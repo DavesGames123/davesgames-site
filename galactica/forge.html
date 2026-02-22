@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Planet Forge // Galactica</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);--yellow-glow:rgba(255,200,50,0.10);
+  --green:#64c864;--text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.3) 100%)}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2)}
+#app{position:relative;z-index:10;width:100%;height:100%;display:flex;flex-direction:column}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:38px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar-l{display:flex;align-items:center;gap:1.2rem}
+.sys-name{color:var(--blue);font-weight:700;font-size:0.6rem;letter-spacing:0.3em}
+.sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green);font-size:0.4rem;letter-spacing:0.12em;text-transform:uppercase}
+.sys-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.topbar-r{display:flex;gap:1.4rem;font-size:0.4rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);align-items:center}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
+.ctrl-bar{display:flex;align-items:center;padding:0 1rem;height:40px;background:rgba(14,17,24,0.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);flex-shrink:0;gap:0.7rem;overflow-x:auto}
+.ctrl-group{display:flex;align-items:center;gap:0.35rem;flex-shrink:0}
+.ctrl-label{font-size:0.36rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);white-space:nowrap}
+.ctrl-sep{width:1px;height:18px;background:var(--border-b);flex-shrink:0}
+select,input[type=number]{background:var(--bg);border:1px solid var(--border-b);color:var(--text);padding:3px 6px;font-size:0.5rem;font-family:'JetBrains Mono',monospace;outline:none}
+select{cursor:pointer}
+input[type=number]{width:58px}
+input[type=range]{-webkit-appearance:none;background:var(--surface);height:2px;border-radius:1px;outline:none;width:70px}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;background:var(--blue);cursor:pointer;box-shadow:0 0 6px var(--blue-glow)}
+.bot-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;padding:3px 8px;cursor:pointer;transition:all 0.2s;white-space:nowrap}
+.bot-btn:hover{border-color:var(--blue);color:var(--blue)}
+.bot-btn.active{border-color:var(--yellow);color:var(--bg);background:var(--yellow)}
+.bot-btn.gen-btn{border-color:var(--yellow);color:var(--bg);background:var(--yellow);font-weight:700}
+.bot-btn.gen-btn:hover{background:#ffe066;box-shadow:0 0 20px var(--yellow-glow)}
+.bot-btn:disabled{opacity:0.4;cursor:wait}
+#prog-wrap{height:2px;background:var(--bg);flex-shrink:0;display:none}
+#prog-bar{height:100%;background:linear-gradient(90deg,var(--blue),#4ad8e0);width:0;transition:width .1s;box-shadow:0 0 10px var(--blue-glow)}
+#main{flex:1;display:flex;overflow:hidden}
+#viewport{flex:1;position:relative;background:var(--bg);cursor:grab}
+#viewport:active{cursor:grabbing}
+#three-mount{width:100%;height:100%}
+#empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.empty-icon{font-size:48px;margin-bottom:12px;opacity:.3}
+.empty-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-style:italic;font-size:1.1rem;color:var(--text-faint)}
+.empty-desc{font-size:0.38rem;color:var(--text-faint);letter-spacing:0.15em;text-transform:uppercase;margin-top:8px;opacity:0.5}
+#sidebar{width:200px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-left:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;position:relative}
+#sidebar::before{content:'';position:absolute;top:0;left:0;bottom:0;width:1px;background:linear-gradient(180deg,var(--blue-dim),transparent 40%,transparent 60%,var(--blue-dim))}
+.side-head{padding:0.5rem 0.8rem;border-bottom:1px solid var(--border);font-size:0.4rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim);display:flex;justify-content:space-between;align-items:center}
+.side-head .tag{color:var(--text-faint);font-size:0.36rem}
+.side-section{padding:6px 8px;border-bottom:1px solid var(--border)}
+.map-btn{width:100%;display:flex;align-items:center;justify-content:space-between;padding:4px 7px;background:transparent;border:1px solid transparent;color:var(--text-faint);font-size:0.42rem;letter-spacing:0.1em;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;text-transform:uppercase;margin-bottom:1px}
+.map-btn:disabled{opacity:.25;cursor:default}
+.map-btn:hover:not(:disabled){color:var(--text);border-color:var(--border-b)}
+.map-btn.active{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
+.map-btn .dl{font-size:0.48rem;color:var(--yellow-dim);cursor:pointer;padding:0 2px;opacity:.6}
+.map-btn .dl:hover{opacity:1;color:var(--yellow)}
+.preview{margin:1px 0 5px;border:1px solid var(--border);cursor:pointer;line-height:0;overflow:hidden}
+.preview img{width:100%;display:block}
+#btn-dl-all{margin:4px 8px;padding:5px;background:transparent;border:1px solid var(--border-b);color:var(--yellow-dim);font-size:0.4rem;font-weight:500;letter-spacing:0.1em;font-family:'JetBrains Mono',monospace;cursor:pointer;text-transform:uppercase;display:none}
+#btn-dl-all:hover{border-color:var(--yellow);color:var(--yellow)}
+#side-info{margin-top:auto;padding:8px;border-top:1px solid var(--border)}
+.info-row{display:flex;justify-content:space-between;padding:1px 0}
+.info-label{font-size:0.34rem;letter-spacing:0.12em;color:var(--text-faint);text-transform:uppercase}
+.info-val{font-size:0.42rem;color:var(--blue-dim)}
+.info-val.yellow{color:var(--yellow)}
+.barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.2rem;color:var(--blue-dim);opacity:0.15;text-align:center;padding:4px 0;line-height:1}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app">
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Galactica</span><span class="sys-status">Planet Forge</span></div>
+  <div class="topbar-r"><span>SYS // <strong>TEXGEN</strong></span><span id="clock">00:00:00</span></div>
+</div>
+<div class="ctrl-bar">
+  <div class="ctrl-group"><span class="ctrl-label">Type</span>
+    <select id="sel-type">
+      <option value="selena">Selena</option>
+      <option value="desert">Desert</option>
+      <option value="terra" selected>Terra</option>
+      <option value="water">Water World</option>
+      <option value="ice">Ice World</option>
+      <option value="ice_giant">Ice Giant</option>
+      <option value="gas_giant">Gas Giant</option>
+    </select>
+  </div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Temp</span>
+    <select id="sel-temp" style="width:72px">
+      <option value="0">Hot</option><option value="1">Warm</option><option value="2" selected>Comfort</option><option value="3">Cool</option><option value="4">Cold</option>
+    </select>
+  </div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Seed</span><input type="number" id="inp-seed" value="42"/><button class="bot-btn" id="btn-rand">⟳</button></div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Res</span><select id="sel-res" style="width:56px"><option value="512">512</option><option value="1024">1024</option><option value="2048" selected>2048</option></select></div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Cities</span><button class="bot-btn" id="btn-cities">Off</button></div>
+
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Sun φ</span><input type="range" id="rng-phi" min="0" max="360" value="40" style="width:60px"/></div>
+  <div class="ctrl-group"><span class="ctrl-label">θ</span><input type="range" id="rng-theta" min="10" max="170" value="65" style="width:50px"/></div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Normals</span><input type="range" id="rng-norm" min="0" max="50" value="18" style="width:50px"/></div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Atmo</span><button class="bot-btn active" id="btn-atmo">On</button></div>
+  <div style="flex:1"></div>
+  <button class="bot-btn gen-btn" id="btn-gen">▶ Generate</button>
+</div>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+<div id="main">
+  <div id="viewport">
+    <div id="three-mount"></div>
+    <div id="empty-state"><div class="empty-icon">🪐</div><div class="empty-title">select parameters and generate</div><div class="empty-desc">albedo · depth · normal · specular · emissive</div></div>
+  </div>
+  <div id="sidebar">
+    <div class="side-head"><span>Outputs</span><span class="tag">2:1 Equirect</span></div>
+    <div class="side-section"><button class="map-btn active" data-map="render" id="btn-render">◉ PBR Render</button></div>
+    <div class="side-section" id="map-buttons"></div>
+    <button id="btn-dl-all">⬇ Download All</button>
+    <div id="side-info">
+      <div class="barcode">PLANET-FORGE</div>
+      <div class="info-row"><span class="info-label">Type</span><span class="info-val" id="i-type">Terra</span></div>
+      <div class="info-row"><span class="info-label">Temp</span><span class="info-val yellow" id="i-temp">Comfort</span></div>
+      <div class="info-row"><span class="info-label">Seed</span><span class="info-val" id="i-seed">42</span></div>
+      <div class="info-row"><span class="info-label">Size</span><span class="info-val" id="i-size">2048×1024</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+"use strict";
+setInterval(()=>{document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8)},1000);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIMPLEX 3D
+// ═══════════════════════════════════════════════════════════════════════════════
+const GR=[[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+const PP=new Uint8Array(512),PM=new Uint8Array(512);
+function seedN(sd){const p=Array.from({length:256},(_,i)=>i);let s=(sd^0xdeadbeef)|0;const r=()=>{s=Math.imul(s,1103515245)+12345|0;return(s>>>16)&0x7fff};for(let i=255;i>0;i--){const j=r()%(i+1);[p[i],p[j]]=[p[j],p[i]]}for(let i=0;i<512;i++){PP[i]=p[i&255];PM[i]=PP[i]%12}}
+function n3(x,y,z){const F=1/3,G=1/6,s=(x+y+z)*F,i=Math.floor(x+s),j=Math.floor(y+s),k=Math.floor(z+s),t=(i+j+k)*G,x0=x-i+t,y0=y-j+t,z0=z-k+t;let i1,j1,k1,i2,j2,k2;if(x0>=y0){if(y0>=z0){i1=1;j1=0;k1=0;i2=1;j2=1;k2=0}else if(x0>=z0){i1=1;j1=0;k1=0;i2=1;j2=0;k2=1}else{i1=0;j1=0;k1=1;i2=1;j2=0;k2=1}}else{if(y0<z0){i1=0;j1=0;k1=1;i2=0;j2=1;k2=1}else if(x0<z0){i1=0;j1=1;k1=0;i2=0;j2=1;k2=1}else{i1=0;j1=1;k1=0;i2=1;j2=1;k2=0}}const x1=x0-i1+G,y1=y0-j1+G,z1=z0-k1+G,x2=x0-i2+G*2,y2=y0-j2+G*2,z2=z0-k2+G*2,x3=x0-.5,y3=y0-.5,z3=z0-.5,ii=i&255,jj=j&255,kk=k&255;let n=0,t0=.6-x0*x0-y0*y0-z0*z0;if(t0>0){t0*=t0;const g=GR[PM[ii+PP[jj+PP[kk]]]];n+=t0*t0*(g[0]*x0+g[1]*y0+g[2]*z0)}let t1=.6-x1*x1-y1*y1-z1*z1;if(t1>0){t1*=t1;const g=GR[PM[ii+i1+PP[jj+j1+PP[kk+k1]]]];n+=t1*t1*(g[0]*x1+g[1]*y1+g[2]*z1)}let t2=.6-x2*x2-y2*y2-z2*z2;if(t2>0){t2*=t2;const g=GR[PM[ii+i2+PP[jj+j2+PP[kk+k2]]]];n+=t2*t2*(g[0]*x2+g[1]*y2+g[2]*z2)}let t3=.6-x3*x3-y3*y3-z3*z3;if(t3>0){t3*=t3;const g=GR[PM[ii+1+PP[jj+1+PP[kk+1]]]];n+=t3*t3*(g[0]*x3+g[1]*y3+g[2]*z3)}return 32*n}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOISE UTILS
+// ═══════════════════════════════════════════════════════════════════════════════
+const PI=Math.PI,TAU=PI*2;
+function fbm(x,y,z,o,l,p,f){let v=0,a=1,ff=f;for(let i=0;i<o;i++){v+=n3(x*ff,y*ff,z*ff)*a;ff*=l;a*=p}return v}
+function rig(x,y,z,o,l,p,f){let v=0,a=1,ff=f,w=1;for(let i=0;i<o;i++){let s=1-Math.abs(n3(x*ff,y*ff,z*ff));s*=s*w;w=Math.min(1,Math.max(0,s*2));v+=s*a;ff*=l;a*=p}return v}
+function wrp(x,y,z,f,a){return[x+n3(x*f+137,y*f+253,z*f+319)*a,y+n3(x*f+467,y*f+541,z*f+631)*a,z+n3(x*f+743,y*f+853,z*f+929)*a]}
+function mw(x,y,z,f,a,n){let p=[x,y,z],ff=f,aa=a;for(let i=0;i<n;i++){p=wrp(p[0],p[1],p[2],ff,aa);ff*=1.5;aa*=.6}return p}
+function uv2s(u,v){const p=u*TAU,t=v*PI,st=Math.sin(t);return[st*Math.cos(p),Math.cos(t),st*Math.sin(p)]}
+const cl=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
+const lp=(a,b,t)=>a+(b-a)*t;
+const lc=(a,b,t)=>[lp(a[0],b[0],t),lp(a[1],b[1],t),lp(a[2],b[2],t)];
+const sm=(e,s,t)=>{const x=cl((t-e)/(s-e));return x*x*(3-2*x)};
+function grd(stops,t){t=cl(t);for(let i=0;i<stops.length-1;i++){if(t<=stops[i+1][0]){const f=(t-stops[i][0])/(stops[i+1][0]-stops[i][0]);return lc(stops[i][1],stops[i+1][1],f)}}return stops[stops.length-1][1]}
+// Desaturate helper
+function desat(c,a){const g=c[0]*.3+c[1]*.59+c[2]*.11;return lc(c,[g,g,g],a)}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TEMPERATURE-SHIFTED PALETTES
+// Each is a function(temp) returning gradient stops. temp 0=hot,1=warm,2=comfort,3=cool,4=cold
+// ═══════════════════════════════════════════════════════════════════════════════
+function mkPal(hot,cold,t){return hot.map((s,i)=>([s[0],lc(s[1],cold[i][1],t/4)]))}
+
+const PALS={
+  selena(t){
+    const hot=[[0,[.12,.04,.02]],[.2,[.22,.10,.06]],[.4,[.35,.18,.10]],[.6,[.44,.28,.18]],[.8,[.52,.36,.26]],[1,[.60,.44,.34]]];
+    const cold=[[0,[.08,.08,.08]],[.2,[.16,.16,.15]],[.4,[.26,.26,.25]],[.6,[.36,.35,.34]],[.8,[.46,.45,.44]],[1,[.55,.54,.53]]];
+    return mkPal(hot,cold,t);
+  },
+  desert(t){
+    const hot=[[0,[.18,.06,.02]],[.15,[.32,.12,.04]],[.3,[.48,.22,.08]],[.5,[.58,.30,.12]],[.7,[.65,.40,.18]],[.85,[.72,.50,.28]],[1,[.78,.58,.36]]];
+    const cold=[[0,[.14,.10,.08]],[.15,[.24,.18,.14]],[.3,[.36,.28,.22]],[.5,[.46,.38,.30]],[.7,[.56,.48,.40]],[.85,[.64,.58,.50]],[1,[.72,.66,.60]]];
+    return mkPal(hot,cold,t);
+  },
+  ocean(t){
+    const hot=[[0,[.003,.012,.06]],[.25,[.008,.035,.14]],[.5,[.02,.07,.22]],[.75,[.035,.11,.30]],[1,[.05,.16,.36]]];
+    const cold=[[0,[.01,.02,.06]],[.25,[.02,.05,.12]],[.5,[.04,.10,.20]],[.75,[.08,.16,.28]],[1,[.12,.22,.34]]];
+    return mkPal(hot,cold,t);
+  },
+  land(t){
+    const hot=[[0,[.50,.46,.30]],[.07,[.15,.28,.08]],[.2,[.10,.22,.05]],[.35,[.13,.20,.06]],[.5,[.24,.20,.13]],[.65,[.36,.32,.24]],[.82,[.48,.45,.40]],[1,[.60,.58,.55]]];
+    const cold=[[0,[.38,.36,.30]],[.07,[.16,.24,.14]],[.2,[.14,.22,.12]],[.35,[.18,.22,.16]],[.5,[.28,.26,.22]],[.65,[.40,.38,.34]],[.82,[.52,.50,.48]],[1,[.62,.61,.60]]];
+    return mkPal(hot,cold,t);
+  },
+  ice(t){
+    const warm=[[0,[.48,.42,.34]],[.15,[.56,.52,.46]],[.3,[.64,.62,.58]],[.5,[.72,.71,.68]],[.7,[.80,.79,.77]],[.85,[.86,.85,.84]],[1,[.90,.90,.89]]];
+    const cold=[[0,[.30,.32,.38]],[.15,[.42,.44,.50]],[.3,[.54,.56,.62]],[.5,[.65,.67,.72]],[.7,[.76,.78,.82]],[.85,[.84,.86,.90]],[1,[.90,.92,.95]]];
+    return mkPal(warm,cold,t);
+  },
+  gas(t){
+    const hot=[[0,[.46,.28,.10]],[.12,[.60,.40,.16]],[.25,[.74,.56,.30]],[.38,[.52,.30,.10]],[.5,[.78,.64,.38]],[.62,[.58,.36,.14]],[.75,[.80,.68,.45]],[.88,[.56,.34,.12]],[1,[.86,.74,.52]]];
+    const cold=[[0,[.18,.16,.22]],[.12,[.28,.26,.34]],[.25,[.38,.36,.44]],[.38,[.24,.22,.30]],[.5,[.42,.40,.48]],[.62,[.30,.28,.36]],[.75,[.46,.44,.52]],[.88,[.26,.24,.32]],[1,[.50,.48,.56]]];
+    return mkPal(hot,cold,t);
+  },
+  ice_giant(t){
+    const hot=[[0,[.36,.30,.24]],[.2,[.48,.42,.36]],[.4,[.56,.52,.46]],[.6,[.50,.44,.38]],[.8,[.58,.54,.48]],[1,[.62,.58,.52]]];
+    const cold=[[0,[.12,.16,.30]],[.2,[.18,.24,.42]],[.4,[.24,.32,.52]],[.6,[.20,.28,.46]],[.8,[.28,.36,.56]],[1,[.34,.42,.62]]];
+    return mkPal(hot,cold,t);
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ATMOSPHERE COLORS per type+temp
+// ═══════════════════════════════════════════════════════════════════════════════
+function atmoColor(type,t){
+  const T=t/4;
+  if(type==='selena')return lc([.15,.08,.04],[.10,.10,.14],T);
+  if(type==='desert')return lc([.3,.14,.06],[.18,.16,.20],T);
+  if(type==='terra')return lc([.15,.3,.6],[.2,.3,.55],T);
+  if(type==='water')return lc([.12,.25,.55],[.15,.28,.5],T);
+  if(type==='ice')return lc([.3,.35,.5],[.35,.4,.6],T);
+  if(type==='gas_giant')return lc([.4,.25,.1],[.15,.15,.25],T);
+  if(type==='ice_giant')return lc([.15,.2,.4],[.2,.25,.5],T);
+  return[.2,.25,.4];
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GENERATORS
+// ═══════════════════════════════════════════════════════════════════════════════
+const GEN={
+  selena(u,v,t){
+    const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1.8,.06);
+    const r1=rig(wx,wy,wz,8,2,.48,3.5),r2=fbm(x,y,z,6,2.3,.4,12)*.14;
+    const h=r1*.7+r2+.3,cv=n3(x*5,y*5,z*5)*.03;
+    const pal=PALS.selena(t);
+    const col=desat(grd(pal,cl(h+cv)),.12);
+    return{height:h,albedo:col,specular:.03+cl(h)*.02,emissive:0};
+  },
+
+  desert(u,v,t){
+    const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1.5,.1);
+    const broad=fbm(wx,wy,wz,7,2,.48,2)*.5+.5;
+    const dune=Math.abs(fbm(wx*2.2,wy*.8,wz,5,2.2,.48,7))*.35;
+    const fine=fbm(x,y,z,5,2.5,.36,18)*.05;
+    const dark=cl(fbm(x*1.5,y*1.5,z*1.5,4,2,.5,1)*.5+.4);
+    const h=broad*.4+dune*.42+fine+.18;
+    const pal=PALS.desert(t);
+    let col=grd(pal,cl(h));
+    col=lc(col,[.06,.04,.02],(1-dark)*.4);
+    col=desat(col,.08);
+    return{height:h,albedo:col,specular:.03,emissive:0};
+  },
+
+  terra(u,v,t){
+    const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1.2,.18);
+    const cont=fbm(wx,wy,wz,6,2.05,.44,1.6);
+    const det=fbm(x,y,z,5,2.3,.38,7)*.12;
+    const h=(cont+det)*.42+.5;
+    const sea=.56+t*.015; // colder = slightly more ice/land ratio shift
+    const lat=Math.abs(y);
+    const latN=cl(lat+fbm(x*6,y*6,z*6,3,2,.5,4)*.05);
+
+    let em=0;
+    if(h>=sea){
+      const cn=fbm(x*14,y*14,z*14,4,2,.5,9);
+      const coast=cl(1-((h-sea)/.06));
+      const pop=cl((cn+.25)*2)*coast*.7+cl((cn+.05)*1.5)*.25;
+      const cluster=cl(fbm(x*4,y*4,z*4,3,2,.5,3)*.5+.5);
+      em=cl(pop*cluster)*cl(1-latN*1.4)*.85;
+    }
+    // Clouds
+
+    if(h<sea){
+      const d=(sea-h)/sea;
+      const opal=PALS.ocean(t);
+      return{height:h,albedo:grd(opal,d),specular:.9,emissive:em};
+    }
+    const lt=cl((h-sea)/(1-sea));
+    const moist=cl(fbm(x*2.5,y*2.5,z*2.5,4,2,.5,1.2)*.5+.5);
+    const lpal=PALS.land(t);
+
+    // Smooth biome blending with temperature influence
+    const tropW=t<2?lc([.06,.16,.04],[.12,.24,.07],moist):lc([.10,.18,.08],[.16,.22,.12],moist);
+    const subW=lc([.10,.20,.06],[.44,.36,.22],cl((1-moist)*1.2+t*.1));
+    const tempW=lc([.18,.22,.12],[.06,.17,.04],moist);
+    const borW=lc([.26,.24,.18],[.14,.18,.10],moist*.4);
+    const b1=sm(.12,.30,latN),b2=sm(.30,.50,latN),b3=sm(.50,.72,latN);
+    let col=lc(tropW,subW,b1);col=lc(col,tempW,b2);col=lc(col,borW,b3);
+
+    if(lt>.72){const sn=cl((lt-.72)/.28);
+      const snowC=t<2?[.66,.64,.60]:[.72,.72,.70];
+      col=lc(col,snowC,sn*.5);
+    }
+    if(lt<.03)col=lc(grd(PALS.ocean(t),0),col,cl(lt/.03));
+    col=desat(col,.06);
+    return{height:h,albedo:col,specular:.04+moist*.05,emissive:em};
+  },
+
+  water(u,v,t){
+    const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1,.2);
+    const h=fbm(wx,wy,wz,5,2,.45,1.5)*.3+.5;
+    const sea=.72;
+    const opal=PALS.ocean(t);
+    if(h<sea){const d=(sea-h)/sea;return{height:h,albedo:grd(opal,d),specular:.92,emissive:0}}
+    const lt=cl((h-sea)/(1-sea));
+    const sand=lc([.48,.44,.32],[.36,.34,.28],t/4);
+    const col=lc(grd(opal,0),sand,cl(lt*4));
+    return{height:h,albedo:col,specular:.3,emissive:0};
+  },
+
+  ice(u,v,t){
+    const[x,y,z]=uv2s(u,v);
+    const base=fbm(x,y,z,6,2,.48,2)*.5+.5;
+    const cr=1-rig(x,y,z,6,2.3,.46,5);
+    const fine=fbm(x,y,z,5,2.5,.38,16)*.05;
+    const h=base*.5+cr*.5+fine;
+    const ipal=PALS.ice(t);
+    const surf=grd(ipal,cl(h));
+    const crD=cl((1-cr)*1.6);
+    const crackC=t<2?[.32,.26,.18]:[.22,.24,.30];
+    let col=lc(surf,crackC,crD*.4);
+    col=desat(col,.1);
+    return{height:h,albedo:col,specular:.3+cl(h)*.4,emissive:0};
+  },
+
+  gas_giant(u,v,t){
+    const[x,y,z]=uv2s(u,v);
+    // PROPER BANDING: regular latitude-locked bands
+    const lat=y; // -1 to 1
+    const bandCount=14+Math.floor(n3(0.1,0.2,0.3)*4);
+    const bandPhase=lat*bandCount*PI;
+    const bandRaw=Math.sin(bandPhase);
+    // Only turbulence at band EDGES (where sin crosses zero)
+    const edgeDist=Math.abs(bandRaw); // 0 at edge, 1 at center
+    const edgeTurb=cl(1-edgeDist*3); // strong only near edges
+    const turb=fbm(x*2,y*2,z*2,5,2,.42,3)*edgeTurb*.18;
+    // Fine longitudinal streaks within bands
+    const streak=fbm(x*1.5,y*.3,z*1.5,4,2.2,.4,6)*.06;
+    const t1=cl(bandRaw*.5+.5+turb+streak);
+    // Occasional storm spots
+    const stormN=fbm(x*5,y*5,z*5,4,2,.5,2.5);
+    const storm=cl((stormN-.55)*6)*.12;
+    const val=cl(t1+storm);
+    const pal=PALS.gas(t);
+    let col=grd(pal,val);
+    col=desat(col,.05);
+    return{height:val,albedo:col,specular:.08+storm*.1,emissive:0};
+  },
+
+  ice_giant(u,v,t){
+    const[x,y,z]=uv2s(u,v);
+    const lat=y;
+    const bandCount=8+Math.floor(n3(0.5,0.6,0.7)*3);
+    const bandRaw=Math.sin(lat*bandCount*PI);
+    const edgeDist=Math.abs(bandRaw);
+    const edgeTurb=cl(1-edgeDist*2.5);
+    // More domain warp for smoother, mistier appearance
+    const[wx,wy,wz]=mw(x,y,z,1.2,.2,3);
+    const atm=fbm(wx,wy,wz,6,2,.46,1.6)*.25;
+    const turb=fbm(x*1.8,y*1.8,z*1.8,4,2,.4,3)*edgeTurb*.12;
+    const val=cl(bandRaw*.3+.5+atm+turb);
+    const pal=PALS.ice_giant(t);
+    let col=grd(pal,val);
+    // Subtle cloud wisps
+    const wisp=cl((fbm(x*3,y*3,z*3,4,2,.5,3)-.2)*2)*.08;
+    col=lc(col,[.7,.75,.82],wisp);
+    col=desat(col,.08);
+    return{height:val,albedo:col,specular:.06+wisp*.08,emissive:0};
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAP BUILD
+// ═══════════════════════════════════════════════════════════════════════════════
+function genNorm(hm,w,h,s){s=s||2.5;const d=new Uint8ClampedArray(w*h*4);const g=(px,py)=>{px=((px%w)+w)%w;py=Math.max(0,Math.min(h-1,py));return hm[py*w+px]};for(let y=0;y<h;y++)for(let x=0;x<w;x++){const l=g(x-1,y-1)+g(x-1,y)*2+g(x-1,y+1),r=g(x+1,y-1)+g(x+1,y)*2+g(x+1,y+1),t=g(x-1,y-1)+g(x,y-1)*2+g(x+1,y-1),b=g(x-1,y+1)+g(x,y+1)*2+g(x+1,y+1),dx=(r-l)*s,dy=(b-t)*s,ln=Math.sqrt(dx*dx+dy*dy+1),i=(y*w+x)*4;d[i]=(-dx/ln*.5+.5)*255|0;d[i+1]=(-dy/ln*.5+.5)*255|0;d[i+2]=(1/ln*.5+.5)*255|0;d[i+3]=255}return d}
+function f2g(a,w,h){const d=new Uint8ClampedArray(w*h*4);for(let i=0;i<a.length;i++){const v=cl(a[i])*255|0,j=i*4;d[j]=v;d[j+1]=v;d[j+2]=v;d[j+3]=255}return d}
+function d2c(r,w,h){const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').putImageData(new ImageData(r,w,h),0,0);return c}
+function c2t(c){const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.wrapT=THREE.ClampToEdgeWrapping;return t}
+
+async function generate(type,temp,seed,width,prog){
+  const H=width/2;seedN(seed);const gen=GEN[type];
+  const hm=new Float32Array(width*H),sp=new Float32Array(width*H),em=new Float32Array(width*H),al=new Uint8ClampedArray(width*H*4);
+  const B=4;
+  for(let sy=0;sy<H;sy+=B){const ey=Math.min(sy+B,H);
+    for(let y=sy;y<ey;y++)for(let x=0;x<width;x++){
+      const u=(x+.5)/width,v=(y+.5)/H,r=gen(u,v,temp),i=y*width+x;
+      hm[i]=r.height;sp[i]=r.specular;em[i]=r.emissive;
+      const p=i*4;al[p]=r.albedo[0]*255|0;al[p+1]=r.albedo[1]*255|0;al[p+2]=r.albedo[2]*255|0;al[p+3]=255;
+    }
+    prog(ey/H);await new Promise(r=>requestAnimationFrame(r));
+  }
+  let mn=1e9,mx=-1e9;for(let i=0;i<hm.length;i++){if(hm[i]<mn)mn=hm[i];if(hm[i]>mx)mx=hm[i]}
+  const rng=mx-mn||1,hmN=new Float32Array(hm.length);for(let i=0;i<hm.length;i++)hmN[i]=(hm[i]-mn)/rng;
+  const emD=new Uint8ClampedArray(width*H*4);
+  for(let i=0;i<em.length;i++){const e=cl(em[i]),j=i*4;emD[j]=(e*.92)*255|0;emD[j+1]=(e*.68)*255|0;emD[j+2]=(e*.22)*255|0;emD[j+3]=255}
+  prog(1);
+  return{width,height:H,albedo:d2c(al,width,H),depth:d2c(f2g(hmN,width,H),width,H),normal:d2c(genNorm(hmN,width,H),width,H),specular:d2c(f2g(sp,width,H),width,H),emissive:d2c(emD,width,H)};
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// THREE.JS SCENE
+// ═══════════════════════════════════════════════════════════════════════════════
+const mount=document.getElementById('three-mount');
+const ren=new THREE.WebGLRenderer({antialias:true});
+ren.setSize(mount.clientWidth,mount.clientHeight);
+ren.setPixelRatio(Math.min(window.devicePixelRatio,2));
+ren.setClearColor(new THREE.Color('#0a0d14'));
+ren.toneMapping=THREE.ACESFilmicToneMapping;
+ren.toneMappingExposure=1.0;
+mount.appendChild(ren.domElement);
+
+const scn=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(38,mount.clientWidth/mount.clientHeight,.1,200);
+cam.position.z=3;
+
+// Planet
+const pgeo=new THREE.SphereGeometry(1,256,128);
+const pmat=new THREE.MeshStandardMaterial({color:0x1c2436,roughness:.9,metalness:0});
+const pmsh=new THREE.Mesh(pgeo,pmat);scn.add(pmsh);
+
+// Atmosphere rim shell
+const ageo=new THREE.SphereGeometry(1.025,64,32);
+const amat=new THREE.ShaderMaterial({
+  uniforms:{
+    uSunDir:{value:new THREE.Vector3(1,0.5,1).normalize()},
+    uColor:{value:new THREE.Color(.15,.3,.6)},
+    uIntensity:{value:1.0},
+    uPow:{value:3.2},
+  },
+  vertexShader:`
+    varying vec3 vNorm;varying vec3 vPos;
+    void main(){vNorm=normalize(normalMatrix*normal);vPos=(modelViewMatrix*vec4(position,1.0)).xyz;gl_Position=projectionMatrix*vec4(vPos,1.0);}
+  `,
+  fragmentShader:`
+    uniform vec3 uSunDir;uniform vec3 uColor;uniform float uIntensity;uniform float uPow;
+    varying vec3 vNorm;varying vec3 vPos;
+    void main(){
+      vec3 viewDir=normalize(-vPos);
+      float rim=1.0-max(dot(viewDir,vNorm),0.0);
+      rim=pow(rim,uPow);
+      vec3 sunWorld=normalize(uSunDir);
+      vec3 sunView=normalize((viewMatrix*vec4(sunWorld,0.0)).xyz);
+      float sunFac=max(dot(vNorm,sunView),0.0)*.5+.5;
+      float alpha=rim*uIntensity*sunFac;
+      gl_FragColor=vec4(uColor,alpha*0.65);
+    }
+  `,
+  transparent:true,depthWrite:false,side:THREE.FrontSide,blending:THREE.AdditiveBlending,
+});
+const amsh=new THREE.Mesh(ageo,amat);amsh.visible=false;scn.add(amsh);
+
+// Lighting
+const amb=new THREE.AmbientLight(0x121828,0.06);scn.add(amb);
+const sun=new THREE.DirectionalLight(0xfff0d0,3.0);scn.add(sun);
+
+// Stars
+const sbuf=new THREE.BufferGeometry(),sv=[];
+for(let i=0;i<5000;i++){const r=15+Math.random()*80,t=Math.random()*TAU,p=Math.acos(2*Math.random()-1);sv.push(r*Math.sin(p)*Math.cos(t),r*Math.sin(p)*Math.sin(t),r*Math.cos(p))}
+sbuf.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));
+scn.add(new THREE.Points(sbuf,new THREE.PointsMaterial({color:0xb0b8d0,size:.06,sizeAttenuation:true})));
+
+// Sun pos
+let sunPhi=40*PI/180,sunTh=65*PI/180;
+function updSun(){
+  const st=Math.sin(sunTh);
+  const dir=new THREE.Vector3(st*Math.cos(sunPhi),Math.cos(sunTh),st*Math.sin(sunPhi));
+  sun.position.copy(dir.clone().multiplyScalar(5));
+  amat.uniforms.uSunDir.value.copy(dir);
+}
+updSun();
+
+const dr={d:false,lx:0,ly:0,rx:.2,ry:0};
+function anim(){requestAnimationFrame(anim);if(!dr.d)dr.ry+=.0008;pmsh.rotation.x=dr.rx;pmsh.rotation.y=dr.ry;amsh.rotation.x=dr.rx;amsh.rotation.y=dr.ry;ren.render(scn,cam)}
+anim();
+window.addEventListener('resize',()=>{const w=mount.clientWidth,h=mount.clientHeight;cam.aspect=w/h;cam.updateProjectionMatrix();ren.setSize(w,h)});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════════
+const vp=document.getElementById('viewport');
+vp.addEventListener('pointerdown',e=>{dr.d=true;dr.lx=e.clientX;dr.ly=e.clientY});
+vp.addEventListener('pointermove',e=>{if(!dr.d)return;dr.ry+=(e.clientX-dr.lx)*.005;dr.rx+=(e.clientY-dr.ly)*.005;dr.rx=Math.max(-1.4,Math.min(1.4,dr.rx));dr.lx=e.clientX;dr.ly=e.clientY});
+vp.addEventListener('pointerup',()=>{dr.d=false});
+vp.addEventListener('pointerleave',()=>{dr.d=false});
+vp.addEventListener('wheel',e=>{e.preventDefault();cam.position.z=cl(cam.position.z+e.deltaY*.003,1.5,8)},{passive:false});
+
+document.getElementById('rng-phi').oninput=function(){sunPhi=+this.value*PI/180;updSun()};
+document.getElementById('rng-theta').oninput=function(){sunTh=+this.value*PI/180;updSun()};
+
+let normStr=1.8;
+document.getElementById('rng-norm').oninput=function(){normStr=+this.value/10;if(pmat.normalMap){pmat.normalScale.set(normStr,normStr);pmat.needsUpdate=true}};
+
+let showCities=false,showAtmo=true;
+document.getElementById('btn-cities').onclick=function(){showCities=!showCities;this.textContent=showCities?'On':'Off';this.classList.toggle('active',showCities);if(curMaps&&actMap==='render'){pmat.emissiveIntensity=showCities?2:0;pmat.needsUpdate=true}};
+document.getElementById('btn-atmo').onclick=function(){showAtmo=!showAtmo;this.textContent=showAtmo?'On':'Off';this.classList.toggle('active',showAtmo);amsh.visible=showAtmo&&!!curMaps};
+document.getElementById('btn-rand').onclick=()=>{document.getElementById('inp-seed').value=Math.floor(Math.random()*99999)};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SIDEBAR
+// ═══════════════════════════════════════════════════════════════════════════════
+const MAPS=['albedo','depth','normal','specular','emissive'];
+const TNAMES=['Hot','Warm','Comfort','Cool','Cold'];
+let curMaps=null,actMap='render';
+
+const mbC=document.getElementById('map-buttons');
+MAPS.forEach(n=>{
+  const w=document.createElement('div');
+  const b=document.createElement('button');b.className='map-btn';b.disabled=true;b.dataset.map=n;
+  b.innerHTML='<span>'+n.toUpperCase()+'</span><span class="dl" style="display:none" title="Download">⬇</span>';
+  w.appendChild(b);
+  const p=document.createElement('div');p.className='preview';p.style.display='none';p.innerHTML='<img/>';w.appendChild(p);
+  mbC.appendChild(w);
+});
+
+function setAct(name){
+  actMap=name;
+  document.querySelectorAll('.map-btn').forEach(b=>b.classList.toggle('active',b.dataset.map===name));
+  if(!curMaps)return;
+  if(name==='render'){
+    pmat.map=c2t(curMaps.albedo);pmat.map.colorSpace=THREE.SRGBColorSpace;
+    pmat.normalMap=c2t(curMaps.normal);pmat.normalScale.set(normStr,normStr);
+    const rc=document.createElement('canvas');rc.width=curMaps.width;rc.height=curMaps.height;
+    const rx=rc.getContext('2d');rx.drawImage(curMaps.specular,0,0);
+    const rd=rx.getImageData(0,0,curMaps.width,curMaps.height);
+    for(let i=0;i<rd.data.length;i+=4){rd.data[i]=255-rd.data[i];rd.data[i+1]=255-rd.data[i+1];rd.data[i+2]=255-rd.data[i+2]}
+    rx.putImageData(rd,0,0);
+    pmat.roughnessMap=c2t(rc);pmat.roughness=1;pmat.metalness=0;
+    pmat.emissiveMap=c2t(curMaps.emissive);pmat.emissive=new THREE.Color(0xffffff);pmat.emissiveIntensity=showCities?2:0;
+    pmat.color=new THREE.Color(0xffffff);
+    amsh.visible=showAtmo;
+  }else{
+    pmat.map=curMaps[name]?c2t(curMaps[name]):null;
+    if(pmat.map)pmat.map.colorSpace=THREE.SRGBColorSpace;
+    pmat.normalMap=null;pmat.roughnessMap=null;pmat.emissiveMap=null;pmat.emissive=new THREE.Color(0);pmat.roughness=.9;pmat.metalness=0;
+    pmat.color=new THREE.Color(curMaps[name]?0xffffff:0x1c2436);
+    amsh.visible=false;
+  }
+  pmat.needsUpdate=true;
+}
+
+document.getElementById('btn-render').onclick=()=>setAct('render');
+mbC.querySelectorAll('.map-btn').forEach(b=>{b.onclick=()=>{if(curMaps)setAct(b.dataset.map)}});
+
+function dl(name){if(!curMaps||!curMaps[name])return;const a=document.createElement('a');a.download=document.getElementById('sel-type').value+'_'+document.getElementById('inp-seed').value+'_'+name+'.png';a.href=curMaps[name].toDataURL('image/png');a.click()}
+mbC.querySelectorAll('.dl').forEach(el=>{el.onclick=e=>{e.stopPropagation();dl(el.closest('.map-btn').dataset.map)}});
+document.getElementById('btn-dl-all').onclick=()=>MAPS.forEach(m=>dl(m));
+
+document.getElementById('btn-gen').onclick=async function(){
+  const type=document.getElementById('sel-type').value;
+  const temp=parseInt(document.getElementById('sel-temp').value);
+  const seed=parseInt(document.getElementById('inp-seed').value)||0;
+  const res=parseInt(document.getElementById('sel-res').value);
+  this.disabled=true;this.textContent='Generating...';
+  document.getElementById('prog-wrap').style.display='block';
+  document.getElementById('empty-state').style.display='none';
+  document.getElementById('i-type').textContent=type.charAt(0).toUpperCase()+type.slice(1).replace('_',' ');
+  document.getElementById('i-temp').textContent=TNAMES[temp];
+  document.getElementById('i-seed').textContent=seed;
+  document.getElementById('i-size').textContent=res+'×'+(res/2);
+
+  curMaps=await generate(type,temp,seed,res,p=>{document.getElementById('prog-bar').style.width=(p*100)+'%'});
+
+  mbC.querySelectorAll('.map-btn').forEach(b=>{b.disabled=false;b.querySelector('.dl').style.display='inline'});
+  mbC.querySelectorAll('.preview').forEach(p=>{const n=p.previousElementSibling.dataset.map;if(curMaps[n]){p.style.display='block';p.querySelector('img').src=curMaps[n].toDataURL()}});
+  document.getElementById('btn-dl-all').style.display='block';
+
+  // Set atmosphere color
+  const ac=atmoColor(type,temp);
+  amat.uniforms.uColor.value.set(ac[0],ac[1],ac[2]);
+  amat.uniforms.uIntensity.value=(type==='selena'?.3:type==='desert'?.5:1.0);
+  amat.uniforms.uPow.value=(type==='gas_giant'||type==='ice_giant')?2.2:3.2;
+
+  setAct('render');
+  document.getElementById('prog-wrap').style.display='none';
+  this.disabled=false;this.textContent='▶ Generate';
+};
+</script>
+</body>
+</html>
