@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GALACTICA // Build Among the Stars</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* ─── In-game palette ─── */
+    --bg:          #0e1118;
+    --bg2:         #121620;
+    --bg3:         #161c28;
+    --surface:     #1c2436;
+    --surface2:    #243040;
+    --border:      rgba(150,200,255,0.06);
+    --border-b:    rgba(150,200,255,0.14);
+    --border-warm: rgba(255,200,80,0.12);
+
+    /* Primary: cool blue (matches ACCENT_LIGHT in-game) */
+    --blue:        #96c8ff;
+    --blue-dim:    #5a8cc0;
+    --blue-faint:  rgba(150,200,255,0.04);
+    --blue-glow:   rgba(150,200,255,0.10);
+
+    /* Accent: warm yellow (matches COLOR_WARNING in-game) */
+    --yellow:      #ffc832;
+    --yellow-dim:  #b8901e;
+    --yellow-faint:rgba(255,200,50,0.04);
+    --yellow-glow: rgba(255,200,50,0.10);
+
+    --red:         #ff5050;
+    --green:       #64c864;
+    --green-dim:   #3a7840;
+    --cyan:        #4ad8e0;
+
+    --text:        #c8d0e0;
+    --text-dim:    #6878a0;
+    --text-faint:  #384060;
+    --text-bright: #e8ecf4;
+
+    --scan:        rgba(0,0,0,0.06);
+  }
+
+  *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+
+  body {
+    font-family:'JetBrains Mono',monospace;
+    background:var(--bg);
+    color:var(--text);
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+    cursor:crosshair;
+  }
+
+  /* ═══════ CRT SCANLINES ═══════ */
+  body::before {
+    content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+    background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);
+    mix-blend-mode:multiply;
+  }
+  body::after {
+    content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.35) 100%);
+  }
+
+  /* ═══════ GRID BG ═══════ */
+  .grid-bg {
+    position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(150,200,255,0.018) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(150,200,255,0.018) 1px, transparent 1px),
+      linear-gradient(rgba(150,200,255,0.006) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(150,200,255,0.006) 1px, transparent 1px);
+    background-size:300px 300px,300px 300px,50px 50px,50px 50px;
+  }
+
+  /* ═══════ CORNER DATA ═══════ */
+  .corner-data{position:fixed;z-index:50;pointer-events:none;font-size:0.38rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);line-height:1.8}
+  .corner-data.tl{top:3.2rem;left:1rem}
+  .corner-data.br{bottom:3.2rem;right:1rem;text-align:right}
+  .corner-data span{color:var(--blue-dim)}
+
+  /* ═══════ TOP BAR ═══════ */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;z-index:100;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;
+  }
+  .topbar-l{display:flex;align-items:center;gap:1.5rem}
+  .sys-name{color:var(--blue);font-weight:700;font-size:0.65rem;letter-spacing:0.3em}
+  .sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green)}
+  .sys-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease infinite}
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+  .topbar-r{display:flex;gap:2rem;color:var(--text-dim)}
+  .topbar-r strong{color:var(--blue-dim);font-weight:500}
+
+  /* ═══════ BOTTOM BAR ═══════ */
+  .botbar{
+    position:fixed;bottom:0;left:0;right:0;z-index:100;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);
+    border-top:1px solid var(--border);font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase;
+  }
+  .bot-group{display:flex;align-items:center;gap:0.8rem}
+  .bot-btn{
+    background:transparent;border:1px solid var(--border);color:var(--text-dim);
+    font-family:'JetBrains Mono',monospace;font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase;
+    padding:0.3rem 0.7rem;cursor:pointer;transition:all 0.2s;
+  }
+  .bot-btn:hover{border-color:var(--blue);color:var(--blue);box-shadow:0 0 10px var(--blue-glow)}
+  .bot-btn.active{border-color:var(--blue);color:var(--bg);background:var(--blue)}
+  .bot-read{color:var(--text-faint)}
+
+  /* ═══════ CONTENT ═══════ */
+  .content{position:relative;z-index:10;pointer-events:none}
+  .content > *{pointer-events:auto}
+
+  /* ═══════ PANEL ═══════ */
+  .panel{background:rgba(14,17,24,0.88);backdrop-filter:blur(20px);border:1px solid var(--border);position:relative}
+  .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue-dim),transparent)}
+  .p-head{display:flex;align-items:center;justify-content:space-between;padding:0.55rem 1.2rem;border-bottom:1px solid var(--border);font-size:0.45rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim)}
+  .p-head .tag{color:var(--text-faint);font-size:0.4rem}
+  .p-body{padding:2rem 2.5rem}
+
+  /* ═══════ SYSTEM WINDOW ═══════ */
+  .sys-window{border:1px solid var(--border-b);background:rgba(14,17,24,0.92);backdrop-filter:blur(16px);position:relative;max-width:440px}
+  .sys-window.full-width{max-width:100%}
+  .sys-window::before{content:'';position:absolute;inset:3px;border:1px solid var(--border);pointer-events:none}
+  .sys-window::after{content:'';position:absolute;top:0;left:0;width:6px;height:6px;background:var(--blue-dim);box-shadow:calc(100% - 6px) 0 0 var(--blue-dim),0 calc(100% - 6px) 0 var(--blue-dim),calc(100% - 6px) calc(100% - 6px) 0 var(--blue-dim);pointer-events:none}
+  .sw-head{padding:0.6rem 1.2rem;border-bottom:1px solid var(--border-b);display:flex;justify-content:space-between;align-items:center;font-size:0.45rem;letter-spacing:0.2em;text-transform:uppercase}
+  .sw-head .sw-sys{color:var(--blue)}
+  .sw-head .sw-tag{color:var(--text-faint)}
+  .sw-body{padding:2rem 2.2rem}
+  .sw-body h2{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:2rem;color:var(--text-bright);margin-bottom:1rem;line-height:1.15}
+  .sw-body h2 em{font-style:italic;color:var(--yellow)}
+  .sw-body p{font-size:0.7rem;font-weight:300;color:var(--text-dim);line-height:2;margin-bottom:1.5rem}
+
+  .data-list{list-style:none;border-top:1px solid var(--border)}
+  .data-list li{display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.06em}
+  .data-list .label{color:var(--text-faint);text-transform:uppercase}
+  .data-list .value{color:var(--yellow);font-weight:500}
+
+  /* ═══════ HERO ═══════ */
+  .hero{min-height:100vh;display:flex;align-items:center;position:relative;overflow:hidden}
+  #heroRadar{position:absolute;inset:0;z-index:0}
+  .hero-inner{position:relative;z-index:10;width:100%;max-width:1100px;margin:0 auto;padding:0 3rem;display:flex;gap:3rem;align-items:flex-start}
+  .hero-panel{max-width:440px;flex:0 0 auto}
+  .hero-panel .p-body{padding:2.5rem}
+  .h-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:2rem;color:var(--blue-dim);opacity:0.25;margin-bottom:0.5rem;line-height:1}
+  .h-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(2.4rem,5vw,4rem);line-height:1;color:var(--text-bright);margin-bottom:1.2rem;letter-spacing:-0.01em}
+  .h-title em{font-style:italic;color:var(--yellow);text-shadow:0 0 25px var(--yellow-glow)}
+  .h-desc{font-size:0.72rem;font-weight:300;color:var(--text-dim);line-height:2;margin-bottom:2rem;max-width:400px}
+  .h-actions{display:flex;gap:1rem;align-items:center}
+  .h-btn{font-family:'JetBrains Mono',monospace;font-size:0.58rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;padding:0.75rem 1.6rem;background:var(--yellow);color:var(--bg);border:none;cursor:pointer;transition:all 0.3s}
+  .h-btn:hover{background:#ffe066;box-shadow:0 0 20px var(--yellow-glow)}
+  .h-ghost{font-size:0.5rem;color:var(--text-faint);text-decoration:none;letter-spacing:0.08em;transition:color 0.3s}
+  .h-ghost:hover{color:var(--blue)}
+
+  .hero-side{display:flex;flex-direction:column;gap:1rem;flex-shrink:0}
+  .mini-panel{width:170px}
+  .mini-panel .p-body{padding:1rem;text-align:center}
+  .mini-stat{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:2rem;color:var(--yellow);text-shadow:0 0 12px var(--yellow-glow);line-height:1}
+  .mini-unit{font-size:0.38rem;color:var(--text-faint);letter-spacing:0.2em;text-transform:uppercase;margin-top:0.3rem}
+
+  /* ═══════ SIGNAL BAR ═══════ */
+  .sig-bar{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative;z-index:10}
+  .sig-cell{padding:1.4rem 2rem;border-right:1px solid var(--border);transition:background 0.3s}
+  .sig-cell:last-child{border-right:none}
+  .sig-cell:hover{background:var(--blue-faint)}
+  .sig-val{font-weight:600;font-size:1rem;color:var(--yellow);margin-bottom:0.15rem}
+  .sig-label{font-size:0.38rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint)}
+
+  /* ═══════ SECTIONS ═══════ */
+  section{position:relative;z-index:10;padding:5rem 0}
+  .sec-inner{max-width:1000px;margin:0 auto;padding:0 3rem}
+
+  /* ═══════ SPLIT LAYOUT ═══════ */
+  .split{display:flex;gap:3rem;align-items:flex-start;margin-bottom:5rem;justify-content:center}
+  .split:last-child{margin-bottom:0}
+  .split.reverse{flex-direction:row-reverse}
+  .split-panel{flex:0 1 440px;min-width:0}
+  .split-viz{flex:0 0 340px;height:340px;position:relative}
+
+  .viewport{width:100%;height:100%;border-radius:50%;overflow:hidden;border:2px solid var(--border-b);box-shadow:inset 0 0 50px rgba(0,0,0,0.5),0 0 25px var(--blue-faint);position:relative}
+  .viewport canvas{width:100%;height:100%;display:block}
+  .rect-viewport{width:100%;height:100%;border-radius:12px;overflow:hidden;border:1px solid var(--border-b);box-shadow:0 0 25px rgba(0,0,0,0.3);background:var(--bg)}
+  .rect-viewport canvas{width:100%;height:100%;display:block}
+
+  /* ═══════ MEDIA BANDS ═══════ */
+  .media-band{position:relative;z-index:10;aspect-ratio:21/9;max-height:480px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--bg2);overflow:hidden}
+  .media-band canvas{width:100%;height:100%;display:block}
+  .media-caption{position:absolute;bottom:1rem;left:2rem;right:2rem;display:flex;justify-content:space-between;font-size:0.38rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint)}
+
+  /* ═══════ SUBSYSTEMS ═══════ */
+  .sub-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border)}
+  .sub-cell{background:var(--bg);padding:1.8rem 1.6rem;transition:background 0.3s;cursor:default;position:relative}
+  .sub-cell:hover{background:var(--bg2)}
+  .sub-cell::before{content:'';position:absolute;top:0;left:0;bottom:0;width:2px;background:var(--blue-dim);opacity:0;transition:opacity 0.3s}
+  .sub-cell:hover::before{opacity:1}
+  .sub-id{font-size:0.38rem;letter-spacing:0.15em;color:var(--blue-dim);margin-bottom:0.7rem;text-transform:uppercase}
+  .sub-cell h3{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:1.2rem;color:var(--yellow);margin-bottom:0.25rem}
+  .sub-cell p{font-size:0.55rem;font-weight:300;color:var(--text-dim);line-height:1.7}
+  .sub-status{margin-top:0.7rem;display:flex;align-items:center;gap:0.35rem;font-size:0.35rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--green-dim)}
+  .sub-dot{width:4px;height:4px;border-radius:50%;background:var(--green);box-shadow:0 0 4px var(--green)}
+
+  /* ═══════ LOG ═══════ */
+  .log-entry{padding:1.6rem 0;border-bottom:1px solid var(--border);display:grid;grid-template-columns:70px 1fr;gap:1.2rem}
+  .log-ts{font-size:0.42rem;color:var(--blue-dim);padding-top:0.15rem;letter-spacing:0.1em}
+  .log-body h4{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.05rem;color:var(--text-bright);margin-bottom:0.25rem;font-style:italic}
+  .log-body p{font-size:0.65rem;font-weight:300;color:var(--text-dim);line-height:1.8}
+
+  /* ═══════ CTA / TRANSMISSION ═══════ */
+  .tx-section{padding:7rem 0;display:flex;justify-content:center}
+  .tx-panel{max-width:620px;width:100%;text-align:center;margin:0 3rem}
+  .tx-panel .p-body{padding:3.5rem 2.5rem}
+  .tx-pre{font-size:0.4rem;letter-spacing:0.4em;text-transform:uppercase;color:var(--text-faint);margin-bottom:2rem}
+  .tx-msg{font-family:'Cormorant Garamond',serif;font-weight:300;font-style:italic;font-size:1.7rem;color:var(--text-bright);line-height:1.4;margin-bottom:2rem}
+  .tx-msg strong{font-weight:600;color:var(--yellow);font-style:normal}
+  .tx-cta{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;padding:0.85rem 2rem;background:var(--yellow);color:var(--bg);border:none;cursor:pointer;transition:all 0.3s;margin-bottom:1.5rem}
+  .tx-cta:hover{background:#ffe066;box-shadow:0 0 20px var(--yellow-glow)}
+  .tx-sig{font-size:0.45rem;color:var(--text-faint);letter-spacing:0.15em}
+  .tx-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.8rem;color:var(--blue-dim);opacity:0.2;margin-top:1.2rem}
+
+  /* ═══════ SCROLL REVEAL ═══════ */
+  .rv{opacity:0;transform:translateY(18px);transition:opacity 0.8s ease,transform 0.8s ease}
+  .rv.vis{opacity:1;transform:translateY(0)}
+
+  @media(max-width:900px){
+    .hero-inner{flex-direction:column;padding:0 1.5rem}
+    .hero-side{flex-direction:row;gap:0.6rem}
+    .mini-panel{width:110px}
+    .split,.split.reverse{flex-direction:column!important}
+    .split-viz{flex:none;width:100%;max-width:300px;height:300px;margin:0 auto}
+    section{padding:3rem 0}
+    .sec-inner{padding:0 1.5rem}
+    .sub-grid{grid-template-columns:1fr}
+    .sig-bar{grid-template-columns:repeat(2,1fr)}
+    .topbar-r,.corner-data{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<div class="corner-data tl">
+  SYS.REF <span>0x7A2F</span><br>
+  GRID <span>50U</span>
+</div>
+<div class="corner-data br">
+  SIGNAL <span>NOMINAL</span><br>
+  AUTH <span>VERIFIED</span>
+</div>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-l">
+    <span class="sys-name">Galactica</span>
+    <span class="sys-status">Sim Active</span>
+  </div>
+  <div class="topbar-r">
+    <span>Bodies: <strong id="bodyCount">0</strong></span>
+    <span>FPS: <strong id="fpsRead">60</strong></span>
+    <span id="clockRead">00:00:00</span>
+  </div>
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="botbar">
+  <div class="bot-group">
+    <button class="bot-btn" onclick="resetSim()">Reset</button>
+    <button class="bot-btn" onclick="addCluster(60)">+Cluster</button>
+    <button class="bot-btn" id="treeBtn" onclick="toggleTree()">Quadtree</button>
+    <button class="bot-btn" id="trailBtn" onclick="toggleTrails()">Trails</button>
+    <button class="bot-btn" id="pauseBtn" onclick="togglePause()">Pause</button>
+  </div>
+  <div class="bot-group"><div class="bot-read">Click + Drag to Launch</div></div>
+</div>
+
+<canvas id="sim" style="position:fixed;inset:0;z-index:1"></canvas>
+
+<div class="content">
+
+  <!-- ═══════ HERO ═══════ -->
+  <div class="hero">
+    <canvas id="heroRadar"></canvas>
+    <div class="hero-inner">
+      <div class="hero-panel panel">
+        <div class="p-head">
+          <span>// Incoming Transmission</span>
+          <span class="tag">PKT.0x7A2F</span>
+        </div>
+        <div class="p-body">
+          <div class="h-barcode">GALACTICA-2026</div>
+          <h1 class="h-title">Build your empire<br>from <em>nothing</em></h1>
+          <p class="h-desc">
+            Mine asteroids. Smelt ore into steel. Bolt modules onto a station
+            that floats where you put it. Watch your citizens argue about
+            water rations while automatons build the next wing without being asked.
+          </p>
+          <div class="h-actions">
+            <a href="https://store.steampowered.com" class="h-btn" target="_blank" rel="noopener">Wishlist on Steam</a>
+            <a href="#play" class="h-ghost">See Gameplay ↓</a>
+          </div>
+        </div>
+      </div>
+      <div class="hero-side">
+        <div class="mini-panel panel">
+          <div class="p-head"><span>Scale</span></div>
+          <div class="p-body"><div class="mini-stat">10K+</div><div class="mini-unit">Objects in Orbit</div></div>
+        </div>
+        <div class="mini-panel panel">
+          <div class="p-head"><span>Physics</span></div>
+          <div class="p-body"><div class="mini-stat">60fps</div><div class="mini-unit">Real-Time</div></div>
+        </div>
+        <div class="mini-panel panel">
+          <div class="p-head"><span>Stories</span></div>
+          <div class="p-body"><div class="mini-stat">∞</div><div class="mini-unit">Emergent</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ SIGNAL BAR ═══════ -->
+  <div class="sig-bar rv">
+    <div class="sig-cell"><div class="sig-val">Mine</div><div class="sig-label">Asteroids & Moons</div></div>
+    <div class="sig-cell"><div class="sig-val">Build</div><div class="sig-label">Stations Module by Module</div></div>
+    <div class="sig-cell"><div class="sig-val">Govern</div><div class="sig-label">Citizens Who Think for Themselves</div></div>
+    <div class="sig-cell"><div class="sig-val">Expand</div><div class="sig-label">Into Rival Territory</div></div>
+  </div>
+
+  <!-- ═══════ MEDIA BAND 1 ═══════ -->
+  <div class="media-band rv">
+    <canvas id="mediaBand1"></canvas>
+    <div class="media-caption">
+      <span>Screenshot // Orbital Station Construction</span>
+      <span>001 / 004</span>
+    </div>
+  </div>
+
+  <!-- ═══════ GRAVITY / ORBITS ═══════ -->
+  <section id="play">
+    <div class="sec-inner">
+      <div class="split rv">
+        <div class="split-panel">
+          <div class="sys-window">
+            <div class="sw-head">
+              <span class="sw-sys">SYS // Gravity</span>
+              <span class="sw-tag">N-Body</span>
+            </div>
+            <div class="sw-body">
+              <h2>Every orbit is <em>earned</em></h2>
+              <p>
+                Nothing is on rails. Launch a station into orbit and it stays there —
+                or it doesn't, depending on where you put it. Slingshot cargo around
+                a gas giant. Watch two moons tug your asteroid belt apart. The physics
+                is the game.
+              </p>
+              <ul class="data-list">
+                <li><span class="label">Gravity</span><span class="value">N-Body · Real-Time</span></li>
+                <li><span class="label">Scale</span><span class="value">10,000+ Bodies at 60fps</span></li>
+                <li><span class="label">Orbits</span><span class="value">Laplacian Resonance</span></li>
+                <li><span class="label">You Do</span><span class="value">Place, Launch, Slingshot</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="split-viz">
+          <div class="viewport"><canvas id="orreryVP"></canvas></div>
+        </div>
+      </div>
+
+      <!-- ═══════ CONSTRUCTION ═══════ -->
+      <div class="split reverse rv">
+        <div class="split-panel">
+          <div class="sys-window">
+            <div class="sw-head">
+              <span class="sw-sys">SYS // Construction</span>
+              <span class="sw-tag">Station Builder</span>
+            </div>
+            <div class="sw-body">
+              <h2>Bolt it together <em>yourself</em></h2>
+              <p>
+                Place habitation pods, refineries, solar arrays, and docking bays
+                on an orthogonal grid. Your AI workers carry materials from stockpiles
+                and assemble each module autonomously. No templates — every station
+                is shaped by your decisions and your resources.
+              </p>
+              <ul class="data-list">
+                <li><span class="label">Modules</span><span class="value">Hab · Refinery · Solar · Dock</span></li>
+                <li><span class="label">Workforce</span><span class="value">Autonomous AI Agents</span></li>
+                <li><span class="label">Grid</span><span class="value">Orthogonal · No 2×2 Blocks</span></li>
+                <li><span class="label">You Do</span><span class="value">Design, Assign, Expand</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="split-viz">
+          <div class="rect-viewport"><canvas id="elevatorViz"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ MEDIA BAND 2 ═══════ -->
+  <div class="media-band rv">
+    <canvas id="mediaBand2"></canvas>
+    <div class="media-caption">
+      <span>Screenshot // Asteroid Mining · Resource Flow</span>
+      <span>002 / 004</span>
+    </div>
+  </div>
+
+  <!-- ═══════ ECONOMY ═══════ -->
+  <section>
+    <div class="sec-inner">
+      <div class="split rv">
+        <div class="split-panel">
+          <div class="sys-window">
+            <div class="sw-head">
+              <span class="sw-sys">SYS // Economy</span>
+              <span class="sw-tag">Supply Chain</span>
+            </div>
+            <div class="sw-body">
+              <h2>Run an empire on <em>elevator cables</em></h2>
+              <p>
+                Mine raw ore on the surface. Ride it up the space elevator. Smelt it
+                into ingots. Forge ingots into hull plating. Ship plating to your
+                orbital shipyard. Every link in the chain is something you built,
+                something that can break, and something your rivals want.
+              </p>
+              <ul class="data-list">
+                <li><span class="label">Tiers</span><span class="value">Raw → Refined → Component → Assembly</span></li>
+                <li><span class="label">Transport</span><span class="value">Elevator + Shuttle</span></li>
+                <li><span class="label">Factions</span><span class="value">Independent Economies</span></li>
+                <li><span class="label">You Do</span><span class="value">Route, Optimize, Defend</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="split-viz">
+          <div class="rect-viewport"><canvas id="networkViz"></canvas></div>
+        </div>
+      </div>
+
+      <!-- ═══════ CITIZENS ═══════ -->
+      <div class="split reverse rv">
+        <div class="split-panel">
+          <div class="sys-window">
+            <div class="sw-head">
+              <span class="sw-sys">SYS // Citizens</span>
+              <span class="sw-tag">Social Sim</span>
+            </div>
+            <div class="sw-body">
+              <h2>People who <em>talk back</em></h2>
+              <p>
+                Your citizens aren't numbers. They form friendships, pick fights,
+                develop skills, and gossip. A dynamic narrator watches the simulation
+                and gives them voices — every character speaks from the state of
+                the world you've built. No two playthroughs share a story.
+              </p>
+              <ul class="data-list">
+                <li><span class="label">Dialogue</span><span class="value">LLM-Driven · Streaming</span></li>
+                <li><span class="label">Relations</span><span class="value">Friendship · Rivalry · Romance</span></li>
+                <li><span class="label">Morale</span><span class="value">Per-Citizen · Reactive</span></li>
+                <li><span class="label">You Do</span><span class="value">Manage, Mediate, Listen</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div class="split-viz">
+          <div class="viewport"><canvas id="socialViz"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ MEDIA BAND 3 ═══════ -->
+  <div class="media-band rv">
+    <canvas id="mediaBand3"></canvas>
+    <div class="media-caption">
+      <span>Screenshot // Citizen Conversations · Dynamic Narrator</span>
+      <span>003 / 004</span>
+    </div>
+  </div>
+
+  <!-- ═══════ SUBSYSTEMS ═══════ -->
+  <section>
+    <div class="sec-inner">
+      <div class="sys-window full-width rv">
+        <div class="sw-head">
+          <span class="sw-sys">Under the Hood</span>
+          <span class="sw-tag">Runtime</span>
+        </div>
+        <div class="sub-grid">
+          <div class="sub-cell"><div class="sub-id">Renderer</div><h3>Quarkstrom</h3><p>Custom engine · mega-atlas · frustum culling · volumetric shaders</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
+          <div class="sub-cell"><div class="sub-id">Interface</div><h3>egui</h3><p>Immediate-mode GUI · custom themed panels · zero-alloc widgets</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
+          <div class="sub-cell"><div class="sub-id">Language</div><h3>Rust</h3><p>Zero-cost abstractions · fearless concurrency · no garbage collector</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
+          <div class="sub-cell"><div class="sub-id">Narrative</div><h3>LLM</h3><p>Local model · streaming narrator · sim-state aware dialogue</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
+          <div class="sub-cell"><div class="sub-id">Power</div><h3>Solar Mesh</h3><p>Dynamic panel physics · distribution networks · eclipse survival</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
+          <div class="sub-cell"><div class="sub-id">Social</div><h3>Graph Net</h3><p>Citizen relationships · loyalty dynamics · emergent factions</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ INTERCEPT LOG ═══════ -->
+  <section>
+    <div class="sec-inner">
+      <div class="sys-window full-width rv">
+        <div class="sw-head">
+          <span class="sw-sys">Signal Intercepts</span>
+          <span class="sw-tag">Gameplay Moments</span>
+        </div>
+        <div class="sw-body">
+          <div class="log-entry">
+            <div class="log-ts">CYC::041</div>
+            <div class="log-body"><h4>"The elevator held."</h4><p>First cargo run from the surface. Sixteen tonnes on a thread against gravity. Your stockpile doubled overnight.</p></div>
+          </div>
+          <div class="log-entry">
+            <div class="log-ts">CYC::087</div>
+            <div class="log-body"><h4>"They routed around the array."</h4><p>You didn't tell the automatons to avoid the solar panels. They figured it out. Three extra hours, but the lights stayed on.</p></div>
+          </div>
+          <div class="log-entry">
+            <div class="log-ts">CYC::142</div>
+            <div class="log-body"><h4>"Korvin won't speak to Jael."</h4><p>A water ration dispute. Morale's slipping on C-deck. You reassigned Jael to the foundry. Distance buys time, not peace.</p></div>
+          </div>
+          <div class="log-entry" style="border-bottom:none">
+            <div class="log-ts">CYC::203</div>
+            <div class="log-body"><h4>"The Tessari sent a signal."</h4><p>Not hostile. Not friendly. A trade proposal wrapped in territorial language. You have what they need — and they know it.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ MEDIA BAND 4 ═══════ -->
+  <div class="media-band rv">
+    <canvas id="mediaBand4"></canvas>
+    <div class="media-caption">
+      <span>Screenshot // Faction Diplomacy · Trade Networks</span>
+      <span>004 / 004</span>
+    </div>
+  </div>
+
+  <!-- ═══════ CTA ═══════ -->
+  <div class="tx-section">
+    <div class="tx-panel panel rv">
+      <div class="p-head"><span>// End Transmission</span><span class="tag">SIG.VERIFIED</span></div>
+      <div class="p-body">
+        <div class="tx-pre">Signal Origin · Active Development</div>
+        <div class="tx-msg">The void is yours.<br><strong>What will you build?</strong></div>
+        <a href="https://store.steampowered.com" class="tx-cta" target="_blank" rel="noopener">Wishlist on Steam</a><br>
+        <div class="tx-sig">GALACTICA // Rust + Quarkstrom + egui // In Development</div>
+        <div class="tx-barcode">GALACTICA-EOT-2026</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const dpr=Math.min(devicePixelRatio||1,2),TAU=Math.PI*2;
+function initCanvas(id){const c=document.getElementById(id);if(!c)return null;return{c,ctx:c.getContext('2d')}}
+function sizeCanvas(cv,w,h){cv.c.width=w*dpr;cv.c.height=h*dpr;cv.c.style.width=w+'px';cv.c.style.height=h+'px';cv.ctx.setTransform(dpr,0,0,dpr,0,0)}
+
+// ═══════ N-BODY SIM ═══════
+const simCV=initCanvas('sim');let W,H,bodies=[],showTree=false,showTrails=false,paused=false;
+const G=800,THETA=0.5,SOFTENING=4,DT=0.016,MAX_TRAIL=40;
+class Body{constructor(x,y,vx,vy,m){this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.ax=0;this.ay=0;this.mass=m;this.radius=Math.pow(m,0.33)*0.8;this.trail=[];const t=Math.min(m/500,1);this.color=t>0.8?'#96c8ff':t>0.4?'#7090b0':t>0.15?'#4a6080':'#2a3850'}}
+class QTNode{constructor(x,y,w,h){this.x=x;this.y=y;this.w=w;this.h=h;this.mass=0;this.cx=0;this.cy=0;this.body=null;this.children=null;this.count=0}insert(b){if(b.x<this.x||b.x>this.x+this.w||b.y<this.y||b.y>this.y+this.h)return;if(this.count===0){this.body=b;this.mass=b.mass;this.cx=b.x;this.cy=b.y;this.count=1;return}if(!this.children){this.subdivide();const o=this.body;this.body=null;for(const c of this.children)c.insert(o)}for(const c of this.children)c.insert(b);const tm=this.mass+b.mass;this.cx=(this.cx*this.mass+b.x*b.mass)/tm;this.cy=(this.cy*this.mass+b.y*b.mass)/tm;this.mass=tm;this.count++}subdivide(){const hw=this.w/2,hh=this.h/2;this.children=[new QTNode(this.x,this.y,hw,hh),new QTNode(this.x+hw,this.y,hw,hh),new QTNode(this.x,this.y+hh,hw,hh),new QTNode(this.x+hw,this.y+hh,hw,hh)]}calcForce(b){if(this.count===0)return;if(this.count===1&&this.body===b)return;const dx=this.cx-b.x,dy=this.cy-b.y,dSq=dx*dx+dy*dy+SOFTENING*SOFTENING,d=Math.sqrt(dSq);if(this.count===1||this.w/d<THETA){const F=G*this.mass/dSq;b.ax+=F*dx/d;b.ay+=F*dy/d;return}if(this.children)for(const c of this.children)c.calcForce(b)}}
+function buildTree(){let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;for(const b of bodies){if(b.x<minX)minX=b.x;if(b.x>maxX)maxX=b.x;if(b.y<minY)minY=b.y;if(b.y>maxY)maxY=b.y}const s=Math.max(maxX-minX,maxY-minY)+20;const r=new QTNode(minX-10,minY-10,s,s);for(const b of bodies)r.insert(b);return r}
+function drawTree(n,ctx){if(!n||n.count===0)return;ctx.strokeStyle='rgba(150,200,255,0.04)';ctx.lineWidth=0.5;ctx.strokeRect(n.x,n.y,n.w,n.h);if(n.children)for(const c of n.children)drawTree(c,ctx)}
+function spawnBody(x,y,vx,vy,m){bodies.push(new Body(x,y,vx||0,vy||0,m||(5+Math.random()*60)))}
+function addCluster(n){const cx=W*0.15+Math.random()*W*0.7,cy=H*0.15+Math.random()*H*0.7,r=80+Math.random()*100;spawnBody(cx,cy,0,0,300+Math.random()*400);for(let i=0;i<n;i++){const a=Math.random()*TAU,d=20+Math.random()*r,x=cx+Math.cos(a)*d,y=cy+Math.sin(a)*d;const sp=Math.sqrt(G*400/d)*(0.6+Math.random()*0.4);spawnBody(x,y,-Math.sin(a)*sp,Math.cos(a)*sp,3+Math.random()*30)}}
+function resetSim(){bodies=[];addCluster(100);setTimeout(()=>addCluster(80),100)}
+let lastTree=null;
+function stepSim(){if(paused)return;bodies=bodies.filter(b=>b.x>-1500&&b.x<W+1500&&b.y>-1500&&b.y<H+1500);if(bodies.length<2)return;lastTree=buildTree();for(const b of bodies){b.ax=0;b.ay=0}for(const b of bodies)lastTree.calcForce(b);for(const b of bodies){b.vx+=b.ax*DT;b.vy+=b.ay*DT;b.x+=b.vx*DT;b.y+=b.vy*DT;if(b.x<-200)b.vx+=2;if(b.x>W+200)b.vx-=2;if(b.y<-200)b.vy+=2;if(b.y>H+200)b.vy-=2;if(showTrails){b.trail.push({x:b.x,y:b.y});if(b.trail.length>MAX_TRAIL)b.trail.shift()}else if(b.trail.length)b.trail=[]}}
+function renderSim(){const ctx=simCV.ctx;ctx.clearRect(0,0,W,H);if(showTree&&lastTree)drawTree(lastTree,ctx);if(showTrails)for(const b of bodies){if(b.trail.length<2)continue;ctx.beginPath();ctx.moveTo(b.trail[0].x,b.trail[0].y);for(let i=1;i<b.trail.length;i++)ctx.lineTo(b.trail[i].x,b.trail[i].y);ctx.strokeStyle=b.color+'18';ctx.lineWidth=b.radius*0.5;ctx.stroke()}for(const b of bodies){const gr=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.radius*5);gr.addColorStop(0,b.color+'10');gr.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(b.x,b.y,b.radius*5,0,TAU);ctx.fillStyle=gr;ctx.fill();ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,TAU);ctx.fillStyle=b.color;ctx.fill()}}
+
+// ═══════ RADAR ORRERY ═══════
+const heroCV=initCanvas('heroRadar');
+const BASE_T=16;
+const planets=[{T:1,color:'#ffc832',r:0.02,moons:[{d:0.028,T:0.18,r:0.007}]},{T:2,color:'#ff8844',r:0.028,moons:[{d:0.03,T:0.22,r:0.006},{d:0.05,T:0.4,r:0.008}]},{T:4,color:'#ff5050',r:0.034,moons:[{d:0.035,T:0.3,r:0.006}]},{T:8,color:'#96c8ff',r:0.024,moons:[{d:0.03,T:0.24,r:0.006}]}];
+planets.forEach(p=>{p.dist=0.27*Math.pow(p.T,2/3);p.omega=TAU/(BASE_T*p.T)});
+planets[0].phase=0;planets[1].phase=Math.PI*0.55;planets[2].phase=Math.PI*1.2;planets[3].phase=Math.PI*0.1;
+planets.forEach(p=>p.moons.forEach(m=>{m.phase=Math.random()*TAU;m.omega=TAU/(BASE_T*m.T)}));
+const asteroids=[];const bi=planets[1].dist+0.02,bo=planets[2].dist-0.02;
+for(let i=0;i<40;i++){const d=bi+Math.random()*(bo-bi);asteroids.push({dist:d,omega:TAU/(BASE_T*Math.pow(d/0.27,1.5)),phase:Math.random()*TAU,r:0.003+Math.random()*0.003})}
+const sweepSpeed=TAU/4;
+
+function drawRadar(ctx,W,H,t,opts={}){
+  const cx=W/2,cy=H/2,sc=Math.min(W,H)/2.4,sa=sweepSpeed*t;
+  ctx.fillStyle=opts.bg||'rgba(14,17,24,0.95)';ctx.fillRect(0,0,W,H);
+  const maxR=planets[3].dist*sc*1.25;
+  for(let i=1;i<=5;i++){const r=(i/5)*maxR;ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.strokeStyle='rgba(150,200,255,0.025)';ctx.lineWidth=0.5;ctx.stroke()}
+  for(let i=0;i<12;i++){const a=(i/12)*TAU;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*maxR,cy+Math.sin(a)*maxR);ctx.strokeStyle='rgba(150,200,255,0.012)';ctx.lineWidth=0.3;ctx.stroke()}
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(sa)*maxR*1.2,cy+Math.sin(sa)*maxR*1.2);ctx.strokeStyle='rgba(150,200,255,0.2)';ctx.lineWidth=1;ctx.stroke();
+  for(let i=0;i<12;i++){const a=sa-(i/12)*0.5,al=(1-i/12)*0.02;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,maxR*1.1,a-0.02,a+0.02);ctx.closePath();ctx.fillStyle=`rgba(150,200,255,${al})`;ctx.fill()}
+  planets.forEach(p=>{const R=p.dist*sc;ctx.beginPath();ctx.setLineDash([1.5,5]);ctx.arc(cx,cy,R,0,TAU);ctx.strokeStyle='rgba(150,200,255,0.025)';ctx.lineWidth=0.4;ctx.stroke();ctx.setLineDash([])});
+  asteroids.forEach(a=>{const ang=a.phase+a.omega*t;ctx.beginPath();ctx.arc(cx+Math.cos(ang)*a.dist*sc,cy+Math.sin(ang)*a.dist*sc,a.r*sc,0,TAU);ctx.fillStyle='rgba(150,200,255,0.05)';ctx.fill()});
+  ctx.beginPath();ctx.arc(cx,cy,0.04*sc,0,TAU);ctx.fillStyle='rgba(255,200,80,0.1)';ctx.fill();
+  ctx.beginPath();ctx.arc(cx,cy,0.02*sc,0,TAU);ctx.fillStyle='rgba(255,200,80,0.2)';ctx.fill();
+  planets.forEach(p=>{
+    const a=p.phase+p.omega*t,px=cx+Math.cos(a)*p.dist*sc,py=cy+Math.sin(a)*p.dist*sc;
+    let sd=(sa-a)%TAU;if(sd<0)sd+=TAU;const ping=sd<1.5?1-sd/1.5:0;
+    if(ping>0){const pr=p.r*sc*(3+(1-ping)*5);ctx.beginPath();ctx.arc(px,py,pr,0,TAU);ctx.strokeStyle=`rgba(150,200,255,${ping*0.12})`;ctx.lineWidth=0.8;ctx.stroke()}
+    const gl=ctx.createRadialGradient(px,py,0,px,py,p.r*sc*3);gl.addColorStop(0,p.color+'18');gl.addColorStop(1,'transparent');
+    ctx.beginPath();ctx.arc(px,py,p.r*sc*3,0,TAU);ctx.fillStyle=gl;ctx.fill();
+    ctx.beginPath();ctx.arc(px,py,p.r*sc,0,TAU);ctx.fillStyle=p.color;ctx.globalAlpha=0.5+ping*0.5;ctx.fill();ctx.globalAlpha=1;
+    if(opts.labels!==false&&sc>80){ctx.font=`${Math.max(7,sc*0.028)}px 'JetBrains Mono',monospace`;ctx.fillStyle=`rgba(150,200,255,${0.08+ping*0.1})`;ctx.textAlign='left';ctx.fillText(`T=${p.T}`,px+p.r*sc+5,py+3)}
+    p.moons.forEach(m=>{const ma=m.phase+m.omega*t;ctx.beginPath();ctx.arc(px+Math.cos(ma)*m.d*sc,py+Math.sin(ma)*m.d*sc,m.r*sc,0,TAU);ctx.fillStyle='rgba(150,200,255,0.12)';ctx.fill()})
+  });
+}
+
+const orrCV=initCanvas('orreryVP');
+function drawOrrPort(t){if(!orrCV)return;const el=orrCV.c.parentElement,r=el.getBoundingClientRect(),s=Math.min(r.width,r.height);sizeCanvas(orrCV,s,s);drawRadar(orrCV.ctx,s,s,t,{bg:'#0e1118',labels:false})}
+
+// ═══════ ELEVATOR ═══════
+const elevCV=initCanvas('elevatorViz');
+function drawElevator(t){if(!elevCV)return;const el=elevCV.c.parentElement,r=el.getBoundingClientRect();sizeCanvas(elevCV,r.width,r.height);const ctx=elevCV.ctx,W2=r.width,H2=r.height;ctx.fillStyle='#0e1118';ctx.fillRect(0,0,W2,H2);
+const pR=W2*0.8,pCY=H2+pR*0.62;ctx.beginPath();ctx.arc(W2/2,pCY,pR,0,TAU);const pg=ctx.createRadialGradient(W2/2,pCY,pR*0.9,W2/2,pCY,pR);pg.addColorStop(0,'#1a2040');pg.addColorStop(1,'#0c1020');ctx.fillStyle=pg;ctx.fill();ctx.beginPath();ctx.arc(W2/2,pCY,pR+2,0,TAU);ctx.strokeStyle='rgba(100,150,255,0.08)';ctx.lineWidth=2;ctx.stroke();
+const bX=W2/2,bY=pCY-pR+5,tY=30;ctx.beginPath();ctx.setLineDash([3,4]);ctx.moveTo(bX,bY);ctx.lineTo(bX,tY);ctx.strokeStyle='rgba(150,200,255,0.15)';ctx.lineWidth=1;ctx.stroke();ctx.setLineDash([]);
+ctx.fillStyle='rgba(150,200,255,0.12)';ctx.fillRect(bX-35,tY-7,70,14);ctx.strokeStyle='rgba(150,200,255,0.25)';ctx.lineWidth=0.5;ctx.strokeRect(bX-35,tY-7,70,14);
+for(let i=0;i<5;i++){ctx.fillStyle='rgba(255,200,80,0.2)';ctx.fillRect(bX-28+i*13,tY-4,8,8)}
+for(let i=0;i<3;i++){const ph=(t*0.3+i/3)%1,py=bY+(tY-bY)*ph;ctx.fillStyle='rgba(255,200,80,0.4)';ctx.fillRect(bX-3,py-3,6,6);const cg=ctx.createRadialGradient(bX,py,0,bX,py,12);cg.addColorStop(0,'rgba(255,200,80,0.06)');cg.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(bX,py,12,0,TAU);ctx.fillStyle=cg;ctx.fill()}
+for(let i=0;i<45;i++){const sx=(Math.sin(i*127.1)*0.5+0.5)*W2,sy=(Math.cos(i*311.7)*0.5+0.5)*H2*0.55;ctx.beginPath();ctx.arc(sx,sy,0.5+Math.random()*0.5,0,TAU);ctx.fillStyle=`rgba(200,210,230,${0.12+Math.sin(t+i)*0.08})`;ctx.fill()}}
+
+// ═══════ NETWORK ═══════
+const netCV=initCanvas('networkViz');const netNodes=[];
+for(let i=0;i<18;i++)netNodes.push({x:0.12+Math.random()*0.76,y:0.12+Math.random()*0.76,vx:(Math.random()-0.5)*0.001,vy:(Math.random()-0.5)*0.001,r:3+Math.random()*5,color:['#ffc832','#ff8844','#96c8ff','#64c864'][i%4]});
+const netEdges=[];for(let i=0;i<netNodes.length;i++)for(let j=i+1;j<netNodes.length;j++)if(Math.random()<0.14)netEdges.push([i,j]);
+function drawNetwork(t){if(!netCV)return;const el=netCV.c.parentElement,r=el.getBoundingClientRect();sizeCanvas(netCV,r.width,r.height);const ctx=netCV.ctx,W2=r.width,H2=r.height;ctx.fillStyle='#0e1118';ctx.fillRect(0,0,W2,H2);netNodes.forEach(n=>{n.x+=n.vx;n.y+=n.vy;if(n.x<0.06||n.x>0.94)n.vx*=-1;if(n.y<0.06||n.y>0.94)n.vy*=-1});netEdges.forEach(([i,j])=>{const a=netNodes[i],b=netNodes[j];ctx.beginPath();ctx.moveTo(a.x*W2,a.y*H2);ctx.lineTo(b.x*W2,b.y*H2);ctx.strokeStyle='rgba(150,200,255,0.05)';ctx.lineWidth=0.5;ctx.stroke();const p=(t*0.2+i*0.1)%1;ctx.beginPath();ctx.arc(a.x*W2+(b.x*W2-a.x*W2)*p,a.y*H2+(b.y*H2-a.y*H2)*p,1.5,0,TAU);ctx.fillStyle='rgba(255,200,80,0.15)';ctx.fill()});netNodes.forEach(n=>{const gl=ctx.createRadialGradient(n.x*W2,n.y*H2,0,n.x*W2,n.y*H2,n.r*3);gl.addColorStop(0,n.color+'12');gl.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(n.x*W2,n.y*H2,n.r*3,0,TAU);ctx.fillStyle=gl;ctx.fill();ctx.beginPath();ctx.arc(n.x*W2,n.y*H2,n.r,0,TAU);ctx.fillStyle=n.color;ctx.globalAlpha=0.6;ctx.fill();ctx.globalAlpha=1})}
+
+// ═══════ SOCIAL ═══════
+const socCV=initCanvas('socialViz');const socNodes=[];const socColors=['#ff6b6b','#ffa07a','#ffcc66','#66cccc','#88bb88','#cc88cc','#96c8ff','#ff88aa'];
+for(let i=0;i<14;i++)socNodes.push({x:0.2+Math.random()*0.6,y:0.2+Math.random()*0.6,vx:(Math.random()-0.5)*0.0005,vy:(Math.random()-0.5)*0.0005,r:4+Math.random()*6,color:socColors[i%socColors.length]});
+const socEdges=[];for(let i=0;i<socNodes.length;i++)for(let j=i+1;j<socNodes.length;j++)if(Math.random()<0.12)socEdges.push([i,j]);
+function drawSocial(t){if(!socCV)return;const el=socCV.c.parentElement,r=el.getBoundingClientRect(),s=Math.min(r.width,r.height);sizeCanvas(socCV,s,s);const ctx=socCV.ctx;ctx.fillStyle='#0e1118';ctx.fillRect(0,0,s,s);socNodes.forEach(n=>{n.x+=n.vx+Math.sin(t*0.5+n.r)*0.0003;n.y+=n.vy+Math.cos(t*0.7+n.r)*0.0003;if(n.x<0.12||n.x>0.88)n.vx*=-1;if(n.y<0.12||n.y>0.88)n.vy*=-1});socEdges.forEach(([i,j])=>{const a=socNodes[i],b=socNodes[j];ctx.beginPath();ctx.moveTo(a.x*s,a.y*s);ctx.lineTo(b.x*s,b.y*s);ctx.strokeStyle='rgba(255,150,150,0.06)';ctx.lineWidth=0.6;ctx.stroke()});socNodes.forEach(n=>{const gl=ctx.createRadialGradient(n.x*s,n.y*s,0,n.x*s,n.y*s,n.r*2.5);gl.addColorStop(0,n.color+'18');gl.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(n.x*s,n.y*s,n.r*2.5,0,TAU);ctx.fillStyle=gl;ctx.fill();ctx.beginPath();ctx.arc(n.x*s,n.y*s,n.r,0,TAU);ctx.fillStyle=n.color;ctx.globalAlpha=0.7;ctx.fill();ctx.globalAlpha=1})}
+
+// ═══════ MEDIA PLACEHOLDERS ═══════
+function drawMedia(id,t,seed){const cv=initCanvas(id);if(!cv)return;const el=cv.c.parentElement,r=el.getBoundingClientRect();sizeCanvas(cv,r.width,r.height);const ctx=cv.ctx,W2=r.width,H2=r.height;ctx.fillStyle='#0c1018';ctx.fillRect(0,0,W2,H2);const ng=ctx.createRadialGradient(W2*0.35,H2*0.5,0,W2*0.35,H2*0.5,W2*0.5);ng.addColorStop(0,'rgba(150,200,255,0.012)');ng.addColorStop(1,'transparent');ctx.fillStyle=ng;ctx.fillRect(0,0,W2,H2);for(let i=0;i<100;i++){const sx=(Math.sin(i*127.1+seed)*0.5+0.5)*W2,sy=(Math.cos(i*311.7+seed)*0.5+0.5)*H2;ctx.beginPath();ctx.arc(sx,sy,0.5+Math.random()*0.8,0,TAU);ctx.fillStyle=`rgba(200,210,230,${0.08+Math.sin(t*0.5+i*0.3)*0.06})`;ctx.fill()}ctx.font="10px 'JetBrains Mono',monospace";ctx.fillStyle='rgba(150,200,255,0.06)';ctx.textAlign='center';ctx.fillText('[ SCREENSHOT / VIDEO PLACEHOLDER ]',W2/2,H2/2)}
+
+// ═══════ RESIZE ═══════
+function resize(){W=innerWidth;H=innerHeight;sizeCanvas(simCV,W,H);sizeCanvas(heroCV,W,H)}
+resize();addEventListener('resize',resize);
+
+// ═══════ CONTROLS ═══════
+function toggleTree(){showTree=!showTree;document.getElementById('treeBtn').classList.toggle('active',showTree)}
+function toggleTrails(){showTrails=!showTrails;document.getElementById('trailBtn').classList.toggle('active',showTrails)}
+function togglePause(){paused=!paused;const b=document.getElementById('pauseBtn');b.classList.toggle('active',paused);b.textContent=paused?'Resume':'Pause'}
+window.resetSim=resetSim;window.addCluster=addCluster;window.toggleTree=toggleTree;window.toggleTrails=toggleTrails;window.togglePause=togglePause;
+
+let dragging=false,dragStart=null;
+simCV.c.addEventListener('mousedown',e=>{dragging=true;dragStart={x:e.clientX,y:e.clientY}});
+addEventListener('mouseup',e=>{if(dragging&&dragStart){spawnBody(dragStart.x,dragStart.y,(dragStart.x-e.clientX)*3,(dragStart.y-e.clientY)*3,10+Math.random()*80);dragging=false;dragStart=null}});
+
+let fc=0,lastFT=performance.now(),time=0;
+addCluster(100);setTimeout(()=>addCluster(80),100);
+
+function loop(){
+  time+=1/60;stepSim();renderSim();
+  drawRadar(heroCV.ctx,W,H,time);drawOrrPort(time);drawElevator(time);drawNetwork(time);drawSocial(time);
+  drawMedia('mediaBand1',time,42);drawMedia('mediaBand2',time,137);drawMedia('mediaBand3',time,271);drawMedia('mediaBand4',time,389);
+  fc++;const now=performance.now();if(now-lastFT>=1000){document.getElementById('fpsRead').textContent=fc;fc=0;lastFT=now}
+  document.getElementById('bodyCount').textContent=bodies.length;
+  document.getElementById('clockRead').textContent=new Date().toTimeString().slice(0,8);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+const obs=new IntersectionObserver(e=>{e.forEach(el=>{if(el.isIntersecting)el.target.classList.add('vis')})},{threshold:0.08});
+document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
+</script>
+</body>
+</html>
