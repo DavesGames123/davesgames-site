@@ -3,93 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>GALACTICA // Build Among the Stars</title>
+<title>GALACTICA // The Universe is Yours</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
 <style>
   :root {
-    /* ─── In-game palette ─── */
-    --bg:          #0e1118;
-    --bg2:         #121620;
-    --bg3:         #161c28;
-    --surface:     #1c2436;
-    --surface2:    #243040;
-    --border:      rgba(150,200,255,0.06);
-    --border-b:    rgba(150,200,255,0.14);
-    --border-warm: rgba(255,200,80,0.12);
-
-    /* Primary: cool blue (matches ACCENT_LIGHT in-game) */
-    --blue:        #96c8ff;
-    --blue-dim:    #5a8cc0;
-    --blue-faint:  rgba(150,200,255,0.04);
-    --blue-glow:   rgba(150,200,255,0.10);
-
-    /* Accent: warm yellow (matches COLOR_WARNING in-game) */
-    --yellow:      #ffc832;
-    --yellow-dim:  #b8901e;
-    --yellow-faint:rgba(255,200,50,0.04);
-    --yellow-glow: rgba(255,200,50,0.10);
-
-    --red:         #ff5050;
-    --green:       #64c864;
-    --green-dim:   #3a7840;
-    --cyan:        #4ad8e0;
-
-    --text:        #c8d0e0;
-    --text-dim:    #6878a0;
-    --text-faint:  #384060;
-    --text-bright: #e8ecf4;
-
-    --scan:        rgba(0,0,0,0.06);
+    --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+    --surface:#1c2436;--surface2:#243040;
+    --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+    --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
+    --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);--yellow-glow:rgba(255,200,50,0.10);
+    --red:#ff5050;--green:#64c864;--cyan:#4ad8e0;
+    --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+    --scan:rgba(0,0,0,0.06);
   }
-
   *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
   html{scroll-behavior:smooth;overflow-x:hidden;max-width:100vw}
-
-  body {
-    font-family:'JetBrains Mono',monospace;
-    background:var(--bg);
-    color:var(--text);
-    overflow-x:hidden;
-    max-width:100vw;
-    -webkit-font-smoothing:antialiased;
-    cursor:crosshair;
-  }
-
-  /* ═══════ CRT SCANLINES ═══════ */
-  body::before {
-    content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
-    background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);
-    mix-blend-mode:multiply;
-  }
-  body::after {
-    content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
-    background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.35) 100%);
-  }
-
-  /* ═══════ GRID BG ═══════ */
-  .grid-bg {
-    position:fixed;inset:0;z-index:0;pointer-events:none;
-    background-image:
-      linear-gradient(rgba(150,200,255,0.018) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(150,200,255,0.018) 1px, transparent 1px),
-      linear-gradient(rgba(150,200,255,0.006) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(150,200,255,0.006) 1px, transparent 1px);
-    background-size:300px 300px,300px 300px,50px 50px,50px 50px;
-  }
-
-  /* ═══════ CORNER DATA ═══════ */
+  body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);overflow-x:hidden;max-width:100vw;-webkit-font-smoothing:antialiased;cursor:crosshair}
+  body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+  body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.35) 100%)}
+  .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
   .corner-data{position:fixed;z-index:50;pointer-events:none;font-size:0.38rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);line-height:1.8}
-  .corner-data.tl{top:3.2rem;left:1rem}
-  .corner-data.br{bottom:3.2rem;right:1rem;text-align:right}
+  .corner-data.tl{top:3.2rem;left:1rem}.corner-data.br{bottom:3.2rem;right:1rem;text-align:right}
   .corner-data span{color:var(--blue-dim)}
 
-  /* ═══════ TOP BAR ═══════ */
-  .topbar{
-    position:fixed;top:0;left:0;right:0;z-index:100;
-    display:flex;align-items:center;justify-content:space-between;
-    padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);
-    border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;
-  }
+  /* ═══════ BARS ═══════ */
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase}
   .topbar-l{display:flex;align-items:center;gap:1.5rem}
   .sys-name{color:var(--blue);font-weight:700;font-size:0.65rem;letter-spacing:0.3em}
   .sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green)}
@@ -97,74 +35,53 @@
   @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
   .topbar-r{display:flex;gap:2rem;color:var(--text-dim)}
   .topbar-r strong{color:var(--blue-dim);font-weight:500}
-
-  /* ═══════ BOTTOM BAR ═══════ */
-  .botbar{
-    position:fixed;bottom:0;left:0;right:0;z-index:100;
-    display:flex;align-items:center;justify-content:space-between;
-    padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);
-    border-top:1px solid var(--border);font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase;
-  }
+  .botbar{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-top:1px solid var(--border);font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase}
   .bot-group{display:flex;align-items:center;gap:0.8rem}
-  .bot-btn{
-    background:transparent;border:1px solid var(--border);color:var(--text-dim);
-    font-family:'JetBrains Mono',monospace;font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase;
-    padding:0.3rem 0.7rem;cursor:pointer;transition:all 0.2s;
-  }
+  .bot-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.3rem 0.7rem;cursor:pointer;transition:all 0.2s}
   .bot-btn:hover{border-color:var(--blue);color:var(--blue);box-shadow:0 0 10px var(--blue-glow)}
   .bot-btn.active{border-color:var(--blue);color:var(--bg);background:var(--blue)}
   .bot-read{color:var(--text-faint)}
 
-  /* ═══════ CONTENT ═══════ */
   .content{position:relative;z-index:10;pointer-events:none}
   .content > *{pointer-events:auto}
 
-  /* ═══════ PANEL ═══════ */
+  /* ═══════ PANELS ═══════ */
   .panel{background:rgba(14,17,24,0.88);backdrop-filter:blur(20px);border:1px solid var(--border);position:relative}
   .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue-dim),transparent)}
   .p-head{display:flex;align-items:center;justify-content:space-between;padding:0.55rem 1.2rem;border-bottom:1px solid var(--border);font-size:0.45rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim)}
   .p-head .tag{color:var(--text-faint);font-size:0.4rem}
-  .p-body{padding:2rem 2.5rem}
 
-  /* ═══════ SYSTEM WINDOW ═══════ */
   .sys-window{border:1px solid var(--border-b);background:rgba(14,17,24,0.92);backdrop-filter:blur(16px);position:relative;width:440px;max-width:440px;overflow:hidden}
   .sys-window.full-width{width:100%;max-width:100%}
   .sys-window::before{content:'';position:absolute;inset:3px;border:1px solid var(--border);pointer-events:none}
   .sys-window::after{content:'';position:absolute;top:0;left:0;width:6px;height:6px;background:var(--blue-dim);box-shadow:calc(100% - 6px) 0 0 var(--blue-dim),0 calc(100% - 6px) 0 var(--blue-dim),calc(100% - 6px) calc(100% - 6px) 0 var(--blue-dim);pointer-events:none}
   .sw-head{padding:0.6rem 1.2rem;border-bottom:1px solid var(--border-b);display:flex;justify-content:space-between;align-items:center;font-size:0.45rem;letter-spacing:0.2em;text-transform:uppercase}
-  .sw-head .sw-sys{color:var(--blue)}
-  .sw-head .sw-tag{color:var(--text-faint)}
+  .sw-head .sw-sys{color:var(--blue)}.sw-head .sw-tag{color:var(--text-faint)}
   .sw-body{padding:2rem 2.2rem}
   .sw-body h2{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:2rem;color:var(--text-bright);margin-bottom:1rem;line-height:1.15}
   .sw-body h2 em{font-style:italic;color:var(--yellow)}
-  .sw-body p{font-size:0.7rem;font-weight:300;color:var(--text-dim);line-height:2;margin-bottom:1.5rem}
-
-  .data-list{list-style:none;border-top:1px solid var(--border)}
-  .data-list li{display:flex;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.06em}
-  .data-list .label{color:var(--text-faint);text-transform:uppercase}
-  .data-list .value{color:var(--yellow);font-weight:500}
+  .sw-body p{font-size:0.7rem;font-weight:300;color:var(--text-dim);line-height:2;margin-bottom:0.8rem}
+  .tag-strip{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem}
+  .tag-strip span{font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--blue-dim);padding:0.25rem 0.6rem;border:1px solid var(--border-b);background:var(--blue-faint)}
 
   /* ═══════ HERO ═══════ */
   .hero{min-height:100vh;display:flex;align-items:center;position:relative;overflow:hidden}
   #heroRadar{position:absolute;inset:0;z-index:0}
   .hero-inner{position:relative;z-index:10;width:100%;max-width:1100px;margin:0 auto;padding:0 3rem;display:flex;gap:3rem;align-items:flex-start}
-  .hero-panel{width:440px;max-width:440px;flex-grow:0;flex-shrink:0;overflow:hidden}
+  .hero-panel{width:480px;max-width:480px;flex-grow:0;flex-shrink:0;overflow:hidden}
   .hero-panel .p-body{padding:2.5rem}
   .h-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:2rem;color:var(--blue-dim);opacity:0.25;margin-bottom:0.5rem;line-height:1}
-  .h-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(2.4rem,5vw,4rem);line-height:1;color:var(--text-bright);margin-bottom:1.2rem;letter-spacing:-0.01em}
+  .h-game-title{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:clamp(0.7rem,1.4vw,1rem);letter-spacing:0.45em;text-transform:uppercase;color:var(--blue);margin-bottom:0.6rem;opacity:0.7}
+  .h-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(3rem,7vw,5.5rem);line-height:1.05;color:var(--text-bright);margin-bottom:0.2rem;letter-spacing:-0.01em}
   .h-title em{font-style:italic;color:var(--yellow);text-shadow:0 0 25px var(--yellow-glow)}
-  .h-desc{font-size:0.72rem;font-weight:300;color:var(--text-dim);line-height:2;margin-bottom:2rem;max-width:400px}
+  .h-sub{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(1.4rem,3vw,2.2rem);color:var(--text-dim);line-height:1.15;margin-bottom:1.2rem;font-style:italic}
+  .h-sub em{color:var(--yellow);font-style:italic}
+  .h-desc{font-size:0.6rem;font-weight:300;color:var(--text-dim);line-height:2;margin-bottom:1.8rem;max-width:400px;opacity:0.8}
   .h-actions{display:flex;gap:1rem;align-items:center}
   .h-btn{font-family:'JetBrains Mono',monospace;font-size:0.58rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;padding:0.75rem 1.6rem;background:var(--yellow);color:var(--bg);border:none;cursor:pointer;transition:all 0.3s}
   .h-btn:hover{background:#ffe066;box-shadow:0 0 20px var(--yellow-glow)}
   .h-ghost{font-size:0.5rem;color:var(--text-faint);text-decoration:none;letter-spacing:0.08em;transition:color 0.3s}
   .h-ghost:hover{color:var(--blue)}
-
-  .hero-side{display:flex;flex-direction:column;gap:1rem;flex-shrink:0}
-  .mini-panel{width:170px;max-width:170px;flex-grow:0;overflow:hidden}
-  .mini-panel .p-body{padding:1rem;text-align:center}
-  .mini-stat{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:2rem;color:var(--yellow);text-shadow:0 0 12px var(--yellow-glow);line-height:1}
-  .mini-unit{font-size:0.38rem;color:var(--text-faint);letter-spacing:0.2em;text-transform:uppercase;margin-top:0.3rem}
 
   /* ═══════ SIGNAL BAR ═══════ */
   .sig-bar{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative;z-index:10}
@@ -174,46 +91,51 @@
   .sig-val{font-weight:600;font-size:1rem;color:var(--yellow);margin-bottom:0.15rem}
   .sig-label{font-size:0.38rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint)}
 
+  /* ═══════ GALLERY (v11 bento) ═══════ */
+  .gallery{padding:4rem 2rem;position:relative;z-index:10}
+  .gallery-inner{max-width:1100px;margin:0 auto}
+  .g-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
+  .g-tag{font-size:0.45rem;letter-spacing:0.25em;text-transform:uppercase;color:var(--blue);margin-bottom:0.4rem}
+  .g-header h2{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:clamp(1.2rem,2.2vw,1.8rem);color:var(--text-bright);letter-spacing:-0.01em}
+  .g-header-right{font-size:0.42rem;color:var(--text-faint);letter-spacing:0.08em}
+  .g-grid{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:minmax(70px,auto);gap:5px}
+  .g-item{position:relative;border-radius:4px;overflow:hidden;background:var(--bg3);border:1px solid var(--border);cursor:pointer;transition:all 0.4s}
+  .g-item:hover{border-color:var(--blue-dim);transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,0.3)}
+  .g-item::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(9,9,11,0.7) 0%,transparent 50%);opacity:0;transition:opacity 0.4s;pointer-events:none}
+  .g-item:hover::after{opacity:1}
+  .g-item canvas{width:100%;height:100%;display:block;position:absolute;inset:0}
+  .g-label{position:absolute;bottom:0.7rem;left:0.8rem;z-index:5;font-size:0.42rem;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0);transition:color 0.4s}
+  .g-item:hover .g-label{color:rgba(255,255,255,0.6)}
+  .g1{grid-column:1/8;grid-row:1/4}.g2{grid-column:8/13;grid-row:1/3}.g3{grid-column:8/13;grid-row:3/4}
+  .g4{grid-column:1/5;grid-row:4/6}.g5{grid-column:5/9;grid-row:4/6}.g6{grid-column:9/13;grid-row:4/6}
+
   /* ═══════ SECTIONS ═══════ */
   section{position:relative;z-index:10;padding:5rem 0}
   .sec-inner{max-width:1000px;margin:0 auto;padding:0 3rem}
-
-  /* ═══════ SPLIT LAYOUT ═══════ */
   .split{display:flex;gap:3rem;align-items:flex-start;margin-bottom:5rem;justify-content:center}
   .split:last-child{margin-bottom:0}
   .split.reverse{flex-direction:row-reverse}
   .split-panel{width:440px;max-width:440px;flex-shrink:1;flex-grow:0;overflow:hidden}
   .split-viz{width:340px;max-width:340px;height:340px;flex-shrink:0;flex-grow:0;position:relative;overflow:hidden}
-
   .viewport{width:100%;height:100%;border-radius:50%;overflow:hidden;border:2px solid var(--border-b);box-shadow:inset 0 0 50px rgba(0,0,0,0.5),0 0 25px var(--blue-faint);position:relative}
   .viewport canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block}
   .rect-viewport{width:100%;height:100%;border-radius:12px;overflow:hidden;border:1px solid var(--border-b);box-shadow:0 0 25px rgba(0,0,0,0.3);background:var(--bg);position:relative}
   .rect-viewport canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block}
 
-  /* ═══════ MEDIA BANDS ═══════ */
-  .media-band{position:relative;z-index:10;aspect-ratio:21/9;max-height:480px;border-top:1px solid var(--border);border-bottom:1px solid var(--border);background:var(--bg2);overflow:hidden}
-  .media-band canvas{position:absolute;top:0;left:0;width:100%;height:100%;display:block}
-  .media-caption{position:absolute;bottom:1rem;left:2rem;right:2rem;display:flex;justify-content:space-between;font-size:0.38rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint)}
+  /* ═══════ REVIEWS ═══════ */
+  .reviews{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border)}
+  .review-card{background:var(--bg);padding:1.6rem 1.8rem;position:relative}
+  .review-stars{color:var(--yellow);font-size:0.7rem;letter-spacing:0.1em;margin-bottom:0.6rem}
+  .review-text{font-size:0.6rem;font-weight:300;color:var(--text-dim);line-height:1.8;font-style:italic;margin-bottom:0.8rem}
+  .review-author{font-size:0.4rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint)}
+  .review-author .hrs{color:var(--blue-dim);margin-left:0.5rem}
+  .review-placeholder{font-size:0.35rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);opacity:0.5;margin-top:0.4rem}
 
-  /* ═══════ SUBSYSTEMS ═══════ */
-  .sub-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border)}
-  .sub-cell{background:var(--bg);padding:1.8rem 1.6rem;transition:background 0.3s;cursor:default;position:relative}
-  .sub-cell:hover{background:var(--bg2)}
-  .sub-cell::before{content:'';position:absolute;top:0;left:0;bottom:0;width:2px;background:var(--blue-dim);opacity:0;transition:opacity 0.3s}
-  .sub-cell:hover::before{opacity:1}
-  .sub-id{font-size:0.38rem;letter-spacing:0.15em;color:var(--blue-dim);margin-bottom:0.7rem;text-transform:uppercase}
-  .sub-cell h3{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:1.2rem;color:var(--yellow);margin-bottom:0.25rem}
-  .sub-cell p{font-size:0.55rem;font-weight:300;color:var(--text-dim);line-height:1.7}
-  .sub-status{margin-top:0.7rem;display:flex;align-items:center;gap:0.35rem;font-size:0.35rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--green-dim)}
-  .sub-dot{width:4px;height:4px;border-radius:50%;background:var(--green);box-shadow:0 0 4px var(--green)}
+  /* ═══════ TECH STRIP ═══════ */
+  .tech-strip{display:flex;align-items:center;justify-content:center;gap:0.6rem;padding:1.2rem 2rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:0.4rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);position:relative;z-index:10}
+  .tech-tag{color:var(--blue-dim)}.tech-sep{color:var(--text-faint);opacity:0.3}
 
-  /* ═══════ LOG ═══════ */
-  .log-entry{padding:1.6rem 0;border-bottom:1px solid var(--border);display:grid;grid-template-columns:70px 1fr;gap:1.2rem}
-  .log-ts{font-size:0.42rem;color:var(--blue-dim);padding-top:0.15rem;letter-spacing:0.1em}
-  .log-body h4{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.05rem;color:var(--text-bright);margin-bottom:0.25rem;font-style:italic}
-  .log-body p{font-size:0.65rem;font-weight:300;color:var(--text-dim);line-height:1.8}
-
-  /* ═══════ CTA / TRANSMISSION ═══════ */
+  /* ═══════ CTA ═══════ */
   .tx-section{padding:7rem 0;display:flex;justify-content:center}
   .tx-panel{max-width:620px;width:100%;text-align:center;margin:0 3rem}
   .tx-panel .p-body{padding:3.5rem 2.5rem}
@@ -225,54 +147,36 @@
   .tx-sig{font-size:0.45rem;color:var(--text-faint);letter-spacing:0.15em}
   .tx-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.8rem;color:var(--blue-dim);opacity:0.2;margin-top:1.2rem}
 
-  /* ═══════ SCROLL REVEAL ═══════ */
   .rv{opacity:0;transform:translateY(18px);transition:opacity 0.8s ease,transform 0.8s ease}
   .rv.vis{opacity:1;transform:translateY(0)}
 
   @media(max-width:900px){
     .hero-inner{flex-direction:column;padding:0 1.5rem}
     .hero-panel{width:100%;max-width:100%}
-    .hero-side{flex-direction:row;gap:0.6rem}
-    .mini-panel{width:110px;max-width:110px}
     .split,.split.reverse{flex-direction:column!important}
     .split-panel{width:100%;max-width:100%}
     .split-viz{flex:none;width:100%;max-width:300px;height:300px;margin:0 auto}
     .sys-window,.sys-window.full-width{width:100%;max-width:100%}
-    section{padding:3rem 0}
-    .sec-inner{padding:0 1.5rem}
-    .sub-grid{grid-template-columns:1fr}
+    section{padding:3rem 0}.sec-inner{padding:0 1.5rem}
     .sig-bar{grid-template-columns:repeat(2,1fr)}
+    .tech-strip{flex-wrap:wrap;justify-content:center}
     .topbar-r,.corner-data{display:none}
+    .h-game-title{font-size:1.4rem;letter-spacing:0.25em}
+    .g-grid{grid-template-columns:1fr 1fr;grid-auto-rows:180px}
+    .g1,.g2,.g3,.g4,.g5,.g6{grid-column:auto;grid-row:auto}
+    .reviews{grid-template-columns:1fr}
   }
 </style>
 </head>
 <body>
-
 <div class="grid-bg"></div>
+<div class="corner-data tl">SYS.REF <span>0x7A2F</span><br>GRID <span>50U</span></div>
+<div class="corner-data br">SIGNAL <span>NOMINAL</span><br>AUTH <span>VERIFIED</span></div>
 
-<div class="corner-data tl">
-  SYS.REF <span>0x7A2F</span><br>
-  GRID <span>50U</span>
-</div>
-<div class="corner-data br">
-  SIGNAL <span>NOMINAL</span><br>
-  AUTH <span>VERIFIED</span>
-</div>
-
-<!-- TOP BAR -->
 <div class="topbar">
-  <div class="topbar-l">
-    <span class="sys-name">Galactica</span>
-    <span class="sys-status">Sim Active</span>
-  </div>
-  <div class="topbar-r">
-    <span>Bodies: <strong id="bodyCount">0</strong></span>
-    <span>FPS: <strong id="fpsRead">60</strong></span>
-    <span id="clockRead">00:00:00</span>
-  </div>
+  <div class="topbar-l"><span class="sys-name">Galactica</span><span class="sys-status">Sim Active</span></div>
+  <div class="topbar-r"><span>Bodies: <strong id="bodyCount">0</strong></span><span>FPS: <strong id="fpsRead">60</strong></span><span id="clockRead">00:00:00</span></div>
 </div>
-
-<!-- BOTTOM BAR -->
 <div class="botbar">
   <div class="bot-group">
     <button class="bot-btn" onclick="resetSim()">Reset</button>
@@ -293,17 +197,16 @@
     <canvas id="heroRadar"></canvas>
     <div class="hero-inner">
       <div class="hero-panel panel">
-        <div class="p-head">
-          <span>// Incoming Transmission</span>
-          <span class="tag">PKT.0x7A2F</span>
-        </div>
+        <div class="p-head"><span>// Incoming Transmission</span><span class="tag">PKT.0x7A2F</span></div>
         <div class="p-body">
           <div class="h-barcode">GALACTICA-2026</div>
-          <h1 class="h-title">Build your empire<br>from <em>nothing</em></h1>
+          <h1 class="h-title">galactica</h1>
+          <div class="h-sub">from ore to <em>empire.</em></div>
           <p class="h-desc">
-            Mine asteroids. Smelt ore into steel. Bolt modules onto a station
-            that floats where you put it. Watch your citizens argue about
-            water rations while automatons build the next wing without being asked.
+            Mine iron and titanium from asteroids. Smelt ore into ingots.
+            Press ingots into steel. Bolt modules onto a station that grows
+            however you design it. Your citizens will form friendships,
+            hold grudges, and run the foundries while you're not looking.
           </p>
           <div class="h-actions">
             <a href="https://store.steampowered.com" class="h-btn" target="_blank" rel="noopener">Wishlist on Steam</a>
@@ -311,243 +214,189 @@
           </div>
         </div>
       </div>
-      <div class="hero-side">
-        <div class="mini-panel panel">
-          <div class="p-head"><span>Scale</span></div>
-          <div class="p-body"><div class="mini-stat">10K+</div><div class="mini-unit">Objects in Orbit</div></div>
-        </div>
-        <div class="mini-panel panel">
-          <div class="p-head"><span>Physics</span></div>
-          <div class="p-body"><div class="mini-stat">60fps</div><div class="mini-unit">Real-Time</div></div>
-        </div>
-        <div class="mini-panel panel">
-          <div class="p-head"><span>Stories</span></div>
-          <div class="p-body"><div class="mini-stat">∞</div><div class="mini-unit">Emergent</div></div>
-        </div>
-      </div>
     </div>
   </div>
 
   <!-- ═══════ SIGNAL BAR ═══════ -->
   <div class="sig-bar rv">
-    <div class="sig-cell"><div class="sig-val">Mine</div><div class="sig-label">Asteroids & Moons</div></div>
-    <div class="sig-cell"><div class="sig-val">Build</div><div class="sig-label">Stations Module by Module</div></div>
-    <div class="sig-cell"><div class="sig-val">Govern</div><div class="sig-label">Citizens Who Think for Themselves</div></div>
-    <div class="sig-cell"><div class="sig-val">Expand</div><div class="sig-label">Into Rival Territory</div></div>
+    <div class="sig-cell"><div class="sig-val">Mine</div><div class="sig-label">10 Ores · Real Rarity Curves</div></div>
+    <div class="sig-cell"><div class="sig-val">Smelt</div><div class="sig-label">Ore → Ingot → Alloy → Component</div></div>
+    <div class="sig-cell"><div class="sig-val">Build</div><div class="sig-label">Grid Stations · Module by Module</div></div>
+    <div class="sig-cell"><div class="sig-val">Govern</div><div class="sig-label">Citizens with Relationships & Grudges</div></div>
   </div>
 
-  <!-- ═══════ MEDIA BAND 1 ═══════ -->
-  <div class="media-band rv">
-    <canvas id="mediaBand1"></canvas>
-    <div class="media-caption">
-      <span>Screenshot // Orbital Station Construction</span>
-      <span>001 / 004</span>
-    </div>
-  </div>
-
-  <!-- ═══════ GRAVITY / ORBITS ═══════ -->
-  <section id="play">
-    <div class="sec-inner">
-      <div class="split rv">
-        <div class="split-panel">
-          <div class="sys-window">
-            <div class="sw-head">
-              <span class="sw-sys">SYS // Gravity</span>
-              <span class="sw-tag">N-Body</span>
-            </div>
-            <div class="sw-body">
-              <h2>Every orbit is <em>earned</em></h2>
-              <p>
-                Nothing is on rails. Launch a station into orbit and it stays there —
-                or it doesn't, depending on where you put it. Slingshot cargo around
-                a gas giant. Watch two moons tug your asteroid belt apart. The physics
-                is the game.
-              </p>
-              <ul class="data-list">
-                <li><span class="label">Gravity</span><span class="value">N-Body · Real-Time</span></li>
-                <li><span class="label">Scale</span><span class="value">10,000+ Bodies at 60fps</span></li>
-                <li><span class="label">Orbits</span><span class="value">Laplacian Resonance</span></li>
-                <li><span class="label">You Do</span><span class="value">Place, Launch, Slingshot</span></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div class="split-viz">
-          <div class="viewport"><canvas id="orreryVP"></canvas></div>
-        </div>
+  <!-- ═══════ GALLERY 1 ═══════ -->
+  <div class="gallery rv" id="play">
+    <div class="gallery-inner">
+      <div class="g-header">
+        <div><div class="g-tag">Screenshots</div><h2>From the Void</h2></div>
+        <div class="g-header-right">6 images · In-engine</div>
       </div>
-
-      <!-- ═══════ CONSTRUCTION ═══════ -->
-      <div class="split reverse rv">
-        <div class="split-panel">
-          <div class="sys-window">
-            <div class="sw-head">
-              <span class="sw-sys">SYS // Construction</span>
-              <span class="sw-tag">Station Builder</span>
-            </div>
-            <div class="sw-body">
-              <h2>Bolt it together <em>yourself</em></h2>
-              <p>
-                Place habitation pods, refineries, solar arrays, and docking bays
-                on an orthogonal grid. Your AI workers carry materials from stockpiles
-                and assemble each module autonomously. No templates — every station
-                is shaped by your decisions and your resources.
-              </p>
-              <ul class="data-list">
-                <li><span class="label">Modules</span><span class="value">Hab · Refinery · Solar · Dock</span></li>
-                <li><span class="label">Workforce</span><span class="value">Autonomous AI Agents</span></li>
-                <li><span class="label">Grid</span><span class="value">Orthogonal · No 2×2 Blocks</span></li>
-                <li><span class="label">You Do</span><span class="value">Design, Assign, Expand</span></li>
-              </ul>
-            </div>
-          </div>
-        </div>
-        <div class="split-viz">
-          <div class="rect-viewport"><canvas id="elevatorViz"></canvas></div>
-        </div>
+      <div class="g-grid">
+        <div class="g-item g1"><canvas class="ss-canvas"></canvas><div class="g-label">Station Overview</div></div>
+        <div class="g-item g2"><canvas class="ss-canvas"></canvas><div class="g-label">Orbital Mechanics</div></div>
+        <div class="g-item g3"><canvas class="ss-canvas"></canvas><div class="g-label">Asteroid Mining</div></div>
+        <div class="g-item g4"><canvas class="ss-canvas"></canvas><div class="g-label">Construction</div></div>
+        <div class="g-item g5"><canvas class="ss-canvas"></canvas><div class="g-label">Power Grid</div></div>
+        <div class="g-item g6"><canvas class="ss-canvas"></canvas><div class="g-label">Citizen AI</div></div>
       </div>
     </div>
-  </section>
-
-  <!-- ═══════ MEDIA BAND 2 ═══════ -->
-  <div class="media-band rv">
-    <canvas id="mediaBand2"></canvas>
-    <div class="media-caption">
-      <span>Screenshot // Asteroid Mining · Resource Flow</span>
-      <span>002 / 004</span>
-    </div>
   </div>
 
-  <!-- ═══════ ECONOMY ═══════ -->
+  <!-- ═══════ COMMAND / GATHER ═══════ -->
   <section>
     <div class="sec-inner">
       <div class="split rv">
         <div class="split-panel">
           <div class="sys-window">
-            <div class="sw-head">
-              <span class="sw-sys">SYS // Economy</span>
-              <span class="sw-tag">Supply Chain</span>
-            </div>
+            <div class="sw-head"><span class="sw-sys">SYS // Crew</span><span class="sw-tag">Command</span></div>
             <div class="sw-body">
-              <h2>Run an empire on <em>elevator cables</em></h2>
+              <h2>Command your <em>crews</em></h2>
               <p>
-                Mine raw ore on the surface. Ride it up the space elevator. Smelt it
-                into ingots. Forge ingots into hull plating. Ship plating to your
-                orbital shipyard. Every link in the chain is something you built,
-                something that can break, and something your rivals want.
+                Assign citizens to mine, collect, construct, or harvest.
+                They'll find the nearest asteroid, dock at the right station,
+                and figure out the route themselves. But they also get tired,
+                take breaks to socialize, and form opinions about who they
+                want to work with — and who they don't.
               </p>
-              <ul class="data-list">
-                <li><span class="label">Tiers</span><span class="value">Raw → Refined → Component → Assembly</span></li>
-                <li><span class="label">Transport</span><span class="value">Elevator + Shuttle</span></li>
-                <li><span class="label">Factions</span><span class="value">Independent Economies</span></li>
-                <li><span class="label">You Do</span><span class="value">Route, Optimize, Defend</span></li>
-              </ul>
+              <div class="tag-strip"><span>12 Work States</span><span>Relationships</span><span>Autonomous AI</span></div>
             </div>
           </div>
         </div>
-        <div class="split-viz">
-          <div class="rect-viewport"><canvas id="networkViz"></canvas></div>
-        </div>
+        <div class="split-viz"><div class="viewport"><canvas id="orreryVP"></canvas></div></div>
       </div>
 
-      <!-- ═══════ CITIZENS ═══════ -->
       <div class="split reverse rv">
         <div class="split-panel">
           <div class="sys-window">
-            <div class="sw-head">
-              <span class="sw-sys">SYS // Citizens</span>
-              <span class="sw-tag">Social Sim</span>
-            </div>
+            <div class="sw-head"><span class="sw-sys">SYS // Resources</span><span class="sw-tag">Extraction</span></div>
             <div class="sw-body">
-              <h2>People who <em>talk back</em></h2>
+              <h2>Gather <em>everything</em></h2>
               <p>
-                Your citizens aren't numbers. They form friendships, pick fights,
-                develop skills, and gossip. A dynamic narrator watches the simulation
-                and gives them voices — every character speaks from the state of
-                the world you've built. No two playthroughs share a story.
+                Ten raw ores — iron, copper, titanium, uranium, rare earth —
+                scattered across asteroids with real spawn rarities. Your miners
+                drill the rock. Crawlers haul the chunks to a space elevator.
+                The elevator lifts them to orbit. Your collectors grab what
+                floats free. Nothing spawns in your inventory — you earn it.
               </p>
-              <ul class="data-list">
-                <li><span class="label">Dialogue</span><span class="value">LLM-Driven · Streaming</span></li>
-                <li><span class="label">Relations</span><span class="value">Friendship · Rivalry · Romance</span></li>
-                <li><span class="label">Morale</span><span class="value">Per-Citizen · Reactive</span></li>
-                <li><span class="label">You Do</span><span class="value">Manage, Mediate, Listen</span></li>
-              </ul>
+              <div class="tag-strip"><span>10 Ore Types</span><span>Space Elevators</span><span>Fog of War</span></div>
             </div>
           </div>
         </div>
-        <div class="split-viz">
-          <div class="viewport"><canvas id="socialViz"></canvas></div>
-        </div>
+        <div class="split-viz"><div class="rect-viewport"><canvas id="elevatorViz"></canvas></div></div>
       </div>
     </div>
   </section>
 
-  <!-- ═══════ MEDIA BAND 3 ═══════ -->
-  <div class="media-band rv">
-    <canvas id="mediaBand3"></canvas>
-    <div class="media-caption">
-      <span>Screenshot // Citizen Conversations · Dynamic Narrator</span>
-      <span>003 / 004</span>
+  <!-- ═══════ GALLERY 2 ═══════ -->
+  <div class="gallery rv">
+    <div class="gallery-inner">
+      <div class="g-header">
+        <div><div class="g-tag">Gameplay</div><h2>Systems in Motion</h2></div>
+        <div class="g-header-right">6 images · In-engine</div>
+      </div>
+      <div class="g-grid">
+        <div class="g-item g1"><canvas class="ss-canvas"></canvas><div class="g-label">Foundry Membranes</div></div>
+        <div class="g-item g2"><canvas class="ss-canvas"></canvas><div class="g-label">Grid Construction</div></div>
+        <div class="g-item g3"><canvas class="ss-canvas"></canvas><div class="g-label">Space Elevator</div></div>
+        <div class="g-item g4"><canvas class="ss-canvas"></canvas><div class="g-label">Crafting Recipes</div></div>
+        <div class="g-item g5"><canvas class="ss-canvas"></canvas><div class="g-label">Citizen Relationships</div></div>
+        <div class="g-item g6"><canvas class="ss-canvas"></canvas><div class="g-label">Radio Contacts</div></div>
+      </div>
     </div>
   </div>
 
-  <!-- ═══════ SUBSYSTEMS ═══════ -->
+  <!-- ═══════ BUILD / MANUFACTURE ═══════ -->
+  <section>
+    <div class="sec-inner">
+      <div class="split rv">
+        <div class="split-panel">
+          <div class="sys-window">
+            <div class="sw-head"><span class="sw-sys">SYS // Station</span><span class="sw-tag">Construction</span></div>
+            <div class="sw-body">
+              <h2>Design your <em>station</em></h2>
+              <p>
+                Place modules on a crossword-puzzle grid that expands in every
+                direction. Crew quarters go inside walls. Docking bays face
+                outward. Enclose empty cells to create storage bays that hold
+                64 units each. Foundries sit between bays as directional
+                membranes — ore goes in one side, alloy comes out the other.
+              </p>
+              <div class="tag-strip"><span>Grid Construction</span><span>Enclosed Storage</span><span>10+ Presets</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="split-viz"><div class="rect-viewport"><canvas id="networkViz"></canvas></div></div>
+      </div>
+
+      <div class="split reverse rv">
+        <div class="split-panel">
+          <div class="sys-window">
+            <div class="sw-head"><span class="sw-sys">SYS // Industry</span><span class="sw-tag">Production</span></div>
+            <div class="sw-body">
+              <h2>Manufacture <em>at scale</em></h2>
+              <p>
+                Smelt iron ore into ingots. Combine ingots with carbon to
+                forge steel. Press steel and titanium alloy into reactor cores
+                and shield emitters. Four production tiers, 40+ recipes, and
+                your citizens operate the foundries — hauling fuel, feeding
+                inputs, collecting outputs. Set a foundry to run indefinitely
+                and it will, as long as someone keeps it fed.
+              </p>
+              <div class="tag-strip"><span>4-Tier Crafting</span><span>40+ Recipes</span><span>Citizen-Operated</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="split-viz"><div class="viewport"><canvas id="socialViz"></canvas></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════ PLACEHOLDER REVIEWS ═══════ -->
   <section>
     <div class="sec-inner">
       <div class="sys-window full-width rv">
         <div class="sw-head">
-          <span class="sw-sys">Under the Hood</span>
-          <span class="sw-tag">Runtime</span>
+          <span class="sw-sys">Community</span>
+          <span class="sw-tag">Placeholder · Pre-Release</span>
         </div>
-        <div class="sub-grid">
-          <div class="sub-cell"><div class="sub-id">Renderer</div><h3>Quarkstrom</h3><p>Custom engine · mega-atlas · frustum culling · volumetric shaders</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
-          <div class="sub-cell"><div class="sub-id">Interface</div><h3>egui</h3><p>Immediate-mode GUI · custom themed panels · zero-alloc widgets</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
-          <div class="sub-cell"><div class="sub-id">Language</div><h3>Rust</h3><p>Zero-cost abstractions · fearless concurrency · no garbage collector</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
-          <div class="sub-cell"><div class="sub-id">Narrative</div><h3>LLM</h3><p>Local model · streaming narrator · sim-state aware dialogue</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
-          <div class="sub-cell"><div class="sub-id">Power</div><h3>Solar Mesh</h3><p>Dynamic panel physics · distribution networks · eclipse survival</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
-          <div class="sub-cell"><div class="sub-id">Social</div><h3>Graph Net</h3><p>Citizen relationships · loyalty dynamics · emergent factions</p><div class="sub-status"><div class="sub-dot"></div>Online</div></div>
+        <div class="reviews">
+          <div class="review-card">
+            <div class="review-stars">★★★★★</div>
+            <div class="review-text">"Set up a foundry between two storage bays — iron ingots on the input side, steel on the output. Left it running on Indefinite mode. Came back 20 minutes later and my metallurgist had kept it fed the whole time. She also started a grudge with the guy on greenhouse duty."</div>
+            <div class="review-author">— SpaceColonist_42 <span class="hrs">127 hrs</span></div>
+            <div class="review-placeholder">* Placeholder · Actual review pending release</div>
+          </div>
+          <div class="review-card">
+            <div class="review-stars">★★★★☆</div>
+            <div class="review-text">"My elevator was hauling copper ore to orbit but I forgot to assign a collector. 200 units just floating in space. By the time I noticed, a rival faction had sent crawlers. Lesson learned: the supply chain doesn't care about your feelings."</div>
+            <div class="review-author">— FactoryBrain <span class="hrs">89 hrs</span></div>
+            <div class="review-placeholder">* Placeholder · Actual review pending release</div>
+          </div>
+          <div class="review-card">
+            <div class="review-stars">★★★★★</div>
+            <div class="review-text">"A visitor came through on the radio — skeptical, wouldn't tell me where she was headed until I provided intel on marauder activity. Gave her the coordinates. She dropped off 50 iron as thanks. My station grew a docking bay that week because of a stranger."</div>
+            <div class="review-author">— QuietStar <span class="hrs">203 hrs</span></div>
+            <div class="review-placeholder">* Placeholder · Actual review pending release</div>
+          </div>
+          <div class="review-card">
+            <div class="review-stars">★★★★☆</div>
+            <div class="review-text">"Two citizens became close friends after surviving an equipment failure together. Now they take breaks at the same time and one of them started spreading gossip about the new guy in medical. I didn't script any of this. The relationship system is wild."</div>
+            <div class="review-author">— OrbitalJanitor <span class="hrs">156 hrs</span></div>
+            <div class="review-placeholder">* Placeholder · Actual review pending release</div>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- ═══════ INTERCEPT LOG ═══════ -->
-  <section>
-    <div class="sec-inner">
-      <div class="sys-window full-width rv">
-        <div class="sw-head">
-          <span class="sw-sys">Signal Intercepts</span>
-          <span class="sw-tag">Gameplay Moments</span>
-        </div>
-        <div class="sw-body">
-          <div class="log-entry">
-            <div class="log-ts">CYC::041</div>
-            <div class="log-body"><h4>"The elevator held."</h4><p>First cargo run from the surface. Sixteen tonnes on a thread against gravity. Your stockpile doubled overnight.</p></div>
-          </div>
-          <div class="log-entry">
-            <div class="log-ts">CYC::087</div>
-            <div class="log-body"><h4>"They routed around the array."</h4><p>You didn't tell the automatons to avoid the solar panels. They figured it out. Three extra hours, but the lights stayed on.</p></div>
-          </div>
-          <div class="log-entry">
-            <div class="log-ts">CYC::142</div>
-            <div class="log-body"><h4>"Korvin won't speak to Jael."</h4><p>A water ration dispute. Morale's slipping on C-deck. You reassigned Jael to the foundry. Distance buys time, not peace.</p></div>
-          </div>
-          <div class="log-entry" style="border-bottom:none">
-            <div class="log-ts">CYC::203</div>
-            <div class="log-body"><h4>"The Tessari sent a signal."</h4><p>Not hostile. Not friendly. A trade proposal wrapped in territorial language. You have what they need — and they know it.</p></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ═══════ MEDIA BAND 4 ═══════ -->
-  <div class="media-band rv">
-    <canvas id="mediaBand4"></canvas>
-    <div class="media-caption">
-      <span>Screenshot // Faction Diplomacy · Trade Networks</span>
-      <span>004 / 004</span>
-    </div>
+  <!-- ═══════ TECH STRIP ═══════ -->
+  <div class="tech-strip rv">
+    <span>Built with</span>
+    <span class="tech-tag">Rust</span><span class="tech-sep">·</span>
+    <span class="tech-tag">Custom Engine</span><span class="tech-sep">·</span>
+    <span class="tech-tag">N-Body Physics</span><span class="tech-sep">·</span>
+    <span class="tech-tag">Local AI Narrator</span>
   </div>
 
   <!-- ═══════ CTA ═══════ -->
@@ -556,9 +405,9 @@
       <div class="p-head"><span>// End Transmission</span><span class="tag">SIG.VERIFIED</span></div>
       <div class="p-body">
         <div class="tx-pre">Signal Origin · Active Development</div>
-        <div class="tx-msg">The void is yours.<br><strong>What will you build?</strong></div>
+        <div class="tx-msg">Every empire starts with<br><strong>a single module.</strong></div>
         <a href="https://store.steampowered.com" class="tx-cta" target="_blank" rel="noopener">Wishlist on Steam</a><br>
-        <div class="tx-sig">GALACTICA // Rust + Quarkstrom + egui // In Development</div>
+        <div class="tx-sig">GALACTICA // In Development</div>
         <div class="tx-barcode">GALACTICA-EOT-2026</div>
       </div>
     </div>
@@ -583,9 +432,9 @@ function addCluster(n){const cx=W*0.15+Math.random()*W*0.7,cy=H*0.15+Math.random
 function resetSim(){bodies=[];addCluster(100);setTimeout(()=>addCluster(80),100)}
 let lastTree=null;
 function stepSim(){if(paused)return;bodies=bodies.filter(b=>b.x>-1500&&b.x<W+1500&&b.y>-1500&&b.y<H+1500);if(bodies.length<2)return;lastTree=buildTree();for(const b of bodies){b.ax=0;b.ay=0}for(const b of bodies)lastTree.calcForce(b);for(const b of bodies){b.vx+=b.ax*DT;b.vy+=b.ay*DT;b.x+=b.vx*DT;b.y+=b.vy*DT;if(b.x<-200)b.vx+=2;if(b.x>W+200)b.vx-=2;if(b.y<-200)b.vy+=2;if(b.y>H+200)b.vy-=2;if(showTrails){b.trail.push({x:b.x,y:b.y});if(b.trail.length>MAX_TRAIL)b.trail.shift()}else if(b.trail.length)b.trail=[]}}
-function renderSim(){const ctx=simCV.ctx;ctx.clearRect(0,0,W,H);if(showTree&&lastTree)drawTree(lastTree,ctx);if(showTrails)for(const b of bodies){if(b.trail.length<2)continue;ctx.beginPath();ctx.moveTo(b.trail[0].x,b.trail[0].y);for(let i=1;i<b.trail.length;i++)ctx.lineTo(b.trail[i].x,b.trail[i].y);ctx.strokeStyle=b.color+'18';ctx.lineWidth=b.radius*0.5;ctx.stroke()}for(const b of bodies){const gr=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.radius*5);gr.addColorStop(0,b.color+'10');gr.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(b.x,b.y,b.radius*5,0,TAU);ctx.fillStyle=gr;ctx.fill();ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,TAU);ctx.fillStyle=b.color;ctx.fill()}}
+function renderSim(){const ctx=simCV.ctx;ctx.clearRect(0,0,W,H);if(showTree&&lastTree)drawTree(lastTree,ctx);if(showTrails)for(const b of bodies){if(b.trail.length<2)continue;ctx.beginPath();ctx.moveTo(b.trail[0].x,b.trail[0].y);for(let i=1;i<b.trail.length;i++)ctx.lineTo(b.trail[i].x,b.trail[i].y);ctx.strokeStyle=b.color+'18';ctx.lineWidth=b.radius*0.5;ctx.stroke()}for(const b of bodies){const gr=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.radius*5);gr.addColorStop(0,b.color+'10');gr.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(b.x,b.y,b.radius*5,0,TAU);ctx.fillStyle=gr;ctx.fill();ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,TAU);ctx.fillStyle=b.color;ctx.fill()}if(dragging&&dragStart&&dragCurrent){ctx.beginPath();ctx.moveTo(dragStart.x,dragStart.y);ctx.lineTo(dragCurrent.x,dragCurrent.y);ctx.strokeStyle='rgba(255,200,80,0.4)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(dragStart.x,dragStart.y,4,0,TAU);ctx.fillStyle='rgba(255,200,80,0.6)';ctx.fill()}}
 
-// ═══════ RADAR ORRERY ═══════
+// ═══════ RADAR ═══════
 const heroCV=initCanvas('heroRadar');
 const BASE_T=16;
 const planets=[{T:1,color:'#ffc832',r:0.02,moons:[{d:0.028,T:0.18,r:0.007}]},{T:2,color:'#ff8844',r:0.028,moons:[{d:0.03,T:0.22,r:0.006},{d:0.05,T:0.4,r:0.008}]},{T:4,color:'#ff5050',r:0.034,moons:[{d:0.035,T:0.3,r:0.006}]},{T:8,color:'#96c8ff',r:0.024,moons:[{d:0.03,T:0.24,r:0.006}]}];
@@ -595,7 +444,6 @@ planets.forEach(p=>p.moons.forEach(m=>{m.phase=Math.random()*TAU;m.omega=TAU/(BA
 const asteroids=[];const bi=planets[1].dist+0.02,bo=planets[2].dist-0.02;
 for(let i=0;i<40;i++){const d=bi+Math.random()*(bo-bi);asteroids.push({dist:d,omega:TAU/(BASE_T*Math.pow(d/0.27,1.5)),phase:Math.random()*TAU,r:0.003+Math.random()*0.003})}
 const sweepSpeed=TAU/4;
-
 function drawRadar(ctx,W,H,t,opts={}){
   const cx=W/2,cy=H/2,sc=Math.min(W,H)/2.4,sa=sweepSpeed*t;
   ctx.fillStyle=opts.bg||'rgba(14,17,24,0.95)';ctx.fillRect(0,0,W,H);
@@ -603,10 +451,8 @@ function drawRadar(ctx,W,H,t,opts={}){
   for(let i=1;i<=5;i++){const r=(i/5)*maxR;ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.strokeStyle='rgba(150,200,255,0.025)';ctx.lineWidth=0.5;ctx.stroke()}
   for(let i=0;i<12;i++){const a=(i/12)*TAU;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*maxR,cy+Math.sin(a)*maxR);ctx.strokeStyle='rgba(150,200,255,0.012)';ctx.lineWidth=0.3;ctx.stroke()}
   ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(sa)*maxR*1.2,cy+Math.sin(sa)*maxR*1.2);ctx.strokeStyle='rgba(150,200,255,0.2)';ctx.lineWidth=1;ctx.stroke();
-  for(let i=0;i<12;i++){const a=sa-(i/12)*0.5,al=(1-i/12)*0.02;ctx.beginPath();ctx.moveTo(cx,cy);ctx.arc(cx,cy,maxR*1.1,a-0.02,a+0.02);ctx.closePath();ctx.fillStyle=`rgba(150,200,255,${al})`;ctx.fill()}
   planets.forEach(p=>{const R=p.dist*sc;ctx.beginPath();ctx.setLineDash([1.5,5]);ctx.arc(cx,cy,R,0,TAU);ctx.strokeStyle='rgba(150,200,255,0.025)';ctx.lineWidth=0.4;ctx.stroke();ctx.setLineDash([])});
   asteroids.forEach(a=>{const ang=a.phase+a.omega*t;ctx.beginPath();ctx.arc(cx+Math.cos(ang)*a.dist*sc,cy+Math.sin(ang)*a.dist*sc,a.r*sc,0,TAU);ctx.fillStyle='rgba(150,200,255,0.05)';ctx.fill()});
-  ctx.beginPath();ctx.arc(cx,cy,0.04*sc,0,TAU);ctx.fillStyle='rgba(255,200,80,0.1)';ctx.fill();
   ctx.beginPath();ctx.arc(cx,cy,0.02*sc,0,TAU);ctx.fillStyle='rgba(255,200,80,0.2)';ctx.fill();
   planets.forEach(p=>{
     const a=p.phase+p.omega*t,px=cx+Math.cos(a)*p.dist*sc,py=cy+Math.sin(a)*p.dist*sc;
@@ -615,13 +461,12 @@ function drawRadar(ctx,W,H,t,opts={}){
     const gl=ctx.createRadialGradient(px,py,0,px,py,p.r*sc*3);gl.addColorStop(0,p.color+'18');gl.addColorStop(1,'transparent');
     ctx.beginPath();ctx.arc(px,py,p.r*sc*3,0,TAU);ctx.fillStyle=gl;ctx.fill();
     ctx.beginPath();ctx.arc(px,py,p.r*sc,0,TAU);ctx.fillStyle=p.color;ctx.globalAlpha=0.5+ping*0.5;ctx.fill();ctx.globalAlpha=1;
-    if(opts.labels!==false&&sc>80){ctx.font=`${Math.max(7,sc*0.028)}px 'JetBrains Mono',monospace`;ctx.fillStyle=`rgba(150,200,255,${0.08+ping*0.1})`;ctx.textAlign='left';ctx.fillText(`T=${p.T}`,px+p.r*sc+5,py+3)}
     p.moons.forEach(m=>{const ma=m.phase+m.omega*t;ctx.beginPath();ctx.arc(px+Math.cos(ma)*m.d*sc,py+Math.sin(ma)*m.d*sc,m.r*sc,0,TAU);ctx.fillStyle='rgba(150,200,255,0.12)';ctx.fill()})
   });
 }
 
-// ═══════ CANVAS SIZING (once, not every frame) ═══════
-function sizeToParent(cv){if(!cv)return{w:0,h:0};const el=cv.c.parentElement,r=el.getBoundingClientRect();const w=Math.floor(r.width),h=Math.floor(r.height);cv.c.width=w*dpr;cv.c.height=h*dpr;cv.c.style.width=w+'px';cv.c.style.height=h+'px';cv.ctx.setTransform(dpr,0,0,dpr,0,0);cv._w=w;cv._h=h;return{w,h}}
+// ═══════ VIZ SIZING ═══════
+function sizeToParent(cv){if(!cv)return;const el=cv.c.parentElement,r=el.getBoundingClientRect();const w=Math.floor(r.width),h=Math.floor(r.height);cv.c.width=w*dpr;cv.c.height=h*dpr;cv.c.style.width=w+'px';cv.c.style.height=h+'px';cv.ctx.setTransform(dpr,0,0,dpr,0,0);cv._w=w;cv._h=h}
 const allVizCVs=[];
 function registerViz(cv){if(cv){allVizCVs.push(cv);sizeToParent(cv)}}
 function resizeAllViz(){allVizCVs.forEach(cv=>sizeToParent(cv))}
@@ -630,16 +475,12 @@ const orrCV=initCanvas('orreryVP');registerViz(orrCV);
 const elevCV=initCanvas('elevatorViz');registerViz(elevCV);
 const netCV=initCanvas('networkViz');registerViz(netCV);
 const socCV=initCanvas('socialViz');registerViz(socCV);
-const mb1=initCanvas('mediaBand1');registerViz(mb1);
-const mb2=initCanvas('mediaBand2');registerViz(mb2);
-const mb3=initCanvas('mediaBand3');registerViz(mb3);
-const mb4=initCanvas('mediaBand4');registerViz(mb4);
 
 function drawOrrPort(t){if(!orrCV||!orrCV._w)return;const s=Math.min(orrCV._w,orrCV._h);drawRadar(orrCV.ctx,s,s,t,{bg:'#0e1118',labels:false})}
 
 // ═══════ ELEVATOR ═══════
 function drawElevator(t){if(!elevCV||!elevCV._w)return;const ctx=elevCV.ctx,W2=elevCV._w,H2=elevCV._h;ctx.fillStyle='#0e1118';ctx.fillRect(0,0,W2,H2);
-const pR=W2*0.8,pCY=H2+pR*0.62;ctx.beginPath();ctx.arc(W2/2,pCY,pR,0,TAU);const pg=ctx.createRadialGradient(W2/2,pCY,pR*0.9,W2/2,pCY,pR);pg.addColorStop(0,'#1a2040');pg.addColorStop(1,'#0c1020');ctx.fillStyle=pg;ctx.fill();ctx.beginPath();ctx.arc(W2/2,pCY,pR+2,0,TAU);ctx.strokeStyle='rgba(100,150,255,0.08)';ctx.lineWidth=2;ctx.stroke();
+const pR=W2*0.8,pCY=H2+pR*0.62;ctx.beginPath();ctx.arc(W2/2,pCY,pR,0,TAU);const pg=ctx.createRadialGradient(W2/2,pCY,pR*0.9,W2/2,pCY,pR);pg.addColorStop(0,'#1a2040');pg.addColorStop(1,'#0c1020');ctx.fillStyle=pg;ctx.fill();
 const bX=W2/2,bY=pCY-pR+5,tY=30;ctx.beginPath();ctx.setLineDash([3,4]);ctx.moveTo(bX,bY);ctx.lineTo(bX,tY);ctx.strokeStyle='rgba(150,200,255,0.15)';ctx.lineWidth=1;ctx.stroke();ctx.setLineDash([]);
 ctx.fillStyle='rgba(150,200,255,0.12)';ctx.fillRect(bX-35,tY-7,70,14);ctx.strokeStyle='rgba(150,200,255,0.25)';ctx.lineWidth=0.5;ctx.strokeRect(bX-35,tY-7,70,14);
 for(let i=0;i<5;i++){ctx.fillStyle='rgba(255,200,80,0.2)';ctx.fillRect(bX-28+i*13,tY-4,8,8)}
@@ -658,22 +499,42 @@ for(let i=0;i<14;i++)socNodes.push({x:0.2+Math.random()*0.6,y:0.2+Math.random()*
 const socEdges=[];for(let i=0;i<socNodes.length;i++)for(let j=i+1;j<socNodes.length;j++)if(Math.random()<0.12)socEdges.push([i,j]);
 function drawSocial(t){if(!socCV||!socCV._w)return;const s=Math.min(socCV._w,socCV._h);const ctx=socCV.ctx;ctx.fillStyle='#0e1118';ctx.fillRect(0,0,s,s);socNodes.forEach(n=>{n.x+=n.vx+Math.sin(t*0.5+n.r)*0.0003;n.y+=n.vy+Math.cos(t*0.7+n.r)*0.0003;if(n.x<0.12||n.x>0.88)n.vx*=-1;if(n.y<0.12||n.y>0.88)n.vy*=-1});socEdges.forEach(([i,j])=>{const a=socNodes[i],b=socNodes[j];ctx.beginPath();ctx.moveTo(a.x*s,a.y*s);ctx.lineTo(b.x*s,b.y*s);ctx.strokeStyle='rgba(255,150,150,0.06)';ctx.lineWidth=0.6;ctx.stroke()});socNodes.forEach(n=>{const gl=ctx.createRadialGradient(n.x*s,n.y*s,0,n.x*s,n.y*s,n.r*2.5);gl.addColorStop(0,n.color+'18');gl.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(n.x*s,n.y*s,n.r*2.5,0,TAU);ctx.fillStyle=gl;ctx.fill();ctx.beginPath();ctx.arc(n.x*s,n.y*s,n.r,0,TAU);ctx.fillStyle=n.color;ctx.globalAlpha=0.7;ctx.fill();ctx.globalAlpha=1})}
 
-// ═══════ MEDIA PLACEHOLDERS ═══════
-function drawMedia(cv,t,seed){if(!cv||!cv._w)return;const ctx=cv.ctx,W2=cv._w,H2=cv._h;ctx.fillStyle='#0c1018';ctx.fillRect(0,0,W2,H2);const ng=ctx.createRadialGradient(W2*0.35,H2*0.5,0,W2*0.35,H2*0.5,W2*0.5);ng.addColorStop(0,'rgba(150,200,255,0.012)');ng.addColorStop(1,'transparent');ctx.fillStyle=ng;ctx.fillRect(0,0,W2,H2);for(let i=0;i<100;i++){const sx=(Math.sin(i*127.1+seed)*0.5+0.5)*W2,sy=(Math.cos(i*311.7+seed)*0.5+0.5)*H2;ctx.beginPath();ctx.arc(sx,sy,0.5+Math.random()*0.8,0,TAU);ctx.fillStyle=`rgba(200,210,230,${0.08+Math.sin(t*0.5+i*0.3)*0.06})`;ctx.fill()}ctx.font="10px 'JetBrains Mono',monospace";ctx.fillStyle='rgba(150,200,255,0.06)';ctx.textAlign='center';ctx.fillText('[ SCREENSHOT / VIDEO PLACEHOLDER ]',W2/2,H2/2)}
+// ═══════ GALLERY CANVASES ═══════
+function drawSS(canvas,t,seed){
+  const ctx=canvas.getContext('2d');const el=canvas.parentElement;const w=el.clientWidth,h=el.clientHeight;
+  if(canvas.width!==Math.floor(w*dpr)){canvas.width=Math.floor(w*dpr);canvas.height=Math.floor(h*dpr);canvas.style.width=w+'px';canvas.style.height=h+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
+  ctx.fillStyle='#0a0e16';ctx.fillRect(0,0,w,h);
+  const ng=ctx.createRadialGradient(w*(0.3+Math.sin(seed)*0.15),h*0.5,0,w*0.4,h*0.5,w*0.5);ng.addColorStop(0,'rgba(100,140,200,0.025)');ng.addColorStop(0.5,'rgba(80,60,120,0.012)');ng.addColorStop(1,'transparent');ctx.fillStyle=ng;ctx.fillRect(0,0,w,h);
+  const ng2=ctx.createRadialGradient(w*(0.7+Math.cos(seed*1.3)*0.12),h*0.4,0,w*0.6,h*0.4,w*0.35);ng2.addColorStop(0,'rgba(150,100,60,0.015)');ng2.addColorStop(1,'transparent');ctx.fillStyle=ng2;ctx.fillRect(0,0,w,h);
+  for(let i=0;i<180;i++){const sx=(Math.sin(i*127.1+seed)*0.5+0.5)*w,sy=(Math.cos(i*311.7+seed)*0.5+0.5)*h;const tw=0.18+Math.sin(t*1.2+i*2.7)*0.12;const sz=i<10?1+Math.random()*0.6:0.3+Math.random()*0.6;ctx.beginPath();ctx.arc(sx,sy,sz,0,TAU);ctx.fillStyle=`rgba(200,215,240,${tw})`;ctx.fill();if(i<6){const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,sz*4);sg.addColorStop(0,`rgba(180,200,255,${tw*0.12})`);sg.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(sx,sy,sz*4,0,TAU);ctx.fillStyle=sg;ctx.fill()}}
+  // Small feature object per tile
+  const fx=w*(0.4+Math.sin(seed*2.1)*0.2),fy=h*(0.35+Math.cos(seed*1.7)*0.15);
+  if(seed%3===0){// grid station
+    ctx.strokeStyle='rgba(150,200,255,0.06)';ctx.lineWidth=0.5;
+    for(let gx=-3;gx<=3;gx++)for(let gy=-3;gy<=3;gy++){if(Math.sin(gx*3.7+gy*7.1+seed)>0.2){ctx.fillStyle='rgba(150,200,255,0.04)';ctx.fillRect(fx+gx*8,fy+gy*8,7,7);ctx.strokeRect(fx+gx*8,fy+gy*8,7,7)}}
+  }else if(seed%3===1){// nebula blob
+    const bg=ctx.createRadialGradient(fx,fy,0,fx,fy,w*0.12);bg.addColorStop(0,'rgba(120,160,255,0.04)');bg.addColorStop(0.5,'rgba(100,80,180,0.02)');bg.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(fx,fy,w*0.12,0,TAU);ctx.fillStyle=bg;ctx.fill();
+  }else{// station grid
+    ctx.strokeStyle='rgba(150,200,255,0.05)';ctx.lineWidth=0.5;
+    for(let gx=-2;gx<=2;gx++)for(let gy=-4;gy<=1;gy++){if(Math.sin(gx*5.3+gy*3.1+seed)>0){ctx.fillStyle='rgba(150,200,255,0.03)';ctx.fillRect(fx+gx*10,fy+gy*10,9,9);ctx.strokeRect(fx+gx*10,fy+gy*10,9,9)}}
+  }
+}
+const ssCanvases=document.querySelectorAll('.ss-canvas');
+let ssSeeds=[];ssCanvases.forEach((_,i)=>ssSeeds.push(i*47+13));
 
 // ═══════ RESIZE ═══════
 function resize(){W=innerWidth;H=innerHeight;sizeCanvas(simCV,W,H);sizeCanvas(heroCV,W,H);resizeAllViz()}
 resize();addEventListener('resize',resize);
 
-// ═══════ CONTROLS ═══════
 function toggleTree(){showTree=!showTree;document.getElementById('treeBtn').classList.toggle('active',showTree)}
 function toggleTrails(){showTrails=!showTrails;document.getElementById('trailBtn').classList.toggle('active',showTrails)}
 function togglePause(){paused=!paused;const b=document.getElementById('pauseBtn');b.classList.toggle('active',paused);b.textContent=paused?'Resume':'Pause'}
 window.resetSim=resetSim;window.addCluster=addCluster;window.toggleTree=toggleTree;window.toggleTrails=toggleTrails;window.togglePause=togglePause;
 
-let dragging=false,dragStart=null;
-simCV.c.addEventListener('mousedown',e=>{dragging=true;dragStart={x:e.clientX,y:e.clientY}});
-addEventListener('mouseup',e=>{if(dragging&&dragStart){spawnBody(dragStart.x,dragStart.y,(dragStart.x-e.clientX)*3,(dragStart.y-e.clientY)*3,10+Math.random()*80);dragging=false;dragStart=null}});
+let dragging=false,dragStart=null,dragCurrent=null;
+simCV.c.addEventListener('mousedown',e=>{dragging=true;dragStart={x:e.clientX,y:e.clientY};dragCurrent={x:e.clientX,y:e.clientY}});
+addEventListener('mousemove',e=>{if(dragging)dragCurrent={x:e.clientX,y:e.clientY}});
+addEventListener('mouseup',e=>{if(dragging&&dragStart){spawnBody(dragStart.x,dragStart.y,(dragStart.x-e.clientX)*3,(dragStart.y-e.clientY)*3,10+Math.random()*80);dragging=false;dragStart=null;dragCurrent=null}});
 
 let fc=0,lastFT=performance.now(),time=0;
 addCluster(100);setTimeout(()=>addCluster(80),100);
@@ -681,7 +542,7 @@ addCluster(100);setTimeout(()=>addCluster(80),100);
 function loop(){
   time+=1/60;stepSim();renderSim();
   drawRadar(heroCV.ctx,W,H,time);drawOrrPort(time);drawElevator(time);drawNetwork(time);drawSocial(time);
-  drawMedia(mb1,time,42);drawMedia(mb2,time,137);drawMedia(mb3,time,271);drawMedia(mb4,time,389);
+  ssCanvases.forEach((c,i)=>drawSS(c,time,ssSeeds[i]));
   fc++;const now=performance.now();if(now-lastFT>=1000){document.getElementById('fpsRead').textContent=fc;fc=0;lastFT=now}
   document.getElementById('bodyCount').textContent=bodies.length;
   document.getElementById('clockRead').textContent=new Date().toTimeString().slice(0,8);
@@ -694,5 +555,3 @@ document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
 </script>
 </body>
 </html>
-
-
