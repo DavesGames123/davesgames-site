@@ -32,6 +32,39 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .topbar-r{display:flex;gap:1.4rem;font-size:0.4rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);align-items:center}
 .topbar-r strong{color:var(--blue-dim);font-weight:500}
 .ctrl-bar{display:flex;align-items:center;padding:0 1rem;height:40px;background:rgba(14,17,24,0.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);flex-shrink:0;gap:0.7rem;overflow-x:auto}
+.mob-row{display:none}
+.mob-toggle{display:none;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;padding:3px 8px;cursor:pointer;white-space:nowrap}
+.mob-toggle:hover{border-color:var(--blue);color:var(--blue)}
+.mob-toggle.active{color:var(--yellow);border-color:var(--yellow)}
+#settings-panel{display:none}
+#mob-sidebar-btn{display:none}
+
+@media(max-width:768px){
+  .topbar-r{display:none}
+  /* Main ctrl bar: hide, replaced by mobile rows */
+  .ctrl-bar{display:none!important}
+  .mob-row{display:flex;align-items:center;padding:0 .6rem;background:rgba(14,17,24,0.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);flex-shrink:0;gap:.5rem;flex-wrap:nowrap;overflow-x:auto}
+  .mob-row.primary{height:44px}
+  .mob-row.primary select,.mob-row.primary input[type=number]{font-size:0.6rem;padding:6px 8px}
+  .mob-row.primary .bot-btn{padding:6px 12px;font-size:0.48rem}
+  .mob-row.primary .gen-btn{padding:8px 14px;font-size:0.5rem}
+  #settings-panel{display:none;padding:8px .6rem 10px;background:rgba(14,17,24,0.92);border-bottom:1px solid var(--border)}
+  #settings-panel.open{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+  #settings-panel .ctrl-group{display:flex;align-items:center;gap:.35rem}
+  #settings-panel .ctrl-label{font-size:0.38rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);white-space:nowrap}
+  #settings-panel input[type=range]{width:80px}
+  #settings-panel .bot-btn{padding:5px 10px;font-size:0.44rem}
+  /* Sidebar: overlay from right */
+  #sidebar{position:absolute;right:0;top:0;bottom:0;z-index:50;width:210px;transform:translateX(100%);transition:transform .25s ease;box-shadow:-4px 0 20px rgba(0,0,0,.4)}
+  #sidebar.open{transform:translateX(0)}
+  #mob-sidebar-btn{display:block;position:absolute;bottom:12px;right:12px;z-index:40;background:rgba(14,17,24,0.9);border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;padding:8px 12px;cursor:pointer;backdrop-filter:blur(8px)}
+  #mob-sidebar-btn:hover{border-color:var(--blue);color:var(--blue)}
+  .mob-toggle{display:block}
+  #main{position:relative}
+  /* Larger touch targets */
+  select,input[type=number]{min-height:34px;font-size:0.55rem!important}
+  .bot-btn{min-height:34px}
+}
 .ctrl-group{display:flex;align-items:center;gap:0.35rem;flex-shrink:0}
 .ctrl-label{font-size:0.36rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);white-space:nowrap}
 .ctrl-sep{width:1px;height:18px;background:var(--border-b);flex-shrink:0}
@@ -77,15 +110,46 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 .info-val{font-size:0.42rem;color:var(--blue-dim)}
 .info-val.yellow{color:var(--yellow)}
 .barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.2rem;color:var(--blue-dim);opacity:0.15;text-align:center;padding:4px 0;line-height:1}
-.in-frame .topbar{display:none!important}</style>
+.in-frame .topbar{display:none!important}
+</style>
 </head>
-<body><script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
 <div id="app">
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Galactica</span><span class="sys-status">Planet Forge</span></div>
   <div class="topbar-r"><span>SYS // <strong>TEXGEN</strong></span><span id="clock">00:00:00</span></div>
 </div>
+<!-- MOBILE CONTROLS -->
+<div class="mob-row primary">
+  <div class="ctrl-group"><span class="ctrl-label">Type</span>
+    <select id="m-sel-type" onchange="document.getElementById('sel-type').value=this.value">
+      <option value="selena">Selena</option><option value="desert">Desert</option><option value="terra" selected>Terra</option><option value="water">Water</option><option value="ice">Ice</option><option value="ice_giant">Ice Giant</option><option value="gas_giant">Gas Giant</option>
+    </select>
+  </div>
+  <div class="ctrl-group"><span class="ctrl-label">Temp</span>
+    <select id="m-sel-temp" style="width:64px" onchange="document.getElementById('sel-temp').value=this.value">
+      <option value="0">Hot</option><option value="1">Warm</option><option value="2" selected>Comfort</option><option value="3">Cool</option><option value="4">Cold</option>
+    </select>
+  </div>
+  <div class="ctrl-group"><span class="ctrl-label">Seed</span><input type="number" id="m-inp-seed" value="42" style="width:54px" onchange="document.getElementById('inp-seed').value=this.value"/><button class="bot-btn" onclick="var s=Math.floor(Math.random()*99999);document.getElementById('m-inp-seed').value=s;document.getElementById('inp-seed').value=s">⟳</button></div>
+  <button class="mob-toggle" id="btn-settings" onclick="this.classList.toggle('active');document.getElementById('settings-panel').classList.toggle('open')">⚙</button>
+  <button class="bot-btn gen-btn" id="m-btn-gen">▶ GO</button>
+</div>
+<div id="settings-panel">
+  <div class="ctrl-group"><span class="ctrl-label">Res</span>
+    <select id="m-sel-res" style="width:56px" onchange="document.getElementById('sel-res').value=this.value">
+      <option value="512">512</option><option value="1024" selected>1024</option><option value="2048">2048</option>
+    </select>
+  </div>
+  <div class="ctrl-group"><span class="ctrl-label">Cities</span><button class="bot-btn active" id="m-btn-cities" onclick="document.getElementById('btn-cities').click();this.textContent=this.textContent==='On'?'Off':'On';this.classList.toggle('active')">On</button></div>
+  <div class="ctrl-group"><span class="ctrl-label">Sun φ</span><input type="range" min="0" max="360" value="40" oninput="var e=document.getElementById('rng-phi');e.value=this.value;e.oninput()"/></div>
+  <div class="ctrl-group"><span class="ctrl-label">θ</span><input type="range" min="10" max="170" value="65" style="width:60px" oninput="var e=document.getElementById('rng-theta');e.value=this.value;e.oninput()"/></div>
+  <div class="ctrl-group"><span class="ctrl-label">Normals</span><input type="range" min="0" max="50" value="4" oninput="var e=document.getElementById('rng-norm');e.value=this.value;e.oninput()"/></div>
+  <div class="ctrl-group"><span class="ctrl-label">Atmo</span><button class="bot-btn active" id="m-btn-atmo" onclick="document.getElementById('btn-atmo').click();this.textContent=this.textContent==='On'?'Off':'On';this.classList.toggle('active')">On</button></div>
+</div>
+<!-- DESKTOP CONTROLS -->
 <div class="ctrl-bar">
   <div class="ctrl-group"><span class="ctrl-label">Type</span>
     <select id="sel-type">
@@ -126,6 +190,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
   <div id="viewport">
     <div id="three-mount"></div>
     <div id="empty-state"><div class="empty-icon">🪐</div><div class="empty-title">select parameters and generate</div><div class="empty-desc">albedo · depth · normal · specular · emissive</div></div>
+    <button id="mob-sidebar-btn" onclick="document.getElementById('sidebar').classList.toggle('open');this.textContent=document.getElementById('sidebar').classList.contains('open')?'✕ Close':'Maps ▸'">Maps ▸</button>
   </div>
   <div id="sidebar">
     <div class="side-head"><span>Outputs</span><span class="tag">2:1 Equirect</span></div>
@@ -501,7 +566,19 @@ document.getElementById('rng-norm').oninput=function(){normStr=+this.value/10;if
 let showCities=true,showAtmo=true;
 document.getElementById('btn-cities').onclick=function(){showCities=!showCities;this.textContent=showCities?'On':'Off';this.classList.toggle('active',showCities);if(curMaps&&actMap==='render'){pmat.emissiveIntensity=showCities?2:0;pmat.needsUpdate=true}};
 document.getElementById('btn-atmo').onclick=function(){showAtmo=!showAtmo;this.textContent=showAtmo?'On':'Off';this.classList.toggle('active',showAtmo);amsh.visible=showAtmo&&!!curMaps};
-document.getElementById('btn-rand').onclick=()=>{document.getElementById('inp-seed').value=Math.floor(Math.random()*99999)};
+document.getElementById('btn-rand').onclick=()=>{var s=Math.floor(Math.random()*99999);document.getElementById('inp-seed').value=s;if(document.getElementById('m-inp-seed'))document.getElementById('m-inp-seed').value=s};
+
+// Mobile generate button triggers desktop one
+if(document.getElementById('m-btn-gen')){
+  document.getElementById('m-btn-gen').onclick=function(){
+    // Sync mobile → desktop
+    document.getElementById('sel-type').value=document.getElementById('m-sel-type').value;
+    document.getElementById('sel-temp').value=document.getElementById('m-sel-temp').value;
+    document.getElementById('inp-seed').value=document.getElementById('m-inp-seed').value;
+    if(document.getElementById('m-sel-res'))document.getElementById('sel-res').value=document.getElementById('m-sel-res').value;
+    document.getElementById('btn-gen').click();
+  };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SIDEBAR
