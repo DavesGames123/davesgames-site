@@ -166,9 +166,9 @@
     .g1,.g2,.g3,.g4,.g5,.g6{grid-column:auto;grid-row:auto}
     .reviews{grid-template-columns:1fr}
   }
-</style>
+.in-frame .topbar{display:none!important}</style>
 </head>
-<body>
+<body><script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
 <div class="corner-data tl">SYS.REF <span>0x7A2F</span><br>GRID <span>50U</span></div>
 <div class="corner-data br">SIGNAL <span>NOMINAL</span><br>AUTH <span>VERIFIED</span></div>

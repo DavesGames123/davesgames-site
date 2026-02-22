@@ -77,9 +77,9 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 .info-val{font-size:0.42rem;color:var(--blue-dim)}
 .info-val.yellow{color:var(--yellow)}
 .barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.2rem;color:var(--blue-dim);opacity:0.15;text-align:center;padding:4px 0;line-height:1}
-</style>
+.in-frame .topbar{display:none!important}</style>
 </head>
-<body>
+<body><script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
 <div id="app">
 <div class="topbar">
@@ -109,13 +109,13 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
   <div class="ctrl-sep"></div>
   <div class="ctrl-group"><span class="ctrl-label">Res</span><select id="sel-res" style="width:56px"><option value="512">512</option><option value="1024">1024</option><option value="2048" selected>2048</option></select></div>
   <div class="ctrl-sep"></div>
-  <div class="ctrl-group"><span class="ctrl-label">Cities</span><button class="bot-btn" id="btn-cities">Off</button></div>
+  <div class="ctrl-group"><span class="ctrl-label">Cities</span><button class="bot-btn active" id="btn-cities">On</button></div>
 
   <div class="ctrl-sep"></div>
   <div class="ctrl-group"><span class="ctrl-label">Sun φ</span><input type="range" id="rng-phi" min="0" max="360" value="40" style="width:60px"/></div>
   <div class="ctrl-group"><span class="ctrl-label">θ</span><input type="range" id="rng-theta" min="10" max="170" value="65" style="width:50px"/></div>
   <div class="ctrl-sep"></div>
-  <div class="ctrl-group"><span class="ctrl-label">Normals</span><input type="range" id="rng-norm" min="0" max="50" value="18" style="width:50px"/></div>
+  <div class="ctrl-group"><span class="ctrl-label">Normals</span><input type="range" id="rng-norm" min="0" max="50" value="4" style="width:50px"/></div>
   <div class="ctrl-sep"></div>
   <div class="ctrl-group"><span class="ctrl-label">Atmo</span><button class="bot-btn active" id="btn-atmo">On</button></div>
   <div style="flex:1"></div>
@@ -495,10 +495,10 @@ vp.addEventListener('wheel',e=>{e.preventDefault();cam.position.z=cl(cam.positio
 document.getElementById('rng-phi').oninput=function(){sunPhi=+this.value*PI/180;updSun()};
 document.getElementById('rng-theta').oninput=function(){sunTh=+this.value*PI/180;updSun()};
 
-let normStr=1.8;
+let normStr=0.4;
 document.getElementById('rng-norm').oninput=function(){normStr=+this.value/10;if(pmat.normalMap){pmat.normalScale.set(normStr,normStr);pmat.needsUpdate=true}};
 
-let showCities=false,showAtmo=true;
+let showCities=true,showAtmo=true;
 document.getElementById('btn-cities').onclick=function(){showCities=!showCities;this.textContent=showCities?'On':'Off';this.classList.toggle('active',showCities);if(curMaps&&actMap==='render'){pmat.emissiveIntensity=showCities?2:0;pmat.needsUpdate=true}};
 document.getElementById('btn-atmo').onclick=function(){showAtmo=!showAtmo;this.textContent=showAtmo?'On':'Off';this.classList.toggle('active',showAtmo);amsh.visible=showAtmo&&!!curMaps};
 document.getElementById('btn-rand').onclick=()=>{document.getElementById('inp-seed').value=Math.floor(Math.random()*99999)};
