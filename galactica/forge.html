@@ -111,6 +111,25 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 .info-val.yellow{color:var(--yellow)}
 .barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.2rem;color:var(--blue-dim);opacity:0.15;text-align:center;padding:4px 0;line-height:1}
 .in-frame .topbar{display:none!important}
+/* ═══════ BATCH ═══════ */
+#batch-panel{display:none;background:rgba(14,17,24,0.94);border-bottom:1px solid var(--border-b);padding:10px 1rem;flex-shrink:0;max-height:220px;overflow-y:auto}
+#batch-panel.open{display:block}
+.batch-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.batch-title{font-size:0.42rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--blue-dim)}
+.batch-count{font-size:0.38rem;color:var(--text-faint)}
+.batch-actions{display:flex;gap:6px}
+.batch-actions .bot-btn{font-size:0.4rem;padding:4px 10px}
+#batch-list{display:flex;flex-wrap:wrap;gap:4px}
+.batch-item{display:flex;align-items:center;gap:6px;padding:3px 8px;background:rgba(150,200,255,0.04);border:1px solid var(--border-b);font-size:0.38rem;letter-spacing:0.08em;color:var(--text-dim);text-transform:uppercase}
+.batch-item .bi-type{color:var(--blue)}
+.batch-item .bi-temp{color:var(--yellow-dim)}
+.batch-item .bi-seed{color:var(--text-faint)}
+.batch-item .bi-rm{color:var(--text-faint);cursor:pointer;font-size:0.45rem;line-height:1;margin-left:2px}
+.batch-item .bi-rm:hover{color:#ff5050}
+#batch-progress{display:none;margin-top:8px;font-size:0.38rem;color:var(--text-faint);letter-spacing:0.1em}
+#batch-progress .bp-bar{height:2px;background:var(--border);margin-top:4px;border-radius:1px;overflow:hidden}
+#batch-progress .bp-fill{height:100%;background:linear-gradient(90deg,var(--blue),#4ad8e0);width:0;transition:width .15s}
+@media(max-width:768px){#batch-panel{padding:8px 0.6rem}}
 </style>
 </head>
 <body>
@@ -135,6 +154,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
   </div>
   <div class="ctrl-group"><span class="ctrl-label">Seed</span><input type="number" id="m-inp-seed" value="42" style="width:54px" onchange="document.getElementById('inp-seed').value=this.value"/><button class="bot-btn" onclick="var s=Math.floor(Math.random()*99999);document.getElementById('m-inp-seed').value=s;document.getElementById('inp-seed').value=s">⟳</button></div>
   <button class="mob-toggle" id="btn-settings" onclick="this.classList.toggle('active');document.getElementById('settings-panel').classList.toggle('open')">⚙</button>
+  <button class="bot-btn" onclick="document.getElementById('batch-panel').classList.toggle('open')" style="font-size:0.4rem;padding:5px 8px">Batch</button>
   <button class="bot-btn gen-btn" id="m-btn-gen">▶ GO</button>
 </div>
 <div id="settings-panel">
@@ -183,9 +203,25 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
   <div class="ctrl-sep"></div>
   <div class="ctrl-group"><span class="ctrl-label">Atmo</span><button class="bot-btn active" id="btn-atmo">On</button></div>
   <div style="flex:1"></div>
+  <button class="bot-btn" id="btn-batch" onclick="document.getElementById('batch-panel').classList.toggle('open');this.classList.toggle('active')">Batch</button>
   <button class="bot-btn gen-btn" id="btn-gen">▶ Generate</button>
 </div>
 <div id="prog-wrap"><div id="prog-bar"></div></div>
+<div id="batch-panel">
+  <div class="batch-header">
+    <span class="batch-title">Batch Queue</span>
+    <span class="batch-count" id="batch-count">0 planets</span>
+  </div>
+  <div id="batch-list"></div>
+  <div style="display:flex;gap:6px;margin-top:8px" class="batch-actions">
+    <button class="bot-btn" id="batch-add" title="Add current settings to queue">+ Add Current</button>
+    <button class="bot-btn" id="batch-add5" title="Add 5 random seeds with current type/temp">+ 5 Random</button>
+    <button class="bot-btn" id="batch-clear">Clear</button>
+    <div style="flex:1"></div>
+    <button class="bot-btn gen-btn" id="batch-go" disabled>▶ Generate All &amp; ZIP</button>
+  </div>
+  <div id="batch-progress"><span id="bp-text">Generating...</span><div class="bp-bar"><div class="bp-fill" id="bp-fill"></div></div></div>
+</div>
 <div id="main">
   <div id="viewport">
     <div id="three-mount"></div>
@@ -209,6 +245,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;heigh
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script>
 "use strict";
 setInterval(()=>{document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8)},1000);
@@ -658,6 +695,88 @@ document.getElementById('btn-gen').onclick=async function(){
   setAct('render');
   document.getElementById('prog-wrap').style.display='none';
   this.disabled=false;this.textContent='▶ Generate';
+};
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// BATCH GENERATION
+// ═══════════════════════════════════════════════════════════════════════════════
+const TNAMES_B=['Hot','Warm','Comfort','Cool','Cold'];
+const batchQueue=[];
+
+function renderQueue(){
+  const list=document.getElementById('batch-list');
+  list.innerHTML='';
+  batchQueue.forEach((item,i)=>{
+    const el=document.createElement('div');el.className='batch-item';
+    el.innerHTML='<span class="bi-type">'+item.type+'</span><span class="bi-temp">'+TNAMES_B[item.temp]+'</span><span class="bi-seed">#'+item.seed+'</span><span class="bi-rm" onclick="batchQueue.splice('+i+',1);renderQueue()">✕</span>';
+    list.appendChild(el);
+  });
+  document.getElementById('batch-count').textContent=batchQueue.length+' planet'+(batchQueue.length!==1?'s':'');
+  document.getElementById('batch-go').disabled=batchQueue.length===0;
+}
+
+document.getElementById('batch-add').onclick=function(){
+  batchQueue.push({
+    type:document.getElementById('sel-type').value,
+    temp:parseInt(document.getElementById('sel-temp').value),
+    seed:parseInt(document.getElementById('inp-seed').value)||0,
+    res:parseInt(document.getElementById('sel-res').value)
+  });
+  renderQueue();
+};
+
+document.getElementById('batch-add5').onclick=function(){
+  const type=document.getElementById('sel-type').value;
+  const temp=parseInt(document.getElementById('sel-temp').value);
+  const res=parseInt(document.getElementById('sel-res').value);
+  for(let i=0;i<5;i++){
+    batchQueue.push({type,temp,seed:Math.floor(Math.random()*99999),res});
+  }
+  renderQueue();
+};
+
+document.getElementById('batch-clear').onclick=function(){batchQueue.length=0;renderQueue()};
+
+function canvasToBlob(canvas){
+  return new Promise(r=>canvas.toBlob(b=>r(b),'image/png'));
+}
+
+document.getElementById('batch-go').onclick=async function(){
+  if(batchQueue.length===0)return;
+  this.disabled=true;this.textContent='Working...';
+  const bp=document.getElementById('batch-progress');bp.style.display='block';
+  const bpText=document.getElementById('bp-text');
+  const bpFill=document.getElementById('bp-fill');
+  const zip=new JSZip();
+  const total=batchQueue.length;
+  const MAP_NAMES=['albedo','depth','normal','specular','emissive'];
+
+  for(let i=0;i<total;i++){
+    const item=batchQueue[i];
+    const prefix=item.type+'_'+TNAMES_B[item.temp].toLowerCase()+'_'+item.seed;
+    bpText.textContent='Generating '+(i+1)+'/'+total+': '+prefix;
+    bpFill.style.width=((i/total)*100)+'%';
+
+    const maps=await generate(item.type,item.temp,item.seed,item.res,()=>{});
+    const folder=zip.folder(prefix);
+    for(const name of MAP_NAMES){
+      if(maps[name]){
+        const blob=await canvasToBlob(maps[name]);
+        folder.file(name+'.png',blob);
+      }
+    }
+  }
+
+  bpText.textContent='Compressing ZIP...';
+  bpFill.style.width='100%';
+  const blob=await zip.generateAsync({type:'blob'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='planets_batch_'+Date.now()+'.zip';a.click();
+  URL.revokeObjectURL(url);
+
+  bp.style.display='none';bpFill.style.width='0';
+  this.disabled=false;this.textContent='▶ Generate All & ZIP';
 };
 </script>
 </body>
