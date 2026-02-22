@@ -3,57 +3,42 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>GALACTICA</title>
+<title>GALACTICA // The Universe is Yours</title>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#0e1118;
-  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
-  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
-  --yellow:#ffc832;--yellow-glow:rgba(255,200,50,0.10);
-  --green:#64c864;
-  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;
-}
+:root{--bg:#0e1118;--border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);--blue:#96c8ff;--blue-dim:#5a8cc0;--yellow:#ffc832;--green:#64c864;--text-dim:#6878a0;--text-faint:#384060}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:'JetBrains Mono',monospace}
 #shell{display:flex;flex-direction:column;width:100%;height:100%}
-#tab-bar{
-  display:flex;align-items:center;height:34px;
-  background:rgba(14,17,24,0.96);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--border-b);
-  padding:0 1rem;gap:0;flex-shrink:0;z-index:1000;position:relative;
-}
-#tab-bar::after{
-  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg,transparent,var(--blue-dim),transparent);
-}
-.tab-logo{color:var(--blue);font-weight:700;font-size:0.58rem;letter-spacing:0.3em;margin-right:1.5rem;user-select:none}
-.tab{
-  background:transparent;border:none;color:var(--text-faint);
-  font-family:'JetBrains Mono',monospace;font-size:0.42rem;font-weight:500;
-  letter-spacing:0.14em;text-transform:uppercase;padding:9px 1.2rem;
-  cursor:pointer;transition:all 0.2s;position:relative;
-  border-bottom:2px solid transparent;margin-bottom:-1px;
-}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:36px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;flex-shrink:0;z-index:100}
+.topbar-l{display:flex;align-items:center;gap:1.5rem}
+.sys-name{color:var(--blue);font-weight:700;font-size:0.65rem;letter-spacing:0.3em}
+.topbar-tabs{display:flex;align-items:center;gap:0;margin-left:0.5rem}
+.tab{background:transparent;border:none;color:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:0.45rem;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;padding:10px 1rem;cursor:pointer;transition:all 0.2s;border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab:hover{color:var(--text-dim)}
 .tab.active{color:var(--yellow);border-bottom-color:var(--yellow)}
-.tab .dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:6px;vertical-align:middle;background:var(--text-faint);transition:all 0.2s}
+.tab .dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:5px;vertical-align:middle;background:var(--text-faint);transition:all 0.2s}
 .tab.active .dot{background:var(--green);box-shadow:0 0 6px var(--green)}
-.tab-right{margin-left:auto;display:flex;align-items:center;gap:1rem;font-size:0.38rem;letter-spacing:0.1em;color:var(--text-faint);text-transform:uppercase}
-.tab-right strong{color:var(--blue-dim);font-weight:500}
+.topbar-r{display:flex;gap:2rem;color:var(--text-dim);font-size:0.5rem}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
 #frames{flex:1;position:relative;overflow:hidden}
-#frames iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:var(--bg);transition:opacity 0.25s ease}
+#frames iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:var(--bg);transition:opacity 0.2s ease}
 #frames iframe.hidden{opacity:0;pointer-events:none;z-index:0}
 #frames iframe.visible{opacity:1;pointer-events:auto;z-index:1}
+@media(max-width:768px){.topbar{padding:0 0.8rem;height:34px}.topbar-r{display:none}.sys-name{font-size:0.55rem;letter-spacing:0.2em}.tab{padding:9px 0.7rem;font-size:0.4rem}}
 </style>
 </head>
 <body>
 <div id="shell">
-  <div id="tab-bar">
-    <span class="tab-logo">Galactica</span>
-    <button class="tab active" data-tab="home" onclick="switchTab('home')"><span class="dot"></span>Home</button>
-    <button class="tab" data-tab="forge" onclick="switchTab('forge')"><span class="dot"></span>Planet Forge</button>
-    <div class="tab-right"><span>SYS // <strong>ONLINE</strong></span><span id="clock">00:00:00</span></div>
+  <div class="topbar">
+    <div class="topbar-l">
+      <span class="sys-name">Galactica</span>
+      <div class="topbar-tabs">
+        <button class="tab active" data-tab="home" onclick="switchTab('home')"><span class="dot"></span>Home</button>
+        <button class="tab" data-tab="forge" onclick="switchTab('forge')"><span class="dot"></span>Planet Forge</button>
+      </div>
+    </div>
+    <div class="topbar-r"><span id="clock">00:00:00</span></div>
   </div>
   <div id="frames">
     <iframe id="frame-home" src="home.html" class="visible"></iframe>
@@ -61,13 +46,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
   </div>
 </div>
 <script>
-function switchTab(id){
-  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===id));
-  document.querySelectorAll('#frames iframe').forEach(f=>{
-    f.classList.toggle('visible',f.id==='frame-'+id);
-    f.classList.toggle('hidden',f.id!=='frame-'+id);
-  });
-}
+function switchTab(id){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===id));document.querySelectorAll('#frames iframe').forEach(f=>{f.classList.toggle('visible',f.id==='frame-'+id);f.classList.toggle('hidden',f.id!=='frame-'+id)})}
 setInterval(()=>{document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8)},1000);
 </script>
 </body>
