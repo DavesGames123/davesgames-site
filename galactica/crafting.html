@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Crafting Database // Galactica</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);
+  --green:#64c864;--red:#e06050;
+  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+  --t0:#d08050;--t1:#c8a840;--t2:#6898d0;--t3:#58b870;--t4:#78b848;--t5:#e88040;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-y:auto}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.3))}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2)}
+#app{position:relative;z-index:10;width:100%;padding-bottom:52px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:38px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar-l{display:flex;align-items:center;gap:1.2rem}
+.sys-name{color:var(--blue);font-weight:700;font-size:0.6rem;letter-spacing:0.3em}
+.sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green);font-size:0.4rem;letter-spacing:0.12em;text-transform:uppercase}
+.sys-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.topbar-r{display:flex;gap:1.4rem;font-size:0.4rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);align-items:center}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
+.in-frame .topbar{display:none!important}
+.hero{padding:1.8rem 2rem 1rem;max-width:1480px;margin:0 auto;display:flex;gap:2.5rem;align-items:flex-start}
+.hero-text{flex:1;min-width:0}
+.hero-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-style:italic;font-size:1.5rem;color:var(--text-bright);line-height:1.3;margin-bottom:0.4rem}
+.hero-title em{color:var(--yellow);font-style:italic}
+.hero-sub{font-size:0.4rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--blue-dim);margin-bottom:0.7rem}
+.hero-body{font-size:0.5rem;color:var(--text-dim);line-height:1.8;max-width:660px}
+.hero-body strong{color:var(--text);font-weight:500}
+.hero-stats{display:flex;flex-direction:column;gap:0.4rem;flex-shrink:0;width:170px;padding-top:0.2rem}
+.hs-box{padding:0.45rem 0.6rem;border:1px solid var(--border);background:var(--blue-faint)}
+.hs-val{font-size:1rem;font-weight:700;color:var(--blue);line-height:1}
+.hs-label{font-size:0.32rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-top:2px}
+.hs-box.yellow{background:var(--yellow-faint);border-color:rgba(255,200,50,0.1)}
+.hs-box.yellow .hs-val{color:var(--yellow)}
+.search-wrap{max-width:1480px;margin:0 auto;padding:0 2rem 0.8rem;display:flex;gap:10px;align-items:center}
+.search-input{width:100%;max-width:340px;background:var(--bg2);border:1px solid var(--border-b);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:0.48rem;letter-spacing:0.08em;padding:6px 10px;outline:none;transition:border-color 0.2s}
+.search-input::placeholder{color:var(--text-faint)}
+.search-input:focus{border-color:var(--blue-dim)}
+.tiers{max-width:1480px;margin:0 auto;padding:0 2rem 3rem;position:relative}
+.tier-row{position:relative}
+.tier-head{display:flex;align-items:center;gap:0.7rem;padding:0.4rem 0 0.3rem;border-bottom:1px solid var(--border)}
+.tier-badge{font-size:0.36rem;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;font-weight:700;white-space:nowrap}
+.tier-name{font-size:0.44rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);font-weight:500}
+.tier-desc{font-size:0.34rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);margin-left:auto}
+.tier-grid{display:flex;flex-wrap:wrap;gap:5px;padding:0.4rem 0 0.2rem}
+.subgroup-label{width:100%;font-size:0.32rem;letter-spacing:0.14em;text-transform:uppercase;padding:3px 0 0 2px}
+.el{width:124px;height:84px;background:var(--bg2);border:1px solid var(--border);padding:5px 7px;cursor:pointer;position:relative;transition:all 0.15s;display:flex;flex-direction:column}
+.el::before{content:'';position:absolute;top:0;left:0;width:100%;height:2px;background:var(--el-c,#888);opacity:0.35;transition:opacity 0.15s}
+.el:hover{border-color:var(--border-b);background:var(--bg3);transform:translateY(-1px)}
+.el:hover::before{opacity:0.7}
+.el.highlight{border-color:var(--el-c,#888);box-shadow:0 0 12px rgba(150,200,255,0.06)}
+.el.highlight::before{opacity:1}
+.el.dim-card{opacity:0.1;pointer-events:none}
+.el.in-cart::after{content:'\2713';position:absolute;top:4px;right:6px;font-size:0.4rem;color:var(--yellow)}
+.el-top{display:flex;justify-content:space-between;align-items:flex-start}
+.el-id{font-size:0.32rem;color:var(--text-faint)}
+.el-spawn{font-size:0.32rem}
+.el-mid{flex:1;display:flex;align-items:center;justify-content:center}
+.el-abbr{font-size:1.1rem;font-weight:700;letter-spacing:0.04em;line-height:1}
+.el-bot{display:flex;justify-content:space-between;align-items:flex-end}
+.el-name{font-size:0.36rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px}
+.el-stats{display:flex;gap:4px;font-size:0.3rem;line-height:1.4}
+.el-stats .consumed{color:var(--red)}
+.el-stats .produced{color:var(--green)}
+.tier-divider{display:flex;align-items:center;padding:2px 0;gap:8px}
+.td-line{flex:1;height:1px;background:var(--border)}
+.td-arrow{font-size:0.45rem;color:var(--text-faint);letter-spacing:5px}
+.svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2}
+.tip{position:fixed;z-index:10000;background:rgba(14,17,24,0.95);border:1px solid var(--border-b);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:10px 14px;width:280px;pointer-events:none;opacity:0;transition:opacity 0.1s;box-shadow:0 4px 24px rgba(0,0,0,0.5)}
+.tip.show{opacity:1}
+.tip-name{font-size:0.6rem;font-weight:700;color:var(--text-bright);margin-bottom:1px}
+.tip-tier{font-size:0.32rem;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:6px}
+.tip-section{margin-bottom:5px}
+.tip-section h4{font-size:0.3rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-bottom:3px}
+.tip-row{display:flex;align-items:center;gap:5px;padding:1.5px 0;font-size:0.4rem}
+.tip-row .qty{font-weight:700;min-width:18px}
+.tip-row .tier-tag{font-size:0.3rem;color:var(--text-faint);margin-left:auto}
+.tip-divider{border-top:1px solid var(--border);padding-top:5px;margin-top:4px}
+
+/* ═══ CALCULATOR PANEL ═══ */
+.calc-toggle{
+  position:fixed;bottom:0;left:0;right:0;z-index:900;
+  height:48px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 1.5rem;
+  background:rgba(14,17,24,0.96);backdrop-filter:blur(14px);
+  border-top:1px solid var(--border-b);cursor:pointer;
+  transition:border-color 0.2s;
+}
+.calc-toggle:hover{border-top-color:var(--yellow-dim)}
+.calc-toggle-l{display:flex;align-items:center;gap:0.8rem}
+.calc-toggle-label{font-size:0.42rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--yellow);font-weight:700}
+.calc-toggle-count{font-size:0.38rem;color:var(--text-faint);letter-spacing:0.1em}
+.calc-toggle-hint{font-size:0.34rem;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase}
+.calc-toggle .arrow{font-size:0.6rem;color:var(--text-faint);transition:transform 0.25s}
+.calc-toggle.open .arrow{transform:rotate(180deg)}
+
+.calc-panel{
+  position:fixed;bottom:48px;left:0;right:0;z-index:899;
+  background:rgba(14,17,24,0.97);backdrop-filter:blur(14px);
+  border-top:1px solid var(--border);
+  max-height:0;overflow:hidden;
+  transition:max-height 0.35s cubic-bezier(0.4,0,0.2,1);
+}
+.calc-panel.open{max-height:70vh;overflow-y:auto}
+.calc-inner{padding:1rem 1.5rem 1.2rem;max-width:1480px;margin:0 auto}
+
+.calc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.7rem}
+.calc-title{font-size:0.44rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--yellow)}
+.calc-actions{display:flex;gap:6px}
+.calc-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.38rem;letter-spacing:0.1em;text-transform:uppercase;padding:4px 10px;cursor:pointer;transition:all 0.15s}
+.calc-btn:hover{border-color:var(--blue);color:var(--blue)}
+.calc-btn.danger:hover{border-color:var(--red);color:var(--red)}
+
+.calc-empty{text-align:center;padding:1.5rem 0;font-size:0.44rem;color:var(--text-faint);letter-spacing:0.1em}
+
+.calc-columns{display:flex;gap:1.5rem;align-items:flex-start}
+.calc-col{flex:1;min-width:0}
+.calc-col-title{font-size:0.36rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--blue-dim);margin-bottom:0.4rem;padding-bottom:0.25rem;border-bottom:1px solid var(--border)}
+
+/* Build list items */
+.build-item{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)}
+.build-item:last-child{border-bottom:none}
+.bi-color{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.bi-name{font-size:0.42rem;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bi-controls{display:flex;align-items:center;gap:0}
+.bi-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.42rem;width:22px;height:22px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s;line-height:1}
+.bi-btn:hover{border-color:var(--blue);color:var(--blue)}
+.bi-qty{font-size:0.44rem;font-weight:700;color:var(--yellow);min-width:28px;text-align:center}
+.bi-rm{background:transparent;border:none;color:var(--text-faint);font-size:0.44rem;cursor:pointer;padding:0 4px;line-height:1;transition:color 0.15s}
+.bi-rm:hover{color:var(--red)}
+
+/* Requirements breakdown */
+.req-tier{margin-bottom:0.6rem}
+.req-tier-head{font-size:0.34rem;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.25rem;padding-bottom:0.15rem;border-bottom:1px solid var(--border)}
+.req-item{display:flex;align-items:center;gap:6px;padding:2.5px 0;font-size:0.42rem}
+.req-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.req-qty{font-weight:700;min-width:32px}
+.req-name{color:var(--text-dim)}
+.req-batches{margin-left:auto;font-size:0.34rem;color:var(--text-faint)}
+.req-time{font-size:0.34rem;color:var(--text-faint)}
+
+/* Totals */
+.calc-totals{margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid var(--border-b)}
+.ct-row{display:flex;justify-content:space-between;padding:2px 0;font-size:0.4rem}
+.ct-label{color:var(--text-faint);letter-spacing:0.1em;text-transform:uppercase}
+.ct-val{font-weight:700;color:var(--yellow)}
+
+@media(max-width:900px){
+  .hero{flex-direction:column;gap:1rem;padding:1.2rem 1rem 0.8rem}
+  .hero-stats{flex-direction:row;width:100%;flex-wrap:wrap}
+  .hs-box{flex:1;min-width:80px}
+  .search-wrap{padding:0 1rem 0.6rem}
+  .tiers{padding:0 1rem 2rem}
+  .el{width:104px;height:74px}
+  .el-abbr{font-size:0.95rem}
+  .calc-columns{flex-direction:column}
+  .calc-inner{padding:0.8rem 1rem}
+}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div id="app">
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Galactica</span><span class="sys-status">Crafting DB</span></div>
+  <div class="topbar-r"><span>SYS // <strong>RESOURCES</strong></span></div>
+</div>
+<div class="hero">
+  <div class="hero-text">
+    <div class="hero-sub">Station Systems // Industrial Database</div>
+    <div class="hero-title">The <em>Forge</em> of Civilization</div>
+    <div class="hero-body">
+      Every station in the galaxy runs on a chain of <strong>extraction, refinement, and assembly</strong>.
+      Miners haul raw ores from asteroids at a <strong>1:7 smelting ratio</strong> — one chunk of ore
+      yields seven ingots. Those ingots combine into alloys and wiring, which are then assembled into
+      the <strong>20 components</strong> that keep your colony alive: circuit boards for your AI systems,
+      solar cells for power, life support for citizens, and reactor cores for the most ambitious builds.
+      <br><br>
+      <strong>Hover</strong> any element to trace its ingredient chain.
+      <strong>Click</strong> to add it to your build queue below — the calculator figures out everything you need to mine, smelt, and assemble.
+    </div>
+  </div>
+  <div class="hero-stats">
+    <div class="hs-box"><div class="hs-val" id="stat-res">\u2014</div><div class="hs-label">Resources</div></div>
+    <div class="hs-box"><div class="hs-val" id="stat-rec">\u2014</div><div class="hs-label">Recipes</div></div>
+    <div class="hs-box yellow"><div class="hs-val" id="stat-conn">\u2014</div><div class="hs-label">Most Connected</div></div>
+    <div class="hs-box yellow"><div class="hs-val" id="stat-demand">\u2014</div><div class="hs-label">Highest Demand</div></div>
+  </div>
+</div>
+<div class="search-wrap"><input type="text" class="search-input" id="searchInput" placeholder="Search resources..."></div>
+<div class="tiers" id="tiers"><svg class="svg-layer" id="svgLayer"></svg></div>
+<div class="tip" id="tip"></div>
+</div>
+
+<!-- CALCULATOR -->
+<div class="calc-panel" id="calcPanel">
+  <div class="calc-inner" id="calcInner"></div>
+</div>
+<div class="calc-toggle" id="calcToggle" onclick="toggleCalc()">
+  <div class="calc-toggle-l">
+    <span class="calc-toggle-label">\u2692 Crafting Calculator</span>
+    <span class="calc-toggle-count" id="calcCount">Empty \u2014 click elements to add</span>
+  </div>
+  <span class="calc-toggle-hint" id="calcHint"></span>
+  <span class="arrow">\u25B2</span>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════════════════════════════
+var R={
+0:{name:"Iron",abbr:"Fe",color:[208,128,80],tier:0,spawn:.25},
+1:{name:"Copper",abbr:"Cu",color:[255,140,60],tier:0,spawn:.20},
+5:{name:"Carbon",abbr:"C",color:[140,140,158],tier:0,spawn:.18},
+2:{name:"Aluminum",abbr:"Al",color:[200,215,235],tier:0,spawn:.15},
+4:{name:"Silicon",abbr:"Si",color:[245,225,100],tier:0,spawn:.12},
+3:{name:"Titanium",abbr:"Ti",color:[110,145,220],tier:0,spawn:.10},
+6:{name:"Gold",abbr:"Au",color:[255,210,60],tier:0,spawn:.07},
+7:{name:"Platinum",abbr:"Pt",color:[210,230,250],tier:0,spawn:.05},
+8:{name:"Uranium",abbr:"U",color:[100,240,100],tier:0,spawn:.03},
+9:{name:"Rare Earth",abbr:"RE",color:[195,90,245],tier:0,spawn:.02},
+10:{name:"Iron Ingot",abbr:"Fe+",color:[215,145,120],tier:1},
+11:{name:"Copper Ingot",abbr:"Cu+",color:[250,180,100],tier:1},
+15:{name:"Carbon Brick",abbr:"CB",color:[150,150,165],tier:1},
+12:{name:"Aluminum Ingot",abbr:"Al+",color:[210,225,248],tier:1},
+14:{name:"Silicon Wafer",abbr:"SiW",color:[195,205,248],tier:1},
+13:{name:"Titanium Ingot",abbr:"Ti+",color:[150,175,248],tier:1},
+16:{name:"Gold Ingot",abbr:"Au+",color:[248,235,85],tier:1},
+17:{name:"Platinum Ingot",abbr:"Pt+",color:[235,242,252],tier:1},
+18:{name:"Uranium Ingot",abbr:"U+",color:[145,248,145],tier:1},
+19:{name:"Rare Earth Ingot",abbr:"RE+",color:[225,125,248],tier:1},
+20:{name:"Steel",abbr:"STL",color:[105,142,200],tier:2},
+21:{name:"Bronze",abbr:"BRZ",color:[200,142,62],tier:2},
+26:{name:"Copper Wire",abbr:"CuW",color:[248,152,55],tier:2},
+22:{name:"Aluminum Wire",abbr:"AlW",color:[178,215,248],tier:2},
+24:{name:"Glass",abbr:"GLS",color:[142,198,248],tier:2},
+25:{name:"Carbon Fiber",abbr:"CF",color:[125,132,162],tier:2},
+27:{name:"Structural Steel",abbr:"SST",color:[85,122,180],tier:2},
+23:{name:"Titanium Alloy",abbr:"TiA",color:[82,198,248],tier:2},
+28:{name:"Reinforced Alloy",abbr:"RA",color:[102,178,248],tier:2},
+29:{name:"Composite Plate",abbr:"CMP",color:[122,162,218],tier:2},
+30:{name:"Circuit Board",abbr:"PCB",color:[82,198,122],tier:3,group:"Electronics"},
+31:{name:"Processor",abbr:"CPU",color:[122,178,248],tier:3,group:"Electronics"},
+32:{name:"Sensor Array",abbr:"SNR",color:[248,85,178],tier:3,group:"Electronics"},
+33:{name:"Comm Module",abbr:"COM",color:[102,215,198],tier:3,group:"Electronics"},
+34:{name:"Navigation Unit",abbr:"NAV",color:[178,142,248],tier:3,group:"Electronics"},
+35:{name:"Battery Cell",abbr:"BAT",color:[248,198,55],tier:3,group:"Power"},
+36:{name:"Solar Cell",abbr:"SLC",color:[65,122,248],tier:3,group:"Power"},
+37:{name:"Fuel Cell",abbr:"FCL",color:[248,152,55],tier:3,group:"Power"},
+38:{name:"Power Regulator",abbr:"REG",color:[248,105,152],tier:3,group:"Power"},
+39:{name:"Reactor Core",abbr:"RCT",color:[102,248,102],tier:3,group:"Power"},
+40:{name:"Hydraulic Act.",abbr:"HYD",color:[198,105,55],tier:3,group:"Mechanical"},
+41:{name:"Thruster Asm.",abbr:"THR",color:[248,122,82],tier:3,group:"Mechanical"},
+42:{name:"Heat Exchanger",abbr:"HEX",color:[215,178,142],tier:3,group:"Mechanical"},
+43:{name:"Pressure Vessel",abbr:"PRS",color:[142,162,198],tier:3,group:"Mechanical"},
+44:{name:"Docking Clamp",abbr:"DCK",color:[178,142,102],tier:3,group:"Mechanical"},
+45:{name:"Life Support",abbr:"LSU",color:[82,215,178],tier:3,group:"Specialized"},
+46:{name:"Cargo Container",abbr:"CRG",color:[142,122,102],tier:3,group:"Specialized"},
+47:{name:"Shield Emitter",abbr:"SHD",color:[198,105,248],tier:3,group:"Specialized"},
+48:{name:"Fabricator Unit",abbr:"FAB",color:[178,198,142],tier:3,group:"Specialized"},
+49:{name:"Antenna Dish",abbr:"ANT",color:[198,215,248],tier:3,group:"Specialized"},
+50:{name:"Food",abbr:"FD",color:[122,198,82],tier:4},
+60:{name:"Oxidized Fuel",abbr:"OxF",color:[248,142,62],tier:5},
+};
+var recipes=[
+{in:[[0,1]],out:[10,7],t:8},{in:[[1,1]],out:[11,7],t:7},{in:[[2,1]],out:[12,7],t:10},
+{in:[[3,1]],out:[13,7],t:15},{in:[[4,1]],out:[14,7],t:12},{in:[[5,1]],out:[15,7],t:6},
+{in:[[6,1]],out:[16,7],t:12},{in:[[7,1]],out:[17,7],t:18},{in:[[8,1]],out:[18,7],t:25},
+{in:[[9,1]],out:[19,7],t:30},
+{in:[[10,2],[15,1]],out:[20,1],t:5},{in:[[11,2],[10,2]],out:[21,1],t:4},
+{in:[[12,2]],out:[22,1],t:2},{in:[[13,2],[12,3]],out:[23,2],t:6},
+{in:[[14,2]],out:[24,1],t:2.5},{in:[[15,3]],out:[25,2],t:6},
+{in:[[11,2]],out:[26,1],t:2},{in:[[20,1],[15,2]],out:[27,3],t:4.5},
+{in:[[23,1],[20,1]],out:[28,2],t:7.5},{in:[[25,1],[12,3]],out:[29,3],t:5.5},
+{in:[[14,2],[26,1],[24,1]],out:[30,1],t:7.5},{in:[[14,2],[16,1],[26,2]],out:[31,1],t:11},
+{in:[[14,2],[24,2],[19,1]],out:[32,1],t:12.5},{in:[[26,2],[22,1],[24,1]],out:[33,1],t:9},
+{in:[[14,2],[16,1],[24,2]],out:[34,1],t:10},{in:[[11,2],[15,2],[26,1]],out:[35,1],t:6},
+{in:[[14,2],[24,2],[22,1]],out:[36,2],t:9},{in:[[17,2],[26,2],[20,2]],out:[37,1],t:14},
+{in:[[26,2],[14,1],[20,2]],out:[38,1],t:9},{in:[[18,2],[20,3],[23,2]],out:[39,1],t:20},
+{in:[[20,2],[11,1],[12,1]],out:[40,1],t:7.5},{in:[[20,2],[23,2],[26,1]],out:[41,1],t:11},
+{in:[[12,2],[11,2],[20,1]],out:[42,1],t:7},{in:[[27,3],[23,2],[25,1]],out:[43,1],t:14},
+{in:[[20,2],[12,2],[26,1]],out:[44,1],t:6},{in:[[12,3],[25,1],[24,2]],out:[45,1],t:11},
+{in:[[20,3],[12,2],[29,1]],out:[46,1],t:7.5},{in:[[23,2],[19,2],[26,2]],out:[47,1],t:15},
+{in:[[20,2],[14,2],[26,2]],out:[48,1],t:10},{in:[[22,2],[26,2],[24,2]],out:[49,1],t:7.5},
+{in:[[15,3],[12,2],[19,1]],out:[60,5],t:30},
+];
+var tierC={0:'var(--t0)',1:'var(--t1)',2:'var(--t2)',3:'var(--t3)',4:'var(--t4)',5:'var(--t5)'};
+var tierN={0:'Raw Ores',1:'Ingots',2:'Alloys & Materials',3:'Components',4:'Consumables',5:'Propellants'};
+var tierD={0:'Mined from asteroids',1:'Smelted 1:7 ratio',2:'Combined ingots',3:'Complex assemblies',4:'Citizen needs',5:'Thruster fuel'};
+var tierCRaw={0:'#d08050',1:'#c8a840',2:'#6898d0',3:'#58b870',4:'#78b848',5:'#e88040'};
+function rgb(c,a){return'rgba('+c[0]+','+c[1]+','+c[2]+','+(a===undefined?1:a)+')';}
+function recipeFor(id){for(var i=0;i<recipes.length;i++){if(recipes[i].out[0]===id)return recipes[i];}return null;}
+
+// ═══════════════════════════════════════════════════════════════
+// STATS
+// ═══════════════════════════════════════════════════════════════
+var stats={};
+Object.keys(R).forEach(function(id){stats[+id]={totalConsumed:0,totalProduced:0,usedInCount:0};});
+recipes.forEach(function(rec){
+  stats[rec.out[0]].totalProduced+=rec.out[1];
+  rec.in.forEach(function(inp){stats[inp[0]].totalConsumed+=inp[1];stats[inp[0]].usedInCount++;});
+});
+var mU=0,mUid=0,mC=0,mCid=0;
+Object.keys(stats).forEach(function(id){var s=stats[+id];if(s.usedInCount>mU){mU=s.usedInCount;mUid=+id;}if(s.totalConsumed>mC){mC=s.totalConsumed;mCid=+id;}});
+document.getElementById('stat-res').textContent=Object.keys(R).length;
+document.getElementById('stat-rec').textContent=recipes.length;
+document.getElementById('stat-conn').textContent=R[mUid].abbr+' ('+mU+')';
+document.getElementById('stat-demand').textContent=R[mCid].abbr+' ('+mC+')';
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER PERIODIC TABLE
+// ═══════════════════════════════════════════════════════════════
+var tierRows=[
+  {tier:0,ids:[0,1,5,2,4,3,6,7,8,9]},
+  {tier:1,ids:[10,11,15,12,14,13,16,17,18,19]},
+  {tier:2,ids:[20,21,26,22,24,25,27,23,28,29]},
+  {tier:3,ids:[30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49],subgroups:{
+    0:{label:"Electronics",ids:[30,31,32,33,34]},
+    1:{label:"Power Systems",ids:[35,36,37,38,39]},
+    2:{label:"Mechanical",ids:[40,41,42,43,44]},
+    3:{label:"Specialized",ids:[45,46,47,48,49]},
+  }},
+  {tier:45,ids:[50,60],label:"Outputs"},
+];
+var tiersEl=document.getElementById('tiers');
+var svgEl=document.getElementById('svgLayer');
+var tipEl=document.getElementById('tip');
+
+function renderEl(id){
+  var r=R[id];if(!r)return'';
+  var c=r.color,s=stats[id];
+  var sp=r.spawn?'<span class="el-spawn" style="color:var(--t0)">'+(r.spawn*100).toFixed(0)+'%</span>':'';
+  var cn=s.totalConsumed>0?'<span class="consumed">\u25BC'+s.totalConsumed+'</span>':'';
+  var pr=s.totalProduced>0?'<span class="produced">\u25B2'+s.totalProduced+'</span>':'';
+  return'<div class="el" id="el'+id+'" data-id="'+id+'" data-name="'+r.name.toLowerCase()+'" onmouseenter="highlight('+id+')" onmouseleave="unhighlight()" onclick="addToCart('+id+')" style="--el-c:'+rgb(c)+'"><div class="el-top"><span class="el-id">'+id+'</span>'+sp+'</div><div class="el-mid"><span class="el-abbr" style="color:'+rgb(c)+'">'+r.abbr+'</span></div><div class="el-bot"><span class="el-name">'+r.name+'</span><span class="el-stats">'+cn+pr+'</span></div></div>';
+}
+(function(){
+  var html='';
+  tierRows.forEach(function(row,ri){
+    var t=row.tier,isC=t===45;
+    var tc=isC?'var(--t4)':tierC[t];
+    var tn=isC?'Outputs':tierN[t];
+    var td=isC?'Food & fuel':tierD[t];
+    html+='<div class="tier-row"><div class="tier-head"><span class="tier-badge" style="color:'+tc+';border:1px solid;opacity:0.7">'+(isC?'T4/5':'T'+t)+'</span><span class="tier-name">'+tn+'</span><span class="tier-desc">'+td+'</span></div><div class="tier-grid">';
+    if(row.subgroups){Object.keys(row.subgroups).forEach(function(k){var sg=row.subgroups[k];html+='<div class="subgroup-label" style="color:'+tc+'">'+sg.label+'</div>';sg.ids.forEach(function(id){html+=renderEl(id);});});}
+    else row.ids.forEach(function(id){html+=renderEl(id);});
+    html+='</div></div>';
+    if(ri<tierRows.length-1)html+='<div class="tier-divider"><div class="td-line"></div><span class="td-arrow">\u25BC \u25BC \u25BC</span><div class="td-line"></div></div>';
+  });
+  svgEl.insertAdjacentHTML('afterend',html);
+})();
+
+// ═══════════════════════════════════════════════════════════════
+// POSITIONS + SVG + TOOLTIP (same as before)
+// ═══════════════════════════════════════════════════════════════
+var elPos={};
+function updatePositions(){
+  var pr=tiersEl.getBoundingClientRect();
+  Object.keys(R).forEach(function(id){var el=document.getElementById('el'+id);if(!el)return;var r=el.getBoundingClientRect();elPos[id]={cx:r.left-pr.left+r.width/2,top:r.top-pr.top,bot:r.top-pr.top+r.height};});
+  svgEl.style.width=tiersEl.scrollWidth+'px';svgEl.style.height=tiersEl.scrollHeight+'px';svgEl.setAttribute('viewBox','0 0 '+tiersEl.scrollWidth+' '+tiersEl.scrollHeight);
+}
+function drawConnections(hId){
+  svgEl.innerHTML='';if(hId===null)return;
+  var related=new Set([hId]),recs=[];
+  function up(id,vis){if(!vis)vis=new Set();if(vis.has(id))return;vis.add(id);related.add(id);recipes.filter(function(r){return r.out[0]===id;}).forEach(function(rec){recs.push({rec:rec,direct:id===hId});rec.in.forEach(function(inp){related.add(inp[0]);up(inp[0],vis);});});}
+  up(hId);
+  document.querySelectorAll('.el').forEach(function(el){var id=+el.dataset.id;el.classList.toggle('dim-card',!related.has(id));el.classList.toggle('highlight',id===hId);});
+  var seen=new Set();
+  recs.forEach(function(item){var rec=item.rec,direct=item.direct;rec.in.forEach(function(inp){var inId=inp[0],qty=inp[1];var k=inId+'->'+rec.out[0];if(seen.has(k))return;seen.add(k);var f=elPos[inId],t=elPos[rec.out[0]];if(!f||!t)return;var x1=f.cx,y1=f.bot,x2=t.cx,y2=t.top;var dy=Math.abs(y2-y1),cp=Math.max(dy*.4,30);var iR=R[inId];var p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d','M'+x1+','+y1+' C'+x1+','+(y1+cp)+' '+x2+','+(y2-cp)+' '+x2+','+y2);p.setAttribute('fill','none');p.setAttribute('stroke',rgb(iR.color,direct?.65:.2));p.setAttribute('stroke-width',direct?2.5:1);svgEl.appendChild(p);if(direct&&qty>0){var tx=document.createElementNS('http://www.w3.org/2000/svg','text');tx.setAttribute('x',(x1+x2)/2+6);tx.setAttribute('y',(y1+y2)/2);tx.setAttribute('font-family','JetBrains Mono,monospace');tx.setAttribute('font-size','10');tx.setAttribute('font-weight','700');tx.setAttribute('fill',rgb(iR.color,.8));tx.textContent='\u00d7'+qty;svgEl.appendChild(tx);}});});
+}
+var hoverTimeout=null,mX=0,mY=0;
+document.addEventListener('mousemove',function(e){mX=e.clientX;mY=e.clientY;if(tipEl.classList.contains('show'))posTip();});
+function posTip(){var pw=280,ph=tipEl.offsetHeight||160,vw=window.innerWidth,vh=window.innerHeight;var x=mX+16,y=mY+12;if(x+pw>vw-8)x=mX-pw-12;if(y+ph>vh-8)y=vh-ph-8;if(y<8)y=8;tipEl.style.left=x+'px';tipEl.style.top=y+'px';}
+function highlight(id){clearTimeout(hoverTimeout);updatePositions();drawConnections(id);showTip(id);}
+function unhighlight(){hoverTimeout=setTimeout(function(){svgEl.innerHTML='';document.querySelectorAll('.el').forEach(function(el){el.classList.remove('dim-card','highlight');});tipEl.classList.remove('show');},80);}
+function showTip(id){
+  var r=R[id],tc=tierC[r.tier];
+  var h='<div class="tip-name" style="color:'+rgb(r.color)+'">'+r.name+' <span style="color:var(--text-faint);font-weight:300;font-size:0.4rem">['+r.abbr+']</span></div>';
+  h+='<div class="tip-tier" style="color:'+tc+'">Tier '+r.tier+' \u2014 '+(tierN[r.tier]||'Output')+'</div>';
+  var rec=recipeFor(id);
+  if(rec){
+    h+='<div class="tip-section"><h4>Ingredients</h4>';
+    rec.in.forEach(function(inp){var ir=R[inp[0]];h+='<div class="tip-row"><span class="qty" style="color:'+rgb(ir.color)+'">'+inp[1]+'\u00d7</span><span style="color:'+rgb(ir.color)+'">'+ir.name+'</span><span class="tier-tag">T'+ir.tier+'</span></div>';});
+    h+='<div class="tip-row" style="color:var(--text-faint);font-size:0.34rem;margin-top:2px">\u2192 '+rec.out[1]+'\u00d7 &ensp;\u23f1 '+rec.t+'s</div></div>';
+  } else if(r.spawn){h+='<div class="tip-section"><h4>Source</h4><div class="tip-row">\u26cf Mined \u2014 '+(r.spawn*100).toFixed(0)+'%</div></div>';}
+  var raw=getRawCosts(id);var re=Object.keys(raw).filter(function(k){return raw[k]>0;});
+  if(re.length>0){re.sort(function(a,b){return raw[b]-raw[a];});h+='<div class="tip-section tip-divider"><h4>Raw Ores (per 1\u00d7)</h4>';re.forEach(function(rid){var rr=R[+rid],qty=raw[rid],qs=Number.isInteger(qty)?qty:qty.toFixed(2);h+='<div class="tip-row"><span class="qty" style="color:'+rgb(rr.color)+'">'+qs+'\u00d7</span><span style="color:'+rgb(rr.color)+'">'+rr.name+'</span></div>';});h+='</div>';}
+  h+='<div style="margin-top:6px;font-size:0.32rem;color:var(--text-faint)">Click to add to build queue</div>';
+  tipEl.innerHTML=h;tipEl.classList.add('show');posTip();
+}
+var rawM={};
+function getRawCosts(id){if(rawM[id])return rawM[id];if(R[id].tier===0){rawM[id]={};rawM[id][id]=1;return rawM[id];}var rc=recipeFor(id);if(!rc){rawM[id]={};return{};}var oq=rc.out[1],costs={};rc.in.forEach(function(inp){var sub=getRawCosts(inp[0]);Object.keys(sub).forEach(function(rid){costs[rid]=(costs[rid]||0)+sub[rid]*(inp[1]/oq);});});rawM[id]=costs;return costs;}
+
+// Search
+document.getElementById('searchInput').addEventListener('input',function(){var q=this.value.toLowerCase().trim();document.querySelectorAll('.el').forEach(function(el){el.style.display=(q&&el.dataset.name.indexOf(q)===-1)?'none':'';});});
+
+// ═══════════════════════════════════════════════════════════════
+// CRAFTING CALCULATOR
+// ═══════════════════════════════════════════════════════════════
+var cart={};// id -> qty
+
+function addToCart(id){
+  // Only allow craftable / non-raw items (or any item really)
+  if(!cart[id])cart[id]=0;
+  cart[id]++;
+  updateCartUI();
+  updateCardMarkers();
+  // Auto-open panel
+  if(!document.getElementById('calcPanel').classList.contains('open'))toggleCalc();
+}
+function removeFromCart(id){delete cart[id];updateCartUI();updateCardMarkers();}
+function setCartQty(id,q){if(q<1){removeFromCart(id);return;}cart[id]=q;updateCartUI();}
+
+function updateCardMarkers(){
+  document.querySelectorAll('.el').forEach(function(el){el.classList.toggle('in-cart',!!cart[+el.dataset.id]);});
+}
+
+function toggleCalc(){
+  document.getElementById('calcPanel').classList.toggle('open');
+  document.getElementById('calcToggle').classList.toggle('open');
+}
+
+function clearCart(){cart={};updateCartUI();updateCardMarkers();}
+
+// ═══════════════════════════════════════════════════════════════
+// COMPUTE FULL MATERIAL BREAKDOWN
+// Given cart {id:qty}, compute every material needed at every tier,
+// using ceil math for discrete recipe batches.
+// ═══════════════════════════════════════════════════════════════
+function computeBreakdown(){
+  // needed[id] = total units needed
+  var needed={};
+
+  // Process from highest tier downward
+  // First seed with cart items
+  Object.keys(cart).forEach(function(id){needed[+id]=(needed[+id]||0)+cart[+id];});
+
+  // Resolve in tier order: T5,T4,T3,T2,T1 — each needs inputs from lower tiers
+  var allIds=Object.keys(R).map(Number);
+  // Sort by tier descending, then by id
+  allIds.sort(function(a,b){return(R[b].tier-R[a].tier)||b-a;});
+
+  var batchInfo={};// id -> {batches, time}
+
+  allIds.forEach(function(id){
+    if(!needed[id]||needed[id]<=0)return;
+    var rec=recipeFor(id);
+    if(!rec)return;// raw ore, no recipe
+    var unitsNeeded=needed[id];
+    var perBatch=rec.out[1];
+    var batches=Math.ceil(unitsNeeded/perBatch);
+    batchInfo[id]={batches:batches,time:batches*rec.t,perBatch:perBatch};
+    // Add input requirements
+    rec.in.forEach(function(inp){
+      needed[inp[0]]=(needed[inp[0]]||0)+inp[1]*batches;
+    });
+  });
+
+  return{needed:needed,batchInfo:batchInfo};
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER CALCULATOR
+// ═══════════════════════════════════════════════════════════════
+function updateCartUI(){
+  var keys=Object.keys(cart);
+  var count=0;keys.forEach(function(k){count+=cart[k];});
+  document.getElementById('calcCount').textContent=keys.length===0?'Empty \u2014 click elements to add':count+' item'+(count!==1?'s':'')+' in '+keys.length+' type'+(keys.length!==1?'s':'');
+
+  var inner=document.getElementById('calcInner');
+  if(keys.length===0){
+    inner.innerHTML='<div class="calc-empty">Click any element in the table above to add it to your build queue.</div>';
+    document.getElementById('calcHint').textContent='';
+    return;
+  }
+
+  var bd=computeBreakdown();
+  var needed=bd.needed,batchInfo=bd.batchInfo;
+
+  // Build list (left column)
+  var h='<div class="calc-header"><span class="calc-title">\u2692 Build Queue</span><div class="calc-actions"><button class="calc-btn danger" onclick="clearCart()">Clear All</button></div></div>';
+  h+='<div class="calc-columns">';
+
+  // LEFT: what they want to build
+  h+='<div class="calc-col" style="max-width:280px">';
+  h+='<div class="calc-col-title">Building</div>';
+  keys.forEach(function(sid){
+    var id=+sid,r=R[id],q=cart[id];
+    h+='<div class="build-item"><span class="bi-color" style="background:'+rgb(r.color)+'"></span><span class="bi-name">'+r.name+'</span>';
+    h+='<div class="bi-controls"><button class="bi-btn" onclick="setCartQty('+id+','+(q-1)+')">\u2212</button><span class="bi-qty">'+q+'</span><button class="bi-btn" onclick="setCartQty('+id+','+(q+1)+')">+</button></div>';
+    h+='<button class="bi-rm" onclick="removeFromCart('+id+')">\u2715</button></div>';
+  });
+  h+='</div>';
+
+  // RIGHT: full breakdown by tier
+  h+='<div class="calc-col">';
+  h+='<div class="calc-col-title">Total Materials Required</div>';
+
+  var totalTime=0;
+  var tierOrder=[3,2,1,0,5,4];// show components first, then down to ores
+  tierOrder.forEach(function(t){
+    var items=[];
+    Object.keys(needed).forEach(function(sid){
+      var id=+sid;
+      if(R[id].tier===t&&needed[id]>0){
+        // Don't show items that are just the cart items themselves for their own tier
+        // Actually, DO show them so they see everything
+        items.push({id:id,qty:needed[id],bi:batchInfo[id]||null});
+      }
+    });
+    if(items.length===0)return;
+    items.sort(function(a,b){return b.qty-a.qty;});
+
+    h+='<div class="req-tier"><div class="req-tier-head" style="color:'+tierCRaw[t]+'">'+(tierN[t]||'Output')+' (T'+t+')</div>';
+    items.forEach(function(item){
+      var r=R[item.id];
+      var batchStr='';
+      if(item.bi){
+        batchStr=item.bi.batches+' batch'+(item.bi.batches!==1?'es':'')+' \u00b7 '+item.bi.time.toFixed(1)+'s';
+        totalTime+=item.bi.time;
+      } else if(r.tier===0){
+        // Raw ore — show how many asteroids (1 ore = 7 ingots)
+        batchStr=item.qty+' ore chunks';
+      }
+      h+='<div class="req-item"><span class="req-dot" style="background:'+rgb(r.color)+'"></span><span class="req-qty" style="color:'+rgb(r.color)+'">'+item.qty+'\u00d7</span><span class="req-name">'+r.name+'</span><span class="req-batches">'+batchStr+'</span></div>';
+    });
+    h+='</div>';
+  });
+
+  // Totals
+  h+='<div class="calc-totals">';
+  h+='<div class="ct-row"><span class="ct-label">Total Craft Time</span><span class="ct-val">'+totalTime.toFixed(1)+'s</span></div>';
+  // Count unique raw ores
+  var oreCount=0;Object.keys(needed).forEach(function(sid){if(R[+sid].tier===0&&needed[+sid]>0)oreCount+=needed[+sid];});
+  h+='<div class="ct-row"><span class="ct-label">Total Raw Ore</span><span class="ct-val">'+oreCount+' chunks</span></div>';
+  h+='</div>';
+
+  h+='</div>';// end right col
+  h+='</div>';// end columns
+
+  inner.innerHTML=h;
+  document.getElementById('calcHint').textContent=totalTime.toFixed(0)+'s total craft time';
+}
+
+updateCartUI();
+window.addEventListener('resize',updatePositions);
+setTimeout(updatePositions,60);
+</script>
+</body>
+</html>
