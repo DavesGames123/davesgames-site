@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Station Guide // Galactica</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);--yellow-glow:rgba(255,200,50,0.10);
+  --green:#64c864;--red:#e06050;--cyan:#4ad8e0;--orange:#ff8844;
+  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+  --sidebar-w:220px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--bg);overflow:hidden}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.3))}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:2px}
+
+/* ═══════ TOPBAR ═══════ */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:38px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);flex-shrink:0;position:relative;z-index:50}
+.topbar-l{display:flex;align-items:center;gap:1.2rem}
+.sys-name{color:var(--blue);font-weight:700;font-size:0.6rem;letter-spacing:0.3em}
+.sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green);font-size:0.4rem;letter-spacing:0.12em;text-transform:uppercase}
+.sys-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.topbar-r{display:flex;gap:1.4rem;font-size:0.4rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);align-items:center}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
+.in-frame .topbar{display:none!important}
+
+/* ═══════ LAYOUT ═══════ */
+#app{position:relative;z-index:10;display:flex;flex-direction:column;height:100%}
+#shell{display:flex;flex:1;overflow:hidden}
+
+/* ═══════ SIDEBAR ═══════ */
+#sidebar{width:var(--sidebar-w);background:rgba(14,17,24,0.94);border-right:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;position:relative}
+#sidebar::after{content:'';position:absolute;top:0;right:0;bottom:0;width:1px;background:linear-gradient(180deg,var(--blue-dim),transparent 30%,transparent 70%,var(--blue-dim))}
+.side-head{padding:0.65rem 0.9rem;border-bottom:1px solid var(--border);font-size:0.42rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue-dim);display:flex;justify-content:space-between;align-items:center}
+.side-head .tag{color:var(--text-faint);font-size:0.34rem}
+.side-section{padding:4px 6px;border-bottom:1px solid var(--border)}
+.side-section-label{font-size:0.32rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-faint);padding:6px 8px 2px;opacity:0.6}
+.nav-btn{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;background:transparent;border:1px solid transparent;color:var(--text-faint);font-size:0.44rem;letter-spacing:0.08em;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;text-align:left;margin-bottom:1px;border-radius:4px}
+.nav-btn:hover{color:var(--text);background:var(--blue-faint);border-color:var(--border)}
+.nav-btn.active{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
+.nav-btn .nav-icon{font-size:0.7rem;width:18px;text-align:center;flex-shrink:0}
+.nav-btn .nav-num{color:var(--text-faint);font-size:0.34rem;margin-left:auto;opacity:0.5}
+.nav-sub{padding-left:26px}
+.nav-sub .nav-btn{font-size:0.38rem;padding:4px 8px;color:var(--text-faint)}
+.nav-sub .nav-btn.active{color:var(--yellow)}
+.side-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.4rem;color:var(--blue-dim);opacity:0.12;text-align:center;padding:12px 0;margin-top:auto}
+
+/* ═══════ WALKTHROUGH TOGGLE ═══════ */
+.wt-toggle{margin:8px 6px;display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--border-b);background:var(--bg2);cursor:pointer;transition:all .2s;border-radius:4px;font-family:'JetBrains Mono',monospace}
+.wt-toggle:hover{border-color:var(--yellow);background:var(--yellow-faint)}
+.wt-toggle.active{border-color:var(--yellow);background:var(--yellow);color:var(--bg)}
+.wt-toggle .wt-dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--yellow-dim);transition:all .2s}
+.wt-toggle.active .wt-dot{background:var(--bg);border-color:var(--bg)}
+.wt-label{font-size:0.38rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-dim)}
+.wt-toggle.active .wt-label{color:var(--bg)}
+
+/* ═══════ MAIN CONTENT ═══════ */
+#content{flex:1;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
+.chapter{padding:2.5rem 3rem 4rem;max-width:960px;margin:0 auto;display:none}
+.chapter.active{display:block}
+
+/* ═══════ CHAPTER HEADERS ═══════ */
+.ch-head{margin-bottom:2.5rem;position:relative}
+.ch-num{font-size:0.36rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--yellow-dim);margin-bottom:0.3rem}
+.ch-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:2.2rem;color:var(--text-bright);line-height:1.15;margin-bottom:0.5rem}
+.ch-title em{font-style:italic;color:var(--yellow)}
+.ch-sub{font-size:0.55rem;color:var(--text-dim);line-height:1.8;max-width:600px;font-weight:300}
+.ch-line{width:100%;height:1px;background:linear-gradient(90deg,var(--blue-dim),transparent 60%);margin-top:1.2rem}
+
+/* ═══════ SECTION ═══════ */
+.section{margin-bottom:3rem}
+.sec-label{font-size:0.36rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim);margin-bottom:0.6rem;display:flex;align-items:center;gap:8px}
+.sec-label::before{content:'';width:14px;height:1px;background:var(--blue-dim)}
+.sec-title{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.4rem;color:var(--text-bright);margin-bottom:0.8rem}
+.sec-body{font-size:0.56rem;color:var(--text-dim);line-height:2;font-weight:300}
+.sec-body strong{color:var(--text);font-weight:500}
+.sec-body code{color:var(--yellow);background:rgba(255,200,50,0.06);padding:1px 5px;border-radius:2px;font-size:0.5rem}
+
+/* ═══════ DIAGRAM PANELS ═══════ */
+.diagram{position:relative;margin:1.5rem 0;border:1px solid var(--border-b);background:rgba(14,17,24,0.8);overflow:hidden;border-radius:6px}
+.diagram::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue-dim),transparent)}
+.diagram::after{content:'';position:absolute;top:0;left:0;width:5px;height:5px;background:var(--blue-dim);box-shadow:calc(100% - 5px) 0 0 var(--blue-dim),0 calc(100% - 5px) 0 var(--blue-dim),calc(100% - 5px) calc(100% - 5px) 0 var(--blue-dim);pointer-events:none}
+.diagram canvas{display:block;width:100%}
+.diagram-label{position:absolute;bottom:8px;left:10px;font-size:0.34rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);pointer-events:none}
+
+/* ═══════ INFO CARDS ═══════ */
+.info-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin:1.2rem 0}
+.info-card{background:var(--bg2);border:1px solid var(--border);padding:12px 14px;position:relative;transition:all .2s;border-radius:4px}
+.info-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--card-c,var(--blue-dim));opacity:0.4;border-radius:4px 4px 0 0}
+.info-card:hover{border-color:var(--border-b);background:var(--bg3)}
+.info-card:hover::before{opacity:0.8}
+.ic-icon{font-size:1.2rem;margin-bottom:4px}
+.ic-name{font-size:0.5rem;font-weight:600;color:var(--text-bright);margin-bottom:3px;letter-spacing:0.04em}
+.ic-desc{font-size:0.38rem;color:var(--text-dim);line-height:1.6}
+.ic-tag{font-size:0.3rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--blue-dim);margin-top:6px}
+
+/* ═══════ STEP MARKERS ═══════ */
+.step{position:relative;padding-left:36px;margin-bottom:1.8rem;opacity:1;transition:opacity .3s}
+.step-num{position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;border:2px solid var(--blue-dim);display:flex;align-items:center;justify-content:center;font-size:0.4rem;font-weight:700;color:var(--blue-dim);background:var(--bg);transition:all .3s}
+.step.done .step-num{background:var(--green);border-color:var(--green);color:var(--bg)}
+.step.current .step-num{background:var(--yellow);border-color:var(--yellow);color:var(--bg);box-shadow:0 0 12px var(--yellow-glow)}
+.step-title{font-size:0.52rem;font-weight:500;color:var(--text-bright);margin-bottom:0.3rem}
+.step-body{font-size:0.48rem;color:var(--text-dim);line-height:1.8;font-weight:300}
+.step-connector{position:absolute;left:12px;top:28px;width:2px;height:calc(100% - 20px);background:var(--border-b)}
+.step:last-child .step-connector{display:none}
+
+/* ═══════ RULE BOXES ═══════ */
+.rule-box{border:1px solid var(--border-b);background:var(--blue-faint);padding:14px 18px;margin:1rem 0;border-radius:4px;position:relative}
+.rule-box::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue-dim);border-radius:3px 0 0 3px}
+.rule-box.warn::before{background:var(--yellow)}
+.rule-box.warn{background:var(--yellow-faint);border-color:rgba(255,200,50,0.12)}
+.rule-box.danger::before{background:var(--red)}
+.rule-box.danger{background:rgba(224,96,80,0.04);border-color:rgba(224,96,80,0.12)}
+.rb-title{font-size:0.42rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--blue);font-weight:600;margin-bottom:4px}
+.rule-box.warn .rb-title{color:var(--yellow)}
+.rule-box.danger .rb-title{color:var(--red)}
+.rb-body{font-size:0.46rem;color:var(--text-dim);line-height:1.7}
+
+/* ═══════ FLOW DIAGRAM ═══════ */
+.flow{display:flex;align-items:center;gap:0;margin:1.5rem 0;flex-wrap:wrap;justify-content:center}
+.flow-node{padding:10px 16px;border:1px solid var(--border-b);background:var(--bg2);text-align:center;border-radius:4px;min-width:90px}
+.flow-node .fn-label{font-size:0.36rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-bottom:2px}
+.flow-node .fn-value{font-size:0.6rem;font-weight:600;color:var(--text-bright)}
+.flow-arrow{color:var(--blue-dim);font-size:1rem;padding:0 8px;flex-shrink:0}
+
+/* ═══════ MODULE TABLE ═══════ */
+.mod-table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:0.42rem}
+.mod-table th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border-b);color:var(--blue-dim);letter-spacing:0.12em;text-transform:uppercase;font-weight:500}
+.mod-table td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text-dim);vertical-align:top}
+.mod-table tr:hover td{background:var(--blue-faint)}
+.mod-table .mod-icon{font-size:0.8rem;text-align:center;width:30px}
+.mod-table .mod-name{color:var(--text-bright);font-weight:500}
+.mod-table .mod-tag{display:inline-block;font-size:0.3rem;letter-spacing:0.08em;text-transform:uppercase;padding:1px 5px;border-radius:2px;margin-left:4px}
+.mod-tag.interior{color:var(--cyan);background:rgba(74,216,224,0.08);border:1px solid rgba(74,216,224,0.15)}
+.mod-tag.exterior{color:var(--orange);background:rgba(255,136,68,0.08);border:1px solid rgba(255,136,68,0.15)}
+.mod-tag.structural{color:var(--text-faint);background:rgba(150,200,255,0.04);border:1px solid var(--border)}
+
+/* ═══════ TIER BADGES ═══════ */
+.tier-badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:0.34rem;letter-spacing:0.1em;text-transform:uppercase;font-weight:700}
+.tier-badge.t0{color:#d08050;background:rgba(208,128,80,0.1);border:1px solid rgba(208,128,80,0.2)}
+.tier-badge.t1{color:#c8a840;background:rgba(200,168,64,0.1);border:1px solid rgba(200,168,64,0.2)}
+.tier-badge.t2{color:#6898d0;background:rgba(104,152,208,0.1);border:1px solid rgba(104,152,208,0.2)}
+.tier-badge.t3{color:#58b870;background:rgba(88,184,112,0.1);border:1px solid rgba(88,184,112,0.2)}
+.tier-badge.t4{color:#78b848;background:rgba(120,184,72,0.1);border:1px solid rgba(120,184,72,0.2)}
+.tier-badge.t5{color:#e88040;background:rgba(232,128,64,0.1);border:1px solid rgba(232,128,64,0.2)}
+
+/* ═══════ WALKTHROUGH OVERLAY ═══════ */
+.wt-bar{display:none;padding:8px 16px;background:rgba(40,32,10,0.9);border-top:1px solid rgba(255,200,50,0.2);backdrop-filter:blur(8px);align-items:center;gap:12px;position:sticky;bottom:0;z-index:40}
+.wt-bar.active{display:flex}
+.wt-progress{flex:1;height:3px;background:var(--surface);border-radius:2px;overflow:hidden}
+.wt-progress-fill{height:100%;background:var(--yellow);transition:width .3s;border-radius:2px}
+.wt-btn{background:transparent;border:1px solid var(--yellow-dim);color:var(--yellow);font-family:'JetBrains Mono',monospace;font-size:0.4rem;letter-spacing:0.1em;text-transform:uppercase;padding:4px 12px;cursor:pointer;transition:all .2s;border-radius:3px}
+.wt-btn:hover{background:var(--yellow);color:var(--bg)}
+.wt-btn:disabled{opacity:0.3;cursor:default}
+.wt-btn:disabled:hover{background:transparent;color:var(--yellow)}
+.wt-step-label{font-size:0.4rem;color:var(--yellow-dim);letter-spacing:0.1em;text-transform:uppercase;min-width:80px}
+
+/* ═══════ RESPONSIVE ═══════ */
+@media(max-width:768px){
+  #sidebar{width:180px}
+  .chapter{padding:1.5rem 1.2rem 3rem}
+  .ch-title{font-size:1.6rem}
+  .info-grid{grid-template-columns:1fr}
+  .flow{flex-direction:column}
+  .flow-arrow{transform:rotate(90deg)}
+}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+
+<div id="app">
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Galactica</span><span class="sys-status">Guide Active</span></div>
+  <div class="topbar-r"><span>Manual <strong>v4.2</strong></span></div>
+</div>
+
+<div id="shell">
+<!-- ═══════ SIDEBAR ═══════ -->
+<div id="sidebar">
+  <div class="side-head"><span>Station Manual</span><span class="tag">4 CH.</span></div>
+
+  <div class="side-section">
+    <div class="side-section-label">Chapter I</div>
+    <button class="nav-btn active" onclick="goTo('ch1')" data-ch="ch1"><span class="nav-icon">▣</span>Stations & Storage<span class="nav-num">01</span></button>
+    <div class="nav-sub" data-parent="ch1">
+      <button class="nav-btn" onclick="goTo('ch1','grid')">Grid & Placement</button>
+      <button class="nav-btn" onclick="goTo('ch1','modules')">Module Types</button>
+      <button class="nav-btn" onclick="goTo('ch1','enclosure')">Enclosed Storage</button>
+      <button class="nav-btn" onclick="goTo('ch1','filters')">Storage Filters</button>
+      <button class="nav-btn" onclick="goTo('ch1','construction')">Construction Pipeline</button>
+      <button class="nav-btn" onclick="goTo('ch1','demolishing')">Demolishing</button>
+    </div>
+  </div>
+
+  <div class="side-section">
+    <div class="side-section-label">Chapter II</div>
+    <button class="nav-btn" onclick="goTo('ch2')" data-ch="ch2"><span class="nav-icon">👤</span>Crew & Assignments<span class="nav-num">02</span></button>
+    <div class="nav-sub" data-parent="ch2">
+      <button class="nav-btn" onclick="goTo('ch2','commission')">Commissioning</button>
+      <button class="nav-btn" onclick="goTo('ch2','tasks')">Task Assignments</button>
+      <button class="nav-btn" onclick="goTo('ch2','skills')">Skills & Levels</button>
+      <button class="nav-btn" onclick="goTo('ch2','docking')">Docking & Rest</button>
+    </div>
+  </div>
+
+  <div class="side-section">
+    <div class="side-section-label">Chapter III</div>
+    <button class="nav-btn" onclick="goTo('ch3')" data-ch="ch3"><span class="nav-icon">⚒</span>Foundry & Refinery<span class="nav-num">03</span></button>
+    <div class="nav-sub" data-parent="ch3">
+      <button class="nav-btn" onclick="goTo('ch3','membrane')">Membrane Concept</button>
+      <button class="nav-btn" onclick="goTo('ch3','smelting')">Ore Smelting</button>
+      <button class="nav-btn" onclick="goTo('ch3','modes')">Production Modes</button>
+    </div>
+  </div>
+
+  <div class="side-section">
+    <div class="side-section-label">Chapter IV</div>
+    <button class="nav-btn" onclick="goTo('ch4')" data-ch="ch4"><span class="nav-icon">🔬</span>Crafting System<span class="nav-num">04</span></button>
+    <div class="nav-sub" data-parent="ch4">
+      <button class="nav-btn" onclick="goTo('ch4','tiers')">Resource Tiers</button>
+      <button class="nav-btn" onclick="goTo('ch4','recipes')">Recipes & Ratios</button>
+      <button class="nav-btn" onclick="goTo('ch4','advanced')">Assembler & Lab</button>
+      <button class="nav-btn" onclick="goTo('ch4','multiinput')">Multi-Input Chains</button>
+    </div>
+  </div>
+
+  <div style="padding:4px 6px">
+  <button class="wt-toggle" id="wtToggle" onclick="toggleWalkthrough()">
+    <span class="wt-dot"></span>
+    <span class="wt-label">Step-by-step</span>
+  </button>
+  </div>
+
+  <div class="side-barcode">GALACTICA-MANUAL-2026</div>
+</div>
+
+<!-- ═══════ CONTENT ═══════ -->
+<div id="content">
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  CHAPTER 1: STATIONS & STORAGE                                      ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="chapter active" id="ch1">
+  <div class="ch-head">
+    <div class="ch-num">Chapter I — Foundations</div>
+    <h1 class="ch-title">Stations & <em>Storage</em></h1>
+    <p class="ch-sub">Build modular space stations on a crossword-puzzle grid. Enclose empty cells with walls to create airtight storage bays that hold up to 64 units each.</p>
+    <div class="ch-line"></div>
+  </div>
+
+  <!-- GRID & PLACEMENT -->
+  <div class="section" id="ch1-grid">
+    <div class="sec-label">1.1 — Grid System</div>
+    <h2 class="sec-title">The Crossword Grid</h2>
+    <p class="sec-body">
+      Every station begins with a <strong>Structure Core</strong> at coordinate (0, 0). Modules are placed on an infinite sparse grid, one cell at a time. The core cannot be removed — it is the heart of your station. Three rules govern placement:
+    </p>
+
+    <div class="diagram" style="height:320px">
+      <canvas id="cvGrid" style="height:320px"></canvas>
+      <div class="diagram-label">Interactive — hover cells to preview placement</div>
+    </div>
+
+    <div class="rule-box">
+      <div class="rb-title">Rule 1 — Connectivity</div>
+      <div class="rb-body">Every new module must be cardinally adjacent to at least one existing module. All modules must trace a path back to the core.</div>
+    </div>
+    <div class="rule-box warn">
+      <div class="rb-title">Rule 2 — No 2×2 Blocks</div>
+      <div class="rb-body">You cannot fill a 2×2 area with modules. This "crossword" constraint ensures visual spacing and forces interesting layout decisions.</div>
+    </div>
+    <div class="rule-box">
+      <div class="rb-title">Rule 3 — Interior / Exterior</div>
+      <div class="rb-body">Some modules require specific placement. <strong>Docking Bays</strong> must face open space (exterior). <strong>Crew Quarters, Medical, Recreation,</strong> and <strong>Greenhouses</strong> must be fully surrounded (interior).</div>
+    </div>
+
+    <div class="flow">
+      <div class="flow-node"><div class="fn-label">Phase 1</div><div class="fn-value">Planned</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-label">Phase 2</div><div class="fn-value">Under Construction</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node"><div class="fn-label">Phase 3</div><div class="fn-value">Operational</div></div>
+    </div>
+    <p class="sec-body">
+      When you place a module, it enters the <strong>Planned</strong> state (a blueprint). Constructor bots deliver the required materials and perform work. Only modules adjacent to at least one <strong>Operational</strong> module can receive resources — this creates a <strong>construction frontier</strong> that expands outward from the core. Once resources are delivered and work is complete, the module becomes <strong>Operational</strong> and contributes its stats.
+    </p>
+  </div>
+
+  <!-- MODULE TYPES -->
+  <div class="section" id="ch1-modules">
+    <div class="sec-label">1.2 — Module Catalog</div>
+    <h2 class="sec-title">Module Types</h2>
+    <p class="sec-body">
+      Thirteen module types serve different roles. <strong>Structural</strong> modules (Core, Orange, White) form walls and can be drawn in lines. <strong>Functional</strong> modules are placed one at a time and provide specific station capabilities.
+    </p>
+
+    <table class="mod-table">
+      <thead><tr><th></th><th>Module</th><th>Role</th><th>Placement</th><th>Work</th></tr></thead>
+      <tbody>
+        <tr><td class="mod-icon">◉</td><td class="mod-name">Structure Core</td><td>Station foundation, +4 housing, +2 docking</td><td><span class="mod-tag structural">Auto</span></td><td>—</td></tr>
+        <tr><td class="mod-icon">▣</td><td class="mod-name">Structure (Orange)</td><td>Hull segment, +10 integrity</td><td><span class="mod-tag structural">Line-draw</span></td><td>150</td></tr>
+        <tr><td class="mod-icon">▢</td><td class="mod-name">Structure (White)</td><td>Hull segment, +10 integrity</td><td><span class="mod-tag structural">Line-draw</span></td><td>150</td></tr>
+        <tr><td class="mod-icon">🏠</td><td class="mod-name">Crew Quarters</td><td>Housing for 12 citizens</td><td><span class="mod-tag interior">Interior</span></td><td>600</td></tr>
+        <tr><td class="mod-icon">🚀</td><td class="mod-name">Docking Bay</td><td>Ship docking & resource transfer</td><td><span class="mod-tag exterior">Exterior</span></td><td>1000</td></tr>
+        <tr><td class="mod-icon">🌱</td><td class="mod-name">Greenhouse</td><td>Food production (5.0 base rate)</td><td><span class="mod-tag interior">Interior</span></td><td>750</td></tr>
+        <tr><td class="mod-icon">🏥</td><td class="mod-name">Medical Bay</td><td>+30% health recovery</td><td><span class="mod-tag interior">Interior</span></td><td>900</td></tr>
+        <tr><td class="mod-icon">🎮</td><td class="mod-name">Recreation</td><td>+20% morale recovery</td><td><span class="mod-tag interior">Interior</span></td><td>500</td></tr>
+        <tr><td class="mod-icon">🛡</td><td class="mod-name">Shield Generator</td><td>+100 shield strength</td><td>Any</td><td>1250</td></tr>
+        <tr><td class="mod-icon">⚒</td><td class="mod-name">Foundry</td><td>Ore smelting & alloy crafting</td><td>Any</td><td>800</td></tr>
+        <tr><td class="mod-icon">⛽</td><td class="mod-name">Fuel Processor</td><td>Oxidized fuel production</td><td>Any</td><td>1000</td></tr>
+        <tr><td class="mod-icon">⚙</td><td class="mod-name">Assembler</td><td>Tier 1–2 recipe crafting</td><td>Any</td><td>900</td></tr>
+        <tr><td class="mod-icon">🔬</td><td class="mod-name">Component Lab</td><td>Tier 3 component crafting</td><td>Any</td><td>1200</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ENCLOSED STORAGE -->
+  <div class="section" id="ch1-enclosure">
+    <div class="sec-label">1.3 — Enclosed Regions</div>
+    <h2 class="sec-title">How Storage Works</h2>
+    <p class="sec-body">
+      The key mechanic: <strong>empty cells fully surrounded by Operational modules form enclosed storage regions</strong>. The engine detects enclosures via flood-fill from the grid exterior — any cell unreachable from outside is "enclosed." Each enclosed cell can hold up to <code>64 units</code> of a single resource type.
+    </p>
+
+    <div class="diagram" style="height:340px">
+      <canvas id="cvEnclosure" style="height:340px"></canvas>
+      <div class="diagram-label">Enclosed cells shown in teal — modules shown as solid blocks</div>
+    </div>
+
+    <p class="sec-body">
+      Connected enclosed cells form a <strong>region</strong> identified by a unique ID. Foundries use these region IDs to know where to pull input materials from and where to deposit outputs. Regions update automatically when modules are built or removed.
+    </p>
+
+    <div class="rule-box danger">
+      <div class="rb-title">Decompression Warning</div>
+      <div class="rb-body">If you remove a wall module that breaks an enclosure, all stored resources in the exposed cells are <strong>explosively ejected into orbit</strong> — a radial burst of loose items around the station. They become collectible floating resources that your citizens must gather back.</div>
+    </div>
+  </div>
+
+  <!-- STORAGE FILTERS -->
+  <div class="section" id="ch1-filters">
+    <div class="sec-label">1.4 — Storage Filters</div>
+    <h2 class="sec-title">Controlling What Goes Where</h2>
+    <p class="sec-body">
+      Right-click any enclosed cell to open the <strong>Zone Filter</strong> popup. Filters apply to all connected cells in a storage region. You can restrict which resource types are accepted — organized by tier: Ores (0–9), Metals (10–29), and Parts (30–49).
+    </p>
+    <div class="info-grid">
+      <div class="info-card" style="--card-c:var(--green)">
+        <div class="ic-icon">✓</div>
+        <div class="ic-name">No Filter (Default)</div>
+        <div class="ic-desc">Zone accepts any resource type. Resources deposited first-come, first-served.</div>
+      </div>
+      <div class="info-card" style="--card-c:var(--yellow)">
+        <div class="ic-icon">◉</div>
+        <div class="ic-name">Partial Filter</div>
+        <div class="ic-desc">Only listed resource types accepted. Ore-only or ingot-only zones focus logistics.</div>
+      </div>
+      <div class="info-card" style="--card-c:var(--red)">
+        <div class="ic-icon">✕</div>
+        <div class="ic-name">Empty Filter</div>
+        <div class="ic-desc">Accept nothing. Useful as a buffer — block deposits temporarily while redesigning.</div>
+      </div>
+    </div>
+    <p class="sec-body">
+      The filter popup also provides <strong>zone sorting</strong>: sort by name (A-Z), stack size (largest first), or material category. This reorganizes resources within the zone cells without ejecting anything.
+    </p>
+  </div>
+
+  <!-- CONSTRUCTION PIPELINE -->
+  <div class="section" id="ch1-construction">
+    <div class="sec-label">1.5 — Construction Pipeline</div>
+    <h2 class="sec-title">From Blueprint to Operational</h2>
+    <p class="sec-body">
+      When you place a module, it enters the <strong>Planned</strong> state — a translucent blueprint on the grid. The module exists in the layout but provides no stats and does not count as a wall for enclosure detection. From here, the construction pipeline has three distinct phases:
+    </p>
+
+    <div class="flow">
+      <div class="flow-node" style="border-color:rgba(150,200,255,0.3)"><div class="fn-label">Phase 1</div><div class="fn-value" style="color:var(--blue)">Planned</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node" style="border-color:rgba(255,200,50,0.3)"><div class="fn-label">Phase 2</div><div class="fn-value" style="color:var(--yellow)">Under Construction</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node" style="border-color:rgba(100,200,100,0.3)"><div class="fn-label">Phase 3</div><div class="fn-value" style="color:var(--green)">Operational</div></div>
+    </div>
+
+    <div class="rule-box">
+      <div class="rb-title">The Construction Frontier</div>
+      <div class="rb-body">Only Planned modules adjacent to at least one <strong>Operational</strong> module can receive resources. This creates a "frontier" that expands outward from the station core. You can place blueprints far ahead, but workers will only deliver materials to the frontier — preventing construction in disconnected areas.</div>
+    </div>
+
+    <p class="sec-body">
+      <strong>Phase 1 — Planned:</strong> The blueprint is placed. The module's recipe defines what resources are needed (e.g., Crew Quarters requires 2× Steel, 3× Glass, 1× Aluminum Ingot). No resources have been delivered yet.
+    </p>
+    <p class="sec-body">
+      <strong>Phase 2 — Under Construction:</strong> Once on the frontier, constructor citizens begin delivering resources. The module tracks <code>resources_delivered</code> vs <code>resources_required</code> for each material type. Once all resources are delivered, workers perform construction work — tracked as <code>work_done / work_required</code>. Work amounts vary by module complexity (150 for structural, up to 1250 for Shield Generators).
+    </p>
+    <p class="sec-body">
+      <strong>Phase 3 — Operational:</strong> The module is fully built. It now provides its stats (housing, food production, shield strength, etc.), counts as a structural wall for enclosure detection, and triggers an enclosure recalculation — potentially creating new storage regions behind it.
+    </p>
+
+    <div class="rule-box warn">
+      <div class="rb-title">Cancelling Blueprints</div>
+      <div class="rb-body">Click a Planned or Under Construction module to cancel it. The blueprint is removed from the grid. Any resources already delivered are <strong>lost</strong> — they were consumed during delivery. Cancelling a Planned module that hasn't received resources costs nothing. Enclosure is recalculated immediately after cancellation.</div>
+    </div>
+
+    <div class="diagram" style="height:240px">
+      <canvas id="cvConstruction" style="height:240px"></canvas>
+      <div class="diagram-label">Construction frontier — only modules touching operational walls receive resources</div>
+    </div>
+  </div>
+
+  <!-- DEMOLISHING -->
+  <div class="section" id="ch1-demolishing">
+    <div class="sec-label">1.6 — Demolishing</div>
+    <h2 class="sec-title">Deconstruction Mechanics</h2>
+    <p class="sec-body">
+      Shift-click an <strong>Operational</strong> module (except the Core) to mark it for deconstruction. The module enters the <strong>MarkedForDeconstruction</strong> state — it remains structurally present (still counts as a wall, still blocks flood-fill) until deconstruction completes.
+    </p>
+
+    <div class="flow">
+      <div class="flow-node" style="border-color:rgba(100,200,100,0.3)"><div class="fn-label">State</div><div class="fn-value" style="color:var(--green)">Operational</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node" style="border-color:rgba(224,96,80,0.3)"><div class="fn-label">Shift-click</div><div class="fn-value" style="color:var(--red)">Marked</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node" style="border-color:rgba(150,200,255,0.2)"><div class="fn-label">Workers</div><div class="fn-value" style="color:var(--text-dim)">Removed</div></div>
+    </div>
+
+    <p class="sec-body">
+      Citizens with the <strong>Build</strong> task enabled will perform deconstruction work. Deconstruction takes <code>40%</code> of the original construction time — faster than building. Once complete:
+    </p>
+
+    <div class="info-grid" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="info-card" style="--card-c:var(--yellow)">
+        <div class="ic-name">Material Refund</div>
+        <div class="ic-desc">Each resource line in the recipe rolls independently: <strong>25–65%</strong> refund (random), rounded up via ceil(). Cheap modules still return something.</div>
+      </div>
+      <div class="info-card" style="--card-c:var(--red)">
+        <div class="ic-name">Ejection to Orbit</div>
+        <div class="ic-desc">Refunded materials are ejected into orbit as collectible floating resources — same explosive decompression physics as storage breach.</div>
+      </div>
+      <div class="info-card" style="--card-c:var(--cyan)">
+        <div class="ic-name">Enclosure Update</div>
+        <div class="ic-desc">After removal, enclosure is recalculated. If the removed module was a wall, any exposed storage cells eject their contents. Docking assignments are also validated.</div>
+      </div>
+    </div>
+
+    <div class="rule-box danger">
+      <div class="rb-title">Structural Cascade</div>
+      <div class="rb-body">Removing a wall module can break multiple enclosures simultaneously. All stored resources in newly-exposed cells are ejected at once — a chain reaction of decompression. Plan demolition carefully: remove interior modules before exterior walls to minimize losses.</div>
+    </div>
+  </div>
+
+  <!-- WALKTHROUGH: CHAPTER 1 -->
+  <div class="section wt-section" id="ch1-walkthrough" style="display:none">
+    <div class="sec-label">Walkthrough — Your First Station</div>
+    <h2 class="sec-title">Step by Step</h2>
+
+    <div class="step current" data-step="1"><div class="step-num">1</div><div class="step-connector"></div>
+      <div class="step-title">Start with the Core</div>
+      <div class="step-body">Every new station spawns with a Structure Core at (0,0). This is your anchor point. Open the Station Management window to see the grid editor.</div>
+    </div>
+    <div class="step" data-step="2"><div class="step-num">2</div><div class="step-connector"></div>
+      <div class="step-title">Draw Structural Walls</div>
+      <div class="step-body">Select Structure (Orange) or Structure (White) from the module palette. Click and drag to draw lines of wall segments extending from the core. Build a rectangular perimeter — leave the interior empty.</div>
+    </div>
+    <div class="step" data-step="3"><div class="step-num">3</div><div class="step-connector"></div>
+      <div class="step-title">Complete the Enclosure</div>
+      <div class="step-body">Close all gaps in your perimeter. Once construction bots finish building every wall segment to Operational, the empty cells inside will turn teal — they are now enclosed storage.</div>
+    </div>
+    <div class="step" data-step="4"><div class="step-num">4</div><div class="step-connector"></div>
+      <div class="step-title">Place Interior Modules</div>
+      <div class="step-body">Now place Crew Quarters, Greenhouses, and Medical bays <em>on</em> the walls (they must have all 4 neighbors occupied or enclosed). These functional modules need interior placement.</div>
+    </div>
+    <div class="step" data-step="5"><div class="step-num">5</div><div class="step-connector"></div>
+      <div class="step-title">Add Docking Ports</div>
+      <div class="step-body">Extend short arms outward from your walls and cap them with Docking Bays. These need at least one open-space neighbor (exterior placement). Citizens dock here to rest and transfer cargo.</div>
+    </div>
+    <div class="step" data-step="6"><div class="step-num">6</div>
+      <div class="step-title">Set Storage Filters</div>
+      <div class="step-body">Right-click an enclosed cell to set what resources the zone accepts. Create dedicated ore storage, ingot bays, and component warehouses for efficient logistics.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  CHAPTER 2: CREW & ASSIGNMENTS                                      ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="chapter" id="ch2">
+  <div class="ch-head">
+    <div class="ch-num">Chapter II — Command</div>
+    <h1 class="ch-title">Crew & <em>Assignments</em></h1>
+    <p class="ch-sub">Commission citizens to stations and toggle task permissions. Each citizen autonomously pursues enabled tasks based on priority, skill level, and station needs.</p>
+    <div class="ch-line"></div>
+  </div>
+
+  <!-- COMMISSIONING -->
+  <div class="section" id="ch2-commission">
+    <div class="sec-label">2.1 — Station Commissioning</div>
+    <h2 class="sec-title">Assigning Citizens to Stations</h2>
+    <p class="sec-body">
+      Citizens must be <strong>commissioned</strong> to a specific station to work there. Unassigned citizens appear in the recruitment panel. Click <code>+ Name</code> to assign them. Commissioned citizens show in the crew matrix — a grid of portraits with action rows beneath.
+    </p>
+    <p class="sec-body">
+      If your planet has multiple stations, you can <strong>transfer</strong> citizens between them using the "Ship" row in the crew panel. Click the station name badge to open a picker showing all stations on the planet.
+    </p>
+
+    <div class="diagram" style="height:200px">
+      <canvas id="cvCrew" style="height:200px"></canvas>
+      <div class="diagram-label">Crew assignment matrix — portraits as columns, tasks as rows</div>
+    </div>
+  </div>
+
+  <!-- TASK ASSIGNMENTS -->
+  <div class="section" id="ch2-tasks">
+    <div class="sec-label">2.2 — Task Toggles</div>
+    <h2 class="sec-title">What Citizens Can Do</h2>
+    <p class="sec-body">
+      Each citizen has independent task toggles. Enabled tasks are highlighted with their category color. Citizens autonomously prioritize which enabled task to pursue based on need.
+    </p>
+
+    <div class="info-grid" style="grid-template-columns:repeat(auto-fill,minmax(170px,1fr))">
+      <div class="info-card" style="--card-c:#8c5ac8"><div class="ic-icon">🔍</div><div class="ic-name">Search</div><div class="ic-desc">Prospect for asteroids. Skill: Prospecting.</div></div>
+      <div class="info-card" style="--card-c:#2878c8"><div class="ic-icon">📥</div><div class="ic-name">Collect</div><div class="ic-desc">Gather floating resources. Skill: Logistics. Supports resource filters.</div></div>
+      <div class="info-card" style="--card-c:#c8a01e"><div class="ic-icon">🔨</div><div class="ic-name">Build</div><div class="ic-desc">Deliver materials and construct station modules. Skill: Construction.</div></div>
+      <div class="info-card" style="--card-c:#be8232"><div class="ic-icon">⛏</div><div class="ic-name">Mine</div><div class="ic-desc">Extract ore from asteroids. Skill: Mining.</div></div>
+      <div class="info-card" style="--card-c:#3ca032"><div class="ic-icon">🌾</div><div class="ic-name">Harvest</div><div class="ic-desc">Collect food from greenhouses. Skill: Agriculture.</div></div>
+      <div class="info-card" style="--card-c:#b45028"><div class="ic-icon">⚒</div><div class="ic-name">Smelt</div><div class="ic-desc">Operate foundries to process ore into ingots. Skill: Metallurgy.</div></div>
+      <div class="info-card" style="--card-c:#be3232"><div class="ic-icon">🛡</div><div class="ic-name">Guard</div><div class="ic-desc">Battle stations formation. No associated skill — pure combat duty.</div></div>
+    </div>
+
+    <p class="sec-body">
+      The <strong>Collect</strong> task supports <strong>resource filters</strong> per citizen: restrict what types of floating resources a citizen will pick up. Useful for directing specific citizens to collect specific materials. The <strong>Rest</strong> button sends a citizen to their assigned docking port to recover energy and eat.
+    </p>
+  </div>
+
+  <!-- SKILLS -->
+  <div class="section" id="ch2-skills">
+    <div class="sec-label">2.3 — Skills & Progression</div>
+    <h2 class="sec-title">Growing Your Crew</h2>
+    <p class="sec-body">
+      Citizens gain <strong>experience</strong> by performing tasks. Each task maps to a specific skill. Skills have 10 levels, displayed as a 2×5 military rank insignia (pips) on the action button. Higher skill levels increase work speed and efficiency.
+    </p>
+
+    <table class="mod-table">
+      <thead><tr><th>Task</th><th>Skill</th><th>Effect</th></tr></thead>
+      <tbody>
+        <tr><td>Search</td><td>Prospecting</td><td>Faster asteroid detection, better yield identification</td></tr>
+        <tr><td>Collect</td><td>Logistics</td><td>Faster pickup, larger effective carry range</td></tr>
+        <tr><td>Build</td><td>Construction</td><td>Faster module construction & deconstruction</td></tr>
+        <tr><td>Mine</td><td>Mining</td><td>Faster ore extraction from asteroids</td></tr>
+        <tr><td>Harvest</td><td>Agriculture</td><td>Faster greenhouse collection</td></tr>
+        <tr><td>Smelt</td><td>Metallurgy</td><td>Faster foundry operation, better fuel efficiency</td></tr>
+      </tbody>
+    </table>
+
+    <p class="sec-body">
+      The crew panel displays four status bars per citizen: <strong>HP</strong> (health), <strong>EN</strong> (energy), <strong>FD</strong> (hunger), and <strong>WK</strong> (work progress). Alert thresholds trigger warning badges — Critical HP below 30%, Exhausted below 15% energy, Starving at 0% hunger. A crew-wide alert banner summarizes fleet health at a glance.
+    </p>
+  </div>
+
+  <!-- DOCKING SYSTEM -->
+  <div class="section" id="ch2-docking">
+    <div class="sec-label">2.4 — Docking & Rest System</div>
+    <h2 class="sec-title">Docking Port Assignments</h2>
+    <p class="sec-body">
+      Each <strong>Docking Bay</strong> module has berthing capacity (typically 4 at 100% efficiency). Citizens are assigned to specific docking modules for rest. When a citizen needs to rest, they fly to their assigned docking port, dock their ship, and begin recovery — regenerating energy and consuming food to replenish hunger.
+    </p>
+
+    <div class="info-grid" style="grid-template-columns:1fr 1fr">
+      <div class="info-card" style="--card-c:var(--blue)">
+        <div class="ic-name">Auto-Assignment</div>
+        <div class="ic-desc">When a citizen first needs rest, they are automatically assigned to an available docking port with remaining capacity. Assignments persist across rest cycles — the citizen returns to the same port each time.</div>
+      </div>
+      <div class="info-card" style="--card-c:var(--yellow)">
+        <div class="ic-name">Manual Reassignment</div>
+        <div class="ic-desc">You can manually reassign citizens via the crew panel GUI. If a docking module is destroyed, all citizens assigned to it are automatically unassigned and will seek a new port on their next rest cycle.</div>
+      </div>
+    </div>
+
+    <p class="sec-body">
+      <strong>What happens during rest:</strong> Docked citizens recover energy over time. If food is available in station storage (resource ID 50, produced by Greenhouses), the citizen eats to restore hunger. Citizens with low energy (&lt;15%) become "Exhausted" and will automatically seek rest if no higher-priority work is available. Citizens with 0% hunger are "Starving" and lose health each tick.
+    </p>
+
+    <div class="rule-box">
+      <div class="rb-title">Crew Quarters vs. Docking Bays</div>
+      <div class="rb-body"><strong>Docking Bays</strong> are where ships physically dock for rest and cargo transfer. <strong>Crew Quarters</strong> provide housing capacity — citizens are also assigned to specific crew quarters modules for long-term residence. A station needs both: Docking Bays for the ship interface and Crew Quarters for the population cap (12 citizens per module at 100% efficiency).</div>
+    </div>
+
+    <div class="rule-box warn">
+      <div class="rb-title">Capacity Planning</div>
+      <div class="rb-body">If all docking ports are full when a citizen needs rest, they cannot dock and will keep working until exhausted. Build enough Docking Bays for your crew — a good ratio is 1 Docking Bay per 3–4 citizens, since not all citizens rest simultaneously.</div>
+    </div>
+  </div>
+
+  <!-- WALKTHROUGH: CHAPTER 2 -->
+  <div class="section wt-section" id="ch2-walkthrough" style="display:none">
+    <div class="sec-label">Walkthrough — Managing Your First Crew</div>
+    <h2 class="sec-title">Step by Step</h2>
+    <div class="step current" data-step="1"><div class="step-num">1</div><div class="step-connector"></div>
+      <div class="step-title">Commission Your Citizens</div>
+      <div class="step-body">Open the Station Management panel. Scroll to "Unassigned Citizens" and click each name to commission them. They'll appear in the crew matrix above.</div>
+    </div>
+    <div class="step" data-step="2"><div class="step-num">2</div><div class="step-connector"></div>
+      <div class="step-title">Enable Core Tasks</div>
+      <div class="step-body">For a new colony, enable Mine + Collect + Build on most citizens. This gets ore flowing, resources gathered, and modules constructed. Keep at least one citizen with Search enabled to find asteroids.</div>
+    </div>
+    <div class="step" data-step="3"><div class="step-num">3</div><div class="step-connector"></div>
+      <div class="step-title">Specialize as You Grow</div>
+      <div class="step-body">As citizens level up, specialize them. A citizen with Mining Lv.5 mines much faster than Lv.1 — disable their other tasks and let them focus. Enable Smelt on 1–2 citizens once your foundry is running.</div>
+    </div>
+    <div class="step" data-step="4"><div class="step-num">4</div>
+      <div class="step-title">Monitor Crew Health</div>
+      <div class="step-body">Watch the alert banner. If you see "Exhausted" or "Hungry" badges, ensure your station has enough docking bays for rest and greenhouses producing food. Use the Rest button to force-rest overworked citizens.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  CHAPTER 3: FOUNDRY & REFINERY                                      ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="chapter" id="ch3">
+  <div class="ch-head">
+    <div class="ch-num">Chapter III — Industry</div>
+    <h1 class="ch-title">Foundry & <em>Refinery</em></h1>
+    <p class="ch-sub">Foundries are membrane modules that sit between two storage regions — pulling raw materials from the input side and depositing products on the output side.</p>
+    <div class="ch-line"></div>
+  </div>
+
+  <!-- MEMBRANE CONCEPT -->
+  <div class="section" id="ch3-membrane">
+    <div class="sec-label">3.1 — The Membrane Model</div>
+    <h2 class="sec-title">Foundries as Walls</h2>
+    <p class="sec-body">
+      A <strong>Foundry</strong> is placed as part of a wall dividing two enclosed storage regions. It has a configurable <strong>output direction</strong> — one cardinal side deposits finished products. All other adjacent enclosed cells become <strong>input sources</strong>. This creates a directional flow: raw ore on one side, refined ingots on the other.
+    </p>
+
+    <div class="diagram" style="height:300px">
+      <canvas id="cvFoundry" style="height:300px"></canvas>
+      <div class="diagram-label">Foundry membrane — ore flows in from the left, ingots deposit to the right</div>
+    </div>
+
+    <p class="sec-body">
+      The foundry <strong>auto-detects recipes</strong> from whatever ore is present in its input region. Workers assigned to the <strong>Smelt</strong> task automatically operate nearby foundries — no manual GUI configuration needed. Place ore in the input bay, and citizens will smelt it into ingots on the output side.
+    </p>
+
+    <div class="rule-box">
+      <div class="rb-title">Key Requirement</div>
+      <div class="rb-body">Both input and output cells must be enclosed (part of a storage region) for the foundry to function. If the output cell's enclosure breaks, production halts until walls are restored.</div>
+    </div>
+  </div>
+
+  <!-- SMELTING -->
+  <div class="section" id="ch3-smelting">
+    <div class="sec-label">3.2 — Ore Smelting</div>
+    <h2 class="sec-title">Tier 1 Processing</h2>
+    <p class="sec-body">
+      The most common foundry operation is smelting raw ore into basic ingots. Each ore type has a dedicated recipe that yields <strong>7 ingots per ore chunk</strong>. This 1:7 ratio is the foundation of your entire industrial chain.
+    </p>
+
+    <div class="flow">
+      <div class="flow-node" style="border-color:rgba(180,80,60,0.4)"><div class="fn-label">Tier 0</div><div class="fn-value" style="color:#d08050">1× Ore</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node" style="border-color:rgba(200,168,64,0.3)"><div class="fn-label">Foundry</div><div class="fn-value" style="color:var(--yellow)">⚒ Smelt</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node" style="border-color:rgba(200,168,64,0.4)"><div class="fn-label">Tier 1</div><div class="fn-value" style="color:#c8a840">7× Ingot</div></div>
+    </div>
+
+    <table class="mod-table" style="font-size:0.4rem">
+      <thead><tr><th>Ore</th><th>Ingot</th><th>Time</th><th>Rarity</th></tr></thead>
+      <tbody>
+        <tr><td>Iron</td><td>Iron Ingot (×7)</td><td>8s</td><td>Common</td></tr>
+        <tr><td>Copper</td><td>Copper Ingot (×7)</td><td>7s</td><td>Common</td></tr>
+        <tr><td>Carbon</td><td>Carbon Brick (×7)</td><td>6s</td><td>Common</td></tr>
+        <tr><td>Aluminum</td><td>Aluminum Ingot (×7)</td><td>10s</td><td>Uncommon</td></tr>
+        <tr><td>Silicon</td><td>Silicon Wafer (×7)</td><td>12s</td><td>Uncommon</td></tr>
+        <tr><td>Titanium</td><td>Titanium Ingot (×7)</td><td>15s</td><td>Rare</td></tr>
+        <tr><td>Gold</td><td>Gold Ingot (×7)</td><td>12s</td><td>Rare</td></tr>
+        <tr><td>Platinum</td><td>Platinum Ingot (×7)</td><td>18s</td><td>Exotic</td></tr>
+        <tr><td>Uranium</td><td>Uranium Ingot (×7)</td><td>25s</td><td>Exotic</td></tr>
+        <tr><td>Rare Earth</td><td>Rare Earth Ingot (×7)</td><td>30s</td><td>Exotic</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- PRODUCTION MODES -->
+  <div class="section" id="ch3-modes">
+    <div class="sec-label">3.3 — Production Modes</div>
+    <h2 class="sec-title">Controlling Output</h2>
+    <p class="sec-body">
+      Foundries support three production modes that determine how long they keep working:
+    </p>
+
+    <div class="info-grid">
+      <div class="info-card" style="--card-c:var(--blue)">
+        <div class="ic-name">Process Exact</div>
+        <div class="ic-desc">Craft exactly N items, then stop. Good for one-off batches. Tracks completed vs target count.</div>
+        <div class="ic-tag">Stops when done</div>
+      </div>
+      <div class="info-card" style="--card-c:var(--green)">
+        <div class="ic-name">Accumulate</div>
+        <div class="ic-desc">Keep producing until the output stockpile reaches N units. Pauses (doesn't clear) when target met — resumes automatically if stock drops below.</div>
+        <div class="ic-tag">Self-regulating</div>
+      </div>
+      <div class="info-card" style="--card-c:var(--yellow)">
+        <div class="ic-name">Indefinite</div>
+        <div class="ic-desc">Never stop. Always starts another job when one completes. Runs until input materials are exhausted or manually cancelled.</div>
+        <div class="ic-tag">Runs forever</div>
+      </div>
+    </div>
+
+    <p class="sec-body">
+      Greenhouses also use the directional output system — with an output direction set, food is deposited directly into the adjacent enclosed storage region instead of waiting for harvesters to collect it manually. This is the preferred setup for efficient food production.
+    </p>
+  </div>
+
+  <!-- WALKTHROUGH: CHAPTER 3 -->
+  <div class="section wt-section" id="ch3-walkthrough" style="display:none">
+    <div class="sec-label">Walkthrough — Setting Up Your First Foundry</div>
+    <h2 class="sec-title">Step by Step</h2>
+    <div class="step current" data-step="1"><div class="step-num">1</div><div class="step-connector"></div>
+      <div class="step-title">Build a Divided Bay</div>
+      <div class="step-body">Create a rectangular enclosure with a wall running through the middle, dividing it into two bays. Leave one gap in the dividing wall for a Foundry module.</div>
+    </div>
+    <div class="step" data-step="2"><div class="step-num">2</div><div class="step-connector"></div>
+      <div class="step-title">Place the Foundry</div>
+      <div class="step-body">Select the Foundry module and place it in the gap. Set the output direction to point toward your desired output bay (the side where you want ingots to appear).</div>
+    </div>
+    <div class="step" data-step="3"><div class="step-num">3</div><div class="step-connector"></div>
+      <div class="step-title">Filter Your Input Bay</div>
+      <div class="step-body">Right-click a cell in the input bay (the non-output side) and set the filter to accept only ores. This prevents refined ingots from accidentally being stored back in the input.</div>
+    </div>
+    <div class="step" data-step="4"><div class="step-num">4</div><div class="step-connector"></div>
+      <div class="step-title">Enable Smelt on a Citizen</div>
+      <div class="step-body">In the crew panel, enable the Smelt (⚒) task on at least one citizen. They will automatically find the foundry, pick up ore from the input bay, and begin smelting.</div>
+    </div>
+    <div class="step" data-step="5"><div class="step-num">5</div>
+      <div class="step-title">Watch the Flow</div>
+      <div class="step-body">Ore chunks deplete from the input bay while ingots accumulate in the output bay. The storage overlay shows stack counts on each cell. You've built a production line!</div>
+    </div>
+  </div>
+</div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  CHAPTER 4: CRAFTING SYSTEM                                         ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="chapter" id="ch4">
+  <div class="ch-head">
+    <div class="ch-num">Chapter IV — Manufacturing</div>
+    <h1 class="ch-title">Crafting <em>System</em></h1>
+    <p class="ch-sub">From asteroid ore to advanced reactor cores — a six-tier industrial chain. Each tier builds on the last, creating an expanding web of recipes and resource dependencies.</p>
+    <div class="ch-line"></div>
+  </div>
+
+  <!-- TIERS -->
+  <div class="section" id="ch4-tiers">
+    <div class="sec-label">4.1 — Resource Tiers</div>
+    <h2 class="sec-title">The Industrial Chain</h2>
+    <p class="sec-body">
+      Resources are organized into six tiers. Each tier's products become inputs for the next, creating a dependency chain from raw asteroid ore to complex components and fuel.
+    </p>
+
+    <div class="diagram" style="height:320px">
+      <canvas id="cvTiers" style="height:320px"></canvas>
+      <div class="diagram-label">Tier dependency flow — mined ore cascades upward through the chain</div>
+    </div>
+
+    <div class="info-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div class="info-card" style="--card-c:#d08050">
+        <div class="ic-name"><span class="tier-badge t0">T0</span> Raw Ores</div>
+        <div class="ic-desc">10 types mined from asteroids. Iron, Copper, Carbon are common. Uranium, Rare Earth are exotic. IDs 0–9.</div>
+      </div>
+      <div class="info-card" style="--card-c:#c8a840">
+        <div class="ic-name"><span class="tier-badge t1">T1</span> Basic Ingots</div>
+        <div class="ic-desc">Smelted from ores at 1:7 ratio. Iron Ingot, Copper Ingot, Silicon Wafer, etc. IDs 10–19.</div>
+      </div>
+      <div class="info-card" style="--card-c:#6898d0">
+        <div class="ic-name"><span class="tier-badge t2">T2</span> Alloys</div>
+        <div class="ic-desc">Combined ingots: Steel, Bronze, Titanium Alloy, Carbon Fiber. Produced by Foundries. IDs 20–29.</div>
+      </div>
+      <div class="info-card" style="--card-c:#58b870">
+        <div class="ic-name"><span class="tier-badge t3">T3</span> Components</div>
+        <div class="ic-desc">Complex assemblies from T1+T2: Circuit Boards, Processors, Reactor Cores. Produced by Component Labs. IDs 30–49.</div>
+      </div>
+      <div class="info-card" style="--card-c:#78b848">
+        <div class="ic-name"><span class="tier-badge t4">T4</span> Consumables</div>
+        <div class="ic-desc">Food produced by Greenhouses. Consumed by citizens during rest to replenish hunger. ID 50.</div>
+      </div>
+      <div class="info-card" style="--card-c:#e88040">
+        <div class="ic-name"><span class="tier-badge t5">T5</span> Propellants</div>
+        <div class="ic-desc">Oxidized Fuel produced by Fuel Processors. Used by thrusters for ship movement. ID 60.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECIPES -->
+  <div class="section" id="ch4-recipes">
+    <div class="sec-label">4.2 — Key Recipes</div>
+    <h2 class="sec-title">Alloys & Materials</h2>
+    <p class="sec-body">
+      Tier 2 alloys combine two or more ingot types. These are the backbone of station construction — <strong>Steel</strong> (Iron + Carbon), <strong>Structural Steel</strong> (Steel + Carbon Brick), and <strong>Titanium Alloy</strong> (Titanium + Aluminum) are required for most module recipes.
+    </p>
+
+    <table class="mod-table" style="font-size:0.4rem">
+      <thead><tr><th>Output</th><th>Inputs</th><th>Yield</th><th>Time</th></tr></thead>
+      <tbody>
+        <tr><td class="mod-name">Steel</td><td>2× Iron Ingot + 1× Carbon Brick</td><td>1</td><td>5s</td></tr>
+        <tr><td class="mod-name">Bronze</td><td>2× Copper Ingot + 2× Iron Ingot</td><td>1</td><td>4s</td></tr>
+        <tr><td class="mod-name">Titanium Alloy</td><td>2× Titanium Ingot + 3× Aluminum Ingot</td><td>2</td><td>6s</td></tr>
+        <tr><td class="mod-name">Carbon Fiber</td><td>3× Carbon Brick</td><td>2</td><td>6s</td></tr>
+        <tr><td class="mod-name">Glass</td><td>2× Silicon Wafer</td><td>1</td><td>2.5s</td></tr>
+        <tr><td class="mod-name">Structural Steel</td><td>1× Steel + 2× Carbon Brick</td><td>3</td><td>4.5s</td></tr>
+        <tr><td class="mod-name">Reinforced Alloy</td><td>1× Titanium Alloy + 1× Steel</td><td>2</td><td>7.5s</td></tr>
+        <tr><td class="mod-name">Composite Plate</td><td>1× Carbon Fiber + 3× Aluminum Ingot</td><td>3</td><td>5.5s</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ASSEMBLER & LAB -->
+  <div class="section" id="ch4-advanced">
+    <div class="sec-label">4.3 — Advanced Manufacturing</div>
+    <h2 class="sec-title">Assembler & Component Lab</h2>
+    <p class="sec-body">
+      Beyond the basic Foundry, two specialized modules handle higher-tier production. Unlike Foundries which auto-detect recipes, these <strong>require manual recipe assignment</strong> since they handle multiple possible outputs.
+    </p>
+
+    <div class="info-grid" style="grid-template-columns:1fr 1fr">
+      <div class="info-card" style="--card-c:#b4a050">
+        <div class="ic-icon">⚙</div>
+        <div class="ic-name">Assembler</div>
+        <div class="ic-desc">Produces outputs in the ID range 10–29 (ingots and alloys). Works like a Foundry but handles Tier 2 multi-input recipes that require manual selection. Same membrane model — input/output regions separated by the module.</div>
+        <div class="ic-tag">Recipes: Tier 1–2</div>
+      </div>
+      <div class="info-card" style="--card-c:#8c64c8">
+        <div class="ic-icon">🔬</div>
+        <div class="ic-name">Component Lab</div>
+        <div class="ic-desc">Produces outputs in the ID range 30–49 (components). The highest-tier manufacturing module. Creates electronics (Circuit Boards, Processors), power systems (Battery Cells, Reactor Cores), and mechanical parts (Thruster Assemblies).</div>
+        <div class="ic-tag">Recipes: Tier 3</div>
+      </div>
+    </div>
+
+    <p class="sec-body">
+      Component recipes require a mix of <strong>Tier 1 ingots and Tier 2 alloys</strong> as inputs. For example, a <strong>Reactor Core</strong> needs 2× Uranium Ingot + 3× Steel + 2× Titanium Alloy — spanning three different source materials. Plan your input storage filters accordingly.
+    </p>
+
+    <div class="rule-box">
+      <div class="rb-title">Fuel Processing</div>
+      <div class="rb-body">The <strong>Fuel Processor</strong> module converts 3× Carbon Brick + 2× Aluminum Ingot + 1× Rare Earth Ingot into 5× Oxidized Fuel (30s). It uses the same directional membrane model as Foundries. Fuel is consumed by ship thrusters for orbital movement.</div>
+    </div>
+  </div>
+
+  <!-- MULTI-INPUT CRAFTING -->
+  <div class="section" id="ch4-multiinput">
+    <div class="sec-label">4.4 — Multi-Input Production Chains</div>
+    <h2 class="sec-title">Complex Manufacturing</h2>
+    <p class="sec-body">
+      Beyond simple ore→ingot smelting, the real manufacturing challenge is <strong>multi-input recipes</strong> — crafting that requires 2–3 different material types simultaneously. These recipes are handled by <strong>Assemblers</strong> (T1–T2 outputs) and <strong>Component Labs</strong> (T3 outputs), both of which require manual recipe assignment since they can't auto-detect from input like basic Foundries.
+    </p>
+
+    <div class="rule-box">
+      <div class="rb-title">Key Difference from Foundries</div>
+      <div class="rb-body">Basic Foundries auto-detect recipes from whatever ore is in the input bay. Assemblers and Component Labs produce multiple possible outputs from overlapping input materials — a Circuit Board and a Processor both need Silicon Wafer, but with different secondary inputs. You must <strong>manually assign a recipe</strong> to tell the module what to build. The function <code>requires_recipe_assignment()</code> distinguishes these modules.</div>
+    </div>
+
+    <p class="sec-body">
+      <strong>Planning a multi-input line:</strong> Consider building a <strong>Reactor Core</strong> (the most complex T3 component). It requires 2× Uranium Ingot + 3× Steel + 2× Titanium Alloy. Steel is itself a T2 alloy (2× Iron Ingot + 1× Carbon Brick), and Titanium Alloy needs (2× Titanium Ingot + 3× Aluminum Ingot). The full dependency tree reaches 4 different ores:
+    </p>
+
+    <div class="flow" style="flex-wrap:wrap;gap:6px">
+      <div class="flow-node" style="border-color:rgba(208,128,80,0.3)"><div class="fn-label">T0</div><div class="fn-value" style="color:#d08050;font-size:0.48rem">Iron Ore</div></div>
+      <div class="flow-arrow" style="font-size:0.7rem">+</div>
+      <div class="flow-node" style="border-color:rgba(208,128,80,0.3)"><div class="fn-label">T0</div><div class="fn-value" style="color:#d08050;font-size:0.48rem">Carbon</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node" style="border-color:rgba(104,152,208,0.3)"><div class="fn-label">T2</div><div class="fn-value" style="color:#6898d0;font-size:0.48rem">Steel ×3</div></div>
+      <div class="flow-arrow" style="font-size:0.7rem">+</div>
+      <div class="flow-node" style="border-color:rgba(200,168,64,0.3)"><div class="fn-label">T1</div><div class="fn-value" style="color:#c8a840;font-size:0.48rem">Uranium Ingot ×2</div></div>
+      <div class="flow-arrow" style="font-size:0.7rem">+</div>
+      <div class="flow-node" style="border-color:rgba(104,152,208,0.3)"><div class="fn-label">T2</div><div class="fn-value" style="color:#6898d0;font-size:0.48rem">Ti Alloy ×2</div></div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node" style="border-color:rgba(88,184,112,0.4)"><div class="fn-label">T3</div><div class="fn-value" style="color:#58b870;font-size:0.48rem">Reactor Core</div></div>
+    </div>
+
+    <p class="sec-body">
+      <strong>Station layout strategy:</strong> For multi-input production, design your station with cascading bays. A typical layout chain:
+    </p>
+
+    <div class="info-grid" style="grid-template-columns:repeat(4,1fr)">
+      <div class="info-card" style="--card-c:#d08050">
+        <div class="ic-name">Bay 1: Ore Input</div>
+        <div class="ic-desc">Filtered to raw ores only. Miners and collectors deposit here. Adjacent to Foundry.</div>
+        <div class="ic-tag">T0 Storage</div>
+      </div>
+      <div class="info-card" style="--card-c:#c8a840">
+        <div class="ic-name">Bay 2: Ingot Buffer</div>
+        <div class="ic-desc">Foundry output side. Filtered to ingots only. Feeds into Assembler input.</div>
+        <div class="ic-tag">T1 Storage</div>
+      </div>
+      <div class="info-card" style="--card-c:#6898d0">
+        <div class="ic-name">Bay 3: Alloy Buffer</div>
+        <div class="ic-desc">Assembler output side. Filtered to alloys. Feeds into Component Lab input.</div>
+        <div class="ic-tag">T2 Storage</div>
+      </div>
+      <div class="info-card" style="--card-c:#58b870">
+        <div class="ic-name">Bay 4: Components</div>
+        <div class="ic-desc">Component Lab output. Final products ready for station construction or export.</div>
+        <div class="ic-tag">T3 Storage</div>
+      </div>
+    </div>
+
+    <p class="sec-body">
+      <strong>Tier 3 recipe examples</strong> — all require a mix of T1 ingots and T2 alloys:
+    </p>
+
+    <table class="mod-table" style="font-size:0.38rem">
+      <thead><tr><th>Component</th><th>Category</th><th>Inputs</th><th>Time</th></tr></thead>
+      <tbody>
+        <tr><td class="mod-name">Circuit Board</td><td>Electronics</td><td>2× Silicon Wafer + 1× Copper Wire + 1× Glass</td><td>7.5s</td></tr>
+        <tr><td class="mod-name">Processor</td><td>Electronics</td><td>2× Silicon Wafer + 1× Gold Ingot + 2× Copper Wire</td><td>11s</td></tr>
+        <tr><td class="mod-name">Battery Cell</td><td>Power</td><td>2× Copper Ingot + 2× Carbon Brick + 1× Copper Wire</td><td>6s</td></tr>
+        <tr><td class="mod-name">Reactor Core</td><td>Power</td><td>2× Uranium Ingot + 3× Steel + 2× Titanium Alloy</td><td>20s</td></tr>
+        <tr><td class="mod-name">Thruster Assembly</td><td>Mechanical</td><td>2× Steel + 2× Titanium Alloy + 1× Copper Wire</td><td>11s</td></tr>
+        <tr><td class="mod-name">Shield Emitter</td><td>Specialized</td><td>2× Titanium Alloy + 2× Rare Earth Ingot + 2× Copper Wire</td><td>15s</td></tr>
+        <tr><td class="mod-name">Fabricator Unit</td><td>Specialized</td><td>2× Steel + 2× Silicon Wafer + 2× Copper Wire</td><td>10s</td></tr>
+      </tbody>
+    </table>
+
+    <div class="rule-box warn">
+      <div class="rb-title">Fuel Processing Chain</div>
+      <div class="rb-body">The <strong>Fuel Processor</strong> module converts 3× Carbon Brick + 2× Aluminum Ingot + 1× Rare Earth Ingot into 5× Oxidized Fuel (30s). This is a multi-input T5 recipe requiring the rarest ore (Rare Earth, 0.02 spawn rate). Plan dedicated Rare Earth mining operations to sustain fuel production. The preset <strong>Fuel Refinery</strong> station layout has 3 ore bays feeding 3 foundries into a shared ingot bay, then 3 Fuel Processors outputting to a fuel export bay.</div>
+    </div>
+  </div>
+
+  <!-- WALKTHROUGH: CHAPTER 4 -->
+  <div class="section wt-section" id="ch4-walkthrough" style="display:none">
+    <div class="sec-label">Walkthrough — Building a Full Production Chain</div>
+    <h2 class="sec-title">Step by Step</h2>
+    <div class="step current" data-step="1"><div class="step-num">1</div><div class="step-connector"></div>
+      <div class="step-title">Mine Diverse Ores</div>
+      <div class="step-body">Enable Search and Mine on multiple citizens. You need at least Iron, Carbon, Copper, and Aluminum flowing in. These four ores unlock the most critical alloy recipes.</div>
+    </div>
+    <div class="step" data-step="2"><div class="step-num">2</div><div class="step-connector"></div>
+      <div class="step-title">Smelt Into Ingots</div>
+      <div class="step-body">Set up foundry bays (Chapter III walkthrough). Each 1 ore yields 7 ingots. Stock up — alloy recipes consume 2–3 ingots per craft. You'll burn through ingots quickly.</div>
+    </div>
+    <div class="step" data-step="3"><div class="step-num">3</div><div class="step-connector"></div>
+      <div class="step-title">Produce Steel & Alloys</div>
+      <div class="step-body">Set a foundry's input bay filter to accept Iron Ingot and Carbon Brick. Steel (Iron + Carbon) is the most consumed alloy — needed for Structural Steel, components, and module construction.</div>
+    </div>
+    <div class="step" data-step="4"><div class="step-num">4</div><div class="step-connector"></div>
+      <div class="step-title">Build a Component Lab</div>
+      <div class="step-body">Once you have a steady alloy supply, construct a Component Lab module. Assign it a recipe (e.g., Circuit Board: 2× Silicon Wafer + 1× Copper Wire + 1× Glass). Ensure the input bay is filtered to exactly those materials.</div>
+    </div>
+    <div class="step" data-step="5"><div class="step-num">5</div>
+      <div class="step-title">Scale & Specialize</div>
+      <div class="step-body">Build dedicated production lines: one foundry bay for Steel, another for Titanium Alloy. Use storage filters to separate outputs. The Crafting Database page (Crafting tab) has a calculator to plan exact material requirements.</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+</div><!-- /shell -->
+
+<!-- WALKTHROUGH BAR -->
+<div class="wt-bar" id="wtBar">
+  <span class="wt-step-label" id="wtStepLabel">Step 1 / 6</span>
+  <div class="wt-progress"><div class="wt-progress-fill" id="wtProgressFill" style="width:0%"></div></div>
+  <button class="wt-btn" id="wtPrev" onclick="wtPrev()">← Prev</button>
+  <button class="wt-btn" id="wtNext" onclick="wtNext()">Next →</button>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+var currentChapter='ch1';
+var walkthroughMode=false;
+var wtStep=1;
+var wtTotalSteps=0;
+
+function goTo(ch,sub){
+  // Switch chapter
+  document.querySelectorAll('.chapter').forEach(c=>c.classList.remove('active'));
+  document.getElementById(ch).classList.add('active');
+  currentChapter=ch;
+
+  // Update nav
+  document.querySelectorAll('#sidebar .nav-btn[data-ch]').forEach(b=>b.classList.toggle('active',b.dataset.ch===ch));
+
+  // Scroll to subsection
+  if(sub){
+    var el=document.getElementById(ch+'-'+sub);
+    if(el)setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),50);
+  }else{
+    document.getElementById('content').scrollTop=0;
+  }
+
+  // Reset walkthrough for this chapter
+  if(walkthroughMode) initWalkthrough();
+}
+
+function toggleWalkthrough(){
+  walkthroughMode=!walkthroughMode;
+  document.getElementById('wtToggle').classList.toggle('active',walkthroughMode);
+  document.getElementById('wtBar').classList.toggle('active',walkthroughMode);
+
+  // Show/hide walkthrough sections
+  document.querySelectorAll('.wt-section').forEach(s=>{
+    s.style.display=walkthroughMode?'block':'none';
+  });
+
+  if(walkthroughMode) initWalkthrough();
+}
+
+function initWalkthrough(){
+  var chEl=document.getElementById(currentChapter);
+  var steps=chEl.querySelectorAll('.wt-section .step');
+  wtTotalSteps=steps.length;
+  wtStep=1;
+  updateWtUI();
+}
+
+function wtPrev(){if(wtStep>1){wtStep--;updateWtUI();}}
+function wtNext(){if(wtStep<wtTotalSteps){wtStep++;updateWtUI();}}
+
+function updateWtUI(){
+  document.getElementById('wtStepLabel').textContent='Step '+wtStep+' / '+wtTotalSteps;
+  document.getElementById('wtProgressFill').style.width=(wtStep/wtTotalSteps*100)+'%';
+  document.getElementById('wtPrev').disabled=wtStep<=1;
+  document.getElementById('wtNext').disabled=wtStep>=wtTotalSteps;
+
+  var chEl=document.getElementById(currentChapter);
+  var steps=chEl.querySelectorAll('.wt-section .step');
+  steps.forEach(function(s,i){
+    var n=i+1;
+    s.classList.remove('done','current');
+    if(n<wtStep)s.classList.add('done');
+    else if(n===wtStep)s.classList.add('current');
+  });
+
+  // Scroll current step into view
+  var current=chEl.querySelector('.wt-section .step.current');
+  if(current)current.scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  CANVAS DIAGRAMS
+// ═══════════════════════════════════════════════════════════════════════════
+var TAU=Math.PI*2;
+var dpr=Math.min(window.devicePixelRatio||1,2);
+
+function initCanvas(id){
+  var c=document.getElementById(id);
+  if(!c)return null;
+  var p=c.parentElement;
+  var w=p.clientWidth,h=p.clientHeight;
+  c.width=Math.floor(w*dpr);c.height=Math.floor(h*dpr);
+  c.style.width=w+'px';c.style.height=h+'px';
+  var ctx=c.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return{c:c,ctx:ctx,w:w,h:h};
+}
+
+// ── GRID DIAGRAM ──
+function drawGridDiagram(t){
+  var d=initCanvas('cvGrid');
+  if(!d)return;
+  var ctx=d.ctx,W=d.w,H=d.h;
+  ctx.fillStyle='#0a0e16';ctx.fillRect(0,0,W,H);
+
+  var cellSize=36,gapX=Math.floor(W/2),gapY=Math.floor(H/2);
+
+  // Draw grid lines
+  ctx.strokeStyle='rgba(150,200,255,0.04)';ctx.lineWidth=0.5;
+  for(var x=-12;x<=12;x++){
+    var px=gapX+x*cellSize;
+    ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,H);ctx.stroke();
+  }
+  for(var y=-8;y<=8;y++){
+    var py=gapY+y*cellSize;
+    ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(W,py);ctx.stroke();
+  }
+
+  // Sample station layout
+  var modules=[
+    [0,0,'#786496','◉'],  // core
+    [-1,0,'#dc8c3c','▣'],[1,0,'#dc8c3c','▣'],
+    [0,-1,'#dc8c3c','▣'],[0,1,'#dc8c3c','▣'],
+    [-2,0,'#dc8c3c','▣'],[2,0,'#dc8c3c','▣'],
+    [0,-2,'#dc8c3c','▣'],[0,2,'#dc8c3c','▣'],
+    [-2,-1,'#c8c8d2','▢'],[-2,1,'#c8c8d2','▢'],
+    [2,-1,'#c8c8d2','▢'],[2,1,'#c8c8d2','▢'],
+    [-1,-2,'#c8c8d2','▢'],[1,-2,'#c8c8d2','▢'],
+    [-1,2,'#c8c8d2','▢'],[1,2,'#c8c8d2','▢'],
+    [0,-3,'#6496c8','🚀'],  // docking
+    [0,3,'#64a0b4','🏠'],    // crew quarters
+    [-3,0,'#50a050','🌱'],    // greenhouse
+  ];
+
+  // Invalid 2x2 overlay (animated)
+  var invalidBlink=Math.sin(t*3)*0.5+0.5;
+  ctx.fillStyle='rgba(224,96,80,'+(0.05+invalidBlink*0.08)+')';
+  ctx.fillRect(gapX+3*cellSize+1,gapY-2*cellSize+1,cellSize*2-2,cellSize*2-2);
+
+  // Draw modules
+  modules.forEach(function(m){
+    var px=gapX+m[0]*cellSize,py=gapY+m[1]*cellSize;
+    var c=m[2];
+    ctx.fillStyle=c;ctx.globalAlpha=0.25;
+    ctx.fillRect(px+2,py+2,cellSize-4,cellSize-4);
+    ctx.globalAlpha=1;
+    ctx.strokeStyle=c;ctx.lineWidth=1.5;
+    ctx.strokeRect(px+2,py+2,cellSize-4,cellSize-4);
+    ctx.fillStyle='rgba(255,255,255,0.7)';
+    ctx.font='12px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(m[3],px+cellSize/2,py+cellSize/2);
+  });
+
+  // Enclosed cells (detected visually)
+  var enclosed=[[-1,-1],[1,-1],[-1,1],[1,1]];
+  enclosed.forEach(function(e){
+    var px=gapX+e[0]*cellSize,py=gapY+e[1]*cellSize;
+    ctx.fillStyle='rgba(74,216,224,0.08)';
+    ctx.fillRect(px+1,py+1,cellSize-2,cellSize-2);
+    ctx.strokeStyle='rgba(74,216,224,0.2)';ctx.lineWidth=0.5;
+    ctx.strokeRect(px+1,py+1,cellSize-2,cellSize-2);
+  });
+
+  // Labels
+  ctx.fillStyle='rgba(150,200,255,0.3)';ctx.font='9px "JetBrains Mono",monospace';
+  ctx.textAlign='left';
+  ctx.fillText('Core (0,0)',gapX+cellSize/2+20,gapY+cellSize/2-4);
+  ctx.fillText('Enclosed Storage',gapX+cellSize*1.5+6,gapY-cellSize*0.5);
+  ctx.fillStyle='rgba(224,96,80,0.4)';
+  ctx.fillText('2×2 violation zone',gapX+cellSize*3.2,gapY-cellSize*2.5);
+
+  // Red X on invalid zone
+  ctx.strokeStyle='rgba(224,96,80,'+(0.3+invalidBlink*0.3)+')';ctx.lineWidth=2;
+  var ix=gapX+4*cellSize,iy=gapY-cellSize;
+  ctx.beginPath();ctx.moveTo(ix-6,iy-6);ctx.lineTo(ix+6,iy+6);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(ix+6,iy-6);ctx.lineTo(ix-6,iy+6);ctx.stroke();
+}
+
+// ── ENCLOSURE DIAGRAM ──
+function drawEnclosureDiagram(t){
+  var d=initCanvas('cvEnclosure');
+  if(!d)return;
+  var ctx=d.ctx,W=d.w,H=d.h;
+  ctx.fillStyle='#0a0e16';ctx.fillRect(0,0,W,H);
+
+  var cs=30,ox=Math.floor(W/2)-cs*4,oy=Math.floor(H/2)-cs*3;
+  // 9x7 station grid
+  var walls=[];
+  for(var x=0;x<=8;x++){walls.push([x,0]);walls.push([x,6]);}
+  for(var y=1;y<=5;y++){walls.push([0,y]);walls.push([8,y]);}
+  // Internal divider at x=4
+  for(var y=1;y<=5;y++)walls.push([4,y]);
+
+  var wallSet={};
+  walls.forEach(function(w){wallSet[w[0]+','+w[1]]=true;});
+
+  // Draw walls
+  walls.forEach(function(w){
+    var px=ox+w[0]*cs,py=oy+w[1]*cs;
+    ctx.fillStyle='rgba(200,200,210,0.2)';ctx.fillRect(px+1,py+1,cs-2,cs-2);
+    ctx.strokeStyle='rgba(200,200,210,0.35)';ctx.lineWidth=1;
+    ctx.strokeRect(px+1,py+1,cs-2,cs-2);
+  });
+
+  // Enclosed cells
+  var enclosedCells=[];
+  for(var x=1;x<=3;x++)for(var y=1;y<=5;y++)enclosedCells.push([x,y,'A']);
+  for(var x=5;x<=7;x++)for(var y=1;y<=5;y++)enclosedCells.push([x,y,'B']);
+
+  enclosedCells.forEach(function(e){
+    var px=ox+e[0]*cs,py=oy+e[1]*cs;
+    var pulse=Math.sin(t*2+e[0]*0.5+e[1]*0.3)*0.03;
+    var alpha=0.08+pulse;
+    ctx.fillStyle=e[2]==='A'?'rgba(74,216,224,'+alpha+')':'rgba(100,200,100,'+alpha+')';
+    ctx.fillRect(px+1,py+1,cs-2,cs-2);
+  });
+
+  // Region labels
+  ctx.fillStyle='rgba(74,216,224,0.4)';ctx.font='bold 16px "JetBrains Mono",monospace';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('Region A',ox+2*cs+cs/2,oy+3*cs+cs/2);
+  ctx.fillStyle='rgba(100,200,100,0.4)';
+  ctx.fillText('Region B',ox+6*cs+cs/2,oy+3*cs+cs/2);
+
+  // Resource stacks in some cells
+  var stacks=[[1,1,12,'Fe+'],[2,2,64,'Cu+'],[5,1,8,'STL'],[6,3,32,'GLS']];
+  stacks.forEach(function(s){
+    var px=ox+s[0]*cs+cs/2,py=oy+s[1]*cs+cs/2;
+    ctx.fillStyle='rgba(255,200,50,0.7)';ctx.font='bold 9px "JetBrains Mono",monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(s[2]+'×',px,py-4);
+    ctx.fillStyle='rgba(200,200,220,0.4)';ctx.font='8px "JetBrains Mono",monospace';
+    ctx.fillText(s[3],px,py+7);
+  });
+
+  // Divider label
+  ctx.save();ctx.translate(ox+4*cs+cs/2,oy+3*cs+cs/2);
+  ctx.fillStyle='rgba(150,200,255,0.25)';ctx.font='8px "JetBrains Mono",monospace';
+  ctx.textAlign='center';ctx.fillText('WALL',0,0);
+  ctx.restore();
+
+  // 64 max label
+  ctx.fillStyle='rgba(255,200,50,0.2)';ctx.font='8px "JetBrains Mono",monospace';
+  ctx.textAlign='left';
+  ctx.fillText('max 64 per cell',ox+cs*9+8,oy+cs+cs/2);
+}
+
+// ── CREW DIAGRAM ──
+function drawCrewDiagram(t){
+  var d=initCanvas('cvCrew');
+  if(!d)return;
+  var ctx=d.ctx,W=d.w,H=d.h;
+  ctx.fillStyle='#0a0e16';ctx.fillRect(0,0,W,H);
+
+  var names=['Astrid','Björn','Celeste','Dmitri','Elena'];
+  var tasks=['Search','Collect','Build','Mine','Harvest','Smelt','Guard'];
+  var taskColors=['#8c5ac8','#2878c8','#c8a01e','#be8232','#3ca032','#b45028','#be3232'];
+
+  var colW=100,rowH=22,startX=90,startY=12,portraitH=60;
+
+  // Portraits
+  names.forEach(function(name,i){
+    var cx=startX+i*colW+colW/2;
+    // Circle portrait placeholder
+    ctx.beginPath();ctx.arc(cx,startY+portraitH/2,22,0,TAU);
+    var hue=(i*60+t*20)%360;
+    ctx.fillStyle='hsla('+hue+',30%,25%,0.6)';ctx.fill();
+    ctx.strokeStyle='rgba(150,200,255,0.15)';ctx.lineWidth=1;ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='11px "JetBrains Mono",monospace';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(name.charAt(0),cx,startY+portraitH/2);
+    // Name
+    ctx.fillStyle='rgba(200,210,230,0.5)';ctx.font='9px "JetBrains Mono",monospace';
+    ctx.fillText(name,cx,startY+portraitH+10);
+  });
+
+  // Task rows
+  var gridY=startY+portraitH+24;
+  tasks.forEach(function(task,row){
+    // Label
+    ctx.fillStyle='rgba(150,200,255,0.25)';ctx.font='9px "JetBrains Mono",monospace';
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.fillText(task,startX-8,gridY+row*rowH+rowH/2);
+
+    // Buttons
+    names.forEach(function(_,col){
+      var x=startX+col*colW+(colW-18)/2;
+      var y=gridY+row*rowH+2;
+      var active=Math.sin(col*3.1+row*2.7+0.5)>0;
+      if(active){
+        ctx.fillStyle=taskColors[row];ctx.globalAlpha=0.5;
+        ctx.fillRect(x,y,18,18);ctx.globalAlpha=1;
+        ctx.strokeStyle=taskColors[row];
+      }else{
+        ctx.fillStyle='rgba(30,35,45,0.8)';ctx.fillRect(x,y,18,18);
+        ctx.strokeStyle='rgba(60,70,85,0.5)';
+      }
+      ctx.lineWidth=0.8;ctx.strokeRect(x,y,18,18);
+    });
+  });
+}
+
+// ── FOUNDRY DIAGRAM ──
+function drawFoundryDiagram(t){
+  var d=initCanvas('cvFoundry');
+  if(!d)return;
+  var ctx=d.ctx,W=d.w,H=d.h;
+  ctx.fillStyle='#0a0e16';ctx.fillRect(0,0,W,H);
+
+  var cs=34,ox=Math.floor(W/2)-cs*5,oy=Math.floor(H/2)-cs*3;
+
+  // Outer walls
+  var walls=[];
+  for(var x=0;x<=10;x++){walls.push([x,0]);walls.push([x,5]);}
+  for(var y=1;y<=4;y++){walls.push([0,y]);walls.push([10,y]);}
+  // Divider at x=5 (with gap for foundry)
+  walls.push([5,0]);walls.push([5,1]);walls.push([5,3]);walls.push([5,4]);walls.push([5,5]);
+
+  walls.forEach(function(w){
+    var px=ox+w[0]*cs,py=oy+w[1]*cs;
+    ctx.fillStyle='rgba(200,200,210,0.15)';ctx.fillRect(px+1,py+1,cs-2,cs-2);
+    ctx.strokeStyle='rgba(200,200,210,0.25)';ctx.lineWidth=0.8;
+    ctx.strokeRect(px+1,py+1,cs-2,cs-2);
+  });
+
+  // Foundry module at (5,2)
+  var fx=ox+5*cs,fy=oy+2*cs;
+  var pulse=Math.sin(t*3)*0.15+0.6;
+  ctx.fillStyle='rgba(200,120,60,'+pulse*0.3+')';ctx.fillRect(fx+1,fy+1,cs-2,cs-2);
+  ctx.strokeStyle='rgba(200,120,60,'+pulse+')';ctx.lineWidth=2;
+  ctx.strokeRect(fx+1,fy+1,cs-2,cs-2);
+  ctx.fillStyle='rgba(255,255,255,0.8)';ctx.font='14px sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('⚒',fx+cs/2,fy+cs/2);
+
+  // Input region (left bay) - blue/cyan tint
+  for(var x=1;x<=4;x++)for(var y=1;y<=4;y++){
+    var px=ox+x*cs,py=oy+y*cs;
+    ctx.fillStyle='rgba(74,216,224,0.06)';ctx.fillRect(px+1,py+1,cs-2,cs-2);
+  }
+  // Output region (right bay) - green tint
+  for(var x=6;x<=9;x++)for(var y=1;y<=4;y++){
+    var px=ox+x*cs,py=oy+y*cs;
+    ctx.fillStyle='rgba(100,200,100,0.06)';ctx.fillRect(px+1,py+1,cs-2,cs-2);
+  }
+
+  // Animated flow arrows
+  var flowPhase=(t*0.8)%1;
+  for(var i=0;i<5;i++){
+    var phase=(flowPhase+i*0.2)%1;
+    var ax=ox+1*cs+phase*(4*cs);
+    ctx.fillStyle='rgba(180,80,60,'+(0.2+phase*0.3)+')';
+    ctx.beginPath();ctx.arc(ax,oy+2.5*cs,3,0,TAU);ctx.fill();
+  }
+  // Output flow
+  for(var i=0;i<5;i++){
+    var phase=(flowPhase+i*0.2)%1;
+    var ax=ox+6*cs+phase*(3.5*cs);
+    ctx.fillStyle='rgba(200,168,64,'+(0.5-phase*0.3)+')';
+    ctx.beginPath();ctx.arc(ax,oy+2.5*cs,3,0,TAU);ctx.fill();
+  }
+
+  // Arrow on foundry
+  ctx.fillStyle='rgba(255,200,50,0.6)';ctx.font='bold 16px sans-serif';
+  ctx.textAlign='center';
+  ctx.fillText('→',fx+cs/2,fy+cs+12);
+
+  // Labels
+  ctx.fillStyle='rgba(74,216,224,0.35)';ctx.font='10px "JetBrains Mono",monospace';
+  ctx.textAlign='center';
+  ctx.fillText('INPUT (Ore)',ox+2.5*cs,oy+5*cs+16);
+  ctx.fillStyle='rgba(100,200,100,0.35)';
+  ctx.fillText('OUTPUT (Ingots)',ox+7.5*cs,oy+5*cs+16);
+  ctx.fillStyle='rgba(200,120,60,0.5)';
+  ctx.fillText('FOUNDRY',ox+5*cs+cs/2,oy-8);
+}
+
+// ── CONSTRUCTION DIAGRAM ──
+function drawConstructionDiagram(t){
+  var d=initCanvas('cvConstruction');
+  if(!d)return;
+  var ctx=d.ctx,W=d.w,H=d.h;
+  ctx.fillStyle='#0a0e16';ctx.fillRect(0,0,W,H);
+  var cs=28,ox=Math.floor(W/2)-cs*6,oy=Math.floor(H/2)-cs*3;
+
+  // Station with core + operational walls + planned extensions
+  var operational=[[0,0],[1,0],[-1,0],[0,-1],[0,1],[2,0],[-2,0],[0,-2],[0,2],
+    [-2,-1],[-2,1],[2,-1],[2,1],[-1,-2],[1,-2],[-1,2],[1,2]];
+  var frontier=[[3,0],[3,-1],[-3,0],[-3,1],[0,-3],[0,3]];
+  var planned=[[4,0],[4,-1],[5,0],[-4,0],[-4,1],[-5,0],[0,-4],[0,4]];
+
+  // Draw operational
+  operational.forEach(function(m){
+    var px=ox+m[0]*cs,py=oy+m[1]*cs;
+    ctx.fillStyle='rgba(100,200,100,0.15)';ctx.fillRect(px+1,py+1,cs-2,cs-2);
+    ctx.strokeStyle='rgba(100,200,100,0.35)';ctx.lineWidth=0.8;ctx.strokeRect(px+1,py+1,cs-2,cs-2);
+  });
+  // Core
+  ctx.fillStyle='rgba(120,100,160,0.3)';ctx.fillRect(ox+1,oy+1,cs-2,cs-2);
+  ctx.strokeStyle='rgba(120,100,160,0.6)';ctx.lineWidth=1.5;ctx.strokeRect(ox+1,oy+1,cs-2,cs-2);
+
+  // Frontier (under construction) — pulsing yellow
+  var pulse=Math.sin(t*3)*0.15+0.5;
+  frontier.forEach(function(m){
+    var px=ox+m[0]*cs,py=oy+m[1]*cs;
+    ctx.fillStyle='rgba(255,200,50,'+pulse*0.2+')';ctx.fillRect(px+1,py+1,cs-2,cs-2);
+    ctx.strokeStyle='rgba(255,200,50,'+pulse+')';ctx.lineWidth=1;
+    ctx.setLineDash([3,3]);ctx.strokeRect(px+1,py+1,cs-2,cs-2);ctx.setLineDash([]);
+    // Progress bar
+    var prog=(Math.sin(t*0.8+m[0]*2+m[1]*3)*0.5+0.5);
+    ctx.fillStyle='rgba(255,200,50,0.4)';ctx.fillRect(px+2,py+cs-5,Math.max(1,(cs-4)*prog),3);
+  });
+
+  // Planned (ghosted)
+  planned.forEach(function(m){
+    var px=ox+m[0]*cs,py=oy+m[1]*cs;
+    ctx.fillStyle='rgba(150,200,255,0.04)';ctx.fillRect(px+1,py+1,cs-2,cs-2);
+    ctx.strokeStyle='rgba(150,200,255,0.12)';ctx.lineWidth=0.5;
+    ctx.setLineDash([2,4]);ctx.strokeRect(px+1,py+1,cs-2,cs-2);ctx.setLineDash([]);
+  });
+
+  // Animated resource delivery arrows to frontier
+  frontier.forEach(function(m){
+    var px=ox+m[0]*cs+cs/2,py=oy+m[1]*cs+cs/2;
+    var phase=(t*0.6+m[0]*0.3+m[1]*0.5)%1;
+    var sx=ox,sy=oy+cs/2;
+    var dx=sx+(px-sx)*phase,dy=sy+(py-sy)*phase;
+    ctx.fillStyle='rgba(255,200,50,'+(0.6-phase*0.5)+')';
+    ctx.beginPath();ctx.arc(dx,dy,2.5,0,TAU);ctx.fill();
+  });
+
+  // Labels
+  ctx.fillStyle='rgba(100,200,100,0.35)';ctx.font='9px "JetBrains Mono",monospace';
+  ctx.textAlign='center';ctx.fillText('OPERATIONAL',ox-cs,oy+cs*4+14);
+  ctx.fillStyle='rgba(255,200,50,0.45)';ctx.fillText('FRONTIER',ox+cs*3,oy+cs*4+14);
+  ctx.fillStyle='rgba(150,200,255,0.2)';ctx.fillText('PLANNED',ox+cs*5.5,oy+cs*4+14);
+}
+
+// ── TIERS DIAGRAM ──
+function drawTiersDiagram(t){
+  var d=initCanvas('cvTiers');
+  if(!d)return;
+  var ctx=d.ctx,W=d.w,H=d.h;
+  ctx.fillStyle='#0a0e16';ctx.fillRect(0,0,W,H);
+
+  var tiers=[
+    {label:'T0 Ores',color:'#d08050',y:0.82,items:['Fe','Cu','C','Al','Si','Ti','Au','Pt','U','RE']},
+    {label:'T1 Ingots',color:'#c8a840',y:0.62,items:['Fe+','Cu+','Al+','Ti+','SiW','CB','Au+','Pt+','U+','RE+']},
+    {label:'T2 Alloys',color:'#6898d0',y:0.42,items:['STL','BRZ','AlW','TiA','GLS','CF','CuW','SST','RA','CMP']},
+    {label:'T3 Components',color:'#58b870',y:0.22,items:['PCB','CPU','SNR','BAT','SLC','THR','HEX','SHD','RCT']},
+  ];
+
+  tiers.forEach(function(tier,ti){
+    var y=H*tier.y;
+    // Tier line
+    ctx.strokeStyle=tier.color;ctx.globalAlpha=0.15;ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(40,y);ctx.lineTo(W-40,y);ctx.stroke();
+    ctx.globalAlpha=1;
+
+    // Label
+    ctx.fillStyle=tier.color;ctx.globalAlpha=0.5;
+    ctx.font='bold 10px "JetBrains Mono",monospace';ctx.textAlign='left';
+    ctx.fillText(tier.label,20,y-8);ctx.globalAlpha=1;
+
+    // Items
+    var iw=(W-120)/tier.items.length;
+    tier.items.forEach(function(item,ii){
+      var x=60+ii*iw+iw/2;
+      var bobY=Math.sin(t*1.5+ii*0.7+ti*2)*3;
+      ctx.fillStyle=tier.color;ctx.globalAlpha=0.12;
+      ctx.beginPath();ctx.arc(x,y+bobY,14,0,TAU);ctx.fill();
+      ctx.globalAlpha=0.6;
+      ctx.font='8px "JetBrains Mono",monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(item,x,y+bobY);
+      ctx.globalAlpha=1;
+
+      // Connection lines to next tier
+      if(ti<tiers.length-1){
+        var nextY=H*tiers[ti+1].y;
+        var nItems=tiers[ti+1].items.length;
+        var nw=(W-120)/nItems;
+        // Connect to 1-2 random items in next tier
+        var targets=[Math.floor(ii*nItems/tier.items.length)];
+        if(targets[0]+1<nItems)targets.push(targets[0]+1);
+        targets.forEach(function(ni){
+          var nx=60+ni*nw+nw/2;
+          ctx.strokeStyle=tier.color;ctx.globalAlpha=0.04;ctx.lineWidth=0.6;
+          ctx.beginPath();ctx.moveTo(x,y+bobY-14);ctx.lineTo(nx,nextY+14);ctx.stroke();
+          ctx.globalAlpha=1;
+        });
+      }
+    });
+  });
+
+  // Consumables & Fuel on sides
+  ctx.fillStyle='rgba(120,184,72,0.3)';ctx.font='9px "JetBrains Mono",monospace';
+  ctx.textAlign='right';ctx.fillText('T4 Food',W-20,H*0.12);
+  ctx.fillStyle='rgba(232,128,64,0.3)';ctx.fillText('T5 Fuel',W-20,H*0.06);
+}
+
+// ── ANIMATION LOOP ──
+var time=0;
+function animLoop(){
+  time+=1/60;
+  drawGridDiagram(time);
+  drawEnclosureDiagram(time);
+  drawCrewDiagram(time);
+  drawFoundryDiagram(time);
+  drawConstructionDiagram(time);
+  drawTiersDiagram(time);
+  requestAnimationFrame(animLoop);
+}
+
+// ── RESIZE ──
+function onResize(){
+  // Canvases auto-reinit on next draw
+}
+window.addEventListener('resize',onResize);
+requestAnimationFrame(animLoop);
+</script>
+</body>
+</html>
