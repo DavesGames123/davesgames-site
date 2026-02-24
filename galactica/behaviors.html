@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Citizen Behaviors // Galactica</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);--yellow-glow:rgba(255,200,50,0.10);
+  --green:#64c864;--red:#e06050;--cyan:#4ad8e0;--orange:#ff8844;
+  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+  --sidebar-w:220px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--bg);overflow:hidden}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.3))}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:2px}
+
+/* ═══════ TOPBAR ═══════ */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:38px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);flex-shrink:0;position:relative;z-index:50}
+.topbar-l{display:flex;align-items:center;gap:1.2rem}
+.sys-name{color:var(--blue);font-weight:700;font-size:0.6rem;letter-spacing:0.3em}
+.sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green);font-size:0.4rem;letter-spacing:0.12em;text-transform:uppercase}
+.sys-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.topbar-r{display:flex;gap:1.4rem;font-size:0.4rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);align-items:center}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
+.in-frame .topbar{display:none!important}
+
+/* ═══════ LAYOUT ═══════ */
+#app{position:relative;z-index:10;display:flex;flex-direction:column;height:100%}
+#shell{display:flex;flex:1;overflow:hidden}
+
+/* ═══════ SIDEBAR ═══════ */
+#sidebar{width:var(--sidebar-w);background:rgba(14,17,24,0.94);border-right:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;position:relative}
+#sidebar::after{content:'';position:absolute;top:0;right:0;bottom:0;width:1px;background:linear-gradient(180deg,var(--blue-dim),transparent 30%,transparent 70%,var(--blue-dim))}
+.side-head{padding:0.65rem 0.9rem;border-bottom:1px solid var(--border);font-size:0.42rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue-dim);display:flex;justify-content:space-between;align-items:center}
+.side-head .tag{color:var(--text-faint);font-size:0.34rem}
+.side-section{padding:4px 6px}
+.nav-btn{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;background:transparent;border:1px solid transparent;color:var(--text-faint);font-size:0.44rem;letter-spacing:0.08em;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;text-align:left;margin-bottom:1px;border-radius:4px}
+.nav-btn:hover{color:var(--text);background:var(--blue-faint);border-color:var(--border)}
+.nav-btn.active{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
+.nav-btn .nav-icon{font-size:0.8rem;width:22px;text-align:center;flex-shrink:0}
+.nav-btn .nav-color{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-left:auto}
+.side-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.4rem;color:var(--blue-dim);opacity:0.12;text-align:center;padding:12px 0;margin-top:auto}
+
+/* ═══════ CONTENT ═══════ */
+#content{flex:1;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
+
+/* ═══════ HERO ═══════ */
+.page-hero{padding:2.5rem 3rem 1.5rem;max-width:960px;margin:0 auto}
+.ph-num{font-size:0.36rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--yellow-dim);margin-bottom:0.3rem}
+.ph-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:2.4rem;color:var(--text-bright);line-height:1.15;margin-bottom:0.5rem}
+.ph-title em{font-style:italic;color:var(--yellow)}
+.ph-sub{font-size:0.55rem;color:var(--text-dim);line-height:1.8;max-width:640px;font-weight:300}
+.ph-line{width:100%;height:1px;background:linear-gradient(90deg,var(--blue-dim),transparent 60%);margin-top:1.2rem}
+
+/* ═══════ BEHAVIOR SECTIONS ═══════ */
+.beh-section{max-width:960px;margin:0 auto;padding:0 3rem 3rem}
+
+.beh-header{display:flex;align-items:center;gap:16px;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
+.beh-icon-wrap{width:64px;height:64px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:2rem;border:2px solid var(--beh-c,var(--blue-dim));background:rgba(0,0,0,0.3);flex-shrink:0;position:relative}
+.beh-icon-wrap::before{content:'';position:absolute;inset:0;border-radius:12px;box-shadow:inset 0 0 20px var(--beh-c,rgba(150,200,255,0.1));pointer-events:none}
+.beh-meta{flex:1}
+.beh-name{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.5rem;color:var(--text-bright);line-height:1.2}
+.beh-tagline{font-size:0.42rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--beh-c,var(--text-dim));margin-top:2px}
+.beh-skill-badge{font-size:0.34rem;padding:3px 10px;border-radius:3px;letter-spacing:0.1em;text-transform:uppercase;border:1px solid var(--beh-c,var(--border-b));color:var(--beh-c,var(--text-dim));background:rgba(0,0,0,0.2);white-space:nowrap}
+
+.beh-body{font-size:0.54rem;color:var(--text-dim);line-height:2;font-weight:300;margin-bottom:1.2rem}
+.beh-body strong{color:var(--text);font-weight:500}
+.beh-body code{color:var(--yellow);background:rgba(255,200,50,0.06);padding:1px 5px;border-radius:2px;font-size:0.48rem}
+
+/* ═══════ STATE FLOW ═══════ */
+.state-flow{display:flex;align-items:stretch;gap:0;margin:1.2rem 0;flex-wrap:wrap}
+.sf-node{flex:1;min-width:100px;padding:10px 12px;border:1px solid var(--border-b);background:var(--bg2);text-align:center;position:relative}
+.sf-node:first-child{border-radius:4px 0 0 4px}
+.sf-node:last-child{border-radius:0 4px 4px 0}
+.sf-node::after{content:'→';position:absolute;right:-8px;top:50%;transform:translateY(-50%);color:var(--text-faint);font-size:0.7rem;z-index:1}
+.sf-node:last-child::after{display:none}
+.sf-label{font-size:0.32rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-bottom:2px}
+.sf-value{font-size:0.48rem;font-weight:500;color:var(--text-bright)}
+.sf-desc{font-size:0.32rem;color:var(--text-faint);margin-top:2px;line-height:1.4}
+
+/* ═══════ DETAIL CARDS ═══════ */
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:1rem 0}
+.detail-card{background:var(--bg2);border:1px solid var(--border);padding:12px 14px;border-radius:4px}
+.dc-title{font-size:0.44rem;font-weight:600;color:var(--text-bright);margin-bottom:4px;letter-spacing:0.04em}
+.dc-body{font-size:0.4rem;color:var(--text-dim);line-height:1.6}
+
+/* ═══════ RULE BOXES ═══════ */
+.rule-box{border:1px solid var(--border-b);background:var(--blue-faint);padding:14px 18px;margin:1rem 0;border-radius:4px;position:relative}
+.rule-box::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--blue-dim);border-radius:3px 0 0 3px}
+.rule-box.warn::before{background:var(--yellow)}
+.rule-box.warn{background:var(--yellow-faint);border-color:rgba(255,200,50,0.12)}
+.rule-box.tip::before{background:var(--green)}
+.rule-box.tip{background:rgba(100,200,100,0.03);border-color:rgba(100,200,100,0.12)}
+.rb-title{font-size:0.42rem;letter-spacing:0.12em;text-transform:uppercase;font-weight:600;margin-bottom:4px}
+.rule-box .rb-title{color:var(--blue)}
+.rule-box.warn .rb-title{color:var(--yellow)}
+.rule-box.tip .rb-title{color:var(--green)}
+.rb-body{font-size:0.46rem;color:var(--text-dim);line-height:1.7}
+
+/* ═══════ STATION RELEVANCE ═══════ */
+.station-rel{display:flex;gap:8px;margin:1rem 0;flex-wrap:wrap}
+.sr-tag{padding:5px 12px;border-radius:4px;border:1px solid var(--border-b);background:var(--bg2);font-size:0.38rem;letter-spacing:0.08em;color:var(--text-dim)}
+.sr-tag .sr-icon{margin-right:4px}
+.sr-tag.primary{border-color:var(--beh-c,var(--blue-dim));color:var(--beh-c,var(--blue))}
+
+/* ═══════ DIVIDER ═══════ */
+.beh-divider{max-width:960px;margin:0 auto;padding:0 3rem}
+.beh-divider-line{height:1px;background:linear-gradient(90deg,transparent,var(--border-b) 20%,var(--border-b) 80%,transparent);margin-bottom:2.5rem}
+
+@media(max-width:768px){
+  #sidebar{width:180px}
+  .beh-section{padding:0 1.2rem 2rem}
+  .page-hero{padding:1.5rem 1.2rem 1rem}
+  .ph-title{font-size:1.6rem}
+  .detail-grid{grid-template-columns:1fr}
+  .state-flow{flex-direction:column}
+  .sf-node{border-radius:0!important}
+  .sf-node::after{display:none}
+}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+
+<div id="app">
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Galactica</span><span class="sys-status">Behaviors Reference</span></div>
+  <div class="topbar-r"><span>Citizens <strong>v4.2</strong></span></div>
+</div>
+
+<div id="shell">
+<!-- ═══════ SIDEBAR ═══════ -->
+<div id="sidebar">
+  <div class="side-head"><span>Citizen AI</span><span class="tag">8 BHVR</span></div>
+
+  <div class="side-section">
+    <button class="nav-btn active" onclick="scrollTo('search')"><span class="nav-icon">🔍</span>Search<span class="nav-color" style="background:#8c5ac8"></span></button>
+    <button class="nav-btn" onclick="scrollTo('collect')"><span class="nav-icon">📥</span>Collect<span class="nav-color" style="background:#2878c8"></span></button>
+    <button class="nav-btn" onclick="scrollTo('build')"><span class="nav-icon">🔨</span>Build<span class="nav-color" style="background:#c8a01e"></span></button>
+    <button class="nav-btn" onclick="scrollTo('mine')"><span class="nav-icon">⛏</span>Mine<span class="nav-color" style="background:#be8232"></span></button>
+    <button class="nav-btn" onclick="scrollTo('harvest')"><span class="nav-icon">🌾</span>Harvest<span class="nav-color" style="background:#3ca032"></span></button>
+    <button class="nav-btn" onclick="scrollTo('smelt')"><span class="nav-icon">⚒</span>Smelt<span class="nav-color" style="background:#b45028"></span></button>
+    <button class="nav-btn" onclick="scrollTo('guard')"><span class="nav-icon">🛡</span>Guard<span class="nav-color" style="background:#be3232"></span></button>
+    <button class="nav-btn" onclick="scrollTo('rest')"><span class="nav-icon">💤</span>Rest<span class="nav-color" style="background:#6496ff"></span></button>
+  </div>
+
+  <div class="side-barcode">GALACTICA-AI-BHVR-2026</div>
+</div>
+
+<!-- ═══════ CONTENT ═══════ -->
+<div id="content">
+
+<!-- ═══════ PAGE HERO ═══════ -->
+<div class="page-hero">
+  <div class="ph-num">Reference — Citizen AI Systems</div>
+  <h1 class="ph-title">Citizen <em>Behaviors</em></h1>
+  <p class="ph-sub">Citizens are autonomous agents that pursue enabled tasks based on priority, proximity, and station need. Each behavior follows a state machine — a sequence of phases from searching for work to completing it. Understanding these cycles is key to efficient colony management.</p>
+  <div class="ph-line"></div>
+</div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  1. SEARCH                                                           ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="beh-section" id="beh-search" style="--beh-c:#8c5ac8">
+  <div class="beh-header">
+    <div class="beh-icon-wrap">🔍</div>
+    <div class="beh-meta">
+      <div class="beh-name">Search</div>
+      <div class="beh-tagline">Prospecting — find asteroids and mark resource deposits</div>
+    </div>
+    <div class="beh-skill-badge">Skill: Prospecting</div>
+  </div>
+
+  <p class="beh-body">
+    The Search behavior sends citizens on <strong>prospecting flights</strong> through the system to discover asteroids. Citizens scan their surroundings for uncharted asteroid bodies, mark them for future mining, and identify what resources they contain. This is the foundational behavior that feeds the entire resource pipeline — without Search, miners have nothing to target.
+  </p>
+
+  <div class="state-flow">
+    <div class="sf-node"><div class="sf-label">Phase 1</div><div class="sf-value">Searching</div><div class="sf-desc">Fly outward from station, scan for asteroids</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 2</div><div class="sf-value">Approaching</div><div class="sf-desc">Navigate toward detected body</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 3</div><div class="sf-value">Scanning</div><div class="sf-desc">Identify resource composition</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 4</div><div class="sf-value">Marking</div><div class="sf-desc">Flag asteroid for miners</div></div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-card"><div class="dc-title">Skill Benefit (Prospecting)</div><div class="dc-body">Higher Prospecting skill increases detection range and scan speed. Lv.1 scouts must fly close; Lv.10 scouts can detect asteroids at extreme range and identify yields faster.</div></div>
+    <div class="detail-card"><div class="dc-title">Priority Behavior</div><div class="dc-body">Search is lowest priority — citizens with other enabled tasks (Mine, Build, Collect) will only Search when no higher-priority work is available. Ideal for citizens with no other enabled tasks.</div></div>
+  </div>
+
+  <div class="rule-box tip">
+    <div class="rb-title">Station Upkeep Role</div>
+    <div class="rb-body">Search feeds your mining pipeline. Early game: enable Search on 1–2 dedicated scouts while others Mine and Build. Mid game: as asteroid fields become sparse, searchers find distant deposits. Without active searchers, your miners will idle once nearby asteroids are depleted — the colony starves for raw materials.</div>
+  </div>
+
+  <div class="station-rel">
+    <span class="sr-tag primary"><span class="sr-icon">⛏</span>Feeds → Mine behavior</span>
+    <span class="sr-tag"><span class="sr-icon">📥</span>Feeds → Collect (marked resources)</span>
+    <span class="sr-tag"><span class="sr-icon">🚀</span>Needs → Docking Bay (return to refuel)</span>
+  </div>
+</div>
+<div class="beh-divider"><div class="beh-divider-line"></div></div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  2. COLLECT                                                          ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="beh-section" id="beh-collect" style="--beh-c:#2878c8">
+  <div class="beh-header">
+    <div class="beh-icon-wrap">📥</div>
+    <div class="beh-meta">
+      <div class="beh-name">Collect</div>
+      <div class="beh-tagline">Logistics — gather floating resources and deliver to storage</div>
+    </div>
+    <div class="beh-skill-badge">Skill: Logistics</div>
+  </div>
+
+  <p class="beh-body">
+    Collect is the <strong>logistics backbone</strong> of your colony. Citizens fly to floating resource objects in orbit, pick them up, and deliver them to the nearest station storage that has capacity and accepts that resource type (respecting storage filters). Resources come from mining (ore chunks), decompression ejections, deconstruction refunds, and newly spawned resource fields.
+  </p>
+
+  <div class="state-flow">
+    <div class="sf-node"><div class="sf-label">Phase 1</div><div class="sf-value">Scanning</div><div class="sf-desc">Find nearest collectible resource</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 2</div><div class="sf-value">Approaching</div><div class="sf-desc">Fly to resource location</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 3</div><div class="sf-value">Picking Up</div><div class="sf-desc">Load resource into cargo</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 4</div><div class="sf-value">Delivering</div><div class="sf-desc">Fly to station, deposit in storage</div></div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-card"><div class="dc-title">Resource Filters</div><div class="dc-body">Each citizen can have per-citizen resource filters restricting which floating resource types they will pick up. Shown as a numbered badge on the Collect button. Set via the filter popup in the crew or citizen panel.</div></div>
+    <div class="detail-card"><div class="dc-title">Skill Benefit (Logistics)</div><div class="dc-body">Higher Logistics skill improves pickup speed and effective detection range. Experienced collectors find resources faster and waste less time flying to distant objects. Lv.10 collectors are hyper-efficient.</div></div>
+  </div>
+
+  <div class="rule-box tip">
+    <div class="rb-title">Station Upkeep Role</div>
+    <div class="rb-body">Collect is critical for keeping resources flowing into storage. After miners crack asteroids, ore chunks float in orbit — collectors bring them in. After decompression events, collectors recover ejected materials. Without collectors, mined ore drifts forever. <strong>Tip:</strong> Use per-citizen resource filters to create specialized collector teams — one citizen collects only rare ores, another handles common materials.</div>
+  </div>
+
+  <div class="station-rel">
+    <span class="sr-tag primary"><span class="sr-icon">▣</span>Fills → Station Storage Bays</span>
+    <span class="sr-tag"><span class="sr-icon">⚒</span>Feeds → Foundry input regions</span>
+    <span class="sr-tag"><span class="sr-icon">🔍</span>Requires → Search (to mark resources)</span>
+  </div>
+</div>
+<div class="beh-divider"><div class="beh-divider-line"></div></div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  3. BUILD                                                            ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="beh-section" id="beh-build" style="--beh-c:#c8a01e">
+  <div class="beh-header">
+    <div class="beh-icon-wrap">🔨</div>
+    <div class="beh-meta">
+      <div class="beh-name">Build</div>
+      <div class="beh-tagline">Construction — deliver materials and construct station modules</div>
+    </div>
+    <div class="beh-skill-badge">Skill: Construction</div>
+  </div>
+
+  <p class="beh-body">
+    The Build behavior handles the entire <strong>construction pipeline</strong>: finding planned modules on the construction frontier, gathering the required resources from storage or orbit, delivering them to the blueprint, and then performing the construction work itself. Build-enabled citizens also perform <strong>deconstruction</strong> on modules marked for demolishing.
+  </p>
+
+  <div class="state-flow">
+    <div class="sf-node"><div class="sf-label">Phase 1</div><div class="sf-value">SearchingForWork</div><div class="sf-desc">Find a frontier blueprint or deconstruction target</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 2</div><div class="sf-value">GatheringResources</div><div class="sf-desc">Collect required materials from storage / orbit</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 3</div><div class="sf-value">Delivering</div><div class="sf-desc">Fly to module, deposit materials</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 4</div><div class="sf-value">Constructing</div><div class="sf-desc">Perform work until complete</div></div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-card"><div class="dc-title">Construction Frontier</div><div class="dc-body">Only Planned modules adjacent to at least one Operational module can receive resources. Builders automatically find the nearest frontier target. Targets are sorted by distance from core (closest first) to ensure orderly expansion.</div></div>
+    <div class="detail-card"><div class="dc-title">Deconstruction</div><div class="dc-body">When modules are marked for demolishing (shift-click), Build-enabled citizens will also perform deconstruction work. This takes 40% of original build time. Refunds 25–65% of materials to orbit on completion.</div></div>
+    <div class="detail-card"><div class="dc-title">Skill Benefit (Construction)</div><div class="dc-body">Higher Construction skill increases work rate — Lv.10 builders complete modules dramatically faster than Lv.1. Resource delivery speed is also improved.</div></div>
+    <div class="detail-card"><div class="dc-title">Cancel Orders</div><div class="dc-body">The "Cancel Orders" button in station management clears all construction targets for workers on that station, transitioning them to SearchingForWork. Useful when priorities change mid-build.</div></div>
+  </div>
+
+  <div class="rule-box tip">
+    <div class="rb-title">Station Upkeep Role</div>
+    <div class="rb-body">Build is essential whenever you're expanding or modifying your station. Early game: enable Build on 2–3 citizens to rapidly expand from core. Mid game: keep 1–2 dedicated builders with high Construction skill for ongoing expansion. Build-enabled citizens will also automatically handle deconstruction requests. <strong>Tip:</strong> Construction is a high-priority task — citizens will prefer building over mining or searching when frontier targets exist.</div>
+  </div>
+
+  <div class="station-rel">
+    <span class="sr-tag primary"><span class="sr-icon">▣</span>Creates → Station Modules (all types)</span>
+    <span class="sr-tag primary"><span class="sr-icon">🗑</span>Handles → Deconstruction tasks</span>
+    <span class="sr-tag"><span class="sr-icon">📥</span>Requires → Collected resources in storage</span>
+  </div>
+</div>
+<div class="beh-divider"><div class="beh-divider-line"></div></div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  4. MINE                                                             ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="beh-section" id="beh-mine" style="--beh-c:#be8232">
+  <div class="beh-header">
+    <div class="beh-icon-wrap">⛏</div>
+    <div class="beh-meta">
+      <div class="beh-name">Mine</div>
+      <div class="beh-tagline">Mining — extract raw ore from asteroids</div>
+    </div>
+    <div class="beh-skill-badge">Skill: Mining</div>
+  </div>
+
+  <p class="beh-body">
+    Mining is the <strong>raw material source</strong> for everything in your colony. Citizens fly to known asteroids, orbit them, and extract ore chunks. Mined resources are ejected as floating objects that collectors must gather. Each asteroid has a composition determined by spawn probabilities — Iron (25%), Copper (20%), and Carbon (18%) are most common, while Uranium (3%) and Rare Earth (2%) are exotic.
+  </p>
+
+  <div class="state-flow">
+    <div class="sf-node"><div class="sf-label">Phase 1</div><div class="sf-value">Seeking</div><div class="sf-desc">Find a known asteroid to mine</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 2</div><div class="sf-value">Approaching</div><div class="sf-desc">Navigate to asteroid</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 3</div><div class="sf-value">Mining</div><div class="sf-desc">Extract ore chunks over time</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 4</div><div class="sf-value">Finished</div><div class="sf-desc">Asteroid depleted or cargo full → repeat</div></div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-card"><div class="dc-title">Ore Ejection</div><div class="dc-body">Mined ore chunks are ejected from the asteroid as floating Resource objects. They drift in orbit near the asteroid until a Collect-enabled citizen picks them up. Resource type is determined by asteroid composition.</div></div>
+    <div class="detail-card"><div class="dc-title">Skill Benefit (Mining)</div><div class="dc-body">Higher Mining skill increases extraction rate. A Lv.10 miner extracts ore dramatically faster and can deplete asteroids in a fraction of the time. Critical for maintaining resource throughput in late game.</div></div>
+  </div>
+
+  <div class="rule-box tip">
+    <div class="rb-title">Station Upkeep Role</div>
+    <div class="rb-body">Mining is the entry point of the production chain. Ore → Ingots → Alloys → Components — it all starts with miners. <strong>Tip:</strong> Mining and Collect work as a pair. A miner creates ore chunks; a collector brings them to storage. Without collectors, mined ore floats uselessly. Without miners, collectors have nothing to gather. Enable both on different citizens for best throughput. Dedicate your highest-Mining-skill citizen to exclusively mine for maximum efficiency.</div>
+  </div>
+
+  <div class="station-rel">
+    <span class="sr-tag primary"><span class="sr-icon">💎</span>Produces → Raw Ore (T0 resources)</span>
+    <span class="sr-tag"><span class="sr-icon">📥</span>Requires → Collect (to bring ore to station)</span>
+    <span class="sr-tag"><span class="sr-icon">🔍</span>Requires → Search (to find asteroids)</span>
+  </div>
+</div>
+<div class="beh-divider"><div class="beh-divider-line"></div></div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  5. HARVEST                                                          ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="beh-section" id="beh-harvest" style="--beh-c:#3ca032">
+  <div class="beh-header">
+    <div class="beh-icon-wrap">🌾</div>
+    <div class="beh-meta">
+      <div class="beh-name">Harvest</div>
+      <div class="beh-tagline">Agriculture — collect food from greenhouse modules</div>
+    </div>
+    <div class="beh-skill-badge">Skill: Agriculture</div>
+  </div>
+
+  <p class="beh-body">
+    Harvest-enabled citizens collect food from <strong>Greenhouse</strong> modules on the station. Greenhouses passively accumulate food production over time (base rate 5.0 scaled by efficiency). If a greenhouse has a <strong>directed output</strong> (output direction set), food deposits directly into the adjacent enclosed storage region — no harvester needed. Harvesters are the <strong>legacy path</strong> for undirected greenhouses: they collect from the module's internal buffer.
+  </p>
+
+  <div class="state-flow">
+    <div class="sf-node"><div class="sf-label">Phase 1</div><div class="sf-value">Searching</div><div class="sf-desc">Find a greenhouse with unharvested food</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 2</div><div class="sf-value">Approaching</div><div class="sf-desc">Fly to the greenhouse module</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 3</div><div class="sf-value">Harvesting</div><div class="sf-desc">Collect accumulated food (up to 64 buffer)</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 4</div><div class="sf-value">Delivering</div><div class="sf-desc">Deposit food in station storage</div></div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-card"><div class="dc-title">Directed vs. Undirected Greenhouses</div><div class="dc-body"><strong>Directed:</strong> Food auto-deposits into adjacent storage region. No harvester needed. Buffer only holds overflow when region is full. <strong>Undirected:</strong> Food accumulates in module buffer (max 64). Harvester must collect it. Production halts when buffer is full.</div></div>
+    <div class="detail-card"><div class="dc-title">Skill Benefit (Agriculture)</div><div class="dc-body">Higher Agriculture skill increases harvest speed — faster collection from module buffers. Less impactful for directed greenhouses since food auto-deposits, but still matters for the legacy harvester path.</div></div>
+  </div>
+
+  <div class="rule-box tip">
+    <div class="rb-title">Station Upkeep Role</div>
+    <div class="rb-body">Food keeps your colony alive. Citizens consume food during rest to replenish hunger. At 0% hunger, citizens starve and lose health each tick. <strong>Best practice:</strong> Set all greenhouses to directed output — food automatically fills the adjacent storage bay. This eliminates the need for dedicated harvesters entirely, freeing citizens for more valuable tasks. Only enable Harvest if you have undirected greenhouses or need emergency food collection.</div>
+  </div>
+
+  <div class="station-rel">
+    <span class="sr-tag primary"><span class="sr-icon">🌱</span>Collects from → Greenhouse modules</span>
+    <span class="sr-tag"><span class="sr-icon">💤</span>Feeds → Rest (citizens eat food during rest)</span>
+    <span class="sr-tag"><span class="sr-icon">🏠</span>Requires → Crew Quarters (population cap)</span>
+  </div>
+</div>
+<div class="beh-divider"><div class="beh-divider-line"></div></div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  6. SMELT                                                            ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="beh-section" id="beh-smelt" style="--beh-c:#b45028">
+  <div class="beh-header">
+    <div class="beh-icon-wrap">⚒</div>
+    <div class="beh-meta">
+      <div class="beh-name">Smelt</div>
+      <div class="beh-tagline">Metallurgy — operate foundries to process ore into ingots and alloys</div>
+    </div>
+    <div class="beh-skill-badge">Skill: Metallurgy</div>
+  </div>
+
+  <p class="beh-body">
+    Smelt-enabled citizens operate <strong>Foundry</strong>, <strong>Assembler</strong>, and <strong>Component Lab</strong> modules. The worker picks up input materials from the input storage region, loads them into the foundry, performs the smelting/crafting work, and deposits finished products into the output region. Foundries auto-detect recipes from input ore; Assemblers and Component Labs require manually assigned recipes.
+  </p>
+
+  <div class="state-flow">
+    <div class="sf-node"><div class="sf-label">Phase 1</div><div class="sf-value">SearchingForWork</div><div class="sf-desc">Find a foundry with assigned recipe & available input</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 2</div><div class="sf-value">FetchingInput</div><div class="sf-desc">Collect materials from input storage region</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 3</div><div class="sf-value">LoadingFoundry</div><div class="sf-desc">Deliver materials to the foundry module</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 4</div><div class="sf-value">Smelting</div><div class="sf-desc">Perform work (duration = recipe base_time)</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 5</div><div class="sf-value">Depositing</div><div class="sf-desc">Place output in output storage region</div></div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-card"><div class="dc-title">Foundry Modes</div><div class="dc-body"><strong>Process Exact:</strong> Craft N items then stop. <strong>Accumulate:</strong> Produce until stockpile reaches target; auto-pause/resume. <strong>Indefinite:</strong> Never stop until input runs out or manually cancelled.</div></div>
+    <div class="detail-card"><div class="dc-title">Membrane Model</div><div class="dc-body">The foundry sits in a wall between two storage regions. Its output direction determines which side receives products. All other adjacent enclosed cells are input sources. Input and output regions must both be enclosed for the foundry to function.</div></div>
+    <div class="detail-card"><div class="dc-title">Auto-Detection (Foundry only)</div><div class="dc-body">Basic Foundries scan the input region for ore and automatically select the matching smelting recipe. No manual assignment needed. Workers just find ore and start smelting. Assemblers and Component Labs require manual recipe assignment.</div></div>
+    <div class="detail-card"><div class="dc-title">Skill Benefit (Metallurgy)</div><div class="dc-body">Higher Metallurgy skill increases smelting speed — faster completion of each crafting job. At Lv.10, a metallurgist processes recipes significantly faster, dramatically increasing throughput.</div></div>
+  </div>
+
+  <div class="rule-box tip">
+    <div class="rb-title">Station Upkeep Role</div>
+    <div class="rb-body">Smelt transforms raw ore into the ingots and alloys that everything else requires. Without smelters, you have piles of useless ore. <strong>Strategy:</strong> Enable Smelt on 1–2 citizens and keep them exclusive (disable other tasks). A dedicated metallurgist quickly levels the Metallurgy skill, becoming dramatically more efficient. Position foundries between filtered storage bays — ore-only input, ingot-only output — and let the worker cycle autonomously.</div>
+  </div>
+
+  <div class="station-rel">
+    <span class="sr-tag primary"><span class="sr-icon">⚒</span>Operates → Foundry, Assembler, Component Lab</span>
+    <span class="sr-tag"><span class="sr-icon">📥</span>Requires → Collected ore in input bays</span>
+    <span class="sr-tag"><span class="sr-icon">🔨</span>Feeds → Build (ingots/alloys for construction)</span>
+  </div>
+</div>
+<div class="beh-divider"><div class="beh-divider-line"></div></div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  7. GUARD                                                            ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="beh-section" id="beh-guard" style="--beh-c:#be3232">
+  <div class="beh-header">
+    <div class="beh-icon-wrap">🛡</div>
+    <div class="beh-meta">
+      <div class="beh-name">Guard</div>
+      <div class="beh-tagline">Formation — battle stations, defensive positioning and combat</div>
+    </div>
+    <div class="beh-skill-badge">No Associated Skill</div>
+  </div>
+
+  <p class="beh-body">
+    Guard assigns citizens to <strong>battle stations</strong> — a combat formation around the station. Unlike other behaviors, Guard is an exclusive <strong>WorkAssignment</strong>: enabling it overrides all other tasks. The citizen stops whatever they're doing and moves to their assigned formation position. From there, they engage hostile targets that enter range.
+  </p>
+
+  <div class="state-flow">
+    <div class="sf-node"><div class="sf-label">Phase 1</div><div class="sf-value">MovingToPost</div><div class="sf-desc">Fly to assigned formation position</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 2</div><div class="sf-value">OnStation</div><div class="sf-desc">Hold position, scan for threats</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 3</div><div class="sf-value">Engaging</div><div class="sf-desc">Combat with hostile target</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 4</div><div class="sf-value">Returning</div><div class="sf-desc">Return to post after engagement</div></div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-card"><div class="dc-title">Exclusive Assignment</div><div class="dc-body">Guard is different from other tasks — it's a <code>WorkAssignment::BattleStations</code> override. The citizen cannot mine, build, or smelt while on guard duty. They are fully committed to defense until you disable Guard.</div></div>
+    <div class="detail-card"><div class="dc-title">Combat States</div><div class="dc-body">Citizens in combat cycle through states: <strong>Engaging</strong> (attacking target), <strong>Critical</strong> (HP below 30%), <strong>Dead</strong>. Critical citizens need immediate rest and medical attention. Dead citizens... don't recover.</div></div>
+  </div>
+
+  <div class="rule-box warn">
+    <div class="rb-title">Station Upkeep Role</div>
+    <div class="rb-body">Guard is a <strong>pure defense</strong> behavior — it produces nothing and consumes a citizen's entire productivity. Only enable it when threats are detected. Every citizen on guard duty is one fewer miner, builder, or smelter. <strong>Strategy:</strong> Keep Guard disabled during peacetime. When hostiles appear, enable it on 2–3 citizens (preferably those with lower industrial skill levels so you don't lose your best workers). Disable it immediately after the threat passes.</div>
+  </div>
+
+  <div class="station-rel">
+    <span class="sr-tag primary"><span class="sr-icon">⚔</span>Protects → Station from hostile entities</span>
+    <span class="sr-tag"><span class="sr-icon">🛡</span>Enhanced by → Shield Generator modules</span>
+    <span class="sr-tag"><span class="sr-icon">🏥</span>Recovery → Medical Bay (after combat wounds)</span>
+  </div>
+</div>
+<div class="beh-divider"><div class="beh-divider-line"></div></div>
+
+<!-- ╔═══════════════════════════════════════════════════════════════════════╗
+     ║  8. REST                                                             ║
+     ╚═══════════════════════════════════════════════════════════════════════╝ -->
+<div class="beh-section" id="beh-rest" style="--beh-c:#6496ff">
+  <div class="beh-header">
+    <div class="beh-icon-wrap">💤</div>
+    <div class="beh-meta">
+      <div class="beh-name">Rest</div>
+      <div class="beh-tagline">Recovery — dock at port, regenerate energy, eat food</div>
+    </div>
+    <div class="beh-skill-badge">No Associated Skill</div>
+  </div>
+
+  <p class="beh-body">
+    Rest sends citizens to their <strong>assigned docking port</strong> to recover. While docked, the citizen regenerates energy over time and consumes food from station storage to replenish hunger. Rest can be triggered manually (click the 💤 button) or happens automatically when a citizen's energy drops below critical threshold. Citizens also socialize during rest — forming relationships, sharing meals, playing games, and telling stories.
+  </p>
+
+  <div class="state-flow">
+    <div class="sf-node"><div class="sf-label">Phase 1</div><div class="sf-value">Seeking Port</div><div class="sf-desc">Find assigned docking port or auto-assign one</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 2</div><div class="sf-value">Approaching</div><div class="sf-desc">Fly to docking bay module</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 3</div><div class="sf-value">Docking</div><div class="sf-desc">Dock ship at port, begin recovery</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 4</div><div class="sf-value">Resting</div><div class="sf-desc">Recover energy, eat food, socialize</div></div>
+    <div class="sf-node"><div class="sf-label">Phase 5</div><div class="sf-value">Undocking</div><div class="sf-desc">Energy restored → resume work assignment</div></div>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-card"><div class="dc-title">Energy & Hunger Recovery</div><div class="dc-body"><strong>Energy</strong> regenerates steadily while docked. <strong>Hunger</strong> is restored by consuming Food (resource ID 50) from station storage — if no food is available, hunger does not recover and continues to deplete.</div></div>
+    <div class="detail-card"><div class="dc-title">Docking Port Assignment</div><div class="dc-body">Citizens are auto-assigned to a docking port on first rest. Each Docking Bay holds ~4 citizens at 100% efficiency. Assignments persist across rest cycles. Manual reassignment is available in the crew panel. Destroyed ports invalidate assignments.</div></div>
+    <div class="detail-card"><div class="dc-title">Social Activities</div><div class="dc-body">Resting citizens interact with each other — sharing meals, playing games, stargazing, telling stories, debating. These activities build relationships (friendships and rivalries) and generate narrative events via the storytelling system.</div></div>
+    <div class="detail-card"><div class="dc-title">Auto-Rest Triggers</div><div class="dc-body">Citizens auto-seek rest when energy drops below ~15% ("Exhausted"). At 0% energy, citizens cannot work effectively. Citizens with 0% hunger ("Starving") lose health each tick and desperately need food during rest.</div></div>
+  </div>
+
+  <div class="rule-box tip">
+    <div class="rb-title">Station Upkeep Role</div>
+    <div class="rb-body">Rest is the <strong>maintenance cycle</strong> that keeps your citizens alive and productive. The entire station exists to support this loop: Greenhouses produce food → Storage holds it → Docking Bays provide rest berths → Citizens eat and recover → Citizens return to work. <strong>Critical infrastructure:</strong> ensure you have enough Docking Bays (1 per 3–4 citizens), enough Greenhouses (directed output for auto-deposit), and enough Crew Quarters (12 pop cap each). Monitor the crew alert banner — "Exhausted" and "Starving" badges mean your infrastructure is falling behind your population.</div>
+  </div>
+
+  <div class="rule-box warn">
+    <div class="rb-title">The Death Spiral</div>
+    <div class="rb-body">If food production falls behind consumption: citizens starve → health drops → citizens die → fewer workers → less food production → more starvation. Break the spiral by: (1) building more Greenhouses with directed output, (2) temporarily sending all citizens to rest to eat remaining food, (3) reducing population pressure by decommissioning non-essential citizens.</div>
+  </div>
+
+  <div class="station-rel">
+    <span class="sr-tag primary"><span class="sr-icon">🚀</span>Requires → Docking Bay (berth for rest)</span>
+    <span class="sr-tag primary"><span class="sr-icon">🌱</span>Requires → Greenhouse (food production)</span>
+    <span class="sr-tag"><span class="sr-icon">🏠</span>Requires → Crew Quarters (population cap)</span>
+    <span class="sr-tag"><span class="sr-icon">🏥</span>Enhanced by → Medical Bay (+30% health recovery)</span>
+    <span class="sr-tag"><span class="sr-icon">🎮</span>Enhanced by → Recreation (+20% morale)</span>
+  </div>
+</div>
+
+<div style="height:4rem"></div>
+</div><!-- /content -->
+</div><!-- /shell -->
+</div><!-- /app -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+function scrollTo(id){
+  var el=document.getElementById('beh-'+id);
+  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
+  // Update active nav
+  document.querySelectorAll('#sidebar .nav-btn').forEach(function(b){b.classList.remove('active')});
+  event.currentTarget.classList.add('active');
+}
+
+// Intersection observer for auto-highlighting nav on scroll
+var sections=document.querySelectorAll('.beh-section');
+var navBtns=document.querySelectorAll('#sidebar .nav-btn');
+var observer=new IntersectionObserver(function(entries){
+  entries.forEach(function(entry){
+    if(entry.isIntersecting){
+      var id=entry.target.id.replace('beh-','');
+      navBtns.forEach(function(btn){
+        var matches=btn.onclick&&btn.onclick.toString().indexOf("'"+id+"'")!==-1;
+        btn.classList.toggle('active',matches);
+      });
+    }
+  });
+},{threshold:0.3,rootMargin:'-80px 0px -60% 0px'});
+sections.forEach(function(s){observer.observe(s)});
+</script>
+</body>
+</html>
