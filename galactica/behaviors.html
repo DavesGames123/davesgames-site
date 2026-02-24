@@ -147,14 +147,14 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
   <div class="side-head"><span>Citizen AI</span><span class="tag">8 BHVR</span></div>
 
   <div class="side-section">
-    <button class="nav-btn active" onclick="scrollTo('search')"><span class="nav-icon">🔍</span>Search<span class="nav-color" style="background:#8c5ac8"></span></button>
-    <button class="nav-btn" onclick="scrollTo('collect')"><span class="nav-icon">📥</span>Collect<span class="nav-color" style="background:#2878c8"></span></button>
-    <button class="nav-btn" onclick="scrollTo('build')"><span class="nav-icon">🔨</span>Build<span class="nav-color" style="background:#c8a01e"></span></button>
-    <button class="nav-btn" onclick="scrollTo('mine')"><span class="nav-icon">⛏</span>Mine<span class="nav-color" style="background:#be8232"></span></button>
-    <button class="nav-btn" onclick="scrollTo('harvest')"><span class="nav-icon">🌾</span>Harvest<span class="nav-color" style="background:#3ca032"></span></button>
-    <button class="nav-btn" onclick="scrollTo('smelt')"><span class="nav-icon">⚒</span>Smelt<span class="nav-color" style="background:#b45028"></span></button>
-    <button class="nav-btn" onclick="scrollTo('guard')"><span class="nav-icon">🛡</span>Guard<span class="nav-color" style="background:#be3232"></span></button>
-    <button class="nav-btn" onclick="scrollTo('rest')"><span class="nav-icon">💤</span>Rest<span class="nav-color" style="background:#6496ff"></span></button>
+    <button class="nav-btn active" data-beh="search" onclick="goToBeh(this,'search')"><span class="nav-icon">🔍</span>Search<span class="nav-color" style="background:#8c5ac8"></span></button>
+    <button class="nav-btn" data-beh="collect" onclick="goToBeh(this,'collect')"><span class="nav-icon">📥</span>Collect<span class="nav-color" style="background:#2878c8"></span></button>
+    <button class="nav-btn" data-beh="build" onclick="goToBeh(this,'build')"><span class="nav-icon">🔨</span>Build<span class="nav-color" style="background:#c8a01e"></span></button>
+    <button class="nav-btn" data-beh="mine" onclick="goToBeh(this,'mine')"><span class="nav-icon">⛏</span>Mine<span class="nav-color" style="background:#be8232"></span></button>
+    <button class="nav-btn" data-beh="harvest" onclick="goToBeh(this,'harvest')"><span class="nav-icon">🌾</span>Harvest<span class="nav-color" style="background:#3ca032"></span></button>
+    <button class="nav-btn" data-beh="smelt" onclick="goToBeh(this,'smelt')"><span class="nav-icon">⚒</span>Smelt<span class="nav-color" style="background:#b45028"></span></button>
+    <button class="nav-btn" data-beh="guard" onclick="goToBeh(this,'guard')"><span class="nav-icon">🛡</span>Guard<span class="nav-color" style="background:#be3232"></span></button>
+    <button class="nav-btn" data-beh="rest" onclick="goToBeh(this,'rest')"><span class="nav-icon">💤</span>Rest<span class="nav-color" style="background:#6496ff"></span></button>
   </div>
 
   <div class="side-barcode">GALACTICA-AI-BHVR-2026</div>
@@ -530,29 +530,28 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 // ═══════════════════════════════════════════════════════════════════════════
 //  NAVIGATION
 // ═══════════════════════════════════════════════════════════════════════════
-function scrollTo(id){
-  var el=document.getElementById('beh-'+id);
-  if(el)el.scrollIntoView({behavior:'smooth',block:'start'});
-  // Update active nav
-  document.querySelectorAll('#sidebar .nav-btn').forEach(function(b){b.classList.remove('active')});
-  event.currentTarget.classList.add('active');
+function goToBeh(btn, id){
+  var el = document.getElementById('beh-' + id);
+  if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+  document.querySelectorAll('#sidebar .nav-btn').forEach(function(b){ b.classList.remove('active') });
+  btn.classList.add('active');
 }
 
 // Intersection observer for auto-highlighting nav on scroll
-var sections=document.querySelectorAll('.beh-section');
-var navBtns=document.querySelectorAll('#sidebar .nav-btn');
-var observer=new IntersectionObserver(function(entries){
+var sections = document.querySelectorAll('.beh-section');
+var navBtns = document.querySelectorAll('#sidebar .nav-btn[data-beh]');
+var contentEl = document.getElementById('content');
+var observer = new IntersectionObserver(function(entries){
   entries.forEach(function(entry){
-    if(entry.isIntersecting){
-      var id=entry.target.id.replace('beh-','');
+    if (entry.isIntersecting) {
+      var id = entry.target.id.replace('beh-', '');
       navBtns.forEach(function(btn){
-        var matches=btn.onclick&&btn.onclick.toString().indexOf("'"+id+"'")!==-1;
-        btn.classList.toggle('active',matches);
+        btn.classList.toggle('active', btn.getAttribute('data-beh') === id);
       });
     }
   });
-},{threshold:0.3,rootMargin:'-80px 0px -60% 0px'});
-sections.forEach(function(s){observer.observe(s)});
+}, {threshold: 0.2, root: contentEl, rootMargin: '-60px 0px -50% 0px'});
+sections.forEach(function(s){ observer.observe(s) });
 </script>
 </body>
 </html>
