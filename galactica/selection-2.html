@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Selection // Galactica</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);
+  --green:#64c864;--red:#e06050;--cyan:#4ad8e0;--orange:#ff8844;
+  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);--sidebar-w:200px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--bg);overflow:hidden}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.3))}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:2px}
+.in-frame .topbar{display:none!important}
+#app{position:relative;z-index:10;display:flex;flex-direction:column;height:100%}
+#shell{display:flex;flex:1;overflow:hidden}
+#sidebar{width:var(--sidebar-w);background:rgba(14,17,24,0.94);border-right:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;position:relative}
+#sidebar::after{content:'';position:absolute;top:0;right:0;bottom:0;width:1px;background:linear-gradient(180deg,var(--blue-dim),transparent 30%,transparent 70%,var(--blue-dim))}
+.side-head{padding:0.65rem 0.9rem;border-bottom:1px solid var(--border);font-size:0.42rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue-dim);display:flex;justify-content:space-between;align-items:center}
+.side-head .tag{color:var(--text-faint);font-size:0.34rem}
+.side-section{padding:4px 6px}
+.nav-btn{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;background:transparent;border:1px solid transparent;color:var(--text-faint);font-size:0.44rem;letter-spacing:0.08em;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;text-align:left;margin-bottom:1px;border-radius:4px}
+.nav-btn:hover{color:var(--text);background:var(--blue-faint);border-color:var(--border)}
+.nav-btn.active{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
+.nav-btn .nav-icon{font-size:0.8rem;width:22px;text-align:center;flex-shrink:0}
+.nav-btn .nav-color{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-left:auto}
+.side-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.4rem;color:var(--blue-dim);opacity:0.12;text-align:center;padding:12px 0;margin-top:auto}
+#content{flex:1;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
+.page-hero{padding:2.5rem 3rem 1.5rem;max-width:960px;margin:0 auto}
+.ph-num{font-size:0.36rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--yellow-dim);margin-bottom:0.3rem}
+.ph-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:2.4rem;color:var(--text-bright);line-height:1.15;margin-bottom:0.5rem}
+.ph-title em{font-style:italic;color:var(--yellow)}
+.ph-sub{font-size:0.55rem;color:var(--text-dim);line-height:1.8;max-width:640px;font-weight:300}
+.ph-line{width:100%;height:1px;background:linear-gradient(90deg,var(--blue-dim),transparent 60%);margin-top:1.2rem}
+.sec{max-width:960px;margin:0 auto;padding:0 3rem 3rem}
+.sec-hdr{display:flex;align-items:center;gap:14px;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
+.sec-ico{width:52px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;border:2px solid var(--sc,var(--blue-dim));background:rgba(0,0,0,0.3);flex-shrink:0;position:relative}
+.sec-ico::before{content:'';position:absolute;inset:0;border-radius:10px;box-shadow:inset 0 0 16px var(--sc,rgba(150,200,255,0.1));pointer-events:none}
+.sec-info{flex:1}
+.sec-name{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.4rem;color:var(--text-bright);line-height:1.2}
+.sec-sub{font-size:0.38rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--sc,var(--text-dim));margin-top:2px}
+.prose{font-size:0.54rem;color:var(--text-dim);line-height:2;font-weight:300;margin-bottom:1.2rem}
+.prose strong{color:var(--text);font-weight:500}
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:1rem 0}
+.action-card{background:var(--bg2);border:1px solid var(--border);padding:16px 18px;border-radius:6px;transition:all 0.2s;position:relative;overflow:hidden}
+.action-card:hover{border-color:color-mix(in srgb,var(--ac,var(--blue)) 40%,transparent);background:color-mix(in srgb,var(--ac,var(--blue)) 3%,var(--bg2))}
+.action-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--ac,var(--blue));opacity:0.4;border-radius:3px 0 0 3px}
+.ac-title{font-size:0.5rem;font-weight:600;color:var(--text-bright);margin-bottom:6px}
+.ac-desc{font-size:0.42rem;color:var(--text-dim);line-height:1.7}
+.tip-box{border:1px solid var(--border-b);border-left:3px solid var(--yellow-dim);background:var(--yellow-faint);padding:14px 18px;margin:1rem 0;border-radius:0 6px 6px 0;display:flex;gap:12px;align-items:flex-start}
+.tip-box .tip-icon{font-size:1.2rem;flex-shrink:0;margin-top:-2px}
+.tip-box .tip-body{font-size:0.44rem;color:var(--text-dim);line-height:1.7}
+.tip-box .tip-body strong{color:var(--text)}
+
+/* ═══ ENTITY CARDS (interactive) ═══ */
+.entity-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:1rem 0}
+.entity-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:14px;text-align:center;cursor:pointer;transition:all 0.25s;position:relative}
+.entity-card:hover{border-color:var(--ec,var(--blue-dim));background:color-mix(in srgb,var(--ec,var(--blue)) 5%,var(--bg2));transform:translateY(-2px);box-shadow:0 4px 16px color-mix(in srgb,var(--ec,var(--blue)) 15%,transparent)}
+.entity-card.picked{border-color:var(--ec)!important;box-shadow:0 0 16px color-mix(in srgb,var(--ec) 20%,transparent),inset 0 0 12px color-mix(in srgb,var(--ec) 6%,transparent)!important}
+.ec-icon{font-size:1.6rem;margin-bottom:6px}
+.ec-name{font-size:0.42rem;font-weight:600;color:var(--text-bright);margin-bottom:2px}
+.ec-hint{font-size:0.32rem;color:var(--text-faint);line-height:1.3}
+#entityDetail{max-width:960px;margin:0 auto 1rem;padding:0 3rem}
+.ed-panel{background:var(--bg2);border:1px solid var(--border-b);border-radius:8px;padding:20px;transition:border-color 0.3s;display:none}
+.ed-panel.show{display:block}
+.ed-name{font-family:'Cormorant Garamond',serif;font-size:1.2rem;color:var(--text-bright);margin-bottom:6px}
+.ed-desc{font-size:0.46rem;color:var(--text-dim);line-height:1.8}
+.ed-desc strong{color:var(--text);font-weight:500}
+
+/* ═══ SCENARIO DEMOS (canvas) ═══ */
+.demo-wrap{background:var(--bg2);border:1px solid var(--border-b);border-radius:10px;padding:0;margin:1.2rem 0;overflow:hidden;position:relative}
+.demo-canvas{width:100%;height:260px;display:block;cursor:crosshair}
+.demo-hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:0.34rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);background:rgba(14,17,24,0.8);padding:4px 12px;border-radius:4px;pointer-events:none}
+
+@media(max-width:900px){#sidebar{width:170px}.sec,.page-hero,#entityDetail{padding-left:1.5rem;padding-right:1.5rem}.action-grid{grid-template-columns:1fr}.entity-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app"><div id="shell">
+<nav id="sidebar">
+  <div class="side-head">Selection<span class="tag">GUIDE</span></div>
+  <div class="side-section">
+    <button class="nav-btn active" data-sec="basics" onclick="goTo(this,'basics')"><span class="nav-icon">◎</span>Basics<span class="nav-color" style="background:var(--blue)"></span></button>
+    <button class="nav-btn" data-sec="entities" onclick="goTo(this,'entities')"><span class="nav-icon">◉</span>What You Can Select<span class="nav-color" style="background:var(--green)"></span></button>
+    <button class="nav-btn" data-sec="multi" onclick="goTo(this,'multi')"><span class="nav-icon">▭</span>Multi-Select<span class="nav-color" style="background:var(--cyan)"></span></button>
+    <button class="nav-btn" data-sec="smart" onclick="goTo(this,'smart')"><span class="nav-icon">🧠</span>Smart Behaviors<span class="nav-color" style="background:var(--yellow)"></span></button>
+    <button class="nav-btn" data-sec="scenarios" onclick="goTo(this,'scenarios')"><span class="nav-icon">🎮</span>Try It<span class="nav-color" style="background:var(--orange)"></span></button>
+  </div>
+  <div class="side-barcode">SEL-GUIDE</div>
+</nav>
+<div id="content">
+
+<div class="page-hero">
+  <div class="ph-num">Player's Manual // 004</div>
+  <h1 class="ph-title">Selection <em>System</em></h1>
+  <p class="ph-sub">How to click, drag, and wrangle every type of object in the game. The selection system is smart — it knows what you probably meant to click, and it handles the edge cases so you don't have to think about them.</p>
+  <div class="ph-line"></div>
+</div>
+
+<!-- ═══ BASICS ═══ -->
+<div class="sec" id="sec-basics">
+  <div class="sec-hdr" style="--sc:var(--blue)"><div class="sec-ico">◎</div><div class="sec-info"><div class="sec-name">The Basics</div><div class="sec-sub">Click, drag, and deselect</div></div></div>
+  <div class="prose">Selection in Galactica works like you'd expect from any strategy game, with a few tricks up its sleeve. <strong>Left-click</strong> to select, <strong>drag</strong> to box-select, and <strong>click empty space</strong> to deselect. The camera automatically follows whatever you select.</div>
+  <div class="action-grid">
+    <div class="action-card" style="--ac:var(--blue)"><div class="ac-title">🖱️ Left Click</div><div class="ac-desc">Click any entity to select it. The camera smoothly pans to follow it. If multiple things overlap, the game picks the most important one — your ships always take priority over background objects.</div></div>
+    <div class="action-card" style="--ac:var(--cyan)"><div class="ac-title">▭ Box Select</div><div class="ac-desc">Click and drag to draw a selection rectangle. Everything of the same type inside the box gets selected. When mixed types are in the box, the game picks one category — usually the most useful.</div></div>
+    <div class="action-card" style="--ac:var(--green)"><div class="ac-title">⊕ Add to Selection</div><div class="ac-desc">Hold <strong>⌘ Cmd</strong> or <strong>Ctrl</strong> while clicking to add an entity to your current selection. Click an already-selected entity with modifier held to remove just that one.</div></div>
+    <div class="action-card" style="--ac:var(--red)"><div class="ac-title">✕ Deselect</div><div class="ac-desc">Click empty space to deselect everything. Or press <strong>R</strong> to clear your selection instantly. Holding the modifier key while clicking empty space preserves your existing selection.</div></div>
+  </div>
+</div>
+
+<!-- ═══ ENTITIES ═══ -->
+<div class="sec" id="sec-entities">
+  <div class="sec-hdr" style="--sc:var(--green)"><div class="sec-ico">◉</div><div class="sec-info"><div class="sec-name">What You Can Select</div><div class="sec-sub">Click any card to learn more</div></div></div>
+  <div class="prose">Everything in the game is selectable. When things overlap, the system uses a priority order to pick the right one — <strong>your ships always win</strong> over background objects when you click.</div>
+
+  <div class="entity-grid" id="entityGrid">
+    <div class="entity-card" style="--ec:#4a90d0" onclick="showEntity(this,0)"><div class="ec-icon">🚀</div><div class="ec-name">Your Ships</div><div class="ec-hint">Highest click priority</div></div>
+    <div class="entity-card" style="--ec:#e06050" onclick="showEntity(this,1)"><div class="ec-icon">👾</div><div class="ec-name">Enemy Ships</div><div class="ec-hint">Visitors & rival factions</div></div>
+    <div class="entity-card" style="--ec:#64c864" onclick="showEntity(this,2)"><div class="ec-icon">🪐</div><div class="ec-name">Planets</div><div class="ec-hint">Top box-select priority</div></div>
+    <div class="entity-card" style="--ec:#c8a01e" onclick="showEntity(this,3)"><div class="ec-icon">🏗️</div><div class="ec-name">Stations</div><div class="ec-hint">Selects as whole or by module</div></div>
+    <div class="entity-card" style="--ec:#ff8844" onclick="showEntity(this,4)"><div class="ec-icon">🧱</div><div class="ec-name">Station Modules</div><div class="ec-hint">Zoom in to reveal</div></div>
+    <div class="entity-card" style="--ec:#8c5ac8" onclick="showEntity(this,5)"><div class="ec-icon">☄️</div><div class="ec-name">Asteroids</div><div class="ec-hint">Multi-selectable</div></div>
+    <div class="entity-card" style="--ec:#4ad8e0" onclick="showEntity(this,6)"><div class="ec-icon">💎</div><div class="ec-name">Resources</div><div class="ec-hint">Discovered vs. hidden</div></div>
+    <div class="entity-card" style="--ec:#50b050" onclick="showEntity(this,7)"><div class="ec-icon">🐛</div><div class="ec-name">Creatures</div><div class="ec-hint">Space fauna</div></div>
+    <div class="entity-card" style="--ec:#96c8ff" onclick="showEntity(this,8)"><div class="ec-icon">📐</div><div class="ec-name">Blueprints</div><div class="ec-hint">Unbuilt structures</div></div>
+    <div class="entity-card" style="--ec:#ffc832" onclick="showEntity(this,9)"><div class="ec-icon">⭐</div><div class="ec-name">Stars</div><div class="ec-hint">Lowest priority</div></div>
+  </div>
+</div>
+
+<div id="entityDetail">
+  <div class="ed-panel" id="edPanel"></div>
+</div>
+
+<!-- ═══ MULTI-SELECT ═══ -->
+<div class="sec" id="sec-multi">
+  <div class="sec-hdr" style="--sc:var(--cyan)"><div class="sec-ico">▭</div><div class="sec-info"><div class="sec-name">Multi-Selection</div><div class="sec-sub">Box dragging, modifier keys, and category locking</div></div></div>
+  <div class="prose">You can select multiple entities of the <strong>same type</strong> at once. The game prevents confusing mixed selections — you can't accidentally select ships and asteroids in the same group.</div>
+  <div class="action-grid">
+    <div class="action-card" style="--ac:var(--cyan)"><div class="ac-title">📦 Box Select</div><div class="ac-desc">Drag a rectangle. If the box captures ships <em>and</em> asteroids, only the highest-priority type is selected. Ships win in a box over most things — but planets actually have the highest box priority, since dragging over a solar system should grab planets, not the hundred ships orbiting them.</div></div>
+    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">⌘ Modifier + Click</div><div class="ac-desc">Holding the modifier and clicking adds individual entities one by one. Click a selected entity again to remove just that one. Only works within the same category — you can't modifier-click a planet into a group of ships.</div></div>
+    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">⌘ Modifier + Box</div><div class="ac-desc">Holding modifier while box-selecting adds the new group to your existing selection — as long as the categories match. Great for selecting scattered ships across different orbits.</div></div>
+    <div class="action-card" style="--ac:var(--green)"><div class="ac-title">🔒 Category Lock</div><div class="ac-desc">Your selection is always a single type. Clicking a different type replaces everything, even with the modifier held. This keeps your selection clean and predictable.</div></div>
+  </div>
+  <div class="tip-box"><div class="tip-icon">💡</div><div class="tip-body"><strong>Empty space is safe:</strong> Clicking or box-selecting empty space with the modifier key held does <em>nothing</em> — your current selection is preserved. Without modifier, it clears everything.</div></div>
+</div>
+
+<!-- ═══ SMART BEHAVIORS ═══ -->
+<div class="sec" id="sec-smart">
+  <div class="sec-hdr" style="--sc:var(--yellow)"><div class="sec-ico">🧠</div><div class="sec-info"><div class="sec-name">Smart Behaviors</div><div class="sec-sub">The system adapts to how you're playing</div></div></div>
+  <div class="prose">The selection system adjusts to your zoom level, resolves overlapping entities intelligently, and uses different priority rules for clicking vs. box-selecting.</div>
+  <div class="action-grid">
+    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">🔍 Zoom-Adaptive Modules</div><div class="ac-desc">When you're zoomed out, clicking a station selects the whole thing. Zoom in past a threshold and individual modules become clickable — each one highlighted separately. There's a comfortable buffer zone between the two modes so you won't flicker back and forth while scrolling.</div></div>
+    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">🎯 Click vs. Box Priority</div><div class="ac-desc">Clicking and box-selecting use <strong>different priority orders</strong>. Clicking favors ships (you usually want to click a specific ship). Box-selecting favors planets (dragging a big box over a system should grab planets, not tiny ships). The game picks the right behavior automatically.</div></div>
+    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">📍 Overlap Resolution</div><div class="ac-desc">When a ship is sitting on a planet, clicking hits the ship — even though the planet is bigger. The system checks all overlapping entities, sorts by priority, then picks the closest one at the best priority level.</div></div>
+    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">📸 Camera Auto-Follow</div><div class="ac-desc">Selecting any entity smoothly animates the camera to track it. For orbiting objects, the camera follows the entity's actual position — so it doesn't land on empty space where the planet <em>was</em> a moment ago.</div></div>
+  </div>
+  <div class="tip-box"><div class="tip-icon">🔍</div><div class="tip-body"><strong>Station module zoom thresholds:</strong> Modules appear when you zoom in fairly close, and they don't disappear until you zoom out <em>much</em> further. This asymmetry is intentional — once you're working with modules, slight zoom adjustments won't yank them away from you.</div></div>
+</div>
+
+<!-- ═══ TRY IT ═══ -->
+<div class="sec" id="sec-scenarios">
+  <div class="sec-hdr" style="--sc:var(--orange)"><div class="sec-ico">🎮</div><div class="sec-info"><div class="sec-name">Try It Out</div><div class="sec-sub">Interactive demo — click and drag to practice</div></div></div>
+  <div class="prose">Practice selection in this mini sandbox. Click entities to select them, drag to box-select, and hold <strong>Ctrl/⌘</strong> to add to your selection. The priority system and category locking work just like the real game.</div>
+  <div class="demo-wrap">
+    <canvas class="demo-canvas" id="demoCanvas"></canvas>
+    <div class="demo-hint">Click to select · Drag to box select · Ctrl/⌘ to add</div>
+  </div>
+</div>
+
+<div style="height:4rem"></div>
+</div></div></div>
+
+<script>
+/* ═══ NAV ═══ */
+function goTo(btn,id){document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const el=document.getElementById('sec-'+id);if(el)document.getElementById('content').scrollTo({top:el.offsetTop-20,behavior:'smooth'})}
+const secs=['basics','entities','multi','smart','scenarios'];
+const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){const id=e.target.id.replace('sec-','');document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('data-sec')===id))}})},{root:document.getElementById('content'),threshold:0.25});
+secs.forEach(id=>{const el=document.getElementById('sec-'+id);if(el)obs.observe(el)});
+
+/* ═══ ENTITY DETAIL ═══ */
+const entities=[
+  {name:'Your Ships',c:'#4a90d0',desc:'Your ships have the <strong>highest click priority</strong> — even sitting on top of a planet, clicking always grabs the ship first. You can multi-select your ships with box-drag or modifier-click. Right-click with ships selected to issue formation move commands.'},
+  {name:'Enemy Ships',c:'#e06050',desc:'Visitors and ships from rival factions. They have the second-highest click priority. You can select them to inspect their status, but you can\'t give them orders. Multi-selectable with box and modifier.'},
+  {name:'Planets',c:'#64c864',desc:'Planets have the <strong>highest box-select priority</strong> — drag a box over a solar system and you\'ll grab planets, not the ships orbiting them. Click priority is third, behind both ship types. Multi-selectable.'},
+  {name:'Stations',c:'#c8a01e',desc:'When zoomed out, clicking a station selects the whole structure. When zoomed in, you can click individual modules instead. The station core is always selectable at grid position (0,0). Selecting a station also reveals its crew management panel.'},
+  {name:'Station Modules',c:'#ff8844',desc:'<strong>Only visible when zoomed in</strong> close to a station. Each module becomes its own clickable entity — smelteries, greenhouses, storage cells, docking bays. The zoom threshold has a comfortable buffer: modules appear at close zoom and don\'t vanish until you zoom out much further.'},
+  {name:'Asteroids',c:'#8c5ac8',desc:'Mineable asteroids scattered through the system. Hidden asteroids (not yet discovered) are excluded from selection entirely. Multi-selectable with box and modifier. Fixed hit radius regardless of zoom.'},
+  {name:'Resources',c:'#4ad8e0',desc:'Ore deposits and resource nodes. Discovered resources have a larger click target than hidden ones. Their click radius scales with zoom, getting easier to click as you zoom in. Multi-selectable.'},
+  {name:'Creatures',c:'#50b050',desc:'Space fauna drifting through the cosmos. Click priority is between resources and automata. Their hit radius scales with their visual display size. Multi-selectable with box and modifier.'},
+  {name:'Blueprints',c:'#96c8ff',desc:'Unbuilt construction orders placed by the player. Relatively low click priority since they\'re usually near other things you\'d want to click first. <strong>Not multi-selectable</strong> — you can only work with one blueprint at a time.'},
+  {name:'Stars',c:'#ffc832',desc:'The central star of each system. <strong>Lowest priority</strong> for both clicking and box-selecting — you\'ll only select a star if there\'s literally nothing else under your cursor. Makes sense: you\'d never want to accidentally select the star when reaching for a planet.'}
+];
+function showEntity(card,i){
+  document.querySelectorAll('.entity-card').forEach(c=>c.classList.remove('picked'));
+  card.classList.add('picked');
+  const e=entities[i],p=document.getElementById('edPanel');
+  p.innerHTML='<div class="ed-name" style="color:'+e.c+'">'+e.name+'</div><div class="ed-desc">'+e.desc+'</div>';
+  p.style.borderColor=e.c;p.classList.add('show');
+}
+
+/* ═══ INTERACTIVE DEMO ═══ */
+(function(){
+  const c=document.getElementById('demoCanvas');if(!c)return;
+  const ctx=c.getContext('2d');const dpr=window.devicePixelRatio||1;
+  let W,H;
+  function resize(){const r=c.getBoundingClientRect();W=r.width;H=r.height;c.width=W*dpr;c.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+  resize();window.addEventListener('resize',resize);
+
+  // Entities
+  const types=[
+    {name:'Ship',icon:'🚀',pri:0,c:'#4a90d0',r:12},
+    {name:'Planet',icon:'🪐',pri:2,c:'#64c864',r:28},
+    {name:'Asteroid',icon:'☄️',pri:5,c:'#8c5ac8',r:10},
+    {name:'Station',icon:'🏗️',pri:3,c:'#c8a01e',r:18}
+  ];
+  let ents=[];
+  function populate(){
+    ents=[];
+    for(let i=0;i<4;i++) ents.push({x:100+Math.random()*(W-200),y:60+Math.random()*(H-120),type:0,sel:false,vx:(Math.random()-0.5)*0.3,vy:(Math.random()-0.5)*0.3});
+    for(let i=0;i<2;i++) ents.push({x:150+Math.random()*(W-300),y:80+Math.random()*(H-160),type:1,sel:false,vx:0,vy:0});
+    for(let i=0;i<5;i++) ents.push({x:80+Math.random()*(W-160),y:50+Math.random()*(H-100),type:2,sel:false,vx:(Math.random()-0.5)*0.15,vy:(Math.random()-0.5)*0.15});
+    for(let i=0;i<2;i++) ents.push({x:200+Math.random()*(W-400),y:80+Math.random()*(H-160),type:3,sel:false,vx:0,vy:0});
+  }
+  populate();
+
+  let drag=null,mouse={x:0,y:0},modHeld=false;
+
+  c.addEventListener('mousedown',e=>{
+    const r=c.getBoundingClientRect();
+    const mx=e.clientX-r.left,my=e.clientY-r.top;
+    modHeld=e.ctrlKey||e.metaKey;
+    drag={sx:mx,sy:my,cx:mx,cy:my,active:false};
+  });
+  c.addEventListener('mousemove',e=>{
+    const r=c.getBoundingClientRect();
+    mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top;
+    if(drag){drag.cx=mouse.x;drag.cy=mouse.y;const d=Math.hypot(drag.cx-drag.sx,drag.cy-drag.sy);if(d>8)drag.active=true}
+  });
+  c.addEventListener('mouseup',e=>{
+    modHeld=e.ctrlKey||e.metaKey;
+    if(!drag)return;
+    if(drag.active){
+      // Box select
+      const x1=Math.min(drag.sx,drag.cx),x2=Math.max(drag.sx,drag.cx);
+      const y1=Math.min(drag.sy,drag.cy),y2=Math.max(drag.sy,drag.cy);
+      let hits=ents.filter(en=>{const t=types[en.type];return en.x+t.r>x1&&en.x-t.r<x2&&en.y+t.r>y1&&en.y-t.r<y2});
+      if(hits.length){
+        hits.sort((a,b)=>types[a.type].pri-types[b.type].pri);
+        const best=types[hits[0].type].pri;
+        hits=hits.filter(h=>types[h.type].pri===best);
+        if(!modHeld)ents.forEach(en=>en.sel=false);
+        hits.forEach(h=>h.sel=true);
+      } else if(!modHeld) ents.forEach(en=>en.sel=false);
+    } else {
+      // Click
+      let hits=ents.filter(en=>{const t=types[en.type];return Math.hypot(en.x-drag.sx,en.y-drag.sy)<=t.r*1.5});
+      if(hits.length){
+        hits.sort((a,b)=>types[a.type].pri-types[b.type].pri);
+        const pick=hits[0];
+        if(modHeld){pick.sel=!pick.sel}else{ents.forEach(en=>en.sel=false);pick.sel=true}
+      } else if(!modHeld) ents.forEach(en=>en.sel=false);
+    }
+    drag=null;
+  });
+  c.addEventListener('mouseleave',()=>{drag=null});
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // Background grid
+    ctx.strokeStyle='rgba(150,200,255,0.04)';ctx.lineWidth=1;
+    for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+    for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+
+    // Update positions (gentle drift)
+    ents.forEach(en=>{en.x+=en.vx;en.y+=en.vy;if(en.x<20||en.x>W-20)en.vx*=-1;if(en.y<20||en.y>H-20)en.vy*=-1});
+
+    // Draw entities
+    ents.forEach(en=>{
+      const t=types[en.type];
+      if(en.sel){
+        ctx.strokeStyle=t.c;ctx.lineWidth=2;ctx.setLineDash([4,3]);
+        ctx.beginPath();ctx.arc(en.x,en.y,t.r+6,0,Math.PI*2);ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle=t.c+'18';ctx.beginPath();ctx.arc(en.x,en.y,t.r+6,0,Math.PI*2);ctx.fill();
+      }
+      ctx.font=(t.r*1.2)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(t.icon,en.x,en.y);
+      ctx.font='8px JetBrains Mono';ctx.fillStyle=en.sel?t.c:'#384060';
+      ctx.fillText(t.name,en.x,en.y+t.r+10);
+    });
+
+    // Drag rectangle
+    if(drag&&drag.active){
+      ctx.strokeStyle='rgba(150,200,255,0.5)';ctx.lineWidth=1;ctx.setLineDash([6,4]);
+      ctx.strokeRect(drag.sx,drag.sy,drag.cx-drag.sx,drag.cy-drag.sy);
+      ctx.setLineDash([]);
+      ctx.fillStyle='rgba(150,200,255,0.04)';
+      ctx.fillRect(drag.sx,drag.sy,drag.cx-drag.sx,drag.cy-drag.sy);
+    }
+
+    // Selection count
+    const sel=ents.filter(e=>e.sel);
+    if(sel.length){
+      const t=types[sel[0].type];
+      ctx.fillStyle=t.c;ctx.font='bold 10px JetBrains Mono';ctx.textAlign='right';
+      ctx.fillText(sel.length+' '+t.name+(sel.length>1?'s':'')+' selected',W-16,H-12);
+    }
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+/* ═══ IFRAME ═══ */
+try{if(window.self!==window.top)document.body.classList.add('in-frame')}catch(e){document.body.classList.add('in-frame')}
+</script>
+</body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Controls // Galactica</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);
+  --green:#64c864;--red:#e06050;--cyan:#4ad8e0;--orange:#ff8844;
+  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+  --sidebar-w:200px;
+  --c-nav:#4a90d0;--c-time:#c8a01e;--c-cmd:#e06050;--c-ui:#cc7733;--c-mod:#9080c0;--c-sel:#50b050;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:var(--bg);overflow:hidden}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.3))}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:2px}
+.in-frame .topbar{display:none!important}
+#app{position:relative;z-index:10;display:flex;flex-direction:column;height:100%}
+#shell{display:flex;flex:1;overflow:hidden}
+#sidebar{width:var(--sidebar-w);background:rgba(14,17,24,0.94);border-right:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;position:relative}
+#sidebar::after{content:'';position:absolute;top:0;right:0;bottom:0;width:1px;background:linear-gradient(180deg,var(--blue-dim),transparent 30%,transparent 70%,var(--blue-dim))}
+.side-head{padding:0.65rem 0.9rem;border-bottom:1px solid var(--border);font-size:0.42rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue-dim);display:flex;justify-content:space-between;align-items:center}
+.side-head .tag{color:var(--text-faint);font-size:0.34rem}
+.side-section{padding:4px 6px}
+.nav-btn{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;background:transparent;border:1px solid transparent;color:var(--text-faint);font-size:0.44rem;letter-spacing:0.08em;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;text-align:left;margin-bottom:1px;border-radius:4px}
+.nav-btn:hover{color:var(--text);background:var(--blue-faint);border-color:var(--border)}
+.nav-btn.active{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
+.nav-btn .nav-icon{font-size:0.8rem;width:22px;text-align:center;flex-shrink:0}
+.nav-btn .nav-color{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-left:auto}
+.side-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.4rem;color:var(--blue-dim);opacity:0.12;text-align:center;padding:12px 0;margin-top:auto}
+#content{flex:1;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
+.page-hero{padding:2.5rem 3rem 1.5rem;max-width:960px;margin:0 auto}
+.ph-num{font-size:0.36rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--yellow-dim);margin-bottom:0.3rem}
+.ph-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:2.4rem;color:var(--text-bright);line-height:1.15;margin-bottom:0.5rem}
+.ph-title em{font-style:italic;color:var(--yellow)}
+.ph-sub{font-size:0.55rem;color:var(--text-dim);line-height:1.8;max-width:640px;font-weight:300}
+.ph-line{width:100%;height:1px;background:linear-gradient(90deg,var(--blue-dim),transparent 60%);margin-top:1.2rem}
+.sec{max-width:960px;margin:0 auto;padding:0 3rem 3rem}
+.sec-hdr{display:flex;align-items:center;gap:14px;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
+.sec-ico{width:52px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;border:2px solid var(--sc,var(--blue-dim));background:rgba(0,0,0,0.3);flex-shrink:0;position:relative}
+.sec-ico::before{content:'';position:absolute;inset:0;border-radius:10px;box-shadow:inset 0 0 16px var(--sc,rgba(150,200,255,0.1));pointer-events:none}
+.sec-info{flex:1}
+.sec-name{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.4rem;color:var(--text-bright);line-height:1.2}
+.sec-sub{font-size:0.38rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--sc,var(--text-dim));margin-top:2px}
+.prose{font-size:0.54rem;color:var(--text-dim);line-height:2;font-weight:300;margin-bottom:1.2rem}
+.prose strong{color:var(--text);font-weight:500}
+.kb-wrap{background:var(--bg2);border:1px solid var(--border-b);border-radius:10px;padding:28px 24px 16px;margin:1.2rem 0;position:relative;overflow:hidden}
+.kb-wrap::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(150,200,255,0.015),transparent 50%);pointer-events:none}
+.kb-row{display:flex;gap:4px;margin-bottom:4px;justify-content:center}
+.kb-key{display:flex;align-items:center;justify-content:center;flex-direction:column;width:46px;height:42px;border:1px solid rgba(150,200,255,0.08);border-radius:5px;background:var(--bg3);font-size:0.48rem;font-weight:500;color:var(--text-faint);transition:all 0.25s;position:relative;cursor:default;flex-shrink:0;user-select:none}
+.kb-key .kl{font-size:0.28rem;color:inherit;margin-top:1px;opacity:0.7;text-align:center;line-height:1.1;transition:opacity 0.25s}
+.kb-key.bound{border-color:color-mix(in srgb,var(--kc) 50%,transparent);color:color-mix(in srgb,var(--kc) 70%,var(--text-dim));cursor:pointer}
+.kb-key.bound:hover{border-color:var(--kc);color:var(--kc);background:color-mix(in srgb,var(--kc) 8%,var(--bg3));transform:translateY(-2px);box-shadow:0 4px 16px color-mix(in srgb,var(--kc) 20%,transparent),inset 0 0 12px color-mix(in srgb,var(--kc) 8%,transparent)}
+.kb-key.bound:hover .kl{opacity:1}
+.kb-key.bound.glow{border-color:var(--kc)!important;color:var(--kc)!important;background:color-mix(in srgb,var(--kc) 12%,var(--bg3))!important;transform:translateY(-2px)!important;box-shadow:0 4px 20px color-mix(in srgb,var(--kc) 25%,transparent),inset 0 0 14px color-mix(in srgb,var(--kc) 10%,transparent)!important}
+.kb-key.dim{opacity:0.15!important;transform:none!important}
+.kb-key.w15{width:70px}.kb-key.w175{width:80px}.kb-key.w2{width:94px}.kb-key.w225{width:102px}.kb-key.w275{width:124px}.kb-key.w-space{width:280px}
+#keyInfo{position:absolute;bottom:0;left:0;right:0;padding:14px 20px;background:linear-gradient(0deg,var(--bg2) 70%,transparent);border-radius:0 0 10px 10px;display:flex;align-items:center;gap:14px;opacity:0;transition:opacity 0.3s;pointer-events:none}
+#keyInfo.show{opacity:1}
+.ki-key{font-size:1.1rem;font-weight:700;min-width:36px;text-align:center}
+.ki-body{flex:1}.ki-name{font-size:0.5rem;font-weight:600;color:var(--text-bright)}.ki-desc{font-size:0.4rem;color:var(--text-dim);margin-top:1px;line-height:1.4}
+.ki-mode{font-size:0.28rem;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;border-radius:3px;border:1px solid;white-space:nowrap;margin-left:auto;flex-shrink:0}
+.kb-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;padding-top:12px;border-top:1px solid var(--border);justify-content:center}
+.leg-item{display:flex;align-items:center;gap:6px;font-size:0.36rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim);cursor:pointer;padding:3px 6px;border-radius:4px;transition:background 0.2s}
+.leg-item:hover{background:var(--blue-faint)}
+.leg-item.on{background:color-mix(in srgb,var(--lc) 10%,transparent)}
+.leg-dot{width:10px;height:10px;border-radius:3px;border:1.5px solid var(--lc);background:color-mix(in srgb,var(--lc) 15%,transparent)}
+.mouse-panel{display:flex;gap:32px;align-items:flex-start;margin:1.2rem 0;flex-wrap:wrap}
+.mouse-visual{position:relative;flex-shrink:0}
+.mouse-visual svg{display:block}
+.mv-zone{cursor:pointer;transition:all 0.25s}
+#mouseInfo{flex:1;min-width:260px;background:var(--bg2);border:1px solid var(--border-b);border-radius:8px;padding:20px;min-height:200px;transition:border-color 0.3s}
+.mi-icon{font-size:1.8rem;margin-bottom:8px}.mi-name{font-family:'Cormorant Garamond',serif;font-size:1.3rem;color:var(--text-bright);margin-bottom:6px}
+.mi-desc{font-size:0.48rem;color:var(--text-dim);line-height:1.9}.mi-desc strong{color:var(--text);font-weight:500}
+.mi-tip{margin-top:10px;padding:8px 12px;border-radius:4px;border:1px solid var(--border);background:var(--bg3);font-size:0.38rem;color:var(--yellow-dim);display:flex;align-items:flex-start;gap:8px}.mi-tip::before{content:'💡';flex-shrink:0}
+.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:1rem 0}
+.action-card{background:var(--bg2);border:1px solid var(--border);padding:16px 18px;border-radius:6px;cursor:default;transition:all 0.2s;position:relative;overflow:hidden}
+.action-card:hover{border-color:color-mix(in srgb,var(--ac,var(--blue)) 40%,transparent);background:color-mix(in srgb,var(--ac,var(--blue)) 3%,var(--bg2))}
+.action-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--ac,var(--blue));opacity:0.4;border-radius:3px 0 0 3px}
+.ac-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.ac-keys{display:flex;gap:4px;flex-wrap:wrap}
+.ac-key{display:inline-flex;align-items:center;justify-content:center;padding:3px 10px;border:1px solid var(--border-b);border-radius:4px;background:var(--bg3);color:var(--text-bright);font-size:0.42rem;font-weight:600;white-space:nowrap;min-width:28px}
+.ac-plus{color:var(--text-faint);font-size:0.36rem}
+.ac-badge{font-size:0.26rem;padding:2px 7px;border-radius:3px;letter-spacing:0.1em;text-transform:uppercase;border:1px solid;margin-left:auto;white-space:nowrap;flex-shrink:0}
+.ac-title{font-size:0.5rem;font-weight:600;color:var(--text-bright)}
+.ac-desc{font-size:0.42rem;color:var(--text-dim);line-height:1.7}
+.speed-strip{display:flex;gap:0;margin:1rem 0;border-radius:8px;overflow:hidden;border:1px solid var(--border-b)}
+.speed-notch{flex:1;padding:14px 8px;text-align:center;background:var(--bg2);border-right:1px solid var(--border);cursor:pointer;transition:all 0.2s}
+.speed-notch:last-child{border-right:none}
+.speed-notch:hover,.speed-notch.on{background:color-mix(in srgb,var(--c-time) 10%,var(--bg2))}
+.speed-notch.on{box-shadow:inset 0 -3px 0 var(--c-time)}
+.sn-key{font-size:0.7rem;font-weight:700;color:var(--text-bright);margin-bottom:4px}
+.sn-label{font-size:0.32rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint)}
+.sn-bar{height:4px;border-radius:2px;margin-top:6px}
+.tip-box{border:1px solid var(--border-b);border-left:3px solid var(--yellow-dim);background:var(--yellow-faint);padding:14px 18px;margin:1rem 0;border-radius:0 6px 6px 0;display:flex;gap:12px;align-items:flex-start}
+.tip-box .tip-icon{font-size:1.2rem;flex-shrink:0;margin-top:-2px}
+.tip-box .tip-body{font-size:0.44rem;color:var(--text-dim);line-height:1.7}
+.tip-box .tip-body strong{color:var(--text)}
+@media(max-width:900px){#sidebar{width:170px}.sec,.page-hero{padding-left:1.5rem;padding-right:1.5rem}.kb-key{width:36px;height:34px;font-size:0.38rem}.kb-key.w15{width:56px}.kb-key.w175{width:64px}.kb-key.w2{width:74px}.kb-key.w225{width:82px}.kb-key.w275{width:100px}.kb-key.w-space{width:200px}.mouse-panel{flex-direction:column;align-items:center}.action-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app"><div id="shell">
+<nav id="sidebar">
+  <div class="side-head">Controls<span class="tag">HOW TO PLAY</span></div>
+  <div class="side-section">
+    <button class="nav-btn active" data-sec="keyboard" onclick="goTo(this,'keyboard')"><span class="nav-icon">⌨</span>Keyboard<span class="nav-color" style="background:var(--blue)"></span></button>
+    <button class="nav-btn" data-sec="mouse" onclick="goTo(this,'mouse')"><span class="nav-icon">◎</span>Mouse<span class="nav-color" style="background:var(--green)"></span></button>
+    <button class="nav-btn" data-sec="navigate" onclick="goTo(this,'navigate')"><span class="nav-icon">◈</span>Navigate<span class="nav-color" style="background:var(--c-nav)"></span></button>
+    <button class="nav-btn" data-sec="command" onclick="goTo(this,'command')"><span class="nav-icon">⚔</span>Command<span class="nav-color" style="background:var(--c-cmd)"></span></button>
+    <button class="nav-btn" data-sec="time" onclick="goTo(this,'time')"><span class="nav-icon">⏱</span>Time<span class="nav-color" style="background:var(--c-time)"></span></button>
+    <button class="nav-btn" data-sec="tips" onclick="goTo(this,'tips')"><span class="nav-icon">💡</span>Tips<span class="nav-color" style="background:var(--yellow)"></span></button>
+  </div>
+  <div class="side-barcode">CTRL-MANUAL</div>
+</nav>
+<div id="content">
+<div class="page-hero">
+  <div class="ph-num">Player's Manual // 003</div>
+  <h1 class="ph-title">Controls &amp; <em>Input</em></h1>
+  <p class="ph-sub">Everything you need to navigate the cosmos, command your fleet, and bend time to your will. Hover over any key below to see what it does.</p>
+  <div class="ph-line"></div>
+</div>
+<div class="sec" id="sec-keyboard">
+  <div class="sec-hdr" style="--sc:var(--blue)"><div class="sec-ico">⌨</div><div class="sec-info"><div class="sec-name">Keyboard Map</div><div class="sec-sub">Hover any highlighted key · click a legend color to filter</div></div></div>
+  <div class="kb-wrap" id="kbWrap">
+    <div class="kb-row"><div class="kb-key w15" style="font-size:0.36rem">ESC</div><div class="kb-key bound" style="--kc:var(--c-time)" data-g="time" data-name="Speed 1" data-desc="Slowest speed — great for precise maneuvers" data-mode="press">1<span class="kl">slowest</span></div><div class="kb-key bound" style="--kc:var(--c-time)" data-g="time" data-name="Speed 2" data-desc="Slow speed — watch things unfold carefully" data-mode="press">2<span class="kl">slow</span></div><div class="kb-key bound" style="--kc:var(--c-time)" data-g="time" data-name="Speed 3" data-desc="Normal speed — good for general gameplay" data-mode="press">3<span class="kl">normal</span></div><div class="kb-key bound" style="--kc:var(--c-time)" data-g="time" data-name="Speed 4" data-desc="Fast speed — skip ahead while things build" data-mode="press">4<span class="kl">fast</span></div><div class="kb-key bound" style="--kc:var(--c-time)" data-g="time" data-name="Speed 5" data-desc="Fastest speed — watch orbits whip around the star" data-mode="press">5<span class="kl">fastest</span></div><div class="kb-key">6</div><div class="kb-key">7</div><div class="kb-key">8</div><div class="kb-key">9</div><div class="kb-key">0</div><div class="kb-key">-</div><div class="kb-key">=</div><div class="kb-key w2" style="font-size:0.36rem">DEL</div></div>
+    <div class="kb-row"><div class="kb-key w15" style="font-size:0.36rem">TAB</div><div class="kb-key bound" style="--kc:var(--c-nav)" data-g="nav" data-name="Rotate Left" data-desc="Spin your fleet's heading counter-clockwise" data-mode="hold">Q<span class="kl">↺ rotate</span></div><div class="kb-key bound" style="--kc:var(--c-nav)" data-g="nav" data-name="Pan Up" data-desc="Move the camera upward — detaches from tracked selection" data-mode="hold">W<span class="kl">↑ pan</span></div><div class="kb-key bound" style="--kc:var(--c-ui)" data-g="ui" data-name="Settings / Rotate Right" data-desc="Tap to toggle settings · Hold to rotate heading clockwise · Hold + click for debug explosion" data-mode="press / hold">E<span class="kl">settings</span></div><div class="kb-key bound" style="--kc:var(--c-sel)" data-g="sel" data-name="Clear Selection" data-desc="Deselect everything — ships, planets, stations, all of it" data-mode="press">R<span class="kl">clear</span></div><div class="kb-key">T</div><div class="kb-key">Y</div><div class="kb-key">U</div><div class="kb-key">I</div><div class="kb-key">O</div><div class="kb-key">P</div><div class="kb-key">[</div><div class="kb-key">]</div><div class="kb-key w15">\</div></div>
+    <div class="kb-row"><div class="kb-key w175" style="font-size:0.36rem">CAPS</div><div class="kb-key bound" style="--kc:var(--c-nav)" data-g="nav" data-name="Pan Left" data-desc="Move the camera left — speed scales with how far you're zoomed out" data-mode="hold">A<span class="kl">← pan</span></div><div class="kb-key bound" style="--kc:var(--c-nav)" data-g="nav" data-name="Pan Down" data-desc="Move the camera downward" data-mode="hold">S<span class="kl">↓ pan</span></div><div class="kb-key bound" style="--kc:var(--c-nav)" data-g="nav" data-name="Pan Right" data-desc="Move the camera right" data-mode="hold">D<span class="kl">→ pan</span></div><div class="kb-key">F</div><div class="kb-key">G</div><div class="kb-key">H</div><div class="kb-key">J</div><div class="kb-key">K</div><div class="kb-key">L</div><div class="kb-key">;</div><div class="kb-key">'</div><div class="kb-key w225" style="font-size:0.36rem">ENTER</div></div>
+    <div class="kb-row"><div class="kb-key w225" style="font-size:0.36rem">SHIFT</div><div class="kb-key">Z</div><div class="kb-key">X</div><div class="kb-key">C</div><div class="kb-key">V</div><div class="kb-key bound" style="--kc:var(--c-cmd)" data-g="cmd" data-name="Battle Stations" data-desc="Toggle selected ships into combat formation — they'll hold position and fight" data-mode="press">B<span class="kl">battle!</span></div><div class="kb-key">N</div><div class="kb-key">M</div><div class="kb-key">,</div><div class="kb-key">.</div><div class="kb-key">/</div><div class="kb-key w275" style="font-size:0.36rem">SHIFT</div></div>
+    <div class="kb-row"><div class="kb-key bound w15" style="--kc:var(--c-mod);font-size:0.34rem" data-g="mod" data-name="Modifier (Ctrl)" data-desc="Hold while clicking or box-selecting to add to your current selection" data-mode="hold">CTRL<span class="kl">+select</span></div><div class="kb-key" style="font-size:0.34rem">OPT</div><div class="kb-key bound w15" style="--kc:var(--c-mod);font-size:0.34rem" data-g="mod" data-name="Modifier (⌘)" data-desc="Same as Ctrl — hold while clicking to add to your selection. Works on Mac!" data-mode="hold">⌘<span class="kl">+select</span></div><div class="kb-key bound w-space" style="--kc:var(--c-time)" data-g="time" data-name="Pause / Resume" data-desc="Freeze time to plan your next move, then hit again to resume" data-mode="press">SPACE<span class="kl">pause / play</span></div><div class="kb-key bound w15" style="--kc:var(--c-mod);font-size:0.34rem" data-g="mod" data-name="Modifier (⌘)" data-desc="Same as Ctrl — hold while clicking to add to selection" data-mode="hold">⌘<span class="kl">+select</span></div><div class="kb-key" style="font-size:0.34rem">OPT</div><div class="kb-key bound w15" style="--kc:var(--c-mod);font-size:0.34rem" data-g="mod" data-name="Modifier (Ctrl)" data-desc="Hold while clicking or box-selecting to add to selection" data-mode="hold">CTRL<span class="kl">+select</span></div></div>
+    <div id="keyInfo"><div class="ki-key" id="kiKey"></div><div class="ki-body"><div class="ki-name" id="kiName"></div><div class="ki-desc" id="kiDesc"></div></div><div class="ki-mode" id="kiMode"></div></div>
+    <div class="kb-legend">
+      <div class="leg-item" style="--lc:var(--c-nav)" onclick="filterKeys(this,'nav')"><div class="leg-dot"></div>Navigate</div>
+      <div class="leg-item" style="--lc:var(--c-time)" onclick="filterKeys(this,'time')"><div class="leg-dot"></div>Time</div>
+      <div class="leg-item" style="--lc:var(--c-cmd)" onclick="filterKeys(this,'cmd')"><div class="leg-dot"></div>Command</div>
+      <div class="leg-item" style="--lc:var(--c-sel)" onclick="filterKeys(this,'sel')"><div class="leg-dot"></div>Selection</div>
+      <div class="leg-item" style="--lc:var(--c-ui)" onclick="filterKeys(this,'ui')"><div class="leg-dot"></div>Interface</div>
+      <div class="leg-item" style="--lc:var(--c-mod)" onclick="filterKeys(this,'mod')"><div class="leg-dot"></div>Modifier</div>
+    </div>
+  </div>
+</div>
+<div class="sec" id="sec-mouse">
+  <div class="sec-hdr" style="--sc:var(--green)"><div class="sec-ico">◎</div><div class="sec-info"><div class="sec-name">Mouse Controls</div><div class="sec-sub">Hover each part of the mouse to learn more</div></div></div>
+  <div class="mouse-panel">
+    <div class="mouse-visual">
+      <svg width="180" height="240" viewBox="0 0 180 240" fill="none">
+        <rect x="25" y="44" width="130" height="170" rx="55" fill="#121620" stroke="rgba(150,200,255,0.12)" stroke-width="1.5"/>
+        <path class="mv-zone" id="mzLeft" d="M25 95 L90 95 L90 44 Q90 44 60 44 Q25 44 25 84 Z" fill="rgba(74,144,208,0.08)" stroke="rgba(74,144,208,0.3)" stroke-width="1.5" onmouseenter="showMouse('left')" onmouseleave="hideMouse()"/>
+        <text x="57" y="74" text-anchor="middle" fill="rgba(74,144,208,0.7)" font-family="JetBrains Mono" font-size="9" font-weight="600" pointer-events="none">LEFT</text>
+        <path class="mv-zone" id="mzRight" d="M90 95 L155 95 L155 84 Q155 44 120 44 Q90 44 90 44 Z" fill="rgba(224,96,80,0.08)" stroke="rgba(224,96,80,0.3)" stroke-width="1.5" onmouseenter="showMouse('right')" onmouseleave="hideMouse()"/>
+        <text x="122" y="74" text-anchor="middle" fill="rgba(224,96,80,0.7)" font-family="JetBrains Mono" font-size="9" font-weight="600" pointer-events="none">RIGHT</text>
+        <line x1="90" y1="44" x2="90" y2="95" stroke="rgba(150,200,255,0.1)" stroke-width="1"/>
+        <rect class="mv-zone" id="mzScroll" x="80" y="98" width="20" height="32" rx="10" fill="rgba(200,160,30,0.12)" stroke="rgba(200,160,30,0.4)" stroke-width="1.5" onmouseenter="showMouse('scroll')" onmouseleave="hideMouse()"/>
+        <text x="90" y="118" text-anchor="middle" fill="rgba(200,160,30,0.7)" font-family="JetBrains Mono" font-size="8" font-weight="600" pointer-events="none">⟳</text>
+        <text x="90" y="232" text-anchor="middle" fill="#384060" font-family="JetBrains Mono" font-size="8" letter-spacing="3">MOUSE</text>
+      </svg>
+    </div>
+    <div id="mouseInfo"><div class="mi-icon">🖱️</div><div class="mi-name">Hover a button</div><div class="mi-desc">Move your cursor over the <strong>left button</strong>, <strong>right button</strong>, or <strong>scroll wheel</strong> to see what each one does.</div></div>
+  </div>
+</div>
+<div class="sec" id="sec-navigate">
+  <div class="sec-hdr" style="--sc:var(--c-nav)"><div class="sec-ico">◈</div><div class="sec-info"><div class="sec-name">Getting Around</div><div class="sec-sub">Pan, zoom, and track your fleet</div></div></div>
+  <div class="prose">You have two ways to move the camera: <strong>WASD keys</strong> for quick panning, or <strong>right-click drag</strong> for precise repositioning. Both detach the camera from whatever you're tracking — click on something again to snap back and follow it through its orbit.</div>
+  <div class="action-grid">
+    <div class="action-card" style="--ac:var(--c-nav)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">W</span><span class="ac-key">A</span><span class="ac-key">S</span><span class="ac-key">D</span></div><span class="ac-badge" style="color:var(--c-nav);border-color:var(--c-nav)">hold</span></div><div class="ac-title">Keyboard Pan</div><div class="ac-desc">Pan the camera in any direction. The further you're zoomed out, the faster you'll move — so panning feels consistent at every scale.</div></div>
+    <div class="action-card" style="--ac:var(--c-nav)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">Right Click</span><span class="ac-plus">+</span><span class="ac-key">Drag</span></div><span class="ac-badge" style="color:var(--c-nav);border-color:var(--c-nav)">drag</span></div><div class="ac-title">Mouse Pan</div><div class="ac-desc">Hold right mouse button and drag to reposition the view. Great for small adjustments when you're zoomed in on a station.</div></div>
+    <div class="action-card" style="--ac:var(--c-nav)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">Scroll ⟳</span></div><span class="ac-badge" style="color:var(--c-nav);border-color:var(--c-nav)">scroll</span></div><div class="ac-title">Zoom</div><div class="ac-desc">Scroll to zoom in and out. The zoom centers on your cursor position — point at something distant and scroll to fly right to it.</div></div>
+    <div class="action-card" style="--ac:var(--c-nav)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">Q</span><span class="ac-key">E</span></div><span class="ac-badge" style="color:var(--c-nav);border-color:var(--c-nav)">hold</span></div><div class="ac-title">Rotate Fleet Heading</div><div class="ac-desc">Spin the directional heading for your ships. Q rotates counter-clockwise, E rotates clockwise. This sets the facing angle for formation commands.</div></div>
+  </div>
+  <div class="tip-box"><div class="tip-icon">📌</div><div class="tip-body"><strong>Auto-tracking:</strong> Whenever you click on a planet, ship, or station, the camera smoothly animates to it and follows its orbit. WASD or right-drag breaks the follow — click again to re-attach.</div></div>
+</div>
+<div class="sec" id="sec-command">
+  <div class="sec-hdr" style="--sc:var(--c-cmd)"><div class="sec-ico">⚔</div><div class="sec-info"><div class="sec-name">Commanding Your Fleet</div><div class="sec-sub">Move ships, build structures, inspect stations</div></div></div>
+  <div class="prose">Select your ships, then use right-click to send them where you need them. The right mouse button is context-sensitive — it does different things depending on what you're pointing at.</div>
+  <div class="action-grid">
+    <div class="action-card" style="--ac:var(--c-cmd)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">Right Click</span></div><span class="ac-badge" style="color:var(--c-cmd);border-color:var(--c-cmd)">context</span></div><div class="ac-title">Move / Inspect</div><div class="ac-desc">With ships selected, right-click open space to send them in <strong>formation</strong>. Right-click a station module to open its <strong>info popup</strong>. Right-click with a constructable active to <strong>cancel</strong> it.</div></div>
+    <div class="action-card" style="--ac:var(--c-cmd)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">B</span></div><span class="ac-badge" style="color:var(--c-cmd);border-color:var(--c-cmd)">toggle</span></div><div class="ac-title">Battle Stations</div><div class="ac-desc">Toggle selected ships into combat mode. They'll hold position, face threats, and fight. Press B again to release them back to normal duties.</div></div>
+    <div class="action-card" style="--ac:var(--green)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">Left Click</span></div><span class="ac-badge" style="color:var(--green);border-color:var(--green)">build</span></div><div class="ac-title">Place Blueprint</div><div class="ac-desc">When you've selected a constructable from the build menu, left-click anywhere to place it. It automatically enters orbit around the nearest planet.</div></div>
+    <div class="action-card" style="--ac:var(--c-sel)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">R</span></div><span class="ac-badge" style="color:var(--c-sel);border-color:var(--c-sel)">press</span></div><div class="ac-title">Clear Selection</div><div class="ac-desc">Deselect everything at once. You can also click empty space to deselect, but R is faster when your hands are on the keyboard.</div></div>
+  </div>
+  <div class="tip-box"><div class="tip-icon">⚔️</div><div class="tip-body"><strong>Formation auto-switch:</strong> When you right-click to move ships, any selected ship not already in Battle Stations is switched automatically. Your fleet knows when it's time to get serious.</div></div>
+</div>
+<div class="sec" id="sec-time">
+  <div class="sec-hdr" style="--sc:var(--c-time)"><div class="sec-ico">⏱</div><div class="sec-info"><div class="sec-name">Time Control</div><div class="sec-sub">Pause, accelerate, and master the flow of time</div></div></div>
+  <div class="prose">Space is patient, but you don't have to be. Use the <strong>number keys</strong> to set the simulation speed and <strong>Space</strong> to pause everything while you plan.</div>
+  <div class="speed-strip" id="speedStrip">
+    <div class="speed-notch" onclick="setSpeed(this)"><div class="sn-key">1</div><div class="sn-label">Crawl</div><div class="sn-bar" style="background:linear-gradient(90deg,var(--c-time),transparent);width:15%"></div></div>
+    <div class="speed-notch" onclick="setSpeed(this)"><div class="sn-key">2</div><div class="sn-label">Slow</div><div class="sn-bar" style="background:linear-gradient(90deg,var(--c-time),transparent);width:30%"></div></div>
+    <div class="speed-notch on" onclick="setSpeed(this)"><div class="sn-key">3</div><div class="sn-label">Normal</div><div class="sn-bar" style="background:linear-gradient(90deg,var(--c-time),transparent);width:50%"></div></div>
+    <div class="speed-notch" onclick="setSpeed(this)"><div class="sn-key">4</div><div class="sn-label">Fast</div><div class="sn-bar" style="background:linear-gradient(90deg,var(--c-time),transparent);width:75%"></div></div>
+    <div class="speed-notch" onclick="setSpeed(this)"><div class="sn-key">5</div><div class="sn-label">Warp</div><div class="sn-bar" style="background:linear-gradient(90deg,var(--c-time),transparent);width:100%"></div></div>
+  </div>
+  <div class="action-grid">
+    <div class="action-card" style="--ac:var(--c-time)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">SPACE</span></div><span class="ac-badge" style="color:var(--c-time);border-color:var(--c-time)">toggle</span></div><div class="ac-title">Pause / Resume</div><div class="ac-desc">Freeze the entire simulation. Orbits, construction, smelting, combat — everything stops. Hit Space again to resume. Great for setting up complex build orders.</div></div>
+    <div class="action-card" style="--ac:var(--c-time)"><div class="ac-top"><div class="ac-keys"><span class="ac-key">1</span><span class="ac-key">2</span><span class="ac-key">3</span><span class="ac-key">4</span><span class="ac-key">5</span></div><span class="ac-badge" style="color:var(--c-time);border-color:var(--c-time)">press</span></div><div class="ac-title">Set Speed</div><div class="ac-desc">Five speed levels from crawl to warp. Low speeds for precision like station building; high speeds to fast-forward through smelting and construction.</div></div>
+  </div>
+  <div class="tip-box"><div class="tip-icon">⏸️</div><div class="tip-body"><strong>Pause is your friend.</strong> You can still select things, pan around, and inspect your colony while paused. Set up all your build orders, assign crew, configure foundries — then unpause and watch it all come together.</div></div>
+</div>
+<div class="sec" id="sec-tips">
+  <div class="sec-hdr" style="--sc:var(--yellow)"><div class="sec-ico">💡</div><div class="sec-info"><div class="sec-name">Pro Tips</div><div class="sec-sub">Tricks that aren't obvious at first</div></div></div>
+  <div class="tip-box"><div class="tip-icon">🎯</div><div class="tip-body"><strong>Zoom to cursor:</strong> Scrolling zooms toward wherever your mouse is pointing. To quickly jump to a distant object, point at it and scroll in — you'll fly right to it without needing to pan.</div></div>
+  <div class="tip-box"><div class="tip-icon">🔍</div><div class="tip-body"><strong>Station module selection:</strong> Zoom in close to a station and individual modules become clickable. Zoomed out, the whole station selects as one unit. There's a comfortable buffer zone so you won't accidentally switch modes while scrolling.</div></div>
+  <div class="tip-box"><div class="tip-icon">⌘</div><div class="tip-body"><strong>Additive selection:</strong> Hold <strong>⌘ Cmd</strong> (Mac) or <strong>Ctrl</strong> (Windows) while clicking or box-dragging to add to your selection instead of replacing it. Click an already-selected entity with modifier held to deselect just that one.</div></div>
+  <div class="tip-box"><div class="tip-icon">📦</div><div class="tip-body"><strong>Box select priority:</strong> When you drag a box over mixed entity types, the game picks the most important category automatically — ships take priority over asteroids, planets over everything. You'll always get the selection you expect.</div></div>
+  <div class="tip-box"><div class="tip-icon">🖱️</div><div class="tip-body"><strong>Right-click is contextual:</strong> It does the most useful thing based on what's under the cursor. Module? Info popup. Open space with ships selected? Formation move. No selection? Just pans the camera.</div></div>
+  <div class="tip-box"><div class="tip-icon">💥</div><div class="tip-body"><strong>Secret debug tool:</strong> Hold <strong>E</strong> and left-click anywhere to spawn a test explosion. It drifts naturally with orbital velocity. Fun for stress-testing your defenses (or just blowing things up).</div></div>
+</div>
+<div style="height:4rem"></div>
+</div></div></div>
+<script>
+function goTo(btn,id){document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const el=document.getElementById('sec-'+id);if(el)document.getElementById('content').scrollTo({top:el.offsetTop-20,behavior:'smooth'})}
+const secs=['keyboard','mouse','navigate','command','time','tips'];
+const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){const id=e.target.id.replace('sec-','');document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('data-sec')===id))}})},{root:document.getElementById('content'),threshold:0.25});
+secs.forEach(id=>{const el=document.getElementById('sec-'+id);if(el)obs.observe(el)});
+const ki=document.getElementById('keyInfo');
+document.querySelectorAll('.kb-key.bound').forEach(key=>{
+  key.addEventListener('mouseenter',()=>{const g=key.dataset.g,s=getComputedStyle(key).getPropertyValue('--kc').trim();document.getElementById('kiKey').textContent=key.childNodes[0].textContent.trim();document.getElementById('kiKey').style.color=s;document.getElementById('kiName').textContent=key.dataset.name;document.getElementById('kiDesc').textContent=key.dataset.desc;const m=document.getElementById('kiMode');m.textContent=key.dataset.mode;m.style.color=s;m.style.borderColor=s;ki.classList.add('show');document.querySelectorAll('.kb-key.bound').forEach(k=>{if(k.dataset.g===g)k.classList.add('glow')})});
+  key.addEventListener('mouseleave',()=>{ki.classList.remove('show');document.querySelectorAll('.kb-key.bound.glow').forEach(k=>k.classList.remove('glow'))});
+});
+let activeFilter=null;
+function filterKeys(el,group){const all=document.querySelectorAll('.kb-key.bound');if(activeFilter===group){activeFilter=null;el.classList.remove('on');all.forEach(k=>{k.classList.remove('dim','glow')});return}activeFilter=group;document.querySelectorAll('.leg-item').forEach(l=>l.classList.remove('on'));el.classList.add('on');all.forEach(k=>{if(k.dataset.g===group){k.classList.remove('dim');k.classList.add('glow')}else{k.classList.add('dim');k.classList.remove('glow')}})}
+const mi=document.getElementById('mouseInfo');
+const mData={left:{icon:'◐',name:'Left Click & Drag',c:'#4a90d0',desc:'<strong>Click</strong> any entity to select it — ships, planets, asteroids, stations. The camera smoothly follows your selection.<br><br><strong>Drag</strong> to draw a box and select multiple entities. Small drags count as clicks, so don\'t worry about being precise.<br><br>With a <strong>constructable</strong> selected from the build menu, left-click places the blueprint into orbit.',tip:'Hold ⌘/Ctrl while clicking to add to your selection instead of replacing it.'},right:{icon:'◑',name:'Right Click & Drag',c:'#e06050',desc:'<strong>Click</strong> to issue commands — right-click open space to send ships in formation, or right-click a station module to see its details.<br><br><strong>Drag</strong> to pan the camera freely. Great for precise repositioning when zoomed in close. Short clicks stay clicks; longer drags become pans.',tip:'Context priority: Module info → Cancel build → Formation move.'},scroll:{icon:'⟳',name:'Scroll Wheel',c:'#c8a01e',desc:'<strong>Scroll up</strong> to zoom in, <strong>scroll down</strong> to zoom out. Zoom always centers on your cursor — point at a distant planet and scroll in to fly right to it.<br><br>At close zoom, individual station modules become clickable. Zoom out far enough and they merge back into the station as a whole.',tip:'Zoom is exponential — big scrolls move fast, small scrolls give fine control.'}};
+function showMouse(w){const d=mData[w];mi.innerHTML='<div class="mi-icon" style="color:'+d.c+'">'+d.icon+'</div><div class="mi-name">'+d.name+'</div><div class="mi-desc">'+d.desc+'</div><div class="mi-tip">'+d.tip+'</div>';mi.style.borderColor=d.c;['Left','Right','Scroll'].forEach(z=>{const el=document.getElementById('mz'+z);if(el)el.style.opacity=z.toLowerCase()===w?'1':'0.25'})}
+function hideMouse(){mi.innerHTML='<div class="mi-icon">🖱️</div><div class="mi-name">Hover a button</div><div class="mi-desc">Move your cursor over the <strong>left button</strong>, <strong>right button</strong>, or <strong>scroll wheel</strong> to see what each one does.</div>';mi.style.borderColor='';['Left','Right','Scroll'].forEach(z=>{const el=document.getElementById('mz'+z);if(el)el.style.opacity=''})}
+function setSpeed(el){document.querySelectorAll('.speed-notch').forEach(s=>s.classList.remove('on'));el.classList.add('on')}
+try{if(window.self!==window.top)document.body.classList.add('in-frame')}catch(e){document.body.classList.add('in-frame')}
+</script>
+</body>
+</html>
