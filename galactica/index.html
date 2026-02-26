@@ -22,9 +22,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .topbar-r{display:flex;gap:2rem;color:var(--text-dim);font-size:0.5rem}
 .topbar-r strong{color:var(--blue-dim);font-weight:500}
 #frames{flex:1;position:relative;overflow:hidden}
-#frames iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:var(--bg);transition:opacity 0.2s ease}
-#frames iframe.hidden{opacity:0;pointer-events:none;z-index:0}
-#frames iframe.visible{opacity:1;pointer-events:auto;z-index:1}
+#frames iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:var(--bg)}
 @media(max-width:768px){.topbar{padding:0 0.8rem;height:34px}.topbar-r{display:none}.sys-name{font-size:0.55rem;letter-spacing:0.2em}.tab{padding:9px 0.7rem;font-size:0.4rem}}
 </style>
 </head>
@@ -47,21 +45,45 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
     </div>
     <div class="topbar-r"><span id="clock">00:00:00</span></div>
   </div>
-  <div id="frames">
-    <iframe id="frame-home" src="home.html" class="visible"></iframe>
-    <iframe id="frame-forge" src="forge.html" class="hidden"></iframe>
-    <iframe id="frame-crafting" src="crafting.html" class="hidden"></iframe>
-    <iframe id="frame-planner" src="planner.html" class="hidden"></iframe>
-    <iframe id="frame-guide" src="guide.html" class="hidden"></iframe>
-    <iframe id="frame-behaviors" src="behaviors.html" class="hidden"></iframe>
-    <iframe id="frame-controls" src="controls.html" class="hidden"></iframe>
-    <iframe id="frame-gravity" src="gravity.html" class="hidden"></iframe>
-    <iframe id="frame-selection" src="selection.html" class="hidden"></iframe>
-  </div>
+  <div id="frames"></div>
 </div>
 <script>
-function switchTab(id){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===id));document.querySelectorAll('#frames iframe').forEach(f=>{f.classList.toggle('visible',f.id==='frame-'+id);f.classList.toggle('hidden',f.id!=='frame-'+id)})}
-setInterval(()=>{document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8)},1000);
+const PAGES = {
+  home: 'home.html',
+  forge: 'forge.html',
+  crafting: 'crafting.html',
+  planner: 'planner.html',
+  guide: 'guide.html',
+  behaviors: 'behaviors.html',
+  controls: 'controls.html',
+  gravity: 'gravity.html',
+  selection: 'selection.html'
+};
+
+let activeTab = null;
+
+function switchTab(id) {
+  if (id === activeTab) return;
+  // Update tab buttons
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.tab === id)
+  );
+  // Destroy the old iframe entirely (stops all JS/rAF/timers)
+  const container = document.getElementById('frames');
+  container.innerHTML = '';
+  // Create a fresh iframe for the new tab only
+  const iframe = document.createElement('iframe');
+  iframe.src = PAGES[id];
+  container.appendChild(iframe);
+  activeTab = id;
+}
+
+// Boot with the home tab
+switchTab('home');
+
+setInterval(() => {
+  document.getElementById('clock').textContent = new Date().toTimeString().slice(0, 8);
+}, 1000);
 </script>
 </body>
 </html>
