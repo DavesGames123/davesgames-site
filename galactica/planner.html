@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Station Planner // Galactica</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);
+  --green:#64c864;--red:#e06050;--orange:#dc8c3c;
+  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.3))}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:3px}
+
+#app{position:relative;z-index:10;width:100%;height:100%;display:flex;flex-direction:column}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:42px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar-l{display:flex;align-items:center;gap:16px}
+.sys-name{color:var(--blue);font-weight:700;font-size:14px;letter-spacing:0.3em}
+.sys-status{display:flex;align-items:center;gap:6px;color:var(--green);font-size:11px;letter-spacing:0.12em;text-transform:uppercase}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.topbar-r{display:flex;gap:24px;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);align-items:center}
+.topbar-r strong{color:var(--blue-dim);font-weight:600}
+.in-frame .topbar{display:none!important}
+
+.ctrl-bar{display:flex;align-items:center;padding:0 12px;height:42px;background:rgba(14,17,24,0.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px;overflow-x:auto}
+.ctrl-label{font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);white-space:nowrap}
+.ctrl-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;padding:5px 14px;cursor:pointer;white-space:nowrap;transition:all 0.15s}
+.ctrl-btn:hover{border-color:var(--blue);color:var(--blue)}
+.ctrl-btn.active{color:var(--yellow);border-color:var(--yellow);background:rgba(255,200,50,0.06)}
+.ctrl-btn.danger{color:var(--red);border-color:rgba(224,96,80,0.3)}
+.ctrl-btn.danger:hover{border-color:var(--red)}
+.ctrl-btn.export{color:var(--green);border-color:rgba(100,200,100,0.3)}
+.ctrl-btn.export:hover{border-color:var(--green);background:rgba(100,200,100,0.06)}
+.ctrl-sep{width:1px;height:22px;background:var(--border-b);flex-shrink:0}
+.ctrl-name input{background:transparent;border:none;border-bottom:1px solid var(--border-b);color:var(--yellow);font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:600;letter-spacing:0.08em;width:170px;outline:none;padding:2px 0}
+.ctrl-name input:focus{border-bottom-color:var(--yellow)}
+
+.main{flex:1;display:flex;overflow:hidden}
+.sidebar-l{width:296px;min-width:296px;border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;background:rgba(14,17,24,0.5)}
+.sidebar-r{width:286px;min-width:286px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;background:rgba(14,17,24,0.5)}
+.canvas-area{flex:1;position:relative;overflow:hidden;cursor:crosshair}
+
+.pal-section{padding:10px 14px 6px}
+.pal-header{font-size:14px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);margin-bottom:8px;display:flex;align-items:center;gap:8px;font-weight:600}
+.pal-header span{color:var(--text-faint);font-size:11px;letter-spacing:0.08em;text-transform:none;font-weight:400}
+.pal-strip{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.pal-cat{font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);width:100%;padding:4px 0 2px}
+
+.mod-btn{width:62px;height:62px;border:2px solid rgba(100,100,100,0.3);background:rgba(20,22,30,0.8);cursor:pointer;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:all 0.15s}
+.mod-btn:hover{border-color:rgba(150,200,255,0.4);background:rgba(30,35,50,0.9);transform:translateY(-1px)}
+.mod-btn.selected{border-color:var(--yellow);box-shadow:0 0 12px rgba(255,200,50,0.2);background:rgba(40,35,20,0.8)}
+.mod-btn .sym{font-size:20px;line-height:1}
+.mod-btn .lbl{font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-dim);white-space:nowrap}
+
+.struct-card{display:flex;align-items:center;gap:10px;padding:8px 10px;border:2px solid rgba(100,100,100,0.3);background:rgba(20,22,30,0.8);cursor:pointer;margin-bottom:5px;transition:all 0.15s}
+.struct-card:hover{border-color:rgba(150,200,255,0.4)}
+.struct-card.selected{box-shadow:0 0 12px rgba(255,200,50,0.2)}
+.struct-card .sym{font-size:24px}
+.struct-card .info{flex:1}
+.struct-card .name{font-size:14px;letter-spacing:0.08em;font-weight:600}
+.struct-card .desc{font-size:11px;color:var(--text-faint);letter-spacing:0.06em;margin-top:2px}
+
+.tool-section{padding:10px 14px;border-top:1px solid var(--border)}
+.tool-header{font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);margin-bottom:8px;font-weight:600}
+.tool-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px}
+.tool-btn{padding:6px 12px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:12px;cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:5px}
+.tool-btn:hover{border-color:var(--blue);color:var(--blue)}
+.tool-btn.active{color:var(--yellow);border-color:var(--yellow);background:rgba(255,200,50,0.06)}
+.tool-btn.red{color:var(--red);border-color:rgba(224,96,80,0.3)}
+.tool-btn.red:hover,.tool-btn.red.active{border-color:var(--red);background:rgba(224,96,80,0.06)}
+
+.dir-row{display:flex;gap:4px;align-items:center}
+.dir-label{font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);margin-right:6px}
+.dir-btn{width:32px;height:32px;border:1px solid var(--border-b);background:transparent;color:var(--text-dim);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s;font-family:'JetBrains Mono',monospace}
+.dir-btn:hover{border-color:var(--blue);color:var(--blue)}
+.dir-btn.active{border-color:var(--yellow);color:var(--yellow);background:rgba(255,200,50,0.08)}
+
+.panel{padding:10px 14px;border-bottom:1px solid var(--border)}
+.panel-title{font-size:14px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;font-weight:600}
+.panel-title .val{color:var(--blue);font-weight:700;font-size:16px}
+
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:14px}
+.stat-row .label{color:var(--text-dim);display:flex;align-items:center;gap:6px}
+.stat-row .label .ico{font-size:15px}
+.stat-row .value{font-weight:700;font-variant-numeric:tabular-nums}
+.stat-row .value.green{color:var(--green)}
+.stat-row .value.yellow{color:var(--yellow)}
+.stat-row .value.blue{color:var(--blue)}
+
+.res-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}
+.res-pip{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.res-name{color:var(--text-dim);flex:1}
+.res-qty{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+
+.module-count{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px}
+.mc-pip{width:16px;height:16px;border-radius:3px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px}
+.mc-name{color:var(--text-dim);flex:1}
+.mc-qty{font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+
+.code-panel{padding:10px 14px;flex:1;min-height:0;display:flex;flex-direction:column}
+.code-area{flex:1;min-height:100px;background:var(--bg2);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;padding:8px;resize:none;outline:none;white-space:pre;overflow:auto;tab-size:4}
+.code-area:focus{border-color:var(--blue-dim)}
+.copy-btn{margin-top:6px;width:100%;background:transparent;border:1px solid rgba(100,200,100,0.3);color:var(--green);font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;padding:7px;cursor:pointer;transition:all 0.15s}
+.copy-btn:hover{border-color:var(--green);background:rgba(100,200,100,0.06)}
+
+canvas{display:block}
+.hover-info{position:absolute;top:10px;left:10px;background:rgba(14,17,24,0.94);border:1px solid var(--border-b);padding:8px 14px;pointer-events:none;z-index:20;font-size:14px;backdrop-filter:blur(8px)}
+.hover-info .hi-coord{color:var(--blue);font-weight:600}
+.hover-info .hi-type{color:var(--yellow)}
+.hover-info .hi-msg{color:var(--text-faint)}
+
+.zoom-bar{position:absolute;top:10px;right:10px;display:flex;gap:4px;z-index:20}
+.zoom-btn{width:34px;height:34px;background:rgba(14,17,24,0.94);border:1px solid var(--border-b);color:var(--text-dim);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);transition:all 0.15s;font-family:'JetBrains Mono',monospace}
+.zoom-btn:hover{border-color:var(--blue);color:var(--blue)}
+
+.bottom-badge{position:absolute;bottom:10px;background:rgba(14,17,24,0.94);border:1px solid var(--border-b);padding:6px 14px;font-size:13px;color:var(--text-dim);z-index:20;backdrop-filter:blur(8px)}
+.bottom-badge strong{color:var(--blue);font-weight:600}
+.bottom-badge.left{left:10px}
+.bottom-badge.right{right:10px;color:var(--yellow);border-color:rgba(255,200,50,0.2);display:none}
+
+.modal-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal-overlay.open{display:flex}
+.modal{background:var(--bg2);border:1px solid var(--border-b);padding:24px;max-width:750px;width:90%;max-height:80vh;overflow:auto}
+.modal h2{font-size:16px;letter-spacing:0.14em;text-transform:uppercase;color:var(--yellow);margin-bottom:14px;font-weight:600}
+.modal pre{background:var(--bg);border:1px solid var(--border);padding:14px;font-size:12px;line-height:1.6;overflow-x:auto;color:var(--text);max-height:50vh;overflow:auto;white-space:pre}
+.modal .modal-btns{display:flex;gap:8px;margin-top:14px}
+.modal .mbtn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:0.1em;text-transform:uppercase;padding:8px 18px;cursor:pointer;transition:all 0.15s}
+.modal .mbtn:hover{border-color:var(--blue);color:var(--blue)}
+.modal .mbtn.green{color:var(--green);border-color:rgba(100,200,100,0.3)}
+.modal .mbtn.green:hover{border-color:var(--green);background:rgba(100,200,100,0.06)}
+
+.sel-info{padding:10px 14px;border-top:1px solid var(--border)}
+.sel-info .si-name{font-size:15px;font-weight:700;margin-bottom:4px}
+.sel-info .si-desc{font-size:13px;color:var(--text-dim);margin-bottom:4px}
+.sel-info .si-recipe{font-size:13px;margin-bottom:3px}
+.sel-info .si-warn{font-size:12px;color:var(--yellow);margin-top:4px}
+.sel-info .si-hint{font-size:12px;color:var(--text-faint);margin-top:4px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app">
+  <div class="topbar"><div class="topbar-l"><span class="sys-name">STATION PLANNER</span><div class="sys-status">DESIGN MODE</div></div><div class="topbar-r"><span>Modules: <strong id="hud-modules">1</strong></span><span>Enclosed: <strong id="hud-enclosed">0</strong></span><span>Regions: <strong id="hud-regions">0</strong></span></div></div>
+  <div class="ctrl-bar">
+    <span class="ctrl-label">Name</span><span class="ctrl-name"><input id="stationName" value="my_station" spellcheck="false"></span><div class="ctrl-sep"></div>
+    <span class="ctrl-label">Load</span>
+    <button class="ctrl-btn" onclick="loadPreset('outpost')">Outpost</button><button class="ctrl-btn" onclick="loadPreset('colony')">Colony</button><button class="ctrl-btn" onclick="loadPreset('fortress')">Fortress</button><button class="ctrl-btn" onclick="loadPreset('citadel')">Citadel</button>
+    <div class="ctrl-sep"></div><button class="ctrl-btn danger" onclick="clearGrid()">✕ Clear</button><button class="ctrl-btn" onclick="undoAction()">↩ Undo</button><button class="ctrl-btn" onclick="centerView()">⊙ Center</button>
+    <div class="ctrl-sep"></div><button class="ctrl-btn export" onclick="showExportModal()">⟨/⟩ Export Rust</button><button class="ctrl-btn export" onclick="copyCode()">⎘ Copy</button>
+  </div>
+  <div class="main">
+    <div class="sidebar-l">
+      <div class="pal-section">
+        <div class="pal-header">STRUCTURE <span>— drag to draw walls</span></div>
+        <div class="struct-card" data-mod="StructureOrange" onclick="selectModule('StructureOrange')"><span class="sym">▣</span><div class="info"><div class="name" style="color:rgb(220,140,60)">Structure (Orange)</div><div class="desc">3× Iron Ingot · drag to draw lines</div></div></div>
+        <div class="struct-card" data-mod="StructureWhite" onclick="selectModule('StructureWhite')"><span class="sym">▢</span><div class="info"><div class="name" style="color:rgb(200,200,210)">Structure (White)</div><div class="desc">3× Aluminum Ingot · drag to draw lines</div></div></div>
+      </div>
+      <div class="pal-section">
+        <div class="pal-header">COMPONENTS <span>— click to place</span></div>
+        <div class="pal-cat">Habitation</div><div class="pal-strip" id="hab-strip"></div>
+        <div class="pal-cat">Infrastructure</div><div class="pal-strip" id="inf-strip"></div>
+        <div class="pal-cat">Production</div><div class="pal-strip" id="prod-strip"></div>
+      </div>
+      <div class="tool-section"><div class="tool-header">Tools</div>
+        <div class="tool-row"><button class="tool-btn red" id="demolishBtn" onclick="toggleDemolish()">✕ Demolish</button></div>
+        <div class="dir-row" id="dirSelector" style="display:none;margin-top:6px"><span class="dir-label">Output</span><button class="dir-btn" data-dir="North" onclick="setDirection('North')">↑</button><button class="dir-btn active" data-dir="South" onclick="setDirection('South')">↓</button><button class="dir-btn" data-dir="East" onclick="setDirection('East')">→</button><button class="dir-btn" data-dir="West" onclick="setDirection('West')">←</button></div>
+      </div>
+      <div class="tool-section"><div class="tool-header">Symmetry</div>
+        <div class="tool-row"><button class="tool-btn" id="symX" onclick="toggleSym('x')">↔ Mirror X</button><button class="tool-btn" id="symY" onclick="toggleSym('y')">↕ Mirror Y</button><button class="tool-btn" id="symXY" onclick="toggleSym('xy')">✦ Both</button></div>
+      </div>
+      <div class="sel-info" id="selInfo"><div class="si-hint">Select a module above to begin placing.<br>Structural: drag to draw lines.<br>Functional: click to place one at a time.<br>Shift+click to remove. Middle-click to pan.</div></div>
+    </div>
+    <div class="canvas-area" id="canvasArea"><canvas id="gridCanvas"></canvas><div class="hover-info" id="hoverInfo" style="display:none"></div>
+      <div class="zoom-bar"><button class="zoom-btn" onclick="zoomIn()">+</button><button class="zoom-btn" onclick="zoomOut()">−</button><button class="zoom-btn" onclick="centerView()">⊙</button></div>
+      <div class="bottom-badge left" id="enclosedBadge">Enclosed: <strong>0</strong> cells · <strong>0</strong> regions</div>
+      <div class="bottom-badge right" id="symBadge">SYMMETRY: OFF</div>
+    </div>
+    <div class="sidebar-r">
+      <div class="panel"><div class="panel-title">Station Stats</div>
+        <div class="stat-row"><span class="label"><span class="ico">🏠</span> Housing</span><span class="value blue" id="stat-housing">4</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🚀</span> Docking</span><span class="value blue" id="stat-docking">2</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🌱</span> Food/day</span><span class="value green" id="stat-food">0.0</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🎮</span> Morale</span><span class="value yellow" id="stat-morale">+0%</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🏥</span> Health</span><span class="value yellow" id="stat-health">+0%</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🛡</span> Shields</span><span class="value blue" id="stat-shields">0</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">📦</span> Storage</span><span class="value" id="stat-storage">0</span></div>
+      </div>
+      <div class="panel"><div class="panel-title">Modules <span class="val" id="totalModules">1</span></div><div id="moduleCounts"></div></div>
+      <div class="panel" style="max-height:260px;overflow-y:auto"><div class="panel-title">Build Cost</div><div id="resourceCosts"><span style="font-size:13px;color:var(--text-faint)">No resources needed</span></div></div>
+      <div class="code-panel"><div class="panel-title">Rust Code</div><textarea class="code-area" id="codeOutput" readonly></textarea><button class="copy-btn" onclick="copyCode()">⎘ COPY TO CLIPBOARD</button></div>
+    </div>
+  </div>
+</div>
+<div class="modal-overlay" id="exportModal"><div class="modal"><h2>Exported Rust Code</h2><pre id="exportCode"></pre><div class="modal-btns"><button class="mbtn green" onclick="copyModalCode()">⎘ Copy to Clipboard</button><button class="mbtn" onclick="closeModal()">Close</button></div></div></div>
+<script>
+const R={10:{name:"Iron Ingot",abbr:"Fe+",color:[215,145,120]},12:{name:"Aluminum Ingot",abbr:"Al+",color:[210,225,248]},15:{name:"Carbon Brick",abbr:"CB",color:[150,150,165]},20:{name:"Steel",abbr:"STL",color:[105,142,200]},23:{name:"Titanium Alloy",abbr:"TiA",color:[82,198,248]},24:{name:"Glass",abbr:"GLS",color:[142,198,248]},26:{name:"Copper Wire",abbr:"CuW",color:[248,152,55]},27:{name:"Structural Steel",abbr:"SST",color:[85,122,180]},30:{name:"Circuit Board",abbr:"PCB",color:[82,198,122]},42:{name:"Heat Exchanger",abbr:"HEX",color:[215,178,142]},44:{name:"Docking Clamp",abbr:"DCK",color:[178,142,102]},45:{name:"Life Support",abbr:"LSU",color:[82,215,178]},47:{name:"Shield Emitter",abbr:"SHD",color:[198,105,248]},48:{name:"Fabricator Unit",abbr:"FAB",color:[178,198,142]}};
+
+const MODULES={
+  StructureCore:{idx:0,name:"Station Core",sym:"\u25C9",abbr:"Core",cat:"structure",color:[120,100,160],recipe:[],desc:"Central hub",stats:{housing:4,docking:2},work:0,structural:true,lineDrawable:true},
+  StructureOrange:{idx:1,name:"Structure (Orange)",sym:"\u25A3",abbr:"OrgW",cat:"structure",color:[220,140,60],recipe:[[10,3]],desc:"Basic wall (orange)",stats:{},work:150,structural:true,lineDrawable:true},
+  StructureWhite:{idx:2,name:"Structure (White)",sym:"\u25A2",abbr:"WhtW",cat:"structure",color:[200,200,210],recipe:[[12,3]],desc:"Basic wall (white)",stats:{},work:150,structural:true,lineDrawable:true},
+  CrewQuarters:{idx:3,name:"Crew Quarters",sym:"\uD83C\uDFE0",abbr:"Crew",cat:"habitation",color:[100,160,180],recipe:[[20,2],[24,3],[12,1]],desc:"+12 housing",stats:{housing:12},work:600,interior:true},
+  Docking:{idx:4,name:"Docking Bay",sym:"\uD83D\uDE80",abbr:"Dock",cat:"infrastructure",color:[100,140,200],recipe:[[27,3],[30,2],[44,1]],desc:"+4 docking ports",stats:{docking:4},work:1000,exterior:true},
+  Greenhouse:{idx:5,name:"Greenhouse",sym:"\uD83C\uDF31",abbr:"Grnh",cat:"habitation",color:[80,160,80],recipe:[[24,5],[20,1],[12,2]],desc:"5.0 food/day",stats:{food:5.0},work:750,interior:true,directional:true},
+  Medical:{idx:6,name:"Medical Bay",sym:"\uD83C\uDFE5",abbr:"Med",cat:"habitation",color:[200,100,120],recipe:[[20,2],[24,3],[30,1],[45,1]],desc:"+30% health",stats:{health:0.3},work:900,interior:true},
+  Recreation:{idx:7,name:"Recreation Room",sym:"\uD83C\uDFAE",abbr:"Rec",cat:"habitation",color:[180,140,200],recipe:[[20,2],[24,2],[12,1]],desc:"+20% morale",stats:{morale:0.2},work:500,interior:true},
+  Shield:{idx:8,name:"Shield Generator",sym:"\uD83D\uDEE1",abbr:"Shld",cat:"infrastructure",color:[100,180,220],recipe:[[23,2],[47,2],[30,2],[26,1]],desc:"+100 shields",stats:{shields:100},work:1250},
+  Foundry:{idx:9,name:"Foundry",sym:"\u2692",abbr:"Fndy",cat:"production",color:[200,120,60],recipe:[[10,2],[12,1]],desc:"Smelts ores",stats:{},work:800,directional:true},
+  FuelProcessor:{idx:10,name:"Fuel Processor",sym:"\u26FD",abbr:"Fuel",cat:"production",color:[255,140,60],recipe:[[20,3],[15,2],[42,1]],desc:"Oxidized fuel",stats:{},work:1000,directional:true},
+  Assembler:{idx:11,name:"Assembler",sym:"\u2699",abbr:"Asmb",cat:"production",color:[180,160,80],recipe:[[20,3],[24,2],[42,1]],desc:"Produces alloys",stats:{},work:900,directional:true},
+  ComponentLab:{idx:12,name:"Component Lab",sym:"\uD83D\uDD2C",abbr:"Comp",cat:"production",color:[140,100,200],recipe:[[20,2],[30,2],[24,3],[48,1]],desc:"Makes components",stats:{},work:1200,directional:true}
+};
+
+let grid={},enclosedCells=new Set(),regionIds={},selectedModule=null,demolishMode=false,outputDirection="South";
+let panX=0,panY=0,cellSize=56,isPanning=false,panSX=0,panSY=0,panSPX=0,panSPY=0,hoveredCell=null,canvas,ctx;
+const MIN_CELL=24,MAX_CELL=120;
+let isDragging=false,dragStart=null,dragCurrent=null;
+let symMode=null;
+let undoStack=[];
+grid["0,0"]={type:"StructureCore",dir:null};
+
+function pushUndo(){undoStack.push(JSON.parse(JSON.stringify(grid)));if(undoStack.length>50)undoStack.shift();}
+function undoAction(){if(!undoStack.length)return;grid=undoStack.pop();recalcAll();}
+
+function initCanvas(){canvas=document.getElementById('gridCanvas');ctx=canvas.getContext('2d');resizeCanvas();window.addEventListener('resize',resizeCanvas);canvas.addEventListener('mousedown',onMouseDown);canvas.addEventListener('mousemove',onMouseMove);canvas.addEventListener('mouseup',onMouseUp);canvas.addEventListener('mouseleave',function(){isPanning=false;isDragging=false;dragStart=null;hoveredCell=null;hideHoverInfo();render();});canvas.addEventListener('wheel',onWheel,{passive:false});canvas.addEventListener('contextmenu',function(e){e.preventDefault();});centerView();}
+function resizeCanvas(){var a=document.getElementById('canvasArea'),d=window.devicePixelRatio||1;canvas.width=a.clientWidth*d;canvas.height=a.clientHeight*d;canvas.style.width=a.clientWidth+'px';canvas.style.height=a.clientHeight+'px';ctx.setTransform(d,0,0,d,0,0);render();}
+function screenToGrid(sx,sy){var a=document.getElementById('canvasArea');return[Math.floor((sx-a.clientWidth/2-panX)/cellSize+0.5),Math.floor((sy-a.clientHeight/2-panY)/cellSize+0.5)];}
+
+function getLineCells(s,e){var dx=Math.abs(e[0]-s[0]),dy=Math.abs(e[1]-s[1]),cells=[];if(dx>=dy){var sx=s[0]<e[0]?1:-1;for(var x=s[0];x!==e[0]+sx;x+=sx)cells.push([x,s[1]]);}else{var sy=s[1]<e[1]?1:-1;for(var y=s[1];y!==e[1]+sy;y+=sy)cells.push([s[0],y]);}return cells;}
+function getSymmetricCoords(x,y){var c=[[x,y]];if(!symMode)return c;if(symMode==='x'||symMode==='xy')c.push([-x,y]);if(symMode==='y'||symMode==='xy')c.push([x,-y]);if(symMode==='xy')c.push([-x,-y]);var s=new Set();return c.filter(function(p){var k=p[0]+','+p[1];if(s.has(k))return false;s.add(k);return true;});}
+
+function onMouseDown(e){var rect=canvas.getBoundingClientRect(),mx=e.clientX-rect.left,my=e.clientY-rect.top;
+if(e.button===1||e.button===2||(e.button===0&&e.altKey)){isPanning=true;panSX=e.clientX;panSY=e.clientY;panSPX=panX;panSPY=panY;canvas.style.cursor='grabbing';return;}
+if(e.button!==0)return;var g=screenToGrid(mx,my),gx=g[0],gy=g[1];
+if(e.shiftKey){pushUndo();demolishAt(gx,gy);recalcAll();return;}
+if(demolishMode){pushUndo();isDragging=true;dragStart=[gx,gy];demolishAt(gx,gy);recalcAll();return;}
+if(!selectedModule)return;var mod=MODULES[selectedModule];
+if(mod.lineDrawable){isDragging=true;dragStart=[gx,gy];dragCurrent=[gx,gy];return;}
+pushUndo();placeWithSymmetry(gx,gy,selectedModule);recalcAll();}
+
+function onMouseMove(e){if(isPanning){panX=panSPX+(e.clientX-panSX);panY=panSPY+(e.clientY-panSY);render();return;}
+var rect=canvas.getBoundingClientRect(),g=screenToGrid(e.clientX-rect.left,e.clientY-rect.top);hoveredCell=g;
+if(isDragging){dragCurrent=g;if(demolishMode){demolishAt(g[0],g[1]);recalcAll();return;}}
+updateHoverInfo(g[0],g[1]);render();}
+
+function onMouseUp(e){if(isPanning){isPanning=false;canvas.style.cursor='crosshair';return;}
+if(isDragging&&dragStart&&!demolishMode&&selectedModule){var mod=MODULES[selectedModule];if(mod.lineDrawable&&dragCurrent){pushUndo();var cells=getLineCells(dragStart,dragCurrent);for(var i=0;i<cells.length;i++)placeWithSymmetry(cells[i][0],cells[i][1],selectedModule);recalcAll();}}
+isDragging=false;dragStart=null;dragCurrent=null;}
+
+function onWheel(e){e.preventDefault();cellSize=Math.max(MIN_CELL,Math.min(MAX_CELL,cellSize+(e.deltaY>0?-6:6)));render();}
+
+function placeWithSymmetry(x,y,mt){var coords=getSymmetricCoords(x,y);for(var i=0;i<coords.length;i++){var cx=coords[i][0],cy=coords[i][1],key=cx+','+cy;if(grid[key])continue;var r=canPlace(cx,cy,mt);if(!r.valid)continue;var mod=MODULES[mt],dir=mod.directional?outputDirection:null;
+if(dir&&symMode){if((symMode==='x'||symMode==='xy')&&cx!==x){if(dir==='East')dir='West';else if(dir==='West')dir='East';}if((symMode==='y'||symMode==='xy')&&cy!==y){if(dir==='North')dir='South';else if(dir==='South')dir='North';}}
+grid[key]={type:mt,dir:dir};}}
+
+function demolishAt(gx,gy){var coords=getSymmetricCoords(gx,gy);for(var i=0;i<coords.length;i++){var k=coords[i][0]+','+coords[i][1];if(k!=='0,0'&&grid[k])delete grid[k];}}
+
+function canPlace(x,y,mt){var key=x+','+y;if(grid[key])return{valid:false,reason:"Cell occupied"};var con=false;var nb=[[-1,0],[1,0],[0,-1],[0,1]];for(var i=0;i<nb.length;i++)if(grid[(x+nb[i][0])+','+(y+nb[i][1])]){con=true;break;}if(!con)return{valid:false,reason:"Must connect to station"};
+var corners=[[[-1,-1],[-1,0],[0,-1]],[[1,-1],[1,0],[0,-1]],[[-1,1],[-1,0],[0,1]],[[1,1],[1,0],[0,1]]];for(var c=0;c<corners.length;c++){var all=true;for(var j=0;j<corners[c].length;j++)if(!grid[(x+corners[c][j][0])+','+(y+corners[c][j][1])]){all=false;break;}if(all)return{valid:false,reason:"Would form 2\u00d72 block"};}
+var mod=MODULES[mt];if(mod.exterior){var ext=false;for(var i=0;i<nb.length;i++){var nk=(x+nb[i][0])+','+(y+nb[i][1]);if(!grid[nk]&&!enclosedCells.has(nk)){ext=true;break;}}if(!ext)return{valid:false,reason:"Must be on exterior"};}
+if(mod.interior){for(var i=0;i<nb.length;i++){var nk=(x+nb[i][0])+','+(y+nb[i][1]);if(!grid[nk]&&!enclosedCells.has(nk))return{valid:false,reason:"Must be in interior"};}}
+return{valid:true};}
+
+function recalcEnclosure(){enclosedCells=new Set();regionIds={};var coords=Object.keys(grid).map(function(k){return k.split(',').map(Number);});if(!coords.length)return;var mnX=1e9,mxX=-1e9,mnY=1e9,mxY=-1e9;for(var i=0;i<coords.length;i++){mnX=Math.min(mnX,coords[i][0]);mxX=Math.max(mxX,coords[i][0]);mnY=Math.min(mnY,coords[i][1]);mxY=Math.max(mxY,coords[i][1]);}mnX-=2;mxX+=2;mnY-=2;mxY+=2;
+var allE=new Set();for(var x=mnX;x<=mxX;x++)for(var y=mnY;y<=mxY;y++)if(!grid[x+','+y])allE.add(x+','+y);
+var ext=new Set(),q=[];for(var x=mnX;x<=mxX;x++){if(!grid[x+','+mnY])q.push(x+','+mnY);if(!grid[x+','+mxY])q.push(x+','+mxY);}for(var y=mnY;y<=mxY;y++){if(!grid[mnX+','+y])q.push(mnX+','+y);if(!grid[mxX+','+y])q.push(mxX+','+y);}
+while(q.length){var k=q.pop();if(ext.has(k)||grid[k])continue;var p=k.split(',').map(Number);if(p[0]<mnX||p[0]>mxX||p[1]<mnY||p[1]>mxY)continue;ext.add(k);var nb=[[-1,0],[1,0],[0,-1],[0,1]];for(var i=0;i<nb.length;i++){var nk=(p[0]+nb[i][0])+','+(p[1]+nb[i][1]);if(!ext.has(nk))q.push(nk);}}
+for(var k of allE)if(!ext.has(k))enclosedCells.add(k);
+var nR=0,lab=new Set();for(var seed of enclosedCells){if(lab.has(seed))continue;var rq=[seed];while(rq.length){var cell=rq.pop();if(lab.has(cell)||!enclosedCells.has(cell))continue;lab.add(cell);regionIds[cell]=nR;var cp=cell.split(',').map(Number);var nb=[[-1,0],[1,0],[0,-1],[0,1]];for(var i=0;i<nb.length;i++){var nk=(cp[0]+nb[i][0])+','+(cp[1]+nb[i][1]);if(!lab.has(nk))rq.push(nk);}}nR++;}}
+
+function calcStats(){var h=4,d=2,f=0,mo=0,he=0,sh=0;for(var m of Object.values(grid)){if(m.type==='StructureCore')continue;var s=MODULES[m.type].stats||{};if(s.housing)h+=s.housing;if(s.docking)d+=s.docking;if(s.food)f+=s.food;if(s.morale)mo+=s.morale;if(s.health)he+=s.health;if(s.shields)sh+=s.shields;}
+document.getElementById('stat-housing').textContent=h;document.getElementById('stat-docking').textContent=d;document.getElementById('stat-food').textContent=f.toFixed(1);document.getElementById('stat-morale').textContent='+'+Math.round(mo*100)+'%';document.getElementById('stat-health').textContent='+'+Math.round(he*100)+'%';document.getElementById('stat-shields').textContent=Math.round(sh);document.getElementById('stat-storage').textContent=enclosedCells.size+' cells ('+enclosedCells.size*64+'u)';}
+
+function calcModuleCounts(){var counts={},total=0;for(var m of Object.values(grid)){counts[m.type]=(counts[m.type]||0)+1;total++;}document.getElementById('totalModules').textContent=total;document.getElementById('hud-modules').textContent=total;document.getElementById('hud-enclosed').textContent=enclosedCells.size;var rc=new Set(Object.values(regionIds)).size;document.getElementById('hud-regions').textContent=rc;document.getElementById('enclosedBadge').innerHTML='Enclosed: <strong>'+enclosedCells.size+'</strong> cells \u00b7 <strong>'+rc+'</strong> regions';
+var html='';for(var t in MODULES){if(!counts[t])continue;var d=MODULES[t],c=d.color;html+='<div class="module-count"><span class="mc-pip" style="background:rgba('+c+',0.3);border:1px solid rgba('+c+',0.6)">'+d.sym+'</span><span class="mc-name">'+d.name+'</span><span class="mc-qty">\u00d7'+counts[t]+'</span></div>';}document.getElementById('moduleCounts').innerHTML=html;}
+
+function calcResources(){var costs={};for(var m of Object.values(grid))for(var r of MODULES[m.type].recipe)costs[r[0]]=(costs[r[0]]||0)+r[1];var sorted=Object.entries(costs).sort(function(a,b){return b[1]-a[1];});var html='';if(!sorted.length)html='<span style="font-size:13px;color:var(--text-faint)">No resources needed</span>';for(var s of sorted){var r=R[s[0]];if(!r)continue;html+='<div class="res-row"><span class="res-pip" style="background:rgb('+r.color+')"></span><span class="res-name">'+r.name+' <span style="color:rgba('+r.color+',0.7)">('+r.abbr+')</span></span><span class="res-qty">\u00d7'+s[1]+'</span></div>';}document.getElementById('resourceCosts').innerHTML=html;}
+
+function generateCode(){var name=document.getElementById('stationName').value||'my_station';var entries=Object.entries(grid).map(function(e){var p=e[0].split(',').map(Number);return{x:p[0],y:p[1],type:e[1].type,dir:e[1].dir};}).sort(function(a,b){return a.y!==b.y?b.y-a.y:a.x-b.x;});
+var code='#[allow(non_snake_case)]\npub fn new_'+name+'() -> StationLayout {\n    let mut s = StationLayout::new_with_core();\n    let O = ModuleType::StructureOrange;\n    let W = ModuleType::StructureWhite;\n\n';
+var dock=entries.filter(function(e){return e.type==='Docking';}),orange=entries.filter(function(e){return e.type==='StructureOrange';}),white=entries.filter(function(e){return e.type==='StructureWhite';}),func=entries.filter(function(e){return!['StructureCore','StructureOrange','StructureWhite','Docking'].includes(e.type);});
+function detectH(mods,vn){var lines=[],used=new Set(),byR={};for(var m of mods){if(!byR[m.y])byR[m.y]=[];byR[m.y].push(m);}for(var y in byR){var row=byR[y].sort(function(a,b){return a.x-b.x;});var i=0;while(i<row.length){var j=i;while(j+1<row.length&&row[j+1].x===row[j].x+1)j++;if(j-i>=2){lines.push({y:+y,x1:row[i].x,x2:row[j].x,vn:vn});for(var k=i;k<=j;k++)used.add(row[k].x+','+row[k].y);}i=j+1;}}return{lines:lines,remaining:mods.filter(function(m){return!used.has(m.x+','+m.y);})};}
+function pad(n){return n.toString().padStart(2);}
+if(dock.length){code+='    // Docking ports\n';for(var d of dock)code+='    s.op('+pad(d.x)+', '+pad(d.y)+', ModuleType::Docking);\n';code+='\n';}
+var oR=detectH(orange,'O'),wR=detectH(white,'W'),allL=[].concat(oR.lines,wR.lines).sort(function(a,b){return a.y!==b.y?b.y-a.y:a.x1-b.x1;});
+if(allL.length){code+='    // Wall runs\n';for(var l of allL)code+='    s.h_wall('+pad(l.y)+', '+pad(l.x1)+', '+pad(l.x2)+', '+l.vn+');\n';code+='\n';}
+var remS=[].concat(oR.remaining,wR.remaining).sort(function(a,b){return a.y!==b.y?b.y-a.y:a.x-b.x;});
+if(remS.length){code+='    // Individual structure\n';for(var s2 of remS)code+='    s.op('+pad(s2.x)+', '+pad(s2.y)+', '+(s2.type==='StructureOrange'?'O':'W')+');\n';code+='\n';}
+if(func.length){code+='    // Functional modules\n';var lastY=null;for(var f of func){if(lastY!==null&&f.y!==lastY)code+='\n';lastY=f.y;code+='    s.op('+pad(f.x)+', '+pad(f.y)+', ModuleType::'+f.type+');';if(f.dir)code+=' s.set_dir('+pad(f.x)+', '+pad(f.y)+', Direction::'+f.dir+');';code+='\n';}code+='\n';}
+code+='    s.finalize_preset();\n    s\n}\n';document.getElementById('codeOutput').value=code;return code;}
+
+var RCOL=[[80,120,200],[80,180,120],[200,160,60],[180,80,140],[60,180,180],[200,100,80],[120,100,200],[180,180,60],[100,200,160],[200,120,160],[120,180,200],[160,200,100]];
+function render(){var w=canvas.clientWidth,h=canvas.clientHeight;ctx.clearRect(0,0,w,h);var cx=w/2+panX,cy=h/2+panY,half=cellSize/2-1;
+var vx1=Math.floor(-cx/cellSize-1),vx2=Math.ceil((w-cx)/cellSize+1),vy1=Math.floor(-cy/cellSize-1),vy2=Math.ceil((h-cy)/cellSize+1);
+ctx.strokeStyle='rgba(150,200,255,0.04)';ctx.lineWidth=1;for(var x=vx1;x<=vx2;x++){var sx=cx+x*cellSize;ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,h);ctx.stroke();}for(var y=vy1;y<=vy2;y++){var sy=cy+y*cellSize;ctx.beginPath();ctx.moveTo(0,sy);ctx.lineTo(w,sy);ctx.stroke();}
+ctx.strokeStyle='rgba(150,200,255,0.12)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,h);ctx.stroke();ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(w,cy);ctx.stroke();
+if(symMode){ctx.setLineDash([6,6]);if(symMode==='x'||symMode==='xy'){ctx.strokeStyle='rgba(255,200,50,0.2)';ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,h);ctx.stroke();}if(symMode==='y'||symMode==='xy'){ctx.strokeStyle='rgba(255,200,50,0.2)';ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(w,cy);ctx.stroke();}ctx.setLineDash([]);}
+for(var k of enclosedCells){var ep=k.split(',').map(Number),sx=cx+ep[0]*cellSize,sy=cy+ep[1]*cellSize,rid=regionIds[k]||0,rc=RCOL[rid%RCOL.length];ctx.fillStyle='rgba('+rc+',0.06)';ctx.fillRect(sx-half,sy-half,half*2,half*2);ctx.strokeStyle='rgba('+rc+',0.15)';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.strokeRect(sx-half,sy-half,half*2,half*2);ctx.setLineDash([]);if(cellSize>36){ctx.fillStyle='rgba('+rc+',0.25)';ctx.font=Math.max(10,cellSize*.18)+'px JetBrains Mono';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('[ ]',sx,sy);}}
+for(var k in grid){var m=grid[k],mp=k.split(',').map(Number),sx=cx+mp[0]*cellSize,sy=cy+mp[1]*cellSize,def=MODULES[m.type],c=def.color;ctx.fillStyle='rgba('+c+',0.2)';ctx.fillRect(sx-half,sy-half,half*2,half*2);ctx.strokeStyle='rgba('+c+',0.7)';ctx.lineWidth=2;ctx.strokeRect(sx-half,sy-half,half*2,half*2);var ss=Math.max(14,cellSize*.32);ctx.font=ss+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='rgba('+c+',0.9)';ctx.fillText(def.sym,sx,sy-(cellSize>40?ss*.25:0));if(cellSize>40){ctx.font='bold '+Math.max(10,cellSize*.15)+'px JetBrains Mono';ctx.fillStyle='rgba('+c+',0.6)';ctx.fillText(def.abbr,sx,sy+ss*.55);}if(m.dir&&cellSize>30){var as=cellSize*.12;ctx.fillStyle='rgba(255,200,50,0.8)';ctx.font='bold '+Math.max(12,as*2)+'px JetBrains Mono';var arrows={North:'\u2191',South:'\u2193',East:'\u2192',West:'\u2190'},offs={North:[0,-half+as+2],South:[0,half-as-2],East:[half-as-2,0],West:[-half+as+2,0]},o=offs[m.dir];ctx.fillText(arrows[m.dir],sx+o[0],sy+o[1]);}}
+if(isDragging&&dragStart&&dragCurrent&&selectedModule&&!demolishMode){var mod=MODULES[selectedModule];if(mod.lineDrawable){var cells=getLineCells(dragStart,dragCurrent);for(var ci=0;ci<cells.length;ci++){var allC=getSymmetricCoords(cells[ci][0],cells[ci][1]);for(var ai=0;ai<allC.length;ai++){var ak=allC[ai][0]+','+allC[ai][1];if(grid[ak])continue;var res=canPlace(allC[ai][0],allC[ai][1],selectedModule),scrX=cx+allC[ai][0]*cellSize,scrY=cy+allC[ai][1]*cellSize,mc=mod.color;if(res.valid){ctx.fillStyle='rgba('+mc+',0.15)';ctx.fillRect(scrX-half,scrY-half,half*2,half*2);ctx.strokeStyle='rgba('+mc+',0.6)';ctx.setLineDash([4,4]);ctx.lineWidth=2;ctx.strokeRect(scrX-half,scrY-half,half*2,half*2);ctx.setLineDash([]);ctx.globalAlpha=0.5;ctx.font=Math.max(14,cellSize*.3)+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='rgb('+mc+')';ctx.fillText(mod.sym,scrX,scrY);ctx.globalAlpha=1;}else{ctx.fillStyle='rgba(224,96,80,0.08)';ctx.fillRect(scrX-half,scrY-half,half*2,half*2);ctx.strokeStyle='rgba(224,96,80,0.3)';ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.strokeRect(scrX-half,scrY-half,half*2,half*2);ctx.setLineDash([]);}}}}}
+if(hoveredCell&&!isPanning&&!isDragging){var hx=hoveredCell[0],hy=hoveredCell[1],allC=getSymmetricCoords(hx,hy);for(var ai=0;ai<allC.length;ai++){var sx2=allC[ai][0],sy2=allC[ai][1],skey=sx2+','+sy2,scrX=cx+sx2*cellSize,scrY=cy+sy2*cellSize;if(demolishMode&&grid[skey]&&skey!=='0,0'){ctx.fillStyle='rgba(224,96,80,0.15)';ctx.fillRect(scrX-half,scrY-half,half*2,half*2);ctx.strokeStyle='rgba(224,96,80,0.6)';ctx.lineWidth=2;ctx.strokeRect(scrX-half,scrY-half,half*2,half*2);ctx.strokeStyle='rgba(224,96,80,0.5)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(scrX-half*.5,scrY-half*.5);ctx.lineTo(scrX+half*.5,scrY+half*.5);ctx.moveTo(scrX+half*.5,scrY-half*.5);ctx.lineTo(scrX-half*.5,scrY+half*.5);ctx.stroke();}else if(selectedModule&&!grid[skey]){var res=canPlace(sx2,sy2,selectedModule),def=MODULES[selectedModule],mc=def.color;if(res.valid){ctx.fillStyle='rgba('+mc+',0.12)';ctx.fillRect(scrX-half,scrY-half,half*2,half*2);ctx.strokeStyle='rgba('+mc+',0.5)';ctx.setLineDash([4,4]);ctx.lineWidth=2;ctx.strokeRect(scrX-half,scrY-half,half*2,half*2);ctx.setLineDash([]);ctx.globalAlpha=0.4;ctx.font=Math.max(14,cellSize*.3)+'px serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle='rgb('+mc+')';ctx.fillText(def.sym,scrX,scrY);ctx.globalAlpha=1;}else{ctx.fillStyle='rgba(224,96,80,0.08)';ctx.fillRect(scrX-half,scrY-half,half*2,half*2);ctx.strokeStyle='rgba(224,96,80,0.3)';ctx.setLineDash([4,4]);ctx.lineWidth=1;ctx.strokeRect(scrX-half,scrY-half,half*2,half*2);ctx.setLineDash([]);}}else if(!grid[skey]){ctx.strokeStyle='rgba(150,200,255,0.15)';ctx.lineWidth=1;ctx.strokeRect(scrX-half,scrY-half,half*2,half*2);}}}}
+
+function updateHoverInfo(gx,gy){var el=document.getElementById('hoverInfo'),key=gx+','+gy;var html='<span class="hi-coord">('+gx+', '+gy+')</span>';if(grid[key]){var m=grid[key],def=MODULES[m.type];html+=' <span class="hi-type">'+def.sym+' '+def.name+'</span>';if(m.dir)html+=' <span class="hi-msg">\u2192 '+m.dir+'</span>';}else if(enclosedCells.has(key)){html+=' <span class="hi-msg">Enclosed storage (region '+regionIds[key]+')</span>';}else if(selectedModule){var r=canPlace(gx,gy,selectedModule);html+=r.valid?' <span style="color:var(--green)">\u2713 Valid</span>':' <span style="color:var(--red)">\u2717 '+r.reason+'</span>';}el.innerHTML=html;el.style.display='block';}
+function hideHoverInfo(){document.getElementById('hoverInfo').style.display='none';}
+
+function selectModule(type){selectedModule=type;demolishMode=false;document.getElementById('demolishBtn').classList.remove('active');document.querySelectorAll('.mod-btn,.struct-card').forEach(function(el){el.classList.toggle('selected',el.dataset.mod===type);if(el.dataset.mod===type){var c=MODULES[type].color;el.style.borderColor='rgb('+c+')';}else el.style.borderColor='';});var mod=MODULES[type];document.getElementById('dirSelector').style.display=mod.directional?'flex':'none';var c=mod.color;var info='<div class="si-name" style="color:rgb('+c+')">'+mod.sym+' '+mod.name+'</div><div class="si-desc">'+mod.desc+'</div>';if(mod.recipe.length){info+='<div class="si-recipe">';for(var r of mod.recipe){var res=R[r[0]];if(res)info+='<span style="color:rgb('+res.color+')">'+r[1]+'\u00d7 '+res.abbr+'</span> ';}info+='</div>';}if(mod.work)info+='<div class="si-desc" style="color:var(--text-faint)">Work: '+mod.work+'</div>';if(mod.interior)info+='<div class="si-warn">\u26A0 Interior placement only</div>';if(mod.exterior)info+='<div class="si-warn">\u26A0 Exterior placement only</div>';info+=mod.lineDrawable?'<div class="si-hint">Drag to draw lines of structure</div>':'<div class="si-hint">Click to place single module</div>';document.getElementById('selInfo').innerHTML=info;}
+
+function toggleDemolish(){demolishMode=!demolishMode;if(demolishMode){selectedModule=null;document.querySelectorAll('.mod-btn,.struct-card').forEach(function(el){el.classList.remove('selected');el.style.borderColor='';});document.getElementById('dirSelector').style.display='none';}document.getElementById('demolishBtn').classList.toggle('active',demolishMode);if(demolishMode)document.getElementById('selInfo').innerHTML='<div class="si-name" style="color:var(--red)">\u2717 DEMOLISH MODE</div><div class="si-desc">Click or drag to remove modules.<br>Shift+click also works anytime.</div>';render();}
+
+function setDirection(dir){outputDirection=dir;document.querySelectorAll('.dir-btn').forEach(function(b){b.classList.toggle('active',b.dataset.dir===dir);});}
+function toggleSym(mode){if(symMode===mode)symMode=null;else symMode=mode;document.getElementById('symX').classList.toggle('active',symMode==='x');document.getElementById('symY').classList.toggle('active',symMode==='y');document.getElementById('symXY').classList.toggle('active',symMode==='xy');var badge=document.getElementById('symBadge');if(symMode){badge.style.display='block';badge.textContent='SYMMETRY: '+(symMode==='x'?'MIRROR X':symMode==='y'?'MIRROR Y':'MIRROR X+Y');}else badge.style.display='none';render();}
+
+function zoomIn(){cellSize=Math.min(MAX_CELL,cellSize+8);render();}
+function zoomOut(){cellSize=Math.max(MIN_CELL,cellSize-8);render();}
+function centerView(){panX=0;panY=0;var coords=Object.keys(grid).map(function(k){return k.split(',').map(Number);});if(coords.length){var ax=0,ay=0;for(var c of coords){ax+=c[0];ay+=c[1];}ax/=coords.length;ay/=coords.length;panX=-ax*cellSize;panY=-ay*cellSize;}render();}
+function clearGrid(){if(!confirm('Clear entire grid?'))return;pushUndo();grid={};grid["0,0"]={type:"StructureCore",dir:null};recalcAll();centerView();}
+function recalcAll(){recalcEnclosure();calcStats();calcModuleCounts();calcResources();generateCode();render();}
+
+function loadPreset(name){pushUndo();grid={};grid["0,0"]={type:"StructureCore",dir:null};if(name==='outpost')buildOutpost();else if(name==='colony')buildColony();else if(name==='fortress')buildFortress();else if(name==='citadel')buildCitadel();document.getElementById('stationName').value='new_'+name;recalcAll();centerView();}
+function op(x,y,type,dir){if(x===0&&y===0)return;grid[x+','+y]={type:type,dir:dir||null};}
+function hWall(y,x1,x2,t){for(var x=x1;x<=x2;x++)op(x,y,t);}
+
+function buildOutpost(){var O='StructureOrange';op(-1,6,'Docking');op(1,6,'Docking');op(-1,-7,'Docking');op(1,-7,'Docking');hWall(5,-3,3,O);for(var y=-6;y<=4;y++){op(-3,y,O);op(3,y,O);}op(-2,3,'Foundry','South');op(-1,3,'Foundry','South');op(0,3,O);op(1,3,'Foundry','South');op(2,3,O);op(-2,1,'Assembler','South');op(-1,1,'Assembler','South');op(0,1,O);op(1,1,'Assembler','South');op(2,1,O);op(-2,-1,'ComponentLab','South');op(-1,-1,'ComponentLab','South');op(0,-1,O);op(1,-1,'ComponentLab','South');op(2,-1,O);op(-3,-3,'CrewQuarters');op(-2,-3,'Greenhouse','North');op(-1,-3,'Medical');op(0,-3,O);op(1,-3,'Recreation');op(2,-3,'Greenhouse','North');op(3,-3,'Shield');op(-3,-4,O);op(-2,-4,O);op(-1,-4,'FuelProcessor','South');op(0,-4,O);op(1,-4,'FuelProcessor','South');op(2,-4,O);op(3,-4,O);hWall(-6,-3,3,O);}
+function buildColony(){var O='StructureOrange';op(-1,8,'Docking');op(1,8,'Docking');op(-2,-6,'Docking');op(0,-6,'Docking');op(2,-6,'Docking');op(4,4,'Docking');hWall(7,-4,4,O);for(var y=-5;y<=6;y++){op(-4,y,O);op(4,y,O);}op(-3,5,'Foundry','South');op(-2,5,'Foundry','South');op(-1,5,O);op(0,5,'Foundry','South');op(1,5,O);op(2,5,'Foundry','South');op(3,5,'Foundry','South');op(-3,3,'Assembler','South');op(-2,3,'Assembler','South');op(-1,3,O);op(0,3,O);op(1,3,O);op(2,3,'Assembler','South');op(3,3,'Assembler','South');op(-3,1,'ComponentLab','South');op(-2,1,'ComponentLab','South');op(-1,1,O);op(0,1,'ComponentLab','South');op(1,1,O);op(2,1,'ComponentLab','South');op(3,1,'ComponentLab','South');hWall(-1,-4,4,O);op(-4,-2,'CrewQuarters');op(-3,-2,'Greenhouse','South');op(-2,-2,'Greenhouse','South');op(-1,-2,'Medical');op(0,-2,O);op(1,-2,'Medical');op(2,-2,'Greenhouse','South');op(3,-2,'Greenhouse','South');op(4,-2,'CrewQuarters');op(-4,-3,O);op(-3,-3,'Recreation');op(-2,-3,O);op(-1,-3,'FuelProcessor','South');op(0,-3,O);op(1,-3,'FuelProcessor','South');op(2,-3,O);op(3,-3,'Recreation');op(4,-3,O);hWall(-5,-4,4,O);op(-4,0,'Shield');}
+function buildFortress(){var O='StructureOrange';op(-1,9,'Docking');op(1,9,'Docking');op(-3,-8,'Docking');op(-1,-8,'Docking');op(1,-8,'Docking');op(3,-8,'Docking');op(-5,4,'Docking');op(5,4,'Docking');op(-5,8,'Shield');hWall(8,-4,4,O);op(5,8,'Shield');for(var y=-7;y<=7;y++){op(-5,y,O);op(5,y,O);}op(-4,5,'Foundry','South');op(-3,5,'Foundry','South');op(-2,5,'Foundry','South');op(-1,5,O);op(0,5,'Foundry','South');op(1,5,O);op(2,5,'Foundry','South');op(3,5,'Foundry','South');op(4,5,O);op(-4,2,'Assembler','South');op(-3,2,'Assembler','South');op(-2,2,O);op(-1,2,'Assembler','South');op(0,2,O);op(1,2,'Assembler','South');op(2,2,O);op(3,2,'Assembler','South');op(4,2,'Assembler','South');op(-4,0,'ComponentLab','South');op(-3,0,'ComponentLab','South');op(-2,0,O);op(-1,0,'ComponentLab','South');op(1,0,'ComponentLab','South');op(2,0,O);op(3,0,'ComponentLab','South');op(4,0,'ComponentLab','South');hWall(-3,-5,5,O);op(-5,-4,'CrewQuarters');op(-4,-4,'Greenhouse','South');op(-3,-4,'Greenhouse','South');op(-2,-4,'Greenhouse','South');op(-1,-4,'Medical');op(0,-4,O);op(1,-4,'Medical');op(2,-4,'Greenhouse','South');op(3,-4,'Greenhouse','South');op(4,-4,'Greenhouse','South');op(5,-4,'CrewQuarters');op(-5,-5,'Shield');op(-4,-5,'Recreation');op(-3,-5,O);op(-2,-5,'FuelProcessor','South');op(-1,-5,'FuelProcessor','South');op(0,-5,O);op(1,-5,'FuelProcessor','South');op(2,-5,'FuelProcessor','South');op(3,-5,O);op(4,-5,'Recreation');op(5,-5,'Shield');hWall(-7,-5,5,O);}
+function buildCitadel(){var O='StructureOrange';op(-1,10,'Docking');op(0,10,'Docking');op(1,10,'Docking');op(-4,-7,'Docking');op(-2,-7,'Docking');op(0,-7,'Docking');op(2,-7,'Docking');op(4,-7,'Docking');op(-6,5,'Docking');op(6,5,'Docking');op(-6,9,'Shield');hWall(9,-5,5,O);op(6,9,'Shield');for(var y=-6;y<=8;y++){op(-6,y,O);op(6,y,O);}op(-5,6,'Foundry','South');op(-4,6,'Foundry','South');op(-3,6,'Foundry','South');op(-2,6,'Foundry','South');op(-1,6,O);op(0,6,O);op(1,6,O);op(2,6,'Foundry','South');op(3,6,'Foundry','South');op(4,6,'Foundry','South');op(5,6,'Foundry','South');op(-5,3,'Assembler','South');op(-4,3,'Assembler','South');op(-3,3,'Assembler','South');op(-2,3,O);op(-1,3,'Assembler','South');op(0,3,O);op(1,3,'Assembler','South');op(2,3,O);op(3,3,'Assembler','South');op(4,3,'Assembler','South');op(5,3,'Assembler','South');op(-5,1,'ComponentLab','South');op(-4,1,'ComponentLab','South');op(-3,1,O);op(-2,1,'ComponentLab','South');op(-1,1,'ComponentLab','South');op(0,1,O);op(1,1,'ComponentLab','South');op(2,1,'ComponentLab','South');op(3,1,O);op(4,1,'ComponentLab','South');op(5,1,'ComponentLab','South');hWall(-2,-6,6,O);op(-6,-3,'CrewQuarters');op(-5,-3,'Greenhouse','South');op(-4,-3,'Greenhouse','South');op(-3,-3,'Greenhouse','South');op(-2,-3,'Greenhouse','South');op(-1,-3,'Medical');op(0,-3,O);op(1,-3,'Medical');op(2,-3,'Greenhouse','South');op(3,-3,'Greenhouse','South');op(4,-3,'Greenhouse','South');op(5,-3,'Greenhouse','South');op(6,-3,'CrewQuarters');op(-6,-4,O);op(-5,-4,'Recreation');op(-4,-4,O);op(-3,-4,'FuelProcessor','South');op(-2,-4,'FuelProcessor','South');op(-1,-4,O);op(0,-4,O);op(1,-4,O);op(2,-4,'FuelProcessor','South');op(3,-4,'FuelProcessor','South');op(4,-4,O);op(5,-4,'Recreation');op(6,-4,O);op(-6,-6,'Shield');hWall(-6,-5,5,O);op(6,-6,'Shield');}
+
+function showExportModal(){document.getElementById('exportCode').textContent=generateCode();document.getElementById('exportModal').classList.add('open');}
+function closeModal(){document.getElementById('exportModal').classList.remove('open');}
+function copyModalCode(){navigator.clipboard.writeText(document.getElementById('exportCode').textContent);var b=document.querySelector('.modal .mbtn.green');b.textContent='\u2713 Copied!';setTimeout(function(){b.textContent='\u238B Copy to Clipboard';},1500);}
+function copyCode(){navigator.clipboard.writeText(document.getElementById('codeOutput').value);}
+
+function buildPalette(){var groups={habitation:['CrewQuarters','Medical','Recreation','Greenhouse'],infrastructure:['Docking','Shield'],production:['Foundry','FuelProcessor','Assembler','ComponentLab']};function btn(type){var d=MODULES[type],c=d.color;return'<div class="mod-btn" data-mod="'+type+'" onclick="selectModule(\''+type+'\')" style="border-color:rgba('+c+',0.3)"><span class="sym">'+d.sym+'</span><span class="lbl" style="color:rgb('+c+')">'+d.abbr+'</span></div>';}document.getElementById('hab-strip').innerHTML=groups.habitation.map(btn).join('');document.getElementById('inf-strip').innerHTML=groups.infrastructure.map(btn).join('');document.getElementById('prod-strip').innerHTML=groups.production.map(btn).join('');}
+
+function init(){buildPalette();setDirection('South');initCanvas();recalcAll();if(window.self!==window.top)document.body.classList.add('in-frame');}
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
