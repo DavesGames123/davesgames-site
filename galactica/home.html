@@ -82,6 +82,15 @@
   .h-btn:hover{background:#ffe066;box-shadow:0 0 20px var(--yellow-glow)}
   .h-ghost{font-size:0.5rem;color:var(--text-faint);text-decoration:none;letter-spacing:0.08em;transition:color 0.3s}
   .h-ghost:hover{color:var(--blue)}
+  .h-btn-outline{font-family:'JetBrains Mono',monospace;font-size:0.58rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;padding:0.75rem 1.6rem;background:transparent;color:var(--blue);border:1px solid var(--blue-dim);cursor:pointer;transition:all 0.3s}
+  .h-btn-outline:hover{border-color:var(--blue);color:var(--text-bright);box-shadow:0 0 14px var(--blue-glow);background:rgba(150,200,255,0.04)}
+  .h-nav{margin-top:1.8rem;padding-top:1.4rem;border-top:1px solid var(--border)}
+  .h-nav-label{font-size:0.38rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint);margin-bottom:0.8rem}
+  .h-nav-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+  .h-nav-link{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;font-size:0.42rem;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);text-decoration:none;cursor:pointer;background:rgba(150,200,255,0.02);border:1px solid var(--border);transition:all 0.25s}
+  .h-nav-link::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--text-faint);flex-shrink:0;transition:all 0.25s}
+  .h-nav-link:hover{color:var(--blue);border-color:var(--blue-dim);background:rgba(150,200,255,0.04)}
+  .h-nav-link:hover::before{background:var(--blue);box-shadow:0 0 6px var(--blue)}
 
   /* ═══════ SIGNAL BAR ═══════ */
   .sig-bar{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative;z-index:10}
@@ -210,7 +219,21 @@
           </p>
           <div class="h-actions">
             <a href="https://store.steampowered.com" class="h-btn" target="_blank" rel="noopener">Wishlist on Steam</a>
-            <a href="#play" class="h-ghost">See Gameplay ↓</a>
+            <a href="https://discord.gg/ZXk554ZH" class="h-btn-outline" target="_blank" rel="noopener">Join Discord</a>
+          </div>
+          <a href="#play" class="h-ghost" style="display:inline-block;margin-top:0.8rem">See Gameplay ↓</a>
+          <div class="h-nav">
+            <div class="h-nav-label">// Systems Manual</div>
+            <div class="h-nav-grid">
+              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a>
+              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting</a>
+              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a>
+              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('behaviors')">Behaviors</a>
+              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('controls')">Controls</a>
+              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('forge')">Planet Forge</a>
+              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('gravity')">Gravity Sim</a>
+              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('selection')">Selection</a>
+            </div>
           </div>
         </div>
       </div>
