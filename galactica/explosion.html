@@ -3,621 +3,442 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>STELLA NOVA // Volumetric Explosion</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<title>STELLA NOVA // Explosion Viewer</title>
 <style>
-:root {
-  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
-  --surface:#1c2436;--surface2:#243040;
-  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
-  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
-  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);--yellow-glow:rgba(255,200,50,0.10);
-  --red:#ff5050;--green:#64c864;--cyan:#4ad8e0;
-  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
-  --scan:rgba(0,0,0,0.06);
-}
+:root{--bg:#0e1118;--border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);--blue:#96c8ff;--blue-dim:#5a8cc0;--blue-glow:rgba(150,200,255,0.10);--yellow:#ffc832;--red:#ff5050;--text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--scan:rgba(0,0,0,0.06)}
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-html{scroll-behavior:smooth;overflow-x:hidden}
-body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;cursor:crosshair;min-height:100vh}
-body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
-body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.35) 100%)}
-.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
-
-/* Corner readouts */
-.corner-data{position:fixed;z-index:50;pointer-events:none;font-size:0.38rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);line-height:1.8}
-.corner-data.tl{top:1rem;left:1rem}
-.corner-data.tr{top:1rem;right:1rem;text-align:right}
-.corner-data.bl{bottom:3.2rem;left:1rem}
-.corner-data.br{bottom:3.2rem;right:1rem;text-align:right}
-.corner-data span{color:var(--blue-dim)}
-
-/* Bottom bar */
-.botbar{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-top:1px solid var(--border);font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase}
-.bot-group{display:flex;align-items:center;gap:0.8rem}
-.bot-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.3rem 0.7rem;cursor:pointer;transition:all 0.2s}
-.bot-btn:hover{border-color:var(--blue);color:var(--blue);box-shadow:0 0 10px var(--blue-glow)}
-.bot-btn.active{border-color:var(--blue);color:var(--bg);background:var(--blue)}
-.bot-read{color:var(--text-faint)}
-
-/* Content layout */
-.content{position:relative;z-index:10;padding:1.5rem 2rem 4rem;display:flex;gap:1.5rem;min-height:100vh;align-items:flex-start}
-.content > *{pointer-events:auto}
-
-/* Main viewport */
-.main-col{flex:1;min-width:0}
-
-/* Sidebar */
-.side-col{width:320px;flex-shrink:0;display:flex;flex-direction:column;gap:1rem}
-
-/* sys-window (matches home.html exactly) */
-.sys-window{border:1px solid var(--border-b);background:rgba(14,17,24,0.92);backdrop-filter:blur(16px);position:relative;overflow:hidden}
-.sys-window::before{content:'';position:absolute;inset:3px;border:1px solid var(--border);pointer-events:none;z-index:1}
-.sys-window::after{content:'';position:absolute;top:0;left:0;width:6px;height:6px;background:var(--blue-dim);box-shadow:calc(100% - 6px) 0 0 var(--blue-dim),0 calc(100% - 6px) 0 var(--blue-dim),calc(100% - 6px) calc(100% - 6px) 0 var(--blue-dim);pointer-events:none;z-index:2}
-.sw-head{padding:0.6rem 1.2rem;border-bottom:1px solid var(--border-b);display:flex;justify-content:space-between;align-items:center;font-size:0.45rem;letter-spacing:0.2em;text-transform:uppercase;position:relative;z-index:3}
-.sw-head .sw-sys{color:var(--blue)}
-.sw-head .sw-tag{color:var(--text-faint)}
-.sw-body{padding:1.5rem 1.8rem;position:relative;z-index:3}
-.sw-body h2{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.6rem;color:var(--text-bright);margin-bottom:0.8rem;line-height:1.15}
-.sw-body h2 em{font-style:italic;color:var(--yellow)}
-.sw-body p{font-size:0.65rem;font-weight:300;color:var(--text-dim);line-height:1.9;margin-bottom:0.6rem}
-
-/* Canvas viewport */
-.viewport-wrap{position:relative;width:100%;aspect-ratio:4/3}
-.viewport-wrap canvas{display:block;width:100%;height:100%;cursor:crosshair}
-.vp-chrome{position:absolute;display:flex;justify-content:space-between;align-items:center;left:12px;right:12px;font-size:0.38rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);pointer-events:none;z-index:5}
-.vp-chrome.top{top:10px}
-.vp-chrome.bottom{bottom:10px}
-.vp-chrome .bright{color:var(--blue-dim)}
-
-/* Controls inside sys-window */
-.ctrl-row{display:flex;flex-direction:column;gap:1rem}
-.ctrl-item{display:flex;flex-direction:column;gap:0.4rem}
-.ctrl-label{font-size:0.4rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint);display:flex;justify-content:space-between}
-.ctrl-label .ctrl-val{color:var(--blue);font-weight:500}
-input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:2px;background:var(--surface2);border-radius:0;outline:none}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:8px;height:8px;background:var(--blue);cursor:pointer;border:none;border-radius:0}
-input[type=range]::-moz-range-thumb{width:8px;height:8px;background:var(--blue);cursor:pointer;border:none;border-radius:0}
-
-/* Button row */
-.q-row{display:flex;gap:0.4rem}
-.q-btn{flex:1;background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.35rem 0.5rem;cursor:pointer;transition:all 0.2s;text-align:center}
-.q-btn:hover{border-color:var(--blue);color:var(--blue)}
-.q-btn.active{border-color:var(--yellow);color:var(--bg);background:var(--yellow)}
-
-/* Stats panel */
-.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.6rem}
-.stat-cell{padding:0.5rem 0.7rem;border:1px solid var(--border);background:var(--blue-faint)}
-.stat-cell .stat-label{font-size:0.35rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);margin-bottom:0.2rem}
-.stat-cell .stat-val{font-size:0.65rem;color:var(--blue);font-weight:500;letter-spacing:0.05em}
-
-/* Barcode */
-.barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.4rem;color:var(--blue-dim);opacity:0.2;line-height:1;margin-top:0.8rem;text-align:center}
-
-/* Tag strip */
-.tag-strip{display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.6rem}
-.tag-strip span{font-size:0.38rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--blue-dim);padding:0.2rem 0.5rem;border:1px solid var(--border-b);background:var(--blue-faint)}
-
-/* Error */
-.error-panel{display:none;background:rgba(255,80,80,0.05);border:1px solid rgba(255,80,80,0.15);padding:3rem;text-align:center}
-.error-panel h2{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.5rem;color:var(--red);margin-bottom:0.5rem}
-.error-panel p{font-size:0.55rem;color:var(--text-dim);letter-spacing:0.05em}
-
-/* Reveal animation */
-.rv{opacity:0;transform:translateY(12px);transition:all 0.5s cubic-bezier(0.22,1,0.36,1)}
-.rv.vis{opacity:1;transform:none}
-
-@media(max-width:900px){
-  .content{flex-direction:column;padding:1rem 1rem 4rem}
-  .side-col{width:100%}
-  .viewport-wrap{aspect-ratio:3/2}
-}
+body{font-family:monospace;background:var(--bg);color:var(--text);min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden}
+.player{position:relative;z-index:10;width:min(90vw, 90vh * 1.333);max-width:1200px}
+.viewport{position:relative;width:100%;aspect-ratio:4/3;background:#000;cursor:crosshair;border:1px solid var(--border-b)}
+.viewport canvas{display:block;width:100%;height:100%}
+.vp-chrome{position:absolute;display:flex;justify-content:space-between;align-items:center;left:12px;right:12px;font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:rgba(150,200,255,0.25);pointer-events:none;z-index:5}
+.vp-chrome.top{top:10px}.vp-chrome.bottom{bottom:10px}
+.controls{background:rgba(14,17,24,0.95);border:1px solid var(--border-b);border-top:none;padding:0}
+.timeline{position:relative;height:32px;cursor:pointer;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid var(--border)}
+.tl-track{position:absolute;left:16px;right:16px;height:3px;background:rgba(150,200,255,0.08)}
+.tl-fill{height:100%;background:var(--blue-dim)}
+.transport{display:flex;align-items:center;padding:8px 16px;gap:8px;flex-wrap:wrap}
+.t-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;padding:4px 8px;cursor:pointer;transition:all 0.15s}
+.t-btn:hover{border-color:var(--blue);color:var(--blue)}
+.t-btn.active{border-color:var(--yellow);color:var(--bg);background:var(--yellow)}
+.t-time{font-size:11px;color:var(--text-dim);letter-spacing:0.08em;min-width:120px}
+.t-time strong{color:var(--blue);font-weight:700}
+.t-sep{flex:1}
+.ctrl-row{display:flex;align-items:center;padding:6px 16px;gap:12px;border-top:1px solid var(--border);flex-wrap:wrap}
+.slider-group{display:flex;align-items:center;gap:6px;flex:1;min-width:120px}
+.slider-group label{font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);white-space:nowrap}
+.slider-group input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:2px;background:rgba(150,200,255,0.08);outline:none}
+.slider-group input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:8px;height:8px;background:var(--blue);cursor:pointer}
+.slider-group .sv{font-size:9px;color:var(--blue);min-width:28px;text-align:right}
+#dbg{position:fixed;bottom:0;left:0;right:0;z-index:99999;background:rgba(0,40,0,0.95);color:#0f0;font:10px/1.4 monospace;padding:6px 10px;max-height:30vh;overflow:auto;white-space:pre-wrap;display:none}
 </style>
 </head>
 <body>
-<div class="grid-bg"></div>
 
-<div class="corner-data tl">
-  SYS.MODULE // VOLUMETRIC<br>
-  RENDER.ENGINE <span>WEBGPU/WGSL</span><br>
-  PIPELINE <span>FRAGMENT RAYMARCHER</span>
-</div>
-<div class="corner-data br">
-  FPS <span id="cornerFps">--</span><br>
-  RES <span id="cornerRes">--</span><br>
-  T+ <span id="cornerTime">0.00</span>s
-</div>
-
-<div class="content">
-  <!-- Main viewport column -->
-  <div class="main-col">
-    <div class="sys-window rv" id="viewportWindow">
-      <div class="sw-head">
-        <span class="sw-sys">▸ Volumetric Render Viewport</span>
-        <span class="sw-tag">WGSL // Realtime</span>
-      </div>
-      <div class="viewport-wrap">
-        <div class="vp-chrome top">
-          <span>SYS.RENDER // WGSL VOLUMETRIC</span>
-          <span class="bright" id="resLabel">--</span>
-        </div>
-        <canvas id="gpuCanvas"></canvas>
-        <div class="vp-chrome bottom">
-          <span>PKT.0x7A2F · DRAG TO ROTATE</span>
-          <span id="timeLabel">T+0.00s</span>
-        </div>
-      </div>
+<div class="player">
+  <div class="viewport">
+    <div class="vp-chrome top">
+      <span>VOLUMETRIC EXPLOSION // DUKE</span>
+      <span id="resLabel">--</span>
     </div>
-
-    <div id="errorPanel" class="error-panel">
-      <h2>WebGPU Unavailable</h2>
-      <p>Your browser does not support WebGPU. Requires Chrome 113+ or Edge 113+.</p>
-    </div>
-
-    <!-- Info panel below viewport -->
-    <div class="sys-window rv" style="margin-top:1rem">
-      <div class="sw-head">
-        <span class="sw-sys">▸ About This Shader</span>
-        <span class="sw-tag">Documentation</span>
-      </div>
-      <div class="sw-body">
-        <h2>Volumetric <em>Explosion</em></h2>
-        <p>
-          A volumetric explosion rendered in real-time via WebGPU.
-          Reimplemented from Duke's Shadertoy original using procedural hash noise,
-          spiral noise turbulence fields, and sphere-bounded raymarched density accumulation.
-          Features bloom lighting, scattering attenuation, and animated dithering.
-        </p>
-        <div class="tag-strip">
-          <span>Raymarching</span>
-          <span>WGSL</span>
-          <span>WebGPU</span>
-          <span>Volumetric</span>
-          <span>FBM Noise</span>
-          <span>Spiral Noise</span>
-        </div>
-      </div>
+    <canvas id="cv"></canvas>
+    <div class="vp-chrome bottom">
+      <span id="fpsLabel">-- FPS</span>
+      <span>DRAG TO ROTATE · SCROLL TO ZOOM</span>
     </div>
   </div>
-
-  <!-- Sidebar controls -->
-  <div class="side-col">
-    <!-- Stats -->
-    <div class="sys-window rv">
-      <div class="sw-head">
-        <span class="sw-sys">▸ Render Stats</span>
-        <span class="sw-tag">Live</span>
-      </div>
-      <div class="sw-body">
-        <div class="stat-grid">
-          <div class="stat-cell">
-            <div class="stat-label">FPS</div>
-            <div class="stat-val" id="statFps">--</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Ray Steps</div>
-            <div class="stat-val" id="statRays">86</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Time</div>
-            <div class="stat-val" id="statTime">0.0</div>
-          </div>
-          <div class="stat-cell">
-            <div class="stat-label">Status</div>
-            <div class="stat-val" id="statStatus" style="color:var(--text-faint)">INIT</div>
-          </div>
-        </div>
-        <div class="barcode">STELLANOVA-VOLEXP</div>
-      </div>
+  <div class="controls">
+    <div class="timeline" id="timeline">
+      <div class="tl-track"><div class="tl-fill" id="tlFill" style="width:0%"></div></div>
     </div>
-
-    <!-- Controls -->
-    <div class="sys-window rv">
-      <div class="sw-head">
-        <span class="sw-sys">▸ Shader Controls</span>
-        <span class="sw-tag">Interactive</span>
-      </div>
-      <div class="sw-body">
-        <div class="ctrl-row">
-          <div class="ctrl-item">
-            <div class="ctrl-label"><span>Zoom Distance</span><span class="ctrl-val" id="zoomVal">0.00</span></div>
-            <input type="range" id="zoomSlider" min="0" max="2" step="0.01" value="0">
-          </div>
-          <div class="ctrl-item">
-            <div class="ctrl-label"><span>Density Scale</span><span class="ctrl-val" id="densityVal">1.00</span></div>
-            <input type="range" id="densitySlider" min="0.5" max="3" step="0.01" value="1">
-          </div>
-          <div class="ctrl-item">
-            <div class="ctrl-label"><span>Speed</span><span class="ctrl-val" id="speedVal">1.00</span></div>
-            <input type="range" id="speedSlider" min="0" max="3" step="0.01" value="1">
-          </div>
-          <div class="ctrl-item">
-            <div class="ctrl-label"><span>Quality Preset</span></div>
-            <div class="q-row">
-              <button class="q-btn" id="qLow" onclick="setQuality(0)">Low</button>
-              <button class="q-btn active" id="qMed" onclick="setQuality(1)">Med</button>
-              <button class="q-btn" id="qHigh" onclick="setQuality(2)">High</button>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div class="transport">
+      <button class="t-btn" id="btnFrameBack">⏮</button>
+      <button class="t-btn" id="btnPlay">▶</button>
+      <button class="t-btn" id="btnFrameFwd">⏭</button>
+      <div class="t-time"><strong id="timeNow">0.00</strong> / 30.00s</div>
+      <button class="t-btn" id="btnSeed">🎲 <span id="seedLabel" style="color:var(--yellow)">--</span></button>
+      <div class="t-sep"></div>
+      <button class="t-btn" data-spd="0.25">¼×</button>
+      <button class="t-btn" data-spd="0.5">½×</button>
+      <button class="t-btn active" data-spd="1">1×</button>
+      <button class="t-btn" data-spd="2">2×</button>
     </div>
-
-    <!-- Palette -->
-    <div class="sys-window rv">
-      <div class="sw-head">
-        <span class="sw-sys">▸ Color Palette</span>
-        <span class="sw-tag">Light · Media · Edge</span>
+    <div class="ctrl-row">
+      <div class="slider-group">
+        <label>Density</label>
+        <input type="range" id="sldDensity" min="0.3" max="3" step="0.01" value="1">
+        <span class="sv" id="valDensity">1.00</span>
       </div>
-      <div class="sw-body" style="padding:1rem 1.2rem">
-        <canvas id="paletteCanvas" width="280" height="60" style="width:100%;height:50px;display:block;image-rendering:pixelated"></canvas>
+      <div class="slider-group">
+        <label>Bright</label>
+        <input type="range" id="sldBright" min="0.5" max="4" step="0.01" value="1.5">
+        <span class="sv" id="valBright">1.50</span>
+      </div>
+      <div class="slider-group">
+        <label>Zoom</label>
+        <input type="range" id="sldZoom" min="0" max="3" step="0.01" value="0.5">
+        <span class="sv" id="valZoom">0.50</span>
+      </div>
+      <div style="display:flex;gap:3px">
+        <button class="t-btn" data-q="0">56</button>
+        <button class="t-btn" data-q="1">86</button>
+        <button class="t-btn active" data-q="2">128</button>
       </div>
     </div>
   </div>
 </div>
-
-<!-- Bottom bar -->
-<div class="botbar">
-  <div class="bot-group">
-    <button class="bot-btn" id="pauseBtn" onclick="togglePause()">Pause</button>
-    <button class="bot-btn" onclick="resetRotation()">Reset View</button>
-  </div>
-  <div class="bot-group">
-    <span class="bot-read">FPS <strong id="botFps">--</strong></span>
-    <span class="bot-read">T+ <strong id="botTime">0.0</strong></span>
-  </div>
-</div>
+<div id="dbg"></div>
 
 <script>
-// ─── WGSL Shader ──────────────────────────────────
-const WGSL_CODE = /* wgsl */`
+// Debug
+var dbgEl = document.getElementById('dbg');
+function dbg(s) { dbgEl.style.display = 'block'; dbgEl.textContent += s + '\n'; }
+window.onerror = function(m,s,l,c,e){ dbg('ERR: '+m+' @'+l+':'+c+(e?'\n'+e.stack:'')); };
+window.addEventListener('unhandledrejection', function(e){ dbg('REJ: '+(e.reason?.stack||e.reason)); });
 
+// ═══════════════════════════════════════════════════════════
+//  State
+// ═══════════════════════════════════════════════════════════
+var playing = true, speed = 1, density = 1, brightness = 1.5, zoom = 0.5, quality = 2;
+var currentTime = 0, duration = 30;
+var seed = Math.random() * 1000;
+var lastTs = 0, frames = 0, fpsTime = 0;
+var mouseX = 200, dragging = false, dragSX = 0, mxS = 0;
+var scrubbing = false;
+var FDT = 1/60;
+
+document.getElementById('seedLabel').textContent = seed.toFixed(1);
+
+// ═══════════════════════════════════════════════════════════
+//  UI wiring — NO inline handlers
+// ═══════════════════════════════════════════════════════════
+var btnPlay = document.getElementById('btnPlay');
+var tlFill = document.getElementById('tlFill');
+var timeline = document.getElementById('timeline');
+var cv = document.getElementById('cv');
+
+function updPlayBtn() { btnPlay.textContent = playing ? '⏸' : '▶'; }
+
+btnPlay.addEventListener('click', function() { playing = !playing; updPlayBtn(); });
+document.getElementById('btnFrameBack').addEventListener('click', function() {
+  playing = false; currentTime = Math.max(0, currentTime - FDT); updPlayBtn();
+});
+document.getElementById('btnFrameFwd').addEventListener('click', function() {
+  playing = false; currentTime = Math.min(duration, currentTime + FDT); updPlayBtn();
+});
+document.getElementById('btnSeed').addEventListener('click', function() {
+  seed = Math.floor(Math.random() * 10000) / 10;
+  currentTime = 0;
+  document.getElementById('seedLabel').textContent = seed.toFixed(1);
+});
+
+// Speed buttons
+document.querySelectorAll('[data-spd]').forEach(function(b) {
+  b.addEventListener('click', function() {
+    speed = parseFloat(this.dataset.spd);
+    document.querySelectorAll('[data-spd]').forEach(function(x){ x.classList.remove('active'); });
+    this.classList.add('active');
+  });
+});
+
+// Quality buttons
+document.querySelectorAll('[data-q]').forEach(function(b) {
+  b.addEventListener('click', function() {
+    quality = parseInt(this.dataset.q);
+    document.querySelectorAll('[data-q]').forEach(function(x){ x.classList.remove('active'); });
+    this.classList.add('active');
+  });
+});
+
+// Sliders
+document.getElementById('sldDensity').addEventListener('input', function() {
+  density = +this.value; document.getElementById('valDensity').textContent = density.toFixed(2);
+});
+document.getElementById('sldBright').addEventListener('input', function() {
+  brightness = +this.value; document.getElementById('valBright').textContent = brightness.toFixed(2);
+});
+document.getElementById('sldZoom').addEventListener('input', function() {
+  zoom = +this.value; document.getElementById('valZoom').textContent = zoom.toFixed(2);
+});
+
+// Timeline scrub
+function timeFromMouse(e) {
+  var rect = timeline.getBoundingClientRect();
+  var x = Math.max(0, Math.min(1, (e.clientX - rect.left - 16) / (rect.width - 32)));
+  return x * duration;
+}
+timeline.addEventListener('mousedown', function(e) { scrubbing = true; currentTime = timeFromMouse(e); });
+document.addEventListener('mousemove', function(e) { if (scrubbing) currentTime = timeFromMouse(e); });
+document.addEventListener('mouseup', function() { scrubbing = false; });
+
+// Canvas drag
+cv.addEventListener('mousedown', function(e) { dragging = true; dragSX = e.clientX; mxS = mouseX; e.preventDefault(); });
+document.addEventListener('mousemove', function(e) { if (dragging) mouseX = mxS + (e.clientX - dragSX) * 0.5; });
+document.addEventListener('mouseup', function() { dragging = false; });
+
+// Scroll zoom
+cv.addEventListener('wheel', function(e) {
+  e.preventDefault();
+  zoom = Math.max(0, Math.min(3, zoom + (e.deltaY > 0 ? -0.1 : 0.1)));
+  document.getElementById('sldZoom').value = zoom;
+  document.getElementById('valZoom').textContent = zoom.toFixed(2);
+}, { passive: false });
+
+// Keyboard
+document.addEventListener('keydown', function(e) {
+  if (e.code === 'Space') { e.preventDefault(); playing = !playing; updPlayBtn(); }
+  if (e.code === 'ArrowLeft') currentTime = Math.max(0, currentTime - 0.5);
+  if (e.code === 'ArrowRight') currentTime = Math.min(duration, currentTime + 0.5);
+  if (e.code === 'Comma') { playing = false; currentTime = Math.max(0, currentTime - FDT); updPlayBtn(); }
+  if (e.code === 'Period') { playing = false; currentTime = Math.min(duration, currentTime + FDT); updPlayBtn(); }
+  if (e.code === 'KeyN') document.getElementById('btnSeed').click();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  WGSL Shader
+// ═══════════════════════════════════════════════════════════
+var WGSL = `
 struct Uniforms {
   resolution: vec2f,
   time: f32,
   mouseX: f32,
-  mouseY: f32,
   zoom: f32,
-  density: f32,
+  density_scale: f32,
   quality: f32,
+  brightness: f32,
+  seed: f32,
+  _p0: f32, _p1: f32, _p2: f32,
 };
-
 @group(0) @binding(0) var<uniform> u: Uniforms;
+@group(0) @binding(1) var iChannel0: texture_2d<f32>;
+@group(0) @binding(2) var samp: sampler;
 
-fn hash3(p_in: vec3f) -> f32 {
-  var p = fract(p_in * 0.1031);
-  p += dot(p, p.yzx + 33.33);
-  return fract((p.x + p.y) * p.z);
-}
+fn glsl_mod(x: f32, y: f32) -> f32 { return x - y * floor(x / y); }
 
-fn noise3d(x: vec3f) -> f32 {
+fn noise(x: vec3f) -> f32 {
   let p = floor(x);
-  let f = fract(x);
-  let s = f * f * (3.0 - 2.0 * f);
-  let n000 = hash3(p + vec3f(0,0,0));
-  let n100 = hash3(p + vec3f(1,0,0));
-  let n010 = hash3(p + vec3f(0,1,0));
-  let n110 = hash3(p + vec3f(1,1,0));
-  let n001 = hash3(p + vec3f(0,0,1));
-  let n101 = hash3(p + vec3f(1,0,1));
-  let n011 = hash3(p + vec3f(0,1,1));
-  let n111 = hash3(p + vec3f(1,1,1));
-  let nx00 = mix(n000, n100, s.x);
-  let nx10 = mix(n010, n110, s.x);
-  let nx01 = mix(n001, n101, s.x);
-  let nx11 = mix(n011, n111, s.x);
-  let nxy0 = mix(nx00, nx10, s.y);
-  let nxy1 = mix(nx01, nx11, s.y);
-  return mix(nxy0, nxy1, s.z);
+  let f_raw = fract(x);
+  let f = f_raw * f_raw * (3.0 - 2.0 * f_raw);
+  let uv = (p.xy + vec2f(37.0, 17.0) * p.z) + f.xy;
+  let rg = textureSampleLevel(iChannel0, samp, (uv + 0.5) / 256.0, 0.0).yx;
+  return 1.0 - 0.82 * mix(rg.x, rg.y, f.z);
 }
 
 fn fbm(p: vec3f) -> f32 {
-  return noise3d(p*0.06125)*0.5 + noise3d(p*0.125)*0.25 + noise3d(p*0.25)*0.125 + noise3d(p*0.4)*0.2;
+  return noise(p*0.06125)*0.5 + noise(p*0.125)*0.25 + noise(p*0.25)*0.125 + noise(p*0.4)*0.2;
 }
 
-fn fbm_low(p: vec3f) -> f32 {
-  return noise3d(p*0.125)*0.5 + noise3d(p*0.25)*0.25;
-}
+fn Sphere(p: vec3f, r: f32) -> f32 { return length(p) - r; }
 
-fn spiralNoiseC(p_in: vec3f) -> f32 {
-  let nudge: f32 = 4.0;
-  let normalizer: f32 = 1.0 / sqrt(1.0 + nudge*nudge);
-  var n: f32 = -((u.time * 0.2) % 2.0);
-  var iter: f32 = 2.0;
+fn SpiralNoiseC(p_in: vec3f) -> f32 {
+  let nudge = 4.0;
+  let normalizer = 1.0 / sqrt(1.0 + nudge*nudge);
+  var n = -glsl_mod(u.time*0.2, -2.0);
+  var iter = 2.0;
   var p = p_in;
   for (var i = 0; i < 8; i++) {
     n += -abs(sin(p.y*iter) + cos(p.x*iter)) / iter;
-    p = vec3f((p.x + p.y*nudge)*normalizer, (p.y - p.x*nudge)*normalizer, p.z);
-    p = vec3f((p.x + p.z*nudge)*normalizer, p.y, (p.z - p.x*nudge)*normalizer);
+    p = vec3f((p.x+p.y*nudge)*normalizer, (p.y-p.x*nudge)*normalizer, p.z);
+    p = vec3f((p.x+p.z*nudge)*normalizer, p.y, (p.z-p.x*nudge)*normalizer);
     iter *= 1.733733;
   }
   return n;
 }
 
-fn sphere(p: vec3f, r: f32) -> f32 { return length(p) - r; }
-
-fn volumetricExplosion(p: vec3f) -> f32 {
-  var result = sphere(p, 4.0);
-  if (u.quality < 0.5) { result += fbm_low(p*50.0); }
-  else { result += fbm(p*50.0); }
-  result += spiralNoiseC(vec3f(p.z, p.x, p.y)*0.4132 + 333.0) * 3.0;
-  return result;
+fn VolumetricExplosion(p: vec3f) -> f32 {
+  let so = vec3f(u.seed*100.0, u.seed*73.0, u.seed*37.0);
+  var r = Sphere(p, 4.0);
+  r += fbm((p + so) * 50.0);
+  r += SpiralNoiseC(p.zxy*0.4132 + 333.0 + so*0.01) * 3.0;
+  return r;
 }
 
 fn mapScene(p_in: vec3f) -> f32 {
-  let angle = u.mouseX * 0.008 * 3.14159265 + u.time * 0.1;
-  let ca = cos(angle); let sa = sin(angle);
-  var p = p_in;
-  p = vec3f(ca*p.x + sa*p.z, p.y, -sa*p.x + ca*p.z);
-  return volumetricExplosion(p / 0.5) * 0.5;
+  let a = u.mouseX*0.008*3.14159265 + u.time*0.1;
+  let ca = cos(a); let sa = sin(a);
+  let p = vec3f(ca*p_in.x + sa*p_in.z, p_in.y, -sa*p_in.x + ca*p_in.z);
+  return VolumetricExplosion(p/0.5)*0.5;
 }
 
 fn computeColor(density: f32, radius: f32) -> vec3f {
   var result = mix(vec3f(1.0,0.9,0.8), vec3f(0.4,0.15,0.1), density);
-  let colCenter = 7.0 * vec3f(0.8,1.0,1.0);
-  let colEdge = 1.5 * vec3f(0.48,0.53,0.5);
+  let colCenter = 12.0 * vec3f(0.8, 1.0, 1.0);
+  let colEdge = 3.0 * vec3f(0.48, 0.53, 0.5);
   result *= mix(colCenter, colEdge, min((radius+0.05)/0.9, 1.15));
   return result;
 }
 
-fn raySphereIntersect(org: vec3f, dir: vec3f) -> vec2f {
+fn RaySphereIntersect(org: vec3f, dir: vec3f, near: ptr<function,f32>, far: ptr<function,f32>) -> bool {
   let b = dot(dir, org);
   let c = dot(org, org) - 8.0;
   let delta = b*b - c;
-  if (delta < 0.0) { return vec2f(-1.0, -1.0); }
+  if (delta < 0.0) { return false; }
   let sq = sqrt(delta);
-  return vec2f(-b - sq, -b + sq);
-}
-
-fn ditherHash(p: vec2f) -> f32 {
-  var p3 = fract(vec3f(p.x, p.y, p.x) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
+  *near = -b - sq; *far = -b + sq;
+  return *far > 0.0;
 }
 
 @fragment
 fn fs(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
   let uv = fragCoord.xy / u.resolution;
-  let rd = normalize(vec3f((fragCoord.xy - 0.5*u.resolution) / u.resolution.y, 1.0));
+  let rd = normalize(vec3f((fragCoord.xy - 0.5*u.resolution)/u.resolution.y, 1.0));
   let ro = vec3f(0.0, 0.0, -6.0 + u.zoom*1.6);
-  var ld: f32 = 0.0; var td: f32 = 0.0; var w: f32 = 0.0;
-  var t: f32 = 0.0; let h: f32 = 0.1;
+  var ld = 0.0; var td = 0.0; var w = 0.0;
+  var d_outer = 1.0; var t = 0.0;
+  let h = 0.1;
   var sum = vec4f(0.0);
-  let hit = raySphereIntersect(ro, rd);
-  if (hit.y <= 0.0) { return vec4f(0.0, 0.0, 0.0, 1.0); }
-  t = max(hit.x, 0.0);
-  let maxDist = hit.y;
-  let maxIter = select(select(56, 86, u.quality > 0.5), 128, u.quality > 1.5);
-  for (var i = 0; i < 128; i++) {
-    if (i >= maxIter) { break; }
-    let pos = ro + t*rd;
-    if (td > 0.9 || t > 10.0 || sum.a > 0.99 || t > maxDist) { break; }
-    var d = mapScene(pos);
-    let splitThresh = cos(u.time) * uv.x;
-    if (splitThresh < 0.1) { d = abs(d) + 0.07; }
-    d = max(d, 0.03);
-    let ldst = vec3f(0.0) - pos;
-    let lDist = max(length(ldst), 0.001);
-    let lightColor = vec3f(1.0, 0.5, 0.25);
-    sum = vec4f(sum.rgb + lightColor / exp(lDist*lDist*lDist*0.08) / 30.0, sum.a);
-    if (d < h) {
-      ld = h - d;
-      w = (1.0 - td) * ld;
-      td += w + 1.0/200.0;
-      var col = vec4f(computeColor(td, lDist), td);
-      sum = vec4f(sum.rgb + sum.a * sum.rgb * 0.2 / lDist, sum.a);
-      col = vec4f(col.rgb * col.a * 0.2, col.a * 0.2);
-      sum = sum + col * (1.0 - sum.a);
+  var min_dist = 0.0; var max_dist = 0.0;
+
+  if (RaySphereIntersect(ro, rd, &min_dist, &max_dist)) {
+    t = min_dist * step(t, min_dist);
+    let maxIter = select(select(56, 86, u.quality > 0.5), 128, u.quality > 1.5);
+
+    for (var i = 0; i < 128; i++) {
+      if (i >= maxIter) { break; }
+      let pos = ro + t*rd;
+      if (td > 0.9 || d_outer < 0.12*t || t > 10.0 || sum.a > 0.99 || t > max_dist) { break; }
+
+      var d = mapScene(pos);
+      d = max(d, 0.03);
+
+      let ldst = -pos;
+      let lDist = max(length(ldst), 0.001);
+      let lightColor = vec3f(1.0, 0.5, 0.25);
+      sum = vec4f(sum.rgb + lightColor/exp(lDist*lDist*lDist*0.08)/8.0, sum.a);
+
+      if (d < h) {
+        ld = h - d;
+        w = (1.0 - td) * ld;
+        td += w + 1.0/200.0;
+        var col = vec4f(computeColor(td, lDist), td);
+        sum += sum.a * vec4f(sum.rgb, 0.0) * 0.5 / lDist;
+        col = vec4f(col.rgb, col.a * 0.2);
+        col = vec4f(col.rgb * col.a, col.a);
+        sum = sum + col * (1.0 - sum.a);
+      }
+
+      td += 1.0/70.0;
+      let uvd = vec2f(uv.x*280.0, uv.y*120.0);
+      let dith = textureSampleLevel(iChannel0, samp, vec2f(uvd.y, -uvd.x+0.5*sin(4.0*u.time+uvd.y*4.0))/256.0, 0.0).r;
+      let d_step = abs(d)*(0.8+0.08*dith);
+      d_outer = d;
+      t += max(d_step*0.08*max(min(length(ldst),d_step),2.0), 0.01);
     }
-    td += 1.0/70.0;
-    let uvd = vec2f(uv.x*280.0, uv.y*120.0);
-    let dith = ditherHash(vec2f(uvd.y, -uvd.x + 0.5*sin(4.0*u.time + uvd.y*4.0)));
-    d = abs(d) * (0.8 + 0.08*dith);
-    if (u.quality < 0.5) { t += max(d*0.25, 0.01); }
-    else { t += max(d * 0.08 * max(min(length(ldst), d), 2.0), 0.01); }
+
+    sum *= 1.0/exp(ld*0.2) * 1.5 * u.density_scale;
+    sum = vec4f(sum.xyz * u.brightness, sum.a);
+    sum = clamp(sum, vec4f(0.0), vec4f(1.0));
+    sum = vec4f(sum.xyz*sum.xyz*(3.0 - 2.0*sum.xyz), sum.a);
   }
-  let scatter = select(0.8, 0.9, u.quality < 0.5);
-  sum *= 1.0 / exp(ld * 0.2) * scatter * u.density;
-  sum = clamp(sum, vec4f(0.0), vec4f(1.0));
-  let c = sum.xyz * sum.xyz * (3.0 - 2.0 * sum.xyz);
-  return vec4f(c, 1.0);
+  return vec4f(sum.xyz, 1.0);
 }
 
 struct VSOut { @builtin(position) pos: vec4f };
-@vertex
-fn vs(@builtin(vertex_index) vi: u32) -> VSOut {
-  var pos = array<vec2f, 3>(vec2f(-1,-1), vec2f(3,-1), vec2f(-1,3));
-  var out: VSOut;
-  out.pos = vec4f(pos[vi], 0, 1);
-  return out;
+@vertex fn vs(@builtin(vertex_index) vi: u32) -> VSOut {
+  var p = array<vec2f,3>(vec2f(-1,-1), vec2f(3,-1), vec2f(-1,3));
+  var o: VSOut; o.pos = vec4f(p[vi], 0, 1); return o;
 }
 `;
 
-// ─── State ────────────────────────────────────────
-let mouseX = 200, mouseY = 0, dragging = false;
-let zoom = 0, density = 1, speed = 1, quality = 1;
-let accTime = 0, lastTs = 0, paused = false;
-let frames = 0, fpsTime = 0;
-
-// ─── Palette Canvas ──────────────────────────────
-function drawPalette() {
-  const c = document.getElementById('paletteCanvas');
-  const ctx = c.getContext('2d');
-  const w = c.width, h = c.height;
-  // Light color gradient
-  const colors = [
-    [255,230,200], [255,180,100], [255,128,64],
-    [102,40,26], [57,80,80], [122,136,128],
-    [204,255,255], [56,140,140]
-  ];
-  const bw = w / colors.length;
-  colors.forEach((col, i) => {
-    ctx.fillStyle = `rgb(${col[0]},${col[1]},${col[2]})`;
-    ctx.fillRect(i * bw, 0, bw + 1, h);
-  });
-  // Label
-  ctx.fillStyle = 'rgba(0,0,0,0.5)';
-  ctx.font = '8px monospace';
-  ctx.fillText('LIGHT', 4, 10);
-  ctx.fillText('MEDIA', w * 0.35, 10);
-  ctx.fillText('EDGE', w * 0.75, 10);
+// ═══════════════════════════════════════════════════════════
+//  Noise texture
+// ═══════════════════════════════════════════════════════════
+function makeNoiseTex() {
+  var S = 256, data = new Uint8Array(S*S*4), s = 48271;
+  for (var i = 0; i < S*S*4; i++) { s = (s*16807) % 2147483647; data[i] = (s>>>16)&0xFF; }
+  return { data: data, size: S };
 }
 
-// ─── Quality ─────────────────────────────────────
-function setQuality(q) {
-  quality = q;
-  document.querySelectorAll('.q-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(q === 0 ? 'qLow' : q === 1 ? 'qMed' : 'qHigh').classList.add('active');
-  document.getElementById('statRays').textContent = q === 0 ? '56' : q === 1 ? '86' : '128';
-}
-window.setQuality = setQuality;
-
-function togglePause() {
-  paused = !paused;
-  const b = document.getElementById('pauseBtn');
-  b.classList.toggle('active', paused);
-  b.textContent = paused ? 'Resume' : 'Pause';
-}
-window.togglePause = togglePause;
-
-function resetRotation() { mouseX = 200; mouseY = 0; }
-window.resetRotation = resetRotation;
-
-// ─── WebGPU Init ─────────────────────────────────
-(async () => {
-  const canvas = document.getElementById('gpuCanvas');
-  const errorPanel = document.getElementById('errorPanel');
-  const viewportWin = document.getElementById('viewportWindow');
-
-  if (!navigator.gpu) {
-    errorPanel.style.display = 'block';
-    viewportWin.style.display = 'none';
-    document.getElementById('statStatus').textContent = 'NO WEBGPU';
-    document.getElementById('statStatus').style.color = 'var(--red)';
-    return;
+// ═══════════════════════════════════════════════════════════
+//  WebGPU init
+// ═══════════════════════════════════════════════════════════
+(async function() { try {
+  dbg('1: check gpu');
+  if (!navigator.gpu) { dbg('NO GPU'); return; }
+  dbg('2: adapter');
+  var adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) { dbg('NO ADAPTER'); return; }
+  dbg('3: device');
+  var device = await adapter.requestDevice();
+  dbg('4: shader');
+  var format = navigator.gpu.getPreferredCanvasFormat();
+  var shaderModule = device.createShaderModule({ code: WGSL });
+  var info = await shaderModule.getCompilationInfo();
+  for (var j = 0; j < info.messages.length; j++) {
+    var m = info.messages[j];
+    dbg('WGSL '+m.type+': '+m.message+' line:'+m.lineNum);
+    if (m.type === 'error') return;
   }
+  dbg('5: noise tex');
+  var nd = makeNoiseTex();
+  var noiseTexture = device.createTexture({ size:[nd.size,nd.size], format:'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.COPY_DST });
+  device.queue.writeTexture({texture:noiseTexture}, nd.data, {bytesPerRow:nd.size*4}, [nd.size,nd.size]);
+  var noiseSampler = device.createSampler({ magFilter:'linear', minFilter:'linear', addressModeU:'repeat', addressModeV:'repeat' });
 
-  const adapter = await navigator.gpu.requestAdapter();
-  if (!adapter) {
-    errorPanel.style.display = 'block';
-    viewportWin.style.display = 'none';
-    document.getElementById('statStatus').textContent = 'NO ADAPTER';
-    document.getElementById('statStatus').style.color = 'var(--red)';
-    return;
-  }
-
-  const device = await adapter.requestDevice();
-  const ctx = canvas.getContext('webgpu');
-  const format = navigator.gpu.getPreferredCanvasFormat();
-  ctx.configure({ device, format, alphaMode: 'opaque' });
-
-  document.getElementById('statStatus').textContent = 'ONLINE';
-  document.getElementById('statStatus').style.color = 'var(--green)';
-
-  const uniformBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  const uniformData = new Float32Array(8);
-
-  const shaderModule = device.createShaderModule({ code: WGSL_CODE });
-  const bindGroupLayout = device.createBindGroupLayout({
-    entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }],
-  });
-  const pipeline = device.createRenderPipeline({
-    layout: device.createPipelineLayout({ bindGroupLayouts: [bindGroupLayout] }),
-    vertex: { module: shaderModule, entryPoint: 'vs' },
-    fragment: { module: shaderModule, entryPoint: 'fs', targets: [{ format }] },
-    primitive: { topology: 'triangle-list' },
-  });
-  const bindGroup = device.createBindGroup({
-    layout: bindGroupLayout,
-    entries: [{ binding: 0, resource: { buffer: uniformBuf } }],
+  dbg('6: pipeline');
+  var uniformBuf = device.createBuffer({ size:48, usage: GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST });
+  var bgl = device.createBindGroupLayout({ entries:[
+    {binding:0, visibility:GPUShaderStage.FRAGMENT, buffer:{type:'uniform'}},
+    {binding:1, visibility:GPUShaderStage.FRAGMENT, texture:{sampleType:'float'}},
+    {binding:2, visibility:GPUShaderStage.FRAGMENT, sampler:{type:'filtering'}},
+  ]});
+  var pipeline = device.createRenderPipeline({
+    layout: device.createPipelineLayout({bindGroupLayouts:[bgl]}),
+    vertex: {module:shaderModule, entryPoint:'vs'},
+    fragment: {module:shaderModule, entryPoint:'fs', targets:[{format:format}]},
+    primitive: {topology:'triangle-list'},
   });
 
-  // ─── Mouse ────────
-  canvas.addEventListener('mousedown', () => { dragging = true; });
-  window.addEventListener('mouseup', () => { dragging = false; });
-  canvas.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    mouseX += e.movementX * 0.5;
-    mouseY += e.movementY * 0.5;
-  });
+  dbg('7: canvas');
+  var ctx = cv.getContext('webgpu');
+  ctx.configure({device:device, format:format, alphaMode:'opaque'});
+  var bindGroup = device.createBindGroup({layout:bgl, entries:[
+    {binding:0, resource:{buffer:uniformBuf}},
+    {binding:1, resource:noiseTexture.createView()},
+    {binding:2, resource:noiseSampler},
+  ]});
 
-  // ─── Sliders ──────
-  const zS = document.getElementById('zoomSlider');
-  const dS = document.getElementById('densitySlider');
-  const sS = document.getElementById('speedSlider');
-  zS.oninput = () => { zoom = +zS.value; document.getElementById('zoomVal').textContent = zoom.toFixed(2); };
-  dS.oninput = () => { density = +dS.value; document.getElementById('densityVal').textContent = density.toFixed(2); };
-  sS.oninput = () => { speed = +sS.value; document.getElementById('speedVal').textContent = speed.toFixed(2); };
-
-  // ─── Resize ───────
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio, quality === 0 ? 1 : quality === 1 ? 1.5 : 2);
-    const rect = canvas.getBoundingClientRect();
-    const w = Math.floor(rect.width * dpr);
-    const h = Math.floor(rect.height * dpr);
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width = w; canvas.height = h;
-      document.getElementById('resLabel').textContent = `${w}×${h}`;
-      document.getElementById('cornerRes').textContent = `${w}×${h}`;
-    }
+    var dpr = Math.min(window.devicePixelRatio, quality===0?1:quality===1?1.5:2);
+    var rect = cv.getBoundingClientRect();
+    var w = Math.floor(rect.width*dpr), h = Math.floor(rect.height*dpr);
+    if (cv.width!==w||cv.height!==h) { cv.width=w; cv.height=h; document.getElementById('resLabel').textContent=w+'×'+h; }
   }
-  new ResizeObserver(resize).observe(canvas);
+  new ResizeObserver(resize).observe(cv);
   resize();
 
-  // ─── Loop ─────────
-  function frame(ts) {
-    const dt = lastTs ? (ts - lastTs) / 1000 : 0.016;
+  dbg('8: render loop — hiding debug');
+  dbgEl.style.display = 'none';
+
+  updPlayBtn();
+
+  function frame(ts) { try {
+    var dt = lastTs ? (ts-lastTs)/1000 : 0.016;
     lastTs = ts;
-    if (!paused) accTime += dt * speed;
-
-    frames++;
-    fpsTime += dt;
-    if (fpsTime >= 1) {
-      const fps = Math.round(frames / fpsTime);
-      ['statFps','cornerFps','botFps'].forEach(id => document.getElementById(id).textContent = fps);
-      frames = 0; fpsTime = 0;
-    }
-    const tStr = accTime.toFixed(1);
-    document.getElementById('statTime').textContent = tStr;
-    document.getElementById('botTime').textContent = tStr;
-    document.getElementById('cornerTime').textContent = accTime.toFixed(2);
-    document.getElementById('timeLabel').textContent = `T+${accTime.toFixed(2)}s`;
-
+    if (playing && !scrubbing) { currentTime += dt*speed; if (currentTime>duration) currentTime=0; }
+    frames++; fpsTime+=dt;
+    if (fpsTime>=1) { document.getElementById('fpsLabel').textContent=Math.round(frames/fpsTime)+' FPS'; frames=0; fpsTime=0; }
+    document.getElementById('timeNow').textContent = currentTime.toFixed(2);
+    tlFill.style.width = (currentTime/duration*100)+'%';
     resize();
 
-    uniformData[0] = canvas.width;
-    uniformData[1] = canvas.height;
-    uniformData[2] = accTime;
-    uniformData[3] = mouseX;
-    uniformData[4] = mouseY;
-    uniformData[5] = zoom;
-    uniformData[6] = density;
-    uniformData[7] = quality;
-    device.queue.writeBuffer(uniformBuf, 0, uniformData);
+    var ud = new Float32Array(12);
+    ud[0]=cv.width; ud[1]=cv.height; ud[2]=Math.max(0,currentTime); ud[3]=mouseX;
+    ud[4]=zoom; ud[5]=density; ud[6]=quality; ud[7]=brightness; ud[8]=seed;
+    device.queue.writeBuffer(uniformBuf, 0, ud);
 
-    const encoder = device.createCommandEncoder();
-    const pass = encoder.beginRenderPass({
-      colorAttachments: [{
-        view: ctx.getCurrentTexture().createView(),
-        loadOp: 'clear', storeOp: 'store',
-        clearValue: { r: 0.055, g: 0.067, b: 0.094, a: 1 },
-      }],
-    });
+    var encoder = device.createCommandEncoder();
+    var pass = encoder.beginRenderPass({colorAttachments:[{view:ctx.getCurrentTexture().createView(), loadOp:'clear', storeOp:'store', clearValue:{r:0,g:0,b:0,a:1}}]});
     pass.setPipeline(pipeline);
     pass.setBindGroup(0, bindGroup);
     pass.draw(3);
     pass.end();
     device.queue.submit([encoder.finish()]);
     requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-})();
+  } catch(e) { dbg('FRAME: '+e.message+'\n'+e.stack); } }
 
-// ─── Reveal observer ─────────────────────────────
-drawPalette();
-const obs = new IntersectionObserver(e => {
-  e.forEach(el => { if (el.isIntersecting) el.target.classList.add('vis'); });
-}, { threshold: 0.08 });
-document.querySelectorAll('.rv').forEach(el => obs.observe(el));
+  requestAnimationFrame(frame);
+} catch(e) { dbg('INIT: '+e.message+'\n'+e.stack); } })();
 </script>
 </body>
 </html>
