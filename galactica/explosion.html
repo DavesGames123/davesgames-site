@@ -453,14 +453,15 @@ fn noise(x:vec3f)->f32{
   let rg=textureSampleLevel(iChannel0,samp,(uv+0.5)/256.0,0.0).yx;
   return 1.0-0.82*mix(rg.x,rg.y,f.z);
 }
-fn fbm(p:vec3f)->f32{return noise(p*0.06125)*0.5+noise(p*0.125)*0.25+noise(p*0.25)*0.125+noise(p*0.4)*0.2;}
+fn fbm(p:vec3f)->f32{return noise(p*0.06125)*0.5+noise(p*0.125)*0.25+noise(p*0.25)*0.125+noise(p*0.4)*0.1;}
 fn Sphere(p:vec3f,r:f32)->f32{return length(p)-r;}
 
 fn SpiralNoiseC(p_in:vec3f)->f32{
   let nudge=4.0;let normalizer=1.0/sqrt(1.0+nudge*nudge);
   var n=-glsl_mod(u.time*0.2,-2.0);var iter=2.0;var p=p_in;
   for(var i=0;i<8;i++){
-    n+=-abs(sin(p.y*iter)+cos(p.x*iter))/iter;
+    // smooth — no abs(), removes the ridged/topographic contour lines
+    n+=(sin(p.y*iter)+cos(p.x*iter))/iter;
     p=vec3f((p.x+p.y*nudge)*normalizer,(p.y-p.x*nudge)*normalizer,p.z);
     p=vec3f((p.x+p.z*nudge)*normalizer,p.y,(p.z-p.x*nudge)*normalizer);
     iter*=1.733733;
@@ -472,7 +473,7 @@ fn VolumetricExplosion(p:vec3f)->f32{
   let so=vec3f(u.seed*100.0,u.seed*73.0,u.seed*37.0);
   var r=Sphere(p,4.0);
   r+=fbm((p+so)*50.0);
-  r+=SpiralNoiseC(p.zxy*0.4132+333.0+so*0.01)*3.0;
+  r+=SpiralNoiseC(p.zxy*0.4132+333.0+so*0.01)*2.0;
   return r;
 }
 
@@ -520,7 +521,7 @@ fn RaySphereIntersect(org:vec3f,dir:vec3f,near:ptr<function,f32>,far:ptr<functio
       let pos=ro+t*rd;
       if(td>0.9||d_outer<0.12*t||t>10.0||sum.a>0.99||t>max_dist){break;}
       var d=mapScene(pos);
-      d=max(d,0.03);
+      d=max(d,0.04);
       let ldst=-pos;let lDist=max(length(ldst),0.001);
       let lightColor=vec3f(1.0,0.5,0.25);
       sum=vec4f(sum.rgb+lightColor/exp(lDist*lDist*lDist*0.08)/8.0,sum.a);
@@ -536,7 +537,7 @@ fn RaySphereIntersect(org:vec3f,dir:vec3f,near:ptr<function,f32>,far:ptr<functio
       let dith=textureSampleLevel(iChannel0,samp,vec2f(uvd.y,-uvd.x+0.5*sin(4.0*u.time+uvd.y*4.0))/256.0,0.0).r;
       let d_step=abs(d)*(0.8+0.08*dith);
       d_outer=d;
-      t+=max(d_step*0.08*max(min(length(ldst),d_step),2.0),0.01);
+      t+=max(d_step*0.1*max(min(length(ldst),d_step),2.0),0.02);
     }
     sum*=1.0/exp(ld*0.2)*1.5*u.density_scale;
     sum=vec4f(sum.xyz*u.brightness,sum.a);
