@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STELLA NOVA // Hohmann Transfer Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<style>
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;
+  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);--yellow-glow:rgba(255,200,50,0.10);
+  --red:#ff5050;--green:#64c864;
+  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{overflow:hidden}
+body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);
+  overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;
+  -webkit-font-smoothing:antialiased;cursor:crosshair;}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);
+  mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
+  background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.35) 100%)}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),
+    linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);
+  background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+.corner-data{position:fixed;z-index:50;pointer-events:none;font-size:0.38rem;
+  letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);line-height:1.8}
+.corner-data.tl{top:3.2rem;left:1rem}
+.corner-data.br{bottom:3.2rem;right:1rem;text-align:right}
+.corner-data span{color:var(--blue-dim)}
+
+/* TOPBAR */
+.topbar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding:0.5rem 1.5rem;background:rgba(14,17,24,0.95);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.12em;
+  text-transform:uppercase;position:relative;z-index:100;}
+.topbar-l{display:flex;align-items:center;gap:1.5rem}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:0.8rem;letter-spacing:0.12em}
+.sys-sub{color:var(--text-faint);font-size:0.4rem;letter-spacing:0.15em}
+.sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green);font-size:0.42rem}
+.sys-status::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;
+  box-shadow:0 0 6px currentColor;animation:blink 2s ease infinite}
+.sys-status.paused{color:var(--yellow)}
+.sys-status.paused::before{animation:none}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.topbar-r{display:flex;gap:1.5rem;align-items:center;color:var(--text-dim)}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
+#smsgwrap{font-size:0.42rem;color:var(--yellow);letter-spacing:0.1em;
+  display:flex;align-items:center;gap:.4rem}
+#smsgwrap::before{content:'//';color:var(--text-faint)}
+
+/* MAIN */
+#main{flex:1 1 0;display:flex;min-height:0;position:relative;z-index:10}
+#cvswrap{flex:0 0 58%;position:relative;min-height:0;background:var(--bg)}
+#cvs{display:block;width:100%;height:100%}
+#hoverbox{position:absolute;bottom:.8rem;left:.8rem;font-size:.42rem;letter-spacing:.06em;
+  color:var(--text-faint);background:rgba(14,17,24,.9);padding:.35rem .8rem;
+  border:1px solid var(--border);pointer-events:none;}
+
+/* MATH PANEL */
+#mathpanel{flex:0 0 42%;display:flex;flex-direction:column;min-height:0;
+  border-left:1px solid var(--border);background:rgba(14,17,24,.9);
+  backdrop-filter:blur(20px);position:relative}
+#mathpanel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--blue-dim),transparent);
+  pointer-events:none;z-index:2}
+.p-head{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding:.55rem 1.2rem;border-bottom:1px solid var(--border);
+  font-size:.45rem;letter-spacing:.2em;text-transform:uppercase;color:var(--blue-dim)}
+.p-head .tag{color:var(--text-faint);font-size:.4rem}
+#tbar{flex-shrink:0;display:none;padding:.45rem 1.2rem;
+  background:rgba(255,200,50,.06);border-bottom:1px solid rgba(255,200,50,.2);
+  font-size:.42rem;letter-spacing:.06em;color:var(--yellow)}
+#tbar.show{display:block}
+#mathscroll{flex:1 1 0;overflow-y:auto}
+#mathscroll::-webkit-scrollbar{width:2px}
+#mathscroll::-webkit-scrollbar-track{background:var(--bg)}
+#mathscroll::-webkit-scrollbar-thumb{background:var(--border)}
+
+.msec{padding:.8rem 1.2rem;border-bottom:1px solid var(--border)}
+.msec:last-child{border-bottom:none}
+.msec-head{font-size:.4rem;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--text-faint);margin-bottom:.6rem;
+  display:flex;justify-content:space-between;align-items:center}
+.msec-head .mh-tag{color:var(--blue-dim)}
+.ocards{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.4rem}
+.ocard{background:var(--bg);border:1px solid var(--border);padding:.55rem .8rem}
+.ocard.src{border-left:2px solid var(--blue)}
+.ocard.tgt{border-left:2px solid var(--green)}
+.ocard.dim{opacity:.22}
+.ol{font-size:.38rem;letter-spacing:.2em;text-transform:uppercase;color:var(--text-faint);margin-bottom:.15rem}
+.on{font-size:.82rem;font-weight:600;font-family:'Cormorant Garamond',serif;letter-spacing:.04em}
+.ov{font-size:.58rem;color:var(--text-dim);margin-top:.18rem;line-height:1.7}
+.step{display:flex;gap:.6rem;padding:.5rem 0;border-bottom:1px solid rgba(22,34,64,.5)}
+.step:last-child{border-bottom:none}
+.snum{font-size:.6rem;color:var(--text-faint);min-width:1.2rem;padding-top:.1rem}
+.sbody{flex:1;font-size:.75rem;line-height:1.6;color:var(--text-dim)}
+.sbody b{color:var(--text-bright);font-weight:500}
+.sresult{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--blue);margin-top:.22rem}
+.katex{font-size:.82em!important}
+.katex-display{margin:.1rem 0!important;overflow-x:auto}
+.scards{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
+.scard{background:var(--bg);border:1px solid var(--border);padding:.6rem .85rem}
+.sl{font-size:.38rem;letter-spacing:.18em;text-transform:uppercase;color:var(--text-faint);margin-bottom:.2rem}
+.sv{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:600}
+.su{font-size:.6rem;color:var(--text-faint);margin-left:.2rem}
+.wcards{display:flex;flex-direction:column;gap:.3rem;margin-top:.4rem}
+.wcard{background:var(--bg);border:1px solid var(--border);border-left:2px solid;
+  padding:.45rem .8rem;display:flex;justify-content:space-between;align-items:center}
+.wcard.w1{border-left-color:var(--yellow)}
+.wcard.w2{border-left-color:rgba(255,200,50,.45)}
+.wcard.w3{border-left-color:rgba(255,200,50,.2)}
+.wlbl{font-size:.55rem;letter-spacing:.1em;color:var(--text-faint)}
+.wval{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--yellow)}
+.wval.d2{color:rgba(255,200,50,.5)}.wval.d3{color:rgba(255,200,50,.28)}
+.ph{padding:1.6rem 1rem;text-align:center;color:var(--text-faint);font-size:.72rem;line-height:2}
+.ph .ic{display:block;font-size:1.4rem;opacity:.1;margin-bottom:.5rem;
+  font-family:'Cormorant Garamond',serif;font-style:italic}
+
+/* BOTBAR */
+.botbar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
+  padding:.5rem 1.5rem;background:rgba(14,17,24,.95);backdrop-filter:blur(12px);
+  border-top:1px solid var(--border);font-size:.45rem;letter-spacing:.1em;
+  text-transform:uppercase;position:relative;z-index:100}
+.bot-group{display:flex;align-items:center;gap:.6rem}
+.bot-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);
+  font-family:'JetBrains Mono',monospace;font-size:.45rem;letter-spacing:.1em;
+  text-transform:uppercase;padding:.3rem .7rem;cursor:pointer;transition:all .2s}
+.bot-btn:hover{border-color:var(--blue);color:var(--blue);box-shadow:0 0 10px var(--blue-glow)}
+.bot-btn.active{border-color:var(--blue);color:var(--bg);background:var(--blue)}
+.bot-btn.warn:hover{border-color:var(--red);color:var(--red)}
+.bot-btn.go{border-color:var(--yellow-dim);color:var(--yellow)}
+.bot-btn.go:hover{background:var(--yellow);color:var(--bg);box-shadow:0 0 14px var(--yellow-glow)}
+.bot-btn.go:disabled{opacity:.2;cursor:not-allowed}
+.bot-btn.go:hover:disabled{background:transparent;color:var(--yellow)}
+.spwrap{display:flex;align-items:center;gap:.4rem;font-size:.42rem;color:var(--text-faint)}
+input[type=range]{width:70px;accent-color:var(--blue);cursor:pointer}
+.bot-read{font-size:.4rem;letter-spacing:.08em;color:var(--text-faint)}
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="corner-data tl">SYS.REF <span>0xH0HM</span><br>MODULE <span>ASTRO.NAV</span></div>
+<div class="corner-data br">SIGNAL <span>NOMINAL</span><br>AUTH <span>VERIFIED</span></div>
+
+<div class="topbar">
+  <div class="topbar-l">
+    <span class="sys-name">Stella Nova</span>
+    <span class="sys-sub">// Orbital Transfer Calculator</span>
+    <div class="sys-status" id="simStatus">Sim Active</div>
+  </div>
+  <div id="smsgwrap"><span id="smsg">AWAITING SELECTION</span></div>
+  <div class="topbar-r">
+    <span>Planets: <strong id="bodyCount">0</strong></span>
+    <span>FPS: <strong id="fpsRead">60</strong></span>
+    <span>T: <strong id="timeRead">0.00</strong>&nbsp;yr</span>
+  </div>
+</div>
+
+<div id="main">
+  <div id="cvswrap">
+    <canvas id="cvs"></canvas>
+    <div id="hoverbox">hover over a planet</div>
+  </div>
+  <div id="mathpanel">
+    <div class="p-head"><span>// Transfer Mathematics</span><span class="tag">PKT.ORBITAL</span></div>
+    <div id="tbar"></div>
+    <div id="mathscroll"><div id="mathcontent"></div></div>
+  </div>
+</div>
+
+<div class="botbar">
+  <div class="bot-group">
+    <button class="bot-btn" onclick="regen()">⟳ New System</button>
+    <button class="bot-btn warn" onclick="clearSel()">✕ Clear</button>
+    <button class="bot-btn go" id="btnLaunch" disabled onclick="launch()">▶ Launch Transfer</button>
+  </div>
+  <div class="bot-group">
+    <div class="spwrap">SPEED
+      <input type="range" id="spSlider" min="0.05" max="0.5" step="0.005" value="0.5">
+      <span id="spVal">0.5×</span>
+    </div>
+  </div>
+  <div class="bot-read">SPACE = pause &nbsp;·&nbsp; ① source &nbsp;·&nbsp; ② target &nbsp;·&nbsp; ③ launch</div>
+</div>
+
+<script>
+const MU=4*Math.PI*Math.PI, AU_KM=1.496e8, YR_S=3.156e7;
+const AU2KMS=AU_KM/YR_S, TAU=Math.PI*2;
+const DPR=Math.min(devicePixelRatio||1,2);
+const BASE_TS=0.035; // years/real-second at 1× — slow default
+
+let planets=[], source=null, target=null, xfer=null, ship=null;
+let hovered=null, simTime=0, lastT=null, paused=false;
+let launchWindows=[];
+let launchScore=null; // {grade, cosTheta, dDeg, color, flavor, fadeT}
+
+// ── Canvas ──────────────────────────────────────────────────────
+const cvs=document.getElementById('cvs'), ctx=cvs.getContext('2d');
+const wrap=document.getElementById('cvswrap');
+let W,H,CX,CY,SCALE;
+
+function resize(){
+  const r=wrap.getBoundingClientRect();
+  W=r.width; H=r.height;
+  cvs.width=W*DPR; cvs.height=H*DPR;
+  cvs.style.width=W+'px'; cvs.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  CX=W/2; CY=H/2;
+  const maxR=planets.length?Math.max(...planets.map(p=>p.r)):4;
+  SCALE=(Math.min(W,H)*0.43)/maxR;
+}
+window.addEventListener('resize',()=>{resize();_sc=null});
+
+// ── Planet generation — Laplace resonance chain ──────────────────
+const NAMES=['Auvon','Belrix','Cytha','Dural','Exven','Farux','Glyth','Helox',
+             'Iyral','Juvex','Kelon','Lythos','Myrvax','Nexul','Ophryn','Pyreth'];
+// Period ratios for consecutive planets: mainly 2:1 and 3:2, sometimes 4:3
+const RES=[2, 3/2, 2, 3/2, 4/3, 3/2];
+
+function regen(){
+  const names=[...NAMES].sort(()=>Math.random()-.5);
+  const count=5+Math.floor(Math.random()*3);
+  planets=[];
+  const hues=[];
+  let T=0.15+Math.random()*0.12; // innermost period (yr)
+
+  for(let i=0;i<count;i++){
+    const r=Math.pow(T,2/3);
+    if(r>5) break;
+    let hue,att=0;
+    do{hue=Math.random()*360;att++}
+    while(att<30&&hues.some(h=>Math.min(Math.abs(h-hue),360-Math.abs(h-hue))<36));
+    hues.push(hue);
+    planets.push({
+      name:names[i], r, period:T,
+      omega:TAU/T, speed:Math.sqrt(MU/r),
+      angle:Math.random()*TAU,
+      hue, size:3+Math.random()*4,
+      color:`hsl(${hue},65%,62%)`
+    });
+    const res=RES[Math.floor(Math.random()*RES.length)];
+    T*=res*(0.97+Math.random()*0.06);
+  }
+
+  source=target=xfer=ship=null; launchWindows=[];
+  simTime=0; lastT=null;
+  resize();
+  setBtnLaunch(false); setTbar(false);
+  setStatus('AWAITING SELECTION');
+  renderMath();
+}
+
+// ── Physics ──────────────────────────────────────────────────────
+const vCirc=(r)=>Math.sqrt(MU/r);
+const visViva=(r,a)=>Math.sqrt(MU*(2/r-1/a));
+
+function solveKepler(M,e){
+  let E=M;
+  for(let i=0;i<60;i++){const d=(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));E-=d;if(Math.abs(d)<1e-12)break}
+  return E;
+}
+
+function computeXfer(r1,r2){
+  const asc=r2>=r1, rPer=Math.min(r1,r2), rApo=Math.max(r1,r2);
+  const a_t=(rPer+rApo)/2, c_t=a_t-rPer;
+  const b_t=Math.sqrt(Math.max(0,a_t*a_t-c_t*c_t)), e_t=c_t/a_t;
+  const vc1=vCirc(r1), vc2=vCirc(r2);
+  const v1=visViva(r1,a_t), v2=visViva(r2,a_t);
+  const dv1=Math.abs(v1-vc1), dv2=Math.abs(v2-vc2);
+  const tTr=Math.PI*Math.sqrt(Math.pow(a_t,3)/MU);
+  return{r1,r2,rPer,rApo,a_t,b_t,c_t,e_t,asc,vc1,vc2,v1,v2,dv1,dv2,dvTot:dv1+dv2,tTr};
+}
+
+// ── Launch window computation ─────────────────────────────────────
+// Required target lead angle: φ_req = π − ω_tgt · t_transfer
+// φ_req is the angle of target AHEAD of source at launch time.
+function computeWindows(src, tgt, tr, now, count=3){
+  const phi_req=Math.PI-tgt.omega*tr.tTr;
+  const theta_src=src.angle+src.omega*now;
+  const theta_tgt=tgt.angle+tgt.omega*now;
+  const phi_now=theta_tgt-theta_src;
+  const dphi=tgt.omega-src.omega;
+  if(Math.abs(dphi)<1e-6) return [];
+
+  const wins=[];
+  for(let k=-30;k<=80;k++){
+    const dt=(phi_req-phi_now+TAU*k)/dphi;
+    if(dt>0.004) wins.push(dt);  // future only for ghost markers
+  }
+  wins.sort((a,b)=>a-b);
+  return wins.slice(0,count).map((dt,i)=>{
+    const tL=now+dt;
+    return{
+      dt,
+      label:`W${i+1}`,
+      srcAng: src.angle+src.omega*tL,
+      tgtAng: tgt.angle+tgt.omega*(tL+tr.tTr)
+    };
+  });
+}
+
+// Find the ideal source angle at the window NEAREST to now (past OR future)
+// so a launch 2 seconds after W1 still scores against W1, not W2.
+// Returns the signed time offset (years) from now to the nearest window (past or future)
+function nearestWindowDt(src, tgt, tr, now){
+  const phi_req=Math.PI-tgt.omega*tr.tTr;
+  const theta_src=src.angle+src.omega*now;
+  const theta_tgt=tgt.angle+tgt.omega*now;
+  const phi_now=theta_tgt-theta_src;
+  const dphi=tgt.omega-src.omega;
+  if(Math.abs(dphi)<1e-6) return 0;
+
+  let bestDt=Infinity;
+  for(let k=-60;k<=60;k++){
+    const dt=(phi_req-phi_now+TAU*k)/dphi;
+    if(Math.abs(dt)<Math.abs(bestDt)) bestDt=dt;
+  }
+  return bestDt; // years, signed (negative = window was in the past)
+}
+
+// ── Launch scoring — based on timing error in days ────────────────
+// Δt = how many simulation-days early/late vs the nearest ideal window.
+// Thresholds are absolute day errors, independent of orbit size.
+const GRADES=[
+  {maxD:0.5,  g:'A+',c:'#69f7a0',f:'Perfect. Textbook Hohmann launch.'},
+  {maxD:1.5,  g:'A', c:'#69f7a0',f:'Excellent timing. Near-optimal trajectory.'},
+  {maxD:4,    g:'A−',c:'#a8f0c0',f:'Great launch. Tiny correction burn needed.'},
+  {maxD:9,    g:'B+',c:'#96c8ff',f:'Good timing. Small phase error.'},
+  {maxD:18,   g:'B', c:'#96c8ff',f:'Decent window. Minor fuel penalty.'},
+  {maxD:35,   g:'B−',c:'#96c8ff',f:'Acceptable. You\'ll arrive, just slightly late.'},
+  {maxD:65,   g:'C+',c:'#ffc832',f:'Off-window. Noticeable trajectory drift.'},
+  {maxD:110,  g:'C', c:'#ffc832',f:'Poor timing. Expect a correction burn.'},
+  {maxD:180,  g:'C−',c:'#ffa040',f:'Badly timed. Significant fuel wasted.'},
+  {maxD:300,  g:'D+',c:'#ff7060',f:'Way off. You\'ll miss the target orbit.'},
+  {maxD:500,  g:'D', c:'#ff5050',f:'Very poor. Emergency corrections required.'},
+  {maxD:800,  g:'D−',c:'#ff5050',f:'Catastrophic timing. Fuel budget blown.'},
+  {maxD:1e9,  g:'F', c:'#ff3030',f:'You launched into the void. Good luck.'},
+];
+
+function scorelaunch(dtYears){
+  const dtDays=Math.abs(dtYears)*365.25;
+  const g=GRADES.find(g=>dtDays<=g.maxD)||GRADES[GRADES.length-1];
+  const early=dtYears<-0.002, late=dtYears>0.002;
+  const timing=early?'early':late?'late':'on time';
+  return{grade:g.g, dtDays, timing, color:g.c, flavor:g.f, fadeT:0};
+}
+
+// ── Star cache ───────────────────────────────────────────────────
+let _sc=null;
+function getStars(){
+  if(_sc&&_sc.W===W&&_sc.H===H) return _sc.d;
+  const d=[];
+  for(let i=0;i<300;i++) d.push({
+    x:((i*7919+13337)%W), y:((i*6271+31337)%H),
+    r:.2+(i%6)*.18, a:.04+(i%5)*.09
+  });
+  _sc={W,H,d}; return d;
+}
+
+// ── Drawing ──────────────────────────────────────────────────────
+function drawBg(){
+  ctx.fillStyle='#0e1118'; ctx.fillRect(0,0,W,H);
+  getStars().forEach(s=>{
+    ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,TAU);
+    ctx.fillStyle=`rgba(200,210,240,${s.a})`; ctx.fill();
+  });
+  // radar sweep
+  const sa=(simTime*0.26)%TAU;
+  const rm=planets.length?Math.max(...planets.map(p=>p.r))*SCALE*1.1:200;
+  ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(CX+Math.cos(sa)*rm,CY-Math.sin(sa)*rm);
+  ctx.strokeStyle='rgba(150,200,255,0.07)'; ctx.lineWidth=1; ctx.stroke();
+  // sun
+  const sg=ctx.createRadialGradient(CX,CY,0,CX,CY,50);
+  sg.addColorStop(0,'rgba(255,248,190,1)'); sg.addColorStop(.18,'rgba(255,218,90,.82)');
+  sg.addColorStop(.55,'rgba(255,155,45,.14)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath(); ctx.arc(CX,CY,50,0,TAU); ctx.fillStyle=sg; ctx.fill();
+  ctx.beginPath(); ctx.arc(CX,CY,11,0,TAU); ctx.fillStyle='#fff9dc'; ctx.fill();
+}
+
+function pPos(p,t){
+  t=t!==undefined?t:simTime;
+  const ang=p.angle+p.omega*t;
+  return{x:CX+Math.cos(ang)*p.r*SCALE, y:CY-Math.sin(ang)*p.r*SCALE, ang};
+}
+
+function drawOrbit(p){
+  ctx.beginPath(); ctx.arc(CX,CY,p.r*SCALE,0,TAU);
+  const sel=p===source||p===target;
+  ctx.setLineDash(sel?[]:[1.5,7]);
+  ctx.strokeStyle=p===source?'rgba(150,200,255,.4)':p===target?'rgba(100,200,100,.4)':'rgba(150,200,255,.05)';
+  ctx.lineWidth=sel?1.2:.6;
+  ctx.stroke(); ctx.setLineDash([]);
+}
+
+function drawPlanet(p,pos,alpha){
+  alpha=alpha!==undefined?alpha:1;
+  const isSrc=p===source,isTgt=p===target,isHov=p===hovered;
+  const r=p.size*DPR;
+  ctx.globalAlpha=alpha;
+  if(alpha===1&&(isSrc||isTgt||isHov)){
+    const gc=isSrc?'150,200,255':isTgt?'100,200,100':'200,220,255';
+    const g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,r*5);
+    g.addColorStop(0,`rgba(${gc},.3)`); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath(); ctx.arc(pos.x,pos.y,r*5,0,TAU); ctx.fillStyle=g; ctx.fill();
+    ctx.beginPath(); ctx.arc(pos.x,pos.y,r+4*DPR,0,TAU);
+    ctx.strokeStyle=isSrc?'rgba(150,200,255,.7)':isTgt?'rgba(100,200,100,.7)':'rgba(255,255,255,.2)';
+    ctx.lineWidth=1; ctx.stroke();
+  }
+  const pg=ctx.createRadialGradient(pos.x-r*.3,pos.y-r*.3,0,pos.x,pos.y,r);
+  pg.addColorStop(0,`hsl(${p.hue},75%,80%)`); pg.addColorStop(1,`hsl(${p.hue},55%,35%)`);
+  ctx.beginPath(); ctx.arc(pos.x,pos.y,r,0,TAU); ctx.fillStyle=pg; ctx.fill();
+  ctx.globalAlpha=1;
+}
+
+function drawLabel(p,pos){
+  const col=p===source?'#96c8ff':p===target?'#64c864':`hsl(${p.hue},50%,65%)`;
+  ctx.font=`${9*DPR}px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left'; ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(p.name,pos.x+p.size*DPR+5*DPR+1,pos.y+1);
+  ctx.fillStyle=col; ctx.fillText(p.name,pos.x+p.size*DPR+5*DPR,pos.y);
+}
+
+// ellipse helper
+function eToXY(a_t,b_t,c_t,periAng,E){
+  const xo=a_t*Math.cos(E)-c_t, yo=b_t*Math.sin(E);
+  const cp=Math.cos(periAng), sp=Math.sin(periAng);
+  return[CX+(xo*cp-yo*sp)*SCALE, CY-(xo*sp+yo*cp)*SCALE];
+}
+
+function drawXferEllipse(tr,periAng,alpha,drawArc){
+  const{a_t,b_t,c_t}=tr;
+  ctx.globalAlpha=alpha;
+  // faint full outline
+  ctx.beginPath();
+  for(let i=0;i<=180;i++){const[x,y]=eToXY(a_t,b_t,c_t,periAng,i*TAU/180);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
+  ctx.closePath(); ctx.setLineDash([4,5]);
+  ctx.strokeStyle='rgba(255,200,50,.1)'; ctx.lineWidth=.7; ctx.stroke(); ctx.setLineDash([]);
+  // active arc
+  if(drawArc){
+    const E0=tr.asc?0:Math.PI;
+    ctx.beginPath();
+    for(let i=0;i<=100;i++){const[x,y]=eToXY(a_t,b_t,c_t,periAng,E0+i*Math.PI/100);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
+    ctx.strokeStyle='#ffc832'; ctx.lineWidth=2*DPR; ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+}
+
+function burnMark(x,y,col,lbl){
+  const r=7*DPR;
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fillStyle=col+'22'; ctx.fill();
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.strokeStyle=col; ctx.lineWidth=1; ctx.stroke();
+  ctx.fillStyle=col;
+  ctx.font=`bold ${7*DPR}px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(lbl,x,y);
+}
+
+// ── Launch window markers ─────────────────────────────────────────
+function drawWindows(){
+  if(!source||!target||!xfer||!launchWindows.length) return;
+  const alphas=[0.85,0.42,0.2];
+  const wCols=['#ffc832','rgba(255,200,50,.55)','rgba(255,200,50,.28)'];
+
+  launchWindows.forEach((w,i)=>{
+    const al=alphas[i];
+    const sr=source.size*DPR, tr2=target.size*DPR;
+    const sx=CX+Math.cos(w.srcAng)*source.r*SCALE;
+    const sy=CY-Math.sin(w.srcAng)*source.r*SCALE;
+    const tx=CX+Math.cos(w.tgtAng)*target.r*SCALE;
+    const ty=CY-Math.sin(w.tgtAng)*target.r*SCALE;
+
+    // transfer ellipse ghost
+    const periAng=xfer.asc?w.srcAng:w.srcAng+Math.PI;
+    drawXferEllipse(xfer,periAng,al*0.32,i===0);
+
+    // target arrival ghost
+    ctx.globalAlpha=al*0.65;
+    const tg=ctx.createRadialGradient(tx,ty,0,tx,ty,tr2*3.5);
+    tg.addColorStop(0,'rgba(100,200,100,.35)'); tg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath(); ctx.arc(tx,ty,tr2*3.5,0,TAU); ctx.fillStyle=tg; ctx.fill();
+    ctx.beginPath(); ctx.arc(tx,ty,tr2,0,TAU); ctx.fillStyle='rgba(100,200,100,.38)'; ctx.fill();
+    ctx.globalAlpha=1;
+
+    // source ghost halo + ring
+    ctx.globalAlpha=al;
+    const hg=ctx.createRadialGradient(sx,sy,0,sx,sy,sr*4.5);
+    hg.addColorStop(0,'rgba(255,200,50,.28)'); hg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath(); ctx.arc(sx,sy,sr*4.5,0,TAU); ctx.fillStyle=hg; ctx.fill();
+    ctx.beginPath(); ctx.arc(sx,sy,sr+5*DPR,0,TAU);
+    ctx.strokeStyle=wCols[i]; ctx.lineWidth=i===0?1.5:.8; ctx.stroke();
+    ctx.globalAlpha=1;
+
+    // label + days
+    ctx.globalAlpha=al;
+    const days=Math.round(w.dt*365.25);
+    ctx.font=`bold ${9*DPR}px 'JetBrains Mono',monospace`;
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    const lx=sx, ly=sy-sr-7*DPR;
+    ctx.fillStyle='rgba(0,0,0,.65)'; ctx.fillText(w.label,lx+.8,ly+.8);
+    ctx.fillStyle=i===0?'#ffc832':'rgba(255,200,50,.65)'; ctx.fillText(w.label,lx,ly);
+    ctx.font=`${7.5*DPR}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle='rgba(255,200,50,.5)'; ctx.fillText(days+'d',lx,ly+9*DPR);
+    ctx.globalAlpha=1;
+
+    // spoke (W1 only)
+    if(i===0){
+      ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(sx,sy);
+      ctx.setLineDash([2,6]); ctx.strokeStyle='rgba(255,200,50,.1)'; ctx.lineWidth=.8;
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+  });
+}
+
+// ── Guidance overlay ─────────────────────────────────────────────
+function drawGuidance(){
+  if(source&&target&&ship) return;
+
+  let line1='', line2='', sub='';
+  if(!source){
+    line1='① SELECT SOURCE PLANET';
+    sub='Click any planet to begin the transfer calculation';
+  } else if(!target){
+    line1=`SOURCE: ${source.name.toUpperCase()}`;
+    line2='② SELECT TARGET PLANET';
+    sub='Click another planet to compute the Hohmann transfer';
+  } else if(!ship){
+    line1=`${source.name} → ${target.name}`;
+    line2=`${launchWindows.length} LAUNCH WINDOWS SHOWN`;
+    sub='Ghost markers show optimal launch positions  ·  Press ▶ to launch';
+  }
+
+  const bw=Math.min(W*.58,380), bx=CX-bw/2;
+  const lineH=13, subH=10, pad=12;
+  const linesCount=(line1?1:0)+(line2?1:0);
+  const bh=linesCount*lineH+subH+pad*2+4;
+  const by=H*.83;
+
+  ctx.save();
+  ctx.globalAlpha=.86;
+  ctx.fillStyle='rgba(8,12,22,.9)';
+  ctx.strokeStyle='rgba(150,200,255,.12)';
+  ctx.lineWidth=1;
+  // rounded rect
+  const rr=4;
+  ctx.beginPath();
+  ctx.moveTo(bx+rr,by); ctx.lineTo(bx+bw-rr,by);
+  ctx.arcTo(bx+bw,by,bx+bw,by+rr,rr);
+  ctx.lineTo(bx+bw,by+bh-rr);
+  ctx.arcTo(bx+bw,by+bh,bx+bw-rr,by+bh,rr);
+  ctx.lineTo(bx+rr,by+bh);
+  ctx.arcTo(bx,by+bh,bx,by+bh-rr,rr);
+  ctx.lineTo(bx,by+rr);
+  ctx.arcTo(bx,by,bx+rr,by,rr);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.globalAlpha=1;
+
+  let ty=by+pad;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  if(line1){
+    ctx.font=`${source?'400':'700'} ${9.5}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle=source?'rgba(150,200,255,.55)':'#96c8ff';
+    ctx.fillText(line1.toUpperCase(),CX,ty);
+    ty+=lineH;
+  }
+  if(line2){
+    ctx.font=`700 ${9.5}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle='#96c8ff';
+    ctx.fillText(line2.toUpperCase(),CX,ty);
+    ty+=lineH+2;
+  }
+  ty+=2;
+  ctx.font=`300 ${7.5}px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='rgba(104,120,160,.7)';
+  ctx.fillText(sub,CX,ty);
+  ctx.restore();
+}
+
+// ── Velocity / burn vector at launch ─────────────────────────────
+function drawBurnVector(){
+  if(!ship||!xfer) return;
+  // Only show during first few seconds of flight (while burn is "happening")
+  const dt=simTime-ship.launchT;
+  if(dt<0||dt>xfer.tTr*0.12) return;
+  const fade=dt<0.001?1:Math.max(0,1-dt/(xfer.tTr*0.12));
+
+  // Launch position
+  const lx=CX+Math.cos(ship.launchAng)*xfer.r1*SCALE;
+  const ly=CY-Math.sin(ship.launchAng)*xfer.r1*SCALE;
+
+  // Tangential direction of circular orbit at launch (perpendicular to radius, prograde)
+  const tanAng=ship.launchAng+Math.PI/2*(xfer.asc?1:-1);
+
+  // Δv₁ magnitude scaled to pixels — make it visually meaningful
+  const dvPixels=Math.min(xfer.dv1/xfer.vc1*xfer.r1*SCALE*5, Math.min(W,H)*0.32);
+
+  // Vector tip
+  const vx=lx+Math.cos(tanAng)*dvPixels;
+  const vy=ly-Math.sin(tanAng)*dvPixels;
+
+  ctx.save();
+  ctx.globalAlpha=fade*0.9;
+
+  // Glow
+  const gl=ctx.createRadialGradient(lx,ly,0,lx,ly,dvPixels*1.1);
+  gl.addColorStop(0,'rgba(255,80,80,0.12)'); gl.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath(); ctx.arc(lx,ly,dvPixels*1.1,0,TAU);
+  ctx.fillStyle=gl; ctx.fill();
+
+  // Arrow shaft
+  ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(vx,vy);
+  ctx.strokeStyle='#ff5050'; ctx.lineWidth=2.5*DPR;
+  ctx.lineCap='round'; ctx.stroke();
+
+  // Arrowhead
+  const headLen=10*DPR, headAng=0.42;
+  ctx.beginPath();
+  ctx.moveTo(vx,vy);
+  ctx.lineTo(vx-headLen*Math.cos(tanAng-headAng), vy+headLen*Math.sin(tanAng-headAng));
+  ctx.lineTo(vx-headLen*Math.cos(tanAng+headAng), vy+headLen*Math.sin(tanAng+headAng));
+  ctx.closePath(); ctx.fillStyle='#ff5050'; ctx.fill();
+
+  // Δv label
+  ctx.font=`bold ${8*DPR}px 'JetBrains Mono',monospace`;
+  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  const mx=(lx+vx)/2, my=(ly+vy)/2;
+  const nx=-Math.sin(tanAng)*12*DPR, ny=Math.cos(tanAng)*12*DPR; // normal offset
+  ctx.fillStyle='rgba(0,0,0,.55)';
+  ctx.fillText(`Δv₁ = ${(xfer.dv1*AU2KMS).toFixed(2)} km/s`, mx+nx+.8, my-ny+.8);
+  ctx.fillStyle='#ff9090';
+  ctx.fillText(`Δv₁ = ${(xfer.dv1*AU2KMS).toFixed(2)} km/s`, mx+nx, my-ny);
+
+  ctx.restore();
+}
+
+// ── Score overlay ─────────────────────────────────────────────────
+function drawScoreOverlay(){
+  if(!launchScore) return;
+
+  launchScore.fadeT+=0.016;
+  const hold=3, fade=2;
+  let alpha=1;
+  if(launchScore.fadeT>hold) alpha=Math.max(0,1-(launchScore.fadeT-hold)/fade);
+  if(alpha<=0){ launchScore=null; return; }
+
+  const sc=launchScore;
+  const bw=Math.min(W*.48,320), bh=148;
+  const bx=CX-bw/2, by=H*.18;
+
+  ctx.save();
+  ctx.globalAlpha=alpha;
+
+  // Panel bg
+  ctx.fillStyle='rgba(8,12,22,0.95)';
+  ctx.strokeStyle=sc.color+'55';
+  ctx.lineWidth=1.5;
+  rRect(ctx,bx,by,bw,bh,6);
+  ctx.fill(); ctx.stroke();
+
+  // Top accent line
+  ctx.fillStyle=sc.color+'30';
+  ctx.fillRect(bx+1,by+1,bw-2,3);
+
+  // Grade
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.font=`700 ${52*DPR}px 'Cormorant Garamond',serif`;
+  ctx.fillStyle=sc.color;
+  ctx.shadowColor=sc.color; ctx.shadowBlur=18*DPR;
+  ctx.fillText(sc.grade, bx+bw*.36, by+22);
+  ctx.shadowBlur=0;
+
+  // Timing readout
+  const dStr=sc.dtDays<1 ? `${(sc.dtDays*24).toFixed(1)} hr` : `${sc.dtDays.toFixed(1)} days`;
+  ctx.font=`${8*DPR}px 'JetBrains Mono',monospace`;
+  ctx.textAlign='left';
+  ctx.fillStyle='rgba(150,200,255,.55)';
+  ctx.fillText('LAUNCH TIMING', bx+bw*.56, by+22);
+  ctx.fillStyle=sc.color;
+  ctx.font=`700 ${13*DPR}px 'JetBrains Mono',monospace`;
+  ctx.fillText(dStr+' '+sc.timing, bx+bw*.56, by+38);
+  ctx.font=`${9*DPR}px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='rgba(200,210,230,.45)';
+  const windowStr=sc.dtDays<0.5?'On window':'Off window by '+dStr;
+  ctx.fillText(windowStr, bx+bw*.56, by+58);
+
+  // Divider
+  ctx.strokeStyle='rgba(150,200,255,.08)';
+  ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(bx+14,by+88); ctx.lineTo(bx+bw-14,by+88); ctx.stroke();
+
+  // Flavor text
+  ctx.font=`300 italic ${8*DPR}px 'Cormorant Garamond',serif`;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillStyle='rgba(200,210,230,.55)';
+  ctx.fillText(sc.flavor, bx+bw/2, by+100);
+
+  // Tag
+  ctx.font=`${7*DPR}px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='rgba(104,120,160,.35)';
+  ctx.fillText('LAUNCH EVALUATION // HOHMANN.SCORE', bx+bw/2, by+122);
+
+  ctx.restore();
+}
+
+function rRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+
+// ── Ship ─────────────────────────────────────────────────────────
+function drawShip(){
+  if(!ship||(!ship.x&&ship.x!==0)) return;
+  if(ship.trail.length>1){
+    ctx.beginPath(); ctx.moveTo(ship.trail[0].x,ship.trail[0].y);
+    ship.trail.forEach(p=>ctx.lineTo(p.x,p.y));
+    ctx.strokeStyle='rgba(255,200,80,.35)'; ctx.lineWidth=1.2; ctx.stroke();
+  }
+  const g=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,11*DPR);
+  g.addColorStop(0,'rgba(255,250,200,.9)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath(); ctx.arc(ship.x,ship.y,11*DPR,0,TAU); ctx.fillStyle=g; ctx.fill();
+  ctx.beginPath(); ctx.arc(ship.x,ship.y,3.5*DPR,0,TAU); ctx.fillStyle='#fff'; ctx.fill();
+}
+
+function updateShip(){
+  if(!ship||ship.arrived) return;
+  const dt=simTime-ship.launchT;
+  if(dt<=0){
+    ship.x=CX+Math.cos(ship.launchAng)*xfer.r1*SCALE;
+    ship.y=CY-Math.sin(ship.launchAng)*xfer.r1*SCALE;
+    return;
+  }
+  if(dt>=xfer.tTr){
+    ship.arrived=true;
+    ship.arriveAng=ship.launchAng+Math.PI;
+    ship.arriveT=simTime;
+    ship.arriveOmega=TAU/Math.pow(xfer.r2,1.5);
+    setTbar(true,'✓  TRANSFER COMPLETE — SPACECRAFT IN TARGET ORBIT');
+    setStatus('TRANSFER COMPLETE');
+    return;
+  }
+  const E=solveKepler((xfer.asc?0:Math.PI)+Math.PI*(dt/xfer.tTr), xfer.e_t);
+  const xo=xfer.a_t*Math.cos(E)-xfer.c_t, yo=xfer.b_t*Math.sin(E);
+  const cp=Math.cos(ship.periAng), sp=Math.sin(ship.periAng);
+  ship.x=CX+(xo*cp-yo*sp)*SCALE;
+  ship.y=CY-(xo*sp+yo*cp)*SCALE;
+  ship.trail.push({x:ship.x,y:ship.y});
+  if(ship.trail.length>90) ship.trail.shift();
+}
+
+// ── Main loop ────────────────────────────────────────────────────
+let fc=0, lastFT=performance.now();
+function frame(now){
+  if(lastT===null) lastT=now;
+  const dtR=(now-lastT)/1000; lastT=now;
+
+  if(!paused){
+    const spd=parseFloat(document.getElementById('spSlider').value);
+    simTime+=dtR*BASE_TS*spd;
+  }
+
+  if(ship&&ship.arrived){
+    const ang=ship.arriveAng+ship.arriveOmega*(simTime-ship.arriveT);
+    ship.x=CX+Math.cos(ang)*xfer.r2*SCALE;
+    ship.y=CY-Math.sin(ang)*xfer.r2*SCALE;
+  } else updateShip();
+
+  if(source&&target&&xfer&&(!ship||ship.arrived))
+    launchWindows=computeWindows(source,target,xfer,simTime);
+
+  // render
+  drawBg();
+  planets.forEach(p=>drawOrbit(p));
+  drawWindows();
+
+  if(ship&&xfer){
+    const pA=xfer.asc?ship.launchAng:ship.launchAng+Math.PI;
+    drawXferEllipse(xfer,pA,1,true);
+    burnMark(CX+Math.cos(ship.launchAng)*xfer.r1*SCALE,CY-Math.sin(ship.launchAng)*xfer.r1*SCALE,'#ff5050','Δv₁');
+    burnMark(CX+Math.cos(ship.launchAng+Math.PI)*xfer.r2*SCALE,CY-Math.sin(ship.launchAng+Math.PI)*xfer.r2*SCALE,'#ffc832','Δv₂');
+  }
+
+  planets.forEach(p=>{const pos=pPos(p);drawPlanet(p,pos);drawLabel(p,pos)});
+  drawShip();
+  drawBurnVector();
+  drawScoreOverlay();
+  drawGuidance();
+
+  fc++; const n2=performance.now();
+  if(n2-lastFT>=1000){document.getElementById('fpsRead').textContent=fc;fc=0;lastFT=n2}
+  document.getElementById('bodyCount').textContent=planets.length;
+  document.getElementById('timeRead').textContent=simTime.toFixed(2);
+  requestAnimationFrame(frame);
+}
+
+// ── Input ────────────────────────────────────────────────────────
+cvs.addEventListener('mousemove',e=>{
+  const rc=cvs.getBoundingClientRect();
+  const mx=e.clientX-rc.left, my=e.clientY-rc.top;  // CSS pixels, matches pPos
+  hovered=null; let md=20;
+  planets.forEach(p=>{
+    const pos=pPos(p);
+    const d=Math.hypot(pos.x-mx,pos.y-my);
+    if(d<md){md=d;hovered=p}
+  });
+  const hb=document.getElementById('hoverbox');
+  if(hovered){
+    hb.innerHTML=`<span style="color:${hovered.color}">${hovered.name}</span>  ·  r&nbsp;=&nbsp;${hovered.r.toFixed(3)}&nbsp;AU  ·  v&nbsp;=&nbsp;${(hovered.speed*AU2KMS).toFixed(2)}&nbsp;km/s  ·  T&nbsp;=&nbsp;${hovered.period.toFixed(2)}&nbsp;yr`;
+    cvs.style.cursor='pointer';
+  } else {
+    hb.textContent='hover over a planet';
+    cvs.style.cursor='crosshair';
+  }
+});
+
+cvs.addEventListener('click',()=>{
+  if(!hovered) return;
+  if(!source){
+    source=hovered;
+    setStatus(`SOURCE: ${source.name.toUpperCase()} — SELECT TARGET`);
+    renderMath();
+  } else if(hovered!==source&&!target){
+    target=hovered;
+    xfer=computeXfer(source.r,target.r);
+    launchWindows=computeWindows(source,target,xfer,simTime);
+    setStatus('TRANSFER COMPUTED — PRESS ▶ LAUNCH');
+    setBtnLaunch(true);
+    renderMath();
+  }
+});
+
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&e.target.tagName!=='INPUT'){
+    e.preventDefault(); togglePause();
+  }
+});
+
+function togglePause(){
+  paused=!paused;
+  const el=document.getElementById('simStatus');
+  el.textContent=paused?'Paused':'Sim Active';
+  el.className='sys-status'+(paused?' paused':'');
+}
+
+function launch(){
+  if(!source||!target||!xfer) return;
+  const pos=pPos(source);
+  const actualAng=pos.ang;
+
+  // Score against the nearest window, past OR future — signed dt in years
+  const dtYears=nearestWindowDt(source, target, xfer, simTime);
+  launchScore=scorelaunch(dtYears);
+
+  ship={launchAng:actualAng, periAng:xfer.asc?actualAng:actualAng+Math.PI,
+        launchT:simTime, trail:[], arrived:false, x:0, y:0};
+  launchWindows=[];
+  setTbar(true,'⚡  TRANSFER IN PROGRESS — SPACECRAFT EN ROUTE');
+  setStatus('TRANSFERRING...'); setBtnLaunch(false);
+}
+
+function clearSel(){
+  source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
+  setBtnLaunch(false); setTbar(false);
+  setStatus('AWAITING SELECTION'); renderMath();
+}
+
+document.getElementById('spSlider').addEventListener('input',function(){
+  const v=parseFloat(this.value);
+  document.getElementById('spVal').textContent=(v<1?v.toFixed(2):v%1===0?v:v.toFixed(1))+'×';
+});
+
+// ── Math panel ───────────────────────────────────────────────────
+function K(s,d=false){
+  try{return katex.renderToString(s,{throwOnError:false,displayMode:d})}
+  catch(e){return`<code>${s}</code>`}
+}
+const f3=v=>v.toFixed(3),f4=v=>v.toFixed(4);
+const fk=v=>(v*AU2KMS).toFixed(3);
+const fD=yr=>(yr*365.25).toFixed(0);
+
+function renderMath(){
+  const el=document.getElementById('mathcontent');
+
+  if(!source){
+    el.innerHTML=`
+      <div class="msec">
+        <div class="msec-head"><span>Reference Equations</span><span class="mh-tag">ASTRO.NAV</span></div>
+        <div class="ph"><span class="ic">Orbital Mechanics</span>Select a source planet, then a target, to see the full Hohmann transfer mathematics computed live for that orbit pair.</div>
+      </div>
+      <div class="msec">
+        <div class="msec-head"><span>Vis-Viva Equation</span></div>
+        <div style="padding:.3rem 0;overflow-x:auto">${K('v = \\sqrt{\\mu\\!\\left(\\dfrac{2}{r} - \\dfrac{1}{a}\\right)}',true)}</div>
+        <div style="font-size:.57rem;color:var(--text-faint);margin-top:.35rem;line-height:1.9">
+          μ = 4π² AU³/yr²&emsp;r = radius&emsp;a = semi-major axis
+        </div>
+      </div>
+      <div class="msec">
+        <div class="msec-head"><span>Transfer Ellipse</span></div>
+        <div style="padding:.25rem 0;overflow-x:auto">${K('a_t = (r_1 + r_2)\\,/\\,2',true)}</div>
+      </div>
+      <div class="msec">
+        <div class="msec-head"><span>Delta-V Burns</span></div>
+        <div style="padding:.18rem 0;overflow-x:auto">${K('\\Delta v_1 = |\\,v_{\\text{tr}}(r_1) - v_c(r_1)\\,|')}</div>
+        <div style="padding:.18rem 0;overflow-x:auto;margin-top:.2rem">${K('\\Delta v_2 = |\\,v_{\\text{tr}}(r_2) - v_c(r_2)\\,|')}</div>
+      </div>
+      <div class="msec">
+        <div class="msec-head"><span>Transfer Time</span></div>
+        <div style="padding:.25rem 0;overflow-x:auto">${K('t = \\pi\\sqrt{a_t^3 / \\mu}',true)}</div>
+      </div>
+      <div class="msec">
+        <div class="msec-head"><span>Launch Window Condition</span></div>
+        <div style="padding:.25rem 0;overflow-x:auto">${K('\\varphi_{\\text{req}} = \\pi - \\omega_{\\text{tgt}}\\cdot t_{\\text{tr}}',true)}</div>
+        <div style="font-size:.57rem;color:var(--text-faint);margin-top:.35rem;line-height:1.9">
+          W1–W3 ghost markers on the source orbit show the next 3 aligned launch opportunities.
+        </div>
+      </div>`;
+    return;
+  }
+
+  if(!target){
+    el.innerHTML=`
+      <div class="msec">
+        <div class="msec-head"><span>Selected Orbits</span></div>
+        <div class="ocards">
+          <div class="ocard src">
+            <div class="ol">Source</div>
+            <div class="on" style="color:${source.color}">${source.name}</div>
+            <div class="ov">r₁ = ${f3(source.r)} AU<br>v = ${fk(source.speed)} km/s<br>T = ${source.period.toFixed(3)} yr</div>
+          </div>
+          <div class="ocard dim">
+            <div class="ol">Target</div>
+            <div class="on" style="color:var(--text-faint)">—</div>
+            <div class="ov">click a planet</div>
+          </div>
+        </div>
+      </div>
+      <div class="msec">
+        <div class="msec-head"><span>Circular speed at r₁</span></div>
+        <div style="padding:.3rem 0;overflow-x:auto">${K(`v_{c1}=\\sqrt{4\\pi^2/${f3(source.r)}}=${f4(source.speed)}\\;\\text{AU/yr}`,true)}</div>
+        <div style="font-size:.68rem;color:var(--blue);margin-top:.28rem">= ${fk(source.speed)} km/s</div>
+      </div>`;
+    return;
+  }
+
+  const tr=xfer;
+  const{r1,r2,a_t,b_t,c_t,e_t,asc,vc1,vc2,v1,v2,dv1,dv2,dvTot,tTr}=tr;
+  const phi_req=Math.PI-target.omega*tTr;
+  const phi_deg=(phi_req*180/Math.PI).toFixed(1);
+  const tDays=(tTr*365.25).toFixed(1);
+  const wHTML=launchWindows.map((w,i)=>`
+    <div class="wcard w${i+1}">
+      <div class="wlbl">${w.label} · in ${fD(w.dt)} days</div>
+      <div class="wval${i>0?` d${i+1}`:''}">${(w.dt*365.25).toFixed(1)}&thinsp;d</div>
+    </div>`).join('');
+
+  el.innerHTML=`
+    <div class="msec">
+      <div class="msec-head"><span>Selected Orbits</span><span class="mh-tag">${asc?'↑ ASCENDING':'↓ DESCENDING'}</span></div>
+      <div class="ocards">
+        <div class="ocard src">
+          <div class="ol">Source</div>
+          <div class="on" style="color:${source.color}">${source.name}</div>
+          <div class="ov">r₁ = ${f3(r1)} AU<br>v_c1 = ${fk(vc1)} km/s<br>T = ${source.period.toFixed(3)} yr</div>
+        </div>
+        <div class="ocard tgt">
+          <div class="ol">Target</div>
+          <div class="on" style="color:${target.color}">${target.name}</div>
+          <div class="ov">r₂ = ${f3(r2)} AU<br>v_c2 = ${fk(vc2)} km/s<br>T = ${target.period.toFixed(3)} yr</div>
+        </div>
+      </div>
+    </div>
+    <div class="msec">
+      <div class="msec-head"><span>Launch Windows</span><span class="mh-tag">PHASE.ALIGN</span></div>
+      <div style="font-size:.58rem;color:var(--text-faint);margin-bottom:.4rem;line-height:1.8">
+        Required target lead angle:&emsp;${K(`\\varphi_{\\text{req}} = ${phi_deg}^\\circ`)}
+      </div>
+      <div class="wcards">${wHTML}</div>
+    </div>
+    <div class="msec">
+      <div class="msec-head"><span>Step-by-Step</span><span class="mh-tag">HOHMANN.CALC</span></div>
+      <div class="step">
+        <div class="snum">01</div>
+        <div class="sbody"><b>Transfer semi-major axis</b>
+          <div style="overflow-x:auto;margin:.18rem 0">${K(`a_t=\\frac{${f3(r1)}+${f3(r2)}}{2}=${f3(a_t)}\\;\\text{AU}`)}</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum">02</div>
+        <div class="sbody"><b>Ellipse geometry</b>
+          <div style="overflow-x:auto;margin:.18rem 0">${K(`c_t=${f3(c_t)},\\;b_t=${f3(b_t)},\\;e=${e_t.toFixed(4)}`)}</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum">03</div>
+        <div class="sbody"><b>Circular speeds</b>
+          <div style="overflow-x:auto;margin:.18rem 0">${K(`v_{c1}=${fk(vc1)}\\;\\text{km/s},\\quad v_{c2}=${fk(vc2)}\\;\\text{km/s}`)}</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum">04</div>
+        <div class="sbody"><b>Vis-viva at r₁ on transfer</b>
+          <div style="overflow-x:auto;margin:.18rem 0">${K(`v_1=\\sqrt{4\\pi^2\\!\\left(\\tfrac{2}{${f3(r1)}}-\\tfrac{1}{${f3(a_t)}}\\right)}`)}</div>
+          <div class="sresult">= ${fk(v1)} km/s</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum">05</div>
+        <div class="sbody"><b>Vis-viva at r₂ on transfer</b>
+          <div style="overflow-x:auto;margin:.18rem 0">${K(`v_2=\\sqrt{4\\pi^2\\!\\left(\\tfrac{2}{${f3(r2)}}-\\tfrac{1}{${f3(a_t)}}\\right)}`)}</div>
+          <div class="sresult">= ${fk(v2)} km/s</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum" style="color:var(--red)">06</div>
+        <div class="sbody"><b style="color:var(--red)">First burn Δv₁</b>
+          <div style="overflow-x:auto;margin:.18rem 0">${K(`\\Delta v_1=|${fk(v1)}-${fk(vc1)}|`)}</div>
+          <div class="sresult" style="color:var(--red)">= ${fk(dv1)} km/s</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum" style="color:var(--yellow)">07</div>
+        <div class="sbody"><b style="color:var(--yellow)">Second burn Δv₂</b>
+          <div style="overflow-x:auto;margin:.18rem 0">${K(`\\Delta v_2=|${fk(v2)}-${fk(vc2)}|`)}</div>
+          <div class="sresult" style="color:var(--yellow)">= ${fk(dv2)} km/s</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="snum" style="color:var(--green)">08</div>
+        <div class="sbody"><b style="color:var(--green)">Transfer time</b>
+          <div style="overflow-x:auto;margin:.18rem 0">${K(`t=\\pi\\sqrt{${f3(a_t)}^3/4\\pi^2}`)}</div>
+          <div class="sresult" style="color:var(--green)">= ${tDays} days</div>
+        </div>
+      </div>
+    </div>
+    <div class="msec">
+      <div class="msec-head"><span>Summary</span></div>
+      <div class="scards">
+        <div class="scard" style="border-left:2px solid var(--red)">
+          <div class="sl">Δv₁ burn 1</div>
+          <div class="sv" style="color:var(--red)">${fk(dv1)}<span class="su">km/s</span></div>
+        </div>
+        <div class="scard" style="border-left:2px solid var(--yellow)">
+          <div class="sl">Δv₂ burn 2</div>
+          <div class="sv" style="color:var(--yellow)">${fk(dv2)}<span class="su">km/s</span></div>
+        </div>
+        <div class="scard" style="border-left:2px solid var(--blue)">
+          <div class="sl">Total Δv</div>
+          <div class="sv" style="color:var(--blue)">${fk(dvTot)}<span class="su">km/s</span></div>
+        </div>
+        <div class="scard" style="border-left:2px solid var(--green)">
+          <div class="sl">Transfer time</div>
+          <div class="sv" style="color:var(--green)">${tDays}<span class="su">days</span></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+function setStatus(m){document.getElementById('smsg').textContent=m}
+function setBtnLaunch(v){document.getElementById('btnLaunch').disabled=!v}
+function setTbar(show,msg=''){
+  const el=document.getElementById('tbar');
+  if(show){el.textContent=msg;el.classList.add('show')}else el.classList.remove('show');
+}
+
+// ── Init ─────────────────────────────────────────────────────────
+regen();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
