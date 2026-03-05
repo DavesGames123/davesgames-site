@@ -186,6 +186,7 @@ input[type=range]{width:70px;accent-color:var(--blue);cursor:pointer}
     <button class="bot-btn" onclick="regen()">⟳ New System</button>
     <button class="bot-btn warn" onclick="clearSel()">✕ Clear</button>
     <button class="bot-btn go" id="btnLaunch" disabled onclick="launch()">▶ Launch Transfer</button>
+    <button class="bot-btn" id="btnHop" onclick="toggleHopMode()" style="border-color:rgba(100,200,100,.3);color:#64c864">⬡ Planet Hop</button>
   </div>
   <div class="bot-group">
     <div class="spwrap">SPEED
@@ -193,7 +194,7 @@ input[type=range]{width:70px;accent-color:var(--blue);cursor:pointer}
       <span id="spVal">0.5×</span>
     </div>
   </div>
-  <div class="bot-read">SPACE = pause &nbsp;·&nbsp; ① source &nbsp;·&nbsp; ② target &nbsp;·&nbsp; ③ launch</div>
+  <div class="bot-read" id="botHint">SPACE = pause &nbsp;·&nbsp; ① source &nbsp;·&nbsp; ② target &nbsp;·&nbsp; ③ launch</div>
 </div>
 
 <script>
@@ -205,7 +206,11 @@ const BASE_TS=0.035; // years/real-second at 1× — slow default
 let planets=[], source=null, target=null, xfer=null, ship=null;
 let hovered=null, simTime=0, lastT=null, paused=false;
 let launchWindows=[];
-let launchScore=null; // {grade, cosTheta, dDeg, color, flavor, fadeT}
+let launchScore=null;
+// ── Planet-hop mode ──────────────────────────────────────────────
+let hopMode=false;
+let hopLog=[];      // [{from, to, grade, color, dtDays, timing, dvTot}]
+let hopHomePlanet=null; // the planet the ship is currently parked at
 
 // ── Canvas ──────────────────────────────────────────────────────
 const cvs=document.getElementById('cvs'), ctx=cvs.getContext('2d');
@@ -255,7 +260,13 @@ function regen(){
     T*=res*(0.97+Math.random()*0.06);
   }
 
-  source=target=xfer=ship=null; launchWindows=[];
+  source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
+  hopLog=[]; hopHomePlanet=null; hopMode=false;
+  // reset hop button visual
+  const hb=document.getElementById('btnHop');
+  if(hb){hb.style.borderColor='rgba(100,200,100,.3)';hb.style.color='#64c864';hb.style.background='transparent';hb.textContent='⬡ Planet Hop';}
+  const bh=document.getElementById('botHint');
+  if(bh) bh.textContent='SPACE = pause \u00b7 ① source \u00b7 ② target \u00b7 ③ launch';
   simTime=0; lastT=null;
   resize();
   setBtnLaunch(false); setTbar(false);
@@ -526,20 +537,40 @@ function drawWindows(){
 
 // ── Guidance overlay ─────────────────────────────────────────────
 function drawGuidance(){
-  if(source&&target&&ship) return;
+  // In hop mode with ship in transit, don't show guidance
+  if(ship&&!ship.arrived) return;
+  // In normal mode, hide once ship is flying
+  if(!hopMode&&source&&target&&ship) return;
 
   let line1='', line2='', sub='';
-  if(!source){
-    line1='① SELECT SOURCE PLANET';
-    sub='Click any planet to begin the transfer calculation';
-  } else if(!target){
-    line1=`SOURCE: ${source.name.toUpperCase()}`;
-    line2='② SELECT TARGET PLANET';
-    sub='Click another planet to compute the Hohmann transfer';
-  } else if(!ship){
-    line1=`${source.name} → ${target.name}`;
-    line2=`${launchWindows.length} LAUNCH WINDOWS SHOWN`;
-    sub='Ghost markers show optimal launch positions  ·  Press ▶ to launch';
+
+  if(hopMode){
+    if(!source){
+      line1='⬡ HOP MODE ACTIVE';
+      line2='① SELECT HOME PLANET';
+      sub='Your spacecraft will park there and await your first transfer';
+    } else if(!target){
+      line1=`PARKED AT ${source.name.toUpperCase()}`;
+      line2='② SELECT DESTINATION';
+      sub='Choose any other planet to compute the Hohmann transfer';
+    } else {
+      line1=`${source.name} → ${target.name}`;
+      line2=`${launchWindows.length} LAUNCH WINDOWS SHOWN`;
+      sub='Wait for the W1 marker · Press ▶ to launch and score your timing';
+    }
+  } else {
+    if(!source){
+      line1='① SELECT SOURCE PLANET';
+      sub='Click any planet to begin the transfer calculation';
+    } else if(!target){
+      line1=`SOURCE: ${source.name.toUpperCase()}`;
+      line2='② SELECT TARGET PLANET';
+      sub='Click another planet to compute the Hohmann transfer';
+    } else if(!ship){
+      line1=`${source.name} → ${target.name}`;
+      line2=`${launchWindows.length} LAUNCH WINDOWS SHOWN`;
+      sub='Ghost markers show optimal launch positions  ·  Press ▶ to launch';
+    }
   }
 
   const bw=Math.min(W*.58,380), bx=CX-bw/2;
@@ -727,15 +758,97 @@ function rRect(ctx,x,y,w,h,r){
 // ── Ship ─────────────────────────────────────────────────────────
 function drawShip(){
   if(!ship||(!ship.x&&ship.x!==0)) return;
+
+  // Trail
   if(ship.trail.length>1){
     ctx.beginPath(); ctx.moveTo(ship.trail[0].x,ship.trail[0].y);
-    ship.trail.forEach(p=>ctx.lineTo(p.x,p.y));
-    ctx.strokeStyle='rgba(255,200,80,.35)'; ctx.lineWidth=1.2; ctx.stroke();
+    for(let i=1;i<ship.trail.length;i++){
+      const t=i/ship.trail.length;
+      ctx.lineTo(ship.trail[i].x,ship.trail[i].y);
+    }
+    // gradient trail using multiple segments
+    for(let i=1;i<ship.trail.length;i++){
+      const t=i/ship.trail.length;
+      ctx.beginPath();
+      ctx.moveTo(ship.trail[i-1].x,ship.trail[i-1].y);
+      ctx.lineTo(ship.trail[i].x,ship.trail[i].y);
+      ctx.strokeStyle=`rgba(255,200,80,${t*0.45})`;
+      ctx.lineWidth=1+t*1.2; ctx.stroke();
+    }
   }
-  const g=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,11*DPR);
-  g.addColorStop(0,'rgba(255,250,200,.9)'); g.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.beginPath(); ctx.arc(ship.x,ship.y,11*DPR,0,TAU); ctx.fillStyle=g; ctx.fill();
-  ctx.beginPath(); ctx.arc(ship.x,ship.y,3.5*DPR,0,TAU); ctx.fillStyle='#fff'; ctx.fill();
+
+  // Heading angle — tangent to current trajectory
+  let heading=0;
+  if(ship.trail.length>=2){
+    const a=ship.trail[ship.trail.length-2];
+    const b=ship.trail[ship.trail.length-1];
+    heading=Math.atan2(b.y-a.y,b.x-a.x);
+  } else if(ship.arrived){
+    // orbiting target: tangent to circular orbit
+    const ang=ship.arriveAng+ship.arriveOmega*(simTime-ship.arriveT);
+    heading=ang+Math.PI/2; // prograde tangent
+  } else {
+    // at launch point, face prograde
+    heading=ship.launchAng+(xfer&&xfer.asc?Math.PI/2:-Math.PI/2);
+  }
+
+  // Docking glow when arrived at planet in hop mode
+  if(hopMode&&ship.arrived){
+    const g=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,18*DPR);
+    g.addColorStop(0,'rgba(100,200,100,.25)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.beginPath(); ctx.arc(ship.x,ship.y,18*DPR,0,TAU); ctx.fillStyle=g; ctx.fill();
+  }
+
+  // Engine glow
+  const eg=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,14*DPR);
+  eg.addColorStop(0,'rgba(255,220,120,.22)'); eg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath(); ctx.arc(ship.x,ship.y,14*DPR,0,TAU); ctx.fillStyle=eg; ctx.fill();
+
+  // Draw spacecraft as a small arrow/rocket shape
+  ctx.save();
+  ctx.translate(ship.x,ship.y);
+  ctx.rotate(heading);
+  const s=DPR; // scale factor
+
+  // Engine exhaust plume (only when in transit)
+  if(!ship.arrived){
+    const plumeLen=10*s, plumeW=4*s;
+    const pg=ctx.createLinearGradient(-plumeLen,0,0,0);
+    pg.addColorStop(0,'rgba(100,200,255,0)');
+    pg.addColorStop(0.4,'rgba(150,230,255,0.5)');
+    pg.addColorStop(1,'rgba(220,240,255,0.9)');
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.lineTo(-plumeLen,-plumeW*0.5*(0.6+0.4*Math.sin(simTime*80)));
+    ctx.lineTo(-plumeLen*1.4,0);
+    ctx.lineTo(-plumeLen, plumeW*0.5*(0.6+0.4*Math.sin(simTime*80+1)));
+    ctx.closePath();
+    ctx.fillStyle=pg; ctx.fill();
+  }
+
+  // Hull — sleek arrowhead body
+  ctx.beginPath();
+  ctx.moveTo( 9*s,  0);       // nose
+  ctx.lineTo( 2*s,  3.5*s);   // right shoulder
+  ctx.lineTo(-5*s,  2.5*s);   // right wing tip
+  ctx.lineTo(-3*s,  0);       // tail notch
+  ctx.lineTo(-5*s, -2.5*s);   // left wing tip
+  ctx.lineTo( 2*s, -3.5*s);   // left shoulder
+  ctx.closePath();
+  ctx.fillStyle='#c8dcf0';
+  ctx.fill();
+
+  // Cockpit highlight
+  ctx.beginPath();
+  ctx.ellipse(4*s, 0, 2.5*s, 1.5*s, 0, 0, TAU);
+  ctx.fillStyle='rgba(180,230,255,0.7)'; ctx.fill();
+
+  // Wing accent lines
+  ctx.strokeStyle='rgba(150,200,255,0.4)'; ctx.lineWidth=0.8;
+  ctx.beginPath(); ctx.moveTo(2*s,3.5*s); ctx.lineTo(-5*s,2.5*s); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(2*s,-3.5*s); ctx.lineTo(-5*s,-2.5*s); ctx.stroke();
+
+  ctx.restore();
 }
 
 function updateShip(){
@@ -751,17 +864,40 @@ function updateShip(){
     ship.arriveAng=ship.launchAng+Math.PI;
     ship.arriveT=simTime;
     ship.arriveOmega=TAU/Math.pow(xfer.r2,1.5);
-    setTbar(true,'✓  TRANSFER COMPLETE — SPACECRAFT IN TARGET ORBIT');
-    setStatus('TRANSFER COMPLETE');
+    if(hopMode){
+      // log this hop then auto-advance: new home = target planet
+      hopLog.push({
+        from: hopHomePlanet ? hopHomePlanet.name : source.name,
+        to:   target.name,
+        toColor: target.color,
+        fromColor: source.color,
+        grade: launchScore ? launchScore.grade : '—',
+        color: launchScore ? launchScore.color : '#c8d0e0',
+        dtDays: launchScore ? launchScore.dtDays : 0,
+        timing: launchScore ? launchScore.timing : '',
+        dvTot:  xfer.dvTot,
+      });
+      hopHomePlanet=target;
+      setTbar(true,`✓  ARRIVED AT ${target.name.toUpperCase()} — SELECT NEXT DESTINATION`);
+      setStatus(`AT ${target.name.toUpperCase()} — HOP ${hopLog.length} COMPLETE`);
+      // Reset for next hop: source = target planet, clear target/xfer/windows
+      source=target; target=null; xfer=null; launchWindows=[];
+      setBtnLaunch(false);
+      renderMath();
+    } else {
+      setTbar(true,'✓  TRANSFER COMPLETE — SPACECRAFT IN TARGET ORBIT');
+      setStatus('TRANSFER COMPLETE');
+    }
     return;
   }
   const E=solveKepler((xfer.asc?0:Math.PI)+Math.PI*(dt/xfer.tTr), xfer.e_t);
   const xo=xfer.a_t*Math.cos(E)-xfer.c_t, yo=xfer.b_t*Math.sin(E);
   const cp=Math.cos(ship.periAng), sp=Math.sin(ship.periAng);
-  ship.x=CX+(xo*cp-yo*sp)*SCALE;
-  ship.y=CY-(xo*sp+yo*cp)*SCALE;
-  ship.trail.push({x:ship.x,y:ship.y});
-  if(ship.trail.length>90) ship.trail.shift();
+  const nx=CX+(xo*cp-yo*sp)*SCALE;
+  const ny=CY-(xo*sp+yo*cp)*SCALE;
+  ship.trail.push({x:nx,y:ny});
+  if(ship.trail.length>120) ship.trail.shift();
+  ship.x=nx; ship.y=ny;
 }
 
 // ── Main loop ────────────────────────────────────────────────────
@@ -777,8 +913,9 @@ function frame(now){
 
   if(ship&&ship.arrived){
     const ang=ship.arriveAng+ship.arriveOmega*(simTime-ship.arriveT);
-    ship.x=CX+Math.cos(ang)*xfer.r2*SCALE;
-    ship.y=CY-Math.sin(ang)*xfer.r2*SCALE;
+    const r=ship.r2;
+    ship.x=CX+Math.cos(ang)*r*SCALE;
+    ship.y=CY-Math.sin(ang)*r*SCALE;
   } else updateShip();
 
   if(source&&target&&xfer&&(!ship||ship.arrived))
@@ -831,6 +968,38 @@ cvs.addEventListener('mousemove',e=>{
 
 cvs.addEventListener('click',()=>{
   if(!hovered) return;
+
+  if(hopMode){
+    if(!source){
+      // First click in hop mode: pick home planet, park ship there
+      source=hovered; hopHomePlanet=hovered;
+      const pos=pPos(hovered);
+      // Create a parked ship sitting on the home planet's orbit
+      ship={
+        x: pos.x, y: pos.y,
+        launchAng: pos.ang,
+        periAng: pos.ang,
+        launchT: simTime-1, // already "arrived"
+        trail:[], arrived:true,
+        arriveAng: pos.ang,
+        arriveT: simTime,
+        arriveOmega: hovered.omega,
+        r2: hovered.r
+      };
+      setStatus(`PARKED AT ${hovered.name.toUpperCase()} — SELECT DESTINATION`);
+      renderMath();
+    } else if(hovered!==source&&!target&&ship&&ship.arrived){
+      target=hovered;
+      xfer=computeXfer(source.r,target.r);
+      launchWindows=computeWindows(source,target,xfer,simTime);
+      setStatus(`${source.name.toUpperCase()} → ${target.name.toUpperCase()} — PRESS ▶ LAUNCH`);
+      setBtnLaunch(true);
+      renderMath();
+    }
+    return;
+  }
+
+  // Normal mode
   if(!source){
     source=hovered;
     setStatus(`SOURCE: ${source.name.toUpperCase()} — SELECT TARGET`);
@@ -868,16 +1037,47 @@ function launch(){
   launchScore=scorelaunch(dtYears);
 
   ship={launchAng:actualAng, periAng:xfer.asc?actualAng:actualAng+Math.PI,
-        launchT:simTime, trail:[], arrived:false, x:0, y:0};
+        launchT:simTime, trail:[], arrived:false, x:0, y:0, r2:xfer.r2};
   launchWindows=[];
   setTbar(true,'⚡  TRANSFER IN PROGRESS — SPACECRAFT EN ROUTE');
   setStatus('TRANSFERRING...'); setBtnLaunch(false);
 }
 
+function toggleHopMode(){
+  hopMode=!hopMode;
+  const btn=document.getElementById('btnHop');
+  if(hopMode){
+    hopLog=[]; hopHomePlanet=null;
+    btn.style.borderColor='#64c864';
+    btn.style.color='#0e1118';
+    btn.style.background='#64c864';
+    btn.textContent='⬡ Hopping...';
+    document.getElementById('botHint').textContent='HOP MODE · ① pick home planet · ② pick destination · ③ launch · repeat';
+    // reset to clean state
+    source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
+    setBtnLaunch(false); setTbar(false);
+    setStatus('HOP MODE — SELECT HOME PLANET');
+    renderMath();
+  } else {
+    btn.style.borderColor='rgba(100,200,100,.3)';
+    btn.style.color='#64c864';
+    btn.style.background='transparent';
+    btn.textContent='⬡ Planet Hop';
+    document.getElementById('botHint').textContent='SPACE = pause \u00b7 ① source \u00b7 ② target \u00b7 ③ launch';
+    hopLog=[]; hopHomePlanet=null;
+    source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
+    setBtnLaunch(false); setTbar(false);
+    setStatus('AWAITING SELECTION');
+    renderMath();
+  }
+}
+
 function clearSel(){
   source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
+  if(hopMode){ hopLog=[]; hopHomePlanet=null; setStatus('HOP MODE — SELECT HOME PLANET'); }
+  else setStatus('AWAITING SELECTION');
   setBtnLaunch(false); setTbar(false);
-  setStatus('AWAITING SELECTION'); renderMath();
+  renderMath();
 }
 
 document.getElementById('spSlider').addEventListener('input',function(){
@@ -897,11 +1097,50 @@ const fD=yr=>(yr*365.25).toFixed(0);
 function renderMath(){
   const el=document.getElementById('mathcontent');
 
+  // ── Hop log (injected at top when in hop mode) ──────────────────
+  function hopLogHTML(){
+    if(!hopMode) return '';
+    const totalDv=(hopLog.reduce((a,h)=>a+h.dvTot,0)*AU2KMS).toFixed(3);
+    const gradeColors={'A+':'#69f7a0','A':'#69f7a0','A−':'#a8f0c0','B+':'#96c8ff','B':'#96c8ff','B−':'#96c8ff','C+':'#ffc832','C':'#ffc832','C−':'#ffa040','D+':'#ff7060','D':'#ff5050','D−':'#ff5050','F':'#ff3030'};
+    const rows=hopLog.length===0
+      ? `<div style="font-size:.6rem;color:var(--text-faint);padding:.4rem 0;text-align:center">No hops yet</div>`
+      : hopLog.map((h,i)=>`
+        <div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(22,34,64,.4)">
+          <div style="font-size:.55rem;color:var(--text-faint);min-width:1rem">${i+1}</div>
+          <div style="flex:1;font-size:.6rem;line-height:1.7">
+            <span style="color:${h.fromColor}">${h.from}</span>
+            <span style="color:var(--text-faint)"> → </span>
+            <span style="color:${h.toColor}">${h.to}</span>
+            <span style="color:var(--text-faint);font-size:.52rem;margin-left:.3rem">${(h.dvTot*AU2KMS).toFixed(2)} km/s</span>
+          </div>
+          <div style="font-size:.78rem;font-weight:700;font-family:'Cormorant Garamond',serif;color:${h.color||gradeColors[h.grade]||'#c8d0e0'}">${h.grade}</div>
+        </div>`).join('');
+    return `
+      <div class="msec" style="background:rgba(100,200,100,.03);border-left:2px solid rgba(100,200,100,.3)">
+        <div class="msec-head">
+          <span style="color:#64c864">⬡ Hop Log</span>
+          <span class="mh-tag">${hopLog.length} HOPS${hopLog.length>0?' · '+totalDv+' km/s':''}</span>
+        </div>
+        ${rows}
+        ${hopLog.length>0?`
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.35rem;margin-top:.5rem">
+          <div class="scard" style="border-left:2px solid rgba(100,200,100,.5)">
+            <div class="sl">Total Δv spent</div>
+            <div class="sv" style="color:#64c864;font-size:.85rem">${totalDv}<span class="su">km/s</span></div>
+          </div>
+          <div class="scard" style="border-left:2px solid rgba(100,200,100,.5)">
+            <div class="sl">Best grade</div>
+            <div class="sv" style="color:${gradeColors[hopLog.reduce((b,h)=>{ const gi=(g)=>Object.keys(gradeColors).indexOf(g); return gi(h.grade)<gi(b)?h.grade:b; },hopLog[0].grade)]||'#c8d0e0'};font-size:.85rem;font-family:'Cormorant Garamond',serif">${hopLog.reduce((b,h)=>{ const gi=(g)=>Object.keys(gradeColors).indexOf(g); return gi(h.grade)<gi(b)?h.grade:b; },hopLog[0].grade)}</div>
+          </div>
+        </div>`:''}
+      </div>`;
+  }
+
   if(!source){
-    el.innerHTML=`
+    el.innerHTML=hopLogHTML()+`
       <div class="msec">
         <div class="msec-head"><span>Reference Equations</span><span class="mh-tag">ASTRO.NAV</span></div>
-        <div class="ph"><span class="ic">Orbital Mechanics</span>Select a source planet, then a target, to see the full Hohmann transfer mathematics computed live for that orbit pair.</div>
+        <div class="ph"><span class="ic">Orbital Mechanics</span>${hopMode?'Select your home planet to park your spacecraft there.':'Select a source planet, then a target, to see the full Hohmann transfer mathematics computed live for that orbit pair.'}</div>
       </div>
       <div class="msec">
         <div class="msec-head"><span>Vis-Viva Equation</span></div>
@@ -934,17 +1173,17 @@ function renderMath(){
   }
 
   if(!target){
-    el.innerHTML=`
+    el.innerHTML=hopLogHTML()+`
       <div class="msec">
         <div class="msec-head"><span>Selected Orbits</span></div>
         <div class="ocards">
           <div class="ocard src">
-            <div class="ol">Source</div>
+            <div class="ol">${hopMode?'Parked At':'Source'}</div>
             <div class="on" style="color:${source.color}">${source.name}</div>
             <div class="ov">r₁ = ${f3(source.r)} AU<br>v = ${fk(source.speed)} km/s<br>T = ${source.period.toFixed(3)} yr</div>
           </div>
           <div class="ocard dim">
-            <div class="ol">Target</div>
+            <div class="ol">Destination</div>
             <div class="on" style="color:var(--text-faint)">—</div>
             <div class="ov">click a planet</div>
           </div>
@@ -969,12 +1208,12 @@ function renderMath(){
       <div class="wval${i>0?` d${i+1}`:''}">${(w.dt*365.25).toFixed(1)}&thinsp;d</div>
     </div>`).join('');
 
-  el.innerHTML=`
+  el.innerHTML=hopLogHTML()+`
     <div class="msec">
       <div class="msec-head"><span>Selected Orbits</span><span class="mh-tag">${asc?'↑ ASCENDING':'↓ DESCENDING'}</span></div>
       <div class="ocards">
         <div class="ocard src">
-          <div class="ol">Source</div>
+          <div class="ol">${hopMode?'Parked At':'Source'}</div>
           <div class="on" style="color:${source.color}">${source.name}</div>
           <div class="ov">r₁ = ${f3(r1)} AU<br>v_c1 = ${fk(vc1)} km/s<br>T = ${source.period.toFixed(3)} yr</div>
         </div>
