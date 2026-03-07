@@ -25,6 +25,11 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
 .tab.highlight:hover{color:var(--blue)}
 .tab.highlight.active{color:var(--blue);border-bottom-color:var(--blue)}
 .tab.highlight.active .dot{background:var(--blue);box-shadow:0 0 6px var(--blue)}
+.tab.flare-tab .dot{background:rgba(255,123,0,0.5)}
+.tab.flare-tab{color:var(--text-dim)}
+.tab.flare-tab:hover{color:#ff7b00}
+.tab.flare-tab.active{color:#ff7b00;border-bottom-color:#ff7b00}
+.tab.flare-tab.active .dot{background:#ff7b00;box-shadow:0 0 6px #ff7b00}
 .topbar-r{display:flex;gap:2rem;color:var(--text-dim);font-size:0.5rem;flex-shrink:0}
 .topbar-r strong{color:var(--blue-dim);font-weight:500}
 #frames{flex:1;position:relative;overflow:hidden}
@@ -49,6 +54,7 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
         <button class="tab"           data-tab="gravity"   onclick="switchTab('gravity')"><span class="dot"></span>Gravity</button>
         <button class="tab"           data-tab="selection" onclick="switchTab('selection')"><span class="dot"></span>Selection</button>
         <button class="tab"           data-tab="explosion" onclick="switchTab('explosion')"><span class="dot"></span>Explosion</button>
+        <button class="tab flare-tab" data-tab="flare"     onclick="switchTab('flare')"><span class="dot"></span>⚡ Flare</button>
       </div>
     </div>
     <div class="topbar-r"><span id="clock">00:00:00</span></div>
@@ -68,6 +74,7 @@ const PAGES = {
   gravity:   'gravity.html',
   selection: 'selection.html',
   explosion: 'explosion.html',
+  flare:     'flare.html',
 };
 
 let activeTab = null;
@@ -85,9 +92,7 @@ function switchTab(id) {
   activeTab = id;
 }
 
-// Expose so hohmann.html can call parent.switchTab(...)
 window.switchTab = switchTab;
-
 switchTab('home');
 
 setInterval(() => {
