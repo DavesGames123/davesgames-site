@@ -2,102 +2,431 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>STELLA NOVA // From Ore to Empire</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STELLA NOVA</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0e1118;--border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);--blue:#96c8ff;--blue-dim:#5a8cc0;--yellow:#ffc832;--green:#64c864;--text-dim:#6878a0;--text-faint:#384060}
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:'JetBrains Mono',monospace}
-#shell{display:flex;flex-direction:column;width:100%;height:100%}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:36px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;flex-shrink:0;z-index:100}
-.topbar-l{display:flex;align-items:center;gap:1.5rem;min-width:0;overflow:hidden}
-.sys-name{color:#e8ecf4;font-family:'Cormorant Garamond',serif;font-weight:300;font-size:0.8rem;letter-spacing:0.12em;text-transform:uppercase;flex-shrink:0}
-.topbar-tabs{display:flex;align-items:center;gap:0;margin-left:0.5rem;overflow-x:auto;scrollbar-width:none}
-.topbar-tabs::-webkit-scrollbar{display:none}
-.tab{background:transparent;border:none;color:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:0.45rem;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;padding:10px 1rem;cursor:pointer;transition:all 0.2s;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;flex-shrink:0}
-.tab:hover{color:var(--text-dim)}
-.tab.active{color:var(--yellow);border-bottom-color:var(--yellow)}
-.tab .dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:5px;vertical-align:middle;background:var(--text-faint);transition:all 0.2s}
-.tab.active .dot{background:var(--green);box-shadow:0 0 6px var(--green)}
-.tab.highlight .dot{background:rgba(150,200,255,0.4)}
-.tab.highlight{color:var(--text-dim)}
-.tab.highlight:hover{color:var(--blue)}
-.tab.highlight.active{color:var(--blue);border-bottom-color:var(--blue)}
-.tab.highlight.active .dot{background:var(--blue);box-shadow:0 0 6px var(--blue)}
-.tab.flare-tab .dot{background:rgba(255,123,0,0.5)}
-.tab.flare-tab{color:var(--text-dim)}
-.tab.flare-tab:hover{color:#ff7b00}
-.tab.flare-tab.active{color:#ff7b00;border-bottom-color:#ff7b00}
-.tab.flare-tab.active .dot{background:#ff7b00;box-shadow:0 0 6px #ff7b00}
-.topbar-r{display:flex;gap:2rem;color:var(--text-dim);font-size:0.5rem;flex-shrink:0}
-.topbar-r strong{color:var(--blue-dim);font-weight:500}
-#frames{flex:1;position:relative;overflow:hidden}
-#frames iframe{position:absolute;inset:0;width:100%;height:100%;border:none;background:var(--bg)}
-@media(max-width:768px){.topbar{padding:0 0.8rem;height:34px}.topbar-r{display:none}.sys-name{font-size:0.55rem;letter-spacing:0.2em}.tab{padding:9px 0.7rem;font-size:0.4rem}}
+:root {
+  --bg:        #0a0c11;
+  --sidebar:   #0c0f16;
+  --border:    rgba(150,200,255,0.07);
+  --border-b:  rgba(150,200,255,0.16);
+  --blue:      #96c8ff;
+  --blue-dim:  #4a7aaa;
+  --yellow:    #ffc832;
+  --orange:    #ff7b00;
+  --green:     #64c864;
+  --text:      #c0cfe0;
+  --text-dim:  #5a7090;
+  --text-faint:#2a3850;
+  --sidebar-w: 260px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-font-smoothing: antialiased; }
+
+/* Shell */
+#shell { display: flex; width: 100%; height: 100%; }
+
+/* Sidebar */
+#sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  height: 100%;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border-b);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 200;
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+}
+
+@media (max-width: 768px) {
+  #sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 32px rgba(0,0,0,0.7);
+  }
+  #sidebar.open { transform: translateX(0); }
+  #overlay { display: none; position: fixed; inset: 0; z-index: 190; background: rgba(0,0,0,0.55); }
+  #overlay.show { display: block; }
+}
+
+/* Sidebar header */
+#sb-header {
+  padding: 24px 20px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#sb-wordmark {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 300;
+  font-size: 1.6rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #eef2fa;
+  line-height: 1;
+}
+#sb-wordmark em { font-style: italic; color: var(--yellow); }
+#sb-sub {
+  margin-top: 6px;
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+#sb-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  color: var(--green);
+}
+#sb-status::before {
+  content: '';
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: blink 2.2s ease infinite;
+  flex-shrink: 0;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+/* Nav scroll */
+#sb-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 0 24px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+#sb-nav::-webkit-scrollbar { width: 3px; }
+#sb-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Cluster */
+.cluster { margin-bottom: 2px; }
+
+.cluster-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 16px;
+  cursor: pointer;
+  user-select: none;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+}
+.cluster-head:hover { background: rgba(150,200,255,0.04); }
+.cluster-icon { font-size: 0.8rem; width: 18px; text-align: center; flex-shrink: 0; opacity: 0.65; }
+.cluster-label {
+  flex: 1;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  transition: color 0.15s;
+}
+.cluster-arrow {
+  font-size: 0.55rem;
+  color: var(--text-faint);
+  transition: transform 0.22s;
+  flex-shrink: 0;
+}
+.cluster.open .cluster-arrow { transform: rotate(90deg); }
+.cluster.open .cluster-label { color: var(--text); }
+
+.cluster-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.28s cubic-bezier(0.4,0,0.2,1);
+}
+.cluster.open .cluster-body { max-height: 600px; }
+
+/* Nav items */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 44px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  position: relative;
+  transition: background 0.15s;
+}
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 28px;
+  top: 50%; transform: translateY(-50%);
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.nav-item:hover { background: rgba(150,200,255,0.04); }
+.nav-item:hover::before { background: var(--blue-dim); }
+
+/* Active states */
+.nav-item.active { background: rgba(255,200,50,0.05); }
+.nav-item.active::before { background: var(--yellow); box-shadow: 0 0 7px var(--yellow); }
+.nav-item.active .nav-label { color: var(--yellow); }
+
+.nav-item.hl.active { background: rgba(150,200,255,0.05); }
+.nav-item.hl.active::before { background: var(--blue); box-shadow: 0 0 7px var(--blue); }
+.nav-item.hl.active .nav-label { color: var(--blue); }
+.nav-item.hl:hover::before { background: var(--blue-dim); }
+
+.nav-item.fx.active { background: rgba(255,123,0,0.05); }
+.nav-item.fx.active::before { background: var(--orange); box-shadow: 0 0 7px var(--orange); }
+.nav-item.fx.active .nav-label { color: var(--orange); }
+.nav-item.fx:hover::before { background: var(--orange); }
+
+.nav-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  transition: color 0.15s;
+}
+.nav-badge {
+  margin-left: auto;
+  font-size: 0.44rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 2px 5px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+/* Sidebar footer */
+#sb-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#sb-clock {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  letter-spacing: 0.14em;
+}
+
+/* Content */
+#content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+
+/* Mobile topbar */
+#topbar {
+  display: none;
+  height: 52px;
+  background: rgba(10,12,17,0.96);
+  border-bottom: 1px solid var(--border-b);
+  align-items: center;
+  padding: 0 16px;
+  gap: 14px;
+  flex-shrink: 0;
+  backdrop-filter: blur(12px);
+}
+@media (max-width: 768px) { #topbar { display: flex; } }
+
+#menu-btn {
+  background: transparent;
+  border: 1px solid var(--border-b);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 1.1rem;
+  padding: 7px 11px;
+  line-height: 1;
+  transition: color 0.2s, border-color 0.2s;
+}
+#menu-btn:hover { color: var(--blue); border-color: var(--blue-dim); }
+#topbar-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 300;
+  font-size: 1.15rem;
+  letter-spacing: 0.14em;
+  color: #eef2fa;
+}
+#topbar-active { margin-left: auto; font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--yellow); }
+
+/* iframe */
+#frame-wrap { flex: 1; position: relative; overflow: hidden; }
+#frame-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: var(--bg); }
+
+/* Scanlines */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+  background: repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.05) 4px);
+}
 </style>
 </head>
 <body>
+
+<div id="overlay" onclick="closeSidebar()"></div>
+
 <div id="shell">
-  <div class="topbar">
-    <div class="topbar-l">
-      <span class="sys-name">Stella Nova</span>
-      <div class="topbar-tabs">
-        <button class="tab active"    data-tab="home"      onclick="switchTab('home')"><span class="dot"></span>Home</button>
-        <button class="tab highlight" data-tab="hohmann"   onclick="switchTab('hohmann')"><span class="dot"></span>Hohmann</button>
-        <button class="tab"           data-tab="forge"     onclick="switchTab('forge')"><span class="dot"></span>Planet Forge</button>
-        <button class="tab"           data-tab="crafting"  onclick="switchTab('crafting')"><span class="dot"></span>Crafting</button>
-        <button class="tab"           data-tab="planner"   onclick="switchTab('planner')"><span class="dot"></span>Station Planner</button>
-        <button class="tab"           data-tab="guide"     onclick="switchTab('guide')"><span class="dot"></span>Station Guide</button>
-        <button class="tab"           data-tab="behaviors" onclick="switchTab('behaviors')"><span class="dot"></span>Behaviors</button>
-        <button class="tab"           data-tab="controls"  onclick="switchTab('controls')"><span class="dot"></span>Controls</button>
-        <button class="tab"           data-tab="gravity"   onclick="switchTab('gravity')"><span class="dot"></span>Gravity</button>
-        <button class="tab"           data-tab="selection" onclick="switchTab('selection')"><span class="dot"></span>Selection</button>
-        <button class="tab"           data-tab="explosion" onclick="switchTab('explosion')"><span class="dot"></span>Explosion</button>
-        <button class="tab flare-tab" data-tab="flare"     onclick="switchTab('flare')"><span class="dot"></span>⚡ Flare</button>
-      </div>
+
+  <nav id="sidebar">
+    <div id="sb-header">
+      <div id="sb-wordmark">Stella Nova</div>
+      <div id="sb-sub">From Ore to Empire</div>
+      <div id="sb-status">Sim Active</div>
     </div>
-    <div class="topbar-r"><span id="clock">00:00:00</span></div>
+
+    <div id="sb-nav">
+
+      <div class="cluster open" id="cl-home">
+        <button class="cluster-head" onclick="toggleCluster('cl-home')">
+          <span class="cluster-icon">⌂</span>
+          <span class="cluster-label">Home</span>
+          <span class="cluster-arrow">›</span>
+        </button>
+        <div class="cluster-body">
+          <button class="nav-item" data-tab="home" onclick="switchTab('home')">
+            <span class="nav-label">Overview</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="cluster open" id="cl-sims">
+        <button class="cluster-head" onclick="toggleCluster('cl-sims')">
+          <span class="cluster-icon">◎</span>
+          <span class="cluster-label">Simulations</span>
+          <span class="cluster-arrow">›</span>
+        </button>
+        <div class="cluster-body">
+          <button class="nav-item hl" data-tab="hohmann" onclick="switchTab('hohmann')">
+            <span class="nav-label">Hohmann Transfer</span>
+            <span class="nav-badge">SIM</span>
+          </button>
+          <button class="nav-item hl" data-tab="gravity" onclick="switchTab('gravity')">
+            <span class="nav-label">Gravity Sim</span>
+            <span class="nav-badge">SIM</span>
+          </button>
+          <button class="nav-item" data-tab="forge" onclick="switchTab('forge')">
+            <span class="nav-label">Planet Forge</span>
+          </button>
+          <button class="nav-item fx" data-tab="explosion" onclick="switchTab('explosion')">
+            <span class="nav-label">Explosion</span>
+          </button>
+          <button class="nav-item fx" data-tab="flare" onclick="switchTab('flare')">
+            <span class="nav-label">Engine Propulsion Effects</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="cluster open" id="cl-crew">
+        <button class="cluster-head" onclick="toggleCluster('cl-crew')">
+          <span class="cluster-icon">⬡</span>
+          <span class="cluster-label">Operational Manual</span>
+          <span class="cluster-arrow">›</span>
+        </button>
+        <div class="cluster-body">
+          <button class="nav-item" data-tab="guide" onclick="switchTab('guide')">
+            <span class="nav-label">Station Guide</span>
+          </button>
+          <button class="nav-item" data-tab="planner" onclick="switchTab('planner')">
+            <span class="nav-label">Station Planner</span>
+          </button>
+          <button class="nav-item" data-tab="selection" onclick="switchTab('selection')">
+            <span class="nav-label">Selection</span>
+          </button>
+          <button class="nav-item" data-tab="crafting" onclick="switchTab('crafting')">
+            <span class="nav-label">Crafting</span>
+          </button>
+          <button class="nav-item" data-tab="behaviors" onclick="switchTab('behaviors')">
+            <span class="nav-label">Behaviors</span>
+          </button>
+          <button class="nav-item" data-tab="controls" onclick="switchTab('controls')">
+            <span class="nav-label">Controls</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="sb-footer">
+      <div id="sb-clock">00:00:00</div>
+    </div>
+  </nav>
+
+  <div id="content">
+    <div id="topbar">
+      <button id="menu-btn" onclick="openSidebar()">☰</button>
+      <span id="topbar-title">S T E L L A  N O V A</span>
+      <span id="topbar-active">Overview</span>
+    </div>
+    <div id="frame-wrap"></div>
   </div>
-  <div id="frames"></div>
+
 </div>
+
 <script>
 const PAGES = {
-  home:      'home.html',
-  hohmann:   'hohmann.html',
-  forge:     'forge.html',
-  crafting:  'crafting.html',
-  planner:   'planner.html',
-  guide:     'guide.html',
-  behaviors: 'behaviors.html',
-  controls:  'controls.html',
-  gravity:   'gravity.html',
-  selection: 'selection.html',
-  explosion: 'explosion.html',
-  flare:     'flare.html',
+  home:'home.html', hohmann:'hohmann.html', forge:'forge.html',
+  crafting:'crafting.html', planner:'planner.html', guide:'guide.html',
+  behaviors:'behaviors.html', controls:'controls.html', gravity:'gravity.html',
+  selection:'selection.html', explosion:'explosion.html', flare:'flare.html',
+};
+const LABELS = {
+  home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
+  crafting:'Crafting', planner:'Station Planner', guide:'Station Guide',
+  behaviors:'Behaviors', controls:'Controls', gravity:'Gravity Sim',
+  selection:'Selection', explosion:'Explosion', flare:'Engine Propulsion Effects',
 };
 
 let activeTab = null;
 
 function switchTab(id) {
-  if (id === activeTab) return;
-  document.querySelectorAll('.tab').forEach(t =>
-    t.classList.toggle('active', t.dataset.tab === id)
-  );
-  const container = document.getElementById('frames');
-  container.innerHTML = '';
-  const iframe = document.createElement('iframe');
-  iframe.src = PAGES[id];
-  container.appendChild(iframe);
+  document.querySelectorAll('.nav-item').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.tab === id);
+  });
+  var wrap = document.getElementById('frame-wrap');
+  wrap.innerHTML = '';
+  var iframe = document.createElement('iframe');
+  iframe.src = PAGES[id] || 'home.html';
+  wrap.appendChild(iframe);
+  var ta = document.getElementById('topbar-active');
+  if (ta) ta.textContent = LABELS[id] || id;
   activeTab = id;
+  closeSidebar();
+}
+window.switchTab = switchTab;
+
+function toggleCluster(id) {
+  var cl = document.getElementById(id);
+  if (cl) cl.classList.toggle('open');
 }
 
-window.switchTab = switchTab;
-switchTab('home');
+function openSidebar() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('overlay').classList.add('show');
+}
+function closeSidebar() {
+  if (window.innerWidth <= 768) {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('overlay').classList.remove('show');
+  }
+}
 
-setInterval(() => {
-  document.getElementById('clock').textContent = new Date().toTimeString().slice(0, 8);
+setInterval(function() {
+  var el = document.getElementById('sb-clock');
+  if (el) el.textContent = new Date().toTimeString().slice(0,8);
 }, 1000);
+
+switchTab('home');
 </script>
 </body>
 </html>
