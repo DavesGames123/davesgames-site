@@ -402,6 +402,18 @@ body::after {
             <span class="nav-label">Investor Case Studies</span>
             <span class="nav-badge">PDF</span>
           </button>
+          <button class="nav-item mi" data-tab="pitch" onclick="switchTab('pitch')">
+            <span class="nav-label">Pitch Deck</span>
+            <span class="nav-badge">NEW</span>
+          </button>
+          <button class="nav-item mi" data-tab="roadmap" onclick="switchTab('roadmap')">
+            <span class="nav-label">Roadmap</span>
+            <span class="nav-badge">NEW</span>
+          </button>
+          <button class="nav-item mi" data-tab="business" onclick="switchTab('business')">
+            <span class="nav-label">Revenue Model</span>
+            <span class="nav-badge">NEW</span>
+          </button>
         </div>
       </div>
 
@@ -430,14 +442,16 @@ const PAGES = {
   crafting:'crafting.html', planner:'planner.html', guide:'guide.html',
   behaviors:'behaviors.html', controls:'controls.html', gravity:'gravity.html',
   selection:'selection.html', explosion:'explosion.html', flare:'flare.html',
-  intel:'market-intel.html',
+  intel:'market-intel.html', pitch:'pitch.html', roadmap:'roadmap.html',
+  business:'business.html',
 };
 const LABELS = {
   home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
   crafting:'Crafting', planner:'Station Planner', guide:'Station Guide',
   behaviors:'Behaviors', controls:'Controls', gravity:'Gravity Sim',
   selection:'Selection', explosion:'Explosion', flare:'Engine Propulsion Effects',
-  intel:'Investor Case Studies',
+  intel:'Investor Case Studies', pitch:'Pitch Deck', roadmap:'Roadmap',
+  business:'Revenue Model',
 };
 
 let activeTab = null;
