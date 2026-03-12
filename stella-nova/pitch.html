@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stella Nova — Investor Pitch</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--black:#000;--near-black:#111;--g800:#333;--g700:#444;--g600:#666;--g500:#888;--g400:#aaa;--g300:#ccc;--g200:#e0e0e0;--g100:#f0f0f0;--white:#fff;--blue:#2771e2;--red:#e02020;--green:#00a854;--amber:#e09000;--bg:#f7f7f5;--cyan:#0099cc}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Archivo',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--near-black);line-height:1.55;font-size:14px;-webkit-font-smoothing:antialiased}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+
+.topbar{background:var(--black);padding:10px 0;border-bottom:3px solid var(--cyan);position:sticky;top:0;z-index:100}
+.topbar-inner{max-width:1100px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between}
+.topbar-brand{font-family:'Archivo';font-weight:700;font-size:13px;letter-spacing:4px;text-transform:uppercase;color:#fff}
+.topbar-right{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500)}
+.topbar-nav{display:flex;gap:0}
+.topbar-nav a{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);padding:10px 14px;border-bottom:2px solid transparent;transition:all .15s;text-decoration:none}
+.topbar-nav a:hover{color:var(--g300)}
+.topbar-nav a.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+
+.tab-nav{background:var(--near-black);border-bottom:1px solid #333;overflow-x:auto;white-space:nowrap}
+.tab-nav-inner{max-width:1100px;margin:0 auto;padding:0 20px;display:flex;gap:0}
+.tab-btn{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);background:none;border:none;padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;text-decoration:none;display:inline-block}
+.tab-btn:hover{color:var(--g300)}
+.tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+
+.header{max-width:720px;margin:0 auto;padding:40px 28px 0}
+.header .topic{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;color:var(--cyan)}
+.header h1{font-family:'Libre Baskerville',Georgia,serif;font-size:clamp(24px,3.5vw,36px);font-weight:700;line-height:1.2;color:var(--black);margin-bottom:12px}
+.header .dek{font-size:15px;color:var(--g600);line-height:1.5;margin-bottom:16px}
+.header .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500);padding-bottom:20px;border-bottom:1px solid var(--g200)}
+
+.c{max-width:720px;margin:0 auto;padding:0 28px}
+.sep{border:none;border-top:1px solid var(--g200);margin:32px 0}
+.sl{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);margin-bottom:8px;margin-top:32px}
+h2{font-family:'Libre Baskerville',Georgia,serif;font-size:20px;font-weight:700;color:var(--black);margin-bottom:14px;line-height:1.25}
+h3{font-family:'Archivo';font-size:14px;font-weight:700;color:var(--black);margin:20px 0 8px}
+p{margin-bottom:10px;color:var(--g700);font-size:14px;line-height:1.6}
+
+.ss{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--g200);border:1px solid var(--g200);margin:16px 0}
+.ss-i{background:var(--white);padding:14px 12px}
+.ss-v{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:500;color:var(--black);line-height:1.1}
+.ss-v.g{color:var(--green)}.ss-v.r{color:var(--red)}.ss-v.b{color:var(--cyan)}
+.ss-l{font-size:11px;color:var(--g500);margin-top:3px;line-height:1.3}
+
+.dl{list-style:none;margin:10px 0}.dl li{padding:5px 0;border-bottom:1px solid var(--g100);font-size:13px;display:flex;align-items:baseline;gap:6px}.dl li:last-child{border-bottom:none}
+.d{width:5px;height:5px;background:var(--cyan);border-radius:50%;flex-shrink:0;margin-top:6px;align-self:flex-start}
+.v{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--black)}
+
+.tw{border:1px solid var(--g200);margin:14px 0;overflow-x:auto;background:var(--white)}
+.t{width:100%;border-collapse:collapse;font-size:12px}
+.t th{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);text-align:left;padding:8px 10px;border-bottom:2px solid var(--g200);font-weight:500;white-space:nowrap;background:var(--g100)}
+.t td{padding:7px 10px;border-bottom:1px solid var(--g100);vertical-align:top}.t tr:last-child td{border-bottom:none}.t .n{font-weight:600}
+
+.cl{border-left:3px solid var(--cyan);padding:8px 14px;margin:14px 0;background:#eef8fb;font-size:13px;color:var(--g700);font-family:'IBM Plex Mono',monospace}
+.q{border-left:3px solid var(--black);padding:8px 16px;margin:14px 0;font-size:13px;color:var(--g700);font-style:italic;line-height:1.55}
+.q .a{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g400);font-style:normal;margin-top:4px;display:block}
+
+.verdict{border:2px solid var(--cyan);padding:20px;margin:20px 0;background:var(--white)}
+.verdict-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-bottom:6px;color:var(--cyan)}
+
+/* Core Loop Visual */
+.loop-strip{display:flex;gap:0;margin:20px 0;border:1px solid var(--g200);background:var(--white);overflow-x:auto}
+.loop-step{flex:1;min-width:120px;padding:16px 12px;border-right:1px solid var(--g200);text-align:center;position:relative}
+.loop-step:last-child{border-right:none}
+.loop-step::after{content:'→';position:absolute;right:-8px;top:50%;transform:translateY(-50%);font-size:14px;color:var(--g400);z-index:1}
+.loop-step:last-child::after{display:none}
+.loop-num{font-family:'IBM Plex Mono',monospace;font-size:28px;font-weight:600;color:var(--cyan);line-height:1}
+.loop-title{font-family:'Archivo';font-size:12px;font-weight:700;margin-top:4px;color:var(--black)}
+.loop-desc{font-size:11px;color:var(--g500);margin-top:2px;line-height:1.3}
+
+/* MEDDIC scorecard */
+.meddic{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--g200);border:1px solid var(--g200);margin:16px 0}
+.meddic-cell{background:var(--white);padding:14px}
+.meddic-letter{font-family:'IBM Plex Mono',monospace;font-size:20px;font-weight:600;color:var(--cyan);line-height:1}
+.meddic-title{font-family:'Archivo';font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--g500);margin-top:2px}
+.meddic-val{font-size:13px;color:var(--g700);margin-top:6px;line-height:1.5}
+
+.tag{display:inline-block;padding:1px 5px;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;letter-spacing:.3px;border-radius:2px}
+.tg{background:#dff5e8;color:#0a7c3e}.ta{background:#fef3dd;color:#9a6c00}.tb{background:#e0f2f7;color:#006680}
+
+footer{background:var(--black);color:var(--g500);padding:24px;margin-top:36px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:1.8}
+
+@media(max-width:640px){.header{padding:28px 16px 0}.c{padding:0 16px}.ss{grid-template-columns:1fr 1fr}.ss-v{font-size:20px}.meddic{grid-template-columns:1fr}.loop-strip{flex-direction:column}.loop-step{border-right:none;border-bottom:1px solid var(--g200)}.loop-step::after{display:none}}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div class="topbar-brand">Stella Nova</div>
+  <div class="topbar-right">Investor Materials · March 2026</div>
+</div></div>
+
+<div class="tab-nav"><div class="tab-nav-inner">
+  <a class="tab-btn active" href="pitch.html">Pitch</a>
+  <a class="tab-btn" href="roadmap.html">Roadmap</a>
+  <a class="tab-btn" href="business.html">Revenue Model</a>
+</div></div>
+
+<div class="header">
+  <div class="topic">Investor Pitch · One-Pager</div>
+  <h1>Stella Nova: The Space Colony Sim Nobody Has Built Yet</h1>
+  <p class="dek">Factorio's automation depth. RimWorld's emergent storytelling. KSP's orbital mechanics. One game. One developer. A custom Rust engine. And the first colony sim with LLM-driven narrative AI.</p>
+  <div class="meta">David Kubala · Solo Developer · dkncus@gmail.com · <a href="https://linkedin.com/in/david-kubala" target="_blank" rel="noopener">LinkedIn</a> · <a href="https://discord.gg/SkJDmnRmdJ" target="_blank" rel="noopener">Discord</a></div>
+</div>
+
+<div class="c">
+
+  <div class="ss">
+    <div class="ss-i"><div class="ss-v b">$9.9B</div><div class="ss-l">Indie game market (2024)</div></div>
+    <div class="ss-i"><div class="ss-v b">12.5%</div><div class="ss-l">CAGR through 2033</div></div>
+    <div class="ss-i"><div class="ss-v g">$421M+</div><div class="ss-l">Combined revenue of 3 closest comps</div></div>
+    <div class="ss-i"><div class="ss-v b">0</div><div class="ss-l">Direct competitors in this intersection</div></div>
+  </div>
+
+  <hr class="sep">
+  <div class="sl">The Elevator Pitch</div>
+  <h2>30 Seconds</h2>
+  <p style="font-size:16px;line-height:1.7;color:var(--near-black)"><strong>Stella Nova</strong> is a space colony simulation where you mine asteroids, smelt ore into alloys, build modular stations piece by piece, and govern AI citizens who form relationships, hold grudges, and run your foundries autonomously. It's built on a custom Rust engine with real N-body orbital physics, and it's the first game in the genre to use LLM-powered narrative AI — meaning every colonist interaction generates unique, emergent stories that no two players will ever share.</p>
+
+  <div class="cl">
+    <strong>One-line pitch:</strong> "Factorio meets RimWorld in space — with AI that writes the stories."
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Core Loop — 30 Seconds</div>
+  <h2>Mine → Smelt → Build → Govern → Expand</h2>
+
+  <div class="loop-strip">
+    <div class="loop-step"><div class="loop-num">1</div><div class="loop-title">Mine</div><div class="loop-desc">10 ores · real rarity curves · asteroid selection</div></div>
+    <div class="loop-step"><div class="loop-num">2</div><div class="loop-title">Smelt</div><div class="loop-desc">Ore → Ingot → Alloy → Component chains</div></div>
+    <div class="loop-step"><div class="loop-num">3</div><div class="loop-title">Build</div><div class="loop-desc">Grid stations · module-by-module construction</div></div>
+    <div class="loop-step"><div class="loop-num">4</div><div class="loop-title">Govern</div><div class="loop-desc">AI citizens · relationships · task assignment</div></div>
+    <div class="loop-step"><div class="loop-num">5</div><div class="loop-title">Expand</div><div class="loop-desc">Orbital logistics · multi-station empire</div></div>
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Target Demographic</div>
+  <h2>The Proven $400M+ Audience</h2>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Audience Segment</th><th>Size Proof</th><th>Stella Nova Hook</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Colony sim players</td><td>RimWorld: 5–10M owners, $116M+ rev</td><td>AI citizens with LLM narrative — deeper emergent stories</td></tr>
+      <tr><td class="n">Automation/factory players</td><td>Factorio: 5–10M owners, $305M+ rev</td><td>Full resource chains from raw ore to station modules</td></tr>
+      <tr><td class="n">Space physics enthusiasts</td><td>KSP: 4M+ units, NASA endorsement</td><td>Barnes-Hut N-body orbital mechanics — real physics</td></tr>
+      <tr><td class="n">Early access engaged</td><td>Genre avg: 211hr playtime (RimWorld)</td><td>Systems-depth = extreme retention</td></tr>
+      <tr><td class="n">Streamer/content creators</td><td>KSP: Scott Manley career; VS: viral clips</td><td>LLM stories = unique shareable moments every session</td></tr>
+    </tbody>
+  </table></div>
+
+  <hr class="sep">
+  <div class="sl">Technical Differentiators</div>
+  <h2>Why This Can't Be Cloned Easily</h2>
+
+  <ul class="dl">
+    <li><span class="d"></span><strong>Custom Rust engine ("quarkstrom"):</strong> Purpose-built with wgpu. No Unity/Unreal overhead. Thousands of physics bodies at 60fps. <span class="tag tb">MOAT</span></li>
+    <li><span class="d"></span><strong>Barnes-Hut N-body gravity:</strong> Real orbital mechanics, not on-rails. Asteroids, stations, and debris interact gravitationally. <span class="tag tb">MOAT</span></li>
+    <li><span class="d"></span><strong>LLM-powered narrative system:</strong> First colony sim with generative AI storytelling. Citizens don't just have stats — they have conversations, grudges, and evolving relationships driven by language models. <span class="tag tb">FIRST MOVER</span></li>
+    <li><span class="d"></span><strong>HDR rendering pipeline:</strong> Rgba16Float → bloom → tonemap → CRT blit. Retro aesthetic with modern rendering tech.</li>
+    <li><span class="d"></span><strong>Modular station construction:</strong> Crossword-puzzle placement rules. Emergent station designs, not prefabs.</li>
+  </ul>
+
+  <hr class="sep">
+  <div class="sl">Current Build Status</div>
+  <h2>What's Shipping — Not What's Promised</h2>
+
+  <div class="ss">
+    <div class="ss-i"><div class="ss-v g">✓</div><div class="ss-l">N-body orbital mechanics</div></div>
+    <div class="ss-i"><div class="ss-v g">✓</div><div class="ss-l">Modular station building</div></div>
+    <div class="ss-i"><div class="ss-v g">✓</div><div class="ss-l">Resource mining + smelting chains</div></div>
+    <div class="ss-i"><div class="ss-v g">✓</div><div class="ss-l">AI citizen behaviors + assignment</div></div>
+    <div class="ss-i"><div class="ss-v g">✓</div><div class="ss-l">Custom Rust/wgpu renderer</div></div>
+    <div class="ss-i"><div class="ss-v g">✓</div><div class="ss-l">LLM narrator integration</div></div>
+    <div class="ss-i"><div class="ss-v g">✓</div><div class="ss-l">Relationship system (force-directed)</div></div>
+    <div class="ss-i"><div class="ss-v g">✓</div><div class="ss-l">HDR + bloom + CRT pipeline</div></div>
+  </div>
+
+  <div class="cl">
+    <strong>Pre-alpha build shipping March 28, 2026.</strong> Steam page live April 17. Demo build for Next Fest prep April 28. Steam Next Fest June 15–22. Early access target: July 2026.
+  </div>
+
+  <hr class="sep">
+  <div class="sl">MEDDIC Scorecard</div>
+  <h2>Qualification Framework</h2>
+
+  <div class="meddic">
+    <div class="meddic-cell">
+      <div class="meddic-letter">M</div>
+      <div class="meddic-title">Metrics</div>
+      <div class="meddic-val">TAM: $9.9B indie market (12.5% CAGR). Colony sim subgenre: $421M+ proven revenue across 3 titles. Target: $2.5M–$50M 5-year gross depending on traction scenario.</div>
+    </div>
+    <div class="meddic-cell">
+      <div class="meddic-letter">E</div>
+      <div class="meddic-title">Economic Buyer</div>
+      <div class="meddic-val">Self-funded solo dev. No external capital required for EA launch. Revenue-positive from unit 1 at $24.99. Publisher-optional (Playstack model viable).</div>
+    </div>
+    <div class="meddic-cell">
+      <div class="meddic-letter">D</div>
+      <div class="meddic-title">Decision Criteria</div>
+      <div class="meddic-val">Steam Next Fest demo performance (wishlists, conversion). Community engagement metrics (Discord, Reddit). Streamer pickup rate. EA week-1 units.</div>
+    </div>
+    <div class="meddic-cell">
+      <div class="meddic-letter">D</div>
+      <div class="meddic-title">Decision Process</div>
+      <div class="meddic-val">Pre-alpha → Next Fest demo → EA launch → community feedback → iterative 2–3 year EA → 1.0 release. Each gate is metrics-driven.</div>
+    </div>
+    <div class="meddic-cell">
+      <div class="meddic-letter">I</div>
+      <div class="meddic-title">Identify Pain</div>
+      <div class="meddic-val">No space colony sim combines orbital physics + automation + emergent narrative. KSP2 destroyed trust. Spacebase DF-9 abandoned. Market is hungry and underserved.</div>
+    </div>
+    <div class="meddic-cell">
+      <div class="meddic-letter">C</div>
+      <div class="meddic-title">Champion</div>
+      <div class="meddic-val">David Kubala — solo dev with custom engine, daily commits since Sep 2025, systems programming + graphics + physics + AI integration expertise. The builder is the believer.</div>
+    </div>
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Comparable Exits & Outcomes</div>
+  <h2>What Solo/Micro-Team Games Have Achieved</h2>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Title</th><th>Team</th><th>Gross Rev</th><th>Time to $10M</th><th>Key Metric</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Factorio</td><td>2 → 31</td><td>$305M+</td><td>~2 years EA</td><td>97% positive, never discounted</td></tr>
+      <tr><td class="n">RimWorld</td><td>1 → 7</td><td>$116M+</td><td>~3 years EA</td><td>211hr avg playtime</td></tr>
+      <tr><td class="n">Balatro</td><td>1</td><td>$95M+</td><td>~3 hours</td><td>5M copies in 11 months</td></tr>
+      <tr><td class="n">Vampire Survivors</td><td>1</td><td>£40M+ creator wealth</td><td>~4 months</td><td>Created entire genre</td></tr>
+      <tr><td class="n">Papers, Please</td><td>1</td><td>$41M</td><td>~3 years</td><td>5M copies over 10 years</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="verdict">
+    <div class="verdict-label">The Ask</div>
+    <p style="margin:0;font-size:14px"><strong>Stella Nova is not seeking funding — it's seeking visibility, partnerships, and strategic advisors.</strong> The game is self-funded and development is on track. What accelerates this: publisher marketing deals (Playstack model), conference visibility, streamer relationships, and strategic introductions to platform partners (Steam featuring, Game Pass). If the metrics land at Next Fest, the conversation shifts from "is this viable" to "how fast can we scale."</p>
+  </div>
+
+  <div style="text-align:center;margin:28px 0 8px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g400);margin-bottom:8px">CONTACT</div>
+    <div style="font-family:'Archivo';font-size:14px;font-weight:600">David Kubala</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--g600);margin-top:4px">
+      <a href="mailto:dkncus@gmail.com">dkncus@gmail.com</a> · <a href="tel:980-229-6314">980-229-6314</a> · <a href="https://linkedin.com/in/david-kubala" target="_blank">LinkedIn</a> · <a href="https://discord.gg/SkJDmnRmdJ" target="_blank">Discord</a>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Stella Nova · Investor Pitch · March 2026<br>
+  Market data: SteamDB · SteamSpy · Steam Revenue Calculator · Gamalytic · VG Insights
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stella Nova — Development Roadmap</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--black:#000;--near-black:#111;--g800:#333;--g700:#444;--g600:#666;--g500:#888;--g400:#aaa;--g300:#ccc;--g200:#e0e0e0;--g100:#f0f0f0;--white:#fff;--blue:#2771e2;--red:#e02020;--green:#00a854;--amber:#e09000;--bg:#f7f7f5;--cyan:#0099cc}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Archivo',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--near-black);line-height:1.55;font-size:14px;-webkit-font-smoothing:antialiased}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+
+.topbar{background:var(--black);padding:10px 0;border-bottom:3px solid var(--cyan);position:sticky;top:0;z-index:100}
+.topbar-inner{max-width:1100px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between}
+.topbar-brand{font-family:'Archivo';font-weight:700;font-size:13px;letter-spacing:4px;text-transform:uppercase;color:#fff}
+.topbar-right{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500)}
+
+.tab-nav{background:var(--near-black);border-bottom:1px solid #333;overflow-x:auto;white-space:nowrap}
+.tab-nav-inner{max-width:1100px;margin:0 auto;padding:0 20px;display:flex;gap:0}
+.tab-btn{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);background:none;border:none;padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;text-decoration:none;display:inline-block}
+.tab-btn:hover{color:var(--g300)}
+.tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+
+.header{max-width:720px;margin:0 auto;padding:40px 28px 0}
+.header .topic{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;color:var(--cyan)}
+.header h1{font-family:'Libre Baskerville',Georgia,serif;font-size:clamp(24px,3.5vw,36px);font-weight:700;line-height:1.2;color:var(--black);margin-bottom:12px}
+.header .dek{font-size:15px;color:var(--g600);line-height:1.5;margin-bottom:16px}
+.header .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500);padding-bottom:20px;border-bottom:1px solid var(--g200)}
+
+.c{max-width:720px;margin:0 auto;padding:0 28px}
+.sep{border:none;border-top:1px solid var(--g200);margin:32px 0}
+.sl{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);margin-bottom:8px;margin-top:32px}
+.sl.g{color:var(--green)}.sl.a{color:var(--amber)}
+h2{font-family:'Libre Baskerville',Georgia,serif;font-size:20px;font-weight:700;color:var(--black);margin-bottom:14px;line-height:1.25}
+p{margin-bottom:10px;color:var(--g700);font-size:14px;line-height:1.6}
+
+.ss{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--g200);border:1px solid var(--g200);margin:16px 0}
+.ss-i{background:var(--white);padding:14px 12px}
+.ss-v{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:500;color:var(--black);line-height:1.1}
+.ss-v.g{color:var(--green)}.ss-v.r{color:var(--red)}.ss-v.b{color:var(--cyan)}.ss-v.a{color:var(--amber)}
+.ss-l{font-size:11px;color:var(--g500);margin-top:3px;line-height:1.3}
+
+.dl{list-style:none;margin:10px 0}.dl li{padding:5px 0;border-bottom:1px solid var(--g100);font-size:13px;display:flex;align-items:baseline;gap:6px}.dl li:last-child{border-bottom:none}
+.d{width:5px;height:5px;background:var(--cyan);border-radius:50%;flex-shrink:0;margin-top:6px;align-self:flex-start}
+.d.g{background:var(--green)}.d.a{background:var(--amber)}.d.r{background:var(--red)}
+.v{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--black)}
+
+.tw{border:1px solid var(--g200);margin:14px 0;overflow-x:auto;background:var(--white)}
+.t{width:100%;border-collapse:collapse;font-size:12px}
+.t th{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);text-align:left;padding:8px 10px;border-bottom:2px solid var(--g200);font-weight:500;white-space:nowrap;background:var(--g100)}
+.t td{padding:7px 10px;border-bottom:1px solid var(--g100);vertical-align:top}.t tr:last-child td{border-bottom:none}.t .n{font-weight:600}
+
+.cl{border-left:3px solid var(--cyan);padding:8px 14px;margin:14px 0;background:#eef8fb;font-size:13px;color:var(--g700);font-family:'IBM Plex Mono',monospace}
+.cl.g{border-left-color:var(--green);background:#eefaf3}
+.cl.a{border-left-color:var(--amber);background:#fef9ee}
+
+.tag{display:inline-block;padding:1px 5px;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;letter-spacing:.3px;border-radius:2px}
+.tg{background:#dff5e8;color:#0a7c3e}.ta{background:#fef3dd;color:#9a6c00}.tb{background:#e0f2f7;color:#006680}.tr{background:#fde8e8;color:#c00}
+
+.verdict{border:2px solid var(--cyan);padding:20px;margin:20px 0;background:var(--white)}
+.verdict-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-bottom:6px;color:var(--cyan)}
+
+/* TIMELINE */
+.timeline{position:relative;margin:24px 0 24px 20px;padding-left:28px;border-left:2px solid var(--g200)}
+.tl-node{position:relative;margin-bottom:24px}
+.tl-node:last-child{margin-bottom:0}
+.tl-dot{position:absolute;left:-35px;top:4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--g300);background:var(--white)}
+.tl-dot.done{background:var(--green);border-color:var(--green)}
+.tl-dot.active{background:var(--cyan);border-color:var(--cyan);box-shadow:0 0 0 3px rgba(0,153,204,.2)}
+.tl-dot.upcoming{background:var(--white);border-color:var(--g300)}
+.tl-dot.gate{background:var(--amber);border-color:var(--amber)}
+.tl-date{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;color:var(--g500);margin-bottom:2px}
+.tl-date .tag{margin-left:6px;vertical-align:middle}
+.tl-title{font-family:'Archivo';font-size:14px;font-weight:700;color:var(--black);margin-bottom:3px}
+.tl-desc{font-size:13px;color:var(--g600);line-height:1.5}
+.tl-metrics{display:flex;gap:12px;flex-wrap:wrap;margin-top:6px}
+.tl-metric{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500)}
+.tl-metric strong{color:var(--black)}
+
+/* GANTT-STYLE BAR CHART */
+.gantt{margin:20px 0;border:1px solid var(--g200);background:var(--white);overflow-x:auto}
+.gantt-header{display:grid;grid-template-columns:140px repeat(10,1fr);border-bottom:2px solid var(--g200);background:var(--g100)}
+.gantt-header span{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:.3px;text-transform:uppercase;color:var(--g500);padding:8px 4px;text-align:center;border-right:1px solid var(--g200)}
+.gantt-header span:first-child{text-align:left;padding-left:10px}
+.gantt-row{display:grid;grid-template-columns:140px repeat(10,1fr);border-bottom:1px solid var(--g100);min-height:32px;align-items:center}
+.gantt-row:last-child{border-bottom:none}
+.gantt-label{font-family:'Archivo';font-size:11px;font-weight:600;color:var(--black);padding:6px 10px;border-right:1px solid var(--g200)}
+.gantt-cells{display:contents}
+.gantt-cell{border-right:1px solid var(--g100);height:100%;position:relative}
+.gantt-bar{position:absolute;top:8px;bottom:8px;border-radius:2px;min-width:4px}
+.gantt-bar.done{background:var(--green)}
+.gantt-bar.active{background:var(--cyan)}
+.gantt-bar.planned{background:var(--g300)}
+.gantt-bar.gate{background:var(--amber)}
+
+/* MILESTONE MARKER */
+.now-marker{position:absolute;top:0;bottom:0;width:2px;background:var(--red);z-index:2}
+.now-label{position:absolute;top:-16px;left:-8px;font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--red);font-weight:600;white-space:nowrap}
+
+footer{background:var(--black);color:var(--g500);padding:24px;margin-top:36px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:1.8}
+
+@media(max-width:640px){.header{padding:28px 16px 0}.c{padding:0 16px}.ss{grid-template-columns:1fr 1fr}.ss-v{font-size:20px}.gantt{font-size:10px}}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div class="topbar-brand">Stella Nova</div>
+  <div class="topbar-right">Development Roadmap · March 2026</div>
+</div></div>
+
+<div class="tab-nav"><div class="tab-nav-inner">
+  <a class="tab-btn" href="pitch.html">Pitch</a>
+  <a class="tab-btn active" href="roadmap.html">Roadmap</a>
+  <a class="tab-btn" href="business.html">Revenue Model</a>
+</div></div>
+
+<div class="header">
+  <div class="topic">Traction & Roadmap</div>
+  <h1>What's Shipped, What's Next, and When It Lands</h1>
+  <p class="dek">Milestones matter to investors. Here's the timeline — what's already built, what's in progress, and the gates ahead. Every date backed by daily commits since September 2025.</p>
+  <div class="meta">Updated March 12, 2026 · David Kubala · Solo Developer</div>
+</div>
+
+<div class="c">
+
+  <div class="ss">
+    <div class="ss-i"><div class="ss-v g">6+ mo</div><div class="ss-l">Daily commits (since Sep 2025)</div></div>
+    <div class="ss-i"><div class="ss-v b">16 days</div><div class="ss-l">Until pre-alpha (Mar 28)</div></div>
+    <div class="ss-i"><div class="ss-v b">96 days</div><div class="ss-l">Until Next Fest (Jun 15)</div></div>
+    <div class="ss-i"><div class="ss-v a">~130 days</div><div class="ss-l">Target EA launch (Jul 2026)</div></div>
+  </div>
+
+  <hr class="sep">
+  <div class="sl g">Shipped — In Build Now</div>
+  <h2>What's Already Working</h2>
+  <p>These systems are implemented, tested, and running in the current build. This isn't a feature list — it's a build manifest.</p>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>System</th><th>Status</th><th>Detail</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Custom Rust Engine (quarkstrom)</td><td><span class="tag tg">SHIPPED</span></td><td>wgpu-based renderer. HDR pipeline: Rgba16Float → bloom → tonemap → CRT blit.</td></tr>
+      <tr><td class="n">N-Body Orbital Mechanics</td><td><span class="tag tg">SHIPPED</span></td><td>Barnes-Hut gravity simulation. Real orbital physics — not on-rails.</td></tr>
+      <tr><td class="n">Modular Station Construction</td><td><span class="tag tg">SHIPPED</span></td><td>Crossword-puzzle grid placement. Module-by-module building with structural rules.</td></tr>
+      <tr><td class="n">Resource Mining & Smelting</td><td><span class="tag tg">SHIPPED</span></td><td>10 ore types with rarity curves. Ore → Ingot → Alloy → Component chains.</td></tr>
+      <tr><td class="n">AI Citizen Behaviors</td><td><span class="tag tg">SHIPPED</span></td><td>State machine autonomy. Task assignment, resource collection, construction workflows.</td></tr>
+      <tr><td class="n">Relationship System</td><td><span class="tag tg">SHIPPED</span></td><td>Force-directed physics visualization. Friendship, rivalry, grudge mechanics.</td></tr>
+      <tr><td class="n">LLM Narrator Integration</td><td><span class="tag tg">SHIPPED</span></td><td>Dynamic character interactions via language model. Emergent narrative generation.</td></tr>
+      <tr><td class="n">GUI Framework (egui)</td><td><span class="tag tg">SHIPPED</span></td><td>Resource management, citizen assignment, station construction interfaces.</td></tr>
+      <tr><td class="n">Texture Atlas System</td><td><span class="tag tg">SHIPPED</span></td><td>Textured rendering for game objects. Sprite-based with atlas packing.</td></tr>
+      <tr><td class="n">Power Network Visualization</td><td><span class="tag tg">SHIPPED</span></td><td>Visual power grid overlay. Energy distribution across station modules.</td></tr>
+      <tr><td class="n">Explosion & VFX Shaders</td><td><span class="tag tg">SHIPPED</span></td><td>Custom fragment shaders for explosions, particle effects, visual feedback.</td></tr>
+      <tr><td class="n">Space Elevator Logistics</td><td><span class="tag tg">SHIPPED</span></td><td>Surface-to-orbit resource transport. Logistics chain integration.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="cl g">
+    <strong>12 major systems shipped.</strong> This is not an early prototype — this is a functioning game with deep interconnected systems. Daily commits since September 2025.
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Development Timeline</div>
+  <h2>Key Milestones — Past, Present, Future</h2>
+
+  <div class="timeline">
+    <div class="tl-node">
+      <div class="tl-dot done"></div>
+      <div class="tl-date">Sep 2025 <span class="tag tg">COMPLETE</span></div>
+      <div class="tl-title">Development Begins</div>
+      <div class="tl-desc">First commit. Custom Rust engine (quarkstrom) initialized. wgpu rendering pipeline established. Barnes-Hut gravity prototype running.</div>
+    </div>
+
+    <div class="tl-node">
+      <div class="tl-dot done"></div>
+      <div class="tl-date">Oct – Dec 2025 <span class="tag tg">COMPLETE</span></div>
+      <div class="tl-title">Core Systems Build-Out</div>
+      <div class="tl-desc">Station construction grid. Resource mining and smelting chains. AI citizen state machines. egui interface framework. Texture atlas system. HDR rendering pipeline.</div>
+    </div>
+
+    <div class="tl-node">
+      <div class="tl-dot done"></div>
+      <div class="tl-date">Jan – Mar 2026 <span class="tag tg">COMPLETE</span></div>
+      <div class="tl-title">Systems Integration & Polish</div>
+      <div class="tl-desc">LLM narrator system. Relationship visualization (force-directed). Power networks. Explosion shaders. Station management UI. Space elevator logistics. Autonomous player AI behaviors.</div>
+    </div>
+
+    <div class="tl-node">
+      <div class="tl-dot active"></div>
+      <div class="tl-date">Mar 28, 2026 <span class="tag tb">NEXT</span></div>
+      <div class="tl-title">Pre-Alpha Launch</div>
+      <div class="tl-desc">First external playtest build. Core loop validated: mine → smelt → build → govern. Performance benchmarking. Initial community feedback collection.</div>
+      <div class="tl-metrics">
+        <span class="tl-metric">Gate: <strong>Core loop fun for 2+ hours</strong></span>
+        <span class="tl-metric">Gate: <strong>Stable 60fps with 500+ entities</strong></span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <div class="tl-dot upcoming"></div>
+      <div class="tl-date">Apr 17, 2026</div>
+      <div class="tl-title">Steam Page Live</div>
+      <div class="tl-desc">Store page with trailer, screenshots, and description. Wishlist accumulation begins. Community building shifts to Steam.</div>
+      <div class="tl-metrics">
+        <span class="tl-metric">Target: <strong>5K+ wishlists in first 30 days</strong></span>
+        <span class="tl-metric">Metric: <strong>Wishlist conversion rate</strong></span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <div class="tl-dot upcoming"></div>
+      <div class="tl-date">Apr 28, 2026</div>
+      <div class="tl-title">Demo Build Ready</div>
+      <div class="tl-desc">20-minute polished vertical slice for Next Fest. Single scenario: build first station module, establish power, survive one crisis. Optimized for streamer capture.</div>
+      <div class="tl-metrics">
+        <span class="tl-metric">Gate: <strong>Demo completes in 15–25 min</strong></span>
+        <span class="tl-metric">Gate: <strong>Zero critical bugs</strong></span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <div class="tl-dot gate"></div>
+      <div class="tl-date">Jun 15 – 22, 2026 <span class="tag ta">KEY GATE</span></div>
+      <div class="tl-title">Steam Next Fest Demo</div>
+      <div class="tl-desc">Public demo during Steam's highest-traffic discovery event. This is the single highest-ROI marketing moment. Balatro got 100K downloads at Next Fest → signed publisher → 5M copies.</div>
+      <div class="tl-metrics">
+        <span class="tl-metric">Target: <strong>10K+ demo downloads</strong></span>
+        <span class="tl-metric">Target: <strong>10K+ wishlists during fest</strong></span>
+        <span class="tl-metric">Metric: <strong>Median session length</strong></span>
+        <span class="tl-metric">Metric: <strong>Streamer pickup count</strong></span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <div class="tl-dot upcoming"></div>
+      <div class="tl-date">Jul 2026 (TBD) <span class="tag ta">DECISION GATE</span></div>
+      <div class="tl-title">Early Access Launch</div>
+      <div class="tl-desc">EA build incorporating Next Fest feedback. Priced at $24.99. Full core loop + 10+ hours of content. Launch window depends on Next Fest metrics and community feedback quality.</div>
+      <div class="tl-metrics">
+        <span class="tl-metric">Gate: <strong>Next Fest metrics meet thresholds</strong></span>
+        <span class="tl-metric">Gate: <strong>Core loop fun for 10+ hours</strong></span>
+        <span class="tl-metric">Target: <strong>Week-1 units</strong></span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <div class="tl-dot upcoming"></div>
+      <div class="tl-date">Jul 2026 – H1 2028</div>
+      <div class="tl-title">Early Access Iteration (2–3 Years)</div>
+      <div class="tl-desc">Transparent development with weekly/biweekly devlogs. Feature expansion: deeper automation, modding support, multiplayer exploration. Price increases as value grows.</div>
+      <div class="tl-metrics">
+        <span class="tl-metric">Cadence: <strong>Weekly devlogs</strong></span>
+        <span class="tl-metric">Metric: <strong>Monthly active players</strong></span>
+        <span class="tl-metric">Metric: <strong>Avg session length trend</strong></span>
+      </div>
+    </div>
+
+    <div class="tl-node">
+      <div class="tl-dot upcoming"></div>
+      <div class="tl-date">H1 2028 – H2 2028 (Est.)</div>
+      <div class="tl-title">Version 1.0 Release</div>
+      <div class="tl-desc">Full release at $34.99. Timed with major gaming events for visibility. Mod support mature. DLC roadmap announced.</div>
+      <div class="tl-metrics">
+        <span class="tl-metric">Price: <strong>$24.99 → $34.99</strong></span>
+        <span class="tl-metric">Precedent: <strong>Factorio 4yr EA, RimWorld 5yr EA</strong></span>
+      </div>
+    </div>
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Gantt Overview</div>
+  <h2>Visual Timeline — Q1 2026 Through 2028</h2>
+
+  <div class="gantt">
+    <div class="gantt-header">
+      <span>Phase</span>
+      <span>Q1 '26</span>
+      <span>Q2 '26</span>
+      <span>Q3 '26</span>
+      <span>Q4 '26</span>
+      <span>Q1 '27</span>
+      <span>Q2 '27</span>
+      <span>Q3 '27</span>
+      <span>Q4 '27</span>
+      <span>H1 '28</span>
+      <span>H2 '28</span>
+    </div>
+    <div class="gantt-row">
+      <div class="gantt-label">Core Engine</div>
+      <div class="gantt-cell"><div class="gantt-bar done" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar done" style="left:0;width:30%"></div></div>
+      <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+    </div>
+    <div class="gantt-row">
+      <div class="gantt-label">Gameplay Systems</div>
+      <div class="gantt-cell"><div class="gantt-bar done" style="left:30%;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar active" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;width:50%"></div></div>
+      <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+    </div>
+    <div class="gantt-row">
+      <div class="gantt-label">Pre-Alpha</div>
+      <div class="gantt-cell"></div>
+      <div class="gantt-cell"><div class="gantt-bar gate" style="left:0;width:8px;border-radius:50%"></div></div>
+      <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+    </div>
+    <div class="gantt-row">
+      <div class="gantt-label">Steam Page</div>
+      <div class="gantt-cell"></div>
+      <div class="gantt-cell"><div class="gantt-bar active" style="left:20%;width:8px;border-radius:50%"></div></div>
+      <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+    </div>
+    <div class="gantt-row">
+      <div class="gantt-label">Next Fest</div>
+      <div class="gantt-cell"></div>
+      <div class="gantt-cell"><div class="gantt-bar gate" style="left:70%;right:0"></div></div>
+      <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+    </div>
+    <div class="gantt-row">
+      <div class="gantt-label">Early Access</div>
+      <div class="gantt-cell"></div>
+      <div class="gantt-cell"></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"></div>
+    </div>
+    <div class="gantt-row">
+      <div class="gantt-label">Mod Support</div>
+      <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+    </div>
+    <div class="gantt-row">
+      <div class="gantt-label">1.0 Release</div>
+      <div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div><div class="gantt-cell"></div>
+      <div class="gantt-cell"><div class="gantt-bar planned" style="left:0;right:0"></div></div>
+      <div class="gantt-cell"><div class="gantt-bar gate" style="left:0;width:8px;border-radius:50%"></div></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g500)">
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:1px;vertical-align:middle;margin-right:3px"></span> Shipped</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--cyan);border-radius:1px;vertical-align:middle;margin-right:3px"></span> In Progress</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--g300);border-radius:1px;vertical-align:middle;margin-right:3px"></span> Planned</span>
+    <span><span style="display:inline-block;width:10px;height:10px;background:var(--amber);border-radius:50%;vertical-align:middle;margin-right:3px"></span> Decision Gate</span>
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Success Metrics by Phase</div>
+  <h2>What Gets Measured Gets Built</h2>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Phase</th><th>Primary KPI</th><th>Target</th><th>Precedent</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Pre-Alpha (Mar 28)</td><td>Core loop engagement</td><td>Playtester sessions &gt;2hr avg</td><td>RimWorld alpha: testers played until 2AM</td></tr>
+      <tr><td class="n">Steam Page (Apr 17)</td><td>Wishlist accumulation</td><td>5K+ in 30 days</td><td>Median top-quartile indie: 7K at launch</td></tr>
+      <tr><td class="n">Demo Build (Apr 28)</td><td>Demo completion rate</td><td>&gt;60% complete the scenario</td><td>Balatro Next Fest: 100K downloads</td></tr>
+      <tr><td class="n">Next Fest (Jun 15–22)</td><td>Downloads + wishlists</td><td>10K+ downloads, 10K+ WL</td><td>Top 50 Next Fest = breakout signal</td></tr>
+      <tr><td class="n">EA Launch (Jul)</td><td>Week-1 unit sales</td><td>5K–15K units</td><td>Space Haven EA launch: ~20K month 1</td></tr>
+      <tr><td class="n">EA Steady State</td><td>Monthly retention + reviews</td><td>&gt;80% positive, growing MAU</td><td>Factorio: 97% positive through entire EA</td></tr>
+      <tr><td class="n">1.0 Release</td><td>Launch week units + CCU peak</td><td>50K+ week-1</td><td>Factorio 1.0: 34.7K peak CCU</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="verdict">
+    <div class="verdict-label">Momentum Signal</div>
+    <p style="margin:0"><strong>6 months of daily commits. 12 major systems shipped. 16 days to pre-alpha.</strong> This is not a pitch deck with mockups — it's a working game with a live roadmap. Every milestone ahead has a metric gate. The question isn't "can this be built" — it's being built. The question is "how big does the audience get."</p>
+  </div>
+
+</div>
+
+<footer>
+  Stella Nova · Development Roadmap · March 2026<br>
+  David Kubala · <a href="mailto:dkncus@gmail.com" style="color:var(--g400)">dkncus@gmail.com</a> · <a href="https://linkedin.com/in/david-kubala" style="color:var(--g400)" target="_blank">LinkedIn</a>
+</footer>
+
+</body>
+</html>

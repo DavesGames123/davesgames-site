@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stella Nova — Revenue Model</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--black:#000;--near-black:#111;--g800:#333;--g700:#444;--g600:#666;--g500:#888;--g400:#aaa;--g300:#ccc;--g200:#e0e0e0;--g100:#f0f0f0;--white:#fff;--blue:#2771e2;--red:#e02020;--green:#00a854;--amber:#e09000;--bg:#f7f7f5;--cyan:#0099cc}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Archivo',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--near-black);line-height:1.55;font-size:14px;-webkit-font-smoothing:antialiased}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+
+.topbar{background:var(--black);padding:10px 0;border-bottom:3px solid var(--cyan);position:sticky;top:0;z-index:100}
+.topbar-inner{max-width:1100px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between}
+.topbar-brand{font-family:'Archivo';font-weight:700;font-size:13px;letter-spacing:4px;text-transform:uppercase;color:#fff}
+.topbar-right{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500)}
+
+.tab-nav{background:var(--near-black);border-bottom:1px solid #333;overflow-x:auto;white-space:nowrap}
+.tab-nav-inner{max-width:1100px;margin:0 auto;padding:0 20px;display:flex;gap:0}
+.tab-btn{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);background:none;border:none;padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap;text-decoration:none;display:inline-block}
+.tab-btn:hover{color:var(--g300)}
+.tab-btn.active{color:var(--cyan);border-bottom-color:var(--cyan)}
+
+.header{max-width:720px;margin:0 auto;padding:40px 28px 0}
+.header .topic{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;color:var(--cyan)}
+.header h1{font-family:'Libre Baskerville',Georgia,serif;font-size:clamp(24px,3.5vw,36px);font-weight:700;line-height:1.2;color:var(--black);margin-bottom:12px}
+.header .dek{font-size:15px;color:var(--g600);line-height:1.5;margin-bottom:16px}
+.header .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500);padding-bottom:20px;border-bottom:1px solid var(--g200)}
+
+.c{max-width:720px;margin:0 auto;padding:0 28px}
+.sep{border:none;border-top:1px solid var(--g200);margin:32px 0}
+.sl{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);margin-bottom:8px;margin-top:32px}
+.sl.g{color:var(--green)}.sl.r{color:var(--red)}.sl.a{color:var(--amber)}
+h2{font-family:'Libre Baskerville',Georgia,serif;font-size:20px;font-weight:700;color:var(--black);margin-bottom:14px;line-height:1.25}
+h3{font-family:'Archivo';font-size:14px;font-weight:700;color:var(--black);margin:20px 0 8px}
+p{margin-bottom:10px;color:var(--g700);font-size:14px;line-height:1.6}
+
+.ss{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--g200);border:1px solid var(--g200);margin:16px 0}
+.ss-i{background:var(--white);padding:14px 12px}
+.ss-v{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:500;color:var(--black);line-height:1.1}
+.ss-v.g{color:var(--green)}.ss-v.r{color:var(--red)}.ss-v.b{color:var(--cyan)}.ss-v.a{color:var(--amber)}
+.ss-l{font-size:11px;color:var(--g500);margin-top:3px;line-height:1.3}
+
+.dl{list-style:none;margin:10px 0}.dl li{padding:5px 0;border-bottom:1px solid var(--g100);font-size:13px;display:flex;align-items:baseline;gap:6px}.dl li:last-child{border-bottom:none}
+.d{width:5px;height:5px;background:var(--cyan);border-radius:50%;flex-shrink:0;margin-top:6px;align-self:flex-start}
+.d.g{background:var(--green)}.d.a{background:var(--amber)}.d.r{background:var(--red)}
+.v{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--black)}
+
+.tw{border:1px solid var(--g200);margin:14px 0;overflow-x:auto;background:var(--white)}
+.t{width:100%;border-collapse:collapse;font-size:12px}
+.t th{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);text-align:left;padding:8px 10px;border-bottom:2px solid var(--g200);font-weight:500;white-space:nowrap;background:var(--g100)}
+.t td{padding:7px 10px;border-bottom:1px solid var(--g100);vertical-align:top}.t tr:last-child td{border-bottom:none}.t .n{font-weight:600}
+.t .right{text-align:right;font-family:'IBM Plex Mono',monospace}
+
+.cl{border-left:3px solid var(--cyan);padding:8px 14px;margin:14px 0;background:#eef8fb;font-size:13px;color:var(--g700);font-family:'IBM Plex Mono',monospace}
+.cl.g{border-left-color:var(--green);background:#eefaf3}
+.cl.r{border-left-color:var(--red);background:#fef2f2}
+.cl.a{border-left-color:var(--amber);background:#fef9ee}
+
+.tag{display:inline-block;padding:1px 5px;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;letter-spacing:.3px;border-radius:2px}
+.tg{background:#dff5e8;color:#0a7c3e}.ta{background:#fef3dd;color:#9a6c00}.tb{background:#e0f2f7;color:#006680}.tr{background:#fde8e8;color:#c00}
+
+.q{border-left:3px solid var(--black);padding:8px 16px;margin:14px 0;font-size:13px;color:var(--g700);font-style:italic;line-height:1.55}
+.q .a{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g400);font-style:normal;margin-top:4px;display:block}
+
+.verdict{border:2px solid var(--cyan);padding:20px;margin:20px 0;background:var(--white)}
+.verdict-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-bottom:6px;color:var(--cyan)}
+
+.cb{background:var(--white);border:1px solid var(--g200);padding:18px;margin:16px 0}
+.cb-t{font-family:'Archivo';font-size:13px;font-weight:700;color:var(--black);margin-bottom:1px}
+.cb-s{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g400);margin-bottom:12px}
+.cc{position:relative;width:100%;height:260px}
+
+/* Waterfall chart */
+.waterfall{display:flex;align-items:flex-end;gap:2px;height:200px;margin:20px 0;padding-top:20px;border-bottom:2px solid var(--g200)}
+.wf-bar{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;position:relative}
+.wf-fill{width:100%;border-radius:2px 2px 0 0;min-height:2px;transition:height .3s}
+.wf-val{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:600;margin-bottom:3px;white-space:nowrap}
+.wf-label{font-family:'IBM Plex Mono',monospace;font-size:8px;color:var(--g500);text-align:center;margin-top:6px;line-height:1.2;white-space:nowrap}
+
+/* Revenue bars */
+.rev-bars{display:grid;grid-template-columns:1fr;gap:8px;margin:16px 0}
+.rev-row{display:grid;grid-template-columns:100px 1fr 80px;align-items:center;gap:10px}
+.rev-label{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g600)}
+.rev-track{height:24px;background:var(--g100);border-radius:2px;position:relative;overflow:hidden}
+.rev-fill{height:100%;border-radius:2px;display:flex;align-items:center;padding-left:8px}
+.rev-fill span{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--white);font-weight:600}
+.rev-amt{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;text-align:right}
+
+footer{background:var(--black);color:var(--g500);padding:24px;margin-top:36px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:1.8}
+
+@media(max-width:640px){.header{padding:28px 16px 0}.c{padding:0 16px}.ss{grid-template-columns:1fr 1fr}.ss-v{font-size:20px}.t{font-size:11px}.rev-row{grid-template-columns:80px 1fr 60px}}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner">
+  <div class="topbar-brand">Stella Nova</div>
+  <div class="topbar-right">Revenue Model · March 2026</div>
+</div></div>
+
+<div class="tab-nav"><div class="tab-nav-inner">
+  <a class="tab-btn" href="pitch.html">Pitch</a>
+  <a class="tab-btn" href="roadmap.html">Roadmap</a>
+  <a class="tab-btn active" href="business.html">Revenue Model</a>
+</div></div>
+
+<div class="header">
+  <div class="topic">Revenue Model & Unit Economics</div>
+  <h1>How Stella Nova Makes Money</h1>
+  <p class="dek">Premium buy-to-play. No microtransactions. No subscriptions. No ads. Price increases as value grows. Expansion-grade DLC. The Factorio/RimWorld model — because it's the highest-margin model in indie gaming.</p>
+  <div class="meta">Financial projections based on comparable titles · Sources: SteamDB · Gamalytic · VG Insights · Steam Revenue Calculator</div>
+</div>
+
+<div class="c">
+
+  <div class="ss">
+    <div class="ss-i"><div class="ss-v b">$24.99</div><div class="ss-l">Early Access price</div></div>
+    <div class="ss-i"><div class="ss-v b">$34.99</div><div class="ss-l">Target 1.0 price</div></div>
+    <div class="ss-i"><div class="ss-v b">$0</div><div class="ss-l">MTX / subscriptions / ads</div></div>
+    <div class="ss-i"><div class="ss-v g">~65%</div><div class="ss-l">Gross margin (after Steam 30%)</div></div>
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Revenue Model</div>
+  <h2>Three Revenue Streams. Zero Recurring Costs to Players.</h2>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Stream</th><th>Timing</th><th>Price</th><th>Model</th></tr></thead>
+    <tbody>
+      <tr><td class="n">1. Base Game (EA)</td><td>Jul 2026</td><td>$24.99</td><td>Premium purchase. Price increases over EA as features ship. Early buyers rewarded.</td></tr>
+      <tr><td class="n">2. Base Game (1.0)</td><td>H2 2028 est.</td><td>$34.99</td><td>Full release. Rarely discounted (10% max). Never below $24.99.</td></tr>
+      <tr><td class="n">3. Expansion DLCs</td><td>Post-1.0 (2029+)</td><td>$19.99–$29.99</td><td>Expansion-grade content (Factorio Space Age model). New systems, not cosmetics.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="cl">
+    <strong>Why no microtransactions:</strong> Every $100M+ indie sim (Factorio, RimWorld, KSP) uses premium-only pricing. MTX signals F2P and erodes trust with the simulation audience. The data is unambiguous: premium colony sims generate more lifetime revenue per player than MTX-driven games in this genre.
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Unit Economics</div>
+  <h2>Revenue Per Unit Sold</h2>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Line Item</th><th>EA ($24.99)</th><th>1.0 ($34.99)</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Gross price</td><td class="right">$24.99</td><td class="right">$34.99</td><td></td></tr>
+      <tr><td class="n">Steam cut (30%)</td><td class="right" style="color:var(--red)">-$7.50</td><td class="right" style="color:var(--red)">-$10.50</td><td>Drops to 25% after $10M, 20% after $50M</td></tr>
+      <tr><td class="n">Net to developer</td><td class="right" style="color:var(--green)"><strong>$17.49</strong></td><td class="right" style="color:var(--green)"><strong>$24.49</strong></td><td></td></tr>
+      <tr><td class="n">Payment processing</td><td class="right" style="color:var(--red)">-$0.50</td><td class="right" style="color:var(--red)">-$0.50</td><td>Included in Steam cut; shown for transparency</td></tr>
+      <tr><td class="n">Est. refund rate (5%)</td><td class="right" style="color:var(--red)">-$0.87</td><td class="right" style="color:var(--red)">-$1.22</td><td>Industry avg: 5–8% for EA</td></tr>
+      <tr><td class="n" style="border-top:2px solid var(--g200)">Effective net per unit</td><td class="right" style="border-top:2px solid var(--g200);color:var(--green)"><strong>$16.12</strong></td><td class="right" style="border-top:2px solid var(--g200);color:var(--green)"><strong>$22.77</strong></td><td></td></tr>
+    </tbody>
+  </table></div>
+
+  <hr class="sep">
+  <div class="sl">Cost Structure</div>
+  <h2>Solo Dev = Minimal Burn Rate</h2>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Cost Category</th><th>Monthly</th><th>Annual</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Developer salary (self)</td><td class="right">$0*</td><td class="right">$0*</td><td>*Self-funded; no salary draw during dev</td></tr>
+      <tr><td class="n">LLM API costs (inference)</td><td class="right">~$50–200</td><td class="right">~$600–2,400</td><td>Anthropic/OpenAI API for narrator system</td></tr>
+      <tr><td class="n">Hosting/infra</td><td class="right">~$20</td><td class="right">~$240</td><td>Website, build distribution</td></tr>
+      <tr><td class="n">Steam direct fee</td><td class="right">—</td><td class="right">$100</td><td>One-time; recouped after ~4 units</td></tr>
+      <tr><td class="n">Music/audio (contract)</td><td class="right">—</td><td class="right">~$2,000</td><td>Commissioned assets; one-time per milestone</td></tr>
+      <tr><td class="n">Art assets (contract)</td><td class="right">—</td><td class="right">~$3,000</td><td>Sprite work, UI art; as-needed</td></tr>
+      <tr><td class="n" style="border-top:2px solid var(--g200)">Total annual burn</td><td class="right" style="border-top:2px solid var(--g200)"></td><td class="right" style="border-top:2px solid var(--g200);color:var(--near-black)"><strong>~$6,000–8,000</strong></td><td>Breakeven: ~400 units at $24.99</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="cl g">
+    <strong>Breakeven: ~400 units.</strong> At $16.12 effective net per EA unit, Stella Nova covers annual operating costs after selling approximately 400 copies. Everything after that is margin. This is the structural advantage of solo development with a custom engine — near-zero COGS.
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Revenue Projections</div>
+  <h2>Three Scenarios — Conservative, Base, Optimistic</h2>
+
+  <div class="cb">
+    <div class="cb-t">5-Year Cumulative Revenue by Scenario</div>
+    <div class="cb-s">EA LAUNCH (JUL 2026) THROUGH DLC CYCLE (2031)</div>
+    <div class="cc"><canvas id="revChart"></canvas></div>
+  </div>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Metric</th><th>Conservative</th><th>Base</th><th>Optimistic</th></tr></thead>
+    <tbody>
+      <tr><td class="n">EA Year 1 units</td><td class="right">15,000</td><td class="right">50,000</td><td class="right">200,000</td></tr>
+      <tr><td class="n">EA Year 1 gross</td><td class="right">$375K</td><td class="right">$1.25M</td><td class="right">$5.0M</td></tr>
+      <tr><td class="n">1.0 launch units (Yr 2–3)</td><td class="right">50,000</td><td class="right">250,000</td><td class="right">1,000,000</td></tr>
+      <tr><td class="n">1.0 gross (Yr 2–3)</td><td class="right">$1.75M</td><td class="right">$8.75M</td><td class="right">$35M</td></tr>
+      <tr><td class="n">DLC units (Yr 3–5)</td><td class="right">10,000</td><td class="right">75,000</td><td class="right">400,000</td></tr>
+      <tr><td class="n">DLC gross (Yr 3–5)</td><td class="right">$250K</td><td class="right">$1.88M</td><td class="right">$10M</td></tr>
+      <tr><td class="n" style="border-top:2px solid var(--g200)">5-Year cumulative gross</td><td class="right" style="border-top:2px solid var(--g200)"><strong>~$2.4M</strong></td><td class="right" style="border-top:2px solid var(--g200);color:var(--cyan)"><strong>~$11.9M</strong></td><td class="right" style="border-top:2px solid var(--g200);color:var(--green)"><strong>~$50M+</strong></td></tr>
+      <tr><td class="n">5-Year net to dev (est.)</td><td class="right">~$1.6M</td><td class="right" style="color:var(--cyan)">~$8.3M</td><td class="right" style="color:var(--green)">~$35M+</td></tr>
+      <tr><td class="n">Comparable</td><td>Space Haven tier</td><td>Oxygen Not Included trajectory</td><td>RimWorld early trajectory</td></tr>
+    </tbody>
+  </table></div>
+
+  <p style="font-size:11px;color:var(--g500);font-family:'IBM Plex Mono',monospace">Assumes $24.99 EA → $34.99 1.0. DLC at $24.99. Steam's 30% cut applied (drops to 25% above $10M). Conservative assumes niche audience, limited marketing. Base assumes successful Next Fest + streamer coverage. Optimistic assumes viral community stories + award nominations. All figures USD gross.</p>
+
+  <hr class="sep">
+  <div class="sl">Revenue Waterfall — Base Case</div>
+  <h2>How $11.9M Accumulates Over 5 Years</h2>
+
+  <div class="waterfall">
+    <div class="wf-bar"><div class="wf-val" style="color:var(--cyan)">$1.25M</div><div class="wf-fill" style="height:21%;background:var(--cyan)"></div><div class="wf-label">EA Yr 1</div></div>
+    <div class="wf-bar"><div class="wf-val" style="color:var(--cyan)">$4.4M</div><div class="wf-fill" style="height:37%;background:var(--cyan)"></div><div class="wf-label">1.0 Yr 2</div></div>
+    <div class="wf-bar"><div class="wf-val" style="color:var(--cyan)">$4.35M</div><div class="wf-fill" style="height:36%;background:var(--cyan)"></div><div class="wf-label">Steady Yr 3</div></div>
+    <div class="wf-bar"><div class="wf-val" style="color:var(--green)">$1.13M</div><div class="wf-fill" style="height:19%;background:var(--green)"></div><div class="wf-label">DLC 1</div></div>
+    <div class="wf-bar"><div class="wf-val" style="color:var(--green)">$750K</div><div class="wf-fill" style="height:13%;background:var(--green)"></div><div class="wf-label">DLC 2+</div></div>
+    <div class="wf-bar"><div class="wf-val" style="color:var(--near-black)"><strong>$11.9M</strong></div><div class="wf-fill" style="height:100%;background:var(--near-black)"></div><div class="wf-label">Total</div></div>
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Pricing Strategy Detail</div>
+  <h2>The "Never Discount" Playbook</h2>
+
+  <ul class="dl">
+    <li><span class="d"></span><strong>EA launch at $24.99:</strong> Below the $30 psychological barrier. Signals value-in-progress. Avoids KSP2's fatal $50 mistake. <span class="tag tb">TESTED</span></li>
+    <li><span class="d"></span><strong>Price increases during EA:</strong> As major features ship (mod support, multiplayer, expanded narrative), price steps up: $24.99 → $27.99 → $29.99 → $34.99 at 1.0. Early buyers are rewarded; later buyers pay for more value.</li>
+    <li><span class="d"></span><strong>10% maximum discount:</strong> RimWorld rarely exceeds 10% off. Factorio has never discounted. Frequent deep sales train customers to wait and signal declining value. Stella Nova caps at 10% during Steam seasonal sales.</li>
+    <li><span class="d"></span><strong>DLC priced as expansions:</strong> $19.99–$29.99 for expansion-grade content. New systems, new mechanics, new narrative arcs. Not cosmetic packs. The Factorio Space Age model: $35 DLC sold 1.24M copies.</li>
+    <li><span class="d"></span><strong>No bundles below cost:</strong> Base + DLC bundles at modest discount only (5–10%). Bundle pricing never drops below individual EA price.</li>
+  </ul>
+
+  <hr class="sep">
+  <div class="sl">Comparable Revenue Timelines</div>
+  <h2>How Similar Games Monetized</h2>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Game</th><th>EA Price</th><th>1.0 Price</th><th>Discount Policy</th><th>5-Yr Gross</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Factorio</td><td>$20</td><td>$35</td><td>Never discounted</td><td>$200M+</td></tr>
+      <tr><td class="n">RimWorld</td><td>$30</td><td>$34.99</td><td>Rare, max 10%</td><td>$80M+</td></tr>
+      <tr><td class="n">Oxygen Not Included</td><td>$14.99</td><td>$24.99</td><td>Moderate (20–33%)</td><td>$50M+ est.</td></tr>
+      <tr><td class="n">Space Haven</td><td>$14.99</td><td>$24.99</td><td>Moderate</td><td>$10M+ est.</td></tr>
+      <tr><td class="n">KSP 2 <span class="tag tr">FAIL</span></td><td>$49.99</td><td>N/A</td><td>N/A (abandoned)</td><td>~$0 net value</td></tr>
+      <tr><td class="n" style="color:var(--cyan)">Stella Nova (planned)</td><td>$24.99</td><td>$34.99</td><td>Rare, max 10%</td><td>$2.4M–$50M</td></tr>
+    </tbody>
+  </table></div>
+
+  <hr class="sep">
+  <div class="sl">Platform Strategy</div>
+  <h2>Steam First. Expand After 1.0.</h2>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Platform</th><th>Timing</th><th>Revenue Impact</th><th>Precedent</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Steam (PC/Mac/Linux)</td><td>EA launch (Jul 2026)</td><td>Primary revenue (90%+ of sales)</td><td>All comparable titles launched Steam-first</td></tr>
+      <tr><td class="n">GOG</td><td>1.0 launch (2028)</td><td>5–10% incremental</td><td>DRM-free audience overlap with sim genre</td></tr>
+      <tr><td class="n">Xbox Game Pass</td><td>Post-1.0 (2029)</td><td>Lump-sum licensing deal</td><td>Vampire Survivors Game Pass → massive awareness</td></tr>
+      <tr><td class="n">Console ports</td><td>Post-1.0 (2029+)</td><td>20–30% of lifetime rev potential</td><td>RimWorld console port sold 1M+ additional</td></tr>
+    </tbody>
+  </table></div>
+
+  <hr class="sep">
+  <div class="sl">Publishing Strategy</div>
+  <h2>Self-Publish. Never Sell IP. Consider Marketing-Only Deals.</h2>
+
+  <div class="tw"><table class="t">
+    <thead><tr><th>Option</th><th>Trade-Off</th><th>Recommendation</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Full self-publish</td><td>100% control, 100% revenue. Marketing burden falls on dev.</td><td><span class="tag tg">DEFAULT</span> Factorio self-published to $305M.</td></tr>
+      <tr><td class="n">Marketing-only publisher</td><td>Publisher handles PR, events, influencers. Dev retains IP + majority revenue (80–90%).</td><td><span class="tag tb">CONSIDER</span> Balatro's Playstack deal: dev kept creative control.</td></tr>
+      <tr><td class="n">Traditional publisher</td><td>Funding + marketing. Publisher takes 50–70% rev + may control IP.</td><td><span class="tag tr">AVOID</span> KSP sold IP → franchise destroyed.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="cl a">
+    <strong>Decision gate:</strong> If Next Fest metrics are strong (10K+ downloads, significant streamer pickup), a marketing-only publishing deal becomes high-value — a publisher can amplify organic momentum without taking IP control. If metrics are modest, self-publishing with organic growth is the proven path.
+  </div>
+
+  <hr class="sep">
+  <div class="sl">Exit / Long-Term Scenarios</div>
+  <h2>This Is a 10-Year Asset, Not a Quarterly Revenue Target</h2>
+
+  <ul class="dl">
+    <li><span class="d g"></span><strong>Scenario A — Lifestyle business:</strong> Conservative case. $2–5M over 5 years. Solo dev with near-zero burn = highly profitable at any scale. Papers, Please generated $41M over 10 years at $9.99.</li>
+    <li><span class="d"></span><strong>Scenario B — Growth studio:</strong> Base case. $10–15M gross. Hire 3–5 devs to accelerate content. Modding ecosystem extends game life. DLC revenue compounds. RimWorld model: 7 developers, 5 DLCs, $116M+.</li>
+    <li><span class="d"></span><strong>Scenario C — Breakout franchise:</strong> Optimistic case. $50M+ gross. Community-driven virality. Sequels, spin-offs, licensing. Factorio model: never sold, never discounted, compounding for 12 years.</li>
+    <li><span class="d r"></span><strong>What we won't do:</strong> Sell IP to a publisher. Implement MTX. Rush to 1.0. Abandon early access. The failure cases (KSP2, Spacebase DF-9) are cautionary tales, not templates.</li>
+  </ul>
+
+  <div class="verdict">
+    <div class="verdict-label">Bottom Line</div>
+    <p style="margin:0"><strong>Stella Nova is capital-efficient by design.</strong> Near-zero burn rate. Premium pricing with proven comparables. Breakeven at 400 units. The upside range — from $2.4M to $50M+ over 5 years — is entirely driven by product quality and community engagement, not capital deployment. This is a game that makes money the moment it ships, and compounds for years through the long tail. The model works because the genre demands depth, and depth takes time — but once built, it generates revenue indefinitely.</p>
+  </div>
+
+  <div style="text-align:center;margin:28px 0 8px">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g400);margin-bottom:8px">CONTACT</div>
+    <div style="font-family:'Archivo';font-size:14px;font-weight:600">David Kubala</div>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--g600);margin-top:4px">
+      <a href="mailto:dkncus@gmail.com">dkncus@gmail.com</a> · <a href="tel:980-229-6314">980-229-6314</a> · <a href="https://linkedin.com/in/david-kubala" target="_blank">LinkedIn</a> · <a href="https://discord.gg/SkJDmnRmdJ" target="_blank">Discord</a>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Stella Nova · Revenue Model · March 2026<br>
+  Market data: SteamDB · SteamSpy · Steam Revenue Calculator · Gamalytic · VG Insights
+</footer>
+
+<script>
+const ctx = document.getElementById('revChart').getContext('2d');
+new Chart(ctx, {
+  type: 'bar',
+  data: {
+    labels: ['Year 1 (EA)', 'Year 2 (1.0)', 'Year 3 (Steady)', 'Year 4 (DLC)', 'Year 5 (DLC+)'],
+    datasets: [
+      {
+        label: 'Conservative',
+        data: [0.375, 0.875, 0.625, 0.375, 0.15],
+        backgroundColor: '#aaa',
+        borderRadius: 2
+      },
+      {
+        label: 'Base',
+        data: [1.25, 4.4, 4.35, 1.13, 0.75],
+        backgroundColor: '#0099cc',
+        borderRadius: 2
+      },
+      {
+        label: 'Optimistic',
+        data: [5.0, 17.5, 17.5, 6.0, 4.0],
+        backgroundColor: '#00a854',
+        borderRadius: 2
+      }
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          font: { family: "'IBM Plex Mono', monospace", size: 10 },
+          usePointStyle: true,
+          pointStyle: 'rect',
+          padding: 16
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: function(ctx) {
+            return ctx.dataset.label + ': $' + ctx.parsed.y.toFixed(1) + 'M';
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { font: { family: "'IBM Plex Mono', monospace", size: 9 }, color: '#888' }
+      },
+      y: {
+        grid: { color: '#e0e0e0' },
+        ticks: {
+          font: { family: "'IBM Plex Mono', monospace", size: 10 },
+          color: '#888',
+          callback: function(val) { return '$' + val + 'M'; }
+        }
+      }
+    }
+  }
+});
+</script>
+
+</body>
+</html>
