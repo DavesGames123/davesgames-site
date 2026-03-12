@@ -264,6 +264,42 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
 #frame-wrap { flex: 1; position: relative; overflow: hidden; }
 #frame-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: var(--bg); }
 
+/* Market Intel accent — teal/cyan distinct from game content colours */
+.nav-item.mi.active { background: rgba(0,212,180,0.06); }
+.nav-item.mi.active::before { background: #00d4b4; box-shadow: 0 0 7px #00d4b4; }
+.nav-item.mi.active .nav-label { color: #00d4b4; }
+.nav-item.mi:hover::before { background: #00a890; }
+
+.cluster-head.mi-head .cluster-icon { opacity: 1; color: #00d4b4; }
+.cluster.open .cluster-head.mi-head .cluster-label { color: #00d4b4; }
+
+/* LinkedIn footer button */
+#sb-linkedin {
+  display: block;
+  margin-top: 10px;
+  padding: 7px 12px;
+  border: 1px solid rgba(0,119,181,0.5);
+  background: rgba(0,119,181,0.08);
+  color: #5ba4cf;
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+#sb-linkedin:hover {
+  background: rgba(0,119,181,0.2);
+  border-color: rgba(0,119,181,0.9);
+  color: #90c8f0;
+}
+#sb-linkedin::before {
+  content: 'in ';
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
 /* Scanlines */
 body::after {
   content: '';
@@ -355,10 +391,25 @@ body::after {
         </div>
       </div>
 
+      <div class="cluster open" id="cl-intel">
+        <button class="cluster-head mi-head" onclick="toggleCluster('cl-intel')">
+          <span class="cluster-icon">◈</span>
+          <span class="cluster-label">Market Intel</span>
+          <span class="cluster-arrow">›</span>
+        </button>
+        <div class="cluster-body">
+          <button class="nav-item mi" data-tab="intel" onclick="switchTab('intel')">
+            <span class="nav-label">Investor Case Studies</span>
+            <span class="nav-badge">PDF</span>
+          </button>
+        </div>
+      </div>
+
     </div>
 
     <div id="sb-footer">
       <div id="sb-clock">00:00:00</div>
+      <a id="sb-linkedin" href="https://linkedin.com/in/david-kubala" target="_blank" rel="noopener">Follow on LinkedIn</a>
     </div>
   </nav>
 
@@ -379,12 +430,14 @@ const PAGES = {
   crafting:'crafting.html', planner:'planner.html', guide:'guide.html',
   behaviors:'behaviors.html', controls:'controls.html', gravity:'gravity.html',
   selection:'selection.html', explosion:'explosion.html', flare:'flare.html',
+  intel:'market-intel.html',
 };
 const LABELS = {
   home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
   crafting:'Crafting', planner:'Station Planner', guide:'Station Guide',
   behaviors:'Behaviors', controls:'Controls', gravity:'Gravity Sim',
   selection:'Selection', explosion:'Explosion', flare:'Engine Propulsion Effects',
+  intel:'Investor Case Studies',
 };
 
 let activeTab = null;

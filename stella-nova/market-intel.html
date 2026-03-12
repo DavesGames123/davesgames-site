@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indie Game Market Analysis — Business Case Studies</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--black:#000;--near-black:#111;--g800:#333;--g700:#444;--g600:#666;--g500:#888;--g400:#aaa;--g300:#ccc;--g200:#e0e0e0;--g100:#f0f0f0;--white:#fff;--blue:#2771e2;--red:#e02020;--green:#00a854;--amber:#e09000;--bg:#f7f7f5;--cyan:#0099cc}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Archivo',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--near-black);line-height:1.55;font-size:14px;-webkit-font-smoothing:antialiased}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+
+/* TOPBAR */
+.topbar{background:var(--black);padding:10px 0;border-bottom:3px solid var(--green);position:sticky;top:0;z-index:100}
+.topbar-inner{max-width:1100px;margin:0 auto;padding:0 28px;display:flex;align-items:center;justify-content:space-between}
+.topbar-brand{font-family:'Archivo';font-weight:700;font-size:13px;letter-spacing:4px;text-transform:uppercase;color:#fff}
+.topbar-right{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500)}
+
+/* TAB NAV */
+.tab-nav{background:var(--near-black);border-bottom:1px solid #333;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+.tab-nav::-webkit-scrollbar{height:2px}.tab-nav::-webkit-scrollbar-thumb{background:#444}
+.tab-nav-inner{max-width:1100px;margin:0 auto;padding:0 20px;display:flex;gap:0}
+.tab-btn{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);background:none;border:none;padding:10px 14px;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.tab-btn:hover{color:var(--g300)}
+.tab-btn.active{color:var(--green);border-bottom-color:var(--green)}
+.tab-btn.fail{color:var(--red) !important;border-bottom-color:var(--red) !important}
+.tab-btn.strat{color:var(--cyan) !important;border-bottom-color:var(--cyan) !important}
+
+/* TAB CONTENT */
+.tab-panel{display:none}.tab-panel.active{display:block}
+
+/* HEADER */
+.header{max-width:720px;margin:0 auto;padding:40px 28px 0}
+.header .topic{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+.header .topic.success{color:var(--green)}.header .topic.failure{color:var(--red)}.header .topic.strat{color:var(--cyan)}
+.header h1{font-family:'Libre Baskerville',Georgia,serif;font-size:clamp(24px,3.5vw,36px);font-weight:700;line-height:1.2;color:var(--black);margin-bottom:12px}
+.header .dek{font-size:15px;color:var(--g600);line-height:1.5;margin-bottom:16px}
+.header .meta{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500);padding-bottom:20px;border-bottom:1px solid var(--g200)}
+.c{max-width:720px;margin:0 auto;padding:0 28px}
+.sep{border:none;border-top:1px solid var(--g200);margin:32px 0}
+.sl{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--green);margin-bottom:8px;margin-top:32px}
+.sl.r{color:var(--red)}.sl.b{color:var(--cyan)}
+h2{font-family:'Libre Baskerville',Georgia,serif;font-size:20px;font-weight:700;color:var(--black);margin-bottom:14px;line-height:1.25}
+h3{font-family:'Archivo';font-size:14px;font-weight:700;color:var(--black);margin:20px 0 8px}
+p{margin-bottom:10px;color:var(--g700);font-size:14px;line-height:1.6}
+.dl{list-style:none;margin:10px 0}.dl li{padding:5px 0;border-bottom:1px solid var(--g100);font-size:13px;display:flex;align-items:baseline;gap:6px}.dl li:last-child{border-bottom:none}
+.d{width:5px;height:5px;background:var(--green);border-radius:50%;flex-shrink:0;margin-top:6px;align-self:flex-start}
+.d.r{background:var(--red)}.d.b{background:var(--cyan)}
+.v{font-family:'IBM Plex Mono',monospace;font-weight:500;color:var(--black)}
+.ss{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:1px;background:var(--g200);border:1px solid var(--g200);margin:16px 0}
+.ss-i{background:var(--white);padding:14px 12px}.ss-v{font-family:'IBM Plex Mono',monospace;font-size:24px;font-weight:500;color:var(--black);line-height:1.1}
+.ss-v.g{color:var(--green)}.ss-v.r{color:var(--red)}.ss-v.b{color:var(--cyan)}
+.ss-l{font-size:11px;color:var(--g500);margin-top:3px;line-height:1.3}
+.cb{background:var(--white);border:1px solid var(--g200);padding:18px;margin:16px 0}.cb-t{font-family:'Archivo';font-size:13px;font-weight:700;color:var(--black);margin-bottom:1px}.cb-s{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g400);margin-bottom:12px}.cc{position:relative;width:100%;max-height:260px}
+.tw{border:1px solid var(--g200);margin:14px 0;overflow-x:auto;background:var(--white)}.t{width:100%;border-collapse:collapse;font-size:12px}.t th{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--g500);text-align:left;padding:8px 10px;border-bottom:2px solid var(--g200);font-weight:500;white-space:nowrap;background:var(--g100)}.t td{padding:7px 10px;border-bottom:1px solid var(--g100);vertical-align:top}.t tr:last-child td{border-bottom:none}.t .n{font-weight:600}
+.tag{display:inline-block;padding:1px 5px;font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:500;letter-spacing:.3px;border-radius:2px}.tg{background:#dff5e8;color:#0a7c3e}.ta{background:#fef3dd;color:#9a6c00}.tr{background:#fde8e8;color:#c00}
+.q{border-left:3px solid var(--black);padding:8px 16px;margin:14px 0;font-size:13px;color:var(--g700);font-style:italic;line-height:1.55}.q .a{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g400);font-style:normal;margin-top:4px;display:block}
+.cl{border-left:3px solid var(--green);padding:8px 14px;margin:14px 0;background:#eefaf3;font-size:13px;color:var(--g700);font-family:'IBM Plex Mono',monospace}
+.cl.r{border-left-color:var(--red);background:#fef2f2}
+.cl.b{border-left-color:var(--cyan);background:#eef8fb}
+.src{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--g400);margin-top:3px}
+footer{background:var(--black);color:var(--g500);padding:24px;margin-top:36px;text-align:center;font-family:'IBM Plex Mono',monospace;font-size:10px;line-height:1.8}
+
+/* INDEX SPECIFIC */
+.index-hero{max-width:720px;margin:0 auto;padding:48px 28px 0;text-align:center}
+.index-hero h1{font-family:'Libre Baskerville',Georgia,serif;font-size:clamp(28px,4vw,42px);font-weight:700;line-height:1.15;color:var(--black);margin-bottom:16px}
+.index-hero .dek{font-size:16px;color:var(--g600);line-height:1.6;max-width:560px;margin:0 auto 24px}
+.cards{max-width:900px;margin:0 auto;padding:0 28px 40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.card{background:var(--white);border:1px solid var(--g200);padding:20px;cursor:pointer;transition:all .15s;position:relative}
+.card:hover{border-color:var(--g400);box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.card-type{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;font-weight:500;margin-bottom:6px}
+.card-type.success{color:var(--green)}.card-type.failure{color:var(--red)}.card-type.strat{color:var(--cyan)}
+.card-title{font-family:'Libre Baskerville',Georgia,serif;font-size:16px;font-weight:700;color:var(--black);margin-bottom:6px;line-height:1.3}
+.card-desc{font-size:12px;color:var(--g600);line-height:1.5;margin-bottom:10px}
+.card-stats{display:flex;gap:12px;flex-wrap:wrap}
+.card-stat{font-family:'IBM Plex Mono',monospace;font-size:11px}
+.card-stat strong{font-weight:600}
+.card-stat.g strong{color:var(--green)}.card-stat.r strong{color:var(--red)}
+.card-arrow{position:absolute;right:16px;top:50%;transform:translateY(-50%);font-size:18px;color:var(--g300);transition:color .15s}
+.card:hover .card-arrow{color:var(--green)}
+
+/* VERDICT BOX */
+.verdict{border:2px solid var(--green);padding:20px;margin:20px 0;background:var(--white)}
+.verdict.fail{border-color:var(--red)}.verdict.strat{border-color:var(--cyan)}
+.verdict-label{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:600;margin-bottom:6px}
+.verdict-label.g{color:var(--green)}.verdict-label.r{color:var(--red)}.verdict-label.b{color:var(--cyan)}
+
+@media(max-width:640px){.header{padding:28px 16px 0}.c{padding:0 16px}.ss{grid-template-columns:1fr 1fr}.ss-v{font-size:20px}.t{font-size:11px}.cards{grid-template-columns:1fr}.tab-btn{padding:8px 10px;font-size:9px}}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="topbar-inner"><div class="topbar-brand">Indie Game Market Intelligence</div><div class="topbar-right">February 2026</div></div></div>
+
+<div class="tab-nav"><div class="tab-nav-inner">
+  <button class="tab-btn active" onclick="showTab('index')">Index</button>
+  <button class="tab-btn" onclick="showTab('balatro')">Balatro</button>
+  <button class="tab-btn" onclick="showTab('factorio')">Factorio</button>
+  <button class="tab-btn" onclick="showTab('rimworld')">RimWorld</button>
+  <button class="tab-btn" onclick="showTab('ksp')">KSP</button>
+  <button class="tab-btn" onclick="showTab('vampire')">Vampire Survivors</button>
+  <button class="tab-btn" onclick="showTab('papers')">Papers, Please</button>
+  <button class="tab-btn" onclick="showTab('ksp2')" style="color:#e02020">KSP 2 ✕</button>
+  <button class="tab-btn" onclick="showTab('spacebase')" style="color:#e02020">Spacebase DF-9 ✕</button>
+  <button class="tab-btn" onclick="showTab('stella-nova')" style="color:#0099cc">Stella Nova →</button>
+</div></div>
+
+<!-- ============================================================ -->
+<!-- INDEX -->
+<!-- ============================================================ -->
+<div class="tab-panel active" id="tab-index">
+  <div class="index-hero">
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--green);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px">Business Case Studies · Gaming</div>
+    <h1>The Indie Game Market Gap: 7 Case Studies & a Strategy</h1>
+    <p class="dek">What separates a $300M Factorio from a $0 Spacebase DF-9? Data-driven analysis of 5 successes, 2 failures, and a strategic blueprint for Stella Nova's market entry.</p>
+    <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--g500);border-top:1px solid var(--g200);border-bottom:1px solid var(--g200);padding:12px 0;margin-bottom:32px">
+      Sources: SteamDB · SteamSpy · Steam Revenue Calculator · Gamalytic · VG Insights · Wikipedia · GamesRadar · PC Gamer · Game Developer · Bloomberg
+    </div>
+  </div>
+
+  <div class="c">
+    <div class="sl">The Thesis</div>
+    <h2>Simulation Games Are the Highest-ROI Indie Genre — If You Survive Early Access</h2>
+    <p>Every breakout indie simulation game in this report shares a pattern: solo or micro-team development, years of transparent early access iteration, zero reliance on marketing spend, and extreme player retention driven by emergent systems. The failures share their own pattern: corporate mismanagement, premature feature announcements, and treating early access as revenue extraction rather than community building.</p>
+    <p>The space colony simulation subgenre — the precise intersection Stella Nova targets — has produced two of gaming's greatest commercial successes (Factorio, RimWorld) and two of its most cautionary failures (KSP2, Spacebase DF-9). The market gap is real, the audience is proven, and the path forward is clear from the data.</p>
+
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v g">$305M</div><div class="ss-l">Factorio gross revenue (est.)</div></div>
+      <div class="ss-i"><div class="ss-v g">$116M+</div><div class="ss-l">RimWorld gross revenue (est.)</div></div>
+      <div class="ss-i"><div class="ss-v g">5M+</div><div class="ss-l">Balatro units (11 months)</div></div>
+      <div class="ss-i"><div class="ss-v r">$0</div><div class="ss-l">KSP2 net value to Take-Two</div></div>
+    </div>
+
+    <hr class="sep">
+    <div class="sl">Case Studies</div>
+    <h2>Click Any Card to Read the Full Analysis</h2>
+  </div>
+
+  <div class="cards">
+    <div class="card" onclick="showTab('balatro')">
+      <div class="card-type success">Success Story</div>
+      <div class="card-title">Balatro</div>
+      <div class="card-desc">Solo dev, $0 budget, 5M copies in 11 months. The perfect roguelike launch.</div>
+      <div class="card-stats"><span class="card-stat g"><strong>$95M+</strong> rev</span><span class="card-stat g"><strong>98%</strong> positive</span><span class="card-stat"><strong>1</strong> dev</span></div>
+      <span class="card-arrow">→</span>
+    </div>
+    <div class="card" onclick="showTab('factorio')">
+      <div class="card-type success">Success Story</div>
+      <div class="card-title">Factorio</div>
+      <div class="card-desc">12 years of development. Never went on sale. $305M gross. The automation empire.</div>
+      <div class="card-stats"><span class="card-stat g"><strong>$305M</strong> gross</span><span class="card-stat g"><strong>97%</strong> positive</span><span class="card-stat"><strong>31</strong> devs</span></div>
+      <span class="card-arrow">→</span>
+    </div>
+    <div class="card" onclick="showTab('rimworld')">
+      <div class="card-type success">Success Story</div>
+      <div class="card-title">RimWorld</div>
+      <div class="card-desc">One man's Kickstarter becomes a $116M+ emergent story generator with 211hr avg playtime.</div>
+      <div class="card-stats"><span class="card-stat g"><strong>$116M+</strong> rev</span><span class="card-stat g"><strong>98%</strong> positive</span><span class="card-stat"><strong>211hr</strong> avg</span></div>
+      <span class="card-arrow">→</span>
+    </div>
+    <div class="card" onclick="showTab('ksp')">
+      <div class="card-type success">Success Story</div>
+      <div class="card-title">Kerbal Space Program</div>
+      <div class="card-desc">A Mexican ad agency's side project becomes the gold standard for physics sandboxes.</div>
+      <div class="card-stats"><span class="card-stat g"><strong>4M+</strong> units</span><span class="card-stat g"><strong>91%</strong> Steam</span><span class="card-stat"><strong>NASA</strong> endorsed</span></div>
+      <span class="card-arrow">→</span>
+    </div>
+    <div class="card" onclick="showTab('vampire')">
+      <div class="card-type success">Lesser-Known Success</div>
+      <div class="card-title">Vampire Survivors</div>
+      <div class="card-desc">$3 asset-flip by a web dev. Created an entire genre. Made its creator £40M.</div>
+      <div class="card-stats"><span class="card-stat g"><strong>£40M</strong> wealth</span><span class="card-stat g"><strong>$4.99</strong> price</span><span class="card-stat"><strong>1</strong> dev</span></div>
+      <span class="card-arrow">→</span>
+    </div>
+    <div class="card" onclick="showTab('papers')">
+      <div class="card-type success">Lesser-Known Success</div>
+      <div class="card-title">Papers, Please</div>
+      <div class="card-desc">An ex-Naughty Dog dev makes a passport-checking sim. 5M copies, BAFTA winner, short film.</div>
+      <div class="card-stats"><span class="card-stat g"><strong>5M</strong> copies</span><span class="card-stat g"><strong>$41M</strong> gross</span><span class="card-stat"><strong>$9.99</strong></span></div>
+      <span class="card-arrow">→</span>
+    </div>
+    <div class="card" onclick="showTab('ksp2')">
+      <div class="card-type failure">Failure Story</div>
+      <div class="card-title">Kerbal Space Program 2</div>
+      <div class="card-desc">Take-Two's $10M-budgeted sequel that killed a studio, scammed fans, and destroyed an IP.</div>
+      <div class="card-stats"><span class="card-stat r"><strong>Mostly Negative</strong></span><span class="card-stat r"><strong>Studio closed</strong></span></div>
+      <span class="card-arrow">→</span>
+    </div>
+    <div class="card" onclick="showTab('spacebase')">
+      <div class="card-type failure">Failure Story</div>
+      <div class="card-title">Spacebase DF-9</div>
+      <div class="card-desc">Double Fine's space colony sim — abandoned mid-Early Access, 46 Metacritic, trust destroyed.</div>
+      <div class="card-stats"><span class="card-stat r"><strong>46/100</strong> Meta</span><span class="card-stat r"><strong>Abandoned</strong></span></div>
+      <span class="card-arrow">→</span>
+    </div>
+    <div class="card" onclick="showTab('stella-nova')" style="border-color:var(--cyan)">
+      <div class="card-type strat">Strategic Analysis</div>
+      <div class="card-title">Stella Nova: Market Entry Strategy</div>
+      <div class="card-desc">Data-driven recommendations for marketing, pricing, early access, and community building.</div>
+      <div class="card-stats"><span class="card-stat" style="color:var(--cyan)"><strong>Space Colony Sim</strong></span><span class="card-stat"><strong>Rust + wgpu</strong></span></div>
+      <span class="card-arrow" style="color:var(--cyan)">→</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- BALATRO -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-balatro">
+  <div class="header">
+    <div class="topic success">Success Story · Case Study #1</div>
+    <h1>Balatro: The $95M Solo-Dev Phenomenon</h1>
+    <p class="dek">Solo developer, near-zero budget, $14.99 price, no microtransactions. 5 million copies in 11 months. The data on how a poker-themed roguelike became 2024's game of the year.</p>
+    <div class="meta">Sources: LocalThunk · SteamSpy · Steam Revenue Calculator · Wikipedia · GamesRadar</div>
+  </div>
+  <div class="c">
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v g">5M+</div><div class="ss-l">Units sold (Jan 2025)</div></div>
+      <div class="ss-i"><div class="ss-v g">~$95M</div><div class="ss-l">Est. gross Steam revenue</div></div>
+      <div class="ss-i"><div class="ss-v g">98%</div><div class="ss-l">Steam positive (183K reviews)</div></div>
+      <div class="ss-i"><div class="ss-v g">43,905</div><div class="ss-l">Peak CCU (Jan 2025)</div></div>
+    </div>
+    <hr class="sep">
+    <div class="sl">Key Metrics</div>
+    <h2>From "CardGame" Folder to GOTY</h2>
+    <ul class="dl">
+      <li><span class="d"></span>Created Dec 2021 as Lua learning project in Saskatchewan, Canada. Dev quit IT job Jan 2023.</li>
+      <li><span class="d"></span>Only expense: music commission via Fiverr. Total budget: <span class="v">~$0</span></li>
+      <li><span class="d"></span>Steam demo (Jun 2023): <span class="v">100K+ downloads</span> during Next Fest. Signed with Playstack publisher.</li>
+      <li><span class="d"></span>Launch (Feb 20, 2024): <span class="v">$600K</span> revenue in first 3 hours. Profitable in <span class="v">&lt;1 hour</span>.</li>
+      <li><span class="d"></span><span class="v">1M copies in 1 month</span> → 2M by Aug → 3.5M at TGA → 5M by Jan 2025</li>
+      <li><span class="d"></span>Median playtime: <span class="v">19h 15m</span>. Average: <span class="v">44h 45m</span>. Typical indie: 2–5 hrs.</li>
+      <li><span class="d"></span>Won GDC GOTY, 3× TGA, 3× DICE, BAFTA. First solo dev ever nominated for TGA GOTY.</li>
+      <li><span class="d"></span>Featured in <em>Black Mirror S7</em>. Creator called it "possibly the most addictive thing ever created."</li>
+    </ul>
+    <div class="verdict">
+      <div class="verdict-label g">Key Lesson</div>
+      <p style="margin:0"><strong>Extreme mechanical depth at a low price point with zero marketing creates its own demand.</strong> Balatro proves that streamers + low friction ($14.99, no tutorial needed) + deep systemic interactions = organic viral growth that no paid marketing budget can replicate.</p>
+    </div>
+    <div class="src">Full Balatro case study available in the original uploaded document. Sources: LocalThunk · SteamSpy · Steam Revenue Calculator · Wikipedia</div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- FACTORIO -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-factorio">
+  <div class="header">
+    <div class="topic success">Success Story · Case Study #2</div>
+    <h1>Factorio: The Factory That Never Goes on Sale</h1>
+    <p class="dek">12 years of development. A €21K Indiegogo. Never discounted. $305M gross revenue. The automation game that Shopify's CEO calls a business expense.</p>
+    <div class="meta">Sources: Wube Software · Wikipedia · SteamSpy · Steam Revenue Calculator · Gamalytic · GamingOnLinux</div>
+  </div>
+  <div class="c">
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v g">$305M</div><div class="ss-l">Est. gross revenue (all time)</div></div>
+      <div class="ss-i"><div class="ss-v g">~$90M</div><div class="ss-l">Est. developer net revenue</div></div>
+      <div class="ss-i"><div class="ss-v g">5–10M</div><div class="ss-l">Steam owners (SteamSpy)</div></div>
+      <div class="ss-i"><div class="ss-v g">97%</div><div class="ss-l">Steam positive reviews</div></div>
+      <div class="ss-i"><div class="ss-v g">118,674</div><div class="ss-l">All-time peak CCU (Oct 2024)</div></div>
+    </div>
+
+    <hr class="sep">
+    <div class="sl">Development Timeline</div>
+    <h2>From Czech Prototype to $305M Empire</h2>
+
+    <div class="tw"><table class="t">
+      <thead><tr><th>Date</th><th>Event</th></tr></thead>
+      <tbody>
+        <tr><td class="n">Mid-2012</td><td>Michal Kovařík begins solo development in Prague, Czech Republic. Inspired by Minecraft mods IndustrialCraft and BuildCraft.</td></tr>
+        <tr><td class="n">Jan 2013</td><td>Indiegogo campaign launches. Raises <strong>€21,626</strong> against €17,000 goal.</td></tr>
+        <tr><td class="n">Apr 2014</td><td>Game trailer drives massive early access sales spike. First breakout moment.</td></tr>
+        <tr><td class="n">Sep 2014</td><td>Wube Software formally incorporated by Kovařík and Tomáš Kozelek.</td></tr>
+        <tr><td class="n">Feb 2016</td><td>Steam Early Access launch. Price: $20. Earns "Cracktorio" nickname for addictiveness.</td></tr>
+        <tr><td class="n">Aug 2020</td><td><strong>1.0 Release</strong>. Peak CCU: 34,700. Universal acclaim. PC Gamer: "a manufacturing masterpiece."</td></tr>
+        <tr><td class="n">Jul 2019</td><td>G2A controversy: Wube proves 198 stolen keys sold on platform. G2A pays $39,600. Wube calls G2A "worse than piracy."</td></tr>
+        <tr><td class="n">Feb 2024</td><td>Team grows to 31 members. Steady ~500K copies sold per year at $35. No sales, ever.</td></tr>
+        <tr><td class="n">Oct 21, 2024</td><td><strong>Space Age DLC + 2.0 update</strong>. DLC priced at $35. 400K DLC copies sold in &lt;1 week.</td></tr>
+        <tr><td class="n">Oct 2024</td><td>New all-time peak CCU: <strong>118,674</strong> — 3.4× the 1.0 launch peak. Tops Steam bestseller list.</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="q">"Factorio is possibly the most polished and mechanically deep game ever sold for $35. The fact that Shopify's CEO lets staff expense it says everything."<span class="a">— Industry commentary on Tobias Lütke's policy</span></div>
+
+    <hr class="sep">
+    <div class="sl">Revenue Model</div>
+    <h2>Never Discounted. $35 Base + $35 DLC. Pure Premium.</h2>
+
+    <div class="tw"><table class="t">
+      <thead><tr><th>Product</th><th>Price</th><th>Est. Units</th><th>Est. Revenue</th></tr></thead>
+      <tbody>
+        <tr><td class="n">Base Game</td><td>$35 (was $20→$30→$35)</td><td>5–10M</td><td>~$305M gross</td></tr>
+        <tr><td class="n">Space Age DLC</td><td>$35</td><td>1.24M+ (as of Feb 2026)</td><td>~$30M gross</td></tr>
+        <tr><td class="n">Total</td><td>—</td><td>—</td><td><strong>~$335M gross</strong></td></tr>
+      </tbody>
+    </table></div>
+
+    <ul class="dl">
+      <li><span class="d"></span>Factorio has <strong>never been on sale</strong>. Price increased 3 times as value grew. Anti-discount strategy.</li>
+      <li><span class="d"></span>Steady-state sales: ~<span class="v">500K copies/year</span> even before Space Age, generating ~$17.5M/yr gross.</li>
+      <li><span class="d"></span>Space Age DLC sold <span class="v">400K copies in &lt;1 week</span>, totaling 1.24M+ by Feb 2026.</li>
+      <li><span class="d"></span>Operating team of 31 in Prague — estimated annual burn rate: ~$1.5–2M. Decades of runway in the bank.</li>
+      <li><span class="d"></span>Zero MTX, zero ads, zero subscriptions. Premium-only model with aggressive anti-piracy stance.</li>
+    </ul>
+
+    <hr class="sep">
+    <div class="sl">Why It Worked</div>
+    <h2>The Factorio Playbook</h2>
+    <ul class="dl">
+      <li><span class="d"></span><strong>Transparent weekly devlogs</strong> ("Friday Facts") since 2013. 400+ posts. Builds trust, community, and anticipation.</li>
+      <li><span class="d"></span><strong>No marketing spend.</strong> Word-of-mouth driven entirely by addictive core loop and community evangelism.</li>
+      <li><span class="d"></span><strong>Modding ecosystem:</strong> Official mod portal. Community extends game infinitely. Popular mods hired into team.</li>
+      <li><span class="d"></span><strong>Price signals quality:</strong> Never discounting communicates confidence and sustained value.</li>
+      <li><span class="d"></span><strong>Performance obsession:</strong> 60fps with millions of entities. Technical excellence = trust = sales.</li>
+      <li><span class="d"></span><strong>4-year DLC dev cycle:</strong> Space Age was built to be "as big as the base game." Patience over shipping quarterly.</li>
+    </ul>
+
+    <div class="verdict">
+      <div class="verdict-label g">Key Lesson</div>
+      <p style="margin:0"><strong>Transparent, patient early access development + never discounting + performance obsession = the highest-revenue indie game on Steam.</strong> Factorio proves that a small team in a low-cost city can build a $300M+ franchise by treating players as partners, not customers.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- RIMWORLD -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-rimworld">
+  <div class="header">
+    <div class="topic success">Success Story · Case Study #3</div>
+    <h1>RimWorld: The AI Story Generator That Prints Money</h1>
+    <p class="dek">One Canadian developer quits BioShock Infinite to make a colony sim where colonists have panic attacks, fall in love, and eat each other. $116M+ revenue. 211-hour average playtime.</p>
+    <div class="meta">Sources: Ludeon Studios · Wikipedia · SteamSpy · Gamalytic · LEVVVEL</div>
+  </div>
+  <div class="c">
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v g">$116M+</div><div class="ss-l">Est. gross revenue</div></div>
+      <div class="ss-i"><div class="ss-v g">5–10M</div><div class="ss-l">Steam owners (SteamSpy)</div></div>
+      <div class="ss-i"><div class="ss-v g">98%</div><div class="ss-l">Overwhelmingly Positive</div></div>
+      <div class="ss-i"><div class="ss-v g">211hr</div><div class="ss-l">Average playtime</div></div>
+      <div class="ss-i"><div class="ss-v g">5 DLCs</div><div class="ss-l">Royalty → Odyssey</div></div>
+    </div>
+
+    <hr class="sep">
+    <div class="sl">Development Timeline</div>
+    <h2>From BioShock Infinite to Rimworld</h2>
+    <div class="tw"><table class="t">
+      <thead><tr><th>Date</th><th>Event</th></tr></thead>
+      <tbody>
+        <tr><td class="n">2008–2012</td><td>Tynan Sylvester (b. 1986, Canada) works at Irrational Games on BioShock Infinite for 4 years.</td></tr>
+        <tr><td class="n">Feb 2012</td><td>Leaves to go indie. Prototypes games resembling Project Zomboid, Smash TV, Football Manager, Hitman.</td></tr>
+        <tr><td class="n">Late 2012</td><td>Tests RimWorld concept (then "Eclipse Colony"). Friends play until 2AM — decides this is the game.</td></tr>
+        <tr><td class="n">Oct 2013</td><td>Kickstarter campaign as "Eclipse Colony." Successfully funded.</td></tr>
+        <tr><td class="n">Nov 2013</td><td>Early Access launch on Steam. Initial team: 2–3 developers.</td></tr>
+        <tr><td class="n">Feb 2018</td><td>Announces <strong>1M copies sold</strong>.</td></tr>
+        <tr><td class="n">Oct 2018</td><td><strong>Version 1.0 release</strong>. Universal acclaim. The "story generator" design philosophy resonates.</td></tr>
+        <tr><td class="n">Aug 2020</td><td>Estimated $100M+ accumulated revenue. One of Steam's most successful indie games.</td></tr>
+        <tr><td class="n">Feb 2020</td><td><strong>Royalty DLC</strong> — first paid expansion. Adds psycasting, Empire faction.</td></tr>
+        <tr><td class="n">Jul 2021</td><td><strong>Ideology DLC</strong> — belief systems, rituals, moral frameworks.</td></tr>
+        <tr><td class="n">Oct 2022</td><td><strong>Biotech DLC</strong> — children, mechanoids, gene modding.</td></tr>
+        <tr><td class="n">Apr 2024</td><td><strong>Anomaly DLC</strong> — horror elements. Accompanied by free major update integrating popular mods.</td></tr>
+        <tr><td class="n">Jul 2025</td><td><strong>Odyssey DLC</strong> — gravships, exploration, new biomes. Announced just 1 month before release.</td></tr>
+      </tbody>
+    </table></div>
+
+    <hr class="sep">
+    <div class="sl">What Makes It Work</div>
+    <h2>Not a Game — A Story Generator</h2>
+    <p>RimWorld's central innovation is framing itself not as a challenge to overcome, but as an <em>AI-driven story generator</em>. Three AI "storytellers" (Cassandra Classic, Randy Random, Phoebe Chillax) modulate event difficulty and pacing, creating emergent narratives that are unique every playthrough. Players don't "beat" RimWorld — they <em>experience</em> it.</p>
+
+    <ul class="dl">
+      <li><span class="d"></span><strong>Average playtime: 211 hours.</strong> This is 40–100× typical indie games (2–5 hrs).</li>
+      <li><span class="d"></span><strong>No discount strategy:</strong> RimWorld rarely goes below 10% off. Base game: $34.99. DLCs: $19.99–$24.99 each.</li>
+      <li><span class="d"></span><strong>Mod ecosystem:</strong> Steam Workshop + official forums. Thousands of mods. Game-changing overhauls (Combat Extended, Multiplayer).</li>
+      <li><span class="d"></span><strong>~30K copies/month</strong> steady-state sales (2024), generating ~$11M/yr gross minimum.</li>
+      <li><span class="d"></span><strong>557K+ Steam community followers.</strong> Active subreddit with 730K+ members.</li>
+      <li><span class="d"></span>Team expanded from 2–3 to 7 developers post-release. Still micro-team.</li>
+      <li><span class="d"></span>Australian Classification Board controversy (Feb 2022): game pulled from Steam for Australians due to drug depictions. Resolved.</li>
+    </ul>
+
+    <div class="verdict">
+      <div class="verdict-label g">Key Lesson</div>
+      <p style="margin:0"><strong>Emergent narrative systems create infinite replayability, which creates the highest possible lifetime value per player.</strong> RimWorld's "AI storyteller" design converts every $35 purchase into 211 hours of unique content — no paid content updates needed. This is the design paradigm Stella Nova should emulate.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- KSP -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-ksp">
+  <div class="header">
+    <div class="topic success">Success Story · Case Study #4</div>
+    <h1>Kerbal Space Program: Rocket Science for Everyone</h1>
+    <p class="dek">A Mexican advertising agency accidentally creates the most beloved physics sandbox in gaming history. 4M+ copies. NASA endorsement. And then Take-Two happened.</p>
+    <div class="meta">Sources: Squad · Wikipedia · VGChartz · SteamSpy · Private Division</div>
+  </div>
+  <div class="c">
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v g">4M+</div><div class="ss-l">Units sold worldwide</div></div>
+      <div class="ss-i"><div class="ss-v g">91%</div><div class="ss-l">Steam user score</div></div>
+      <div class="ss-i"><div class="ss-v g">88</div><div class="ss-l">Metacritic</div></div>
+      <div class="ss-i"><div class="ss-v g">NASA</div><div class="ss-l">Official collaboration</div></div>
+    </div>
+
+    <hr class="sep">
+    <div class="sl">Development Timeline</div>
+    <h2>From Ad Agency Side Project to Cultural Phenomenon</h2>
+    <div class="tw"><table class="t">
+      <thead><tr><th>Date</th><th>Event</th></tr></thead>
+      <tbody>
+        <tr><td class="n">Apr 2010</td><td>Felipe Falanghe hired by Squad, a <em>Mexican advertising agency</em>. Pitches a space game.</td></tr>
+        <tr><td class="n">Oct 2010</td><td>Development authorized as side project by co-founder Adrian Goya.</td></tr>
+        <tr><td class="n">Jun 2011</td><td>First public version released on Squad's own storefront. Free prototype.</td></tr>
+        <tr><td class="n">Mar 2013</td><td>Steam Early Access. Reaches top 5 best-selling immediately.</td></tr>
+        <tr><td class="n">Apr 2014</td><td>NASA Asteroid Redirection Mission Pack — first official NASA collaboration with a game.</td></tr>
+        <tr><td class="n">Apr 2015</td><td><strong>Version 1.0 release.</strong> Metacritic 88. "One of the finest sandbox games ever built."</td></tr>
+        <tr><td class="n">May 2016</td><td>Felipe Falanghe (creator) steps down from active development.</td></tr>
+        <tr><td class="n">May 2017</td><td><strong>Take-Two Interactive acquires KSP IP.</strong> Squad continues updates under Private Division.</td></tr>
+        <tr><td class="n">Jun 2021</td><td>Version 1.12 "On Final Approach" — final major update. Squad devs join KSP2 team.</td></tr>
+      </tbody>
+    </table></div>
+
+    <hr class="sep">
+    <div class="sl">Why It Worked</div>
+    <h2>Accidental Genius: The KSP Formula</h2>
+    <ul class="dl">
+      <li><span class="d"></span><strong>Real physics, cartoon characters:</strong> Realistic orbital mechanics wrapped in humor made rocket science approachable.</li>
+      <li><span class="d"></span><strong>Educational crossover:</strong> KerbalEdu (with TeacherGaming LLC) brought KSP into classrooms. NASA, ESA, and SpaceX endorsed it.</li>
+      <li><span class="d"></span><strong>Modding as lifeblood:</strong> 2,600+ mods on CKAN. Many modders hired onto the dev team directly.</li>
+      <li><span class="d"></span><strong>YouTube/streamer ecosystem:</strong> Scott Manley built a career on KSP content. Self-reinforcing content loop.</li>
+      <li><span class="d"></span><strong>Multi-platform:</strong> PS4, Xbox One, and nearly Wii U. Expanded addressable market significantly.</li>
+      <li><span class="d"></span><strong>Community-driven development:</strong> Forum feedback directly shaped features for years.</li>
+    </ul>
+
+    <div class="cl">
+      <strong>The cautionary tale:</strong> KSP's acquisition by Take-Two is directly responsible for the KSP2 disaster documented in the Failure Studies section. The IP's value was destroyed by corporate mismanagement — see KSP2 tab.
+    </div>
+
+    <div class="verdict">
+      <div class="verdict-label g">Key Lesson</div>
+      <p style="margin:0"><strong>Making complex systems accessible through humor and approachability creates a uniquely defensible market position.</strong> KSP proved that "edutainment" done right can become a beloved franchise — but also that selling to a public publisher can destroy the community trust that built it.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- VAMPIRE SURVIVORS -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-vampire">
+  <div class="header">
+    <div class="topic success">Lesser-Known Success · Case Study #5</div>
+    <h1>Vampire Survivors: The $3 Game That Built an Empire</h1>
+    <p class="dek">A former web developer uses asset-store pixel art to create an entirely new genre. £40M personal wealth. BAFTA winner. And the secret weapon was a price so low that streamers screamed "JUST BUY IT."</p>
+    <div class="meta">Sources: poncle · Wikipedia · SteamSpy · LEVVVEL · HowToMarketAGame · GamesRadar</div>
+  </div>
+  <div class="c">
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v g">£40M</div><div class="ss-l">Creator wealth (Sunday Times '24)</div></div>
+      <div class="ss-i"><div class="ss-v g">~2M</div><div class="ss-l">Copies in month 1 of full launch</div></div>
+      <div class="ss-i"><div class="ss-v g">$4.99</div><div class="ss-l">Current price</div></div>
+      <div class="ss-i"><div class="ss-v g">98%</div><div class="ss-l">Overwhelmingly Positive</div></div>
+      <div class="ss-i"><div class="ss-v g">70K+</div><div class="ss-l">Peak CCU</div></div>
+    </div>
+
+    <hr class="sep">
+    <div class="sl">The Story</div>
+    <h2>"I Had Given Up on the Idea of Success"</h2>
+    <p>Luca Galante was a web developer in the UK with no game industry experience. Vampire Survivors was his first project, built with asset-store pixel art and a basic game engine. The game launched in early access on December 18, 2021 for $2.99. It had fewer than 10 reviews in its first month.</p>
+    <p>Then Northernlion and SplatterCat found it. Within weeks, the game exploded to 30,000+ concurrent players. By February 2022, it hit 70,000 concurrent. Galante quit his day job. The full launch in October 2022 generated nearly $7M in the first month and sold almost 2 million copies.</p>
+
+    <div class="q">"I had given up on the idea of success a long time ago. Vampire Survivors is the first game I made just for fun. That might be the key ingredient."<span class="a">— Luca Galante, Edge Magazine</span></div>
+
+    <hr class="sep">
+    <div class="sl">Why $3 Was The Right Price</div>
+    <h2>The Impulse-Buy Thesis</h2>
+    <ul class="dl">
+      <li><span class="d"></span><strong>The "uncanny valley" of pricing:</strong> $10–$25 games get wishlisted and forgotten. $3 games get impulse-bought on a streamer's recommendation.</li>
+      <li><span class="d"></span>Streamers could say <span class="v">"It's $3, just buy it!"</span> — no hesitation, no "wait for sale" behavior.</li>
+      <li><span class="d"></span>At $3 × millions of copies, volume compensated massively for low per-unit revenue.</li>
+      <li><span class="d"></span><strong>DLC revenue multiplication:</strong> Multiple paid DLCs (Legacy of Moonspell, Tides of Foscari) at $2–$5 each dramatically increased lifetime value.</li>
+      <li><span class="d"></span>Xbox Game Pass inclusion expanded reach to console audiences. Apple Arcade followed.</li>
+      <li><span class="d"></span>Created an entire genre: "bullet heaven" / "reverse bullet hell." Spawned 174+ clones in 2023 alone.</li>
+      <li><span class="d"></span>Galante established <strong>Poncle Presents</strong> indie publishing label in Sep 2024 to help other devs.</li>
+    </ul>
+
+    <div class="verdict">
+      <div class="verdict-label g">Key Lesson</div>
+      <p style="margin:0"><strong>Price as distribution strategy: ultra-low prices eliminate purchase friction and let streamers become your sales force.</strong> This only works for games with viral "spectator appeal" and simple visual hooks. For deep sims like Stella Nova, the Factorio/RimWorld premium model is more appropriate — but the streamer-friendliness principle applies universally.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- PAPERS PLEASE -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-papers">
+  <div class="header">
+    <div class="topic success">Lesser-Known Success · Case Study #6</div>
+    <h1>Papers, Please: The "Boring" Game That Sold 5 Million</h1>
+    <p class="dek">An ex-Naughty Dog developer makes a game about checking passports in a fictional Soviet state. $9.99. Solo dev. $41M gross. BAFTA, IGF, and GDC award winner. A live-action short film. 10 years of sales.</p>
+    <div class="meta">Sources: Lucas Pope · 3909 LLC · Wikipedia · Engadget · Steam Revenue Calculator</div>
+  </div>
+  <div class="c">
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v g">5M+</div><div class="ss-l">Copies sold (10 years)</div></div>
+      <div class="ss-i"><div class="ss-v g">$41M</div><div class="ss-l">Est. gross Steam revenue</div></div>
+      <div class="ss-i"><div class="ss-v g">$9.99</div><div class="ss-l">Price point</div></div>
+      <div class="ss-i"><div class="ss-v g">97%</div><div class="ss-l">Positive reviews (69K+)</div></div>
+    </div>
+
+    <hr class="sep">
+    <div class="sl">The Story</div>
+    <h2>From Uncharted to Arstotzka</h2>
+    <p>Lucas Pope spent years at Naughty Dog working on the Uncharted series' GUI tools. In 2010, he left to move to Saitama, Japan with his wife Keiko. The move was driven by a desire to make "smaller, experimental" games far from the AAA formula. Traveling through Asia gave him the idea for a passport inspection game.</p>
+    <p>Papers, Please took 9 months to build. Pope shared progress on TIGSource forums, got early feedback, and submitted to Steam Greenlight in April 2013. YouTube streamers helped it get greenlit within days. The game launched August 8, 2013 and sold 500,000 copies within months.</p>
+
+    <ul class="dl">
+      <li><span class="d"></span><strong>Self-funded</strong> from Naughty Dog savings. No publisher, no Kickstarter.</li>
+      <li><span class="d"></span><strong>TIGSource → Greenlight → YouTube pipeline:</strong> Forum feedback → Steam visibility → streamer virality.</li>
+      <li><span class="d"></span><strong>40+ platforms</strong> over 10 years: Windows, Mac, Linux, iOS, Android, PlayStation Vita.</li>
+      <li><span class="d"></span><strong>Cultural penetration:</strong> Short film adaptation with "Overwhelmingly Positive" reviews on Steam. Inspired by the game, authorized by Pope.</li>
+      <li><span class="d"></span><strong>Mechanically simple, morally complex:</strong> The gameplay is "boring" (checking documents) but the narrative choices are devastating. This duality is the hook.</li>
+      <li><span class="d"></span><strong>Long tail:</strong> ~500K copies/year average over a decade. Consistent, compounding revenue.</li>
+      <li><span class="d"></span>Pope went on to make Return of the Obra Dinn (2018): another solo-dev hit with 1.1M units and $16M gross.</li>
+      <li><span class="d"></span>Won Pioneer Award at 2025 GDC Awards for career contributions to game design.</li>
+    </ul>
+
+    <div class="verdict">
+      <div class="verdict-label g">Key Lesson</div>
+      <p style="margin:0"><strong>"Boring" concepts with deep moral engagement outperform flashy games with shallow mechanics.</strong> Papers, Please proves that a game nobody could describe excitingly ("you check passports") can sell 5M copies if the mechanics create genuine emotional weight. <em>The concept doesn't need to sound exciting — it needs to feel important when played.</em></p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- KSP2 FAILURE -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-ksp2">
+  <div class="header">
+    <div class="topic failure">Failure Story · Case Study #7</div>
+    <h1>KSP 2: How Take-Two Killed a Beloved Franchise</h1>
+    <p class="dek">$10M budget. 7 years of development hell. Studio poaching. Broken early access at $50. Studio closure. IP abandoned. The definitive case study in how corporate management destroys indie magic.</p>
+    <div class="meta">Sources: Wikipedia · Bloomberg · PC Gamer · Game Developer · Windows Central · TechDrivePlay</div>
+  </div>
+  <div class="c">
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v r">Mostly Neg.</div><div class="ss-l">Steam review score</div></div>
+      <div class="ss-i"><div class="ss-v r">$50</div><div class="ss-l">EA price ($10 more than KSP1)</div></div>
+      <div class="ss-i"><div class="ss-v r">70</div><div class="ss-l">Employees laid off (Jun 2024)</div></div>
+      <div class="ss-i"><div class="ss-v r">0</div><div class="ss-l">Updates since Jun 2024</div></div>
+    </div>
+
+    <hr class="sep">
+    <div class="sl r">The Disaster Timeline</div>
+    <h2>Seven Years of Corporate Sabotage</h2>
+    <div class="tw"><table class="t">
+      <thead><tr><th>Date</th><th>Event</th></tr></thead>
+      <tbody>
+        <tr><td class="n">2017</td><td>Take-Two begins KSP2 development. Budget: <strong>$10M for 2 years</strong> — wildly insufficient for scope.</td></tr>
+        <tr><td class="n">Aug 2019</td><td>KSP2 announced at Gamescom. Dev: Star Theory Games. Release: early 2020.</td></tr>
+        <tr><td class="n">2020</td><td>Take-Two fails to acquire Star Theory. Instead, <strong>poaches 1/3 of their staff</strong> to form Intercept Games. Star Theory collapses 3 months later.</td></tr>
+        <tr><td class="n">2020–2022</td><td>Multiple delays. Take-Two mandates reuse of KSP1's outdated codebase. Restricts hiring. Blocks contact with original KSP devs.</td></tr>
+        <tr><td class="n">Feb 24, 2023</td><td><strong>Early Access launch at $49.99</strong> (£44.99). Catastrophic. Poor performance, bugs, less content than 12-year-old KSP1. Player count drops 75% in 4 days.</td></tr>
+        <tr><td class="n">Dec 2023</td><td>"For Science!" update — first and only major content update. Briefly improves sentiment.</td></tr>
+        <tr><td class="n">Apr 2024</td><td>Take-Two announces 5% headcount reduction. Begins "rationalizing pipeline."</td></tr>
+        <tr><td class="n">May 2024</td><td><strong>Bloomberg confirms Intercept Games closure.</strong> Take-Two denies, then confirms. Roll7 (BAFTA winners) also closed.</td></tr>
+        <tr><td class="n">Jun 28, 2024</td><td>WARN notice: 70 employees laid off. Last bug patch released. Radio silence begins.</td></tr>
+        <tr><td class="n">Nov 2024</td><td>Take-Two sells Private Division (including KSP IP) to unknown investor. Later revealed as Haveli Investments + ex-Annapurna employees.</td></tr>
+        <tr><td class="n">Feb 2026</td><td><strong>Game still sold at $49.99 on Steam.</strong> No updates in 20 months. Roadmap still listed on store page.</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="cl r">
+      <strong>Comparison:</strong> KSP1 was beloved because an indie dev with passion built it transparently over years. KSP2 failed because a corporation treated it as a line item — poaching devs, underfunding development, forcing legacy code, then abandoning ship when quarterly numbers didn't materialize.
+    </div>
+
+    <hr class="sep">
+    <div class="sl r">Root Causes</div>
+    <h2>The Five Fatal Mistakes</h2>
+    <ul class="dl">
+      <li><span class="d r"></span><strong>1. Studio poaching over acquisition:</strong> Take-Two destroyed Star Theory rather than buying them, losing institutional knowledge and creating a hostile start.</li>
+      <li><span class="d r"></span><strong>2. Mandating legacy code:</strong> Forcing KSP1's outdated Unity codebase onto a next-gen vision created insurmountable technical debt.</li>
+      <li><span class="d r"></span><strong>3. $10M budget for an ambitious sequel:</strong> Wildly insufficient. Resulted in constant understaffing and missed milestones.</li>
+      <li><span class="d r"></span><strong>4. $50 Early Access pricing:</strong> Charging more than the complete, mod-rich, 12-year-old original for a broken alpha was perceived as contempt for the fanbase.</li>
+      <li><span class="d r"></span><strong>5. Abandonment while still selling:</strong> Game remains for sale at full price with zero ongoing development. No refunds offered. Trust in the IP is destroyed.</li>
+    </ul>
+
+    <div class="verdict fail">
+      <div class="verdict-label r">Key Lesson</div>
+      <p style="margin:0"><strong>Sequels to beloved indie games cannot be built by corporate mandate.</strong> The community trust that made KSP1 a 4M-unit success took a decade to build and one publisher decision to destroy. For Stella Nova: stay independent, never sell IP to a publisher who views games as quarterly revenue targets.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- SPACEBASE DF-9 FAILURE -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-spacebase">
+  <div class="header">
+    <div class="topic failure">Failure Story · Case Study #8</div>
+    <h1>Spacebase DF-9: The Space Colony Sim That Was Abandoned</h1>
+    <p class="dek">Double Fine, a respected studio, launches a space colony sim into Early Access. Sales stall. Development halts. Source code dumped on modders. 46 Metacritic. The poster child for Early Access betrayal.</p>
+    <div class="meta">Sources: Wikipedia · Metacritic · PC Gamer · Double Fine · Legacy of Games</div>
+  </div>
+  <div class="c">
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v r">46/100</div><div class="ss-l">Metacritic score</div></div>
+      <div class="ss-i"><div class="ss-v r">6 updates</div><div class="ss-l">Total alpha patches before 1.0</div></div>
+      <div class="ss-i"><div class="ss-v r">$24.99</div><div class="ss-l">Price (for unfinished game)</div></div>
+      <div class="ss-i"><div class="ss-v r">May 2015</div><div class="ss-l">Development ceased</div></div>
+    </div>
+
+    <hr class="sep">
+    <div class="sl r">The Failure Timeline</div>
+    <h2>Promise, Early Access, Abandonment</h2>
+    <div class="tw"><table class="t">
+      <thead><tr><th>Date</th><th>Event</th></tr></thead>
+      <tbody>
+        <tr><td class="n">Nov 2012</td><td>Prototype created during Double Fine's Amnesia Fortnight public game jam. Fans vote for it.</td></tr>
+        <tr><td class="n">Oct 2013</td><td>Steam Early Access launch at $24.99. Promising concept: build a space station, manage aliens, fend off threats.</td></tr>
+        <tr><td class="n">2013–2014</td><td>6 alpha updates. Development slow. Many promised features (reactors, exploration, deep AI) never implemented.</td></tr>
+        <tr><td class="n">Sep 2014</td><td><strong>Double Fine announces v1.0 release</strong> — effectively ending development. Reason: "sales no longer sustain development."</td></tr>
+        <tr><td class="n">Oct 2014</td><td>"1.0" ships with tutorial and bugfixes. Most planned features cut. Lua source code released to community.</td></tr>
+        <tr><td class="n">May 2015</td><td>Double Fine formally ends all support. Community group "Derelict Games" attempts to continue. Also eventually abandons.</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="q">"Double Fine went a step beyond. Not only did they release the full source code, but they left hundreds of planned features incomplete, giving modders the exciting challenge of finishing the game themselves."<span class="a">— PC Gamer, satirical "Best Mod Support" award, 2014</span></div>
+
+    <hr class="sep">
+    <div class="sl r">What Went Wrong</div>
+    <h2>The Space Colony Sim Graveyard</h2>
+    <ul class="dl">
+      <li><span class="d r"></span><strong>Sales-contingent development:</strong> Double Fine treated EA revenue as the development budget. When sales plateaued, development stopped.</li>
+      <li><span class="d r"></span><strong>No core gameplay loop:</strong> Colonists had stats but no manageable behaviors. Rooms had UI but no function. "You run out of things to do in an hour."</li>
+      <li><span class="d r"></span><strong>Genre comparison problem:</strong> Launching against RimWorld (same concept, vastly deeper) made Spacebase look amateur.</li>
+      <li><span class="d r"></span><strong>Reputation damage:</strong> Double Fine's prior Kickstarter controversies (Broken Age split) meant trust was already thin. This shattered it.</li>
+      <li><span class="d r"></span><strong>"Dumping source code" is not community engagement:</strong> Modders inherited unfinished code with no documentation. Community mod efforts also died.</li>
+    </ul>
+
+    <div class="cl r">
+      <strong>Direct relevance to Stella Nova:</strong> Spacebase DF-9 targeted the <em>exact same genre</em> — space colony simulation. It failed because it shipped a shell with no depth. RimWorld succeeded in the same period because it shipped systems with infinite emergence. The lesson is absolute: <strong>depth of simulation is non-negotiable for colony sims.</strong>
+    </div>
+
+    <div class="verdict fail">
+      <div class="verdict-label r">Key Lesson</div>
+      <p style="margin:0"><strong>Early Access is a development partnership, not a funding mechanism.</strong> If your game can't sustain development through sales, don't launch into Early Access — you'll destroy both the game and your reputation. Colony sims specifically demand deep, interconnected systems from day one. A shallow shell with promises will be compared to RimWorld and Factorio and found wanting.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- GALACTICA STRATEGY -->
+<!-- ============================================================ -->
+<div class="tab-panel" id="tab-stella-nova">
+  <div class="header">
+    <div class="topic strat">Strategic Analysis · Stella Nova</div>
+    <h1>Stella Nova: Data-Driven Market Entry Strategy</h1>
+    <p class="dek">Synthesizing lessons from 5 successes, 2 failures, and current market data into actionable recommendations for Stella Nova's development, marketing, pricing, and launch.</p>
+    <div class="meta">Analysis based on case studies above · HowToMarketAGame · VG Insights · Gamalytic · GameDiscoverCo</div>
+  </div>
+  <div class="c">
+
+    <div class="ss">
+      <div class="ss-i"><div class="ss-v b">$9.9B</div><div class="ss-l">Indie market size (2024)</div></div>
+      <div class="ss-i"><div class="ss-v b">12.5%</div><div class="ss-l">CAGR to 2033</div></div>
+      <div class="ss-i"><div class="ss-v b">18,000</div><div class="ss-l">Games released on Steam (2024)</div></div>
+      <div class="ss-i"><div class="ss-v b">2.5%</div><div class="ss-l">Hit rate (1000+ reviews)</div></div>
+    </div>
+
+    <hr class="sep">
+    <div class="sl b">Market Position</div>
+    <h2>Stella Nova's Unique Intersection</h2>
+    <p>Stella Nova sits at the intersection of three proven mega-genres: <strong>colony simulation</strong> (RimWorld: $116M+), <strong>automation/factory building</strong> (Factorio: $305M), and <strong>space physics sandbox</strong> (KSP: 4M units). No released game occupies all three simultaneously. This is a defensible market gap.</p>
+
+    <div class="tw"><table class="t">
+      <thead><tr><th>Stella Nova Feature</th><th>Comparable</th><th>Market Proof</th></tr></thead>
+      <tbody>
+        <tr><td class="n">Modular station construction</td><td>RimWorld base building</td><td>$116M+ revenue, 211hr avg playtime</td></tr>
+        <tr><td class="n">Barnes-Hut orbital mechanics</td><td>KSP orbital physics</td><td>4M units, NASA endorsement</td></tr>
+        <tr><td class="n">Resource chains + automation</td><td>Factorio logistics</td><td>$305M revenue, 97% positive</td></tr>
+        <tr><td class="n">Autonomous AI citizens</td><td>RimWorld colonist AI</td><td>"Story generator" = infinite replayability</td></tr>
+        <tr><td class="n">LLM-powered narrative</td><td>No direct comparable</td><td>Novel differentiator — "Rimworld meets GPT"</td></tr>
+        <tr><td class="n">Custom Rust engine (quarkstrom)</td><td>Factorio custom engine</td><td>Performance = trust = sales</td></tr>
+      </tbody>
+    </table></div>
+
+    <div class="cl b">
+      <strong>The LLM narrative system is Stella Nova's moat.</strong> No shipping colony sim has integrated generative AI for dynamic storytelling. This is a first-mover advantage in a market that has proven "AI storyteller" designs (RimWorld) generate extreme engagement.
+    </div>
+
+    <hr class="sep">
+    <div class="sl b">Pricing Strategy</div>
+    <h2>Recommendation: $24.99 EA → $34.99 1.0 → $29.99 DLC</h2>
+
+    <div class="tw"><table class="t">
+      <thead><tr><th>Strategy</th><th>Rationale</th><th>Precedent</th></tr></thead>
+      <tbody>
+        <tr><td class="n">EA at $24.99</td><td>Below $30 psychological threshold. Signals value-in-progress, not premium-complete. Avoids KSP2's $50 error.</td><td>Factorio EA: $20 → increased over time</td></tr>
+        <tr><td class="n">1.0 at $34.99</td><td>Match RimWorld/Factorio. Price increase rewards early buyers, signals quality growth.</td><td>Factorio: $20→$30→$35. Never discounted.</td></tr>
+        <tr><td class="n">Rare discounts (10% max)</td><td>Protect perceived value. Frequent sales train customers to wait.</td><td>RimWorld: rarely &gt;10% off. Factorio: 0% ever.</td></tr>
+        <tr><td class="n">DLC at $24.99–$29.99</td><td>Expansion-grade DLC (Factorio Space Age model, not cosmetic packs).</td><td>Space Age: $35 DLC, 1.24M sold.</td></tr>
+      </tbody>
+    </table></div>
+
+    <hr class="sep">
+    <div class="sl b">Early Access Strategy</div>
+    <h2>The Factorio Model: Transparent, Patient, Systems-First</h2>
+
+    <ul class="dl">
+      <li><span class="d b"></span><strong>1. Weekly devlogs from day one.</strong> Factorio's "Friday Facts" (400+ posts) built the most loyal indie community on Steam. Stella Nova should commit to a weekly or biweekly devlog with technical depth — not marketing fluff.</li>
+      <li><span class="d b"></span><strong>2. Ship playable systems, not promises.</strong> Spacebase DF-9 died because its EA had shell features. KSP2 died because its EA had less content than KSP1. Stella Nova's EA must have at minimum: functional station building, working AI, basic resource chains, and stable performance.</li>
+      <li><span class="d b"></span><strong>3. Modding support from EA launch.</strong> Every $100M+ indie sim in this report (Factorio, RimWorld, KSP) has a thriving mod ecosystem. Build mod support early. Hire talented modders. Community extends your game for free.</li>
+      <li><span class="d b"></span><strong>4. Performance is a feature.</strong> Factorio runs millions of entities at 60fps. This is a core selling point, not a nice-to-have. The Rust/wgpu engine is a legitimate competitive advantage — communicate it.</li>
+      <li><span class="d b"></span><strong>5. EA duration: 2–3 years minimum.</strong> Factorio: 4 years EA. RimWorld: 5 years EA. KSP: 4 years EA. Rushing to 1.0 kills colony sims. The audience expects — and rewards — patience.</li>
+    </ul>
+
+    <hr class="sep">
+    <div class="sl b">Marketing Strategy</div>
+    <h2>Zero-Budget, Maximum Impact</h2>
+
+    <p>Every single success story in this report had zero or near-zero marketing budgets. The common thread: <strong>make something so compelling that streamers and communities become your marketing team.</strong></p>
+
+    <div class="tw"><table class="t">
+      <thead><tr><th>Phase</th><th>Action</th><th>Precedent</th></tr></thead>
+      <tbody>
+        <tr><td class="n">Pre-EA (Now)</td><td>Start devlog. Post weekly technical/design content on Reddit, Twitter, YouTube. Build Steam page. Accumulate wishlists. Target <strong>10K+ wishlists before EA launch.</strong></td><td>Factorio: trailer drove EA sales. Balatro: 100K demo downloads at Next Fest.</td></tr>
+        <tr><td class="n">Demo</td><td>Release a Steam Next Fest demo. Focus on a single polished scenario: "Build your first station module, establish power, survive one crisis." 20-minute vertical slice.</td><td>Balatro: Next Fest demo → publisher signing → 5M copies.</td></tr>
+        <tr><td class="n">EA Launch</td><td>Target mid-week (Tue/Wed). Send keys to 50+ mid-tier YouTubers/streamers in simulation genre (not AAA reviewers). Focus on <em>emergent story</em> potential — "Watch what my colonists did" clips.</td><td>Vampire Survivors: SplatterCat + Northernlion streams = viral breakout.</td></tr>
+        <tr><td class="n">Post-EA</td><td>Weekly devlogs. Engage Reddit/Discord daily. Highlight community stories and mods. Run community events (challenges, build contests).</td><td>Factorio: "Friday Facts" built decade of trust.</td></tr>
+        <tr><td class="n">1.0 Launch</td><td>Time for major gaming events (TGA nominations, Steam seasonal sales visibility). Have a compelling trailer with emergent gameplay moments.</td><td>Balatro: TGA = 1.5M copies in 6 weeks.</td></tr>
+      </tbody>
+    </table></div>
+
+    <hr class="sep">
+    <div class="sl b">Competitive Positioning</div>
+    <h2>The Pitch: "Factorio Meets RimWorld in Space — With AI That Tells Stories"</h2>
+
+    <div class="tw"><table class="t">
+      <thead><tr><th>vs.</th><th>Stella Nova Advantage</th><th>Risk</th></tr></thead>
+      <tbody>
+        <tr><td class="n">vs. RimWorld</td><td>3D space setting, orbital mechanics, LLM narrative</td><td>RimWorld's mod ecosystem is massive; need strong mod support</td></tr>
+        <tr><td class="n">vs. Factorio</td><td>Living colonists with AI behaviors, emergent stories</td><td>Factorio's optimization is legendary; must match performance expectations</td></tr>
+        <tr><td class="n">vs. KSP (legacy)</td><td>Colony management + station building + orbital mechanics in one game</td><td>KSP community is traumatized by KSP2; must build trust slowly</td></tr>
+        <tr><td class="n">vs. Oxygen Not Included</td><td>Scale (orbital, multi-station), physics simulation depth</td><td>ONI has proven space-colony-sim audience; direct comparison likely</td></tr>
+        <tr><td class="n">vs. Space Haven</td><td>Deeper simulation, custom engine performance, LLM narrative</td><td>Space Haven occupies "space RimWorld" niche already</td></tr>
+      </tbody>
+    </table></div>
+
+    <hr class="sep">
+    <div class="sl b">Critical Risks</div>
+    <h2>Lessons From the Failures</h2>
+
+    <div class="tw"><table class="t">
+      <thead><tr><th>Risk</th><th>Failure Precedent</th><th>Mitigation</th></tr></thead>
+      <tbody>
+        <tr><td class="n">Premature EA launch</td><td>KSP2: launched with less than KSP1</td><td>Don't launch EA until core loop is fun for 10+ hours</td></tr>
+        <tr><td class="n">Sales-dependent development</td><td>Spacebase DF-9: stopped when sales dipped</td><td>Have 12–18 months runway <em>before</em> EA launch</td></tr>
+        <tr><td class="n">Overpriced EA</td><td>KSP2: $50 for broken alpha</td><td>$24.99 EA, increase to $34.99 at 1.0</td></tr>
+        <tr><td class="n">Scope creep</td><td>KSP2: interstellar + colonies + MP on $10M</td><td>Ship modular: station building first, then orbital, then LLM</td></tr>
+        <tr><td class="n">Publisher dependency</td><td>KSP: sold to Take-Two → IP destroyed</td><td>Self-publish. Never sell IP. Consider Playstack-style marketing-only deals.</td></tr>
+        <tr><td class="n">Performance on complex sims</td><td>KSP2: unplayable framerate</td><td>Rust + wgpu engine is purpose-built. Benchmark publicly. Make performance a marketing pillar.</td></tr>
+      </tbody>
+    </table></div>
+
+    <hr class="sep">
+    <div class="sl b">Revenue Projections</div>
+    <h2>Conservative, Base, and Optimistic Scenarios</h2>
+
+    <div class="tw"><table class="t">
+      <thead><tr><th>Scenario</th><th>EA Units (Yr 1)</th><th>1.0 Units (Yr 2–3)</th><th>5-Year Gross Rev</th><th>Comparable</th></tr></thead>
+      <tbody>
+        <tr><td class="n">Conservative</td><td>15K</td><td>50K</td><td>~$2.5M</td><td>Space Haven tier</td></tr>
+        <tr><td class="n">Base</td><td>50K</td><td>250K</td><td>~$12M</td><td>Oxygen Not Included trajectory</td></tr>
+        <tr><td class="n">Optimistic</td><td>200K</td><td>1M+</td><td>~$50M+</td><td>RimWorld early trajectory</td></tr>
+      </tbody>
+    </table></div>
+
+    <p style="font-size:12px;color:var(--g500);margin-top:6px">Assumes $24.99 EA → $34.99 1.0. Excludes DLC. Conservative assumes niche audience with limited marketing. Base assumes successful Next Fest + streamer coverage. Optimistic assumes viral community stories + award nominations.</p>
+
+    <hr class="sep">
+    <div class="sl b">Final Recommendation</div>
+    <h2>The Stella Nova Playbook: 8 Non-Negotiables</h2>
+
+    <div class="verdict strat">
+      <div class="verdict-label b">Data-Driven Action Items</div>
+      <ol style="margin:8px 0 0 18px;font-size:13px;color:var(--g700);line-height:1.7">
+        <li><strong>Start the devlog now.</strong> Factorio's 400+ Friday Facts are worth more than $10M in marketing. Technical depth + transparency builds the most loyal audience in gaming.</li>
+        <li><strong>Ship a Steam Next Fest demo.</strong> Balatro's 100K demo downloads led directly to its publisher deal and launch strategy. A 20-minute polished vertical slice is your single highest-ROI marketing investment.</li>
+        <li><strong>Price EA at $24.99, increase to $34.99 at 1.0.</strong> Rewards early adopters, signals growing value, avoids KSP2's trust-destroying premium pricing.</li>
+        <li><strong>Build mod support before 1.0.</strong> Every $100M+ indie sim (Factorio, RimWorld, KSP) was extended infinitely by mods. Budget for mod tooling as core infrastructure, not an afterthought.</li>
+        <li><strong>Never sell the IP.</strong> KSP's acquisition by Take-Two destroyed the franchise. Self-publish or use marketing-only publishing deals (Balatro's Playstack model).</li>
+        <li><strong>Make performance a marketing pillar.</strong> "Built in Rust with a custom wgpu renderer" is a compelling differentiator in a market traumatized by KSP2's 15fps. Publish benchmarks. Show thousands of entities running at 60fps.</li>
+        <li><strong>Lead with emergent stories, not feature lists.</strong> RimWorld's marketing is "look what my colonists did." Stella Nova's LLM narrative system should generate shareable moments that spread organically on Reddit, Twitter, and YouTube.</li>
+        <li><strong>Plan for 2–3 years of EA.</strong> Factorio, RimWorld, and KSP all spent 4–5 years in Early Access. The colony sim audience rewards patience and punishes premature 1.0 releases (Spacebase DF-9).</li>
+      </ol>
+    </div>
+
+    <div class="cl b" style="margin-top:20px">
+      <strong>The market gap is real.</strong> The space colony simulation subgenre has produced two $100M+ hits (Factorio, RimWorld), one beloved 4M-unit franchise (KSP), and two spectacular failures (KSP2, Spacebase DF-9). The failures were caused by corporate mismanagement and shallow execution — not lack of demand. A technically excellent, deeply simulated, transparently developed space colony sim with AI-driven narrative has no direct competitor and a proven, hungry audience.
+    </div>
+
+  </div>
+</div>
+
+<footer>
+  Indie Game Market Intelligence · Business Case Studies · February 2026<br>
+  Sources: SteamDB · SteamSpy · Steam Revenue Calculator · Gamalytic · VG Insights · Wikipedia · GamesRadar · PC Gamer · Game Developer · Bloomberg · HowToMarketAGame
+</footer>
+
+<script>
+function showTab(id) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active','fail','strat'));
+  document.getElementById('tab-' + id).classList.add('active');
+  const btns = document.querySelectorAll('.tab-btn');
+  const names = ['index','balatro','factorio','rimworld','ksp','vampire','papers','ksp2','spacebase','stella-nova'];
+  const idx = names.indexOf(id);
+  if (idx >= 0) {
+    btns[idx].classList.add('active');
+    if (id === 'ksp2' || id === 'spacebase') btns[idx].classList.add('fail');
+    if (id === 'stella-nova') btns[idx].classList.add('strat');
+  }
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+</script>
+</body>
+</html>
