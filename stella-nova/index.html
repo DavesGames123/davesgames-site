@@ -273,6 +273,15 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
 .cluster-head.mi-head .cluster-icon { opacity: 1; color: #00d4b4; }
 .cluster.open .cluster-head.mi-head .cluster-label { color: #00d4b4; }
 
+/* Solar accent — warm amber/gold */
+.nav-item.sol.active { background: rgba(245,200,66,0.06); }
+.nav-item.sol.active::before { background: #f5c842; box-shadow: 0 0 7px #f5c842; }
+.nav-item.sol.active .nav-label { color: #f5c842; }
+.nav-item.sol:hover::before { background: #c8a020; }
+
+.cluster-head.sol-head .cluster-icon { opacity: 1; color: #f5c842; }
+.cluster.open .cluster-head.sol-head .cluster-label { color: #f5c842; }
+
 /* LinkedIn footer button */
 #sb-linkedin {
   display: block;
@@ -417,6 +426,20 @@ body::after {
         </div>
       </div>
 
+      <div class="cluster" id="cl-solar">
+        <button class="cluster-head sol-head" onclick="toggleCluster('cl-solar')">
+          <span class="cluster-icon">☀</span>
+          <span class="cluster-label">Light Study</span>
+          <span class="cluster-arrow">›</span>
+        </button>
+        <div class="cluster-body">
+          <button class="nav-item sol" data-tab="solar" onclick="switchTab('solar')">
+            <span class="nav-label">Solar Transit Study</span>
+            <span class="nav-badge">TOOL</span>
+          </button>
+        </div>
+      </div>
+
     </div>
 
     <div id="sb-footer">
@@ -444,6 +467,7 @@ const PAGES = {
   selection:'selection.html', explosion:'explosion.html', flare:'flare.html',
   intel:'market-intel.html', pitch:'pitch.html', roadmap:'roadmap.html',
   business:'business.html',
+  solar:'solar.html',
 };
 const LABELS = {
   home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
@@ -452,6 +476,7 @@ const LABELS = {
   selection:'Selection', explosion:'Explosion', flare:'Engine Propulsion Effects',
   intel:'Investor Case Studies', pitch:'Pitch Deck', roadmap:'Roadmap',
   business:'Revenue Model',
+  solar:'Solar Transit Study',
 };
 
 let activeTab = null;
