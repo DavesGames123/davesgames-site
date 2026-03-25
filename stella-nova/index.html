@@ -264,7 +264,7 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
 #frame-wrap { flex: 1; position: relative; overflow: hidden; }
 #frame-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: var(--bg); }
 
-/* Market Intel accent — teal/cyan distinct from game content colours */
+/* Market Intel accent */
 .nav-item.mi.active { background: rgba(0,212,180,0.06); }
 .nav-item.mi.active::before { background: #00d4b4; box-shadow: 0 0 7px #00d4b4; }
 .nav-item.mi.active .nav-label { color: #00d4b4; }
@@ -273,7 +273,7 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
 .cluster-head.mi-head .cluster-icon { opacity: 1; color: #00d4b4; }
 .cluster.open .cluster-head.mi-head .cluster-label { color: #00d4b4; }
 
-/* Solar accent — warm amber/gold */
+/* Solar accent */
 .nav-item.sol.active { background: rgba(245,200,66,0.06); }
 .nav-item.sol.active::before { background: #f5c842; box-shadow: 0 0 7px #f5c842; }
 .nav-item.sol.active .nav-label { color: #f5c842; }
@@ -334,9 +334,9 @@ body::after {
 
       <div class="cluster open" id="cl-home">
         <button class="cluster-head" onclick="toggleCluster('cl-home')">
-          <span class="cluster-icon">⌂</span>
+          <span class="cluster-icon">&#8962;</span>
           <span class="cluster-label">Home</span>
-          <span class="cluster-arrow">›</span>
+          <span class="cluster-arrow">&#8250;</span>
         </button>
         <div class="cluster-body">
           <button class="nav-item" data-tab="home" onclick="switchTab('home')">
@@ -347,9 +347,9 @@ body::after {
 
       <div class="cluster open" id="cl-sims">
         <button class="cluster-head" onclick="toggleCluster('cl-sims')">
-          <span class="cluster-icon">◎</span>
+          <span class="cluster-icon">&#9678;</span>
           <span class="cluster-label">Simulations</span>
-          <span class="cluster-arrow">›</span>
+          <span class="cluster-arrow">&#8250;</span>
         </button>
         <div class="cluster-body">
           <button class="nav-item hl" data-tab="hohmann" onclick="switchTab('hohmann')">
@@ -374,9 +374,9 @@ body::after {
 
       <div class="cluster open" id="cl-crew">
         <button class="cluster-head" onclick="toggleCluster('cl-crew')">
-          <span class="cluster-icon">⬡</span>
+          <span class="cluster-icon">&#11041;</span>
           <span class="cluster-label">Operational Manual</span>
-          <span class="cluster-arrow">›</span>
+          <span class="cluster-arrow">&#8250;</span>
         </button>
         <div class="cluster-body">
           <button class="nav-item" data-tab="guide" onclick="switchTab('guide')">
@@ -391,6 +391,10 @@ body::after {
           <button class="nav-item" data-tab="crafting" onclick="switchTab('crafting')">
             <span class="nav-label">Crafting</span>
           </button>
+          <button class="nav-item" data-tab="shipdesigner" onclick="switchTab('shipdesigner')">
+            <span class="nav-label">Ship Designer</span>
+            <span class="nav-badge">NEW</span>
+          </button>
           <button class="nav-item" data-tab="behaviors" onclick="switchTab('behaviors')">
             <span class="nav-label">Behaviors</span>
           </button>
@@ -402,9 +406,9 @@ body::after {
 
       <div class="cluster open" id="cl-intel">
         <button class="cluster-head mi-head" onclick="toggleCluster('cl-intel')">
-          <span class="cluster-icon">◈</span>
+          <span class="cluster-icon">&#9672;</span>
           <span class="cluster-label">Market Intel</span>
-          <span class="cluster-arrow">›</span>
+          <span class="cluster-arrow">&#8250;</span>
         </button>
         <div class="cluster-body">
           <button class="nav-item mi" data-tab="intel" onclick="switchTab('intel')">
@@ -428,9 +432,9 @@ body::after {
 
       <div class="cluster" id="cl-solar">
         <button class="cluster-head sol-head" onclick="toggleCluster('cl-solar')">
-          <span class="cluster-icon">☀</span>
+          <span class="cluster-icon">&#9728;</span>
           <span class="cluster-label">Light Study</span>
-          <span class="cluster-arrow">›</span>
+          <span class="cluster-arrow">&#8250;</span>
         </button>
         <div class="cluster-body">
           <button class="nav-item sol" data-tab="solar" onclick="switchTab('solar')">
@@ -450,7 +454,7 @@ body::after {
 
   <div id="content">
     <div id="topbar">
-      <button id="menu-btn" onclick="openSidebar()">☰</button>
+      <button id="menu-btn" onclick="openSidebar()">&#9776;</button>
       <span id="topbar-title">S T E L L A  N O V A</span>
       <span id="topbar-active">Overview</span>
     </div>
@@ -466,8 +470,8 @@ const PAGES = {
   behaviors:'behaviors.html', controls:'controls.html', gravity:'gravity.html',
   selection:'selection.html', explosion:'explosion.html', flare:'flare.html',
   intel:'market-intel.html', pitch:'pitch.html', roadmap:'roadmap.html',
-  business:'business.html',
-  solar:'solar.html',
+  business:'business.html', solar:'solar.html',
+  shipdesigner:'ship-designer.html',
 };
 const LABELS = {
   home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
@@ -475,8 +479,8 @@ const LABELS = {
   behaviors:'Behaviors', controls:'Controls', gravity:'Gravity Sim',
   selection:'Selection', explosion:'Explosion', flare:'Engine Propulsion Effects',
   intel:'Investor Case Studies', pitch:'Pitch Deck', roadmap:'Roadmap',
-  business:'Revenue Model',
-  solar:'Solar Transit Study',
+  business:'Revenue Model', solar:'Solar Transit Study',
+  shipdesigner:'Ship Designer',
 };
 
 let activeTab = null;
