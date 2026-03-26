@@ -282,6 +282,15 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
 .cluster-head.sol-head .cluster-icon { opacity: 1; color: #f5c842; }
 .cluster.open .cluster-head.sol-head .cluster-label { color: #f5c842; }
 
+/* Material Lab accent */
+.nav-item.mat.active { background: rgba(184,150,255,0.06); }
+.nav-item.mat.active::before { background: #b896ff; box-shadow: 0 0 7px #b896ff; }
+.nav-item.mat.active .nav-label { color: #b896ff; }
+.nav-item.mat:hover::before { background: #9070d0; }
+.cluster-head.mat-head .cluster-icon { opacity: 1; color: #b896ff; }
+.cluster.open .cluster-head.mat-head .cluster-label { color: #b896ff; }
+
+
 /* LinkedIn footer button */
 #sb-linkedin {
   display: block;
@@ -444,6 +453,20 @@ body::after {
         </div>
       </div>
 
+      <div class="cluster" id="cl-matlab">
+        <button class="cluster-head mat-head" onclick="toggleCluster('cl-matlab')">
+          <span class="cluster-icon">&#9670;</span>
+          <span class="cluster-label">Material Lab</span>
+          <span class="cluster-arrow">&#8250;</span>
+        </button>
+        <div class="cluster-body">
+          <button class="nav-item mat" data-tab="matlab" onclick="switchTab('matlab')">
+            <span class="nav-label">PBR Material Studio</span>
+            <span class="nav-badge">TOOL</span>
+          </button>
+        </div>
+      </div>
+
     </div>
 
     <div id="sb-footer">
@@ -472,6 +495,7 @@ const PAGES = {
   intel:'market-intel.html', pitch:'pitch.html', roadmap:'roadmap.html',
   business:'business.html', solar:'solar.html',
   shipdesigner:'ship-designer.html',
+  matlab:'material-lab.html',
 };
 const LABELS = {
   home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
@@ -481,6 +505,7 @@ const LABELS = {
   intel:'Investor Case Studies', pitch:'Pitch Deck', roadmap:'Roadmap',
   business:'Revenue Model', solar:'Solar Transit Study',
   shipdesigner:'Ship Designer',
+  matlab:'PBR Material Studio',
 };
 
 let activeTab = null;

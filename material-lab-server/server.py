@@ -1,13 +1,16 @@
 """
 Material Lab — local inference server.
 BiRefNet segmentation · Depth Anything V2 · Normal maps · PBR estimation.
+Also serves the static site so everything runs on one origin.
 """
-import io, base64, logging
+import io, base64, logging, os
 import numpy as np
+from pathlib import Path
 from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from scipy.ndimage import sobel, gaussian_filter, uniform_filter
 import torch, uvicorn
 
@@ -130,6 +133,16 @@ async def pbr(file: UploadFile = File(...)):
 
 @app.get("/health")
 async def health(): return {"status": "ok", "cuda": torch.cuda.is_available()}
+
+# ── Static file serving ──
+# Serves the repo root so the full site is accessible at http://localhost:8787/
+# API routes above take priority over static files.
+SITE_ROOT = Path(__file__).resolve().parent.parent
+if (SITE_ROOT / "stella-nova").is_dir():
+    app.mount("/", StaticFiles(directory=str(SITE_ROOT), html=True), name="site")
+    log.info(f"Serving static site from {SITE_ROOT}")
+else:
+    log.warning(f"No stella-nova/ found in {SITE_ROOT} — static serving disabled")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8787)
