@@ -404,6 +404,10 @@ body::after {
             <span class="nav-label">Ship Designer</span>
             <span class="nav-badge">NEW</span>
           </button>
+          <button class="nav-item" data-tab="flagdesigner" onclick="switchTab('flagdesigner')">
+            <span class="nav-label">Flag Designer</span>
+            <span class="nav-badge">NEW</span>
+          </button>
           <button class="nav-item" data-tab="behaviors" onclick="switchTab('behaviors')">
             <span class="nav-label">Behaviors</span>
           </button>
@@ -495,6 +499,7 @@ const PAGES = {
   intel:'market-intel.html', pitch:'pitch.html', roadmap:'roadmap.html',
   business:'business.html', solar:'solar.html',
   shipdesigner:'ship-designer.html',
+  flagdesigner:'flag-designer.html',
   matlab:'material-lab.html',
 };
 const LABELS = {
@@ -505,6 +510,7 @@ const LABELS = {
   intel:'Investor Case Studies', pitch:'Pitch Deck', roadmap:'Roadmap',
   business:'Revenue Model', solar:'Solar Transit Study',
   shipdesigner:'Ship Designer',
+  flagdesigner:'Flag Designer',
   matlab:'PBR Material Studio',
 };
 
@@ -518,6 +524,7 @@ function switchTab(id) {
   wrap.innerHTML = '';
   var iframe = document.createElement('iframe');
   iframe.src = PAGES[id] || 'home.html';
+  iframe.setAttribute('allow', 'downloads');
   wrap.appendChild(iframe);
   var ta = document.getElementById('topbar-active');
   if (ta) ta.textContent = LABELS[id] || id;

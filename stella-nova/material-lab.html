@@ -7,312 +7,565 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg:        #0a0c11;
-  --panel:     #0c0f16;
-  --card:      #0e1219;
-  --border:    rgba(150,200,255,0.07);
-  --border-b:  rgba(150,200,255,0.16);
-  --blue:      #96c8ff;
-  --blue-dim:  #4a7aaa;
-  --yellow:    #ffc832;
-  --orange:    #ff7b00;
-  --green:     #64c864;
-  --red:       #ff4a4a;
-  --purple:    #b896ff;
-  --purple-dim:#7a5ebd;
-  --cyan:      #00d4b4;
-  --text:      #c0cfe0;
-  --text-dim:  #5a7090;
-  --text-faint:#2a3850;
+  --bg: #0a0c11;
+  --panel: #0c0f16;
+  --card: #0e1219;
+  --border: rgba(150,200,255,0.07);
+  --border-b: rgba(150,200,255,0.16);
+  --blue: #96c8ff;
+  --blue-dim: #4a7aaa;
+  --yellow: #ffc832;
+  --orange: #ff7b00;
+  --green: #64c864;
+  --red: #ff4a4a;
+  --purple: #b896ff;
+  --purple-dim: #7a5ebd;
+  --cyan: #00d4b4;
+  --text: #c0cfe0;
+  --text-dim: #5a7090;
+  --text-faint: #2a3850;
 }
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;background:var(--bg);overflow:hidden}
-body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
 
-.app{display:flex;flex-direction:column;height:100%;overflow:hidden}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; background: var(--bg); overflow: hidden; }
+body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-font-smoothing: antialiased; }
 
-/* ── Header ── */
-.page-header{
-  display:flex;align-items:center;gap:16px;
-  padding:18px 24px 14px;
-  border-bottom:1px solid var(--border-b);
-  flex-shrink:0;
-  background:linear-gradient(180deg,rgba(184,150,255,0.03) 0%,transparent 100%);
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
-.page-title{
-  font-family:'Cormorant Garamond',serif;
-  font-weight:300;font-size:1.5rem;
-  letter-spacing:0.14em;color:#eef2fa;line-height:1;
-}
-.page-title em{font-style:italic;color:var(--purple)}
-.page-tag{
-  font-size:0.5rem;letter-spacing:0.18em;
-  text-transform:uppercase;color:var(--text-faint);
-  padding:3px 8px;border:1px solid var(--border);
-}
-.header-sep{width:1px;height:22px;background:var(--border-b);flex-shrink:0}
-.header-right{margin-left:auto;display:flex;align-items:center;gap:10px}
 
-/* ── Buttons ── */
-.btn{
-  padding:7px 16px;border:1px solid var(--border-b);
-  background:transparent;color:var(--text-dim);
-  font-family:inherit;font-size:0.62rem;
-  letter-spacing:0.1em;text-transform:uppercase;
-  cursor:pointer;white-space:nowrap;transition:all 0.18s;
+/* ═══ TOP BAR ═══ */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-b);
+  flex-shrink: 0;
+  background: var(--panel);
 }
-.btn:hover{color:var(--blue);border-color:var(--blue-dim)}
-.btn:disabled{opacity:0.25;cursor:default;pointer-events:none}
-.btn:active:not(:disabled){transform:scale(0.97)}
-.btn.primary{border-color:var(--purple-dim);color:var(--purple)}
-.btn.primary:hover{background:rgba(184,150,255,0.08);border-color:var(--purple)}
-.btn.go{border-color:rgba(100,200,100,0.4);color:var(--green)}
-.btn.go:hover{background:rgba(100,200,100,0.08);border-color:var(--green)}
-.btn.danger{border-color:rgba(255,74,74,0.3);color:var(--text-faint)}
-.btn.danger:hover{color:var(--red);border-color:var(--red);background:rgba(255,74,74,0.06)}
 
-.workspace{flex:1;display:flex;overflow:hidden}
+.topbar-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 300;
+  font-size: 1.2rem;
+  letter-spacing: 0.12em;
+  color: #eef2fa;
+  margin-right: 8px;
+}
+.topbar-title em { font-style: italic; color: var(--purple); }
 
-/* ── Left: Maps ── */
-.maps-panel{
-  width:400px;min-width:320px;
-  border-right:1px solid var(--border-b);
-  display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;
-  background:var(--panel);
+.btn {
+  padding: 5px 12px;
+  border: 1px solid var(--border-b);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
 }
-.section-head{
-  padding:14px 18px 10px;border-bottom:1px solid var(--border);
-  flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
-}
-.section-head h3{
-  font-size:0.58rem;font-weight:700;letter-spacing:0.22em;
-  text-transform:uppercase;color:var(--text-dim);
-}
-.section-head .pill{
-  font-size:0.44rem;letter-spacing:0.12em;text-transform:uppercase;
-  padding:2px 7px;border:1px solid var(--border);color:var(--text-faint);
-}
-.action-bar{
-  display:flex;gap:6px;padding:10px 14px;
-  border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;
-}
-.maps-grid{
-  flex:1;overflow-y:auto;padding:10px 12px;
-  display:grid;grid-template-columns:1fr 1fr;gap:8px;
-  align-content:start;
-  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
-}
-.maps-grid::-webkit-scrollbar{width:3px}
-.maps-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.btn:hover { color: var(--blue); border-color: var(--blue-dim); }
+.btn:disabled { opacity: 0.2; cursor: default; pointer-events: none; }
+.btn.purple { border-color: var(--purple-dim); color: var(--purple); }
+.btn.purple:hover { background: rgba(184,150,255,0.08); border-color: var(--purple); }
+.btn.green { border-color: rgba(100,200,100,0.4); color: var(--green); }
+.btn.green:hover { background: rgba(100,200,100,0.08); }
+.btn.yellow { border-color: rgba(255,200,50,0.3); color: var(--yellow); }
+.btn.yellow:hover { background: rgba(255,200,50,0.06); }
+.btn.red { border-color: rgba(255,74,74,0.25); color: var(--text-faint); }
+.btn.red:hover { color: var(--red); border-color: var(--red); }
 
-/* Upload zone */
-.upload-zone{
-  grid-column:1/-1;border:1px dashed var(--border-b);
-  padding:28px 16px;text-align:center;cursor:pointer;
-  transition:all 0.22s;background:rgba(184,150,255,0.015);
-}
-.upload-zone:hover{border-color:var(--purple-dim);background:rgba(184,150,255,0.04)}
-.upload-zone.dragging{border-color:var(--purple);background:rgba(184,150,255,0.06)}
-.upload-zone.has-image{padding:8px;border-style:solid}
-.upload-zone.has-image .upload-prompt{display:none}
-.upload-zone .preview-img{width:100%;display:none;image-rendering:auto;border:1px solid var(--border)}
-.upload-zone.has-image .preview-img{display:block}
-.upload-icon{font-size:1.4rem;color:var(--text-faint);margin-bottom:6px;transition:color 0.2s}
-.upload-zone:hover .upload-icon{color:var(--purple-dim)}
-.upload-text{font-size:0.58rem;color:var(--text-dim);letter-spacing:0.1em}
-.upload-sub{font-size:0.48rem;color:var(--text-faint);margin-top:4px;letter-spacing:0.08em}
+.topbar-sep { width: 1px; height: 18px; background: var(--border-b); flex-shrink: 0; }
+.topbar-spacer { flex: 1; }
 
-/* Map card */
-.map-card{
-  background:var(--card);border:1px solid var(--border);
-  overflow:hidden;transition:border-color 0.2s;
+.server-label {
+  font-size: 0.44rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
-.map-card:hover{border-color:var(--border-b)}
-.map-card canvas{width:100%;aspect-ratio:1;display:block;background:#060810}
-.map-card .card-footer{
-  padding:5px 8px;font-size:0.5rem;font-weight:500;
-  letter-spacing:0.14em;text-transform:uppercase;
-  border-top:1px solid var(--border);
-  display:flex;justify-content:space-between;align-items:center;
+.server-input {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.46rem;
+  padding: 2px 7px;
+  width: 160px;
 }
-.map-card .card-label{display:flex;align-items:center;gap:5px}
-.map-card .card-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;opacity:0.7}
-.map-card .card-dl{
-  font-size:0.46rem;color:var(--text-faint);cursor:pointer;
-  text-decoration:none;transition:color 0.15s;letter-spacing:0.08em;
-}
-.map-card .card-dl:hover{color:var(--purple)}
-.map-card.empty canvas{opacity:0.15}
+.server-input:focus { outline: none; border-color: var(--purple-dim); color: var(--text); }
 
-/* ── Right: Renderer ── */
-.render-panel{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+/* ═══ CONTROLS STRIP ═══ */
+.ctrl-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.ctrl-row::-webkit-scrollbar { display: none; }
 
-.ctrl-strip{
-  display:flex;align-items:center;gap:14px;
-  padding:10px 16px;border-bottom:1px solid var(--border);
-  flex-shrink:0;overflow-x:auto;scrollbar-width:none;
+.ctrl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
-.ctrl-strip::-webkit-scrollbar{display:none}
-.ctrl-strip-2{
-  display:flex;align-items:center;gap:14px;
-  padding:6px 16px 8px;border-bottom:1px solid var(--border);
-  flex-shrink:0;overflow-x:auto;scrollbar-width:none;
+.ctrl label {
+  font-size: 0.46rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
-.ctrl-strip-2::-webkit-scrollbar{display:none}
-.ctrl{display:flex;align-items:center;gap:5px;white-space:nowrap}
-.ctrl label{font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint)}
-.ctrl input[type=range]{
-  width:80px;height:3px;-webkit-appearance:none;appearance:none;
-  background:var(--border-b);outline:none;cursor:pointer;
+.ctrl input[type=range] {
+  width: 72px;
+  height: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--border-b);
+  outline: none;
+  cursor: pointer;
 }
-.ctrl input[type=range]::-webkit-slider-thumb{
-  -webkit-appearance:none;width:10px;height:10px;border-radius:50%;
-  background:var(--purple);cursor:pointer;border:none;
+.ctrl input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--purple);
+  border: none;
 }
-.ctrl input[type=range]::-moz-range-thumb{
-  width:10px;height:10px;border-radius:50%;
-  background:var(--purple);cursor:pointer;border:none;
+.ctrl input[type=range].yl::-webkit-slider-thumb { background: var(--yellow); }
+.ctrl select {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.46rem;
+  padding: 2px 5px;
 }
-.ctrl select{
-  background:var(--card);border:1px solid var(--border);
-  color:var(--text-dim);font-family:inherit;font-size:0.52rem;
-  padding:3px 6px;cursor:pointer;
-}
-.ctrl-sep{width:1px;height:18px;background:var(--border);flex-shrink:0}
+.ctrl-sep { width: 1px; height: 16px; background: var(--border); flex-shrink: 0; }
 
-.viewport{flex:1;position:relative;overflow:hidden;background:#040608}
-.viewport canvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair}
-
-.viewport-overlay{
-  position:absolute;inset:0;background:rgba(10,12,17,0.88);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  z-index:50;backdrop-filter:blur(6px);transition:opacity 0.3s;
+/* Light Sphere Widget */
+.light-sphere-wrap {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
-.viewport-overlay.hidden{opacity:0;pointer-events:none}
-.spinner{
-  width:28px;height:28px;border:2px solid var(--border);
-  border-top-color:var(--purple);border-radius:50%;
-  animation:spin 0.7s linear infinite;
+.light-sphere {
+  width: 90px; height: 90px;
+  border-radius: 50%;
+  cursor: crosshair;
+  flex-shrink: 0;
+  border: 1px solid var(--border-b);
+  position: relative;
 }
-@keyframes spin{to{transform:rotate(360deg)}}
-.overlay-text{margin-top:12px;font-size:0.58rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-dim)}
-.overlay-sub{margin-top:4px;font-size:0.46rem;letter-spacing:0.08em;color:var(--text-faint)}
-
-.empty-state{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
-.empty-state.hidden{display:none}
-.empty-glyph{font-size:2.4rem;color:var(--text-faint);opacity:0.3;margin-bottom:10px}
-.empty-msg{font-size:0.58rem;letter-spacing:0.12em;color:var(--text-faint);text-transform:uppercase}
-
-/* ── Status Bar ── */
-.statusbar{
-  display:flex;align-items:center;gap:10px;
-  padding:5px 18px;border-top:1px solid var(--border);
-  flex-shrink:0;font-size:0.5rem;letter-spacing:0.1em;
-  color:var(--text-faint);background:var(--panel);
+.light-sphere canvas {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  display: block;
 }
-.status-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;transition:all 0.3s}
-.status-dot.ok{background:var(--green);box-shadow:0 0 5px var(--green)}
-.status-dot.busy{background:var(--yellow);box-shadow:0 0 5px var(--yellow);animation:pulse 1s ease infinite}
-.status-dot.err{background:var(--red);box-shadow:0 0 5px var(--red)}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.25}}
-.status-sep{width:1px;height:10px;background:var(--border);flex-shrink:0}
-
-.server-input{
-  background:var(--card);border:1px solid var(--border);
-  color:var(--text-dim);font-family:inherit;font-size:0.5rem;
-  padding:2px 8px;width:175px;letter-spacing:0.04em;transition:border-color 0.2s;
+.light-controls-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
 }
-.server-input:focus{outline:none;border-color:var(--purple-dim);color:var(--text)}
+.light-controls-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.light-readout {
+  font-size: 0.42rem;
+  color: var(--text-faint);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
 
-@media(max-width:860px){
-  .workspace{flex-direction:column}
-  .maps-panel{width:100%;min-width:0;max-height:42%;border-right:none;border-bottom:1px solid var(--border-b)}
-  .maps-grid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr))}
-  .page-header{padding:12px 16px 10px;flex-wrap:wrap}
-  .ctrl-strip,.ctrl-strip-2{padding:6px 12px}
+/* HDRI row */
+.hdri-row {
+  background: rgba(255,200,50,0.012);
+}
+.hdri-preview {
+  width: 48px; height: 16px;
+  border: 1px solid var(--border);
+  background: #111;
+  cursor: pointer;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.mode-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.mode-toggle button {
+  padding: 2px 9px;
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-family: inherit;
+  font-size: 0.44rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mode-toggle button.active {
+  background: rgba(255,200,50,0.12);
+  color: var(--yellow);
+}
+
+/* ═══ VIEWPORT ═══ */
+.viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: #040608;
+  min-height: 0;
+}
+.viewport canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+/* Map inspection overlay (when viewing a single map) */
+.map-inspect {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0c11;
+  z-index: 20;
+}
+.map-inspect.hidden { display: none; }
+.map-inspect canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: auto;
+}
+.map-inspect { padding: 16px; }
+
+/* Upload prompt */
+.upload-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: background 0.2s;
+}
+.upload-prompt:hover { background: rgba(184,150,255,0.03); }
+.upload-prompt.hidden { display: none; }
+.upload-glyph { font-size: 3rem; color: var(--text-faint); opacity: 0.25; margin-bottom: 12px; }
+.upload-msg { font-size: 0.6rem; letter-spacing: 0.12em; color: var(--text-faint); text-transform: uppercase; }
+.upload-sub { font-size: 0.46rem; color: var(--text-faint); margin-top: 4px; opacity: 0.5; }
+
+/* Progress */
+.progress-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(10,12,17,0.88);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+  backdrop-filter: blur(6px);
+  transition: opacity 0.3s;
+}
+.progress-overlay.hidden { opacity: 0; pointer-events: none; }
+.spinner {
+  width: 28px; height: 28px;
+  border: 2px solid var(--border);
+  border-top-color: var(--purple);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.progress-text {
+  margin-top: 12px;
+  font-size: 0.55rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* ═══ BOTTOM MAP STRIP ═══ */
+.map-strip {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--border-b);
+  flex-shrink: 0;
+  background: var(--panel);
+  overflow-x: auto;
+  scrollbar-width: none;
+  height: 110px;
+}
+.map-strip::-webkit-scrollbar { display: none; }
+
+.map-thumb {
+  flex: 0 0 auto;
+  width: 110px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+.map-thumb:hover { background: rgba(150,200,255,0.03); }
+.map-thumb.active { background: rgba(184,150,255,0.06); }
+.map-thumb.active::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--purple);
+}
+.map-thumb.render-tab { }
+.map-thumb.render-tab.active::after { background: var(--yellow); }
+
+.map-thumb canvas {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  background: #060810;
+  display: block;
+}
+.map-thumb.empty canvas { opacity: 0.1; }
+
+.map-thumb-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 3px 6px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.map-thumb-label {
+  font-size: 0.44rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.map-thumb .dl-btn {
+  font-size: 0.48rem;
+  color: var(--purple-dim);
+  cursor: pointer;
+  text-decoration: none;
+  padding: 1px 5px;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  background: transparent;
+  font-family: inherit;
+}
+.map-thumb .dl-btn:hover {
+  color: var(--purple);
+  border-color: var(--purple-dim);
+  background: rgba(184,150,255,0.08);
+}
+.map-thumb .dl-btn.disabled {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ═══ STATUS BAR ═══ */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+  font-size: 0.46rem;
+  letter-spacing: 0.06em;
+  color: var(--text-faint);
+  background: var(--panel);
+}
+.status-dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+.status-dot.ok { background: var(--green); box-shadow: 0 0 5px var(--green); }
+.status-dot.busy { background: var(--yellow); box-shadow: 0 0 5px var(--yellow); animation: pulse 1s ease infinite; }
+.status-dot.err { background: var(--red); box-shadow: 0 0 5px var(--red); }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+.status-sep { width: 1px; height: 10px; background: var(--border); }
+
+/* ═══ DEPTH EDITOR ═══ */
+.de-overlay {
+  position: fixed; inset: 0; z-index: 1000;
+  background: rgba(10,12,17,0.95);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+.de-overlay.hidden { display: none; }
+.de-bar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border-b);
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.de-bar .ctrl label { color: var(--purple); }
+.de-wrap { border: 1px solid var(--border-b); background: #000; cursor: crosshair; }
+.de-wrap canvas { display: block; max-width: 90vw; max-height: 70vh; }
+.de-footer { display: flex; gap: 8px; margin-top: 10px; }
+.de-val-prev {
+  display: inline-block; width: 12px; height: 12px;
+  border: 1px solid var(--border); vertical-align: middle; margin-left: 3px;
 }
 </style>
 </head>
 <body>
 <div class="app">
 
-  <div class="page-header">
-    <div class="page-title"><em>Material</em> Lab</div>
-    <span class="page-tag">PBR</span>
-    <div class="header-sep"></div>
-    <span style="font-size:0.5rem;letter-spacing:0.1em;color:var(--text-faint);text-transform:uppercase">
-      BiRefNet &middot; Depth Anything V2 &middot; Cook-Torrance
-    </span>
-    <div class="header-right">
-      <label style="font-size:0.48rem;letter-spacing:0.08em;color:var(--text-faint);text-transform:uppercase;display:flex;align-items:center;gap:6px">
-        Server
-        <input type="text" id="server-url" value="/api" class="server-input">
-      </label>
-    </div>
+  <!-- ═══ TOP BAR ═══ -->
+  <div class="topbar">
+    <div class="topbar-title"><em>Material</em> Lab</div>
+    <div class="topbar-sep"></div>
+    <button class="btn purple" id="btn-upload" onclick="document.getElementById('file-input').click()">Upload</button>
+    <input type="file" id="file-input" accept="image/*" style="display:none">
+    <div class="topbar-sep"></div>
+    <button class="btn purple" id="btn-segment" disabled onclick="doSegment()">Segment</button>
+    <button class="btn purple" id="btn-depth" disabled onclick="doDepth()">Depth</button>
+    <button class="btn purple" id="btn-normals" disabled onclick="doNormals()">Normals</button>
+    <button class="btn green" id="btn-pbr" disabled onclick="doPBR()">Full PBR</button>
+    <div class="topbar-sep"></div>
+    <button class="btn" id="btn-editdepth" disabled onclick="openDepthEditor()">Edit Depth</button>
+    <button class="btn" id="btn-nfd" disabled onclick="doNFD()">N&#8592;D</button>
+    <button class="btn red" onclick="clearAll()">Clear</button>
+    <div class="topbar-spacer"></div>
+    <label class="server-label">Server <input type="text" id="server-url" value="http://localhost:8787" class="server-input"></label>
   </div>
 
-  <div class="workspace">
-
-    <div class="maps-panel">
-      <div class="section-head">
-        <h3>Material Maps</h3>
-        <span class="pill" id="img-info">&mdash;</span>
-      </div>
-      <div class="action-bar">
-        <button class="btn primary" id="btn-segment" disabled onclick="runSegment()">Segment</button>
-        <button class="btn primary" id="btn-depth"   disabled onclick="runDepth()">Depth</button>
-        <button class="btn primary" id="btn-normals" disabled onclick="runNormals()">Normals</button>
-        <button class="btn go"      id="btn-pbr"     disabled onclick="runPBR()">Full PBR</button>
-        <div style="flex:1"></div>
-        <button class="btn danger" onclick="clearAll()">Clear</button>
-      </div>
-      <div class="maps-grid" id="maps-grid">
-        <div class="upload-zone" id="upload-zone"
-             onclick="document.getElementById('file-input').click()"
-             ondragover="event.preventDefault();this.classList.add('dragging')"
-             ondragleave="this.classList.remove('dragging')"
-             ondrop="handleDrop(event)">
-          <div class="upload-prompt">
-            <div class="upload-icon">&#9670;</div>
-            <div class="upload-text">Drop image or click to upload</div>
-            <div class="upload-sub">PNG &middot; JPG &middot; WEBP</div>
-          </div>
-          <img class="preview-img" id="preview-img">
-        </div>
-        <input type="file" id="file-input" accept="image/*" style="display:none" onchange="handleFile(this.files[0])">
-      </div>
+  <!-- ═══ LIGHT & MATERIAL CONTROLS ═══ -->
+  <div class="light-sphere-wrap">
+    <!-- Draggable light sphere -->
+    <div class="light-sphere" id="light-sphere">
+      <canvas id="sphere-canvas" width="180" height="180"></canvas>
     </div>
+    <!-- Hidden inputs for compatibility -->
+    <input type="hidden" id="light-x" value="1.5">
+    <input type="hidden" id="light-y" value="1.5">
+    <input type="hidden" id="light-z" value="2.0">
 
-    <div class="render-panel">
-      <div class="ctrl-strip">
-        <div class="ctrl"><label>Light X</label><input type="range" id="light-x" min="-3" max="3" step="0.05" value="1.5" oninput="scheduleRender()"></div>
-        <div class="ctrl"><label>Light Y</label><input type="range" id="light-y" min="-3" max="3" step="0.05" value="1.5" oninput="scheduleRender()"></div>
-        <div class="ctrl"><label>Light Z</label><input type="range" id="light-z" min="0.1" max="5" step="0.05" value="2.0" oninput="scheduleRender()"></div>
-        <div class="ctrl-sep"></div>
-        <div class="ctrl"><label>Cone&deg;</label><input type="range" id="light-cone" min="5" max="180" step="1" value="90" oninput="scheduleRender()"></div>
-        <div class="ctrl"><label>Intensity</label><input type="range" id="light-int" min="0.1" max="5" step="0.05" value="1.8" oninput="scheduleRender()"></div>
+    <div class="light-controls-col">
+      <div class="light-controls-row">
+        <div class="ctrl"><label>Intensity</label><input type="range" id="light-int" min="0.0" max="10" step="0.05" value="1.8" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Cone</label><input type="range" id="light-cone" min="1" max="180" step="1" value="90" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Distance</label><input type="range" id="light-dist" min="0.5" max="5" step="0.05" value="2.0" oninput="updateLightFromSphere();schedRender()"></div>
+        <span class="light-readout" id="light-readout">X:1.50 Y:1.50 Z:2.00</span>
       </div>
-      <div class="ctrl-strip-2">
-        <div class="ctrl"><label>Roughness &times;</label><input type="range" id="rough-mult" min="0" max="2" step="0.05" value="1.0" oninput="scheduleRender()"></div>
-        <div class="ctrl"><label>Metallic &times;</label><input type="range" id="metal-mult" min="0" max="2" step="0.05" value="1.0" oninput="scheduleRender()"></div>
-        <div class="ctrl"><label>Ambient</label><input type="range" id="ambient" min="0" max="0.5" step="0.01" value="0.08" oninput="scheduleRender()"></div>
-        <div class="ctrl-sep"></div>
-        <div class="ctrl"><label>Normal Str</label><input type="range" id="norm-str" min="0" max="3" step="0.05" value="1.0" oninput="scheduleRender()"></div>
-        <div class="ctrl-sep"></div>
-        <div class="ctrl"><label>BG</label><select id="bg-mode" onchange="scheduleRender()"><option value="0">Checker</option><option value="1">Black</option><option value="2">Gray 18%</option></select></div>
-      </div>
-      <div class="viewport" id="viewport">
-        <canvas id="gl-canvas"></canvas>
-        <div class="empty-state" id="empty-state"><div class="empty-glyph">&#9670;</div><div class="empty-msg">Upload an image to begin</div></div>
-        <div class="viewport-overlay hidden" id="progress">
-          <div class="spinner"></div>
-          <div class="overlay-text" id="progress-text">Processing&hellip;</div>
-          <div class="overlay-sub">Models load on first run</div>
-        </div>
+      <div class="light-controls-row">
+        <div class="ctrl"><label>Rough&#215;</label><input type="range" id="rough-mult" min="0" max="2" step="0.05" value="1.0" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Metal&#215;</label><input type="range" id="metal-mult" min="0" max="2" step="0.05" value="1.0" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Ambient</label><input type="range" id="ambient" min="0" max="0.5" step="0.01" value="0.08" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Norm Str</label><input type="range" id="norm-str" min="0" max="3" step="0.05" value="1.0" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Depth Smooth</label><input type="range" id="depth-smooth" min="0.1" max="8" step="0.1" value="1.0"></div>
+        <div class="ctrl"><label>BG</label><select id="bg-mode" onchange="schedRender()"><option value="0">Checker</option><option value="1">Black</option><option value="2">Gray 18%</option></select></div>
       </div>
     </div>
   </div>
 
+  <!-- ═══ HDRI ROW ═══ -->
+  <div class="ctrl-row hdri-row">
+    <button class="btn yellow" onclick="document.getElementById('hdri-input').click()">Load HDRI</button>
+    <input type="file" id="hdri-input" accept=".hdr,.png,.jpg,.jpeg,.webp" style="display:none">
+    <img class="hdri-preview" id="hdri-preview" onclick="document.getElementById('hdri-input').click()">
+    <div class="ctrl"><label style="color:var(--yellow);opacity:0.7">Rotation</label><input type="range" class="yl" id="env-rot" min="0" max="6.283" step="0.02" value="0" oninput="schedRender()"></div>
+    <div class="ctrl"><label style="color:var(--yellow);opacity:0.7">Exposure</label><input type="range" class="yl" id="env-exp" min="0.1" max="8" step="0.05" value="1.0" oninput="schedRender()"></div>
+    <div class="ctrl-sep"></div>
+    <div class="mode-toggle" id="mode-toggle">
+      <button class="active" data-mode="0" onclick="setLightMode(0)">Point</button>
+      <button data-mode="1" onclick="setLightMode(1)">IBL</button>
+      <button data-mode="2" onclick="setLightMode(2)">Both</button>
+    </div>
+  </div>
+
+  <!-- ═══ VIEWPORT ═══ -->
+  <div class="viewport" id="viewport">
+    <canvas id="gl-canvas"></canvas>
+
+    <!-- Map inspection layer -->
+    <div class="map-inspect hidden" id="map-inspect">
+      <canvas id="inspect-canvas"></canvas>
+    </div>
+
+    <!-- Upload prompt -->
+    <div class="upload-prompt" id="upload-prompt" onclick="document.getElementById('file-input').click()">
+      <div class="upload-glyph">&#9670;</div>
+      <div class="upload-msg">Drop image or click to upload</div>
+      <div class="upload-sub">PNG · JPG · WEBP</div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-overlay hidden" id="progress">
+      <div class="spinner"></div>
+      <div class="progress-text" id="progress-text">Processing...</div>
+    </div>
+  </div>
+
+  <!-- ═══ MAP THUMBNAIL STRIP ═══ -->
+  <div class="map-strip" id="map-strip">
+    <!-- "Render" tab -->
+    <div class="map-thumb render-tab active" id="tab-render" onclick="showRender()">
+      <canvas width="96" height="72" id="thumb-render"></canvas>
+      <div class="map-thumb-footer">
+        <span class="map-thumb-label" style="color:var(--yellow)">Render</span>
+        <button class="dl-btn disabled">&#8681;</button>
+      </div>
+    </div>
+    <!-- Map tabs built by JS -->
+  </div>
+
+  <!-- ═══ DEPTH EDITOR ═══ -->
+  <div class="de-overlay hidden" id="de-overlay">
+    <div class="de-bar">
+      <div class="ctrl"><label>Brush</label><input type="range" id="de-brush" min="2" max="80" value="20"></div>
+      <div class="ctrl"><label>Opacity</label><input type="range" id="de-opacity" min="0.01" max="1" step="0.01" value="0.15"></div>
+      <div class="ctrl"><label>Value</label>
+        <input type="range" id="de-value" min="0" max="255" step="1" value="255"
+               oninput="document.getElementById('de-vprev').style.background='rgb('+this.value+','+this.value+','+this.value+')'">
+        <span id="de-vprev" class="de-val-prev" style="background:#fff"></span>
+      </div>
+      <div class="ctrl-sep"></div>
+      <button class="btn" onclick="deBlur()">Blur</button>
+      <button class="btn red" onclick="deReset()">Reset</button>
+    </div>
+    <div class="de-wrap"><canvas id="de-canvas"></canvas></div>
+    <div class="de-footer">
+      <button class="btn green" onclick="deApply()">Apply &amp; Close</button>
+      <button class="btn" onclick="deCancel()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═══ STATUS BAR ═══ -->
   <div class="statusbar">
     <div class="status-dot ok" id="status-dot"></div>
     <span id="status-text">Ready</span>
@@ -321,326 +574,1067 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
   </div>
 </div>
 
-<!-- ═══ VERTEX SHADER ═══ -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- VERTEX SHADER                                          -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <script id="vs-quad" type="x-shader/x-vertex">
 attribute vec2 aPos;
 varying vec2 vUV;
-void main(){
+void main() {
   vUV = aPos * 0.5 + 0.5;
   vUV.y = 1.0 - vUV.y;
   gl_Position = vec4(aPos, 0.0, 1.0);
 }
 </script>
 
-<!-- ═══ FRAGMENT SHADER ═══ -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- FRAGMENT SHADER                                        -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <script id="fs-pbr" type="x-shader/x-fragment">
 precision highp float;
 varying vec2 vUV;
 
-uniform sampler2D uAlbedo;
-uniform sampler2D uNormal;
-uniform sampler2D uRoughness;
-uniform sampler2D uMetallic;
-uniform sampler2D uAO;
-uniform sampler2D uMask;
-
-uniform vec3  uLightPos;
-uniform float uLightCone;
-uniform float uLightIntensity;
-uniform vec3  uLightDir;
-uniform float uAmbient;
-uniform float uRoughMult;
-uniform float uMetalMult;
-uniform float uNormStr;
-uniform int   uBgMode;
+uniform sampler2D uAlbedo, uNormal, uRoughness, uMetallic, uAO, uMask, uEnvMap;
+uniform vec3  uLightPos, uLightDir;
+uniform float uLightCone, uLightIntensity, uAmbient;
+uniform float uRoughMult, uMetalMult, uNormStr, uAspect, uImgAspect;
+uniform float uEnvRot, uEnvExp;
 uniform vec2  uResolution;
-uniform float uAspect;
+uniform int   uBgMode, uLightMode;
+uniform bool  uHasAlbedo, uHasNormal, uHasRoughness, uHasMetallic, uHasAO, uHasMask, uHasEnv;
 
-uniform bool uHasAlbedo;
-uniform bool uHasNormal;
-uniform bool uHasRoughness;
-uniform bool uHasMetallic;
-uniform bool uHasAO;
-uniform bool uHasMask;
+const float PI  = 3.14159265359;
+const float TAU = 6.28318530718;
 
-const float PI = 3.14159265359;
-
-float D_GGX(float NdotH, float a){
-  float a2 = a*a;
-  float d = NdotH*NdotH*(a2-1.0)+1.0;
-  return a2/(PI*d*d+1e-7);
-}
-vec3 F_Schlick(float cosT, vec3 F0){
-  return F0+(1.0-F0)*pow(clamp(1.0-cosT,0.0,1.0),5.0);
-}
-float G1(float NdotX, float k){ return NdotX/(NdotX*(1.0-k)+k); }
-float G_Smith(float NdotV, float NdotL, float r){
-  float k=(r+1.0); k=k*k/8.0;
-  return G1(NdotV,k)*G1(NdotL,k);
+float D_GGX(float NdH, float a) {
+  float a2 = a * a;
+  float d  = NdH * NdH * (a2 - 1.0) + 1.0;
+  return a2 / (PI * d * d + 1e-7);
 }
 
-vec3 checker(vec2 uv){
-  float s=24.0;
-  float c=mod(floor(uv.x*s)+floor(uv.y*s),2.0);
-  return mix(vec3(0.10,0.10,0.12),vec3(0.16,0.16,0.18),c);
+vec3 F_Schlick(float cosT, vec3 F0) {
+  return F0 + (1.0 - F0) * pow(clamp(1.0 - cosT, 0.0, 1.0), 5.0);
 }
 
-void main(){
+float G1(float x, float k) { return x / (x * (1.0 - k) + k); }
+
+float G_Smith(float NdV, float NdL, float r) {
+  float k = (r + 1.0);
+  k = k * k / 8.0;
+  return G1(NdV, k) * G1(NdL, k);
+}
+
+vec3 checker(vec2 uv) {
+  float s = 24.0;
+  return mix(vec3(0.10, 0.10, 0.12), vec3(0.16, 0.16, 0.18),
+             mod(floor(uv.x * s) + floor(uv.y * s), 2.0));
+}
+
+vec2 envUV(vec3 d) {
+  float phi   = atan(d.x, d.z) + uEnvRot;
+  float theta = acos(clamp(d.y, -1.0, 1.0));
+  return vec2(mod(phi / TAU + 0.5, 1.0), theta / PI);
+}
+
+vec3 sampleEnv(vec3 d, float lod) {
+  vec2 uv = envUV(d);
+  vec3 c  = texture2D(uEnvMap, uv).rgb;
+  if (lod > 0.0) {
+    float o = 0.02 * lod;
+    c += texture2D(uEnvMap, uv + vec2( o, 0)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(-o, 0)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(0,  o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(0, -o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2( o, o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(-o,-o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2( o,-o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(-o, o)).rgb;
+    c /= 9.0;
+  }
+  return c * uEnvExp;
+}
+
+void main() {
+  // Background (always uses raw vUV for checker pattern)
   vec3 bg;
-  if(uBgMode==0)bg=checker(vUV);else if(uBgMode==1)bg=vec3(0.0);else bg=vec3(0.18);
-  if(!uHasAlbedo){gl_FragColor=vec4(bg,1.0);return;}
+  if      (uBgMode == 0) bg = checker(vUV);
+  else if (uBgMode == 1) bg = vec3(0.0);
+  else                    bg = vec3(0.18);
 
-  vec3 albedo=pow(texture2D(uAlbedo,vUV).rgb,vec3(2.2));
-  float alpha=1.0;
-  if(uHasMask) alpha=texture2D(uMask,vUV).r;
-  if(alpha<0.005){gl_FragColor=vec4(pow(bg,vec3(1.0/2.2)),1.0);return;}
+  if (!uHasAlbedo) { gl_FragColor = vec4(bg, 1.0); return; }
 
-  vec3 N=vec3(0.0,0.0,1.0);
-  if(uHasNormal){
-    vec3 ns=texture2D(uNormal,vUV).rgb*2.0-1.0;
-    ns.xy*=uNormStr; ns.y=-ns.y; N=normalize(ns);
+  // Letterbox UVs: fit image aspect into viewport aspect
+  vec2 texUV = vUV;
+  if (uImgAspect > 0.0) {
+    float vpAspect = uAspect;
+    vec2 scale;
+    if (uImgAspect > vpAspect) {
+      // Image wider than viewport: fit width, letterbox top/bottom
+      scale = vec2(1.0, vpAspect / uImgAspect);
+    } else {
+      // Image taller than viewport: fit height, pillarbox sides
+      scale = vec2(uImgAspect / vpAspect, 1.0);
+    }
+    texUV = (vUV - 0.5) / scale + 0.5;
   }
 
-  float roughness=0.5;
-  if(uHasRoughness) roughness=texture2D(uRoughness,vUV).r;
-  roughness=clamp(roughness*uRoughMult,0.04,1.0);
-
-  float metallic=0.0;
-  if(uHasMetallic) metallic=texture2D(uMetallic,vUV).r;
-  metallic=clamp(metallic*uMetalMult,0.0,1.0);
-
-  float ao=1.0;
-  if(uHasAO) ao=texture2D(uAO,vUV).r;
-
-  vec2 sUV=(vUV-0.5)*vec2(uAspect,1.0);
-  vec3 frag=vec3(sUV,0.0);
-  vec3 V=normalize(vec3(0.0,0.0,2.5)-frag);
-  vec3 L=normalize(uLightPos-frag);
-  vec3 H=normalize(V+L);
-
-  float NdL=max(dot(N,L),0.0);
-  float NdV=max(dot(N,V),0.001);
-  float NdH=max(dot(N,H),0.0);
-  float HdV=max(dot(H,V),0.0);
-
-  float spot=1.0;
-  if(uLightCone<179.0){
-    float sc=cos(uLightCone*0.5*PI/180.0);
-    spot=smoothstep(sc-0.08,sc+0.12,dot(-L,normalize(uLightDir)));
+  // Outside image bounds → show background
+  if (texUV.x < 0.0 || texUV.x > 1.0 || texUV.y < 0.0 || texUV.y > 1.0) {
+    gl_FragColor = vec4(pow(bg, vec3(1.0/2.2)), 1.0);
+    return;
   }
 
-  float dist=length(uLightPos-frag);
-  float att=1.0/(1.0+0.25*dist*dist);
+  vec3  albedo = pow(texture2D(uAlbedo, texUV).rgb, vec3(2.2));
+  float alpha  = 1.0;
+  if (uHasMask) alpha = texture2D(uMask, texUV).r;
+  if (alpha < 0.005) { gl_FragColor = vec4(pow(bg, vec3(1.0/2.2)), 1.0); return; }
 
-  vec3 F0=mix(vec3(0.04),albedo,metallic);
-  float D=D_GGX(NdH,roughness);
-  vec3 F=F_Schlick(HdV,F0);
-  float G=G_Smith(NdV,NdL,roughness);
-  vec3 spec=(D*F*G)/(4.0*NdV*NdL+0.001);
-  vec3 kD=(1.0-F)*(1.0-metallic);
-  vec3 diff=kD*albedo/PI;
+  // Normal
+  vec3 N = vec3(0.0, 0.0, 1.0);
+  if (uHasNormal) {
+    vec3 ns = texture2D(uNormal, texUV).rgb * 2.0 - 1.0;
+    ns.xy *= uNormStr;
+    ns.y = -ns.y;
+    N = normalize(ns);
+  }
 
-  vec3 rad=vec3(uLightIntensity)*att*spot;
-  vec3 Lo=(diff+spec)*rad*NdL;
-  vec3 color=vec3(uAmbient)*albedo*ao + Lo;
-  color=mix(bg,color,alpha);
-  color=color*(2.51*color+0.03)/(color*(2.43*color+0.59)+0.14);
-  color=pow(clamp(color,0.0,1.0),vec3(1.0/2.2));
-  gl_FragColor=vec4(color,1.0);
+  // Material
+  float roughness = 0.5;
+  if (uHasRoughness) roughness = texture2D(uRoughness, texUV).r;
+  roughness = clamp(roughness * uRoughMult, 0.04, 1.0);
+
+  float metallic = 0.0;
+  if (uHasMetallic) metallic = texture2D(uMetallic, texUV).r;
+  metallic = clamp(metallic * uMetalMult, 0.0, 1.0);
+
+  float ao = 1.0;
+  if (uHasAO) ao = texture2D(uAO, texUV).r;
+
+  // Geometry
+  vec2 sUV  = (texUV - 0.5) * vec2(uAspect, 1.0);
+  vec3 frag = vec3(sUV, 0.0);
+  vec3 V    = normalize(vec3(0.0, 0.0, 2.5) - frag);
+  float NdV = max(dot(N, V), 0.001);
+
+  vec3 F0 = mix(vec3(0.04), albedo, metallic);
+  vec3 F  = F_Schlick(NdV, F0);
+  vec3 kD = (1.0 - F) * (1.0 - metallic);
+
+  vec3 color = vec3(0.0);
+
+  // Point light
+  if (uLightMode == 0 || uLightMode == 2) {
+    vec3  L   = normalize(uLightPos - frag);
+    vec3  H   = normalize(V + L);
+    float NdL = max(dot(N, L), 0.0);
+    float NdH = max(dot(N, H), 0.0);
+    float HdV = max(dot(H, V), 0.0);
+
+    float spot = 1.0;
+    if (uLightCone < 179.0) {
+      float sc = cos(uLightCone * 0.5 * PI / 180.0);
+      spot = smoothstep(sc - 0.08, sc + 0.12, dot(-L, normalize(uLightDir)));
+    }
+
+    float dist = length(uLightPos - frag);
+    float att  = 1.0 / (1.0 + 0.25 * dist * dist);
+
+    float D   = D_GGX(NdH, roughness);
+    vec3  Fp  = F_Schlick(HdV, F0);
+    float G   = G_Smith(NdV, NdL, roughness);
+    vec3  spec = (D * Fp * G) / (4.0 * NdV * NdL + 0.001);
+
+    color += (kD * albedo / PI + spec) * vec3(uLightIntensity) * att * spot * NdL;
+  }
+
+  // IBL
+  if (uHasEnv && (uLightMode == 1 || uLightMode == 2)) {
+    vec3 wN   = vec3(N.x, N.y, max(N.z, 0.1));
+    vec3 envD = sampleEnv(normalize(wN), roughness * 4.0 + 2.0);
+    vec3 R    = reflect(-V, N);
+    vec3 envS = sampleEnv(normalize(R), roughness * 2.0);
+    color += kD * albedo * envD + F * envS * (1.0 - roughness * 0.7);
+  }
+
+  // Ambient
+  color += vec3(uAmbient) * albedo * ao;
+
+  // Composite
+  color = mix(bg, color, alpha);
+
+  // ACES tonemap
+  color = color * (2.51 * color + 0.03) / (color * (2.43 * color + 0.59) + 0.14);
+
+  // Gamma
+  color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / 2.2));
+
+  gl_FragColor = vec4(color, 1.0);
 }
 </script>
 
-<!-- ═══ APP ═══ -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- APPLICATION                                            -->
+<!-- ═══════════════════════════════════════════════════════ -->
 <script>
-const MAP_DEFS=[
-  {key:'albedo',label:'Albedo',color:'#c0cfe0'},
-  {key:'mask',label:'Mask',color:'#64c864'},
-  {key:'depth',label:'Depth',color:'#96c8ff'},
-  {key:'normals',label:'Normals',color:'#b896ff'},
-  {key:'roughness',label:'Roughness',color:'#ffc832'},
-  {key:'metallic',label:'Metallic',color:'#ff7b00'},
-  {key:'ao',label:'AO',color:'#00d4b4'},
+/* ═══ State ═══ */
+var MAP_DEFS = [
+  { key: 'albedo',    label: 'Albedo',    color: '#c0cfe0' },
+  { key: 'mask',      label: 'Mask',      color: '#64c864' },
+  { key: 'depth',     label: 'Depth',     color: '#96c8ff' },
+  { key: 'normals',   label: 'Normals',   color: '#b896ff' },
+  { key: 'roughness', label: 'Roughness', color: '#ffc832' },
+  { key: 'metallic',  label: 'Metallic',  color: '#ff7b00' },
+  { key: 'ao',        label: 'AO',        color: '#00d4b4' }
 ];
-const S={file:null,img:null,maps:{},tex:{},busy:false};
-const API=()=>document.getElementById('server-url').value.replace(/\/+$/,'');
 
-function buildCards(){
-  const g=document.getElementById('maps-grid');
-  MAP_DEFS.forEach(d=>{
-    const el=document.createElement('div');
-    el.className='map-card empty';el.id='card-'+d.key;
-    el.innerHTML='<canvas width="192" height="192" id="thumb-'+d.key+'"></canvas>'+
-      '<div class="card-footer"><span class="card-label"><span class="card-dot" style="background:'+d.color+'"></span>'+d.label+'</span>'+
-      '<a class="card-dl" id="dl-'+d.key+'" download="'+d.key+'.png" style="visibility:hidden">SAVE</a></div>';
-    g.appendChild(el);
-  });
-}
-buildCards();
+var S = {
+  file: null, img: null, maps: {}, tex: {},
+  busy: false, envTex: null, hasEnv: false, lightMode: 0,
+  activeTab: 'render'
+};
 
-function setMap(k,img){
-  S.maps[k]=img;
-  const c=document.getElementById('thumb-'+k);if(!c)return;
-  const ctx=c.getContext('2d');c.width=img.width;c.height=img.height;ctx.drawImage(img,0,0);
-  const dl=document.getElementById('dl-'+k);
-  if(dl){dl.href=c.toDataURL('image/png');dl.style.visibility='visible';}
-  document.getElementById('card-'+k).classList.remove('empty');
-  uploadTex(k,img);scheduleRender();
-  if(k==='albedo')document.getElementById('empty-state').classList.add('hidden');
+function API() {
+  return document.getElementById('server-url').value.replace(/\/+$/, '');
 }
 
-function handleDrop(e){
-  e.preventDefault();document.getElementById('upload-zone').classList.remove('dragging');
-  if(e.dataTransfer.files[0])handleFile(e.dataTransfer.files[0]);
-}
-function handleFile(f){
-  if(!f)return;S.file=f;
-  const img=new Image();
-  img.onload=()=>{
-    S.img=img;setMap('albedo',img);
-    document.getElementById('upload-zone').classList.add('has-image');
-    document.getElementById('preview-img').src=img.src;
-    setStatus('ok','Loaded '+img.width+'\u00d7'+img.height);
-    document.getElementById('img-info').textContent=img.width+'\u00d7'+img.height;
-    enableBtns(true);
-  };
-  img.src=URL.createObjectURL(f);
-}
-function enableBtns(on){
-  ['btn-segment','btn-depth','btn-normals','btn-pbr'].forEach(id=>{document.getElementById(id).disabled=!on;});
-}
-function clearAll(){
-  S.file=null;S.img=null;S.maps={};
-  Object.keys(S.tex).forEach(k=>{if(S.tex[k])gl.deleteTexture(S.tex[k]);});
-  S.tex={};
-  MAP_DEFS.forEach(d=>{
-    const c=document.getElementById('thumb-'+d.key);
-    if(c){c.getContext('2d').clearRect(0,0,c.width,c.height);}
-    const dl=document.getElementById('dl-'+d.key);if(dl)dl.style.visibility='hidden';
-    document.getElementById('card-'+d.key).classList.add('empty');
-  });
-  document.getElementById('upload-zone').classList.remove('has-image');
-  document.getElementById('preview-img').src='';
-  enableBtns(false);setStatus('ok','Cleared');
-  document.getElementById('img-info').textContent='\u2014';
-  document.getElementById('empty-state').classList.remove('hidden');
-  scheduleRender();
-}
 
-async function apiCall(ep,label){
-  if(S.busy||!S.file)return null;
-  S.busy=true;showProgress(label);setStatus('busy',label);
-  try{
-    const fd=new FormData();fd.append('file',S.file);
-    const t0=performance.now();
-    const r=await fetch(API()+ep,{method:'POST',body:fd});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const d=await r.json();
-    document.getElementById('status-detail').textContent=((performance.now()-t0)/1000).toFixed(1)+'s';
-    return d;
-  }catch(e){setStatus('err',e.message);return null;}
-  finally{S.busy=false;hideProgress();}
-}
-function b64Img(b){return new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.src='data:image/png;base64,'+b;});}
-
-async function runSegment(){const d=await apiCall('/segment','Segmenting\u2026');if(!d)return;setMap('mask',await b64Img(d.mask));setStatus('ok','Segmentation done');}
-async function runDepth(){const d=await apiCall('/depth','Depth\u2026');if(!d)return;setMap('depth',await b64Img(d.depth));setStatus('ok','Depth done');}
-async function runNormals(){const d=await apiCall('/normals','Normals\u2026');if(!d)return;setMap('normals',await b64Img(d.normals));if(d.depth)setMap('depth',await b64Img(d.depth));setStatus('ok','Normals done');}
-async function runPBR(){
-  const d=await apiCall('/pbr','Full PBR\u2026');if(!d)return;
-  for(const k of['albedo','mask','depth','normals','roughness','metallic','ao']){if(d[k])setMap(k,await b64Img(d[k]));}
-  setStatus('ok','PBR done');
-}
-
-function setStatus(t,m){document.getElementById('status-dot').className='status-dot '+t;document.getElementById('status-text').textContent=m;}
-function showProgress(m){document.getElementById('progress').classList.remove('hidden');document.getElementById('progress-text').textContent=m;}
-function hideProgress(){document.getElementById('progress').classList.add('hidden');}
-
-/* ═══ WebGL ═══ */
-let gl,prog,renderPending=false;
-
-function initGL(){
-  const c=document.getElementById('gl-canvas');
-  gl=c.getContext('webgl',{antialias:false,premultipliedAlpha:false});
-  if(!gl)return;
-  const vs=mkS(gl.VERTEX_SHADER,document.getElementById('vs-quad').textContent);
-  const fs=mkS(gl.FRAGMENT_SHADER,document.getElementById('fs-pbr').textContent);
-  prog=gl.createProgram();gl.attachShader(prog,vs);gl.attachShader(prog,fs);gl.linkProgram(prog);
-  if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(prog));return;}
-  gl.useProgram(prog);
-  const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
-  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
-  const a=gl.getAttribLocation(prog,'aPos');gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,2,gl.FLOAT,false,0,0);
-  ['uAlbedo','uNormal','uRoughness','uMetallic','uAO','uMask'].forEach((n,i)=>gl.uniform1i(gl.getUniformLocation(prog,n),i));
-  MAP_DEFS.forEach(d=>{S.tex[d.key]=phTex(d.key==='normals'?[128,128,255,255]:[0,0,0,255]);});
-  resize();window.addEventListener('resize',()=>{resize();scheduleRender();});scheduleRender();
-}
-function mkS(t,src){const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))console.error(gl.getShaderInfoLog(s));return s;}
-function phTex(rgba){
-  const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array(rgba));
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);return t;
-}
-function uploadTex(k,img){
-  if(!gl)return;if(S.tex[k])gl.deleteTexture(S.tex[k]);
-  const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
-  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,img);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
-  S.tex[k]=t;
-}
-function resize(){
-  const c=document.getElementById('gl-canvas'),vp=document.getElementById('viewport'),d=window.devicePixelRatio||1;
-  c.width=vp.clientWidth*d;c.height=vp.clientHeight*d;
-  if(gl)gl.viewport(0,0,c.width,c.height);
-}
-function scheduleRender(){if(!renderPending){renderPending=true;requestAnimationFrame(render);}}
-function render(){
-  renderPending=false;if(!gl)return;
-  const c=document.getElementById('gl-canvas');
-  gl.viewport(0,0,c.width,c.height);gl.clearColor(0.016,0.024,0.035,1);gl.clear(gl.COLOR_BUFFER_BIT);gl.useProgram(prog);
-  ['albedo','normals','roughness','metallic','ao','mask'].forEach((k,i)=>{
-    gl.activeTexture(gl.TEXTURE0+i);gl.bindTexture(gl.TEXTURE_2D,S.tex[k]||phTex([0,0,0,255]));
-  });
-  const u=n=>gl.getUniformLocation(prog,n);
-  gl.uniform1i(u('uHasAlbedo'),S.maps.albedo?1:0);
-  gl.uniform1i(u('uHasNormal'),S.maps.normals?1:0);
-  gl.uniform1i(u('uHasRoughness'),S.maps.roughness?1:0);
-  gl.uniform1i(u('uHasMetallic'),S.maps.metallic?1:0);
-  gl.uniform1i(u('uHasAO'),S.maps.ao?1:0);
-  gl.uniform1i(u('uHasMask'),S.maps.mask?1:0);
-  const v=id=>parseFloat(document.getElementById(id).value);
-  gl.uniform3f(u('uLightPos'),v('light-x'),v('light-y'),v('light-z'));
-  gl.uniform1f(u('uLightCone'),v('light-cone'));
-  gl.uniform1f(u('uLightIntensity'),v('light-int'));
-  gl.uniform3f(u('uLightDir'),-v('light-x'),-v('light-y'),-v('light-z'));
-  gl.uniform1f(u('uAmbient'),v('ambient'));
-  gl.uniform1f(u('uRoughMult'),v('rough-mult'));
-  gl.uniform1f(u('uMetalMult'),v('metal-mult'));
-  gl.uniform1f(u('uNormStr'),v('norm-str'));
-  gl.uniform2f(u('uResolution'),c.width,c.height);
-  gl.uniform1f(u('uAspect'),c.width/c.height);
-  gl.uniform1i(u('uBgMode'),parseInt(document.getElementById('bg-mode').value));
-  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
-}
-
-/* viewport drag → light position */
-(function(){
-  const vp=document.getElementById('viewport');let drag=false;
-  vp.addEventListener('mousedown',e=>{if(e.button===0)drag=true;});
-  window.addEventListener('mouseup',()=>drag=false);
-  vp.addEventListener('mousemove',e=>{
-    if(!drag)return;const r=vp.getBoundingClientRect();
-    document.getElementById('light-x').value=(((e.clientX-r.left)/r.width-0.5)*4).toFixed(2);
-    document.getElementById('light-y').value=(-((e.clientY-r.top)/r.height-0.5)*4).toFixed(2);
-    scheduleRender();
+/* ═══ Build map thumbnail tabs ═══ */
+(function() {
+  var strip = document.getElementById('map-strip');
+  MAP_DEFS.forEach(function(d) {
+    var tab = document.createElement('div');
+    tab.className = 'map-thumb empty';
+    tab.id = 'tab-' + d.key;
+    tab.onclick = function() { showMap(d.key); };
+    tab.innerHTML =
+      '<canvas width="96" height="72" id="thumb-' + d.key + '"></canvas>' +
+      '<div class="map-thumb-footer">' +
+        '<span class="map-thumb-label" style="color:' + d.color + '">' + d.label + '</span>' +
+        '<button class="dl-btn disabled" id="dl-' + d.key + '" onclick="event.stopPropagation();downloadMap(\'' + d.key + '\')">&#8681;</button>' +
+      '</div>';
+    strip.appendChild(tab);
   });
 })();
 
+
+/* ═══ Tab switching ═══ */
+function showRender() {
+  S.activeTab = 'render';
+  document.getElementById('map-inspect').classList.add('hidden');
+  document.querySelectorAll('.map-thumb').forEach(function(t) {
+    t.classList.toggle('active', t.id === 'tab-render');
+  });
+}
+
+function showMap(key) {
+  if (!S.maps[key]) return;
+  S.activeTab = key;
+  // Draw map into inspect canvas at native resolution
+  var inspect = document.getElementById('map-inspect');
+  var canvas  = document.getElementById('inspect-canvas');
+  var img     = S.maps[key];
+  canvas.width  = img.width;
+  canvas.height = img.height;
+  // CSS constrains display size, canvas holds full-res pixels
+  canvas.style.aspectRatio = img.width + ' / ' + img.height;
+  canvas.getContext('2d').drawImage(img, 0, 0);
+  inspect.classList.remove('hidden');
+  // Update tab highlights
+  document.querySelectorAll('.map-thumb').forEach(function(t) {
+    t.classList.toggle('active', t.id === 'tab-' + key);
+  });
+}
+
+
+// ── NEW (works in iframes via blob URL + parent document) ────
+function downloadMap(key) {
+  if (!S.maps[key]) return;
+  var canvas = document.createElement('canvas');
+  var img = S.maps[key];
+  canvas.width = img.width;
+  canvas.height = img.height;
+  canvas.getContext('2d').drawImage(img, 0, 0);
+ 
+  canvas.toBlob(function(blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = key + '.png';
+    a.style.display = 'none';
+    // Use parent document if inside an iframe for reliable downloads
+    var doc = document;
+    try {
+      if (window.parent && window.parent !== window && window.parent.document) {
+        doc = window.parent.document;
+      }
+    } catch(e) { /* cross-origin, stay in current doc */ }
+    doc.body.appendChild(a);
+    a.click();
+    doc.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+  }, 'image/png');
+}
+
+
+/* ═══ Set map data ═══ */
+function setMap(key, img) {
+  S.maps[key] = img;
+
+  // Update thumbnail (letterboxed, preserves aspect ratio)
+  var tc = document.getElementById('thumb-' + key);
+  if (tc) {
+    var tw = 96, th = 72;
+    tc.width = tw; tc.height = th;
+    var ctx = tc.getContext('2d');
+    ctx.clearRect(0, 0, tw, th);
+    var scale = Math.min(tw / img.width, th / img.height);
+    var dw = img.width * scale;
+    var dh = img.height * scale;
+    ctx.drawImage(img, (tw - dw) / 2, (th - dh) / 2, dw, dh);
+  }
+
+  // Enable download button
+  var dl = document.getElementById('dl-' + key);
+  if (dl) dl.classList.remove('disabled');
+
+  // Remove empty state
+  document.getElementById('tab-' + key).classList.remove('empty');
+
+  // Upload to WebGL
+  uploadTex(key, img);
+  schedRender();
+
+  // Update render thumbnail
+  updateRenderThumb();
+
+  // Hide upload prompt
+  if (key === 'albedo') {
+    document.getElementById('upload-prompt').classList.add('hidden');
+  }
+
+  // Enable depth tools
+  if (key === 'depth') {
+    document.getElementById('btn-editdepth').disabled = false;
+    document.getElementById('btn-nfd').disabled = false;
+  }
+
+  // If currently inspecting this map, refresh it
+  if (S.activeTab === key) showMap(key);
+}
+
+function updateRenderThumb() {
+  // Small delay to let WebGL render, then snapshot
+  setTimeout(function() {
+    var src = document.getElementById('gl-canvas');
+    var dst = document.getElementById('thumb-render');
+    if (src && dst) {
+      var ctx = dst.getContext('2d');
+      dst.width = 96; dst.height = 72;
+      ctx.clearRect(0, 0, 96, 72);
+      var rscale = Math.min(96 / src.width, 72 / src.height);
+      var rw = src.width * rscale, rh = src.height * rscale;
+      ctx.drawImage(src, (96 - rw) / 2, (72 - rh) / 2, rw, rh);
+    }
+  }, 100);
+}
+
+
+/* ═══ File upload ═══ */
+var fileInput = document.getElementById('file-input');
+
+fileInput.addEventListener('change', function() {
+  if (this.files && this.files[0]) loadFile(this.files[0]);
+});
+
+// Drag & drop on viewport
+var vp = document.getElementById('viewport');
+vp.addEventListener('dragover', function(e) { e.preventDefault(); });
+vp.addEventListener('drop', function(e) {
+  e.preventDefault();
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
+});
+
+function loadFile(f) {
+  S.file = f;
+  var img = new Image();
+  img.onload = function() {
+    S.img = img;
+    setMap('albedo', img);
+    setStatus('ok', 'Loaded ' + img.width + '\u00d7' + img.height);
+    document.getElementById('status-detail').textContent = img.width + '\u00d7' + img.height;
+    showRender();
+    // Enable buttons
+    ['btn-segment', 'btn-depth', 'btn-normals', 'btn-pbr'].forEach(function(id) {
+      document.getElementById(id).disabled = false;
+    });
+  };
+  img.src = URL.createObjectURL(f);
+}
+
+function clearAll() {
+  S.file = null;
+  S.img = null;
+  S.maps = {};
+  Object.keys(S.tex).forEach(function(k) { if (S.tex[k] && gl) gl.deleteTexture(S.tex[k]); });
+  S.tex = {};
+  // Reset thumbnails
+  MAP_DEFS.forEach(function(d) {
+    var tc = document.getElementById('thumb-' + d.key);
+    if (tc) tc.getContext('2d').clearRect(0, 0, tc.width, tc.height);
+    var dl = document.getElementById('dl-' + d.key);
+    if (dl) dl.classList.add('disabled');
+    document.getElementById('tab-' + d.key).classList.add('empty');
+  });
+  var rc = document.getElementById('thumb-render');
+  if (rc) rc.getContext('2d').clearRect(0, 0, rc.width, rc.height);
+  fileInput.value = '';
+  ['btn-segment', 'btn-depth', 'btn-normals', 'btn-pbr', 'btn-editdepth', 'btn-nfd'].forEach(function(id) {
+    document.getElementById(id).disabled = true;
+  });
+  document.getElementById('upload-prompt').classList.remove('hidden');
+  document.getElementById('map-inspect').classList.add('hidden');
+  showRender();
+  setStatus('ok', 'Cleared');
+  document.getElementById('status-detail').textContent = '\u2014';
+  schedRender();
+}
+
+
+/* ═══ API calls ═══ */
+function setStatus(t, m) {
+  document.getElementById('status-dot').className = 'status-dot ' + t;
+  document.getElementById('status-text').textContent = m;
+}
+function showProgress(m) {
+  document.getElementById('progress').classList.remove('hidden');
+  document.getElementById('progress-text').textContent = m;
+}
+function hideProgress() {
+  document.getElementById('progress').classList.add('hidden');
+}
+
+function b64Img(b) {
+  return new Promise(function(resolve) {
+    var img = new Image();
+    img.onload = function() { resolve(img); };
+    img.src = 'data:image/png;base64,' + b;
+  });
+}
+
+async function apiPost(endpoint, formData, label) {
+  if (S.busy) return null;
+  S.busy = true;
+  showProgress(label);
+  setStatus('busy', label);
+  try {
+    var t0 = performance.now();
+    var r = await fetch(API() + endpoint, { method: 'POST', body: formData });
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + r.statusText);
+    var d = await r.json();
+    document.getElementById('status-detail').textContent =
+      ((performance.now() - t0) / 1000).toFixed(1) + 's';
+    return d;
+  } catch(e) {
+    setStatus('err', e.message);
+    return null;
+  } finally {
+    S.busy = false;
+    hideProgress();
+  }
+}
+
+function fileFD() {
+  var fd = new FormData();
+  fd.append('file', S.file);
+  return fd;
+}
+
+async function doSegment() {
+  if (!S.file) return;
+  var d = await apiPost('/segment', fileFD(), 'Segmenting...');
+  if (d) { setMap('mask', await b64Img(d.mask)); setStatus('ok', 'Done'); }
+}
+
+async function doDepth() {
+  if (!S.file) return;
+  var d = await apiPost('/depth', fileFD(), 'Depth...');
+  if (d) { setMap('depth', await b64Img(d.depth)); setStatus('ok', 'Done'); }
+}
+
+async function doNormals() {
+  if (!S.file) return;
+  var smooth = document.getElementById('depth-smooth').value;
+  var fd = fileFD();
+  var d = await apiPost('/normals?smooth=' + smooth, fd, 'Normals...');
+  if (!d) return;
+  setMap('normals', await b64Img(d.normals));
+  if (d.depth) setMap('depth', await b64Img(d.depth));
+  setStatus('ok', 'Done');
+}
+
+async function doPBR() {
+  if (!S.file) return;
+  var d = await apiPost('/pbr', fileFD(), 'Full PBR...');
+  if (!d) return;
+  for (var i = 0; i < MAP_DEFS.length; i++) {
+    var k = MAP_DEFS[i].key;
+    if (d[k]) setMap(k, await b64Img(d[k]));
+  }
+  setStatus('ok', 'PBR done');
+}
+
+async function doNFD() {
+  if (!S.maps.depth || S.busy) return;
+  S.busy = true;
+  showProgress('Normals from depth...');
+  setStatus('busy', 'Computing...');
+  try {
+    var c = document.getElementById('thumb-depth');
+    // Use full-res depth, not thumbnail
+    var fullCanvas = document.createElement('canvas');
+    fullCanvas.width = S.maps.depth.width;
+    fullCanvas.height = S.maps.depth.height;
+    fullCanvas.getContext('2d').drawImage(S.maps.depth, 0, 0);
+    var blob = await new Promise(function(r) { fullCanvas.toBlob(r, 'image/png'); });
+    var fd = new FormData();
+    fd.append('file', blob, 'depth.png');
+    var t0 = performance.now();
+    var smooth = document.getElementById('depth-smooth').value;
+    var r = await fetch(API() + '/normals-from-depth?smooth=' + smooth, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var d = await r.json();
+    document.getElementById('status-detail').textContent =
+      ((performance.now() - t0) / 1000).toFixed(1) + 's';
+    setMap('normals', await b64Img(d.normals));
+    setStatus('ok', 'Done');
+  } catch(e) {
+    setStatus('err', e.message);
+  } finally {
+    S.busy = false;
+    hideProgress();
+  }
+}
+
+
+/* ═══ HDRI ═══ */
+document.getElementById('hdri-input').addEventListener('change', function() {
+  if (!this.files || !this.files[0]) return;
+  var f = this.files[0];
+  if (f.name.toLowerCase().endsWith('.hdr')) {
+    loadHDR(f);
+  } else {
+    loadLDREnv(f);
+  }
+});
+
+function loadLDREnv(f) {
+  var img = new Image();
+  img.onload = function() {
+    uploadEnvTex(img);
+    document.getElementById('hdri-preview').src = img.src;
+    setLightMode(1);
+    setStatus('ok', 'Env map loaded');
+  };
+  img.src = URL.createObjectURL(f);
+}
+
+function loadHDR(file) {
+  var reader = new FileReader();
+  reader.onload = function() {
+    try {
+      var res = parseHDR(new Uint8Array(reader.result));
+      var cv = document.createElement('canvas');
+      cv.width = res.width; cv.height = res.height;
+      var cx = cv.getContext('2d');
+      var id = cx.createImageData(res.width, res.height);
+      for (var i = 0; i < res.data.length; i += 3) {
+        var pi = (i / 3) * 4;
+        for (var c = 0; c < 3; c++) {
+          var v = 1.0 - Math.exp(-res.data[i + c]);
+          id.data[pi + c] = Math.min(255, v * 255) | 0;
+        }
+        id.data[pi + 3] = 255;
+      }
+      cx.putImageData(id, 0, 0);
+      var img = new Image();
+      img.onload = function() {
+        uploadEnvTex(img);
+        setLightMode(1);
+        setStatus('ok', 'HDR loaded ' + res.width + 'x' + res.height);
+      };
+      img.src = cv.toDataURL();
+      document.getElementById('hdri-preview').src = img.src;
+    } catch(e) {
+      setStatus('err', 'HDR: ' + e.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function parseHDR(b) {
+  var i = 0;
+  // Skip header
+  while (i < b.length - 1) {
+    if (b[i] === 10 && b[i+1] === 10) { i += 2; break; }
+    if (b[i] === 10 && b[i+1] === 13 && b[i+2] === 10) { i += 3; break; }
+    i++;
+  }
+  // Dimensions
+  var dl = '';
+  while (i < b.length && b[i] !== 10) { dl += String.fromCharCode(b[i]); i++; }
+  i++;
+  var m = dl.match(/-Y\s+(\d+)\s+\+X\s+(\d+)/);
+  if (!m) throw new Error('Bad HDR dimensions');
+  var H = parseInt(m[1]), W = parseInt(m[2]);
+  var data = new Float32Array(W * H * 3);
+  for (var y = 0; y < H; y++) {
+    var sl = decodeScanline(b, i, W);
+    i = sl.next;
+    for (var x = 0; x < W; x++) {
+      var si = x * 4, di = (y * W + x) * 3;
+      var e = sl.px[si + 3];
+      if (e === 0) { data[di] = data[di+1] = data[di+2] = 0; }
+      else {
+        var sc = Math.pow(2, e - 128 - 8);
+        data[di]   = sl.px[si] * sc;
+        data[di+1] = sl.px[si+1] * sc;
+        data[di+2] = sl.px[si+2] * sc;
+      }
+    }
+  }
+  return { width: W, height: H, data: data };
+}
+
+function decodeScanline(b, o, W) {
+  var i = o;
+  if (W < 8 || W > 32767 || b[i] !== 2 || b[i+1] !== 2) {
+    var px = new Uint8Array(W * 4);
+    for (var x = 0; x < W; x++) {
+      px[x*4] = b[i++]; px[x*4+1] = b[i++];
+      px[x*4+2] = b[i++]; px[x*4+3] = b[i++];
+    }
+    return { px: px, next: i };
+  }
+  var sw = (b[i+2] << 8) | b[i+3]; i += 4;
+  if (sw !== W) throw new Error('Width mismatch');
+  var px = new Uint8Array(W * 4);
+  for (var ch = 0; ch < 4; ch++) {
+    var p = 0;
+    while (p < W) {
+      if (b[i] > 128) {
+        var cnt = b[i++] - 128, val = b[i++];
+        for (var j = 0; j < cnt; j++) px[(p++) * 4 + ch] = val;
+      } else {
+        var cnt = b[i++];
+        for (var j = 0; j < cnt; j++) px[(p++) * 4 + ch] = b[i++];
+      }
+    }
+  }
+  return { px: px, next: i };
+}
+
+function uploadEnvTex(img) {
+  if (!gl) return;
+  if (S.envTex) gl.deleteTexture(S.envTex);
+  var t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  S.envTex = t;
+  S.hasEnv = true;
+  schedRender();
+}
+
+function setLightMode(m) {
+  S.lightMode = m;
+  document.querySelectorAll('#mode-toggle button').forEach(function(b) {
+    b.classList.toggle('active', parseInt(b.dataset.mode) === m);
+  });
+  schedRender();
+}
+
+
+/* ═══ Depth Editor ═══ */
+var deOrig = null, deCtx = null;
+
+function openDepthEditor() {
+  if (!S.maps.depth) return;
+  document.getElementById('de-overlay').classList.remove('hidden');
+  var cv  = document.getElementById('de-canvas');
+  var img = S.maps.depth;
+  cv.width = img.width; cv.height = img.height;
+  cv.style.width = Math.min(img.width, window.innerWidth * 0.85) + 'px';
+  cv.style.height = 'auto';
+  deCtx = cv.getContext('2d');
+  deCtx.drawImage(img, 0, 0);
+  deOrig = deCtx.getImageData(0, 0, cv.width, cv.height);
+  var painting = false;
+  function gp(e) {
+    var r = cv.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (cv.width / r.width), y: (e.clientY - r.top) * (cv.height / r.height) };
+  }
+  function paint(e) {
+    if (!painting) return;
+    var p  = gp(e);
+    var br = parseInt(document.getElementById('de-brush').value);
+    deCtx.globalAlpha = parseFloat(document.getElementById('de-opacity').value);
+    var v = parseInt(document.getElementById('de-value').value);
+    deCtx.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')';
+    deCtx.beginPath();
+    deCtx.arc(p.x, p.y, br / 2, 0, Math.PI * 2);
+    deCtx.fill();
+    deCtx.globalAlpha = 1;
+  }
+  cv.onmousedown = function(e) { painting = true; paint(e); };
+  cv.onmousemove = paint;
+  cv.onmouseup = cv.onmouseleave = function() { painting = false; };
+}
+
+function deBlur() {
+  if (!deCtx) return;
+  var c = document.getElementById('de-canvas');
+  var t = document.createElement('canvas');
+  t.width = c.width; t.height = c.height;
+  var tc = t.getContext('2d');
+  tc.filter = 'blur(3px)';
+  tc.drawImage(c, 0, 0);
+  deCtx.drawImage(t, 0, 0);
+}
+
+function deReset() {
+  if (deCtx && deOrig) deCtx.putImageData(deOrig, 0, 0);
+}
+
+function deApply() {
+  var c = document.getElementById('de-canvas');
+  var img = new Image();
+  img.onload = function() {
+    setMap('depth', img);
+    document.getElementById('de-overlay').classList.add('hidden');
+  };
+  img.src = c.toDataURL('image/png');
+}
+
+function deCancel() {
+  document.getElementById('de-overlay').classList.add('hidden');
+}
+
+
+/* ═══ WebGL ═══ */
+var gl, prog, renderPending = false;
+
+function initGL() {
+  var c = document.getElementById('gl-canvas');
+  gl = c.getContext('webgl', { antialias: false, premultipliedAlpha: false });
+  if (!gl) return;
+
+  var vs = compileShader(gl.VERTEX_SHADER, document.getElementById('vs-quad').textContent);
+  var fs = compileShader(gl.FRAGMENT_SHADER, document.getElementById('fs-pbr').textContent);
+  prog = gl.createProgram();
+  gl.attachShader(prog, vs);
+  gl.attachShader(prog, fs);
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    console.error('Shader link error:', gl.getProgramInfoLog(prog));
+    return;
+  }
+  gl.useProgram(prog);
+
+  var buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  var a = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(a);
+  gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+
+  // Texture units: 0-5 = maps, 6 = env
+  var texNames = ['uAlbedo', 'uNormal', 'uRoughness', 'uMetallic', 'uAO', 'uMask', 'uEnvMap'];
+  texNames.forEach(function(name, i) {
+    gl.uniform1i(gl.getUniformLocation(prog, name), i);
+  });
+
+  // Placeholder textures
+  MAP_DEFS.forEach(function(d) {
+    S.tex[d.key] = makePlaceholder(d.key === 'normals' ? [128,128,255,255] : [0,0,0,255]);
+  });
+
+  resizeGL();
+  window.addEventListener('resize', function() { resizeGL(); schedRender(); });
+  schedRender();
+}
+
+function compileShader(type, src) {
+  var s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error('Shader compile error:', gl.getShaderInfoLog(s));
+  }
+  return s;
+}
+
+function makePlaceholder(rgba) {
+  var t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(rgba));
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  return t;
+}
+
+function uploadTex(key, img) {
+  if (!gl) return;
+  if (S.tex[key]) gl.deleteTexture(S.tex[key]);
+  var t = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  S.tex[key] = t;
+}
+
+function resizeGL() {
+  var c  = document.getElementById('gl-canvas');
+  var vp = document.getElementById('viewport');
+  var d  = window.devicePixelRatio || 1;
+  c.width  = vp.clientWidth * d;
+  c.height = vp.clientHeight * d;
+  if (gl) gl.viewport(0, 0, c.width, c.height);
+}
+
+function schedRender() {
+  if (!renderPending) {
+    renderPending = true;
+    requestAnimationFrame(render);
+  }
+}
+
+function render() {
+  renderPending = false;
+  if (!gl) return;
+
+  var c = document.getElementById('gl-canvas');
+  gl.viewport(0, 0, c.width, c.height);
+  gl.clearColor(0.016, 0.024, 0.035, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.useProgram(prog);
+
+  // Bind map textures (0-5)
+  var order = ['albedo', 'normals', 'roughness', 'metallic', 'ao', 'mask'];
+  order.forEach(function(key, i) {
+    gl.activeTexture(gl.TEXTURE0 + i);
+    gl.bindTexture(gl.TEXTURE_2D, S.tex[key] || makePlaceholder([0,0,0,255]));
+  });
+
+  // Env map (6)
+  gl.activeTexture(gl.TEXTURE6);
+  gl.bindTexture(gl.TEXTURE_2D, S.envTex || makePlaceholder([0,0,0,255]));
+
+  // Uniforms
+  var u = function(n) { return gl.getUniformLocation(prog, n); };
+  var v = function(id) { return parseFloat(document.getElementById(id).value); };
+
+  gl.uniform1i(u('uHasAlbedo'),    S.maps.albedo    ? 1 : 0);
+  gl.uniform1i(u('uHasNormal'),    S.maps.normals   ? 1 : 0);
+  gl.uniform1i(u('uHasRoughness'), S.maps.roughness ? 1 : 0);
+  gl.uniform1i(u('uHasMetallic'),  S.maps.metallic  ? 1 : 0);
+  gl.uniform1i(u('uHasAO'),        S.maps.ao        ? 1 : 0);
+  gl.uniform1i(u('uHasMask'),      S.maps.mask      ? 1 : 0);
+  gl.uniform1i(u('uHasEnv'),       S.hasEnv         ? 1 : 0);
+  gl.uniform1i(u('uLightMode'),    S.lightMode);
+
+  gl.uniform3f(u('uLightPos'), v('light-x'), v('light-y'), v('light-z'));
+  gl.uniform1f(u('uLightCone'), v('light-cone'));
+  gl.uniform1f(u('uLightIntensity'), v('light-int'));
+  gl.uniform3f(u('uLightDir'), -v('light-x'), -v('light-y'), -v('light-z'));
+  gl.uniform1f(u('uAmbient'), v('ambient'));
+  gl.uniform1f(u('uRoughMult'), v('rough-mult'));
+  gl.uniform1f(u('uMetalMult'), v('metal-mult'));
+  gl.uniform1f(u('uNormStr'), v('norm-str'));
+  gl.uniform2f(u('uResolution'), c.width, c.height);
+  gl.uniform1f(u('uAspect'), c.width / c.height);
+  gl.uniform1f(u('uImgAspect'), S.maps.albedo ? (S.maps.albedo.width / S.maps.albedo.height) : 0.0);
+  gl.uniform1i(u('uBgMode'), parseInt(document.getElementById('bg-mode').value));
+  gl.uniform1f(u('uEnvRot'), v('env-rot'));
+  gl.uniform1f(u('uEnvExp'), v('env-exp'));
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+
+/* ═══ Viewport drag: IBL rotation only ═══ */
+(function() {
+  var vp = document.getElementById('viewport');
+  var drag = false;
+  vp.addEventListener('mousedown', function(e) {
+    if (e.button === 0 && S.activeTab === 'render' && S.lightMode === 1 && S.hasEnv) drag = true;
+  });
+  window.addEventListener('mouseup', function() { drag = false; });
+  vp.addEventListener('mousemove', function(e) {
+    if (!drag) return;
+    var r = vp.getBoundingClientRect();
+    var dx = e.movementX / r.width * 3.0;
+    var el = document.getElementById('env-rot');
+    el.value = ((parseFloat(el.value) + dx) % (Math.PI * 2)).toFixed(3);
+    schedRender();
+  });
+})();
+
+/* ═══ Light Sphere Widget ═══ */
+var sphereAzimuth = 0.78;  // radians, initial ~45deg
+var sphereElevation = 0.78;
+var sphereCanvas = document.getElementById('sphere-canvas');
+var sphereCtx = sphereCanvas.getContext('2d');
+
+function drawSphere() {
+  var w = sphereCanvas.width, h = sphereCanvas.height;
+  var cx = w / 2, cy = h / 2, r = w / 2 - 4;
+  var ctx = sphereCtx;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Hemisphere background with shading
+  var grad = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.2, 0, cx, cy, r);
+  grad.addColorStop(0, '#1a2030');
+  grad.addColorStop(0.7, '#0e1420');
+  grad.addColorStop(1, '#080c14');
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(150,200,255,0.12)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Grid lines (latitude/longitude)
+  ctx.strokeStyle = 'rgba(150,200,255,0.04)';
+  ctx.lineWidth = 0.5;
+  // Equator
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, r, r * 0.15, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  // Meridian
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, r * 0.15, r, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  // 45-deg latitude
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - r * 0.5, r * 0.866, r * 0.13, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Light dot position on sphere surface
+  var lx = Math.cos(sphereElevation) * Math.sin(sphereAzimuth);
+  var ly = Math.cos(sphereElevation) * Math.cos(sphereAzimuth);
+  var lz = Math.sin(sphereElevation);
+  // Project to 2D (orthographic)
+  var px = cx + lx * r;
+  var py = cy - lz * r;
+
+  // Direction line from center
+  ctx.beginPath();
+  ctx.moveTo(cx, cy);
+  ctx.lineTo(px, py);
+  ctx.strokeStyle = 'rgba(255,200,50,0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  // Light glow
+  var glow = ctx.createRadialGradient(px, py, 0, px, py, 18);
+  glow.addColorStop(0, 'rgba(255,200,50,0.25)');
+  glow.addColorStop(1, 'rgba(255,200,50,0)');
+  ctx.beginPath();
+  ctx.arc(px, py, 18, 0, Math.PI * 2);
+  ctx.fillStyle = glow;
+  ctx.fill();
+
+  // Light dot
+  ctx.beginPath();
+  ctx.arc(px, py, 5, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffc832';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,200,50,0.6)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(150,200,255,0.2)';
+  ctx.fill();
+}
+
+function updateLightFromSphere() {
+  var dist = parseFloat(document.getElementById('light-dist').value);
+  var lx = Math.cos(sphereElevation) * Math.sin(sphereAzimuth) * dist;
+  var ly = Math.cos(sphereElevation) * Math.cos(sphereAzimuth) * dist;
+  var lz = Math.sin(sphereElevation) * dist + 0.5;
+  document.getElementById('light-x').value = lx.toFixed(2);
+  document.getElementById('light-y').value = ly.toFixed(2);
+  document.getElementById('light-z').value = lz.toFixed(2);
+  document.getElementById('light-readout').textContent =
+    'X:' + lx.toFixed(1) + ' Y:' + ly.toFixed(1) + ' Z:' + lz.toFixed(1);
+  drawSphere();
+  schedRender();
+}
+
+// Sphere interaction
+(function() {
+  var el = document.getElementById('light-sphere');
+  var dragging = false;
+
+  function handleSphereInput(e) {
+    var rect = el.getBoundingClientRect();
+    var cx = rect.width / 2;
+    var cy = rect.height / 2;
+    var mx = e.clientX - rect.left - cx;
+    var my = -(e.clientY - rect.top - cy);
+    var maxR = cx - 2;
+    // Clamp to sphere radius
+    var d = Math.sqrt(mx * mx + my * my);
+    if (d > maxR) { mx = mx / d * maxR; my = my / d * maxR; d = maxR; }
+
+    sphereAzimuth = Math.atan2(mx, 1);  // left-right maps to azimuth
+    sphereElevation = Math.asin(Math.min(my / maxR, 1.0));  // up-down maps to elevation
+
+    updateLightFromSphere();
+  }
+
+  el.addEventListener('mousedown', function(e) {
+    if (e.button === 0) { dragging = true; handleSphereInput(e); }
+  });
+  window.addEventListener('mouseup', function() { dragging = false; });
+  el.addEventListener('mousemove', function(e) {
+    if (dragging) handleSphereInput(e);
+  });
+})();
+
+// Initial draw
+updateLightFromSphere();
+
+
+/* ═══ Boot ═══ */
 initGL();
+
+(async function() {
+  try {
+    var r = await fetch(API() + '/health');
+    if (r.ok) {
+      var d = await r.json();
+      setStatus('ok', 'Connected \u00b7 ' + d.device);
+    } else {
+      setStatus('err', 'Server returned ' + r.status);
+    }
+  } catch(e) {
+    setStatus('err', 'Server offline');
+    document.getElementById('status-detail').textContent = API();
+  }
+})();
 </script>
 </body>
 </html>
