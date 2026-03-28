@@ -34,6 +34,10 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .topbar-r{display:flex;gap:1.4rem;font-size:0.4rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);align-items:center}
 .topbar-r strong{color:var(--blue-dim);font-weight:500}
 
+.shape-strip{position:fixed;left:0;top:38px;bottom:0;width:64px;background:var(--bg2);border-right:1px solid var(--border-b);z-index:50;display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:2px;overflow-y:auto;scrollbar-width:none}
+.shape-strip::-webkit-scrollbar{display:none}
+.shape-strip-label{font-size:0.3rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-bottom:6px}
+.page-body{margin-left:64px}
 .hero{padding:1.8rem 2rem 1rem;max-width:1480px;margin:0 auto}
 .hero-sub{font-size:0.4rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--blue-dim);margin-bottom:0.7rem}
 .hero-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-style:italic;font-size:1.5rem;color:var(--text-bright);line-height:1.3;margin-bottom:0.4rem}
@@ -84,12 +88,11 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .hsv-hue-cursor{position:absolute;left:-1px;right:-1px;height:6px;border:2px solid #fff;box-shadow:0 0 3px rgba(0,0,0,0.8);pointer-events:none;transform:translateY(-50%);z-index:2}
 
 /* ── SHAPE SELECTOR ── */
-.shape-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:1rem}
-.shape-btn{background:var(--bg3);border:1px solid var(--border);padding:8px 4px;cursor:pointer;text-align:center;transition:all 0.15s;display:flex;flex-direction:column;align-items:center;gap:4px}
+.shape-btn{width:54px;background:var(--bg3);border:1px solid var(--border);padding:6px 2px 4px;cursor:pointer;text-align:center;transition:all 0.15s;display:flex;flex-direction:column;align-items:center;gap:3px}
 .shape-btn:hover{border-color:rgba(150,200,255,0.2);background:var(--surface)}
-.shape-btn.active{border-color:var(--yellow);box-shadow:0 0 12px rgba(255,200,50,0.15)}
-.shape-btn svg{width:40px;height:28px}
-.shape-btn span{font-size:0.32rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-dim)}
+.shape-btn.active{border-color:var(--yellow);box-shadow:0 0 12px rgba(255,200,50,0.15);background:rgba(255,200,50,0.04)}
+.shape-btn svg{width:36px;height:22px}
+.shape-btn span{font-size:0.28rem;letter-spacing:0.06em;text-transform:uppercase;color:var(--text-dim);line-height:1}
 .shape-btn.active span{color:var(--yellow)}
 
 /* ── PATTERN CATALOG ── */
@@ -138,6 +141,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .emblem-btn.active svg{fill:var(--yellow)}
 
 @media(max-width:960px){
+  .shape-strip{position:relative;top:0;width:100%;height:auto;flex-direction:row;border-right:none;border-bottom:1px solid var(--border-b);overflow-x:auto;padding:6px 8px;gap:4px}
+  .page-body{margin-left:0}
   .main-layout{flex-direction:column}
   .designer-panel{width:100%;position:static}
   .pattern-grid{grid-template-columns:repeat(auto-fill,minmax(90px,1fr))}
@@ -153,13 +158,19 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
   <div class="topbar-r"><span>SYS // <strong>FLAG DESIGNER</strong></span></div>
 </div>
 
+<!-- Shape Strip (left sidebar) -->
+<div class="shape-strip" id="shapeStrip">
+  <span class="shape-strip-label">Shape</span>
+</div>
+
+<div class="page-body">
 <div class="hero">
   <div class="hero-sub">Colony Systems // Flag Designer</div>
   <div class="hero-title">Raise Your <em>Banner</em></div>
   <div class="hero-body">
     Every colony needs a <strong>flag</strong> &mdash; a symbol of identity among the stars. Choose from
     <strong>30 heraldic patterns</strong>, six distinct <strong>shapes</strong>, and optional <strong>emblems</strong>
-    to forge a banner that will fly over your settlements, stations, and fleets.
+    with a dedicated <strong>symbol color</strong> to forge a banner for your settlements, stations, and fleets.
   </div>
 </div>
 
@@ -189,13 +200,13 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
         <div class="color-section">
           <div class="color-label">Primary Color</div>
           <div class="cpick">
-            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="primarySwatchBg"></div><input type="color" id="primaryNativePicker" value="#1a3d8f"></div>
+            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="primarySwatchBg"></div><input type="color" id="primaryNativePicker" value="#6B1D1D"></div>
             <div class="cpick-fields">
-              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="primaryHex" value="#1A3D8F" maxlength="7" spellcheck="false"></div>
+              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="primaryHex" value="#6B1D1D" maxlength="7" spellcheck="false"></div>
               <div class="cpick-rgb-row">
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="primaryR" min="0" max="255" value="26"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="primaryG" min="0" max="255" value="61"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="primaryB" min="0" max="255" value="143"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="primaryR" min="0" max="255" value="107"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="primaryG" min="0" max="255" value="29"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="primaryB" min="0" max="255" value="29"></div>
               </div>
             </div>
           </div>
@@ -208,13 +219,13 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
         <div class="color-section">
           <div class="color-label">Secondary Color</div>
           <div class="cpick">
-            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="secondarySwatchBg"></div><input type="color" id="secondaryNativePicker" value="#c8a030"></div>
+            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="secondarySwatchBg"></div><input type="color" id="secondaryNativePicker" value="#C0C8D0"></div>
             <div class="cpick-fields">
-              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="secondaryHex" value="#C8A030" maxlength="7" spellcheck="false"></div>
+              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="secondaryHex" value="#C0C8D0" maxlength="7" spellcheck="false"></div>
               <div class="cpick-rgb-row">
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="secondaryR" min="0" max="255" value="200"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="secondaryG" min="0" max="255" value="160"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="secondaryB" min="0" max="255" value="48"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="secondaryR" min="0" max="255" value="192"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="secondaryG" min="0" max="255" value="200"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="secondaryB" min="0" max="255" value="208"></div>
               </div>
             </div>
           </div>
@@ -224,8 +235,24 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
           </div>
         </div>
 
-        <div class="color-label">Flag Shape</div>
-        <div class="shape-grid" id="shapeGrid"></div>
+        <div class="color-section">
+          <div class="color-label">Symbol Color</div>
+          <div class="cpick">
+            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="tertiarySwatchBg"></div><input type="color" id="tertiaryNativePicker" value="#E8D060"></div>
+            <div class="cpick-fields">
+              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="tertiaryHex" value="#E8D060" maxlength="7" spellcheck="false"></div>
+              <div class="cpick-rgb-row">
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="tertiaryR" min="0" max="255" value="232"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="tertiaryG" min="0" max="255" value="208"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="tertiaryB" min="0" max="255" value="96"></div>
+              </div>
+            </div>
+          </div>
+          <div class="hsv-wrap">
+            <div class="hsv-sv-wrap" id="tertiarySvWrap"><canvas id="tertiarySvCanvas"></canvas><div class="hsv-sv-cursor" id="tertiarySvCursor"></div></div>
+            <div class="hsv-hue-wrap" id="tertiaryHueWrap"><canvas id="tertiaryHueCanvas"></canvas><div class="hsv-hue-cursor" id="tertiaryHueCursor"></div></div>
+          </div>
+        </div>
 
         <div class="emblem-section">
           <div class="color-label">Emblem Overlay</div>
@@ -263,6 +290,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
     </div>
   </div>
 </div>
+</div><!-- .page-body -->
 </div>
 
 <script>
@@ -274,11 +302,12 @@ function rgbToHsv(r,g,b){r/=255;g/=255;b/=255;var mx=Math.max(r,g,b),mn=Math.min
 function hsvToRgb(h,s,v){var i=Math.floor(h*6),f=h*6-i,p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s);var r,g,b;switch(i%6){case 0:r=v;g=t;b=p;break;case 1:r=q;g=v;b=p;break;case 2:r=p;g=v;b=t;break;case 3:r=p;g=q;b=v;break;case 4:r=t;g=p;b=v;break;case 5:r=v;g=p;b=q;break;}return{r:Math.round(r*255),g:Math.round(g*255),b:Math.round(b*255)};}
 
 // ── STATE ──
-var primaryColor = '#1A3D8F';
-var secondaryColor = '#C8A030';
-var currentPattern = 'bicolor_h';
+var primaryColor = '#6B1D1D';
+var secondaryColor = '#C0C8D0';
+var tertiaryColor = '#E8D060';
+var currentPattern = 'cross';
 var currentShape = 'rectangle';
-var currentEmblem = 'none';
+var currentEmblem = 'star5';
 
 // ── FLAG SHAPES ──
 var SHAPES = [
@@ -344,32 +373,32 @@ var PATTERNS = [
   {id:'serrated', name:'Serrated', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c2;ctx.fillRect(0,0,W,H);ctx.beginPath();ctx.moveTo(0,0);var n=6;for(var i=0;i<n;i++){ctx.lineTo(W*0.45,H*(i+0.5)/n);ctx.lineTo(0,H*(i+1)/n);}ctx.closePath();ctx.fillStyle=c1;ctx.fill();}},
 ];
 
-// ── PRESET BANNERS ──
+// ── PRESET BANNERS: [name, c1, c2, c3_symbol, pattern, shape, emblem] ──
 var PRESETS = [
-  ['Terran','#003399','#FFD700','bicolor_h','rectangle','star5'],
-  ['Martian','#8B0000','#D2691E','chevron','rectangle','none'],
-  ['Void Corp','#0a0a14','#8866ff','saltire','rectangle','ring'],
-  ['Solaris','#FFD700','#FF4500','sunburst','rectangle','circle'],
-  ['Frostheim','#d0e8f0','#2080c0','triband_h','swallowtail','star6'],
-  ['Jade Fed','#005544','#50c878','diagonal_l','rectangle','diamond'],
-  ['Crimson','#8a1a1a','#e8e0d0','cross','shield','none'],
-  ['Nebula','#3020a0','#00e8ff','per_bend','guidon','star5'],
-  ['Iron','#404850','#c0c0c0','fess','rectangle','cross'],
-  ['Nova','#1a0033','#ff40ff','gyronny','rectangle','star8'],
-  ['Auroran','#004466','#66ffcc','pall','pennant','none'],
-  ['Scorched','#330000','#ff3300','arrow','guidon','none'],
-  ['Polar','#f0f8ff','#4682b4','canton','rectangle','star5'],
-  ['Amber','#8b4513','#daa520','triband_v','rectangle','circle'],
-  ['Emerald','#003300','#00cc66','five_stripes','rectangle','crescent'],
-  ['Titanium','#1a1a2e','#e94560','bend','swallowtail','none'],
-  ['Monarch','#4a0060','#ffd700','border_flag','shield','diamond'],
-  ['Tempest','#003355','#88ccee','vert_stripes','rectangle','none'],
-  ['Obsidian','#101018','#cc0000','diagonal_r','rectangle','star5'],
-  ['Sentinel','#222222','#ffcc00','chief','rectangle','anchor'],
+  ['Viper','#6B1D1D','#C0C8D0','#E8D060','cross','rectangle','star5'],
+  ['Terran','#18244A','#C0C8D0','#D4443B','canton','rectangle','star5'],
+  ['Martian','#8B0000','#D2691E','#FFD700','chevron','rectangle','none'],
+  ['Void Corp','#0a0a14','#8866ff','#00e8ff','saltire','rectangle','ring'],
+  ['Solaris','#CC4400','#FF9900','#FFFFFF','sunburst','rectangle','circle'],
+  ['Frostheim','#d0e8f0','#2080c0','#FFFFFF','triband_h','swallowtail','star6'],
+  ['Jade Fed','#005544','#50c878','#FFD700','diagonal_l','rectangle','diamond'],
+  ['Crimson','#8a1a1a','#e8e0d0','#FFFFFF','cross','shield','none'],
+  ['Nebula','#3020a0','#00e8ff','#ff40ff','per_bend','guidon','star5'],
+  ['Iron','#404850','#c0c0c0','#E0A030','fess','rectangle','cross'],
+  ['Nova','#1a0033','#ff40ff','#FFFFFF','gyronny','rectangle','star8'],
+  ['Auroran','#004466','#66ffcc','#FFD700','pall','pennant','none'],
+  ['Scorched','#330000','#ff3300','#FF9900','arrow','guidon','none'],
+  ['Polar','#1a2a4a','#e0e8f0','#C0C8D0','canton','rectangle','star5'],
+  ['Amber','#8b4513','#daa520','#FFFFFF','triband_v','rectangle','circle'],
+  ['Emerald','#003300','#00cc66','#FFD700','five_stripes','rectangle','crescent'],
+  ['Titanium','#1a1a2e','#e94560','#FFFFFF','bend','swallowtail','none'],
+  ['Monarch','#4a0060','#ffd700','#FFFFFF','border_flag','shield','diamond'],
+  ['Tempest','#003355','#88ccee','#FFD700','vert_stripes','rectangle','none'],
+  ['Sentinel','#222222','#888890','#ffcc00','chief','rectangle','anchor'],
 ];
 
 // ── RENDER FLAG ──
-function renderFlag(canvas, W, H, c1, c2, patternId, shapeId, emblemId, preview) {
+function renderFlag(canvas, W, H, c1, c2, c3, patternId, shapeId, emblemId, preview) {
   canvas.width = W; canvas.height = H;
   var ctx = canvas.getContext('2d');
   ctx.clearRect(0, 0, W, H);
@@ -383,14 +412,13 @@ function renderFlag(canvas, W, H, c1, c2, patternId, shapeId, emblemId, preview)
   var ox = offscreen.getContext('2d');
   pat.draw(ox, W, H, c1, c2);
 
-  // Draw emblem on top of pattern
+  // Draw emblem using tertiary (symbol) color
   if (emblemId && emblemId !== 'none') {
     var emb = EMBLEMS.find(function(e){return e.id===emblemId;});
     if (emb) {
       var er = Math.min(W, H) * 0.2;
-      // Emblem color: whichever contrasts more with the center region
       ox.save();
-      emb.draw(ox, W/2, H/2, er, c2);
+      emb.draw(ox, W/2, H/2, er, c3);
       ox.restore();
     }
   }
@@ -417,12 +445,12 @@ function renderFlag(canvas, W, H, c1, c2, patternId, shapeId, emblemId, preview)
 
 function renderPreview() {
   var c = document.getElementById('previewCanvas');
-  renderFlag(c, 480, 320, primaryColor, secondaryColor, currentPattern, currentShape, currentEmblem, false);
+  renderFlag(c, 480, 320, primaryColor, secondaryColor, tertiaryColor, currentPattern, currentShape, currentEmblem, false);
 }
 
 // ── BUILD UI ──
 function buildShapes() {
-  var g = document.getElementById('shapeGrid');
+  var g = document.getElementById('shapeStrip');
   SHAPES.forEach(function(s) {
     var btn = document.createElement('div');
     btn.className = 'shape-btn' + (s.id === currentShape ? ' active' : '');
@@ -491,7 +519,7 @@ function buildPatternGrid() {
 function renderAllPatternCards() {
   document.querySelectorAll('.pattern-card').forEach(function(card) {
     var c = card.querySelector('canvas');
-    renderFlag(c, 165, 110, primaryColor, secondaryColor, card.dataset.id, currentShape, currentEmblem, true);
+    renderFlag(c, 165, 110, primaryColor, secondaryColor, tertiaryColor, card.dataset.id, currentShape, currentEmblem, true);
   });
 }
 
@@ -505,8 +533,9 @@ function buildPresets() {
     item.appendChild(c);
     item.innerHTML += '<span>' + p[0] + '</span>';
     item.onclick = function() {
-      primaryColor = p[1]; secondaryColor = p[2]; currentPattern = p[3]; currentShape = p[4]; currentEmblem = p[5];
-      setPrimary(primaryColor); setSecondary(secondaryColor);
+      primaryColor = p[1]; secondaryColor = p[2]; tertiaryColor = p[3];
+      currentPattern = p[4]; currentShape = p[5]; currentEmblem = p[6];
+      setPrimary(primaryColor); setSecondary(secondaryColor); setTertiary(tertiaryColor);
       // Update shape UI
       document.querySelectorAll('.shape-btn').forEach(function(b){b.classList.toggle('active',b.dataset.id===currentShape);});
       // Update pattern UI
@@ -524,14 +553,17 @@ function renderAllPresets() {
   document.querySelectorAll('.preset-item').forEach(function(item) {
     var c = item.querySelector('canvas');
     var p = PRESETS[+item.dataset.idx];
-    renderFlag(c, 132, 88, p[1], p[2], p[3], p[4], p[5], true);
+    renderFlag(c, 132, 88, p[1], p[2], p[3], p[4], p[5], p[6], true);
   });
 }
 
 function updatePresetActive() {
   document.querySelectorAll('.preset-item').forEach(function(item) {
     var p = PRESETS[+item.dataset.idx];
-    var match = primaryColor.toUpperCase() === p[1].toUpperCase() && secondaryColor.toUpperCase() === p[2].toUpperCase() && currentPattern === p[3] && currentShape === p[4] && currentEmblem === p[5];
+    var match = primaryColor.toUpperCase() === p[1].toUpperCase()
+      && secondaryColor.toUpperCase() === p[2].toUpperCase()
+      && tertiaryColor.toUpperCase() === p[3].toUpperCase()
+      && currentPattern === p[4] && currentShape === p[5] && currentEmblem === p[6];
     item.classList.toggle('active', match);
   });
 }
@@ -559,11 +591,23 @@ function setSecondary(hex) {
   document.getElementById('secondarySwatchBg').style.background = hex;
   syncHsvFromHex('secondary', hex);
 }
+function setTertiary(hex) {
+  tertiaryColor = hex;
+  var rgb = hexToRgb(hex);
+  document.getElementById('tertiaryNativePicker').value = hex;
+  document.getElementById('tertiaryHex').value = hex.toUpperCase();
+  document.getElementById('tertiaryR').value = rgb.r;
+  document.getElementById('tertiaryG').value = rgb.g;
+  document.getElementById('tertiaryB').value = rgb.b;
+  document.getElementById('tertiarySwatchBg').style.background = hex;
+  syncHsvFromHex('tertiary', hex);
+}
 
 function colorChanged() { renderPreview(); renderAllPatternCards(); renderAllPresets(); updatePresetActive(); }
 
 document.getElementById('primaryNativePicker').addEventListener('input', function() { setPrimary(this.value); colorChanged(); });
 document.getElementById('secondaryNativePicker').addEventListener('input', function() { setSecondary(this.value); colorChanged(); });
+document.getElementById('tertiaryNativePicker').addEventListener('input', function() { setTertiary(this.value); colorChanged(); });
 
 document.getElementById('primaryHex').addEventListener('change', function() {
   var v = this.value.trim(); if (v[0] !== '#') v = '#' + v;
@@ -572,6 +616,10 @@ document.getElementById('primaryHex').addEventListener('change', function() {
 document.getElementById('secondaryHex').addEventListener('change', function() {
   var v = this.value.trim(); if (v[0] !== '#') v = '#' + v;
   if (/^#[0-9a-fA-F]{6}$/.test(v)) { setSecondary(v); colorChanged(); }
+});
+document.getElementById('tertiaryHex').addEventListener('change', function() {
+  var v = this.value.trim(); if (v[0] !== '#') v = '#' + v;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) { setTertiary(v); colorChanged(); }
 });
 
 ['primaryR','primaryG','primaryB'].forEach(function(id) {
@@ -586,9 +634,15 @@ document.getElementById('secondaryHex').addEventListener('change', function() {
     setSecondary(rgbToHex(r,g,b)); colorChanged();
   });
 });
+['tertiaryR','tertiaryG','tertiaryB'].forEach(function(id) {
+  document.getElementById(id).addEventListener('input', function() {
+    var r = clamp(+document.getElementById('tertiaryR').value), g = clamp(+document.getElementById('tertiaryG').value), b = clamp(+document.getElementById('tertiaryB').value);
+    setTertiary(rgbToHex(r,g,b)); colorChanged();
+  });
+});
 
 // ── HSV PICKER LOGIC ──
-var hsvState = { primary: {h:0,s:0,v:0}, secondary: {h:0,s:0,v:0} };
+var hsvState = { primary: {h:0,s:0,v:0}, secondary: {h:0,s:0,v:0}, tertiary: {h:0,s:0,v:0} };
 
 function renderSvCanvas(canvasId, hue) {
   var c = document.getElementById(canvasId);
@@ -759,7 +813,7 @@ function renderWave() {
   // First render current flag to offscreen
   if (!renderWave._flagCanvas) { renderWave._flagCanvas = document.createElement('canvas'); }
   var fc = renderWave._flagCanvas;
-  renderFlag(fc, 400, 250, primaryColor, secondaryColor, currentPattern, 'rectangle', currentEmblem, true);
+  renderFlag(fc, 400, 250, primaryColor, secondaryColor, tertiaryColor, currentPattern, 'rectangle', currentEmblem, true);
 
   // Scale cloth to canvas
   var scaleX = waveW / (CLOTH_W * 8 + 160);
@@ -858,11 +912,14 @@ document.getElementById('windSlider').addEventListener('input', function() {
 function init() {
   renderHueCanvas('primaryHueCanvas');
   renderHueCanvas('secondaryHueCanvas');
+  renderHueCanvas('tertiaryHueCanvas');
   setupHsvInteraction('primary', setPrimary);
   setupHsvInteraction('secondary', setSecondary);
+  setupHsvInteraction('tertiary', setTertiary);
 
   setPrimary(primaryColor);
   setSecondary(secondaryColor);
+  setTertiary(tertiaryColor);
 
   buildShapes();
   buildEmblems();
@@ -878,12 +935,12 @@ function init() {
 
 window.addEventListener('resize', function() {
   resizeWave();
-  renderHueCanvas('primaryHueCanvas');
-  renderHueCanvas('secondaryHueCanvas');
-  renderSvCanvas('primarySvCanvas', hsvState.primary.h);
-  renderSvCanvas('secondarySvCanvas', hsvState.secondary.h);
-  updateSvCursor('primary'); updateSvCursor('secondary');
-  updateHueCursor('primary'); updateHueCursor('secondary');
+  ['primary','secondary','tertiary'].forEach(function(which) {
+    renderHueCanvas(which + 'HueCanvas');
+    renderSvCanvas(which + 'SvCanvas', hsvState[which].h);
+    updateSvCursor(which);
+    updateHueCursor(which);
+  });
 });
 
 init();
