@@ -1300,7 +1300,8 @@ pGeo.setAttribute('color',pColAttr);
 pGeo.setDrawRange(0,0);
 const pMat=new THREE.PointsMaterial({size:S.psize,vertexColors:true,transparent:true,opacity:1.0,sizeAttenuation:true,depthWrite:true,blending:THREE.NormalBlending,map:makeCircleTex(),alphaTest:0.5});
 const pSystem=new THREE.Points(pGeo,pMat);
-pSystem.frustumCulled=false; // prevents WebGL from clipping sprites at frustum edge
+pSystem.frustumCulled=false; // never cull — particles must render at all camera distances/angles
+pGeo.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,0,0),Infinity); // explicit infinite sphere
 orbitalGroup.add(pSystem);
 
 // Static flow arrows
