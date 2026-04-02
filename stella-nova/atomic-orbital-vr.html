@@ -1274,6 +1274,235 @@ reticle.matrixAutoUpdate=false;
 reticle.visible=false;
 scene.add(reticle);
 
+/* ════════════════════════════════════════════════════════════
+   AR 3D PANEL — world-space canvas texture GUI
+   Floats beside the bounding cube; finger-poke interaction.
+   GREP: initARPanel | drawARPanel | updateARPanel | checkARPoke
+   ════════════════════════════════════════════════════════════ */
+const ARP = {
+  PW:0.28, PH:0.40,   // metres physical size
+  CW:512,  CH:732,    // canvas pixel resolution
+  mesh:null, tex:null, ctx:null,
+  buttons:[],          // [{u0,v0,u1,v1,action,label}]
+  cooldown:0,          // frame cooldown after poke
+  dirty:true,          // redraw needed
+};
+
+// ── Canvas helpers ──
+function _rrect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+function _div(ctx,W,y){
+  ctx.save();ctx.strokeStyle='rgba(150,200,255,0.1)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(18,y);ctx.lineTo(W-18,y);ctx.stroke();ctx.restore();
+}
+
+function initARPanel(){
+  if(ARP.mesh) return;
+  const canvas=document.createElement('canvas');
+  canvas.width=ARP.CW; canvas.height=ARP.CH;
+  ARP.ctx=canvas.getContext('2d');
+  ARP.tex=new THREE.CanvasTexture(canvas);
+  ARP.tex.minFilter=THREE.LinearFilter;
+  ARP.tex.generateMipmaps=false;
+  const mat=new THREE.MeshBasicMaterial({
+    map:ARP.tex, transparent:true,
+    side:THREE.DoubleSide, depthWrite:false,
+  });
+  ARP.mesh=new THREE.Mesh(new THREE.PlaneGeometry(ARP.PW,ARP.PH), mat);
+  ARP.mesh.renderOrder=999;
+  ARP.mesh.visible=false;
+  scene.add(ARP.mesh);
+}
+
+function drawARPanel(){
+  const ctx=ARP.ctx;
+  const W=ARP.CW, H=ARP.CH;
+  ARP.buttons=[];
+  ctx.clearRect(0,0,W,H);
+
+  // Background + border
+  ctx.fillStyle='rgba(6,9,18,0.95)';
+  _rrect(ctx,0,0,W,H,20); ctx.fill();
+  ctx.strokeStyle='rgba(150,200,255,0.28)';ctx.lineWidth=2;
+  _rrect(ctx,1,1,W-2,H-2,20); ctx.stroke();
+
+  // Top accent gradient
+  const gr=ctx.createLinearGradient(0,0,W,0);
+  gr.addColorStop(0,'rgba(150,200,255,0)');
+  gr.addColorStop(0.5,'rgba(150,200,255,0.55)');
+  gr.addColorStop(1,'rgba(150,200,255,0)');
+  ctx.fillStyle=gr; ctx.fillRect(0,0,W,3);
+
+  const SUBS=['s','p','d','f','g','h'];
+  const{n,l,m}=S; const ms=(m>=0?'+':'')+m;
+  let y=18;
+
+  // Title
+  ctx.textAlign='center';
+  ctx.font='italic 500 26px "Cormorant Garamond",serif';
+  ctx.fillStyle='rgba(150,200,255,0.55)';
+  ctx.fillText(`${n}${SUBS[l]??'?'} orbital`,W/2,y+26); y+=28;
+  ctx.font='500 13px "JetBrains Mono",monospace';
+  ctx.fillStyle='rgba(150,200,255,0.28)';
+  ctx.fillText(`|${n},${l},${ms}⟩`,W/2,y+16); y+=28;
+
+  _div(ctx,W,y); y+=16;
+
+  // ── QN stepper rows ──
+  function qnRow(sym,val,qn,minV,maxV){
+    const RH=68, BW=68, BH=46;
+    const cx=W/2, by=y+(RH-BH)/2;
+    // Label
+    ctx.font='italic 700 32px "Cormorant Garamond",serif';
+    ctx.fillStyle='rgba(150,200,255,0.6)';
+    ctx.textAlign='left';
+    ctx.fillText(sym,20,y+RH*0.72);
+    // Value
+    ctx.font='bold 24px "JetBrains Mono",monospace';
+    ctx.fillStyle='#e8ecf4';
+    ctx.textAlign='center';
+    ctx.fillText(String(val),cx,y+RH*0.72);
+    // − button
+    const bxM=cx-BW*1.55, bxP=cx+BW*0.55;
+    [[bxM,'−',false],[bxP,'+',true]].forEach(([bx,lbl,isPlus])=>{
+      ctx.fillStyle='rgba(150,200,255,0.07)';
+      _rrect(ctx,bx,by,BW,BH,9); ctx.fill();
+      ctx.strokeStyle='rgba(150,200,255,0.22)';ctx.lineWidth=1.2;
+      _rrect(ctx,bx,by,BW,BH,9); ctx.stroke();
+      ctx.font='bold 24px "JetBrains Mono",monospace';
+      ctx.fillStyle='rgba(150,200,255,0.75)';
+      ctx.textAlign='center';
+      ctx.fillText(lbl,bx+BW/2,by+BH*0.75);
+      ARP.buttons.push({u0:bx/W,v0:by/H,u1:(bx+BW)/W,v1:(by+BH)/H,
+        action:()=>{
+          let{n:nn,l:ll,m:mm}=S;
+          const d=isPlus?1:-1;
+          if(qn==='n')nn+=d; else if(qn==='l')ll+=d; else mm+=d;
+          applyQN(nn,ll,mm); S.dirty=true;
+        }
+      });
+    });
+    y+=RH;
+  }
+  qnRow('n',n,'n',1,6);
+  qnRow('ℓ',l,'l',0,n-1);
+  qnRow('m',m,'m',-l,l);
+
+  _div(ctx,W,y); y+=14;
+
+  // ── B Field toggle ──
+  const bOn=S.showBField;
+  ctx.fillStyle=bOn?'rgba(150,200,255,0.11)':'rgba(255,60,60,0.08)';
+  _rrect(ctx,16,y,W-32,66,12); ctx.fill();
+  ctx.strokeStyle=bOn?'rgba(150,200,255,0.45)':'rgba(255,80,80,0.35)';
+  ctx.lineWidth=1.5; _rrect(ctx,16,y,W-32,66,12); ctx.stroke();
+  ctx.font='bold 18px "JetBrains Mono",monospace';
+  ctx.fillStyle=bOn?'#96c8ff':'#e06060';
+  ctx.textAlign='center';
+  ctx.fillText(bOn?'⊕  B FIELD  ON':'⊗  B FIELD  OFF',W/2,y+42);
+  ARP.buttons.push({u0:16/W,v0:y/H,u1:(W-16)/W,v1:(y+66)/H,
+    action:()=>setMagField(!S.showBField)});
+  y+=80;
+
+  _div(ctx,W,y); y+=14;
+
+  // ── Color mode ──
+  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.fillStyle='rgba(150,200,255,0.3)';
+  ctx.textAlign='left';
+  ctx.fillText('VISUALIZE',18,y+13); y+=20;
+  const modes=['|ψ|²','Re','Im','∠'];
+  const mw=(W-36)/4-5;
+  for(let i=0;i<4;i++){
+    const bx=18+i*(mw+5), act=S.colorMode===i;
+    ctx.fillStyle=act?'rgba(255,200,50,0.14)':'rgba(255,255,255,0.03)';
+    _rrect(ctx,bx,y,mw,50,8); ctx.fill();
+    ctx.strokeStyle=act?'rgba(255,200,50,0.5)':'rgba(150,200,255,0.14)';
+    ctx.lineWidth=1.2; _rrect(ctx,bx,y,mw,50,8); ctx.stroke();
+    ctx.font=(act?'bold ':'')+'15px "JetBrains Mono",monospace';
+    ctx.fillStyle=act?'#ffc832':'rgba(150,200,255,0.55)';
+    ctx.textAlign='center';
+    ctx.fillText(modes[i],bx+mw/2,y+33);
+    const ii=i;
+    ARP.buttons.push({u0:bx/W,v0:y/H,u1:(bx+mw)/W,v1:(y+50)/H,
+      action:()=>setColorMode(ii)});
+  }
+  y+=64;
+
+  _div(ctx,W,y); y+=14;
+
+  // ── Particle count presets ──
+  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.fillStyle='rgba(150,200,255,0.3)';
+  ctx.textAlign='left';
+  ctx.fillText('PARTICLES',18,y+13); y+=20;
+  const presets=[['5k',5000],['10k',10000],['25k',25000],['50k',50000]];
+  const pw=(W-36)/4-5;
+  for(let i=0;i<4;i++){
+    const bx=18+i*(pw+5), act=Math.abs(S.N-presets[i][1])<500;
+    ctx.fillStyle=act?'rgba(150,200,255,0.12)':'rgba(255,255,255,0.03)';
+    _rrect(ctx,bx,y,pw,46,8); ctx.fill();
+    ctx.strokeStyle=act?'rgba(150,200,255,0.45)':'rgba(150,200,255,0.12)';
+    ctx.lineWidth=1.2; _rrect(ctx,bx,y,pw,46,8); ctx.stroke();
+    ctx.font=(act?'bold ':'')+'14px "JetBrains Mono",monospace';
+    ctx.fillStyle=act?'#96c8ff':'rgba(150,200,255,0.5)';
+    ctx.textAlign='center';
+    ctx.fillText(presets[i][0],bx+pw/2,y+30);
+    const pi=i;
+    ARP.buttons.push({u0:bx/W,v0:y/H,u1:(bx+pw)/W,v1:(y+46)/H,
+      action:()=>setN(presets[pi][1])});
+  }
+  y+=60;
+
+  ARP.tex.needsUpdate=true;
+}
+
+function updateARPanel(frame){
+  if(!ARP.mesh||!ARP.mesh.visible) return;
+
+  // Position panel beside the orbital in world space
+  const wp=new THREE.Vector3();
+  orbitalGroup.getWorldPosition(wp);
+  const sz=Math.max(orbitalGroup.scale.x, 0.04);
+  ARP.mesh.position.set(wp.x + sz*3 + 0.16, wp.y + 0.04, wp.z);
+  // Always face camera
+  ARP.mesh.quaternion.copy(camera.quaternion);
+
+  // Redraw if state changed
+  if(ARP.dirty){ ARP.dirty=false; drawARPanel(); }
+
+  // Poke detection
+  if(!frame||ARP.cooldown>0){if(ARP.cooldown>0)ARP.cooldown--;return;}
+  const sess=renderer.xr.getSession(); if(!sess) return;
+  const refSpace=renderer.xr.getReferenceSpace(); if(!refSpace) return;
+
+  for(const src of sess.inputSources){
+    if(!src.hand) continue;
+    const tip=_jointWorldPos(src.hand,'index-finger-tip',frame,refSpace);
+    if(!tip) continue;
+    const local=ARP.mesh.worldToLocal(tip.clone());
+    if(Math.abs(local.z)>0.035) continue; // must be within 3.5cm of surface
+    const u=(local.x+ARP.PW/2)/ARP.PW;
+    const v=1-(local.y+ARP.PH/2)/ARP.PH;
+    if(u<0||u>1||v<0||v>1) continue;
+    for(const btn of ARP.buttons){
+      if(u>=btn.u0&&u<=btn.u1&&v>=btn.v0&&v<=btn.v1){
+        btn.action();
+        ARP.dirty=true;
+        ARP.cooldown=22; // ~0.3s at 72fps
+        return;
+      }
+    }
+  }
+}
+
+
 // Nucleus
 const nucleusGroup=new THREE.Group();orbitalGroup.add(nucleusGroup);
 nucleusGroup.add(new THREE.Mesh(new THREE.SphereGeometry(.055,20,20),new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:.9})));
@@ -1968,11 +2197,16 @@ function updateHandTracking(frame){
       // Cancel hit test — reticle gone, no re-placement
       if(hitTestSrc){ hitTestSrc.cancel(); hitTestSrc=null; }
       reticle.visible = false;
-      arStatus('Placed · pinch to move · 2-hand to scale');
+      // Show 3D world-space control panel
+      initARPanel();
+      ARP.mesh.visible = true;
+      ARP.dirty = true;
+      arStatus('Placed · poke panel to control');
     });
 
     // ── Cleanup on session end ──
     s.addEventListener('end', () => {
+      if(ARP.mesh) ARP.mesh.visible = false;
       arSession = null; hitTestSrc = null;
       arPlaced = false; arSpawnDone = false; hasHitTest = false;
       inARSession = false; arScaleTarget = 1;
@@ -2106,6 +2340,7 @@ function applyQN(n,l,m){
   ['sl-n','sl-l','sl-m'].forEach(id=>sg(document.getElementById(id)));
   S.n=n;S.l=l;S.m=m;
   updateDisplay();
+  if(ARP.mesh) ARP.dirty=true;
 }
 function syncQN(){
   applyQN(+document.getElementById('sl-n').value,
@@ -2150,6 +2385,7 @@ function setColorMode(mode){
   S.colorMode=mode; S.colDirty=true;
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',+b.dataset.mode===mode));
   document.querySelectorAll('.qp-mode').forEach(b=>b.classList.toggle('active',+b.dataset.mode===mode));
+  if(ARP.mesh) ARP.dirty=true;
 }
 document.querySelectorAll('.mode-btn').forEach(b=>b.addEventListener('click',()=>setColorMode(+b.dataset.mode)));
 document.querySelectorAll('.qp-mode').forEach(b=>b.addEventListener('click',()=>setColorMode(+b.dataset.mode)));
@@ -2187,6 +2423,7 @@ function setMagField(on){
   if(ib){ib.classList.toggle('on',on);ib.classList.toggle('off',!on);}
   if(!on){bArrowLines.visible=false;btLines.visible=false;bTracers=[];}
   else if(!bFieldData) computeBField();
+  if(ARP.mesh) ARP.dirty=true;
 }
 document.getElementById('btn-bfield-toggle').addEventListener('click',()=>{S.showBField=!S.showBField;setMagField(S.showBField);});
 document.getElementById('qp-tog-b').addEventListener('click',()=>setMagField(!S.showBField));
@@ -2303,6 +2540,7 @@ renderer.setAnimationLoop((time, frame)=>{
   handleVRInput(frame);
   if(frame && window._arUpdateHitTest) _arUpdateHitTest(frame);
   if(window._arUpdateScale) _arUpdateScale(dt);
+  updateARPanel(frame);
   // Safety: clamp scale back to 1 if something collapsed it outside AR mode
   if(!document.body.classList.contains('ar-mode') && orbitalGroup.scale.x < 0.05)
     orbitalGroup.scale.setScalar(1);
