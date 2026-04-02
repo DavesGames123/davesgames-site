@@ -127,7 +127,36 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--surface2);}
 
-/* ── MOBILE PANEL TOGGLE BUTTON ── */
+/* ── XR / DOM OVERLAY MODE ── */
+/* Applied via body.xr-active when an immersive-vr session is running.
+   The DOM overlay renders the HTML on top of the VR view.
+   We force the panel open, compact it, and pin it top-left. */
+.xr-active #panel{
+  transform:translateX(0) !important;
+  position:fixed !important;
+  top:0 !important; left:0 !important; bottom:0 !important;
+  width:min(300px,40vw) !important;
+  max-height:100dvh !important;
+  border-radius:0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  font-size:0.9em;
+  background:rgba(8,10,18,0.88) !important;
+}
+.xr-active #panel .panel-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.xr-active #panel-toggle{display:none !important;}
+.xr-active #panel-overlay{display:none !important;}
+.xr-active .topbar{display:none;}
+/* Bigger touch targets in XR (controller ray-cast clicking) */
+.xr-active input[type=range]::-webkit-slider-thumb{width:20px;height:20px;}
+.xr-active .tog{width:44px;height:24px;}
+.xr-active .tog-track::after{width:18px;height:18px;}
+.xr-active .tog input:checked ~ .tog-track::after{transform:translateX(20px);}
+.xr-active .panel-btn{padding:8px 14px;font-size:0.6rem;}
+.xr-active .mode-btn{padding:10px 2px;}
+/* XR perf badge — shown in info bar during XR */
+#xr-perf-badge{display:none;font-size:0.46rem;letter-spacing:0.1em;color:var(--yellow);background:rgba(255,200,50,0.08);border:1px solid rgba(255,200,50,0.2);padding:3px 8px;margin-top:6px;text-align:center;}
+.xr-active #xr-perf-badge{display:block;}
 #panel-toggle{
   display:none;
   position:absolute;
@@ -340,6 +369,7 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
       <div class="tog-row"><span class="tog-lbl">Axes</span><label class="tog"><input type="checkbox" id="cb-axes"><span class="tog-track"></span></label></div>
 
       <div class="info-bar" id="info-bar">n=3 l=1 m=+1 &middot; 8000 pts<br>drag to orbit &middot; scroll to zoom</div>
+      <div id="xr-perf-badge">&#9889; XR mode &mdash; reduced quality</div>
     </div>
   </div>
 
@@ -483,7 +513,6 @@ camera.position.set(0,1.8,8.5);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.target.set(0,0,0);controls.enableDamping=true;controls.dampingFactor=.05;
 controls.minDistance=.3;controls.maxDistance=60;
-renderer.xr.addEventListener('sessionstart',()=>controls.enabled=false);
 renderer.xr.addEventListener('sessionend',()=>controls.enabled=true);
 
 // Starfield
@@ -940,25 +969,94 @@ function rebuildStaticFlow(){
 }
 
 /* ════════════════════════════════════════════════════════════
-   VR BUTTON
+   VR BUTTON + SESSION MANAGEMENT
    ════════════════════════════════════════════════════════════ */
 {
   const wrap=document.getElementById('vr-wrap');
   const btn=document.createElement('button');btn.className='vr-btn-el';btn.textContent='Enter VR';wrap.appendChild(btn);
   let activeSession=null;
-  async function onSessionStart(s){s.addEventListener('end',()=>{activeSession=null;btn.textContent='Enter VR';});await renderer.xr.setSession(s);activeSession=s;btn.textContent='Exit VR';}
+  let xrSaved=null; // saved desktop settings restored on exit
+
+  async function onSessionStart(s){
+    s.addEventListener('end',()=>{
+      activeSession=null;
+      btn.textContent='Enter VR';
+      document.body.classList.remove('xr-active');
+      controls.enabled=true;
+      // Restore desktop settings
+      if(xrSaved){
+        S.N=xrSaved.N; S.bGridDim=xrSaved.bGridDim;
+        S.bUpdateEvery=xrSaved.bUpdateEvery; S.bTrSpawn=xrSaved.bTrSpawn;
+        xrSaved=null;
+        startGrow(); // grow back to previous count
+      }
+    });
+
+    await renderer.xr.setSession(s);
+    activeSession=s;
+    btn.textContent='Exit VR';
+    controls.enabled=false;
+
+    /* ── Step 1: Teleport user 5 units back so atom is in front ── */
+    const refSpace=renderer.xr.getReferenceSpace();
+    if(refSpace&&refSpace.getOffsetReferenceSpace){
+      // Positive z offset places user's origin at z=+5 in scene space.
+      // They face -z by default, so the atom at origin is 5 units ahead.
+      const offset=new XRRigidTransform({x:0,y:0,z:5,w:1},{x:0,y:0,z:0,w:1});
+      renderer.xr.setReferenceSpace(refSpace.getOffsetReferenceSpace(offset));
+    }
+
+    /* ── Step 2: Reduce simulation load for Quest GPU ── */
+    xrSaved={N:S.N, bGridDim:S.bGridDim, bUpdateEvery:S.bUpdateEvery, bTrSpawn:S.bTrSpawn};
+    const XR_MAX_P=30000;
+    if(S.N>XR_MAX_P){ S.N=XR_MAX_P; startGrow(); }
+    S.bGridDim=7;          // 7³=343 pts — fast enough for real-time in XR
+    S.bUpdateEvery=90;     // recompute B every 90 frames (~1.25 s at 72 fps)
+    S.bTrSpawn=150;        // fewer tracers, still looks good
+    bFieldFrameCount=0;    // reset so next recompute uses new settings
+
+    /* ── Step 3: Force panel open as DOM overlay ── */
+    document.body.classList.add('xr-active');
+    document.getElementById('panel').classList.add('panel-open');
+  }
+
   btn.addEventListener('click',async()=>{
     if(activeSession){activeSession.end();return;}
-    try{const s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor','hand-tracking','dom-overlay'],domOverlay:{root:document.getElementById('ui')}});onSessionStart(s);}catch(e){console.warn(e);}
+    try{
+      const s=await navigator.xr.requestSession('immersive-vr',{
+        requiredFeatures:['local'],
+        optionalFeatures:['local-floor','bounded-floor','hand-tracking','dom-overlay'],
+        domOverlay:{root:document.getElementById('ui')}
+      });
+      onSessionStart(s);
+    }catch(e){console.warn('XR session failed:',e);}
   });
-  if(navigator.xr){navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(ok)btn.classList.add('vr-ready');else{btn.textContent='VR Unavailable';btn.disabled=true;}}).catch(()=>{btn.textContent='VR Unavailable';btn.disabled=true;});}
-  else{btn.textContent='No WebXR';btn.disabled=true;}
+
+  if(navigator.xr){
+    navigator.xr.isSessionSupported('immersive-vr')
+      .then(ok=>{if(ok)btn.classList.add('vr-ready');else{btn.textContent='VR Unavailable';btn.disabled=true;}})
+      .catch(()=>{btn.textContent='VR Unavailable';btn.disabled=true;});
+  }else{btn.textContent='No WebXR';btn.disabled=true;}
 }
 
+/* ════════════════════════════════════════════════════════════
+   VR THUMBSTICK INPUT — rotate orbital cloud left/right
+   ════════════════════════════════════════════════════════════ */
 let vrRotY=0;
 function handleVRInput(){
   const sess=renderer.xr.getSession();if(!sess)return;
-  for(const src of sess.inputSources){if(!src.gamepad)continue;const ax=src.gamepad.axes;const stX=ax[2]??ax[0]??0;if(Math.abs(stX)>.12){vrRotY-=stX*.018;pSystem.rotation.y=vrRotY;ftLines.rotation.y=vrRotY;btLines.rotation.y=vrRotY;nucleusGroup.rotation.y=vrRotY;}}
+  for(const src of sess.inputSources){
+    if(!src.gamepad)continue;
+    const ax=src.gamepad.axes;
+    const stX=ax[2]??ax[0]??0;
+    if(Math.abs(stX)>.12){
+      vrRotY-=stX*.018;
+      pSystem.rotation.y=vrRotY;
+      ftLines.rotation.y=vrRotY;
+      btLines.rotation.y=vrRotY;
+      nucleusGroup.rotation.y=vrRotY;
+    }
+  }
 }
 
 /* ════════════════════════════════════════════════════════════
