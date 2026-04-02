@@ -93,6 +93,52 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 .tog-track::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;background:var(--text-faint);border-radius:50%;transition:all 0.2s;}
 .tog input:checked ~ .tog-track::after{transform:translateX(16px);background:var(--blue);}
 
+/* ── BIG TOGGLE BUTTON ── */
+.big-toggle{
+  display:flex;align-items:center;gap:10px;
+  width:100%;padding:10px 14px;margin-bottom:6px;
+  background:rgba(150,200,255,0.04);
+  border:1px solid var(--border-b);
+  cursor:pointer;transition:all 0.18s;
+  font-family:'JetBrains Mono',monospace;
+  text-align:left;
+}
+.big-toggle:hover{background:rgba(150,200,255,0.09);border-color:rgba(150,200,255,0.25);}
+.big-toggle.active{background:rgba(150,200,255,0.1);border-color:rgba(150,200,255,0.4);}
+.big-toggle-icon{font-size:1rem;color:var(--blue-dim);flex-shrink:0;transition:color 0.18s;}
+.big-toggle.active .big-toggle-icon{color:var(--blue);}
+.big-toggle-label{flex:1;font-size:0.62rem;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);}
+.big-toggle.active .big-toggle-label{color:var(--text);}
+.big-toggle-state{
+  font-size:0.52rem;letter-spacing:0.14em;font-weight:700;
+  padding:2px 8px;border-radius:2px;
+  background:rgba(100,200,100,0.1);border:1px solid rgba(100,200,100,0.3);
+  color:var(--green);transition:all 0.18s;
+}
+.big-toggle.off .big-toggle-state{
+  background:rgba(255,80,80,0.08);border-color:rgba(255,80,80,0.25);
+  color:#e05050;
+}
+
+/* ── RESOLUTION PRESET GRID ── */
+.res-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:8px;}
+.res-btn{
+  background:transparent;border:1px solid var(--border);
+  color:var(--text-faint);padding:8px 4px;
+  font-family:'JetBrains Mono',monospace;font-size:0.62rem;
+  font-weight:700;letter-spacing:0.05em;
+  cursor:pointer;transition:all 0.14s;text-align:center;
+  line-height:1.5;
+}
+.res-btn span{display:block;font-size:0.44rem;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);margin-top:2px;}
+.res-btn:hover{color:var(--text-dim);border-color:var(--border-b);}
+.res-btn.active{
+  background:rgba(150,200,255,0.08);
+  border-color:rgba(150,200,255,0.4);
+  color:var(--blue);
+}
+.res-btn.active span{color:var(--blue-dim);}
+
 /* ── PANEL BUTTON ── */
 .btn-row{display:flex;align-items:center;gap:8px;margin:6px 0;}
 .panel-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;padding:5px 12px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
@@ -254,6 +300,35 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
   padding: 4px 8px; margin-top: 6px; text-align: center;
 }
 .xr-active #xr-perf-badge { display: block; }
+
+/* ── QUICK TOGGLES — always visible, below hamburger ── */
+#quick-toggles{
+  position:fixed;top:96px;left:12px;
+  z-index:199;display:flex;flex-direction:column;gap:4px;pointer-events:all;
+}
+.in-frame #quick-toggles{top:56px;}
+.qt-item{
+  display:flex;align-items:center;gap:7px;
+  padding:5px 9px;
+  background:rgba(10,12,20,0.82);border:1px solid var(--border);border-radius:2px;
+  backdrop-filter:blur(8px);cursor:pointer;
+  transition:border-color 0.15s,background 0.15s;user-select:none;white-space:nowrap;
+}
+.qt-item:hover{background:rgba(20,28,50,0.92);border-color:var(--border-b);}
+.qt-item input[type=checkbox]{
+  appearance:none;-webkit-appearance:none;
+  width:12px;height:12px;border:1.5px solid var(--border-b);border-radius:1px;
+  background:transparent;flex-shrink:0;position:relative;cursor:pointer;transition:all 0.15s;
+}
+.qt-item input[type=checkbox]:checked{background:var(--blue-dim);border-color:var(--blue);}
+.qt-item input[type=checkbox]:checked::after{
+  content:'';position:absolute;top:1px;left:3px;width:4px;height:7px;
+  border:1.5px solid #fff;border-top:none;border-left:none;transform:rotate(45deg);
+}
+.qt-lbl{font-size:0.55rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);transition:color 0.15s;}
+.qt-item:has(input:checked) .qt-lbl{color:var(--blue);}
+@media(min-width:701px){#quick-toggles{top:58px;}.in-frame #quick-toggles{top:14px;}}
+.ar-mode #quick-toggles{display:none;}
 #panel-toggle{
   display:none;
   position:absolute;
@@ -276,6 +351,73 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 }
 #panel-toggle:hover{background:rgba(30,40,60,0.95);border-color:var(--blue-dim);}
 .in-frame #panel-toggle{top:10px;}
+
+/* ── QUICK CONTROLS — always visible, same row as hamburger ── */
+#quick-controls{
+  position:absolute;
+  top:50px; left:60px;   /* hamburger is 38px wide at left:12px → right edge ~50px + 10px gap */
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  pointer-events:all;
+  z-index:290;           /* below hamburger (300) so it never covers it */
+}
+.in-frame #quick-controls{ top:10px; left:60px; }
+
+/* Desktop: panel always visible, push controls to the right of it */
+@media(min-width:701px){
+  #quick-controls{ top:66px; left:calc(var(--panel-w) + 20px); }
+  .in-frame #quick-controls{ top:14px; left:calc(var(--panel-w) + 20px); }
+}
+
+.qc-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:6px 10px;
+  background:rgba(8,12,22,0.82);
+  border:1px solid var(--border-b);
+  backdrop-filter:blur(12px);
+  cursor:pointer;
+  user-select:none;
+  transition:background 0.15s,border-color 0.15s;
+  white-space:nowrap;
+}
+.qc-row:hover{ background:rgba(20,30,50,0.9); border-color:rgba(150,200,255,0.22); }
+
+/* Custom checkbox */
+.qc-row input[type=checkbox]{ display:none; }
+.qc-check{
+  width:14px; height:14px; flex-shrink:0;
+  border:1px solid rgba(150,200,255,0.3);
+  background:rgba(0,0,0,0.4);
+  border-radius:2px;
+  position:relative;
+  transition:all 0.15s;
+}
+.qc-row input:checked ~ .qc-check{
+  background:rgba(150,200,255,0.15);
+  border-color:var(--blue-dim);
+}
+.qc-row input:checked ~ .qc-check::after{
+  content:'';
+  position:absolute;
+  left:3px; top:1px;
+  width:6px; height:8px;
+  border:1.5px solid var(--blue);
+  border-top:none; border-left:none;
+  transform:rotate(42deg);
+}
+.qc-label{
+  font-size:0.58rem;
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  color:var(--text-dim);
+  transition:color 0.15s;
+}
+.qc-row:has(input:checked) .qc-label{ color:var(--text); }
+/* ar-mode: hide quick controls from overlay */
+.ar-mode #quick-controls{ display:none !important; }
 
 /* ── PANEL OVERLAY (mobile) ── */
 #panel-overlay{
@@ -383,6 +525,35 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
   <!-- Floating toggle — mobile only -->
   <button id="panel-toggle" onclick="togglePanel()" aria-label="Open controls">&#9776;</button>
 
+  <!-- Always-visible quick controls, below hamburger -->
+  <div id="quick-controls">
+    <label class="qc-row">
+      <input type="checkbox" id="qc-bfield" checked>
+      <span class="qc-check"></span>
+      <span class="qc-label">Magnetic Field</span>
+    </label>
+  </div>
+
+  <!-- Quick toggles — always visible below hamburger -->
+  <div id="quick-toggles">
+    <label class="qt-item">
+      <input type="checkbox" id="qt-bfield" checked>
+      <span class="qt-lbl">B Field</span>
+    </label>
+    <label class="qt-item">
+      <input type="checkbox" id="qt-btr" checked>
+      <span class="qt-lbl">B Tracers</span>
+    </label>
+    <label class="qt-item">
+      <input type="checkbox" id="qt-flow" checked>
+      <span class="qt-lbl">Animate</span>
+    </label>
+    <label class="qt-item">
+      <input type="checkbox" id="qt-flowtr">
+      <span class="qt-lbl">Flow Tr</span>
+    </label>
+  </div>
+
   <!-- Overlay behind drawer -->
   <div id="panel-overlay" onclick="closePanel()"></div>
 
@@ -409,9 +580,9 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
       </div>
 
       <div class="sec-label">Particles</div>
-      <div class="row"><span class="row-lbl">count</span><input type="range" id="sl-N" min="1000" max="2000000" value="100000" step="1000"><span class="val" id="vl-N">100k</span></div>
-      <div class="row"><span class="row-lbl">size</span><input type="range" id="sl-sz" min="0.005" max="0.5" value="0.02" step="0.005"><span class="val" id="vl-sz">0.020</span></div>
-      <div class="row"><span class="row-lbl">scale</span><input type="range" id="sl-ls" min="50" max="6000" value="800" step="25"><span class="val" id="vl-ls">800</span></div>
+      <div class="row"><span class="row-lbl">count</span><input type="range" id="sl-N" min="1000" max="250000" value="100000" step="1000"><span class="val" id="vl-N">100k</span></div>
+      <div class="row"><span class="row-lbl">size</span><input type="range" id="sl-sz" min="0.005" max="0.25" value="0.02" step="0.005"><span class="val" id="vl-sz">0.020</span></div>
+      <div class="row"><span class="row-lbl">scale</span><input type="range" id="sl-ls" min="50" max="3000" value="800" step="25"><span class="val" id="vl-ls">800</span></div>
 
       <div class="sec-label">Time Evolution</div>
       <div class="tog-row"><span class="tog-lbl">Evolve phase</span><label class="tog"><input type="checkbox" id="cb-ev" checked><span class="tog-track"></span></label></div>
@@ -427,9 +598,23 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
       </div>
 
       <div class="sec-label">Magnetic Field</div>
-      <div class="tog-row"><span class="tog-lbl">Show B arrows</span><label class="tog"><input type="checkbox" id="cb-bfield" checked><span class="tog-track"></span></label></div>
+
+      <button class="big-toggle" id="btn-bfield-toggle">
+        <span class="big-toggle-icon">&#9632;</span>
+        <span class="big-toggle-label">B ARROWS</span>
+        <span class="big-toggle-state" id="bfield-state-lbl">ON</span>
+      </button>
+
       <div id="bfield-opts" style="display:block">
-        <div class="row"><span class="row-lbl">grid N</span><input type="range" id="sl-bgdim" min="3" max="24" value="24" step="1"><span class="val" id="vl-bgdim">24</span></div>
+
+        <div class="sec-label" style="margin-top:10px">Resolution</div>
+        <div class="res-grid">
+          <button class="res-btn" data-dim="5">5³<br><span>Fast</span></button>
+          <button class="res-btn" data-dim="10">10³<br><span>Med</span></button>
+          <button class="res-btn" data-dim="16">16³<br><span>High</span></button>
+          <button class="res-btn active" data-dim="24">24³<br><span>Max</span></button>
+        </div>
+
         <div class="row"><span class="row-lbl">extent</span><input type="range" id="sl-bgext" min="5" max="120" value="40" step="1"><span class="val" id="vl-bgext">40</span></div>
         <div class="row"><span class="row-lbl">scale</span><input type="range" id="sl-basc" min="0.1" max="5" value="0.1" step="0.1"><span class="val" id="vl-basc">0.1</span></div>
         <div class="row"><span class="row-lbl">gamma</span><input type="range" id="sl-bgam" min="0.2" max="4" value="1.0" step="0.1"><span class="val" id="vl-bgam">1.0</span></div>
@@ -438,10 +623,15 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
           <button class="panel-btn" id="btn-brecompute">Recompute B</button>
           <span class="status-txt ready" id="bstatus">ready</span>
         </div>
-        <div class="tog-row"><span class="tog-lbl">B-field tracers</span><label class="tog"><input type="checkbox" id="cb-btr" checked><span class="tog-track"></span></label></div>
+
+        <button class="big-toggle" id="btn-btr-toggle" style="margin-top:6px">
+          <span class="big-toggle-icon">&#8621;</span>
+          <span class="big-toggle-label">B TRACERS</span>
+          <span class="big-toggle-state" id="btr-state-lbl">ON</span>
+        </button>
         <div id="btr-opts" style="display:block">
           <div class="row"><span class="row-lbl">speed</span><input type="range" id="sl-bspd" min="0.1" max="20" value="1.0" step="0.1"><span class="val" id="vl-bspd">1.0</span></div>
-          <div class="row"><span class="row-lbl">spawn</span><input type="range" id="sl-bspwn" min="1" max="5000" value="750" step="1"><span class="val" id="vl-bspwn">750</span></div>
+          <div class="row"><span class="row-lbl">spawn</span><input type="range" id="sl-bspwn" min="1" max="1500" value="750" step="1"><span class="val" id="vl-bspwn">750</span></div>
           <div class="row"><span class="row-lbl">trail</span><input type="range" id="sl-btrl" min="5" max="120" value="50" step="1"><span class="val" id="vl-btrl">50</span></div>
         </div>
       </div>
@@ -671,7 +861,7 @@ const pColAttr=new THREE.BufferAttribute(colArr,3); pColAttr.setUsage(THREE.Dyna
 pGeo.setAttribute('position',pPosAttr);
 pGeo.setAttribute('color',pColAttr);
 pGeo.setDrawRange(0,0);
-const pMat=new THREE.PointsMaterial({size:S.psize,vertexColors:true,transparent:true,opacity:.88,sizeAttenuation:true,depthWrite:false,blending:THREE.AdditiveBlending,map:makeCircleTex(),alphaTest:0.01});
+const pMat=new THREE.PointsMaterial({size:S.psize,vertexColors:true,transparent:true,opacity:1.0,sizeAttenuation:true,depthWrite:true,blending:THREE.NormalBlending,map:makeCircleTex(),alphaTest:0.5});
 const pSystem=new THREE.Points(pGeo,pMat);orbitalGroup.add(pSystem);
 
 // Static flow arrows
@@ -1456,9 +1646,75 @@ document.getElementById('sl-ftr-n').addEventListener('input',function(){S.flowTr
 document.getElementById('sl-ftr-tl').addEventListener('input',function(){S.flowTrTrail=+this.value;document.getElementById('vl-ftr-tl').textContent=this.value;sg(this);});sg(document.getElementById('sl-ftr-tl'));
 
 // B field
-document.getElementById('cb-bfield').addEventListener('change',function(){S.showBField=this.checked;document.getElementById('bfield-opts').style.display=this.checked?'block':'none';if(this.checked&&!bFieldData)computeBField();if(!this.checked){bArrowLines.visible=false;}});
-document.getElementById('cb-btr').addEventListener('change',function(){S.showBTr=this.checked;document.getElementById('btr-opts').style.display=this.checked?'block':'none';if(!this.checked){btLines.visible=false;bTracers=[];}});
-document.getElementById('sl-bgdim').addEventListener('input',function(){S.bGridDim=+this.value;document.getElementById('vl-bgdim').textContent=this.value;sg(this);});sg(document.getElementById('sl-bgdim'));
+/* ── Quick controls — always-visible floating checkboxes ── */
+function setMagField(on){
+  S.showBField = on;
+  S.showBTr    = on;
+  // Sync panel big-toggles
+  const bBtn  = document.getElementById('btn-bfield-toggle');
+  const bLbl  = document.getElementById('bfield-state-lbl');
+  const trBtn = document.getElementById('btn-btr-toggle');
+  const trLbl = document.getElementById('btr-state-lbl');
+  if(bBtn){ bBtn.classList.toggle('active',on); bBtn.classList.toggle('off',!on); }
+  if(bLbl) bLbl.textContent = on ? 'ON' : 'OFF';
+  if(trBtn){ trBtn.classList.toggle('active',on); trBtn.classList.toggle('off',!on); }
+  if(trLbl) trLbl.textContent = on ? 'ON' : 'OFF';
+  document.getElementById('bfield-opts').style.display = on ? 'block' : 'none';
+  if(!on){ bArrowLines.visible=false; btLines.visible=false; bTracers=[]; }
+  else if(!bFieldData) computeBField();
+}
+document.getElementById('qc-bfield').addEventListener('change', function(){
+  setMagField(this.checked);
+});
+// Keep quick checkbox in sync when panel buttons are clicked
+const _origBBtn = document.getElementById('btn-bfield-toggle');
+const _origTrBtn = document.getElementById('btn-btr-toggle');
+if(_origBBtn) _origBBtn.addEventListener('click',()=>{
+  document.getElementById('qc-bfield').checked = S.showBField && S.showBTr;
+});
+if(_origTrBtn) _origTrBtn.addEventListener('click',()=>{
+  document.getElementById('qc-bfield').checked = S.showBField && S.showBTr;
+});
+(function(){
+  const btn = document.getElementById('btn-bfield-toggle');
+  const lbl = document.getElementById('bfield-state-lbl');
+  function sync(){
+    btn.classList.toggle('active', S.showBField);
+    btn.classList.toggle('off', !S.showBField);
+    lbl.textContent = S.showBField ? 'ON' : 'OFF';
+    document.getElementById('bfield-opts').style.display = S.showBField ? 'block' : 'none';
+    if(!S.showBField) bArrowLines.visible = false;
+    else if(!bFieldData) computeBField();
+  }
+  btn.addEventListener('click', ()=>{ S.showBField=!S.showBField; sync(); });
+  sync();
+})();
+
+// ── Resolution preset buttons ──
+document.querySelectorAll('.res-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const dim = +btn.dataset.dim;
+    S.bGridDim = dim;
+    document.querySelectorAll('.res-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    if(S.showBField) computeBField();
+  });
+});
+
+// ── B TRACERS big toggle ──
+(function(){
+  const btn = document.getElementById('btn-btr-toggle');
+  const lbl = document.getElementById('btr-state-lbl');
+  function sync(){
+    btn.classList.toggle('active', S.showBTr);
+    btn.classList.toggle('off', !S.showBTr);
+    lbl.textContent = S.showBTr ? 'ON' : 'OFF';
+    document.getElementById('btr-opts').style.display = S.showBTr ? 'block' : 'none';
+    if(!S.showBTr){ btLines.visible=false; bTracers=[]; }
+  }
+  btn.addEventListener('click', ()=>{ S.showBTr=!S.showBTr; sync(); });
+  sync();
+})();
 document.getElementById('sl-bgext').addEventListener('input',function(){S.bGridExtent=+this.value;document.getElementById('vl-bgext').textContent=this.value;sg(this);});sg(document.getElementById('sl-bgext'));
 document.getElementById('sl-basc').addEventListener('input',function(){S.bArrowScale=+this.value;document.getElementById('vl-basc').textContent=S.bArrowScale.toFixed(1);sg(this);if(bFieldData)uploadBArrows();});sg(document.getElementById('sl-basc'));
 document.getElementById('sl-bgam').addEventListener('input',function(){S.bColGamma=+this.value;document.getElementById('vl-bgam').textContent=S.bColGamma.toFixed(1);sg(this);if(bFieldData)uploadBArrows();});sg(document.getElementById('sl-bgam'));
@@ -1486,12 +1742,10 @@ document.getElementById('sl-N').value=S.N;
 document.getElementById('vl-N').textContent='100k';
 sg(document.getElementById('sl-N'));
 // Sync B field sliders to state defaults
-document.getElementById('sl-bgdim').value=S.bGridDim; sg(document.getElementById('sl-bgdim'));
 document.getElementById('sl-bgext').value=S.bGridExtent; sg(document.getElementById('sl-bgext'));
 document.getElementById('sl-basc').value=S.bArrowScale; sg(document.getElementById('sl-basc'));
 document.getElementById('sl-buev').value=S.bUpdateEvery; sg(document.getElementById('sl-buev'));
 document.getElementById('sl-bspwn').value=S.bTrSpawn; sg(document.getElementById('sl-bspwn'));
-document.getElementById('vl-bgdim').textContent=S.bGridDim;
 document.getElementById('vl-bgext').textContent=S.bGridExtent;
 document.getElementById('vl-basc').textContent=S.bArrowScale.toFixed(1);
 document.getElementById('vl-buev').textContent=S.bUpdateEvery;
