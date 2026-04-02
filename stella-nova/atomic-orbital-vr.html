@@ -128,35 +128,85 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--surface2);}
 
 /* ── XR / DOM OVERLAY MODE ── */
-/* Applied via body.xr-active when an immersive-vr session is running.
-   The DOM overlay renders the HTML on top of the VR view.
-   We force the panel open, compact it, and pin it top-left. */
-.xr-active #panel{
-  transform:translateX(0) !important;
-  position:fixed !important;
-  top:0 !important; left:0 !important; bottom:0 !important;
-  width:min(300px,40vw) !important;
-  max-height:100dvh !important;
-  border-radius:0 !important;
-  display:flex !important;
-  flex-direction:column !important;
-  font-size:0.9em;
-  background:rgba(8,10,18,0.88) !important;
+/* Applied via body.xr-active when an immersive-vr session is running. */
+.xr-active,
+.xr-active #ui {
+  /* CRITICAL: #ui has pointer-events:none by default.
+     In DOM overlay the XR input system routes through the HTML tree —
+     a none parent silently swallows all events to children. */
+  pointer-events: auto !important;
 }
-.xr-active #panel .panel-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
-.xr-active #panel-toggle{display:none !important;}
-.xr-active #panel-overlay{display:none !important;}
-.xr-active .topbar{display:none;}
-/* Bigger touch targets in XR (controller ray-cast clicking) */
-.xr-active input[type=range]::-webkit-slider-thumb{width:20px;height:20px;}
-.xr-active .tog{width:44px;height:24px;}
-.xr-active .tog-track::after{width:18px;height:18px;}
-.xr-active .tog input:checked ~ .tog-track::after{transform:translateX(20px);}
-.xr-active .panel-btn{padding:8px 14px;font-size:0.6rem;}
-.xr-active .mode-btn{padding:10px 2px;}
-/* XR perf badge — shown in info bar during XR */
-#xr-perf-badge{display:none;font-size:0.46rem;letter-spacing:0.1em;color:var(--yellow);background:rgba(255,200,50,0.08);border:1px solid rgba(255,200,50,0.2);padding:3px 8px;margin-top:6px;text-align:center;}
-.xr-active #xr-perf-badge{display:block;}
+
+/* Panel: full-height left drawer, wider for controller ray-cast accuracy */
+.xr-active #panel {
+  transform: translateX(0) !important;
+  position: fixed !important;
+  top: 0 !important; left: 0 !important; bottom: 0 !important;
+  width: clamp(300px, 38vw, 520px) !important;
+  max-height: 100dvh !important;
+  border-radius: 0 !important;
+  border-left: none !important;
+  border-right: 2px solid var(--border-b) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: rgba(6,8,16,0.92) !important;
+  backdrop-filter: blur(20px) !important;
+  touch-action: pan-y;
+  /* Raise above canvas in overlay */
+  z-index: 9000 !important;
+}
+.xr-active #panel .panel-body {
+  flex: 1;
+  overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  padding-bottom: 40px;
+}
+
+/* Larger text for readability at headset distance */
+.xr-active #panel { font-size: 1.05em; }
+.xr-active .sec-label { font-size: 0.6rem; margin: 16px 0 10px; }
+.xr-active .row { margin-bottom: 14px; }
+.xr-active .tog-row { margin-bottom: 12px; }
+.xr-active .row-lbl { font-size: 0.62rem; width: 46px; }
+.xr-active .val { font-size: 0.68rem; }
+.xr-active .tog-lbl { font-size: 0.6rem; }
+
+/* Big slider thumbs — easy to hit with controller ray */
+.xr-active input[type=range] { height: 6px !important; }
+.xr-active input[type=range]::-webkit-slider-thumb {
+  width: 26px !important; height: 26px !important;
+  border-width: 2px !important;
+}
+
+/* Big toggles */
+.xr-active .tog { width: 48px !important; height: 26px !important; }
+.xr-active .tog-track::after { width: 20px !important; height: 20px !important; }
+.xr-active .tog input:checked ~ .tog-track::after { transform: translateX(22px) !important; }
+
+/* Chunky mode and view buttons */
+.xr-active .mode-btn { padding: 12px 4px !important; font-size: 0.62rem !important; }
+.xr-active .view-btn { padding: 10px 4px !important; }
+.xr-active .panel-btn { padding: 10px 16px !important; font-size: 0.6rem !important; }
+
+/* Hide desktop-only chrome */
+.xr-active .topbar { display: none !important; }
+.xr-active #panel-toggle { display: none !important; }
+.xr-active #panel-overlay { display: none !important; }
+.xr-active #vr-wrap { display: none !important; }
+.xr-active #state-display { display: none !important; }
+
+/* XR perf badge */
+#xr-perf-badge {
+  display: none;
+  font-size: 0.5rem; letter-spacing: 0.1em;
+  color: var(--yellow);
+  background: rgba(255,200,50,0.08);
+  border: 1px solid rgba(255,200,50,0.2);
+  padding: 4px 8px; margin-top: 6px; text-align: center;
+}
+.xr-active #xr-perf-badge { display: block; }
 #panel-toggle{
   display:none;
   position:absolute;
