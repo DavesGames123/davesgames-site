@@ -1741,7 +1741,7 @@ const _bCol=new THREE.Color();
 
 function uploadBArrows(){
   if(!bFieldData||!S.showBField){
-    bArrowShaft.visible=false; bArrowHead.visible=false; return;
+    bArrowShaft.visible=false; return;
   }
   const{bArrowScale,bColGamma}=S;
   const ng=Math.min(bFieldData.length/7|0, MAX_BARROWS);
@@ -1765,18 +1765,12 @@ function uploadBArrows(){
     _bDummy.updateMatrix();
     bArrowShaft.setMatrixAt(i,_bDummy.matrix);
     _bCol.setRGB(r*0.35,g*0.35,b*0.35); bArrowShaft.setColorAt(i,_bCol);
-    // Head cone: tip at arrow end
-    _bDummy.position.set(ox+dx*(len-HEAD_LEN*0.5), oy+dy*(len-HEAD_LEN*0.5), oz+dz*(len-HEAD_LEN*0.5));
-    _bDummy.scale.set(1,1,1);
-    _bDummy.updateMatrix();
-    bArrowHead.setMatrixAt(i,_bDummy.matrix);
-    _bCol.setRGB(r,g,b); bArrowHead.setColorAt(i,_bCol);
   }
-  bArrowShaft.count=ng; bArrowHead.count=ng;
-  bArrowShaft.instanceMatrix.needsUpdate=true; bArrowHead.instanceMatrix.needsUpdate=true;
+  bArrowShaft.count=ng;
+  bArrowShaft.instanceMatrix.needsUpdate=true;
   if(bArrowShaft.instanceColor) bArrowShaft.instanceColor.needsUpdate=true;
-  if(bArrowHead.instanceColor)  bArrowHead.instanceColor.needsUpdate=true;
-  bArrowShaft.visible=true; bArrowHead.visible=true;
+  bArrowShaft.visible=true;
+  bArrowHead.visible=false; // arrowheads disabled
 }
 
 // Trilinear interpolation of precomputed B field
@@ -2261,7 +2255,7 @@ function updateHandTracking(frame){
     S.N = 25000; startGrow();
     pMat.size = 0.005;
     // B-field: low res for AR perf, disabled by default but user can toggle
-    S.bGridDim = 5; S.bUpdateEvery = 120; S.bTrSpawn = 0; S.bArrowScale = 0.6;
+    S.bGridDim = 12; S.bUpdateEvery = 60; S.bTrSpawn = 0; S.bArrowScale = 0.6;
     setMagField(false);
 
     // ── System pinch events — drive _sysActive + panel checks ──
@@ -2548,7 +2542,7 @@ function setMagField(on){
   qb.textContent=on?'⊕ B Field':'⊗ B Field';
   const ib=document.getElementById('qp-icon-b');
   if(ib){ib.classList.toggle('on',on);ib.classList.toggle('off',!on);}
-  if(!on){bArrowShaft.visible=false;bArrowHead.visible=false;btLines.visible=false;bTracers=[];}
+  if(!on){bArrowShaft.visible=false;btLines.visible=false;bTracers=[];}
   else if(!bFieldData) computeBField();
   if(ARP.mesh) ARP.dirty=true;
 }
