@@ -518,8 +518,12 @@ renderer.xr.addEventListener('sessionend',()=>controls.enabled=true);
 // Starfield
 {const N=2200,pos=new Float32Array(N*3),col=new Float32Array(N*3);for(let i=0;i<N;i++){const R=90+Math.random()*130,th=Math.random()*Math.PI,ph=Math.random()*6.28;pos[i*3]=R*Math.sin(th)*Math.cos(ph);pos[i*3+1]=R*Math.cos(th);pos[i*3+2]=R*Math.sin(th)*Math.sin(ph);const t=Math.random();col[i*3]=.4+.6*t;col[i*3+1]=.6+.4*t;col[i*3+2]=1;}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));scene.add(new THREE.Points(g,new THREE.PointsMaterial({size:.07,vertexColors:true,transparent:true,opacity:.5,sizeAttenuation:true})));}
 
+// Orbital group — everything that should be grabbable/scaleable lives here
+const orbitalGroup = new THREE.Group();
+scene.add(orbitalGroup);
+
 // Nucleus
-const nucleusGroup=new THREE.Group();scene.add(nucleusGroup);
+const nucleusGroup=new THREE.Group();orbitalGroup.add(nucleusGroup);
 nucleusGroup.add(new THREE.Mesh(new THREE.SphereGeometry(.055,20,20),new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:.9})));
 for(let i=0;i<3;i++){const ring=new THREE.Mesh(new THREE.RingGeometry(.09+i*.04,.10+i*.04,48),new THREE.MeshBasicMaterial({color:0x5a8cc0,transparent:true,opacity:.18-i*.04,side:THREE.DoubleSide}));ring.rotation.x=Math.random()*Math.PI;ring.rotation.y=Math.random()*Math.PI;ring.userData.spinSpeed=(.4+Math.random()*.4)*(Math.random()>.5?1:-1);ring.userData.spinAxis=new THREE.Vector3(Math.random()-.5,Math.random()-.5,Math.random()-.5).normalize();nucleusGroup.add(ring);}
 
@@ -543,16 +547,16 @@ pGeo.setAttribute('position',pPosAttr);
 pGeo.setAttribute('color',pColAttr);
 pGeo.setDrawRange(0,0);
 const pMat=new THREE.PointsMaterial({size:S.psize,vertexColors:true,transparent:true,opacity:.88,sizeAttenuation:true,depthWrite:false,blending:THREE.AdditiveBlending,map:makeCircleTex(),alphaTest:0.01});
-const pSystem=new THREE.Points(pGeo,pMat);scene.add(pSystem);
+const pSystem=new THREE.Points(pGeo,pMat);orbitalGroup.add(pSystem);
 
 // Static flow arrows
 const flowGeo=new THREE.BufferGeometry();
 const flowMat=new THREE.LineBasicMaterial({color:0x5a8cc0,transparent:true,opacity:.35});
 const flowLines=new THREE.LineSegments(flowGeo,flowMat);
-scene.add(flowLines);flowLines.visible=false;
+orbitalGroup.add(flowLines);flowLines.visible=false;
 
 // Axes
-const axesHelper=new THREE.AxesHelper(4);axesHelper.visible=false;scene.add(axesHelper);
+const axesHelper=new THREE.AxesHelper(4);axesHelper.visible=false;orbitalGroup.add(axesHelper);
 
 /* ════════════════════════════════════════════════════════════
    B FIELD ARROW SYSTEM
@@ -560,7 +564,7 @@ const axesHelper=new THREE.AxesHelper(4);axesHelper.visible=false;scene.add(axes
 const bArrowGeo=new THREE.BufferGeometry();
 const bArrowMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:1});
 const bArrowLines=new THREE.LineSegments(bArrowGeo,bArrowMat);
-scene.add(bArrowLines);bArrowLines.visible=false;
+orbitalGroup.add(bArrowLines);bArrowLines.visible=false;
 
 let bFieldData=null;   // Float32Array [x,y,z,dx,dy,dz,mag × ng]
 let bFieldFrameCount=0;
@@ -711,7 +715,7 @@ ftLineGeo.setAttribute('position',new THREE.BufferAttribute(ftPosArr,3));
 ftLineGeo.setAttribute('color',new THREE.BufferAttribute(ftColArr,3));
 const ftLineMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:.8});
 const ftLines=new THREE.LineSegments(ftLineGeo,ftLineMat);
-scene.add(ftLines);ftLines.visible=false;
+orbitalGroup.add(ftLines);ftLines.visible=false;
 
 let flowTracers=[];
 
@@ -780,7 +784,7 @@ btLineGeo.setAttribute('position',new THREE.BufferAttribute(btPosArr,3));
 btLineGeo.setAttribute('color',new THREE.BufferAttribute(btColArr,3));
 const btLineMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:.9});
 const btLines=new THREE.LineSegments(btLineGeo,btLineMat);
-scene.add(btLines);btLines.visible=false;
+orbitalGroup.add(btLines);btLines.visible=false;
 
 let bTracers=[];
 
@@ -1042,19 +1046,121 @@ function rebuildStaticFlow(){
 /* ════════════════════════════════════════════════════════════
    VR THUMBSTICK INPUT — rotate orbital cloud left/right
    ════════════════════════════════════════════════════════════ */
-let vrRotY=0;
-function handleVRInput(){
-  const sess=renderer.xr.getSession();if(!sess)return;
+/* ════════════════════════════════════════════════════════════
+   HAND GESTURE SYSTEM
+   One-hand pinch  → grab & translate orbitalGroup
+   Two-hand pinch  → scale (and translate midpoint)
+   Thumbstick X    → rotate (controller fallback)
+
+   Uses WebXR Hand Tracking API joint poses.
+   Pinch = thumb-tip ↔ index-finger-tip distance < PINCH_THRESH metres.
+   ════════════════════════════════════════════════════════════ */
+const PINCH_THRESH = 0.035; // 3.5 cm
+
+// Small glowing spheres shown at each pinch point when active
+const _pinchGeo = new THREE.SphereGeometry(0.012, 8, 8);
+const pinchMeshL = new THREE.Mesh(_pinchGeo,
+  new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:0.85,depthWrite:false}));
+const pinchMeshR = new THREE.Mesh(_pinchGeo,
+  new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:0.85,depthWrite:false}));
+pinchMeshL.visible=false; pinchMeshR.visible=false;
+scene.add(pinchMeshL); scene.add(pinchMeshR);
+
+// Gesture state
+const HS = {
+  grabbing:false, grabStartWorld:new THREE.Vector3(), grabStartGroupPos:new THREE.Vector3(),
+  scaling:false,  scaleStartDist:1,
+  scaleStartGroupScale:new THREE.Vector3(1,1,1),
+  scaleStartMid:new THREE.Vector3(), scaleStartGroupPos:new THREE.Vector3(),
+};
+
+function _jointWorldPos(hand, jointName, frame, refSpace){
+  if(!hand) return null;
+  const joint = hand.get(jointName); if(!joint) return null;
+  const pose  = frame.getJointPose(joint, refSpace); if(!pose) return null;
+  const p = pose.transform.position;
+  return new THREE.Vector3(p.x, p.y, p.z);
+}
+
+function getPinchPos(inputSource, frame, refSpace){
+  const thumb = _jointWorldPos(inputSource.hand,'thumb-tip',frame,refSpace);
+  const index = _jointWorldPos(inputSource.hand,'index-finger-tip',frame,refSpace);
+  if(!thumb||!index) return null;
+  if(thumb.distanceTo(index) > PINCH_THRESH) return null;
+  return thumb.clone().lerp(index, 0.5); // midpoint
+}
+
+function updateHandTracking(frame){
+  const sess = renderer.xr.getSession(); if(!sess) return;
+  const refSpace = renderer.xr.getReferenceSpace(); if(!refSpace) return;
+
+  let lPos=null, rPos=null;
   for(const src of sess.inputSources){
-    if(!src.gamepad)continue;
+    if(!src.hand) continue;
+    const p = getPinchPos(src, frame, refSpace);
+    if(src.handedness==='left')  lPos=p;
+    else                         rPos=p;
+  }
+
+  // Update pinch indicators
+  pinchMeshL.visible=!!lPos; if(lPos) pinchMeshL.position.copy(lPos);
+  pinchMeshR.visible=!!rPos; if(rPos) pinchMeshR.position.copy(rPos);
+
+  if(lPos && rPos){
+    // ── TWO-HAND PINCH: scale + translate ──
+    const mid  = lPos.clone().lerp(rPos, 0.5);
+    const dist = lPos.distanceTo(rPos);
+
+    if(!HS.scaling){
+      HS.scaling=true; HS.grabbing=false;
+      HS.scaleStartDist=Math.max(dist,0.01);
+      HS.scaleStartGroupScale.copy(orbitalGroup.scale);
+      HS.scaleStartMid.copy(mid);
+      HS.scaleStartGroupPos.copy(orbitalGroup.position);
+    }
+
+    const sf = dist / HS.scaleStartDist;
+    orbitalGroup.scale.copy(HS.scaleStartGroupScale).multiplyScalar(sf);
+    // Translate with midpoint so scaling feels anchored between hands
+    const delta = mid.clone().sub(HS.scaleStartMid);
+    orbitalGroup.position.copy(HS.scaleStartGroupPos).add(delta);
+
+  } else if(lPos || rPos){
+    // ── ONE-HAND PINCH: grab and translate ──
+    const pinch = lPos || rPos;
+    HS.scaling=false;
+
+    if(!HS.grabbing){
+      HS.grabbing=true;
+      HS.grabStartWorld.copy(pinch);
+      HS.grabStartGroupPos.copy(orbitalGroup.position);
+    }
+
+    orbitalGroup.position.copy(HS.grabStartGroupPos)
+      .add(pinch.clone().sub(HS.grabStartWorld));
+
+  } else {
+    // ── No pinch — release ──
+    HS.grabbing=false;
+    HS.scaling=false;
+  }
+}
+
+let vrRotY=0;
+function handleVRInput(frame){
+  const sess=renderer.xr.getSession(); if(!sess) return;
+
+  // Hand tracking gestures (runs when hand-tracking feature is available)
+  if(frame) updateHandTracking(frame);
+
+  // Controller thumbstick → rotate orbitalGroup (fallback when using controllers)
+  for(const src of sess.inputSources){
+    if(!src.gamepad||src.hand) continue; // skip hand sources
     const ax=src.gamepad.axes;
     const stX=ax[2]??ax[0]??0;
     if(Math.abs(stX)>.12){
       vrRotY-=stX*.018;
-      pSystem.rotation.y=vrRotY;
-      ftLines.rotation.y=vrRotY;
-      btLines.rotation.y=vrRotY;
-      nucleusGroup.rotation.y=vrRotY;
+      orbitalGroup.rotation.y=vrRotY;
     }
   }
 }
@@ -1178,7 +1284,7 @@ const loadingEl=document.getElementById('loading');
 pMat.size = S.psize;
 startRebuild();
 
-renderer.setAnimationLoop(()=>{
+renderer.setAnimationLoop((time, frame)=>{
   const dt=clock.getDelta();
 
   // Quantum state changed → full clear and rebuild
@@ -1215,7 +1321,7 @@ renderer.setAnimationLoop(()=>{
   // Nucleus spin animation
   nucleusGroup.children.forEach(c=>{if(c.userData.spinSpeed)c.rotateOnAxis(c.userData.spinAxis,c.userData.spinSpeed*dt);});
 
-  handleVRInput();
+  handleVRInput(frame);
   controls.update();
   renderer.render(scene,camera);
 });
