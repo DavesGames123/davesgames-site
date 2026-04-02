@@ -104,8 +104,11 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 /* ── INFO BAR ── */
 .info-bar{font-size:0.5rem;color:var(--text-faint);margin-top:10px;padding-top:8px;border-top:1px solid var(--border);letter-spacing:0.06em;line-height:1.8;}
 
-/* Hidden sections */
-#cut-row,#flow-tr-opts,#bfield-opts,#btr-opts{display:none;}
+#panel{display:none !important;}
+#panel-toggle{display:none !important;}
+#panel-overlay{display:none !important;}
+#state-display{display:none !important;}
+.topbar{display:none !important;}
 
 /* ── STATE DISPLAY ── */
 #state-display{position:absolute;top:54px;right:20px;text-align:right;pointer-events:none;}
@@ -1094,77 +1097,6 @@ function rebuildStaticFlow(){
 }
 
 /* ════════════════════════════════════════════════════════════
-   VR BUTTON + SESSION MANAGEMENT
-   ════════════════════════════════════════════════════════════ */
-{
-  const wrap=document.getElementById('vr-wrap');
-  const btn=document.createElement('button');btn.className='vr-btn-el';btn.textContent='Enter VR';wrap.appendChild(btn);
-  let activeSession=null;
-  let xrSaved=null; // saved desktop settings restored on exit
-
-  async function onSessionStart(s){
-    s.addEventListener('end',()=>{
-      activeSession=null;
-      btn.textContent='Enter VR';
-      document.body.classList.remove('xr-active');
-      controls.enabled=true;
-      // Restore desktop settings
-      if(xrSaved){
-        S.N=xrSaved.N; S.bGridDim=xrSaved.bGridDim;
-        S.bUpdateEvery=xrSaved.bUpdateEvery; S.bTrSpawn=xrSaved.bTrSpawn;
-        xrSaved=null;
-        startGrow(); // grow back to previous count
-      }
-    });
-
-    await renderer.xr.setSession(s);
-    activeSession=s;
-    btn.textContent='Exit VR';
-    controls.enabled=false;
-
-    /* ── Step 1: Teleport user 5 units back so atom is in front ── */
-    const refSpace=renderer.xr.getReferenceSpace();
-    if(refSpace&&refSpace.getOffsetReferenceSpace){
-      // Positive z offset places user's origin at z=+5 in scene space.
-      // They face -z by default, so the atom at origin is 5 units ahead.
-      const offset=new XRRigidTransform({x:0,y:0,z:5,w:1},{x:0,y:0,z:0,w:1});
-      renderer.xr.setReferenceSpace(refSpace.getOffsetReferenceSpace(offset));
-    }
-
-    /* ── Step 2: Reduce simulation load for Quest GPU ── */
-    xrSaved={N:S.N, bGridDim:S.bGridDim, bUpdateEvery:S.bUpdateEvery, bTrSpawn:S.bTrSpawn};
-    const XR_MAX_P=30000;
-    if(S.N>XR_MAX_P){ S.N=XR_MAX_P; startGrow(); }
-    S.bGridDim=7;          // 7³=343 pts — fast enough for real-time in XR
-    S.bUpdateEvery=90;     // recompute B every 90 frames (~1.25 s at 72 fps)
-    S.bTrSpawn=150;        // fewer tracers, still looks good
-    bFieldFrameCount=0;    // reset so next recompute uses new settings
-
-    /* ── Step 3: Force panel open as DOM overlay ── */
-    document.body.classList.add('xr-active');
-    document.getElementById('panel').classList.add('panel-open');
-  }
-
-  btn.addEventListener('click',async()=>{
-    if(activeSession){activeSession.end();return;}
-    try{
-      const s=await navigator.xr.requestSession('immersive-vr',{
-        requiredFeatures:['local'],
-        optionalFeatures:['local-floor','bounded-floor','hand-tracking','dom-overlay'],
-        domOverlay:{root:document.getElementById('ui')}
-      });
-      onSessionStart(s);
-    }catch(e){console.warn('XR session failed:',e);}
-  });
-
-  if(navigator.xr){
-    navigator.xr.isSessionSupported('immersive-vr')
-      .then(ok=>{if(ok)btn.classList.add('vr-ready');else{btn.textContent='VR Unavailable';btn.disabled=true;}})
-      .catch(()=>{btn.textContent='VR Unavailable';btn.disabled=true;});
-  }else{btn.textContent='No WebXR';btn.disabled=true;}
-}
-
-/* ════════════════════════════════════════════════════════════
    VR THUMBSTICK INPUT — rotate orbital cloud left/right
    ════════════════════════════════════════════════════════════ */
 /* ════════════════════════════════════════════════════════════
@@ -1287,7 +1219,8 @@ function updateHandTracking(frame){
   let hitTestSrc   = null;
   let hasHitTest   = false;
   let arPlaced     = false;
-  let arScaleTarget= 0;
+  let arScaleTarget= 1;   // 1 = desktop normal; only changes during AR
+  let inARSession  = false;
   const AR_SCALE   = 0.05;
   const AR_HOVER   = 0.10;
 
@@ -1327,6 +1260,7 @@ function updateHandTracking(frame){
     arSession     = s;
     arPlaced      = false;
     arScaleTarget = 0;
+    inARSession   = true;
     orbitalGroup.scale.setScalar(0);
     orbitalGroup.position.set(0,0,0);
     reticle.visible      = false;
@@ -1393,6 +1327,7 @@ function updateHandTracking(frame){
     // ── Cleanup on session end ──
     s.addEventListener('end', () => {
       arSession = null; hitTestSrc = null; arPlaced = false; hasHitTest = false;
+      inARSession = false; arScaleTarget = 1;
       renderer.setClearColor(0x0e1118, 1);
       controls.enabled = true;
       document.body.classList.remove('xr-active','ar-mode');
@@ -1422,6 +1357,7 @@ function updateHandTracking(frame){
   };
 
   window._arUpdateScale = function(dt){
+    if(!inARSession) return;  // never touch scale outside AR — was collapsing scene to point
     const cur = orbitalGroup.scale.x;
     if(Math.abs(cur - arScaleTarget) > 0.0001)
       orbitalGroup.scale.setScalar(cur + (arScaleTarget - cur) * Math.min(1, dt*8));
