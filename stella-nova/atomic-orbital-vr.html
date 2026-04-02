@@ -1299,7 +1299,9 @@ pGeo.setAttribute('position',pPosAttr);
 pGeo.setAttribute('color',pColAttr);
 pGeo.setDrawRange(0,0);
 const pMat=new THREE.PointsMaterial({size:S.psize,vertexColors:true,transparent:true,opacity:1.0,sizeAttenuation:true,depthWrite:true,blending:THREE.NormalBlending,map:makeCircleTex(),alphaTest:0.5});
-const pSystem=new THREE.Points(pGeo,pMat);orbitalGroup.add(pSystem);
+const pSystem=new THREE.Points(pGeo,pMat);
+pSystem.frustumCulled=false; // prevents WebGL from clipping sprites at frustum edge
+orbitalGroup.add(pSystem);
 
 // Static flow arrows
 const flowGeo=new THREE.BufferGeometry();
@@ -1736,7 +1738,9 @@ function rebuildStaticFlow(){
    Uses WebXR Hand Tracking API joint poses.
    Pinch = thumb-tip ↔ index-finger-tip distance < PINCH_THRESH metres.
    ════════════════════════════════════════════════════════════ */
-const PINCH_THRESH = 0.035; // 3.5 cm
+const PINCH_START = 0.020;  // 2 cm — deliberate pinch required
+const PINCH_END   = 0.045;  // 4.5 cm — must open hand this wide to release (hysteresis)
+const _pinchActive = { left: false, right: false };
 
 // Small glowing spheres shown at each pinch point when active
 const _pinchGeo = new THREE.SphereGeometry(0.012, 8, 8);
@@ -1767,8 +1771,13 @@ function getPinchPos(inputSource, frame, refSpace){
   const thumb = _jointWorldPos(inputSource.hand,'thumb-tip',frame,refSpace);
   const index = _jointWorldPos(inputSource.hand,'index-finger-tip',frame,refSpace);
   if(!thumb||!index) return null;
-  if(thumb.distanceTo(index) > PINCH_THRESH) return null;
-  return thumb.clone().lerp(index, 0.5); // midpoint
+  const dist = thumb.distanceTo(index);
+  const hand = inputSource.handedness === 'left' ? 'left' : 'right';
+  // Hysteresis: latch on at PINCH_START, release at PINCH_END
+  if(_pinchActive[hand]){ if(dist > PINCH_END)   _pinchActive[hand]=false; }
+  else                  { if(dist < PINCH_START) _pinchActive[hand]=true;  }
+  if(!_pinchActive[hand]) return null;
+  return thumb.clone().lerp(index, 0.5);
 }
 
 function updateHandTracking(frame){
@@ -1847,8 +1856,10 @@ function updateHandTracking(frame){
   let hitTestSrc   = null;
   let hasHitTest   = false;
   let arPlaced     = false;
-  let arScaleTarget= 1;   // 1 = desktop normal; only changes during AR
+  let arSpawnDone  = false;  // true after spawn anim completes — hand gestures own scale
+  let arScaleTarget= 1;
   let inARSession  = false;
+  let arSaved      = null;   // saved settings restored on exit
   const AR_SCALE   = 0.05;
   const AR_HOVER   = 0.10;
 
@@ -1869,9 +1880,6 @@ function updateHandTracking(frame){
 
     arStatus('Requesting AR session…');
 
-    // ── Session request ──
-    // Only 'local' is required. hit-test, dom-overlay, hand-tracking are
-    // all optional so a missing feature never silently kills the session.
     let s;
     try {
       s = await navigator.xr.requestSession('immersive-ar', {
@@ -1885,10 +1893,11 @@ function updateHandTracking(frame){
     }
 
     arStatus('AR started ✓');
-    arSession     = s;
-    arPlaced      = false;
-    arScaleTarget = 0;
-    inARSession   = true;
+    arSession    = s;
+    arPlaced     = false;
+    arSpawnDone  = false;
+    arScaleTarget= 0;
+    inARSession  = true;
     orbitalGroup.scale.setScalar(0);
     orbitalGroup.position.set(0,0,0);
     reticle.visible      = false;
@@ -1907,6 +1916,16 @@ function updateHandTracking(frame){
     document.body.classList.add('xr-active','ar-mode');
     arBtn.textContent = 'Exit AR';
 
+    // ── Reduce simulation load for AR ──
+    arSaved = {
+      N: S.N, psize: S.psize,
+      showBField: S.showBField, showBTr: S.showBTr,
+      bGridDim: S.bGridDim, bUpdateEvery: S.bUpdateEvery, bTrSpawn: S.bTrSpawn,
+    };
+    S.N = 25000; startGrow();         // light particle count
+    pMat.size = 0.005;                 // minimum point size
+    setMagField(false);               // disable B field — complex lines kill AR perf
+
     // ── Hit-test (optional) ──
     hasHitTest = false;
     try {
@@ -1916,45 +1935,47 @@ function updateHandTracking(frame){
       document.getElementById('ar-hint').style.display = 'flex';
       arStatus('Point at a surface to place');
     } catch(e) {
-      // Hit-test not available — place at fixed depth on first select
       arStatus('Hit-test unavailable — tap to place at fixed depth');
       document.getElementById('ar-hint').style.display = 'flex';
     }
 
-    // ── Placement via select (trigger or pinch) ──
+    // ── Placement via select — re-usable, hit test stays active ──
     s.addEventListener('select', () => {
-      if(arPlaced) return; // already placed; hand gestures handle movement
-
       let placePos = new THREE.Vector3();
 
       if(hasHitTest && reticle.visible){
-        // Place at detected surface
         placePos.setFromMatrixPosition(
           new THREE.Matrix4().fromArray(reticle.matrix.elements));
         placePos.y += AR_HOVER;
-      } else {
-        // Fallback: place 0.6 m in front of camera
+      } else if(!arPlaced) {
+        // First-time fallback: place 0.6m ahead
         const cam = renderer.xr.getCamera();
-        const fwd = new THREE.Vector3(0, 0, -0.6).applyQuaternion(cam.quaternion);
+        const fwd = new THREE.Vector3(0,0,-0.6).applyQuaternion(cam.quaternion);
         placePos.copy(cam.position).add(fwd);
+      } else {
+        return; // no surface + already placed → ignore
       }
 
       orbitalGroup.position.copy(placePos);
       orbitalGroup.rotation.set(0,0,0);
       vrRotY = 0;
-      arPlaced      = true;
-      arScaleTarget = AR_SCALE;
-      boundingCube.visible = true;
 
-      document.getElementById('ar-hint').style.display = 'none';
-      if(hitTestSrc){ hitTestSrc.cancel(); hitTestSrc=null; }
-      reticle.visible = false;
-      arStatus('Placed! Pinch to move · two-hand pinch to scale');
+      if(!arPlaced){
+        // First placement — start spawn animation
+        arPlaced     = true;
+        arSpawnDone  = false;
+        arScaleTarget= AR_SCALE;
+        boundingCube.visible = true;
+        document.getElementById('ar-hint').style.display = 'none';
+        arStatus('Placed · tap surface to re-place · pinch to move · 2-hand to scale');
+      }
+      // Re-placement: position already updated above, scale/state unchanged
     });
 
     // ── Cleanup on session end ──
     s.addEventListener('end', () => {
-      arSession = null; hitTestSrc = null; arPlaced = false; hasHitTest = false;
+      arSession = null; hitTestSrc = null;
+      arPlaced = false; arSpawnDone = false; hasHitTest = false;
       inARSession = false; arScaleTarget = 1;
       renderer.setClearColor(0x0e1118, 1);
       controls.enabled = true;
@@ -1967,10 +1988,17 @@ function updateHandTracking(frame){
       orbitalGroup.rotation.set(0,0,0);
       boundingCube.visible = false;
       reticle.visible = false;
+      // Restore saved settings
+      if(arSaved){
+        S.N = arSaved.N; startGrow();
+        S.psize = arSaved.psize; pMat.size = S.psize;
+        if(arSaved.showBField) setMagField(true);
+        arSaved = null;
+      }
     });
   });
 
-  // Called from animation loop
+  // Called from animation loop — hit test reticle update
   window._arUpdateHitTest = function(frame){
     if(!hitTestSrc || !frame) return;
     const refSpace = renderer.xr.getReferenceSpace(); if(!refSpace) return;
@@ -1984,11 +2012,17 @@ function updateHandTracking(frame){
     }
   };
 
+  // Spawn animation — lerps scale from 0 to AR_SCALE once, then stops forever.
+  // After arSpawnDone=true, hand gestures own orbitalGroup.scale freely.
   window._arUpdateScale = function(dt){
-    if(!inARSession) return;  // never touch scale outside AR — was collapsing scene to point
-    const cur = orbitalGroup.scale.x;
-    if(Math.abs(cur - arScaleTarget) > 0.0001)
-      orbitalGroup.scale.setScalar(cur + (arScaleTarget - cur) * Math.min(1, dt*8));
+    if(!inARSession || arSpawnDone) return;
+    const cur  = orbitalGroup.scale.x;
+    const next = cur + (arScaleTarget - cur) * Math.min(1, dt*8);
+    orbitalGroup.scale.setScalar(next);
+    if(arPlaced && Math.abs(next - arScaleTarget) < 0.0005){
+      orbitalGroup.scale.setScalar(arScaleTarget);
+      arSpawnDone = true; // hand gestures take over from here
+    }
   };
 }
 
