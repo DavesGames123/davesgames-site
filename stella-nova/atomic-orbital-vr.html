@@ -117,13 +117,37 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 #loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.6rem;letter-spacing:0.32em;text-transform:uppercase;color:var(--blue-dim);pointer-events:none;opacity:0;transition:opacity 0.2s;}
 #loading.show{opacity:1;}
 
-/* ── VR BUTTON ── */
-#vr-wrap{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);pointer-events:all;}
+/* ── VR/AR BUTTON ROW ── */
+#vr-wrap{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);pointer-events:all;display:flex;gap:10px;align-items:center;}
 .vr-btn-el{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.58rem;font-weight:500;letter-spacing:0.22em;text-transform:uppercase;padding:9px 26px;cursor:pointer;transition:all 0.2s;white-space:nowrap;}
 .vr-btn-el:hover:not(:disabled){border-color:var(--yellow-dim);color:var(--yellow);background:var(--yellow-faint);}
 .vr-btn-el:disabled{opacity:0.3;cursor:default;}
 .vr-btn-el.vr-ready{border-color:rgba(255,200,50,0.35);color:var(--yellow);background:var(--yellow-faint);}
 .vr-btn-el.vr-ready:hover{border-color:var(--yellow);box-shadow:0 0 18px rgba(255,200,50,0.12);}
+
+/* ── AR PLACEMENT HINT ── */
+#ar-hint{
+  display:none;position:fixed;inset:0;z-index:8999;
+  align-items:center;justify-content:center;
+  flex-direction:column;gap:18px;
+  pointer-events:none;
+}
+.ar-hint-inner{display:flex;flex-direction:column;align-items:center;gap:14px;}
+.ar-hint-ring{
+  width:64px;height:64px;border-radius:50%;
+  border:2px solid rgba(255,200,50,0.7);
+  animation:ar-pulse 1.6s ease infinite;
+}
+@keyframes ar-pulse{
+  0%,100%{transform:scale(1);opacity:0.8;}
+  50%{transform:scale(1.18);opacity:0.3;}
+}
+.ar-hint-text{
+  font-size:0.78rem;letter-spacing:0.12em;text-align:center;
+  color:rgba(255,200,50,0.9);
+  text-shadow:0 0 18px rgba(255,200,50,0.4);
+  line-height:1.7;
+}
 
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--surface2);}
 
@@ -428,7 +452,15 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
     <div class="ket-sub" id="orb-disp">3p orbital</div>
   </div>
   <div id="loading">Generating···</div>
-  <div id="vr-wrap"></div>
+  <div id="vr-wrap">
+    <button id="ar-btn" class="vr-btn-el">Enter AR</button>
+  </div>
+  <div id="ar-hint">
+    <div class="ar-hint-inner">
+      <div class="ar-hint-ring"></div>
+      <span class="ar-hint-text">Point at a flat surface<br>then pinch or tap to place</span>
+    </div>
+  </div>
 </div>
 
 <script type="module">
@@ -550,10 +582,10 @@ const COLOR_CHUNK =  80_000;
    THREE.JS SETUP
    ════════════════════════════════════════════════════════════ */
 const canvas=document.getElementById('c');
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 renderer.setSize(innerWidth,innerHeight);
-renderer.setClearColor(0x0e1118);
+renderer.setClearColor(0x0e1118,1); // AR will override to transparent
 renderer.xr.enabled=true;
 
 const scene=new THREE.Scene();
@@ -571,6 +603,25 @@ renderer.xr.addEventListener('sessionend',()=>controls.enabled=true);
 // Orbital group — everything that should be grabbable/scaleable lives here
 const orbitalGroup = new THREE.Group();
 scene.add(orbitalGroup);
+
+/* ── AR: Bounding cube wireframe — contains the orbital in physical space ── */
+const boundingCube = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(6,6,6)),
+  new THREE.LineBasicMaterial({color:0x96c8ff,transparent:true,opacity:0.22,
+    blending:THREE.AdditiveBlending,depthWrite:false})
+);
+boundingCube.visible=false;
+orbitalGroup.add(boundingCube);
+
+/* ── AR: Surface reticle — yellow ring shown on detected surfaces ── */
+const reticleGeo = new THREE.RingGeometry(0.07,0.11,36);
+reticleGeo.rotateX(-Math.PI/2);
+const reticle = new THREE.Mesh(reticleGeo,
+  new THREE.MeshBasicMaterial({color:0xffc832,transparent:true,opacity:0.9,
+    side:THREE.DoubleSide,depthWrite:false}));
+reticle.matrixAutoUpdate=false;
+reticle.visible=false;
+scene.add(reticle);
 
 // Nucleus
 const nucleusGroup=new THREE.Group();orbitalGroup.add(nucleusGroup);
@@ -1196,6 +1247,123 @@ function updateHandTracking(frame){
   }
 }
 
+/* ════════════════════════════════════════════════════════════
+   AR SESSION — immersive-ar with surface hit-test placement
+   ════════════════════════════════════════════════════════════ */
+{
+  const arBtn = document.getElementById('ar-btn');
+  if(!arBtn) throw new Error('ar-btn missing');
+
+  let arSession = null;
+  let hitTestSource = null;
+  let arPlaced = false;
+  let arScaleTarget = 0;
+  const AR_SCALE = 0.05; // orbitalGroup world scale — makes cloud ~25cm wide
+  const AR_HOVER = 0.08; // metres above detected surface
+
+  // Check support
+  if(navigator.xr){
+    navigator.xr.isSessionSupported('immersive-ar')
+      .then(ok=>{if(ok){arBtn.classList.add('vr-ready');}else{arBtn.disabled=true;arBtn.textContent='AR unavailable';}})
+      .catch(()=>{arBtn.disabled=true;});
+  } else { arBtn.disabled=true; }
+
+  arBtn.addEventListener('click', async()=>{
+    if(arSession){arSession.end();return;}
+    try{
+      const s = await navigator.xr.requestSession('immersive-ar',{
+        requiredFeatures:['hit-test','dom-overlay'],
+        optionalFeatures:['local-floor','hand-tracking','light-estimation'],
+        domOverlay:{root:document.getElementById('ui')}
+      });
+
+      arSession = s;
+      arPlaced  = false;
+      arScaleTarget = 0;
+      orbitalGroup.scale.setScalar(0);
+      orbitalGroup.position.set(0,0,0);
+      reticle.visible = false;
+      boundingCube.visible = false;
+
+      // Transparent background for passthrough
+      renderer.setClearColor(0x000000,0);
+
+      // XR session
+      await renderer.xr.setSession(s);
+      controls.enabled = false;
+      document.body.classList.add('xr-active','ar-mode');
+      document.getElementById('ar-hint').style.display='flex';
+      arBtn.textContent = 'Exit AR';
+
+      // Hit-test source: ray from viewer forward
+      const viewerSpace = await s.requestReferenceSpace('viewer');
+      hitTestSource = await s.requestHitTestSource({space:viewerSpace});
+
+      // "select" event = controller trigger OR hand pinch → place orbital
+      s.addEventListener('select', ()=>{
+        if(!reticle.visible) return;
+        // Extract position from reticle matrix
+        const pos = new THREE.Vector3();
+        pos.setFromMatrixPosition(new THREE.Matrix4().fromArray(reticle.matrix.elements));
+        orbitalGroup.position.copy(pos);
+        orbitalGroup.position.y += AR_HOVER;
+        orbitalGroup.rotation.set(0,0,0);
+        vrRotY = 0;
+
+        if(!arPlaced){
+          arPlaced = true;
+          arScaleTarget = AR_SCALE;
+          boundingCube.visible = true;
+          document.getElementById('ar-hint').style.display='none';
+          hitTestSource.cancel(); hitTestSource=null; // stop scanning after placement
+          reticle.visible = false;
+        }
+      });
+
+      s.addEventListener('end', ()=>{
+        arSession = null; hitTestSource = null; arPlaced = false;
+        renderer.setClearColor(0x0e1118,1);
+        controls.enabled = true;
+        document.body.classList.remove('xr-active','ar-mode');
+        document.getElementById('ar-hint').style.display='none';
+        arBtn.textContent = 'Enter AR';
+        // Restore group
+        orbitalGroup.scale.setScalar(1);
+        orbitalGroup.position.set(0,0,0);
+        orbitalGroup.rotation.set(0,0,0);
+        boundingCube.visible = false;
+        reticle.visible = false;
+      });
+
+    } catch(e){ console.warn('AR session failed:',e); }
+  });
+
+  // Called from animation loop — updates reticle position from hit-test
+  window._arUpdateHitTest = function(frame){
+    if(!hitTestSource||!frame) return;
+    const refSpace = renderer.xr.getReferenceSpace();
+    if(!refSpace) return;
+    const results = frame.getHitTestResults(hitTestSource);
+    if(results.length>0){
+      const pose = results[0].getPose(refSpace);
+      reticle.visible = true;
+      reticle.matrix.fromArray(pose.transform.matrix);
+    } else {
+      reticle.visible = false;
+    }
+  };
+
+  // Called from animation loop — smooth scale-in spawn animation
+  window._arUpdateScale = function(dt){
+    if(!arPlaced) return;
+    const cur = orbitalGroup.scale.x;
+    if(Math.abs(cur - arScaleTarget)>0.0001){
+      const next = cur + (arScaleTarget - cur) * Math.min(1, dt*8);
+      orbitalGroup.scale.setScalar(next);
+    }
+  };
+}
+
 let vrRotY=0;
 function handleVRInput(frame){
   const sess=renderer.xr.getSession(); if(!sess) return;
@@ -1372,6 +1540,8 @@ renderer.setAnimationLoop((time, frame)=>{
   nucleusGroup.children.forEach(c=>{if(c.userData.spinSpeed)c.rotateOnAxis(c.userData.spinAxis,c.userData.spinSpeed*dt);});
 
   handleVRInput(frame);
+  if(frame && window._arUpdateHitTest) _arUpdateHitTest(frame);
+  if(window._arUpdateScale) _arUpdateScale(dt);
   controls.update();
   renderer.render(scene,camera);
 });
