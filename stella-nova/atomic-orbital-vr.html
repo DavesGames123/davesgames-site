@@ -1293,8 +1293,8 @@ scene.add(bgDimMesh);
    GREP: initARPanel | drawARPanel | updateARPanel | checkARPoke
    ════════════════════════════════════════════════════════════ */
 const ARP = {
-  PW:0.14, PH:0.25,   // metres — half size
-  CW:256,  CH:458,    // canvas pixel resolution
+  PW:0.28, PH:0.50,   // metres
+  CW:512,  CH:915,    // canvas pixel resolution
   mesh:null, tex:null, ctx:null,
   buttons:[],
   cooldown:0,
@@ -1553,27 +1553,28 @@ function updateARPanel(frame){
   orbitalGroup.getWorldPosition(wp);
   const sz=Math.max(orbitalGroup.scale.x,0.04);
   const cubeHalf=3*sz; // half-extent of 6-unit local cube in world space
-  // Place at front face of cube, vertically centered at cube bottom edge
-  ARP.mesh.position.set(wp.x, wp.y - cubeHalf + ARP.PH*0.5, wp.z + cubeHalf + 0.01);
+  // Hang below cube bottom edge, at front face Z — panel top aligns with cube bottom
+  ARP.mesh.position.set(wp.x, wp.y - cubeHalf - ARP.PH*0.5 - 0.01, wp.z + cubeHalf);
   ARP.mesh.lookAt(camera.position);
 
   if(ARP.dirty){ARP.dirty=false;drawARPanel();}
 
   if(ARP.cooldown>0){ARP.cooldown--;return;}
-  // Only fire on system-detected pinch (selectstart), not continuous distance polling
-  if(!_pendingPanelCheck||!frame||!refSpace) return;
-  const src=_pendingPanelCheck; _pendingPanelCheck=null;
-  if(!src.hand) return;
-  const tip=_jointWorldPos(src.hand,'index-finger-tip',frame,refSpace); if(!tip) return;
-  const local=ARP.mesh.worldToLocal(tip.clone());
-  // Generous depth — system already confirmed pinch, just map to button
-  if(Math.abs(local.z)>0.12) return;
-  const u=(local.x+ARP.PW/2)/ARP.PW;
-  const v=1-(local.y+ARP.PH/2)/ARP.PH;
-  if(u<0||u>1||v<0||v>1) return;
-  for(const btn of ARP.buttons){
-    if(u>=btn.u0&&u<=btn.u1&&v>=btn.v0&&v<=btn.v1){
-      btn.action(); ARP.dirty=true; ARP.cooldown=18; return;
+  if(!frame||!refSpace) return;
+  // Continuous finger-poke detection — user physically touches panel surface
+  const sess=renderer.xr.getSession(); if(!sess) return;
+  for(const src of sess.inputSources){
+    if(!src.hand) continue;
+    const tip=_jointWorldPos(src.hand,'index-finger-tip',frame,refSpace); if(!tip) continue;
+    const local=ARP.mesh.worldToLocal(tip.clone());
+    if(Math.abs(local.z)>0.035) continue; // must be within 3.5cm of panel surface
+    const u=(local.x+ARP.PW/2)/ARP.PW;
+    const v=1-(local.y+ARP.PH/2)/ARP.PH;
+    if(u<0||u>1||v<0||v>1) continue;
+    for(const btn of ARP.buttons){
+      if(u>=btn.u0&&u<=btn.u1&&v>=btn.v0&&v<=btn.v1){
+        btn.action(); ARP.dirty=true; ARP.cooldown=22; return;
+      }
     }
   }
 }
@@ -2255,7 +2256,8 @@ function updateHandTracking(frame){
     S.N = 25000; startGrow();
     pMat.size = 0.005;
     // B-field: low res for AR perf, disabled by default but user can toggle
-    S.bGridDim = 12; S.bUpdateEvery = 60; S.bTrSpawn = 0; S.bArrowScale = 0.6;
+    S.bGridDim = 9; S.bUpdateEvery = 90; S.bArrowScale = 0.6;
+    // Keep tracers running — field flows matter more than grid density
     setMagField(false);
 
     // ── System pinch events — drive _sysActive + panel checks ──
