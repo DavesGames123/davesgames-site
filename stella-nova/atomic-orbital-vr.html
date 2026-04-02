@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Atomic Orbital // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+:root {
+  --bg:#0e1118; --bg2:#121620; --bg3:#161c28;
+  --surface:#1c2436; --surface2:#243040;
+  --border:rgba(150,200,255,0.06); --border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff; --blue-dim:#5a8cc0; --blue-faint:rgba(150,200,255,0.04);
+  --yellow:#ffc832; --yellow-dim:#b8901e; --yellow-faint:rgba(255,200,50,0.04);
+  --green:#64c864; --text:#c8d0e0; --text-dim:#6878a0;
+  --text-faint:#384060; --text-bright:#e8ecf4; --scan:rgba(0,0,0,0.06);
+  --panel-w:300px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply;}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.35));}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px;}
+canvas{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:1;}
+#ui{position:fixed;inset:0;pointer-events:none;z-index:10;}
+
+/* ── TOPBAR ── */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;height:42px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border-b);pointer-events:all;}
+.in-frame .topbar{display:none!important;}
+.topbar-l{display:flex;align-items:center;gap:1.4rem;}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.05rem;letter-spacing:0.12em;}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.topbar-r{font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);}
+.topbar-r strong{color:var(--blue-dim);font-weight:500;}
+
+/* ── LEFT PANEL ── */
+#panel{position:absolute;top:58px;left:14px;width:var(--panel-w);background:rgba(18,22,32,0.93);border:1px solid var(--border-b);backdrop-filter:blur(14px);pointer-events:all;user-select:none;max-height:calc(100vh - 74px);overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent;}
+#panel::-webkit-scrollbar{width:3px;}
+#panel::-webkit-scrollbar-thumb{background:var(--surface2);}
+.in-frame #panel{top:14px;max-height:calc(100vh - 28px);}
+.panel-head{display:flex;align-items:center;gap:0.7rem;padding:0.6rem 0.8rem;border-bottom:1px solid var(--border-b);}
+.panel-badge{font-size:0.44rem;letter-spacing:0.14em;text-transform:uppercase;padding:2px 7px;font-weight:700;border:1px solid;opacity:0.75;}
+.panel-title{font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);font-weight:500;}
+.panel-live{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:0.46rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--green);}
+.panel-live::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);animation:blink 2.2s ease infinite;}
+.panel-body{padding:0.6rem 0.8rem 0.8rem;}
+
+/* ── SECTION LABELS ── */
+.sec-label{display:flex;align-items:center;gap:0.5rem;font-size:0.46rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-faint);margin:12px 0 8px;}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* ── ROWS ── */
+.row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.row-lbl{font-size:0.52rem;color:var(--text-dim);width:40px;flex-shrink:0;letter-spacing:0.05em;}
+.row-lbl.qn{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.25rem;color:var(--blue);width:16px;line-height:1;}
+.val{font-size:0.6rem;color:var(--blue);min-width:30px;text-align:right;flex-shrink:0;}
+
+/* ── SLIDERS ── */
+input[type=range]{flex:1;-webkit-appearance:none;height:2px;background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.12) var(--pct,50%));border-radius:1px;outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--bg);border:1.5px solid var(--blue-dim);cursor:pointer;transition:border-color 0.15s;}
+input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
+
+/* ── MODE BUTTONS ── */
+.mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:3px;}
+.mode-btn{background:transparent;border:1px solid var(--border);color:var(--text-faint);padding:6px 2px;font-size:0.52rem;font-family:'JetBrains Mono',monospace;letter-spacing:0.06em;cursor:pointer;transition:all 0.14s;text-align:center;text-transform:uppercase;}
+.mode-btn:hover{color:var(--text-dim);border-color:var(--border-b);}
+.mode-btn.active{background:var(--yellow-faint);border-color:rgba(255,200,50,0.35);color:var(--yellow);}
+
+/* ── VIEW / AXIS BUTTONS ── */
+.view-row{display:flex;gap:4px;margin-bottom:6px;}
+.view-btn{flex:1;background:transparent;border:1px solid var(--border);color:var(--text-faint);padding:5px 2px;font-size:0.48rem;font-family:'JetBrains Mono',monospace;letter-spacing:0.12em;cursor:pointer;transition:all 0.14s;text-align:center;text-transform:uppercase;}
+.view-btn:hover{color:var(--text-dim);border-color:var(--border-b);}
+.view-btn.active{background:var(--blue-faint);border-color:rgba(150,200,255,0.3);color:var(--blue);}
+
+/* ── TOGGLE ── */
+.tog-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.tog-lbl{font-size:0.52rem;color:var(--text-dim);letter-spacing:0.05em;}
+.tog{position:relative;width:34px;height:18px;flex-shrink:0;}
+.tog input{opacity:0;position:absolute;width:0;height:0;}
+.tog-track{position:absolute;inset:0;border:1px solid rgba(150,200,255,0.18);border-radius:9px;background:rgba(0,0,0,0.4);cursor:pointer;transition:all 0.2s;}
+.tog input:checked ~ .tog-track{border-color:rgba(150,200,255,0.35);background:rgba(90,140,192,0.2);}
+.tog-track::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;background:var(--text-faint);border-radius:50%;transition:all 0.2s;}
+.tog input:checked ~ .tog-track::after{transform:translateX(16px);background:var(--blue);}
+
+/* ── PANEL BUTTON ── */
+.btn-row{display:flex;align-items:center;gap:8px;margin:6px 0;}
+.panel-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;padding:5px 12px;cursor:pointer;transition:all 0.15s;white-space:nowrap;}
+.panel-btn:hover{border-color:var(--yellow-dim);color:var(--yellow);background:var(--yellow-faint);}
+.status-txt{font-size:0.46rem;letter-spacing:0.08em;color:var(--text-faint);}
+.status-txt.computing{color:var(--yellow);}
+.status-txt.ready{color:var(--green);}
+
+/* ── INFO BAR ── */
+.info-bar{font-size:0.5rem;color:var(--text-faint);margin-top:10px;padding-top:8px;border-top:1px solid var(--border);letter-spacing:0.06em;line-height:1.8;}
+
+/* Hidden sections */
+#cut-row,#flow-tr-opts,#bfield-opts,#btr-opts{display:none;}
+
+/* ── STATE DISPLAY ── */
+#state-display{position:absolute;top:54px;right:20px;text-align:right;pointer-events:none;}
+.in-frame #state-display{top:14px;}
+.ket-main{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:3.2rem;color:rgba(150,200,255,0.28);line-height:1;letter-spacing:0.03em;}
+.ket-sub{font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-faint);margin-top:5px;}
+
+/* ── LOADING ── */
+#loading{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:0.6rem;letter-spacing:0.32em;text-transform:uppercase;color:var(--blue-dim);pointer-events:none;opacity:0;transition:opacity 0.2s;}
+#loading.show{opacity:1;}
+
+/* ── VR BUTTON ── */
+#vr-wrap{position:absolute;bottom:22px;left:50%;transform:translateX(-50%);pointer-events:all;}
+.vr-btn-el{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.58rem;font-weight:500;letter-spacing:0.22em;text-transform:uppercase;padding:9px 26px;cursor:pointer;transition:all 0.2s;white-space:nowrap;}
+.vr-btn-el:hover:not(:disabled){border-color:var(--yellow-dim);color:var(--yellow);background:var(--yellow-faint);}
+.vr-btn-el:disabled{opacity:0.3;cursor:default;}
+.vr-btn-el.vr-ready{border-color:rgba(255,200,50,0.35);color:var(--yellow);background:var(--yellow-faint);}
+.vr-btn-el.vr-ready:hover{border-color:var(--yellow);box-shadow:0 0 18px rgba(255,200,50,0.12);}
+
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--surface2);}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div class="topbar">
+    <div class="topbar-l">
+      <span class="sys-name">Stella Nova</span>
+      <span class="sys-status">Atomic Orbital Viewer</span>
+    </div>
+    <div class="topbar-r">SYS // <strong>QUANTUM MECHANICS</strong></div>
+  </div>
+
+  <div id="panel">
+    <div class="panel-head">
+      <span class="panel-badge" style="color:var(--yellow)">QM</span>
+      <span class="panel-title">Orbital Viewer</span>
+      <span class="panel-live">Live</span>
+    </div>
+    <div class="panel-body">
+
+      <div class="sec-label">Quantum Numbers</div>
+      <div class="row"><span class="row-lbl qn">n</span><input type="range" id="sl-n" min="1" max="6" value="3" step="1"><span class="val" id="vl-n">3</span></div>
+      <div class="row"><span class="row-lbl qn">l</span><input type="range" id="sl-l" min="0" max="5" value="1" step="1"><span class="val" id="vl-l">1</span></div>
+      <div class="row"><span class="row-lbl qn">m</span><input type="range" id="sl-m" min="-5" max="5" value="1" step="1"><span class="val" id="vl-m">+1</span></div>
+
+      <div class="sec-label">Visualization</div>
+      <div class="mode-grid">
+        <button class="mode-btn active" data-mode="0">|ψ|²</button>
+        <button class="mode-btn" data-mode="1">Re(ψ)</button>
+        <button class="mode-btn" data-mode="2">Im(ψ)</button>
+        <button class="mode-btn" data-mode="3">Phase</button>
+      </div>
+
+      <div class="sec-label">Particles</div>
+      <div class="row"><span class="row-lbl">count</span><input type="range" id="sl-N" min="1000" max="2000000" value="100000" step="1000"><span class="val" id="vl-N">100k</span></div>
+      <div class="row"><span class="row-lbl">size</span><input type="range" id="sl-sz" min="0.005" max="0.5" value="0.02" step="0.005"><span class="val" id="vl-sz">0.020</span></div>
+      <div class="row"><span class="row-lbl">scale</span><input type="range" id="sl-ls" min="50" max="6000" value="800" step="25"><span class="val" id="vl-ls">800</span></div>
+
+      <div class="sec-label">Time Evolution</div>
+      <div class="tog-row"><span class="tog-lbl">Evolve phase</span><label class="tog"><input type="checkbox" id="cb-ev" checked><span class="tog-track"></span></label></div>
+      <div class="row"><span class="row-lbl">speed</span><input type="range" id="sl-sp" min="0.0" max="5.0" value="1.0" step="0.1"><span class="val" id="vl-sp">1.0</span></div>
+
+      <div class="sec-label">Probability Flow</div>
+      <div class="tog-row"><span class="tog-lbl">Animate particles</span><label class="tog"><input type="checkbox" id="cb-flow-anim" checked><span class="tog-track"></span></label></div>
+      <div class="tog-row"><span class="tog-lbl">Flow tracers</span><label class="tog"><input type="checkbox" id="cb-flow-tr"><span class="tog-track"></span></label></div>
+      <div class="row"><span class="row-lbl">speed</span><input type="range" id="sl-fspd" min="0.0" max="3.0" value="0.5" step="0.05"><span class="val" id="vl-fspd">0.50</span></div>
+      <div id="flow-tr-opts">
+        <div class="row"><span class="row-lbl">count</span><input type="range" id="sl-ftr-n" min="50" max="2000" value="400" step="50"><span class="val" id="vl-ftr-n">400</span></div>
+        <div class="row"><span class="row-lbl">trail</span><input type="range" id="sl-ftr-tl" min="5" max="80" value="30" step="1"><span class="val" id="vl-ftr-tl">30</span></div>
+      </div>
+
+      <div class="sec-label">Magnetic Field</div>
+      <div class="tog-row"><span class="tog-lbl">Show B arrows</span><label class="tog"><input type="checkbox" id="cb-bfield" checked><span class="tog-track"></span></label></div>
+      <div id="bfield-opts" style="display:block">
+        <div class="row"><span class="row-lbl">grid N</span><input type="range" id="sl-bgdim" min="3" max="24" value="24" step="1"><span class="val" id="vl-bgdim">24</span></div>
+        <div class="row"><span class="row-lbl">extent</span><input type="range" id="sl-bgext" min="5" max="120" value="40" step="1"><span class="val" id="vl-bgext">40</span></div>
+        <div class="row"><span class="row-lbl">scale</span><input type="range" id="sl-basc" min="0.1" max="5" value="0.1" step="0.1"><span class="val" id="vl-basc">0.1</span></div>
+        <div class="row"><span class="row-lbl">gamma</span><input type="range" id="sl-bgam" min="0.2" max="4" value="1.0" step="0.1"><span class="val" id="vl-bgam">1.0</span></div>
+        <div class="row"><span class="row-lbl">upd/fr</span><input type="range" id="sl-buev" min="10" max="180" value="10" step="10"><span class="val" id="vl-buev">10</span></div>
+        <div class="btn-row">
+          <button class="panel-btn" id="btn-brecompute">Recompute B</button>
+          <span class="status-txt ready" id="bstatus">ready</span>
+        </div>
+        <div class="tog-row"><span class="tog-lbl">B-field tracers</span><label class="tog"><input type="checkbox" id="cb-btr" checked><span class="tog-track"></span></label></div>
+        <div id="btr-opts" style="display:block">
+          <div class="row"><span class="row-lbl">speed</span><input type="range" id="sl-bspd" min="0.1" max="20" value="1.0" step="0.1"><span class="val" id="vl-bspd">1.0</span></div>
+          <div class="row"><span class="row-lbl">spawn</span><input type="range" id="sl-bspwn" min="1" max="5000" value="750" step="1"><span class="val" id="vl-bspwn">750</span></div>
+          <div class="row"><span class="row-lbl">trail</span><input type="range" id="sl-btrl" min="5" max="120" value="50" step="1"><span class="val" id="vl-btrl">50</span></div>
+        </div>
+      </div>
+
+      <div class="sec-label">Cross-Section</div>
+      <div class="view-row">
+        <button class="view-btn active" data-view="0">Full</button>
+        <button class="view-btn" data-view="1">Cross</button>
+        <button class="view-btn" data-view="2">Inv</button>
+      </div>
+      <div id="cut-row">
+        <div class="view-row" style="margin-bottom:5px">
+          <button class="view-btn active" data-axis="0">X</button>
+          <button class="view-btn" data-axis="1">Y</button>
+          <button class="view-btn" data-axis="2">Z</button>
+        </div>
+        <div class="row"><span class="row-lbl">cut</span><input type="range" id="sl-cut" min="-30" max="30" value="0" step="0.5"><span class="val" id="vl-cut">0.0</span></div>
+      </div>
+
+      <div class="sec-label">Extras</div>
+      <div class="tog-row"><span class="tog-lbl">Static flow arrows</span><label class="tog"><input type="checkbox" id="cb-flow"><span class="tog-track"></span></label></div>
+      <div class="tog-row"><span class="tog-lbl">Axes</span><label class="tog"><input type="checkbox" id="cb-axes"><span class="tog-track"></span></label></div>
+
+      <div class="info-bar" id="info-bar">n=3 l=1 m=+1 &middot; 8000 pts<br>drag to orbit &middot; scroll to zoom</div>
+    </div>
+  </div>
+
+  <div id="state-display">
+    <div class="ket-main" id="ket-disp">|3,1,+1⟩</div>
+    <div class="ket-sub" id="orb-disp">3p orbital</div>
+  </div>
+  <div id="loading">Generating···</div>
+  <div id="vr-wrap"></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ════════════════════════════════════════════════════════════
+   (no Web Worker — computed synchronously; see computeBField)
+   ════════════════════════════════════════════════════════════ */
+
+/* ════════════════════════════════════════════════════════════
+   PHYSICS
+   ════════════════════════════════════════════════════════════ */
+function factorial(n){if(n<=1)return 1;let r=1;for(let i=2;i<=n;i++)r*=i;return r;}
+
+function radialR(r,n,l){
+  const rho=2*r/n,k=n-l-1,alpha=2*l+1;let L=1;
+  if(k===1){L=1+alpha-rho;}else if(k>1){let Lm2=1,Lm1=1+alpha-rho;for(let j=2;j<=k;j++){const t=((2*j-1+alpha-rho)*Lm1-(j-1+alpha)*Lm2)/j;Lm2=Lm1;Lm1=t;}L=Lm1;}
+  return Math.sqrt(Math.pow(2/n,3)*factorial(n-l-1)/(2*n*factorial(n+l)))*Math.exp(-rho/2)*Math.pow(rho,l)*L;
+}
+
+function legendrePlm(x,l,m){
+  const am=Math.abs(m);let Pmm=1;
+  if(am>0){const s=Math.sqrt((1-x)*(1+x));let f=1;for(let j=1;j<=am;j++){Pmm*=-f*s;f+=2;}}
+  if(l===am)return Pmm;let Pm1m=x*(2*am+1)*Pmm;if(l===am+1)return Pm1m;
+  let pp=Pmm;for(let ll=am+2;ll<=l;ll++){const t=((2*ll-1)*x*Pm1m-(ll+am-1)*pp)/(ll-am);pp=Pm1m;Pm1m=t;}return Pm1m;
+}
+
+const HEAT=[[0,0,0],[.3,0,.6],[.8,0,0],[1,.5,0],[1,1,0],[1,1,1]];
+function heatmap(v){v=Math.max(0,Math.min(1,v));const sv=v*5,i=Math.min(Math.floor(sv),4),t=sv-i;return[HEAT[i][0]+t*(HEAT[i+1][0]-HEAT[i][0]),HEAT[i][1]+t*(HEAT[i+1][1]-HEAT[i][1]),HEAT[i][2]+t*(HEAT[i+1][2]-HEAT[i][2])];}
+function diverging(v){v=Math.max(-1,Math.min(1,v));if(v>=0){const t=v;return[Math.min(1,t*2),Math.min(1,Math.max(0,t*2-.5)),0];}const t=-v;return[0,Math.min(1,Math.max(0,t*2-.5)),Math.min(1,t*2)];}
+
+function particleColor(x,y,z,n,l,m,t,mode,scaler){
+  const r=Math.sqrt(x*x+y*y+z*z);if(r<1e-6)return[0,0,0];
+  const R=radialR(r,n,l),Plm=legendrePlm(y/r,l,m),phi=Math.atan2(z,x);
+  const phase=m*phi-t/(2*n*n);
+  if(mode===0)return heatmap(R*R*Plm*Plm*scaler);
+  if(mode===1)return diverging(R*Plm*Math.cos(phase)*scaler*.05);
+  if(mode===2)return diverging(R*Plm*Math.sin(phase)*scaler*.05);
+  const phiE=((phase%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+  const hh=phiE/(2*Math.PI)*6,hi=Math.floor(hh)%6,ff=hh-Math.floor(hh),q=1-ff;
+  return[[1,ff,0],[q,1,0],[0,1,ff],[0,q,1],[ff,0,1],[1,0,q]][hi];
+}
+
+// Probability current J = m/(r*sinθ) in phi-hat direction
+function probabilityFlow(x,y,z,m){
+  const r=Math.sqrt(x*x+y*y+z*z);if(r<1e-6)return[0,0,0];
+  const theta=Math.acos(Math.max(-1,Math.min(1,y/r))),phi=Math.atan2(z,x);
+  const st=Math.max(Math.abs(Math.sin(theta)),1e-4)*Math.sign(Math.sin(theta)||1);
+  const vm=m/(r*st);
+  return[-vm*Math.sin(phi),0,vm*Math.cos(phi)];
+}
+
+// Field color ramp: dark-purple → blue → cyan → green → orange → white
+function fieldColor(mag,gamma=1){
+  const lv=Math.log10(1+mag*99)/2;
+  const lc=Math.pow(Math.max(0,Math.min(1,lv)),1/Math.max(0.1,gamma));
+  const stops=[[0.05,0,0.3],[0,0.2,1],[0,1,0.8],[0.2,1,0],[1,0.5,0],[1,1,1]];
+  const sv=lc*5,i=Math.min(Math.floor(sv),4),t=sv-i;
+  return[stops[i][0]+t*(stops[i+1][0]-stops[i][0]),stops[i][1]+t*(stops[i+1][1]-stops[i][1]),stops[i][2]+t*(stops[i+1][2]-stops[i][2])];
+}
+
+// CDF samplers
+function buildRadialCDF(n,l){const M=4096,rMax=10*n*n;const cdf=new Float64Array(M);let sum=0;for(let i=0;i<M;i++){const r=i*rMax/(M-1),R=radialR(r,n,l);sum+=r*r*R*R;cdf[i]=sum;}for(let i=0;i<M;i++)cdf[i]/=sum;return{cdf,rMax,M};}
+function buildThetaCDF(l,m){const M=2048;const cdf=new Float64Array(M);let sum=0;for(let i=0;i<M;i++){const theta=i*Math.PI/(M-1),Plm=legendrePlm(Math.cos(theta),l,m);sum+=Math.sin(theta)*Plm*Plm;cdf[i]=sum;}for(let i=0;i<M;i++)cdf[i]/=sum;return{cdf,M};}
+function sampleCDF(d,maxVal){const{cdf,M}=d;const u=Math.random();let lo=0,hi=M-1;while(lo<hi){const mid=(lo+hi)>>1;if(cdf[mid]<u)lo=mid+1;else hi=mid;}return lo*maxVal/(M-1);}
+
+/* ════════════════════════════════════════════════════════════
+   STATE
+   ════════════════════════════════════════════════════════════ */
+const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||innerWidth<768;
+const S={
+  n:3,l:1,m:1,
+  N:isMobile?3000:100000, scale:0.13,
+  colorMode:0, scaler:800,
+  evolving:true, timeSpeed:1, simTime:0,
+  viewMode:0, cutAxis:1, cutPos:0,
+  // Flow
+  animateFlow:true, showFlowTr:false, flowSpeed:0.5,
+  flowTrCount:400, flowTrTrail:30,
+  // B field — on by default at max resolution, minimum arrow scale, fast update
+  showBField:true, bGridDim:24, bGridExtent:40,
+  bArrowScale:0.1, bColGamma:1.0, bUpdateEvery:10,
+  showBTr:true, bTrSpeed:1.0, bTrSpawn:750, bTrTrail:50,
+  // Misc
+  showFlow:false, showAxes:false,
+  psize:isMobile?.2:.020,
+  dirty:true, colDirty:false,
+};
+
+/* ════════════════════════════════════════════════════════════
+   PRE-ALLOCATED PARTICLE BUFFERS (2 M cap)
+   posArr  — Three.js-unit positions  (x·scale, y·scale, z·scale)
+   sphArr  — spherical coords in a.u. (r, θ, φ) — used by flow anim & color update
+   colArr  — RGB colors
+   Never reallocated; only liveCount and pGeo.drawRange change.
+   ════════════════════════════════════════════════════════════ */
+const MAX_P = 2_000_000;
+const posArr = new Float32Array(MAX_P * 3);
+const colArr = new Float32Array(MAX_P * 3);
+const sphArr = new Float32Array(MAX_P * 3);
+
+// Aliases kept for functions that used old names
+const storedPos = posArr;   // NOTE: now holds scaled positions, not atomic
+const storedSph = sphArr;
+
+// CDF state — rebuilt when (n,l) or (l,m) change
+let rCDF = null, tCDF = null;
+let cdfN = -1, cdfL = -1, cdfM = -999;
+
+let liveCount  = 0;   // particles currently rendered
+let targetCount = 0;  // what we're growing toward
+let spawning   = false;
+let colorRollIdx = 0; // rolling window pointer for chunked color updates
+const SPAWN_CHUNK = 15_000;
+const COLOR_CHUNK =  80_000;
+
+/* ════════════════════════════════════════════════════════════
+   THREE.JS SETUP
+   ════════════════════════════════════════════════════════════ */
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.setClearColor(0x0e1118);
+renderer.xr.enabled=true;
+
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.01,600);
+camera.position.set(0,1.8,8.5);
+
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.target.set(0,0,0);controls.enableDamping=true;controls.dampingFactor=.05;
+controls.minDistance=.3;controls.maxDistance=60;
+renderer.xr.addEventListener('sessionstart',()=>controls.enabled=false);
+renderer.xr.addEventListener('sessionend',()=>controls.enabled=true);
+
+// Starfield
+{const N=2200,pos=new Float32Array(N*3),col=new Float32Array(N*3);for(let i=0;i<N;i++){const R=90+Math.random()*130,th=Math.random()*Math.PI,ph=Math.random()*6.28;pos[i*3]=R*Math.sin(th)*Math.cos(ph);pos[i*3+1]=R*Math.cos(th);pos[i*3+2]=R*Math.sin(th)*Math.sin(ph);const t=Math.random();col[i*3]=.4+.6*t;col[i*3+1]=.6+.4*t;col[i*3+2]=1;}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));scene.add(new THREE.Points(g,new THREE.PointsMaterial({size:.07,vertexColors:true,transparent:true,opacity:.5,sizeAttenuation:true})));}
+
+// Nucleus
+const nucleusGroup=new THREE.Group();scene.add(nucleusGroup);
+nucleusGroup.add(new THREE.Mesh(new THREE.SphereGeometry(.055,20,20),new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:.9})));
+for(let i=0;i<3;i++){const ring=new THREE.Mesh(new THREE.RingGeometry(.09+i*.04,.10+i*.04,48),new THREE.MeshBasicMaterial({color:0x5a8cc0,transparent:true,opacity:.18-i*.04,side:THREE.DoubleSide}));ring.rotation.x=Math.random()*Math.PI;ring.rotation.y=Math.random()*Math.PI;ring.userData.spinSpeed=(.4+Math.random()*.4)*(Math.random()>.5?1:-1);ring.userData.spinAxis=new THREE.Vector3(Math.random()-.5,Math.random()-.5,Math.random()-.5).normalize();nucleusGroup.add(ring);}
+
+// Circle sprite texture (avoids square particles)
+function makeCircleTex(){
+  const c=document.createElement('canvas');c.width=64;c.height=64;
+  const ctx=c.getContext('2d');
+  const g=ctx.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,'rgba(255,255,255,1)');
+  g.addColorStop(0.55,'rgba(255,255,255,0.9)');
+  g.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(c);
+}
+
+// Main particle cloud — attributes point permanently into pre-allocated arrays
+const pGeo=new THREE.BufferGeometry();
+const pPosAttr=new THREE.BufferAttribute(posArr,3); pPosAttr.setUsage(THREE.DynamicDrawUsage);
+const pColAttr=new THREE.BufferAttribute(colArr,3); pColAttr.setUsage(THREE.DynamicDrawUsage);
+pGeo.setAttribute('position',pPosAttr);
+pGeo.setAttribute('color',pColAttr);
+pGeo.setDrawRange(0,0);
+const pMat=new THREE.PointsMaterial({size:S.psize,vertexColors:true,transparent:true,opacity:.88,sizeAttenuation:true,depthWrite:false,blending:THREE.AdditiveBlending,map:makeCircleTex(),alphaTest:0.01});
+const pSystem=new THREE.Points(pGeo,pMat);scene.add(pSystem);
+
+// Static flow arrows
+const flowGeo=new THREE.BufferGeometry();
+const flowMat=new THREE.LineBasicMaterial({color:0x5a8cc0,transparent:true,opacity:.35});
+const flowLines=new THREE.LineSegments(flowGeo,flowMat);
+scene.add(flowLines);flowLines.visible=false;
+
+// Axes
+const axesHelper=new THREE.AxesHelper(4);axesHelper.visible=false;scene.add(axesHelper);
+
+/* ════════════════════════════════════════════════════════════
+   B FIELD ARROW SYSTEM
+   ════════════════════════════════════════════════════════════ */
+const bArrowGeo=new THREE.BufferGeometry();
+const bArrowMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:1});
+const bArrowLines=new THREE.LineSegments(bArrowGeo,bArrowMat);
+scene.add(bArrowLines);bArrowLines.visible=false;
+
+let bFieldData=null;   // Float32Array [x,y,z,dx,dy,dz,mag × ng]
+let bFieldFrameCount=0;
+let bFieldDim=7, bFieldExt=25*S.scale;
+
+/* ════════════════════════════════════════════════════════════
+   B FIELD — SYNCHRONOUS BIOT-SAVART
+   J is purely azimuthal so Jy = 0 always.
+   Cross product J×d simplifies to 3 mults instead of 6.
+   Source J vectors precomputed once, then reused for every
+   grid point — avoids trig inside the inner loop.
+   Timing: 5³=125 pts × 300 src ≈ 1 ms. 8³=512 × 400 ≈ 8 ms.
+   ════════════════════════════════════════════════════════════ */
+let bFieldScheduled=false;
+
+function computeBField(){
+  if(!storedPos)return;
+  bFieldScheduled=false;
+  const{m,bGridDim,bGridExtent,scale,bArrowScale,bColGamma}=S;
+  const count=liveCount; if(count===0)return;
+
+  const G=Math.min(bGridDim,24);  // cap: 24³=13824 pts
+  const ext=bGridExtent*scale;
+  const ng=G*G*G;
+
+  // ── Subsample sources (max 400) and precompute J ──
+  const maxSrc=400;
+  const step=Math.max(1,Math.floor(count/maxSrc));
+  const ns=Math.min(maxSrc,Math.floor(count/step));
+  const ssx=new Float32Array(ns),ssy=new Float32Array(ns),ssz=new Float32Array(ns);
+  const sjx=new Float32Array(ns),sjz=new Float32Array(ns); // Jy=0 always
+  for(let si=0;si<ns;si++){
+    const i=si*step;
+    // posArr holds Three.js-unit (scaled) positions
+    ssx[si]=posArr[i*3]; ssy[si]=posArr[i*3+1]; ssz[si]=posArr[i*3+2];
+    // probabilityFlow needs atomic-unit coords → divide by scale
+    const ax=posArr[i*3]/scale, ay=posArr[i*3+1]/scale, az=posArr[i*3+2]/scale;
+    const r=Math.sqrt(ax*ax+ay*ay+az*az); if(r<1e-6)continue;
+    const theta=Math.acos(Math.max(-1,Math.min(1,ay/r)));
+    const phi=Math.atan2(az,ax);
+    const st=Math.max(Math.abs(Math.sin(theta)),1e-4);
+    const vm=m/(r*st);
+    sjx[si]=-vm*Math.sin(phi);  // Jx
+    sjz[si]= vm*Math.cos(phi);  // Jz  (Jy=0)
+  }
+
+  // ── Biot-Savart on grid ──
+  const out=new Float32Array(ng*7);
+  let maxMag=0, gi=0;
+  const step2=G>1?2*ext/(G-1):1;
+  for(let xi=0;xi<G;xi++){
+    const px=G>1?-ext+xi*step2:0;
+    for(let yi=0;yi<G;yi++){
+      const py=G>1?-ext+yi*step2:0;
+      for(let zi=0;zi<G;zi++){
+        const pz=G>1?-ext+zi*step2:0;
+        let Bx=0,By=0,Bz=0;
+        for(let si=0;si<ns;si++){
+          const dx=px-ssx[si],dy=py-ssy[si],dz=pz-ssz[si];
+          const d2=dx*dx+dy*dy+dz*dz;
+          if(d2<0.001)continue;
+          const inv3=1/(d2*Math.sqrt(d2));
+          // B += (J×d)/|d|³  with Jy=0:
+          // Bx = Jy·dz - Jz·dy = -Jz·dy
+          // By = Jz·dx - Jx·dz
+          // Bz = Jx·dy - Jy·dx =  Jx·dy
+          const jx=sjx[si],jz=sjz[si];
+          Bx+=(-jz*dy)*inv3;
+          By+=(jz*dx-jx*dz)*inv3;
+          Bz+=(jx*dy)*inv3;
+        }
+        const mag=Math.sqrt(Bx*Bx+By*By+Bz*Bz);
+        if(mag>maxMag)maxMag=mag;
+        out[gi*7]=px;out[gi*7+1]=py;out[gi*7+2]=pz;
+        out[gi*7+3]=Bx;out[gi*7+4]=By;out[gi*7+5]=Bz;out[gi*7+6]=mag;
+        gi++;
+      }
+    }
+  }
+
+  // ── Normalize ──
+  if(maxMag>1e-10){
+    for(let i=0;i<ng;i++){
+      const mag=out[i*7+6];
+      if(mag>1e-12){const inv=1/mag;out[i*7+3]*=inv;out[i*7+4]*=inv;out[i*7+5]*=inv;}
+      out[i*7+6]/=maxMag;
+    }
+  }
+
+  bFieldData=out;
+  bFieldDim=G;
+  bFieldExt=ext;
+  document.getElementById('bstatus').textContent='ready';
+  document.getElementById('bstatus').className='status-txt ready';
+  uploadBArrows();
+}
+
+function uploadBArrows(){
+  if(!bFieldData||!S.showBField){bArrowLines.visible=false;return;}
+  bArrowLines.visible=true;
+  const{bArrowScale,bColGamma}=S;
+  const ng=bFieldData.length/7;
+  const pos=new Float32Array(ng*6),col=new Float32Array(ng*6);
+  for(let i=0;i<ng;i++){
+    const ox=bFieldData[i*7],oy=bFieldData[i*7+1],oz=bFieldData[i*7+2];
+    const dx=bFieldData[i*7+3],dy=bFieldData[i*7+4],dz=bFieldData[i*7+5];
+    const mag=bFieldData[i*7+6];
+    const lv=Math.log10(1+mag*99)/2;
+    const len=bArrowScale*(0.04+lv*0.7);
+    const [r,g,b]=fieldColor(mag,bColGamma);
+    pos[i*6]=ox;pos[i*6+1]=oy;pos[i*6+2]=oz;
+    col[i*6]=r*0.08;col[i*6+1]=g*0.08;col[i*6+2]=b*0.08;
+    pos[i*6+3]=ox+dx*len;pos[i*6+4]=oy+dy*len;pos[i*6+5]=oz+dz*len;
+    col[i*6+3]=r;col[i*6+4]=g;col[i*6+5]=b;
+  }
+  bArrowGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  bArrowGeo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  bArrowGeo.setDrawRange(0,ng*2);
+}
+
+// Trilinear interpolation of precomputed B field
+function sampleBField(px,py,pz){
+  if(!bFieldData||bFieldDim<2)return[0,1,0,0];
+  const G=bFieldDim,ext=bFieldExt,step=2*ext/(G-1);
+  const gx=(px+ext)/step,gy=(py+ext)/step,gz=(pz+ext)/step;
+  const x0=Math.max(0,Math.min(G-2,Math.floor(gx)));
+  const y0=Math.max(0,Math.min(G-2,Math.floor(gy)));
+  const z0=Math.max(0,Math.min(G-2,Math.floor(gz)));
+  const tx=Math.max(0,Math.min(1,gx-x0)),ty=Math.max(0,Math.min(1,gy-y0)),tz=Math.max(0,Math.min(1,gz-z0));
+  function cell(xi,yi,zi){const i=(xi*G*G+yi*G+zi)*7;return bFieldData.subarray(i,i+7);}
+  const w=[(1-tx)*(1-ty)*(1-tz),tx*(1-ty)*(1-tz),(1-tx)*ty*(1-tz),tx*ty*(1-tz),(1-tx)*(1-ty)*tz,tx*(1-ty)*tz,(1-tx)*ty*tz,tx*ty*tz];
+  const corners=[[x0,y0,z0],[x0+1,y0,z0],[x0,y0+1,z0],[x0+1,y0+1,z0],[x0,y0,z0+1],[x0+1,y0,z0+1],[x0,y0+1,z0+1],[x0+1,y0+1,z0+1]];
+  let dx=0,dy=0,dz=0,mag=0;
+  for(let c=0;c<8;c++){const cl=cell(corners[c][0],corners[c][1],corners[c][2]);dx+=w[c]*cl[3];dy+=w[c]*cl[4];dz+=w[c]*cl[5];mag+=w[c]*cl[6];}
+  const len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+  if(len>1e-6){dx/=len;dy/=len;dz/=len;}
+  return[dx,dy,dz,mag];
+}
+
+/* ════════════════════════════════════════════════════════════
+   FLOW TRACERS  (follow probability current J, azimuthal rotation)
+   ════════════════════════════════════════════════════════════ */
+const MAX_FT=2000, MAX_FT_TRAIL=80;
+const ftPosArr=new Float32Array(MAX_FT*MAX_FT_TRAIL*2*3);
+const ftColArr=new Float32Array(MAX_FT*MAX_FT_TRAIL*2*3);
+const ftLineGeo=new THREE.BufferGeometry();
+ftLineGeo.setAttribute('position',new THREE.BufferAttribute(ftPosArr,3));
+ftLineGeo.setAttribute('color',new THREE.BufferAttribute(ftColArr,3));
+const ftLineMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:.8});
+const ftLines=new THREE.LineSegments(ftLineGeo,ftLineMat);
+scene.add(ftLines);ftLines.visible=false;
+
+let flowTracers=[];
+
+function updateFlowTracers(dt){
+  if(!S.showFlowTr||S.m===0){ftLines.visible=false;return;}
+  ftLines.visible=true;
+  const{m,scale,flowSpeed,flowTrCount,flowTrTrail}=S;
+  const fdt=dt*flowSpeed*2;
+  const ext=bFieldExt>0?bFieldExt:5;
+
+  // Move + age
+  for(let i=flowTracers.length-1;i>=0;i--){
+    const tr=flowTracers[i];
+    tr.age+=dt;
+    // Rotate in phi (azimuthal probability current)
+    const r=tr.r,theta=tr.theta;
+    const st=Math.max(Math.abs(Math.sin(theta)),1e-4);
+    tr.phi+=m/(r*st)*fdt;
+    const sinT=Math.sin(theta);
+    const sx=r*sinT*Math.cos(tr.phi)*scale;
+    const sy=r*Math.cos(theta)*scale; // y unchanged
+    const sz=r*sinT*Math.sin(tr.phi)*scale;
+    tr.trail.unshift([sx,sy,sz]);
+    if(tr.trail.length>flowTrTrail)tr.trail.pop();
+    if(tr.age>=tr.maxAge)flowTracers.splice(i,1);
+  }
+
+  // Spawn from particle cloud
+  while(flowTracers.length<flowTrCount){
+    if(liveCount===0)break;
+    const idx=Math.floor(Math.random()*liveCount);
+    const r=storedSph[idx*3],theta=storedSph[idx*3+1],phi=storedSph[idx*3+2];
+    if(r<0.5)continue;
+    flowTracers.push({r,theta,phi,trail:[],age:0,maxAge:2.5+Math.random()*2});
+  }
+
+  // Build line buffer
+  const posA=ftLineGeo.attributes.position.array;
+  const colA=ftLineGeo.attributes.color.array;
+  let vi=0;
+  for(const tr of flowTracers){
+    const tl=tr.trail.length;if(tl<2)continue;
+    const ageA=tr.age<0.1?tr.age/0.1:tr.age>tr.maxAge*0.8?(tr.maxAge-tr.age)/(tr.maxAge*0.2):1;
+    for(let s=0;s<tl-1;s++){
+      const a0=(1-s/flowTrTrail)*ageA, a1=(1-(s+1)/flowTrTrail)*ageA*.3;
+      const pt=tr.trail[s],pn=tr.trail[s+1];
+      posA[vi*3]=pt[0];posA[vi*3+1]=pt[1];posA[vi*3+2]=pt[2];
+      colA[vi*3]=0.2*a0;colA[vi*3+1]=0.7*a0;colA[vi*3+2]=1.0*a0; vi++;
+      posA[vi*3]=pn[0];posA[vi*3+1]=pn[1];posA[vi*3+2]=pn[2];
+      colA[vi*3]=0.05*a1;colA[vi*3+1]=0.3*a1;colA[vi*3+2]=0.7*a1; vi++;
+    }
+  }
+  ftLineGeo.attributes.position.needsUpdate=true;
+  ftLineGeo.attributes.color.needsUpdate=true;
+  ftLineGeo.setDrawRange(0,vi);
+}
+
+/* ════════════════════════════════════════════════════════════
+   B-FIELD TRACERS  (advect along interpolated B field)
+   ════════════════════════════════════════════════════════════ */
+const MAX_BT=50000, MAX_BT_TRAIL=40;
+const btPosArr=new Float32Array(MAX_BT*MAX_BT_TRAIL*2*3);
+const btColArr=new Float32Array(MAX_BT*MAX_BT_TRAIL*2*3);
+const btLineGeo=new THREE.BufferGeometry();
+btLineGeo.setAttribute('position',new THREE.BufferAttribute(btPosArr,3));
+btLineGeo.setAttribute('color',new THREE.BufferAttribute(btColArr,3));
+const btLineMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:.9});
+const btLines=new THREE.LineSegments(btLineGeo,btLineMat);
+scene.add(btLines);btLines.visible=false;
+
+let bTracers=[];
+
+function updateBTracers(dt){
+  if(!S.showBTr||!bFieldData){btLines.visible=false;return;}
+  btLines.visible=true;
+  const{bTrSpeed,bTrSpawn,bTrTrail,bColGamma}=S;
+  const ext=bFieldExt;
+
+  for(let i=bTracers.length-1;i>=0;i--){
+    const tr=bTracers[i];tr.age+=dt;
+    const[dx,dy,dz,mag]=sampleBField(tr.x,tr.y,tr.z);
+    tr.x+=dx*bTrSpeed*dt;tr.y+=dy*bTrSpeed*dt;tr.z+=dz*bTrSpeed*dt;
+    tr.trail.unshift([tr.x,tr.y,tr.z,mag]);
+    if(tr.trail.length>bTrTrail)tr.trail.pop();
+    if(tr.age>=tr.maxAge||Math.abs(tr.x)>ext||Math.abs(tr.y)>ext||Math.abs(tr.z)>ext)bTracers.splice(i,1);
+  }
+  // Spawn: fractional accumulator so rate is exact regardless of framerate
+  const spawnF = bTrSpawn * dt;
+  const spawnN = Math.floor(spawnF) + (Math.random() < (spawnF % 1) ? 1 : 0);
+  for(let s=0; s<spawnN && bTracers.length<MAX_BT; s++){
+    const e=ext*.9;
+    bTracers.push({x:(Math.random()*2-1)*e,y:(Math.random()*2-1)*e,z:(Math.random()*2-1)*e,trail:[],age:0,maxAge:2+Math.random()*2});
+  }
+
+  const posA=btLineGeo.attributes.position.array;
+  const colA=btLineGeo.attributes.color.array;
+  let vi=0;
+  for(const tr of bTracers){
+    const tl=tr.trail.length;if(tl<2)continue;
+    const ageA=tr.age<0.1?tr.age/0.1:tr.age>tr.maxAge*0.8?(tr.maxAge-tr.age)/(tr.maxAge*0.2):1;
+    for(let s=0;s<tl-1;s++){
+      const pt=tr.trail[s],pn=tr.trail[s+1];
+      const a0=(1-s/bTrTrail)*ageA,a1=(1-(s+1)/bTrTrail)*ageA*.25;
+      const[r0,g0,b0]=fieldColor(pt[3]||0,bColGamma);
+      const[r1,g1,b1]=fieldColor(pn[3]||0,bColGamma);
+      posA[vi*3]=pt[0];posA[vi*3+1]=pt[1];posA[vi*3+2]=pt[2];
+      colA[vi*3]=r0*a0;colA[vi*3+1]=g0*a0;colA[vi*3+2]=b0*a0;vi++;
+      posA[vi*3]=pn[0];posA[vi*3+1]=pn[1];posA[vi*3+2]=pn[2];
+      colA[vi*3]=r1*a1;colA[vi*3+1]=g1*a1;colA[vi*3+2]=b1*a1;vi++;
+    }
+  }
+  btLineGeo.attributes.position.needsUpdate=true;
+  btLineGeo.attributes.color.needsUpdate=true;
+  btLineGeo.setDrawRange(0,vi);
+}
+
+/* ════════════════════════════════════════════════════════════
+   PARTICLE GENERATION — chunked streamer
+   startRebuild(): clears cloud, begins filling toward targetCount
+   startGrow():    keeps existing particles, adds up to targetCount
+   spawnChunk():   called every frame, adds SPAWN_CHUNK particles
+   ════════════════════════════════════════════════════════════ */
+function startRebuild(){
+  liveCount=0; pGeo.setDrawRange(0,0); colorRollIdx=0;
+  flowTracers=[]; bTracers=[];
+  const{n,l,m}=S;
+  if(n!==cdfN||l!==cdfL) rCDF=buildRadialCDF(n,l);
+  if(l!==cdfL||m!==cdfM) tCDF=buildThetaCDF(l,m);
+  cdfN=n; cdfL=l; cdfM=m;
+  targetCount=Math.min(S.N, MAX_P);
+  spawning=true;
+  loadingEl.classList.add('show');
+}
+
+function startGrow(){
+  targetCount=Math.min(S.N, MAX_P);
+  if(targetCount<=liveCount){ // shrink
+    liveCount=targetCount; pGeo.setDrawRange(0,liveCount);
+    pPosAttr.needsUpdate=true; pColAttr.needsUpdate=true;
+    updateInfoBar(liveCount); return;
+  }
+  spawning=true;
+  loadingEl.classList.add('show');
+}
+
+// Legacy alias used by the dirty-flag path
+function rebuildParticles(){ startRebuild(); }
+
+function spawnChunk(){
+  if(!spawning) return;
+  if(liveCount>=targetCount){
+    spawning=false;
+    loadingEl.classList.remove('show');
+    updateInfoBar(liveCount);
+    if(S.showFlow) rebuildStaticFlow();
+    if(S.showBField&&!bFieldScheduled){bFieldScheduled=true;setTimeout(computeBField,100);}
+    return;
+  }
+
+  const{n,l,m,scale,viewMode,cutAxis,cutPos,simTime,colorMode,scaler}=S;
+  const toAdd=Math.min(SPAWN_CHUNK, targetCount-liveCount);
+  let added=0, attempts=0;
+
+  while(added<toAdd && attempts<toAdd*8 && liveCount+added<MAX_P){
+    attempts++;
+    const r=sampleCDF(rCDF,rCDF.rMax), th=sampleCDF(tCDF,Math.PI), ph=Math.random()*6.2831853;
+    if(r<1e-6) continue;
+    const sinT=Math.sin(th);
+    const x=r*sinT*Math.cos(ph), y=r*Math.cos(th), z=r*sinT*Math.sin(ph);
+    const cv=cutAxis===0?x:cutAxis===1?y:z;
+    if(viewMode===1&&cv>cutPos) continue;
+    if(viewMode===2&&cv<cutPos) continue;
+
+    const i=liveCount+added;
+    sphArr[i*3]=r; sphArr[i*3+1]=th; sphArr[i*3+2]=ph;
+    posArr[i*3]=x*scale; posArr[i*3+1]=y*scale; posArr[i*3+2]=z*scale;
+    const c=particleColor(x,y,z,n,l,m,simTime,colorMode,scaler);
+    colArr[i*3]=c[0]; colArr[i*3+1]=c[1]; colArr[i*3+2]=c[2];
+    added++;
+  }
+
+  liveCount+=added;
+  pPosAttr.needsUpdate=true;
+  pColAttr.needsUpdate=true;
+  pGeo.setDrawRange(0,liveCount);
+  updateInfoBar(liveCount);
+}
+
+/* ════════════════════════════════════════════════════════════
+   COLOR UPDATE — rolling window
+   Processes COLOR_CHUNK particles per frame so even 2 M particles
+   stay smooth. Full pass completes in ceil(liveCount/COLOR_CHUNK) frames.
+   For mode 0 with pure flow animation, colors never need updating
+   (|ψ|² is constant along φ-orbits).
+   ════════════════════════════════════════════════════════════ */
+function updateColors(){
+  if(liveCount===0) return;
+  const{n,l,m,simTime,colorMode,scaler}=S;
+  const count=liveCount;
+  // Roll through COLOR_CHUNK particles per call
+  const end=Math.min(colorRollIdx+COLOR_CHUNK, count);
+  for(let i=colorRollIdx;i<end;i++){
+    const r=sphArr[i*3],th=sphArr[i*3+1],ph=sphArr[i*3+2];
+    const sinT=Math.sin(th);
+    const x=r*sinT*Math.cos(ph), y=r*Math.cos(th), z=r*sinT*Math.sin(ph);
+    const c=particleColor(x,y,z,n,l,m,simTime,colorMode,scaler);
+    colArr[i*3]=c[0]; colArr[i*3+1]=c[1]; colArr[i*3+2]=c[2];
+  }
+  colorRollIdx = end>=count ? 0 : end;
+  pColAttr.needsUpdate=true;
+}
+
+/* ════════════════════════════════════════════════════════════
+   PROBABILITY FLOW ANIMATION
+   sphArr[i] = (r, θ, φ) in atomic units.
+   Each frame: advance φ by m/(r·sinθ)·dt, recompute x,z into posArr.
+   No acos/atan2 — only cos/sin → fast even at 2 M particles.
+   ════════════════════════════════════════════════════════════ */
+function animateFlow(dt){
+  if(liveCount===0) return;
+  const{m,scale,flowSpeed}=S;
+  if(m===0) return;
+  const fdt=dt*flowSpeed;
+  for(let i=0;i<liveCount;i++){
+    const r=sphArr[i*3], theta=sphArr[i*3+1];
+    const st=Math.max(Math.abs(Math.sin(theta)),1e-4);
+    sphArr[i*3+2]+=m/(r*st)*fdt;        // advance φ
+    const ph=sphArr[i*3+2];
+    const sinT=Math.sin(theta);
+    posArr[i*3  ]=r*sinT*Math.cos(ph)*scale;
+    posArr[i*3+2]=r*sinT*Math.sin(ph)*scale; // posArr[i*3+1] (y) unchanged
+  }
+  pPosAttr.needsUpdate=true;
+}
+
+/* ── Static flow arrows ── */
+function rebuildStaticFlow(){
+  const geo=flowGeo;while(geo.attributes.position)geo.deleteAttribute('position');
+  if(!S.showFlow){flowLines.visible=false;return;}
+  flowLines.visible=true;
+  const{m,n,scale}=S,rMax=7*n*n;
+  const pts=[];
+  for(let i=0;i<350;i++){
+    let rx,ry,rz,r;
+    do{rx=(Math.random()*2-1)*rMax;ry=(Math.random()*2-1)*rMax;rz=(Math.random()*2-1)*rMax;r=Math.sqrt(rx*rx+ry*ry+rz*rz);}while(r<3||r>rMax*.75);
+    const J=probabilityFlow(rx,ry,rz,m);
+    const fl=Math.sqrt(J[0]*J[0]+J[1]*J[1]+J[2]*J[2]);if(fl<1e-8)continue;
+    const len=2;
+    pts.push(rx*scale,ry*scale,rz*scale);
+    pts.push((rx+J[0]/fl*len)*scale,(ry+J[1]/fl*len)*scale,(rz+J[2]/fl*len)*scale);
+  }
+  const pa=new Float32Array(pts);
+  geo.setAttribute('position',new THREE.BufferAttribute(pa,3));
+  geo.setDrawRange(0,pts.length/3);
+}
+
+/* ════════════════════════════════════════════════════════════
+   VR BUTTON
+   ════════════════════════════════════════════════════════════ */
+{
+  const wrap=document.getElementById('vr-wrap');
+  const btn=document.createElement('button');btn.className='vr-btn-el';btn.textContent='Enter VR';wrap.appendChild(btn);
+  let activeSession=null;
+  async function onSessionStart(s){s.addEventListener('end',()=>{activeSession=null;btn.textContent='Enter VR';});await renderer.xr.setSession(s);activeSession=s;btn.textContent='Exit VR';}
+  btn.addEventListener('click',async()=>{
+    if(activeSession){activeSession.end();return;}
+    try{const s=await navigator.xr.requestSession('immersive-vr',{optionalFeatures:['local-floor','bounded-floor','hand-tracking','dom-overlay'],domOverlay:{root:document.getElementById('ui')}});onSessionStart(s);}catch(e){console.warn(e);}
+  });
+  if(navigator.xr){navigator.xr.isSessionSupported('immersive-vr').then(ok=>{if(ok)btn.classList.add('vr-ready');else{btn.textContent='VR Unavailable';btn.disabled=true;}}).catch(()=>{btn.textContent='VR Unavailable';btn.disabled=true;});}
+  else{btn.textContent='No WebXR';btn.disabled=true;}
+}
+
+let vrRotY=0;
+function handleVRInput(){
+  const sess=renderer.xr.getSession();if(!sess)return;
+  for(const src of sess.inputSources){if(!src.gamepad)continue;const ax=src.gamepad.axes;const stX=ax[2]??ax[0]??0;if(Math.abs(stX)>.12){vrRotY-=stX*.018;pSystem.rotation.y=vrRotY;ftLines.rotation.y=vrRotY;btLines.rotation.y=vrRotY;nucleusGroup.rotation.y=vrRotY;}}
+}
+
+/* ════════════════════════════════════════════════════════════
+   UI WIRING
+   ════════════════════════════════════════════════════════════ */
+const SUBSHELLS=['s','p','d','f','g','h'];
+
+function updateDisplay(){
+  const{n,l,m}=S;const ms=(m>=0?'+':'')+m;
+  document.getElementById('ket-disp').textContent=`|${n},${l},${ms}⟩`;
+  document.getElementById('orb-disp').textContent=`${n}${SUBSHELLS[l]??'?'} orbital`;
+  document.getElementById('vl-n').textContent=n;
+  document.getElementById('vl-l').textContent=l;
+  document.getElementById('vl-m').textContent=ms;
+}
+function updateInfoBar(count){
+  const{n,l,m}=S;const ms=(m>=0?'+':'')+m;
+  document.getElementById('info-bar').innerHTML=`n=${n} l=${l} m=${ms} &middot; ${count} pts<br>drag to orbit &middot; scroll to zoom`;
+}
+function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
+
+function syncQN(){
+  let n=+document.getElementById('sl-n').value,l=+document.getElementById('sl-l').value,m=+document.getElementById('sl-m').value;
+  if(l>n-1){l=n-1;document.getElementById('sl-l').value=l;}if(l<0){l=0;document.getElementById('sl-l').value=0;}
+  if(m>l){m=l;document.getElementById('sl-m').value=m;}if(m<-l){m=-l;document.getElementById('sl-m').value=m;}
+  document.getElementById('sl-l').max=n-1;document.getElementById('sl-m').min=-l;document.getElementById('sl-m').max=l;
+  S.n=n;S.l=l;S.m=m;updateDisplay();
+  ['sl-n','sl-l','sl-m'].forEach(id=>sg(document.getElementById(id)));
+}
+
+['sl-n','sl-l','sl-m'].forEach(id=>{const el=document.getElementById(id);el.addEventListener('input',()=>{syncQN();S.dirty=true;});sg(el);});
+
+// Particles
+document.getElementById('sl-N').addEventListener('input',function(){
+  S.N=+this.value;
+  const k=S.N>=1000000?(S.N/1000000).toFixed(1).replace('.0','')+'M':(S.N/1000).toFixed(1).replace('.0','')+'k';
+  document.getElementById('vl-N').textContent=k;
+  sg(this);
+  startGrow(); // add/remove without clearing existing cloud
+});sg(document.getElementById('sl-N'));
+document.getElementById('sl-sz').addEventListener('input',function(){S.psize=+this.value;pMat.size=S.psize;document.getElementById('vl-sz').textContent=S.psize.toFixed(3);sg(this);});sg(document.getElementById('sl-sz'));
+document.getElementById('sl-ls').addEventListener('input',function(){S.scaler=+this.value;document.getElementById('vl-ls').textContent=S.scaler;sg(this);S.colDirty=true;});sg(document.getElementById('sl-ls'));
+
+// Visualization
+document.querySelectorAll('.mode-btn').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');S.colorMode=+btn.dataset.mode;S.colDirty=true;}));
+
+// Time evolution
+document.getElementById('cb-ev').addEventListener('change',function(){S.evolving=this.checked;});
+document.getElementById('sl-sp').addEventListener('input',function(){S.timeSpeed=+this.value;document.getElementById('vl-sp').textContent=S.timeSpeed.toFixed(1);sg(this);});sg(document.getElementById('sl-sp'));
+
+// Probability flow
+document.getElementById('cb-flow-anim').addEventListener('change',function(){S.animateFlow=this.checked;});
+document.getElementById('cb-flow-tr').addEventListener('change',function(){S.showFlowTr=this.checked;document.getElementById('flow-tr-opts').style.display=this.checked?'block':'none';if(!this.checked){ftLines.visible=false;flowTracers=[];}});
+document.getElementById('sl-fspd').addEventListener('input',function(){S.flowSpeed=+this.value;document.getElementById('vl-fspd').textContent=S.flowSpeed.toFixed(2);sg(this);});sg(document.getElementById('sl-fspd'));
+document.getElementById('sl-ftr-n').addEventListener('input',function(){S.flowTrCount=+this.value;document.getElementById('vl-ftr-n').textContent=this.value;sg(this);});sg(document.getElementById('sl-ftr-n'));
+document.getElementById('sl-ftr-tl').addEventListener('input',function(){S.flowTrTrail=+this.value;document.getElementById('vl-ftr-tl').textContent=this.value;sg(this);});sg(document.getElementById('sl-ftr-tl'));
+
+// B field
+document.getElementById('cb-bfield').addEventListener('change',function(){S.showBField=this.checked;document.getElementById('bfield-opts').style.display=this.checked?'block':'none';if(this.checked&&!bFieldData)computeBField();if(!this.checked){bArrowLines.visible=false;}});
+document.getElementById('cb-btr').addEventListener('change',function(){S.showBTr=this.checked;document.getElementById('btr-opts').style.display=this.checked?'block':'none';if(!this.checked){btLines.visible=false;bTracers=[];}});
+document.getElementById('sl-bgdim').addEventListener('input',function(){S.bGridDim=+this.value;document.getElementById('vl-bgdim').textContent=this.value;sg(this);});sg(document.getElementById('sl-bgdim'));
+document.getElementById('sl-bgext').addEventListener('input',function(){S.bGridExtent=+this.value;document.getElementById('vl-bgext').textContent=this.value;sg(this);});sg(document.getElementById('sl-bgext'));
+document.getElementById('sl-basc').addEventListener('input',function(){S.bArrowScale=+this.value;document.getElementById('vl-basc').textContent=S.bArrowScale.toFixed(1);sg(this);if(bFieldData)uploadBArrows();});sg(document.getElementById('sl-basc'));
+document.getElementById('sl-bgam').addEventListener('input',function(){S.bColGamma=+this.value;document.getElementById('vl-bgam').textContent=S.bColGamma.toFixed(1);sg(this);if(bFieldData)uploadBArrows();});sg(document.getElementById('sl-bgam'));
+document.getElementById('sl-buev').addEventListener('input',function(){S.bUpdateEvery=+this.value;document.getElementById('vl-buev').textContent=this.value;sg(this);});sg(document.getElementById('sl-buev'));
+document.getElementById('btn-brecompute').addEventListener('click',()=>{ if(S.showBField) computeBField(); });
+document.getElementById('sl-bspd').addEventListener('input',function(){S.bTrSpeed=+this.value;document.getElementById('vl-bspd').textContent=S.bTrSpeed.toFixed(1);sg(this);});sg(document.getElementById('sl-bspd'));
+document.getElementById('sl-bspwn').addEventListener('input',function(){S.bTrSpawn=+this.value;document.getElementById('vl-bspwn').textContent=this.value;sg(this);});sg(document.getElementById('sl-bspwn'));
+document.getElementById('sl-btrl').addEventListener('input',function(){S.bTrTrail=+this.value;document.getElementById('vl-btrl').textContent=this.value;sg(this);});sg(document.getElementById('sl-btrl'));
+
+// Cross-section
+document.querySelectorAll('.view-btn[data-view]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.view-btn[data-view]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');S.viewMode=+btn.dataset.view;document.getElementById('cut-row').style.display=S.viewMode!==0?'block':'none';S.dirty=true;}));
+document.querySelectorAll('.view-btn[data-axis]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.view-btn[data-axis]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');S.cutAxis=+btn.dataset.axis;S.dirty=true;}));
+document.getElementById('sl-cut').addEventListener('input',function(){S.cutPos=+this.value;document.getElementById('vl-cut').textContent=S.cutPos.toFixed(1);sg(this);S.dirty=true;});sg(document.getElementById('sl-cut'));
+
+// Extras
+document.getElementById('cb-flow').addEventListener('change',function(){S.showFlow=this.checked;rebuildStaticFlow();});
+document.getElementById('cb-axes').addEventListener('change',function(){S.showAxes=this.checked;axesHelper.visible=this.checked;});
+
+window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+
+/* ════════════════════════════════════════════════════════════
+   ANIMATION LOOP
+   ════════════════════════════════════════════════════════════ */
+document.getElementById('sl-N').value=S.N;
+document.getElementById('vl-N').textContent='100k';
+sg(document.getElementById('sl-N'));
+// Sync B field sliders to state defaults
+document.getElementById('sl-bgdim').value=S.bGridDim; sg(document.getElementById('sl-bgdim'));
+document.getElementById('sl-bgext').value=S.bGridExtent; sg(document.getElementById('sl-bgext'));
+document.getElementById('sl-basc').value=S.bArrowScale; sg(document.getElementById('sl-basc'));
+document.getElementById('sl-buev').value=S.bUpdateEvery; sg(document.getElementById('sl-buev'));
+document.getElementById('sl-bspwn').value=S.bTrSpawn; sg(document.getElementById('sl-bspwn'));
+document.getElementById('vl-bgdim').textContent=S.bGridDim;
+document.getElementById('vl-bgext').textContent=S.bGridExtent;
+document.getElementById('vl-basc').textContent=S.bArrowScale.toFixed(1);
+document.getElementById('vl-buev').textContent=S.bUpdateEvery;
+document.getElementById('vl-bspwn').textContent=S.bTrSpawn;
+
+const clock=new THREE.Clock();
+const loadingEl=document.getElementById('loading');
+startRebuild();
+
+renderer.setAnimationLoop(()=>{
+  const dt=clock.getDelta();
+
+  // Quantum state changed → full clear and rebuild
+  if(S.dirty){S.dirty=false;S.colDirty=false;colorRollIdx=0;startRebuild();return;}
+
+  // Grow/shrink particle count each frame
+  spawnChunk();
+
+  // Time-evolve phase (rolling window so large counts stay smooth)
+  if(S.evolving&&S.colorMode!==0){S.simTime+=dt*S.timeSpeed*12;updateColors();}
+  else if(S.colDirty){S.colDirty=false;colorRollIdx=0;updateColors();}
+
+  // Animate particle positions along J
+  if(S.animateFlow&&S.m!==0){
+    animateFlow(dt);
+    if(S.colorMode!==0) updateColors();
+  }
+
+  // Flow tracers
+  updateFlowTracers(dt);
+
+  // B field: periodic recompute
+  if(S.showBField){
+    bFieldFrameCount++;
+    if(bFieldFrameCount>=S.bUpdateEvery){
+      bFieldFrameCount=0;
+      if(!bFieldScheduled){bFieldScheduled=true;setTimeout(computeBField,0);}
+    }
+  }
+
+  // B-field tracers
+  updateBTracers(dt);
+
+  // Nucleus spin animation
+  nucleusGroup.children.forEach(c=>{if(c.userData.spinSpeed)c.rotateOnAxis(c.userData.spinAxis,c.userData.spinSpeed*dt);});
+
+  handleVRInput();
+  controls.update();
+  renderer.render(scene,camera);
+});
+
+syncQN();
+</script>
+</body>
+</html>

@@ -290,6 +290,11 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
 .cluster-head.mat-head .cluster-icon { opacity: 1; color: #b896ff; }
 .cluster.open .cluster-head.mat-head .cluster-label { color: #b896ff; }
 
+/* Quantum accent — cyan-violet for the orbital viewer */
+.nav-item.qm.active { background: rgba(100,180,255,0.06); }
+.nav-item.qm.active::before { background: #64b4ff; box-shadow: 0 0 7px #64b4ff; }
+.nav-item.qm.active .nav-label { color: #64b4ff; }
+.nav-item.qm:hover::before { background: #4a8ccc; }
 
 /* LinkedIn footer button */
 #sb-linkedin {
@@ -377,6 +382,11 @@ body::after {
           </button>
           <button class="nav-item fx" data-tab="flare" onclick="switchTab('flare')">
             <span class="nav-label">Engine Propulsion Effects</span>
+          </button>
+          <!-- ── ATOMIC ORBITAL VR ── -->
+          <button class="nav-item qm" data-tab="orbital" onclick="switchTab('orbital')">
+            <span class="nav-label">Atomic Orbital</span>
+            <span class="nav-badge">VR</span>
           </button>
         </div>
       </div>
@@ -501,6 +511,7 @@ const PAGES = {
   shipdesigner:'ship-designer.html',
   flagdesigner:'flag-designer.html',
   matlab:'material-lab.html',
+  orbital:'atomic_orbital_vr.html',
 };
 const LABELS = {
   home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
@@ -512,7 +523,11 @@ const LABELS = {
   shipdesigner:'Ship Designer',
   flagdesigner:'Flag Designer',
   matlab:'PBR Material Studio',
+  orbital:'Atomic Orbital',
 };
+
+// Pages that need WebXR + motion sensor permissions in the iframe
+const XR_PAGES = new Set(['orbital']);
 
 let activeTab = null;
 
@@ -524,8 +539,20 @@ function switchTab(id) {
   wrap.innerHTML = '';
   var iframe = document.createElement('iframe');
   iframe.src = PAGES[id] || 'home.html';
-  iframe.setAttribute('allow', 'downloads');
+
+  // Standard permissions — always granted
+  var allow = 'downloads';
+
+  // WebXR permissions — required for Quest browser to allow immersive-vr sessions
+  // inside a cross-origin iframe. Without xr-spatial-tracking the browser silently
+  // blocks navigator.xr and the VR button shows "No WebXR".
+  if (XR_PAGES.has(id)) {
+    allow = 'xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';
+  }
+
+  iframe.setAttribute('allow', allow);
   wrap.appendChild(iframe);
+
   var ta = document.getElementById('topbar-active');
   if (ta) ta.textContent = LABELS[id] || id;
   activeTab = id;
