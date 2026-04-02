@@ -104,11 +104,12 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 /* ── INFO BAR ── */
 .info-bar{font-size:0.5rem;color:var(--text-faint);margin-top:10px;padding-top:8px;border-top:1px solid var(--border);letter-spacing:0.06em;line-height:1.8;}
 
-#panel{display:none !important;}
-#panel-toggle{display:none !important;}
-#panel-overlay{display:none !important;}
-#state-display{display:none !important;}
-.topbar{display:none !important;}
+/* Panel hidden only when inside an AR session overlay, not on desktop */
+.ar-mode #panel{display:none !important;}
+.ar-mode #panel-toggle{display:none !important;}
+.ar-mode #panel-overlay{display:none !important;}
+.ar-mode #state-display{display:none !important;}
+.ar-mode .topbar{display:none !important;}
 
 /* ── STATE DISPLAY ── */
 #state-display{position:absolute;top:54px;right:20px;text-align:right;pointer-events:none;}
