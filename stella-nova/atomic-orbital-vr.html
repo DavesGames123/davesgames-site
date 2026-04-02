@@ -126,6 +126,118 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 .vr-btn-el.vr-ready:hover{border-color:var(--yellow);box-shadow:0 0 18px rgba(255,200,50,0.12);}
 
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--surface2);}
+
+/* ── MOBILE PANEL TOGGLE BUTTON ── */
+#panel-toggle{
+  display:none;
+  position:absolute;
+  top:50px; left:12px;
+  width:38px; height:38px;
+  background:rgba(18,22,32,0.9);
+  border:1px solid var(--border-b);
+  border-radius:4px;
+  color:var(--blue);
+  font-size:1.1rem;
+  cursor:pointer;
+  align-items:center;
+  justify-content:center;
+  pointer-events:all;
+  backdrop-filter:blur(10px);
+  z-index:300;
+  transition:background 0.15s,border-color 0.15s;
+  flex-shrink:0;
+  line-height:1;
+}
+#panel-toggle:hover{background:rgba(30,40,60,0.95);border-color:var(--blue-dim);}
+.in-frame #panel-toggle{top:10px;}
+
+/* ── PANEL OVERLAY (mobile) ── */
+#panel-overlay{
+  display:none;
+  position:fixed;inset:0;
+  background:rgba(0,0,0,0.6);
+  z-index:199;
+  pointer-events:all;
+}
+#panel-overlay.show{display:block;}
+
+/* ── MOBILE RESPONSIVE ── */
+@media(max-width:700px){
+  /* Show toggle button */
+  #panel-toggle{display:flex;}
+
+  /* Panel becomes a full-height drawer */
+  #panel{
+    position:fixed;
+    top:0;left:0;bottom:0;
+    width:min(290px,88vw);
+    max-height:100dvh;
+    border-radius:0;
+    border-left:none;
+    border-right:1px solid var(--border-b);
+    transform:translateX(-105%);
+    transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+    z-index:200;
+    display:flex;
+    flex-direction:column;
+  }
+  #panel .panel-body{
+    flex:1;
+    overflow-y:auto;
+    overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    max-height:none;
+  }
+  #panel.panel-open{transform:translateX(0);}
+
+  /* Add close button to panel head */
+  .panel-close{display:flex;}
+
+  /* Shrink ket display */
+  .ket-main{font-size:1.8rem;}
+  .ket-sub{font-size:0.46rem;}
+  #state-display{top:56px;right:10px;}
+  .in-frame #state-display{top:10px;}
+
+  /* Larger slider thumbs for touch */
+  input[type=range]::-webkit-slider-thumb{width:18px;height:18px;}
+  input[type=range]{height:3px;}
+
+  /* Bigger toggle targets */
+  .tog{width:40px;height:22px;}
+  .tog-track::after{width:16px;height:16px;}
+  .tog input:checked ~ .tog-track::after{transform:translateX(18px);}
+  .tog-row{margin-bottom:9px;}
+
+  /* More breathing room on rows */
+  .row{margin-bottom:9px;}
+  .mode-btn{padding:9px 2px;font-size:0.56rem;}
+  .view-btn{padding:8px 2px;}
+
+  /* VR button at bottom, full-width-ish */
+  .vr-btn-el{padding:12px 32px;font-size:0.6rem;}
+
+  /* Compact topbar on mobile */
+  .topbar{height:46px;padding:0 10px;}
+  .sys-name{font-size:0.85rem;}
+  .topbar-r{display:none;}
+}
+
+/* Close button — only shown inside panel on mobile */
+.panel-close{
+  display:none;
+  margin-left:auto;
+  background:transparent;
+  border:none;
+  color:var(--text-dim);
+  font-size:1rem;
+  cursor:pointer;
+  padding:0 4px;
+  line-height:1;
+  flex-shrink:0;
+}
+.panel-close:hover{color:var(--blue);}
+
 </style>
 </head>
 <body>
@@ -142,11 +254,18 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
     <div class="topbar-r">SYS // <strong>QUANTUM MECHANICS</strong></div>
   </div>
 
+  <!-- Floating toggle — mobile only -->
+  <button id="panel-toggle" onclick="togglePanel()" aria-label="Open controls">&#9776;</button>
+
+  <!-- Overlay behind drawer -->
+  <div id="panel-overlay" onclick="closePanel()"></div>
+
   <div id="panel">
     <div class="panel-head">
       <span class="panel-badge" style="color:var(--yellow)">QM</span>
       <span class="panel-title">Orbital Viewer</span>
       <span class="panel-live">Live</span>
+      <button class="panel-close" onclick="closePanel()" aria-label="Close">&#10005;</button>
     </div>
     <div class="panel-body">
 
@@ -860,6 +979,22 @@ function updateInfoBar(count){
   document.getElementById('info-bar').innerHTML=`n=${n} l=${l} m=${ms} &middot; ${count} pts<br>drag to orbit &middot; scroll to zoom`;
 }
 function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
+
+/* ── Mobile panel drawer ── */
+function togglePanel(){
+  const p=document.getElementById('panel');
+  const ov=document.getElementById('panel-overlay');
+  const isOpen=p.classList.contains('panel-open');
+  if(isOpen){p.classList.remove('panel-open');ov.classList.remove('show');}
+  else{p.classList.add('panel-open');ov.classList.add('show');}
+}
+function closePanel(){
+  document.getElementById('panel').classList.remove('panel-open');
+  document.getElementById('panel-overlay').classList.remove('show');
+}
+// ES modules are not on window by default — expose for inline onclick handlers
+window.togglePanel = togglePanel;
+window.closePanel  = closePanel;
 
 function syncQN(){
   let n=+document.getElementById('sl-n').value,l=+document.getElementById('sl-l').value,m=+document.getElementById('sl-m').value;
