@@ -257,7 +257,11 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 .xr-active .qp-tog{padding:14px 4px !important;font-size:0.6rem !important;}
 .xr-active .qp-mode{padding:12px 2px !important;}
 .xr-active #vr-wrap{display:none !important;}
-.ar-mode #quick-panel,.ar-mode #adv-panel,.ar-mode .topbar{display:none !important;}
+/* AR mode: hide ALL ui children — blanket rule beats specificity fights */
+.ar-mode #ui > * { display: none !important; }
+/* Only show AR-specific elements */
+.ar-mode #ar-hint   { display: flex !important; }
+.ar-mode #ar-status { display: block !important; }
 
 ::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--surface2);}
 </style>
@@ -397,11 +401,7 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 .info-bar{font-size:0.5rem;color:var(--text-faint);margin-top:10px;padding-top:8px;border-top:1px solid var(--border);letter-spacing:0.06em;line-height:1.8;}
 
 /* Panel hidden only when inside an AR session overlay, not on desktop */
-.ar-mode #panel{display:none !important;}
-.ar-mode #panel-toggle{display:none !important;}
-.ar-mode #panel-overlay{display:none !important;}
-.ar-mode #state-display{display:none !important;}
-.ar-mode .topbar{display:none !important;}
+/* (old panel ar-mode rules removed — superseded by blanket rule above) */
 
 /* ── STATE DISPLAY ── */
 #state-display{position:absolute;top:54px;right:20px;text-align:right;pointer-events:none;}
@@ -1739,8 +1739,8 @@ function rebuildStaticFlow(){
    Uses WebXR Hand Tracking API joint poses.
    Pinch = thumb-tip ↔ index-finger-tip distance < PINCH_THRESH metres.
    ════════════════════════════════════════════════════════════ */
-const PINCH_START = 0.020;  // 2 cm — deliberate pinch required
-const PINCH_END   = 0.045;  // 4.5 cm — must open hand this wide to release (hysteresis)
+const PINCH_START = 0.028;  // 2.8 cm — clear pinch, tolerates tracking jitter
+const PINCH_END   = 0.055;  // 5.5 cm — need to visibly open hand to release
 const _pinchActive = { left: false, right: false };
 
 // Small glowing spheres shown at each pinch point when active
@@ -1940,37 +1940,35 @@ function updateHandTracking(frame){
       document.getElementById('ar-hint').style.display = 'flex';
     }
 
-    // ── Placement via select — re-usable, hit test stays active ──
+    // ── Placement via select — one-time only, reticle stops after placement ──
     s.addEventListener('select', () => {
+      if(arPlaced) return; // one placement only
+
       let placePos = new THREE.Vector3();
 
       if(hasHitTest && reticle.visible){
         placePos.setFromMatrixPosition(
           new THREE.Matrix4().fromArray(reticle.matrix.elements));
         placePos.y += AR_HOVER;
-      } else if(!arPlaced) {
-        // First-time fallback: place 0.6m ahead
+      } else {
         const cam = renderer.xr.getCamera();
         const fwd = new THREE.Vector3(0,0,-0.6).applyQuaternion(cam.quaternion);
         placePos.copy(cam.position).add(fwd);
-      } else {
-        return; // no surface + already placed → ignore
       }
 
       orbitalGroup.position.copy(placePos);
       orbitalGroup.rotation.set(0,0,0);
       vrRotY = 0;
+      arPlaced     = true;
+      arSpawnDone  = false;
+      arScaleTarget= AR_SCALE;
+      boundingCube.visible = true;
 
-      if(!arPlaced){
-        // First placement — start spawn animation
-        arPlaced     = true;
-        arSpawnDone  = false;
-        arScaleTarget= AR_SCALE;
-        boundingCube.visible = true;
-        document.getElementById('ar-hint').style.display = 'none';
-        arStatus('Placed · tap surface to re-place · pinch to move · 2-hand to scale');
-      }
-      // Re-placement: position already updated above, scale/state unchanged
+      document.getElementById('ar-hint').style.display = 'none';
+      // Cancel hit test — reticle gone, no re-placement
+      if(hitTestSrc){ hitTestSrc.cancel(); hitTestSrc=null; }
+      reticle.visible = false;
+      arStatus('Placed · pinch to move · 2-hand to scale');
     });
 
     // ── Cleanup on session end ──
