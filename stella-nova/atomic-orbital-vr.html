@@ -352,23 +352,27 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 #panel-toggle:hover{background:rgba(30,40,60,0.95);border-color:var(--blue-dim);}
 .in-frame #panel-toggle{top:10px;}
 
-/* ── QUICK CONTROLS — always visible, same row as hamburger ── */
+/* ── QUICK CONTROLS — fixed to viewport, always visible ── */
 #quick-controls{
-  position:absolute;
-  top:50px; left:60px;   /* hamburger is 38px wide at left:12px → right edge ~50px + 10px gap */
+  position:fixed;
+  z-index:1000;   /* above everything including #ui (z-index:10) */
   display:flex;
   flex-direction:column;
   gap:5px;
   pointer-events:all;
-  z-index:290;           /* below hamburger (300) so it never covers it */
+  /* Mobile default: to the right of the hamburger button */
+  top:50px; left:60px;
 }
-.in-frame #quick-controls{ top:10px; left:60px; }
+/* In-frame (inside Stella Nova iframe): topbar present, shift down */
+.in-frame #quick-controls{ top:50px; left:60px; }
 
-/* Desktop: panel always visible, push controls to the right of it */
+/* Desktop: panel always visible, sit to its right below topbar */
 @media(min-width:701px){
-  #quick-controls{ top:66px; left:calc(var(--panel-w) + 20px); }
-  .in-frame #quick-controls{ top:14px; left:calc(var(--panel-w) + 20px); }
+  #quick-controls       { top:66px; left:calc(var(--panel-w) + 20px); }
+  .in-frame #quick-controls { top:66px; left:calc(var(--panel-w) + 20px); }
 }
+/* AR mode: hide from passthrough overlay */
+body.ar-mode #quick-controls{ display:none !important; }
 
 .qc-row{
   display:flex;
@@ -525,15 +529,6 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
   <!-- Floating toggle — mobile only -->
   <button id="panel-toggle" onclick="togglePanel()" aria-label="Open controls">&#9776;</button>
 
-  <!-- Always-visible quick controls, below hamburger -->
-  <div id="quick-controls">
-    <label class="qc-row">
-      <input type="checkbox" id="qc-bfield" checked>
-      <span class="qc-check"></span>
-      <span class="qc-label">Magnetic Field</span>
-    </label>
-  </div>
-
   <!-- Quick toggles — always visible below hamburger -->
   <div id="quick-toggles">
     <label class="qt-item">
@@ -675,6 +670,15 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
     </div>
   </div>
   <div id="ar-status" class="ar-status-msg" style="display:none"></div>
+</div>
+
+<!-- Quick controls: direct body child, position:fixed, always on top -->
+<div id="quick-controls">
+  <label class="qc-row">
+    <input type="checkbox" id="qc-bfield" checked>
+    <span class="qc-check"></span>
+    <span class="qc-label">Magnetic Field</span>
+  </label>
 </div>
 
 <script type="module">
