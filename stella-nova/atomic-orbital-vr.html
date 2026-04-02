@@ -1280,13 +1280,45 @@ scene.add(reticle);
    GREP: initARPanel | drawARPanel | updateARPanel | checkARPoke
    ════════════════════════════════════════════════════════════ */
 const ARP = {
-  PW:0.28, PH:0.40,   // metres physical size
-  CW:512,  CH:732,    // canvas pixel resolution
+  PW:0.28, PH:0.50,   // metres — taller to fit bg controls
+  CW:512,  CH:915,    // canvas pixel resolution
   mesh:null, tex:null, ctx:null,
-  buttons:[],          // [{u0,v0,u1,v1,action,label}]
-  cooldown:0,          // frame cooldown after poke
-  dirty:true,          // redraw needed
+  buttons:[],
+  cooldown:0,
+  dirty:true,
+  bgOpacity:0,         // 0=full passthrough, 1=full black
 };
+
+/* Hand joint visualization — always-on-top dots so panel can't occlude hands */
+const _HAND_JOINTS=[
+  'wrist',
+  'thumb-metacarpal','thumb-phalanx-proximal','thumb-phalanx-distal','thumb-tip',
+  'index-finger-metacarpal','index-finger-phalanx-proximal',
+  'index-finger-phalanx-intermediate','index-finger-phalanx-distal','index-finger-tip',
+  'middle-finger-tip','ring-finger-tip','pinky-finger-tip',
+];
+const _handDotGeo=new THREE.SphereGeometry(0.007,6,6);
+const _handDotMat=new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:0.55,depthTest:false,depthWrite:false});
+const _handDots=[];
+for(let i=0;i<28;i++){const m=new THREE.Mesh(_handDotGeo,_handDotMat.clone());m.visible=false;m.renderOrder=9998;scene.add(m);_handDots.push(m);}
+
+function updateHandDots(frame,refSpace){
+  let di=0;
+  const sess=renderer.xr.getSession();
+  if(sess&&frame&&refSpace){
+    for(const src of sess.inputSources){
+      if(!src.hand) continue;
+      for(const jn of _HAND_JOINTS){
+        const j=src.hand.get(jn); if(!j) continue;
+        const p=frame.getJointPose(j,refSpace); if(!p||di>=_handDots.length) continue;
+        const pos=p.transform.position;
+        _handDots[di].position.set(pos.x,pos.y,pos.z);
+        _handDots[di].visible=true; di++;
+      }
+    }
+  }
+  for(let i=di;i<_handDots.length;i++) _handDots[i].visible=false;
+}
 
 // ── Canvas helpers ──
 function _rrect(ctx,x,y,w,h,r){
@@ -1460,34 +1492,67 @@ function drawARPanel(){
   }
   y+=60;
 
+  _div(ctx,W,y); y+=14;
+
+  // ── Background opacity ──
+  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.fillStyle='rgba(150,200,255,0.3)';
+  ctx.textAlign='left';
+  ctx.fillText('BACKGROUND',18,y+13); y+=20;
+  const bgLevels=[[0,'Pass'],[0.25,'25%'],[0.5,'50%'],[0.75,'75%'],[1,'VR']];
+  const bw=(W-36)/5-4;
+  for(let i=0;i<5;i++){
+    const bx=18+i*(bw+4);
+    const act=Math.abs(ARP.bgOpacity-bgLevels[i][0])<0.05;
+    ctx.fillStyle=act?(i===4?'rgba(255,200,50,0.18)':'rgba(150,200,255,0.12)'):'rgba(255,255,255,0.03)';
+    _rrect(ctx,bx,y,bw,46,7); ctx.fill();
+    ctx.strokeStyle=act?(i===4?'rgba(255,200,50,0.5)':'rgba(150,200,255,0.45)'):'rgba(150,200,255,0.12)';
+    ctx.lineWidth=1.2; _rrect(ctx,bx,y,bw,46,7); ctx.stroke();
+    ctx.font=(act?'bold ':'')+'13px "JetBrains Mono",monospace';
+    ctx.fillStyle=act?(i===4?'#ffc832':'#96c8ff'):'rgba(150,200,255,0.5)';
+    ctx.textAlign='center';
+    ctx.fillText(bgLevels[i][1],bx+bw/2,y+30);
+    const level=bgLevels[i][0];
+    ARP.buttons.push({u0:bx/W,v0:y/H,u1:(bx+bw)/W,v1:(y+46)/H,
+      action:()=>setARBgOpacity(level)});
+  }
+  y+=58;
+
   ARP.tex.needsUpdate=true;
 }
 
+function setARBgOpacity(v){
+  ARP.bgOpacity=v;
+  renderer.setClearColor(0x000000, v);
+  ARP.dirty=true;
+}
+
 function updateARPanel(frame){
+  const refSpace=renderer.xr.getReferenceSpace();
+  // Hand dots always update in AR (depthTest:false keeps them on top of everything)
+  if(frame&&refSpace) updateHandDots(frame,refSpace);
+
   if(!ARP.mesh||!ARP.mesh.visible) return;
 
-  // Position panel beside the orbital in world space
+  // Dock panel directly below the bounding cube, face camera
   const wp=new THREE.Vector3();
   orbitalGroup.getWorldPosition(wp);
-  const sz=Math.max(orbitalGroup.scale.x, 0.04);
-  ARP.mesh.position.set(wp.x + sz*3 + 0.16, wp.y + 0.04, wp.z);
-  // Always face camera
-  ARP.mesh.quaternion.copy(camera.quaternion);
+  const sz=Math.max(orbitalGroup.scale.x,0.04);
+  const cubeHalfY=3*sz; // half of 6-unit local cube in world space
+  ARP.mesh.position.set(wp.x, wp.y-cubeHalfY-ARP.PH*0.5-0.02, wp.z+sz*0.5);
+  ARP.mesh.lookAt(camera.position);
 
-  // Redraw if state changed
-  if(ARP.dirty){ ARP.dirty=false; drawARPanel(); }
+  if(ARP.dirty){ARP.dirty=false;drawARPanel();}
 
-  // Poke detection
   if(!frame||ARP.cooldown>0){if(ARP.cooldown>0)ARP.cooldown--;return;}
-  const sess=renderer.xr.getSession(); if(!sess) return;
-  const refSpace=renderer.xr.getReferenceSpace(); if(!refSpace) return;
+  const sess=renderer.xr.getSession(); if(!sess||!refSpace) return;
 
   for(const src of sess.inputSources){
     if(!src.hand) continue;
     const tip=_jointWorldPos(src.hand,'index-finger-tip',frame,refSpace);
     if(!tip) continue;
     const local=ARP.mesh.worldToLocal(tip.clone());
-    if(Math.abs(local.z)>0.035) continue; // must be within 3.5cm of surface
+    if(Math.abs(local.z)>0.035) continue;
     const u=(local.x+ARP.PW/2)/ARP.PW;
     const v=1-(local.y+ARP.PH/2)/ARP.PH;
     if(u<0||u>1||v<0||v>1) continue;
@@ -1495,7 +1560,7 @@ function updateARPanel(frame){
       if(u>=btn.u0&&u<=btn.u1&&v>=btn.v0&&v<=btn.v1){
         btn.action();
         ARP.dirty=true;
-        ARP.cooldown=22; // ~0.3s at 72fps
+        ARP.cooldown=22;
         return;
       }
     }
@@ -2114,8 +2179,9 @@ function updateHandTracking(frame){
     try {
       s = await navigator.xr.requestSession('immersive-ar', {
         requiredFeatures: ['local'],
-        optionalFeatures: ['hit-test','dom-overlay','local-floor','hand-tracking','light-estimation'],
-        domOverlay: { root: document.getElementById('ui') }
+        optionalFeatures: ['hit-test','local-floor','hand-tracking','light-estimation'],
+        // dom-overlay intentionally omitted — it renders above the system hand compositor
+        // and obscures passthrough hands. All AR UI is in 3D world space instead.
       });
     } catch(e) {
       arStatus('Session failed: ' + (e.message||String(e)), true);
@@ -2207,6 +2273,8 @@ function updateHandTracking(frame){
     // ── Cleanup on session end ──
     s.addEventListener('end', () => {
       if(ARP.mesh) ARP.mesh.visible = false;
+      _handDots.forEach(d=>d.visible=false);
+      ARP.bgOpacity=0;
       arSession = null; hitTestSrc = null;
       arPlaced = false; arSpawnDone = false; hasHitTest = false;
       inARSession = false; arScaleTarget = 1;
