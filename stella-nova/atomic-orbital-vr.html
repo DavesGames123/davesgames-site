@@ -1274,14 +1274,27 @@ reticle.matrixAutoUpdate=false;
 reticle.visible=false;
 scene.add(reticle);
 
+/* Background dim plane — large black plane that follows camera.
+   depthWrite:false lets 3D objects draw on top; only background pixels are dimmed. */
+const bgDimGeo = new THREE.PlaneGeometry(1000, 1000);
+const bgDimMat = new THREE.MeshBasicMaterial({
+  color:0x000000, transparent:true, opacity:0,
+  depthTest:false, depthWrite:false, side:THREE.DoubleSide
+});
+const bgDimMesh = new THREE.Mesh(bgDimGeo, bgDimMat);
+bgDimMesh.renderOrder = -1000;
+bgDimMesh.frustumCulled = false;
+bgDimMesh.visible = false;
+scene.add(bgDimMesh);
+
 /* ════════════════════════════════════════════════════════════
    AR 3D PANEL — world-space canvas texture GUI
    Floats beside the bounding cube; finger-poke interaction.
    GREP: initARPanel | drawARPanel | updateARPanel | checkARPoke
    ════════════════════════════════════════════════════════════ */
 const ARP = {
-  PW:0.28, PH:0.50,   // metres — taller to fit bg controls
-  CW:512,  CH:915,    // canvas pixel resolution
+  PW:0.14, PH:0.25,   // metres — half size
+  CW:256,  CH:458,    // canvas pixel resolution
   mesh:null, tex:null, ctx:null,
   buttons:[],
   cooldown:0,
@@ -1523,7 +1536,8 @@ function drawARPanel(){
 
 function setARBgOpacity(v){
   ARP.bgOpacity=v;
-  renderer.setClearColor(0x000000, v);
+  bgDimMat.opacity = v;
+  bgDimMesh.visible = v > 0.01;
   ARP.dirty=true;
 }
 
@@ -1538,31 +1552,28 @@ function updateARPanel(frame){
   const wp=new THREE.Vector3();
   orbitalGroup.getWorldPosition(wp);
   const sz=Math.max(orbitalGroup.scale.x,0.04);
-  const cubeHalfY=3*sz; // half of 6-unit local cube in world space
-  ARP.mesh.position.set(wp.x, wp.y-cubeHalfY-ARP.PH*0.5-0.02, wp.z+sz*0.5);
+  const cubeHalf=3*sz; // half-extent of 6-unit local cube in world space
+  // Place at front face of cube, vertically centered at cube bottom edge
+  ARP.mesh.position.set(wp.x, wp.y - cubeHalf + ARP.PH*0.5, wp.z + cubeHalf + 0.01);
   ARP.mesh.lookAt(camera.position);
 
   if(ARP.dirty){ARP.dirty=false;drawARPanel();}
 
-  if(!frame||ARP.cooldown>0){if(ARP.cooldown>0)ARP.cooldown--;return;}
-  const sess=renderer.xr.getSession(); if(!sess||!refSpace) return;
-
-  for(const src of sess.inputSources){
-    if(!src.hand) continue;
-    const tip=_jointWorldPos(src.hand,'index-finger-tip',frame,refSpace);
-    if(!tip) continue;
-    const local=ARP.mesh.worldToLocal(tip.clone());
-    if(Math.abs(local.z)>0.035) continue;
-    const u=(local.x+ARP.PW/2)/ARP.PW;
-    const v=1-(local.y+ARP.PH/2)/ARP.PH;
-    if(u<0||u>1||v<0||v>1) continue;
-    for(const btn of ARP.buttons){
-      if(u>=btn.u0&&u<=btn.u1&&v>=btn.v0&&v<=btn.v1){
-        btn.action();
-        ARP.dirty=true;
-        ARP.cooldown=22;
-        return;
-      }
+  if(ARP.cooldown>0){ARP.cooldown--;return;}
+  // Only fire on system-detected pinch (selectstart), not continuous distance polling
+  if(!_pendingPanelCheck||!frame||!refSpace) return;
+  const src=_pendingPanelCheck; _pendingPanelCheck=null;
+  if(!src.hand) return;
+  const tip=_jointWorldPos(src.hand,'index-finger-tip',frame,refSpace); if(!tip) return;
+  const local=ARP.mesh.worldToLocal(tip.clone());
+  // Generous depth — system already confirmed pinch, just map to button
+  if(Math.abs(local.z)>0.12) return;
+  const u=(local.x+ARP.PW/2)/ARP.PW;
+  const v=1-(local.y+ARP.PH/2)/ARP.PH;
+  if(u<0||u>1||v<0||v>1) return;
+  for(const btn of ARP.buttons){
+    if(u>=btn.u0&&u<=btn.u1&&v>=btn.v0&&v<=btn.v1){
+      btn.action(); ARP.dirty=true; ARP.cooldown=18; return;
     }
   }
 }
@@ -1610,10 +1621,19 @@ const axesHelper=new THREE.AxesHelper(4);axesHelper.visible=false;orbitalGroup.a
 /* ════════════════════════════════════════════════════════════
    B FIELD ARROW SYSTEM
    ════════════════════════════════════════════════════════════ */
-const bArrowGeo=new THREE.BufferGeometry();
-const bArrowMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:1});
-const bArrowLines=new THREE.LineSegments(bArrowGeo,bArrowMat);
-orbitalGroup.add(bArrowLines);bArrowLines.visible=false;
+// B-field arrows: instanced 3D cylinders + cones (thick lines impossible in WebGL)
+const MAX_BARROWS = 24*24*24;
+const _bShaftGeo = new THREE.CylinderGeometry(0.008,0.008,1,6,1);
+const _bHeadGeo  = new THREE.ConeGeometry(0.022,0.08,6,1);
+const _bInstMat  = new THREE.MeshBasicMaterial({transparent:true,opacity:0.85,blending:THREE.AdditiveBlending,depthWrite:false});
+const bArrowShaft = new THREE.InstancedMesh(_bShaftGeo,_bInstMat.clone(),MAX_BARROWS);
+const bArrowHead  = new THREE.InstancedMesh(_bHeadGeo, _bInstMat.clone(),MAX_BARROWS);
+bArrowShaft.count=0; bArrowHead.count=0;
+bArrowShaft.frustumCulled=false; bArrowHead.frustumCulled=false;
+bArrowShaft.visible=false; bArrowHead.visible=false;
+orbitalGroup.add(bArrowShaft); orbitalGroup.add(bArrowHead);
+// Keep bArrowLines as alias for visibility checks (will be null-stubbed)
+const bArrowLines={visible:false,get _stub(){return true;}};
 
 let bFieldData=null;   // Float32Array [x,y,z,dx,dy,dz,mag × ng]
 let bFieldFrameCount=0;
@@ -1711,27 +1731,52 @@ function computeBField(){
   uploadBArrows();
 }
 
+// Reusable temporaries for uploadBArrows
+const _bDummy=new THREE.Object3D();
+const _bUp=new THREE.Vector3(0,1,0);
+const _bDir=new THREE.Vector3();
+const _bQ=new THREE.Quaternion();
+const _bAxisX=new THREE.Vector3(1,0,0);
+const _bCol=new THREE.Color();
+
 function uploadBArrows(){
-  if(!bFieldData||!S.showBField){bArrowLines.visible=false;return;}
-  bArrowLines.visible=true;
+  if(!bFieldData||!S.showBField){
+    bArrowShaft.visible=false; bArrowHead.visible=false; return;
+  }
   const{bArrowScale,bColGamma}=S;
-  const ng=bFieldData.length/7;
-  const pos=new Float32Array(ng*6),col=new Float32Array(ng*6);
+  const ng=Math.min(bFieldData.length/7|0, MAX_BARROWS);
+  const HEAD_LEN=0.08;
   for(let i=0;i<ng;i++){
     const ox=bFieldData[i*7],oy=bFieldData[i*7+1],oz=bFieldData[i*7+2];
     const dx=bFieldData[i*7+3],dy=bFieldData[i*7+4],dz=bFieldData[i*7+5];
     const mag=bFieldData[i*7+6];
     const lv=Math.log10(1+mag*99)/2;
-    const len=bArrowScale*(0.04+lv*0.7);
+    const len=bArrowScale*(0.06+lv*0.9);
     const [r,g,b]=fieldColor(mag,bColGamma);
-    pos[i*6]=ox;pos[i*6+1]=oy;pos[i*6+2]=oz;
-    col[i*6]=r*0.08;col[i*6+1]=g*0.08;col[i*6+2]=b*0.08;
-    pos[i*6+3]=ox+dx*len;pos[i*6+4]=oy+dy*len;pos[i*6+5]=oz+dz*len;
-    col[i*6+3]=r;col[i*6+4]=g;col[i*6+5]=b;
+    _bDir.set(dx,dy,dz).normalize();
+    // Safe quaternion: handle antiparallel-to-up edge case
+    if(_bDir.dot(_bUp)<-0.999) _bQ.setFromAxisAngle(_bAxisX,Math.PI);
+    else _bQ.setFromUnitVectors(_bUp,_bDir);
+    // Shaft: Y-cylinder centered at mid-point of shaft portion
+    const shaftLen=Math.max(0.001,len-HEAD_LEN);
+    _bDummy.position.set(ox+dx*shaftLen*0.5, oy+dy*shaftLen*0.5, oz+dz*shaftLen*0.5);
+    _bDummy.quaternion.copy(_bQ);
+    _bDummy.scale.set(1,shaftLen,1);
+    _bDummy.updateMatrix();
+    bArrowShaft.setMatrixAt(i,_bDummy.matrix);
+    _bCol.setRGB(r*0.35,g*0.35,b*0.35); bArrowShaft.setColorAt(i,_bCol);
+    // Head cone: tip at arrow end
+    _bDummy.position.set(ox+dx*(len-HEAD_LEN*0.5), oy+dy*(len-HEAD_LEN*0.5), oz+dz*(len-HEAD_LEN*0.5));
+    _bDummy.scale.set(1,1,1);
+    _bDummy.updateMatrix();
+    bArrowHead.setMatrixAt(i,_bDummy.matrix);
+    _bCol.setRGB(r,g,b); bArrowHead.setColorAt(i,_bCol);
   }
-  bArrowGeo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-  bArrowGeo.setAttribute('color',new THREE.BufferAttribute(col,3));
-  bArrowGeo.setDrawRange(0,ng*2);
+  bArrowShaft.count=ng; bArrowHead.count=ng;
+  bArrowShaft.instanceMatrix.needsUpdate=true; bArrowHead.instanceMatrix.needsUpdate=true;
+  if(bArrowShaft.instanceColor) bArrowShaft.instanceColor.needsUpdate=true;
+  if(bArrowHead.instanceColor)  bArrowHead.instanceColor.needsUpdate=true;
+  bArrowShaft.visible=true; bArrowHead.visible=true;
 }
 
 // Trilinear interpolation of precomputed B field
@@ -2033,11 +2078,11 @@ function rebuildStaticFlow(){
    Uses WebXR Hand Tracking API joint poses.
    Pinch = thumb-tip ↔ index-finger-tip distance < PINCH_THRESH metres.
    ════════════════════════════════════════════════════════════ */
-const PINCH_START = 0.028;  // 2.8 cm — clear pinch, tolerates tracking jitter
-const PINCH_END   = 0.055;  // 5.5 cm — need to visibly open hand to release
-const _pinchActive = { left: false, right: false };
+// System pinch state — driven by XR selectstart/selectend, not manual distance.
+const _sysActive = { left: false, right: false };
+let _pendingPanelCheck = null; // inputSource set by selectstart, consumed next frame for panel
 
-// Small glowing spheres shown at each pinch point when active
+// Pinch indicator dots (kept for visual feedback)
 const _pinchGeo = new THREE.SphereGeometry(0.012, 8, 8);
 const pinchMeshL = new THREE.Mesh(_pinchGeo,
   new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:0.85,depthWrite:false}));
@@ -2063,16 +2108,10 @@ function _jointWorldPos(hand, jointName, frame, refSpace){
 }
 
 function getPinchPos(inputSource, frame, refSpace){
-  const thumb = _jointWorldPos(inputSource.hand,'thumb-tip',frame,refSpace);
-  const index = _jointWorldPos(inputSource.hand,'index-finger-tip',frame,refSpace);
-  if(!thumb||!index) return null;
-  const dist = thumb.distanceTo(index);
+  if(!inputSource.hand) return null;
   const hand = inputSource.handedness === 'left' ? 'left' : 'right';
-  // Hysteresis: latch on at PINCH_START, release at PINCH_END
-  if(_pinchActive[hand]){ if(dist > PINCH_END)   _pinchActive[hand]=false; }
-  else                  { if(dist < PINCH_START) _pinchActive[hand]=true;  }
-  if(!_pinchActive[hand]) return null;
-  return thumb.clone().lerp(index, 0.5);
+  if(!_sysActive[hand]) return null; // XR system says not pinching
+  return _jointWorldPos(inputSource.hand, 'index-finger-tip', frame, refSpace);
 }
 
 function updateHandTracking(frame){
@@ -2217,10 +2256,26 @@ function updateHandTracking(frame){
       N: S.N, psize: S.psize,
       showBField: S.showBField, showBTr: S.showBTr,
       bGridDim: S.bGridDim, bUpdateEvery: S.bUpdateEvery, bTrSpawn: S.bTrSpawn,
+      bArrowScale: S.bArrowScale,
     };
-    S.N = 25000; startGrow();         // light particle count
-    pMat.size = 0.005;                 // minimum point size
-    setMagField(false);               // disable B field — complex lines kill AR perf
+    S.N = 25000; startGrow();
+    pMat.size = 0.005;
+    // B-field: low res for AR perf, disabled by default but user can toggle
+    S.bGridDim = 5; S.bUpdateEvery = 120; S.bTrSpawn = 0; S.bArrowScale = 0.6;
+    setMagField(false);
+
+    // ── System pinch events — drive _sysActive + panel checks ──
+    s.addEventListener('selectstart', e => {
+      if(!e.inputSource.hand) return;
+      const h = e.inputSource.handedness === 'left' ? 'left' : 'right';
+      _sysActive[h] = true;
+      if(ARP.mesh && ARP.mesh.visible) _pendingPanelCheck = e.inputSource;
+    });
+    s.addEventListener('selectend', e => {
+      if(!e.inputSource.hand) return;
+      const h = e.inputSource.handedness === 'left' ? 'left' : 'right';
+      _sysActive[h] = false;
+    });
 
     // ── Hit-test (optional) ──
     hasHitTest = false;
@@ -2275,6 +2330,7 @@ function updateHandTracking(frame){
       if(ARP.mesh) ARP.mesh.visible = false;
       _handDots.forEach(d=>d.visible=false);
       ARP.bgOpacity=0;
+      _sysActive.left=false; _sysActive.right=false; _pendingPanelCheck=null;
       arSession = null; hitTestSrc = null;
       arPlaced = false; arSpawnDone = false; hasHitTest = false;
       inARSession = false; arScaleTarget = 1;
@@ -2293,9 +2349,12 @@ function updateHandTracking(frame){
       if(arSaved){
         S.N = arSaved.N; startGrow();
         S.psize = arSaved.psize; pMat.size = S.psize;
+        S.bGridDim = arSaved.bGridDim; S.bUpdateEvery = arSaved.bUpdateEvery;
+        S.bTrSpawn = arSaved.bTrSpawn; S.bArrowScale = arSaved.bArrowScale;
         if(arSaved.showBField) setMagField(true);
         arSaved = null;
       }
+      bgDimMesh.visible = false; bgDimMat.opacity = 0; ARP.bgOpacity = 0;
     });
   });
 
@@ -2489,7 +2548,7 @@ function setMagField(on){
   qb.textContent=on?'⊕ B Field':'⊗ B Field';
   const ib=document.getElementById('qp-icon-b');
   if(ib){ib.classList.toggle('on',on);ib.classList.toggle('off',!on);}
-  if(!on){bArrowLines.visible=false;btLines.visible=false;bTracers=[];}
+  if(!on){bArrowShaft.visible=false;bArrowHead.visible=false;btLines.visible=false;bTracers=[];}
   else if(!bFieldData) computeBField();
   if(ARP.mesh) ARP.dirty=true;
 }
@@ -2612,6 +2671,12 @@ renderer.setAnimationLoop((time, frame)=>{
   // Safety: clamp scale back to 1 if something collapsed it outside AR mode
   if(!document.body.classList.contains('ar-mode') && orbitalGroup.scale.x < 0.05)
     orbitalGroup.scale.setScalar(1);
+  // Track bgDimMesh to camera so it always covers the full AR passthrough background
+  if(bgDimMesh.visible){
+    bgDimMesh.position.copy(camera.position);
+    bgDimMesh.quaternion.copy(camera.quaternion);
+    bgDimMesh.translateZ(-10);
+  }
   controls.update();
   renderer.render(scene,camera);
 });
