@@ -316,7 +316,7 @@ const S={
   showBTr:true, bTrSpeed:1.0, bTrSpawn:750, bTrTrail:50,
   // Misc
   showFlow:false, showAxes:false,
-  psize:isMobile?.2:.020,
+  psize:0.020,
   dirty:true, colDirty:false,
 };
 
@@ -941,6 +941,8 @@ document.getElementById('vl-bspwn').textContent=S.bTrSpawn;
 
 const clock=new THREE.Clock();
 const loadingEl=document.getElementById('loading');
+// Guarantee material size matches state regardless of initialization order
+pMat.size = S.psize;
 startRebuild();
 
 renderer.setAnimationLoop(()=>{
