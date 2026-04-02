@@ -125,6 +125,25 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
 .vr-btn-el.vr-ready{border-color:rgba(255,200,50,0.35);color:var(--yellow);background:var(--yellow-faint);}
 .vr-btn-el.vr-ready:hover{border-color:var(--yellow);box-shadow:0 0 18px rgba(255,200,50,0.12);}
 
+/* ── AR STATUS / ERROR OVERLAY ── */
+.ar-status-msg {
+  position: fixed;
+  bottom: 80px; left: 50%; transform: translateX(-50%);
+  background: rgba(8,10,18,0.88);
+  border: 1px solid rgba(150,200,255,0.2);
+  color: var(--yellow);
+  font-size: 0.72rem; letter-spacing: 0.1em;
+  padding: 10px 20px; border-radius: 3px;
+  max-width: 80vw; text-align: center;
+  z-index: 9999; pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+.ar-status-msg.ar-err {
+  border-color: rgba(255,80,80,0.4);
+  color: #ff7070;
+  background: rgba(40,8,8,0.92);
+}
+
 /* ── AR PLACEMENT HINT ── */
 #ar-hint{
   display:none;position:fixed;inset:0;z-index:8999;
@@ -461,6 +480,7 @@ input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
       <span class="ar-hint-text">Point at a flat surface<br>then pinch or tap to place</span>
     </div>
   </div>
+  <div id="ar-status" class="ar-status-msg" style="display:none"></div>
 </div>
 
 <script type="module">
@@ -1252,99 +1272,147 @@ function updateHandTracking(frame){
    ════════════════════════════════════════════════════════════ */
 {
   const arBtn = document.getElementById('ar-btn');
-  if(!arBtn) throw new Error('ar-btn missing');
 
-  let arSession = null;
-  let hitTestSource = null;
-  let arPlaced = false;
-  let arScaleTarget = 0;
-  const AR_SCALE = 0.05; // orbitalGroup world scale — makes cloud ~25cm wide
-  const AR_HOVER = 0.08; // metres above detected surface
+  // ── Visible status/error — shown in headset since no console ──
+  function arStatus(msg, isErr){
+    const el = document.getElementById('ar-status');
+    if(!el) return;
+    el.textContent = msg;
+    el.className = 'ar-status-msg' + (isErr?' ar-err':'');
+    el.style.display = 'block';
+    if(!isErr) setTimeout(()=>{ el.style.display='none'; }, 4000);
+  }
 
-  // Check support
+  let arSession    = null;
+  let hitTestSrc   = null;
+  let hasHitTest   = false;
+  let arPlaced     = false;
+  let arScaleTarget= 0;
+  const AR_SCALE   = 0.05;
+  const AR_HOVER   = 0.10;
+
+  // ── Support check ──
   if(navigator.xr){
     navigator.xr.isSessionSupported('immersive-ar')
-      .then(ok=>{if(ok){arBtn.classList.add('vr-ready');}else{arBtn.disabled=true;arBtn.textContent='AR unavailable';}})
-      .catch(()=>{arBtn.disabled=true;});
-  } else { arBtn.disabled=true; }
+      .then(ok => {
+        if(ok){ arBtn.classList.add('vr-ready'); }
+        else  { arBtn.textContent='AR unavailable'; arBtn.disabled=true; }
+      })
+      .catch(e => { arBtn.textContent='AR check failed'; arBtn.disabled=true; });
+  } else {
+    arBtn.textContent='No WebXR'; arBtn.disabled=true;
+  }
 
-  arBtn.addEventListener('click', async()=>{
-    if(arSession){arSession.end();return;}
-    try{
-      const s = await navigator.xr.requestSession('immersive-ar',{
-        requiredFeatures:['hit-test','dom-overlay'],
-        optionalFeatures:['local-floor','hand-tracking','light-estimation'],
-        domOverlay:{root:document.getElementById('ui')}
+  arBtn.addEventListener('click', async () => {
+    if(arSession){ arSession.end(); return; }
+
+    arStatus('Requesting AR session…');
+
+    // ── Session request ──
+    // Only 'local' is required. hit-test, dom-overlay, hand-tracking are
+    // all optional so a missing feature never silently kills the session.
+    let s;
+    try {
+      s = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['local'],
+        optionalFeatures: ['hit-test','dom-overlay','local-floor','hand-tracking','light-estimation'],
+        domOverlay: { root: document.getElementById('ui') }
       });
+    } catch(e) {
+      arStatus('Session failed: ' + (e.message||String(e)), true);
+      return;
+    }
 
-      arSession = s;
-      arPlaced  = false;
-      arScaleTarget = 0;
-      orbitalGroup.scale.setScalar(0);
-      orbitalGroup.position.set(0,0,0);
-      reticle.visible = false;
-      boundingCube.visible = false;
+    arStatus('AR started ✓');
+    arSession     = s;
+    arPlaced      = false;
+    arScaleTarget = 0;
+    orbitalGroup.scale.setScalar(0);
+    orbitalGroup.position.set(0,0,0);
+    reticle.visible      = false;
+    boundingCube.visible = false;
 
-      // Transparent background for passthrough
-      renderer.setClearColor(0x000000,0);
+    renderer.setClearColor(0x000000, 0);
 
-      // XR session
+    try {
       await renderer.xr.setSession(s);
-      controls.enabled = false;
-      document.body.classList.add('xr-active','ar-mode');
-      document.getElementById('ar-hint').style.display='flex';
-      arBtn.textContent = 'Exit AR';
+    } catch(e) {
+      arStatus('setSession failed: '+(e.message||String(e)), true);
+      s.end(); return;
+    }
 
-      // Hit-test source: ray from viewer forward
+    controls.enabled = false;
+    document.body.classList.add('xr-active','ar-mode');
+    arBtn.textContent = 'Exit AR';
+
+    // ── Hit-test (optional) ──
+    hasHitTest = false;
+    try {
       const viewerSpace = await s.requestReferenceSpace('viewer');
-      hitTestSource = await s.requestHitTestSource({space:viewerSpace});
+      hitTestSrc = await s.requestHitTestSource({ space: viewerSpace });
+      hasHitTest = true;
+      document.getElementById('ar-hint').style.display = 'flex';
+      arStatus('Point at a surface to place');
+    } catch(e) {
+      // Hit-test not available — place at fixed depth on first select
+      arStatus('Hit-test unavailable — tap to place at fixed depth');
+      document.getElementById('ar-hint').style.display = 'flex';
+    }
 
-      // "select" event = controller trigger OR hand pinch → place orbital
-      s.addEventListener('select', ()=>{
-        if(!reticle.visible) return;
-        // Extract position from reticle matrix
-        const pos = new THREE.Vector3();
-        pos.setFromMatrixPosition(new THREE.Matrix4().fromArray(reticle.matrix.elements));
-        orbitalGroup.position.copy(pos);
-        orbitalGroup.position.y += AR_HOVER;
-        orbitalGroup.rotation.set(0,0,0);
-        vrRotY = 0;
+    // ── Placement via select (trigger or pinch) ──
+    s.addEventListener('select', () => {
+      if(arPlaced) return; // already placed; hand gestures handle movement
 
-        if(!arPlaced){
-          arPlaced = true;
-          arScaleTarget = AR_SCALE;
-          boundingCube.visible = true;
-          document.getElementById('ar-hint').style.display='none';
-          hitTestSource.cancel(); hitTestSource=null; // stop scanning after placement
-          reticle.visible = false;
-        }
-      });
+      let placePos = new THREE.Vector3();
 
-      s.addEventListener('end', ()=>{
-        arSession = null; hitTestSource = null; arPlaced = false;
-        renderer.setClearColor(0x0e1118,1);
-        controls.enabled = true;
-        document.body.classList.remove('xr-active','ar-mode');
-        document.getElementById('ar-hint').style.display='none';
-        arBtn.textContent = 'Enter AR';
-        // Restore group
-        orbitalGroup.scale.setScalar(1);
-        orbitalGroup.position.set(0,0,0);
-        orbitalGroup.rotation.set(0,0,0);
-        boundingCube.visible = false;
-        reticle.visible = false;
-      });
+      if(hasHitTest && reticle.visible){
+        // Place at detected surface
+        placePos.setFromMatrixPosition(
+          new THREE.Matrix4().fromArray(reticle.matrix.elements));
+        placePos.y += AR_HOVER;
+      } else {
+        // Fallback: place 0.6 m in front of camera
+        const cam = renderer.xr.getCamera();
+        const fwd = new THREE.Vector3(0, 0, -0.6).applyQuaternion(cam.quaternion);
+        placePos.copy(cam.position).add(fwd);
+      }
 
-    } catch(e){ console.warn('AR session failed:',e); }
+      orbitalGroup.position.copy(placePos);
+      orbitalGroup.rotation.set(0,0,0);
+      vrRotY = 0;
+      arPlaced      = true;
+      arScaleTarget = AR_SCALE;
+      boundingCube.visible = true;
+
+      document.getElementById('ar-hint').style.display = 'none';
+      if(hitTestSrc){ hitTestSrc.cancel(); hitTestSrc=null; }
+      reticle.visible = false;
+      arStatus('Placed! Pinch to move · two-hand pinch to scale');
+    });
+
+    // ── Cleanup on session end ──
+    s.addEventListener('end', () => {
+      arSession = null; hitTestSrc = null; arPlaced = false; hasHitTest = false;
+      renderer.setClearColor(0x0e1118, 1);
+      controls.enabled = true;
+      document.body.classList.remove('xr-active','ar-mode');
+      document.getElementById('ar-hint').style.display = 'none';
+      document.getElementById('ar-status').style.display = 'none';
+      arBtn.textContent = 'Enter AR';
+      orbitalGroup.scale.setScalar(1);
+      orbitalGroup.position.set(0,0,0);
+      orbitalGroup.rotation.set(0,0,0);
+      boundingCube.visible = false;
+      reticle.visible = false;
+    });
   });
 
-  // Called from animation loop — updates reticle position from hit-test
+  // Called from animation loop
   window._arUpdateHitTest = function(frame){
-    if(!hitTestSource||!frame) return;
-    const refSpace = renderer.xr.getReferenceSpace();
-    if(!refSpace) return;
-    const results = frame.getHitTestResults(hitTestSource);
-    if(results.length>0){
+    if(!hitTestSrc || !frame) return;
+    const refSpace = renderer.xr.getReferenceSpace(); if(!refSpace) return;
+    const results = frame.getHitTestResults(hitTestSrc);
+    if(results.length > 0){
       const pose = results[0].getPose(refSpace);
       reticle.visible = true;
       reticle.matrix.fromArray(pose.transform.matrix);
@@ -1353,14 +1421,10 @@ function updateHandTracking(frame){
     }
   };
 
-  // Called from animation loop — smooth scale-in spawn animation
   window._arUpdateScale = function(dt){
-    if(!arPlaced) return;
     const cur = orbitalGroup.scale.x;
-    if(Math.abs(cur - arScaleTarget)>0.0001){
-      const next = cur + (arScaleTarget - cur) * Math.min(1, dt*8);
-      orbitalGroup.scale.setScalar(next);
-    }
+    if(Math.abs(cur - arScaleTarget) > 0.0001)
+      orbitalGroup.scale.setScalar(cur + (arScaleTarget - cur) * Math.min(1, dt*8));
   };
 }
 
