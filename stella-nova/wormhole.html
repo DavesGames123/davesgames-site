@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wormhole</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@300;400;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: 'Oxanium', monospace; color: #fff; }
+  canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block; cursor: crosshair; }
+
+  .hud {
+    position: fixed; top: 20px; left: 24px; z-index: 10; pointer-events: none;
+  }
+  .hud h1 {
+    font-size: 11px; font-weight: 300; letter-spacing: 5px;
+    color: rgba(255,255,255,0.18); text-transform: uppercase;
+  }
+
+  .stats {
+    position: fixed; top: 20px; right: 24px; z-index: 10; pointer-events: none;
+    font-size: 11px; color: rgba(255,255,255,0.15); text-align: right; font-weight: 300;
+  }
+
+  .slider-wrap {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    z-index: 10; display: flex; align-items: center; gap: 14px;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+    padding: 10px 20px;
+  }
+  .slider-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 1.5px;
+    text-transform: uppercase; color: rgba(255,255,255,0.3);
+    white-space: nowrap; user-select: none;
+  }
+  .slider-val {
+    font-size: 10px; font-weight: 400; letter-spacing: 1px;
+    color: rgba(255,140,60,0.5); min-width: 28px; text-align: right;
+    user-select: none;
+  }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 200px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.08); outline: none; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #ff8830; border: 2px solid rgba(0,0,0,0.4);
+    box-shadow: 0 0 10px rgba(255,120,40,0.3);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #ff8830; border: 2px solid rgba(0,0,0,0.4);
+    box-shadow: 0 0 10px rgba(255,120,40,0.3);
+  }
+
+  .hint {
+    position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%); z-index: 10;
+    font-size: 10px; color: rgba(255,255,255,0.1); letter-spacing: 1.5px;
+    pointer-events: none; text-transform: uppercase; transition: opacity 2s;
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="hud"><h1>Wormhole</h1></div>
+<div class="stats"><div id="fps"></div><div id="res"></div></div>
+<div class="hint" id="hint">click + drag to orbit · scroll to zoom</div>
+
+<div class="slider-wrap">
+  <span class="slider-label">Energy</span>
+  <input type="range" id="energy" min="0" max="100" value="20">
+  <span class="slider-val" id="energyVal">20</span>
+  <span style="display:inline-block;width:1px;height:20px;background:rgba(255,255,255,0.08);margin:0 6px"></span>
+  <span class="slider-label">Timescale</span>
+  <input type="range" id="timescale" min="0" max="500" value="100">
+  <span class="slider-val" id="tsVal">1.0×</span>
+</div>
+
+<script>
+const VS = `#version 300 es
+in vec2 a_pos;
+void main(){ gl_Position = vec4(a_pos,0,1); }`;
+
+const FS = `#version 300 es
+precision highp float;
+uniform float u_time;
+uniform vec2 u_res;
+uniform vec4 u_mouse;
+uniform float u_energy; // 0..1
+uniform float u_timescale; // 0..5
+uniform float u_zoom;
+out vec4 O;
+
+mat2 rot(float a){ float c=cos(a),s=sin(a); return mat2(c,s,-s,c); }
+
+// ──── Neon spinning rings (3D tumbling) ────
+vec3 spinRings(vec2 uv, float time){
+    vec3 col = vec3(0.0);
+
+    vec3 neon[4] = vec3[4](
+        vec3(1.0, 0.2, 0.8),
+        vec3(0.3, 0.7, 1.0),
+        vec3(0.7, 0.3, 1.0),
+        vec3(0.2, 1.0, 0.9)
+    );
+
+    for(int i = 0; i < 4; i++){
+        float fi = float(i);
+        float radius = 0.003 + fi * 0.0015;
+
+        float spinA = time * (0.3 + fi * 0.1) + fi * 1.57;
+        float spinB = time * (0.2 + fi * 0.08) + fi * 2.09;
+
+        vec2 ruv = uv;
+
+        ruv *= rot(spinA);
+        float tiltA = sin(spinA * 0.6 + fi) * 0.8 + 0.3;
+        ruv.y *= 1.0 + abs(tiltA) * 3.0;
+
+        ruv *= rot(spinB * 0.7 + fi * 0.5);
+        float tiltB = cos(spinB * 0.5 + fi * 1.3) * 0.6;
+        ruv.x *= 1.0 + abs(tiltB) * 2.5;
+
+        float d = abs(length(ruv) - radius);
+
+        float core = smoothstep(0.0006, 0.0, d) * 1.5;
+        float glow = 0.00002 / (d * d + 0.000005);
+        glow *= smoothstep(0.006, 0.0005, d);
+        float bloom = exp(-d * 400.0) * 0.15;
+
+        vec3 n = neon[i];
+        col += core * mix(vec3(1.0), n, 0.3);
+        col += glow * n * 0.1;
+        col += bloom * n;
+    }
+
+    float nd = length(uv);
+    col += vec3(0.9, 0.93, 1.0) * 0.000002 / (nd * nd + 0.0000002);
+
+    return col;
+}
+
+// ──── Plasma ring ────
+vec3 plasmaRing(vec2 uv, float time, float energy){
+    vec3 c1 = vec3(0.8, 0.5, 0.3);
+    vec3 c2 = vec3(0.35, 0.2, 0.7);
+    vec3 shape = vec3(0.0);
+
+    float speed = 0.01 + 0.04 * energy;
+    float perturb = 0.01 + 0.07 * energy;
+
+    for(float i = 0.0; i < 12.0; i++){
+        float s = sin(time * speed + i * (cos(time*perturb + i)*0.04 + 0.06));
+        float c = cos(time * speed * 0.7 + i * (sin(time*perturb + i)*0.04 + 0.06));
+        c += (0.2 + 0.6*energy) * sin(time * (0.1 + 0.2*energy) + i * 0.15);
+
+        float f = 0.01 / abs(length(uv / vec2(c, s)) - 0.4);
+        f += exp(-(200.0 + 200.0*energy) * distance(uv, vec2(c,s) * 0.5)) * (0.8 + energy);
+        f += exp(-(100.0 + 150.0*energy) * distance(uv, vec2(c,s) * -0.5)) * (0.5 + 0.8*energy);
+        f += 0.006 / abs(length(uv/2.0 / vec2(c/4.0 + sin(time*0.3), s/4.0))) * 0.3;
+
+        float idx = fract(i / 12.0 * 2.0);
+        shape += f * mix(c1, c2, idx);
+
+        float feedback = energy * 0.5;
+        uv *= rot(sin(time*0.1)*0.03 + cos(i*20.0*f + time*0.4) * f * feedback);
+    }
+    return shape;
+}
+
+void main(){
+    vec2 p = (gl_FragCoord.xy - 0.5*u_res) / u_res.y;
+    p /= u_zoom;
+    float energy = u_energy;
+    float time = u_time * u_timescale;
+
+    vec2 puv = p;
+    puv *= rot(u_mouse.x * 0.3 + time * 0.02);
+    vec3 col = plasmaRing(puv, time, energy);
+
+    vec2 auv = p;
+    auv *= rot(u_mouse.x * 0.2);
+    col += spinRings(auv, time);
+
+    col = col / (1.0 + col * 0.3);
+    O = vec4(col, 1.0);
+}
+`;
+
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias:false, alpha:false, powerPreference:'high-performance' });
+if(!gl){ document.body.innerHTML='<h1 style="color:red;padding:2em">WebGL 2 required</h1>'; throw ''; }
+
+function compile(src,type){
+  const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ console.error(gl.getShaderInfoLog(s)); return null; }
+  return s;
+}
+
+const vs=compile(VS,gl.VERTEX_SHADER), fs=compile(FS,gl.FRAGMENT_SHADER);
+const prog=gl.createProgram();
+gl.attachShader(prog,vs); gl.attachShader(prog,fs);
+gl.bindAttribLocation(prog,0,'a_pos'); gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+
+const buf=gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+
+let dragX=0, dragY=0, dragging=false, lmx=0, lmy=0;
+canvas.addEventListener('mousedown',e=>{ dragging=true; lmx=e.clientX; lmy=e.clientY; });
+window.addEventListener('mouseup',()=>{ dragging=false; });
+window.addEventListener('mousemove',e=>{
+  if(!dragging)return;
+  dragX+=(e.clientX-lmx)*.008; dragY+=(e.clientY-lmy)*.008;
+  dragY=Math.max(-1.5,Math.min(1.5,dragY));
+  lmx=e.clientX; lmy=e.clientY;
+  document.getElementById('hint').style.opacity='0';
+});
+canvas.addEventListener('touchstart',e=>{
+  dragging=true; const t=e.touches[0]; lmx=t.clientX; lmy=t.clientY;
+},{passive:true});
+window.addEventListener('touchend',()=>{ dragging=false; });
+window.addEventListener('touchmove',e=>{
+  if(!dragging)return; const t=e.touches[0];
+  dragX+=(t.clientX-lmx)*.008; dragY+=(t.clientY-lmy)*.008;
+  dragY=Math.max(-1.5,Math.min(1.5,dragY));
+  lmx=t.clientX; lmy=t.clientY;
+},{passive:true});
+
+let zoom = 1.0;
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  zoom *= e.deltaY > 0 ? 0.92 : 1.08;
+  zoom = Math.max(0.05, Math.min(50.0, zoom));
+}, {passive:false});
+
+function resize(){
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  canvas.width=window.innerWidth*dpr; canvas.height=window.innerHeight*dpr;
+  gl.viewport(0,0,canvas.width,canvas.height);
+  document.getElementById('res').textContent=canvas.width+'×'+canvas.height;
+}
+window.addEventListener('resize',resize); resize();
+
+let energy = 0.2;
+const slider = document.getElementById('energy');
+const valLabel = document.getElementById('energyVal');
+slider.addEventListener('input', () => {
+  energy = parseInt(slider.value) / 100;
+  valLabel.textContent = slider.value;
+});
+
+let timescale = 1.0;
+const tsSlider = document.getElementById('timescale');
+const tsLabel = document.getElementById('tsVal');
+tsSlider.addEventListener('input', () => {
+  timescale = parseInt(tsSlider.value) / 100;
+  tsLabel.textContent = timescale.toFixed(1) + '×';
+});
+
+const uTime=gl.getUniformLocation(prog,'u_time');
+const uRes=gl.getUniformLocation(prog,'u_res');
+const uMouse=gl.getUniformLocation(prog,'u_mouse');
+const uEnergy=gl.getUniformLocation(prog,'u_energy');
+const uTimescale=gl.getUniformLocation(prog,'u_timescale');
+const uZoom=gl.getUniformLocation(prog,'u_zoom');
+
+let frames=0, lastT=performance.now();
+const t0=performance.now();
+
+function frame(){
+  const now=performance.now();
+  const time=(now-t0)/1000;
+  frames++;
+  if(now-lastT>500){
+    document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';
+    frames=0; lastT=now;
+  }
+  gl.uniform1f(uTime,time);
+  gl.uniform2f(uRes,canvas.width,canvas.height);
+  gl.uniform4f(uMouse,dragX,dragY,0,0);
+  gl.uniform1f(uEnergy,energy);
+  gl.uniform1f(uTimescale,timescale);
+  gl.uniform1f(uZoom,zoom);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  requestAnimationFrame(frame);
+}
+frame();
+</script>
+</body>
+</html>
