@@ -107,11 +107,15 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
 .nav-item.qm.active::before { background: #64b4ff; box-shadow: 0 0 7px #64b4ff; }
 .nav-item.qm.active .nav-label { color: #64b4ff; }
 .nav-item.qm:hover::before { background: #4a8ccc; }
-/* Wormhole accent */
 .nav-item.wh.active { background: rgba(255,136,48,0.06); }
 .nav-item.wh.active::before { background: #ff8830; box-shadow: 0 0 7px #ff8830; }
 .nav-item.wh.active .nav-label { color: #ff8830; }
 .nav-item.wh:hover::before { background: #cc6a20; }
+/* Galaxy accent */
+.nav-item.gx.active { background: rgba(255,200,100,0.06); }
+.nav-item.gx.active::before { background: #ffc864; box-shadow: 0 0 7px #ffc864; }
+.nav-item.gx.active .nav-label { color: #ffc864; }
+.nav-item.gx:hover::before { background: #cc9a40; }
 #sb-linkedin { display: block; margin-top: 10px; padding: 7px 12px; border: 1px solid rgba(0,119,181,0.5); background: rgba(0,119,181,0.08); color: #5ba4cf; font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; text-align: center; text-decoration: none; cursor: pointer; transition: background 0.18s, border-color 0.18s, color 0.18s; }
 #sb-linkedin:hover { background: rgba(0,119,181,0.2); border-color: rgba(0,119,181,0.9); color: #90c8f0; }
 #sb-linkedin::before { content: 'in '; font-weight: 700; font-size: 0.75rem; }
@@ -153,6 +157,10 @@ body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-eve
           </button>
           <button class="nav-item hl" data-tab="gravity" onclick="switchTab('gravity')">
             <span class="nav-label">Gravity Sim</span>
+            <span class="nav-badge">SIM</span>
+          </button>
+          <button class="nav-item gx" data-tab="galaxy" onclick="switchTab('galaxy')">
+            <span class="nav-label">Galaxy</span>
             <span class="nav-badge">SIM</span>
           </button>
           <button class="nav-item" data-tab="forge" onclick="switchTab('forge')">
@@ -288,6 +296,7 @@ const PAGES = {
   matlab:'material-lab.html',
   orbital:'atomic-orbital-vr.html',
   wormhole:'wormhole.html',
+  galaxy:'galaxy.html',
 };
 const LABELS = {
   home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
@@ -301,6 +310,7 @@ const LABELS = {
   matlab:'PBR Material Studio',
   orbital:'Atomic Orbital',
   wormhole:'Wormhole',
+  galaxy:'Galaxy',
 };
 const XR_PAGES = new Set(['orbital']);
 let activeTab = null;
