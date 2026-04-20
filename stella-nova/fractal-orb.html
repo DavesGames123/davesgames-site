@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Fractal Orb // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+/* ═══════════════════ TOKENS ═══════════════════ */
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);
+  --green:#64c864;--text:#c8d0e0;--text-dim:#6878a0;
+  --text-faint:#384060;--text-bright:#e8ecf4;--scan:rgba(0,0,0,0.06);
+  --qp-w:240px;
+  --adv-w:290px;
+}
+/* ═══════════════════ BASE ═══════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply;}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.35));}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px;}
+canvas{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:1;}
+#ui{position:fixed;inset:0;pointer-events:none;z-index:10;}
+
+/* ═══════════════════ TOPBAR ═══════════════════ */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;height:42px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border-b);pointer-events:all;}
+.in-frame .topbar{display:none!important;}
+.topbar-l{display:flex;align-items:center;gap:1.4rem;}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.05rem;letter-spacing:0.12em;}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.topbar-r{font-size:0.52rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);}
+.topbar-r strong{color:var(--blue-dim);font-weight:500;}
+
+/* ═══════════════════ QUICK PANEL ═══════════════════ */
+#quick-panel{
+  position:fixed;top:0;left:0;bottom:0;
+  width:var(--qp-w);
+  background:rgba(9,12,20,0.96);
+  border-right:1px solid var(--border-b);
+  backdrop-filter:blur(24px) saturate(1.5);
+  z-index:200;display:flex;flex-direction:column;
+  pointer-events:all;user-select:none;
+  transition:width 0.22s cubic-bezier(0.4,0,0.2,1);
+  overflow:hidden;
+}
+#quick-panel.qp-collapsed{width:44px;}
+#quick-panel.qp-collapsed .qp-body{display:none;}
+#quick-panel.qp-collapsed .qp-body-hdr{display:none;}
+#quick-panel.qp-collapsed .qp-head{padding:14px 0;flex-direction:column;align-items:center;gap:10px;border-bottom:none;}
+#quick-panel.qp-collapsed .qp-ket{display:none;}
+#quick-panel.qp-collapsed .qp-subshell{font-size:1.3rem;}
+#quick-panel.qp-collapsed .qp-collapse-btn{transform:rotate(180deg);}
+#quick-panel.qp-collapsed .qp-icons{display:flex;}
+
+.qp-head{display:flex;align-items:flex-start;justify-content:space-between;padding:16px 14px 12px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.qp-id{display:flex;flex-direction:column;gap:4px;min-width:0;}
+.qp-subshell{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:2.2rem;color:rgba(150,200,255,0.5);line-height:1;letter-spacing:0.02em;white-space:nowrap;}
+.qp-ket{font-size:0.5rem;color:var(--text-faint);letter-spacing:0.08em;white-space:nowrap;}
+.qp-collapse-btn{flex-shrink:0;margin-top:6px;background:transparent;border:1px solid var(--border);color:var(--text-faint);width:22px;height:22px;cursor:pointer;font-size:0.55rem;display:flex;align-items:center;justify-content:center;transition:all 0.2s;}
+.qp-collapse-btn:hover{border-color:var(--blue-dim);color:var(--blue);}
+
+.qp-icons{display:none;flex-direction:column;align-items:center;gap:8px;padding:8px 0 16px;flex-shrink:0;}
+.qp-icon-row{font-size:0.46rem;letter-spacing:0.06em;color:var(--text-dim);text-align:center;}
+.qp-icon-adv{width:28px;height:28px;background:rgba(255,200,50,0.04);border:1px solid rgba(255,200,50,0.2);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:0.85rem;color:var(--yellow);transition:all 0.15s;}
+.qp-icon-adv:hover{background:rgba(255,200,50,0.1);}
+
+.qp-body{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent;}
+.qp-body::-webkit-scrollbar{width:3px;}
+.qp-body::-webkit-scrollbar-thumb{background:var(--surface2);}
+.qp-section{padding:10px 12px;border-bottom:1px solid var(--border);}
+.qp-sec-lbl{font-size:0.42rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-faint);margin-bottom:8px;}
+
+/* Preset grid */
+.qp-presets{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+.qp-preset{position:relative;background:transparent;border:1px solid var(--border);color:var(--text-faint);padding:9px 4px;font-family:'JetBrains Mono',monospace;font-size:0.54rem;letter-spacing:0.06em;cursor:pointer;transition:all 0.14s;text-align:center;}
+.qp-preset:hover{color:var(--text-dim);border-color:var(--border-b);}
+.qp-preset.active{background:rgba(255,200,50,0.07);border-color:rgba(255,200,50,0.3);color:var(--yellow);}
+.qp-preset .swatch{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle;border:1px solid rgba(255,255,255,0.1);}
+
+/* Quick sliders */
+.qp-row{margin-bottom:6px;}
+.qp-row-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;}
+.qp-row-lbl{font-size:0.5rem;color:var(--text-dim);letter-spacing:0.1em;text-transform:uppercase;}
+.qp-row-val{font-size:0.62rem;color:var(--blue);font-weight:700;}
+.qp-range{width:100%;}
+
+/* Color pickers */
+.qp-color-row{display:flex;align-items:center;gap:8px;margin-bottom:7px;}
+.qp-color-lbl{font-size:0.5rem;color:var(--text-dim);letter-spacing:0.06em;flex:1;}
+.qp-color-input{width:28px;height:20px;border:1px solid var(--border-b);background:transparent;cursor:pointer;padding:0;-webkit-appearance:none;appearance:none;}
+.qp-color-input::-webkit-color-swatch-wrapper{padding:1px;}
+.qp-color-input::-webkit-color-swatch{border:none;border-radius:1px;}
+
+/* Footer */
+.qp-footer{padding:10px 12px 14px;}
+.qp-adv-btn{width:100%;padding:10px;background:rgba(255,200,50,0.03);border:1px solid rgba(255,200,50,0.18);color:var(--yellow);font-family:'JetBrains Mono',monospace;font-size:0.56rem;letter-spacing:0.16em;text-transform:uppercase;cursor:pointer;transition:all 0.16s;text-align:center;}
+.qp-adv-btn:hover{background:rgba(255,200,50,0.08);border-color:rgba(255,200,50,0.4);}
+.qp-adv-btn.adv-open-active{background:rgba(255,200,50,0.1);border-color:var(--yellow-dim);}
+
+/* ═══════════════════ ADVANCED PANEL ═══════════════════ */
+#adv-panel{
+  position:fixed;top:0;right:0;bottom:0;
+  width:var(--adv-w);
+  background:rgba(9,12,20,0.96);
+  border-left:1px solid var(--border-b);
+  backdrop-filter:blur(20px);
+  z-index:200;display:flex;flex-direction:column;
+  pointer-events:all;user-select:none;
+  transform:translateX(100%);
+  transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  overflow:hidden;
+}
+#adv-panel.adv-open{transform:translateX(0);}
+.adv-head{display:flex;align-items:center;gap:0.7rem;padding:0.7rem 0.9rem;border-bottom:1px solid var(--border-b);flex-shrink:0;}
+.adv-badge{font-size:0.42rem;letter-spacing:0.14em;text-transform:uppercase;padding:2px 7px;font-weight:700;border:1px solid var(--blue-dim);color:var(--blue-dim);}
+.adv-title{font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);font-weight:500;}
+.adv-live{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:0.46rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--green);}
+.adv-live::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green);animation:blink 2.2s ease infinite;}
+.adv-close{margin-left:0;background:transparent;border:none;color:var(--text-dim);font-size:1.1rem;cursor:pointer;padding:0 4px;transition:color 0.15s;line-height:1;}
+.adv-close:hover{color:var(--blue);}
+.adv-body{flex:1;overflow-y:auto;overflow-x:hidden;padding:0.6rem 0.9rem 1.4rem;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent;}
+.adv-body::-webkit-scrollbar{width:3px;}
+.adv-body::-webkit-scrollbar-thumb{background:var(--surface2);}
+
+/* ═══════════════════ SHARED PANEL COMPONENTS ═══════════════════ */
+.sec-label{display:flex;align-items:center;gap:0.5rem;font-size:0.46rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-faint);margin:12px 0 8px;}
+.sec-label::after{content:'';flex:1;height:1px;background:var(--border);}
+.row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.row-lbl{font-size:0.52rem;color:var(--text-dim);width:60px;flex-shrink:0;letter-spacing:0.05em;}
+.val{font-size:0.6rem;color:var(--blue);min-width:36px;text-align:right;flex-shrink:0;}
+input[type=range]{flex:1;-webkit-appearance:none;height:2px;background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.12) var(--pct,50%));border-radius:1px;outline:none;cursor:pointer;}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--bg);border:1.5px solid var(--blue-dim);cursor:pointer;transition:border-color 0.15s;}
+input[type=range]:hover::-webkit-slider-thumb{border-color:var(--blue);}
+.tog-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.tog-lbl{font-size:0.52rem;color:var(--text-dim);letter-spacing:0.05em;}
+.tog{position:relative;width:34px;height:18px;flex-shrink:0;}
+.tog input{opacity:0;position:absolute;width:0;height:0;}
+.tog-track{position:absolute;inset:0;border:1px solid rgba(150,200,255,0.18);border-radius:9px;background:rgba(0,0,0,0.4);cursor:pointer;transition:all 0.2s;}
+.tog input:checked ~ .tog-track{border-color:rgba(150,200,255,0.35);background:rgba(90,140,192,0.2);}
+.tog-track::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;background:var(--text-faint);border-radius:50%;transition:all 0.2s;}
+.tog input:checked ~ .tog-track::after{transform:translateX(16px);background:var(--blue);}
+.color-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;}
+.color-lbl{font-size:0.52rem;color:var(--text-dim);width:60px;flex-shrink:0;letter-spacing:0.05em;}
+.color-input{width:32px;height:20px;border:1px solid var(--border-b);background:transparent;cursor:pointer;padding:0;-webkit-appearance:none;appearance:none;}
+.color-input::-webkit-color-swatch-wrapper{padding:1px;}
+.color-input::-webkit-color-swatch{border:none;border-radius:1px;}
+.color-hex{font-size:0.5rem;color:var(--text-faint);letter-spacing:0.06em;}
+.info-bar{font-size:0.5rem;color:var(--text-faint);margin-top:10px;padding-top:8px;border-top:1px solid var(--border);letter-spacing:0.06em;line-height:1.8;}
+
+/* ═══════════════════ STATE DISPLAY ═══════════════════ */
+#state-display{position:absolute;top:54px;right:20px;text-align:right;pointer-events:none;}
+.in-frame #state-display{top:14px;}
+.ket-main{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:2.6rem;color:rgba(150,200,255,0.22);line-height:1;letter-spacing:0.03em;}
+.ket-sub{font-size:0.54rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-faint);margin-top:5px;}
+
+/* ═══════════════════ FPS ═══════════════════ */
+#fps{position:fixed;bottom:12px;right:16px;font-size:0.5rem;letter-spacing:0.1em;color:var(--text-faint);z-index:100;pointer-events:none;}
+
+/* ═══════════════════ MOBILE ═══════════════════ */
+@media(max-width:599px){
+  #quick-panel{width:44px;}
+  #quick-panel .qp-body{display:none;}
+  #quick-panel .qp-head{padding:14px 0;flex-direction:column;align-items:center;gap:10px;border-bottom:none;}
+  #quick-panel .qp-ket{display:none;}
+  #quick-panel .qp-subshell{font-size:1.3rem;}
+  #quick-panel .qp-collapse-btn{transform:rotate(180deg);}
+  #quick-panel .qp-icons{display:flex;}
+  #adv-panel{width:min(100vw,360px);}
+}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}::-webkit-scrollbar-thumb{background:var(--surface2);}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+
+<div id="ui">
+  <div class="topbar">
+    <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Fractal Orb Engine</span></div>
+    <div class="topbar-r">SYS // <strong>VOLUMETRIC FRACTAL</strong></div>
+  </div>
+
+  <!-- ═══ QUICK PANEL ═══ -->
+  <div id="quick-panel">
+    <div class="qp-head">
+      <div class="qp-id">
+        <span class="qp-subshell" id="qp-preset-name">Neutron</span>
+        <span class="qp-ket" id="qp-ket">Iter 3 · ρ 3.5</span>
+      </div>
+      <button class="qp-collapse-btn" onclick="toggleQPCollapse()" title="Collapse panel">◀</button>
+    </div>
+    <div class="qp-icons">
+      <div class="qp-icon-row" id="qp-icon-preset">NEU</div>
+      <button class="qp-icon-adv" title="Advanced" onclick="toggleAdv()">⚙</button>
+    </div>
+    <div class="qp-body">
+
+      <!-- Presets -->
+      <div class="qp-section">
+        <div class="qp-sec-lbl">Presets</div>
+        <div class="qp-presets" id="preset-grid"></div>
+      </div>
+
+      <!-- Colors -->
+      <div class="qp-section">
+        <div class="qp-sec-lbl">Energy Colors</div>
+        <div class="qp-color-row">
+          <span class="qp-color-lbl">Primary</span>
+          <input type="color" class="qp-color-input" id="qp-col-pri" value="#e0e8ff">
+        </div>
+        <div class="qp-color-row">
+          <span class="qp-color-lbl">Secondary</span>
+          <input type="color" class="qp-color-input" id="qp-col-sec" value="#4488ff">
+        </div>
+      </div>
+
+      <!-- Key sliders -->
+      <div class="qp-section">
+        <div class="qp-sec-lbl">Quick Controls</div>
+        <div class="qp-row">
+          <div class="qp-row-hdr"><span class="qp-row-lbl">Speed</span><span class="qp-row-val" id="qp-vl-spd">1.0</span></div>
+          <input type="range" class="qp-range" id="qp-sl-spd" min="0.1" max="1.0" value="1.0" step="0.1">
+        </div>
+        <div class="qp-row">
+          <div class="qp-row-hdr"><span class="qp-row-lbl">Density</span><span class="qp-row-val" id="qp-vl-den">3.5</span></div>
+          <input type="range" class="qp-range" id="qp-sl-den" min="0.1" max="5.0" value="3.5" step="0.1">
+        </div>
+        <div class="qp-row">
+          <div class="qp-row-hdr"><span class="qp-row-lbl">Iterations</span><span class="qp-row-val" id="qp-vl-iter">3</span></div>
+          <input type="range" class="qp-range" id="qp-sl-iter" min="2" max="12" value="3" step="1">
+        </div>
+      </div>
+
+      <div class="qp-footer">
+        <button class="qp-adv-btn" id="qp-adv-btn" onclick="toggleAdv()">⚙ Advanced</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ADVANCED PANEL ═══ -->
+  <div id="adv-panel">
+    <div class="adv-head">
+      <span class="adv-badge">ADV</span>
+      <span class="adv-title">Fractal Parameters</span>
+      <span class="adv-live">Live</span>
+      <button class="adv-close" onclick="toggleAdv()">✕</button>
+    </div>
+    <div class="adv-body">
+
+      <div class="sec-label">Energy Style</div>
+      <div class="color-row"><span class="color-lbl">Primary</span><input type="color" class="color-input" id="adv-col-pri" value="#e0e8ff"><span class="color-hex" id="adv-hex-pri">#e0e8ff</span></div>
+      <div class="color-row"><span class="color-lbl">Secondary</span><input type="color" class="color-input" id="adv-col-sec" value="#4488ff"><span class="color-hex" id="adv-hex-sec">#4488ff</span></div>
+      <div class="row"><span class="row-lbl">Speed</span><input type="range" id="adv-spd" min="0.1" max="1.0" value="1.0" step="0.1"><span class="val" id="adv-vl-spd">1.0</span></div>
+      <div class="row"><span class="row-lbl">Density</span><input type="range" id="adv-den" min="0.1" max="5.0" value="3.0" step="0.1"><span class="val" id="adv-vl-den">3.0</span></div>
+      <div class="row"><span class="row-lbl">Rotation</span><input type="range" id="adv-rot" min="0.0" max="1.0" value="0.89" step="0.01"><span class="val" id="adv-vl-rot">0.89</span></div>
+      <div class="row"><span class="row-lbl">DPR</span><input type="range" id="adv-dpr" min="0.3" max="2.0" value="0.7" step="0.1"><span class="val" id="adv-vl-dpr">0.7</span></div>
+
+      <div class="sec-label">Atmosphere</div>
+      <div class="row"><span class="row-lbl">Glow</span><input type="range" id="adv-aglow" min="0.0" max="5.0" value="0.15" step="0.01"><span class="val" id="adv-vl-aglow">0.15</span></div>
+      <div class="row"><span class="row-lbl">Level</span><input type="range" id="adv-alev" min="0.1" max="1.0" value="1.0" step="0.01"><span class="val" id="adv-vl-alev">1.00</span></div>
+      <div class="row"><span class="row-lbl">Scale</span><input type="range" id="adv-ascl" min="1.0" max="1.15" value="1.03" step="0.001"><span class="val" id="adv-vl-ascl">1.030</span></div>
+
+      <div class="sec-label">Fractal Structure</div>
+      <div class="row"><span class="row-lbl">Iterations</span><input type="range" id="adv-iter" min="2" max="12" value="4" step="1"><span class="val" id="adv-vl-iter">4</span></div>
+      <div class="row"><span class="row-lbl">Scale</span><input type="range" id="adv-fscl" min="0.3" max="1.5" value="0.97" step="0.01"><span class="val" id="adv-vl-fscl">0.97</span></div>
+      <div class="row"><span class="row-lbl">Decay</span><input type="range" id="adv-fdec" min="-25.0" max="-5.0" value="-16.7" step="0.1"><span class="val" id="adv-vl-fdec">-16.7</span></div>
+      <div class="row"><span class="row-lbl">Anim Spd</span><input type="range" id="adv-ianim" min="0.0" max="2.0" value="0.43" step="0.01"><span class="val" id="adv-vl-ianim">0.43</span></div>
+      <div class="row"><span class="row-lbl">Smooth</span><input type="range" id="adv-smooth" min="0.0" max="0.15" value="0.031" step="0.001"><span class="val" id="adv-vl-smooth">0.031</span></div>
+      <div class="row"><span class="row-lbl">Asymmetry</span><input type="range" id="adv-asym" min="0.0" max="1.0" value="0.55" step="0.01"><span class="val" id="adv-vl-asym">0.55</span></div>
+
+      <div class="sec-label">Post Processing</div>
+      <div class="row"><span class="row-lbl">Chroma</span><input type="range" id="adv-ca" min="0.0" max="0.05" value="0.025" step="0.001"><span class="val" id="adv-vl-ca">0.025</span></div>
+
+      <div class="info-bar">
+        Drag to orbit · Scroll to zoom<br>
+        All parameters update in real-time
+      </div>
+    </div>
+  </div>
+
+  <!-- State display overlay -->
+  <div id="state-display">
+    <div class="ket-main" id="disp-preset">Neutron</div>
+    <div class="ket-sub" id="disp-info">ITER 3 · FRACTAL ENERGY</div>
+  </div>
+</div>
+
+<div id="fps"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+
+// ═══════════════════ PRESETS ═══════════════════
+const presets = {
+  'Default': {
+    primaryEnergy:'#00b3ff',secondaryEnergy:'#2e9aff',speed:0.5,density:3.0,dpr:0.7,
+    atmosphereGlow:0.15,atmosphereLevel:1.0,atmosphereScale:1.03,orbRotation:0.89,
+    internalAnim:0.43,fractalIters:4,fractalScale:0.97,fractalDecay:-16.7,
+    smoothness:0.031,asymmetry:0.55,chromaticAberration:0.025
+  },
+  'Cyan': {
+    primaryEnergy:'#00ffee',secondaryEnergy:'#9900ff',speed:0.5,density:1.1,dpr:0.7,
+    atmosphereGlow:0.15,atmosphereLevel:1.0,atmosphereScale:1.03,orbRotation:0.89,
+    internalAnim:0.43,fractalIters:3,fractalScale:0.75,fractalDecay:-16.7,
+    smoothness:0.05,asymmetry:0.45,chromaticAberration:0.026
+  },
+  'Gray': {
+    primaryEnergy:'#ffffff',secondaryEnergy:'#000000',speed:0.3,density:0.9,dpr:0.7,
+    atmosphereGlow:0.15,atmosphereLevel:1.0,atmosphereScale:1.03,orbRotation:0.46,
+    internalAnim:0.17,fractalIters:4,fractalScale:0.74,fractalDecay:-21.6,
+    smoothness:0.036,asymmetry:0.0,chromaticAberration:0.017
+  },
+  'Yellow': {
+    primaryEnergy:'#ffbb00',secondaryEnergy:'#2eff9d',speed:0.5,density:2.1,dpr:0.7,
+    atmosphereGlow:0.15,atmosphereLevel:1.0,atmosphereScale:1.03,orbRotation:0.53,
+    internalAnim:0.43,fractalIters:3,fractalScale:0.69,fractalDecay:-14.5,
+    smoothness:0.008,asymmetry:0.35,chromaticAberration:0.024
+  },
+  'Green': {
+    primaryEnergy:'#44ff00',secondaryEnergy:'#0062ff',speed:1.0,density:1.3,dpr:0.7,
+    atmosphereGlow:0.15,atmosphereLevel:1.0,atmosphereScale:1.03,orbRotation:0.56,
+    internalAnim:0.4,fractalIters:4,fractalScale:0.89,fractalDecay:-24.3,
+    smoothness:0.081,asymmetry:0.26,chromaticAberration:0.0
+  },
+  'Ember': {
+    primaryEnergy:'#ff3300',secondaryEnergy:'#ff8800',speed:0.4,density:2.5,dpr:0.7,
+    atmosphereGlow:0.25,atmosphereLevel:0.85,atmosphereScale:1.04,orbRotation:0.35,
+    internalAnim:0.55,fractalIters:5,fractalScale:0.82,fractalDecay:-13.0,
+    smoothness:0.02,asymmetry:0.7,chromaticAberration:0.018
+  },
+  'Void': {
+    primaryEnergy:'#8833ff',secondaryEnergy:'#110033',speed:0.2,density:1.8,dpr:0.7,
+    atmosphereGlow:0.35,atmosphereLevel:0.7,atmosphereScale:1.05,orbRotation:0.25,
+    internalAnim:0.15,fractalIters:6,fractalScale:1.1,fractalDecay:-10.0,
+    smoothness:0.06,asymmetry:0.8,chromaticAberration:0.03
+  },
+  'Neutron': {
+    primaryEnergy:'#e0e8ff',secondaryEnergy:'#4488ff',speed:1.0,density:3.5,dpr:0.7,
+    atmosphereGlow:0.5,atmosphereLevel:0.9,atmosphereScale:1.02,orbRotation:1.0,
+    internalAnim:0.8,fractalIters:3,fractalScale:0.6,fractalDecay:-20.0,
+    smoothness:0.01,asymmetry:0.15,chromaticAberration:0.01
+  }
+};
+
+// ═══════════════════ STATE ═══════════════════
+const S = { preset:'Neutron', ...presets['Neutron'] };
+
+// ═══════════════════ THREE.JS SETUP ═══════════════════
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
+camera.position.set(0, 0, 6);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(S.dpr);
+document.body.insertBefore(renderer.domElement, document.getElementById('ui'));
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.enablePan = false;
+controls.minDistance = 3;
+controls.maxDistance = 15;
+
+// ═══════════════════ SHADERS ═══════════════════
+const vertexShader = `
+varying vec3 vLocalPosition;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+void main(){
+  vLocalPosition=position;
+  vNormal=normalize(normalMatrix*normal);
+  vec4 mvPos=modelViewMatrix*vec4(position,1.0);
+  vViewPosition=-mvPos.xyz;
+  gl_Position=projectionMatrix*mvPos;
+}`;
+
+const fragmentShader = `
+uniform float uTime;
+uniform vec3 uLocalCamPos;
+uniform vec3 uPrimaryColor;
+uniform vec3 uSecondaryColor;
+uniform float uDensity;
+uniform float uFractalIters;
+uniform float uFractalScale;
+uniform float uFractalDecay;
+uniform float uInternalAnim;
+uniform float uSmoothness;
+uniform float uAsymmetry;
+uniform float uAtmosphereGlow;
+
+varying vec3 vLocalPosition;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+
+float evaluateStructure(vec3 pos){
+  float densityAcc=0.0;
+  vec3 anchor=pos;
+  float animTime=uTime*uInternalAnim;
+  float s=sin(animTime),c=cos(animTime);
+  mat2 rotAnim=mat2(c,s,-s,c);
+  float a=0.5*uAsymmetry;
+  mat2 rotAsym1=mat2(cos(a),sin(a),-sin(a),cos(a));
+  float b=0.3*uAsymmetry;
+  mat2 rotAsym2=mat2(cos(b),sin(b),-sin(b),cos(b));
+  for(int step=0;step<12;++step){
+    if(float(step)>=uFractalIters)break;
+    pos.xy*=rotAnim;pos.yz*=rotAnim;
+    pos.xz*=rotAsym1;pos.yz*=rotAsym2;
+    pos+=vec3(0.05,-0.02,0.03)*uAsymmetry;
+    vec3 foldedPos=sqrt(pos*pos+uSmoothness);
+    float magnitudeSq=max(dot(foldedPos,foldedPos),0.00001);
+    pos=(uFractalScale*foldedPos/magnitudeSq)-uFractalScale;
+    float ySq=pos.y*pos.y,zSq=pos.z*pos.z,yz2=2.0*pos.y*pos.z;
+    pos.yz=vec2(ySq-zSq,yz2);
+    pos=vec3(pos.z,pos.x,pos.y);
+    densityAcc+=exp(uFractalDecay*abs(dot(pos,anchor)));
+  }
+  return densityAcc*0.5;
+}
+
+vec2 getVolumeBounds(vec3 origin,vec3 dir,float radius){
+  float b=dot(origin,dir),c=dot(origin,origin)-radius*radius;
+  float discriminant=b*b-c;
+  if(discriminant<0.0)return vec2(-1.0);
+  float root=sqrt(discriminant);
+  return vec2(-b-root,-b+root);
+}
+
+vec3 traceEnergy(vec3 origin,vec3 dir,vec2 limits){
+  float currentDepth=limits.x,marchStep=0.02;
+  vec3 finalEnergy=vec3(0.0);
+  float fieldVal=0.0;
+  for(int i=0;i<64;i++){
+    currentDepth+=marchStep*exp(-2.0*fieldVal);
+    if(currentDepth>limits.y)break;
+    vec3 samplePoint=origin+currentDepth*dir;
+    fieldVal=evaluateStructure(samplePoint);
+    float vSq=fieldVal*fieldVal;
+    float gradientBlend=smoothstep(0.0,0.4,fieldVal);
+    vec3 currentGradient=mix(uSecondaryColor,uPrimaryColor,gradientBlend);
+    vec3 emission=currentGradient*(fieldVal*1.8+vSq*1.0);
+    finalEnergy=0.99*finalEnergy+(0.08*uDensity)*emission;
+  }
+  return finalEnergy;
+}
+
+void main(){
+  vec3 rayOrig=uLocalCamPos;
+  vec3 rayDir=normalize(vLocalPosition-uLocalCamPos);
+  float t=uTime*0.001,s=sin(t),c=cos(t);
+  mat2 rotXZ=mat2(c,s,-s,c);
+  rayOrig.xz*=rotXZ;rayDir.xz*=rotXZ;
+  vec2 limits=getVolumeBounds(rayOrig,rayDir,2.0);
+  if(limits.x<0.0)discard;
+  vec3 volumeColor=traceEnergy(rayOrig,rayDir,limits);
+  vec3 normal=normalize(vNormal);
+  vec3 viewDir=normalize(vViewPosition);
+  float facingRatio=max(dot(normal,viewDir),0.0);
+  float edgeAA=smoothstep(0.0,0.05,facingRatio);
+  vec3 finalColor=0.5*log(1.0+volumeColor);
+  finalColor=clamp(finalColor,0.0,1.0)*edgeAA;
+  float maxLuma=max(finalColor.r,max(finalColor.g,finalColor.b));
+  float alpha=clamp(maxLuma*1.5,0.0,1.0)*edgeAA;
+  gl_FragColor=vec4(finalColor,alpha);
+}`;
+
+const uniforms = {
+  uTime:{value:0},
+  uLocalCamPos:{value:new THREE.Vector3()},
+  uPrimaryColor:{value:new THREE.Color(S.primaryEnergy)},
+  uSecondaryColor:{value:new THREE.Color(S.secondaryEnergy)},
+  uDensity:{value:S.density},
+  uFractalIters:{value:S.fractalIters},
+  uFractalScale:{value:S.fractalScale},
+  uFractalDecay:{value:S.fractalDecay},
+  uInternalAnim:{value:S.internalAnim},
+  uSmoothness:{value:S.smoothness},
+  uAsymmetry:{value:S.asymmetry}
+};
+
+const material = new THREE.ShaderMaterial({
+  vertexShader, fragmentShader, uniforms,
+  transparent:true, side:THREE.DoubleSide, depthWrite:false, blending:THREE.AdditiveBlending
+});
+
+// Atmosphere
+const atmosphereUniforms = {
+  uColor:{value:new THREE.Color(S.primaryEnergy)},
+  uGlow:{value:S.atmosphereGlow},
+  uLevel:{value:S.atmosphereLevel}
+};
+const atmosphereMaterial = new THREE.ShaderMaterial({
+  vertexShader:`
+    varying vec3 vNormal;varying vec3 vViewPosition;
+    void main(){vNormal=normalize(normalMatrix*normal);vec4 mv=modelViewMatrix*vec4(position,1.0);vViewPosition=-mv.xyz;gl_Position=projectionMatrix*mv;}`,
+  fragmentShader:`
+    uniform vec3 uColor;uniform float uGlow;uniform float uLevel;
+    varying vec3 vNormal;varying vec3 vViewPosition;
+    void main(){
+      vec3 n=normalize(vNormal);vec3 v=normalize(vViewPosition);
+      float vdn=max(dot(n,v),0.0);
+      float edgeFade=smoothstep(0.0,0.15,vdn);
+      float innerFadePoint=clamp(1.0-uLevel,0.0,0.99);
+      float centerFade=smoothstep(1.0,innerFadePoint,vdn);
+      float alpha=edgeFade*centerFade*uGlow;
+      gl_FragColor=vec4(uColor,alpha);
+    }`,
+  uniforms:atmosphereUniforms,
+  transparent:true, side:THREE.FrontSide, depthWrite:false, blending:THREE.AdditiveBlending
+});
+
+const geometry = new THREE.SphereGeometry(2.0, 128, 128);
+const orb = new THREE.Mesh(geometry, material);
+scene.add(orb);
+
+const atmosphereMesh = new THREE.Mesh(geometry, atmosphereMaterial);
+atmosphereMesh.scale.setScalar(S.atmosphereScale);
+orb.add(atmosphereMesh);
+
+// Post-processing
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(S.dpr);
+composer.addPass(new RenderPass(scene, camera));
+
+const ChromaticAberrationShader = {
+  uniforms:{"tDiffuse":{value:null},"uAmount":{value:S.chromaticAberration}},
+  vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`
+    uniform sampler2D tDiffuse;uniform float uAmount;varying vec2 vUv;
+    void main(){
+      vec4 base=texture2D(tDiffuse,vUv);
+      float luma=max(base.r,max(base.g,base.b));
+      float mask=smoothstep(0.01,0.1,luma);
+      vec2 offset=(vUv-0.5)*uAmount;
+      float r=texture2D(tDiffuse,vUv+offset).r;
+      float g=texture2D(tDiffuse,vUv).g;
+      float b=texture2D(tDiffuse,vUv-offset).b;
+      gl_FragColor=vec4(mix(base.rgb,vec3(r,g,b),mask),1.0);
+    }`
+};
+const caPass = new ShaderPass(ChromaticAberrationShader);
+composer.addPass(caPass);
+
+// ═══════════════════ APPLY STATE → UNIFORMS ═══════════════════
+function applyState(){
+  uniforms.uPrimaryColor.value.set(S.primaryEnergy);
+  uniforms.uSecondaryColor.value.set(S.secondaryEnergy);
+  uniforms.uDensity.value=S.density;
+  uniforms.uFractalIters.value=S.fractalIters;
+  uniforms.uFractalScale.value=S.fractalScale;
+  uniforms.uFractalDecay.value=S.fractalDecay;
+  uniforms.uInternalAnim.value=S.internalAnim;
+  uniforms.uSmoothness.value=S.smoothness;
+  uniforms.uAsymmetry.value=S.asymmetry;
+  atmosphereUniforms.uColor.value.set(S.primaryEnergy);
+  atmosphereUniforms.uGlow.value=S.atmosphereGlow;
+  atmosphereUniforms.uLevel.value=S.atmosphereLevel;
+  atmosphereMesh.scale.setScalar(S.atmosphereScale);
+  caPass.uniforms.uAmount.value=S.chromaticAberration;
+  renderer.setPixelRatio(S.dpr);
+  composer.setPixelRatio(S.dpr);
+}
+
+// ═══════════════════ UI SYNC ═══════════════════
+function sg(el){
+  const min=parseFloat(el.min),max=parseFloat(el.max),val=parseFloat(el.value);
+  el.style.setProperty('--pct',((val-min)/(max-min)*100)+'%');
+}
+
+function syncAllUI(){
+  // Quick panel
+  document.getElementById('qp-col-pri').value=S.primaryEnergy;
+  document.getElementById('qp-col-sec').value=S.secondaryEnergy;
+  setSlider('qp-sl-spd','qp-vl-spd',S.speed,1);
+  setSlider('qp-sl-den','qp-vl-den',S.density,1);
+  setSlider('qp-sl-iter','qp-vl-iter',S.fractalIters,0);
+
+  // Advanced panel
+  document.getElementById('adv-col-pri').value=S.primaryEnergy;
+  document.getElementById('adv-col-sec').value=S.secondaryEnergy;
+  document.getElementById('adv-hex-pri').textContent=S.primaryEnergy;
+  document.getElementById('adv-hex-sec').textContent=S.secondaryEnergy;
+  setSlider('adv-spd','adv-vl-spd',S.speed,1);
+  setSlider('adv-den','adv-vl-den',S.density,1);
+  setSlider('adv-rot','adv-vl-rot',S.orbRotation,2);
+  setSlider('adv-dpr','adv-vl-dpr',S.dpr,1);
+  setSlider('adv-aglow','adv-vl-aglow',S.atmosphereGlow,2);
+  setSlider('adv-alev','adv-vl-alev',S.atmosphereLevel,2);
+  setSlider('adv-ascl','adv-vl-ascl',S.atmosphereScale,3);
+  setSlider('adv-iter','adv-vl-iter',S.fractalIters,0);
+  setSlider('adv-fscl','adv-vl-fscl',S.fractalScale,2);
+  setSlider('adv-fdec','adv-vl-fdec',S.fractalDecay,1);
+  setSlider('adv-ianim','adv-vl-ianim',S.internalAnim,2);
+  setSlider('adv-smooth','adv-vl-smooth',S.smoothness,3);
+  setSlider('adv-asym','adv-vl-asym',S.asymmetry,2);
+  setSlider('adv-ca','adv-vl-ca',S.chromaticAberration,3);
+
+  // Preset highlight
+  document.querySelectorAll('.qp-preset').forEach(b=>{
+    b.classList.toggle('active',b.dataset.preset===S.preset);
+  });
+
+  // State display
+  document.getElementById('qp-preset-name').textContent=S.preset;
+  document.getElementById('qp-ket').textContent=`Iter ${S.fractalIters} · ρ ${S.density.toFixed(1)}`;
+  document.getElementById('qp-icon-preset').textContent=S.preset.substring(0,3).toUpperCase();
+  document.getElementById('disp-preset').textContent=S.preset;
+  document.getElementById('disp-info').textContent=`ITER ${S.fractalIters} · FRACTAL ENERGY`;
+}
+
+function setSlider(sliderId,valId,val,decimals){
+  const el=document.getElementById(sliderId);
+  el.value=val;
+  sg(el);
+  document.getElementById(valId).textContent=decimals===0?Math.round(val):val.toFixed(decimals);
+}
+
+// ═══════════════════ BUILD PRESET GRID ═══════════════════
+const presetGrid=document.getElementById('preset-grid');
+for(const name of Object.keys(presets)){
+  const btn=document.createElement('button');
+  btn.className='qp-preset'+(name===S.preset?' active':'');
+  btn.dataset.preset=name;
+  btn.innerHTML=`<span class="swatch" style="background:${presets[name].primaryEnergy}"></span>${name}`;
+  btn.addEventListener('click',()=>{
+    S.preset=name;
+    Object.assign(S,presets[name]);
+    applyState();
+    syncAllUI();
+  });
+  presetGrid.appendChild(btn);
+}
+
+// ═══════════════════ BIND QUICK PANEL ═══════════════════
+function bindQP(sliderId,valId,key,decimals){
+  const el=document.getElementById(sliderId);
+  sg(el);
+  el.addEventListener('input',function(){
+    S[key]=parseFloat(this.value);
+    document.getElementById(valId).textContent=decimals===0?Math.round(S[key]):S[key].toFixed(decimals);
+    sg(this);
+    S.preset='Custom';
+    applyState();
+    syncAllUI();
+  });
+}
+bindQP('qp-sl-spd','qp-vl-spd','speed',1);
+bindQP('qp-sl-den','qp-vl-den','density',1);
+bindQP('qp-sl-iter','qp-vl-iter','fractalIters',0);
+
+document.getElementById('qp-col-pri').addEventListener('input',function(){
+  S.primaryEnergy=this.value;S.preset='Custom';applyState();syncAllUI();
+});
+document.getElementById('qp-col-sec').addEventListener('input',function(){
+  S.secondaryEnergy=this.value;S.preset='Custom';applyState();syncAllUI();
+});
+
+// ═══════════════════ BIND ADVANCED PANEL ═══════════════════
+function bindAdv(sliderId,valId,key,decimals,applyFn){
+  const el=document.getElementById(sliderId);
+  sg(el);
+  el.addEventListener('input',function(){
+    S[key]=parseFloat(this.value);
+    document.getElementById(valId).textContent=decimals===0?Math.round(S[key]):S[key].toFixed(decimals);
+    sg(this);
+    S.preset='Custom';
+    if(applyFn)applyFn();else applyState();
+    syncAllUI();
+  });
+}
+bindAdv('adv-spd','adv-vl-spd','speed',1);
+bindAdv('adv-den','adv-vl-den','density',1);
+bindAdv('adv-rot','adv-vl-rot','orbRotation',2);
+bindAdv('adv-dpr','adv-vl-dpr','dpr',1);
+bindAdv('adv-aglow','adv-vl-aglow','atmosphereGlow',2);
+bindAdv('adv-alev','adv-vl-alev','atmosphereLevel',2);
+bindAdv('adv-ascl','adv-vl-ascl','atmosphereScale',3);
+bindAdv('adv-iter','adv-vl-iter','fractalIters',0);
+bindAdv('adv-fscl','adv-vl-fscl','fractalScale',2);
+bindAdv('adv-fdec','adv-vl-fdec','fractalDecay',1);
+bindAdv('adv-ianim','adv-vl-ianim','internalAnim',2);
+bindAdv('adv-smooth','adv-vl-smooth','smoothness',3);
+bindAdv('adv-asym','adv-vl-asym','asymmetry',2);
+bindAdv('adv-ca','adv-vl-ca','chromaticAberration',3);
+
+document.getElementById('adv-col-pri').addEventListener('input',function(){
+  S.primaryEnergy=this.value;S.preset='Custom';applyState();syncAllUI();
+});
+document.getElementById('adv-col-sec').addEventListener('input',function(){
+  S.secondaryEnergy=this.value;S.preset='Custom';applyState();syncAllUI();
+});
+
+// ═══════════════════ PANEL TOGGLES ═══════════════════
+window.toggleQPCollapse=function(){
+  document.getElementById('quick-panel').classList.toggle('qp-collapsed');
+};
+window.toggleAdv=function(){
+  const panel=document.getElementById('adv-panel');
+  const btn=document.getElementById('qp-adv-btn');
+  panel.classList.toggle('adv-open');
+  btn.classList.toggle('adv-open-active',panel.classList.contains('adv-open'));
+};
+
+// ═══════════════════ RESIZE ═══════════════════
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+  composer.setSize(innerWidth,innerHeight);
+});
+
+// ═══════════════════ ANIMATION ═══════════════════
+const clock=new THREE.Clock();
+let frameCount=0,fpsTime=0;
+const fpsEl=document.getElementById('fps');
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=clock.getDelta();
+  uniforms.uTime.value+=dt*S.speed;
+  orb.rotation.y+=dt*S.orbRotation;
+  orb.rotation.x+=dt*(S.orbRotation*0.5);
+  orb.updateMatrixWorld();
+  const localCam=new THREE.Vector3().copy(camera.position);
+  orb.worldToLocal(localCam);
+  uniforms.uLocalCamPos.value.copy(localCam);
+  controls.update();
+  composer.render();
+
+  // FPS counter
+  frameCount++;
+  fpsTime+=dt;
+  if(fpsTime>=1.0){
+    fpsEl.textContent=Math.round(frameCount/fpsTime)+' FPS';
+    frameCount=0;fpsTime=0;
+  }
+}
+
+syncAllUI();
+animate();
+</script>
+</body>
+</html>

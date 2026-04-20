@@ -180,6 +180,10 @@ body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-eve
             <span class="nav-label">Wormhole</span>
             <span class="nav-badge">SHADER</span>
           </button>
+          <button class="nav-item wh" data-tab="fractalorb" onclick="switchTab('fractalorb')">
+            <span class="nav-label">Fractal Orb</span>
+            <span class="nav-badge">SHADER</span>
+          </button>
         </div>
       </div>
       <div class="cluster open" id="cl-crew">
@@ -297,6 +301,7 @@ const PAGES = {
   orbital:'atomic-orbital-vr.html',
   wormhole:'wormhole.html',
   galaxy:'galaxy.html',
+  fractalorb:'fractal-orb.html',
 };
 const LABELS = {
   home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
@@ -311,6 +316,7 @@ const LABELS = {
   orbital:'Atomic Orbital',
   wormhole:'Wormhole',
   galaxy:'Galaxy',
+  fractalorb:'Fractal Orb',
 };
 const XR_PAGES = new Set(['orbital']);
 let activeTab = null;
