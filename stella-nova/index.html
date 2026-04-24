@@ -6,8 +6,10 @@
 <title>STELLA NOVA</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
+/* ── Reset & Root ─────────────────────────────────────────────────────────── */
 :root {
   --bg:        #0a0c11;
+  --bg2:       #0e1118;
   --sidebar:   #0c0f16;
   --border:    rgba(150,200,255,0.07);
   --border-b:  rgba(150,200,255,0.16);
@@ -16,122 +18,357 @@
   --yellow:    #ffc832;
   --orange:    #ff7b00;
   --green:     #64c864;
+  --red:       #ff5050;
   --text:      #c0cfe0;
   --text-dim:  #5a7090;
   --text-faint:#2a3850;
-  --sidebar-w: 260px;
+  --sidebar-w: 290px;
+  --topbar-h:  56px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
 body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-font-smoothing: antialiased; }
+
+/* ── Shell ────────────────────────────────────────────────────────────────── */
 #shell { display: flex; width: 100%; height: 100%; }
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
 #sidebar {
-  width: var(--sidebar-w); min-width: var(--sidebar-w); height: 100%;
-  background: var(--sidebar); border-right: 1px solid var(--border-b);
-  display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
-  z-index: 200; transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  height: 100%;
+  background: var(--sidebar);
+  border-right: 1px solid var(--border-b);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+  z-index: 200;
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
 }
+
+/* Mobile: sidebar slides off-screen */
 @media (max-width: 768px) {
-  #sidebar { position: fixed; top: 0; left: 0; bottom: 0; transform: translateX(-100%); box-shadow: 4px 0 32px rgba(0,0,0,0.7); }
+  #sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 32px rgba(0,0,0,0.6);
+  }
   #sidebar.open { transform: translateX(0); }
-  #overlay { display: none; position: fixed; inset: 0; z-index: 190; background: rgba(0,0,0,0.55); }
+  #overlay {
+    display: none;
+    position: fixed; inset: 0; z-index: 190;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(2px);
+  }
   #overlay.show { display: block; }
 }
-#sb-header { padding: 24px 20px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-#sb-wordmark { font-family: 'Cormorant Garamond', serif; font-weight: 300; font-size: 1.6rem; letter-spacing: 0.18em; text-transform: uppercase; color: #eef2fa; line-height: 1; }
-#sb-wordmark em { font-style: italic; color: var(--yellow); }
-#sb-sub { margin-top: 6px; font-size: 0.58rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--text-faint); }
-#sb-status { display: flex; align-items: center; gap: 7px; margin-top: 12px; font-size: 0.58rem; letter-spacing: 0.12em; color: var(--green); }
-#sb-status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: blink 2.2s ease infinite; flex-shrink: 0; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
-#sb-nav { flex: 1; overflow-y: auto; padding: 12px 0 24px; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-#sb-nav::-webkit-scrollbar { width: 3px; }
-#sb-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-.cluster { margin-bottom: 2px; }
-.cluster-head { display: flex; align-items: center; gap: 10px; padding: 10px 18px 10px 16px; cursor: pointer; user-select: none; border: none; background: transparent; width: 100%; text-align: left; transition: background 0.15s; }
+
+/* ── Sidebar header ───────────────────────────────────────────────────────── */
+#sb-header {
+  padding: 24px 22px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#sb-wordmark {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 300;
+  font-size: 1.8rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #e8eef8;
+  line-height: 1;
+}
+#sb-sub {
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+  margin-top: 6px;
+  text-transform: uppercase;
+}
+#sb-status {
+  margin-top: 14px;
+  font-size: 0.6rem;
+  letter-spacing: 0.14em;
+  color: var(--green);
+  text-transform: uppercase;
+}
+#sb-status::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 7px;
+  vertical-align: middle;
+  box-shadow: 0 0 6px var(--green);
+}
+
+/* ── Nav scroll area ──────────────────────────────────────────────────────── */
+#sb-nav {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-faint) transparent;
+}
+#sb-nav::-webkit-scrollbar { width: 4px; }
+#sb-nav::-webkit-scrollbar-thumb { background: var(--text-faint); border-radius: 2px; }
+
+/* ── Clusters ─────────────────────────────────────────────────────────────── */
+.cluster { border-bottom: 1px solid var(--border); }
+.cluster-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px 12px 18px;
+  cursor: pointer;
+  user-select: none;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  transition: background 0.15s;
+  font-family: inherit;
+  color: inherit;
+}
 .cluster-head:hover { background: rgba(150,200,255,0.04); }
-.cluster-icon { font-size: 0.8rem; width: 18px; text-align: center; flex-shrink: 0; opacity: 0.65; }
-.cluster-label { flex: 1; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; color: var(--text-dim); transition: color 0.15s; }
-.cluster-arrow { font-size: 0.55rem; color: var(--text-faint); transition: transform 0.22s; flex-shrink: 0; }
+.cluster-icon { font-size: 1.0rem; width: 22px; text-align: center; flex-shrink: 0; opacity: 0.65; }
+.cluster-label {
+  flex: 1;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  transition: color 0.15s;
+}
+.cluster-arrow {
+  font-size: 0.7rem;
+  color: var(--text-faint);
+  transition: transform 0.22s;
+  flex-shrink: 0;
+}
 .cluster.open .cluster-arrow { transform: rotate(90deg); }
 .cluster.open .cluster-label { color: var(--text); }
-.cluster-body { overflow: hidden; max-height: 0; transition: max-height 0.28s cubic-bezier(0.4,0,0.2,1); }
+
+.cluster-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.28s cubic-bezier(0.4,0,0.2,1);
+}
 .cluster.open .cluster-body { max-height: 600px; }
-.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px 10px 44px; cursor: pointer; border: none; background: transparent; width: 100%; text-align: left; position: relative; transition: background 0.15s; }
-.nav-item::before { content: ''; position: absolute; left: 28px; top: 50%; transform: translateY(-50%); width: 4px; height: 4px; border-radius: 50%; background: var(--text-faint); transition: background 0.15s, box-shadow 0.15s; }
+
+/* ── Nav items ────────────────────────────────────────────────────────────── */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 20px 11px 46px;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  position: relative;
+  transition: background 0.15s;
+  font-family: inherit;
+  color: inherit;
+}
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 30px;
+  top: 50%; transform: translateY(-50%);
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition: background 0.15s, box-shadow 0.15s;
+}
 .nav-item:hover { background: rgba(150,200,255,0.04); }
 .nav-item:hover::before { background: var(--blue-dim); }
+
+/* Default active (yellow) */
 .nav-item.active { background: rgba(255,200,50,0.05); }
 .nav-item.active::before { background: var(--yellow); box-shadow: 0 0 7px var(--yellow); }
 .nav-item.active .nav-label { color: var(--yellow); }
+
+/* Sim accent (blue) */
 .nav-item.hl.active { background: rgba(150,200,255,0.05); }
 .nav-item.hl.active::before { background: var(--blue); box-shadow: 0 0 7px var(--blue); }
 .nav-item.hl.active .nav-label { color: var(--blue); }
 .nav-item.hl:hover::before { background: var(--blue-dim); }
+
+/* FX accent (orange) */
 .nav-item.fx.active { background: rgba(255,123,0,0.05); }
 .nav-item.fx.active::before { background: var(--orange); box-shadow: 0 0 7px var(--orange); }
 .nav-item.fx.active .nav-label { color: var(--orange); }
 .nav-item.fx:hover::before { background: var(--orange); }
-.nav-label { font-size: 0.72rem; letter-spacing: 0.05em; color: var(--text-dim); transition: color 0.15s; }
-.nav-badge { margin-left: auto; font-size: 0.44rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); padding: 2px 5px; border: 1px solid var(--border); border-radius: 2px; }
-#sb-footer { padding: 14px 20px; border-top: 1px solid var(--border); flex-shrink: 0; }
-#sb-clock { font-size: 0.7rem; color: var(--text-faint); letter-spacing: 0.14em; }
-#content { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-#topbar { display: none; height: 52px; background: rgba(10,12,17,0.96); border-bottom: 1px solid var(--border-b); align-items: center; padding: 0 16px; gap: 14px; flex-shrink: 0; backdrop-filter: blur(12px); }
-@media (max-width: 768px) { #topbar { display: flex; } }
-#menu-btn { background: transparent; border: 1px solid var(--border-b); color: var(--text-dim); cursor: pointer; font-size: 1.1rem; padding: 7px 11px; line-height: 1; transition: color 0.2s, border-color 0.2s; }
-#menu-btn:hover { color: var(--blue); border-color: var(--blue-dim); }
-#topbar-title { font-family: 'Cormorant Garamond', serif; font-weight: 300; font-size: 1.15rem; letter-spacing: 0.14em; color: #eef2fa; }
-#topbar-active { margin-left: auto; font-size: 0.6rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--yellow); }
-#frame-wrap { flex: 1; position: relative; overflow: hidden; }
-#frame-wrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; background: var(--bg); }
-.nav-item.mi.active { background: rgba(0,212,180,0.06); }
-.nav-item.mi.active::before { background: #00d4b4; box-shadow: 0 0 7px #00d4b4; }
-.nav-item.mi.active .nav-label { color: #00d4b4; }
-.nav-item.mi:hover::before { background: #00a890; }
-.cluster-head.mi-head .cluster-icon { opacity: 1; color: #00d4b4; }
-.cluster.open .cluster-head.mi-head .cluster-label { color: #00d4b4; }
+
+/* Supernova accent (orange plasma) */
+.nav-item.sn.active { background: rgba(255,136,48,0.06); }
+.nav-item.sn.active::before { background: #ff8830; box-shadow: 0 0 7px #ff8830; }
+.nav-item.sn.active .nav-label { color: #ff8830; }
+.nav-item.sn:hover::before { background: #cc6a20; }
+
+/* Atomic Orbital accent (sky blue) */
+.nav-item.qm.active { background: rgba(100,180,255,0.06); }
+.nav-item.qm.active::before { background: #64b4ff; box-shadow: 0 0 7px #64b4ff; }
+.nav-item.qm.active .nav-label { color: #64b4ff; }
+.nav-item.qm:hover::before { background: #4a8ccc; }
+
+/* Anomaly accent (plasma orange) */
+.nav-item.wh.active { background: rgba(255,136,48,0.06); }
+.nav-item.wh.active::before { background: #ff8830; box-shadow: 0 0 7px #ff8830; }
+.nav-item.wh.active .nav-label { color: #ff8830; }
+.nav-item.wh:hover::before { background: #cc6a20; }
+
+/* Galaxy accent (warm gold) */
+.nav-item.gx.active { background: rgba(255,200,100,0.06); }
+.nav-item.gx.active::before { background: #ffc864; box-shadow: 0 0 7px #ffc864; }
+.nav-item.gx.active .nav-label { color: #ffc864; }
+.nav-item.gx:hover::before { background: #cc9a40; }
+
+/* Solar accent (gold) */
 .nav-item.sol.active { background: rgba(245,200,66,0.06); }
 .nav-item.sol.active::before { background: #f5c842; box-shadow: 0 0 7px #f5c842; }
 .nav-item.sol.active .nav-label { color: #f5c842; }
 .nav-item.sol:hover::before { background: #c8a020; }
 .cluster-head.sol-head .cluster-icon { opacity: 1; color: #f5c842; }
 .cluster.open .cluster-head.sol-head .cluster-label { color: #f5c842; }
+
+/* Material Lab accent (purple) */
 .nav-item.mat.active { background: rgba(184,150,255,0.06); }
 .nav-item.mat.active::before { background: #b896ff; box-shadow: 0 0 7px #b896ff; }
 .nav-item.mat.active .nav-label { color: #b896ff; }
 .nav-item.mat:hover::before { background: #9070d0; }
 .cluster-head.mat-head .cluster-icon { opacity: 1; color: #b896ff; }
 .cluster.open .cluster-head.mat-head .cluster-label { color: #b896ff; }
-.nav-item.qm.active { background: rgba(100,180,255,0.06); }
-.nav-item.qm.active::before { background: #64b4ff; box-shadow: 0 0 7px #64b4ff; }
-.nav-item.qm.active .nav-label { color: #64b4ff; }
-.nav-item.qm:hover::before { background: #4a8ccc; }
-.nav-item.wh.active { background: rgba(255,136,48,0.06); }
-.nav-item.wh.active::before { background: #ff8830; box-shadow: 0 0 7px #ff8830; }
-.nav-item.wh.active .nav-label { color: #ff8830; }
-.nav-item.wh:hover::before { background: #cc6a20; }
-/* Galaxy accent */
-.nav-item.gx.active { background: rgba(255,200,100,0.06); }
-.nav-item.gx.active::before { background: #ffc864; box-shadow: 0 0 7px #ffc864; }
-.nav-item.gx.active .nav-label { color: #ffc864; }
-.nav-item.gx:hover::before { background: #cc9a40; }
-#sb-linkedin { display: block; margin-top: 10px; padding: 7px 12px; border: 1px solid rgba(0,119,181,0.5); background: rgba(0,119,181,0.08); color: #5ba4cf; font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase; text-align: center; text-decoration: none; cursor: pointer; transition: background 0.18s, border-color 0.18s, color 0.18s; }
-#sb-linkedin:hover { background: rgba(0,119,181,0.2); border-color: rgba(0,119,181,0.9); color: #90c8f0; }
-#sb-linkedin::before { content: 'in '; font-weight: 700; font-size: 0.75rem; }
-body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none; background: repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.05) 4px); }
+
+/* ── Nav text ─────────────────────────────────────────────────────────────── */
+.nav-label {
+  font-size: 0.88rem;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  transition: color 0.15s;
+}
+.nav-badge {
+  margin-left: auto;
+  font-size: 0.55rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+}
+
+/* ── Sidebar footer ───────────────────────────────────────────────────────── */
+#sb-footer {
+  padding: 14px 20px 18px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#sb-clock {
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  color: var(--text-faint);
+  text-align: center;
+}
+#sb-linkedin {
+  display: block;
+  margin-top: 10px;
+  padding: 8px 14px;
+  border: 1px solid rgba(0,119,181,0.5);
+  background: rgba(0,119,181,0.08);
+  color: #5ba4cf;
+  font-size: 0.7rem;
+  font-family: inherit;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+#sb-linkedin:hover {
+  background: rgba(0,119,181,0.2);
+  border-color: rgba(0,119,181,0.9);
+  color: #90c8f0;
+}
+#sb-linkedin::before { content: 'in '; font-weight: 700; font-size: 0.85rem; }
+
+/* ── Content area ─────────────────────────────────────────────────────────── */
+#content { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+#topbar {
+  height: var(--topbar-h);
+  min-height: var(--topbar-h);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 22px;
+  gap: 16px;
+}
+#menu-btn {
+  display: none;
+  background: none; border: none;
+  color: var(--text-dim); font-size: 1.4rem;
+  cursor: pointer; padding: 4px 8px;
+  font-family: inherit;
+}
+@media (max-width: 768px) { #menu-btn { display: block; } }
+#topbar-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 300;
+  font-size: 0.95rem;
+  letter-spacing: 0.35em;
+  color: var(--text-dim);
+}
+#topbar-active {
+  margin-left: auto;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+#frame-wrap {
+  flex: 1;
+  overflow: hidden;
+}
+#frame-wrap iframe {
+  width: 100%; height: 100%;
+  border: none; display: block;
+  background: var(--bg);
+}
+
+/* ── CRT overlay ──────────────────────────────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.05) 4px);
+}
 </style>
 </head>
 <body>
+
 <div id="overlay" onclick="closeSidebar()"></div>
+
 <div id="shell">
   <nav id="sidebar">
+
     <div id="sb-header">
       <div id="sb-wordmark">Stella Nova</div>
       <div id="sb-sub">From Ore to Empire</div>
       <div id="sb-status">Sim Active</div>
     </div>
+
     <div id="sb-nav">
+
+      <!-- ── Home ──────────────────────────────────────────────── -->
       <div class="cluster open" id="cl-home">
         <button class="cluster-head" onclick="toggleCluster('cl-home')">
           <span class="cluster-icon">&#8962;</span>
@@ -144,6 +381,8 @@ body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-eve
           </button>
         </div>
       </div>
+
+      <!-- ── Simulations ───────────────────────────────────────── -->
       <div class="cluster open" id="cl-sims">
         <button class="cluster-head" onclick="toggleCluster('cl-sims')">
           <span class="cluster-icon">&#9678;</span>
@@ -176,16 +415,18 @@ body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-eve
             <span class="nav-label">Atomic Orbital</span>
             <span class="nav-badge">VR</span>
           </button>
-          <button class="nav-item wh" data-tab="wormhole" onclick="switchTab('wormhole')">
-            <span class="nav-label">Wormhole</span>
+          <button class="nav-item sn" data-tab="supernova" onclick="switchTab('supernova')">
+            <span class="nav-label">Supernova</span>
             <span class="nav-badge">SHADER</span>
           </button>
-          <button class="nav-item wh" data-tab="fractalorb" onclick="switchTab('fractalorb')">
-            <span class="nav-label">Fractal Orb</span>
+          <button class="nav-item wh" data-tab="anomaly" onclick="switchTab('anomaly')">
+            <span class="nav-label">Anomaly</span>
             <span class="nav-badge">SHADER</span>
           </button>
         </div>
       </div>
+
+      <!-- ── Operational Manual ─────────────────────────────────── -->
       <div class="cluster open" id="cl-crew">
         <button class="cluster-head" onclick="toggleCluster('cl-crew')">
           <span class="cluster-icon">&#11041;</span>
@@ -221,31 +462,8 @@ body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-eve
           </button>
         </div>
       </div>
-      <div class="cluster open" id="cl-intel">
-        <button class="cluster-head mi-head" onclick="toggleCluster('cl-intel')">
-          <span class="cluster-icon">&#9672;</span>
-          <span class="cluster-label">Market Intel</span>
-          <span class="cluster-arrow">&#8250;</span>
-        </button>
-        <div class="cluster-body">
-          <button class="nav-item mi" data-tab="intel" onclick="switchTab('intel')">
-            <span class="nav-label">Investor Case Studies</span>
-            <span class="nav-badge">PDF</span>
-          </button>
-          <button class="nav-item mi" data-tab="pitch" onclick="switchTab('pitch')">
-            <span class="nav-label">Pitch Deck</span>
-            <span class="nav-badge">NEW</span>
-          </button>
-          <button class="nav-item mi" data-tab="roadmap" onclick="switchTab('roadmap')">
-            <span class="nav-label">Roadmap</span>
-            <span class="nav-badge">NEW</span>
-          </button>
-          <button class="nav-item mi" data-tab="business" onclick="switchTab('business')">
-            <span class="nav-label">Business Strategy</span>
-            <span class="nav-badge">NEW</span>
-          </button>
-        </div>
-      </div>
+
+      <!-- ── Light Study ────────────────────────────────────────── -->
       <div class="cluster" id="cl-solar">
         <button class="cluster-head sol-head" onclick="toggleCluster('cl-solar')">
           <span class="cluster-icon">&#9728;</span>
@@ -259,6 +477,8 @@ body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-eve
           </button>
         </div>
       </div>
+
+      <!-- ── Material Lab ───────────────────────────────────────── -->
       <div class="cluster" id="cl-matlab">
         <button class="cluster-head mat-head" onclick="toggleCluster('cl-matlab')">
           <span class="cluster-icon">&#9670;</span>
@@ -272,12 +492,16 @@ body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-eve
           </button>
         </div>
       </div>
+
     </div>
+
     <div id="sb-footer">
       <div id="sb-clock">00:00:00</div>
       <a id="sb-linkedin" href="https://linkedin.com/in/david-kubala" target="_blank" rel="noopener">Follow on LinkedIn</a>
     </div>
+
   </nav>
+
   <div id="content">
     <div id="topbar">
       <button id="menu-btn" onclick="openSidebar()">&#9776;</button>
@@ -286,40 +510,59 @@ body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-eve
     </div>
     <div id="frame-wrap"></div>
   </div>
+
 </div>
+
 <script>
 const PAGES = {
-  home:'home.html', hohmann:'hohmann.html', forge:'forge.html',
-  crafting:'crafting.html', planner:'planner.html', guide:'guide.html',
-  behaviors:'behaviors.html', controls:'controls.html', gravity:'gravity.html',
-  selection:'selection.html', explosion:'explosion.html', flare:'flare.html',
-  intel:'market-intel.html', pitch:'pitch.html', roadmap:'roadmap.html',
-  business:'business.html', solar:'solar.html',
+  home:'home.html',
+  hohmann:'hohmann.html',
+  forge:'forge.html',
+  crafting:'crafting.html',
+  planner:'planner.html',
+  guide:'guide.html',
+  behaviors:'behaviors.html',
+  controls:'controls.html',
+  gravity:'gravity.html',
+  selection:'selection.html',
+  explosion:'explosion.html',
+  flare:'flare.html',
+  solar:'solar.html',
   shipdesigner:'ship-designer.html',
   flagdesigner:'flag-designer.html',
   matlab:'material-lab.html',
   orbital:'atomic-orbital-vr.html',
-  wormhole:'wormhole.html',
+  supernova:'supernova.html',
+  anomaly:'wormhole.html',
   galaxy:'galaxy.html',
-  fractalorb:'fractal-orb.html',
 };
+
 const LABELS = {
-  home:'Overview', hohmann:'Hohmann Transfer', forge:'Planet Forge',
-  crafting:'Crafting', planner:'Station Planner', guide:'Station Guide',
-  behaviors:'Behaviors', controls:'Controls', gravity:'Gravity Sim',
-  selection:'Selection', explosion:'Explosion', flare:'Engine Propulsion Effects',
-  intel:'Investor Case Studies', pitch:'Pitch Deck', roadmap:'Roadmap',
-  business:'Business Strategy', solar:'Solar Transit Study',
+  home:'Overview',
+  hohmann:'Hohmann Transfer',
+  forge:'Planet Forge',
+  crafting:'Crafting',
+  planner:'Station Planner',
+  guide:'Station Guide',
+  behaviors:'Behaviors',
+  controls:'Controls',
+  gravity:'Gravity Sim',
+  selection:'Selection',
+  explosion:'Explosion',
+  flare:'Engine Propulsion Effects',
+  solar:'Solar Transit Study',
   shipdesigner:'Ship Designer',
   flagdesigner:'Flag Designer',
   matlab:'PBR Material Studio',
   orbital:'Atomic Orbital',
-  wormhole:'Wormhole',
+  supernova:'Supernova',
+  anomaly:'Anomaly',
   galaxy:'Galaxy',
-  fractalorb:'Fractal Orb',
 };
+
 const XR_PAGES = new Set(['orbital']);
 let activeTab = null;
+
 function switchTab(id) {
   document.querySelectorAll('.nav-item').forEach(function(el) {
     el.classList.toggle('active', el.dataset.tab === id);
@@ -328,36 +571,43 @@ function switchTab(id) {
   wrap.innerHTML = '';
   var iframe = document.createElement('iframe');
   iframe.src = PAGES[id] || 'home.html';
+
   var allow = 'downloads';
   if (XR_PAGES.has(id)) {
     allow = 'xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';
   }
   iframe.setAttribute('allow', allow);
   wrap.appendChild(iframe);
+
   var ta = document.getElementById('topbar-active');
   if (ta) ta.textContent = LABELS[id] || id;
   activeTab = id;
   closeSidebar();
 }
 window.switchTab = switchTab;
+
 function toggleCluster(id) {
   var cl = document.getElementById(id);
   if (cl) cl.classList.toggle('open');
 }
+
 function openSidebar() {
   document.getElementById('sidebar').classList.add('open');
   document.getElementById('overlay').classList.add('show');
 }
+
 function closeSidebar() {
   if (window.innerWidth <= 768) {
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('overlay').classList.remove('show');
   }
 }
+
 setInterval(function() {
   var el = document.getElementById('sb-clock');
   if (el) el.textContent = new Date().toTimeString().slice(0,8);
 }, 1000);
+
 switchTab('home');
 </script>
 </body>
