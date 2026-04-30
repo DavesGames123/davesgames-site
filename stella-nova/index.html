@@ -225,6 +225,12 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
 .nav-item.wh.active .nav-label { color: #ff8830; }
 .nav-item.wh:hover::before { background: #cc6a20; }
 
+/* Black Hole accent (deep red) */
+.nav-item.bh.active { background: rgba(255,60,40,0.06); }
+.nav-item.bh.active::before { background: #ff4030; box-shadow: 0 0 7px #ff4030; }
+.nav-item.bh.active .nav-label { color: #ff4030; }
+.nav-item.bh:hover::before { background: #cc3020; }
+
 /* Galaxy accent (warm gold) */
 .nav-item.gx.active { background: rgba(255,200,100,0.06); }
 .nav-item.gx.active::before { background: #ffc864; box-shadow: 0 0 7px #ffc864; }
@@ -423,6 +429,10 @@ body::after {
             <span class="nav-label">Anomaly</span>
             <span class="nav-badge">SHADER</span>
           </button>
+          <button class="nav-item bh" data-tab="blackhole" onclick="switchTab('blackhole')">
+            <span class="nav-label">Black Hole</span>
+            <span class="nav-badge">GPU</span>
+          </button>
         </div>
       </div>
 
@@ -534,6 +544,7 @@ const PAGES = {
   orbital:'atomic-orbital-vr.html',
   supernova:'fractal-orb.html',
   anomaly:'wormhole.html',
+  blackhole:'blackhole.html',
   galaxy:'galaxy.html',
 };
 
@@ -557,6 +568,7 @@ const LABELS = {
   orbital:'Atomic Orbital',
   supernova:'Fractal Orb',
   anomaly:'Anomaly',
+  blackhole:'Black Hole',
   galaxy:'Galaxy',
 };
 

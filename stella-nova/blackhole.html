@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Black Hole // Stella Nova</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#000;overflow:hidden;font-family:'JetBrains Mono',monospace;color:#fff;touch-action:none}
+  body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px);mix-blend-mode:multiply}
+  body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.3))}
+  canvas{position:fixed;top:0;left:0;width:100vw;height:100vh;display:block;cursor:crosshair}
+
+  .hud{position:fixed;top:16px;left:20px;z-index:10;pointer-events:none}
+  .hud h1{font-family:'Cormorant Garamond',serif;font-size:11px;font-weight:300;letter-spacing:5px;color:rgba(255,255,255,0.18);text-transform:uppercase}
+  .hud .sub{font-size:8px;letter-spacing:2px;color:rgba(255,255,255,0.08);margin-top:3px;text-transform:uppercase}
+  .stats{position:fixed;top:16px;right:20px;z-index:10;pointer-events:none;font-size:9px;color:rgba(255,255,255,0.12);text-align:right;font-weight:300;line-height:1.6}
+
+  /* GPU warning */
+  .gpu-warn{
+    position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;
+    background:rgba(0,0,0,0.82);backdrop-filter:blur(16px);
+    border:1px solid rgba(255,200,50,0.12);border-radius:8px;
+    padding:24px 32px;max-width:380px;text-align:center;
+    opacity:1;transition:opacity 0.8s;pointer-events:auto;
+  }
+  .gpu-warn.hide{opacity:0;pointer-events:none}
+  .gpu-warn h2{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:14px;letter-spacing:3px;color:rgba(255,200,50,0.5);text-transform:uppercase;margin-bottom:10px}
+  .gpu-warn p{font-size:10px;line-height:1.7;color:rgba(255,255,255,0.35);letter-spacing:0.04em}
+  .gpu-warn .dismiss{
+    margin-top:16px;background:transparent;border:1px solid rgba(255,255,255,0.12);
+    color:rgba(255,255,255,0.3);font-family:'JetBrains Mono',monospace;
+    font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+    padding:6px 20px;cursor:pointer;border-radius:3px;transition:all 0.15s;
+  }
+  .gpu-warn .dismiss:hover{border-color:rgba(150,200,255,0.3);color:rgba(150,200,255,0.5)}
+
+  /* Bottom controls */
+  .ctrl-wrap{
+    position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;
+    background:rgba(0,0,0,0.55);backdrop-filter:blur(14px);
+    border:1px solid rgba(255,255,255,0.05);border-radius:10px;
+    padding:8px 14px;max-width:calc(100vw - 32px);
+  }
+  .ctrl-label{font-size:8px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.22);white-space:nowrap;user-select:none}
+  .ctrl-val{font-size:8px;font-weight:400;letter-spacing:1px;color:rgba(150,200,255,0.35);min-width:20px;text-align:right;user-select:none}
+  .ctrl-sep{width:1px;height:16px;background:rgba(255,255,255,0.06);flex-shrink:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:90px;height:3px;border-radius:2px;background:rgba(255,255,255,0.07);outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:#5a8cc0;border:2px solid rgba(0,0,0,0.4);box-shadow:0 0 8px rgba(90,140,192,0.2)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#5a8cc0;border:2px solid rgba(0,0,0,0.4)}
+  .toggle-btn{
+    background:transparent;border:1px solid rgba(255,255,255,0.12);
+    color:rgba(255,255,255,0.25);font-family:'JetBrains Mono',monospace;
+    font-size:8px;letter-spacing:1px;text-transform:uppercase;
+    padding:5px 10px;cursor:pointer;white-space:nowrap;transition:all 0.15s;border-radius:3px;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .toggle-btn:hover{border-color:rgba(150,200,255,0.3);color:rgba(150,200,255,0.5)}
+  .toggle-btn.on{border-color:rgba(100,200,100,0.3);color:rgba(100,200,100,0.5)}
+  .toggle-btn.off{border-color:rgba(255,80,80,0.2);color:rgba(255,80,80,0.35)}
+  .toggle-btn.mode{border-color:rgba(150,200,255,0.2);color:rgba(150,200,255,0.4)}
+
+  .hint{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:10;font-size:8px;color:rgba(255,255,255,0.08);letter-spacing:1.5px;pointer-events:none;text-transform:uppercase;transition:opacity 2s;white-space:nowrap}
+
+  .in-frame .hud{display:none!important}
+  .in-frame .gpu-warn{top:40%}
+
+  /* Mobile */
+  @media(max-width:600px){
+    .ctrl-wrap{padding:6px 10px;gap:6px;bottom:10px}
+    .toggle-btn{font-size:7px;padding:4px 7px}
+    .ctrl-label{font-size:7px}
+    .ctrl-val{font-size:7px}
+    input[type=range]{width:70px}
+    .ctrl-sep{height:14px}
+    .hud h1{font-size:9px;letter-spacing:3px}
+    .hud .sub{font-size:7px}
+    .stats{font-size:8px}
+    .hint{font-size:7px;bottom:52px}
+    .gpu-warn{padding:18px 22px;max-width:300px}
+    .gpu-warn h2{font-size:12px}
+    .gpu-warn p{font-size:9px}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="gpu-warn" id="gpuWarn">
+  <h2>GPU Intensive</h2>
+  <p>This page performs per-pixel Schwarzschild geodesic ray tracing on the GPU. Your device may run warm and fans may spin up. Performance varies by hardware.</p>
+  <button class="dismiss" onclick="dismissWarn()">Continue</button>
+</div>
+
+<div class="hud"><h1>Black Hole</h1><div class="sub">Schwarzschild Geodesic Ray Tracer</div></div>
+<div class="stats"><div id="fps"></div><div id="res"></div><div id="mode"></div></div>
+<div class="hint" id="hint">drag to orbit · scroll to zoom</div>
+
+<div class="ctrl-wrap" id="ctrlWrap" style="display:none">
+  <button class="toggle-btn on" id="btnGeodesic" onclick="toggleGeodesic()">Geodesic</button>
+  <button class="toggle-btn" id="btnRK4" onclick="toggleRK4()">RK4</button>
+  <div class="ctrl-sep"></div>
+  <button class="toggle-btn on" id="btnDisc" onclick="toggleDisc()">Disc</button>
+  <button class="toggle-btn mode" id="btnBg" onclick="cycleBg()">☆ Stars</button>
+  <div class="ctrl-sep"></div>
+  <span class="ctrl-label">Zoom</span>
+  <input type="range" id="zoomSlider" min="5" max="200" value="32">
+  <span class="ctrl-val" id="zoomVal">32</span>
+  <div class="ctrl-sep"></div>
+  <button class="toggle-btn" id="btnQLow" onclick="setQuality(0)">Low</button>
+  <button class="toggle-btn on" id="btnQMed" onclick="setQuality(1)">Med</button>
+  <button class="toggle-btn" id="btnQHigh" onclick="setQuality(2)">High</button>
+</div>
+
+<script>
+const VS=`#version 300 es
+in vec2 a_pos;
+void main(){gl_Position=vec4(a_pos,0,1);}`;
+
+const FS=`#version 300 es
+precision highp float;
+uniform vec2 u_res;
+uniform vec3 u_camPos,u_camFwd,u_camRight,u_camUp;
+uniform float u_focalLen,u_rs,u_discInner,u_discOuter;
+uniform float u_geodesicDl,u_maxSteps,u_escapeR;
+uniform float u_useGeodesic,u_useRK4,u_showDisc;
+uniform float u_bgMode;
+out vec4 fragColor;
+const float PI=3.141592653589793;
+
+float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
+vec2 hash22(vec2 p){return vec2(hash21(p+vec2(17.0,59.4)),hash21(p+vec2(63.1,12.8)));}
+vec2 bgUV(vec3 d){return vec2(atan(d.z,d.x)/(2.0*PI)+0.5,acos(clamp(d.y,-1.0,1.0))/PI);}
+
+// ── Stars + Milky Way ──
+vec3 sampleStars(vec3 dir){
+  vec2 skyUv=bgUV(dir);
+  vec3 col=vec3(0.012,0.016,0.032);
+  vec3 mwN=normalize(vec3(0.26,0.9,-0.34));
+  float pd=abs(dot(dir,mwN));
+  float mwB=exp(-pow(pd/0.17,2.0)),mwR=exp(-pow(pd/0.0238,2.0));
+  float mwNs=0.55+0.45*hash21(skyUv*vec2(220.0,110.0));
+  float mwS=mwB*mwNs*0.42,mwC=mwS*(0.45+1.25*mwB);
+  vec3 mwCol=mix(vec3(0.502,0.439,0.329),vec3(1.0,0.985,0.94),0.88);
+  float mwRS=mwR*(0.58+0.92*hash21(vec2(skyUv.x*460.0+13.0,skyUv.y*28.0+5.0)))*0.42;
+  col+=mwCol*mwS+vec3(1.0)*mwRS;
+  vec2 pUv=skyUv*vec2(720.0,360.0);vec2 pC=floor(pUv);
+  float pD=clamp(0.046+mwC*0.085,0.0,0.56);
+  for(int oy=-1;oy<=1;oy++)for(int ox=-1;ox<=1;ox++){
+    vec2 c=pC+vec2(float(ox),float(oy));float s=hash21(c);
+    if(s>1.0-pD){vec2 o=(hash22(c)-0.5)*0.7;float d=length(pUv-c-0.5-o);
+    float g=smoothstep(0.14,0.0,d);float ti=hash21(c+vec2(19.7,73.1));
+    vec3 sc=vec3(1.0);if(ti>0.9975)sc=vec3(1.0,0.58,0.42);else if(ti>0.985)sc=vec3(1.0,0.9,0.62);
+    col+=sc*g*(0.8+1.35*hash21(c+vec2(101.3,7.7))+mwC*3.2);}}
+  vec2 sUv=skyUv*vec2(1200.0,600.0);vec2 sC=floor(sUv);
+  float sD=clamp(0.022+mwC*0.05,0.0,0.44);
+  for(int oy=-1;oy<=1;oy++)for(int ox=-1;ox<=1;ox++){
+    vec2 c=sC+vec2(float(ox),float(oy));float s=hash21(c+vec2(211.0,503.0));
+    if(s>1.0-sD){vec2 o=(hash22(c+vec2(5.2,91.7))-0.5)*0.5;float d=length(sUv-c-0.5-o);
+    col+=vec3(1.0)*smoothstep(0.06,0.0,d)*(0.4+mwC*0.9);}}
+  vec2 bUv=skyUv*vec2(520.0,260.0);vec2 bC=floor(bUv);
+  float bD=clamp(mwC*0.32,0.0,0.24);
+  for(int oy=-1;oy<=1;oy++)for(int ox=-1;ox<=1;ox++){
+    vec2 c=bC+vec2(float(ox),float(oy));float s=hash21(c+vec2(401.0,887.0));
+    if(s>1.0-bD){vec2 o=(hash22(c+vec2(13.0,37.0))-0.5)*0.65;float d=length(bUv-c-0.5-o);
+    float g=smoothstep(0.18,0.0,d);float ti=hash21(c+vec2(97.0,31.0));
+    vec3 sc=vec3(1.0);if(ti>0.9985)sc=vec3(1.0,0.6,0.45);else if(ti>0.992)sc=vec3(1.0,0.9,0.68);
+    col+=sc*g*(1.25+mwC*5.5);}}
+  return clamp(col,vec3(0.0),vec3(1.0));
+}
+
+// ── Grid paper ──
+vec3 sampleGridBg(vec3 dir){
+  vec2 uv=bgUV(dir);
+  float lon=uv.x*360.0,lat=(1.0-uv.y)*180.0-90.0;
+  float lw=0.35,tw=0.7;
+  float lm5=mod(lon,5.0),am5=mod(lat+90.0,5.0);
+  float lm15=mod(lon,15.0),am15=mod(lat+90.0,15.0);
+  float lonL=1.0-smoothstep(0.0,lw,min(lm5,5.0-lm5));
+  float latL=1.0-smoothstep(0.0,lw,min(am5,5.0-am5));
+  float lonT=1.0-smoothstep(0.0,tw,min(lm15,15.0-lm15));
+  float latT=1.0-smoothstep(0.0,tw,min(am15,15.0-am15));
+  float eqL=1.0-smoothstep(0.0,1.2,abs(lat));
+  float pmL=1.0-smoothstep(0.0,1.2,min(lon,360.0-lon));
+  float thin=max(lonL,latL)*0.2,thick=max(lonT,latT)*0.45,special=max(eqL,pmL)*0.75;
+  float ck=mod(floor(lon/15.0)+floor((lat+90.0)/15.0),2.0);
+  vec3 bg=mix(vec3(0.015,0.02,0.035),vec3(0.025,0.03,0.048),ck);
+  vec3 col=bg;
+  col=mix(col,vec3(0.08,0.14,0.22),thin);
+  col=mix(col,vec3(0.16,0.28,0.44),thick);
+  col=mix(col,vec3(0.35,0.5,0.65),special);
+  return col;
+}
+
+// ── UV map ──
+vec3 sampleUVMap(vec3 dir){
+  vec2 uv=bgUV(dir);
+  vec3 grad=vec3(uv.x,uv.y,1.0-uv.x);
+  float ck=mod(floor(uv.x*36.0)+floor(uv.y*18.0),2.0);
+  vec3 col=grad*(0.55+0.45*ck);
+  float gu=fract(uv.x*36.0),gv=fract(uv.y*18.0);
+  float line=max(1.0-smoothstep(0.0,0.02,min(gu,1.0-gu)),1.0-smoothstep(0.0,0.02,min(gv,1.0-gv)));
+  col=mix(col,vec3(1.0),line*0.35);
+  col+=vec3(1.0,0.3,0.3)*smoothstep(0.05,0.0,acos(clamp(dir.y,-1.0,1.0)))*2.0;
+  col+=vec3(0.3,0.3,1.0)*smoothstep(0.05,0.0,acos(clamp(-dir.y,-1.0,1.0)))*2.0;
+  col+=vec3(0.2,0.4,0.2)*smoothstep(0.03,0.0,abs(dir.y))*0.5;
+  return clamp(col,vec3(0.0),vec3(1.0));
+}
+
+vec3 sampleBg(vec3 dir){
+  if(u_bgMode<0.5)return sampleStars(dir);
+  if(u_bgMode<1.5)return sampleGridBg(dir);
+  return sampleUVMap(dir);
+}
+
+// ── Disc ──
+vec3 sampleDisc(vec3 p){
+  float rd=length(p.xz);float t=clamp((rd-u_discInner)/(u_discOuter-u_discInner),0.0,1.0);
+  return clamp(mix(vec3(1.0,0.282,0.0),vec3(1.0,0.835,0.18),t)+vec3(0.11,0.024,0.0)*(1.0-t),vec3(0.0),vec3(1.0));
+}
+
+// ── Intersections ──
+struct Isect{bool hit;float dist;vec3 color;};
+Isect noHit(){return Isect(false,1e30,vec3(0.0));}
+Isect closest(Isect a,Isect b){if(!b.hit)return a;if(!a.hit||b.dist<a.dist)return b;return a;}
+
+Isect raySphere(vec3 ro,vec3 rd,vec3 c,float r,vec3 col){
+  vec3 oc=ro-c;float b=2.0*dot(oc,rd),cc=dot(oc,oc)-r*r,disc=b*b-4.0*cc;
+  if(disc<0.0)return noHit();float sq=sqrt(disc);
+  float t1=(-b-sq)*0.5,t2=(-b+sq)*0.5;
+  float t=t1>=0.0?t1:(t2>=0.0?t2:1e30);
+  if(t>=1e30)return noHit();return Isect(true,t,col);}
+
+Isect rayDisc(vec3 ro,vec3 rd){
+  if(u_showDisc<0.5||abs(rd.y)<1e-9)return noHit();
+  float t=-ro.y/rd.y;if(t<=0.0)return noHit();vec3 p=ro+rd*t;
+  float r=length(p.xz),bias=u_rs*0.1;
+  if(r<u_discInner+bias||r>u_discOuter)return noHit();
+  return Isect(true,t,sampleDisc(p));}
+
+Isect segSphere(vec3 s0,vec3 s1,vec3 c,float r,vec3 col){
+  vec3 seg=s1-s0;float sl=length(seg);if(sl<1e-9)return noHit();
+  vec3 d=seg/sl;vec3 oc=s0-c;float b=2.0*dot(oc,d),cc=dot(oc,oc)-r*r,disc=b*b-4.0*cc;
+  if(disc<0.0)return noHit();float sq=sqrt(disc);
+  float t1=(-b-sq)*0.5,t2=(-b+sq)*0.5,t=1e30;
+  if(t1>=0.0&&t1<=sl)t=t1;else if(t2>=0.0&&t2<=sl)t=t2;
+  if(t>=1e30)return noHit();return Isect(true,t,col);}
+
+Isect segDisc(vec3 s0,vec3 s1){
+  if(u_showDisc<0.5)return noHit();vec3 seg=s1-s0;
+  if(abs(seg.y)<1e-9)return noHit();float t=-s0.y/seg.y;
+  if(t<0.0||t>1.0)return noHit();vec3 p=s0+seg*t;
+  float r=length(p.xz),bias=u_rs*0.1;
+  if(r<u_discInner+bias||r>u_discOuter)return noHit();
+  return Isect(true,length(seg)*t,sampleDisc(p));}
+
+Isect traceRay(vec3 ro,vec3 rd,float bhR){
+  return closest(closest(noHit(),raySphere(ro,rd,vec3(0.0),bhR,vec3(0.0))),rayDisc(ro,rd));}
+Isect traceSeg(vec3 s0,vec3 s1,float bhR){
+  return closest(closest(noHit(),segSphere(s0,s1,vec3(0.0),bhR,vec3(0.0))),segDisc(s0,s1));}
+
+// ── Geodesic ──
+struct OrbPlane{vec3 radial;vec3 tangent;};
+OrbPlane buildOrbPlane(vec3 lo,vec3 dir){
+  vec3 rad=normalize(lo),nC=cross(lo,dir);
+  vec3 fb;if(abs(rad.y)>0.9)fb=vec3(1,0,0);else fb=vec3(0,1,0);
+  vec3 n;if(length(nC)<1e-6)n=normalize(cross(rad,fb));else n=normalize(nC);
+  return OrbPlane(rad,normalize(cross(n,rad)));}
+
+struct GRay{float r;float phi;float dr;float dphi;float E;};
+GRay initGRay(vec3 lo,vec3 dir,OrbPlane op,float rs,float capR){
+  float r=length(lo),dr=dot(dir,op.radial),dphi=dot(dir,op.tangent)/max(r,1e-9);
+  float rE=max(r,capR),f=1.0-rs/rE;
+  return GRay(r,0.0,dr,dphi,f*sqrt(dr*dr/(f*f)+rE*rE*dphi*dphi/f));}
+
+vec4 gRHS(GRay g,float rs,float capR){
+  float r=max(g.r,capR),f=1.0-rs/r,dtDl=g.E/f;
+  return vec4(g.dr,g.dphi,-(rs/(2.0*r*r))*f*dtDl*dtDl+(rs/(2.0*r*r*f))*g.dr*g.dr+(r-rs)*g.dphi*g.dphi,-2.0*g.dr*g.dphi/r);}
+
+GRay gApply(GRay g,vec4 k,float f){return GRay(g.r+k.x*f,g.phi+k.y*f,g.dr+k.z*f,g.dphi+k.w*f,g.E);}
+GRay stepEuler(GRay g,float dl,float rs,float capR){vec4 k=gRHS(g,rs,capR);return GRay(g.r+dl*k.x,g.phi+dl*k.y,g.dr+dl*k.z,g.dphi+dl*k.w,g.E);}
+GRay stepRK4(GRay g,float dl,float rs,float capR){
+  vec4 k1=gRHS(g,rs,capR),k2=gRHS(gApply(g,k1,dl*0.5),rs,capR);
+  vec4 k3=gRHS(gApply(g,k2,dl*0.5),rs,capR),k4=gRHS(gApply(g,k3,dl),rs,capR);
+  vec4 t=(k1+2.0*k2+2.0*k3+k4)/6.0;
+  return GRay(g.r+dl*t.x,g.phi+dl*t.y,g.dr+dl*t.z,g.dphi+dl*t.w,g.E);}
+
+vec3 wPoint(GRay g,OrbPlane op){return op.radial*(g.r*cos(g.phi))+op.tangent*(g.r*sin(g.phi));}
+vec3 wDir(GRay g,OrbPlane op){float cp=cos(g.phi),sp=sin(g.phi);
+  return normalize(op.radial*(g.dr*cp-g.r*g.dphi*sp)+op.tangent*(g.dr*sp+g.r*g.dphi*cp));}
+
+struct TR{bool hit;vec3 color;};
+
+TR traceStraight(vec3 ro,vec3 rd){
+  Isect h=traceRay(ro,rd,0.5*sqrt(27.0)*u_rs);
+  if(!h.hit)return TR(false,vec3(0.0));return TR(true,h.color);}
+
+TR traceGeodesic(vec3 ro,vec3 rd){
+  float capR=u_rs*1.035;
+  OrbPlane op=buildOrbPlane(ro,rd);
+  GRay g=initGRay(ro,rd,op,u_rs,capR);
+  float dl=u_geodesicDl;int maxS=int(u_maxSteps);
+  float escR=u_escapeR*u_rs;bool rk4=u_useRK4>0.5;
+  vec3 prev=ro;
+  for(int i=0;i<8192;i++){
+    if(i>=maxS)break;
+    if(g.r<=capR)return TR(true,vec3(0.0));
+    if(rk4){g=stepRK4(g,dl,u_rs,capR);}else{g=stepEuler(g,dl,u_rs,capR);}
+    if(g.r<=capR)return TR(true,vec3(0.0));
+    vec3 cur=wPoint(g,op);
+    Isect h=traceSeg(prev,cur,capR);
+    if(h.hit)return TR(true,h.color);
+    if(g.r>=escR&&i>8)return TR(false,sampleBg(wDir(g,op)));
+    prev=cur;
+  }
+  return TR(false,sampleBg(wDir(g,op)));
+}
+
+void main(){
+  vec2 uv=gl_FragCoord.xy/u_res;
+  float x=uv.x*u_res.x-u_res.x*0.5,y=(1.0-uv.y)*u_res.y-u_res.y*0.5;
+  vec3 rd=normalize(u_camRight*x+u_camUp*(-y)+u_camFwd*u_focalLen);
+  TR r;
+  if(u_useGeodesic>0.5){r=traceGeodesic(u_camPos,rd);}
+  else{r=traceStraight(u_camPos,rd);}
+  if(r.hit){fragColor=vec4(r.color,1.0);}
+  else if(u_useGeodesic>0.5){fragColor=vec4(r.color,1.0);}
+  else{fragColor=vec4(sampleBg(rd),1.0);}
+}
+`;
+
+// ═══════════════════════════════════════════════════════════════════
+//  SETUP
+// ═══════════════════════════════════════════════════════════════════
+const canvas=document.getElementById('c');
+const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
+if(!gl){document.body.innerHTML='<h1 style="color:red;padding:2em">WebGL 2 required</h1>';throw '';}
+function compile(src,type){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s));return null;}return s;}
+const vs=compile(VS,gl.VERTEX_SHADER),fs=compile(FS,gl.FRAGMENT_SHADER);
+const prog=gl.createProgram();gl.attachShader(prog,vs);gl.attachShader(prog,fs);
+gl.bindAttribLocation(prog,0,'a_pos');gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog,gl.LINK_STATUS))console.error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+
+const U={};
+['u_res','u_camPos','u_camFwd','u_camRight','u_camUp','u_focalLen','u_rs','u_discInner','u_discOuter',
+ 'u_geodesicDl','u_maxSteps','u_escapeR','u_useGeodesic','u_useRK4','u_showDisc','u_bgMode'
+].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+
+// ═══════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════
+const CC=2.99792458e8,GR=6.67430e-11,RS=2.0*GR*4.3e6*1.989e30/(CC*CC);
+let camYaw=0,camPitch=0.15,camRadius=32*RS;
+const FOCAL=700;
+let useGeodesic=true,useRK4=false,showDisc=true;
+let bgMode=0;
+const bgLabels=['☆ Stars','▦ Grid','◧ UV Map'];
+let geodesicDl=5e7*1.9*4.0,maxSteps=2048,escMul=35;
+let autoSpin=true;
+const SPIN_SPEED=0.0008;
+let warnDismissed=false;
+var spinTimer=null;
+const SPIN_RESUME_MS=4000;
+function pauseSpin(){
+  autoSpin=false;
+  if(spinTimer)clearTimeout(spinTimer);
+  spinTimer=setTimeout(function(){autoSpin=true;},SPIN_RESUME_MS);
+  document.getElementById('hint').style.opacity='0';
+}
+var qualitySteps=[512,2048,4096];
+var qualityLabels=['btnQLow','btnQMed','btnQHigh'];
+var currentQuality=1;
+window.setQuality=function(q){
+  currentQuality=q;maxSteps=qualitySteps[q];
+  qualityLabels.forEach(function(id,i){
+    var el=document.getElementById(id);
+    el.classList.toggle('on',i===q);el.classList.toggle('off',false);
+  });
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  GPU WARNING
+// ═══════════════════════════════════════════════════════════════════
+window.dismissWarn=function(){
+  document.getElementById('gpuWarn').classList.add('hide');
+  document.getElementById('ctrlWrap').style.display='flex';
+  warnDismissed=true;
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  INPUT
+// ═══════════════════════════════════════════════════════════════════
+let dragging=false,lmx=0,lmy=0;
+
+canvas.addEventListener('mousedown',function(e){dragging=true;lmx=e.clientX;lmy=e.clientY;pauseSpin();});
+window.addEventListener('mouseup',function(){dragging=false;});
+window.addEventListener('mousemove',function(e){if(!dragging)return;
+  camYaw-=(e.clientX-lmx)*0.005;camPitch-=(e.clientY-lmy)*0.005;
+  camPitch=Math.max(-Math.PI*0.49,Math.min(Math.PI*0.49,camPitch));
+  lmx=e.clientX;lmy=e.clientY;});
+
+// Touch
+canvas.addEventListener('touchstart',function(e){
+  e.preventDefault();pauseSpin();
+  if(e.touches.length===1){dragging=true;lmx=e.touches[0].clientX;lmy=e.touches[0].clientY;}
+  if(e.touches.length===2){dragging=false;pinchDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}
+},{passive:false});
+var pinchDist=0;
+canvas.addEventListener('touchmove',function(e){
+  e.preventDefault();
+  if(e.touches.length===1&&dragging){
+    var t=e.touches[0];
+    camYaw-=(t.clientX-lmx)*0.005;camPitch-=(t.clientY-lmy)*0.005;
+    camPitch=Math.max(-Math.PI*0.49,Math.min(Math.PI*0.49,camPitch));
+    lmx=t.clientX;lmy=t.clientY;
+  }
+  if(e.touches.length===2){
+    var nd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    var ratio=pinchDist/nd;
+    camRadius*=ratio;camRadius=Math.max(RS*5,Math.min(RS*200,camRadius));
+    document.getElementById('zoomSlider').value=Math.round(camRadius/RS);
+    document.getElementById('zoomVal').textContent=Math.round(camRadius/RS);
+    pinchDist=nd;
+  }
+},{passive:false});
+canvas.addEventListener('touchend',function(){dragging=false;});
+
+canvas.addEventListener('wheel',function(e){e.preventDefault();pauseSpin();
+  camRadius*=e.deltaY>0?1.08:0.92;camRadius=Math.max(RS*5,Math.min(RS*200,camRadius));
+  document.getElementById('zoomSlider').value=Math.round(camRadius/RS);
+  document.getElementById('zoomVal').textContent=Math.round(camRadius/RS);},{passive:false});
+
+window.addEventListener('keydown',function(e){var s=0.05;pauseSpin();
+  if(e.key==='ArrowLeft')camYaw+=s;if(e.key==='ArrowRight')camYaw-=s;
+  if(e.key==='ArrowUp')camPitch=Math.min(camPitch+s,Math.PI*0.49);
+  if(e.key==='ArrowDown')camPitch=Math.max(camPitch-s,-Math.PI*0.49);});
+
+document.getElementById('zoomSlider').addEventListener('input',function(){
+  camRadius=this.value*RS;document.getElementById('zoomVal').textContent=this.value;});
+
+function setBtn(id,on){var el=document.getElementById(id);el.classList.toggle('on',on);el.classList.toggle('off',!on);}
+window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',useGeodesic);};
+window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);};
+window.toggleDisc=function(){showDisc=!showDisc;setBtn('btnDisc',showDisc);};
+window.cycleBg=function(){bgMode=(bgMode+1)%3;document.getElementById('btnBg').textContent=bgLabels[bgMode];};
+
+// ═══════════════════════════════════════════════════════════════════
+//  RESIZE
+// ═══════════════════════════════════════════════════════════════════
+function resize(){
+  var dpr=Math.min(window.devicePixelRatio||1,2);
+  var isMobile=window.innerWidth<600;
+  var scale=isMobile?0.25:0.4;
+  canvas.width=Math.floor(window.innerWidth*dpr*scale);
+  canvas.height=Math.floor(window.innerHeight*dpr*scale);
+  gl.viewport(0,0,canvas.width,canvas.height);
+  document.getElementById('res').textContent=canvas.width+'×'+canvas.height;
+}
+window.addEventListener('resize',resize);resize();
+
+// ═══════════════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════════════
+var frames=0,lastT=performance.now();
+function frame(){
+  var now=performance.now();frames++;
+  if(now-lastT>500){document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';frames=0;lastT=now;}
+
+  // Auto-spin
+  if(autoSpin) camYaw-=SPIN_SPEED;
+
+  var cx=camRadius*Math.cos(camPitch)*Math.cos(camYaw),cy=camRadius*Math.sin(camPitch),cz=camRadius*Math.cos(camPitch)*Math.sin(camYaw);
+  var fl=Math.sqrt(cx*cx+cy*cy+cz*cz),fwd=[-cx/fl,-cy/fl,-cz/fl];
+  var rl=Math.sqrt(fwd[2]*fwd[2]+fwd[0]*fwd[0]);
+  var right=rl>1e-6?[fwd[2]/rl,0,-fwd[0]/rl]:[1,0,0];
+  var up=[fwd[1]*right[2]-fwd[2]*right[1],fwd[2]*right[0]-fwd[0]*right[2],fwd[0]*right[1]-fwd[1]*right[0]];
+  var scaleR=camRadius/(32*RS),dl=geodesicDl*scaleR,steps=Math.max(1,Math.round(maxSteps*scaleR)),escR=escMul*scaleR;
+  document.getElementById('mode').textContent=useGeodesic?(useRK4?'Geodesic (RK4)':'Geodesic (Euler)'):'Straight rays';
+
+  gl.uniform2f(U.u_res,canvas.width,canvas.height);
+  gl.uniform3f(U.u_camPos,cx,cy,cz);gl.uniform3f(U.u_camFwd,fwd[0],fwd[1],fwd[2]);
+  gl.uniform3f(U.u_camRight,right[0],right[1],right[2]);gl.uniform3f(U.u_camUp,up[0],up[1],up[2]);
+  gl.uniform1f(U.u_focalLen,FOCAL);gl.uniform1f(U.u_rs,RS);
+  gl.uniform1f(U.u_discInner,3.0*RS);gl.uniform1f(U.u_discOuter,5.1*RS);
+  gl.uniform1f(U.u_geodesicDl,dl);gl.uniform1f(U.u_maxSteps,steps);gl.uniform1f(U.u_escapeR,escR);
+  gl.uniform1f(U.u_useGeodesic,useGeodesic?1:0);gl.uniform1f(U.u_useRK4,useRK4?1:0);
+  gl.uniform1f(U.u_showDisc,showDisc?1:0);gl.uniform1f(U.u_bgMode,bgMode);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  requestAnimationFrame(frame);
+}
+
+if(window.self!==window.top)document.body.classList.add('in-frame');
+frame();
+</script>
+</body>
+</html>
