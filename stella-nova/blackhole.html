@@ -15,7 +15,7 @@
   .hud{position:fixed;top:16px;left:20px;z-index:10;pointer-events:none}
   .hud h1{font-family:'Cormorant Garamond',serif;font-size:11px;font-weight:300;letter-spacing:5px;color:rgba(255,255,255,0.18);text-transform:uppercase}
   .hud .sub{font-size:8px;letter-spacing:2px;color:rgba(255,255,255,0.08);margin-top:3px;text-transform:uppercase}
-  .stats{position:fixed;top:16px;right:20px;z-index:10;pointer-events:none;font-size:9px;color:rgba(255,255,255,0.12);text-align:right;font-weight:300;line-height:1.6}
+  .stats{position:fixed;top:82px;right:20px;z-index:10;pointer-events:none;font-size:9px;color:rgba(255,255,255,0.12);text-align:right;font-weight:300;line-height:1.6}
 
   /* GPU warning */
   .gpu-warn{
@@ -62,6 +62,48 @@
   .toggle-btn.off{border-color:rgba(255,80,80,0.2);color:rgba(255,80,80,0.35)}
   .toggle-btn.mode{border-color:rgba(150,200,255,0.2);color:rgba(150,200,255,0.4)}
 
+  /* Background mode icons — top right */
+  .bg-bar{
+    position:fixed;top:16px;right:20px;z-index:10;
+    display:flex;gap:8px;
+  }
+  .bg-icon{
+    width:56px;height:56px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    background:rgba(0,0,0,0.5);backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,0.08);border-radius:8px;
+    cursor:pointer;transition:all 0.18s;
+    -webkit-tap-highlight-color:transparent;
+    user-select:none;
+  }
+  .bg-icon:hover{border-color:rgba(150,200,255,0.25);background:rgba(0,0,0,0.6)}
+  .bg-icon.active{border-color:rgba(150,200,255,0.4);background:rgba(150,200,255,0.08)}
+  .bg-icon .ico{font-size:18px;line-height:1;color:rgba(255,255,255,0.25);transition:color 0.18s}
+  .bg-icon.active .ico{color:rgba(150,200,255,0.7)}
+  .bg-icon .lbl{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:0.8px;text-transform:uppercase;color:rgba(255,255,255,0.15);transition:color 0.18s}
+  .bg-icon.active .lbl{color:rgba(150,200,255,0.5)}
+
+  /* Stars icon: warm gold active */
+  .bg-icon.bg-stars.active{border-color:rgba(255,200,100,0.35);background:rgba(255,200,100,0.06)}
+  .bg-icon.bg-stars.active .ico{color:rgba(255,210,120,0.7)}
+  .bg-icon.bg-stars.active .lbl{color:rgba(255,200,100,0.45)}
+  /* Grid icon: cool blue active */
+  .bg-icon.bg-grid.active{border-color:rgba(100,180,255,0.35);background:rgba(100,180,255,0.06)}
+  .bg-icon.bg-grid.active .ico{color:rgba(120,190,255,0.7)}
+  .bg-icon.bg-grid.active .lbl{color:rgba(100,180,255,0.45)}
+  /* UV icon: multicolor active */
+  .bg-icon.bg-uv.active{border-color:rgba(255,100,200,0.3);background:rgba(255,100,200,0.05)}
+  .bg-icon.bg-uv.active .ico{color:rgba(255,130,200,0.7)}
+  .bg-icon.bg-uv.active .lbl{color:rgba(255,100,200,0.45)}
+  /* Nebula icon: purple/pink active */
+  .bg-icon.bg-nebula.active{border-color:rgba(180,100,255,0.35);background:rgba(180,100,255,0.06)}
+  .bg-icon.bg-nebula.active .ico{color:rgba(200,130,255,0.7)}
+  .bg-icon.bg-nebula.active .lbl{color:rgba(180,100,255,0.45)}
+  /* Bullseye icon: warm orange active */
+  .bg-icon.bg-rings.active{border-color:rgba(255,160,60,0.35);background:rgba(255,160,60,0.06)}
+  .bg-icon.bg-rings.active .ico{color:rgba(255,180,80,0.7)}
+  .bg-icon.bg-rings.active .lbl{color:rgba(255,160,60,0.45)}
+
   .hint{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:10;font-size:8px;color:rgba(255,255,255,0.08);letter-spacing:1.5px;pointer-events:none;text-transform:uppercase;transition:opacity 2s;white-space:nowrap}
 
   .in-frame .hud{display:none!important}
@@ -77,11 +119,15 @@
     .ctrl-sep{height:14px}
     .hud h1{font-size:9px;letter-spacing:3px}
     .hud .sub{font-size:7px}
-    .stats{font-size:8px}
+    .stats{font-size:8px;top:70px}
     .hint{font-size:7px;bottom:52px}
     .gpu-warn{padding:18px 22px;max-width:300px}
     .gpu-warn h2{font-size:12px}
     .gpu-warn p{font-size:9px}
+    .bg-bar{top:12px;right:12px;gap:6px}
+    .bg-icon{width:44px;height:44px;border-radius:6px}
+    .bg-icon .ico{font-size:14px}
+    .bg-icon .lbl{font-size:6px}
   }
 </style>
 </head>
@@ -98,12 +144,35 @@
 <div class="stats"><div id="fps"></div><div id="res"></div><div id="mode"></div></div>
 <div class="hint" id="hint">drag to orbit · scroll to zoom</div>
 
+<div class="bg-bar" id="bgBar" style="display:none">
+  <div class="bg-icon bg-stars active" id="bgStars" onclick="setBg(0)">
+    <span class="ico">✦</span>
+    <span class="lbl">Stars</span>
+  </div>
+  <div class="bg-icon bg-grid" id="bgGrid" onclick="setBg(1)">
+    <span class="ico">▦</span>
+    <span class="lbl">Grid</span>
+  </div>
+  <div class="bg-icon bg-uv" id="bgUV" onclick="setBg(2)">
+    <span class="ico">◧</span>
+    <span class="lbl">UV</span>
+  </div>
+  <div class="bg-icon bg-nebula" id="bgNebula" onclick="setBg(3)">
+    <span class="ico">☁</span>
+    <span class="lbl">Nebula</span>
+  </div>
+  <div class="bg-icon bg-rings" id="bgRings" onclick="setBg(4)">
+    <span class="ico">◎</span>
+    <span class="lbl">Rings</span>
+  </div>
+</div>
+
 <div class="ctrl-wrap" id="ctrlWrap" style="display:none">
   <button class="toggle-btn on" id="btnGeodesic" onclick="toggleGeodesic()">Geodesic</button>
   <button class="toggle-btn" id="btnRK4" onclick="toggleRK4()">RK4</button>
   <div class="ctrl-sep"></div>
   <button class="toggle-btn on" id="btnDisc" onclick="toggleDisc()">Disc</button>
-  <button class="toggle-btn mode" id="btnBg" onclick="cycleBg()">☆ Stars</button>
+  <button class="toggle-btn on" id="btnSpin" onclick="toggleSpin()">⟳ Spin</button>
   <div class="ctrl-sep"></div>
   <span class="ctrl-label">Zoom</span>
   <input type="range" id="zoomSlider" min="5" max="200" value="32">
@@ -197,22 +266,130 @@ vec3 sampleGridBg(vec3 dir){
 // ── UV map ──
 vec3 sampleUVMap(vec3 dir){
   vec2 uv=bgUV(dir);
-  vec3 grad=vec3(uv.x,uv.y,1.0-uv.x);
-  float ck=mod(floor(uv.x*36.0)+floor(uv.y*18.0),2.0);
-  vec3 col=grad*(0.55+0.45*ck);
-  float gu=fract(uv.x*36.0),gv=fract(uv.y*18.0);
-  float line=max(1.0-smoothstep(0.0,0.02,min(gu,1.0-gu)),1.0-smoothstep(0.0,0.02,min(gv,1.0-gv)));
-  col=mix(col,vec3(1.0),line*0.35);
-  col+=vec3(1.0,0.3,0.3)*smoothstep(0.05,0.0,acos(clamp(dir.y,-1.0,1.0)))*2.0;
-  col+=vec3(0.3,0.3,1.0)*smoothstep(0.05,0.0,acos(clamp(-dir.y,-1.0,1.0)))*2.0;
-  col+=vec3(0.2,0.4,0.2)*smoothstep(0.03,0.0,abs(dir.y))*0.5;
+  // Bold per-cell coloring — 6 columns × 3 rows of saturated hues
+  float cu=floor(uv.x*6.0),cv=floor(uv.y*3.0);
+  float hue=mod(cu+cv*2.0,6.0);
+  vec3 cellCol;
+  if(hue<1.0)      cellCol=vec3(0.9,0.15,0.1);  // red
+  else if(hue<2.0) cellCol=vec3(0.1,0.8,0.2);   // green
+  else if(hue<3.0) cellCol=vec3(0.15,0.3,0.95);  // blue
+  else if(hue<4.0) cellCol=vec3(0.95,0.85,0.1);  // yellow
+  else if(hue<5.0) cellCol=vec3(0.85,0.15,0.85); // magenta
+  else             cellCol=vec3(0.1,0.85,0.9);   // cyan
+  // Fine checker within each cell — 36x18 total tiles
+  float fineCheck=mod(floor(uv.x*36.0)+floor(uv.y*18.0),2.0);
+  vec3 col=cellCol*(0.5+0.5*fineCheck);
+  // UV gradient tint blended on top
+  col=mix(col, vec3(uv.x,uv.y,1.0-uv.x), 0.15);
+  // Grid lines — thick at cell boundaries, thin at tile boundaries
+  float gu6=fract(uv.x*6.0),gv3=fract(uv.y*3.0);
+  float thickLine=max(1.0-smoothstep(0.0,0.015,min(gu6,1.0-gu6)),1.0-smoothstep(0.0,0.015,min(gv3,1.0-gv3)));
+  float gu36=fract(uv.x*36.0),gv18=fract(uv.y*18.0);
+  float thinLine=max(1.0-smoothstep(0.0,0.02,min(gu36,1.0-gu36)),1.0-smoothstep(0.0,0.02,min(gv18,1.0-gv18)));
+  col=mix(col,vec3(0.0),thinLine*0.3);
+  col=mix(col,vec3(1.0),thickLine*0.7);
+  // Pole markers
+  col+=vec3(1.0,1.0,1.0)*smoothstep(0.06,0.0,acos(clamp(dir.y,-1.0,1.0)))*3.0;
+  col+=vec3(1.0,1.0,1.0)*smoothstep(0.06,0.0,acos(clamp(-dir.y,-1.0,1.0)))*3.0;
+  // Equator
+  col+=vec3(1.0)*smoothstep(0.015,0.0,abs(dir.y))*0.6;
+  return clamp(col,vec3(0.0),vec3(1.0));
+}
+
+// ── Nebula ──
+vec3 sampleNebula(vec3 dir){
+  vec2 uv=bgUV(dir);
+  // FBM noise
+  float n=0.0,amp=1.0,freq=3.0;
+  vec2 p=uv*vec2(6.0,3.0);
+  for(int i=0;i<6;i++){
+    float h=hash21(floor(p*freq));
+    vec2 f=fract(p*freq);
+    float a=h,b=hash21(floor(p*freq)+vec2(1,0)),c=hash21(floor(p*freq)+vec2(0,1)),d=hash21(floor(p*freq)+vec2(1,1));
+    vec2 u=f*f*(3.0-2.0*f);
+    float v=mix(mix(a,b,u.x),mix(c,d,u.x),u.y);
+    n+=v*amp;
+    amp*=0.5;freq*=2.1;
+  }
+  n=n/1.98;
+  // Color ramps — emission nebula palette
+  float r1=smoothstep(0.25,0.65,n);
+  float r2=smoothstep(0.4,0.8,n);
+  float r3=smoothstep(0.55,0.9,n);
+  vec3 deep=vec3(0.02,0.01,0.06);
+  vec3 purple=vec3(0.25,0.05,0.35);
+  vec3 pink=vec3(0.7,0.15,0.3);
+  vec3 teal=vec3(0.05,0.35,0.45);
+  vec3 gold=vec3(0.9,0.7,0.2);
+  // Layer them
+  float band1=sin(uv.y*8.0+uv.x*3.0+n*4.0)*0.5+0.5;
+  float band2=cos(uv.x*5.0-uv.y*7.0+n*3.0)*0.5+0.5;
+  vec3 col=deep;
+  col=mix(col,purple,r1*band1);
+  col=mix(col,teal,r1*(1.0-band1)*0.7);
+  col=mix(col,pink,r2*band2*0.8);
+  col=mix(col,gold,r3*0.3);
+  // Bright embedded stars
+  vec2 sUv=uv*vec2(800.0,400.0);
+  vec2 sC=floor(sUv);
+  float sd=hash21(sC+vec2(77.0,133.0));
+  if(sd>0.97){
+    vec2 so=(hash22(sC)-0.5)*0.6;
+    float d=length(fract(sUv)-0.5-so);
+    float glow=smoothstep(0.08,0.0,d);
+    float bright=2.0+hash21(sC+vec2(41.0,99.0))*3.0;
+    col+=vec3(1.0,0.9,0.8)*glow*bright;
+  }
+  // Dust lanes — dark absorption
+  float dust=smoothstep(0.35,0.5,sin(uv.x*12.0+n*6.0)*0.5+0.5);
+  col*=mix(1.0,0.3,dust*smoothstep(0.3,0.6,n));
+  return clamp(col,vec3(0.0),vec3(1.0));
+}
+
+// ── Bullseye rings ──
+vec3 sampleRings(vec3 dir){
+  // Angular distance from a point behind the camera (anti-camera direction)
+  float theta=acos(clamp(-dir.z,-1.0,1.0));
+  float phi=atan(dir.y,dir.x);
+  // Concentric rings based on theta
+  float ringFreq=28.0;
+  float ring=theta*ringFreq;
+  float band=floor(ring);
+  float frac=fract(ring);
+  // Alternating saturated colors per ring
+  float hue=mod(band,7.0);
+  vec3 ringCol;
+  if(hue<1.0)      ringCol=vec3(1.0,0.2,0.15);
+  else if(hue<2.0) ringCol=vec3(1.0,0.6,0.05);
+  else if(hue<3.0) ringCol=vec3(1.0,0.95,0.15);
+  else if(hue<4.0) ringCol=vec3(0.15,0.9,0.3);
+  else if(hue<5.0) ringCol=vec3(0.15,0.5,1.0);
+  else if(hue<6.0) ringCol=vec3(0.5,0.15,0.9);
+  else             ringCol=vec3(0.9,0.15,0.6);
+  // Brightness modulation — lighter/darker alternation within color
+  float alt=mod(band,2.0);
+  vec3 col=ringCol*(0.6+0.4*alt);
+  // Radial spokes every 15 degrees
+  float spoke=mod(phi*180.0/PI,15.0);
+  float spokeLine=1.0-smoothstep(0.0,0.5,min(spoke,15.0-spoke));
+  col=mix(col,vec3(0.0),spokeLine*0.25);
+  // Ring edge lines
+  float edgeLine=1.0-smoothstep(0.0,0.08,min(frac,1.0-frac));
+  col=mix(col,vec3(0.0),edgeLine*0.4);
+  // Center bullseye glow
+  float centerDist=theta/PI;
+  col+=vec3(1.0)*smoothstep(0.03,0.0,centerDist)*2.0;
+  // Anti-center marker
+  col+=vec3(0.5,0.5,1.0)*smoothstep(0.03,0.0,abs(centerDist-1.0))*1.5;
   return clamp(col,vec3(0.0),vec3(1.0));
 }
 
 vec3 sampleBg(vec3 dir){
   if(u_bgMode<0.5)return sampleStars(dir);
   if(u_bgMode<1.5)return sampleGridBg(dir);
-  return sampleUVMap(dir);
+  if(u_bgMode<2.5)return sampleUVMap(dir);
+  if(u_bgMode<3.5)return sampleNebula(dir);
+  return sampleRings(dir);
 }
 
 // ── Disc ──
@@ -361,19 +538,29 @@ let camYaw=0,camPitch=0.15,camRadius=32*RS;
 const FOCAL=700;
 let useGeodesic=true,useRK4=false,showDisc=true;
 let bgMode=0;
-const bgLabels=['☆ Stars','▦ Grid','◧ UV Map'];
 let geodesicDl=5e7*1.9*4.0,maxSteps=2048,escMul=35;
 let autoSpin=true;
 const SPIN_SPEED=0.0008;
 let warnDismissed=false;
 var spinTimer=null;
+var spinEnabled=true;
 const SPIN_RESUME_MS=4000;
 function pauseSpin(){
   autoSpin=false;
   if(spinTimer)clearTimeout(spinTimer);
-  spinTimer=setTimeout(function(){autoSpin=true;},SPIN_RESUME_MS);
+  if(spinEnabled){
+    spinTimer=setTimeout(function(){autoSpin=true;},SPIN_RESUME_MS);
+  }
   document.getElementById('hint').style.opacity='0';
 }
+window.toggleSpin=function(){
+  spinEnabled=!spinEnabled;
+  var el=document.getElementById('btnSpin');
+  el.classList.toggle('on',spinEnabled);
+  el.classList.toggle('off',!spinEnabled);
+  if(spinEnabled){autoSpin=true;}
+  else{autoSpin=false;if(spinTimer){clearTimeout(spinTimer);spinTimer=null;}}
+};
 var qualitySteps=[512,2048,4096];
 var qualityLabels=['btnQLow','btnQMed','btnQHigh'];
 var currentQuality=1;
@@ -391,6 +578,7 @@ window.setQuality=function(q){
 window.dismissWarn=function(){
   document.getElementById('gpuWarn').classList.add('hide');
   document.getElementById('ctrlWrap').style.display='flex';
+  document.getElementById('bgBar').style.display='flex';
   warnDismissed=true;
 };
 
@@ -449,7 +637,14 @@ function setBtn(id,on){var el=document.getElementById(id);el.classList.toggle('o
 window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',useGeodesic);};
 window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);};
 window.toggleDisc=function(){showDisc=!showDisc;setBtn('btnDisc',showDisc);};
-window.cycleBg=function(){bgMode=(bgMode+1)%3;document.getElementById('btnBg').textContent=bgLabels[bgMode];};
+window.setBg=function(m){
+  bgMode=m;
+  document.getElementById('bgStars').classList.toggle('active',m===0);
+  document.getElementById('bgGrid').classList.toggle('active',m===1);
+  document.getElementById('bgUV').classList.toggle('active',m===2);
+  document.getElementById('bgNebula').classList.toggle('active',m===3);
+  document.getElementById('bgRings').classList.toggle('active',m===4);
+};
 
 // ═══════════════════════════════════════════════════════════════════
 //  RESIZE
