@@ -24,15 +24,7 @@
   };
   var XR_PAGES = { orbital: 1 };
 
-  function detectBasePath(){
-    var s = document.getElementsByTagName('script');
-    for (var i=0;i<s.length;i++){
-      var src = s[i].getAttribute('src') || '';
-      if (src.indexOf('router.js') !== -1) return src.replace(/router\.js.*$/, '');
-    }
-    return '/stella-nova/';
-  }
-  var BASE_PATH = detectBasePath();
+  var BASE_PATH = '/stella-nova/';
   var activeTab = null, suppressURLWrite = false;
 
   function urlForTab(id){ return id === 'home' ? BASE_PATH : BASE_PATH + id; }
