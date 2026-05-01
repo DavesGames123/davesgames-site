@@ -2,153 +2,1174 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>For Tom — Stella Nova</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<title>ASTROTECHS — Operational Overview</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
-:root {
-  --bg:        #0a0c11;
-  --bg2:       #0e1118;
-  --border:    rgba(150,200,255,0.07);
-  --border-b:  rgba(150,200,255,0.16);
-  --teal:      #64dcc8;
-  --teal-dim:  #40a090;
-  --text:      #c0cfe0;
-  --text-dim:  #5a7090;
-  --text-faint:#2a3850;
+:root{
+  --bg:#040814; --bg-elev:#0a1326; --bg-deep:#02050d;
+  --cyan:#5be6e6; --cyan-mid:#2a8a8a; --cyan-dim:#18484a;
+  --magenta:#ff3d8b; --magenta-dim:#7a1d44;
+  --amber:#ffb000; --amber-dim:#6a4a00;
+  --phos:#39ff7a; --phos-dim:#1f8a3f;
+  --red:#ff5a5a;
+  --text:#cfe4f5; --text-dim:#6b8aa8; --text-faint:#3a5570;
+  --rule:rgba(91,230,230,0.18);
+  --bloom-cyan:0 0 12px rgba(91,230,230,0.45);
+  --bloom-cyan-soft:0 0 6px rgba(91,230,230,0.28);
+  --bloom-magenta:0 0 14px rgba(255,61,139,0.55);
+  --bloom-magenta-soft:0 0 6px rgba(255,61,139,0.3);
+  --bloom-amber:0 0 10px rgba(255,176,0,0.4);
+  --bloom-phos:0 0 8px rgba(57,255,122,0.5);
 }
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body {
-  width: 100%; min-height: 100%;
-  background: var(--bg);
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--text);
-  -webkit-font-smoothing: antialiased;
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'Space Grotesk',system-ui,sans-serif;font-size:15px;line-height:1.55;}
+body{
+  background:radial-gradient(ellipse at top, rgba(255,61,139,0.07), transparent 60%),
+    radial-gradient(ellipse at bottom right, rgba(91,230,230,0.06), transparent 50%),var(--bg);
+  min-height:100vh;position:relative;
 }
-body::after {
-  content: '';
-  position: fixed; inset: 0; z-index: 9999;
-  pointer-events: none;
-  background: repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.05) 4px);
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;
+  background-image:linear-gradient(rgba(91,230,230,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(91,230,230,0.035) 1px,transparent 1px);
+  background-size:48px 48px;}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:2;
+  background:repeating-linear-gradient(to bottom,rgba(0,0,0,0) 0,rgba(0,0,0,0) 3px,rgba(0,0,0,0.05) 3px,rgba(0,0,0,0.05) 4px);
+  mix-blend-mode:multiply;}
+.page{position:relative;z-index:3;}
+svg .bloom{filter:drop-shadow(0 0 4px currentColor);}
+
+/* ---------- ANIMATIONS ---------- */
+@keyframes spin{from{transform:rotate(0);}to{transform:rotate(360deg);}}
+@keyframes spin-rev{from{transform:rotate(0);}to{transform:rotate(-360deg);}}
+@keyframes soft-pulse{0%,100%{opacity:1;}50%{opacity:0.5;}}
+@keyframes pulse-bright{0%,100%{opacity:0.4;}50%{opacity:1;}}
+@keyframes scan{0%{transform:translateY(0);}100%{transform:translateY(100%);}}
+@keyframes bar-pulse{0%,100%{height:30%;}50%{height:90%;}}
+@keyframes blip{0%{r:2;opacity:1;}100%{r:18;opacity:0;}}
+@keyframes wobble{0%,100%{transform:rotate(-15deg);}50%{transform:rotate(15deg);}}
+@keyframes hum{0%,100%{transform:translateY(0);}50%{transform:translateY(-1px);}}
+@keyframes flow-dash{to{stroke-dashoffset:-100;}}
+@keyframes glow-cycle{0%,100%{filter:drop-shadow(0 0 3px currentColor);}50%{filter:drop-shadow(0 0 8px currentColor);}}
+
+/* ============================================================
+   SHIP CHROME — DIALS / GAUGES / BUTTONS / READOUTS
+   ============================================================ */
+
+/* Spinning radar dial */
+.dial{display:inline-block;width:42px;height:42px;position:relative;flex-shrink:0;}
+.dial svg{width:100%;height:100%;}
+.dial .sweep{transform-origin:center;animation:spin 4s linear infinite;}
+.dial.slow .sweep{animation-duration:8s;}
+.dial.fast .sweep{animation:spin 1.8s linear infinite;}
+.dial.rev .sweep{animation:spin-rev 5s linear infinite;}
+
+/* Gauge — semicircular needle */
+.gauge{display:inline-block;width:90px;height:54px;position:relative;flex-shrink:0;}
+.gauge svg{width:100%;height:100%;overflow:visible;}
+.gauge .needle{transform-origin:50px 50px;animation:wobble 3s ease-in-out infinite;}
+.gauge.slow .needle{animation-duration:6s;}
+.gauge .lbl{position:absolute;left:0;right:0;bottom:-4px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.18em;color:var(--text-dim);text-transform:uppercase;}
+
+/* Pulse button */
+.btn-pulse{
+  width:24px;height:24px;border-radius:50%;
+  background:radial-gradient(circle,var(--magenta) 0%,var(--magenta-dim) 70%,transparent 100%);
+  position:relative;flex-shrink:0;animation:pulse-bright 1.6s ease-in-out infinite;
+  box-shadow:var(--bloom-magenta);
 }
-main {
-  max-width: 880px;
-  margin: 0 auto;
-  padding: 64px 32px 96px;
+.btn-pulse.cyan{background:radial-gradient(circle,var(--cyan) 0%,var(--cyan-dim) 70%,transparent 100%);box-shadow:var(--bloom-cyan);}
+.btn-pulse.amber{background:radial-gradient(circle,var(--amber) 0%,var(--amber-dim) 70%,transparent 100%);box-shadow:var(--bloom-amber);}
+.btn-pulse.phos{background:radial-gradient(circle,var(--phos) 0%,var(--phos-dim) 70%,transparent 100%);box-shadow:var(--bloom-phos);}
+
+/* Equalizer bars */
+.eq{display:inline-flex;gap:2px;align-items:flex-end;height:24px;flex-shrink:0;}
+.eq i{display:block;width:3px;background:var(--cyan);box-shadow:var(--bloom-cyan-soft);animation:bar-pulse 0.9s ease-in-out infinite;}
+.eq i:nth-child(1){animation-delay:0s;}
+.eq i:nth-child(2){animation-delay:0.15s;}
+.eq i:nth-child(3){animation-delay:0.3s;}
+.eq i:nth-child(4){animation-delay:0.45s;}
+.eq i:nth-child(5){animation-delay:0.6s;}
+.eq.magenta i{background:var(--magenta);box-shadow:var(--bloom-magenta-soft);}
+
+/* Scanner bar */
+.scanner{
+  position:relative;height:6px;background:rgba(91,230,230,0.06);
+  border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+  overflow:hidden;
 }
-.kicker {
-  font-size: 0.7rem;
-  letter-spacing: 0.32em;
-  color: var(--teal);
-  text-transform: uppercase;
-  margin-bottom: 18px;
-  display: flex; align-items: center; gap: 10px;
+.scanner::after{
+  content:"";position:absolute;top:0;left:0;right:0;height:100%;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  animation:scan 2.4s linear infinite;
+  box-shadow:var(--bloom-cyan);
 }
-.kicker::before {
-  content: '';
-  display: inline-block;
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: var(--teal);
-  box-shadow: 0 0 7px var(--teal);
+@keyframes scan-h{0%{transform:translateX(-100%);}100%{transform:translateX(100%);}}
+.scanner::after{animation:scan-h 2.4s linear infinite;}
+
+/* Toggle button */
+.tog{
+  display:inline-flex;align-items:center;gap:6px;
+  font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.2em;
+  color:var(--text-dim);text-transform:uppercase;
 }
-h1 {
-  font-family: 'Cormorant Garamond', serif;
-  font-weight: 300;
-  font-size: 4.2rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: #e8eef8;
-  line-height: 1;
-  margin-bottom: 14px;
+.tog .led{width:8px;height:8px;border-radius:50%;background:var(--phos);box-shadow:var(--bloom-phos);animation:soft-pulse 2s ease-in-out infinite;}
+.tog.off .led{background:var(--text-faint);box-shadow:none;animation:none;}
+.tog.warn .led{background:var(--amber);box-shadow:var(--bloom-amber);}
+
+/* Round knob */
+.knob{
+  width:54px;height:54px;border-radius:50%;
+  background:radial-gradient(circle at 30% 30%,#1a2a4a,#040814);
+  border:2px solid var(--cyan-mid);
+  position:relative;flex-shrink:0;
+  box-shadow:0 0 10px rgba(91,230,230,0.2),inset 0 0 8px rgba(0,0,0,0.6);
+  animation:hum 2s ease-in-out infinite;
 }
-.sub {
-  font-size: 0.85rem;
-  letter-spacing: 0.16em;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  margin-bottom: 48px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--border-b);
+.knob::before{
+  content:"";position:absolute;top:6px;left:50%;width:3px;height:14px;
+  background:var(--magenta);transform:translateX(-50%);box-shadow:var(--bloom-magenta);
 }
-.frame {
-  border: 1px solid var(--border-b);
-  background: var(--bg2);
-  padding: 28px 30px;
-  margin-bottom: 22px;
-  position: relative;
+.knob.amber{border-color:var(--amber-dim);}
+.knob.amber::before{background:var(--amber);box-shadow:var(--bloom-amber);}
+.knob.spin::before{transform-origin:50% 21px;animation:spin 6s linear infinite;}
+
+/* Big rotary radar (used as section ornament) */
+.radar-orn{
+  width:80px;height:80px;flex-shrink:0;position:relative;
 }
-.frame-title {
-  font-size: 0.65rem;
-  letter-spacing: 0.28em;
-  color: var(--teal);
-  text-transform: uppercase;
-  margin-bottom: 14px;
+.radar-orn svg{width:100%;height:100%;}
+.radar-orn .ring{stroke:var(--cyan-mid);fill:none;}
+.radar-orn .center-dot{fill:var(--magenta);}
+.radar-orn .sweep{transform-origin:center;animation:spin 5s linear infinite;}
+
+/* Status strip — chrome below frame title */
+.chrome-strip{
+  display:flex;align-items:center;gap:14px;
+  padding:8px 0;border-bottom:1px solid var(--rule);
+  margin:-4px 0 14px;flex-wrap:wrap;
 }
-.frame p {
-  font-size: 0.95rem;
-  line-height: 1.7;
-  color: var(--text);
-  margin-bottom: 12px;
+
+/* ---------- TOP NAV ---------- */
+.topnav{position:sticky;top:0;z-index:50;background:rgba(4,8,20,0.88);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--rule);font-family:'JetBrains Mono',monospace;
+  font-size:11px;letter-spacing:0.2em;display:flex;align-items:center;justify-content:space-between;padding:10px 24px;gap:14px;}
+.topnav .brand{color:var(--cyan);font-weight:700;display:flex;align-items:center;gap:10px;text-shadow:var(--bloom-cyan-soft);}
+.topnav .brand .dot{width:6px;height:6px;background:var(--magenta);border-radius:50%;animation:soft-pulse 2.4s ease-in-out infinite;box-shadow:var(--bloom-magenta);}
+.topnav nav{display:flex;gap:18px;flex-wrap:wrap;}
+.topnav nav a{color:var(--text-dim);text-decoration:none;text-transform:uppercase;transition:color .15s,text-shadow .15s;}
+.topnav nav a:hover{color:var(--cyan);text-shadow:var(--bloom-cyan-soft);}
+.topnav .chrome{display:flex;align-items:center;gap:10px;}
+@media(max-width:880px){.topnav nav,.topnav .chrome{display:none;}}
+
+.bootbar{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--phos-dim);
+  border-bottom:1px solid var(--rule);padding:8px 24px;letter-spacing:0.06em;
+  display:flex;gap:20px;flex-wrap:wrap;align-items:center;}
+.bootbar .ok{color:var(--phos);text-shadow:var(--bloom-phos);}
+.bootbar .warn{color:var(--amber);text-shadow:var(--bloom-amber);}
+.bootbar .acc{color:var(--magenta);text-shadow:var(--bloom-magenta-soft);}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px;}
+
+/* ---------- SECTION HEADER (with chrome) ---------- */
+.section{padding:72px 0 24px;border-bottom:1px solid var(--rule);}
+.section:first-of-type{padding-top:40px;}
+.section-head{display:flex;align-items:center;gap:14px;margin-bottom:8px;font-family:'JetBrains Mono',monospace;}
+.section-head .num{font-size:11px;letter-spacing:0.3em;color:var(--magenta);font-weight:700;text-shadow:var(--bloom-magenta-soft);}
+.section-head h2{font-family:'Space Grotesk',sans-serif;font-size:30px;font-weight:600;letter-spacing:-.005em;color:#fff;margin:0;flex:1;}
+.section-head h2 small{display:inline-block;font-size:11px;letter-spacing:0.24em;color:var(--text-dim);margin-left:14px;font-weight:400;text-transform:uppercase;font-family:'JetBrains Mono',monospace;vertical-align:middle;}
+.section-head .meta{font-size:10px;letter-spacing:0.24em;color:var(--text-faint);text-transform:uppercase;}
+
+.section-chrome{
+  display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:10px 0 16px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+  margin:0 0 24px;
 }
-.frame p:last-child { margin-bottom: 0; }
-.placeholder {
-  border: 1px dashed var(--text-faint);
-  background: repeating-linear-gradient(45deg,
-    rgba(100,220,200,0.03) 0,
-    rgba(100,220,200,0.03) 1px,
-    transparent 1px, transparent 14px);
-  padding: 80px 24px;
-  text-align: center;
-  font-size: 0.7rem;
-  letter-spacing: 0.24em;
-  color: var(--text-faint);
-  text-transform: uppercase;
-  margin: 24px 0;
+.section-chrome .label{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.22em;color:var(--text-faint);text-transform:uppercase;}
+.section-chrome .scanner{flex:1;min-width:120px;}
+
+/* ---------- HUD FRAME ---------- */
+.frame{position:relative;background:linear-gradient(180deg,rgba(10,19,38,0.7),rgba(4,8,20,0.5));
+  border:1px solid var(--rule);padding:22px 24px;}
+.frame::before,.frame::after,.frame > .corner-tr,.frame > .corner-bl{
+  content:"";position:absolute;width:14px;height:14px;border:1px solid var(--cyan);pointer-events:none;box-shadow:var(--bloom-cyan-soft);}
+.frame::before{top:-1px;left:-1px;border-right:none;border-bottom:none;}
+.frame::after{bottom:-1px;right:-1px;border-left:none;border-top:none;}
+.frame > .corner-tr{top:-1px;right:-1px;border-left:none;border-bottom:none;}
+.frame > .corner-bl{bottom:-1px;left:-1px;border-right:none;border-top:none;}
+.frame.accent{border-color:var(--magenta-dim);}
+.frame.accent::before,.frame.accent::after,.frame.accent > .corner-tr,.frame.accent > .corner-bl{border-color:var(--magenta);box-shadow:var(--bloom-magenta-soft);}
+
+.frame-title{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.28em;color:var(--cyan);
+  text-transform:uppercase;margin:0 0 10px;display:flex;justify-content:space-between;align-items:center;gap:10px;text-shadow:var(--bloom-cyan-soft);}
+.frame-title .left{display:flex;align-items:center;gap:10px;}
+.frame.accent .frame-title{color:var(--magenta);text-shadow:var(--bloom-magenta-soft);}
+.frame-title .pip{font-size:9px;color:var(--phos);text-shadow:var(--bloom-phos);}
+
+/* ---------- HERO ---------- */
+.hero{padding:48px 0 80px;border-bottom:1px solid var(--rule);}
+.hero-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:40px;align-items:center;}
+@media(max-width:880px){.hero-grid{grid-template-columns:1fr;}}
+.hero h1{font-family:'Space Grotesk',sans-serif;font-size:104px;line-height:0.92;letter-spacing:-0.025em;font-weight:700;margin:0 0 16px;color:#fff;
+  text-shadow:0 0 1px rgba(255,255,255,0.6),0 0 18px rgba(91,230,230,0.35),0 0 40px rgba(91,230,230,0.15);}
+.hero h1 .accent{color:var(--magenta);text-shadow:0 0 1px rgba(255,255,255,0.5),0 0 18px rgba(255,61,139,0.55),0 0 40px rgba(255,61,139,0.25);}
+@media(max-width:600px){.hero h1{font-size:60px;}}
+.hero .kicker{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.32em;color:var(--cyan);text-transform:uppercase;margin-bottom:22px;display:flex;align-items:center;gap:10px;text-shadow:var(--bloom-cyan-soft);}
+.hero .kicker .bar{flex:1;height:1px;background:var(--cyan-dim);max-width:80px;box-shadow:var(--bloom-cyan-soft);}
+.hero .deck{font-size:20px;line-height:1.4;color:var(--text);margin:0 0 26px;font-weight:400;}
+.hero .deck em{color:var(--magenta);font-style:normal;text-shadow:var(--bloom-magenta-soft);}
+.hero .stats{display:flex;gap:28px;flex-wrap:wrap;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);border-top:1px solid var(--rule);padding-top:18px;}
+.hero .stats span b{display:block;color:var(--cyan);font-size:14px;letter-spacing:0.12em;font-weight:500;margin-top:4px;text-shadow:var(--bloom-cyan-soft);}
+.hero-art{position:relative;}
+.hero-art .controls{
+  position:absolute;top:14px;right:14px;display:flex;flex-direction:column;gap:10px;align-items:flex-end;
 }
-.meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  font-size: 0.7rem;
-  letter-spacing: 0.18em;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  border-top: 1px solid var(--border);
-  padding-top: 20px;
-  margin-top: 32px;
-}
-.meta b {
-  display: block;
-  color: var(--teal);
-  font-weight: 400;
-  font-size: 0.85rem;
-  letter-spacing: 0.1em;
-  margin-top: 4px;
-}
+.hero-art .controls .row{display:flex;gap:8px;align-items:center;}
+
+/* ---------- PLACEHOLDER IMG ---------- */
+.ph{position:relative;background:repeating-linear-gradient(45deg,rgba(91,230,230,0.04) 0,rgba(91,230,230,0.04) 1px,transparent 1px,transparent 14px);
+  border:1px dashed var(--cyan-dim);display:flex;align-items:center;justify-content:center;color:var(--cyan-mid);
+  font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.22em;text-transform:uppercase;text-align:center;padding:24px;min-height:200px;}
+.ph::before{content:"[ IMG ]";position:absolute;top:10px;left:12px;font-size:9px;color:var(--cyan-dim);}
+.ph::after{content:attr(data-dim);position:absolute;bottom:10px;right:12px;font-size:9px;color:var(--cyan-dim);}
+.ph.accent{border-color:var(--magenta-dim);background:repeating-linear-gradient(45deg,rgba(255,61,139,0.05) 0,rgba(255,61,139,0.05) 1px,transparent 1px,transparent 14px);color:var(--magenta-dim);}
+.ph.accent::before{content:"[ IMG · KEY ART ]";color:var(--magenta-dim);}
+.ph.sm{min-height:140px;}
+.ph.tall{min-height:300px;}
+
+.quote{font-family:'Space Grotesk',sans-serif;font-style:italic;font-size:18px;line-height:1.4;color:#fff;
+  border-left:2px solid var(--magenta);padding:8px 0 8px 18px;margin:0 0 14px;box-shadow:-2px 0 12px -2px rgba(255,61,139,0.4);}
+.quote.cyan{border-left-color:var(--cyan);box-shadow:-2px 0 12px -2px rgba(91,230,230,0.4);}
+p{margin:0 0 12px;} p strong,.strong{color:#fff;font-weight:500;} .dim{color:var(--text-dim);}
+
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+.grid-asym{display:grid;grid-template-columns:1.4fr 1fr;gap:18px;}
+.grid-asym-r{display:grid;grid-template-columns:1fr 1.4fr;gap:18px;}
+@media(max-width:880px){.grid-2,.grid-3,.grid-asym,.grid-asym-r{grid-template-columns:1fr;}}
+
+.pillar h3{font-family:'Space Grotesk',sans-serif;font-size:14px;letter-spacing:0.28em;text-transform:uppercase;color:#fff;margin:0 0 10px;font-weight:600;}
+.pillar h3::before{content:"//";color:var(--magenta);margin-right:8px;text-shadow:var(--bloom-magenta-soft);}
+.pillar p{font-size:14px;color:var(--text);margin:0;}
+.pillar .ph{margin-bottom:14px;min-height:140px;}
+
+.term{font-family:'Share Tech Mono',monospace;font-size:13px;color:var(--phos);background:rgba(57,255,122,0.03);
+  border:1px solid var(--phos-dim);padding:10px 12px;letter-spacing:0.04em;}
+.term .l{color:var(--phos-dim);} .term .a{color:var(--amber);text-shadow:var(--bloom-amber);}
+.term .m{color:var(--magenta);text-shadow:var(--bloom-magenta-soft);} .term .b{color:var(--cyan);text-shadow:var(--bloom-cyan-soft);}
+
+ul.tk{list-style:none;padding:0;margin:8px 0;}
+ul.tk li{padding-left:22px;position:relative;margin-bottom:7px;font-size:14px;}
+ul.tk li::before{content:"▸";position:absolute;left:4px;color:var(--cyan);text-shadow:var(--bloom-cyan-soft);}
+ul.tk li b{color:#fff;font-weight:500;}
+
+.tag{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.22em;padding:2px 8px;border:1px solid;text-transform:uppercase;vertical-align:1px;}
+.tag.stretch{color:var(--cyan);border-color:var(--cyan-mid);}
+.tag.cut{color:var(--red);border-color:var(--red);}
+.tag.hidden{color:var(--amber);border-color:var(--amber);}
+.tag.review{color:var(--text-dim);border-color:var(--text-faint);}
+.tag.ship{color:var(--phos);border-color:var(--phos-dim);}
+
+/* ---------- FLOWCHART ---------- */
+.flow-wrap{display:grid;grid-template-columns:2fr 1fr;gap:18px;margin-top:6px;}
+@media(max-width:760px){.flow-wrap{grid-template-columns:1fr;}}
+.flow-svg{width:100%;height:auto;display:block;background:rgba(2,5,13,0.4);border:1px solid var(--rule);}
+.flow-side{padding:16px 18px;border:1px solid var(--rule);background:rgba(10,19,38,0.5);min-height:200px;}
+.flow-side .meta{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.24em;color:var(--cyan);text-transform:uppercase;margin-bottom:8px;text-shadow:var(--bloom-cyan-soft);}
+.flow-side h4{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;color:#fff;margin:0 0 8px;letter-spacing:0;}
+.flow-side p{font-size:14px;color:var(--text);margin:0 0 10px;}
+.flow-side .accent{color:var(--magenta);text-shadow:var(--bloom-magenta-soft);}
+
+.flow-svg .node rect,.flow-svg .node circle,.flow-svg .node polygon{
+  fill:rgba(10,19,38,0.85);stroke:var(--cyan);stroke-width:1.2;
+  transition:fill .18s,stroke .18s,filter .18s;cursor:pointer;}
+.flow-svg .node text{fill:var(--text);font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;pointer-events:none;transition:fill .18s;}
+.flow-svg .node:hover rect,.flow-svg .node:hover circle,.flow-svg .node:hover polygon,
+.flow-svg .node.active rect,.flow-svg .node.active circle,.flow-svg .node.active polygon{
+  fill:rgba(255,61,139,0.12);stroke:var(--magenta);filter:drop-shadow(0 0 6px rgba(255,61,139,0.7));}
+.flow-svg .node:hover text,.flow-svg .node.active text{fill:#fff;}
+.flow-svg .node.start rect{fill:rgba(57,255,122,0.08);stroke:var(--phos);}
+.flow-svg .node.start text{fill:var(--phos);}
+.flow-svg .node.end rect{fill:rgba(255,90,90,0.1);stroke:var(--red);}
+.flow-svg .node.end text{fill:var(--red);}
+.flow-svg .node.win rect{fill:rgba(57,255,122,0.12);stroke:var(--phos);}
+.flow-svg .node.win text{fill:var(--phos);}
+.flow-svg .edge{stroke:var(--cyan-mid);stroke-width:1;fill:none;marker-end:url(#arrow);transition:stroke .18s;
+  stroke-dasharray:4,4;animation:flow-dash 6s linear infinite;}
+.flow-svg .edge.loop{stroke:var(--magenta-dim);}
+.flow-svg .edge.fail{stroke:var(--red);}
+.flow-svg .label-out{fill:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.18em;text-transform:uppercase;}
+
+/* ---------- RECOIL / DILATION / etc reuse from prior ---------- */
+.recoil .hint{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.2em;color:var(--text-dim);text-transform:uppercase;margin-bottom:10px;}
+#recoilSvg{width:100%;height:200px;display:block;cursor:crosshair;background:rgba(91,230,230,0.02);}
+.recoil .row{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.14em;color:var(--text-dim);margin-top:10px;}
+.recoil .row b{color:var(--cyan);font-size:14px;letter-spacing:.06em;font-weight:500;text-shadow:var(--bloom-cyan-soft);}
+.recoil .row b.warn{color:var(--magenta);text-shadow:var(--bloom-magenta-soft);}
+
+.dilation .readout{display:flex;justify-content:space-between;align-items:baseline;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.18em;color:var(--cyan);text-transform:uppercase;margin-bottom:6px;text-shadow:var(--bloom-cyan-soft);}
+.dilation .readout b{color:#fff;font-size:32px;letter-spacing:0;font-weight:600;font-family:'Space Grotesk',sans-serif;text-shadow:0 0 14px rgba(255,255,255,0.4);}
+.dilation input[type=range]{width:100%;-webkit-appearance:none;background:transparent;margin:8px 0 0;}
+.dilation input[type=range]::-webkit-slider-runnable-track{height:2px;background:linear-gradient(to right,var(--cyan),var(--amber),var(--magenta));}
+.dilation input[type=range]::-moz-range-track{height:2px;background:linear-gradient(to right,var(--cyan),var(--amber),var(--magenta));}
+.dilation input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#fff;border:2px solid var(--cyan);border-radius:50%;margin-top:-6px;cursor:pointer;box-shadow:0 0 8px rgba(91,230,230,0.6);}
+.dilation input[type=range]::-moz-range-thumb{width:14px;height:14px;background:#fff;border:2px solid var(--cyan);border-radius:50%;cursor:pointer;box-shadow:0 0 8px rgba(91,230,230,0.6);}
+.dilation .ticks{display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.18em;color:var(--text-faint);margin-top:4px;text-transform:uppercase;}
+#dilOrbit{width:100%;height:140px;margin-top:8px;}
+
+.abilities{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:8px;}
+@media(max-width:600px){.abilities{grid-template-columns:repeat(2,1fr);}}
+.slot{border:1px solid var(--cyan-mid);padding:14px 10px 12px;text-align:center;cursor:default;position:relative;background:rgba(91,230,230,0.03);transition:box-shadow .18s,transform .18s;}
+.slot:hover{box-shadow:0 0 16px rgba(91,230,230,0.2);transform:translateY(-2px);}
+.slot .ph{margin:0 0 10px;min-height:80px;border-color:var(--cyan-dim);}
+.slot .ph::before{content:"[ ICON ]";font-size:8px;}
+.slot .num{position:absolute;top:4px;left:6px;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.18em;color:var(--text-faint);}
+.slot .name{font-family:'Space Grotesk',sans-serif;font-size:14px;font-weight:600;color:#fff;letter-spacing:.04em;text-shadow:var(--bloom-cyan-soft);}
+.slot .status{font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;color:var(--phos);margin-top:6px;text-transform:uppercase;}
+.slot.cut{border-color:var(--red);}.slot.cut .status{color:var(--red);}.slot.cut .name{color:var(--red);text-shadow:0 0 8px rgba(255,90,90,0.4);}
+.slot.cut .ph{border-color:var(--red);} .slot.cut .ph::before{color:var(--red);}
+.slot.cut:hover{box-shadow:0 0 16px rgba(255,90,90,0.3);}
+.slot.hidden{border-color:var(--amber);}.slot.hidden .status{color:var(--amber);}.slot.hidden .name{color:var(--amber);text-shadow:var(--bloom-amber);}
+.slot.hidden .ph{border-color:var(--amber);} .slot.hidden .ph::before{color:var(--amber);}
+.slot.hidden:hover{box-shadow:0 0 16px rgba(255,176,0,0.25);}
+
+.threats .bar{display:flex;height:36px;border:1px solid var(--rule);}
+.threats .bar div{display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:#000;font-weight:700;cursor:pointer;transition:filter .15s,box-shadow .15s;text-transform:uppercase;}
+.threats .bar div:hover,.threats .bar div.active{filter:brightness(1.2);box-shadow:inset 0 0 16px rgba(255,255,255,0.3);}
+.threats .legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.18em;color:var(--text-dim);text-transform:uppercase;}
+.threats .legend span{display:flex;align-items:center;gap:6px;}
+.threats .legend i{display:inline-block;width:10px;height:10px;}
+#threatDetail{margin-top:14px;padding:12px 14px;border-left:2px solid var(--magenta);background:rgba(255,61,139,0.04);font-size:14px;color:var(--text);min-height:48px;box-shadow:-2px 0 12px -2px rgba(255,61,139,0.4);}
+#threatDetail b{color:#fff;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;display:block;margin-bottom:4px;}
+
+.haz{display:grid;grid-template-columns:1fr 1.5fr;gap:18px;}
+@media(max-width:760px){.haz{grid-template-columns:1fr;}}
+.haz .opts{display:flex;flex-direction:column;gap:6px;}
+.haz .opt{border:1px solid var(--rule);padding:12px 14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-dim);transition:border-color .15s,background .15s,color .15s,box-shadow .15s;}
+.haz .opt:hover{color:var(--cyan);border-color:var(--cyan-mid);box-shadow:var(--bloom-cyan-soft);}
+.haz .opt.on{border-color:var(--magenta);color:#fff;background:rgba(255,61,139,0.08);box-shadow:var(--bloom-magenta-soft);}
+.haz .opt small{font-size:9px;color:var(--text-faint);letter-spacing:.22em;}
+.haz .opt.on small{color:var(--magenta);}
+.haz .detail{border:1px solid var(--rule);padding:18px;background:rgba(10,19,38,0.5);min-height:240px;}
+.haz .detail .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.haz .detail .ph{margin:10px 0;min-height:120px;}
+.haz .detail h4{font-family:'Space Grotesk',sans-serif;font-size:20px;font-weight:600;margin:0 0 4px;color:#fff;letter-spacing:0;}
+.haz .detail .hmeta{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;color:var(--cyan);text-transform:uppercase;text-shadow:var(--bloom-cyan-soft);}
+.haz .detail p{font-size:14px;color:var(--text);margin:0 0 10px;}
+.haz .detail svg.diag{width:100%;height:120px;margin-top:8px;}
+
+.regfilters{display:flex;flex-wrap:wrap;gap:6px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;margin:8px 0 14px;}
+.regfilters button{background:transparent;border:1px solid var(--rule);color:var(--text-dim);padding:6px 12px;cursor:pointer;font-family:inherit;font-size:inherit;letter-spacing:inherit;text-transform:uppercase;transition:border-color .15s,color .15s,background .15s,box-shadow .15s;}
+.regfilters button:hover{color:var(--cyan);border-color:var(--cyan-mid);box-shadow:var(--bloom-cyan-soft);}
+.regfilters button.on{background:var(--magenta);border-color:var(--magenta);color:#000;font-weight:700;box-shadow:var(--bloom-magenta);}
+table.reg{width:100%;border-collapse:collapse;font-size:14px;}
+table.reg th,table.reg td{padding:11px 12px;border-bottom:1px solid var(--rule);text-align:left;vertical-align:top;}
+table.reg th{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.22em;color:var(--text-dim);text-transform:uppercase;font-weight:400;}
+table.reg td b{color:#fff;font-weight:500;}
+table.reg tr.hide{display:none;}
+
+.crew .card h4{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:600;margin:0 0 8px;color:#fff;}
+.crew .card .role{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.24em;color:var(--cyan);text-transform:uppercase;margin-bottom:8px;text-shadow:var(--bloom-cyan-soft);}
+.crew .card.alt h4{color:var(--magenta);text-shadow:var(--bloom-magenta-soft);}
+.crew .card.alt .role{color:var(--magenta);text-shadow:var(--bloom-magenta-soft);}
+.crew .card .ph{margin-bottom:14px;min-height:160px;}
+
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.chip{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;padding:4px 10px;border:1px solid var(--cyan-mid);color:var(--cyan);text-transform:uppercase;}
+.chip.stretch{border-color:var(--amber);color:var(--amber);text-shadow:var(--bloom-amber);}
+
+.modes .card .role{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.24em;color:var(--magenta);text-transform:uppercase;margin-bottom:6px;text-shadow:var(--bloom-magenta-soft);}
+.modes .card h4{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:600;margin:0 0 8px;color:#fff;}
+.modes .card .ph{margin-bottom:14px;min-height:180px;}
+
+footer{padding:48px 24px 60px;border-top:1px solid var(--rule);font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em;color:var(--text-dim);text-transform:uppercase;}
+footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;align-items:center;}
+footer b{color:var(--cyan);font-weight:500;text-shadow:var(--bloom-cyan-soft);}
+footer .dot{color:var(--magenta);text-shadow:var(--bloom-magenta-soft);}
+
+kbd{font-family:'JetBrains Mono',monospace;background:rgba(91,230,230,0.08);border:1px solid var(--cyan-mid);padding:1px 6px;color:var(--cyan);font-size:11px;letter-spacing:.06em;box-shadow:0 0 6px rgba(91,230,230,0.15);}
 </style>
 </head>
 <body>
+<div class="page">
 
-<main>
-  <div class="kicker">Community // Personal Dispatch</div>
-  <h1>For Tom</h1>
-  <div class="sub">Stella Nova · Reserved Page</div>
+<!-- DIAL/GAUGE/ETC SVG TEMPLATES (defined inline below for portability) -->
 
-  <div class="frame">
-    <div class="frame-title">▸ Reserved</div>
-    <p>This page is reserved for Tom.</p>
-    <p>Content pending.</p>
+<header class="topnav">
+  <div class="brand"><span class="dot"></span>ASTROTECHS · OPS</div>
+  <nav>
+    <a href="#identity">Identity</a><a href="#loop">Loop</a><a href="#controls">Combat</a>
+    <a href="#abilities">Kit</a><a href="#hazards">Hazards</a><a href="#enemies">Enemies</a>
+    <a href="#crew">Crew</a><a href="#endstates">End States</a><a href="#register">Register</a>
+  </nav>
+  <div class="chrome">
+    <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><circle cx="20" cy="20" r="10" fill="none" stroke="#2a8a8a" stroke-width="0.5" stroke-dasharray="2,2"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2" filter="drop-shadow(0 0 3px #5be6e6)"/><circle cx="20" cy="6" r="1.5" fill="#5be6e6"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+    <span class="eq"><i style="height:40%"></i><i style="height:70%"></i><i style="height:50%"></i><i style="height:80%"></i><i style="height:60%"></i></span>
+    <span class="btn-pulse"></span>
   </div>
+</header>
 
-  <div class="placeholder">[ CONTENT BLOCK · TBD ]</div>
+<div class="bootbar wrap">
+  <span><span class="ok">●</span> SHIP-OS v0.5</span>
+  <span>SECTOR <span class="acc">07</span></span>
+  <span>DOC <span class="acc">AT-0079</span></span>
+  <span>CLASSIFICATION: <span class="warn">PRE-RELEASE</span></span>
+  <span>STUDIO: <span class="ok">ALLEGORY PUBLISHING</span></span>
+  <span class="tog"><span class="led"></span>LIFE SUPPORT</span>
+  <span class="tog"><span class="led"></span>NAV LOCK</span>
+  <span class="tog warn"><span class="led"></span>HULL ALERT</span>
+</div>
 
-  <div class="meta">
-    <span>FILE<b>community / for-tom.html</b></span>
-    <span>STATUS<b>Draft</b></span>
-    <span>REV<b>0.1</b></span>
+<!-- HERO -->
+<section class="hero" id="identity">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="kicker"><span class="bar"></span>TACTICAL ACTION · DARK SCI-FI</div>
+      <h1>ASTRO<span class="accent">TECHS</span></h1>
+      <p class="quote">"You're an engineer with a gun and a wrench, and you're the only thing keeping this ship alive."</p>
+      <p class="deck">A tactical action game where you fight <em>corrupted machines</em>, weaponize ship systems, and repair the damage — all under fire.</p>
+      <div class="stats">
+        <span>GENRE<b>Real-Time Tactics</b></span>
+        <span>VIEW<b>Top-Down · Isometric</b></span>
+        <span>MODE<b>Single-Player + NPCs</b></span>
+        <span>STATUS<b>Pre-release · Playtest</b></span>
+      </div>
+    </div>
+    <div class="hero-art">
+      <div class="ph accent" data-dim="540×420" style="min-height:380px;">KEY ART · GAMEPLAY HERO</div>
+      <div class="controls">
+        <div class="row"><span class="tog"><span class="led"></span>FEED</span><span class="btn-pulse cyan" style="width:14px;height:14px;"></span></div>
+        <div class="row"><span class="tog warn"><span class="led"></span>UPLINK</span><span class="btn-pulse amber" style="width:14px;height:14px;"></span></div>
+        <span class="dial slow"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#ff3d8b" stroke-width="1.2"/><circle cx="20" cy="6" r="1.5" fill="#ff3d8b"/></g><circle cx="20" cy="20" r="1.5" fill="#5be6e6"/></svg></span>
+      </div>
+    </div>
   </div>
-</main>
+</section>
 
+<!-- 01 PILLARS -->
+<section class="section" id="pillars">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">01 //</span>
+      <h2>Standing Orders <small>Three Design Pillars</small></h2>
+      <span class="meta">Authoritative · Per Steam Brief</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">SYS</span>
+      <span class="dial"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/><circle cx="20" cy="6" r="1.5" fill="#5be6e6"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+      <span class="eq"><i style="height:40%"></i><i style="height:80%"></i><i style="height:55%"></i><i style="height:75%"></i><i style="height:45%"></i></span>
+      <span class="tog"><span class="led"></span>NOMINAL</span>
+      <span class="scanner"></span>
+      <span class="label">SECT 01</span>
+    </div>
+    <div class="grid-3">
+      <div class="frame pillar"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Pillar A</span><span class="pip">●</span></p>
+        <div class="ph" data-dim="320×140">PILLAR · TACTICS</div>
+        <h3>Tactics, not reflexes</h3>
+        <p>Bullets matter, movement is tuned for decisions, and the tension is claustrophobic, not chaotic. Fights reward positioning, patience, and smart use of the environment over raw reflexes.</p>
+      </div>
+      <div class="frame pillar"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Pillar B</span><span class="pip">●</span></p>
+        <div class="ph" data-dim="320×140">PILLAR · ROLE</div>
+        <h3>Engineer. Soldier. Survivor.</h3>
+        <p>You're not a red shirt. You're a mechanically inclined (but battle-trained) engineer — and the only one who can keep the ship running.</p>
+      </div>
+      <div class="frame pillar accent"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Pillar C</span><span class="pip">●</span></p>
+        <div class="ph accent" data-dim="320×140">PILLAR · ENVIRONMENT</div>
+        <h3>Use the environment to your advantage</h3>
+        <p>Weaponize the ship. Trigger hazards and environmental kills — but watch out, because stray bullets from enemy robots can cause problems for you, too.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 OPERATIONAL LOOP -->
+<section class="section" id="loop">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">02 //</span><h2>Operational Loop <small>Gameplay Flow Diagram</small></h2><span class="meta">Hover Nodes To Inspect</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">LOOP</span>
+      <span class="knob spin"></span>
+      <span class="gauge"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 10 50 A 40 40 0 0 1 50 10" fill="none" stroke="#5be6e6" stroke-width="2"/><g class="needle"><line x1="50" y1="50" x2="50" y2="14" stroke="#ff3d8b" stroke-width="1.5" filter="drop-shadow(0 0 3px #ff3d8b)"/><circle cx="50" cy="50" r="3" fill="#5be6e6"/></g></svg><span class="lbl">CYCLE</span></span>
+      <span class="scanner"></span>
+      <span class="tog"><span class="led"></span>RUNNING</span>
+    </div>
+    <div class="grid-asym" style="margin-bottom:18px;">
+      <div class="ph" data-dim="780×280" style="min-height:280px;">SCREENSHOT · MAP VIEW / STRATEGIC OVERLAY</div>
+      <div class="ph" data-dim="380×280" style="min-height:280px;">SCREENSHOT · ROUND START</div>
+    </div>
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Round Lifecycle · Interactive</span><span class="pip">REC</span></p>
+      <div class="flow-wrap">
+        <svg class="flow-svg" id="flowLoop" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet">
+          <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker></defs>
+          <path class="edge" d="M 90 60 L 170 60"/>
+          <path class="edge" d="M 270 60 L 350 60"/>
+          <path class="edge" d="M 450 60 L 530 60"/>
+          <path class="edge" d="M 610 80 L 610 130"/>
+          <path class="edge" d="M 530 160 L 450 160"/>
+          <path class="edge" d="M 350 160 L 270 160"/>
+          <path class="edge" d="M 170 180 L 170 230"/>
+          <path class="edge loop" d="M 270 250 Q 400 290 530 250" marker-end="url(#arrow)"/>
+          <path class="edge" d="M 610 230 L 610 180"/>
+          <g class="node start" data-key="start"><rect x="20" y="40" width="70" height="40" rx="3"/><text x="55" y="65" text-anchor="middle">START</text></g>
+          <g class="node" data-key="media-res"><rect x="170" y="40" width="100" height="40" rx="3"/><text x="220" y="65" text-anchor="middle">IN MEDIA RES</text></g>
+          <g class="node" data-key="map"><rect x="350" y="40" width="100" height="40" rx="3"/><text x="400" y="65" text-anchor="middle">MAP VIEW</text></g>
+          <g class="node" data-key="prioritize"><rect x="530" y="40" width="160" height="40" rx="3"/><text x="610" y="65" text-anchor="middle">PRIORITIZE THREATS</text></g>
+          <g class="node" data-key="navigate"><rect x="530" y="140" width="160" height="40" rx="3"/><text x="610" y="165" text-anchor="middle">NAVIGATE + SOLVE</text></g>
+          <g class="node" data-key="combat"><rect x="350" y="140" width="100" height="40" rx="3"/><text x="400" y="165" text-anchor="middle">FIREFIGHT</text></g>
+          <g class="node" data-key="repair"><rect x="170" y="140" width="100" height="40" rx="3"/><text x="220" y="165" text-anchor="middle">REPAIR</text></g>
+          <g class="node" data-key="newprob"><rect x="120" y="230" width="160" height="40" rx="3"/><text x="200" y="255" text-anchor="middle">NEW PROBLEMS SPAWN</text></g>
+          <text class="label-out" x="380" y="285" text-anchor="middle">↻ LOOP TO PRIORITIZE</text>
+        </svg>
+        <div class="flow-side" id="loopSide">
+          <div class="meta">Node Profile</div><h4>Hover a node →</h4>
+          <p>Click or hover any block in the diagram to inspect that phase of the operational loop.</p>
+          <p class="dim" style="font-size:12px;">The loop runs continuously: every problem solved spawns new ones via attack events, ratcheting pressure on the player.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 COMBAT -->
+<section class="section" id="controls">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">03 //</span><h2>Combat Decision Tree <small>Movement · Aim · Recoil</small></h2><span class="meta">Hover Nodes · Trace Branches</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">FIRE CTRL</span>
+      <span class="knob"></span>
+      <span class="gauge"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 70 50 A 40 40 0 0 1 90 50" fill="none" stroke="#ff3d8b" stroke-width="2"/><g class="needle fast"><line x1="50" y1="50" x2="80" y2="22" stroke="#ff3d8b" stroke-width="1.5" filter="drop-shadow(0 0 3px #ff3d8b)"/><circle cx="50" cy="50" r="3" fill="#5be6e6"/></g></svg><span class="lbl">RECOIL</span></span>
+      <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+      <span class="eq magenta"><i style="height:60%"></i><i style="height:30%"></i><i style="height:80%"></i><i style="height:50%"></i><i style="height:90%"></i></span>
+      <span class="scanner"></span>
+      <span class="tog warn"><span class="led"></span>ARMED</span>
+    </div>
+    <div class="grid-3" style="margin-bottom:18px;">
+      <div class="ph" data-dim="380×220">SCREENSHOT · ENGAGEMENT</div>
+      <div class="ph" data-dim="380×220">SCREENSHOT · COVER</div>
+      <div class="ph" data-dim="380×220">SCREENSHOT · DEVICE TRIGGER</div>
+    </div>
+    <div class="frame" style="margin-bottom:18px;">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Input → Outcome Decision Tree</span><span class="pip">REC</span></p>
+      <div class="flow-wrap">
+        <svg class="flow-svg" id="flowCombat" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet">
+          <defs><marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker></defs>
+          <path class="edge" d="M 130 60 L 220 60" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 30" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 90" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 140" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 200" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 260" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 30 L 620 30" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 90 L 620 90" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 140 L 620 140" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 200 L 620 200" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 260 L 620 260" marker-end="url(#arrow2)"/>
+          <g class="node start" data-key="player"><rect x="40" y="40" width="90" height="40" rx="3"/><text x="85" y="65" text-anchor="middle">PLAYER</text></g>
+          <g class="node" data-key="input"><polygon points="220,60 265,40 310,60 265,80"/><text x="265" y="64" text-anchor="middle">INPUT</text></g>
+          <g class="node" data-key="lmb-enemy"><rect x="400" y="10" width="140" height="34" rx="3"/><text x="470" y="32" text-anchor="middle">LMB · ON ENEMY</text></g>
+          <g class="node" data-key="lmb-device"><rect x="400" y="70" width="140" height="34" rx="3"/><text x="470" y="92" text-anchor="middle">LMB · ON DEVICE</text></g>
+          <g class="node" data-key="rmb"><rect x="400" y="125" width="140" height="34" rx="3"/><text x="470" y="147" text-anchor="middle">RMB · ANYWHERE</text></g>
+          <g class="node" data-key="click-move"><rect x="400" y="183" width="140" height="34" rx="3"/><text x="470" y="205" text-anchor="middle">CLICK · GROUND</text></g>
+          <g class="node" data-key="click-npc"><rect x="400" y="243" width="140" height="34" rx="3"/><text x="470" y="265" text-anchor="middle">CLICK · NPC</text></g>
+          <g class="node" data-key="o-burst"><rect x="620" y="10" width="80" height="34" rx="3"/><text x="660" y="32" text-anchor="middle">BURST</text></g>
+          <g class="node" data-key="o-hazard"><rect x="620" y="70" width="80" height="34" rx="3"/><text x="660" y="92" text-anchor="middle">HAZARD</text></g>
+          <g class="node" data-key="o-free"><rect x="620" y="125" width="80" height="34" rx="3"/><text x="660" y="147" text-anchor="middle">FREE FIRE</text></g>
+          <g class="node" data-key="o-move"><rect x="620" y="183" width="80" height="34" rx="3"/><text x="660" y="205" text-anchor="middle">MOVE</text></g>
+          <g class="node" data-key="o-command"><rect x="620" y="243" width="80" height="34" rx="3"/><text x="660" y="265" text-anchor="middle">COMMAND</text></g>
+        </svg>
+        <div class="flow-side" id="combatSide">
+          <div class="meta">Branch Profile</div><h4>Trace a branch →</h4>
+          <p>Each player input maps to a distinct in-game outcome. Hover a node to inspect mechanics, recoil model, and specific quoted behavior.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-asym">
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Recoil Curve · Live</span><span class="pip">REC</span></p>
+        <div class="recoil">
+          <div class="hint">Click + hold inside the frame to hold fire — release to reset</div>
+          <svg id="recoilSvg" viewBox="0 0 600 200" preserveAspectRatio="none">
+            <line x1="0" y1="180" x2="600" y2="180" stroke="#2a8a8a" stroke-width="1"/>
+            <line x1="0" y1="20" x2="600" y2="20" stroke="#2a8a8a" stroke-width="1" stroke-dasharray="2,4"/>
+            <text x="8" y="14" fill="#2a8a8a" font-size="9" font-family="JetBrains Mono">RECOIL CEILING</text>
+            <text x="8" y="194" fill="#2a8a8a" font-size="9" font-family="JetBrains Mono">PERFECT ACCURACY</text>
+            <path id="recoilCurve" d="M 0 180" stroke="#5be6e6" stroke-width="2" fill="none" class="bloom"/>
+            <circle id="recoilDot" cx="0" cy="180" r="4" fill="#ff3d8b" class="bloom"/>
+          </svg>
+          <div class="row">
+            <span>HOLD <b id="holdTime">0.0s</b></span>
+            <span>SPREAD <b id="spread">0%</b></span>
+            <span>ADVISORY <b style="color:var(--phos);text-shadow:var(--bloom-phos);">PACE BURSTS</b></span>
+          </div>
+        </div>
+        <p style="margin-top:14px;font-size:13px;color:var(--text-dim);"><em style="color:var(--cyan);font-style:normal;">"Your recoil gets bigger so pacing your shots will resolve in perfectly accurate burst."</em></p>
+      </div>
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Input Map</span><span class="pip">●</span></p>
+        <div class="ph sm" data-dim="360×140">DIAGRAM · INPUT BINDINGS</div>
+        <ul class="tk" style="margin-top:14px;">
+          <li><b>Movement</b> — click-to-move. <kbd>WASD</kbd> currently <span class="tag review">Under Review</span></li>
+          <li><b>Primary fire</b> — <kbd>LMB</kbd> on enemy. Auto-aim snaps to center mass.</li>
+          <li><b>Free fire</b> — <kbd>RMB</kbd>. Fires anywhere the player chooses.</li>
+          <li><b>Weaponize</b> — <kbd>LMB</kbd> on a destructible device. Triggers its hazard.</li>
+        </ul>
+        <div class="term" style="margin-top:12px;">
+          <span class="l">&gt;</span> aim_mode <span class="b">SNAP_CENTER</span><br>
+          <span class="l">&gt;</span> recoil_curve <span class="b">EXPONENTIAL</span><br>
+          <span class="l">&gt;</span> friendly_fire <span class="m">ENABLED</span><br>
+          <span class="l">&gt;</span> dilation <span class="a">v2_PARTIAL</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 TACTICAL PAUSE -->
+<section class="section" id="dilation">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">04 //</span><h2>Tactical Pause v2 <small>SUPERHOT-Like Time Dilation</small></h2><span class="meta">In Implementation</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">DILATION</span>
+      <span class="knob amber spin"></span>
+      <span class="gauge slow"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 10 50 A 40 40 0 0 1 64 13" fill="none" stroke="#ffb000" stroke-width="2"/><g class="needle slow"><line x1="50" y1="50" x2="64" y2="13" stroke="#ffb000" stroke-width="1.5" filter="drop-shadow(0 0 3px #ffb000)"/><circle cx="50" cy="50" r="3" fill="#5be6e6"/></g></svg><span class="lbl">SPEED</span></span>
+      <span class="dial slow"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#ff3d8b" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#5be6e6"/></svg></span>
+      <span class="scanner"></span>
+      <span class="tog warn"><span class="led"></span>v2 PARTIAL</span>
+    </div>
+    <div class="grid-asym-r">
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Doctrine</span><span class="pip">●</span></p>
+        <div class="ph" data-dim="440×220">SCREENSHOT · TIME-DILATED MOMENT</div>
+        <p class="quote cyan" style="margin-top:14px;">"Starts very slow motion, but speeds up to about 70% when you decide to act."</p>
+        <p>Time dilates around player intent. At rest the simulation runs in heavy slow-motion; the moment the player commits to an action — moving, shooting, interacting with a device, or casting an ability — time accelerates to roughly <strong>70% real-speed</strong>.</p>
+        <p class="dim" style="font-size:13px;">Net effect: planning happens almost-paused; commitment costs you tempo. Action and analysis share the same control surface.</p>
+      </div>
+      <div class="frame accent"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Live Sim · Drag To Test</span><span class="pip" id="dilStateLabel">AT REST</span></p>
+        <div class="dilation">
+          <div class="readout"><span>SIM SPEED</span><b id="dilVal">10%</b></div>
+          <input type="range" min="10" max="100" value="10" id="dilSlider">
+          <div class="ticks"><span>10%</span><span>40%</span><span style="color:var(--magenta);">70% COMMIT</span><span>100%</span></div>
+          <svg id="dilOrbit" viewBox="0 0 200 100">
+            <circle cx="100" cy="50" r="42" fill="none" stroke="rgba(91,230,230,0.3)" stroke-width="1"/>
+            <circle cx="100" cy="50" r="3" fill="#5be6e6" class="bloom"/>
+            <circle id="dilPlanet" cx="142" cy="50" r="6" fill="#ff3d8b" class="bloom"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 LOADOUT -->
+<section class="section" id="abilities">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">05 //</span><h2>Loadout <small>Five-Slot Kit · Weapon Variants</small></h2><span class="meta">Skill Tree Upgradable</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">LOADOUT</span>
+      <span class="dial"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+      <span class="eq"><i style="height:50%"></i><i style="height:80%"></i><i style="height:60%"></i><i style="height:40%"></i><i style="height:70%"></i></span>
+      <span class="tog"><span class="led"></span>3 / 5 LOCKED</span>
+      <span class="scanner"></span>
+      <span class="btn-pulse amber"></span>
+    </div>
+    <div class="frame" style="margin-bottom:18px;">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Ability Slots</span><span class="pip">●</span></p>
+      <div class="abilities">
+        <div class="slot"><div class="num">01</div><div class="ph" data-dim="120×80">ICON</div><div class="name">Power Shot</div><div class="status">SHIPPING</div></div>
+        <div class="slot"><div class="num">02</div><div class="ph" data-dim="120×80">ICON</div><div class="name">Shield</div><div class="status">SHIPPING</div></div>
+        <div class="slot"><div class="num">03</div><div class="ph" data-dim="120×80">ICON</div><div class="name">Grenade</div><div class="status">SHIPPING</div></div>
+        <div class="slot cut"><div class="num">04</div><div class="ph" data-dim="120×80">ICON</div><div class="name">AOE Explosion</div><div class="status">CUT-CANDIDATE</div></div>
+        <div class="slot hidden"><div class="num">05</div><div class="ph" data-dim="120×80">ICON</div><div class="name">Flare</div><div class="status">HIDDEN · SECRET</div></div>
+      </div>
+      <p class="dim" style="font-size:13px;margin-top:14px;margin-bottom:0;">AOE Explosion is slated to be removed; Flare is slated to be a secret and hidden from the player.</p>
+    </div>
+    <div class="grid-2">
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Primary Weapon Variants</span><span class="pip">●</span></p>
+        <div class="ph sm" data-dim="380×140">DIAGRAM · WEAPON TIERS</div>
+        <ul class="tk" style="margin-top:14px;">
+          <li><b>Burst Fire</b> <span class="tag ship">Shipping</span></li>
+          <li><b>Bolt Fire</b> <span class="tag ship">Shipping</span></li>
+          <li><b>Shotgun</b> <span class="tag ship">Shipping</span></li>
+          <li><b>SMG</b> <span class="tag stretch">Stretch</span></li>
+          <li><b>Pistol</b> <span class="tag stretch">Stretch</span></li>
+        </ul>
+      </div>
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Skill Tree Upgrades</span><span class="pip">●</span></p>
+        <div class="ph sm" data-dim="380×140">DIAGRAM · SKILL TREE BRANCH</div>
+        <ul class="tk" style="margin-top:14px;">
+          <li><b>Multi-target chaining shots</b> — shots can chain to additional targets.</li>
+          <li><b>Splitting projectiles</b> — projectiles split mid-flight for area coverage.</li>
+          <li><b>Per-ability upgrades</b> — every slot in the five-ability kit upgrades down its own branch.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 HAZARDS -->
+<section class="section" id="hazards">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">06 //</span><h2>Weaponized Environment <small>Destructible Devices</small></h2><span class="meta">Click Device · Inspect</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">HAZARDS</span>
+      <span class="knob spin"></span>
+      <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#ff3d8b" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ffb000"/></svg></span>
+      <span class="eq magenta"><i style="height:80%"></i><i style="height:40%"></i><i style="height:90%"></i><i style="height:30%"></i><i style="height:70%"></i></span>
+      <span class="scanner"></span>
+      <span class="tog warn"><span class="led"></span>HOT</span>
+    </div>
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Device Profile · Selectable</span><span class="pip">●</span></p>
+      <div class="haz">
+        <div class="opts">
+          <div class="opt on" data-haz="window">WINDOW <small>VACUUM</small></div>
+          <div class="opt" data-haz="fire">FIRE BARREL <small>SPREAD</small></div>
+          <div class="opt" data-haz="bomb">BOMB <small>BLAST</small></div>
+          <div class="opt" data-haz="conduit">POWER CONDUIT <small>TRAP</small></div>
+        </div>
+        <div class="detail" id="hazDetail">
+          <div class="topbar"><div class="hmeta">PROFILE 01 / 04</div><div style="display:flex;gap:8px;align-items:center;"><span class="dial fast" style="width:24px;height:24px;"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.5"/></g></svg></span><span class="btn-pulse cyan" style="width:10px;height:10px;"></span></div></div>
+          <h4>Window</h4>
+          <div class="ph" data-dim="500×120">SCREENSHOT · DECOMPRESSION KILL</div>
+          <p>Shooting a window decompresses the chamber, creating a suction zone that pulls hostiles out into space. <em style="color:var(--cyan);font-style:normal;">"Blast your enemies out into space by destroying a window, and then repairing it when you're done."</em></p>
+          <svg class="diag" viewBox="0 0 400 100">
+            <rect x="20" y="20" width="360" height="60" fill="none" stroke="#5be6e6" stroke-dasharray="4,4"/>
+            <circle cx="60" cy="50" r="6" fill="#ff3d8b" class="bloom"/>
+            <circle cx="120" cy="50" r="6" fill="#ff3d8b" class="bloom"/>
+            <circle cx="180" cy="50" r="6" fill="#ff3d8b" class="bloom"/>
+            <line x1="60" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/>
+            <line x1="120" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/>
+            <line x1="180" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/>
+            <text x="385" y="54" fill="#5be6e6" font-size="9" font-family="JetBrains Mono">→ VACUUM</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 07 ENEMIES -->
+<section class="section" id="enemies">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">07 //</span><h2>Threat Composition <small>Born From Nanotechnology Run Amok</small></h2><span class="meta">Hover To Inspect</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">THREAT</span>
+      <span class="gauge"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#ff5a5a" stroke-width="2"/><g class="needle fast"><line x1="50" y1="50" x2="78" y2="22" stroke="#ff5a5a" stroke-width="1.5" filter="drop-shadow(0 0 3px #ff5a5a)"/><circle cx="50" cy="50" r="3" fill="#5be6e6"/></g></svg><span class="lbl">RISING</span></span>
+      <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#7a1818" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#ff5a5a" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff5a5a"/></svg></span>
+      <span class="eq magenta"><i style="height:60%"></i><i style="height:90%"></i><i style="height:40%"></i><i style="height:80%"></i><i style="height:55%"></i></span>
+      <span class="scanner"></span>
+      <span class="tog warn"><span class="led"></span>HOSTILES</span>
+    </div>
+    <div class="grid-3" style="margin-bottom:18px;">
+      <div class="ph" data-dim="380×220">SCREEN · SNIPER NEST</div>
+      <div class="ph" data-dim="380×220">SCREEN · SPIDER SWARM</div>
+      <div class="ph" data-dim="380×220">SCREEN · SENTRY DROID</div>
+    </div>
+    <div class="grid-asym">
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Enemy Composition</span><span class="pip">●</span></p>
+        <div class="threats">
+          <div class="bar">
+            <div data-t="snipers" style="background:#ff3d8b;flex:1.6;">SNIPERS</div>
+            <div data-t="spiders" style="background:#ffb000;flex:1.4;">SPIDERS</div>
+            <div data-t="sentry" style="background:#5be6e6;flex:1.4;">SENTRY DROIDS</div>
+            <div data-t="boss" style="background:#a08458;flex:1;">BOSSES</div>
+          </div>
+          <div class="legend">
+            <span><i style="background:#ff3d8b;"></i>Snipers</span>
+            <span><i style="background:#ffb000;"></i>Spiders</span>
+            <span><i style="background:#5be6e6;"></i>Sentry Droids</span>
+            <span><i style="background:#a08458;"></i>Environmental Bosses</span>
+          </div>
+          <div id="threatDetail">Hover a band above to view threat profile.</div>
+        </div>
+      </div>
+      <div class="frame accent"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>World Behavior</span><span class="pip">●</span></p>
+        <div class="ph accent sm" data-dim="380×140">SCREEN · NEST MUTATION</div>
+        <p style="margin-top:14px;">Parts of the ship <strong>"mutate"</strong> around you, forming nests of violent machines.</p>
+        <p>The narrative hook: the ship has been <strong>rerouted from its original mission</strong>. Recovered AstroTechs share intel as you piece together why.</p>
+        <div class="term" style="margin-top:12px;">
+          <span class="l">&gt;</span> nests <span class="m">SPAWNING</span><br>
+          <span class="l">&gt;</span> mutation_rate <span class="a">RISING</span><br>
+          <span class="l">&gt;</span> route <span class="m">UNCONFIRMED</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 CREW -->
+<section class="section" id="crew">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">08 //</span><h2>Crew Command Flow <small>NPC Squad Layer</small></h2><span class="meta">Hover Personalities · Trace Behavior</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">CREW</span>
+      <span class="dial slow"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+      <span class="knob"></span>
+      <span class="eq"><i style="height:50%"></i><i style="height:70%"></i><i style="height:40%"></i><i style="height:80%"></i><i style="height:60%"></i></span>
+      <span class="tog"><span class="led"></span>SQUAD READY</span>
+      <span class="scanner"></span>
+    </div>
+    <div class="grid-2 crew" style="margin-bottom:18px;">
+      <div class="frame card"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <div class="role">Class A · Civilian</div>
+        <div class="ph" data-dim="500×160">PORTRAIT · BOB</div>
+        <h4>Bobs</h4>
+        <p>Regular ship crew. Pistol-armed, fragile, scattered through the ship. They flee when combat draws near. <strong>Must be protected</strong> — they are the labor force keeping the ship operational.</p>
+      </div>
+      <div class="frame card alt"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <div class="role">Class B · Combat</div>
+        <div class="ph accent" data-dim="500×160">PORTRAIT · ASTROTECH</div>
+        <h4>Fellow AstroTechs</h4>
+        <p>Other engineer-soldiers. Multiple abilities they will use autonomously when enemies are near. Combat-capable peers — recoverable through play and addable to your squad.</p>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Command Surface · Click → Personality → Behavior</span><span class="pip">●</span></p>
+      <div class="flow-wrap">
+        <svg class="flow-svg" id="flowCrew" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet">
+          <defs><marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker></defs>
+          <path class="edge" d="M 130 60 L 220 60" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 130 60 L 220 200" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 60 L 400 30" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 60 L 400 80" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 60 L 400 130" marker-end="url(#arrow3)"/>
+          <path class="edge loop" d="M 320 60 L 400 180" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 200 L 400 230" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 200 L 400 280" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 30 L 620 30" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 80 L 620 80" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 130 L 620 130" marker-end="url(#arrow3)"/>
+          <path class="edge loop" d="M 540 180 L 620 180" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 230 L 620 230" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 280 L 620 280" marker-end="url(#arrow3)"/>
+          <g class="node start" data-key="player2"><rect x="40" y="40" width="90" height="40" rx="3"/><text x="85" y="65" text-anchor="middle">PLAYER</text></g>
+          <g class="node" data-key="bob"><rect x="220" y="40" width="100" height="40" rx="3"/><text x="270" y="65" text-anchor="middle">CLICK · BOB</text></g>
+          <g class="node" data-key="atech"><rect x="220" y="180" width="100" height="40" rx="3"/><text x="270" y="205" text-anchor="middle">CLICK · ASTROTECH</text></g>
+          <g class="node" data-key="follow"><rect x="400" y="10" width="140" height="34" rx="3"/><text x="470" y="32" text-anchor="middle">FOLLOW</text></g>
+          <g class="node" data-key="guard"><rect x="400" y="60" width="140" height="34" rx="3"/><text x="470" y="82" text-anchor="middle">GUARD</text></g>
+          <g class="node" data-key="default"><rect x="400" y="110" width="140" height="34" rx="3"/><text x="470" y="132" text-anchor="middle">DEFAULT</text></g>
+          <g class="node" data-key="work"><rect x="400" y="160" width="140" height="34" rx="3" style="stroke:var(--amber);"/><text x="470" y="182" text-anchor="middle" style="fill:var(--amber);">WORK · STRETCH</text></g>
+          <g class="node" data-key="follow2"><rect x="400" y="210" width="140" height="34" rx="3"/><text x="470" y="232" text-anchor="middle">SAME 4 OPTIONS</text></g>
+          <g class="node" data-key="abilities-auto"><rect x="400" y="260" width="140" height="34" rx="3"/><text x="470" y="282" text-anchor="middle">+ ABILITY USE</text></g>
+          <g class="node" data-key="o-follow"><rect x="620" y="10" width="80" height="34" rx="3"/><text x="660" y="32" text-anchor="middle">TRAILS</text></g>
+          <g class="node" data-key="o-guard"><rect x="620" y="60" width="80" height="34" rx="3"/><text x="660" y="82" text-anchor="middle">HOLDS</text></g>
+          <g class="node" data-key="o-default"><rect x="620" y="110" width="80" height="34" rx="3"/><text x="660" y="132" text-anchor="middle">FLEES</text></g>
+          <g class="node" data-key="o-work"><rect x="620" y="160" width="80" height="34" rx="3" style="stroke:var(--amber);"/><text x="660" y="182" text-anchor="middle" style="fill:var(--amber);">REPAIRS</text></g>
+          <g class="node" data-key="o-engaged"><rect x="620" y="210" width="80" height="34" rx="3"/><text x="660" y="232" text-anchor="middle">ENGAGES</text></g>
+          <g class="node" data-key="o-cast"><rect x="620" y="260" width="80" height="34" rx="3"/><text x="660" y="282" text-anchor="middle">CASTS</text></g>
+        </svg>
+        <div class="flow-side" id="crewSide">
+          <div class="meta">Personality Profile</div><h4>Hover a personality →</h4>
+          <p>Personalities determine autonomous behavior between commands. <span class="accent">Work</span> is a stretch personality — adds autonomous repair labor.</p>
+          <p class="dim" style="font-size:12px;">Click any NPC to override personality with direct orders.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 END STATES -->
+<section class="section" id="endstates">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">09 //</span><h2>End States <small>Win &amp; Fail Conditions</small></h2><span class="meta">Hover Branches · Inspect</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">END</span>
+      <span class="gauge"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#39ff7a" stroke-width="2"/><path d="M 10 50 A 40 40 0 0 1 50 10" fill="none" stroke="#ff5a5a" stroke-width="2"/><g class="needle"><line x1="50" y1="50" x2="50" y2="14" stroke="#5be6e6" stroke-width="1.5" filter="drop-shadow(0 0 3px #5be6e6)"/><circle cx="50" cy="50" r="3" fill="#fff"/></g></svg><span class="lbl">OUTCOME</span></span>
+      <span class="dial"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#39ff7a" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff5a5a"/></svg></span>
+      <span class="eq"><i style="height:50%"></i><i style="height:60%"></i><i style="height:90%"></i><i style="height:30%"></i><i style="height:70%"></i></span>
+      <span class="scanner"></span>
+      <span class="tog"><span class="led"></span>RESOLVING</span>
+    </div>
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Outcome Branch Tree</span><span class="pip">●</span></p>
+      <div class="flow-wrap">
+        <svg class="flow-svg" id="flowEnd" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <marker id="arrow4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker>
+            <marker id="arrowFail" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff5a5a"/></marker>
+          </defs>
+          <g class="node start" data-key="round"><rect x="40" y="140" width="100" height="40" rx="3"/><text x="90" y="165" text-anchor="middle">ROUND ACTIVE</text></g>
+          <text class="label-out" x="200" y="100" fill="#39ff7a">VICTORY PATH</text>
+          <text class="label-out" x="200" y="240" fill="#ff5a5a">FAILURE PATH</text>
+          <path class="edge" d="M 140 150 L 220 110" marker-end="url(#arrow4)"/>
+          <path class="edge fail" d="M 140 170 L 220 220" marker-end="url(#arrowFail)"/>
+          <g class="node" data-key="systems-up"><rect x="220" y="90" width="140" height="40" rx="3"/><text x="290" y="115" text-anchor="middle">SYSTEMS REPAIRED</text></g>
+          <path class="edge" d="M 360 110 L 430 110" marker-end="url(#arrow4)"/>
+          <g class="node" data-key="objective"><rect x="430" y="90" width="140" height="40" rx="3"/><text x="500" y="115" text-anchor="middle">OBJECTIVE COMPLETE</text></g>
+          <path class="edge" d="M 570 110 L 620 110" marker-end="url(#arrow4)"/>
+          <g class="node win" data-key="win"><rect x="620" y="90" width="80" height="40" rx="3"/><text x="660" y="115" text-anchor="middle">VICTORY</text></g>
+          <g class="node" data-key="fail-trigger"><polygon points="220,220 265,200 310,220 265,240"/><text x="265" y="224" text-anchor="middle">FAIL TRIGGER</text></g>
+          <path class="edge fail" d="M 310 220 L 400 180" marker-end="url(#arrowFail)"/>
+          <path class="edge fail" d="M 310 220 L 400 220" marker-end="url(#arrowFail)"/>
+          <path class="edge fail" d="M 310 220 L 400 260" marker-end="url(#arrowFail)"/>
+          <g class="node end" data-key="death"><rect x="400" y="160" width="160" height="34" rx="3"/><text x="480" y="182" text-anchor="middle">PLAYER DOWN</text></g>
+          <g class="node end" data-key="ship-loss"><rect x="400" y="200" width="160" height="34" rx="3"/><text x="480" y="222" text-anchor="middle">CRITICAL SYSTEMS LOST</text></g>
+          <g class="node end" data-key="overrun"><rect x="400" y="240" width="160" height="34" rx="3"/><text x="480" y="262" text-anchor="middle">OVERRUN</text></g>
+          <path class="edge fail" d="M 560 180 L 620 220" marker-end="url(#arrowFail)"/>
+          <path class="edge fail" d="M 560 220 L 620 220" marker-end="url(#arrowFail)"/>
+          <path class="edge fail" d="M 560 260 L 620 220" marker-end="url(#arrowFail)"/>
+          <g class="node end" data-key="defeat"><rect x="620" y="200" width="80" height="40" rx="3"/><text x="660" y="225" text-anchor="middle">DEFEAT</text></g>
+        </svg>
+        <div class="flow-side" id="endSide">
+          <div class="meta">Outcome Profile</div><h4>Hover a branch →</h4>
+          <p>Two paths exit every round: victory (objective + repairs intact) or defeat (player down, critical systems lost, or hostile overrun). Hover any node to inspect.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 MODES -->
+<section class="section" id="modes">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">10 //</span><h2>Game Modes <small>Defense · Horde</small></h2><span class="meta">Two Manifests</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">MODES</span>
+      <span class="dial"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g></svg></span>
+      <span class="eq magenta"><i style="height:60%"></i><i style="height:80%"></i><i style="height:50%"></i><i style="height:70%"></i><i style="height:40%"></i></span>
+      <span class="tog"><span class="led"></span>2 MANIFESTS</span>
+      <span class="scanner"></span>
+    </div>
+    <div class="grid-2 modes">
+      <div class="frame card"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <div class="role">Mode 01 · Story</div>
+        <div class="ph" data-dim="540×180">SCREEN · DEFENSE OBJECTIVE</div>
+        <h4>Defense Mode</h4>
+        <p>Live out the AstroTechs story. Repair damaged systems and complete objectives. Solve puzzles, overcome powerful enemies, speak with fellow AstroTechs to unravel the mystery of why the ship has been rerouted from its original mission, and rescue crew members to bring them to safety.</p>
+      </div>
+      <div class="frame card"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <div class="role">Mode 02 · Survival</div>
+        <div class="ph" data-dim="540×180">SCREEN · HORDE WAVES</div>
+        <h4>Horde Mode</h4>
+        <p>Survive escalating waves as you open new areas, activate traps, and upgrade your arsenal. Combat-first; no narrative beats.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 REGISTER -->
+<section class="section" id="register">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">11 //</span><h2>Stretch &amp; Cut Register <small>Playtest Priority Scanner</small></h2><span class="meta">Filter · Solicit Feedback</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">SCAN</span>
+      <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g></svg></span>
+      <span class="knob"></span>
+      <span class="eq"><i style="height:30%"></i><i style="height:90%"></i><i style="height:50%"></i><i style="height:70%"></i><i style="height:40%"></i></span>
+      <span class="tog warn"><span class="led"></span>FEEDBACK OPEN</span>
+      <span class="scanner"></span>
+    </div>
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Asset Status · Filterable</span><span class="pip">●</span></p>
+      <div class="regfilters">
+        <button class="on" data-filter="all">All</button>
+        <button data-filter="stretch">Stretch</button>
+        <button data-filter="cut">Cut-Candidate</button>
+        <button data-filter="hidden">Hidden</button>
+        <button data-filter="review">Under Review</button>
+      </div>
+      <table class="reg">
+        <thead><tr><th style="width:18%">Status</th><th style="width:24%">Item</th><th>Detail</th></tr></thead>
+        <tbody id="regBody">
+          <tr data-row="cut"><td><span class="tag cut">Cut-Candidate</span></td><td><b>AOE Explosion</b> · ability</td><td>Slated to be removed. Feedback wanted on whether it earns its slot.</td></tr>
+          <tr data-row="hidden"><td><span class="tag hidden">Hidden</span></td><td><b>Flare</b> · ability</td><td>Slated to be a secret and hidden from the player. Discovery-gated.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>SMG</b> · weapon variant</td><td>Additional primary-weapon variant beyond burst / bolt / shotgun.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Pistol</b> · weapon variant</td><td>Additional primary-weapon variant beyond burst / bolt / shotgun.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Work</b> · NPC personality</td><td>New commandable personality alongside Follow / Guard / Default — assigns crew to autonomous repair labor.</td></tr>
+          <tr data-row="review"><td><span class="tag review">Under Review</span></td><td><b>WASD movement</b></td><td>Click-to-move is the default. WASD is currently on hold; no commitment either way.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>ASTROTECHS <span class="dot">●</span> ALLEGORY PUBLISHING L.L.C. <span class="dot">●</span> 2026</div>
+    <div>DOC <b>AT-0079 · REV 0.6</b></div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span class="dial slow"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g></svg></span>
+      <span class="btn-pulse cyan" style="width:14px;height:14px;"></span>
+      END OF TRANSMISSION
+    </div>
+  </div>
+</footer>
+
+</div>
+
+<script>
+const flowProfiles = {
+  start:{t:'Round Start',c:'Player drops in. The first five attacks have already resolved — you arrive in media res, with chaos already in progress.',accent:false},
+  'media-res':{t:'In Media Res',c:'<span class="accent">5 random attacks pre-resolved.</span> Fires already burning, systems already damaged, enemies already deployed. The game does not begin in calm.',accent:true},
+  map:{t:'Map View',c:'The strategic map reveals the full picture. Systems failing across the ship — you choose what to save and what to let go.',accent:false},
+  prioritize:{t:'Prioritize Threats',c:'Triage: which fire is biggest? Which system is most critical? Which enemy is closest to a Bob? Decisions are the gameplay.',accent:false},
+  navigate:{t:'Navigate + Solve',c:'Click-to-move toward priority targets. Engage hostiles, weaponize the environment, repair damage.',accent:false},
+  combat:{t:'Firefight',c:'Auto-aim engagements with growing recoil. Pacing bursts produces perfectly accurate fire.',accent:false},
+  repair:{t:'Repair',c:'Wrench out broken systems. Blast windows for vacuum, then repair them when the room is clear.',accent:false},
+  newprob:{t:'New Problems Spawn',c:'Attack events fire on a fixed interval — new fires, new enemies, new system damage. <span class="accent">The pressure never relents.</span>',accent:true},
+  player:{t:'Player Input',c:'One character under direct control. Mouse-driven by default; <span class="accent">WASD under review</span> but on hold.',accent:true},
+  input:{t:'Input Branch',c:'Five branches on the input layer. Each maps deterministically to one in-world outcome.',accent:false},
+  'lmb-enemy':{t:'LMB · On Enemy',c:'Aim auto-snaps to enemy center mass. Hold to fire — <span class="accent">"recoil gets bigger so pacing your shots will resolve in perfectly accurate burst."</span>',accent:true},
+  'lmb-device':{t:'LMB · On Device',c:'Destructible devices: window, fire barrel, bomb, power conduit. LMB destroys them and triggers the associated hazard.',accent:false},
+  rmb:{t:'RMB · Anywhere',c:'Manual aim. Decoupled from auto-aim. Used for trick angles, environmental shots, intentional misses.',accent:false},
+  'click-move':{t:'Click · Ground',c:'Click-to-move pathing. Movement is tuned for decisions, not reflexes.',accent:false},
+  'click-npc':{t:'Click · NPC',c:'Selects an NPC. Issue direct orders the same way you command yourself.',accent:false},
+  'o-burst':{t:'Outcome · Burst',c:'Paced shots stay inside the perfect-accuracy band. Held shots overshoot the recoil ceiling.',accent:false},
+  'o-hazard':{t:'Outcome · Hazard',c:'Suction zones, fire spread, blast detonation, electrified wires. Stray bullets from enemy robots can also trigger these.',accent:false},
+  'o-free':{t:'Outcome · Free Fire',c:'Player-aimed projectile path. No auto-targeting assistance.',accent:false},
+  'o-move':{t:'Outcome · Move',c:'Pathfinding to clicked location.',accent:false},
+  'o-command':{t:'Outcome · Command',c:'NPC selected; awaiting direct order or personality switch.',accent:false},
+  player2:{t:'Player',c:'Same one-character controller. Crew commands layer on top.',accent:false},
+  bob:{t:'Bob · Civilian Crew',c:'Pistol-armed, fragile, scattered. Flees when combat draws near. <span class="accent">Must be protected — they operate the ship.</span>',accent:true},
+  atech:{t:'Fellow AstroTech',c:'Engineer-soldier peer. Multiple abilities, autonomous combat use. Recoverable through play.',accent:false},
+  follow:{t:'Personality · Follow',c:'NPC trails behind the player. Useful for escorts.',accent:false},
+  guard:{t:'Personality · Guard',c:'NPC holds position and engages hostiles entering range.',accent:false},
+  default:{t:'Personality · Default',c:'Idle / scared behavior. Bobs flee from nearby combat.',accent:false},
+  work:{t:'Personality · Work · STRETCH',c:'Stretch goal. Autonomous repair labor — assign crew to broken systems and they fix them without further input.',accent:true},
+  follow2:{t:'AstroTech Personalities',c:'Same four options as Bobs.',accent:false},
+  'abilities-auto':{t:'Autonomous Abilities',c:'AstroTechs use their abilities automatically when enemies are near.',accent:false},
+  'o-follow':{t:'Behavior · Trails',c:'Tracks player position with a small offset.',accent:false},
+  'o-guard':{t:'Behavior · Holds',c:'Stationary. Auto-fires on hostiles in range.',accent:false},
+  'o-default':{t:'Behavior · Flees',c:'Bobs panic and route away from threats.',accent:false},
+  'o-work':{t:'Behavior · Repairs · STRETCH',c:'Targets damaged systems and repairs them autonomously. Stretch only.',accent:true},
+  'o-engaged':{t:'Behavior · Engages',c:'AstroTech locks on and fires.',accent:false},
+  'o-cast':{t:'Behavior · Casts',c:'Uses abilities on cooldown when targets are valid.',accent:false},
+  round:{t:'Round Active',c:'Mid-round. All systems running, all paths still open.',accent:false},
+  'systems-up':{t:'Systems Repaired',c:'Critical systems back online. Ship integrity holding.',accent:false},
+  objective:{t:'Objective Complete',c:'Mission goal achieved — defense held, story beat reached, or wave cleared.',accent:false},
+  win:{t:'VICTORY',c:'Round resolves to win. <span class="accent">Save the ship with your strat.</span>',accent:true},
+  'fail-trigger':{t:'Fail Trigger',c:'Any one of three failure conditions activates the defeat path.',accent:false},
+  death:{t:'Player Down',c:'Engineer killed in combat. Game over.',accent:false},
+  'ship-loss':{t:'Critical Systems Lost',c:'Too much damage to ship-critical infrastructure. Vessel cannot be saved.',accent:false},
+  overrun:{t:'Overrun',c:'Hostile mass exceeds containable threshold. Position lost.',accent:false},
+  defeat:{t:'DEFEAT',c:'Round resolves to loss. Restart or load.',accent:false}
+};
+function bindFlow(svgId, sideId){
+  const svg = document.getElementById(svgId);
+  const side = document.getElementById(sideId);
+  const nodes = svg.querySelectorAll('.node');
+  nodes.forEach(n=>{
+    n.addEventListener('mouseenter',()=>{
+      nodes.forEach(x=>x.classList.remove('active'));
+      n.classList.add('active');
+      const k = n.dataset.key; const p = flowProfiles[k]; if(!p) return;
+      side.innerHTML = `<div class="meta">${p.accent?'⚠ Critical Profile':'Node Profile'}</div><h4>${p.t}</h4><p>${p.c}</p>`;
+    });
+  });
+}
+bindFlow('flowLoop','loopSide');bindFlow('flowCombat','combatSide');bindFlow('flowCrew','crewSide');bindFlow('flowEnd','endSide');
+
+(function(){
+  const svg=document.getElementById('recoilSvg'),path=document.getElementById('recoilCurve'),dot=document.getElementById('recoilDot'),tEl=document.getElementById('holdTime'),sEl=document.getElementById('spread');
+  let t=0,holding=false,points=[];
+  function tick(){
+    if(holding){t=Math.min(t+0.05,4);}else{t=Math.max(t-0.15,0);}
+    const x=(t/4)*600,y=180-(1-Math.exp(-t*0.9))*150;
+    if(holding){points.push([x,y]);if(points.length>120)points.shift();}
+    if(!holding&&t<=0){points=[];}
+    let d="M 0 180";points.forEach(p=>{d+=` L ${p[0].toFixed(1)} ${p[1].toFixed(1)}`;});
+    path.setAttribute('d',d);dot.setAttribute('cx',x);dot.setAttribute('cy',y);
+    const spread=((1-Math.exp(-t*0.9))*100).toFixed(0);
+    tEl.textContent=t.toFixed(1)+'s';sEl.textContent=spread+'%';sEl.className=spread>60?'warn':'';
+    requestAnimationFrame(tick);
+  }
+  svg.addEventListener('mousedown',()=>{holding=true;});
+  svg.addEventListener('touchstart',e=>{e.preventDefault();holding=true;},{passive:false});
+  window.addEventListener('mouseup',()=>{holding=false;});
+  window.addEventListener('touchend',()=>{holding=false;});
+  tick();
+})();
+(function(){
+  const slider=document.getElementById('dilSlider'),val=document.getElementById('dilVal'),planet=document.getElementById('dilPlanet'),stateLabel=document.getElementById('dilStateLabel');
+  let angle=0,lastT=0;
+  function frame(t){
+    if(!lastT)lastT=t;const dt=(t-lastT)/1000;lastT=t;
+    const speed=+slider.value/100;angle+=dt*speed*1.4;
+    const cx=100+Math.cos(angle)*42,cy=50+Math.sin(angle)*42;
+    planet.setAttribute('cx',cx.toFixed(2));planet.setAttribute('cy',cy.toFixed(2));
+    requestAnimationFrame(frame);
+  }
+  slider.addEventListener('input',()=>{
+    const v=+slider.value;val.textContent=v+'%';
+    if(v<=20)stateLabel.textContent='AT REST';else if(v<70)stateLabel.textContent='COMMITTING';
+    else if(v<=75)stateLabel.textContent='COMMIT // 70%';else stateLabel.textContent='OVERDRIVE';
+  });
+  requestAnimationFrame(frame);
+})();
+(function(){
+  const data={snipers:{n:'SNIPERS',c:'Long-range corrupted units. Force you to break sightlines and approach via cover or environmental hazards.'},
+    spiders:{n:'SPIDERS',c:'Fast, low-profile machines. Punish stationary play. Vulnerable to suction zones and live-wire traps.'},
+    sentry:{n:'SENTRY DROIDS',c:'Garrisoned area-denial. Hold key chokepoints — dislodge with grenades, AOE, or environmental detonation.'},
+    boss:{n:'ENVIRONMENTAL BOSSES',c:'"Powerful environmental boss-enemies." Fight is structured around the room itself — windows, conduits, barrels.'}};
+  const detail=document.getElementById('threatDetail');const bands=document.querySelectorAll('.threats .bar div');
+  bands.forEach(b=>{b.addEventListener('mouseenter',()=>{bands.forEach(x=>x.classList.remove('active'));b.classList.add('active');const d=data[b.dataset.t];detail.innerHTML=`<b>${d.n}</b>${d.c}`;});});
+})();
+(function(){
+  const hazards={
+    window:{n:'Window',m:'PROFILE 01 / 04',ph:'SCREENSHOT · DECOMPRESSION KILL',
+      e:`Shooting a window decompresses the chamber, creating a suction zone that pulls hostiles out into space. <em style="color:var(--cyan);font-style:normal;">"Blast your enemies out into space by destroying a window, and then repairing it when you're done."</em>`,
+      svg:`<rect x="20" y="20" width="360" height="60" fill="none" stroke="#5be6e6" stroke-dasharray="4,4"/><circle cx="60" cy="50" r="6" fill="#ff3d8b" class="bloom"/><circle cx="120" cy="50" r="6" fill="#ff3d8b" class="bloom"/><circle cx="180" cy="50" r="6" fill="#ff3d8b" class="bloom"/><line x1="60" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/><line x1="120" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/><line x1="180" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/><text x="385" y="54" fill="#5be6e6" font-size="9" font-family="JetBrains Mono">→ VACUUM</text>`},
+    fire:{n:'Fire Barrel',m:'PROFILE 02 / 04',ph:'SCREENSHOT · FIRE SPREAD',
+      e:`Spawns a spreading fire hazard. <strong>"Individual fires expand and can grow very big"</strong> if untreated. Stray bullets from enemy robots can cause problems for you, too.`,
+      svg:`<circle cx="80" cy="50" r="8" fill="#ff3d8b" class="bloom"/><circle cx="80" cy="50" r="22" fill="none" stroke="#ff3d8b" stroke-dasharray="3,3" opacity="0.7"/><circle cx="80" cy="50" r="38" fill="none" stroke="#ff3d8b" stroke-dasharray="2,5" opacity="0.4"/><text x="140" y="40" fill="#ff3d8b" font-size="10" font-family="JetBrains Mono">T+0s : IGNITION</text><text x="140" y="58" fill="#ffb000" font-size="10" font-family="JetBrains Mono">T+5s : SPREADING</text><text x="140" y="76" fill="#fff" font-size="10" font-family="JetBrains Mono">T+15s : LARGE</text>`},
+    bomb:{n:'Bomb',m:'PROFILE 03 / 04',ph:'SCREENSHOT · DETONATION',
+      e:`Triggers a large explosion. High-yield environmental detonation — clear rooms or take out clusters in one shot.`,
+      svg:`<circle cx="200" cy="50" r="6" fill="#ff3d8b" class="bloom"/><circle cx="200" cy="50" r="20" fill="none" stroke="#ffb000" stroke-width="1"/><circle cx="200" cy="50" r="35" fill="none" stroke="#ffb000" stroke-width="1" opacity="0.6"/><circle cx="200" cy="50" r="48" fill="none" stroke="#ffb000" stroke-width="1" opacity="0.3" stroke-dasharray="3,3"/><text x="200" y="92" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">BLAST RADIUS</text>`},
+    conduit:{n:'Power Conduit',m:'PROFILE 04 / 04',ph:'SCREENSHOT · ELECTRIFIED FLOOR',
+      e:`Creates an electrical trap zone over the conduit. <em style="color:var(--cyan);font-style:normal;">"Lure your enemies onto live wires and watch them fry."</em>`,
+      svg:`<path d="M 20 50 L 60 30 L 100 50 L 140 30 L 180 50 L 220 30 L 260 50 L 300 30 L 340 50 L 380 30" fill="none" stroke="#ffb000" stroke-width="2"/><circle cx="100" cy="50" r="4" fill="#ff3d8b" class="bloom"/><circle cx="220" cy="30" r="4" fill="#ff3d8b" class="bloom"/><text x="200" y="92" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">LIVE WIRES — LURE TARGETS</text>`}
+  };
+  const detail=document.getElementById('hazDetail');const opts=document.querySelectorAll('.haz .opt');
+  opts.forEach(o=>{o.addEventListener('click',()=>{
+    opts.forEach(x=>x.classList.remove('on'));o.classList.add('on');
+    const h=hazards[o.dataset.haz];
+    detail.innerHTML=`<div class="topbar"><div class="hmeta">${h.m}</div><div style="display:flex;gap:8px;align-items:center;"><span class="dial fast" style="width:24px;height:24px;"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.5"/></g></svg></span><span class="btn-pulse cyan" style="width:10px;height:10px;"></span></div></div><h4>${h.n}</h4><div class="ph" data-dim="500×120">${h.ph}</div><p>${h.e}</p><svg class="diag" viewBox="0 0 400 100">${h.svg}</svg>`;
+  });});
+})();
+(function(){
+  const buttons=document.querySelectorAll('.regfilters button');const rows=document.querySelectorAll('#regBody tr');
+  buttons.forEach(b=>{b.addEventListener('click',()=>{buttons.forEach(x=>x.classList.remove('on'));b.classList.add('on');
+    const f=b.dataset.filter;rows.forEach(r=>{if(f==='all'||r.dataset.row===f)r.classList.remove('hide');else r.classList.add('hide');});});});
+})();
+document.querySelectorAll('.topnav a').forEach(a=>{a.addEventListener('click',e=>{const id=a.getAttribute('href').slice(1);const el=document.getElementById(id);if(el){e.preventDefault();el.scrollIntoView({behavior:'smooth',block:'start'});}});});
+</script>
 </body>
 </html>
