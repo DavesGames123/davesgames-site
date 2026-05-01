@@ -1,0 +1,6 @@
+# Stella Nova SPA rewrite
+RewriteEngine On
+RewriteBase /stella-nova/
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^.*$ index.html [L]

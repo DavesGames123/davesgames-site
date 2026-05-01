@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/stella-nova/:slug", "destination": "/stella-nova/index.html" },
+    { "source": "/stella-nova/:slug/:rest*", "destination": "/stella-nova/index.html" }
+  ]
+}
