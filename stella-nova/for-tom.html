@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>For Tom — Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #0a0c11;
+  --bg2:       #0e1118;
+  --border:    rgba(150,200,255,0.07);
+  --border-b:  rgba(150,200,255,0.16);
+  --teal:      #64dcc8;
+  --teal-dim:  #40a090;
+  --text:      #c0cfe0;
+  --text-dim:  #5a7090;
+  --text-faint:#2a3850;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; min-height: 100%;
+  background: var(--bg);
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.05) 4px);
+}
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 64px 32px 96px;
+}
+.kicker {
+  font-size: 0.7rem;
+  letter-spacing: 0.32em;
+  color: var(--teal);
+  text-transform: uppercase;
+  margin-bottom: 18px;
+  display: flex; align-items: center; gap: 10px;
+}
+.kicker::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--teal);
+  box-shadow: 0 0 7px var(--teal);
+}
+h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 300;
+  font-size: 4.2rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #e8eef8;
+  line-height: 1;
+  margin-bottom: 14px;
+}
+.sub {
+  font-size: 0.85rem;
+  letter-spacing: 0.16em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  margin-bottom: 48px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border-b);
+}
+.frame {
+  border: 1px solid var(--border-b);
+  background: var(--bg2);
+  padding: 28px 30px;
+  margin-bottom: 22px;
+  position: relative;
+}
+.frame-title {
+  font-size: 0.65rem;
+  letter-spacing: 0.28em;
+  color: var(--teal);
+  text-transform: uppercase;
+  margin-bottom: 14px;
+}
+.frame p {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+.frame p:last-child { margin-bottom: 0; }
+.placeholder {
+  border: 1px dashed var(--text-faint);
+  background: repeating-linear-gradient(45deg,
+    rgba(100,220,200,0.03) 0,
+    rgba(100,220,200,0.03) 1px,
+    transparent 1px, transparent 14px);
+  padding: 80px 24px;
+  text-align: center;
+  font-size: 0.7rem;
+  letter-spacing: 0.24em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  margin: 24px 0;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 32px;
+}
+.meta b {
+  display: block;
+  color: var(--teal);
+  font-weight: 400;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  margin-top: 4px;
+}
+</style>
+</head>
+<body>
+
+<main>
+  <div class="kicker">Community // Personal Dispatch</div>
+  <h1>For Tom</h1>
+  <div class="sub">Stella Nova · Reserved Page</div>
+
+  <div class="frame">
+    <div class="frame-title">▸ Reserved</div>
+    <p>This page is reserved for Tom.</p>
+    <p>Content pending.</p>
+  </div>
+
+  <div class="placeholder">[ CONTENT BLOCK · TBD ]</div>
+
+  <div class="meta">
+    <span>FILE<b>community / for-tom.html</b></span>
+    <span>STATUS<b>Draft</b></span>
+    <span>REV<b>0.1</b></span>
+  </div>
+</main>
+
+</body>
+</html>

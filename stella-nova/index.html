@@ -47,7 +47,6 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
   transition: transform 0.28s cubic-bezier(0.4,0,0.2,1);
 }
 
-/* Mobile: sidebar slides off-screen */
 @media (max-width: 768px) {
   #sidebar {
     position: fixed;
@@ -252,6 +251,14 @@ body { font-family: 'JetBrains Mono', monospace; color: var(--text); -webkit-fon
 .nav-item.mat:hover::before { background: #9070d0; }
 .cluster-head.mat-head .cluster-icon { opacity: 1; color: #b896ff; }
 .cluster.open .cluster-head.mat-head .cluster-label { color: #b896ff; }
+
+/* Community accent (teal) */
+.nav-item.com.active { background: rgba(100,220,200,0.06); }
+.nav-item.com.active::before { background: #64dcc8; box-shadow: 0 0 7px #64dcc8; }
+.nav-item.com.active .nav-label { color: #64dcc8; }
+.nav-item.com:hover::before { background: #40a090; }
+.cluster-head.com-head .cluster-icon { opacity: 1; color: #64dcc8; }
+.cluster.open .cluster-head.com-head .cluster-label { color: #64dcc8; }
 
 /* ── Nav text ─────────────────────────────────────────────────────────────── */
 .nav-label {
@@ -503,6 +510,20 @@ body::after {
         </div>
       </div>
 
+      <!-- ── Community ──────────────────────────────────────────── -->
+      <div class="cluster" id="cl-community">
+        <button class="cluster-head com-head" onclick="toggleCluster('cl-community')">
+          <span class="cluster-icon">&#9737;</span>
+          <span class="cluster-label">Community</span>
+          <span class="cluster-arrow">&#8250;</span>
+        </button>
+        <div class="cluster-body">
+          <button class="nav-item com" data-tab="fortom" onclick="switchTab('fortom')">
+            <span class="nav-label">For Tom</span>
+          </button>
+        </div>
+      </div>
+
     </div>
 
     <div id="sb-footer">
@@ -546,6 +567,7 @@ const PAGES = {
   anomaly:'wormhole.html',
   blackhole:'blackhole.html',
   galaxy:'galaxy.html',
+  fortom:'for-tom.html',
 };
 
 const LABELS = {
@@ -570,6 +592,7 @@ const LABELS = {
   anomaly:'Anomaly',
   blackhole:'Black Hole',
   galaxy:'Galaxy',
+  fortom:'For Tom',
 };
 
 const XR_PAGES = new Set(['orbital']);
