@@ -400,7 +400,7 @@ kbd{font-family:'JetBrains Mono',monospace;background:rgba(91,230,230,0.08);bord
   <div class="brand"><span class="dot"></span>ASTROTECHS · OPS</div>
   <nav>
     <a href="#identity">Identity</a><a href="#loop">Loop</a><a href="#controls">Combat</a>
-    <a href="#abilities">Kit</a><a href="#hazards">Hazards</a><a href="#enemies">Enemies</a>
+    <a href="#abilities">Kit</a><a href="#hazards">Devices</a><a href="#enemies">Enemies</a>
     <a href="#crew">Crew</a><a href="#endstates">End States</a><a href="#register">Register</a>
   </nav>
   <div class="chrome">
@@ -726,35 +726,45 @@ kbd{font-family:'JetBrains Mono',monospace;background:rgba(91,230,230,0.08);bord
   </div>
 </section>
 
-<!-- 06 HAZARDS -->
+<!-- 06 DEVICES -->
 <section class="section" id="hazards">
   <div class="wrap">
     <div class="section-head">
-      <span class="num">06 //</span><h2>Weaponized Environment <small>Destructible Devices</small></h2><span class="meta">Click Device · Inspect</span>
+      <span class="num">06 //</span><h2>Devices <small>Playtester-Visible Roster</small></h2><span class="meta">Click Device · Inspect</span>
     </div>
     <div class="section-chrome">
-      <span class="label">HAZARDS</span>
+      <span class="label">DEVICES</span>
       <span class="knob spin"></span>
       <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#ff3d8b" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ffb000"/></svg></span>
       <span class="eq magenta"><i style="height:80%"></i><i style="height:40%"></i><i style="height:90%"></i><i style="height:30%"></i><i style="height:70%"></i></span>
       <span class="scanner"></span>
       <span class="tog warn"><span class="led"></span>HOT</span>
     </div>
+
+    <div class="frame" style="margin-bottom:18px;">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Roster Scope</span><span class="pip">●</span></p>
+      <p class="dim" style="font-size:13px;margin:0;">Tested device set. <em style="color:var(--cyan);font-style:normal;">"What the play testers will see is going to be the smallest list of just a couple of them"</em> — five devices visible to playtesters, with stretch interconnects between them flagged where applicable.</p>
+    </div>
+
     <div class="frame">
       <span class="corner-tr"></span><span class="corner-bl"></span>
       <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Device Profile · Selectable</span><span class="pip">●</span></p>
       <div class="haz">
         <div class="opts">
-          <div class="opt on" data-haz="window">WINDOW <small>VACUUM</small></div>
-          <div class="opt" data-haz="fire">FIRE BARREL <small>SPREAD</small></div>
-          <div class="opt" data-haz="bomb">BOMB <small>BLAST</small></div>
-          <div class="opt" data-haz="conduit">POWER CONDUIT <small>TRAP</small></div>
+          <div class="opt on" data-haz="window">WINDOW <small>VACUUM · 3-STATE</small></div>
+          <div class="opt" data-haz="door">DOOR <small>AUTO · DURABLE</small></div>
+          <div class="opt" data-haz="bomb">BARREL BOMB <small>EXPLOSION</small></div>
+          <div class="opt" data-haz="fire">FIRE BARREL <small>SPREADING FIRE</small></div>
+          <div class="opt" data-haz="conduit">POWER CONDUIT <small>STUN TRAP</small></div>
         </div>
         <div class="detail" id="hazDetail">
-          <div class="topbar"><div class="hmeta">PROFILE 01 / 04</div><div style="display:flex;gap:8px;align-items:center;"><span class="dial fast" style="width:24px;height:24px;"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.5"/></g></svg></span><span class="btn-pulse cyan" style="width:10px;height:10px;"></span></div></div>
+          <div class="topbar"><div class="hmeta">PROFILE 01 / 05</div><div style="display:flex;gap:8px;align-items:center;"><span class="dial fast" style="width:24px;height:24px;"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.5"/></g></svg></span><span class="btn-pulse cyan" style="width:10px;height:10px;"></span></div></div>
           <h4>Window</h4>
           <div class="ph" data-dim="500×120">SCREENSHOT · DECOMPRESSION KILL</div>
-          <p>Shooting a window decompresses the chamber, creating a suction zone that pulls hostiles out into space. <em style="color:var(--cyan);font-style:normal;">"Blast your enemies out into space by destroying a window, and then repairing it when you're done."</em></p>
+          <p><strong>Three states:</strong> <span class="tag ship">Working / Closed</span> <span class="tag" style="color:var(--magenta);border-color:var(--magenta);">Broken</span> <span class="tag" style="color:var(--cyan);border-color:var(--cyan-mid);">Broken-Shielded</span></p>
+          <p>When broken, a window <em style="color:var(--cyan);font-style:normal;">"will create a sucking area of effect"</em>, then after a couple seconds of that <em style="color:var(--cyan);font-style:normal;">"they will shield themselves and become broken shielded."</em></p>
+          <p style="font-size:13px;color:var(--text-dim);"><span class="tag stretch">STRETCH</span> Wire a window to a power conduit — <em style="color:var(--cyan);font-style:normal;">"if the power [conduit] is destroyed, the window will not shield itself."</em></p>
           <svg class="diag" viewBox="0 0 400 100">
             <rect x="20" y="20" width="360" height="60" fill="none" stroke="#5be6e6" stroke-dasharray="4,4"/>
             <circle cx="60" cy="50" r="6" fill="#ff3d8b" class="bloom"/>
@@ -768,6 +778,20 @@ kbd{font-family:'JetBrains Mono',monospace;background:rgba(91,230,230,0.08);bord
         </div>
       </div>
     </div>
+
+    <!-- Implementation Plans / Stretch -->
+    <div class="frame accent" style="margin-top:18px;">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Implementation Plans &amp; Stretch Interconnects</span><span class="pip">PLANNED</span></p>
+      <ul class="tk">
+        <li><b>Window ↔ Conduit wiring</b> <span class="tag stretch">Stretch</span> — destroy the linked conduit and the broken window will not shield itself, leaving the suction zone permanent.</li>
+        <li><b>Doors as enemy hosts</b> <span class="tag hidden">Likely Add</span> — a door can be enemy-infected; walk through without clearing it and the door fires an attack at you.</li>
+        <li><b>Pressurized doors</b> <span class="tag stretch">Stretch</span> — wired to an oxygen generator on one side. Unequal pressure disables auto-open. Manual click vents <em style="color:var(--cyan);font-style:normal;">"a short burst of air in one direction that is away from pressure"</em> before becoming shielded or a walkable windy area. Final behavior pending.</li>
+        <li><b>Oxygen generators</b> <span class="tag review">TBD</span> — device does not currently exist. Leading theory: reuse the existing ice mechanic.</li>
+        <li><b>Damaged doors auto-shut</b> <span class="tag review">Considering</span> — open/closed both take damage; "I wouldn't mind it shutting every time it gets damaged."</li>
+      </ul>
+    </div>
+
   </div>
 </section>
 
@@ -1015,6 +1039,11 @@ kbd{font-family:'JetBrains Mono',monospace;background:rgba(91,230,230,0.08);bord
           <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Pistol</b> · weapon variant</td><td>Additional primary-weapon variant beyond burst / bolt / shotgun.</td></tr>
           <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Work</b> · NPC personality</td><td>New commandable personality alongside Follow / Guard / Default — assigns crew to autonomous repair labor.</td></tr>
           <tr data-row="review"><td><span class="tag review">Under Review</span></td><td><b>WASD movement</b></td><td>Click-to-move is the default. WASD is currently on hold; no commitment either way.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Window ↔ Conduit wiring</b> · device link</td><td>Wire a window to a power conduit — destroy the conduit and the broken window will not shield itself.</td></tr>
+          <tr data-row="hidden"><td><span class="tag hidden">Likely Add</span></td><td><b>Enemy-infected doors</b> · device behavior</td><td>A door can be enemy-infected; walk through without clearing it and the door fires an attack at you.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Pressurized doors</b> · device link</td><td>Wired to oxygen generator on one side. Unequal pressure disables auto-open. Manual click vents short air burst before shielding.</td></tr>
+          <tr data-row="review"><td><span class="tag review">TBD</span></td><td><b>Oxygen generators</b> · new device</td><td>Device does not currently exist. Leading theory: reuse the existing ice mechanic.</td></tr>
+          <tr data-row="review"><td><span class="tag review">Considering</span></td><td><b>Damaged doors auto-shut</b> · behavior</td><td>"I wouldn't mind it shutting every time it gets damaged."</td></tr>
         </tbody>
       </table>
     </div>
@@ -1144,24 +1173,49 @@ bindFlow('flowLoop','loopSide');bindFlow('flowCombat','combatSide');bindFlow('fl
 })();
 (function(){
   const hazards={
-    window:{n:'Window',m:'PROFILE 01 / 04',ph:'SCREENSHOT · DECOMPRESSION KILL',
-      e:`Shooting a window decompresses the chamber, creating a suction zone that pulls hostiles out into space. <em style="color:var(--cyan);font-style:normal;">"Blast your enemies out into space by destroying a window, and then repairing it when you're done."</em>`,
-      svg:`<rect x="20" y="20" width="360" height="60" fill="none" stroke="#5be6e6" stroke-dasharray="4,4"/><circle cx="60" cy="50" r="6" fill="#ff3d8b" class="bloom"/><circle cx="120" cy="50" r="6" fill="#ff3d8b" class="bloom"/><circle cx="180" cy="50" r="6" fill="#ff3d8b" class="bloom"/><line x1="60" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/><line x1="120" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/><line x1="180" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/><text x="385" y="54" fill="#5be6e6" font-size="9" font-family="JetBrains Mono">→ VACUUM</text>`},
-    fire:{n:'Fire Barrel',m:'PROFILE 02 / 04',ph:'SCREENSHOT · FIRE SPREAD',
-      e:`Spawns a spreading fire hazard. <strong>"Individual fires expand and can grow very big"</strong> if untreated. Stray bullets from enemy robots can cause problems for you, too.`,
-      svg:`<circle cx="80" cy="50" r="8" fill="#ff3d8b" class="bloom"/><circle cx="80" cy="50" r="22" fill="none" stroke="#ff3d8b" stroke-dasharray="3,3" opacity="0.7"/><circle cx="80" cy="50" r="38" fill="none" stroke="#ff3d8b" stroke-dasharray="2,5" opacity="0.4"/><text x="140" y="40" fill="#ff3d8b" font-size="10" font-family="JetBrains Mono">T+0s : IGNITION</text><text x="140" y="58" fill="#ffb000" font-size="10" font-family="JetBrains Mono">T+5s : SPREADING</text><text x="140" y="76" fill="#fff" font-size="10" font-family="JetBrains Mono">T+15s : LARGE</text>`},
-    bomb:{n:'Bomb',m:'PROFILE 03 / 04',ph:'SCREENSHOT · DETONATION',
-      e:`Triggers a large explosion. High-yield environmental detonation — clear rooms or take out clusters in one shot.`,
-      svg:`<circle cx="200" cy="50" r="6" fill="#ff3d8b" class="bloom"/><circle cx="200" cy="50" r="20" fill="none" stroke="#ffb000" stroke-width="1"/><circle cx="200" cy="50" r="35" fill="none" stroke="#ffb000" stroke-width="1" opacity="0.6"/><circle cx="200" cy="50" r="48" fill="none" stroke="#ffb000" stroke-width="1" opacity="0.3" stroke-dasharray="3,3"/><text x="200" y="92" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">BLAST RADIUS</text>`},
-    conduit:{n:'Power Conduit',m:'PROFILE 04 / 04',ph:'SCREENSHOT · ELECTRIFIED FLOOR',
-      e:`Creates an electrical trap zone over the conduit. <em style="color:var(--cyan);font-style:normal;">"Lure your enemies onto live wires and watch them fry."</em>`,
-      svg:`<path d="M 20 50 L 60 30 L 100 50 L 140 30 L 180 50 L 220 30 L 260 50 L 300 30 L 340 50 L 380 30" fill="none" stroke="#ffb000" stroke-width="2"/><circle cx="100" cy="50" r="4" fill="#ff3d8b" class="bloom"/><circle cx="220" cy="30" r="4" fill="#ff3d8b" class="bloom"/><text x="200" y="92" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">LIVE WIRES — LURE TARGETS</text>`}
+    window:{n:'Window',m:'PROFILE 01 / 05',ph:'SCREENSHOT · DECOMPRESSION KILL',
+      e:`<p><strong>Three states:</strong> <span class="tag ship">Working / Closed</span> <span class="tag" style="color:var(--magenta);border-color:var(--magenta);">Broken</span> <span class="tag" style="color:var(--cyan);border-color:var(--cyan-mid);">Broken-Shielded</span></p>
+          <p>When broken, a window <em style="color:var(--cyan);font-style:normal;">"will create a sucking area of effect"</em>, then after a couple seconds <em style="color:var(--cyan);font-style:normal;">"they will shield themselves and become broken shielded."</em></p>
+          <p style="font-size:13px;color:var(--text-dim);"><span class="tag stretch">STRETCH</span> Wire to a power conduit — destroy the conduit and the window will not shield itself.</p>`,
+      svg:`<rect x="40" y="30" width="80" height="40" fill="none" stroke="#5be6e6" stroke-width="1.5"/><text x="80" y="86" fill="#5be6e6" font-size="9" font-family="JetBrains Mono" text-anchor="middle">WORKING</text>
+            <line x1="135" y1="50" x2="155" y2="50" stroke="#2a8a8a" stroke-width="1" marker-end="url(#hazArrow)"/>
+            <rect x="170" y="30" width="80" height="40" fill="none" stroke="#ff3d8b" stroke-width="1.5" stroke-dasharray="3,2"/><circle cx="195" cy="50" r="4" fill="#ff3d8b" class="bloom"/><circle cx="225" cy="50" r="4" fill="#ff3d8b" class="bloom"/><text x="210" y="86" fill="#ff3d8b" font-size="9" font-family="JetBrains Mono" text-anchor="middle">BROKEN</text>
+            <line x1="265" y1="50" x2="285" y2="50" stroke="#2a8a8a" stroke-width="1" marker-end="url(#hazArrow)"/>
+            <rect x="300" y="30" width="80" height="40" fill="none" stroke="#5be6e6" stroke-width="2"/><rect x="304" y="34" width="72" height="32" fill="none" stroke="#5be6e6" stroke-width="0.5" stroke-dasharray="2,2"/><text x="340" y="86" fill="#5be6e6" font-size="9" font-family="JetBrains Mono" text-anchor="middle">SHIELDED</text>`},
+    door:{n:'Door',m:'PROFILE 02 / 05',ph:'SCREENSHOT · DOOR OPENING',
+      e:`<p>Opens automatically to <em style="color:var(--cyan);font-style:normal;">"both friendly and enemies."</em> Pretty durable but grenades and similar will damage it. Damageable in both open and closed states.</p>
+          <p style="font-size:13px;color:var(--text-dim);"><span class="tag hidden">LIKELY ADD</span> Doors can be enemy-infected — walk through without shooting the enemies off the door and it sends an attack toward you.</p>
+          <p style="font-size:13px;color:var(--text-dim);"><span class="tag stretch">STRETCH</span> Pressurized via oxygen generator on one side. Unequal pressure disables auto-open; manual click vents a short air burst before shielding or becoming a walkable windy area.</p>`,
+      svg:`<rect x="40" y="35" width="20" height="30" fill="none" stroke="#5be6e6" stroke-width="1.5"/><rect x="60" y="35" width="20" height="30" fill="none" stroke="#5be6e6" stroke-width="1.5"/><text x="60" y="86" fill="#5be6e6" font-size="9" font-family="JetBrains Mono" text-anchor="middle">CLOSED</text>
+            <line x1="95" y1="50" x2="115" y2="50" stroke="#2a8a8a" stroke-width="1" marker-end="url(#hazArrow)"/>
+            <rect x="125" y="35" width="20" height="30" fill="none" stroke="#5be6e6" stroke-width="1.5"/><line x1="148" y1="35" x2="170" y2="35" stroke="#5be6e6" stroke-width="1.5"/><line x1="148" y1="65" x2="170" y2="65" stroke="#5be6e6" stroke-width="1.5"/><rect x="170" y="35" width="20" height="30" fill="none" stroke="#5be6e6" stroke-width="1.5"/><text x="155" y="86" fill="#5be6e6" font-size="9" font-family="JetBrains Mono" text-anchor="middle">OPEN</text>
+            <line x1="205" y1="50" x2="225" y2="50" stroke="#ffb000" stroke-width="1" marker-end="url(#hazArrow)"/>
+            <rect x="240" y="35" width="20" height="30" fill="none" stroke="#ffb000" stroke-width="1.5" stroke-dasharray="3,2"/><rect x="260" y="35" width="20" height="30" fill="none" stroke="#ffb000" stroke-width="1.5" stroke-dasharray="3,2"/><circle cx="270" cy="50" r="3" fill="#ff3d8b" class="bloom"/><text x="260" y="86" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">INFECTED</text>
+            <text x="350" y="50" fill="#ff3d8b" font-size="9" font-family="JetBrains Mono">→ ATTACKS</text>`},
+    bomb:{n:'Barrel Bomb',m:'PROFILE 03 / 05',ph:'SCREENSHOT · DETONATION',
+      e:`<p><em style="color:var(--cyan);font-style:normal;">"A classic barrel that you shoot and it blows up."</em></p>
+          <p>Cannot be repaired once destroyed. One-shot environmental tool — clear a room or take out a cluster in a single trigger.</p>`,
+      svg:`<rect x="180" y="30" width="40" height="40" fill="none" stroke="#ff3d8b" stroke-width="1.5"/><circle cx="200" cy="50" r="6" fill="#ff3d8b" class="bloom"/><circle cx="200" cy="50" r="20" fill="none" stroke="#ffb000" stroke-width="1"/><circle cx="200" cy="50" r="35" fill="none" stroke="#ffb000" stroke-width="1" opacity="0.6"/><circle cx="200" cy="50" r="48" fill="none" stroke="#ffb000" stroke-width="1" opacity="0.3" stroke-dasharray="3,3"/><text x="200" y="92" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">BLAST RADIUS · ONE-SHOT</text>`},
+    fire:{n:'Fire Barrel',m:'PROFILE 04 / 05',ph:'SCREENSHOT · FIRE SPREAD',
+      e:`<p>Wall-mounted. <em style="color:var(--cyan);font-style:normal;">"When you shoot it, it drops some fire hazards that spread organically."</em></p>
+          <p>Unlike the barrel bomb, the fire barrel <strong>can be repaired</strong>. Spread continues until contained.</p>`,
+      svg:`<rect x="40" y="30" width="20" height="40" fill="none" stroke="#ff3d8b" stroke-width="1.5"/><line x1="40" y1="30" x2="40" y2="70" stroke="#ff3d8b" stroke-width="3"/><text x="50" y="86" fill="#ff3d8b" font-size="9" font-family="JetBrains Mono" text-anchor="middle">WALL</text>
+            <circle cx="120" cy="60" r="6" fill="#ff3d8b" class="bloom"/><circle cx="160" cy="55" r="5" fill="#ff3d8b" class="bloom"/><circle cx="200" cy="62" r="7" fill="#ff3d8b" class="bloom"/><circle cx="240" cy="55" r="5" fill="#ff3d8b" class="bloom"/><circle cx="280" cy="60" r="6" fill="#ff3d8b" class="bloom"/>
+            <circle cx="120" cy="60" r="14" fill="none" stroke="#ffb000" stroke-dasharray="2,3" opacity="0.6"/><circle cx="200" cy="62" r="16" fill="none" stroke="#ffb000" stroke-dasharray="2,3" opacity="0.6"/><circle cx="280" cy="60" r="14" fill="none" stroke="#ffb000" stroke-dasharray="2,3" opacity="0.6"/>
+            <text x="200" y="92" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">SPREADS ORGANICALLY · REPAIRABLE</text>`},
+    conduit:{n:'Power Conduit',m:'PROFILE 05 / 05',ph:'SCREENSHOT · STUN TRAP',
+      e:`<p>Usually mounted above a set of electrical wires. Shoot the conduit and the wires <em style="color:var(--cyan);font-style:normal;">"create a hazard that will stun a player or enemies a little — sticky trap if you will."</em></p>
+          <p style="font-size:13px;color:var(--text-dim);">Conduits are also the wiring substrate for the stretch interconnects (window-to-conduit, etc.).</p>`,
+      svg:`<rect x="160" y="20" width="80" height="14" fill="none" stroke="#ffb000" stroke-width="1.5"/><text x="200" y="16" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">CONDUIT</text>
+            <path d="M 20 60 L 60 40 L 100 60 L 140 40 L 180 60 L 220 40 L 260 60 L 300 40 L 340 60 L 380 40" fill="none" stroke="#ffb000" stroke-width="2"/>
+            <circle cx="100" cy="60" r="4" fill="#ff3d8b" class="bloom"/><circle cx="220" cy="40" r="4" fill="#ff3d8b" class="bloom"/>
+            <text x="200" y="92" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">STUN ZONE — STICKY TRAP</text>`}
   };
   const detail=document.getElementById('hazDetail');const opts=document.querySelectorAll('.haz .opt');
   opts.forEach(o=>{o.addEventListener('click',()=>{
     opts.forEach(x=>x.classList.remove('on'));o.classList.add('on');
     const h=hazards[o.dataset.haz];
-    detail.innerHTML=`<div class="topbar"><div class="hmeta">${h.m}</div><div style="display:flex;gap:8px;align-items:center;"><span class="dial fast" style="width:24px;height:24px;"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.5"/></g></svg></span><span class="btn-pulse cyan" style="width:10px;height:10px;"></span></div></div><h4>${h.n}</h4><div class="ph" data-dim="500×120">${h.ph}</div><p>${h.e}</p><svg class="diag" viewBox="0 0 400 100">${h.svg}</svg>`;
+    detail.innerHTML=`<div class="topbar"><div class="hmeta">${h.m}</div><div style="display:flex;gap:8px;align-items:center;"><span class="dial fast" style="width:24px;height:24px;"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.5"/></g></svg></span><span class="btn-pulse cyan" style="width:10px;height:10px;"></span></div></div><h4>${h.n}</h4><div class="ph" data-dim="500×120">${h.ph}</div>${h.e}<svg class="diag" viewBox="0 0 400 100"><defs><marker id="hazArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker></defs>${h.svg}</svg>`;
   });});
 })();
 (function(){
