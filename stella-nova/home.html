@@ -117,21 +117,40 @@
   .g-header h2{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:clamp(1.2rem,2.2vw,1.8rem);color:var(--text-bright);letter-spacing:-0.01em}
   .g-header-right{font-size:0.42rem;color:var(--text-faint);letter-spacing:0.08em}
 
-  /* Media gallery */
-  .media-gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px}
-  .media-item{position:relative;border-radius:4px;overflow:hidden;background:var(--bg3);border:1px solid var(--border);cursor:pointer;transition:all 0.4s;aspect-ratio:16/9}
-  .media-item:hover{border-color:var(--blue-dim);transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,0.3)}
-  .media-item.featured{grid-column:span 2;grid-row:span 2}
-  .media-item img,.media-item video,.media-item iframe{width:100%;height:100%;display:block;object-fit:cover;position:absolute;inset:0}
-  .media-item::after{content:'';position:absolute;inset:0;background:linear-gradient(to top,rgba(9,9,11,0.7) 0%,transparent 50%);opacity:0;transition:opacity 0.4s;pointer-events:none;z-index:2}
-  .media-item:hover::after{opacity:1}
-  .media-label{position:absolute;bottom:0.7rem;left:0.8rem;z-index:5;font-size:0.42rem;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0);transition:color 0.4s}
-  .media-item:hover .media-label{color:rgba(255,255,255,0.6)}
-  .media-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5;width:48px;height:48px;background:rgba(0,0,0,0.6);border:2px solid rgba(255,255,255,0.3);border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all 0.3s}
-  .media-play::after{content:'';width:0;height:0;border-style:solid;border-width:8px 0 8px 14px;border-color:transparent transparent transparent rgba(255,255,255,0.8);margin-left:3px}
-  .media-item:hover .media-play{background:rgba(255,200,50,0.8);border-color:var(--yellow)}
-  /* placeholder for screenshots */
-  .media-placeholder{width:100%;height:100%;position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--bg3),var(--surface));color:var(--text-faint);font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase}
+  /* Media: YouTube */
+  .media-video{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border:1px solid var(--border);margin-bottom:2.5rem}
+  .media-video iframe{width:100%;height:100%;display:block;border:none}
+
+  /* ═══════ NOSTROMO VIEWER ═══════ */
+  .nv{border:1px solid var(--border-b);background:rgba(10,12,18,0.96);position:relative;overflow:hidden}
+  .nv::before{content:'';position:absolute;inset:3px;border:1px solid var(--border);pointer-events:none;z-index:5}
+  .nv::after{content:'';position:absolute;top:0;left:0;width:6px;height:6px;background:var(--blue-dim);box-shadow:calc(100% - 6px) 0 0 var(--blue-dim),0 calc(100% - 6px) 0 var(--blue-dim),calc(100% - 6px) calc(100% - 6px) 0 var(--blue-dim);pointer-events:none;z-index:5}
+  .nv-head{padding:0 1.2rem;height:36px;border-bottom:1px solid var(--border-b);display:flex;align-items:center;font-size:0.42rem;letter-spacing:0.2em;text-transform:uppercase;gap:1rem}
+  .nv-sys{color:var(--blue)}
+  .nv-spacer{flex:1}
+  .nv-file{color:var(--text-faint);font-variant-numeric:tabular-nums}
+  .nv-status{display:flex;align-items:center;gap:5px;color:var(--green);font-size:0.38rem}
+  .nv-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease infinite}
+  .nv-viewport{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#060810;cursor:crosshair}
+  .nv-track{display:flex;height:100%;transition:transform 0.5s cubic-bezier(0.25,0.46,0.45,0.94)}
+  .nv-slide{min-width:100%;height:100%;position:relative;flex-shrink:0}
+  .nv-slide img{width:100%;height:100%;object-fit:cover;display:block}
+  .nv-viewport::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:3;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);mix-blend-mode:multiply}
+  .nv-slide-label{position:absolute;bottom:0;left:0;right:0;z-index:4;padding:1rem 1.2rem 0.8rem;background:linear-gradient(to top,rgba(6,8,16,0.9) 0%,transparent 100%);display:flex;align-items:flex-end;justify-content:space-between;opacity:0;transition:opacity 0.35s}
+  .nv-viewport:hover .nv-slide-label{opacity:1}
+  .nv-slide-name{font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:rgba(200,210,230,0.7)}
+  .nv-slide-idx{font-size:0.38rem;letter-spacing:0.15em;color:var(--text-faint);font-variant-numeric:tabular-nums}
+  .nv-controls{padding:0 1.2rem;height:40px;border-top:1px solid var(--border-b);display:flex;align-items:center;gap:6px}
+  .nv-btn{width:32px;height:26px;border:1px solid var(--border-b);background:rgba(150,200,255,0.02);color:var(--text-dim);font-size:0.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;font-family:inherit;line-height:1;flex-shrink:0}
+  .nv-btn:hover{border-color:var(--blue);color:var(--blue);background:rgba(150,200,255,0.06)}
+  .nv-btn:active{background:rgba(150,200,255,0.12)}
+  .nv-pips{display:flex;gap:4px;margin:0 8px;flex:1;justify-content:center}
+  .nv-pip{width:20px;height:3px;background:var(--text-faint);border:none;cursor:pointer;padding:0;transition:all 0.25s;opacity:0.4}
+  .nv-pip.active{background:var(--blue);box-shadow:0 0 6px var(--blue);opacity:1}
+  .nv-pip:hover{background:var(--blue-dim);opacity:0.8}
+  .nv-auto{font-size:0.38rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);cursor:pointer;border:1px solid var(--border);background:transparent;padding:3px 8px;font-family:inherit;transition:all 0.2s;flex-shrink:0}
+  .nv-auto:hover{border-color:var(--blue-dim);color:var(--text-dim)}
+  .nv-auto.on{border-color:var(--green);color:var(--green)}
 
   /* ═══════ SECTIONS ═══════ */
   section{position:relative;z-index:10;padding:5rem 0}
@@ -230,8 +249,6 @@
     .sig-bar{grid-template-columns:repeat(2,1fr)}
     .tech-strip{flex-wrap:wrap;justify-content:center}
     .topbar-r,.corner-data{display:none}
-    .media-gallery{grid-template-columns:1fr}
-    .media-item.featured{grid-column:span 1;grid-row:span 1}
     .download-grid{grid-template-columns:1fr}
     .bug-row{flex-direction:column}
     .features-grid{grid-template-columns:1fr}
@@ -352,24 +369,41 @@
     </div>
   </section>
 
-  <!-- ═══════ MEDIA GALLERY ═══════ -->
+  <!-- ═══════ MEDIA ═══════ -->
   <div class="gallery rv" id="media">
     <div class="gallery-inner">
       <div class="g-header">
-        <div><div class="g-tag">// Media Feed</div><h2>Screenshots &amp; Gameplay</h2></div>
+        <div><div class="g-tag">// Gameplay Feed</div><h2>See It In Action</h2></div>
         <div class="g-header-right">In-engine captures</div>
       </div>
-      <div class="media-gallery">
-        <div class="media-item featured">
-          <iframe src="https://www.youtube.com/embed/Pn9WTbewFFQ" title="Stella Nova Gameplay" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen style="pointer-events:auto"></iframe>
-          <div class="media-label">Gameplay Trailer</div>
+
+      <div class="media-video">
+        <iframe src="https://www.youtube.com/embed/Pn9WTbewFFQ" title="Stella Nova Gameplay" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+      </div>
+
+      <div class="nv" id="nvViewer">
+        <div class="nv-head">
+          <span class="nv-sys">SYS // Visual Feed</span>
+          <span class="nv-spacer"></span>
+          <span class="nv-file" id="nvFile">IMG 01/06</span>
+          <span class="nv-status">LIVE</span>
         </div>
-        <div class="media-item"><img src="media/ss-station-construction.png" alt="Station Construction" loading="lazy"><div class="media-label">Station Construction</div></div>
-        <div class="media-item"><img src="media/ss-nbody-orbits.png" alt="N-Body Orbits" loading="lazy"><div class="media-label">N-Body Orbits</div></div>
-        <div class="media-item"><img src="media/ss-citizen-ai.png" alt="Citizen AI" loading="lazy"><div class="media-label">Citizen AI</div></div>
-        <div class="media-item"><img src="media/ss-crafting.png" alt="Resource Crafting" loading="lazy"><div class="media-label">Resource Crafting</div></div>
-        <div class="media-item"><img src="media/ss-interplanetary.png" alt="Interplanetary Travel" loading="lazy"><div class="media-label">Interplanetary Travel</div></div>
-        <div class="media-item"><img src="media/ss-navmap.png" alt="Nav Map" loading="lazy"><div class="media-label">Nav Map</div></div>
+        <div class="nv-viewport" id="nvViewport">
+          <div class="nv-track" id="nvTrack">
+            <div class="nv-slide"><img src="media/1.jpg" alt="Station Construction" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Station Construction</span><span class="nv-slide-idx">01</span></div></div>
+            <div class="nv-slide"><img src="media/2.jpg" alt="N-Body Orbits" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">N-Body Orbits</span><span class="nv-slide-idx">02</span></div></div>
+            <div class="nv-slide"><img src="media/3.jpg" alt="Citizen AI" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Citizen AI</span><span class="nv-slide-idx">03</span></div></div>
+            <div class="nv-slide"><img src="media/4.jpg" alt="Resource Crafting" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Resource Crafting</span><span class="nv-slide-idx">04</span></div></div>
+            <div class="nv-slide"><img src="media/5.jpg" alt="Interplanetary Travel" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Interplanetary Travel</span><span class="nv-slide-idx">05</span></div></div>
+            <div class="nv-slide"><img src="media/6.jpg" alt="Nav Map" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Nav Map</span><span class="nv-slide-idx">06</span></div></div>
+          </div>
+        </div>
+        <div class="nv-controls">
+          <button class="nv-btn" onclick="nvNav(-1)" aria-label="Previous">&#8249;</button>
+          <button class="nv-btn" onclick="nvNav(1)" aria-label="Next">&#8250;</button>
+          <div class="nv-pips" id="nvPips"></div>
+          <button class="nv-auto" id="nvAutoBtn" onclick="nvToggleAuto()">Auto</button>
+        </div>
       </div>
     </div>
   </div>
@@ -742,6 +776,70 @@ function submitBug(e) {
     alert('Transmission failed. Try again or report on Discord.');
   });
 }
+
+/* ═══════ NOSTROMO VIEWER ═══════ */
+(function(){
+  var cur = 0, autoTimer = null;
+  var track = document.getElementById('nvTrack');
+  var slides = track ? track.children : [];
+  var total = slides.length;
+  var fileEl = document.getElementById('nvFile');
+  var pipsEl = document.getElementById('nvPips');
+  var autoBtn = document.getElementById('nvAutoBtn');
+  var viewer = document.getElementById('nvViewer');
+
+  function pad(n){ return n < 10 ? '0'+n : ''+n; }
+
+  function render(){
+    if(!track) return;
+    track.style.transform = 'translateX(-' + (cur * 100) + '%)';
+    if(fileEl) fileEl.textContent = 'IMG ' + pad(cur+1) + '/' + pad(total);
+    var pips = pipsEl ? pipsEl.children : [];
+    for(var i = 0; i < pips.length; i++){
+      pips[i].className = 'nv-pip' + (i === cur ? ' active' : '');
+    }
+  }
+
+  // build pips
+  if(pipsEl){
+    for(var i = 0; i < total; i++){
+      var p = document.createElement('button');
+      p.className = 'nv-pip' + (i === 0 ? ' active' : '');
+      p.setAttribute('aria-label', 'Slide ' + (i+1));
+      (function(idx){ p.onclick = function(){ cur = idx; render(); resetAuto(); }; })(i);
+      pipsEl.appendChild(p);
+    }
+  }
+
+  window.nvNav = function(dir){
+    cur = (cur + dir + total) % total;
+    render();
+    resetAuto();
+  };
+
+  window.nvToggleAuto = function(){
+    if(autoTimer){ clearInterval(autoTimer); autoTimer = null; }
+    else { autoTimer = setInterval(function(){ cur = (cur+1) % total; render(); }, 3500); }
+    if(autoBtn) autoBtn.className = 'nv-auto' + (autoTimer ? ' on' : '');
+  };
+
+  function resetAuto(){
+    if(!autoTimer) return;
+    clearInterval(autoTimer);
+    autoTimer = setInterval(function(){ cur = (cur+1) % total; render(); }, 3500);
+  }
+
+  // keyboard nav
+  if(viewer){
+    viewer.setAttribute('tabindex', '0');
+    viewer.addEventListener('keydown', function(e){
+      if(e.key === 'ArrowLeft'){ window.nvNav(-1); e.preventDefault(); }
+      if(e.key === 'ArrowRight'){ window.nvNav(1); e.preventDefault(); }
+    });
+  }
+
+  render();
+})();
 
 /* ═══════ N-BODY SIM ═══════ */
 const dpr=Math.min(devicePixelRatio||1,2),TAU=Math.PI*2;
