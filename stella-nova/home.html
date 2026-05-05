@@ -134,7 +134,7 @@
   .nv-viewport{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#060810;cursor:crosshair}
   .nv-track{display:flex;height:100%;transition:transform 0.5s cubic-bezier(0.25,0.46,0.45,0.94)}
   .nv-slide{min-width:100%;height:100%;position:relative;flex-shrink:0}
-  .nv-slide img{width:100%;height:100%;object-fit:contain;display:block;background:#060810}
+  .nv-slide img{width:100%;height:100%;object-fit:cover;object-position:center;display:block;background:#060810}
   .nv-viewport::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:3;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);mix-blend-mode:multiply}
   .nv-slide-label{position:absolute;bottom:0;left:0;right:0;z-index:4;padding:1rem 1.2rem 0.8rem;background:linear-gradient(to top,rgba(6,8,16,0.9) 0%,transparent 100%);display:flex;align-items:flex-end;justify-content:space-between;opacity:0;transition:opacity 0.35s}
   .nv-viewport:hover .nv-slide-label{opacity:1}
