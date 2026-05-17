@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Circular Polarization // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<style>
+:root{
+  --bg:#0e1118; --bg2:#121620;
+  --surface:rgba(9,12,20,0.92);
+  --border:rgba(150,200,255,0.06);
+  --border-b:rgba(150,200,255,0.16);
+  --blue:#96c8ff; --blue-dim:#5a8cc0;
+  --yellow:#ffc832; --green:#64c864;
+  --text:#c8d0e0; --text-dim:#7888a8;
+  --text-faint:#445068; --text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+
+  /* Page signature accent */
+  --cp:#d4a847; --cp-bright:#f5a623;
+  --cp-dim:rgba(212,168,71,0.30);
+  --cp-faint:rgba(212,168,71,0.07);
+
+  /* Field colors */
+  --e-color:#ffb84d;
+  --b-color:#60e0ee;
+
+  /* Per-mode accents */
+  --accent-single:#ff5566;
+  --accent-ring:#c36bff;
+  --accent-sphere:#5b9eff;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
+
+/* CRT scanlines + vignette + faint grid */
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.45))}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+
+canvas#scene{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:1}
+
+/* ═══ TOPBAR ═══ */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.4rem;height:42px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border-b);position:relative;z-index:50}
+.in-frame .topbar{display:none!important}
+.topbar-l{display:flex;align-items:center;gap:1.4rem}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.05rem;letter-spacing:0.12em}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.25}}
+.topbar-r{font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint)}
+.topbar-r strong{color:var(--cp);font-weight:500}
+
+#ui{position:fixed;inset:0;pointer-events:none;z-index:10}
+#ui > *{pointer-events:auto}
+
+/* ═══ EQUATION PANEL ═══ */
+.eq-panel{
+  position:absolute; top:62px; left:18px;
+  max-width:min(720px, calc(100vw - 36px));
+  background:var(--surface);
+  border:1px solid var(--border-b);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  padding:18px 24px 20px;
+}
+.in-frame .eq-panel{top:14px}
+.eq-head{display:flex;align-items:center;gap:9px;margin-bottom:11px}
+.eq-head .dot{width:6px;height:6px;background:var(--cp);box-shadow:0 0 8px var(--cp);flex-shrink:0}
+.eq-head .lbl{font-size:0.62rem;letter-spacing:0.28em;text-transform:uppercase;color:var(--cp);font-weight:600}
+.eq-row{margin:8px 0;overflow-x:auto;overflow-y:hidden}
+.eq-row::-webkit-scrollbar{height:0}
+.eq-panel .katex{color:var(--text-bright)!important;font-size:1.75rem!important;line-height:1.5!important}
+.eq-panel .katex-display{margin:0.1em 0!important}
+
+/* ═══ MODE BUTTONS (top-right, large) ═══ */
+.modes{position:absolute;top:54px;right:18px;display:flex;flex-direction:column;gap:8px}
+.in-frame .modes{top:14px}
+.mode-btn{
+  width:50px;height:50px;
+  background:var(--surface);
+  border:1px solid var(--border-b);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:border-color 0.18s, background 0.18s;
+  position:relative;padding:0;
+}
+.mode-btn:hover{border-color:rgba(150,200,255,0.3)}
+.mode-btn svg{width:24px;height:24px;stroke:var(--text-dim);fill:none;stroke-width:1.4;transition:stroke 0.18s}
+.mode-btn.active{border-color:var(--accent);background:rgba(150,200,255,0.04)}
+.mode-btn.active svg{stroke:var(--accent)}
+.mode-btn.active::after{content:'';position:absolute;left:-1px;top:-1px;bottom:-1px;width:2px;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.mode-btn[data-mode="single"].active{--accent:var(--accent-single)}
+.mode-btn[data-mode="ring"].active  {--accent:var(--accent-ring)}
+.mode-btn[data-mode="sphere"].active{--accent:var(--accent-sphere)}
+.mode-btn .tip{
+  position:absolute; right:58px; top:50%; transform:translateY(-50%);
+  font-size:0.62rem; letter-spacing:0.2em; text-transform:uppercase;
+  color:var(--text); white-space:nowrap;
+  padding:7px 11px; border:1px solid var(--border-b); background:var(--surface);
+  opacity:0; pointer-events:none; transition:opacity 0.15s;
+}
+.mode-btn:hover .tip{opacity:1}
+
+/* ═══ CONTROLS PANEL — large, touch-friendly ═══ */
+.ctrl{
+  position:absolute; left:50%; bottom:16px; transform:translateX(-50%);
+  width:min(900px, calc(100vw - 28px));
+  background:var(--surface);
+  border:1px solid var(--border-b);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  padding:18px 22px 20px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  gap:16px 28px;
+  align-items:end;
+}
+.ctrl-cell{display:flex;flex-direction:column;gap:8px}
+.ctrl-row{display:flex;justify-content:space-between;align-items:baseline;min-height:18px}
+.ctrl-lbl{font-size:0.72rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-dim);font-weight:500}
+.ctrl-val{font-size:0.95rem;color:var(--cp);font-weight:600;font-variant-numeric:tabular-nums}
+
+input[type="range"]{
+  -webkit-appearance:none;appearance:none;
+  width:100%;height:4px;
+  background:linear-gradient(to right, var(--cp) 0%, var(--cp) var(--pct,50%), rgba(150,200,255,0.14) var(--pct,50%));
+  outline:none;cursor:pointer;border-radius:2px;
+  margin:6px 0 3px;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;appearance:none;
+  width:18px;height:18px;border-radius:50%;
+  background:var(--bg);border:2px solid var(--cp);cursor:pointer;
+  box-shadow:0 0 8px rgba(212,168,71,0.55);
+  transition:transform 0.12s;
+}
+input[type="range"]::-webkit-slider-thumb:hover{transform:scale(1.15)}
+input[type="range"]::-webkit-slider-thumb:active{transform:scale(1.25);background:var(--cp)}
+input[type="range"]::-moz-range-thumb{
+  width:18px;height:18px;border-radius:50%;
+  background:var(--bg);border:2px solid var(--cp);cursor:pointer;
+  box-shadow:0 0 8px rgba(212,168,71,0.55);
+}
+
+/* Toggle — big and obvious */
+.tog{display:inline-flex;align-items:center;gap:12px;cursor:pointer;user-select:none;font-size:0.72rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-dim);font-weight:500;margin-top:6px;min-height:28px}
+.tog input{display:none}
+.tog .sw{position:relative;width:46px;height:24px;border:1px solid var(--border-b);background:rgba(0,0,0,0.35);transition:all 0.18s;flex-shrink:0;border-radius:13px}
+.tog .sw::after{content:'';position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--text-faint);transition:transform 0.2s,background 0.2s,box-shadow 0.2s}
+.tog input:checked + .sw{border-color:var(--cp-dim);background:var(--cp-faint)}
+.tog input:checked + .sw::after{transform:translateX(22px);background:var(--cp);box-shadow:0 0 10px var(--cp)}
+.tog input:checked ~ .tog-lbl{color:var(--text-bright)}
+.tog-lbl{transition:color 0.18s}
+
+/* Color the lobes toggle handle in the field-tone */
+.tog.tog-lobes input:checked + .sw{border-color:rgba(255,184,77,0.5);background:rgba(255,184,77,0.06)}
+.tog.tog-lobes input:checked + .sw::after{background:var(--e-color);box-shadow:0 0 10px var(--e-color)}
+
+/* ═══ HINT + CREDITS ═══ */
+.hint{position:absolute;bottom:6px;left:16px;font-size:0.55rem;color:var(--text-faint);letter-spacing:0.22em;text-transform:uppercase;pointer-events:none}
+.hint span{color:var(--cp);opacity:0.7}
+.credits{position:absolute;bottom:6px;right:16px;font-size:0.55rem;letter-spacing:0.22em;color:var(--text-faint);pointer-events:none}
+
+.err{position:absolute;top:54px;left:14px;z-index:100;background:rgba(60,10,10,0.92);color:#ffb0b0;border:1px solid #803030;padding:10px 14px;font-size:0.7rem;max-width:80vw;display:none;white-space:pre-wrap}
+.in-frame .err{top:10px}
+
+/* ═══ MOBILE — very large touch targets ═══ */
+@media (max-width:720px){
+  .eq-panel{top:54px;left:10px;right:10px;max-width:none;padding:13px 14px 15px}
+  .in-frame .eq-panel{top:10px}
+  .eq-head .lbl{font-size:0.62rem}
+  .eq-panel .katex{font-size:1.35rem!important}
+
+  .modes{top:54px;right:10px;gap:8px}
+  .in-frame .modes{top:10px}
+  .mode-btn{width:54px;height:54px}
+  .mode-btn svg{width:26px;height:26px;stroke-width:1.6}
+  .mode-btn .tip{display:none}
+
+  .ctrl{bottom:12px;width:calc(100vw - 16px);padding:16px 16px 18px;gap:16px 16px;grid-template-columns:1fr 1fr}
+  .ctrl-lbl{font-size:0.78rem;letter-spacing:0.16em}
+  .ctrl-val{font-size:1.1rem}
+  input[type="range"]{height:6px;margin:8px 0 4px}
+  input[type="range"]::-webkit-slider-thumb{width:26px;height:26px;border-width:2.5px}
+  input[type="range"]::-moz-range-thumb{width:26px;height:26px;border-width:2.5px}
+  .tog{font-size:0.78rem;gap:14px;min-height:36px}
+  .tog .sw{width:58px;height:30px;border-radius:16px}
+  .tog .sw::after{width:22px;height:22px;top:3px;left:3px}
+  .tog input:checked + .sw::after{transform:translateX(28px)}
+
+  .hint{display:none}
+  .credits{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<canvas id="scene"></canvas>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Circular Polarization</span></div>
+  <div class="topbar-r">SYS // <strong>ELECTROMAGNETISM</strong></div>
+</div>
+
+<div class="err" id="err"></div>
+
+<div id="ui">
+  <section class="eq-panel">
+    <div class="eq-head">
+      <span class="dot"></span>
+      <span class="lbl">Field Equations</span>
+    </div>
+    <div class="eq-row" id="eq1"></div>
+    <div class="eq-row" id="eq2"></div>
+  </section>
+
+  <aside class="modes">
+    <button class="mode-btn" data-mode="single" type="button" aria-label="Single helix">
+      <span class="tip">Single</span>
+      <svg viewBox="0 0 24 24"><path d="M2.5 12 Q 5 5.5, 7.5 12 T 12.5 12 T 17.5 12 T 22.5 12"/><line x1="2.5" y1="12" x2="22.5" y2="12" stroke-dasharray="1.5,2" opacity="0.35"/></svg>
+    </button>
+    <button class="mode-btn active" data-mode="ring" type="button" aria-label="Radial ring">
+      <span class="tip">Radial</span>
+      <svg viewBox="0 0 24 24">
+        <ellipse cx="12" cy="12" rx="9" ry="3.2"/>
+        <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+        <circle cx="21" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="3" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="17.5" cy="13.6" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="6.5" cy="13.6" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="17.5" cy="10.4" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="6.5" cy="10.4" r="1.2" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
+    <button class="mode-btn" data-mode="sphere" type="button" aria-label="Full sphere">
+      <span class="tip">Spherical</span>
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9"/>
+        <ellipse cx="12" cy="12" rx="9" ry="3.5"/>
+        <ellipse cx="12" cy="12" rx="3.5" ry="9"/>
+      </svg>
+    </button>
+  </aside>
+
+  <section class="ctrl">
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Helices</span><span class="ctrl-val" id="vNum">36</span></div>
+      <input type="range" id="numHelices" min="1" max="800" value="36">
+    </div>
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Wavenumber <em>k</em></span><span class="ctrl-val" id="vK">2.0</span></div>
+      <input type="range" id="k" min="0.4" max="5" step="0.1" value="2.0">
+    </div>
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Frequency <em>ω</em></span><span class="ctrl-val" id="vW">1.00</span></div>
+      <input type="range" id="omega" min="0" max="4" step="0.05" value="1.0">
+    </div>
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Magnetic Field</span></div>
+      <label class="tog">
+        <input type="checkbox" id="showB" checked>
+        <span class="sw"></span>
+        <span class="tog-lbl">B-field</span>
+      </label>
+    </div>
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Field Lobes</span></div>
+      <label class="tog tog-lobes">
+        <input type="checkbox" id="showLobes">
+        <span class="sw"></span>
+        <span class="tog-lbl">E · B</span>
+      </label>
+    </div>
+  </section>
+
+  <div class="hint"><span>drag</span> rotate · <span>scroll</span> zoom · <span>right-drag</span> pan</div>
+  <div class="credits">davesgames.io</div>
+</div>
+
+<script type="module">
+const errEl = document.getElementById('err');
+function showErr(msg){errEl.style.display='block';errEl.textContent='ERROR: '+msg;console.error(msg)}
+window.addEventListener('error', e => showErr((e.message||'unknown')+' @ '+(e.filename||'?')+':'+(e.lineno||'?')));
+window.addEventListener('unhandledrejection', e => showErr('Promise: '+(e.reason?.message||e.reason)));
+
+// Update slider gradient fill
+function paintSlider(el){const min=+el.min,max=+el.max,val=+el.value;el.style.setProperty('--pct',((val-min)/(max-min)*100)+'%')}
+document.querySelectorAll('input[type=range]').forEach(s=>{paintSlider(s);s.addEventListener('input',()=>paintSlider(s))});
+
+try {
+
+const THREE = await import('three');
+const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+
+// ─── Render equations ──────────────────────────────────────────────────────
+// Color coding by role:
+//   E vector         → amber (matches helix)
+//   B vector         → cyan  (matches helix)
+//   cos·û_z term     → red    (first orthogonal component — "vertical" oscillation)
+//   sin·û_x term     → blue   (second orthogonal component — "horizontal" oscillation)
+//   û_r              → white  (propagation direction)
+//   1/r              → gold   (page accent, the amplitude falloff)
+const C_E    = '#ffb84d';
+const C_B    = '#60e0ee';
+const C_UZ   = '#ff7878';
+const C_UX   = '#8aa8ff';
+const C_UR   = '#e8ecf4';
+const C_FALL = '#d4a847';
+if (window.katex) {
+  katex.render(
+    String.raw`\textcolor{${C_E}}{\vec{E}} \;\propto\; \textcolor{${C_FALL}}{\tfrac{1}{r}}\left[\textcolor{${C_UZ}}{\cos(kr-\omega t)\,\hat{u}_z} \;+\; \textcolor{${C_UX}}{\sin(kr-\omega t)\,\hat{u}_x}\right]`,
+    document.getElementById('eq1'),
+    { throwOnError:false, displayMode:true }
+  );
+  katex.render(
+    String.raw`\textcolor{${C_B}}{\vec{B}} \;=\; \tfrac{1}{c}\,\bigl(\textcolor{${C_UR}}{\hat{u}_r} \times \textcolor{${C_E}}{\vec{E}}\bigr)`,
+    document.getElementById('eq2'),
+    { throwOnError:false, displayMode:true }
+  );
+}
+
+// ─── Scene setup ───────────────────────────────────────────────────────────
+const canvas = document.getElementById('scene');
+const scene  = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 500);
+camera.position.set(24, 14, 28);
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x0e1118, 1);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.minDistance = 4;
+controls.maxDistance = 90;
+
+let idleTimer = 0;
+controls.addEventListener('start', () => { idleTimer = -1; controls.autoRotate = false; });
+controls.addEventListener('end',   () => { idleTimer = 0; });
+
+// ─── Source: vertical axis with three colored spheres ─────────────────────
+const sourceGroup = new THREE.Group();
+scene.add(sourceGroup);
+
+sourceGroup.add(new THREE.Mesh(
+  new THREE.CylinderGeometry(0.035, 0.035, 5.6, 8),
+  new THREE.MeshBasicMaterial({ color:0x4a4538, transparent:true, opacity:0.55 })
+));
+
+const sphereSpec = [
+  { y: 2.0, color:0xff5566 },
+  { y: 0.0, color:0xc36bff },
+  { y:-2.0, color:0x5b9eff },
+];
+const sourceSpheres = sphereSpec.map(({y,color}) => {
+  const m = new THREE.Mesh(
+    new THREE.SphereGeometry(0.48, 28, 28),
+    new THREE.MeshBasicMaterial({ color })
+  );
+  m.position.y = y;
+  sourceGroup.add(m);
+  return m;
+});
+
+sourceGroup.add(new THREE.Mesh(
+  new THREE.SphereGeometry(0.22, 20, 20),
+  new THREE.MeshBasicMaterial({ color:0xffe9a8 })
+));
+
+// ─── Helix & FieldLobes ────────────────────────────────────────────────────
+const HELIX_POINTS = 220;
+const LOBE_RIBS = 64;  // perpendicular vectors per helix
+const R_MIN = 0.55;
+const R_MAX = 22.0;
+
+const E_COLOR = 0xffb84d;
+const B_COLOR = 0x60e0ee;
+
+class Helix {
+  constructor(direction, color, isMagnetic = false) {
+    this.dir = direction.clone().normalize();
+    this.isMagnetic = isMagnetic;
+
+    const ref = Math.abs(this.dir.y) > 0.95
+      ? new THREE.Vector3(1, 0, 0)
+      : new THREE.Vector3(0, 1, 0);
+    this.e1 = new THREE.Vector3().crossVectors(ref, this.dir).normalize();
+    this.e2 = new THREE.Vector3().crossVectors(this.dir, this.e1).normalize();
+
+    // Continuous helix curve
+    const geom = new THREE.BufferGeometry();
+    this.positions = new Float32Array(HELIX_POINTS * 3);
+    const attr = new THREE.BufferAttribute(this.positions, 3);
+    attr.setUsage(THREE.DynamicDrawUsage);
+    geom.setAttribute('position', attr);
+    const mat = new THREE.LineBasicMaterial({
+      color, transparent:true,
+      opacity: isMagnetic ? 0.65 : 0.88,
+      blending: THREE.AdditiveBlending, depthWrite:false,
+    });
+    this.line = new THREE.Line(geom, mat);
+    this.line.frustumCulled = false;
+    scene.add(this.line);
+
+    // Field lobes: perpendicular line segments from propagation axis → field tip
+    const lobeGeom = new THREE.BufferGeometry();
+    this.lobePositions = new Float32Array(LOBE_RIBS * 2 * 3); // 2 verts per rib
+    const lobeAttr = new THREE.BufferAttribute(this.lobePositions, 3);
+    lobeAttr.setUsage(THREE.DynamicDrawUsage);
+    lobeGeom.setAttribute('position', lobeAttr);
+    const lobeMat = new THREE.LineBasicMaterial({
+      color, transparent:true,
+      opacity: isMagnetic ? 0.35 : 0.5,
+      blending: THREE.AdditiveBlending, depthWrite:false,
+    });
+    this.lobes = new THREE.LineSegments(lobeGeom, lobeMat);
+    this.lobes.frustumCulled = false;
+    this.lobes.visible = false;
+    scene.add(this.lobes);
+  }
+
+  update(t, k, omega, amp, lobesOn) {
+    const pos = this.positions;
+    const dx=this.dir.x, dy=this.dir.y, dz=this.dir.z;
+    const a1x=this.e1.x, a1y=this.e1.y, a1z=this.e1.z;
+    const a2x=this.e2.x, a2y=this.e2.y, a2z=this.e2.z;
+    const isB = this.isMagnetic;
+
+    // Helix curve
+    for (let i = 0; i < HELIX_POINTS; i++) {
+      const r = R_MIN + (R_MAX - R_MIN) * (i / (HELIX_POINTS - 1));
+      const phase = k * r - omega * t;
+      const ampR = amp / Math.max(r, 1.6);
+
+      let c1, c2;
+      if (isB) { c1 = -Math.sin(phase) * ampR; c2 =  Math.cos(phase) * ampR; }
+      else     { c1 =  Math.cos(phase) * ampR; c2 =  Math.sin(phase) * ampR; }
+
+      pos[i*3]   = r*dx + c1*a1x + c2*a2x;
+      pos[i*3+1] = r*dy + c1*a1y + c2*a2y;
+      pos[i*3+2] = r*dz + c1*a1z + c2*a2z;
+    }
+    this.line.geometry.attributes.position.needsUpdate = true;
+
+    // Lobes (only if visible)
+    if (lobesOn) {
+      const lp = this.lobePositions;
+      for (let i = 0; i < LOBE_RIBS; i++) {
+        const r = R_MIN + (R_MAX - R_MIN) * (i / (LOBE_RIBS - 1));
+        const phase = k * r - omega * t;
+        const ampR = amp / Math.max(r, 1.6);
+
+        let c1, c2;
+        if (isB) { c1 = -Math.sin(phase) * ampR; c2 =  Math.cos(phase) * ampR; }
+        else     { c1 =  Math.cos(phase) * ampR; c2 =  Math.sin(phase) * ampR; }
+
+        const ax = r*dx, ay = r*dy, az = r*dz;
+        const base = i * 6;
+        lp[base    ] = ax;                          // axis point
+        lp[base + 1] = ay;
+        lp[base + 2] = az;
+        lp[base + 3] = ax + c1*a1x + c2*a2x;        // field tip
+        lp[base + 4] = ay + c1*a1y + c2*a2y;
+        lp[base + 5] = az + c1*a1z + c2*a2z;
+      }
+      this.lobes.geometry.attributes.position.needsUpdate = true;
+    }
+  }
+
+  setVisible(v){ this.line.visible = v; this.lobes.visible = v && params.showLobes; }
+  setLobesVisible(v){ this.lobes.visible = v && this.line.visible; }
+
+  dispose(){
+    this.line.geometry.dispose();
+    this.line.material.dispose();
+    scene.remove(this.line);
+    this.lobes.geometry.dispose();
+    this.lobes.material.dispose();
+    scene.remove(this.lobes);
+  }
+}
+
+function fibonacciSphere(N){
+  const points = [];
+  const phi = Math.PI * (Math.sqrt(5) - 1);
+  for (let i = 0; i < N; i++) {
+    const y = N === 1 ? 0 : 1 - (i / (N - 1)) * 2;
+    const r = Math.sqrt(Math.max(0, 1 - y*y));
+    const theta = phi * i;
+    points.push(new THREE.Vector3(Math.cos(theta)*r, y, Math.sin(theta)*r));
+  }
+  return points;
+}
+
+function equatorialRing(N){
+  const points = [];
+  for (let i = 0; i < N; i++) {
+    const theta = (i / N) * Math.PI * 2;
+    points.push(new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta)));
+  }
+  return points;
+}
+
+let helicesE = [];
+let helicesB = [];
+
+function rebuild(n, dist) {
+  helicesE.forEach(h => h.dispose());
+  helicesB.forEach(h => h.dispose());
+  helicesE = []; helicesB = [];
+
+  let dirs;
+  if (dist === 'single') {
+    dirs = [new THREE.Vector3(1.0, 0.18, 0.55).normalize()];
+  } else if (dist === 'ring') {
+    dirs = equatorialRing(n);
+  } else {
+    dirs = fibonacciSphere(n);
+  }
+
+  dirs.forEach(d => {
+    helicesE.push(new Helix(d, E_COLOR, false));
+    helicesB.push(new Helix(d, B_COLOR, true));
+  });
+
+  helicesB.forEach(h => h.setVisible(params.showB));
+  helicesE.forEach(h => h.setLobesVisible(params.showLobes));
+  helicesB.forEach(h => h.setLobesVisible(params.showLobes));
+
+  for (let i = 0; i < helicesE.length; i++) {
+    helicesE[i].update(0, params.k, params.omega, params.amp, params.showLobes);
+    helicesB[i].update(0, params.k, params.omega, params.amp, params.showLobes);
+  }
+}
+
+// ─── Parameters & UI ───────────────────────────────────────────────────────
+const params = {
+  n: 36, k: 2.0, omega: 1.0,
+  dist: 'ring', showB: true, showLobes: false, amp: 4.2,
+};
+
+const $ = id => document.getElementById(id);
+
+$('numHelices').addEventListener('input', e => {
+  params.n = +e.target.value;
+  $('vNum').textContent = params.n;
+  if (params.dist !== 'single') rebuild(params.n, params.dist);
+});
+$('k').addEventListener('input', e => {
+  params.k = +e.target.value;
+  $('vK').textContent = params.k.toFixed(1);
+});
+$('omega').addEventListener('input', e => {
+  params.omega = +e.target.value;
+  $('vW').textContent = params.omega.toFixed(2);
+});
+$('showB').addEventListener('change', e => {
+  params.showB = e.target.checked;
+  helicesB.forEach(h => h.setVisible(params.showB));
+});
+$('showLobes').addEventListener('change', e => {
+  params.showLobes = e.target.checked;
+  helicesE.forEach(h => h.setLobesVisible(params.showLobes));
+  helicesB.forEach(h => h.setLobesVisible(params.showLobes));
+});
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const mode = btn.dataset.mode;
+    if (mode === params.dist) return;
+    params.dist = mode;
+    document.querySelectorAll('.mode-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.mode === mode));
+    const isSingle = (mode === 'single');
+    $('numHelices').disabled = isSingle;
+    $('numHelices').style.opacity = isSingle ? 0.35 : 1;
+    rebuild(params.n, mode);
+  });
+});
+
+rebuild(params.n, params.dist);
+
+// ─── Animation loop ────────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+let t = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(clock.getDelta(), 0.05);
+  t += dt;
+
+  if (idleTimer >= 0) {
+    idleTimer += dt;
+    if (idleTimer > 4 && !controls.autoRotate) {
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.35;
+    }
+  }
+
+  const lobesOn = params.showLobes;
+  for (let i = 0; i < helicesE.length; i++) {
+    helicesE[i].update(t, params.k, params.omega, params.amp, lobesOn);
+    if (params.showB) helicesB[i].update(t, params.k, params.omega, params.amp, lobesOn);
+  }
+
+  const pulse = 1 + 0.06 * Math.sin(params.omega * t * 2);
+  sourceSpheres.forEach((s, i) => {
+    s.scale.setScalar(pulse + 0.04 * Math.sin(params.omega * t * 2 + i * 1.8));
+  });
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+} catch (err) {
+  showErr(err.message || String(err));
+}
+</script>
+
+</body>
+</html>
