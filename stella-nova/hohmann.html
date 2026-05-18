@@ -2,32 +2,33 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>STELLA NOVA // Hohmann Transfer Calculator</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Stella Nova // Hohmann Transfer Calculator</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <style>
 :root{
-  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
-  --surface:#1c2436;
-  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
-  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
-  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);--yellow-glow:rgba(255,200,50,0.10);
-  --red:#ff5050;--green:#64c864;
-  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --bg:#0e1118; --bg2:#141826; --bg3:#1a2032;
+  --surface:#1c2436; --surface2:#243040;
+  --border:rgba(150,200,255,0.10); --border-b:rgba(150,200,255,0.22);
+  --blue:#96c8ff; --blue-dim:#7caee0; --blue-faint:rgba(150,200,255,0.08);
+  --yellow:#ffc832; --yellow-dim:#dca838; --yellow-faint:rgba(255,200,50,0.06);
+  --green:#7ad87a; --green-dim:#5ab95a;
+  --red:#e87466; --cyan:#5cd8e8; --magenta:#d870c8; --orange:#ff9050;
+  --text:#dde3f0; --text-dim:#a4b0ce; --text-faint:#6e7a98; --text-bright:#f4f7fc;
   --scan:rgba(0,0,0,0.06);
+  --topbar-h:44px;
+  --action-h:54px;
+  --mp-w:380px;
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-html{overflow:hidden}
-body{font-family:'JetBrains Mono',monospace;background:var(--bg);color:var(--text);
-  overflow:hidden;width:100vw;height:100vh;display:flex;flex-direction:column;
-  -webkit-font-smoothing:antialiased;cursor:crosshair;}
-body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);
-  mix-blend-mode:multiply}
-body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
-  background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.35) 100%)}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;-webkit-user-select:none;user-select:none}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.35))}
+::-webkit-scrollbar{width:5px;height:3px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:2px}
+
 .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;
   background-image:
     linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),
@@ -35,186 +36,472 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;
     linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),
     linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);
   background-size:300px 300px,300px 300px,50px 50px,50px 50px}
-.corner-data{position:fixed;z-index:50;pointer-events:none;font-size:0.38rem;
-  letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);line-height:1.8}
-.corner-data.tl{top:3.2rem;left:1rem}
-.corner-data.br{bottom:3.2rem;right:1rem;text-align:right}
-.corner-data span{color:var(--blue-dim)}
 
 /* TOPBAR */
-.topbar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
-  padding:0.5rem 1.5rem;background:rgba(14,17,24,0.95);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.12em;
-  text-transform:uppercase;position:relative;z-index:100;}
-.topbar-l{display:flex;align-items:center;gap:1.5rem}
-.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:0.8rem;letter-spacing:0.12em}
-.sys-sub{color:var(--text-faint);font-size:0.4rem;letter-spacing:0.15em}
-.sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green);font-size:0.42rem}
-.sys-status::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;
-  box-shadow:0 0 6px currentColor;animation:blink 2s ease infinite}
-.sys-status.paused{color:var(--yellow)}
-.sys-status.paused::before{animation:none}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 16px;height:var(--topbar-h);background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);position:relative;z-index:100;flex-shrink:0}
+.in-frame .topbar{display:none!important}
+.topbar-l{display:flex;align-items:center;gap:18px}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:500;font-size:1.05rem;letter-spacing:0.12em}
+.sys-sub{color:var(--text-faint);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;font-weight:600}
+.sys-status{display:flex;align-items:center;gap:7px;color:var(--green);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;font-weight:700}
+.sys-status::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s ease infinite;flex-shrink:0}
+.sys-status.paused{color:var(--yellow)} .sys-status.paused::before{animation:none;background:var(--yellow);box-shadow:0 0 8px var(--yellow)}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
-.topbar-r{display:flex;gap:1.5rem;align-items:center;color:var(--text-dim)}
-.topbar-r strong{color:var(--blue-dim);font-weight:500}
-#smsgwrap{font-size:0.42rem;color:var(--yellow);letter-spacing:0.1em;
-  display:flex;align-items:center;gap:.4rem}
-#smsgwrap::before{content:'//';color:var(--text-faint)}
+.topbar-r{display:flex;gap:18px;font-size:12px;color:var(--text-faint);font-weight:500;font-variant-numeric:tabular-nums;align-items:center}
+.topbar-r strong{color:var(--blue);font-weight:700}
+.smsg{font-size:11px;color:var(--yellow);letter-spacing:0.08em;font-weight:600;white-space:nowrap}
+.smsg::before{content:'// ';color:var(--text-faint)}
+
+/* ACTION BAR (replaces bottom bar) */
+.action-bar{
+  position:absolute;top:var(--topbar-h);left:0;right:0;
+  height:var(--action-h);
+  display:flex;align-items:center;gap:8px;
+  padding:0 14px;
+  background:rgba(14,17,24,0.92);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--border);
+  overflow-x:auto;overflow-y:hidden;
+  z-index:90;flex-shrink:0;
+  scrollbar-width:none;
+}
+.action-bar::-webkit-scrollbar{display:none}
+.in-frame .action-bar{top:0}
+.ab-label{font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-faint);font-weight:700;white-space:nowrap;margin-right:4px;flex-shrink:0}
+.ab-divider{width:1px;height:30px;background:var(--border-b);flex-shrink:0;margin:0 4px}
+
+/* Preset cards */
+.pcard{
+  display:flex;align-items:center;gap:8px;
+  padding:6px 12px 6px 7px;
+  background:rgba(150,200,255,0.035);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:4px;cursor:pointer;flex-shrink:0;
+  font-family:inherit;transition:all 0.15s;
+}
+.pcard:hover{background:rgba(150,200,255,0.09);border-color:var(--border-b);transform:translateY(-1px)}
+.pcard.active{background:rgba(255,200,50,0.12);border-color:var(--yellow-dim)}
+.pcard.active:hover{transform:none}
+.pcard.active .pcard-name{color:var(--yellow)}
+.pcard-icon{width:28px;height:28px;flex-shrink:0;opacity:0.92;display:block}
+.pcard.active .pcard-icon{opacity:1}
+.pcard-name{font-size:11.5px;font-weight:700;letter-spacing:0.04em;color:var(--text-bright);white-space:nowrap}
+
+/* Action buttons */
+.act-btn{
+  padding:8px 13px;background:transparent;
+  border:1px solid var(--border-b);color:var(--text-dim);
+  font-family:inherit;font-size:11px;letter-spacing:0.1em;
+  text-transform:uppercase;font-weight:700;
+  cursor:pointer;white-space:nowrap;
+  transition:all 0.15s;border-radius:3px;flex-shrink:0;
+}
+.act-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-faint)}
+.act-btn.go{color:var(--yellow);border-color:var(--yellow-dim);background:var(--yellow-faint);font-weight:700}
+.act-btn.go:hover:not(:disabled){background:rgba(255,200,50,0.14);border-color:var(--yellow);box-shadow:0 0 12px rgba(255,200,50,0.2)}
+.act-btn.go:disabled{opacity:0.3;cursor:not-allowed}
+.act-btn.go:hover:disabled{background:var(--yellow-faint);border-color:var(--yellow-dim);box-shadow:none}
+.act-btn.green{color:var(--green);border-color:rgba(122,216,122,0.38)}
+.act-btn.green:hover{border-color:var(--green);background:rgba(122,216,122,0.08)}
+.act-btn.green.active{background:var(--green);color:var(--bg);border-color:var(--green)}
+.act-btn.red{color:var(--red);border-color:rgba(232,116,102,0.38)}
+.act-btn.red:hover{border-color:var(--red);background:rgba(232,116,102,0.08)}
+
+.speed-ctl{display:flex;align-items:center;gap:8px;flex-shrink:0;color:var(--text-faint);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700}
+.speed-ctl input[type=range]{width:90px;accent-color:var(--blue);cursor:pointer}
+.speed-val{color:var(--blue);font-weight:700;min-width:34px;font-size:11px;font-variant-numeric:tabular-nums}
 
 /* MAIN */
-#main{flex:1 1 0;display:flex;min-height:0;position:relative;z-index:10}
-#cvswrap{flex:0 0 58%;position:relative;min-height:0;background:var(--bg)}
-#cvs{display:block;width:100%;height:100%}
-#hoverbox{position:absolute;bottom:.8rem;left:.8rem;font-size:.42rem;letter-spacing:.06em;
-  color:var(--text-faint);background:rgba(14,17,24,.9);padding:.35rem .8rem;
-  border:1px solid var(--border);pointer-events:none;}
+#main{position:absolute;top:calc(var(--topbar-h) + var(--action-h));left:0;right:0;bottom:0;display:flex;overflow:hidden}
+.in-frame #main{top:var(--action-h)}
 
-/* MATH PANEL */
-#mathpanel{flex:0 0 42%;display:flex;flex-direction:column;min-height:0;
-  border-left:1px solid var(--border);background:rgba(14,17,24,.9);
-  backdrop-filter:blur(20px);position:relative}
-#mathpanel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
-  background:linear-gradient(90deg,transparent,var(--blue-dim),transparent);
-  pointer-events:none;z-index:2}
-.p-head{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
-  padding:.55rem 1.2rem;border-bottom:1px solid var(--border);
-  font-size:.45rem;letter-spacing:.2em;text-transform:uppercase;color:var(--blue-dim)}
-.p-head .tag{color:var(--text-faint);font-size:.4rem}
-#tbar{flex-shrink:0;display:none;padding:.45rem 1.2rem;
-  background:rgba(255,200,50,.06);border-bottom:1px solid rgba(255,200,50,.2);
-  font-size:.42rem;letter-spacing:.06em;color:var(--yellow)}
+/* CANVAS */
+.canvas-area{flex:1;position:relative;overflow:hidden;background:#060810;min-width:0;cursor:crosshair}
+canvas#cvs{display:block;width:100%;height:100%}
+
+.hoverbox{
+  position:absolute;bottom:14px;left:14px;
+  font-size:11.5px;letter-spacing:0.04em;color:var(--text-dim);
+  background:rgba(14,17,24,0.94);padding:7px 13px;
+  border:1px solid var(--border-b);border-radius:3px;
+  pointer-events:none;backdrop-filter:blur(8px);font-weight:500;
+}
+.hoverbox strong{color:var(--text-bright);font-weight:600}
+
+/* EQUATION PANEL (floating, top of canvas) */
+.eq-panel{
+  position:absolute;
+  top:14px;left:50%;transform:translateX(-50%);
+  width:min(560px,calc(100% - 80px));
+  background:rgba(9,12,20,0.94);
+  border:1px solid var(--border-b);
+  backdrop-filter:blur(14px);
+  padding:13px 22px 15px;
+  z-index:50;border-radius:4px;
+  box-shadow:0 8px 32px rgba(0,0,0,0.5);
+}
+.eq-head{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.eq-head .eq-dot{width:6px;height:6px;background:var(--blue);box-shadow:0 0 8px var(--blue);flex-shrink:0;border-radius:50%;transition:background 0.3s,box-shadow 0.3s}
+.eq-head .lbl{font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue);font-weight:700;flex:1;transition:color 0.3s}
+.eq-state{font-size:9px;letter-spacing:0.22em;font-weight:700;color:var(--text-faint);padding:2px 7px;border:1px solid var(--border);border-radius:2px;transition:all 0.3s;white-space:nowrap}
+.eq-panel.active .eq-dot{background:var(--yellow);box-shadow:0 0 10px var(--yellow)}
+.eq-panel.active .eq-head .lbl{color:var(--yellow)}
+.eq-panel.active .eq-state{color:var(--yellow);border-color:var(--yellow-dim);background:rgba(255,200,50,0.10)}
+.eq-panel.active .eq-row{
+  position:relative;
+  background:linear-gradient(90deg,rgba(255,200,50,0.045),rgba(255,200,50,0.012));
+  padding:3px 8px;margin:2px -8px;
+  border-left:2px solid rgba(255,200,50,0.4);
+  border-radius:2px;
+}
+.eq-panel.active .eq-sublabel{color:rgba(255,200,50,0.55)}
+.eq-collapse{width:24px;height:24px;background:transparent;border:1px solid var(--border-b);color:var(--text-faint);cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;transition:all 0.15s;border-radius:2px;font-family:inherit}
+.eq-collapse:hover{border-color:var(--blue);color:var(--blue)}
+.eq-block + .eq-block{border-top:1px solid var(--border);margin-top:9px;padding-top:10px}
+.eq-block{padding:4px 0 1px}
+.eq-sublabel{font-size:9.5px;letter-spacing:0.24em;text-transform:uppercase;color:var(--text-faint);margin-bottom:3px;font-weight:700}
+.eq-row{margin:3px 0;overflow-x:auto;overflow-y:hidden}
+.eq-row::-webkit-scrollbar{height:0}
+.eq-panel .katex{color:var(--text-bright)!important;font-size:1.1rem!important;line-height:1.45!important}
+.eq-panel .katex-display{margin:0.12em 0!important}
+.eq-panel.collapsed{padding:9px 18px 9px}
+.eq-panel.collapsed .eq-block{display:none}
+.eq-panel.collapsed .eq-head{margin-bottom:0}
+.eq-panel.collapsed .eq-collapse{transform:rotate(180deg)}
+
+/* MATH PANEL (right side, live values) */
+#mathpanel{
+  width:var(--mp-w);flex-shrink:0;
+  background:rgba(9,12,20,0.96);
+  border-left:1px solid var(--border-b);
+  backdrop-filter:blur(20px);
+  display:flex;flex-direction:column;overflow:hidden;
+  z-index:80;
+}
+.p-head{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid var(--border);font-size:11px;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim);font-weight:700}
+.p-head .tag{color:var(--text-faint);font-size:10px}
+#tbar{flex-shrink:0;display:none;padding:9px 18px;background:rgba(255,200,50,0.07);border-bottom:1px solid rgba(255,200,50,0.22);font-size:10.5px;letter-spacing:0.08em;color:var(--yellow);font-weight:600}
 #tbar.show{display:block}
-#mathscroll{flex:1 1 0;overflow-y:auto}
-#mathscroll::-webkit-scrollbar{width:2px}
-#mathscroll::-webkit-scrollbar-track{background:var(--bg)}
-#mathscroll::-webkit-scrollbar-thumb{background:var(--border)}
+#tbar.go{background:rgba(122,216,122,0.08);border-color:rgba(122,216,122,0.25);color:var(--green)}
+#mathscroll{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
+#mathcontent{padding:0}
 
-.msec{padding:.8rem 1.2rem;border-bottom:1px solid var(--border)}
+.msec{padding:14px 18px;border-bottom:1px solid var(--border)}
 .msec:last-child{border-bottom:none}
-.msec-head{font-size:.4rem;letter-spacing:.2em;text-transform:uppercase;
-  color:var(--text-faint);margin-bottom:.6rem;
-  display:flex;justify-content:space-between;align-items:center}
-.msec-head .mh-tag{color:var(--blue-dim)}
-.ocards{display:grid;grid-template-columns:1fr 1fr;gap:.4rem;margin-bottom:.4rem}
-.ocard{background:var(--bg);border:1px solid var(--border);padding:.55rem .8rem}
-.ocard.src{border-left:2px solid var(--blue)}
-.ocard.tgt{border-left:2px solid var(--green)}
-.ocard.dim{opacity:.22}
-.ol{font-size:.38rem;letter-spacing:.2em;text-transform:uppercase;color:var(--text-faint);margin-bottom:.15rem}
-.on{font-size:.82rem;font-weight:600;font-family:'Cormorant Garamond',serif;letter-spacing:.04em}
-.ov{font-size:.58rem;color:var(--text-dim);margin-top:.18rem;line-height:1.7}
-.step{display:flex;gap:.6rem;padding:.5rem 0;border-bottom:1px solid rgba(22,34,64,.5)}
-.step:last-child{border-bottom:none}
-.snum{font-size:.6rem;color:var(--text-faint);min-width:1.2rem;padding-top:.1rem}
-.sbody{flex:1;font-size:.75rem;line-height:1.6;color:var(--text-dim)}
-.sbody b{color:var(--text-bright);font-weight:500}
-.sresult{font-family:'JetBrains Mono',monospace;font-size:.68rem;color:var(--blue);margin-top:.22rem}
-.katex{font-size:.82em!important}
-.katex-display{margin:.1rem 0!important;overflow-x:auto}
-.scards{display:grid;grid-template-columns:1fr 1fr;gap:.4rem}
-.scard{background:var(--bg);border:1px solid var(--border);padding:.6rem .85rem}
-.sl{font-size:.38rem;letter-spacing:.18em;text-transform:uppercase;color:var(--text-faint);margin-bottom:.2rem}
-.sv{font-family:'JetBrains Mono',monospace;font-size:1.1rem;font-weight:600}
-.su{font-size:.6rem;color:var(--text-faint);margin-left:.2rem}
-.wcards{display:flex;flex-direction:column;gap:.3rem;margin-top:.4rem}
-.wcard{background:var(--bg);border:1px solid var(--border);border-left:2px solid;
-  padding:.45rem .8rem;display:flex;justify-content:space-between;align-items:center}
-.wcard.w1{border-left-color:var(--yellow)}
-.wcard.w2{border-left-color:rgba(255,200,50,.45)}
-.wcard.w3{border-left-color:rgba(255,200,50,.2)}
-.wlbl{font-size:.55rem;letter-spacing:.1em;color:var(--text-faint)}
-.wval{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--yellow)}
-.wval.d2{color:rgba(255,200,50,.5)}.wval.d3{color:rgba(255,200,50,.28)}
-.ph{padding:1.6rem 1rem;text-align:center;color:var(--text-faint);font-size:.72rem;line-height:2}
-.ph .ic{display:block;font-size:1.4rem;opacity:.1;margin-bottom:.5rem;
-  font-family:'Cormorant Garamond',serif;font-style:italic}
+.msec-head{font-size:10.5px;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue-dim);font-weight:700;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.msec-head .mh-tag{color:var(--text-faint);font-size:9.5px}
 
-/* BOTBAR */
-.botbar{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;
-  padding:.5rem 1.5rem;background:rgba(14,17,24,.95);backdrop-filter:blur(12px);
-  border-top:1px solid var(--border);font-size:.45rem;letter-spacing:.1em;
-  text-transform:uppercase;position:relative;z-index:100}
-.bot-group{display:flex;align-items:center;gap:.6rem}
-.bot-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);
-  font-family:'JetBrains Mono',monospace;font-size:.45rem;letter-spacing:.1em;
-  text-transform:uppercase;padding:.3rem .7rem;cursor:pointer;transition:all .2s}
-.bot-btn:hover{border-color:var(--blue);color:var(--blue);box-shadow:0 0 10px var(--blue-glow)}
-.bot-btn.active{border-color:var(--blue);color:var(--bg);background:var(--blue)}
-.bot-btn.warn:hover{border-color:var(--red);color:var(--red)}
-.bot-btn.go{border-color:var(--yellow-dim);color:var(--yellow)}
-.bot-btn.go:hover{background:var(--yellow);color:var(--bg);box-shadow:0 0 14px var(--yellow-glow)}
-.bot-btn.go:disabled{opacity:.2;cursor:not-allowed}
-.bot-btn.go:hover:disabled{background:transparent;color:var(--yellow)}
-.spwrap{display:flex;align-items:center;gap:.4rem;font-size:.42rem;color:var(--text-faint)}
-input[type=range]{width:70px;accent-color:var(--blue);cursor:pointer}
-.bot-read{font-size:.4rem;letter-spacing:.08em;color:var(--text-faint)}
+.ocards{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:6px}
+.ocard{background:rgba(20,22,30,0.6);border:1px solid var(--border);padding:9px 12px;border-radius:3px}
+.ocard.src{border-left:3px solid var(--blue)}
+.ocard.tgt{border-left:3px solid var(--green)}
+.ocard.dim{opacity:0.35}
+.ol{font-size:9.5px;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-faint);margin-bottom:3px;font-weight:700}
+.on{font-size:15px;font-weight:600;font-family:'Cormorant Garamond',serif;letter-spacing:0.04em;line-height:1.2}
+.ov{font-size:11px;color:var(--text-dim);margin-top:4px;line-height:1.55;font-variant-numeric:tabular-nums}
+
+.step{display:flex;gap:11px;padding:9px 0;border-bottom:1px solid rgba(22,34,64,0.5)}
+.step:last-child{border-bottom:none}
+.snum{font-size:12px;color:var(--text-faint);min-width:24px;padding-top:2px;font-weight:700}
+.sbody{flex:1;font-size:13.5px;line-height:1.6;color:var(--text-dim)}
+.sbody b{color:var(--text-bright);font-weight:600}
+.sresult{font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--blue);margin-top:5px;font-weight:700;font-variant-numeric:tabular-nums}
+.katex{font-size:1.25em!important}
+.katex-display{margin:4px 0!important;overflow-x:auto;overflow-y:hidden}
+
+.scards{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.scard{background:rgba(20,22,30,0.6);border:1px solid var(--border);padding:10px 12px;border-radius:3px;border-left:3px solid var(--border-b)}
+.sl{font-size:9.5px;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint);margin-bottom:4px;font-weight:700}
+.sv{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+.su{font-size:10px;color:var(--text-faint);margin-left:3px;font-weight:500}
+
+.wcards{display:flex;flex-direction:column;gap:5px;margin-top:6px}
+.wcard{background:rgba(20,22,30,0.6);border:1px solid var(--border);border-left:3px solid;padding:7px 12px;display:flex;justify-content:space-between;align-items:center;border-radius:3px}
+.wcard.w1{border-left-color:var(--yellow)}
+.wcard.w2{border-left-color:rgba(255,200,50,0.5)}
+.wcard.w3{border-left-color:rgba(255,200,50,0.25)}
+.wlbl{font-size:11px;color:var(--text-dim);letter-spacing:0.08em;font-weight:500}
+.wval{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--yellow);font-weight:700;font-variant-numeric:tabular-nums}
+.wval.d2{color:rgba(255,200,50,0.6)} .wval.d3{color:rgba(255,200,50,0.35)}
+
+.ph{padding:24px 16px;text-align:center;color:var(--text-faint);font-size:12px;line-height:1.7;font-weight:500}
+.ph .ic{display:block;font-size:18px;opacity:0.35;margin-bottom:8px;font-family:'Cormorant Garamond',serif;font-style:italic;color:var(--blue-dim)}
+
+.hint{font-size:11px;color:var(--text-faint);margin-top:6px;line-height:1.6;font-weight:500}
+
+/* MOBILE FAB */
+.fab{display:none;position:absolute;bottom:14px;right:14px;z-index:35;padding:11px 16px;background:rgba(14,17,24,0.96);border:1px solid var(--border-b);color:var(--text);font-family:inherit;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;font-weight:700;border-radius:4px;backdrop-filter:blur(8px);cursor:pointer;transition:all 0.18s}
+.fab:active{transform:scale(0.96)}
+.fab.open{color:var(--yellow);border-color:var(--yellow);background:rgba(255,200,50,0.1)}
+
+.drawer-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:30;opacity:0;pointer-events:none;transition:opacity 0.2s}
+.drawer-backdrop.show{opacity:1;pointer-events:auto}
+
+/* ── Mobile (≤980) ── */
+@media(max-width:980px){
+  #mathpanel{
+    position:fixed;
+    top:calc(var(--topbar-h) + var(--action-h));bottom:0;
+    right:0;width:92vw;max-width:400px;
+    z-index:200;
+    transform:translateX(105%);
+    transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);
+    box-shadow:0 0 32px rgba(0,0,0,0.65);
+    background:rgba(9,12,20,0.98)
+  }
+  .in-frame #mathpanel{top:var(--action-h)}
+  #mathpanel.open{transform:translateX(0)}
+  .canvas-area{width:100vw}
+  .fab{display:block}
+  .drawer-backdrop{display:block}
+  .ab-label{display:none}
+  .smsg{display:none}
+}
+
+@media(max-width:600px){
+  :root{--topbar-h:38px;--action-h:50px}
+  .topbar{padding:0 12px}
+  .sys-name{font-size:0.86rem;letter-spacing:0.1em}
+  .sys-sub{display:none}
+  .sys-status{font-size:9.5px;gap:5px}
+  .sys-status::before{width:6px;height:6px}
+  .topbar-r{gap:11px;font-size:10.5px}
+  .topbar-r .hide-narrow{display:none}
+  .action-bar{padding:0 10px;gap:6px}
+  .pcard{padding:6px 10px 6px 6px;gap:6px}
+  .pcard-icon{width:24px;height:24px}
+  .pcard-name{font-size:10.5px}
+  .act-btn{padding:7px 11px;font-size:10.5px}
+  .speed-ctl{gap:6px}
+  .speed-ctl input[type=range]{width:74px}
+  .speed-val{font-size:10.5px;min-width:30px}
+  .eq-panel{top:10px;padding:11px 15px 12px}
+  .eq-panel .katex{font-size:0.95rem!important}
+  .eq-sublabel{font-size:9px;letter-spacing:0.18em}
+  .fab{padding:10px 14px;font-size:10.5px;bottom:14px;right:12px}
+  .hoverbox{bottom:14px;left:12px;font-size:10.5px;padding:6px 11px}
+  .ocard,.scard,.wcard{padding:8px 10px}
+  .on{font-size:14px}
+}
 </style>
 </head>
 <body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+
 <div class="grid-bg"></div>
-<div class="corner-data tl">SYS.REF <span>0xH0HM</span><br>MODULE <span>ASTRO.NAV</span></div>
-<div class="corner-data br">SIGNAL <span>NOMINAL</span><br>AUTH <span>VERIFIED</span></div>
 
 <div class="topbar">
   <div class="topbar-l">
     <span class="sys-name">Stella Nova</span>
-    <span class="sys-sub">// Orbital Transfer Calculator</span>
+    <span class="sys-sub">Orbital Transfer Calculator</span>
     <div class="sys-status" id="simStatus">Sim Active</div>
   </div>
-  <div id="smsgwrap"><span id="smsg">AWAITING SELECTION</span></div>
   <div class="topbar-r">
-    <span>Planets: <strong id="bodyCount">0</strong></span>
-    <span>FPS: <strong id="fpsRead">60</strong></span>
-    <span>T: <strong id="timeRead">0.00</strong>&nbsp;yr</span>
+    <span class="smsg" id="smsg">AWAITING SELECTION</span>
+    <span class="hide-narrow">Planets <strong id="bodyCount">0</strong></span>
+    <span class="hide-narrow">FPS <strong id="fpsRead">60</strong></span>
+    <span>t <strong id="timeRead">0.00</strong> yr</span>
   </div>
 </div>
+
+<!-- ACTION BAR (presets + actions, always visible) -->
+<nav class="action-bar">
+  <span class="ab-label">Systems</span>
+
+  <button class="pcard active" data-preset="random" onclick="loadPreset('random',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="2.8" fill="#ffe080"/>
+      <circle cx="20" cy="20" r="7" fill="none" stroke="rgba(150,200,255,0.3)" stroke-width="0.4"/>
+      <circle cx="20" cy="20" r="13" fill="none" stroke="rgba(150,200,255,0.3)" stroke-width="0.4"/>
+      <circle cx="20" cy="20" r="17" fill="none" stroke="rgba(150,200,255,0.3)" stroke-width="0.4"/>
+      <circle cx="26" cy="20" r="1.6" fill="#ffc832"/>
+      <circle cx="20" cy="13" r="1.4" fill="#5cd8e8"/>
+      <circle cx="9" cy="22" r="2" fill="#e87466"/>
+      <circle cx="33" cy="15" r="1.7" fill="#7ad87a"/>
+    </svg></span>
+    <span class="pcard-name">Random</span>
+  </button>
+
+  <button class="pcard" data-preset="inner" onclick="loadPreset('inner',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="3.2" fill="#ffe080"/>
+      <circle cx="20" cy="20" r="7" fill="none" stroke="rgba(150,200,255,0.5)" stroke-width="0.5"/>
+      <circle cx="20" cy="20" r="10" fill="none" stroke="rgba(150,200,255,0.5)" stroke-width="0.5"/>
+      <circle cx="20" cy="20" r="13" fill="none" stroke="rgba(150,200,255,0.5)" stroke-width="0.5"/>
+      <circle cx="27" cy="20" r="1.5" fill="#ffc832"/>
+      <circle cx="20" cy="10" r="1.5" fill="#5cd8e8"/>
+      <circle cx="9" cy="22" r="1.6" fill="#e87466"/>
+    </svg></span>
+    <span class="pcard-name">Inner</span>
+  </button>
+
+  <button class="pcard" data-preset="outer" onclick="loadPreset('outer',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="2.8" fill="#ffe080"/>
+      <circle cx="20" cy="20" r="9" fill="none" stroke="rgba(150,200,255,0.4)" stroke-width="0.4"/>
+      <circle cx="20" cy="20" r="17" fill="none" stroke="rgba(150,200,255,0.4)" stroke-width="0.4"/>
+      <circle cx="29" cy="20" r="1.6" fill="#5cd8e8"/>
+      <circle cx="9" cy="14" r="2.2" fill="#e87466"/>
+    </svg></span>
+    <span class="pcard-name">Outer</span>
+  </button>
+
+  <button class="pcard" data-preset="laplace" onclick="loadPreset('laplace',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="2.5" fill="#ffe080"/>
+      <circle cx="20" cy="20" r="6" fill="none" stroke="rgba(150,200,255,0.45)" stroke-width="0.4"/>
+      <circle cx="20" cy="20" r="10" fill="none" stroke="rgba(150,200,255,0.45)" stroke-width="0.4"/>
+      <circle cx="20" cy="20" r="14" fill="none" stroke="rgba(150,200,255,0.45)" stroke-width="0.4"/>
+      <circle cx="20" cy="20" r="18" fill="none" stroke="rgba(150,200,255,0.45)" stroke-width="0.4"/>
+      <circle cx="26" cy="20" r="1.3" fill="#ffc832"/>
+      <circle cx="30" cy="20" r="1.5" fill="#5cd8e8"/>
+      <circle cx="34" cy="20" r="1.7" fill="#e87466"/>
+      <circle cx="38" cy="20" r="1.9" fill="#7ad87a"/>
+    </svg></span>
+    <span class="pcard-name">Laplace</span>
+  </button>
+
+  <button class="pcard" data-preset="binary" onclick="loadPreset('binary',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="20" r="3" fill="#ffe080"/>
+      <circle cx="20" cy="20" r="9" fill="none" stroke="rgba(150,200,255,0.45)" stroke-width="0.4"/>
+      <circle cx="20" cy="20" r="13" fill="none" stroke="rgba(150,200,255,0.45)" stroke-width="0.4"/>
+      <circle cx="29" cy="20" r="2.2" fill="#ffc832"/>
+      <circle cx="33" cy="20" r="2.4" fill="#5cd8e8"/>
+    </svg></span>
+    <span class="pcard-name">Binary</span>
+  </button>
+
+  <span class="ab-divider"></span>
+
+  <button class="act-btn go" id="btnLaunch" disabled onclick="launch()">&#9654; Launch</button>
+  <button class="act-btn green" id="btnHop" onclick="toggleHopMode()">&#11041; Hop</button>
+  <button class="act-btn red" onclick="clearSel()">&#x2715; Clear</button>
+
+  <span class="ab-divider"></span>
+
+  <div class="speed-ctl">
+    <span>Speed</span>
+    <input type="range" id="spSlider" min="0.05" max="0.5" step="0.005" value="0.25">
+    <span class="speed-val" id="spVal">0.25&times;</span>
+  </div>
+</nav>
 
 <div id="main">
-  <div id="cvswrap">
+
+  <div class="canvas-area" id="canvasArea">
     <canvas id="cvs"></canvas>
-    <div id="hoverbox">hover over a planet</div>
+    <div class="hoverbox" id="hoverbox">hover over a planet</div>
+
+    <!-- FLOATING EQUATION PANEL -->
+    <section class="eq-panel" id="eqPanel">
+      <div class="eq-head">
+        <span class="eq-dot"></span>
+        <span class="lbl">Hohmann Transfer Equations</span>
+        <span class="eq-state" id="eqState">REFERENCE</span>
+        <button class="eq-collapse" id="eqCollapseBtn" title="Collapse">&#9650;</button>
+      </div>
+      <div class="eq-block">
+        <div class="eq-sublabel">Vis-Viva &middot; Speed on any conic</div>
+        <div class="eq-row" id="eq-visviva"></div>
+      </div>
+      <div class="eq-block">
+        <div class="eq-sublabel">Transfer Ellipse &middot; &Delta;v Burns</div>
+        <div class="eq-row" id="eq-atransfer"></div>
+        <div class="eq-row" id="eq-dv1"></div>
+        <div class="eq-row" id="eq-dv2"></div>
+      </div>
+      <div class="eq-block">
+        <div class="eq-sublabel">Transit Time &middot; Launch Window</div>
+        <div class="eq-row" id="eq-time"></div>
+        <div class="eq-row" id="eq-phi"></div>
+      </div>
+    </section>
+
+    <button class="fab" id="fabMath" onclick="toggleMathDrawer()">Math &equiv;</button>
+    <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeMathDrawer()"></div>
   </div>
-  <div id="mathpanel">
-    <div class="p-head"><span>// Transfer Mathematics</span><span class="tag">PKT.ORBITAL</span></div>
+
+  <aside id="mathpanel">
+    <div class="p-head">
+      <span>Live Computation</span>
+      <span class="tag">PKT.ORBITAL</span>
+    </div>
     <div id="tbar"></div>
     <div id="mathscroll"><div id="mathcontent"></div></div>
-  </div>
-</div>
+  </aside>
 
-<div class="botbar">
-  <div class="bot-group">
-    <button class="bot-btn" onclick="regen()">⟳ New System</button>
-    <button class="bot-btn warn" onclick="clearSel()">✕ Clear</button>
-    <button class="bot-btn go" id="btnLaunch" disabled onclick="launch()">▶ Launch Transfer</button>
-    <button class="bot-btn" id="btnHop" onclick="toggleHopMode()" style="border-color:rgba(100,200,100,.3);color:#64c864">⬡ Planet Hop</button>
-  </div>
-  <div class="bot-group">
-    <div class="spwrap">SPEED
-      <input type="range" id="spSlider" min="0.05" max="0.5" step="0.005" value="0.5">
-      <span id="spVal">0.5×</span>
-    </div>
-  </div>
-  <div class="bot-read" id="botHint">SPACE = pause &nbsp;·&nbsp; ① source &nbsp;·&nbsp; ② target &nbsp;·&nbsp; ③ launch</div>
 </div>
 
 <script>
+/* ═════════════════════════════════════════════════════════════
+   KaTeX color-coded reference equations
+   μ → yellow      r → blue       v → green
+   a → orange      Δv → cyan      t,T → yellow
+   φ → magenta     ω → magenta
+   ═════════════════════════════════════════════════════════════ */
+(function(){
+  if(!window.katex) return;
+  const C_mu='#ffc832', C_r='#96c8ff', C_v='#7ad87a', C_a='#ff9050',
+        C_dv='#5cd8e8', C_t='#ffc832', C_phi='#d870c8', C_om='#d870c8';
+  const opts={throwOnError:false,displayMode:true};
+
+  katex.render(
+    String.raw`\textcolor{${C_v}}{v} \;=\; \sqrt{\textcolor{${C_mu}}{\mu}\!\left(\frac{2}{\textcolor{${C_r}}{r}} - \frac{1}{\textcolor{${C_a}}{a}}\right)}`,
+    document.getElementById('eq-visviva'), opts
+  );
+  katex.render(
+    String.raw`\textcolor{${C_a}}{a_t} \;=\; \frac{\textcolor{${C_r}}{r_1} + \textcolor{${C_r}}{r_2}}{2}`,
+    document.getElementById('eq-atransfer'), opts
+  );
+  katex.render(
+    String.raw`\textcolor{${C_dv}}{\Delta v_1} \;=\; \left|\,\textcolor{${C_v}}{v_t(r_1)} - \textcolor{${C_v}}{v_c(r_1)}\,\right|`,
+    document.getElementById('eq-dv1'), opts
+  );
+  katex.render(
+    String.raw`\textcolor{${C_dv}}{\Delta v_2} \;=\; \left|\,\textcolor{${C_v}}{v_t(r_2)} - \textcolor{${C_v}}{v_c(r_2)}\,\right|`,
+    document.getElementById('eq-dv2'), opts
+  );
+  katex.render(
+    String.raw`\textcolor{${C_t}}{t_{tr}} \;=\; \pi\sqrt{\frac{\textcolor{${C_a}}{a_t}^{3}}{\textcolor{${C_mu}}{\mu}}}`,
+    document.getElementById('eq-time'), opts
+  );
+  katex.render(
+    String.raw`\textcolor{${C_phi}}{\varphi_{\text{req}}} \;=\; \pi - \textcolor{${C_om}}{\omega_{\text{tgt}}}\cdot\textcolor{${C_t}}{t_{tr}}`,
+    document.getElementById('eq-phi'), opts
+  );
+
+  const panel=document.getElementById('eqPanel');
+  const btn=document.getElementById('eqCollapseBtn');
+  btn.addEventListener('click',()=>{
+    const c=panel.classList.toggle('collapsed');
+    btn.innerHTML=c?'&#9660;':'&#9650;';
+    btn.title=c?'Expand':'Collapse';
+  });
+})();
+</script>
+
+<script>
+/* ═════════════════════════════════════════════════════════════
+   PHYSICS CONSTANTS
+   ═════════════════════════════════════════════════════════════ */
 const MU=4*Math.PI*Math.PI, AU_KM=1.496e8, YR_S=3.156e7;
 const AU2KMS=AU_KM/YR_S, TAU=Math.PI*2;
 const DPR=Math.min(devicePixelRatio||1,2);
-const BASE_TS=0.035; // years/real-second at 1× — slow default
+const BASE_TS=0.035; // years per real-second at 1× speed
 
 let planets=[], source=null, target=null, xfer=null, ship=null;
 let hovered=null, simTime=0, lastT=null, paused=false;
-let launchWindows=[];
-let launchScore=null;
-// ── Planet-hop mode ──────────────────────────────────────────────
-let hopMode=false;
-let hopLog=[];      // [{from, to, grade, color, dtDays, timing, dvTot}]
-let hopHomePlanet=null; // the planet the ship is currently parked at
+let launchWindows=[], launchScore=null;
+let hopMode=false, hopLog=[], hopHomePlanet=null;
+let currentPreset='random';
 
-// ── Canvas ──────────────────────────────────────────────────────
+/* ═════════════════════════════════════════════════════════════
+   CANVAS
+   ═════════════════════════════════════════════════════════════ */
 const cvs=document.getElementById('cvs'), ctx=cvs.getContext('2d');
-const wrap=document.getElementById('cvswrap');
+const wrap=document.getElementById('canvasArea');
 let W,H,CX,CY,SCALE;
 
 function resize(){
@@ -225,26 +512,24 @@ function resize(){
   ctx.setTransform(DPR,0,0,DPR,0,0);
   CX=W/2; CY=H/2;
   const maxR=planets.length?Math.max(...planets.map(p=>p.r)):4;
-  SCALE=(Math.min(W,H)*0.43)/maxR;
+  SCALE=(Math.min(W,H)*0.42)/maxR;
 }
 window.addEventListener('resize',()=>{resize();_sc=null});
 
-// ── Planet generation — Laplace resonance chain ──────────────────
+/* ═════════════════════════════════════════════════════════════
+   PLANET GENERATION — parameterised system presets
+   ═════════════════════════════════════════════════════════════ */
 const NAMES=['Auvon','Belrix','Cytha','Dural','Exven','Farux','Glyth','Helox',
              'Iyral','Juvex','Kelon','Lythos','Myrvax','Nexul','Ophryn','Pyreth'];
-// Period ratios for consecutive planets: mainly 2:1 and 3:2, sometimes 4:3
-const RES=[2, 3/2, 2, 3/2, 4/3, 3/2];
 
-function regen(){
-  const names=[...NAMES].sort(()=>Math.random()-.5);
-  const count=5+Math.floor(Math.random()*3);
-  planets=[];
+function genSystem(opts){
+  const names=[...NAMES].sort(()=>Math.random()-0.5);
   const hues=[];
-  let T=0.15+Math.random()*0.12; // innermost period (yr)
-
-  for(let i=0;i<count;i++){
+  planets=[];
+  let T=opts.startT;
+  for(let i=0;i<opts.count;i++){
     const r=Math.pow(T,2/3);
-    if(r>5) break;
+    if(r>opts.maxR) break;
     let hue,att=0;
     do{hue=Math.random()*360;att++}
     while(att<30&&hues.some(h=>Math.min(Math.abs(h-hue),360-Math.abs(h-hue))<36));
@@ -253,37 +538,106 @@ function regen(){
       name:names[i], r, period:T,
       omega:TAU/T, speed:Math.sqrt(MU/r),
       angle:Math.random()*TAU,
-      hue, size:3+Math.random()*4,
+      hue, size:opts.size||(3+Math.random()*4),
       color:`hsl(${hue},65%,62%)`
     });
-    const res=RES[Math.floor(Math.random()*RES.length)];
-    T*=res*(0.97+Math.random()*0.06);
+    const ratio=opts.ratios[i%opts.ratios.length];
+    const jit=opts.jitter||0;
+    T*=ratio*(1+jit*(Math.random()*2-1));
   }
+}
 
-  source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
+function genRandom(){
+  genSystem({
+    startT:0.15+Math.random()*0.12,
+    count:5+Math.floor(Math.random()*3),
+    maxR:5,
+    ratios:[2,1.5,2,1.5,4/3,1.5],
+    jitter:0.03
+  });
+}
+function genInner(){
+  genSystem({
+    startT:0.08,
+    count:4,
+    maxR:1.4,
+    ratios:[1.5,4/3,1.5],
+    jitter:0.02
+  });
+}
+function genOuter(){
+  genSystem({
+    startT:0.8,
+    count:3,
+    maxR:8,
+    ratios:[2.2,2.5],
+    jitter:0.02
+  });
+}
+function genLaplace(){
+  // 1:2:4:8 period ratios → exact 2:1 chain (the most pedagogical resonance)
+  genSystem({
+    startT:0.18,
+    count:4,
+    maxR:5,
+    ratios:[2,2,2],
+    jitter:0,
+    size:4
+  });
+}
+function genBinary(){
+  genSystem({
+    startT:0.6,
+    count:2,
+    maxR:3,
+    ratios:[1.35],
+    jitter:0,
+    size:5
+  });
+}
+
+function loadPreset(name,btn){
+  currentPreset=name;
+  document.querySelectorAll('.pcard').forEach(c=>c.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  else{
+    const c=document.querySelector(`.pcard[data-preset="${name}"]`);
+    if(c) c.classList.add('active');
+  }
+  if(name==='random') genRandom();
+  else if(name==='inner') genInner();
+  else if(name==='outer') genOuter();
+  else if(name==='laplace') genLaplace();
+  else if(name==='binary') genBinary();
+
+  source=target=xfer=ship=null;
+  launchWindows=[]; launchScore=null;
   hopLog=[]; hopHomePlanet=null; hopMode=false;
-  // reset hop button visual
   const hb=document.getElementById('btnHop');
-  if(hb){hb.style.borderColor='rgba(100,200,100,.3)';hb.style.color='#64c864';hb.style.background='transparent';hb.textContent='⬡ Planet Hop';}
-  const bh=document.getElementById('botHint');
-  if(bh) bh.textContent='SPACE = pause \u00b7 ① source \u00b7 ② target \u00b7 ③ launch';
+  hb.classList.remove('active'); hb.innerHTML='&#11041; Hop';
   simTime=0; lastT=null;
   resize();
   setBtnLaunch(false); setTbar(false);
+  setEqPanelActive(false);
   setStatus('AWAITING SELECTION');
   renderMath();
+  if(window.innerWidth<=980) closeMathDrawer();
 }
 
-// ── Physics ──────────────────────────────────────────────────────
+/* ═════════════════════════════════════════════════════════════
+   PHYSICS
+   ═════════════════════════════════════════════════════════════ */
 const vCirc=(r)=>Math.sqrt(MU/r);
 const visViva=(r,a)=>Math.sqrt(MU*(2/r-1/a));
 
 function solveKepler(M,e){
   let E=M;
-  for(let i=0;i<60;i++){const d=(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));E-=d;if(Math.abs(d)<1e-12)break}
+  for(let i=0;i<60;i++){
+    const d=(E-e*Math.sin(E)-M)/(1-e*Math.cos(E));
+    E-=d; if(Math.abs(d)<1e-12) break;
+  }
   return E;
 }
-
 function computeXfer(r1,r2){
   const asc=r2>=r1, rPer=Math.min(r1,r2), rApo=Math.max(r1,r2);
   const a_t=(rPer+rApo)/2, c_t=a_t-rPer;
@@ -295,21 +649,18 @@ function computeXfer(r1,r2){
   return{r1,r2,rPer,rApo,a_t,b_t,c_t,e_t,asc,vc1,vc2,v1,v2,dv1,dv2,dvTot:dv1+dv2,tTr};
 }
 
-// ── Launch window computation ─────────────────────────────────────
-// Required target lead angle: φ_req = π − ω_tgt · t_transfer
-// φ_req is the angle of target AHEAD of source at launch time.
-function computeWindows(src, tgt, tr, now, count=3){
+/* Launch windows: target lead angle at launch = π − ω_tgt · t_tr */
+function computeWindows(src,tgt,tr,now,count=3){
   const phi_req=Math.PI-tgt.omega*tr.tTr;
   const theta_src=src.angle+src.omega*now;
   const theta_tgt=tgt.angle+tgt.omega*now;
   const phi_now=theta_tgt-theta_src;
   const dphi=tgt.omega-src.omega;
   if(Math.abs(dphi)<1e-6) return [];
-
   const wins=[];
   for(let k=-30;k<=80;k++){
     const dt=(phi_req-phi_now+TAU*k)/dphi;
-    if(dt>0.004) wins.push(dt);  // future only for ghost markers
+    if(dt>0.004) wins.push(dt);
   }
   wins.sort((a,b)=>a-b);
   return wins.slice(0,count).map((dt,i)=>{
@@ -322,45 +673,37 @@ function computeWindows(src, tgt, tr, now, count=3){
     };
   });
 }
-
-// Find the ideal source angle at the window NEAREST to now (past OR future)
-// so a launch 2 seconds after W1 still scores against W1, not W2.
-// Returns the signed time offset (years) from now to the nearest window (past or future)
-function nearestWindowDt(src, tgt, tr, now){
+function nearestWindowDt(src,tgt,tr,now){
   const phi_req=Math.PI-tgt.omega*tr.tTr;
   const theta_src=src.angle+src.omega*now;
   const theta_tgt=tgt.angle+tgt.omega*now;
   const phi_now=theta_tgt-theta_src;
   const dphi=tgt.omega-src.omega;
   if(Math.abs(dphi)<1e-6) return 0;
-
   let bestDt=Infinity;
   for(let k=-60;k<=60;k++){
     const dt=(phi_req-phi_now+TAU*k)/dphi;
     if(Math.abs(dt)<Math.abs(bestDt)) bestDt=dt;
   }
-  return bestDt; // years, signed (negative = window was in the past)
+  return bestDt;
 }
 
-// ── Launch scoring — based on timing error in days ────────────────
-// Δt = how many simulation-days early/late vs the nearest ideal window.
-// Thresholds are absolute day errors, independent of orbit size.
+/* Grades by absolute day error from nearest window */
 const GRADES=[
   {maxD:0.5,  g:'A+',c:'#69f7a0',f:'Perfect. Textbook Hohmann launch.'},
   {maxD:1.5,  g:'A', c:'#69f7a0',f:'Excellent timing. Near-optimal trajectory.'},
   {maxD:4,    g:'A−',c:'#a8f0c0',f:'Great launch. Tiny correction burn needed.'},
   {maxD:9,    g:'B+',c:'#96c8ff',f:'Good timing. Small phase error.'},
   {maxD:18,   g:'B', c:'#96c8ff',f:'Decent window. Minor fuel penalty.'},
-  {maxD:35,   g:'B−',c:'#96c8ff',f:'Acceptable. You\'ll arrive, just slightly late.'},
+  {maxD:35,   g:'B−',c:'#96c8ff',f:"Acceptable. You'll arrive, just slightly late."},
   {maxD:65,   g:'C+',c:'#ffc832',f:'Off-window. Noticeable trajectory drift.'},
   {maxD:110,  g:'C', c:'#ffc832',f:'Poor timing. Expect a correction burn.'},
   {maxD:180,  g:'C−',c:'#ffa040',f:'Badly timed. Significant fuel wasted.'},
-  {maxD:300,  g:'D+',c:'#ff7060',f:'Way off. You\'ll miss the target orbit.'},
+  {maxD:300,  g:'D+',c:'#ff7060',f:"Way off. You'll miss the target orbit."},
   {maxD:500,  g:'D', c:'#ff5050',f:'Very poor. Emergency corrections required.'},
   {maxD:800,  g:'D−',c:'#ff5050',f:'Catastrophic timing. Fuel budget blown.'},
   {maxD:1e9,  g:'F', c:'#ff3030',f:'You launched into the void. Good luck.'},
 ];
-
 function scorelaunch(dtYears){
   const dtDays=Math.abs(dtYears)*365.25;
   const g=GRADES.find(g=>dtDays<=g.maxD)||GRADES[GRADES.length-1];
@@ -369,21 +712,22 @@ function scorelaunch(dtYears){
   return{grade:g.g, dtDays, timing, color:g.c, flavor:g.f, fadeT:0};
 }
 
-// ── Star cache ───────────────────────────────────────────────────
+/* ═════════════════════════════════════════════════════════════
+   DRAWING
+   ═════════════════════════════════════════════════════════════ */
 let _sc=null;
 function getStars(){
   if(_sc&&_sc.W===W&&_sc.H===H) return _sc.d;
   const d=[];
   for(let i=0;i<300;i++) d.push({
     x:((i*7919+13337)%W), y:((i*6271+31337)%H),
-    r:.2+(i%6)*.18, a:.04+(i%5)*.09
+    r:0.2+(i%6)*0.18, a:0.04+(i%5)*0.09
   });
   _sc={W,H,d}; return d;
 }
 
-// ── Drawing ──────────────────────────────────────────────────────
 function drawBg(){
-  ctx.fillStyle='#0e1118'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#060810'; ctx.fillRect(0,0,W,H);
   getStars().forEach(s=>{
     ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,TAU);
     ctx.fillStyle=`rgba(200,210,240,${s.a})`; ctx.fill();
@@ -395,8 +739,8 @@ function drawBg(){
   ctx.strokeStyle='rgba(150,200,255,0.07)'; ctx.lineWidth=1; ctx.stroke();
   // sun
   const sg=ctx.createRadialGradient(CX,CY,0,CX,CY,50);
-  sg.addColorStop(0,'rgba(255,248,190,1)'); sg.addColorStop(.18,'rgba(255,218,90,.82)');
-  sg.addColorStop(.55,'rgba(255,155,45,.14)'); sg.addColorStop(1,'rgba(0,0,0,0)');
+  sg.addColorStop(0,'rgba(255,248,190,1)'); sg.addColorStop(0.18,'rgba(255,218,90,0.82)');
+  sg.addColorStop(0.55,'rgba(255,155,45,0.14)'); sg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.beginPath(); ctx.arc(CX,CY,50,0,TAU); ctx.fillStyle=sg; ctx.fill();
   ctx.beginPath(); ctx.arc(CX,CY,11,0,TAU); ctx.fillStyle='#fff9dc'; ctx.fill();
 }
@@ -411,8 +755,8 @@ function drawOrbit(p){
   ctx.beginPath(); ctx.arc(CX,CY,p.r*SCALE,0,TAU);
   const sel=p===source||p===target;
   ctx.setLineDash(sel?[]:[1.5,7]);
-  ctx.strokeStyle=p===source?'rgba(150,200,255,.4)':p===target?'rgba(100,200,100,.4)':'rgba(150,200,255,.05)';
-  ctx.lineWidth=sel?1.2:.6;
+  ctx.strokeStyle=p===source?'rgba(150,200,255,0.45)':p===target?'rgba(122,216,122,0.45)':'rgba(150,200,255,0.06)';
+  ctx.lineWidth=sel?1.4:0.7;
   ctx.stroke(); ctx.setLineDash([]);
 }
 
@@ -422,68 +766,163 @@ function drawPlanet(p,pos,alpha){
   const r=p.size*DPR;
   ctx.globalAlpha=alpha;
   if(alpha===1&&(isSrc||isTgt||isHov)){
-    const gc=isSrc?'150,200,255':isTgt?'100,200,100':'200,220,255';
+    const gc=isSrc?'150,200,255':isTgt?'122,216,122':'200,220,255';
     const g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,r*5);
-    g.addColorStop(0,`rgba(${gc},.3)`); g.addColorStop(1,'rgba(0,0,0,0)');
+    g.addColorStop(0,`rgba(${gc},0.32)`); g.addColorStop(1,'rgba(0,0,0,0)');
     ctx.beginPath(); ctx.arc(pos.x,pos.y,r*5,0,TAU); ctx.fillStyle=g; ctx.fill();
     ctx.beginPath(); ctx.arc(pos.x,pos.y,r+4*DPR,0,TAU);
-    ctx.strokeStyle=isSrc?'rgba(150,200,255,.7)':isTgt?'rgba(100,200,100,.7)':'rgba(255,255,255,.2)';
-    ctx.lineWidth=1; ctx.stroke();
+    ctx.strokeStyle=isSrc?'rgba(150,200,255,0.78)':isTgt?'rgba(122,216,122,0.78)':'rgba(255,255,255,0.25)';
+    ctx.lineWidth=1.1; ctx.stroke();
   }
-  const pg=ctx.createRadialGradient(pos.x-r*.3,pos.y-r*.3,0,pos.x,pos.y,r);
+  const pg=ctx.createRadialGradient(pos.x-r*0.3,pos.y-r*0.3,0,pos.x,pos.y,r);
   pg.addColorStop(0,`hsl(${p.hue},75%,80%)`); pg.addColorStop(1,`hsl(${p.hue},55%,35%)`);
   ctx.beginPath(); ctx.arc(pos.x,pos.y,r,0,TAU); ctx.fillStyle=pg; ctx.fill();
   ctx.globalAlpha=1;
 }
 
 function drawLabel(p,pos){
-  const col=p===source?'#96c8ff':p===target?'#64c864':`hsl(${p.hue},50%,65%)`;
-  ctx.font=`${9*DPR}px 'JetBrains Mono',monospace`;
+  const col=p===source?'#96c8ff':p===target?'#7ad87a':`hsl(${p.hue},50%,68%)`;
+  ctx.font=`600 ${10*DPR}px 'JetBrains Mono',monospace`;
   ctx.textAlign='left'; ctx.textBaseline='middle';
-  ctx.fillStyle='rgba(0,0,0,.55)'; ctx.fillText(p.name,pos.x+p.size*DPR+5*DPR+1,pos.y+1);
+  ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillText(p.name,pos.x+p.size*DPR+5*DPR+1,pos.y+1);
   ctx.fillStyle=col; ctx.fillText(p.name,pos.x+p.size*DPR+5*DPR,pos.y);
 }
 
-// ellipse helper
 function eToXY(a_t,b_t,c_t,periAng,E){
   const xo=a_t*Math.cos(E)-c_t, yo=b_t*Math.sin(E);
   const cp=Math.cos(periAng), sp=Math.sin(periAng);
   return[CX+(xo*cp-yo*sp)*SCALE, CY-(xo*sp+yo*cp)*SCALE];
 }
-
 function drawXferEllipse(tr,periAng,alpha,drawArc){
   const{a_t,b_t,c_t}=tr;
   ctx.globalAlpha=alpha;
-  // faint full outline
   ctx.beginPath();
   for(let i=0;i<=180;i++){const[x,y]=eToXY(a_t,b_t,c_t,periAng,i*TAU/180);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
   ctx.closePath(); ctx.setLineDash([4,5]);
-  ctx.strokeStyle='rgba(255,200,50,.1)'; ctx.lineWidth=.7; ctx.stroke(); ctx.setLineDash([]);
-  // active arc
+  ctx.strokeStyle='rgba(255,200,50,0.42)'; ctx.lineWidth=0.9; ctx.stroke(); ctx.setLineDash([]);
   if(drawArc){
+    ctx.globalAlpha=Math.min(alpha*3.2,1);
     const E0=tr.asc?0:Math.PI;
     ctx.beginPath();
     for(let i=0;i<=100;i++){const[x,y]=eToXY(a_t,b_t,c_t,periAng,E0+i*Math.PI/100);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
-    ctx.strokeStyle='#ffc832'; ctx.lineWidth=2*DPR; ctx.stroke();
+    ctx.strokeStyle='#ffc832'; ctx.lineWidth=2.2*DPR; ctx.stroke();
   }
   ctx.globalAlpha=1;
+}
+
+/* Faint geometric construction of the transfer ellipse: major + minor axes,
+   center, empty focus, and color-coded labels for a, b, c, r1, r2 */
+function drawEllipseGeometry(tr,periAng){
+  const{a_t,b_t,c_t,rPer,rApo,asc,r1,r2}=tr;
+  const sp=Math.sin(periAng), cp=Math.cos(periAng);
+  function ts(xo,yo){
+    return [CX+(xo*cp-yo*sp)*SCALE, CY-(xo*sp+yo*cp)*SCALE];
+  }
+  // local +y direction projected to screen (unit vector)
+  function perpY(p,n){ return [p[0]+(-sp)*n, p[1]+(-cp)*n]; }
+  // local +x direction projected to screen (unit vector)
+  function perpX(p,n){ return [p[0]+cp*n, p[1]+(-sp)*n]; }
+
+  const sun=[CX,CY];
+  const peri=ts(rPer,0);
+  const apo=ts(-rApo,0);
+  const center=ts(-c_t,0);
+  const focus2=ts(-2*c_t,0);
+  const minorTop=ts(-c_t,b_t);
+  const minorBot=ts(-c_t,-b_t);
+
+  ctx.save();
+
+  // Major axis (dashed, faint orange)
+  ctx.beginPath();
+  ctx.moveTo(peri[0],peri[1]); ctx.lineTo(apo[0],apo[1]);
+  ctx.setLineDash([3,5]);
+  ctx.strokeStyle='rgba(255,144,80,0.18)'; ctx.lineWidth=0.9; ctx.stroke();
+
+  // Minor axis (dashed, fainter orange)
+  ctx.beginPath();
+  ctx.moveTo(minorTop[0],minorTop[1]); ctx.lineTo(minorBot[0],minorBot[1]);
+  ctx.strokeStyle='rgba(255,144,80,0.14)'; ctx.lineWidth=0.8; ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Sun-to-other-focus tick (faint, indicates 2c)
+  ctx.beginPath();
+  ctx.moveTo(sun[0],sun[1]); ctx.lineTo(focus2[0],focus2[1]);
+  ctx.setLineDash([1,3]);
+  ctx.strokeStyle='rgba(180,190,220,0.15)'; ctx.lineWidth=0.7; ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Center marker (orange dot)
+  ctx.beginPath();
+  ctx.arc(center[0],center[1],2.6*DPR,0,TAU);
+  ctx.fillStyle='rgba(255,144,80,0.45)'; ctx.fill();
+
+  // Empty focus marker (open circle + crosshair)
+  ctx.beginPath();
+  ctx.arc(focus2[0],focus2[1],3.2*DPR,0,TAU);
+  ctx.strokeStyle='rgba(180,190,220,0.4)'; ctx.lineWidth=1; ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(focus2[0]-2*DPR,focus2[1]); ctx.lineTo(focus2[0]+2*DPR,focus2[1]);
+  ctx.moveTo(focus2[0],focus2[1]-2*DPR); ctx.lineTo(focus2[0],focus2[1]+2*DPR);
+  ctx.stroke();
+
+  // ── Labels ──
+  ctx.font=`italic 600 ${13.5*DPR}px 'Cormorant Garamond',serif`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  function lbl(text,x,y,color){
+    ctx.fillStyle='rgba(0,0,0,0.85)';
+    ctx.fillText(text,x+1,y+1);
+    ctx.fillStyle=color;
+    ctx.fillText(text,x,y);
+  }
+  const PX=18*DPR;
+
+  // "a" — center→apo half, BELOW the axis (-PX in local +y → +PX along (-sp,-cp))
+  // perpY pushes +y in local, which means screen direction (-sp,-cp).
+  // To go to the OTHER side, pass negative n.
+  const aMid=ts(-c_t-a_t/2,0);
+  const aLbl=perpY(aMid,-PX);
+  lbl(`a = ${a_t.toFixed(3)}`, aLbl[0], aLbl[1], 'rgba(255,184,128,0.88)');
+
+  // "b" — upper-half of minor axis, offset toward -x local (away from sun side)
+  const bMid=ts(-c_t,b_t/2);
+  const bLbl=perpX(bMid,-PX);
+  lbl(`b = ${b_t.toFixed(3)}`, bLbl[0], bLbl[1], 'rgba(255,184,128,0.88)');
+
+  // "c" — between sun and center, BELOW the axis to keep it clear of r1/r2 above
+  const cMid=ts(-c_t/2,0);
+  const cLbl=perpY(cMid,-PX);
+  lbl(`c = ${c_t.toFixed(3)}`, cLbl[0], cLbl[1], 'rgba(190,200,225,0.7)');
+
+  // r1, r2 — sun→source-orbit-intersection and sun→target-orbit-intersection
+  // asc: source meets ellipse at perihelion (+x), target at aphelion (-x)
+  let r1X, r2X;
+  if(asc){ r1X=rPer/2; r2X=-rApo/2; }
+  else   { r1X=-rApo/2; r2X=rPer/2; }
+  const r1Mid=ts(r1X,0);
+  const r2Mid=ts(r2X,0);
+  const r1Lbl=perpY(r1Mid,PX);   // above
+  const r2Lbl=perpY(r2Mid,PX);   // above
+  lbl(`r\u2081 = ${r1.toFixed(3)}`, r1Lbl[0], r1Lbl[1], 'rgba(150,200,255,0.78)');
+  lbl(`r\u2082 = ${r2.toFixed(3)}`, r2Lbl[0], r2Lbl[1], 'rgba(150,200,255,0.78)');
+
+  ctx.restore();
 }
 
 function burnMark(x,y,col,lbl){
   const r=7*DPR;
   ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fillStyle=col+'22'; ctx.fill();
-  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.strokeStyle=col; ctx.lineWidth=1; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.strokeStyle=col; ctx.lineWidth=1.2; ctx.stroke();
   ctx.fillStyle=col;
   ctx.font=`bold ${7*DPR}px 'JetBrains Mono',monospace`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(lbl,x,y);
 }
 
-// ── Launch window markers ─────────────────────────────────────────
 function drawWindows(){
   if(!source||!target||!xfer||!launchWindows.length) return;
   const alphas=[0.85,0.42,0.2];
-  const wCols=['#ffc832','rgba(255,200,50,.55)','rgba(255,200,50,.28)'];
+  const wCols=['#ffc832','rgba(255,200,50,0.55)','rgba(255,200,50,0.28)'];
 
   launchWindows.forEach((w,i)=>{
     const al=alphas[i];
@@ -493,256 +932,204 @@ function drawWindows(){
     const tx=CX+Math.cos(w.tgtAng)*target.r*SCALE;
     const ty=CY-Math.sin(w.tgtAng)*target.r*SCALE;
 
-    // transfer ellipse ghost
     const periAng=xfer.asc?w.srcAng:w.srcAng+Math.PI;
     drawXferEllipse(xfer,periAng,al*0.32,i===0);
 
-    // target arrival ghost
     ctx.globalAlpha=al*0.65;
     const tg=ctx.createRadialGradient(tx,ty,0,tx,ty,tr2*3.5);
-    tg.addColorStop(0,'rgba(100,200,100,.35)'); tg.addColorStop(1,'rgba(0,0,0,0)');
+    tg.addColorStop(0,'rgba(122,216,122,0.4)'); tg.addColorStop(1,'rgba(0,0,0,0)');
     ctx.beginPath(); ctx.arc(tx,ty,tr2*3.5,0,TAU); ctx.fillStyle=tg; ctx.fill();
-    ctx.beginPath(); ctx.arc(tx,ty,tr2,0,TAU); ctx.fillStyle='rgba(100,200,100,.38)'; ctx.fill();
+    ctx.beginPath(); ctx.arc(tx,ty,tr2,0,TAU); ctx.fillStyle='rgba(122,216,122,0.4)'; ctx.fill();
     ctx.globalAlpha=1;
 
-    // source ghost halo + ring
     ctx.globalAlpha=al;
     const hg=ctx.createRadialGradient(sx,sy,0,sx,sy,sr*4.5);
-    hg.addColorStop(0,'rgba(255,200,50,.28)'); hg.addColorStop(1,'rgba(0,0,0,0)');
+    hg.addColorStop(0,'rgba(255,200,50,0.32)'); hg.addColorStop(1,'rgba(0,0,0,0)');
     ctx.beginPath(); ctx.arc(sx,sy,sr*4.5,0,TAU); ctx.fillStyle=hg; ctx.fill();
     ctx.beginPath(); ctx.arc(sx,sy,sr+5*DPR,0,TAU);
-    ctx.strokeStyle=wCols[i]; ctx.lineWidth=i===0?1.5:.8; ctx.stroke();
+    ctx.strokeStyle=wCols[i]; ctx.lineWidth=i===0?1.6:0.85; ctx.stroke();
     ctx.globalAlpha=1;
 
-    // label + days
     ctx.globalAlpha=al;
     const days=Math.round(w.dt*365.25);
-    ctx.font=`bold ${9*DPR}px 'JetBrains Mono',monospace`;
+    ctx.font=`bold ${10*DPR}px 'JetBrains Mono',monospace`;
     ctx.textAlign='center'; ctx.textBaseline='bottom';
     const lx=sx, ly=sy-sr-7*DPR;
-    ctx.fillStyle='rgba(0,0,0,.65)'; ctx.fillText(w.label,lx+.8,ly+.8);
-    ctx.fillStyle=i===0?'#ffc832':'rgba(255,200,50,.65)'; ctx.fillText(w.label,lx,ly);
-    ctx.font=`${7.5*DPR}px 'JetBrains Mono',monospace`;
-    ctx.fillStyle='rgba(255,200,50,.5)'; ctx.fillText(days+'d',lx,ly+9*DPR);
+    ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillText(w.label,lx+0.8,ly+0.8);
+    ctx.fillStyle=i===0?'#ffc832':'rgba(255,200,50,0.68)'; ctx.fillText(w.label,lx,ly);
+    ctx.font=`${8*DPR}px 'JetBrains Mono',monospace`;
+    ctx.fillStyle='rgba(255,200,50,0.55)'; ctx.fillText(days+'d',lx,ly+10*DPR);
     ctx.globalAlpha=1;
 
-    // spoke (W1 only)
     if(i===0){
       ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(sx,sy);
-      ctx.setLineDash([2,6]); ctx.strokeStyle='rgba(255,200,50,.1)'; ctx.lineWidth=.8;
+      ctx.setLineDash([2,6]); ctx.strokeStyle='rgba(255,200,50,0.12)'; ctx.lineWidth=0.8;
       ctx.stroke(); ctx.setLineDash([]);
     }
   });
 }
 
-// ── Guidance overlay ─────────────────────────────────────────────
 function drawGuidance(){
-  // In hop mode with ship in transit, don't show guidance
   if(ship&&!ship.arrived) return;
-  // In normal mode, hide once ship is flying
   if(!hopMode&&source&&target&&ship) return;
 
   let line1='', line2='', sub='';
-
   if(hopMode){
     if(!source){
-      line1='⬡ HOP MODE ACTIVE';
+      line1='HOP MODE ACTIVE';
       line2='① SELECT HOME PLANET';
-      sub='Your spacecraft will park there and await your first transfer';
+      sub='Your spacecraft will park there and await your first transfer.';
     } else if(!target){
       line1=`PARKED AT ${source.name.toUpperCase()}`;
       line2='② SELECT DESTINATION';
-      sub='Choose any other planet to compute the Hohmann transfer';
+      sub='Choose any other planet to compute the Hohmann transfer.';
     } else {
       line1=`${source.name} → ${target.name}`;
       line2=`${launchWindows.length} LAUNCH WINDOWS SHOWN`;
-      sub='Wait for the W1 marker · Press ▶ to launch and score your timing';
+      sub='Wait for the W1 marker, then press ▶ Launch.';
     }
   } else {
     if(!source){
       line1='① SELECT SOURCE PLANET';
-      sub='Click any planet to begin the transfer calculation';
+      sub='Click any planet to begin the transfer calculation.';
     } else if(!target){
       line1=`SOURCE: ${source.name.toUpperCase()}`;
       line2='② SELECT TARGET PLANET';
-      sub='Click another planet to compute the Hohmann transfer';
+      sub='Click another planet to compute the Hohmann transfer.';
     } else if(!ship){
       line1=`${source.name} → ${target.name}`;
       line2=`${launchWindows.length} LAUNCH WINDOWS SHOWN`;
-      sub='Ghost markers show optimal launch positions  ·  Press ▶ to launch';
+      sub='Ghost markers show optimal launch positions. Press ▶ Launch when ready.';
     }
   }
 
-  const bw=Math.min(W*.58,380), bx=CX-bw/2;
-  const lineH=13, subH=10, pad=12;
+  const bw=Math.min(W*0.6,420), bx=CX-bw/2;
+  const lineH=14, subH=11, pad=13;
   const linesCount=(line1?1:0)+(line2?1:0);
   const bh=linesCount*lineH+subH+pad*2+4;
-  const by=H*.83;
+  const by=H*0.82;
 
   ctx.save();
-  ctx.globalAlpha=.86;
-  ctx.fillStyle='rgba(8,12,22,.9)';
-  ctx.strokeStyle='rgba(150,200,255,.12)';
+  ctx.globalAlpha=0.88;
+  ctx.fillStyle='rgba(8,12,22,0.92)';
+  ctx.strokeStyle='rgba(150,200,255,0.16)';
   ctx.lineWidth=1;
-  // rounded rect
-  const rr=4;
-  ctx.beginPath();
-  ctx.moveTo(bx+rr,by); ctx.lineTo(bx+bw-rr,by);
-  ctx.arcTo(bx+bw,by,bx+bw,by+rr,rr);
-  ctx.lineTo(bx+bw,by+bh-rr);
-  ctx.arcTo(bx+bw,by+bh,bx+bw-rr,by+bh,rr);
-  ctx.lineTo(bx+rr,by+bh);
-  ctx.arcTo(bx,by+bh,bx,by+bh-rr,rr);
-  ctx.lineTo(bx,by+rr);
-  ctx.arcTo(bx,by,bx+rr,by,rr);
-  ctx.closePath();
-  ctx.fill(); ctx.stroke();
+  rRect(ctx,bx,by,bw,bh,4); ctx.fill(); ctx.stroke();
   ctx.globalAlpha=1;
 
   let ty=by+pad;
   ctx.textAlign='center'; ctx.textBaseline='top';
   if(line1){
-    ctx.font=`${source?'400':'700'} ${9.5}px 'JetBrains Mono',monospace`;
-    ctx.fillStyle=source?'rgba(150,200,255,.55)':'#96c8ff';
+    ctx.font=`${source?'500':'700'} 10.5px 'JetBrains Mono',monospace`;
+    ctx.fillStyle=source?'rgba(150,200,255,0.7)':'#96c8ff';
     ctx.fillText(line1.toUpperCase(),CX,ty);
     ty+=lineH;
   }
   if(line2){
-    ctx.font=`700 ${9.5}px 'JetBrains Mono',monospace`;
+    ctx.font=`700 10.5px 'JetBrains Mono',monospace`;
     ctx.fillStyle='#96c8ff';
     ctx.fillText(line2.toUpperCase(),CX,ty);
     ty+=lineH+2;
   }
   ty+=2;
-  ctx.font=`300 ${7.5}px 'JetBrains Mono',monospace`;
-  ctx.fillStyle='rgba(104,120,160,.7)';
+  ctx.font=`400 9.5px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='rgba(164,176,206,0.75)';
   ctx.fillText(sub,CX,ty);
   ctx.restore();
 }
 
-// ── Velocity / burn vector at launch ─────────────────────────────
 function drawBurnVector(){
   if(!ship||!xfer) return;
-  // Only show during first few seconds of flight (while burn is "happening")
   const dt=simTime-ship.launchT;
   if(dt<0||dt>xfer.tTr*0.12) return;
   const fade=dt<0.001?1:Math.max(0,1-dt/(xfer.tTr*0.12));
 
-  // Launch position
   const lx=CX+Math.cos(ship.launchAng)*xfer.r1*SCALE;
   const ly=CY-Math.sin(ship.launchAng)*xfer.r1*SCALE;
-
-  // Tangential direction of circular orbit at launch (perpendicular to radius, prograde)
   const tanAng=ship.launchAng+Math.PI/2*(xfer.asc?1:-1);
-
-  // Δv₁ magnitude scaled to pixels — make it visually meaningful
   const dvPixels=Math.min(xfer.dv1/xfer.vc1*xfer.r1*SCALE*5, Math.min(W,H)*0.32);
 
-  // Vector tip
   const vx=lx+Math.cos(tanAng)*dvPixels;
   const vy=ly-Math.sin(tanAng)*dvPixels;
 
   ctx.save();
-  ctx.globalAlpha=fade*0.9;
-
-  // Glow
+  ctx.globalAlpha=fade*0.92;
   const gl=ctx.createRadialGradient(lx,ly,0,lx,ly,dvPixels*1.1);
-  gl.addColorStop(0,'rgba(255,80,80,0.12)'); gl.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.beginPath(); ctx.arc(lx,ly,dvPixels*1.1,0,TAU);
-  ctx.fillStyle=gl; ctx.fill();
+  gl.addColorStop(0,'rgba(92,216,232,0.14)'); gl.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.beginPath(); ctx.arc(lx,ly,dvPixels*1.1,0,TAU); ctx.fillStyle=gl; ctx.fill();
 
-  // Arrow shaft
   ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(vx,vy);
-  ctx.strokeStyle='#ff5050'; ctx.lineWidth=2.5*DPR;
-  ctx.lineCap='round'; ctx.stroke();
+  ctx.strokeStyle='#5cd8e8'; ctx.lineWidth=2.5*DPR; ctx.lineCap='round'; ctx.stroke();
 
-  // Arrowhead
   const headLen=10*DPR, headAng=0.42;
   ctx.beginPath();
   ctx.moveTo(vx,vy);
   ctx.lineTo(vx-headLen*Math.cos(tanAng-headAng), vy+headLen*Math.sin(tanAng-headAng));
   ctx.lineTo(vx-headLen*Math.cos(tanAng+headAng), vy+headLen*Math.sin(tanAng+headAng));
-  ctx.closePath(); ctx.fillStyle='#ff5050'; ctx.fill();
+  ctx.closePath(); ctx.fillStyle='#5cd8e8'; ctx.fill();
 
-  // Δv label
-  ctx.font=`bold ${8*DPR}px 'JetBrains Mono',monospace`;
+  ctx.font=`bold ${9*DPR}px 'JetBrains Mono',monospace`;
   ctx.textAlign='center'; ctx.textBaseline='bottom';
   const mx=(lx+vx)/2, my=(ly+vy)/2;
-  const nx=-Math.sin(tanAng)*12*DPR, ny=Math.cos(tanAng)*12*DPR; // normal offset
-  ctx.fillStyle='rgba(0,0,0,.55)';
-  ctx.fillText(`Δv₁ = ${(xfer.dv1*AU2KMS).toFixed(2)} km/s`, mx+nx+.8, my-ny+.8);
-  ctx.fillStyle='#ff9090';
+  const nx=-Math.sin(tanAng)*12*DPR, ny=Math.cos(tanAng)*12*DPR;
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillText(`Δv₁ = ${(xfer.dv1*AU2KMS).toFixed(2)} km/s`, mx+nx+0.8, my-ny+0.8);
+  ctx.fillStyle='#9ce8f4';
   ctx.fillText(`Δv₁ = ${(xfer.dv1*AU2KMS).toFixed(2)} km/s`, mx+nx, my-ny);
-
   ctx.restore();
 }
 
-// ── Score overlay ─────────────────────────────────────────────────
 function drawScoreOverlay(){
   if(!launchScore) return;
-
   launchScore.fadeT+=0.016;
-  const hold=3, fade=2;
+  const hold=3.2, fade=2;
   let alpha=1;
   if(launchScore.fadeT>hold) alpha=Math.max(0,1-(launchScore.fadeT-hold)/fade);
   if(alpha<=0){ launchScore=null; return; }
 
   const sc=launchScore;
-  const bw=Math.min(W*.48,320), bh=148;
-  const bx=CX-bw/2, by=H*.18;
+  const bw=Math.min(W*0.5,340), bh=152;
+  const bx=CX-bw/2, by=H*0.18;
 
   ctx.save();
   ctx.globalAlpha=alpha;
-
-  // Panel bg
   ctx.fillStyle='rgba(8,12,22,0.95)';
   ctx.strokeStyle=sc.color+'55';
   ctx.lineWidth=1.5;
-  rRect(ctx,bx,by,bw,bh,6);
-  ctx.fill(); ctx.stroke();
+  rRect(ctx,bx,by,bw,bh,6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle=sc.color+'30'; ctx.fillRect(bx+1,by+1,bw-2,3);
 
-  // Top accent line
-  ctx.fillStyle=sc.color+'30';
-  ctx.fillRect(bx+1,by+1,bw-2,3);
-
-  // Grade
   ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.font=`700 ${52*DPR}px 'Cormorant Garamond',serif`;
+  ctx.font=`700 ${56*DPR}px 'Cormorant Garamond',serif`;
   ctx.fillStyle=sc.color;
-  ctx.shadowColor=sc.color; ctx.shadowBlur=18*DPR;
-  ctx.fillText(sc.grade, bx+bw*.36, by+22);
+  ctx.shadowColor=sc.color; ctx.shadowBlur=20*DPR;
+  ctx.fillText(sc.grade, bx+bw*0.34, by+22);
   ctx.shadowBlur=0;
 
-  // Timing readout
   const dStr=sc.dtDays<1 ? `${(sc.dtDays*24).toFixed(1)} hr` : `${sc.dtDays.toFixed(1)} days`;
-  ctx.font=`${8*DPR}px 'JetBrains Mono',monospace`;
-  ctx.textAlign='left';
-  ctx.fillStyle='rgba(150,200,255,.55)';
-  ctx.fillText('LAUNCH TIMING', bx+bw*.56, by+22);
-  ctx.fillStyle=sc.color;
-  ctx.font=`700 ${13*DPR}px 'JetBrains Mono',monospace`;
-  ctx.fillText(dStr+' '+sc.timing, bx+bw*.56, by+38);
   ctx.font=`${9*DPR}px 'JetBrains Mono',monospace`;
-  ctx.fillStyle='rgba(200,210,230,.45)';
+  ctx.textAlign='left';
+  ctx.fillStyle='rgba(150,200,255,0.65)';
+  ctx.fillText('LAUNCH TIMING', bx+bw*0.54, by+24);
+  ctx.fillStyle=sc.color;
+  ctx.font=`700 ${14*DPR}px 'JetBrains Mono',monospace`;
+  ctx.fillText(dStr+' '+sc.timing, bx+bw*0.54, by+40);
+  ctx.font=`${10*DPR}px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='rgba(200,210,230,0.55)';
   const windowStr=sc.dtDays<0.5?'On window':'Off window by '+dStr;
-  ctx.fillText(windowStr, bx+bw*.56, by+58);
+  ctx.fillText(windowStr, bx+bw*0.54, by+62);
 
-  // Divider
-  ctx.strokeStyle='rgba(150,200,255,.08)';
-  ctx.lineWidth=1;
-  ctx.beginPath(); ctx.moveTo(bx+14,by+88); ctx.lineTo(bx+bw-14,by+88); ctx.stroke();
+  ctx.strokeStyle='rgba(150,200,255,0.1)';
+  ctx.beginPath(); ctx.moveTo(bx+14,by+92); ctx.lineTo(bx+bw-14,by+92); ctx.stroke();
 
-  // Flavor text
-  ctx.font=`300 italic ${8*DPR}px 'Cormorant Garamond',serif`;
+  ctx.font=`400 italic ${10*DPR}px 'Cormorant Garamond',serif`;
   ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.fillStyle='rgba(200,210,230,.55)';
-  ctx.fillText(sc.flavor, bx+bw/2, by+100);
+  ctx.fillStyle='rgba(200,210,230,0.7)';
+  ctx.fillText(sc.flavor, bx+bw/2, by+102);
 
-  // Tag
-  ctx.font=`${7*DPR}px 'JetBrains Mono',monospace`;
-  ctx.fillStyle='rgba(104,120,160,.35)';
-  ctx.fillText('LAUNCH EVALUATION // HOHMANN.SCORE', bx+bw/2, by+122);
-
+  ctx.font=`${8*DPR}px 'JetBrains Mono',monospace`;
+  ctx.fillStyle='rgba(110,122,152,0.45)';
+  ctx.fillText('LAUNCH EVALUATION // HOHMANN.SCORE', bx+bw/2, by+128);
   ctx.restore();
 }
 
@@ -755,62 +1142,46 @@ function rRect(ctx,x,y,w,h,r){
   ctx.closePath();
 }
 
-// ── Ship ─────────────────────────────────────────────────────────
 function drawShip(){
   if(!ship||(!ship.x&&ship.x!==0)) return;
 
   // Trail
   if(ship.trail.length>1){
-    ctx.beginPath(); ctx.moveTo(ship.trail[0].x,ship.trail[0].y);
-    for(let i=1;i<ship.trail.length;i++){
-      const t=i/ship.trail.length;
-      ctx.lineTo(ship.trail[i].x,ship.trail[i].y);
-    }
-    // gradient trail using multiple segments
     for(let i=1;i<ship.trail.length;i++){
       const t=i/ship.trail.length;
       ctx.beginPath();
       ctx.moveTo(ship.trail[i-1].x,ship.trail[i-1].y);
       ctx.lineTo(ship.trail[i].x,ship.trail[i].y);
-      ctx.strokeStyle=`rgba(255,200,80,${t*0.45})`;
+      ctx.strokeStyle=`rgba(255,200,80,${t*0.5})`;
       ctx.lineWidth=1+t*1.2; ctx.stroke();
     }
   }
 
-  // Heading angle — tangent to current trajectory
   let heading=0;
   if(ship.trail.length>=2){
     const a=ship.trail[ship.trail.length-2];
     const b=ship.trail[ship.trail.length-1];
     heading=Math.atan2(b.y-a.y,b.x-a.x);
   } else if(ship.arrived){
-    // orbiting target: tangent to circular orbit
     const ang=ship.arriveAng+ship.arriveOmega*(simTime-ship.arriveT);
-    heading=ang+Math.PI/2; // prograde tangent
+    heading=ang+Math.PI/2;
   } else {
-    // at launch point, face prograde
     heading=ship.launchAng+(xfer&&xfer.asc?Math.PI/2:-Math.PI/2);
   }
 
-  // Docking glow when arrived at planet in hop mode
   if(hopMode&&ship.arrived){
     const g=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,18*DPR);
-    g.addColorStop(0,'rgba(100,200,100,.25)'); g.addColorStop(1,'rgba(0,0,0,0)');
+    g.addColorStop(0,'rgba(122,216,122,0.28)'); g.addColorStop(1,'rgba(0,0,0,0)');
     ctx.beginPath(); ctx.arc(ship.x,ship.y,18*DPR,0,TAU); ctx.fillStyle=g; ctx.fill();
   }
-
-  // Engine glow
   const eg=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,14*DPR);
-  eg.addColorStop(0,'rgba(255,220,120,.22)'); eg.addColorStop(1,'rgba(0,0,0,0)');
+  eg.addColorStop(0,'rgba(255,220,120,0.24)'); eg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.beginPath(); ctx.arc(ship.x,ship.y,14*DPR,0,TAU); ctx.fillStyle=eg; ctx.fill();
 
-  // Draw spacecraft as a small arrow/rocket shape
   ctx.save();
   ctx.translate(ship.x,ship.y);
   ctx.rotate(heading);
-  const s=DPR; // scale factor
-
-  // Engine exhaust plume (only when in transit)
+  const s=DPR;
   if(!ship.arrived){
     const plumeLen=10*s, plumeW=4*s;
     const pg=ctx.createLinearGradient(-plumeLen,0,0,0);
@@ -822,32 +1193,18 @@ function drawShip(){
     ctx.lineTo(-plumeLen,-plumeW*0.5*(0.6+0.4*Math.sin(simTime*80)));
     ctx.lineTo(-plumeLen*1.4,0);
     ctx.lineTo(-plumeLen, plumeW*0.5*(0.6+0.4*Math.sin(simTime*80+1)));
-    ctx.closePath();
-    ctx.fillStyle=pg; ctx.fill();
+    ctx.closePath(); ctx.fillStyle=pg; ctx.fill();
   }
-
-  // Hull — sleek arrowhead body
   ctx.beginPath();
-  ctx.moveTo( 9*s,  0);       // nose
-  ctx.lineTo( 2*s,  3.5*s);   // right shoulder
-  ctx.lineTo(-5*s,  2.5*s);   // right wing tip
-  ctx.lineTo(-3*s,  0);       // tail notch
-  ctx.lineTo(-5*s, -2.5*s);   // left wing tip
-  ctx.lineTo( 2*s, -3.5*s);   // left shoulder
-  ctx.closePath();
-  ctx.fillStyle='#c8dcf0';
-  ctx.fill();
-
-  // Cockpit highlight
+  ctx.moveTo( 9*s,  0); ctx.lineTo( 2*s,  3.5*s); ctx.lineTo(-5*s,  2.5*s);
+  ctx.lineTo(-3*s,  0); ctx.lineTo(-5*s, -2.5*s); ctx.lineTo( 2*s, -3.5*s);
+  ctx.closePath(); ctx.fillStyle='#c8dcf0'; ctx.fill();
   ctx.beginPath();
   ctx.ellipse(4*s, 0, 2.5*s, 1.5*s, 0, 0, TAU);
-  ctx.fillStyle='rgba(180,230,255,0.7)'; ctx.fill();
-
-  // Wing accent lines
-  ctx.strokeStyle='rgba(150,200,255,0.4)'; ctx.lineWidth=0.8;
+  ctx.fillStyle='rgba(180,230,255,0.75)'; ctx.fill();
+  ctx.strokeStyle='rgba(150,200,255,0.45)'; ctx.lineWidth=0.8;
   ctx.beginPath(); ctx.moveTo(2*s,3.5*s); ctx.lineTo(-5*s,2.5*s); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(2*s,-3.5*s); ctx.lineTo(-5*s,-2.5*s); ctx.stroke();
-
   ctx.restore();
 }
 
@@ -865,27 +1222,26 @@ function updateShip(){
     ship.arriveT=simTime;
     ship.arriveOmega=TAU/Math.pow(xfer.r2,1.5);
     if(hopMode){
-      // log this hop then auto-advance: new home = target planet
       hopLog.push({
         from: hopHomePlanet ? hopHomePlanet.name : source.name,
-        to:   target.name,
+        to: target.name,
         toColor: target.color,
         fromColor: source.color,
         grade: launchScore ? launchScore.grade : '—',
         color: launchScore ? launchScore.color : '#c8d0e0',
         dtDays: launchScore ? launchScore.dtDays : 0,
         timing: launchScore ? launchScore.timing : '',
-        dvTot:  xfer.dvTot,
+        dvTot: xfer.dvTot,
       });
       hopHomePlanet=target;
-      setTbar(true,`✓  ARRIVED AT ${target.name.toUpperCase()} — SELECT NEXT DESTINATION`);
+      setTbar(true,`✓ ARRIVED AT ${target.name.toUpperCase()} — SELECT NEXT DESTINATION`, true);
       setStatus(`AT ${target.name.toUpperCase()} — HOP ${hopLog.length} COMPLETE`);
-      // Reset for next hop: source = target planet, clear target/xfer/windows
       source=target; target=null; xfer=null; launchWindows=[];
       setBtnLaunch(false);
+      setEqPanelActive(false);
       renderMath();
     } else {
-      setTbar(true,'✓  TRANSFER COMPLETE — SPACECRAFT IN TARGET ORBIT');
+      setTbar(true,'✓ TRANSFER COMPLETE — SPACECRAFT IN TARGET ORBIT', true);
       setStatus('TRANSFER COMPLETE');
     }
     return;
@@ -900,7 +1256,9 @@ function updateShip(){
   ship.x=nx; ship.y=ny;
 }
 
-// ── Main loop ────────────────────────────────────────────────────
+/* ═════════════════════════════════════════════════════════════
+   MAIN LOOP
+   ═════════════════════════════════════════════════════════════ */
 let fc=0, lastFT=performance.now();
 function frame(now){
   if(lastT===null) lastT=now;
@@ -921,15 +1279,26 @@ function frame(now){
   if(source&&target&&xfer&&(!ship||ship.arrived))
     launchWindows=computeWindows(source,target,xfer,simTime);
 
-  // render
   drawBg();
   planets.forEach(p=>drawOrbit(p));
   drawWindows();
 
+  // Geometry overlay: faint axes + labels on whichever ellipse is "active"
+  if(xfer){
+    let geomAng=null;
+    if(ship){
+      geomAng=xfer.asc?ship.launchAng:ship.launchAng+Math.PI;
+    } else if(launchWindows.length>0){
+      const w=launchWindows[0];
+      geomAng=xfer.asc?w.srcAng:w.srcAng+Math.PI;
+    }
+    if(geomAng!==null) drawEllipseGeometry(xfer,geomAng);
+  }
+
   if(ship&&xfer){
     const pA=xfer.asc?ship.launchAng:ship.launchAng+Math.PI;
     drawXferEllipse(xfer,pA,1,true);
-    burnMark(CX+Math.cos(ship.launchAng)*xfer.r1*SCALE,CY-Math.sin(ship.launchAng)*xfer.r1*SCALE,'#ff5050','Δv₁');
+    burnMark(CX+Math.cos(ship.launchAng)*xfer.r1*SCALE,CY-Math.sin(ship.launchAng)*xfer.r1*SCALE,'#5cd8e8','Δv₁');
     burnMark(CX+Math.cos(ship.launchAng+Math.PI)*xfer.r2*SCALE,CY-Math.sin(ship.launchAng+Math.PI)*xfer.r2*SCALE,'#ffc832','Δv₂');
   }
 
@@ -946,11 +1315,13 @@ function frame(now){
   requestAnimationFrame(frame);
 }
 
-// ── Input ────────────────────────────────────────────────────────
+/* ═════════════════════════════════════════════════════════════
+   INPUT
+   ═════════════════════════════════════════════════════════════ */
 cvs.addEventListener('mousemove',e=>{
   const rc=cvs.getBoundingClientRect();
-  const mx=e.clientX-rc.left, my=e.clientY-rc.top;  // CSS pixels, matches pPos
-  hovered=null; let md=20;
+  const mx=e.clientX-rc.left, my=e.clientY-rc.top;
+  hovered=null; let md=22;
   planets.forEach(p=>{
     const pos=pPos(p);
     const d=Math.hypot(pos.x-mx,pos.y-my);
@@ -958,33 +1329,26 @@ cvs.addEventListener('mousemove',e=>{
   });
   const hb=document.getElementById('hoverbox');
   if(hovered){
-    hb.innerHTML=`<span style="color:${hovered.color}">${hovered.name}</span>  ·  r&nbsp;=&nbsp;${hovered.r.toFixed(3)}&nbsp;AU  ·  v&nbsp;=&nbsp;${(hovered.speed*AU2KMS).toFixed(2)}&nbsp;km/s  ·  T&nbsp;=&nbsp;${hovered.period.toFixed(2)}&nbsp;yr`;
+    hb.innerHTML=`<strong style="color:${hovered.color}">${hovered.name}</strong>  r=${hovered.r.toFixed(3)} AU  ·  v=${(hovered.speed*AU2KMS).toFixed(2)} km/s  ·  T=${hovered.period.toFixed(2)} yr`;
     cvs.style.cursor='pointer';
   } else {
     hb.textContent='hover over a planet';
     cvs.style.cursor='crosshair';
   }
 });
+cvs.addEventListener('mouseleave',()=>{hovered=null;document.getElementById('hoverbox').textContent='hover over a planet';});
 
 cvs.addEventListener('click',()=>{
   if(!hovered) return;
-
   if(hopMode){
     if(!source){
-      // First click in hop mode: pick home planet, park ship there
       source=hovered; hopHomePlanet=hovered;
       const pos=pPos(hovered);
-      // Create a parked ship sitting on the home planet's orbit
       ship={
-        x: pos.x, y: pos.y,
-        launchAng: pos.ang,
-        periAng: pos.ang,
-        launchT: simTime-1, // already "arrived"
-        trail:[], arrived:true,
-        arriveAng: pos.ang,
-        arriveT: simTime,
-        arriveOmega: hovered.omega,
-        r2: hovered.r
+        x:pos.x, y:pos.y, launchAng:pos.ang, periAng:pos.ang,
+        launchT:simTime-1, trail:[], arrived:true,
+        arriveAng:pos.ang, arriveT:simTime,
+        arriveOmega:hovered.omega, r2:hovered.r
       };
       setStatus(`PARKED AT ${hovered.name.toUpperCase()} — SELECT DESTINATION`);
       renderMath();
@@ -994,12 +1358,11 @@ cvs.addEventListener('click',()=>{
       launchWindows=computeWindows(source,target,xfer,simTime);
       setStatus(`${source.name.toUpperCase()} → ${target.name.toUpperCase()} — PRESS ▶ LAUNCH`);
       setBtnLaunch(true);
+      setEqPanelActive(true);
       renderMath();
     }
     return;
   }
-
-  // Normal mode
   if(!source){
     source=hovered;
     setStatus(`SOURCE: ${source.name.toUpperCase()} — SELECT TARGET`);
@@ -1010,14 +1373,32 @@ cvs.addEventListener('click',()=>{
     launchWindows=computeWindows(source,target,xfer,simTime);
     setStatus('TRANSFER COMPUTED — PRESS ▶ LAUNCH');
     setBtnLaunch(true);
+    setEqPanelActive(true);
     renderMath();
   }
 });
 
+// Touch support — tap = click on nearest planet
+cvs.addEventListener('touchstart',e=>{
+  if(e.touches.length!==1) return;
+  e.preventDefault();
+  const rc=cvs.getBoundingClientRect();
+  const t=e.touches[0];
+  const mx=t.clientX-rc.left, my=t.clientY-rc.top;
+  hovered=null; let md=28;
+  planets.forEach(p=>{
+    const pos=pPos(p);
+    const d=Math.hypot(pos.x-mx,pos.y-my);
+    if(d<md){md=d;hovered=p}
+  });
+  if(hovered) cvs.dispatchEvent(new MouseEvent('click'));
+},{passive:false});
+
 document.addEventListener('keydown',e=>{
-  if(e.code==='Space'&&e.target.tagName!=='INPUT'){
-    e.preventDefault(); togglePause();
-  }
+  if(e.target.tagName==='INPUT') return;
+  if(e.code==='Space'){ e.preventDefault(); togglePause(); }
+  else if(e.key==='c'||e.key==='C'){ clearSel(); }
+  else if(e.key==='Enter'){ if(!document.getElementById('btnLaunch').disabled) launch(); }
 });
 
 function togglePause(){
@@ -1031,16 +1412,13 @@ function launch(){
   if(!source||!target||!xfer) return;
   const pos=pPos(source);
   const actualAng=pos.ang;
-
-  // Score against the nearest window, past OR future — signed dt in years
-  const dtYears=nearestWindowDt(source, target, xfer, simTime);
+  const dtYears=nearestWindowDt(source,target,xfer,simTime);
   launchScore=scorelaunch(dtYears);
-
   ship={launchAng:actualAng, periAng:xfer.asc?actualAng:actualAng+Math.PI,
         launchT:simTime, trail:[], arrived:false, x:0, y:0, r2:xfer.r2};
   launchWindows=[];
-  setTbar(true,'⚡  TRANSFER IN PROGRESS — SPACECRAFT EN ROUTE');
-  setStatus('TRANSFERRING...'); setBtnLaunch(false);
+  setTbar(true,'⚡ TRANSFER IN PROGRESS — SPACECRAFT EN ROUTE');
+  setStatus('TRANSFERRING'); setBtnLaunch(false);
 }
 
 function toggleHopMode(){
@@ -1048,25 +1426,20 @@ function toggleHopMode(){
   const btn=document.getElementById('btnHop');
   if(hopMode){
     hopLog=[]; hopHomePlanet=null;
-    btn.style.borderColor='#64c864';
-    btn.style.color='#0e1118';
-    btn.style.background='#64c864';
-    btn.textContent='⬡ Hopping...';
-    document.getElementById('botHint').textContent='HOP MODE · ① pick home planet · ② pick destination · ③ launch · repeat';
-    // reset to clean state
+    btn.classList.add('active');
+    btn.innerHTML='&#11041; Hopping';
     source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
     setBtnLaunch(false); setTbar(false);
+    setEqPanelActive(false);
     setStatus('HOP MODE — SELECT HOME PLANET');
     renderMath();
   } else {
-    btn.style.borderColor='rgba(100,200,100,.3)';
-    btn.style.color='#64c864';
-    btn.style.background='transparent';
-    btn.textContent='⬡ Planet Hop';
-    document.getElementById('botHint').textContent='SPACE = pause \u00b7 ① source \u00b7 ② target \u00b7 ③ launch';
+    btn.classList.remove('active');
+    btn.innerHTML='&#11041; Hop';
     hopLog=[]; hopHomePlanet=null;
     source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
     setBtnLaunch(false); setTbar(false);
+    setEqPanelActive(false);
     setStatus('AWAITING SELECTION');
     renderMath();
   }
@@ -1077,96 +1450,105 @@ function clearSel(){
   if(hopMode){ hopLog=[]; hopHomePlanet=null; setStatus('HOP MODE — SELECT HOME PLANET'); }
   else setStatus('AWAITING SELECTION');
   setBtnLaunch(false); setTbar(false);
+  setEqPanelActive(false);
   renderMath();
 }
 
 document.getElementById('spSlider').addEventListener('input',function(){
   const v=parseFloat(this.value);
-  document.getElementById('spVal').textContent=(v<1?v.toFixed(2):v%1===0?v:v.toFixed(1))+'×';
+  document.getElementById('spVal').textContent=(v<1?v.toFixed(2):v%1===0?v:v.toFixed(1))+'\u00d7';
 });
 
-// ── Math panel ───────────────────────────────────────────────────
+// Mobile drawer
+function toggleMathDrawer(){
+  const p=document.getElementById('mathpanel');
+  const f=document.getElementById('fabMath');
+  const b=document.getElementById('drawerBackdrop');
+  const open=!p.classList.contains('open');
+  p.classList.toggle('open',open);
+  f.classList.toggle('open',open);
+  b.classList.toggle('show',open);
+}
+function closeMathDrawer(){
+  document.getElementById('mathpanel').classList.remove('open');
+  document.getElementById('fabMath').classList.remove('open');
+  document.getElementById('drawerBackdrop').classList.remove('show');
+}
+
+/* ═════════════════════════════════════════════════════════════
+   MATH PANEL RENDERING (live values, color-coded variable names)
+   ═════════════════════════════════════════════════════════════ */
 function K(s,d=false){
   try{return katex.renderToString(s,{throwOnError:false,displayMode:d})}
   catch(e){return`<code>${s}</code>`}
 }
-const f3=v=>v.toFixed(3),f4=v=>v.toFixed(4);
+const f3=v=>v.toFixed(3), f4=v=>v.toFixed(4);
 const fk=v=>(v*AU2KMS).toFixed(3);
 const fD=yr=>(yr*365.25).toFixed(0);
+
+const CC={
+  mu:'#ffc832', r:'#96c8ff', v:'#7ad87a', a:'#ff9050',
+  dv:'#5cd8e8', t:'#ffc832', phi:'#d870c8', om:'#d870c8'
+};
+
+function hopLogHTML(){
+  if(!hopMode) return '';
+  const totalDv=(hopLog.reduce((a,h)=>a+h.dvTot,0)*AU2KMS).toFixed(3);
+  const gradeColors={'A+':'#69f7a0','A':'#69f7a0','A−':'#a8f0c0','B+':'#96c8ff','B':'#96c8ff','B−':'#96c8ff','C+':'#ffc832','C':'#ffc832','C−':'#ffa040','D+':'#ff7060','D':'#ff5050','D−':'#ff5050','F':'#ff3030'};
+  const rows=hopLog.length===0
+    ? `<div style="font-size:11px;color:var(--text-faint);padding:8px 0;text-align:center">No hops yet</div>`
+    : hopLog.map((h,i)=>`
+      <div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid rgba(22,34,64,0.4)">
+        <div style="font-size:10.5px;color:var(--text-faint);min-width:18px;font-weight:700">${i+1}</div>
+        <div style="flex:1;font-size:11.5px;line-height:1.5">
+          <span style="color:${h.fromColor};font-weight:600">${h.from}</span>
+          <span style="color:var(--text-faint)"> → </span>
+          <span style="color:${h.toColor};font-weight:600">${h.to}</span>
+          <span style="color:var(--text-faint);font-size:10px;margin-left:4px">${(h.dvTot*AU2KMS).toFixed(2)} km/s</span>
+        </div>
+        <div style="font-size:15px;font-weight:700;font-family:'Cormorant Garamond',serif;color:${h.color||gradeColors[h.grade]||'#c8d0e0'}">${h.grade}</div>
+      </div>`).join('');
+  return `
+    <div class="msec" style="background:rgba(122,216,122,0.04);border-left:3px solid rgba(122,216,122,0.35)">
+      <div class="msec-head">
+        <span style="color:#7ad87a">⬡ Hop Log</span>
+        <span class="mh-tag">${hopLog.length} HOPS${hopLog.length>0?' · '+totalDv+' km/s':''}</span>
+      </div>
+      ${rows}
+      ${hopLog.length>0?`
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+        <div class="scard" style="border-left:3px solid rgba(122,216,122,0.55)">
+          <div class="sl">Total Δv</div>
+          <div class="sv" style="color:#7ad87a;font-size:14px">${totalDv}<span class="su">km/s</span></div>
+        </div>
+        <div class="scard" style="border-left:3px solid rgba(122,216,122,0.55)">
+          <div class="sl">Best grade</div>
+          <div class="sv" style="color:${gradeColors[hopLog.reduce((b,h)=>{const gi=g=>Object.keys(gradeColors).indexOf(g);return gi(h.grade)<gi(b)?h.grade:b;},hopLog[0].grade)]||'#c8d0e0'};font-size:14px;font-family:'Cormorant Garamond',serif">${hopLog.reduce((b,h)=>{const gi=g=>Object.keys(gradeColors).indexOf(g);return gi(h.grade)<gi(b)?h.grade:b;},hopLog[0].grade)}</div>
+        </div>
+      </div>`:''}
+    </div>`;
+}
 
 function renderMath(){
   const el=document.getElementById('mathcontent');
 
-  // ── Hop log (injected at top when in hop mode) ──────────────────
-  function hopLogHTML(){
-    if(!hopMode) return '';
-    const totalDv=(hopLog.reduce((a,h)=>a+h.dvTot,0)*AU2KMS).toFixed(3);
-    const gradeColors={'A+':'#69f7a0','A':'#69f7a0','A−':'#a8f0c0','B+':'#96c8ff','B':'#96c8ff','B−':'#96c8ff','C+':'#ffc832','C':'#ffc832','C−':'#ffa040','D+':'#ff7060','D':'#ff5050','D−':'#ff5050','F':'#ff3030'};
-    const rows=hopLog.length===0
-      ? `<div style="font-size:.6rem;color:var(--text-faint);padding:.4rem 0;text-align:center">No hops yet</div>`
-      : hopLog.map((h,i)=>`
-        <div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid rgba(22,34,64,.4)">
-          <div style="font-size:.55rem;color:var(--text-faint);min-width:1rem">${i+1}</div>
-          <div style="flex:1;font-size:.6rem;line-height:1.7">
-            <span style="color:${h.fromColor}">${h.from}</span>
-            <span style="color:var(--text-faint)"> → </span>
-            <span style="color:${h.toColor}">${h.to}</span>
-            <span style="color:var(--text-faint);font-size:.52rem;margin-left:.3rem">${(h.dvTot*AU2KMS).toFixed(2)} km/s</span>
-          </div>
-          <div style="font-size:.78rem;font-weight:700;font-family:'Cormorant Garamond',serif;color:${h.color||gradeColors[h.grade]||'#c8d0e0'}">${h.grade}</div>
-        </div>`).join('');
-    return `
-      <div class="msec" style="background:rgba(100,200,100,.03);border-left:2px solid rgba(100,200,100,.3)">
-        <div class="msec-head">
-          <span style="color:#64c864">⬡ Hop Log</span>
-          <span class="mh-tag">${hopLog.length} HOPS${hopLog.length>0?' · '+totalDv+' km/s':''}</span>
-        </div>
-        ${rows}
-        ${hopLog.length>0?`
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.35rem;margin-top:.5rem">
-          <div class="scard" style="border-left:2px solid rgba(100,200,100,.5)">
-            <div class="sl">Total Δv spent</div>
-            <div class="sv" style="color:#64c864;font-size:.85rem">${totalDv}<span class="su">km/s</span></div>
-          </div>
-          <div class="scard" style="border-left:2px solid rgba(100,200,100,.5)">
-            <div class="sl">Best grade</div>
-            <div class="sv" style="color:${gradeColors[hopLog.reduce((b,h)=>{ const gi=(g)=>Object.keys(gradeColors).indexOf(g); return gi(h.grade)<gi(b)?h.grade:b; },hopLog[0].grade)]||'#c8d0e0'};font-size:.85rem;font-family:'Cormorant Garamond',serif">${hopLog.reduce((b,h)=>{ const gi=(g)=>Object.keys(gradeColors).indexOf(g); return gi(h.grade)<gi(b)?h.grade:b; },hopLog[0].grade)}</div>
-          </div>
-        </div>`:''}
-      </div>`;
-  }
-
   if(!source){
     el.innerHTML=hopLogHTML()+`
       <div class="msec">
-        <div class="msec-head"><span>Reference Equations</span><span class="mh-tag">ASTRO.NAV</span></div>
-        <div class="ph"><span class="ic">Orbital Mechanics</span>${hopMode?'Select your home planet to park your spacecraft there.':'Select a source planet, then a target, to see the full Hohmann transfer mathematics computed live for that orbit pair.'}</div>
-      </div>
-      <div class="msec">
-        <div class="msec-head"><span>Vis-Viva Equation</span></div>
-        <div style="padding:.3rem 0;overflow-x:auto">${K('v = \\sqrt{\\mu\\!\\left(\\dfrac{2}{r} - \\dfrac{1}{a}\\right)}',true)}</div>
-        <div style="font-size:.57rem;color:var(--text-faint);margin-top:.35rem;line-height:1.9">
-          μ = 4π² AU³/yr²&emsp;r = radius&emsp;a = semi-major axis
+        <div class="msec-head"><span>Getting Started</span><span class="mh-tag">SELECT.A.PLANET</span></div>
+        <div class="ph">
+          <span class="ic">Orbital Mechanics</span>
+          ${hopMode
+            ?'Select your home planet to park your spacecraft there. Then pick any destination and launch repeated transfers in a chain.'
+            :'Click any planet to set the source orbit, then click another to compute the Hohmann transfer and reveal the launch windows.'}
         </div>
       </div>
       <div class="msec">
-        <div class="msec-head"><span>Transfer Ellipse</span></div>
-        <div style="padding:.25rem 0;overflow-x:auto">${K('a_t = (r_1 + r_2)\\,/\\,2',true)}</div>
-      </div>
-      <div class="msec">
-        <div class="msec-head"><span>Delta-V Burns</span></div>
-        <div style="padding:.18rem 0;overflow-x:auto">${K('\\Delta v_1 = |\\,v_{\\text{tr}}(r_1) - v_c(r_1)\\,|')}</div>
-        <div style="padding:.18rem 0;overflow-x:auto;margin-top:.2rem">${K('\\Delta v_2 = |\\,v_{\\text{tr}}(r_2) - v_c(r_2)\\,|')}</div>
-      </div>
-      <div class="msec">
-        <div class="msec-head"><span>Transfer Time</span></div>
-        <div style="padding:.25rem 0;overflow-x:auto">${K('t = \\pi\\sqrt{a_t^3 / \\mu}',true)}</div>
-      </div>
-      <div class="msec">
-        <div class="msec-head"><span>Launch Window Condition</span></div>
-        <div style="padding:.25rem 0;overflow-x:auto">${K('\\varphi_{\\text{req}} = \\pi - \\omega_{\\text{tgt}}\\cdot t_{\\text{tr}}',true)}</div>
-        <div style="font-size:.57rem;color:var(--text-faint);margin-top:.35rem;line-height:1.9">
-          W1–W3 ghost markers on the source orbit show the next 3 aligned launch opportunities.
+        <div class="msec-head"><span>What this calculator does</span></div>
+        <div style="font-size:11.5px;color:var(--text-dim);line-height:1.7">
+          A <b style="color:var(--text-bright)">Hohmann transfer</b> is the lowest-fuel route between two circular coplanar orbits. The spacecraft burns once to enter an elliptical transfer orbit tangent to both circles, coasts, then burns again to circularise at the target.
+          <br><br>
+          The floating panel above shows the five equations that fully describe the maneuver. After you pick a source and target, this panel fills with the live computed values, the three nearest launch windows, and an eight-step walkthrough of the math.
         </div>
       </div>`;
     return;
@@ -1175,24 +1557,24 @@ function renderMath(){
   if(!target){
     el.innerHTML=hopLogHTML()+`
       <div class="msec">
-        <div class="msec-head"><span>Selected Orbits</span></div>
+        <div class="msec-head"><span>Selected Orbit</span></div>
         <div class="ocards">
           <div class="ocard src">
             <div class="ol">${hopMode?'Parked At':'Source'}</div>
             <div class="on" style="color:${source.color}">${source.name}</div>
-            <div class="ov">r₁ = ${f3(source.r)} AU<br>v = ${fk(source.speed)} km/s<br>T = ${source.period.toFixed(3)} yr</div>
+            <div class="ov"><span style="color:${CC.r}">r₁</span> = ${f3(source.r)} AU<br><span style="color:${CC.v}">v</span> = ${fk(source.speed)} km/s<br><span style="color:${CC.t}">T</span> = ${source.period.toFixed(3)} yr</div>
           </div>
           <div class="ocard dim">
-            <div class="ol">Destination</div>
+            <div class="ol">Target</div>
             <div class="on" style="color:var(--text-faint)">—</div>
-            <div class="ov">click a planet</div>
+            <div class="ov">click another planet</div>
           </div>
         </div>
       </div>
       <div class="msec">
-        <div class="msec-head"><span>Circular speed at r₁</span></div>
-        <div style="padding:.3rem 0;overflow-x:auto">${K(`v_{c1}=\\sqrt{4\\pi^2/${f3(source.r)}}=${f4(source.speed)}\\;\\text{AU/yr}`,true)}</div>
-        <div style="font-size:.68rem;color:var(--blue);margin-top:.28rem">= ${fk(source.speed)} km/s</div>
+        <div class="msec-head"><span>Circular speed at <span style="color:${CC.r}">r₁</span></span></div>
+        <div style="padding:6px 0;overflow-x:auto">${K(`\\textcolor{${CC.v}}{v_{c1}}=\\sqrt{4\\pi^2/\\textcolor{${CC.r}}{${f3(source.r)}}}=${f4(source.speed)}\\;\\text{AU/yr}`,true)}</div>
+        <div style="font-size:12px;color:${CC.v};margin-top:5px;font-weight:700">= ${fk(source.speed)} km/s</div>
       </div>`;
     return;
   }
@@ -1205,7 +1587,7 @@ function renderMath(){
   const wHTML=launchWindows.map((w,i)=>`
     <div class="wcard w${i+1}">
       <div class="wlbl">${w.label} · in ${fD(w.dt)} days</div>
-      <div class="wval${i>0?` d${i+1}`:''}">${(w.dt*365.25).toFixed(1)}&thinsp;d</div>
+      <div class="wval${i>0?` d${i+1}`:''}">${(w.dt*365.25).toFixed(1)} d</div>
     </div>`).join('');
 
   el.innerHTML=hopLogHTML()+`
@@ -1215,111 +1597,121 @@ function renderMath(){
         <div class="ocard src">
           <div class="ol">${hopMode?'Parked At':'Source'}</div>
           <div class="on" style="color:${source.color}">${source.name}</div>
-          <div class="ov">r₁ = ${f3(r1)} AU<br>v_c1 = ${fk(vc1)} km/s<br>T = ${source.period.toFixed(3)} yr</div>
+          <div class="ov"><span style="color:${CC.r}">r₁</span> = ${f3(r1)} AU<br><span style="color:${CC.v}">v<sub>c1</sub></span> = ${fk(vc1)} km/s<br><span style="color:${CC.t}">T</span> = ${source.period.toFixed(3)} yr</div>
         </div>
         <div class="ocard tgt">
           <div class="ol">Target</div>
           <div class="on" style="color:${target.color}">${target.name}</div>
-          <div class="ov">r₂ = ${f3(r2)} AU<br>v_c2 = ${fk(vc2)} km/s<br>T = ${target.period.toFixed(3)} yr</div>
+          <div class="ov"><span style="color:${CC.r}">r₂</span> = ${f3(r2)} AU<br><span style="color:${CC.v}">v<sub>c2</sub></span> = ${fk(vc2)} km/s<br><span style="color:${CC.t}">T</span> = ${target.period.toFixed(3)} yr</div>
         </div>
       </div>
     </div>
+
     <div class="msec">
       <div class="msec-head"><span>Launch Windows</span><span class="mh-tag">PHASE.ALIGN</span></div>
-      <div style="font-size:.58rem;color:var(--text-faint);margin-bottom:.4rem;line-height:1.8">
-        Required target lead angle:&emsp;${K(`\\varphi_{\\text{req}} = ${phi_deg}^\\circ`)}
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:7px;line-height:1.7">
+        Required target lead angle: ${K(`\\textcolor{${CC.phi}}{\\varphi_{\\text{req}}} = ${phi_deg}^\\circ`)}
       </div>
       <div class="wcards">${wHTML}</div>
     </div>
+
     <div class="msec">
-      <div class="msec-head"><span>Step-by-Step</span><span class="mh-tag">HOHMANN.CALC</span></div>
+      <div class="msec-head"><span>Step by Step</span><span class="mh-tag">HOHMANN.CALC</span></div>
       <div class="step">
         <div class="snum">01</div>
         <div class="sbody"><b>Transfer semi-major axis</b>
-          <div style="overflow-x:auto;margin:.18rem 0">${K(`a_t=\\frac{${f3(r1)}+${f3(r2)}}{2}=${f3(a_t)}\\;\\text{AU}`)}</div>
+          <div style="overflow-x:auto;margin:4px 0">${K(`\\textcolor{${CC.a}}{a_t}=\\tfrac{\\textcolor{${CC.r}}{${f3(r1)}}+\\textcolor{${CC.r}}{${f3(r2)}}}{2}=${f3(a_t)}\\;\\text{AU}`)}</div>
         </div>
       </div>
       <div class="step">
         <div class="snum">02</div>
         <div class="sbody"><b>Ellipse geometry</b>
-          <div style="overflow-x:auto;margin:.18rem 0">${K(`c_t=${f3(c_t)},\\;b_t=${f3(b_t)},\\;e=${e_t.toFixed(4)}`)}</div>
+          <div style="overflow-x:auto;margin:4px 0">${K(`c_t=${f3(c_t)},\\;b_t=${f3(b_t)},\\;e=${e_t.toFixed(4)}`)}</div>
         </div>
       </div>
       <div class="step">
         <div class="snum">03</div>
         <div class="sbody"><b>Circular speeds</b>
-          <div style="overflow-x:auto;margin:.18rem 0">${K(`v_{c1}=${fk(vc1)}\\;\\text{km/s},\\quad v_{c2}=${fk(vc2)}\\;\\text{km/s}`)}</div>
+          <div style="overflow-x:auto;margin:4px 0">${K(`\\textcolor{${CC.v}}{v_{c1}}=${fk(vc1)}\\;\\text{km/s},\\;\\textcolor{${CC.v}}{v_{c2}}=${fk(vc2)}\\;\\text{km/s}`)}</div>
         </div>
       </div>
       <div class="step">
         <div class="snum">04</div>
-        <div class="sbody"><b>Vis-viva at r₁ on transfer</b>
-          <div style="overflow-x:auto;margin:.18rem 0">${K(`v_1=\\sqrt{4\\pi^2\\!\\left(\\tfrac{2}{${f3(r1)}}-\\tfrac{1}{${f3(a_t)}}\\right)}`)}</div>
-          <div class="sresult">= ${fk(v1)} km/s</div>
+        <div class="sbody"><b>Vis-viva at <span style="color:${CC.r}">r₁</span> on transfer</b>
+          <div style="overflow-x:auto;margin:4px 0">${K(`\\textcolor{${CC.v}}{v_1}=\\sqrt{4\\pi^2\\!\\left(\\tfrac{2}{\\textcolor{${CC.r}}{${f3(r1)}}}-\\tfrac{1}{\\textcolor{${CC.a}}{${f3(a_t)}}}\\right)}`)}</div>
+          <div class="sresult" style="color:${CC.v}">= ${fk(v1)} km/s</div>
         </div>
       </div>
       <div class="step">
         <div class="snum">05</div>
-        <div class="sbody"><b>Vis-viva at r₂ on transfer</b>
-          <div style="overflow-x:auto;margin:.18rem 0">${K(`v_2=\\sqrt{4\\pi^2\\!\\left(\\tfrac{2}{${f3(r2)}}-\\tfrac{1}{${f3(a_t)}}\\right)}`)}</div>
-          <div class="sresult">= ${fk(v2)} km/s</div>
+        <div class="sbody"><b>Vis-viva at <span style="color:${CC.r}">r₂</span> on transfer</b>
+          <div style="overflow-x:auto;margin:4px 0">${K(`\\textcolor{${CC.v}}{v_2}=\\sqrt{4\\pi^2\\!\\left(\\tfrac{2}{\\textcolor{${CC.r}}{${f3(r2)}}}-\\tfrac{1}{\\textcolor{${CC.a}}{${f3(a_t)}}}\\right)}`)}</div>
+          <div class="sresult" style="color:${CC.v}">= ${fk(v2)} km/s</div>
         </div>
       </div>
       <div class="step">
-        <div class="snum" style="color:var(--red)">06</div>
-        <div class="sbody"><b style="color:var(--red)">First burn Δv₁</b>
-          <div style="overflow-x:auto;margin:.18rem 0">${K(`\\Delta v_1=|${fk(v1)}-${fk(vc1)}|`)}</div>
-          <div class="sresult" style="color:var(--red)">= ${fk(dv1)} km/s</div>
+        <div class="snum" style="color:${CC.dv}">06</div>
+        <div class="sbody"><b style="color:${CC.dv}">First burn Δv₁</b>
+          <div style="overflow-x:auto;margin:4px 0">${K(`\\textcolor{${CC.dv}}{\\Delta v_1}=|${fk(v1)}-${fk(vc1)}|`)}</div>
+          <div class="sresult" style="color:${CC.dv}">= ${fk(dv1)} km/s</div>
         </div>
       </div>
       <div class="step">
-        <div class="snum" style="color:var(--yellow)">07</div>
-        <div class="sbody"><b style="color:var(--yellow)">Second burn Δv₂</b>
-          <div style="overflow-x:auto;margin:.18rem 0">${K(`\\Delta v_2=|${fk(v2)}-${fk(vc2)}|`)}</div>
-          <div class="sresult" style="color:var(--yellow)">= ${fk(dv2)} km/s</div>
+        <div class="snum" style="color:${CC.t}">07</div>
+        <div class="sbody"><b style="color:${CC.t}">Second burn Δv₂</b>
+          <div style="overflow-x:auto;margin:4px 0">${K(`\\textcolor{${CC.t}}{\\Delta v_2}=|${fk(v2)}-${fk(vc2)}|`)}</div>
+          <div class="sresult" style="color:${CC.t}">= ${fk(dv2)} km/s</div>
         </div>
       </div>
       <div class="step">
-        <div class="snum" style="color:var(--green)">08</div>
-        <div class="sbody"><b style="color:var(--green)">Transfer time</b>
-          <div style="overflow-x:auto;margin:.18rem 0">${K(`t=\\pi\\sqrt{${f3(a_t)}^3/4\\pi^2}`)}</div>
-          <div class="sresult" style="color:var(--green)">= ${tDays} days</div>
+        <div class="snum" style="color:${CC.t}">08</div>
+        <div class="sbody"><b style="color:${CC.t}">Transfer time</b>
+          <div style="overflow-x:auto;margin:4px 0">${K(`\\textcolor{${CC.t}}{t_{tr}}=\\pi\\sqrt{\\textcolor{${CC.a}}{${f3(a_t)}}^3/4\\pi^2}`)}</div>
+          <div class="sresult" style="color:${CC.t}">= ${tDays} days</div>
         </div>
       </div>
     </div>
+
     <div class="msec">
       <div class="msec-head"><span>Summary</span></div>
       <div class="scards">
-        <div class="scard" style="border-left:2px solid var(--red)">
+        <div class="scard" style="border-left-color:${CC.dv}">
           <div class="sl">Δv₁ burn 1</div>
-          <div class="sv" style="color:var(--red)">${fk(dv1)}<span class="su">km/s</span></div>
+          <div class="sv" style="color:${CC.dv}">${fk(dv1)}<span class="su">km/s</span></div>
         </div>
-        <div class="scard" style="border-left:2px solid var(--yellow)">
+        <div class="scard" style="border-left-color:${CC.t}">
           <div class="sl">Δv₂ burn 2</div>
-          <div class="sv" style="color:var(--yellow)">${fk(dv2)}<span class="su">km/s</span></div>
+          <div class="sv" style="color:${CC.t}">${fk(dv2)}<span class="su">km/s</span></div>
         </div>
-        <div class="scard" style="border-left:2px solid var(--blue)">
+        <div class="scard" style="border-left-color:${CC.r}">
           <div class="sl">Total Δv</div>
-          <div class="sv" style="color:var(--blue)">${fk(dvTot)}<span class="su">km/s</span></div>
+          <div class="sv" style="color:${CC.r}">${fk(dvTot)}<span class="su">km/s</span></div>
         </div>
-        <div class="scard" style="border-left:2px solid var(--green)">
+        <div class="scard" style="border-left-color:${CC.v}">
           <div class="sl">Transfer time</div>
-          <div class="sv" style="color:var(--green)">${tDays}<span class="su">days</span></div>
+          <div class="sv" style="color:${CC.v}">${tDays}<span class="su">days</span></div>
         </div>
       </div>
     </div>`;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────
 function setStatus(m){document.getElementById('smsg').textContent=m}
 function setBtnLaunch(v){document.getElementById('btnLaunch').disabled=!v}
-function setTbar(show,msg=''){
+function setEqPanelActive(active){
+  document.getElementById('eqPanel').classList.toggle('active',active);
+  document.getElementById('eqState').textContent=active?'LIVE':'REFERENCE';
+}
+function setTbar(show,msg='',green){
   const el=document.getElementById('tbar');
-  if(show){el.textContent=msg;el.classList.add('show')}else el.classList.remove('show');
+  if(show){
+    el.textContent=msg;
+    el.classList.add('show');
+    el.classList.toggle('go',!!green);
+  } else el.classList.remove('show');
 }
 
-// ── Init ─────────────────────────────────────────────────────────
-regen();
+/* INIT */
+loadPreset('random', document.querySelector('.pcard[data-preset="random"]'));
 requestAnimationFrame(frame);
 </script>
 </body>
