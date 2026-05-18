@@ -4,16 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Crafting Database // Stella Nova</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --bg:#0e1118;--bg2:#141826;--bg3:#1a2032;
   --surface:#1c2436;--surface2:#243040;
-  --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
-  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);--blue-glow:rgba(150,200,255,0.10);
-  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);
-  --green:#64c864;--red:#e06050;
-  --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
+  --border:rgba(150,200,255,0.12);--border-b:rgba(150,200,255,0.22);
+  --blue:#96c8ff;--blue-dim:#7caee0;--blue-faint:rgba(150,200,255,0.08);--blue-glow:rgba(150,200,255,0.14);
+  --yellow:#ffc832;--yellow-dim:#dca838;--yellow-faint:rgba(255,200,50,0.06);
+  --green:#7ad87a;--red:#e87466;
+  --text:#dde3f0;--text-dim:#a4b0ce;--text-faint:#7682a0;--text-bright:#f4f7fc;
   --scan:rgba(0,0,0,0.06);
   --t0:#d08050;--t1:#c8a840;--t2:#6898d0;--t3:#58b870;--t4:#78b848;--t5:#e88040;
   --foundry:#c87840;--assembler:#b4a050;--complab:#8c64c8;--fuelproc:#ff8c3c;
@@ -23,153 +23,347 @@ html,body{width:100%;height:100%;background:var(--bg)}
 body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;overflow-x:hidden;overflow-y:auto}
 body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
 body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.3))}
-.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2)}
-#app{position:relative;z-index:10;width:100%;padding-bottom:50px}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:38px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);flex-shrink:0}
-.topbar-l{display:flex;align-items:center;gap:1.2rem}
-.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:0.8rem;letter-spacing:0.12em}
-.sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green);font-size:0.4rem;letter-spacing:0.12em;text-transform:uppercase}
-.sys-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease infinite}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.022) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.022) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.008) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.008) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:3px}
+#app{position:relative;z-index:10;width:100%;padding-bottom:80px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;height:46px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);flex-shrink:0}
+.topbar-l{display:flex;align-items:center;gap:1.4rem}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.15rem;letter-spacing:0.12em}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.65rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+.sys-status::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s ease infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
-.topbar-r{display:flex;gap:1.4rem;font-size:0.4rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);align-items:center}
-.topbar-r strong{color:var(--blue-dim);font-weight:500}
+.topbar-r{display:flex;gap:1.4rem;font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);align-items:center;font-weight:500}
+.topbar-r strong{color:var(--blue);font-weight:600}
 .in-frame .topbar{display:none!important}
-.hero{padding:1.8rem 2rem 1rem;max-width:1480px;margin:0 auto;display:flex;gap:2.5rem;align-items:flex-start}
+
+.hero{padding:2rem 2rem 1.2rem;max-width:1480px;margin:0 auto;display:flex;gap:2.5rem;align-items:flex-start}
 .hero-text{flex:1;min-width:0}
-.hero-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-style:italic;font-size:1.5rem;color:var(--text-bright);line-height:1.3;margin-bottom:0.4rem}
-.hero-title em{color:var(--yellow);font-style:italic}
-.hero-sub{font-size:0.4rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--blue-dim);margin-bottom:0.7rem}
-.hero-body{font-size:0.5rem;color:var(--text-dim);line-height:1.8;max-width:660px}
-.hero-body strong{color:var(--text);font-weight:500}
-.hero-stats{display:flex;flex-direction:column;gap:0.4rem;flex-shrink:0;width:170px;padding-top:0.2rem}
-.hs-box{padding:0.45rem 0.6rem;border:1px solid var(--border);background:var(--blue-faint)}
-.hs-val{font-size:1rem;font-weight:700;color:var(--blue);line-height:1}
-.hs-label{font-size:0.32rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-top:2px}
-.hs-box.yellow{background:var(--yellow-faint);border-color:rgba(255,200,50,0.1)}
+.hero-sub{font-size:0.72rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue-dim);margin-bottom:0.6rem;font-weight:600}
+.hero-title{font-family:'Cormorant Garamond',serif;font-weight:500;font-size:2.3rem;color:var(--text-bright);line-height:1.1;margin-bottom:0.55rem;letter-spacing:-0.005em}
+.hero-lead{font-size:0.93rem;color:var(--text);line-height:1.6;margin-bottom:0.6rem;font-weight:400;max-width:720px}
+.hero-lead .nums{color:var(--blue);font-weight:700}
+.prod-modules{margin:0.9rem 0 1rem;padding:0.85rem 1.1rem;background:var(--bg2);border:1px solid var(--border);border-radius:3px;max-width:720px}
+.pm-head{font-size:0.6rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-faint);margin-bottom:0.55rem;font-weight:700;padding-bottom:0.5rem;border-bottom:1px solid var(--border)}
+.pm-row{display:flex;align-items:baseline;gap:14px;padding:5px 0;font-size:0.87rem;font-weight:400;color:var(--text-dim);line-height:1.5}
+.pm-name{font-weight:700;letter-spacing:0.14em;font-size:0.72rem;min-width:108px;flex-shrink:0;text-transform:uppercase}
+.pm-desc{flex:1;color:var(--text-dim)}
+.pm-desc strong{color:var(--text-bright);font-weight:600;font-style:normal}
+.hero-facts{margin:0.6rem 0 0.9rem;display:flex;flex-direction:column;gap:0.5rem;max-width:720px}
+.hero-fact{font-size:0.85rem;color:var(--text-dim);line-height:1.55;font-weight:400}
+.hero-fact strong{color:var(--text);font-weight:600}
+.hf-label{display:inline-block;font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;color:var(--blue);padding:2px 9px;margin-right:9px;border:1px solid rgba(150,200,255,0.28);background:rgba(150,200,255,0.06);border-radius:2px;line-height:1.5}
+.hero-howto{font-size:0.88rem;color:var(--text);line-height:1.55;padding:0.7rem 1rem;border-left:3px solid var(--yellow);background:var(--yellow-faint);font-weight:500;max-width:720px;border-radius:0 3px 3px 0;margin:0}
+.hero-howto strong{color:var(--yellow);font-weight:700}
+
+.hero-stats{display:flex;flex-direction:column;gap:0.55rem;flex-shrink:0;width:215px;padding-top:0.2rem}
+.hs-box{padding:0.7rem 0.9rem;border:1px solid var(--border);background:var(--blue-faint);border-radius:3px}
+.hs-val{font-size:1.7rem;font-weight:700;color:var(--blue);line-height:1;letter-spacing:-0.01em}
+.hs-label{font-size:0.62rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-dim);margin-top:5px;font-weight:600}
+.hs-box.yellow{background:var(--yellow-faint);border-color:rgba(255,200,50,0.18)}
 .hs-box.yellow .hs-val{color:var(--yellow)}
-.search-wrap{max-width:1480px;margin:0 auto;padding:0 2rem 0.8rem}
-.search-input{width:100%;max-width:340px;background:var(--bg2);border:1px solid var(--border-b);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:0.48rem;letter-spacing:0.08em;padding:6px 10px;outline:none;transition:border-color 0.2s}
-.search-input::placeholder{color:var(--text-faint)}
-.search-input:focus{border-color:var(--blue-dim)}
-.tiers{max-width:1480px;margin:0 auto;padding:0 2rem 3rem;position:relative}
+
+.search-wrap{max-width:1480px;margin:0 auto;padding:0 2rem 1rem}
+.search-input{width:100%;max-width:380px;background:var(--bg2);border:1px solid var(--border-b);color:var(--text-bright);font-family:'JetBrains Mono',monospace;font-size:0.85rem;letter-spacing:0.04em;padding:9px 14px;outline:none;transition:border-color 0.2s;border-radius:4px;font-weight:500}
+.search-input::placeholder{color:var(--text-faint);font-weight:400}
+.search-input:focus{border-color:var(--blue)}
+
+.tiers{max-width:1480px;margin:0 auto;padding:0 2rem 2.5rem;position:relative}
 .tier-row{position:relative}
-.tier-head{display:flex;align-items:center;gap:0.7rem;padding:0.4rem 0 0.3rem;border-bottom:1px solid var(--border)}
-.tier-badge{font-size:0.36rem;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;font-weight:700;white-space:nowrap}
-.tier-name{font-size:0.44rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);font-weight:500}
-.tier-desc{font-size:0.34rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);margin-left:auto}
-.tier-grid{display:flex;flex-wrap:wrap;gap:5px;padding:0.4rem 0 0.2rem}
-.subgroup-label{width:100%;font-size:0.32rem;letter-spacing:0.14em;text-transform:uppercase;padding:3px 0 0 2px}
-.el{width:124px;height:84px;background:var(--bg2);border:1px solid var(--border);padding:5px 7px;cursor:pointer;position:relative;transition:all 0.15s;display:flex;flex-direction:column}
-.el::before{content:'';position:absolute;top:0;left:0;width:100%;height:2px;background:var(--el-c,#888);opacity:0.35;transition:opacity 0.15s}
+.tier-head{display:flex;align-items:center;gap:0.85rem;padding:0.55rem 0 0.4rem;border-bottom:1px solid var(--border)}
+.tier-badge{font-size:0.7rem;letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;font-weight:700;white-space:nowrap;border-radius:3px}
+.tier-name{font-size:0.88rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);font-weight:600}
+.tier-desc{font-size:0.66rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-left:auto;font-weight:500}
+.tier-grid{display:flex;flex-wrap:wrap;gap:6px;padding:0.55rem 0 0.3rem}
+.subgroup-label{width:100%;font-size:0.66rem;letter-spacing:0.16em;text-transform:uppercase;padding:6px 0 1px 3px;font-weight:600}
+
+.el{width:154px;height:104px;background:var(--bg2);border:1px solid var(--border);padding:7px 10px;cursor:pointer;position:relative;transition:all 0.15s;display:flex;flex-direction:column;border-radius:3px}
+.el::before{content:'';position:absolute;top:0;left:0;width:100%;height:2px;background:var(--el-c,#888);opacity:0.45;transition:opacity 0.15s}
 .el:hover{border-color:var(--border-b);background:var(--bg3);transform:translateY(-1px)}
-.el:hover::before{opacity:0.7}
-.el.highlight{border-color:var(--el-c,#888);box-shadow:0 0 12px rgba(150,200,255,0.06)}
+.el:hover::before{opacity:0.85}
+.el.highlight{border-color:var(--el-c,#888);box-shadow:0 0 14px rgba(150,200,255,0.08)}
 .el.highlight::before{opacity:1}
 .el.dim-card{opacity:0.1;pointer-events:none}
-.el.in-cart::after{content:'\2713';position:absolute;top:3px;right:5px;font-size:0.45rem;color:var(--yellow)}
+.el.in-cart::after{content:'\2713';position:absolute;top:4px;right:7px;font-size:0.75rem;color:var(--yellow);font-weight:700}
 .el-top{display:flex;justify-content:space-between;align-items:flex-start}
-.el-id{font-size:0.32rem;color:var(--text-faint)}
-.el-spawn{font-size:0.32rem}
+.el-id{font-size:0.6rem;color:var(--text-faint);font-weight:500}
+.el-spawn{font-size:0.6rem;font-weight:600}
 .el-mid{flex:1;display:flex;align-items:center;justify-content:center}
-.el-abbr{font-size:1.1rem;font-weight:700;letter-spacing:0.04em;line-height:1}
-.el-bot{display:flex;justify-content:space-between;align-items:flex-end}
-.el-name{font-size:0.36rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70px}
-.el-stats{display:flex;gap:4px;font-size:0.3rem;line-height:1.4}
+.el-abbr{font-size:1.55rem;font-weight:700;letter-spacing:0.03em;line-height:1}
+.el-bot{display:flex;justify-content:space-between;align-items:flex-end;gap:6px}
+.el-name{font-size:0.7rem;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500;flex:1}
+.el-stats{display:flex;gap:5px;font-size:0.6rem;line-height:1.3;flex-shrink:0;font-weight:600}
 .el-stats .consumed{color:var(--red)}
 .el-stats .produced{color:var(--green)}
-.tier-divider{display:flex;align-items:center;padding:2px 0;gap:8px}
+
+.tier-divider{display:flex;align-items:center;padding:4px 0;gap:10px}
 .td-line{flex:1;height:1px;background:var(--border)}
-.td-arrow{font-size:0.45rem;color:var(--text-faint);letter-spacing:5px}
+.td-arrow{font-size:0.7rem;color:var(--text-faint);letter-spacing:6px}
+
 .svg-layer{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:2}
-.tip{position:fixed;z-index:10000;background:rgba(14,17,24,0.95);border:1px solid var(--border-b);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:12px 16px;width:360px;pointer-events:none;opacity:0;transition:opacity 0.1s;box-shadow:0 4px 24px rgba(0,0,0,0.5)}
+
+.tip{position:fixed;z-index:10000;background:rgba(14,17,24,0.96);border:1px solid var(--border-b);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);padding:16px 20px;width:420px;pointer-events:none;opacity:0;transition:opacity 0.1s;box-shadow:0 4px 28px rgba(0,0,0,0.6);border-radius:4px}
 .tip.show{opacity:1}
-.tip-name{font-size:0.9rem;font-weight:700;color:var(--text-bright);margin-bottom:2px}
-.tip-tier{font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:8px}
-.tip-section{margin-bottom:6px}
-.tip-section h4{font-size:0.56rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-bottom:3px}
-.tip-row{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:0.72rem}
-.tip-row .qty{font-weight:700;min-width:22px}
-.tip-row .tier-tag{font-size:0.54rem;color:var(--text-faint);margin-left:auto}
-.tip-divider{border-top:1px solid var(--border);padding-top:6px;margin-top:5px}
-.tip-module{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:0.66rem}
-.tip-module-icon{font-size:0.7rem}
-.tip-module-name{letter-spacing:0.1em;text-transform:uppercase}
-.calc-toggle{position:fixed;bottom:0;left:0;right:0;z-index:900;height:48px;display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;background:rgba(14,17,24,0.96);backdrop-filter:blur(14px);border-top:1px solid var(--border-b);cursor:pointer;transition:border-color 0.2s}
+.tip-name{font-size:1.1rem;font-weight:700;color:var(--text-bright);margin-bottom:4px;letter-spacing:0.01em}
+.tip-tier{font-size:0.72rem;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:12px;font-weight:600}
+.tip-section{margin-bottom:8px}
+.tip-section h4{font-size:0.68rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-faint);margin-bottom:6px;font-weight:600}
+.tip-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.85rem;font-weight:500}
+.tip-row .qty{font-weight:700;min-width:30px}
+.tip-row .tier-tag{font-size:0.66rem;color:var(--text-faint);margin-left:auto;font-weight:500}
+.tip-divider{border-top:1px solid var(--border);padding-top:8px;margin-top:7px}
+.tip-module{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:0.8rem;font-weight:500}
+.tip-module-icon{font-size:0.95rem}
+.tip-module-name{letter-spacing:0.12em;text-transform:uppercase;font-weight:700}
+.tip-module-desc{color:var(--text-faint);font-size:0.66rem;margin-left:auto;font-weight:500}
+
+.calc-toggle{position:fixed;bottom:0;left:0;right:0;z-index:900;height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 1.8rem;background:rgba(14,17,24,0.96);backdrop-filter:blur(14px);border-top:1px solid var(--border-b);cursor:pointer;transition:border-color 0.2s}
 .calc-toggle:hover{border-top-color:var(--yellow-dim)}
-.calc-toggle-l{display:flex;align-items:center;gap:0.8rem}
-.calc-toggle-label{font-size:0.66rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--yellow);font-weight:700}
-.calc-toggle-count{font-size:0.6rem;color:var(--text-faint);letter-spacing:0.1em}
-.calc-toggle-hint{font-size:0.56rem;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase}
-.calc-toggle .arrow{font-size:0.75rem;color:var(--text-faint);transition:transform 0.25s}
+.calc-toggle-l{display:flex;align-items:center;gap:1rem}
+.calc-toggle-label{font-size:0.84rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--yellow);font-weight:700}
+.calc-toggle-count{font-size:0.75rem;color:var(--text-dim);letter-spacing:0.06em;font-weight:500}
+.calc-toggle-hint{font-size:0.72rem;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase;font-weight:600}
+.calc-toggle .arrow{font-size:0.9rem;color:var(--text-faint);transition:transform 0.25s}
 .calc-toggle.open .arrow{transform:rotate(180deg)}
-.calc-panel{position:fixed;bottom:48px;left:0;right:0;z-index:899;background:rgba(14,17,24,0.97);backdrop-filter:blur(14px);border-top:1px solid var(--border);max-height:0;overflow:hidden;transition:max-height 0.35s cubic-bezier(0.4,0,0.2,1)}
-.calc-panel.open{max-height:70vh;overflow-y:auto}
-.calc-inner{padding:1rem 1.5rem 1.2rem;max-width:1480px;margin:0 auto}
-.calc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.7rem}
-.calc-title{font-size:0.66rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--yellow)}
-.calc-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;padding:4px 10px;cursor:pointer;transition:all 0.15s}
+
+.calc-panel{position:fixed;bottom:56px;left:0;right:0;z-index:899;background:rgba(14,17,24,0.97);backdrop-filter:blur(14px);border-top:1px solid var(--border);max-height:0;overflow:hidden;transition:max-height 0.35s cubic-bezier(0.4,0,0.2,1)}
+.calc-panel.open{max-height:75vh;overflow-y:auto}
+.calc-inner{padding:1.2rem 1.8rem 1.4rem;max-width:1480px;margin:0 auto}
+
+.calc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.9rem}
+.calc-title{font-size:0.85rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--yellow);font-weight:700}
+.calc-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.72rem;letter-spacing:0.1em;text-transform:uppercase;padding:6px 14px;cursor:pointer;transition:all 0.15s;font-weight:600;border-radius:3px}
 .calc-btn:hover{border-color:var(--blue);color:var(--blue)}
 .calc-btn.danger:hover{border-color:var(--red);color:var(--red)}
-.calc-empty{text-align:center;padding:1.5rem 0;font-size:0.72rem;color:var(--text-faint);letter-spacing:0.1em}
-.calc-columns{display:flex;gap:1.5rem;align-items:flex-start}
+
+.calc-empty{text-align:center;padding:1.8rem 0;font-size:0.85rem;color:var(--text-faint);letter-spacing:0.06em;font-weight:500}
+
+.calc-columns{display:flex;gap:1.8rem;align-items:flex-start}
 .calc-col{flex:1;min-width:0}
-.calc-col-title{font-size:0.56rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--blue-dim);margin-bottom:0.4rem;padding-bottom:0.25rem;border-bottom:1px solid var(--border)}
-.build-item{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--border)}
+.calc-col-title{font-size:0.72rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--blue-dim);margin-bottom:0.55rem;padding-bottom:0.35rem;border-bottom:1px solid var(--border);font-weight:700}
+
+.build-item{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)}
 .build-item:last-child{border-bottom:none}
-.bi-color{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.bi-name{font-size:0.75rem;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bi-color{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.bi-name{font-size:0.88rem;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500}
 .bi-controls{display:flex;align-items:center;gap:0}
-.bi-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.68rem;width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s;line-height:1}
+.bi-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.85rem;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s;line-height:1;font-weight:700}
 .bi-btn:hover{border-color:var(--blue);color:var(--blue)}
-.bi-qty{font-size:0.75rem;font-weight:700;color:var(--yellow);min-width:28px;text-align:center}
-.bi-rm{background:transparent;border:none;color:var(--text-faint);font-size:0.68rem;cursor:pointer;padding:0 4px;line-height:1;transition:color 0.15s}
+.bi-qty{font-size:0.9rem;font-weight:700;color:var(--yellow);min-width:34px;text-align:center}
+.bi-rm{background:transparent;border:none;color:var(--text-faint);font-size:0.85rem;cursor:pointer;padding:0 6px;line-height:1;transition:color 0.15s;font-weight:600}
 .bi-rm:hover{color:var(--red)}
-.req-tier{margin-bottom:0.6rem}
-.req-tier-head{font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;margin-bottom:0.25rem;padding-bottom:0.15rem;border-bottom:1px solid var(--border)}
-.req-item{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:0.75rem}
-.req-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.req-qty{font-weight:700;min-width:32px}
+
+.req-tier{margin-bottom:0.75rem}
+.req-tier-head{font-size:0.72rem;letter-spacing:0.14em;text-transform:uppercase;margin-bottom:0.35rem;padding-bottom:0.2rem;border-bottom:1px solid var(--border);font-weight:700}
+.req-item{display:flex;align-items:center;gap:10px;padding:4px 0;font-size:0.85rem;font-weight:500}
+.req-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.req-qty{font-weight:700;min-width:38px}
 .req-name{color:var(--text-dim)}
-.req-batches{margin-left:auto;font-size:0.62rem;color:var(--text-faint)}
-.calc-totals{margin-top:0.5rem;padding-top:0.5rem;border-top:1px solid var(--border-b)}
-.ct-row{display:flex;justify-content:space-between;padding:2px 0;font-size:0.72rem}
-.ct-label{color:var(--text-faint);letter-spacing:0.1em;text-transform:uppercase}
-.ct-val{font-weight:700;color:var(--yellow)}
-.constr-wrap{max-width:1480px;margin:0 auto;padding:0 2rem 2rem}
-.constr-section{margin-bottom:1.5rem}
-.constr-head{display:flex;align-items:center;gap:0.7rem;padding:0.4rem 0 0.3rem;border-bottom:1px solid var(--border);margin-bottom:0.5rem}
-.constr-badge{font-size:0.36rem;letter-spacing:0.12em;text-transform:uppercase;padding:2px 7px;font-weight:700;border:1px solid;opacity:0.7}
-.constr-title{font-size:0.44rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);font-weight:500}
-.constr-desc{font-size:0.34rem;color:var(--text-faint);margin-left:auto;letter-spacing:0.1em;text-transform:uppercase}
-.constr-grid{display:flex;flex-wrap:wrap;gap:8px}
-.constr-card{background:var(--bg2);border:1px solid var(--border);padding:10px 14px;width:220px;cursor:pointer;position:relative;transition:all 0.15s}
+.req-batches{margin-left:auto;font-size:0.7rem;color:var(--text-faint);font-weight:500}
+
+.calc-totals{margin-top:0.7rem;padding-top:0.7rem;border-top:1px solid var(--border-b)}
+.ct-row{display:flex;justify-content:space-between;padding:3px 0;font-size:0.85rem;font-weight:500}
+.ct-label{color:var(--text-faint);letter-spacing:0.12em;text-transform:uppercase;font-size:0.72rem;font-weight:600}
+.ct-val{font-weight:700;color:var(--yellow);font-size:0.92rem}
+
+.constr-wrap{max-width:1480px;margin:0 auto;padding:0 2rem 2.5rem}
+.constr-section{margin-bottom:2rem}
+.constr-head{display:flex;align-items:center;gap:0.85rem;padding:0.55rem 0 0.4rem;border-bottom:1px solid var(--border);margin-bottom:0.7rem}
+.constr-badge{font-size:0.7rem;letter-spacing:0.14em;text-transform:uppercase;padding:3px 10px;font-weight:700;border:1px solid;border-radius:3px}
+.constr-title{font-size:0.88rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-bright);font-weight:600}
+.constr-desc{font-size:0.66rem;color:var(--text-faint);margin-left:auto;letter-spacing:0.12em;text-transform:uppercase;font-weight:500}
+.constr-subgroup{font-size:0.66rem;letter-spacing:0.16em;text-transform:uppercase;padding:8px 0 4px 3px;width:100%;font-weight:600;color:var(--blue-dim)}
+.constr-grid{display:flex;flex-wrap:wrap;gap:10px}
+.constr-card{background:var(--bg2);border:1px solid var(--border);padding:12px 16px;width:260px;cursor:pointer;position:relative;transition:all 0.15s;border-radius:3px}
 .constr-card:hover{border-color:var(--border-b);background:var(--bg3);transform:translateY(-1px)}
-.constr-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:2px;opacity:0.4}
-.cc-top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.cc-symbol{font-size:1rem}
-.cc-name{font-size:0.44rem;font-weight:700;color:var(--text-bright)}
-.cc-desc{font-size:0.36rem;color:var(--text-faint);line-height:1.5;margin-bottom:6px}
-.cc-recipe{display:flex;flex-direction:column;gap:2px}
-.cc-row{display:flex;align-items:center;gap:5px;font-size:0.9rem}
-.cc-qty{font-weight:700;min-width:16px}
-.cc-rname{color:var(--text-dim)}
-.cc-ore{font-size:0.56rem;color:var(--yellow-dim);margin-top:4px;letter-spacing:0.08em}
+.constr-card::before{content:'';position:absolute;top:0;left:0;width:100%;height:2px;opacity:0.5}
+.cc-top{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.cc-symbol{font-size:1.25rem;line-height:1}
+.cc-name{font-size:0.85rem;font-weight:700;color:var(--text-bright);letter-spacing:0.04em}
+.cc-desc{font-size:0.72rem;color:var(--text-dim);line-height:1.5;margin-bottom:8px;font-weight:500}
+.cc-recipe{display:flex;flex-direction:column;gap:3px}
+.cc-row{display:flex;align-items:center;gap:7px;font-size:0.9rem;font-weight:500}
+.cc-qty{font-weight:700;min-width:22px}
+.cc-rname{color:var(--text)}
+.cc-ore{font-size:0.7rem;color:var(--yellow);margin-top:7px;letter-spacing:0.06em;font-weight:600}
+
 .tip-add-btn{display:none}
 .tip-close-btn{display:none}
+
+.constr-card.featured{width:340px;background:linear-gradient(135deg,var(--bg2),var(--blue-faint))}
+.constr-card.featured .cc-name{font-size:0.95rem}
+.constr-card.featured .cc-symbol{font-size:1.5rem}
+
+/* ═════════════ MOBILE & TOUCH (≤900px or coarse pointer) ═════════════ */
 @media(max-width:900px),(pointer:coarse){
-  .tip{position:fixed!important;bottom:52px!important;left:0!important;right:0!important;top:auto!important;width:100%!important;max-height:50vh;overflow-y:auto;border-radius:0;border:none;border-top:1px solid var(--border-b);pointer-events:auto!important;padding:14px 16px 16px}
-  .tip-add-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;margin-top:8px;padding:8px;background:rgba(255,200,50,0.08);border:1px solid var(--yellow-dim);color:var(--yellow);font-family:'JetBrains Mono',monospace;font-size:0.56rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.15s}
-  .tip-add-btn:active{background:rgba(255,200,50,0.18)}
-  .tip-close-btn{display:block;position:absolute;top:8px;right:12px;background:none;border:none;color:var(--text-faint);font-size:0.7rem;cursor:pointer;padding:4px;line-height:1}
-  .hero{flex-direction:column;gap:1rem;padding:1.2rem 1rem 0.8rem}
-  .hero-stats{flex-direction:row;width:100%;flex-wrap:wrap}
-  .hs-box{flex:1;min-width:80px}
-  .search-wrap{padding:0 1rem 0.6rem}
+  #app{padding-bottom:62px}
+
+  /* Topbar — slim */
+  .topbar{height:38px;padding:0 1rem}
+  .sys-name{font-size:0.95rem}
+  .sys-status{font-size:0.56rem}
+  .topbar-r{font-size:0.56rem;gap:1rem}
+
+  /* Hero */
+  .hero{flex-direction:column;gap:1rem;padding:1.1rem 1rem 0.7rem}
+  .hero-sub{font-size:0.62rem;margin-bottom:0.4rem}
+  .hero-title{font-size:1.9rem;line-height:1.1;margin-bottom:0.45rem}
+  .hero-lead{font-size:0.82rem;line-height:1.55;margin-bottom:0.5rem}
+  .prod-modules{padding:0.7rem 0.9rem;margin:0.7rem 0 0.85rem}
+  .pm-head{font-size:0.56rem;margin-bottom:0.45rem;padding-bottom:0.4rem}
+  .pm-row{font-size:0.78rem;padding:5px 0;gap:10px}
+  .pm-name{font-size:0.66rem;min-width:88px}
+  .hero-facts{margin:0.55rem 0 0.8rem;gap:0.45rem}
+  .hero-fact{font-size:0.78rem;line-height:1.5}
+  .hf-label{font-size:0.54rem;padding:1px 7px;margin-right:7px}
+  .hero-howto{font-size:0.8rem;padding:0.6rem 0.85rem}
+
+  /* Stats — explicit 2x2 grid */
+  .hero-stats{flex-direction:row;width:100%;flex-wrap:wrap;gap:0.4rem;padding-top:0}
+  .hs-box{flex:1 1 calc(50% - 0.2rem);min-width:0;padding:0.55rem 0.7rem}
+  .hs-val{font-size:1.35rem}
+  .hs-label{font-size:0.54rem;margin-top:3px}
+
+  /* Search */
+  .search-wrap{padding:0 1rem 0.7rem}
+  .search-input{font-size:0.78rem;padding:8px 12px}
+
+  /* Tier rows */
   .tiers{padding:0 1rem 2rem}
-  .el{width:104px;height:74px}.el-abbr{font-size:0.95rem}
-  .calc-columns{flex-direction:column}
-  .calc-inner{padding:0.8rem 1rem}
+  .tier-head{padding:0.4rem 0 0.3rem;gap:0.6rem}
+  .tier-badge{font-size:0.62rem;padding:2px 8px}
+  .tier-name{font-size:0.78rem}
+  .tier-desc{font-size:0.56rem;letter-spacing:0.08em}
+  .subgroup-label{font-size:0.58rem;padding:5px 0 1px}
+  .tier-grid{gap:5px}
+  .td-arrow{font-size:0.6rem;letter-spacing:4px}
+
+  /* Element cards — 3+ per row on most phones */
+  .el{width:118px;height:90px;padding:6px 8px}
+  .el-id{font-size:0.52rem}.el-spawn{font-size:0.52rem}
+  .el-abbr{font-size:1.3rem}
+  .el-name{font-size:0.62rem;max-width:75px}
+  .el-stats{font-size:0.52rem;gap:4px}
+
+  /* Tooltip — bottom-pinned above slim calc-toggle */
+  .tip{position:fixed!important;bottom:50px!important;left:0!important;right:0!important;top:auto!important;width:100%!important;max-height:50vh;overflow-y:auto;border-radius:0;border:none;border-top:1px solid var(--border-b);pointer-events:auto!important;padding:14px 16px 16px}
+  .tip-name{font-size:0.95rem}
+  .tip-tier{font-size:0.64rem;margin-bottom:8px}
+  .tip-section h4{font-size:0.6rem;margin-bottom:4px}
+  .tip-row{font-size:0.78rem;padding:2px 0}
+  .tip-row .tier-tag{font-size:0.58rem}
+  .tip-module{font-size:0.72rem;padding:3px 0}
+  .tip-module-desc{font-size:0.58rem}
+  .tip-add-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px;padding:11px;background:rgba(255,200,50,0.12);border:1px solid var(--yellow-dim);color:var(--yellow);font-family:'JetBrains Mono',monospace;font-size:0.74rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;transition:all 0.15s;border-radius:3px}
+  .tip-add-btn:active{background:rgba(255,200,50,0.22)}
+  .tip-close-btn{display:block;position:absolute;top:8px;right:12px;background:none;border:none;color:var(--text-dim);font-size:0.95rem;cursor:pointer;padding:6px;line-height:1;font-weight:700}
+
+  /* Calc toggle — slimmer, drop right-side hint (redundant with label) */
+  .calc-toggle{height:50px;padding:0 1rem}
+  .calc-toggle-l{gap:0.7rem;flex:1;min-width:0;overflow:hidden}
+  .calc-toggle-label{font-size:0.72rem;letter-spacing:0.12em;white-space:nowrap}
+  .calc-toggle-count{font-size:0.6rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .calc-toggle-hint{display:none}
+  .calc-toggle .arrow{font-size:0.75rem;flex-shrink:0}
+
+  /* Calc panel — 60vh cap so context above stays visible */
+  .calc-panel{bottom:50px}
+  .calc-panel.open{max-height:60vh}
+  .calc-inner{padding:0.9rem 1rem 1.1rem}
+  .calc-header{margin-bottom:0.7rem}
+  .calc-title{font-size:0.74rem}
+  .calc-btn{font-size:0.62rem;padding:5px 10px}
+  .calc-empty{padding:1.2rem 0;font-size:0.78rem}
+  .calc-columns{flex-direction:column;gap:1.2rem}
+  .calc-col{max-width:100%!important}
+  .calc-col-title{font-size:0.64rem;margin-bottom:0.4rem;padding-bottom:0.25rem}
+  .build-item{padding:6px 0;gap:8px}
+  .bi-name{font-size:0.78rem}
+  .bi-btn{width:28px;height:28px;font-size:0.78rem}
+  .bi-qty{font-size:0.82rem;min-width:30px}
+  .bi-rm{font-size:0.78rem}
+  .req-tier-head{font-size:0.62rem}
+  .req-item{font-size:0.76rem;padding:3px 0;gap:8px}
+  .req-qty{min-width:34px}
+  .req-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .req-batches{font-size:0.6rem;text-align:right;flex-shrink:0}
+  .ct-row{font-size:0.78rem}
+  .ct-label{font-size:0.62rem}
+  .ct-val{font-size:0.82rem}
+
+  /* Constructables */
+  .constr-wrap{padding:0 1rem 2.5rem}
+  .constr-section{margin-bottom:1.6rem}
+  .constr-head{gap:0.65rem;flex-wrap:wrap}
+  .constr-badge{font-size:0.62rem;padding:2px 8px}
+  .constr-title{font-size:0.78rem}
+  .constr-desc{font-size:0.56rem;letter-spacing:0.08em;margin-left:auto}
+  .constr-subgroup{font-size:0.6rem;padding:7px 0 3px}
+  .constr-grid{gap:8px}
+  .constr-card,.constr-card.featured{width:100%;padding:11px 14px}
+  .cc-symbol{font-size:1.15rem}
+  .cc-name,.constr-card.featured .cc-name{font-size:0.8rem}
+  .cc-desc{font-size:0.7rem;margin-bottom:7px;line-height:1.45}
+  .cc-row{font-size:0.84rem}
+  .cc-qty{min-width:20px}
+  .cc-ore{font-size:0.64rem}
+}
+
+/* ═════════════ SMALL PHONES (≤480px) ═════════════ */
+@media(max-width:480px){
+  #app{padding-bottom:58px}
+
+  .topbar{height:34px;padding:0 0.8rem}
+  .sys-name{font-size:0.85rem;letter-spacing:0.1em}
+  .sys-status{font-size:0.5rem;gap:0.3rem}
+  .sys-status::before{width:5px;height:5px}
+  .topbar-r{font-size:0.5rem;gap:0.7rem}
+
+  .hero{padding:0.9rem 0.8rem 0.6rem;gap:0.85rem}
+  .hero-title{font-size:1.55rem}
+  .hero-sub{font-size:0.56rem;letter-spacing:0.18em}
+  .hero-lead{font-size:0.76rem;line-height:1.5}
+  .prod-modules{padding:0.6rem 0.75rem;margin:0.6rem 0 0.75rem}
+  .pm-row{flex-direction:column;align-items:flex-start;gap:3px;padding:6px 0}
+  .pm-name{min-width:auto;font-size:0.64rem}
+  .pm-desc{font-size:0.74rem;line-height:1.45}
+  .hero-fact{font-size:0.74rem;line-height:1.45}
+  .hf-label{font-size:0.52rem}
+  .hero-howto{font-size:0.76rem;padding:0.55rem 0.75rem}
+
+  .hero-stats{gap:0.35rem}
+  .hs-box{padding:0.5rem 0.6rem}
+  .hs-val{font-size:1.15rem}
+  .hs-label{font-size:0.5rem}
+
+  .search-wrap{padding:0 0.8rem 0.6rem}
+  .search-input{font-size:0.74rem;padding:7px 11px}
+
+  .tiers{padding:0 0.8rem 1.8rem}
+  .tier-head{padding:0.35rem 0 0.25rem}
+  .tier-desc{display:none}
+  .tier-grid{gap:4px}
+
+  .el{width:98px;height:80px;padding:5px 7px}
+  .el-abbr{font-size:1.1rem}
+  .el-name{font-size:0.56rem;max-width:62px}
+  .el-stats{font-size:0.48rem}
+  .el-id{font-size:0.48rem}.el-spawn{font-size:0.48rem}
+
+  .tip{padding:12px 14px 14px;bottom:46px!important;max-height:55vh}
+  .tip-name{font-size:0.88rem}
+  .tip-tier{font-size:0.6rem;margin-bottom:7px}
+  .tip-row{font-size:0.74rem}
+
+  .calc-toggle{height:46px;padding:0 0.85rem}
+  .calc-toggle-label{font-size:0.66rem;letter-spacing:0.1em}
+  .calc-toggle-count{font-size:0.55rem}
+  .calc-panel{bottom:46px}
+  .calc-panel.open{max-height:65vh}
+  .calc-inner{padding:0.75rem 0.85rem 0.95rem}
+
+  .constr-wrap{padding:0 0.8rem 2rem}
+  .constr-desc{display:none}
+  .constr-card,.constr-card.featured{padding:10px 12px}
 }
 </style>
 </head>
@@ -183,29 +377,42 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 </div>
 <div class="hero">
   <div class="hero-text">
-    <div class="hero-sub">Station Systems // Industrial Database</div>
-    <div class="hero-title">The <em>Forge</em> of Civilization</div>
-    <div class="hero-body">
-      Every station runs on a chain of <strong>extraction, refinement, and assembly</strong>.
-      Miners haul raw ores from asteroids at a <strong>1:1 smelting ratio</strong> &mdash; one chunk of ore
-      yields one ingot in a <strong>Foundry</strong>. Ingots combine into alloys in <strong>Assemblers</strong>,
-      then assemble into <strong>20 components</strong> in <strong>Component Labs</strong> through a deeply
-      interconnected dependency web. Layer 1 components feed into Layer 2, which feed into
-      Layer 3 <strong>pinnacle</strong> items &mdash; the Navigation Unit and Reactor Core that anchor your
-      <strong>Colony Core</strong>.
-      <br><br>
-      Building a Station Core requires <strong>~79 ore</strong>. A Colony Core demands <strong>~386 ore</strong>
-      flowing through every tier of the production chain.
-      <br><br>
-      <strong>Hover</strong> any element to trace its full ingredient chain.
-      <strong>Click</strong> to add it to the build calculator below.
+    <div class="hero-sub">SYS // Stella Nova</div>
+    <h1 class="hero-title">Crafting Database</h1>
+    <p class="hero-lead"><span class="nums">52</span> resources, <span class="nums">41</span> recipes, <span class="nums">14</span> station modules, <span class="nums">1</span> orbital constructable. Production chain pulled live from the game source.</p>
+
+    <div class="prod-modules">
+      <div class="pm-head">Four Production Modules</div>
+      <div class="pm-row">
+        <span class="pm-name" style="color:var(--foundry)">Foundry</span>
+        <span class="pm-desc">T0 ore to T1 ingot, <strong>1:1 ratio</strong>. Auto-detects the ore kind on hand, no recipe selection.</span>
+      </div>
+      <div class="pm-row">
+        <span class="pm-name" style="color:var(--assembler)">Assembler</span>
+        <span class="pm-desc">T1 ingots to T2 alloy. Player assigns one recipe per module.</span>
+      </div>
+      <div class="pm-row">
+        <span class="pm-name" style="color:var(--complab)">Comp Lab</span>
+        <span class="pm-desc">T1 and T2 to T3 component. <strong>L1 to L2 to L3</strong> dependency depth, 20 components total.</span>
+      </div>
+      <div class="pm-row">
+        <span class="pm-name" style="color:var(--fuelproc)">Fuel Proc</span>
+        <span class="pm-desc">Carbon Brick + Aluminum Ingot + Rare Earth Ingot to <strong>75 Oxidized Fuel</strong> per 20s batch.</span>
+      </div>
     </div>
+
+    <div class="hero-facts">
+      <div class="hero-fact"><span class="hf-label">Orbital</span>Only Station Core. Placed as a blueprint, constructor bots haul resources from orbit. <strong>About 50 ore</strong> end to end.</div>
+      <div class="hero-fact"><span class="hf-label">Grid</span>14 station module types built from the station stockpile. Deconstructing returns <strong>25 to 65%</strong> per material line, randomized per resource.</div>
+    </div>
+
+    <p class="hero-howto"><strong>Hover</strong> any card to see its recipe and total raw ore cost. <strong>Click</strong> to queue it in the build calculator at the bottom of the page.</p>
   </div>
   <div class="hero-stats">
-    <div class="hs-box"><div class="hs-val" id="stat-res">&mdash;</div><div class="hs-label">Resources</div></div>
-    <div class="hs-box"><div class="hs-val" id="stat-rec">&mdash;</div><div class="hs-label">Recipes</div></div>
-    <div class="hs-box yellow"><div class="hs-val" id="stat-sc">&mdash;</div><div class="hs-label">Station Core Ore</div></div>
-    <div class="hs-box yellow"><div class="hs-val" id="stat-cc">&mdash;</div><div class="hs-label">Colony Core Ore</div></div>
+    <div class="hs-box"><div class="hs-val" id="stat-res">0</div><div class="hs-label">Resources</div></div>
+    <div class="hs-box"><div class="hs-val" id="stat-rec">0</div><div class="hs-label">Recipes</div></div>
+    <div class="hs-box yellow"><div class="hs-val" id="stat-mod">0</div><div class="hs-label">Station Modules</div></div>
+    <div class="hs-box yellow"><div class="hs-val" id="stat-sc">0</div><div class="hs-label">Station Core Ore</div></div>
   </div>
 </div>
 <div class="search-wrap"><input type="text" class="search-input" id="searchInput" placeholder="Search resources..."></div>
@@ -217,12 +424,15 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 <div class="calc-toggle" id="calcToggle" onclick="toggleCalc()">
   <div class="calc-toggle-l">
     <span class="calc-toggle-label">&#9874; Crafting Calculator</span>
-    <span class="calc-toggle-count" id="calcCount">Empty &mdash; click elements to add</span>
+    <span class="calc-toggle-count" id="calcCount">Empty. Click any card to add.</span>
   </div>
   <span class="calc-toggle-hint" id="calcHint"></span>
   <span class="arrow">&#9650;</span>
 </div>
 <script>
+// ═══════════════════════════════════════════════════════════════════════════
+// RESOURCES — mirrors src/globals/resources.rs RESOURCE_MAP
+// ═══════════════════════════════════════════════════════════════════════════
 var R={
 0:{name:"Iron",abbr:"Fe",color:[180,80,60],tier:0,spawn:.25},
 1:{name:"Copper",abbr:"Cu",color:[255,120,40],tier:0,spawn:.20},
@@ -277,8 +487,12 @@ var R={
 50:{name:"Food",abbr:"FD",color:[120,200,80],tier:4},
 60:{name:"Oxidized Fuel",abbr:"OxF",color:[255,140,60],tier:5},
 };
-// ═══ RECIPES — COMPRESSED RATIOS (1:1 smelting, reduced T2 outputs) ═══
+// ═══════════════════════════════════════════════════════════════════════════
+// RECIPES — mirrors src/globals/resources.rs CRAFTING_RECIPES verbatim
+// Format: in:[[id,count]...], out:[id,count], t:base_time, mod:'Module'
+// ═══════════════════════════════════════════════════════════════════════════
 var recipes=[
+// T0 → T1 smelting (Foundry, 1:1)
 {in:[[0,1]],out:[10,1],t:8,mod:'Foundry'},
 {in:[[1,1]],out:[11,1],t:7,mod:'Foundry'},
 {in:[[2,1]],out:[12,1],t:10,mod:'Foundry'},
@@ -289,6 +503,7 @@ var recipes=[
 {in:[[7,1]],out:[17,1],t:18,mod:'Foundry'},
 {in:[[8,1]],out:[18,1],t:25,mod:'Foundry'},
 {in:[[9,1]],out:[19,1],t:30,mod:'Foundry'},
+// T2 alloys (Assembler)
 {in:[[10,2],[15,1],[12,1]],out:[20,1],t:5,mod:'Assembler'},
 {in:[[11,2],[10,1],[15,1]],out:[21,1],t:4,mod:'Assembler'},
 {in:[[12,2],[11,1],[15,1]],out:[22,1],t:2,mod:'Assembler'},
@@ -299,6 +514,7 @@ var recipes=[
 {in:[[20,2],[15,1],[10,1]],out:[27,2],t:4.5,mod:'Assembler'},
 {in:[[23,1],[20,1],[25,1]],out:[28,1],t:7.5,mod:'Assembler'},
 {in:[[25,1],[12,2],[14,1]],out:[29,1],t:5.5,mod:'Assembler'},
+// T3 components (Component Lab)
 {in:[[14,2],[26,1],[24,1]],out:[30,1],t:7.5,mod:'Comp. Lab'},
 {in:[[30,1],[14,2],[16,1],[26,1]],out:[31,1],t:11,mod:'Comp. Lab'},
 {in:[[30,1],[49,1],[19,1],[24,1]],out:[32,1],t:12.5,mod:'Comp. Lab'},
@@ -319,7 +535,8 @@ var recipes=[
 {in:[[32,1],[43,1],[19,1],[23,1]],out:[47,1],t:15,mod:'Comp. Lab'},
 {in:[[20,2],[14,2],[26,2]],out:[48,1],t:10,mod:'Comp. Lab'},
 {in:[[22,2],[26,2],[24,2]],out:[49,1],t:7.5,mod:'Comp. Lab'},
-{in:[[15,3],[12,2],[19,1]],out:[60,2],t:30,mod:'Fuel Proc.'},
+// Fuel processing — verified: 75 OxF per batch, 20s base time
+{in:[[15,3],[12,2],[19,1]],out:[60,75],t:20,mod:'Fuel Proc.'},
 ];
 var moduleInfo={
   'Foundry':{color:'var(--foundry)',icon:'\u2692',desc:'Auto-detect ore, 1:1 smelting'},
@@ -329,7 +546,7 @@ var moduleInfo={
 };
 var tierC={0:'var(--t0)',1:'var(--t1)',2:'var(--t2)',3:'var(--t3)',4:'var(--t4)',5:'var(--t5)'};
 var tierN={0:'Raw Ores',1:'Ingots',2:'Alloys & Materials',3:'Components',4:'Consumables',5:'Propellants'};
-var tierD={0:'Mined from asteroids',1:'Smelted 1:1 ratio',2:'Combined ingots',3:'L1\u2192L2\u2192L3 web',4:'Citizen needs',5:'Thruster fuel'};
+var tierD={0:'Mined from asteroids',1:'Smelted 1:1 from ore',2:'Combined ingots',3:'L1\u2192L2\u2192L3 web',4:'Citizen needs',5:'Thruster fuel'};
 var tierCRaw={0:'#d08050',1:'#c8a840',2:'#6898d0',3:'#58b870',4:'#78b848',5:'#e88040'};
 function rgb(c,a){return'rgba('+c[0]+','+c[1]+','+c[2]+','+(a===undefined?1:a)+')';}
 function recipeFor(id){for(var i=0;i<recipes.length;i++){if(recipes[i].out[0]===id)return recipes[i];}return null;}
@@ -338,42 +555,41 @@ recipes.forEach(function(rec){stats[rec.out[0]].totalProduced+=rec.out[1];rec.in
 var rawM={};
 function getRawCosts(id){if(rawM[id])return rawM[id];if(R[id].tier===0){rawM[id]={};rawM[id][id]=1;return rawM[id];}var rc=recipeFor(id);if(!rc){rawM[id]={};return{};}var oq=rc.out[1],costs={};rc.in.forEach(function(inp){var sub=getRawCosts(inp[0]);Object.keys(sub).forEach(function(rid){costs[rid]=(costs[rid]||0)+sub[rid]*(inp[1]/oq);});});rawM[id]=costs;return costs;}
 function totalOre(id){var c=getRawCosts(id),t=0;Object.values(c).forEach(function(v){t+=v;});return t;}
-// Stats
+// Hero stats
 document.getElementById('stat-res').textContent=Object.keys(R).length;
 document.getElementById('stat-rec').textContent=recipes.length;
-var scOre=Math.round([[30,1],[44,1],[45,1],[42,1]].reduce(function(s,p){return s+totalOre(p[0])*p[1];},0));
-var ccOre=Math.round([[34,1],[39,1],[41,1],[45,1],[46,1],[47,1]].reduce(function(s,p){return s+totalOre(p[0])*p[1];},0));
-document.getElementById('stat-sc').textContent=scOre;
-document.getElementById('stat-cc').textContent=ccOre;
-// ── RENDER ──
-var tierRows=[{tier:0,ids:[0,1,5,2,4,3,6,7,8,9]},{tier:1,ids:[10,11,15,12,14,13,16,17,18,19]},{tier:2,ids:[20,21,26,22,24,25,27,23,28,29]},{tier:3,ids:[30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49],subgroups:{0:{label:"Electronics (L1\u2192L2\u2192L3)",ids:[30,31,32,33,34]},1:{label:"Power Systems",ids:[35,36,37,38,39]},2:{label:"Mechanical",ids:[40,41,42,43,44]},3:{label:"Specialized",ids:[45,46,47,48,49]}}},{tier:45,ids:[50,60],label:"Outputs"}];
+// Station Core actual recipe: 4 Steel + 3 Glass + 2 Copper Wire + 2 Structural Steel + 1 Carbon Fiber
+var scOre=Math.round([[20,4],[24,3],[26,2],[27,2],[25,1]].reduce(function(s,p){return s+totalOre(p[0])*p[1];},0));
+document.getElementById('stat-sc').textContent='~'+scOre;
+// ── RENDER TIERS ──
+var tierRows=[{tier:0,ids:[0,1,5,2,4,3,6,7,8,9]},{tier:1,ids:[10,11,15,12,14,13,16,17,18,19]},{tier:2,ids:[20,21,26,22,24,25,27,23,28,29]},{tier:3,ids:[30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49],subgroups:{0:{label:"Electronics (L1\u2192L2\u2192L3)",ids:[30,31,32,33,34]},1:{label:"Power Systems (L1\u2192L2\u2192L3)",ids:[35,36,37,38,39]},2:{label:"Mechanical (L1\u2192L2)",ids:[40,41,42,43,44]},3:{label:"Specialized (L1\u2192L2)",ids:[45,46,47,48,49]}}},{tier:45,ids:[50,60],label:"Outputs"}];
 var tiersEl=document.getElementById('tiers'),svgEl=document.getElementById('svgLayer'),tipEl=document.getElementById('tip');
 function renderEl(id){var r=R[id];if(!r)return'';var c=r.color,s=stats[id];var sp=r.spawn?'<span class="el-spawn" style="color:var(--t0)">'+(r.spawn*100).toFixed(0)+'%</span>':'';var ly=r.layer?'<span class="el-spawn" style="color:var(--t3)">L'+r.layer+'</span>':'';var cn=s.totalConsumed>0?'<span class="consumed">\u25bc'+s.totalConsumed+'</span>':'';var pr=s.totalProduced>0?'<span class="produced">\u25b2'+s.totalProduced+'</span>':'';return'<div class="el" id="el'+id+'" data-id="'+id+'" data-name="'+r.name.toLowerCase()+'" onmouseenter="elEnter('+id+')" onmouseleave="elLeave('+id+')" onclick="elClick('+id+')" style="--el-c:'+rgb(c)+'"><div class="el-top"><span class="el-id">'+id+'</span>'+(sp||ly)+'</div><div class="el-mid"><span class="el-abbr" style="color:'+rgb(c)+'">'+r.abbr+'</span></div><div class="el-bot"><span class="el-name">'+r.name+'</span><span class="el-stats">'+cn+pr+'</span></div></div>';}
-(function(){var html='';tierRows.forEach(function(row,ri){var t=row.tier,isC=t===45;var tc=isC?'var(--t4)':tierC[t];var tn=isC?'Outputs':tierN[t];var td=isC?'Food & fuel':tierD[t];html+='<div class="tier-row"><div class="tier-head"><span class="tier-badge" style="color:'+tc+';border:1px solid;opacity:0.7">'+(isC?'T4/5':'T'+t)+'</span><span class="tier-name">'+tn+'</span><span class="tier-desc">'+td+'</span></div><div class="tier-grid">';if(row.subgroups){Object.keys(row.subgroups).forEach(function(k){var sg=row.subgroups[k];html+='<div class="subgroup-label" style="color:'+tc+'">'+sg.label+'</div>';sg.ids.forEach(function(id){html+=renderEl(id);});});}else row.ids.forEach(function(id){html+=renderEl(id);});html+='</div></div>';if(ri<tierRows.length-1)html+='<div class="tier-divider"><div class="td-line"></div><span class="td-arrow">\u25bc \u25bc \u25bc</span><div class="td-line"></div></div>';});svgEl.insertAdjacentHTML('afterend',html);})();
+(function(){var html='';tierRows.forEach(function(row,ri){var t=row.tier,isC=t===45;var tc=isC?'var(--t4)':tierC[t];var tn=isC?'Outputs':tierN[t];var td=isC?'Food & fuel':tierD[t];html+='<div class="tier-row"><div class="tier-head"><span class="tier-badge" style="color:'+tc+';border:1px solid;opacity:0.85">'+(isC?'T4/5':'T'+t)+'</span><span class="tier-name">'+tn+'</span><span class="tier-desc">'+td+'</span></div><div class="tier-grid">';if(row.subgroups){Object.keys(row.subgroups).forEach(function(k){var sg=row.subgroups[k];html+='<div class="subgroup-label" style="color:'+tc+'">'+sg.label+'</div>';sg.ids.forEach(function(id){html+=renderEl(id);});});}else row.ids.forEach(function(id){html+=renderEl(id);});html+='</div></div>';if(ri<tierRows.length-1)html+='<div class="tier-divider"><div class="td-line"></div><span class="td-arrow">\u25bc \u25bc \u25bc</span><div class="td-line"></div></div>';});svgEl.insertAdjacentHTML('afterend',html);})();
 var elPos={};
 function updatePositions(){var pr=tiersEl.getBoundingClientRect();Object.keys(R).forEach(function(id){var el=document.getElementById('el'+id);if(!el)return;var r=el.getBoundingClientRect();elPos[id]={cx:r.left-pr.left+r.width/2,top:r.top-pr.top,bot:r.top-pr.top+r.height};});svgEl.style.width=tiersEl.scrollWidth+'px';svgEl.style.height=tiersEl.scrollHeight+'px';svgEl.setAttribute('viewBox','0 0 '+tiersEl.scrollWidth+' '+tiersEl.scrollHeight);}
-function drawConnections(hId){svgEl.innerHTML='';if(hId===null)return;var related=new Set([hId]),recs=[];function up(id,vis){if(!vis)vis=new Set();if(vis.has(id))return;vis.add(id);related.add(id);recipes.filter(function(r){return r.out[0]===id;}).forEach(function(rec){recs.push({rec:rec,direct:id===hId});rec.in.forEach(function(inp){related.add(inp[0]);up(inp[0],vis);});});}up(hId);document.querySelectorAll('.el').forEach(function(el){var id=+el.dataset.id;el.classList.toggle('dim-card',!related.has(id));el.classList.toggle('highlight',id===hId);});var seen=new Set();recs.forEach(function(item){var rec=item.rec,direct=item.direct;rec.in.forEach(function(inp){var inId=inp[0],qty=inp[1];var k=inId+'->'+rec.out[0];if(seen.has(k))return;seen.add(k);var f=elPos[inId],t=elPos[rec.out[0]];if(!f||!t)return;var x1=f.cx,y1=f.bot,x2=t.cx,y2=t.top,dy=Math.abs(y2-y1),cp=Math.max(dy*.4,30);var iR=R[inId];var p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d','M'+x1+','+y1+' C'+x1+','+(y1+cp)+' '+x2+','+(y2-cp)+' '+x2+','+y2);p.setAttribute('fill','none');p.setAttribute('stroke',rgb(iR.color,direct?.65:.2));p.setAttribute('stroke-width',direct?2.5:1);svgEl.appendChild(p);if(direct&&qty>0){var tx=document.createElementNS('http://www.w3.org/2000/svg','text');tx.setAttribute('x',(x1+x2)/2+6);tx.setAttribute('y',(y1+y2)/2);tx.setAttribute('font-family','JetBrains Mono,monospace');tx.setAttribute('font-size','12');tx.setAttribute('font-weight','700');tx.setAttribute('fill',rgb(iR.color,.8));tx.textContent='\u00d7'+qty;svgEl.appendChild(tx);}});});}
+function drawConnections(hId){svgEl.innerHTML='';if(hId===null)return;var related=new Set([hId]),recs=[];function up(id,vis){if(!vis)vis=new Set();if(vis.has(id))return;vis.add(id);related.add(id);recipes.filter(function(r){return r.out[0]===id;}).forEach(function(rec){recs.push({rec:rec,direct:id===hId});rec.in.forEach(function(inp){related.add(inp[0]);up(inp[0],vis);});});}up(hId);document.querySelectorAll('.el').forEach(function(el){var id=+el.dataset.id;el.classList.toggle('dim-card',!related.has(id));el.classList.toggle('highlight',id===hId);});var seen=new Set();recs.forEach(function(item){var rec=item.rec,direct=item.direct;rec.in.forEach(function(inp){var inId=inp[0],qty=inp[1];var k=inId+'->'+rec.out[0];if(seen.has(k))return;seen.add(k);var f=elPos[inId],t=elPos[rec.out[0]];if(!f||!t)return;var x1=f.cx,y1=f.bot,x2=t.cx,y2=t.top,dy=Math.abs(y2-y1),cp=Math.max(dy*.4,30);var iR=R[inId];var p=document.createElementNS('http://www.w3.org/2000/svg','path');p.setAttribute('d','M'+x1+','+y1+' C'+x1+','+(y1+cp)+' '+x2+','+(y2-cp)+' '+x2+','+y2);p.setAttribute('fill','none');p.setAttribute('stroke',rgb(iR.color,direct?.7:.22));p.setAttribute('stroke-width',direct?2.8:1.2);svgEl.appendChild(p);if(direct&&qty>0){var tx=document.createElementNS('http://www.w3.org/2000/svg','text');tx.setAttribute('x',(x1+x2)/2+7);tx.setAttribute('y',(y1+y2)/2);tx.setAttribute('font-family','JetBrains Mono,monospace');tx.setAttribute('font-size','13');tx.setAttribute('font-weight','700');tx.setAttribute('fill',rgb(iR.color,.85));tx.textContent='\u00d7'+qty;svgEl.appendChild(tx);}});});}
 var hoverTimeout=null,mX=0,mY=0,isMobile=('ontouchstart' in window)||(navigator.maxTouchPoints>0);var activeTipId=null;
 document.addEventListener('mousemove',function(e){mX=e.clientX;mY=e.clientY;if(!isMobile&&tipEl.classList.contains('show'))posTip();});
-function posTip(){if(isMobile)return;var pw=360,ph=tipEl.offsetHeight||160,vw=window.innerWidth,vh=window.innerHeight;var x=mX+16,y=mY+12;if(x+pw>vw-8)x=mX-pw-12;if(y+ph>vh-8)y=vh-ph-8;if(y<8)y=8;tipEl.style.left=x+'px';tipEl.style.top=y+'px';}
+function posTip(){if(isMobile)return;var pw=420,ph=tipEl.offsetHeight||180,vw=window.innerWidth,vh=window.innerHeight;var x=mX+16,y=mY+12;if(x+pw>vw-8)x=mX-pw-12;if(y+ph>vh-8)y=vh-ph-8;if(y<8)y=8;tipEl.style.left=x+'px';tipEl.style.top=y+'px';}
 function elEnter(id){if(isMobile)return;clearTimeout(hoverTimeout);updatePositions();drawConnections(id);showTip(id);}
 function elLeave(id){if(isMobile)return;hoverTimeout=setTimeout(function(){svgEl.innerHTML='';document.querySelectorAll('.el').forEach(function(el){el.classList.remove('dim-card','highlight');});tipEl.classList.remove('show');activeTipId=null;},80);}
-function elClick(id){if(isMobile){if(activeTipId===id){closeMobileTip();return;}updatePositions();drawConnections(id);showTip(id);activeTipId=id;}else{addToCart(id);}}
+function elClick(id){if(isMobile){if(activeTipId===id){closeMobileTip();return;}var cp=document.getElementById('calcPanel');if(cp.classList.contains('open')){cp.classList.remove('open');document.getElementById('calcToggle').classList.remove('open');}updatePositions();drawConnections(id);showTip(id);activeTipId=id;}else{addToCart(id);}}
 function closeMobileTip(){tipEl.classList.remove('show');svgEl.innerHTML='';document.querySelectorAll('.el').forEach(function(el){el.classList.remove('dim-card','highlight');});activeTipId=null;}
 function queueFromTip(){if(activeTipId!==null){addToCart(activeTipId);closeMobileTip();}}
 function showTip(id){
   var r=R[id],tc=tierC[r.tier];
-  var h='<div class="tip-name" style="color:'+rgb(r.color)+'">'+r.name+' <span style="color:var(--text-faint);font-weight:300;font-size:0.68rem">['+r.abbr+']</span></div>';
-  h+='<div class="tip-tier" style="color:'+tc+'">Tier '+r.tier+(r.layer?' \u2014 Layer '+r.layer:'')+' \u2014 '+(tierN[r.tier]||'Output')+'</div>';
+  var h='<div class="tip-name" style="color:'+rgb(r.color)+'">'+r.name+' <span style="color:var(--text-faint);font-weight:400;font-size:0.78rem">['+r.abbr+']</span></div>';
+  h+='<div class="tip-tier" style="color:'+tc+'">Tier '+r.tier+(r.layer?' \u00b7 Layer '+r.layer:'')+' \u00b7 '+(tierN[r.tier]||'Output')+'</div>';
   var rec=recipeFor(id);
-  if(rec){var mi=moduleInfo[rec.mod];if(mi){h+='<div class="tip-module"><span class="tip-module-icon">'+mi.icon+'</span><span class="tip-module-name" style="color:'+mi.color+'">'+rec.mod+'</span><span style="color:var(--text-faint);font-size:0.56rem;margin-left:auto">'+mi.desc+'</span></div>';}
-    h+='<div class="tip-section" style="margin-top:6px"><h4>Ingredients</h4>';
+  if(rec){var mi=moduleInfo[rec.mod];if(mi){h+='<div class="tip-module"><span class="tip-module-icon">'+mi.icon+'</span><span class="tip-module-name" style="color:'+mi.color+'">'+rec.mod+'</span><span class="tip-module-desc">'+mi.desc+'</span></div>';}
+    h+='<div class="tip-section" style="margin-top:8px"><h4>Ingredients</h4>';
     rec.in.forEach(function(inp){var ir=R[inp[0]];h+='<div class="tip-row"><span class="qty" style="color:'+rgb(ir.color)+'">'+inp[1]+'\u00d7</span><span style="color:'+rgb(ir.color)+'">'+ir.name+'</span><span class="tier-tag">T'+ir.tier+(ir.layer?'/L'+ir.layer:'')+'</span></div>';});
-    h+='<div class="tip-row" style="color:var(--text-faint);font-size:0.62rem;margin-top:3px">\u2192 '+rec.out[1]+'\u00d7 &ensp;\u23f1 '+rec.t+'s</div></div>';
-  } else if(r.spawn){h+='<div class="tip-section"><h4>Source</h4><div class="tip-row">\u26cf Mined \u2014 '+(r.spawn*100).toFixed(0)+'%</div></div>';}
+    h+='<div class="tip-row" style="color:var(--text-faint);font-size:0.72rem;margin-top:5px;font-weight:600">\u2192 produces '+rec.out[1]+'\u00d7 &ensp;\u00b7&ensp; \u23f1 '+rec.t+'s</div></div>';
+  } else if(r.spawn){h+='<div class="tip-section"><h4>Source</h4><div class="tip-row">\u26cf Mined from asteroids, '+(r.spawn*100).toFixed(0)+'% spawn rate</div></div>';}
   var raw=getRawCosts(id);var re=Object.keys(raw).filter(function(k){return raw[k]>0;});
-  if(re.length>0){re.sort(function(a,b){return raw[b]-raw[a];});var tOre=0;re.forEach(function(k){tOre+=raw[k];});h+='<div class="tip-section tip-divider"><h4>Raw Ores (per 1\u00d7) \u2014 '+Math.round(tOre)+' total</h4>';re.forEach(function(rid){var rr=R[+rid],qty=raw[rid],qs=Number.isInteger(qty)?qty:qty.toFixed(1);h+='<div class="tip-row"><span class="qty" style="color:'+rgb(rr.color)+'">'+qs+'\u00d7</span><span style="color:'+rgb(rr.color)+'">'+rr.name+'</span></div>';});h+='</div>';}
-  if(!isMobile){h+='<div style="margin-top:6px;font-size:0.56rem;color:var(--text-faint)">Click to add to build queue</div>';}
+  if(re.length>0){re.sort(function(a,b){return raw[b]-raw[a];});var tOre=0;re.forEach(function(k){tOre+=raw[k];});var tOreDisp=tOre<1?tOre.toFixed(2):Math.round(tOre);h+='<div class="tip-section tip-divider"><h4>Raw Ores (per 1\u00d7) \u00b7 '+tOreDisp+' total</h4>';re.forEach(function(rid){var rr=R[+rid],qty=raw[rid],qs=qty<1?qty.toFixed(2):(Number.isInteger(qty)?qty:qty.toFixed(1));h+='<div class="tip-row"><span class="qty" style="color:'+rgb(rr.color)+'">'+qs+'\u00d7</span><span style="color:'+rgb(rr.color)+'">'+rr.name+'</span></div>';});h+='</div>';}
+  if(!isMobile){h+='<div style="margin-top:8px;font-size:0.7rem;color:var(--text-faint);font-weight:500;letter-spacing:0.04em">Click to add to build queue</div>';}
   h+='<button class="tip-close-btn" onclick="closeMobileTip()">\u2715</button>';
   h+='<button class="tip-add-btn" onclick="queueFromTip()">+ Add to Build Queue</button>';
   tipEl.innerHTML=h;tipEl.classList.add('show');posTip();
@@ -384,31 +600,55 @@ function addToCart(id){if(!cart[id])cart[id]=0;cart[id]++;updateCartUI();updateC
 function removeFromCart(id){delete cart[id];updateCartUI();updateCardMarkers();}
 function setCartQty(id,q){if(q<1){removeFromCart(id);return;}cart[id]=q;updateCartUI();}
 function updateCardMarkers(){document.querySelectorAll('.el').forEach(function(el){el.classList.toggle('in-cart',!!cart[+el.dataset.id]);});}
-function toggleCalc(){document.getElementById('calcPanel').classList.toggle('open');document.getElementById('calcToggle').classList.toggle('open');}
+function toggleCalc(){var cp=document.getElementById('calcPanel');var opening=!cp.classList.contains('open');if(opening&&isMobile&&activeTipId!==null)closeMobileTip();cp.classList.toggle('open');document.getElementById('calcToggle').classList.toggle('open');}
 function clearCart(){cart={};updateCartUI();updateCardMarkers();}
 function computeBreakdown(){var needed={};Object.keys(cart).forEach(function(id){needed[+id]=(needed[+id]||0)+cart[+id];});var allIds=Object.keys(R).map(Number);allIds.sort(function(a,b){return(R[b].tier-R[a].tier)||b-a;});var batchInfo={};allIds.forEach(function(id){if(!needed[id]||needed[id]<=0)return;var rec=recipeFor(id);if(!rec)return;var batches=Math.ceil(needed[id]/rec.out[1]);batchInfo[id]={batches:batches,time:batches*rec.t,perBatch:rec.out[1],mod:rec.mod};rec.in.forEach(function(inp){needed[inp[0]]=(needed[inp[0]]||0)+inp[1]*batches;});});return{needed:needed,batchInfo:batchInfo};}
-function updateCartUI(){var keys=Object.keys(cart);var count=0;keys.forEach(function(k){count+=cart[k];});document.getElementById('calcCount').textContent=keys.length===0?'Empty \u2014 click elements to add':count+' item'+(count!==1?'s':'')+' in '+keys.length+' type'+(keys.length!==1?'s':'');var inner=document.getElementById('calcInner');if(keys.length===0){inner.innerHTML='<div class="calc-empty">Click any element in the table above to add it to your build queue.</div>';document.getElementById('calcHint').textContent='';return;}var bd=computeBreakdown(),needed=bd.needed,batchInfo=bd.batchInfo;var h='<div class="calc-header"><span class="calc-title">\u2692 Build Queue</span><div class="calc-actions"><button class="calc-btn danger" onclick="clearCart()">Clear All</button></div></div>';h+='<div class="calc-columns"><div class="calc-col" style="max-width:280px"><div class="calc-col-title">Building</div>';keys.forEach(function(sid){var id=+sid,r=R[id],q=cart[id];h+='<div class="build-item"><span class="bi-color" style="background:'+rgb(r.color)+'"></span><span class="bi-name">'+r.name+'</span><div class="bi-controls"><button class="bi-btn" onclick="setCartQty('+id+','+(q-1)+')">\u2212</button><span class="bi-qty">'+q+'</span><button class="bi-btn" onclick="setCartQty('+id+','+(q+1)+')">+</button></div><button class="bi-rm" onclick="removeFromCart('+id+')">\u2715</button></div>';});h+='</div><div class="calc-col"><div class="calc-col-title">Total Materials Required</div>';var totalTime=0;[3,2,1,0,5,4].forEach(function(t){var items=[];Object.keys(needed).forEach(function(sid){var id=+sid;if(R[id].tier===t&&needed[id]>0)items.push({id:id,qty:needed[id],bi:batchInfo[id]||null});});if(!items.length)return;items.sort(function(a,b){return b.qty-a.qty;});h+='<div class="req-tier"><div class="req-tier-head" style="color:'+tierCRaw[t]+'">'+(tierN[t]||'Output')+' (T'+t+')</div>';items.forEach(function(item){var r=R[item.id],bs='';if(item.bi){var mi=moduleInfo[item.bi.mod];var mc=mi?'color:'+mi.color+';':'';bs='<span style="'+mc+'font-size:0.56rem">'+item.bi.mod+'</span> '+item.bi.batches+' batch'+(item.bi.batches!==1?'es':'')+' \u00b7 '+item.bi.time.toFixed(1)+'s';totalTime+=item.bi.time;}else if(r.tier===0){bs=item.qty+' ore chunks';}h+='<div class="req-item"><span class="req-dot" style="background:'+rgb(r.color)+'"></span><span class="req-qty" style="color:'+rgb(r.color)+'">'+item.qty+'\u00d7</span><span class="req-name">'+r.name+'</span><span class="req-batches">'+bs+'</span></div>';});h+='</div>';});h+='<div class="calc-totals"><div class="ct-row"><span class="ct-label">Total Craft Time</span><span class="ct-val">'+totalTime.toFixed(1)+'s</span></div>';var oreCount=0;Object.keys(needed).forEach(function(sid){if(R[+sid].tier===0&&needed[+sid]>0)oreCount+=needed[+sid];});h+='<div class="ct-row"><span class="ct-label">Total Raw Ore</span><span class="ct-val">'+oreCount+' chunks</span></div></div></div></div>';inner.innerHTML=h;document.getElementById('calcHint').textContent=totalTime.toFixed(0)+'s total \u00b7 '+oreCount+' ore';}
-// ── CONSTRUCTION ──
+function updateCartUI(){var keys=Object.keys(cart);var count=0;keys.forEach(function(k){count+=cart[k];});document.getElementById('calcCount').textContent=keys.length===0?'Empty. Click any card to add.':count+' item'+(count!==1?'s':'')+' across '+keys.length+' type'+(keys.length!==1?'s':'');var inner=document.getElementById('calcInner');if(keys.length===0){inner.innerHTML='<div class="calc-empty">Click any element in the table above to add it to your build queue.</div>';document.getElementById('calcHint').textContent='';return;}var bd=computeBreakdown(),needed=bd.needed,batchInfo=bd.batchInfo;var h='<div class="calc-header"><span class="calc-title">\u2692 Build Queue</span><div class="calc-actions"><button class="calc-btn danger" onclick="clearCart()">Clear All</button></div></div>';h+='<div class="calc-columns"><div class="calc-col" style="max-width:320px"><div class="calc-col-title">Building</div>';keys.forEach(function(sid){var id=+sid,r=R[id],q=cart[id];h+='<div class="build-item"><span class="bi-color" style="background:'+rgb(r.color)+'"></span><span class="bi-name">'+r.name+'</span><div class="bi-controls"><button class="bi-btn" onclick="setCartQty('+id+','+(q-1)+')">\u2212</button><span class="bi-qty">'+q+'</span><button class="bi-btn" onclick="setCartQty('+id+','+(q+1)+')">+</button></div><button class="bi-rm" onclick="removeFromCart('+id+')">\u2715</button></div>';});h+='</div><div class="calc-col"><div class="calc-col-title">Total Materials Required</div>';var totalTime=0;[3,2,1,0,5,4].forEach(function(t){var items=[];Object.keys(needed).forEach(function(sid){var id=+sid;if(R[id].tier===t&&needed[id]>0)items.push({id:id,qty:needed[id],bi:batchInfo[id]||null});});if(!items.length)return;items.sort(function(a,b){return b.qty-a.qty;});h+='<div class="req-tier"><div class="req-tier-head" style="color:'+tierCRaw[t]+'">'+(tierN[t]||'Output')+' (T'+t+')</div>';items.forEach(function(item){var r=R[item.id],bs='';if(item.bi){var mi=moduleInfo[item.bi.mod];var mc=mi?'color:'+mi.color+';':'';bs='<span style="'+mc+'font-weight:700">'+item.bi.mod+'</span> &middot; '+item.bi.batches+'\u00d7 \u23f1'+item.bi.time.toFixed(1)+'s';totalTime+=item.bi.time;}else if(r.tier===0){bs=item.qty+' ore chunks';}h+='<div class="req-item"><span class="req-dot" style="background:'+rgb(r.color)+'"></span><span class="req-qty" style="color:'+rgb(r.color)+'">'+item.qty+'\u00d7</span><span class="req-name">'+r.name+'</span><span class="req-batches">'+bs+'</span></div>';});h+='</div>';});h+='<div class="calc-totals"><div class="ct-row"><span class="ct-label">Total Craft Time</span><span class="ct-val">'+totalTime.toFixed(1)+'s</span></div>';var oreCount=0;Object.keys(needed).forEach(function(sid){if(R[+sid].tier===0&&needed[+sid]>0)oreCount+=needed[+sid];});h+='<div class="ct-row"><span class="ct-label">Total Raw Ore</span><span class="ct-val">'+oreCount+' chunks</span></div></div></div></div>';inner.innerHTML=h;document.getElementById('calcHint').textContent=totalTime.toFixed(0)+'s \u00b7 '+oreCount+' ore';}
+// ═══════════════════════════════════════════════════════════════════════════
+// CONSTRUCTABLES — only Station Core exists in src/globals/construction.rs
+// ═══════════════════════════════════════════════════════════════════════════
 var CONSTRUCTABLES=[
-  {id:0,name:"Solar Panel",symbol:"\u2600",desc:"Orbital power generation.",color:[255,220,60],recipe:[[36,2],[12,2],[24,1]]},
-  {id:1,name:"Station Core",symbol:"\u25CE",desc:"Foundation for orbital station. ~79 ore.",color:[120,180,220],recipe:[[30,1],[44,1],[45,1],[42,1]]},
-  {id:2,name:"Colony Core",symbol:"\u2605",desc:"Autonomous colony station. ~386 ore.",color:[232,184,32],recipe:[[34,1],[39,1],[41,1],[45,1],[46,1],[47,1]]},
+  {id:1,name:"Station Core",symbol:"\u25CE",desc:"Foundation for an orbital station. Handles logistics, docking, and crew housing. Placed as a blueprint; constructor bots haul resources to it.",color:[120,180,220],recipe:[[20,4],[24,3],[26,2],[27,2],[25,1]],featured:true},
 ];
+// ═══════════════════════════════════════════════════════════════════════════
+// MODULES — mirrors src/globals/construction.rs MODULE_RECIPES
+// Grouped by function for player scanning. StructureCore (auto-built) omitted.
+// ═══════════════════════════════════════════════════════════════════════════
 var MODULES=[
-  {name:"Structure (Orange)",recipe:[[10,3]]},
-  {name:"Structure (White)",recipe:[[12,3]]},
-  {name:"Docking Bay",recipe:[[10,3],[11,2]]},
-  {name:"Greenhouse",recipe:[[24,5],[20,1],[12,2]]},
-  {name:"Foundry",recipe:[[10,2],[12,1]],modColor:'var(--foundry)'},
-  {name:"Fuel Processor",recipe:[[20,3],[15,2],[38,1]],modColor:'var(--fuelproc)'},
-  {name:"Assembler",recipe:[[10,4],[11,3],[13,2]],modColor:'var(--assembler)'},
-  {name:"Component Lab",recipe:[[23,1],[20,3],[21,3],[28,1]],modColor:'var(--complab)'},
-  {name:"Thruster",recipe:[[27,2],[23,2],[41,2],[37,1]]},
-  {name:"Hopper",recipe:[[20,1],[26,1]]},
-  {name:"Docking Port",recipe:[[10,2],[12,1]]},
+  // Structural
+  {group:"Structural",name:"Structure (Orange)",recipe:[[10,3]]},
+  {group:"Structural",name:"Structure (White)",recipe:[[12,3]]},
+  // Habitation
+  {group:"Habitation",name:"Crew Quarters",recipe:[[20,2],[24,3],[12,1]]},
+  {group:"Habitation",name:"Greenhouse",recipe:[[24,5],[20,1],[12,2]]},
+  {group:"Habitation",name:"Medical",recipe:[[20,2],[24,3],[30,1],[45,1]]},
+  {group:"Habitation",name:"Recreation",recipe:[[20,2],[24,2],[12,1]]},
+  // Production
+  {group:"Production",name:"Foundry",recipe:[[10,2],[12,1]],modColor:'var(--foundry)'},
+  {group:"Production",name:"Assembler",recipe:[[10,4],[11,3],[13,2]],modColor:'var(--assembler)'},
+  {group:"Production",name:"Component Lab",recipe:[[10,6],[12,3],[20,3],[13,2]],modColor:'var(--complab)'},
+  {group:"Production",name:"Fuel Processor",recipe:[[10,4],[15,3],[20,2],[11,2]],modColor:'var(--fuelproc)'},
+  // Logistics & Defense
+  {group:"Logistics & Defense",name:"Docking",recipe:[[10,3],[11,2]]},
+  {group:"Logistics & Defense",name:"Hopper",recipe:[[20,1],[26,1]]},
+  {group:"Logistics & Defense",name:"Thruster",recipe:[[27,2],[23,2],[41,2],[37,1]]},
+  {group:"Logistics & Defense",name:"Shield",recipe:[[23,2],[47,2],[30,2],[26,1]]},
 ];
-function renderConstruction(){var wrap=document.getElementById('constrWrap');var h='';h+='<div class="constr-section"><div class="constr-head"><span class="constr-badge" style="color:var(--yellow)">Orbital</span><span class="constr-title">Orbital Structures</span><span class="constr-desc">Blueprint placement in orbit</span></div><div class="constr-grid">';CONSTRUCTABLES.forEach(function(c){var oreT=Math.round(c.recipe.reduce(function(s,p){return s+totalOre(p[0])*p[1];},0));h+='<div class="constr-card" onclick="addConstrToCart('+JSON.stringify(c.recipe)+')" style="--el-c:'+rgb(c.color)+'"><div style="position:absolute;top:0;left:0;width:100%;height:2px;background:'+rgb(c.color)+';opacity:0.4"></div><div class="cc-top"><span class="cc-symbol">'+c.symbol+'</span><span class="cc-name" style="color:'+rgb(c.color)+'">'+c.name+'</span></div><div class="cc-desc">'+c.desc+'</div><div class="cc-recipe">';c.recipe.forEach(function(p){var r=R[p[0]];h+='<div class="cc-row"><span class="cc-qty" style="color:'+rgb(r.color)+'">'+p[1]+'\u00d7</span><span class="cc-rname">'+r.name+'</span></div>';});h+='</div><div class="cc-ore">\u26cf '+oreT+' total ore</div></div>';});h+='</div></div>';
-h+='<div class="constr-section"><div class="constr-head"><span class="constr-badge" style="color:var(--blue)">Modules</span><span class="constr-title">Station Modules</span><span class="constr-desc">Grid-based construction</span></div><div class="constr-grid">';MODULES.forEach(function(m){if(!m.recipe.length)return;var mc=m.modColor||'rgba(150,200,255,0.6)';var oreT=Math.round(m.recipe.reduce(function(s,p){return s+totalOre(p[0])*p[1];},0));h+='<div class="constr-card" onclick="addConstrToCart('+JSON.stringify(m.recipe)+')" style="--el-c:'+mc+'"><div style="position:absolute;top:0;left:0;width:100%;height:2px;background:'+mc+';opacity:0.4"></div><div class="cc-top"><span class="cc-name" style="color:'+mc+'">'+m.name+'</span></div><div class="cc-recipe">';m.recipe.forEach(function(p){var r=R[p[0]];h+='<div class="cc-row"><span class="cc-qty" style="color:'+rgb(r.color)+'">'+p[1]+'\u00d7</span><span class="cc-rname">'+r.name+'</span></div>';});h+='</div><div class="cc-ore">\u26cf '+oreT+' ore</div></div>';});h+='</div></div>';wrap.innerHTML=h;}
+// Hero stat: module count (excludes free StructureCore)
+document.getElementById('stat-mod').textContent=MODULES.length;
+function renderConstruction(){
+  var wrap=document.getElementById('constrWrap');var h='';
+  // Constructables (only Station Core)
+  h+='<div class="constr-section"><div class="constr-head"><span class="constr-badge" style="color:var(--yellow);border-color:var(--yellow-dim)">Orbital</span><span class="constr-title">Orbital Constructables</span><span class="constr-desc">Blueprint placed in orbit, built by bots</span></div><div class="constr-grid">';
+  CONSTRUCTABLES.forEach(function(c){var oreT=Math.round(c.recipe.reduce(function(s,p){return s+totalOre(p[0])*p[1];},0));var cls=c.featured?'constr-card featured':'constr-card';h+='<div class="'+cls+'" onclick="addConstrToCart('+JSON.stringify(c.recipe)+')" style="--el-c:'+rgb(c.color)+'"><div style="position:absolute;top:0;left:0;width:100%;height:2px;background:'+rgb(c.color)+';opacity:0.5"></div><div class="cc-top"><span class="cc-symbol">'+c.symbol+'</span><span class="cc-name" style="color:'+rgb(c.color)+'">'+c.name+'</span></div><div class="cc-desc">'+c.desc+'</div><div class="cc-recipe">';c.recipe.forEach(function(p){var r=R[p[0]];h+='<div class="cc-row"><span class="cc-qty" style="color:'+rgb(r.color)+'">'+p[1]+'\u00d7</span><span class="cc-rname">'+r.name+'</span></div>';});h+='</div><div class="cc-ore">\u26cf '+oreT+' total ore</div></div>';});
+  h+='</div></div>';
+  // Modules grouped
+  h+='<div class="constr-section"><div class="constr-head"><span class="constr-badge" style="color:var(--blue);border-color:var(--blue-dim)">Modules</span><span class="constr-title">Station Modules</span><span class="constr-desc">Grid-based construction on stations</span></div><div class="constr-grid">';
+  var groups={};MODULES.forEach(function(m){if(!groups[m.group])groups[m.group]=[];groups[m.group].push(m);});
+  Object.keys(groups).forEach(function(g){h+='<div class="constr-subgroup">'+g+'</div>';groups[g].forEach(function(m){if(!m.recipe.length)return;var mc=m.modColor||'rgba(150,200,255,0.7)';var oreT=Math.round(m.recipe.reduce(function(s,p){return s+totalOre(p[0])*p[1];},0));h+='<div class="constr-card" onclick="addConstrToCart('+JSON.stringify(m.recipe)+')" style="--el-c:'+mc+'"><div style="position:absolute;top:0;left:0;width:100%;height:2px;background:'+mc+';opacity:0.5"></div><div class="cc-top"><span class="cc-name" style="color:'+mc+'">'+m.name+'</span></div><div class="cc-recipe">';m.recipe.forEach(function(p){var r=R[p[0]];h+='<div class="cc-row"><span class="cc-qty" style="color:'+rgb(r.color)+'">'+p[1]+'\u00d7</span><span class="cc-rname">'+r.name+'</span></div>';});h+='</div><div class="cc-ore">\u26cf '+oreT+' ore</div></div>';});});
+  h+='</div></div>';
+  wrap.innerHTML=h;
+}
 function addConstrToCart(recipe){recipe.forEach(function(p){if(!cart[p[0]])cart[p[0]]=0;cart[p[0]]+=p[1];});updateCartUI();updateCardMarkers();if(!document.getElementById('calcPanel').classList.contains('open'))toggleCalc();}
 renderConstruction();updateCartUI();window.addEventListener('resize',updatePositions);setTimeout(updatePositions,60);
 </script>
