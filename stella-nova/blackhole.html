@@ -4,8 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Black Hole // Stella Nova</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap');
   *{margin:0;padding:0;box-sizing:border-box}
   body{background:#000;overflow:hidden;font-family:'JetBrains Mono',monospace;color:#fff;touch-action:none}
   body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px);mix-blend-mode:multiply}
@@ -13,121 +15,172 @@
   canvas{position:fixed;top:0;left:0;width:100vw;height:100vh;display:block;cursor:crosshair}
 
   .hud{position:fixed;top:16px;left:20px;z-index:10;pointer-events:none}
-  .hud h1{font-family:'Cormorant Garamond',serif;font-size:11px;font-weight:300;letter-spacing:5px;color:rgba(255,255,255,0.18);text-transform:uppercase}
-  .hud .sub{font-size:8px;letter-spacing:2px;color:rgba(255,255,255,0.08);margin-top:3px;text-transform:uppercase}
-  .stats{position:fixed;top:82px;right:20px;z-index:10;pointer-events:none;font-size:9px;color:rgba(255,255,255,0.12);text-align:right;font-weight:300;line-height:1.6}
+  .hud h1{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:400;letter-spacing:5px;color:rgba(255,255,255,0.7);text-transform:uppercase}
+  .hud .sub{font-size:11px;letter-spacing:2.5px;color:rgba(255,255,255,0.45);margin-top:4px;text-transform:uppercase;font-weight:500}
+  .stats{position:fixed;bottom:86px;right:20px;z-index:10;pointer-events:none;font-size:11px;color:rgba(255,255,255,0.55);text-align:right;font-weight:400;line-height:1.7;letter-spacing:0.04em}
+
+  /* Equations panel — top center */
+  .eq-panel{
+    position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10;
+    background:rgba(0,0,0,0.72);backdrop-filter:blur(14px);
+    border:1px solid rgba(255,255,255,0.14);border-radius:10px;
+    padding:18px 44px 18px;
+    transition:padding 0.25s,gap 0.25s;pointer-events:none;
+    display:flex;flex-direction:column;gap:14px;align-items:center;
+    max-width:calc(100vw - 40px);
+  }
+  .eq-panel.hide{opacity:0}
+  .eq-content{display:flex;flex-direction:column;align-items:center;gap:14px;width:100%}
+  .eq-group{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .eq-title{
+    font-family:'JetBrains Mono',monospace;font-weight:600;
+    font-size:0.78rem;letter-spacing:0.26em;text-transform:uppercase;
+    color:rgba(150,200,255,0.88);
+  }
+  .eq-row{margin:0;text-align:center}
+  .eq-row .katex{font-size:1.75rem!important;color:#ffffff}
+  .eq-toggle{
+    position:absolute;top:8px;right:10px;
+    background:transparent;border:none;
+    color:rgba(255,255,255,0.55);font-family:'JetBrains Mono',monospace;
+    font-size:20px;line-height:1;cursor:pointer;font-weight:500;
+    width:28px;height:28px;border-radius:4px;
+    display:flex;align-items:center;justify-content:center;
+    pointer-events:auto;transition:all 0.15s;
+  }
+  .eq-toggle:hover{color:rgba(255,255,255,0.95);background:rgba(255,255,255,0.08)}
+  .eq-collapsed-label{display:none;font-family:'JetBrains Mono',monospace;font-weight:600;font-size:0.72rem;letter-spacing:0.26em;text-transform:uppercase;color:rgba(150,200,255,0.88)}
+  .eq-panel.collapsed{
+    padding:8px 18px;gap:10px;flex-direction:row;align-items:center;
+    cursor:pointer;pointer-events:auto;
+  }
+  .eq-panel.collapsed .eq-content{display:none}
+  .eq-panel.collapsed .eq-toggle{position:static;width:auto;height:auto;font-size:18px;color:rgba(150,200,255,0.85)}
+  .eq-panel.collapsed .eq-collapsed-label{display:block}
 
   /* GPU warning */
   .gpu-warn{
     position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:100;
-    background:rgba(0,0,0,0.82);backdrop-filter:blur(16px);
-    border:1px solid rgba(255,200,50,0.12);border-radius:8px;
-    padding:24px 32px;max-width:380px;text-align:center;
+    background:rgba(0,0,0,0.85);backdrop-filter:blur(16px);
+    border:1px solid rgba(255,200,50,0.18);border-radius:8px;
+    padding:26px 34px;max-width:420px;text-align:center;
     opacity:1;transition:opacity 0.8s;pointer-events:auto;
   }
   .gpu-warn.hide{opacity:0;pointer-events:none}
-  .gpu-warn h2{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:14px;letter-spacing:3px;color:rgba(255,200,50,0.5);text-transform:uppercase;margin-bottom:10px}
-  .gpu-warn p{font-size:10px;line-height:1.7;color:rgba(255,255,255,0.35);letter-spacing:0.04em}
+  .gpu-warn h2{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:18px;letter-spacing:3px;color:rgba(255,200,50,0.78);text-transform:uppercase;margin-bottom:12px}
+  .gpu-warn p{font-size:13px;line-height:1.7;color:rgba(255,255,255,0.7);letter-spacing:0.02em}
   .gpu-warn .dismiss{
-    margin-top:16px;background:transparent;border:1px solid rgba(255,255,255,0.12);
-    color:rgba(255,255,255,0.3);font-family:'JetBrains Mono',monospace;
-    font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
-    padding:6px 20px;cursor:pointer;border-radius:3px;transition:all 0.15s;
+    margin-top:18px;background:transparent;border:1px solid rgba(255,255,255,0.2);
+    color:rgba(255,255,255,0.65);font-family:'JetBrains Mono',monospace;
+    font-size:11px;letter-spacing:1.6px;text-transform:uppercase;font-weight:500;
+    padding:7px 22px;cursor:pointer;border-radius:3px;transition:all 0.15s;
   }
-  .gpu-warn .dismiss:hover{border-color:rgba(150,200,255,0.3);color:rgba(150,200,255,0.5)}
+  .gpu-warn .dismiss:hover{border-color:rgba(150,200,255,0.5);color:rgba(150,200,255,0.85)}
 
   /* Bottom controls */
   .ctrl-wrap{
     position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;
     display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;
-    background:rgba(0,0,0,0.55);backdrop-filter:blur(14px);
-    border:1px solid rgba(255,255,255,0.05);border-radius:10px;
-    padding:8px 14px;max-width:calc(100vw - 32px);
+    background:rgba(0,0,0,0.6);backdrop-filter:blur(14px);
+    border:1px solid rgba(255,255,255,0.07);border-radius:10px;
+    padding:9px 15px;max-width:calc(100vw - 32px);
   }
-  .ctrl-label{font-size:8px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:rgba(255,255,255,0.22);white-space:nowrap;user-select:none}
-  .ctrl-val{font-size:8px;font-weight:400;letter-spacing:1px;color:rgba(150,200,255,0.35);min-width:20px;text-align:right;user-select:none}
-  .ctrl-sep{width:1px;height:16px;background:rgba(255,255,255,0.06);flex-shrink:0}
-  input[type=range]{-webkit-appearance:none;appearance:none;width:90px;height:3px;border-radius:2px;background:rgba(255,255,255,0.07);outline:none;cursor:pointer}
-  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:#5a8cc0;border:2px solid rgba(0,0,0,0.4);box-shadow:0 0 8px rgba(90,140,192,0.2)}
-  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#5a8cc0;border:2px solid rgba(0,0,0,0.4)}
+  .ctrl-label{font-size:11px;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,0.65);white-space:nowrap;user-select:none}
+  .ctrl-val{font-size:11px;font-weight:500;letter-spacing:0.6px;color:rgba(150,200,255,0.78);min-width:24px;text-align:right;user-select:none}
+  .ctrl-sep{width:1px;height:18px;background:rgba(255,255,255,0.1);flex-shrink:0}
+  input[type=range]{-webkit-appearance:none;appearance:none;width:100px;height:3px;border-radius:2px;background:rgba(255,255,255,0.1);outline:none;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:#6aa0d8;border:2px solid rgba(0,0,0,0.4);box-shadow:0 0 8px rgba(106,160,216,0.35)}
+  input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:#6aa0d8;border:2px solid rgba(0,0,0,0.4)}
   .toggle-btn{
-    background:transparent;border:1px solid rgba(255,255,255,0.12);
-    color:rgba(255,255,255,0.25);font-family:'JetBrains Mono',monospace;
-    font-size:8px;letter-spacing:1px;text-transform:uppercase;
-    padding:5px 10px;cursor:pointer;white-space:nowrap;transition:all 0.15s;border-radius:3px;
+    background:transparent;border:1px solid rgba(255,255,255,0.18);
+    color:rgba(255,255,255,0.7);font-family:'JetBrains Mono',monospace;
+    font-size:11px;font-weight:500;letter-spacing:1.2px;text-transform:uppercase;
+    padding:6px 12px;cursor:pointer;white-space:nowrap;transition:all 0.15s;border-radius:3px;
     -webkit-tap-highlight-color:transparent;
   }
-  .toggle-btn:hover{border-color:rgba(150,200,255,0.3);color:rgba(150,200,255,0.5)}
-  .toggle-btn.on{border-color:rgba(100,200,100,0.3);color:rgba(100,200,100,0.5)}
-  .toggle-btn.off{border-color:rgba(255,80,80,0.2);color:rgba(255,80,80,0.35)}
-  .toggle-btn.mode{border-color:rgba(150,200,255,0.2);color:rgba(150,200,255,0.4)}
+  .toggle-btn:hover{border-color:rgba(150,200,255,0.5);color:rgba(150,200,255,0.85)}
+  .toggle-btn.on{border-color:rgba(100,200,100,0.5);color:rgba(120,220,120,0.85)}
+  .toggle-btn.off{border-color:rgba(255,80,80,0.35);color:rgba(255,120,120,0.7)}
+  .toggle-btn.mode{border-color:rgba(150,200,255,0.35);color:rgba(150,200,255,0.7)}
 
-  /* Background mode icons — top right */
-  .bg-bar{
-    position:fixed;top:16px;right:20px;z-index:10;
-    display:flex;gap:8px;
-  }
+  /* Background mode icons — bottom right */
+  .bg-bar{position:fixed;bottom:78px;right:20px;z-index:10;display:flex;gap:8px}
   .bg-icon{
-    width:56px;height:56px;
+    width:54px;height:54px;
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
-    background:rgba(0,0,0,0.5);backdrop-filter:blur(12px);
-    border:1px solid rgba(255,255,255,0.08);border-radius:8px;
+    background:rgba(0,0,0,0.55);backdrop-filter:blur(12px);
+    border:1px solid rgba(255,255,255,0.1);border-radius:8px;
     cursor:pointer;transition:all 0.18s;
-    -webkit-tap-highlight-color:transparent;
-    user-select:none;
+    -webkit-tap-highlight-color:transparent;user-select:none;
   }
-  .bg-icon:hover{border-color:rgba(150,200,255,0.25);background:rgba(0,0,0,0.6)}
-  .bg-icon.active{border-color:rgba(150,200,255,0.4);background:rgba(150,200,255,0.08)}
-  .bg-icon .ico{font-size:18px;line-height:1;color:rgba(255,255,255,0.25);transition:color 0.18s}
-  .bg-icon.active .ico{color:rgba(150,200,255,0.7)}
-  .bg-icon .lbl{font-family:'JetBrains Mono',monospace;font-size:7px;letter-spacing:0.8px;text-transform:uppercase;color:rgba(255,255,255,0.15);transition:color 0.18s}
-  .bg-icon.active .lbl{color:rgba(150,200,255,0.5)}
+  .bg-icon:hover{border-color:rgba(150,200,255,0.4);background:rgba(0,0,0,0.7)}
+  .bg-icon.active{border-color:rgba(150,200,255,0.55);background:rgba(150,200,255,0.1)}
+  .bg-icon .ico{font-size:18px;line-height:1;color:rgba(255,255,255,0.55);transition:color 0.18s}
+  .bg-icon.active .ico{color:rgba(150,200,255,0.92)}
+  .bg-icon .lbl{font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:0.9px;text-transform:uppercase;color:rgba(255,255,255,0.55);font-weight:500;transition:color 0.18s}
+  .bg-icon.active .lbl{color:rgba(150,200,255,0.85)}
 
-  /* Stars icon: warm gold active */
-  .bg-icon.bg-stars.active{border-color:rgba(255,200,100,0.35);background:rgba(255,200,100,0.06)}
-  .bg-icon.bg-stars.active .ico{color:rgba(255,210,120,0.7)}
-  .bg-icon.bg-stars.active .lbl{color:rgba(255,200,100,0.45)}
-  /* Grid icon: cool blue active */
-  .bg-icon.bg-grid.active{border-color:rgba(100,180,255,0.35);background:rgba(100,180,255,0.06)}
-  .bg-icon.bg-grid.active .ico{color:rgba(120,190,255,0.7)}
-  .bg-icon.bg-grid.active .lbl{color:rgba(100,180,255,0.45)}
-  /* UV icon: multicolor active */
-  .bg-icon.bg-uv.active{border-color:rgba(255,100,200,0.3);background:rgba(255,100,200,0.05)}
-  .bg-icon.bg-uv.active .ico{color:rgba(255,130,200,0.7)}
-  .bg-icon.bg-uv.active .lbl{color:rgba(255,100,200,0.45)}
-  /* Nebula icon: purple/pink active */
-  .bg-icon.bg-nebula.active{border-color:rgba(180,100,255,0.35);background:rgba(180,100,255,0.06)}
-  .bg-icon.bg-nebula.active .ico{color:rgba(200,130,255,0.7)}
-  .bg-icon.bg-nebula.active .lbl{color:rgba(180,100,255,0.45)}
-  /* Bullseye icon: warm orange active */
-  .bg-icon.bg-rings.active{border-color:rgba(255,160,60,0.35);background:rgba(255,160,60,0.06)}
-  .bg-icon.bg-rings.active .ico{color:rgba(255,180,80,0.7)}
-  .bg-icon.bg-rings.active .lbl{color:rgba(255,160,60,0.45)}
+  .bg-icon.bg-stars.active{border-color:rgba(255,200,100,0.55);background:rgba(255,200,100,0.1)}
+  .bg-icon.bg-stars.active .ico{color:rgba(255,210,120,0.92)}
+  .bg-icon.bg-stars.active .lbl{color:rgba(255,200,100,0.85)}
+  .bg-icon.bg-grid.active{border-color:rgba(100,180,255,0.55);background:rgba(100,180,255,0.1)}
+  .bg-icon.bg-grid.active .ico{color:rgba(120,190,255,0.92)}
+  .bg-icon.bg-grid.active .lbl{color:rgba(100,180,255,0.85)}
+  .bg-icon.bg-uv.active{border-color:rgba(255,100,200,0.5);background:rgba(255,100,200,0.08)}
+  .bg-icon.bg-uv.active .ico{color:rgba(255,130,200,0.92)}
+  .bg-icon.bg-uv.active .lbl{color:rgba(255,100,200,0.85)}
+  .bg-icon.bg-nebula.active{border-color:rgba(180,100,255,0.55);background:rgba(180,100,255,0.1)}
+  .bg-icon.bg-nebula.active .ico{color:rgba(200,130,255,0.92)}
+  .bg-icon.bg-nebula.active .lbl{color:rgba(180,100,255,0.85)}
+  .bg-icon.bg-rings.active{border-color:rgba(255,160,60,0.55);background:rgba(255,160,60,0.1)}
+  .bg-icon.bg-rings.active .ico{color:rgba(255,180,80,0.92)}
+  .bg-icon.bg-rings.active .lbl{color:rgba(255,160,60,0.85)}
 
-  .hint{position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:10;font-size:8px;color:rgba(255,255,255,0.08);letter-spacing:1.5px;pointer-events:none;text-transform:uppercase;transition:opacity 2s;white-space:nowrap}
+  .hint{position:fixed;bottom:160px;left:50%;transform:translateX(-50%);z-index:10;font-size:11px;color:rgba(255,255,255,0.32);letter-spacing:1.8px;pointer-events:none;text-transform:uppercase;transition:opacity 2s;white-space:nowrap;font-weight:500}
 
   .in-frame .hud{display:none!important}
   .in-frame .gpu-warn{top:40%}
 
+  /* Tablet */
+  @media(max-width:900px){
+    .eq-row .katex{font-size:1.2rem!important}
+    .eq-sub{font-size:10.5px}
+  }
+
   /* Mobile */
   @media(max-width:600px){
-    .ctrl-wrap{padding:6px 10px;gap:6px;bottom:10px}
-    .toggle-btn{font-size:7px;padding:4px 7px}
-    .ctrl-label{font-size:7px}
-    .ctrl-val{font-size:7px}
-    input[type=range]{width:70px}
-    .ctrl-sep{height:14px}
-    .hud h1{font-size:9px;letter-spacing:3px}
-    .hud .sub{font-size:7px}
-    .stats{font-size:8px;top:70px}
-    .hint{font-size:7px;bottom:52px}
-    .gpu-warn{padding:18px 22px;max-width:300px}
-    .gpu-warn h2{font-size:12px}
-    .gpu-warn p{font-size:9px}
-    .bg-bar{top:12px;right:12px;gap:6px}
-    .bg-icon{width:44px;height:44px;border-radius:6px}
-    .bg-icon .ico{font-size:14px}
-    .bg-icon .lbl{font-size:6px}
+    .ctrl-wrap{padding:7px 11px;gap:6px;bottom:10px}
+    .toggle-btn{font-size:10px;padding:5px 9px;letter-spacing:1px}
+    .ctrl-label{font-size:10px}
+    .ctrl-val{font-size:10px}
+    input[type=range]{width:78px}
+    .ctrl-sep{height:15px}
+    .gpu-warn{padding:20px 24px;max-width:320px}
+    .gpu-warn h2{font-size:16px}
+    .gpu-warn p{font-size:12px}
+    /* Hide HUD on mobile — equations take the top */
+    .hud{display:none}
+    /* Hide stats on mobile to keep canvas clear */
+    .stats{display:none}
+    /* Hint moves up out of the way of bg icons */
+    .hint{font-size:9px;bottom:140px;letter-spacing:1.4px}
+    /* Equations panel compact */
+    .eq-panel{
+      top:10px;padding:11px 38px 13px 14px;
+      max-width:calc(100vw - 16px);gap:10px;
+    }
+    .eq-content{gap:10px}
+    .eq-group{gap:4px}
+    .eq-title{font-size:0.62rem;letter-spacing:0.22em}
+    .eq-row .katex{font-size:1.0rem!important}
+    .eq-toggle{top:5px;right:6px;width:24px;height:24px;font-size:16px}
+    .eq-collapsed-label{font-size:0.62rem;letter-spacing:0.22em}
+    .eq-panel.collapsed{padding:6px 14px;gap:6px}
+    /* BG icons smaller, no labels, single row above controls */
+    .bg-bar{bottom:62px;right:8px;gap:5px}
+    .bg-icon{width:38px;height:38px;border-radius:6px;gap:0}
+    .bg-icon .ico{font-size:15px}
+    .bg-icon .lbl{display:none}
   }
 </style>
 </head>
@@ -143,6 +196,21 @@
 <div class="hud"><h1>Black Hole</h1><div class="sub">Schwarzschild Geodesic Ray Tracer</div></div>
 <div class="stats"><div id="fps"></div><div id="res"></div><div id="mode"></div></div>
 <div class="hint" id="hint">drag to orbit · scroll to zoom</div>
+
+<div class="eq-panel" id="eqPanel" style="display:none" onclick="if(this.classList.contains('collapsed'))toggleEqPanel()">
+  <button class="eq-toggle" id="eqToggleBtn" onclick="event.stopPropagation();toggleEqPanel()" aria-label="Toggle equations">−</button>
+  <div class="eq-content">
+    <div class="eq-group">
+      <div class="eq-title">Schwarzschild Metric</div>
+      <div class="eq-row" id="eq1"></div>
+    </div>
+    <div class="eq-group">
+      <div class="eq-title">Einstein Field Equations</div>
+      <div class="eq-row" id="eq2"></div>
+    </div>
+  </div>
+  <span class="eq-collapsed-label">Equations</span>
+</div>
 
 <div class="bg-bar" id="bgBar" style="display:none">
   <div class="bg-icon bg-stars active" id="bgStars" onclick="setBg(0)">
@@ -203,7 +271,6 @@ float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
 vec2 hash22(vec2 p){return vec2(hash21(p+vec2(17.0,59.4)),hash21(p+vec2(63.1,12.8)));}
 vec2 bgUV(vec3 d){return vec2(atan(d.z,d.x)/(2.0*PI)+0.5,acos(clamp(d.y,-1.0,1.0))/PI);}
 
-// ── Stars + Milky Way ──
 vec3 sampleStars(vec3 dir){
   vec2 skyUv=bgUV(dir);
   vec3 col=vec3(0.012,0.016,0.032);
@@ -240,7 +307,6 @@ vec3 sampleStars(vec3 dir){
   return clamp(col,vec3(0.0),vec3(1.0));
 }
 
-// ── Grid paper ──
 vec3 sampleGridBg(vec3 dir){
   vec2 uv=bgUV(dir);
   float lon=uv.x*360.0,lat=(1.0-uv.y)*180.0-90.0;
@@ -263,43 +329,34 @@ vec3 sampleGridBg(vec3 dir){
   return col;
 }
 
-// ── UV map ──
 vec3 sampleUVMap(vec3 dir){
   vec2 uv=bgUV(dir);
-  // Bold per-cell coloring — 6 columns × 3 rows of saturated hues
   float cu=floor(uv.x*6.0),cv=floor(uv.y*3.0);
   float hue=mod(cu+cv*2.0,6.0);
   vec3 cellCol;
-  if(hue<1.0)      cellCol=vec3(0.9,0.15,0.1);  // red
-  else if(hue<2.0) cellCol=vec3(0.1,0.8,0.2);   // green
-  else if(hue<3.0) cellCol=vec3(0.15,0.3,0.95);  // blue
-  else if(hue<4.0) cellCol=vec3(0.95,0.85,0.1);  // yellow
-  else if(hue<5.0) cellCol=vec3(0.85,0.15,0.85); // magenta
-  else             cellCol=vec3(0.1,0.85,0.9);   // cyan
-  // Fine checker within each cell — 36x18 total tiles
+  if(hue<1.0)      cellCol=vec3(0.9,0.15,0.1);
+  else if(hue<2.0) cellCol=vec3(0.1,0.8,0.2);
+  else if(hue<3.0) cellCol=vec3(0.15,0.3,0.95);
+  else if(hue<4.0) cellCol=vec3(0.95,0.85,0.1);
+  else if(hue<5.0) cellCol=vec3(0.85,0.15,0.85);
+  else             cellCol=vec3(0.1,0.85,0.9);
   float fineCheck=mod(floor(uv.x*36.0)+floor(uv.y*18.0),2.0);
   vec3 col=cellCol*(0.5+0.5*fineCheck);
-  // UV gradient tint blended on top
   col=mix(col, vec3(uv.x,uv.y,1.0-uv.x), 0.15);
-  // Grid lines — thick at cell boundaries, thin at tile boundaries
   float gu6=fract(uv.x*6.0),gv3=fract(uv.y*3.0);
   float thickLine=max(1.0-smoothstep(0.0,0.015,min(gu6,1.0-gu6)),1.0-smoothstep(0.0,0.015,min(gv3,1.0-gv3)));
   float gu36=fract(uv.x*36.0),gv18=fract(uv.y*18.0);
   float thinLine=max(1.0-smoothstep(0.0,0.02,min(gu36,1.0-gu36)),1.0-smoothstep(0.0,0.02,min(gv18,1.0-gv18)));
   col=mix(col,vec3(0.0),thinLine*0.3);
   col=mix(col,vec3(1.0),thickLine*0.7);
-  // Pole markers
   col+=vec3(1.0,1.0,1.0)*smoothstep(0.06,0.0,acos(clamp(dir.y,-1.0,1.0)))*3.0;
   col+=vec3(1.0,1.0,1.0)*smoothstep(0.06,0.0,acos(clamp(-dir.y,-1.0,1.0)))*3.0;
-  // Equator
   col+=vec3(1.0)*smoothstep(0.015,0.0,abs(dir.y))*0.6;
   return clamp(col,vec3(0.0),vec3(1.0));
 }
 
-// ── Nebula ──
 vec3 sampleNebula(vec3 dir){
   vec2 uv=bgUV(dir);
-  // FBM noise
   float n=0.0,amp=1.0,freq=3.0;
   vec2 p=uv*vec2(6.0,3.0);
   for(int i=0;i<6;i++){
@@ -312,7 +369,6 @@ vec3 sampleNebula(vec3 dir){
     amp*=0.5;freq*=2.1;
   }
   n=n/1.98;
-  // Color ramps — emission nebula palette
   float r1=smoothstep(0.25,0.65,n);
   float r2=smoothstep(0.4,0.8,n);
   float r3=smoothstep(0.55,0.9,n);
@@ -321,7 +377,6 @@ vec3 sampleNebula(vec3 dir){
   vec3 pink=vec3(0.7,0.15,0.3);
   vec3 teal=vec3(0.05,0.35,0.45);
   vec3 gold=vec3(0.9,0.7,0.2);
-  // Layer them
   float band1=sin(uv.y*8.0+uv.x*3.0+n*4.0)*0.5+0.5;
   float band2=cos(uv.x*5.0-uv.y*7.0+n*3.0)*0.5+0.5;
   vec3 col=deep;
@@ -329,7 +384,6 @@ vec3 sampleNebula(vec3 dir){
   col=mix(col,teal,r1*(1.0-band1)*0.7);
   col=mix(col,pink,r2*band2*0.8);
   col=mix(col,gold,r3*0.3);
-  // Bright embedded stars
   vec2 sUv=uv*vec2(800.0,400.0);
   vec2 sC=floor(sUv);
   float sd=hash21(sC+vec2(77.0,133.0));
@@ -340,23 +394,18 @@ vec3 sampleNebula(vec3 dir){
     float bright=2.0+hash21(sC+vec2(41.0,99.0))*3.0;
     col+=vec3(1.0,0.9,0.8)*glow*bright;
   }
-  // Dust lanes — dark absorption
   float dust=smoothstep(0.35,0.5,sin(uv.x*12.0+n*6.0)*0.5+0.5);
   col*=mix(1.0,0.3,dust*smoothstep(0.3,0.6,n));
   return clamp(col,vec3(0.0),vec3(1.0));
 }
 
-// ── Bullseye rings ──
 vec3 sampleRings(vec3 dir){
-  // Angular distance from a point behind the camera (anti-camera direction)
   float theta=acos(clamp(-dir.z,-1.0,1.0));
   float phi=atan(dir.y,dir.x);
-  // Concentric rings based on theta
   float ringFreq=28.0;
   float ring=theta*ringFreq;
   float band=floor(ring);
   float frac=fract(ring);
-  // Alternating saturated colors per ring
   float hue=mod(band,7.0);
   vec3 ringCol;
   if(hue<1.0)      ringCol=vec3(1.0,0.2,0.15);
@@ -366,20 +415,15 @@ vec3 sampleRings(vec3 dir){
   else if(hue<5.0) ringCol=vec3(0.15,0.5,1.0);
   else if(hue<6.0) ringCol=vec3(0.5,0.15,0.9);
   else             ringCol=vec3(0.9,0.15,0.6);
-  // Brightness modulation — lighter/darker alternation within color
   float alt=mod(band,2.0);
   vec3 col=ringCol*(0.6+0.4*alt);
-  // Radial spokes every 15 degrees
   float spoke=mod(phi*180.0/PI,15.0);
   float spokeLine=1.0-smoothstep(0.0,0.5,min(spoke,15.0-spoke));
   col=mix(col,vec3(0.0),spokeLine*0.25);
-  // Ring edge lines
   float edgeLine=1.0-smoothstep(0.0,0.08,min(frac,1.0-frac));
   col=mix(col,vec3(0.0),edgeLine*0.4);
-  // Center bullseye glow
   float centerDist=theta/PI;
   col+=vec3(1.0)*smoothstep(0.03,0.0,centerDist)*2.0;
-  // Anti-center marker
   col+=vec3(0.5,0.5,1.0)*smoothstep(0.03,0.0,abs(centerDist-1.0))*1.5;
   return clamp(col,vec3(0.0),vec3(1.0));
 }
@@ -392,13 +436,11 @@ vec3 sampleBg(vec3 dir){
   return sampleRings(dir);
 }
 
-// ── Disc ──
 vec3 sampleDisc(vec3 p){
   float rd=length(p.xz);float t=clamp((rd-u_discInner)/(u_discOuter-u_discInner),0.0,1.0);
   return clamp(mix(vec3(1.0,0.282,0.0),vec3(1.0,0.835,0.18),t)+vec3(0.11,0.024,0.0)*(1.0-t),vec3(0.0),vec3(1.0));
 }
 
-// ── Intersections ──
 struct Isect{bool hit;float dist;vec3 color;};
 Isect noHit(){return Isect(false,1e30,vec3(0.0));}
 Isect closest(Isect a,Isect b){if(!b.hit)return a;if(!a.hit||b.dist<a.dist)return b;return a;}
@@ -438,7 +480,6 @@ Isect traceRay(vec3 ro,vec3 rd,float bhR){
 Isect traceSeg(vec3 s0,vec3 s1,float bhR){
   return closest(closest(noHit(),segSphere(s0,s1,vec3(0.0),bhR,vec3(0.0))),segDisc(s0,s1));}
 
-// ── Geodesic ──
 struct OrbPlane{vec3 radial;vec3 tangent;};
 OrbPlane buildOrbPlane(vec3 lo,vec3 dir){
   vec3 rad=normalize(lo),nC=cross(lo,dir);
@@ -508,9 +549,6 @@ void main(){
 }
 `;
 
-// ═══════════════════════════════════════════════════════════════════
-//  SETUP
-// ═══════════════════════════════════════════════════════════════════
 const canvas=document.getElementById('c');
 const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.innerHTML='<h1 style="color:red;padding:2em">WebGL 2 required</h1>';throw '';}
@@ -530,9 +568,6 @@ const U={};
  'u_geodesicDl','u_maxSteps','u_escapeR','u_useGeodesic','u_useRK4','u_showDisc','u_bgMode'
 ].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
 
-// ═══════════════════════════════════════════════════════════════════
-//  STATE
-// ═══════════════════════════════════════════════════════════════════
 const CC=2.99792458e8,GR=6.67430e-11,RS=2.0*GR*4.3e6*1.989e30/(CC*CC);
 let camYaw=0,camPitch=0.15,camRadius=32*RS;
 const FOCAL=700;
@@ -572,19 +607,14 @@ window.setQuality=function(q){
   });
 };
 
-// ═══════════════════════════════════════════════════════════════════
-//  GPU WARNING
-// ═══════════════════════════════════════════════════════════════════
 window.dismissWarn=function(){
   document.getElementById('gpuWarn').classList.add('hide');
   document.getElementById('ctrlWrap').style.display='flex';
   document.getElementById('bgBar').style.display='flex';
+  document.getElementById('eqPanel').style.display='flex';
   warnDismissed=true;
 };
 
-// ═══════════════════════════════════════════════════════════════════
-//  INPUT
-// ═══════════════════════════════════════════════════════════════════
 let dragging=false,lmx=0,lmy=0;
 
 canvas.addEventListener('mousedown',function(e){dragging=true;lmx=e.clientX;lmy=e.clientY;pauseSpin();});
@@ -594,7 +624,6 @@ window.addEventListener('mousemove',function(e){if(!dragging)return;
   camPitch=Math.max(-Math.PI*0.49,Math.min(Math.PI*0.49,camPitch));
   lmx=e.clientX;lmy=e.clientY;});
 
-// Touch
 canvas.addEventListener('touchstart',function(e){
   e.preventDefault();pauseSpin();
   if(e.touches.length===1){dragging=true;lmx=e.touches[0].clientX;lmy=e.touches[0].clientY;}
@@ -645,10 +674,13 @@ window.setBg=function(m){
   document.getElementById('bgNebula').classList.toggle('active',m===3);
   document.getElementById('bgRings').classList.toggle('active',m===4);
 };
+window.toggleEqPanel=function(){
+  var panel=document.getElementById('eqPanel');
+  var btn=document.getElementById('eqToggleBtn');
+  panel.classList.toggle('collapsed');
+  btn.textContent=panel.classList.contains('collapsed')?'+':'−';
+};
 
-// ═══════════════════════════════════════════════════════════════════
-//  RESIZE
-// ═══════════════════════════════════════════════════════════════════
 function resize(){
   var dpr=Math.min(window.devicePixelRatio||1,2);
   var isMobile=window.innerWidth<600;
@@ -660,15 +692,11 @@ function resize(){
 }
 window.addEventListener('resize',resize);resize();
 
-// ═══════════════════════════════════════════════════════════════════
-//  RENDER
-// ═══════════════════════════════════════════════════════════════════
 var frames=0,lastT=performance.now();
 function frame(){
   var now=performance.now();frames++;
   if(now-lastT>500){document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';frames=0;lastT=now;}
 
-  // Auto-spin
   if(autoSpin) camYaw-=SPIN_SPEED;
 
   var cx=camRadius*Math.cos(camPitch)*Math.cos(camYaw),cy=camRadius*Math.sin(camPitch),cz=camRadius*Math.cos(camPitch)*Math.sin(camYaw);
@@ -693,6 +721,31 @@ function frame(){
 
 if(window.self!==window.top)document.body.classList.add('in-frame');
 frame();
+
+// ─── KaTeX equations ───
+// Colors: R (curvature) amber, g (metric) blue, T (stress-energy) pink, G lavender, c cyan
+function renderEqs(){
+  if(typeof katex==='undefined'){setTimeout(renderEqs,100);return;}
+  var R_C='#ffb464', G_C='#96c8ff', T_C='#e8a0c8', GR_C='#c8a8e8', C_C='#7ce0d0';
+
+  // Schwarzschild metric tensor — 4×4 matrix form
+  katex.render(
+    '\\textcolor{'+G_C+'}{g_{\\mu\\nu}} = \\begin{pmatrix}'
+    + '-\\!\\left(1 - \\tfrac{\\textcolor{'+R_C+'}{r_s}}{\\textcolor{'+G_C+'}{r}}\\right)\\!\\textcolor{'+C_C+'}{c}^2 & 0 & 0 & 0 \\\\'
+    + '0 & \\left(1 - \\tfrac{\\textcolor{'+R_C+'}{r_s}}{\\textcolor{'+G_C+'}{r}}\\right)^{\\!-1} & 0 & 0 \\\\'
+    + '0 & 0 & \\textcolor{'+G_C+'}{r}^2 & 0 \\\\'
+    + '0 & 0 & 0 & \\textcolor{'+G_C+'}{r}^2 \\sin^2\\theta'
+    + '\\end{pmatrix}',
+    document.getElementById('eq1'),{throwOnError:false}
+  );
+
+  // Einstein field equations — full tensor equation
+  katex.render(
+    '\\textcolor{'+R_C+'}{R_{\\mu\\nu}} - \\tfrac{1}{2}\\textcolor{'+G_C+'}{g_{\\mu\\nu}}\\textcolor{'+R_C+'}{R} = \\frac{8\\pi \\textcolor{'+GR_C+'}{G}}{\\textcolor{'+C_C+'}{c}^4}\\textcolor{'+T_C+'}{T_{\\mu\\nu}}',
+    document.getElementById('eq2'),{throwOnError:false}
+  );
+}
+renderEqs();
 </script>
 </body>
 </html>
