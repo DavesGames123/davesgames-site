@@ -123,13 +123,14 @@ canvas{display:block;position:fixed;inset:0;width:100%;height:100%;z-index:1}
 }
 .qp-sec-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
 
-/* QN steppers — BIG */
-.qp-qns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.qp-qn{display:flex;flex-direction:column;align-items:center;gap:9px;padding:8px 4px;background:rgba(150,200,255,0.02);border:1px solid var(--border);border-radius:2px}
+/* QN steppers — vertical row layout, always fits */
+.qp-qns{display:flex;flex-direction:column;gap:6px}
+.qp-qn{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;padding:8px 12px;background:rgba(150,200,255,0.02);border:1px solid var(--border);border-radius:4px}
 .qp-qn-sym{
   font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400;
-  font-size:1.7rem;color:var(--blue);line-height:1;
+  font-size:1.7rem;color:var(--blue);line-height:1;min-width:24px;text-align:center;
 }
+.qp-qn-val{min-width:36px;text-align:center}
 .qp-stepper{display:flex;align-items:center;gap:4px}
 .qp-step{
   width:34px;height:34px;background:transparent;border:1px solid var(--border-b);
@@ -530,7 +531,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
           <span class="qp-row-lbl">Count</span>
           <span class="qp-row-val" id="qp-n-val">100k</span>
         </div>
-        <input type="range" class="qp-range" id="qp-sl-n" min="1000" max="250000" value="100000" step="1000">
+        <input type="range" class="qp-range" id="qp-sl-n" min="3000" max="300000" value="100000" step="1000">
       </div>
 
       <!-- ═══ Effects ═══ -->
@@ -569,7 +570,7 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;bac
       </div>
 
       <div class="sec-label">Particle Appearance</div>
-      <div class="row"><span class="row-lbl">Count</span><input type="range" id="sl-N" min="1000" max="250000" value="100000" step="1000"><span class="val" id="vl-N">100k</span></div>
+      <div class="row"><span class="row-lbl">Count</span><input type="range" id="sl-N" min="3000" max="300000" value="100000" step="1000"><span class="val" id="vl-N">100k</span></div>
       <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-sz" min="0.005" max="0.25" value="0.02" step="0.005"><span class="val" id="vl-sz">0.020</span></div>
       <div class="row"><span class="row-lbl">Scale</span><input type="range" id="sl-ls" min="50" max="3000" value="800" step="25"><span class="val" id="vl-ls">800</span></div>
 
@@ -796,7 +797,7 @@ function sampleCDF(d,maxVal){const{cdf,M}=d;const u=Math.random();let lo=0,hi=M-
 const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||innerWidth<768;
 const S={
   n:3,l:1,m:1,
-  N:isMobile?3000:100000, scale:0.13,
+  N:100000, scale:0.13,
   colorMode:0, scaler:800,
   evolving:true, timeSpeed:1, simTime:0,
   viewMode:0, cutAxis:1, cutPos:0,
