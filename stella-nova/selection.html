@@ -4,329 +4,983 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Selection // Stella Nova</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --bg:#0a0d14;--bg2:#0e1320;--bg3:#121828;
   --surface:#1c2436;--surface2:#243040;
   --border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
   --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.04);
   --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.04);
-  --green:#64c864;--red:#e06050;--cyan:#4ad8e0;--orange:#ff8844;
+  --green:#64c864;--red:#ff5050;--cyan:#4ad8e0;--orange:#ff8844;--magenta:#c878d8;
   --text:#c8d0e0;--text-dim:#6878a0;--text-faint:#384060;--text-bright:#e8ecf4;
-  --scan:rgba(0,0,0,0.06);--sidebar-w:200px;
+  --scan:rgba(0,0,0,0.10);
 }
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;background:var(--bg);overflow:hidden}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
 body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
-body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.3))}
-.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:2px}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,0.45))}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.015) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.015) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.005) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.005) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:3px}
+
+#app{position:relative;z-index:10;width:100%;height:100%;display:flex;flex-direction:column}
+
+.topbar{display:flex;align-items:center;padding:0 16px;height:42px;background:rgba(10,13,20,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);flex-shrink:0;gap:16px}
+.sys-name{color:var(--blue);font-weight:700;font-size:14px;letter-spacing:0.3em;text-shadow:0 0 8px rgba(150,200,255,0.4)}
+.status-pill{display:flex;align-items:center;gap:6px;color:var(--green);font-size:11px;letter-spacing:0.12em;text-transform:uppercase;text-shadow:0 0 6px rgba(100,200,100,0.5)}
+.status-pill::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s ease infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.tb-readouts{margin-left:auto;display:flex;gap:22px;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);align-items:center}
+.tb-readouts strong{color:var(--blue-dim);font-weight:600}
 .in-frame .topbar{display:none!important}
-#app{position:relative;z-index:10;display:flex;flex-direction:column;height:100%}
-#shell{display:flex;flex:1;overflow:hidden}
-#sidebar{width:var(--sidebar-w);background:rgba(14,17,24,0.94);border-right:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;position:relative}
-#sidebar::after{content:'';position:absolute;top:0;right:0;bottom:0;width:1px;background:linear-gradient(180deg,var(--blue-dim),transparent 30%,transparent 70%,var(--blue-dim))}
-.side-head{padding:0.65rem 0.9rem;border-bottom:1px solid var(--border);font-size:0.42rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue-dim);display:flex;justify-content:space-between;align-items:center}
-.side-head .tag{color:var(--text-faint);font-size:0.34rem}
-.side-section{padding:4px 6px}
-.nav-btn{width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;background:transparent;border:1px solid transparent;color:var(--text-faint);font-size:0.44rem;letter-spacing:0.08em;font-family:'JetBrains Mono',monospace;cursor:pointer;transition:all .15s;text-align:left;margin-bottom:1px;border-radius:4px}
-.nav-btn:hover{color:var(--text);background:var(--blue-faint);border-color:var(--border)}
-.nav-btn.active{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
-.nav-btn .nav-icon{font-size:0.8rem;width:22px;text-align:center;flex-shrink:0}
-.nav-btn .nav-color{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-left:auto}
-.side-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.4rem;color:var(--blue-dim);opacity:0.12;text-align:center;padding:12px 0;margin-top:auto}
-#content{flex:1;overflow-y:auto;overflow-x:hidden;scroll-behavior:smooth}
-.page-hero{padding:2.5rem 3rem 1.5rem;max-width:960px;margin:0 auto}
-.ph-num{font-size:0.36rem;letter-spacing:0.3em;text-transform:uppercase;color:var(--yellow-dim);margin-bottom:0.3rem}
-.ph-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:2.4rem;color:var(--text-bright);line-height:1.15;margin-bottom:0.5rem}
-.ph-title em{font-style:italic;color:var(--yellow)}
-.ph-sub{font-size:0.55rem;color:var(--text-dim);line-height:1.8;max-width:640px;font-weight:300}
-.ph-line{width:100%;height:1px;background:linear-gradient(90deg,var(--blue-dim),transparent 60%);margin-top:1.2rem}
-.sec{max-width:960px;margin:0 auto;padding:0 3rem 3rem}
-.sec-hdr{display:flex;align-items:center;gap:14px;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
-.sec-ico{width:52px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;border:2px solid var(--sc,var(--blue-dim));background:rgba(0,0,0,0.3);flex-shrink:0;position:relative}
-.sec-ico::before{content:'';position:absolute;inset:0;border-radius:10px;box-shadow:inset 0 0 16px var(--sc,rgba(150,200,255,0.1));pointer-events:none}
-.sec-info{flex:1}
-.sec-name{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.4rem;color:var(--text-bright);line-height:1.2}
-.sec-sub{font-size:0.38rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--sc,var(--text-dim));margin-top:2px}
-.prose{font-size:0.54rem;color:var(--text-dim);line-height:2;font-weight:300;margin-bottom:1.2rem}
-.prose strong{color:var(--text);font-weight:500}
-.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:1rem 0}
-.action-card{background:var(--bg2);border:1px solid var(--border);padding:16px 18px;border-radius:6px;transition:all 0.2s;position:relative;overflow:hidden}
-.action-card:hover{border-color:color-mix(in srgb,var(--ac,var(--blue)) 40%,transparent);background:color-mix(in srgb,var(--ac,var(--blue)) 3%,var(--bg2))}
-.action-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:var(--ac,var(--blue));opacity:0.4;border-radius:3px 0 0 3px}
-.ac-title{font-size:0.5rem;font-weight:600;color:var(--text-bright);margin-bottom:6px}
-.ac-desc{font-size:0.42rem;color:var(--text-dim);line-height:1.7}
-.tip-box{border:1px solid var(--border-b);border-left:3px solid var(--yellow-dim);background:var(--yellow-faint);padding:14px 18px;margin:1rem 0;border-radius:0 6px 6px 0;display:flex;gap:12px;align-items:flex-start}
-.tip-box .tip-icon{font-size:1.2rem;flex-shrink:0;margin-top:-2px}
-.tip-box .tip-body{font-size:0.44rem;color:var(--text-dim);line-height:1.7}
-.tip-box .tip-body strong{color:var(--text)}
 
-/* ═══ ENTITY CARDS (interactive) ═══ */
-.entity-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin:1rem 0}
-.entity-card{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:14px;text-align:center;cursor:pointer;transition:all 0.25s;position:relative}
-.entity-card:hover{border-color:var(--ec,var(--blue-dim));background:color-mix(in srgb,var(--ec,var(--blue)) 5%,var(--bg2));transform:translateY(-2px);box-shadow:0 4px 16px color-mix(in srgb,var(--ec,var(--blue)) 15%,transparent)}
-.entity-card.picked{border-color:var(--ec)!important;box-shadow:0 0 16px color-mix(in srgb,var(--ec) 20%,transparent),inset 0 0 12px color-mix(in srgb,var(--ec) 6%,transparent)!important}
-.ec-icon{font-size:1.6rem;margin-bottom:6px}
-.ec-name{font-size:0.42rem;font-weight:600;color:var(--text-bright);margin-bottom:2px}
-.ec-hint{font-size:0.32rem;color:var(--text-faint);line-height:1.3}
-#entityDetail{max-width:960px;margin:0 auto 1rem;padding:0 3rem}
-.ed-panel{background:var(--bg2);border:1px solid var(--border-b);border-radius:8px;padding:20px;transition:border-color 0.3s;display:none}
-.ed-panel.show{display:block}
-.ed-name{font-family:'Cormorant Garamond',serif;font-size:1.2rem;color:var(--text-bright);margin-bottom:6px}
-.ed-desc{font-size:0.46rem;color:var(--text-dim);line-height:1.8}
-.ed-desc strong{color:var(--text);font-weight:500}
+.scn-bar{display:flex;align-items:stretch;padding:8px 10px;height:74px;background:rgba(10,13,20,0.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px;overflow-x:auto;overflow-y:hidden}
+.scn-card{display:flex;align-items:center;gap:11px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:inherit;padding:8px 14px;cursor:pointer;border-radius:5px;transition:all 0.18s;white-space:nowrap;flex-shrink:0;min-width:130px}
+.scn-card:hover{border-color:color-mix(in srgb,var(--ac,var(--blue)) 50%,transparent);color:var(--text)}
+.scn-card.active{border-color:var(--ac,var(--yellow));background:color-mix(in srgb,var(--ac,var(--yellow)) 6%,transparent);color:var(--ac,var(--yellow));box-shadow:0 0 14px color-mix(in srgb,var(--ac,var(--yellow)) 15%,transparent),inset 0 0 12px color-mix(in srgb,var(--ac,var(--yellow)) 4%,transparent)}
+.scn-card .scn-ico{font-size:22px;line-height:1;color:var(--ac,var(--blue))}
+.scn-card.active .scn-ico{text-shadow:0 0 10px var(--ac)}
+.scn-card .scn-meta{display:flex;flex-direction:column;align-items:flex-start;gap:1px}
+.scn-card .scn-num{font-size:9px;letter-spacing:0.18em;color:var(--text-faint);text-transform:uppercase}
+.scn-card .scn-name{font-size:13px;font-weight:600;letter-spacing:0.04em}
+.scn-card.active .scn-num{color:color-mix(in srgb,var(--ac,var(--yellow)) 65%,var(--text-faint))}
 
-/* ═══ SCENARIO DEMOS (canvas) ═══ */
-.demo-wrap{background:var(--bg2);border:1px solid var(--border-b);border-radius:10px;padding:0;margin:1.2rem 0;overflow:hidden;position:relative}
-.demo-canvas{width:100%;height:260px;display:block;cursor:crosshair}
-.demo-hint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:0.34rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);background:rgba(14,17,24,0.8);padding:4px 12px;border-radius:4px;pointer-events:none}
+.ctrl-bar{display:flex;align-items:center;padding:0 12px;height:40px;background:rgba(10,13,20,0.85);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px;overflow-x:auto}
+.ctrl-label{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-faint);white-space:nowrap}
+.ctrl-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:inherit;font-size:11.5px;letter-spacing:0.08em;text-transform:uppercase;padding:5px 12px;cursor:pointer;white-space:nowrap;transition:all 0.15s;border-radius:3px}
+.ctrl-btn:hover{border-color:var(--blue);color:var(--blue)}
+.ctrl-btn.active{color:var(--yellow);border-color:var(--yellow);background:rgba(255,200,50,0.06);box-shadow:0 0 10px rgba(255,200,50,0.2)}
+.ctrl-btn.warn{color:var(--red);border-color:rgba(255,80,80,0.3)}
+.ctrl-btn.warn:hover{border-color:var(--red);box-shadow:0 0 10px rgba(255,80,80,0.25)}
+.ctrl-sep{width:1px;height:22px;background:var(--border-b);flex-shrink:0}
+.ctrl-info{margin-left:auto;font-size:11px;color:var(--text-faint);letter-spacing:0.06em;white-space:nowrap}
 
-@media(max-width:900px){#sidebar{width:170px}.sec,.page-hero,#entityDetail{padding-left:1.5rem;padding-right:1.5rem}.action-grid{grid-template-columns:1fr}.entity-grid{grid-template-columns:repeat(auto-fill,minmax(110px,1fr))}}
+.main{flex:1;display:flex;overflow:hidden;min-height:0}
+.canvas-area{flex:1;position:relative;overflow:hidden;background:radial-gradient(ellipse at center,#0c1018 0%,#070a10 100%);min-width:0}
+#cv{display:block;cursor:crosshair;touch-action:none}
+
+.hint-bar{position:absolute;top:12px;left:50%;transform:translateX(-50%);max-width:calc(100% - 24px);background:rgba(10,13,20,0.94);border:1px solid var(--border-b);border-left:3px solid var(--ac,var(--yellow));padding:9px 16px;font-size:12.5px;color:var(--text);backdrop-filter:blur(8px);border-radius:0 4px 4px 0;letter-spacing:0.02em;line-height:1.5;pointer-events:none;text-align:center;z-index:5;box-shadow:0 0 16px color-mix(in srgb,var(--ac,var(--yellow)) 18%,transparent)}
+.hint-bar strong{color:var(--ac,var(--yellow));font-weight:600;text-shadow:0 0 8px var(--ac,var(--yellow))}
+.hint-bar code{font-family:inherit;background:rgba(150,200,255,0.10);padding:1px 6px;border-radius:2px;color:var(--blue);font-size:11.5px}
+
+.sel-bar{position:absolute;bottom:12px;left:12px;background:rgba(10,13,20,0.94);border:1px solid var(--border-b);padding:7px 14px;font-size:12px;color:var(--text-dim);backdrop-filter:blur(8px);border-radius:4px;letter-spacing:0.04em;pointer-events:none;z-index:5}
+.sel-bar strong{color:var(--blue);font-weight:600;text-shadow:0 0 6px currentColor}
+.sel-bar.has-sel{border-color:color-mix(in srgb,var(--ac,var(--yellow)) 40%,var(--border-b));color:var(--text);box-shadow:0 0 14px color-mix(in srgb,var(--ac,var(--yellow)) 18%,transparent)}
+
+.toast{position:absolute;top:62px;left:50%;transform:translateX(-50%) translateY(-6px);background:rgba(255,80,80,0.95);color:#fff;padding:7px 16px;font-size:12px;letter-spacing:0.06em;border-radius:3px;backdrop-filter:blur(8px);pointer-events:none;z-index:6;opacity:0;transition:all 0.35s ease;font-weight:600;box-shadow:0 0 18px rgba(255,80,80,0.45)}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.info{background:rgba(74,144,208,0.95);box-shadow:0 0 18px rgba(74,144,208,0.45)}
+.toast.win{background:rgba(100,200,100,0.95);box-shadow:0 0 18px rgba(100,200,100,0.45)}
+
+.sidebar-r{width:280px;min-width:280px;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;background:rgba(10,13,20,0.55);flex-shrink:0}
+.panel{padding:12px 16px;border-bottom:1px solid var(--border)}
+.panel-title{font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--text-faint);margin-bottom:8px;font-weight:700;display:flex;align-items:center;gap:8px}
+.panel-title::before{content:'';width:6px;height:6px;background:var(--ac,var(--blue));border-radius:50%;flex-shrink:0;box-shadow:0 0 8px var(--ac,var(--blue))}
+.scn-headline{font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:300;color:var(--text-bright);line-height:1.1;margin-bottom:8px}
+.scn-headline em{font-style:italic;color:var(--ac,var(--yellow));text-shadow:0 0 12px var(--ac,var(--yellow))}
+.scn-desc{font-size:12.5px;color:var(--text-dim);line-height:1.7}
+.scn-desc strong{color:var(--text)}
+.notes-list{list-style:none;padding:0;margin:0}
+.notes-list li{font-size:12px;color:var(--text-dim);line-height:1.65;padding:5px 0 5px 16px;position:relative}
+.notes-list li::before{content:'→';position:absolute;left:0;color:var(--ac,var(--blue-dim));font-weight:600}
+.notes-list code{font-family:inherit;background:rgba(150,200,255,0.10);padding:0 5px;border-radius:2px;color:var(--blue);font-size:11px}
+.legend-row{display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--text-dim);padding:3px 0}
+.lpip{width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.lpip canvas{display:block}
+.legend-row .lpri{margin-left:auto;font-family:inherit;font-size:10.5px;color:var(--text-faint);letter-spacing:0.06em}
+
+.fab{display:none;position:fixed;bottom:14px;right:14px;z-index:35;padding:11px 16px;background:rgba(10,13,20,0.96);border:1px solid var(--border-b);color:var(--text);font-family:inherit;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;font-weight:700;border-radius:4px;backdrop-filter:blur(8px);cursor:pointer;transition:all 0.18s}
+.fab:active{transform:scale(0.96)}
+.fab.open{color:var(--yellow);border-color:var(--yellow);background:rgba(255,200,50,0.1);box-shadow:0 0 12px rgba(255,200,50,0.3)}
+.drawer-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:150;opacity:0;pointer-events:none;transition:opacity 0.2s}
+.drawer-backdrop.show{opacity:1;pointer-events:auto;display:block}
+
+@media(max-width:980px){
+  .sidebar-r{position:fixed;top:156px;bottom:0;right:0;width:88vw;max-width:340px;z-index:200;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);box-shadow:0 0 32px rgba(0,0,0,0.65);background:rgba(8,11,18,0.98);transform:translateX(105%)}
+  .sidebar-r.open{transform:translateX(0)}
+  .canvas-area{width:100%}
+  .fab{display:block}
+  .tb-readouts{display:none}
+}
+@media(max-width:600px){
+  .topbar{padding:0 10px;height:38px}
+  .sys-name{font-size:12px;letter-spacing:0.18em}
+  .status-pill{font-size:10px}
+  .scn-bar{height:64px;padding:6px 8px;gap:6px}
+  .scn-card{padding:6px 11px;min-width:110px;gap:9px}
+  .scn-card .scn-ico{font-size:18px}
+  .scn-card .scn-num{font-size:8px}
+  .scn-card .scn-name{font-size:11.5px}
+  .ctrl-bar{height:36px;padding:0 8px;gap:5px}
+  .ctrl-btn{padding:4px 9px;font-size:10.5px}
+  .ctrl-label{font-size:10px}
+  .ctrl-info{display:none}
+  .sidebar-r{top:138px}
+  .hint-bar{font-size:11.5px;padding:7px 13px;border-left-width:2px}
+  .sel-bar{font-size:10.5px;padding:5px 10px}
+  .fab{padding:9px 13px;font-size:10.5px;bottom:12px;right:12px}
+}
 </style>
 </head>
 <body>
 <div class="grid-bg"></div>
-<div id="app"><div id="shell">
-<nav id="sidebar">
-  <div class="side-head">Selection<span class="tag">GUIDE</span></div>
-  <div class="side-section">
-    <button class="nav-btn active" data-sec="basics" onclick="goTo(this,'basics')"><span class="nav-icon">◎</span>Basics<span class="nav-color" style="background:var(--blue)"></span></button>
-    <button class="nav-btn" data-sec="entities" onclick="goTo(this,'entities')"><span class="nav-icon">◉</span>What You Can Select<span class="nav-color" style="background:var(--green)"></span></button>
-    <button class="nav-btn" data-sec="multi" onclick="goTo(this,'multi')"><span class="nav-icon">▭</span>Multi-Select<span class="nav-color" style="background:var(--cyan)"></span></button>
-    <button class="nav-btn" data-sec="smart" onclick="goTo(this,'smart')"><span class="nav-icon">🧠</span>Smart Behaviors<span class="nav-color" style="background:var(--yellow)"></span></button>
-    <button class="nav-btn" data-sec="scenarios" onclick="goTo(this,'scenarios')"><span class="nav-icon">🎮</span>Try It<span class="nav-color" style="background:var(--orange)"></span></button>
+<div id="app">
+  <div class="topbar">
+    <span class="sys-name">SELECTION</span>
+    <div class="status-pill">LIVE PRACTICE</div>
+    <div class="tb-readouts">
+      <span>SCENARIO <strong id="hud-scn">01/06</strong></span>
+      <span>ENTITIES <strong id="hud-ents">0</strong></span>
+      <span>SELECTED <strong id="hud-sel">0</strong></span>
+      <span>MOD <strong id="hud-mod">OFF</strong></span>
+    </div>
   </div>
-  <div class="side-barcode">SEL-GUIDE</div>
-</nav>
-<div id="content">
 
-<div class="page-hero">
-  <div class="ph-num">Player's Manual // 004</div>
-  <h1 class="ph-title">Selection <em>System</em></h1>
-  <p class="ph-sub">How to click, drag, and wrangle every type of object in the game. The selection system is smart — it knows what you probably meant to click, and it handles the edge cases so you don't have to think about them.</p>
-  <div class="ph-line"></div>
-</div>
+  <div class="scn-bar" id="scnBar"></div>
 
-<!-- ═══ BASICS ═══ -->
-<div class="sec" id="sec-basics">
-  <div class="sec-hdr" style="--sc:var(--blue)"><div class="sec-ico">◎</div><div class="sec-info"><div class="sec-name">The Basics</div><div class="sec-sub">Click, drag, and deselect</div></div></div>
-  <div class="prose">Selection in Stella Nova works like you'd expect from any strategy game, with a few tricks up its sleeve. <strong>Left-click</strong> to select, <strong>drag</strong> to box-select, and <strong>click empty space</strong> to deselect. The camera automatically follows whatever you select.</div>
-  <div class="action-grid">
-    <div class="action-card" style="--ac:var(--blue)"><div class="ac-title">🖱️ Left Click</div><div class="ac-desc">Click any entity to select it. The camera smoothly pans to follow it. If multiple things overlap, the game picks the most important one — your ships always take priority over background objects.</div></div>
-    <div class="action-card" style="--ac:var(--cyan)"><div class="ac-title">▭ Box Select</div><div class="ac-desc">Click and drag to draw a selection rectangle. Everything of the same type inside the box gets selected. When mixed types are in the box, the game picks one category — usually the most useful.</div></div>
-    <div class="action-card" style="--ac:var(--green)"><div class="ac-title">⊕ Add to Selection</div><div class="ac-desc">Hold <strong>⌘ Cmd</strong> or <strong>Ctrl</strong> while clicking to add an entity to your current selection. Click an already-selected entity with modifier held to remove just that one.</div></div>
-    <div class="action-card" style="--ac:var(--red)"><div class="ac-title">✕ Deselect</div><div class="ac-desc">Click empty space to deselect everything. Or press <strong>R</strong> to clear your selection instantly. Holding the modifier key while clicking empty space preserves your existing selection.</div></div>
+  <div class="ctrl-bar">
+    <span class="ctrl-label">MOD</span>
+    <button class="ctrl-btn" id="modBtn" onclick="toggleMod()">⌘ HOLD</button>
+    <div class="ctrl-sep"></div>
+    <button class="ctrl-btn warn" onclick="resetScenario()">↻ RESET</button>
+    <button class="ctrl-btn" id="zoomOut" style="display:none" onclick="adjustZoom(-1)">− ZOOM</button>
+    <button class="ctrl-btn" id="zoomIn" style="display:none" onclick="adjustZoom(1)">+ ZOOM</button>
+    <span class="ctrl-info">DESKTOP: HOLD <strong style="color:var(--text-dim)">⌘ / CTRL</strong> · MOBILE: TAP MOD</span>
   </div>
-</div>
 
-<!-- ═══ ENTITIES ═══ -->
-<div class="sec" id="sec-entities">
-  <div class="sec-hdr" style="--sc:var(--green)"><div class="sec-ico">◉</div><div class="sec-info"><div class="sec-name">What You Can Select</div><div class="sec-sub">Click any card to learn more</div></div></div>
-  <div class="prose">Everything in the game is selectable. When things overlap, the system uses a priority order to pick the right one — <strong>your ships always win</strong> over background objects when you click.</div>
-
-  <div class="entity-grid" id="entityGrid">
-    <div class="entity-card" style="--ec:#4a90d0" onclick="showEntity(this,0)"><div class="ec-icon">🚀</div><div class="ec-name">Your Ships</div><div class="ec-hint">Highest click priority</div></div>
-    <div class="entity-card" style="--ec:#e06050" onclick="showEntity(this,1)"><div class="ec-icon">👾</div><div class="ec-name">Enemy Ships</div><div class="ec-hint">Visitors & rival factions</div></div>
-    <div class="entity-card" style="--ec:#64c864" onclick="showEntity(this,2)"><div class="ec-icon">🪐</div><div class="ec-name">Planets</div><div class="ec-hint">Top box-select priority</div></div>
-    <div class="entity-card" style="--ec:#c8a01e" onclick="showEntity(this,3)"><div class="ec-icon">🏗️</div><div class="ec-name">Stations</div><div class="ec-hint">Selects as whole or by module</div></div>
-    <div class="entity-card" style="--ec:#ff8844" onclick="showEntity(this,4)"><div class="ec-icon">🧱</div><div class="ec-name">Station Modules</div><div class="ec-hint">Zoom in to reveal</div></div>
-    <div class="entity-card" style="--ec:#8c5ac8" onclick="showEntity(this,5)"><div class="ec-icon">☄️</div><div class="ec-name">Asteroids</div><div class="ec-hint">Multi-selectable</div></div>
-    <div class="entity-card" style="--ec:#4ad8e0" onclick="showEntity(this,6)"><div class="ec-icon">💎</div><div class="ec-name">Resources</div><div class="ec-hint">Discovered vs. hidden</div></div>
-    <div class="entity-card" style="--ec:#50b050" onclick="showEntity(this,7)"><div class="ec-icon">🐛</div><div class="ec-name">Creatures</div><div class="ec-hint">Space fauna</div></div>
-    <div class="entity-card" style="--ec:#96c8ff" onclick="showEntity(this,8)"><div class="ec-icon">📐</div><div class="ec-name">Blueprints</div><div class="ec-hint">Unbuilt structures</div></div>
-    <div class="entity-card" style="--ec:#ffc832" onclick="showEntity(this,9)"><div class="ec-icon">⭐</div><div class="ec-name">Stars</div><div class="ec-hint">Lowest priority</div></div>
-  </div>
-</div>
-
-<div id="entityDetail">
-  <div class="ed-panel" id="edPanel"></div>
-</div>
-
-<!-- ═══ MULTI-SELECT ═══ -->
-<div class="sec" id="sec-multi">
-  <div class="sec-hdr" style="--sc:var(--cyan)"><div class="sec-ico">▭</div><div class="sec-info"><div class="sec-name">Multi-Selection</div><div class="sec-sub">Box dragging, modifier keys, and category locking</div></div></div>
-  <div class="prose">You can select multiple entities of the <strong>same type</strong> at once. The game prevents confusing mixed selections — you can't accidentally select ships and asteroids in the same group.</div>
-  <div class="action-grid">
-    <div class="action-card" style="--ac:var(--cyan)"><div class="ac-title">📦 Box Select</div><div class="ac-desc">Drag a rectangle. If the box captures ships <em>and</em> asteroids, only the highest-priority type is selected. Ships win in a box over most things — but planets actually have the highest box priority, since dragging over a solar system should grab planets, not the hundred ships orbiting them.</div></div>
-    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">⌘ Modifier + Click</div><div class="ac-desc">Holding the modifier and clicking adds individual entities one by one. Click a selected entity again to remove just that one. Only works within the same category — you can't modifier-click a planet into a group of ships.</div></div>
-    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">⌘ Modifier + Box</div><div class="ac-desc">Holding modifier while box-selecting adds the new group to your existing selection — as long as the categories match. Great for selecting scattered ships across different orbits.</div></div>
-    <div class="action-card" style="--ac:var(--green)"><div class="ac-title">🔒 Category Lock</div><div class="ac-desc">Your selection is always a single type. Clicking a different type replaces everything, even with the modifier held. This keeps your selection clean and predictable.</div></div>
-  </div>
-  <div class="tip-box"><div class="tip-icon">💡</div><div class="tip-body"><strong>Empty space is safe:</strong> Clicking or box-selecting empty space with the modifier key held does <em>nothing</em> — your current selection is preserved. Without modifier, it clears everything.</div></div>
-</div>
-
-<!-- ═══ SMART BEHAVIORS ═══ -->
-<div class="sec" id="sec-smart">
-  <div class="sec-hdr" style="--sc:var(--yellow)"><div class="sec-ico">🧠</div><div class="sec-info"><div class="sec-name">Smart Behaviors</div><div class="sec-sub">The system adapts to how you're playing</div></div></div>
-  <div class="prose">The selection system adjusts to your zoom level, resolves overlapping entities intelligently, and uses different priority rules for clicking vs. box-selecting.</div>
-  <div class="action-grid">
-    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">🔍 Zoom-Adaptive Modules</div><div class="ac-desc">When you're zoomed out, clicking a station selects the whole thing. Zoom in past a threshold and individual modules become clickable — each one highlighted separately. There's a comfortable buffer zone between the two modes so you won't flicker back and forth while scrolling.</div></div>
-    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">🎯 Click vs. Box Priority</div><div class="ac-desc">Clicking and box-selecting use <strong>different priority orders</strong>. Clicking favors ships (you usually want to click a specific ship). Box-selecting favors planets (dragging a big box over a system should grab planets, not tiny ships). The game picks the right behavior automatically.</div></div>
-    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">📍 Overlap Resolution</div><div class="ac-desc">When a ship is sitting on a planet, clicking hits the ship — even though the planet is bigger. The system checks all overlapping entities, sorts by priority, then picks the closest one at the best priority level.</div></div>
-    <div class="action-card" style="--ac:var(--yellow)"><div class="ac-title">📸 Camera Auto-Follow</div><div class="ac-desc">Selecting any entity smoothly animates the camera to track it. For orbiting objects, the camera follows the entity's actual position — so it doesn't land on empty space where the planet <em>was</em> a moment ago.</div></div>
-  </div>
-  <div class="tip-box"><div class="tip-icon">🔍</div><div class="tip-body"><strong>Station module zoom thresholds:</strong> Modules appear when you zoom in fairly close, and they don't disappear until you zoom out <em>much</em> further. This asymmetry is intentional — once you're working with modules, slight zoom adjustments won't yank them away from you.</div></div>
-</div>
-
-<!-- ═══ TRY IT ═══ -->
-<div class="sec" id="sec-scenarios">
-  <div class="sec-hdr" style="--sc:var(--orange)"><div class="sec-ico">🎮</div><div class="sec-info"><div class="sec-name">Try It Out</div><div class="sec-sub">Interactive demo — click and drag to practice</div></div></div>
-  <div class="prose">Practice selection in this mini sandbox. Click entities to select them, drag to box-select, and hold <strong>Ctrl/⌘</strong> to add to your selection. The priority system and category locking work just like the real game.</div>
-  <div class="demo-wrap">
-    <canvas class="demo-canvas" id="demoCanvas"></canvas>
-    <div class="demo-hint">Click to select · Drag to box select · Ctrl/⌘ to add</div>
+  <div class="main">
+    <div class="canvas-area">
+      <canvas id="cv"></canvas>
+      <div class="hint-bar" id="hint" style="--ac:var(--yellow)"></div>
+      <div class="sel-bar" id="sel">Nothing selected</div>
+      <div class="toast" id="toast"></div>
+    </div>
+    <aside class="sidebar-r" id="sideR">
+      <div class="panel">
+        <div class="scn-headline" id="scnHead"></div>
+        <div class="scn-desc" id="scnDesc"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">How it works</div>
+        <ul class="notes-list" id="scnNotes"></ul>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Click priority</div>
+        <div id="legendC"></div>
+      </div>
+      <div class="panel" style="border-bottom:none">
+        <div class="panel-title">Box priority</div>
+        <div id="legendB"></div>
+      </div>
+    </aside>
   </div>
 </div>
 
-<div style="height:4rem"></div>
-</div></div></div>
+<button class="fab" id="fab" onclick="toggleDrawer()">Info ≡</button>
+<div class="drawer-backdrop" id="bd" onclick="closeDrawer()"></div>
 
 <script>
-/* ═══ NAV ═══ */
-function goTo(btn,id){document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');const el=document.getElementById('sec-'+id);if(el)document.getElementById('content').scrollTo({top:el.offsetTop-20,behavior:'smooth'})}
-const secs=['basics','entities','multi','smart','scenarios'];
-const obs=new IntersectionObserver(entries=>{entries.forEach(e=>{if(e.isIntersecting){const id=e.target.id.replace('sec-','');document.querySelectorAll('.nav-btn').forEach(b=>b.classList.toggle('active',b.getAttribute('data-sec')===id))}})},{root:document.getElementById('content'),threshold:0.25});
-secs.forEach(id=>{const el=document.getElementById('sec-'+id);if(el)obs.observe(el)});
+/* ════════════════════════════════════════════════════════════════════
+   ENTITY TYPES — vector-drawn, CRT-glow
+   ──────────────────────────────────────────────────────────────────── */
+const TYPES = {
+  ship:     {label:'Ship',     shape:'ship',     color:'#4ad8e0', r:13, clickPri:0, boxPri:1, drift:true,  spin:0.004},
+  enemy:    {label:'Enemy',    shape:'enemy',    color:'#ff5050', r:13, clickPri:1, boxPri:2, drift:true,  spin:0.018},
+  planet:   {label:'Planet',   shape:'planet',   color:'#64c864', r:32, clickPri:2, boxPri:0, drift:false, spin:0.002},
+  station:  {label:'Station',  shape:'station',  color:'#ffc832', r:24, clickPri:3, boxPri:3, drift:false, spin:0},
+  module:   {label:'Module',   shape:'module',   color:'#ff8844', r:10, clickPri:4, boxPri:4, drift:false, spin:0},
+  asteroid: {label:'Asteroid', shape:'asteroid', color:'#c8b8a0', r:14, clickPri:5, boxPri:5, drift:true,  spin:0.020},
+  star:     {label:'Star',     shape:'star',     color:'#ffe060', r:28, clickPri:9, boxPri:9, drift:false, spin:0},
+};
 
-/* ═══ ENTITY DETAIL ═══ */
-const entities=[
-  {name:'Your Ships',c:'#4a90d0',desc:'Your ships have the <strong>highest click priority</strong> — even sitting on top of a planet, clicking always grabs the ship first. You can multi-select your ships with box-drag or modifier-click. Right-click with ships selected to issue formation move commands.'},
-  {name:'Enemy Ships',c:'#e06050',desc:'Visitors and ships from rival factions. They have the second-highest click priority. You can select them to inspect their status, but you can\'t give them orders. Multi-selectable with box and modifier.'},
-  {name:'Planets',c:'#64c864',desc:'Planets have the <strong>highest box-select priority</strong> — drag a box over a solar system and you\'ll grab planets, not the ships orbiting them. Click priority is third, behind both ship types. Multi-selectable.'},
-  {name:'Stations',c:'#c8a01e',desc:'When zoomed out, clicking a station selects the whole structure. When zoomed in, you can click individual modules instead. The station core is always selectable at grid position (0,0). Selecting a station also reveals its crew management panel.'},
-  {name:'Station Modules',c:'#ff8844',desc:'<strong>Only visible when zoomed in</strong> close to a station. Each module becomes its own clickable entity — smelteries, greenhouses, storage cells, docking bays. The zoom threshold has a comfortable buffer: modules appear at close zoom and don\'t vanish until you zoom out much further.'},
-  {name:'Asteroids',c:'#8c5ac8',desc:'Mineable asteroids scattered through the system. Hidden asteroids (not yet discovered) are excluded from selection entirely. Multi-selectable with box and modifier. Fixed hit radius regardless of zoom.'},
-  {name:'Resources',c:'#4ad8e0',desc:'Ore deposits and resource nodes. Discovered resources have a larger click target than hidden ones. Their click radius scales with zoom, getting easier to click as you zoom in. Multi-selectable.'},
-  {name:'Creatures',c:'#50b050',desc:'Space fauna drifting through the cosmos. Click priority is between resources and automata. Their hit radius scales with their visual display size. Multi-selectable with box and modifier.'},
-  {name:'Blueprints',c:'#96c8ff',desc:'Unbuilt construction orders placed by the player. Relatively low click priority since they\'re usually near other things you\'d want to click first. <strong>Not multi-selectable</strong> — you can only work with one blueprint at a time.'},
-  {name:'Stars',c:'#ffc832',desc:'The central star of each system. <strong>Lowest priority</strong> for both clicking and box-selecting — you\'ll only select a star if there\'s literally nothing else under your cursor. Makes sense: you\'d never want to accidentally select the star when reaching for a planet.'}
+const MODULE_LIB = [
+  {sub:'foundry',   letter:'F', color:'#ff8844'},
+  {sub:'assembler', letter:'A', color:'#ffc832'},
+  {sub:'lab',       letter:'L', color:'#c878d8'},
+  {sub:'fuel',      letter:'P', color:'#ff5050'},
+  {sub:'crew',      letter:'C', color:'#4ad8e0'},
+  {sub:'green',     letter:'G', color:'#64c864'},
+  {sub:'medical',   letter:'M', color:'#e06080'},
+  {sub:'dock',      letter:'D', color:'#4a90d0'},
 ];
-function showEntity(card,i){
-  document.querySelectorAll('.entity-card').forEach(c=>c.classList.remove('picked'));
-  card.classList.add('picked');
-  const e=entities[i],p=document.getElementById('edPanel');
-  p.innerHTML='<div class="ed-name" style="color:'+e.c+'">'+e.name+'</div><div class="ed-desc">'+e.desc+'</div>';
-  p.style.borderColor=e.c;p.classList.add('show');
+
+/* ════════════════════════════════════════════════════════════════════
+   SCENARIOS
+   ──────────────────────────────────────────────────────────────────── */
+const SCENARIOS = [
+  {
+    id:'basics', name:'Click & Box', icon:'◎', accent:'#96c8ff',
+    head:'Click & <em>Box</em>',
+    desc:'Click one entity to select it. Drag a rectangle to select many at once.',
+    notes:[
+      'Left-click any entity to select it.',
+      'Click and drag in empty space to draw a box.',
+      'Click empty space to clear.'
+    ],
+    hint:'Click any ship · then <strong>drag a box</strong> around several asteroids',
+    setup(){
+      spawn('ship',   10, {region:'wide'});
+      spawn('enemy',  4,  {region:'wide'});
+      spawn('asteroid', 90, {region:'wide'});
+      spawn('planet', 2,  {region:'wide'});
+      spawn('star',   3,  {region:'corners'});
+    }
+  },
+  {
+    id:'priority', name:'Priority', icon:'◉', accent:'#64c864',
+    head:'Overlap <em>Priority</em>',
+    desc:'When entities sit on top of each other, the system picks the one you probably meant.',
+    notes:[
+      'A ship on a planet → clicking gets the <code>ship</code>.',
+      'You\'d rarely want the bigger background object.',
+      'Same applies to ships on stations, asteroids on planets, etc.'
+    ],
+    hint:'The ship is sitting <strong>on top of</strong> the planet · click it · <strong>the ship wins</strong>',
+    setup(){
+      const pairs = [[W*0.30,H*0.40],[W*0.62,H*0.55],[W*0.45,H*0.75]];
+      pairs.forEach(([px,py])=>{
+        ents.push(make('planet', px, py));
+        ents.push(make('ship', px-5+Math.random()*8, py-5+Math.random()*8));
+      });
+      ents.push(make('station', W*0.80, H*0.30));
+      ents.push(make('ship', W*0.80+4, H*0.30-3));
+      spawn('asteroid', 70, {region:'wide'});
+      spawn('star', 2, {region:'corners'});
+    }
+  },
+  {
+    id:'clickbox', name:'Click vs Box', icon:'⊟', accent:'#ff8844',
+    head:'Click <em>vs</em> Box',
+    desc:'Clicking and box-dragging use different priorities. Clicking favors small useful things. Boxing favors the big important ones.',
+    notes:[
+      'Click in a busy area → you get a <code>ship</code>.',
+      'Box over the same area → you get the <code>planet</code> instead.',
+      'Boxing over a system should grab planets, not the 50 ships orbiting them.'
+    ],
+    hint:'<strong>Click a ship</strong> in the cluster · then <strong>box-drag</strong> over the planet · different result',
+    setup(){
+      const px = W*0.40, py = H*0.55;
+      ents.push(make('planet', px, py));
+      for(let i=0;i<12;i++){
+        const ang = (i/12)*Math.PI*2 + Math.random()*0.3;
+        const rad = 65 + Math.random()*45;
+        const s = make('ship', px+Math.cos(ang)*rad, py+Math.sin(ang)*rad);
+        s.vx = -Math.sin(ang)*0.4;
+        s.vy = Math.cos(ang)*0.4;
+        s.dir = ang + Math.PI/2;
+        ents.push(s);
+      }
+      ents.push(make('planet', W*0.78, H*0.30));
+      spawn('asteroid', 80, {region:'wide'});
+      spawn('enemy', 4, {region:'edges'});
+    }
+  },
+  {
+    id:'modifier', name:'Modifier', icon:'⌘', accent:'#ffc832',
+    head:'Hold <em>Modifier</em>',
+    desc:'Hold Cmd / Ctrl while clicking to add to your selection. Click an already-selected entity to remove just that one.',
+    notes:[
+      'Hold <code>⌘</code> or <code>Ctrl</code> + click → adds to selection.',
+      'Click a selected entity (with modifier) → removes it.',
+      'Mobile: tap the <strong>⌘ HOLD</strong> button to toggle modifier mode.'
+    ],
+    hint:'Click a ship · then <code>⌘-click</code> more · then <code>⌘-click</code> a selected one to remove it',
+    setup(){
+      spawn('ship', 14, {region:'wide'});
+      spawn('enemy', 4, {region:'wide'});
+      spawn('asteroid', 40, {region:'wide'});
+    }
+  },
+  {
+    id:'lock', name:'Category Lock', icon:'⊠', accent:'#c878d8',
+    head:'Category <em>Lock</em>',
+    desc:'You can never mix types in one selection. Selecting a new category replaces the old one — even with modifier held.',
+    notes:[
+      'Selection is always single-category.',
+      'Click a different type → previous selection drops out.',
+      '<code>⌘-click</code> empty space → nothing happens (safe).'
+    ],
+    hint:'Select some ships · then click an asteroid · <strong>the ships are released</strong>',
+    setup(){
+      spawn('ship', 10, {region:'left'});
+      spawn('asteroid', 50, {region:'right'});
+      spawn('enemy', 3, {region:'wide'});
+      spawn('planet', 2, {region:'wide'});
+    }
+  },
+  {
+    id:'modules', name:'Zoom & Modules', icon:'◇', accent:'#4ad8e0',
+    head:'Zoom &amp; <em>Modules</em>',
+    desc:'Zoom in past the threshold and a station decomposes into its individual modules. Each one becomes clickable.',
+    notes:[
+      'Low zoom → station is one entity.',
+      'High zoom → individual modules become clickable.',
+      'Threshold has hysteresis — no flickering at the boundary.'
+    ],
+    hint:'Use <code>+ ZOOM</code> · station breaks into modules at high zoom · click any module',
+    enableZoom:true,
+    setup(){
+      state.stationCenter = {x:W*0.50, y:H*0.55};
+      rebuildStation();
+      spawn('ship', 6, {region:'edges'});
+      spawn('enemy', 2, {region:'edges'});
+      spawn('asteroid', 70, {region:'wide'});
+    }
+  }
+];
+
+/* ════════════════════════════════════════════════════════════════════
+   STATE
+   ──────────────────────────────────────────────────────────────────── */
+const state = {
+  scnIdx: 0, mod: false, kbMod: false,
+  zoom: 1.0, zoomVisible: false,
+  drag: null, stationCenter: null,
+  t: 0,
+};
+let ents = [];
+let W=0, H=0;
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const dpr = window.devicePixelRatio||1;
+
+/* ════════════════════════════════════════════════════════════════════
+   ENTITY CONSTRUCTION
+   ──────────────────────────────────────────────────────────────────── */
+function make(type, x, y){
+  const t = TYPES[type];
+  const e = {
+    type, x, y, sel:false,
+    vx: t.drift ? (Math.random()-0.5)*0.3 : 0,
+    vy: t.drift ? (Math.random()-0.5)*0.3 : 0,
+    dir: Math.random()*Math.PI*2,
+    spin: t.spin ? (Math.random()-0.5)*2*t.spin : 0,
+  };
+  if(type==='asteroid'){
+    const n = 8 + Math.floor(Math.random()*4);
+    e.verts = [];
+    for(let i=0;i<n;i++){
+      const a = (i/n)*Math.PI*2;
+      const r = 0.7 + Math.random()*0.4;
+      e.verts.push({a,r});
+    }
+  }
+  if(type==='star'){
+    e.twinkle = Math.random()*Math.PI*2;
+  }
+  return e;
 }
 
-/* ═══ INTERACTIVE DEMO ═══ */
-(function(){
-  const c=document.getElementById('demoCanvas');if(!c)return;
-  const ctx=c.getContext('2d');const dpr=window.devicePixelRatio||1;
-  let W,H;
-  function resize(){const r=c.getBoundingClientRect();W=r.width;H=r.height;c.width=W*dpr;c.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
-  resize();window.addEventListener('resize',resize);
-
-  // Entities
-  const types=[
-    {name:'Ship',icon:'🚀',pri:0,c:'#4a90d0',r:12},
-    {name:'Planet',icon:'🪐',pri:2,c:'#64c864',r:28},
-    {name:'Asteroid',icon:'☄️',pri:5,c:'#8c5ac8',r:10},
-    {name:'Station',icon:'🏗️',pri:3,c:'#c8a01e',r:18}
-  ];
-  let ents=[];
-  function populate(){
-    ents=[];
-    for(let i=0;i<4;i++) ents.push({x:100+Math.random()*(W-200),y:60+Math.random()*(H-120),type:0,sel:false,vx:(Math.random()-0.5)*0.3,vy:(Math.random()-0.5)*0.3});
-    for(let i=0;i<2;i++) ents.push({x:150+Math.random()*(W-300),y:80+Math.random()*(H-160),type:1,sel:false,vx:0,vy:0});
-    for(let i=0;i<5;i++) ents.push({x:80+Math.random()*(W-160),y:50+Math.random()*(H-100),type:2,sel:false,vx:(Math.random()-0.5)*0.15,vy:(Math.random()-0.5)*0.15});
-    for(let i=0;i<2;i++) ents.push({x:200+Math.random()*(W-400),y:80+Math.random()*(H-160),type:3,sel:false,vx:0,vy:0});
+function spawn(type, n, opts){
+  opts = opts||{};
+  for(let i=0;i<n;i++){
+    const t = TYPES[type];
+    let x, y, tries=0;
+    do{
+      if(opts.region==='left')        x = W*0.06 + Math.random()*W*0.32;
+      else if(opts.region==='right')  x = W*0.58 + Math.random()*W*0.36;
+      else if(opts.region==='edges')  x = Math.random()<0.5 ? W*0.06 + Math.random()*W*0.20 : W*0.74 + Math.random()*W*0.20;
+      else if(opts.region==='corners'){const cx=Math.random()<0.5?0.10:0.85; x = W*cx + Math.random()*W*0.05;}
+      else                            x = W*0.05 + Math.random()*W*0.90;
+      if(opts.region==='corners')     y = (Math.random()<0.5?0.12:0.82)*H + Math.random()*H*0.06;
+      else                            y = H*0.15 + Math.random()*H*0.72;
+      tries++;
+    } while(tooClose(x,y,type==='asteroid'?t.r-2:t.r+8,type) && tries<40);
+    ents.push(make(type, x, y));
   }
-  populate();
+}
 
-  let drag=null,mouse={x:0,y:0},modHeld=false;
-
-  c.addEventListener('mousedown',e=>{
-    const r=c.getBoundingClientRect();
-    const mx=e.clientX-r.left,my=e.clientY-r.top;
-    modHeld=e.ctrlKey||e.metaKey;
-    drag={sx:mx,sy:my,cx:mx,cy:my,active:false};
+function tooClose(x,y,r,fromType){
+  return ents.some(e=>{
+    const tr = TYPES[e.type].r;
+    // Asteroid-vs-asteroid allow tighter packing (just don't visually overlap)
+    if(fromType==='asteroid' && e.type==='asteroid') return Math.hypot(e.x-x, e.y-y) < r+tr-6;
+    return Math.hypot(e.x-x, e.y-y) < r+tr;
   });
-  c.addEventListener('mousemove',e=>{
-    const r=c.getBoundingClientRect();
-    mouse.x=e.clientX-r.left;mouse.y=e.clientY-r.top;
-    if(drag){drag.cx=mouse.x;drag.cy=mouse.y;const d=Math.hypot(drag.cx-drag.sx,drag.cy-drag.sy);if(d>8)drag.active=true}
-  });
-  c.addEventListener('mouseup',e=>{
-    modHeld=e.ctrlKey||e.metaKey;
-    if(!drag)return;
-    if(drag.active){
-      // Box select
-      const x1=Math.min(drag.sx,drag.cx),x2=Math.max(drag.sx,drag.cx);
-      const y1=Math.min(drag.sy,drag.cy),y2=Math.max(drag.sy,drag.cy);
-      let hits=ents.filter(en=>{const t=types[en.type];return en.x+t.r>x1&&en.x-t.r<x2&&en.y+t.r>y1&&en.y-t.r<y2});
-      if(hits.length){
-        hits.sort((a,b)=>types[a.type].pri-types[b.type].pri);
-        const best=types[hits[0].type].pri;
-        hits=hits.filter(h=>types[h.type].pri===best);
-        if(!modHeld)ents.forEach(en=>en.sel=false);
-        hits.forEach(h=>h.sel=true);
-      } else if(!modHeld) ents.forEach(en=>en.sel=false);
-    } else {
-      // Click
-      let hits=ents.filter(en=>{const t=types[en.type];return Math.hypot(en.x-drag.sx,en.y-drag.sy)<=t.r*1.5});
-      if(hits.length){
-        hits.sort((a,b)=>types[a.type].pri-types[b.type].pri);
-        const pick=hits[0];
-        if(modHeld){pick.sel=!pick.sel}else{ents.forEach(en=>en.sel=false);pick.sel=true}
-      } else if(!modHeld) ents.forEach(en=>en.sel=false);
-    }
-    drag=null;
-  });
-  c.addEventListener('mouseleave',()=>{drag=null});
+}
 
-  function draw(){
-    ctx.clearRect(0,0,W,H);
-    // Background grid
-    ctx.strokeStyle='rgba(150,200,255,0.04)';ctx.lineWidth=1;
-    for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
-    for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
-
-    // Update positions (gentle drift)
-    ents.forEach(en=>{en.x+=en.vx;en.y+=en.vy;if(en.x<20||en.x>W-20)en.vx*=-1;if(en.y<20||en.y>H-20)en.vy*=-1});
-
-    // Draw entities
-    ents.forEach(en=>{
-      const t=types[en.type];
-      if(en.sel){
-        ctx.strokeStyle=t.c;ctx.lineWidth=2;ctx.setLineDash([4,3]);
-        ctx.beginPath();ctx.arc(en.x,en.y,t.r+6,0,Math.PI*2);ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle=t.c+'18';ctx.beginPath();ctx.arc(en.x,en.y,t.r+6,0,Math.PI*2);ctx.fill();
-      }
-      ctx.font=(t.r*1.2)+'px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
-      ctx.fillText(t.icon,en.x,en.y);
-      ctx.font='8px JetBrains Mono';ctx.fillStyle=en.sel?t.c:'#384060';
-      ctx.fillText(t.name,en.x,en.y+t.r+10);
+function rebuildStation(){
+  if(!state.stationCenter) return;
+  ents = ents.filter(e => e.type!=='station' && e.type!=='module');
+  const c = state.stationCenter;
+  const z = state.zoom;
+  const wasVisible = state.zoomVisible;
+  state.zoomVisible = wasVisible ? z>=1.6 : z>=2.2;
+  if(state.zoomVisible){
+    const sp = 22 * z * 0.55;
+    MODULE_LIB.forEach((m,i)=>{
+      const col = i%4, row = (i/4)|0;
+      const e = make('module', c.x + (col-1.5)*sp, c.y + (row-0.5)*sp);
+      e.subType = m.sub;
+      e.subLetter = m.letter;
+      e.subColor = m.color;
+      ents.push(e);
     });
-
-    // Drag rectangle
-    if(drag&&drag.active){
-      ctx.strokeStyle='rgba(150,200,255,0.5)';ctx.lineWidth=1;ctx.setLineDash([6,4]);
-      ctx.strokeRect(drag.sx,drag.sy,drag.cx-drag.sx,drag.cy-drag.sy);
-      ctx.setLineDash([]);
-      ctx.fillStyle='rgba(150,200,255,0.04)';
-      ctx.fillRect(drag.sx,drag.sy,drag.cx-drag.sx,drag.cy-drag.sy);
-    }
-
-    // Selection count
-    const sel=ents.filter(e=>e.sel);
-    if(sel.length){
-      const t=types[sel[0].type];
-      ctx.fillStyle=t.c;ctx.font='bold 10px JetBrains Mono';ctx.textAlign='right';
-      ctx.fillText(sel.length+' '+t.name+(sel.length>1?'s':'')+' selected',W-16,H-12);
-    }
-
-    requestAnimationFrame(draw);
+  } else {
+    const e = make('station', c.x, c.y);
+    e.scale = Math.max(0.7, z*0.85);
+    ents.push(e);
   }
-  draw();
-})();
+}
 
-/* ═══ IFRAME ═══ */
-try{if(window.self!==window.top)document.body.classList.add('in-frame')}catch(e){document.body.classList.add('in-frame')}
+/* ════════════════════════════════════════════════════════════════════
+   SCENARIO LIFECYCLE
+   ──────────────────────────────────────────────────────────────────── */
+function loadScenario(i){
+  state.scnIdx = i;
+  state.drag = null;
+  state.zoom = 1.0;
+  state.zoomVisible = false;
+  ents = [];
+  const s = SCENARIOS[i];
+  s.setup();
+  document.getElementById('hud-scn').textContent = String(i+1).padStart(2,'0')+'/'+String(SCENARIOS.length).padStart(2,'0');
+  document.querySelectorAll('.scn-card').forEach((b,k)=>b.classList.toggle('active',k===i));
+  const hint = document.getElementById('hint');
+  hint.innerHTML = s.hint;
+  hint.style.setProperty('--ac', s.accent);
+  document.getElementById('scnHead').innerHTML = s.head;
+  document.getElementById('scnHead').style.setProperty('--ac', s.accent);
+  document.getElementById('scnDesc').textContent = s.desc;
+  const notes = document.getElementById('scnNotes');
+  notes.innerHTML = '';
+  notes.style.setProperty('--ac', s.accent);
+  s.notes.forEach(n=>{ const li=document.createElement('li'); li.innerHTML=n; notes.appendChild(li); });
+  document.getElementById('sel').style.setProperty('--ac', s.accent);
+  const showZoom = !!s.enableZoom;
+  document.getElementById('zoomIn').style.display = showZoom?'':'none';
+  document.getElementById('zoomOut').style.display = showZoom?'':'none';
+  updateSelReadout();
+}
+
+function resetScenario(){ loadScenario(state.scnIdx); }
+
+function adjustZoom(dir){
+  state.zoom = Math.max(0.5, Math.min(3.2, state.zoom + dir*0.4));
+  rebuildStation();
+  flash('Zoom: '+state.zoom.toFixed(1)+'×', 'info');
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   SELECTION LOGIC
+   ──────────────────────────────────────────────────────────────────── */
+function modActive(e){ return state.mod || (e && (e.ctrlKey||e.metaKey)); }
+
+function hitTest(mx,my){
+  return ents.filter(en=>{
+    const t = TYPES[en.type];
+    const r = t.r * (en.scale||1) + 5;
+    return Math.hypot(en.x-mx, en.y-my) <= r;
+  });
+}
+
+function boxOverlap(en, x1, y1, x2, y2){
+  const t = TYPES[en.type];
+  const r = t.r * (en.scale||1);
+  return en.x+r>x1 && en.x-r<x2 && en.y+r>y1 && en.y-r<y2;
+}
+
+function doClick(mx, my, mod){
+  const hits = hitTest(mx, my);
+  if(!hits.length){
+    if(!mod){
+      const had = ents.some(e=>e.sel);
+      ents.forEach(e=>e.sel=false);
+      if(had) flash('Selection cleared');
+    } else { flash('Selection preserved', 'info'); }
+    return;
+  }
+  hits.sort((a,b)=>TYPES[a.type].clickPri - TYPES[b.type].clickPri);
+  const pick = hits[0];
+  if(mod){
+    const cur = ents.find(e=>e.sel);
+    if(cur && cur.type !== pick.type){
+      ents.forEach(e=>e.sel=false);
+      pick.sel = true;
+      flash('Category lock — switched to '+TYPES[pick.type].label,'info');
+    } else { pick.sel = !pick.sel; }
+  } else {
+    ents.forEach(e=>e.sel=false);
+    pick.sel = true;
+  }
+}
+
+function doBox(x1,y1,x2,y2,mod){
+  const inside = ents.filter(en=>boxOverlap(en,x1,y1,x2,y2));
+  if(!inside.length){
+    if(!mod){ const had=ents.some(e=>e.sel); ents.forEach(e=>e.sel=false); if(had) flash('Selection cleared'); }
+    else flash('Selection preserved', 'info');
+    return;
+  }
+  inside.sort((a,b)=>TYPES[a.type].boxPri - TYPES[b.type].boxPri);
+  const bestType = inside[0].type;
+  const winners = inside.filter(e=>e.type===bestType);
+  if(mod){
+    const cur = ents.find(e=>e.sel);
+    if(cur && cur.type !== bestType){
+      ents.forEach(e=>e.sel=false);
+      winners.forEach(e=>e.sel=true);
+      flash('Category lock — switched to '+TYPES[bestType].label,'info');
+    } else { winners.forEach(e=>e.sel=true); }
+  } else {
+    ents.forEach(e=>e.sel=false);
+    winners.forEach(e=>e.sel=true);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   INPUT
+   ──────────────────────────────────────────────────────────────────── */
+function getPt(e){
+  const r = cv.getBoundingClientRect();
+  if(e.touches && e.touches.length){
+    return {x:e.touches[0].clientX-r.left, y:e.touches[0].clientY-r.top};
+  }
+  return {x:e.clientX-r.left, y:e.clientY-r.top};
+}
+
+function onDown(e){
+  e.preventDefault();
+  const p = getPt(e);
+  state.drag = {sx:p.x, sy:p.y, cx:p.x, cy:p.y, active:false, mod:modActive(e)};
+}
+function onMove(e){
+  if(!state.drag) return;
+  e.preventDefault();
+  const p = getPt(e);
+  state.drag.cx = p.x; state.drag.cy = p.y;
+  if(Math.hypot(p.x-state.drag.sx, p.y-state.drag.sy) > 6) state.drag.active = true;
+}
+function onUp(e){
+  if(!state.drag) return;
+  e.preventDefault();
+  let endX=state.drag.cx, endY=state.drag.cy;
+  if(e.changedTouches && e.changedTouches[0]){
+    const r = cv.getBoundingClientRect();
+    endX = e.changedTouches[0].clientX-r.left;
+    endY = e.changedTouches[0].clientY-r.top;
+  }
+  const mod = state.drag.mod || modActive(e);
+  if(state.drag.active){
+    const x1=Math.min(state.drag.sx, endX), x2=Math.max(state.drag.sx, endX);
+    const y1=Math.min(state.drag.sy, endY), y2=Math.max(state.drag.sy, endY);
+    doBox(x1,y1,x2,y2,mod);
+  } else {
+    doClick(state.drag.sx, state.drag.sy, mod);
+  }
+  state.drag = null;
+  updateSelReadout();
+}
+
+cv.addEventListener('mousedown', onDown);
+cv.addEventListener('mousemove', onMove);
+cv.addEventListener('mouseup', onUp);
+cv.addEventListener('mouseleave', ()=>{ state.drag = null; });
+cv.addEventListener('touchstart', onDown, {passive:false});
+cv.addEventListener('touchmove', onMove, {passive:false});
+cv.addEventListener('touchend', onUp, {passive:false});
+
+window.addEventListener('keydown', e=>{
+  if(e.key==='Control'||e.key==='Meta'){
+    state.kbMod = true;
+    document.getElementById('hud-mod').textContent = state.mod||state.kbMod ? 'ON' : 'OFF';
+  }
+  if(e.key==='r'||e.key==='R'){ resetScenario(); }
+});
+window.addEventListener('keyup', e=>{
+  if(e.key==='Control'||e.key==='Meta'){
+    state.kbMod = false;
+    document.getElementById('hud-mod').textContent = state.mod||state.kbMod ? 'ON' : 'OFF';
+  }
+});
+
+function toggleMod(){
+  state.mod = !state.mod;
+  document.getElementById('modBtn').classList.toggle('active', state.mod);
+  document.getElementById('hud-mod').textContent = state.mod||state.kbMod ? 'ON' : 'OFF';
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   READOUTS
+   ──────────────────────────────────────────────────────────────────── */
+function updateSelReadout(){
+  const sel = ents.filter(e=>e.sel);
+  document.getElementById('hud-sel').textContent = sel.length;
+  document.getElementById('hud-ents').textContent = ents.length;
+  const bar = document.getElementById('sel');
+  if(!sel.length){
+    bar.textContent = 'Nothing selected';
+    bar.classList.remove('has-sel');
+  } else {
+    const t = TYPES[sel[0].type];
+    bar.classList.add('has-sel');
+    bar.innerHTML = '<strong style="color:'+t.color+'">'+sel.length+'</strong> '+t.label+(sel.length>1?'s':'')+' selected';
+  }
+}
+
+let toastTimer;
+function flash(msg, kind){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (kind?(' '+kind):'');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>t.classList.remove('show'), 1600);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   RENDERING — CRT glow vectors
+   ──────────────────────────────────────────────────────────────────── */
+function resize(){
+  const r = document.querySelector('.canvas-area').getBoundingClientRect();
+  W = r.width; H = r.height;
+  cv.width = W*dpr; cv.height = H*dpr;
+  cv.style.width = W+'px'; cv.style.height = H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+}
+
+function drawGrid(){
+  ctx.strokeStyle = 'rgba(80,130,200,0.045)';
+  ctx.lineWidth = 1;
+  const g = 50;
+  for(let x=0;x<W;x+=g){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<H;y+=g){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+}
+
+function glow(color, sel, baseBlur){
+  ctx.shadowBlur = sel ? baseBlur*1.8 : baseBlur;
+  ctx.shadowColor = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = sel ? 2 : 1.4;
+}
+
+function drawSelHalo(x,y,r,color){
+  ctx.save();
+  ctx.shadowBlur = 14; ctx.shadowColor = color;
+  ctx.strokeStyle = color; ctx.lineWidth = 1;
+  ctx.setLineDash([5,4]);
+  ctx.beginPath(); ctx.arc(x,y,r+9,0,Math.PI*2); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function shape_ship(r){
+  ctx.beginPath();
+  ctx.moveTo(r, 0);
+  ctx.lineTo(-r*0.8, -r*0.75);
+  ctx.lineTo(-r*0.45, 0);
+  ctx.lineTo(-r*0.8, r*0.75);
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function shape_enemy(r){
+  ctx.beginPath();
+  ctx.moveTo(r*1.05, 0);
+  ctx.lineTo(0, -r*0.6);
+  ctx.lineTo(-r*1.05, 0);
+  ctx.lineTo(0, r*0.6);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(-r*0.5, 0); ctx.lineTo(r*0.5, 0);
+  ctx.stroke();
+}
+
+function shape_planet(r){
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-r,0); ctx.lineTo(r,0); ctx.stroke();
+  for(let i=1;i<3;i++){
+    const y = (i/3)*r;
+    const xs = Math.sqrt(r*r - y*y);
+    ctx.beginPath(); ctx.moveTo(-xs,y); ctx.lineTo(xs,y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-xs,-y); ctx.lineTo(xs,-y); ctx.stroke();
+  }
+}
+
+function shape_station(r){
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const a = (i/6)*Math.PI*2;
+    const x = Math.cos(a)*r, y = Math.sin(a)*r;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath(); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(0,-r*0.7); ctx.lineTo(0,r*0.7);
+  ctx.moveTo(-r*0.7,0); ctx.lineTo(r*0.7,0);
+  ctx.stroke();
+  ctx.strokeRect(-r*0.42,-r*0.42,r*0.84,r*0.84);
+}
+
+function shape_asteroid(verts, r){
+  ctx.beginPath();
+  verts.forEach((v,i)=>{
+    const x = Math.cos(v.a)*v.r*r;
+    const y = Math.sin(v.a)*v.r*r;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  });
+  ctx.closePath(); ctx.stroke();
+}
+
+function shape_star(r, twinkle){
+  const pulse = 0.85 + 0.15*Math.sin(twinkle + state.t*0.06);
+  ctx.beginPath(); ctx.arc(0,0,r*0.32*pulse,0,Math.PI*2); ctx.stroke();
+  const spikes = 12;
+  for(let i=0;i<spikes;i++){
+    const a = (i/spikes)*Math.PI*2;
+    const inner = r * 0.48;
+    const outer = r * (i%2 ? 0.78 : 1.0) * pulse;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a)*inner, Math.sin(a)*inner);
+    ctx.lineTo(Math.cos(a)*outer, Math.sin(a)*outer);
+    ctx.stroke();
+  }
+}
+
+function shape_module(r, letter, color){
+  ctx.strokeRect(-r,-r,r*2,r*2);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = color;
+  ctx.font = 'bold 11px JetBrains Mono';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText(letter, 0, 0.5);
+}
+
+function drawEntity(e){
+  const t = TYPES[e.type];
+  const r = t.r * (e.scale||1);
+  const color = e.subColor || t.color;
+
+  if(e.sel) drawSelHalo(e.x, e.y, r, color);
+
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  if(e.type==='ship'||e.type==='enemy'||e.type==='asteroid'||e.type==='planet'){
+    ctx.rotate(e.dir);
+  }
+  glow(color, e.sel, t.shape==='star' ? 18 : t.shape==='planet' ? 16 : t.shape==='asteroid' ? 6 : 11);
+
+  switch(t.shape){
+    case 'ship':     shape_ship(r); break;
+    case 'enemy':    shape_enemy(r); break;
+    case 'planet':   shape_planet(r); break;
+    case 'station':  shape_station(r); break;
+    case 'asteroid': shape_asteroid(e.verts, r); break;
+    case 'star':     shape_star(r, e.twinkle||0); break;
+    case 'module':   shape_module(r, e.subLetter||'M', color); break;
+  }
+  ctx.restore();
+}
+
+function drawDrag(){
+  if(!state.drag || !state.drag.active) return;
+  const x1=Math.min(state.drag.sx, state.drag.cx);
+  const y1=Math.min(state.drag.sy, state.drag.cy);
+  const x2=Math.max(state.drag.sx, state.drag.cx);
+  const y2=Math.max(state.drag.sy, state.drag.cy);
+  ctx.fillStyle = 'rgba(150,200,255,0.05)';
+  ctx.fillRect(x1,y1,x2-x1,y2-y1);
+  ctx.save();
+  ctx.shadowBlur = 8;
+  ctx.shadowColor = 'rgba(150,200,255,0.5)';
+  ctx.strokeStyle = 'rgba(150,200,255,0.65)';
+  ctx.lineWidth = 1.2;
+  ctx.setLineDash([6,4]);
+  ctx.strokeRect(x1,y1,x2-x1,y2-y1);
+  ctx.setLineDash([]);
+  ctx.restore();
+
+  const inside = ents.filter(en=>boxOverlap(en,x1,y1,x2,y2));
+  if(inside.length){
+    inside.sort((a,b)=>TYPES[a.type].boxPri-TYPES[b.type].boxPri);
+    const bestType = inside[0].type;
+    inside.filter(e=>e.type===bestType).forEach(e=>{
+      const t = TYPES[e.type];
+      const r = t.r*(e.scale||1);
+      ctx.save();
+      ctx.shadowBlur = 10; ctx.shadowColor = t.color;
+      ctx.strokeStyle = t.color; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(e.x, e.y, r+6, 0, Math.PI*2); ctx.stroke();
+      ctx.restore();
+    });
+  }
+}
+
+function render(){
+  resize();
+  state.t += 1;
+
+  // Phosphor trail: alpha veil instead of hard clear
+  ctx.fillStyle = 'rgba(7,10,16,0.32)';
+  ctx.fillRect(0,0,W,H);
+
+  drawGrid();
+
+  ents.forEach(e=>{
+    const t = TYPES[e.type];
+    if(t.drift){
+      e.x += e.vx; e.y += e.vy;
+      const pad = 30;
+      if(e.x<pad){ e.x=pad; e.vx*=-1; }
+      if(e.x>W-pad){ e.x=W-pad; e.vx*=-1; }
+      if(e.y<pad){ e.y=pad; e.vy*=-1; }
+      if(e.y>H-pad){ e.y=H-pad; e.vy*=-1; }
+    }
+    if(t.spin) e.dir += e.spin;
+  });
+
+  const sorted = ents.slice().sort((a,b)=>TYPES[b.type].r - TYPES[a.type].r);
+  sorted.forEach(drawEntity);
+
+  drawDrag();
+  requestAnimationFrame(render);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   SIDEBAR LEGEND
+   ──────────────────────────────────────────────────────────────────── */
+function drawLegendPip(type){
+  const c = document.createElement('canvas');
+  const s = 22;
+  c.width = s*dpr; c.height = s*dpr;
+  c.style.width = s+'px'; c.style.height = s+'px';
+  const lc = c.getContext('2d');
+  lc.setTransform(dpr,0,0,dpr,0,0);
+  const T = TYPES[type];
+  const r = 8;
+  lc.translate(s/2, s/2);
+  lc.shadowBlur = 6;
+  lc.shadowColor = T.color;
+  lc.strokeStyle = T.color;
+  lc.lineWidth = 1.4;
+  lc.fillStyle = T.color;
+  switch(T.shape){
+    case 'ship':
+      lc.beginPath();
+      lc.moveTo(r, 0);
+      lc.lineTo(-r*0.8, -r*0.75);
+      lc.lineTo(-r*0.45, 0);
+      lc.lineTo(-r*0.8, r*0.75);
+      lc.closePath(); lc.stroke(); break;
+    case 'enemy':
+      lc.beginPath();
+      lc.moveTo(r,0); lc.lineTo(0,-r*0.6); lc.lineTo(-r,0); lc.lineTo(0,r*0.6); lc.closePath(); lc.stroke();
+      break;
+    case 'planet':
+      lc.beginPath(); lc.arc(0,0,r*0.85,0,Math.PI*2); lc.stroke();
+      lc.beginPath(); lc.moveTo(-r*0.85,0); lc.lineTo(r*0.85,0); lc.stroke();
+      break;
+    case 'station':
+      lc.beginPath();
+      for(let i=0;i<6;i++){
+        const a=(i/6)*Math.PI*2;
+        const x=Math.cos(a)*r*0.85, y=Math.sin(a)*r*0.85;
+        if(i===0) lc.moveTo(x,y); else lc.lineTo(x,y);
+      }
+      lc.closePath(); lc.stroke();
+      lc.strokeRect(-r*0.35,-r*0.35,r*0.7,r*0.7);
+      break;
+    case 'module':
+      lc.strokeRect(-r*0.7,-r*0.7,r*1.4,r*1.4);
+      lc.shadowBlur=0; lc.font='bold 9px JetBrains Mono';
+      lc.textAlign='center'; lc.textBaseline='middle'; lc.fillText('F',0,0.5);
+      break;
+    case 'asteroid':
+      lc.beginPath();
+      const verts = 9;
+      for(let i=0;i<verts;i++){
+        const a=(i/verts)*Math.PI*2;
+        const rr = r*(0.75 + (i%3===0?0.25:i%2===0?0.10:0.0));
+        const x=Math.cos(a)*rr, y=Math.sin(a)*rr;
+        if(i===0) lc.moveTo(x,y); else lc.lineTo(x,y);
+      }
+      lc.closePath(); lc.stroke();
+      break;
+    case 'star':
+      lc.beginPath(); lc.arc(0,0,r*0.28,0,Math.PI*2); lc.stroke();
+      for(let i=0;i<8;i++){
+        const a=(i/8)*Math.PI*2;
+        lc.beginPath();
+        lc.moveTo(Math.cos(a)*r*0.45, Math.sin(a)*r*0.45);
+        lc.lineTo(Math.cos(a)*r*0.85, Math.sin(a)*r*0.85);
+        lc.stroke();
+      }
+      break;
+  }
+  return c;
+}
+
+function buildLegends(){
+  const types = Object.keys(TYPES);
+  const legendC = types.slice().sort((a,b)=>TYPES[a].clickPri-TYPES[b].clickPri);
+  const legendB = types.slice().sort((a,b)=>TYPES[a].boxPri-TYPES[b].boxPri);
+  function row(t, pri){
+    const T = TYPES[t];
+    const div = document.createElement('div');
+    div.className = 'legend-row';
+    const pip = document.createElement('span');
+    pip.className = 'lpip';
+    pip.appendChild(drawLegendPip(t));
+    div.appendChild(pip);
+    const name = document.createElement('span');
+    name.textContent = T.label;
+    div.appendChild(name);
+    const pri_el = document.createElement('span');
+    pri_el.className = 'lpri';
+    pri_el.textContent = '#'+pri;
+    div.appendChild(pri_el);
+    return div;
+  }
+  const lc = document.getElementById('legendC');
+  const lb = document.getElementById('legendB');
+  lc.innerHTML = ''; lb.innerHTML = '';
+  legendC.forEach((t,i)=>lc.appendChild(row(t,i+1)));
+  legendB.forEach((t,i)=>lb.appendChild(row(t,i+1)));
+}
+
+function buildScnBar(){
+  const bar = document.getElementById('scnBar');
+  bar.innerHTML = SCENARIOS.map((s,i)=>(
+    '<button class="scn-card" data-idx="'+i+'" style="--ac:'+s.accent+'" onclick="loadScenario('+i+')">'+
+      '<span class="scn-ico">'+s.icon+'</span>'+
+      '<span class="scn-meta">'+
+        '<span class="scn-num">'+String(i+1).padStart(2,'0')+'</span>'+
+        '<span class="scn-name">'+s.name+'</span>'+
+      '</span>'+
+    '</button>'
+  )).join('');
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   MOBILE DRAWER
+   ──────────────────────────────────────────────────────────────────── */
+function toggleDrawer(){
+  const panel = document.getElementById('sideR');
+  const fab = document.getElementById('fab');
+  const bd = document.getElementById('bd');
+  const willOpen = !panel.classList.contains('open');
+  panel.classList.toggle('open', willOpen);
+  fab.classList.toggle('open', willOpen);
+  bd.classList.toggle('show', willOpen);
+}
+function closeDrawer(){
+  document.getElementById('sideR').classList.remove('open');
+  document.getElementById('fab').classList.remove('open');
+  document.getElementById('bd').classList.remove('show');
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   BOOT
+   ──────────────────────────────────────────────────────────────────── */
+buildScnBar();
+resize();
+buildLegends();
+window.addEventListener('resize', ()=>{ resize(); });
+loadScenario(0);
+render();
+
+try{ if(window.self!==window.top) document.body.classList.add('in-frame'); }catch(e){ document.body.classList.add('in-frame'); }
 </script>
 </body>
 </html>
