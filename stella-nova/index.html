@@ -93,14 +93,17 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
         </div>
       </div>
       <div class="cluster open" id="cl-crew">
-        <button class="cluster-head" onclick="toggleCluster('cl-crew')"><span class="cluster-icon">&#9733;</span><span class="cluster-label">Learn About Stella Nova</span><span class="cluster-arrow">&#8250;</span></button>
+        <button class="cluster-head" onclick="toggleCluster('cl-crew')"><span class="cluster-icon">&#9733;</span><span class="cluster-label">Interactive Wiki</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
+          <div class="nav-sub">Station Design</div>
           <button class="nav-item" data-tab="guide" onclick="switchTab('guide')"><span class="nav-label">Station Guide</span></button>
           <button class="nav-item" data-tab="planner" onclick="switchTab('planner')"><span class="nav-label">Station Planner</span></button>
-          <button class="nav-item" data-tab="selection" onclick="switchTab('selection')"><span class="nav-label">Selection</span></button>
           <button class="nav-item" data-tab="crafting" onclick="switchTab('crafting')"><span class="nav-label">Crafting</span></button>
+          <div class="nav-sub">Ship &amp; Identity</div>
           <button class="nav-item" data-tab="shipdesigner" onclick="switchTab('shipdesigner')"><span class="nav-label">Ship Designer</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item" data-tab="flagdesigner" onclick="switchTab('flagdesigner')"><span class="nav-label">Flag Designer</span><span class="nav-badge">NEW</span></button>
+          <div class="nav-sub">Gameplay</div>
+          <button class="nav-item" data-tab="selection" onclick="switchTab('selection')"><span class="nav-label">Selection</span></button>
           <button class="nav-item" data-tab="behaviors" onclick="switchTab('behaviors')"><span class="nav-label">Behaviors</span></button>
           <button class="nav-item" data-tab="controls" onclick="switchTab('controls')"><span class="nav-label">Controls</span></button>
         </div>
