@@ -139,6 +139,16 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
       <button class="qp-action-btn yellow" id="btn-set-text">⟶ Set as Aperture</button>
     </div>
     <div class="qp-section"><div class="qp-sec-lbl">Presets</div><div class="preset-grid" id="preset-grid"></div></div>
+    <div class="qp-section" id="export-section"><div class="qp-sec-lbl">Export</div>
+      <div class="res-grid" id="ar-btns" style="grid-template-columns:repeat(5,1fr);margin-bottom:5px"><button class="res-btn active" data-ar="1:1">1:1</button><button class="res-btn" data-ar="16:9">16:9</button><button class="res-btn" data-ar="9:16">9:16</button><button class="res-btn" data-ar="4:3">4:3</button><button class="res-btn" data-ar="3:4">3:4</button></div>
+      <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-exw" min="512" max="3840" value="1920" step="1"><span class="val" id="vl-exw" style="min-width:60px">1920×1920</span></div>
+      <select class="qp-select" id="sel-dir" style="margin-bottom:5px"><option value="bounce" selected>↔ Bounce (0 → max → 0)</option><option value="fwd">→ Forward (0 → max)</option><option value="rev">← Reverse (max → 0)</option></select>
+      <select class="qp-select" id="sel-interp" style="margin-bottom:5px"><option value="linear" selected>Linear</option><option value="ease-in">Ease In (accelerate)</option><option value="ease-out">Ease Out (decelerate)</option><option value="ease-in-out">Ease In-Out (smooth)</option></select>
+      <div class="row"><span class="row-lbl">Dur</span><input type="range" id="sl-dur" min="1" max="30" value="5" step="1"><span class="val" id="vl-dur">5s</span></div>
+      <div class="row"><span class="row-lbl">Reps</span><input type="range" id="sl-rep" min="1" max="10" value="1" step="1"><span class="val" id="vl-rep">1</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:2px"><button class="qp-action-btn yellow" id="btn-export-png">⬇ PNG Still</button><button class="qp-action-btn yellow" id="btn-export-vid">⬇ Video</button></div>
+      <div id="export-status" style="font-size:0.46rem;color:var(--text-faint);margin-top:4px;text-align:center"></div>
+    </div>
     <div class="qp-section"><button class="qp-action-btn red" id="btn-reset">↺ Reset to Default</button></div>
   </div>
 </div>
@@ -274,7 +284,7 @@ document.getElementById('file-input').addEventListener('change',function(){const
 document.getElementById('element-select').addEventListener('change',function(){S.element=this.value;buildParamUI();scheduleRecompute()});
 document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#source-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.source=b.dataset.source;document.getElementById('mono-params').style.display=S.source==='mono'?'block':'none';document.getElementById('white-params').style.display=S.source==='white'?'block':'none';scheduleRecompute()}));
 document.querySelectorAll('.res-btn[data-n]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.res-btn[data-n]').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.N=+b.dataset.n;window._imgMask=null;scheduleRecompute()}));
-document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#view-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.viewMode=+b.dataset.view;const g=document.getElementById('canvas-grid');g.classList.toggle('view-1',S.viewMode===1);scheduleRecompute()}));
+document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#view-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.viewMode=+b.dataset.view;const g=document.getElementById('canvas-grid');g.classList.toggle('view-1',S.viewMode===1);document.getElementById('export-section').style.display=S.viewMode===1?'':'none';scheduleRecompute()}));
 ['sl-lam','sl-div'].forEach(id=>{const el=document.getElementById(id);if(!el)return;sg(el);el.addEventListener('input',function(){sg(this);const v=+this.value;if(id==='sl-lam'){S.lambda=v;document.getElementById('vl-lam').textContent=v.toFixed(0);const rgb=wlRGB(v),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs}else{S.divs=v;document.getElementById('vl-div').textContent=v.toFixed(0)}scheduleRecompute()})});
 document.getElementById('sl-txtsz').addEventListener('input',function(){sg(this);document.getElementById('vl-txtsz').textContent=this.value});sg(document.getElementById('sl-txtsz'));
 document.getElementById('qp-collapse-btn').addEventListener('click',()=>{const p=document.getElementById('quick-panel'),c=p.classList.toggle('collapsed');document.getElementById('qp-collapse-btn').textContent=c?'▶':'◀';document.getElementById('canvas-grid').style.left=c?'44px':'';setTimeout(scheduleRecompute,250)});
@@ -306,6 +316,150 @@ document.getElementById('btn-reset').addEventListener('click',()=>{animDir=0;S.e
   allZ.forEach(s=>s.max=500);
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
   buildParamUI();syncBars();scheduleRecompute();closeMob()});
+
+/* ═══ EXPORT SYSTEM ═══ */
+let exAR=[1,1]; // [w,h] ratio
+const AR_MAP={'1:1':[1,1],'16:9':[16,9],'9:16':[9,16],'4:3':[4,3],'3:4':[3,4]};
+const EASE={linear:t=>t,'ease-in':t=>t*t,'ease-out':t=>1-(1-t)*(1-t),'ease-in-out':t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2};
+function exDims(){const w=+document.getElementById('sl-exw').value;const h=Math.round(w*exAR[1]/exAR[0]);return[w,h]}
+function updateExLabel(){const[w,h]=exDims();document.getElementById('vl-exw').textContent=w+'×'+h}
+
+document.querySelectorAll('#ar-btns .res-btn').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#ar-btns .res-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');exAR=AR_MAP[b.dataset.ar]||[1,1];updateExLabel()}));
+const slExw=document.getElementById('sl-exw');sg(slExw);slExw.addEventListener('input',function(){sg(this);updateExLabel()});
+const slDur=document.getElementById('sl-dur');sg(slDur);slDur.addEventListener('input',function(){sg(this);document.getElementById('vl-dur').textContent=this.value+'s'});
+const slRep=document.getElementById('sl-rep');sg(slRep);slRep.addEventListener('input',function(){sg(this);document.getElementById('vl-rep').textContent=this.value});
+
+function renderFrame(Nx,Ny,exW,exH,z){
+  const p=readParams(),el=EL[S.element];
+  const maxN=Math.max(Nx,Ny),ext=S.extent*mm;
+  const dx=ext/maxN,dy=ext/maxN; // isotropic sampling
+  const NN=Nx*Ny;
+  const xx=new Float64Array(NN),yy=new Float64Array(NN);
+  for(let iy=0;iy<Ny;iy++){const y_=dy*(iy-Ny/2);for(let ix=0;ix<Nx;ix++){xx[iy*Nx+ix]=dx*(ix-Nx/2);yy[iy*Nx+ix]=y_}}
+  let rgb;
+  if(S.source==='mono'){
+    const lam=S.lambda*nm,tr=el.t(xx,yy,lam,NN,p);let E=cmul(cones(NN),tr);E=prop(E,Nx,Ny,dx,dy,z*mm,lam);const I=cabs2(E);let mx=0;for(let i=0;i<I.length;i++)if(I[i]>mx)mx=I[i];if(mx<1e-30)mx=1;const wl=wlRGB(S.lambda);rgb=new Uint8Array(NN*3);for(let i=0;i<NN;i++){const v=Math.sqrt(I[i]/mx);rgb[i*3]=Math.min(255,v*wl[0]*255)|0;rgb[i*3+1]=Math.min(255,v*wl[1]*255)|0;rgb[i*3+2]=Math.min(255,v*wl[2]*255)|0}
+  } else {
+    const nD=S.divs,dl=(780-380)/nD,X=new Float64Array(NN),Y=new Float64Array(NN),Z=new Float64Array(NN);let tC=null;if(!el.wlDep)tC=el.t(xx,yy,550*nm,NN,p);
+    for(let d=0;d<nD;d++){const ln=380+(d+.5)*dl,lam=ln*nm,Sd=d65(ln)*dl,xw=cieX(ln)*Sd,yw=cieY(ln)*Sd,zw=cieZ(ln)*Sd,tr=tC||el.t(xx,yy,lam,NN,p);let E=cmul(cones(NN),tr);E=prop(E,Nx,Ny,dx,dy,z*mm,lam);const I=cabs2(E);for(let i=0;i<NN;i++){X[i]+=I[i]*xw;Y[i]+=I[i]*yw;Z[i]+=I[i]*zw}}
+    let mY=0;for(let i=0;i<NN;i++)if(Y[i]>mY)mY=Y[i];if(mY<1e-30)mY=1;const sc=1/mY;rgb=new Uint8Array(NN*3);
+    for(let i=0;i<NN;i++){const x=X[i]*sc,y=Y[i]*sc,zv=Z[i]*sc;let r=3.2406*x-1.5372*y-.4986*zv,g=-.9689*x+1.8758*y+.0415*zv,b=.0557*x-.204*y+1.057*zv;r=Math.max(0,r);g=Math.max(0,g);b=Math.max(0,b);rgb[i*3]=Math.min(255,sGam(r)*255)|0;rgb[i*3+1]=Math.min(255,sGam(g)*255)|0;rgb[i*3+2]=Math.min(255,sGam(b)*255)|0}
+  }
+  const simCv=document.createElement('canvas');simCv.width=Nx;simCv.height=Ny;
+  const sc2=simCv.getContext('2d'),img=sc2.createImageData(Nx,Ny),d=img.data;
+  for(let iy=0;iy<Ny;iy++)for(let ix=0;ix<Nx;ix++){const si=(Ny-1-iy)*Nx+ix,di=(iy*Nx+ix)*4;d[di]=rgb[si*3];d[di+1]=rgb[si*3+1];d[di+2]=rgb[si*3+2];d[di+3]=255}
+  sc2.putImageData(img,0,0);
+  const outCv=document.createElement('canvas');outCv.width=exW;outCv.height=exH;
+  const oc=outCv.getContext('2d');oc.fillStyle='#000';oc.fillRect(0,0,exW,exH);
+  oc.imageSmoothingEnabled=true;oc.imageSmoothingQuality='high';
+  oc.drawImage(simCv,0,0,exW,exH); // fills exactly, no letterboxing
+  return outCv;
+}
+
+function getZForFrame(frame,total,dir,ease){
+  const zMax=+allZ[0].max||500;
+  let t=frame/Math.max(1,total-1); // 0→1
+  t=ease(t);
+  if(dir==='fwd') return t*zMax;
+  if(dir==='rev') return (1-t)*zMax;
+  // bounce: 0→1→0
+  return t<0.5 ? (t*2)*zMax : (2-t*2)*zMax;
+}
+
+/* Half each dimension, snap to power of 2 */
+function exSimDims(w,h){return[Math.pow(2,Math.max(7,Math.round(Math.log2(w/2)))),Math.pow(2,Math.max(7,Math.round(Math.log2(h/2))))]}
+
+/* PNG export */
+document.getElementById('btn-export-png').addEventListener('click',()=>{
+  const stat=document.getElementById('export-status');
+  const[w,h]=exDims();const[sNx,sNy]=exSimDims(w,h);
+  stat.textContent='Rendering '+w+'×'+h+' (sim '+sNx+'×'+sNy+')…';
+  setTimeout(()=>{
+    const cv=renderFrame(sNx,sNy,w,h,S.z);
+    cv.toBlob(blob=>{
+      if(!blob){stat.textContent='Export failed';return}
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;
+      a.download='diffraction-'+w+'x'+h+'-z'+S.z.toFixed(0)+'mm.png';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      stat.textContent='Saved '+w+'×'+h+' PNG';
+    },'image/png');
+  },50);
+});
+
+/* Video export — pre-render all frames then encode */
+let exporting=false;
+document.getElementById('btn-export-vid').addEventListener('click',()=>{
+  if(exporting)return;exporting=true;
+  const stat=document.getElementById('export-status');
+  const[w,h]=exDims();
+  const fps=30;
+  const dur=+document.getElementById('sl-dur').value||5;
+  const reps=+document.getElementById('sl-rep').value||1;
+  const dir=document.getElementById('sel-dir').value;
+  const interpName=document.getElementById('sel-interp').value;
+  const ease=EASE[interpName]||EASE.linear;
+  const framesPerCycle=fps*dur;
+  const totalFrames=framesPerCycle*reps;
+
+  // Phase 1: pre-render all frames as ImageData
+  const frames=[];
+  let f=0;
+  const[sNx,sNy]=exSimDims(w,h);
+  stat.textContent='Rendering frame 1/'+totalFrames+' (sim '+sNx+'×'+sNy+')…';
+
+  function computeNext(){
+    if(f>=totalFrames){startEncoding();return}
+    const cycleFrame=f%framesPerCycle;
+    const z=getZForFrame(cycleFrame,framesPerCycle,dir,ease);
+    stat.textContent='Frame '+(f+1)+'/'+totalFrames+' · z='+z.toFixed(0)+'mm ('+sNx+'×'+sNy+')';
+    const cv=renderFrame(sNx,sNy,w,h,z);
+    frames.push(cv.getContext('2d').getImageData(0,0,w,h));
+    f++;
+    setTimeout(computeNext,0);
+  }
+
+  function startEncoding(){
+    stat.textContent='Encoding video…';
+    const recCv=document.createElement('canvas');recCv.width=w;recCv.height=h;
+    const recCtx=recCv.getContext('2d');
+
+    let mimeType='video/webm;codecs=vp9';
+    if(!MediaRecorder.isTypeSupported(mimeType))mimeType='video/webm;codecs=vp8';
+    if(!MediaRecorder.isTypeSupported(mimeType))mimeType='video/webm';
+    if(typeof MediaRecorder==='undefined'||!MediaRecorder.isTypeSupported(mimeType)){
+      stat.textContent='Video not supported — try Chrome or Firefox';exporting=false;return;
+    }
+
+    const stream=recCv.captureStream(fps);
+    const recorder=new MediaRecorder(stream,{mimeType,videoBitsPerSecond:8000000});
+    const chunks=[];
+    recorder.ondataavailable=e=>{if(e.data&&e.data.size>0)chunks.push(e.data)};
+    recorder.onstop=()=>{
+      const blob=new Blob(chunks,{type:mimeType.split(';')[0]});
+      if(blob.size<100){stat.textContent='Encoding failed';exporting=false;return}
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;
+      a.download='diffraction-'+w+'x'+h+'-'+dur+'s-'+dir+'.webm';
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      setTimeout(()=>URL.revokeObjectURL(url),2000);
+      stat.textContent='Saved '+w+'×'+h+' video · '+totalFrames+' frames';
+      exporting=false;
+    };
+
+    recorder.start();
+    let fi=0;
+    function playFrame(){
+      if(fi>=frames.length){setTimeout(()=>recorder.stop(),200);return}
+      recCtx.putImageData(frames[fi],0,0);
+      fi++;
+      setTimeout(playFrame,1000/fps);
+    }
+    playFrame();
+  }
+  computeNext();
+});
 
 /* ═══ PRESETS ═══ */
 const PR=[
