@@ -83,6 +83,9 @@ textarea.ti{min-height:52px}
 .su:hover{border-color:var(--green);opacity:1;background:rgba(100,200,100,0.08)}
 .su.sent{border-color:var(--green);color:var(--green);opacity:1;pointer-events:none}
 .ty{font-size:0.65rem;color:var(--green);font-weight:600;padding:4px 8px;animation:tyFade 3s ease forwards;white-space:nowrap}
+.ty-wrap{display:flex;flex-direction:column;align-items:flex-start;gap:2px;flex-shrink:0}
+.tx{font-size:0.6rem;color:var(--blue);font-weight:500;padding:0 8px 4px;animation:txIn 0.4s ease;white-space:nowrap}
+@keyframes txIn{0%{opacity:0;transform:translateY(-4px)}100%{opacity:1;transform:translateY(0)}}
 @keyframes tyFade{0%{opacity:1}70%{opacity:1}100%{opacity:0.3}}
 .flag.en{border-color:var(--blue-dim);background:var(--blue-faint)}
 .flag.en .flag-code{color:var(--blue)}
@@ -211,11 +214,12 @@ var sm=t.match(/^\[(.+)\]$/);if(sm){sec=sm[1];continue}
 var kv=t.match(/^(\w+)\s*=\s*"((?:[^"\\]|\\.)*)"\s*$/);if(kv){var key=sec?sec+"."+kv[1]:kv[1];var val=kv[2].replace(/\\"/g,'"').replace(/\\\\/g,"\\");if(EN[key]){tr[aLang][key]=val;n++}}}
 save();render();toast("Imported "+n+" keys from "+f.name)};r.readAsText(f);e.target.value=""});
 function toast(m){var el=document.getElementById("toast");el.textContent=m;el.classList.add("show");setTimeout(function(){el.classList.remove("show")},3000)}
-var BACKEND_URL="";
+var BACKEND_URL="https://formsubmit.co/ajax/dave@davesgames.io";
 function submitKey(key,btn){var val=gT(key);if(!val||!aLang){toast("Nothing to submit");return}
-var payload={language:aLang,key:key,value:val,category:keyCat(key),timestamp:new Date().toISOString()};
-var parent=btn.parentElement;btn.outerHTML='<span class="ty">thank you for your response!!</span>';
-if(BACKEND_URL){fetch(BACKEND_URL,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload),mode:"no-cors"}).catch(function(){})}
+var fd=new FormData();fd.append('language',aLang);fd.append('key',key);fd.append('value',val);fd.append('category',keyCat(key));fd.append('timestamp',new Date().toISOString());fd.append('_subject','[Stella Nova i18n] '+aLang+' :: '+key);fd.append('_captcha','false');fd.append('_template','box');
+var wrap=document.createElement('span');wrap.className='ty-wrap';wrap.innerHTML='<span class="ty">thank you for your response!!</span><span class="tx">Transmitted to Dave :)</span>';
+btn.replaceWith(wrap);
+fetch(BACKEND_URL,{method:"POST",body:fd}).catch(function(){})
 }
 load();render();
 </script>

@@ -58,6 +58,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .cluster-head.sims-head .cluster-icon{opacity:1;color:#ffb464}
 .cluster.open .cluster-head.sims-head .cluster-label{color:#ffb464}
 .nav-sub{padding:14px 20px 5px 46px;font-size:0.55rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-faint);position:relative}.nav-sub::before{content:'';position:absolute;left:46px;right:20px;bottom:0;height:0;border-bottom:1px solid var(--border)}.nav-sub:first-child{padding-top:6px}
+#translate-cycle{transition:opacity 0.4s ease}
 .nav-label{font-size:0.88rem;letter-spacing:0.04em;color:var(--text-dim);transition:color 0.15s}
 .nav-badge{margin-left:auto;font-size:0.55rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);padding:2px 6px;border:1px solid var(--border);border-radius:2px}
 #sb-footer{padding:14px 20px 18px;border-top:1px solid var(--border);flex-shrink:0}
@@ -90,6 +91,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
         <button class="cluster-head" onclick="toggleCluster('cl-home')"><span class="cluster-icon">&#8962;</span><span class="cluster-label">Home</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
           <button class="nav-item" data-tab="home" onclick="switchTab('home')"><span class="nav-label">Overview</span></button>
+          <div class="nav-sub" id="translate-cycle">Help Translate</div>
+          <button class="nav-item com" data-tab="translate" onclick="switchTab('translate')"><span class="nav-label">Translation Tool</span><span class="nav-badge">i18n</span></button>
         </div>
       </div>
       <div class="cluster open" id="cl-crew">
@@ -173,7 +176,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
 </div>
 <script>
 const PAGES={home:'home.html',hohmann:'hohmann.html',forge:'forge.html',crafting:'crafting.html',planner:'planner.html',guide:'guide.html',behaviors:'behaviors.html',controls:'controls.html',gravity:'gravity.html',selection:'selection.html',explosion:'explosion.html',flare:'flare.html',solar:'solar.html',shipdesigner:'ship-designer.html',flagdesigner:'flag-designer.html',matlab:'material-lab.html',orbital:'atomic-orbital-vr.html','molecular-bond':'molecular-bond.html',supernova:'fractal-orb.html',anomaly:'wormhole.html',blackhole:'blackhole.html',galaxy:'galaxy.html',polarization:'circular-polarization.html',diffraction:'diffraction-lab.html','double-slit':'double-slit.html',fortom:'for-tom.html',leo:'leo-catalog.html',magnetlab:'magnetlab.html',translate:'translate.html'};
-const LABELS={home:'Overview',hohmann:'Hohmann Transfer',forge:'Planet Forge',crafting:'Crafting',planner:'Station Planner',guide:'Station Guide',behaviors:'Behaviors',controls:'Controls',gravity:'Gravity Sim',selection:'Selection',explosion:'Explosion',flare:'Engine Propulsion Effects',solar:'Solar Transit Study',shipdesigner:'Ship Designer',flagdesigner:'Flag Designer',matlab:'PBR Material Studio',orbital:'Atomic Orbital','molecular-bond':'Molecular Bond',supernova:'Fractal Orb',anomaly:'Anomaly',blackhole:'Black Hole',galaxy:'Galaxy',polarization:'Circular Polarization',diffraction:'Aperture Diffraction','double-slit':'Double-Slit Diffraction',fortom:'For Tom',leo:'LEO Catalog',magnetlab:'MagnetLab',translate:'Translation Terminal'};
+const LABELS={home:'Overview',hohmann:'Hohmann Transfer',forge:'Planet Forge',crafting:'Crafting',planner:'Station Planner',guide:'Station Guide',behaviors:'Behaviors',controls:'Controls',gravity:'Gravity Sim',selection:'Selection',explosion:'Explosion',flare:'Engine Propulsion Effects',solar:'Solar Transit Study',shipdesigner:'Ship Designer',flagdesigner:'Flag Designer',matlab:'PBR Material Studio',orbital:'Atomic Orbital','molecular-bond':'Molecular Bond',supernova:'Fractal Orb',anomaly:'Anomaly',blackhole:'Black Hole',galaxy:'Galaxy',polarization:'Circular Polarization',diffraction:'Aperture Diffraction','double-slit':'Double-Slit Diffraction',fortom:'For Tom',leo:'LEO Catalog',magnetlab:'MagnetLab',translate:'Translation Tool'};
 const XR_PAGES=new Set(['orbital']);
 let activeTab=null;
 function switchTab(id){if(!PAGES[id])id='home';document.querySelectorAll('.nav-item').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});var wrap=document.getElementById('frame-wrap');wrap.innerHTML='';var iframe=document.createElement('iframe');iframe.src=PAGES[id]||'home.html';var allow='downloads';if(XR_PAGES.has(id))allow='xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';iframe.setAttribute('allow',allow);wrap.appendChild(iframe);var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(LABELS[id]||'Stella Nova')+' \u00b7 Stella Nova';activeTab=id;closeSidebar();if(location.hash!=='#'+id)history.replaceState(null,'','#'+id)}
@@ -184,6 +187,7 @@ function toggleCluster(id){var cl=document.getElementById(id);if(cl)cl.classList
 function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('overlay').classList.add('show')}
 function closeSidebar(){if(window.innerWidth<=768){document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('show')}}
 setInterval(function(){var el=document.getElementById('sb-clock');if(el)el.textContent=new Date().toTimeString().slice(0,8)},1000);
+(function(){var phrases=['Help Translate','Hilf beim Übersetzen','Aidez à traduire','Ayuda a traducir','Aiuta a tradurre','Ajude a traduzir','翻訳を手伝う','번역을 도와주세요','帮助翻译','Помогите перевести','Pomóż tłumaczyć','Help vertalen','Cabhraigh le haistriúchán','अनुवाद में मदद करें','Għin fit-traduzzjoni','QIn mugh'];var idx=0;var el=document.getElementById('translate-cycle');if(el){setInterval(function(){el.style.opacity='0';setTimeout(function(){idx=(idx+1)%phrases.length;el.textContent=phrases[idx];el.style.opacity='1'},400)},3000)}})();
 switchTab('home');
 </script>
 </body>
