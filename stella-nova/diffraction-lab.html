@@ -371,16 +371,18 @@ function exSimDims(w,h){return[Math.pow(2,Math.max(7,Math.round(Math.log2(w/2)))
 
 /* PNG export */
 document.getElementById('btn-export-png').addEventListener('click',()=>{
+  const wasAnimating=animDir;animDir=0;syncBars(); // pause to freeze preview
   const stat=document.getElementById('export-status');
   const[w,h]=exDims();const[sNx,sNy]=exSimDims(w,h);
-  stat.textContent='Rendering '+w+'×'+h+' (sim '+sNx+'×'+sNy+')…';
+  const capturedZ=S.z; // freeze current z
+  stat.textContent='Rendering '+w+'×'+h+' at z='+capturedZ.toFixed(0)+'mm (sim '+sNx+'×'+sNy+')…';
   setTimeout(()=>{
-    const cv=renderFrame(sNx,sNy,w,h,S.z);
+    const cv=renderFrame(sNx,sNy,w,h,capturedZ);
     cv.toBlob(blob=>{
       if(!blob){stat.textContent='Export failed';return}
       const url=URL.createObjectURL(blob);
       const a=document.createElement('a');a.href=url;
-      a.download='diffraction-'+w+'x'+h+'-z'+S.z.toFixed(0)+'mm.png';
+      a.download='diffraction-'+w+'x'+h+'-z'+capturedZ.toFixed(0)+'mm.png';
       document.body.appendChild(a);a.click();document.body.removeChild(a);
       setTimeout(()=>URL.revokeObjectURL(url),1000);
       stat.textContent='Saved '+w+'×'+h+' PNG';
