@@ -11,8 +11,7 @@
 :root{--bg:#0e1118;--bg2:#121620;--border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.18);--blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.05);--yellow:#ffc832;--yellow-dim:#b8901e;--green:#64c864;--text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;--scan:rgba(0,0,0,0.06);--qp-w:280px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
-body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
-body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.4))}
+
 .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
 #ui{position:fixed;inset:0;pointer-events:none;z-index:10}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1rem;height:40px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border-b);pointer-events:all}
@@ -47,7 +46,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .cb-val{font-size:0.46rem;color:var(--blue);font-weight:600;white-space:nowrap;font-variant-numeric:tabular-nums;min-width:32px;text-align:right}
 
 /* ═══ QUICK PANEL ═══ */
-#quick-panel{position:fixed;top:40px;left:0;bottom:0;width:var(--qp-w);background:rgba(9,12,20,0.96);border-right:1px solid var(--border-b);backdrop-filter:blur(24px);z-index:200;display:flex;flex-direction:column;pointer-events:all;user-select:none;overflow:hidden;transition:width 0.22s}
+#quick-panel{position:fixed;top:40px;left:0;bottom:0;width:var(--qp-w);background:rgba(9,12,20,0.96);border-right:1px solid var(--border-b);backdrop-filter:blur(24px);z-index:100;display:flex;flex-direction:column;pointer-events:all;user-select:none;overflow:hidden;transition:width 0.22s}
 .in-frame #quick-panel{top:0}
 #quick-panel.collapsed{width:44px}#quick-panel.collapsed .qp-body,#quick-panel.collapsed .qp-ket{display:none}#quick-panel.collapsed .qp-head{padding:10px 0;flex-direction:column;align-items:center;gap:6px;border-bottom:none}#quick-panel.collapsed .qp-subshell{font-size:1.1rem}#quick-panel.collapsed .qp-collapse-btn{transform:rotate(180deg)}
 .qp-head{display:flex;align-items:flex-start;justify-content:space-between;padding:12px 12px 8px;border-bottom:1px solid var(--border);flex-shrink:0;background:linear-gradient(180deg,rgba(150,200,255,0.04) 0%,transparent 100%)}
@@ -83,40 +82,69 @@ input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;bac
 
 #status-display{position:fixed;bottom:4px;right:6px;text-align:right;pointer-events:none;z-index:20}.status-main{font-size:0.5rem;color:var(--text-dim)}.status-sub{font-size:0.44rem;color:var(--text-faint)}
 
-@media(max-width:599px){:root{--qp-w:44px}#quick-panel{width:44px}#quick-panel .qp-body,#quick-panel .qp-ket{display:none}#quick-panel .qp-head{padding:8px 0;flex-direction:column;align-items:center;gap:4px;border-bottom:none}#quick-panel .qp-subshell{font-size:1rem}#quick-panel .qp-collapse-btn{transform:rotate(180deg)}#canvas-grid{left:44px}.eq-panel{left:50px;right:4px;top:44px;padding:6px 8px}.in-frame .eq-panel{top:4px}.eq-panel .katex{font-size:0.7rem!important}.cb-btn{font-size:0.75rem}}
+/* ═══ MOBILE DRAWER ═══ */
+#mob-menu{display:none;position:fixed;top:44px;left:6px;z-index:10000;height:36px;padding:0 14px;background:rgba(9,12,20,0.95);border:1px solid var(--border-b);color:var(--blue);font-size:0.72rem;font-weight:600;letter-spacing:0.1em;cursor:pointer;align-items:center;justify-content:center;gap:6px;font-family:'JetBrains Mono',monospace;backdrop-filter:blur(8px);touch-action:manipulation;pointer-events:all;text-transform:uppercase}
+#mob-menu:hover{background:rgba(150,200,255,0.1);border-color:var(--blue)}
+#mob-overlay{display:none;position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px)}
+#mob-overlay.show{display:block}
+.in-frame #mob-menu{top:6px}
+
+@media(max-width:700px){
+  :root{--qp-w:0px}
+  #mob-menu{display:flex}
+  #quick-panel{position:fixed;top:40px;left:0;bottom:0;width:min(300px,85vw);transform:translateX(-100%);transition:transform 0.25s ease;z-index:10001;border-right:1px solid var(--border-b)}
+  #quick-panel.mob-open{transform:translateX(0)}
+  #quick-panel.collapsed{width:min(300px,85vw);transform:translateX(-100%)}
+  #quick-panel.collapsed.mob-open{transform:translateX(0)}
+  #quick-panel.collapsed .qp-body{display:block}
+  #quick-panel.collapsed .qp-ket{display:block}
+  #quick-panel.collapsed .qp-head{padding:14px 14px 10px;flex-direction:row;align-items:flex-start;border-bottom:1px solid var(--border)}
+  #quick-panel.collapsed .qp-subshell{font-size:1.5rem}
+  #quick-panel.collapsed .qp-collapse-btn{display:none}
+  .qp-collapse-btn{display:none}
+  .in-frame #quick-panel{top:0}
+  #canvas-grid{left:0}
+  .eq-panel{display:none}
+  .cb-btn{font-size:0.7rem;height:28px}
+}
+
 </style>
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
+<button id="mob-menu">☰ Settings</button>
+<div id="mob-overlay"></div>
 <div id="canvas-grid"></div>
+
+<div id="quick-panel">
+  <div class="qp-head"><div class="qp-id"><span class="qp-subshell" id="qp-title">Aperture Diffraction</span><span class="qp-ket" id="qp-summary">Aa Text · D65 · z=200mm</span></div><button class="qp-collapse-btn" id="qp-collapse-btn">◀</button></div>
+  <div class="qp-body">
+    <div class="qp-section"><div class="qp-sec-lbl">Element</div><select id="element-select" class="qp-select"></select></div>
+    <div class="qp-section"><div class="qp-sec-lbl">Parameters</div><div id="params-container"></div></div>
+    <div class="qp-section"><div class="qp-sec-lbl">Source</div>
+      <div class="qp-modes" id="source-modes"><button class="qp-mode" data-source="mono">Mono λ</button><button class="qp-mode active" data-source="white">White D65</button></div>
+      <div id="mono-params" style="display:none;margin-top:4px"><div class="row"><span class="row-lbl">λ</span><input type="range" id="sl-lam" min="380" max="780" value="633" step="1"><span class="val" id="vl-lam">633</span><span class="wl-dot" id="wl-dot"></span></div></div>
+      <div id="white-params" style="margin-top:4px"><div class="row"><span class="row-lbl">Div</span><input type="range" id="sl-div" min="6" max="30" value="15" step="1"><span class="val" id="vl-div">15</span></div></div>
+    </div>
+    <div class="qp-section"><div class="qp-sec-lbl">View</div>
+      <div class="qp-modes" id="view-modes"><button class="qp-mode active" data-view="4">2×2 · RGBC</button><button class="qp-mode" data-view="1">1×1 · Fast</button></div>
+    </div>
+    <div class="qp-section"><div class="qp-sec-lbl">Grid</div>
+      <div class="res-grid"><button class="res-btn" data-n="128">128²</button><button class="res-btn active" data-n="256">256²</button><button class="res-btn" data-n="512">512²</button></div>
+    </div>
+    <div class="qp-section"><div class="qp-sec-lbl">Custom Text</div>
+      <input type="text" id="custom-text" class="qp-text-input" value="davesgames.io" placeholder="Type text…">
+      <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-txtsz" min="8" max="100" value="28" step="1"><span class="val" id="vl-txtsz">28</span></div>
+      <button class="qp-action-btn yellow" id="btn-set-text">⟶ Set as Aperture</button>
+    </div>
+    <div class="qp-section"><div class="qp-sec-lbl">Presets</div><div class="preset-grid" id="preset-grid"></div></div>
+    <div class="qp-section"><button class="qp-action-btn red" id="btn-reset">↺ Reset to Default</button></div>
+  </div>
+</div>
+
 <div id="ui">
   <div class="topbar"><div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Aperture Diffraction</span></div><div class="topbar-r">SYS // <strong>WAVE OPTICS</strong></div></div>
-  <div id="quick-panel">
-    <div class="qp-head"><div class="qp-id"><span class="qp-subshell" id="qp-title">Aperture Diffraction</span><span class="qp-ket" id="qp-summary">Aa Text · D65 · z=200mm</span></div><button class="qp-collapse-btn" id="qp-collapse-btn">◀</button></div>
-    <div class="qp-body">
-      <div class="qp-section"><div class="qp-sec-lbl">Element</div><select id="element-select" class="qp-select"></select></div>
-      <div class="qp-section"><div class="qp-sec-lbl">Parameters</div><div id="params-container"></div></div>
-      <div class="qp-section"><div class="qp-sec-lbl">Source</div>
-        <div class="qp-modes" id="source-modes"><button class="qp-mode" data-source="mono">Mono λ</button><button class="qp-mode active" data-source="white">White D65</button></div>
-        <div id="mono-params" style="display:none;margin-top:4px"><div class="row"><span class="row-lbl">λ</span><input type="range" id="sl-lam" min="380" max="780" value="633" step="1"><span class="val" id="vl-lam">633</span><span class="wl-dot" id="wl-dot"></span></div></div>
-        <div id="white-params" style="margin-top:4px"><div class="row"><span class="row-lbl">Div</span><input type="range" id="sl-div" min="6" max="30" value="15" step="1"><span class="val" id="vl-div">15</span></div></div>
-      </div>
-      <div class="qp-section"><div class="qp-sec-lbl">View</div>
-        <div class="qp-modes" id="view-modes"><button class="qp-mode active" data-view="4">2×2 · RGBC</button><button class="qp-mode" data-view="1">1×1 · Fast</button></div>
-      </div>
-      <div class="qp-section"><div class="qp-sec-lbl">Grid</div>
-        <div class="res-grid"><button class="res-btn" data-n="128">128²</button><button class="res-btn active" data-n="256">256²</button><button class="res-btn" data-n="512">512²</button></div>
-      </div>
-      <div class="qp-section"><div class="qp-sec-lbl">Custom Text</div>
-        <input type="text" id="custom-text" class="qp-text-input" value="davesgames.io" placeholder="Type text…">
-        <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-txtsz" min="8" max="100" value="28" step="1"><span class="val" id="vl-txtsz">28</span></div>
-        <button class="qp-action-btn yellow" id="btn-set-text">⟶ Set as Aperture</button>
-      </div>
-      <div class="qp-section"><div class="qp-sec-lbl">Presets</div><div class="preset-grid" id="preset-grid"></div></div>
-      <div class="qp-section"><button class="qp-action-btn red" id="btn-reset">↺ Reset to Default</button></div>
-    </div>
-  </div>
   <section class="eq-panel" id="eq-panel">
     <button class="eq-collapse" id="eq-collapse-btn">▲</button>
     <div class="eq-head"><span class="dot"></span><span class="lbl">Governing Equations</span></div>
@@ -250,8 +278,15 @@ document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.addEventListener(
 ['sl-lam','sl-div'].forEach(id=>{const el=document.getElementById(id);if(!el)return;sg(el);el.addEventListener('input',function(){sg(this);const v=+this.value;if(id==='sl-lam'){S.lambda=v;document.getElementById('vl-lam').textContent=v.toFixed(0);const rgb=wlRGB(v),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs}else{S.divs=v;document.getElementById('vl-div').textContent=v.toFixed(0)}scheduleRecompute()})});
 document.getElementById('sl-txtsz').addEventListener('input',function(){sg(this);document.getElementById('vl-txtsz').textContent=this.value});sg(document.getElementById('sl-txtsz'));
 document.getElementById('qp-collapse-btn').addEventListener('click',()=>{const p=document.getElementById('quick-panel'),c=p.classList.toggle('collapsed');document.getElementById('qp-collapse-btn').textContent=c?'▶':'◀';setTimeout(scheduleRecompute,250)});
+/* Mobile drawer */
+function toggleMobilePanel(){const p=document.getElementById('quick-panel'),o=document.getElementById('mob-overlay');const isOpen=p.classList.toggle('mob-open');o.classList.toggle('show',isOpen)}
+document.getElementById('mob-menu').addEventListener('click',toggleMobilePanel);
+document.getElementById('mob-overlay').addEventListener('click',toggleMobilePanel);
+/* Auto 1-up on mobile */
+if(window.innerWidth<=700){S.viewMode=1;document.getElementById('canvas-grid').classList.add('view-1');document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.classList.toggle('active',+b.dataset.view===1))}
 window.addEventListener('resize',()=>scheduleRecompute());
 
+function closeMob(){if(window.innerWidth<=700){document.getElementById('quick-panel').classList.remove('mob-open');document.getElementById('mob-overlay').classList.remove('show')}}
 /* Custom text button */
 document.getElementById('btn-set-text').addEventListener('click',()=>{
   const txt=document.getElementById('custom-text').value||'A';
@@ -260,7 +295,7 @@ document.getElementById('btn-set-text').addEventListener('click',()=>{
   buildParamUI();
   const slT=document.getElementById('sl-p-txt');if(slT)slT.value=txt;
   const slS=document.getElementById('sl-p-sz');if(slS){slS.value=sz;sg(slS);const vl=document.getElementById('vl-p-sz');if(vl)vl.textContent=sz}
-  scheduleRecompute();
+  scheduleRecompute();closeMob();
 });
 
 /* Reset */
@@ -272,7 +307,7 @@ document.getElementById('btn-reset').addEventListener('click',()=>{animDir=0;S.e
   document.querySelectorAll('.res-btn[data-n]').forEach(b=>b.classList.toggle('active',+b.dataset.n===256));
   allZ.forEach(s=>s.max=500);
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
-  buildParamUI();syncBars();scheduleRecompute()});
+  buildParamUI();syncBars();scheduleRecompute();closeMob()});
 
 /* ═══ PRESETS ═══ */
 const PR=[
@@ -298,7 +333,7 @@ function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
   buildParamUI();const el=EL[pr.el];el.params.forEach(pd=>{if(pd.type==='file')return;if(pr.p[pd.id]!==undefined){const sl=document.getElementById('sl-p-'+pd.id);if(sl){if(pd.type==='text')sl.value=pr.p[pd.id];else{sl.value=pr.p[pd.id];sg(sl);const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const vl=document.getElementById('vl-p-'+pd.id);if(vl)vl.textContent=pr.p[pd.id].toFixed(dec)}}}});
   syncBars();scheduleRecompute()}
-(function(){const g=document.getElementById('preset-grid');PR.forEach(pr=>{const b=document.createElement('button');b.className='preset-btn';b.textContent=pr.name;b.addEventListener('click',()=>{applyP(pr);b.classList.add('on')});g.appendChild(b)})})();
+(function(){const g=document.getElementById('preset-grid');PR.forEach(pr=>{const b=document.createElement('button');b.className='preset-btn';b.textContent=pr.name;b.addEventListener('click',()=>{applyP(pr);b.classList.add('on');closeMob()});g.appendChild(b)})})();
 
 (function(){const rgb=wlRGB(S.lambda),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs;buildParamUI();syncBars();scheduleRecompute()})();
 </script>
