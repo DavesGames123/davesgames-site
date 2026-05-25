@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>MagnetLab // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<style>
+:root{
+  --bg:#0e1118;--surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.18);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.05);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.05);
+  --green:#64c864;--red:#e05050;
+  --text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+  --panel-w:280px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;
+  display:flex;flex-direction:column;}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.4))}
+
+/* ═══ TOPBAR ═══ */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:40px;flex-shrink:0;
+  background:rgba(14,17,24,0.94);border-bottom:1px solid var(--border-b);z-index:100}
+.in-frame .topbar{display:none!important}
+.topbar-l{display:flex;align-items:center;gap:1.2rem}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.1rem;letter-spacing:0.12em}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.64rem;letter-spacing:0.14em;text-transform:uppercase}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.topbar-r{font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint)}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
+
+/* ═══ MAIN LAYOUT — flex row: panel | canvas ═══ */
+#main{display:flex;flex:1;min-height:0;position:relative;z-index:1}
+
+/* ═══ LEFT PANEL ═══ */
+#panel{
+  width:var(--panel-w);flex-shrink:0;
+  background:rgba(9,12,20,0.96);border-right:1px solid var(--border-b);
+  display:flex;flex-direction:column;overflow:hidden;user-select:none;z-index:10;
+}
+.p-body{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent}
+.p-body::-webkit-scrollbar{width:4px}
+.p-body::-webkit-scrollbar-thumb{background:var(--surface2)}
+.p-section{padding:12px 14px 14px;border-bottom:1px solid var(--border)}
+.p-sec-lbl{font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.p-sec-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.add-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.add-btn{
+  background:transparent;border:1px solid var(--border-b);color:var(--text-dim);
+  padding:10px 4px;font-family:'JetBrains Mono',monospace;font-size:0.65rem;
+  cursor:pointer;transition:all 0.14s;text-align:center;font-weight:500;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+}
+.add-btn .icon{font-size:1.1rem;line-height:1}
+.add-btn:hover{color:var(--text);border-color:rgba(150,200,255,0.3);background:var(--blue-faint)}
+
+.mag-list{display:flex;flex-direction:column;gap:4px}
+.mag-card{padding:8px 10px;background:rgba(150,200,255,0.03);border:1px solid var(--border);transition:all 0.15s}
+.mag-card.selected{border-color:rgba(150,200,255,0.4);background:rgba(150,200,255,0.08)}
+.mag-card-head{display:flex;align-items:center;gap:5px;margin-bottom:5px}
+.mag-card-icon{font-size:0.9rem;color:var(--blue)}
+.mag-card-name{flex:1;font-size:0.68rem;color:var(--text-bright);font-weight:600;letter-spacing:0.06em}
+.mag-card-del{background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:0.8rem;padding:2px 4px;transition:color 0.15s}
+.mag-card-del:hover{color:var(--red)}
+
+.mag-row{display:flex;align-items:center;gap:5px;margin-bottom:4px}
+.mag-row-lbl{font-size:0.58rem;color:var(--text-dim);width:40px;flex-shrink:0;letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
+.mag-row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));border-radius:2px;outline:none;cursor:pointer}
+.mag-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);cursor:pointer;box-shadow:0 0 4px rgba(150,200,255,0.3)}
+.mag-row .val{min-width:28px;text-align:right;font-size:0.65rem;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0}
+
+.tog-btn{
+  display:flex;align-items:center;gap:5px;width:100%;
+  padding:7px 8px;background:transparent;border:1px solid var(--border-b);
+  color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.6rem;
+  letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.15s;text-align:left;font-weight:500;
+}
+.tog-btn:hover{border-color:rgba(150,200,255,0.3);color:var(--text);background:var(--blue-faint)}
+.tog-btn.on{background:rgba(150,200,255,0.08);border-color:rgba(150,200,255,0.35);color:var(--blue)}
+.tog-btn.off{background:rgba(255,50,50,0.05);border-color:rgba(255,100,100,0.22);color:#a04040}
+
+.sim-btns{display:flex;gap:4px;flex-wrap:wrap}
+.sim-btn{
+  flex:1;padding:8px 4px;background:transparent;border:1px solid var(--border-b);
+  color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.6rem;
+  letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;transition:all 0.15s;text-align:center;font-weight:600;
+}
+.sim-btn:hover{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
+.sim-btn.active{background:rgba(150,200,255,0.1);border-color:rgba(150,200,255,0.4);color:var(--blue)}
+.sim-btn.warn{border-color:rgba(255,200,50,0.3);color:var(--yellow)}
+.sim-btn.warn:hover{border-color:var(--yellow);background:var(--yellow-faint)}
+
+/* ═══ CANVAS WRAPPER ═══ */
+#canvas-wrap{flex:1;position:relative;min-width:0;min-height:0;overflow:hidden}
+#sim-canvas{display:block;width:100%;height:100%;cursor:crosshair}
+
+/* ═══ EQUATION PANEL — overlays canvas ═══ */
+.eq-panel{
+  position:absolute;top:8px;left:8px;
+  max-width:min(500px, calc(100% - 20px));
+  background:rgba(9,12,20,0.92);border:1px solid var(--border-b);
+  backdrop-filter:blur(14px);padding:10px 16px 12px;z-index:50;pointer-events:auto;
+}
+.eq-head{display:flex;align-items:center;gap:7px;margin-bottom:4px;cursor:pointer}
+.eq-head .dot{width:5px;height:5px;background:var(--blue);box-shadow:0 0 8px var(--blue);flex-shrink:0}
+.eq-head .lbl{font-size:0.58rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue);font-weight:600}
+.eq-head .arrow{font-size:0.55rem;color:var(--text-faint);margin-left:auto;transition:transform 0.2s}
+.eq-block{padding:2px 0}
+.eq-block+.eq-block{border-top:1px solid var(--border);margin-top:4px;padding-top:6px}
+.eq-sublabel{font-size:0.46rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-faint);margin-bottom:1px;font-weight:500}
+.eq-row{margin:1px 0;overflow-x:auto;overflow-y:hidden}
+.eq-row::-webkit-scrollbar{height:0}
+.eq-panel .katex{color:var(--text-bright)!important;font-size:1.0rem!important;line-height:1.3!important}
+.eq-panel .katex-display{margin:0.05em 0!important}
+.eq-panel.collapsed .eq-blocks{display:none}
+.eq-panel.collapsed{padding:8px 14px}
+.eq-panel.collapsed .eq-head .arrow{transform:rotate(180deg)}
+
+/* ═══ STATUS BAR ═══ */
+#status-bar{
+  height:22px;flex-shrink:0;
+  background:rgba(14,17,24,0.94);border-top:1px solid var(--border);
+  display:flex;align-items:center;padding:0 12px;gap:14px;z-index:50;
+  font-size:0.54rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500;
+}
+#status-bar .sep{width:1px;height:10px;background:var(--border-b)}
+
+@media(max-width:599px){
+  :root{--panel-w:0px}
+  #panel{
+    position:fixed;top:0;left:0;bottom:0;width:280px;
+    z-index:300;transform:translateX(-100%);transition:transform 0.25s ease;
+  }
+  #panel.mob-open{transform:translateX(0)}
+  .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:250}
+  #panel.mob-open ~ .mob-overlay{display:block}
+}
+#mob-btn{
+  display:none;position:fixed;top:6px;left:6px;z-index:200;
+  width:38px;height:38px;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);
+  color:var(--blue);font-size:1.2rem;cursor:pointer;
+  align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;
+  backdrop-filter:blur(8px);
+}
+#mob-btn:hover{background:rgba(150,200,255,0.1);border-color:var(--blue-dim)}
+@media(max-width:599px){
+  #mob-btn{display:flex}
+  .in-frame #mob-btn{top:6px}
+}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--surface2)}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+
+<button id="mob-btn" onclick="toggleMobilePanel()">☰</button>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">MagnetLab</span></div>
+  <div class="topbar-r">SYS // <strong>ELECTROMAGNETISM</strong></div>
+</div>
+
+<div id="main">
+  <!-- LEFT PANEL -->
+  <div id="panel"><div class="p-body">
+    <div class="p-section">
+      <div class="p-sec-lbl">Add Magnet</div>
+      <div class="add-grid">
+        <button class="add-btn" onclick="addMagnet('bar')"><span class="icon">▮</span>Bar</button>
+        <button class="add-btn" onclick="addMagnet('dipole')"><span class="icon">◉</span>Dipole</button>
+        <button class="add-btn" onclick="addMagnet('solenoid')"><span class="icon">⊞</span>Solenoid</button>
+        <button class="add-btn" onclick="addMagnet('horseshoe')"><span class="icon">⊍</span>Horseshoe</button>
+        <button class="add-btn" onclick="addMagnet('buzzer')"><span class="icon">⊚</span>Buzzer</button>
+        <button class="add-btn" onclick="addMagnet('ring')"><span class="icon">◎</span>Ring</button>
+        <button class="add-btn" onclick="addMagnet('quadrupole')"><span class="icon">✦</span>Quad</button>
+        <button class="add-btn" onclick="addMagnet('halbach')"><span class="icon">⇶</span>Halbach</button>
+      </div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Magnets</div>
+      <div class="mag-list" id="mag-list"></div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Field Display</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <button class="tog-btn on" id="tog-tracers" onclick="toggleTracers()">⇌ Field Tracers</button>
+        <button class="tog-btn on" id="tog-arrows" onclick="toggleArrows()">→ Field Arrows</button>
+        <button class="tog-btn off" id="tog-grid" onclick="toggleGrid()">▦ Field Heatmap</button>
+      </div>
+      <div class="mag-row" style="margin-top:6px">
+        <span class="mag-row-lbl">Count</span>
+        <input type="range" id="sl-tracer-count" min="200" max="3000" value="1500" step="50" oninput="updateTracerCount(this)">
+        <span class="val" id="vl-tracer-count">1500</span>
+      </div>
+      <div class="mag-row">
+        <span class="mag-row-lbl">Speed</span>
+        <input type="range" id="sl-tracer-speed" min="0.1" max="5" value="1.5" step="0.1" oninput="updateTracerSpeed(this)">
+        <span class="val" id="vl-tracer-speed">1.5</span>
+      </div>
+      <div class="mag-row">
+        <span class="mag-row-lbl">Trail</span>
+        <input type="range" id="sl-tracer-trail" min="5" max="80" value="40" step="1" oninput="updateTracerTrail(this)">
+        <span class="val" id="vl-tracer-trail">40</span>
+      </div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Simulation</div>
+      <div class="sim-btns">
+        <button class="sim-btn active" id="btn-play" onclick="togglePlay()">▶ Play</button>
+        <button class="sim-btn" onclick="stopAll()">■ Stop</button>
+        <button class="sim-btn" onclick="resetSim()">↺ Reset</button>
+        <button class="sim-btn warn" onclick="clearAll()">✕ Clear</button>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- CANVAS AREA -->
+  <div class="mob-overlay" onclick="toggleMobilePanel()"></div>
+  <div id="canvas-wrap">
+    <canvas id="sim-canvas"></canvas>
+
+    <!-- Equation panel overlays canvas -->
+    <section class="eq-panel collapsed" id="eq-panel">
+      <div class="eq-head" id="eq-toggle">
+        <span class="dot"></span>
+        <span class="lbl">Maxwell's Equations</span>
+        <span class="arrow">▼</span>
+      </div>
+      <div class="eq-blocks">
+        <div class="eq-block">
+          <div class="eq-sublabel">Gauss's Law · Magnetic</div>
+          <div class="eq-row" id="eq-gauss-b"></div>
+        </div>
+        <div class="eq-block">
+          <div class="eq-sublabel">Ampère–Maxwell</div>
+          <div class="eq-row" id="eq-ampere"></div>
+        </div>
+        <div class="eq-block">
+          <div class="eq-sublabel">Dipole Field</div>
+          <div class="eq-row" id="eq-dipole"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="status-bar">
+  <span id="st-magnets">0 magnets</span><span class="sep"></span>
+  <span id="st-tracers">1500 tracers</span><span class="sep"></span>
+  <span id="st-fps">-- fps</span><span class="sep"></span>
+  <span id="st-field">B: 0.00</span><span class="sep"></span>
+  <span id="st-dims">--</span>
+</div>
+
+<!-- KaTeX -->
+<script>
+(function(){
+  if(!window.katex) return;
+  const B='#60e0ee',E='#ffc832',J='#ffb84d',mu='#c890ff',op='#96c8ff',m='#ff9050';
+  const o={throwOnError:false,displayMode:true};
+  katex.render(String.raw`\textcolor{${op}}{\nabla}\cdot\textcolor{${B}}{\vec{B}}=0`,document.getElementById('eq-gauss-b'),o);
+  katex.render(String.raw`\textcolor{${op}}{\nabla}\times\textcolor{${B}}{\vec{B}}=\textcolor{${mu}}{\mu_0}\textcolor{${J}}{\vec{J}}+\textcolor{${mu}}{\mu_0\epsilon_0}\frac{\partial\textcolor{${E}}{\vec{E}}}{\partial t}`,document.getElementById('eq-ampere'),o);
+  katex.render(String.raw`\textcolor{${B}}{\vec{B}}(\vec{r})=\frac{\textcolor{${mu}}{\mu_0}}{4\pi}\frac{3(\textcolor{${m}}{\vec{m}}\cdot\hat{r})\hat{r}-\textcolor{${m}}{\vec{m}}}{r^3}`,document.getElementById('eq-dipole'),o);
+  document.getElementById('eq-toggle').addEventListener('click',()=>{
+    const p=document.getElementById('eq-panel');
+    const c=p.classList.toggle('collapsed');
+    p.querySelector('.arrow').textContent=c?'▼':'▲';
+  });
+})();
+</script>
+
+<script>
+/* ════════════════════════════════════════════════════════════
+   MAGNETLAB — 2D MAGNETIC FIELD SIMULATOR
+   CW / CH = logical CSS-pixel dimensions of the canvas.
+   All physics, spawning, hit-testing, and rendering use CW/CH.
+   ════════════════════════════════════════════════════════════ */
+const canvas = document.getElementById('sim-canvas');
+const ctx = canvas.getContext('2d');
+let CW = 100, CH = 100;
+
+const SIM = {
+  playing:true, showTracers:true, showArrows:true, showHeatmap:false,
+  tracerCount:1500, tracerSpeed:1.5, tracerTrail:40,
+  dt:1/60, damping:0.97, angDamping:0.85, selectedId:-1,
+};
+let magnets=[], tracers=[], nextId=0;
+
+/* ═══ MAGNET FACTORY ═══ */
+function createMagnet(type,x,y){
+  const m={id:nextId++,type,x,y,angle:-Math.PI/2,strength:1.0,spin:0,fixed:true,vx:0,vy:0,va:0,mass:1,inertia:1};
+  switch(type){
+    case 'bar':
+      m.w=100;m.h=30;m.poles=[];
+      for(let i=-2;i<=2;i++) m.poles.push({dx:i*20,dy:0,mx:1,my:0});
+      m.mass=2;m.inertia=2;break;
+    case 'dipole':
+      m.w=36;m.h=36;m.poles=[{dx:0,dy:0,mx:1,my:0}];
+      m.mass=0.5;m.inertia=0.3;break;
+    case 'solenoid':
+      m.w=80;m.h=50;m.poles=[];m.strength=1.5;
+      for(let i=-3;i<=3;i++) m.poles.push({dx:i*10,dy:0,mx:2,my:0});
+      m.mass=3;m.inertia=3;break;
+    case 'horseshoe':
+      m.w=60;m.h=70;m.poles=[
+        {dx:25,dy:-30,mx:0,my:-1},{dx:25,dy:-15,mx:0.5,my:-0.5},
+        {dx:25,dy:0,mx:1,my:0},{dx:25,dy:15,mx:0.5,my:0.5},
+        {dx:15,dy:28,mx:0,my:1},{dx:0,dy:32,mx:-0.3,my:1},{dx:-15,dy:28,mx:0,my:1},
+        {dx:-25,dy:15,mx:-0.5,my:0.5},{dx:-25,dy:0,mx:-1,my:0},{dx:-25,dy:-15,mx:-0.5,my:-0.5},
+        {dx:-25,dy:-30,mx:0,my:-1}
+      ];m.mass=2.5;m.inertia=2.5;break;
+    case 'buzzer':
+      m.w=44;m.h=44;m.poles=[{dx:0,dy:0,mx:1.5,my:0}];
+      // Dense disc: center + 6 in a ring, all aligned
+      for(let i=0;i<6;i++){const a=i*Math.PI/3;m.poles.push({dx:Math.cos(a)*14,dy:Math.sin(a)*14,mx:1,my:0});}
+      m.mass=1.5;m.inertia=1.2;break;
+    case 'ring':
+      m.w=56;m.h=56;m.poles=[];
+      // 8 dipoles pointing radially outward
+      for(let i=0;i<8;i++){const a=i*Math.PI/4;const cx=Math.cos(a),sy=Math.sin(a);
+        m.poles.push({dx:cx*22,dy:sy*22,mx:cx*1.2,my:sy*1.2});}
+      m.mass=2;m.inertia=2;break;
+    case 'quadrupole':
+      m.w=50;m.h=50;m.poles=[
+        {dx:22,dy:0,mx:1.5,my:0},   // N right
+        {dx:0,dy:22,mx:0,my:1.5},   // N down
+        {dx:-22,dy:0,mx:-1.5,my:0}, // S left (points inward = N right repels)
+        {dx:0,dy:-22,mx:0,my:-1.5}  // S up
+      ];m.mass=2;m.inertia=2;m.strength=1.2;break;
+    case 'halbach':
+      m.w=130;m.h=30;m.poles=[];
+      // Each dipole rotated 90° from previous → field concentrates on one side
+      for(let i=0;i<6;i++){
+        const a=i*Math.PI/2; // 0, 90, 180, 270, 0, 90...
+        m.poles.push({dx:(i-2.5)*22,dy:0,mx:Math.cos(a)*1.5,my:Math.sin(a)*1.5});}
+      m.mass=3;m.inertia=3;m.strength=1.3;break;
+  }
+  return m;
+}
+
+/* ═══ PHYSICS ═══ */
+const FIELD_SCALE = 80000; // compensates for 1/r³ falloff at pixel-scale distances
+
+function dipoleField(px,py,mx,my){
+  const r2=px*px+py*py,r=Math.sqrt(r2);
+  if(r<5)return[0,0];
+  const r3=r2*r,r5=r3*r2,mdotr=mx*px+my*py;
+  return[(3*mdotr*px/r5-mx/r3)*FIELD_SCALE,(3*mdotr*py/r5-my/r3)*FIELD_SCALE];
+}
+function totalField(wx,wy){
+  let Bx=0,By=0;
+  for(const mag of magnets){
+    const ca=Math.cos(mag.angle),sa=Math.sin(mag.angle);
+    for(const p of mag.poles){
+      const sx=mag.x+p.dx*ca-p.dy*sa,sy=mag.y+p.dx*sa+p.dy*ca;
+      const mmx=(p.mx*ca-p.my*sa)*mag.strength,mmy=(p.mx*sa+p.my*ca)*mag.strength;
+      const[bx,by]=dipoleField(wx-sx,wy-sy,mmx,mmy);
+      Bx+=bx;By+=by;
+    }
+  }
+  return[Bx,By];
+}
+function fieldFromOthers(wx,wy,exId){
+  let Bx=0,By=0;
+  for(const mag of magnets){
+    if(mag.id===exId)continue;
+    const ca=Math.cos(mag.angle),sa=Math.sin(mag.angle);
+    for(const p of mag.poles){
+      const sx=mag.x+p.dx*ca-p.dy*sa,sy=mag.y+p.dx*sa+p.dy*ca;
+      const mmx=(p.mx*ca-p.my*sa)*mag.strength,mmy=(p.mx*sa+p.my*ca)*mag.strength;
+      const[bx,by]=dipoleField(wx-sx,wy-sy,mmx,mmy);
+      Bx+=bx;By+=by;
+    }
+  }
+  return[Bx,By];
+}
+function integrateMagnets(){
+  // ── Apply preset spin to ALL magnets (fixed or dynamic) ──
+  for(const mag of magnets){
+    if(mag.spin!==0 && mag!==dragMag) mag.angle+=mag.spin*SIM.dt;
+  }
+
+  // ── Magnetic forces & torque (dynamic only) ──
+  for(const mag of magnets){
+    if(mag.fixed||mag===dragMag)continue;
+    const ca=Math.cos(mag.angle),sa=Math.sin(mag.angle);
+    let Fx=0,Fy=0,torque=0;
+    for(const p of mag.poles){
+      const sx=mag.x+p.dx*ca-p.dy*sa,sy=mag.y+p.dx*sa+p.dy*ca;
+      const mmx=(p.mx*ca-p.my*sa)*mag.strength,mmy=(p.mx*sa+p.my*ca)*mag.strength;
+      const[Bx,By]=fieldFromOthers(sx,sy,mag.id);
+      const h=2;
+      const[Bxr,Byr]=fieldFromOthers(sx+h,sy,mag.id);
+      const[Bxl,Byl]=fieldFromOthers(sx-h,sy,mag.id);
+      const[Bxu,Byu]=fieldFromOthers(sx,sy+h,mag.id);
+      const[Bxd,Byd]=fieldFromOthers(sx,sy-h,mag.id);
+      Fx+=(mmx*(Bxr-Bxl)+mmy*(Byr-Byl))/(2*h)*6000;
+      Fy+=(mmx*(Bxu-Bxd)+mmy*(Byu-Byd))/(2*h)*6000;
+      torque+=(mmx*By-mmy*Bx)*1200;
+    }
+    const fMag=Math.sqrt(Fx*Fx+Fy*Fy),fMax=4000;
+    if(fMag>fMax){Fx*=fMax/fMag;Fy*=fMax/fMag;}
+    torque=Math.max(-1500,Math.min(1500,torque));
+    mag.vx=(mag.vx+Fx/mag.mass*SIM.dt)*SIM.damping;
+    mag.vy=(mag.vy+Fy/mag.mass*SIM.dt)*SIM.damping;
+    mag.va=(mag.va+torque/mag.inertia*SIM.dt)*SIM.angDamping;
+    // Hard cap on angular velocity to prevent spin blowup
+    mag.va=Math.max(-3,Math.min(3,mag.va));
+    mag.x+=mag.vx*SIM.dt;mag.y+=mag.vy*SIM.dt;mag.angle+=mag.va*SIM.dt;
+    // Wall bounce
+    const M=40;
+    if(mag.x<M){mag.x=M;mag.vx*=-0.5;}if(mag.x>CW-M){mag.x=CW-M;mag.vx*=-0.5;}
+    if(mag.y<M){mag.y=M;mag.vy*=-0.5;}if(mag.y>CH-M){mag.y=CH-M;mag.vy*=-0.5;}
+  }
+
+  // ── Magnet-magnet collisions (circle approximation) ──
+  const restitution = 0.6;
+  for(let i=0;i<magnets.length;i++){
+    const a=magnets[i];
+    const ra=Math.max(a.w,a.h)*0.5;
+    for(let j=i+1;j<magnets.length;j++){
+      const b=magnets[j];
+      const rb=Math.max(b.w,b.h)*0.5;
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      const minDist=ra+rb;
+      if(dist>=minDist||dist<0.1)continue;
+
+      // Collision normal
+      const nx=dx/dist, ny=dy/dist;
+      const overlap=minDist-dist;
+
+      // Position correction — push apart
+      const aFixed=a.fixed||a===dragMag, bFixed=b.fixed||b===dragMag;
+      if(aFixed&&bFixed) continue;
+      if(aFixed){
+        b.x+=nx*overlap; b.y+=ny*overlap;
+      } else if(bFixed){
+        a.x-=nx*overlap; a.y-=ny*overlap;
+      } else {
+        a.x-=nx*overlap*0.5; a.y-=ny*overlap*0.5;
+        b.x+=nx*overlap*0.5; b.y+=ny*overlap*0.5;
+      }
+
+      // Velocity exchange along collision normal
+      if(!aFixed&&!bFixed){
+        const dvx=a.vx-b.vx, dvy=a.vy-b.vy;
+        const dvn=dvx*nx+dvy*ny;
+        if(dvn>0){ // approaching
+          const impulse=dvn*(1+restitution)/(1/a.mass+1/b.mass);
+          a.vx-=impulse/a.mass*nx; a.vy-=impulse/a.mass*ny;
+          b.vx+=impulse/b.mass*nx; b.vy+=impulse/b.mass*ny;
+          // Spin from off-center impact
+          a.va+=dvn*0.003; b.va-=dvn*0.003;
+        }
+      } else if(aFixed){
+        const dvn=(b.vx*nx+b.vy*ny);
+        if(dvn<0){ b.vx-=2*dvn*nx*restitution; b.vy-=2*dvn*ny*restitution; b.va+=dvn*0.005; }
+      } else {
+        const dvn=(a.vx*nx+a.vy*ny);
+        if(dvn>0){ a.vx-=2*dvn*nx*restitution; a.vy-=2*dvn*ny*restitution; a.va-=dvn*0.005; }
+      }
+    }
+  }
+}
+
+/* ═══ TRACERS ═══ */
+// Collect world-space positions of magnet pole tips for biased spawning
+function getPoleTips(){
+  const tips=[];
+  for(const mag of magnets){
+    const ca=Math.cos(mag.angle),sa=Math.sin(mag.angle);
+    // Use first and last poles as "tips" (N and S ends)
+    const tipPoles = mag.poles.length<=2 ? mag.poles : [mag.poles[0],mag.poles[mag.poles.length-1]];
+    for(const p of tipPoles){
+      tips.push({
+        x: mag.x + p.dx*ca - p.dy*sa,
+        y: mag.y + p.dx*sa + p.dy*ca
+      });
+    }
+    // Also add intermediate poles for denser coverage near the body
+    if(mag.poles.length>2){
+      const mid=mag.poles[Math.floor(mag.poles.length/2)];
+      tips.push({
+        x: mag.x + mid.dx*ca - mid.dy*sa,
+        y: mag.y + mid.dx*sa + mid.dy*ca
+      });
+    }
+  }
+  return tips;
+}
+
+function spawnPos(){
+  const tips=getPoleTips();
+  // 65% near poles, 35% random — reject positions inside magnets
+  for(let attempt=0;attempt<10;attempt++){
+    let x,y;
+    if(tips.length>0 && Math.random()<0.65){
+      const tip=tips[Math.floor(Math.random()*tips.length)];
+      const r=(Math.random()+Math.random()+Math.random())/3 * 35 + 8;
+      const a=Math.random()*Math.PI*2;
+      x=tip.x+Math.cos(a)*r; y=tip.y+Math.sin(a)*r;
+    } else {
+      x=Math.random()*CW; y=Math.random()*CH;
+    }
+    if(!isInsideMagnet(x,y)) return [x,y];
+  }
+  return [Math.random()*CW, Math.random()*CH];
+}
+
+// Test if point is inside any magnet's oriented bounding box (with padding)
+function isInsideMagnet(px,py){
+  for(const mag of magnets){
+    const ca=Math.cos(-mag.angle),sa=Math.sin(-mag.angle);
+    const dx=px-mag.x, dy=py-mag.y;
+    const lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
+    const pad=6; // px padding
+    if(Math.abs(lx)<mag.w*0.5+pad && Math.abs(ly)<mag.h*0.5+pad) return true;
+  }
+  return false;
+}
+
+function spawnTracers(){
+  tracers=[];
+  for(let i=0;i<SIM.tracerCount;i++){
+    const [x,y]=spawnPos();
+    tracers.push({x,y,trail:[],age:0,maxAge:2.5+Math.random()*4});
+  }
+}
+function updateTracers(dt){
+  const speed=SIM.tracerSpeed*80,trailLen=SIM.tracerTrail;
+  const threshold=1e-6;
+  for(const tr of tracers){
+    tr.age+=dt;
+    const[Bx,By]=totalField(tr.x,tr.y);
+    const Bmag=Math.sqrt(Bx*Bx+By*By);
+    if(Bmag>threshold){
+      const vx=(Bx/Bmag)*speed;
+      const vy=(By/Bmag)*speed;
+      tr.x+=vx*dt;
+      tr.y+=vy*dt;
+    }
+    tr.trail.unshift([tr.x,tr.y,Bmag]);
+    if(tr.trail.length>trailLen)tr.trail.pop();
+    // Kill if: aged out, out of bounds, OR inside a magnet body
+    if(tr.age>tr.maxAge||tr.x<-20||tr.x>CW+20||tr.y<-20||tr.y>CH+20||isInsideMagnet(tr.x,tr.y)){
+      // Respawn biased toward poles
+      const [nx,ny]=spawnPos();
+      tr.x=nx;tr.y=ny;tr.trail=[];tr.age=0;tr.maxAge=2.5+Math.random()*4;
+    }
+  }
+}
+
+/* ═══ COLORS — ported from orbital viewer's B-field tracer system ═══ */
+// Returns [r,g,b] in 0-1 range, matching the orbital viewer exactly
+// Ramp: dark-purple → blue → cyan → green → orange → white
+function fieldColorRGB(mag, gamma){
+  gamma = gamma || 1.0;
+  const lv = Math.log10(1 + mag * 8) / 2.2;
+  const lc = Math.pow(Math.max(0, Math.min(1, lv)), 1 / Math.max(0.1, gamma));
+  const stops = [[0.05,0,0.3],[0,0.2,1],[0,1,0.8],[0.2,1,0],[1,0.5,0],[1,1,1]];
+  const sv = lc * 5, si = Math.min(Math.floor(sv), 4), sf = sv - si;
+  return [
+    stops[si][0] + sf * (stops[si+1][0] - stops[si][0]),
+    stops[si][1] + sf * (stops[si+1][1] - stops[si][1]),
+    stops[si][2] + sf * (stops[si+1][2] - stops[si][2])
+  ];
+}
+function fieldColorCSS(mag, alpha, gamma){
+  const [r,g,b] = fieldColorRGB(mag, gamma);
+  return `rgba(${(r*255)|0},${(g*255)|0},${(b*255)|0},${alpha})`;
+}
+
+/* ═══ RENDER ═══ */
+function render(){
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.restore();
+
+  // Background
+  ctx.fillStyle='#0e1118';
+  ctx.fillRect(0,0,CW,CH);
+
+  // Grid
+  ctx.strokeStyle='rgba(150,200,255,0.03)';ctx.lineWidth=1;
+  for(let x=0;x<CW;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
+  for(let y=0;y<CH;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
+
+  if(SIM.showHeatmap) renderHeatmap();
+  if(SIM.showArrows) renderArrows();
+  if(SIM.showTracers) renderTracers();
+  renderMagnets();
+}
+
+function renderHeatmap(){
+  const step=14;
+  for(let x=0;x<CW;x+=step)for(let y=0;y<CH;y+=step){
+    const[Bx,By]=totalField(x,y);
+    ctx.fillStyle=fieldColorCSS(Math.sqrt(Bx*Bx+By*By),0.4);
+    ctx.fillRect(x,y,step,step);
+  }
+}
+function renderArrows(){
+  ctx.save();
+  ctx.globalCompositeOperation='lighter'; // additive blend like orbital viewer
+  const step=44,maxLen=18;
+  for(let x=step/2;x<CW;x+=step)for(let y=step/2;y<CH;y+=step){
+    const[Bx,By]=totalField(x,y);
+    const Bmag=Math.sqrt(Bx*Bx+By*By);
+    if(Bmag<1e-5)continue;
+    const[r,g,b]=fieldColorRGB(Bmag);
+    const lv=Math.min(1,Math.log10(1+Bmag*8)/2.2);
+    const len=Math.max(3,lv*maxLen);
+    const nx=Bx/Bmag,ny=By/Bmag;
+    const alpha=Math.max(0.06,Math.min(0.5,lv*0.6));
+    // Dim shaft color (0.35× like orbital viewer's instanced arrows)
+    ctx.strokeStyle=`rgba(${(r*0.35*255)|0},${(g*0.35*255)|0},${(b*0.35*255)|0},${alpha})`;
+    ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+nx*len,y+ny*len);ctx.stroke();
+    if(len>4){
+      const ax=x+nx*len,ay=y+ny*len,px=-ny*2.5,py=nx*2.5;
+      ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(ax-nx*4+px,ay-ny*4+py);ctx.lineTo(ax-nx*4-px,ay-ny*4-py);ctx.closePath();
+      ctx.fillStyle=`rgba(${(r*0.35*255)|0},${(g*0.35*255)|0},${(b*0.35*255)|0},${alpha})`;
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+function renderTracers(){
+  ctx.save();
+  ctx.globalCompositeOperation='lighter'; // additive blend — matches THREE.AdditiveBlending
+  ctx.lineCap='round';
+
+  for(const tr of tracers){
+    const tl=tr.trail.length;if(tl<2)continue;
+    // Age alpha: fast fade-in, slow sustain, fade-out in last 20%
+    // Matches orbital viewer: tr.age<0.1 ? age/0.1 : age>max*0.8 ? (max-age)/(max*0.2) : 1
+    const ageA = tr.age < 0.1 ? tr.age / 0.1
+               : tr.age > tr.maxAge * 0.8 ? (tr.maxAge - tr.age) / (tr.maxAge * 0.2)
+               : 1;
+
+    for(let s=0;s<tl-1;s++){
+      const pt=tr.trail[s], pn=tr.trail[s+1];
+      // Trail alpha: head bright, tail dim (0.25× at tail end, matching orbital viewer)
+      const a0 = (1 - s / SIM.tracerTrail) * ageA;
+      const a1 = (1 - (s+1) / SIM.tracerTrail) * ageA * 0.25;
+      if(a0 < 0.01) continue;
+
+      const Bmag = pt[2] || 0;
+      const [r,g,b] = fieldColorRGB(Bmag);
+
+      // Glow pass: wider, dimmer line underneath for bloom effect
+      ctx.strokeStyle = `rgba(${(r*a0*0.12*255)|0},${(g*a0*0.12*255)|0},${(b*a0*0.12*255)|0},1)`;
+      ctx.lineWidth = Math.max(1, 5 * a0);
+      ctx.beginPath(); ctx.moveTo(pt[0],pt[1]); ctx.lineTo(pn[0],pn[1]); ctx.stroke();
+
+      // Core pass: bright, thin — color multiplied by alpha like vertex colors
+      ctx.strokeStyle = `rgba(${(r*a0*0.55*255)|0},${(g*a0*0.55*255)|0},${(b*a0*0.55*255)|0},1)`;
+      ctx.lineWidth = Math.max(0.5, 1.8 * a0);
+      ctx.beginPath(); ctx.moveTo(pt[0],pt[1]); ctx.lineTo(pn[0],pn[1]); ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function renderMagnets(){
+  for(const mag of magnets){
+    ctx.save();ctx.translate(mag.x,mag.y);ctx.rotate(mag.angle);
+    const sel=mag.id===SIM.selectedId;
+    if(mag.type==='bar') drawBar(mag,sel);
+    else if(mag.type==='dipole') drawDipole(mag,sel);
+    else if(mag.type==='solenoid') drawSolenoid(mag,sel);
+    else if(mag.type==='horseshoe') drawHorseshoe(mag,sel);
+    else if(mag.type==='buzzer') drawBuzzer(mag,sel);
+    else if(mag.type==='ring') drawRing(mag,sel);
+    else if(mag.type==='quadrupole') drawQuadrupole(mag,sel);
+    else if(mag.type==='halbach') drawHalbach(mag,sel);
+    if(!mag.fixed){
+      ctx.strokeStyle='rgba(100,200,100,0.45)';ctx.lineWidth=1;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.arc(0,0,Math.max(mag.w,mag.h)*0.65,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+    }
+    ctx.restore();
+  }
+}
+function drawBar(m,sel){
+  const hw=m.w/2,hh=m.h/2;
+  ctx.fillStyle=sel?'rgba(220,60,60,0.85)':'rgba(200,50,50,0.65)';ctx.fillRect(0,-hh,hw,m.h);
+  ctx.fillStyle=sel?'rgba(60,100,220,0.85)':'rgba(50,80,200,0.65)';ctx.fillRect(-hw,-hh,hw,m.h);
+  ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.25)';ctx.lineWidth=sel?2:1;ctx.strokeRect(-hw,-hh,m.w,m.h);
+  ctx.font='bold 13px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(255,255,255,0.8)';ctx.fillText('N',hw/2,0);ctx.fillText('S',-hw/2,0);
+}
+function drawDipole(m,sel){
+  const r=16;
+  ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);
+  ctx.fillStyle=sel?'rgba(150,200,255,0.2)':'rgba(150,200,255,0.08)';ctx.fill();
+  ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.35)';ctx.lineWidth=sel?2:1;ctx.stroke();
+  ctx.beginPath();ctx.arc(0,0,r-2,-Math.PI/2,Math.PI/2);ctx.fillStyle='rgba(220,60,60,0.45)';ctx.fill();
+  ctx.beginPath();ctx.arc(0,0,r-2,Math.PI/2,Math.PI*1.5);ctx.fillStyle='rgba(60,100,220,0.45)';ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(-7,0);ctx.lineTo(7,0);ctx.moveTo(4,-3);ctx.lineTo(7,0);ctx.lineTo(4,3);ctx.stroke();
+}
+function drawSolenoid(m,sel){
+  const hw=m.w/2,hh=m.h/2;
+  ctx.fillStyle=sel?'rgba(80,60,40,0.8)':'rgba(60,45,30,0.65)';ctx.fillRect(-hw,-hh,m.w,m.h);
+  ctx.strokeStyle='rgba(200,160,60,0.45)';ctx.lineWidth=1.5;
+  for(let i=-3;i<=3;i++){ctx.beginPath();ctx.moveTo(i*10,-hh);ctx.lineTo(i*10,hh);ctx.stroke();}
+  ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.25)';ctx.lineWidth=sel?2:1;ctx.strokeRect(-hw,-hh,m.w,m.h);
+  ctx.font='bold 11px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(220,60,60,0.8)';ctx.fillText('N',hw-10,0);
+  ctx.fillStyle='rgba(60,100,220,0.8)';ctx.fillText('S',-hw+10,0);
+}
+function drawHorseshoe(m,sel){
+  const lc=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.35)';ctx.lineCap='round';
+  ctx.beginPath();ctx.moveTo(25,-30);ctx.lineTo(25,15);ctx.strokeStyle='rgba(220,80,80,0.65)';ctx.lineWidth=10;ctx.stroke();
+  ctx.beginPath();ctx.moveTo(-25,-30);ctx.lineTo(-25,15);ctx.strokeStyle='rgba(80,100,220,0.65)';ctx.lineWidth=10;ctx.stroke();
+  ctx.beginPath();ctx.arc(0,15,25,0,Math.PI);ctx.strokeStyle='rgba(140,100,180,0.55)';ctx.lineWidth=10;ctx.stroke();
+  ctx.strokeStyle=lc;ctx.lineWidth=sel?2:1;
+  ctx.beginPath();ctx.moveTo(30,-30);ctx.lineTo(30,15);ctx.arc(0,15,30,0,Math.PI);ctx.lineTo(-30,-30);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(20,-30);ctx.lineTo(20,15);ctx.arc(0,15,20,0,Math.PI);ctx.lineTo(-20,-30);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(20,-30);ctx.lineTo(30,-30);ctx.moveTo(-20,-30);ctx.lineTo(-30,-30);ctx.stroke();
+  ctx.font='bold 10px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(255,200,200,0.9)';ctx.fillText('N',25,-22);
+  ctx.fillStyle='rgba(200,200,255,0.9)';ctx.fillText('S',-25,-22);
+}
+function drawBuzzer(m,sel){
+  const r=20;
+  // Metallic disc body
+  const grad=ctx.createRadialGradient(0,0,2,0,0,r);
+  grad.addColorStop(0,'rgba(180,180,200,0.4)');grad.addColorStop(0.6,'rgba(120,120,140,0.35)');grad.addColorStop(1,'rgba(80,80,100,0.25)');
+  ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.fillStyle=grad;ctx.fill();
+  // N half (right)
+  ctx.beginPath();ctx.arc(0,0,r-2,-Math.PI/2,Math.PI/2);ctx.fillStyle='rgba(220,60,60,0.4)';ctx.fill();
+  // S half (left)
+  ctx.beginPath();ctx.arc(0,0,r-2,Math.PI/2,Math.PI*1.5);ctx.fillStyle='rgba(60,100,220,0.4)';ctx.fill();
+  // Outline + inner ring
+  ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.3)';ctx.lineWidth=sel?2:1;
+  ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);ctx.stroke();
+  ctx.strokeStyle='rgba(150,200,255,0.12)';ctx.beginPath();ctx.arc(0,0,r*0.55,0,Math.PI*2);ctx.stroke();
+  // Center dot
+  ctx.beginPath();ctx.arc(0,0,3,0,Math.PI*2);ctx.fillStyle='rgba(200,200,220,0.6)';ctx.fill();
+  ctx.font='bold 8px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillText('N',10,0);ctx.fillText('S',-10,0);
+}
+function drawRing(m,sel){
+  const ro=26,ri=14;
+  // Ring body with radial gradient
+  ctx.beginPath();ctx.arc(0,0,ro,0,Math.PI*2);ctx.arc(0,0,ri,0,Math.PI*2,true);
+  ctx.fillStyle=sel?'rgba(100,180,100,0.3)':'rgba(80,150,80,0.2)';ctx.fill();
+  ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.3)';ctx.lineWidth=sel?2:1;
+  ctx.beginPath();ctx.arc(0,0,ro,0,Math.PI*2);ctx.stroke();
+  ctx.beginPath();ctx.arc(0,0,ri,0,Math.PI*2);ctx.stroke();
+  // Pole direction ticks (radial outward arrows)
+  ctx.strokeStyle='rgba(255,255,255,0.35)';ctx.lineWidth=1.5;
+  for(let i=0;i<8;i++){
+    const a=i*Math.PI/4;
+    ctx.beginPath();ctx.moveTo(Math.cos(a)*ri,Math.sin(a)*ri);ctx.lineTo(Math.cos(a)*ro,Math.sin(a)*ro);ctx.stroke();
+  }
+  ctx.font='bold 7px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fillText('RING',0,0);
+}
+function drawQuadrupole(m,sel){
+  const s=22,r=8;
+  // Four pole circles at cardinal directions
+  const poles=[{x:s,y:0,n:true},{x:0,y:s,n:false},{x:-s,y:0,n:true},{x:0,y:-s,n:false}];
+  // Cross body
+  ctx.strokeStyle=sel?'rgba(150,200,255,0.5)':'rgba(150,200,255,0.15)';ctx.lineWidth=sel?2:1;
+  ctx.beginPath();ctx.moveTo(-s,0);ctx.lineTo(s,0);ctx.moveTo(0,-s);ctx.lineTo(0,s);ctx.stroke();
+  // Pole circles
+  for(const p of poles){
+    ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);
+    ctx.fillStyle=p.n?'rgba(220,60,60,0.55)':'rgba(60,100,220,0.55)';ctx.fill();
+    ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.3)';ctx.lineWidth=sel?2:1;ctx.stroke();
+    ctx.font='bold 9px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(255,255,255,0.8)';ctx.fillText(p.n?'N':'S',p.x,p.y);
+  }
+  // Center marker
+  ctx.beginPath();ctx.arc(0,0,3,0,Math.PI*2);ctx.fillStyle='rgba(255,200,50,0.5)';ctx.fill();
+}
+function drawHalbach(m,sel){
+  const hw=m.w/2,hh=m.h/2,ns=6,sw=m.w/ns;
+  // Draw segments with arrows showing rotation
+  for(let i=0;i<ns;i++){
+    const x=-hw+i*sw;
+    const a=i*Math.PI/2; // 0°, 90°, 180°, 270°...
+    // Segment fill: color indicates pole direction
+    const red=Math.max(0,Math.cos(a)), blue=Math.max(0,-Math.cos(a));
+    const up=Math.max(0,-Math.sin(a)), dn=Math.max(0,Math.sin(a));
+    ctx.fillStyle=`rgba(${(80+red*140)|0},${(40+up*80+dn*80)|0},${(80+blue*140)|0},0.5)`;
+    ctx.fillRect(x,-hh,sw,m.h);
+    // Arrow showing dipole direction in this segment
+    ctx.save();ctx.translate(x+sw/2,0);ctx.rotate(a);
+    ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(-6,0);ctx.lineTo(6,0);ctx.moveTo(3,-3);ctx.lineTo(6,0);ctx.lineTo(3,3);ctx.stroke();
+    ctx.restore();
+  }
+  // Outline
+  ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.25)';ctx.lineWidth=sel?2:1;
+  ctx.strokeRect(-hw,-hh,m.w,m.h);
+  // Segment dividers
+  ctx.strokeStyle='rgba(150,200,255,0.15)';ctx.lineWidth=1;
+  for(let i=1;i<ns;i++){const x=-hw+i*sw;ctx.beginPath();ctx.moveTo(x,-hh);ctx.lineTo(x,hh);ctx.stroke();}
+  // Label
+  ctx.font='bold 8px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(255,200,50,0.6)';ctx.fillText('HALBACH',0,hh+8);
+}
+
+/* ═══ UI WIRING ═══ */
+function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
+function rebuildMagnetList(){
+  const list=document.getElementById('mag-list');if(!list)return;list.innerHTML='';
+  const icons={bar:'▮',dipole:'◉',solenoid:'⊞',horseshoe:'⊍',buzzer:'⊚',ring:'◎',quadrupole:'✦',halbach:'⇶'};
+  magnets.forEach(mag=>{
+    const c=document.createElement('div');
+    c.className='mag-card'+(mag.id===SIM.selectedId?' selected':'');
+    c.onclick=e=>{if(!e.target.closest('.mag-card-del'))selectMagnet(mag.id);};
+    c.innerHTML=`<div class="mag-card-head"><span class="mag-card-icon">${icons[mag.type]||'?'}</span><span class="mag-card-name">${mag.type.toUpperCase()} #${mag.id}</span><button class="mag-card-del" onclick="removeMagnet(${mag.id})">✕</button></div>
+      <div class="mag-row"><span class="mag-row-lbl">Str</span><input type="range" min="0.1" max="5" value="${mag.strength}" step="0.1" oninput="setMagProp(${mag.id},'strength',+this.value,this)"><span class="val">${mag.strength.toFixed(1)}</span></div>
+      <div class="mag-row"><span class="mag-row-lbl">Angle</span><input type="range" min="-3.14159" max="3.14159" value="${mag.angle}" step="0.05" oninput="setMagProp(${mag.id},'angle',+this.value,this)"><span class="val">${(mag.angle*180/Math.PI).toFixed(0)}°</span></div>
+      <div class="mag-row"><span class="mag-row-lbl">Spin</span><input type="range" min="-12" max="12" value="${mag.spin}" step="0.2" oninput="setMagProp(${mag.id},'spin',+this.value,this)"><span class="val">${mag.spin.toFixed(1)}</span></div>
+      <button class="tog-btn ${mag.fixed?'off':'on'}" onclick="toggleFixed(${mag.id})">${mag.fixed?'🔒 Fixed':'🔓 Dynamic'}</button>`;
+    list.appendChild(c);
+    c.querySelectorAll('input[type=range]').forEach(sg);
+  });
+  document.getElementById('st-magnets').textContent=magnets.length+' magnet'+(magnets.length!==1?'s':'');
+}
+
+function addMagnet(type){
+  // Find a position that doesn't overlap existing magnets
+  let cx=CW/2, cy=CH/2;
+  const tryRadius=Math.max(60, Math.min(CW,CH)*0.08);
+  let placed=false;
+  // Spiral outward from center to find a free spot
+  for(let ring=0;ring<8&&!placed;ring++){
+    const r=ring*tryRadius;
+    const steps=Math.max(1, Math.round(ring*6));
+    for(let s=0;s<steps&&!placed;s++){
+      const angle=s/steps*Math.PI*2;
+      const tx=CW/2+Math.cos(angle)*r;
+      const ty=CH/2+Math.sin(angle)*r;
+      let overlap=false;
+      for(const other of magnets){
+        const dx=tx-other.x,dy=ty-other.y;
+        const minD=Math.max(other.w,other.h)*0.5+60;
+        if(dx*dx+dy*dy<minD*minD){overlap=true;break;}
+      }
+      if(!overlap){cx=tx;cy=ty;placed=true;}
+    }
+  }
+  cx=Math.max(60,Math.min(CW-60,cx));
+  cy=Math.max(60,Math.min(CH-60,cy));
+  const m=createMagnet(type,cx,cy);
+  magnets.push(m);SIM.selectedId=m.id;
+  rebuildMagnetList();spawnTracers();
+  // Auto-close mobile panel so user sees the new magnet
+  if(window.innerWidth<600) document.getElementById('panel').classList.remove('mob-open');
+}
+
+function toggleMobilePanel(){
+  document.getElementById('panel').classList.toggle('mob-open');
+}
+function removeMagnet(id){magnets=magnets.filter(m=>m.id!==id);if(SIM.selectedId===id)SIM.selectedId=magnets.length?magnets[0].id:-1;rebuildMagnetList();spawnTracers();}
+function selectMagnet(id){SIM.selectedId=id;rebuildMagnetList();}
+function setMagProp(id,prop,val,el){
+  const m=magnets.find(m=>m.id===id);if(!m)return;m[prop]=val;if(el)sg(el);
+  const row=el.closest('.mag-row');if(row){const v=row.querySelector('.val');if(prop==='angle')v.textContent=(val*180/Math.PI).toFixed(0)+'°';else v.textContent=val.toFixed(1);}
+}
+function toggleFixed(id){const m=magnets.find(m=>m.id===id);if(!m)return;m.fixed=!m.fixed;m.vx=0;m.vy=0;m.va=0;rebuildMagnetList();}
+function toggleTracers(){SIM.showTracers=!SIM.showTracers;const b=document.getElementById('tog-tracers');b.classList.toggle('on',SIM.showTracers);b.classList.toggle('off',!SIM.showTracers);}
+function toggleArrows(){SIM.showArrows=!SIM.showArrows;const b=document.getElementById('tog-arrows');b.classList.toggle('on',SIM.showArrows);b.classList.toggle('off',!SIM.showArrows);}
+function toggleGrid(){SIM.showHeatmap=!SIM.showHeatmap;const b=document.getElementById('tog-grid');b.classList.toggle('on',SIM.showHeatmap);b.classList.toggle('off',!SIM.showHeatmap);}
+function updateTracerCount(el){SIM.tracerCount=+el.value;document.getElementById('vl-tracer-count').textContent=el.value;sg(el);spawnTracers();document.getElementById('st-tracers').textContent=SIM.tracerCount+' tracers';}
+function updateTracerSpeed(el){SIM.tracerSpeed=+el.value;document.getElementById('vl-tracer-speed').textContent=(+el.value).toFixed(1);sg(el);}
+function updateTracerTrail(el){SIM.tracerTrail=+el.value;document.getElementById('vl-tracer-trail').textContent=el.value;sg(el);}
+function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'▶ Play':'▐▐ Pause';b.classList.toggle('active',SIM.playing);}
+function resetSim(){magnets.forEach(m=>{m.vx=0;m.vy=0;m.va=0;m.spin=0;});rebuildMagnetList();spawnTracers();}
+function stopAll(){magnets.forEach(m=>{m.vx=0;m.vy=0;m.va=0;m.spin=0;});rebuildMagnetList();}
+function clearAll(){magnets=[];SIM.selectedId=-1;rebuildMagnetList();spawnTracers();}
+
+/* ═══ DRAG ═══ */
+let dragMag=null,dragOffX=0,dragOffY=0,rotating=false;
+function getCanvasPos(e){
+  const rect=canvas.getBoundingClientRect();
+  const t=e.touches?e.touches[0]:e;
+  return[t.clientX-rect.left,t.clientY-rect.top];
+}
+function hitTest(wx,wy){
+  for(let i=magnets.length-1;i>=0;i--){
+    const m=magnets[i],ca=Math.cos(-m.angle),sa=Math.sin(-m.angle);
+    const dx=wx-m.x,dy=wy-m.y,lx=dx*ca-dy*sa,ly=dx*sa+dy*ca;
+    if(Math.abs(lx)<m.w/2+10&&Math.abs(ly)<m.h/2+10)return m;
+  }
+  return null;
+}
+canvas.addEventListener('mousedown',onDown);
+canvas.addEventListener('touchstart',onDown,{passive:false});
+function onDown(e){
+  e.preventDefault();const[x,y]=getCanvasPos(e);const hit=hitTest(x,y);
+  if(hit){dragMag=hit;dragOffX=hit.x-x;dragOffY=hit.y-y;rotating=e.shiftKey;SIM.selectedId=hit.id;rebuildMagnetList();}
+}
+window.addEventListener('mousemove',onMove);
+window.addEventListener('touchmove',onMove,{passive:false});
+function onMove(e){
+  if(!dragMag)return;e.preventDefault();const[x,y]=getCanvasPos(e);
+  if(rotating)dragMag.angle=Math.atan2(y-dragMag.y,x-dragMag.x);
+  else{dragMag.x=x+dragOffX;dragMag.y=y+dragOffY;}
+  rebuildMagnetList();
+}
+window.addEventListener('mouseup',onUp);
+window.addEventListener('touchend',onUp);
+function onUp(){if(dragMag){dragMag.vx=0;dragMag.vy=0;}dragMag=null;rotating=false;}
+
+/* ═══ RESIZE — uses ResizeObserver on the wrapper div ═══ */
+function resize(){
+  const wrap=document.getElementById('canvas-wrap');
+  CW=wrap.clientWidth;
+  CH=wrap.clientHeight;
+  if(CW<10||CH<10){CW=300;CH=300;} // fallback
+  const dpr=Math.min(devicePixelRatio,2);
+  canvas.width=CW*dpr;
+  canvas.height=CH*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  document.getElementById('st-dims').textContent=CW+'×'+CH;
+}
+
+// Use ResizeObserver for reliable sizing
+if(window.ResizeObserver){
+  new ResizeObserver(()=>{resize();spawnTracers();}).observe(document.getElementById('canvas-wrap'));
+} else {
+  window.addEventListener('resize',()=>{resize();spawnTracers();});
+}
+
+/* ═══ LOOP ═══ */
+let lastTime=0,fpsCounter=0,fpsTime=0;
+function loop(time){
+  requestAnimationFrame(loop);
+  const dt=Math.min((time-lastTime)/1000,0.05);lastTime=time;
+  fpsCounter++;fpsTime+=dt;
+  if(fpsTime>=0.5){document.getElementById('st-fps').textContent=Math.round(fpsCounter/fpsTime)+' fps';fpsCounter=0;fpsTime=0;}
+  if(SIM.playing){integrateMagnets();updateTracers(dt);}
+  if(magnets.length>0){
+    const[Bx,By]=totalField(CW/2,CH/2);
+    document.getElementById('st-field').textContent='B: '+Math.sqrt(Bx*Bx+By*By).toExponential(1);
+  }
+  render();
+}
+
+/* ═══ INIT ═══ */
+document.querySelectorAll('#panel input[type=range]').forEach(sg);
+// Delay init slightly to ensure layout is computed
+setTimeout(()=>{
+  resize();
+  spawnTracers();
+  rebuildMagnetList();
+  addMagnet('bar');
+  requestAnimationFrame(loop);
+},50);
+</script>
+</body>
+</html>
