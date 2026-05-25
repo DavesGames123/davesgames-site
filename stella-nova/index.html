@@ -92,6 +92,19 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item" data-tab="home" onclick="switchTab('home')"><span class="nav-label">Overview</span></button>
         </div>
       </div>
+      <div class="cluster open" id="cl-crew">
+        <button class="cluster-head" onclick="toggleCluster('cl-crew')"><span class="cluster-icon">&#9733;</span><span class="cluster-label">Learn About Stella Nova</span><span class="cluster-arrow">&#8250;</span></button>
+        <div class="cluster-body">
+          <button class="nav-item" data-tab="guide" onclick="switchTab('guide')"><span class="nav-label">Station Guide</span></button>
+          <button class="nav-item" data-tab="planner" onclick="switchTab('planner')"><span class="nav-label">Station Planner</span></button>
+          <button class="nav-item" data-tab="selection" onclick="switchTab('selection')"><span class="nav-label">Selection</span></button>
+          <button class="nav-item" data-tab="crafting" onclick="switchTab('crafting')"><span class="nav-label">Crafting</span></button>
+          <button class="nav-item" data-tab="shipdesigner" onclick="switchTab('shipdesigner')"><span class="nav-label">Ship Designer</span><span class="nav-badge">NEW</span></button>
+          <button class="nav-item" data-tab="flagdesigner" onclick="switchTab('flagdesigner')"><span class="nav-label">Flag Designer</span><span class="nav-badge">NEW</span></button>
+          <button class="nav-item" data-tab="behaviors" onclick="switchTab('behaviors')"><span class="nav-label">Behaviors</span></button>
+          <button class="nav-item" data-tab="controls" onclick="switchTab('controls')"><span class="nav-label">Controls</span></button>
+        </div>
+      </div>
       <div class="cluster open" id="cl-learn">
         <button class="cluster-head learn-head" onclick="toggleCluster('cl-learn')"><span class="cluster-icon">&#955;</span><span class="cluster-label">Learn About Physics</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
@@ -119,19 +132,6 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item wh" data-tab="anomaly" onclick="switchTab('anomaly')"><span class="nav-label">Anomaly</span><span class="nav-badge">SHADER</span></button>
           <button class="nav-item fx" data-tab="explosion" onclick="switchTab('explosion')"><span class="nav-label">Explosion</span></button>
           <button class="nav-item fx" data-tab="flare" onclick="switchTab('flare')"><span class="nav-label">Engine Propulsion Effects</span></button>
-        </div>
-      </div>
-      <div class="cluster open" id="cl-crew">
-        <button class="cluster-head" onclick="toggleCluster('cl-crew')"><span class="cluster-icon">&#11041;</span><span class="cluster-label">Operational Manual</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <button class="nav-item" data-tab="guide" onclick="switchTab('guide')"><span class="nav-label">Station Guide</span></button>
-          <button class="nav-item" data-tab="planner" onclick="switchTab('planner')"><span class="nav-label">Station Planner</span></button>
-          <button class="nav-item" data-tab="selection" onclick="switchTab('selection')"><span class="nav-label">Selection</span></button>
-          <button class="nav-item" data-tab="crafting" onclick="switchTab('crafting')"><span class="nav-label">Crafting</span></button>
-          <button class="nav-item" data-tab="shipdesigner" onclick="switchTab('shipdesigner')"><span class="nav-label">Ship Designer</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item" data-tab="flagdesigner" onclick="switchTab('flagdesigner')"><span class="nav-label">Flag Designer</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item" data-tab="behaviors" onclick="switchTab('behaviors')"><span class="nav-label">Behaviors</span></button>
-          <button class="nav-item" data-tab="controls" onclick="switchTab('controls')"><span class="nav-label">Controls</span></button>
         </div>
       </div>
       <div class="cluster" id="cl-solar">
