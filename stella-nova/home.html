@@ -22,12 +22,10 @@
   body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
   body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.35) 100%)}
   .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
-  .corner-data{position:fixed;z-index:50;pointer-events:none;font-size:0.38rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);line-height:1.8}
+  .corner-data{position:fixed;z-index:50;pointer-events:none;font-size:0.5rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);line-height:1.8}
   .corner-data.tl{top:3.2rem;left:1rem}.corner-data.br{bottom:3.2rem;right:1rem;text-align:right}
   .corner-data span{color:var(--blue-dim)}
-
-  /* ═══════ BARS ═══════ */
-  .topbar{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase}
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase}
   .topbar-l{display:flex;align-items:center;gap:1.5rem}
   .sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:0.8rem;letter-spacing:0.12em}
   .sys-status{display:flex;align-items:center;gap:0.35rem;color:var(--green)}
@@ -35,36 +33,30 @@
   @keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
   .topbar-r{display:flex;gap:2rem;color:var(--text-dim)}
   .topbar-r strong{color:var(--blue-dim);font-weight:500}
-  .botbar{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-top:1px solid var(--border);font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase}
+  .botbar{position:fixed;bottom:0;left:0;right:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0.5rem 1.5rem;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-top:1px solid var(--border);font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase}
   .bot-group{display:flex;align-items:center;gap:0.8rem}
-  .bot-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.45rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.3rem 0.7rem;cursor:pointer;transition:all 0.2s}
+  .bot-btn{background:transparent;border:1px solid var(--border);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;padding:0.3rem 0.7rem;cursor:pointer;transition:all 0.2s}
   .bot-btn:hover{border-color:var(--blue);color:var(--blue);box-shadow:0 0 10px var(--blue-glow)}
   .bot-btn.active{border-color:var(--blue);color:var(--bg);background:var(--blue)}
-  .bot-read{color:var(--text-faint)}
-
+  .bot-read{color:var(--text-dim)}
   .content{position:relative;z-index:10;pointer-events:none}
   .content > *{pointer-events:auto}
-
-  /* ═══════ PANELS ═══════ */
   .panel{background:rgba(14,17,24,0.88);backdrop-filter:blur(20px);border:1px solid var(--border);position:relative}
   .panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--blue-dim),transparent)}
-  .p-head{display:flex;align-items:center;justify-content:space-between;padding:0.55rem 1.2rem;border-bottom:1px solid var(--border);font-size:0.45rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim)}
-  .p-head .tag{color:var(--text-faint);font-size:0.4rem}
-
+  .p-head{display:flex;align-items:center;justify-content:space-between;padding:0.55rem 1.2rem;border-bottom:1px solid var(--border);font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim)}
+  .p-head .tag{color:var(--text-dim);font-size:0.52rem}
   .sys-window{border:1px solid var(--border-b);background:rgba(14,17,24,0.92);backdrop-filter:blur(16px);position:relative;width:100%;max-width:540px;overflow:hidden}
   .sys-window.full-width{width:100%;max-width:100%}
   .sys-window::before{content:'';position:absolute;inset:3px;border:1px solid var(--border);pointer-events:none;z-index:2}
   .sys-window::after{content:'';position:absolute;top:0;left:0;width:6px;height:6px;background:var(--blue-dim);box-shadow:calc(100% - 6px) 0 0 var(--blue-dim),0 calc(100% - 6px) 0 var(--blue-dim),calc(100% - 6px) calc(100% - 6px) 0 var(--blue-dim);pointer-events:none;z-index:2}
-  .sw-head{padding:0.6rem 1.2rem;border-bottom:1px solid var(--border-b);display:flex;justify-content:space-between;align-items:center;font-size:0.45rem;letter-spacing:0.2em;text-transform:uppercase}
+  .sw-head{padding:0.6rem 1.2rem;border-bottom:1px solid var(--border-b);display:flex;justify-content:space-between;align-items:center;font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase}
   .sw-head .sw-sys{color:var(--blue)}.sw-head .sw-tag{color:var(--text-faint)}
   .sw-body{padding:2rem 2.2rem}
   .sw-body h2{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:2rem;color:var(--text-bright);margin-bottom:1rem;line-height:1.15}
   .sw-body h2 em{font-style:italic;color:var(--yellow)}
-  .sw-body p{font-size:0.7rem;font-weight:300;color:var(--text-dim);line-height:2;margin-bottom:0.8rem}
+  .sw-body p{font-size:0.85rem;font-weight:300;color:var(--text);line-height:1.85;margin-bottom:0.8rem}
   .tag-strip{display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.5rem}
-  .tag-strip span{font-size:0.42rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--blue-dim);padding:0.25rem 0.6rem;border:1px solid var(--border-b);background:var(--blue-faint)}
-
-  /* ═══════ HERO ═══════ */
+  .tag-strip span{font-size:0.55rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--blue-dim);padding:0.25rem 0.6rem;border:1px solid var(--border-b);background:var(--blue-faint)}
   .hero{min-height:100vh;display:flex;align-items:center;position:relative;overflow:hidden}
   #heroRadar{position:absolute;inset:0;z-index:0}
   .hero-inner{position:relative;z-index:10;width:100%;max-width:1100px;margin:0 auto;padding:0 3rem;display:flex;gap:3rem;align-items:flex-start}
@@ -76,8 +68,7 @@
   .h-title em{font-style:italic;color:var(--yellow);text-shadow:0 0 25px var(--yellow-glow)}
   .h-sub{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(1.4rem,3vw,2.2rem);color:var(--text-dim);line-height:1.15;margin-bottom:1.2rem;font-style:italic}
   .h-sub em{color:var(--yellow);font-style:italic}
-  .h-desc{font-size:0.6rem;font-weight:300;color:var(--text-dim);line-height:2;margin-bottom:1.8rem;max-width:400px;opacity:0.8}
-
+  .h-desc{font-size:0.82rem;font-weight:300;color:var(--text);line-height:1.9;margin-bottom:1.8rem;max-width:460px}
   .h-actions{display:flex;flex-direction:column;gap:8px;margin-top:1.2rem}
   .h-social-link{display:flex;align-items:center;gap:14px;padding:12px 16px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;text-decoration:none;transition:background 0.15s,border-color 0.15s;color:inherit;cursor:pointer}
   .h-social-link:hover{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.2)}
@@ -92,52 +83,43 @@
   .h-social-insta .h-social-name{color:#E1306C}
   .h-social-insta .h-social-badge{background:#E1306C}
   .h-social-text{display:flex;flex-direction:column;flex:1;min-width:0}
-  .h-social-name{font-size:0.85rem;font-weight:600;color:var(--text-bright)}
-  .h-social-sub{font-size:0.62rem;color:var(--text-dim);margin-top:2px;letter-spacing:0.04em}
-  .h-social-badge{font-size:0.58rem;background:#5865F2;color:#fff;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0}
-  .h-social-soon{font-size:0.58rem;color:var(--text-dim);white-space:nowrap;flex-shrink:0}
-
-  .h-btn{font-family:'JetBrains Mono',monospace;font-size:0.58rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;padding:0.75rem 1.6rem;background:var(--yellow);color:var(--bg);border:none;cursor:pointer;transition:all 0.3s;display:inline-block}
+  .h-social-name{font-size:0.92rem;font-weight:600;color:var(--text-bright)}
+  .h-social-sub{font-size:0.72rem;color:var(--text-dim);margin-top:2px;letter-spacing:0.04em}
+  .h-social-badge{font-size:0.65rem;background:#5865F2;color:#fff;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+  .h-social-soon{font-size:0.65rem;color:var(--text-dim);white-space:nowrap;flex-shrink:0}
+  .h-btn{font-family:'JetBrains Mono',monospace;font-size:0.68rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;padding:0.75rem 1.6rem;background:var(--yellow);color:var(--bg);border:none;cursor:pointer;transition:all 0.3s;display:inline-block}
   .h-btn:hover{background:#ffe066;box-shadow:0 0 20px var(--yellow-glow)}
-  .h-ghost{font-size:0.5rem;color:var(--text-faint);text-decoration:none;letter-spacing:0.08em;transition:color 0.3s}
+  .h-ghost{font-size:0.62rem;color:var(--text-dim);text-decoration:none;letter-spacing:0.08em;transition:color 0.3s}
   .h-ghost:hover{color:var(--blue)}
   .h-nav{margin-top:1.8rem;padding-top:1.4rem;border-top:1px solid var(--border)}
-  .h-nav-label{font-size:0.38rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint);margin-bottom:0.8rem}
+  .h-nav-label{font-size:0.52rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint);margin-bottom:0.8rem}
   .h-nav-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
-  .h-nav-link{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;font-size:0.42rem;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);text-decoration:none;cursor:pointer;background:rgba(150,200,255,0.02);border:1px solid var(--border);transition:all 0.25s}
+  .h-nav-link{display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.7rem;font-size:0.6rem;font-weight:400;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);text-decoration:none;cursor:pointer;background:rgba(150,200,255,0.02);border:1px solid var(--border);transition:all 0.25s}
   .h-nav-link::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--text-faint);flex-shrink:0;transition:all 0.25s}
   .h-nav-link:hover{color:var(--blue);border-color:var(--blue-dim);background:rgba(150,200,255,0.04)}
   .h-nav-link:hover::before{background:var(--blue);box-shadow:0 0 6px var(--blue)}
-
-  /* ═══════ SIGNAL BAR ═══════ */
   .sig-bar{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--border);border-bottom:1px solid var(--border);position:relative;z-index:10}
   .sig-cell{padding:1.4rem 2rem;border-right:1px solid var(--border);transition:background 0.3s}
   .sig-cell:last-child{border-right:none}
   .sig-cell:hover{background:var(--blue-faint)}
   .sig-val{font-weight:600;font-size:1rem;color:var(--yellow);margin-bottom:0.15rem}
-  .sig-label{font-size:0.38rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint)}
-
-  /* ═══════ GALLERY ═══════ */
+  .sig-label{font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-dim)}
   .gallery{padding:4rem 2rem;position:relative;z-index:10}
   .gallery-inner{max-width:1100px;margin:0 auto}
   .g-header{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
-  .g-tag{font-size:0.45rem;letter-spacing:0.25em;text-transform:uppercase;color:var(--blue);margin-bottom:0.4rem}
+  .g-tag{font-size:0.6rem;letter-spacing:0.25em;text-transform:uppercase;color:var(--blue);margin-bottom:0.4rem}
   .g-header h2{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:clamp(1.2rem,2.2vw,1.8rem);color:var(--text-bright);letter-spacing:-0.01em}
-  .g-header-right{font-size:0.42rem;color:var(--text-faint);letter-spacing:0.08em}
-
-  /* Media: YouTube */
+  .g-header-right{font-size:0.58rem;color:var(--text-faint);letter-spacing:0.08em}
   .media-video{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;border:1px solid var(--border);margin-bottom:2.5rem}
   .media-video iframe{width:100%;height:100%;display:block;border:none}
-
-  /* ═══════ NOSTROMO VIEWER ═══════ */
   .nv{border:1px solid var(--border-b);background:rgba(10,12,18,0.96);position:relative;overflow:hidden}
   .nv::before{content:'';position:absolute;inset:3px;border:1px solid var(--border);pointer-events:none;z-index:5}
   .nv::after{content:'';position:absolute;top:0;left:0;width:6px;height:6px;background:var(--blue-dim);box-shadow:calc(100% - 6px) 0 0 var(--blue-dim),0 calc(100% - 6px) 0 var(--blue-dim),calc(100% - 6px) calc(100% - 6px) 0 var(--blue-dim);pointer-events:none;z-index:5}
-  .nv-head{padding:0 1.2rem;height:36px;border-bottom:1px solid var(--border-b);display:flex;align-items:center;font-size:0.42rem;letter-spacing:0.2em;text-transform:uppercase;gap:1rem}
+  .nv-head{padding:0 1.2rem;height:36px;border-bottom:1px solid var(--border-b);display:flex;align-items:center;font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;gap:1rem}
   .nv-sys{color:var(--blue)}
   .nv-spacer{flex:1}
-  .nv-file{color:var(--text-faint);font-variant-numeric:tabular-nums}
-  .nv-status{display:flex;align-items:center;gap:5px;color:var(--green);font-size:0.38rem}
+  .nv-file{color:var(--text-dim);font-variant-numeric:tabular-nums}
+  .nv-status{display:flex;align-items:center;gap:5px;color:var(--green);font-size:0.52rem}
   .nv-status::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2s ease infinite}
   .nv-viewport{position:relative;width:100%;aspect-ratio:16/9;overflow:hidden;background:#060810;cursor:crosshair}
   .nv-track{display:flex;height:100%;transition:transform 0.5s cubic-bezier(0.25,0.46,0.45,0.94)}
@@ -146,8 +128,8 @@
   .nv-viewport::after{content:'';position:absolute;inset:0;pointer-events:none;z-index:3;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.06) 2px,rgba(0,0,0,0.06) 4px);mix-blend-mode:multiply}
   .nv-slide-label{position:absolute;bottom:0;left:0;right:0;z-index:4;padding:1rem 1.2rem 0.8rem;background:linear-gradient(to top,rgba(6,8,16,0.9) 0%,transparent 100%);display:flex;align-items:flex-end;justify-content:space-between;opacity:0;transition:opacity 0.35s}
   .nv-viewport:hover .nv-slide-label{opacity:1}
-  .nv-slide-name{font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:rgba(200,210,230,0.7)}
-  .nv-slide-idx{font-size:0.38rem;letter-spacing:0.15em;color:var(--text-faint);font-variant-numeric:tabular-nums}
+  .nv-slide-name{font-size:0.65rem;letter-spacing:0.12em;text-transform:uppercase;color:rgba(200,210,230,0.7)}
+  .nv-slide-idx{font-size:0.52rem;letter-spacing:0.15em;color:var(--text-faint);font-variant-numeric:tabular-nums}
   .nv-controls{padding:0 1.2rem;height:40px;border-top:1px solid var(--border-b);display:flex;align-items:center;gap:6px}
   .nv-btn{width:32px;height:26px;border:1px solid var(--border-b);background:rgba(150,200,255,0.02);color:var(--text-dim);font-size:0.9rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;font-family:inherit;line-height:1;flex-shrink:0}
   .nv-btn:hover{border-color:var(--blue);color:var(--blue);background:rgba(150,200,255,0.06)}
@@ -156,97 +138,77 @@
   .nv-pip{width:20px;height:3px;background:var(--text-faint);border:none;cursor:pointer;padding:0;transition:all 0.25s;opacity:0.4}
   .nv-pip.active{background:var(--blue);box-shadow:0 0 6px var(--blue);opacity:1}
   .nv-pip:hover{background:var(--blue-dim);opacity:0.8}
-  .nv-auto{font-size:0.38rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);cursor:pointer;border:1px solid var(--border);background:transparent;padding:3px 8px;font-family:inherit;transition:all 0.2s;flex-shrink:0}
+  .nv-auto{font-size:0.52rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);cursor:pointer;border:1px solid var(--border);background:transparent;padding:3px 8px;font-family:inherit;transition:all 0.2s;flex-shrink:0}
   .nv-auto:hover{border-color:var(--blue-dim);color:var(--text-dim)}
   .nv-auto.on{border-color:var(--green);color:var(--green)}
-
-  /* ═══════ SECTIONS ═══════ */
   section{position:relative;z-index:10;padding:5rem 0}
   .sec-inner{max-width:1000px;margin:0 auto;padding:0 3rem}
   .split{display:flex;gap:3rem;align-items:flex-start;margin-bottom:5rem;justify-content:center}
   .split:last-child{margin-bottom:0}
   .split.reverse{flex-direction:row-reverse}
   .split-panel{flex:1;min-width:0;max-width:540px}
-
-  /* ═══════ DOWNLOAD SECTION ═══════ */
   .download-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:1.5rem}
   .dl-card{border:1px solid var(--border-b);background:rgba(150,200,255,0.02);padding:1.5rem;transition:all 0.3s;cursor:pointer;text-decoration:none;color:inherit;display:block}
   .dl-card:hover{border-color:var(--blue);background:rgba(150,200,255,0.06);box-shadow:0 4px 20px var(--blue-glow)}
   .dl-card-icon{font-size:1.8rem;margin-bottom:0.6rem}
-  .dl-card-title{font-size:0.7rem;font-weight:500;color:var(--text-bright);margin-bottom:0.3rem;letter-spacing:0.05em}
-  .dl-card-sub{font-size:0.5rem;color:var(--text-dim);line-height:1.6}
-  .dl-card-note{font-size:0.42rem;color:var(--yellow-dim);margin-top:0.6rem;line-height:1.6;font-style:italic}
-
-  /* ═══════ BUG REPORT ═══════ */
+  .dl-card-title{font-size:0.85rem;font-weight:500;color:var(--text-bright);margin-bottom:0.3rem;letter-spacing:0.05em}
+  .dl-card-sub{font-size:0.68rem;color:var(--text-dim);line-height:1.6}
+  .dl-card-note{font-size:0.58rem;color:var(--yellow-dim);margin-top:0.6rem;line-height:1.6;font-style:italic}
   .bug-section{max-width:700px;margin:0 auto;padding:0 3rem}
   .bug-form{display:flex;flex-direction:column;gap:12px;margin-top:1.5rem}
   .bug-row{display:flex;gap:12px}
   .bug-row > *{flex:1}
-  .bug-input,.bug-textarea,.bug-select{font-family:'JetBrains Mono',monospace;font-size:0.6rem;background:rgba(150,200,255,0.03);border:1px solid var(--border-b);color:var(--text);padding:0.7rem 1rem;outline:none;transition:border-color 0.2s,box-shadow 0.2s;width:100%}
+  .bug-input,.bug-textarea,.bug-select{font-family:'JetBrains Mono',monospace;font-size:0.72rem;background:rgba(150,200,255,0.03);border:1px solid var(--border-b);color:var(--text);padding:0.7rem 1rem;outline:none;transition:border-color 0.2s,box-shadow 0.2s;width:100%}
   .bug-input:focus,.bug-textarea:focus,.bug-select:focus{border-color:var(--blue-dim);box-shadow:0 0 12px var(--blue-glow)}
   .bug-textarea{resize:vertical;min-height:120px;line-height:1.8}
   .bug-select{cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%235a8cc0' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 0.8rem center}
   .bug-select option{background:var(--bg);color:var(--text)}
-  .bug-submit{font-family:'JetBrains Mono',monospace;font-size:0.58rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;padding:0.85rem 2rem;background:var(--blue);color:var(--bg);border:none;cursor:pointer;transition:all 0.3s;align-self:flex-start}
+  .bug-submit{font-family:'JetBrains Mono',monospace;font-size:0.68rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;padding:0.85rem 2rem;background:var(--blue);color:var(--bg);border:none;cursor:pointer;transition:all 0.3s;align-self:flex-start}
   .bug-submit:hover{background:#b8dcff;box-shadow:0 0 20px var(--blue-glow)}
   .bug-submit:disabled{opacity:0.4;cursor:not-allowed}
-  .bug-success{display:none;padding:1rem;border:1px solid var(--green);background:rgba(100,200,100,0.05);color:var(--green);font-size:0.6rem;text-align:center}
+  .bug-success{display:none;padding:1rem;border:1px solid var(--green);background:rgba(100,200,100,0.05);color:var(--green);font-size:0.72rem;text-align:center}
   .bug-success.show{display:block}
-  .bug-label{font-size:0.42rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-faint);margin-bottom:4px;display:block}
-
-  /* ═══════ TECH STRIP ═══════ */
-  .tech-strip{display:flex;align-items:center;justify-content:center;gap:0.6rem;padding:1.2rem 2rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:0.4rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);position:relative;z-index:10}
+  .bug-label{font-size:0.58rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px;display:block}
+  .tech-strip{display:flex;align-items:center;justify-content:center;gap:0.6rem;padding:1.2rem 2rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-dim);position:relative;z-index:10}
   .tech-tag{color:var(--blue-dim)}.tech-sep{color:var(--text-faint);opacity:0.3}
-
-  /* ═══════ CTA ═══════ */
   .tx-section{padding:7rem 0;display:flex;justify-content:center}
   .tx-panel{max-width:620px;width:100%;text-align:center;margin:0 3rem}
   .tx-panel .p-body{padding:3.5rem 2.5rem}
-  .tx-pre{font-size:0.4rem;letter-spacing:0.4em;text-transform:uppercase;color:var(--text-faint);margin-bottom:2rem}
+  .tx-pre{font-size:0.55rem;letter-spacing:0.4em;text-transform:uppercase;color:var(--text-dim);margin-bottom:2rem}
   .tx-msg{font-family:'Cormorant Garamond',serif;font-weight:300;font-style:italic;font-size:1.7rem;color:var(--text-bright);line-height:1.4;margin-bottom:2rem}
   .tx-msg strong{font-weight:600;color:var(--yellow);font-style:normal}
-  .tx-cta{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.6rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;padding:0.85rem 2rem;background:var(--yellow);color:var(--bg);border:none;cursor:pointer;transition:all 0.3s;margin-bottom:1.5rem}
+  .tx-cta{display:inline-block;font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;text-decoration:none;padding:0.85rem 2rem;background:var(--yellow);color:var(--bg);border:none;cursor:pointer;transition:all 0.3s;margin-bottom:1.5rem}
   .tx-cta:hover{background:#ffe066;box-shadow:0 0 20px var(--yellow-glow)}
-  .tx-sig{font-size:0.45rem;color:var(--text-faint);letter-spacing:0.15em}
+  .tx-sig{font-size:0.58rem;color:var(--text-dim);letter-spacing:0.15em}
   .tx-barcode{font-family:'Libre Barcode 128 Text',cursive;font-size:1.8rem;color:var(--blue-dim);opacity:0.2;margin-top:1.2rem}
-
   .rv{opacity:0;transform:translateY(18px);transition:opacity 0.8s ease,transform 0.8s ease}
   .rv.vis{opacity:1;transform:translateY(0)}
-
-  /* ═══════ FEATURES GRID ═══════ */
   .features-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1px;background:var(--border);margin-top:2rem}
   .feature-card{background:var(--bg);padding:2rem;position:relative;overflow:hidden}
   .feature-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:0;background:var(--blue);transition:height 0.4s}
   .feature-card:hover::before{height:100%}
   .feature-icon{font-size:1.4rem;margin-bottom:0.8rem}
-  .feature-title{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.1rem;color:var(--text-bright);margin-bottom:0.5rem}
-  .feature-desc{font-size:0.55rem;color:var(--text-dim);line-height:1.9;font-weight:300}
-
-  /* ═══════ COMMUNITY QUOTES ═══════ */
+  .feature-title{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:1.2rem;color:var(--text-bright);margin-bottom:0.5rem}
+  .feature-desc{font-size:0.78rem;color:var(--text);line-height:1.85;font-weight:300}
   .community-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);margin:1.5rem 0}
   .community-stat{background:var(--bg);padding:1.2rem;text-align:center}
   .community-stat-val{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:1.6rem;color:var(--yellow);line-height:1}
-  .community-stat-label{font-size:0.35rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint);margin-top:4px}
+  .community-stat-label{font-size:0.52rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-dim);margin-top:4px}
   .community-quotes{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);margin-top:1px}
   .cq{background:var(--bg);padding:1.4rem 1.6rem;position:relative}
-  .cq-text{font-size:0.6rem;font-weight:300;color:var(--text-dim);line-height:1.8;font-style:italic}
+  .cq-text{font-size:0.78rem;font-weight:300;color:var(--text);line-height:1.8;font-style:italic}
   .cq-text::before{content:'\201C';font-family:'Cormorant Garamond',serif;font-size:1.8rem;color:var(--text-faint);position:absolute;top:0.6rem;left:0.8rem;line-height:1}
-  .cq-attr{font-size:0.4rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);margin-top:0.5rem}
+  .cq-attr{font-size:0.55rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-dim);margin-top:0.5rem}
   .cq-attr a{color:var(--blue-dim);text-decoration:none}
   .cq-attr a:hover{color:var(--blue)}
   @media(max-width:900px){.community-bar{grid-template-columns:1fr}.community-quotes{grid-template-columns:1fr}}
-
-  /* ═══════ CROSS-LINKS ═══════ */
-  .xlink{display:inline-flex;align-items:center;gap:5px;font-size:0.5rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--blue-dim);text-decoration:none;cursor:pointer;padding:0.3rem 0.6rem;border:1px solid var(--border);background:rgba(150,200,255,0.02);transition:all 0.25s;margin-top:0.8rem;margin-right:4px}
+  .xlink{display:inline-flex;align-items:center;gap:5px;font-size:0.62rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--blue-dim);text-decoration:none;cursor:pointer;padding:0.3rem 0.6rem;border:1px solid var(--border);background:rgba(150,200,255,0.02);transition:all 0.25s;margin-top:0.8rem;margin-right:4px}
   .xlink::before{content:'\203A';font-size:0.7rem;color:var(--text-faint);transition:color 0.25s}
   .xlink:hover{color:var(--blue);border-color:var(--blue-dim);background:rgba(150,200,255,0.06)}
   .xlink:hover::before{color:var(--blue)}
   .xlinks{display:flex;flex-wrap:wrap;gap:4px;margin-top:1rem}
-
-  /* ═══════ ABOUT / LORE ═══════ */
-  .lore-text{font-family:'Cormorant Garamond',serif;font-size:1.15rem;font-style:italic;color:var(--text-dim);line-height:1.8;max-width:700px;margin:0 auto;text-align:center}
+  .lore-text{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-style:italic;color:var(--text);line-height:1.8;max-width:700px;margin:0 auto;text-align:center}
   .lore-text strong{color:var(--text-bright);font-weight:500;font-style:normal}
-
   @media(max-width:900px){
     .hero-inner{flex-direction:column;padding:0 1.5rem}
     .hero-panel{width:100%;max-width:100%}
@@ -288,7 +250,6 @@
 
 <div class="content">
 
-  <!-- ═══════ HERO ═══════ -->
   <div class="hero">
     <canvas id="heroRadar"></canvas>
     <div class="hero-inner">
@@ -306,41 +267,26 @@
           <div class="h-actions">
             <a href="https://store.steampowered.com/app/4474070/Stella_Nova/" class="h-social-link h-social-gold" target="_blank" rel="noopener">
               <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="var(--yellow)" d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.985 1.298 1.233 1.267.539 2.735-.05 3.27-1.318.26-.61.254-1.278-.012-1.887-.268-.61-.747-1.085-1.356-1.343-.609-.252-1.243-.254-1.81-.049l1.524.63c.935.398 1.376 1.482.975 2.419-.399.937-1.48 1.376-2.416.926zm8.398-8.742c0-1.663-1.354-3.015-3.016-3.015-1.665 0-3.017 1.352-3.017 3.015 0 1.665 1.352 3.017 3.017 3.017 1.663 0 3.016-1.352 3.016-3.017zm-5.275-.01c0-1.252 1.013-2.264 2.264-2.264 1.251 0 2.265 1.012 2.265 2.264s-1.014 2.261-2.265 2.261c-1.251 0-2.264-1.009-2.264-2.261z"/></svg>
-              <div class="h-social-text">
-                <span class="h-social-name">Play the Demo on Steam</span>
-                <span class="h-social-sub">Demo available now</span>
-              </div>
+              <div class="h-social-text"><span class="h-social-name">Play the Demo on Steam</span><span class="h-social-sub">Demo available now</span></div>
               <span class="h-social-badge">Play Free</span>
             </a>
             <a href="https://discord.gg/SkJDmnRmdJ" class="h-social-link h-social-primary" target="_blank" rel="noopener">
               <svg width="24" height="24" viewBox="0 0 127.14 96.36" xmlns="http://www.w3.org/2000/svg"><path fill="#5865F2" d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>
-              <div class="h-social-text">
-                <span class="h-social-name">Join the Discord</span>
-                <span class="h-social-sub">Follow updates, give feedback, help shape the game</span>
-              </div>
+              <div class="h-social-text"><span class="h-social-name">Join the Discord</span><span class="h-social-sub">Follow updates, give feedback, help shape the game</span></div>
               <span class="h-social-badge">Join now</span>
             </a>
             <a href="https://davesgames.itch.io/stella-nova" class="h-social-link" target="_blank" rel="noopener">
-              <svg width="24" height="24" viewBox="0 0 262.728 235.284" xmlns="http://www.w3.org/2000/svg"><path fill="#fa5c5c" d="M31.987 1.567C21.403 8.803 0 33.957 0 44.468v13.578c0 19.207 14.229 33.48 31.308 33.48 18.272 0 33.14-14.608 33.14-32.88 0 18.272 12.818 32.88 31.09 32.88 18.27 0 30.467-14.608 30.467-32.88 0 18.272 14.84 32.88 33.112 32.88h.366c18.272 0 33.112-14.608 33.112-32.88 0 18.272 12.198 32.88 30.468 32.88 18.272 0 31.09-14.608 31.09-32.88 0 18.272 14.868 32.88 33.14 32.88 17.08 0 31.308-14.273 31.308-33.48V44.468c0-10.51-21.403-35.665-31.987-42.9C230.126-.502 213.632-.18 206.758 0c-22.398.585-33.903 11.89-37.91 14.55-8.166-5.27-19.18-14.55-37.547-14.55-18.365 0-29.38 9.28-37.546 14.55C89.748 11.89 78.243.585 55.845 0 48.97-.18 32.477-.502 31.987 1.567zm-3.32 107.72c-7.4.262-15.1.83-21.408 1.684v107.168c0 12.17 72.5 17.144 124.24 17.144s124.238-4.972 124.238-17.144V110.972c-6.31-.855-14.01-1.422-21.41-1.685-11.76 12.24-28.396 19.86-46.148 19.86-18.067 0-31.397-7.794-42.667-18.472-5.19 5.538-14.026 18.472-35.15 18.472-21.122 0-29.964-12.934-35.15-18.472-11.27 10.678-24.6 18.472-42.668 18.472-17.752 0-34.388-7.62-46.148-19.86h.27zm80.098 43.74h46.102l-5.2 22.312 21.05 22.097-24.476 9.975L131.363 235 116.49 207.41l-24.477-9.975 21.05-22.097-4.297-22.312z"/></svg>
-              <div class="h-social-text">
-                <span class="h-social-name">Download on itch.io</span>
-                <span class="h-social-sub">Play the demo now</span>
-              </div>
+              <svg width="24" height="24" viewBox="0 0 262.728 235.284" xmlns="http://www.w3.org/2000/svg"><path fill="#fa5c5c" d="M31.987 1.567C21.403 8.803 0 33.957 0 44.468v13.578c0 19.207 14.229 33.48 31.308 33.48 18.272 0 33.14-14.608 33.14-32.88 0 18.272 12.818 32.88 31.09 32.88 18.27 0 30.467-14.608 30.467-32.88 0 18.272 14.84 32.88 33.112 32.88h.366c18.272 0 33.112-14.608 33.112-32.88 0 18.272 12.198 32.88 30.468 32.88 18.272 0 31.09-14.608 31.09-32.88 0 18.272 14.868 32.88 33.14 32.88 17.08 0 31.308-14.273 31.308-33.48V44.468c0-10.51-21.403-35.665-31.987-42.9C230.126-.502 213.632-.18 206.758 0c-22.398.585-33.903 11.89-37.91 14.55-8.166-5.27-19.18-14.55-37.547-14.55-18.365 0-29.38 9.28-37.546 14.55C89.748 11.89 78.243.585 55.845 0 48.97-.18 32.477-.502 31.987 1.567z"/></svg>
+              <div class="h-social-text"><span class="h-social-name">Download on itch.io</span><span class="h-social-sub">Play the demo now</span></div>
             </a>
             <a href="https://www.instagram.com/stella.nova.game" class="h-social-link h-social-insta" target="_blank" rel="noopener">
               <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#E1306C" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
-              <div class="h-social-text">
-                <span class="h-social-name">Follow on Instagram</span>
-                <span class="h-social-sub">Dev updates &amp; behind the scenes</span>
-              </div>
+              <div class="h-social-text"><span class="h-social-name">Follow on Instagram</span><span class="h-social-sub">Dev updates &amp; behind the scenes</span></div>
               <span class="h-social-badge" style="background:#E1306C">Follow</span>
             </a>
             <a href="https://linkedin.com/in/david-kubala" class="h-social-link" target="_blank" rel="noopener" style="border-color:rgba(10,102,194,0.5);background:rgba(10,102,194,0.08)">
               <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#0A66C2" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-              <div class="h-social-text">
-                <span class="h-social-name" style="color:#0A66C2">Connect on LinkedIn</span>
-                <span class="h-social-sub">Dave Kubala &mdash; Solo Developer</span>
-              </div>
+              <div class="h-social-text"><span class="h-social-name" style="color:#0A66C2">Connect on LinkedIn</span><span class="h-social-sub">Dave Kubala &mdash; Solo Developer</span></div>
               <span class="h-social-badge" style="background:#0A66C2">Connect</span>
             </a>
           </div>
@@ -365,7 +311,6 @@
     </div>
   </div>
 
-  <!-- ═══════ SIGNAL BAR ═══════ -->
   <div class="sig-bar rv">
     <div class="sig-cell"><div class="sig-val">Mine</div><div class="sig-label">10 Ores &middot; Real Rarity Curves</div></div>
     <div class="sig-cell"><div class="sig-val">Smelt</div><div class="sig-label">Ore &rarr; Ingot &rarr; Alloy &rarr; Component</div></div>
@@ -373,7 +318,6 @@
     <div class="sig-cell"><div class="sig-val">Govern</div><div class="sig-label">Citizens with Relationships &amp; Grudges</div></div>
   </div>
 
-  <!-- ═══════ LORE / ABOUT ═══════ -->
   <section>
     <div class="sec-inner rv">
       <div class="lore-text">
@@ -393,25 +337,17 @@
     </div>
   </section>
 
-  <!-- ═══════ MEDIA ═══════ -->
   <div class="gallery rv" id="media">
     <div class="gallery-inner">
       <div class="g-header">
         <div><div class="g-tag">// Gameplay Feed</div><h2>See It In Action</h2></div>
         <div class="g-header-right">In-engine captures</div>
       </div>
-
       <div class="media-video">
         <iframe src="https://www.youtube.com/embed/Pn9WTbewFFQ" title="Stella Nova Gameplay" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
       </div>
-
       <div class="nv" id="nvViewer">
-        <div class="nv-head">
-          <span class="nv-sys">SYS // Visual Feed</span>
-          <span class="nv-spacer"></span>
-          <span class="nv-file" id="nvFile">IMG 01/06</span>
-          <span class="nv-status">LIVE</span>
-        </div>
+        <div class="nv-head"><span class="nv-sys">SYS // Visual Feed</span><span class="nv-spacer"></span><span class="nv-file" id="nvFile">IMG 01/06</span><span class="nv-status">LIVE</span></div>
         <div class="nv-viewport" id="nvViewport">
           <div class="nv-track" id="nvTrack">
             <div class="nv-slide"><img src="media/1.jpg" alt="Station Construction" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Station Construction</span><span class="nv-slide-idx">01</span></div></div>
@@ -432,7 +368,6 @@
     </div>
   </div>
 
-  <!-- ═══════ FEATURES ═══════ -->
   <section id="features">
     <div class="sec-inner rv">
       <div style="text-align:center;margin-bottom:1rem">
@@ -440,70 +375,22 @@
         <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(1.6rem,3vw,2.4rem);color:var(--text-bright)">What You'll <em style="font-style:italic;color:var(--yellow)">Command</em></h2>
       </div>
       <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">&#9201;</div>
-          <div class="feature-title">Time-Dilating Astrophysics</div>
-          <div class="feature-desc">A living universe with thousands of dynamic objects adhering to real n-body orbital physics. Dilate and compress the flow of time at will.</div>
-          <div class="xlinks">
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('gravity')">Gravity Sim</a>
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('hohmann')">Hohmann Transfer</a>
-          </div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#9878;</div>
-          <div class="feature-title">Modular Station Construction</div>
-          <div class="feature-desc">Place modules on a crossword-puzzle grid that expands in every direction. Crew quarters, docking bays, foundries &mdash; design your station however you want.</div>
-          <div class="xlinks">
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a>
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a>
-          </div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#9775;</div>
-          <div class="feature-title">Colony Management</div>
-          <div class="feature-desc">Your citizens form friendships, hold grudges, and run the foundries while you're not looking. Assign them to mine, collect, construct, or harvest.</div>
-          <div class="xlinks">
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Behavior System</a>
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('selection')">Selection UI</a>
-          </div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#9878;</div>
-          <div class="feature-title">4-Tier Crafting Chain</div>
-          <div class="feature-desc">Smelt iron ore into ingots. Combine ingots with carbon to forge steel. Press steel and titanium alloy into reactor cores. 40+ recipes, citizen-operated.</div>
-          <div class="xlinks">
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a>
-          </div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#9733;</div>
-          <div class="feature-title">Emergent Storytelling</div>
-          <div class="feature-desc">A narrator creates events based on the status of your colony to drive the story forward. 27 quest types across 4 tiers of complexity.</div>
-          <div class="xlinks">
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a>
-          </div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">&#9706;</div>
-          <div class="feature-title">Interplanetary Travel</div>
-          <div class="feature-desc">Work with real orbital mechanics to fly interplanetary distances. Manufacture fuel, plan Hohmann transfers, and expand across the solar system.</div>
-          <div class="xlinks">
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('hohmann')">Hohmann Transfer</a>
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('shipdesigner')">Ship Designer</a>
-            <a class="xlink" onclick="parent.switchTab&&parent.switchTab('galaxy')">Galaxy Sim</a>
-          </div>
-        </div>
+        <div class="feature-card"><div class="feature-icon">&#9201;</div><div class="feature-title">Time-Dilating Astrophysics</div><div class="feature-desc">A living universe with thousands of dynamic objects adhering to real n-body orbital physics. Dilate and compress the flow of time at will.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('gravity')">Gravity Sim</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('hohmann')">Hohmann Transfer</a></div></div>
+        <div class="feature-card"><div class="feature-icon">&#9878;</div><div class="feature-title">Modular Station Construction</div><div class="feature-desc">Place modules on a crossword-puzzle grid that expands in every direction. Crew quarters, docking bays, foundries &mdash; design your station however you want.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a></div></div>
+        <div class="feature-card"><div class="feature-icon">&#9775;</div><div class="feature-title">Colony Management</div><div class="feature-desc">Your citizens form friendships, hold grudges, and run the foundries while you're not looking. Assign them to mine, collect, construct, or harvest.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Behavior System</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('selection')">Selection UI</a></div></div>
+        <div class="feature-card"><div class="feature-icon">&#9878;</div><div class="feature-title">4-Tier Crafting Chain</div><div class="feature-desc">Smelt iron ore into ingots. Combine ingots with carbon to forge steel. Press steel and titanium alloy into reactor cores. 40+ recipes, citizen-operated.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a></div></div>
+        <div class="feature-card"><div class="feature-icon">&#9733;</div><div class="feature-title">Emergent Storytelling</div><div class="feature-desc">A narrator creates events based on the status of your colony to drive the story forward. 27 quest types across 4 tiers of complexity.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a></div></div>
+        <div class="feature-card"><div class="feature-icon">&#9706;</div><div class="feature-title">Interplanetary Travel</div><div class="feature-desc">Work with real orbital mechanics to fly interplanetary distances. Manufacture fuel, plan Hohmann transfers, and expand across the solar system.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('hohmann')">Hohmann Transfer</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('shipdesigner')">Ship Designer</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('galaxy')">Galaxy Sim</a></div></div>
       </div>
     </div>
   </section>
 
-  <!-- ═══════ COMMUNITY RECEPTION ═══════ -->
   <section>
     <div class="sec-inner rv">
       <div style="text-align:center;margin-bottom:0.5rem">
         <div class="g-tag">// Community Signal</div>
         <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(1.2rem,2.5vw,1.8rem);color:var(--text-bright)">From <em style="font-style:italic;color:var(--yellow)">r/RimWorld</em></h2>
-        <p style="font-size:0.5rem;color:var(--text-dim);margin-top:0.6rem;line-height:1.8">Posted to a 340K-member community notoriously protective of off-topic content. The mod team approved the post.</p>
+        <p style="font-size:0.68rem;color:var(--text);margin-top:0.6rem;line-height:1.8">Posted to a 340K-member community notoriously protective of off-topic content. The mod team approved the post.</p>
       </div>
       <div class="community-bar">
         <div class="community-stat"><div class="community-stat-val">2,200</div><div class="community-stat-label">Upvotes</div></div>
@@ -511,164 +398,40 @@
         <div class="community-stat"><div class="community-stat-val">177</div><div class="community-stat-label">Comments</div></div>
       </div>
       <div class="community-quotes">
-        <div class="cq">
-          <div class="cq-text" style="padding-left:1rem">Mans just finished the tutorial and went straight to making mods. Looks dope OP!</div>
-          <div class="cq-attr">r/RimWorld &middot; 220 upvotes</div>
-        </div>
-        <div class="cq">
-          <div class="cq-text" style="padding-left:1rem">I'm scared for my life, it looks crazy, in a good way. Can see it being addicting as hell</div>
-          <div class="cq-attr">r/RimWorld</div>
-        </div>
-        <div class="cq">
-          <div class="cq-text" style="padding-left:1rem">"Developer: Dave" "Publisher: also Dave" &mdash; hell yeah dave</div>
-          <div class="cq-attr">r/RimWorld &middot; 128 upvotes</div>
-        </div>
-        <div class="cq">
-          <div class="cq-text" style="padding-left:1rem">We support you guys, and when one of you has a project like this [...] some things are still allowed, are bigger than memes.</div>
-          <div class="cq-attr"><a href="https://www.reddit.com/r/RimWorld/comments/1surnpy/very_grateful_to_the_mod_team_for_allowing_me/" target="_blank" rel="noopener">r/RimWorld moderator</a> &middot; stickied comment</div>
-        </div>
+        <div class="cq"><div class="cq-text" style="padding-left:1rem">Mans just finished the tutorial and went straight to making mods. Looks dope OP!</div><div class="cq-attr">r/RimWorld &middot; 220 upvotes</div></div>
+        <div class="cq"><div class="cq-text" style="padding-left:1rem">I'm scared for my life, it looks crazy, in a good way. Can see it being addicting as hell</div><div class="cq-attr">r/RimWorld</div></div>
+        <div class="cq"><div class="cq-text" style="padding-left:1rem">"Developer: Dave" "Publisher: also Dave" &mdash; hell yeah dave</div><div class="cq-attr">r/RimWorld &middot; 128 upvotes</div></div>
+        <div class="cq"><div class="cq-text" style="padding-left:1rem">We support you guys, and when one of you has a project like this [...] some things are still allowed, are bigger than memes.</div><div class="cq-attr"><a href="https://www.reddit.com/r/RimWorld/comments/1surnpy/very_grateful_to_the_mod_team_for_allowing_me/" target="_blank" rel="noopener">r/RimWorld moderator</a> &middot; stickied comment</div></div>
       </div>
     </div>
   </section>
 
-  <!-- ═══════ COMMAND / GATHER DETAILS ═══════ -->
   <section>
     <div class="sec-inner">
-      <div class="split rv">
-        <div class="split-panel">
-          <div class="sys-window">
-            <div class="sw-head"><span class="sw-sys">SYS // Crew</span><span class="sw-tag">Command</span></div>
-            <div class="sw-body">
-              <h2>Command your <em>crews</em></h2>
-              <p>
-                Assign citizens to mine, collect, construct, or harvest.
-                They'll find the nearest asteroid, dock at the right station,
-                and figure out the route themselves. But they also get tired,
-                take breaks to socialize, and form opinions about who they
-                want to work with &mdash; and who they don't.
-              </p>
-              <div class="tag-strip"><span>12 Work States</span><span>Relationships</span><span>Autonomous AI</span></div>
-              <div class="xlinks">
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Behavior System</a>
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a>
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('selection')">Selection UI</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="split reverse rv">
-        <div class="split-panel">
-          <div class="sys-window">
-            <div class="sw-head"><span class="sw-sys">SYS // Resources</span><span class="sw-tag">Extraction</span></div>
-            <div class="sw-body">
-              <h2>Gather <em>everything</em></h2>
-              <p>
-                Ten raw ores &mdash; iron, copper, titanium, uranium, rare earth &mdash;
-                scattered across asteroids with real spawn rarities. Your miners
-                drill the rock. Crawlers haul the chunks to a space elevator.
-                The elevator lifts them to orbit. Nothing spawns in your inventory &mdash; you earn it.
-              </p>
-              <div class="tag-strip"><span>10 Ore Types</span><span>Space Elevators</span><span>Fog of War</span></div>
-              <div class="xlinks">
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a>
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('forge')">Planet Forge</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="split rv">
-        <div class="split-panel">
-          <div class="sys-window">
-            <div class="sw-head"><span class="sw-sys">SYS // Station</span><span class="sw-tag">Construction</span></div>
-            <div class="sw-body">
-              <h2>Design your <em>station</em></h2>
-              <p>
-                Place modules on a crossword-puzzle grid that expands in every
-                direction. Enclose empty cells to create storage bays that hold
-                64 units each. Foundries sit between bays as directional
-                membranes &mdash; ore goes in one side, alloy comes out the other.
-              </p>
-              <div class="tag-strip"><span>Grid Construction</span><span>Enclosed Storage</span><span>10+ Presets</span></div>
-              <div class="xlinks">
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a>
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a>
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('controls')">Controls</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="split reverse rv">
-        <div class="split-panel">
-          <div class="sys-window">
-            <div class="sw-head"><span class="sw-sys">SYS // Industry</span><span class="sw-tag">Production</span></div>
-            <div class="sw-body">
-              <h2>Manufacture <em>at scale</em></h2>
-              <p>
-                Four production tiers, 40+ recipes, and your citizens operate the
-                foundries &mdash; hauling fuel, feeding inputs, collecting outputs.
-                Set a foundry to run indefinitely and it will, as long as someone keeps it fed.
-              </p>
-              <div class="tag-strip"><span>4-Tier Crafting</span><span>40+ Recipes</span><span>Citizen-Operated</span></div>
-              <div class="xlinks">
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a>
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Citizen Behaviors</a>
-                <a class="xlink" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div class="split rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Crew</span><span class="sw-tag">Command</span></div><div class="sw-body"><h2>Command your <em>crews</em></h2><p>Assign citizens to mine, collect, construct, or harvest. They'll find the nearest asteroid, dock at the right station, and figure out the route themselves. But they also get tired, take breaks to socialize, and form opinions about who they want to work with &mdash; and who they don't.</p><div class="tag-strip"><span>12 Work States</span><span>Relationships</span><span>Autonomous AI</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Behavior System</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('selection')">Selection UI</a></div></div></div></div></div>
+      <div class="split reverse rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Resources</span><span class="sw-tag">Extraction</span></div><div class="sw-body"><h2>Gather <em>everything</em></h2><p>Ten raw ores &mdash; iron, copper, titanium, uranium, rare earth &mdash; scattered across asteroids with real spawn rarities. Your miners drill the rock. Crawlers haul the chunks to a space elevator. The elevator lifts them to orbit. Nothing spawns in your inventory &mdash; you earn it.</p><div class="tag-strip"><span>10 Ore Types</span><span>Space Elevators</span><span>Fog of War</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('forge')">Planet Forge</a></div></div></div></div></div>
+      <div class="split rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Station</span><span class="sw-tag">Construction</span></div><div class="sw-body"><h2>Design your <em>station</em></h2><p>Place modules on a crossword-puzzle grid that expands in every direction. Enclose empty cells to create storage bays that hold 64 units each. Foundries sit between bays as directional membranes &mdash; ore goes in one side, alloy comes out the other.</p><div class="tag-strip"><span>Grid Construction</span><span>Enclosed Storage</span><span>10+ Presets</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('controls')">Controls</a></div></div></div></div></div>
+      <div class="split reverse rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Industry</span><span class="sw-tag">Production</span></div><div class="sw-body"><h2>Manufacture <em>at scale</em></h2><p>Four production tiers, 40+ recipes, and your citizens operate the foundries &mdash; hauling fuel, feeding inputs, collecting outputs. Set a foundry to run indefinitely and it will, as long as someone keeps it fed.</p><div class="tag-strip"><span>4-Tier Crafting</span><span>40+ Recipes</span><span>Citizen-Operated</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Citizen Behaviors</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a></div></div></div></div></div>
     </div>
   </section>
 
-  <!-- ═══════ TECH STRIP ═══════ -->
-  <div class="tech-strip rv">
-    <span>Built from scratch in</span>
-    <span class="tech-tag">Rust</span><span class="tech-sep">&middot;</span>
-    <span class="tech-tag">Custom wgpu Engine</span><span class="tech-sep">&middot;</span>
-    <span class="tech-tag">N-Body Physics</span><span class="tech-sep">&middot;</span>
-    <span class="tech-tag">Local AI Narrator</span><span class="tech-sep">&middot;</span>
-    <span class="tech-tag">Solo Developer</span>
-  </div>
+  <div class="tech-strip rv"><span>Built from scratch in</span><span class="tech-tag">Rust</span><span class="tech-sep">&middot;</span><span class="tech-tag">Custom wgpu Engine</span><span class="tech-sep">&middot;</span><span class="tech-tag">N-Body Physics</span><span class="tech-sep">&middot;</span><span class="tech-tag">Local AI Narrator</span><span class="tech-sep">&middot;</span><span class="tech-tag">Solo Developer</span></div>
 
-  <!-- ═══════ DOWNLOAD DEMO ═══════ -->
   <section id="download">
     <div class="sec-inner rv">
       <div style="text-align:center;margin-bottom:0.5rem">
         <div class="g-tag">// Demo Available</div>
         <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(1.6rem,3vw,2.4rem);color:var(--text-bright)">Download the <em style="font-style:italic;color:var(--yellow)">Demo</em></h2>
-        <p style="font-size:0.6rem;color:var(--text-dim);margin-top:0.8rem;max-width:500px;margin-left:auto;margin-right:auto;line-height:1.8">
-          Try Stella Nova before Early Access. Space station building, factory mechanics, resource &amp; crew management, interplanetary travel, and a detailed tutorial.
-        </p>
+        <p style="font-size:0.75rem;color:var(--text);margin-top:0.8rem;max-width:500px;margin-left:auto;margin-right:auto;line-height:1.8">Try Stella Nova before Early Access. Space station building, factory mechanics, resource &amp; crew management, interplanetary travel, and a detailed tutorial.</p>
       </div>
       <div class="download-grid" style="max-width:600px;margin:2rem auto 0">
-        <a class="dl-card" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener">
-          <div class="dl-card-icon" style="font-size:0.9rem;letter-spacing:0.1em;color:var(--blue)">WIN</div>
-          <div class="dl-card-title">Windows</div>
-          <div class="dl-card-sub">Windows 10/11 64-bit<br>Vulkan 1.1 required</div>
-        </a>
-        <a class="dl-card" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener">
-          <div class="dl-card-icon" style="font-size:0.9rem;letter-spacing:0.1em;color:var(--blue)">MAC</div>
-          <div class="dl-card-title">macOS</div>
-          <div class="dl-card-sub">macOS 11+ (Intel &amp; Apple Silicon)</div>
-          <div class="dl-card-note">Not codesigned because Apple charges $99/yr for the privilege. You can still play &mdash; right-click &rarr; Open to bypass Gatekeeper.</div>
-        </a>
+        <a class="dl-card" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener"><div class="dl-card-icon" style="font-size:0.9rem;letter-spacing:0.1em;color:var(--blue)">WIN</div><div class="dl-card-title">Windows</div><div class="dl-card-sub">Windows 10/11 64-bit<br>Vulkan 1.1 required</div></a>
+        <a class="dl-card" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener"><div class="dl-card-icon" style="font-size:0.9rem;letter-spacing:0.1em;color:var(--blue)">MAC</div><div class="dl-card-title">macOS</div><div class="dl-card-sub">macOS 11+ (Intel &amp; Apple Silicon)</div><div class="dl-card-note">Not codesigned because Apple charges $99/yr for the privilege. You can still play &mdash; right-click &rarr; Open to bypass Gatekeeper.</div></a>
       </div>
-      <div class="xlinks" style="justify-content:center;margin-top:1.5rem">
-        <a class="xlink" href="#report">Report a Bug</a>
-        <a class="xlink" onclick="parent.switchTab&&parent.switchTab('controls')">Controls</a>
-        <a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a>
-      </div>
+      <div class="xlinks" style="justify-content:center;margin-top:1.5rem"><a class="xlink" href="#report">Report a Bug</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('controls')">Controls</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a></div>
     </div>
   </section>
 
-  <!-- ═══════ BUG REPORT ═══════ -->
   <section id="report">
     <div class="bug-section rv">
       <div class="sys-window full-width">
@@ -676,60 +439,14 @@
         <div class="sw-body">
           <h2 style="font-size:1.6rem">Report a <em>bug</em></h2>
           <p>Found something broken? Help make Stella Nova better. Reports go straight to the dev.</p>
-
           <div class="bug-success" id="bugSuccess">&#10003; Report transmitted. Thank you, Commander.</div>
-
           <form class="bug-form" id="bugForm" onsubmit="submitBug(event)">
-            <div class="bug-row">
-              <div>
-                <label class="bug-label">Your name (optional)</label>
-                <input class="bug-input" type="text" name="name" placeholder="Anonymous commander">
-              </div>
-              <div>
-                <label class="bug-label">Contact (optional)</label>
-                <input class="bug-input" type="text" name="contact" placeholder="Discord handle or email">
-              </div>
-            </div>
-            <div class="bug-row">
-              <div>
-                <label class="bug-label">Category</label>
-                <select class="bug-select" name="category">
-                  <option value="gameplay">Gameplay</option>
-                  <option value="ui">UI / UX</option>
-                  <option value="graphics">Graphics / Rendering</option>
-                  <option value="performance">Performance</option>
-                  <option value="crash">Crash / Freeze</option>
-                  <option value="audio">Audio</option>
-                  <option value="tutorial">Tutorial</option>
-                  <option value="other">Other</option>
-                </select>
-              </div>
-              <div>
-                <label class="bug-label">Severity</label>
-                <select class="bug-select" name="severity">
-                  <option value="low">Low &mdash; cosmetic</option>
-                  <option value="medium" selected>Medium &mdash; annoying</option>
-                  <option value="high">High &mdash; blocks progress</option>
-                  <option value="critical">Critical &mdash; crash/data loss</option>
-                </select>
-              </div>
-            </div>
-            <div>
-              <label class="bug-label">Summary</label>
-              <input class="bug-input" type="text" name="summary" placeholder="Brief description of the issue" required>
-            </div>
-            <div>
-              <label class="bug-label">Steps to reproduce</label>
-              <textarea class="bug-textarea" name="steps" placeholder="1. Open the station builder&#10;2. Place a foundry module&#10;3. ..."></textarea>
-            </div>
-            <div>
-              <label class="bug-label">Expected vs Actual behavior</label>
-              <textarea class="bug-textarea" name="expected" placeholder="Expected: The foundry should process ore&#10;Actual: Nothing happens when ore arrives" style="min-height:80px"></textarea>
-            </div>
-            <div>
-              <label class="bug-label">System info (optional)</label>
-              <input class="bug-input" type="text" name="system" placeholder="e.g. Windows 11, RTX 3070, 16GB RAM">
-            </div>
+            <div class="bug-row"><div><label class="bug-label">Your name (optional)</label><input class="bug-input" type="text" name="name" placeholder="Anonymous commander"></div><div><label class="bug-label">Contact (optional)</label><input class="bug-input" type="text" name="contact" placeholder="Discord handle or email"></div></div>
+            <div class="bug-row"><div><label class="bug-label">Category</label><select class="bug-select" name="category"><option value="gameplay">Gameplay</option><option value="ui">UI / UX</option><option value="graphics">Graphics / Rendering</option><option value="performance">Performance</option><option value="crash">Crash / Freeze</option><option value="audio">Audio</option><option value="tutorial">Tutorial</option><option value="other">Other</option></select></div><div><label class="bug-label">Severity</label><select class="bug-select" name="severity"><option value="low">Low &mdash; cosmetic</option><option value="medium" selected>Medium &mdash; annoying</option><option value="high">High &mdash; blocks progress</option><option value="critical">Critical &mdash; crash/data loss</option></select></div></div>
+            <div><label class="bug-label">Summary</label><input class="bug-input" type="text" name="summary" placeholder="Brief description of the issue" required></div>
+            <div><label class="bug-label">Steps to reproduce</label><textarea class="bug-textarea" name="steps" placeholder="1. Open the station builder&#10;2. Place a foundry module&#10;3. ..."></textarea></div>
+            <div><label class="bug-label">Expected vs Actual behavior</label><textarea class="bug-textarea" name="expected" placeholder="Expected: The foundry should process ore&#10;Actual: Nothing happens when ore arrives" style="min-height:80px"></textarea></div>
+            <div><label class="bug-label">System info (optional)</label><input class="bug-input" type="text" name="system" placeholder="e.g. Windows 11, RTX 3070, 16GB RAM"></div>
             <button type="submit" class="bug-submit" id="bugSubmitBtn">Transmit Report</button>
           </form>
         </div>
@@ -737,13 +454,8 @@
     </div>
   </section>
 
-  <!-- ═══════ AI DISCLOSURE ═══════ -->
-  <div class="tech-strip rv" style="font-size:0.38rem;padding:0.8rem 2rem;opacity:0.6">
-    <span>AI Disclosure:</span>
-    <span style="color:var(--text-dim)">AI coding tools used during development. All visual assets, music, writing, and narrative content are human-made.</span>
-  </div>
+  <div class="tech-strip rv" style="font-size:0.52rem;padding:0.8rem 2rem;opacity:0.7"><span>AI Disclosure:</span><span style="color:var(--text-dim)">AI coding tools used during development. All visual assets, music, writing, and narrative content are human-made.</span></div>
 
-  <!-- ═══════ CTA ═══════ -->
   <div class="tx-section">
     <div class="tx-panel panel rv">
       <div class="p-head"><span>// End Transmission</span><span class="tag">SIG.VERIFIED</span></div>
@@ -751,9 +463,9 @@
         <div class="tx-pre">Signal Origin &middot; Active Development &middot; Solo Dev</div>
         <div class="tx-msg">Every empire starts with<br><strong>a single module.</strong></div>
         <a href="https://davesgames.itch.io/stella-nova" class="tx-cta" target="_blank" rel="noopener">Download the Demo</a><br>
-        <a href="https://store.steampowered.com/app/4474070/Stella_Nova/" class="h-ghost" target="_blank" rel="noopener" style="font-size:0.5rem">wishlist on Steam &rarr;</a>
-        <span style="display:inline-block;margin:0 0.6rem;color:var(--text-faint);font-size:0.4rem">or</span>
-        <a href="https://discord.gg/SkJDmnRmdJ" class="h-ghost" target="_blank" rel="noopener" style="font-size:0.5rem">join the Discord &rarr;</a>
+        <a href="https://store.steampowered.com/app/4474070/Stella_Nova/" class="h-ghost" target="_blank" rel="noopener" style="font-size:0.62rem">wishlist on Steam &rarr;</a>
+        <span style="display:inline-block;margin:0 0.6rem;color:var(--text-faint);font-size:0.52rem">or</span>
+        <a href="https://discord.gg/SkJDmnRmdJ" class="h-ghost" target="_blank" rel="noopener" style="font-size:0.62rem">join the Discord &rarr;</a>
         <div class="tx-sig" style="margin-top:1rem">STELLA NOVA // Demo Available Now</div>
         <div class="tx-barcode">STELLANOVA-EOT-2026</div>
       </div>
@@ -763,7 +475,6 @@
 </div>
 
 <script>
-/* ═══════ BUG REPORT ═══════ */
 function submitBug(e) {
   e.preventDefault();
   const form = document.getElementById('bugForm');
@@ -771,105 +482,32 @@ function submitBug(e) {
   const btn = document.getElementById('bugSubmitBtn');
   btn.disabled = true;
   btn.textContent = 'Transmitting...';
-
-  // Build a readable _subject line
   const severity = data.get('severity') || 'medium';
   const summary = data.get('summary') || 'Bug Report';
   data.append('_subject', '[Stella Nova Bug] [' + severity.toUpperCase() + '] ' + summary);
   data.append('_captcha', 'false');
   data.append('_template', 'box');
-
-  fetch('https://formsubmit.co/ajax/dave@davesgames.io', {
-    method: 'POST',
-    body: data
-  })
+  fetch('https://formsubmit.co/ajax/dave@davesgames.io', {method:'POST',body:data})
   .then(r => r.json())
-  .then(res => {
-    if (res.success) {
-      document.getElementById('bugSuccess').classList.add('show');
-      form.style.display = 'none';
-    } else {
-      btn.disabled = false;
-      btn.textContent = 'Transmit Report';
-      alert('Transmission failed. Try again or report on Discord.');
-    }
-  })
-  .catch(() => {
-    btn.disabled = false;
-    btn.textContent = 'Transmit Report';
-    alert('Transmission failed. Try again or report on Discord.');
-  });
+  .then(res => {if(res.success){document.getElementById('bugSuccess').classList.add('show');form.style.display='none'}else{btn.disabled=false;btn.textContent='Transmit Report';alert('Transmission failed. Try again or report on Discord.')}})
+  .catch(() => {btn.disabled=false;btn.textContent='Transmit Report';alert('Transmission failed. Try again or report on Discord.')});
 }
 
-/* ═══════ NOSTROMO VIEWER ═══════ */
 (function(){
-  var cur = 0, autoTimer = null;
-  var track = document.getElementById('nvTrack');
-  var slides = track ? track.children : [];
-  var total = slides.length;
-  var fileEl = document.getElementById('nvFile');
-  var pipsEl = document.getElementById('nvPips');
-  var autoBtn = document.getElementById('nvAutoBtn');
-  var viewer = document.getElementById('nvViewer');
-
-  function pad(n){ return n < 10 ? '0'+n : ''+n; }
-
-  function render(){
-    if(!track) return;
-    track.style.transform = 'translateX(-' + (cur * 100) + '%)';
-    if(fileEl) fileEl.textContent = 'IMG ' + pad(cur+1) + '/' + pad(total);
-    var pips = pipsEl ? pipsEl.children : [];
-    for(var i = 0; i < pips.length; i++){
-      pips[i].className = 'nv-pip' + (i === cur ? ' active' : '');
-    }
-  }
-
-  // build pips
-  if(pipsEl){
-    for(var i = 0; i < total; i++){
-      var p = document.createElement('button');
-      p.className = 'nv-pip' + (i === 0 ? ' active' : '');
-      p.setAttribute('aria-label', 'Slide ' + (i+1));
-      (function(idx){ p.onclick = function(){ cur = idx; render(); resetAuto(); }; })(i);
-      pipsEl.appendChild(p);
-    }
-  }
-
-  window.nvNav = function(dir){
-    cur = (cur + dir + total) % total;
-    render();
-    resetAuto();
-  };
-
-  window.nvToggleAuto = function(){
-    if(autoTimer){ clearInterval(autoTimer); autoTimer = null; }
-    else { autoTimer = setInterval(function(){ cur = (cur+1) % total; render(); }, 3500); }
-    if(autoBtn) autoBtn.className = 'nv-auto' + (autoTimer ? ' on' : '');
-  };
-
-  function resetAuto(){
-    if(!autoTimer) return;
-    clearInterval(autoTimer);
-    autoTimer = setInterval(function(){ cur = (cur+1) % total; render(); }, 3500);
-  }
-
-  // keyboard nav
-  if(viewer){
-    viewer.setAttribute('tabindex', '0');
-    viewer.addEventListener('keydown', function(e){
-      if(e.key === 'ArrowLeft'){ window.nvNav(-1); e.preventDefault(); }
-      if(e.key === 'ArrowRight'){ window.nvNav(1); e.preventDefault(); }
-    });
-  }
-
+  var cur=0,autoTimer=null;var track=document.getElementById('nvTrack');var slides=track?track.children:[];var total=slides.length;var fileEl=document.getElementById('nvFile');var pipsEl=document.getElementById('nvPips');var autoBtn=document.getElementById('nvAutoBtn');var viewer=document.getElementById('nvViewer');
+  function pad(n){return n<10?'0'+n:''+n}
+  function render(){if(!track)return;track.style.transform='translateX(-'+(cur*100)+'%)';if(fileEl)fileEl.textContent='IMG '+pad(cur+1)+'/'+pad(total);var pips=pipsEl?pipsEl.children:[];for(var i=0;i<pips.length;i++){pips[i].className='nv-pip'+(i===cur?' active':'')}}
+  if(pipsEl){for(var i=0;i<total;i++){var p=document.createElement('button');p.className='nv-pip'+(i===0?' active':'');p.setAttribute('aria-label','Slide '+(i+1));(function(idx){p.onclick=function(){cur=idx;render();resetAuto()}})(i);pipsEl.appendChild(p)}}
+  window.nvNav=function(dir){cur=(cur+dir+total)%total;render();resetAuto()};
+  window.nvToggleAuto=function(){if(autoTimer){clearInterval(autoTimer);autoTimer=null}else{autoTimer=setInterval(function(){cur=(cur+1)%total;render()},3500)}if(autoBtn)autoBtn.className='nv-auto'+(autoTimer?' on':'')};
+  function resetAuto(){if(!autoTimer)return;clearInterval(autoTimer);autoTimer=setInterval(function(){cur=(cur+1)%total;render()},3500)}
+  if(viewer){viewer.setAttribute('tabindex','0');viewer.addEventListener('keydown',function(e){if(e.key==='ArrowLeft'){window.nvNav(-1);e.preventDefault()}if(e.key==='ArrowRight'){window.nvNav(1);e.preventDefault()}})}
   render();
 })();
 
-/* ═══════ N-BODY SIM ═══════ */
 const dpr=Math.min(devicePixelRatio||1,2),TAU=Math.PI*2;
 function initCanvas(id){const c=document.getElementById(id);if(!c)return null;return{c,ctx:c.getContext('2d')}}
 function sizeCanvas(cv,w,h){cv.c.width=w*dpr;cv.c.height=h*dpr;cv.c.style.width=w+'px';cv.c.style.height=h+'px';cv.ctx.setTransform(dpr,0,0,dpr,0,0)}
-
 const simCV=initCanvas('sim');let W,H,bodies=[],showTree=false,showTrails=false,paused=false;
 const G=800,THETA=0.5,SOFTENING=4,DT=0.016,MAX_TRAIL=40;
 class Body{constructor(x,y,vx,vy,m){this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.ax=0;this.ay=0;this.mass=m;this.radius=Math.pow(m,0.33)*0.8;this.trail=[];const t=Math.min(m/500,1);this.color=t>0.8?'#96c8ff':t>0.4?'#7090b0':t>0.15?'#4a6080':'#2a3850'}}
@@ -883,7 +521,6 @@ let lastTree=null;
 function stepSim(){if(paused)return;bodies=bodies.filter(b=>b.x>-1500&&b.x<W+1500&&b.y>-1500&&b.y<H+1500);if(bodies.length<2)return;lastTree=buildTree();for(const b of bodies){b.ax=0;b.ay=0}for(const b of bodies)lastTree.calcForce(b);for(const b of bodies){b.vx+=b.ax*DT;b.vy+=b.ay*DT;b.x+=b.vx*DT;b.y+=b.vy*DT;if(b.x<-200)b.vx+=2;if(b.x>W+200)b.vx-=2;if(b.y<-200)b.vy+=2;if(b.y>H+200)b.vy-=2;if(showTrails){b.trail.push({x:b.x,y:b.y});if(b.trail.length>MAX_TRAIL)b.trail.shift()}else if(b.trail.length)b.trail=[]}}
 function renderSim(){const ctx=simCV.ctx;ctx.clearRect(0,0,W,H);if(showTree&&lastTree)drawTree(lastTree,ctx);if(showTrails)for(const b of bodies){if(b.trail.length<2)continue;ctx.beginPath();ctx.moveTo(b.trail[0].x,b.trail[0].y);for(let i=1;i<b.trail.length;i++)ctx.lineTo(b.trail[i].x,b.trail[i].y);ctx.strokeStyle=b.color+'18';ctx.lineWidth=b.radius*0.5;ctx.stroke()}for(const b of bodies){const gr=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.radius*5);gr.addColorStop(0,b.color+'10');gr.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(b.x,b.y,b.radius*5,0,TAU);ctx.fillStyle=gr;ctx.fill();ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,TAU);ctx.fillStyle=b.color;ctx.fill()}if(dragging&&dragStart&&dragCurrent){ctx.beginPath();ctx.moveTo(dragStart.x,dragStart.y);ctx.lineTo(dragCurrent.x,dragCurrent.y);ctx.strokeStyle='rgba(255,200,80,0.4)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(dragStart.x,dragStart.y,4,0,TAU);ctx.fillStyle='rgba(255,200,80,0.6)';ctx.fill()}}
 
-/* ═══════ RADAR ═══════ */
 const heroCV=initCanvas('heroRadar');
 const BASE_T=16;
 const planets=[{T:1,color:'#ffc832',r:0.02,moons:[{d:0.028,T:0.18,r:0.007}]},{T:2,color:'#ff8844',r:0.028,moons:[{d:0.03,T:0.22,r:0.006},{d:0.05,T:0.4,r:0.008}]},{T:4,color:'#ff5050',r:0.034,moons:[{d:0.035,T:0.3,r:0.006}]},{T:8,color:'#96c8ff',r:0.024,moons:[{d:0.03,T:0.24,r:0.006}]}];
@@ -895,26 +532,20 @@ for(let i=0;i<40;i++){const d=bi+Math.random()*(bo-bi);asteroids.push({dist:d,om
 const sweepSpeed=TAU/4;
 function drawRadar(ctx,W,H,t){const cx=W/2,cy=H/2,sc=Math.min(W,H)/2.4,sa=sweepSpeed*t;ctx.fillStyle='rgba(14,17,24,0.95)';ctx.fillRect(0,0,W,H);const maxR=planets[3].dist*sc*1.25;for(let i=1;i<=5;i++){const r=(i/5)*maxR;ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.strokeStyle='rgba(150,200,255,0.025)';ctx.lineWidth=0.5;ctx.stroke()}for(let i=0;i<12;i++){const a=(i/12)*TAU;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*maxR,cy+Math.sin(a)*maxR);ctx.strokeStyle='rgba(150,200,255,0.012)';ctx.lineWidth=0.3;ctx.stroke()}ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(sa)*maxR*1.2,cy+Math.sin(sa)*maxR*1.2);ctx.strokeStyle='rgba(150,200,255,0.2)';ctx.lineWidth=1;ctx.stroke();planets.forEach(p=>{const R=p.dist*sc;ctx.beginPath();ctx.setLineDash([1.5,5]);ctx.arc(cx,cy,R,0,TAU);ctx.strokeStyle='rgba(150,200,255,0.025)';ctx.lineWidth=0.4;ctx.stroke();ctx.setLineDash([])});asteroids.forEach(a=>{const ang=a.phase+a.omega*t;ctx.beginPath();ctx.arc(cx+Math.cos(ang)*a.dist*sc,cy+Math.sin(ang)*a.dist*sc,a.r*sc,0,TAU);ctx.fillStyle='rgba(150,200,255,0.05)';ctx.fill()});ctx.beginPath();ctx.arc(cx,cy,0.02*sc,0,TAU);ctx.fillStyle='rgba(255,200,80,0.2)';ctx.fill();planets.forEach(p=>{const a=p.phase+p.omega*t,px=cx+Math.cos(a)*p.dist*sc,py=cy+Math.sin(a)*p.dist*sc;let sd=(sa-a)%TAU;if(sd<0)sd+=TAU;const ping=sd<1.5?1-sd/1.5:0;if(ping>0){const pr=p.r*sc*(3+(1-ping)*5);ctx.beginPath();ctx.arc(px,py,pr,0,TAU);ctx.strokeStyle=`rgba(150,200,255,${ping*0.12})`;ctx.lineWidth=0.8;ctx.stroke()}const gl=ctx.createRadialGradient(px,py,0,px,py,p.r*sc*3);gl.addColorStop(0,p.color+'18');gl.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(px,py,p.r*sc*3,0,TAU);ctx.fillStyle=gl;ctx.fill();ctx.beginPath();ctx.arc(px,py,p.r*sc,0,TAU);ctx.fillStyle=p.color;ctx.globalAlpha=0.5+ping*0.5;ctx.fill();ctx.globalAlpha=1;p.moons.forEach(m=>{const ma=m.phase+m.omega*t;ctx.beginPath();ctx.arc(px+Math.cos(ma)*m.d*sc,py+Math.sin(ma)*m.d*sc,m.r*sc,0,TAU);ctx.fillStyle='rgba(150,200,255,0.12)';ctx.fill()})})}
 
-/* ═══════ RESIZE ═══════ */
 function resize(){W=innerWidth;H=innerHeight;sizeCanvas(simCV,W,H);sizeCanvas(heroCV,W,H)}
 resize();addEventListener('resize',resize);
-
 function toggleTree(){showTree=!showTree;document.getElementById('treeBtn').classList.toggle('active',showTree)}
 function toggleTrails(){showTrails=!showTrails;document.getElementById('trailBtn').classList.toggle('active',showTrails)}
 function togglePause(){paused=!paused;const b=document.getElementById('pauseBtn');b.classList.toggle('active',paused);b.textContent=paused?'Resume':'Pause'}
 window.resetSim=resetSim;window.addCluster=addCluster;window.toggleTree=toggleTree;window.toggleTrails=toggleTrails;window.togglePause=togglePause;
-
 let dragging=false,dragStart=null,dragCurrent=null;
 simCV.c.addEventListener('mousedown',e=>{dragging=true;dragStart={x:e.clientX,y:e.clientY};dragCurrent={x:e.clientX,y:e.clientY}});
 addEventListener('mousemove',e=>{if(dragging)dragCurrent={x:e.clientX,y:e.clientY}});
 addEventListener('mouseup',e=>{if(dragging&&dragStart){spawnBody(dragStart.x,dragStart.y,(dragStart.x-e.clientX)*3,(dragStart.y-e.clientY)*3,10+Math.random()*80);dragging=false;dragStart=null;dragCurrent=null}});
-
 let fc=0,lastFT=performance.now(),time=0;
 addCluster(100);setTimeout(()=>addCluster(80),100);
-
 function loop(){time+=1/60;stepSim();renderSim();drawRadar(heroCV.ctx,W,H,time);fc++;const now=performance.now();if(now-lastFT>=1000){document.getElementById('fpsRead').textContent=fc;fc=0;lastFT=now}document.getElementById('bodyCount').textContent=bodies.length;document.getElementById('clockRead').textContent=new Date().toTimeString().slice(0,8);requestAnimationFrame(loop)}
 requestAnimationFrame(loop);
-
 const obs=new IntersectionObserver(e=>{e.forEach(el=>{if(el.isIntersecting)el.target.classList.add('vis')})},{threshold:0.08});
 document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
 </script>
