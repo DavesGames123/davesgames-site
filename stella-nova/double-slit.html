@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Double-Slit Diffraction // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<style>
+:root{
+  --bg:#0e1118;--bg2:#121620;--bg3:#161c28;
+  --surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.18);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.05);
+  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.05);
+  --green:#64c864;--red:#e87466;
+  --text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+  --ctrl-w:220px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.4))}
+.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+
+/* TOPBAR */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:42px;background:rgba(14,17,24,0.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border-b);position:relative;z-index:100;flex-shrink:0}
+.in-frame .topbar{display:none!important}
+.topbar-l{display:flex;align-items:center;gap:1.2rem}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.05rem;letter-spacing:0.12em}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:600}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.topbar-r{font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500;font-variant-numeric:tabular-nums}
+.topbar-r strong{color:var(--blue-dim);font-weight:600}
+
+/* LAYOUT */
+#app{position:fixed;inset:0;display:flex;flex-direction:column;z-index:10}
+.in-frame #app{top:0}
+#main{flex:1;display:flex;min-height:0;position:relative}
+
+/* CANVAS */
+#sim{flex:1;position:relative;min-width:0;overflow:hidden}
+#waveCanvas{position:absolute;inset:0;width:100%;height:100%;cursor:crosshair;image-rendering:pixelated;z-index:1}
+
+/* OVERLAY INFO */
+#overlay{position:absolute;bottom:8px;left:8px;font-size:9px;color:rgba(150,200,255,0.35);pointer-events:none;line-height:1.7;z-index:20;font-weight:500}
+#overlay .v{color:var(--blue-dim)}
+
+/* DETECTOR */
+#det-wrap{position:absolute;top:0;right:0;width:56px;height:100%;background:rgba(14,17,24,0.85);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding-top:3px;z-index:15}
+#det-wrap .lbl{font-size:7px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;font-weight:700}
+#detectorCanvas{flex:1;width:44px}
+
+/* EQUATION PANEL — floating over canvas, matches orbital viewer */
+.eq-panel{
+  position:absolute;top:8px;left:8px;
+  max-width:min(520px, calc(100vw - 80px));
+  background:rgba(9,12,20,0.94);border:1px solid var(--border-b);
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  padding:14px 20px 16px;z-index:50;pointer-events:auto;
+  border-radius:3px;
+}
+.eq-head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.eq-head .dot{width:5px;height:5px;background:var(--blue);box-shadow:0 0 6px var(--blue);flex-shrink:0;border-radius:50%}
+.eq-head .lbl{font-size:0.6rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue);font-weight:700;flex:1}
+.eq-collapse{width:20px;height:20px;background:transparent;border:1px solid var(--border-b);color:var(--text-faint);cursor:pointer;font-size:0.55rem;display:flex;align-items:center;justify-content:center;transition:all 0.15s;border-radius:2px;font-family:inherit}
+.eq-collapse:hover{border-color:var(--blue-dim);color:var(--blue)}
+.eq-blocks{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.eq-block{padding:2px 0}
+.eq-sublabel{font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint);font-weight:600;margin-bottom:2px}
+.eq-row{overflow-x:auto;overflow-y:hidden}
+.eq-row::-webkit-scrollbar{height:0}
+.eq-panel .katex{color:var(--text-bright)!important;font-size:1.45rem!important;line-height:1.55!important}
+.eq-panel .katex-display{margin:0.1em 0!important}
+.eq-panel.collapsed .eq-blocks{display:none}
+.eq-panel.collapsed{padding:8px 14px}
+.eq-panel.collapsed .eq-collapse{transform:rotate(180deg)}
+
+/* CONTROLS PANEL */
+#controls{
+  width:var(--ctrl-w);flex-shrink:0;
+  background:rgba(9,12,20,0.96);
+  border-left:1px solid var(--border-b);
+  backdrop-filter:blur(24px) saturate(1.5);
+  display:flex;flex-direction:column;
+  overflow-y:auto;overflow-x:hidden;
+  z-index:80;
+  scrollbar-width:thin;scrollbar-color:var(--surface2) transparent;
+}
+#controls::-webkit-scrollbar{width:4px}
+#controls::-webkit-scrollbar-thumb{background:var(--surface2)}
+
+.sec{padding:10px 14px;border-bottom:1px solid var(--border)}
+.sec:last-child{border-bottom:none}
+.sec-lbl{font-size:0.58rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue-dim);font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.sec-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.row{display:flex;align-items:center;justify-content:space-between;margin-bottom:3px}
+.row label{color:var(--text-dim);font-size:0.62rem;letter-spacing:0.06em;font-weight:500}
+.row .vd{color:var(--blue);font-size:0.62rem;font-weight:700;font-variant-numeric:tabular-nums;min-width:28px;text-align:right}
+
+input[type="range"]{
+  -webkit-appearance:none;width:100%;height:3px;
+  background:linear-gradient(to right,var(--blue-dim) 0%,rgba(150,200,255,0.14) 100%);
+  border-radius:2px;outline:none;margin:2px 0 4px;cursor:pointer;
+}
+input[type="range"]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--bg);border:2px solid var(--blue-dim);cursor:pointer;
+  box-shadow:0 0 6px rgba(150,200,255,0.3);transition:all 0.12s;
+}
+input[type="range"]:hover::-webkit-slider-thumb{border-color:var(--blue);transform:scale(1.1)}
+input[type="range"]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);cursor:pointer}
+
+.channel-row{display:flex;align-items:center;gap:5px;margin-bottom:3px}
+.channel-row .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.channel-row label{flex:1;font-size:0.6rem;letter-spacing:0.04em;font-weight:500}
+.channel-row .vd{font-size:0.6rem;font-weight:700;min-width:20px;text-align:right}
+
+.br{display:flex;gap:3px;flex-wrap:wrap;margin-top:2px}
+.btn{
+  display:inline-block;padding:5px 7px;
+  font-family:inherit;font-size:0.58rem;font-weight:600;
+  color:var(--text-dim);background:transparent;
+  border:1px solid var(--border-b);cursor:pointer;
+  letter-spacing:0.06em;text-transform:uppercase;
+  transition:all 0.12s;white-space:nowrap;
+}
+.btn:hover{color:var(--text);border-color:rgba(150,200,255,0.3);background:var(--blue-faint)}
+.btn.active{background:rgba(150,200,255,0.1);border-color:rgba(150,200,255,0.4);color:var(--blue)}
+.btn.r{color:#ff6b6b;border-color:rgba(255,107,107,.25)}.btn.r.active{background:rgba(255,107,107,.15);border-color:#ff6b6b;color:#fff}
+.btn.g{color:#51cf66;border-color:rgba(81,207,102,.25)}.btn.g.active{background:rgba(81,207,102,.15);border-color:#51cf66;color:#fff}
+.btn.b{color:#339af0;border-color:rgba(51,154,240,.25)}.btn.b.active{background:rgba(51,154,240,.15);border-color:#339af0;color:#fff}
+
+/* MOBILE */
+.fab{display:none;position:absolute;bottom:12px;right:12px;z-index:30;padding:9px 14px;background:rgba(14,17,24,0.96);border:1px solid var(--border-b);color:var(--text);font-family:inherit;font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;border-radius:3px;backdrop-filter:blur(8px);cursor:pointer}
+.fab.open{color:var(--yellow);border-color:var(--yellow)}
+.drawer-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:60;opacity:0;pointer-events:none;transition:opacity 0.2s}
+.drawer-bg.show{opacity:1;pointer-events:auto}
+
+@media(max-width:700px){
+  :root{--ctrl-w:min(82vw,300px)}
+  #controls{position:fixed;top:42px;right:0;bottom:0;z-index:200;transform:translateX(105%);transition:transform 0.25s cubic-bezier(0.4,0,0.2,1);box-shadow:0 0 24px rgba(0,0,0,0.6)}
+  .in-frame #controls{top:0}
+  #controls.open{transform:translateX(0)}
+  .fab{display:block}
+  .drawer-bg{display:block}
+  .eq-panel{right:8px;left:8px;max-width:none;padding:10px 14px 12px}
+  .eq-panel .katex{font-size:1.2rem!important}
+  .eq-sublabel{font-size:0.48rem}
+  .topbar{height:38px;padding:0 0.9rem}
+  .sys-name{font-size:0.9rem}
+}
+@media(max-width:420px){
+  .eq-panel .eq-blocks{gap:4px}
+  .eq-panel .katex{font-size:1.0rem!important}
+  .topbar-r{display:none}
+}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-l">
+      <span class="sys-name">Stella Nova</span>
+      <span class="sys-status">FDTD Wave Sim</span>
+    </div>
+    <div class="topbar-r" id="perf-info">SYS // <strong>OPTICS</strong></div>
+  </div>
+
+  <div id="main">
+    <div id="sim">
+      <canvas id="waveCanvas"></canvas>
+
+      <div id="overlay">
+        <div>t = <span class="v" id="ot">0.000</span> fs</div>
+        <div>steps = <span class="v" id="os">0</span></div>
+        <div>grid = <span class="v" id="og">—</span></div>
+      </div>
+
+      <div id="det-wrap">
+        <div class="lbl">Intensity</div>
+        <canvas id="detectorCanvas" width="44"></canvas>
+      </div>
+
+      <!-- EQUATION PANEL — floating, collapsible -->
+      <section class="eq-panel" id="eq-panel">
+        <div class="eq-head">
+          <span class="dot"></span>
+          <span class="lbl">Governing Equations</span>
+          <button class="eq-collapse" id="eq-collapse-btn" title="Collapse">▲</button>
+        </div>
+        <div class="eq-blocks">
+          <div class="eq-block">
+            <div class="eq-sublabel">Scalar Wave Equation</div>
+            <div class="eq-row" id="eq-wave"></div>
+          </div>
+          <div class="eq-block">
+            <div class="eq-sublabel">FDTD Discretization</div>
+            <div class="eq-row" id="eq-fdtd"></div>
+          </div>
+          <div class="eq-block">
+            <div class="eq-sublabel">Stability · Channels</div>
+            <div class="eq-row" id="eq-rgb"></div>
+          </div>
+        </div>
+      </section>
+
+      <button class="fab" id="fab" onclick="toggleDrawer()">Controls ≡</button>
+      <div class="drawer-bg" id="drawer-bg" onclick="closeDrawer()"></div>
+    </div>
+
+    <div id="controls">
+      <div class="sec">
+        <div class="sec-lbl">RGB Channels</div>
+        <div class="channel-row"><div class="dot" style="background:#ff6b6b"></div><label style="color:#ff6b6b">Red λ</label><span class="vd" id="val-lr" style="color:#ff6b6b">44</span></div>
+        <input type="range" id="sl-lr" min="30" max="80" value="44" step="1">
+        <div class="channel-row"><div class="dot" style="background:#51cf66"></div><label style="color:#51cf66">Green λ</label><span class="vd" id="val-lg" style="color:#51cf66">32</span></div>
+        <input type="range" id="sl-lg" min="16" max="60" value="32" step="1">
+        <div class="channel-row"><div class="dot" style="background:#339af0"></div><label style="color:#339af0">Blue λ</label><span class="vd" id="val-lb" style="color:#339af0">22</span></div>
+        <input type="range" id="sl-lb" min="10" max="44" value="22" step="1">
+        <div class="br" style="margin-top:4px">
+          <button class="btn r active" id="tog-r">R</button>
+          <button class="btn g active" id="tog-g">G</button>
+          <button class="btn b active" id="tog-b">B</button>
+          <button class="btn active" id="tog-all">All</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Barrier / Slits</div>
+        <div class="row"><label>Slit width</label><span class="vd" id="val-sw">8</span></div>
+        <input type="range" id="sl-sw" min="2" max="120" value="8" step="1">
+        <div class="row"><label>Separation</label><span class="vd" id="val-ss">30</span></div>
+        <input type="range" id="sl-ss" min="4" max="300" value="30" step="1">
+        <div class="row"><label>Position</label><span class="vd" id="val-bx">0.30</span></div>
+        <input type="range" id="sl-bx" min="0.05" max="0.90" value="0.30" step="0.01">
+        <div class="br">
+          <button class="btn active" data-slits="double">Double</button>
+          <button class="btn" data-slits="single">Single</button>
+          <button class="btn" data-slits="none">None</button>
+          <button class="btn" data-slits="triple">Triple</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Simulation</div>
+        <div class="row"><label>Δt</label><span class="vd" id="val-dt">0.70</span></div>
+        <input type="range" id="sl-dt" min="0.10" max="0.70" value="0.70" step="0.05">
+        <div class="row"><label>Dissipation</label><span class="vd" id="val-diss">0.998</span></div>
+        <input type="range" id="sl-diss" min="0.950" max="1.000" value="0.998" step="0.001">
+        <div class="row"><label>Gain</label><span class="vd" id="val-gain">1.5</span></div>
+        <input type="range" id="sl-gain" min="0.3" max="100.0" value="1.5" step="0.1">
+        <div class="row"><label>Resolution</label><span class="vd" id="val-scale">2</span></div>
+        <input type="range" id="sl-scale" min="1" max="4" value="2" step="1">
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Display</div>
+        <div class="br">
+          <button class="btn active" data-disp="amplitude">Amplitude</button>
+          <button class="btn" data-disp="intensity">Intensity</button>
+          <button class="btn" data-disp="phase">Phase</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Interaction</div>
+        <div class="row"><label>Brush</label><span class="vd" id="val-br">6</span></div>
+        <input type="range" id="sl-br" min="1" max="30" value="6" step="1">
+        <div class="br">
+          <button class="btn" data-src="sine">Sine</button>
+          <button class="btn active" data-src="impulse">Impulse</button>
+          <button class="btn" data-src="wall">Wall</button>
+          <button class="btn" data-src="erase">Erase</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="br">
+          <button class="btn" id="btn-pause">⏸ Pause</button>
+          <button class="btn" id="btn-reset">⟲ Reset</button>
+          <button class="btn" id="btn-clr">✕ Walls</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KaTeX Equation Rendering -->
+<script>
+(function(){
+  if(!window.katex) return;
+  const C_psi='#ffc832', C_c='#64c864', C_a='#ff6b6b', C_lam='#96c8ff';
+  const opts={throwOnError:false,displayMode:true};
+  katex.render(
+    String.raw`\frac{\partial^2 \textcolor{${C_psi}}{\psi}}{\partial t^2} \;=\; \textcolor{${C_c}}{c^2}\,\nabla^2\textcolor{${C_psi}}{\psi}`,
+    document.getElementById('eq-wave'), opts
+  );
+  katex.render(
+    String.raw`\textcolor{${C_psi}}{\psi^{n\!+\!1}} \!=\! 2\textcolor{${C_psi}}{\psi^n} \!-\! \textcolor{${C_psi}}{\psi^{n\!-\!1}} \!+\! \textcolor{${C_a}}{\alpha^2}\nabla^2\textcolor{${C_psi}}{\psi^n}`,
+    document.getElementById('eq-fdtd'), opts
+  );
+  katex.render(
+    String.raw`\textcolor{${C_a}}{\alpha} = \tfrac{c\,\Delta t}{\Delta x} \leq \tfrac{1}{\sqrt{2}}\;\;\;\; 3\!\times\!\textcolor{${C_lam}}{\lambda_{\scriptscriptstyle R,G,B}}`,
+    document.getElementById('eq-rgb'), opts
+  );
+  const panel=document.getElementById('eq-panel');
+  const btn=document.getElementById('eq-collapse-btn');
+  btn.addEventListener('click',()=>{
+    const c=panel.classList.toggle('collapsed');
+    btn.textContent=c?'▼':'▲';
+    btn.title=c?'Expand':'Collapse';
+  });
+})();
+</script>
+
+<script>
+// Mobile drawer
+function toggleDrawer(){
+  const c=document.getElementById('controls'),f=document.getElementById('fab'),b=document.getElementById('drawer-bg');
+  const open=!c.classList.contains('open');
+  c.classList.toggle('open',open);f.classList.toggle('open',open);b.classList.toggle('show',open);
+}
+function closeDrawer(){
+  document.getElementById('controls').classList.remove('open');
+  document.getElementById('fab').classList.remove('open');
+  document.getElementById('drawer-bg').classList.remove('show');
+}
+
+// ============================================================
+//  FDTD 2D SCALAR WAVE — THREE INDEPENDENT RGB CHANNELS
+//  ψ(n+1) = damping * dissipation * (2ψ(n) - ψ(n-1) + α²·∇²ψ(n))
+//  α = c·dt/dx  (Courant number, stability requires α ≤ 1/√2)
+//  Mur 1st-order ABC at edges + PML damping ramp
+// ============================================================
+
+const canvas = document.getElementById('waveCanvas');
+const ctx = canvas.getContext('2d');
+const detC = document.getElementById('detectorCanvas');
+const detCtx = detC.getContext('2d');
+
+let NX, NY, N;
+let u = [null,null,null];
+let up = [null,null,null];
+let un = [null,null,null];
+let barrier, userWalls, dampArr;
+let imgData;
+let detAccum = [null,null,null];
+let detCount = 0;
+let simTime = 0, stepN = 0;
+let paused = false;
+let fCount = 0, lastFT = performance.now(), fps = 0;
+
+const P = {
+  lambdaR: 44, lambdaG: 32, lambdaB: 22,
+  chOn: [true, true, true],
+  slitW: 8, slitSep: 30, barrierX: 0.30, slitMode: 'double',
+  dt: 0.70, amp: 1.0, pml: 20, gain: 1.5,
+  disp: 'amplitude',
+  brushR: 6, srcMode: 'impulse',
+  scale: 2,
+  dissipation: 0.998,
+};
+
+let displayW, displayH;
+function init() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  displayW = Math.floor(r.width);
+  displayH = Math.floor(r.height);
+  NX = Math.floor(displayW / P.scale);
+  NY = Math.floor(displayH / P.scale);
+  canvas.width = NX;
+  canvas.height = NY;
+  N = NX * NY;
+  for (let c = 0; c < 3; c++) {
+    u[c]  = new Float32Array(N);
+    up[c] = new Float32Array(N);
+    un[c] = new Float32Array(N);
+    detAccum[c] = new Float64Array(NY);
+  }
+  barrier = new Uint8Array(N);
+  userWalls = new Uint8Array(N);
+  dampArr = new Float32Array(N);
+  imgData = ctx.createImageData(NX, NY);
+  const d = imgData.data;
+  for (let i = 3; i < d.length; i += 4) d[i] = 255;
+  detCount = 0; simTime = 0; stepN = 0;
+  buildDamping(); buildBarrier(); resizeDetector();
+  document.getElementById('og').textContent = `${NX}×${NY}`;
+}
+
+function buildDamping() {
+  const pml = P.pml;
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const mn = Math.min(x, NX-1-x, y, NY-1-y);
+    let d = 0;
+    if (mn < pml) { const t = (pml - mn) / pml; d = 0.015 + 0.18 * t * t; }
+    dampArr[y * NX + x] = 1.0 - d;
+  }
+}
+
+function buildBarrier() {
+  barrier.set(userWalls);
+  if (P.slitMode === 'none') return;
+  const bx = Math.floor(NX * P.barrierX), cy = Math.floor(NY / 2), thick = 3;
+  for (let t = 0; t < thick; t++) { const x = bx + t; if (x < 0 || x >= NX) continue; for (let y = 0; y < NY; y++) barrier[y * NX + x] = 1; }
+  let centers = [];
+  if (P.slitMode === 'single') centers = [cy];
+  else if (P.slitMode === 'double') centers = [cy - Math.floor(P.slitSep/2), cy + Math.floor(P.slitSep/2)];
+  else if (P.slitMode === 'triple') centers = [cy - P.slitSep, cy, cy + P.slitSep];
+  const hw = Math.floor(P.slitW / 2);
+  for (const sc of centers) for (let t = 0; t < thick; t++) { const x = bx + t; if (x < 0 || x >= NX) continue; for (let dy = -hw; dy <= hw; dy++) { const y = sc + dy; if (y >= 0 && y < NY && !userWalls[y * NX + x]) barrier[y * NX + x] = 0; } }
+}
+
+let mDown = false, mX = 0, mY = 0;
+let sineChAmp = [1, 1, 1];
+
+function gp(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: Math.max(0, Math.min(NX-1, Math.floor((e.clientX - r.left) / r.width * NX))), y: Math.max(0, Math.min(NY-1, Math.floor((e.clientY - r.top) / r.height * NY))) };
+}
+
+function applyBrush(gx, gy) {
+  const r = P.brushR, r2 = r * r;
+  if (P.srcMode === 'wall') {
+    for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++) { if(dx*dx+dy*dy>r2) continue; const x=gx+dx,y=gy+dy; if(x<0||x>=NX||y<0||y>=NY) continue; const i=y*NX+x; userWalls[i]=1;barrier[i]=1; for(let c=0;c<3;c++){u[c][i]=0;up[c][i]=0;} }
+  } else if (P.srcMode === 'erase') {
+    for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++) { if(dx*dx+dy*dy>r2) continue; const x=gx+dx,y=gy+dy; if(x<0||x>=NX||y<0||y>=NY) continue; userWalls[y*NX+x]=0; }
+    buildBarrier();
+  } else if (P.srcMode === 'impulse') {
+    const chAmp=[P.chOn[0]?(0.4+Math.random()*0.6):0,P.chOn[1]?(0.4+Math.random()*0.6):0,P.chOn[2]?(0.4+Math.random()*0.6):0];
+    for (let c=0;c<3;c++) { if(!chAmp[c]) continue; for (let dy=-r;dy<=r;dy++) for (let dx=-r;dx<=r;dx++) { const d2=dx*dx+dy*dy; if(d2>r2) continue; const x=gx+dx,y=gy+dy; if(x<0||x>=NX||y<0||y>=NY) continue; const i=y*NX+x; if(!barrier[i]){const falloff=1-Math.sqrt(d2)/r;u[c][i]+=P.amp*chAmp[c]*falloff*1.5;} } }
+  }
+}
+
+canvas.addEventListener('mousedown',e=>{mDown=true;sineChAmp=[0.4+Math.random()*0.6,0.4+Math.random()*0.6,0.4+Math.random()*0.6];const p=gp(e);mX=p.x;mY=p.y;if(P.srcMode!=='sine')applyBrush(p.x,p.y);});
+canvas.addEventListener('mousemove',e=>{if(!mDown)return;const p=gp(e);if(P.srcMode!=='sine'){let cx=mX,cy=mY;const dx=Math.abs(p.x-cx),dy=Math.abs(p.y-cy),sx=cx<p.x?1:-1,sy=cy<p.y?1:-1;let err=dx-dy;while(true){applyBrush(cx,cy);if(cx===p.x&&cy===p.y)break;const e2=2*err;if(e2>-dy){err-=dy;cx+=sx;}if(e2<dx){err+=dx;cy+=sy;}}}mX=p.x;mY=p.y;});
+canvas.addEventListener('mouseup',()=>{mDown=false;});
+canvas.addEventListener('mouseleave',()=>{mDown=false;});
+canvas.addEventListener('wheel',e=>{e.preventDefault();P.brushR=Math.max(1,Math.min(30,P.brushR+(e.deltaY>0?-1:1)));document.getElementById('sl-br').value=P.brushR;document.getElementById('val-br').textContent=P.brushR;},{passive:false});
+
+canvas.addEventListener('touchstart',e=>{e.preventDefault();mDown=true;sineChAmp=[0.4+Math.random()*0.6,0.4+Math.random()*0.6,0.4+Math.random()*0.6];const p=gp(e.touches[0]);mX=p.x;mY=p.y;if(P.srcMode!=='sine')applyBrush(p.x,p.y);},{passive:false});
+canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!mDown)return;const p=gp(e.touches[0]);if(P.srcMode!=='sine')applyBrush(p.x,p.y);mX=p.x;mY=p.y;},{passive:false});
+canvas.addEventListener('touchend',()=>{mDown=false;});
+
+function step() {
+  const nx=NX,ny=NY,alpha2=P.dt*P.dt,alpha=P.dt,murCoeff=(alpha-1)/(alpha+1),lambdas=[P.lambdaR,P.lambdaG,P.lambdaB],diss=P.dissipation;
+  for (let c=0;c<3;c++) {
+    if(!P.chOn[c]) continue;
+    const uc=u[c],upc=up[c],unc=un[c],omega=2*Math.PI/lambdas[c];
+    if(mDown&&P.srcMode==='sine'){const r=P.brushR,r2=r*r,sv=P.amp*sineChAmp[c]*Math.sin(omega*simTime);for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){const d2=dx*dx+dy*dy;if(d2>r2)continue;const x=mX+dx,y=mY+dy;if(x<0||x>=nx||y<0||y>=ny)continue;const i=y*nx+x;if(!barrier[i]){const falloff=1-Math.sqrt(d2)/r;uc[i]+=sv*0.4*falloff;}}}
+    for(let y=1;y<ny-1;y++){const yo=y*nx;for(let x=1;x<nx-1;x++){const i=yo+x;if(barrier[i]){unc[i]=0;continue;}const lap=uc[i-1]+uc[i+1]+uc[i-nx]+uc[i+nx]-4*uc[i];unc[i]=diss*dampArr[i]*(2*uc[i]-upc[i]+alpha2*lap);}}
+    for(let y=1;y<ny-1;y++){const yo=y*nx;unc[yo]=uc[yo+1]+murCoeff*(unc[yo+1]-uc[yo]);unc[yo+nx-1]=uc[yo+nx-2]+murCoeff*(unc[yo+nx-2]-uc[yo+nx-1]);}
+    for(let x=0;x<nx;x++){unc[x]=uc[x+nx]+murCoeff*(unc[x+nx]-uc[x]);unc[(ny-1)*nx+x]=uc[(ny-2)*nx+x]+murCoeff*(unc[(ny-2)*nx+x]-uc[(ny-1)*nx+x]);}
+    for(let y=0;y<ny;y++){const yo=y*nx;if(barrier[yo])unc[yo]=0;if(barrier[yo+nx-1])unc[yo+nx-1]=0;}
+    for(let x=0;x<nx;x++){if(barrier[x])unc[x]=0;if(barrier[(ny-1)*nx+x])unc[(ny-1)*nx+x]=0;}
+    up[c]=uc;u[c]=unc;un[c]=upc;
+  }
+  simTime+=1;stepN++;
+}
+
+function accumDet(){const dx=Math.min(NX-5,Math.floor(NX*0.90));for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=u[c][y*NX+dx];detAccum[c][y]+=v*v;}}detCount++;}
+
+function render(){
+  const d=imgData.data,g=P.gain,disp=P.disp,rOn=P.chOn[0],gOn=P.chOn[1],bOn=P.chOn[2];
+  if(disp==='amplitude'){const ur=u[0],ug=u[1],ub=u[2];for(let i=0;i<N;i++){const p=i*4;let vr=rOn?ur[i]*g:0;if(vr<0)vr=-vr;vr=vr*255|0;if(vr>255)vr=255;let vg=gOn?ug[i]*g:0;if(vg<0)vg=-vg;vg=vg*255|0;if(vg>255)vg=255;let vb=bOn?ub[i]*g:0;if(vb<0)vb=-vb;vb=vb*255|0;if(vb>255)vb=255;d[p]=vr;d[p+1]=vg;d[p+2]=vb;}}
+  else if(disp==='intensity'){const ur=u[0],ug=u[1],ub=u[2];for(let i=0;i<N;i++){const p=i*4;let ir=rOn?ur[i]*g:0;ir=ir*ir*255|0;if(ir>255)ir=255;let ig=gOn?ug[i]*g:0;ig=ig*ig*255|0;if(ig>255)ig=255;let ib=bOn?ub[i]*g:0;ib=ib*ib*255|0;if(ib>255)ib=255;d[p]=ir;d[p+1]=ig;d[p+2]=ib;}}
+  else if(disp==='phase'){for(let i=0;i<N;i++){const p=i*4;for(let c=0;c<3;c++){if(!P.chOn[c]){d[p+c]=0;continue;}const v=u[c][i],vp=up[c][i];const amp=Math.sqrt(v*v+vp*vp)*g;const phase=Math.atan2(v,vp);const bright=Math.min(1,amp)*(0.5+0.5*Math.cos(phase));d[p+c]=Math.round(bright*255);}}}
+  for(let i=0;i<N;i++){if(barrier[i]){const p=i*4;if(userWalls[i]){d[p]=100;d[p+1]=180;d[p+2]=240;}else{d[p]=45;d[p+1]=70;d[p+2]=100;}}}
+  ctx.putImageData(imgData,0,0);
+}
+
+function resizeDetector(){const h=detC.parentElement.getBoundingClientRect().height-20;detC.height=Math.max(80,h);}
+
+function renderDetector(){
+  const w=detC.width,h=detC.height;detCtx.fillStyle='#0e1118';detCtx.fillRect(0,0,w,h);
+  if(!detCount)return;let maxI=0;for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=detAccum[c][y]/detCount;if(v>maxI)maxI=v;}}if(!maxI)return;
+  const colors=['rgba(255,107,107,','rgba(81,207,102,','rgba(51,154,240,'];const bw=w-6;
+  for(let c=2;c>=0;c--){if(!P.chOn[c])continue;for(let py=0;py<h;py++){const gy=Math.floor(py/h*NY);const intensity=(detAccum[c][gy]/detCount)/maxI;detCtx.fillStyle=colors[c]+(0.6+0.4*intensity)+')';detCtx.fillRect(3,py,bw*intensity,1);}}
+}
+
+// Controls wiring
+function wire(slId,valId,key,parse,fmt){const sl=document.getElementById(slId);const vl=document.getElementById(valId);sl.addEventListener('input',()=>{P[key]=parse(sl.value);vl.textContent=fmt?fmt(P[key]):P[key];if(['slitW','slitSep','barrierX','slitMode'].includes(key))buildBarrier();if(key==='pml')buildDamping();});}
+wire('sl-lr','val-lr','lambdaR',Number);wire('sl-lg','val-lg','lambdaG',Number);wire('sl-lb','val-lb','lambdaB',Number);
+wire('sl-sw','val-sw','slitW',Number);wire('sl-ss','val-ss','slitSep',Number);wire('sl-bx','val-bx','barrierX',Number,v=>v.toFixed(2));
+wire('sl-dt','val-dt','dt',Number,v=>v.toFixed(2));wire('sl-gain','val-gain','gain',Number,v=>v.toFixed(1));wire('sl-br','val-br','brushR',Number);wire('sl-diss','val-diss','dissipation',Number,v=>v.toFixed(3));
+document.getElementById('sl-scale').addEventListener('input',function(){P.scale=Number(this.value);document.getElementById('val-scale').textContent=P.scale;init();});
+
+['r','g','b'].forEach((ch,ci)=>{document.getElementById('tog-'+ch).addEventListener('click',function(){P.chOn[ci]=!P.chOn[ci];this.classList.toggle('active',P.chOn[ci]);});});
+document.getElementById('tog-all').addEventListener('click',function(){const allOn=P.chOn.every(v=>v);P.chOn=[!allOn,!allOn,!allOn];['r','g','b'].forEach((ch,ci)=>{document.getElementById('tog-'+ch).classList.toggle('active',P.chOn[ci]);});this.classList.toggle('active',P.chOn[0]);});
+
+function wireGroup(sel,key,cb){document.querySelectorAll(sel).forEach(btn=>{btn.addEventListener('click',()=>{document.querySelectorAll(sel).forEach(b=>b.classList.remove('active'));btn.classList.add('active');const dk=Object.keys(btn.dataset)[0];P[key]=btn.dataset[dk];if(cb)cb();});});}
+wireGroup('[data-slits]','slitMode',buildBarrier);wireGroup('[data-disp]','disp');wireGroup('[data-src]','srcMode');
+
+document.getElementById('btn-pause').addEventListener('click',function(){paused=!paused;this.textContent=paused?'▶ Play':'⏸ Pause';this.classList.toggle('active',paused);});
+document.getElementById('btn-reset').addEventListener('click',()=>{for(let c=0;c<3;c++){u[c].fill(0);up[c].fill(0);un[c].fill(0);detAccum[c].fill(0);}detCount=0;simTime=0;stepN=0;});
+document.getElementById('btn-clr').addEventListener('click',()=>{userWalls.fill(0);buildBarrier();});
+
+function loop(){
+  fCount++;const now=performance.now();
+  if(now-lastFT>500){fps=Math.round(fCount/((now-lastFT)/1000));fCount=0;lastFT=now;
+    document.getElementById('perf-info').innerHTML=`${fps} fps · ${NX}×${NY} · <strong>${NX*NY*3/1000|0}k</strong> cells · α=${P.dt.toFixed(2)}`;}
+  if(!paused){step();accumDet();}
+  render();if(stepN%8===0)renderDetector();
+  document.getElementById('ot').textContent=(simTime*0.01).toFixed(3);
+  document.getElementById('os').textContent=stepN;
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener('resize',()=>{clearTimeout(window._rt);window._rt=setTimeout(()=>{init();},200);});
+init();loop();
+</script>
+</body>
+</html>
