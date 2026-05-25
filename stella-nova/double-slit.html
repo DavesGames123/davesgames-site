@@ -236,10 +236,10 @@ input[type="range"]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;b
 
       <div class="sec">
         <div class="sec-lbl">Barrier / Slits</div>
-        <div class="row"><label>Slit width</label><span class="vd" id="val-sw">8</span></div>
-        <input type="range" id="sl-sw" min="2" max="120" value="8" step="1">
-        <div class="row"><label>Separation</label><span class="vd" id="val-ss">30</span></div>
-        <input type="range" id="sl-ss" min="4" max="300" value="30" step="1">
+        <div class="row"><label>Slit width</label><span class="vd" id="val-sw">15</span></div>
+        <input type="range" id="sl-sw" min="2" max="120" value="15" step="1">
+        <div class="row"><label>Separation</label><span class="vd" id="val-ss">111</span></div>
+        <input type="range" id="sl-ss" min="4" max="300" value="111" step="1">
         <div class="row"><label>Position</label><span class="vd" id="val-bx">0.30</span></div>
         <input type="range" id="sl-bx" min="0.05" max="0.90" value="0.30" step="0.01">
         <div class="br">
@@ -351,7 +351,7 @@ let NX, NY, N;
 let u = [null,null,null];
 let up = [null,null,null];
 let un = [null,null,null];
-let barrier, userWalls, dampArr;
+let barrier, userWalls, caArr, cbArr;
 let imgData;
 let detAccum = [null,null,null];
 let detCount = 0;
@@ -362,7 +362,7 @@ let fCount = 0, lastFT = performance.now(), fps = 0;
 const P = {
   lambdaR: 44, lambdaG: 32, lambdaB: 22,
   chOn: [true, true, true],
-  slitW: 8, slitSep: 30, barrierX: 0.30, slitMode: 'double',
+  slitW: 15, slitSep: 111, barrierX: 0.30, slitMode: 'double',
   dt: 0.50, amp: 1.0, pml: 30, gain: 1.0,
   disp: 'amplitude',
   brushR: 6, srcMode: 'impulse',
@@ -388,7 +388,12 @@ function init() {
   }
   barrier = new Uint8Array(N);
   userWalls = new Uint8Array(N);
-  dampArr = new Float32Array(N);
+  // Proper lossy medium: two coefficient arrays derived from conductivity σ
+  // ∂²ψ/∂t² + σ·∂ψ/∂t = c²∇²ψ
+  // Discretized: ψ(n+1) = ca*(2ψ(n) + α²∇²ψ) - cb*ψ(n-1)
+  // where ca = 1/(1+σΔt/2),  cb = (1-σΔt/2)/(1+σΔt/2)
+  caArr = new Float32Array(N); // coefficient for current term
+  cbArr = new Float32Array(N); // coefficient for previous term
   imgData = ctx.createImageData(NX, NY);
   const d = imgData.data;
   for (let i = 3; i < d.length; i += 4) d[i] = 255;
@@ -398,21 +403,28 @@ function init() {
 }
 
 function buildDamping() {
-  const pml = 30; // thick absorbing layer
-  const absorbStart = Math.floor(NX * 0.82);
+  // Proper PML: conductivity σ ramps smoothly from 0 to σ_max
+  // ca = 1/(1 + σΔt/2),  cb = (1 - σΔt/2)/(1 + σΔt/2)
+  // When σ=0: ca=1, cb=1 (lossless)
+  // When σΔt/2=1: ca=0.5, cb=0 (heavy absorption, no memory of previous step)
+  const pml = 40;
+  const sigMax = 2.0; // σΔt/2 at boundary edge (strong absorption)
+  const absorbStart = Math.floor(NX * 0.78);
   const absorbLen = Math.max(1, NX - absorbStart);
   for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const i = y * NX + x;
     const dL = x, dR = NX-1-x, dT = y, dB = NY-1-y;
     const mn = Math.min(dL, dR, dT, dB);
-    let d = 0;
-    // Cubic ramp to 0.95 damping — nearly total absorption at boundary
-    if (mn < pml) { const t = (pml - mn) / pml; d = 0.95 * t * t * t; }
-    // Right side detector wall
+    let sig = 0; // σΔt/2
+    // Quartic ramp into PML — smooth impedance transition
+    if (mn < pml) { const t = (pml - mn) / pml; sig = sigMax * t * t * t * t; }
+    // Right-side detector absorber wall
     if (x > absorbStart) {
       const t = (x - absorbStart) / absorbLen;
-      d = Math.max(d, 0.95 * t * t);
+      sig = Math.max(sig, sigMax * t * t * t);
     }
-    dampArr[y * NX + x] = 1.0 - d;
+    caArr[i] = 1.0 / (1.0 + sig);
+    cbArr[i] = (1.0 - sig) / (1.0 + sig);
   }
 }
 
@@ -461,22 +473,24 @@ canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!mDown)return;cons
 canvas.addEventListener('touchend',()=>{mDown=false;});
 
 function step() {
-  const nx=NX,ny=NY,alpha2=P.dt*P.dt,alpha=P.dt,murCoeff=(alpha-1)/(alpha+1),lambdas=[P.lambdaR,P.lambdaG,P.lambdaB],diss=P.dissipation;
+  const nx=NX,ny=NY,alpha2=P.dt*P.dt,lambdas=[P.lambdaR,P.lambdaG,P.lambdaB],diss=P.dissipation;
   for (let c=0;c<3;c++) {
     if(!P.chOn[c]) continue;
     const uc=u[c],upc=up[c],unc=un[c],omega=2*Math.PI/lambdas[c];
     if(mDown&&P.srcMode==='sine'){const r=P.brushR,r2=r*r,sv=P.amp*sineChAmp[c]*Math.sin(omega*simTime);for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){const d2=dx*dx+dy*dy;if(d2>r2)continue;const x=mX+dx,y=mY+dy;if(x<0||x>=nx||y<0||y>=ny)continue;const i=y*nx+x;if(!barrier[i]){const falloff=1-Math.sqrt(d2)/r;uc[i]+=sv*0.4*falloff;}}}
-    for(let y=1;y<ny-1;y++){const yo=y*nx;for(let x=1;x<nx-1;x++){const i=yo+x;if(barrier[i]){unc[i]=0;continue;}const lap=uc[i-1]+uc[i+1]+uc[i-nx]+uc[i+nx]-4*uc[i];unc[i]=diss*dampArr[i]*(2*uc[i]-upc[i]+alpha2*lap);}}
-    for(let y=1;y<ny-1;y++){const yo=y*nx;unc[yo]=uc[yo+1]+murCoeff*(unc[yo+1]-uc[yo]);unc[yo+nx-1]=uc[yo+nx-2]+murCoeff*(unc[yo+nx-2]-uc[yo+nx-1]);}
-    for(let x=0;x<nx;x++){unc[x]=uc[x+nx]+murCoeff*(unc[x+nx]-uc[x]);unc[(ny-1)*nx+x]=uc[(ny-2)*nx+x]+murCoeff*(unc[(ny-2)*nx+x]-uc[(ny-1)*nx+x]);}
-    for(let y=0;y<ny;y++){const yo=y*nx;if(barrier[yo])unc[yo]=0;if(barrier[yo+nx-1])unc[yo+nx-1]=0;}
-    for(let x=0;x<nx;x++){if(barrier[x])unc[x]=0;if(barrier[(ny-1)*nx+x])unc[(ny-1)*nx+x]=0;}
+    // Interior FDTD: proper lossy medium formulation
+    // ψ(n+1) = ca * (2ψ(n) + α²∇²ψ) - cb * ψ(n-1)
+    // Global dissipation applied multiplicatively on top
+    for(let y=1;y<ny-1;y++){const yo=y*nx;for(let x=1;x<nx-1;x++){const i=yo+x;if(barrier[i]){unc[i]=0;continue;}const lap=uc[i-1]+uc[i+1]+uc[i-nx]+uc[i+nx]-4*uc[i];unc[i]=diss*(caArr[i]*(2*uc[i]+alpha2*lap)-cbArr[i]*upc[i]);}}
+    // Hard zero all edge cells
+    for(let x=0;x<nx;x++){unc[x]=0;unc[(ny-1)*nx+x]=0;}
+    for(let y=0;y<ny;y++){unc[y*nx]=0;unc[y*nx+nx-1]=0;}
     up[c]=uc;u[c]=unc;un[c]=upc;
   }
   simTime+=1;stepN++;
 }
 
-function accumDet(){const dx=Math.min(NX-5,Math.floor(NX*0.82));for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=u[c][y*NX+dx];detAccum[c][y]+=v*v;}}detCount++;}
+function accumDet(){const dx=Math.min(NX-5,Math.floor(NX*0.78));for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=u[c][y*NX+dx];detAccum[c][y]+=v*v;}}detCount++;}
 
 function render(){
   const d=imgData.data,g=P.gain,disp=P.disp,rOn=P.chOn[0],gOn=P.chOn[1],bOn=P.chOn[2];

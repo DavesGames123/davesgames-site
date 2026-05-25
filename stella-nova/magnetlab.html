@@ -200,8 +200,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
       </div>
       <div class="mag-row" style="margin-top:6px">
         <span class="mag-row-lbl">Count</span>
-        <input type="range" id="sl-tracer-count" min="200" max="3000" value="1500" step="50" oninput="updateTracerCount(this)">
-        <span class="val" id="vl-tracer-count">1500</span>
+        <input type="range" id="sl-tracer-count" min="200" max="5000" value="2500" step="50" oninput="updateTracerCount(this)">
+        <span class="val" id="vl-tracer-count">2500</span>
       </div>
       <div class="mag-row">
         <span class="mag-row-lbl">Speed</span>
@@ -257,7 +257,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 
 <div id="status-bar">
   <span id="st-magnets">0 magnets</span><span class="sep"></span>
-  <span id="st-tracers">1500 tracers</span><span class="sep"></span>
+  <span id="st-tracers">2500 tracers</span><span class="sep"></span>
   <span id="st-fps">-- fps</span><span class="sep"></span>
   <span id="st-field">B: 0.00</span><span class="sep"></span>
   <span id="st-zoom">1.0×</span><span class="sep"></span>
@@ -293,7 +293,7 @@ let CW = 100, CH = 100;
 
 const SIM = {
   playing:true, showTracers:true, showArrows:true, showHeatmap:false,
-  tracerCount:1500, tracerSpeed:1.5, tracerTrail:40,
+  tracerCount:2500, tracerSpeed:1.5, tracerTrail:40,
   dt:1/60, damping:0.97, angDamping:0.85, selectedId:-1,
 };
 let magnets=[], tracers=[], nextId=0;
@@ -437,52 +437,74 @@ function integrateMagnets(){
     if(mag.y<M){mag.y=M;mag.vy*=-0.5;}if(mag.y>CH-M){mag.y=CH-M;mag.vy*=-0.5;}
   }
 
-  // ── Magnet-magnet collisions (circle approximation) ──
-  const restitution = 0.6;
+  // ── Magnet-magnet collisions with contact damping (spring-dashpot) ──
+  const restitution = 0.1;  // nearly inelastic — magnets stick rather than bounce
+  const COLL_PAD = 14;      // padding so magnets settle with a visible gap
+  const SKIN = 30;          // proximity zone for soft forces
+  const CONTACT_DAMP = 12;  // dashpot coefficient — absorbs relative velocity
+  const ANG_CONTACT_DAMP = 0.7; // angular damping when in proximity
+
   for(let i=0;i<magnets.length;i++){
     const a=magnets[i];
-    const ra=Math.max(a.w,a.h)*0.5;
+    const ra=Math.max(a.w,a.h)*0.5 + COLL_PAD;
     for(let j=i+1;j<magnets.length;j++){
       const b=magnets[j];
-      const rb=Math.max(b.w,b.h)*0.5;
+      const rb=Math.max(b.w,b.h)*0.5 + COLL_PAD;
       const dx=b.x-a.x, dy=b.y-a.y;
       const dist=Math.sqrt(dx*dx+dy*dy);
       const minDist=ra+rb;
-      if(dist>=minDist||dist<0.1)continue;
+      if(dist<0.1)continue;
 
-      // Collision normal
       const nx=dx/dist, ny=dy/dist;
-      const overlap=minDist-dist;
-
-      // Position correction — push apart
       const aFixed=a.fixed||a===dragMag, bFixed=b.fixed||b===dragMag;
-      if(aFixed&&bFixed) continue;
-      if(aFixed){
-        b.x+=nx*overlap; b.y+=ny*overlap;
-      } else if(bFixed){
-        a.x-=nx*overlap; a.y-=ny*overlap;
-      } else {
-        a.x-=nx*overlap*0.5; a.y-=ny*overlap*0.5;
-        b.x+=nx*overlap*0.5; b.y+=ny*overlap*0.5;
-      }
 
-      // Velocity exchange along collision normal
-      if(!aFixed&&!bFixed){
-        const dvx=a.vx-b.vx, dvy=a.vy-b.vy;
-        const dvn=dvx*nx+dvy*ny;
-        if(dvn>0){ // approaching
-          const impulse=dvn*(1+restitution)/(1/a.mass+1/b.mass);
-          a.vx-=impulse/a.mass*nx; a.vy-=impulse/a.mass*ny;
-          b.vx+=impulse/b.mass*nx; b.vy+=impulse/b.mass*ny;
-          // Spin from off-center impact
-          a.va+=dvn*0.003; b.va-=dvn*0.003;
+      // ── Proximity zone: soft repulsion + velocity damping (dashpot) ──
+      if(dist<minDist+SKIN){
+        // Relative velocity along normal (positive = approaching)
+        const rvx=(a.vx||0)-(b.vx||0), rvy=(a.vy||0)-(b.vy||0);
+        const rvn=rvx*nx+rvy*ny;
+
+        if(dist>=minDist){
+          // Skin zone: graduated repulsion + damping
+          const t=1-(dist-minDist)/SKIN; // 0 at edge, 1 at boundary
+          const skinForce=t*600;
+          const dampForce=rvn*CONTACT_DAMP*t; // damp relative approach
+          const totalF=skinForce+dampForce;
+          if(!aFixed){a.vx-=nx*totalF*SIM.dt/a.mass;a.vy-=ny*totalF*SIM.dt/a.mass;}
+          if(!bFixed){b.vx+=nx*totalF*SIM.dt/b.mass;b.vy+=ny*totalF*SIM.dt/b.mass;}
+        } else {
+          // Hard overlap: position correction + strong damping
+          const overlap=minDist-dist;
+          if(!(aFixed&&bFixed)){
+            if(aFixed){b.x+=nx*overlap;b.y+=ny*overlap;}
+            else if(bFixed){a.x-=nx*overlap;a.y-=ny*overlap;}
+            else{a.x-=nx*overlap*0.5;a.y-=ny*overlap*0.5;b.x+=nx*overlap*0.5;b.y+=ny*overlap*0.5;}
+          }
+
+          // Velocity exchange (nearly inelastic)
+          if(!aFixed&&!bFixed){
+            if(rvn>0){
+              const impulse=rvn*(1+restitution)/(1/a.mass+1/b.mass);
+              a.vx-=impulse/a.mass*nx;a.vy-=impulse/a.mass*ny;
+              b.vx+=impulse/b.mass*nx;b.vy+=impulse/b.mass*ny;
+            }
+          } else if(aFixed&&!bFixed){
+            const bvn=b.vx*nx+b.vy*ny;
+            if(bvn<0){b.vx-=2*bvn*nx*restitution;b.vy-=2*bvn*ny*restitution;}
+          } else if(!aFixed&&bFixed){
+            const avn=a.vx*nx+a.vy*ny;
+            if(avn>0){a.vx-=2*avn*nx*restitution;a.vy-=2*avn*ny*restitution;}
+          }
+
+          // Strong contact damping — kill remaining relative velocity
+          const dampF=rvn*CONTACT_DAMP;
+          if(!aFixed){a.vx-=nx*dampF*SIM.dt/a.mass;a.vy-=ny*dampF*SIM.dt/a.mass;}
+          if(!bFixed){b.vx+=nx*dampF*SIM.dt/b.mass;b.vy+=ny*dampF*SIM.dt/b.mass;}
         }
-      } else if(aFixed){
-        const dvn=(b.vx*nx+b.vy*ny);
-        if(dvn<0){ b.vx-=2*dvn*nx*restitution; b.vy-=2*dvn*ny*restitution; b.va+=dvn*0.005; }
-      } else {
-        const dvn=(a.vx*nx+a.vy*ny);
-        if(dvn>0){ a.vx-=2*dvn*nx*restitution; a.vy-=2*dvn*ny*restitution; a.va-=dvn*0.005; }
+
+        // Angular damping when in proximity — helps magnets align and stop spinning
+        if(!aFixed) a.va*=ANG_CONTACT_DAMP;
+        if(!bFixed) b.va*=ANG_CONTACT_DAMP;
       }
     }
   }
@@ -644,7 +666,7 @@ function renderHeatmap(){
 function renderArrows(){
   ctx.save();
   ctx.globalCompositeOperation='lighter'; // additive blend like orbital viewer
-  const step=44,maxLen=18;
+  const step=28,maxLen=14;
   for(let x=step/2;x<CW;x+=step)for(let y=step/2;y<CH;y+=step){
     const[Bx,By]=totalField(x,y);
     const Bmag=Math.sqrt(Bx*Bx+By*By);
