@@ -260,6 +260,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
   <span id="st-tracers">1500 tracers</span><span class="sep"></span>
   <span id="st-fps">-- fps</span><span class="sep"></span>
   <span id="st-field">B: 0.00</span><span class="sep"></span>
+  <span id="st-zoom">1.0×</span><span class="sep"></span>
   <span id="st-dims">--</span>
 </div>
 
@@ -296,6 +297,18 @@ const SIM = {
   dt:1/60, damping:0.97, angDamping:0.85, selectedId:-1,
 };
 let magnets=[], tracers=[], nextId=0;
+
+/* ═══ CAMERA / VIEWPORT ═══ */
+const CAM = { x:0, y:0, zoom:1 }; // x,y = world offset from center, zoom = scale factor
+function screenToWorld(sx, sy){
+  return [(sx - CW/2) / CAM.zoom + CW/2 - CAM.x,
+          (sy - CH/2) / CAM.zoom + CH/2 - CAM.y];
+}
+function visibleBounds(){
+  const [x0,y0]=screenToWorld(0,0);
+  const [x1,y1]=screenToWorld(CW,CH);
+  return {x0,y0,x1,y1};
+}
 
 /* ═══ MAGNET FACTORY ═══ */
 function createMagnet(type,x,y){
@@ -512,11 +525,14 @@ function spawnPos(){
       const a=Math.random()*Math.PI*2;
       x=tip.x+Math.cos(a)*r; y=tip.y+Math.sin(a)*r;
     } else {
-      x=Math.random()*CW; y=Math.random()*CH;
+      const vb=visibleBounds();
+      x=vb.x0+Math.random()*(vb.x1-vb.x0);
+      y=vb.y0+Math.random()*(vb.y1-vb.y0);
     }
     if(!isInsideMagnet(x,y)) return [x,y];
   }
-  return [Math.random()*CW, Math.random()*CH];
+  const vb=visibleBounds();
+  return [vb.x0+Math.random()*(vb.x1-vb.x0), vb.y0+Math.random()*(vb.y1-vb.y0)];
 }
 
 // Test if point is inside any magnet's oriented bounding box (with padding)
@@ -553,8 +569,10 @@ function updateTracers(dt){
     }
     tr.trail.unshift([tr.x,tr.y,Bmag]);
     if(tr.trail.length>trailLen)tr.trail.pop();
-    // Kill if: aged out, out of bounds, OR inside a magnet body
-    if(tr.age>tr.maxAge||tr.x<-20||tr.x>CW+20||tr.y<-20||tr.y>CH+20||isInsideMagnet(tr.x,tr.y)){
+    // Kill if: aged out, out of visible bounds, OR inside a magnet body
+    const vb=visibleBounds();
+    const margin=40;
+    if(tr.age>tr.maxAge||tr.x<vb.x0-margin||tr.x>vb.x1+margin||tr.y<vb.y0-margin||tr.y>vb.y1+margin||isInsideMagnet(tr.x,tr.y)){
       // Respawn biased toward poles
       const [nx,ny]=spawnPos();
       tr.x=nx;tr.y=ny;tr.trail=[];tr.age=0;tr.maxAge=2.5+Math.random()*4;
@@ -589,19 +607,30 @@ function render(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.restore();
 
-  // Background
+  // Background (full screen, no transform)
   ctx.fillStyle='#0e1118';
   ctx.fillRect(0,0,CW,CH);
 
+  // Apply camera transform — all drawing below is in world coordinates
+  ctx.save();
+  ctx.translate(CW/2, CH/2);
+  ctx.scale(CAM.zoom, CAM.zoom);
+  ctx.translate(-CW/2 + CAM.x, -CH/2 + CAM.y);
+
   // Grid
-  ctx.strokeStyle='rgba(150,200,255,0.03)';ctx.lineWidth=1;
-  for(let x=0;x<CW;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
-  for(let y=0;y<CH;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
+  const vb=visibleBounds();
+  ctx.strokeStyle='rgba(150,200,255,0.03)';ctx.lineWidth=1/CAM.zoom;
+  const gs=50;
+  const gx0=Math.floor(vb.x0/gs)*gs, gy0=Math.floor(vb.y0/gs)*gs;
+  for(let x=gx0;x<vb.x1;x+=gs){ctx.beginPath();ctx.moveTo(x,vb.y0);ctx.lineTo(x,vb.y1);ctx.stroke();}
+  for(let y=gy0;y<vb.y1;y+=gs){ctx.beginPath();ctx.moveTo(vb.x0,y);ctx.lineTo(vb.x1,y);ctx.stroke();}
 
   if(SIM.showHeatmap) renderHeatmap();
   if(SIM.showArrows) renderArrows();
   if(SIM.showTracers) renderTracers();
   renderMagnets();
+
+  ctx.restore();
 }
 
 function renderHeatmap(){
@@ -828,7 +857,7 @@ function rebuildMagnetList(){
     c.innerHTML=`<div class="mag-card-head"><span class="mag-card-icon">${icons[mag.type]||'?'}</span><span class="mag-card-name">${mag.type.toUpperCase()} #${mag.id}</span><button class="mag-card-del" onclick="removeMagnet(${mag.id})">✕</button></div>
       <div class="mag-row"><span class="mag-row-lbl">Str</span><input type="range" min="0.1" max="5" value="${mag.strength}" step="0.1" oninput="setMagProp(${mag.id},'strength',+this.value,this)"><span class="val">${mag.strength.toFixed(1)}</span></div>
       <div class="mag-row"><span class="mag-row-lbl">Angle</span><input type="range" min="-3.14159" max="3.14159" value="${mag.angle}" step="0.05" oninput="setMagProp(${mag.id},'angle',+this.value,this)"><span class="val">${(mag.angle*180/Math.PI).toFixed(0)}°</span></div>
-      <div class="mag-row"><span class="mag-row-lbl">Spin</span><input type="range" min="-12" max="12" value="${mag.spin}" step="0.2" oninput="setMagProp(${mag.id},'spin',+this.value,this)"><span class="val">${mag.spin.toFixed(1)}</span></div>
+      <div class="mag-row"><span class="mag-row-lbl">Spin</span><input type="range" min="-24" max="24" value="${mag.spin}" step="0.5" oninput="setMagProp(${mag.id},'spin',+this.value,this)"><span class="val">${mag.spin.toFixed(1)}</span></div>
       <button class="tog-btn ${mag.fixed?'off':'on'}" onclick="toggleFixed(${mag.id})">${mag.fixed?'🔒 Fixed':'🔓 Dynamic'}</button>`;
     list.appendChild(c);
     c.querySelectorAll('input[type=range]').forEach(sg);
@@ -888,12 +917,18 @@ function resetSim(){magnets.forEach(m=>{m.vx=0;m.vy=0;m.va=0;m.spin=0;});rebuild
 function stopAll(){magnets.forEach(m=>{m.vx=0;m.vy=0;m.va=0;m.spin=0;});rebuildMagnetList();}
 function clearAll(){magnets=[];SIM.selectedId=-1;rebuildMagnetList();spawnTracers();}
 
-/* ═══ DRAG ═══ */
+/* ═══ DRAG + ZOOM ═══ */
 let dragMag=null,dragOffX=0,dragOffY=0,rotating=false;
-function getCanvasPos(e){
+let isPanning=false, panLastX=0, panLastY=0;
+
+function getScreenPos(e){
   const rect=canvas.getBoundingClientRect();
   const t=e.touches?e.touches[0]:e;
-  return[t.clientX-rect.left,t.clientY-rect.top];
+  return[t.clientX-rect.left, t.clientY-rect.top];
+}
+function getCanvasPos(e){
+  const [sx,sy]=getScreenPos(e);
+  return screenToWorld(sx,sy);
 }
 function hitTest(wx,wy){
   for(let i=magnets.length-1;i>=0;i--){
@@ -903,23 +938,95 @@ function hitTest(wx,wy){
   }
   return null;
 }
+
+// ── Wheel zoom (desktop) ──
+canvas.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const [sx,sy]=getScreenPos(e);
+  const [wx,wy]=screenToWorld(sx,sy);
+  const factor=e.deltaY<0?1.08:1/1.08;
+  CAM.zoom=Math.max(0.15,Math.min(8,CAM.zoom*factor));
+  // Keep world point under cursor stationary
+  const [wx2,wy2]=screenToWorld(sx,sy);
+  CAM.x+=wx2-wx; CAM.y+=wy2-wy;
+},{passive:false});
+
+// ── Touch: pinch zoom + pan ──
+let pinchDist0=0, pinchZoom0=1, pinchMidX=0, pinchMidY=0, pinchCamX=0, pinchCamY=0;
+let touchCount=0;
+
+canvas.addEventListener('touchstart',e=>{
+  touchCount=e.touches.length;
+  if(touchCount===2){
+    e.preventDefault();
+    dragMag=null; // cancel any drag
+    const t0=e.touches[0],t1=e.touches[1];
+    const rect=canvas.getBoundingClientRect();
+    const sx0=t0.clientX-rect.left,sy0=t0.clientY-rect.top;
+    const sx1=t1.clientX-rect.left,sy1=t1.clientY-rect.top;
+    pinchDist0=Math.sqrt((sx1-sx0)**2+(sy1-sy0)**2);
+    pinchZoom0=CAM.zoom;
+    pinchMidX=(sx0+sx1)/2; pinchMidY=(sy0+sy1)/2;
+    pinchCamX=CAM.x; pinchCamY=CAM.y;
+    return;
+  }
+  if(touchCount===1) onDown(e);
+},{passive:false});
+
+canvas.addEventListener('touchmove',e=>{
+  if(e.touches.length===2){
+    e.preventDefault();
+    const t0=e.touches[0],t1=e.touches[1];
+    const rect=canvas.getBoundingClientRect();
+    const sx0=t0.clientX-rect.left,sy0=t0.clientY-rect.top;
+    const sx1=t1.clientX-rect.left,sy1=t1.clientY-rect.top;
+    const dist=Math.sqrt((sx1-sx0)**2+(sy1-sy0)**2);
+    const midX=(sx0+sx1)/2, midY=(sy0+sy1)/2;
+
+    // Zoom
+    const [wxOld,wyOld]=screenToWorld(pinchMidX,pinchMidY);
+    CAM.zoom=Math.max(0.15,Math.min(8,pinchZoom0*(dist/pinchDist0)));
+    const [wxNew,wyNew]=screenToWorld(pinchMidX,pinchMidY);
+    CAM.x+=wxNew-wxOld; CAM.y+=wyNew-wyOld;
+
+    // Pan with midpoint drift
+    const dmx=(midX-pinchMidX)/CAM.zoom, dmy=(midY-pinchMidY)/CAM.zoom;
+    CAM.x=pinchCamX+dmx; CAM.y=pinchCamY+dmy;
+    return;
+  }
+  onMove(e);
+},{passive:false});
+
+canvas.addEventListener('touchend',e=>{
+  touchCount=e.touches.length;
+  if(touchCount===0) onUp();
+},{passive:false});
+
+// ── Mouse drag ──
 canvas.addEventListener('mousedown',onDown);
-canvas.addEventListener('touchstart',onDown,{passive:false});
 function onDown(e){
   e.preventDefault();const[x,y]=getCanvasPos(e);const hit=hitTest(x,y);
   if(hit){dragMag=hit;dragOffX=hit.x-x;dragOffY=hit.y-y;rotating=e.shiftKey;SIM.selectedId=hit.id;rebuildMagnetList();}
+  else{
+    // Pan if clicking empty space
+    isPanning=true;const[sx,sy]=getScreenPos(e);panLastX=sx;panLastY=sy;
+  }
 }
 window.addEventListener('mousemove',onMove);
-window.addEventListener('touchmove',onMove,{passive:false});
 function onMove(e){
+  if(isPanning&&!dragMag){
+    const[sx,sy]=getScreenPos(e);
+    CAM.x+=(sx-panLastX)/CAM.zoom; CAM.y+=(sy-panLastY)/CAM.zoom;
+    panLastX=sx;panLastY=sy;
+    return;
+  }
   if(!dragMag)return;e.preventDefault();const[x,y]=getCanvasPos(e);
   if(rotating)dragMag.angle=Math.atan2(y-dragMag.y,x-dragMag.x);
   else{dragMag.x=x+dragOffX;dragMag.y=y+dragOffY;}
   rebuildMagnetList();
 }
 window.addEventListener('mouseup',onUp);
-window.addEventListener('touchend',onUp);
-function onUp(){if(dragMag){dragMag.vx=0;dragMag.vy=0;}dragMag=null;rotating=false;}
+function onUp(){if(dragMag){dragMag.vx=0;dragMag.vy=0;}dragMag=null;rotating=false;isPanning=false;}
 
 /* ═══ RESIZE — uses ResizeObserver on the wrapper div ═══ */
 function resize(){
@@ -953,6 +1060,7 @@ function loop(time){
     const[Bx,By]=totalField(CW/2,CH/2);
     document.getElementById('st-field').textContent='B: '+Math.sqrt(Bx*Bx+By*By).toExponential(1);
   }
+  document.getElementById('st-zoom').textContent=CAM.zoom.toFixed(1)+'×';
   render();
 }
 

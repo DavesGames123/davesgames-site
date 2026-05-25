@@ -252,12 +252,12 @@ input[type="range"]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;b
 
       <div class="sec">
         <div class="sec-lbl">Simulation</div>
-        <div class="row"><label>Δt</label><span class="vd" id="val-dt">0.70</span></div>
-        <input type="range" id="sl-dt" min="0.10" max="0.70" value="0.70" step="0.05">
-        <div class="row"><label>Dissipation</label><span class="vd" id="val-diss">0.998</span></div>
-        <input type="range" id="sl-diss" min="0.950" max="1.000" value="0.998" step="0.001">
-        <div class="row"><label>Gain</label><span class="vd" id="val-gain">1.5</span></div>
-        <input type="range" id="sl-gain" min="0.3" max="100.0" value="1.5" step="0.1">
+        <div class="row"><label>Δt</label><span class="vd" id="val-dt">0.50</span></div>
+        <input type="range" id="sl-dt" min="0.10" max="0.70" value="0.50" step="0.05">
+        <div class="row"><label>Dissipation</label><span class="vd" id="val-diss">0.995</span></div>
+        <input type="range" id="sl-diss" min="0.950" max="1.000" value="0.995" step="0.001">
+        <div class="row"><label>Gain</label><span class="vd" id="val-gain">1.0</span></div>
+        <input type="range" id="sl-gain" min="0.3" max="100.0" value="1.0" step="0.1">
         <div class="row"><label>Resolution</label><span class="vd" id="val-scale">2</span></div>
         <input type="range" id="sl-scale" min="1" max="4" value="2" step="1">
       </div>
@@ -363,11 +363,11 @@ const P = {
   lambdaR: 44, lambdaG: 32, lambdaB: 22,
   chOn: [true, true, true],
   slitW: 8, slitSep: 30, barrierX: 0.30, slitMode: 'double',
-  dt: 0.70, amp: 1.0, pml: 20, gain: 1.5,
+  dt: 0.50, amp: 1.0, pml: 30, gain: 1.0,
   disp: 'amplitude',
   brushR: 6, srcMode: 'impulse',
   scale: 2,
-  dissipation: 0.998,
+  dissipation: 0.995,
 };
 
 let displayW, displayH;
@@ -398,11 +398,20 @@ function init() {
 }
 
 function buildDamping() {
-  const pml = P.pml;
+  const pml = 30; // thick absorbing layer
+  const absorbStart = Math.floor(NX * 0.82);
+  const absorbLen = Math.max(1, NX - absorbStart);
   for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
-    const mn = Math.min(x, NX-1-x, y, NY-1-y);
+    const dL = x, dR = NX-1-x, dT = y, dB = NY-1-y;
+    const mn = Math.min(dL, dR, dT, dB);
     let d = 0;
-    if (mn < pml) { const t = (pml - mn) / pml; d = 0.015 + 0.18 * t * t; }
+    // Cubic ramp to 0.95 damping — nearly total absorption at boundary
+    if (mn < pml) { const t = (pml - mn) / pml; d = 0.95 * t * t * t; }
+    // Right side detector wall
+    if (x > absorbStart) {
+      const t = (x - absorbStart) / absorbLen;
+      d = Math.max(d, 0.95 * t * t);
+    }
     dampArr[y * NX + x] = 1.0 - d;
   }
 }
@@ -467,7 +476,7 @@ function step() {
   simTime+=1;stepN++;
 }
 
-function accumDet(){const dx=Math.min(NX-5,Math.floor(NX*0.90));for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=u[c][y*NX+dx];detAccum[c][y]+=v*v;}}detCount++;}
+function accumDet(){const dx=Math.min(NX-5,Math.floor(NX*0.82));for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=u[c][y*NX+dx];detAccum[c][y]+=v*v;}}detCount++;}
 
 function render(){
   const d=imgData.data,g=P.gain,disp=P.disp,rOn=P.chOn[0],gOn=P.chOn[1],bOn=P.chOn[2];
