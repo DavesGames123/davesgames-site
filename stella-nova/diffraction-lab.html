@@ -211,7 +211,7 @@ const EL={
 /* Populate element select */
 (function(){const sel=document.getElementById('element-select');Object.entries(EL).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.sym+' '+v.name;if(k==='text')o.selected=true;sel.appendChild(o)})})();
 
-const S={element:'text',source:'white',lambda:633,z:200,extent:5,N:256,divs:15,speed:1.5,viewMode:1,params:{}};
+const S={element:'text',source:'white',lambda:633,z:200,extent:5,N:256,divs:15,speed:5,viewMode:1,params:{}};
 let animDir=0,animDwell=0;
 function sg(el){el.style.setProperty('--pct',(el.value-el.min)/(el.max-el.min)*100+'%')}
 
@@ -222,9 +222,9 @@ CHANNELS.forEach((ch,idx)=>{
   const cell=document.createElement('div');cell.className='canvas-cell';cell.id='cell-'+idx;
   cell.innerHTML=`<div class="cell-label ${ch.cls}">${ch.label}</div><canvas id="${ch.id}"></canvas>
 <div class="cell-bar">
-<div class="cb-row"><span class="cb-lbl">z</span><input type="range" class="cb-slider cb-z" min="1" max="500" value="200" step="1"><span class="cb-val cb-z-v">200 mm</span></div>
+<div class="cb-row"><span class="cb-lbl">z</span><input type="range" class="cb-slider cb-z" min="0" max="500" value="200" step="1"><span class="cb-val cb-z-v">200 mm</span></div>
 <div class="cb-row"><span class="cb-lbl">ext</span><input type="range" class="cb-slider cb-ext" min="0.5" max="30" value="5" step="0.1"><span class="cb-val cb-ext-v">5.0 mm</span></div>
-<div class="cb-row"><span class="cb-lbl">spd</span><input type="range" class="cb-slider cb-spd" min="0.5" max="5" value="1.5" step="0.25"><span class="cb-val cb-spd-v">×1.5</span></div>
+<div class="cb-row"><span class="cb-lbl">spd</span><input type="range" class="cb-slider cb-spd" min="0.5" max="5" value="5" step="0.25"><span class="cb-val cb-spd-v">×5</span></div>
 <div class="cb-transport"><button class="cb-btn" data-d="-1">◀ REV</button><button class="cb-btn" data-d="0">⏸ STOP</button><button class="cb-btn" data-d="1">▶ PLAY</button></div>
 </div>`;
   grid.appendChild(cell);
@@ -263,7 +263,7 @@ allZ.forEach(s=>{sg(s);s.addEventListener('input',function(){S.z=+this.value;syn
 allSpd.forEach(s=>{sg(s);s.addEventListener('input',function(){S.speed=+this.value;syncBars()})});
 allExt.forEach(s=>{sg(s);s.addEventListener('input',function(){S.extent=+this.value;syncBars();scheduleRecompute()})});
 allBtns.forEach(b=>b.addEventListener('click',function(){const d=+this.dataset.d;if(d===0)animDir=0;else if(animDir===d)animDir=0;else{animDir=d;requestAnimationFrame(animLoop)}syncBars()}));
-function animLoop(){if(!animDir)return;if(animDwell>0){animDwell--;requestAnimationFrame(animLoop);return}const zMin=1,zMax=+allZ[0].max||500;S.z+=animDir*S.speed*(zMax-zMin)/400;if(S.z>=zMax){S.z=zMax;animDir=-1;animDwell=60}if(S.z<=zMin){S.z=zMin;animDir=1;animDwell=60}syncBars();recompute();requestAnimationFrame(animLoop)}
+function animLoop(){if(!animDir)return;if(animDwell>0){animDwell--;requestAnimationFrame(animLoop);return}const zMin=0,zMax=+allZ[0].max||500;S.z+=animDir*S.speed*(zMax-zMin)/400;if(S.z>=zMax){S.z=zMax;animDir=-1;animDwell=60}if(S.z<=zMin){S.z=zMin;animDir=1;animDwell=60}syncBars();recompute();requestAnimationFrame(animLoop)}
 
 /* ═══ PARAM UI ═══ */
 function buildParamUI(){const c=document.getElementById('params-container'),el=EL[S.element];c.innerHTML='';el.params.forEach(pd=>{if(pd.type==='text'){const d=document.createElement('div');d.innerHTML=`<input type="text" id="sl-p-${pd.id}" value="${pd.value}" class="qp-text-input" placeholder="${pd.label}">`;c.appendChild(d);d.querySelector('input').addEventListener('input',()=>scheduleRecompute())}else if(pd.type==='file'){const d=document.createElement('div');d.innerHTML=`<button class="qp-file-btn">Choose Image</button>`;c.appendChild(d);d.querySelector('button').addEventListener('click',()=>document.getElementById('file-input').click())}else{const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const row=document.createElement('div');row.className='row';row.innerHTML=`<span class="row-lbl">${pd.label}</span><input type="range" id="sl-p-${pd.id}" min="${pd.min}" max="${pd.max}" value="${pd.value}" step="${pd.step}"><span class="val" id="vl-p-${pd.id}">${pd.value.toFixed(dec)}</span>`;c.appendChild(row);const sl=row.querySelector('input');sg(sl);sl.addEventListener('input',function(){document.getElementById('vl-p-'+pd.id).textContent=(+this.value).toFixed(dec);sg(this);scheduleRecompute()})}});readParams()}
@@ -277,7 +277,7 @@ document.querySelectorAll('.res-btn[data-n]').forEach(b=>b.addEventListener('cli
 document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#view-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.viewMode=+b.dataset.view;const g=document.getElementById('canvas-grid');g.classList.toggle('view-1',S.viewMode===1);scheduleRecompute()}));
 ['sl-lam','sl-div'].forEach(id=>{const el=document.getElementById(id);if(!el)return;sg(el);el.addEventListener('input',function(){sg(this);const v=+this.value;if(id==='sl-lam'){S.lambda=v;document.getElementById('vl-lam').textContent=v.toFixed(0);const rgb=wlRGB(v),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs}else{S.divs=v;document.getElementById('vl-div').textContent=v.toFixed(0)}scheduleRecompute()})});
 document.getElementById('sl-txtsz').addEventListener('input',function(){sg(this);document.getElementById('vl-txtsz').textContent=this.value});sg(document.getElementById('sl-txtsz'));
-document.getElementById('qp-collapse-btn').addEventListener('click',()=>{const p=document.getElementById('quick-panel'),c=p.classList.toggle('collapsed');document.getElementById('qp-collapse-btn').textContent=c?'▶':'◀';setTimeout(scheduleRecompute,250)});
+document.getElementById('qp-collapse-btn').addEventListener('click',()=>{const p=document.getElementById('quick-panel'),c=p.classList.toggle('collapsed');document.getElementById('qp-collapse-btn').textContent=c?'▶':'◀';document.getElementById('canvas-grid').style.left=c?'44px':'';setTimeout(scheduleRecompute,250)});
 /* Mobile drawer */
 function toggleMobilePanel(){const p=document.getElementById('quick-panel'),o=document.getElementById('mob-overlay');const isOpen=p.classList.toggle('mob-open');o.classList.toggle('show',isOpen)}
 document.getElementById('mob-menu').addEventListener('click',toggleMobilePanel);
@@ -297,7 +297,7 @@ document.getElementById('btn-set-text').addEventListener('click',()=>{
 });
 
 /* Reset */
-document.getElementById('btn-reset').addEventListener('click',()=>{animDir=0;S.element='text';S.source='white';S.lambda=633;S.z=200;S.extent=5;S.N=256;S.divs=15;S.speed=1.5;window._imgMask=null;
+document.getElementById('btn-reset').addEventListener('click',()=>{animDir=0;S.element='text';S.source='white';S.lambda=633;S.z=200;S.extent=5;S.N=256;S.divs=15;S.speed=5;window._imgMask=null;
   document.getElementById('element-select').value='text';
   document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.classList.toggle('active',b.dataset.source==='white'));
   document.getElementById('mono-params').style.display='none';document.getElementById('white-params').style.display='block';
@@ -322,7 +322,7 @@ const PR=[
   {name:'Slit',el:'rect',p:{width:.1,height:3},ext:5,z:200,div:15},
   {name:'6-Star',el:'star',p:{pts:6,radius:.6,inner:.45},ext:3,z:200,div:15},
 ];
-function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=pr.lam||633;S.extent=pr.ext;S.z=pr.z;S.N=pr.N||256;S.divs=pr.div||15;S.speed=1.5;
+function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=pr.lam||633;S.extent=pr.ext;S.z=pr.z;S.N=pr.N||256;S.divs=pr.div||15;S.speed=5;
   document.getElementById('element-select').value=pr.el;allZ.forEach(s=>s.max=Math.max(500,pr.z*3));
   document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.classList.toggle('active',b.dataset.source===(pr.src||'white')));
   document.getElementById('mono-params').style.display=S.source==='mono'?'block':'none';document.getElementById('white-params').style.display=S.source==='white'?'block':'none';
