@@ -373,11 +373,12 @@ function exSimDims(w,h){return[Math.pow(2,Math.max(7,Math.round(Math.log2(w/2)))
 document.getElementById('btn-export-png').addEventListener('click',()=>{
   const wasAnimating=animDir;animDir=0;syncBars(); // pause to freeze preview
   const stat=document.getElementById('export-status');
-  const[w,h]=exDims();const[sNx,sNy]=exSimDims(w,h);
-  const capturedZ=S.z; // freeze current z
-  stat.textContent='Rendering '+w+'×'+h+' at z='+capturedZ.toFixed(0)+'mm (sim '+sNx+'×'+sNy+')…';
+  const[w,h]=exDims();
+  const sN=S.N; // WYSIWYG: same sim grid as preview
+  const capturedZ=S.z;
+  stat.textContent='Rendering '+w+'×'+h+' at z='+capturedZ.toFixed(0)+'mm…';
   setTimeout(()=>{
-    const cv=renderFrame(sNx,sNy,w,h,capturedZ);
+    const cv=renderFrame(sN,sN,w,h,capturedZ);
     cv.toBlob(blob=>{
       if(!blob){stat.textContent='Export failed';return}
       const url=URL.createObjectURL(blob);
@@ -408,15 +409,15 @@ document.getElementById('btn-export-vid').addEventListener('click',()=>{
   // Phase 1: pre-render all frames as ImageData
   const frames=[];
   let f=0;
-  const[sNx,sNy]=exSimDims(w,h);
-  stat.textContent='Rendering frame 1/'+totalFrames+' (sim '+sNx+'×'+sNy+')…';
+  const sN=S.N; // WYSIWYG: same sim grid as preview
+  stat.textContent='Rendering frame 1/'+totalFrames+'…';
 
   function computeNext(){
     if(f>=totalFrames){startEncoding();return}
     const cycleFrame=f%framesPerCycle;
     const z=getZForFrame(cycleFrame,framesPerCycle,dir,ease);
-    stat.textContent='Frame '+(f+1)+'/'+totalFrames+' · z='+z.toFixed(0)+'mm ('+sNx+'×'+sNy+')';
-    const cv=renderFrame(sNx,sNy,w,h,z);
+    stat.textContent='Frame '+(f+1)+'/'+totalFrames+' · z='+z.toFixed(0)+'mm';
+    const cv=renderFrame(sN,sN,w,h,z);
     frames.push(cv.getContext('2d').getImageData(0,0,w,h));
     f++;
     setTimeout(computeNext,0);
