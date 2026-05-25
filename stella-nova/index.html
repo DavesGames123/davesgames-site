@@ -28,7 +28,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .cluster-arrow{font-size:0.7rem;color:var(--text-faint);transition:transform 0.22s;flex-shrink:0}
 .cluster.open .cluster-arrow{transform:rotate(90deg)}.cluster.open .cluster-label{color:var(--text)}
 .cluster-body{overflow:hidden;max-height:0;transition:max-height 0.28s cubic-bezier(0.4,0,0.2,1)}
-.cluster.open .cluster-body{max-height:600px}
+.cluster.open .cluster-body{max-height:900px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px 11px 46px;cursor:pointer;border:none;background:transparent;width:100%;text-align:left;position:relative;transition:background 0.15s;font-family:inherit;color:inherit}
 .nav-item::before{content:'';position:absolute;left:30px;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:var(--text-faint);transition:background 0.15s,box-shadow 0.15s}
 .nav-item:hover{background:rgba(150,200,255,0.04)}.nav-item:hover::before{background:var(--blue-dim)}
@@ -57,6 +57,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .cluster.open .cluster-head.shader-head .cluster-label{color:#e58bd0}
 .cluster-head.sims-head .cluster-icon{opacity:1;color:#ffb464}
 .cluster.open .cluster-head.sims-head .cluster-label{color:#ffb464}
+.nav-sub{padding:14px 20px 5px 46px;font-size:0.55rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:var(--text-faint);position:relative}.nav-sub::before{content:'';position:absolute;left:46px;right:20px;bottom:0;height:0;border-bottom:1px solid var(--border)}.nav-sub:first-child{padding-top:6px}
 .nav-label{font-size:0.88rem;letter-spacing:0.04em;color:var(--text-dim);transition:color 0.15s}
 .nav-badge{margin-left:auto;font-size:0.55rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);padding:2px 6px;border:1px solid var(--border);border-radius:2px}
 #sb-footer{padding:14px 20px 18px;border-top:1px solid var(--border);flex-shrink:0}
@@ -94,14 +95,21 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
       <div class="cluster open" id="cl-learn">
         <button class="cluster-head learn-head" onclick="toggleCluster('cl-learn')"><span class="cluster-icon">&#955;</span><span class="cluster-label">Learn About Physics</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
+          <div class="nav-sub">Orbital Mechanics</div>
           <button class="nav-item hl" data-tab="hohmann" onclick="switchTab('hohmann')"><span class="nav-label">Hohmann Transfer</span><span class="nav-badge">SIM</span></button>
+          <button class="nav-item leo" data-tab="leo" onclick="switchTab('leo')"><span class="nav-label">LEO Catalog</span><span class="nav-badge">NEW</span></button>
+          <button class="nav-item hl" data-tab="gravity" onclick="switchTab('gravity')"><span class="nav-label">Gravity Sim</span><span class="nav-badge">SIM</span></button>
+          <button class="nav-item gx" data-tab="galaxy" onclick="switchTab('galaxy')"><span class="nav-label">Galaxy</span><span class="nav-badge">SIM</span></button>
+          <button class="nav-item" data-tab="forge" onclick="switchTab('forge')"><span class="nav-label">Planet Forge</span></button>
+          <button class="nav-item bh" data-tab="blackhole" onclick="switchTab('blackhole')"><span class="nav-label">Black Hole</span><span class="nav-badge">GPU</span></button>
+          <div class="nav-sub">Quantum &amp; Atomic</div>
           <button class="nav-item qm" data-tab="orbital" onclick="switchTab('orbital')"><span class="nav-label">Atomic Orbital</span><span class="nav-badge">VR</span></button>
-          <button class="nav-item em" data-tab="magnetlab" onclick="switchTab('magnetlab')"><span class="nav-label">MagnetLab</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item qm" data-tab="molecular-bond" onclick="switchTab('molecular-bond')"><span class="nav-label">Molecular Bond</span><span class="nav-badge">SIM</span></button>
+          <div class="nav-sub">Electromagnetism</div>
+          <button class="nav-item em" data-tab="magnetlab" onclick="switchTab('magnetlab')"><span class="nav-label">MagnetLab</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item cp" data-tab="polarization" onclick="switchTab('polarization')"><span class="nav-label">Circular Polarization</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item ad" data-tab="diffraction" onclick="switchTab('diffraction')"><span class="nav-label">Aperture Diffraction</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item ds" data-tab="double-slit" onclick="switchTab('double-slit')"><span class="nav-label">Double-Slit Diffraction</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item bh" data-tab="blackhole" onclick="switchTab('blackhole')"><span class="nav-label">Black Hole</span><span class="nav-badge">GPU</span></button>
         </div>
       </div>
       <div class="cluster open" id="cl-shader">
@@ -111,15 +119,6 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item wh" data-tab="anomaly" onclick="switchTab('anomaly')"><span class="nav-label">Anomaly</span><span class="nav-badge">SHADER</span></button>
           <button class="nav-item fx" data-tab="explosion" onclick="switchTab('explosion')"><span class="nav-label">Explosion</span></button>
           <button class="nav-item fx" data-tab="flare" onclick="switchTab('flare')"><span class="nav-label">Engine Propulsion Effects</span></button>
-        </div>
-      </div>
-      <div class="cluster open" id="cl-sims">
-        <button class="cluster-head sims-head" onclick="toggleCluster('cl-sims')"><span class="cluster-icon">&#9678;</span><span class="cluster-label">Physics Simulations</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <button class="nav-item leo" data-tab="leo" onclick="switchTab('leo')"><span class="nav-label">LEO Catalog</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item hl" data-tab="gravity" onclick="switchTab('gravity')"><span class="nav-label">Gravity Sim</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item gx" data-tab="galaxy" onclick="switchTab('galaxy')"><span class="nav-label">Galaxy</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item" data-tab="forge" onclick="switchTab('forge')"><span class="nav-label">Planet Forge</span></button>
         </div>
       </div>
       <div class="cluster open" id="cl-crew">
