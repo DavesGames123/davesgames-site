@@ -212,7 +212,7 @@ const EL={
 (function(){const sel=document.getElementById('element-select');Object.entries(EL).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.sym+' '+v.name;if(k==='text')o.selected=true;sel.appendChild(o)})})();
 
 const S={element:'text',source:'white',lambda:633,z:200,extent:5,N:256,divs:15,speed:1.5,viewMode:1,params:{}};
-let animDir=0;
+let animDir=0,animDwell=0;
 function sg(el){el.style.setProperty('--pct',(el.value-el.min)/(el.max-el.min)*100+'%')}
 
 /* ═══ BUILD 4 CELLS WITH BARS ═══ */
@@ -263,7 +263,7 @@ allZ.forEach(s=>{sg(s);s.addEventListener('input',function(){S.z=+this.value;syn
 allSpd.forEach(s=>{sg(s);s.addEventListener('input',function(){S.speed=+this.value;syncBars()})});
 allExt.forEach(s=>{sg(s);s.addEventListener('input',function(){S.extent=+this.value;syncBars();scheduleRecompute()})});
 allBtns.forEach(b=>b.addEventListener('click',function(){const d=+this.dataset.d;if(d===0)animDir=0;else if(animDir===d)animDir=0;else{animDir=d;requestAnimationFrame(animLoop)}syncBars()}));
-function animLoop(){if(!animDir)return;const zMin=1,zMax=+allZ[0].max||500;S.z+=animDir*S.speed*(zMax-zMin)/400;if(S.z>=zMax){S.z=zMax;animDir=-1}if(S.z<=zMin){S.z=zMin;animDir=1}syncBars();recompute();requestAnimationFrame(animLoop)}
+function animLoop(){if(!animDir)return;if(animDwell>0){animDwell--;requestAnimationFrame(animLoop);return}const zMin=1,zMax=+allZ[0].max||500;S.z+=animDir*S.speed*(zMax-zMin)/400;if(S.z>=zMax){S.z=zMax;animDir=-1;animDwell=60}if(S.z<=zMin){S.z=zMin;animDir=1;animDwell=60}syncBars();recompute();requestAnimationFrame(animLoop)}
 
 /* ═══ PARAM UI ═══ */
 function buildParamUI(){const c=document.getElementById('params-container'),el=EL[S.element];c.innerHTML='';el.params.forEach(pd=>{if(pd.type==='text'){const d=document.createElement('div');d.innerHTML=`<input type="text" id="sl-p-${pd.id}" value="${pd.value}" class="qp-text-input" placeholder="${pd.label}">`;c.appendChild(d);d.querySelector('input').addEventListener('input',()=>scheduleRecompute())}else if(pd.type==='file'){const d=document.createElement('div');d.innerHTML=`<button class="qp-file-btn">Choose Image</button>`;c.appendChild(d);d.querySelector('button').addEventListener('click',()=>document.getElementById('file-input').click())}else{const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const row=document.createElement('div');row.className='row';row.innerHTML=`<span class="row-lbl">${pd.label}</span><input type="range" id="sl-p-${pd.id}" min="${pd.min}" max="${pd.max}" value="${pd.value}" step="${pd.step}"><span class="val" id="vl-p-${pd.id}">${pd.value.toFixed(dec)}</span>`;c.appendChild(row);const sl=row.querySelector('input');sg(sl);sl.addEventListener('input',function(){document.getElementById('vl-p-'+pd.id).textContent=(+this.value).toFixed(dec);sg(this);scheduleRecompute()})}});readParams()}
