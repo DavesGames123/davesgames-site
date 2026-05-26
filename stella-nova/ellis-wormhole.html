@@ -334,14 +334,28 @@ TR traceGeodesic(vec3 ro,vec3 rd){
   OrbPlane op=buildOrbPlane(ro,rd);WRay w=initWRay(ro,rd,op);
   float dl=u_dl;int maxS=int(u_maxSteps);float escR=u_escapeR;bool rk4=u_useRK4>0.5;
   vec3 prev=ro;float minL=abs(w.l);
+  // Angular momentum: L = r^2 * |dtheta|. If L > k, ray bounces — use fewer steps
+  float rInit=whR(w.l);
+  float angMom=rInit*rInit*abs(w.dtheta);
+  bool canPassThrough=angMom<u_throatK*1.1;
+  int effMax=canPassThrough?maxS:maxS/3;
+  // Track if ray has turned around (dl changed sign) for bounce rays
+  float initDl=w.dl;
   for(int i=0;i<8192;i++){
-    if(i>=maxS)break;
-    float adaptDl=dl*clamp(abs(w.l)/(u_throatK*2.0),0.4,1.0);
+    if(i>=effMax)break;
+    float adaptDl=dl*clamp(u_throatK*2.0/max(abs(w.l),0.01),1.0,2.5);
     if(rk4)w=stepRK4(w,adaptDl);else w=stepEuler(w,adaptDl);
     minL=min(minL,abs(w.l));
     vec3 cur=wPoint(w,op);Isect h=segDisc(prev,cur);
     if(h.hit)return TR(true,h.color,minL);
-    if(abs(w.l)>=escR&&i>4){vec3 dir=wDir(w,op);
+    // Early escape: bounce rays moving outward can exit sooner
+    bool movingOut=(w.l>0.0&&w.dl>0.0)||(w.l<0.0&&w.dl<0.0);
+    if(abs(w.l)>=escR&&(i>4||(movingOut&&!canPassThrough))){
+      vec3 dir=wDir(w,op);
+      return TR(false,w.l>0.0?sampleSkyA(dir):sampleSkyB(dir),minL);}
+    // Bounce rays that turned around and are moving outward — escape at lower radius
+    if(!canPassThrough&&movingOut&&abs(w.l)>escR*0.3&&i>2){
+      vec3 dir=wDir(w,op);
       return TR(false,w.l>0.0?sampleSkyA(dir):sampleSkyB(dir),minL);}
     prev=cur;
   }
@@ -606,7 +620,9 @@ function frame(){
   }
 
   var scaleR=absL/20.0;var dl=baseDl*scaleR;
-  var steps=Math.max(1,Math.round(maxSteps/Math.max(scaleR,0.5)));
+  var distFactor=Math.min(1.0,Math.abs(camL)/(throatK*5.0));
+  var dynSteps=Math.round(maxSteps*(0.35+0.65*distFactor));
+  var steps=Math.max(128,Math.round(dynSteps/Math.max(scaleR,0.5)));
   var escR=escMul*Math.max(scaleR,1.0);
   var universe=camL>=0?'Universe A':'Universe B';
   document.getElementById('mode').textContent=(useGeodesic?(useRK4?'RK4':'Euler'):'Straight')+' · '+universe;
