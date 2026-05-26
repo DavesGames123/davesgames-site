@@ -64,7 +64,20 @@
   .toggle-btn.on{border-color:rgba(100,220,220,0.5);color:rgba(100,220,220,0.85)}
   .toggle-btn.off{border-color:rgba(255,80,80,0.35);color:rgba(255,120,120,0.7)}
 
-  .hint{position:fixed;bottom:160px;left:50%;transform:translateX(-50%);z-index:10;font-size:11px;color:rgba(255,255,255,0.32);letter-spacing:1.8px;pointer-events:none;text-transform:uppercase;transition:opacity 2s;white-space:nowrap;font-weight:500}
+
+  .traverse-bar{position:fixed;bottom:148px;left:50%;transform:translateX(-50%);z-index:11;display:flex;align-items:center;gap:12px;background:rgba(0,0,0,0.7);backdrop-filter:blur(14px);border:1px solid rgba(100,220,220,0.15);border-radius:10px;padding:10px 18px;max-width:calc(100vw - 40px);width:520px}
+  .trav-slider{-webkit-appearance:none;appearance:none;flex:1;height:5px;border-radius:3px;background:linear-gradient(to right,rgba(100,180,255,0.3),rgba(100,220,220,0.5) 50%,rgba(255,200,100,0.3));outline:none;cursor:pointer}
+  .trav-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#5ad8d8;border:2px solid rgba(0,0,0,0.5);box-shadow:0 0 12px rgba(90,216,216,0.5);cursor:pointer}
+  .trav-slider::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#5ad8d8;border:2px solid rgba(0,0,0,0.5)}
+  .trav-label{font-size:13px;font-weight:700;letter-spacing:0.15em;user-select:none;min-width:16px;text-align:center}
+  .trav-b{color:rgba(100,180,255,0.7)}
+  .trav-a{color:rgba(255,200,100,0.7)}
+  .trav-play{width:40px;height:40px;border-radius:50%;background:rgba(100,220,220,0.12);border:2px solid rgba(100,220,220,0.4);color:rgba(100,220,220,0.9);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.18s;flex-shrink:0;font-family:inherit;line-height:1}
+  .trav-play:hover{background:rgba(100,220,220,0.25);border-color:rgba(100,220,220,0.7)}
+  .trav-play.on{background:rgba(255,80,80,0.15);border-color:rgba(255,80,80,0.5);color:rgba(255,100,100,0.9)}
+  .trav-pos{font-size:12px;color:rgba(100,220,220,0.6);min-width:36px;text-align:right;letter-spacing:0.05em;font-weight:500}
+  @media(max-width:600px){.traverse-bar{width:calc(100vw - 20px);bottom:150px;padding:8px 12px;gap:8px}.trav-play{width:34px;height:34px;font-size:14px}.trav-label{font-size:11px}.trav-pos{font-size:10px;min-width:28px}}
+  .hint{position:fixed;bottom:174px;left:50%;transform:translateX(-50%);z-index:10;font-size:11px;color:rgba(255,255,255,0.32);letter-spacing:1.8px;pointer-events:none;text-transform:uppercase;transition:opacity 2s;white-space:nowrap;font-weight:500}
   .in-frame .hud{display:none!important}
   @media(max-width:900px){.eq-row .katex{font-size:1.15rem!important}}
   @media(max-width:600px){
@@ -74,7 +87,20 @@
     input[type=range]{width:78px}.ctrl-sep{height:15px}
     .gpu-warn{padding:20px 24px;max-width:320px}.gpu-warn h2{font-size:16px}.gpu-warn p{font-size:12px}
     .hud,.stats{display:none}
-    .hint{font-size:9px;bottom:140px;letter-spacing:1.4px}
+  
+  .traverse-bar{position:fixed;bottom:148px;left:50%;transform:translateX(-50%);z-index:11;display:flex;align-items:center;gap:12px;background:rgba(0,0,0,0.7);backdrop-filter:blur(14px);border:1px solid rgba(100,220,220,0.15);border-radius:10px;padding:10px 18px;max-width:calc(100vw - 40px);width:520px}
+  .trav-slider{-webkit-appearance:none;appearance:none;flex:1;height:5px;border-radius:3px;background:linear-gradient(to right,rgba(100,180,255,0.3),rgba(100,220,220,0.5) 50%,rgba(255,200,100,0.3));outline:none;cursor:pointer}
+  .trav-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#5ad8d8;border:2px solid rgba(0,0,0,0.5);box-shadow:0 0 12px rgba(90,216,216,0.5);cursor:pointer}
+  .trav-slider::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#5ad8d8;border:2px solid rgba(0,0,0,0.5)}
+  .trav-label{font-size:13px;font-weight:700;letter-spacing:0.15em;user-select:none;min-width:16px;text-align:center}
+  .trav-b{color:rgba(100,180,255,0.7)}
+  .trav-a{color:rgba(255,200,100,0.7)}
+  .trav-play{width:40px;height:40px;border-radius:50%;background:rgba(100,220,220,0.12);border:2px solid rgba(100,220,220,0.4);color:rgba(100,220,220,0.9);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.18s;flex-shrink:0;font-family:inherit;line-height:1}
+  .trav-play:hover{background:rgba(100,220,220,0.25);border-color:rgba(100,220,220,0.7)}
+  .trav-play.on{background:rgba(255,80,80,0.15);border-color:rgba(255,80,80,0.5);color:rgba(255,100,100,0.9)}
+  .trav-pos{font-size:12px;color:rgba(100,220,220,0.6);min-width:36px;text-align:right;letter-spacing:0.05em;font-weight:500}
+  @media(max-width:600px){.traverse-bar{width:calc(100vw - 20px);bottom:150px;padding:8px 12px;gap:8px}.trav-play{width:34px;height:34px;font-size:14px}.trav-label{font-size:11px}.trav-pos{font-size:10px;min-width:28px}}
+  .hint{font-size:9px;bottom:140px;letter-spacing:1.4px}
     .eq-panel{top:10px;padding:11px 38px 13px 14px;max-width:calc(100vw - 16px);gap:10px}
     .eq-content{gap:10px}.eq-group{gap:4px}.eq-title{font-size:0.62rem}
     .eq-row .katex{font-size:0.95rem!important}
@@ -95,6 +121,14 @@
 
 <div class="hud"><h1>Wormhole</h1><div class="sub" id="hudSub">Ellis Metric · Universe A</div></div>
 <div class="stats"><div id="fps"></div><div id="res"></div><div id="mode"></div></div>
+
+<div class="traverse-bar" id="traverseBar" style="display:none">
+  <span class="trav-label trav-b">B</span>
+  <input type="range" id="zoomSlider" min="-60" max="60" value="20" step="0.2" class="trav-slider">
+  <span class="trav-label trav-a">A</span>
+  <button class="trav-play" id="playBtn" onclick="toggleDescend()">&#x25B6;</button>
+  <span class="trav-pos" id="zoomVal">20</span>
+</div>
 <div class="hint" id="hint">drag to look · scroll to fly through · arrows to orbit</div>
 
 <div class="eq-panel" id="eqPanel" style="display:none" onclick="if(this.classList.contains('collapsed'))toggleEqPanel()">
@@ -116,7 +150,7 @@
   <button class="toggle-btn off" id="btnDisc" onclick="toggleDisc()">Disc</button>
   <button class="toggle-btn on" id="btnGlow" onclick="toggleGlow()">Glow</button>
   <button class="toggle-btn on" id="btnSpin" onclick="toggleSpin()">⟳ Spin</button>
-  <button class="toggle-btn" id="btnTransit" onclick="startTransit()" style="border-color:rgba(100,220,220,0.45);color:rgba(100,220,220,0.85)">⇋ Transit</button>
+
   <div class="ctrl-sep"></div>
   <button class="toggle-btn on" id="bgStars" onclick="setBg(0)">Stars</button>
   <button class="toggle-btn" id="bgGrid" onclick="setBg(1)">Grid</button>
@@ -131,10 +165,7 @@
   <span class="ctrl-label">Length</span>
   <input type="range" id="lengthSlider" min="0.0" max="5.0" value="0.5" step="0.1">
   <span class="ctrl-val" id="lengthVal">0.5</span>
-  <div class="ctrl-sep"></div>
-  <span class="ctrl-label">Dist</span>
-  <input type="range" id="zoomSlider" min="-60" max="60" value="20" step="0.5">
-  <span class="ctrl-val" id="zoomVal">20</span>
+
   <div class="ctrl-sep"></div>
   <button class="toggle-btn" id="btnQLow" onclick="setQuality(0)">Low</button>
   <button class="toggle-btn on" id="btnQMed" onclick="setQuality(1)">Med</button>
@@ -305,7 +336,7 @@ TR traceGeodesic(vec3 ro,vec3 rd){
   vec3 prev=ro;float minL=abs(w.l);
   for(int i=0;i<8192;i++){
     if(i>=maxS)break;
-    float adaptDl=dl*clamp(abs(w.l)/(u_throatK*2.0),0.15,1.0);
+    float adaptDl=dl*clamp(abs(w.l)/(u_throatK*2.0),0.4,1.0);
     if(rk4)w=stepRK4(w,adaptDl);else w=stepEuler(w,adaptDl);
     minL=min(minL,abs(w.l));
     vec3 cur=wPoint(w,op);Isect h=segDisc(prev,cur);
@@ -375,7 +406,7 @@ const SPIN_SPEED=0.0008;
 var spinTimer=null;
 const SPIN_RESUME_MS=4000;
 
-function pauseSpin(){autoSpin=false;if(spinTimer)clearTimeout(spinTimer);
+function pauseSpin(){autoSpin=false;if(descending){descending=false;var db=document.getElementById('btnDescend');if(db){db.classList.remove('on');db.textContent='\u25B6';}var pb=document.getElementById('playBtn');if(pb){pb.classList.remove('on');pb.textContent='\u25B6';}}if(spinTimer)clearTimeout(spinTimer);
   if(spinEnabled)spinTimer=setTimeout(function(){autoSpin=true;},SPIN_RESUME_MS);
   document.getElementById('hint').style.opacity='0';}
 
@@ -386,7 +417,7 @@ var qualitySteps=[512,2048,4096],qualityLabels=['btnQLow','btnQMed','btnQHigh'];
 window.setQuality=function(q){maxSteps=qualitySteps[q];qualityLabels.forEach(function(id,i){document.getElementById(id).classList.toggle('on',i===q);});};
 window.dismissWarn=function(){document.getElementById('gpuWarn').classList.add('hide');
   document.getElementById('ctrlWrap').style.display='flex';
-  document.getElementById('eqPanel').style.display='flex';document.getElementById('minimap').style.display='block';};
+  document.getElementById('eqPanel').style.display='flex';document.getElementById('minimap').style.display='block';document.getElementById('traverseBar').style.display='flex';};
 function setBtn(id,on){var el=document.getElementById(id);el.classList.toggle('on',on);el.classList.toggle('off',!on);}
 window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',useGeodesic);};
 window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);};
@@ -395,16 +426,42 @@ window.toggleGlow=function(){showGlow=!showGlow;setBtn('btnGlow',showGlow);};
 window.setBg=function(m){bgMode=m;['bgStars','bgGrid','bgUV','bgNeb','bgRings'].forEach(function(id,i){var el=document.getElementById(id);if(el){el.classList.toggle('on',i===m);}});};
 window.toggleEqPanel=function(){var p=document.getElementById('eqPanel'),b=document.getElementById('eqToggleBtn');p.classList.toggle('collapsed');b.textContent=p.classList.contains('collapsed')?'+':'−';};
 
-/* ── Transit animation ── */
-var transitTarget=null,transitPhase=0;
-window.startTransit=function(){if(transitTarget!==null)return;pauseSpin();
-  transitTarget=camL>0?-20:20;transitPhase=0;document.getElementById('btnTransit').textContent='⇋ ...';};
-function updateTransit(){if(transitTarget===null)return;
-  transitPhase+=0.014;var t=Math.min(transitPhase,1.0);
-  var ease=t<0.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
-  var startL=transitTarget>0?-20:20;camL=startL+(transitTarget-startL)*ease;
+/* ── Descent animation — gentle cinematic drift through the wormhole ── */
+var descending=false,descentDir=0,lastFrameTime=0;
+window.toggleDescend=function(){
+  if(descending){
+    descending=false;
+    var btn=document.getElementById('btnDescend');
+    if(btn){btn.classList.remove('on');btn.textContent='\u25B6';}
+    var pb=document.getElementById('playBtn');if(pb)pb.textContent='\u25B6';
+    return;
+  }
+  // Start descent — pauseSpin first (descending is still false so it won't cancel)
+  pauseSpin();
+  descending=true;
+  descentDir=camL>0?-1:1;
+  lastFrameTime=performance.now();
+  var btn=document.getElementById('btnDescend');
+  if(btn){btn.classList.add('on');btn.textContent='\u25A0';}
+  var pb=document.getElementById('playBtn');if(pb){pb.classList.add('on');pb.textContent='\u25A0';}
+};
+function updateDescent(){
+  if(!descending)return;
+  var now=performance.now();
+  var dt=Math.min((now-lastFrameTime)/1000,0.05);
+  lastFrameTime=now;
+  // Speed profile: gentle approach, dramatic slowdown at throat, then accelerates out
+  var dist=Math.abs(camL);
+  var throatProximity=dist/(throatK*4.0); // 0 at throat, 1 at 4*k away
+  // Very slow near throat (0.15x), moderate far (1x), with smooth interpolation
+  var speedMult=0.15+0.85*Math.min(1.0,throatProximity*throatProximity);
+  var baseSpeed=4.0; // units per second at full speed
+  camL+=descentDir*baseSpeed*speedMult*dt;
+  // Loop: reverse direction when reaching the other side
+  if(descentDir<0&&camL<-18){camL=-18;descentDir=1;}
+  if(descentDir>0&&camL>18){camL=18;descentDir=-1;}
   syncSlider();
-  if(t>=1.0){transitTarget=null;document.getElementById('btnTransit').textContent='⇋ Transit';}}
+}
 function syncSlider(){document.getElementById('zoomSlider').value=camL.toFixed(1);document.getElementById('zoomVal').textContent=camL.toFixed(1);}
 
 /* ── Mouse / touch — drag = free-look, shift+drag or arrows = orbit ── */
@@ -519,7 +576,7 @@ function frame(){
   var now=performance.now();frames++;
   if(now-lastT>500){document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';frames=0;lastT=now;}
   if(autoSpin)orbYaw-=SPIN_SPEED;
-  updateTransit();
+  updateDescent();
   // Smooth look decay when spinning
   if(autoSpin&&!dragging){lookYaw*=0.97;lookPitch*=0.97;if(Math.abs(lookYaw)<0.001)lookYaw=0;if(Math.abs(lookPitch)<0.001)lookPitch=0;}
 
