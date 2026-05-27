@@ -40,7 +40,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .cmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}.cmap-btn{position:relative;padding:0;height:38px;border:2px solid var(--border-b);cursor:pointer;overflow:hidden;transition:all 0.15s;font-family:'JetBrains Mono',monospace;background:transparent}
 .cmap-btn canvas{display:block;width:100%;height:100%;pointer-events:none}.cmap-btn .cmap-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.9),0 0 8px rgba(0,0,0,0.7);pointer-events:none}
 .cmap-btn.active{border-color:var(--blue);box-shadow:0 0 12px rgba(150,200,255,0.3)}.cmap-btn:hover{border-color:rgba(150,200,255,0.5)}
-#canvas-wrap{flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;background:#000}#sim-canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1}
+#canvas-wrap{flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;background:#000}#sim-canvas{display:block;width:100%;height:100%}
 .eq-panel{position:absolute;top:8px;left:8px;max-width:min(460px,calc(100% - 20px));background:rgba(9,12,20,0.92);border:1px solid var(--border-b);backdrop-filter:blur(14px);padding:10px 16px 12px;z-index:50;pointer-events:auto}
 .eq-head{display:flex;align-items:center;gap:7px;margin-bottom:4px;cursor:pointer}.eq-head .dot{width:5px;height:5px;background:var(--blue);box-shadow:0 0 8px var(--blue);flex-shrink:0}.eq-head .lbl{font-size:0.58rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue);font-weight:600}.eq-head .arrow{font-size:0.55rem;color:var(--text-faint);margin-left:auto}
 .eq-block{padding:2px 0}.eq-block+.eq-block{border-top:1px solid var(--border);margin-top:4px;padding-top:6px}.eq-sublabel{font-size:0.46rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-faint);margin-bottom:1px;font-weight:500}.eq-row{margin:1px 0;overflow-x:auto;overflow-y:hidden}.eq-row::-webkit-scrollbar{height:0}
@@ -329,25 +329,7 @@ const rP=mkP(VS,DSP_FS),rU=gU(rP,['uVelocity','uDye','uBarrier','uGain','uBloom'
 
 let vF,pF,dvF,dyF;
 function initFBOs(){const isMob=window.innerWidth<600;const scale=isMob?0.5:0.75;simW=Math.floor(canvas.width*scale);simH=Math.floor(canvas.height*scale);if(isMob){simW=Math.min(simW,384);simH=Math.min(simH,384);}simW=Math.max(simW,64);simH=Math.max(simH,64);vF=mkDF(simW,simH);pF=mkDF(simW,simH);dvF=mkF(simW,simH);dyF=mkDF(simW,simH);
-  // Check FBO completeness
-  gl.bindFramebuffer(gl.FRAMEBUFFER,vF.read.fbo);
-  const fbStat=gl.checkFramebufferStatus(gl.FRAMEBUFFER);
-  gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-  // FBO write-readback test: verify GPU can actually write to float FBOs
-  let fboOK='?';
-  try{
-    gl.bindFramebuffer(gl.FRAMEBUFFER,vF.write.fbo);
-    gl.viewport(0,0,simW,simH);gl.clearColor(0.5,0.25,0,1);gl.clear(gl.COLOR_BUFFER_BIT);
-    const tb=new Float32Array(4);
-    gl.readPixels(0,0,1,1,gl.RGBA,gl.FLOAT,tb);
-    while(gl.getError()!==gl.NO_ERROR){}
-    gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-    fboOK=tb[0]>0.1?'OK':'FAIL:'+tb.join(',');
-  }catch(e){fboOK='ERR:'+e.message;}
-  if(fbStat!==gl.FRAMEBUFFER_COMPLETE)console.error('FluidLab FBO incomplete:',fbStat);
-  console.log('FluidLab FBO test:',fboOK);
-  barrierTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,simW,simH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);initBarrierCanvas();document.getElementById('st-res').textContent=simW+'×'+simH+' '+TEX_NAME+' '+fboOK;}
+  barrierTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,simW,simH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);initBarrierCanvas();document.getElementById('st-res').textContent=simW+'×'+simH;}
 function resize(){const w=document.getElementById('canvas-wrap');CW=w.clientWidth;CH=w.clientHeight;if(CW<10||CH<10){CW=300;CH=300;}const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.floor(CW*dpr);canvas.height=Math.floor(CH*dpr);initFBOs();frame=0;}
 if(window.ResizeObserver)new ResizeObserver(()=>resize()).observe(document.getElementById('canvas-wrap'));else window.addEventListener('resize',resize);
 
