@@ -17,12 +17,10 @@
   .hud{position:fixed;top:16px;left:20px;z-index:10;pointer-events:none}
   .hud h1{font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:400;letter-spacing:5px;color:rgba(255,255,255,0.7);text-transform:uppercase}
   .hud .sub{font-size:11px;letter-spacing:2.5px;color:rgba(255,255,255,0.45);margin-top:4px;text-transform:uppercase;font-weight:500}
-  .stats{position:fixed;bottom:632px;right:20px;z-index:10;pointer-events:none;font-size:11px;color:rgba(255,255,255,0.55);text-align:right;font-weight:400;line-height:1.7;letter-spacing:0.04em}
+  .stats{position:fixed;top:60px;right:20px;z-index:10;pointer-events:none;font-size:11px;color:rgba(255,255,255,0.55);text-align:right;font-weight:400;line-height:1.7;letter-spacing:0.04em}
 
-  /* Minimap */
   #minimap{position:fixed;bottom:145px;right:20px;z-index:12;border:1px solid rgba(100,220,220,0.18);border-radius:8px;background:rgba(0,0,0,0.7);backdrop-filter:blur(10px);box-shadow:0 0 20px rgba(0,0,0,0.5)}
   .in-frame #minimap{bottom:100px;right:12px}
-  @media(max-width:600px){#minimap{bottom:auto!important;top:10px!important;right:6px;width:120px!important;height:220px!important}}
 
   .eq-panel{
     position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:10;
@@ -64,7 +62,6 @@
   .toggle-btn.on{border-color:rgba(100,220,220,0.5);color:rgba(100,220,220,0.85)}
   .toggle-btn.off{border-color:rgba(255,80,80,0.35);color:rgba(255,120,120,0.7)}
 
-
   .traverse-bar{position:fixed;bottom:148px;left:50%;transform:translateX(-50%);z-index:11;display:flex;align-items:center;gap:12px;background:rgba(0,0,0,0.7);backdrop-filter:blur(14px);border:1px solid rgba(100,220,220,0.15);border-radius:10px;padding:10px 18px;max-width:calc(100vw - 40px);width:520px}
   .trav-slider{-webkit-appearance:none;appearance:none;flex:1;height:5px;border-radius:3px;background:linear-gradient(to right,rgba(100,180,255,0.3),rgba(100,220,220,0.5) 50%,rgba(255,200,100,0.3));outline:none;cursor:pointer}
   .trav-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#5ad8d8;border:2px solid rgba(0,0,0,0.5);box-shadow:0 0 12px rgba(90,216,216,0.5);cursor:pointer}
@@ -76,36 +73,86 @@
   .trav-play:hover{background:rgba(100,220,220,0.25);border-color:rgba(100,220,220,0.7)}
   .trav-play.on{background:rgba(255,80,80,0.15);border-color:rgba(255,80,80,0.5);color:rgba(255,100,100,0.9)}
   .trav-pos{font-size:12px;color:rgba(100,220,220,0.6);min-width:36px;text-align:right;letter-spacing:0.05em;font-weight:500}
-  @media(max-width:600px){.traverse-bar{width:calc(100vw - 20px);bottom:150px;padding:8px 12px;gap:8px}.trav-play{width:34px;height:34px;font-size:14px}.trav-label{font-size:11px}.trav-pos{font-size:10px;min-width:28px}}
+  .trav-slider-wrap{display:contents}
   .hint{position:fixed;bottom:174px;left:50%;transform:translateX(-50%);z-index:10;font-size:11px;color:rgba(255,255,255,0.32);letter-spacing:1.8px;pointer-events:none;text-transform:uppercase;transition:opacity 2s;white-space:nowrap;font-weight:500}
+
   .in-frame .hud{display:none!important}
+
   @media(max-width:900px){.eq-row .katex{font-size:1.15rem!important}}
+
+  /* ═══════════════════════════════════════════
+     MOBILE — aggressive compact layout
+     ═══════════════════════════════════════════ */
   @media(max-width:600px){
-    .ctrl-wrap{padding:7px 11px;gap:6px;bottom:10px}
-    .toggle-btn{font-size:10px;padding:5px 9px;letter-spacing:1px}
-    .ctrl-label{font-size:10px}.ctrl-val{font-size:10px}
-    input[type=range]{width:78px}.ctrl-sep{height:15px}
-    .gpu-warn{padding:20px 24px;max-width:320px}.gpu-warn h2{font-size:16px}.gpu-warn p{font-size:12px}
-    .hud,.stats{display:none}
-  
-  .traverse-bar{position:fixed;bottom:148px;left:50%;transform:translateX(-50%);z-index:11;display:flex;align-items:center;gap:12px;background:rgba(0,0,0,0.7);backdrop-filter:blur(14px);border:1px solid rgba(100,220,220,0.15);border-radius:10px;padding:10px 18px;max-width:calc(100vw - 40px);width:520px}
-  .trav-slider{-webkit-appearance:none;appearance:none;flex:1;height:5px;border-radius:3px;background:linear-gradient(to right,rgba(100,180,255,0.3),rgba(100,220,220,0.5) 50%,rgba(255,200,100,0.3));outline:none;cursor:pointer}
-  .trav-slider::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#5ad8d8;border:2px solid rgba(0,0,0,0.5);box-shadow:0 0 12px rgba(90,216,216,0.5);cursor:pointer}
-  .trav-slider::-moz-range-thumb{width:20px;height:20px;border-radius:50%;background:#5ad8d8;border:2px solid rgba(0,0,0,0.5)}
-  .trav-label{font-size:13px;font-weight:700;letter-spacing:0.15em;user-select:none;min-width:16px;text-align:center}
-  .trav-b{color:rgba(100,180,255,0.7)}
-  .trav-a{color:rgba(255,200,100,0.7)}
-  .trav-play{width:40px;height:40px;border-radius:50%;background:rgba(100,220,220,0.12);border:2px solid rgba(100,220,220,0.4);color:rgba(100,220,220,0.9);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.18s;flex-shrink:0;font-family:inherit;line-height:1}
-  .trav-play:hover{background:rgba(100,220,220,0.25);border-color:rgba(100,220,220,0.7)}
-  .trav-play.on{background:rgba(255,80,80,0.15);border-color:rgba(255,80,80,0.5);color:rgba(255,100,100,0.9)}
-  .trav-pos{font-size:12px;color:rgba(100,220,220,0.6);min-width:36px;text-align:right;letter-spacing:0.05em;font-weight:500}
-  @media(max-width:600px){.traverse-bar{width:calc(100vw - 20px);bottom:150px;padding:8px 12px;gap:8px}.trav-play{width:34px;height:34px;font-size:14px}.trav-label{font-size:11px}.trav-pos{font-size:10px;min-width:28px}}
-  .hint{font-size:9px;bottom:140px;letter-spacing:1.4px}
-    .eq-panel{top:10px;padding:11px 38px 13px 14px;max-width:calc(100vw - 16px);gap:10px}
-    .eq-content{gap:10px}.eq-group{gap:4px}.eq-title{font-size:0.62rem}
-    .eq-row .katex{font-size:0.95rem!important}
-    .eq-toggle{top:5px;right:6px;width:24px;height:24px;font-size:16px}
-    .eq-collapsed-label{font-size:0.62rem}.eq-panel.collapsed{padding:6px 14px;gap:6px}
+    /* Hide: stats, minimap, hint, hud */
+    .hud, .stats, #minimap, .hint { display:none!important }
+    .ctrl-sep, .mob-hide { display:none!important }
+
+    /* Equation panel: visible but collapsed, top-left */
+    .eq-panel{
+      top:8px;left:8px;right:auto;transform:none;
+      padding:10px 36px 10px 12px;max-width:calc(100vw - 24px);
+      gap:8px;border-radius:8px;
+    }
+    .eq-content{gap:8px}
+    .eq-group{gap:3px}
+    .eq-title{font-size:0.58rem;letter-spacing:0.2em}
+    .eq-row .katex{font-size:0.85rem!important}
+    .eq-toggle{top:4px;right:5px;width:24px;height:24px;font-size:16px}
+    .eq-collapsed-label{font-size:0.58rem;letter-spacing:0.18em}
+    .eq-panel.collapsed{padding:6px 12px;gap:6px}
+
+    /* GPU warning */
+    .gpu-warn{padding:18px 20px;max-width:calc(100vw - 32px)}
+    .gpu-warn h2{font-size:15px;letter-spacing:2px}
+    .gpu-warn p{font-size:12px;line-height:1.5}
+
+    /* Traverse bar — VERTICAL on right edge */
+    .traverse-bar{
+      left:auto;right:8px;bottom:auto;
+      top:50%;transform:translateY(-50%);
+      width:auto;
+      flex-direction:column;
+      align-items:center;
+      padding:10px 6px;
+      gap:6px;
+      border-radius:6px;
+    }
+    .trav-slider-wrap{
+      display:flex;align-items:center;justify-content:center;
+      width:24px;height:180px;
+      flex-shrink:0;
+    }
+    .traverse-bar .trav-slider{
+      width:180px;
+      transform:rotate(90deg);
+      transform-origin:center center;
+      flex:none;
+    }
+    .trav-play{width:28px;height:28px;font-size:11px;border-width:1.5px}
+    .trav-label{font-size:9px}
+    .trav-pos{font-size:9px;min-width:18px}
+    .trav-slider::-webkit-slider-thumb{width:16px;height:16px}
+
+    /* Control bar — single compact strip */
+    .ctrl-wrap{
+      bottom:6px;left:6px;right:6px;
+      transform:none;
+      max-width:none;width:auto;
+      padding:5px 6px;
+      gap:3px;
+      border-radius:6px;
+    }
+    .toggle-btn{
+      font-size:8px;
+      padding:3px 5px;
+      letter-spacing:0.5px;
+      border-radius:2px;
+    }
+    .ctrl-label{font-size:8px;letter-spacing:0.8px}
+    .ctrl-val{font-size:8px;min-width:16px}
+    input[type=range]{width:40px;height:2px}
+    input[type=range]::-webkit-slider-thumb{width:10px;height:10px}
   }
 </style>
 </head>
@@ -115,7 +162,7 @@
 
 <div class="gpu-warn" id="gpuWarn">
   <h2>GPU Intensive</h2>
-  <p>Per-pixel geodesic ray tracing through an Ellis wormhole metric. Drag to look around, scroll or W/S to fly through, arrows to orbit.</p>
+  <p>Per-pixel geodesic ray tracing through an Ellis wormhole metric. Drag to look around, scroll or pinch to fly through.</p>
   <button class="dismiss" onclick="dismissWarn()">Continue</button>
 </div>
 
@@ -124,7 +171,9 @@
 
 <div class="traverse-bar" id="traverseBar" style="display:none">
   <span class="trav-label trav-b">B</span>
-  <input type="range" id="zoomSlider" min="-60" max="60" value="20" step="0.2" class="trav-slider">
+  <div class="trav-slider-wrap">
+    <input type="range" id="zoomSlider" min="-60" max="60" value="20" step="0.2" class="trav-slider">
+  </div>
   <span class="trav-label trav-a">A</span>
   <button class="trav-play" id="playBtn" onclick="toggleDescend()">&#x25B6;</button>
   <span class="trav-pos" id="zoomVal">20</span>
@@ -141,35 +190,32 @@
   <span class="eq-collapsed-label">Equations</span>
 </div>
 
-
-
 <div class="ctrl-wrap" id="ctrlWrap" style="display:none">
-  <button class="toggle-btn on" id="btnGeodesic" onclick="toggleGeodesic()">Geodesic</button>
-  <button class="toggle-btn" id="btnRK4" onclick="toggleRK4()">RK4</button>
+  <!-- Geodesic/RK4/Disc hidden on mobile via .mob-hide -->
+  <button class="toggle-btn on mob-hide" id="btnGeodesic" onclick="toggleGeodesic()">Geodesic</button>
+  <button class="toggle-btn mob-hide" id="btnRK4" onclick="toggleRK4()">RK4</button>
   <div class="ctrl-sep"></div>
-  <button class="toggle-btn off" id="btnDisc" onclick="toggleDisc()">Disc</button>
+  <button class="toggle-btn off mob-hide" id="btnDisc" onclick="toggleDisc()">Disc</button>
   <button class="toggle-btn on" id="btnGlow" onclick="toggleGlow()">Glow</button>
-  <button class="toggle-btn on" id="btnSpin" onclick="toggleSpin()">⟳ Spin</button>
-
+  <button class="toggle-btn on" id="btnSpin" onclick="toggleSpin()">⟳</button>
   <div class="ctrl-sep"></div>
-  <button class="toggle-btn on" id="bgStars" onclick="setBg(0)">Stars</button>
+  <button class="toggle-btn on" id="bgStars" onclick="setBg(0)">★</button>
   <button class="toggle-btn" id="bgGrid" onclick="setBg(1)">Grid</button>
   <button class="toggle-btn" id="bgUV" onclick="setBg(2)">UV</button>
-  <button class="toggle-btn" id="bgNeb" onclick="setBg(3)">Nebula</button>
-  <button class="toggle-btn" id="bgRings" onclick="setBg(4)">Rings</button>
+  <button class="toggle-btn" id="bgNeb" onclick="setBg(3)">Neb</button>
+  <button class="toggle-btn" id="bgRings" onclick="setBg(4)">Ring</button>
   <div class="ctrl-sep"></div>
-  <span class="ctrl-label">Throat</span>
+  <span class="ctrl-label">K</span>
   <input type="range" id="throatSlider" min="0.2" max="4.0" value="1.5" step="0.1">
   <span class="ctrl-val" id="throatVal">1.5</span>
   <div class="ctrl-sep"></div>
-  <span class="ctrl-label">Length</span>
+  <span class="ctrl-label">L</span>
   <input type="range" id="lengthSlider" min="0.0" max="5.0" value="0.5" step="0.1">
   <span class="ctrl-val" id="lengthVal">0.5</span>
-
   <div class="ctrl-sep"></div>
-  <button class="toggle-btn" id="btnQLow" onclick="setQuality(0)">Low</button>
-  <button class="toggle-btn on" id="btnQMed" onclick="setQuality(1)">Med</button>
-  <button class="toggle-btn" id="btnQHigh" onclick="setQuality(2)">High</button>
+  <button class="toggle-btn mob-hide" id="btnQLow" onclick="setQuality(0)">Lo</button>
+  <button class="toggle-btn on mob-hide" id="btnQMed" onclick="setQuality(1)">Med</button>
+  <button class="toggle-btn mob-hide" id="btnQHigh" onclick="setQuality(2)">Hi</button>
 </div>
 
 <script>
@@ -197,7 +243,6 @@ vec2 bgUV(vec3 d){return vec2(atan(d.z,d.x)/(2.0*PI)+0.5,acos(clamp(d.y,-1.0,1.0
 float whR(float l){float x=max(0.0,abs(l)-u_throatA);return sqrt(u_throatK*u_throatK+x*x);}
 float whRp(float l){float al=abs(l);if(al<=u_throatA)return 0.0;float x=al-u_throatA;return sign(l)*x/sqrt(u_throatK*u_throatK+x*x);}
 
-/* ═══ SKY BACKGROUNDS ═══ */
 vec3 sampleStars(vec3 dir,float warm){
   vec2 skyUv=bgUV(dir);vec3 col=vec3(0.01,0.012,0.028);
   vec3 mwN=normalize(vec3(0.26,0.9,-0.34));float pd=abs(dot(dir,mwN));
@@ -232,7 +277,7 @@ vec3 sampleGridBg(vec3 dir,float warm){
 }
 vec3 sampleUVMap(vec3 dir,float warm){
   vec2 uv=bgUV(dir);float cu=floor(uv.x*6.0),cv=floor(uv.y*3.0),hue=mod(cu+cv*2.0,6.0);
-  vec3 warmP[6],coolP[6];vec3 cc;
+  vec3 cc;
   if(warm>0.5){if(hue<1.0)cc=vec3(.9,.3,.1);else if(hue<2.0)cc=vec3(.9,.65,.1);else if(hue<3.0)cc=vec3(.95,.9,.2);else if(hue<4.0)cc=vec3(.7,.35,.1);else if(hue<5.0)cc=vec3(.85,.2,.15);else cc=vec3(.95,.75,.3);}
   else{if(hue<1.0)cc=vec3(.1,.3,.9);else if(hue<2.0)cc=vec3(.1,.7,.85);else if(hue<3.0)cc=vec3(.15,.9,.6);else if(hue<4.0)cc=vec3(.2,.4,.95);else if(hue<5.0)cc=vec3(.1,.85,.9);else cc=vec3(.3,.6,.95);}
   float fck=mod(floor(uv.x*36.0)+floor(uv.y*18.0),2.0);vec3 col=cc*(0.5+0.5*fck);
@@ -272,13 +317,11 @@ vec3 sampleSky(vec3 dir,float warm){
 vec3 sampleSkyA(vec3 dir){return sampleSky(dir,1.0);}
 vec3 sampleSkyB(vec3 dir){return sampleSky(vec3(-dir.x,dir.y,-dir.z),0.0);}
 
-/* ═══ DISC ═══ */
 vec3 sampleDisc(vec3 p){
   float rd=length(p.xz),t=clamp((rd-u_discInner)/(u_discOuter-u_discInner),0.0,1.0);
-  // Disc projects the OTHER universe — portal surface
-  float fromA=step(0.0,u_camL); // 1 if cam in A, 0 if in B
-  vec3 innerA=vec3(0.35,0.6,1.0),outerA=vec3(0.1,0.2,0.5);   // cool: you see B through it
-  vec3 innerB=vec3(1.0,0.7,0.3),outerB=vec3(0.5,0.25,0.08);  // warm: you see A through it
+  float fromA=step(0.0,u_camL);
+  vec3 innerA=vec3(0.35,0.6,1.0),outerA=vec3(0.1,0.2,0.5);
+  vec3 innerB=vec3(1.0,0.7,0.3),outerB=vec3(0.5,0.25,0.08);
   vec3 inner=mix(innerB,innerA,fromA),outer=mix(outerB,outerA,fromA);
   return clamp(mix(inner,outer,t)*1.3,vec3(0),vec3(1));
 }
@@ -290,7 +333,6 @@ Isect segDisc(vec3 s0,vec3 s1){
   if(r<u_discInner||r>u_discOuter)return noHit();return Isect(true,length(seg)*t,sampleDisc(p));
 }
 
-/* ═══ ORBITAL PLANE + GEODESIC ═══ */
 struct OrbPlane{vec3 radial;vec3 tangent;};
 OrbPlane buildOrbPlane(vec3 lo,vec3 dir){
   vec3 rad=normalize(lo),nC=cross(lo,dir);
@@ -334,13 +376,10 @@ TR traceGeodesic(vec3 ro,vec3 rd){
   OrbPlane op=buildOrbPlane(ro,rd);WRay w=initWRay(ro,rd,op);
   float dl=u_dl;int maxS=int(u_maxSteps);float escR=u_escapeR;bool rk4=u_useRK4>0.5;
   vec3 prev=ro;float minL=abs(w.l);
-  // Angular momentum: L = r^2 * |dtheta|. If L > k, ray bounces — use fewer steps
   float rInit=whR(w.l);
   float angMom=rInit*rInit*abs(w.dtheta);
   bool canPassThrough=angMom<u_throatK*1.1;
   int effMax=canPassThrough?maxS:maxS/3;
-  // Track if ray has turned around (dl changed sign) for bounce rays
-  float initDl=w.dl;
   for(int i=0;i<8192;i++){
     if(i>=effMax)break;
     float adaptDl=dl*clamp(u_throatK*2.0/max(abs(w.l),0.01),1.0,2.5);
@@ -348,12 +387,10 @@ TR traceGeodesic(vec3 ro,vec3 rd){
     minL=min(minL,abs(w.l));
     vec3 cur=wPoint(w,op);Isect h=segDisc(prev,cur);
     if(h.hit)return TR(true,h.color,minL);
-    // Early escape: bounce rays moving outward can exit sooner
     bool movingOut=(w.l>0.0&&w.dl>0.0)||(w.l<0.0&&w.dl<0.0);
     if(abs(w.l)>=escR&&(i>4||(movingOut&&!canPassThrough))){
       vec3 dir=wDir(w,op);
       return TR(false,w.l>0.0?sampleSkyA(dir):sampleSkyB(dir),minL);}
-    // Bounce rays that turned around and are moving outward — escape at lower radius
     if(!canPassThrough&&movingOut&&abs(w.l)>escR*0.3&&i>2){
       vec3 dir=wDir(w,op);
       return TR(false,w.l>0.0?sampleSkyA(dir):sampleSkyB(dir),minL);}
@@ -372,7 +409,6 @@ void main(){
   if(u_showGlow>0.5&&u_useGeodesic>0.5){
     float glow=exp(-r.minL*r.minL/(u_throatK*u_throatK*0.6))*0.5;
     float ring=exp(-r.minL*r.minL/(u_throatK*u_throatK*0.08))*0.3;
-    // Throat emission — tinted by the universe visible THROUGH the portal
     float fromA=step(0.0,u_camL);
     vec3 gc=mix(vec3(0.7,0.45,0.15),vec3(0.2,0.5,0.75),fromA);
     vec3 rc=mix(vec3(1.0,0.8,0.4),vec3(0.6,0.85,1.0),fromA);
@@ -383,9 +419,6 @@ void main(){
 }
 `;
 
-/* ═══════════════════════════════════════════════════════════
-   WebGL
-   ═══════════════════════════════════════════════════════════ */
 const canvas=document.getElementById('c');
 const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.innerHTML='<h1 style="color:red;padding:2em">WebGL 2 required</h1>';throw '';}
@@ -405,13 +438,10 @@ const U={};
  'u_dl','u_maxSteps','u_escapeR','u_useGeodesic','u_useRK4','u_showDisc','u_showGlow','u_bgMode','u_camL'
 ].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
 
-/* ═══════════════════════════════════════════════════════════
-   State
-   ═══════════════════════════════════════════════════════════ */
 let throatK=1.5,throatA=0.5;
-let orbYaw=0,orbPitch=0.15;  // orbital position (where cam sits on sphere)
-let lookYaw=0,lookPitch=0;   // look direction offsets (free-look)
-let camL=20;                 // signed: >0 = Universe A, <0 = Universe B
+let orbYaw=0,orbPitch=0.15;
+let lookYaw=0,lookPitch=0;
+let camL=20;
 const FOCAL=700;
 let useGeodesic=true,useRK4=false,showDisc=false,showGlow=true,bgMode=0;
 let baseDl=0.12,maxSteps=2048,escMul=50;
@@ -420,19 +450,32 @@ const SPIN_SPEED=0.0008;
 var spinTimer=null;
 const SPIN_RESUME_MS=4000;
 
-function pauseSpin(){autoSpin=false;if(descending){descending=false;var db=document.getElementById('btnDescend');if(db){db.classList.remove('on');db.textContent='\u25B6';}var pb=document.getElementById('playBtn');if(pb){pb.classList.remove('on');pb.textContent='\u25B6';}}if(spinTimer)clearTimeout(spinTimer);
+function pauseSpin(){autoSpin=false;if(descending){descending=false;var pb=document.getElementById('playBtn');if(pb){pb.classList.remove('on');pb.textContent='\u25B6';}}if(spinTimer)clearTimeout(spinTimer);
   if(spinEnabled)spinTimer=setTimeout(function(){autoSpin=true;},SPIN_RESUME_MS);
   document.getElementById('hint').style.opacity='0';}
 
-/* ── Controls ── */
 window.toggleSpin=function(){spinEnabled=!spinEnabled;setBtn('btnSpin',spinEnabled);
   if(spinEnabled)autoSpin=true;else{autoSpin=false;if(spinTimer){clearTimeout(spinTimer);spinTimer=null;}}};
 var qualitySteps=[512,2048,4096],qualityLabels=['btnQLow','btnQMed','btnQHigh'];
 window.setQuality=function(q){maxSteps=qualitySteps[q];qualityLabels.forEach(function(id,i){document.getElementById(id).classList.toggle('on',i===q);});};
-window.dismissWarn=function(){document.getElementById('gpuWarn').classList.add('hide');
+
+window.dismissWarn=function(){
+  document.getElementById('gpuWarn').classList.add('hide');
   document.getElementById('ctrlWrap').style.display='flex';
-  document.getElementById('eqPanel').style.display='flex';document.getElementById('minimap').style.display='block';document.getElementById('traverseBar').style.display='flex';};
-function setBtn(id,on){var el=document.getElementById(id);el.classList.toggle('on',on);el.classList.toggle('off',!on);}
+  document.getElementById('traverseBar').style.display='flex';
+  var mob=window.innerWidth<600;
+  document.getElementById('eqPanel').style.display='flex';
+  if(mob){
+    // Collapse equations on mobile
+    var p=document.getElementById('eqPanel');
+    p.classList.add('collapsed');
+    document.getElementById('eqToggleBtn').textContent='+';
+  } else {
+    document.getElementById('minimap').style.display='block';
+  }
+};
+
+function setBtn(id,on){var el=document.getElementById(id);if(!el)return;el.classList.toggle('on',on);el.classList.toggle('off',!on);}
 window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',useGeodesic);};
 window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);};
 window.toggleDisc=function(){showDisc=!showDisc;setBtn('btnDisc',showDisc);};
@@ -440,23 +483,17 @@ window.toggleGlow=function(){showGlow=!showGlow;setBtn('btnGlow',showGlow);};
 window.setBg=function(m){bgMode=m;['bgStars','bgGrid','bgUV','bgNeb','bgRings'].forEach(function(id,i){var el=document.getElementById(id);if(el){el.classList.toggle('on',i===m);}});};
 window.toggleEqPanel=function(){var p=document.getElementById('eqPanel'),b=document.getElementById('eqToggleBtn');p.classList.toggle('collapsed');b.textContent=p.classList.contains('collapsed')?'+':'−';};
 
-/* ── Descent animation — gentle cinematic drift through the wormhole ── */
 var descending=false,descentDir=0,lastFrameTime=0;
 window.toggleDescend=function(){
   if(descending){
     descending=false;
-    var btn=document.getElementById('btnDescend');
-    if(btn){btn.classList.remove('on');btn.textContent='\u25B6';}
-    var pb=document.getElementById('playBtn');if(pb)pb.textContent='\u25B6';
+    var pb=document.getElementById('playBtn');if(pb){pb.classList.remove('on');pb.textContent='\u25B6';}
     return;
   }
-  // Start descent — pauseSpin first (descending is still false so it won't cancel)
   pauseSpin();
   descending=true;
   descentDir=camL>0?-1:1;
   lastFrameTime=performance.now();
-  var btn=document.getElementById('btnDescend');
-  if(btn){btn.classList.add('on');btn.textContent='\u25A0';}
   var pb=document.getElementById('playBtn');if(pb){pb.classList.add('on');pb.textContent='\u25A0';}
 };
 function updateDescent(){
@@ -464,25 +501,20 @@ function updateDescent(){
   var now=performance.now();
   var dt=Math.min((now-lastFrameTime)/1000,0.05);
   lastFrameTime=now;
-  // Speed profile: gentle approach, dramatic slowdown at throat, then accelerates out
   var dist=Math.abs(camL);
-  var throatProximity=dist/(throatK*4.0); // 0 at throat, 1 at 4*k away
-  // Very slow near throat (0.15x), moderate far (1x), with smooth interpolation
+  var throatProximity=dist/(throatK*4.0);
   var speedMult=0.15+0.85*Math.min(1.0,throatProximity*throatProximity);
-  var baseSpeed=4.0; // units per second at full speed
+  var baseSpeed=4.0;
   camL+=descentDir*baseSpeed*speedMult*dt;
-  // Loop: reverse direction when reaching the other side
   if(descentDir<0&&camL<-18){camL=-18;descentDir=1;}
   if(descentDir>0&&camL>18){camL=18;descentDir=-1;}
   syncSlider();
 }
 function syncSlider(){document.getElementById('zoomSlider').value=camL.toFixed(1);document.getElementById('zoomVal').textContent=camL.toFixed(1);}
 
-/* ── Mouse / touch — drag = free-look, shift+drag or arrows = orbit ── */
 let dragging=false,lmx=0,lmy=0,shiftHeld=false;
 window.addEventListener('keydown',function(e){if(e.key==='Shift')shiftHeld=true;});
 window.addEventListener('keyup',function(e){if(e.key==='Shift')shiftHeld=false;});
-
 canvas.addEventListener('mousedown',function(e){dragging=true;lmx=e.clientX;lmy=e.clientY;pauseSpin();});
 window.addEventListener('mouseup',function(){dragging=false;});
 window.addEventListener('mousemove',function(e){if(!dragging)return;
@@ -516,64 +548,53 @@ window.addEventListener('keydown',function(e){pauseSpin();var s=0.05;
   if(e.key==='ArrowDown'){orbPitch=Math.max(orbPitch-s,-1.5);}
   if(e.key==='w'||e.key==='W'){camL-=Math.max(Math.abs(camL)*0.04,0.2);camL=Math.max(-60,Math.min(60,camL));syncSlider();}
   if(e.key==='s'||e.key==='S'){camL+=Math.max(Math.abs(camL)*0.04,0.2);camL=Math.max(-60,Math.min(60,camL));syncSlider();}
-  if(e.key==='r'||e.key==='R'){lookYaw=0;lookPitch=0;} // reset look
+  if(e.key==='r'||e.key==='R'){lookYaw=0;lookPitch=0;}
 });
 
 document.getElementById('zoomSlider').addEventListener('input',function(){camL=+this.value;document.getElementById('zoomVal').textContent=camL.toFixed(1);});
 document.getElementById('throatSlider').addEventListener('input',function(){throatK=+this.value;document.getElementById('throatVal').textContent=(+this.value).toFixed(1);});
 document.getElementById('lengthSlider').addEventListener('input',function(){throatA=+this.value;document.getElementById('lengthVal').textContent=(+this.value).toFixed(1);});
 
-function resize(){var dpr=Math.min(window.devicePixelRatio||1,2),isMob=window.innerWidth<600,sc=isMob?0.25:0.4;
+function resize(){var dpr=Math.min(window.devicePixelRatio||1,2),mob=window.innerWidth<600,sc=mob?0.25:0.4;
   canvas.width=Math.floor(window.innerWidth*dpr*sc);canvas.height=Math.floor(window.innerHeight*dpr*sc);
   gl.viewport(0,0,canvas.width,canvas.height);document.getElementById('res').textContent=canvas.width+'×'+canvas.height;}
 window.addEventListener('resize',resize);resize();
 
-/* ═══════════════════════════════════════════════════════════
-   MINIMAP — embedding diagram with camera dot
-   ═══════════════════════════════════════════════════════════ */
 var mmCanvas=document.getElementById('minimap'),mmCtx=mmCanvas.getContext('2d');
 function drawMinimap(){
+  if(window.innerWidth<600)return; // skip on mobile
   var W=mmCanvas.width,H=mmCanvas.height;
   mmCtx.clearRect(0,0,W,H);
   var k=throatK,a=throatA;
-  // Build embedding profile
   var NL=50,lMax=20,prof=[];
   for(var i=0;i<=NL;i++){var l=-lMax+i*2*lMax/NL;
     var x=Math.max(0,Math.abs(l)-a),r=Math.sqrt(k*k+x*x);
     var z=Math.abs(l)<=a?l:Math.sign(l)*(a+k*Math.asinh(x/k));
     prof.push({r:r,z:z,l:l});}
-  // Surface of revolution
   var NPHI=28,surf=[];
   for(var i=0;i<prof.length;i++){var row=[];
     for(var j=0;j<=NPHI;j++){var phi=j*2*Math.PI/NPHI;
       row.push({x:prof[i].r*Math.cos(phi),y:prof[i].r*Math.sin(phi),z:prof[i].z});}
     surf.push(row);}
-  // Auto-scale
   var maxE=0;for(var i=0;i<prof.length;i++){maxE=Math.max(maxE,prof[i].r,Math.abs(prof[i].z));}
   var scX=W*0.72/Math.max(maxE,1),scZ=H*0.30/Math.max(maxE,1);var sc=Math.min(scX,scZ);
-  // 3D → 2D projection (slight tilt, slow spin)
   var tilt=0.35,rot=performance.now()*0.0002;
   var ct=Math.cos(tilt),st=Math.sin(tilt),cr=Math.cos(rot),sr=Math.sin(rot);
   function proj(p){var pz=p.z*3.0;var rx=p.x*cr-p.y*sr,ry=p.x*sr+p.y*cr;
     var tz=ry*st+pz*ct,ty=ry*ct-pz*st;
     return{x:W/2+rx*sc,y:H/2-tz*sc,d:ty};}
-  // Draw meridians
   for(var j=0;j<NPHI;j+=2){mmCtx.beginPath();mmCtx.strokeStyle='rgba(255,255,255,0.28)';mmCtx.lineWidth=1.0;
     for(var i=0;i<surf.length;i++){var p=proj(surf[i][j]);if(i===0)mmCtx.moveTo(p.x,p.y);else mmCtx.lineTo(p.x,p.y);}mmCtx.stroke();}
-  // Draw parallels with depth-based opacity
   for(var i=2;i<surf.length;i+=3){mmCtx.beginPath();
     var side=prof[i].l>=0;
     mmCtx.strokeStyle=side?'rgba(255,200,120,0.35)':'rgba(120,180,255,0.35)';mmCtx.lineWidth=1.0;
     for(var j=0;j<=NPHI;j++){var p=proj(surf[i][j]);if(j===0)mmCtx.moveTo(p.x,p.y);else mmCtx.lineTo(p.x,p.y);}mmCtx.stroke();}
-  // Throat circle
   var ti=Math.floor(NL/2);mmCtx.beginPath();mmCtx.strokeStyle='rgba(100,240,240,0.75)';mmCtx.lineWidth=2.0;
   for(var j=0;j<=NPHI;j++){var p=proj(surf[ti][j]);if(j===0)mmCtx.moveTo(p.x,p.y);else mmCtx.lineTo(p.x,p.y);}mmCtx.stroke();
-  // A / B labels
   var pA=proj({x:0,y:0,z:prof[prof.length-1].z*0.7}),pB=proj({x:0,y:0,z:prof[0].z*0.7});
   mmCtx.font='bold 11px "JetBrains Mono",monospace';mmCtx.textAlign='center';
   mmCtx.fillStyle='rgba(255,200,120,0.7)';mmCtx.fillText('A',pA.x,pA.y-8);
   mmCtx.fillStyle='rgba(120,180,255,0.7)';mmCtx.fillText('B',pB.x,pB.y-8);
-  // Camera dot on surface
   var cx2=Math.max(0,Math.abs(camL)-a),cR=Math.sqrt(k*k+cx2*cx2);
   var cZ=Math.abs(camL)<=a?camL:Math.sign(camL)*(a+k*Math.asinh(cx2/k));
   var cPhi=orbYaw,cam3={x:cR*Math.cos(cPhi),y:cR*Math.sin(cPhi),z:cZ};
@@ -582,39 +603,30 @@ function drawMinimap(){
   mmCtx.beginPath();mmCtx.arc(cp.x,cp.y,4.5,0,Math.PI*2);mmCtx.fill();mmCtx.shadowBlur=0;
 }
 
-/* ═══════════════════════════════════════════════════════════
-   Render loop
-   ═══════════════════════════════════════════════════════════ */
 var frames=0,lastT=performance.now();
 function frame(){
   var now=performance.now();frames++;
   if(now-lastT>500){document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';frames=0;lastT=now;}
   if(autoSpin)orbYaw-=SPIN_SPEED;
   updateDescent();
-  // Smooth look decay when spinning
   if(autoSpin&&!dragging){lookYaw*=0.97;lookPitch*=0.97;if(Math.abs(lookYaw)<0.001)lookYaw=0;if(Math.abs(lookPitch)<0.001)lookPitch=0;}
 
   var absL=Math.max(Math.abs(camL),0.1);
   var cx=absL*Math.cos(orbPitch)*Math.cos(orbYaw),cy=absL*Math.sin(orbPitch),cz=absL*Math.cos(orbPitch)*Math.sin(orbYaw);
   var fl=Math.sqrt(cx*cx+cy*cy+cz*cz);
-  // Base forward: toward origin (wormhole)
   var fwd=[-cx/fl,-cy/fl,-cz/fl];
   var rl=Math.sqrt(fwd[2]*fwd[2]+fwd[0]*fwd[0]);
   var right=rl>1e-6?[fwd[2]/rl,0,-fwd[0]/rl]:[1,0,0];
   var up=[fwd[1]*right[2]-fwd[2]*right[1],fwd[2]*right[0]-fwd[0]*right[2],fwd[0]*right[1]-fwd[1]*right[0]];
 
-  // Apply free-look rotation
   if(Math.abs(lookYaw)>0.001||Math.abs(lookPitch)>0.001){
-    // Yaw: rotate fwd around world Y
     var cy2=Math.cos(lookYaw),sy=Math.sin(lookYaw);
     var nx=fwd[0]*cy2+fwd[2]*sy,nz=-fwd[0]*sy+fwd[2]*cy2;fwd[0]=nx;fwd[2]=nz;
-    // Pitch: rotate fwd around right axis (Rodrigues)
     var cp2=Math.cos(lookPitch),sp=Math.sin(lookPitch);
     var d=fwd[0]*right[0]+fwd[1]*right[1]+fwd[2]*right[2];
     var crx=fwd[1]*right[2]-fwd[2]*right[1],cry=fwd[2]*right[0]-fwd[0]*right[2],crz=fwd[0]*right[1]-fwd[1]*right[0];
     fwd[0]=fwd[0]*cp2+crx*sp+right[0]*d*(1-cp2);fwd[1]=fwd[1]*cp2+cry*sp+right[1]*d*(1-cp2);fwd[2]=fwd[2]*cp2+crz*sp+right[2]*d*(1-cp2);
     var fnl=Math.sqrt(fwd[0]*fwd[0]+fwd[1]*fwd[1]+fwd[2]*fwd[2]);fwd[0]/=fnl;fwd[1]/=fnl;fwd[2]/=fnl;
-    // Recompute right/up
     rl=Math.sqrt(fwd[2]*fwd[2]+fwd[0]*fwd[0]);right=rl>1e-6?[fwd[2]/rl,0,-fwd[0]/rl]:[1,0,0];
     up=[fwd[1]*right[2]-fwd[2]*right[1],fwd[2]*right[0]-fwd[0]*right[2],fwd[0]*right[1]-fwd[1]*right[0]];
   }
@@ -645,13 +657,9 @@ function frame(){
 if(window.self!==window.top)document.body.classList.add('in-frame');
 frame();
 
-/* ═══════════════════════════════════════════════════════════
-   KaTeX — matrix forms
-   ═══════════════════════════════════════════════════════════ */
 function renderEqs(){
   if(typeof katex==='undefined'){setTimeout(renderEqs,100);return;}
   var L='#64dce0',K='#ff9860',A='#c896ff',R='#96c8ff',T='#ff6080',G='#90e090';
-  // Metric tensor — full 4x4 matrix
   katex.render(
     '\\textcolor{'+R+'}{g_{\\mu\\nu}} = \\begin{pmatrix}'
     +' \\textcolor{'+T+'}{-1} & 0 & 0 & 0 \\\\'
@@ -661,13 +669,11 @@ function renderEqs(){
     +' \\end{pmatrix}',
     document.getElementById('eq1'),{throwOnError:false}
   );
-  // Effective radius
   katex.render(
     '\\textcolor{'+K+'}{r}(\\textcolor{'+L+'}{\\ell})'
     +' = \\sqrt{\\textcolor{'+K+'}{k}^{\\,2} + \\bigl[\\max\\!(0,\\;|\\textcolor{'+L+'}{\\ell}| - \\textcolor{'+A+'}{a})\\bigr]^{2}}',
     document.getElementById('eq2'),{throwOnError:false}
   );
-  // Stress-energy tensor — full 4x4 matrix
   katex.render(
     '\\textcolor{'+T+'}{T^{\\mu}{}_{\\nu}} = \\frac{\\textcolor{'+K+'}{k}^{\\,2}}{8\\pi\\,\\textcolor{'+K+'}{r}^{\\,4}}'
     +' \\begin{pmatrix}'
