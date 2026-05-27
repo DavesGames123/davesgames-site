@@ -40,7 +40,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .cmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}.cmap-btn{position:relative;padding:0;height:38px;border:2px solid var(--border-b);cursor:pointer;overflow:hidden;transition:all 0.15s;font-family:'JetBrains Mono',monospace;background:transparent}
 .cmap-btn canvas{display:block;width:100%;height:100%;pointer-events:none}.cmap-btn .cmap-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.6rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.9),0 0 8px rgba(0,0,0,0.7);pointer-events:none}
 .cmap-btn.active{border-color:var(--blue);box-shadow:0 0 12px rgba(150,200,255,0.3)}.cmap-btn:hover{border-color:rgba(150,200,255,0.5)}
-#canvas-wrap{flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;background:#000}#sim-canvas{position:absolute;top:0;left:0;display:block;width:100%;height:100%;cursor:crosshair;z-index:1}
+#canvas-wrap{flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;background:#000}#sim-canvas{position:absolute;top:0;left:0;width:100%;height:100%;z-index:1}
 .eq-panel{position:absolute;top:8px;left:8px;max-width:min(460px,calc(100% - 20px));background:rgba(9,12,20,0.92);border:1px solid var(--border-b);backdrop-filter:blur(14px);padding:10px 16px 12px;z-index:50;pointer-events:auto}
 .eq-head{display:flex;align-items:center;gap:7px;margin-bottom:4px;cursor:pointer}.eq-head .dot{width:5px;height:5px;background:var(--blue);box-shadow:0 0 8px var(--blue);flex-shrink:0}.eq-head .lbl{font-size:0.58rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue);font-weight:600}.eq-head .arrow{font-size:0.55rem;color:var(--text-faint);margin-left:auto}
 .eq-block{padding:2px 0}.eq-block+.eq-block{border-top:1px solid var(--border);margin-top:4px;padding-top:6px}.eq-sublabel{font-size:0.46rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-faint);margin-bottom:1px;font-weight:500}.eq-row{margin:1px 0;overflow-x:auto;overflow-y:hidden}.eq-row::-webkit-scrollbar{height:0}
@@ -119,7 +119,7 @@ katex.render(String.raw`\textcolor{${u}}{\vec{u}}=\textcolor{${u}}{\vec{w}}-\fra
 document.getElementById('eq-toggle').addEventListener('click',()=>{const el=document.getElementById('eq-panel');const c=el.classList.toggle('collapsed');el.querySelector('.arrow').textContent=c?'▼':'▲';});})();
 </script>
 <script>
-const canvas=document.getElementById('sim-canvas');const gl=canvas.getContext('webgl2',{antialias:false,depth:false,stencil:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
+const canvas=document.getElementById('sim-canvas');const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
 if(!gl){alert('WebGL2 required');throw new Error('No WebGL2');}
 // Robust float texture format detection with framebuffer completeness check
 gl.getExtension('EXT_color_buffer_float');
@@ -375,15 +375,15 @@ function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
 function display(){
   // Always re-render barrier when dirty (even if paused)
   if(barrierDirty){renderBarrierCanvas();barrierDirty=false;}
-  gl.viewport(0,0,canvas.width,canvas.height);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-  // DIAGNOSTIC: solid red for first 60 frames to verify canvas is visible
-  if(frame<60){gl.clearColor(1,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);drawOverlays();return;}
-  gl.useProgram(rP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(rU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(rU.uDye,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(rU.uBarrier,2);gl.uniform1f(rU.uGain,SIM.gain);gl.uniform1f(rU.uBloom,SIM.bloom);gl.uniform1i(rU.uCmap,SIM.cmap);dq();drawOverlays();}
+  gl.viewport(0,0,canvas.width,canvas.height);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.useProgram(rP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(rU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(rU.uDye,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(rU.uBarrier,2);gl.uniform1f(rU.uGain,SIM.gain);gl.uniform1f(rU.uBloom,SIM.bloom);gl.uniform1i(rU.uCmap,SIM.cmap);dq();drawOverlays();}
 
 /* ═══ OVERLAY ═══ */
 let overlayCanvas,overlayCtx;
-function initOverlay(){overlayCanvas=document.createElement('canvas');overlayCanvas.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5';document.getElementById('canvas-wrap').appendChild(overlayCanvas);overlayCtx=overlayCanvas.getContext('2d');}
-function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(overlayCanvas.width!==Math.floor(CW*dpr)||overlayCanvas.height!==Math.floor(CH*dpr)){overlayCanvas.width=Math.floor(CW*dpr);overlayCanvas.height=Math.floor(CH*dpr);overlayCtx.setTransform(dpr,0,0,dpr,0,0);}const ctx=overlayCtx;ctx.clearRect(0,0,CW,CH);
+function initOverlay(){overlayCanvas=document.createElement('canvas');overlayCanvas.id='display-canvas';overlayCanvas.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;cursor:crosshair';document.getElementById('canvas-wrap').appendChild(overlayCanvas);overlayCtx=overlayCanvas.getContext('2d');}
+function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(overlayCanvas.width!==Math.floor(CW*dpr)||overlayCanvas.height!==Math.floor(CH*dpr)){overlayCanvas.width=Math.floor(CW*dpr);overlayCanvas.height=Math.floor(CH*dpr);}const ctx=overlayCtx;ctx.setTransform(1,0,0,1,0,0);
+  // Composite: copy WebGL fluid render to this 2D canvas
+  ctx.drawImage(canvas,0,0,overlayCanvas.width,overlayCanvas.height);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
   for(const e of emitters){const sel=SIM.selectedId===e.id&&SIM.selectedType==='emitter';ctx.save();ctx.translate(e.x,e.y);ctx.rotate(e.angle);const hw=Math.max(e.width*CH,12);const ec=`rgb(${e.dyeR*255|0},${e.dyeG*255|0},${e.dyeB*255|0})`;
     if(e.type==='point'||e.type==='vortex'){ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.3)';ctx.lineWidth=sel?2:1;ctx.beginPath();ctx.arc(0,0,hw,0,Math.PI*2);ctx.stroke();if(e.type==='vortex'){ctx.strokeStyle='rgba(150,200,255,0.15)';ctx.lineWidth=1;for(let a=0;a<6;a++){const ang=a*Math.PI/3;ctx.beginPath();ctx.arc(0,0,hw*.65,ang,ang+.8);ctx.stroke();}}ctx.beginPath();ctx.arc(0,0,4,0,Math.PI*2);ctx.fillStyle=ec;ctx.fill();}
     else{const jd=6;ctx.fillStyle=sel?'rgba(255,200,50,0.12)':'rgba(255,200,50,0.05)';ctx.fillRect(-jd/2,-hw,jd,hw*2);ctx.strokeStyle=sel?ec:'rgba(255,200,50,0.3)';ctx.lineWidth=sel?2:1;ctx.strokeRect(-jd/2,-hw,jd,hw*2);ctx.strokeStyle=ec;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(jd/2,0);ctx.lineTo(jd/2+16,0);ctx.moveTo(jd/2+12,-4);ctx.lineTo(jd/2+16,0);ctx.lineTo(jd/2+12,4);ctx.stroke();}
@@ -439,9 +439,9 @@ function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(over
 let mouse={x:0,y:0,screenX:0,screenY:0,down:false,px:0,py:0};
 let dragObj=null,dragOffX=0,dragOffY=0,rotating=false;
 let mouseVortex=0; // +1=CW, -1=CCW
-canvas.addEventListener('contextmenu',e=>e.preventDefault());
+// Events bound to overlay canvas after init (see bottom)
 
-function gp(e){const r=canvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{sx:t.clientX-r.left,sy:t.clientY-r.top};}
+function gp(e){const r=document.getElementById('canvas-wrap').getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{sx:t.clientX-r.left,sy:t.clientY-r.top};}
 function hitObj(sx,sy){for(let i=emitters.length-1;i>=0;i--){const e=emitters[i];if(Math.sqrt((sx-e.x)**2+(sy-e.y)**2)<e.width*CH+15)return{obj:e,type:'emitter'};}
   for(let i=shapes.length-1;i>=0;i--){const s=shapes[i];const ca=Math.cos(-s.angle),sa=Math.sin(-s.angle);const dx=sx-s.x,dy=sy-s.y;if(Math.abs(dx*ca-dy*sa)<s.w/2+12&&Math.abs(dx*sa+dy*ca)<s.h/2+12)return{obj:s,type:'shape'};}return null;}
 
@@ -456,8 +456,7 @@ function onMove(e){const{sx,sy}=gp(e);mouse.screenX=sx;mouse.screenY=sy;
   if(dragObj){e.preventDefault();if(rotating)dragObj.angle=Math.atan2(sy-dragObj.y,sx-dragObj.x);else{dragObj.x=sx+dragOffX;dragObj.y=sy+dragOffY;}barrierDirty=true;return;}
   if(mouse.down){mouse.x=sx/CW;mouse.y=1-sy/CH;}}
 function onUp(){if(dragObj){dragObj.vx=0;dragObj.vy=0;}dragObj=null;rotating=false;mouse.down=false;mouseVortex=0;}
-canvas.addEventListener('mousedown',onDown);window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
-canvas.addEventListener('touchstart',e=>{if(e.touches.length===1)onDown(e);},{passive:false});canvas.addEventListener('touchmove',e=>{if(e.touches.length===1)onMove(e);},{passive:false});canvas.addEventListener('touchend',onUp,{passive:false});
+// Input events bound after initOverlay (see bottom)
 
 /* ═══ DRAW — Y-flip fix ═══ */
 function drawBrush(sx,sy){const bx=sx/CW*simW,by=(1-sy/CH)*simH,r=SIM.brushSize/CW*simW;
@@ -466,7 +465,7 @@ function drawBrush(sx,sy){const bx=sx/CW*simW,by=(1-sy/CH)*simH,r=SIM.brushSize/
 function clearDrawn(){drawnCtx.clearRect(0,0,simW,simH);barrierDirty=true;}
 function toggleDraw(){SIM.drawMode=!SIM.drawMode;if(SIM.drawMode)SIM.eraseMode=false;updD();}
 function toggleErase(){SIM.eraseMode=!SIM.eraseMode;if(SIM.eraseMode)SIM.drawMode=false;updD();}
-function updD(){document.getElementById('tog-draw').className='tog-btn '+(SIM.drawMode?'on':'off');document.getElementById('tog-erase').className='tog-btn '+(SIM.eraseMode?'on':'off');canvas.style.cursor=(SIM.drawMode||SIM.eraseMode)?'none':'crosshair';document.getElementById('st-mode').textContent=SIM.drawMode?'draw':SIM.eraseMode?'erase':'vortex';}
+function updD(){document.getElementById('tog-draw').className='tog-btn '+(SIM.drawMode?'on':'off');document.getElementById('tog-erase').className='tog-btn '+(SIM.eraseMode?'on':'off');if(overlayCanvas)overlayCanvas.style.cursor=(SIM.drawMode||SIM.eraseMode)?'none':'crosshair';document.getElementById('st-mode').textContent=SIM.drawMode?'draw':SIM.eraseMode?'erase':'vortex';}
 
 /* ═══ UI ═══ */
 function sg(el){el.style.setProperty('--pct',((el.value-el.min)/(el.max-el.min)*100)+'%');}
@@ -620,7 +619,12 @@ function loop(now){requestAnimationFrame(loop);deltaTime=Math.min((now-lastTime)
   if(fpsAccum>=.5){document.getElementById('st-fps').textContent=Math.round(fpsCount/fpsAccum)+' fps';fpsAccum=0;fpsCount=0;}
   if(SIM.playing){step();frame++;}display();document.getElementById('st-frame').textContent='frame '+frame;}
 
-initOverlay();resize();renderCmapPreviews();
+initOverlay();
+// Bind input events to the visible overlay canvas
+overlayCanvas.addEventListener('contextmenu',e=>e.preventDefault());
+overlayCanvas.addEventListener('mousedown',onDown);window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
+overlayCanvas.addEventListener('touchstart',e=>{if(e.touches.length===1)onDown(e);},{passive:false});overlayCanvas.addEventListener('touchmove',e=>{if(e.touches.length===1)onMove(e);},{passive:false});overlayCanvas.addEventListener('touchend',onUp,{passive:false});
+resize();renderCmapPreviews();
 setTimeout(()=>{defaultSetup();requestAnimationFrame(loop);},60);
 </script>
 </body>
