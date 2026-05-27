@@ -83,7 +83,7 @@
   /* ═══════════════════════════════════════════
      MOBILE — aggressive compact layout
      ═══════════════════════════════════════════ */
-  @media(max-width:600px){
+  @media(max-width:768px){
     /* Hide: stats, minimap, hint, hud */
     .hud, .stats, #minimap, .hint { display:none!important }
     .ctrl-sep, .mob-hide { display:none!important }
@@ -463,7 +463,7 @@ window.dismissWarn=function(){
   document.getElementById('gpuWarn').classList.add('hide');
   document.getElementById('ctrlWrap').style.display='flex';
   document.getElementById('traverseBar').style.display='flex';
-  var mob=window.innerWidth<600;
+  var mob=window.innerWidth<768;
   document.getElementById('eqPanel').style.display='flex';
   if(mob){
     // Collapse equations on mobile
@@ -555,14 +555,14 @@ document.getElementById('zoomSlider').addEventListener('input',function(){camL=+
 document.getElementById('throatSlider').addEventListener('input',function(){throatK=+this.value;document.getElementById('throatVal').textContent=(+this.value).toFixed(1);});
 document.getElementById('lengthSlider').addEventListener('input',function(){throatA=+this.value;document.getElementById('lengthVal').textContent=(+this.value).toFixed(1);});
 
-function resize(){var dpr=Math.min(window.devicePixelRatio||1,2),mob=window.innerWidth<600,sc=mob?0.25:0.4;
+function resize(){var dpr=Math.min(window.devicePixelRatio||1,2),mob=window.innerWidth<768,sc=mob?0.25:0.4;
   canvas.width=Math.floor(window.innerWidth*dpr*sc);canvas.height=Math.floor(window.innerHeight*dpr*sc);
   gl.viewport(0,0,canvas.width,canvas.height);document.getElementById('res').textContent=canvas.width+'×'+canvas.height;}
 window.addEventListener('resize',resize);resize();
 
 var mmCanvas=document.getElementById('minimap'),mmCtx=mmCanvas.getContext('2d');
 function drawMinimap(){
-  if(window.innerWidth<600)return; // skip on mobile
+  if(window.innerWidth<768)return; // skip on mobile
   var W=mmCanvas.width,H=mmCanvas.height;
   mmCtx.clearRect(0,0,W,H);
   var k=throatK,a=throatA;
