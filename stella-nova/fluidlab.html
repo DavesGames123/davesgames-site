@@ -49,6 +49,9 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 #status-bar{height:22px;flex-shrink:0;background:rgba(14,17,24,0.94);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:14px;z-index:50;font-size:0.54rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500}#status-bar .sep{width:1px;height:10px;background:var(--border-b)}
 @media(max-width:599px){:root{--panel-w:0px}#panel{position:fixed;top:0;left:0;bottom:0;width:290px;z-index:300;transform:translateX(-100%);transition:transform 0.25s ease}#panel.mob-open{transform:translateX(0)}.mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:250}#panel.mob-open ~ .mob-overlay{display:block}}
 #mob-btn{display:none;position:fixed;top:6px;left:6px;z-index:200;width:38px;height:38px;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);color:var(--blue);font-size:1.2rem;cursor:pointer;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;backdrop-filter:blur(8px)}@media(max-width:599px){#mob-btn{display:flex}}
+#vec-btn{position:absolute;bottom:28px;right:10px;z-index:20;height:32px;padding:0 12px;background:rgba(9,12,20,0.85);border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:5px;backdrop-filter:blur(8px);transition:all 0.15s;font-weight:600}
+#vec-btn:hover{border-color:rgba(150,200,255,0.4);color:var(--text)}
+#vec-btn.on{background:rgba(150,200,255,0.12);border-color:rgba(150,200,255,0.4);color:var(--blue)}
 </style>
 </head>
 <body>
@@ -103,6 +106,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
   </div></div>
   <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
   <div id="canvas-wrap"><canvas id="sim-canvas"></canvas>
+    <button id="vec-btn" onclick="SIM.showVectors=!SIM.showVectors;this.className=SIM.showVectors?'on':'';this.innerHTML=SIM.showVectors?'→ Vectors ON':'→ Vectors';document.getElementById('tog-vectors').className='tog-btn '+(SIM.showVectors?'on':'off')">→ Vectors</button>
     <section class="eq-panel collapsed" id="eq-panel"><div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Navier-Stokes Equations</span><span class="arrow">▼</span></div>
       <div class="eq-blocks"><div class="eq-block"><div class="eq-sublabel">Momentum</div><div class="eq-row" id="eq-mom"></div></div><div class="eq-block"><div class="eq-sublabel">Incompressibility</div><div class="eq-row" id="eq-cont"></div></div><div class="eq-block"><div class="eq-sublabel">Pressure Poisson</div><div class="eq-row" id="eq-pois"></div></div><div class="eq-block"><div class="eq-sublabel">Velocity Correction</div><div class="eq-row" id="eq-corr"></div></div></div>
     </section>
@@ -212,12 +216,12 @@ let barrierCanvas,barrierCtx,barrierTex,drawnCanvas,drawnCtx,barrierDirty=true;
 function initBarrierCanvas(){barrierCanvas=document.createElement('canvas');barrierCanvas.width=simW;barrierCanvas.height=simH;barrierCtx=barrierCanvas.getContext('2d',{willReadFrequently:true});drawnCanvas=document.createElement('canvas');drawnCanvas.width=simW;drawnCanvas.height=simH;drawnCtx=drawnCanvas.getContext('2d');barrierDirty=true;}
 function drawShapePath(ctx,type,sw,sh,teeth,pts){
   teeth=teeth||10;pts=pts||5;
-  if(type==='circle'){ctx.beginPath();ctx.arc(0,0,sw/2,0,Math.PI*2);ctx.fill();}
+  if(type==='circle'){ctx.beginPath();ctx.ellipse(0,0,sw/2,sh/2,0,0,Math.PI*2);ctx.fill();}
   else if(type==='rect'){ctx.fillRect(-sw/2,-sh/2,sw,sh);}
   else if(type==='airfoil'){ctx.beginPath();ctx.moveTo(sw/2,0);ctx.bezierCurveTo(sw*.3,-sh*.55,-sw*.3,-sh*.25,-sw/2,0);ctx.bezierCurveTo(-sw*.3,sh*.25,sw*.3,sh*.55,sw/2,0);ctx.fill();}
   else if(type==='wedge'){ctx.beginPath();ctx.moveTo(sw/2,0);ctx.lineTo(-sw/2,-sh/2);ctx.lineTo(-sw/2,sh/2);ctx.closePath();ctx.fill();}
-  else if(type==='gear'){const or=sw/2,ir=sw*.34,tw=Math.PI/teeth*.55;ctx.beginPath();for(let i=0;i<teeth;i++){const a=i/teeth*Math.PI*2;ctx.lineTo(Math.cos(a-tw)*or,Math.sin(a-tw)*or);ctx.lineTo(Math.cos(a+tw)*or,Math.sin(a+tw)*or);const m=a+Math.PI/teeth;ctx.lineTo(Math.cos(m-tw*.6)*ir,Math.sin(m-tw*.6)*ir);ctx.lineTo(Math.cos(m+tw*.6)*ir,Math.sin(m+tw*.6)*ir);}ctx.closePath();ctx.fill();ctx.globalCompositeOperation='destination-out';ctx.beginPath();ctx.arc(0,0,sw*.15,0,Math.PI*2);ctx.fill();ctx.globalCompositeOperation='source-over';}
-  else if(type==='star'){const or=sw/2,ir=sw*.2;ctx.beginPath();for(let i=0;i<pts*2;i++){const a=i/pts*Math.PI-Math.PI/2,r=i%2===0?or:ir;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);}ctx.closePath();ctx.fill();}
+  else if(type==='gear'){const ys=sh/sw;ctx.save();ctx.scale(1,ys);const or=sw/2,ir=sw*.34,tw=Math.PI/teeth*.55;ctx.beginPath();for(let i=0;i<teeth;i++){const a=i/teeth*Math.PI*2;ctx.lineTo(Math.cos(a-tw)*or,Math.sin(a-tw)*or);ctx.lineTo(Math.cos(a+tw)*or,Math.sin(a+tw)*or);const m=a+Math.PI/teeth;ctx.lineTo(Math.cos(m-tw*.6)*ir,Math.sin(m-tw*.6)*ir);ctx.lineTo(Math.cos(m+tw*.6)*ir,Math.sin(m+tw*.6)*ir);}ctx.closePath();ctx.fill();ctx.globalCompositeOperation='destination-out';ctx.beginPath();ctx.arc(0,0,sw*.15,0,Math.PI*2);ctx.fill();ctx.globalCompositeOperation='source-over';ctx.restore();}
+  else if(type==='star'){const ys=sh/sw;ctx.save();ctx.scale(1,ys);const or=sw/2,ir=sw*.2;ctx.beginPath();for(let i=0;i<pts*2;i++){const a=i/pts*Math.PI-Math.PI/2,r=i%2===0?or:ir;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);}ctx.closePath();ctx.fill();ctx.restore();}
   else if(type==='tesla'){const hw=sw/2,hh=sh/2,wt=sh*.08;ctx.fillRect(-hw,-hh,sw,wt);ctx.fillRect(-hw,hh-wt,sw,wt);const nd=3,seg=sw/(nd+1);for(let i=0;i<nd;i++){const cx=-hw+seg*(i+1),dir=i%2===0?-1:1;ctx.save();ctx.translate(cx,0);ctx.beginPath();ctx.moveTo(-seg*.3,dir*wt*.5);ctx.quadraticCurveTo(-seg*.05,dir*hh*.7,seg*.15,dir*hh*.5);ctx.lineTo(seg*.15,dir*(hh*.5-wt));ctx.quadraticCurveTo(-seg*.05,dir*(hh*.7-wt),-seg*.3,dir*(wt*.5+wt));ctx.closePath();ctx.fill();if(dir>0)ctx.fillRect(-wt/2,-hh*.3,wt,hh*.5);else ctx.fillRect(-wt/2,-hh*.2,wt,hh*.5);ctx.restore();}}}
 function renderBarrierCanvas(){const ctx=barrierCtx;ctx.clearRect(0,0,simW,simH);ctx.fillStyle='#fff';for(const s of shapes){const sx=s.x/CW*simW,sy=(1-s.y/CH)*simH,sw=s.w/CW*simW,sh=s.h/CH*simH;ctx.save();ctx.translate(sx,sy);ctx.rotate(-s.angle);drawShapePath(ctx,s.type,sw,sh,s.teeth,s.points);ctx.restore();}ctx.drawImage(drawnCanvas,0,0);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,barrierCanvas);}
 
@@ -388,7 +392,13 @@ const gP=mkP(VS,GRD_FS),gUn=gU(gP,['uPressure','uVelocity','uBarrier','uInvRes']
 const rP=mkP(VS,DSP_FS),rU=gU(rP,['uVelocity','uDye','uBarrier','uGain','uBloom','uCmap']);
 
 let vF,pF,dvF,dyF;
-function initFBOs(){const isMob=window.innerWidth<600;const scale=isMob?0.5:0.75;simW=Math.floor(canvas.width*scale);simH=Math.floor(canvas.height*scale);if(isMob){simW=Math.min(simW,384);simH=Math.min(simH,384);}simW=Math.max(simW,64);simH=Math.max(simH,64);vF=mkDF(simW,simH);pF=mkDF(simW,simH);dvF=mkF(simW,simH);dyF=mkDF(simW,simH);
+function initFBOs(){const isMob=window.innerWidth<600;const scale=isMob?0.5:0.75;
+  // MOBILE FIX: Maintain screen aspect ratio in sim grid.
+  // Old code forced 384×384 square on portrait screens, distorting all shapes.
+  const maxSide=isMob?384:1024;
+  if(canvas.width>=canvas.height){simW=Math.min(Math.floor(canvas.width*scale),maxSide);simH=Math.max(64,Math.round(simW*canvas.height/canvas.width));}
+  else{simH=Math.min(Math.floor(canvas.height*scale),maxSide);simW=Math.max(64,Math.round(simH*canvas.width/canvas.height));}
+  simW=Math.max(simW,64);simH=Math.max(simH,64);vF=mkDF(simW,simH);pF=mkDF(simW,simH);dvF=mkF(simW,simH);dyF=mkDF(simW,simH);
   barrierTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,simW,simH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);initBarrierCanvas();document.getElementById('st-res').textContent=simW+'×'+simH+(TEX_CAN_LINEAR?'':' [nearest]');}
 function resize(){const w=document.getElementById('canvas-wrap');CW=w.clientWidth;CH=w.clientHeight;if(CW<10||CH<10){CW=300;CH=300;}const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.floor(CW*dpr);canvas.height=Math.floor(CH*dpr);initFBOs();frame=0;}
 if(window.ResizeObserver)new ResizeObserver(()=>resize()).observe(document.getElementById('canvas-wrap'));else window.addEventListener('resize',resize);
@@ -640,7 +650,7 @@ function preset(name){clearAll();
 function defaultSetup(){
   const e1=createEmitter('jet',40,CH*.42);e1.strength=100;e1.width=.06;e1.dyeR=.15;e1.dyeG=.5;e1.dyeB=1;emitters.push(e1);
   const e2=createEmitter('jet',40,CH*.58);e2.strength=100;e2.width=.06;e2.dyeR=1;e2.dyeG=.35;e2.dyeB=.1;emitters.push(e2);
-  const s=createShape('circle',CW*.35,CH*.5);s.w=150;s.h=150;shapes.push(s);
+  const s=createShape('circle',CW*.35,CH*.5);s.w=100;s.h=100;shapes.push(s);
   barrierDirty=true;rebuildList();}
 
 function loop(now){requestAnimationFrame(loop);deltaTime=Math.min((now-lastTime)/1000,.033);lastTime=now;fpsAccum+=deltaTime;fpsCount++;
