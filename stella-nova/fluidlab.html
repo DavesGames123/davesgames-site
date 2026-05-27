@@ -284,15 +284,29 @@ function mkF(w,h){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
 const qVAO=gl.createVertexArray();gl.bindVertexArray(qVAO);const qb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,qb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);function dq(){gl.bindVertexArray(qVAO);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);}
 const VS=`#version 300 es\nin vec2 aPosition;out vec2 vUV;void main(){vUV=aPosition*.5+.5;gl_Position=vec4(aPosition,0,1);}`;
 
+// Manual bilinear interpolation for mobile GPUs without OES_texture_float_linear
+const BILERP_GLSL=TEX_CAN_LINEAR?'':`
+vec4 bilerp(sampler2D tex,vec2 uv,vec2 invRes){
+  vec2 res=1.0/invRes;vec2 st=uv*res-0.5;
+  vec2 iuv=floor(st);vec2 fuv=fract(st);
+  vec4 a=texture(tex,(iuv+vec2(0.5,0.5))*invRes);
+  vec4 b=texture(tex,(iuv+vec2(1.5,0.5))*invRes);
+  vec4 c=texture(tex,(iuv+vec2(0.5,1.5))*invRes);
+  vec4 d=texture(tex,(iuv+vec2(1.5,1.5))*invRes);
+  return mix(mix(a,b,fuv.x),mix(c,d,fuv.x),fuv.y);}`;
+const SAMPLE_VEL=TEX_CAN_LINEAR?'texture(uVelocity,sp).xy':'bilerp(uVelocity,sp,uInvRes).xy';
+const SAMPLE_DYE=TEX_CAN_LINEAR?'texture(uDye,sp)':'bilerp(uDye,sp,uInvRes)';
+
 const ADV_FS=`#version 300 es
 precision highp float;in vec2 vUV;out vec4 fragColor;
 uniform sampler2D uVelocity,uDye,uBarrier;uniform vec2 uInvRes;uniform float uDt,uAspect;uniform int uMode;
 uniform int uNumEmitters,uNumShapes;uniform vec4 uEmitA[${MAX_E}],uEmitB[${MAX_E}],uEmitC[${MAX_E}];uniform vec4 uShapeA[${MAX_S}];
 uniform vec2 uMousePos;uniform float uMouseDown,uMouseVortex,uGravity;
+${BILERP_GLSL}
 void main(){vec2 uv=vUV;float barrier=texture(uBarrier,uv).r;vec2 oldVel=texture(uVelocity,uv).xy;
 if(uMode==0){
   if(barrier>.1){vec2 sv=vec2(0);for(int i=0;i<${MAX_S};i++){if(i>=uNumShapes)break;vec2 sc=uShapeA[i].xy;float om=uShapeA[i].z,rad=uShapeA[i].w;vec2 d=uv-sc;d.x*=uAspect;if(length(d)<rad*1.3&&abs(om)>.001){sv=vec2(-(uv.y-sc.y),(uv.x-sc.x))*om*800.0;}}fragColor=vec4(sv,0,0);return;}
-  vec2 sp=uv-oldVel*uDt*uInvRes;vec2 vel=texture(uVelocity,sp).xy;
+  vec2 sp=uv-oldVel*uDt*uInvRes;vec2 vel=${SAMPLE_VEL};
   for(int i=0;i<${MAX_E};i++){if(i>=uNumEmitters)break;if(uEmitB[i].w<.5)continue;
     vec2 ep=uEmitA[i].xy,ed=uEmitA[i].zw;float es=uEmitB[i].x,ew=uEmitB[i].y;int et=int(uEmitB[i].z);
     vec2 d=uv-ep;
@@ -319,7 +333,7 @@ if(uMode==0){
   float bw=uInvRes.x,bh=uInvRes.y;if(uv.x<bw||uv.x>1.0-bw||uv.y<bh||uv.y>1.0-bh)vel=vec2(0);
   fragColor=vec4(vel,0,0);
 }else{
-  vec2 sp=uv-oldVel*uDt*uInvRes;vec4 dye=texture(uDye,sp);if(barrier>.1){fragColor=vec4(0);return;}dye*=.997;
+  vec2 sp=uv-oldVel*uDt*uInvRes;vec4 dye=${SAMPLE_DYE};if(barrier>.1){fragColor=vec4(0);return;}dye*=.997;
   for(int i=0;i<${MAX_E};i++){if(i>=uNumEmitters)break;if(uEmitB[i].w<.5)continue;
     vec2 ep=uEmitA[i].xy,ed=uEmitA[i].zw;float ew=uEmitB[i].y;int et=int(uEmitB[i].z);vec3 ec=uEmitC[i].rgb;vec2 d=uv-ep;
     if(et==0){
@@ -349,10 +363,19 @@ fragColor=vec4(texture(uVelocity,uv).xy-vec2(texture(uPressure,uv+vec2(uInvRes.x
 
 const DSP_FS=`#version 300 es
 precision highp float;in vec2 vUV;out vec4 fragColor;uniform sampler2D uVelocity,uDye,uBarrier;uniform float uGain,uBloom;uniform int uCmap;
+${TEX_CAN_LINEAR?'':
+`vec4 bilerp2(sampler2D tex,vec2 uv){
+  vec2 res=vec2(textureSize(tex,0));vec2 st=uv*res-0.5;
+  vec2 iuv=floor(st);vec2 fuv=fract(st);vec2 inv=1.0/res;
+  vec4 a=texture(tex,(iuv+vec2(0.5,0.5))*inv);
+  vec4 b=texture(tex,(iuv+vec2(1.5,0.5))*inv);
+  vec4 c=texture(tex,(iuv+vec2(0.5,1.5))*inv);
+  vec4 d=texture(tex,(iuv+vec2(1.5,1.5))*inv);
+  return mix(mix(a,b,fuv.x),mix(c,d,fuv.x),fuv.y);}`}
 vec3 cmP(float t){t=clamp(t,0.,1.);const vec3 c[8]=vec3[8](vec3(0),vec3(.08,.02,.22),vec3(.25,.05,.45),vec3(.55,.08,.35),vec3(.8,.2,.05),vec3(1,.55,0),vec3(1,.85,.3),vec3(1,1,.92));float s=t*7.;if(s>=7.)return c[7];int i=int(s);return mix(c[i],c[i+1],fract(s));}
 vec3 cmV(float t){t=clamp(t,0.,1.);const vec3 c[8]=vec3[8](vec3(.267,.004,.329),vec3(.283,.141,.458),vec3(.254,.265,.530),vec3(.164,.471,.558),vec3(.128,.567,.551),vec3(.134,.658,.517),vec3(.478,.821,.318),vec3(.993,.906,.144));float s=t*7.;if(s>=7.)return c[7];int i=int(s);return mix(c[i],c[i+1],fract(s));}
 vec3 cmO(float t){t=clamp(t,0.,1.);const vec3 c[8]=vec3[8](vec3(.02,.02,.15),vec3(.02,.1,.35),vec3(0,.25,.55),vec3(0,.45,.55),vec3(0,.6,.5),vec3(.1,.75,.45),vec3(.4,.85,.3),vec3(1,.95,.3));float s=t*7.;if(s>=7.)return c[7];int i=int(s);return mix(c[i],c[i+1],fract(s));}
-void main(){vec2 uv=vUV;float barrier=texture(uBarrier,uv).r;vec2 vel=texture(uVelocity,uv).xy;vec3 dye=texture(uDye,uv).rgb;vec3 col;
+void main(){vec2 uv=vUV;float barrier=texture(uBarrier,uv).r;${TEX_CAN_LINEAR?'vec2 vel=texture(uVelocity,uv).xy;vec3 dye=texture(uDye,uv).rgb;':'vec2 vel=bilerp2(uVelocity,uv).xy;vec3 dye=bilerp2(uDye,uv).rgb;'}vec3 col;
   if(barrier>.1){col=vec3(.10,.14,.20);vec2 ts=vec2(1)/vec2(textureSize(uBarrier,0));float edge=abs(texture(uBarrier,uv+vec2(ts.x,0)).r-texture(uBarrier,uv-vec2(ts.x,0)).r)+abs(texture(uBarrier,uv+vec2(0,ts.y)).r-texture(uBarrier,uv-vec2(0,ts.y)).r);col+=vec3(.12,.25,.35)*clamp(edge*3.,0.,1.);}
   else{float speed=length(vel);float t=clamp(log(1.+speed*uGain*.2)/2.5,0.,1.);
     if(uCmap==0)col=cmP(t);else if(uCmap==1)col=cmV(t);else if(uCmap==2)col=cmO(t);else{col=dye*uGain*1.5+vec3(t*.04);}col+=col*uBloom;}
