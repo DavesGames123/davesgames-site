@@ -121,33 +121,77 @@ document.getElementById('eq-toggle').addEventListener('click',()=>{const el=docu
 <script>
 const canvas=document.getElementById('sim-canvas');const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
 if(!gl){alert('WebGL2 required');throw new Error('No WebGL2');}
-// Robust float texture format detection with framebuffer completeness check
+
+// ═══ MOBILE FIX: Properly detect float texture + linear filtering support ═══
 gl.getExtension('EXT_color_buffer_float');
 gl.getExtension('EXT_color_buffer_half_float');
-gl.getExtension('OES_texture_float_linear');
+const hasFloatLinear=!!gl.getExtension('OES_texture_float_linear');
+const hasHalfFloatLinear=!!gl.getExtension('OES_texture_half_float_linear');
+
 function detectTexFormat(){
-  while(gl.getError()!==gl.NO_ERROR){} // drain error queue
+  while(gl.getError()!==gl.NO_ERROR){}
   const formats=[[gl.RGBA32F,gl.FLOAT,'RGBA32F'],[gl.RGBA16F,gl.HALF_FLOAT,'RGBA16F'],[gl.RGBA16F,gl.FLOAT,'RGBA16F/FLOAT'],[gl.RGBA8,gl.UNSIGNED_BYTE,'RGBA8']];
   for(const[ifmt,type,name] of formats){
     try{
-      while(gl.getError()!==gl.NO_ERROR){} // drain before each attempt
+      while(gl.getError()!==gl.NO_ERROR){}
       const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
       gl.texImage2D(gl.TEXTURE_2D,0,ifmt,4,4,0,gl.RGBA,type,null);
       if(gl.getError()!==gl.NO_ERROR){gl.deleteTexture(t);continue;}
-      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);
-      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+      // MOBILE FIX: Use NEAREST for test if linear filtering isn't supported for this type
+      const canLinear=(type===gl.FLOAT&&hasFloatLinear)||(type===gl.HALF_FLOAT&&hasHalfFloatLinear)||(type===gl.UNSIGNED_BYTE);
+      const filter=canLinear?gl.LINEAR:gl.NEAREST;
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,filter);
+      gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,filter);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
       const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);
       gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
       const ok=gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE;
       gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.deleteFramebuffer(f);gl.deleteTexture(t);
-      if(ok){console.log('FluidLab: using '+name);return{fmt:ifmt,type,name};}
+      if(ok){console.log('FluidLab: using '+name+(canLinear?' (linear)':' (nearest)'));return{fmt:ifmt,type,name,canLinear};}
     }catch(e){continue;}
   }
-  console.error('FluidLab: no renderable format found');return{fmt:gl.RGBA16F,type:gl.HALF_FLOAT,name:'FALLBACK'};
+  console.error('FluidLab: no renderable format found');return{fmt:gl.RGBA16F,type:gl.HALF_FLOAT,name:'FALLBACK',canLinear:false};
 }
-const{fmt:TEX_FMT,type:TEX_TYPE,name:TEX_NAME}=detectTexFormat();
+const{fmt:TEX_FMT,type:TEX_TYPE,name:TEX_NAME,canLinear:TEX_CAN_LINEAR}=detectTexFormat();
+// MOBILE FIX: Use NEAREST when linear filtering isn't available for this float format
+const TEX_FILTER=TEX_CAN_LINEAR?gl.LINEAR:gl.NEAREST;
+
+// MOBILE FIX: Detect the correct readPixels type for the chosen framebuffer format
+let READ_TYPE=gl.FLOAT;
+let ReadArrayCtor=Float32Array;
+(function detectReadFormat(){
+  while(gl.getError()!==gl.NO_ERROR){}
+  const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,TEX_FMT,4,4,0,gl.RGBA,TEX_TYPE,null);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,TEX_FILTER);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,TEX_FILTER);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);
+  const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);
+  // Ask the implementation what type it can actually read
+  const implType=gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_TYPE);
+  const implFmt=gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_FORMAT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.deleteFramebuffer(f);gl.deleteTexture(t);
+  if(implType===gl.FLOAT){READ_TYPE=gl.FLOAT;ReadArrayCtor=Float32Array;}
+  else if(implType===gl.HALF_FLOAT){READ_TYPE=gl.HALF_FLOAT;ReadArrayCtor=Uint16Array;}
+  else if(implType===gl.UNSIGNED_BYTE){READ_TYPE=gl.UNSIGNED_BYTE;ReadArrayCtor=Uint8Array;}
+  else{READ_TYPE=gl.FLOAT;ReadArrayCtor=Float32Array;}
+  console.log('FluidLab: readPixels type='+implType+' (FLOAT='+gl.FLOAT+', HALF='+gl.HALF_FLOAT+', UBYTE='+gl.UNSIGNED_BYTE+')');
+})();
+
+// Helper: decode read buffer value to float regardless of source type
+function decodeReadValue(arr,i){
+  if(ReadArrayCtor===Float32Array)return arr[i];
+  if(ReadArrayCtor===Uint8Array)return(arr[i]/255.0)*2.0-1.0; // rough: map 0-255 to -1..1
+  // HALF_FLOAT as Uint16 — manual decode
+  const h=arr[i],s=(h>>15)&1,e=(h>>10)&0x1f,m=h&0x3ff;
+  if(e===0)return(s?-1:1)*(m/1024)*Math.pow(2,-14);
+  if(e===31)return m?NaN:(s?-Infinity:Infinity);
+  return(s?-1:1)*Math.pow(2,e-15)*(1+m/1024);
+}
+
 const MAX_E=24,MAX_S=12;
 const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200};
 let emitters=[],shapes=[],nextId=0,frame=0,CW=100,CH=100,simW=100,simH=100;
@@ -182,11 +226,14 @@ function sampleVelocityAt(wx,wy){
   try{
     const u=wx/CW,v=1-wy/CH;
     const px=Math.max(0,Math.min(simW-1,Math.floor(u*simW))),py=Math.max(0,Math.min(simH-1,Math.floor(v*simH)));
-    gl.bindFramebuffer(gl.FRAMEBUFFER,vF.read.fbo);const buf=new Float32Array(4);
-    gl.readPixels(px,py,1,1,gl.RGBA,gl.FLOAT,buf);
+    gl.bindFramebuffer(gl.FRAMEBUFFER,vF.read.fbo);
+    // MOBILE FIX: Use the implementation's preferred read type
+    const buf=new ReadArrayCtor(4);
+    gl.readPixels(px,py,1,1,gl.RGBA,READ_TYPE,buf);
+    if(gl.getError()!==gl.NO_ERROR){buf[0]=0;buf[1]=0;buf[2]=0;buf[3]=0;}
     gl.bindFramebuffer(gl.FRAMEBUFFER,null);
-    while(gl.getError()!==gl.NO_ERROR){} // drain any GL errors
-    return[buf[0],-buf[1]];
+    while(gl.getError()!==gl.NO_ERROR){}
+    return[decodeReadValue(buf,0),-decodeReadValue(buf,1)];
   }catch(e){
     gl.bindFramebuffer(gl.FRAMEBUFFER,null);
     while(gl.getError()!==gl.NO_ERROR){}
@@ -196,27 +243,21 @@ function sampleVelocityAt(wx,wy){
 function integrateShapes(){
   for(const s of shapes){if(s.spin!==0&&s!==dragObj)s.angle+=s.spin*deltaTime;}
   for(const e of emitters){if(e.spin!==0&&e!==dragObj)e.angle+=e.spin*deltaTime;}
-  // Fluid forces on dynamic shapes
   for(const s of shapes){
     if(s.fixed||s===dragObj)continue;
     const[fvx,fvy]=sampleVelocityAt(s.x,s.y);
-    const drag=8.0; // fluid coupling strength
-    // Apply fluid velocity as drag force on rigid body
+    const drag=8.0;
     s.vx+=(fvx*drag-s.vx*0.3)*deltaTime*60;
     s.vy+=(fvy*drag-s.vy*0.3)*deltaTime*60;
-    // Gravity
     if(SIM.gravity) s.vy+=SIM.gravityStr*0.5*deltaTime;
-    // Torque from velocity gradient (rough approximation)
     const[lvx]=sampleVelocityAt(s.x-10,s.y);
     const[rvx]=sampleVelocityAt(s.x+10,s.y);
     s.va+=(rvx-lvx)*0.5*deltaTime*60;
     s.x+=s.vx*deltaTime;s.y+=s.vy*deltaTime;s.angle+=s.va*deltaTime;
-    // Wall containment
     const M=30;if(s.x<M){s.x=M;s.vx=Math.abs(s.vx)*0.3;}if(s.x>CW-M){s.x=CW-M;s.vx=-Math.abs(s.vx)*0.3;}
     if(s.y<M){s.y=M;s.vy=Math.abs(s.vy)*0.3;}if(s.y>CH-M){s.y=CH-M;s.vy=-Math.abs(s.vy)*0.3;}
     s.vx*=0.99;s.vy*=0.99;s.va*=0.95;s.va=Math.max(-6,Math.min(6,s.va));
   }
-  // Shape-shape collisions
   const REST=0.15,PAD=8,SKIN=20,CD=10;
   for(let i=0;i<shapes.length;i++){const a=shapes[i],ra=Math.max(a.w,a.h)*.5+PAD;
     for(let j=i+1;j<shapes.length;j++){const b=shapes[j],rb=Math.max(b.w,b.h)*.5+PAD;
@@ -236,10 +277,10 @@ function mkP(v,f){const p=gl.createProgram();gl.attachShader(p,compS(gl.VERTEX_S
 function gU(p,ns){const u={};for(const n of ns)u[n]=gl.getUniformLocation(p,n);return u;}
 function mkDF(w,h){const mk=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
     const data=TEX_TYPE===gl.FLOAT?new Float32Array(w*h*4):TEX_TYPE===gl.HALF_FLOAT?new Uint16Array(w*h*4):new Uint8Array(w*h*4);
-    gl.texImage2D(gl.TEXTURE_2D,0,TEX_FMT,w,h,0,gl.RGBA,TEX_TYPE,data);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return{tex:t,fbo:f};};let a=mk(),b=mk();return{get read(){return a},get write(){return b},swap(){[a,b]=[b,a]}};}
+    gl.texImage2D(gl.TEXTURE_2D,0,TEX_FMT,w,h,0,gl.RGBA,TEX_TYPE,data);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,TEX_FILTER);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,TEX_FILTER);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return{tex:t,fbo:f};};let a=mk(),b=mk();return{get read(){return a},get write(){return b},swap(){[a,b]=[b,a]}};}
 function mkF(w,h){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
   const data=TEX_TYPE===gl.FLOAT?new Float32Array(w*h*4):TEX_TYPE===gl.HALF_FLOAT?new Uint16Array(w*h*4):new Uint8Array(w*h*4);
-  gl.texImage2D(gl.TEXTURE_2D,0,TEX_FMT,w,h,0,gl.RGBA,TEX_TYPE,data);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return{tex:t,fbo:f};}
+  gl.texImage2D(gl.TEXTURE_2D,0,TEX_FMT,w,h,0,gl.RGBA,TEX_TYPE,data);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,TEX_FILTER);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,TEX_FILTER);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return{tex:t,fbo:f};}
 const qVAO=gl.createVertexArray();gl.bindVertexArray(qVAO);const qb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,qb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);function dq(){gl.bindVertexArray(qVAO);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);}
 const VS=`#version 300 es\nin vec2 aPosition;out vec2 vUV;void main(){vUV=aPosition*.5+.5;gl_Position=vec4(aPosition,0,1);}`;
 
@@ -256,7 +297,6 @@ if(uMode==0){
     vec2 ep=uEmitA[i].xy,ed=uEmitA[i].zw;float es=uEmitB[i].x,ew=uEmitB[i].y;int et=int(uEmitB[i].z);
     vec2 d=uv-ep;
     if(et==0){
-      // JET: rectangular nozzle — emit from a line perpendicular to jet direction
       d.x*=uAspect;
       vec2 edN=normalize(vec2(ed.x*uAspect,ed.y));
       vec2 perpN=vec2(-edN.y,edN.x);
@@ -265,16 +305,13 @@ if(uMode==0){
       float depth=max(uInvRes.x,uInvRes.y)*4.0;
       if(abs(across)<ew && abs(along)<depth){vel+=ed*es*uDt;}
     } else if(et==2){
-      // VORTEX: tangential circular
       d.x*=uAspect;float dist=length(d);
       if(dist<ew){float t=smoothstep(ew,ew*.85,dist);
         vec2 tg=vec2(-d.y,d.x);if(length(tg)>.001)tg=normalize(tg);vel+=tg*es*t*uDt;}
     } else {
-      // POINT: circular
       d.x*=uAspect;float dist=length(d);
       if(dist<ew){float t=smoothstep(ew,ew*.85,dist);vel+=ed*es*t*uDt;}
     }}
-  // Mouse vortex injection
   if(uMouseDown>.5){vec2 d=uv-uMousePos;d.x*=uAspect;float dist2=dot(d,d);
     vec2 tang=vec2(-d.y,d.x);float r=length(d);
     if(r>.002){tang/=r;vel+=tang*exp(-dist2/.004)*uMouseVortex*175.0*uDt;}}
@@ -329,7 +366,7 @@ const rP=mkP(VS,DSP_FS),rU=gU(rP,['uVelocity','uDye','uBarrier','uGain','uBloom'
 
 let vF,pF,dvF,dyF;
 function initFBOs(){const isMob=window.innerWidth<600;const scale=isMob?0.5:0.75;simW=Math.floor(canvas.width*scale);simH=Math.floor(canvas.height*scale);if(isMob){simW=Math.min(simW,384);simH=Math.min(simH,384);}simW=Math.max(simW,64);simH=Math.max(simH,64);vF=mkDF(simW,simH);pF=mkDF(simW,simH);dvF=mkF(simW,simH);dyF=mkDF(simW,simH);
-  barrierTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,simW,simH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);initBarrierCanvas();document.getElementById('st-res').textContent=simW+'×'+simH;}
+  barrierTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,simW,simH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);initBarrierCanvas();document.getElementById('st-res').textContent=simW+'×'+simH+(TEX_CAN_LINEAR?'':' [nearest]');}
 function resize(){const w=document.getElementById('canvas-wrap');CW=w.clientWidth;CH=w.clientHeight;if(CW<10||CH<10){CW=300;CH=300;}const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.floor(CW*dpr);canvas.height=Math.floor(CH*dpr);initFBOs();frame=0;}
 if(window.ResizeObserver)new ResizeObserver(()=>resize()).observe(document.getElementById('canvas-wrap'));else window.addEventListener('resize',resize);
 
@@ -355,7 +392,6 @@ function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
   gl.bindFramebuffer(gl.FRAMEBUFFER,vF.write.fbo);gl.useProgram(gP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,pF.read.tex);gl.uniform1i(gUn.uPressure,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(gUn.uVelocity,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(gUn.uBarrier,2);gl.uniform2f(gUn.uInvRes,inv[0],inv[1]);dq();vF.swap();}
 
 function display(){
-  // Always re-render barrier when dirty (even if paused)
   if(barrierDirty){renderBarrierCanvas();barrierDirty=false;}
   gl.viewport(0,0,canvas.width,canvas.height);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.useProgram(rP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(rU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(rU.uDye,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(rU.uBarrier,2);gl.uniform1f(rU.uGain,SIM.gain);gl.uniform1f(rU.uBloom,SIM.bloom);gl.uniform1i(rU.uCmap,SIM.cmap);dq();drawOverlays();}
 
@@ -363,7 +399,6 @@ function display(){
 let overlayCanvas,overlayCtx;
 function initOverlay(){overlayCanvas=document.createElement('canvas');overlayCanvas.id='display-canvas';overlayCanvas.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;cursor:crosshair';document.getElementById('canvas-wrap').appendChild(overlayCanvas);overlayCtx=overlayCanvas.getContext('2d');}
 function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(overlayCanvas.width!==Math.floor(CW*dpr)||overlayCanvas.height!==Math.floor(CH*dpr)){overlayCanvas.width=Math.floor(CW*dpr);overlayCanvas.height=Math.floor(CH*dpr);}const ctx=overlayCtx;ctx.setTransform(1,0,0,1,0,0);
-  // Composite: copy WebGL fluid render to this 2D canvas
   ctx.drawImage(canvas,0,0,overlayCanvas.width,overlayCanvas.height);
   ctx.setTransform(dpr,0,0,dpr,0,0);
   for(const e of emitters){const sel=SIM.selectedId===e.id&&SIM.selectedType==='emitter';ctx.save();ctx.translate(e.x,e.y);ctx.rotate(e.angle);const hw=Math.max(e.width*CH,12);const ec=`rgb(${e.dyeR*255|0},${e.dyeG*255|0},${e.dyeB*255|0})`;
@@ -384,8 +419,10 @@ function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(over
     const arrowMax=cs*0.55;
     try{
       gl.bindFramebuffer(gl.FRAMEBUFFER,vF.read.fbo);
-      const vd=new Float32Array(simW*simH*4);
-      gl.readPixels(0,0,simW,simH,gl.RGBA,gl.FLOAT,vd);
+      // MOBILE FIX: Use correct read type for vector field
+      const vd=new ReadArrayCtor(simW*simH*4);
+      gl.readPixels(0,0,simW,simH,gl.RGBA,READ_TYPE,vd);
+      if(gl.getError()!==gl.NO_ERROR){gl.bindFramebuffer(gl.FRAMEBUFFER,null);ctx.restore();return;}
       gl.bindFramebuffer(gl.FRAMEBUFFER,null);
       ctx.save();
       ctx.strokeStyle='rgba(200,220,255,0.5)';
@@ -398,7 +435,7 @@ function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(over
           const px=Math.max(0,Math.min(simW-1,Math.floor(tu*simW)));
           const py=Math.max(0,Math.min(simH-1,Math.floor(tv*simH)));
           const idx=4*(py*simW+px);
-          const vx=vd[idx],vy=-vd[idx+1];
+          const vx=decodeReadValue(vd,idx),vy=-decodeReadValue(vd,idx+1);
           const speed=Math.sqrt(vx*vx+vy*vy);
           if(speed<0.5)continue;
           const len=Math.min(speed*0.18,arrowMax);
@@ -412,16 +449,15 @@ function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(over
         }
       }
       ctx.restore();
-    }catch(e){}
+    }catch(e){gl.bindFramebuffer(gl.FRAMEBUFFER,null);}
   }
 
   if(SIM.drawMode||SIM.eraseMode){ctx.strokeStyle=SIM.eraseMode?'rgba(255,80,80,0.5)':'rgba(150,200,255,0.5)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(mouse.screenX,mouse.screenY,SIM.brushSize/2,0,Math.PI*2);ctx.stroke();}}
 
-/* ═══ INPUT — vortex: left=CW, right=CCW ═══ */
+/* ═══ INPUT ═══ */
 let mouse={x:0,y:0,screenX:0,screenY:0,down:false,px:0,py:0};
 let dragObj=null,dragOffX=0,dragOffY=0,rotating=false;
-let mouseVortex=0; // +1=CW, -1=CCW
-// Events bound to overlay canvas after init (see bottom)
+let mouseVortex=0;
 
 function gp(e){const r=document.getElementById('canvas-wrap').getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{sx:t.clientX-r.left,sy:t.clientY-r.top};}
 function hitObj(sx,sy){for(let i=emitters.length-1;i>=0;i--){const e=emitters[i];if(Math.sqrt((sx-e.x)**2+(sy-e.y)**2)<e.width*CH+15)return{obj:e,type:'emitter'};}
@@ -431,16 +467,15 @@ function onDown(e){e.preventDefault();const{sx,sy}=gp(e);mouse.screenX=sx;mouse.
   if(SIM.drawMode||SIM.eraseMode){mouse.down=true;drawBrush(sx,sy);return;}
   const hit=hitObj(sx,sy);
   if(hit){dragObj=hit.obj;dragOffX=hit.obj.x-sx;dragOffY=hit.obj.y-sy;rotating=e.shiftKey;SIM.selectedId=hit.obj.id;SIM.selectedType=hit.type;rebuildList();}
-  else{mouse.down=true;mouseVortex=(e.button===2)?-1:1; // left=CW, right=CCW
+  else{mouse.down=true;mouseVortex=(e.button===2)?-1:1;
     mouse.x=sx/CW;mouse.y=1-sy/CH;mouse.px=mouse.x;mouse.py=mouse.y;SIM.selectedId=-1;rebuildList();}}
 function onMove(e){const{sx,sy}=gp(e);mouse.screenX=sx;mouse.screenY=sy;
   if(SIM.drawMode||SIM.eraseMode){if(mouse.down)drawBrush(sx,sy);return;}
   if(dragObj){e.preventDefault();if(rotating)dragObj.angle=Math.atan2(sy-dragObj.y,sx-dragObj.x);else{dragObj.x=sx+dragOffX;dragObj.y=sy+dragOffY;}barrierDirty=true;return;}
   if(mouse.down){mouse.x=sx/CW;mouse.y=1-sy/CH;}}
 function onUp(){if(dragObj){dragObj.vx=0;dragObj.vy=0;}dragObj=null;rotating=false;mouse.down=false;mouseVortex=0;}
-// Input events bound after initOverlay (see bottom)
 
-/* ═══ DRAW — Y-flip fix ═══ */
+/* ═══ DRAW ═══ */
 function drawBrush(sx,sy){const bx=sx/CW*simW,by=(1-sy/CH)*simH,r=SIM.brushSize/CW*simW;
   if(SIM.eraseMode){drawnCtx.globalCompositeOperation='destination-out';drawnCtx.beginPath();drawnCtx.arc(bx,by,r,0,Math.PI*2);drawnCtx.fill();drawnCtx.globalCompositeOperation='source-over';}
   else{drawnCtx.fillStyle='#fff';drawnCtx.beginPath();drawnCtx.arc(bx,by,r,0,Math.PI*2);drawnCtx.fill();}barrierDirty=true;}
@@ -470,7 +505,6 @@ function bindSlider(inp, obj, prop, kind) {
 function rebuildList(){
   const list=document.getElementById('obj-list');list.innerHTML='';
   const eI={jet:'▸',point:'◉',vortex:'◎'},sI={circle:'●',rect:'▬',airfoil:'◗',wedge:'◣',gear:'⚙',star:'★',tesla:'⇌'};
-  // Work with ORIGINAL objects, not copies
   const allObjs=[];
   emitters.forEach(e=>allObjs.push({obj:e,kind:'emitter'}));
   shapes.forEach(s=>allObjs.push({obj:s,kind:'shape'}));
@@ -482,14 +516,12 @@ function rebuildList(){
     const c=document.createElement('div');
     c.className='obj-card'+(sel?' selected':'');
 
-    // Card click selects (but not when clicking inputs/buttons)
     const capturedId=obj.id, capturedKind=kind;
     c.addEventListener('click', function(e){
       if(e.target.closest('input')||e.target.closest('button'))return;
       SIM.selectedId=capturedId;SIM.selectedType=capturedKind;rebuildList();
     });
 
-    // Build HTML without any inline event handlers for sliders
     let head=`<div class="obj-card-head"><span class="obj-card-icon">${isE?eI[obj.type]:sI[obj.type]}</span><span class="obj-card-name">${isE?'EMIT':'SHAPE'} · ${obj.type.toUpperCase()}</span><button class="obj-card-dup" style="background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:0.7rem;padding:2px 4px" title="Duplicate">⧉</button><button class="obj-card-del">✕</button></div>`;
     let rows='';
     if(isE){
@@ -507,7 +539,6 @@ function rebuildList(){
         +`<div class="mag-row"><span class="mag-row-lbl">Height</span><input type="range" data-p="h" min="10" max="250" value="${obj.h}" step="2"><span class="val">${obj.h}</span></div>`
         +`<div class="mag-row"><span class="mag-row-lbl">Angle</span><input type="range" data-p="angle" min="-3.14159" max="3.14159" value="${obj.angle}" step="0.05"><span class="val">${(obj.angle*180/Math.PI).toFixed(0)}°</span></div>`
         +`<div class="mag-row"><span class="mag-row-lbl">Spin</span><input type="range" data-p="spin" min="-12" max="12" value="${obj.spin}" step="0.25"><span class="val">${obj.spin.toFixed(1)}</span></div>`;
-      // Shape-specific params
       if(obj.type==='gear')
         rows+=`<div class="mag-row"><span class="mag-row-lbl">Teeth</span><input type="range" data-p="teeth" min="3" max="24" value="${obj.teeth}" step="1"><span class="val">${obj.teeth}</span></div>`;
       if(obj.type==='star')
@@ -517,14 +548,12 @@ function rebuildList(){
     c.innerHTML=head+rows;
     list.appendChild(c);
 
-    // NOW bind all sliders via addEventListener with direct object reference
     c.querySelectorAll('input[type=range]').forEach(inp=>{
       const prop=inp.dataset.p;
       if(prop) bindSlider(inp, obj, prop, kind);
       sg(inp);
     });
 
-    // Bind color picker
     const colorInp=c.querySelector('input[type=color]');
     if(colorInp){
       colorInp.addEventListener('input', function(){
@@ -535,7 +564,6 @@ function rebuildList(){
       });
     }
 
-    // Bind multiplier buttons
     c.querySelectorAll('[data-mult]').forEach(btn=>{
       btn.addEventListener('click', function(){
         obj.mult=+this.dataset.mult;
@@ -543,15 +571,12 @@ function rebuildList(){
       });
     });
 
-    // Bind delete button
     const delBtn=c.querySelector('.obj-card-del');
     if(delBtn) delBtn.addEventListener('click', function(){removeObj(capturedId,capturedKind);});
 
-    // Bind duplicate button
     const dupBtn=c.querySelector('.obj-card-dup');
     if(dupBtn) dupBtn.addEventListener('click', function(){duplicateObj(capturedId,capturedKind);});
 
-    // Bind fixed toggle
     const togBtn=c.querySelector('.tog-btn');
     if(togBtn) togBtn.addEventListener('click', function(){toggleFixed(capturedId);});
   }
@@ -577,7 +602,6 @@ function clearAll(){emitters=[];shapes=[];SIM.selectedId=-1;if(drawnCtx)drawnCtx
 
 function preset(name){clearAll();
   if(name==='windtunnel'){
-    // 20 thin horizontal emitters creating parallel streamlines
     const n=20;for(let i=0;i<n;i++){
       const y=CH*(i+0.5)/n;
       const e=createEmitter('jet',15,y);e.strength=30;e.width=0.015;
@@ -591,7 +615,6 @@ function preset(name){clearAll();
   barrierDirty=true;rebuildList();}
 
 function defaultSetup(){
-  // Two jets stacked tight around a circle
   const e1=createEmitter('jet',40,CH*.42);e1.strength=100;e1.width=.06;e1.dyeR=.15;e1.dyeG=.5;e1.dyeB=1;emitters.push(e1);
   const e2=createEmitter('jet',40,CH*.58);e2.strength=100;e2.width=.06;e2.dyeR=1;e2.dyeG=.35;e2.dyeB=.1;emitters.push(e2);
   const s=createShape('circle',CW*.35,CH*.5);s.w=150;s.h=150;shapes.push(s);
@@ -602,7 +625,6 @@ function loop(now){requestAnimationFrame(loop);deltaTime=Math.min((now-lastTime)
   if(SIM.playing){step();frame++;}display();document.getElementById('st-frame').textContent='frame '+frame;}
 
 initOverlay();
-// Bind input events to the visible overlay canvas
 overlayCanvas.addEventListener('contextmenu',e=>e.preventDefault());
 overlayCanvas.addEventListener('mousedown',onDown);window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);
 overlayCanvas.addEventListener('touchstart',e=>{if(e.touches.length===1)onDown(e);},{passive:false});overlayCanvas.addEventListener('touchmove',e=>{if(e.touches.length===1)onMove(e);},{passive:false});overlayCanvas.addEventListener('touchend',onUp,{passive:false});
