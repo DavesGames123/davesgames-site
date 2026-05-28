@@ -2,204 +2,309 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>GS-SLAM // Stella Nova · davesgames.io</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <style>
 :root{
-  --bg:#0e1118;--bg2:#121620;--surface:#1c2436;--surface2:#243040;
-  --border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.18);
+  --bg:#0a0c11;--surface:rgba(9,12,20,0.96);
+  --border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.16);
   --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.05);
-  --yellow:#ffc832;--yellow-dim:#b8901e;--yellow-faint:rgba(255,200,50,0.05);
+  --yellow:#ffc832;--yellow-dim:#b8901e;
   --green:#64c864;--red:#e05050;
   --text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;
-  --scan:rgba(0,0,0,0.06);
-  --panel-w:280px;
+  --tab-h:52px;--safe-b:env(safe-area-inset-bottom,0px);
 }
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
-body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
-body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
-body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.4))}
-.grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);touch-action:none}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
 
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:40px;flex-shrink:0;background:rgba(14,17,24,0.94);border-bottom:1px solid var(--border-b);z-index:100}
-.in-frame .topbar{display:none!important}
-.topbar-l{display:flex;align-items:center;gap:1.2rem}
-.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.1rem;letter-spacing:0.12em}
-.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.64rem;letter-spacing:0.14em;text-transform:uppercase}
-.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
-.topbar-r{font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint)}.topbar-r strong{color:var(--blue-dim);font-weight:500}
-
-#main{display:flex;flex:1;min-height:0;position:relative;z-index:1}
-
-#panel{width:var(--panel-w);flex-shrink:0;background:rgba(9,12,20,0.96);border-right:1px solid var(--border-b);display:flex;flex-direction:column;overflow:hidden;user-select:none;z-index:10}
-.p-head{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 14px 10px;border-bottom:1px solid var(--border);flex-shrink:0;background:linear-gradient(180deg,rgba(150,200,255,0.04) 0%,transparent 100%)}
-.p-id{display:flex;flex-direction:column;gap:3px}.p-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.5rem;color:var(--blue);line-height:1;white-space:nowrap}.p-ket{font-size:0.52rem;color:var(--text-dim);letter-spacing:0.04em;white-space:nowrap}
-.p-collapse-btn{flex-shrink:0;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);width:24px;height:24px;cursor:pointer;font-size:0.6rem;display:flex;align-items:center;justify-content:center;transition:all 0.2s}.p-collapse-btn:hover{border-color:var(--blue-dim);color:var(--blue)}
-.p-body{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent}.p-body::-webkit-scrollbar{width:4px}.p-body::-webkit-scrollbar-thumb{background:var(--surface2)}
-.p-section{padding:12px 14px 14px;border-bottom:1px solid var(--border)}
-.p-sec-lbl{font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px}.p-sec-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
-
-.tog-btn{display:flex;align-items:center;gap:5px;width:100%;padding:7px 8px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.15s;text-align:left;font-weight:500}
-.tog-btn:hover{border-color:rgba(150,200,255,0.3);color:var(--text);background:var(--blue-faint)}
-.tog-btn.on{background:rgba(150,200,255,0.08);border-color:rgba(150,200,255,0.35);color:var(--blue)}
-.tog-btn.off{background:rgba(255,50,50,0.05);border-color:rgba(255,100,100,0.22);color:#a04040}
-
-.sim-btns{display:flex;gap:4px;flex-wrap:wrap}
-.sim-btn{flex:1;padding:8px 4px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;transition:all 0.15s;text-align:center;font-weight:600}
-.sim-btn:hover{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
-.sim-btn.active{background:rgba(150,200,255,0.1);border-color:rgba(150,200,255,0.4);color:var(--blue)}
-.sim-btn.warn{border-color:rgba(255,200,50,0.3);color:var(--yellow)}.sim-btn.warn:hover{border-color:var(--yellow);background:var(--yellow-faint)}
-
-.row{display:flex;align-items:center;gap:5px;margin-bottom:4px}
-.row-lbl{font-size:0.58rem;color:var(--text-dim);width:40px;flex-shrink:0;letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
-.row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));border-radius:2px;outline:none;cursor:pointer}
-.row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);cursor:pointer;box-shadow:0 0 4px rgba(150,200,255,0.3)}
-.row input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);cursor:pointer}
-.row .val{min-width:28px;text-align:right;font-size:0.65rem;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0}
-
-.stat-row{display:flex;align-items:center;gap:4px;margin-bottom:3px}
-.stat-lbl{font-size:0.52rem;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase;font-weight:500;min-width:55px}
-.stat-val{font-size:0.65rem;font-weight:600;font-variant-numeric:tabular-nums}
-.c-blue{color:var(--blue)}.c-green{color:var(--green)}.c-yellow{color:var(--yellow)}.c-pink{color:#ff6090}
-
-#canvas-wrap{flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column}
-#view-split{flex:1;display:flex;gap:1px;background:rgba(150,200,255,0.04);min-height:0}
-.view-cell{flex:1;position:relative;overflow:hidden;background:#060810;display:flex;flex-direction:column}
-.view-cell canvas{flex:1;width:100%;display:block;min-height:0}
-.cell-label{position:absolute;top:6px;left:8px;font-size:0.5rem;letter-spacing:0.18em;text-transform:uppercase;font-weight:600;z-index:2;pointer-events:none;background:rgba(6,8,16,0.8);padding:2px 6px;border:1px solid rgba(150,200,255,0.08)}
-.cell-label.track{color:var(--blue);border-color:rgba(150,200,255,0.2)}
-.cell-label.recon{color:var(--yellow);border-color:rgba(255,200,50,0.2)}
+/* ═══ FULL-SCREEN CANVAS STAGE ═══ */
+#stage{position:fixed;inset:0;z-index:1}
+#stage canvas,#stage video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
 video{display:none}
+#webcamCanvas{z-index:2}
+#splatCanvas{z-index:2;display:none}
+#webcamCanvas.hidden,#splatCanvas.hidden{display:none}
+#webcamCanvas:not(.hidden),#splatCanvas:not(.hidden){display:block}
 
-.overlay-msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:20;pointer-events:none}
-.overlay-msg h2{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.3rem;color:var(--blue);margin-bottom:6px;letter-spacing:0.08em}
-.overlay-msg p{font-size:0.6rem;color:var(--text-faint);line-height:1.6;letter-spacing:0.06em}
+/* Scanlines */
+#stage::after{content:'';position:absolute;inset:0;z-index:3;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px)}
 
-.eq-panel{position:absolute;top:8px;right:8px;max-width:min(460px,calc(100% - 20px));background:rgba(9,12,20,0.92);border:1px solid var(--border-b);backdrop-filter:blur(14px);padding:10px 16px 12px;z-index:50;pointer-events:auto}
-.eq-head{display:flex;align-items:center;gap:7px;margin-bottom:4px;cursor:pointer}
-.eq-head .dot{width:5px;height:5px;background:var(--blue);box-shadow:0 0 8px var(--blue);flex-shrink:0}
-.eq-head .lbl{font-size:0.58rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--blue);font-weight:600}
-.eq-head .arrow{font-size:0.55rem;color:var(--text-faint);margin-left:auto;transition:transform 0.2s}
-.eq-block{padding:2px 0}.eq-block+.eq-block{border-top:1px solid var(--border);margin-top:4px;padding-top:6px}
-.eq-sublabel{font-size:0.46rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-faint);margin-bottom:1px;font-weight:500}
-.eq-row{margin:1px 0;overflow-x:auto;overflow-y:hidden}.eq-row::-webkit-scrollbar{height:0}
-.eq-panel .katex{color:var(--text-bright)!important;font-size:1.0rem!important;line-height:1.3!important}
-.eq-panel .katex-display{margin:0.05em 0!important}
-.eq-panel.collapsed .eq-blocks{display:none}
-.eq-panel.collapsed{padding:8px 14px}
-.eq-panel.collapsed .eq-head .arrow{transform:rotate(180deg)}
-
-#status-bar{height:22px;flex-shrink:0;background:rgba(14,17,24,0.94);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:14px;z-index:50;font-size:0.54rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500}
-#status-bar .sep{width:1px;height:10px;background:var(--border-b)}
-#status-bar a{color:var(--blue-dim);text-decoration:none}
-
-#mob-btn{display:none;position:fixed;top:6px;left:6px;z-index:200;width:38px;height:38px;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);color:var(--blue);font-size:1.2rem;cursor:pointer;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;backdrop-filter:blur(8px)}
-.mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:250}
-#panel.mob-open ~ .mob-overlay{display:block}
-@media(max-width:599px){
-  :root{--panel-w:0px}
-  #mob-btn{display:flex}
-  .in-frame #mob-btn{top:6px}
-  #panel{position:fixed;top:0;left:0;bottom:0;width:280px;z-index:300;transform:translateX(-100%);transition:transform 0.25s ease}
-  #panel.mob-open{transform:translateX(0)}
-  #view-split{flex-direction:column}
-  .eq-panel{display:none}
+/* ═══ TOP STATS — translucent strip ═══ */
+#stats{
+  position:fixed;top:0;left:0;right:0;z-index:20;
+  display:flex;align-items:center;justify-content:space-around;
+  padding:6px 8px;padding-top:max(6px,env(safe-area-inset-top,6px));
+  background:rgba(8,10,16,0.75);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;
 }
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2)}
+.st{display:flex;flex-direction:column;align-items:center;gap:1px}
+.st-val{font-size:0.8rem;font-weight:700;font-variant-numeric:tabular-nums}
+.st-lbl{font-size:0.48rem;color:var(--text-faint);letter-spacing:0.12em}
+.c-b{color:var(--blue)}.c-g{color:var(--green)}.c-y{color:var(--yellow)}.c-p{color:#ff6090}
+
+/* ═══ CENTER CTA — start button ═══ */
+#cta{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;
+  display:flex;flex-direction:column;align-items:center;gap:16px;
+  pointer-events:all;
+}
+#cta.gone{display:none}
+#cta h2{
+  font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;
+  font-size:1.6rem;color:var(--blue);letter-spacing:0.08em;text-align:center;
+  text-shadow:0 0 20px rgba(150,200,255,0.3);
+}
+#cta p{font-size:0.65rem;color:var(--text-faint);text-align:center;line-height:1.6;max-width:240px}
+#start-btn{
+  width:180px;height:54px;
+  background:rgba(150,200,255,0.06);border:1px solid rgba(150,200,255,0.35);
+  color:var(--blue);font-family:'JetBrains Mono',monospace;
+  font-size:0.9rem;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;
+  cursor:pointer;transition:all 0.2s;
+}
+#start-btn:active{background:rgba(150,200,255,0.2);transform:scale(0.96)}
+
+/* ═══ BOTTOM TAB BAR ═══ */
+#tabs{
+  position:fixed;bottom:0;left:0;right:0;z-index:20;
+  display:flex;align-items:stretch;
+  height:calc(var(--tab-h) + var(--safe-b));
+  padding-bottom:var(--safe-b);
+  background:rgba(8,10,16,0.88);backdrop-filter:blur(16px);
+  border-top:1px solid var(--border-b);
+}
+.tab{
+  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+  background:transparent;border:none;color:var(--text-faint);
+  font-family:'JetBrains Mono',monospace;font-size:0.5rem;
+  letter-spacing:0.12em;text-transform:uppercase;font-weight:600;
+  cursor:pointer;transition:all 0.15s;
+  border-top:2px solid transparent;
+}
+.tab .tab-icon{font-size:1.2rem;transition:color 0.15s}
+.tab.active{color:var(--blue);border-top-color:var(--blue);background:rgba(150,200,255,0.04)}
+.tab.active .tab-icon{color:var(--blue)}
+.tab:active{background:rgba(150,200,255,0.08)}
+
+/* Settings tab accent */
+.tab.settings-tab.active{color:var(--yellow);border-top-color:var(--yellow)}
+.tab.settings-tab.active .tab-icon{color:var(--yellow)}
+
+/* ═══ SETTINGS SHEET — slides up from bottom ═══ */
+#sheet-overlay{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,0.5);display:none}
+#sheet-overlay.show{display:block}
+#sheet{
+  position:fixed;bottom:0;left:0;right:0;z-index:50;
+  background:var(--surface);border-top:1px solid var(--border-b);
+  border-radius:16px 16px 0 0;
+  padding:0 0 var(--safe-b);
+  transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  max-height:75vh;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:rgba(36,48,64,0.8) transparent;
+}
+#sheet.open{transform:translateY(0)}
+.sheet-handle{display:flex;justify-content:center;padding:10px 0 6px}
+.sheet-handle::after{content:'';width:36px;height:4px;background:rgba(150,200,255,0.2);border-radius:2px}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;padding:0 20px 12px}
+.sheet-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.1rem;color:var(--blue);letter-spacing:0.06em}
+.sheet-close{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);width:32px;height:32px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.sheet-close:active{background:rgba(150,200,255,0.1)}
+.sh-section{padding:12px 20px 14px;border-top:1px solid var(--border)}
+.sh-lbl{font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--blue-dim);font-weight:600;margin-bottom:8px}
+.sh-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.sh-row-lbl{font-size:0.62rem;color:var(--text-dim);width:48px;flex-shrink:0;letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
+.sh-row input[type=range]{
+  flex:1;-webkit-appearance:none;height:4px;
+  background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));
+  border-radius:2px;outline:none;
+}
+.sh-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);box-shadow:0 0 6px rgba(150,200,255,0.3)}
+.sh-row .val{min-width:28px;text-align:right;font-size:0.7rem;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums}
+
+.sh-toggle{
+  display:flex;align-items:center;gap:8px;width:100%;
+  padding:10px 12px;margin-bottom:4px;
+  background:transparent;border:1px solid var(--border-b);
+  color:var(--text-dim);font-family:'JetBrains Mono',monospace;
+  font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;
+  cursor:pointer;transition:all 0.15s;text-align:left;font-weight:500;
+}
+.sh-toggle:active{background:rgba(150,200,255,0.08)}
+.sh-toggle.on{background:rgba(150,200,255,0.06);border-color:rgba(150,200,255,0.3);color:var(--blue)}
+.sh-toggle.off{border-color:rgba(255,100,100,0.2);color:#a04040}
+
+.sh-btns{display:flex;gap:6px}
+.sh-btn{
+  flex:1;padding:12px 4px;background:transparent;border:1px solid var(--border-b);
+  color:var(--text-dim);font-family:'JetBrains Mono',monospace;
+  font-size:0.65rem;letter-spacing:0.06em;text-transform:uppercase;
+  font-weight:600;cursor:pointer;text-align:center;
+}
+.sh-btn:active{background:rgba(150,200,255,0.08);color:var(--blue)}
+.sh-btn.warn{border-color:rgba(255,200,50,0.3);color:var(--yellow)}
+
+/* ═══ EQUATION TOAST — swipe-dismissable ═══ */
+#eq-toast{
+  position:fixed;top:auto;bottom:calc(var(--tab-h) + var(--safe-b) + 8px);
+  left:8px;right:8px;z-index:15;
+  background:rgba(9,12,20,0.92);border:1px solid var(--border-b);
+  backdrop-filter:blur(12px);padding:8px 14px;
+  pointer-events:all;display:none;
+}
+#eq-toast.show{display:block}
+.eq-head{display:flex;align-items:center;gap:6px;margin-bottom:2px;cursor:pointer}
+.eq-head .dot{width:4px;height:4px;background:var(--blue);box-shadow:0 0 6px var(--blue)}
+.eq-head .lbl{font-size:0.5rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--blue);font-weight:600}
+.eq-head .x{margin-left:auto;font-size:0.8rem;color:var(--text-faint);padding:2px 6px}
+.eq-row{margin:2px 0;overflow-x:auto}.eq-row::-webkit-scrollbar{height:0}
+#eq-toast .katex{color:var(--text-bright)!important;font-size:0.85rem!important;line-height:1.2!important}
+#eq-toast .katex-display{margin:0.04em 0!important}
+
+/* ═══ PAUSE PILL ═══ */
+#pause-pill{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:25;
+  background:rgba(8,10,16,0.85);border:1px solid var(--border-b);
+  backdrop-filter:blur(8px);padding:10px 28px;
+  font-size:0.7rem;letter-spacing:0.2em;text-transform:uppercase;
+  color:var(--yellow);font-weight:700;display:none;pointer-events:none;
+}
+#pause-pill.show{display:block}
+
+/* ═══ RECORDING DOT ═══ */
+#rec-dot{
+  position:fixed;top:max(10px,env(safe-area-inset-top,10px));right:10px;z-index:25;
+  width:10px;height:10px;border-radius:50%;background:var(--red);
+  box-shadow:0 0 8px var(--red);display:none;
+  animation:rec-pulse 1.2s ease infinite;
+}
+#rec-dot.show{display:block}
+@keyframes rec-pulse{0%,100%{opacity:1}50%{opacity:0.3}}
 </style>
 </head>
 <body>
-<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<div class="grid-bg"></div>
-<button id="mob-btn" onclick="toggleMobile()">☰</button>
 
-<div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">GS-SLAM Live</span></div>
-  <div class="topbar-r">SYS // <strong>GAUSSIAN SPLATTING</strong></div>
+<!-- FULL-SCREEN STAGE -->
+<div id="stage">
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="webcamCanvas"></canvas>
+  <canvas id="splatCanvas" class="hidden"></canvas>
 </div>
 
-<div id="main">
-  <div id="panel">
-    <div class="p-head"><div class="p-id"><span class="p-title">GS-SLAM</span><span class="p-ket">Gaussian Splatting SLAM · Webcam</span></div><button class="p-collapse-btn" id="collapse-btn" onclick="toggleCollapse()">◀</button></div>
-    <div class="p-body">
-      <div class="p-section"><div class="p-sec-lbl">Camera</div>
-        <div class="sim-btns"><button class="sim-btn" id="btn-start" onclick="startCapture()">▶ Start</button><button class="sim-btn" id="btn-pause" onclick="togglePause()" style="display:none">▐▐ Pause</button><button class="sim-btn warn" onclick="resetMap()">↺ Reset</button></div>
-      </div>
-      <div class="p-section"><div class="p-sec-lbl">Tracking</div>
-        <div class="stat-row"><span class="stat-lbl">Features</span><span class="stat-val c-blue" id="st-feat">0</span></div>
-        <div class="stat-row"><span class="stat-lbl">Tracked</span><span class="stat-val c-green" id="st-track">0</span></div>
-        <div class="stat-row"><span class="stat-lbl">Frame</span><span class="stat-val c-blue" id="st-frame">0</span></div>
-      </div>
-      <div class="p-section"><div class="p-sec-lbl">Reconstruction</div>
-        <div class="stat-row"><span class="stat-lbl">Gaussians</span><span class="stat-val c-pink" id="st-gauss">0</span></div>
-        <div class="stat-row"><span class="stat-lbl">Keyframes</span><span class="stat-val c-yellow" id="st-kf">0</span></div>
-      </div>
-      <div class="p-section"><div class="p-sec-lbl">Parameters</div>
-        <div class="row"><span class="row-lbl">Qual</span><input type="range" id="sl-q" min="1" max="3" value="2" step="1"><span class="val" id="vl-q">2</span></div>
-        <div class="row"><span class="row-lbl">Splat</span><input type="range" id="sl-sp" min="1" max="20" value="8" step="1"><span class="val" id="vl-sp">8</span></div>
-        <div class="row"><span class="row-lbl">Decay</span><input type="range" id="sl-dc" min="0" max="100" value="0" step="1"><span class="val" id="vl-dc">0</span></div>
-      </div>
-      <div class="p-section"><div class="p-sec-lbl">Display</div>
-        <div style="display:flex;flex-direction:column;gap:4px">
-          <button class="tog-btn on" id="tog-feat" onclick="togVis('feat')">◉ Feature Overlay</button>
-          <button class="tog-btn on" id="tog-trail" onclick="togVis('trail')">⇌ Camera Trail</button>
-          <button class="tog-btn on" id="tog-grid" onclick="togVis('grid')">▦ Ground Grid</button>
-        </div>
-      </div>
-      <div class="p-section"><div class="p-sec-lbl">3D View</div>
-        <div class="row"><span class="row-lbl">Orbit</span><input type="range" id="sl-ot" min="0" max="6.28" value="0.5" step="0.01"><span class="val" id="vl-ot">0.5</span></div>
-        <div class="row"><span class="row-lbl">Elev</span><input type="range" id="sl-op" min="0.1" max="3.0" value="0.8" step="0.01"><span class="val" id="vl-op">0.8</span></div>
-        <div class="row"><span class="row-lbl">Dist</span><input type="range" id="sl-od" min="1" max="30" value="5" step="0.1"><span class="val" id="vl-od">5.0</span></div>
-      </div>
+<!-- TOP STATS -->
+<div id="stats">
+  <div class="st"><span class="st-val c-b" id="s-feat">—</span><span class="st-lbl">Features</span></div>
+  <div class="st"><span class="st-val c-g" id="s-track">—</span><span class="st-lbl">Tracked</span></div>
+  <div class="st"><span class="st-val c-p" id="s-gauss">—</span><span class="st-lbl">Gaussians</span></div>
+  <div class="st"><span class="st-val c-y" id="s-kf">—</span><span class="st-lbl">Keyframes</span></div>
+  <div class="st"><span class="st-val c-b" id="s-fps">—</span><span class="st-lbl">FPS</span></div>
+</div>
+
+<!-- CENTER CTA -->
+<div id="cta">
+  <h2>GS-SLAM</h2>
+  <p>Gaussian Splatting SLAM from your camera. Point at textured surfaces for best results.</p>
+  <button id="start-btn" onclick="startCapture()">▶ START</button>
+</div>
+
+<!-- RECORDING DOT -->
+<div id="rec-dot"></div>
+<!-- PAUSE PILL -->
+<div id="pause-pill">▐▐ PAUSED</div>
+
+<!-- EQUATION TOAST -->
+<div id="eq-toast">
+  <div class="eq-head" onclick="document.getElementById('eq-toast').classList.remove('show')">
+    <span class="dot"></span><span class="lbl">3D Gaussian Splatting</span><span class="x">✕</span>
+  </div>
+  <div class="eq-row" id="eq-gauss"></div>
+</div>
+
+<!-- BOTTOM TABS -->
+<div id="tabs">
+  <button class="tab active" id="tab-cam" onclick="switchView('cam')">
+    <span class="tab-icon">◉</span>Camera
+  </button>
+  <button class="tab" id="tab-3d" onclick="switchView('3d')">
+    <span class="tab-icon">◇</span>3D View
+  </button>
+  <button class="tab" id="tab-pause" onclick="togglePause()" style="display:none">
+    <span class="tab-icon" id="pause-icon">▐▐</span>Pause
+  </button>
+  <button class="tab settings-tab" id="tab-settings" onclick="toggleSheet()">
+    <span class="tab-icon">⚙</span>Settings
+  </button>
+</div>
+
+<!-- SETTINGS SHEET -->
+<div id="sheet-overlay" onclick="closeSheet()"></div>
+<div id="sheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-head">
+    <span class="sheet-title">Settings</span>
+    <button class="sheet-close" onclick="closeSheet()">✕</button>
+  </div>
+
+  <div class="sh-section">
+    <div class="sh-lbl">Controls</div>
+    <div class="sh-btns">
+      <button class="sh-btn" onclick="resetMap();closeSheet()">↺ Reset Map</button>
+      <button class="sh-btn" id="sh-eq-btn" onclick="toggleEq()">λ Equations</button>
     </div>
   </div>
 
-  <div class="mob-overlay" onclick="toggleMobile()"></div>
-  <div id="canvas-wrap">
-    <div id="view-split">
-      <div class="view-cell"><div class="cell-label track">Tracking</div><video id="video" autoplay playsinline></video><canvas id="webcamCanvas"></canvas>
-        <div class="overlay-msg" id="startOverlay"><h2>Camera Feed</h2><p>Click START to begin tracking<br>features in real-time</p></div></div>
-      <div class="view-cell"><div class="cell-label recon">3D Reconstruction</div><canvas id="splatCanvas"></canvas></div>
+  <div class="sh-section">
+    <div class="sh-lbl">Tracking</div>
+    <div class="sh-row"><span class="sh-row-lbl">Quality</span><input type="range" id="sl-q" min="1" max="3" value="2" step="1"><span class="val" id="vl-q">2</span></div>
+    <div class="sh-row"><span class="sh-row-lbl">Splat</span><input type="range" id="sl-sp" min="1" max="20" value="8" step="1"><span class="val" id="vl-sp">8</span></div>
+    <div class="sh-row"><span class="sh-row-lbl">Decay</span><input type="range" id="sl-dc" min="0" max="100" value="0" step="1"><span class="val" id="vl-dc">0</span></div>
+  </div>
+
+  <div class="sh-section">
+    <div class="sh-lbl">Display</div>
+    <button class="sh-toggle on" id="tog-feat" onclick="togVis('feat')">◉ Feature Overlay</button>
+    <button class="sh-toggle on" id="tog-trail" onclick="togVis('trail')">⇌ Camera Trail</button>
+    <button class="sh-toggle on" id="tog-grid" onclick="togVis('grid')">▦ Ground Grid</button>
+  </div>
+
+  <div class="sh-section">
+    <div class="sh-lbl">3D Camera</div>
+    <div class="sh-row"><span class="sh-row-lbl">Orbit</span><input type="range" id="sl-ot" min="0" max="6.28" value="0.5" step="0.01"><span class="val" id="vl-ot">0.5</span></div>
+    <div class="sh-row"><span class="sh-row-lbl">Elev</span><input type="range" id="sl-op" min="0.1" max="3.0" value="0.8" step="0.01"><span class="val" id="vl-op">0.8</span></div>
+    <div class="sh-row"><span class="sh-row-lbl">Dist</span><input type="range" id="sl-od" min="1" max="30" value="5" step="0.1"><span class="val" id="vl-od">5.0</span></div>
+  </div>
+
+  <div class="sh-section" style="padding-bottom:20px">
+    <div style="font-size:0.48rem;color:var(--text-faint);text-align:center;letter-spacing:0.08em">
+      Based on <span style="color:var(--blue-dim)">GS-SLAM</span> · Yan et al. CVPR 2024<br>
+      Gaussian Splatting SLAM · davesgames.io
     </div>
-    <section class="eq-panel collapsed" id="eq-panel">
-      <div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Governing Equations</span><span class="arrow">▼</span></div>
-      <div class="eq-blocks">
-        <div class="eq-block"><div class="eq-sublabel">3D Gaussian Splatting</div><div class="eq-row" id="eq-gauss"></div></div>
-        <div class="eq-block"><div class="eq-sublabel">Alpha Compositing · Front-to-Back</div><div class="eq-row" id="eq-alpha"></div></div>
-        <div class="eq-block"><div class="eq-sublabel">Camera Pose Optimization</div><div class="eq-row" id="eq-pose"></div></div>
-      </div>
-    </section>
   </div>
 </div>
 
-<div id="status-bar">
-  <span id="sb-fps">-- fps</span><span class="sep"></span>
-  <span id="sb-gauss">0 gaussians</span><span class="sep"></span>
-  <span id="sb-kf">0 keyframes</span><span class="sep"></span>
-  <span id="sb-mode">idle</span><span class="sep"></span>
-  <span style="margin-left:auto;font-size:0.48rem">Based on <a href="https://github.com/yanchi-3dv/diff-gaussian-rasterization-for-gsslam">GS-SLAM</a> · Yan et al. CVPR 2024</span>
-</div>
-
+<!-- KaTeX -->
 <script>
 (function(){
   if(!window.katex) return;
-  const G='#ff9050',S='#ffc832',P='#c890ff',C='#60e0ee',K='#64c864',o={throwOnError:false,displayMode:true};
-  katex.render(String.raw`\textcolor{${G}}{G}(\vec{x}) = e^{-\frac{1}{2}(\vec{x}-\textcolor{${C}}{\mu})^\top \textcolor{${P}}{\Sigma}^{-1} (\vec{x}-\textcolor{${C}}{\mu})}`,document.getElementById('eq-gauss'),o);
-  katex.render(String.raw`\textcolor{${S}}{C} = \sum_{i \in \mathcal{N}} \textcolor{${S}}{c_i}\,\alpha_i \prod_{j=1}^{i-1}(1-\alpha_j)`,document.getElementById('eq-alpha'),o);
-  katex.render(String.raw`\textcolor{${C}}{T^*} = \arg\min_T \left\| \textcolor{${S}}{I_{\text{render}}}(T) - \textcolor{${K}}{I_{\text{obs}}} \right\|^2`,document.getElementById('eq-pose'),o);
-  document.getElementById('eq-toggle').addEventListener('click',()=>{const p=document.getElementById('eq-panel'),c=p.classList.toggle('collapsed');p.querySelector('.arrow').textContent=c?'▼':'▲'});
+  const G='#ff9050',C='#60e0ee',P='#c890ff';
+  katex.render(
+    String.raw`\textcolor{${G}}{G}(\vec{x}) = e^{-\frac{1}{2}(\vec{x}-\textcolor{${C}}{\mu})^\top \textcolor{${P}}{\Sigma}^{-1} (\vec{x}-\textcolor{${C}}{\mu})}`,
+    document.getElementById('eq-gauss'),
+    {throwOnError:false,displayMode:true}
+  );
 })();
 </script>
+
 <script>
 /* ════════════════════════════════════════════════════════════
-   GS-SLAM WebGL Demo
+   GS-SLAM — MOBILE-FIRST
+   Full-screen camera, bottom tabs, pull-up settings sheet
    ════════════════════════════════════════════════════════════ */
-let video,webcamCanvas,wCtx,splatCanvas,gl;
+let video,wCanvas,wCtx,sCanvas,gl;
 let running=false,paused=false,frameNum=0;
 let prevGray=null,currGray=null,features=[];
 let gaussians=[],keyframes=[];
@@ -208,53 +313,87 @@ let splatSize=8,gaussDecay=0,quality=2,maxFeatures=300;
 let lastTime=performance.now(),fpsSmooth=0;
 let showFeat=true,showTrail=true,showGrid=true;
 let orbitTheta=0.5,orbitPhi=0.8,orbitDist=5.0;
-let isDragging=false,lastMX=0,lastMY=0;
-let glProgram,glPointBuf,glColorBuf,posAttr,colAttr,uMVP,uPointSize;
+let activeView='cam'; // 'cam' or '3d'
+
+// WebGL
+let glProg,glPBuf,glCBuf,aP,aC,uM,uS;
+
+// Touch orbit state
+let isDrag=false,lastTX=0,lastTY=0;
+let pinchDist0=0,pinchZoom0=5;
 
 function sg(el){el.style.setProperty('--pct',(el.value-el.min)/(el.max-el.min)*100+'%')}
-function toggleMobile(){document.getElementById('panel').classList.toggle('mob-open')}
-function toggleCollapse(){const p=document.getElementById('panel'),b=p.querySelector('.p-body'),k=p.querySelector('.p-ket'),c=b.style.display==='none';b.style.display=c?'':'none';k.style.display=c?'':'none';document.getElementById('collapse-btn').textContent=c?'◀':'▶'}
 
-// Slider wiring
-function wireSlider(id,vlId,cb,fmt){const el=document.getElementById(id);sg(el);el.addEventListener('input',function(){sg(this);document.getElementById(vlId).textContent=fmt?fmt(+this.value):this.value;cb(+this.value)})}
-wireSlider('sl-q','vl-q',v=>{quality=v;maxFeatures=[150,300,500][v-1]});
-wireSlider('sl-sp','vl-sp',v=>splatSize=v);
-wireSlider('sl-dc','vl-dc',v=>gaussDecay=v);
-wireSlider('sl-ot','vl-ot',v=>orbitTheta=v,v=>v.toFixed(2));
-wireSlider('sl-op','vl-op',v=>orbitPhi=v,v=>v.toFixed(2));
-wireSlider('sl-od','vl-od',v=>orbitDist=v,v=>v.toFixed(1));
+/* ═══ VIEW SWITCHING ═══ */
+function switchView(v){
+  activeView=v;
+  document.getElementById('webcamCanvas').classList.toggle('hidden',v!=='cam');
+  document.getElementById('splatCanvas').classList.toggle('hidden',v!=='3d');
+  document.getElementById('tab-cam').classList.toggle('active',v==='cam');
+  document.getElementById('tab-3d').classList.toggle('active',v==='3d');
+}
 
+/* ═══ SETTINGS SHEET ═══ */
+function toggleSheet(){
+  const s=document.getElementById('sheet'),o=document.getElementById('sheet-overlay');
+  const open=s.classList.toggle('open');o.classList.toggle('show',open);
+  document.getElementById('tab-settings').classList.toggle('active',open);
+}
+function closeSheet(){
+  document.getElementById('sheet').classList.remove('open');
+  document.getElementById('sheet-overlay').classList.remove('show');
+  document.getElementById('tab-settings').classList.remove('active');
+}
+
+/* ═══ EQUATION TOAST ═══ */
+function toggleEq(){document.getElementById('eq-toast').classList.toggle('show')}
+
+/* ═══ TOGGLES ═══ */
 function togVis(k){
   if(k==='feat')showFeat=!showFeat;else if(k==='trail')showTrail=!showTrail;else showGrid=!showGrid;
   const v=k==='feat'?showFeat:k==='trail'?showTrail:showGrid;
   const b=document.getElementById('tog-'+k);b.classList.toggle('on',v);b.classList.toggle('off',!v);
 }
-function syncOrbitSliders(){
-  ['sl-ot','sl-op','sl-od'].forEach((id,i)=>{const el=document.getElementById(id);el.value=[orbitTheta,orbitPhi,orbitDist][i];sg(el)});
-  document.getElementById('vl-ot').textContent=orbitTheta.toFixed(2);
-  document.getElementById('vl-op').textContent=orbitPhi.toFixed(2);
-  document.getElementById('vl-od').textContent=orbitDist.toFixed(1);
-}
 
 /* ═══ WEBCAM ═══ */
 async function startCapture(){
   try{
-    const stream=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:'user'}});
+    // Prefer rear camera on mobile
+    const stream=await navigator.mediaDevices.getUserMedia({
+      video:{width:{ideal:640},height:{ideal:480},facingMode:{ideal:'environment'}},
+      audio:false
+    });
     video=document.getElementById('video');video.srcObject=stream;await video.play();
-    webcamCanvas=document.getElementById('webcamCanvas');webcamCanvas.width=video.videoWidth;webcamCanvas.height=video.videoHeight;
-    wCtx=webcamCanvas.getContext('2d',{willReadFrequently:true});
-    document.getElementById('startOverlay').style.display='none';
-    document.getElementById('btn-start').style.display='none';
-    document.getElementById('btn-pause').style.display='';
-    initWebGL();running=true;requestAnimationFrame(mainLoop);
-    document.getElementById('sb-mode').textContent='tracking';
-  }catch(e){alert('Camera access required.\n'+e.message)}
+    wCanvas=document.getElementById('webcamCanvas');
+    wCanvas.width=video.videoWidth;wCanvas.height=video.videoHeight;
+    wCtx=wCanvas.getContext('2d',{willReadFrequently:true});
+
+    document.getElementById('cta').classList.add('gone');
+    document.getElementById('rec-dot').classList.add('show');
+    document.getElementById('tab-pause').style.display='';
+
+    initWebGL();
+    running=true;
+    requestAnimationFrame(mainLoop);
+  }catch(e){
+    alert('Camera access required.\n'+e.message);
+  }
 }
-function togglePause(){paused=!paused;const b=document.getElementById('btn-pause');b.textContent=paused?'▶ Resume':'▐▐ Pause';b.classList.toggle('active',!paused);document.getElementById('sb-mode').textContent=paused?'paused':'tracking';if(!paused)requestAnimationFrame(mainLoop)}
+
+function togglePause(){
+  paused=!paused;
+  document.getElementById('pause-icon').textContent=paused?'▶':'▐▐';
+  document.getElementById('tab-pause').querySelector('.tab-icon').textContent=paused?'▶':'▐▐';
+  document.getElementById('pause-pill').classList.toggle('show',paused);
+  document.getElementById('rec-dot').classList.toggle('show',!paused);
+  if(!paused)requestAnimationFrame(mainLoop);
+}
+
 function resetMap(){gaussians=[];keyframes=[];features=[];prevGray=null;frameNum=0;camPose={x:0,y:0,z:0}}
 
-/* ═══ FEATURES ═══ */
+/* ═══ FEATURE DETECTION ═══ */
 function toGray(d){const w=d.width,h=d.height,g=new Float32Array(w*h);for(let i=0;i<w*h;i++){const j=i*4;g[i]=0.299*d.data[j]+0.587*d.data[j+1]+0.114*d.data[j+2]}return g}
+
 function detectFeatures(gray,w,h){
   const th=25,step=quality===3?4:quality===2?6:8,cands=[];
   for(let y=8;y<h-8;y+=step)for(let x=8;x<w-8;x+=step){
@@ -266,6 +405,7 @@ function detectFeatures(gray,w,h){
   for(const c of cands){if(sel.length>=maxFeatures)break;let ok=true;for(const s of sel){const dx=c.x-s.x,dy=c.y-s.y;if(dx*dx+dy*dy<md*md){ok=false;break}}if(ok)sel.push(c)}
   return sel
 }
+
 function trackFeatures(pG,cG,feats,w,h){
   const hw=5,tracked=[];
   for(const f of feats){
@@ -310,76 +450,90 @@ function drawOverlay(tracked){
   for(const t of tracked){
     const age=Math.min(t.age||1,20),a=0.3+0.5*(age/20);
     wCtx.beginPath();wCtx.moveTo(t.px,t.py);wCtx.lineTo(t.x,t.y);
-    wCtx.strokeStyle=`rgba(150,200,255,${a})`;wCtx.lineWidth=1;wCtx.stroke();
+    wCtx.strokeStyle=`rgba(150,200,255,${a})`;wCtx.lineWidth=1.5;wCtx.stroke();
     const h=t.sad<300?[57,255,20]:t.sad<600?[255,170,0]:[255,51,102];
-    wCtx.fillStyle=`rgba(${h[0]},${h[1]},${h[2]},0.9)`;wCtx.fillRect(t.x-1.5,t.y-1.5,3,3)
+    wCtx.fillStyle=`rgba(${h[0]},${h[1]},${h[2]},0.9)`;
+    wCtx.beginPath();wCtx.arc(t.x,t.y,2.5,0,Math.PI*2);wCtx.fill();
   }
-  wCtx.fillStyle='rgba(150,200,255,0.5)';wCtx.font='10px "JetBrains Mono"';wCtx.fillText('FRAME '+frameNum,8,webcamCanvas.height-8)
 }
 
-/* ═══ WebGL ═══ */
+/* ═══ WebGL 3D RENDERER ═══ */
 function initWebGL(){
-  splatCanvas=document.getElementById('splatCanvas');
-  const cell=splatCanvas.parentElement,dpr=Math.min(devicePixelRatio,2);
-  splatCanvas.width=cell.clientWidth*dpr;splatCanvas.height=cell.clientHeight*dpr;
-  gl=splatCanvas.getContext('webgl',{alpha:false,antialias:true});if(!gl)return;
-  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
+  sCanvas=document.getElementById('splatCanvas');
+  const dpr=Math.min(devicePixelRatio,2);
+  sCanvas.width=window.innerWidth*dpr;sCanvas.height=window.innerHeight*dpr;
+  gl=sCanvas.getContext('webgl',{alpha:false,antialias:true});if(!gl)return;
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
+  gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
   const vs=`attribute vec3 aP;attribute vec4 aC;uniform mat4 uM;uniform float uS;varying vec4 vC;void main(){gl_Position=uM*vec4(aP,1.0);gl_PointSize=uS/max(gl_Position.w,0.1);vC=aC;}`;
-  const fs=`precision mediump float;varying vec4 vC;void main(){vec2 p=gl_PointCoord-0.5;float d=dot(p,p);float a=vC.a*exp(-d*8.0);if(a<0.01)discard;gl_FragColor=vec4(vC.rgb+exp(-d*3.0)*0.15,a);}`;
-  glProgram=mkProg(gl,vs,fs);posAttr=gl.getAttribLocation(glProgram,'aP');colAttr=gl.getAttribLocation(glProgram,'aC');
-  uMVP=gl.getUniformLocation(glProgram,'uM');uPointSize=gl.getUniformLocation(glProgram,'uS');
-  glPointBuf=gl.createBuffer();glColorBuf=gl.createBuffer();
-  splatCanvas.style.cursor='crosshair';
-  splatCanvas.addEventListener('mousedown',e=>{isDragging=true;lastMX=e.clientX;lastMY=e.clientY});
-  splatCanvas.addEventListener('mousemove',e=>{if(!isDragging)return;orbitTheta+=(e.clientX-lastMX)*0.005;orbitPhi=Math.max(0.1,Math.min(Math.PI-0.1,orbitPhi+(e.clientY-lastMY)*0.005));lastMX=e.clientX;lastMY=e.clientY;syncOrbitSliders()});
-  splatCanvas.addEventListener('mouseup',()=>isDragging=false);splatCanvas.addEventListener('mouseleave',()=>isDragging=false);
-  splatCanvas.addEventListener('wheel',e=>{orbitDist=Math.max(1,Math.min(30,orbitDist+e.deltaY*0.01));e.preventDefault();syncOrbitSliders()},{passive:false});
-  splatCanvas.addEventListener('touchstart',e=>{isDragging=true;lastMX=e.touches[0].clientX;lastMY=e.touches[0].clientY});
-  splatCanvas.addEventListener('touchmove',e=>{if(!isDragging)return;orbitTheta+=(e.touches[0].clientX-lastMX)*0.005;orbitPhi=Math.max(0.1,Math.min(Math.PI-0.1,orbitPhi+(e.touches[0].clientY-lastMY)*0.005));lastMX=e.touches[0].clientX;lastMY=e.touches[0].clientY;e.preventDefault();syncOrbitSliders()},{passive:false});
-  splatCanvas.addEventListener('touchend',()=>isDragging=false)
+  const fs=`precision mediump float;varying vec4 vC;void main(){vec2 p=gl_PointCoord-0.5;float d=dot(p,p);float a=vC.a*exp(-d*8.0);if(a<0.01)discard;gl_FragColor=vec4(vC.rgb+exp(-d*3.0)*0.12,a);}`;
+  glProg=mkProg(gl,vs,fs);aP=gl.getAttribLocation(glProg,'aP');aC=gl.getAttribLocation(glProg,'aC');
+  uM=gl.getUniformLocation(glProg,'uM');uS=gl.getUniformLocation(glProg,'uS');
+  glPBuf=gl.createBuffer();glCBuf=gl.createBuffer();
+
+  // Touch orbit on 3D canvas
+  sCanvas.addEventListener('touchstart',e=>{
+    if(e.touches.length===2){
+      pinchDist0=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);
+      pinchZoom0=orbitDist;return;
+    }
+    isDrag=true;lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;
+  },{passive:true});
+  sCanvas.addEventListener('touchmove',e=>{
+    if(e.touches.length===2){
+      const d=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);
+      orbitDist=Math.max(1,Math.min(30,pinchZoom0*(pinchDist0/d)));
+      e.preventDefault();return;
+    }
+    if(!isDrag)return;
+    orbitTheta+=(e.touches[0].clientX-lastTX)*0.008;
+    orbitPhi=Math.max(0.1,Math.min(Math.PI-0.1,orbitPhi+(e.touches[0].clientY-lastTY)*0.008));
+    lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;
+  },{passive:false});
+  sCanvas.addEventListener('touchend',()=>isDrag=false,{passive:true});
 }
+
 function mkProg(gl,vs,fs){const v=gl.createShader(gl.VERTEX_SHADER);gl.shaderSource(v,vs);gl.compileShader(v);const f=gl.createShader(gl.FRAGMENT_SHADER);gl.shaderSource(f,fs);gl.compileShader(f);const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);return p}
-function m4Persp(fov,asp,n,f){const t=1/Math.tan(fov/2),nf=1/(n-f);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)*nf,-1,0,0,2*f*n*nf,0])}
-function m4Look(e,c,u){const zx=e[0]-c[0],zy=e[1]-c[1],zz=e[2]-c[2];let l=1/Math.sqrt(zx*zx+zy*zy+zz*zz);const z=[zx*l,zy*l,zz*l],xx=u[1]*z[2]-u[2]*z[1],xy=u[2]*z[0]-u[0]*z[2],xz=u[0]*z[1]-u[1]*z[0];l=1/Math.sqrt(xx*xx+xy*xy+xz*xz);const x=[xx*l,xy*l,xz*l],y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]),-(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]),-(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]),1])}
-function m4Mul(a,b){const r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];return r}
+function m4P(fov,asp,n,f){const t=1/Math.tan(fov/2),nf=1/(n-f);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)*nf,-1,0,0,2*f*n*nf,0])}
+function m4L(e,c,u){const zx=e[0]-c[0],zy=e[1]-c[1],zz=e[2]-c[2];let l=1/Math.sqrt(zx*zx+zy*zy+zz*zz);const z=[zx*l,zy*l,zz*l],xx=u[1]*z[2]-u[2]*z[1],xy=u[2]*z[0]-u[0]*z[2],xz=u[0]*z[1]-u[1]*z[0];l=1/Math.sqrt(xx*xx+xy*xy+xz*xz);const x=[xx*l,xy*l,xz*l],y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]),-(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]),-(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]),1])}
+function m4M(a,b){const r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];return r}
 function glDraw(pos,col,mode){
-  gl.bindBuffer(gl.ARRAY_BUFFER,glPointBuf);gl.bufferData(gl.ARRAY_BUFFER,pos,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(posAttr);gl.vertexAttribPointer(posAttr,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER,glColorBuf);gl.bufferData(gl.ARRAY_BUFFER,col,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(colAttr);gl.vertexAttribPointer(colAttr,4,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,glPBuf);gl.bufferData(gl.ARRAY_BUFFER,pos,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(aP);gl.vertexAttribPointer(aP,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,glCBuf);gl.bufferData(gl.ARRAY_BUFFER,col,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(aC);gl.vertexAttribPointer(aC,4,gl.FLOAT,false,0,0);
   gl.drawArrays(mode,0,pos.length/3)
 }
 
 function renderSplats(){
-  if(!gl)return;
-  const cell=splatCanvas.parentElement,dpr=Math.min(devicePixelRatio,2);
-  const w=Math.floor(cell.clientWidth*dpr),h=Math.floor(cell.clientHeight*dpr);
-  if(splatCanvas.width!==w||splatCanvas.height!==h){splatCanvas.width=w;splatCanvas.height=h}
-  gl.viewport(0,0,w,h);gl.clearColor(0.024,0.027,0.035,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  if(!gl||activeView!=='3d')return;
+  const dpr=Math.min(devicePixelRatio,2);
+  const w=Math.floor(window.innerWidth*dpr),h=Math.floor(window.innerHeight*dpr);
+  if(sCanvas.width!==w||sCanvas.height!==h){sCanvas.width=w;sCanvas.height=h}
+  gl.viewport(0,0,w,h);gl.clearColor(0.04,0.045,0.06,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const cx=camPose.x,cy=camPose.y,cz=camPose.z;
   const eX=cx+orbitDist*Math.sin(orbitPhi)*Math.cos(orbitTheta),eY=cy+orbitDist*Math.cos(orbitPhi),eZ=cz+orbitDist*Math.sin(orbitPhi)*Math.sin(orbitTheta);
-  const mvp=m4Mul(m4Persp(Math.PI/4,w/h,0.1,100),m4Look([eX,eY,eZ],[cx,cy,cz],[0,1,0]));
-  gl.useProgram(glProgram);gl.uniformMatrix4fv(uMVP,false,mvp);
+  const mvp=m4M(m4P(Math.PI/4,w/h,0.1,100),m4L([eX,eY,eZ],[cx,cy,cz],[0,1,0]));
+  gl.useProgram(glProg);gl.uniformMatrix4fv(uM,false,mvp);
 
+  // Grid
   if(showGrid){
-    gl.uniform1f(uPointSize,1);const gN=21,gS=5,gp=[],gc=[];
-    for(let i=0;i<gN;i++){const t=(i/(gN-1)-0.5)*gS*2;gp.push(t,0,-gS,t,0,gS,-gS,0,t,gS,0,t);const a=0.06;gc.push(0.25,0.25,0.35,a,0.25,0.25,0.35,a,0.25,0.25,0.35,a,0.25,0.25,0.35,a)}
+    gl.uniform1f(uS,1);const gN=21,gS=5,gp=[],gc=[];
+    for(let i=0;i<gN;i++){const t=(i/(gN-1)-0.5)*gS*2;gp.push(t,0,-gS,t,0,gS,-gS,0,t,gS,0,t);gc.push(0.2,0.2,0.3,0.08,0.2,0.2,0.3,0.08,0.2,0.2,0.3,0.08,0.2,0.2,0.3,0.08)}
     glDraw(new Float32Array(gp),new Float32Array(gc),gl.LINES)
   }
-
+  // Gaussians
   const n=gaussians.length;
   if(n>0){
-    gl.uniform1f(uPointSize,splatSize*40);
+    gl.uniform1f(uS,splatSize*40);
     const p=new Float32Array(n*3),c=new Float32Array(n*4);
     for(let i=0;i<n;i++){const g=gaussians[i];p[i*3]=g.x;p[i*3+1]=g.y;p[i*3+2]=g.z;c[i*4]=g.r;c[i*4+1]=g.g;c[i*4+2]=g.b;c[i*4+3]=g.opacity}
     glDraw(p,c,gl.POINTS)
   }
-
+  // Camera trail
   if(showTrail&&keyframes.length>1){
-    gl.uniform1f(uPointSize,200);
-    const kn=keyframes.length,cp=new Float32Array(kn*3),cc=new Float32Array(kn*4);
+    gl.uniform1f(uS,200);const kn=keyframes.length,cp=new Float32Array(kn*3),cc=new Float32Array(kn*4);
     for(let i=0;i<kn;i++){const k=keyframes[i];cp[i*3]=k.x;cp[i*3+1]=k.y;cp[i*3+2]=k.z;const t=i/kn;cc[i*4]=0.15;cc[i*4+1]=0.5*(1-t)+0.9*t;cc[i*4+2]=t+0.3*(1-t);cc[i*4+3]=0.8}
     glDraw(cp,cc,gl.LINE_STRIP);
-    gl.uniform1f(uPointSize,300);
-    glDraw(new Float32Array([cp[(kn-1)*3],cp[(kn-1)*3+1],cp[(kn-1)*3+2]]),new Float32Array([1,0.8,0.2,0.9]),gl.POINTS)
+    gl.uniform1f(uS,300);glDraw(new Float32Array([cp[(kn-1)*3],cp[(kn-1)*3+1],cp[(kn-1)*3+2]]),new Float32Array([1,0.8,0.2,0.9]),gl.POINTS)
   }
 }
 
@@ -387,33 +541,53 @@ function renderSplats(){
 function mainLoop(ts){
   if(!running||paused)return;
   const dt=ts-lastTime;lastTime=ts;fpsSmooth=fpsSmooth*0.9+(1000/Math.max(dt,1))*0.1;
-  if(!isDragging)orbitTheta+=0.002;
+
+  // Auto-orbit when viewing 3D
+  if(activeView==='3d'&&!isDrag)orbitTheta+=0.003;
 
   wCtx.drawImage(video,0,0);
-  const imgData=wCtx.getImageData(0,0,webcamCanvas.width,webcamCanvas.height);
-  currGray=toGray(imgData);const w=webcamCanvas.width,h=webcamCanvas.height;
+  const imgData=wCtx.getImageData(0,0,wCanvas.width,wCanvas.height);
+  currGray=toGray(imgData);const w=wCanvas.width,h=wCanvas.height;
 
   if(prevGray){
     let tracked=features.length>0?trackFeatures(prevGray,currGray,features,w,h):[];
     if(tracked.length<maxFeatures*0.5){const nf=detectFeatures(currGray,w,h);for(const f of nf){if(tracked.length>=maxFeatures)break;let ok=true;for(const t of tracked)if((f.x-t.x)**2+(f.y-t.y)**2<144){ok=false;break};if(ok)tracked.push({...f,px:f.x,py:f.y,dx:0,dy:0,sad:0,age:0})}}
-    estimateMotion(tracked,w,h,imgData);drawOverlay(tracked);features=tracked;
+    estimateMotion(tracked,w,h,imgData);
+    if(activeView==='cam')drawOverlay(tracked);
+    features=tracked;
   }else{features=detectFeatures(currGray,w,h);for(const f of features){f.px=f.x;f.py=f.y;f.dx=0;f.dy=0;f.sad=0;f.age=0}}
 
   if(gaussDecay>0)for(let i=gaussians.length-1;i>=0;i--){gaussians[i].age++;if(gaussians[i].age>3000-gaussDecay*28)gaussians.splice(i,1)}
-  prevGray=currGray;frameNum++;renderSplats();
+  prevGray=currGray;frameNum++;
 
-  document.getElementById('st-feat').textContent=features.length;
-  document.getElementById('st-track').textContent=features.filter(f=>f.age>0).length;
-  document.getElementById('st-frame').textContent=frameNum;
-  document.getElementById('st-gauss').textContent=gaussians.length;
-  document.getElementById('st-kf').textContent=keyframes.length;
-  document.getElementById('sb-fps').textContent=Math.round(fpsSmooth)+' fps';
-  document.getElementById('sb-gauss').textContent=gaussians.length+' gaussians';
-  document.getElementById('sb-kf').textContent=keyframes.length+' keyframes';
-  requestAnimationFrame(mainLoop)
+  renderSplats();
+
+  // Stats
+  document.getElementById('s-feat').textContent=features.length;
+  document.getElementById('s-track').textContent=features.filter(f=>f.age>0).length;
+  document.getElementById('s-gauss').textContent=gaussians.length;
+  document.getElementById('s-kf').textContent=keyframes.length;
+  document.getElementById('s-fps').textContent=Math.round(fpsSmooth);
+
+  requestAnimationFrame(mainLoop);
 }
 
-document.querySelectorAll('#panel input[type=range]').forEach(sg);
+/* ═══ SLIDER WIRING ═══ */
+function wire(id,vlId,cb,fmt){const el=document.getElementById(id);sg(el);el.addEventListener('input',function(){sg(this);document.getElementById(vlId).textContent=fmt?fmt(+this.value):this.value;cb(+this.value)})}
+wire('sl-q','vl-q',v=>{quality=v;maxFeatures=[150,300,500][v-1]});
+wire('sl-sp','vl-sp',v=>splatSize=v);
+wire('sl-dc','vl-dc',v=>gaussDecay=v);
+wire('sl-ot','vl-ot',v=>orbitTheta=v,v=>v.toFixed(2));
+wire('sl-op','vl-op',v=>orbitPhi=v,v=>v.toFixed(2));
+wire('sl-od','vl-od',v=>orbitDist=v,v=>v.toFixed(1));
+
+// Init all slider fills
+document.querySelectorAll('input[type=range]').forEach(sg);
+
+// Handle resize
+window.addEventListener('resize',()=>{
+  if(sCanvas&&gl){const dpr=Math.min(devicePixelRatio,2);sCanvas.width=window.innerWidth*dpr;sCanvas.height=window.innerHeight*dpr}
+});
 </script>
 </body>
 </html>
