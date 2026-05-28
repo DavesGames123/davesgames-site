@@ -6,83 +6,49 @@
 <title>GS-SLAM // Stella Nova · davesgames.io</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
-:root{
-  --bg:#0a0c11;--surface:rgba(9,12,20,0.96);
-  --border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.16);
-  --blue:#96c8ff;--blue-dim:#5a8cc0;
-  --yellow:#ffc832;--green:#64c864;--red:#e05050;
-  --text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;
-  --safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
-}
+:root{--bg:#0a0c11;--surface:rgba(9,12,20,0.96);--border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.16);--blue:#96c8ff;--blue-dim:#5a8cc0;--yellow:#ffc832;--green:#64c864;--red:#e05050;--text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;--safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px)}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);touch-action:none}
 body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
-
 #stage{position:fixed;inset:0;z-index:1}
 #stage canvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
 video{display:none}
 #camC{z-index:2}#glC{z-index:2;display:none}
-#stage::after{content:'';position:absolute;inset:0;z-index:3;pointer-events:none;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px)}
-
-#hud{position:fixed;top:0;left:0;right:0;z-index:20;
-  padding:max(6px,var(--safe-t)) 8px 5px;
-  background:rgba(8,10,16,0.7);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--border);
-  display:flex;align-items:center;justify-content:space-around}
+#stage::after{content:'';position:absolute;inset:0;z-index:3;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px)}
+#hud{position:fixed;top:0;left:0;right:0;z-index:20;padding:max(6px,var(--safe-t)) 6px 5px;background:rgba(8,10,16,0.7);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-around}
 .hi{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1}
-.hv{font-size:0.72rem;font-weight:700;font-variant-numeric:tabular-nums}
-.hl{font-size:0.4rem;color:var(--text-faint);letter-spacing:0.1em;text-transform:uppercase}
-.cb{color:var(--blue)}.cg{color:var(--green)}.cy{color:var(--yellow)}.cp{color:#ff6090}.cr{color:var(--red)}
-
-.badge{position:fixed;top:max(48px,calc(var(--safe-t)+40px));left:8px;z-index:25;
-  font-size:0.48rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;padding:3px 8px;pointer-events:none}
+.hv{font-size:0.68rem;font-weight:700;font-variant-numeric:tabular-nums}
+.hl{font-size:0.38rem;color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase}
+.cb{color:var(--blue)}.cg{color:var(--green)}.cy{color:var(--yellow)}.cp{color:#ff6090}.cr{color:var(--red)}.co{color:#e0a050}
+.badge{position:fixed;top:max(46px,calc(var(--safe-t)+38px));left:8px;z-index:25;font-size:0.46rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;padding:3px 8px;pointer-events:none}
 .badge.cap{background:rgba(224,80,80,0.15);border:1px solid rgba(224,80,80,0.4);color:var(--red)}
 .badge.proc{background:rgba(255,200,50,0.12);border:1px solid rgba(255,200,50,0.35);color:var(--yellow)}
 .badge.exp{background:rgba(100,200,100,0.12);border:1px solid rgba(100,200,100,0.35);color:var(--green)}
-
-#rec{position:fixed;top:max(50px,calc(var(--safe-t)+42px));right:10px;z-index:25;
-  display:none;align-items:center;gap:4px;font-size:0.48rem;letter-spacing:0.1em;color:var(--red);font-weight:700}
+#rec{position:fixed;top:max(48px,calc(var(--safe-t)+40px));right:10px;z-index:25;display:none;align-items:center;gap:4px;font-size:0.46rem;letter-spacing:0.1em;color:var(--red);font-weight:700}
 #rec::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 6px var(--red);animation:rp 1s ease infinite}
 @keyframes rp{0%,100%{opacity:1}50%{opacity:0.2}}
-
-#cta{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:14px;background:rgba(10,12,17,0.92);pointer-events:all}
+#cta{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(10,12,17,0.92);pointer-events:all}
 #cta.gone{display:none}
-#cta h1{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;
-  font-size:2rem;color:var(--blue);letter-spacing:0.1em;text-shadow:0 0 30px rgba(150,200,255,0.25)}
-#cta p{font-size:0.6rem;color:var(--text-faint);text-align:center;line-height:1.7;max-width:280px}
-#cta button{width:200px;height:54px;background:rgba(150,200,255,0.06);
-  border:1px solid rgba(150,200,255,0.35);color:var(--blue);
-  font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;
-  letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
+#cta h1{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:2rem;color:var(--blue);letter-spacing:0.1em;text-shadow:0 0 30px rgba(150,200,255,0.25)}
+#cta p{font-size:0.58rem;color:var(--text-faint);text-align:center;line-height:1.7;max-width:280px}
+#cta button{width:200px;height:54px;background:rgba(150,200,255,0.06);border:1px solid rgba(150,200,255,0.35);color:var(--blue);font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
 #cta button:active{background:rgba(150,200,255,0.2);transform:scale(0.96)}
-
-#bot{position:fixed;bottom:0;left:0;right:0;z-index:20;
-  padding:0 10px var(--safe-b);background:rgba(8,10,16,0.88);backdrop-filter:blur(16px);border-top:1px solid var(--border-b)}
+#bot{position:fixed;bottom:0;left:0;right:0;z-index:20;padding:0 10px var(--safe-b);background:rgba(8,10,16,0.88);backdrop-filter:blur(16px);border-top:1px solid var(--border-b)}
 .br{display:flex;align-items:center;gap:6px;padding:8px 0;justify-content:center}
-.bb{flex:1;max-width:180px;height:46px;background:transparent;border:1px solid var(--border-b);
-  color:var(--text-dim);font-family:'JetBrains Mono',monospace;
-  font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
+.bb{flex:1;max-width:180px;height:46px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
 .bb:active{background:rgba(150,200,255,0.08)}
 .bb.stop{border-color:rgba(224,80,80,0.5);color:var(--red)}
 .bb.pri{border-color:rgba(150,200,255,0.4);color:var(--blue);background:rgba(150,200,255,0.05)}
 .bb.set{max-width:46px}
-
-#proc{position:fixed;inset:0;z-index:35;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(10,12,17,0.95)}
+#proc{position:fixed;inset:0;z-index:35;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:rgba(10,12,17,0.95)}
 #proc.show{display:flex}
 .pt{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.3rem;color:var(--yellow);letter-spacing:0.1em}
-.ps{font-size:0.58rem;color:var(--text-dim);letter-spacing:0.06em;text-align:center;line-height:1.8}
+.ps{font-size:0.56rem;color:var(--text-dim);letter-spacing:0.06em;text-align:center;line-height:1.8}
 .pw{width:260px;height:4px;background:rgba(150,200,255,0.1);overflow:hidden}
 .pb{height:100%;background:var(--yellow);width:0%;transition:width 0.1s}
-.pn{font-size:0.7rem;color:var(--blue);font-weight:700}
-
-#shBg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,0.5);display:none}
-#shBg.show{display:block}
-#sh{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--surface);
-  border-top:1px solid var(--border-b);border-radius:16px 16px 0 0;
-  padding:0 0 var(--safe-b);transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);max-height:70vh;overflow-y:auto}
+.pn{font-size:0.72rem;color:var(--blue);font-weight:700}
+#shBg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,0.5);display:none}#shBg.show{display:block}
+#sh{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--surface);border-top:1px solid var(--border-b);border-radius:16px 16px 0 0;padding:0 0 var(--safe-b);transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);max-height:70vh;overflow-y:auto}
 #sh.open{transform:translateY(0)}
 .shH{display:flex;justify-content:center;padding:10px 0 6px}.shH::after{content:'';width:36px;height:4px;background:rgba(150,200,255,0.2);border-radius:2px}
 .shT{display:flex;align-items:center;justify-content:space-between;padding:0 20px 10px}
@@ -91,9 +57,8 @@ video{display:none}
 .ss{padding:10px 20px 12px;border-top:1px solid var(--border)}
 .sl{font-size:0.55rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--blue-dim);font-weight:600;margin-bottom:6px}
 .sr{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.srl{font-size:0.58rem;color:var(--text-dim);width:44px;flex-shrink:0;letter-spacing:0.04em;text-transform:uppercase;font-weight:500}
-.sr input[type=range]{flex:1;-webkit-appearance:none;height:4px;
-  background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));border-radius:2px;outline:none}
+.srl{font-size:0.58rem;color:var(--text-dim);width:44px;flex-shrink:0;text-transform:uppercase;font-weight:500}
+.sr input[type=range]{flex:1;-webkit-appearance:none;height:4px;background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));border-radius:2px;outline:none}
 .sr input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);box-shadow:0 0 6px rgba(150,200,255,0.3)}
 .sr .v{min-width:26px;text-align:right;font-size:0.65rem;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums}
 </style>
@@ -102,95 +67,87 @@ video{display:none}
 <div id="stage"><video id="vid" autoplay playsinline muted></video><canvas id="camC"></canvas><canvas id="glC"></canvas></div>
 <div id="hud">
   <div class="hi"><span class="hv cb" id="hF">—</span><span class="hl">Frame</span></div>
-  <div class="hi"><span class="hv cg" id="hT">—</span><span class="hl">Tracks</span></div>
+  <div class="hi"><span class="hv cg" id="hT">—</span><span class="hl">Live</span></div>
+  <div class="hi"><span class="hv co" id="hA">—</span><span class="hl">Archived</span></div>
   <div class="hi"><span class="hv cy" id="hO">—</span><span class="hl">Obs</span></div>
   <div class="hi"><span class="hv cp" id="hG">—</span><span class="hl">Gauss</span></div>
   <div class="hi"><span class="hv cb" id="hFPS">—</span><span class="hl">FPS</span></div>
 </div>
 <div class="badge cap" id="badge" style="display:none">● Capture</div>
 <div id="rec" style="display:none">REC</div>
-
-<div id="cta">
-  <h1>GS-SLAM</h1>
-  <p>Gaussian Splatting SLAM. Move the camera slowly across a textured scene. The map builds from hundreds of frames.</p>
-  <button onclick="startCapture()">▶ BEGIN</button>
-</div>
-
+<div id="cta"><h1>GS-SLAM</h1><p>Gaussian Splatting SLAM. Move the camera slowly across a textured scene. The 3D map builds from thousands of tracked features across hundreds of frames.</p><button onclick="beginCapture()">▶ BEGIN</button></div>
 <div id="proc"><div class="pt">Processing</div><div class="pw"><div class="pb" id="pBar"></div></div><div class="ps" id="pSt">Preparing...</div><div class="pn" id="pN"></div></div>
-
 <div id="bot" style="display:none">
-  <div class="br" id="bCap"><button class="bb stop" onclick="stopCapture()">■ STOP CAPTURE</button></div>
-  <div class="br" id="bExp" style="display:none"><button class="bb pri" onclick="startCapture()">● NEW CAPTURE</button><button class="bb set" onclick="openSh()">⚙</button></div>
+  <div class="br" id="bCap"><button class="bb stop" onclick="endCapture()">■ STOP CAPTURE</button></div>
+  <div class="br" id="bExp" style="display:none"><button class="bb pri" onclick="beginCapture()">● NEW</button><button class="bb set" onclick="openSh()">⚙</button></div>
 </div>
-
 <div id="shBg" onclick="closeSh()"></div>
-<div id="sh">
-  <div class="shH"></div>
-  <div class="shT"><span class="shTt">Settings</span><button class="shX" onclick="closeSh()">✕</button></div>
-  <div class="ss"><div class="sl">Rendering</div>
-    <div class="sr"><span class="srl">Splat</span><input type="range" id="slSp" min="4" max="50" value="18" step="1"><span class="v" id="vlSp">18</span></div>
-    <div class="sr"><span class="srl">Alpha</span><input type="range" id="slAl" min="0.1" max="1.0" value="0.8" step="0.05"><span class="v" id="vlAl">0.80</span></div>
-  </div>
-  <div class="ss" style="padding-bottom:24px">
-    <div style="font-size:0.44rem;color:var(--text-faint);text-align:center;letter-spacing:0.06em">
-      Based on <span style="color:var(--blue-dim)">GS-SLAM</span> · Yan et al. CVPR 2024 · davesgames.io</div>
-  </div>
-</div>
+<div id="sh"><div class="shH"></div><div class="shT"><span class="shTt">Settings</span><button class="shX" onclick="closeSh()">✕</button></div>
+<div class="ss"><div class="sl">Rendering</div>
+<div class="sr"><span class="srl">Splat</span><input type="range" id="slSp" min="4" max="60" value="20" step="1"><span class="v" id="vlSp">20</span></div>
+<div class="sr"><span class="srl">Alpha</span><input type="range" id="slAl" min="0.1" max="1.0" value="0.85" step="0.05"><span class="v" id="vlAl">0.85</span></div>
+</div><div class="ss" style="padding-bottom:24px"><div style="font-size:0.44rem;color:var(--text-faint);text-align:center">Based on GS-SLAM · Yan et al. CVPR 2024 · davesgames.io</div></div></div>
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   GS-SLAM · THREE-PHASE PIPELINE
+   GS-SLAM · PROPER TRACK LIFECYCLE
    
-   KEY FIX: Observations are recorded EVERY 5 FRAMES for ALL
-   active tracks, UNCONDITIONALLY. No motion gate. No keyframe
-   gatekeeping. This ensures 2 minutes of capture produces
-   hundreds of observation snapshots and tens of thousands
-   of triangulatable tracks.
+   CRITICAL FIXES:
+   1. DEAD TRACK ARCHIVE — when tracks die, they're pushed to
+      deadTracks[] instead of deleted. Their observation history
+      is preserved for processing.
+   2. GRACE PERIOD — tracks survive 8 frames of match failure
+      before being archived. Prevents jitter-kills.
+   3. LARGER SEARCH — ±22px matching window for better flow.
+   4. PROCESS ALL — live + archived tracks feed triangulation.
+   5. NO DUP CHECK — every valid triangulation becomes a Gaussian.
    
-   Target: 10K-50K Gaussians from a 2-minute session.
+   Expected: 2 min capture → 30K-60K archived tracks → 15K-40K Gaussians
    ════════════════════════════════════════════════════════════ */
 
 let vid, camC, cCtx, glC, gl;
-let phase = 'idle';
-let frameNum = 0, lastTime = 0, fpsSmooth = 30;
-let totalObs = 0; // total observations recorded
+let phase = 'idle', frameNum = 0, lastTime = 0, fps = 30;
 
-// ─── FEATURE TRACKS ───
-// Observation recorded for every active track every OBS_INTERVAL frames.
-// No motion gate. No keyframe gate. Just time.
-const OBS_INTERVAL = 5;   // record obs every 5 frames
-const MAX_TRACKS = 700;
-const MIN_SPACE = 9;
+// ─── TRACKING CONFIG ───
+const OBS_EVERY = 3;      // record observations every 3 frames
+const MAX_LIVE = 700;      // max simultaneous tracks
+const MIN_SPACE = 8;       // min px between features
+const SEARCH_R = 22;       // match search radius (was 14 — doubled)
+const MATCH_THRESH = 800;  // SAD threshold for match acceptance
+const GRACE = 8;           // frames a track survives without match
+const GLYPHS = ['dot','dot','dot','dot','dot','dot','dot','target','corners','cross']; // 70% dots
+
+// ─── STATE ───
 let nextTID = 0;
-const tracks = new Map();
-
-// Camera pose (accumulated from mean optical flow)
+const live = new Map();     // active tracks
+const dead = [];            // ARCHIVED dead tracks — THIS IS THE KEY FIX
+let totalObs = 0;
 let camX = 0, camY = 0, camZ = 0;
 let prevGray = null;
+let poses = [];             // camera pose snapshots
 
-// Snapshot for processing
-let allTracks = [];   // frozen at end of capture
-let poseHistory = []; // {frame, cx, cy, cz} every OBS_INTERVAL frames
-
-// Gaussians
+// ─── GAUSSIANS ───
 let gaussians = [];
-let splatSize = 18, baseAlpha = 0.8;
+const MAX_GAUSS = 50000;
+let splatSz = 20, baseA = 0.85;
 
-// 3D orbit
-let orbitTh = 0.6, orbitPh = 0.7, orbitD = 6;
-let isDrag = false, ltx = 0, lty = 0, pd0 = 0, pz0 = 6;
+// ─── 3D VIEW ───
+let oTh = 0.6, oPh = 0.7, oD = 6;
+let drag = false, ltx = 0, lty = 0, pd0 = 0, pz0 = 6;
+let sortedOrder = null, sortFrame = 0;
 
-// WebGL
+// ─── GL ───
 let gP, gPB, gCB, gaP, gaC, guM, guS;
 
+function fmt(n){return n>=100000?(n/1000|0)+'k':n>=10000?(n/1000).toFixed(1)+'k':n>=1000?(n/1000).toFixed(1)+'k':String(n)}
 function sg(el){el.style.setProperty('--pct',(el.value-el.min)/(el.max-el.min)*100+'%')}
 
 /* ════════════════════════════════════════════════════════════
    PHASE 1: CAPTURE
    ════════════════════════════════════════════════════════════ */
-async function startCapture(){
-  tracks.clear(); nextTID=0; prevGray=null; frameNum=0; totalObs=0;
-  camX=0;camY=0;camZ=0; gaussians=[]; allTracks=[]; poseHistory=[];
+async function beginCapture(){
+  live.clear();dead.length=0;nextTID=0;prevGray=null;frameNum=0;totalObs=0;
+  camX=0;camY=0;camZ=0;gaussians=[];poses=[];sortedOrder=null;
   try{
     const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:{ideal:'environment'}},audio:false});
     vid=document.getElementById('vid');vid.srcObject=s;await vid.play();
@@ -211,64 +168,81 @@ async function startCapture(){
 
 function capLoop(ts){
   if(phase!=='capture')return;
-  const dt=ts-lastTime;lastTime=ts;fpsSmooth=fpsSmooth*0.9+(1000/Math.max(dt,1))*0.1;
+  const dt=ts-lastTime;lastTime=ts;fps=fps*0.9+(1000/Math.max(dt,1))*0.1;
 
   cCtx.drawImage(vid,0,0);
   const img=cCtx.getImageData(0,0,camC.width,camC.height);
   const gray=toGray(img);
-  const w=camC.width, h=camC.height;
+  const W=camC.width, H=camC.height;
 
   if(prevGray){
-    // Match existing tracks
-    const matched=new Set();
-    for(const[id,tr] of tracks){
-      const m=matchPatch(prevGray,gray,w,h,tr.x,tr.y);
+    // ── MATCH all live tracks ──
+    const matched = new Set();
+    for(const[id,tr] of live){
+      const m = match(prevGray,gray,W,H,tr.x,tr.y);
       if(m){
         matched.add(id);
-        tr.px=tr.x;tr.py=tr.y;tr.x=m.x;tr.y=m.y;tr.sad=m.sad;tr.frames++;
-        // Rolling color
-        const pi=(Math.round(m.y)*w+Math.round(m.x))*4;
+        tr.px=tr.x; tr.py=tr.y;
+        tr.x=m.x; tr.y=m.y; tr.sad=m.sad;
+        tr.age++; tr.lost=0;
+        // Color running average
+        const pi=(Math.round(m.y)*W+Math.round(m.x))*4;
         tr.c[0]=tr.c[0]*0.88+img.data[pi]/255*0.12;
         tr.c[1]=tr.c[1]*0.88+img.data[pi+1]/255*0.12;
         tr.c[2]=tr.c[2]*0.88+img.data[pi+2]/255*0.12;
+      } else {
+        // GRACE PERIOD — don't kill immediately
+        tr.lost++;
       }
     }
-    // Kill lost
-    for(const[id] of tracks)if(!matched.has(id))tracks.delete(id);
 
-    // Camera motion from mean flow
+    // ── ARCHIVE tracks that exceeded grace period ──
+    for(const[id,tr] of live){
+      if(tr.lost > GRACE){
+        // ARCHIVE instead of delete — this is the critical fix
+        if(tr.obs.length >= 2){
+          dead.push({obs:tr.obs, c:[...tr.c], age:tr.age});
+        }
+        live.delete(id);
+      }
+    }
+
+    // ── Camera motion from mean flow ──
     let sx=0,sy=0,n=0;
-    for(const[id,tr] of tracks){if(matched.has(id)){sx+=tr.x-tr.px;sy+=tr.y-tr.py;n++}}
+    for(const[id,tr] of live){
+      if(matched.has(id)){sx+=tr.x-tr.px;sy+=tr.y-tr.py;n++}
+    }
     const mx=n>0?sx/n:0, my=n>0?sy/n:0;
     camX+=mx*0.004; camY-=my*0.004; camZ-=0.012;
 
-    // ══ RECORD OBSERVATIONS — EVERY OBS_INTERVAL FRAMES, UNCONDITIONALLY ══
-    if(frameNum % OBS_INTERVAL === 0){
-      poseHistory.push({frame:frameNum, cx:camX, cy:camY, cz:camZ});
-      for(const[id,tr] of tracks){
-        if(matched.has(id)){
-          tr.obs.push({x:tr.x, y:tr.y, cx:camX, cy:camY, cz:camZ, frame:frameNum});
+    // ── RECORD OBSERVATIONS — every OBS_EVERY frames, unconditionally ──
+    if(frameNum % OBS_EVERY === 0){
+      poses.push({f:frameNum, cx:camX, cy:camY, cz:camZ});
+      for(const[id,tr] of live){
+        if(tr.lost === 0){ // only record if actively matched
+          tr.obs.push({x:tr.x, y:tr.y, cx:camX, cy:camY, cz:camZ});
           totalObs++;
         }
       }
     }
   }
 
-  // Spawn to maintain density
-  if(tracks.size<MAX_TRACKS){
-    const corners=detect(gray,w,h,MAX_TRACKS);
+  // ── SPAWN new tracks ──
+  if(live.size < MAX_LIVE){
+    const corners = detect(gray, W, H, MAX_LIVE);
     for(const c of corners){
-      if(tracks.size>=MAX_TRACKS)break;
-      let ok=true;for(const[,tr] of tracks)if((c.x-tr.x)**2+(c.y-tr.y)**2<MIN_SPACE*MIN_SPACE){ok=false;break}
-      if(!ok)continue;
-      const pi=(Math.round(c.y)*w+Math.round(c.x))*4;
-      const g=Math.random();
-      tracks.set(nextTID,{
+      if(live.size >= MAX_LIVE) break;
+      let ok=true;
+      for(const[,tr] of live){
+        if((c.x-tr.x)**2+(c.y-tr.y)**2 < MIN_SPACE*MIN_SPACE){ok=false;break}
+      }
+      if(!ok) continue;
+      const pi=(Math.round(c.y)*W+Math.round(c.x))*4;
+      live.set(nextTID,{
         id:nextTID, x:c.x, y:c.y, px:c.x, py:c.y,
         c:[img.data[pi]/255, img.data[pi+1]/255, img.data[pi+2]/255],
-        frames:1, obs:[], sad:0,
-        // Glyph: 70% soft dots, 15% targets, 10% corners, 5% cross
-        glyph: g<0.7?'dot':g<0.85?'target':g<0.95?'corners':'cross'
+        age:1, lost:0, obs:[], sad:0,
+        gl:GLYPHS[nextTID % GLYPHS.length]
       });
       nextTID++;
     }
@@ -277,63 +251,55 @@ function capLoop(ts){
   prevGray=gray; frameNum++;
   drawOverlay();
 
+  // ── HUD ──
   document.getElementById('hF').textContent=frameNum;
-  document.getElementById('hT').textContent=tracks.size;
-  document.getElementById('hO').textContent=totalObs>999?(totalObs/1000).toFixed(1)+'k':totalObs;
+  document.getElementById('hT').textContent=live.size;
+  document.getElementById('hA').textContent=fmt(dead.length);
+  document.getElementById('hO').textContent=fmt(totalObs);
   document.getElementById('hG').textContent='—';
-  document.getElementById('hFPS').textContent=Math.round(fpsSmooth);
+  document.getElementById('hFPS').textContent=Math.round(fps);
   requestAnimationFrame(capLoop);
 }
 
-/* ═══ TRACKING OVERLAY — soft + magical with subtle structure ═══ */
+/* ═══ OVERLAY — soft magical + subtle structure ═══ */
 function drawOverlay(){
   const ctx=cCtx;
-
-  // Subtle network mesh — very faint connections
-  const arr=[];for(const[,tr] of tracks)if(tr.frames>3)arr.push(tr);
-  ctx.globalAlpha=0.05;ctx.strokeStyle='rgba(150,200,255,1)';ctx.lineWidth=0.5;
+  // Faint network mesh
+  const arr=[];for(const[,tr] of live)if(tr.age>3&&tr.lost===0)arr.push(tr);
+  ctx.globalAlpha=0.04;ctx.strokeStyle='rgba(150,200,255,1)';ctx.lineWidth=0.5;
   for(let i=0;i<arr.length;i++){
-    const a=arr[i];
-    for(let j=i+1;j<Math.min(i+20,arr.length);j++){
-      const b=arr[j],dx=a.x-b.x,dy=a.y-b.y;
-      if(dx*dx+dy*dy<1600){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
+    for(let j=i+1;j<Math.min(i+15,arr.length);j++){
+      const dx=arr[i].x-arr[j].x,dy=arr[i].y-arr[j].y;
+      if(dx*dx+dy*dy<1800){ctx.beginPath();ctx.moveTo(arr[i].x,arr[i].y);ctx.lineTo(arr[j].x,arr[j].y);ctx.stroke()}
     }
   }
   ctx.globalAlpha=1;
 
-  for(const[,tr] of tracks){
-    if(tr.frames<2)continue;
-    const age=Math.min(tr.frames,100), ageT=age/100;
-    const nObs=tr.obs.length;
-    const rich=nObs>=4;
-    const a=0.3+0.5*ageT;
+  for(const[,tr] of live){
+    if(tr.age<2||tr.lost>0)continue;
+    const at=Math.min(tr.age,80)/80;
+    const rich=tr.obs.length>=4;
+    const a=0.3+0.5*at;
+    const cr=rich?255:130,cg=rich?200:190,cb=rich?50:255;
 
-    // Color: blue-cyan for tracking, warm gold for observation-rich
-    const cr=rich?255:130, cg=rich?200:190, cb=rich?50:255;
-
-    // Motion trail — soft glow line
+    // Trail
     ctx.beginPath();ctx.moveTo(tr.px,tr.py);ctx.lineTo(tr.x,tr.y);
-    ctx.strokeStyle=`rgba(${cr},${cg},${cb},${a*0.35})`;
-    ctx.lineWidth=rich?1.5:0.7;ctx.stroke();
+    ctx.strokeStyle=`rgba(${cr},${cg},${cb},${a*0.3})`;ctx.lineWidth=rich?1.2:0.6;ctx.stroke();
 
-    const x=tr.x,y=tr.y,s=rich?4:2.8;
-    ctx.strokeStyle=`rgba(${cr},${cg},${cb},${a*0.7})`;
-    ctx.fillStyle=`rgba(${cr},${cg},${cb},${a*0.6})`;
-    ctx.lineWidth=0.8;
+    const x=tr.x,y=tr.y,s=rich?3.5:2.5;
+    ctx.fillStyle=`rgba(${cr},${cg},${cb},${a*0.65})`;
+    ctx.strokeStyle=`rgba(${cr},${cg},${cb},${a*0.6})`;ctx.lineWidth=0.7;
 
-    switch(tr.glyph){
+    switch(tr.gl){
       case 'dot':
-        // Soft glowing dot (the magical look)
-        ctx.beginPath();ctx.arc(x,y,s*0.6,0,Math.PI*2);ctx.fill();
-        // Outer glow ring
-        if(rich){ctx.globalAlpha=a*0.2;ctx.beginPath();ctx.arc(x,y,s*1.5,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
+        ctx.beginPath();ctx.arc(x,y,s*0.55,0,Math.PI*2);ctx.fill();
+        if(rich){ctx.globalAlpha=a*0.15;ctx.beginPath();ctx.arc(x,y,s*1.8,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
         break;
       case 'target':
         ctx.beginPath();ctx.arc(x,y,s,0,Math.PI*2);ctx.stroke();
-        ctx.beginPath();ctx.arc(x,y,1.2,0,Math.PI*2);ctx.fill();break;
+        ctx.beginPath();ctx.arc(x,y,1,0,Math.PI*2);ctx.fill();break;
       case 'corners':
-        const c=s*1.1,l=s*0.45;
-        ctx.beginPath();
+        const c=s,l=s*0.4;ctx.beginPath();
         ctx.moveTo(x-c,y-c+l);ctx.lineTo(x-c,y-c);ctx.lineTo(x-c+l,y-c);
         ctx.moveTo(x+c-l,y-c);ctx.lineTo(x+c,y-c);ctx.lineTo(x+c,y-c+l);
         ctx.moveTo(x+c,y+c-l);ctx.lineTo(x+c,y+c);ctx.lineTo(x+c-l,y+c);
@@ -341,15 +307,16 @@ function drawOverlay(){
         ctx.stroke();break;
       case 'cross':
         ctx.beginPath();ctx.moveTo(x-s,y);ctx.lineTo(x+s,y);ctx.moveTo(x,y-s);ctx.lineTo(x,y+s);ctx.stroke();
-        ctx.beginPath();ctx.arc(x,y,1,0,Math.PI*2);ctx.fill();break;
+        ctx.beginPath();ctx.arc(x,y,0.8,0,Math.PI*2);ctx.fill();break;
     }
   }
 }
 
 /* ════════════════════════════════════════════════════════════
-   PHASE 2: PROCESS — triangulate ALL tracks aggressively
+   PHASE 2: PROCESS
+   Triangulate ALL tracks — live AND archived dead ones.
    ════════════════════════════════════════════════════════════ */
-function stopCapture(){
+function endCapture(){
   phase='process';
   if(vid&&vid.srcObject){vid.srcObject.getTracks().forEach(t=>t.stop());vid.srcObject=null}
   document.getElementById('rec').style.display='none';
@@ -357,36 +324,37 @@ function stopCapture(){
   const b=document.getElementById('badge');b.className='badge proc';b.textContent='◆ Processing';
   document.getElementById('proc').classList.add('show');
 
-  // Snapshot ALL tracks (including short-lived ones)
-  allTracks=[];
-  for(const[,tr] of tracks){
-    if(tr.obs.length>=2) allTracks.push({obs:[...tr.obs],c:[...tr.c],frames:tr.frames});
+  // Collect ALL tracks: archived dead + currently live
+  const allTracks = [];
+
+  // Dead tracks (the bulk of the data)
+  for(const tr of dead){
+    if(tr.obs.length >= 2) allTracks.push(tr);
   }
-  // Also include tracks that were previously killed but had observations
-  // (we don't have those — they were deleted. This is a known limitation.
-  //  To fix properly, we'd archive dead tracks. For now, we only have living tracks.)
 
-  // For future: we could store dead tracks. For now, the fix is that with
-  // observations recorded every 5 frames unconditionally, even short-lived
-  // tracks accumulate data before dying.
+  // Still-live tracks
+  for(const[,tr] of live){
+    if(tr.obs.length >= 2) allTracks.push({obs:[...tr.obs], c:[...tr.c], age:tr.age});
+  }
 
-  document.getElementById('pSt').textContent=
-    `${allTracks.length} tracks · ${poseHistory.length} snapshots · ${frameNum} frames`;
+  document.getElementById('pSt').textContent =
+    `${allTracks.length.toLocaleString()} tracks (${dead.length.toLocaleString()} archived + ${live.size} live)\n${totalObs.toLocaleString()} observations · ${frameNum} frames`;
   document.getElementById('pN').textContent='';
 
-  setTimeout(()=>processChunk(0),100);
+  setTimeout(()=>procChunk(allTracks,0),50);
 }
 
-function processChunk(idx){
-  const total=allTracks.length;
-  if(total===0){finishProcess();return}
-  const CHUNK=500;
+function procChunk(all,idx){
+  const total=all.length;
+  if(total===0){finProc();return}
+  const CHUNK=1000;
   const end=Math.min(idx+CHUNK,total);
   const W=camC?camC.width:640, H=camC?camC.height:480;
   const fx=W*0.8, cx=W/2, cy=H/2;
 
   for(let i=idx;i<end;i++){
-    const tr=allTracks[i];
+    if(gaussians.length>=MAX_GAUSS)break;
+    const tr=all[i];
     const obs=tr.obs;
     if(obs.length<2)continue;
 
@@ -394,64 +362,57 @@ function processChunk(idx){
     const blX=last.cx-first.cx, blY=last.cy-first.cy, blZ=last.cz-first.cz;
     const baseline=Math.sqrt(blX*blX+blY*blY+blZ*blZ);
 
-    // Very permissive: even tiny baseline produces Gaussians
-    // (with proportionally lower opacity for less confident points)
     const dispX=(last.x-first.x)/W, dispY=(last.y-first.y)/H;
     const disparity=Math.sqrt(dispX*dispX+dispY*dispY);
 
     let depth;
-    if(disparity>0.002 && baseline>0.002){
-      depth=Math.max(0.15,Math.min(25,baseline/(disparity*2+0.003)));
+    if(disparity>0.001 && baseline>0.001){
+      depth=Math.max(0.1,Math.min(30,baseline/(disparity*2+0.002)));
     } else {
-      // Minimal parallax: assign default depth based on camera travel
-      depth=Math.max(0.5,Math.min(8,baseline*20+1));
+      depth=Math.max(0.3,Math.min(10,baseline*25+0.8));
     }
 
-    // Create Gaussians at MULTIPLE observation points along the track
-    // (not just midpoint — this dramatically increases density)
-    const nGauss=Math.min(obs.length,Math.max(1,Math.floor(obs.length/3)));
-    const step=Math.max(1,Math.floor(obs.length/nGauss));
+    // Confidence from observation count and baseline
+    const conf=Math.min(1,obs.length/8)*Math.min(1,baseline/0.06+0.2);
 
-    for(let gi=0;gi<nGauss;gi++){
-      const oi=Math.min(gi*step,obs.length-1);
-      const o=obs[oi];
+    // Create Gaussian from median observation
+    const mid=obs[Math.floor(obs.length/2)];
+    const X=(mid.x-cx)/fx*depth+mid.cx;
+    const Y=-(mid.y-cy)/fx*depth+mid.cy;
+    const Z=-depth+mid.cz;
 
-      const X=(o.x-cx)/fx*depth+o.cx;
-      const Y=-(o.y-cy)/fx*depth+o.cy;
-      const Z=-depth+o.cz;
+    gaussians.push({x:X,y:Y,z:Z, r:tr.c[0],g:tr.c[1],b:tr.c[2],
+      opacity:baseA*(0.25+0.75*conf)});
 
-      // Very tight dup check — only suppress near-identical positions
-      let dup=false;
-      const checkN=Math.min(gaussians.length,200);
-      for(let j=gaussians.length-1;j>=gaussians.length-checkN&&j>=0;j--){
-        const g=gaussians[j];
-        if((g.x-X)**2+(g.y-Y)**2+(g.z-Z)**2<0.0002){dup=true;break}
-      }
-      if(dup)continue;
-
-      const conf=Math.min(1,obs.length/6)*Math.min(1,baseline/0.08+0.3);
-      gaussians.push({
-        x:X,y:Y,z:Z,
-        r:tr.c[0],g:tr.c[1],b:tr.c[2],
-        opacity:baseAlpha*(0.3+0.7*conf),
-      });
+    // For long-lived tracks, create additional Gaussians at other observation points
+    if(obs.length>=6 && gaussians.length<MAX_GAUSS){
+      const q1=obs[Math.floor(obs.length*0.25)];
+      const X2=(q1.x-cx)/fx*depth+q1.cx, Y2=-(q1.y-cy)/fx*depth+q1.cy, Z2=-depth+q1.cz;
+      gaussians.push({x:X2,y:Y2,z:Z2, r:tr.c[0],g:tr.c[1],b:tr.c[2],
+        opacity:baseA*(0.2+0.6*conf)});
+    }
+    if(obs.length>=10 && gaussians.length<MAX_GAUSS){
+      const q3=obs[Math.floor(obs.length*0.75)];
+      const X3=(q3.x-cx)/fx*depth+q3.cx, Y3=-(q3.y-cy)/fx*depth+q3.cy, Z3=-depth+q3.cz;
+      gaussians.push({x:X3,y:Y3,z:Z3, r:tr.c[0],g:tr.c[1],b:tr.c[2],
+        opacity:baseA*(0.2+0.6*conf)});
     }
   }
 
   const pct=Math.round(end/total*100);
   document.getElementById('pBar').style.width=pct+'%';
-  document.getElementById('pSt').textContent=`Triangulating: ${end}/${total} tracks`;
+  document.getElementById('pSt').textContent=`Triangulating: ${fmt(end)} / ${fmt(total)} tracks`;
   document.getElementById('pN').textContent=gaussians.length.toLocaleString()+' Gaussians';
-  document.getElementById('hG').textContent=gaussians.length>999?(gaussians.length/1000).toFixed(1)+'k':gaussians.length;
+  document.getElementById('hG').textContent=fmt(gaussians.length);
 
-  if(end<total)setTimeout(()=>processChunk(end),5);
-  else setTimeout(finishProcess,300);
+  if(end<total && gaussians.length<MAX_GAUSS) setTimeout(()=>procChunk(all,end),4);
+  else setTimeout(finProc,200);
 }
 
-function finishProcess(){
+function finProc(){
   document.getElementById('pBar').style.width='100%';
-  document.getElementById('pSt').textContent=`Complete · ${gaussians.length.toLocaleString()} Gaussians from ${allTracks.length} tracks`;
-  setTimeout(enterExplore,500);
+  document.getElementById('pSt').textContent=`Done · ${gaussians.length.toLocaleString()} Gaussians from ${fmt(dead.length+live.size)} tracks`;
+  setTimeout(enterExplore,400);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -460,21 +421,21 @@ function finishProcess(){
 function enterExplore(){
   phase='explore';
   document.getElementById('proc').classList.remove('show');
-  camC.style.display='none';
-  glC=document.getElementById('glC');glC.style.display='block';
-  const b=document.getElementById('badge');b.className='badge exp';b.textContent='◆ Explore';
+  camC.style.display='none';glC=document.getElementById('glC');glC.style.display='block';
+  const b=document.getElementById('badge');b.className='badge exp';b.textContent='◆ Explore · '+fmt(gaussians.length)+' Gaussians';
   document.getElementById('bot').style.display='';
   document.getElementById('bCap').style.display='none';document.getElementById('bExp').style.display='';
-  document.getElementById('hG').textContent=gaussians.length>999?(gaussians.length/1000).toFixed(1)+'k':gaussians.length;
-  initGL();lastTime=performance.now();requestAnimationFrame(expLoop);
+  document.getElementById('hG').textContent=fmt(gaussians.length);
+  initGL();sortedOrder=null;sortFrame=0;
+  lastTime=performance.now();requestAnimationFrame(expLoop);
 }
 
 function expLoop(ts){
   if(phase!=='explore')return;
-  const dt=ts-lastTime;lastTime=ts;fpsSmooth=fpsSmooth*0.9+(1000/Math.max(dt,1))*0.1;
-  if(!isDrag)orbitTh+=0.003;
+  const dt=ts-lastTime;lastTime=ts;fps=fps*0.9+(1000/Math.max(dt,1))*0.1;
+  if(!drag)oTh+=0.003;
   renderSplats();
-  document.getElementById('hFPS').textContent=Math.round(fpsSmooth);
+  document.getElementById('hFPS').textContent=Math.round(fps);
   requestAnimationFrame(expLoop);
 }
 
@@ -484,8 +445,8 @@ function expLoop(ts){
 function toGray(d){const n=d.width*d.height,g=new Float32Array(n);for(let i=0;i<n;i++){const j=i*4;g[i]=0.299*d.data[j]+0.587*d.data[j+1]+0.114*d.data[j+2]}return g}
 
 function detect(gray,w,h,maxN){
-  const step=5,th=2400,cands=[];
-  for(let y=8;y<h-8;y+=step)for(let x=8;x<w-8;x+=step){
+  const step=5,th=2000,cands=[];
+  for(let y=6;y<h-6;y+=step)for(let x=6;x<w-6;x+=step){
     const c=gray[y*w+x];let sc=0;
     for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const d=gray[(y+dy)*w+(x+dx)]-c;sc+=d*d}
     if(sc>th)cands.push({x,y,sc})
@@ -496,8 +457,9 @@ function detect(gray,w,h,maxN){
   return sel
 }
 
-function matchPatch(pG,cG,w,h,ox,oy){
-  const hw=5,sr=14,px=Math.round(ox),py=Math.round(oy);
+function match(pG,cG,w,h,ox,oy){
+  const hw=5, sr=SEARCH_R;
+  const px=Math.round(ox),py=Math.round(oy);
   if(px<sr+hw||px>=w-sr-hw||py<sr+hw||py>=h-sr-hw)return null;
   let bx=0,by=0,bs=Infinity;
   for(let dy=-sr;dy<=sr;dy+=2)for(let dx=-sr;dx<=sr;dx+=2){
@@ -505,43 +467,40 @@ function matchPatch(pG,cG,w,h,ox,oy){
     let s=0;for(let wy=-hw;wy<=hw;wy+=2)for(let wx=-hw;wx<=hw;wx+=2)s+=Math.abs(pG[(py+wy)*w+(px+wx)]-cG[(ny+wy)*w+(nx+wx)]);
     if(s<bs){bs=s;bx=dx;by=dy}
   }
-  return bs<700?{x:px+bx,y:py+by,dx:bx,dy:by,sad:bs}:null;
+  return bs<MATCH_THRESH?{x:px+bx,y:py+by,dx:bx,dy:by,sad:bs}:null;
 }
 
 /* ════════════════════════════════════════════════════════════
-   WebGL — DEPTH-SORTED GAUSSIAN RENDERER
+   WebGL RENDERER
+   Depth-sort every 15 frames for performance at high counts.
    ════════════════════════════════════════════════════════════ */
 function initGL(){
   const dpr=Math.min(devicePixelRatio,2);
   glC.width=window.innerWidth*dpr;glC.height=window.innerHeight*dpr;
   gl=glC.getContext('webgl',{alpha:false,antialias:true,premultipliedAlpha:false});if(!gl)return;
-
   const vs=`attribute vec3 aP;attribute vec4 aC;uniform mat4 uM;uniform float uS;varying vec4 vC;
     void main(){gl_Position=uM*vec4(aP,1.0);gl_PointSize=uS/max(gl_Position.w,0.05);vC=aC;}`;
   const fs=`precision mediump float;varying vec4 vC;
     void main(){vec2 d=gl_PointCoord-0.5;float r2=dot(d,d);
     float gauss=exp(-r2/0.08);float alpha=vC.a*gauss;
     if(alpha<0.003)discard;gl_FragColor=vec4(vC.rgb*alpha,alpha);}`;
-
   gP=mkP(gl,vs,fs);gaP=gl.getAttribLocation(gP,'aP');gaC=gl.getAttribLocation(gP,'aC');
   guM=gl.getUniformLocation(gP,'uM');guS=gl.getUniformLocation(gP,'uS');
   gPB=gl.createBuffer();gCB=gl.createBuffer();
-
-  glC.addEventListener('touchstart',e=>{if(e.touches.length===2){pd0=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);pz0=orbitD;return}isDrag=true;ltx=e.touches[0].clientX;lty=e.touches[0].clientY},{passive:true});
-  glC.addEventListener('touchmove',e=>{if(e.touches.length===2){const d=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);orbitD=Math.max(0.5,Math.min(40,pz0*(pd0/d)));e.preventDefault();return}if(!isDrag)return;orbitTh+=(e.touches[0].clientX-ltx)*0.008;orbitPh=Math.max(0.1,Math.min(Math.PI-0.1,orbitPh+(e.touches[0].clientY-lty)*0.008));ltx=e.touches[0].clientX;lty=e.touches[0].clientY},{passive:false});
-  glC.addEventListener('touchend',()=>isDrag=false,{passive:true});
-  glC.addEventListener('mousedown',e=>{isDrag=true;ltx=e.clientX;lty=e.clientY});
-  window.addEventListener('mousemove',e=>{if(!isDrag)return;orbitTh+=(e.clientX-ltx)*0.005;orbitPh=Math.max(0.1,Math.min(Math.PI-0.1,orbitPh+(e.clientY-lty)*0.005));ltx=e.clientX;lty=e.clientY});
-  window.addEventListener('mouseup',()=>isDrag=false);
-  glC.addEventListener('wheel',e=>{orbitD=Math.max(0.5,Math.min(40,orbitD+e.deltaY*0.01));e.preventDefault()},{passive:false});
+  // Touch
+  glC.addEventListener('touchstart',e=>{if(e.touches.length===2){pd0=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);pz0=oD;return}drag=true;ltx=e.touches[0].clientX;lty=e.touches[0].clientY},{passive:true});
+  glC.addEventListener('touchmove',e=>{if(e.touches.length===2){const d=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);oD=Math.max(0.3,Math.min(50,pz0*(pd0/d)));e.preventDefault();return}if(!drag)return;oTh+=(e.touches[0].clientX-ltx)*0.008;oPh=Math.max(0.1,Math.min(Math.PI-0.1,oPh+(e.touches[0].clientY-lty)*0.008));ltx=e.touches[0].clientX;lty=e.touches[0].clientY},{passive:false});
+  glC.addEventListener('touchend',()=>drag=false,{passive:true});
+  glC.addEventListener('mousedown',e=>{drag=true;ltx=e.clientX;lty=e.clientY});
+  window.addEventListener('mousemove',e=>{if(!drag)return;oTh+=(e.clientX-ltx)*0.005;oPh=Math.max(0.1,Math.min(Math.PI-0.1,oPh+(e.clientY-lty)*0.005));ltx=e.clientX;lty=e.clientY});
+  window.addEventListener('mouseup',()=>drag=false);
+  glC.addEventListener('wheel',e=>{oD=Math.max(0.3,Math.min(50,oD+e.deltaY*0.01));e.preventDefault()},{passive:false});
 }
-
 function mkP(g,vs,fs){const v=g.createShader(g.VERTEX_SHADER);g.shaderSource(v,vs);g.compileShader(v);const f=g.createShader(g.FRAGMENT_SHADER);g.shaderSource(f,fs);g.compileShader(f);const p=g.createProgram();g.attachShader(p,v);g.attachShader(p,f);g.linkProgram(p);return p}
 function m4P(fov,asp,n,f){const t=1/Math.tan(fov/2),nf=1/(n-f);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)*nf,-1,0,0,2*f*n*nf,0])}
 function m4L(e,c,u){const zx=e[0]-c[0],zy=e[1]-c[1],zz=e[2]-c[2];let l=1/Math.sqrt(zx*zx+zy*zy+zz*zz);const z=[zx*l,zy*l,zz*l],xx=u[1]*z[2]-u[2]*z[1],xy=u[2]*z[0]-u[0]*z[2],xz=u[0]*z[1]-u[1]*z[0];l=1/Math.sqrt(xx*xx+xy*xy+xz*xz);const x=[xx*l,xy*l,xz*l],y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]),-(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]),-(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]),1])}
 function m4M(a,b){const r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];return r}
 function m4TP(m,x,y,z){return[m[0]*x+m[4]*y+m[8]*z+m[12],m[1]*x+m[5]*y+m[9]*z+m[13],m[2]*x+m[6]*y+m[10]*z+m[14]]}
-
 function glD(pos,col,mode){
   gl.bindBuffer(gl.ARRAY_BUFFER,gPB);gl.bufferData(gl.ARRAY_BUFFER,pos,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(gaP);gl.vertexAttribPointer(gaP,3,gl.FLOAT,false,0,0);
   gl.bindBuffer(gl.ARRAY_BUFFER,gCB);gl.bufferData(gl.ARRAY_BUFFER,col,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(gaC);gl.vertexAttribPointer(gaC,4,gl.FLOAT,false,0,0);
@@ -555,45 +514,48 @@ function renderSplats(){
   if(glC.width!==w||glC.height!==h){glC.width=w;glC.height=h}
   gl.viewport(0,0,w,h);gl.clearColor(0.035,0.04,0.055,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
-  // Orbit target = centroid of pose history
   let tcx=0,tcy=0,tcz=0;
-  if(poseHistory.length>0){for(const p of poseHistory){tcx+=p.cx;tcy+=p.cy;tcz+=p.cz}tcx/=poseHistory.length;tcy/=poseHistory.length;tcz/=poseHistory.length}
-  const eX=tcx+orbitD*Math.sin(orbitPh)*Math.cos(orbitTh),eY=tcy+orbitD*Math.cos(orbitPh),eZ=tcz+orbitD*Math.sin(orbitPh)*Math.sin(orbitTh);
+  if(poses.length>0){for(const p of poses){tcx+=p.cx;tcy+=p.cy;tcz+=p.cz}tcx/=poses.length;tcy/=poses.length;tcz/=poses.length}
+  const eX=tcx+oD*Math.sin(oPh)*Math.cos(oTh),eY=tcy+oD*Math.cos(oPh),eZ=tcz+oD*Math.sin(oPh)*Math.sin(oTh);
   const proj=m4P(Math.PI/4,w/h,0.02,300);
   const view=m4L([eX,eY,eZ],[tcx,tcy,tcz],[0,1,0]);
   const mvp=m4M(proj,view);
-
   gl.useProgram(gP);gl.uniformMatrix4fv(guM,false,mvp);
 
-  // Pass 1: opaque (grid + camera path)
+  // Opaque pass: grid + camera path
   gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.disable(gl.BLEND);
   gl.uniform1f(guS,1);
   const gN=21,gS=8,gp=[],gc=[];
-  for(let i=0;i<gN;i++){const t=(i/(gN-1)-.5)*gS*2;gp.push(t,0,-gS,t,0,gS,-gS,0,t,gS,0,t);gc.push(.12,.12,.18,1,.12,.12,.18,1,.12,.12,.18,1,.12,.12,.18,1)}
+  for(let i=0;i<gN;i++){const t=(i/(gN-1)-.5)*gS*2;gp.push(t,0,-gS,t,0,gS,-gS,0,t,gS,0,t);gc.push(.1,.1,.16,1,.1,.1,.16,1,.1,.1,.16,1,.1,.1,.16,1)}
   glD(new Float32Array(gp),new Float32Array(gc),gl.LINES);
 
-  if(poseHistory.length>1){
-    gl.uniform1f(guS,80);
-    const kn=poseHistory.length,cp=new Float32Array(kn*3),cc=new Float32Array(kn*4);
-    for(let i=0;i<kn;i++){const k=poseHistory[i];cp[i*3]=k.cx;cp[i*3+1]=k.cy;cp[i*3+2]=k.cz;const t=i/kn;cc[i*4]=.1;cc[i*4+1]=.35*(1-t)+.85*t;cc[i*4+2]=t+.25*(1-t);cc[i*4+3]=1}
+  if(poses.length>1){
+    gl.uniform1f(guS,60);
+    const kn=Math.min(poses.length,2000),skip=Math.max(1,Math.floor(poses.length/kn));
+    const cp=new Float32Array(kn*3),cc=new Float32Array(kn*4);
+    for(let i=0;i<kn;i++){const k=poses[Math.min(i*skip,poses.length-1)];cp[i*3]=k.cx;cp[i*3+1]=k.cy;cp[i*3+2]=k.cz;const t=i/kn;cc[i*4]=.1;cc[i*4+1]=.3*(1-t)+.8*t;cc[i*4+2]=t+.2*(1-t);cc[i*4+3]=1}
     glD(cp,cc,gl.LINE_STRIP);
   }
 
-  // Pass 2: Gaussians — depth sorted back-to-front
+  // Gaussian pass: depth sorted
   const n=gaussians.length;if(n===0)return;
 
-  const sorted=new Array(n);
-  for(let i=0;i<n;i++){const g=gaussians[i];const vz=m4TP(view,g.x,g.y,g.z);sorted[i]={i,z:vz[2]}}
-  sorted.sort((a,b)=>a.z-b.z);
+  // Re-sort every 15 frames for performance
+  sortFrame++;
+  if(!sortedOrder||sortFrame%15===0){
+    sortedOrder=new Array(n);
+    for(let i=0;i<n;i++){const g=gaussians[i];const vz=m4TP(view,g.x,g.y,g.z);sortedOrder[i]={i,z:vz[2]}}
+    sortedOrder.sort((a,b)=>a.z-b.z);
+  }
 
   const pos=new Float32Array(n*3),col=new Float32Array(n*4);
-  for(let i=0;i<n;i++){const g=gaussians[sorted[i].i];
+  for(let i=0;i<n;i++){const g=gaussians[sortedOrder[i].i];
     pos[i*3]=g.x;pos[i*3+1]=g.y;pos[i*3+2]=g.z;
     col[i*4]=g.r;col[i*4+1]=g.g;col[i*4+2]=g.b;col[i*4+3]=g.opacity}
 
   gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE_MINUS_SRC_ALPHA);
   gl.depthMask(false);gl.enable(gl.DEPTH_TEST);
-  gl.uniform1f(guS,splatSize*30);
+  gl.uniform1f(guS,splatSz*30);
   glD(pos,col,gl.POINTS);
   gl.depthMask(true);gl.disable(gl.BLEND);
 }
@@ -601,9 +563,9 @@ function renderSplats(){
 /* ═══ UI ═══ */
 function openSh(){document.getElementById('sh').classList.add('open');document.getElementById('shBg').classList.add('show')}
 function closeSh(){document.getElementById('sh').classList.remove('open');document.getElementById('shBg').classList.remove('show')}
-function wire(id,vl,cb,fmt){const el=document.getElementById(id);sg(el);el.addEventListener('input',function(){sg(this);document.getElementById(vl).textContent=fmt?fmt(+this.value):this.value;cb(+this.value)})}
-wire('slSp','vlSp',v=>splatSize=v);
-wire('slAl','vlAl',v=>baseAlpha=v,v=>v.toFixed(2));
+function wire(id,vl,cb,f){const el=document.getElementById(id);sg(el);el.addEventListener('input',function(){sg(this);document.getElementById(vl).textContent=f?f(+this.value):this.value;cb(+this.value)})}
+wire('slSp','vlSp',v=>splatSz=v);
+wire('slAl','vlAl',v=>baseA=v,v=>v.toFixed(2));
 document.querySelectorAll('input[type=range]').forEach(sg);
 window.addEventListener('resize',()=>{if(glC&&gl){const d=Math.min(devicePixelRatio,2);glC.width=window.innerWidth*d;glC.height=window.innerHeight*d}});
 </script>
