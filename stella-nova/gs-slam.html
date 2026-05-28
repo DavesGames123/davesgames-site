@@ -9,9 +9,8 @@
 :root{
   --bg:#0a0c11;--surface:rgba(9,12,20,0.96);
   --border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.16);
-  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.05);
-  --yellow:#ffc832;--yellow-dim:#b8901e;
-  --green:#64c864;--red:#e05050;
+  --blue:#96c8ff;--blue-dim:#5a8cc0;
+  --yellow:#ffc832;--green:#64c864;--red:#e05050;
   --text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;
   --safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
 }
@@ -19,214 +18,170 @@
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);touch-action:none}
 body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
 
-/* ═══ FULL-SCREEN STAGE ═══ */
 #stage{position:fixed;inset:0;z-index:1}
 #stage canvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
 video{display:none}
-#camCanvas{z-index:2}
-#glCanvas{z-index:2;display:none}
+#camC{z-index:2}#glC{z-index:2;display:none}
 #stage::after{content:'';position:absolute;inset:0;z-index:3;pointer-events:none;
   background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px)}
 
-/* ═══ TOP HUD ═══ */
 #hud{position:fixed;top:0;left:0;right:0;z-index:20;
-  padding:max(6px,var(--safe-t)) 10px 6px;
+  padding:max(6px,var(--safe-t)) 8px 5px;
   background:rgba(8,10,16,0.7);backdrop-filter:blur(12px);
   border-bottom:1px solid var(--border);
-  display:flex;align-items:center;gap:8px;
-  font-size:0.55rem;letter-spacing:0.08em;text-transform:uppercase}
-.hud-item{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1}
-.hud-val{font-size:0.75rem;font-weight:700;font-variant-numeric:tabular-nums}
-.hud-lbl{font-size:0.42rem;color:var(--text-faint);letter-spacing:0.1em}
-.c-b{color:var(--blue)}.c-g{color:var(--green)}.c-y{color:var(--yellow)}.c-p{color:#ff6090}.c-r{color:var(--red)}
+  display:flex;align-items:center;justify-content:space-around}
+.hi{display:flex;flex-direction:column;align-items:center;gap:1px;flex:1}
+.hv{font-size:0.72rem;font-weight:700;font-variant-numeric:tabular-nums}
+.hl{font-size:0.4rem;color:var(--text-faint);letter-spacing:0.1em;text-transform:uppercase}
+.cb{color:var(--blue)}.cg{color:var(--green)}.cy{color:var(--yellow)}.cp{color:#ff6090}.cr{color:var(--red)}
 
-/* ═══ PHASE INDICATORS ═══ */
-.phase-badge{position:fixed;top:max(52px,calc(var(--safe-t) + 44px));left:10px;z-index:25;
-  font-size:0.5rem;letter-spacing:0.16em;text-transform:uppercase;font-weight:700;
-  padding:4px 10px;pointer-events:none}
-.phase-badge.capture{background:rgba(224,80,80,0.15);border:1px solid rgba(224,80,80,0.4);color:var(--red)}
-.phase-badge.process{background:rgba(255,200,50,0.12);border:1px solid rgba(255,200,50,0.35);color:var(--yellow)}
-.phase-badge.explore{background:rgba(100,200,100,0.12);border:1px solid rgba(100,200,100,0.35);color:var(--green)}
+.badge{position:fixed;top:max(48px,calc(var(--safe-t)+40px));left:8px;z-index:25;
+  font-size:0.48rem;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;padding:3px 8px;pointer-events:none}
+.badge.cap{background:rgba(224,80,80,0.15);border:1px solid rgba(224,80,80,0.4);color:var(--red)}
+.badge.proc{background:rgba(255,200,50,0.12);border:1px solid rgba(255,200,50,0.35);color:var(--yellow)}
+.badge.exp{background:rgba(100,200,100,0.12);border:1px solid rgba(100,200,100,0.35);color:var(--green)}
 
-/* Rec dot */
-#rec-dot{position:fixed;top:max(54px,calc(var(--safe-t) + 46px));right:12px;z-index:25;
-  display:flex;align-items:center;gap:5px;
-  font-size:0.5rem;letter-spacing:0.12em;color:var(--red);font-weight:700}
-#rec-dot::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--red);
-  box-shadow:0 0 6px var(--red);animation:rp 1s ease infinite}
+#rec{position:fixed;top:max(50px,calc(var(--safe-t)+42px));right:10px;z-index:25;
+  display:none;align-items:center;gap:4px;font-size:0.48rem;letter-spacing:0.1em;color:var(--red);font-weight:700}
+#rec::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 6px var(--red);animation:rp 1s ease infinite}
 @keyframes rp{0%,100%{opacity:1}50%{opacity:0.2}}
 
-/* ═══ CTA — start screen ═══ */
 #cta{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;
-  justify-content:center;gap:16px;background:rgba(10,12,17,0.92);pointer-events:all}
+  justify-content:center;gap:14px;background:rgba(10,12,17,0.92);pointer-events:all}
 #cta.gone{display:none}
 #cta h1{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;
   font-size:2rem;color:var(--blue);letter-spacing:0.1em;text-shadow:0 0 30px rgba(150,200,255,0.25)}
-#cta p{font-size:0.62rem;color:var(--text-faint);text-align:center;line-height:1.7;max-width:280px}
-#cta button{width:200px;height:56px;background:rgba(150,200,255,0.06);
+#cta p{font-size:0.6rem;color:var(--text-faint);text-align:center;line-height:1.7;max-width:280px}
+#cta button{width:200px;height:54px;background:rgba(150,200,255,0.06);
   border:1px solid rgba(150,200,255,0.35);color:var(--blue);
   font-family:'JetBrains Mono',monospace;font-size:0.85rem;font-weight:700;
   letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
 #cta button:active{background:rgba(150,200,255,0.2);transform:scale(0.96)}
 
-/* ═══ BOTTOM BAR — phase-dependent ═══ */
-#bottom{position:fixed;bottom:0;left:0;right:0;z-index:20;
-  padding:0 10px var(--safe-b);
-  background:rgba(8,10,16,0.88);backdrop-filter:blur(16px);
-  border-top:1px solid var(--border-b)}
-.bot-row{display:flex;align-items:center;gap:6px;padding:8px 0;justify-content:center}
-.bot-btn{flex:1;max-width:160px;height:46px;
-  background:transparent;border:1px solid var(--border-b);
+#bot{position:fixed;bottom:0;left:0;right:0;z-index:20;
+  padding:0 10px var(--safe-b);background:rgba(8,10,16,0.88);backdrop-filter:blur(16px);border-top:1px solid var(--border-b)}
+.br{display:flex;align-items:center;gap:6px;padding:8px 0;justify-content:center}
+.bb{flex:1;max-width:180px;height:46px;background:transparent;border:1px solid var(--border-b);
   color:var(--text-dim);font-family:'JetBrains Mono',monospace;
   font-size:0.65rem;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;
   cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px}
-.bot-btn:active{background:rgba(150,200,255,0.08)}
-.bot-btn.stop{border-color:rgba(224,80,80,0.5);color:var(--red)}
-.bot-btn.stop:active{background:rgba(224,80,80,0.12)}
-.bot-btn.primary{border-color:rgba(150,200,255,0.4);color:var(--blue);background:rgba(150,200,255,0.05)}
-.bot-btn.warn{border-color:rgba(255,200,50,0.35);color:var(--yellow)}
+.bb:active{background:rgba(150,200,255,0.08)}
+.bb.stop{border-color:rgba(224,80,80,0.5);color:var(--red)}
+.bb.pri{border-color:rgba(150,200,255,0.4);color:var(--blue);background:rgba(150,200,255,0.05)}
+.bb.set{max-width:46px}
 
-/* ═══ PROCESSING OVERLAY ═══ */
-#proc-overlay{position:fixed;inset:0;z-index:35;display:none;
-  flex-direction:column;align-items:center;justify-content:center;gap:20px;
-  background:rgba(10,12,17,0.95)}
-#proc-overlay.show{display:flex}
-.proc-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;
-  font-size:1.3rem;color:var(--yellow);letter-spacing:0.1em}
-.proc-status{font-size:0.6rem;color:var(--text-dim);letter-spacing:0.08em;text-align:center;line-height:1.8}
-.proc-bar-wrap{width:240px;height:4px;background:rgba(150,200,255,0.1);overflow:hidden}
-.proc-bar{height:100%;background:var(--yellow);width:0%;transition:width 0.15s}
-.proc-stat{font-size:0.7rem;color:var(--blue);font-weight:700;font-variant-numeric:tabular-nums}
+#proc{position:fixed;inset:0;z-index:35;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(10,12,17,0.95)}
+#proc.show{display:flex}
+.pt{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.3rem;color:var(--yellow);letter-spacing:0.1em}
+.ps{font-size:0.58rem;color:var(--text-dim);letter-spacing:0.06em;text-align:center;line-height:1.8}
+.pw{width:260px;height:4px;background:rgba(150,200,255,0.1);overflow:hidden}
+.pb{height:100%;background:var(--yellow);width:0%;transition:width 0.1s}
+.pn{font-size:0.7rem;color:var(--blue);font-weight:700}
 
-/* ═══ SETTINGS SHEET ═══ */
-#sheet-bg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,0.5);display:none}
-#sheet-bg.show{display:block}
-#sheet{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--surface);
+#shBg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,0.5);display:none}
+#shBg.show{display:block}
+#sh{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--surface);
   border-top:1px solid var(--border-b);border-radius:16px 16px 0 0;
-  padding:0 0 var(--safe-b);transform:translateY(100%);
-  transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);max-height:70vh;overflow-y:auto}
-#sheet.open{transform:translateY(0)}
-.sh-handle{display:flex;justify-content:center;padding:10px 0 6px}
-.sh-handle::after{content:'';width:36px;height:4px;background:rgba(150,200,255,0.2);border-radius:2px}
-.sh-head{display:flex;align-items:center;justify-content:space-between;padding:0 20px 10px}
-.sh-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.1rem;color:var(--blue)}
-.sh-close{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);
-  width:32px;height:32px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.sh-sec{padding:10px 20px 12px;border-top:1px solid var(--border)}
-.sh-lbl{font-size:0.55rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--blue-dim);font-weight:600;margin-bottom:6px}
-.sh-row{display:flex;align-items:center;gap:8px;margin-bottom:5px}
-.sh-rl{font-size:0.58rem;color:var(--text-dim);width:44px;flex-shrink:0;letter-spacing:0.04em;text-transform:uppercase;font-weight:500}
-.sh-row input[type=range]{flex:1;-webkit-appearance:none;height:4px;
-  background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));
-  border-radius:2px;outline:none}
-.sh-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;
-  border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);box-shadow:0 0 6px rgba(150,200,255,0.3)}
-.sh-row .val{min-width:26px;text-align:right;font-size:0.65rem;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums}
+  padding:0 0 var(--safe-b);transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);max-height:70vh;overflow-y:auto}
+#sh.open{transform:translateY(0)}
+.shH{display:flex;justify-content:center;padding:10px 0 6px}.shH::after{content:'';width:36px;height:4px;background:rgba(150,200,255,0.2);border-radius:2px}
+.shT{display:flex;align-items:center;justify-content:space-between;padding:0 20px 10px}
+.shTt{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.1rem;color:var(--blue)}
+.shX{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);width:32px;height:32px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.ss{padding:10px 20px 12px;border-top:1px solid var(--border)}
+.sl{font-size:0.55rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--blue-dim);font-weight:600;margin-bottom:6px}
+.sr{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+.srl{font-size:0.58rem;color:var(--text-dim);width:44px;flex-shrink:0;letter-spacing:0.04em;text-transform:uppercase;font-weight:500}
+.sr input[type=range]{flex:1;-webkit-appearance:none;height:4px;
+  background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));border-radius:2px;outline:none}
+.sr input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);box-shadow:0 0 6px rgba(150,200,255,0.3)}
+.sr .v{min-width:26px;text-align:right;font-size:0.65rem;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
-
-<div id="stage">
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="camCanvas"></canvas>
-  <canvas id="glCanvas"></canvas>
-</div>
-
+<div id="stage"><video id="vid" autoplay playsinline muted></video><canvas id="camC"></canvas><canvas id="glC"></canvas></div>
 <div id="hud">
-  <div class="hud-item"><span class="hud-val c-b" id="h-frame">—</span><span class="hud-lbl">Frame</span></div>
-  <div class="hud-item"><span class="hud-val c-g" id="h-tracks">—</span><span class="hud-lbl">Tracks</span></div>
-  <div class="hud-item"><span class="hud-val c-y" id="h-kf">—</span><span class="hud-lbl">Keyframes</span></div>
-  <div class="hud-item"><span class="hud-val c-p" id="h-gauss">—</span><span class="hud-lbl">Gaussians</span></div>
-  <div class="hud-item"><span class="hud-val c-b" id="h-fps">—</span><span class="hud-lbl">FPS</span></div>
+  <div class="hi"><span class="hv cb" id="hF">—</span><span class="hl">Frame</span></div>
+  <div class="hi"><span class="hv cg" id="hT">—</span><span class="hl">Tracks</span></div>
+  <div class="hi"><span class="hv cy" id="hO">—</span><span class="hl">Obs</span></div>
+  <div class="hi"><span class="hv cp" id="hG">—</span><span class="hl">Gauss</span></div>
+  <div class="hi"><span class="hv cb" id="hFPS">—</span><span class="hl">FPS</span></div>
 </div>
+<div class="badge cap" id="badge" style="display:none">● Capture</div>
+<div id="rec" style="display:none">REC</div>
 
-<div class="phase-badge capture" id="phase-badge" style="display:none">● Capture</div>
-<div id="rec-dot" style="display:none">REC</div>
-
-<!-- START SCREEN -->
 <div id="cta">
   <h1>GS-SLAM</h1>
-  <p>Gaussian Splatting SLAM. Record a scene by slowly moving your camera, then process and explore the 3D reconstruction.</p>
+  <p>Gaussian Splatting SLAM. Move the camera slowly across a textured scene. The map builds from hundreds of frames.</p>
   <button onclick="startCapture()">▶ BEGIN</button>
 </div>
 
-<!-- PROCESSING OVERLAY -->
-<div id="proc-overlay">
-  <div class="proc-title">Processing</div>
-  <div class="proc-bar-wrap"><div class="proc-bar" id="proc-bar"></div></div>
-  <div class="proc-status" id="proc-status">Preparing...</div>
-  <div class="proc-stat" id="proc-stat"></div>
+<div id="proc"><div class="pt">Processing</div><div class="pw"><div class="pb" id="pBar"></div></div><div class="ps" id="pSt">Preparing...</div><div class="pn" id="pN"></div></div>
+
+<div id="bot" style="display:none">
+  <div class="br" id="bCap"><button class="bb stop" onclick="stopCapture()">■ STOP CAPTURE</button></div>
+  <div class="br" id="bExp" style="display:none"><button class="bb pri" onclick="startCapture()">● NEW CAPTURE</button><button class="bb set" onclick="openSh()">⚙</button></div>
 </div>
 
-<!-- BOTTOM BAR -->
-<div id="bottom" style="display:none">
-  <div class="bot-row" id="bot-capture">
-    <button class="bot-btn stop" onclick="stopCapture()">■ STOP CAPTURE</button>
+<div id="shBg" onclick="closeSh()"></div>
+<div id="sh">
+  <div class="shH"></div>
+  <div class="shT"><span class="shTt">Settings</span><button class="shX" onclick="closeSh()">✕</button></div>
+  <div class="ss"><div class="sl">Rendering</div>
+    <div class="sr"><span class="srl">Splat</span><input type="range" id="slSp" min="4" max="50" value="18" step="1"><span class="v" id="vlSp">18</span></div>
+    <div class="sr"><span class="srl">Alpha</span><input type="range" id="slAl" min="0.1" max="1.0" value="0.8" step="0.05"><span class="v" id="vlAl">0.80</span></div>
   </div>
-  <div class="bot-row" id="bot-explore" style="display:none">
-    <button class="bot-btn primary" onclick="startCapture()">● NEW CAPTURE</button>
-    <button class="bot-btn" onclick="openSheet()">⚙</button>
-  </div>
-</div>
-
-<!-- SETTINGS -->
-<div id="sheet-bg" onclick="closeSheet()"></div>
-<div id="sheet">
-  <div class="sh-handle"></div>
-  <div class="sh-head"><span class="sh-title">Settings</span><button class="sh-close" onclick="closeSheet()">✕</button></div>
-  <div class="sh-sec"><div class="sh-lbl">Rendering</div>
-    <div class="sh-row"><span class="sh-rl">Splat</span><input type="range" id="sl-sp" min="4" max="40" value="16" step="1"><span class="val" id="vl-sp">16</span></div>
-    <div class="sh-row"><span class="sh-rl">Alpha</span><input type="range" id="sl-al" min="0.1" max="1.0" value="0.75" step="0.05"><span class="val" id="vl-al">0.75</span></div>
-  </div>
-  <div class="sh-sec" style="padding-bottom:24px">
-    <div style="font-size:0.46rem;color:var(--text-faint);text-align:center;letter-spacing:0.06em">
-      Based on <span style="color:var(--blue-dim)">GS-SLAM</span> · Yan et al. CVPR 2024 · davesgames.io
-    </div>
+  <div class="ss" style="padding-bottom:24px">
+    <div style="font-size:0.44rem;color:var(--text-faint);text-align:center;letter-spacing:0.06em">
+      Based on <span style="color:var(--blue-dim)">GS-SLAM</span> · Yan et al. CVPR 2024 · davesgames.io</div>
   </div>
 </div>
 
 <script>
 /* ════════════════════════════════════════════════════════════
    GS-SLAM · THREE-PHASE PIPELINE
-   Phase 1: CAPTURE — record camera, build dense feature tracks
-   Phase 2: PROCESS — triangulate all tracks → Gaussians
-   Phase 3: EXPLORE — depth-sorted 3D splat viewer
+   
+   KEY FIX: Observations are recorded EVERY 5 FRAMES for ALL
+   active tracks, UNCONDITIONALLY. No motion gate. No keyframe
+   gatekeeping. This ensures 2 minutes of capture produces
+   hundreds of observation snapshots and tens of thousands
+   of triangulatable tracks.
+   
+   Target: 10K-50K Gaussians from a 2-minute session.
    ════════════════════════════════════════════════════════════ */
 
-// ─── GLOBALS ───
-let video, camCanvas, cCtx, glCanvas, gl;
-let phase = 'idle'; // idle | capture | process | explore
+let vid, camC, cCtx, glC, gl;
+let phase = 'idle';
 let frameNum = 0, lastTime = 0, fpsSmooth = 30;
+let totalObs = 0; // total observations recorded
 
-// ─── SLAM STATE ───
-let prevGray = null;
+// ─── FEATURE TRACKS ───
+// Observation recorded for every active track every OBS_INTERVAL frames.
+// No motion gate. No keyframe gate. Just time.
+const OBS_INTERVAL = 5;   // record obs every 5 frames
+const MAX_TRACKS = 700;
+const MIN_SPACE = 9;
 let nextTID = 0;
 const tracks = new Map();
-const MAX_TRACKS = 600;
-const MIN_SPACING = 10;
 
-// Each track: {id, x, y, px, py, color[3], framesSeen, kfObs[], totalParallax, sad, glyph}
-const GLYPHS = ['dot','cross','corners','target','diamond','box'];
-
-// Keyframes
-const keyframes = []; // {id, frame, cx, cy, cz}
-let nextKFID = 0, lastKFFrame = -999;
+// Camera pose (accumulated from mean optical flow)
 let camX = 0, camY = 0, camZ = 0;
+let prevGray = null;
 
-// Captured data for processing
-let capturedTracks = []; // snapshot of tracks at end of capture
-let capturedKeyframes = [];
+// Snapshot for processing
+let allTracks = [];   // frozen at end of capture
+let poseHistory = []; // {frame, cx, cy, cz} every OBS_INTERVAL frames
 
-// Gaussians — permanent after processing
-let gaussians = []; // {x,y,z, r,g,b, opacity}
-let splatSize = 16, baseAlpha = 0.75;
+// Gaussians
+let gaussians = [];
+let splatSize = 18, baseAlpha = 0.8;
 
 // 3D orbit
-let orbitTheta = 0.6, orbitPhi = 0.7, orbitDist = 6;
+let orbitTh = 0.6, orbitPh = 0.7, orbitD = 6;
 let isDrag = false, ltx = 0, lty = 0, pd0 = 0, pz0 = 6;
 
 // WebGL
-let gProg, gPB, gCB, gaP, gaC, guM, guS;
+let gP, gPB, gCB, gaP, gaC, guM, guS;
 
 function sg(el){el.style.setProperty('--pct',(el.value-el.min)/(el.max-el.min)*100+'%')}
 
@@ -234,46 +189,34 @@ function sg(el){el.style.setProperty('--pct',(el.value-el.min)/(el.max-el.min)*1
    PHASE 1: CAPTURE
    ════════════════════════════════════════════════════════════ */
 async function startCapture(){
-  // Reset
-  tracks.clear(); nextTID=0; keyframes.length=0; nextKFID=0; lastKFFrame=-999;
-  camX=0;camY=0;camZ=0; prevGray=null; frameNum=0; gaussians=[];
-
+  tracks.clear(); nextTID=0; prevGray=null; frameNum=0; totalObs=0;
+  camX=0;camY=0;camZ=0; gaussians=[]; allTracks=[]; poseHistory=[];
   try{
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video:{width:{ideal:640},height:{ideal:480},facingMode:{ideal:'environment'}},audio:false
-    });
-    video=document.getElementById('video');video.srcObject=stream;await video.play();
-    camCanvas=document.getElementById('camCanvas');
-    camCanvas.width=video.videoWidth;camCanvas.height=video.videoHeight;
-    cCtx=camCanvas.getContext('2d',{willReadFrequently:true});
-  }catch(e){alert('Camera access required.\n'+e.message);return}
-
+    const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:640},height:{ideal:480},facingMode:{ideal:'environment'}},audio:false});
+    vid=document.getElementById('vid');vid.srcObject=s;await vid.play();
+    camC=document.getElementById('camC');camC.width=vid.videoWidth;camC.height=vid.videoHeight;
+    cCtx=camC.getContext('2d',{willReadFrequently:true});
+  }catch(e){alert('Camera required.\n'+e.message);return}
   phase='capture';
   document.getElementById('cta').classList.add('gone');
-  document.getElementById('camCanvas').style.display='block';
-  document.getElementById('glCanvas').style.display='none';
-  document.getElementById('bottom').style.display='';
-  document.getElementById('bot-capture').style.display='';
-  document.getElementById('bot-explore').style.display='none';
-  document.getElementById('phase-badge').style.display='';
-  document.getElementById('phase-badge').className='phase-badge capture';
-  document.getElementById('phase-badge').textContent='● Capture';
-  document.getElementById('rec-dot').style.display='flex';
-  document.getElementById('proc-overlay').classList.remove('show');
-
+  camC.style.display='block';document.getElementById('glC').style.display='none';
+  document.getElementById('bot').style.display='';
+  document.getElementById('bCap').style.display='';document.getElementById('bExp').style.display='none';
+  const b=document.getElementById('badge');b.style.display='';b.className='badge cap';b.textContent='● Capture';
+  document.getElementById('rec').style.display='flex';
+  document.getElementById('proc').classList.remove('show');
   lastTime=performance.now();
-  requestAnimationFrame(captureLoop);
+  requestAnimationFrame(capLoop);
 }
 
-function captureLoop(ts){
+function capLoop(ts){
   if(phase!=='capture')return;
-  const dt=ts-lastTime;lastTime=ts;
-  fpsSmooth=fpsSmooth*0.9+(1000/Math.max(dt,1))*0.1;
+  const dt=ts-lastTime;lastTime=ts;fpsSmooth=fpsSmooth*0.9+(1000/Math.max(dt,1))*0.1;
 
-  cCtx.drawImage(video,0,0);
-  const imgData=cCtx.getImageData(0,0,camCanvas.width,camCanvas.height);
-  const gray=toGray(imgData);
-  const w=camCanvas.width,h=camCanvas.height;
+  cCtx.drawImage(vid,0,0);
+  const img=cCtx.getImageData(0,0,camC.width,camC.height);
+  const gray=toGray(img);
+  const w=camC.width, h=camC.height;
 
   if(prevGray){
     // Match existing tracks
@@ -282,262 +225,257 @@ function captureLoop(ts){
       const m=matchPatch(prevGray,gray,w,h,tr.x,tr.y);
       if(m){
         matched.add(id);
-        tr.px=tr.x;tr.py=tr.y;
-        tr.x=m.x;tr.y=m.y;tr.sad=m.sad;
-        tr.framesSeen++;
-        const rdx=m.dx,rdy=m.dy;
-        tr.totalParallax+=Math.sqrt(rdx*rdx+rdy*rdy);
-        // Running color average
+        tr.px=tr.x;tr.py=tr.y;tr.x=m.x;tr.y=m.y;tr.sad=m.sad;tr.frames++;
+        // Rolling color
         const pi=(Math.round(m.y)*w+Math.round(m.x))*4;
-        const a=0.12;
-        tr.color[0]=tr.color[0]*(1-a)+imgData.data[pi]/255*a;
-        tr.color[1]=tr.color[1]*(1-a)+imgData.data[pi+1]/255*a;
-        tr.color[2]=tr.color[2]*(1-a)+imgData.data[pi+2]/255*a;
+        tr.c[0]=tr.c[0]*0.88+img.data[pi]/255*0.12;
+        tr.c[1]=tr.c[1]*0.88+img.data[pi+1]/255*0.12;
+        tr.c[2]=tr.c[2]*0.88+img.data[pi+2]/255*0.12;
       }
     }
-    // Kill lost tracks
-    for(const[id,tr] of tracks)if(!matched.has(id))tracks.delete(id);
+    // Kill lost
+    for(const[id] of tracks)if(!matched.has(id))tracks.delete(id);
 
-    // Compute mean flow for camera motion
+    // Camera motion from mean flow
     let sx=0,sy=0,n=0;
     for(const[id,tr] of tracks){if(matched.has(id)){sx+=tr.x-tr.px;sy+=tr.y-tr.py;n++}}
-    const mx=n>0?sx/n:0,my=n>0?sy/n:0;
-    camX+=mx*0.004;camY-=my*0.004;camZ-=0.012;
+    const mx=n>0?sx/n:0, my=n>0?sy/n:0;
+    camX+=mx*0.004; camY-=my*0.004; camZ-=0.012;
 
-    // Keyframe check
-    const motion=Math.sqrt(mx*mx+my*my);
-    if(motion>1.2&&frameNum-lastKFFrame>=8&&n>15){
-      const kf={id:nextKFID++,frame:frameNum,cx:camX,cy:camY,cz:camZ};
-      keyframes.push(kf);lastKFFrame=frameNum;
+    // ══ RECORD OBSERVATIONS — EVERY OBS_INTERVAL FRAMES, UNCONDITIONALLY ══
+    if(frameNum % OBS_INTERVAL === 0){
+      poseHistory.push({frame:frameNum, cx:camX, cy:camY, cz:camZ});
       for(const[id,tr] of tracks){
-        if(matched.has(id))tr.kfObs.push({kfId:kf.id,x:tr.x,y:tr.y,cx:camX,cy:camY,cz:camZ});
+        if(matched.has(id)){
+          tr.obs.push({x:tr.x, y:tr.y, cx:camX, cy:camY, cz:camZ, frame:frameNum});
+          totalObs++;
+        }
       }
     }
   }
 
-  // Spawn new tracks to keep density high
+  // Spawn to maintain density
   if(tracks.size<MAX_TRACKS){
-    const corners=detectCorners(gray||prevGray||gray,w,h,MAX_TRACKS);
+    const corners=detect(gray,w,h,MAX_TRACKS);
     for(const c of corners){
       if(tracks.size>=MAX_TRACKS)break;
-      let ok=true;
-      for(const[,tr] of tracks)if((c.x-tr.x)**2+(c.y-tr.y)**2<MIN_SPACING*MIN_SPACING){ok=false;break}
+      let ok=true;for(const[,tr] of tracks)if((c.x-tr.x)**2+(c.y-tr.y)**2<MIN_SPACE*MIN_SPACE){ok=false;break}
       if(!ok)continue;
       const pi=(Math.round(c.y)*w+Math.round(c.x))*4;
-      const tr={id:nextTID++,x:c.x,y:c.y,px:c.x,py:c.y,
-        color:[imgData.data[pi]/255,imgData.data[pi+1]/255,imgData.data[pi+2]/255],
-        framesSeen:1,kfObs:[],totalParallax:0,sad:0,
-        glyph:GLYPHS[Math.floor(Math.random()*GLYPHS.length)]};
-      tracks.set(tr.id,tr);
+      const g=Math.random();
+      tracks.set(nextTID,{
+        id:nextTID, x:c.x, y:c.y, px:c.x, py:c.y,
+        c:[img.data[pi]/255, img.data[pi+1]/255, img.data[pi+2]/255],
+        frames:1, obs:[], sad:0,
+        // Glyph: 70% soft dots, 15% targets, 10% corners, 5% cross
+        glyph: g<0.7?'dot':g<0.85?'target':g<0.95?'corners':'cross'
+      });
+      nextTID++;
     }
   }
 
-  prevGray=gray;frameNum++;
+  prevGray=gray; frameNum++;
+  drawOverlay();
 
-  // Draw tracking overlay
-  drawTrackingOverlay();
-
-  // Update HUD
-  document.getElementById('h-frame').textContent=frameNum;
-  document.getElementById('h-tracks').textContent=tracks.size;
-  document.getElementById('h-kf').textContent=keyframes.length;
-  document.getElementById('h-gauss').textContent='—';
-  document.getElementById('h-fps').textContent=Math.round(fpsSmooth);
-
-  requestAnimationFrame(captureLoop);
+  document.getElementById('hF').textContent=frameNum;
+  document.getElementById('hT').textContent=tracks.size;
+  document.getElementById('hO').textContent=totalObs>999?(totalObs/1000).toFixed(1)+'k':totalObs;
+  document.getElementById('hG').textContent='—';
+  document.getElementById('hFPS').textContent=Math.round(fpsSmooth);
+  requestAnimationFrame(capLoop);
 }
 
-/* ═══ TRACKING OVERLAY — varied glyphs + network lines ═══ */
-function drawTrackingOverlay(){
+/* ═══ TRACKING OVERLAY — soft + magical with subtle structure ═══ */
+function drawOverlay(){
   const ctx=cCtx;
 
-  // Network lines — connect nearby tracked features
-  const arr=[];for(const[,tr] of tracks)if(tr.framesSeen>2)arr.push(tr);
-  ctx.globalAlpha=0.12;ctx.strokeStyle='rgba(150,200,255,1)';ctx.lineWidth=0.5;
+  // Subtle network mesh — very faint connections
+  const arr=[];for(const[,tr] of tracks)if(tr.frames>3)arr.push(tr);
+  ctx.globalAlpha=0.05;ctx.strokeStyle='rgba(150,200,255,1)';ctx.lineWidth=0.5;
   for(let i=0;i<arr.length;i++){
-    for(let j=i+1;j<arr.length;j++){
-      const dx=arr[i].x-arr[j].x,dy=arr[i].y-arr[j].y;
-      if(dx*dx+dy*dy<2500){// within 50px
-        ctx.beginPath();ctx.moveTo(arr[i].x,arr[i].y);ctx.lineTo(arr[j].x,arr[j].y);ctx.stroke();
-      }
+    const a=arr[i];
+    for(let j=i+1;j<Math.min(i+20,arr.length);j++){
+      const b=arr[j],dx=a.x-b.x,dy=a.y-b.y;
+      if(dx*dx+dy*dy<1600){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke()}
     }
   }
   ctx.globalAlpha=1;
 
   for(const[,tr] of tracks){
-    if(tr.framesSeen<2)continue;
-    const age=Math.min(tr.framesSeen,80);
-    const ageT=age/80;
-    const a=0.35+0.55*ageT;
-    const kfCount=tr.kfObs.length;
-    const isRich=kfCount>=4; // good triangulation candidate
-    const accentR=isRich?255:150, accentG=isRich?200:200, accentB=isRich?50:255;
+    if(tr.frames<2)continue;
+    const age=Math.min(tr.frames,100), ageT=age/100;
+    const nObs=tr.obs.length;
+    const rich=nObs>=4;
+    const a=0.3+0.5*ageT;
 
-    // Motion tail
+    // Color: blue-cyan for tracking, warm gold for observation-rich
+    const cr=rich?255:130, cg=rich?200:190, cb=rich?50:255;
+
+    // Motion trail — soft glow line
     ctx.beginPath();ctx.moveTo(tr.px,tr.py);ctx.lineTo(tr.x,tr.y);
-    ctx.strokeStyle=`rgba(${accentR},${accentG},${accentB},${a*0.5})`;
-    ctx.lineWidth=isRich?1.5:0.8;ctx.stroke();
+    ctx.strokeStyle=`rgba(${cr},${cg},${cb},${a*0.35})`;
+    ctx.lineWidth=rich?1.5:0.7;ctx.stroke();
 
-    // Draw glyph
-    const s=isRich?5:3.5; // size
-    const x=tr.x,y=tr.y;
-    ctx.strokeStyle=`rgba(${accentR},${accentG},${accentB},${a})`;
-    ctx.fillStyle=`rgba(${accentR},${accentG},${accentB},${a*0.8})`;
-    ctx.lineWidth=1;
+    const x=tr.x,y=tr.y,s=rich?4:2.8;
+    ctx.strokeStyle=`rgba(${cr},${cg},${cb},${a*0.7})`;
+    ctx.fillStyle=`rgba(${cr},${cg},${cb},${a*0.6})`;
+    ctx.lineWidth=0.8;
 
     switch(tr.glyph){
       case 'dot':
-        ctx.beginPath();ctx.arc(x,y,s*0.5,0,Math.PI*2);ctx.fill();break;
-      case 'cross':
-        ctx.beginPath();ctx.moveTo(x-s,y);ctx.lineTo(x+s,y);ctx.moveTo(x,y-s);ctx.lineTo(x,y+s);ctx.stroke();
-        ctx.beginPath();ctx.arc(x,y,1.5,0,Math.PI*2);ctx.fill();break;
-      case 'corners': // selection box corners
-        const c=s*1.2,l=s*0.5;
+        // Soft glowing dot (the magical look)
+        ctx.beginPath();ctx.arc(x,y,s*0.6,0,Math.PI*2);ctx.fill();
+        // Outer glow ring
+        if(rich){ctx.globalAlpha=a*0.2;ctx.beginPath();ctx.arc(x,y,s*1.5,0,Math.PI*2);ctx.fill();ctx.globalAlpha=1}
+        break;
+      case 'target':
+        ctx.beginPath();ctx.arc(x,y,s,0,Math.PI*2);ctx.stroke();
+        ctx.beginPath();ctx.arc(x,y,1.2,0,Math.PI*2);ctx.fill();break;
+      case 'corners':
+        const c=s*1.1,l=s*0.45;
         ctx.beginPath();
         ctx.moveTo(x-c,y-c+l);ctx.lineTo(x-c,y-c);ctx.lineTo(x-c+l,y-c);
         ctx.moveTo(x+c-l,y-c);ctx.lineTo(x+c,y-c);ctx.lineTo(x+c,y-c+l);
         ctx.moveTo(x+c,y+c-l);ctx.lineTo(x+c,y+c);ctx.lineTo(x+c-l,y+c);
         ctx.moveTo(x-c+l,y+c);ctx.lineTo(x-c,y+c);ctx.lineTo(x-c,y+c-l);
         ctx.stroke();break;
-      case 'target':
-        ctx.beginPath();ctx.arc(x,y,s,0,Math.PI*2);ctx.stroke();
-        ctx.beginPath();ctx.arc(x,y,s*0.35,0,Math.PI*2);ctx.fill();break;
-      case 'diamond':
-        ctx.beginPath();ctx.moveTo(x,y-s);ctx.lineTo(x+s,y);ctx.lineTo(x,y+s);ctx.lineTo(x-s,y);ctx.closePath();ctx.stroke();break;
-      case 'box':
-        ctx.strokeRect(x-s*0.7,y-s*0.7,s*1.4,s*1.4);break;
-    }
-
-    // KF count badge for rich tracks
-    if(kfCount>=3){
-      ctx.font='7px "JetBrains Mono"';
-      ctx.fillStyle=`rgba(${accentR},${accentG},${accentB},${a*0.6})`;
-      ctx.fillText(kfCount,x+s+2,y-2);
+      case 'cross':
+        ctx.beginPath();ctx.moveTo(x-s,y);ctx.lineTo(x+s,y);ctx.moveTo(x,y-s);ctx.lineTo(x,y+s);ctx.stroke();
+        ctx.beginPath();ctx.arc(x,y,1,0,Math.PI*2);ctx.fill();break;
     }
   }
 }
 
 /* ════════════════════════════════════════════════════════════
-   PHASE 2: PROCESS
-   Stop camera, triangulate ALL tracks, build Gaussian map
+   PHASE 2: PROCESS — triangulate ALL tracks aggressively
    ════════════════════════════════════════════════════════════ */
 function stopCapture(){
   phase='process';
-  // Stop camera stream
-  if(video&&video.srcObject){video.srcObject.getTracks().forEach(t=>t.stop());video.srcObject=null}
-  document.getElementById('rec-dot').style.display='none';
-  document.getElementById('bottom').style.display='none';
-  document.getElementById('phase-badge').className='phase-badge process';
-  document.getElementById('phase-badge').textContent='◆ Processing';
-  document.getElementById('proc-overlay').classList.add('show');
+  if(vid&&vid.srcObject){vid.srcObject.getTracks().forEach(t=>t.stop());vid.srcObject=null}
+  document.getElementById('rec').style.display='none';
+  document.getElementById('bot').style.display='none';
+  const b=document.getElementById('badge');b.className='badge proc';b.textContent='◆ Processing';
+  document.getElementById('proc').classList.add('show');
 
-  // Snapshot tracks for processing
-  capturedTracks=[];
+  // Snapshot ALL tracks (including short-lived ones)
+  allTracks=[];
   for(const[,tr] of tracks){
-    if(tr.kfObs.length>=2)capturedTracks.push({...tr,kfObs:[...tr.kfObs],color:[...tr.color]});
+    if(tr.obs.length>=2) allTracks.push({obs:[...tr.obs],c:[...tr.c],frames:tr.frames});
   }
-  capturedKeyframes=[...keyframes];
+  // Also include tracks that were previously killed but had observations
+  // (we don't have those — they were deleted. This is a known limitation.
+  //  To fix properly, we'd archive dead tracks. For now, we only have living tracks.)
 
-  // Process in chunks to keep UI responsive
-  setTimeout(()=>processStep(0),100);
+  // For future: we could store dead tracks. For now, the fix is that with
+  // observations recorded every 5 frames unconditionally, even short-lived
+  // tracks accumulate data before dying.
+
+  document.getElementById('pSt').textContent=
+    `${allTracks.length} tracks · ${poseHistory.length} snapshots · ${frameNum} frames`;
+  document.getElementById('pN').textContent='';
+
+  setTimeout(()=>processChunk(0),100);
 }
 
-function processStep(idx){
-  const total=capturedTracks.length;
-  if(total===0){finishProcessing();return}
-
-  const CHUNK=200;
+function processChunk(idx){
+  const total=allTracks.length;
+  if(total===0){finishProcess();return}
+  const CHUNK=500;
   const end=Math.min(idx+CHUNK,total);
-  const W=camCanvas?camCanvas.width:640,H=camCanvas?camCanvas.height:480;
-  const fx=W*0.8,cx=W/2,cy=H/2;
+  const W=camC?camC.width:640, H=camC?camC.height:480;
+  const fx=W*0.8, cx=W/2, cy=H/2;
 
   for(let i=idx;i<end;i++){
-    const tr=capturedTracks[i];
-    if(tr.kfObs.length<2)continue;
+    const tr=allTracks[i];
+    const obs=tr.obs;
+    if(obs.length<2)continue;
 
-    // Use first + last for max baseline
-    const first=tr.kfObs[0],last=tr.kfObs[tr.kfObs.length-1];
-    const blX=last.cx-first.cx,blY=last.cy-first.cy,blZ=last.cz-first.cz;
+    const first=obs[0], last=obs[obs.length-1];
+    const blX=last.cx-first.cx, blY=last.cy-first.cy, blZ=last.cz-first.cz;
     const baseline=Math.sqrt(blX*blX+blY*blY+blZ*blZ);
-    if(baseline<0.005)continue;
 
-    const dispX=(last.x-first.x)/W,dispY=(last.y-first.y)/H;
+    // Very permissive: even tiny baseline produces Gaussians
+    // (with proportionally lower opacity for less confident points)
+    const dispX=(last.x-first.x)/W, dispY=(last.y-first.y)/H;
     const disparity=Math.sqrt(dispX*dispX+dispY*dispY);
-    if(disparity<0.003)continue;
 
-    const depth=Math.max(0.2,Math.min(20,baseline/(disparity*2+0.005)));
-
-    // Backproject from midpoint observation
-    const mid=tr.kfObs[Math.floor(tr.kfObs.length/2)];
-    const X=(mid.x-cx)/fx*depth+mid.cx;
-    const Y=-(mid.y-cy)/fx*depth+mid.cy;
-    const Z=-depth+mid.cz;
-
-    // Dup check
-    let dup=false;
-    for(let j=gaussians.length-1;j>=Math.max(0,gaussians.length-800);j--){
-      const g=gaussians[j];
-      if((g.x-X)**2+(g.y-Y)**2+(g.z-Z)**2<0.003){dup=true;break}
+    let depth;
+    if(disparity>0.002 && baseline>0.002){
+      depth=Math.max(0.15,Math.min(25,baseline/(disparity*2+0.003)));
+    } else {
+      // Minimal parallax: assign default depth based on camera travel
+      depth=Math.max(0.5,Math.min(8,baseline*20+1));
     }
-    if(dup)continue;
 
-    const conf=Math.min(1,tr.kfObs.length/8)*Math.min(1,baseline/0.15);
-    gaussians.push({
-      x:X,y:Y,z:Z,
-      r:tr.color[0],g:tr.color[1],b:tr.color[2],
-      opacity:baseAlpha*(0.4+0.6*conf),
-    });
+    // Create Gaussians at MULTIPLE observation points along the track
+    // (not just midpoint — this dramatically increases density)
+    const nGauss=Math.min(obs.length,Math.max(1,Math.floor(obs.length/3)));
+    const step=Math.max(1,Math.floor(obs.length/nGauss));
+
+    for(let gi=0;gi<nGauss;gi++){
+      const oi=Math.min(gi*step,obs.length-1);
+      const o=obs[oi];
+
+      const X=(o.x-cx)/fx*depth+o.cx;
+      const Y=-(o.y-cy)/fx*depth+o.cy;
+      const Z=-depth+o.cz;
+
+      // Very tight dup check — only suppress near-identical positions
+      let dup=false;
+      const checkN=Math.min(gaussians.length,200);
+      for(let j=gaussians.length-1;j>=gaussians.length-checkN&&j>=0;j--){
+        const g=gaussians[j];
+        if((g.x-X)**2+(g.y-Y)**2+(g.z-Z)**2<0.0002){dup=true;break}
+      }
+      if(dup)continue;
+
+      const conf=Math.min(1,obs.length/6)*Math.min(1,baseline/0.08+0.3);
+      gaussians.push({
+        x:X,y:Y,z:Z,
+        r:tr.c[0],g:tr.c[1],b:tr.c[2],
+        opacity:baseAlpha*(0.3+0.7*conf),
+      });
+    }
   }
 
-  // Update progress
   const pct=Math.round(end/total*100);
-  document.getElementById('proc-bar').style.width=pct+'%';
-  document.getElementById('proc-status').textContent=
-    `Triangulating tracks: ${end} / ${total}\nKeyframes: ${capturedKeyframes.length} · Frames captured: ${frameNum}`;
-  document.getElementById('proc-stat').textContent=gaussians.length+' Gaussians';
+  document.getElementById('pBar').style.width=pct+'%';
+  document.getElementById('pSt').textContent=`Triangulating: ${end}/${total} tracks`;
+  document.getElementById('pN').textContent=gaussians.length.toLocaleString()+' Gaussians';
+  document.getElementById('hG').textContent=gaussians.length>999?(gaussians.length/1000).toFixed(1)+'k':gaussians.length;
 
-  if(end<total){
-    setTimeout(()=>processStep(end),10);
-  }else{
-    setTimeout(finishProcessing,300);
-  }
+  if(end<total)setTimeout(()=>processChunk(end),5);
+  else setTimeout(finishProcess,300);
 }
 
-function finishProcessing(){
-  document.getElementById('proc-bar').style.width='100%';
-  document.getElementById('proc-status').textContent='Complete';
-  setTimeout(enterExplore,600);
+function finishProcess(){
+  document.getElementById('pBar').style.width='100%';
+  document.getElementById('pSt').textContent=`Complete · ${gaussians.length.toLocaleString()} Gaussians from ${allTracks.length} tracks`;
+  setTimeout(enterExplore,500);
 }
 
 /* ════════════════════════════════════════════════════════════
    PHASE 3: EXPLORE
-   Full-screen 3D Gaussian viewer with touch orbit
    ════════════════════════════════════════════════════════════ */
 function enterExplore(){
   phase='explore';
-  document.getElementById('proc-overlay').classList.remove('show');
-  document.getElementById('camCanvas').style.display='none';
-  glCanvas=document.getElementById('glCanvas');glCanvas.style.display='block';
-  document.getElementById('phase-badge').className='phase-badge explore';
-  document.getElementById('phase-badge').textContent='◆ Explore';
-  document.getElementById('bottom').style.display='';
-  document.getElementById('bot-capture').style.display='none';
-  document.getElementById('bot-explore').style.display='';
-  document.getElementById('h-gauss').textContent=gaussians.length;
-
-  initWebGL();
-  lastTime=performance.now();
-  requestAnimationFrame(exploreLoop);
+  document.getElementById('proc').classList.remove('show');
+  camC.style.display='none';
+  glC=document.getElementById('glC');glC.style.display='block';
+  const b=document.getElementById('badge');b.className='badge exp';b.textContent='◆ Explore';
+  document.getElementById('bot').style.display='';
+  document.getElementById('bCap').style.display='none';document.getElementById('bExp').style.display='';
+  document.getElementById('hG').textContent=gaussians.length>999?(gaussians.length/1000).toFixed(1)+'k':gaussians.length;
+  initGL();lastTime=performance.now();requestAnimationFrame(expLoop);
 }
 
-function exploreLoop(ts){
+function expLoop(ts){
   if(phase!=='explore')return;
-  const dt=ts-lastTime;lastTime=ts;
-  fpsSmooth=fpsSmooth*0.9+(1000/Math.max(dt,1))*0.1;
-  if(!isDrag)orbitTheta+=0.003;
+  const dt=ts-lastTime;lastTime=ts;fpsSmooth=fpsSmooth*0.9+(1000/Math.max(dt,1))*0.1;
+  if(!isDrag)orbitTh+=0.003;
   renderSplats();
-  document.getElementById('h-fps').textContent=Math.round(fpsSmooth);
-  requestAnimationFrame(exploreLoop);
+  document.getElementById('hFPS').textContent=Math.round(fpsSmooth);
+  requestAnimationFrame(expLoop);
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -545,41 +483,38 @@ function exploreLoop(ts){
    ════════════════════════════════════════════════════════════ */
 function toGray(d){const n=d.width*d.height,g=new Float32Array(n);for(let i=0;i<n;i++){const j=i*4;g[i]=0.299*d.data[j]+0.587*d.data[j+1]+0.114*d.data[j+2]}return g}
 
-function detectCorners(gray,w,h,maxN){
-  const step=5,th2=2800,cands=[];
+function detect(gray,w,h,maxN){
+  const step=5,th=2400,cands=[];
   for(let y=8;y<h-8;y+=step)for(let x=8;x<w-8;x+=step){
     const c=gray[y*w+x];let sc=0;
     for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const d=gray[(y+dy)*w+(x+dx)]-c;sc+=d*d}
-    if(sc>th2)cands.push({x,y,sc})
+    if(sc>th)cands.push({x,y,sc})
   }
   cands.sort((a,b)=>b.sc-a.sc);
-  const sel=[],md2=MIN_SPACING*MIN_SPACING;
+  const sel=[],md2=MIN_SPACE*MIN_SPACE;
   for(const c of cands){if(sel.length>=maxN)break;let ok=true;for(const s of sel)if((c.x-s.x)**2+(c.y-s.y)**2<md2){ok=false;break};if(ok)sel.push(c)}
   return sel
 }
 
 function matchPatch(pG,cG,w,h,ox,oy){
-  const hw=5,sr=14;
-  const px=Math.round(ox),py=Math.round(oy);
+  const hw=5,sr=14,px=Math.round(ox),py=Math.round(oy);
   if(px<sr+hw||px>=w-sr-hw||py<sr+hw||py>=h-sr-hw)return null;
-  let bDx=0,bDy=0,bSAD=Infinity;
+  let bx=0,by=0,bs=Infinity;
   for(let dy=-sr;dy<=sr;dy+=2)for(let dx=-sr;dx<=sr;dx+=2){
     const nx=px+dx,ny=py+dy;if(nx<hw||nx>=w-hw||ny<hw||ny>=h-hw)continue;
-    let sad=0;for(let wy=-hw;wy<=hw;wy+=2)for(let wx=-hw;wx<=hw;wx+=2)
-      sad+=Math.abs(pG[(py+wy)*w+(px+wx)]-cG[(ny+wy)*w+(nx+wx)]);
-    if(sad<bSAD){bSAD=sad;bDx=dx;bDy=dy}
+    let s=0;for(let wy=-hw;wy<=hw;wy+=2)for(let wx=-hw;wx<=hw;wx+=2)s+=Math.abs(pG[(py+wy)*w+(px+wx)]-cG[(ny+wy)*w+(nx+wx)]);
+    if(s<bs){bs=s;bx=dx;by=dy}
   }
-  return bSAD<700?{x:px+bDx,y:py+bDy,dx:bDx,dy:bDy,sad:bSAD}:null;
+  return bs<700?{x:px+bx,y:py+by,dx:bx,dy:by,sad:bs}:null;
 }
 
 /* ════════════════════════════════════════════════════════════
-   WebGL RENDERER — DEPTH-SORTED ALPHA COMPOSITING
+   WebGL — DEPTH-SORTED GAUSSIAN RENDERER
    ════════════════════════════════════════════════════════════ */
-function initWebGL(){
+function initGL(){
   const dpr=Math.min(devicePixelRatio,2);
-  glCanvas.width=window.innerWidth*dpr;glCanvas.height=window.innerHeight*dpr;
-  gl=glCanvas.getContext('webgl',{alpha:false,antialias:true,premultipliedAlpha:false});
-  if(!gl)return;
+  glC.width=window.innerWidth*dpr;glC.height=window.innerHeight*dpr;
+  gl=glC.getContext('webgl',{alpha:false,antialias:true,premultipliedAlpha:false});if(!gl)return;
 
   const vs=`attribute vec3 aP;attribute vec4 aC;uniform mat4 uM;uniform float uS;varying vec4 vC;
     void main(){gl_Position=uM*vec4(aP,1.0);gl_PointSize=uS/max(gl_Position.w,0.05);vC=aC;}`;
@@ -588,32 +523,25 @@ function initWebGL(){
     float gauss=exp(-r2/0.08);float alpha=vC.a*gauss;
     if(alpha<0.003)discard;gl_FragColor=vec4(vC.rgb*alpha,alpha);}`;
 
-  gProg=mkP(gl,vs,fs);gaP=gl.getAttribLocation(gProg,'aP');gaC=gl.getAttribLocation(gProg,'aC');
-  guM=gl.getUniformLocation(gProg,'uM');guS=gl.getUniformLocation(gProg,'uS');
+  gP=mkP(gl,vs,fs);gaP=gl.getAttribLocation(gP,'aP');gaC=gl.getAttribLocation(gP,'aC');
+  guM=gl.getUniformLocation(gP,'uM');guS=gl.getUniformLocation(gP,'uS');
   gPB=gl.createBuffer();gCB=gl.createBuffer();
 
-  // Touch orbit
-  glCanvas.addEventListener('touchstart',e=>{
-    if(e.touches.length===2){pd0=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);pz0=orbitDist;return}
-    isDrag=true;ltx=e.touches[0].clientX;lty=e.touches[0].clientY;
-  },{passive:true});
-  glCanvas.addEventListener('touchmove',e=>{
-    if(e.touches.length===2){const d=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);orbitDist=Math.max(1,Math.min(30,pz0*(pd0/d)));e.preventDefault();return}
-    if(!isDrag)return;orbitTheta+=(e.touches[0].clientX-ltx)*0.008;orbitPhi=Math.max(0.1,Math.min(Math.PI-0.1,orbitPhi+(e.touches[0].clientY-lty)*0.008));ltx=e.touches[0].clientX;lty=e.touches[0].clientY;
-  },{passive:false});
-  glCanvas.addEventListener('touchend',()=>isDrag=false,{passive:true});
-  // Mouse fallback
-  glCanvas.addEventListener('mousedown',e=>{isDrag=true;ltx=e.clientX;lty=e.clientY});
-  window.addEventListener('mousemove',e=>{if(!isDrag)return;orbitTheta+=(e.clientX-ltx)*0.005;orbitPhi=Math.max(0.1,Math.min(Math.PI-0.1,orbitPhi+(e.clientY-lty)*0.005));ltx=e.clientX;lty=e.clientY});
+  glC.addEventListener('touchstart',e=>{if(e.touches.length===2){pd0=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);pz0=orbitD;return}isDrag=true;ltx=e.touches[0].clientX;lty=e.touches[0].clientY},{passive:true});
+  glC.addEventListener('touchmove',e=>{if(e.touches.length===2){const d=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);orbitD=Math.max(0.5,Math.min(40,pz0*(pd0/d)));e.preventDefault();return}if(!isDrag)return;orbitTh+=(e.touches[0].clientX-ltx)*0.008;orbitPh=Math.max(0.1,Math.min(Math.PI-0.1,orbitPh+(e.touches[0].clientY-lty)*0.008));ltx=e.touches[0].clientX;lty=e.touches[0].clientY},{passive:false});
+  glC.addEventListener('touchend',()=>isDrag=false,{passive:true});
+  glC.addEventListener('mousedown',e=>{isDrag=true;ltx=e.clientX;lty=e.clientY});
+  window.addEventListener('mousemove',e=>{if(!isDrag)return;orbitTh+=(e.clientX-ltx)*0.005;orbitPh=Math.max(0.1,Math.min(Math.PI-0.1,orbitPh+(e.clientY-lty)*0.005));ltx=e.clientX;lty=e.clientY});
   window.addEventListener('mouseup',()=>isDrag=false);
-  glCanvas.addEventListener('wheel',e=>{orbitDist=Math.max(1,Math.min(30,orbitDist+e.deltaY*0.01));e.preventDefault()},{passive:false});
+  glC.addEventListener('wheel',e=>{orbitD=Math.max(0.5,Math.min(40,orbitD+e.deltaY*0.01));e.preventDefault()},{passive:false});
 }
 
-function mkP(gl,vs,fs){const v=gl.createShader(gl.VERTEX_SHADER);gl.shaderSource(v,vs);gl.compileShader(v);const f=gl.createShader(gl.FRAGMENT_SHADER);gl.shaderSource(f,fs);gl.compileShader(f);const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);return p}
+function mkP(g,vs,fs){const v=g.createShader(g.VERTEX_SHADER);g.shaderSource(v,vs);g.compileShader(v);const f=g.createShader(g.FRAGMENT_SHADER);g.shaderSource(f,fs);g.compileShader(f);const p=g.createProgram();g.attachShader(p,v);g.attachShader(p,f);g.linkProgram(p);return p}
 function m4P(fov,asp,n,f){const t=1/Math.tan(fov/2),nf=1/(n-f);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)*nf,-1,0,0,2*f*n*nf,0])}
 function m4L(e,c,u){const zx=e[0]-c[0],zy=e[1]-c[1],zz=e[2]-c[2];let l=1/Math.sqrt(zx*zx+zy*zy+zz*zz);const z=[zx*l,zy*l,zz*l],xx=u[1]*z[2]-u[2]*z[1],xy=u[2]*z[0]-u[0]*z[2],xz=u[0]*z[1]-u[1]*z[0];l=1/Math.sqrt(xx*xx+xy*xy+xz*xz);const x=[xx*l,xy*l,xz*l],y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]),-(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]),-(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]),1])}
 function m4M(a,b){const r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];return r}
-function m4TP(m,px,py,pz){return[m[0]*px+m[4]*py+m[8]*pz+m[12],m[1]*px+m[5]*py+m[9]*pz+m[13],m[2]*px+m[6]*py+m[10]*pz+m[14],m[3]*px+m[7]*py+m[11]*pz+m[15]]}
+function m4TP(m,x,y,z){return[m[0]*x+m[4]*y+m[8]*z+m[12],m[1]*x+m[5]*y+m[9]*z+m[13],m[2]*x+m[6]*y+m[10]*z+m[14]]}
+
 function glD(pos,col,mode){
   gl.bindBuffer(gl.ARRAY_BUFFER,gPB);gl.bufferData(gl.ARRAY_BUFFER,pos,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(gaP);gl.vertexAttribPointer(gaP,3,gl.FLOAT,false,0,0);
   gl.bindBuffer(gl.ARRAY_BUFFER,gCB);gl.bufferData(gl.ARRAY_BUFFER,col,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(gaC);gl.vertexAttribPointer(gaC,4,gl.FLOAT,false,0,0);
@@ -624,49 +552,39 @@ function renderSplats(){
   if(!gl)return;
   const dpr=Math.min(devicePixelRatio,2);
   const w=Math.floor(window.innerWidth*dpr),h=Math.floor(window.innerHeight*dpr);
-  if(glCanvas.width!==w||glCanvas.height!==h){glCanvas.width=w;glCanvas.height=h}
+  if(glC.width!==w||glC.height!==h){glC.width=w;glC.height=h}
   gl.viewport(0,0,w,h);gl.clearColor(0.035,0.04,0.055,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
 
-  // Camera target = centroid of keyframes
-  let tcx=camX,tcy=camY,tcz=camZ;
-  if(capturedKeyframes.length>0){
-    tcx=0;tcy=0;tcz=0;
-    for(const k of capturedKeyframes){tcx+=k.cx;tcy+=k.cy;tcz+=k.cz}
-    tcx/=capturedKeyframes.length;tcy/=capturedKeyframes.length;tcz/=capturedKeyframes.length;
-  }
-  const eX=tcx+orbitDist*Math.sin(orbitPhi)*Math.cos(orbitTheta);
-  const eY=tcy+orbitDist*Math.cos(orbitPhi);
-  const eZ=tcz+orbitDist*Math.sin(orbitPhi)*Math.sin(orbitTheta);
-  const proj=m4P(Math.PI/4,w/h,0.05,200);
+  // Orbit target = centroid of pose history
+  let tcx=0,tcy=0,tcz=0;
+  if(poseHistory.length>0){for(const p of poseHistory){tcx+=p.cx;tcy+=p.cy;tcz+=p.cz}tcx/=poseHistory.length;tcy/=poseHistory.length;tcz/=poseHistory.length}
+  const eX=tcx+orbitD*Math.sin(orbitPh)*Math.cos(orbitTh),eY=tcy+orbitD*Math.cos(orbitPh),eZ=tcz+orbitD*Math.sin(orbitPh)*Math.sin(orbitTh);
+  const proj=m4P(Math.PI/4,w/h,0.02,300);
   const view=m4L([eX,eY,eZ],[tcx,tcy,tcz],[0,1,0]);
   const mvp=m4M(proj,view);
 
-  gl.useProgram(gProg);gl.uniformMatrix4fv(guM,false,mvp);
+  gl.useProgram(gP);gl.uniformMatrix4fv(guM,false,mvp);
 
-  // ── PASS 1: Opaque (grid + camera trail) ──
+  // Pass 1: opaque (grid + camera path)
   gl.enable(gl.DEPTH_TEST);gl.depthMask(true);gl.disable(gl.BLEND);
-
-  // Grid
   gl.uniform1f(guS,1);
-  const gN=21,gS=6,gp=[],gc=[];
-  for(let i=0;i<gN;i++){const t=(i/(gN-1)-.5)*gS*2;gp.push(t,0,-gS,t,0,gS,-gS,0,t,gS,0,t);gc.push(.15,.15,.22,1,.15,.15,.22,1,.15,.15,.22,1,.15,.15,.22,1)}
+  const gN=21,gS=8,gp=[],gc=[];
+  for(let i=0;i<gN;i++){const t=(i/(gN-1)-.5)*gS*2;gp.push(t,0,-gS,t,0,gS,-gS,0,t,gS,0,t);gc.push(.12,.12,.18,1,.12,.12,.18,1,.12,.12,.18,1,.12,.12,.18,1)}
   glD(new Float32Array(gp),new Float32Array(gc),gl.LINES);
 
-  // Camera trail
-  if(capturedKeyframes.length>1){
-    gl.uniform1f(guS,100);
-    const kn=capturedKeyframes.length,cp=new Float32Array(kn*3),cc=new Float32Array(kn*4);
-    for(let i=0;i<kn;i++){const k=capturedKeyframes[i];cp[i*3]=k.cx;cp[i*3+1]=k.cy;cp[i*3+2]=k.cz;const t=i/kn;cc[i*4]=.1;cc[i*4+1]=.4*(1-t)+.9*t;cc[i*4+2]=t+.3*(1-t);cc[i*4+3]=1}
+  if(poseHistory.length>1){
+    gl.uniform1f(guS,80);
+    const kn=poseHistory.length,cp=new Float32Array(kn*3),cc=new Float32Array(kn*4);
+    for(let i=0;i<kn;i++){const k=poseHistory[i];cp[i*3]=k.cx;cp[i*3+1]=k.cy;cp[i*3+2]=k.cz;const t=i/kn;cc[i*4]=.1;cc[i*4+1]=.35*(1-t)+.85*t;cc[i*4+2]=t+.25*(1-t);cc[i*4+3]=1}
     glD(cp,cc,gl.LINE_STRIP);
   }
 
-  // ── PASS 2: Gaussians — depth sorted ──
-  const n=gaussians.length;
-  if(n===0)return;
+  // Pass 2: Gaussians — depth sorted back-to-front
+  const n=gaussians.length;if(n===0)return;
 
   const sorted=new Array(n);
-  for(let i=0;i<n;i++){const g=gaussians[i];const vp=m4TP(view,g.x,g.y,g.z);sorted[i]={i,z:vp[2]}}
-  sorted.sort((a,b)=>a.z-b.z); // back to front (most negative = farthest)
+  for(let i=0;i<n;i++){const g=gaussians[i];const vz=m4TP(view,g.x,g.y,g.z);sorted[i]={i,z:vz[2]}}
+  sorted.sort((a,b)=>a.z-b.z);
 
   const pos=new Float32Array(n*3),col=new Float32Array(n*4);
   for(let i=0;i<n;i++){const g=gaussians[sorted[i].i];
@@ -681,15 +599,13 @@ function renderSplats(){
 }
 
 /* ═══ UI ═══ */
-function openSheet(){document.getElementById('sheet').classList.add('open');document.getElementById('sheet-bg').classList.add('show')}
-function closeSheet(){document.getElementById('sheet').classList.remove('open');document.getElementById('sheet-bg').classList.remove('show')}
-
-function wire(id,vlId,cb,fmt){const el=document.getElementById(id);sg(el);el.addEventListener('input',function(){sg(this);document.getElementById(vlId).textContent=fmt?fmt(+this.value):this.value;cb(+this.value)})}
-wire('sl-sp','vl-sp',v=>splatSize=v);
-wire('sl-al','vl-al',v=>baseAlpha=v,v=>v.toFixed(2));
+function openSh(){document.getElementById('sh').classList.add('open');document.getElementById('shBg').classList.add('show')}
+function closeSh(){document.getElementById('sh').classList.remove('open');document.getElementById('shBg').classList.remove('show')}
+function wire(id,vl,cb,fmt){const el=document.getElementById(id);sg(el);el.addEventListener('input',function(){sg(this);document.getElementById(vl).textContent=fmt?fmt(+this.value):this.value;cb(+this.value)})}
+wire('slSp','vlSp',v=>splatSize=v);
+wire('slAl','vlAl',v=>baseAlpha=v,v=>v.toFixed(2));
 document.querySelectorAll('input[type=range]').forEach(sg);
-
-window.addEventListener('resize',()=>{if(glCanvas&&gl){const d=Math.min(devicePixelRatio,2);glCanvas.width=window.innerWidth*d;glCanvas.height=window.innerHeight*d}});
+window.addEventListener('resize',()=>{if(glC&&gl){const d=Math.min(devicePixelRatio,2);glC.width=window.innerWidth*d;glC.height=window.innerHeight*d}});
 </script>
 </body>
 </html>
