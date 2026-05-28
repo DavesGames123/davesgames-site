@@ -21,141 +21,62 @@
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);touch-action:none}
 body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
 
-/* ═══ FULL-SCREEN CANVAS STAGE ═══ */
 #stage{position:fixed;inset:0;z-index:1}
 #stage canvas,#stage video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
 video{display:none}
 #webcamCanvas{z-index:2}
 #splatCanvas{z-index:2;display:none}
-#webcamCanvas.hidden,#splatCanvas.hidden{display:none}
-#webcamCanvas:not(.hidden),#splatCanvas:not(.hidden){display:block}
-
-/* Scanlines */
+#webcamCanvas.hidden{display:none}#splatCanvas.hidden{display:none}
+#webcamCanvas:not(.hidden){display:block}#splatCanvas:not(.hidden){display:block}
 #stage::after{content:'';position:absolute;inset:0;z-index:3;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px)}
 
-/* ═══ TOP STATS — translucent strip ═══ */
-#stats{
-  position:fixed;top:0;left:0;right:0;z-index:20;
-  display:flex;align-items:center;justify-content:space-around;
-  padding:6px 8px;padding-top:max(6px,env(safe-area-inset-top,6px));
-  background:rgba(8,10,16,0.75);backdrop-filter:blur(12px);
-  border-bottom:1px solid var(--border);
-  font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;
-}
+#stats{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;justify-content:space-around;padding:6px 8px;padding-top:max(6px,env(safe-area-inset-top,6px));background:rgba(8,10,16,0.75);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase}
 .st{display:flex;flex-direction:column;align-items:center;gap:1px}
 .st-val{font-size:0.8rem;font-weight:700;font-variant-numeric:tabular-nums}
 .st-lbl{font-size:0.48rem;color:var(--text-faint);letter-spacing:0.12em}
 .c-b{color:var(--blue)}.c-g{color:var(--green)}.c-y{color:var(--yellow)}.c-p{color:#ff6090}
 
-/* ═══ CENTER CTA — start button ═══ */
-#cta{
-  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;
-  display:flex;flex-direction:column;align-items:center;gap:16px;
-  pointer-events:all;
-}
+#cta{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:30;display:flex;flex-direction:column;align-items:center;gap:16px;pointer-events:all}
 #cta.gone{display:none}
-#cta h2{
-  font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;
-  font-size:1.6rem;color:var(--blue);letter-spacing:0.08em;text-align:center;
-  text-shadow:0 0 20px rgba(150,200,255,0.3);
-}
-#cta p{font-size:0.65rem;color:var(--text-faint);text-align:center;line-height:1.6;max-width:240px}
-#start-btn{
-  width:180px;height:54px;
-  background:rgba(150,200,255,0.06);border:1px solid rgba(150,200,255,0.35);
-  color:var(--blue);font-family:'JetBrains Mono',monospace;
-  font-size:0.9rem;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;
-  cursor:pointer;transition:all 0.2s;
-}
+#cta h2{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.6rem;color:var(--blue);letter-spacing:0.08em;text-shadow:0 0 20px rgba(150,200,255,0.3)}
+#cta p{font-size:0.65rem;color:var(--text-faint);text-align:center;line-height:1.6;max-width:260px}
+#start-btn{width:180px;height:54px;background:rgba(150,200,255,0.06);border:1px solid rgba(150,200,255,0.35);color:var(--blue);font-family:'JetBrains Mono',monospace;font-size:0.9rem;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer;transition:all 0.2s}
 #start-btn:active{background:rgba(150,200,255,0.2);transform:scale(0.96)}
 
-/* ═══ BOTTOM TAB BAR ═══ */
-#tabs{
-  position:fixed;bottom:0;left:0;right:0;z-index:20;
-  display:flex;align-items:stretch;
-  height:calc(var(--tab-h) + var(--safe-b));
-  padding-bottom:var(--safe-b);
-  background:rgba(8,10,16,0.88);backdrop-filter:blur(16px);
-  border-top:1px solid var(--border-b);
-}
-.tab{
-  flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  background:transparent;border:none;color:var(--text-faint);
-  font-family:'JetBrains Mono',monospace;font-size:0.5rem;
-  letter-spacing:0.12em;text-transform:uppercase;font-weight:600;
-  cursor:pointer;transition:all 0.15s;
-  border-top:2px solid transparent;
-}
+#tabs{position:fixed;bottom:0;left:0;right:0;z-index:20;display:flex;align-items:stretch;height:calc(var(--tab-h) + var(--safe-b));padding-bottom:var(--safe-b);background:rgba(8,10,16,0.88);backdrop-filter:blur(16px);border-top:1px solid var(--border-b)}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;background:transparent;border:none;color:var(--text-faint);font-family:'JetBrains Mono',monospace;font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;font-weight:600;cursor:pointer;transition:all 0.15s;border-top:2px solid transparent}
 .tab .tab-icon{font-size:1.2rem;transition:color 0.15s}
 .tab.active{color:var(--blue);border-top-color:var(--blue);background:rgba(150,200,255,0.04)}
 .tab.active .tab-icon{color:var(--blue)}
 .tab:active{background:rgba(150,200,255,0.08)}
-
-/* Settings tab accent */
 .tab.settings-tab.active{color:var(--yellow);border-top-color:var(--yellow)}
 .tab.settings-tab.active .tab-icon{color:var(--yellow)}
 
-/* ═══ SETTINGS SHEET — slides up from bottom ═══ */
 #sheet-overlay{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,0.5);display:none}
 #sheet-overlay.show{display:block}
-#sheet{
-  position:fixed;bottom:0;left:0;right:0;z-index:50;
-  background:var(--surface);border-top:1px solid var(--border-b);
-  border-radius:16px 16px 0 0;
-  padding:0 0 var(--safe-b);
-  transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
-  max-height:75vh;overflow-y:auto;
-  scrollbar-width:thin;scrollbar-color:rgba(36,48,64,0.8) transparent;
-}
+#sheet{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--surface);border-top:1px solid var(--border-b);border-radius:16px 16px 0 0;padding:0 0 var(--safe-b);transform:translateY(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);max-height:75vh;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(36,48,64,0.8) transparent}
 #sheet.open{transform:translateY(0)}
-.sheet-handle{display:flex;justify-content:center;padding:10px 0 6px}
-.sheet-handle::after{content:'';width:36px;height:4px;background:rgba(150,200,255,0.2);border-radius:2px}
+.sheet-handle{display:flex;justify-content:center;padding:10px 0 6px}.sheet-handle::after{content:'';width:36px;height:4px;background:rgba(150,200,255,0.2);border-radius:2px}
 .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:0 20px 12px}
 .sheet-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:300;font-size:1.1rem;color:var(--blue);letter-spacing:0.06em}
 .sheet-close{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);width:32px;height:32px;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
-.sheet-close:active{background:rgba(150,200,255,0.1)}
 .sh-section{padding:12px 20px 14px;border-top:1px solid var(--border)}
 .sh-lbl{font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--blue-dim);font-weight:600;margin-bottom:8px}
 .sh-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
 .sh-row-lbl{font-size:0.62rem;color:var(--text-dim);width:48px;flex-shrink:0;letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
-.sh-row input[type=range]{
-  flex:1;-webkit-appearance:none;height:4px;
-  background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));
-  border-radius:2px;outline:none;
-}
+.sh-row input[type=range]{flex:1;-webkit-appearance:none;height:4px;background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));border-radius:2px;outline:none}
 .sh-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);box-shadow:0 0 6px rgba(150,200,255,0.3)}
 .sh-row .val{min-width:28px;text-align:right;font-size:0.7rem;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums}
-
-.sh-toggle{
-  display:flex;align-items:center;gap:8px;width:100%;
-  padding:10px 12px;margin-bottom:4px;
-  background:transparent;border:1px solid var(--border-b);
-  color:var(--text-dim);font-family:'JetBrains Mono',monospace;
-  font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;
-  cursor:pointer;transition:all 0.15s;text-align:left;font-weight:500;
-}
+.sh-toggle{display:flex;align-items:center;gap:8px;width:100%;padding:10px 12px;margin-bottom:4px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.15s;text-align:left;font-weight:500}
 .sh-toggle:active{background:rgba(150,200,255,0.08)}
 .sh-toggle.on{background:rgba(150,200,255,0.06);border-color:rgba(150,200,255,0.3);color:var(--blue)}
 .sh-toggle.off{border-color:rgba(255,100,100,0.2);color:#a04040}
-
 .sh-btns{display:flex;gap:6px}
-.sh-btn{
-  flex:1;padding:12px 4px;background:transparent;border:1px solid var(--border-b);
-  color:var(--text-dim);font-family:'JetBrains Mono',monospace;
-  font-size:0.65rem;letter-spacing:0.06em;text-transform:uppercase;
-  font-weight:600;cursor:pointer;text-align:center;
-}
+.sh-btn{flex:1;padding:12px 4px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.65rem;letter-spacing:0.06em;text-transform:uppercase;font-weight:600;cursor:pointer;text-align:center}
 .sh-btn:active{background:rgba(150,200,255,0.08);color:var(--blue)}
 .sh-btn.warn{border-color:rgba(255,200,50,0.3);color:var(--yellow)}
 
-/* ═══ EQUATION TOAST — swipe-dismissable ═══ */
-#eq-toast{
-  position:fixed;top:auto;bottom:calc(var(--tab-h) + var(--safe-b) + 8px);
-  left:8px;right:8px;z-index:15;
-  background:rgba(9,12,20,0.92);border:1px solid var(--border-b);
-  backdrop-filter:blur(12px);padding:8px 14px;
-  pointer-events:all;display:none;
-}
+#eq-toast{position:fixed;bottom:calc(var(--tab-h) + var(--safe-b) + 8px);left:8px;right:8px;z-index:15;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);backdrop-filter:blur(12px);padding:8px 14px;pointer-events:all;display:none}
 #eq-toast.show{display:block}
 .eq-head{display:flex;align-items:center;gap:6px;margin-bottom:2px;cursor:pointer}
 .eq-head .dot{width:4px;height:4px;background:var(--blue);box-shadow:0 0 6px var(--blue)}
@@ -164,136 +85,86 @@ video{display:none}
 .eq-row{margin:2px 0;overflow-x:auto}.eq-row::-webkit-scrollbar{height:0}
 #eq-toast .katex{color:var(--text-bright)!important;font-size:0.85rem!important;line-height:1.2!important}
 #eq-toast .katex-display{margin:0.04em 0!important}
-
-/* ═══ PAUSE PILL ═══ */
-#pause-pill{
-  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:25;
-  background:rgba(8,10,16,0.85);border:1px solid var(--border-b);
-  backdrop-filter:blur(8px);padding:10px 28px;
-  font-size:0.7rem;letter-spacing:0.2em;text-transform:uppercase;
-  color:var(--yellow);font-weight:700;display:none;pointer-events:none;
-}
+#pause-pill{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:25;background:rgba(8,10,16,0.85);border:1px solid var(--border-b);backdrop-filter:blur(8px);padding:10px 28px;font-size:0.7rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--yellow);font-weight:700;display:none;pointer-events:none}
 #pause-pill.show{display:block}
-
-/* ═══ RECORDING DOT ═══ */
-#rec-dot{
-  position:fixed;top:max(10px,env(safe-area-inset-top,10px));right:10px;z-index:25;
-  width:10px;height:10px;border-radius:50%;background:var(--red);
-  box-shadow:0 0 8px var(--red);display:none;
-  animation:rec-pulse 1.2s ease infinite;
-}
+#rec-dot{position:fixed;top:max(10px,env(safe-area-inset-top,10px));right:10px;z-index:25;width:10px;height:10px;border-radius:50%;background:var(--red);box-shadow:0 0 8px var(--red);display:none;animation:rp 1.2s ease infinite}
 #rec-dot.show{display:block}
-@keyframes rec-pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+@keyframes rp{0%,100%{opacity:1}50%{opacity:0.3}}
 </style>
 </head>
 <body>
 
-<!-- FULL-SCREEN STAGE -->
 <div id="stage">
   <video id="video" autoplay playsinline muted></video>
   <canvas id="webcamCanvas"></canvas>
   <canvas id="splatCanvas" class="hidden"></canvas>
 </div>
 
-<!-- TOP STATS -->
 <div id="stats">
-  <div class="st"><span class="st-val c-b" id="s-feat">—</span><span class="st-lbl">Features</span></div>
-  <div class="st"><span class="st-val c-g" id="s-track">—</span><span class="st-lbl">Tracked</span></div>
-  <div class="st"><span class="st-val c-p" id="s-gauss">—</span><span class="st-lbl">Gaussians</span></div>
-  <div class="st"><span class="st-val c-y" id="s-kf">—</span><span class="st-lbl">Keyframes</span></div>
+  <div class="st"><span class="st-val c-b" id="s-tracks">—</span><span class="st-lbl">Tracks</span></div>
+  <div class="st"><span class="st-val c-g" id="s-age">—</span><span class="st-lbl">Avg Age</span></div>
+  <div class="st"><span class="st-val c-p" id="s-gauss">—</span><span class="st-lbl">Gauss</span></div>
+  <div class="st"><span class="st-val c-y" id="s-kf">—</span><span class="st-lbl">KF</span></div>
   <div class="st"><span class="st-val c-b" id="s-fps">—</span><span class="st-lbl">FPS</span></div>
 </div>
 
-<!-- CENTER CTA -->
 <div id="cta">
   <h2>GS-SLAM</h2>
-  <p>Gaussian Splatting SLAM from your camera. Point at textured surfaces for best results.</p>
+  <p>Gaussian Splatting SLAM. Move the camera slowly across a textured scene. The map builds over many frames.</p>
   <button id="start-btn" onclick="startCapture()">▶ START</button>
 </div>
 
-<!-- RECORDING DOT -->
 <div id="rec-dot"></div>
-<!-- PAUSE PILL -->
 <div id="pause-pill">▐▐ PAUSED</div>
 
-<!-- EQUATION TOAST -->
 <div id="eq-toast">
   <div class="eq-head" onclick="document.getElementById('eq-toast').classList.remove('show')">
-    <span class="dot"></span><span class="lbl">3D Gaussian Splatting</span><span class="x">✕</span>
+    <span class="dot"></span><span class="lbl">Alpha Compositing · Front-to-Back</span><span class="x">✕</span>
   </div>
-  <div class="eq-row" id="eq-gauss"></div>
+  <div class="eq-row" id="eq-alpha"></div>
 </div>
 
-<!-- BOTTOM TABS -->
 <div id="tabs">
-  <button class="tab active" id="tab-cam" onclick="switchView('cam')">
-    <span class="tab-icon">◉</span>Camera
-  </button>
-  <button class="tab" id="tab-3d" onclick="switchView('3d')">
-    <span class="tab-icon">◇</span>3D View
-  </button>
-  <button class="tab" id="tab-pause" onclick="togglePause()" style="display:none">
-    <span class="tab-icon" id="pause-icon">▐▐</span>Pause
-  </button>
-  <button class="tab settings-tab" id="tab-settings" onclick="toggleSheet()">
-    <span class="tab-icon">⚙</span>Settings
-  </button>
+  <button class="tab active" id="tab-cam" onclick="switchView('cam')"><span class="tab-icon">◉</span>Camera</button>
+  <button class="tab" id="tab-3d" onclick="switchView('3d')"><span class="tab-icon">◇</span>3D View</button>
+  <button class="tab" id="tab-pause" onclick="togglePause()" style="display:none"><span class="tab-icon" id="pause-icon">▐▐</span>Pause</button>
+  <button class="tab settings-tab" id="tab-settings" onclick="toggleSheet()"><span class="tab-icon">⚙</span>Settings</button>
 </div>
 
-<!-- SETTINGS SHEET -->
 <div id="sheet-overlay" onclick="closeSheet()"></div>
 <div id="sheet">
   <div class="sheet-handle"></div>
-  <div class="sheet-head">
-    <span class="sheet-title">Settings</span>
-    <button class="sheet-close" onclick="closeSheet()">✕</button>
+  <div class="sheet-head"><span class="sheet-title">Settings</span><button class="sheet-close" onclick="closeSheet()">✕</button></div>
+  <div class="sh-section"><div class="sh-lbl">Controls</div>
+    <div class="sh-btns"><button class="sh-btn" onclick="resetMap();closeSheet()">↺ Reset Map</button><button class="sh-btn" onclick="toggleEq()">λ Equations</button></div>
   </div>
-
-  <div class="sh-section">
-    <div class="sh-lbl">Controls</div>
-    <div class="sh-btns">
-      <button class="sh-btn" onclick="resetMap();closeSheet()">↺ Reset Map</button>
-      <button class="sh-btn" id="sh-eq-btn" onclick="toggleEq()">λ Equations</button>
-    </div>
+  <div class="sh-section"><div class="sh-lbl">SLAM</div>
+    <div class="sh-row"><span class="sh-row-lbl">KF Int</span><input type="range" id="sl-kfi" min="5" max="60" value="12" step="1"><span class="val" id="vl-kfi">12</span></div>
+    <div class="sh-row"><span class="sh-row-lbl">Min BL</span><input type="range" id="sl-mbl" min="1" max="30" value="5" step="1"><span class="val" id="vl-mbl">5</span></div>
+    <div class="sh-row"><span class="sh-row-lbl">Min Age</span><input type="range" id="sl-ma" min="2" max="30" value="4" step="1"><span class="val" id="vl-ma">4</span></div>
   </div>
-
-  <div class="sh-section">
-    <div class="sh-lbl">Tracking</div>
-    <div class="sh-row"><span class="sh-row-lbl">Quality</span><input type="range" id="sl-q" min="1" max="3" value="2" step="1"><span class="val" id="vl-q">2</span></div>
-    <div class="sh-row"><span class="sh-row-lbl">Splat</span><input type="range" id="sl-sp" min="1" max="20" value="8" step="1"><span class="val" id="vl-sp">8</span></div>
-    <div class="sh-row"><span class="sh-row-lbl">Decay</span><input type="range" id="sl-dc" min="0" max="100" value="0" step="1"><span class="val" id="vl-dc">0</span></div>
+  <div class="sh-section"><div class="sh-lbl">Rendering</div>
+    <div class="sh-row"><span class="sh-row-lbl">Splat</span><input type="range" id="sl-sp" min="2" max="30" value="12" step="1"><span class="val" id="vl-sp">12</span></div>
+    <div class="sh-row"><span class="sh-row-lbl">Alpha</span><input type="range" id="sl-al" min="0.1" max="1.0" value="0.7" step="0.05"><span class="val" id="vl-al">0.70</span></div>
   </div>
-
-  <div class="sh-section">
-    <div class="sh-lbl">Display</div>
-    <button class="sh-toggle on" id="tog-feat" onclick="togVis('feat')">◉ Feature Overlay</button>
+  <div class="sh-section"><div class="sh-lbl">Display</div>
+    <button class="sh-toggle on" id="tog-feat" onclick="togVis('feat')">◉ Feature Tracks</button>
     <button class="sh-toggle on" id="tog-trail" onclick="togVis('trail')">⇌ Camera Trail</button>
     <button class="sh-toggle on" id="tog-grid" onclick="togVis('grid')">▦ Ground Grid</button>
   </div>
-
-  <div class="sh-section">
-    <div class="sh-lbl">3D Camera</div>
-    <div class="sh-row"><span class="sh-row-lbl">Orbit</span><input type="range" id="sl-ot" min="0" max="6.28" value="0.5" step="0.01"><span class="val" id="vl-ot">0.5</span></div>
-    <div class="sh-row"><span class="sh-row-lbl">Elev</span><input type="range" id="sl-op" min="0.1" max="3.0" value="0.8" step="0.01"><span class="val" id="vl-op">0.8</span></div>
-    <div class="sh-row"><span class="sh-row-lbl">Dist</span><input type="range" id="sl-od" min="1" max="30" value="5" step="0.1"><span class="val" id="vl-od">5.0</span></div>
-  </div>
-
   <div class="sh-section" style="padding-bottom:20px">
     <div style="font-size:0.48rem;color:var(--text-faint);text-align:center;letter-spacing:0.08em">
-      Based on <span style="color:var(--blue-dim)">GS-SLAM</span> · Yan et al. CVPR 2024<br>
-      Gaussian Splatting SLAM · davesgames.io
+      Based on <span style="color:var(--blue-dim)">GS-SLAM</span> · Yan et al. CVPR 2024<br>davesgames.io
     </div>
   </div>
 </div>
 
-<!-- KaTeX -->
 <script>
 (function(){
   if(!window.katex) return;
-  const G='#ff9050',C='#60e0ee',P='#c890ff';
   katex.render(
-    String.raw`\textcolor{${G}}{G}(\vec{x}) = e^{-\frac{1}{2}(\vec{x}-\textcolor{${C}}{\mu})^\top \textcolor{${P}}{\Sigma}^{-1} (\vec{x}-\textcolor{${C}}{\mu})}`,
-    document.getElementById('eq-gauss'),
+    String.raw`\textcolor{#ffc832}{C} = \sum_{i \in \mathcal{N}} \textcolor{#ffc832}{c_i}\,\alpha_i \prod_{j=1}^{i-1}(1-\alpha_j)\,,\quad \alpha_i = o_i \cdot \exp\!\bigl(-\tfrac{1}{2}\Delta_i^\top \Sigma_i^{-1} \Delta_i\bigr)`,
+    document.getElementById('eq-alpha'),
     {throwOnError:false,displayMode:true}
   );
 })();
@@ -301,292 +172,685 @@ video{display:none}
 
 <script>
 /* ════════════════════════════════════════════════════════════
-   GS-SLAM — MOBILE-FIRST
-   Full-screen camera, bottom tabs, pull-up settings sheet
+   GS-SLAM — PROPER MULTI-FRAME PIPELINE
+   
+   Architecture:
+   1. Feature TRACKS persist across hundreds of frames
+   2. Keyframes store camera poses at significant baselines
+   3. Triangulation only when a track spans enough keyframes
+   4. Gaussians are permanent map points
+   5. Depth-sorted back-to-front alpha compositing
    ════════════════════════════════════════════════════════════ */
-let video,wCanvas,wCtx,sCanvas,gl;
-let running=false,paused=false,frameNum=0;
-let prevGray=null,currGray=null,features=[];
-let gaussians=[],keyframes=[];
-let camPose={x:0,y:0,z:0};
-let splatSize=8,gaussDecay=0,quality=2,maxFeatures=300;
-let lastTime=performance.now(),fpsSmooth=0;
-let showFeat=true,showTrail=true,showGrid=true;
-let orbitTheta=0.5,orbitPhi=0.8,orbitDist=5.0;
-let activeView='cam'; // 'cam' or '3d'
 
-// WebGL
-let glProg,glPBuf,glCBuf,aP,aC,uM,uS;
+/* ═══ STATE ═══ */
+let video, wCanvas, wCtx, sCanvas, gl;
+let running = false, paused = false, frameNum = 0;
+let prevGray = null, currGray = null;
+let activeView = 'cam';
+let lastTime = performance.now(), fpsSmooth = 0;
 
-// Touch orbit state
-let isDrag=false,lastTX=0,lastTY=0;
-let pinchDist0=0,pinchZoom0=5;
+// SLAM parameters
+let kfInterval = 12;     // min frames between keyframes
+let minBaseline = 5;     // min accumulated px parallax for triangulation
+let minTrackAge = 4;     // min keyframe observations before triangulating
+let splatSize = 12;
+let baseAlpha = 0.7;
+let showFeat = true, showTrail = true, showGrid = true;
 
-function sg(el){el.style.setProperty('--pct',(el.value-el.min)/(el.max-el.min)*100+'%')}
+// 3D orbit
+let orbitTheta = 0.5, orbitPhi = 0.8, orbitDist = 6.0;
+let isDrag = false, lastTX = 0, lastTY = 0, pinchD0 = 0, pinchZ0 = 6;
 
-/* ═══ VIEW SWITCHING ═══ */
-function switchView(v){
-  activeView=v;
-  document.getElementById('webcamCanvas').classList.toggle('hidden',v!=='cam');
-  document.getElementById('splatCanvas').classList.toggle('hidden',v!=='3d');
-  document.getElementById('tab-cam').classList.toggle('active',v==='cam');
-  document.getElementById('tab-3d').classList.toggle('active',v==='3d');
-}
+// WebGL handles
+let glProg, glPB, glCB, aP, aC, uM, uS;
 
-/* ═══ SETTINGS SHEET ═══ */
-function toggleSheet(){
-  const s=document.getElementById('sheet'),o=document.getElementById('sheet-overlay');
-  const open=s.classList.toggle('open');o.classList.toggle('show',open);
-  document.getElementById('tab-settings').classList.toggle('active',open);
-}
-function closeSheet(){
-  document.getElementById('sheet').classList.remove('open');
-  document.getElementById('sheet-overlay').classList.remove('show');
-  document.getElementById('tab-settings').classList.remove('active');
-}
+/* ════════════════════════════════════════════════════════════
+   FEATURE TRACK SYSTEM
+   Each track lives across many frames. It stores every
+   keyframe observation so we can triangulate from the full
+   baseline when ready.
+   ════════════════════════════════════════════════════════════ */
+let nextTrackId = 0;
+let tracks = new Map();   // id → Track
+const MAX_TRACKS = 400;
 
-/* ═══ EQUATION TOAST ═══ */
-function toggleEq(){document.getElementById('eq-toast').classList.toggle('show')}
-
-/* ═══ TOGGLES ═══ */
-function togVis(k){
-  if(k==='feat')showFeat=!showFeat;else if(k==='trail')showTrail=!showTrail;else showGrid=!showGrid;
-  const v=k==='feat'?showFeat:k==='trail'?showTrail:showGrid;
-  const b=document.getElementById('tog-'+k);b.classList.toggle('on',v);b.classList.toggle('off',!v);
-}
-
-/* ═══ WEBCAM ═══ */
-async function startCapture(){
-  try{
-    // Prefer rear camera on mobile
-    const stream=await navigator.mediaDevices.getUserMedia({
-      video:{width:{ideal:640},height:{ideal:480},facingMode:{ideal:'environment'}},
-      audio:false
-    });
-    video=document.getElementById('video');video.srcObject=stream;await video.play();
-    wCanvas=document.getElementById('webcamCanvas');
-    wCanvas.width=video.videoWidth;wCanvas.height=video.videoHeight;
-    wCtx=wCanvas.getContext('2d',{willReadFrequently:true});
-
-    document.getElementById('cta').classList.add('gone');
-    document.getElementById('rec-dot').classList.add('show');
-    document.getElementById('tab-pause').style.display='';
-
-    initWebGL();
-    running=true;
-    requestAnimationFrame(mainLoop);
-  }catch(e){
-    alert('Camera access required.\n'+e.message);
+class Track {
+  constructor(x, y, frame, color) {
+    this.id = nextTrackId++;
+    this.x = x;            // current pixel position
+    this.y = y;
+    this.px = x;           // previous pixel position (for drawing)
+    this.py = y;
+    this.color = color;     // [r, g, b] 0-1
+    this.framesSeen = 1;
+    this.lastFrame = frame;
+    this.kfObs = [];        // [{kfId, x, y, camX, camY, camZ}]
+    this.triangulated = false;
+    this.pos3D = null;      // {x, y, z} world position
+    this.totalParallax = 0; // accumulated px displacement
+    this.sad = 0;           // last matching cost
   }
 }
 
-function togglePause(){
-  paused=!paused;
-  document.getElementById('pause-icon').textContent=paused?'▶':'▐▐';
-  document.getElementById('tab-pause').querySelector('.tab-icon').textContent=paused?'▶':'▐▐';
-  document.getElementById('pause-pill').classList.toggle('show',paused);
-  document.getElementById('rec-dot').classList.toggle('show',!paused);
-  if(!paused)requestAnimationFrame(mainLoop);
-}
+/* ════════════════════════════════════════════════════════════
+   KEYFRAME SYSTEM
+   ════════════════════════════════════════════════════════════ */
+let keyframes = [];     // [{id, frame, cx, cy, cz}]
+let nextKfId = 0;
+let lastKfFrame = -999;
 
-function resetMap(){gaussians=[];keyframes=[];features=[];prevGray=null;frameNum=0;camPose={x:0,y:0,z:0}}
+// Camera pose — accumulated from optical flow
+let camX = 0, camY = 0, camZ = 0;
 
-/* ═══ FEATURE DETECTION ═══ */
-function toGray(d){const w=d.width,h=d.height,g=new Float32Array(w*h);for(let i=0;i<w*h;i++){const j=i*4;g[i]=0.299*d.data[j]+0.587*d.data[j+1]+0.114*d.data[j+2]}return g}
+/* ════════════════════════════════════════════════════════════
+   GAUSSIAN MAP — permanent once created
+   ════════════════════════════════════════════════════════════ */
+let gaussians = [];   // [{x, y, z, r, g, b, opacity, scale}]
+const MAX_GAUSS = 20000;
 
-function detectFeatures(gray,w,h){
-  const th=25,step=quality===3?4:quality===2?6:8,cands=[];
-  for(let y=8;y<h-8;y+=step)for(let x=8;x<w-8;x+=step){
-    const c=gray[y*w+x];let sc=0;
-    for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const d=gray[(y+dy)*w+(x+dx)]-c;sc+=d*d}
-    if(sc>th*th*5)cands.push({x,y,score:sc})
+/* ════════════════════════════════════════════════════════════
+   FEATURE DETECTION
+   ════════════════════════════════════════════════════════════ */
+function toGray(imgData) {
+  const d = imgData.data, n = imgData.width * imgData.height;
+  const g = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const j = i * 4;
+    g[i] = 0.299 * d[j] + 0.587 * d[j+1] + 0.114 * d[j+2];
   }
-  cands.sort((a,b)=>b.score-a.score);const sel=[],md=12;
-  for(const c of cands){if(sel.length>=maxFeatures)break;let ok=true;for(const s of sel){const dx=c.x-s.x,dy=c.y-s.y;if(dx*dx+dy*dy<md*md){ok=false;break}}if(ok)sel.push(c)}
-  return sel
+  return g;
 }
 
-function trackFeatures(pG,cG,feats,w,h){
-  const hw=5,tracked=[];
-  for(const f of feats){
-    let bDx=0,bDy=0,bSAD=Infinity;const sr=12,px=Math.round(f.x),py=Math.round(f.y);
-    for(let dy=-sr;dy<=sr;dy+=2)for(let dx=-sr;dx<=sr;dx+=2){
-      const nx=px+dx,ny=py+dy;if(nx<hw||nx>=w-hw||ny<hw||ny>=h-hw)continue;
-      let sad=0;for(let wy=-hw;wy<=hw;wy+=2)for(let wx=-hw;wx<=hw;wx+=2)sad+=Math.abs(pG[(py+wy)*w+(px+wx)]-cG[(ny+wy)*w+(nx+wx)]);
-      if(sad<bSAD){bSAD=sad;bDx=dx;bDy=dy}
+function detectCorners(gray, w, h, maxN) {
+  const step = 6, th2 = 625 * 5, cands = [];
+  for (let y = 10; y < h - 10; y += step) {
+    for (let x = 10; x < w - 10; x += step) {
+      const c = gray[y * w + x];
+      let sc = 0;
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const d = gray[(y+dy)*w + (x+dx)] - c;
+          sc += d * d;
+        }
+      if (sc > th2) cands.push({x, y, sc});
     }
-    if(bSAD<800)tracked.push({x:px+bDx,y:py+bDy,px:f.x,py:f.y,dx:bDx,dy:bDy,score:f.score,sad:bSAD,age:(f.age||0)+1})
   }
-  return tracked
+  cands.sort((a, b) => b.sc - a.sc);
+  const sel = [], md2 = 144;
+  for (const c of cands) {
+    if (sel.length >= maxN) break;
+    let ok = true;
+    for (const s of sel) {
+      if ((c.x-s.x)**2 + (c.y-s.y)**2 < md2) { ok = false; break; }
+    }
+    if (ok) sel.push(c);
+  }
+  return sel;
 }
 
-/* ═══ POSE & MAP ═══ */
-function estimateMotion(tracked,w,h,imgData){
-  if(tracked.length<8)return;
-  let ax=0,ay=0;for(const t of tracked){ax+=t.dx;ay+=t.dy}ax/=tracked.length;ay/=tracked.length;
-  camPose.x+=ax*0.005;camPose.y-=ay*0.005;camPose.z-=0.02;
-  const par=Math.sqrt(ax*ax+ay*ay),isKF=par>2||frameNum%15===0;
-  if(isKF&&frameNum>5){
-    keyframes.push({...camPose,frame:frameNum});
-    const d=imgData.data;
-    for(const t of tracked){
-      const dvx=t.dx-ax,dvy=t.dy-ay,dev=Math.sqrt(dvx*dvx+dvy*dvy);
-      if(dev>1||Math.random()<0.3){
-        const depth=1/(dev*0.2+0.1)+Math.random()*0.3;
-        const fx=w*0.8,cx=w/2,cy=h/2;
-        const X=(t.x-cx)/fx*depth+camPose.x,Y=-(t.y-cy)/fx*depth+camPose.y,Z=-depth+camPose.z;
-        const pi=(Math.round(t.y)*w+Math.round(t.x))*4;
-        let dup=false;for(let i=gaussians.length-1;i>=Math.max(0,gaussians.length-200);i--){const g=gaussians[i];if((g.x-X)**2+(g.y-Y)**2+(g.z-Z)**2<0.01){dup=true;break}}
-        if(!dup)gaussians.push({x:X,y:Y,z:Z,r:d[pi]/255,g:d[pi+1]/255,b:d[pi+2]/255,opacity:0.6+Math.random()*0.3,age:0})
+/* ════════════════════════════════════════════════════════════
+   PATCH MATCHING — track existing features to new frame
+   Returns array of {trackId, x, y, dx, dy, sad}
+   ════════════════════════════════════════════════════════════ */
+function matchTracks(prevG, currG, w, h) {
+  const hw = 5, sr = 14, matches = [];
+
+  for (const [id, tr] of tracks) {
+    const px = Math.round(tr.x), py = Math.round(tr.y);
+    if (px < sr+hw || px >= w-sr-hw || py < sr+hw || py >= h-sr-hw) continue;
+
+    let bDx = 0, bDy = 0, bSAD = Infinity;
+    // Search window around previous position
+    for (let dy = -sr; dy <= sr; dy += 2) {
+      for (let dx = -sr; dx <= sr; dx += 2) {
+        const nx = px + dx, ny = py + dy;
+        if (nx < hw || nx >= w-hw || ny < hw || ny >= h-hw) continue;
+        let sad = 0;
+        for (let wy = -hw; wy <= hw; wy += 2)
+          for (let wx = -hw; wx <= hw; wx += 2)
+            sad += Math.abs(prevG[(py+wy)*w + (px+wx)] - currG[(ny+wy)*w + (nx+wx)]);
+        if (sad < bSAD) { bSAD = sad; bDx = dx; bDy = dy; }
       }
     }
-    if(gaussians.length>15000)gaussians=gaussians.slice(-12000)
+
+    if (bSAD < 700) {
+      matches.push({ trackId: id, x: px+bDx, y: py+bDy, dx: bDx, dy: bDy, sad: bSAD });
+    }
+    // else: track is lost — will be cleaned up
+  }
+  return matches;
+}
+
+/* ════════════════════════════════════════════════════════════
+   SLAM PIPELINE — called every frame
+   ════════════════════════════════════════════════════════════ */
+function slamStep(imgData) {
+  const w = imgData.width, h = imgData.height;
+  currGray = toGray(imgData);
+
+  if (!prevGray) {
+    // First frame: seed tracks
+    const corners = detectCorners(currGray, w, h, MAX_TRACKS);
+    for (const c of corners) {
+      const pi = (Math.round(c.y) * w + Math.round(c.x)) * 4;
+      const col = [imgData.data[pi]/255, imgData.data[pi+1]/255, imgData.data[pi+2]/255];
+      tracks.set(nextTrackId, new Track(c.x, c.y, frameNum, col));
+      nextTrackId++;
+    }
+    prevGray = currGray;
+    return;
+  }
+
+  // 1) Match existing tracks
+  const matches = matchTracks(prevGray, currGray, w, h);
+  const matchedIds = new Set();
+
+  // Compute mean flow for camera motion estimate
+  let sumDx = 0, sumDy = 0, nMatch = 0;
+  for (const m of matches) { sumDx += m.dx; sumDy += m.dy; nMatch++; }
+  const meanDx = nMatch > 0 ? sumDx / nMatch : 0;
+  const meanDy = nMatch > 0 ? sumDy / nMatch : 0;
+
+  // 2) Update camera pose from mean flow
+  const motionScale = 0.004;
+  camX += meanDx * motionScale;
+  camY -= meanDy * motionScale;
+  camZ -= 0.015;  // forward drift
+
+  // 3) Update matched tracks
+  for (const m of matches) {
+    matchedIds.add(m.trackId);
+    const tr = tracks.get(m.trackId);
+    if (!tr) continue;
+    tr.px = tr.x;
+    tr.py = tr.y;
+    tr.x = m.x;
+    tr.y = m.y;
+    tr.sad = m.sad;
+    tr.framesSeen++;
+    tr.lastFrame = frameNum;
+    // Accumulate parallax (residual motion after camera compensation)
+    const resDx = m.dx - meanDx;
+    const resDy = m.dy - meanDy;
+    tr.totalParallax += Math.sqrt(resDx*resDx + resDy*resDy);
+    // Update color (running average)
+    const pi = (Math.round(m.y) * w + Math.round(m.x)) * 4;
+    const a = 0.15;
+    tr.color[0] = tr.color[0] * (1-a) + imgData.data[pi]/255 * a;
+    tr.color[1] = tr.color[1] * (1-a) + imgData.data[pi+1]/255 * a;
+    tr.color[2] = tr.color[2] * (1-a) + imgData.data[pi+2]/255 * a;
+  }
+
+  // 4) Kill lost tracks
+  for (const [id, tr] of tracks) {
+    if (!matchedIds.has(id) && !tr.triangulated) {
+      tracks.delete(id);
+    }
+  }
+  // Also kill triangulated tracks not seen recently
+  for (const [id, tr] of tracks) {
+    if (tr.triangulated && frameNum - tr.lastFrame > 60) {
+      tracks.delete(id);
+    }
+  }
+
+  // 5) Spawn new tracks to replace lost ones
+  if (tracks.size < MAX_TRACKS * 0.6) {
+    const newCorners = detectCorners(currGray, w, h, MAX_TRACKS);
+    for (const c of newCorners) {
+      if (tracks.size >= MAX_TRACKS) break;
+      // Don't spawn near existing tracks
+      let tooClose = false;
+      for (const [, tr] of tracks) {
+        if ((c.x-tr.x)**2 + (c.y-tr.y)**2 < 196) { tooClose = true; break; }
+      }
+      if (tooClose) continue;
+      const pi = (Math.round(c.y) * w + Math.round(c.x)) * 4;
+      const col = [imgData.data[pi]/255, imgData.data[pi+1]/255, imgData.data[pi+2]/255];
+      const tr = new Track(c.x, c.y, frameNum, col);
+      tracks.set(tr.id, tr);
+    }
+  }
+
+  // 6) Keyframe check
+  const totalMotion = Math.sqrt(meanDx*meanDx + meanDy*meanDy);
+  const enoughMotion = totalMotion > 1.5;
+  const enoughFrames = frameNum - lastKfFrame >= kfInterval;
+
+  if (enoughMotion && enoughFrames && nMatch > 10) {
+    const kf = { id: nextKfId++, frame: frameNum, cx: camX, cy: camY, cz: camZ };
+    keyframes.push(kf);
+    lastKfFrame = frameNum;
+
+    // Record observation for every active track
+    for (const [id, tr] of tracks) {
+      if (matchedIds.has(id) || tr.triangulated) {
+        tr.kfObs.push({
+          kfId: kf.id, x: tr.x, y: tr.y,
+          camX: camX, camY: camY, camZ: camZ
+        });
+      }
+    }
+
+    // 7) Triangulate tracks with enough observations & baseline
+    if (gaussians.length < MAX_GAUSS) {
+      triangulateReady(w, h);
+    }
+  }
+
+  prevGray = currGray;
+}
+
+/* ════════════════════════════════════════════════════════════
+   TRIANGULATION
+   For each track with enough keyframe observations and
+   accumulated parallax, estimate 3D position and create
+   a permanent Gaussian.
+   ════════════════════════════════════════════════════════════ */
+function triangulateReady(imgW, imgH) {
+  const fx = imgW * 0.8;  // approximate focal length in pixels
+  const cx = imgW / 2, cy = imgH / 2;
+
+  for (const [id, tr] of tracks) {
+    if (tr.triangulated) continue;
+    if (tr.kfObs.length < minTrackAge) continue;
+    if (tr.totalParallax < minBaseline) continue;
+
+    // Use first and last observations for maximum baseline
+    const first = tr.kfObs[0];
+    const last = tr.kfObs[tr.kfObs.length - 1];
+
+    // Camera baseline
+    const blX = last.camX - first.camX;
+    const blY = last.camY - first.camY;
+    const blZ = last.camZ - first.camZ;
+    const baseline = Math.sqrt(blX*blX + blY*blY + blZ*blZ);
+
+    if (baseline < 0.01) continue;
+
+    // Pixel disparity (corrected for camera motion)
+    const dispX = (last.x - first.x) / imgW;
+    const dispY = (last.y - first.y) / imgH;
+    const disparity = Math.sqrt(dispX*dispX + dispY*dispY);
+
+    if (disparity < 0.005) continue; // too small to be reliable
+
+    // Depth estimate: inversely proportional to disparity/baseline ratio
+    // Higher parallax relative to baseline → closer point
+    const depth = baseline / (disparity * 2 + 0.01);
+    const clampedDepth = Math.max(0.3, Math.min(15, depth));
+
+    // Backproject using midpoint observation and midpoint camera pose
+    const midIdx = Math.floor(tr.kfObs.length / 2);
+    const midObs = tr.kfObs[midIdx];
+    const X = (midObs.x - cx) / fx * clampedDepth + midObs.camX;
+    const Y = -(midObs.y - cy) / fx * clampedDepth + midObs.camY;
+    const Z = -clampedDepth + midObs.camZ;
+
+    // Check for duplicates near this position
+    let dup = false;
+    for (let i = gaussians.length - 1; i >= Math.max(0, gaussians.length - 500); i--) {
+      const g = gaussians[i];
+      if ((g.x-X)**2 + (g.y-Y)**2 + (g.z-Z)**2 < 0.005) { dup = true; break; }
+    }
+    if (dup) continue;
+
+    // Confidence scales with observation count and baseline
+    const conf = Math.min(1, tr.kfObs.length / 12) * Math.min(1, baseline / 0.2);
+    const opacity = baseAlpha * (0.5 + 0.5 * conf);
+    const scale = 0.04 + (1 - conf) * 0.06; // tighter when more confident
+
+    gaussians.push({
+      x: X, y: Y, z: Z,
+      r: tr.color[0], g: tr.color[1], b: tr.color[2],
+      opacity: opacity,
+      scale: scale,
+      trackObs: tr.kfObs.length,
+    });
+
+    tr.triangulated = true;
+    tr.pos3D = { x: X, y: Y, z: Z };
   }
 }
 
-/* ═══ TRACKING OVERLAY ═══ */
-function drawOverlay(tracked){
-  if(!showFeat)return;
-  for(const t of tracked){
-    const age=Math.min(t.age||1,20),a=0.3+0.5*(age/20);
-    wCtx.beginPath();wCtx.moveTo(t.px,t.py);wCtx.lineTo(t.x,t.y);
-    wCtx.strokeStyle=`rgba(150,200,255,${a})`;wCtx.lineWidth=1.5;wCtx.stroke();
-    const h=t.sad<300?[57,255,20]:t.sad<600?[255,170,0]:[255,51,102];
-    wCtx.fillStyle=`rgba(${h[0]},${h[1]},${h[2]},0.9)`;
-    wCtx.beginPath();wCtx.arc(t.x,t.y,2.5,0,Math.PI*2);wCtx.fill();
+/* ════════════════════════════════════════════════════════════
+   DRAWING — WEBCAM OVERLAY
+   Show persistent tracks with age-coded tails
+   ════════════════════════════════════════════════════════════ */
+function drawOverlay() {
+  if (!showFeat) return;
+  for (const [, tr] of tracks) {
+    if (tr.framesSeen < 2) continue;
+    const age = Math.min(tr.framesSeen, 60);
+    const ageT = age / 60;
+
+    // Track tail line
+    wCtx.beginPath();
+    wCtx.moveTo(tr.px, tr.py);
+    wCtx.lineTo(tr.x, tr.y);
+    const lineAlpha = 0.2 + 0.5 * ageT;
+    wCtx.strokeStyle = tr.triangulated
+      ? `rgba(255,200,50,${lineAlpha})`        // yellow = triangulated
+      : `rgba(150,200,255,${lineAlpha * 0.7})`; // blue = tracking
+    wCtx.lineWidth = tr.triangulated ? 2 : 1;
+    wCtx.stroke();
+
+    // Feature dot — green=good, orange=ok, red=poor matching
+    const dotR = tr.triangulated ? 3.5 : 2;
+    const h = tr.sad < 250 ? [57,255,20] : tr.sad < 500 ? [255,170,0] : [255,51,102];
+    if (tr.triangulated) {
+      // Triangulated features get a ring
+      wCtx.beginPath(); wCtx.arc(tr.x, tr.y, 4.5, 0, Math.PI*2);
+      wCtx.strokeStyle = `rgba(255,200,50,0.6)`;
+      wCtx.lineWidth = 1;
+      wCtx.stroke();
+    }
+    wCtx.beginPath(); wCtx.arc(tr.x, tr.y, dotR, 0, Math.PI*2);
+    wCtx.fillStyle = `rgba(${h[0]},${h[1]},${h[2]},0.9)`;
+    wCtx.fill();
+
+    // Track age label for long-lived tracks
+    if (tr.kfObs.length >= 3 && !tr.triangulated) {
+      wCtx.fillStyle = 'rgba(150,200,255,0.4)';
+      wCtx.font = '8px "JetBrains Mono"';
+      wCtx.fillText(tr.kfObs.length + 'kf', tr.x + 5, tr.y - 3);
+    }
   }
 }
 
-/* ═══ WebGL 3D RENDERER ═══ */
-function initWebGL(){
-  sCanvas=document.getElementById('splatCanvas');
-  const dpr=Math.min(devicePixelRatio,2);
-  sCanvas.width=window.innerWidth*dpr;sCanvas.height=window.innerHeight*dpr;
-  gl=sCanvas.getContext('webgl',{alpha:false,antialias:true});if(!gl)return;
-  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);
-  gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);
-  const vs=`attribute vec3 aP;attribute vec4 aC;uniform mat4 uM;uniform float uS;varying vec4 vC;void main(){gl_Position=uM*vec4(aP,1.0);gl_PointSize=uS/max(gl_Position.w,0.1);vC=aC;}`;
-  const fs=`precision mediump float;varying vec4 vC;void main(){vec2 p=gl_PointCoord-0.5;float d=dot(p,p);float a=vC.a*exp(-d*8.0);if(a<0.01)discard;gl_FragColor=vec4(vC.rgb+exp(-d*3.0)*0.12,a);}`;
-  glProg=mkProg(gl,vs,fs);aP=gl.getAttribLocation(glProg,'aP');aC=gl.getAttribLocation(glProg,'aC');
-  uM=gl.getUniformLocation(glProg,'uM');uS=gl.getUniformLocation(glProg,'uS');
-  glPBuf=gl.createBuffer();glCBuf=gl.createBuffer();
+/* ════════════════════════════════════════════════════════════
+   WebGL 3D RENDERER — DEPTH-SORTED ALPHA COMPOSITING
+   ════════════════════════════════════════════════════════════ */
+function initWebGL() {
+  sCanvas = document.getElementById('splatCanvas');
+  const dpr = Math.min(devicePixelRatio, 2);
+  sCanvas.width = window.innerWidth * dpr;
+  sCanvas.height = window.innerHeight * dpr;
+  gl = sCanvas.getContext('webgl', { alpha: false, antialias: true, premultipliedAlpha: false });
+  if (!gl) return;
 
-  // Touch orbit on 3D canvas
-  sCanvas.addEventListener('touchstart',e=>{
-    if(e.touches.length===2){
-      pinchDist0=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);
-      pinchZoom0=orbitDist;return;
+  // Vertex shader: pass through position, color, and per-point size
+  const vs = `
+    attribute vec3 aP;
+    attribute vec4 aC;
+    uniform mat4 uM;
+    uniform float uS;
+    varying vec4 vC;
+    void main() {
+      gl_Position = uM * vec4(aP, 1.0);
+      gl_PointSize = uS / max(gl_Position.w, 0.05);
+      vC = aC;
+    }`;
+
+  // Fragment shader: proper 2D Gaussian evaluation
+  const fs = `
+    precision mediump float;
+    varying vec4 vC;
+    void main() {
+      vec2 d = gl_PointCoord - 0.5;
+      float r2 = dot(d, d);
+      // 2D Gaussian: exp(-r²/(2σ²)), σ=0.2 → divisor=0.08
+      float gauss = exp(-r2 / 0.08);
+      float alpha = vC.a * gauss;
+      if (alpha < 0.003) discard;
+      // Pre-multiply alpha for correct compositing
+      gl_FragColor = vec4(vC.rgb * alpha, alpha);
+    }`;
+
+  glProg = mkProg(gl, vs, fs);
+  aP = gl.getAttribLocation(glProg, 'aP');
+  aC = gl.getAttribLocation(glProg, 'aC');
+  uM = gl.getUniformLocation(glProg, 'uM');
+  uS = gl.getUniformLocation(glProg, 'uS');
+  glPB = gl.createBuffer();
+  glCB = gl.createBuffer();
+
+  // Touch orbit
+  sCanvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      pinchD0 = Math.hypot(e.touches[1].clientX-e.touches[0].clientX, e.touches[1].clientY-e.touches[0].clientY);
+      pinchZ0 = orbitDist; return;
     }
-    isDrag=true;lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;
-  },{passive:true});
-  sCanvas.addEventListener('touchmove',e=>{
-    if(e.touches.length===2){
-      const d=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);
-      orbitDist=Math.max(1,Math.min(30,pinchZoom0*(pinchDist0/d)));
-      e.preventDefault();return;
+    isDrag = true; lastTX = e.touches[0].clientX; lastTY = e.touches[0].clientY;
+  }, {passive:true});
+  sCanvas.addEventListener('touchmove', e => {
+    if (e.touches.length === 2) {
+      const d = Math.hypot(e.touches[1].clientX-e.touches[0].clientX, e.touches[1].clientY-e.touches[0].clientY);
+      orbitDist = Math.max(1, Math.min(30, pinchZ0 * (pinchD0/d)));
+      e.preventDefault(); return;
     }
-    if(!isDrag)return;
-    orbitTheta+=(e.touches[0].clientX-lastTX)*0.008;
-    orbitPhi=Math.max(0.1,Math.min(Math.PI-0.1,orbitPhi+(e.touches[0].clientY-lastTY)*0.008));
-    lastTX=e.touches[0].clientX;lastTY=e.touches[0].clientY;
-  },{passive:false});
-  sCanvas.addEventListener('touchend',()=>isDrag=false,{passive:true});
+    if (!isDrag) return;
+    orbitTheta += (e.touches[0].clientX - lastTX) * 0.008;
+    orbitPhi = Math.max(0.1, Math.min(Math.PI-0.1, orbitPhi + (e.touches[0].clientY-lastTY) * 0.008));
+    lastTX = e.touches[0].clientX; lastTY = e.touches[0].clientY;
+  }, {passive:false});
+  sCanvas.addEventListener('touchend', () => isDrag = false, {passive:true});
 }
 
-function mkProg(gl,vs,fs){const v=gl.createShader(gl.VERTEX_SHADER);gl.shaderSource(v,vs);gl.compileShader(v);const f=gl.createShader(gl.FRAGMENT_SHADER);gl.shaderSource(f,fs);gl.compileShader(f);const p=gl.createProgram();gl.attachShader(p,v);gl.attachShader(p,f);gl.linkProgram(p);return p}
+function mkProg(gl, vs, fs) {
+  const v = gl.createShader(gl.VERTEX_SHADER); gl.shaderSource(v, vs); gl.compileShader(v);
+  const f = gl.createShader(gl.FRAGMENT_SHADER); gl.shaderSource(f, fs); gl.compileShader(f);
+  const p = gl.createProgram(); gl.attachShader(p, v); gl.attachShader(p, f); gl.linkProgram(p); return p;
+}
+
+// Matrix helpers
 function m4P(fov,asp,n,f){const t=1/Math.tan(fov/2),nf=1/(n-f);return new Float32Array([t/asp,0,0,0,0,t,0,0,0,0,(f+n)*nf,-1,0,0,2*f*n*nf,0])}
 function m4L(e,c,u){const zx=e[0]-c[0],zy=e[1]-c[1],zz=e[2]-c[2];let l=1/Math.sqrt(zx*zx+zy*zy+zz*zz);const z=[zx*l,zy*l,zz*l],xx=u[1]*z[2]-u[2]*z[1],xy=u[2]*z[0]-u[0]*z[2],xz=u[0]*z[1]-u[1]*z[0];l=1/Math.sqrt(xx*xx+xy*xy+xz*xz);const x=[xx*l,xy*l,xz*l],y=[z[1]*x[2]-z[2]*x[1],z[2]*x[0]-z[0]*x[2],z[0]*x[1]-z[1]*x[0]];return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]),-(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]),-(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]),1])}
 function m4M(a,b){const r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];return r}
-function glDraw(pos,col,mode){
-  gl.bindBuffer(gl.ARRAY_BUFFER,glPBuf);gl.bufferData(gl.ARRAY_BUFFER,pos,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(aP);gl.vertexAttribPointer(aP,3,gl.FLOAT,false,0,0);
-  gl.bindBuffer(gl.ARRAY_BUFFER,glCBuf);gl.bufferData(gl.ARRAY_BUFFER,col,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(aC);gl.vertexAttribPointer(aC,4,gl.FLOAT,false,0,0);
-  gl.drawArrays(mode,0,pos.length/3)
+
+// Transform a point by a 4x4 matrix, return [x, y, z, w]
+function m4TransformPoint(m, px, py, pz) {
+  return [
+    m[0]*px + m[4]*py + m[8]*pz + m[12],
+    m[1]*px + m[5]*py + m[9]*pz + m[13],
+    m[2]*px + m[6]*py + m[10]*pz + m[14],
+    m[3]*px + m[7]*py + m[11]*pz + m[15],
+  ];
 }
 
-function renderSplats(){
-  if(!gl||activeView!=='3d')return;
-  const dpr=Math.min(devicePixelRatio,2);
-  const w=Math.floor(window.innerWidth*dpr),h=Math.floor(window.innerHeight*dpr);
-  if(sCanvas.width!==w||sCanvas.height!==h){sCanvas.width=w;sCanvas.height=h}
-  gl.viewport(0,0,w,h);gl.clearColor(0.04,0.045,0.06,1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
-  const cx=camPose.x,cy=camPose.y,cz=camPose.z;
-  const eX=cx+orbitDist*Math.sin(orbitPhi)*Math.cos(orbitTheta),eY=cy+orbitDist*Math.cos(orbitPhi),eZ=cz+orbitDist*Math.sin(orbitPhi)*Math.sin(orbitTheta);
-  const mvp=m4M(m4P(Math.PI/4,w/h,0.1,100),m4L([eX,eY,eZ],[cx,cy,cz],[0,1,0]));
-  gl.useProgram(glProg);gl.uniformMatrix4fv(uM,false,mvp);
-
-  // Grid
-  if(showGrid){
-    gl.uniform1f(uS,1);const gN=21,gS=5,gp=[],gc=[];
-    for(let i=0;i<gN;i++){const t=(i/(gN-1)-0.5)*gS*2;gp.push(t,0,-gS,t,0,gS,-gS,0,t,gS,0,t);gc.push(0.2,0.2,0.3,0.08,0.2,0.2,0.3,0.08,0.2,0.2,0.3,0.08,0.2,0.2,0.3,0.08)}
-    glDraw(new Float32Array(gp),new Float32Array(gc),gl.LINES)
-  }
-  // Gaussians
-  const n=gaussians.length;
-  if(n>0){
-    gl.uniform1f(uS,splatSize*40);
-    const p=new Float32Array(n*3),c=new Float32Array(n*4);
-    for(let i=0;i<n;i++){const g=gaussians[i];p[i*3]=g.x;p[i*3+1]=g.y;p[i*3+2]=g.z;c[i*4]=g.r;c[i*4+1]=g.g;c[i*4+2]=g.b;c[i*4+3]=g.opacity}
-    glDraw(p,c,gl.POINTS)
-  }
-  // Camera trail
-  if(showTrail&&keyframes.length>1){
-    gl.uniform1f(uS,200);const kn=keyframes.length,cp=new Float32Array(kn*3),cc=new Float32Array(kn*4);
-    for(let i=0;i<kn;i++){const k=keyframes[i];cp[i*3]=k.x;cp[i*3+1]=k.y;cp[i*3+2]=k.z;const t=i/kn;cc[i*4]=0.15;cc[i*4+1]=0.5*(1-t)+0.9*t;cc[i*4+2]=t+0.3*(1-t);cc[i*4+3]=0.8}
-    glDraw(cp,cc,gl.LINE_STRIP);
-    gl.uniform1f(uS,300);glDraw(new Float32Array([cp[(kn-1)*3],cp[(kn-1)*3+1],cp[(kn-1)*3+2]]),new Float32Array([1,0.8,0.2,0.9]),gl.POINTS)
-  }
+function glDraw(pos, col, mode) {
+  gl.bindBuffer(gl.ARRAY_BUFFER, glPB); gl.bufferData(gl.ARRAY_BUFFER, pos, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, glCB); gl.bufferData(gl.ARRAY_BUFFER, col, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(aC); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
+  gl.drawArrays(mode, 0, pos.length / 3);
 }
 
-/* ═══ MAIN LOOP ═══ */
-function mainLoop(ts){
-  if(!running||paused)return;
-  const dt=ts-lastTime;lastTime=ts;fpsSmooth=fpsSmooth*0.9+(1000/Math.max(dt,1))*0.1;
+function renderSplats() {
+  if (!gl || activeView !== '3d') return;
+  const dpr = Math.min(devicePixelRatio, 2);
+  const w = Math.floor(window.innerWidth * dpr), h = Math.floor(window.innerHeight * dpr);
+  if (sCanvas.width !== w || sCanvas.height !== h) { sCanvas.width = w; sCanvas.height = h; }
+  gl.viewport(0, 0, w, h);
+  gl.clearColor(0.035, 0.04, 0.055, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  // Auto-orbit when viewing 3D
-  if(activeView==='3d'&&!isDrag)orbitTheta+=0.003;
+  // Camera orbit
+  const cx = camX, cy = camY, cz = camZ;
+  const eX = cx + orbitDist * Math.sin(orbitPhi) * Math.cos(orbitTheta);
+  const eY = cy + orbitDist * Math.cos(orbitPhi);
+  const eZ = cz + orbitDist * Math.sin(orbitPhi) * Math.sin(orbitTheta);
+  const proj = m4P(Math.PI / 4, w / h, 0.1, 200);
+  const view = m4L([eX, eY, eZ], [cx, cy, cz], [0, 1, 0]);
+  const mvp = m4M(proj, view);
 
-  wCtx.drawImage(video,0,0);
-  const imgData=wCtx.getImageData(0,0,wCanvas.width,wCanvas.height);
-  currGray=toGray(imgData);const w=wCanvas.width,h=wCanvas.height;
+  gl.useProgram(glProg);
+  gl.uniformMatrix4fv(uM, false, mvp);
 
-  if(prevGray){
-    let tracked=features.length>0?trackFeatures(prevGray,currGray,features,w,h):[];
-    if(tracked.length<maxFeatures*0.5){const nf=detectFeatures(currGray,w,h);for(const f of nf){if(tracked.length>=maxFeatures)break;let ok=true;for(const t of tracked)if((f.x-t.x)**2+(f.y-t.y)**2<144){ok=false;break};if(ok)tracked.push({...f,px:f.x,py:f.y,dx:0,dy:0,sad:0,age:0})}}
-    estimateMotion(tracked,w,h,imgData);
-    if(activeView==='cam')drawOverlay(tracked);
-    features=tracked;
-  }else{features=detectFeatures(currGray,w,h);for(const f of features){f.px=f.x;f.py=f.y;f.dx=0;f.dy=0;f.sad=0;f.age=0}}
+  // ── PASS 1: Opaque geometry (grid + camera trail) ──
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
 
-  if(gaussDecay>0)for(let i=gaussians.length-1;i>=0;i--){gaussians[i].age++;if(gaussians[i].age>3000-gaussDecay*28)gaussians.splice(i,1)}
-  prevGray=currGray;frameNum++;
+  if (showGrid) {
+    gl.uniform1f(uS, 1);
+    const gN = 21, gS = 6, gp = [], gc = [];
+    for (let i = 0; i < gN; i++) {
+      const t = (i/(gN-1) - 0.5) * gS * 2;
+      gp.push(t,0,-gS, t,0,gS, -gS,0,t, gS,0,t);
+      gc.push(0.18,0.18,0.25,1, 0.18,0.18,0.25,1, 0.18,0.18,0.25,1, 0.18,0.18,0.25,1);
+    }
+    glDraw(new Float32Array(gp), new Float32Array(gc), gl.LINES);
+  }
 
+  if (showTrail && keyframes.length > 1) {
+    gl.uniform1f(uS, 120);
+    const kn = keyframes.length, cp = new Float32Array(kn*3), cc = new Float32Array(kn*4);
+    for (let i = 0; i < kn; i++) {
+      const k = keyframes[i]; cp[i*3]=k.cx; cp[i*3+1]=k.cy; cp[i*3+2]=k.cz;
+      const t = i/kn;
+      cc[i*4]=0.15; cc[i*4+1]=0.4*(1-t)+0.9*t; cc[i*4+2]=t+0.3*(1-t); cc[i*4+3]=1;
+    }
+    glDraw(cp, cc, gl.LINE_STRIP);
+    // Current camera marker
+    gl.uniform1f(uS, 250);
+    glDraw(
+      new Float32Array([cp[(kn-1)*3], cp[(kn-1)*3+1], cp[(kn-1)*3+2]]),
+      new Float32Array([1, 0.78, 0.2, 1]),
+      gl.POINTS
+    );
+  }
+
+  // ── PASS 2: Gaussians — depth-sorted back-to-front ──
+  const n = gaussians.length;
+  if (n === 0) return;
+
+  // Compute view-space Z for each Gaussian
+  const sorted = new Array(n);
+  for (let i = 0; i < n; i++) {
+    const g = gaussians[i];
+    const vp = m4TransformPoint(view, g.x, g.y, g.z);
+    sorted[i] = { idx: i, viewZ: vp[2] };
+  }
+  // Sort back-to-front (most negative Z = farthest in view space)
+  sorted.sort((a, b) => a.viewZ - b.viewZ);
+
+  // Build sorted buffers
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const g = gaussians[sorted[i].idx];
+    pos[i*3] = g.x; pos[i*3+1] = g.y; pos[i*3+2] = g.z;
+    col[i*4] = g.r; col[i*4+1] = g.g; col[i*4+2] = g.b;
+    col[i*4+3] = g.opacity;
+  }
+
+  // Render with proper alpha compositing
+  gl.enable(gl.BLEND);
+  // Pre-multiplied alpha blending (fragment shader outputs pre-multiplied colors)
+  gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+  gl.depthMask(false);     // don't write depth for transparent splats
+  gl.enable(gl.DEPTH_TEST); // still test against opaque geometry
+
+  gl.uniform1f(uS, splatSize * 30);
+  glDraw(pos, col, gl.POINTS);
+
+  // Restore state
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
+}
+
+/* ════════════════════════════════════════════════════════════
+   MAIN LOOP
+   ════════════════════════════════════════════════════════════ */
+function mainLoop(ts) {
+  if (!running || paused) return;
+  const dt = ts - lastTime; lastTime = ts;
+  fpsSmooth = fpsSmooth * 0.9 + (1000 / Math.max(dt, 1)) * 0.1;
+
+  if (activeView === '3d' && !isDrag) orbitTheta += 0.003;
+
+  // Grab frame and run SLAM
+  wCtx.drawImage(video, 0, 0);
+  const imgData = wCtx.getImageData(0, 0, wCanvas.width, wCanvas.height);
+  slamStep(imgData);
+
+  // Draw overlay on camera view
+  if (activeView === 'cam') drawOverlay();
+
+  // Render 3D
   renderSplats();
+  frameNum++;
 
-  // Stats
-  document.getElementById('s-feat').textContent=features.length;
-  document.getElementById('s-track').textContent=features.filter(f=>f.age>0).length;
-  document.getElementById('s-gauss').textContent=gaussians.length;
-  document.getElementById('s-kf').textContent=keyframes.length;
-  document.getElementById('s-fps').textContent=Math.round(fpsSmooth);
+  // Update stats
+  let totalAge = 0, nTr = 0;
+  for (const [, tr] of tracks) { totalAge += tr.framesSeen; nTr++; }
+  document.getElementById('s-tracks').textContent = nTr;
+  document.getElementById('s-age').textContent = nTr > 0 ? Math.round(totalAge / nTr) : 0;
+  document.getElementById('s-gauss').textContent = gaussians.length;
+  document.getElementById('s-kf').textContent = keyframes.length;
+  document.getElementById('s-fps').textContent = Math.round(fpsSmooth);
 
   requestAnimationFrame(mainLoop);
 }
 
-/* ═══ SLIDER WIRING ═══ */
-function wire(id,vlId,cb,fmt){const el=document.getElementById(id);sg(el);el.addEventListener('input',function(){sg(this);document.getElementById(vlId).textContent=fmt?fmt(+this.value):this.value;cb(+this.value)})}
-wire('sl-q','vl-q',v=>{quality=v;maxFeatures=[150,300,500][v-1]});
-wire('sl-sp','vl-sp',v=>splatSize=v);
-wire('sl-dc','vl-dc',v=>gaussDecay=v);
-wire('sl-ot','vl-ot',v=>orbitTheta=v,v=>v.toFixed(2));
-wire('sl-op','vl-op',v=>orbitPhi=v,v=>v.toFixed(2));
-wire('sl-od','vl-od',v=>orbitDist=v,v=>v.toFixed(1));
+/* ═══ UI WIRING ═══ */
+function sg(el) { el.style.setProperty('--pct', (el.value-el.min)/(el.max-el.min)*100 + '%') }
+function switchView(v) {
+  activeView = v;
+  document.getElementById('webcamCanvas').classList.toggle('hidden', v !== 'cam');
+  document.getElementById('splatCanvas').classList.toggle('hidden', v !== '3d');
+  document.getElementById('tab-cam').classList.toggle('active', v === 'cam');
+  document.getElementById('tab-3d').classList.toggle('active', v === '3d');
+}
+function toggleSheet() {
+  const s = document.getElementById('sheet'), o = document.getElementById('sheet-overlay');
+  const open = s.classList.toggle('open'); o.classList.toggle('show', open);
+  document.getElementById('tab-settings').classList.toggle('active', open);
+}
+function closeSheet() {
+  document.getElementById('sheet').classList.remove('open');
+  document.getElementById('sheet-overlay').classList.remove('show');
+  document.getElementById('tab-settings').classList.remove('active');
+}
+function toggleEq() { document.getElementById('eq-toast').classList.toggle('show') }
+function togVis(k) {
+  if (k==='feat') showFeat=!showFeat; else if (k==='trail') showTrail=!showTrail; else showGrid=!showGrid;
+  const v = k==='feat'?showFeat : k==='trail'?showTrail : showGrid;
+  const b = document.getElementById('tog-'+k); b.classList.toggle('on', v); b.classList.toggle('off', !v);
+}
+function togglePause() {
+  paused = !paused;
+  document.getElementById('pause-icon').textContent = paused ? '▶' : '▐▐';
+  document.getElementById('pause-pill').classList.toggle('show', paused);
+  document.getElementById('rec-dot').classList.toggle('show', !paused);
+  if (!paused) requestAnimationFrame(mainLoop);
+}
+function resetMap() {
+  gaussians = []; keyframes = []; tracks.clear(); nextTrackId = 0; nextKfId = 0;
+  prevGray = null; frameNum = 0; lastKfFrame = -999;
+  camX = 0; camY = 0; camZ = 0;
+}
 
-// Init all slider fills
+async function startCapture() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width:{ideal:640}, height:{ideal:480}, facingMode:{ideal:'environment'} }, audio: false
+    });
+    video = document.getElementById('video'); video.srcObject = stream; await video.play();
+    wCanvas = document.getElementById('webcamCanvas');
+    wCanvas.width = video.videoWidth; wCanvas.height = video.videoHeight;
+    wCtx = wCanvas.getContext('2d', { willReadFrequently: true });
+    document.getElementById('cta').classList.add('gone');
+    document.getElementById('rec-dot').classList.add('show');
+    document.getElementById('tab-pause').style.display = '';
+    initWebGL(); running = true; requestAnimationFrame(mainLoop);
+  } catch(e) { alert('Camera access required.\n' + e.message); }
+}
+
+function wire(id, vlId, cb, fmt) {
+  const el = document.getElementById(id); sg(el);
+  el.addEventListener('input', function() { sg(this); document.getElementById(vlId).textContent = fmt ? fmt(+this.value) : this.value; cb(+this.value); });
+}
+wire('sl-kfi','vl-kfi', v => kfInterval = v);
+wire('sl-mbl','vl-mbl', v => minBaseline = v);
+wire('sl-ma','vl-ma', v => minTrackAge = v);
+wire('sl-sp','vl-sp', v => splatSize = v);
+wire('sl-al','vl-al', v => baseAlpha = v, v => v.toFixed(2));
 document.querySelectorAll('input[type=range]').forEach(sg);
 
-// Handle resize
-window.addEventListener('resize',()=>{
-  if(sCanvas&&gl){const dpr=Math.min(devicePixelRatio,2);sCanvas.width=window.innerWidth*dpr;sCanvas.height=window.innerHeight*dpr}
+window.addEventListener('resize', () => {
+  if (sCanvas && gl) { const d = Math.min(devicePixelRatio,2); sCanvas.width = window.innerWidth*d; sCanvas.height = window.innerHeight*d; }
 });
 </script>
 </body>
