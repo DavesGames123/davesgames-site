@@ -28,7 +28,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .cluster-arrow{font-size:0.7rem;color:var(--text-faint);transition:transform 0.22s;flex-shrink:0}
 .cluster.open .cluster-arrow{transform:rotate(90deg)}.cluster.open .cluster-label{color:var(--text)}
 .cluster-body{overflow:hidden;max-height:0;transition:max-height 0.28s cubic-bezier(0.4,0,0.2,1)}
-.cluster.open .cluster-body{max-height:900px}
+.cluster.open .cluster-body{max-height:1200px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px 11px 46px;cursor:pointer;border:none;background:transparent;width:100%;text-align:left;position:relative;transition:background 0.15s;font-family:inherit;color:inherit}
 .nav-item::before{content:'';position:absolute;left:30px;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:var(--text-faint);transition:background 0.15s,box-shadow 0.15s}
 .nav-item:hover{background:rgba(150,200,255,0.04)}.nav-item:hover::before{background:var(--blue-dim)}
@@ -45,6 +45,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .cluster-head.sol-head .cluster-icon{opacity:1;color:#f5c842}.cluster.open .cluster-head.sol-head .cluster-label{color:#f5c842}
 .nav-item.mat.active{background:rgba(184,150,255,0.06)}.nav-item.mat.active::before{background:#b896ff;box-shadow:0 0 7px #b896ff}.nav-item.mat.active .nav-label{color:#b896ff}.nav-item.mat:hover::before{background:#9070d0}
 .cluster-head.mat-head .cluster-icon{opacity:1;color:#b896ff}.cluster.open .cluster-head.mat-head .cluster-label{color:#b896ff}
+.nav-item.ren.active{background:rgba(255,180,120,0.06)}.nav-item.ren.active::before{background:#ffb478;box-shadow:0 0 7px #ffb478}.nav-item.ren.active .nav-label{color:#ffb478}.nav-item.ren:hover::before{background:#cc8a50}
 .nav-item.com.active{background:rgba(100,220,200,0.06)}.nav-item.com.active::before{background:#64dcc8;box-shadow:0 0 7px #64dcc8}.nav-item.com.active .nav-label{color:#64dcc8}.nav-item.com:hover::before{background:#40a090}
 .cluster-head.com-head .cluster-icon{opacity:1;color:#64dcc8}.cluster.open .cluster-head.com-head .cluster-label{color:#64dcc8}
 .nav-item.leo.active{background:rgba(91,159,217,0.08)}.nav-item.leo.active::before{background:#5b9fd9;box-shadow:0 0 7px #5b9fd9}.nav-item.leo.active .nav-label{color:#5b9fd9}.nav-item.leo:hover::before{background:#3d76a8}
@@ -65,6 +66,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .nav-sub.c-orbital{color:#60b0f0;border-left-color:#60b0f0;background:linear-gradient(90deg,rgba(96,176,240,0.08) 0%,transparent 70%)}
 .nav-sub.c-quantum{color:#9088e0;border-left-color:#9088e0;background:linear-gradient(90deg,rgba(144,136,224,0.08) 0%,transparent 70%)}
 .nav-sub.c-em{color:#50dce8;border-left-color:#50dce8;background:linear-gradient(90deg,rgba(80,220,232,0.08) 0%,transparent 70%)}
+.nav-sub.c-optical{color:#ffb478;border-left-color:#ffb478;background:linear-gradient(90deg,rgba(255,180,120,0.08) 0%,transparent 70%)}
 .nav-sub.c-fluid{color:#50c0ff;border-left-color:#50c0ff;background:linear-gradient(90deg,rgba(80,192,255,0.08) 0%,transparent 70%)}
 #translate-cycle{transition:opacity 0.4s ease}
 .nav-label{font-size:0.88rem;letter-spacing:0.04em;color:#8aa8c8;transition:color 0.15s}
@@ -137,9 +139,11 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item em" data-tab="magnetlab" onclick="switchTab('magnetlab')"><span class="nav-label">MagnetLab</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item em" data-tab="biot-savart" onclick="switchTab('biot-savart')"><span class="nav-label">Biot–Savart Law</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item em" data-tab="maxwell" onclick="switchTab('maxwell')"><span class="nav-label">Maxwell's Equations</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item cp" data-tab="polarization" onclick="switchTab('polarization')"><span class="nav-label">Circular Polarization</span><span class="nav-badge">NEW</span></button>
+          <div class="nav-sub c-optical">Optical Physics</div>
+          <button class="nav-item ren" data-tab="cornell" onclick="switchTab('cornell')"><span class="nav-label">Rendering Engine</span><span class="nav-badge">PATH</span></button>
           <button class="nav-item ad" data-tab="diffraction" onclick="switchTab('diffraction')"><span class="nav-label">Aperture Diffraction</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item ds" data-tab="double-slit" onclick="switchTab('double-slit')"><span class="nav-label">Double-Slit Diffraction</span><span class="nav-badge">NEW</span></button>
+          <button class="nav-item cp" data-tab="polarization" onclick="switchTab('polarization')"><span class="nav-label">Circular Polarization</span><span class="nav-badge">NEW</span></button>
           <div class="nav-sub c-fluid">Fluid Dynamics</div>
           <button class="nav-item fl" data-tab="fluidlab" onclick="switchTab('fluidlab')"><span class="nav-label">FluidLab</span><span class="nav-badge">GPU</span></button>
         </div>
@@ -187,8 +191,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
   </div>
 </div>
 <script>
-const PAGES={home:'home.html',hohmann:'hohmann.html',forge:'forge.html',crafting:'crafting.html',planner:'planner.html',guide:'guide.html',behaviors:'behaviors.html',controls:'controls.html',gravity:'gravity.html',selection:'selection.html',explosion:'explosion.html',flare:'flare.html',solar:'solar.html',shipdesigner:'ship-designer.html',flagdesigner:'flag-designer.html',matlab:'material-lab.html',orbital:'atomic-orbital-vr.html','molecular-bond':'molecular-bond.html',supernova:'fractal-orb.html',wormhole:'ellis-wormhole.html',blackhole:'blackhole.html',galaxy:'galaxy.html',polarization:'circular-polarization.html',diffraction:'diffraction-lab.html','double-slit':'double-slit.html',fortom:'for-tom.html',leo:'leo-catalog.html',magnetlab:'magnetlab.html','biot-savart':'biot-savart.html',maxwell:'maxwells-equations.html',fluidlab:'fluidlab.html',translate:'translate.html'};
-const LABELS={home:'Overview',hohmann:'Hohmann Transfer',forge:'Planet Forge',crafting:'Crafting',planner:'Station Planner',guide:'Station Guide',behaviors:'Behaviors',controls:'Controls',gravity:'Gravity Sim',selection:'Selection',explosion:'Explosion',flare:'Engine Propulsion Effects',solar:'Solar Transit Study',shipdesigner:'Ship Designer',flagdesigner:'Flag Designer',matlab:'PBR Material Studio',orbital:'Atomic Orbital','molecular-bond':'Molecular Bond',supernova:'Fractal Orb',wormhole:'Wormhole',blackhole:'Black Hole',galaxy:'Galaxy',polarization:'Circular Polarization',diffraction:'Aperture Diffraction','double-slit':'Double-Slit Diffraction',fortom:'For Tom',leo:'LEO Catalog',magnetlab:'MagnetLab','biot-savart':'Biot\u2013Savart Law',maxwell:'Maxwell\u2019s Equations',fluidlab:'FluidLab',translate:'Translation Tool'};
+const PAGES={home:'home.html',hohmann:'hohmann.html',forge:'forge.html',crafting:'crafting.html',planner:'planner.html',guide:'guide.html',behaviors:'behaviors.html',controls:'controls.html',gravity:'gravity.html',selection:'selection.html',explosion:'explosion.html',flare:'flare.html',solar:'solar.html',shipdesigner:'ship-designer.html',flagdesigner:'flag-designer.html',matlab:'material-lab.html',orbital:'atomic-orbital-vr.html','molecular-bond':'molecular-bond.html',supernova:'fractal-orb.html',wormhole:'ellis-wormhole.html',blackhole:'blackhole.html',galaxy:'galaxy.html',polarization:'circular-polarization.html',diffraction:'diffraction-lab.html','double-slit':'double-slit.html',fortom:'for-tom.html',leo:'leo-catalog.html',magnetlab:'magnetlab.html','biot-savart':'biot-savart.html',maxwell:'maxwells-equations.html',fluidlab:'fluidlab.html',cornell:'cornell.html',translate:'translate.html'};
+const LABELS={home:'Overview',hohmann:'Hohmann Transfer',forge:'Planet Forge',crafting:'Crafting',planner:'Station Planner',guide:'Station Guide',behaviors:'Behaviors',controls:'Controls',gravity:'Gravity Sim',selection:'Selection',explosion:'Explosion',flare:'Engine Propulsion Effects',solar:'Solar Transit Study',shipdesigner:'Ship Designer',flagdesigner:'Flag Designer',matlab:'PBR Material Studio',orbital:'Atomic Orbital','molecular-bond':'Molecular Bond',supernova:'Fractal Orb',wormhole:'Wormhole',blackhole:'Black Hole',galaxy:'Galaxy',polarization:'Circular Polarization',diffraction:'Aperture Diffraction','double-slit':'Double-Slit Diffraction',fortom:'For Tom',leo:'LEO Catalog',magnetlab:'MagnetLab','biot-savart':'Biot\u2013Savart Law',maxwell:'Maxwell\u2019s Equations',fluidlab:'FluidLab',cornell:'Rendering Engine',translate:'Translation Tool'};
 const XR_PAGES=new Set(['orbital']);
 let activeTab=null;
 function switchTab(id){if(!PAGES[id])id='home';document.querySelectorAll('.nav-item').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});var wrap=document.getElementById('frame-wrap');wrap.innerHTML='';var iframe=document.createElement('iframe');iframe.src=PAGES[id]||'home.html';var allow='downloads';if(XR_PAGES.has(id))allow='xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';iframe.setAttribute('allow',allow);wrap.appendChild(iframe);var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(LABELS[id]||'Stella Nova')+'\u00b7 Stella Nova';activeTab=id;closeSidebar();if(location.hash!=='#'+id)history.replaceState(null,'','#'+id)}
