@@ -44,6 +44,18 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .gate-btn:hover{border-color:var(--cyan);background:rgba(69,211,255,0.08)}
 .gate-btn.two{color:var(--amber);border-color:rgba(255,185,72,0.25)}
 .gate-btn.two:hover{border-color:var(--amber);background:rgba(255,185,72,0.08)}
+#gate-tip{position:fixed;z-index:400;pointer-events:none;display:none;background:rgba(9,12,20,0.97);border:1px solid var(--border-b);border-radius:8px;padding:9px 11px;backdrop-filter:blur(8px);box-shadow:0 6px 26px rgba(0,0,0,0.55);font-family:'JetBrains Mono',monospace}
+#gate-tip .tip-name{font-size:0.6rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px}
+#gate-tip.two .tip-name{color:var(--amber)}
+#gate-tip .tip-mtx{display:flex;align-items:stretch;gap:3px}
+#gate-tip .tip-fac{align-self:center;color:#dbe4f2;font-size:0.82rem;margin-right:2px}
+#gate-tip .brk{width:5px;border:1.5px solid var(--text-dim)}
+#gate-tip .brk.l{border-right:none;border-radius:3px 0 0 3px}
+#gate-tip .brk.r{border-left:none;border-radius:0 3px 3px 0}
+#gate-tip .cells{display:grid;gap:3px 13px;padding:4px 7px}
+#gate-tip .cells span{color:#dbe4f2;font-size:0.74rem;text-align:center;white-space:nowrap}
+#gate-tip .cells span.z{color:#46506a}
+#gate-tip .tip-theta{margin-top:7px;font-size:0.55rem;color:var(--text-dim);letter-spacing:0.04em}
 .qrow{display:flex;align-items:center;gap:6px;margin-bottom:7px}
 .qrow-lbl{font-size:0.6rem;color:var(--text-dim);width:56px;flex-shrink:0;letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
 .stepper{display:flex;align-items:center;gap:4px;margin-left:auto}
@@ -110,6 +122,12 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .cd-srow input[type=range]{flex:1}
 .cd-srow .val{color:var(--blue);min-width:40px;text-align:right}
 .cd-heatrow{margin-top:5px;padding-top:9px;border-top:1px solid var(--border);color:var(--yellow)}
+.adv-toggle{width:100%;text-align:left;background:transparent;border:none;border-top:1px solid var(--border);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.56rem;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;padding:7px 0 5px;cursor:pointer;margin-top:5px}
+.adv-toggle:hover{color:var(--blue)}
+.adv-toggle .arw{display:inline-block;transition:transform .2s;margin-right:6px;color:var(--text-faint)}
+.adv-toggle.open .arw{transform:rotate(90deg);color:var(--blue)}
+.adv-rows{overflow:hidden;max-height:0;transition:max-height .26s ease}
+.adv-rows.open{max-height:300px}
 .cd-heatrow .val{color:var(--yellow)}
 .cd-heatrow input[type=range]{--pct-color:var(--yellow)}
 #cd-transport{display:flex;gap:6px;margin-top:8px}
@@ -152,6 +170,25 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .hud-bottom .tag{color:var(--amber);font-weight:600}
 .legend{position:absolute;bottom:10px;right:16px;display:flex;gap:10px;align-items:center;font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-faint);pointer-events:none}
 #orient-btn{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);z-index:30;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);color:var(--blue);padding:8px 16px;font-family:'JetBrains Mono',monospace;font-size:0.62rem;font-weight:600;letter-spacing:0.07em;cursor:pointer;border-radius:6px;backdrop-filter:blur(8px);transition:all .14s}
+#step-inspector{position:absolute;top:14px;left:14px;z-index:30;display:none;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);border-radius:8px;padding:9px 11px;backdrop-filter:blur(8px);box-shadow:0 6px 22px rgba(0,0,0,0.45)}
+#step-inspector.show{display:block}
+#insp-title{font-size:0.55rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px;white-space:nowrap}
+#insp-title b{color:var(--yellow);font-weight:600}
+#insp-title .note{display:block;margin-top:4px;color:var(--text-faint);text-transform:none;letter-spacing:0;font-size:0.54rem;max-width:180px;white-space:normal;line-height:1.35}
+#insp-cv{display:block}
+#grid2d-panel{position:absolute;top:60px;right:14px;z-index:30;display:none;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);border-radius:8px;padding:8px 9px 9px;backdrop-filter:blur(8px);box-shadow:0 6px 22px rgba(0,0,0,0.45)}
+#grid2d-panel.show{display:block}
+#grid2d-title{font-size:0.55rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px}
+#grid2d-title b{color:var(--yellow);font-weight:600}
+#grid2d-cv{display:block;border-radius:3px}
+#grid2d-stack{position:relative;border:1px solid rgba(70,95,135,0.35);border-radius:3px;line-height:0;cursor:crosshair}
+#grid2d-ov{position:absolute;left:0;top:0;pointer-events:none}
+#grid-tip{position:fixed;z-index:400;pointer-events:none;display:none;background:rgba(9,12,20,0.97);border:1px solid var(--border-b);border-radius:7px;padding:8px 10px;backdrop-filter:blur(8px);box-shadow:0 6px 24px rgba(0,0,0,0.55);font-family:'JetBrains Mono',monospace;max-width:210px}
+#grid-tip .gt-gate{font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--cyan);margin-bottom:5px}
+#grid-tip.two .gt-gate{color:var(--amber)}
+#grid-tip .gt-cell{font-size:0.8rem;color:#dbe4f2}
+#grid-tip .gt-val{font-size:0.62rem;color:var(--text-dim);margin-top:3px}
+#grid-tip .gt-note{font-size:0.55rem;color:var(--text-faint);margin-top:5px;line-height:1.35;white-space:normal}
 #orient-btn:hover{border-color:var(--blue-dim);background:rgba(150,200,255,0.15);color:var(--cyan)}
 .legend i{display:inline-block;width:54px;height:8px;margin-right:4px;vertical-align:middle}
 #status-bar{height:24px;flex-shrink:0;background:rgba(14,17,24,0.94);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:12px;z-index:50;font-size:0.54rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500}
@@ -250,7 +287,9 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
       <button class="tog-btn on" id="tog-rotate">⟳ Auto-orbit</button>
       <button class="tog-btn" id="tog-floor">▦ Floor grid</button>
       <button class="tog-btn on" id="tog-net">⇌ Shot-stack network</button>
-      <button class="tog-btn on" id="tog-labels">⊞ Basis labels</button></div>
+      <button class="tog-btn on" id="tog-labels">⊞ Basis labels</button>
+      <button class="tog-btn on" id="tog-inspect">◎ Step inspector (active gate)</button>
+      <button class="tog-btn on" id="tog-grid2d">▦ 2D matrix grid</button></div>
   </div></div>
   <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
   <div id="canvas-wrap">
@@ -276,11 +315,14 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
       </div>
       <div id="cd-sliders">
         <div class="cd-srow"><span>Scrub</span><input type="range" id="sl-scrub" min="0" max="100" value="0" step="1"><span class="val" id="vl-scrub">0%</span></div>
-        <div class="cd-srow"><span>Speed</span><input type="range" id="sl-speed" min="0.1" max="3" value="2" step="0.1"><span class="val" id="vl-speed">2.0</span></div>
-        <div class="cd-srow"><span>Hold</span><input type="range" id="sl-hold" min="0.1" max="4" value="0.7" step="0.1"><span class="val" id="vl-hold">0.7s</span></div>
-        <div class="cd-srow"><span>Seed</span><input type="range" id="sl-seed" min="0" max="255" value="24" step="1"><span class="val" id="vl-seed">24</span></div>
-        <div class="cd-srow"><span>Shots</span><input type="range" id="sl-shots" min="0" max="4096" value="2048" step="1"><span class="val" id="vl-shots">2048</span></div>
-        <div class="cd-srow"><span>Gap</span><input type="range" id="sl-gap" min="0" max="1.5" value="0.7" step="0.05"><span class="val" id="vl-gap">0.70s</span></div>
+        <button id="adv-toggle" class="adv-toggle"><span class="arw">▸</span>Advanced settings</button>
+        <div id="adv-rows" class="adv-rows">
+          <div class="cd-srow"><span>Speed</span><input type="range" id="sl-speed" min="0.1" max="3" value="2" step="0.1"><span class="val" id="vl-speed">2.0</span></div>
+          <div class="cd-srow"><span>Hold</span><input type="range" id="sl-hold" min="0.1" max="4" value="0.7" step="0.1"><span class="val" id="vl-hold">0.7s</span></div>
+          <div class="cd-srow"><span>Seed</span><input type="range" id="sl-seed" min="0" max="255" value="24" step="1"><span class="val" id="vl-seed">24</span></div>
+          <div class="cd-srow"><span>Shots</span><input type="range" id="sl-shots" min="0" max="4096" value="2048" step="1"><span class="val" id="vl-shots">2048</span></div>
+          <div class="cd-srow"><span>Gap</span><input type="range" id="sl-gap" min="0" max="1.5" value="0.7" step="0.05"><span class="val" id="vl-gap">0.70s</span></div>
+        </div>
         <div class="cd-srow cd-heatrow"><span>Heat ≥</span><input type="range" id="sl-thresh" min="0" max="1" value="0" step="0.01"><span class="val" id="vl-thresh">0.00</span></div>
       </div>
       <div id="qiskit-panel" hidden>
@@ -301,6 +343,8 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
       <div class="hud hud-tr" id="hud-tr"></div>
       <div class="hud hud-bottom" id="hud-bottom"></div>
       <div class="legend" id="legend"></div>
+      <div id="step-inspector"><div id="insp-title">step —</div><canvas id="insp-cv"></canvas></div>
+      <div id="grid2d-panel"><div id="grid2d-title">ρ · 2D</div><div id="grid2d-stack"><canvas id="grid2d-cv"></canvas><canvas id="grid2d-ov"></canvas></div></div>
       <button id="orient-btn">⬍ Vertical stack</button>
       <div id="hist-panel">
         <div id="hist-head"><span>Measurement sampling</span><span id="hist-info"></span><button id="hist-close">✕</button></div>
@@ -818,7 +862,7 @@ function smooth(t){t=clamp01(t);return t*t*(3-2*t);}
 /* ════════ circuit model ════════ */
 const VS={numQubits:4,gates:[],target:0,control:1,angle:Math.PI/2,seed:24,substeps:24,
   playing:true,speed:2,frameIndex:0,stageTime:0,holdTime:0.7,threshold:0,threshDirty:false,preset:'qft',colorMode:'mag',viewMode:'stack',
-  autoRotate:true,floorGrid:false,network:true,labels:true,shape:'round',showFull:false,bg:'black',gamma:0.4,stackAxis:'vertical'};
+  autoRotate:true,floorGrid:false,network:true,labels:true,shape:'round',showFull:false,bg:'black',gamma:0.4,stackAxis:'vertical',autoOrient:true,stepInspect:true,grid2d:true};
 let trace=null,layerStates=[],layerCell=[],totalLayers=1,builtStage=-1,layerEndArr=[],edgeEndArr=[];
 const PRESET_N={bell:2,grover:3,dj:3,bv:4,toffoli:3,kick:2,teleport:3}; // fixed-size presets; others scale with the qubit count
 function presetGates(name,n){const g=[];
@@ -911,6 +955,8 @@ composer.addPass(new OutputPass());   // REQUIRED in r152+: applies tonemap + li
 const grp=new THREE.Group();scene.add(grp);
 let cellMesh=null,edgeLines=null,edgeBuf=null,floorMesh=null,floorGrid=null,netLines=null,labelGroup=null,sampleMesh=null;
 let histGroup=null,histBars=null,histMarks=null;
+let inspMesh=null,lastInspStep=-99;
+let last2dLayer=-99,grid2dDirty=true;
 const PITCH=1.0,CUBE=0.82,MAXH=4.4,LAYER_GAP=1.15;       // NO instance cap — render everything the circuit produces
 const BARMAX=4.6;                                         // tallest sampling-histogram bar (world units)
 const dummy=new THREE.Object3D(),_col=new THREE.Color();
@@ -929,6 +975,7 @@ function edgeColor3(){const c=heatColor(0.01);return new THREE.Color().setRGB(c[
 function rebuildMeshes(){
   while(grp.children.length){const c=grp.children.pop();disposeGroup(c);}
   histGroup=null;histBars=null;histMarks=null;
+  inspMesh=null;lastInspStep=-99;last2dLayer=-99;grid2dDirty=true;
   const need=Math.max(DIM*DIM,totalLayers*DIM*DIM);          // everything: every cell of every layer
   let geo;
   if(VS.shape==='box')geo=new THREE.BoxGeometry(CUBE,CUBE,CUBE);
@@ -959,6 +1006,12 @@ function rebuildMeshes(){
   histMarks=new THREE.InstancedMesh(mgeo,new THREE.MeshBasicMaterial({toneMapped:false}),DIM);
   histMarks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);histMarks.setColorAt(0,_col.setRGB(1,0.72,0.28,THREE.SRGBColorSpace));histMarks.count=0;histMarks.frustumCulled=false;histGroup.add(histMarks);
   grp.add(histGroup);   // child of grp → diagonal placement follows the stack orientation automatically
+  // step-inspector highlight: tints the cells the active gate's operator couples (its support on the array)
+  const icap=Math.min(DIM*DIM,DIM*4+8);
+  const igeo=new THREE.BoxGeometry(CUBE*1.08,CUBE*1.08,CUBE*1.08);
+  const imat=new THREE.MeshBasicMaterial({transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false});
+  inspMesh=new THREE.InstancedMesh(igeo,imat,icap);inspMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  inspMesh.setColorAt(0,_col.setRGB(0,0,0,THREE.SRGBColorSpace));inspMesh.count=0;inspMesh.frustumCulled=false;grp.add(inspMesh);
   // floor + grid (for floor-field view)
   const span=DIM*PITCH;
   floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(span+PITCH,span+PITCH),new THREE.MeshBasicMaterial({color:0x05080f,transparent:true,opacity:0.7}));
@@ -1024,7 +1077,7 @@ function currentStageFor(t){return Math.max(0,Math.min(totalLayers-1,Math.floor(
 function stageFrame(stage){const si=stage-1,st=trace.steps[si];
   return {stepIndex:si,gateName:si<0?'init':(st?st.name:'?'),phase:'settle',measurement:!!(st&&st.kind==='measurement'),t:1,state:layerStates[stage]};}
 function maxBuildableStage(){return builtStage<0?totalLayers-1:builtStage;}
-function ghostsEnabled(){return VS.numQubits<=6;}          // 7+ qubits: too many zero cells — drop the transparent ghosts entirely
+function ghostsEnabled(){return VS.numQubits<=4;}          // 5+ qubits: render NOTHING for zero-probability cells (too dense otherwise)
 function heatCut(){return Math.max(1e-4,VS.threshold);}   // |ρ| below this renders as a transparent ghost (edges only); Heat slider raises it
 function layerEnd(L){return L<0?0:(layerEndArr[L]||0);}
 function edgeEnd(L){return L<0?0:(edgeEndArr[L]||0);}
@@ -1201,12 +1254,132 @@ function followPlayhead(){if(!trace)return;const {colW,x0,steps}=circLayout;if(s
   else if(VS.playing){cscroll.scrollLeft+=((cx-vw/2)-left)*0.12;}}
 
 /* ════════ HUD ════════ */
+const inspCv=document.getElementById('insp-cv'),ictx=inspCv.getContext('2d');
+const g2dCv=document.getElementById('grid2d-cv'),g2ctx=g2dCv.getContext('2d');
+function draw2DGrid(si){                                     // flat crossword-style heatmap of the current layer's ρ, updates as it builds
+  const panel=document.getElementById('grid2d-panel');
+  if(!VS.grid2d||!trace){panel.classList.remove('show');return;}
+  panel.classList.add('show');
+  const L=Math.max(0,Math.min(totalLayers-1,si+1));
+  if(L===last2dLayer&&!grid2dDirty)return;                   // redraw only when the layer (or coloring) changes
+  last2dLayer=L;grid2dDirty=false;
+  const cells=layerCell[L];if(!cells)return;
+  const dpr=Math.min(devicePixelRatio||1,2),SZ=186;
+  if(g2dCv.width!==(SZ*dpr|0)){g2dCv.width=SZ*dpr|0;g2dCv.height=SZ*dpr|0;g2dCv.style.width=SZ+'px';g2dCv.style.height=SZ+'px';}
+  g2ctx.setTransform(dpr,0,0,dpr,0,0);
+  g2ctx.fillStyle='#060910';g2ctx.fillRect(0,0,SZ,SZ);       // backdrop shows between cells → crossword gridlines
+  const cell=SZ/DIM,gap=cell>5?1:(cell>2.4?0.5:0);
+  for(let r=0;r<DIM;r++)for(let c=0;c<DIM;c++){const k=(r*DIM+c)*3,col=cellColor(cells[k],cells[k+1],cells[k+2]);
+    g2ctx.fillStyle='rgb('+(col[0]|0)+','+(col[1]|0)+','+(col[2]|0)+')';
+    g2ctx.fillRect(c*cell+gap*0.5,r*cell+gap*0.5,cell-gap,cell-gap);}
+  g2ctx.strokeStyle='rgba(255,200,80,0.22)';g2ctx.lineWidth=1;g2ctx.beginPath();g2ctx.moveTo(0,0);g2ctx.lineTo(SZ,SZ);g2ctx.stroke(); // diagonal = populations
+  document.getElementById('grid2d-title').innerHTML='ρ · 2D · layer <b>'+L+'</b> · '+DIM+'×'+DIM;
+  if(gridHover)renderGridOverlay();
+}
+/* hover the 2D grid → show how the active layer's gate operates (operator support + cell readout) */
+const g2ov=document.getElementById('grid2d-ov'),g2octx=g2ov.getContext('2d');
+const gridTip=document.createElement('div');gridTip.id='grid-tip';document.body.appendChild(gridTip);
+let gridHover=null;const G2SZ=186;
+function bitstr(v){return v.toString(2).padStart(VS.numQubits,'0');}
+function gateSubmasks(mask){const s=[];let x=mask;for(;;x=(x-1)&mask){s.push(x);if(x===0)break;}return s;}
+function renderGridOverlay(){
+  const dpr=Math.min(devicePixelRatio||1,2);
+  if(g2ov.width!==(G2SZ*dpr|0)){g2ov.width=G2SZ*dpr|0;g2ov.height=G2SZ*dpr|0;g2ov.style.width=G2SZ+'px';g2ov.style.height=G2SZ+'px';}
+  g2octx.setTransform(dpr,0,0,dpr,0,0);g2octx.clearRect(0,0,G2SZ,G2SZ);
+  if(gridHover&&(gridHover.r>=DIM||gridHover.c>=DIM))gridHover=null;
+  if(!gridHover||!trace)return;
+  const L=last2dLayer,g=(L>=1&&trace.steps[L-1])?trace.steps[L-1]:null,cell=G2SZ/DIM;
+  if(g&&g.kind!=='measurement'){const Q=(g.targets||[]).concat(g.controls||[]);
+    if(Q.length<=2){let mask=0;for(const q of Q)mask|=(1<<q);
+      const col=(g.controls&&g.controls.length)?C_AMBER:C_CYAN;g2octx.fillStyle='rgba('+col[0]+','+col[1]+','+col[2]+',0.30)';
+      const subs=gateSubmasks(mask);for(let i=0;i<DIM;i++)for(const s of subs){const j=i^s;g2octx.fillRect(j*cell,i*cell,Math.max(1,cell),Math.max(1,cell));}}}
+  g2octx.strokeStyle='#fff';g2octx.lineWidth=1.5;g2octx.strokeRect(gridHover.c*cell,gridHover.r*cell,Math.max(2,cell),Math.max(2,cell));
+}
+function gridCellFromEvent(e){const r=g2dCv.getBoundingClientRect(),cell=G2SZ/DIM;
+  const c=Math.floor((e.clientX-r.left)/cell),rr=Math.floor((e.clientY-r.top)/cell);
+  if(c<0||rr<0||c>=DIM||rr>=DIM)return null;return {r:rr,c};}
+function showGridTip(e){const hc=gridCellFromEvent(e);if(!hc||!trace){hideGridTip();return;}
+  gridHover=hc;renderGridOverlay();
+  const L=last2dLayer,g=(L>=1&&trace.steps[L-1])?trace.steps[L-1]:null,cells=layerCell[L];
+  const k=(hc.r*DIM+hc.c)*3,mag=cells?cells[k]:0,re=cells?cells[k+1]:0,im=cells?cells[k+2]:0,ph=Math.round(Math.atan2(im,re)*180/Math.PI);
+  let gate,note,two=false;
+  if(!g){gate='initial state';note='no gate at layer 0 — pure |0…0⟩';}
+  else{two=!!(g.controls&&g.controls.length);let q;
+    if(g.kind==='measurement')q='all';else if(two)q='ctrl q'+g.controls.join(',')+' → q'+g.targets[0];else if(g.name==='swap')q='q'+g.targets[0]+' ↔ q'+g.targets[1];else q='q'+g.targets[0];
+    gate=(g.kind==='measurement'?'MEASURE':g.name.toUpperCase())+' · '+q;
+    const Q=(g.targets||[]).concat(g.controls||[]);let mask=0;for(const x of Q)mask|=(1<<x);
+    const inSup=g.kind!=='measurement'&&Q.length<=2&&(((hc.r^hc.c)&~mask)===0);
+    note=g.kind==='measurement'?'measurement keeps only the diagonal':(inSup?'★ this cell is coupled by the gate':'untouched by this gate (spectator qubits differ)');}
+  gridTip.className=two?'two':'';
+  gridTip.innerHTML='<div class="gt-gate">'+gate+'</div><div class="gt-cell">⟨'+bitstr(hc.r)+'|ρ|'+bitstr(hc.c)+'⟩</div>'+
+    '<div class="gt-val">|ρ| = '+mag.toFixed(3)+(mag>0.004?'  ∠ '+ph+'°':'')+'</div><div class="gt-note">'+note+'</div>';
+  gridTip.style.display='block';
+  const pad=15,w=gridTip.offsetWidth,h=gridTip.offsetHeight;let x=e.clientX+pad,y=e.clientY+pad;
+  if(x+w>innerWidth-6)x=e.clientX-pad-w;if(y+h>innerHeight-6)y=e.clientY-pad-h;gridTip.style.left=x+'px';gridTip.style.top=y+'px';
+}
+function hideGridTip(){gridHover=null;gridTip.style.display='none';renderGridOverlay();}
+g2dCv.addEventListener('mousemove',showGridTip);
+g2dCv.addEventListener('mouseleave',hideGridTip);
+function drawStepInspector(si){                              // mini score-column of the active step: gate glyph + highlighted qubits
+  const panel=document.getElementById('step-inspector');
+  if(!VS.stepInspect||!trace){panel.classList.remove('show');if(inspMesh)inspMesh.count=0;lastInspStep=-99;return;}
+  panel.classList.add('show');
+  const N=VS.numQubits,g=(si>=0&&si<VS.gates.length)?VS.gates[si]:null;
+  const dpr=Math.min(devicePixelRatio||1,2),LW=24,GW=60,laneH=17,padT=9,Wc=LW+GW,Hc=padT*2+Math.max(1,N)*laneH;
+  if(inspCv.width!==(Wc*dpr|0)||inspCv.height!==(Hc*dpr|0)){inspCv.width=Wc*dpr|0;inspCv.height=Hc*dpr|0;inspCv.style.width=Wc+'px';inspCv.style.height=Hc+'px';}
+  ictx.setTransform(dpr,0,0,dpr,0,0);ictx.clearRect(0,0,Wc,Hc);
+  const lY=q=>padT+(N-1-q)*laneH+laneH/2,gx=LW+GW/2;        // q0 at the bottom
+  const acted=g?new Set((g.targets||[]).concat(g.controls||[])):new Set();
+  ictx.textBaseline='middle';ictx.font='600 9px JetBrains Mono,monospace';
+  for(let q=0;q<N;q++){const y=lY(q),hot=acted.has(q);
+    ictx.strokeStyle=hot?'rgba(255,200,80,0.55)':'rgba(70,95,135,0.5)';ictx.lineWidth=1;ictx.beginPath();ictx.moveTo(LW,y);ictx.lineTo(Wc-4,y);ictx.stroke();
+    ictx.fillStyle=hot?'#ffc850':'#7f90ad';ictx.textAlign='left';ictx.fillText('q'+q,3,y);}
+  if(g){const col=(g.kind==='measurement')?[182,196,216]:((g.controls&&g.controls.length)?C_AMBER:C_CYAN),cs='rgb('+col[0]+','+col[1]+','+col[2]+')';
+    if(g.controls&&g.controls.length){const ys=g.controls.concat(g.targets).map(lY),y0=Math.min(...ys),y1=Math.max(...ys);
+      ictx.strokeStyle=cs;ictx.lineWidth=2;ictx.beginPath();ictx.moveTo(gx,y0);ictx.lineTo(gx,y1);ictx.stroke();
+      for(const cq of g.controls){ictx.fillStyle=cs;ictx.beginPath();ictx.arc(gx,lY(cq),3.6,0,7);ictx.fill();}}
+    const bw=27,bh=14;
+    for(const q of g.targets){const y=lY(q);
+      ictx.fillStyle='rgba(8,12,20,0.96)';roundRect(ictx,gx-bw/2,y-bh/2,bw,bh,4);ictx.fill();
+      ictx.strokeStyle=cs;ictx.lineWidth=2;roundRect(ictx,gx-bw/2,y-bh/2,bw,bh,4);ictx.stroke();
+      ictx.fillStyle=cs;ictx.font='700 10px JetBrains Mono,monospace';ictx.textAlign='center';
+      ictx.fillText(g.kind==='measurement'?'M':(g.name==='swap'?'×':g.name.toUpperCase().slice(0,3)),gx,y+0.5);}}
+  let lbl,note='';
+  if(!g){lbl='<b>initial</b> state |0…0⟩';note='no gate applied yet';}
+  else{let q;if(g.kind==='measurement')q='all qubits';else if(g.controls&&g.controls.length)q='ctrl q'+g.controls.join(',')+' → q'+g.targets[0];
+    else if(g.name==='swap')q='q'+g.targets[0]+' ↔ q'+g.targets[1];else q='q'+g.targets[0]+(g.params&&g.params.length?' · θ='+g.params[0].toFixed(2):'');
+    lbl='step <b>'+(si+1)+'</b>/'+VS.gates.length+' · '+(g.kind==='measurement'?'MEASURE':g.name.toUpperCase())+' · '+q;
+    if(g.kind==='measurement')note='collapses all qubits onto a basis state';
+    else if(g.name==='swap')note='exchanges q'+g.targets[0]+' ↔ q'+g.targets[1]+' — lit cells are coupled';
+    else if(g.controls&&g.controls.length)note='acts on q'+g.targets[0]+' only where q'+g.controls.join(',')+'=1 — lit block is its reach';
+    else note='mixes states differing in q'+g.targets[0]+' — diagonal + cross-stripes lit';}
+  document.getElementById('insp-title').innerHTML=lbl+'<span class="note">'+note+'</span>';
+  highlightStepCells(si,g);
+}
+function highlightStepCells(si,g){                          // tint the array cells this gate's operator couples (diagonal + cross-correlation off-diagonals)
+  if(!inspMesh)return;
+  const Q=g?(g.targets||[]).concat(g.controls||[]):[],k=Q.length;
+  if(!g||g.kind==='measurement'||k>2||VS.viewMode!=='stack'){inspMesh.count=0;lastInspStep=-99;return;}
+  if(si===lastInspStep)return;                              // already placed for this step
+  lastInspStep=si;
+  let mask=0;for(const q of Q)mask|=(1<<q);
+  const L=Math.min(totalLayers-1,si+1),baseY=L*LAYER_GAP+CUBE/2,off=(DIM-1)/2;
+  const col=(g.controls&&g.controls.length)?C_AMBER:C_CYAN,cap=inspMesh.instanceMatrix.count;
+  let n=0;
+  for(let i=0;i<DIM&&n<cap;i++)for(let j=0;j<DIM&&n<cap;j++){
+    if(((i^j)&~mask)===0){                                  // i and j agree on every spectator qubit → operator can touch (i,j)
+      dummy.position.set((j-off)*PITCH,baseY,(i-off)*PITCH);dummy.scale.set(1,1,1);dummy.updateMatrix();inspMesh.setMatrixAt(n,dummy.matrix);
+      const b=(i===j)?1.05:0.62;_col.setRGB(col[0]/255*b,col[1]/255*b,col[2]/255*b,THREE.SRGBColorSpace);inspMesh.setColorAt(n,_col);n++;}
+  }
+  inspMesh.count=n;inspMesh.instanceMatrix.needsUpdate=true;if(inspMesh.instanceColor)inspMesh.instanceColor.needsUpdate=true;
+}
 function updateHudStatic(){document.getElementById('st-qubits').textContent=VS.numQubits+' qubits';
   const lg=document.getElementById('legend');
   if(VS.colorMode==='mag')lg.innerHTML='<span><i style="background:'+cmapCss(currentCmap())+'"></i>|ρ| low→high</span>';
   else if(VS.colorMode==='real')lg.innerHTML='<span><i style="background:linear-gradient(90deg,#ffb948,#24344e,#45d3ff)"></i>Re(ρ) −→+</span>';
   else lg.innerHTML='<span><i style="background:linear-gradient(90deg,#4bd7ff,#8273ff,#ffb15c)"></i>∠ρ phase</span>';}
 function updateHud(frame){const steps=VS.gates.length,si=frame?frame.stepIndex:0;
+  drawStepInspector(si);draw2DGrid(si);
   const ph=frame?frame.phase:'—';const c=phaseColorArr(ph);
   document.getElementById('hud-step').innerHTML='step '+(si<0?0:si+1)+'/'+steps+' · phase <b style="color:rgb('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+')">'+ph+'</b>'+(VS.viewMode==='stack'?' · layer '+(Math.max(0,si+1))+'/'+(totalLayers-1):'');
   document.getElementById('st-step').innerHTML='step <b>'+(si<0?0:si+1)+'</b>/'+steps;
@@ -1419,7 +1592,13 @@ function loop(t){requestAnimationFrame(loop);const dt=Math.min((t-last)/1000,0.0
     if(sampleAnim)updateSampling(dt);
   }
   controls.update();composer.render();}
-function resize(){const w=document.getElementById('gl-host');const W=w.clientWidth||600,H=w.clientHeight||400;renderer.setSize(W,H,false);composer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();}
+function applyAutoOrient(W,H){                              // wide window → horizontal stack, tall → vertical
+  if(!VS.autoOrient)return;const want=(W/H>=1.2)?'horizontal':'vertical';
+  if(want!==VS.stackAxis){VS.stackAxis=want;const b=document.getElementById('orient-btn');
+    if(b)b.textContent=want==='horizontal'?'⬌ Horizontal (auto)':'⬍ Vertical (auto)';
+    if(typeof frameCamera==='function')frameCamera();}
+}
+function resize(){const w=document.getElementById('gl-host');const W=w.clientWidth||600,H=w.clientHeight||400;renderer.setSize(W,H,false);composer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();applyAutoOrient(W,H);}
 if(window.ResizeObserver)new ResizeObserver(resize).observe(document.getElementById('gl-host'));else window.addEventListener('resize',resize);
 
 /* ════════ UI wiring ════════ */
@@ -1444,14 +1623,44 @@ $('t-minus').onclick=()=>{VS.target--;clampQ();};$('t-plus').onclick=()=>{VS.tar
 $('c-minus').onclick=()=>{VS.control--;clampQ();};$('c-plus').onclick=()=>{VS.control++;clampQ();};
 $('sl-angle').addEventListener('input',function(){VS.angle=+this.value;sg(this);const f=this.value/Math.PI;$('vl-angle').textContent=Math.abs(f-0.5)<0.02?'π/2':Math.abs(f-1)<0.02?'π':f.toFixed(2)+'π';});sg($('sl-angle'));
 document.querySelectorAll('.gate-btn').forEach(b=>b.addEventListener('click',()=>addGate(b.dataset.g)));
+/* ── hover a gate → show its unitary (operator) matrix at the cursor ── */
+const gateTip=document.createElement('div');gateTip.id='gate-tip';document.body.appendChild(gateTip);
+function gateMatrix(g){switch(g){
+  case 'h':return{n:'Hadamard',f:'1/√2',m:[['1','1'],['1','−1']]};
+  case 'x':return{n:'Pauli-X (NOT)',m:[['0','1'],['1','0']]};
+  case 'y':return{n:'Pauli-Y',m:[['0','−i'],['i','0']]};
+  case 'z':return{n:'Pauli-Z',m:[['1','0'],['0','−1']]};
+  case 's':return{n:'Phase (S)',m:[['1','0'],['0','i']]};
+  case 't':return{n:'T (π/8)',m:[['1','0'],['0','e<sup>iπ/4</sup>']]};
+  case 'rx':return{n:'Rx(θ)',p:1,m:[['cos θ⁄2','−i sin θ⁄2'],['−i sin θ⁄2','cos θ⁄2']]};
+  case 'ry':return{n:'Ry(θ)',p:1,m:[['cos θ⁄2','−sin θ⁄2'],['sin θ⁄2','cos θ⁄2']]};
+  case 'rz':return{n:'Rz(θ)',p:1,m:[['e<sup>−iθ⁄2</sup>','0'],['0','e<sup>iθ⁄2</sup>']]};
+  case 'cx':return{n:'CNOT (CX)',two:1,m:[['1','0','0','0'],['0','1','0','0'],['0','0','0','1'],['0','0','1','0']]};
+  case 'cz':return{n:'Controlled-Z',two:1,m:[['1','0','0','0'],['0','1','0','0'],['0','0','1','0'],['0','0','0','−1']]};
+  case 'swap':return{n:'SWAP',two:1,m:[['1','0','0','0'],['0','0','1','0'],['0','1','0','0'],['0','0','0','1']]};
+}return null;}
+function showGateTip(g){const d=gateMatrix(g);if(!d){gateTip.style.display='none';return;}
+  const cols=d.m[0].length,cells=d.m.flat().map(v=>'<span'+(v==='0'?' class="z"':'')+'>'+v+'</span>').join('');
+  let theta='';if(d.p){const r=VS.angle/Math.PI;theta='<div class="tip-theta">θ = '+VS.angle.toFixed(3)+' rad = '+r.toFixed(3)+'π</div>';}
+  gateTip.className=d.two?'two':'';
+  gateTip.innerHTML='<div class="tip-name">'+d.n+'</div><div class="tip-mtx">'+(d.f?'<span class="tip-fac">'+d.f+'</span>':'')+
+    '<div class="brk l"></div><div class="cells" style="grid-template-columns:repeat('+cols+',auto)">'+cells+'</div><div class="brk r"></div></div>'+theta;
+  gateTip.style.display='block';}
+function moveGateTip(e){const pad=16,w=gateTip.offsetWidth,h=gateTip.offsetHeight;
+  let x=e.clientX+pad,y=e.clientY+pad;if(x+w>innerWidth-6)x=e.clientX-pad-w;if(y+h>innerHeight-6)y=e.clientY-pad-h;
+  gateTip.style.left=x+'px';gateTip.style.top=y+'px';}
+document.querySelectorAll('.gate-btn').forEach(b=>{
+  b.addEventListener('mouseenter',()=>showGateTip(b.dataset.g));
+  b.addEventListener('mousemove',moveGateTip);
+  b.addEventListener('mouseleave',()=>{gateTip.style.display='none';});});
 $('btn-measure').onclick=()=>{VS.gates=VS.gates.filter(x=>x.kind!=='measurement');VS.gates.push({name:'measure',kind:'measurement',targets:Array.from({length:VS.numQubits},(_,i)=>i)});rebuild();};
 $('btn-clear').onclick=()=>{VS.gates=[];VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));rebuild();};
 document.querySelectorAll('.preset-btn').forEach(b=>b.addEventListener('click',()=>loadPreset(b.dataset.preset)));
 document.querySelectorAll('.dock-view').forEach(b=>b.addEventListener('click',()=>{VS.viewMode=b.dataset.view;stopSampling();document.getElementById('hist-panel').classList.remove('show');builtStage=-1;layerEndArr=[];edgeEndArr=[];document.querySelectorAll('.dock-view').forEach(x=>x.classList.toggle('active',x===b));frameCamera();updateHudStatic();}));
-document.querySelectorAll('.mode-grid .mode-btn').forEach(b=>b.addEventListener('click',()=>{VS.colorMode=b.dataset.cm;document.querySelectorAll('.mode-grid .mode-btn').forEach(x=>x.classList.toggle('active',x===b));builtStage=-1;layerEndArr=[];edgeEndArr=[];updateHudStatic();}));
+document.querySelectorAll('.mode-grid .mode-btn').forEach(b=>b.addEventListener('click',()=>{VS.colorMode=b.dataset.cm;document.querySelectorAll('.mode-grid .mode-btn').forEach(x=>x.classList.toggle('active',x===b));builtStage=-1;layerEndArr=[];edgeEndArr=[];grid2dDirty=true;updateHudStatic();}));
 // colormap grid (fluidlab-style swatches)
 function renderCmapPreviews(){document.querySelectorAll('.cmap-btn').forEach(btn=>{const cv=btn.querySelector('canvas');cv.width=120;cv.height=24;const x=cv.getContext('2d');const H=CMAPS[btn.dataset.cmap];for(let px=0;px<120;px++){const t=px/119,s=t*(H.length-1),i=Math.min(Math.floor(s),H.length-2),f=s-i;x.fillStyle='rgb('+((H[i][0]+(H[i+1][0]-H[i][0])*f)|0)+','+((H[i][1]+(H[i+1][1]-H[i][1])*f)|0)+','+((H[i][2]+(H[i+1][2]-H[i][2])*f)|0)+')';x.fillRect(px,0,1,24);}});}
-document.querySelectorAll('.cmap-btn').forEach(b=>b.addEventListener('click',()=>{ACTIVE_HEAT=CMAPS[b.dataset.cmap];document.querySelectorAll('.cmap-btn').forEach(x=>x.classList.toggle('active',x===b));if(edgeLines)edgeLines.material.color.copy(edgeColor3());builtStage=-1;layerEndArr=[];edgeEndArr=[];if(typeof drawCurveEditor==='function')drawCurveEditor();updateHudStatic();}));
+document.querySelectorAll('.cmap-btn').forEach(b=>b.addEventListener('click',()=>{ACTIVE_HEAT=CMAPS[b.dataset.cmap];document.querySelectorAll('.cmap-btn').forEach(x=>x.classList.toggle('active',x===b));if(edgeLines)edgeLines.material.color.copy(edgeColor3());builtStage=-1;layerEndArr=[];edgeEndArr=[];if(typeof drawCurveEditor==='function')drawCurveEditor();grid2dDirty=true;updateHudStatic();}));
 renderCmapPreviews();
 // shape grid
 document.querySelectorAll('.shape-grid .mode-btn').forEach(b=>b.addEventListener('click',()=>{VS.shape=b.dataset.shape;document.querySelectorAll('.shape-grid .mode-btn').forEach(x=>x.classList.toggle('active',x===b));builtStage=-1;layerEndArr=[];edgeEndArr=[];rebuildMeshes();}));
@@ -1486,7 +1695,7 @@ function curvePt(e){const r=curveCv.getBoundingClientRect(),W=r.width,H=r.height
   return {x:Math.min(1,Math.max(0,((e.clientX-r.left)-CVP)/(W-2*CVP))),y:Math.min(1,Math.max(0,1-((e.clientY-r.top)-CVP)/(H-2*CVP)))};}
 function curveHit(pt){const r=curveCv.getBoundingClientRect(),W=r.width,H=r.height;
   for(let i=0;i<CURVE.pts.length;i++){const dx=(CURVE.pts[i].x-pt.x)*(W-2*CVP),dy=(CURVE.pts[i].y-pt.y)*(H-2*CVP);if(dx*dx+dy*dy<110)return i;}return -1;}
-function curveChanged(){buildCurve();builtStage=-1;layerEndArr=[];edgeEndArr=[];drawCurveEditor();}
+function curveChanged(){buildCurve();builtStage=-1;layerEndArr=[];edgeEndArr=[];grid2dDirty=true;drawCurveEditor();}
 function curveSet(e){const pt=curvePt(e);CURVE.pts[1].x=Math.min(0.98,Math.max(0.02,pt.x));CURVE.pts[1].y=Math.min(1,Math.max(0,pt.y));curveChanged();}
 curveCv.addEventListener('pointerdown',e=>{e.preventDefault();curveDrag=1;curveCv.setPointerCapture(e.pointerId);curveSet(e);});
 curveCv.addEventListener('pointermove',e=>{if(curveDrag!==1)return;curveSet(e);});
@@ -1503,8 +1712,16 @@ $('tog-rotate').onclick=function(){VS.autoRotate=!VS.autoRotate;controls.autoRot
 $('tog-floor').onclick=function(){VS.floorGrid=!VS.floorGrid;this.classList.toggle('on',VS.floorGrid);};
 $('tog-net').onclick=function(){VS.network=!VS.network;this.classList.toggle('on',VS.network);};
 $('tog-labels').onclick=function(){VS.labels=!VS.labels;if(labelGroup)labelGroup.visible=VS.labels;this.classList.toggle('on',VS.labels);};
-$('orient-btn').onclick=function(){VS.stackAxis=VS.stackAxis==='horizontal'?'vertical':'horizontal';
-  this.textContent=VS.stackAxis==='horizontal'?'⬌ Horizontal stack':'⬍ Vertical stack';
+$('tog-inspect').onclick=function(){VS.stepInspect=!VS.stepInspect;this.classList.toggle('on',VS.stepInspect);if(!VS.stepInspect)document.getElementById('step-inspector').classList.remove('show');};
+$('tog-grid2d').onclick=function(){VS.grid2d=!VS.grid2d;this.classList.toggle('on',VS.grid2d);grid2dDirty=true;last2dLayer=-99;if(!VS.grid2d)document.getElementById('grid2d-panel').classList.remove('show');};
+$('adv-toggle').onclick=function(){const open=document.getElementById('adv-rows').classList.toggle('open');this.classList.toggle('open',open);};
+$('orient-btn').onclick=function(){
+  if(VS.autoOrient){VS.autoOrient=false;VS.stackAxis='vertical';}        // auto → manual vertical
+  else if(VS.stackAxis==='vertical'){VS.stackAxis='horizontal';}         // vertical → horizontal
+  else{VS.autoOrient=true;}                                              // horizontal → back to auto
+  if(VS.autoOrient){const g=document.getElementById('gl-host');applyAutoOrient(g.clientWidth||600,g.clientHeight||400);
+    this.textContent=VS.stackAxis==='horizontal'?'⬌ Horizontal (auto)':'⬍ Vertical (auto)';}
+  else this.textContent=VS.stackAxis==='horizontal'?'⬌ Horizontal stack':'⬍ Vertical stack';
   if(VS.viewMode!=='stack'){VS.viewMode='stack';document.querySelectorAll('.dock-view').forEach(b=>b.classList.toggle('active',b.dataset.view==='stack'));}
   frameCamera();};
 
