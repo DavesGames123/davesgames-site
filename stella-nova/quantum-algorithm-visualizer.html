@@ -828,7 +828,7 @@ const CMAPS={
 let ACTIVE_HEAT=CMAPS.inferno;
 function heatColor(v){v=clamp01(v);const H=ACTIVE_HEAT,s=v*(H.length-1),i=Math.min(Math.floor(s),H.length-2),t=s-i;return lerp3(H[i],H[i+1],t);}
 // ── tone curve: input |ρ| → colormap position, shaped by draggable keys (Photoshop-style) ──
-const CURVE={pts:[{x:0,y:0},{x:0.5,y:Math.pow(0.5,0.4)},{x:1,y:1}],lut:new Float32Array(256)};
+const CURVE={pts:[{x:0,y:0},{x:0.5,y:Math.pow(0.5,0.2)},{x:1,y:1}],lut:new Float32Array(256)};
 function buildCurve(){
   const P=CURVE.pts;P.sort((a,b)=>a.x-b.x);const n=P.length;
   const xs=P.map(p=>p.x),ys=P.map(p=>p.y),dx=[],m=[];
@@ -849,11 +849,10 @@ function densityColorReal(re){const t=(Math.max(-1,Math.min(1,re))+1)*0.5;return
 function amplitudeColorArr(ph){let n=(ph+Math.PI)/(2*Math.PI);n=clamp01(n);const c0=[75,215,255],c1=[130,115,255],c2=[255,177,92];return n<0.5?lerp3(c0,c1,n*2):lerp3(c1,c2,(n-0.5)*2);}
 function phaseColorArr(p){return p==='pre_gate'?[105,168,255]:p==='apply_gate'?[72,224,252]:p==='settle'?[255,194,94]:[182,196,216];}
 function cellColor(mag,re,im){
-  if(VS.colorMode==='real')return densityColorReal(re);
-  if(VS.colorMode==='phase')return mag>0.008?amplitudeColorArr(Math.atan2(im,re)):[48,34,74];
-  const v=clamp01(mag);                                  // |ρ| magnitude → heat, reshaped by the tone curve
-  const vg=curveEval(v);
-  return heatColor(0.01+0.99*vg);                        // start 1% up the ramp: colored from the very bottom, never flat black
+  const w=curveEval(clamp01(mag));                       // tone-curve (gamma) weight — now applied in EVERY color mode
+  if(VS.colorMode==='real'){const c=densityColorReal(re);return [c[0]*w,c[1]*w,c[2]*w];}
+  if(VS.colorMode==='phase'){const c=amplitudeColorArr(Math.atan2(im,re));return [c[0]*w,c[1]*w,c[2]*w];}
+  return heatColor(0.01+0.99*w);                         // magnitude → heat ramp position, shaped by the curve
 }
 // Glow scales smoothly with magnitude (LINEAR multiplier — applied after the sRGB→linear color conversion,
 // so it never runs through the sRGB transfer and blows up). Every lit cell glows a little; pure cells most.
@@ -863,7 +862,7 @@ function smooth(t){t=clamp01(t);return t*t*(3-2*t);}
 /* ════════ circuit model ════════ */
 const VS={numQubits:4,gates:[],target:0,control:1,angle:Math.PI/2,seed:24,substeps:24,
   playing:true,speed:2,frameIndex:0,stageTime:0,holdTime:0.7,threshold:0,threshDirty:false,preset:'qft',colorMode:'mag',viewMode:'stack',
-  autoRotate:true,floorGrid:false,network:true,labels:true,shape:'round',showFull:false,bg:'black',gamma:0.4,stackAxis:'vertical',autoOrient:true,stepInspect:true,grid2d:true};
+  autoRotate:true,floorGrid:false,network:true,labels:true,shape:'round',showFull:false,bg:'black',gamma:0.2,stackAxis:'vertical',autoOrient:true,stepInspect:true,grid2d:true};
 let trace=null,layerStates=[],layerCell=[],totalLayers=1,builtStage=-1,layerEndArr=[],edgeEndArr=[];
 const PRESET_N={bell:2,grover:3,dj:3,bv:4,toffoli:3,kick:2,teleport:3}; // fixed-size presets; others scale with the qubit count
 function presetGates(name,n){const g=[];
@@ -905,16 +904,23 @@ function densityToCell(state){ // returns Float32Array[DIM*DIM*3] = mag,re,im
     out[k]=Math.hypot(rRe,rIm);out[k+1]=rRe;out[k+2]=rIm;}}
   return out;}
 
-function rebuild(){
+function rebuild(keepPos){
   if(typeof stopSampling==='function')stopSampling();const hp=document.getElementById('hist-panel');if(hp)hp.classList.remove('show');
   if(VS.gates.length===0){trace=null;VS.frameIndex=0;renderList();return;}
+  const prevStage=(keepPos&&trace)?currentStageFor(VS.stageTime):0;
+  const prevFrac=(keepPos&&trace&&trace.frames.length>1)?VS.frameIndex/(trace.frames.length-1):0;
   trace=buildTrace({numQubits:VS.numQubits,gates:VS.gates},{substeps:VS.substeps,seed:VS.seed});
-  VS.frameIndex=0;VS.stageTime=0;builtStage=-1;layerEndArr=[];edgeEndArr=[];document.getElementById('sl-scrub').max=100;
+  builtStage=-1;layerEndArr=[];edgeEndArr=[];document.getElementById('sl-scrub').max=100;
   DIM=1<<VS.numQubits;
   layerStates=[trace.frames[0].state].concat(trace.steps.map(s=>s.endState));
   totalLayers=layerStates.length;
   layerCell=layerStates.map(densityToCell);
-  rebuildMeshes();frameCamera();renderList();updateHudStatic();
+  if(keepPos){const s=Math.max(0,Math.min(totalLayers-1,prevStage));
+    VS.stageTime=s*stageDuration()+1e-3;
+    VS.frameIndex=Math.max(0,Math.min(trace.frames.length-1,prevFrac*(trace.frames.length-1)));
+    revealMode();
+  }else{VS.frameIndex=0;VS.stageTime=0;}
+  rebuildMeshes();if(!keepPos)frameCamera();renderList();updateHudStatic();
   document.getElementById('st-dim').textContent=DIM+'×'+DIM+' cells';
   document.getElementById('st-layers').textContent=totalLayers+' layer'+(totalLayers>1?'s':'');
 }
@@ -1201,7 +1207,7 @@ function drawLens(frame){
   if(circ.width!==Math.round(Wcss*dpr)||circ.height!==Math.round(Hcss*dpr)){circ.width=Math.round(Wcss*dpr);circ.height=Math.round(Hcss*dpr);}
   cctx.setTransform(dpr,0,0,dpr,0,0);cctx.clearRect(0,0,Wcss,Hcss);
   const padT=15,padB=Hcss-18,laneH=(padB-padT)/Math.max(1,N);
-  circLayout={colW:COLW,x0,steps};
+  circLayout={colW:COLW,x0,steps,padT,laneH,bw:Math.min(28,COLW*0.62),bh:Math.min(19,laneH*0.8)};
   const cur=frame?frame.stepIndex:-1,colX=s=>x0+COLW*(s+0.5),endX=x0+COLW*steps;
   // measure/bar lines every 4 columns (score "bars" — help read large circuits)
   cctx.strokeStyle='rgba(70,95,135,0.16)';cctx.lineWidth=1;
@@ -1225,7 +1231,9 @@ function drawLens(frame){
       cctx.fillStyle='rgba(8,12,20,0.96)';roundRect(cctx,x-bw/2,gy-bh/2,bw,bh,4);cctx.fill();
       cctx.strokeStyle=cs;cctx.lineWidth=active?2:1.3;roundRect(cctx,x-bw/2,gy-bh/2,bw,bh,4);cctx.stroke();
       cctx.fillStyle=active?cs:'#cdd6e6';cctx.font='700 10px JetBrains Mono,monospace';cctx.textAlign='center';
-      cctx.fillText(g.kind==='measurement'?'M':(g.name==='swap'?'×':g.name.toUpperCase()).slice(0,3),x,gy+0.5);}}
+      cctx.fillText(g.kind==='measurement'?'M':(g.name==='swap'?'×':g.name.toUpperCase()).slice(0,3),x,gy+0.5);
+      if(g.name==='rz'&&g.params){cctx.font='600 7px JetBrains Mono,monospace';cctx.fillStyle=(s===editSel)?'#ffb948':'rgba(150,200,255,0.62)';cctx.fillText(fmtPi(g.params[0]),x,gy-bh/2-6);}
+    }}
   // layer numbers (beats) under each column
   cctx.textAlign='center';cctx.textBaseline='top';cctx.font='500 8px JetBrains Mono,monospace';
   cctx.fillStyle=(cur<0)?'rgba(255,200,80,0.95)':'rgba(110,125,150,0.65)';cctx.fillText('L0',x0-4,padB+5);
@@ -1244,8 +1252,108 @@ function circuitScrubTo(clientX){if(!trace)return;const rect=circ.getBoundingCli
   if(VS.viewMode==='stack')VS.stageTime=(s+1)*stageDuration()+1e-3;else VS.frameIndex=((s+0.5)/steps)*(trace.frames.length-1);
   revealMode();VS.playing=false;const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}}
 let scrubbing=false;
-circ.addEventListener('pointerdown',e=>{scrubbing=true;try{circ.setPointerCapture(e.pointerId);}catch(_){}circuitScrubTo(e.clientX);e.preventDefault();});
-circ.addEventListener('pointermove',e=>{if(scrubbing){circuitScrubTo(e.clientX);e.preventDefault();}});
+circ.addEventListener('pointerdown',e=>{
+  const rs=rzGateAt(e.clientX,e.clientY);
+  if(rs>=0){openAngleEditor(rs,e.clientX,e.clientY);e.preventDefault();return;}
+  closeAngleEditor();
+  scrubbing=true;try{circ.setPointerCapture(e.pointerId);}catch(_){}circuitScrubTo(e.clientX);e.preventDefault();});
+circ.addEventListener('pointermove',e=>{
+  if(scrubbing){circuitScrubTo(e.clientX);e.preventDefault();return;}
+  circ.style.cursor=rzGateAt(e.clientX,e.clientY)>=0?'pointer':'ew-resize';});
+
+/* ════════ RZ angle editor — click an RZ note on the score to retune its phase ════════ */
+let editSel=-1, rzEd=null;
+function fmtPi(v){
+  const r=v/Math.PI, near=(a,b)=>Math.abs(a-b)<0.012, sgn=r<0?'−':'';
+  const fr=[[0,'0'],[1/16,'π/16'],[1/8,'π/8'],[1/6,'π/6'],[1/4,'π/4'],[1/3,'π/3'],[1/2,'π/2'],[3/4,'3π/4'],[1,'π'],[3/2,'3π/2'],[2,'2π']];
+  for(const [k,s] of fr){if(near(Math.abs(r),k))return k===0?'0':sgn+s;}
+  return v.toFixed(3);
+}
+function rzGateAt(clientX,clientY){
+  if(!VS.gates.length||!circLayout||circLayout.padT==null)return -1;
+  const rect=circ.getBoundingClientRect(),x=clientX-rect.left,y=clientY-rect.top;
+  const {x0,colW,padT,laneH,bw,bh}=circLayout;
+  for(let s=0;s<VS.gates.length;s++){const g=VS.gates[s];
+    if(g.name!=='rz'||!g.params)continue;
+    const gx=x0+colW*(s+0.5),gy=laneY(g.targets[0],padT,laneH);
+    if(Math.abs(x-gx)<=bw/2+3&&Math.abs(y-gy)<=bh/2+3)return s;}
+  return -1;
+}
+function buildRzEditor(){
+  rzEd=document.createElement('div');rzEd.id='rz-editor';
+  rzEd.style.cssText='position:fixed;z-index:500;display:none;width:218px;background:rgba(9,12,20,0.98);'
+    +'border:1px solid var(--border-b);border-radius:9px;padding:11px 12px 12px;backdrop-filter:blur(9px);'
+    +"box-shadow:0 8px 30px rgba(0,0,0,0.6);font-family:'JetBrains Mono',monospace;user-select:none";
+  rzEd.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'
+      +'<span id="rz-title" style="font-size:0.64rem;letter-spacing:0.12em;color:#ffb948;font-weight:600"></span>'
+      +'<span id="rz-x" style="cursor:pointer;color:#7d8aa0;font-size:0.7rem;padding:0 2px">✕</span></div>'
+    +'<div style="font-size:0.7rem;color:#cdd6e6;margin-bottom:8px"><span id="rz-rad"></span> rad <span style="color:#5a8cc0">·</span> <span id="rz-frac" style="color:#96c8ff"></span></div>'
+    +'<input type="range" id="rz-slider" min="-6.2832" max="6.2832" step="0.01" style="width:100%;accent-color:#ffb948;margin-bottom:9px">'
+    +'<div style="display:flex;gap:4px;align-items:center">'
+      +'<button class="rz-step" data-d="-0.7853981">−π/4</button>'
+      +'<button class="rz-step" data-d="-0.0314159">−</button>'
+      +'<input type="number" id="rz-num" step="0.01" style="flex:1;min-width:0;background:rgba(20,28,42,0.9);border:1px solid var(--border-b);color:#cdd6e6;font-family:inherit;font-size:0.66rem;padding:4px 5px;border-radius:4px;text-align:center">'
+      +'<button class="rz-step" data-d="0.0314159">+</button>'
+      +'<button class="rz-step" data-d="0.7853981">+π/4</button></div>'
+    +'<div style="font-size:0.55rem;color:#5a8cc0;margin-top:8px;line-height:1.4">live · retunes the encoded phase and recomputes the state</div>';
+  document.body.appendChild(rzEd);
+  rzEd.querySelectorAll('.rz-step').forEach(b=>{
+    b.style.cssText='background:transparent;border:1px solid var(--border-b);color:#96c8ff;font-family:inherit;'
+      +'font-size:0.6rem;padding:5px 4px;border-radius:4px;cursor:pointer;white-space:nowrap';
+    b.addEventListener('click',()=>{if(editSel<0)return;setAngle(VS.gates[editSel].params[0]+parseFloat(b.dataset.d));});});
+  rzEd.querySelector('#rz-slider').addEventListener('input',e=>setAngle(parseFloat(e.target.value)));
+  rzEd.querySelector('#rz-num').addEventListener('input',e=>{const v=parseFloat(e.target.value);if(!isNaN(v))setAngle(v);});
+  rzEd.querySelector('#rz-x').addEventListener('click',closeAngleEditor);
+  return rzEd;
+}
+function syncRzEditor(){
+  if(editSel<0||!rzEd)return;const v=VS.gates[editSel].params[0];
+  rzEd.querySelector('#rz-rad').textContent=v.toFixed(3);
+  rzEd.querySelector('#rz-frac').textContent=fmtPi(v);
+  const sl=rzEd.querySelector('#rz-slider');if(document.activeElement!==sl)sl.value=v;
+  const nm=rzEd.querySelector('#rz-num');if(document.activeElement!==nm)nm.value=v.toFixed(3);
+}
+function setAngle(v){
+  if(editSel<0)return;
+  VS.gates[editSel].params[0]=v;
+  VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));
+  VS.playing=false;const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}
+  rebuild(true);syncRzEditor();
+}
+function openAngleEditor(s,clientX,clientY){
+  editSel=s;const g=VS.gates[s];if(!rzEd)buildRzEditor();
+  rzEd.querySelector('#rz-title').textContent='RZ · q'+g.targets[0]+' · L'+(s+1);
+  rzEd.style.display='block';syncRzEditor();
+  const w=rzEd.offsetWidth,h=rzEd.offsetHeight,pad=14;
+  let x=clientX+pad,y=clientY-h-pad;
+  if(x+w>innerWidth-8)x=clientX-pad-w;if(x<8)x=8;
+  if(y<8)y=clientY+pad;if(y+h>innerHeight-8)y=innerHeight-8-h;
+  rzEd.style.left=x+'px';rzEd.style.top=y+'px';
+}
+function closeAngleEditor(){editSel=-1;if(rzEd)rzEd.style.display='none';}
+document.addEventListener('pointerdown',e=>{
+  if(editSel<0)return;
+  if(rzEd&&rzEd.contains(e.target))return;
+  if(e.target===circ)return;
+  closeAngleEditor();},true);
+function stepLayer(dir){
+  if(!trace)return;revealMode();VS.playing=false;
+  const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}
+  if(VS.viewMode==='stack'){
+    let s=Math.max(0,Math.min(totalLayers-1,currentStageFor(VS.stageTime)+dir));
+    VS.stageTime=s*stageDuration()+1e-3;return;}
+  const fi=Math.floor(VS.frameIndex),cur=trace.frames[Math.min(fi,trace.frames.length-1)].stepIndex;
+  if(dir>0){let j=fi+1;while(j<trace.frames.length&&trace.frames[j].stepIndex===cur)j++;VS.frameIndex=Math.min(j,trace.frames.length-1);}
+  else{let j=fi;while(j>0&&trace.frames[j].stepIndex===cur)j--;const pst=trace.frames[j].stepIndex;while(j>0&&trace.frames[j-1].stepIndex===pst)j--;VS.frameIndex=Math.max(0,j);}
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeAngleEditor();return;}
+  const t=e.target,tn=t&&t.tagName;
+  if(tn==='INPUT'||tn==='TEXTAREA'||tn==='SELECT'||(t&&t.isContentEditable))return;
+  if(e.key==='ArrowRight'){stepLayer(1);e.preventDefault();}
+  else if(e.key==='ArrowLeft'){stepLayer(-1);e.preventDefault();}
+});
 circ.addEventListener('pointerup',()=>{scrubbing=false;});
 circ.addEventListener('pointercancel',()=>{scrubbing=false;});
 function followPlayhead(){if(!trace)return;const {colW,x0,steps}=circLayout;if(steps<1)return;
@@ -1710,7 +1818,7 @@ function curveSet(e){const pt=curvePt(e);CURVE.pts[1].x=Math.min(0.98,Math.max(0
 curveCv.addEventListener('pointerdown',e=>{e.preventDefault();curveDrag=1;curveCv.setPointerCapture(e.pointerId);curveSet(e);});
 curveCv.addEventListener('pointermove',e=>{if(curveDrag!==1)return;curveSet(e);});
 curveCv.addEventListener('pointerup',e=>{curveDrag=-1;try{curveCv.releasePointerCapture(e.pointerId);}catch(_){}drawCurveEditor();});
-$('curve-reset').onclick=()=>{CURVE.pts=[{x:0,y:0},{x:0.5,y:Math.pow(0.5,0.4)},{x:1,y:1}];curveDrag=-1;curveChanged();};
+$('curve-reset').onclick=()=>{CURVE.pts=[{x:0,y:0},{x:0.5,y:Math.pow(0.5,0.2)},{x:1,y:1}];curveDrag=-1;curveChanged();};
 drawCurveEditor();
 $('sl-scrub').addEventListener('input',function(){if(trace){const f=+this.value/100;if(VS.viewMode==='stack')VS.stageTime=f*totalStackTime();else VS.frameIndex=f*(trace.frames.length-1);revealMode();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');}sg(this);});
 $('sl-seed').addEventListener('input',function(){VS.seed=+this.value;$('vl-seed').textContent=this.value;sg(this);rebuild();});sg($('sl-seed'));

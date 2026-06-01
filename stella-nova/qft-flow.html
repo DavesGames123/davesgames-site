@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QFT Flow // Stella Nova · davesgames.io</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<style>
+/* ── Stella Nova · davesgames.io shared design tokens ── */
+:root{
+  --bg:#0e1118; --bg2:#0a0d14; --panel:rgba(11,16,28,0.72);
+  --border:rgba(150,200,255,0.07); --border-b:rgba(150,200,255,0.18);
+  --ink:#c8d0e0; --bright:#e8ecf4; --dim:#8090b0; --faint:#506080;
+  --blue:#96c8ff; --cyan:#45d3ff; --cyan-d:#5a8cc0; --amber:#ffb948; --rose:#ff6b8a; --green:#64c864;
+  --grid:rgba(90,130,180,0.10); --glow:rgba(69,211,255,0.45); --scan:rgba(0,0,0,0.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:'JetBrains Mono',monospace;height:100%;overflow:hidden}
+body{line-height:1.5;display:flex;flex-direction:column}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.4))}
+::selection{background:rgba(69,211,255,0.25)}
+a{color:var(--cyan)}
+/* topbar — visible standalone, hidden when embedded in the Stella Nova shell */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:40px;flex-shrink:0;background:rgba(14,17,24,0.94);border-bottom:1px solid var(--border-b);z-index:100}
+.in-frame .topbar{display:none!important}
+.topbar-l{display:flex;align-items:center;gap:1.1rem}
+.sys-name{color:var(--bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.1rem;letter-spacing:0.12em}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.topbar-r{font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--faint)}
+.topbar-r strong{color:var(--cyan-d);font-weight:500}
+
+#main{flex:1;display:flex;min-height:0}
+#panel{width:330px;flex-shrink:0;overflow-y:auto;overflow-x:hidden;border-right:1px solid var(--border-b);
+  background:rgba(9,12,20,0.45);padding:14px 14px 28px;scrollbar-width:thin;scrollbar-color:var(--cyan-d) transparent}
+#panel::-webkit-scrollbar{width:5px}#panel::-webkit-scrollbar-thumb{background:var(--cyan-d);border-radius:3px}
+#panel .card{background:transparent;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:14px 4px;box-shadow:none}
+#panel .card:last-child{border-bottom:none}
+#panel .card+.card{margin-top:0}
+#viz{flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;padding:20px clamp(14px,2.4vw,34px) 48px;
+  scrollbar-width:thin;scrollbar-color:var(--cyan-d) transparent}
+#viz::-webkit-scrollbar{width:7px}#viz::-webkit-scrollbar-thumb{background:var(--cyan-d);border-radius:4px}
+#viz>*{max-width:940px}
+header{margin:0 0 18px;border-bottom:1px solid var(--border);padding-bottom:16px}
+.kicker{font-size:0.62rem;letter-spacing:0.42em;text-transform:uppercase;color:var(--cyan-d);font-weight:600}
+h1{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:clamp(1.7rem,3.6vw,2.5rem);
+   letter-spacing:0.01em;line-height:1.04;margin:6px 0 8px;color:var(--bright)}
+h1 em{font-style:italic;color:var(--amber)}
+.sub{color:var(--dim);font-size:0.8rem;max-width:60ch}
+.sub b{color:var(--ink);font-weight:600}
+
+@media(max-width:760px){
+  html,body{overflow:auto}
+  #main{flex-direction:column;min-height:0}
+  #panel{width:auto;border-right:none;border-bottom:1px solid var(--border-b);overflow:visible}
+  #viz{overflow:visible}
+}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 17px;
+  backdrop-filter:blur(7px);box-shadow:0 10px 40px rgba(0,0,0,0.35)}
+.card + .card{margin-top:16px}
+.lbl{font-size:0.6rem;letter-spacing:0.22em;text-transform:uppercase;color:var(--cyan-d);font-weight:600;
+  display:flex;align-items:center;gap:9px;margin-bottom:13px}
+.lbl::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border-b),transparent)}
+.lbl .tag{color:var(--faint);font-weight:500;letter-spacing:0.1em}
+
+/* n stepper */
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.row .name{font-size:0.72rem;color:var(--dim)}
+.stepper{display:flex;align-items:center;gap:2px;border:1px solid var(--border-b);border-radius:7px;overflow:hidden}
+.stepper button{width:30px;height:30px;background:transparent;border:none;color:var(--cyan);font-family:inherit;
+  font-size:1rem;cursor:pointer;transition:background .12s}
+.stepper button:hover{background:rgba(63,224,255,0.12)}
+.stepper .v{min-width:54px;text-align:center;font-weight:700;color:var(--ink);font-size:0.82rem}
+.stepper .v small{color:var(--faint);font-weight:500;font-size:0.62rem}
+
+/* sliders */
+.slider{margin-bottom:12px}
+.slider .head{display:flex;justify-content:space-between;align-items:baseline;font-size:0.66rem;margin-bottom:5px}
+.slider .head .k{color:var(--dim)}
+.slider .head .k b{color:var(--ink);font-weight:600}
+.slider .head .w{color:var(--faint);font-size:0.58rem}
+.slider .head .val{color:var(--amber);font-weight:600;font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;
+  background:linear-gradient(90deg,var(--cyan-d),rgba(120,170,230,0.18));outline:none;cursor:ew-resize}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;
+  background:var(--cyan);box-shadow:0 0 9px var(--glow);border:2px solid #081019;cursor:ew-resize}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--cyan);border:2px solid #081019}
+input[type=range].amber{background:linear-gradient(90deg,#a06410,rgba(255,182,72,0.18))}
+input[type=range].amber::-webkit-slider-thumb{background:var(--amber);box-shadow:0 0 9px rgba(255,182,72,0.5)}
+input[type=range].amber::-moz-range-thumb{background:var(--amber)}
+
+/* per-qubit phase list + preset chips */
+#phi-sliders{padding-right:2px}
+.slider .chips{display:flex;gap:3px;margin-top:5px}
+.slider .chips button{flex:1;background:transparent;border:1px solid var(--border);color:var(--faint);
+  font-family:inherit;font-size:0.56rem;padding:3px 0;border-radius:4px;cursor:pointer;transition:all .1s}
+.slider .chips button:hover{color:var(--cyan);border-color:var(--cyan-d);background:rgba(69,211,255,0.07)}
+.slider .chips button.on{color:var(--amber);border-color:var(--amber);background:rgba(255,185,72,0.08)}
+.phi-tools{display:flex;gap:4px;margin-bottom:9px}
+.phi-tools button{flex:1;background:transparent;border:1px solid var(--border-b);color:var(--dim);
+  font-family:inherit;font-size:0.58rem;letter-spacing:0.04em;text-transform:uppercase;font-weight:600;
+  padding:6px 4px;border-radius:5px;cursor:pointer;transition:all .12s}
+.phi-tools button:hover{color:var(--cyan);border-color:var(--cyan-d);background:rgba(69,211,255,0.07)}
+.note.warn{color:var(--amber);border-top-color:rgba(255,185,72,0.25)}
+
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.btns button{flex:1;min-width:62px;background:transparent;border:1px solid var(--border-b);color:var(--dim);
+  font-family:inherit;font-size:0.62rem;letter-spacing:0.05em;padding:8px 6px;border-radius:6px;cursor:pointer;
+  transition:all .13s;text-transform:uppercase;font-weight:600}
+.btns button:hover{color:var(--ink);border-color:var(--cyan-d);background:rgba(63,224,255,0.07)}
+.btns button.amber:hover{border-color:var(--amber);background:rgba(255,182,72,0.07)}
+
+.note{font-size:0.62rem;color:var(--faint);line-height:1.55;margin-top:11px;border-top:1px dashed var(--border);padding-top:10px}
+.note b{color:var(--dim)}
+
+/* canvases */
+.viz{display:block;width:100%;border-radius:8px;background:
+  linear-gradient(180deg, rgba(8,12,20,0.7), rgba(6,9,15,0.9))}
+.viz-cap{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 7px}
+.viz-cap .t{font-size:0.68rem;color:var(--ink);font-weight:600}
+.viz-cap .t span{color:var(--faint);font-weight:400;font-size:0.6rem;margin-left:7px}
+.viz-cap .r{font-size:0.6rem;color:var(--dim);font-variant-numeric:tabular-nums}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:620px){.split{grid-template-columns:1fr}}
+
+.flow{display:flex;align-items:center;justify-content:center;gap:14px;color:var(--faint);
+  font-size:0.66rem;letter-spacing:0.12em;text-transform:uppercase;margin:2px 0 2px}
+.flow .arr{color:var(--cyan-d);font-size:1.1rem}
+.formula{text-align:center;font-size:0.72rem;color:var(--dim);margin-top:3px;font-variant-numeric:tabular-nums}
+.formula b{color:var(--ink)}
+
+/* readouts */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:2px}
+@media(max-width:620px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:rgba(8,12,20,0.6);border:1px solid var(--border);border-radius:8px;padding:10px 11px}
+.stat .sl{font-size:0.55rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--faint)}
+.stat .sv{font-size:1.15rem;font-weight:700;color:var(--cyan);font-variant-numeric:tabular-nums;margin-top:3px}
+.stat .sv small{font-size:0.62rem;color:var(--dim);font-weight:500}
+.stat.amber .sv{color:var(--amber)}
+.stat.rose .sv{color:var(--rose)}
+
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:0.6rem;color:var(--dim);margin-top:9px}
+.legend i{display:inline-block;width:18px;height:8px;border-radius:2px;margin-right:6px;vertical-align:middle}
+.swatch-curve{background:linear-gradient(90deg,rgba(63,224,255,0.15),var(--cyan))}
+.swatch-bar{background:var(--amber)}
+.swatch-hist{background:transparent;border:1px solid var(--rose);height:8px}
+
+.explain{font-size:0.72rem;color:var(--dim);line-height:1.65}
+.explain p{margin-bottom:9px}
+.explain b{color:var(--ink);font-weight:600}
+.explain .c{color:var(--cyan)}
+.explain .a{color:var(--amber)}
+
+/* equations */
+.eq{margin:0 0 13px}
+.eq:last-child{margin-bottom:0}
+.eq .cap{font-size:0.62rem;color:var(--dim);margin-bottom:5px;letter-spacing:0.04em}
+.eq .cap b{color:var(--ink)}
+.eq .math{background:rgba(8,12,20,0.55);border:1px solid var(--border);border-radius:7px;
+  padding:11px 13px;overflow-x:auto;color:var(--ink)}
+.katex{font-size:1.02em!important}
+.katex .mord,.katex .mbin,.katex .mrel,.katex .mopen,.katex .mclose,.katex .mop{color:var(--ink)}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QFT · ρ→spectrum</span></div>
+  <div class="topbar-r">SYS // <strong>FOURIER TRANSFORM</strong></div>
+</div>
+<div id="main">
+  <div id="panel">
+    <div class="card">
+      <div class="lbl">Register <span class="tag">2ⁿ amplitudes</span></div>
+      <div class="row">
+        <span class="name">qubits&nbsp;<b style="color:var(--ink)">n</b></span>
+        <div class="stepper">
+          <button id="n-minus">−</button>
+          <span class="v" id="n-val">4 <small id="dim-val">· 16 bins</small></span>
+          <button id="n-plus">+</button>
+        </div>
+      </div>
+      <div class="lbl" style="margin-top:6px">Phase rotations <span class="tag">Rz(φⱼ) per qubit</span></div>
+      <div id="phi-sliders"></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Linear ramp <span class="tag">φⱼ = α·2ʲ</span></div>
+      <div class="slider">
+        <div class="head"><span class="k">slope <b>α</b></span><span class="val" id="alpha-val">0.00</span></div>
+        <input type="range" class="amber" id="alpha" min="0" max="6.2832" step="0.001" value="0">
+      </div>
+      <div class="btns">
+        <button class="amber" data-preset="flat">Flat</button>
+        <button class="amber" data-preset="ramp">Clean tone</button>
+        <button class="amber" data-preset="detune">Detune</button>
+        <button class="amber" data-preset="random">Random</button>
+      </div>
+      <div class="note">A perfect <b>1:2:4:8</b> ramp is a pure tone → one bin. Drag α to slide that tone across the spectrum; nudge a single φⱼ off the ramp to watch energy <b>leak</b> into neighbours.</div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Measurement <span class="tag">finite shots</span></div>
+      <div class="slider">
+        <div class="head"><span class="k">shots <b>S</b></span><span class="val" id="shots-val">exact</span></div>
+        <input type="range" id="shots" min="0" max="20" step="1" value="0">
+      </div>
+      <div class="btns"><button id="resample">↻ Resample</button></div>
+      <div class="note">At <b>S = exact</b> you see the true state. Add shots to sample it — the rose histogram is one measurement run, wobbling around the curve by <b>√</b>shot noise.</div>
+    </div>
+  </div>
+
+  <!-- ── VISUALS ── -->
+  <div id="viz">
+    <header>
+      <div class="kicker">Quantum Fourier Transform · input → output</div>
+      <h1>Four knobs, <em>one spectrum</em></h1>
+      <p class="sub">Turn <b>n</b> single-qubit phase rotations and watch the whole pipeline: the flat-magnitude signal they encode, the <b>smooth continuous spectrum</b> an ideal machine holds, and the <b>discrete probability histogram</b> you'd actually measure. The bars are samples of the curve.</p>
+    </header>
+    <div class="card">
+      <div class="lbl">① Input signal <span class="tag">the n rotations, encoded</span></div>
+      <div class="split">
+        <div>
+          <div class="viz-cap"><span class="t">|amplitude|<span>constant modulus</span></span><span class="r" id="mag-r">1/√N</span></div>
+          <canvas class="viz" id="cv-mag" height="150"></canvas>
+        </div>
+        <div>
+          <div class="viz-cap"><span class="t">phase θ(x)<span>= Σ φⱼ·xⱼ</span></span><span class="r" id="phase-r"></span></div>
+          <canvas class="viz" id="cv-phase" height="150"></canvas>
+        </div>
+      </div>
+      <div class="flow" style="margin-top:14px"><span>flat magnitude · phase ramp</span><span class="arr">▼</span><span style="color:var(--cyan-d)">QFT</span></div>
+      <div class="formula">$P(k)=\bigl|\tfrac{1}{N}\sum_{x} e^{i\theta(x)}\,e^{-2\pi i kx/N}\bigr|^2$&nbsp;&nbsp;<span style="color:var(--faint)">— power spectrum of a constant-modulus sequence</span></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">② Output <span class="tag">smooth state vs measured histogram</span></div>
+      <div class="viz-cap"><span class="t">P(k)<span>probability over the 2ⁿ basis states</span></span><span class="r" id="out-r"></span></div>
+      <canvas class="viz" id="cv-out" height="300"></canvas>
+      <div class="legend">
+        <span><i class="swatch-curve"></i>continuous spectrum |V(κ)|² (ideal)</span>
+        <span><i class="swatch-bar"></i>exact bin probability P(k)</span>
+        <span><i class="swatch-hist"></i>measured histogram (S shots)</span>
+      </div>
+      <div class="stats">
+        <div class="stat amber"><div class="sl">peak bin</div><div class="sv" id="st-peak">0</div></div>
+        <div class="stat"><div class="sl">peak prob</div><div class="sv" id="st-prob">100<small>%</small></div></div>
+        <div class="stat rose"><div class="sl">spread</div><div class="sv" id="st-spread">1.0<small> bins</small></div></div>
+        <div class="stat"><div class="sl">ramp → bin</div><div class="sv" id="st-pred">0.0</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">What you're watching</div>
+      <div class="explain">
+        <p><b>The input is the least impulse-like thing there is.</b> Every one of the 2ⁿ amplitudes has the <span class="c">same magnitude</span>; all your information lives in the <span class="c">phase</span> θ(x) = Σⱼ φⱼ·xⱼ. Because that phase is additive over the bits, n knobs only reach an n-parameter family of signals — you steer <b>where</b> the energy lands and <b>how sharp</b> it is, not an arbitrary shape.</p>
+        <p><b>The smooth curve is the ideal state; the bars sample it.</b> An infinite-resolution machine would hold the continuous spectrum |V(κ)|². A real n-qubit register only has <span class="a">2ⁿ slots</span>, so it reads off that curve at the integer bins. When the ramp lands the peak exactly on an integer, every other bin sits on a <b>zero</b> of the curve → a single clean spike. Land it between integers and the bins sample the skirts → <b>spectral leakage</b>.</p>
+        <p><b>The leak law.</b> Detune one qubit's phase by δ and the peak drops to exactly <b>cos²(δ/2)</b>, the rest bleeding into neighbours — same for any qubit, because each splits the indices evenly.</p>
+        <p><b>The axis wraps around.</b> Frequency bin <span class="c">N</span> is the same state as bin <span class="c">0</span> — the spectrum is periodic. So when the peak sits at <span class="a">|0…0⟩</span>, the curve <em>also</em> climbs at the far-right edge: that's the same spike seen through the wrap, <b>not</b> a second peak at <span class="a">|1…1⟩</span>. Trust the orange dots, not the rising skirt.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">The math <span class="tag">QFT, formally</span></div>
+      <div class="eq"><div class="cap"><b>Input state</b> — flat magnitude, phase set by your n rotations</div>
+        <div class="math">$$|\psi_{\text{in}}\rangle=\frac{1}{\sqrt{N}}\sum_{x=0}^{N-1} e^{\,i\theta(x)}\,|x\rangle,\qquad \theta(x)=\sum_{j=0}^{n-1}\varphi_j\,x_j,\quad N=2^{\,n}$$</div></div>
+      <div class="eq"><div class="cap"><b>QFT amplitude</b> on basis state $|k\rangle$</div>
+        <div class="math">$$V[k]=\langle k|\,\mathrm{QFT}\,|\psi_{\text{in}}\rangle=\frac{1}{N}\sum_{x=0}^{N-1} e^{\,i\theta(x)}\,e^{-2\pi i\,kx/N}$$</div></div>
+      <div class="eq"><div class="cap"><b>Measured probability</b> and its smooth continuation $|V(\kappa)|^2$</div>
+        <div class="math">$$P(k)=\bigl|V[k]\bigr|^2,\qquad \kappa\in[0,N)\ \text{continuous}$$</div></div>
+      <div class="eq"><div class="cap"><b>Clean-tone condition</b> — a 1:2:4:8 ramp is a single frequency</div>
+        <div class="math">$$\varphi_j=\alpha\,2^{\,j}\;\Rightarrow\;\theta(x)=\alpha x\;\Rightarrow\;\text{peak at }k=\frac{\alpha N}{2\pi}$$</div></div>
+      <div class="eq"><div class="cap"><b>Leak law</b> — cost of detuning qubit $j$ by $\delta_j$</div>
+        <div class="math">$$P_{\text{peak}}=\prod_{j=0}^{n-1}\cos^2\!\Bigl(\tfrac{\delta_j}{2}\Bigr)$$</div></div>
+      <div class="eq"><div class="cap"><b>Periodicity</b> — why the curve rises again on the right</div>
+        <div class="math">$$V[k+N]=V[k]\quad\Longleftrightarrow\quad |k\rangle\ \text{and}\ |k+N\rangle\ \text{label the same bin}$$</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const TAU=Math.PI*2;
+const S = { n:8, phi:[0,0,0,0,0,0,0,0], shotsIdx:0, sampleCounts:null, sampleTotal:0 };
+const SHOT_TABLE=[0,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288,1048576,2097152,4194304,8388608];
+
+const wrap=a=>{a=((a+Math.PI)%TAU+TAU)%TAU-Math.PI;return a;};
+function fmtPi(v){
+  const r=v/Math.PI,near=(a,b)=>Math.abs(a-b)<0.01,s=r<0?'−':'';
+  const fr=[[0,'0'],[0.25,'π/4'],[0.5,'π/2'],[0.75,'3π/4'],[1,'π']];
+  for(const[k,t]of fr)if(near(Math.abs(r),k))return k===0?'0':s+t;
+  return v.toFixed(2);
+}
+const N=()=>2**S.n;
+const BAR_CAP=512, KET_CAP=16, SAMP_CAP=4096, STRIP_CAP=220, CURVE_M=1200;
+const w2=j=>2**j;                                  // 2^j, safe past bit 31
+function thetaAt(x){let s=0;for(let j=0;j<S.n;j++){if(Math.floor(x/w2(j))%2===1)s+=S.phi[j];}return s;}
+const bin=(k,n)=>k.toString(2).padStart(n,'0');
+const ket=(k,n)=>'|'+bin(k,n)+'\u27E9';
+
+/* ── physics: closed-form spectrum of a bit-additive-phase flat signal ──
+   P(k) = Π_j cos²((φ_j − 2π·k·2^j / N)/2).  Exact, O(n) per point → works at any n. */
+function specClosed(kappa,N0){let p=1;for(let j=0;j<S.n;j++){const psi=S.phi[j]-TAU*kappa*w2(j)/N0;const c=Math.cos(psi*0.5);p*=c*c;}return p;}
+function compute(){
+  const N0=N(),M=CURVE_M,curve=new Float64Array(M+1);
+  for(let i=0;i<=M;i++)curve[i]=specClosed(i/M*N0,N0);
+  let probs=null;
+  if(N0<=BAR_CAP){probs=new Float64Array(N0);for(let k=0;k<N0;k++)probs[k]=specClosed(k,N0);}
+  // exact peak: refine the curve's argmax to the nearest integer bin
+  let bi=0,bm=-1;for(let i=0;i<=M;i++)if(curve[i]>bm){bm=curve[i];bi=i;}
+  let kpk=Math.round(bi/M*N0)%N0,pk=specClosed(kpk,N0);
+  for(const kk of [kpk-1,kpk+1]){const k2=((kk%N0)+N0)%N0,p2=specClosed(k2,N0);if(p2>pk){pk=p2;kpk=k2;}}
+  return {N0,probs,curve,M,peak:kpk,peakP:pk};
+}
+
+/* ── sampling (only feasible while the full 2^n distribution fits) ── */
+function resample(R){
+  const N0=R.N0,S0=SHOT_TABLE[S.shotsIdx];S.sampleTotal=S0;
+  if(S0===0||!R.probs||N0>SAMP_CAP){S.sampleCounts=null;return;}
+  const cum=new Float64Array(N0);let acc=0;for(let k=0;k<N0;k++){acc+=R.probs[k];cum[k]=acc;}
+  const counts=new Float64Array(N0);
+  for(let s=0;s<S0;s++){const r=Math.random()*acc;let lo=0,hi=N0-1;
+    while(lo<hi){const m=(lo+hi)>>1;if(cum[m]<r)lo=m+1;else hi=m;}counts[lo]++;}
+  S.sampleCounts=counts;
+}
+
+/* ── canvas helpers ── */
+function fit(cv){const dpr=Math.min(devicePixelRatio||1,2),w=cv.clientWidth,h=cv.clientHeight;
+  if(cv.width!==(w*dpr|0)||cv.height!==(h*dpr|0)){cv.width=w*dpr|0;cv.height=h*dpr|0;}
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);return {c,w,h};}
+const phaseHue=p=>{const n=(wrap(p)+Math.PI)/TAU;return `hsl(${(n*340+10)|0} 90% 62%)`;};
+
+function drawMag(R){
+  const {c,w,h}=fit($('cv-mag')),N0=R.N0,m=Math.min(N0,STRIP_CAP),pad=10,bw=(w-pad*2)/m,base=h-22,amp=1/Math.sqrt(N0);
+  c.strokeStyle='rgba(90,130,180,0.10)';c.lineWidth=1;
+  for(let g=0;g<=4;g++){const y=14+(base-14)*g/4;c.beginPath();c.moveTo(pad,y);c.lineTo(w-pad,y);c.stroke();}
+  const bh=(base-14)*0.78;
+  for(let x=0;x<m;x++){const bx=pad+x*bw+bw*0.16,bwid=Math.max(1,bw*0.68);
+    c.fillStyle='rgba(69,211,255,0.32)';c.fillRect(bx,base-bh,bwid,bh);
+    c.fillStyle='rgba(69,211,255,0.85)';c.fillRect(bx,base-bh,bwid,2);}
+  c.fillStyle='rgba(86,100,128,0.9)';c.font="9px 'JetBrains Mono'";c.textAlign='center';
+  c.fillText(N0>m?('all '+N0.toLocaleString()+' equal · '+m+' shown'):'all bars equal — magnitude carries no info',w/2,h-6);
+  $('mag-r').textContent='all = '+(amp>=0.01?amp.toFixed(3):amp.toExponential(1));
+}
+function drawPhase(R){
+  const {c,w,h}=fit($('cv-phase')),N0=R.N0,m=Math.min(N0,STRIP_CAP),pad=10,bw=(w-pad*2)/m,top=14,bot=h-22;
+  const th=new Array(m);
+  for(let i=0;i<m;i++){const x=m<N0?Math.round(i/(m-1)*(N0-1)):i;th[i]=thetaAt(x);}
+  let mn=Infinity,mx=-Infinity;for(let i=0;i<m;i++){mn=Math.min(mn,th[i]);mx=Math.max(mx,th[i]);}
+  if(mx-mn<1e-6){mn-=Math.PI;mx+=Math.PI;}
+  const pad2=(mx-mn)*0.12;mn-=pad2;mx+=pad2;
+  const Y=v=>bot-(v-mn)/(mx-mn)*(bot-top);
+  c.strokeStyle='rgba(90,130,180,0.10)';c.lineWidth=1;
+  for(let g=0;g<=4;g++){const y=top+(bot-top)*g/4;c.beginPath();c.moveTo(pad,y);c.lineTo(w-pad,y);c.stroke();}
+  if(mn<0&&mx>0){c.strokeStyle='rgba(120,170,230,0.25)';c.setLineDash([3,3]);c.beginPath();c.moveTo(pad,Y(0));c.lineTo(w-pad,Y(0));c.stroke();c.setLineDash([]);}
+  c.strokeStyle='rgba(120,170,230,0.30)';c.lineWidth=1.4;c.beginPath();
+  for(let i=0;i<m;i++){const px=pad+i*bw+bw/2,py=Y(th[i]);i?c.lineTo(px,py):c.moveTo(px,py);}c.stroke();
+  const dotR=Math.max(1.4,Math.min(4,bw*0.3));
+  for(let i=0;i<m;i++){const px=pad+i*bw+bw/2,py=Y(th[i]);
+    c.strokeStyle='rgba(120,170,230,0.14)';c.beginPath();c.moveTo(px,bot);c.lineTo(px,py);c.stroke();
+    c.fillStyle=phaseHue(th[i]);c.beginPath();c.arc(px,py,dotR,0,TAU);c.fill();}
+  c.fillStyle='rgba(86,100,128,0.9)';c.font="9px 'JetBrains Mono'";c.textAlign='center';
+  c.fillText('x = 0 … '+(N0-1).toLocaleString()+(m<N0?' · '+m+' sampled':'')+'  (basis index)',w/2,h-6);
+  $('phase-r').textContent='span '+(mx-mn-2*pad2).toFixed(2)+' rad';
+}
+function fmtK(v){return v>=100000?v.toExponential(1):''+Math.round(v);}
+function drawOut(R){
+  const {c,w,h}=fit($('cv-out')),N0=R.N0,padL=12,padR=12,top=16,bot=h-26;
+  const plotW=w-padL-padR;
+  let pmax=0;for(let i=0;i<=R.M;i++)pmax=Math.max(pmax,R.curve[i]);
+  if(R.probs)for(let k=0;k<N0;k++)pmax=Math.max(pmax,R.probs[k]);
+  pmax=Math.max(pmax,1e-9);const yMax=pmax*1.08;
+  const X=k=>padL+(k/N0)*plotW, Y=p=>bot-(p/yMax)*(bot-top);
+  c.strokeStyle='rgba(90,130,180,0.09)';c.lineWidth=1;
+  for(let g=0;g<=4;g++){const y=top+(bot-top)*g/4;c.beginPath();c.moveTo(padL,y);c.lineTo(w-padR,y);c.stroke();}
+  const pred=predBin();if(pred!=null){const gx=X(pred+0.5);c.strokeStyle='rgba(255,182,72,0.35)';c.setLineDash([4,4]);
+    c.beginPath();c.moveTo(gx,top);c.lineTo(gx,bot);c.stroke();c.setLineDash([]);}
+  // smooth continuous spectrum (filled + glow)
+  c.beginPath();c.moveTo(padL,bot);
+  for(let i=0;i<=R.M;i++){const x=padL+(i/R.M)*plotW,y=Y(R.curve[i]);c.lineTo(x,y);}
+  c.lineTo(w-padR,bot);c.closePath();
+  const grad=c.createLinearGradient(0,top,0,bot);grad.addColorStop(0,'rgba(69,211,255,0.30)');grad.addColorStop(1,'rgba(69,211,255,0.02)');
+  c.fillStyle=grad;c.fill();
+  c.shadowColor='rgba(69,211,255,0.55)';c.shadowBlur=9;c.strokeStyle='rgba(120,235,255,0.92)';c.lineWidth=1.6;
+  c.beginPath();for(let i=0;i<=R.M;i++){const x=padL+(i/R.M)*plotW,y=Y(R.curve[i]);i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
+  c.shadowBlur=0;
+  const slot=plotW/N0;
+  if(R.probs){const dots=N0<=64;
+    for(let k=0;k<N0;k++){const cx=X(k)+slot/2,y=Y(R.probs[k]);
+      c.strokeStyle='rgba(255,182,72,0.45)';c.lineWidth=Math.min(1.4,Math.max(0.5,slot*0.5));c.beginPath();c.moveTo(cx,bot);c.lineTo(cx,y);c.stroke();
+      if(dots){c.fillStyle='#ffb648';c.beginPath();c.arc(cx,y,Math.max(2,Math.min(3.5,slot*0.18)),0,TAU);c.fill();}}
+    if(S.sampleCounts){const tot=S.sampleTotal;
+      c.strokeStyle='rgba(255,107,138,0.9)';c.lineWidth=1.3;c.beginPath();
+      for(let k=0;k<N0;k++){const p=S.sampleCounts[k]/tot,x0=X(k)+slot*0.18,x1=X(k)+slot*0.82,y=Y(p);
+        c.moveTo(x0,bot);c.lineTo(x0,y);c.lineTo(x1,y);c.lineTo(x1,bot);}c.stroke();}
+  }else{
+    c.fillStyle='rgba(120,170,230,0.55)';c.font="9px 'JetBrains Mono'";c.textAlign='center';
+    c.fillText('2\u207F = '+N0.toLocaleString()+' bins — too dense to resolve individually; exact continuous spectrum shown',w/2,bot-8);
+  }
+  // periodic-wrap marker
+  c.fillStyle='rgba(120,170,230,0.5)';c.font="8px 'JetBrains Mono'";c.textAlign='right';
+  c.fillText('\u21BB k\u2261'+N0.toLocaleString()+' \u2261 0',w-padR-2,top+11);
+  // axis ticks
+  c.fillStyle='rgba(86,100,128,0.92)';c.textAlign='center';
+  if(N0<=KET_CAP){c.font="8px 'JetBrains Mono'";for(let k=0;k<N0;k++)c.fillText(bin(k,S.n),X(k)+slot/2,h-9);}
+  else{c.font="9px 'JetBrains Mono'";for(let t=0;t<=4;t++)c.fillText(fmtK(t/4*N0),padL+(t/4)*plotW,h-9);}
+  // peak callout
+  const peak=R.peak,pk=R.peakP,px=X(peak)+slot/2,py=Y(pk),left=peak<N0*0.6;
+  const lab=(S.n<=10?ket(peak,S.n):'bin '+peak.toLocaleString())+'  '+(pk*100).toFixed(1)+'%';
+  c.fillStyle='#ffd27a';c.font="600 11px 'JetBrains Mono'";c.textAlign=left?'left':'right';
+  c.fillText(lab,left?px+6:px-6,Math.max(top+13,py-6));
+  c.textAlign='left';c.fillStyle='rgba(86,100,128,0.92)';c.font="9px 'JetBrains Mono'";
+  c.fillText('basis state '+(N0<=KET_CAP?'|b\u2099\u2026b\u2080\u27E9':'bin k')+'  (frequency)',padL,12);
+}
+
+/* ── stats / readouts ── */
+function predBin(){ // peak bin implied by the linear-ramp part of phi (uses phi_0 weight ladder)
+  const a=parseFloat($('alpha').value); // displayed ramp slope
+  if(a<=0)return null; const b=a*N()/TAU; return Math.max(0,Math.min(N()-1,b));
+}
+function updateStats(R){
+  const N0=R.N0,peak=R.peak,pk=R.peakP;
+  let ipr,approx=false;
+  if(R.probs){let s2=0;for(let k=0;k<N0;k++)s2+=R.probs[k]*R.probs[k];ipr=s2>0?1/s2:N0;}
+  else{let s2=0;for(let i=0;i<=R.M;i++)s2+=R.curve[i]*R.curve[i];s2*=N0/R.M;ipr=s2>0?1/s2:N0;approx=true;}
+  $('st-peak').textContent=S.n<=10?ket(peak,S.n):'bin '+peak.toLocaleString();
+  $('st-peak').style.fontSize=S.n>8?'0.7rem':(S.n>5?'0.82rem':(S.n>4?'0.95rem':'1.15rem'));
+  $('st-prob').innerHTML=(pk*100).toFixed(1)+'<small>%</small>';
+  $('st-spread').innerHTML=(approx?'~':'')+ipr.toFixed(ipr<100?1:0)+'<small> bins</small>';
+  const pred=predBin();
+  $('st-pred').textContent=pred==null?'\u2014':(pred>=1e5?pred.toExponential(1):pred.toFixed(2));
+  $('out-r').textContent='peak '+(pk*100).toFixed(1)+'% @ '+(S.n<=10?ket(peak,S.n):'bin '+peak.toLocaleString());
+}
+
+/* ── render ── */
+function render(){const R=compute();
+  const tooBig=R.N0>SAMP_CAP, sl=$('shots');
+  if(sl){sl.disabled=tooBig;sl.style.opacity=tooBig?0.4:1;}
+  $('shots-val').textContent=tooBig?'exact only':(S.shotsIdx===0?'exact':SHOT_TABLE[S.shotsIdx].toLocaleString());
+  if(S.shotsIdx>0)resample(R); // resample each change so the measured histogram tracks the current state
+  drawMag(R);drawPhase(R);drawOut(R);updateStats(R);
+}
+
+/* ── controls ── */
+function buildPhiSliders(){
+  const host=$('phi-sliders');host.innerHTML='';
+  const CH=[['0',0],['π/2',Math.PI/2],['π',Math.PI],['3π/2',3*Math.PI/2],['2π',TAU]];
+  for(let j=0;j<S.n;j++){
+    const chips=CH.map(([lab,v])=>`<button data-j="${j}" data-v="${v}">${lab}</button>`).join('');
+    const d=document.createElement('div');d.className='slider';
+    d.innerHTML=`<div class="head"><span class="k">φ<b>${j}</b> <span class="w">· weight 2<sup>${j}</sup>=${(2**j).toLocaleString()}</span></span><span class="val" id="pv${j}"></span></div>
+      <input type="range" min="-6.2832" max="6.2832" step="0.001" id="ph${j}" value="${S.phi[j]}">
+      <div class="chips" id="ch${j}">${chips}</div>`;
+    host.appendChild(d);
+  }
+  for(let j=0;j<S.n;j++){const sl=$('ph'+j);
+    sl.addEventListener('input',()=>{S.phi[j]=parseFloat(sl.value);clearAlpha();syncPhiLabels();render();});}
+  host.querySelectorAll('.chips button').forEach(b=>b.addEventListener('click',()=>{
+    S.phi[+b.dataset.j]=parseFloat(b.dataset.v);clearAlpha();syncPhiLabels();render();}));
+  syncPhiLabels();
+}
+function clearAlpha(){$('alpha').value=0;$('alpha-val').textContent='0.00';}
+function syncPhiLabels(){for(let j=0;j<S.n;j++){const v=$('pv'+j);if(v)v.textContent=fmtPi(S.phi[j])+'  '+S.phi[j].toFixed(2);
+  const sl=$('ph'+j);if(sl&&document.activeElement!==sl)sl.value=S.phi[j];
+  const ch=$('ch'+j);if(ch){const cur=S.phi[j];ch.querySelectorAll('button').forEach(b=>b.classList.toggle('on',Math.abs(parseFloat(b.dataset.v)-cur)<0.02));}}}
+function setN(n){n=Math.max(1,Math.min(20,n));S.n=n;S.phi=Array.from({length:n},(_,j)=>S.phi[j]||0);
+  $('n-val').firstChild.textContent=n+' ';$('dim-val').textContent='· '+(n<=20?(2**n).toLocaleString():'2^'+n)+' bins';
+  S.sampleCounts=null;buildPhiSliders();render();}
+
+function applyRamp(a){for(let j=0;j<S.n;j++)S.phi[j]=wrap(a*(1<<j));$('alpha').value=a;$('alpha-val').textContent=a.toFixed(2);syncPhiLabels();render();}
+$('alpha').addEventListener('input',e=>applyRamp(parseFloat(e.target.value)));
+
+$('n-minus').onclick=()=>setN(S.n-1);
+$('n-plus').onclick=()=>setN(S.n+1);
+
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{
+  const p=b.dataset.preset,N0=N();
+  if(p==='flat'){S.phi=Array(S.n).fill(0);$('alpha').value=0;$('alpha-val').textContent='0.00';}
+  else if(p==='ramp'){const m=Math.max(1,Math.round(N0*0.31));const a=TAU*m/N0;applyRamp(a);return;}
+  else if(p==='detune'){const m=Math.max(1,Math.round(N0*0.31));const a=TAU*m/N0;
+    for(let j=0;j<S.n;j++)S.phi[j]=wrap(a*(1<<j));S.phi[0]=wrap(S.phi[0]+0.9);$('alpha').value=a;$('alpha-val').textContent=a.toFixed(2);}
+  else if(p==='random'){S.phi=Array.from({length:S.n},()=>(Math.random()*2-1)*Math.PI);$('alpha').value=0;$('alpha-val').textContent='0.00';}
+  syncPhiLabels();render();
+}));
+
+$('shots').addEventListener('input',e=>{S.shotsIdx=+e.target.value;
+  $('shots-val').textContent=S.shotsIdx===0?'exact':SHOT_TABLE[S.shotsIdx].toLocaleString();
+  S.sampleCounts=null;render();});
+$('resample').onclick=()=>{if(S.shotsIdx>0){S.sampleCounts=null;render();}};
+
+window.addEventListener('resize',()=>render());
+setN(8);applyRamp(0);
+if(window.renderMathInElement)renderMathInElement(document.body,{delimiters:[
+  {left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+</script>
+</body>
+</html>
