@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spin Storage // Stella Nova · davesgames.io</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<style>
+/* ── Stella Nova · davesgames.io shared design tokens ── */
+:root{
+  --bg:#0e1118; --bg2:#0a0d14; --panel:rgba(11,16,28,0.72);
+  --border:rgba(150,200,255,0.07); --border-b:rgba(150,200,255,0.18);
+  --ink:#c8d0e0; --bright:#e8ecf4; --dim:#8090b0; --faint:#506080;
+  --blue:#96c8ff; --cyan:#45d3ff; --cyan-d:#5a8cc0; --amber:#ffb948; --rose:#ff6b8a; --green:#64c864;
+  --grid:rgba(90,130,180,0.10); --glow:rgba(69,211,255,0.45); --scan:rgba(0,0,0,0.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:'JetBrains Mono',monospace;height:100%;overflow:hidden}
+body{line-height:1.5;display:flex;flex-direction:column}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.4))}
+::selection{background:rgba(69,211,255,0.25)}
+a{color:var(--cyan)}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:40px;flex-shrink:0;background:rgba(14,17,24,0.94);border-bottom:1px solid var(--border-b);z-index:100}
+.in-frame .topbar{display:none!important}
+.topbar-l{display:flex;align-items:center;gap:1.1rem}
+.sys-name{color:var(--bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.1rem;letter-spacing:0.12em}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.topbar-r{font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--faint)}
+.topbar-r strong{color:var(--cyan-d);font-weight:500}
+
+#main{flex:1;display:flex;min-height:0}
+#panel{width:340px;flex-shrink:0;overflow-y:auto;overflow-x:hidden;border-right:1px solid var(--border-b);
+  background:rgba(9,12,20,0.45);padding:14px 14px 28px;scrollbar-width:thin;scrollbar-color:var(--cyan-d) transparent}
+#panel::-webkit-scrollbar{width:5px}#panel::-webkit-scrollbar-thumb{background:var(--cyan-d);border-radius:3px}
+#panel .card{background:transparent;border:none;border-bottom:1px solid var(--border);border-radius:0;padding:14px 4px;box-shadow:none}
+#panel .card:last-child{border-bottom:none}
+#viz{flex:1;min-width:0;overflow-y:auto;overflow-x:hidden;padding:20px clamp(14px,2.4vw,34px) 48px;
+  scrollbar-width:thin;scrollbar-color:var(--cyan-d) transparent}
+#viz::-webkit-scrollbar{width:7px}#viz::-webkit-scrollbar-thumb{background:var(--cyan-d);border-radius:4px}
+#viz>*{max-width:980px}
+
+header{margin:0 0 18px;border-bottom:1px solid var(--border);padding-bottom:16px}
+.kicker{font-size:0.62rem;letter-spacing:0.42em;text-transform:uppercase;color:var(--cyan-d);font-weight:600}
+h1{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:clamp(1.7rem,3.6vw,2.5rem);
+   letter-spacing:0.01em;line-height:1.04;margin:6px 0 8px;color:var(--bright)}
+h1 em{font-style:italic;color:var(--amber)}
+.sub{color:var(--dim);font-size:0.8rem;max-width:64ch}
+.sub b{color:var(--ink);font-weight:600}
+
+.card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 17px}
+.card + .card{margin-top:16px}
+.lbl{font-size:0.66rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--cyan);font-weight:600;margin-bottom:11px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.lbl .tag{color:var(--faint);font-weight:400;letter-spacing:0.04em;text-transform:none;font-size:0.62rem}
+
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.row .name{font-size:0.72rem;color:var(--dim)}
+.stepper{display:flex;align-items:center;gap:2px;border:1px solid var(--border-b);border-radius:7px;overflow:hidden}
+.stepper button{width:30px;height:30px;background:transparent;border:none;color:var(--cyan);font-family:inherit;font-size:1rem;cursor:pointer;transition:background .12s}
+.stepper button:hover{background:rgba(69,211,255,0.12)}
+.stepper .v{min-width:78px;text-align:center;font-weight:700;color:var(--ink);font-size:0.82rem}
+.stepper .v small{color:var(--faint);font-weight:500;font-size:0.62rem}
+
+.slider{margin-bottom:11px}
+.slider .head{display:flex;justify-content:space-between;align-items:baseline;font-size:0.66rem;margin-bottom:5px}
+.slider .head .k{color:var(--dim)} .slider .head .k b{color:var(--ink);font-weight:600}
+.slider .head .val{color:var(--amber);font-weight:600;font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:3px;background:linear-gradient(90deg,var(--cyan-d),rgba(120,170,230,0.18));outline:none;cursor:ew-resize}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--cyan);box-shadow:0 0 9px var(--glow);border:2px solid #081019;cursor:ew-resize}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--cyan);border:2px solid #081019}
+input[type=range].amber{background:linear-gradient(90deg,#a06410,rgba(255,182,72,0.18))}
+input[type=range].amber::-webkit-slider-thumb{background:var(--amber);box-shadow:0 0 9px rgba(255,182,72,0.5)}
+input[type=range].amber::-moz-range-thumb{background:var(--amber)}
+
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.btns button{flex:1;min-width:58px;background:transparent;border:1px solid var(--border-b);color:var(--dim);font-family:inherit;font-size:0.6rem;letter-spacing:0.04em;padding:8px 6px;border-radius:6px;cursor:pointer;transition:all .13s;text-transform:uppercase;font-weight:600}
+.btns button:hover{color:var(--ink);border-color:var(--cyan-d);background:rgba(69,211,255,0.07)}
+.btns button.amber:hover{border-color:var(--amber);background:rgba(255,182,72,0.07)}
+.btns button.go{flex-basis:100%;color:var(--cyan);border-color:var(--cyan-d);background:rgba(69,211,255,0.08);padding:10px}
+.btns button.go:hover{background:rgba(69,211,255,0.16);color:var(--bright)}
+
+.tone{border:1px solid var(--border);border-radius:9px;padding:10px 11px 4px;margin-bottom:9px;position:relative}
+.tone.off{opacity:0.4}
+.tone .thead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.tone .thead .tn{font-size:0.64rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--amber);font-weight:600}
+.tone .toggle{width:30px;height:16px;border-radius:9px;border:1px solid var(--border-b);background:transparent;cursor:pointer;position:relative;transition:all .15s}
+.tone .toggle::after{content:'';position:absolute;top:1px;left:1px;width:12px;height:12px;border-radius:50%;background:var(--faint);transition:all .15s}
+.tone.on .toggle{background:rgba(69,211,255,0.25);border-color:var(--cyan)}
+.tone.on .toggle::after{left:15px;background:var(--cyan)}
+
+.toggle-row{display:flex;align-items:center;justify-content:space-between;font-size:0.7rem;color:var(--dim);margin-bottom:10px}
+.sw{width:34px;height:18px;border-radius:10px;border:1px solid var(--border-b);background:transparent;cursor:pointer;position:relative;transition:all .15s;flex-shrink:0}
+.sw::after{content:'';position:absolute;top:1px;left:1px;width:14px;height:14px;border-radius:50%;background:var(--faint);transition:all .15s}
+.sw.on{background:rgba(100,200,100,0.25);border-color:var(--green)}
+.sw.on::after{left:17px;background:var(--green)}
+
+.note{font-size:0.66rem;color:var(--faint);line-height:1.55;margin-top:10px;border-top:1px solid var(--border);padding-top:9px}
+.note b{color:var(--dim);font-weight:600}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:13px}
+.stat{background:rgba(9,13,22,0.6);border:1px solid var(--border);border-radius:9px;padding:9px 11px}
+.stat .n{font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
+.stat .v{font-size:1.05rem;color:var(--bright);font-weight:600;font-variant-numeric:tabular-nums}
+.stat .v small{font-size:0.6rem;color:var(--dim);font-weight:400}
+.stat.good .v{color:var(--green)} .stat.bad .v{color:var(--rose)}
+
+canvas.viz{width:100%;display:block;border-radius:9px;background:rgba(7,10,17,0.55);border:1px solid var(--border)}
+
+/* recovered spin-state dials */
+#phi-out{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px}
+.dial{display:flex;flex-direction:column;align-items:center;gap:2px;width:46px}
+.dial svg{width:34px;height:34px}
+.dial .dv{font-size:0.54rem;color:var(--amber);font-variant-numeric:tabular-nums}
+.dial .dj{font-size:0.52rem;color:var(--faint)}
+
+.eq{margin:9px 0;padding:9px 12px;background:rgba(9,13,22,0.5);border-left:2px solid var(--cyan-d);border-radius:0 7px 7px 0}
+.eq .cap{font-size:0.66rem;color:var(--dim);margin-bottom:5px} .eq .cap b{color:var(--ink)}
+.eq .math{overflow-x:auto;overflow-y:hidden}
+.explain{font-size:0.78rem;color:var(--dim);line-height:1.7} .explain b{color:var(--ink)} .explain em{color:var(--amber);font-style:normal}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:0.64rem;color:var(--dim);margin:9px 0 2px}
+.legend i{display:inline-block;width:16px;height:0;border-top-width:2px;border-top-style:solid;margin-right:5px;vertical-align:middle}
+
+@media(max-width:760px){
+  html,body{overflow:auto}
+  #main{flex-direction:column;min-height:0}
+  #panel{width:auto;border-right:none;border-bottom:1px solid var(--border-b);overflow:visible}
+  #viz{overflow:visible}
+}
+
+#payload{width:100%;background:rgba(7,10,17,0.7);border:1px solid var(--border-b);border-radius:8px;color:var(--ink);
+  font-family:inherit;font-size:0.78rem;padding:9px 10px;resize:vertical;outline:none}
+#payload:focus{border-color:var(--cyan-d)}
+.cap{margin-top:10px} .capbar{height:6px;background:rgba(7,10,17,0.8);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+#capfill{height:100%;background:var(--green);transition:width .2s,background .2s}
+.capnum{font-size:0.6rem;color:var(--faint);margin-top:5px;font-variant-numeric:tabular-nums}
+#dials{display:flex;flex-wrap:wrap;gap:9px}
+.rt{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
+.rtlab{font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--faint);padding-top:3px;flex-shrink:0}
+.rtval{font-size:0.82rem;color:var(--bright);background:rgba(7,10,17,0.6);border:1px solid var(--border);border-radius:7px;padding:7px 10px;word-break:break-word;flex:1;min-height:1.4em}
+.badge{font-size:0.68rem;padding:8px 11px;border-radius:7px;font-weight:600}
+.badge.ok{color:var(--green);background:rgba(100,200,100,0.1);border:1px solid rgba(100,200,100,0.3)}
+.badge.warn{color:var(--rose);background:rgba(255,107,138,0.1);border:1px solid rgba(255,107,138,0.3)}
+</style>
+</head><body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QFT · storage</span></div>
+  <div class="topbar-r">SYS // <strong>SPIN DATA STORE</strong></div>
+</div>
+
+<div id="main">
+  <div id="panel">
+    <div class="card">
+      <div class="lbl">Payload <span class="tag">your data</span></div>
+      <textarea id="payload" rows="3" spellcheck="false">Hello, Stella Nova!</textarea>
+      <div class="cap"><div class="capbar"><div id="capfill"></div></div><div class="capnum" id="capnum"></div>
+        <div class="capnum" id="holevo" style="color:var(--amber)"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Register <span class="tag">storage medium</span></div>
+      <div class="row">
+        <span class="name">qubits&nbsp;<b style="color:var(--ink)">n</b></span>
+        <div class="stepper"><button id="n-minus">−</button><span class="v" id="n-val">10</span><button id="n-plus">+</button></div>
+      </div>
+      <div class="slider"><div class="head"><span class="k">bits / angle <b>B</b></span><span class="val" id="b-val">8</span></div>
+        <input type="range" class="amber" id="bits" min="4" max="12" step="1" value="8"></div>
+      <div class="toggle-row"><span>amplitude axis too (θ)</span><button class="sw on" id="ampmode"></button></div>
+      <div class="note" id="reg-note"></div>
+    </div>
+  </div>
+
+  <div id="viz">
+    <header>
+      <div class="kicker">Lossless encode · spin rotations → bits → spin rotations</div>
+      <h1>Store data in <em>the angles</em></h1>
+      <p class="sub">The honest way to use spin states as memory: write your bytes straight into the rotation angles each qubit actually controls, then read them back. n qubits give <b>2n real dials</b> (a θ and φ each); quantize each to B bits and you have a clean, exact <b>2nB-bit</b> register. No synthesis, no fitting, no loss — the data lives where the hardware lives.</p>
+    </header>
+
+    <div class="card">
+      <div class="lbl">① Register state <span class="tag" id="slots-tag"></span></div>
+      <div id="dials"></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">② Round trip <span class="tag">decode the angles back</span></div>
+      <div class="rt"><div class="rtlab">decoded</div><div class="rtval" id="decoded"></div></div>
+      <div id="match"></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">③ The waveform your bytes make <span class="tag">spectrum of the stored state</span></div>
+      <canvas class="viz" id="cv-wave" height="170"></canvas>
+      <div class="note">A fun aside: this is the power spectrum the stored rotations happen to produce. It carries no meaning — it's just what your data looks like as a quantum signal. The <b>meaning</b> is in the angles, recovered exactly above; the curve is a derived shadow.</div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">What you're watching</div>
+      <div class="explain">You're storing bits in the <b>degrees of freedom the device controls</b> — 2 angles per qubit — and decoding them exactly. This is the opposite of the trap from the synthesis pages: there we tried to cram a 2ⁿ-sample <em>curve</em> into 2n knobs (a lossy 2ⁿ→2n squeeze that can never be exact). Here we store exactly <b>2nB bits</b>, matched to the 2n dials, and read them straight back. Capacity scales <b>linearly</b> with qubits, decode is trivial, fidelity is perfect. If you wanted to store a full 2ⁿ-amplitude vector instead, you'd need an entangling write circuit and full state tomography to read — exponential, and not what you want for a dummy data channel.<br><br><b>The catch that matters:</b> the 2nB figure is a property of this <b>classical simulator</b>, which reads the float angles back perfectly. On a real device you can't read an angle — a measurement returns one bit per qubit and destroys the state, and no-cloning forbids copying it. <b>Holevo's theorem (1973)</b> caps what's retrievable from n qubits at exactly <b>n classical bits</b>, no matter how finely you slice the angles. So as a simulator data structure this is a fancy float array; as a claim about quantum storage, the ceiling is n bits.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const TAU=Math.PI*2;
+const S={ n:10, bits:8, amp:true, payload:'Hello, Stella Nova!' };
+const slotsPerQ=()=>S.amp?2:1;
+const numSlots=()=>S.n*slotsPerQ();
+const capBytes=()=>Math.floor(numSlots()*S.bits/8);
+
+/* build the flat slot list: for amp → [θ0,φ0,θ1,φ1,…]; phase → [φ0,φ1,…] */
+function slotList(){const L=[];for(let j=0;j<S.n;j++){if(S.amp)L.push({type:'t',q:j});L.push({type:'p',q:j});}return L;}
+const stepFor=t=>(t==='t'?Math.PI/2:TAU)/(2**S.bits);
+
+let STATE={th:[],ph:[],storedBytes:0,truncated:false};
+
+function encode(){
+  const bytes=new TextEncoder().encode(S.payload);
+  const cap=capBytes(),truncated=bytes.length>cap,used=Math.min(bytes.length,cap);
+  // bitstream (MSB first per byte)
+  const bits=[];for(let i=0;i<used;i++)for(let b=7;b>=0;b--)bits.push((bytes[i]>>b)&1);
+  const slots=slotList();while(bits.length<slots.length*S.bits)bits.push(0);
+  const th=Array(S.n).fill(S.amp?0:Math.PI/2), ph=Array(S.n).fill(0);
+  slots.forEach((s,si)=>{let lvl=0;for(let b=0;b<S.bits;b++)lvl=(lvl<<1)|bits[si*S.bits+b];
+    const ang=lvl*stepFor(s.type);if(s.type==='t')th[s.q]=ang;else ph[s.q]=ang;});
+  STATE={th,ph,storedBytes:used,truncated};
+}
+function decode(){
+  const slots=slotList(),bits=[];
+  slots.forEach(s=>{const ang=(s.type==='t'?STATE.th[s.q]:STATE.ph[s.q]);
+    let lvl=Math.round(ang/stepFor(s.type));lvl=Math.max(0,Math.min(2**S.bits-1,lvl));
+    for(let b=S.bits-1;b>=0;b--)bits.push((lvl>>b)&1);});
+  const out=new Uint8Array(STATE.storedBytes);
+  for(let i=0;i<STATE.storedBytes;i++){let v=0;for(let b=0;b<8;b++)v=(v<<1)|bits[i*8+b];out[i]=v;}
+  return new TextDecoder().decode(out);
+}
+
+/* ── render ── */
+function render(){
+  encode();
+  $('n-val').textContent=S.n;$('b-val').textContent=S.bits;$('ampmode').classList.toggle('on',S.amp);
+  const cap=capBytes(),used=STATE.storedBytes;
+  $('capnum').textContent=used+' / '+cap+' bytes  ·  '+numSlots()+'×'+S.bits+' = '+(numSlots()*S.bits)+' bits';
+  $('capfill').style.width=Math.min(100,cap?used/cap*100:0)+'%';
+  $('holevo').innerHTML='simulator: '+(numSlots()*S.bits)+' bits · real hardware (Holevo): only <b>'+S.n+'</b> bits retrievable';
+  $('capfill').style.background=STATE.truncated?'var(--rose)':'var(--green)';
+  $('reg-note').innerHTML=`<b>${numSlots()}</b> angle dials × <b>${S.bits}</b> bits = <b>${numSlots()*S.bits}</b> bits (${cap} bytes). `+(S.amp?'Each qubit carries a θ and a φ.':'Phase only — one φ per qubit.');
+  $('slots-tag').textContent=numSlots()+' dials';
+  buildDials();
+  const dec=decode();
+  $('decoded').textContent=dec||'∅';
+  const exact=dec===S.payload;
+  $('match').className='badge '+(exact?'ok':'warn');
+  $('match').innerHTML=exact?'✓ exact round-trip — bytes recovered with zero loss'
+    :(STATE.truncated?'✗ payload exceeds capacity — '+(S.payload.length-cap)+' byte(s) dropped. Add qubits or bits.':'✗ mismatch');
+  drawWave();
+}
+function buildDials(){const host=$('dials');host.innerHTML='';
+  for(let j=0;j<S.n;j++){const th=STATE.th[j],ph=STATE.ph[j];
+    const r=13*Math.sin(th), ex=17+r*Math.cos(ph-Math.PI/2), ey=17+r*Math.sin(ph-Math.PI/2);
+    const d=document.createElement('div');d.className='dial';
+    d.innerHTML=`<svg viewBox="0 0 34 34">
+      <circle cx="17" cy="17" r="13" fill="none" stroke="rgba(150,200,255,0.16)" stroke-width="1.2"/>
+      <ellipse cx="17" cy="17" rx="13" ry="${(13*Math.cos(th)).toFixed(1)}" fill="none" stroke="rgba(150,200,255,0.10)" stroke-width="1"/>
+      <line x1="17" y1="17" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="#45d3ff" stroke-width="1.8" stroke-linecap="round"/>
+      <circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="2" fill="#ffb948"/></svg>
+      <span class="dj">q${j}</span>`;
+    host.appendChild(d);}
+}
+function drawWave(){const cv=$('cv-wave'),dpr=Math.min(devicePixelRatio||1,2),w=cv.clientWidth,h=cv.clientHeight;
+  if(cv.width!==(w*dpr|0)||cv.height!==(h*dpr|0)){cv.width=w*dpr|0;cv.height=h*dpr|0;}
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);
+  const N0=2**S.n,M=420,padL=10,padR=10,top=10,bot=h-18,plotW=w-padL-padR;
+  const spec=k=>{let p=1;for(let j=0;j<S.n;j++){const w2=TAU*2**j/N0;p*=1+Math.sin(2*STATE.th[j])*Math.cos(STATE.ph[j]-w2*k);}return p/N0;};
+  let mx=1e-12;const P=new Float64Array(M+1);for(let i=0;i<=M;i++){P[i]=spec(i/M*N0);mx=Math.max(mx,P[i]);}
+  const X=i=>padL+(i/M)*plotW,Y=v=>bot-(v/mx)*(bot-top);
+  c.strokeStyle='rgba(90,130,180,0.09)';c.lineWidth=1;for(let g=0;g<=3;g++){const y=top+(bot-top)*g/3;c.beginPath();c.moveTo(padL,y);c.lineTo(w-padR,y);c.stroke();}
+  c.beginPath();c.moveTo(padL,bot);for(let i=0;i<=M;i++)c.lineTo(X(i),Y(P[i]));c.lineTo(w-padR,bot);c.closePath();
+  const grad=c.createLinearGradient(0,top,0,bot);grad.addColorStop(0,'rgba(168,156,255,0.30)');grad.addColorStop(1,'rgba(168,156,255,0.02)');c.fillStyle=grad;c.fill();
+  c.strokeStyle='rgba(168,156,255,0.9)';c.lineWidth=1.4;c.beginPath();for(let i=0;i<=M;i++){const x=X(i),y=Y(P[i]);i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
+  c.fillStyle='rgba(86,100,128,0.9)';c.font="9px 'JetBrains Mono'";c.textAlign='left';c.fillText('frequency k/N',padL,h-5);
+}
+
+/* ── controls ── */
+$('payload').addEventListener('input',e=>{S.payload=e.target.value;render();});
+$('bits').addEventListener('input',e=>{S.bits=+e.target.value;render();});
+$('ampmode').onclick=()=>{S.amp=!S.amp;render();};
+$('n-minus').onclick=()=>{S.n=Math.max(1,S.n-1);render();};
+$('n-plus').onclick=()=>{S.n=Math.min(20,S.n+1);render();};
+window.addEventListener('resize',drawWave);
+render();
+</script>
+</body>
+</html>
