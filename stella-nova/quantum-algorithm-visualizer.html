@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>QAVE · ρ(t) // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<style>
+:root{--bg:#0e1118;--surface2:#243040;--border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.18);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.05);--cyan:#45d3ff;--amber:#ffb948;
+  --yellow:#ffc832;--green:#64c864;--red:#e05050;--text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);--panel-w:300px;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.4))}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:42px;flex-shrink:0;background:rgba(14,17,24,0.94);border-bottom:1px solid var(--border-b);z-index:100}
+.in-frame .topbar{display:none!important}
+.topbar-l{display:flex;align-items:center;gap:1.2rem}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.15rem;letter-spacing:0.12em}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.64rem;letter-spacing:0.14em;text-transform:uppercase}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.topbar-r{font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint)}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
+#main{display:flex;flex:1;min-height:0;position:relative;z-index:1}
+#panel{width:var(--panel-w);flex-shrink:0;background:rgba(9,12,20,0.96);border-right:1px solid var(--border-b);display:flex;flex-direction:column;overflow:hidden;user-select:none;z-index:10}
+.p-body{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent}
+.p-body::-webkit-scrollbar{width:4px}.p-body::-webkit-scrollbar-thumb{background:var(--surface2)}
+.p-section{padding:12px 14px 14px;border-bottom:1px solid var(--border)}
+.p-sec-lbl{font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--blue-dim);font-weight:600;margin-bottom:9px;display:flex;align-items:center;gap:8px}
+.p-sec-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
+.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.preset-btn,.mode-btn,.view-btn{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);padding:9px 4px;font-family:'JetBrains Mono',monospace;font-size:0.66rem;cursor:pointer;transition:all .14s;text-align:center;font-weight:500;letter-spacing:0.04em}
+.preset-btn:hover,.mode-btn:hover,.view-btn:hover{color:var(--text);border-color:rgba(150,200,255,0.3);background:var(--blue-faint)}
+.preset-btn.active,.mode-btn.active,.view-btn.active{background:rgba(150,200,255,0.1);border-color:rgba(150,200,255,0.4);color:var(--blue)}
+.view-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
+.gate-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.gate-btn{background:transparent;border:1px solid var(--border-b);color:var(--cyan);padding:8px 2px;font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:600;cursor:pointer;transition:all .12s;text-align:center}
+.gate-btn:hover{border-color:var(--cyan);background:rgba(69,211,255,0.08)}
+.gate-btn.two{color:var(--amber);border-color:rgba(255,185,72,0.25)}
+.gate-btn.two:hover{border-color:var(--amber);background:rgba(255,185,72,0.08)}
+.qrow{display:flex;align-items:center;gap:6px;margin-bottom:7px}
+.qrow-lbl{font-size:0.6rem;color:var(--text-dim);width:56px;flex-shrink:0;letter-spacing:0.06em;text-transform:uppercase;font-weight:500}
+.stepper{display:flex;align-items:center;gap:4px;margin-left:auto}
+.step{width:26px;height:26px;background:transparent;border:1px solid var(--border-b);color:var(--text);font-size:1rem;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s}
+.step:hover{border-color:var(--blue);color:var(--blue);background:rgba(150,200,255,0.08)}
+.stepval{min-width:24px;text-align:center;font-size:0.82rem;font-weight:700;color:var(--text-bright);font-variant-numeric:tabular-nums}
+input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));border-radius:2px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);cursor:pointer;box-shadow:0 0 4px rgba(150,200,255,0.3)}
+input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim)}
+.val{min-width:30px;text-align:right;font-size:0.64rem;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums;flex-shrink:0}
+.gate-list{display:flex;flex-direction:column;gap:3px;max-height:110px;overflow-y:auto;scrollbar-width:thin}
+.gate-list::-webkit-scrollbar{width:3px}.gate-list::-webkit-scrollbar-thumb{background:var(--surface2)}
+.gate-item{display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(150,200,255,0.03);border:1px solid var(--border);font-size:0.64rem}
+.gate-item .gi-idx{color:var(--text-faint);width:18px}.gate-item .gi-name{color:var(--text-bright);font-weight:600;flex:1}
+.gate-item .gi-q{color:var(--blue-dim)}.gate-item .gi-del{background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:0.7rem;padding:0 2px}
+.gate-item .gi-del:hover{color:var(--red)}.gate-empty{font-size:0.62rem;color:var(--text-faint);text-align:center;padding:10px}
+.sim-btns{display:flex;gap:4px;flex-wrap:wrap}
+.sim-btn{flex:1;min-width:58px;padding:8px 4px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;transition:all .15s;text-align:center;font-weight:600}
+.sim-btn:hover{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
+.sim-btn.active{background:rgba(150,200,255,0.1);border-color:rgba(150,200,255,0.4);color:var(--blue)}
+.sim-btn.warn{border-color:rgba(255,200,50,0.3);color:var(--yellow)}
+.tog-btn{display:flex;align-items:center;gap:6px;width:100%;padding:7px 9px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.6rem;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all .15s;text-align:left;font-weight:500;margin-bottom:4px}
+.tog-btn:hover{border-color:rgba(150,200,255,0.3);color:var(--text);background:var(--blue-faint)}
+.tog-btn.on{background:rgba(150,200,255,0.08);border-color:rgba(150,200,255,0.35);color:var(--blue)}
+.mode-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px}
+.cmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+#curve-cv{display:block;width:100%;height:128px;background:#0a0e16;border:1px solid var(--border-b);border-radius:5px;cursor:crosshair;touch-action:none}
+.curve-reset{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.52rem;letter-spacing:0.06em;text-transform:uppercase;padding:3px 9px;border-radius:4px;cursor:pointer}
+.curve-reset:hover{border-color:var(--blue-dim);color:var(--blue)}
+.curve-hint{font-size:0.5rem;color:var(--text-faint);letter-spacing:0.04em;margin-top:4px}
+.cmap-btn{position:relative;padding:0;height:32px;border:2px solid var(--border-b);border-radius:4px;cursor:pointer;overflow:hidden;transition:all .15s;background:transparent}
+.cmap-btn canvas{display:block;width:100%;height:100%;pointer-events:none}
+.cmap-btn .cmap-label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:0.55rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,0.95),0 0 6px rgba(0,0,0,0.8);pointer-events:none}
+.cmap-btn.active{border-color:var(--blue);box-shadow:0 0 10px rgba(150,200,255,0.3)}.cmap-btn:hover{border-color:rgba(150,200,255,0.5)}
+.shape-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:4px}
+.shape-grid .mode-btn{font-size:1rem;padding:7px 4px}
+.bg-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.bg-sw{height:28px;border:2px solid var(--border-b);border-radius:4px;cursor:pointer;transition:all .15s;padding:0}
+.bg-sw.active{border-color:var(--blue);box-shadow:0 0 8px rgba(150,200,255,0.35)}.bg-sw:hover{border-color:rgba(150,200,255,0.55)}
+#canvas-wrap{flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;background:#0a0d14;display:flex;flex-direction:column}
+#gl-host{flex:1;position:relative;min-height:0}
+#gl{display:block;width:100%;height:100%;cursor:grab}#gl:active{cursor:grabbing}
+/* ── prominent circuit dock (top) ── */
+#circuit-dock{flex-shrink:0;background:linear-gradient(180deg,rgba(13,19,33,0.98),rgba(9,12,20,0.98));border-bottom:1px solid var(--border-b);padding:9px 13px 7px;z-index:30}
+#cd-head{display:flex;align-items:center;gap:13px}
+#cd-head .cd-title{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.5rem;color:var(--text-bright);line-height:1}
+#cd-head #hud-step{font-size:0.56rem;letter-spacing:0.13em;text-transform:uppercase;color:var(--text-dim);white-space:nowrap}
+#cd-head #hud-step b{color:var(--yellow);font-weight:600}
+#cd-views{margin-left:auto;display:flex;gap:7px}
+.dock-view{background:transparent;border:1px solid var(--border-b);color:var(--text-dim);padding:9px 18px;font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:600;letter-spacing:0.07em;cursor:pointer;border-radius:5px;transition:all .14s}
+.dock-view:hover{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
+.dock-view.active{background:rgba(150,200,255,0.15);border-color:rgba(150,200,255,0.55);color:var(--blue);box-shadow:0 0 12px rgba(150,200,255,0.12)}
+#cd-qiskit-btn{background:transparent;border:1px solid rgba(255,200,50,0.35);color:var(--yellow);padding:9px 13px;font-family:'JetBrains Mono',monospace;font-size:0.66rem;font-weight:600;letter-spacing:0.06em;cursor:pointer;border-radius:5px}
+#cd-qiskit-btn:hover{background:rgba(255,200,50,0.1)}
+#cd-qiskit-btn.on{background:rgba(255,200,50,0.16);color:var(--yellow)}
+#circuit-frame{position:relative;margin-top:7px}
+#circuit-scroll{overflow-x:auto;overflow-y:hidden;background:rgba(6,10,18,0.55);border:1px solid var(--border);border-radius:5px;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:var(--blue-dim) transparent}
+#circuit-scroll::-webkit-scrollbar{height:7px}#circuit-scroll::-webkit-scrollbar-thumb{background:var(--blue-dim);border-radius:4px}#circuit-scroll::-webkit-scrollbar-track{background:transparent}
+#circuit-canvas{display:block;height:128px;touch-action:none;cursor:ew-resize}
+#cgutter{position:absolute;left:1px;top:1px;height:128px;width:30px;pointer-events:none;border-radius:5px 0 0 5px}
+#cd-sliders{margin-top:8px;display:flex;flex-direction:column;gap:7px}
+.cd-srow{display:flex;align-items:center;gap:10px;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-dim)}
+.cd-srow>span:first-child{min-width:48px}
+.cd-srow input[type=range]{flex:1}
+.cd-srow .val{color:var(--blue);min-width:40px;text-align:right}
+.cd-heatrow{margin-top:5px;padding-top:9px;border-top:1px solid var(--border);color:var(--yellow)}
+.cd-heatrow .val{color:var(--yellow)}
+.cd-heatrow input[type=range]{--pct-color:var(--yellow)}
+#cd-transport{display:flex;gap:6px;margin-top:8px}
+.cd-tbtn{flex:1;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);padding:8px 4px;font-family:'JetBrains Mono',monospace;font-size:0.66rem;font-weight:600;letter-spacing:0.05em;cursor:pointer;border-radius:5px;transition:all .14s}
+.cd-tbtn:hover{border-color:var(--blue-dim);color:var(--blue);background:var(--blue-faint)}
+.cd-tbtn.active{background:rgba(150,200,255,0.14);border-color:rgba(150,200,255,0.5);color:var(--blue)}
+.cd-tbtn.sample{border-color:rgba(255,200,50,0.4);color:var(--yellow)}.cd-tbtn.sample:hover{background:rgba(255,200,50,0.1)}
+#hist-panel{position:absolute;left:12px;right:12px;bottom:14px;height:132px;background:rgba(9,12,20,0.93);border:1px solid var(--border-b);border-radius:6px;backdrop-filter:blur(8px);z-index:40;display:none;padding:8px 10px}
+#hist-panel.show{display:block}
+#hist-head{display:flex;align-items:center;gap:10px;font-size:0.56rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-dim);margin-bottom:4px}
+#hist-head b{color:var(--yellow)}#hist-close{margin-left:auto;cursor:pointer;color:var(--text-faint);border:none;background:none;font-size:0.85rem}
+#hist-canvas{display:block;width:100%;height:96px}
+#qiskit-panel{margin-top:9px;border-top:1px solid var(--border);padding-top:9px}
+#qiskit-panel[hidden]{display:none}
+#qiskit-editor{position:relative;width:100%;height:152px;margin-bottom:2px}
+#qiskit-hl,#qiskit-src{position:absolute;inset:0;margin:0;box-sizing:border-box;width:100%;height:100%;font-family:'JetBrains Mono',monospace;font-size:0.74rem;line-height:1.55;padding:9px;border:1px solid var(--border-b);border-radius:5px;white-space:pre;overflow:auto;tab-size:2;letter-spacing:0}
+#qiskit-hl{background:#0a0e16;color:#cbd8ea;pointer-events:none;z-index:0}
+#qiskit-src{background:transparent;color:transparent;caret-color:var(--cyan);z-index:1;resize:none;outline:none}
+#qiskit-src[readonly]{caret-color:transparent}
+#qiskit-src:focus{border-color:var(--blue-dim)}
+#qiskit-src:not([readonly]){border-color:rgba(255,200,50,0.45)}
+.qk-cmt{color:#5d7a55;font-style:italic}.qk-gate{color:var(--cyan)}.qk-cgate{color:var(--yellow)}.qk-num{color:#9ad0ff}.qk-pi{color:var(--green)}.qk-kw{color:#c79bff}.qk-id{color:#8aa0bf}
+#qiskit-custom{background:rgba(150,200,255,0.12);border:1px solid var(--blue-dim);color:var(--blue);padding:8px 18px;font-family:'JetBrains Mono',monospace;font-size:0.7rem;font-weight:600;letter-spacing:0.06em;cursor:pointer;border-radius:5px}
+#qiskit-custom:hover{background:rgba(150,200,255,0.2)}
+#qiskit-custom[hidden],#qiskit-run[hidden]{display:none}
+#qiskit-bar{display:flex;align-items:center;gap:12px;margin-top:7px}
+#qiskit-run{background:rgba(100,200,100,0.13);border:1px solid rgba(100,200,100,0.45);color:var(--green);padding:8px 22px;font-family:'JetBrains Mono',monospace;font-size:0.7rem;font-weight:600;letter-spacing:0.08em;cursor:pointer;border-radius:5px}
+#qiskit-run:hover{background:rgba(100,200,100,0.2)}
+#qiskit-msg{font-size:0.6rem;letter-spacing:0.04em;color:var(--text-faint)}
+#qiskit-msg.err{color:#ff9aa3}#qiskit-msg.ok{color:var(--green)}
+#qiskit-hint{font-size:0.55rem;color:var(--text-faint);margin-left:auto;letter-spacing:0.03em}
+.hud{position:absolute;pointer-events:none;font-family:'JetBrains Mono',monospace}
+.hud-tl{top:12px;left:14px}
+.hud-tl .rho{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.5rem;color:var(--text-bright);letter-spacing:0.04em;line-height:1}
+.hud-tl .sub{font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-dim);margin-top:3px}
+#lens{margin-top:8px;display:block;background:rgba(9,12,20,0.55);border:1px solid var(--border)}
+.hud-tr{top:12px;right:16px;text-align:right;font-size:0.56rem;letter-spacing:0.08em;line-height:1.85;color:var(--text-faint)}
+.hud-tr b{color:var(--blue-dim);font-weight:500}.hud-tr .hi{color:var(--cyan)}
+.hud-bottom{bottom:10px;left:14px;right:16px;font-size:0.55rem;letter-spacing:0.06em;color:var(--text-faint);line-height:1.6;max-width:66%}
+.hud-bottom .tag{color:var(--amber);font-weight:600}
+.legend{position:absolute;bottom:10px;right:16px;display:flex;gap:10px;align-items:center;font-size:0.52rem;letter-spacing:0.08em;text-transform:uppercase;color:var(--text-faint);pointer-events:none}
+#orient-btn{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);z-index:30;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);color:var(--blue);padding:8px 16px;font-family:'JetBrains Mono',monospace;font-size:0.62rem;font-weight:600;letter-spacing:0.07em;cursor:pointer;border-radius:6px;backdrop-filter:blur(8px);transition:all .14s}
+#orient-btn:hover{border-color:var(--blue-dim);background:rgba(150,200,255,0.15);color:var(--cyan)}
+.legend i{display:inline-block;width:54px;height:8px;margin-right:4px;vertical-align:middle}
+#status-bar{height:24px;flex-shrink:0;background:rgba(14,17,24,0.94);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:12px;z-index:50;font-size:0.54rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500}
+#status-bar .sep{width:1px;height:11px;background:var(--border-b)}#status-bar b{color:var(--blue);font-weight:600}
+@media(max-width:599px){:root{--panel-w:0px}
+  #panel{position:fixed;top:0;left:0;bottom:0;width:286px;z-index:300;transform:translateX(-100%);transition:transform .25s ease}
+  #panel.mob-open{transform:translateX(0)}
+  .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:250}
+  #panel.mob-open ~ .mob-overlay{display:block}
+  .hud-tr,.hud-bottom,.legend{display:none}
+  #circuit-canvas,#cgutter{height:96px}#cd-head{flex-wrap:wrap;gap:7px}.dock-view{padding:8px 14px;font-size:0.66rem}
+  #cd-head .cd-title{font-size:1.25rem}#circuit-dock{padding:8px 9px 7px}.cd-srow>span:first-child{min-width:42px;font-size:0.52rem}}
+#mob-btn{display:none;position:fixed;top:6px;left:6px;z-index:200;width:36px;height:36px;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);color:var(--blue);font-size:1.1rem;cursor:pointer;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;backdrop-filter:blur(8px)}
+@media(max-width:599px){#mob-btn{display:flex}}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2)}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QAVE · ρ(t)</span></div>
+  <div class="topbar-r">SYS // <strong>DENSITY MATRIX</strong></div>
+</div>
+<div id="main">
+  <div id="panel"><div class="p-body">
+    <div class="p-section"><div class="p-sec-lbl">Algorithm</div>
+      <div class="preset-grid" id="preset-grid">
+        <button class="preset-btn" data-preset="bell">Bell</button>
+        <button class="preset-btn" data-preset="ghz">GHZ</button>
+        <button class="preset-btn" data-preset="plus">|+⟩ⁿ</button>
+        <button class="preset-btn active" data-preset="qft">QFT</button>
+        <button class="preset-btn" data-preset="iqft">iQFT</button>
+        <button class="preset-btn" data-preset="grover">Grover</button>
+        <button class="preset-btn" data-preset="dj">Deutsch–J</button>
+        <button class="preset-btn" data-preset="bv">Bernstein</button>
+        <button class="preset-btn" data-preset="toffoli">Toffoli</button>
+        <button class="preset-btn" data-preset="kick">Kickback</button>
+        <button class="preset-btn" data-preset="teleport">Teleport</button>
+        <button class="preset-btn" data-preset="scramble">Scramble</button>
+      </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Build</div>
+      <div class="qrow"><span class="qrow-lbl">Qubits</span><div class="stepper"><button class="step" id="q-minus">−</button><span class="stepval" id="q-count">3</span><button class="step" id="q-plus">+</button></div></div>
+      <div class="qrow"><span class="qrow-lbl">Target q</span><div class="stepper"><button class="step" id="t-minus">−</button><span class="stepval" id="t-val">0</span><button class="step" id="t-plus">+</button></div></div>
+      <div class="qrow"><span class="qrow-lbl">Control q</span><div class="stepper"><button class="step" id="c-minus">−</button><span class="stepval" id="c-val">1</span><button class="step" id="c-plus">+</button></div></div>
+      <div class="qrow"><span class="qrow-lbl">Angle θ</span><input type="range" id="sl-angle" min="0" max="6.283" value="1.5708" step="0.0628"><span class="val" id="vl-angle">π/2</span></div>
+      <div class="gate-grid" style="margin-top:8px">
+        <button class="gate-btn" data-g="h">H</button><button class="gate-btn" data-g="x">X</button><button class="gate-btn" data-g="y">Y</button><button class="gate-btn" data-g="z">Z</button>
+        <button class="gate-btn" data-g="s">S</button><button class="gate-btn" data-g="t">T</button><button class="gate-btn" data-g="rx">Rx</button><button class="gate-btn" data-g="ry">Ry</button>
+        <button class="gate-btn" data-g="rz">Rz</button><button class="gate-btn two" data-g="cx">CX</button><button class="gate-btn two" data-g="cz">CZ</button><button class="gate-btn two" data-g="swap">SW</button>
+      </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Sequence</div>
+      <div class="gate-list" id="gate-list"></div>
+      <div class="sim-btns" style="margin-top:8px"><button class="sim-btn" id="btn-measure">⊡ Measure</button><button class="sim-btn warn" id="btn-clear">✕ Clear</button></div></div>
+    <div class="p-section"><div class="p-sec-lbl">ρ Coloring</div>
+      <div class="mode-grid">
+        <button class="mode-btn active" data-cm="mag">|ρ|</button>
+        <button class="mode-btn" data-cm="real">Re(ρ)</button>
+        <button class="mode-btn" data-cm="phase">∠ρ</button>
+      </div>
+      <div class="cmap-grid" id="cmap-grid" style="margin-top:6px">
+        <button class="cmap-btn active" data-cmap="inferno"><canvas></canvas><span class="cmap-label">Inferno</span></button>
+        <button class="cmap-btn" data-cmap="viridis"><canvas></canvas><span class="cmap-label">Viridis</span></button>
+        <button class="cmap-btn" data-cmap="turbo"><canvas></canvas><span class="cmap-label">Turbo</span></button>
+        <button class="cmap-btn" data-cmap="ice"><canvas></canvas><span class="cmap-label">Ice</span></button>
+        <button class="cmap-btn" data-cmap="plasma"><canvas></canvas><span class="cmap-label">Plasma</span></button>
+        <button class="cmap-btn" data-cmap="mono"><canvas></canvas><span class="cmap-label">Mono</span></button>
+      </div>
+      <div style="margin-top:11px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+          <span class="qrow-lbl" style="width:auto">Tone curve</span>
+          <button id="curve-reset" class="curve-reset">reset γ</button>
+        </div>
+        <canvas id="curve-cv" width="252" height="150"></canvas>
+        <div class="curve-hint">input |ρ| → output · drag the point to reshape</div>
+      </div>
+    </div>
+    <div class="p-section"><div class="p-sec-lbl">Shape</div>
+      <div class="shape-grid" id="shape-grid">
+        <button class="mode-btn active" data-shape="round" title="Rounded cube">▢</button>
+        <button class="mode-btn" data-shape="box" title="Sharp box">◻</button>
+        <button class="mode-btn" data-shape="sphere" title="Sphere">●</button>
+        <button class="mode-btn" data-shape="octa" title="Octahedron">◆</button>
+      </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Background</div>
+      <div class="bg-grid" id="bg-grid">
+        <button class="bg-sw" data-bg="navy" title="Navy" style="background:linear-gradient(180deg,#16294d,#05070f)"></button>
+        <button class="bg-sw active" data-bg="black" title="Black" style="background:#000"></button>
+        <button class="bg-sw" data-bg="slate" title="Slate" style="background:#12161e"></button>
+        <button class="bg-sw" data-bg="steel" title="Steel grey" style="background:#2a3340"></button>
+        <button class="bg-sw" data-bg="dusk" title="Dusk" style="background:linear-gradient(180deg,#2a1a3e,#0a0812)"></button>
+        <button class="bg-sw" data-bg="paper" title="Paper (light)" style="background:#e8ecf2"></button>
+      </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Scene</div>
+      <button class="tog-btn" id="tog-full">⬢ Full structure (show all layers)</button>
+      <button class="tog-btn on" id="tog-rotate">⟳ Auto-orbit</button>
+      <button class="tog-btn" id="tog-floor">▦ Floor grid</button>
+      <button class="tog-btn on" id="tog-net">⇌ Shot-stack network</button>
+      <button class="tog-btn on" id="tog-labels">⊞ Basis labels</button></div>
+  </div></div>
+  <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
+  <div id="canvas-wrap">
+    <div id="circuit-dock">
+      <div id="cd-head">
+        <span class="cd-title">ρ(t)</span>
+        <span id="hud-step">step 0/0 · phase —</span>
+        <div id="cd-views">
+          <button class="dock-view active" data-view="stack">▣ LAYER STACK</button>
+          <button class="dock-view" data-view="floor">▦ FLOOR FIELD</button>
+        </div>
+        <button id="cd-qiskit-btn">&lt;/&gt; QISKIT</button>
+      </div>
+      <div id="circuit-frame">
+        <div id="circuit-scroll"><canvas id="circuit-canvas"></canvas></div>
+        <canvas id="cgutter"></canvas>
+      </div>
+      <div id="cd-transport">
+        <button class="cd-tbtn active" id="btn-play">▶ Play</button>
+        <button class="cd-tbtn" id="btn-step">⇥ Step</button>
+        <button class="cd-tbtn" id="btn-restart">↺ Restart</button>
+        <button class="cd-tbtn sample" id="btn-sample">⚲ Sample</button>
+      </div>
+      <div id="cd-sliders">
+        <div class="cd-srow"><span>Scrub</span><input type="range" id="sl-scrub" min="0" max="100" value="0" step="1"><span class="val" id="vl-scrub">0%</span></div>
+        <div class="cd-srow"><span>Speed</span><input type="range" id="sl-speed" min="0.1" max="3" value="2" step="0.1"><span class="val" id="vl-speed">2.0</span></div>
+        <div class="cd-srow"><span>Hold</span><input type="range" id="sl-hold" min="0.1" max="4" value="0.7" step="0.1"><span class="val" id="vl-hold">0.7s</span></div>
+        <div class="cd-srow"><span>Seed</span><input type="range" id="sl-seed" min="0" max="255" value="24" step="1"><span class="val" id="vl-seed">24</span></div>
+        <div class="cd-srow"><span>Shots</span><input type="range" id="sl-shots" min="0" max="4096" value="2048" step="1"><span class="val" id="vl-shots">2048</span></div>
+        <div class="cd-srow"><span>Gap</span><input type="range" id="sl-gap" min="0" max="1.5" value="0.7" step="0.05"><span class="val" id="vl-gap">0.70s</span></div>
+        <div class="cd-srow cd-heatrow"><span>Heat ≥</span><input type="range" id="sl-thresh" min="0" max="1" value="0" step="0.01"><span class="val" id="vl-thresh">0.00</span></div>
+      </div>
+      <div id="qiskit-panel" hidden>
+        <div id="qiskit-editor">
+          <pre id="qiskit-hl" aria-hidden="true"></pre>
+          <textarea id="qiskit-src" spellcheck="false" readonly></textarea>
+        </div>
+        <div id="qiskit-bar">
+          <button id="qiskit-custom">✎ Create custom</button>
+          <button id="qiskit-run" hidden>▶ Run circuit</button>
+          <span id="qiskit-msg">live code for the active algorithm</span>
+          <span id="qiskit-hint">h x y z s t rx ry rz cx cz swap ccx cswap · measure_all() · pi</span>
+        </div>
+      </div>
+    </div>
+    <div id="gl-host">
+      <canvas id="gl"></canvas>
+      <div class="hud hud-tr" id="hud-tr"></div>
+      <div class="hud hud-bottom" id="hud-bottom"></div>
+      <div class="legend" id="legend"></div>
+      <button id="orient-btn">⬍ Vertical stack</button>
+      <div id="hist-panel">
+        <div id="hist-head"><span>Measurement sampling</span><span id="hist-info"></span><button id="hist-close">✕</button></div>
+        <canvas id="hist-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="status-bar">
+  <span id="st-qubits">3 qubits</span><span class="sep"></span>
+  <span id="st-dim">8×8 cells</span><span class="sep"></span>
+  <span id="st-layers">1 layer</span><span class="sep"></span>
+  <span id="st-step">step 0/0</span><span class="sep"></span>
+  <span id="st-outcome">outcome —</span><span class="sep"></span>
+  <span id="st-fps">-- fps</span>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+/* engine */
+// Port of qave_backend/simulator/gates.py
+// Complex matrices represented as 2D arrays of [re, im] pairs.
+// Faithful to the Python definitions: same matrices, same qubit-order conventions.
+
+const SQRT1_2 = Math.SQRT1_2; // 1/sqrt(2)
+class UnsupportedGateError extends Error {}
+
+const c = (re, im = 0) => [re, im];
+
+// Base single-qubit gates (identical to gates.py)
+const I2 = [[c(1), c(0)], [c(0), c(1)]];
+const X  = [[c(0), c(1)], [c(1), c(0)]];
+const Y  = [[c(0), c(0, -1)], [c(0, 1), c(0)]];
+const Z  = [[c(1), c(0)], [c(0), c(-1)]];
+const H  = [[c(SQRT1_2), c(SQRT1_2)], [c(SQRT1_2), c(-SQRT1_2)]];
+const S  = [[c(1), c(0)], [c(0), c(0, 1)]];
+const T  = [[c(1), c(0)], [c(0), c(Math.cos(Math.PI / 4), Math.sin(Math.PI / 4))]];
+const CX = [
+  [c(1), c(0), c(0), c(0)],
+  [c(0), c(1), c(0), c(0)],
+  [c(0), c(0), c(0), c(1)],
+  [c(0), c(0), c(1), c(0)],
+];
+const CZ = [
+  [c(1), c(0), c(0), c(0)],
+  [c(0), c(1), c(0), c(0)],
+  [c(0), c(0), c(1), c(0)],
+  [c(0), c(0), c(0), c(-1)],
+];
+const SWAP = [
+  [c(1), c(0), c(0), c(0)],
+  [c(0), c(0), c(1), c(0)],
+  [c(0), c(1), c(0), c(0)],
+  [c(0), c(0), c(0), c(1)],
+];
+
+function permMatrix(perm) {
+  const n = perm.length;
+  const M = Array.from({ length: n }, () => Array.from({ length: n }, () => c(0)));
+  for (let row = 0; row < n; row++) M[row][perm[row]] = c(1);
+  return M;
+}
+// CCX: identity on 0..5, swap 6<->7 (rows). Matches CCX in gates.py.
+const CCX = permMatrix([0, 1, 2, 3, 4, 5, 7, 6]);
+// CSWAP: identity except swap basis 5<->6. Matches CSWAP in gates.py.
+const CSWAP = permMatrix([0, 1, 2, 3, 4, 6, 5, 7]);
+function rx(theta) {
+  const cc = Math.cos(theta / 2);
+  const ss = Math.sin(theta / 2); // matrix entries are -i*sin
+  return [[c(cc), c(0, -ss)], [c(0, -ss), c(cc)]];
+}
+function ry(theta) {
+  const cc = Math.cos(theta / 2);
+  const ss = Math.sin(theta / 2);
+  return [[c(cc), c(-ss)], [c(ss), c(cc)]];
+}
+function rz(theta) {
+  return [
+    [c(Math.cos(-theta / 2), Math.sin(-theta / 2)), c(0)],
+    [c(0), c(Math.cos(theta / 2), Math.sin(theta / 2))],
+  ];
+}
+
+// Returns { matrix, qubits } for a supported gate, faithful to matrix_for_gate().
+function matrixForGate(gate) {
+  const name = gate.name.toLowerCase();
+  if (gate.kind !== "unitary") {
+    throw new UnsupportedGateError(`Gate kind ${gate.kind} is non-unitary in Backend A`);
+  }
+  const single = { x: X, y: Y, z: Z, h: H, s: S, t: T };
+  const controls = gate.controls || [];
+  const targets = gate.targets || [];
+  const params = gate.params || [];
+
+  if (name in single) {
+    if (controls.length) throw new UnsupportedGateError(`Controlled variant for ${gate.name} unsupported`);
+    if (targets.length !== 1) throw new UnsupportedGateError(`Single-qubit gate ${gate.name} requires one target`);
+    return { matrix: single[name], qubits: [targets[0]] };
+  }
+  if (name === "rx" || name === "ry" || name === "rz") {
+    if (controls.length) throw new UnsupportedGateError(`Controlled rotation ${gate.name} unsupported`);
+    if (targets.length !== 1 || params.length !== 1) throw new UnsupportedGateError(`${gate.name} requires one target and one param`);
+    const m = { rx, ry, rz }[name](params[0]);
+    return { matrix: m, qubits: [targets[0]] };
+  }
+  if (name === "cx" || name === "cz") {
+    if (controls.length !== 1 || targets.length !== 1) throw new UnsupportedGateError(`${gate.name} requires one control and one target`);
+    return { matrix: name === "cx" ? CX : CZ, qubits: [controls[0], targets[0]] };
+  }
+  if (name === "ccx" || name === "toffoli") {
+    if (controls.length !== 2 || targets.length !== 1) throw new UnsupportedGateError(`${gate.name} requires two controls and one target`);
+    return { matrix: CCX, qubits: [controls[0], controls[1], targets[0]] };
+  }
+  if (name === "cswap") {
+    if (controls.length !== 1 || targets.length !== 2) throw new UnsupportedGateError(`cswap requires one control and two targets`);
+    return { matrix: CSWAP, qubits: [controls[0], targets[0], targets[1]] };
+  }
+  if (name === "swap") {
+    if (controls.length) throw new UnsupportedGateError(`SWAP with controls unsupported`);
+    if (targets.length !== 2) throw new UnsupportedGateError(`SWAP requires two targets`);
+    return { matrix: SWAP, qubits: [targets[0], targets[1]] };
+  }
+  throw new UnsupportedGateError(`Unsupported gate ${gate.name}`);
+}
+
+// Port of qave_backend/simulator/statevector_engine.py (core paths)
+// State = { re: Float64Array, im: Float64Array }, little-endian qubit indexing.
+function initializeState(numQubits) {
+  const dim = 1 << numQubits;
+  const re = new Float64Array(dim);
+  const im = new Float64Array(dim);
+  re[0] = 1.0;
+  return { re, im };
+}
+function cloneState(s) {
+  return { re: Float64Array.from(s.re), im: Float64Array.from(s.im) };
+}
+
+// Apply a k-qubit unitary. qubits[0] is the most-significant index of the gate
+// matrix basis, matching Python's axes = [num_qubits-1-q for q in qubits] convention.
+function applyUnitary(state, matrix, qubits, numQubits) {
+  if (!qubits.length) return cloneState(state);
+  const k = qubits.length;
+  const sub = 1 << k;
+
+  // unique check
+  if (new Set(qubits).size !== qubits.length) {
+    throw new Error("Gate qubits must be unique");
+  }
+
+  const dim = 1 << numQubits;
+  const inRe = state.re, inIm = state.im;
+  const outRe = Float64Array.from(inRe);
+  const outIm = Float64Array.from(inIm);
+
+  // bit position in flat index for each sub-index bit b (b=0 is MSB of sub-index)
+  const shiftFor = new Array(k);
+  for (let b = 0; b < k; b++) shiftFor[b] = qubits[b];
+
+  const targetMask = qubits.reduce((m, q) => m | (1 << q), 0);
+
+  // For each flat index that is the "base" (target bits = 0), process the block.
+  for (let base = 0; base < dim; base++) {
+    if ((base & targetMask) !== 0) continue; // only base configurations
+    // gather
+    const gr = new Float64Array(sub);
+    const gi = new Float64Array(sub);
+    const idxOf = new Int32Array(sub);
+    for (let s = 0; s < sub; s++) {
+      let flat = base;
+      for (let b = 0; b < k; b++) {
+        const bit = (s >> (k - 1 - b)) & 1;
+        flat |= bit << shiftFor[b];
+      }
+      idxOf[s] = flat;
+      gr[s] = inRe[flat];
+      gi[s] = inIm[flat];
+    }
+    // matrix-vector: out[r] = sum_tcol M[r][tcol] * g[tcol]
+    for (let r = 0; r < sub; r++) {
+      let accRe = 0.0, accIm = 0.0;
+      const row = matrix[r];
+      for (let tcol = 0; tcol < sub; tcol++) {
+        const mre = row[tcol][0], mim = row[tcol][1];
+        const vre = gr[tcol], vim = gi[tcol];
+        accRe += mre * vre - mim * vim;
+        accIm += mre * vim + mim * vre;
+      }
+      outRe[idxOf[r]] = accRe;
+      outIm[idxOf[r]] = accIm;
+    }
+  }
+  return { re: outRe, im: outIm };
+}
+
+// ---- deterministic state hashing (matches StatevectorEngine.state_hash) ----
+function canonicalizeGlobalPhase(state) {
+  const re = Float64Array.from(state.re);
+  const im = Float64Array.from(state.im);
+  const dim = re.length;
+  for (let i = 0; i < dim; i++) {
+    const mag = Math.hypot(re[i], im[i]);
+    if (mag > 1e-15) {
+      // divide whole vector by w = amplitude/mag  (|w| = 1)
+      const wr = re[i] / mag, wi = im[i] / mag;
+      const denom = wr * wr + wi * wi; // ~1
+      for (let j = 0; j < dim; j++) {
+        const ar = re[j], ai = im[j];
+        // (ar+ai i) / (wr+wi i) = (ar+ai i)(wr-wi i)/denom
+        re[j] = (ar * wr + ai * wi) / denom;
+        im[j] = (ai * wr - ar * wi) / denom;
+      }
+      break;
+    }
+  }
+  return { re, im };
+}
+
+// numpy np.round semantics: rint(x*1e12)/1e12 with round-half-to-even.
+function rintHalfEven(y) {
+  const fl = Math.floor(y);
+  const diff = y - fl;
+  if (diff < 0.5) return fl;
+  if (diff > 0.5) return fl + 1;
+  // exactly .5 -> round to even
+  return (fl % 2 === 0) ? fl : fl + 1;
+}
+function round12(x) {
+  if (!isFinite(x)) return x;
+  const scaled = x * 1e12;
+  const r = rintHalfEven(scaled);
+  return r / 1e12;
+}
+
+// Build the exact byte buffer numpy hashes: column_stack((re,im)) rounded to 12,
+// signed-zero normalized, C-order float64 little-endian -> interleaved [re0,im0,...].
+function canonicalBuffer(state) {
+  const canon = canonicalizeGlobalPhase(state);
+  const dim = canon.re.length;
+  const out = new Float64Array(dim * 2);
+  for (let i = 0; i < dim; i++) {
+    let r = round12(canon.re[i]);
+    let m = round12(canon.im[i]);
+    if (r === 0) r = 0;   // normalize -0 -> 0
+    if (m === 0) m = 0;
+    out[2 * i] = r;
+    out[2 * i + 1] = m;
+  }
+  return out.buffer;
+}
+
+// ---- measurement (exact, deterministic given outcome index) ----
+function measurementProbabilities(state, qubits) {
+  const dim = state.re.length;
+  if (!qubits.length) return Float64Array.from([1.0]);
+  const probs = new Float64Array(1 << qubits.length);
+  for (let i = 0; i < dim; i++) {
+    let outcome = 0;
+    for (let b = 0; b < qubits.length; b++) outcome |= (((i >> qubits[b]) & 1) << b);
+    probs[outcome] += state.re[i] * state.re[i] + state.im[i] * state.im[i];
+  }
+  let total = 0;
+  for (let p of probs) total += p;
+  if (total <= 1e-15) { probs.fill(0); probs[0] = 1; return probs; }
+  for (let i = 0; i < probs.length; i++) probs[i] /= total;
+  return probs;
+}
+function collapseState(state, qubits, outcomeIndex) {
+  if (!qubits.length) return cloneState(state);
+  const dim = state.re.length;
+  const re = new Float64Array(dim);
+  const im = new Float64Array(dim);
+  let norm = 0;
+  for (let i = 0; i < dim; i++) {
+    let outcome = 0;
+    for (let b = 0; b < qubits.length; b++) outcome |= (((i >> qubits[b]) & 1) << b);
+    if (outcome === outcomeIndex) {
+      re[i] = state.re[i]; im[i] = state.im[i];
+      norm += re[i] * re[i] + im[i] * im[i];
+    }
+  }
+  norm = Math.sqrt(norm);
+  if (norm <= 1e-15) return cloneState(state);
+  for (let i = 0; i < dim; i++) { re[i] /= norm; im[i] /= norm; }
+  return { re, im };
+}
+
+// Engine extensions for the QAVE web viewer.
+// Adds: faithful in-gate fractional evolution U^tau, observable extraction,
+// deterministic measurement sampling, and a full trace builder.
+
+
+// ---- fractional gate U^tau (no eigensolver; principal-branch faithful) ----
+
+const INVOLUTIONS = new Set(["x", "y", "z", "h", "cx", "cz", "swap", "ccx", "toffoli", "cswap"]);
+
+function eye(d) {
+  const M = Array.from({ length: d }, (_, i) =>
+    Array.from({ length: d }, (_, j) => [i === j ? 1 : 0, 0]));
+  return M;
+}
+
+// U^tau for an involution (U^2 = I): (I+U)/2 + e^{i pi tau}(I-U)/2
+function involutionPow(U, tau) {
+  const d = U.length;
+  const ang = Math.PI * tau;
+  const er = Math.cos(ang), ei = Math.sin(ang);
+  const out = eye(d);
+  for (let i = 0; i < d; i++) {
+    for (let j = 0; j < d; j++) {
+      const id = i === j ? 1 : 0;
+      const uRe = U[i][j][0], uIm = U[i][j][1];
+      const plusRe = 0.5 * (id + uRe), plusIm = 0.5 * uIm;     // (I+U)/2
+      const minusRe = 0.5 * (id - uRe), minusIm = -0.5 * uIm;  // (I-U)/2
+      // plus + e^{i pi tau} * minus
+      out[i][j][0] = plusRe + (er * minusRe - ei * minusIm);
+      out[i][j][1] = plusIm + (er * minusIm + ei * minusRe);
+    }
+  }
+  return out;
+}
+
+// Returns { matrix: U^tau, qubits } faithful to gate semantics.
+function fractionalGateMatrix(gate, tau) {
+  const name = gate.name.toLowerCase();
+  const { matrix: U, qubits } = matrixForGate(gate);
+  const t = Math.max(0, Math.min(1, tau));
+
+  if (t === 0) return { matrix: eye(U.length), qubits };
+  if (t === 1) return { matrix: U, qubits };
+
+  if (name === "rx") return { matrix: rx(gate.params[0] * t), qubits };
+  if (name === "ry") return { matrix: ry(gate.params[0] * t), qubits };
+  if (name === "rz") return { matrix: rz(gate.params[0] * t), qubits };
+  if (name === "s") return { matrix: [[[1, 0], [0, 0]], [[0, 0], [Math.cos(Math.PI * t / 2), Math.sin(Math.PI * t / 2)]]], qubits };
+  if (name === "t") return { matrix: [[[1, 0], [0, 0]], [[0, 0], [Math.cos(Math.PI * t / 4), Math.sin(Math.PI * t / 4)]]], qubits };
+  if (INVOLUTIONS.has(name)) return { matrix: involutionPow(U, t), qubits };
+
+  // Fallback: linear hold (shouldn't hit for supported set)
+  return { matrix: U, qubits };
+}
+
+// ---- observables ----
+function probabilities(state) {
+  const dim = state.re.length;
+  const p = new Float64Array(dim);
+  for (let i = 0; i < dim; i++) p[i] = state.re[i] * state.re[i] + state.im[i] * state.im[i];
+  return p;
+}
+
+// Single-qubit Bloch vector via partial trace (matches extractor.py conventions).
+function blochVector(state, qubit) {
+  const dim = state.re.length;
+  let rho00 = 0, rho11 = 0, r01re = 0, r01im = 0;
+  for (let i = 0; i < dim; i++) {
+    if ((i >> qubit) & 1) continue; // bit==0 rows
+    const j = i | (1 << qubit);     // matching bit==1
+    rho00 += state.re[i] * state.re[i] + state.im[i] * state.im[i];
+    rho11 += state.re[j] * state.re[j] + state.im[j] * state.im[j];
+    // rho01 = amp_i * conj(amp_j)
+    r01re += state.re[i] * state.re[j] + state.im[i] * state.im[j];
+    r01im += state.im[i] * state.re[j] - state.re[i] * state.im[j];
+  }
+  return { x: 2 * r01re, y: -2 * r01im, z: rho00 - rho11, purity_z: rho00 - rho11 };
+}
+
+// ---- deterministic RNG (mulberry32) ----
+function makeRng(seed) {
+  let a = (seed >>> 0) || 1;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function sampleOutcome(rng, probs) {
+  const u = rng();
+  let acc = 0;
+  for (let i = 0; i < probs.length; i++) { acc += probs[i]; if (u < acc) return i; }
+  return probs.length - 1;
+}
+
+// ---- phase schedule (faithful to statevector_engine._phase_schedule) ----
+const PHASE_RATIOS = { pre_gate: 0.2, apply_gate: 0.55, settle: 0.25 };
+function phaseSchedule(totalSubsteps) {
+  const total = Math.max(6, totalSubsteps);
+  const pre = Math.max(1, Math.round(total * PHASE_RATIOS.pre_gate));
+  const apply = Math.max(2, Math.round(total * PHASE_RATIOS.apply_gate));
+  const settle = Math.max(1, total - pre - apply);
+  const sched = [];
+  for (let i = 0; i < pre; i++) sched.push(["pre_gate", PHASE_RATIOS.pre_gate * (i / pre), 0]);
+  for (let i = 0; i < apply; i++) {
+    const frac = i / Math.max(1, apply - 1);
+    sched.push(["apply_gate", PHASE_RATIOS.pre_gate + PHASE_RATIOS.apply_gate * frac, frac]);
+  }
+  for (let i = 1; i <= settle; i++) {
+    const frac = i / settle;
+    sched.push(["settle", PHASE_RATIOS.pre_gate + PHASE_RATIOS.apply_gate + PHASE_RATIOS.settle * frac, 1]);
+  }
+  return sched;
+}
+
+// ---- trace builder ----
+// circuit: { numQubits, gates: [{name, kind, targets, controls?, params?}] }
+// returns { numQubits, steps, frames } with frames carrying real in-gate states.
+function buildTrace(circuit, { substeps = 24, seed = 42 } = {}) {
+  const N = circuit.numQubits;
+  let state = initializeState(N);
+  const sched = phaseSchedule(substeps);
+  const rng = makeRng(seed);
+
+  const steps = [];
+  const frames = [];
+  // initial resting frame
+  frames.push({ stepIndex: -1, gateName: "init", phase: "settle", t: 0, state: cloneState(state) });
+
+  circuit.gates.forEach((gate, idx) => {
+    const before = cloneState(state);
+    let selectedOutcome = null;
+    let measuredQubits = null;
+
+    if (gate.kind === "measurement") {
+      measuredQubits = gate.targets.slice();
+      const probs = measurementProbabilities(state, measuredQubits);
+      const oi = sampleOutcome(rng, probs);
+      state = collapseState(state, measuredQubits, oi);
+      selectedOutcome = oi.toString(2).padStart(Math.max(1, measuredQubits.length), "0");
+      // constant samples (collapsed state held across phases)
+      for (const [phase, t] of sched) {
+        frames.push({ stepIndex: idx, gateName: gate.name, phase, t, state: cloneState(state),
+          controls: [], targets: measuredQubits, measurement: true });
+      }
+    } else {
+      const { matrix, qubits } = matrixForGate(gate);
+      const after = applyUnitary(state, matrix, qubits, N);
+      for (const [phase, t, tau] of sched) {
+        let s;
+        if (tau === 0) s = cloneState(before);
+        else if (tau === 1) s = cloneState(after);
+        else {
+          const f = fractionalGateMatrix(gate, tau);
+          s = applyUnitary(before, f.matrix, f.qubits, N);
+        }
+        frames.push({ stepIndex: idx, gateName: gate.name, phase, t, state: s,
+          controls: gate.controls || [], targets: gate.targets });
+      }
+      state = after;
+    }
+
+    steps.push({
+      index: idx, name: gate.name, kind: gate.kind,
+      controls: gate.controls || [], targets: gate.targets, params: gate.params || [],
+      endState: cloneState(state), selectedOutcome, measuredQubits,
+    });
+  });
+
+  return { numQubits: N, steps, frames, finalState: state };
+}
+
+/* ════════ color maps ════════ */
+function clamp01(x){return x<0?0:x>1?1:x;}
+function lerp3(a,b,t){return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
+// Selectable density colormaps (0–255). Low end is never flat black.
+const CMAPS={
+  inferno:[[26,12,54],[58,18,99],[101,26,123],[151,41,107],[201,62,74],[233,109,38],[248,168,40],[251,221,96],[255,250,214]],
+  viridis:[[68,1,84],[72,40,120],[62,74,137],[49,104,142],[38,130,142],[31,158,137],[53,183,121],[110,206,88],[181,222,43],[253,231,37]],
+  turbo:[[48,18,59],[62,84,205],[40,160,232],[42,215,167],[120,245,80],[211,228,46],[252,160,46],[227,79,17],[122,4,3]],
+  ice:[[6,11,32],[10,32,74],[16,62,124],[26,104,176],[42,152,212],[96,198,236],[166,228,246],[232,249,255]],
+  plasma:[[24,12,110],[84,2,163],[139,10,165],[185,50,137],[219,92,104],[244,136,73],[254,188,43],[240,249,33]],
+  mono:[[24,26,34],[62,67,80],[110,117,134],[158,166,186],[206,214,232],[245,249,255]]
+};
+let ACTIVE_HEAT=CMAPS.inferno;
+function heatColor(v){v=clamp01(v);const H=ACTIVE_HEAT,s=v*(H.length-1),i=Math.min(Math.floor(s),H.length-2),t=s-i;return lerp3(H[i],H[i+1],t);}
+// ── tone curve: input |ρ| → colormap position, shaped by draggable keys (Photoshop-style) ──
+const CURVE={pts:[{x:0,y:0},{x:0.5,y:Math.pow(0.5,0.4)},{x:1,y:1}],lut:new Float32Array(256)};
+function buildCurve(){
+  const P=CURVE.pts;P.sort((a,b)=>a.x-b.x);const n=P.length;
+  const xs=P.map(p=>p.x),ys=P.map(p=>p.y),dx=[],m=[];
+  for(let i=0;i<n-1;i++){dx[i]=Math.max(1e-6,xs[i+1]-xs[i]);m[i]=(ys[i+1]-ys[i])/dx[i];}
+  const t=new Array(n);t[0]=m[0];t[n-1]=m[n-2];
+  for(let i=1;i<n-1;i++)t[i]=(m[i-1]*m[i]<=0)?0:(m[i-1]+m[i])/2;
+  for(let i=0;i<n-1;i++){if(m[i]===0){t[i]=0;t[i+1]=0;}else{const a=t[i]/m[i],b=t[i+1]/m[i],s=a*a+b*b;if(s>9){const k=3/Math.sqrt(s);t[i]=k*a*m[i];t[i+1]=k*b*m[i];}}}
+  for(let k=0;k<256;k++){const x=k/255;let i=0;while(i<n-2&&x>xs[i+1])i++;
+    const h=dx[i],s=(x-xs[i])/h,h00=(1+2*s)*(1-s)*(1-s),h10=s*(1-s)*(1-s),h01=s*s*(3-2*s),h11=s*s*(s-1);
+    CURVE.lut[k]=Math.min(1,Math.max(0,h00*ys[i]+h10*h*t[i]+h01*ys[i+1]+h11*h*t[i+1]));}
+}
+function curveEval(v){v=clamp01(v);return CURVE.lut[Math.min(255,(v*255)|0)];}
+buildCurve();
+function cmapCss(name){const H=CMAPS[name];return 'linear-gradient(90deg,'+H.map((c,i)=>'rgb('+c[0]+','+c[1]+','+c[2]+') '+Math.round(i/(H.length-1)*100)+'%').join(',')+')';}
+function currentCmap(){for(const k in CMAPS)if(CMAPS[k]===ACTIVE_HEAT)return k;return 'inferno';}
+const C_CYAN=[69,211,255],C_AMBER=[255,185,72],C_NAVY=[36,52,78];
+function densityColorReal(re){const t=(Math.max(-1,Math.min(1,re))+1)*0.5;return t<0.5?lerp3(C_AMBER,C_NAVY,t*2):lerp3(C_NAVY,C_CYAN,(t-0.5)*2);}
+function amplitudeColorArr(ph){let n=(ph+Math.PI)/(2*Math.PI);n=clamp01(n);const c0=[75,215,255],c1=[130,115,255],c2=[255,177,92];return n<0.5?lerp3(c0,c1,n*2):lerp3(c1,c2,(n-0.5)*2);}
+function phaseColorArr(p){return p==='pre_gate'?[105,168,255]:p==='apply_gate'?[72,224,252]:p==='settle'?[255,194,94]:[182,196,216];}
+function cellColor(mag,re,im){
+  if(VS.colorMode==='real')return densityColorReal(re);
+  if(VS.colorMode==='phase')return mag>0.008?amplitudeColorArr(Math.atan2(im,re)):[48,34,74];
+  const v=clamp01(mag);                                  // |ρ| magnitude → heat, reshaped by the tone curve
+  const vg=curveEval(v);
+  return heatColor(0.01+0.99*vg);                        // start 1% up the ramp: colored from the very bottom, never flat black
+}
+// Glow scales smoothly with magnitude (LINEAR multiplier — applied after the sRGB→linear color conversion,
+// so it never runs through the sRGB transfer and blows up). Every lit cell glows a little; pure cells most.
+function glowGain(mag){const v=clamp01(mag);return 1+1.9*v;}   // linear ramp: v=0→1.0, 0.25→1.48, 0.5→1.95, 1→2.9
+function smooth(t){t=clamp01(t);return t*t*(3-2*t);}
+
+/* ════════ circuit model ════════ */
+const VS={numQubits:4,gates:[],target:0,control:1,angle:Math.PI/2,seed:24,substeps:24,
+  playing:true,speed:2,frameIndex:0,stageTime:0,holdTime:0.7,threshold:0,threshDirty:false,preset:'qft',colorMode:'mag',viewMode:'stack',
+  autoRotate:true,floorGrid:false,network:true,labels:true,shape:'round',showFull:false,bg:'black',gamma:0.4,stackAxis:'vertical'};
+let trace=null,layerStates=[],layerCell=[],totalLayers=1,builtStage=-1,layerEndArr=[],edgeEndArr=[];
+const PRESET_N={bell:2,grover:3,dj:3,bv:4,toffoli:3,kick:2,teleport:3}; // fixed-size presets; others scale with the qubit count
+function presetGates(name,n){const g=[];
+  const H=q=>g.push({name:'h',kind:'unitary',targets:[q],controls:[]});
+  const X=q=>g.push({name:'x',kind:'unitary',targets:[q],controls:[]});
+  const CX=(c,t)=>g.push({name:'cx',kind:'unitary',targets:[t],controls:[c]});
+  const CZ=(c,t)=>g.push({name:'cz',kind:'unitary',targets:[t],controls:[c]});
+  const CCX=(a,b,t)=>g.push({name:'ccx',kind:'unitary',targets:[t],controls:[a,b]});
+  const RZ=(a,q)=>g.push({name:'rz',kind:'unitary',targets:[q],controls:[],params:[a]});
+  const RY=(a,q)=>g.push({name:'ry',kind:'unitary',targets:[q],controls:[],params:[a]});
+  const SWAP=(a,b)=>g.push({name:'swap',kind:'unitary',targets:[a,b],controls:[]});
+  const CP=(c,t,l)=>{RZ(l/2,c);CX(c,t);RZ(-l/2,t);CX(c,t);RZ(l/2,t);};      // controlled phase λ
+  const CCZ=(a,b,t)=>{H(t);CCX(a,b,t);H(t);};                                // controlled-controlled-Z
+  const MEAS=()=>g.push({name:'measure',kind:'measurement',targets:Array.from({length:n},(_,i)=>i)});
+  const qftOn=(qs,inv)=>{const s=inv?-1:1,m=qs.length;
+    for(let to=0;to<m;to++){const tg=qs[m-1-to];H(tg);for(let co=to+1;co<m;co++)CP(qs[m-1-co],tg,s*Math.PI/Math.pow(2,co-to));}
+    for(let i=0;i<(m>>1);i++)SWAP(qs[i],qs[m-1-i]);};
+  const all=Array.from({length:n},(_,i)=>i);
+  if(name==='bell'){H(0);CX(0,1);MEAS();}
+  else if(name==='ghz'){H(0);for(let q=1;q<n;q++)CX(0,q);MEAS();}
+  else if(name==='plus'){for(const q of all)H(q);}                            // uniform superposition: every ρ cell equal
+  else if(name==='qft'){const prep=[0.17,-0.33,0.71,0.42,-0.6,0.95,-0.21,1.3];for(const q of all)H(q);all.forEach(q=>RZ(prep[q%prep.length],q));qftOn(all,false);}
+  else if(name==='iqft'){for(const q of all)H(q);qftOn(all,true);}
+  else if(name==='grover'){for(let q=0;q<3;q++)H(q);CCZ(0,1,2);              // oracle marks |111⟩
+    for(let q=0;q<3;q++)H(q);for(let q=0;q<3;q++)X(q);CCZ(0,1,2);for(let q=0;q<3;q++)X(q);for(let q=0;q<3;q++)H(q);MEAS();} // diffusion
+  else if(name==='dj'){X(2);for(let q=0;q<3;q++)H(q);CX(0,2);CX(1,2);H(0);H(1);MEAS();} // balanced oracle f=x0⊕x1
+  else if(name==='bv'){X(3);for(let q=0;q<4;q++)H(q);CX(0,3);CX(2,3);H(0);H(1);H(2);MEAS();} // hidden string s=101
+  else if(name==='toffoli'){H(0);H(1);CCX(0,1,2);MEAS();}
+  else if(name==='kick'){X(1);H(0);CZ(0,1);H(0);MEAS();}                      // phase kickback onto the control
+  else if(name==='teleport'){RY(0.9,0);H(1);CX(1,2);CX(0,1);H(0);MEAS();}     // teleportation through Bell-basis measurement
+  else if(name==='scramble'){const ph=[0.4,1.1,-0.7,0.9,1.7,-1.3,0.55,2.0];for(const q of all)H(q);all.forEach(q=>RZ(ph[q%ph.length],q));
+    for(let i=0;i<n-1;i++)CX(i,i+1);if(n>1)CX(n-1,0);for(const q of all)H(q);for(let i=0;i<n-1;i++)CZ(i,i+1);}
+  return g;}
+
+function densityToCell(state){ // returns Float32Array[DIM*DIM*3] = mag,re,im
+  const re=state.re,im=state.im,out=new Float32Array(DIM*DIM*3);
+  for(let r=0;r<DIM;r++){const cr=re[r],ci=im[r];for(let c=0;c<DIM;c++){
+    const dr=re[c],di=im[c];const rRe=cr*dr+ci*di,rIm=ci*dr-cr*di;const k=(r*DIM+c)*3;
+    out[k]=Math.hypot(rRe,rIm);out[k+1]=rRe;out[k+2]=rIm;}}
+  return out;}
+
+function rebuild(){
+  if(typeof stopSampling==='function')stopSampling();const hp=document.getElementById('hist-panel');if(hp)hp.classList.remove('show');
+  if(VS.gates.length===0){trace=null;VS.frameIndex=0;renderList();return;}
+  trace=buildTrace({numQubits:VS.numQubits,gates:VS.gates},{substeps:VS.substeps,seed:VS.seed});
+  VS.frameIndex=0;VS.stageTime=0;builtStage=-1;layerEndArr=[];edgeEndArr=[];document.getElementById('sl-scrub').max=100;
+  DIM=1<<VS.numQubits;
+  layerStates=[trace.frames[0].state].concat(trace.steps.map(s=>s.endState));
+  totalLayers=layerStates.length;
+  layerCell=layerStates.map(densityToCell);
+  rebuildMeshes();frameCamera();renderList();updateHudStatic();
+  document.getElementById('st-dim').textContent=DIM+'×'+DIM+' cells';
+  document.getElementById('st-layers').textContent=totalLayers+' layer'+(totalLayers>1?'s':'');
+}
+function loadPreset(name){VS.preset=name;if(PRESET_N[name]){VS.numQubits=PRESET_N[name];clampQ();}VS.gates=presetGates(name,VS.numQubits);
+  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active',b.dataset.preset===name));rebuild();setQiskitFromState();}
+
+/* ════════ three.js scene ════════ */
+const canvas=document.getElementById('gl');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+renderer.setClearColor(0x0a0d14,1);                  // dark navy-black, matches #canvas-wrap
+renderer.toneMapping=THREE.NoToneMapping;renderer.outputColorSpace=THREE.SRGBColorSpace; // exact colors, no highlight roll-off
+const scene=new THREE.Scene(); // no fog: full grid stays visible at any size
+function bgGrad(c0,c1,c2){const cv=document.createElement('canvas');cv.width=4;cv.height=512;const g=cv.getContext('2d');
+  const grd=g.createLinearGradient(0,0,0,512);grd.addColorStop(0,c0);grd.addColorStop(0.5,c1);grd.addColorStop(1,c2);
+  g.fillStyle=grd;g.fillRect(0,0,4,512);const tx=new THREE.CanvasTexture(cv);tx.colorSpace=THREE.SRGBColorSpace;return tx;}
+const BGS={navy:()=>bgGrad('#16294d','#0d1830','#05070f'),black:()=>new THREE.Color(0x000000),slate:()=>new THREE.Color(0x12161e),
+  steel:()=>new THREE.Color(0x2a3340),dusk:()=>bgGrad('#2a1a3e','#1a1530','#0a0812'),paper:()=>new THREE.Color(0xe8ecf2)};
+function setBg(name){if(!BGS[name])return;VS.bg=name;scene.background=BGS[name]();
+  const solid={black:0x000000,slate:0x12161e,steel:0x2a3340,paper:0xe8ecf2,navy:0x0a0d14,dusk:0x0a0812};renderer.setClearColor(solid[name]??0x0a0d14,1);
+  document.querySelectorAll('.bg-sw').forEach(b=>b.classList.toggle('active',b.dataset.bg===name));}
+setBg('black');
+const camera=new THREE.PerspectiveCamera(46,1,0.1,6000);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=4;controls.maxDistance=2000;
+controls.autoRotate=true;controls.autoRotateSpeed=0.55;
+controls.addEventListener('start',()=>{controls.autoRotate=false;clearTimeout(window._arT);});
+controls.addEventListener('end',()=>{if(VS.autoRotate)window._arT=setTimeout(()=>controls.autoRotate=true,3500);});
+scene.add(new THREE.AmbientLight(0x556682,1.1));
+const dir=new THREE.DirectionalLight(0xcfe6ff,0.8);dir.position.set(10,26,14);scene.add(dir);
+const dir2=new THREE.DirectionalLight(0x4878b0,0.4);dir2.position.set(-12,10,-8);scene.add(dir2);
+// ── bloom: high-probability cells blow past the threshold and glow red-hot ──
+const composer=new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene,camera));
+const bloom=new UnrealBloomPass(new THREE.Vector2(1,1),0.4,0.5,0.15); // strength halved (0.8→0.4): softer overall glow, still scales down the range
+composer.addPass(bloom);
+composer.addPass(new OutputPass());   // REQUIRED in r152+: applies tonemap + linear→sRGB; without it bg & heatmap colors render wrong
+
+const grp=new THREE.Group();scene.add(grp);
+let cellMesh=null,edgeLines=null,edgeBuf=null,floorMesh=null,floorGrid=null,netLines=null,labelGroup=null,sampleMesh=null;
+let histGroup=null,histBars=null,histMarks=null;
+const PITCH=1.0,CUBE=0.82,MAXH=4.4,LAYER_GAP=1.15;       // NO instance cap — render everything the circuit produces
+const BARMAX=4.6;                                         // tallest sampling-histogram bar (world units)
+const dummy=new THREE.Object3D(),_col=new THREE.Color();
+let DIM=8;
+const _EH=CUBE/2,_EI=[0,1,1,2,2,3,3,0,4,5,5,6,6,7,7,4,0,4,1,5,2,6,3,7]; // 12 cube edges = 24 verts (no face diagonals)
+function writeBoxEdges(buf,voff,cx,cy,cz,h){              // write one cube's 12 edges as line-segment verts
+  const x0=cx-_EH,x1=cx+_EH,z0=cz-_EH,z1=cz+_EH,y0=cy,y1=cy+h;
+  const C=[[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]];
+  let p=voff*3;for(let i=0;i<24;i++){const v=C[_EI[i]];buf[p++]=v[0];buf[p++]=v[1];buf[p++]=v[2];}
+  return voff+24;
+}
+
+function disposeGroup(g){if(!g)return;g.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());}});}
+function edgeColor3(){const c=heatColor(0.01);return new THREE.Color().setRGB(c[0]/255,c[1]/255,c[2]/255,THREE.SRGBColorSpace);} // 1% floor color for zero-cell ghosts
+
+function rebuildMeshes(){
+  while(grp.children.length){const c=grp.children.pop();disposeGroup(c);}
+  histGroup=null;histBars=null;histMarks=null;
+  const need=Math.max(DIM*DIM,totalLayers*DIM*DIM);          // everything: every cell of every layer
+  let geo;
+  if(VS.shape==='box')geo=new THREE.BoxGeometry(CUBE,CUBE,CUBE);
+  else if(VS.shape==='sphere')geo=new THREE.SphereGeometry(CUBE*0.6,12,9);
+  else if(VS.shape==='octa')geo=new THREE.OctahedronGeometry(CUBE*0.72,0);
+  else geo=new RoundedBoxGeometry(CUBE,CUBE,CUBE,1,CUBE*0.14);
+  geo.translate(0,CUBE/2,0);
+  const mat=new THREE.MeshBasicMaterial({toneMapped:false});
+  cellMesh=new THREE.InstancedMesh(geo,mat,need);cellMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  cellMesh.setColorAt(0,_col.setRGB(0.1,0.05,0.2,THREE.SRGBColorSpace));cellMesh.count=0;cellMesh.frustumCulled=false;grp.add(cellMesh);
+  // zero-probability ghosts: clean cube EDGES only (no face diagonals), transparent, at the 1% floor color
+  const eneed=ghostsEnabled()?need:1;edgeBuf=new Float32Array(eneed*72);   // 24 verts * 3 floats per cell
+  const eg=new THREE.BufferGeometry();eg.setAttribute('position',new THREE.BufferAttribute(edgeBuf,3).setUsage(THREE.DynamicDrawUsage));eg.setDrawRange(0,0);
+  const emat=new THREE.LineBasicMaterial({color:edgeColor3(),transparent:true,opacity:0.24,depthWrite:false,toneMapped:false});
+  edgeLines=new THREE.LineSegments(eg,emat);edgeLines.frustumCulled=false;grp.add(edgeLines);
+  // sampling glow: additive boxes over the diagonal (population) cells, lit one sample at a time
+  const sgeo=new THREE.BoxGeometry(CUBE*1.14,CUBE*1.14,CUBE*1.14);
+  const smat=new THREE.MeshBasicMaterial({transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,toneMapped:false});
+  sampleMesh=new THREE.InstancedMesh(sgeo,smat,DIM);sampleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  sampleMesh.setColorAt(0,_col.setRGB(0,0,0,THREE.SRGBColorSpace));sampleMesh.count=0;sampleMesh.frustumCulled=false;grp.add(sampleMesh);
+  // sampling RESULTS as 3D bars rising from the DIAGONAL cells (the populations |ρ_ii|) of the sampling layer
+  histGroup=new THREE.Group();histGroup.visible=false;
+  const barW=PITCH*0.6,barD=PITCH*0.6;
+  const bgeo=new THREE.BoxGeometry(barW,1,barD);bgeo.translate(0,0.5,0);   // grows up from its base
+  histBars=new THREE.InstancedMesh(bgeo,new THREE.MeshBasicMaterial({toneMapped:false}),DIM);
+  histBars.instanceMatrix.setUsage(THREE.DynamicDrawUsage);histBars.setColorAt(0,_col.setRGB(0.1,0.05,0.2,THREE.SRGBColorSpace));histBars.count=0;histBars.frustumCulled=false;histGroup.add(histBars);
+  const mgeo=new THREE.BoxGeometry(barW*1.25,0.05,barD*1.25);              // amber crossbar = true |ψ|² target
+  histMarks=new THREE.InstancedMesh(mgeo,new THREE.MeshBasicMaterial({toneMapped:false}),DIM);
+  histMarks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);histMarks.setColorAt(0,_col.setRGB(1,0.72,0.28,THREE.SRGBColorSpace));histMarks.count=0;histMarks.frustumCulled=false;histGroup.add(histMarks);
+  grp.add(histGroup);   // child of grp → diagonal placement follows the stack orientation automatically
+  // floor + grid (for floor-field view)
+  const span=DIM*PITCH;
+  floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(span+PITCH,span+PITCH),new THREE.MeshBasicMaterial({color:0x05080f,transparent:true,opacity:0.7}));
+  floorMesh.rotation.x=-Math.PI/2;floorMesh.position.y=-0.02;grp.add(floorMesh);
+  const pts=[],half=span/2;
+  for(let r=0;r<=DIM;r++){const z=(r-DIM/2)*PITCH;pts.push(-half,0,z,half,0,z);}
+  for(let c=0;c<=DIM;c++){const x=(c-DIM/2)*PITCH;pts.push(x,0,-half,x,0,half);}
+  const lg=new THREE.BufferGeometry();lg.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+  floorGrid=new THREE.LineSegments(lg,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.08}));floorGrid.frustumCulled=false;floorMesh.frustumCulled=false;grp.add(floorGrid);
+  // network lines
+  const ng=new THREE.BufferGeometry();ng.setAttribute('position',new THREE.Float32BufferAttribute(new Float32Array(DIM*6*2),3));
+  netLines=new THREE.LineSegments(ng,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.6,blending:THREE.AdditiveBlending,depthWrite:false}));
+  netLines.frustumCulled=false;grp.add(netLines);
+  buildLabels();
+}
+function buildLabels(){
+  if(labelGroup){disposeGroup(labelGroup);}
+  labelGroup=new THREE.Group();grp.add(labelGroup);
+  if(DIM>16)return;
+  const span=DIM*PITCH,half=span/2,n=VS.numQubits;
+  const tex=t=>{const c=document.createElement('canvas');c.width=64;c.height=32;const x=c.getContext('2d');
+    x.clearRect(0,0,64,32);x.fillStyle='#7a8aa6';x.font='600 16px JetBrains Mono,monospace';x.textAlign='center';x.textBaseline='middle';x.fillText(t,32,16);
+    const tx=new THREE.CanvasTexture(c);tx.minFilter=THREE.LinearFilter;return tx;};
+  for(let i=0;i<DIM;i++){const lbl=i.toString(2).padStart(n,'0');
+    const a=new THREE.Sprite(new THREE.SpriteMaterial({map:tex(lbl),transparent:true,depthWrite:false}));
+    a.position.set(-half-0.7,0.05,(i-(DIM-1)/2)*PITCH);a.scale.set(1.1,0.55,1);labelGroup.add(a);
+    const b=new THREE.Sprite(new THREE.SpriteMaterial({map:tex(lbl),transparent:true,depthWrite:false}));
+    b.position.set((i-(DIM-1)/2)*PITCH,0.05,-half-0.7);b.scale.set(1.1,0.55,1);labelGroup.add(b);}
+  labelGroup.visible=VS.labels;
+}
+function frameCamera(){
+  const span=DIM*PITCH;
+  if(VS.viewMode==='stack'){
+    const builtLayers=Math.min(totalLayers,(typeof maxBuildableStage==='function'?maxBuildableStage():totalLayers-1)+1);
+    const sampling=!!sampleAnim;
+    const towerH=builtLayers*LAYER_GAP+(sampling?BARMAX+LAYER_GAP*1.4:0);   // leave room for the results bar chart
+    if(VS.stackAxis==='horizontal'){            // layers run along world +X (0..towerH); grids stand upright in Y/Z
+      const d=Math.max(span,towerH)*1.05+span*0.6+5;
+      camera.position.set(towerH*0.5-span*0.15,span*0.72+4,d);
+      controls.target.set(towerH*0.5,0,0);
+    } else {                                    // tower grows up world +Y
+      const d=Math.max(span,towerH)*1.15+span*0.5+5;
+      camera.position.set(span*0.85+4,towerH*0.62+span*0.35,d);
+      controls.target.set(0,towerH*0.45,0);
+    }
+  } else {
+    camera.position.set(span*0.7,span*0.98,span*1.08);
+    controls.target.set(0,0.3,0);
+  }
+  controls.update();
+}
+
+/* ════════ shared helpers ════════ */
+function selectedOutcomeIndex(){if(!trace)return -1;const ms=trace.steps.find(s=>s.selectedOutcome!=null);return ms?(parseInt(ms.selectedOutcome,2)||0):-1;}
+
+/* ════════ STACK view ════════
+   Fixed true cubes. Each computation stage drops in its WHOLE layer at once, at its
+   final settled color. Color never morphs. Instances for a layer are written ONCE,
+   when that layer first appears — so holding/orbiting costs ~nothing even at 8 qubits. */
+function stageDuration(){return Math.max(0.06,VS.holdTime);}          // dwell per stage (seconds)
+function totalStackTime(){return (totalLayers+1)*stageDuration();}     // +1 = final hold before loop
+function currentStageFor(t){return Math.max(0,Math.min(totalLayers-1,Math.floor(t/stageDuration())));}
+function stageFrame(stage){const si=stage-1,st=trace.steps[si];
+  return {stepIndex:si,gateName:si<0?'init':(st?st.name:'?'),phase:'settle',measurement:!!(st&&st.kind==='measurement'),t:1,state:layerStates[stage]};}
+function maxBuildableStage(){return builtStage<0?totalLayers-1:builtStage;}
+function ghostsEnabled(){return VS.numQubits<=6;}          // 7+ qubits: too many zero cells — drop the transparent ghosts entirely
+function heatCut(){return Math.max(1e-4,VS.threshold);}   // |ρ| below this renders as a transparent ghost (edges only); Heat slider raises it
+function layerEnd(L){return L<0?0:(layerEndArr[L]||0);}
+function edgeEnd(L){return L<0?0:(edgeEndArr[L]||0);}
+function buildStackUpTo(stage){
+  stage=Math.min(stage,totalLayers-1);
+  const CUT=heatCut(),ghosts=ghostsEnabled();
+  if(stage>builtStage){                                   // append newly-revealed layers once; render EVERY cell
+    let si=layerEnd(builtStage),ei=edgeEnd(builtStage);
+    for(let L=builtStage+1;L<=stage;L++){
+      const meas=(L>=1&&trace.steps[L-1]&&trace.steps[L-1].kind==='measurement');
+      const sel=meas?selectedOutcomeIndex():-1;
+      const cells=layerCell[L],baseY=L*LAYER_GAP;
+      for(let r=0;r<DIM;r++)for(let c=0;c<DIM;c++){
+        const k=(r*DIM+c)*3;const mag=cells[k];const isSel=(meas&&sel>=0&&r===sel&&c===sel);
+        if(mag>=CUT||isSel){                               // solid colored box
+          dummy.position.set((c-(DIM-1)/2)*PITCH,baseY,(r-(DIM-1)/2)*PITCH);dummy.scale.set(1,1,1);dummy.updateMatrix();
+          let col=cellColor(mag,cells[k+1],cells[k+2]),gv=mag;if(isSel){col=[255,250,235];gv=1;}
+          cellMesh.setMatrixAt(si,dummy.matrix);
+          _col.setRGB(col[0]/255,col[1]/255,col[2]/255,THREE.SRGBColorSpace).multiplyScalar(glowGain(gv));cellMesh.setColorAt(si,_col);si++;
+        }else if(ghosts){                                  // zero probability → clean cube edges (no diagonals); dropped at 7+ qubits
+          ei=writeBoxEdges(edgeBuf,ei,(c-(DIM-1)/2)*PITCH,baseY,(r-(DIM-1)/2)*PITCH,CUBE);
+        }
+      }
+      layerEndArr[L]=si;edgeEndArr[L]=ei;
+    }
+    builtStage=stage;
+    cellMesh.instanceMatrix.needsUpdate=true;if(cellMesh.instanceColor)cellMesh.instanceColor.needsUpdate=true;
+    edgeLines.geometry.attributes.position.needsUpdate=true;
+  }
+  const shown=Math.min(stage,builtStage);
+  cellMesh.count=shown<0?0:layerEnd(shown);edgeLines.geometry.setDrawRange(0,shown<0?0:edgeEnd(shown));
+  return shown;
+}
+function drawStackNetwork(stage){
+  let measLayer=-1;
+  for(let L=1;L<=stage;L++){if(trace.steps[L-1]&&trace.steps[L-1].kind==='measurement'){measLayer=L;break;}}
+  if(!VS.network||measLayer<1){netLines.visible=false;return;}
+  netLines.visible=true;const pos=netLines.geometry.attributes.position.array,cap=(pos.length/6)|0;let v=0;
+  const sel=selectedOutcomeIndex(),src=layerCell[measLayer-1];
+  const selX=(sel-(DIM-1)/2)*PITCH,selZ=(sel-(DIM-1)/2)*PITCH,selY=measLayer*LAYER_GAP+CUBE*0.5;
+  for(let kk=0;kk<DIM&&v/6<cap;kk++){const p=src[(kk*DIM+kk)*3];if(p<0.06||kk===sel)continue;
+    const x=(kk-(DIM-1)/2)*PITCH,z=(kk-(DIM-1)/2)*PITCH,y=(measLayer-1)*LAYER_GAP+CUBE*0.5;
+    pos[v++]=x;pos[v++]=y;pos[v++]=z;pos[v++]=selX;pos[v++]=selY;pos[v++]=selZ;}
+  for(let i=v;i<pos.length;i++)pos[i]=0;
+  netLines.geometry.setDrawRange(0,v/3);netLines.geometry.attributes.position.needsUpdate=true;
+}
+function applyThreshold(){ // rewrite matrices of already-built cells to honor brightness threshold
+  if(!cellMesh||builtStage<0)return;let inst=0;
+  for(let L=0;L<=builtStage;L++){const cells=layerCell[L],baseY=L*LAYER_GAP;
+    for(let r=0;r<DIM;r++)for(let c=0;c<DIM;c++){
+      const vis=cells[(r*DIM+c)*3]>=VS.threshold;
+      dummy.position.set((c-(DIM-1)/2)*PITCH,baseY,(r-(DIM-1)/2)*PITCH);
+      dummy.scale.set(vis?1:0,vis?1:0,vis?1:0);dummy.updateMatrix();
+      cellMesh.setMatrixAt(inst++,dummy.matrix);}}
+  cellMesh.instanceMatrix.needsUpdate=true;
+}
+function updateStack(dt){
+  floorMesh.visible=VS.floorGrid;floorGrid.visible=VS.floorGrid;
+  if(VS.floorGrid&&floorGrid.material){floorPulse+=dt*0.6;floorGrid.material.opacity=0.06+0.05*(0.5+0.5*Math.sin(floorPulse));}
+  grp.scale.setScalar(1);                                   // tower stays put: no shape/size animation
+  grp.rotation.set(0,0,VS.stackAxis==='horizontal'?-Math.PI/2:0); // lay the stack on its side for horizontal
+  const cs=currentStageFor(VS.stageTime);
+  buildStackUpTo(VS.showFull?totalLayers-1:cs);             // BUILD instances (showFull → all are ready instantly)
+  const showStage=Math.min(cs,builtStage);                  // shown layers ALWAYS follow the scrub/playhead → reveal one at a time
+  cellMesh.count=showStage<0?0:layerEnd(showStage);
+  edgeLines.geometry.setDrawRange(0,showStage<0?0:edgeEnd(showStage));
+  drawStackNetwork(cs);
+}
+
+/* ════════ FLOOR view (tucked-away morphing grid) ════════ */
+let floorPulse=0;
+function updateFloor(frame,dt){
+  grp.scale.setScalar(1);grp.rotation.set(0,0,0);          // floor field is always flat
+  floorMesh.visible=true;floorGrid.visible=true;
+  floorPulse+=dt*0.6;
+  if(floorGrid.material){floorGrid.material.opacity=0.06+0.05*(0.5+0.5*Math.sin(floorPulse));} // animated floor grid
+  const cells=frame?densityToCell(frame.state):layerCell[0];
+  const sel=selectedOutcomeIndex();const meas=frame&&frame.measurement;const CUT=heatCut(),ghosts=ghostsEnabled();
+  let si=0,ei=0;
+  for(let r=0;r<DIM;r++)for(let c=0;c<DIM;c++){
+    const k=(r*DIM+c)*3;const mag=cells[k],re=cells[k+1],im=cells[k+2];const isSel=(meas&&sel>=0&&r===sel&&c===sel);
+    if(mag>=CUT||isSel){
+      let col=cellColor(mag,re,im),gv=mag;if(isSel){col=[255,250,235];gv=1;}
+      const h=Math.max(0.012,mag*MAXH);
+      dummy.position.set((c-(DIM-1)/2)*PITCH,0,(r-(DIM-1)/2)*PITCH);dummy.scale.set(1,h/CUBE,1);dummy.updateMatrix();
+      cellMesh.setMatrixAt(si,dummy.matrix);_col.setRGB(col[0]/255,col[1]/255,col[2]/255,THREE.SRGBColorSpace).multiplyScalar(glowGain(gv));cellMesh.setColorAt(si,_col);si++;
+    }else if(ghosts){                                       // zero → flat clean edges; dropped at 7+ qubits
+      ei=writeBoxEdges(edgeBuf,ei,(c-(DIM-1)/2)*PITCH,0,(r-(DIM-1)/2)*PITCH,0.06);
+    }
+  }
+  cellMesh.count=si;cellMesh.instanceMatrix.needsUpdate=true;if(cellMesh.instanceColor)cellMesh.instanceColor.needsUpdate=true;
+  edgeLines.geometry.setDrawRange(0,ei);edgeLines.geometry.attributes.position.needsUpdate=true;
+  if(VS.network&&meas&&sel>=0){
+    netLines.visible=true;const pos=netLines.geometry.attributes.position.array;let v=0;
+    const selX=(sel-(DIM-1)/2)*PITCH,selZ=(sel-(DIM-1)/2)*PITCH,selY=Math.max(0.05,cells[(sel*DIM+sel)*3]*MAXH);
+    const pre=layerCell[Math.max(0,totalLayers-2)];
+    for(let kk=0;kk<DIM;kk++){const p=pre[(kk*DIM+kk)*3];if(p<0.06||kk===sel)continue;
+      const x=(kk-(DIM-1)/2)*PITCH,z=(kk-(DIM-1)/2)*PITCH,y=Math.max(0.05,p*MAXH);
+      pos[v++]=x;pos[v++]=y;pos[v++]=z;pos[v++]=selX;pos[v++]=selY+0.3;pos[v++]=selZ;}
+    for(let i=v;i<pos.length;i++)pos[i]=0;
+    netLines.geometry.setDrawRange(0,v/3);netLines.geometry.attributes.position.needsUpdate=true;
+  } else netLines.visible=false;
+}
+
+/* ════════ circuit lens ════════ */
+const circ=document.getElementById('circuit-canvas'),cctx=circ.getContext('2d');
+const cgut=document.getElementById('cgutter'),gctx=cgut.getContext('2d');
+const cscroll=document.getElementById('circuit-scroll');
+const COLW=46,GUT=30,PADR=20;                              // fixed column pitch → no squeeze; long circuits scroll like a score
+let circLayout={colW:COLW,x0:GUT+6,steps:0};
+function laneY(q,padT,laneH){return padT+laneH*(q+0.5);}
+function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function drawLens(frame){
+  const dpr=Math.min(devicePixelRatio||1,2);
+  const N=VS.numQubits,steps=VS.gates.length;
+  const Hcss=circ.clientHeight||128,viewW=cscroll.clientWidth||700;
+  const x0=GUT+8;
+  const Wcss=Math.max(viewW,x0+steps*COLW+PADR);           // fill the view, or grow & scroll
+  if(circ.style.width!==Wcss+'px')circ.style.width=Wcss+'px';
+  if(circ.width!==Math.round(Wcss*dpr)||circ.height!==Math.round(Hcss*dpr)){circ.width=Math.round(Wcss*dpr);circ.height=Math.round(Hcss*dpr);}
+  cctx.setTransform(dpr,0,0,dpr,0,0);cctx.clearRect(0,0,Wcss,Hcss);
+  const padT=15,padB=Hcss-18,laneH=(padB-padT)/Math.max(1,N);
+  circLayout={colW:COLW,x0,steps};
+  const cur=frame?frame.stepIndex:-1,colX=s=>x0+COLW*(s+0.5),endX=x0+COLW*steps;
+  // measure/bar lines every 4 columns (score "bars" — help read large circuits)
+  cctx.strokeStyle='rgba(70,95,135,0.16)';cctx.lineWidth=1;
+  for(let s=0;s<=steps;s+=4){const bx=x0+COLW*s;cctx.beginPath();cctx.moveTo(bx,padT-7);cctx.lineTo(bx,padB+7);cctx.stroke();}
+  // playhead cursor (current layer)
+  if(cur>=0){const px=x0+COLW*cur;cctx.fillStyle='rgba(255,200,80,0.11)';cctx.fillRect(px,padT-8,COLW,padB-padT+16);
+    cctx.strokeStyle='rgba(255,200,80,0.85)';cctx.lineWidth=1.5;const mx=px+COLW/2;cctx.beginPath();cctx.moveTo(mx,padT-9);cctx.lineTo(mx,padB+9);cctx.stroke();
+    cctx.fillStyle='rgba(255,200,80,0.95)';cctx.beginPath();cctx.moveTo(mx-4,padT-9);cctx.lineTo(mx+4,padT-9);cctx.lineTo(mx,padT-4);cctx.fill();}
+  // staff lines (qubit wires)
+  for(let q=0;q<N;q++){const y=laneY(q,padT,laneH);cctx.strokeStyle='rgba(70,95,135,0.55)';cctx.lineWidth=1;cctx.beginPath();cctx.moveTo(x0-8,y);cctx.lineTo(endX+10,y);cctx.stroke();}
+  // gates as score notes
+  cctx.textBaseline='middle';
+  for(let s=0;s<steps;s++){const g=VS.gates[s],x=colX(s),active=s===cur;
+    const col=active&&frame?phaseColorArr(frame.phase):(g.kind==='measurement'?[182,196,216]:(g.controls&&g.controls.length?C_AMBER:C_CYAN));
+    const cs='rgb('+(col[0]|0)+','+(col[1]|0)+','+(col[2]|0)+')';
+    if(g.controls&&g.controls.length){const ys=g.controls.concat(g.targets).map(q=>laneY(q,padT,laneH));const y0=Math.min(...ys),y1=Math.max(...ys);
+      cctx.strokeStyle=cs;cctx.lineWidth=active?2:1.4;cctx.beginPath();cctx.moveTo(x,y0);cctx.lineTo(x,y1);cctx.stroke();
+      for(const cq of g.controls){const cy=laneY(cq,padT,laneH);cctx.fillStyle=cs;cctx.beginPath();cctx.arc(x,cy,3.4,0,7);cctx.fill();}}
+    const bw=Math.min(28,COLW*0.62),bh=Math.min(19,laneH*0.8);
+    for(const q of g.targets){const gy=laneY(q,padT,laneH);
+      cctx.fillStyle='rgba(8,12,20,0.96)';roundRect(cctx,x-bw/2,gy-bh/2,bw,bh,4);cctx.fill();
+      cctx.strokeStyle=cs;cctx.lineWidth=active?2:1.3;roundRect(cctx,x-bw/2,gy-bh/2,bw,bh,4);cctx.stroke();
+      cctx.fillStyle=active?cs:'#cdd6e6';cctx.font='700 10px JetBrains Mono,monospace';cctx.textAlign='center';
+      cctx.fillText(g.kind==='measurement'?'M':(g.name==='swap'?'×':g.name.toUpperCase()).slice(0,3),x,gy+0.5);}}
+  // layer numbers (beats) under each column
+  cctx.textAlign='center';cctx.textBaseline='top';cctx.font='500 8px JetBrains Mono,monospace';
+  cctx.fillStyle=(cur<0)?'rgba(255,200,80,0.95)':'rgba(110,125,150,0.65)';cctx.fillText('L0',x0-4,padB+5);
+  for(let s=0;s<steps;s++){cctx.fillStyle=(s===cur)?'rgba(255,200,80,0.95)':'rgba(110,125,150,0.65)';cctx.fillText('L'+(s+1),colX(s),padB+5);}
+  // sticky qubit-label gutter (stays pinned while the score scrolls)
+  if(cgut.width!==Math.round(GUT*dpr)||cgut.height!==Math.round(Hcss*dpr)){cgut.width=Math.round(GUT*dpr);cgut.height=Math.round(Hcss*dpr);}
+  gctx.setTransform(dpr,0,0,dpr,0,0);gctx.clearRect(0,0,GUT,Hcss);
+  const grd=gctx.createLinearGradient(0,0,GUT,0);grd.addColorStop(0,'rgba(11,16,28,0.98)');grd.addColorStop(0.65,'rgba(11,16,28,0.95)');grd.addColorStop(1,'rgba(11,16,28,0)');
+  gctx.fillStyle=grd;gctx.fillRect(0,0,GUT,Hcss);gctx.textAlign='left';gctx.textBaseline='middle';gctx.font='600 10px JetBrains Mono,monospace';gctx.fillStyle='#8fa0bd';
+  for(let q=0;q<N;q++)gctx.fillText('q'+q,5,laneY(q,padT,laneH));
+}
+/* ── scrub by dragging on the score (== moving the Scrub slider) ── */
+function revealMode(){VS.showFull=false;const t=document.getElementById('tog-full');if(t)t.classList.remove('on');} // scrub/play/step drop "show all" so layers reveal one at a time
+function circuitScrubTo(clientX){if(!trace)return;const rect=circ.getBoundingClientRect();const x=clientX-rect.left;
+  const {colW,x0,steps}=circLayout;if(steps<1)return;let s=Math.floor((x-x0)/colW);s=Math.max(0,Math.min(steps-1,s));
+  if(VS.viewMode==='stack')VS.stageTime=(s+1)*stageDuration()+1e-3;else VS.frameIndex=((s+0.5)/steps)*(trace.frames.length-1);
+  revealMode();VS.playing=false;const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}}
+let scrubbing=false;
+circ.addEventListener('pointerdown',e=>{scrubbing=true;try{circ.setPointerCapture(e.pointerId);}catch(_){}circuitScrubTo(e.clientX);e.preventDefault();});
+circ.addEventListener('pointermove',e=>{if(scrubbing){circuitScrubTo(e.clientX);e.preventDefault();}});
+circ.addEventListener('pointerup',()=>{scrubbing=false;});
+circ.addEventListener('pointercancel',()=>{scrubbing=false;});
+function followPlayhead(){if(!trace)return;const {colW,x0,steps}=circLayout;if(steps<1)return;
+  let s=VS.viewMode==='stack'?Math.max(0,currentStageFor(VS.stageTime)-1):Math.floor((VS.frameIndex/Math.max(1,trace.frames.length-1))*steps);
+  const cx=x0+colW*(s+0.5),vw=cscroll.clientWidth,left=cscroll.scrollLeft;
+  if(scrubbing){if(cx<left+colW*1.2)cscroll.scrollLeft=Math.max(0,cx-colW*1.8);else if(cx>left+vw-colW*1.2)cscroll.scrollLeft=cx-vw+colW*1.8;}
+  else if(VS.playing){cscroll.scrollLeft+=((cx-vw/2)-left)*0.12;}}
+
+/* ════════ HUD ════════ */
+function updateHudStatic(){document.getElementById('st-qubits').textContent=VS.numQubits+' qubits';
+  const lg=document.getElementById('legend');
+  if(VS.colorMode==='mag')lg.innerHTML='<span><i style="background:'+cmapCss(currentCmap())+'"></i>|ρ| low→high</span>';
+  else if(VS.colorMode==='real')lg.innerHTML='<span><i style="background:linear-gradient(90deg,#ffb948,#24344e,#45d3ff)"></i>Re(ρ) −→+</span>';
+  else lg.innerHTML='<span><i style="background:linear-gradient(90deg,#4bd7ff,#8273ff,#ffb15c)"></i>∠ρ phase</span>';}
+function updateHud(frame){const steps=VS.gates.length,si=frame?frame.stepIndex:0;
+  const ph=frame?frame.phase:'—';const c=phaseColorArr(ph);
+  document.getElementById('hud-step').innerHTML='step '+(si<0?0:si+1)+'/'+steps+' · phase <b style="color:rgb('+(c[0]|0)+','+(c[1]|0)+','+(c[2]|0)+')">'+ph+'</b>'+(VS.viewMode==='stack'?' · layer '+(Math.max(0,si+1))+'/'+(totalLayers-1):'');
+  document.getElementById('st-step').innerHTML='step <b>'+(si<0?0:si+1)+'</b>/'+steps;
+  let outcome='—';if(trace){const ms=trace.steps.find(s=>s.selectedOutcome!=null);if(ms)outcome=ms.selectedOutcome;}
+  document.getElementById('st-outcome').innerHTML='outcome <b>'+(outcome==='—'?'—':'|'+outcome+'⟩')+'</b>';
+  const gname=frame&&frame.gateName!=='init'?frame.gateName.toUpperCase():'—';
+  document.getElementById('hud-tr').innerHTML='STATE: <b>op_'+(si<0?0:si)+'_'+gname.toLowerCase()+'</b><br>BLOCK: <b>['+Array.from({length:VS.numQubits},(_,i)=>i).join(',')+']</b><br>MODE: <b>'+(VS.viewMode==='stack'?'layer stack · full history':'floor field')+'</b><br>LAYERS: <b>'+(Math.max(0,si+1)+1)+'/'+totalLayers+'</b><br>GATE: <span class="hi">'+gname+'</span><br>OUTCOME: <span class="hi">'+(outcome==='—'?'pending':'|'+outcome+'⟩')+'</span>';
+  const b=document.getElementById('hud-bottom');
+  if(frame&&frame.measurement)b.innerHTML='<span class="tag">shot_stack:</span> collapsed outcome |'+(outcome==='—'?'?':outcome)+'⟩ is the bright cube; lines trace from the responsible diagonal source cells in the layer below.';
+  else if(VS.viewMode==='stack')b.innerHTML='<span class="tag">layer stack:</span> each slab is ρ = |ψ⟩⟨ψ| after one computation step; the circuit builds upward, one layer per gate. color = |ρ<sub>ij</sub>| heatmap.';
+  else b.innerHTML='<span class="tag">floor field:</span> single ρ(t) grid morphing on the animated floor. height ∝ |ρ<sub>ij</sub>|.';}
+
+/* ════════ Qiskit programming (hidden dock panel) ════════ */
+function parseQiskit(src){
+  const num=tok=>{const e=tok.trim().replace(/pi/gi,'Math.PI');if(!/^[-+0-9.\s*/()MathPI]*$/.test(e)||e==='')throw 'bad angle: '+tok;return Function('return ('+e+')')();};
+  const qi=a=>{const v=parseInt(a,10);if(!Number.isInteger(v))throw 'bad qubit: '+a;return v;};
+  let n=null;const gates=[];
+  for(const raw of src.split('\n')){const line=raw.split('#')[0].trim();if(!line)continue;
+    let m=line.match(/QuantumCircuit\s*\(\s*(\d+)/);if(m){n=parseInt(m[1]);continue;}
+    m=line.match(/\.(\w+)\s*\(([^)]*)\)/);if(!m)continue;
+    const fn=m[1].toLowerCase(),A=m[2].trim()===''?[]:m[2].split(',');
+    if(['h','x','y','z','s','t'].includes(fn))gates.push({name:fn,kind:'unitary',targets:[qi(A[0])],controls:[]});
+    else if(['rx','ry','rz'].includes(fn))gates.push({name:fn,kind:'unitary',targets:[qi(A[1])],controls:[],params:[num(A[0])]});
+    else if(fn==='cx'||fn==='cnot')gates.push({name:'cx',kind:'unitary',targets:[qi(A[1])],controls:[qi(A[0])]});
+    else if(fn==='cz')gates.push({name:'cz',kind:'unitary',targets:[qi(A[1])],controls:[qi(A[0])]});
+    else if(fn==='swap')gates.push({name:'swap',kind:'unitary',targets:[qi(A[0]),qi(A[1])],controls:[]});
+    else if(fn==='ccx'||fn==='toffoli')gates.push({name:'ccx',kind:'unitary',targets:[qi(A[2])],controls:[qi(A[0]),qi(A[1])]});
+    else if(fn==='cswap'||fn==='fredkin')gates.push({name:'cswap',kind:'unitary',targets:[qi(A[1]),qi(A[2])],controls:[qi(A[0])]});
+    else if(fn==='measure'||fn==='measure_all')gates.push({name:'measure',kind:'measurement',targets:null});
+    else if(fn==='barrier'){}                                  // ignored
+    else throw 'unsupported op: .'+fn+'()';}
+  if(!n)throw 'no QuantumCircuit(n) line found';
+  if(n<1||n>8)throw 'qubits must be 1–8 (got '+n+')';
+  for(const g of gates){if(g.kind==='measurement'){g.targets=Array.from({length:n},(_,i)=>i);}
+    else for(const q of g.targets.concat(g.controls||[]))if(!(q>=0&&q<n))throw 'qubit '+q+' out of range for n='+n;}
+  return {n,gates};
+}
+document.getElementById('cd-qiskit-btn').onclick=function(){const p=document.getElementById('qiskit-panel');p.hidden=!p.hidden;this.classList.toggle('on',!p.hidden);if(!p.hidden)syncQiskitHL();resize();};
+
+/* ---- Qiskit: codegen for the active algorithm + live syntax highlighting ---- */
+function gatesToQiskit(gates,n){
+  const fmt=x=>String(+(+x).toFixed(6));
+  const out=['qc = QuantumCircuit('+n+')'];
+  for(const g of gates){const nm=g.name,T=g.targets||[],C=g.controls||[];
+    if(['h','x','y','z','s','t'].includes(nm))out.push('qc.'+nm+'('+T[0]+')');
+    else if(['rx','ry','rz'].includes(nm))out.push('qc.'+nm+'('+fmt((g.params||[0])[0])+', '+T[0]+')');
+    else if(nm==='cx')out.push('qc.cx('+C[0]+', '+T[0]+')');
+    else if(nm==='cz')out.push('qc.cz('+C[0]+', '+T[0]+')');
+    else if(nm==='swap')out.push('qc.swap('+T[0]+', '+T[1]+')');
+    else if(nm==='ccx')out.push('qc.ccx('+C[0]+', '+C[1]+', '+T[0]+')');
+    else if(nm==='cswap')out.push('qc.cswap('+C[0]+', '+T[0]+', '+T[1]+')');
+    else if(g.kind==='measurement')out.push('qc.measure_all()');}
+  return out.join('\n');
+}
+function highlightQiskit(src){
+  const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const single=/^(h|x|y|z|s|t|rx|ry|rz)$/,multi=/^(cx|cnot|cz|swap|ccx|toffoli|cswap|fredkin|measure|measure_all|barrier)$/;
+  return src.split('\n').map(line=>{
+    const h=line.indexOf('#');let code=line,cmt='';if(h>=0){code=line.slice(0,h);cmt=line.slice(h);}
+    let out='',m;const re=/([A-Za-z_]\w*|\d+\.\d+|\.\d+|\d+|\s+|[(),.])/g;
+    while((m=re.exec(code))){const t=m[0],e=esc(t);
+      if(/^\s+$/.test(t)||/^[(),.]$/.test(t))out+=e;
+      else if(t==='QuantumCircuit')out+='<span class="qk-kw">'+e+'</span>';
+      else if(t==='qc')out+='<span class="qk-id">'+e+'</span>';
+      else if(t==='pi')out+='<span class="qk-pi">'+e+'</span>';
+      else if(single.test(t))out+='<span class="qk-gate">'+e+'</span>';
+      else if(multi.test(t))out+='<span class="qk-cgate">'+e+'</span>';
+      else if(/^(\d+\.\d+|\.\d+|\d+)$/.test(t))out+='<span class="qk-num">'+e+'</span>';
+      else out+=e;}
+    if(cmt)out+='<span class="qk-cmt">'+esc(cmt)+'</span>';
+    return out||' ';
+  }).join('\n');
+}
+function syncQiskitHL(){const ta=document.getElementById('qiskit-src'),hl=document.getElementById('qiskit-hl');hl.innerHTML=highlightQiskit(ta.value);hl.scrollTop=ta.scrollTop;hl.scrollLeft=ta.scrollLeft;}
+function setQiskitFromState(){                              // mirror the active algorithm into the editor (read-only display)
+  const ta=document.getElementById('qiskit-src');ta.value=gatesToQiskit(VS.gates,VS.numQubits);ta.readOnly=true;
+  document.getElementById('qiskit-custom').hidden=false;document.getElementById('qiskit-run').hidden=true;
+  const msg=document.getElementById('qiskit-msg');msg.textContent='live code for the active algorithm';msg.className='';
+  syncQiskitHL();
+}
+document.getElementById('qiskit-custom').onclick=function(){
+  const ta=document.getElementById('qiskit-src');ta.readOnly=false;ta.focus();
+  this.hidden=true;document.getElementById('qiskit-run').hidden=false;
+  const msg=document.getElementById('qiskit-msg');msg.textContent='editing — write your circuit, then Run';msg.className='';};
+(function(){const ta=document.getElementById('qiskit-src');
+  ta.addEventListener('input',syncQiskitHL);
+  ta.addEventListener('scroll',()=>{const hl=document.getElementById('qiskit-hl');hl.scrollTop=ta.scrollTop;hl.scrollLeft=ta.scrollLeft;});})();
+document.getElementById('qiskit-run').onclick=()=>{const msg=document.getElementById('qiskit-msg');try{
+  const {n,gates}=parseQiskit(document.getElementById('qiskit-src').value);
+  VS.numQubits=n;VS.preset='custom';VS.gates=gates;clampQ();
+  document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));
+  rebuild();syncQiskitHL();msg.textContent='✓ '+gates.length+' ops on '+n+' qubits';msg.className='ok';
+}catch(e){msg.textContent='✕ '+e;msg.className='err';}};
+
+/* ════════ measurement sampling — lit one shot at a time, Gaussian-paced ════════ */
+const histCv=document.getElementById('hist-canvas'),hctx=histCv.getContext('2d');
+let sampleAnim=null;
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);
+  const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y;}
+const _S0=0.5*(1+erf((0-0.5)/(0.19*Math.SQRT2))),_S1=0.5*(1+erf((1-0.5)/(0.19*Math.SQRT2)));
+function sCurve(p){const s=0.5*(1+erf((p-0.5)/(0.19*Math.SQRT2)));return Math.min(1,Math.max(0,(s-_S0)/(_S1-_S0)));} // integral of a Gaussian rate: slow→fast→slow
+function placeSampleGlow(L){                                 // diagonal (population) cells of the sampling layer
+  for(let i=0;i<DIM;i++){const x=(i-(DIM-1)/2)*PITCH,z=(i-(DIM-1)/2)*PITCH;
+    const y=(VS.viewMode==='floor')?CUBE*0.5:L*LAYER_GAP+CUBE*0.5;
+    dummy.position.set(x,y,z);dummy.scale.set(1,1,1);dummy.updateMatrix();sampleMesh.setMatrixAt(i,dummy.matrix);}
+  sampleMesh.instanceMatrix.needsUpdate=true;sampleMesh.count=DIM;
+}
+function updateHistBars(A){
+  if(!histBars||histBars.count!==A.D)return;
+  const baseY=(VS.viewMode==='floor')?CUBE:A.layer*LAYER_GAP+CUBE;     // top of the sampling layer's cells
+  let scale=1e-4;for(let i=0;i<A.D;i++)scale=Math.max(scale,A.counts[i]/Math.max(1,A.drawn),A.probs[i]);
+  const breathe=0.82+0.18*Math.sin(A.gp);
+  for(let i=0;i<A.D;i++){const dx=(i-(A.D-1)/2)*PITCH;                 // diagonal cell (i,i): x = z
+    const emp=A.counts[i]/Math.max(1,A.drawn),h=Math.max(1e-4,(emp/scale)*BARMAX);
+    dummy.position.set(dx,baseY,dx);dummy.scale.set(1,h,1);dummy.updateMatrix();histBars.setMatrixAt(i,dummy.matrix);
+    const col=heatColor(0.04+0.96*(emp/scale)),b=breathe*(1+A.pulses[i]*1.4);
+    _col.setRGB(col[0]/255*b,col[1]/255*b,col[2]/255*b,THREE.SRGBColorSpace);histBars.setColorAt(i,_col);
+    const th=baseY+Math.max(1e-4,(A.probs[i]/scale)*BARMAX);          // amber target at the true probability
+    dummy.position.set(dx,th,dx);dummy.scale.set(1,1,1);dummy.updateMatrix();histMarks.setMatrixAt(i,dummy.matrix);}
+  histBars.instanceMatrix.needsUpdate=true;if(histBars.instanceColor)histBars.instanceColor.needsUpdate=true;
+  histMarks.instanceMatrix.needsUpdate=true;
+}
+function runSampling(){
+  if(!trace)return;
+  if(VS.viewMode!=='stack'){VS.viewMode='stack';document.querySelectorAll('.dock-view').forEach(b=>b.classList.toggle('active',b.dataset.view==='stack'));}
+  VS.showFull=true;const tf=document.getElementById('tog-full');if(tf)tf.classList.add('on');
+  VS.stageTime=totalStackTime();VS.playing=false;$('btn-play')&&($('btn-play').textContent='▶ Play',$('btn-play').classList.remove('active')); // reveal whole tower so the sampled layer is in view
+  let sampleLayer=totalLayers-1;const mi=trace.steps.findIndex(s=>s.kind==='measurement');
+  if(mi>=0)sampleLayer=mi;                                   // the superposition right before measurement collapses it
+  const st=layerStates[sampleLayer],D=1<<VS.numQubits;
+  const probs=new Array(D);let sm=0;for(let i=0;i<D;i++){const p=st.re[i]*st.re[i]+st.im[i]*st.im[i];probs[i]=p;sm+=p;}
+  if(sm>0)for(let i=0;i<D;i++)probs[i]/=sm;
+  const shots=Math.max(0,Math.round(+document.getElementById('sl-shots').value));
+  const gap=Math.max(0,+document.getElementById('sl-gap').value);
+  sampleAnim={probs,D,layer:sampleLayer,counts:new Array(D).fill(0),pulses:new Float32Array(D),maxc:1,
+    drawn:0,shots,gap,acc:gap,gp:0,done:false,rng:makeRng((((VS.seed+1)*2654435761)>>>0)||1)};
+  placeSampleGlow(sampleLayer);
+  histBars.count=D;histMarks.count=D;
+  for(let i=0;i<D;i++)histMarks.setColorAt(i,_col.setRGB(1,0.72,0.28,THREE.SRGBColorSpace));
+  if(histMarks.instanceColor)histMarks.instanceColor.needsUpdate=true;
+  histGroup.visible=true;
+  document.getElementById('hist-panel').classList.add('show');frameCamera();
+}
+function updateSampling(dt){
+  const A=sampleAnim;if(!A)return;A.gp+=dt*5;
+  if(!A.done){
+    if(A.gap<=0.001){while(A.drawn<A.shots)oneShot(A);}     // gap≈0 → emit all at once
+    else{
+      A.acc+=dt;
+      while(A.drawn<A.shots){                                // Gaussian-shaped rate: ~0.7s gaps at the ends, fast through the middle
+        const e=Math.min(A.drawn,A.shots-1-A.drawn),r=e/4,ramp=Math.exp(-0.5*r*r);
+        const g=0.006+(A.gap-0.006)*ramp;                     // start/end ≈ slider gap (slow); centre ≈ 6ms (fast)
+        if(A.acc<g)break;A.acc-=g;oneShot(A);
+      }
+    }
+    if(A.drawn>=A.shots)A.done=true;
+  }
+  const decay=Math.exp(-dt*4);for(let i=0;i<A.D;i++)A.pulses[i]*=decay;
+  paintSampleGlow(A);updateHistBars(A);drawHistogram(A);
+}
+function oneShot(A){const idx=sampleOutcome(A.rng,A.probs);A.counts[idx]++;A.pulses[idx]=1;A.drawn++;if(A.counts[idx]>A.maxc)A.maxc=A.counts[idx];}
+function paintSampleGlow(A){
+  if(!sampleMesh||sampleMesh.count!==A.D)return;
+  const breathe=0.75+0.25*Math.sin(A.gp);
+  for(let i=0;i<A.D;i++){const norm=A.counts[i]/A.maxc;
+    const b=norm*breathe*1.25 + A.pulses[i]*2.2;            // steady glow ∝ count, plus a spike each time it's hit
+    if(b<=0.001){_col.setRGB(0,0,0,THREE.SRGBColorSpace);}
+    else{const col=heatColor(0.01+0.99*curveEval(norm));_col.setRGB(col[0]/255*b,col[1]/255*b,col[2]/255*b,THREE.SRGBColorSpace);}
+    sampleMesh.setColorAt(i,_col);}
+  if(sampleMesh.instanceColor)sampleMesh.instanceColor.needsUpdate=true;
+}
+function drawHistogram(A){
+  const dpr=Math.min(devicePixelRatio||1,2),W=histCv.clientWidth||600,H=histCv.clientHeight||96;
+  if(histCv.width!==Math.round(W*dpr)||histCv.height!==Math.round(H*dpr)){histCv.width=Math.round(W*dpr);histCv.height=Math.round(H*dpr);}
+  hctx.setTransform(dpr,0,0,dpr,0,0);hctx.clearRect(0,0,W,H);
+  const D=A.D,padL=8,padR=W-8,padB=H-4,padT=4,bw=(padR-padL)/D;
+  let maxP=1e-4;for(let i=0;i<D;i++){maxP=Math.max(maxP,A.probs[i],A.counts[i]/Math.max(1,A.drawn));}
+  for(let i=0;i<D;i++){const x=padL+i*bw,emp=A.counts[i]/Math.max(1,A.drawn);
+    const eh=(emp/maxP)*(padB-padT),col=heatColor(A.probs[i]/maxP),fl=A.pulses?A.pulses[i]:0;
+    const br=1+fl*1.6;hctx.fillStyle='rgba('+Math.min(255,col[0]*br|0)+','+Math.min(255,col[1]*br|0)+','+Math.min(255,col[2]*br|0)+','+(0.9+0.1*fl)+')';
+    hctx.fillRect(x+bw*0.12,padB-eh,Math.max(1,bw*0.76),eh);
+    const th=(A.probs[i]/maxP)*(padB-padT);hctx.strokeStyle='rgba(255,200,80,0.85)';hctx.lineWidth=1;hctx.beginPath();hctx.moveTo(x+bw*0.05,padB-th);hctx.lineTo(x+bw*0.95,padB-th);hctx.stroke();}
+  hctx.strokeStyle='rgba(70,95,135,0.5)';hctx.lineWidth=1;hctx.beginPath();hctx.moveTo(padL,padB+0.5);hctx.lineTo(padR,padB+0.5);hctx.stroke();
+  document.getElementById('hist-info').innerHTML='<b>'+A.drawn+'</b> / '+A.shots+' shots · '+D+' basis states · amber line = true |ψ|²';
+}
+function stopSampling(){sampleAnim=null;if(sampleMesh)sampleMesh.count=0;if(histGroup)histGroup.visible=false;if(histBars)histBars.count=0;if(histMarks)histMarks.count=0;}
+document.getElementById('btn-sample').onclick=runSampling;
+document.getElementById('hist-close').onclick=()=>{document.getElementById('hist-panel').classList.remove('show');stopSampling();};
+
+/* ════════ loop ════════ */
+let last=0,fc=0,ft=0;const TL_FPS=26;
+function loop(t){requestAnimationFrame(loop);const dt=Math.min((t-last)/1000,0.05);last=t;
+  fc++;ft+=dt;if(ft>=0.5){document.getElementById('st-fps').textContent=Math.round(fc/ft)+' fps';fc=0;ft=0;}
+  if(trace){
+    if(VS.threshDirty){builtStage=-1;layerEndArr=[];edgeEndArr=[];VS.threshDirty=false;}  // re-pack with the new heat cutoff
+    const sc=document.getElementById('sl-scrub');
+    if(VS.viewMode==='stack'){
+      if(VS.playing){VS.stageTime+=dt*VS.speed;if(VS.stageTime>=totalStackTime())VS.stageTime=0;}
+      updateStack(dt);
+      const stage=currentStageFor(VS.stageTime),sf=stageFrame(stage);
+      drawLens(sf);updateHud(sf);
+      if(document.activeElement!==sc){const f=VS.stageTime/Math.max(1e-6,totalStackTime());sc.value=Math.round(f*100);sc.style.setProperty('--pct',(f*100)+'%');document.getElementById('vl-scrub').textContent=Math.round(f*100)+'%';}
+    } else {
+      if(VS.playing){VS.frameIndex+=VS.speed*TL_FPS*dt;if(VS.frameIndex>=trace.frames.length)VS.frameIndex=0;}
+      const fi=Math.max(0,Math.min(trace.frames.length-1,Math.floor(VS.frameIndex))),frame=trace.frames[fi];
+      updateFloor(frame,dt);drawLens(frame);updateHud(frame);
+      if(document.activeElement!==sc){const f=fi/Math.max(1,trace.frames.length-1);sc.value=Math.round(f*100);sc.style.setProperty('--pct',(f*100)+'%');document.getElementById('vl-scrub').textContent=Math.round(f*100)+'%';}
+    }
+    followPlayhead();
+    if(sampleAnim)updateSampling(dt);
+  }
+  controls.update();composer.render();}
+function resize(){const w=document.getElementById('gl-host');const W=w.clientWidth||600,H=w.clientHeight||400;renderer.setSize(W,H,false);composer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();}
+if(window.ResizeObserver)new ResizeObserver(resize).observe(document.getElementById('gl-host'));else window.addEventListener('resize',resize);
+
+/* ════════ UI wiring ════════ */
+const $=id=>document.getElementById(id);
+function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
+function clampQ(){VS.target=Math.max(0,Math.min(VS.numQubits-1,VS.target));VS.control=Math.max(0,Math.min(VS.numQubits-1,VS.control));$('t-val').textContent=VS.target;$('c-val').textContent=VS.control;$('q-count').textContent=VS.numQubits;}
+function renderList(){const list=$('gate-list');list.innerHTML='';if(VS.gates.length===0){list.innerHTML='<div class="gate-empty">pick a preset or build</div>';return;}
+  VS.gates.forEach((g,i)=>{const d=document.createElement('div');d.className='gate-item';let q;
+    if(g.kind==='measurement')q='all';else if(g.controls&&g.controls.length)q='c'+g.controls[0]+'→t'+g.targets[0];else if(g.name==='swap')q=g.targets[0]+'↔'+g.targets[1];else q='q'+g.targets[0]+(g.params&&g.params.length?' ('+g.params[0].toFixed(2)+')':'');
+    d.innerHTML=`<span class="gi-idx">${i}</span><span class="gi-name">${g.kind==='measurement'?'MEAS':g.name.toUpperCase()}</span><span class="gi-q">${q}</span><button class="gi-del" data-i="${i}">✕</button>`;list.appendChild(d);});
+  list.querySelectorAll('.gi-del').forEach(b=>b.addEventListener('click',()=>{VS.gates.splice(+b.dataset.i,1);VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));rebuild();}));}
+function addGate(name){const two=['cx','cz','swap'].includes(name),rot=['rx','ry','rz'].includes(name);let g;
+  if(name==='swap')g={name,kind:'unitary',targets:[VS.target,VS.control],controls:[]};
+  else if(two)g={name,kind:'unitary',targets:[VS.target],controls:[VS.control]};
+  else if(rot)g={name,kind:'unitary',targets:[VS.target],controls:[],params:[VS.angle]};
+  else g={name,kind:'unitary',targets:[VS.target],controls:[]};
+  if(two&&VS.target===VS.control){const e=$('c-val');e.style.color='var(--red)';setTimeout(()=>e.style.color='',300);return;}
+  VS.gates=VS.gates.filter(x=>x.kind!=='measurement');VS.gates.push(g);VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));rebuild();}
+$('q-minus').onclick=()=>{VS.numQubits=Math.max(1,VS.numQubits-1);clampQ();if(VS.preset!=='custom')loadPreset(VS.preset);else rebuild();};
+$('q-plus').onclick=()=>{VS.numQubits=Math.min(8,VS.numQubits+1);clampQ();if(VS.preset!=='custom')loadPreset(VS.preset);else rebuild();};
+$('t-minus').onclick=()=>{VS.target--;clampQ();};$('t-plus').onclick=()=>{VS.target++;clampQ();};
+$('c-minus').onclick=()=>{VS.control--;clampQ();};$('c-plus').onclick=()=>{VS.control++;clampQ();};
+$('sl-angle').addEventListener('input',function(){VS.angle=+this.value;sg(this);const f=this.value/Math.PI;$('vl-angle').textContent=Math.abs(f-0.5)<0.02?'π/2':Math.abs(f-1)<0.02?'π':f.toFixed(2)+'π';});sg($('sl-angle'));
+document.querySelectorAll('.gate-btn').forEach(b=>b.addEventListener('click',()=>addGate(b.dataset.g)));
+$('btn-measure').onclick=()=>{VS.gates=VS.gates.filter(x=>x.kind!=='measurement');VS.gates.push({name:'measure',kind:'measurement',targets:Array.from({length:VS.numQubits},(_,i)=>i)});rebuild();};
+$('btn-clear').onclick=()=>{VS.gates=[];VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));rebuild();};
+document.querySelectorAll('.preset-btn').forEach(b=>b.addEventListener('click',()=>loadPreset(b.dataset.preset)));
+document.querySelectorAll('.dock-view').forEach(b=>b.addEventListener('click',()=>{VS.viewMode=b.dataset.view;stopSampling();document.getElementById('hist-panel').classList.remove('show');builtStage=-1;layerEndArr=[];edgeEndArr=[];document.querySelectorAll('.dock-view').forEach(x=>x.classList.toggle('active',x===b));frameCamera();updateHudStatic();}));
+document.querySelectorAll('.mode-grid .mode-btn').forEach(b=>b.addEventListener('click',()=>{VS.colorMode=b.dataset.cm;document.querySelectorAll('.mode-grid .mode-btn').forEach(x=>x.classList.toggle('active',x===b));builtStage=-1;layerEndArr=[];edgeEndArr=[];updateHudStatic();}));
+// colormap grid (fluidlab-style swatches)
+function renderCmapPreviews(){document.querySelectorAll('.cmap-btn').forEach(btn=>{const cv=btn.querySelector('canvas');cv.width=120;cv.height=24;const x=cv.getContext('2d');const H=CMAPS[btn.dataset.cmap];for(let px=0;px<120;px++){const t=px/119,s=t*(H.length-1),i=Math.min(Math.floor(s),H.length-2),f=s-i;x.fillStyle='rgb('+((H[i][0]+(H[i+1][0]-H[i][0])*f)|0)+','+((H[i][1]+(H[i+1][1]-H[i][1])*f)|0)+','+((H[i][2]+(H[i+1][2]-H[i][2])*f)|0)+')';x.fillRect(px,0,1,24);}});}
+document.querySelectorAll('.cmap-btn').forEach(b=>b.addEventListener('click',()=>{ACTIVE_HEAT=CMAPS[b.dataset.cmap];document.querySelectorAll('.cmap-btn').forEach(x=>x.classList.toggle('active',x===b));if(edgeLines)edgeLines.material.color.copy(edgeColor3());builtStage=-1;layerEndArr=[];edgeEndArr=[];if(typeof drawCurveEditor==='function')drawCurveEditor();updateHudStatic();}));
+renderCmapPreviews();
+// shape grid
+document.querySelectorAll('.shape-grid .mode-btn').forEach(b=>b.addEventListener('click',()=>{VS.shape=b.dataset.shape;document.querySelectorAll('.shape-grid .mode-btn').forEach(x=>x.classList.toggle('active',x===b));builtStage=-1;layerEndArr=[];edgeEndArr=[];rebuildMeshes();}));
+// background swatches
+document.querySelectorAll('.bg-sw').forEach(b=>b.addEventListener('click',()=>setBg(b.dataset.bg)));
+$('btn-play').onclick=function(){VS.playing=!VS.playing;if(VS.playing)revealMode();this.textContent=VS.playing?'▐▐ Pause':'▶ Play';this.classList.toggle('active',VS.playing);};
+$('btn-step').onclick=()=>{if(!trace)return;revealMode();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');
+  if(VS.viewMode==='stack'){const ns=currentStageFor(VS.stageTime)+1;VS.stageTime=(ns>=totalLayers?0:ns)*stageDuration();return;}
+  const fi=Math.floor(VS.frameIndex),cur=trace.frames[Math.min(fi,trace.frames.length-1)].stepIndex;let j=fi+1;while(j<trace.frames.length&&trace.frames[j].stepIndex===cur)j++;VS.frameIndex=j<trace.frames.length?j:0;};
+$('btn-restart').onclick=()=>{VS.frameIndex=0;VS.stageTime=0;builtStage=-1;layerEndArr=[];edgeEndArr=[];};
+$('sl-speed').addEventListener('input',function(){VS.speed=+this.value;$('vl-speed').textContent=(+this.value).toFixed(1);sg(this);});sg($('sl-speed'));
+$('sl-hold').addEventListener('input',function(){VS.holdTime=+this.value;$('vl-hold').textContent=(+this.value).toFixed(1)+'s';sg(this);});sg($('sl-hold'));
+$('sl-thresh').addEventListener('input',function(){VS.threshold=+this.value;$('vl-thresh').textContent=(+this.value).toFixed(2);VS.threshDirty=true;sg(this);});sg($('sl-thresh'));
+/* ---- tone curve editor (Photoshop-style draggable keys) ---- */
+const curveCv=$('curve-cv'),cux=curveCv.getContext('2d');let curveDrag=-1;const CVP=9;
+const cvGX=(x,W)=>CVP+x*(W-2*CVP),cvGY=(y,H)=>H-CVP-y*(H-2*CVP);
+function drawCurveEditor(){
+  const dpr=Math.min(devicePixelRatio||1,2),W=curveCv.clientWidth||230,H=curveCv.clientHeight||128;
+  if(curveCv.width!==(W*dpr|0)||curveCv.height!==(H*dpr|0)){curveCv.width=W*dpr|0;curveCv.height=H*dpr|0;}
+  cux.setTransform(dpr,0,0,dpr,0,0);cux.clearRect(0,0,W,H);
+  cux.strokeStyle='rgba(150,200,255,0.07)';cux.lineWidth=1;
+  for(let i=0;i<=4;i++){const t=i/4;cux.beginPath();cux.moveTo(cvGX(t,W),cvGY(0,H));cux.lineTo(cvGX(t,W),cvGY(1,H));cux.moveTo(cvGX(0,W),cvGY(t,H));cux.lineTo(cvGX(1,W),cvGY(t,H));cux.stroke();}
+  cux.strokeStyle='rgba(150,200,255,0.13)';cux.setLineDash([3,3]);cux.beginPath();cux.moveTo(cvGX(0,W),cvGY(0,H));cux.lineTo(cvGX(1,W),cvGY(1,H));cux.stroke();cux.setLineDash([]);
+  const hc=heatColor(0.85),cs='rgb('+(hc[0]|0)+','+(hc[1]|0)+','+(hc[2]|0)+')';
+  cux.strokeStyle=cs;cux.lineWidth=2;cux.beginPath();
+  for(let i=0;i<=80;i++){const x=i/80,y=curveEval(x);if(i===0)cux.moveTo(cvGX(x,W),cvGY(y,H));else cux.lineTo(cvGX(x,W),cvGY(y,H));}cux.stroke();
+  for(let i=0;i<CURVE.pts.length;i++){const a=CURVE.pts[i],X=cvGX(a.x,W),Y=cvGY(a.y,H),mid=(i===1);
+    cux.beginPath();cux.arc(X,Y,mid?(curveDrag===1?6:5):3,0,7);cux.fillStyle=mid?'#0a0e16':cs;cux.fill();
+    if(mid){cux.lineWidth=2;cux.strokeStyle=curveDrag===1?'#fff':cs;cux.stroke();}}
+}
+function curvePt(e){const r=curveCv.getBoundingClientRect(),W=r.width,H=r.height;
+  return {x:Math.min(1,Math.max(0,((e.clientX-r.left)-CVP)/(W-2*CVP))),y:Math.min(1,Math.max(0,1-((e.clientY-r.top)-CVP)/(H-2*CVP)))};}
+function curveHit(pt){const r=curveCv.getBoundingClientRect(),W=r.width,H=r.height;
+  for(let i=0;i<CURVE.pts.length;i++){const dx=(CURVE.pts[i].x-pt.x)*(W-2*CVP),dy=(CURVE.pts[i].y-pt.y)*(H-2*CVP);if(dx*dx+dy*dy<110)return i;}return -1;}
+function curveChanged(){buildCurve();builtStage=-1;layerEndArr=[];edgeEndArr=[];drawCurveEditor();}
+function curveSet(e){const pt=curvePt(e);CURVE.pts[1].x=Math.min(0.98,Math.max(0.02,pt.x));CURVE.pts[1].y=Math.min(1,Math.max(0,pt.y));curveChanged();}
+curveCv.addEventListener('pointerdown',e=>{e.preventDefault();curveDrag=1;curveCv.setPointerCapture(e.pointerId);curveSet(e);});
+curveCv.addEventListener('pointermove',e=>{if(curveDrag!==1)return;curveSet(e);});
+curveCv.addEventListener('pointerup',e=>{curveDrag=-1;try{curveCv.releasePointerCapture(e.pointerId);}catch(_){}drawCurveEditor();});
+$('curve-reset').onclick=()=>{CURVE.pts=[{x:0,y:0},{x:0.5,y:Math.pow(0.5,0.4)},{x:1,y:1}];curveDrag=-1;curveChanged();};
+drawCurveEditor();
+$('sl-scrub').addEventListener('input',function(){if(trace){const f=+this.value/100;if(VS.viewMode==='stack')VS.stageTime=f*totalStackTime();else VS.frameIndex=f*(trace.frames.length-1);revealMode();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');}sg(this);});
+$('sl-seed').addEventListener('input',function(){VS.seed=+this.value;$('vl-seed').textContent=this.value;sg(this);rebuild();});sg($('sl-seed'));
+$('sl-shots').addEventListener('input',function(){$('vl-shots').textContent=this.value;sg(this);});sg($('sl-shots'));
+$('sl-gap').addEventListener('input',function(){$('vl-gap').textContent=(+this.value).toFixed(2)+'s';sg(this);if(sampleAnim)sampleAnim.gap=+this.value;});sg($('sl-gap'));
+$('tog-full').onclick=function(){VS.showFull=!VS.showFull;this.classList.toggle('on',VS.showFull);
+  if(VS.showFull){VS.stageTime=totalStackTime();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');}};
+$('tog-rotate').onclick=function(){VS.autoRotate=!VS.autoRotate;controls.autoRotate=VS.autoRotate;this.classList.toggle('on',VS.autoRotate);};
+$('tog-floor').onclick=function(){VS.floorGrid=!VS.floorGrid;this.classList.toggle('on',VS.floorGrid);};
+$('tog-net').onclick=function(){VS.network=!VS.network;this.classList.toggle('on',VS.network);};
+$('tog-labels').onclick=function(){VS.labels=!VS.labels;if(labelGroup)labelGroup.visible=VS.labels;this.classList.toggle('on',VS.labels);};
+$('orient-btn').onclick=function(){VS.stackAxis=VS.stackAxis==='horizontal'?'vertical':'horizontal';
+  this.textContent=VS.stackAxis==='horizontal'?'⬌ Horizontal stack':'⬍ Vertical stack';
+  if(VS.viewMode!=='stack'){VS.viewMode='stack';document.querySelectorAll('.dock-view').forEach(b=>b.classList.toggle('active',b.dataset.view==='stack'));}
+  frameCamera();};
+
+resize();clampQ();loadPreset('qft');requestAnimationFrame(loop);
+</script>
+</body>
+</html>
