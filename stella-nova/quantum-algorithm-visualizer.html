@@ -189,6 +189,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 #grid-tip .gt-cell{font-size:0.8rem;color:#dbe4f2}
 #grid-tip .gt-val{font-size:0.62rem;color:var(--text-dim);margin-top:3px}
 #grid-tip .gt-note{font-size:0.55rem;color:var(--text-faint);margin-top:5px;line-height:1.35;white-space:normal}
+@media(max-width:760px){#step-inspector,#grid2d-panel,#tog-inspect,#tog-grid2d,#gate-tip,#grid-tip{display:none !important}}
 #orient-btn:hover{border-color:var(--blue-dim);background:rgba(150,200,255,0.15);color:var(--cyan)}
 .legend i{display:inline-block;width:54px;height:8px;margin-right:4px;vertical-align:middle}
 #status-bar{height:24px;flex-shrink:0;background:rgba(14,17,24,0.94);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:12px;z-index:50;font-size:0.54rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500}
@@ -1598,7 +1599,16 @@ function applyAutoOrient(W,H){                              // wide window → h
     if(b)b.textContent=want==='horizontal'?'⬌ Horizontal (auto)':'⬍ Vertical (auto)';
     if(typeof frameCamera==='function')frameCamera();}
 }
-function resize(){const w=document.getElementById('gl-host');const W=w.clientWidth||600,H=w.clientHeight||400;renderer.setSize(W,H,false);composer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();applyAutoOrient(W,H);}
+let wasMobile=null;
+function applyMobileLayout(W){                              // narrow viewport: kill the overlay panels (they cover the 3D view)
+  const mob=W<760;if(mob===wasMobile)return;wasMobile=mob;
+  if(mob){VS.stepInspect=false;VS.grid2d=false;
+    document.getElementById('step-inspector').classList.remove('show');document.getElementById('grid2d-panel').classList.remove('show');
+    const a=document.getElementById('tog-inspect'),b=document.getElementById('tog-grid2d');if(a)a.classList.remove('on');if(b)b.classList.remove('on');}
+  else{VS.stepInspect=true;VS.grid2d=true;grid2dDirty=true;last2dLayer=-99;
+    const a=document.getElementById('tog-inspect'),b=document.getElementById('tog-grid2d');if(a)a.classList.add('on');if(b)b.classList.add('on');}
+}
+function resize(){const w=document.getElementById('gl-host');const W=w.clientWidth||600,H=w.clientHeight||400;renderer.setSize(W,H,false);composer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();applyAutoOrient(W,H);applyMobileLayout(window.innerWidth||W);}
 if(window.ResizeObserver)new ResizeObserver(resize).observe(document.getElementById('gl-host'));else window.addEventListener('resize',resize);
 
 /* ════════ UI wiring ════════ */
