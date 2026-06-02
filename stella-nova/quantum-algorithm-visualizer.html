@@ -762,6 +762,7 @@ function phaseSchedule(totalSubsteps) {
 function buildTrace(circuit, { substeps = 24, seed = 42 } = {}) {
   const N = circuit.numQubits;
   let state = initializeState(N);
+  if(typeof initBasis==='number'&&initBasis>0&&initBasis<state.re.length){state.re[0]=0;state.re[initBasis]=1;}  // custom start state |b⟩
   const sched = phaseSchedule(substeps);
   const rng = makeRng(seed);
 
@@ -863,7 +864,7 @@ function smooth(t){t=clamp01(t);return t*t*(3-2*t);}
 const VS={numQubits:4,gates:[],target:0,control:1,angle:Math.PI/2,seed:24,substeps:24,
   playing:true,speed:2,frameIndex:0,stageTime:0,holdTime:0.7,threshold:0,threshDirty:false,preset:'qft',colorMode:'mag',viewMode:'stack',
   autoRotate:true,floorGrid:false,network:true,labels:true,shape:'round',showFull:false,bg:'black',gamma:0.2,stackAxis:'vertical',autoOrient:true,stepInspect:true,grid2d:true};
-let trace=null,layerStates=[],layerCell=[],totalLayers=1,builtStage=-1,layerEndArr=[],edgeEndArr=[];
+let trace=null,layerStates=[],layerCell=[],totalLayers=1,builtStage=-1,layerEndArr=[],edgeEndArr=[],initBasis=0;
 const PRESET_N={bell:2,grover:3,dj:3,bv:4,toffoli:3,kick:2,teleport:3}; // fixed-size presets; others scale with the qubit count
 function presetGates(name,n){const g=[];
   const H=q=>g.push({name:'h',kind:'unitary',targets:[q],controls:[]});
@@ -924,7 +925,7 @@ function rebuild(keepPos){
   document.getElementById('st-dim').textContent=DIM+'×'+DIM+' cells';
   document.getElementById('st-layers').textContent=totalLayers+' layer'+(totalLayers>1?'s':'');
 }
-function loadPreset(name){VS.preset=name;if(PRESET_N[name]){VS.numQubits=PRESET_N[name];clampQ();}VS.gates=presetGates(name,VS.numQubits);
+function loadPreset(name){VS.preset=name;initBasis=0;if(PRESET_N[name]){VS.numQubits=PRESET_N[name];clampQ();}VS.gates=presetGates(name,VS.numQubits);
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active',b.dataset.preset===name));rebuild();setQiskitFromState();}
 
 /* ════════ three.js scene ════════ */
@@ -1033,6 +1034,7 @@ function rebuildMeshes(){
   netLines=new THREE.LineSegments(ng,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.6,blending:THREE.AdditiveBlending,depthWrite:false}));
   netLines.frustumCulled=false;grp.add(netLines);
   buildLabels();
+  ensureInitPicker();
 }
 function buildLabels(){
   if(labelGroup){disposeGroup(labelGroup);}
@@ -1578,7 +1580,7 @@ document.getElementById('qiskit-custom').onclick=function(){
   ta.addEventListener('scroll',()=>{const hl=document.getElementById('qiskit-hl');hl.scrollTop=ta.scrollTop;hl.scrollLeft=ta.scrollLeft;});})();
 document.getElementById('qiskit-run').onclick=()=>{const msg=document.getElementById('qiskit-msg');try{
   const {n,gates}=parseQiskit(document.getElementById('qiskit-src').value);
-  VS.numQubits=n;VS.preset='custom';VS.gates=gates;clampQ();
+  VS.numQubits=n;VS.preset='custom';VS.gates=gates;initBasis=0;clampQ();
   document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));
   rebuild();syncQiskitHL();msg.textContent='✓ '+gates.length+' ops on '+n+' qubits';msg.className='ok';
 }catch(e){msg.textContent='✕ '+e;msg.className='err';}};
@@ -1735,8 +1737,8 @@ function addGate(name){const two=['cx','cz','swap'].includes(name),rot=['rx','ry
   else g={name,kind:'unitary',targets:[VS.target],controls:[]};
   if(two&&VS.target===VS.control){const e=$('c-val');e.style.color='var(--red)';setTimeout(()=>e.style.color='',300);return;}
   VS.gates=VS.gates.filter(x=>x.kind!=='measurement');VS.gates.push(g);VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));rebuild();}
-$('q-minus').onclick=()=>{VS.numQubits=Math.max(1,VS.numQubits-1);clampQ();if(VS.preset!=='custom')loadPreset(VS.preset);else rebuild();};
-$('q-plus').onclick=()=>{VS.numQubits=Math.min(8,VS.numQubits+1);clampQ();if(VS.preset!=='custom')loadPreset(VS.preset);else rebuild();};
+$('q-minus').onclick=()=>{VS.numQubits=Math.max(1,VS.numQubits-1);initBasis=0;clampQ();if(VS.preset!=='custom')loadPreset(VS.preset);else rebuild();};
+$('q-plus').onclick=()=>{VS.numQubits=Math.min(8,VS.numQubits+1);initBasis=0;clampQ();if(VS.preset!=='custom')loadPreset(VS.preset);else rebuild();};
 $('t-minus').onclick=()=>{VS.target--;clampQ();};$('t-plus').onclick=()=>{VS.target++;clampQ();};
 $('c-minus').onclick=()=>{VS.control--;clampQ();};$('c-plus').onclick=()=>{VS.control++;clampQ();};
 $('sl-angle').addEventListener('input',function(){VS.angle=+this.value;sg(this);const f=this.value/Math.PI;$('vl-angle').textContent=Math.abs(f-0.5)<0.02?'π/2':Math.abs(f-1)<0.02?'π':f.toFixed(2)+'π';});sg($('sl-angle'));
@@ -1774,7 +1776,7 @@ document.querySelectorAll('.gate-btn').forEach(b=>{
 $('btn-measure').onclick=()=>{VS.gates=VS.gates.filter(x=>x.kind!=='measurement');VS.gates.push({name:'measure',kind:'measurement',targets:Array.from({length:VS.numQubits},(_,i)=>i)});rebuild();};
 $('btn-clear').onclick=()=>{VS.gates=[];VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));rebuild();};
 document.querySelectorAll('.preset-btn').forEach(b=>b.addEventListener('click',()=>loadPreset(b.dataset.preset)));
-document.querySelectorAll('.dock-view').forEach(b=>b.addEventListener('click',()=>{VS.viewMode=b.dataset.view;stopSampling();document.getElementById('hist-panel').classList.remove('show');builtStage=-1;layerEndArr=[];edgeEndArr=[];document.querySelectorAll('.dock-view').forEach(x=>x.classList.toggle('active',x===b));frameCamera();updateHudStatic();}));
+document.querySelectorAll('.dock-view').forEach(b=>b.addEventListener('click',()=>{VS.viewMode=b.dataset.view;stopSampling();document.getElementById('hist-panel').classList.remove('show');builtStage=-1;layerEndArr=[];edgeEndArr=[];document.querySelectorAll('.dock-view').forEach(x=>x.classList.toggle('active',x===b));frameCamera();updateHudStatic();if(typeof updateDiagGuide==='function')updateDiagGuide();hideInitHover();}));
 document.querySelectorAll('.mode-grid .mode-btn').forEach(b=>b.addEventListener('click',()=>{VS.colorMode=b.dataset.cm;document.querySelectorAll('.mode-grid .mode-btn').forEach(x=>x.classList.toggle('active',x===b));builtStage=-1;layerEndArr=[];edgeEndArr=[];grid2dDirty=true;updateHudStatic();}));
 // colormap grid (fluidlab-style swatches)
 function renderCmapPreviews(){document.querySelectorAll('.cmap-btn').forEach(btn=>{const cv=btn.querySelector('canvas');cv.width=120;cv.height=24;const x=cv.getContext('2d');const H=CMAPS[btn.dataset.cmap];for(let px=0;px<120;px++){const t=px/119,s=t*(H.length-1),i=Math.min(Math.floor(s),H.length-2),f=s-i;x.fillStyle='rgb('+((H[i][0]+(H[i+1][0]-H[i][0])*f)|0)+','+((H[i][1]+(H[i+1][1]-H[i][1])*f)|0)+','+((H[i][2]+(H[i+1][2]-H[i][2])*f)|0)+')';x.fillRect(px,0,1,24);}});}
@@ -1842,6 +1844,60 @@ $('orient-btn').onclick=function(){
   else this.textContent=VS.stackAxis==='horizontal'?'⬌ Horizontal stack':'⬍ Vertical stack';
   if(VS.viewMode!=='stack'){VS.viewMode='stack';document.querySelectorAll('.dock-view').forEach(b=>b.classList.toggle('active',b.dataset.view==='stack'));}
   frameCamera();};
+
+/* ════════ init-state picker — hover bottom grid (layer 0) for |b⟩, click to set the start state ════════ */
+const _ray=new THREE.Raycaster(),_ndc=new THREE.Vector2();
+let pickPlane=null,pickHi=null,diagGuide=null,_downXY=null;
+const DIAG_CAP=300;
+const initTip=document.createElement('div');initTip.id='init-tip';
+initTip.style.cssText='position:fixed;z-index:600;pointer-events:none;display:none;background:rgba(9,12,20,0.97);border:1px solid rgba(150,200,255,0.35);border-radius:7px;padding:7px 10px;font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#cdd6e6;box-shadow:0 6px 22px rgba(0,0,0,0.55);max-width:230px;line-height:1.4';
+document.body.appendChild(initTip);
+function ensureInitPicker(){
+  if(!grp)return;
+  if(!pickPlane||pickPlane.parent!==grp){const pg=new THREE.PlaneGeometry(600,600);pickPlane=new THREE.Mesh(pg,new THREE.MeshBasicMaterial({visible:false}));pickPlane.rotation.x=-Math.PI/2;pickPlane.frustumCulled=false;grp.add(pickPlane);}
+  if(!pickHi||pickHi.parent!==grp){const hg=new THREE.BoxGeometry(PITCH*0.98,CUBE*1.14,PITCH*0.98);hg.translate(0,CUBE*0.5,0);
+    pickHi=new THREE.Mesh(hg,new THREE.MeshBasicMaterial({color:0x9cc8ff,transparent:true,opacity:0.30,depthWrite:false,toneMapped:false}));pickHi.visible=false;pickHi.frustumCulled=false;grp.add(pickHi);}
+  if(!diagGuide||diagGuide.parent!==grp){const dg=new THREE.BoxGeometry(PITCH*0.9,0.05,PITCH*0.9);dg.translate(0,0.02,0);
+    diagGuide=new THREE.InstancedMesh(dg,new THREE.MeshBasicMaterial({transparent:true,opacity:0.4,depthWrite:false,toneMapped:false}),DIAG_CAP);
+    diagGuide.setColorAt(0,_col.setRGB(0.27,0.78,0.95,THREE.SRGBColorSpace));diagGuide.count=0;diagGuide.frustumCulled=false;grp.add(diagGuide);}
+  updateDiagGuide();
+}
+function updateDiagGuide(){
+  if(!diagGuide)return;const off=(DIM-1)/2,n=Math.min(DIM,DIAG_CAP);
+  for(let i=0;i<n;i++){const sel=(i===initBasis);dummy.position.set((i-off)*PITCH,0,(i-off)*PITCH);dummy.scale.set(1,sel?3.2:1,1);dummy.updateMatrix();diagGuide.setMatrixAt(i,dummy.matrix);
+    if(sel)_col.setRGB(1,0.72,0.28,THREE.SRGBColorSpace).multiplyScalar(1.5);else _col.setRGB(0.27,0.78,0.95,THREE.SRGBColorSpace);diagGuide.setColorAt(i,_col);}
+  diagGuide.count=n;diagGuide.instanceMatrix.needsUpdate=true;if(diagGuide.instanceColor)diagGuide.instanceColor.needsUpdate=true;
+  diagGuide.visible=(VS.viewMode==='stack');
+}
+function ketStr(idx){return idx.toString(2).padStart(Math.max(1,VS.numQubits),'0');}
+function pickRC(e){
+  if(VS.viewMode!=='stack'||!grp){return null;}ensureInitPicker();
+  const rect=canvas.getBoundingClientRect();
+  _ndc.x=((e.clientX-rect.left)/rect.width)*2-1;_ndc.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  _ray.setFromCamera(_ndc,camera);const hit=_ray.intersectObject(pickPlane,false)[0];if(!hit)return null;
+  const lp=grp.worldToLocal(hit.point.clone()),off=(DIM-1)/2;
+  const c=Math.round(lp.x/PITCH+off),r=Math.round(lp.z/PITCH+off);
+  if(r<0||c<0||r>=DIM||c>=DIM)return null;return {r,c,off};
+}
+function hideInitHover(){if(pickHi)pickHi.visible=false;initTip.style.display='none';}
+function onInitMove(e){
+  const rc=pickRC(e);if(!rc){hideInitHover();return;}
+  const {r,c,off}=rc,diag=(r===c);
+  pickHi.position.set((c-off)*PITCH,0,(r-off)*PITCH);pickHi.material.color.setHex(diag?0x9cc8ff:0x5a7090);pickHi.material.opacity=diag?0.34:0.16;pickHi.visible=true;
+  initTip.innerHTML = diag
+    ? 'start state &nbsp;<b style="color:#9cc8ff">|'+ketStr(r)+'⟩</b>'+(r===initBasis?' <span style="color:#64c864">(current)</span>':'')+'<div style="color:#7a8aa6;font-size:0.58rem;margin-top:3px">click to begin the circuit here</div>'
+    : '⟨'+ketStr(r)+'|ρ₀|'+ketStr(c)+'⟩ coherence<div style="color:#7a8aa6;font-size:0.58rem;margin-top:3px">pick a diagonal cell to set the start state</div>';
+  initTip.style.display='block';const pad=15,w=initTip.offsetWidth,h=initTip.offsetHeight;
+  let x=e.clientX+pad,y=e.clientY+pad;if(x+w>innerWidth-6)x=e.clientX-pad-w;if(y+h>innerHeight-6)y=e.clientY-pad-h;
+  initTip.style.left=x+'px';initTip.style.top=y+'px';
+}
+canvas.addEventListener('pointermove',onInitMove);
+canvas.addEventListener('pointerleave',hideInitHover);
+canvas.addEventListener('pointerdown',e=>{_downXY=[e.clientX,e.clientY];});
+canvas.addEventListener('pointerup',e=>{if(!_downXY)return;const dx=e.clientX-_downXY[0],dy=e.clientY-_downXY[1];_downXY=null;
+  if(dx*dx+dy*dy>25)return;                       // drag = orbit, not a pick
+  const rc=pickRC(e);if(rc&&rc.r===rc.c){initBasis=rc.r;rebuild(true);VS.stageTime=0;VS.frameIndex=0;onInitMove(e);}
+});
 
 resize();clampQ();loadPreset('qft');requestAnimationFrame(loop);
 </script>
