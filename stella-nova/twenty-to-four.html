@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Twenty to Four // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<style>
+:root{
+  --bg:#0e1118;--surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.08);--border-b:rgba(150,200,255,0.2);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--blue-faint:rgba(150,200,255,0.05);
+  --yellow:#ffc832;--yellow-dim:#b8901e;
+  --cyan:#60e0ee;--green:#64c864;--red:#e05050;--amber:#ffb84d;--grey:#7a8aa0;
+  --text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;font-size:15px}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.4))}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:42px;flex-shrink:0;background:rgba(14,17,24,0.94);border-bottom:1px solid var(--border-b);z-index:100}
+.in-frame .topbar{display:none!important}
+.topbar-l{display:flex;align-items:baseline;gap:1.1rem}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:500;font-size:1.3rem;letter-spacing:0.1em}
+.sys-status{color:var(--cyan);font-size:0.68rem;letter-spacing:0.16em;text-transform:uppercase}
+.topbar-r{font-size:0.62rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint)}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
+
+#main{display:flex;flex:1;min-height:0;position:relative;z-index:1}
+
+/* ─── LEFT RAIL (controls) ─── */
+#rail{width:212px;flex-shrink:0;background:rgba(9,12,20,0.96);border-right:1px solid var(--border-b);display:flex;flex-direction:column;overflow-y:auto;padding:14px 13px 22px}
+.r-sec{margin-bottom:17px}
+.r-lbl{font-size:0.58rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-faint);font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.r-lbl::after{content:'';flex:1;height:1px;background:var(--border)}
+.r-row{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.r-row-lbl{font-size:0.6rem;color:var(--text-dim);width:58px;flex-shrink:0;letter-spacing:0.05em;text-transform:uppercase}
+.r-row input[type=range]{flex:1;-webkit-appearance:none;height:3px;background:linear-gradient(to right,var(--blue-dim) 0%,var(--blue-dim) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%));border-radius:2px;outline:none;cursor:pointer}
+.r-row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);cursor:pointer}
+.r-row input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--bg);border:2px solid var(--blue-dim);cursor:pointer}
+.r-row .val{min-width:34px;text-align:right;font-size:0.66rem;color:var(--blue);font-weight:600;font-variant-numeric:tabular-nums}
+.tog{display:flex;align-items:center;gap:7px;width:100%;padding:7px 9px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:inherit;font-size:0.63rem;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;transition:all .15s;text-align:left;font-weight:500;margin-bottom:5px}
+.tog:hover{border-color:rgba(150,200,255,0.3);color:var(--text)}
+.tog.on{background:rgba(96,224,238,0.07);border-color:rgba(96,224,238,0.32);color:var(--cyan)}
+.btns{display:flex;gap:5px}
+.btn{flex:1;padding:8px 4px;background:transparent;border:1px solid var(--border-b);color:var(--text-dim);font-family:inherit;font-size:0.62rem;letter-spacing:0.05em;text-transform:uppercase;cursor:pointer;transition:all .15s;font-weight:600}
+.btn:hover{border-color:var(--blue-dim);color:var(--blue)}
+.btn.active{background:rgba(150,200,255,0.1);border-color:rgba(150,200,255,0.4);color:var(--blue)}
+.hint{font-size:0.6rem;line-height:1.6;color:var(--text-faint)}
+.hint b{color:var(--text-dim);font-weight:500}
+
+/* ─── CENTER STAGE (canvas) ─── */
+#stage{flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;background:#0b0e15}
+#sim-canvas{display:block;width:100%;height:100%;cursor:grab}
+#sim-canvas:active{cursor:grabbing}
+#ovl-caption{position:absolute;left:12px;bottom:12px;max-width:calc(100% - 24px);padding:9px 14px;background:rgba(9,12,20,0.9);border:1px solid var(--border-b);border-left:3px solid var(--amber);backdrop-filter:blur(10px);font-size:0.74rem;letter-spacing:0.02em;color:var(--text-bright);z-index:30;opacity:0;transition:opacity .15s;pointer-events:none;line-height:1.5}
+#ovl-caption.show{opacity:1}
+#ovl-caption .ck{color:var(--text-faint);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.14em;display:block;margin-top:3px}
+#ovl-caption .pm{font-weight:700}#ovl-caption .pos{color:var(--amber)}#ovl-caption .neg{color:var(--blue)}
+#stage-tip{position:absolute;left:12px;top:10px;font-size:0.6rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);z-index:20;pointer-events:none}
+
+/* ─── RIGHT EQUATION PANEL ─── */
+#eqpanel{width:clamp(440px,46%,680px);flex-shrink:0;background:rgba(8,11,18,0.97);border-left:1px solid var(--border-b);display:flex;flex-direction:column;overflow:hidden}
+.eq-top{flex-shrink:0;padding:13px 18px 11px;border-bottom:1px solid var(--border-b);background:rgba(12,16,24,0.6)}
+.eq-top h2{font-family:'Cormorant Garamond',serif;font-weight:500;font-size:1.42rem;letter-spacing:0.01em;color:var(--text-bright);display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.eq-top h2 .y1{color:var(--yellow)}.eq-top h2 .y2{color:var(--cyan)}.eq-top h2 .ar{color:var(--text-faint);font-style:normal}
+.eq-top p{font-size:0.66rem;line-height:1.6;color:var(--text-dim);margin-top:5px;letter-spacing:0.01em}
+.eq-top .colhdr{display:grid;grid-template-columns:1fr 26px 1fr;gap:8px;margin-top:11px}
+.eq-top .colhdr span{font-size:0.56rem;letter-spacing:0.16em;text-transform:uppercase;font-weight:600;color:var(--text-faint)}
+.eq-top .colhdr .c2{text-align:right}
+
+.eq-scroll{flex:1;overflow-y:auto;padding:6px 12px 30px}
+
+.concept{margin:11px 0;border:1px solid var(--border);border-radius:2px;overflow:hidden;transition:border-color .15s,background .15s}
+.concept.hot{border-color:var(--cc);background:rgba(255,255,255,0.012)}
+.concept-head{display:flex;align-items:center;gap:9px;padding:7px 12px;background:rgba(150,200,255,0.03);border-bottom:1px solid var(--border)}
+.concept-head .badge{font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;padding:2px 6px;border:1px solid var(--cc);color:var(--cc);border-radius:2px}
+.concept-head .badge.dim{--cc:var(--grey)}
+.concept-head .cname{font-family:'Cormorant Garamond',serif;font-size:1.12rem;font-weight:500;color:var(--text-bright);letter-spacing:0.02em}
+.concept-body{display:grid;grid-template-columns:1fr 26px 1fr;gap:8px;align-items:center;padding:11px 12px}
+.mw-col{min-width:0}
+.mw-grp{font-size:0.5rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--cc);font-weight:600;margin-bottom:5px;opacity:0.85}
+.mw-line{display:flex;align-items:center;gap:6px;padding:3px 5px;margin:1px -5px;border-radius:3px;cursor:crosshair;overflow-x:auto;overflow-y:hidden;transition:background .12s}
+.mw-line::-webkit-scrollbar{height:0}
+.mw-line:hover{background:rgba(255,200,50,0.1)}
+.mw-line.lit{background:rgba(255,200,50,0.16)}
+.mw-line .katex{font-size:1.22rem!important;color:var(--text)!important;white-space:nowrap}
+.arrow-col{display:flex;align-items:center;justify-content:center;color:var(--cc);font-size:1.1rem;opacity:0.6}
+.hv-col{min-width:0}
+.hv-eq{padding:4px 0}
+.hv-eq .katex{font-size:1.82rem!important;color:var(--text-bright)!important}
+.hv-note{font-size:0.62rem;line-height:1.55;color:var(--text-dim);margin-top:7px;border-top:1px solid var(--border);padding-top:6px}
+.hv-note b{color:var(--cc);font-weight:600}
+.hv-text{font-size:0.74rem;line-height:1.6;color:var(--grey);font-style:italic;font-family:'Cormorant Garamond',serif;font-size:0.95rem}
+.summary{margin:18px 4px 6px;padding:13px 14px;border:1px dashed var(--border-b);background:rgba(96,224,238,0.03)}
+.summary h3{font-size:0.56rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--cyan);font-weight:700;margin-bottom:9px}
+.summary .seq{padding:5px 0}.summary .seq .katex{font-size:1.42rem!important;color:var(--text-bright)!important}
+
+#mob-btn{display:none;position:fixed;top:7px;left:7px;z-index:200;width:38px;height:38px;background:rgba(9,12,20,0.92);border:1px solid var(--border-b);color:var(--blue);font-size:1.2rem;cursor:pointer;align-items:center;justify-content:center;font-family:inherit;backdrop-filter:blur(8px)}
+
+#status-bar{height:25px;flex-shrink:0;background:rgba(14,17,24,0.94);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 14px;gap:13px;z-index:50;font-size:0.56rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500;overflow-x:auto;white-space:nowrap}
+#status-bar .sep{width:1px;height:11px;background:var(--border-b);flex-shrink:0}
+#status-bar b{color:var(--blue-dim);font-weight:600}
+
+@media(max-width:980px){
+  #main{flex-direction:column}
+  #rail{position:fixed;top:0;left:0;bottom:0;width:230px;z-index:300;transform:translateX(-100%);transition:transform .25s ease}
+  #rail.open{transform:translateX(0)}
+  .mob-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:250}
+  #rail.open ~ .mob-overlay{display:block}
+  #mob-btn{display:flex}
+  #stage{height:44vh;flex:none}
+  #eqpanel{width:100%;flex:1;border-left:none;border-top:1px solid var(--border-b)}
+}
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:3px}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<button id="mob-btn" onclick="document.getElementById('rail').classList.toggle('open')">☰</button>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Twenty to Four</span></div>
+  <div class="topbar-r">SYS // <strong>ELECTRODYNAMICS</strong></div>
+</div>
+
+<div id="main">
+  <!-- LEFT RAIL -->
+  <div id="rail">
+    <div class="r-sec">
+      <div class="r-lbl">Source</div>
+      <div class="hint" style="margin-bottom:9px">Drag the glowing charge anywhere on the field.</div>
+      <div class="r-row"><span class="r-row-lbl">Freq</span><input type="range" id="sl-freq" min="0.3" max="3" value="1" step="0.05" oninput="setFreq(this)"><span class="val" id="vl-freq">1.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Wavelen</span><input type="range" id="sl-lambda" min="70" max="260" value="140" step="5" oninput="setLambda(this)"><span class="val" id="vl-lambda">140</span></div>
+      <div class="r-row"><span class="r-row-lbl">Axis°</span><input type="range" id="sl-axis" min="0" max="180" value="90" step="1" oninput="setAxis(this)"><span class="val" id="vl-axis">90</span></div>
+    </div>
+    <div class="r-sec">
+      <div class="r-lbl">Field view</div>
+      <button class="tog on" id="tog-vectors" onclick="tog('showVectors',this)">↗ E-field vectors</button>
+      <button class="tog on" id="tog-lines" onclick="tog('showLines',this)">⥲ Field lines</button>
+      <button class="tog on" id="tog-flow" onclick="tog('showFlow',this)">→ Energy pulse</button>
+      <button class="tog on" id="tog-bfield" onclick="tog('showB',this)">⊙ Magnetic field</button>
+      <button class="tog" id="tog-fronts" onclick="tog('showFronts',this)">◜ Wavefronts</button>
+      <div class="r-row" style="margin-top:8px"><span class="r-row-lbl">Loops</span><input type="range" id="sl-density" min="20" max="100" value="42" step="2" oninput="setDensity(this)"><span class="val" id="vl-density">42</span></div>
+    </div>
+    <div class="r-sec">
+      <div class="r-lbl">Coefficients</div>
+      <div class="hint" style="margin-bottom:9px">Tune the field live — overall strength and the weight of each falloff term.</div>
+      <div class="r-row"><span class="r-row-lbl">Strength</span><input type="range" id="sl-amp" min="0.2" max="4" value="1" step="0.05" oninput="setCoef('amp',this)"><span class="val" id="vl-amp">1.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Near 1/r³</span><input type="range" id="sl-near" min="0" max="3" value="1" step="0.05" oninput="setCoef('cNear',this)"><span class="val" id="vl-near">1.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Radiate 1/r</span><input type="range" id="sl-rad" min="0" max="3" value="1" step="0.05" oninput="setCoef('cRad',this)"><span class="val" id="vl-rad">1.0</span></div>
+    </div>
+    <div class="r-sec">
+      <div class="r-lbl">Time</div>
+      <div class="btns"><button class="btn active" id="btn-play" onclick="togglePlay()">▶ Play</button><button class="btn" onclick="setSpeed(0.25)">◑ Slow</button><button class="btn" onclick="setSpeed(1)">1×</button></div>
+    </div>
+    <div class="r-sec">
+      <div class="r-lbl">Read it</div>
+      <div class="hint">Hover any equation on the right and the canvas shows the exact <b>field quantity</b> that equation governs — its magnitude and sign across space.</div>
+    </div>
+  </div>
+  <div class="mob-overlay" onclick="document.getElementById('rail').classList.remove('open')"></div>
+
+  <!-- CENTER STAGE -->
+  <div id="stage">
+    <canvas id="sim-canvas"></canvas>
+    <div id="stage-tip">oscillating charge · radiating light · 2D + time</div>
+    <div id="ovl-caption"></div>
+  </div>
+
+  <!-- RIGHT EQUATION PANEL -->
+  <div id="eqpanel">
+    <div class="eq-top">
+      <h2><span class="y1">Maxwell 1865</span> <span class="ar">→</span> <span class="y2">Heaviside 1884</span></h2>
+      <p>The same physics, two hands. On the left, Maxwell's original components — every one hoverable to light up the field it controls. On the right, the single vector equation Heaviside's calculus folds them into.</p>
+      <div class="colhdr"><span>20 scalar equations</span><span></span><span class="c2">4 vector equations</span></div>
+    </div>
+    <div class="eq-scroll" id="eq-scroll"></div>
+  </div>
+</div>
+
+<div id="status-bar">
+  <span>λ <b id="st-lambda">140</b>px</span><span class="sep"></span>
+  <span>c <b id="st-c">—</b></span><span class="sep"></span>
+  <span>φ <b id="st-phase">0.00</b></span><span class="sep"></span>
+  <span id="st-ovl">showing: <b>field lines</b></span><span class="sep"></span>
+  <span id="st-fps">-- fps</span>
+</div>
+
+<!-- ════════ EQUATION PANEL (build + hover) ════════ -->
+<script>
+(function(){
+  if(!window.katex) return;
+  const E='#ffc832',B='#60e0ee',A='#c890ff',J='#ffb84d',op='#96c8ff',rho='#ff9050',mu='#7fd6a0',phi='#c890ff';
+  const ro={throwOnError:false,displayMode:false};
+  const R=(tex,el)=>el&&katex.render(tex,el,ro);
+  const S=String.raw;
+
+  // concepts: destination-grouped — how the 20 collapse into the 4 (+ what falls away)
+  const concepts=[
+    {color:E, role:'CORE', name:'Gauss · electric', grp:'G · free charge   ·   E · elasticity',
+     lines:[
+       {tex:S`\partial_x \textcolor{${E}}{D_x}+\partial_y \textcolor{${E}}{D_y}+\partial_z \textcolor{${E}}{D_z}=\textcolor{${rho}}{\rho}`, ov:'divE'},
+       {tex:S`\textcolor{${E}}{D_x}=\varepsilon \textcolor{${E}}{E_x}`, ov:'Ex'},
+       {tex:S`\textcolor{${E}}{D_y}=\varepsilon \textcolor{${E}}{E_y}`, ov:'Ey'},
+       {tex:S`\textcolor{${E}}{D_z}=\varepsilon \textcolor{${E}}{E_z}`, ov:'zero'},
+     ],
+     heav:S`\textcolor{${op}}{\nabla}\cdot\textcolor{${E}}{\vec{E}}=\dfrac{\textcolor{${rho}}{\rho}}{\varepsilon_0}`,
+     note:S`Substitute <b>D = εE</b>, and the three separate \(\partial_i D_i\) terms fold into one <b>divergence</b>.`},
+
+    {color:B, role:'CORE', name:'Gauss · magnetic', grp:'B · field from the vector potential',
+     lines:[
+       {tex:S`\textcolor{${B}}{B_x}=\partial_y \textcolor{${A}}{A_z}-\partial_z \textcolor{${A}}{A_y}`, ov:'zero'},
+       {tex:S`\textcolor{${B}}{B_y}=\partial_z \textcolor{${A}}{A_x}-\partial_x \textcolor{${A}}{A_z}`, ov:'zero'},
+       {tex:S`\textcolor{${B}}{B_z}=\partial_x \textcolor{${A}}{A_y}-\partial_y \textcolor{${A}}{A_x}`, ov:'Bz'},
+     ],
+     heav:S`\textcolor{${op}}{\nabla}\cdot\textcolor{${B}}{\vec{B}}=0`,
+     note:S`Because <b>B = ∇×A</b>, the identity \(\nabla\!\cdot\!(\nabla\times\vec A)=0\) makes this <b>true for free</b> — no measured law required.`},
+
+    {color:'#ffb84d', role:'CORE', name:'Faraday · induction', grp:'D · electromotive force',
+     lines:[
+       {tex:S`\textcolor{${E}}{E_x}=\mu(v_y \textcolor{${B}}{H_z}-v_z \textcolor{${B}}{H_y})-\partial_t \textcolor{${A}}{A_x}-\partial_x \textcolor{${phi}}{\varphi}`, ov:'Ex'},
+       {tex:S`\textcolor{${E}}{E_y}=\mu(v_z \textcolor{${B}}{H_x}-v_x \textcolor{${B}}{H_z})-\partial_t \textcolor{${A}}{A_y}-\partial_y \textcolor{${phi}}{\varphi}`, ov:'Ey'},
+       {tex:S`\textcolor{${E}}{E_z}=\mu(v_x \textcolor{${B}}{H_y}-v_y \textcolor{${B}}{H_x})-\partial_t \textcolor{${A}}{A_z}-\partial_z \textcolor{${phi}}{\varphi}`, ov:'zero'},
+     ],
+     heav:S`\textcolor{${op}}{\nabla}\times\textcolor{${E}}{\vec{E}}=-\dfrac{\partial\textcolor{${B}}{\vec{B}}}{\partial t}`,
+     note:S`Drop the motional term and take the <b>curl</b>: \(\nabla\times(-\partial_t\vec A)=-\partial_t(\nabla\times\vec A)=-\partial_t\vec B\).`},
+
+    {color:'#64c864', role:'CORE', name:'Ampère · Maxwell', grp:'C · circuital law   ·   A · total current',
+     lines:[
+       {tex:S`\partial_y \textcolor{${B}}{H_z}-\partial_z \textcolor{${B}}{H_y}=\textcolor{${J}}{J'_x}`, ov:'curlHx'},
+       {tex:S`\partial_z \textcolor{${B}}{H_x}-\partial_x \textcolor{${B}}{H_z}=\textcolor{${J}}{J'_y}`, ov:'curlHy'},
+       {tex:S`\partial_x \textcolor{${B}}{H_y}-\partial_y \textcolor{${B}}{H_x}=\textcolor{${J}}{J'_z}`, ov:'zero'},
+       {tex:S`\textcolor{${J}}{J'_x}=\textcolor{${J}}{J_x}+\partial_t \textcolor{${E}}{D_x}`, ov:'dExdt'},
+       {tex:S`\textcolor{${J}}{J'_y}=\textcolor{${J}}{J_y}+\partial_t \textcolor{${E}}{D_y}`, ov:'dEydt'},
+       {tex:S`\textcolor{${J}}{J'_z}=\textcolor{${J}}{J_z}+\partial_t \textcolor{${E}}{D_z}`, ov:'zero'},
+     ],
+     heav:S`\textcolor{${op}}{\nabla}\times\textcolor{${B}}{\vec{B}}=\mu_0\textcolor{${J}}{\vec{J}}+\textcolor{${mu}}{\mu_0\varepsilon_0\dfrac{\partial\textcolor{${E}}{\vec{E}}}{\partial t}}`,
+     note:S`The curl of H is the <b>total</b> current. Its \(\partial D/\partial t\) half is Maxwell's <b>displacement current</b> — the term that lets the loops on the canvas detach and fly off as light.`},
+
+    {color:'#7a8aa0', role:'SET ASIDE', name:'Constitutive', grp:"F · Ohm's law   ·   E · elasticity",
+     lines:[
+       {tex:S`\textcolor{${J}}{J_x}=\sigma \textcolor{${E}}{E_x}`, ov:'Ex'},
+       {tex:S`\textcolor{${J}}{J_y}=\sigma \textcolor{${E}}{E_y}`, ov:'Ey'},
+       {tex:S`\textcolor{${J}}{J_z}=\sigma \textcolor{${E}}{E_z}`, ov:'zero'},
+     ],
+     heavText:S`\(\vec J=\sigma\vec E,\;\; \vec D=\varepsilon\vec E\) — material relations. They describe the <b>medium</b>, not the field, so they sit outside the famous four.`,
+     note:''},
+
+    {color:'#7a8aa0', role:'REDUNDANT', name:'Continuity', grp:'H · conservation of charge',
+     lines:[
+       {tex:S`\partial_x \textcolor{${J}}{J_x}+\partial_y \textcolor{${J}}{J_y}+\partial_z \textcolor{${J}}{J_z}+\partial_t \textcolor{${rho}}{\rho}=0`, ov:'zero'},
+     ],
+     heavText:S`Not an independent law — it <b>follows automatically</b> from \(\nabla\!\cdot\!(\nabla\times\vec B)=0\) applied to Ampère–Maxwell.`,
+     note:''},
+  ];
+
+  const scroll=document.getElementById('eq-scroll');
+  concepts.forEach((c,ci)=>{
+    const block=document.createElement('div');block.className='concept';block.style.setProperty('--cc',c.color);
+    const dim=c.role!=='CORE'?' dim':'';
+    block.innerHTML=
+      `<div class="concept-head"><span class="badge${dim}">${c.role}</span><span class="cname">${c.name}</span></div>`;
+    const body=document.createElement('div');body.className='concept-body';
+    // Maxwell column
+    const mw=document.createElement('div');mw.className='mw-col';
+    mw.innerHTML=`<div class="mw-grp">${c.grp}</div>`;
+    c.lines.forEach((ln,li)=>{
+      const row=document.createElement('div');row.className='mw-line';row.dataset.ov=ln.ov;row.dataset.ci=ci;
+      const span=document.createElement('span');R(ln.tex,span);row.appendChild(span);
+      mw.appendChild(row);
+    });
+    body.appendChild(mw);
+    // arrow
+    const arr=document.createElement('div');arr.className='arrow-col';arr.textContent='→';body.appendChild(arr);
+    // Heaviside column
+    const hv=document.createElement('div');hv.className='hv-col';
+    if(c.heav){const eq=document.createElement('div');eq.className='hv-eq';R(c.heav,eq);hv.appendChild(eq);}
+    if(c.heavText){const t=document.createElement('div');t.className='hv-text';t.innerHTML=c.heavText;hv.appendChild(t);renderInlineKatex(t);}
+    if(c.note){const n=document.createElement('div');n.className='hv-note';n.innerHTML=c.note;hv.appendChild(n);renderInlineKatex(n);}
+    body.appendChild(hv);
+    block.appendChild(body);
+    scroll.appendChild(block);
+  });
+
+  // summary
+  const sm=document.createElement('div');sm.className='summary';
+  sm.innerHTML=`<h3>The four that remain</h3>`;
+  [S`\textcolor{${op}}{\nabla}\cdot\textcolor{${E}}{\vec E}=\rho/\varepsilon_0`,
+   S`\textcolor{${op}}{\nabla}\cdot\textcolor{${B}}{\vec B}=0`,
+   S`\textcolor{${op}}{\nabla}\times\textcolor{${E}}{\vec E}=-\partial_t\textcolor{${B}}{\vec B}`,
+   S`\textcolor{${op}}{\nabla}\times\textcolor{${B}}{\vec B}=\mu_0\vec J+\mu_0\varepsilon_0\,\partial_t\textcolor{${E}}{\vec E}`
+  ].forEach(t=>{const d=document.createElement('div');d.className='seq';R(t,d);sm.appendChild(d);});
+  scroll.appendChild(sm);
+
+  // render \( \) inline katex inside note/text html
+  function renderInlineKatex(el){
+    el.innerHTML=el.innerHTML.replace(/\\\((.+?)\\\)/g,(m,tex)=>{
+      try{return katex.renderToString(tex,{throwOnError:false,displayMode:false});}catch(e){return m;}
+    });
+  }
+
+  // hover → drive canvas overlay (functions defined in sim script via window)
+  scroll.querySelectorAll('.mw-line').forEach(row=>{
+    row.addEventListener('pointerenter',()=>{
+      row.classList.add('lit');
+      const block=row.closest('.concept'); if(block) block.classList.add('hot');
+      window.__setOverlay && window.__setOverlay(row.dataset.ov);
+    });
+    row.addEventListener('pointerleave',()=>{
+      row.classList.remove('lit');
+      const block=row.closest('.concept'); if(block) block.classList.remove('hot');
+      window.__setOverlay && window.__setOverlay(null);
+    });
+  });
+})();
+</script>
+
+<!-- ════════ FIELD SIMULATION ════════ -->
+<script>
+const canvas=document.getElementById('sim-canvas');
+const ctx=canvas.getContext('2d');
+let CW=100,CH=100;
+
+const SIM={
+  playing:true, speed:1.0, t:0,
+  freq:1.0, lambda:140, axisDeg:90, density:42,
+  showLines:true, showFlow:true, showB:true, showFronts:false, showVectors:true,
+  amp:1.0, cNear:1.0, cRad:1.0,
+  overlay:null,
+};
+const SRC={x:0,y:0};
+let dragging=false,dragDX=0,dragDY=0;
+
+function fieldColorRGB(mag,gamma){
+  gamma=gamma||1.0;
+  const lv=Math.log10(1+mag*9e6)/6.6;
+  const lc=Math.pow(Math.max(0,Math.min(1,lv)),1/Math.max(0.1,gamma));
+  const stops=[[0.05,0,0.3],[0,0.2,1],[0,1,0.8],[0.2,1,0],[1,0.5,0],[1,1,1]];
+  const sv=lc*5,si=Math.min(Math.floor(sv),4),sf=sv-si;
+  return [stops[si][0]+sf*(stops[si+1][0]-stops[si][0]),
+          stops[si][1]+sf*(stops[si+1][1]-stops[si][1]),
+          stops[si][2]+sf*(stops[si+1][2]-stops[si][2])];
+}
+function kOf(){return 2*Math.PI/SIM.lambda;}
+function axisVec(){const a=SIM.axisDeg*Math.PI/180;return [Math.cos(a),-Math.sin(a)];}
+
+// field at an arbitrary time (needed for d/dt overlays). amp/cNear/cRad are live coefficients.
+function fieldAt(x,y,t){
+  const k=kOf(),[ax,ay]=axisVec();
+  let dx=x-SRC.x,dy=y-SRC.y;
+  let r=Math.hypot(dx,dy); if(r<7) r=7;
+  const rx=dx/r,ry=dy/r,cosT=rx*ax+ry*ay;
+  const u=k*r-t,r2=r*r,r3=r2*r,cu=Math.cos(u),su=Math.sin(u);
+  const nearInd=SIM.cNear*(cu/r3+k*su/r2), rad=SIM.cRad*(k*k*cu/r);
+  const nvx=3*cosT*rx-ax,nvy=3*cosT*ry-ay,tvx=ax-cosT*rx,tvy=ay-cosT*ry;
+  const Ex=SIM.amp*(nvx*nearInd+tvx*rad), Ey=SIM.amp*(nvy*nearInd+tvy*rad);
+  const crossZ=rx*ay-ry*ax;
+  const Bz=SIM.amp*crossZ*(SIM.cRad*k*k*cu/r + SIM.cNear*k*su/r2);
+  return {Ex,Ey,Bz,Emag:Math.hypot(Ex,Ey)};
+}
+function field(x,y){return fieldAt(x,y,SIM.t);}
+
+/* ─── OVERLAYS: hover a Maxwell equation → see that quantity ───
+   .fn  = signed scalar for the heatmap
+   .cvec= the COMPONENT vector drawn over the base E vectors, or 'glyph' (B⊥), or null */
+const HT=0.05, hS=2;
+function dEdt(x,y,comp){const a=fieldAt(x,y,SIM.t+HT),b=fieldAt(x,y,SIM.t-HT);return (a[comp]-b[comp])/(2*HT);}
+function dBz_dy(x,y){return (field(x,y+hS).Bz-field(x,y-hS).Bz)/(2*hS);}
+function dBz_dx(x,y){return (field(x+hS,y).Bz-field(x-hS,y).Bz)/(2*hS);}
+const OVL={
+  Ex:{lab:'Eₓ — electric field, x-component', fn:(x,y)=>field(x,y).Ex, cvec:(x,y)=>[field(x,y).Ex,0]},
+  Ey:{lab:'E_y — electric field, y-component', fn:(x,y)=>field(x,y).Ey, cvec:(x,y)=>[0,field(x,y).Ey]},
+  Bz:{lab:'B⊥ — magnetic field, out of / into the plane', fn:(x,y)=>field(x,y).Bz, cvec:'glyph'},
+  dExdt:{lab:'∂Eₓ/∂t — displacement current, x', fn:(x,y)=>dEdt(x,y,'Ex'), cvec:(x,y)=>[dEdt(x,y,'Ex'),0]},
+  dEydt:{lab:'∂E_y/∂t — displacement current, y', fn:(x,y)=>dEdt(x,y,'Ey'), cvec:(x,y)=>[0,dEdt(x,y,'Ey')]},
+  curlHx:{lab:'(∇×H)ₓ ∝ ∂_y B⊥', fn:dBz_dy, cvec:(x,y)=>[dBz_dy(x,y),0]},
+  curlHy:{lab:'(∇×H)_y ∝ −∂ₓ B⊥', fn:(x,y)=>-dBz_dx(x,y), cvec:(x,y)=>[0,-dBz_dx(x,y)]},
+  divE:{lab:'∇·E — sources of the field (≈ 0 away from the charge)', fn:(x,y)=>(dExdx(x,y)+dEydy(x,y)), cvec:null},
+  zero:{lab:'≡ 0 for an in-plane dipole — this component vanishes in the slice', fn:null, cvec:null},
+};
+function dExdx(x,y){return (field(x+hS,y).Ex-field(x-hS,y).Ex)/(2*hS);}
+function dEydy(x,y){return (field(x,y+hS).Ey-field(x,y-hS).Ey)/(2*hS);}
+window.__setOverlay=function(kind){
+  SIM.overlay=(kind&&OVL[kind])?kind:null;
+  const cap=document.getElementById('ovl-caption'),stov=document.getElementById('st-ovl');
+  if(!SIM.overlay){cap.classList.remove('show');stov.innerHTML='showing: <b>field lines</b>';return;}
+  const o=OVL[kind];cap.classList.add('show');
+  cap.innerHTML=o.fn
+    ? o.lab+'<span class="ck"><span class="pm pos">▮ positive</span> &nbsp; <span class="pm neg">▮ negative</span> &nbsp; amber arrow = this component</span>'
+    : o.lab+'<span class="ck">nothing to draw — the field has no component here</span>';
+  stov.innerHTML='showing: <b>'+kind+'</b>';
+};
+
+/* ─── smooth high-resolution field heatmap (computed dense, upscaled with smoothing) ─── */
+const hmCanvas=document.createElement('canvas'); const hmCtx=hmCanvas.getContext('2d');
+function drawHeatmap(fn){
+  const step=7;
+  const bw=Math.max(2,Math.ceil(CW/step)), bh=Math.max(2,Math.ceil(CH/step));
+  if(hmCanvas.width!==bw||hmCanvas.height!==bh){hmCanvas.width=bw;hmCanvas.height=bh;}
+  const img=hmCtx.createImageData(bw,bh), data=img.data;
+  const vals=new Float32Array(bw*bh); let mx=1e-30, idx=0;
+  for(let j=0;j<bh;j++){const y=(j+0.5)*step;
+    for(let i=0;i<bw;i++,idx++){const x=(i+0.5)*step;const v=fn(x,y);vals[idx]=v;const a=Math.abs(v);if(a>mx)mx=a;}}
+  const TARGET=1e4, SCALE=TARGET/mx, DEN=Math.log10(1+TARGET);
+  const bright=Math.min(1.7,Math.sqrt(SIM.amp));
+  for(let p=0;p<vals.length;p++){
+    const v=vals[p]; let a=Math.log10(1+Math.abs(v)*SCALE)/DEN; a=a*a*bright;
+    if(a>1)a=1; const al=(a*235)|0; const o=p*4;
+    if(v>=0){data[o]=255;data[o+1]=176;data[o+2]=77;} else {data[o]=96;data[o+1]=170;data[o+2]=255;}
+    data[o+3]=al;
+  }
+  hmCtx.putImageData(img,0,0);
+  ctx.save();ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  ctx.drawImage(hmCanvas,0,0,bw,bh,0,0,CW,CH);ctx.restore();
+}
+
+/* ─── vector field arrows ─── */
+function arrowGS(){return Math.max(30,Math.round(Math.min(CW,CH)/14));}
+function drawArrowField(vf,rgb,alpha,lenMul){
+  const gs=arrowGS(); let mx=1e-30; const pts=[];
+  for(let y=gs/2;y<CH;y+=gs)for(let x=gs/2;x<CW;x+=gs){const v=vf(x,y);const m=Math.hypot(v[0],v[1]);if(m>mx)mx=m;pts.push([x,y,v[0],v[1],m]);}
+  const K=1e4/mx, DEN=Math.log10(1+1e4);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(const a of pts){
+    const m=a[4]; if(m<1e-13) continue;
+    const nx=a[2]/m, ny=a[3]/m, t=Math.log10(1+m*K)/DEN;
+    const len=(6+t*gs*0.42)*lenMul, al=alpha*(0.32+0.68*t);
+    const x=a[0],y=a[1],x0=x-nx*len*0.5,y0=y-ny*len*0.5,x1=x+nx*len*0.5,y1=y+ny*len*0.5;
+    ctx.strokeStyle='rgba('+rgb+','+al+')';ctx.lineWidth=1.3;
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+    const px=-ny*2.6,py=nx*2.6;
+    ctx.fillStyle='rgba('+rgb+','+al+')';
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x1-nx*4.6+px,y1-ny*4.6+py);ctx.lineTo(x1-nx*4.6-px,y1-ny*4.6-py);ctx.closePath();ctx.fill();
+  }
+  ctx.restore();
+}
+function drawBzGlyphs(){
+  const gs=arrowGS(); let mx=1e-30; const pts=[];
+  for(let y=gs/2;y<CH;y+=gs)for(let x=gs/2;x<CW;x+=gs){const v=field(x,y).Bz;const a=Math.abs(v);if(a>mx)mx=a;pts.push([x,y,v]);}
+  const K=1e4/mx, DEN=Math.log10(1+1e4);
+  ctx.save();
+  for(const p of pts){
+    const v=p[2],a=Math.abs(v);if(a<1e-13)continue;
+    const t=Math.log10(1+a*K)/DEN, r=2+t*6, al=0.35+0.6*t;
+    ctx.strokeStyle='rgba(255,200,50,'+al+')';ctx.lineWidth=1.4;
+    ctx.beginPath();ctx.arc(p[0],p[1],r,0,Math.PI*2);ctx.stroke();
+    if(v>=0){ctx.fillStyle='rgba(255,200,50,'+al+')';ctx.beginPath();ctx.arc(p[0],p[1],Math.max(1,r*0.32),0,Math.PI*2);ctx.fill();}
+    else{const d=r*0.7;ctx.beginPath();ctx.moveTo(p[0]-d,p[1]-d);ctx.lineTo(p[0]+d,p[1]+d);ctx.moveTo(p[0]+d,p[1]-d);ctx.lineTo(p[0]-d,p[1]+d);ctx.stroke();}
+  }
+  ctx.restore();
+}
+function renderComponentVectors(kind){
+  const o=OVL[kind]; if(!o) return;
+  if(o.cvec==='glyph'){drawBzGlyphs();return;}
+  if(typeof o.cvec==='function'){drawArrowField(o.cvec,'255,200,50',0.95,1.0);}
+}
+
+/* ─── stream-function field lines (contours; smooth in time) ─── */
+let GS=0,GW=0,GH=0,psiGrid=null,magGrid=null;
+function buildGrid(){
+  GS=Math.min(10,Math.max(5,Math.round(Math.sqrt(CW*CH)/130)));
+  GW=Math.ceil(CW/GS)+1;GH=Math.ceil(CH/GS)+1;const N=GW*GH;
+  if(!psiGrid||psiGrid.length!==N){psiGrid=new Float32Array(N);magGrid=new Float32Array(N);}
+  const k=kOf(),[ax,ay]=axisVec(),cN=SIM.cNear,cR=SIM.cRad,amp=SIM.amp;let idx=0;
+  for(let j=0;j<GH;j++){const y=j*GS;
+    for(let i=0;i<GW;i++,idx++){const x=i*GS;
+      let dx=x-SRC.x,dy=y-SRC.y;let r=Math.hypot(dx,dy);if(r<7)r=7;
+      const rx=dx/r,ry=dy/r,cosT=rx*ax+ry*ay,sin2=1-cosT*cosT,u=k*r-SIM.t,cu=Math.cos(u),su=Math.sin(u);
+      psiGrid[idx]=sin2*(cN*cu/r + cR*k*su);
+      const gw=cN*(cu/(r*r*r)+k*su/(r*r)), hw=cR*k*k*cu/r, gh=gw-hw;
+      magGrid[idx]=amp*Math.sqrt(4*cosT*cosT*gw*gw+sin2*gh*gh);
+    }}
+}
+function contourLevels(){
+  const k=kOf();
+  const M=Math.max(7,Math.min(20,Math.round(SIM.density/3.8)));
+  const base=k*0.025, ratio=1.5, out=[];
+  for(let n=0;n<M;n++){const v=base*Math.pow(ratio,n);out.push(v);out.push(-v);}
+  out.sort((a,b)=>a-b);
+  return out;
+}
+function sampleMag(x,y){const gi=Math.min(GW-1,Math.max(0,(x/GS)|0)),gj=Math.min(GH-1,Math.max(0,(y/GS)|0));return magGrid[gj*GW+gi];}
+function marchAll(levels,segs){
+  const NL=levels.length;
+  for(let j=0;j<GH-1;j++){const rowA=j*GW,rowB=(j+1)*GW,y0=j*GS,y1=y0+GS;
+    for(let i=0;i<GW-1;i++){const x0=i*GS,x1=x0+GS;
+      const tl=psiGrid[rowA+i],tr=psiGrid[rowA+i+1],br=psiGrid[rowB+i+1],bl=psiGrid[rowB+i];
+      let mn=tl,mx=tl;if(tr<mn)mn=tr;else if(tr>mx)mx=tr;if(br<mn)mn=br;else if(br>mx)mx=br;if(bl<mn)mn=bl;else if(bl>mx)mx=bl;
+      for(let li=0;li<NL;li++){const L=levels[li];if(L<mn)continue;if(L>mx)break;
+        const a=tl<L,b=tr<L,c=br<L,d=bl<L;if(a===b&&b===c&&c===d)continue;
+        let n=0;const p=[];
+        if(a!==b){const t=(L-tl)/(tr-tl);p.push(x0+t*GS,y0);n++;}
+        if(b!==c){const t=(L-tr)/(br-tr);p.push(x1,y0+t*GS);n++;}
+        if(d!==c){const t=(L-bl)/(br-bl);p.push(x0+t*GS,y1);n++;}
+        if(a!==d){const t=(L-tl)/(bl-tl);p.push(x0,y0+t*GS);n++;}
+        if(n>=2){segs.push(p[0],p[1],p[2],p[3]);if(n===4)segs.push(p[4],p[5],p[6],p[7]);}
+      }}}
+}
+
+/* ─── render ─── */
+function render(){
+  ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();
+  ctx.fillStyle='#0b0e15';ctx.fillRect(0,0,CW,CH);
+  ctx.strokeStyle='rgba(150,200,255,0.022)';ctx.lineWidth=1;
+  for(let x=0;x<CW;x+=46){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
+  for(let y=0;y<CH;y+=46){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
+
+  // base field heatmap: overlay quantity when hovering, else the magnetic field
+  if(SIM.overlay && OVL[SIM.overlay].fn) drawHeatmap(OVL[SIM.overlay].fn);
+  else if(SIM.showB && !SIM.overlay) drawHeatmap((x,y)=>field(x,y).Bz);
+
+  if(SIM.showFronts) renderFronts();
+  if(SIM.showLines) renderLines();
+  if(SIM.showVectors) drawArrowField((x,y)=>{const f=field(x,y);return [f.Ex,f.Ey];},'205,216,238',0.55,1.0);
+  if(SIM.overlay) renderComponentVectors(SIM.overlay);
+  renderSource();
+}
+function renderFronts(){
+  const k=kOf();ctx.save();ctx.strokeStyle='rgba(150,200,255,0.13)';ctx.lineWidth=1;ctx.setLineDash([2,6]);
+  for(let n=0;n<16;n++){const r=(2*Math.PI*n+SIM.t)/k;if(r<8||r>Math.hypot(CW,CH))continue;
+    ctx.beginPath();ctx.arc(SRC.x,SRC.y,r,0,Math.PI*2);ctx.stroke();}
+  ctx.restore();
+}
+function renderLines(){
+  buildGrid();
+  const levels=contourLevels();const segs=[];marchAll(levels,segs);
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
+  const k=kOf(),flowPhase=SIM.t/k, dim=SIM.overlay?0.3:1;
+  for(let pass=0;pass<2;pass++){
+    for(let s=0;s<segs.length;s+=4){
+      const x0=segs[s],y0=segs[s+1],x1=segs[s+2],y1=segs[s+3];
+      const mx=(x0+x1)*0.5,my=(y0+y1)*0.5,m=sampleMag(mx,my);
+      const [r,g,b]=fieldColorRGB(m);
+      let pulse=1;
+      if(SIM.showFlow){const rr=Math.hypot(mx-SRC.x,my-SRC.y);pulse=0.4+0.6*Math.max(0,Math.sin((rr-flowPhase)*k));}
+      const lv=Math.min(1,Math.log10(1+m*9e6)/6.6);
+      const a=Math.min(0.92,0.16+lv*0.95)*pulse*dim;
+      if(a<0.02)continue;
+      if(pass===0){ctx.strokeStyle='rgba('+((r*a*0.18*255)|0)+','+((g*a*0.18*255)|0)+','+((b*a*0.18*255)|0)+',1)';ctx.lineWidth=4.5*pulse;}
+      else{ctx.strokeStyle='rgba('+((r*a*255)|0)+','+((g*a*255)|0)+','+((b*a*255)|0)+',1)';ctx.lineWidth=1.4;}
+      ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+function renderSource(){
+  const [ax,ay]=axisVec();const osc=Math.sin(SIM.t);const off=osc*7;
+  const cx=SRC.x,cy=SRC.y;ctx.save();
+  ctx.strokeStyle='rgba(150,200,255,0.25)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(cx-ax*12,cy-ay*12);ctx.lineTo(cx+ax*12,cy+ay*12);ctx.stroke();
+  const gx=cx+ax*off,gy=cy+ay*off,mix=(osc+1)*0.5;
+  const cr=(96+(255-96)*mix)|0,cg=(224+(200-224)*mix)|0,cb=(238+(50-238)*mix)|0,c=cr+','+cg+','+cb;
+  const grd=ctx.createRadialGradient(gx,gy,0,gx,gy,16);
+  grd.addColorStop(0,'rgba('+c+',0.95)');grd.addColorStop(0.4,'rgba('+c+',0.4)');grd.addColorStop(1,'rgba('+c+',0)');
+  ctx.fillStyle=grd;ctx.beginPath();ctx.arc(gx,gy,16,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba('+c+',1)';ctx.beginPath();ctx.arc(gx,gy,3.2,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+/* ─── controls ─── */
+function sg(el){if(!el)return;const min=+el.min,max=+el.max;el.style.setProperty('--pct',((el.value-min)/(max-min)*100)+'%');}
+function setFreq(el){SIM.freq=+el.value;document.getElementById('vl-freq').textContent=SIM.freq.toFixed(2);sg(el);}
+function setLambda(el){SIM.lambda=+el.value;document.getElementById('vl-lambda').textContent=SIM.lambda;document.getElementById('st-lambda').textContent=SIM.lambda;sg(el);}
+function setAxis(el){SIM.axisDeg=+el.value;document.getElementById('vl-axis').textContent=SIM.axisDeg;sg(el);}
+function setDensity(el){SIM.density=+el.value;document.getElementById('vl-density').textContent=SIM.density;sg(el);}
+function setCoef(key,el){SIM[key]=+el.value;const m={amp:'vl-amp',cNear:'vl-near',cRad:'vl-rad'};document.getElementById(m[key]).textContent=(+el.value).toFixed(2);sg(el);}
+function tog(key,btn){SIM[key]=!SIM[key];btn.classList.toggle('on',SIM[key]);}
+function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'▶ Play':'❚❚ Pause';b.classList.toggle('active',SIM.playing);}
+function setSpeed(s){SIM.speed=s;}
+
+/* ─── pointer: drag source ─── */
+function ptr(e){const r=canvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return [t.clientX-r.left,t.clientY-r.top];}
+canvas.addEventListener('mousedown',e=>{const[x,y]=ptr(e);if(Math.hypot(x-SRC.x,y-SRC.y)<60){dragging=true;dragDX=SRC.x-x;dragDY=SRC.y-y;}});
+canvas.addEventListener('mousemove',e=>{if(!dragging)return;const[x,y]=ptr(e);SRC.x=x+dragDX;SRC.y=y+dragDY;});
+window.addEventListener('mouseup',()=>dragging=false);
+canvas.addEventListener('touchstart',e=>{const[x,y]=ptr(e);if(Math.hypot(x-SRC.x,y-SRC.y)<70){dragging=true;dragDX=SRC.x-x;dragDY=SRC.y-y;e.preventDefault();}},{passive:false});
+canvas.addEventListener('touchmove',e=>{if(!dragging)return;const[x,y]=ptr(e);SRC.x=x+dragDX;SRC.y=y+dragDY;e.preventDefault();},{passive:false});
+window.addEventListener('touchend',()=>dragging=false);
+
+/* ─── resize ─── */
+function resize(){
+  const s=document.getElementById('stage');CW=s.clientWidth;CH=s.clientHeight;
+  if(CW<10||CH<10){CW=600;CH=400;}
+  const dpr=Math.min(devicePixelRatio,2);canvas.width=CW*dpr;canvas.height=CH*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
+  if(SRC.x===0&&SRC.y===0){SRC.x=CW*0.46;SRC.y=CH*0.5;}
+}
+if(window.ResizeObserver){new ResizeObserver(()=>resize()).observe(document.getElementById('stage'));}
+else{window.addEventListener('resize',resize);}
+
+/* ─── loop ─── */
+let last=0,fc=0,ft=0;
+function loop(time){
+  requestAnimationFrame(loop);
+  const dt=Math.min((time-last)/1000,0.05);last=time;
+  fc++;ft+=dt;if(ft>=0.5){document.getElementById('st-fps').textContent=Math.round(fc/ft)+' fps';fc=0;ft=0;}
+  if(SIM.playing){SIM.t+=dt*SIM.freq*SIM.speed*3.2;}
+  document.getElementById('st-c').textContent=(SIM.lambda*SIM.freq).toFixed(0)+'px/s';
+  document.getElementById('st-phase').textContent=(SIM.t%(2*Math.PI)).toFixed(2);
+  render();
+}
+document.querySelectorAll('#rail input[type=range]').forEach(sg);
+setTimeout(()=>{resize();requestAnimationFrame(loop);},60);
+</script>
+</body>
+</html>
