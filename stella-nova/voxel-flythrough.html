@@ -173,7 +173,7 @@ const S={
   morphSpeed:0.08, pathSpeed:0.4, moveSpeed:14,
   seed:0, seedAxis:0,
   // planned flight path
-  loop:null, dist:0, bank:0, showPath:true, needPlan:true, planMorph:0, lastPlanMs:0,
+  loop:null, dist:0, bank:0, showPath:true, needPlan:true, planMorph:0, lastPlanMs:0, hoPos:[0,0,0], hoFwd:[0,0,0],
   // walk camera
   pos:[0,16,0], yaw:0.6, pitch:-0.15,
   // flythrough free-look offset (drag to rotate, Blender-style)
@@ -561,13 +561,18 @@ function planFlight(){
     for(let k=0;k<K;k++) node[k]=nx[k];
   }
   const prev=S.loop;                 // did we already have a route? (then this is a re-plan)
+  const oldEye=camRO.slice(), oldFwd=camF.slice();
   buildLoop(node);
-  // SEAMLESS HAND-OVER: snap traversal distance so the camera stays at its current world
-  // position on the freshly-computed loop — it keeps flying along, no teleport or jolt.
+  // SEAMLESS HAND-OVER: re-anchor traversal to the camera's current position on the new loop, then
+  // capture the residual offset so the camera starts exactly where it is and DRIFTS onto the route.
   if(prev && S.mode==='fly'){
     const Lp=S.loop; let best=1e18, bd=S.dist;
-    for(let i=0;i<Lp.N;i++){ const p=Lp.pts[i]; const dx=p[0]-camRO[0],dy=p[1]-camRO[1],dz=p[2]-camRO[2]; const dd=dx*dx+dy*dy+dz*dz; if(dd<best){best=dd; bd=Lp.cum[i];} }
+    for(let i=0;i<Lp.N;i++){ const q=Lp.pts[i]; const dx=q[0]-oldEye[0],dy=q[1]-oldEye[1],dz=q[2]-oldEye[2]; const dd=dx*dx+dy*dy+dz*dz; if(dd<best){best=dd; bd=Lp.cum[i];} }
     S.dist=bd;
+    const hh=5.0, nb=loopPos(bd), nbE=[nb[0],nb[1]+3.0,nb[2]];
+    const ta=loopPos(bd-hh), tb=loopPos(bd+hh), nbF=norm([tb[0]-ta[0],tb[1]-ta[1],tb[2]-ta[2]]);
+    S.hoPos=[oldEye[0]-nbE[0], oldEye[1]-nbE[1], oldEye[2]-nbE[2]];
+    S.hoFwd=[oldFwd[0]-nbF[0], oldFwd[1]-nbF[1], oldFwd[2]-nbF[2]];
   }
   S.needPlan=false; S.lastPlanMs=performance.now();
 }
@@ -611,7 +616,16 @@ function buildCamera(){
     const p  = loopPos(d);
     const pa = loopPos(d-h), pb = loopPos(d+h);
     let vel=[pb[0]-pa[0], pb[1]-pa[1], pb[2]-pa[2]];          // velocity (tangent), includes climb/dive
-    let forward=norm(vel);
+    let fTarget=norm(vel);
+    const eyeBase=[p[0], p[1]+3.0, p[2]];                    // exact eye, above the rail
+    // hand-over drift: in normal flight the offsets are 0 (camera glued to the track). When the
+    // route changes, an offset is captured so the camera doesn't jump, then it decays SLOWLY here —
+    // a long, gentle drift onto the new track rather than a snap.
+    const kd=Math.min(1, lastDt*0.7);
+    S.hoPos=[S.hoPos[0]*(1-kd), S.hoPos[1]*(1-kd), S.hoPos[2]*(1-kd)];
+    S.hoFwd=[S.hoFwd[0]*(1-kd), S.hoFwd[1]*(1-kd), S.hoFwd[2]*(1-kd)];
+    const eye=[eyeBase[0]+S.hoPos[0], eyeBase[1]+S.hoPos[1], eyeBase[2]+S.hoPos[2]];
+    let forward=norm([fTarget[0]+S.hoFwd[0], fTarget[1]+S.hoFwd[1], fTarget[2]+S.hoFwd[2]]);
     let right0=norm(cross(forward,[0,1,0])); if(!isFinite(right0[0])) right0=[1,0,0];
     let up0=cross(right0,forward);
     // lateral acceleration from path curvature → coordinated-turn bank (lean into the turn)
@@ -631,7 +645,7 @@ function buildCamera(){
       const r2=norm(cross(fwd2,up)), u2=cross(r2,fwd2);
       forward=fwd2; right=r2; up=u2;
     }
-    camRO=[p[0], p[1]+3.0, p[2]]; camR=right; camU=up; camF=forward;  // eye above the rail
+    camRO=eye; camR=right; camU=up; camF=forward;
   } else {
     const cp=Math.cos(S.pitch), sp=Math.sin(S.pitch), cy=Math.cos(S.yaw), sy=Math.sin(S.yaw);
     const f=norm([cp*cy, sp, cp*sy]);
@@ -683,54 +697,66 @@ function pathOccluded(P,morphT){
 // original implementation (not a port) — low-alpha cyan, house mono type.
 function drawHUD(ctx,W,H){
   const now=performance.now()*0.001;
-  const cyn=a=>'rgba(150,232,248,'+a+')';
-  ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.lineWidth=1;
-  // corner brackets
-  ctx.strokeStyle=cyn(0.28); const m=15,len=18;
+  const C=a=>'rgba(150,232,248,'+a+')';
+  ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.textBaseline='top'; ctx.textAlign='left';
+  // corner brackets (bold)
+  ctx.strokeStyle=C(0.55); ctx.lineWidth=1.6; const m=14,len=26;
   for(const [x,y,sx,sy] of [[m,m,1,1],[W-m,m,-1,1],[m,H-m,1,-1],[W-m,H-m,-1,-1]]){
     ctx.beginPath(); ctx.moveTo(x+sx*len,y); ctx.lineTo(x,y); ctx.lineTo(x,y+sy*len); ctx.stroke();
   }
-  // centre reticle
-  const cx=W/2, cy=H/2; ctx.strokeStyle=cyn(0.18);
-  ctx.beginPath();
-  ctx.moveTo(cx-13,cy); ctx.lineTo(cx-5,cy); ctx.moveTo(cx+5,cy); ctx.lineTo(cx+13,cy);
-  ctx.moveTo(cx,cy-13); ctx.lineTo(cx,cy-5); ctx.moveTo(cx,cy+5); ctx.lineTo(cx,cy+13); ctx.stroke();
-  ctx.strokeRect(cx-2,cy-2,4,4);
-  // trajectory readouts (top-left)
-  ctx.font='10px "JetBrains Mono", ui-monospace, monospace'; ctx.textBaseline='top';
-  const recomputing=(performance.now()-S.lastPlanMs)<700;
+  ctx.font='10px "JetBrains Mono", monospace';
+  ctx.fillStyle=C(0.50); ctx.fillText('STELLA NOVA \u00B7 VOXEL FIELD \u00B7 NAV', m+34, m-3);
+  ctx.textAlign='right'; ctx.fillStyle=C(0.38); ctx.fillText('FRM '+(Math.floor(now*30)%100000), W-m-34, m-3); ctx.textAlign='left';
+  // readout panel (top-left)
+  const recomputing=(performance.now()-S.lastPlanMs)<800;
   const spd=(S.pathSpeed*10).toFixed(1);
   const hdg=((Math.atan2(camF[2],camF[0])*180/Math.PI+360)%360).toFixed(0).padStart(3,'0');
   const prog=S.loop?((S.dist%S.loop.total)/S.loop.total*100):0;
   const dots='.'.repeat(1+Math.floor(now*3)%3);
-  const lines=[
-    '\u25C8 TRAJECTORY SOLVER',
-    'STATUS  '+(recomputing?'RECOMPUTING'+dots:'LOCKED \u2713'),
-    'VEL     '+spd+' u/s',
-    'HDG     '+hdg+'\u00B0   BANK '+(S.bank*180/Math.PI).toFixed(0)+'\u00B0',
-    'POS     '+camRO[0].toFixed(0)+'  '+camRO[1].toFixed(0)+'  '+camRO[2].toFixed(0),
-    'NODES   84   ITER 72'
-  ];
-  ctx.fillStyle=cyn(0.40); let ty=22;
-  for(const ln of lines){ ctx.fillText(ln,18,ty); ty+=13; }
-  // progress bar
-  ctx.strokeStyle=cyn(0.22); ctx.strokeRect(18,ty+3,118,3);
-  ctx.fillStyle=cyn(0.40); ctx.fillRect(18,ty+3,118*prog/100,3);
-  // scanning radar (bottom-right)
-  const rx=W-66, ry=H-66, R=44;
-  ctx.strokeStyle=cyn(0.26);
+  ctx.fillStyle='rgba(8,16,24,0.34)'; ctx.fillRect(16,40,186,134);
+  ctx.strokeStyle=C(0.32); ctx.lineWidth=1; ctx.strokeRect(16,40,186,134);
+  ctx.fillStyle=C(0.88); ctx.font='bold 12px "JetBrains Mono", monospace'; ctx.fillText('\u25C8 TRAJECTORY SOLVER',24,49);
+  ctx.font='11px "JetBrains Mono", monospace';
+  ctx.fillStyle=C(0.50); ctx.fillText('STATUS',24,70);
+  ctx.fillStyle=recomputing?'rgba(255,198,96,0.96)':C(0.82); ctx.fillText(recomputing?'RECOMPUTING'+dots:'LOCKED \u2713',88,70);
+  const rows=[['VEL',spd+' u/s'],['HDG',hdg+'\u00B0'],['BANK',(S.bank*180/Math.PI).toFixed(0)+'\u00B0'],['POS',camRO[0].toFixed(0)+' '+camRO[1].toFixed(0)+' '+camRO[2].toFixed(0)]];
+  let ty=88; for(const [k,v] of rows){ ctx.fillStyle=C(0.50); ctx.fillText(k,24,ty); ctx.fillStyle=C(0.84); ctx.fillText(v,88,ty); ty+=15; }
+  ctx.fillStyle=C(0.50); ctx.fillText('TRACK',24,ty);
+  ctx.strokeStyle=C(0.40); ctx.strokeRect(88,ty+2,104,7); ctx.fillStyle=C(0.58); ctx.fillRect(88,ty+2,104*prog/100,7);
+  // centre ranging reticle
+  const cx=W/2, cy=H/2;
+  ctx.strokeStyle=C(0.42); ctx.lineWidth=1.4; ctx.beginPath();
+  ctx.moveTo(cx-22,cy); ctx.lineTo(cx-8,cy); ctx.moveTo(cx+8,cy); ctx.lineTo(cx+22,cy);
+  ctx.moveTo(cx,cy-22); ctx.lineTo(cx,cy-8); ctx.moveTo(cx,cy+8); ctx.lineTo(cx,cy+22); ctx.stroke();
+  ctx.strokeStyle=C(0.30); ctx.lineWidth=1.2; const q=15;
+  for(const [sx,sy] of [[-1,-1],[1,-1],[-1,1],[1,1]]){ ctx.beginPath(); ctx.moveTo(cx+sx*q-sx*6,cy+sy*q); ctx.lineTo(cx+sx*q,cy+sy*q); ctx.lineTo(cx+sx*q,cy+sy*q-sy*6); ctx.stroke(); }
+  ctx.fillStyle=C(0.55); ctx.beginPath(); ctx.arc(cx,cy,1.7,0,6.2832); ctx.fill();
+  // scanning radar (bottom-right, large)
+  const rx=W-88, ry=H-88, R=64;
+  ctx.fillStyle='rgba(8,16,24,0.32)'; ctx.beginPath(); ctx.arc(rx,ry,R+9,0,6.2832); ctx.fill();
+  ctx.strokeStyle=C(0.50); ctx.lineWidth=1.3;
   for(const rr of [R,R*0.66,R*0.33]){ ctx.beginPath(); ctx.arc(rx,ry,rr,0,6.2832); ctx.stroke(); }
-  ctx.strokeStyle=cyn(0.18);
-  for(let a=0;a<12;a++){ const an=a*Math.PI/6; ctx.beginPath(); ctx.moveTo(rx+Math.cos(an)*(R-4),ry+Math.sin(an)*(R-4)); ctx.lineTo(rx+Math.cos(an)*R,ry+Math.sin(an)*R); ctx.stroke(); }
-  const sw=now*1.25;
-  ctx.fillStyle=cyn(0.06); ctx.beginPath(); ctx.moveTo(rx,ry); ctx.arc(rx,ry,R,sw-0.7,sw); ctx.closePath(); ctx.fill();
-  ctx.strokeStyle=cyn(0.5); ctx.beginPath(); ctx.moveTo(rx,ry); ctx.lineTo(rx+Math.cos(sw)*R,ry+Math.sin(sw)*R); ctx.stroke();
-  for(const [bx,by] of [[Math.cos(now*0.7)*0.62,Math.sin(now*0.5)*0.5],[Math.cos(-now*0.4+1)*0.42,Math.sin(now*0.6+2)*0.7]]){
-    ctx.fillStyle=cyn(0.55); ctx.beginPath(); ctx.arc(rx+bx*R,ry+by*R,1.5,0,6.2832); ctx.fill();
+  ctx.strokeStyle=C(0.42); ctx.lineWidth=2; const orot=now*0.4;
+  for(let a=0;a<24;a+=2){ const a0=orot+a*Math.PI/12; ctx.beginPath(); ctx.arc(rx,ry,R+6,a0,a0+0.18); ctx.stroke(); }
+  ctx.strokeStyle=C(0.34); ctx.lineWidth=1;
+  for(let a=0;a<24;a++){ const an=a*Math.PI/12, lng=(a%6===0)?9:4; ctx.beginPath(); ctx.moveTo(rx+Math.cos(an)*(R-lng),ry+Math.sin(an)*(R-lng)); ctx.lineTo(rx+Math.cos(an)*R,ry+Math.sin(an)*R); ctx.stroke(); }
+  ctx.strokeStyle=C(0.20); ctx.beginPath(); ctx.moveTo(rx-R,ry); ctx.lineTo(rx+R,ry); ctx.moveTo(rx,ry-R); ctx.lineTo(rx,ry+R); ctx.stroke();
+  ctx.globalCompositeOperation='lighter';
+  const sw=now*1.3;
+  ctx.fillStyle=C(0.12); ctx.beginPath(); ctx.moveTo(rx,ry); ctx.arc(rx,ry,R,sw-0.9,sw); ctx.closePath(); ctx.fill();
+  ctx.fillStyle=C(0.05); ctx.beginPath(); ctx.moveTo(rx,ry); ctx.arc(rx,ry,R,sw-1.9,sw-0.9); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle=C(0.88); ctx.lineWidth=1.5; ctx.beginPath(); ctx.moveTo(rx,ry); ctx.lineTo(rx+Math.cos(sw)*R,ry+Math.sin(sw)*R); ctx.stroke();
+  for(const ph of [0,2.1,4.3]){
+    const px=rx+Math.cos(now*0.3+ph)*R*0.66, py=ry+Math.sin(now*0.42+ph)*R*0.5;
+    ctx.fillStyle=C(0.72); ctx.beginPath(); ctx.arc(px,py,2.0,0,6.2832); ctx.fill();
   }
-  ctx.fillStyle='rgba(255,96,72,'+(0.35+0.3*Math.sin(now*3)).toFixed(2)+')';
-  ctx.beginPath(); ctx.arc(rx+Math.cos(now*0.25+4)*R*0.7, ry+Math.sin(now*0.35+1)*R*0.55, 2,0,6.2832); ctx.fill();
-  ctx.fillStyle=cyn(0.32); ctx.font='8px "JetBrains Mono", monospace'; ctx.fillText('SCAN',rx-R,ry-R-9);
+  ctx.fillStyle='rgba(255,110,80,'+(0.5+0.4*Math.sin(now*3)).toFixed(2)+')';
+  ctx.beginPath(); ctx.arc(rx+Math.cos(now*0.25+4)*R*0.72, ry+Math.sin(now*0.33+1)*R*0.55, 2.6,0,6.2832); ctx.fill();
+  ctx.globalCompositeOperation='source-over';
+  ctx.font='9px "JetBrains Mono", monospace';
+  ctx.fillStyle=C(0.62); ctx.fillText('\u25B8 SCAN ACTIVE',rx-R,ry-R-13);
+  ctx.textAlign='right'; ctx.fillStyle=C(0.48); ctx.fillText('BRG '+hdg+'\u00B0',rx+R+8,ry-R-13);
+  ctx.fillStyle=C(0.40); ctx.fillText('RNG 120u',rx+R+8,ry+R+4); ctx.textAlign='left';
   ctx.restore();
 }
 function drawPath(){
