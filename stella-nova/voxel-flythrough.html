@@ -55,6 +55,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 /* ─── CENTER STAGE ─── */
 #stage{flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;background:#06080d}
 #gl{display:block;width:100%;height:100%;cursor:grab}
+#pathOverlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:20}
 #gl:active{cursor:grabbing}
 
 /* ─── ON-SCREEN CONTROL LEGEND ─── */
@@ -99,7 +100,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
       <div class="btns"><button class="btn active" id="btn-fly" onclick="setMode('fly')">▶ Flythrough</button><button class="btn amber" id="btn-walk" onclick="setMode('walk')">⛶ WASD Fly</button></div>
       <div class="btns"><button class="btn active" id="btn-play" onclick="togglePlay()">❚❚ Pause</button><button class="btn" id="btn-dice" onclick="randomizeSeed()">⚄ Seed</button><button class="btn" id="btn-bake" onclick="rebake()">↻ Rebake</button></div>
       <div class="hint" id="walk-hint" style="display:none"><b>WASD Fly:</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Spc</kbd> up · <kbd>Shift</kbd> down · click-drag to look · scroll to zoom.</div>
-      <div class="r-row" id="row-cruise" style="margin-top:8px"><span class="r-row-lbl">Cruise</span><input type="range" id="sl-cruise" min="0.2" max="4" value="1" step="0.1" oninput="setF('pathSpeed',this,1)"><span class="val" id="vl-cruise">1.0</span></div>
+      <div class="r-row" id="row-cruise" style="margin-top:8px"><span class="r-row-lbl">Cruise</span><input type="range" id="sl-cruise" min="0.2" max="4" value="0.4" step="0.1" oninput="setF('pathSpeed',this,1)"><span class="val" id="vl-cruise">0.4</span></div>
       <div class="r-row" id="row-speed" style="display:none"><span class="r-row-lbl">Move spd</span><input type="range" id="sl-movespeed" min="4" max="40" value="14" step="1" oninput="setF('moveSpeed',this,0)"><span class="val" id="vl-movespeed">14</span></div>
     </div>
 
@@ -112,7 +113,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
       <div class="r-row"><span class="r-row-lbl">Threshold</span><input type="range" id="sl-thresh" min="4" max="20" value="12" step="0.25" oninput="setU('uThresh',this,1)"><span class="val" id="vl-thresh">12</span></div>
       <div class="r-row"><span class="r-row-lbl">Slope</span><input type="range" id="sl-slope" min="0" max="0.3" value="0.06" step="0.005" oninput="setU('uSlope',this,3)"><span class="val" id="vl-slope">0.060</span></div>
       <div class="r-row"><span class="r-row-lbl">Evolve</span><input type="range" id="sl-morph" min="0" max="0.25" value="0.08" step="0.005" oninput="setMorph(this)"><span class="val" id="vl-morph">13s</span></div>
-      <div class="r-row"><span class="r-row-lbl">Bubble</span><input type="range" id="sl-clear" min="2" max="60" value="4" step="1" oninput="setClear(this)"><span class="val" id="vl-clear">4</span></div>
+      <div class="r-row"><span class="r-row-lbl">Bubble</span><input type="range" id="sl-clear" min="0" max="60" value="2" step="1" oninput="setClear(this)"><span class="val" id="vl-clear">2</span></div>
     </div>
 
     <div class="r-sec">
@@ -128,10 +129,11 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
     <div class="r-sec">
       <div class="r-lbl">CRT & View</div>
       <button class="tog on" id="tog-scan" onclick="togScan(this)">▤ Scanlines</button>
-      <div class="r-row"><span class="r-row-lbl">CRT glow</span><input type="range" id="sl-bloom" min="0" max="2.5" value="1.0" step="0.05" oninput="setU('uBloom',this,2)"><span class="val" id="vl-bloom">1.00</span></div>
-      <div class="r-row"><span class="r-row-lbl">Fog</span><input type="range" id="sl-fog" min="0.002" max="0.05" value="0.012" step="0.001" oninput="setU('uFog',this,3)"><span class="val" id="vl-fog">0.012</span></div>
-      <div class="r-row"><span class="r-row-lbl">FOV</span><input type="range" id="sl-focal" min="1" max="2.6" value="1.7" step="0.05" oninput="setU('uFocal',this,2)"><span class="val" id="vl-focal">1.70</span></div>
-      <div class="r-row"><span class="r-row-lbl">Res scale</span><input type="range" id="sl-resscale" min="0.4" max="1" value="0.8" step="0.05" oninput="setResScale(this)"><span class="val" id="vl-resscale">0.80</span></div>
+      <button class="tog on" id="tog-path" onclick="togPath(this)">⤳ Flight path</button>
+      <div class="r-row"><span class="r-row-lbl">CRT glow</span><input type="range" id="sl-bloom" min="0" max="2.5" value="0.2" step="0.05" oninput="setU('uBloom',this,2)"><span class="val" id="vl-bloom">0.20</span></div>
+      <div class="r-row"><span class="r-row-lbl">Fog</span><input type="range" id="sl-fog" min="0.002" max="0.05" value="0.02" step="0.001" oninput="setU('uFog',this,3)"><span class="val" id="vl-fog">0.020</span></div>
+      <div class="r-row"><span class="r-row-lbl">FOV</span><input type="range" id="sl-focal" min="1" max="2.6" value="1.0" step="0.05" oninput="setU('uFocal',this,2)"><span class="val" id="vl-focal">1.00</span></div>
+      <div class="r-row"><span class="r-row-lbl">Res scale</span><input type="range" id="sl-resscale" min="0.4" max="1" value="0.7" step="0.05" oninput="setResScale(this)"><span class="val" id="vl-resscale">0.70</span></div>
       <div class="r-row"><span class="r-row-lbl">Max steps</span><input type="range" id="sl-steps" min="48" max="420" value="150" step="2" oninput="setUi('uMaxSteps',this)"><span class="val" id="vl-steps">150</span></div>
     </div>
   </div>
@@ -140,6 +142,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
   <!-- CENTER STAGE -->
   <div id="stage">
     <canvas id="gl"></canvas>
+    <canvas id="pathOverlay"></canvas>
 
     <!-- on-screen control legend (desktop) -->
     <div class="ctrl-legend" id="ctrlLegend"></div>
@@ -158,15 +161,19 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 <script>
 const canvas=document.getElementById('gl');
 const stage=document.getElementById('stage');
+const overlay=document.getElementById('pathOverlay');
+const octx=overlay.getContext('2d');
 const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
 
 /* ---- state ---- */
 const S={
   mode:'fly', playing:true,
-  resScale:0.8, dprCap:1.5,
+  resScale:0.7, dprCap:1.5,
   camClock:0, morphClock:0, bakeMorph:0,
-  morphSpeed:0.08, pathSpeed:1.0, moveSpeed:14,
+  morphSpeed:0.08, pathSpeed:0.4, moveSpeed:14,
   seed:0, seedAxis:0,
+  // planned flight path
+  loop:null, dist:0, bank:0, showPath:true, needPlan:true, planMorph:0, lastPlanMs:0,
   // walk camera
   pos:[0,16,0], yaw:0.6, pitch:-0.15,
   // flythrough free-look offset (drag to rotate, Blender-style)
@@ -175,9 +182,9 @@ const S={
 };
 const U={
   uFreq:0.07, uOct:2, uHeight:22, uThresh:12, uSlope:0.06, uRegion:14,
-  uClearR:4, uMorphAmt:1.1,
+  uClearR:2, uMorphAmt:1.1,
   uEdgeGlow:1.9, uEdgeW:0.07, uBaseBright:0.62, uSat:1.0, uDuotone:0,
-  uBloom:1.0, uScan:0.12, uFog:0.012, uFocal:1.7, uMaxSteps:150,
+  uBloom:0.2, uScan:0.12, uFog:0.02, uFocal:1.0, uMaxSteps:150,
 };
 let CW=2,CH=2,RW=2,RH=2;
 
@@ -200,14 +207,14 @@ uniform float uEdgeGlow, uEdgeW, uBaseBright, uSat, uFog;
 uniform int uDuotone;
 
 const vec3 PAL[8]=vec3[8](
-  vec3(0.130,0.880,1.000),  // cyan
-  vec3(0.120,0.560,1.000),  // blue
-  vec3(0.520,0.320,1.000),  // violet
-  vec3(0.980,0.240,0.720),  // magenta
-  vec3(1.000,0.300,0.380),  // pink-red
-  vec3(1.000,0.520,0.140),  // orange
-  vec3(1.000,0.840,0.220),  // amber-yellow
-  vec3(0.360,0.940,0.380));  // green
+  vec3(0.130,0.880,1.000),  // 0 cyan
+  vec3(0.160,0.470,1.000),  // 1 blue
+  vec3(0.090,0.800,0.720),  // 2 teal
+  vec3(1.000,0.520,0.140),  // 3 orange
+  vec3(1.000,0.800,0.250),  // 4 gold
+  vec3(0.300,0.920,0.430),  // 5 green
+  vec3(0.600,0.340,1.000),  // 6 purple
+  vec3(0.130,0.880,1.000)); // 7 (spare cyan)
 
 float hash13(vec3 p){ p=fract(p*0.1031); p+=dot(p,p.yzx+33.33); return fract((p.x+p.y)*p.z); }
 float vnoise(vec3 x){
@@ -232,11 +239,24 @@ bool solid(vec3 cell){
   return s;
 }
 vec3 voxColor(vec3 cell){
-  // colour by large region, not per-voxel → big splashes of one colour
-  vec3 region=floor(cell/max(uRegion,1.0) + uSeedVec*0.013);
-  float h=hash13(region+0.137);
-  if(uDuotone==1){ return (h<0.5)?PAL[5]:PAL[0]; }   // blaze orange / electric cyan
-  int idx=int(floor(h*8.0)); idx = idx>7?7:idx;
+  // sample the SAME field that sculpts the terrain (coarse) so colour patches
+  // drape along the geometry's form — boundaries fall on the shape's iso-contours
+  vec3 qc = (cell+0.5)*uFreq*(14.0/max(uRegion,1.0)) + uSeedVec
+          + vec3(0.5,1.0,0.4)*(uMorphAmt*uMorphTime);
+  float cf = clamp(vnoise(qc), 0.0, 0.9999);
+  int band = int(floor(cf*8.0));
+  // permute iso-bands so adjacent levels get distinct hues (splashes, not a ramp)
+  float h = hash13(vec3(float(band)*12.73 + 3.1) + uSeedVec*0.017);
+  if(uDuotone==1){ return (h<0.5)?PAL[3]:PAL[0]; }   // orange / cyan
+  // weighted: blue·cyan·teal primary  ·  orange·gold accents  ·  green·purple occasional
+  int idx;
+  if(h<0.26)       idx=0;   // cyan
+  else if(h<0.48)  idx=1;   // blue
+  else if(h<0.66)  idx=2;   // teal
+  else if(h<0.80)  idx=3;   // orange
+  else if(h<0.91)  idx=4;   // gold
+  else if(h<0.965) idx=5;   // green
+  else             idx=6;   // purple
   return PAL[idx];
 }
 
@@ -294,10 +314,11 @@ void main(){
     float gPy=max(1.0-s3,a3), gNy=max(1.0-s4,a4);
 
     float w=uEdgeW;
-    float bNx=1.0-smoothstep(0.0,w,fuv.x);
-    float bPx=1.0-smoothstep(0.0,w,1.0-fuv.x);
-    float bNy=1.0-smoothstep(0.0,w,fuv.y);
-    float bPy=1.0-smoothstep(0.0,w,1.0-fuv.y);
+    vec2 aaw=clamp(fwidth(fuv)*0.9, vec2(1e-4), vec2(0.5));  // screen footprint → analytic AA
+    float bNx=1.0-smoothstep(w-aaw.x, w+aaw.x, fuv.x);
+    float bPx=1.0-smoothstep(w-aaw.x, w+aaw.x, 1.0-fuv.x);
+    float bNy=1.0-smoothstep(w-aaw.y, w+aaw.y, fuv.y);
+    float bPy=1.0-smoothstep(w-aaw.y, w+aaw.y, 1.0-fuv.y);
     float edge=max(max(bNx*gNx,bPx*gPx),max(bNy*gNy,bPy*gPy));
 
     // ambient occlusion reuses the in-plane neighbour samples
@@ -344,15 +365,35 @@ vec3 tonemap(vec3 c){
   return clamp(c,0.0,1.0);
 }
 
+// FXAA (console edition) — softens jagged edges, incl. far silhouettes in the background
+vec3 fxaa(vec2 uv, vec2 px){
+  const vec3 LUM=vec3(0.299,0.587,0.114);
+  vec3 rgbM =texture(uScene,uv).rgb;
+  vec3 rgbNW=texture(uScene,uv+vec2(-1.0,-1.0)*px).rgb;
+  vec3 rgbNE=texture(uScene,uv+vec2( 1.0,-1.0)*px).rgb;
+  vec3 rgbSW=texture(uScene,uv+vec2(-1.0, 1.0)*px).rgb;
+  vec3 rgbSE=texture(uScene,uv+vec2( 1.0, 1.0)*px).rgb;
+  float lM=dot(rgbM,LUM),lNW=dot(rgbNW,LUM),lNE=dot(rgbNE,LUM),lSW=dot(rgbSW,LUM),lSE=dot(rgbSE,LUM);
+  float lMin=min(lM,min(min(lNW,lNE),min(lSW,lSE)));
+  float lMax=max(lM,max(max(lNW,lNE),max(lSW,lSE)));
+  vec2 dir=vec2(-((lNW+lNE)-(lSW+lSE)), ((lNW+lSW)-(lNE+lSE)));
+  float red=max((lNW+lNE+lSW+lSE)*0.25*0.125, 1.0/128.0);
+  float rcp=1.0/(min(abs(dir.x),abs(dir.y))+red);
+  dir=clamp(dir*rcp,-8.0,8.0)*px;
+  vec3 rA=0.5*(texture(uScene,uv+dir*(1.0/3.0-0.5)).rgb + texture(uScene,uv+dir*(2.0/3.0-0.5)).rgb);
+  vec3 rB=rA*0.5 + 0.25*(texture(uScene,uv+dir*-0.5).rgb + texture(uScene,uv+dir*0.5).rgb);
+  float lB=dot(rB,LUM);
+  return (lB<lMin||lB>lMax)? rA : rB;
+}
+
 void main(){
   vec2 uv=gl_FragCoord.xy/uRes;
   vec2 px=1.0/uRes;
-  // slight chromatic offset toward edges
+  // anti-aliased scene (FXAA), with a subtle chromatic shimmer on top
+  vec3 c=fxaa(uv,px);
   vec2 ca=(uv-0.5)*0.0035;
-  vec3 c;
-  c.r=texture(uScene,uv+ca).r;
-  c.g=texture(uScene,uv).g;
-  c.b=texture(uScene,uv-ca).b;
+  c.r=mix(c.r, texture(uScene,uv+ca).r, 0.5);
+  c.b=mix(c.b, texture(uScene,uv-ca).b, 0.5);
 
   // bloom: thresholded multi-ring disk blur — wide halo for a broad CRT glow
   vec3 b=vec3(0.0); float wsum=0.0;
@@ -446,38 +487,151 @@ function steppedMorph(phase){
 const SEED_DIRS=[[1.7,0.25,0.45],[0.4,1.55,0.6],[0.55,0.4,1.7]];
 function seedVec(){ const d=SEED_DIRS[S.seedAxis]||SEED_DIRS[0]; return [S.seed*d[0], S.seed*d[1], S.seed*d[2]]; }
 
-function path(t){
-  return [ 118*Math.sin(0.021*t) + 44*Math.sin(0.034*t+1.3),
-           72 + 8*Math.sin(0.016*t+0.7),                       // high above the terrain
-           118*Math.cos(0.019*t) + 44*Math.cos(0.043*t+2.1) ];
+/* ════════ FLIGHT PLANNER — plots an obstacle-avoiding trajectory through the field ════════ */
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+const fract=x=>x-Math.floor(x);
+// density field ported from the shader so the planner can "see" the voxels it must avoid
+function jhash13(px,py,pz){
+  let x=fract(px*0.1031), y=fract(py*0.1031), z=fract(pz*0.1031);
+  const d=x*(y+33.33)+y*(z+33.33)+z*(x+33.33);
+  x+=d; y+=d; z+=d;
+  return fract((x+y)*z);
 }
+function jvnoise(x,y,z){
+  const ix=Math.floor(x),iy=Math.floor(y),iz=Math.floor(z);
+  const fx=x-ix,fy=y-iy,fz=z-iz;
+  const ux=fx*fx*(3-2*fx),uy=fy*fy*(3-2*fy),uz=fz*fz*(3-2*fz);
+  const L=(a,b,t)=>a+(b-a)*t;
+  const n000=jhash13(ix,iy,iz),   n100=jhash13(ix+1,iy,iz),   n010=jhash13(ix,iy+1,iz),   n110=jhash13(ix+1,iy+1,iz);
+  const n001=jhash13(ix,iy,iz+1), n101=jhash13(ix+1,iy,iz+1), n011=jhash13(ix,iy+1,iz+1), n111=jhash13(ix+1,iy+1,iz+1);
+  const x00=L(n000,n100,ux),x10=L(n010,n110,ux),x01=L(n001,n101,ux),x11=L(n011,n111,ux);
+  return L(L(x00,x10,uy),L(x01,x11,uy),uz);
+}
+function densJS(x,y,z,morphT){
+  const sv=seedVec();
+  let qx=x*U.uFreq+sv[0], qy=y*U.uFreq+sv[1], qz=z*U.uFreq+sv[2];
+  const m=U.uMorphAmt*morphT; qx+=0.5*m; qy+=1.0*m; qz+=0.4*m;
+  let f=0,amp=0.5,fr=1.0,nrm=0;
+  for(let i=0;i<U.uOct;i++){ f+=amp*jvnoise(qx*fr,qy*fr,qz*fr); nrm+=amp; fr*=2.02; amp*=0.5; }
+  f/=Math.max(nrm,1e-4);
+  return U.uHeight*f - U.uSlope*y - U.uThresh;
+}
+// normalized density gradient (points "uphill" into solid; we move against it toward open air)
+function gradN(x,y,z,m){
+  const e=1.6;
+  return norm([ densJS(x+e,y,z,m)-densJS(x-e,y,z,m),
+                densJS(x,y+e,z,m)-densJS(x,y-e,z,m),
+                densJS(x,y,z+e,m)-densJS(x,y,z-e,m) ]);
+}
+// base circuit (2π-periodic closed loop)
+function baseLoop(s){
+  return [ 90*Math.sin(s) + 38*Math.sin(2*s+1.3) + 16*Math.sin(3*s+0.5),
+           38 + 9*Math.sin(2*s+0.7) + 5*Math.sin(3*s),
+           90*Math.cos(s) + 38*Math.cos(2*s+2.1) + 16*Math.cos(3*s+1.7) ];
+}
+// ELASTIC BAND: relax a closed loop into the open corridors of the CURRENT field.
+// Each node feels: a smoothing pull (taut curve), repulsion away from solids — sampled at the
+// node AND the mid-points to its neighbours so the smoothed spline itself clears walls — and a
+// weak tether to the base route so it stays a coherent circuit instead of drifting off.
+function planFlight(){
+  const morphT = (S.mode==='fly') ? steppedMorph(S.morphClock) : S.bakeMorph;
+  S.planMorph = morphT;
+  const K=84, TAU=Math.PI*2, SAFE=4.5, ITERS=72, MX=3.2;
+  const base=[], node=[];
+  for(let k=0;k<K;k++){ const s=TAU*k/K; const p=baseLoop(s); base.push(p); node.push(p.slice()); }
+  for(let it=0;it<ITERS;it++){
+    const nx=[];
+    for(let k=0;k<K;k++){
+      const p=node[k], pm=node[(k-1+K)%K], pn=node[(k+1)%K], b=base[k];
+      const lap=[(pm[0]+pn[0])*0.5-p[0], (pm[1]+pn[1])*0.5-p[1], (pm[2]+pn[2])*0.5-p[2]];
+      let rx=0,ry=0,rz=0;
+      const probes=[ p,
+                     [(p[0]+pn[0])*0.5,(p[1]+pn[1])*0.5,(p[2]+pn[2])*0.5],
+                     [(p[0]+pm[0])*0.5,(p[1]+pm[1])*0.5,(p[2]+pm[2])*0.5] ];
+      for(const q of probes){
+        const d=densJS(q[0],q[1],q[2],morphT);
+        if(d>-SAFE){ const g=gradN(q[0],q[1],q[2],morphT); const push=d+SAFE; rx-=g[0]*push; ry-=g[1]*push; rz-=g[2]*push; }
+      }
+      let fx=lap[0]*0.50 + rx*0.82 + (b[0]-p[0])*0.009;
+      let fy=lap[1]*0.50 + ry*0.82 + (b[1]-p[1])*0.018;
+      let fz=lap[2]*0.50 + rz*0.82 + (b[2]-p[2])*0.009;
+      const fl=Math.hypot(fx,fy,fz); if(fl>MX){ const s2=MX/fl; fx*=s2; fy*=s2; fz*=s2; }
+      nx.push([p[0]+fx, p[1]+fy, p[2]+fz]);
+    }
+    for(let k=0;k<K;k++) node[k]=nx[k];
+  }
+  const prev=S.loop;                 // did we already have a route? (then this is a re-plan)
+  buildLoop(node);
+  // SEAMLESS HAND-OVER: snap traversal distance so the camera stays at its current world
+  // position on the freshly-computed loop — it keeps flying along, no teleport or jolt.
+  if(prev && S.mode==='fly'){
+    const Lp=S.loop; let best=1e18, bd=S.dist;
+    for(let i=0;i<Lp.N;i++){ const p=Lp.pts[i]; const dx=p[0]-camRO[0],dy=p[1]-camRO[1],dz=p[2]-camRO[2]; const dd=dx*dx+dy*dy+dz*dz; if(dd<best){best=dd; bd=Lp.cum[i];} }
+    S.dist=bd;
+  }
+  S.needPlan=false; S.lastPlanMs=performance.now();
+}
+// Catmull-Rom through the closed waypoint list → dense arc-length-parameterised samples
+function crom(p0,p1,p2,p3,t){
+  const t2=t*t,t3=t2*t; const out=[0,0,0];
+  for(let i=0;i<3;i++){
+    out[i]=0.5*((2*p1[i])+(-p0[i]+p2[i])*t+(2*p0[i]-5*p1[i]+4*p2[i]-p3[i])*t2+(-p0[i]+3*p1[i]-3*p2[i]+p3[i])*t3);
+  }
+  return out;
+}
+function buildLoop(wp){
+  const K=wp.length, SUB=12; const pts=[];
+  for(let k=0;k<K;k++){
+    const p0=wp[(k-1+K)%K],p1=wp[k],p2=wp[(k+1)%K],p3=wp[(k+2)%K];
+    for(let j=0;j<SUB;j++) pts.push(crom(p0,p1,p2,p3,j/SUB));
+  }
+  const N=pts.length, cum=new Float64Array(N+1); cum[0]=0;
+  for(let i=0;i<N;i++){ const a=pts[i],b=pts[(i+1)%N]; cum[i+1]=cum[i]+Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]); }
+  S.loop={pts,cum,total:cum[N],N};
+}
+function loopPos(d){
+  const Lp=S.loop; if(!Lp) return [0,38,0];
+  let x=d%Lp.total; if(x<0)x+=Lp.total;
+  // binary search the cumulative table
+  let lo=0,hi=Lp.N;
+  while(lo<hi){ const mid=(lo+hi)>>1; if(Lp.cum[mid+1]<x) lo=mid+1; else hi=mid; }
+  const i=lo, seg=Lp.cum[i+1]-Lp.cum[i], f=seg>1e-6?(x-Lp.cum[i])/seg:0;
+  const a=Lp.pts[i], b=Lp.pts[(i+1)%Lp.N];
+  return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
+}
+function ensurePlan(){ if(S.needPlan || !S.loop) planFlight(); }
 
-/* ---- camera basis for current frame ---- */
+
 let camRO=[0,16,0], camR=[1,0,0], camU=[0,1,0], camF=[0,0,-1];
+let lastDt=0.016;
 function buildCamera(){
   if(S.mode==='fly'){
-    const t=S.camClock;
-    const p=path(t);
-    // travel direction (horizontal), then tilt the view down to look over the landscape
-    const ahead=path(t+1.0);
-    let h=norm([ahead[0]-p[0], 0, ahead[2]-p[2]]);
-    const p0=-0.46;                                          // ~26° downward gaze
-    let f=norm([h[0]*Math.cos(p0), Math.sin(p0), h[2]*Math.cos(p0)]);
-    let r=norm(cross(f,[0,1,0]));
-    let u=cross(r,f);
-    // free-look offset: rotate the view inside this basis (drag to rotate)
+    ensurePlan();
+    const d=S.dist, h=5.0;
+    const p  = loopPos(d);
+    const pa = loopPos(d-h), pb = loopPos(d+h);
+    let vel=[pb[0]-pa[0], pb[1]-pa[1], pb[2]-pa[2]];          // velocity (tangent), includes climb/dive
+    let forward=norm(vel);
+    let right0=norm(cross(forward,[0,1,0])); if(!isFinite(right0[0])) right0=[1,0,0];
+    let up0=cross(right0,forward);
+    // lateral acceleration from path curvature → coordinated-turn bank (lean into the turn)
+    const acc=[pb[0]-2*p[0]+pa[0], pb[1]-2*p[1]+pa[1], pb[2]-2*p[2]+pa[2]]; // ∝ curvature
+    const latA=dot(acc,right0)/(h*h);
+    let bankTarget=clamp(-9.0*latA, -0.7, 0.7);              // roll ONLY when actually turning
+    // ease toward the target so banking feels like inertia, never a twitch
+    S.bank += (bankTarget - S.bank)*Math.min(1, lastDt*3.2);
+    const cb=Math.cos(S.bank), sb=Math.sin(S.bank);
+    let right=[right0[0]*cb+up0[0]*sb, right0[1]*cb+up0[1]*sb, right0[2]*cb+up0[2]*sb];
+    let up   =[up0[0]*cb-right0[0]*sb, up0[1]*cb-right0[1]*sb, up0[2]*cb-right0[2]*sb];
+    // free-look offset still layers on top (drag to glance around)
     const ly=S.lookYaw, lp=S.lookPitch;
-    const dl=[Math.sin(ly)*Math.cos(lp), Math.sin(lp), Math.cos(ly)*Math.cos(lp)];
-    let fwd=norm(add(add(mul(r,dl[0]),mul(u,dl[1])),mul(f,dl[2])));
-    let right=norm(cross(fwd,[0,1,0]));
-    let up=cross(right,fwd);
-    // cinematic roll
-    const roll=0.13*Math.cos(0.08*t);
-    const cr=Math.cos(roll), sr=Math.sin(roll);
-    camRO=p;
-    camR=add(mul(right,cr),mul(up,sr));
-    camU=sub(mul(up,cr),mul(right,sr));
-    camF=fwd;
+    if(ly||lp){
+      const dl=[Math.sin(ly)*Math.cos(lp), Math.sin(lp), Math.cos(ly)*Math.cos(lp)];
+      const fwd2=norm(add(add(mul(right,dl[0]),mul(up,dl[1])),mul(forward,dl[2])));
+      const r2=norm(cross(fwd2,up)), u2=cross(r2,fwd2);
+      forward=fwd2; right=r2; up=u2;
+    }
+    camRO=[p[0], p[1]+3.0, p[2]]; camR=right; camU=up; camF=forward;  // eye above the rail
   } else {
     const cp=Math.cos(S.pitch), sp=Math.sin(S.pitch), cy=Math.cos(S.yaw), sy=Math.sin(S.yaw);
     const f=norm([cp*cy, sp, cp*sy]);
@@ -500,6 +654,9 @@ function resize(){
   if(tot>BUDGET){ const k=Math.sqrt(BUDGET/tot); RW=Math.max(2,Math.round(RW*k)); RH=Math.max(2,Math.round(RH*k)); }
   canvas.width=RW; canvas.height=RH;
   canvas.style.width=CW+'px'; canvas.style.height=CH+'px';
+  const odpr=Math.min(devicePixelRatio||1, 2);
+  overlay.width=Math.max(2,Math.round(CW*odpr)); overlay.height=Math.max(2,Math.round(CH*odpr));
+  overlay._dpr=odpr;
   if(gl) makeFBO(RW,RH);
 }
 if(window.ResizeObserver){new ResizeObserver(()=>resize()).observe(stage);}
@@ -507,6 +664,144 @@ window.addEventListener('resize',resize);
 window.addEventListener('orientationchange',()=>setTimeout(resize,120));
 window.addEventListener('load',()=>setTimeout(resize,80));
 if(document.fonts&&document.fonts.ready){document.fonts.ready.then(()=>resize());}
+
+/* ---- trajectory overlay: project the planned path to screen, occluded by geometry ---- */
+function pathOccluded(P,morphT){
+  // march from the eye toward P; if the voxel CELL we pass through is solid (exactly what the
+  // renderer draws), the point is hidden. Fine step + cell-centre test so thin walls aren't skipped.
+  const dx=P[0]-camRO[0], dy=P[1]-camRO[1], dz=P[2]-camRO[2];
+  const dist=Math.hypot(dx,dy,dz); if(dist<1e-3) return false;
+  const ux=dx/dist, uy=dy/dist, uz=dz/dist, step=0.9, start=Math.max(step,U.uClearR+0.5);
+  for(let s=start; s<dist-1.0; s+=step){
+    const cx=Math.floor(camRO[0]+ux*s)+0.5, cy=Math.floor(camRO[1]+uy*s)+0.5, cz=Math.floor(camRO[2]+uz*s)+0.5;
+    if(densJS(cx,cy,cz,morphT) > 0.0) return true;
+  }
+  return false;
+}
+// subtle Oblivion-radar-style HUD: trajectory readouts, reticle, corner brackets, scanning radar.
+// original implementation (not a port) — low-alpha cyan, house mono type.
+function drawHUD(ctx,W,H){
+  const now=performance.now()*0.001;
+  const cyn=a=>'rgba(150,232,248,'+a+')';
+  ctx.save(); ctx.globalCompositeOperation='source-over'; ctx.lineWidth=1;
+  // corner brackets
+  ctx.strokeStyle=cyn(0.28); const m=15,len=18;
+  for(const [x,y,sx,sy] of [[m,m,1,1],[W-m,m,-1,1],[m,H-m,1,-1],[W-m,H-m,-1,-1]]){
+    ctx.beginPath(); ctx.moveTo(x+sx*len,y); ctx.lineTo(x,y); ctx.lineTo(x,y+sy*len); ctx.stroke();
+  }
+  // centre reticle
+  const cx=W/2, cy=H/2; ctx.strokeStyle=cyn(0.18);
+  ctx.beginPath();
+  ctx.moveTo(cx-13,cy); ctx.lineTo(cx-5,cy); ctx.moveTo(cx+5,cy); ctx.lineTo(cx+13,cy);
+  ctx.moveTo(cx,cy-13); ctx.lineTo(cx,cy-5); ctx.moveTo(cx,cy+5); ctx.lineTo(cx,cy+13); ctx.stroke();
+  ctx.strokeRect(cx-2,cy-2,4,4);
+  // trajectory readouts (top-left)
+  ctx.font='10px "JetBrains Mono", ui-monospace, monospace'; ctx.textBaseline='top';
+  const recomputing=(performance.now()-S.lastPlanMs)<700;
+  const spd=(S.pathSpeed*10).toFixed(1);
+  const hdg=((Math.atan2(camF[2],camF[0])*180/Math.PI+360)%360).toFixed(0).padStart(3,'0');
+  const prog=S.loop?((S.dist%S.loop.total)/S.loop.total*100):0;
+  const dots='.'.repeat(1+Math.floor(now*3)%3);
+  const lines=[
+    '\u25C8 TRAJECTORY SOLVER',
+    'STATUS  '+(recomputing?'RECOMPUTING'+dots:'LOCKED \u2713'),
+    'VEL     '+spd+' u/s',
+    'HDG     '+hdg+'\u00B0   BANK '+(S.bank*180/Math.PI).toFixed(0)+'\u00B0',
+    'POS     '+camRO[0].toFixed(0)+'  '+camRO[1].toFixed(0)+'  '+camRO[2].toFixed(0),
+    'NODES   84   ITER 72'
+  ];
+  ctx.fillStyle=cyn(0.40); let ty=22;
+  for(const ln of lines){ ctx.fillText(ln,18,ty); ty+=13; }
+  // progress bar
+  ctx.strokeStyle=cyn(0.22); ctx.strokeRect(18,ty+3,118,3);
+  ctx.fillStyle=cyn(0.40); ctx.fillRect(18,ty+3,118*prog/100,3);
+  // scanning radar (bottom-right)
+  const rx=W-66, ry=H-66, R=44;
+  ctx.strokeStyle=cyn(0.26);
+  for(const rr of [R,R*0.66,R*0.33]){ ctx.beginPath(); ctx.arc(rx,ry,rr,0,6.2832); ctx.stroke(); }
+  ctx.strokeStyle=cyn(0.18);
+  for(let a=0;a<12;a++){ const an=a*Math.PI/6; ctx.beginPath(); ctx.moveTo(rx+Math.cos(an)*(R-4),ry+Math.sin(an)*(R-4)); ctx.lineTo(rx+Math.cos(an)*R,ry+Math.sin(an)*R); ctx.stroke(); }
+  const sw=now*1.25;
+  ctx.fillStyle=cyn(0.06); ctx.beginPath(); ctx.moveTo(rx,ry); ctx.arc(rx,ry,R,sw-0.7,sw); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle=cyn(0.5); ctx.beginPath(); ctx.moveTo(rx,ry); ctx.lineTo(rx+Math.cos(sw)*R,ry+Math.sin(sw)*R); ctx.stroke();
+  for(const [bx,by] of [[Math.cos(now*0.7)*0.62,Math.sin(now*0.5)*0.5],[Math.cos(-now*0.4+1)*0.42,Math.sin(now*0.6+2)*0.7]]){
+    ctx.fillStyle=cyn(0.55); ctx.beginPath(); ctx.arc(rx+bx*R,ry+by*R,1.5,0,6.2832); ctx.fill();
+  }
+  ctx.fillStyle='rgba(255,96,72,'+(0.35+0.3*Math.sin(now*3)).toFixed(2)+')';
+  ctx.beginPath(); ctx.arc(rx+Math.cos(now*0.25+4)*R*0.7, ry+Math.sin(now*0.35+1)*R*0.55, 2,0,6.2832); ctx.fill();
+  ctx.fillStyle=cyn(0.32); ctx.font='8px "JetBrains Mono", monospace'; ctx.fillText('SCAN',rx-R,ry-R-9);
+  ctx.restore();
+}
+function drawPath(){
+  const ctx=octx; if(!ctx) return;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,overlay.width,overlay.height);
+  ctx.globalCompositeOperation='source-over';
+  if(S.mode!=='fly') return;
+  const odpr=overlay._dpr||1; ctx.setTransform(odpr,0,0,odpr,0,0);
+  const W=CW,H=CH, focal=U.uFocal, morphT=steppedMorph(S.morphClock);
+  function proj(P){
+    const rel=[P[0]-camRO[0],P[1]-camRO[1],P[2]-camRO[2]];
+    const vz=dot(rel,camF); if(vz<=0.1) return null;
+    const ux=focal*dot(rel,camR)/vz, uy=focal*dot(rel,camU)/vz;
+    return [(ux*H+W)/2, H-(uy*H+H)/2, vz];
+  }
+  if(S.showPath && S.loop){
+    // TEN rails in five close pairs (slight lateral+vertical offset) → each reads as a thicker 3D rail
+    const AHEAD=140, up=[0,1,0];
+    const RAILS=[ [-2.75,0.22],[-2.42,-0.10], [-1.50,0.22],[-1.17,-0.10],
+                  [-0.17,0.22],[0.17,-0.10],  [1.17,0.22],[1.50,-0.10],  [2.42,0.22],[2.75,-0.10] ];
+    const NR=RAILS.length;
+    const railSegs=RAILS.map(()=>[]), curR=RAILS.map(()=>[]); const ties=[];
+    let s=-8, nextTie=0;
+    while(s<=AHEAD){
+      const P=loopPos(S.dist+s);
+      const Pa=loopPos(S.dist+s-2.0), Pb=loopPos(S.dist+s+2.0);
+      let lat=norm(cross(norm([Pb[0]-Pa[0],Pb[1]-Pa[1],Pb[2]-Pa[2]]), up));
+      if(!isFinite(lat[0])) lat=[1,0,0];
+      const vis = proj(P) && !pathOccluded(P,morphT);
+      if(vis){
+        const row=[];
+        for(let r=0;r<NR;r++){
+          const o=RAILS[r][0], vy=RAILS[r][1];
+          const pr=proj([P[0]+lat[0]*o, P[1]+vy, P[2]+lat[2]*o]);
+          if(pr){ curR[r].push(pr); row.push(pr); }
+          else { if(curR[r].length>1)railSegs[r].push(curR[r]); curR[r]=[]; row.push(null); }
+        }
+        if(s>=nextTie){ ties.push(row); nextTie+=12; }
+      } else {
+        for(let r=0;r<NR;r++){ if(curR[r].length>1)railSegs[r].push(curR[r]); curR[r]=[]; }
+        if(s>=nextTie) nextTie+=12;
+      }
+      s += Math.min(3.0, 0.32 + Math.max(0.0,s)*0.02);
+    }
+    for(let r=0;r<NR;r++) if(curR[r].length>1) railSegs[r].push(curR[r]);
+
+    ctx.globalCompositeOperation='lighter'; ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.strokeStyle='rgba(110,205,235,0.22)'; ctx.lineWidth=1.2; ctx.shadowColor='rgba(120,232,255,0.6)'; ctx.shadowBlur=4;
+    for(const row of ties){
+      ctx.beginPath(); let started=false;
+      for(let r=0;r<row.length;r++){ const q=row[r]; if(!q){started=false;continue;} started?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); started=true; }
+      ctx.stroke();
+    }
+    const layers=[
+      {w:7.0,col:'rgba(46,150,180,0.08)', blur:15},
+      {w:3.2,col:'rgba(90,210,235,0.18)', blur:9},
+      {w:1.5,col:'rgba(170,240,255,0.58)',blur:4},
+      {w:0.9,col:'rgba(232,252,255,0.92)',blur:2}
+    ];
+    for(const L of layers){
+      ctx.lineWidth=L.w; ctx.strokeStyle=L.col; ctx.shadowColor='rgba(120,232,255,0.9)'; ctx.shadowBlur=L.blur;
+      for(let r=0;r<NR;r++) for(const seg of railSegs[r]){
+        ctx.beginPath();
+        for(let i=0;i<seg.length;i++){ const q=seg[i]; i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); }
+        ctx.stroke();
+      }
+    }
+    ctx.shadowBlur=0; ctx.globalCompositeOperation='source-over';
+  }
+  drawHUD(ctx,W,H);
+}
 
 /* ---- render ---- */
 function draw(){
@@ -577,19 +872,34 @@ function updateWalk(dt){
 let last=0,fc=0,ft=0;
 function loop(time){
   requestAnimationFrame(loop);
-  const dt=Math.min((time-last)/1000,0.05); last=time;
+  const dt=Math.min((time-last)/1000,0.05); last=time; lastDt=dt;
   fc++;ft+=dt; if(ft>=0.5){document.getElementById('st-fps').textContent=Math.round(fc/ft)+' fps';fc=0;ft=0;}
-  if(S.mode==='fly' && S.playing){ S.camClock+=dt*S.pathSpeed; S.morphClock+=dt*S.morphSpeed; }
+  if(S.mode==='fly' && S.playing){
+    const FLY_SPEED=10;
+    S.dist += dt*S.pathSpeed*FLY_SPEED;
+    S.morphClock += dt*S.morphSpeed;
+    // re-plan whenever the field has visibly morphed (throttled), so the route tracks the geometry
+    const cm=steppedMorph(S.morphClock);
+    if(Math.abs(cm-S.planMorph)>0.02 && (time-S.lastPlanMs)>240) S.needPlan=true;
+  }
+  if(S.mode==='fly' && !S.dragging && (S.lookYaw||S.lookPitch)){
+    const k=Math.max(0, 1 - dt*6.0);              // snap the gaze back to forward, fast
+    S.lookYaw*=k; S.lookPitch*=k;
+    if(Math.abs(S.lookYaw)<1e-3)S.lookYaw=0;
+    if(Math.abs(S.lookPitch)<1e-3)S.lookPitch=0;
+  }
   if(S.mode==='walk') updateWalk(dt);
   draw();
+  drawPath();
   const p = (S.mode==='fly')?camRO:S.pos;
   document.getElementById('st-pos').textContent=`${p[0].toFixed(0)}, ${p[1].toFixed(0)}, ${p[2].toFixed(0)}`;
 }
 
 /* ---- controls ---- */
 function sg(el){if(!el)return;const mn=+el.min,mx=+el.max;el.style.setProperty('--pct',((el.value-mn)/(mx-mn)*100)+'%');}
-function setU(key,el,dp){U[key]=+el.value;const id='vl-'+el.id.slice(3);const o=document.getElementById(id);if(o)o.textContent=(+el.value).toFixed(dp);sg(el);}
-function setUi(key,el){U[key]=parseInt(el.value);const id='vl-'+el.id.slice(3);const o=document.getElementById(id);if(o)o.textContent=el.value;sg(el);if(key==='uMaxSteps')document.getElementById('st-steps').textContent=el.value;}
+const PLAN_KEYS={uFreq:1,uOct:1,uHeight:1,uThresh:1,uSlope:1,uMorphAmt:1};
+function setU(key,el,dp){U[key]=+el.value;const id='vl-'+el.id.slice(3);const o=document.getElementById(id);if(o)o.textContent=(+el.value).toFixed(dp);sg(el);if(PLAN_KEYS[key])S.needPlan=true;}
+function setUi(key,el){U[key]=parseInt(el.value);const id='vl-'+el.id.slice(3);const o=document.getElementById(id);if(o)o.textContent=el.value;sg(el);if(key==='uMaxSteps')document.getElementById('st-steps').textContent=el.value;if(PLAN_KEYS[key])S.needPlan=true;}
 function setF(key,el,dp){S[key]=+el.value;const id='vl-'+el.id.slice(3);const o=document.getElementById(id);if(o)o.textContent=(+el.value).toFixed(dp);sg(el);}
 function setClear(el){U.uClearR=+el.value;document.getElementById('vl-clear').textContent=(+el.value).toFixed(0);sg(el);}
 function setMorph(el){S.morphSpeed=+el.value;const v=+el.value;document.getElementById('vl-morph').textContent=(v<=0.0005)?'off':Math.round(1/v)+'s';sg(el);}
@@ -634,16 +944,18 @@ window.addEventListener('resize',updateLegend);
 function togglePlay(){S.playing=!S.playing;const b=document.getElementById('btn-play');b.textContent=S.playing?'❚❚ Pause':'▶ Play';b.classList.toggle('active',S.playing);}
 window.togglePlay=togglePlay;
 const AXL=['X','Y','Z'];
-function setSeed(el){S.seed=+el.value;const v=(+el.value).toFixed(1);document.getElementById('vl-seed').textContent=v;document.getElementById('st-seed').textContent=v+'·'+AXL[S.seedAxis];sg(el);if(S.mode==='walk')S.bakeMorph=steppedMorph(S.morphClock);}
+function setSeed(el){S.seed=+el.value;const v=(+el.value).toFixed(1);document.getElementById('vl-seed').textContent=v;document.getElementById('st-seed').textContent=v+'·'+AXL[S.seedAxis];sg(el);S.needPlan=true;if(S.mode==='walk')S.bakeMorph=steppedMorph(S.morphClock);}
 window.setSeed=setSeed;
 function randomizeSeed(){S.seedAxis=Math.floor(Math.random()*3);const sl=document.getElementById('sl-seed');sl.value=(Math.random()*200).toFixed(1);setSeed(sl);}
 window.randomizeSeed=randomizeSeed;
-function rebake(){S.morphClock=Math.round(S.morphClock)+1+Math.floor(Math.random()*5);S.bakeMorph=steppedMorph(S.morphClock);}
+function rebake(){S.morphClock=Math.round(S.morphClock)+1+Math.floor(Math.random()*5);S.bakeMorph=steppedMorph(S.morphClock);S.needPlan=true;}
 window.rebake=rebake;
 function setPalette(d){U.uDuotone=d;document.getElementById('btn-pal-full').classList.toggle('active',d===0);document.getElementById('btn-pal-duo').classList.toggle('active',d===1);}
 window.setPalette=setPalette;
 function togScan(btn){btn.classList.toggle('on');}
 window.togScan=togScan;
+function togPath(btn){btn.classList.toggle('on');S.showPath=btn.classList.contains('on');}
+window.togPath=togPath;
 
 /* ---- pointer / keyboard ---- */
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
