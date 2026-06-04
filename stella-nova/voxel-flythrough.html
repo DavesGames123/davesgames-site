@@ -117,6 +117,16 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
     </div>
 
     <div class="r-sec">
+      <div class="r-lbl">Data Fauna</div>
+      <button class="tog on" id="tog-swarm" onclick="togSwarm(this)">✦ Swarm</button>
+      <div class="r-row"><span class="r-row-lbl">Count</span><span class="val" id="vl-bcount" style="width:auto;flex:1;text-align:left;color:var(--text-faint);font-weight:500">78k</span></div>
+      <div class="r-row"><span class="r-row-lbl">Speed</span><input type="range" id="sl-bspeed" min="2" max="30" value="16" step="0.5" oninput="setB('speed',this,1)"><span class="val" id="vl-bspeed">16.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Wall cling</span><input type="range" id="sl-bcling" min="0" max="2" value="0.4" step="0.05" oninput="setB('cling',this,2)"><span class="val" id="vl-bcling">0.40</span></div>
+      <div class="r-row"><span class="r-row-lbl">Cohesion</span><input type="range" id="sl-bcohesion" min="0" max="3" value="1.7" step="0.05" oninput="setB('cohesion',this,2)"><span class="val" id="vl-bcohesion">1.70</span></div>
+      <div class="r-row"><span class="r-row-lbl">Wander</span><input type="range" id="sl-bwander" min="0" max="2" value="0.2" step="0.05" oninput="setB('wander',this,2)"><span class="val" id="vl-bwander">0.20</span></div>
+      <div class="r-row"><span class="r-row-lbl">Glow</span><input type="range" id="sl-bglow" min="0.5" max="3" value="1.4" step="0.05" oninput="setB('glow',this,2)"><span class="val" id="vl-bglow">1.40</span></div>
+    </div>
+    <div class="r-sec">
       <div class="r-lbl">Glow & Color</div>
       <div class="btns"><button class="btn active" id="btn-pal-full" onclick="setPalette(0)">Palette</button><button class="btn" id="btn-pal-duo" onclick="setPalette(1)">Duotone</button></div>
       <div class="r-row"><span class="r-row-lbl">Color size</span><input type="range" id="sl-region" min="4" max="40" value="14" step="1" oninput="setUi('uRegion',this)"><span class="val" id="vl-region">14</span></div>
@@ -284,13 +294,14 @@ void main(){
     pos += vec3(mask)*rs;
   }
 
-  vec3 col=vec3(0.0);  // black void — distant geometry fades into it
+  vec3 col=vec3(0.0); float vz=1e4;  // black void — distant geometry fades into it
 
   if(hit){
     vec3 n=-vec3(mask)*rs;
     vec3 mini=(pos-ro + 0.5 - 0.5*rs)*ri;
     float t=max(mini.x,max(mini.y,mini.z));
     vec3 hp=ro+rd*t;
+    vz=dot(hp-ro,uFwd);
     vec3 fp=hp-pos;
 
     // face-local uv (the two axes that aren't the normal)
@@ -344,7 +355,7 @@ void main(){
     float fog=exp(-fa - 0.14*fa*fa);                      // 1 near → 0 far, gentle
     col = lit*fog + glow*fog;                             // everything fades into black with depth
   }
-  outColor=vec4(col,1.0);
+  outColor=vec4(col, clamp(vz/1300.0,0.0,1.0));
 }`;
 
 const POST_FS=`#version 300 es
@@ -426,6 +437,119 @@ void main(){
   outColor=vec4(c,1.0);
 }`;
 
+/* ════════ DATA FAUNA — GPU boid swarm that inhabits the voxel field ════════ */
+const BOID_SIM_FS=`#version 300 es
+precision highp float;
+layout(location=0) out vec4 outPos;
+layout(location=1) out vec4 outVel;
+uniform sampler2D uPos,uVel;
+uniform float uW,uDt,uTime;
+uniform vec3 uRO,uSeedVec;
+uniform float uFreq,uHeight,uThresh,uSlope,uMorphAmt,uMorphTime;
+uniform int uOct;
+uniform float uAvoid,uCling,uCohesion,uWander,uSpeed,uRegion;
+float hash13(vec3 p){ p=fract(p*0.1031); p+=dot(p,p.yzx+33.33); return fract((p.x+p.y)*p.z); }
+float vnoise(vec3 x){
+  vec3 i=floor(x), f=fract(x); vec3 u=f*f*(3.0-2.0*f);
+  float n000=hash13(i),n100=hash13(i+vec3(1,0,0)),n010=hash13(i+vec3(0,1,0)),n110=hash13(i+vec3(1,1,0));
+  float n001=hash13(i+vec3(0,0,1)),n101=hash13(i+vec3(1,0,1)),n011=hash13(i+vec3(0,1,1)),n111=hash13(i+vec3(1,1,1));
+  float x00=mix(n000,n100,u.x),x10=mix(n010,n110,u.x),x01=mix(n001,n101,u.x),x11=mix(n011,n111,u.x);
+  return mix(mix(x00,x10,u.y),mix(x01,x11,u.y),u.z);
+}
+float density(vec3 p){
+  vec3 q=p*uFreq+uSeedVec; q+=vec3(0.5,1.0,0.4)*(uMorphAmt*uMorphTime);
+  float f=0.0,amp=0.5,fr=1.0,nrm=0.0;
+  for(int i=0;i<8;i++){ if(i>=uOct)break; f+=amp*vnoise(q*fr); nrm+=amp; fr*=2.02; amp*=0.5; }
+  f/=max(nrm,1e-4); return uHeight*f - uSlope*p.y - uThresh;
+}
+vec3 dgrad(vec3 p){ float e=1.6; return vec3(
+  density(p+vec3(e,0,0))-density(p-vec3(e,0,0)),
+  density(p+vec3(0,e,0))-density(p-vec3(0,e,0)),
+  density(p+vec3(0,0,e))-density(p-vec3(0,0,e))); }
+vec3 curl(vec3 p){ float t=uTime*0.4; return vec3(
+  sin(p.y*0.08+t)-cos(p.z*0.07-t), sin(p.z*0.06-t)-cos(p.x*0.09+t), sin(p.x*0.07+t)-cos(p.y*0.08-t)); }
+void main(){
+  vec2 uv=gl_FragCoord.xy/uW;
+  vec4 P=texture(uPos,uv),V=texture(uVel,uv);
+  vec3 pos=P.xyz; float age=P.w; vec3 vel=V.xyz; float seed=V.w;
+  float dt=min(uDt,0.033);
+  float d=density(pos);
+  vec3 n=normalize(dgrad(pos)+1e-5);            // points INTO solid
+  vec3 acc=vec3(0.0);
+  float SAFE=3.0;
+  if(d>-SAFE) acc += -n*(d+SAFE)*uAvoid;        // steer out of walls
+  // boid neighbours (separation / alignment / cohesion)
+  vec2 px=1.0/vec2(uW);
+  vec2 offs[12]=vec2[12](vec2(1.,0.),vec2(0.,1.),vec2(-1.,0.),vec2(0.,-1.),vec2(1.,1.),vec2(-1.,1.),vec2(1.,-1.),vec2(-1.,-1.),vec2(3.,2.),vec2(-2.,4.),vec2(6.,-5.),vec2(-7.,-3.));
+  vec3 sep=vec3(0.0),ali=vec3(0.0),coh=vec3(0.0); float cnt=1e-3;
+  for(int j=0;j<12;j++){
+    vec2 nuv=fract(uv+offs[j]*px);
+    vec3 np=texture(uPos,nuv).xyz; vec3 nv=texture(uVel,nuv).xyz;
+    vec3 dl=pos-np; float ds=length(dl)+1e-3;
+    if(ds<5.0) sep += dl/(ds*ds);
+    ali+=nv; coh+=np; cnt+=1.0;
+  }
+  ali/=cnt; coh/=cnt;
+  acc += sep*0.9*uCohesion + (ali-vel)*1.7*uCohesion + (coh-pos)*0.06*uCohesion;
+  acc += curl(pos)*uWander;
+  vec3 toCam=uRO-pos; float dc=length(toCam);
+  if(dc>uRegion) acc += normalize(toCam)*(dc-uRegion)*0.06;   // keep near the viewed field
+  vel += acc*dt;
+  // wall cling: near a surface, slide tangentially and stick lightly
+  float cling=smoothstep(2.6,0.0,abs(d));
+  vel = mix(vel, vel - dot(vel,n)*n, cling*uCling);
+  vel += -n*clamp(d,-1.0,1.0)*cling*uCling*0.8;
+  float sp=length(vel), mx=uSpeed;
+  if(sp>mx) vel*=mx/sp; else if(sp<mx*0.3 && sp>1e-4) vel*=(mx*0.3)/sp;
+  pos += vel*dt; age+=dt;
+  if(d>4.5 || dc>uRegion*1.9 || age>(18.0+seed*22.0)){       // respawn lost / buried boids
+    vec3 r=vec3(hash13(pos+uTime),hash13(pos*1.3+uTime*1.7),hash13(pos*0.7+uTime*0.3))-0.5;
+    pos=uRO+r*uRegion*1.1; vel=r*uSpeed; age=0.0;
+  }
+  outPos=vec4(pos,age); outVel=vec4(vel,seed);
+}`;
+const BOID_VS=`#version 300 es
+precision highp float;
+uniform sampler2D uPos,uVel; uniform float uW;
+uniform vec3 uRO,uRight,uUp,uFwd; uniform float uFocal,uPoint; uniform vec2 uRes;
+out float vVZ; out float vSeed; out float vT; out float vSize;
+void main(){
+  int W=int(uW); int id=gl_VertexID;
+  vec2 uv=(vec2(float(id-(id/W)*W),float(id/W))+0.5)/uW;
+  vec3 pos=textureLod(uPos,uv,0.0).xyz; vec4 V=textureLod(uVel,uv,0.0); vec3 vel=V.xyz; float seed=V.w;
+  vec3 rel=pos-uRO; float vz=dot(rel,uFwd);
+  vec2 sp=uFocal*vec2(dot(rel,uRight),dot(rel,uUp))/max(vz,0.001);
+  float aspect=uRes.x/uRes.y;
+  gl_Position = vz>0.05 ? vec4(sp.x/aspect, sp.y, 0.0, 1.0) : vec4(2.0,2.0,2.0,1.0);
+  float ps = clamp((0.45 + seed*1.0)*uPoint/max(vz,0.001), 1.0, 7.0);   // small, lightly varied
+  gl_PointSize=ps; vSize=ps;
+  vVZ=vz; vSeed=seed; vT=clamp(length(vel)*0.04,0.0,1.0);
+}`;
+const BOID_FS=`#version 300 es
+precision highp float;
+in float vVZ; in float vSeed; in float vT; in float vSize;
+uniform sampler2D uDepth; uniform vec2 uRes; uniform float uGlow,uFog,uTime;
+out vec4 o;
+float glyph(vec2 uv,float seed){
+  vec2 g=floor(uv*vec2(3.0,5.0)); float gi=g.x+g.y*3.0;
+  float on=step(0.45, fract(sin((gi+1.0)*12.9898 + seed*78.233)*43758.5453));
+  vec2 f=fract(uv*vec2(3.0,5.0))-0.5;
+  return on*smoothstep(0.5,0.12,length(f));
+}
+void main(){
+  vec2 uv=gl_FragCoord.xy/uRes;
+  float sceneVZ=texture(uDepth,uv).a*1300.0;
+  if(vVZ > sceneVZ+0.6) discard;                       // occluded by terrain
+  vec2 pc=gl_PointCoord;
+  float dotR=exp(-dot(pc-0.5,pc-0.5)*7.0);
+  float gseed=vSeed*9.0 + floor(uTime*7.0)*0.2;        // glyph flips over time → falling code
+  float g=glyph(pc,gseed);
+  float shape=mix(dotR, g, smoothstep(2.5,5.0,vSize)); // tiny→dot, bigger→glyph
+  if(shape<0.02) discard;
+  float fa=uFog*vVZ; float fog=exp(-fa-0.14*fa*fa);    // fade into the distance like the geometry
+  vec3 col=mix(vec3(0.18,1.0,0.5), vec3(0.42,1.0,0.86), vT);   // matrix green → cyan with speed
+  o=vec4(col*shape*(0.55+vSeed*0.6)*uGlow*fog, 1.0);
+}`;
 /* ---- gl helpers ---- */
 function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s),src);}
@@ -881,6 +1005,8 @@ function draw(){
   gl.uniform1f(postLoc.uScan,U.uScan);
   gl.uniform1i(postLoc.uScanOn, document.getElementById('tog-scan').classList.contains('on')?1:0);
   gl.drawArrays(gl.TRIANGLES,0,3);
+  // data fauna: step + draw the swarm over the composited scene (terrain-occluded via scene depth)
+  if(BO.on){ if(S.playing) boidsStep(lastDt, morphT); boidsRender(); }
 }
 
 /* ---- walk update ---- */
@@ -1037,9 +1163,76 @@ window.addEventListener('keyup',e=>{
   if(k==='shift')S.keys['shift']=false;
 });
 
+/* ════════ boid swarm plumbing ════════ */
+const BO={ W:280, N:280*280, speed:16, avoid:6, cling:0.4, cohesion:1.7, wander:0.2, glow:1.4, region:130,
+  on:true, prog:null, pts:null, posT:[], velT:[], fbo:[], cur:0, loc:{}, ploc:{} };
+function linkP(vsSrc,fsSrc){ const p=gl.createProgram(); gl.attachShader(p,sh(gl.VERTEX_SHADER,vsSrc)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fsSrc)); gl.linkProgram(p);
+  if(!gl.getProgramParameter(p,gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(p)); return p; }
+function boidsInit(){
+  if(!floatRT){ BO.on=false; const t=document.getElementById('tog-swarm'); if(t){ t.classList.remove('on'); t.textContent='✦ Swarm — float RT needed'; t.disabled=true; } return; }
+  BO.prog=linkP(VS,BOID_SIM_FS);
+  BO.pts =linkP(BOID_VS,BOID_FS);
+  ['uPos','uVel','uW','uDt','uTime','uRO','uSeedVec','uFreq','uHeight','uThresh','uSlope','uMorphAmt','uMorphTime','uOct','uAvoid','uCling','uCohesion','uWander','uSpeed','uRegion'].forEach(k=>BO.loc[k]=gl.getUniformLocation(BO.prog,k));
+  ['uPos','uVel','uW','uRO','uRight','uUp','uFwd','uFocal','uPoint','uRes','uDepth','uGlow','uFog','uTime'].forEach(k=>BO.ploc[k]=gl.getUniformLocation(BO.pts,k));
+  const W=BO.W,N=BO.N, p0=new Float32Array(N*4), v0=new Float32Array(N*4);
+  for(let i=0;i<N;i++){ const rx=Math.random()-0.5,ry=Math.random()-0.5,rz=Math.random()-0.5;
+    p0[i*4]=rx*BO.region*1.5; p0[i*4+1]=38+ry*BO.region; p0[i*4+2]=rz*BO.region*1.5; p0[i*4+3]=Math.random()*15;
+    v0[i*4]=rx; v0[i*4+1]=ry; v0[i*4+2]=rz; v0[i*4+3]=Math.random(); }
+  const mk=data=>{ const t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t);
+    gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA32F,W,W,0,gl.RGBA,gl.FLOAT,data);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.REPEAT); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.REPEAT); return t; };
+  BO.posT=[mk(p0),mk(p0)]; BO.velT=[mk(v0),mk(v0)]; BO.fbo=[gl.createFramebuffer(),gl.createFramebuffer()];
+  for(let k=0;k<2;k++){ gl.bindFramebuffer(gl.FRAMEBUFFER,BO.fbo[k]);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,BO.posT[k],0);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT1,gl.TEXTURE_2D,BO.velT[k],0); }
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); BO.cur=0;
+  const c=document.getElementById('vl-bcount'); if(c)c.textContent=(N/1000).toFixed(0)+'k';
+}
+function boidsStep(dt,morphT){
+  if(!BO.on||!BO.prog) return;
+  gl.bindFramebuffer(gl.FRAMEBUFFER,BO.fbo[1-BO.cur]);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0,gl.COLOR_ATTACHMENT1]);
+  gl.viewport(0,0,BO.W,BO.W); gl.disable(gl.BLEND);
+  gl.useProgram(BO.prog); gl.bindVertexArray(vao);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,BO.posT[BO.cur]); gl.uniform1i(BO.loc.uPos,0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,BO.velT[BO.cur]); gl.uniform1i(BO.loc.uVel,1);
+  gl.uniform1f(BO.loc.uW,BO.W); gl.uniform1f(BO.loc.uDt,dt); gl.uniform1f(BO.loc.uTime,performance.now()*0.001);
+  gl.uniform3f(BO.loc.uRO,camRO[0],camRO[1],camRO[2]);
+  const sv=seedVec(); gl.uniform3f(BO.loc.uSeedVec,sv[0],sv[1],sv[2]);
+  gl.uniform1f(BO.loc.uFreq,U.uFreq); gl.uniform1f(BO.loc.uHeight,U.uHeight); gl.uniform1f(BO.loc.uThresh,U.uThresh);
+  gl.uniform1f(BO.loc.uSlope,U.uSlope); gl.uniform1f(BO.loc.uMorphAmt,U.uMorphAmt); gl.uniform1f(BO.loc.uMorphTime,morphT); gl.uniform1i(BO.loc.uOct,U.uOct);
+  gl.uniform1f(BO.loc.uAvoid,BO.avoid); gl.uniform1f(BO.loc.uCling,BO.cling); gl.uniform1f(BO.loc.uCohesion,BO.cohesion);
+  gl.uniform1f(BO.loc.uWander,BO.wander); gl.uniform1f(BO.loc.uSpeed,BO.speed); gl.uniform1f(BO.loc.uRegion,BO.region);
+  gl.drawArrays(gl.TRIANGLES,0,3);
+  gl.bindFramebuffer(gl.FRAMEBUFFER,null); BO.cur=1-BO.cur;
+}
+function boidsRender(){
+  if(!BO.on||!BO.pts) return;
+  gl.viewport(0,0,RW,RH);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE);
+  gl.useProgram(BO.pts); gl.bindVertexArray(vao);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,BO.posT[BO.cur]); gl.uniform1i(BO.ploc.uPos,0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D,BO.velT[BO.cur]); gl.uniform1i(BO.ploc.uVel,1);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D,fboTex); gl.uniform1i(BO.ploc.uDepth,2);
+  gl.uniform1f(BO.ploc.uW,BO.W);
+  gl.uniform3f(BO.ploc.uRO,camRO[0],camRO[1],camRO[2]);
+  gl.uniform3f(BO.ploc.uRight,camR[0],camR[1],camR[2]);
+  gl.uniform3f(BO.ploc.uUp,camU[0],camU[1],camU[2]);
+  gl.uniform3f(BO.ploc.uFwd,camF[0],camF[1],camF[2]);
+  gl.uniform1f(BO.ploc.uFocal,U.uFocal); gl.uniform1f(BO.ploc.uPoint,42.0); gl.uniform2f(BO.ploc.uRes,RW,RH); gl.uniform1f(BO.ploc.uGlow,BO.glow);
+  gl.uniform1f(BO.ploc.uFog,U.uFog); gl.uniform1f(BO.ploc.uTime,performance.now()*0.001);
+  gl.drawArrays(gl.POINTS,0,BO.N);
+  gl.disable(gl.BLEND);
+}
+function setB(key,el,dp){ BO[key]=+el.value; const o=document.getElementById('vl-'+el.id.slice(3)); if(o)o.textContent=(+el.value).toFixed(dp); sg(el); }
+function togSwarm(btn){ if(btn.disabled)return; btn.classList.toggle('on'); BO.on=btn.classList.contains('on'); }
+window.setB=setB; window.togSwarm=togSwarm;
+
 /* ---- boot ---- */
 function boot(){
   if(!initGL()){ return; }
+  boidsInit();
   document.querySelectorAll('#rail input[type=range]').forEach(sg);
   document.getElementById('st-seed').textContent=S.seed.toFixed(1)+'\u00b7X';
   updateLegend();
