@@ -120,7 +120,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
       <div class="r-lbl">Data Fauna</div>
       <button class="tog on" id="tog-swarm" onclick="togSwarm(this)">✦ Swarm</button>
       <div class="r-row"><span class="r-row-lbl">Count</span><span class="val" id="vl-bcount" style="width:auto;flex:1;text-align:left;color:var(--text-faint);font-weight:500">78k</span></div>
-      <div class="r-row"><span class="r-row-lbl">Speed</span><input type="range" id="sl-bspeed" min="2" max="30" value="16" step="0.5" oninput="setB('speed',this,1)"><span class="val" id="vl-bspeed">16.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Speed</span><input type="range" id="sl-bspeed" min="8" max="64" value="16" step="1" oninput="setB('speed',this,1)"><span class="val" id="vl-bspeed">16.0</span></div>
       <div class="r-row"><span class="r-row-lbl">Wall cling</span><input type="range" id="sl-bcling" min="0" max="2" value="0.4" step="0.05" oninput="setB('cling',this,2)"><span class="val" id="vl-bcling">0.40</span></div>
       <div class="r-row"><span class="r-row-lbl">Cohesion</span><input type="range" id="sl-bcohesion" min="0" max="3" value="1.7" step="0.05" oninput="setB('cohesion',this,2)"><span class="val" id="vl-bcohesion">1.70</span></div>
       <div class="r-row"><span class="r-row-lbl">Wander</span><input type="range" id="sl-bwander" min="0" max="2" value="0.2" step="0.05" oninput="setB('wander',this,2)"><span class="val" id="vl-bwander">0.20</span></div>
