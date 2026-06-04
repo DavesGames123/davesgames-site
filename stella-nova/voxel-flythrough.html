@@ -107,17 +107,18 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
       <div class="r-lbl">Procedural Gen</div>
       <div class="r-row"><span class="r-row-lbl">Seed</span><input type="range" id="sl-seed" min="0" max="200" value="0" step="0.5" oninput="setSeed(this)"><span class="val" id="vl-seed">0.0</span></div>
       <div class="r-row"><span class="r-row-lbl">Frequency</span><input type="range" id="sl-freq" min="0.02" max="0.18" value="0.07" step="0.005" oninput="setU('uFreq',this,3)"><span class="val" id="vl-freq">0.070</span></div>
-      <div class="r-row"><span class="r-row-lbl">Octaves</span><input type="range" id="sl-oct" min="1" max="6" value="4" step="1" oninput="setUi('uOct',this)"><span class="val" id="vl-oct">4</span></div>
+      <div class="r-row"><span class="r-row-lbl">Octaves</span><input type="range" id="sl-oct" min="1" max="6" value="2" step="1" oninput="setUi('uOct',this)"><span class="val" id="vl-oct">2</span></div>
       <div class="r-row"><span class="r-row-lbl">Height</span><input type="range" id="sl-height" min="8" max="40" value="22" step="0.5" oninput="setU('uHeight',this,1)"><span class="val" id="vl-height">22</span></div>
       <div class="r-row"><span class="r-row-lbl">Threshold</span><input type="range" id="sl-thresh" min="4" max="20" value="12" step="0.25" oninput="setU('uThresh',this,1)"><span class="val" id="vl-thresh">12</span></div>
       <div class="r-row"><span class="r-row-lbl">Slope</span><input type="range" id="sl-slope" min="0" max="0.3" value="0.06" step="0.005" oninput="setU('uSlope',this,3)"><span class="val" id="vl-slope">0.060</span></div>
       <div class="r-row"><span class="r-row-lbl">Evolve</span><input type="range" id="sl-morph" min="0" max="0.25" value="0.08" step="0.005" oninput="setMorph(this)"><span class="val" id="vl-morph">13s</span></div>
-      <div class="r-row"><span class="r-row-lbl">Bubble</span><input type="range" id="sl-clear" min="4" max="60" value="24" step="1" oninput="setClear(this)"><span class="val" id="vl-clear">24</span></div>
+      <div class="r-row"><span class="r-row-lbl">Bubble</span><input type="range" id="sl-clear" min="2" max="60" value="4" step="1" oninput="setClear(this)"><span class="val" id="vl-clear">4</span></div>
     </div>
 
     <div class="r-sec">
       <div class="r-lbl">Glow & Color</div>
       <div class="btns"><button class="btn active" id="btn-pal-full" onclick="setPalette(0)">Palette</button><button class="btn" id="btn-pal-duo" onclick="setPalette(1)">Duotone</button></div>
+      <div class="r-row"><span class="r-row-lbl">Color size</span><input type="range" id="sl-region" min="4" max="40" value="14" step="1" oninput="setUi('uRegion',this)"><span class="val" id="vl-region">14</span></div>
       <div class="r-row"><span class="r-row-lbl">Edge glow</span><input type="range" id="sl-eglow" min="0" max="4" value="1.9" step="0.05" oninput="setU('uEdgeGlow',this,2)"><span class="val" id="vl-eglow">1.90</span></div>
       <div class="r-row"><span class="r-row-lbl">Edge width</span><input type="range" id="sl-ewidth" min="0.02" max="0.2" value="0.07" step="0.005" oninput="setU('uEdgeW',this,3)"><span class="val" id="vl-ewidth">0.070</span></div>
       <div class="r-row"><span class="r-row-lbl">Face lum</span><input type="range" id="sl-base" min="0" max="1" value="0.62" step="0.02" oninput="setU('uBaseBright',this,2)"><span class="val" id="vl-base">0.62</span></div>
@@ -128,10 +129,10 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
       <div class="r-lbl">CRT & View</div>
       <button class="tog on" id="tog-scan" onclick="togScan(this)">▤ Scanlines</button>
       <div class="r-row"><span class="r-row-lbl">CRT glow</span><input type="range" id="sl-bloom" min="0" max="2.5" value="1.0" step="0.05" oninput="setU('uBloom',this,2)"><span class="val" id="vl-bloom">1.00</span></div>
-      <div class="r-row"><span class="r-row-lbl">Fog</span><input type="range" id="sl-fog" min="0.002" max="0.05" value="0.009" step="0.001" oninput="setU('uFog',this,3)"><span class="val" id="vl-fog">0.009</span></div>
+      <div class="r-row"><span class="r-row-lbl">Fog</span><input type="range" id="sl-fog" min="0.002" max="0.05" value="0.012" step="0.001" oninput="setU('uFog',this,3)"><span class="val" id="vl-fog">0.012</span></div>
       <div class="r-row"><span class="r-row-lbl">FOV</span><input type="range" id="sl-focal" min="1" max="2.6" value="1.7" step="0.05" oninput="setU('uFocal',this,2)"><span class="val" id="vl-focal">1.70</span></div>
       <div class="r-row"><span class="r-row-lbl">Res scale</span><input type="range" id="sl-resscale" min="0.4" max="1" value="0.8" step="0.05" oninput="setResScale(this)"><span class="val" id="vl-resscale">0.80</span></div>
-      <div class="r-row"><span class="r-row-lbl">Max steps</span><input type="range" id="sl-steps" min="48" max="420" value="200" step="2" oninput="setUi('uMaxSteps',this)"><span class="val" id="vl-steps">200</span></div>
+      <div class="r-row"><span class="r-row-lbl">Max steps</span><input type="range" id="sl-steps" min="48" max="420" value="150" step="2" oninput="setUi('uMaxSteps',this)"><span class="val" id="vl-steps">150</span></div>
     </div>
   </div>
   <div class="mob-overlay" onclick="document.getElementById('rail').classList.remove('open')"></div>
@@ -149,7 +150,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
   <span>mode <b id="st-mode">flythrough</b></span><span class="sep"></span>
   <span>seed <b id="st-seed">0.0</b></span><span class="sep"></span>
   <span>pos <b id="st-pos">0, 0, 0</b></span><span class="sep"></span>
-  <span>steps <b id="st-steps">200</b></span><span class="sep"></span>
+  <span>steps <b id="st-steps">150</b></span><span class="sep"></span>
   <span id="st-fps">-- fps</span>
 </div>
 
@@ -165,7 +166,7 @@ const S={
   resScale:0.8, dprCap:1.5,
   camClock:0, morphClock:0, bakeMorph:0,
   morphSpeed:0.08, pathSpeed:1.0, moveSpeed:14,
-  seed:0,
+  seed:0, seedAxis:0,
   // walk camera
   pos:[0,16,0], yaw:0.6, pitch:-0.15,
   // flythrough free-look offset (drag to rotate, Blender-style)
@@ -173,10 +174,10 @@ const S={
   keys:{}, dragging:false, lx:0, ly:0,
 };
 const U={
-  uFreq:0.07, uOct:4, uHeight:22, uThresh:12, uSlope:0.06,
-  uClearR:24, uMorphAmt:1.1,
+  uFreq:0.07, uOct:2, uHeight:22, uThresh:12, uSlope:0.06, uRegion:14,
+  uClearR:4, uMorphAmt:1.1,
   uEdgeGlow:1.9, uEdgeW:0.07, uBaseBright:0.62, uSat:1.0, uDuotone:0,
-  uBloom:1.0, uScan:0.12, uFog:0.009, uFocal:1.7, uMaxSteps:200,
+  uBloom:1.0, uScan:0.12, uFog:0.012, uFocal:1.7, uMaxSteps:150,
 };
 let CW=2,CH=2,RW=2,RH=2;
 
@@ -190,7 +191,9 @@ out vec4 outColor;
 uniform vec2 uRes;
 uniform vec3 uRO, uRight, uUp, uFwd;
 uniform float uFocal;
-uniform float uMorphTime, uSeed;
+uniform float uMorphTime;
+uniform vec3 uSeedVec;
+uniform float uRegion;
 uniform float uFreq, uHeight, uThresh, uSlope, uMorphAmt, uClearR;
 uniform int uOct, uMaxSteps;
 uniform float uEdgeGlow, uEdgeW, uBaseBright, uSat, uFog;
@@ -215,7 +218,7 @@ float vnoise(vec3 x){
   return mix(mix(x00,x10,u.y), mix(x01,x11,u.y), u.z);
 }
 float density(vec3 p){
-  vec3 q=p*uFreq + vec3(uSeed*1.7, uSeed*0.9, uSeed*1.3);
+  vec3 q=p*uFreq + uSeedVec;
   q += vec3(0.5,1.0,0.4)*(uMorphAmt*uMorphTime);
   float f=0.0, amp=0.5, fr=1.0, nrm=0.0;
   for(int i=0;i<8;i++){ if(i>=uOct) break; f+=amp*vnoise(q*fr); nrm+=amp; fr*=2.02; amp*=0.5; }
@@ -229,7 +232,9 @@ bool solid(vec3 cell){
   return s;
 }
 vec3 voxColor(vec3 cell){
-  float h=hash13(floor(cell)+0.137);
+  // colour by large region, not per-voxel → big splashes of one colour
+  vec3 region=floor(cell/max(uRegion,1.0) + uSeedVec*0.013);
+  float h=hash13(region+0.137);
   if(uDuotone==1){ return (h<0.5)?PAL[5]:PAL[0]; }   // blaze orange / electric cyan
   int idx=int(floor(h*8.0)); idx = idx>7?7:idx;
   return PAL[idx];
@@ -259,7 +264,7 @@ void main(){
     pos += vec3(mask)*rs;
   }
 
-  vec3 col=vec3(0.020,0.030,0.052);  // background haze
+  vec3 col=vec3(0.0);  // black void — distant geometry fades into it
 
   if(hit){
     vec3 n=-vec3(mask)*rs;
@@ -304,7 +309,7 @@ void main(){
     vec3 albedo = base * mix(0.34, 0.68, uBaseBright);
     albedo = mix(vec3(dot(albedo,vec3(0.299,0.587,0.114))), albedo, uSat);
 
-    vec3 L=normalize(vec3(-0.45,0.80,0.35));
+    vec3 L=normalize(vec3(0.0,0.30,1.0));   // directly northward, low on the horizon
     float dif=clamp(dot(n,L),0.0,1.0);
     float sky=0.5+0.5*n.y;
     float shade = 0.50 + 0.55*dif + 0.16*sky;             // bright, with clear orientation gradient
@@ -312,12 +317,11 @@ void main(){
 
     vec3 glow=base*edge*edge*uEdgeGlow*2.0;                // bright emissive seam
 
-    // ATMOSPHERIC FOG: clear up close, ramps aggressively with distance (quadratic) so
-    // far structures sink into haze and depth reads strongly.
+    // DISTANCE FALLOFF: gentle near, fading fully into black so the most distant
+    // geometry disappears (matches the original's mood).
     float fa=uFog*t;
-    float fog=exp(-fa - 0.22*fa*fa);                       // 1 near → 0 far, aggressive tail
-    vec3 haze=vec3(0.020,0.030,0.052);
-    col = mix(haze, lit, fog) + glow*mix(0.22,1.0,fog);    // faces haze out; edges dim with depth
+    float fog=exp(-fa - 0.14*fa*fa);                      // 1 near → 0 far, gentle
+    col = lit*fog + glow*fog;                             // everything fades into black with depth
   }
   outColor=vec4(col,1.0);
 }`;
@@ -350,14 +354,14 @@ void main(){
   c.g=texture(uScene,uv).g;
   c.b=texture(uScene,uv-ca).b;
 
-  // bloom: thresholded multi-ring disk blur (wider halo for the Tron glow)
+  // bloom: thresholded multi-ring disk blur — wide halo for a broad CRT glow
   vec3 b=vec3(0.0); float wsum=0.0;
   const int N=14;
   for(int i=0;i<N;i++){
     float a=6.2831853*float(i)/float(N);
     vec2 d=vec2(cos(a),sin(a));
-    for(int r=1;r<=4;r++){
-      float rad=float(r)*3.0;
+    for(int r=1;r<=6;r++){
+      float rad=float(r)*5.5;                 // reaches ~33px → much wider edge glow
       vec3 s=texture(uScene,uv+d*px*rad).rgb;
       vec3 hi=max(s-0.66,0.0);
       float w=1.0/float(r);
@@ -365,7 +369,7 @@ void main(){
     }
   }
   b/=max(wsum,1e-4);
-  c += b*uBloom*2.0;
+  c += b*uBloom*2.2;
 
   c=tonemap(c*1.1);
 
@@ -397,7 +401,7 @@ function initGL(){
   postProg=prog(POST_FS);
   vao=gl.createVertexArray();
   // uniform locations
-  sceneLoc={}; ['uRes','uRO','uRight','uUp','uFwd','uFocal','uMorphTime','uSeed','uFreq','uHeight','uThresh','uSlope','uMorphAmt','uClearR','uOct','uMaxSteps','uEdgeGlow','uEdgeW','uBaseBright','uSat','uDuotone','uFog']
+  sceneLoc={}; ['uRes','uRO','uRight','uUp','uFwd','uFocal','uMorphTime','uSeedVec','uRegion','uFreq','uHeight','uThresh','uSlope','uMorphAmt','uClearR','uOct','uMaxSteps','uEdgeGlow','uEdgeW','uBaseBright','uSat','uDuotone','uFog']
     .forEach(n=>sceneLoc[n]=gl.getUniformLocation(sceneProg,n));
   postLoc={}; ['uScene','uRes','uBloom','uScan','uScanOn'].forEach(n=>postLoc[n]=gl.getUniformLocation(postProg,n));
   return true;
@@ -438,9 +442,13 @@ function steppedMorph(phase){
   return it + smoothstep(1.0-snapFrac, 1.0, ft);
 }
 
+// seed offset directions — randomize explores ONE OF THREE distinct axes through noise space
+const SEED_DIRS=[[1.7,0.25,0.45],[0.4,1.55,0.6],[0.55,0.4,1.7]];
+function seedVec(){ const d=SEED_DIRS[S.seedAxis]||SEED_DIRS[0]; return [S.seed*d[0], S.seed*d[1], S.seed*d[2]]; }
+
 function path(t){
   return [ 118*Math.sin(0.021*t) + 44*Math.sin(0.034*t+1.3),
-           17 + 5.5*Math.sin(0.016*t+0.7),
+           72 + 8*Math.sin(0.016*t+0.7),                       // high above the terrain
            118*Math.cos(0.019*t) + 44*Math.cos(0.043*t+2.1) ];
 }
 
@@ -450,11 +458,14 @@ function buildCamera(){
   if(S.mode==='fly'){
     const t=S.camClock;
     const p=path(t);
-    const tgt=path(t+3.0);
-    let f=norm(sub(tgt,p));
+    // travel direction (horizontal), then tilt the view down to look over the landscape
+    const ahead=path(t+1.0);
+    let h=norm([ahead[0]-p[0], 0, ahead[2]-p[2]]);
+    const p0=-0.46;                                          // ~26° downward gaze
+    let f=norm([h[0]*Math.cos(p0), Math.sin(p0), h[2]*Math.cos(p0)]);
     let r=norm(cross(f,[0,1,0]));
     let u=cross(r,f);
-    // free-look offset: rotate the view inside the path basis (drag to rotate)
+    // free-look offset: rotate the view inside this basis (drag to rotate)
     const ly=S.lookYaw, lp=S.lookPitch;
     const dl=[Math.sin(ly)*Math.cos(lp), Math.sin(lp), Math.cos(ly)*Math.cos(lp)];
     let fwd=norm(add(add(mul(r,dl[0]),mul(u,dl[1])),mul(f,dl[2])));
@@ -515,7 +526,9 @@ function draw(){
   gl.uniform3f(sceneLoc.uFwd,camF[0],camF[1],camF[2]);
   gl.uniform1f(sceneLoc.uFocal,U.uFocal);
   gl.uniform1f(sceneLoc.uMorphTime,morphT);
-  gl.uniform1f(sceneLoc.uSeed,S.seed);
+  const sv=seedVec();
+  gl.uniform3f(sceneLoc.uSeedVec,sv[0],sv[1],sv[2]);
+  gl.uniform1f(sceneLoc.uRegion,U.uRegion);
   gl.uniform1f(sceneLoc.uFreq,U.uFreq);
   gl.uniform1f(sceneLoc.uHeight,U.uHeight);
   gl.uniform1f(sceneLoc.uThresh,U.uThresh);
@@ -620,9 +633,10 @@ function updateLegend(){
 window.addEventListener('resize',updateLegend);
 function togglePlay(){S.playing=!S.playing;const b=document.getElementById('btn-play');b.textContent=S.playing?'❚❚ Pause':'▶ Play';b.classList.toggle('active',S.playing);}
 window.togglePlay=togglePlay;
-function setSeed(el){S.seed=+el.value;const v=(+el.value).toFixed(1);document.getElementById('vl-seed').textContent=v;document.getElementById('st-seed').textContent=v;sg(el);if(S.mode==='walk')S.bakeMorph=steppedMorph(S.morphClock);}
+const AXL=['X','Y','Z'];
+function setSeed(el){S.seed=+el.value;const v=(+el.value).toFixed(1);document.getElementById('vl-seed').textContent=v;document.getElementById('st-seed').textContent=v+'·'+AXL[S.seedAxis];sg(el);if(S.mode==='walk')S.bakeMorph=steppedMorph(S.morphClock);}
 window.setSeed=setSeed;
-function randomizeSeed(){const sl=document.getElementById('sl-seed');sl.value=(Math.random()*200).toFixed(1);setSeed(sl);}
+function randomizeSeed(){S.seedAxis=Math.floor(Math.random()*3);const sl=document.getElementById('sl-seed');sl.value=(Math.random()*200).toFixed(1);setSeed(sl);}
 window.randomizeSeed=randomizeSeed;
 function rebake(){S.morphClock=Math.round(S.morphClock)+1+Math.floor(Math.random()*5);S.bakeMorph=steppedMorph(S.morphClock);}
 window.rebake=rebake;
@@ -684,7 +698,7 @@ window.addEventListener('keyup',e=>{
 function boot(){
   if(!initGL()){ return; }
   document.querySelectorAll('#rail input[type=range]').forEach(sg);
-  document.getElementById('st-seed').textContent=S.seed.toFixed(1);
+  document.getElementById('st-seed').textContent=S.seed.toFixed(1)+'\u00b7X';
   updateLegend();
   resize();
   requestAnimationFrame(loop);
