@@ -667,12 +667,13 @@ if(document.fonts&&document.fonts.ready){document.fonts.ready.then(()=>resize())
 
 /* ---- trajectory overlay: project the planned path to screen, occluded by geometry ---- */
 function pathOccluded(P,morphT){
-  // march from the eye toward P; if the voxel CELL we pass through is solid (exactly what the
-  // renderer draws), the point is hidden. Fine step + cell-centre test so thin walls aren't skipped.
+  // march from the eye toward P; if the voxel CELL we pass is solid (what the renderer draws),
+  // the point is hidden. Capped at ~96u — beyond that the fog hides everything regardless.
   const dx=P[0]-camRO[0], dy=P[1]-camRO[1], dz=P[2]-camRO[2];
   const dist=Math.hypot(dx,dy,dz); if(dist<1e-3) return false;
-  const ux=dx/dist, uy=dy/dist, uz=dz/dist, step=0.9, start=Math.max(step,U.uClearR+0.5);
-  for(let s=start; s<dist-1.0; s+=step){
+  const ux=dx/dist, uy=dy/dist, uz=dz/dist, step=1.0;
+  const far=Math.min(dist-1.0, 96.0);
+  for(let s=Math.max(step,U.uClearR+0.5); s<far; s+=step){
     const cx=Math.floor(camRO[0]+ux*s)+0.5, cy=Math.floor(camRO[1]+uy*s)+0.5, cz=Math.floor(camRO[2]+uz*s)+0.5;
     if(densJS(cx,cy,cz,morphT) > 0.0) return true;
   }
@@ -748,7 +749,7 @@ function drawPath(){
   }
   if(S.showPath && S.loop){
     // TEN rails in five close pairs (slight lateral+vertical offset) → each reads as a thicker 3D rail
-    const AHEAD=140, up=[0,1,0];
+    const AHEAD=120, up=[0,1,0];
     const RAILS=[ [-2.75,0.22],[-2.42,-0.10], [-1.50,0.22],[-1.17,-0.10],
                   [-0.17,0.22],[0.17,-0.10],  [1.17,0.22],[1.50,-0.10],  [2.42,0.22],[2.75,-0.10] ];
     const NR=RAILS.length;
@@ -773,32 +774,33 @@ function drawPath(){
         for(let r=0;r<NR;r++){ if(curR[r].length>1)railSegs[r].push(curR[r]); curR[r]=[]; }
         if(s>=nextTie) nextTie+=12;
       }
-      s += Math.min(3.0, 0.32 + Math.max(0.0,s)*0.02);
+      s += Math.min(3.5, 0.4 + Math.max(0.0,s)*0.03);
     }
     for(let r=0;r<NR;r++) if(curR[r].length>1) railSegs[r].push(curR[r]);
 
     ctx.globalCompositeOperation='lighter'; ctx.lineJoin='round'; ctx.lineCap='round';
-    ctx.strokeStyle='rgba(110,205,235,0.22)'; ctx.lineWidth=1.2; ctx.shadowColor='rgba(120,232,255,0.6)'; ctx.shadowBlur=4;
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='rgba(110,205,235,0.20)'; ctx.lineWidth=1.1;
     for(const row of ties){
       ctx.beginPath(); let started=false;
       for(let r=0;r<row.length;r++){ const q=row[r]; if(!q){started=false;continue;} started?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); started=true; }
       ctx.stroke();
     }
     const layers=[
-      {w:7.0,col:'rgba(46,150,180,0.08)', blur:15},
-      {w:3.2,col:'rgba(90,210,235,0.18)', blur:9},
-      {w:1.5,col:'rgba(170,240,255,0.58)',blur:4},
-      {w:0.9,col:'rgba(232,252,255,0.92)',blur:2}
+      {w:8.0,col:'rgba(64,176,206,0.07)'},
+      {w:3.6,col:'rgba(104,216,238,0.15)'},
+      {w:1.6,col:'rgba(176,242,255,0.52)'},
+      {w:0.9,col:'rgba(236,253,255,0.92)'}
     ];
     for(const L of layers){
-      ctx.lineWidth=L.w; ctx.strokeStyle=L.col; ctx.shadowColor='rgba(120,232,255,0.9)'; ctx.shadowBlur=L.blur;
+      ctx.lineWidth=L.w; ctx.strokeStyle=L.col;
       for(let r=0;r<NR;r++) for(const seg of railSegs[r]){
         ctx.beginPath();
         for(let i=0;i<seg.length;i++){ const q=seg[i]; i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]); }
         ctx.stroke();
       }
     }
-    ctx.shadowBlur=0; ctx.globalCompositeOperation='source-over';
+    ctx.globalCompositeOperation='source-over';
   }
   drawHUD(ctx,W,H);
 }
@@ -878,9 +880,12 @@ function loop(time){
     const FLY_SPEED=10;
     S.dist += dt*S.pathSpeed*FLY_SPEED;
     S.morphClock += dt*S.morphSpeed;
-    // re-plan whenever the field has visibly morphed (throttled), so the route tracks the geometry
+    // Re-plan ONLY once the field has settled on a new configuration — never while it's mid-morph.
+    // Re-planning during the shift re-anchors the camera onto a loop that's still changing, which
+    // makes it lurch. Instead the camera keeps cruising the current trail through the whole
+    // transition, then the route updates seamlessly once the geometry holds still again.
     const cm=steppedMorph(S.morphClock);
-    if(Math.abs(cm-S.planMorph)>0.02 && (time-S.lastPlanMs)>240) S.needPlan=true;
+    if(Math.abs(cm-Math.round(cm))<1e-3 && Math.round(cm)!==Math.round(S.planMorph)) S.needPlan=true;
   }
   if(S.mode==='fly' && !S.dragging && (S.lookYaw||S.lookPitch)){
     const k=Math.max(0, 1 - dt*6.0);              // snap the gaze back to forward, fast
