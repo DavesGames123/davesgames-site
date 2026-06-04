@@ -94,6 +94,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
       <div class="mag-row"><span class="mag-row-lbl">Gain</span><input type="range" id="sl-gain" min="0.02" max="4.0" value="1.5" step="0.01" oninput="SIM.gain=+this.value;sg(this);this.nextElementSibling.textContent=(+this.value).toFixed(2)"><span class="val">1.50</span></div>
       <div class="mag-row"><span class="mag-row-lbl">Bloom</span><input type="range" id="sl-bloom" min="0" max="1.0" value="0.4" step="0.01" oninput="SIM.bloom=+this.value;sg(this);this.nextElementSibling.textContent=(+this.value).toFixed(2)"><span class="val">0.40</span></div>
       <div class="mag-row"><span class="mag-row-lbl">Jacobi</span><input type="range" id="sl-jacobi" min="4" max="80" value="40" step="2" oninput="SIM.jacobiIters=+this.value;sg(this);this.nextElementSibling.textContent=this.value"><span class="val">40</span></div>
+      <div class="mag-row"><span class="mag-row-lbl">Visc ν</span><input type="range" id="sl-visc" min="0" max="50" value="0" step="0.5" oninput="SIM.viscosity=+this.value;sg(this);this.nextElementSibling.textContent=(+this.value).toFixed(1)"><span class="val">0.0</span></div>
       <div style="margin-top:6px"><button class="tog-btn off" id="tog-vectors" onclick="SIM.showVectors=!SIM.showVectors;this.className='tog-btn '+(SIM.showVectors?'on':'off')">→ Vector Field</button></div>
       <div class="mag-row" style="margin-top:4px"><span class="mag-row-lbl">Cell</span><input type="range" id="sl-cell" min="8" max="60" value="24" step="1" oninput="SIM.cellSize=+this.value;sg(this);this.nextElementSibling.textContent=this.value+'px'"><span class="val">24px</span></div>
     </div>
@@ -197,7 +198,7 @@ function decodeReadValue(arr,i){
 }
 
 const MAX_E=24,MAX_S=12;
-const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200};
+const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200,viscosity:0};
 let emitters=[],shapes=[],nextId=0,frame=0,CW=100,CH=100,simW=100,simH=100;
 let lastTime=performance.now(),deltaTime=0.016,fpsAccum=0,fpsCount=0;
 
@@ -391,14 +392,35 @@ const jP=mkP(VS,JAC_FS),jU=gU(jP,['uPressure','uDivergence','uBarrier','uInvRes'
 const gP=mkP(VS,GRD_FS),gUn=gU(gP,['uPressure','uVelocity','uBarrier','uInvRes']);
 const rP=mkP(VS,DSP_FS),rU=gU(rP,['uVelocity','uDye','uBarrier','uGain','uBloom','uCmap']);
 
-let vF,pF,dvF,dyF;
+/* ═══ VISCOUS DIFFUSION ═══
+   Implicit backward-Euler: (I - νΔt∇²)u = u*, Jacobi-solved.
+   Unconditionally stable, well-conditioned (diagonal 1+4a dominates), so ~20 sweeps converge.
+   Only runs when ν>0, so the default (ν=0) path is identical in cost to before. */
+const COPY_FS=`#version 300 es
+precision highp float;in vec2 vUV;out vec4 fragColor;uniform sampler2D uTex;
+void main(){fragColor=texture(uTex,vUV);}`;
+const DIFF_FS=`#version 300 es
+precision highp float;in vec2 vUV;out vec4 fragColor;
+uniform sampler2D uVel,uVel0,uBarrier;uniform vec2 uInvRes;uniform float uA;
+void main(){vec2 uv=vUV;vec2 src=texture(uVel0,uv).xy;
+  if(texture(uBarrier,uv).r>.1){fragColor=vec4(src,0,0);return;}
+  vec2 l=texture(uVel,uv-vec2(uInvRes.x,0)).xy;
+  vec2 r=texture(uVel,uv+vec2(uInvRes.x,0)).xy;
+  vec2 d=texture(uVel,uv-vec2(0,uInvRes.y)).xy;
+  vec2 u=texture(uVel,uv+vec2(0,uInvRes.y)).xy;
+  fragColor=vec4((src+uA*(l+r+d+u))/(1.0+4.0*uA),0,0);}`;
+const cP=mkP(VS,COPY_FS),cU=gU(cP,['uTex']);
+const fP=mkP(VS,DIFF_FS),fU=gU(fP,['uVel','uVel0','uBarrier','uInvRes','uA']);
+const DIFFUSE_ITERS=20;
+
+let vF,pF,dvF,dyF,u0F;
 function initFBOs(){const isMob=window.innerWidth<600;const scale=isMob?0.5:0.75;
   // MOBILE FIX: Maintain screen aspect ratio in sim grid.
   // Old code forced 384×384 square on portrait screens, distorting all shapes.
   const maxSide=isMob?384:1024;
   if(canvas.width>=canvas.height){simW=Math.min(Math.floor(canvas.width*scale),maxSide);simH=Math.max(64,Math.round(simW*canvas.height/canvas.width));}
   else{simH=Math.min(Math.floor(canvas.height*scale),maxSide);simW=Math.max(64,Math.round(simH*canvas.width/canvas.height));}
-  simW=Math.max(simW,64);simH=Math.max(simH,64);vF=mkDF(simW,simH);pF=mkDF(simW,simH);dvF=mkF(simW,simH);dyF=mkDF(simW,simH);
+  simW=Math.max(simW,64);simH=Math.max(simH,64);vF=mkDF(simW,simH);pF=mkDF(simW,simH);dvF=mkF(simW,simH);dyF=mkDF(simW,simH);u0F=mkF(simW,simH);
   barrierTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,simW,simH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);initBarrierCanvas();document.getElementById('st-res').textContent=simW+'×'+simH+(TEX_CAN_LINEAR?'':' [nearest]');}
 function resize(){const w=document.getElementById('canvas-wrap');CW=w.clientWidth;CH=w.clientHeight;if(CW<10||CH<10){CW=300;CH=300;}const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.floor(CW*dpr);canvas.height=Math.floor(CH*dpr);initFBOs();frame=0;}
 if(window.ResizeObserver)new ResizeObserver(()=>resize()).observe(document.getElementById('canvas-wrap'));else window.addEventListener('resize',resize);
@@ -419,7 +441,21 @@ function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
   for(let i=0;i<MAX_E;i++){const e=emitters[i];if(e&&e.active){const ca=Math.cos(e.angle),sa=Math.sin(e.angle);let dx=ca,dy=-sa;const et=e.type==='jet'?0:e.type==='point'?1:2;if(e.type==='point'){dx=0;dy=0;}if(e.type==='vortex'){dx=-sa;dy=-ca;}gl.uniform4f(aU[`uEmitA[${i}]`],e.x/CW,1-e.y/CH,dx,dy);gl.uniform4f(aU[`uEmitB[${i}]`],e.strength*(e.mult||1),e.width,et,1);gl.uniform4f(aU[`uEmitC[${i}]`],e.dyeR,e.dyeG,e.dyeB,0);}else{gl.uniform4f(aU[`uEmitA[${i}]`],0,0,0,0);gl.uniform4f(aU[`uEmitB[${i}]`],0,0,0,0);gl.uniform4f(aU[`uEmitC[${i}]`],0,0,0,0);}}
   for(let i=0;i<MAX_S;i++){const s=shapes[i];if(s)gl.uniform4f(aU[`uShapeA[${i}]`],s.x/CW,1-s.y/CH,s.spin,Math.max(s.w,s.h)/2/CW);else gl.uniform4f(aU[`uShapeA[${i}]`],0,0,0,0);}
   dq();vF.swap();
-  gl.bindFramebuffer(gl.FRAMEBUFFER,dyF.write.fbo);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(aU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(aU.uDye,1);gl.uniform1i(aU.uMode,1);dq();dyF.swap();
+  // ── Viscous diffusion (only when ν>0; zero cost otherwise) ──
+  if(SIM.viscosity>1e-4){
+    const a=SIM.viscosity*deltaTime;
+    // stash u* (post-advection velocity) as the fixed RHS
+    gl.bindFramebuffer(gl.FRAMEBUFFER,u0F.fbo);gl.useProgram(cP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(cU.uTex,0);dq();
+    gl.useProgram(fP);gl.uniform1f(fU.uA,a);gl.uniform2f(fU.uInvRes,inv[0],inv[1]);
+    for(let i=0;i<DIFFUSE_ITERS;i++){
+      gl.bindFramebuffer(gl.FRAMEBUFFER,vF.write.fbo);
+      gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(fU.uVel,0);
+      gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,u0F.tex);gl.uniform1i(fU.uVel0,1);
+      gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(fU.uBarrier,2);
+      dq();vF.swap();
+    }
+  }
+  gl.useProgram(aP);gl.bindFramebuffer(gl.FRAMEBUFFER,dyF.write.fbo);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(aU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(aU.uDye,1);gl.uniform1i(aU.uMode,1);dq();dyF.swap();
   gl.bindFramebuffer(gl.FRAMEBUFFER,dvF.fbo);gl.useProgram(dP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(dU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(dU.uBarrier,1);gl.uniform2f(dU.uInvRes,inv[0],inv[1]);dq();
   gl.useProgram(jP);for(let i=0;i<SIM.jacobiIters;i++){gl.bindFramebuffer(gl.FRAMEBUFFER,pF.write.fbo);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,pF.read.tex);gl.uniform1i(jU.uPressure,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dvF.tex);gl.uniform1i(jU.uDivergence,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(jU.uBarrier,2);gl.uniform2f(jU.uInvRes,inv[0],inv[1]);dq();pF.swap();}
   gl.bindFramebuffer(gl.FRAMEBUFFER,vF.write.fbo);gl.useProgram(gP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,pF.read.tex);gl.uniform1i(gUn.uPressure,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(gUn.uVelocity,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(gUn.uBarrier,2);gl.uniform2f(gUn.uInvRes,inv[0],inv[1]);dq();vF.swap();}
