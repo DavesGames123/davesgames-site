@@ -109,18 +109,37 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 #status-bar .sep{width:1px;height:10px;background:var(--border-b);flex-shrink:0}
 #status-bar b{color:var(--blue)}
 
-/* ── mobile ── */
+/* ── mobile: bottom-tab app layout ── */
+#mobTabs{display:none}
 @media(max-width:860px){
   html,body{overflow:hidden}
-  #main{flex-direction:column;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin}
-  #now{border-right:none;border-bottom:1px solid var(--border-b);flex:none;padding:34px 12px 16px;min-height:56vh}
-  #ringWrap{width:min(76vw,340px)}
-  #diag{flex:none;padding:40px 12px 16px;overflow:visible;border-right:none;border-bottom:1px solid var(--border-b)}
-  #diagWrap{max-width:220px}
-  #tuner{flex:none;padding:40px 12px 14px;gap:8px}
-  #specCanvas{flex:0 0 260px;height:260px;min-height:0}
-  #tunerNote{font-size:2.3rem}
+  .zone-lbl{display:none}
+  #main{flex-direction:column;overflow:hidden}
+  #now,#diag,#tuner{display:none;border-right:none;border-bottom:none}
+  #staffZone{display:none;border-top:none}
+
+  body.mtab-now  #now {display:flex;flex:1;min-height:0;padding:12px;gap:10px}
+  body.mtab-diag #diag{display:flex;flex:1;min-height:0;padding:16px 14px 10px;overflow-y:auto}
+  body.mtab-tuner #tuner{display:flex;flex:1;min-height:0;padding:14px 14px 10px}
+  body.mtab-staff #main{display:none}
+  body.mtab-staff #staffZone{display:flex;flex-direction:column;justify-content:center;flex:1;min-height:0;padding:24px 12px;background:transparent}
+
+  #ringWrap{width:min(84vw,46vh)}
+  #chordRoot{font-size:clamp(3rem,10vh,5.6rem)}
+  #diagWrap{max-width:210px}
+  #tunerNote{font-size:2.4rem}
+  #specCanvas{flex:1;min-height:0;height:auto}
+  #micGate{position:fixed;inset:0;z-index:500}
   #status-bar{display:none}
+
+  #mobTabs{display:flex;flex-shrink:0;background:rgba(9,12,20,0.97);border-top:1px solid var(--border-b);padding-bottom:env(safe-area-inset-bottom);z-index:120}
+  #mobTabs button{flex:1;background:transparent;border:none;color:var(--text-faint);font-family:'JetBrains Mono',monospace;padding:9px 2px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .15s;-webkit-tap-highlight-color:transparent}
+  #mobTabs .ti{font-size:1.2rem;line-height:1}
+  #mobTabs .tl{font-size:0.54rem;letter-spacing:0.16em;text-transform:uppercase;font-weight:700}
+  #mobTabs button.on[data-t=now]{color:var(--blue);text-shadow:0 0 12px rgba(150,200,255,0.5)}
+  #mobTabs button.on[data-t=diag]{color:var(--yellow);text-shadow:0 0 12px rgba(255,200,50,0.5)}
+  #mobTabs button.on[data-t=tuner]{color:#c890ff;text-shadow:0 0 12px rgba(200,144,255,0.5)}
+  #mobTabs button.on[data-t=staff]{color:var(--green);text-shadow:0 0 12px rgba(100,200,100,0.5)}
 }
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2)}
 @media (prefers-reduced-motion: reduce){#micBtn{animation:none}.sys-status::before{animation:none}}
@@ -197,6 +216,13 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
   <span id="st-log">0 logged</span><span class="sep"></span>
   <span id="st-fps">-- fps</span>
 </div>
+
+<nav id="mobTabs">
+  <button data-t="now"   class="on"><span class="ti">◉</span><span class="tl">Listen</span></button>
+  <button data-t="diag"><span class="ti">⌗</span><span class="tl">Chords</span></button>
+  <button data-t="tuner"><span class="ti">∿</span><span class="tl">Tuner</span></button>
+  <button data-t="staff"><span class="ti">♩</span><span class="tl">Staff</span></button>
+</nav>
 
 <script>
 "use strict";
@@ -508,6 +534,7 @@ let ringPulse=new Float32Array(12);
 function drawRing(){
   const dpr=Math.min(devicePixelRatio||1,2);
   const w=ringC.clientWidth,h=ringC.clientHeight;
+  if(w<10||h<10)return;
   if(ringC.width!==w*dpr){ringC.width=w*dpr;ringC.height=h*dpr;}
   ringX.setTransform(dpr,0,0,dpr,0,0);
   ringX.clearRect(0,0,w,h);
@@ -1161,6 +1188,19 @@ if(window.ResizeObserver){
   new ResizeObserver(()=>{diagDirty=true;staffDirty=true;}).observe($('diagCanvas'));
   new ResizeObserver(()=>{staffDirty=true;}).observe($('staffScroll'));
 }else window.addEventListener('resize',()=>{diagDirty=true;staffDirty=true;});
+
+/* ═══════════ MOBILE TABS ═══════════ */
+const mobTabs=$('mobTabs');
+function setMTab(t){
+  document.body.className=document.body.className.replace(/\bmtab-\w+/g,'').trim();
+  document.body.classList.add('mtab-'+t);
+  [...mobTabs.children].forEach(b=>b.classList.toggle('on',b.dataset.t===t));
+  diagDirty=true;staffDirty=true;   // canvases were 0×0 while hidden — redraw on reveal
+}
+mobTabs.addEventListener('click',e=>{
+  const b=e.target.closest('button');if(b)setMTab(b.dataset.t);
+});
+setMTab('now');
 
 setDiagramChord(0,'');   // C major as the friendly default
 buildVoicingBtns();
