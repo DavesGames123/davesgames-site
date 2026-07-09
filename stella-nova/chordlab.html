@@ -682,11 +682,12 @@ function barreAt(shape,f){return shape.map(v=>v<0?-1:v+f);}
 function guitarVoicings(root,q){
   const out=[];
   const open=OPEN_SHAPES[root+'|'+q];
-  if(open)out.push({name:'Open',frets:open});
+  if(open)out.push({name:'Open',frets:open,pos:0});
   const eF=((root-4)%12+12)%12, aF=((root-9)%12+12)%12;
-  if(E_SHAPE[q]&&eF>=1&&eF<=11)out.push({name:eF+'fr · E-shape',frets:barreAt(E_SHAPE[q],eF),barre:eF});
-  if(A_SHAPE[q]&&aF>=1&&aF<=11)out.push({name:aF+'fr · A-shape',frets:barreAt(A_SHAPE[q],aF),barre:aF});
-  if(q==='dim'){const dF=((root-2)%12+12)%12;if(dF>=1&&dF<=11)out.push({name:dF+'fr · dim',frets:barreAt(D_DIM,dF)});}
+  if(E_SHAPE[q]&&eF>=1&&eF<=11)out.push({name:eF+'fr · E-shape',frets:barreAt(E_SHAPE[q],eF),barre:eF,pos:eF});
+  if(A_SHAPE[q]&&aF>=1&&aF<=11)out.push({name:aF+'fr · A-shape',frets:barreAt(A_SHAPE[q],aF),barre:aF,pos:aF});
+  if(q==='dim'){const dF=((root-2)%12+12)%12;if(dF>=1&&dF<=11)out.push({name:dF+'fr · dim',frets:barreAt(D_DIM,dF),pos:dF});}
+  out.sort((a,b)=>a.pos-b.pos);   // lowest playable position leads
   if(!out.length)out.push({name:'—',frets:[-1,-1,-1,-1,-1,-1]});
   return out;
 }
