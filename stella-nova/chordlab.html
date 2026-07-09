@@ -42,7 +42,12 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .zone-lbl .dot{width:5px;height:5px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px var(--blue)}
 #domBar{display:flex;align-items:baseline;justify-content:center;gap:14px;width:100%;padding:26px 12px 2px;flex-shrink:0;flex-wrap:wrap}
 #domTag{font-size:0.58rem;letter-spacing:0.26em;text-transform:uppercase;color:var(--text-faint);font-weight:700}
-#domChord{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400;font-size:2.6rem;line-height:1;color:var(--text-faint);min-width:96px;text-align:center;transition:color .35s,text-shadow .35s}
+#domList{display:flex;align-items:flex-end;justify-content:center;gap:16px;flex-wrap:wrap;min-height:52px}
+.domPill{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:44px}
+.dp-name{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400;line-height:0.95;transition:color .3s,text-shadow .3s,font-size .3s;white-space:nowrap}
+.dp-bar{width:100%;max-width:74px;height:3px;border-radius:2px;background:rgba(150,200,255,0.08);overflow:hidden}
+.dp-bar i{display:block;height:100%;border-radius:2px;transition:width .3s}
+.domEmpty{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.05rem;color:var(--text-faint);align-self:center}
 #domHint{font-size:0.52rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-faint)}
 #nowBody{display:flex;flex:1;min-height:0;width:100%;gap:10px;align-items:stretch}
 #meterCanvas{flex:0 0 94px;width:94px;height:auto;display:block;border:1px solid var(--border);border-radius:10px;background:#090c13;margin:4px 0 4px 2px}
@@ -100,6 +105,9 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .strBtn{flex:1;max-width:52px;padding:9px 0;background:transparent;border:1px solid var(--border-b);border-radius:9px;color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.72rem;font-weight:700;cursor:pointer;transition:.15s;text-align:center}
 .strBtn:hover{color:var(--blue);border-color:rgba(150,200,255,0.45);box-shadow:0 0 10px rgba(150,200,255,0.15)}
 .strBtn small{display:block;font-size:0.5rem;color:var(--text-faint);font-weight:500;letter-spacing:0.06em}
+.strBtn.pinned{background:rgba(150,200,255,0.12);box-shadow:0 0 14px rgba(150,200,255,0.3);border-width:2px;transform:translateY(-1px)}
+#tuneTargetLbl{font-size:0.54rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-faint);text-align:center;flex-shrink:0;font-weight:600}
+#tuneTargetLbl b{font-weight:700}
 
 /* bottom — STAFF */
 #staffZone{flex-shrink:0;border-top:1px solid var(--border-b);background:rgba(9,12,20,0.7);position:relative;padding:26px 12px 8px}
@@ -133,7 +141,8 @@ html.mob body.mtab-staff #main{display:none}
 html.mob body.mtab-staff #staffZone{display:flex;flex-direction:column;justify-content:center;flex:1;min-height:0;padding:24px 12px;background:transparent}
 
 html.mob #domBar{padding:8px 8px 0;gap:10px}
-html.mob #domChord{font-size:2.1rem}
+html.mob #domList{gap:11px;min-height:44px}
+html.mob .dp-bar{max-width:56px}
 html.mob #domHint{display:none}
 html.mob #meterCanvas{flex-basis:60px;width:60px;margin:2px 0 2px 0}
 html.mob #ringWrap{width:min(88%,44vh,440px);max-width:none}
@@ -187,9 +196,9 @@ html.mob #mobTabs{display:flex;flex-shrink:0;background:rgba(9,12,20,0.97);borde
   <div class="col" id="now">
     <div class="zone-lbl"><span class="dot"></span>Now Playing</div>
     <div id="domBar">
-      <span id="domTag">Dominant</span>
-      <span id="domChord">—</span>
-      <span id="domHint">most likely chord in this passage</span>
+      <span id="domTag">Likely Chords</span>
+      <div id="domList"><span class="domEmpty">listening for a passage…</span></div>
+      <span id="domHint">this passage</span>
     </div>
     <div id="nowBody">
       <canvas id="meterCanvas"></canvas>
@@ -237,6 +246,7 @@ html.mob #mobTabs{display:flex;flex-shrink:0;background:rgba(9,12,20,0.97);borde
     </div>
     <div id="centsBar"><div id="centsNeedle"></div></div>
     <div id="centsLbl"><span>♭ −50</span><span>in tune</span><span>+50 ♯</span></div>
+    <div id="tuneTargetLbl">target auto · tap a string to lock</div>
     <canvas id="specCanvas"></canvas>
     <div id="stringRow"></div>
   </div>
@@ -525,22 +535,31 @@ function analyzeFrame(){
 const domScores=Object.create(null);
 let domKey=null;
 function renderDominant(){
-  let bk=null,bv=0;
-  for(const k in domScores)if(domScores[k]>bv){bv=domScores[k];bk=k;}
+  const el=$('domList');
+  let entries=Object.entries(domScores).sort((a,b)=>b[1]-a[1]);
+  const bv=entries.length?entries[0][1]:0;
   if(bv<6){                                   // not enough evidence yet
-    if(domKey!==null){domKey=null;paintDominant(null);}
+    domKey=null;
+    el.innerHTML='<span class="domEmpty">listening for a passage…</span>';
     return;
   }
-  if(domKey&&bk!==domKey&&bv<=(domScores[domKey]||0)*1.3)bk=domKey;  // incumbent advantage
-  if(bk!==domKey){domKey=bk;paintDominant(bk);}
-}
-function paintDominant(k){
-  const el=$('domChord');
-  if(!k){el.textContent='—';el.style.color='var(--text-faint)';el.style.textShadow='none';return;}
-  const[r,q]=k.split('|');
-  el.textContent=NOTE_NAMES[+r]+q;
-  el.style.color=pcColor(+r,68);
-  el.style.textShadow=`0 0 26px ${pcColorA(+r,0.5)}`;
+  // leader hysteresis: the incumbent holds slot 1 unless clearly beaten
+  let bk=entries[0][0];
+  if(domKey&&bk!==domKey&&bv<=(domScores[domKey]||0)*1.3)bk=domKey;
+  domKey=bk;
+  entries=entries.filter(([k,v])=>v>bv*0.12).slice(0,5);
+  entries.sort((a,b)=>(a[0]===bk?-1:b[0]===bk?1:b[1]-a[1]));
+  const max=domScores[bk]||bv;
+  el.innerHTML=entries.map(([k,v],i)=>{
+    const[r,q]=k.split('|');
+    const sh=Math.min(1,v/max);
+    const fs=(i===0?2.35:0.95+1.05*sh).toFixed(2);
+    const glow=i===0?0.5:0.22*sh;
+    return `<div class="domPill">
+      <span class="dp-name" style="font-size:${fs}rem;color:${pcColor(+r,i===0?68:56)};text-shadow:0 0 ${i===0?24:10}px ${pcColorA(+r,glow)}">${NOTE_NAMES[+r]}${q}</span>
+      <span class="dp-bar"><i style="width:${Math.round(sh*100)}%;background:${pcColorA(+r,0.8)}"></i></span>
+    </div>`;
+  }).join('');
 }
 function setChord(c){
   curChord=c;
@@ -1090,7 +1109,7 @@ $('clearStaff').addEventListener('click',()=>{
   chordLog.length=0;
   for(const k in tally)delete tally[k];
   for(const k in domScores)delete domScores[k];
-  domKey=null;paintDominant(null);
+  domKey=null;renderDominant();
   renderTally();
   $('st-log').textContent='0 logged';staffDirty=true;
 });
@@ -1184,10 +1203,23 @@ const SFMIN=70,SFMAX=1300,SLOGR=Math.log(SFMAX/SFMIN);
 const DB_LO=-90,DB_HI=-25;               // display dynamic range
 const AXIS_L=36,AXIS_R=22,AXIS_T=6,AXIS_B=16;  // CSS-px gutters
 const GTR_STRINGS=[
-  {n:'E',o:2,f:82.41},{n:'A',o:2,f:110.00},{n:'D',o:3,f:146.83},
-  {n:'G',o:3,f:196.00},{n:'B',o:3,f:246.94},{n:'E',o:4,f:329.63}
+  {n:'E',o:2,f:82.41,pc:4},{n:'A',o:2,f:110.00,pc:9},{n:'D',o:3,f:146.83,pc:2},
+  {n:'G',o:3,f:196.00,pc:7},{n:'B',o:3,f:246.94,pc:11},{n:'E',o:4,f:329.63,pc:4}
 ];
-let lastPitch=0,lastPitchPc=0;
+let lastPitch=0,lastPitchPc=0,lastCents=999;
+let tuneTarget=-1;   // index into GTR_STRINGS, -1 = auto (follow detected pitch)
+function currentTuneTarget(){
+  if(tuneTarget>=0)return GTR_STRINGS[tuneTarget];
+  if(lastPitch>0){
+    let bi=-1,bd=1e9;
+    GTR_STRINGS.forEach((st,i)=>{
+      const d=Math.abs(Math.log2(lastPitch/st.f));
+      if(d<bd){bd=d;bi=i;}
+    });
+    if(bd<0.45)return GTR_STRINGS[bi];   // within ~half octave of a string
+  }
+  return null;
+}
 
 /* inferno colormap LUT — perceptually uniform, amplitude → color */
 const INFERNO=[[0,0,0.016],[0.087,0.044,0.224],[0.258,0.039,0.406],[0.416,0.090,0.433],
@@ -1298,17 +1330,61 @@ function drawSpec(){
   specX.fillText('now ▸',px0+pwc,py0+phc+5);
 
   // guitar string reference lines — dashed, labeled at the right edge
+  const tgt=currentTuneTarget();
   specX.setLineDash([3,3]);
   specX.textBaseline='bottom';
   for(const s of GTR_STRINGS){
     const y=yOf(s.f);
-    specX.strokeStyle='rgba(232,236,244,0.22)';specX.lineWidth=1;
+    const isTgt=tgt===s;
+    specX.strokeStyle=isTgt?'rgba(232,236,244,0.05)':'rgba(232,236,244,0.22)';
+    specX.lineWidth=1;
     specX.beginPath();specX.moveTo(px0,y);specX.lineTo(px0+pwc,y);specX.stroke();
     specX.font='600 8.5px "JetBrains Mono",monospace';
-    specX.fillStyle='rgba(210,220,236,0.75)';specX.textAlign='right';
+    specX.fillStyle=isTgt?pcColor(s.pc,70):'rgba(210,220,236,0.75)';
+    specX.textAlign='right';
     specX.fillText(s.n+s.o,px0+pwc-3,y-1);
   }
   specX.setLineDash([]);
+
+  // ── tuning ladder: the full expected harmonic comb of the target ──
+  // A string paints fundamental + overtones; in tune, every rung of the
+  // played comb sits on these lines across the whole spectrum.
+  if(tgt){
+    specX.textBaseline='bottom';
+    let lastLblY=1e9;
+    for(let hn=1;hn*tgt.f<=SFMAX;hn++){
+      const y=yOf(hn*tgt.f);
+      specX.strokeStyle=pcColorA(tgt.pc,hn===1?0.75:0.45,62);
+      specX.lineWidth=hn===1?1.6:1;
+      specX.setLineDash(hn===1?[]:[5,4]);
+      specX.beginPath();specX.moveTo(px0,y);specX.lineTo(px0+pwc,y);specX.stroke();
+      if(lastLblY-y>11){   // rungs compress upward on the log axis — skip crowded labels
+        specX.font='600 8px "JetBrains Mono",monospace';
+        specX.fillStyle=pcColorA(tgt.pc,0.85,68);
+        specX.textAlign='left';
+        specX.fillText(hn===1?tgt.n+tgt.o+' ×1':'×'+hn,px0+3,y-1);
+        lastLblY=y;
+      }
+    }
+    specX.setLineDash([]);
+    // measured comb: where the played harmonics actually are right now
+    if(lastPitch>0&&Math.abs(Math.log2(lastPitch/tgt.f))<0.45){
+      const inTune=Math.abs(lastCents)<=5;
+      const mCol=inTune?'#64c864':pcColor(lastPitchPc,64);
+      for(let hn=1;hn*lastPitch<=SFMAX;hn++){
+        const y=yOf(hn*lastPitch);
+        specX.fillStyle=mCol;
+        specX.beginPath();
+        specX.moveTo(px0+pwc,y);specX.lineTo(px0+pwc-9,y-4);specX.lineTo(px0+pwc-9,y+4);
+        specX.closePath();specX.fill();
+      }
+      // status chip: sharp/flat direction against the ladder
+      specX.font='700 9px "JetBrains Mono",monospace';
+      specX.textAlign='left';specX.textBaseline='top';
+      specX.fillStyle=inTune?'#64c864':mCol;
+      specX.fillText(inTune?'● in tune':(lastCents>0?'▲ sharp '+Math.abs(lastCents)+'¢':'▼ flat '+Math.abs(lastCents)+'¢'),px0+4,py0+4);
+    }
+  }
 
   // dB colorbar in the right gutter
   const cbX=px0+pwc+5,cbW=5;
@@ -1329,15 +1405,17 @@ function drawSpec(){
   specX.fillText('dB',0,0);
   specX.restore();
 
-  // detected fundamental: crosshair line + marker
+  // detected fundamental crosshair (comb markers cover the rest when targeting)
   if(lastPitch>=SFMIN&&lastPitch<=SFMAX){
     const y=yOf(lastPitch);
-    specX.strokeStyle=pcColorA(lastPitchPc,0.4);specX.lineWidth=1;
+    specX.strokeStyle=pcColorA(lastPitchPc,0.35);specX.lineWidth=1;
     specX.beginPath();specX.moveTo(px0,y);specX.lineTo(px0+pwc,y);specX.stroke();
-    specX.fillStyle=pcColor(lastPitchPc,64);
-    specX.beginPath();
-    specX.moveTo(px0+pwc,y);specX.lineTo(px0+pwc-9,y-4.5);specX.lineTo(px0+pwc-9,y+4.5);
-    specX.closePath();specX.fill();
+    if(!tgt){
+      specX.fillStyle=pcColor(lastPitchPc,64);
+      specX.beginPath();
+      specX.moveTo(px0+pwc,y);specX.lineTo(px0+pwc-9,y-4.5);specX.lineTo(px0+pwc-9,y+4.5);
+      specX.closePath();specX.fill();
+    }
   }
 
   // plot frame
@@ -1375,7 +1453,7 @@ function updateTuner(){
   const p=autoCorrelate(tdBuf.subarray(0,2048),AC.sampleRate);
   const nEl=$('tunerNote'),fEl=$('tunerFreq'),nd=$('centsNeedle');
   if(p<50||p>1400){
-    lastPitch=0;
+    lastPitch=0;lastCents=999;
     nEl.textContent='—';nEl.style.color='var(--text-faint)';nEl.style.textShadow='none';
     fEl.textContent='— Hz';
     nd.style.left='50%';nd.style.background='var(--text-faint)';nd.style.boxShadow='none';
@@ -1385,6 +1463,13 @@ function updateTuner(){
   const cents=Math.round((midi-nearest)*100);
   const pc=((nearest%12)+12)%12, oct=Math.floor(nearest/12)-1;
   lastPitch=p;lastPitchPc=pc;
+  // cents against the tuning target if one is active, else against nearest note
+  const tgt=currentTuneTarget();
+  if(tgt){
+    let r=1200*Math.log2(p/tgt.f);
+    r=((r%1200)+1200)%1200; if(r>600)r-=1200;   // fold octaves: harmonics count too
+    lastCents=Math.round(r);
+  }else lastCents=cents;
   const inTune=Math.abs(cents)<=5;
   nEl.textContent=NOTE_NAMES[pc]+oct;
   nEl.style.color=inTune?'#64c864':pcColor(pc,66);
@@ -1408,15 +1493,30 @@ function playRef(freq){
   g.gain.exponentialRampToValueAtTime(0.001,t+2.2);
   o.start(t);o.stop(t+2.3);
 }
-GTR_STRINGS.forEach(s=>{
+const strBtns=[];
+function syncStrBtns(){
+  strBtns.forEach((b,i)=>b.classList.toggle('pinned',i===tuneTarget));
+  const lbl=$('tuneTargetLbl');
+  if(tuneTarget>=0){
+    const t=GTR_STRINGS[tuneTarget];
+    lbl.innerHTML='target <b style="color:'+pcColor(t.pc,68)+'">'+t.n+t.o+'</b> · locked — tap again to unlock';
+  }else{
+    lbl.textContent='target auto · tap a string to lock';
+  }
+}
+GTR_STRINGS.forEach((s,i)=>{
   const b=document.createElement('button');
-  const pc=(s.n==='E'?4:s.n==='A'?9:s.n==='D'?2:s.n==='G'?7:11);
   b.className='strBtn';
-  b.style.color=pcColor(pc,66);b.style.borderColor=pcColorA(pc,0.4);
+  b.style.color=pcColor(s.pc,66);b.style.borderColor=pcColorA(s.pc,0.4);
   b.innerHTML=s.n+'<small>'+s.f.toFixed(0)+' Hz</small>';
-  b.addEventListener('click',()=>playRef(s.f));
-  $('stringRow').appendChild(b);
+  b.addEventListener('click',()=>{
+    playRef(s.f);
+    tuneTarget=tuneTarget===i?-1:i;   // toggle lock
+    syncStrBtns();
+  });
+  $('stringRow').appendChild(b);strBtns.push(b);
 });
+syncStrBtns();
 
 /* ═══════════ STRUM SYNTH ═══════════ */
 function strum(){
