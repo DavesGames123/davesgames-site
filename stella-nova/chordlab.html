@@ -40,6 +40,13 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 #now{flex:1.05;border-right:1px solid var(--border-b);align-items:center;justify-content:center;position:relative;padding:14px;gap:6px}
 .zone-lbl{position:absolute;top:12px;left:16px;font-size:0.6rem;letter-spacing:0.26em;text-transform:uppercase;color:var(--text-faint);font-weight:600;display:flex;align-items:center;gap:8px}
 .zone-lbl .dot{width:5px;height:5px;border-radius:50%;background:var(--blue);box-shadow:0 0 8px var(--blue)}
+#domBar{display:flex;align-items:baseline;justify-content:center;gap:14px;width:100%;padding:26px 12px 2px;flex-shrink:0;flex-wrap:wrap}
+#domTag{font-size:0.58rem;letter-spacing:0.26em;text-transform:uppercase;color:var(--text-faint);font-weight:700}
+#domChord{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400;font-size:2.6rem;line-height:1;color:var(--text-faint);min-width:96px;text-align:center;transition:color .35s,text-shadow .35s}
+#domHint{font-size:0.52rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-faint)}
+#nowBody{display:flex;flex:1;min-height:0;width:100%;gap:10px;align-items:stretch}
+#meterCanvas{flex:0 0 94px;width:94px;height:auto;display:block;border:1px solid var(--border);border-radius:10px;background:#090c13;margin:4px 0 4px 2px}
+#ringArea{flex:1;min-width:0;display:flex;align-items:center;justify-content:center}
 #ringWrap{position:relative;width:min(46vh,86%);aspect-ratio:1;max-width:430px}
 #ringCanvas{width:100%;height:100%;display:block}
 #chordDisp{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center}
@@ -60,7 +67,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 #diag{flex:1;padding:44px 16px 14px;gap:12px;position:relative;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent;border-right:1px solid var(--border-b)}
 #diag::-webkit-scrollbar{width:4px}#diag::-webkit-scrollbar-thumb{background:var(--surface2)}
 .seg{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:4px;align-self:center;flex-shrink:0}
-.seg button{background:transparent;border:none;color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.7rem;letter-spacing:0.12em;padding:9px 22px;border-radius:999px;cursor:pointer;transition:.16s;text-transform:uppercase;font-weight:700}
+.seg button{background:transparent;border:none;color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.66rem;letter-spacing:0.1em;padding:9px 14px;border-radius:999px;cursor:pointer;transition:.16s;text-transform:uppercase;font-weight:700}
 .seg button.on{background:rgba(150,200,255,0.14);color:var(--blue);box-shadow:0 0 12px rgba(150,200,255,0.12)}
 #diagWrap{width:100%;max-width:236px;align-self:center;flex-shrink:0}
 #diagCanvas{width:100%;aspect-ratio:4/5;height:auto;display:block}
@@ -109,44 +116,66 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 #status-bar .sep{width:1px;height:10px;background:var(--border-b);flex-shrink:0}
 #status-bar b{color:var(--blue)}
 
-/* ── mobile: bottom-tab app layout ── */
+/* ── mobile: bottom-tab app layout ──
+   Driven by html.mob (set in JS from device characteristics), NOT a
+   width media query — iOS Safari inflates iframe viewports, which made
+   the old @media(max-width) breakpoint unreachable inside the index. */
 #mobTabs{display:none}
-@media(max-width:860px){
-  html,body{overflow:hidden}
-  .zone-lbl{display:none}
-  #main{flex-direction:column;overflow:hidden}
-  #now,#diag,#tuner{display:none;border-right:none;border-bottom:none}
-  #staffZone{display:none;border-top:none}
+html.mob .zone-lbl{display:none}
+html.mob #main{flex-direction:column;overflow:hidden}
+html.mob #now,html.mob #diag,html.mob #tuner{display:none;border-right:none;border-bottom:none}
+html.mob #staffZone{display:none;border-top:none}
 
-  body.mtab-now  #now {display:flex;flex:1;min-height:0;padding:12px;gap:10px}
-  body.mtab-diag #diag{display:flex;flex:1;min-height:0;padding:16px 14px 10px;overflow-y:auto}
-  body.mtab-tuner #tuner{display:flex;flex:1;min-height:0;padding:14px 14px 10px}
-  body.mtab-staff #main{display:none}
-  body.mtab-staff #staffZone{display:flex;flex-direction:column;justify-content:center;flex:1;min-height:0;padding:24px 12px;background:transparent}
+html.mob body.mtab-now  #now {display:flex;flex:1;min-height:0;padding:12px;gap:10px}
+html.mob body.mtab-diag #diag{display:flex;flex:1;min-height:0;padding:16px 14px 10px;overflow-y:auto}
+html.mob body.mtab-tuner #tuner{display:flex;flex:1;min-height:0;padding:14px 14px 10px}
+html.mob body.mtab-staff #main{display:none}
+html.mob body.mtab-staff #staffZone{display:flex;flex-direction:column;justify-content:center;flex:1;min-height:0;padding:24px 12px;background:transparent}
 
-  #ringWrap{width:min(84vw,46vh)}
-  #chordRoot{font-size:clamp(3rem,10vh,5.6rem)}
-  #diagWrap{max-width:210px}
-  #tunerNote{font-size:2.4rem}
-  #specCanvas{flex:1;min-height:0;height:auto}
-  #micGate{position:fixed;inset:0;z-index:500}
-  #status-bar{display:none}
+html.mob #domBar{padding:8px 8px 0;gap:10px}
+html.mob #domChord{font-size:2.1rem}
+html.mob #domHint{display:none}
+html.mob #meterCanvas{flex-basis:60px;width:60px;margin:2px 0 2px 0}
+html.mob #ringWrap{width:min(88%,44vh,440px);max-width:none}
+html.mob .seg button{font-size:0.6rem;padding:8px 10px}
+html.mob #chordRoot{font-size:clamp(3rem,10vh,5.6rem)}
+html.mob #diagWrap{max-width:210px}
+html.mob #tunerNote{font-size:2.4rem}
+html.mob #specCanvas{flex:1;min-height:0;height:auto}
+html.mob #micGate{position:fixed;inset:0;z-index:500}
+html.mob #status-bar{display:none}
 
-  #mobTabs{display:flex;flex-shrink:0;background:rgba(9,12,20,0.97);border-top:1px solid var(--border-b);padding-bottom:env(safe-area-inset-bottom);z-index:120}
-  #mobTabs button{flex:1;background:transparent;border:none;color:var(--text-faint);font-family:'JetBrains Mono',monospace;padding:9px 2px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .15s;-webkit-tap-highlight-color:transparent}
-  #mobTabs .ti{font-size:1.2rem;line-height:1}
-  #mobTabs .tl{font-size:0.54rem;letter-spacing:0.16em;text-transform:uppercase;font-weight:700}
-  #mobTabs button.on[data-t=now]{color:var(--blue);text-shadow:0 0 12px rgba(150,200,255,0.5)}
-  #mobTabs button.on[data-t=diag]{color:var(--yellow);text-shadow:0 0 12px rgba(255,200,50,0.5)}
-  #mobTabs button.on[data-t=tuner]{color:#c890ff;text-shadow:0 0 12px rgba(200,144,255,0.5)}
-  #mobTabs button.on[data-t=staff]{color:var(--green);text-shadow:0 0 12px rgba(100,200,100,0.5)}
-}
+html.mob #mobTabs{display:flex;flex-shrink:0;background:rgba(9,12,20,0.97);border-top:1px solid var(--border-b);padding-bottom:env(safe-area-inset-bottom);z-index:120}
+#mobTabs button{flex:1;background:transparent;border:none;color:var(--text-faint);font-family:'JetBrains Mono',monospace;padding:9px 2px 10px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:color .15s;-webkit-tap-highlight-color:transparent}
+#mobTabs .ti{font-size:1.2rem;line-height:1}
+#mobTabs .tl{font-size:0.54rem;letter-spacing:0.16em;text-transform:uppercase;font-weight:700}
+#mobTabs button.on[data-t=now]{color:var(--blue);text-shadow:0 0 12px rgba(150,200,255,0.5)}
+#mobTabs button.on[data-t=diag]{color:var(--yellow);text-shadow:0 0 12px rgba(255,200,50,0.5)}
+#mobTabs button.on[data-t=tuner]{color:#c890ff;text-shadow:0 0 12px rgba(200,144,255,0.5)}
+#mobTabs button.on[data-t=staff]{color:var(--green);text-shadow:0 0 12px rgba(100,200,100,0.5)}
 ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2)}
 @media (prefers-reduced-motion: reduce){#micBtn{animation:none}.sys-status::before{animation:none}}
 </style>
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<script>
+/* Device-aware mobile switch. iOS Safari expands iframes to content size,
+   so media queries on viewport width lie inside the index shell — check the
+   physical device (coarse pointer + screen dims) as well. */
+(function(){
+  function chk(){
+    var vw=window.visualViewport?window.visualViewport.width:window.innerWidth;
+    var coarse=window.matchMedia&&matchMedia('(pointer:coarse)').matches;
+    var dev=Math.min(screen.width,screen.height);
+    document.documentElement.classList.toggle('mob',vw<=860||(coarse&&dev<=860));
+  }
+  chk();
+  addEventListener('resize',chk);
+  addEventListener('orientationchange',chk);
+  if(window.visualViewport)visualViewport.addEventListener('resize',chk);
+})();
+</script>
 
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">ChordLab · ♪</span></div>
@@ -157,12 +186,22 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
   <!-- LEFT: what's playing right now -->
   <div class="col" id="now">
     <div class="zone-lbl"><span class="dot"></span>Now Playing</div>
-    <div id="ringWrap">
-      <canvas id="ringCanvas"></canvas>
-      <div id="chordDisp">
-        <div id="chordRoot">···</div>
-        <div id="chordQual">listening</div>
-        <div id="chordConf">— %</div>
+    <div id="domBar">
+      <span id="domTag">Dominant</span>
+      <span id="domChord">—</span>
+      <span id="domHint">most likely chord in this passage</span>
+    </div>
+    <div id="nowBody">
+      <canvas id="meterCanvas"></canvas>
+      <div id="ringArea">
+        <div id="ringWrap">
+          <canvas id="ringCanvas"></canvas>
+          <div id="chordDisp">
+            <div id="chordRoot">···</div>
+            <div id="chordQual">listening</div>
+            <div id="chordConf">— %</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -178,6 +217,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
     <div class="zone-lbl"><span class="dot" style="background:#ffc832;box-shadow:0 0 8px #ffc832"></span>How To Play It</div>
     <div class="seg" id="instSeg">
       <button data-i="guitar" class="on">Guitar</button>
+      <button data-i="bass">Bass</button>
+      <button data-i="ukulele">Uke</button>
       <button data-i="violin">Violin</button>
     </div>
     <div id="diagWrap"><canvas id="diagCanvas"></canvas></div>
@@ -432,10 +473,12 @@ function analyzeFrame(){
   if(level<GATE||!detPeaks.length){
     quietTicks++;
     for(let i=0;i<smScores.length;i++)smScores[i]*=0.8;
+    for(const k in domScores)domScores[k]*=0.992;
     if(quietTicks>4&&curChord)setChord(null);
     return;
   }
   quietTicks=0;
+  for(const k in domScores)domScores[k]*=0.988;   // ~4 s memory at 16 Hz
   tuningCents+= (estimateTuning()-tuningCents)*0.15;   // slow EMA — a guitar's tuning doesn't jump
   peaksToChroma();
   // display chroma follows the cleaned profile
@@ -471,6 +514,33 @@ function analyzeFrame(){
   }else{
     curChord.score=smScores[curI];
   }
+  if(curChord&&curChord.q!=='·note')
+    domScores[curChord.root+'|'+curChord.q]=(domScores[curChord.root+'|'+curChord.q]||0)+1;
+}
+
+/* ═══════════ DOMINANT CHORD — the passage-level winner ═══════════
+   Instant detection flickers between near-ties; this is a decaying
+   vote with switch hysteresis, so the banner names the chord that is
+   actually carrying the passage. */
+const domScores=Object.create(null);
+let domKey=null;
+function renderDominant(){
+  let bk=null,bv=0;
+  for(const k in domScores)if(domScores[k]>bv){bv=domScores[k];bk=k;}
+  if(bv<6){                                   // not enough evidence yet
+    if(domKey!==null){domKey=null;paintDominant(null);}
+    return;
+  }
+  if(domKey&&bk!==domKey&&bv<=(domScores[domKey]||0)*1.3)bk=domKey;  // incumbent advantage
+  if(bk!==domKey){domKey=bk;paintDominant(bk);}
+}
+function paintDominant(k){
+  const el=$('domChord');
+  if(!k){el.textContent='—';el.style.color='var(--text-faint)';el.style.textShadow='none';return;}
+  const[r,q]=k.split('|');
+  el.textContent=NOTE_NAMES[+r]+q;
+  el.style.color=pcColor(+r,68);
+  el.style.textShadow=`0 0 26px ${pcColorA(+r,0.5)}`;
 }
 function setChord(c){
   curChord=c;
@@ -622,14 +692,139 @@ function guitarVoicings(root,q){
 }
 function buildVoicingBtns(){
   const el=$('voicings');
-  if(instrument!=='guitar'){el.innerHTML='';return;}
-  const vs=guitarVoicings(diagChord.root,diagChord.q);
+  if(instrument!=='guitar'&&instrument!=='ukulele'){el.innerHTML='';return;}
+  const vs=voicingsFor(diagChord.root,diagChord.q);
   if(voicingIdx>=vs.length)voicingIdx=0;
   el.innerHTML=vs.map((v,i)=>`<button class="vbtn${i===voicingIdx?' on':''}" data-v="${i}">${v.name}</button>`).join('');
   [...el.children].forEach(b=>b.addEventListener('click',()=>{voicingIdx=+b.dataset.v;diagDirty=true;buildVoicingBtns();}));
 }
 
 const GTR_MIDI=[40,45,50,55,59,64];
+const UKE_MIDI=[67,60,64,69];            // g C E A — re-entrant high-g
+const BASS_MIDI=[28,33,38,43], BASS_NAMES=['E','A','D','G'];
+
+function voicingsFor(root,q){
+  return instrument==='ukulele'?ukeVoicings(root,q):guitarVoicings(root,q);
+}
+
+/* ── ukulele: exhaustive first-positions search ──
+   4 strings, window of 4 frets; full chord-tone coverage required,
+   except 4-note chords may drop the 5th (standard uke practice). */
+const _ukeCache=Object.create(null);
+function ukeVoicings(root,q){
+  const ck=root+'|'+q;
+  if(_ukeCache[ck])return _ukeCache[ck];
+  const need=(QUALS[q]||QUALS['']).iv.map(iv=>(root+iv)%12);
+  const found=[];
+  for(let base=0;base<=9;base++){
+    const opts=UKE_MIDI.map(m=>{
+      const o=[];
+      for(let f=0;f<=base+3;f++){
+        if(f!==0&&f<base)continue;
+        if(need.includes((m+f)%12))o.push(f);
+      }
+      return o;
+    });
+    if(opts.some(o=>!o.length))continue;
+    for(const f0 of opts[0])for(const f1 of opts[1])for(const f2 of opts[2])for(const f3 of opts[3]){
+      const fr=[f0,f1,f2,f3];
+      const pcs=new Set(fr.map((f,st)=>(UKE_MIDI[st]+f)%12));
+      let ok=need.every(pc=>pcs.has(pc));
+      let dropped5=false;
+      if(!ok&&need.length===4){
+        ok=need.every((pc,idx)=>idx===2||pcs.has(pc));
+        dropped5=ok;
+      }
+      if(!ok)continue;
+      const pos=fr.filter(f=>f>0);
+      const lo=pos.length?Math.min(...pos):0, hi=pos.length?Math.max(...pos):0;
+      if(hi-lo>3)continue;
+      found.push({frets:fr,base:lo,score:fr.reduce((a,b)=>a+b,0)+hi*0.6+(dropped5?2.5:0)});
+    }
+  }
+  found.sort((a,b)=>a.score-b.score);
+  const seen=new Set(),out=[];
+  for(const v of found){
+    const k=v.frets.join(',');
+    if(seen.has(k))continue;seen.add(k);
+    out.push({name:v.base===0?'Open':v.base+'fr',frets:v.frets});
+    if(out.length>=3)break;
+  }
+  if(!out.length)out.push({name:'—',frets:[-1,-1,-1,-1]});
+  return _ukeCache[ck]=out;
+}
+
+/* ── bass: chord-tone map, first 5 frets ──
+   Bassists outline chords, so show every chord tone position;
+   root ringed — walk root → 5th → octave from any of them. */
+function drawBass(){
+  if(!fitDiag())return;
+  const w=diagC.clientWidth,h=diagC.clientHeight;
+  diagX.clearRect(0,0,w,h);
+  const tones=new Set();
+  (QUALS[diagChord.q]||QUALS['']).iv.forEach(iv=>tones.add((diagChord.root+iv)%12));
+  const pad={t:64,b:30,l:42,r:24}, NF=5;
+  const gw=w-pad.l-pad.r,gh=h-pad.t-pad.b;
+  const sx=i=>pad.l+gw*i/3, fy=f=>pad.t+gh*f/NF;
+  // title
+  diagX.textAlign='center';diagX.textBaseline='alphabetic';
+  diagX.font='italic 400 28px "Cormorant Garamond",serif';
+  diagX.fillStyle=pcColor(diagChord.root,68);
+  diagX.shadowColor=pcColorA(diagChord.root,0.5);diagX.shadowBlur=16;
+  diagX.fillText(chordTitle(),w/2,34);diagX.shadowBlur=0;
+  // frets
+  for(let f=0;f<=NF;f++){
+    diagX.strokeStyle=f===0?'rgba(232,236,244,0.9)':'rgba(150,200,255,0.18)';
+    diagX.lineWidth=f===0?4:1.1;
+    diagX.beginPath();diagX.moveTo(pad.l,fy(f));diagX.lineTo(pad.l+gw,fy(f));diagX.stroke();
+  }
+  // fret numbers
+  diagX.font='500 10px "JetBrains Mono",monospace';
+  diagX.fillStyle='rgba(128,144,176,0.7)';diagX.textAlign='right';diagX.textBaseline='middle';
+  for(let f=1;f<=NF;f++)diagX.fillText(f,pad.l-10,fy(f-0.5));
+  diagX.textBaseline='alphabetic';
+  // strings — bass gauge: thick to thin
+  for(let st=0;st<4;st++){
+    diagX.strokeStyle='rgba(150,200,255,0.32)';diagX.lineWidth=3.4-st*0.7;
+    diagX.beginPath();diagX.moveTo(sx(st),fy(0));diagX.lineTo(sx(st),fy(NF));diagX.stroke();
+    diagX.font='700 11px "JetBrains Mono",monospace';
+    diagX.fillStyle='rgba(128,144,176,0.85)';diagX.textAlign='center';
+    diagX.fillText(BASS_NAMES[st],sx(st),fy(NF)+20);
+  }
+  // chord-tone markers
+  const dR=Math.min(12,gw/9);
+  for(let st=0;st<4;st++)for(let f=0;f<=NF;f++){
+    const pc=(BASS_MIDI[st]+f)%12;
+    if(!tones.has(pc))continue;
+    const isRoot=pc===diagChord.root,X=sx(st);
+    if(f===0){
+      diagX.strokeStyle=pcColor(pc,66);diagX.lineWidth=2.2;
+      diagX.beginPath();diagX.arc(X,fy(0)-14,6.5,0,7);diagX.stroke();
+      if(isRoot){diagX.strokeStyle=pcColorA(pc,0.45);diagX.beginPath();diagX.arc(X,fy(0)-14,10,0,7);diagX.stroke();}
+    }else{
+      const y=fy(f-0.5);
+      diagX.fillStyle=pcColor(pc,60);
+      diagX.shadowColor=pcColorA(pc,0.7);diagX.shadowBlur=isRoot?14:9;
+      diagX.beginPath();diagX.arc(X,y,isRoot?dR+1:dR-1.5,0,7);diagX.fill();diagX.shadowBlur=0;
+      if(isRoot){diagX.strokeStyle='rgba(255,255,255,0.85)';diagX.lineWidth=1.5;diagX.beginPath();diagX.arc(X,y,dR+4,0,7);diagX.stroke();}
+      diagX.fillStyle='#0e1118';
+      diagX.font='700 10px "JetBrains Mono",monospace';diagX.textAlign='center';diagX.textBaseline='middle';
+      diagX.fillText(NOTE_NAMES[pc].replace('♯','#'),X,y+0.5);
+      diagX.textBaseline='alphabetic';
+    }
+  }
+  diagX.font='500 9px "JetBrains Mono",monospace';
+  diagX.fillStyle='rgba(128,144,176,0.7)';diagX.textAlign='center';
+  diagX.fillText('chord tones · ◎ = root',w/2,h-6);
+}
+
+function redrawDiagram(){
+  if(instrument==='guitar')drawChordBox(GTR_MIDI);
+  else if(instrument==='ukulele')drawChordBox(UKE_MIDI);
+  else if(instrument==='bass')drawBass();
+  else drawViolin();
+}
+
 const diagC=$('diagCanvas'),diagX=diagC.getContext('2d');
 function fitDiag(){
   const dpr=Math.min(devicePixelRatio||1,2);
@@ -641,11 +836,12 @@ function fitDiag(){
 }
 function chordTitle(){return NOTE_NAMES[diagChord.root]+diagChord.q;}
 
-function drawGuitar(){
+function drawChordBox(MIDI){
+  const NS=MIDI.length;
   if(!fitDiag())return;
   const w=diagC.clientWidth,h=diagC.clientHeight;
   diagX.clearRect(0,0,w,h);
-  const vs=guitarVoicings(diagChord.root,diagChord.q);
+  const vs=voicingsFor(diagChord.root,diagChord.q);
   const v=vs[Math.min(voicingIdx,vs.length-1)];
   const frets=v.frets;
   const played=frets.filter(f=>f>=0);
@@ -656,7 +852,7 @@ function drawGuitar(){
   const nFrets=Math.max(5,fMax-base+(base>0?1:0));
   const pad={t:64,b:16,l:32,r:20};
   const gw=w-pad.l-pad.r, gh=h-pad.t-pad.b;
-  const sx=i=>pad.l+gw*i/5;
+  const sx=i=>pad.l+gw*i/(NS-1);
   const fy=f=>pad.t+gh*f/nFrets;
   // title
   diagX.textAlign='center';diagX.textBaseline='alphabetic';
@@ -665,7 +861,7 @@ function drawGuitar(){
   diagX.shadowColor=pcColorA(diagChord.root,0.5);diagX.shadowBlur=16;
   diagX.fillText(chordTitle(),w/2,34);diagX.shadowBlur=0;
   // strings
-  for(let s=0;s<6;s++){
+  for(let s=0;s<NS;s++){
     diagX.strokeStyle='rgba(150,200,255,0.3)';diagX.lineWidth=0.8+s*0.25;
     diagX.beginPath();diagX.moveTo(sx(s),pad.t);diagX.lineTo(sx(s),pad.t+gh);diagX.stroke();
   }
@@ -695,7 +891,7 @@ function drawGuitar(){
   }
   // dots / open / mute
   const dR=Math.min(12.5,gw/12);
-  for(let s=0;s<6;s++){
+  for(let s=0;s<NS;s++){
     const f=frets[s];
     const x=sx(s);
     if(f<0){
@@ -704,7 +900,7 @@ function drawGuitar(){
       diagX.fillText('✕',x,pad.t-10);
       continue;
     }
-    const pc=(GTR_MIDI[s]+f)%12;
+    const pc=(MIDI[s]+f)%12;
     if(f===0){
       diagX.strokeStyle=pcColor(pc,66);diagX.lineWidth=2.2;
       diagX.beginPath();diagX.arc(x,pad.t-14,6.5,0,7);diagX.stroke();
@@ -798,12 +994,102 @@ function drawViolin(){
   diagX.fillText('1st position · ◎ ring = root',w/2,h-6);
 }
 
+/* ═══════════ INPUT METER — live scope + frequency bands ═══════════
+   Left strip of Now Playing: top = oscilloscope of the raw mic
+   waveform, below = 20 log-spaced band bars (low at bottom) with
+   peak-hold ticks, inferno-colored by level like the spectrogram. */
+const meterC=$('meterCanvas'),meterX=meterC.getContext('2d');
+const MBANDS=20,MF0=60,MF1=4200,MLOGR=Math.log(MF1/MF0);
+const meterPeaks=new Float32Array(MBANDS);
+let scopeBuf=null,scopePhase=0;
+function drawMeter(){
+  const cw=meterC.clientWidth,ch=meterC.clientHeight;
+  if(cw<24||ch<80)return;
+  const dpr=Math.min(devicePixelRatio||1,2);
+  if(meterC.width!==Math.round(cw*dpr)){meterC.width=Math.round(cw*dpr);meterC.height=Math.round(ch*dpr);}
+  meterX.setTransform(dpr,0,0,dpr,0,0);
+  meterX.fillStyle='#090c13';meterX.fillRect(0,0,cw,ch);
+
+  // ── oscilloscope (top) ──
+  const scopeH=Math.min(86,ch*0.22);
+  const mid=scopeH*0.5+6;
+  meterX.strokeStyle='rgba(150,200,255,0.1)';meterX.lineWidth=1;
+  meterX.beginPath();meterX.moveTo(4,mid);meterX.lineTo(cw-4,mid);meterX.stroke();
+  if(micOn){
+    if(!scopeBuf)scopeBuf=new Float32Array(2048);
+    analyser.getFloatTimeDomainData(scopeBuf);
+    const amp=Math.min(1,level*4+0.15);
+    meterX.strokeStyle=`rgba(150,200,255,${0.35+amp*0.6})`;
+    meterX.lineWidth=1.3;
+    meterX.shadowColor='rgba(150,200,255,0.6)';meterX.shadowBlur=amp*8;
+    meterX.beginPath();
+    const N=scopeBuf.length;
+    for(let x=0;x<cw-8;x++){
+      const v=scopeBuf[(x/(cw-8)*(N-1))|0];
+      const y=mid-Math.max(-1,Math.min(1,v*2.4))*(scopeH*0.44);
+      x?meterX.lineTo(4+x,y):meterX.moveTo(4+x,y);
+    }
+    meterX.stroke();meterX.shadowBlur=0;
+  }
+  // divider
+  meterX.strokeStyle='rgba(150,200,255,0.16)';
+  meterX.beginPath();meterX.moveTo(0,scopeH+12);meterX.lineTo(cw,scopeH+12);meterX.stroke();
+  meterX.font='500 7.5px "JetBrains Mono",monospace';
+  meterX.fillStyle='rgba(128,144,176,0.6)';
+  meterX.textAlign='left';meterX.textBaseline='bottom';
+  meterX.fillText('mic',4,scopeH+10);
+
+  // ── band meter (bottom, low → high going up) ──
+  const bTop=scopeH+18,bBot=ch-8;
+  const bandH=(bBot-bTop)/MBANDS;
+  const barX=4,barW=cw-8;
+  meterX.textBaseline='middle';
+  for(let b=0;b<MBANDS;b++){
+    const f0=MF0*Math.exp(b/MBANDS*MLOGR);
+    const f1=MF0*Math.exp((b+1)/MBANDS*MLOGR);
+    let t=0;
+    if(micOn){
+      let m=-160;
+      const i0=Math.max(1,Math.floor(f0/binHz)),i1=Math.min(freqData.length-1,Math.ceil(f1/binHz));
+      for(let i=i0;i<=i1;i++)if(freqData[i]>m)m=freqData[i];
+      t=(m-DB_LO)/(DB_HI-DB_LO);t=t<0?0:t>1?1:t;
+    }
+    meterPeaks[b]=Math.max(t,meterPeaks[b]-0.014);
+    const y=bBot-(b+1)*bandH;
+    // track
+    meterX.fillStyle='rgba(150,200,255,0.05)';
+    meterX.fillRect(barX,y+1.5,barW,bandH-3);
+    // bar
+    if(t>0.02){
+      const li=(t*255)|0;
+      meterX.fillStyle=`rgb(${ILUT[li*3]},${ILUT[li*3+1]},${ILUT[li*3+2]})`;
+      meterX.fillRect(barX,y+1.5,barW*t,bandH-3);
+    }
+    // peak-hold tick
+    if(meterPeaks[b]>0.03){
+      const li=(meterPeaks[b]*255)|0;
+      meterX.fillStyle=`rgba(${ILUT[li*3]},${ILUT[li*3+1]},${ILUT[li*3+2]},0.95)`;
+      meterX.fillRect(barX+barW*meterPeaks[b]-1,y+1,2,bandH-2);
+    }
+  }
+  // freq labels along the band stack
+  meterX.fillStyle='rgba(128,144,176,0.6)';
+  meterX.textAlign='left';
+  [[100,'100'],[440,'440'],[1000,'1k'],[4000,'4k']].forEach(([f,l])=>{
+    const b=Math.log(f/MF0)/MLOGR*MBANDS;
+    const y=bBot-b*bandH;
+    meterX.fillText(l,barX+1,y);
+  });
+}
+
 /* ═══════════ STAFF ═══════════ */
 const staffC=$('staffCanvas'),staffX=staffC.getContext('2d');
 let staffDirty=true;
 $('clearStaff').addEventListener('click',()=>{
   chordLog.length=0;
   for(const k in tally)delete tally[k];
+  for(const k in domScores)delete domScores[k];
+  domKey=null;paintDominant(null);
   renderTally();
   $('st-log').textContent='0 logged';staffDirty=true;
 });
@@ -1135,11 +1421,16 @@ GTR_STRINGS.forEach(s=>{
 function strum(){
   if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();
   if(AC.state==='suspended')AC.resume();
-  let midis=[];
-  if(instrument==='guitar'){
-    const vs=guitarVoicings(diagChord.root,diagChord.q);
+  let midis=[],stag=0.055,dur=2.4;
+  if(instrument==='guitar'||instrument==='ukulele'){
+    const MIDI=instrument==='guitar'?GTR_MIDI:UKE_MIDI;
+    const vs=voicingsFor(diagChord.root,diagChord.q);
     const v=vs[Math.min(voicingIdx,vs.length-1)];
-    v.frets.forEach((f,s)=>{if(f>=0)midis.push(GTR_MIDI[s]+f);});
+    v.frets.forEach((f,st)=>{if(f>=0)midis.push(MIDI[st]+f);});
+  }else if(instrument==='bass'){
+    const base=28+((diagChord.root-4)%12+12)%12;   // lowest position on the E string
+    midis=[base,base+7,base+12];                    // root · fifth · octave walk
+    stag=0.22;dur=2.9;
   }else{
     const q=QUALS[diagChord.q]||QUALS[''];
     midis=q.iv.map(iv=>60+((diagChord.root+iv)%12)+(diagChord.root+iv>=12?12:0));
@@ -1147,24 +1438,23 @@ function strum(){
   }
   const t0=AC.currentTime+0.03;
   const master=AC.createGain();master.gain.value=0.5;master.connect(AC.destination);
-  midis.forEach((m,i)=>{
-    const f=440*Math.pow(2,(m-69)/12);
-    const t=t0+i*0.055;
-    const o1=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain();
+  midis.forEach((mn,i)=>{
+    const f=440*Math.pow(2,(mn-69)/12);
+    const t=t0+i*stag;
+    const o1=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain(),g2=AC.createGain();
     o1.type='triangle';o1.frequency.value=f;
-    o2.type='sine';o2.frequency.value=f*2;o2.detune.value=4;
-    const g2=AC.createGain();g2.gain.value=0.18;
+    o2.type='sine';o2.frequency.value=f*2;o2.detune.value=4;g2.gain.value=0.18;
     o1.connect(g);o2.connect(g2);g2.connect(g);g.connect(master);
     g.gain.setValueAtTime(0,t);
     g.gain.linearRampToValueAtTime(0.34/Math.sqrt(midis.length),t+0.012);
-    g.gain.exponentialRampToValueAtTime(0.0008,t+2.4);
-    o1.start(t);o2.start(t);o1.stop(t+2.5);o2.stop(t+2.5);
+    g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
+    o1.start(t);o2.start(t);o1.stop(t+dur+0.1);o2.stop(t+dur+0.1);
   });
 }
 $('strumBtn').addEventListener('click',strum);
 
 /* ═══════════ MAIN LOOP ═══════════ */
-let last=0,fc=0,ft=0,anTick=0,tunTick=0;
+let last=0,fc=0,ft=0,anTick=0,tunTick=0,domTick=0;
 function loop(t){
   requestAnimationFrame(loop);
   const dt=Math.min((t-last)/1000,0.1);last=t;
@@ -1177,11 +1467,14 @@ function loop(t){
       if(curChord&&curChord.score)$('chordConf').textContent=Math.round(curChord.score*100)+' % match';}
     tunTick+=dt;
     if(tunTick>0.09){tunTick=0;updateTuner();}
+    domTick+=dt;
+    if(domTick>0.25){domTick=0;renderDominant();}
     $('st-level').innerHTML='level <b>'+(level*100|0)+'</b>';
     $('st-tune').innerHTML='tuning <b>'+(tuningCents>0?'+':'')+tuningCents.toFixed(0)+'¢</b>';
   }
   drawRing();
-  if(diagDirty){diagDirty=false;instrument==='guitar'?drawGuitar():drawViolin();}
+  drawMeter();
+  if(diagDirty){diagDirty=false;redrawDiagram();}
   if(staffDirty)drawStaff();
 }
 if(window.ResizeObserver){
