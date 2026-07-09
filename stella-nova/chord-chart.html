@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Chord Chart // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0e1118;--surface:#1c2436;--surface2:#243040;
+  --border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.18);
+  --blue:#96c8ff;--blue-dim:#5a8cc0;--yellow:#ffc832;--green:#64c864;
+  --text:#c8d0e0;--text-dim:#8090b0;--text-faint:#506080;--text-bright:#e8ecf4;
+  --scan:rgba(0,0,0,0.06);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:var(--bg)}
+body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
+body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.4))}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:40px;flex-shrink:0;background:rgba(14,17,24,0.94);border-bottom:1px solid var(--border-b);z-index:100}
+.in-frame .topbar{display:none!important}
+.topbar-l{display:flex;align-items:center;gap:1.2rem}
+.sys-name{color:var(--text-bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.1rem;letter-spacing:0.12em}
+.sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.64rem;letter-spacing:0.14em;text-transform:uppercase}
+.sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+.topbar-r{font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint)}
+.topbar-r strong{color:var(--blue-dim);font-weight:500}
+
+/* root rainbow strip */
+#rootStrip{flex-shrink:0;display:flex;gap:7px;padding:14px 14px 12px;overflow-x:auto;scrollbar-width:none;justify-content:safe center;background:rgba(9,12,20,0.7);border-bottom:1px solid var(--border)}
+#rootStrip::-webkit-scrollbar{display:none}
+.rchip{flex-shrink:0;width:46px;height:46px;border-radius:50%;border:2px solid;background:rgba(0,0,0,0.3);font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.25rem;font-weight:500;cursor:pointer;transition:transform .15s,box-shadow .2s,background .2s;display:flex;align-items:center;justify-content:center;line-height:1}
+.rchip:hover{transform:scale(1.12)}
+.rchip.on{transform:scale(1.16)}
+
+/* instrument seg */
+#chartHead{display:flex;align-items:center;justify-content:center;gap:16px;padding:12px 14px 4px;flex-shrink:0;flex-wrap:wrap}
+#bigRoot{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400;font-size:2.3rem;line-height:1;min-width:64px;text-align:center;transition:color .2s,text-shadow .2s}
+.seg{display:flex;gap:4px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:4px}
+.seg button{background:transparent;border:none;color:var(--text-dim);font-family:'JetBrains Mono',monospace;font-size:0.66rem;letter-spacing:0.12em;padding:8px 20px;border-radius:999px;cursor:pointer;transition:.16s;text-transform:uppercase;font-weight:700}
+.seg button.on{background:rgba(150,200,255,0.14);color:var(--blue)}
+
+/* quality grid */
+#grid{flex:1;min-height:0;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));align-content:start;gap:12px;padding:12px 16px 20px;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent}
+#grid::-webkit-scrollbar{width:5px}#grid::-webkit-scrollbar-thumb{background:var(--surface2)}
+.qcard{background:rgba(150,200,255,0.025);border:1px solid var(--border-b);border-radius:14px;padding:10px 10px 8px;cursor:pointer;transition:transform .16s,box-shadow .2s,border-color .2s;display:flex;flex-direction:column;align-items:center;position:relative;width:100%;max-width:270px;margin:0 auto}
+.qcard:hover{transform:translateY(-3px)}
+.qcard canvas{width:100%;aspect-ratio:4/5;height:auto;display:block}
+.qname{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.35rem;line-height:1;margin-bottom:2px}
+.qfull{font-size:0.56rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-faint);margin-bottom:4px}
+.playb{position:absolute;top:8px;right:8px;width:34px;height:34px;border-radius:50%;border:1px solid rgba(255,200,50,0.4);background:rgba(255,200,50,0.07);color:var(--yellow);font-size:0.85rem;cursor:pointer;transition:.15s;display:flex;align-items:center;justify-content:center}
+.playb:hover{background:rgba(255,200,50,0.18);box-shadow:0 0 12px rgba(255,200,50,0.3)}
+
+#status-bar{height:22px;flex-shrink:0;background:rgba(14,17,24,0.94);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:14px;font-size:0.54rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500}
+#status-bar .sep{width:1px;height:10px;background:var(--border-b)}
+#status-bar b{color:var(--blue)}
+
+@media(max-width:640px){
+  #rootStrip{justify-content:flex-start;padding:12px 10px 10px}
+  .rchip{width:42px;height:42px;font-size:1.1rem}
+  #grid{grid-template-columns:repeat(2,1fr);gap:9px;padding:10px 10px 16px}
+  #status-bar{display:none}
+}
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface2)}
+@media (prefers-reduced-motion: reduce){.sys-status::before{animation:none}.rchip,.qcard{transition:none}}
+</style>
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Chord Chart · ♪</span></div>
+  <div class="topbar-r">SYS // <strong>CHORD REFERENCE</strong></div>
+</div>
+
+<div id="rootStrip"></div>
+
+<div id="chartHead">
+  <div id="bigRoot">C</div>
+  <div class="seg" id="instSeg">
+    <button data-i="guitar" class="on">Guitar</button>
+    <button data-i="violin">Violin</button>
+  </div>
+</div>
+
+<div id="grid"></div>
+
+<div id="status-bar">
+  <span>root <b id="st-root">C</b></span><span class="sep"></span>
+  <span id="st-inst">guitar</span><span class="sep"></span>
+  <span>8 qualities · tap ♪ to hear</span>
+</div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════
+   Chord Chart — every root × 8 qualities, guitar & violin
+   Shares the ChordLab shape library and renderers.
+   GREP: guitarVoicings | drawGuitarInto | drawViolinInto | strum
+   ════════════════════════════════════════════════════════════ */
+const NOTE_NAMES=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
+const pcColor=(pc,l=64)=>`hsl(${pc*30},88%,${l}%)`;
+const pcColorA=(pc,a,l=64)=>`hsla(${pc*30},88%,${l}%,${a})`;
+
+const QUALS={
+  ''    :{iv:[0,4,7],    full:'major'},
+  'm'   :{iv:[0,3,7],    full:'minor'},
+  '7'   :{iv:[0,4,7,10], full:'dominant 7'},
+  'maj7':{iv:[0,4,7,11], full:'major 7'},
+  'm7'  :{iv:[0,3,7,10], full:'minor 7'},
+  'sus2':{iv:[0,2,7],    full:'suspended 2'},
+  'sus4':{iv:[0,5,7],    full:'suspended 4'},
+  'dim' :{iv:[0,3,6],    full:'diminished'},
+};
+const QUAL_KEYS=Object.keys(QUALS);
+
+/* ── guitar shapes (identical library to ChordLab) ── */
+const OPEN_SHAPES={
+  '0|':[-1,3,2,0,1,0],'9|':[-1,0,2,2,2,0],'7|':[3,2,0,0,0,3],'4|':[0,2,2,1,0,0],'2|':[-1,-1,0,2,3,2],
+  '9|m':[-1,0,2,2,1,0],'4|m':[0,2,2,0,0,0],'2|m':[-1,-1,0,2,3,1],
+  '9|7':[-1,0,2,0,2,0],'11|7':[-1,2,1,2,0,2],'0|7':[-1,3,2,3,1,0],'2|7':[-1,-1,0,2,1,2],'4|7':[0,2,0,1,0,0],'7|7':[3,2,0,0,0,1],
+  '0|maj7':[-1,3,2,0,0,0],'9|maj7':[-1,0,2,1,2,0],'2|maj7':[-1,-1,0,2,2,2],'4|maj7':[0,2,1,1,0,0],'7|maj7':[3,2,0,0,0,2],'5|maj7':[-1,-1,3,2,1,0],
+  '9|m7':[-1,0,2,0,1,0],'4|m7':[0,2,0,0,0,0],'2|m7':[-1,-1,0,2,1,1],
+  '9|sus2':[-1,0,2,2,0,0],'2|sus2':[-1,-1,0,2,3,0],'7|sus2':[3,0,0,0,3,3],
+  '9|sus4':[-1,0,2,2,3,0],'2|sus4':[-1,-1,0,2,3,3],'4|sus4':[0,2,2,2,0,0],
+  '2|dim':[-1,-1,0,1,3,1],
+};
+const E_SHAPE={'':[0,2,2,1,0,0],'m':[0,2,2,0,0,0],'7':[0,2,0,1,0,0],'m7':[0,2,0,0,0,0],'maj7':[0,-1,1,1,0,-1],'sus4':[0,2,2,2,0,0],'sus2':null,'dim':null};
+const A_SHAPE={'':[-1,0,2,2,2,0],'m':[-1,0,2,2,1,0],'7':[-1,0,2,0,2,0],'m7':[-1,0,2,0,1,0],'maj7':[-1,0,2,1,2,0],'sus4':[-1,0,2,2,3,0],'sus2':[-1,0,2,2,0,0],'dim':[-1,0,1,2,1,-1]};
+const D_DIM=[-1,-1,0,1,3,1];
+function barreAt(shape,f){return shape.map(v=>v<0?-1:v+f);}
+function guitarVoicings(root,q){
+  const out=[];
+  const open=OPEN_SHAPES[root+'|'+q];
+  if(open)out.push({name:'Open',frets:open});
+  const eF=((root-4)%12+12)%12, aF=((root-9)%12+12)%12;
+  if(E_SHAPE[q]&&eF>=1&&eF<=11)out.push({name:eF+'fr',frets:barreAt(E_SHAPE[q],eF),barre:eF});
+  if(A_SHAPE[q]&&aF>=1&&aF<=11)out.push({name:aF+'fr',frets:barreAt(A_SHAPE[q],aF),barre:aF});
+  if(q==='dim'){const dF=((root-2)%12+12)%12;if(dF>=1&&dF<=11)out.push({name:dF+'fr',frets:barreAt(D_DIM,dF)});}
+  if(!out.length)out.push({name:'—',frets:[-1,-1,-1,-1,-1,-1]});
+  return out;
+}
+const GTR_MIDI=[40,45,50,55,59,64];
+const VLN_MIDI=[55,62,69,76], VLN_NAMES=['G','D','A','E'];
+
+/* ── renderers into an arbitrary canvas ── */
+function prep(cv){
+  const dpr=Math.min(devicePixelRatio||1,2);
+  const w=cv.clientWidth,h=cv.clientHeight;
+  if(w<10||h<10)return null;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)){cv.width=w*dpr;cv.height=h*dpr;}
+  const x=cv.getContext('2d');
+  x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,w,h);
+  return {x,w,h};
+}
+function drawGuitarInto(cv,root,q){
+  const P=prep(cv);if(!P)return;const{x,w,h}=P;
+  const vs=guitarVoicings(root,q), v=vs[0], frets=v.frets;
+  const played=frets.filter(f=>f>=0);
+  const fMax=played.length?Math.max(...played):3;
+  const fMinPos=played.filter(f=>f>0);
+  const fMin=fMinPos.length?Math.min(...fMinPos):0;
+  const base=fMax<=4?0:Math.max(1,fMin);
+  const nFrets=Math.max(5,fMax-base+(base>0?1:0));
+  const pad={t:44,b:36,l:34,r:24};
+  const gw=w-pad.l-pad.r,gh=h-pad.t-pad.b;
+  const sx=i=>pad.l+gw*i/5, fy=f=>pad.t+gh*f/nFrets;
+  // strings
+  for(let s=0;s<6;s++){x.strokeStyle='rgba(150,200,255,0.3)';x.lineWidth=0.8+s*0.25;
+    x.beginPath();x.moveTo(sx(s),pad.t);x.lineTo(sx(s),pad.t+gh);x.stroke();}
+  // frets
+  for(let f=0;f<=nFrets;f++){
+    x.strokeStyle=f===0&&base===0?'rgba(232,236,244,0.9)':'rgba(150,200,255,0.18)';
+    x.lineWidth=f===0&&base===0?4:1.1;
+    x.beginPath();x.moveTo(pad.l,fy(f));x.lineTo(pad.l+gw,fy(f));x.stroke();
+  }
+  if(base>0){x.font='600 11px "JetBrains Mono",monospace';x.fillStyle='#8090b0';x.textAlign='right';x.fillText(base+'fr',pad.l-8,fy(0.5)+4);}
+  // barre band — only across the strings actually fretted at the barre
+  if(v.barre&&base>0){
+    const barred=frets.map((f,s)=>f===v.barre?s:-1).filter(s=>s>=0);
+    if(barred.length>1){
+      const y=fy(v.barre-base+0.5), x0=sx(Math.min(...barred)), x1=sx(Math.max(...barred));
+      x.fillStyle=pcColorA(root,0.22,50);
+      x.beginPath();
+      if(x.roundRect)x.roundRect(x0-11,y-10,x1-x0+22,20,10);else x.rect(x0-11,y-10,x1-x0+22,20);
+      x.fill();
+    }
+  }
+  const dR=Math.min(12.5,gw/12);
+  x.textAlign='center';
+  for(let s=0;s<6;s++){
+    const f=frets[s],X=sx(s);
+    if(f<0){x.font='700 13px "JetBrains Mono",monospace';x.fillStyle='rgba(224,80,80,0.85)';x.fillText('✕',X,pad.t-11);continue;}
+    const pc=(GTR_MIDI[s]+f)%12;
+    if(f===0){x.strokeStyle=pcColor(pc,66);x.lineWidth=2.2;x.beginPath();x.arc(X,pad.t-15,6.5,0,7);x.stroke();}
+    else{
+      const y=fy(f-base-0.5+(base>0?1:0));
+      x.fillStyle=pcColor(pc,60);
+      x.shadowColor=pcColorA(pc,0.7);x.shadowBlur=11;
+      x.beginPath();x.arc(X,y,dR,0,7);x.fill();x.shadowBlur=0;
+      x.fillStyle='#0e1118';x.font='700 10px "JetBrains Mono",monospace';x.textBaseline='middle';
+      x.fillText(NOTE_NAMES[pc].replace('♯','#'),X,y+0.5);x.textBaseline='alphabetic';
+    }
+  }
+  // note letters under each string
+  x.font='500 10px "JetBrains Mono",monospace';
+  for(let s=0;s<6;s++){
+    const f=frets[s];
+    if(f<0){x.fillStyle='rgba(80,96,128,0.6)';x.fillText('—',sx(s),pad.t+gh+22);}
+    else{const pc=(GTR_MIDI[s]+f)%12;x.fillStyle=pcColor(pc,62);x.fillText(NOTE_NAMES[pc],sx(s),pad.t+gh+22);}
+  }
+}
+function drawViolinInto(cv,root,q){
+  const P=prep(cv);if(!P)return;const{x,w,h}=P;
+  const tones=new Set();(QUALS[q]||QUALS['']).iv.forEach(iv=>tones.add((root+iv)%12));
+  const pad={t:36,b:34,l:44,r:44};
+  const gw=w-pad.l-pad.r,gh=h-pad.t-pad.b;
+  const sx=i=>pad.l+gw*i/3, NPOS=7, py=st=>pad.t+gh*st/NPOS;
+  // nut
+  x.strokeStyle='rgba(232,236,244,0.85)';x.lineWidth=4;
+  x.beginPath();x.moveTo(pad.l-18,pad.t);x.lineTo(pad.l+gw+18,pad.t);x.stroke();
+  // semitone guides
+  for(let st=1;st<=NPOS;st++){x.strokeStyle='rgba(150,200,255,0.08)';x.lineWidth=1;
+    x.beginPath();x.moveTo(pad.l-18,py(st));x.lineTo(pad.l+gw+18,py(st));x.stroke();}
+  x.textAlign='center';
+  for(let s=0;s<4;s++){
+    x.strokeStyle='rgba(150,200,255,0.3)';x.lineWidth=2.4-s*0.45;
+    x.beginPath();x.moveTo(sx(s),pad.t);x.lineTo(sx(s),pad.t+gh);x.stroke();
+    x.font='700 11px "JetBrains Mono",monospace';x.fillStyle='rgba(128,144,176,0.85)';
+    x.fillText(VLN_NAMES[s],sx(s),pad.t+gh+21);
+  }
+  const dR=Math.min(12,gw/9);
+  for(let s=0;s<4;s++)for(let st=0;st<=NPOS;st++){
+    const pc=(VLN_MIDI[s]+st)%12;
+    if(!tones.has(pc))continue;
+    const isRoot=pc===root,X=sx(s);
+    if(st===0){x.strokeStyle=pcColor(pc,66);x.lineWidth=2.2;x.beginPath();x.arc(X,pad.t-13,6.5,0,7);x.stroke();}
+    else{
+      const y=py(st);
+      x.fillStyle=pcColor(pc,60);
+      x.shadowColor=pcColorA(pc,0.7);x.shadowBlur=isRoot?14:9;
+      x.beginPath();x.arc(X,y,isRoot?dR+1:dR-1,0,7);x.fill();x.shadowBlur=0;
+      if(isRoot){x.strokeStyle='rgba(255,255,255,0.85)';x.lineWidth=1.5;x.beginPath();x.arc(X,y,dR+4,0,7);x.stroke();}
+      x.fillStyle='#0e1118';x.font='700 10px "JetBrains Mono",monospace';x.textBaseline='middle';
+      x.fillText(NOTE_NAMES[pc].replace('♯','#'),X,y+0.5);x.textBaseline='alphabetic';
+    }
+  }
+}
+
+/* ── strum synth ── */
+let AC=null;
+function strum(root,q){
+  if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();
+  if(AC.state==='suspended')AC.resume();
+  let midis=[];
+  if(instrument==='guitar'){
+    guitarVoicings(root,q)[0].frets.forEach((f,s)=>{if(f>=0)midis.push(GTR_MIDI[s]+f);});
+  }else{
+    midis=(QUALS[q]||QUALS['']).iv.map(iv=>60+((root+iv)%12)+((root+iv)>=12?12:0));
+    midis.unshift(48+root);
+  }
+  const t0=AC.currentTime+0.03;
+  const master=AC.createGain();master.gain.value=0.5;master.connect(AC.destination);
+  midis.forEach((m,i)=>{
+    const f=440*Math.pow(2,(m-69)/12), t=t0+i*0.055;
+    const o1=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain(),g2=AC.createGain();
+    o1.type='triangle';o1.frequency.value=f;
+    o2.type='sine';o2.frequency.value=f*2;o2.detune.value=4;g2.gain.value=0.18;
+    o1.connect(g);o2.connect(g2);g2.connect(g);g.connect(master);
+    g.gain.setValueAtTime(0,t);
+    g.gain.linearRampToValueAtTime(0.34/Math.sqrt(midis.length),t+0.012);
+    g.gain.exponentialRampToValueAtTime(0.0008,t+2.4);
+    o1.start(t);o2.start(t);o1.stop(t+2.5);o2.stop(t+2.5);
+  });
+}
+
+/* ── UI state ── */
+let root=0, instrument='guitar';
+const $=id=>document.getElementById(id);
+
+/* root strip */
+const strip=$('rootStrip');
+for(let pc=0;pc<12;pc++){
+  const b=document.createElement('button');
+  b.className='rchip';b.textContent=NOTE_NAMES[pc];
+  b.style.color=pcColor(pc,66);b.style.borderColor=pcColorA(pc,0.55);
+  b.addEventListener('click',()=>{root=pc;syncStrip();renderGrid();});
+  strip.appendChild(b);
+}
+function syncStrip(){
+  [...strip.children].forEach((b,pc)=>{
+    const on=pc===root;
+    b.classList.toggle('on',on);
+    b.style.background=on?pcColorA(pc,0.22,40):'rgba(0,0,0,0.3)';
+    b.style.boxShadow=on?`0 0 18px ${pcColorA(pc,0.55)}`:'none';
+  });
+  const br=$('bigRoot');
+  br.textContent=NOTE_NAMES[root];
+  br.style.color=pcColor(root,68);
+  br.style.textShadow=`0 0 26px ${pcColorA(root,0.55)}`;
+  $('st-root').textContent=NOTE_NAMES[root];
+}
+
+/* instrument seg */
+$('instSeg').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  [...$('instSeg').children].forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');instrument=b.dataset.i;
+  $('st-inst').textContent=instrument;
+  renderGrid();
+});
+
+/* quality grid */
+function renderGrid(){
+  const g=$('grid');g.innerHTML='';
+  for(const q of QUAL_KEYS){
+    const card=document.createElement('div');
+    card.className='qcard';
+    card.style.borderColor=pcColorA(root,0.28);
+    card.innerHTML=`
+      <div class="qname" style="color:${pcColor(root,66)}">${NOTE_NAMES[root]}${q}</div>
+      <div class="qfull">${QUALS[q].full}</div>
+      <canvas></canvas>
+      <button class="playb" title="Hear ${NOTE_NAMES[root]}${q}">♪</button>`;
+    card.addEventListener('mouseenter',()=>card.style.boxShadow=`0 6px 26px ${pcColorA(root,0.22)}`);
+    card.addEventListener('mouseleave',()=>card.style.boxShadow='none');
+    const play=e=>{e.stopPropagation();strum(root,q);};
+    card.querySelector('.playb').addEventListener('click',play);
+    card.addEventListener('click',()=>strum(root,q));
+    g.appendChild(card);
+    const cv=card.querySelector('canvas');
+    requestAnimationFrame(()=>instrument==='guitar'?drawGuitarInto(cv,root,q):drawViolinInto(cv,root,q));
+  }
+}
+
+let rT=null;
+window.addEventListener('resize',()=>{clearTimeout(rT);rT=setTimeout(renderGrid,150);});
+syncStrip();renderGrid();
+</script>
+</body>
+</html>
