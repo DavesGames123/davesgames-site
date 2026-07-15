@@ -93,11 +93,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 #sb-wishlist .wl-ico{font-size:1.05rem;line-height:1;color:#66c0f4;transition:color 0.18s}
 #sb-wishlist:hover .wl-ico{color:#fff}
 @keyframes wlpulse{0%,100%{box-shadow:0 0 0 rgba(102,192,244,0)}50%{box-shadow:0 0 14px rgba(102,192,244,0.32)}}
-#sb-countdown{margin-bottom:12px;text-align:center;line-height:1.2}
-#sb-countdown .cd-label{font-size:0.56rem;letter-spacing:0.18em;text-transform:uppercase;color:#5a7a98;margin-bottom:4px}
-#sb-countdown .cd-time{font-size:0.95rem;font-weight:500;letter-spacing:0.05em;color:#66c0f4;font-variant-numeric:tabular-nums}
-#sb-countdown.live .cd-time{color:#64c864}
-#sb-countdown.live .cd-label{color:#64c864}
+
 #content{flex:1;display:flex;flex-direction:column;overflow:hidden}
 #topbar{height:var(--topbar-h);min-height:var(--topbar-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:16px}
 #menu-btn{display:none;background:none;border:none;color:var(--text-dim);font-size:1.4rem;cursor:pointer;padding:4px 8px;font-family:inherit}
@@ -232,7 +228,6 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
     </div>
     <div id="sb-footer">
       <a id="sb-wishlist" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener"><span class="wl-ico">&#9733;</span>Wishlist on Steam</a>
-      <div id="sb-countdown"><div class="cd-label">until Steam Next Fest</div><div class="cd-time" id="cd-time">--d --h --m --s</div></div>
       <div id="sb-clock">00:00:00</div>
       <a id="sb-linkedin" href="https://linkedin.com/in/david-kubala" target="_blank" rel="noopener">Follow on LinkedIn</a>
     </div>
@@ -263,7 +258,7 @@ function closeSidebar(){if(window.innerWidth<=768){document.getElementById('side
 function toggleSidebar(){var c=document.body.classList.toggle('sb-collapsed');try{localStorage.setItem('sn-sb-collapsed',c?'1':'0')}catch(e){}}
 window.toggleSidebar=toggleSidebar;
 setInterval(function(){var el=document.getElementById('sb-clock');if(el)el.textContent=new Date().toTimeString().slice(0,8)},1000);
-;(function(){var START=Date.UTC(2026,5,15,17,0,0),END=Date.UTC(2026,5,22,17,0,0);var el=document.getElementById('cd-time'),box=document.getElementById('sb-countdown');var lab=box?box.querySelector('.cd-label'):null;function fmt(ms){var s=Math.floor(ms/1000);var d=Math.floor(s/86400);s-=d*86400;var h=Math.floor(s/3600);s-=h*3600;var m=Math.floor(s/60);s-=m*60;function p(n){return(n<10?'0':'')+n}return d+'d '+p(h)+'h '+p(m)+'m '+p(s)+'s'}function tick(){if(!el)return;var now=Date.now();if(now<START){if(lab)lab.textContent='until Steam Next Fest';el.textContent=fmt(START-now)}else if(now<END){box.classList.add('live');if(lab)lab.textContent='Steam Next Fest is LIVE \u2014 ends in';el.textContent=fmt(END-now)}else{box.classList.remove('live');if(lab)lab.textContent='Steam Next Fest';el.textContent='now concluded'}}tick();setInterval(tick,1000)})();
+
 ;(function(){var phrases=['Help Translate','Hilf beim \u00dcbersetzen','Aidez \u00e0 traduire','Ayuda a traducir','Aiuta a tradurre','Ajude a traduzir','\u7ffb\u8a33\u3092\u624b\u4f1d\u3046','\ubc88\uc5ed\uc744 \ub3c4\uc640\uc8fc\uc138\uc694','\u5e2e\u52a9\u7ffb\u8bd1','\u041f\u043e\u043c\u043e\u0433\u0438\u0442\u0435 \u043f\u0435\u0440\u0435\u0432\u0435\u0441\u0442\u0438','Pom\u00f3\u017c t\u0142umaczy\u0107','Help vertalen','Cabhraigh le haistri\u00fach\u00e1n','\u0905\u0928\u0941\u0935\u093e\u0926 \u092e\u0947\u0902 \u092e\u0926\u0926 \u0915\u0930\u0947\u0902','G\u0127in fit-traduzzjoni','QIn mugh'];var idx=0;var el=document.getElementById('translate-cycle');if(el){setInterval(function(){el.style.opacity='0';setTimeout(function(){idx=(idx+1)%phrases.length;el.textContent=phrases[idx];el.style.opacity='1'},400)},3000)}})();
 switchTab('home');
 </script>
