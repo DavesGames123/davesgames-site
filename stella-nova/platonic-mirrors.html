@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Platonic Mirrors // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: 'JetBrains Mono', monospace; color: #fff; touch-action: none; -webkit-font-smoothing: antialiased; }
+  body::before { content:''; position:fixed; inset:0; z-index:9999; pointer-events:none; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px); mix-blend-mode:multiply }
+  body::after { content:''; position:fixed; inset:0; z-index:9998; pointer-events:none; background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.3)) }
+  canvas { position: fixed; top: 0; left: 0; display: block; width: 100vw; height: 100vh; cursor: crosshair; }
+
+  #panel {
+    position: fixed; top: 0; left: 0; bottom: 0;
+    width: 290px; overflow-y: auto; overflow-x: hidden;
+    background: rgba(8, 8, 14, 0.88);
+    backdrop-filter: blur(12px);
+    border-right: 1px solid rgba(255,255,255,0.06);
+    z-index: 10;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.15) transparent;
+    transition: transform 0.3s ease;
+    padding-bottom: 20px;
+  }
+  #panel.hidden { transform: translateX(-290px); }
+
+  #toggle-btn {
+    position: fixed; top: 12px; left: 12px; z-index: 20;
+    background: rgba(8,8,14,0.7); border: 1px solid rgba(255,255,255,0.12);
+    color: #aab; font-size: 18px; width: 32px; height: 32px;
+    border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    transition: left 0.3s ease, background 0.2s;
+  }
+  #toggle-btn:hover { background: rgba(40,40,60,0.9); }
+  #toggle-btn.open { left: 300px; }
+
+  .panel-header {
+    padding: 16px 14px 10px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .panel-header h1 { font-family:'Cormorant Garamond',serif; font-size: 14px; font-weight: 400; color: #dde; letter-spacing: 3px; text-transform: uppercase; }
+  #fps { font-size: 11px; color: #667; font-weight: 400; }
+
+  .presets {
+    padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 5px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .preset-btn {
+    font-family: inherit; font-size: 10px; padding: 4px 8px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+    color: #99a; border-radius: 4px; cursor: pointer; transition: all 0.15s;
+  }
+  .preset-btn:hover { background: rgba(255,255,255,0.1); color: #dde; border-color: rgba(255,255,255,0.2); }
+  .preset-btn.active { background: rgba(100,140,255,0.15); border-color: rgba(100,140,255,0.4); color: #aac; }
+  .preset-btn.rand { background: rgba(255,160,60,0.1); border-color: rgba(255,160,60,0.3); color: #ca8; }
+  .preset-btn.rand:hover { background: rgba(255,160,60,0.2); color: #ec9; }
+
+  .section { border-bottom: 1px solid rgba(255,255,255,0.04); }
+  .section-head {
+    padding: 10px 14px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+    user-select: none;
+  }
+  .section-head:hover { background: rgba(255,255,255,0.02); }
+  .section-head span { font-size: 11px; font-weight: 600; color: #889; text-transform: uppercase; letter-spacing: 1px; }
+  .section-arrow { font-size: 10px; color: #556; transition: transform 0.2s; }
+  .section.collapsed .section-arrow { transform: rotate(-90deg); }
+  .section.collapsed .section-body { display: none; }
+  .section-body { padding: 4px 14px 12px; }
+
+  .param-row { margin-bottom: 8px; }
+  .param-label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 3px;
+  }
+  .param-label label { font-size: 10px; color: #778; }
+  .param-label .val { font-size: 10px; color: #99b; min-width: 40px; text-align: right; }
+
+  input[type="range"] {
+    -webkit-appearance: none; width: 100%; height: 3px;
+    background: rgba(255,255,255,0.08); border-radius: 2px; outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px;
+    background: #667; border-radius: 50%; cursor: pointer; transition: background 0.15s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { background: #99b; }
+  input[type="range"]::-moz-range-thumb {
+    width: 12px; height: 12px; background: #667;
+    border: none; border-radius: 50%; cursor: pointer;
+  }
+
+  .color-group { margin-bottom: 10px; }
+  .color-group-label {
+    font-size: 10px; color: #889; margin-bottom: 4px; display: flex;
+    align-items: center; gap: 6px;
+  }
+  .color-swatch {
+    width: 10px; height: 10px; border-radius: 2px;
+    border: 1px solid rgba(255,255,255,0.15); display: inline-block;
+  }
+
+  .btn-row { display: flex; gap: 6px; margin-top: 8px; }
+  .sm-btn {
+    font-family: inherit; font-size: 10px; padding: 4px 10px;
+    background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+    color: #778; border-radius: 3px; cursor: pointer; transition: all 0.15s;
+  }
+  .sm-btn:hover { background: rgba(255,255,255,0.08); color: #aab; }
+
+  .hud { position:fixed; top:16px; right:20px; z-index:10; pointer-events:none; text-align:right }
+  .hud h1 { font-family:'Cormorant Garamond',serif; font-size:18px; font-weight:400; letter-spacing:5px; color:rgba(255,255,255,0.7); text-transform:uppercase }
+  .hud .sub { font-size:11px; letter-spacing:2.5px; color:rgba(255,255,255,0.45); margin-top:4px; text-transform:uppercase; font-weight:500 }
+  .stats { position:fixed; bottom:20px; right:20px; z-index:10; pointer-events:none; font-size:11px; color:rgba(255,255,255,0.4); text-align:right; letter-spacing:0.04em; line-height:1.7 }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud"><h1>Platonic Mirrors</h1><div class="sub">Wythoff Construction &middot; Raymarched SDF</div></div>
+<div class="stats" id="stats-hud"></div>
+<button id="toggle-btn" class="open">◀</button>
+<div id="panel">
+  <div class="panel-header">
+    <h1>PLATONIC MIRRORS</h1>
+    <span id="fps">-- fps</span>
+  </div>
+  <div class="presets" id="presets"></div>
+  <div id="controls"></div>
+</div>
+
+<script>
+// ======== STATE ========
+const S = {
+  rot_x: 0.3, rot_y: 0.0, orbit_speed: 0.15,
+  poly_type: 3,
+  poly_U: 1.0, poly_V: 0.5, poly_W: 1.0,
+  poly_zoom: 2.0,
+  inner_sphere: 1.0,
+  refr_index: 0.9,
+  max_bounces: 6,
+  fov: 2.0,
+  cam_y: 1.0, cam_z: -5.0,
+  sun_h: 0.06, sun_s: 0.90, sun_i: 0.01,
+  floor_h: 0.66, floor_s: 0.80, floor_i: 0.5,
+  sky_h: 0.60, sky_s: 0.90, sky_i: 1.0,
+  glow0_h: 0.05, glow0_s: 0.70, glow0_i: 0.001,
+  glow1_h: 0.95, glow1_s: 0.70, glow1_i: 0.001,
+  beer_h: 0.65, beer_s: 0.70, beer_i: 2.0,
+  edge_thick: 0.002,
+  marches_inner: 50,
+  marches_outer: 90,
+  res_scale: 1.0,
+};
+
+const DEFAULTS = { ...S };
+
+const PRESETS = {
+  'Default':     { poly_type:3, poly_U:1.0, poly_V:0.5, poly_W:1.0, poly_zoom:2.0 },
+  'Icosa':       { poly_type:3, poly_U:1.0, poly_V:1.0, poly_W:0.0, poly_zoom:2.0 },
+  'Octa':        { poly_type:3, poly_U:0.0, poly_V:1.0, poly_W:0.0, poly_zoom:2.2 },
+  'Cube':        { poly_type:4, poly_U:1.0, poly_V:0.0, poly_W:0.0, poly_zoom:1.8 },
+  'Dodeca':      { poly_type:5, poly_U:1.0, poly_V:0.0, poly_W:0.0, poly_zoom:2.2 },
+  'Truncated':   { poly_type:3, poly_U:1.0, poly_V:1.0, poly_W:1.0, poly_zoom:2.5 },
+  'Stellated':   { poly_type:5, poly_U:0.3, poly_V:1.0, poly_W:0.3, poly_zoom:2.8 },
+  'Prism':       { poly_type:2, poly_U:1.0, poly_V:0.5, poly_W:0.5, poly_zoom:2.0 },
+  'Gem':         { poly_type:4, poly_U:0.5, poly_V:0.5, poly_W:1.0, poly_zoom:2.0 },
+};
+
+// ======== HSV→RGB ========
+function hsv2rgb(h, s, v) {
+  h = ((h % 1) + 1) % 1;
+  const k = [1, 2/3, 1/3, 3];
+  const p = [
+    Math.abs(((h + k[0]) % 1) * 6 - k[3]),
+    Math.abs(((h + k[1]) % 1) * 6 - k[3]),
+    Math.abs(((h + k[2]) % 1) * 6 - k[3]),
+  ];
+  return [
+    v * (1 - s + s * Math.max(0, Math.min(1, p[0] - 1))),
+    v * (1 - s + s * Math.max(0, Math.min(1, p[1] - 1))),
+    v * (1 - s + s * Math.max(0, Math.min(1, p[2] - 1))),
+  ];
+}
+
+// ======== POLY PARAMS ========
+function computePoly() {
+  const t = S.poly_type;
+  const cospin = Math.cos(Math.PI / t);
+  const scospin = Math.sqrt(Math.max(0, 0.75 - cospin * cospin));
+  const nc = [-0.5, -cospin, scospin];
+  const pab = [0, 0, 1];
+  const pbc_ = [scospin, 0, 0.5];
+  const pca_ = [0, scospin, cospin];
+  const pr = [
+    S.poly_U * pab[0] + S.poly_V * pbc_[0] + S.poly_W * pca_[0],
+    S.poly_U * pab[1] + S.poly_V * pbc_[1] + S.poly_W * pca_[1],
+    S.poly_U * pab[2] + S.poly_V * pbc_[2] + S.poly_W * pca_[2],
+  ];
+  const pl = Math.sqrt(pr[0]*pr[0]+pr[1]*pr[1]+pr[2]*pr[2]) || 1;
+  const p = pr.map(x=>x/pl);
+  const bl = Math.sqrt(pbc_[0]**2+pbc_[1]**2+pbc_[2]**2) || 1;
+  const pbc = pbc_.map(x=>x/bl);
+  const cl = Math.sqrt(pca_[0]**2+pca_[1]**2+pca_[2]**2) || 1;
+  const pca = pca_.map(x=>x/cl);
+  return { nc, pab, pbc, pca, p };
+}
+
+// ======== WEBGL ========
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
+if (!gl) { document.body.innerHTML = '<h1 style="color:#fff;padding:40px">WebGL2 required</h1>'; throw 'no gl'; }
+
+const VERT = `#version 300 es
+in vec2 a_pos;
+void main(){ gl_Position = vec4(a_pos, 0, 1); }`;
+
+const FRAG = `#version 300 es
+precision highp float;
+
+uniform vec2 u_resolution;
+uniform float u_rot_x;
+uniform float u_rot_y;
+uniform int u_poly_type;
+uniform float u_poly_zoom;
+uniform float u_inner_sphere;
+uniform float u_refr_index;
+uniform int u_max_bounces;
+uniform float u_fov;
+uniform vec3 u_ray_origin;
+uniform vec3 u_sun_col;
+uniform vec3 u_bottom_col;
+uniform vec3 u_top_col;
+uniform vec3 u_glow_col0;
+uniform vec3 u_glow_col1;
+uniform vec3 u_beer_col;
+uniform vec3 u_poly_nc;
+uniform vec3 u_poly_p;
+uniform vec3 u_poly_pab;
+uniform vec3 u_poly_pbc;
+uniform vec3 u_poly_pca;
+uniform int u_marches_inner;
+uniform int u_marches_outer;
+uniform float u_edge_thick;
+
+out vec4 fragColor;
+
+#define PI 3.141592654
+#define TAU (2.0*PI)
+#define TOLERANCE 0.0005
+#define MAX_RAY_LENGTH 10000.0
+#define NORM_OFF 0.005
+
+mat3 g_rot;
+vec2 g_gd;
+
+mat3 rotMat(vec3 d, vec3 z) {
+  vec3 v = cross(z, d);
+  float c = dot(z, d);
+  float k = 1.0/(1.0+c);
+  return mat3(
+    v.x*v.x*k+c,     v.y*v.x*k-v.z,   v.z*v.x*k+v.y,
+    v.x*v.y*k+v.z,   v.y*v.y*k+c,     v.z*v.y*k-v.x,
+    v.x*v.z*k-v.y,   v.y*v.z*k+v.x,   v.z*v.z*k+c
+  );
+}
+
+vec3 aces(vec3 v) {
+  v = max(v, 0.0);
+  v *= 0.6;
+  float a=2.51, b=0.03, c=2.43, d=0.59, e=0.14;
+  return clamp((v*(a*v+b))/(v*(c*v+d)+e), 0.0, 1.0);
+}
+
+float sdSphere(vec3 p, float r) { return length(p)-r; }
+
+float sdBox(vec2 p, vec2 b) {
+  vec2 d = abs(p)-b;
+  return length(max(d,0.0))+min(max(d.x,d.y),0.0);
+}
+
+void polyFold(inout vec3 pos) {
+  for(int i=0; i<8; ++i) {
+    if(i >= u_poly_type) break;
+    pos.xy = abs(pos.xy);
+    pos -= 2.0*min(0.0, dot(pos, u_poly_nc))*u_poly_nc;
+  }
+}
+
+float polyPlane(vec3 pos) {
+  float d = dot(pos, u_poly_pab);
+  d = max(d, dot(pos, u_poly_pbc));
+  d = max(d, dot(pos, u_poly_pca));
+  return d;
+}
+
+float dot2(vec3 p) { return dot(p,p); }
+
+float polyEdge(vec3 pos) {
+  float dla = dot2(pos - min(0.0, pos.x)*vec3(1,0,0));
+  float dlb = dot2(pos - min(0.0, pos.y)*vec3(0,1,0));
+  float dlc = dot2(pos - min(0.0, dot(pos, u_poly_nc))*u_poly_nc);
+  return sqrt(min(min(dla, dlb), dlc)) - u_edge_thick;
+}
+
+float polyCorner(vec3 pos) {
+  return length(pos) - 0.0125;
+}
+
+vec3 shape(vec3 pos) {
+  pos *= g_rot;
+  pos /= u_poly_zoom;
+  polyFold(pos);
+  pos -= u_poly_p;
+  return vec3(polyPlane(pos), polyEdge(pos), polyCorner(pos)) * u_poly_zoom;
+}
+
+vec3 sunDir;
+
+vec3 renderSky(vec3 ro, vec3 rd) {
+  vec3 col = vec3(0.0);
+  float srd = sign(rd.y);
+  float tp = -(ro.y-6.0)/abs(rd.y);
+  if(srd < 0.0) {
+    col += u_bottom_col * exp(-0.5*length((ro+tp*rd).xz));
+  }
+  if(srd > 0.0) {
+    vec3 pos = ro+tp*rd;
+    float db = sdBox(pos.xz, vec2(5.0,9.0))-3.0;
+    col += u_top_col*rd.y*rd.y*smoothstep(0.25, 0.0, db);
+    col += 0.2*u_top_col*exp(-0.5*max(db,0.0));
+    col += 0.05*sqrt(u_top_col)*max(-db,0.0);
+  }
+  col += u_sun_col/(1.001-dot(sunDir, rd));
+  return col;
+}
+
+float df_inner(vec3 p) {
+  vec3 ds = shape(p);
+  float d2 = ds.y - 5E-3;
+  float d0 = min(-ds.x, d2);
+  float d1 = sdSphere(p, u_inner_sphere);
+  g_gd = min(g_gd, vec2(d2, d1));
+  return min(d0, d1);
+}
+
+float marchInner(vec3 ro, vec3 rd, float tinit) {
+  float t = tinit;
+  vec2 dti = vec2(1e10, 0.0);
+  int mi = u_marches_inner;
+  int i;
+  for(i=0; i<200; ++i) {
+    if(i >= mi) break;
+    float d = df_inner(ro+rd*t);
+    if(d < dti.x) dti = vec2(d, t);
+    if(d < TOLERANCE) break;
+    t += d;
+  }
+  if(i >= mi) t = dti.y;
+  return t;
+}
+
+vec3 normalInner(vec3 pos) {
+  vec2 e = vec2(NORM_OFF, 0.0);
+  return normalize(vec3(
+    df_inner(pos+e.xyy)-df_inner(pos-e.xyy),
+    df_inner(pos+e.yxy)-df_inner(pos-e.yxy),
+    df_inner(pos+e.yyx)-df_inner(pos-e.yyx)
+  ));
+}
+
+vec3 renderInner(vec3 ro, vec3 rd, float db) {
+  vec3 agg = vec3(0.0);
+  float ragg = 1.0;
+  float tagg = 0.0;
+  float ri = 1.0/u_refr_index;
+
+  for(int bounce=0; bounce<16; ++bounce) {
+    if(bounce >= u_max_bounces || ragg < 0.1) break;
+    g_gd = vec2(1E3);
+    float t2 = marchInner(ro, rd, min(db+0.05, 0.3));
+    vec2 gd2 = g_gd;
+    tagg += t2;
+    vec3 p2 = ro+rd*t2;
+    vec3 n2 = normalInner(p2);
+    vec3 r2 = reflect(rd, n2);
+    vec3 rr2 = refract(rd, n2, ri);
+    float fre2 = 1.0+dot(n2, rd);
+    vec3 beer = ragg*exp(0.2*u_beer_col*tagg);
+    agg += u_glow_col1*beer*((1.0+tagg*tagg*4E-2)*6.0/max(gd2.x, 5E-4+tagg*tagg*2E-4/ragg));
+    vec3 ocol = 0.2*beer*renderSky(p2, rr2);
+    if(gd2.y <= TOLERANCE) {
+      ragg *= 1.0-0.9*fre2;
+    } else {
+      agg += ocol;
+      ragg *= 0.8;
+    }
+    ro = p2; rd = r2; db = gd2.x;
+  }
+  return agg;
+}
+
+float df_outer(vec3 p) {
+  vec3 ds = shape(p);
+  g_gd = min(g_gd, ds.yz);
+  float d = min(ds.x, min(ds.y, ds.z));
+  return d;
+}
+
+float marchOuter(vec3 ro, vec3 rd, float tinit, out int iter) {
+  float t = tinit;
+  int mo = u_marches_outer;
+  int i;
+  for(i=0; i<300; ++i) {
+    if(i >= mo) break;
+    float d = df_outer(ro+rd*t);
+    if(d < TOLERANCE || t > MAX_RAY_LENGTH) break;
+    t += d;
+  }
+  iter = i;
+  return t;
+}
+
+vec3 normalOuter(vec3 pos) {
+  vec2 e = vec2(NORM_OFF, 0.0);
+  return normalize(vec3(
+    df_outer(pos+e.xyy)-df_outer(pos-e.xyy),
+    df_outer(pos+e.yxy)-df_outer(pos-e.yxy),
+    df_outer(pos+e.yyx)-df_outer(pos-e.yyx)
+  ));
+}
+
+vec3 render(vec3 ro, vec3 rd) {
+  int iter;
+  vec3 skyCol = renderSky(ro, rd);
+  vec3 col = skyCol;
+  g_gd = vec2(1E3);
+  float t1 = marchOuter(ro, rd, 0.1, iter);
+  vec2 gd1 = g_gd;
+  vec3 p1 = ro+t1*rd;
+  vec3 n1 = normalOuter(p1);
+  vec3 r1 = reflect(rd, n1);
+  vec3 rr1 = refract(rd, n1, u_refr_index);
+  float fre1 = 1.0+dot(rd, n1);
+  fre1 *= fre1;
+  float ifo = mix(0.5, 1.0, smoothstep(1.0, 0.9, float(iter)/float(u_marches_outer)));
+  col = renderSky(p1, r1)*(0.5+0.5*fre1)*ifo;
+  vec3 icol = renderInner(p1, rr1, gd1.x);
+  if(gd1.x > TOLERANCE && gd1.y > TOLERANCE && rr1 != vec3(0.0)) {
+    col += icol*(1.0-0.75*fre1)*ifo;
+  }
+  col += (u_glow_col0+1.0*fre1*u_glow_col0)/max(gd1.x, 3E-4);
+  return col;
+}
+
+void main() {
+  vec2 uv = gl_FragCoord.xy/u_resolution;
+  vec2 p = -1.0+2.0*uv;
+  p.x *= u_resolution.x/u_resolution.y;
+
+  sunDir = normalize(-u_ray_origin);
+  float cx = cos(u_rot_x), sx = sin(u_rot_x);
+  float cy = cos(u_rot_y), sy = sin(u_rot_y);
+  mat3 rx = mat3(1,0,0, 0,cx,-sx, 0,sx,cx);
+  mat3 ry = mat3(cy,0,sy, 0,1,0, -sy,0,cy);
+  g_rot = rx * ry;
+
+  vec3 up = vec3(0,1,0);
+  vec3 la = vec3(0);
+  vec3 ww = normalize(la - u_ray_origin);
+  vec3 uu = normalize(cross(up, ww));
+  vec3 vv = cross(ww, uu);
+  vec3 rd = normalize(-p.x*uu + p.y*vv + u_fov*ww);
+
+  vec3 col = render(u_ray_origin, rd);
+  col -= 2E-2*vec3(2,3,1)*(length(p)+0.25);
+  col = aces(col);
+  col = sqrt(col);
+  fragColor = vec4(col, 1.0);
+}`;
+
+function compileShader(src, type) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    console.error(gl.getShaderInfoLog(s));
+    return null;
+  }
+  return s;
+}
+
+const vs = compileShader(VERT, gl.VERTEX_SHADER);
+const fs = compileShader(FRAG, gl.FRAGMENT_SHADER);
+const prog = gl.createProgram();
+gl.attachShader(prog, vs);
+gl.attachShader(prog, fs);
+gl.linkProgram(prog);
+if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+  console.error(gl.getProgramInfoLog(prog));
+}
+gl.useProgram(prog);
+
+// Fullscreen quad
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+const aPos = gl.getAttribLocation(prog, 'a_pos');
+gl.enableVertexAttribArray(aPos);
+gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+// Uniform locations
+const U = {};
+const uNames = [
+  'u_resolution','u_rot_x','u_rot_y','u_poly_type','u_poly_zoom',
+  'u_inner_sphere','u_refr_index','u_max_bounces','u_fov','u_ray_origin',
+  'u_sun_col','u_bottom_col','u_top_col','u_glow_col0','u_glow_col1','u_beer_col',
+  'u_poly_nc','u_poly_p','u_poly_pab','u_poly_pbc','u_poly_pca',
+  'u_marches_inner','u_marches_outer','u_edge_thick',
+];
+for (const n of uNames) U[n] = gl.getUniformLocation(prog, n);
+
+// ======== RESIZE ========
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  const s = S.res_scale;
+  canvas.width = Math.floor(window.innerWidth * dpr * s);
+  canvas.height = Math.floor(window.innerHeight * dpr * s);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ======== UI ========
+const SECTIONS = [
+  { id: 'shape', label: 'Shape', params: [
+    { key:'poly_type', label:'Poly Type', min:2, max:5, step:1, fmt: v=>v },
+    { key:'poly_U', label:'U', min:0, max:3, step:0.01 },
+    { key:'poly_V', label:'V', min:0, max:3, step:0.01 },
+    { key:'poly_W', label:'W', min:0, max:3, step:0.01 },
+    { key:'poly_zoom', label:'Zoom', min:0.5, max:5, step:0.01 },
+    { key:'inner_sphere', label:'Inner Sphere', min:0, max:3, step:0.01 },
+    { key:'edge_thick', label:'Edge Width', min:0.0005, max:0.02, step:0.0001 },
+  ]},
+  { id: 'rotation', label: 'Rotation', params: [
+    { key:'orbit_speed', label:'Orbit Speed', min:0, max:1, step:0.005 },
+    { key:'rot_x', label:'Pitch', min:-3.14159, max:3.14159, step:0.001 },
+    { key:'rot_y', label:'Yaw', min:-3.14159, max:3.14159, step:0.001 },
+  ], extra: 'rotation' },
+  { id: 'optics', label: 'Optics', params: [
+    { key:'refr_index', label:'Refraction', min:0.3, max:1.5, step:0.01 },
+    { key:'max_bounces', label:'Bounces', min:1, max:12, step:1, fmt: v=>v },
+  ]},
+  { id: 'colors', label: 'Colors', colors: [
+    { prefix:'sun', label:'Sun' },
+    { prefix:'floor', label:'Floor' },
+    { prefix:'sky', label:'Sky' },
+    { prefix:'glow0', label:'Outer Glow' },
+    { prefix:'glow1', label:'Inner Glow' },
+    { prefix:'beer', label:'Absorption' },
+  ]},
+  { id: 'camera', label: 'Camera', params: [
+    { key:'fov', label:'FOV', min:0.5, max:5, step:0.01 },
+    { key:'cam_y', label:'Height', min:-3, max:6, step:0.01 },
+    { key:'cam_z', label:'Distance', min:-12, max:-1, step:0.01 },
+  ]},
+  { id: 'quality', label: 'Quality', params: [
+    { key:'res_scale', label:'Resolution', min:0.25, max:1.0, step:0.05, fmt: v=>(v*100).toFixed(0)+'%' },
+    { key:'marches_inner', label:'Inner Marches', min:10, max:120, step:1, fmt: v=>v },
+    { key:'marches_outer', label:'Outer Marches', min:20, max:200, step:1, fmt: v=>v },
+  ]},
+];
+
+function fmtVal(v, p) {
+  if (p && p.fmt) return p.fmt(v);
+  return Number(v).toFixed(v < 0.01 ? 4 : v < 1 ? 3 : 2);
+}
+
+function buildUI() {
+  const container = document.getElementById('controls');
+  container.innerHTML = '';
+
+  for (const sec of SECTIONS) {
+    const div = document.createElement('div');
+    div.className = 'section';
+    div.id = 'sec-'+sec.id;
+
+    const head = document.createElement('div');
+    head.className = 'section-head';
+    head.innerHTML = `<span>${sec.label}</span><span class="section-arrow">▼</span>`;
+    head.onclick = () => div.classList.toggle('collapsed');
+    div.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'section-body';
+
+    if (sec.params) {
+      for (const p of sec.params) {
+        body.appendChild(makeSlider(p));
+      }
+    }
+
+    if (sec.colors) {
+      for (const c of sec.colors) {
+        body.appendChild(makeColorGroup(c));
+      }
+    }
+
+    if (sec.extra === 'rotation') {
+      const row = document.createElement('div');
+      row.className = 'btn-row';
+      const resetBtn = document.createElement('button');
+      resetBtn.className = 'sm-btn';
+      resetBtn.textContent = 'Reset Angles';
+      resetBtn.onclick = () => { S.rot_x = 0.3; S.rot_y = 0; syncSlider('rot_x'); syncSlider('rot_y'); };
+      row.appendChild(resetBtn);
+      const hint = document.createElement('span');
+      hint.style.cssText = 'font-size:9px;color:#556;margin-left:6px;line-height:26px;';
+      hint.textContent = 'drag canvas to rotate';
+      row.appendChild(hint);
+      body.appendChild(row);
+    }
+
+    div.appendChild(body);
+    container.appendChild(div);
+  }
+}
+
+function makeSlider(p) {
+  const row = document.createElement('div');
+  row.className = 'param-row';
+  const lbl = document.createElement('div');
+  lbl.className = 'param-label';
+  const valSpan = document.createElement('span');
+  valSpan.className = 'val';
+  valSpan.id = 'val-'+p.key;
+  valSpan.textContent = fmtVal(S[p.key], p);
+  lbl.innerHTML = `<label>${p.label}</label>`;
+  lbl.appendChild(valSpan);
+  row.appendChild(lbl);
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.id = 'sl-'+p.key;
+  input.min = p.min; input.max = p.max; input.step = p.step;
+  input.value = S[p.key];
+  input.oninput = () => {
+    S[p.key] = p.step >= 1 ? parseInt(input.value) : parseFloat(input.value);
+    valSpan.textContent = fmtVal(S[p.key], p);
+    if (p.key === 'res_scale') resize();
+  };
+  row.appendChild(input);
+  return row;
+}
+
+function makeColorGroup(c) {
+  const group = document.createElement('div');
+  group.className = 'color-group';
+  const lbl = document.createElement('div');
+  lbl.className = 'color-group-label';
+  const swatch = document.createElement('span');
+  swatch.className = 'color-swatch';
+  swatch.id = 'swatch-'+c.prefix;
+  lbl.appendChild(swatch);
+  lbl.appendChild(document.createTextNode(c.label));
+  group.appendChild(lbl);
+
+  const isLog = ['sun','glow0','glow1','beer'].includes(c.prefix);
+  const iMax = c.prefix === 'beer' ? 5 : (isLog ? 1 : 2);
+  const iStep = isLog ? 0.0001 : 0.01;
+
+  const sliders = [
+    { key: c.prefix+'_h', label:'H', min:0, max:1, step:0.001 },
+    { key: c.prefix+'_s', label:'S', min:0, max:1, step:0.01 },
+    { key: c.prefix+'_i', label:'I', min:0, max:iMax, step:iStep },
+  ];
+  for (const s of sliders) {
+    group.appendChild(makeSlider(s));
+  }
+  updateSwatch(c.prefix);
+  return group;
+}
+
+function updateSwatch(prefix) {
+  const el = document.getElementById('swatch-'+prefix);
+  if (!el) return;
+  const rgb = hsv2rgb(S[prefix+'_h'], S[prefix+'_s'], Math.min(S[prefix+'_i'], 1));
+  el.style.background = `rgb(${rgb.map(v=>Math.round(v*255)).join(',')})`;
+}
+
+function updateAllSwatches() {
+  for (const sec of SECTIONS) {
+    if (sec.colors) sec.colors.forEach(c => updateSwatch(c.prefix));
+  }
+}
+
+// ======== PRESETS ========
+const presetsDiv = document.getElementById('presets');
+for (const [name, vals] of Object.entries(PRESETS)) {
+  const btn = document.createElement('button');
+  btn.className = 'preset-btn';
+  btn.textContent = name;
+  btn.onclick = () => {
+    for (const [k, v] of Object.entries(vals)) {
+      S[k] = v;
+      syncSlider(k);
+    }
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  };
+  presetsDiv.appendChild(btn);
+}
+
+buildUI();
+
+// ======== SYNC HELPER ========
+function syncSlider(key) {
+  const sl = document.getElementById('sl-'+key);
+  const vl = document.getElementById('val-'+key);
+  if (sl) sl.value = S[key];
+  if (vl) {
+    const param = SECTIONS.flatMap(s=>s.params||[]).concat(
+      SECTIONS.flatMap(s=>(s.colors||[]).flatMap(c=>[
+        {key:c.prefix+'_h',fmt:undefined},{key:c.prefix+'_s',fmt:undefined},{key:c.prefix+'_i',fmt:undefined}
+      ]))
+    ).find(p=>p.key===key);
+    vl.textContent = fmtVal(S[key], param);
+  }
+}
+
+function syncAll() {
+  for (const k of Object.keys(S)) syncSlider(k);
+}
+
+// ======== RANDOMIZE ========
+function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
+function randInt(lo, hi) { return Math.floor(rand(lo, hi + 1)); }
+function randPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+function randomize() {
+  S.poly_type = randInt(2, 5);
+  S.poly_U = rand(0, 2.5);
+  S.poly_V = rand(0, 2.5);
+  S.poly_W = rand(0, 2.5);
+  S.poly_zoom = rand(1.2, 3.5);
+  S.inner_sphere = rand(0.2, 2.0);
+  S.edge_thick = rand(0.0008, 0.012);
+  S.rot_x = rand(-3.14, 3.14);
+  S.rot_y = rand(-3.14, 3.14);
+  S.orbit_speed = rand(0.02, 0.4);
+  S.refr_index = rand(0.4, 1.3);
+  S.max_bounces = randInt(2, 10);
+  S.fov = rand(1.0, 3.5);
+  S.cam_y = rand(-1, 3);
+  S.cam_z = rand(-8, -2.5);
+  S.sun_h = rand(0, 1); S.sun_s = rand(0.4, 1); S.sun_i = rand(0.002, 0.05);
+  S.floor_h = rand(0, 1); S.floor_s = rand(0.3, 1); S.floor_i = rand(0.2, 1.0);
+  S.sky_h = rand(0, 1); S.sky_s = rand(0.3, 1); S.sky_i = rand(0.3, 1.5);
+  S.glow0_h = rand(0, 1); S.glow0_s = rand(0.3, 1); S.glow0_i = rand(0.0003, 0.005);
+  S.glow1_h = rand(0, 1); S.glow1_s = rand(0.3, 1); S.glow1_i = rand(0.0003, 0.005);
+  S.beer_h = rand(0, 1); S.beer_s = rand(0.3, 1); S.beer_i = rand(0.5, 4.0);
+  syncAll();
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+}
+
+// Add randomize button
+const randBtn = document.createElement('button');
+randBtn.className = 'preset-btn rand';
+randBtn.textContent = '🎲 Random';
+randBtn.onclick = randomize;
+presetsDiv.insertBefore(randBtn, presetsDiv.firstChild);
+
+// ======== MOUSE WHEEL ZOOM ========
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY * 0.008;
+  S.cam_z = Math.max(-12, Math.min(-1, S.cam_z + delta));
+  syncSlider('cam_z');
+}, { passive: false });
+
+// ======== MOUSE DRAG ROTATION ========
+let dragging = false, dragX = 0, dragY = 0;
+canvas.addEventListener('mousedown', (e) => {
+  dragging = true; dragX = e.clientX; dragY = e.clientY;
+  canvas.style.cursor = 'grabbing';
+});
+window.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - dragX, dy = e.clientY - dragY;
+  dragX = e.clientX; dragY = e.clientY;
+  S.rot_y += dx * 0.005;
+  S.rot_x += dy * 0.005;
+  syncSlider('rot_x'); syncSlider('rot_y');
+});
+window.addEventListener('mouseup', () => {
+  dragging = false;
+  canvas.style.cursor = 'crosshair';
+});
+
+// Touch drag
+let touchId = null;
+canvas.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 1) {
+    touchId = e.touches[0].identifier;
+    dragX = e.touches[0].clientX; dragY = e.touches[0].clientY;
+  }
+}, { passive: true });
+canvas.addEventListener('touchmove', (e) => {
+  for (const t of e.changedTouches) {
+    if (t.identifier === touchId) {
+      const dx = t.clientX - dragX, dy = t.clientY - dragY;
+      dragX = t.clientX; dragY = t.clientY;
+      S.rot_y += dx * 0.005;
+      S.rot_x += dy * 0.005;
+      syncSlider('rot_x'); syncSlider('rot_y');
+      e.preventDefault();
+    }
+  }
+}, { passive: false });
+canvas.addEventListener('touchend', () => { touchId = null; });
+
+// Toggle panel
+const toggleBtn = document.getElementById('toggle-btn');
+const panel = document.getElementById('panel');
+toggleBtn.onclick = () => {
+  panel.classList.toggle('hidden');
+  toggleBtn.classList.toggle('open');
+  toggleBtn.textContent = panel.classList.contains('hidden') ? '▶' : '◀';
+};
+
+// ======== RENDER LOOP ========
+let lastTime = 0;
+let accTime = 0;
+let frameCount = 0;
+let displayFps = 0;
+
+function frame(now) {
+  requestAnimationFrame(frame);
+  const nowSec = now / 1000;
+  const dt = nowSec - lastTime;
+  lastTime = nowSec;
+
+  frameCount++;
+  accTime += dt;
+  if (accTime >= 0.5) {
+    displayFps = Math.round(frameCount / accTime);
+    document.getElementById('fps').textContent = displayFps + ' fps';
+    const sh = document.getElementById('stats-hud');
+    if (sh) sh.textContent = displayFps + ' fps \u00b7 ' + canvas.width + '\u00d7' + canvas.height;
+    frameCount = 0; accTime = 0;
+  }
+
+  updateAllSwatches();
+
+  // Orbit drift
+  if (S.orbit_speed > 0 && !dragging) {
+    const d = Math.min(dt, 0.1) * S.orbit_speed;
+    S.rot_x += d * 0.7071;
+    S.rot_y += d * 0.9131;
+    syncSlider('rot_x'); syncSlider('rot_y');
+  }
+
+  const poly = computePoly();
+
+  gl.uniform2f(U.u_resolution, canvas.width, canvas.height);
+  gl.uniform1f(U.u_rot_x, S.rot_x);
+  gl.uniform1f(U.u_rot_y, S.rot_y);
+  gl.uniform1i(U.u_poly_type, S.poly_type);
+  gl.uniform1f(U.u_poly_zoom, S.poly_zoom);
+  gl.uniform1f(U.u_inner_sphere, S.inner_sphere);
+  gl.uniform1f(U.u_refr_index, S.refr_index);
+  gl.uniform1i(U.u_max_bounces, S.max_bounces);
+  gl.uniform1f(U.u_fov, S.fov);
+  gl.uniform3f(U.u_ray_origin, 0, S.cam_y, S.cam_z);
+
+  const sun = hsv2rgb(S.sun_h, S.sun_s, S.sun_i);
+  const floor = hsv2rgb(S.floor_h, S.floor_s, S.floor_i);
+  const sky = hsv2rgb(S.sky_h, S.sky_s, S.sky_i);
+  const g0 = hsv2rgb(S.glow0_h, S.glow0_s, S.glow0_i);
+  const g1 = hsv2rgb(S.glow1_h, S.glow1_s, S.glow1_i);
+  const beer = hsv2rgb(S.beer_h, S.beer_s, S.beer_i);
+
+  gl.uniform3fv(U.u_sun_col, sun);
+  gl.uniform3fv(U.u_bottom_col, floor);
+  gl.uniform3fv(U.u_top_col, sky);
+  gl.uniform3fv(U.u_glow_col0, g0);
+  gl.uniform3fv(U.u_glow_col1, g1);
+  gl.uniform3fv(U.u_beer_col, beer.map(v => -v));
+
+  gl.uniform3fv(U.u_poly_nc, poly.nc);
+  gl.uniform3fv(U.u_poly_p, poly.p);
+  gl.uniform3fv(U.u_poly_pab, poly.pab);
+  gl.uniform3fv(U.u_poly_pbc, poly.pbc);
+  gl.uniform3fv(U.u_poly_pca, poly.pca);
+
+  gl.uniform1i(U.u_marches_inner, S.marches_inner);
+  gl.uniform1i(U.u_marches_outer, S.marches_outer);
+  gl.uniform1f(U.u_edge_thick, S.edge_thick);
+
+  gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
