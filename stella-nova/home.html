@@ -447,6 +447,7 @@
             <div><label class="bug-label">Steps to reproduce</label><textarea class="bug-textarea" name="steps" placeholder="1. Open the station builder&#10;2. Place a foundry module&#10;3. ..."></textarea></div>
             <div><label class="bug-label">Expected vs Actual behavior</label><textarea class="bug-textarea" name="expected" placeholder="Expected: The foundry should process ore&#10;Actual: Nothing happens when ore arrives" style="min-height:80px"></textarea></div>
             <div><label class="bug-label">System info (optional)</label><input class="bug-input" type="text" name="system" placeholder="e.g. Windows 11, RTX 3070, 16GB RAM"></div>
+            <input type="checkbox" name="botcheck" tabindex="-1" autocomplete="off" style="display:none" aria-hidden="true">
             <button type="submit" class="bug-submit" id="bugSubmitBtn">Transmit Report</button>
           </form>
         </div>
@@ -475,6 +476,13 @@
 </div>
 
 <script>
+// Form delivery: Web3Forms. Replaces FormSubmit, which shut down without notice.
+// The key identifies the destination inbox (dave@davesgames.io) and is public by
+// design, exactly as the old FormSubmit URL was. Rotate it at web3forms.com if it
+// gets abused, and restrict it to davesgames.io in the dashboard.
+const WEB3FORMS_KEY = 'PASTE-WEB3FORMS-ACCESS-KEY-HERE';
+const FORM_ENDPOINT = 'https://api.web3forms.com/submit';
+
 function submitBug(e) {
   e.preventDefault();
   const form = document.getElementById('bugForm');
@@ -484,10 +492,10 @@ function submitBug(e) {
   btn.textContent = 'Transmitting...';
   const severity = data.get('severity') || 'medium';
   const summary = data.get('summary') || 'Bug Report';
-  data.append('_subject', '[Stella Nova Bug] [' + severity.toUpperCase() + '] ' + summary);
-  data.append('_captcha', 'false');
-  data.append('_template', 'box');
-  fetch('https://formsubmit.co/ajax/dave@davesgames.io', {method:'POST',body:data})
+  data.append('access_key', WEB3FORMS_KEY);
+  data.append('subject', '[Stella Nova Bug] [' + severity.toUpperCase() + '] ' + summary);
+  data.append('from_name', 'Stella Nova Bug Report');
+  fetch(FORM_ENDPOINT, {method:'POST',body:data})
   .then(r => r.json())
   .then(res => {if(res.success){document.getElementById('bugSuccess').classList.add('show');form.style.display='none'}else{btn.disabled=false;btn.textContent='Transmit Report';alert('Transmission failed. Try again or report on Discord.')}})
   .catch(() => {btn.disabled=false;btn.textContent='Transmit Report';alert('Transmission failed. Try again or report on Discord.')});
