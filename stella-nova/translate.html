@@ -214,14 +214,9 @@ var sm=t.match(/^\[(.+)\]$/);if(sm){sec=sm[1];continue}
 var kv=t.match(/^(\w+)\s*=\s*"((?:[^"\\]|\\.)*)"\s*$/);if(kv){var key=sec?sec+"."+kv[1]:kv[1];var val=kv[2].replace(/\\"/g,'"').replace(/\\\\/g,"\\");if(EN[key]){tr[aLang][key]=val;n++}}}
 save();render();toast("Imported "+n+" keys from "+f.name)};r.readAsText(f);e.target.value=""});
 function toast(m){var el=document.getElementById("toast");el.textContent=m;el.classList.add("show");setTimeout(function(){el.classList.remove("show")},3000)}
-// Form delivery: Web3Forms. Replaces FormSubmit, which shut down without notice.
-// The key identifies the destination inbox (dave@davesgames.io) and is public by
-// design, exactly as the old FormSubmit URL was. Rotate it at web3forms.com if it
-// gets abused, and restrict it to davesgames.io in the dashboard.
-var WEB3FORMS_KEY="PASTE-WEB3FORMS-ACCESS-KEY-HERE";
-var BACKEND_URL="https://api.web3forms.com/submit";
+var BACKEND_URL="https://formsubmit.co/ajax/dave@davesgames.io";
 function submitKey(key,btn){var val=gT(key);if(!val||!aLang){toast("Nothing to submit");return}
-var fd=new FormData();fd.append('access_key',WEB3FORMS_KEY);fd.append('language',aLang);fd.append('key',key);fd.append('value',val);fd.append('category',keyCat(key));fd.append('timestamp',new Date().toISOString());fd.append('subject','[Stella Nova i18n] '+aLang+' :: '+key);fd.append('from_name','Stella Nova Translation Terminal');
+var fd=new FormData();fd.append('language',aLang);fd.append('key',key);fd.append('value',val);fd.append('category',keyCat(key));fd.append('timestamp',new Date().toISOString());fd.append('_subject','[Stella Nova i18n] '+aLang+' :: '+key);fd.append('_captcha','false');fd.append('_template','box');
 var wrap=document.createElement('span');wrap.className='ty-wrap';wrap.innerHTML='<span class="ty">thank you for your response!!</span><span class="tx">Transmitted to Dave :)</span>';
 btn.replaceWith(wrap);
 fetch(BACKEND_URL,{method:"POST",body:fd}).catch(function(){})
