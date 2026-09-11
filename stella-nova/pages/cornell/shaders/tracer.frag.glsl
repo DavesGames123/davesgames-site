@@ -1,3 +1,4 @@
+#version 300 es
 // tracer.frag.glsl — Cornell box path tracer, fragment stage (GPU port)
 //
 //   One fragment = one pixel = one new path sample this frame. It shoots a jittered
@@ -27,7 +28,6 @@
 //
 //   Materials (h.type): 0 diffuse, 1 emissive light face, 2 mirror, 3 glass,
 //   5 object emitter, else glossy. Uniforms mirror the JS SCENE object.
-#version 300 es
 precision highp float; out vec4 frag;
 uniform vec2 uRes; uniform int uFrame; uniform int uSamples; uniform vec3 uCamPos,uFwd,uRight,uUp; uniform float uTan,uAspect;
 uniform vec3 uColL,uColR,uColW,uLightCol; uniform float uLightInt,uLightSize; uniform int uNumSph,uMaxB,uMSteps;

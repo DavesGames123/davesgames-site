@@ -1,3 +1,4 @@
+#version 300 es
 // raytracer.frag.glsl — Schwarzschild geodesic ray tracer, fragment stage
 //
 //   For each pixel: build a view ray, then bend it through the curved spacetime
@@ -43,7 +44,6 @@
 //     straight trace ...... "TR traceStraight"       flat-space fallback
 //     geodesic trace ...... "TR traceGeodesic"       the bent-ray march
 //     entry point ......... "void main"              build ray, trace, shade
-#version 300 es
 precision highp float;
 // Camera basis and screen size (u_res); u_focalLen sets the field of view.
 uniform vec2 u_res;

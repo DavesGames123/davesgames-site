@@ -1,3 +1,4 @@
+#version 300 es
 // flare.frag.glsl — animated lens-flare / plasma streak, fragment stage
 //
 //   For each pixel it sums the light of many small "particles" streaming from
@@ -17,7 +18,6 @@
 //
 //   Uniforms come from main.js per instance (u_flarePos, u_intensity, the trail
 //   and flicker controls, u_colorShift, u_noiseStrength).
-#version 300 es
 precision highp float;
 uniform vec2  u_res;
 uniform float u_time;

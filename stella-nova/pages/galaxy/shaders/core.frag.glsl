@@ -1,3 +1,4 @@
+#version 300 es
 // core.frag.glsl — galaxy core + disk glow, fragment stage
 //
 //   Paints the smooth, star-free light of the galaxy: a bright round bulge and
@@ -12,7 +13,6 @@
 //
 //   The rotation (rotAngle) and the flatten factor (tilt) follow the mouse so
 //   the glow tracks the same view as the stars.
-#version 300 es
 precision highp float;
 uniform vec2  u_res;
 uniform vec4  u_mouse;

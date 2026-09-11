@@ -1,3 +1,4 @@
+#version 300 es
 // filament.frag.glsl — filament ribbon shading + occlusion, fragment stage
 //
 //   Shades one pixel of a ribbon. Across the ribbon (v_edge in -1..1) it builds
@@ -12,7 +13,6 @@
 //
 //   Uniforms come from main.js: hue/saturation/value, hot-core controls, ring
 //   spread, gradient, per-pass brightness/width, camera, and the depth texture.
-#version 300 es
 precision highp float;
 in float v_edge,v_along,v_bright,v_ringPhase;
 in vec3 v_wpos;

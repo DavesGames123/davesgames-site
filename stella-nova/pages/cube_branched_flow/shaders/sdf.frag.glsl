@@ -1,3 +1,4 @@
+#version 300 es
 // sdf.frag.glsl — ray-marched solid, fragment stage
 //
 //   Ray-marches the scene signed-distance field and shades it. The scene is a
@@ -22,7 +23,6 @@
 //
 //   Uniforms come from main.js (u_ro camera, torus/box shape, glow, material,
 //   spin, u_filTex the filament reflection texture, u_vp shared view-proj).
-#version 300 es
 precision highp float;
 uniform vec2 u_res;uniform float u_time;uniform vec3 u_ro;
 uniform float u_sR,u_pK,u_tO,u_tM,u_tm,u_cD,u_pM,u_rS,u_gP,u_gH,u_mode;

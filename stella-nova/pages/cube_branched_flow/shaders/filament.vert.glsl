@@ -1,3 +1,4 @@
+#version 300 es
 // filament.vert.glsl — instanced filament ribbon, vertex stage
 //
 //   One instance per filament edge. The instance carries the edge's two world
@@ -12,7 +13,6 @@
 //          ●━━━━━━━━━●               offset = perp * side * width
 //
 //   The six vertex ids map to the two triangles of the quad (see side/end).
-#version 300 es
 precision highp float;
 layout(location=0) in vec3 a_pA;layout(location=1) in vec3 a_pB;
 layout(location=2) in float a_along;layout(location=3) in float a_bright;

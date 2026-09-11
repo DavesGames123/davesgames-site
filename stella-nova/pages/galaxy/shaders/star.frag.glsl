@@ -1,3 +1,4 @@
+#version 300 es
 // star.frag.glsl — star point sprite, fragment stage
 //
 //   Shades one point sprite into a soft round star. The sprite is a layered
@@ -8,7 +9,6 @@
 //
 //     gl_PointCoord ─▶ d2 (squared radius) ─▶ core + bloom + haze  = shape
 //                      shape · v_lum = intensity ─▶ col = tint · intensity
-#version 300 es
 precision highp float;
 in vec3 v_color;
 in float v_lum;

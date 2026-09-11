@@ -1,3 +1,4 @@
+#version 300 es
 // star.vert.glsl — per-star placement, vertex stage
 //
 //   Runs once per star. It advances the star's circular orbit analytically for
@@ -14,7 +15,6 @@
 //
 //   gl_PointSize scales with luminosity and zoom; the fragment shader shapes
 //   the sprite. specHash drives a pow(h,4) skew toward redder, dimmer stars.
-#version 300 es
 precision highp float;
 
 in float a_radius;

@@ -1,3 +1,4 @@
+#version 300 es
 // wormhole.frag.glsl — Ellis wormhole geodesic ray tracer, fragment stage
 //
 //   For each pixel it builds a view ray, then bends that ray through the Ellis
@@ -25,7 +26,6 @@
 //
 //   Uniforms come from main.js: camera basis, throat k/a, integrator choice,
 //   step budget, background mode, and u_camL (which universe the camera is in).
-#version 300 es
 precision highp float;
 uniform vec2 u_res;
 uniform vec3 u_camPos,u_camFwd,u_camRight,u_camUp;

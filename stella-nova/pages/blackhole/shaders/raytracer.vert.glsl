@@ -1,3 +1,4 @@
+#version 300 es
 // raytracer.vert.glsl — fullscreen pass, vertex stage
 //
 //   The whole scene is a fragment-shader job. This stage only puts a screen
@@ -10,7 +11,6 @@
 //       (-1,-1) ●─────● (1,-1)      z=0, w=1 puts the quad on the near plane.
 //
 //   All ray setup and marching happens in raytracer.frag.glsl.
-#version 300 es
 // a_pos: one clip space corner of the fullscreen quad (bound to location 0).
 in vec2 a_pos;
 // Pass the corner straight to clip space; z=0 pins the quad to the near plane.
