@@ -4,10 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Translation Terminal // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   TRANSLATION TERMINAL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js renders the entire tool into #content: the
+   language flags, category tabs, filters, progress bar, and the editable
+   translation rows. This file declares only the frame and the export bar that
+   main.js binds to by id and by the inline onclick handlers.
+
+   LOAD ORDER
+     1. in-frame guard   adds .in-frame when embedded in the site shell iframe
+     2. style.css        page stylesheet
+     3. main.js          classic script at end of body; builds everything
+
+   LAYOUT  (# marks an element id that main.js writes into)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Translation Terminal                        │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #content  (all built by main.js)                                  │
+     │   flag bar  ─ pick a language                                     │
+     │   category tabs ─ UX / Title / Tutorial / Narrative               │
+     │   controls ─ section select · empty/done filter · search          │
+     │   progress bar                                                    │
+     │   #rows  ─ key · English source · translation input · SUBMIT      │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #xb export bar (hidden until a language is chosen)                │
+     │   CLEAR · IMPORT · EXPORT TOML          #xi language summary       │
+     └─────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: when embedded in the site shell iframe, tag <html> so the
+     CSS hides this page's own topbar. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
 <div id="app">
@@ -15,9 +47,13 @@
 <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Translation Terminal</span></div>
 <div class="topbar-r">SYS // <strong>LOCALIZATION v2</strong></div>
 </div>
+<!-- main.js renders the flags, tabs, filters, progress and rows here. -->
 <div id="content"></div>
 </div>
+<!-- Transient status message; main.js shows and hides it. -->
 <div class="toast" id="toast"></div>
+<!-- Export bar: revealed by main.js once a language is selected. The buttons
+     call the global functions main.js defines. -->
 <div class="xb" id="xb" style="display:none">
 <div class="xi" id="xi"></div>
 <div class="xa">
@@ -26,7 +62,9 @@
 <button class="eb" onclick="exportToml()">EXPORT TOML</button>
 </div>
 </div>
+<!-- Hidden file picker for TOML import; importToml() clicks it. -->
 <input type="file" id="fi" accept=".toml" style="display:none">
+<!-- Builds the whole tool and loads any saved translations from localStorage. -->
 <script src="main.js"></script>
 </body>
 </html>

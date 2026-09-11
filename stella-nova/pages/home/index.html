@@ -4,6 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>STELLA NOVA // From Ore to Empire</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   HOME  ·  Stella Nova landing page
+  ───────────────────────────────────────────────────────────────────────────
+   The marketing front page. Two full-screen canvases sit behind the content:
+   #sim (the background N-body gravity toy) and #heroRadar (the hero solar
+   system). main.js drives both, plus the gallery carousel and the bug form.
+   This file is the markup and copy; main.js binds to the ids called out below.
+
+   LOAD ORDER
+     1. style.css   page stylesheet
+     2. main.js      classic script at end of body; runs the canvases and forms
+
+   PAGE FLOW  (top to bottom; # marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar (Bodies/FPS/clock)          botbar (sim controls)          │
+     │ #sim   full-screen gravity sim canvas, behind everything          │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ .hero  #heroRadar canvas + hero-panel: title, blurb, social links │
+     │ lore section  ─  the story hook                                    │
+     │ .gallery #media  ─  video + #nvViewer image carousel              │
+     │ #features  ─  the systems manifest cards                          │
+     │ community section  ─  r/RimWorld quotes                           │
+     │ split sections  ─  crew / resources / station / industry          │
+     │ #download  ─  demo download cards                                 │
+     │ #report  ─  #bugForm bug report                                    │
+     │ end-transmission call to action                                   │
+     └─────────────────────────────────────────────────────────────────┘
+
+   Sections tagged .rv fade in on scroll (see the IntersectionObserver in
+   main.js). Many .xlink buttons call parent.switchTab to drive the site shell.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -16,6 +49,8 @@
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Sim Active</span></div>
   <div class="topbar-r"><span>Bodies: <strong id="bodyCount">0</strong></span><span>FPS: <strong id="fpsRead">60</strong></span><span id="clockRead">00:00:00</span></div>
 </div>
+<!-- Bottom bar: controls for the background gravity sim; the buttons call the
+     global functions main.js exposes on window. -->
 <div class="botbar">
   <div class="bot-group">
     <button class="bot-btn" onclick="resetSim()">Reset</button>
@@ -27,10 +62,12 @@
   <div class="bot-group"><div class="bot-read">Click + Drag to Launch</div></div>
 </div>
 
+<!-- Background gravity sim canvas; main.js sizes and animates it. -->
 <canvas id="sim" style="position:fixed;inset:0;z-index:1"></canvas>
 
 <div class="content">
 
+  <!-- Hero: the radar canvas behind the title panel and social links. -->
   <div class="hero">
     <canvas id="heroRadar"></canvas>
     <div class="hero-inner">
@@ -99,6 +136,7 @@
     <div class="sig-cell"><div class="sig-val">Govern</div><div class="sig-label">Citizens with Relationships &amp; Grudges</div></div>
   </div>
 
+  <!-- Lore section: the post-cataclysm story hook plus demo cross-links. -->
   <section>
     <div class="sec-inner rv">
       <div class="lore-text">
@@ -118,6 +156,7 @@
     </div>
   </section>
 
+  <!-- Gallery: an embedded video plus the image carousel. -->
   <div class="gallery rv" id="media">
     <div class="gallery-inner">
       <div class="g-header">
@@ -127,6 +166,7 @@
       <div class="media-video">
         <iframe src="https://www.youtube.com/embed/Pn9WTbewFFQ" title="Stella Nova Gameplay" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
       </div>
+      <!-- Image carousel: main.js slides #nvTrack, builds #nvPips, drives Auto. -->
       <div class="nv" id="nvViewer">
         <div class="nv-head"><span class="nv-sys">SYS // Visual Feed</span><span class="nv-spacer"></span><span class="nv-file" id="nvFile">IMG 01/06</span><span class="nv-status">LIVE</span></div>
         <div class="nv-viewport" id="nvViewport">
@@ -149,6 +189,7 @@
     </div>
   </div>
 
+  <!-- Features: the systems manifest, one card per major game system. -->
   <section id="features">
     <div class="sec-inner rv">
       <div style="text-align:center;margin-bottom:1rem">
@@ -169,6 +210,7 @@
   <section>
     <div class="sec-inner rv">
       <div style="text-align:center;margin-bottom:0.5rem">
+        <!-- Community section: r/RimWorld reception stats and pull quotes. -->
         <div class="g-tag">// Community Signal</div>
         <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(1.2rem,2.5vw,1.8rem);color:var(--text-bright)">From <em style="font-style:italic;color:var(--yellow)">r/RimWorld</em></h2>
         <p style="font-size:0.68rem;color:var(--text);margin-top:0.6rem;line-height:1.8">Posted to a 340K-member community notoriously protective of off-topic content. The mod team approved the post.</p>
@@ -188,6 +230,7 @@
   </section>
 
   <section>
+    <!-- Split feature sections: crew, resources, station, industry. -->
     <div class="sec-inner">
       <div class="split rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Crew</span><span class="sw-tag">Command</span></div><div class="sw-body"><h2>Command your <em>crews</em></h2><p>Assign citizens to mine, collect, construct, or harvest. They'll find the nearest asteroid, dock at the right station, and figure out the route themselves. But they also get tired, take breaks to socialize, and form opinions about who they want to work with &mdash; and who they don't.</p><div class="tag-strip"><span>12 Work States</span><span>Relationships</span><span>Autonomous AI</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Behavior System</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('selection')">Selection UI</a></div></div></div></div></div>
       <div class="split reverse rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Resources</span><span class="sw-tag">Extraction</span></div><div class="sw-body"><h2>Gather <em>everything</em></h2><p>Ten raw ores &mdash; iron, copper, titanium, uranium, rare earth &mdash; scattered across asteroids with real spawn rarities. Your miners drill the rock. Crawlers haul the chunks to a space elevator. The elevator lifts them to orbit. Nothing spawns in your inventory &mdash; you earn it.</p><div class="tag-strip"><span>10 Ore Types</span><span>Space Elevators</span><span>Fog of War</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('forge')">Planet Forge</a></div></div></div></div></div>
@@ -198,6 +241,7 @@
 
   <div class="tech-strip rv"><span>Built from scratch in</span><span class="tech-tag">Rust</span><span class="tech-sep">&middot;</span><span class="tech-tag">Custom wgpu Engine</span><span class="tech-sep">&middot;</span><span class="tech-tag">N-Body Physics</span><span class="tech-sep">&middot;</span><span class="tech-tag">Local AI Narrator</span><span class="tech-sep">&middot;</span><span class="tech-tag">Solo Developer</span></div>
 
+  <!-- Download: demo download cards for Windows and macOS. -->
   <section id="download">
     <div class="sec-inner rv">
       <div style="text-align:center;margin-bottom:0.5rem">
@@ -213,6 +257,7 @@
     </div>
   </section>
 
+  <!-- Report: the bug form. submitBug() POSTs it; #bugSuccess replaces it. -->
   <section id="report">
     <div class="bug-section rv">
       <div class="sys-window full-width">
@@ -237,6 +282,7 @@
 
   <div class="tech-strip rv" style="font-size:0.52rem;padding:0.8rem 2rem;opacity:0.7"><span>AI Disclosure:</span><span style="color:var(--text-dim)">AI coding tools used during development. All visual assets, music, writing, and narrative content are human-made.</span></div>
 
+  <!-- End transmission: the closing call to action. -->
   <div class="tx-section">
     <div class="tx-panel panel rv">
       <div class="p-head"><span>// End Transmission</span><span class="tag">SIG.VERIFIED</span></div>
@@ -255,6 +301,7 @@
 
 </div>
 
+<!-- Runs the canvases, the carousel, the bug form, and the scroll reveals. -->
 <script src="main.js"></script>
 </body>
 </html>

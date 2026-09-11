@@ -5,6 +5,40 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
 <title>Harmony Wheel — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   HARMONY WHEEL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws the wheel onto the full-screen canvas and
+   fills the empty containers (keystrip, keyboard, roll, pattern grid) with
+   generated controls. This file declares those containers and the panels
+   main.js binds to by id.
+
+   LOAD ORDER
+     1. in-frame guard   adds .in-frame when embedded in the site shell iframe
+     2. mobile-switch.js classic script; sets the .mob layout flag early
+     3. style.css        page stylesheet
+     4. main.js          classic script at end of body; builds and animates
+
+   LAYOUT  (# marks an element id that main.js writes into or reads)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Harmony Wheel                    #hamburger │
+     │ #keystrip   ALL C G D A ...   key focus row                       │
+     ├─────────────────────────────────────────────────────────────────┤
+     │                                                                   │
+     │        #wheel  (full-screen canvas, the chord mandala)           │
+     │                                                                   │
+     │                                            #panel  (setup, slides │
+     │                                             in from the side)     │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #dock                                                             │
+     │   #kb piano keyboard  │  #roll note timeline canvas               │
+     │   #seq pattern grid: lines of chord cells + transport buttons     │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #theory  how to read the wheel      │  #status  function readout  │
+     └─────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <meta name="description" content="An interactive map of chord resolution. Tap a chord to hear it and see where it wants to go — dominants fall a fifth, diminished chords rise a half step.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +46,10 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: when embedded in the site shell iframe, tag <html> so the
+     CSS hides this page's own topbar. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+<!-- Sets the .mob phone-layout flag before the page renders. -->
 <script src="mobile-switch.js"></script>
 
 <div class="topbar">
@@ -26,22 +63,28 @@
   </div>
 </div>
 
+<!-- The wheel canvas main.js draws into; the gear opens the setup panel. -->
 <canvas id="wheel"></canvas>
 <button id="hamburger" aria-label="Setup">⚙</button>
 
+<!-- Key focus row: main.js appends ALL plus the twelve key buttons. -->
 <div id="keystrip"></div>
 
+<!-- Bottom dock: keyboard + note roll on top, pattern sequencer below. -->
 <div id="dock">
   <div id="dockrow">
+    <!-- Piano keyboard: main.js builds the keys inside #kb and updates #kbCount. -->
     <div id="kbwrap">
       <div id="kbhead"><span id="kbCount">TAP KEYS TO FILTER THE WHEEL BY NOTE</span><button id="kbClear">CLEAR</button></div>
       <div id="kb"></div>
     </div>
+    <!-- Note timeline: main.js paints the sounding voices onto #roll. -->
     <div id="rollwrap">
       <div id="rollhead"><span>NOTE TIMELINE</span><span>unbroken bar = held voice</span></div>
       <canvas id="roll"></canvas>
     </div>
   </div>
+  <!-- Pattern sequencer: transport buttons here, chord lines built in #seqbody. -->
   <div id="seq">
     <div id="seqhead">
       <span id="seqTitle" title="Tap to collapse">PATTERN ▾</span>
@@ -57,6 +100,8 @@
   </div>
 </div>
 
+<!-- Setup panel: complexity tier, layer toggles, mode, tempo/volume, and the
+     reading rules. main.js reads data-tier and data-layer on click. -->
 <div id="panel">
   <button id="panelClose" aria-label="Close setup">✕</button>
   <div class="sec-label">COMPLEXITY</div>
@@ -96,6 +141,8 @@
   </div>
 </div>
 
+<!-- Collapsible "how to read the wheel" rules; #status shows the tapped chord's
+     function. main.js toggles #theory and rewrites #fnMain. -->
 <div id="theory" class="open">
   <div class="head" id="theoryHead"><span>HOW TO READ THE WHEEL</span><span id="theoryArrow">▾</span></div>
   <div class="body">
@@ -110,6 +157,7 @@
   <span class="right" id="fnRight">24 spokes · 12 keys · 3 rules</span>
 </div>
 
+<!-- Builds the wheel graph, wires the controls, and runs the animation loop. -->
 <script src="main.js"></script>
 </body>
 </html>

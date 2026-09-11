@@ -1,13 +1,72 @@
+// ============================================================================
+//  CHORD CHART  ·  every root note x 8 chord qualities, four instruments
+// ----------------------------------------------------------------------------
+//  A reference grid. The user picks a root (12 pitch classes) and an instrument
+//  (guitar, bass, ukulele, violin); the page draws one small canvas diagram per
+//  chord quality, and can strum each chord through the Web Audio API.
+//
+//  A pitch class (pc) is an integer 0..11 (C=0). A chord quality is an interval
+//  set added to the root, modulo 12. Every diagram, colour, and synth note is
+//  derived from those integers, so nothing in the page stores note letters as
+//  truth; NOTE_NAMES is only a display lookup.
+//
+//  DATA FLOW
+//  ---------
+//      root (0..11) ─┐
+//                    ├─▶ QUALS[q].iv  ─▶ chord tones = (root+iv) % 12
+//      quality  q ───┘                        │
+//                                             ▼
+//                    voicing search / tone map ─▶ drawCard() ─▶ <canvas>
+//                    (guitar/uke solve frets;   │
+//                     bass/violin map tones)    └─▶ strum() ─▶ Web Audio
+//
+//  FRETBOARD COORDINATE FRAME  (drawFrettedInto: strings run down, frets across)
+//  ----------------------------------------------------------------------------
+//      sx(s) = pad.l + gw * s/(NS-1)      column x per string index s
+//      fy(f) = pad.t + gh * f/nFrets      row y per fret line f
+//
+//         nut ═══════════════════════  fy(0)   (open/nut, bold when base=0)
+//          s=0   s=1   s=2  ...              columns = strings, low to high
+//           │     │     │                    a fingered note draws a dot at
+//          ─┼──●──┼─────┼──  fy(1)           fy(f - base - 0.5), coloured by
+//           │     │     │                    its pitch class; the root gets a
+//          ─┼─────┼──●──┼──  fy(2)           white ring; ✕ marks a muted string
+//           │     │     │
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      pitch helpers ........ "NOTE_NAMES"        names + hsl colour by pc
+//      chord qualities ...... "const QUALS"       interval sets per quality
+//      quality order ........ "QUAL_BASIC"        which cards go in each row
+//      guitar shapes ........ "OPEN_SHAPES"       open/barre shape library
+//      guitar voicings ...... "function guitarVoicings"  pick shapes for root+q
+//      instrument tunings ... "GTR_MIDI"          open-string MIDI per instrument
+//      ukulele search ....... "function ukeVoicings"     brute-force fret solver
+//      bass tone map ........ "function drawBassInto"    every chord tone shown
+//      canvas prep .......... "function prep"     dpr sizing + clear
+//      fretted render ....... "function drawFrettedInto"  guitar/uke diagram
+//      violin tone map ...... "function drawViolinInto"   fingerboard diagram
+//      strum synth .......... "function strum"    Web Audio pluck per note
+//      UI state ............. "let root="         current root + instrument
+//      root strip ........... "const strip"       the 12 pitch-class buttons
+//      instrument seg ....... "instSeg"           instrument switch wiring
+//      grid build ........... "function fillGrid" build the chord cards
+// ============================================================================
 "use strict";
 /* ════════════════════════════════════════════════════════════
    Chord Chart — every root × 8 qualities, guitar & violin
    Shares the ChordLab shape library and renderers.
    GREP: guitarVoicings | ukeVoicings | drawFrettedInto | drawBassInto | drawViolinInto | strum
    ════════════════════════════════════════════════════════════ */
+// Twelve pitch-class names for display only; index is the pitch class (C=0).
+// pcColor maps a pitch class to a hue (30 degrees per semitone) so every note
+// keeps one consistent colour across every diagram; pcColorA adds an alpha.
 const NOTE_NAMES=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
 const pcColor=(pc,l=64)=>`hsl(${pc*30},88%,${l}%)`;
 const pcColorA=(pc,a,l=64)=>`hsla(${pc*30},88%,${l}%,${a})`;
 
+// The eight chord qualities. iv is the interval set in semitones above the
+// root; the chord tones are (root + each iv) % 12. full is the spoken name.
 const QUALS={
   ''    :{iv:[0,4,7],    full:'major'},
   'm'   :{iv:[0,3,7],    full:'minor'},
@@ -20,10 +79,16 @@ const QUALS={
 };
 /* explicit order — Object.keys() sorts the integer-like '7' key first,
    which is why dominant-7 cards were jumping ahead of plain major */
+// The two grid rows, in fixed display order. Object.keys(QUALS) cannot be used
+// because the numeric-like '7' key would sort ahead of the empty (major) key.
 const QUAL_BASIC=['','m','7'];
 const QUAL_MORE=['maj7','m7','sus2','sus4','dim'];
 
 /* ── guitar shapes (identical library to ChordLab) ── */
+// Open-position shape library, keyed by "<root pc>|<quality>". Each value is a
+// six-string fret array (index 0 = low E); -1 means a muted string, 0 an open
+// string. These are hand-picked shapes that ring open strings, preferred over
+// movable barre shapes when one exists for the root.
 const OPEN_SHAPES={
   '0|':[-1,3,2,0,1,0],'9|':[-1,0,2,2,2,0],'7|':[3,2,0,0,0,3],'4|':[0,2,2,1,0,0],'2|':[-1,-1,0,2,3,2],
   '9|m':[-1,0,2,2,1,0],'4|m':[0,2,2,0,0,0],'2|m':[-1,-1,0,2,3,1],
@@ -34,14 +99,23 @@ const OPEN_SHAPES={
   '9|sus4':[-1,0,2,2,3,0],'2|sus4':[-1,-1,0,2,3,3],'4|sus4':[0,2,2,2,0,0],
   '2|dim':[-1,-1,0,1,3,1],
 };
+// Movable barre shapes rooted on the E and A strings, plus a movable D-string
+// diminished shape. Sliding one up f frets transposes it by f semitones, so any
+// root that lacks an open shape is covered by shifting these.
 const E_SHAPE={'':[0,2,2,1,0,0],'m':[0,2,2,0,0,0],'7':[0,2,0,1,0,0],'m7':[0,2,0,0,0,0],'maj7':[0,-1,1,1,0,-1],'sus4':[0,2,2,2,0,0],'sus2':null,'dim':null};
 const A_SHAPE={'':[-1,0,2,2,2,0],'m':[-1,0,2,2,1,0],'7':[-1,0,2,0,2,0],'m7':[-1,0,2,0,1,0],'maj7':[-1,0,2,1,2,0],'sus4':[-1,0,2,2,3,0],'sus2':[-1,0,2,2,0,0],'dim':[-1,0,1,2,1,-1]};
 const D_DIM=[-1,-1,0,1,3,1];
+// Transpose a movable shape up f frets, leaving muted strings muted.
 function barreAt(shape,f){return shape.map(v=>v<0?-1:v+f);}
+// Collect the playable voicings for one root and quality: the open shape if the
+// library has one, then the E and A barre shapes at the fret that puts them on
+// this root. Sorted so the lowest (easiest) position leads.
 function guitarVoicings(root,q){
   const out=[];
   const open=OPEN_SHAPES[root+'|'+q];
   if(open)out.push({name:'Open',frets:open,pos:0});
+  // Fret that lands the E shape (open E = pc 4) and A shape (open A = pc 9) on
+  // this root, wrapped into 0..11.
   const eF=((root-4)%12+12)%12, aF=((root-9)%12+12)%12;
   if(E_SHAPE[q]&&eF>=1&&eF<=11)out.push({name:eF+'fr',frets:barreAt(E_SHAPE[q],eF),barre:eF,pos:eF});
   if(A_SHAPE[q]&&aF>=1&&aF<=11)out.push({name:aF+'fr',frets:barreAt(A_SHAPE[q],aF),barre:aF,pos:aF});
@@ -50,18 +124,28 @@ function guitarVoicings(root,q){
   if(!out.length)out.push({name:'—',frets:[-1,-1,-1,-1,-1,-1]});
   return out;
 }
+// Open-string MIDI note numbers per instrument, in draw order (low string
+// first for fretted diagrams). Pitch class of a fretted note is (MIDI+f)%12.
 const GTR_MIDI=[40,45,50,55,59,64];
 const VLN_MIDI=[55,62,69,76], VLN_NAMES=['G','D','A','E'];
 const UKE_MIDI=[67,60,64,69];               // g C E A, re-entrant
 const BASS_MIDI=[28,33,38,43], BASS_NAMES=['E','A','D','G'];
 
 /* ukulele voicing search — full coverage, 4-note chords may drop the 5th */
+// Memo of solved ukulele voicings, keyed by "<root>|<quality>"; the brute-force
+// search below is expensive, so results are cached across redraws.
 const _ukeCache=Object.create(null);
+// Brute-force the ukulele fretboard for chords: for each base position, list the
+// frets on each string that hit a required chord tone, take every combination,
+// keep the ones that cover all tones (a 4-note chord may drop the 5th), score by
+// low + tight hand position, and return the three best distinct shapes.
 function ukeVoicings(root,q){
   const ck=root+'|'+q;
   if(_ukeCache[ck])return _ukeCache[ck];
+  // Pitch classes this chord must contain.
   const need=(QUALS[q]||QUALS['']).iv.map(iv=>(root+iv)%12);
   const found=[];
+  // Slide a four-fret hand window down the neck (base = its lowest fret).
   for(let base=0;base<=9;base++){
     const opts=UKE_MIDI.map(m=>{
       const o=[];
@@ -71,19 +155,26 @@ function ukeVoicings(root,q){
       }
       return o;
     });
+    // A string with no tone-hitting fret in this window kills the position.
     if(opts.some(o=>!o.length))continue;
+    // Cartesian product of one fret choice per string.
     for(const f0 of opts[0])for(const f1 of opts[1])for(const f2 of opts[2])for(const f3 of opts[3]){
       const fr=[f0,f1,f2,f3];
       const pcs=new Set(fr.map((f,st)=>(UKE_MIDI[st]+f)%12));
+      // Accept when every tone is present; for a 4-note chord, allow dropping
+      // the 5th (index 2 of the interval set) at a penalty.
       let ok=need.every(pc=>pcs.has(pc)),dropped5=false;
       if(!ok&&need.length===4){ok=need.every((pc,i)=>i===2||pcs.has(pc));dropped5=ok;}
       if(!ok)continue;
       const pos=fr.filter(f=>f>0);
       const lo=pos.length?Math.min(...pos):0,hi=pos.length?Math.max(...pos):0;
+      // Reject spans wider than a four-fret hand stretch.
       if(hi-lo>3)continue;
+      // Score: lower total fret sum, lower position, and no dropped 5th win.
       found.push({frets:fr,base:lo,score:fr.reduce((a,b)=>a+b,0)+hi*0.6+(dropped5?2.5:0)});
     }
   }
+  // Best score first, then keep the top three distinct fret shapes.
   found.sort((a,b)=>a.score-b.score);
   const seen=new Set(),out=[];
   for(const v of found){
@@ -97,21 +188,28 @@ function ukeVoicings(root,q){
 }
 
 /* bass: chord-tone map — bassists outline, so show every tone position */
+// Bass diagram: rather than one chord shape, mark every place a chord tone sits
+// in the first five frets across the four strings, so a bassist can build a line.
 function drawBassInto(cv,root,q){
   const P=prep(cv);if(!P)return;const{x,w,h}=P;
+  // Set of chord-tone pitch classes to mark on the neck.
   const tones=new Set();(QUALS[q]||QUALS['']).iv.forEach(iv=>tones.add((root+iv)%12));
   const pad={t:34,b:34,l:38,r:22},NF=5;
   const gw=w-pad.l-pad.r,gh=h-pad.t-pad.b;
+  // Column x per string index (0..3); row y per fret (0..NF).
   const sx=i=>pad.l+gw*i/3, fy=f=>pad.t+gh*f/NF;
+  // Fret lines; the nut (f=0) draws bold and bright.
   for(let f=0;f<=NF;f++){
     x.strokeStyle=f===0?'rgba(232,236,244,0.9)':'rgba(150,200,255,0.16)';
     x.lineWidth=f===0?4:1;
     x.beginPath();x.moveTo(pad.l,fy(f));x.lineTo(pad.l+gw,fy(f));x.stroke();
   }
+  // Fret numbers down the left gutter.
   x.font='500 9px "JetBrains Mono",monospace';
   x.fillStyle='rgba(128,144,176,0.7)';x.textAlign='right';x.textBaseline='middle';
   for(let f=1;f<=NF;f++)x.fillText(f,pad.l-8,fy(f-0.5));
   x.textBaseline='alphabetic';x.textAlign='center';
+  // String lines, thinning toward the higher strings, with open-note labels.
   for(let st=0;st<4;st++){
     x.strokeStyle='rgba(150,200,255,0.32)';x.lineWidth=3.2-st*0.65;
     x.beginPath();x.moveTo(sx(st),fy(0));x.lineTo(sx(st),fy(NF));x.stroke();
@@ -119,6 +217,8 @@ function drawBassInto(cv,root,q){
     x.fillStyle='rgba(128,144,176,0.85)';
     x.fillText(BASS_NAMES[st],sx(st),fy(NF)+18);
   }
+  // Walk every string/fret cell; draw a coloured dot wherever a chord tone
+  // lands. Open-string tones draw as a ring above the nut; the root gets a halo.
   const dR=Math.min(11.5,gw/9);
   for(let st=0;st<4;st++)for(let f=0;f<=NF;f++){
     const pc=(BASS_MIDI[st]+f)%12;
@@ -143,6 +243,9 @@ function drawBassInto(cv,root,q){
 }
 
 /* ── renderers into an arbitrary canvas ── */
+// Ready a canvas for a crisp draw: size its backing store to the display size
+// times the device pixel ratio (capped at 2), scale the context so drawing uses
+// CSS pixels, and clear. Returns null when the canvas is not laid out yet.
 function prep(cv){
   const dpr=Math.min(devicePixelRatio||1,2);
   const w=cv.clientWidth,h=cv.clientHeight;
@@ -152,14 +255,20 @@ function prep(cv){
   x.setTransform(dpr,0,0,dpr,0,0);x.clearRect(0,0,w,h);
   return {x,w,h};
 }
+// Draw the top voicing for a fretted instrument (guitar or ukulele). Picks the
+// solver by tuning array, windows the neck to the frets in use, then paints
+// strings, frets, an optional barre band, note dots, and note letters.
 function drawFrettedInto(cv,root,q,MIDI){
   const NS=MIDI.length;
   const P=prep(cv);if(!P)return;const{x,w,h}=P;
+  // Solve the chord and take the easiest voicing.
   const vs=(MIDI===UKE_MIDI?ukeVoicings:guitarVoicings)(root,q), v=vs[0], frets=v.frets;
   const played=frets.filter(f=>f>=0);
   const fMax=played.length?Math.max(...played):3;
   const fMinPos=played.filter(f=>f>0);
   const fMin=fMinPos.length?Math.min(...fMinPos):0;
+  // Show open position when it fits in four frets; otherwise start the window at
+  // the lowest fingered fret so a high voicing stays on the diagram.
   const base=fMax<=4?0:Math.max(1,fMin);
   const nFrets=Math.max(5,fMax-base+(base>0?1:0));
   const pad={t:44,b:36,l:34,r:24};
@@ -174,6 +283,7 @@ function drawFrettedInto(cv,root,q,MIDI){
     x.lineWidth=f===0&&base===0?4:1.1;
     x.beginPath();x.moveTo(pad.l,fy(f));x.lineTo(pad.l+gw,fy(f));x.stroke();
   }
+  // Position label ("5fr") when the window does not start at the nut.
   if(base>0){x.font='600 11px "JetBrains Mono",monospace';x.fillStyle='#8090b0';x.textAlign='right';x.fillText(base+'fr',pad.l-8,fy(0.5)+4);}
   // barre band — only across the strings actually fretted at the barre
   if(v.barre&&base>0){
@@ -186,6 +296,8 @@ function drawFrettedInto(cv,root,q,MIDI){
       x.fill();
     }
   }
+  // Note dots: one per string. Muted strings show ✕ above the nut, open strings
+  // a ring, fretted notes a coloured dot at the fret centre labelled by name.
   const dR=Math.min(12.5,gw/12);
   x.textAlign='center';
   for(let s=0;s<NS;s++){
@@ -210,11 +322,14 @@ function drawFrettedInto(cv,root,q,MIDI){
     else{const pc=(MIDI[s]+f)%12;x.fillStyle=pcColor(pc,62);x.fillText(NOTE_NAMES[pc],sx(s),pad.t+gh+22);}
   }
 }
+// Violin diagram: a fretless fingerboard, so like the bass it marks every chord
+// tone within the first seven semitone positions across the four strings.
 function drawViolinInto(cv,root,q){
   const P=prep(cv);if(!P)return;const{x,w,h}=P;
   const tones=new Set();(QUALS[q]||QUALS['']).iv.forEach(iv=>tones.add((root+iv)%12));
   const pad={t:36,b:34,l:44,r:44};
   const gw=w-pad.l-pad.r,gh=h-pad.t-pad.b;
+  // Column x per string; row y per semitone step (0..NPOS) down the neck.
   const sx=i=>pad.l+gw*i/3, NPOS=7, py=st=>pad.t+gh*st/NPOS;
   // nut
   x.strokeStyle='rgba(232,236,244,0.85)';x.lineWidth=4;
@@ -229,6 +344,7 @@ function drawViolinInto(cv,root,q){
     x.font='700 11px "JetBrains Mono",monospace';x.fillStyle='rgba(128,144,176,0.85)';
     x.fillText(VLN_NAMES[s],sx(s),pad.t+gh+21);
   }
+  // Mark chord tones at each string/position cell, root haloed.
   const dR=Math.min(12,gw/9);
   for(let s=0;s<4;s++)for(let st=0;st<=NPOS;st++){
     const pc=(VLN_MIDI[s]+st)%12;
@@ -248,18 +364,25 @@ function drawViolinInto(cv,root,q){
 }
 
 /* ── strum synth ── */
+// Lazily created shared AudioContext; browsers block audio until a user gesture,
+// so it is built and resumed on the first strum.
 let AC=null;
+// Play the current chord: gather MIDI notes for the instrument, then schedule a
+// short two-oscillator pluck per note, staggered in time to sound like a strum.
 function strum(root,q){
   if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();
   if(AC.state==='suspended')AC.resume();
   let midis=[],stag=0.055,dur=2.4;
+  // Fretted instruments sound the actual voicing that is drawn.
   if(instrument==='guitar'||instrument==='ukulele'){
     const MIDI=instrument==='guitar'?GTR_MIDI:UKE_MIDI;
     const vf=instrument==='guitar'?guitarVoicings:ukeVoicings;
     vf(root,q)[0].frets.forEach((f,st)=>{if(f>=0)midis.push(MIDI[st]+f);});
+  // Bass plays root, fifth, octave as a slower arpeggio.
   }else if(instrument==='bass'){
     const base=28+((root-4)%12+12)%12;
     midis=[base,base+7,base+12];stag=0.22;dur=2.9;
+  // Violin (and any fallback) sounds the raw chord tones plus a low root.
   }else{
     midis=(QUALS[q]||QUALS['']).iv.map(iv=>60+((root+iv)%12)+((root+iv)>=12?12:0));
     midis.unshift(48+root);
@@ -267,11 +390,14 @@ function strum(root,q){
   const t0=AC.currentTime+0.03;
   const master=AC.createGain();master.gain.value=0.5;master.connect(AC.destination);
   midis.forEach((mn,i)=>{
+    // Equal-temperament frequency from MIDI note; each note starts stag later.
     const f=440*Math.pow(2,(mn-69)/12), t=t0+i*stag;
+    // Triangle fundamental plus a quiet detuned sine octave for body.
     const o1=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain(),g2=AC.createGain();
     o1.type='triangle';o1.frequency.value=f;
     o2.type='sine';o2.frequency.value=f*2;o2.detune.value=4;g2.gain.value=0.18;
     o1.connect(g);o2.connect(g2);g2.connect(g);g.connect(master);
+    // Fast attack, exponential decay envelope; louder chords are scaled down.
     g.gain.setValueAtTime(0,t);
     g.gain.linearRampToValueAtTime(0.34/Math.sqrt(midis.length),t+0.012);
     g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
@@ -280,10 +406,14 @@ function strum(root,q){
 }
 
 /* ── UI state ── */
+// The whole page renders from two variables: the selected root pitch class and
+// the selected instrument. Any change re-runs renderGrid().
 let root=0, instrument='guitar';
 const $=id=>document.getElementById(id);
 
 /* root strip */
+// Build the twelve root-note buttons, each tinted with its pitch-class colour;
+// clicking one sets the root and redraws.
 const strip=$('rootStrip');
 for(let pc=0;pc<12;pc++){
   const b=document.createElement('button');
@@ -292,6 +422,8 @@ for(let pc=0;pc<12;pc++){
   b.addEventListener('click',()=>{root=pc;syncStrip();renderGrid();});
   strip.appendChild(b);
 }
+// Repaint the root strip to match the current root: highlight the active chip,
+// update the large root display and the status-bar readout.
 function syncStrip(){
   [...strip.children].forEach((b,pc)=>{
     const on=pc===root;
@@ -307,6 +439,8 @@ function syncStrip(){
 }
 
 /* instrument seg */
+// Instrument switch: one delegated click handler flips the active button, stores
+// the choice, and redraws the whole grid in the new instrument.
 $('instSeg').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   [...$('instSeg').children].forEach(x=>x.classList.remove('on'));
@@ -316,12 +450,16 @@ $('instSeg').addEventListener('click',e=>{
 });
 
 /* quality grid */
+// Route one card's canvas to the renderer for the current instrument.
 function drawCard(cv,root,q){
   if(instrument==='guitar')drawFrettedInto(cv,root,q,GTR_MIDI);
   else if(instrument==='ukulele')drawFrettedInto(cv,root,q,UKE_MIDI);
   else if(instrument==='bass')drawBassInto(cv,root,q);
   else drawViolinInto(cv,root,q);
 }
+// Build the cards for one grid row: a titled card per quality with its own
+// canvas and a play button, then draw each canvas on the next animation frame
+// (so the canvas has a layout size before prep() measures it).
 function fillGrid(id,quals){
   const g=$(id);g.innerHTML='';
   for(const q of quals){
@@ -342,11 +480,14 @@ function fillGrid(id,quals){
     requestAnimationFrame(()=>drawCard(cv,root,q));
   }
 }
+// Redraw both rows of chord cards for the current root and instrument.
 function renderGrid(){
   fillGrid('gridBasic',QUAL_BASIC);
   fillGrid('gridMore',QUAL_MORE);
 }
 
+// Debounce resizes so the grid redraws once the window settles, not per event.
 let rT=null;
 window.addEventListener('resize',()=>{clearTimeout(rT);rT=setTimeout(renderGrid,150);});
+// First paint.
 syncStrip();renderGrid();

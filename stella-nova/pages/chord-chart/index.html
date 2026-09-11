@@ -4,11 +4,43 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Chord Chart // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CHORD CHART  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js fills the empty containers below with buttons
+   and chord cards, and draws each card onto its own canvas. This file only
+   declares the containers and the chrome that main.js binds to by id.
+
+   LOAD ORDER
+     1. in-frame guard   adds .in-frame when embedded in the site shell iframe
+     2. mobile-switch.js classic script; sets the .mob layout flag early
+     3. style.css        page stylesheet
+     4. main.js          classic script at end of body; builds the UI
+
+   LAYOUT  (# marks an element id that main.js writes into)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Chord Chart                                 │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #rootStrip   ● ● ● ● ● ● ● ● ● ● ● ●   twelve root buttons        │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #bigRoot  C          #instSeg  Guitar Bass Uke Violin             │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ The Essentials      #gridBasic   major · minor · 7                │
+     │ More Flavors        #gridMore    maj7 m7 sus2 sus4 dim            │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #status-bar   root · instrument · hint                            │
+     └─────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: when embedded in the site shell iframe, tag <html> so the
+     CSS hides this page's own topbar. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Sets the .mob phone-layout flag before the page renders. -->
 <script src="mobile-switch.js"></script>
 
 <div class="topbar">
@@ -16,10 +48,13 @@
   <div class="topbar-r">SYS // <strong>CHORD REFERENCE</strong></div>
 </div>
 
+<!-- Root picker: main.js appends the twelve pitch-class buttons here. -->
 <div id="rootStrip"></div>
 
+<!-- Header: large current-root display plus the instrument switch. -->
 <div id="chartHead">
   <div id="bigRoot">C</div>
+  <!-- data-i is the instrument key main.js reads on click. -->
   <div class="seg" id="instSeg">
     <button data-i="guitar" class="on">Guitar</button>
     <button data-i="bass">Bass</button>
@@ -28,6 +63,7 @@
   </div>
 </div>
 
+<!-- Card grids: main.js fills gridBasic and gridMore with one chord card each. -->
 <div id="chartBody">
   <div class="gsec-lbl">The Essentials<span class="gs-note">start here — major · minor · 7</span></div>
   <div id="gridBasic"></div>
@@ -35,12 +71,14 @@
   <div id="gridMore"></div>
 </div>
 
+<!-- Status bar: main.js keeps st-root and st-inst in sync with the selection. -->
 <div id="status-bar">
   <span>root <b id="st-root">C</b></span><span class="sep"></span>
   <span id="st-inst">guitar</span><span class="sep"></span>
   <span>8 qualities · tap ♪ to hear</span>
 </div>
 
+<!-- Builds the UI and draws the cards; runs after the markup is parsed. -->
 <script src="main.js"></script>
 </body>
 </html>
