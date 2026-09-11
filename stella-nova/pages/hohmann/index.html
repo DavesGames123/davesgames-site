@@ -210,7 +210,14 @@
 <!-- katex.js renders the reference equations; load it before main.js. -->
 <script src="katex.js"></script>
 
-<!-- main.js: the whole simulation, drawing and control logic. -->
+<!-- main.js split into ordered classic scripts. One shared global scope, run in
+     sequence: data.js (constants, state, canvas, presets, orbital math, windows,
+     grading) → render.js (drawing, ship, main loop) → input.js (interaction) →
+     mathpanel.js (live KaTeX panel) → main.js (HUD setters, INIT boot). -->
+<script src="data.js"></script>
+<script src="render.js"></script>
+<script src="input.js"></script>
+<script src="mathpanel.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
