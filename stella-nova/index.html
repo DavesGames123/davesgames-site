@@ -28,7 +28,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .cluster-arrow{font-size:0.7rem;color:var(--text-faint);transition:transform 0.22s;flex-shrink:0}
 .cluster.open .cluster-arrow{transform:rotate(90deg)}.cluster.open .cluster-label{color:var(--text)}
 .cluster-body{overflow:hidden;max-height:0;transition:max-height 0.28s cubic-bezier(0.4,0,0.2,1)}
-.cluster.open .cluster-body{max-height:1200px}
+.cluster.open .cluster-body{max-height:2400px}
 .nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px 11px 46px;cursor:pointer;border:none;background:transparent;width:100%;text-align:left;position:relative;transition:background 0.15s;font-family:inherit;color:inherit}
 .nav-item::before{content:'';position:absolute;left:30px;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:var(--text-faint);transition:background 0.15s,box-shadow 0.15s}
 .nav-item:hover{background:rgba(150,200,255,0.04)}.nav-item:hover::before{background:var(--blue-dim)}
@@ -121,7 +121,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
       <div id="sb-status">Sim Active</div>
     </div>
     <div id="sb-nav">
-      <div class="cluster open" id="cl-home">
+      <div class="cluster" id="cl-home">
         <button class="cluster-head" onclick="toggleCluster('cl-home')"><span class="cluster-icon">&#8962;</span><span class="cluster-label">Home</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
           <button class="nav-item" data-tab="home" onclick="switchTab('home')"><span class="nav-label">Overview</span></button>
@@ -129,7 +129,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item com" data-tab="translate" onclick="switchTab('translate')"><span class="nav-label">Translation Tool</span><span class="nav-badge">i18n</span></button>
         </div>
       </div>
-      <div class="cluster open" id="cl-crew">
+      <div class="cluster" id="cl-crew">
         <button class="cluster-head" onclick="toggleCluster('cl-crew')"><span class="cluster-icon">&#9733;</span><span class="cluster-label">Interactive Wiki</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
           <div class="nav-sub c-station">Station Design</div>
@@ -145,7 +145,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item" data-tab="controls" onclick="switchTab('controls')"><span class="nav-label">Controls</span></button>
         </div>
       </div>
-      <div class="cluster open" id="cl-learn">
+      <div class="cluster" id="cl-learn">
         <button class="cluster-head learn-head" onclick="toggleCluster('cl-learn')"><span class="cluster-icon">&#955;</span><span class="cluster-label">Learn About Physics</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
           <div class="nav-sub c-orbital">Orbital Mechanics</div>
@@ -160,7 +160,14 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item qm" data-tab="orbital" onclick="switchTab('orbital')"><span class="nav-label">Atomic Orbital</span><span class="nav-badge">VR</span></button>
           <button class="nav-item qm" data-tab="molecular-bond" onclick="switchTab('molecular-bond')"><span class="nav-label">Molecular Bond</span><span class="nav-badge">SIM</span></button>
           <div class="nav-sub c-fluid">Fluid Dynamics</div>
-          <button class="nav-item fl" data-tab="fluidlab" onclick="switchTab('fluidlab')"><span class="nav-label">FluidLab</span><span class="nav-badge">GPU</span></button>
+          <button class="nav-item fl" data-tab="fluidlab" onclick="switchTab('fluidlab')"><span class="nav-label">Stable Fluids</span><span class="nav-badge">GPU</span></button>
+          <button class="nav-item fl" data-tab="ns-equations" onclick="switchTab('ns-equations')"><span class="nav-label">Navier–Stokes 1D</span><span class="nav-badge">MATH</span></button>
+          <button class="nav-item fl" data-tab="ns-burgers" onclick="switchTab('ns-burgers')"><span class="nav-label">Burgers Equation</span><span class="nav-badge">SIM</span></button>
+          <button class="nav-item fl" data-tab="ns-flow2d" onclick="switchTab('ns-flow2d')"><span class="nav-label">Navier–Stokes 2D</span><span class="nav-badge">SIM</span></button>
+          <button class="nav-item fl" data-tab="ns-flow3d" onclick="switchTab('ns-flow3d')"><span class="nav-label">Navier–Stokes 3D</span><span class="nav-badge">SIM</span></button>
+          <button class="nav-item fl" data-tab="ns-wave" onclick="switchTab('ns-wave')"><span class="nav-label">Blowup: Wave</span><span class="nav-badge">MATH</span></button>
+          <button class="nav-item fl" data-tab="ns-cascade" onclick="switchTab('ns-cascade')"><span class="nav-label">Blowup: Cascade</span><span class="nav-badge">MATH</span></button>
+          <button class="nav-item fl" data-tab="ns-vortex" onclick="switchTab('ns-vortex')"><span class="nav-label">Blowup: Vortex</span><span class="nav-badge">3D</span></button>
           <div class="nav-sub c-qcomp">Quantum Computing</div>
           <button class="nav-item qav" data-tab="qave" onclick="switchTab('qave')"><span class="nav-label">Quantum Algorithm Visualizer</span><span class="nav-badge">3D</span></button>
           <button class="nav-item qav" data-tab="qft-flow" onclick="switchTab('qft-flow')"><span class="nav-label">Quantum Encoding</span><span class="nav-badge">MATH</span></button>
@@ -176,17 +183,12 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item ad" data-tab="diffraction" onclick="switchTab('diffraction')"><span class="nav-label">Aperture Diffraction</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item ds" data-tab="double-slit" onclick="switchTab('double-slit')"><span class="nav-label">Double-Slit Diffraction</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item cp" data-tab="polarization" onclick="switchTab('polarization')"><span class="nav-label">Circular Polarization</span><span class="nav-badge">NEW</span></button>
-        </div>
-      </div>
-      <div class="cluster open" id="cl-math">
-        <button class="cluster-head math-head" onclick="toggleCluster('cl-math')"><span class="cluster-icon">&#8706;</span><span class="cluster-label">Differential Equations</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <div class="nav-sub c-math">Dynamical Systems</div>
+          <div class="nav-sub c-math">Differential Equations</div>
           <button class="nav-item mth" data-tab="attractorlab" onclick="switchTab('attractorlab')"><span class="nav-label">Strange Attractors</span><span class="nav-badge">3D</span></button>
           <button class="nav-item mth" data-tab="flowlab" onclick="switchTab('flowlab')"><span class="nav-label">Vector Fields</span><span class="nav-badge">SIM</span></button>
         </div>
       </div>
-      <div class="cluster open" id="cl-music">
+      <div class="cluster" id="cl-music">
         <button class="cluster-head music-head" onclick="toggleCluster('cl-music')"><span class="cluster-icon">&#9834;</span><span class="cluster-label">Music Lab</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
           <button class="nav-item mus" data-tab="chordlab" onclick="switchTab('chordlab')"><span class="nav-label">ChordLab</span><span class="nav-badge">MIC</span></button>
@@ -194,7 +196,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item mus" data-tab="harmonywheel" onclick="switchTab('harmonywheel')"><span class="nav-label">Harmony Wheel</span><span class="nav-badge">NEW</span></button>
         </div>
       </div>
-      <div class="cluster open" id="cl-shader">
+      <div class="cluster" id="cl-shader">
         <button class="cluster-head shader-head" onclick="toggleCluster('cl-shader')"><span class="cluster-icon">&#10022;</span><span class="cluster-label">Shader Library</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
           <button class="nav-item vx" data-tab="voxel" onclick="switchTab('voxel')"><span class="nav-label">Voxel Flythrough</span><span class="nav-badge">GPU</span></button>
@@ -243,8 +245,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
   </div>
 </div>
 <script>
-const PAGES={home:'home.html',hohmann:'hohmann.html',forge:'forge.html',crafting:'crafting.html',planner:'planner.html',guide:'guide.html',behaviors:'behaviors.html',controls:'controls.html',gravity:'gravity.html',selection:'selection.html',explosion:'explosion.html',flare:'flare.html',solar:'solar.html',shipdesigner:'ship-designer.html',flagdesigner:'flag-designer.html',matlab:'material-lab.html',orbital:'atomic-orbital-vr.html','molecular-bond':'molecular-bond.html',supernova:'fractal-orb.html',platonic:'platonic-mirrors.html',wormhole:'ellis-wormhole.html',blackhole:'blackhole.html',galaxy:'galaxy.html',polarization:'circular-polarization.html',diffraction:'diffraction-lab.html','double-slit':'double-slit.html',fortom:'for-tom.html',leo:'leo-catalog.html',magnetlab:'magnetlab.html','biot-savart':'biot-savart.html',maxwell:'maxwells-equations.html','twenty-to-four':'twenty-to-four.html',fluidlab:'fluidlab.html',cornell:'cornell.html',translate:'translate.html',qave:'quantum-algorithm-visualizer.html','qft-flow':'qft-flow.html','qft-store':'qft-store.html','frqi':'frqi-quantum-image-lab.html',attractorlab:'attractorlab.html',flowlab:'flowlab.html',voxel:'voxel-flythrough.html',chordlab:'chordlab.html',chordchart:'chord-chart.html',harmonywheel:'harmony-wheel.html','branched-flow':'cube_branched_flow.html','glass-cube':'glass-cube.html'};
-const LABELS={home:'Overview',hohmann:'Hohmann Transfer',forge:'Planet Forge',crafting:'Crafting',planner:'Station Planner',guide:'Station Guide',behaviors:'Behaviors',controls:'Controls',gravity:'Gravity Sim',selection:'Selection',explosion:'Explosion',flare:'Engine Propulsion Effects',solar:'Solar Transit Study',shipdesigner:'Ship Designer',flagdesigner:'Flag Designer',matlab:'PBR Material Studio',orbital:'Atomic Orbital','molecular-bond':'Molecular Bond',supernova:'Fractal Orb',platonic:'Platonic Mirrors',wormhole:'Wormhole',blackhole:'Black Hole',galaxy:'Galaxy',polarization:'Circular Polarization',diffraction:'Aperture Diffraction','double-slit':'Double-Slit Diffraction',fortom:'For Tom',leo:'LEO Catalog',magnetlab:'MagnetLab','biot-savart':'Biot\u2013Savart Law',maxwell:'Maxwell\u2019s Equations','twenty-to-four':'Twenty to Four',fluidlab:'FluidLab',cornell:'Rendering Engine',translate:'Translation Tool',qave:'Quantum Algorithm Visualizer','qft-flow':'QFT Flow','qft-store':'Spin Storage','frqi':'FRQI Image Lab',attractorlab:'Strange Attractors',flowlab:'Vector Fields',voxel:'Voxel Flythrough',chordlab:'ChordLab',chordchart:'Chord Chart',harmonywheel:'Harmony Wheel','branched-flow':'Branched Flow','glass-cube':'Refraction'};
+const PAGES={home:'home.html',hohmann:'hohmann.html',forge:'forge.html',crafting:'crafting.html',planner:'planner.html',guide:'guide.html',behaviors:'behaviors.html',controls:'controls.html',gravity:'gravity.html',selection:'selection.html',explosion:'explosion.html',flare:'flare.html',solar:'solar.html',shipdesigner:'ship-designer.html',flagdesigner:'flag-designer.html',matlab:'material-lab.html',orbital:'atomic-orbital-vr.html','molecular-bond':'molecular-bond.html',supernova:'fractal-orb.html',platonic:'platonic-mirrors.html',wormhole:'ellis-wormhole.html',blackhole:'blackhole.html',galaxy:'galaxy.html',polarization:'circular-polarization.html',diffraction:'diffraction-lab.html','double-slit':'double-slit.html',fortom:'for-tom.html',leo:'leo-catalog.html',magnetlab:'magnetlab.html','biot-savart':'biot-savart.html',maxwell:'maxwells-equations.html','twenty-to-four':'twenty-to-four.html',fluidlab:'fluidlab.html','ns-equations':'ns-equations.html','ns-burgers':'ns-burgers.html','ns-flow2d':'ns-flow2d.html','ns-flow3d':'ns-flow3d.html','ns-wave':'ns-wave.html','ns-cascade':'ns-cascade.html','ns-vortex':'ns-vortex.html',cornell:'cornell.html',translate:'translate.html',qave:'quantum-algorithm-visualizer.html','qft-flow':'qft-flow.html','qft-store':'qft-store.html','frqi':'frqi-quantum-image-lab.html',attractorlab:'attractorlab.html',flowlab:'flowlab.html',voxel:'voxel-flythrough.html',chordlab:'chordlab.html',chordchart:'chord-chart.html',harmonywheel:'harmony-wheel.html','branched-flow':'cube_branched_flow.html','glass-cube':'glass-cube.html'};
+const LABELS={home:'Overview',hohmann:'Hohmann Transfer',forge:'Planet Forge',crafting:'Crafting',planner:'Station Planner',guide:'Station Guide',behaviors:'Behaviors',controls:'Controls',gravity:'Gravity Sim',selection:'Selection',explosion:'Explosion',flare:'Engine Propulsion Effects',solar:'Solar Transit Study',shipdesigner:'Ship Designer',flagdesigner:'Flag Designer',matlab:'PBR Material Studio',orbital:'Atomic Orbital','molecular-bond':'Molecular Bond',supernova:'Fractal Orb',platonic:'Platonic Mirrors',wormhole:'Wormhole',blackhole:'Black Hole',galaxy:'Galaxy',polarization:'Circular Polarization',diffraction:'Aperture Diffraction','double-slit':'Double-Slit Diffraction',fortom:'For Tom',leo:'LEO Catalog',magnetlab:'MagnetLab','biot-savart':'Biot\u2013Savart Law',maxwell:'Maxwell\u2019s Equations','twenty-to-four':'Twenty to Four',fluidlab:'Stable Fluids','ns-equations':'Navier–Stokes 1D','ns-burgers':'Burgers Equation','ns-flow2d':'Navier–Stokes 2D','ns-flow3d':'Navier–Stokes 3D','ns-wave':'Blowup: Wave','ns-cascade':'Blowup: Cascade','ns-vortex':'Blowup: Vortex',cornell:'Rendering Engine',translate:'Translation Tool',qave:'Quantum Algorithm Visualizer','qft-flow':'QFT Flow','qft-store':'Spin Storage','frqi':'FRQI Image Lab',attractorlab:'Strange Attractors',flowlab:'Vector Fields',voxel:'Voxel Flythrough',chordlab:'ChordLab',chordchart:'Chord Chart',harmonywheel:'Harmony Wheel','branched-flow':'Branched Flow','glass-cube':'Refraction'};
 const XR_PAGES=new Set(['orbital']);
 const MIC_PAGES=new Set(['chordlab']);
 let activeTab=null;

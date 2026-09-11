@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>FluidLab // Stella Nova · davesgames.io</title>
+<title>Stable Fluids // Stella Nova · davesgames.io</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -57,7 +57,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
-<div class="topbar"><div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">FluidLab</span></div><div class="topbar-r">SYS // <strong>NAVIER-STOKES</strong></div></div>
+<div class="topbar"><div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Stable Fluids</span></div><div class="topbar-r">SYS // <strong>STABLE FLUIDS</strong> · Stam 1999</div></div>
 <div id="main">
   <div id="panel"><div class="p-body">
     <div class="p-section"><div class="p-sec-lbl">Colormap</div><div class="cmap-grid" id="cmap-grid">
@@ -108,7 +108,7 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
   <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
   <div id="canvas-wrap"><canvas id="sim-canvas"></canvas>
     <button id="vec-btn" onclick="SIM.showVectors=!SIM.showVectors;this.className=SIM.showVectors?'on':'';this.innerHTML=SIM.showVectors?'→ Vectors ON':'→ Vectors';document.getElementById('tog-vectors').className='tog-btn '+(SIM.showVectors?'on':'off')">→ Vectors</button>
-    <section class="eq-panel collapsed" id="eq-panel"><div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Navier-Stokes Equations</span><span class="arrow">▼</span></div>
+    <section class="eq-panel collapsed" id="eq-panel"><div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Stable Fluids — Stam's operator splitting</span><span class="arrow">▼</span></div>
       <div class="eq-blocks"><div class="eq-block"><div class="eq-sublabel">Momentum</div><div class="eq-row" id="eq-mom"></div></div><div class="eq-block"><div class="eq-sublabel">Incompressibility</div><div class="eq-row" id="eq-cont"></div></div><div class="eq-block"><div class="eq-sublabel">Pressure Poisson</div><div class="eq-row" id="eq-pois"></div></div><div class="eq-block"><div class="eq-sublabel">Velocity Correction</div><div class="eq-row" id="eq-corr"></div></div></div>
     </section>
   </div>
