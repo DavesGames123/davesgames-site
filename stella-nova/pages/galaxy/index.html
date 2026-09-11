@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galaxy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud"><h1>Galaxy</h1></div>
+<div class="stats"><div id="fps"></div><div id="res"></div><div id="starcount"></div></div>
+<div class="hint" id="hint">click + drag to orbit · scroll to zoom</div>
+
+<div class="slider-wrap">
+  <span class="slider-label">Timescale</span>
+  <input type="range" id="timescale" min="0" max="100" value="50">
+  <span class="slider-val" id="tsVal">0.50×</span>
+  <span class="sep"></span>
+  <span class="slider-label">Stars</span>
+  <input type="range" id="density" min="1000" max="20000" value="10000" step="500">
+  <span class="slider-val" id="densityVal">10000</span>
+  <span class="sep"></span>
+  <span class="slider-label">Wind</span>
+  <input type="range" id="spiral" min="0" max="200" value="70">
+  <span class="slider-val" id="spiralVal">0.70</span>
+  <span class="sep"></span>
+  <span class="slider-label">Tilt</span>
+  <input type="range" id="tilt" min="10" max="60" value="28">
+  <span class="slider-val" id="tiltVal">2.8</span>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+  :root {
+    --bg:#070809;--border:rgba(150,200,255,0.06);--border-b:rgba(150,200,255,0.14);
+    --accent:#ff7b00;--accent2:#00c8ff;--dim:#3a4450;--text:#8fa0b0;--track:#151c24;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);font-family:'Share Tech Mono',monospace;font-size:12px;
+       overflow:hidden;height:100vh;display:flex;flex-direction:column}
+  body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;
+    background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.07) 4px)}
+
+  /* label bar */
+  #label-bar{display:flex;height:26px;border-bottom:1px solid var(--border);flex-shrink:0;z-index:10}
+  .col-label{flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;
+    font-size:7px;letter-spacing:1.5px;color:var(--dim);border-right:1px solid var(--border);
+    text-transform:uppercase;line-height:1.3;cursor:pointer;transition:color 0.2s}
+  .col-label:last-child{border-right:none}
+  .col-label .sub{color:rgba(150,200,255,0.2);font-size:6px}
+  .col-label:hover{color:var(--text)}
+  .col-label.selected{color:var(--accent)}
+  .col-label.selected .sub{color:rgba(255,123,0,0.4)}
+
+  /* main area */
+  #main{flex:1;display:flex;overflow:hidden;min-height:0}
+
+  /* strip */
+  #strip{flex:1;display:flex;overflow:hidden;position:relative;min-width:0}
+  .col{flex:1;position:relative;border-right:1px solid var(--border);overflow:hidden;cursor:pointer}
+  .col:last-child{border-right:none}
+  .col canvas{width:100%;height:100%;display:block}
+  .var-tag{position:absolute;bottom:8px;left:0;right:0;text-align:center;
+    font-size:7px;letter-spacing:2px;color:rgba(150,200,255,0.18);text-transform:uppercase;pointer-events:none}
+  .sel-ring{position:absolute;inset:0;pointer-events:none;
+    border:2px solid transparent;transition:border-color 0.2s}
+  .col.selected .sel-ring{border-color:var(--accent);box-shadow:inset 0 0 12px rgba(255,123,0,0.08)}
+  .col.selected .var-tag{color:var(--accent)}
+
+  /* control panel — right sidebar */
+  #ctrl-panel{width:200px;min-width:200px;background:rgba(7,8,9,0.95);
+    border-left:1px solid var(--border-b);display:flex;flex-direction:column;
+    flex-shrink:0;z-index:50}
+  #ctrl-header{padding:10px 12px 8px;border-bottom:1px solid var(--border);flex-shrink:0}
+  #ctrl-header h3{font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;
+    color:var(--accent);letter-spacing:3px}
+  #ctrl-header p{font-size:7px;color:var(--dim);letter-spacing:1px;margin-top:2px}
+  #sel-indicator{font-size:7px;color:var(--accent2);letter-spacing:1px;margin-top:4px}
+  #ctrl-inner{flex:1;overflow-y:auto;padding:8px 0 12px;
+    scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+  #ctrl-inner::-webkit-scrollbar{width:3px}
+  #ctrl-inner::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+  .section{display:flex;align-items:center;gap:6px;padding:8px 12px 4px}
+  .sec-lbl{font-size:7px;letter-spacing:2px;color:var(--dim);text-transform:uppercase}
+  .sec-line{flex:1;height:1px;background:var(--border)}
+  .ctrl{padding:3px 12px 6px}
+  .ctrl-row{display:flex;justify-content:space-between;margin-bottom:3px}
+  .ctrl-name{font-size:9px;color:var(--text)}
+  .ctrl-val{font-size:9px;color:var(--accent);min-width:32px;text-align:right;font-weight:bold}
+  input[type=range]{-webkit-appearance:none;width:100%;height:2px;background:var(--track);
+    outline:none;border-radius:1px;cursor:pointer}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;
+    border-radius:50%;background:var(--accent);margin-top:-4px;box-shadow:0 0 5px var(--accent)}
+  input[type=range]::-moz-range-thumb{width:10px;height:10px;border:none;border-radius:50%;background:var(--accent)}
+  #reset-btn{margin:8px 12px 0;padding:6px;background:transparent;border:1px solid var(--border);
+    color:var(--dim);cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:8px;
+    letter-spacing:2px;text-transform:uppercase;width:calc(100% - 24px);transition:all 0.2s}
+  #reset-btn:hover{border-color:var(--accent2);color:var(--accent2)}

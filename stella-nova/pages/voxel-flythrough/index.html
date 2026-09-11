@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Voxel Flythrough // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<button id="mob-btn" onclick="document.getElementById('rail').classList.toggle('open')">☰</button>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Voxel Flythrough</span></div>
+  <div class="topbar-r">SYS // <strong>SHADER LIBRARY</strong></div>
+</div>
+
+<div id="main">
+  <!-- LEFT RAIL -->
+  <div id="rail">
+    <div class="r-sec">
+      <div class="r-lbl">Camera</div>
+      <div class="btns"><button class="btn active" id="btn-fly" onclick="setMode('fly')">▶ Flythrough</button><button class="btn amber" id="btn-walk" onclick="setMode('walk')">⛶ WASD Fly</button></div>
+      <div class="btns"><button class="btn active" id="btn-play" onclick="togglePlay()">❚❚ Pause</button><button class="btn" id="btn-dice" onclick="randomizeSeed()">⚄ Seed</button><button class="btn" id="btn-bake" onclick="rebake()">↻ Rebake</button></div>
+      <div class="hint" id="walk-hint" style="display:none"><b>WASD Fly:</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move · <kbd>Spc</kbd> up · <kbd>Shift</kbd> down · click-drag to look · scroll to zoom.</div>
+      <div class="r-row" id="row-cruise" style="margin-top:8px"><span class="r-row-lbl">Cruise</span><input type="range" id="sl-cruise" min="0.2" max="4" value="0.4" step="0.1" oninput="setF('pathSpeed',this,1)"><span class="val" id="vl-cruise">0.4</span></div>
+      <div class="r-row" id="row-speed" style="display:none"><span class="r-row-lbl">Move spd</span><input type="range" id="sl-movespeed" min="4" max="40" value="14" step="1" oninput="setF('moveSpeed',this,0)"><span class="val" id="vl-movespeed">14</span></div>
+    </div>
+
+    <div class="r-sec">
+      <div class="r-lbl">Procedural Gen</div>
+      <div class="r-row"><span class="r-row-lbl">Seed</span><input type="range" id="sl-seed" min="0" max="200" value="0" step="0.5" oninput="setSeed(this)"><span class="val" id="vl-seed">0.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Frequency</span><input type="range" id="sl-freq" min="0.02" max="0.18" value="0.07" step="0.005" oninput="setU('uFreq',this,3)"><span class="val" id="vl-freq">0.070</span></div>
+      <div class="r-row"><span class="r-row-lbl">Octaves</span><input type="range" id="sl-oct" min="1" max="6" value="2" step="1" oninput="setUi('uOct',this)"><span class="val" id="vl-oct">2</span></div>
+      <div class="r-row"><span class="r-row-lbl">Height</span><input type="range" id="sl-height" min="8" max="40" value="22" step="0.5" oninput="setU('uHeight',this,1)"><span class="val" id="vl-height">22</span></div>
+      <div class="r-row"><span class="r-row-lbl">Threshold</span><input type="range" id="sl-thresh" min="4" max="20" value="12" step="0.25" oninput="setU('uThresh',this,1)"><span class="val" id="vl-thresh">12</span></div>
+      <div class="r-row"><span class="r-row-lbl">Slope</span><input type="range" id="sl-slope" min="0" max="0.3" value="0.06" step="0.005" oninput="setU('uSlope',this,3)"><span class="val" id="vl-slope">0.060</span></div>
+      <div class="r-row"><span class="r-row-lbl">Evolve</span><input type="range" id="sl-morph" min="0" max="0.25" value="0.08" step="0.005" oninput="setMorph(this)"><span class="val" id="vl-morph">13s</span></div>
+      <div class="r-row"><span class="r-row-lbl">Bubble</span><input type="range" id="sl-clear" min="0" max="60" value="2" step="1" oninput="setClear(this)"><span class="val" id="vl-clear">2</span></div>
+    </div>
+
+    <div class="r-sec">
+      <div class="r-lbl">Data Fauna</div>
+      <button class="tog on" id="tog-swarm" onclick="togSwarm(this)">✦ Swarm</button>
+      <div class="r-row"><span class="r-row-lbl">Count</span><span class="val" id="vl-bcount" style="width:auto;flex:1;text-align:left;color:var(--text-faint);font-weight:500">78k</span></div>
+      <div class="r-row"><span class="r-row-lbl">Speed</span><input type="range" id="sl-bspeed" min="8" max="64" value="16" step="1" oninput="setB('speed',this,1)"><span class="val" id="vl-bspeed">16.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Wall cling</span><input type="range" id="sl-bcling" min="0" max="2" value="0.4" step="0.05" oninput="setB('cling',this,2)"><span class="val" id="vl-bcling">0.40</span></div>
+      <div class="r-row"><span class="r-row-lbl">Cohesion</span><input type="range" id="sl-bcohesion" min="0" max="3" value="1.7" step="0.05" oninput="setB('cohesion',this,2)"><span class="val" id="vl-bcohesion">1.70</span></div>
+      <div class="r-row"><span class="r-row-lbl">Wander</span><input type="range" id="sl-bwander" min="0" max="2" value="0.2" step="0.05" oninput="setB('wander',this,2)"><span class="val" id="vl-bwander">0.20</span></div>
+      <div class="r-row"><span class="r-row-lbl">Glow</span><input type="range" id="sl-bglow" min="0.5" max="3" value="1.4" step="0.05" oninput="setB('glow',this,2)"><span class="val" id="vl-bglow">1.40</span></div>
+    </div>
+    <div class="r-sec">
+      <div class="r-lbl">Glow & Color</div>
+      <div class="btns"><button class="btn active" id="btn-pal-full" onclick="setPalette(0)">Palette</button><button class="btn" id="btn-pal-duo" onclick="setPalette(1)">Duotone</button></div>
+      <div class="r-row"><span class="r-row-lbl">Color size</span><input type="range" id="sl-region" min="4" max="40" value="14" step="1" oninput="setUi('uRegion',this)"><span class="val" id="vl-region">14</span></div>
+      <div class="r-row"><span class="r-row-lbl">Edge glow</span><input type="range" id="sl-eglow" min="0" max="4" value="1.9" step="0.05" oninput="setU('uEdgeGlow',this,2)"><span class="val" id="vl-eglow">1.90</span></div>
+      <div class="r-row"><span class="r-row-lbl">Edge width</span><input type="range" id="sl-ewidth" min="0.02" max="0.2" value="0.07" step="0.005" oninput="setU('uEdgeW',this,3)"><span class="val" id="vl-ewidth">0.070</span></div>
+      <div class="r-row"><span class="r-row-lbl">Face lum</span><input type="range" id="sl-base" min="0" max="1" value="0.62" step="0.02" oninput="setU('uBaseBright',this,2)"><span class="val" id="vl-base">0.62</span></div>
+      <div class="r-row"><span class="r-row-lbl">Saturate</span><input type="range" id="sl-sat" min="0" max="1.6" value="1" step="0.05" oninput="setU('uSat',this,2)"><span class="val" id="vl-sat">1.00</span></div>
+    </div>
+
+    <div class="r-sec">
+      <div class="r-lbl">CRT & View</div>
+      <button class="tog on" id="tog-scan" onclick="togScan(this)">▤ Scanlines</button>
+      <button class="tog on" id="tog-path" onclick="togPath(this)">⤳ Flight path</button>
+      <div class="r-row"><span class="r-row-lbl">CRT glow</span><input type="range" id="sl-bloom" min="0" max="2.5" value="0.2" step="0.05" oninput="setU('uBloom',this,2)"><span class="val" id="vl-bloom">0.20</span></div>
+      <div class="r-row"><span class="r-row-lbl">Fog</span><input type="range" id="sl-fog" min="0.002" max="0.05" value="0.02" step="0.001" oninput="setU('uFog',this,3)"><span class="val" id="vl-fog">0.020</span></div>
+      <div class="r-row"><span class="r-row-lbl">FOV</span><input type="range" id="sl-focal" min="1" max="2.6" value="1.0" step="0.05" oninput="setU('uFocal',this,2)"><span class="val" id="vl-focal">1.00</span></div>
+      <div class="r-row"><span class="r-row-lbl">Res scale</span><input type="range" id="sl-resscale" min="0.4" max="1" value="0.7" step="0.05" oninput="setResScale(this)"><span class="val" id="vl-resscale">0.70</span></div>
+      <div class="r-row"><span class="r-row-lbl">Max steps</span><input type="range" id="sl-steps" min="48" max="420" value="150" step="2" oninput="setUi('uMaxSteps',this)"><span class="val" id="vl-steps">150</span></div>
+    </div>
+  </div>
+  <div class="mob-overlay" onclick="document.getElementById('rail').classList.remove('open')"></div>
+
+  <!-- CENTER STAGE -->
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="pathOverlay"></canvas>
+
+    <!-- on-screen control legend (desktop) -->
+    <div class="ctrl-legend" id="ctrlLegend"></div>
+  </div>
+</div>
+
+<div id="status-bar">
+  <span>mode <b id="st-mode">flythrough</b></span><span class="sep"></span>
+  <span>seed <b id="st-seed">0.0</b></span><span class="sep"></span>
+  <span>pos <b id="st-pos">0, 0, 0</b></span><span class="sep"></span>
+  <span>steps <b id="st-steps">150</b></span><span class="sep"></span>
+  <span id="st-fps">-- fps</span>
+</div>
+
+<!-- ════════ VOXEL RENDERER (WebGL2) ════════ -->
+<script src="main.js"></script>
+</body>
+</html>

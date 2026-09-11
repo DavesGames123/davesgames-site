@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>LEO / CAT — low earth orbit catalog & chronograph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<!-- Splash -->
+<div id="splash">
+  <div class="splash-header">
+    <div class="logo">LEO / CAT</div>
+    <div class="sub">low earth orbit :: catalog &amp; chronograph</div>
+  </div>
+
+  <div class="splash-rack">
+    <!-- Top row: 5 circular gauges -->
+    <div class="gauge-row">
+      <div class="gauge" data-prog="catalog">
+        <svg viewBox="0 0 70 70" class="gauge-svg">
+          <circle class="g-bg"    cx="35" cy="35" r="28" />
+          <circle class="g-tick"  cx="35" cy="35" r="32" />
+          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
+          <g class="g-needle" transform="rotate(-135 35 35)">
+            <line x1="35" y1="35" x2="35" y2="13" />
+            <circle cx="35" cy="35" r="2.5" />
+          </g>
+          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
+        </svg>
+        <div class="g-label">CATALOG</div>
+      </div>
+      <div class="gauge" data-prog="weather">
+        <svg viewBox="0 0 70 70" class="gauge-svg">
+          <circle class="g-bg"    cx="35" cy="35" r="28" />
+          <circle class="g-tick"  cx="35" cy="35" r="32" />
+          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
+          <g class="g-needle" transform="rotate(-135 35 35)">
+            <line x1="35" y1="35" x2="35" y2="13" />
+            <circle cx="35" cy="35" r="2.5" />
+          </g>
+          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
+        </svg>
+        <div class="g-label">WIND GRID</div>
+      </div>
+      <div class="gauge" data-prog="streams">
+        <svg viewBox="0 0 70 70" class="gauge-svg">
+          <circle class="g-bg"    cx="35" cy="35" r="28" />
+          <circle class="g-tick"  cx="35" cy="35" r="32" />
+          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
+          <g class="g-needle" transform="rotate(-135 35 35)">
+            <line x1="35" y1="35" x2="35" y2="13" />
+            <circle cx="35" cy="35" r="2.5" />
+          </g>
+          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
+        </svg>
+        <div class="g-label">STREAMS</div>
+      </div>
+      <div class="gauge" data-prog="storms">
+        <svg viewBox="0 0 70 70" class="gauge-svg">
+          <circle class="g-bg"    cx="35" cy="35" r="28" />
+          <circle class="g-tick"  cx="35" cy="35" r="32" />
+          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
+          <g class="g-needle" transform="rotate(-135 35 35)">
+            <line x1="35" y1="35" x2="35" y2="13" />
+            <circle cx="35" cy="35" r="2.5" />
+          </g>
+          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
+        </svg>
+        <div class="g-label">STORMS</div>
+      </div>
+      <div class="gauge" data-prog="geo">
+        <svg viewBox="0 0 70 70" class="gauge-svg">
+          <circle class="g-bg"    cx="35" cy="35" r="28" />
+          <circle class="g-tick"  cx="35" cy="35" r="32" />
+          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
+          <g class="g-needle" transform="rotate(-135 35 35)">
+            <line x1="35" y1="35" x2="35" y2="13" />
+            <circle cx="35" cy="35" r="2.5" />
+          </g>
+          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
+        </svg>
+        <div class="g-label">GEODESY</div>
+      </div>
+    </div>
+
+    <!-- Middle: linear meters for individual TLE catalog groups -->
+    <div class="meter-stack" id="catalog-meters">
+      <!-- generated dynamically as each group starts loading -->
+    </div>
+
+    <!-- Bottom: continuous scan bar + spinning indicators -->
+    <div class="rack-bottom">
+      <div class="scan-block">
+        <div class="scan-label">SIGNAL ACQUISITION</div>
+        <div class="scan-track"><div class="scan-bar"></div></div>
+      </div>
+      <div class="spinners">
+        <div class="spinner s1"></div>
+        <div class="spinner s2"></div>
+        <div class="spinner s3"></div>
+      </div>
+    </div>
+
+    <!-- Log stream -->
+    <div id="splash-lines"></div>
+  </div>
+</div>
+
+<!-- Brand block (top-left) -->
+<div id="brand-bar">
+  <span class="brand">LEO<span class="div">/</span>CAT</span>
+  <button id="menu-btn" class="menu-btn">&#9776;</button>
+  <button id="menu-btn-right" class="menu-btn">i</button>
+</div>
+
+<!-- Unified time panel (bottom) -->
+<div id="timepanel" class="panel corners">
+  <span class="ctl"></span><span class="ctr"></span>
+  <div class="tp-display">
+    <div class="tp-time" id="tc-time">—</div>
+    <div class="tp-stats">
+      <span>OBJ <span class="v" id="stat-count">0</span></span>
+      <span class="status-warn" id="stat-status">BOOT</span>
+    </div>
+  </div>
+  <div id="slider">
+    <div id="slider-handle"></div>
+    <div class="slider-ticks">
+      <span class="tk" data-lbl="−1y"  style="left: 0%"></span>
+      <span class="tk" data-lbl="−1mo" style="left: 13.87%"></span>
+      <span class="tk" data-lbl="−1d"  style="left: 32.53%"></span>
+      <span class="tk" data-lbl="−1h"  style="left: 46.36%"></span>
+      <span class="tk now"             style="left: 50%"></span>
+      <span class="tk" data-lbl="+1h"  style="left: 53.64%"></span>
+      <span class="tk" data-lbl="+1d"  style="left: 67.47%"></span>
+      <span class="tk" data-lbl="+1mo" style="left: 86.13%"></span>
+      <span class="tk" data-lbl="+1y"  style="left: 100%"></span>
+    </div>
+  </div>
+  <div class="tp-row tp-controls">
+    <button id="btn-rewind" class="tc-btn" title="back 1 day">&#x23EA;</button>
+    <button id="btn-play" class="tc-btn playing" title="play/pause">&#x25B6;</button>
+    <button id="btn-now" class="tc-btn" title="now">&#x29BF;</button>
+    <span class="rate-label">RATE</span>
+    <div id="rate-slider"><div id="rate-slider-handle"></div></div>
+    <span class="rate-value" id="rate-value">3×</span>
+  </div>
+</div>
+
+<!-- Left panel: search + filters + overlays -->
+<aside id="leftpanel">
+  <div class="panel corners" id="search-panel">
+    <span class="ctl"></span><span class="ctr"></span>
+    <h2 class="cyan">search <span class="dot"></span></h2>
+    <div class="panel-body">
+      <input id="search-input" type="text" placeholder="name or norad id..." autocomplete="off" spellcheck="false">
+      <div class="quick-tags">
+        <button class="qtag" data-q="STARLINK">Starlink</button>
+        <button class="qtag" data-q="GPS">GPS</button>
+        <button class="qtag" data-q="GLONASS">GLONASS</button>
+        <button class="qtag" data-q="GALILEO">Galileo</button>
+        <button class="qtag" data-q="IRIDIUM">Iridium</button>
+        <button class="qtag" data-q="COSMOS">Cosmos</button>
+        <button class="qtag" data-q="ONEWEB">OneWeb</button>
+        <button class="qtag" data-q="HUBBLE">Hubble</button>
+      </div>
+      <div id="search-results"></div>
+    </div>
+  </div>
+  <div class="panel corners" id="load-status">
+    <span class="ctl"></span><span class="ctr"></span>
+    <h2 class="cyan">load status <span class="dot" id="load-dot"></span></h2>
+    <div class="panel-body" id="load-rows"></div>
+  </div>
+  <div class="panel corners">
+    <span class="ctl"></span><span class="ctr"></span>
+    <h2>filter <span class="dot"></span></h2>
+    <div class="panel-body">
+      <div class="filter-group">
+        <label class="filter-row" data-cat="starlink">
+          <input type="checkbox" checked>
+          <span class="legend-mark starlink"></span>
+          <span class="label">STARLINK</span>
+          <span class="count" id="cnt-starlink">0</span>
+        </label>
+        <div class="cat-desc">spacex broadband constellation — large green triangles</div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-row" data-cat="payload">
+          <input type="checkbox" checked>
+          <span class="legend-mark payload"></span>
+          <span class="label">PAYLOADS</span>
+          <span class="count" id="cnt-payload">0</span>
+        </label>
+        <div class="cat-desc">satellites — active spacecraft or retired payloads still in orbit</div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-row" data-cat="station">
+          <input type="checkbox" checked>
+          <span class="legend-mark station"></span>
+          <span class="label">STATIONS</span>
+          <span class="count" id="cnt-station">0</span>
+        </label>
+        <div class="cat-desc">crewed orbital platforms — ISS, tiangong, css</div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-row" data-cat="rocket">
+          <input type="checkbox" checked>
+          <span class="legend-mark rocket"></span>
+          <span class="label">ROCKET BODIES</span>
+          <span class="count" id="cnt-rocket">0</span>
+        </label>
+        <div class="cat-desc">spent upper stages (R/B) — boosters left behind after deployment</div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-row" data-cat="debris">
+          <input type="checkbox" checked>
+          <span class="legend-mark debris"></span>
+          <span class="label">DEBRIS</span>
+          <span class="count" id="cnt-debris">0</span>
+        </label>
+        <div class="cat-desc">tracked fragments from collisions, explosions, and ASAT tests</div>
+      </div>
+      <div class="filter-group">
+        <label class="filter-row" data-cat="storm">
+          <input type="checkbox" checked>
+          <span class="legend-mark storm"></span>
+          <span class="label">STORMS</span>
+          <span class="count" id="cnt-storm">0</span>
+        </label>
+        <div class="cat-desc">active tropical cyclones (noaa nhc, may be blocked by cors)</div>
+      </div>
+    </div>
+  </div>
+  <div class="panel corners">
+    <span class="ctl"></span><span class="ctr"></span>
+    <h2 class="cyan">overlays <span class="dot"></span></h2>
+    <div class="panel-body">
+      <label class="filter-row" data-overlay="trails">
+        <input type="checkbox" checked>
+        <span class="label">ORBIT TRAIL</span>
+      </label>
+      <label class="filter-row" data-overlay="cities">
+        <input type="checkbox" checked>
+        <span class="label">CITY LABELS</span>
+      </label>
+      <label class="filter-row" data-overlay="weather">
+        <input type="checkbox">
+        <span class="label">WIND FIELD</span>
+      </label>
+      <label class="filter-row" data-overlay="satlabels">
+        <input type="checkbox" checked>
+        <span class="label">SAT LABELS (LOD)</span>
+      </label>
+    </div>
+  </div>
+</aside>
+
+<!-- Right panel: object info -->
+<aside id="rightpanel">
+  <div class="panel corners">
+    <span class="ctl"></span><span class="ctr"></span>
+    <h2 class="cyan">object info <span class="dot"></span></h2>
+    <div class="panel-body" id="info-body">
+      <div class="info-empty">click any satellite, debris, or station to see details</div>
+    </div>
+  </div>
+</aside>
+
+<!-- Slider bar -->
+<!-- Hidden time fallback for mobile (kept for layout symmetry) -->
+<span id="mobile-time" style="display:none">—</span>
+
+<!-- Hover/Lock Chip -->
+<div id="chip" class="panel corners">
+  <div class="ch-head">
+    <span class="ch-name">—</span>
+    <span class="ch-cat">—</span>
+    <span id="chip-close">×</span>
+  </div>
+  <div class="ch-body"></div>
+  <div class="ch-actions">
+    <button class="ch-btn active" id="chip-trail">TRAIL</button>
+    <button class="ch-btn" id="chip-focus">FOCUS</button>
+  </div>
+  <div class="ch-hint">hover to inspect</div>
+</div>
+
+<!-- Target reticle -->
+<div id="target-reticle">
+  <span class="tr-cross-h"></span>
+  <span class="tr-cross-v"></span>
+  <span class="tr-ring"></span>
+  <span class="tr-corner tr-tl"></span>
+  <span class="tr-corner tr-tr"></span>
+  <span class="tr-corner tr-bl"></span>
+  <span class="tr-corner tr-br"></span>
+  <span class="tr-label">LOCKED</span>
+</div>
+
+<!-- KSP-style banner -->
+<div id="banner" class="panel corners">
+  <span class="ctl"></span><span class="ctr"></span>
+  <button id="banner-close">×</button>
+  <div class="banner-inner">
+    <div class="banner-head">
+      <span class="b-title">—</span>
+      <span class="b-meta">—</span>
+    </div>
+    <div class="b-body">—</div>
+    <div class="b-stats"></div>
+  </div>
+</div>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<script type="importmap">
+{ "imports": {
+  "three":          "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>

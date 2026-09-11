@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Material Lab — Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+
+  <!-- ═══ TOP BAR ═══ -->
+  <div class="topbar">
+    <div class="topbar-title"><em>Material</em> Lab</div>
+    <div class="topbar-sep"></div>
+    <button class="btn purple" id="btn-upload" onclick="document.getElementById('file-input').click()">Upload</button>
+    <input type="file" id="file-input" accept="image/*" style="display:none">
+    <div class="topbar-sep"></div>
+    <button class="btn purple" id="btn-segment" disabled onclick="doSegment()">Segment</button>
+    <button class="btn purple" id="btn-depth" disabled onclick="doDepth()">Depth</button>
+    <button class="btn purple" id="btn-normals" disabled onclick="doNormals()">Normals</button>
+    <button class="btn green" id="btn-pbr" disabled onclick="doPBR()">Full PBR</button>
+    <div class="topbar-sep"></div>
+    <button class="btn" id="btn-editdepth" disabled onclick="openDepthEditor()">Edit Depth</button>
+    <button class="btn" id="btn-nfd" disabled onclick="doNFD()">N&#8592;D</button>
+    <button class="btn red" onclick="clearAll()">Clear</button>
+    <div class="topbar-spacer"></div>
+    <label class="server-label">Server <input type="text" id="server-url" value="http://localhost:8787" class="server-input"></label>
+  </div>
+
+  <!-- ═══ LIGHT & MATERIAL CONTROLS ═══ -->
+  <div class="light-sphere-wrap">
+    <!-- Draggable light sphere -->
+    <div class="light-sphere" id="light-sphere">
+      <canvas id="sphere-canvas" width="180" height="180"></canvas>
+    </div>
+    <!-- Hidden inputs for compatibility -->
+    <input type="hidden" id="light-x" value="1.5">
+    <input type="hidden" id="light-y" value="1.5">
+    <input type="hidden" id="light-z" value="2.0">
+
+    <div class="light-controls-col">
+      <div class="light-controls-row">
+        <div class="ctrl"><label>Intensity</label><input type="range" id="light-int" min="0.0" max="10" step="0.05" value="1.8" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Cone</label><input type="range" id="light-cone" min="1" max="180" step="1" value="90" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Distance</label><input type="range" id="light-dist" min="0.5" max="5" step="0.05" value="2.0" oninput="updateLightFromSphere();schedRender()"></div>
+        <span class="light-readout" id="light-readout">X:1.50 Y:1.50 Z:2.00</span>
+      </div>
+      <div class="light-controls-row">
+        <div class="ctrl"><label>Rough&#215;</label><input type="range" id="rough-mult" min="0" max="2" step="0.05" value="1.0" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Metal&#215;</label><input type="range" id="metal-mult" min="0" max="2" step="0.05" value="1.0" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Ambient</label><input type="range" id="ambient" min="0" max="0.5" step="0.01" value="0.08" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Norm Str</label><input type="range" id="norm-str" min="0" max="3" step="0.05" value="1.0" oninput="schedRender()"></div>
+        <div class="ctrl"><label>Depth Smooth</label><input type="range" id="depth-smooth" min="0.1" max="8" step="0.1" value="1.0"></div>
+        <div class="ctrl"><label>BG</label><select id="bg-mode" onchange="schedRender()"><option value="0">Checker</option><option value="1">Black</option><option value="2">Gray 18%</option></select></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ HDRI ROW ═══ -->
+  <div class="ctrl-row hdri-row">
+    <button class="btn yellow" onclick="document.getElementById('hdri-input').click()">Load HDRI</button>
+    <input type="file" id="hdri-input" accept=".hdr,.png,.jpg,.jpeg,.webp" style="display:none">
+    <img class="hdri-preview" id="hdri-preview" onclick="document.getElementById('hdri-input').click()">
+    <div class="ctrl"><label style="color:var(--yellow);opacity:0.7">Rotation</label><input type="range" class="yl" id="env-rot" min="0" max="6.283" step="0.02" value="0" oninput="schedRender()"></div>
+    <div class="ctrl"><label style="color:var(--yellow);opacity:0.7">Exposure</label><input type="range" class="yl" id="env-exp" min="0.1" max="8" step="0.05" value="1.0" oninput="schedRender()"></div>
+    <div class="ctrl-sep"></div>
+    <div class="mode-toggle" id="mode-toggle">
+      <button class="active" data-mode="0" onclick="setLightMode(0)">Point</button>
+      <button data-mode="1" onclick="setLightMode(1)">IBL</button>
+      <button data-mode="2" onclick="setLightMode(2)">Both</button>
+    </div>
+  </div>
+
+  <!-- ═══ VIEWPORT ═══ -->
+  <div class="viewport" id="viewport">
+    <canvas id="gl-canvas"></canvas>
+
+    <!-- Map inspection layer -->
+    <div class="map-inspect hidden" id="map-inspect">
+      <canvas id="inspect-canvas"></canvas>
+    </div>
+
+    <!-- Upload prompt -->
+    <div class="upload-prompt" id="upload-prompt" onclick="document.getElementById('file-input').click()">
+      <div class="upload-glyph">&#9670;</div>
+      <div class="upload-msg">Drop image or click to upload</div>
+      <div class="upload-sub">PNG · JPG · WEBP</div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-overlay hidden" id="progress">
+      <div class="spinner"></div>
+      <div class="progress-text" id="progress-text">Processing...</div>
+    </div>
+  </div>
+
+  <!-- ═══ MAP THUMBNAIL STRIP ═══ -->
+  <div class="map-strip" id="map-strip">
+    <!-- "Render" tab -->
+    <div class="map-thumb render-tab active" id="tab-render" onclick="showRender()">
+      <canvas width="96" height="72" id="thumb-render"></canvas>
+      <div class="map-thumb-footer">
+        <span class="map-thumb-label" style="color:var(--yellow)">Render</span>
+        <button class="dl-btn disabled">&#8681;</button>
+      </div>
+    </div>
+    <!-- Map tabs built by JS -->
+  </div>
+
+  <!-- ═══ DEPTH EDITOR ═══ -->
+  <div class="de-overlay hidden" id="de-overlay">
+    <div class="de-bar">
+      <div class="ctrl"><label>Brush</label><input type="range" id="de-brush" min="2" max="80" value="20"></div>
+      <div class="ctrl"><label>Opacity</label><input type="range" id="de-opacity" min="0.01" max="1" step="0.01" value="0.15"></div>
+      <div class="ctrl"><label>Value</label>
+        <input type="range" id="de-value" min="0" max="255" step="1" value="255"
+               oninput="document.getElementById('de-vprev').style.background='rgb('+this.value+','+this.value+','+this.value+')'">
+        <span id="de-vprev" class="de-val-prev" style="background:#fff"></span>
+      </div>
+      <div class="ctrl-sep"></div>
+      <button class="btn" onclick="deBlur()">Blur</button>
+      <button class="btn red" onclick="deReset()">Reset</button>
+    </div>
+    <div class="de-wrap"><canvas id="de-canvas"></canvas></div>
+    <div class="de-footer">
+      <button class="btn green" onclick="deApply()">Apply &amp; Close</button>
+      <button class="btn" onclick="deCancel()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- ═══ STATUS BAR ═══ -->
+  <div class="statusbar">
+    <div class="status-dot ok" id="status-dot"></div>
+    <span id="status-text">Ready</span>
+    <div class="status-sep"></div>
+    <span id="status-detail">&mdash;</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- VERTEX SHADER                                          -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<script id="vs-quad" type="x-shader/x-vertex">
+attribute vec2 aPos;
+varying vec2 vUV;
+void main() {
+  vUV = aPos * 0.5 + 0.5;
+  vUV.y = 1.0 - vUV.y;
+  gl_Position = vec4(aPos, 0.0, 1.0);
+}
+</script>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- FRAGMENT SHADER                                        -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<script id="fs-pbr" type="x-shader/x-fragment">
+precision highp float;
+varying vec2 vUV;
+
+uniform sampler2D uAlbedo, uNormal, uRoughness, uMetallic, uAO, uMask, uEnvMap;
+uniform vec3  uLightPos, uLightDir;
+uniform float uLightCone, uLightIntensity, uAmbient;
+uniform float uRoughMult, uMetalMult, uNormStr, uAspect, uImgAspect;
+uniform float uEnvRot, uEnvExp;
+uniform vec2  uResolution;
+uniform int   uBgMode, uLightMode;
+uniform bool  uHasAlbedo, uHasNormal, uHasRoughness, uHasMetallic, uHasAO, uHasMask, uHasEnv;
+
+const float PI  = 3.14159265359;
+const float TAU = 6.28318530718;
+
+float D_GGX(float NdH, float a) {
+  float a2 = a * a;
+  float d  = NdH * NdH * (a2 - 1.0) + 1.0;
+  return a2 / (PI * d * d + 1e-7);
+}
+
+vec3 F_Schlick(float cosT, vec3 F0) {
+  return F0 + (1.0 - F0) * pow(clamp(1.0 - cosT, 0.0, 1.0), 5.0);
+}
+
+float G1(float x, float k) { return x / (x * (1.0 - k) + k); }
+
+float G_Smith(float NdV, float NdL, float r) {
+  float k = (r + 1.0);
+  k = k * k / 8.0;
+  return G1(NdV, k) * G1(NdL, k);
+}
+
+vec3 checker(vec2 uv) {
+  float s = 24.0;
+  return mix(vec3(0.10, 0.10, 0.12), vec3(0.16, 0.16, 0.18),
+             mod(floor(uv.x * s) + floor(uv.y * s), 2.0));
+}
+
+vec2 envUV(vec3 d) {
+  float phi   = atan(d.x, d.z) + uEnvRot;
+  float theta = acos(clamp(d.y, -1.0, 1.0));
+  return vec2(mod(phi / TAU + 0.5, 1.0), theta / PI);
+}
+
+vec3 sampleEnv(vec3 d, float lod) {
+  vec2 uv = envUV(d);
+  vec3 c  = texture2D(uEnvMap, uv).rgb;
+  if (lod > 0.0) {
+    float o = 0.02 * lod;
+    c += texture2D(uEnvMap, uv + vec2( o, 0)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(-o, 0)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(0,  o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(0, -o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2( o, o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(-o,-o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2( o,-o)).rgb;
+    c += texture2D(uEnvMap, uv + vec2(-o, o)).rgb;
+    c /= 9.0;
+  }
+  return c * uEnvExp;
+}
+
+void main() {
+  // Background (always uses raw vUV for checker pattern)
+  vec3 bg;
+  if      (uBgMode == 0) bg = checker(vUV);
+  else if (uBgMode == 1) bg = vec3(0.0);
+  else                    bg = vec3(0.18);
+
+  if (!uHasAlbedo) { gl_FragColor = vec4(bg, 1.0); return; }
+
+  // Letterbox UVs: fit image aspect into viewport aspect
+  vec2 texUV = vUV;
+  if (uImgAspect > 0.0) {
+    float vpAspect = uAspect;
+    vec2 scale;
+    if (uImgAspect > vpAspect) {
+      // Image wider than viewport: fit width, letterbox top/bottom
+      scale = vec2(1.0, vpAspect / uImgAspect);
+    } else {
+      // Image taller than viewport: fit height, pillarbox sides
+      scale = vec2(uImgAspect / vpAspect, 1.0);
+    }
+    texUV = (vUV - 0.5) / scale + 0.5;
+  }
+
+  // Outside image bounds → show background
+  if (texUV.x < 0.0 || texUV.x > 1.0 || texUV.y < 0.0 || texUV.y > 1.0) {
+    gl_FragColor = vec4(pow(bg, vec3(1.0/2.2)), 1.0);
+    return;
+  }
+
+  vec3  albedo = pow(texture2D(uAlbedo, texUV).rgb, vec3(2.2));
+  float alpha  = 1.0;
+  if (uHasMask) alpha = texture2D(uMask, texUV).r;
+  if (alpha < 0.005) { gl_FragColor = vec4(pow(bg, vec3(1.0/2.2)), 1.0); return; }
+
+  // Normal
+  vec3 N = vec3(0.0, 0.0, 1.0);
+  if (uHasNormal) {
+    vec3 ns = texture2D(uNormal, texUV).rgb * 2.0 - 1.0;
+    ns.xy *= uNormStr;
+    ns.y = -ns.y;
+    N = normalize(ns);
+  }
+
+  // Material
+  float roughness = 0.5;
+  if (uHasRoughness) roughness = texture2D(uRoughness, texUV).r;
+  roughness = clamp(roughness * uRoughMult, 0.04, 1.0);
+
+  float metallic = 0.0;
+  if (uHasMetallic) metallic = texture2D(uMetallic, texUV).r;
+  metallic = clamp(metallic * uMetalMult, 0.0, 1.0);
+
+  float ao = 1.0;
+  if (uHasAO) ao = texture2D(uAO, texUV).r;
+
+  // Geometry
+  vec2 sUV  = (texUV - 0.5) * vec2(uAspect, 1.0);
+  vec3 frag = vec3(sUV, 0.0);
+  vec3 V    = normalize(vec3(0.0, 0.0, 2.5) - frag);
+  float NdV = max(dot(N, V), 0.001);
+
+  vec3 F0 = mix(vec3(0.04), albedo, metallic);
+  vec3 F  = F_Schlick(NdV, F0);
+  vec3 kD = (1.0 - F) * (1.0 - metallic);
+
+  vec3 color = vec3(0.0);
+
+  // Point light
+  if (uLightMode == 0 || uLightMode == 2) {
+    vec3  L   = normalize(uLightPos - frag);
+    vec3  H   = normalize(V + L);
+    float NdL = max(dot(N, L), 0.0);
+    float NdH = max(dot(N, H), 0.0);
+    float HdV = max(dot(H, V), 0.0);
+
+    float spot = 1.0;
+    if (uLightCone < 179.0) {
+      float sc = cos(uLightCone * 0.5 * PI / 180.0);
+      spot = smoothstep(sc - 0.08, sc + 0.12, dot(-L, normalize(uLightDir)));
+    }
+
+    float dist = length(uLightPos - frag);
+    float att  = 1.0 / (1.0 + 0.25 * dist * dist);
+
+    float D   = D_GGX(NdH, roughness);
+    vec3  Fp  = F_Schlick(HdV, F0);
+    float G   = G_Smith(NdV, NdL, roughness);
+    vec3  spec = (D * Fp * G) / (4.0 * NdV * NdL + 0.001);
+
+    color += (kD * albedo / PI + spec) * vec3(uLightIntensity) * att * spot * NdL;
+  }
+
+  // IBL
+  if (uHasEnv && (uLightMode == 1 || uLightMode == 2)) {
+    vec3 wN   = vec3(N.x, N.y, max(N.z, 0.1));
+    vec3 envD = sampleEnv(normalize(wN), roughness * 4.0 + 2.0);
+    vec3 R    = reflect(-V, N);
+    vec3 envS = sampleEnv(normalize(R), roughness * 2.0);
+    color += kD * albedo * envD + F * envS * (1.0 - roughness * 0.7);
+  }
+
+  // Ambient
+  color += vec3(uAmbient) * albedo * ao;
+
+  // Composite
+  color = mix(bg, color, alpha);
+
+  // ACES tonemap
+  color = color * (2.51 * color + 0.03) / (color * (2.43 * color + 0.59) + 0.14);
+
+  // Gamma
+  color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / 2.2));
+
+  gl_FragColor = vec4(color, 1.0);
+}
+</script>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- APPLICATION                                            -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<script src="main.js"></script>
+</body>
+</html>

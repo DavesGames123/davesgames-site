@@ -1,0 +1,25 @@
+  @import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@300;400;600&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: 'Oxanium', monospace; color: #fff; }
+  canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block; cursor: crosshair; }
+
+  .hud { position: fixed; top: 20px; left: 24px; z-index: 10; pointer-events: none; }
+  .hud h1 { font-size: 11px; font-weight: 300; letter-spacing: 5px; color: rgba(255,255,255,0.18); text-transform: uppercase; }
+  .stats { position: fixed; top: 20px; right: 24px; z-index: 10; pointer-events: none; font-size: 11px; color: rgba(255,255,255,0.15); text-align: right; font-weight: 300; line-height: 1.7; }
+
+  .slider-wrap {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+    z-index: 10; display: flex; align-items: center; gap: 14px;
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(12px);
+    border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+    padding: 10px 20px; flex-wrap: wrap; justify-content: center;
+  }
+  .slider-label { font-size: 10px; font-weight: 600; letter-spacing: 1.5px; text-transform: uppercase; color: rgba(255,255,255,0.3); white-space: nowrap; user-select: none; }
+  .slider-val { font-size: 10px; font-weight: 400; letter-spacing: 1px; color: rgba(255,140,60,0.5); min-width: 28px; text-align: right; user-select: none; }
+  .sep { display: inline-block; width: 1px; height: 20px; background: rgba(255,255,255,0.08); margin: 0 6px; }
+
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 130px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.08); outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #ff8830; border: 2px solid rgba(0,0,0,0.4); box-shadow: 0 0 10px rgba(255,120,40,0.3); }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: #ff8830; border: 2px solid rgba(0,0,0,0.4); }
+
+  .hint { position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%); z-index: 10; font-size: 10px; color: rgba(255,255,255,0.1); letter-spacing: 1.5px; pointer-events: none; text-transform: uppercase; transition: opacity 2s; }

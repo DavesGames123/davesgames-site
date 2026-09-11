@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Planet Forge // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div id="app">
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Planet Forge</span></div>
+  <div class="topbar-r"><span>SYS // <strong>TEXGEN</strong></span><span id="clock">00:00:00</span></div>
+</div>
+<!-- MOBILE CONTROLS -->
+<div class="mob-row primary">
+  <div class="ctrl-group"><span class="ctrl-label">Type</span>
+    <select id="m-sel-type" onchange="document.getElementById('sel-type').value=this.value">
+      <option value="selena">Selena</option><option value="desert">Desert</option><option value="terra" selected>Terra</option><option value="water">Water</option><option value="ice">Ice</option><option value="ice_giant">Ice Giant</option><option value="gas_giant">Gas Giant</option>
+    </select>
+  </div>
+  <div class="ctrl-group"><span class="ctrl-label">Temp</span>
+    <select id="m-sel-temp" style="width:64px" onchange="document.getElementById('sel-temp').value=this.value">
+      <option value="0">Hot</option><option value="1">Warm</option><option value="2" selected>Comfort</option><option value="3">Cool</option><option value="4">Cold</option>
+    </select>
+  </div>
+  <div class="ctrl-group"><span class="ctrl-label">Seed</span><input type="number" id="m-inp-seed" value="42" style="width:54px" onchange="document.getElementById('inp-seed').value=this.value"/><button class="bot-btn" onclick="var s=Math.floor(Math.random()*99999);document.getElementById('m-inp-seed').value=s;document.getElementById('inp-seed').value=s">⟳</button></div>
+  <button class="mob-toggle" id="btn-settings" onclick="this.classList.toggle('active');document.getElementById('settings-panel').classList.toggle('open')">⚙</button>
+  <button class="bot-btn" onclick="document.getElementById('batch-panel').classList.toggle('open')" style="font-size:0.4rem;padding:5px 8px">Batch</button>
+  <button class="bot-btn gen-btn" id="m-btn-gen">▶ GO</button>
+</div>
+<div id="settings-panel">
+  <div class="ctrl-group"><span class="ctrl-label">Res</span>
+    <select id="m-sel-res" style="width:56px" onchange="document.getElementById('sel-res').value=this.value">
+      <option value="512">512</option><option value="1024" selected>1024</option><option value="2048">2048</option>
+    </select>
+  </div>
+  <div class="ctrl-group"><span class="ctrl-label">Cities</span><button class="bot-btn active" id="m-btn-cities" onclick="document.getElementById('btn-cities').click();this.textContent=this.textContent==='On'?'Off':'On';this.classList.toggle('active')">On</button></div>
+  <div class="ctrl-group"><span class="ctrl-label">Sun φ</span><input type="range" min="0" max="360" value="40" oninput="var e=document.getElementById('rng-phi');e.value=this.value;e.oninput()"/></div>
+  <div class="ctrl-group"><span class="ctrl-label">θ</span><input type="range" min="10" max="170" value="65" style="width:60px" oninput="var e=document.getElementById('rng-theta');e.value=this.value;e.oninput()"/></div>
+  <div class="ctrl-group"><span class="ctrl-label">Normals</span><input type="range" min="0" max="50" value="4" oninput="var e=document.getElementById('rng-norm');e.value=this.value;e.oninput()"/></div>
+  <div class="ctrl-group"><span class="ctrl-label">Atmo</span><button class="bot-btn active" id="m-btn-atmo" onclick="document.getElementById('btn-atmo').click();this.textContent=this.textContent==='On'?'Off':'On';this.classList.toggle('active')">On</button></div>
+</div>
+<!-- DESKTOP CONTROLS -->
+<div class="ctrl-bar">
+  <div class="ctrl-group"><span class="ctrl-label">Type</span>
+    <select id="sel-type">
+      <option value="selena">Selena</option>
+      <option value="desert">Desert</option>
+      <option value="terra" selected>Terra</option>
+      <option value="water">Water World</option>
+      <option value="ice">Ice World</option>
+      <option value="ice_giant">Ice Giant</option>
+      <option value="gas_giant">Gas Giant</option>
+    </select>
+  </div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Temp</span>
+    <select id="sel-temp" style="width:72px">
+      <option value="0">Hot</option><option value="1">Warm</option><option value="2" selected>Comfort</option><option value="3">Cool</option><option value="4">Cold</option>
+    </select>
+  </div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Seed</span><input type="number" id="inp-seed" value="42"/><button class="bot-btn" id="btn-rand">⟳</button></div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Res</span><select id="sel-res" style="width:56px"><option value="512">512</option><option value="1024">1024</option><option value="2048" selected>2048</option></select></div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Cities</span><button class="bot-btn active" id="btn-cities">On</button></div>
+
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Sun φ</span><input type="range" id="rng-phi" min="0" max="360" value="40" style="width:60px"/></div>
+  <div class="ctrl-group"><span class="ctrl-label">θ</span><input type="range" id="rng-theta" min="10" max="170" value="65" style="width:50px"/></div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Normals</span><input type="range" id="rng-norm" min="0" max="50" value="4" style="width:50px"/></div>
+  <div class="ctrl-sep"></div>
+  <div class="ctrl-group"><span class="ctrl-label">Atmo</span><button class="bot-btn active" id="btn-atmo">On</button></div>
+  <div style="flex:1"></div>
+  <button class="bot-btn" id="btn-batch" onclick="document.getElementById('batch-panel').classList.toggle('open');this.classList.toggle('active')">Batch</button>
+  <button class="bot-btn gen-btn" id="btn-gen">▶ Generate</button>
+</div>
+<div id="prog-wrap"><div id="prog-bar"></div></div>
+<div id="batch-panel">
+  <div class="batch-header">
+    <span class="batch-title">Batch Queue</span>
+    <span class="batch-count" id="batch-count">0 planets</span>
+  </div>
+  <div id="batch-list"></div>
+  <div style="display:flex;gap:6px;margin-top:8px" class="batch-actions">
+    <button class="bot-btn" id="batch-add" title="Add current settings to queue">+ Add Current</button>
+    <button class="bot-btn" id="batch-add5" title="Add 5 random seeds with current type/temp">+ 5 Random</button>
+    <button class="bot-btn" id="batch-clear">Clear</button>
+    <div style="flex:1"></div>
+    <button class="bot-btn gen-btn" id="batch-go" disabled>▶ Generate All &amp; ZIP</button>
+  </div>
+  <div id="batch-progress"><span id="bp-text">Generating...</span><div class="bp-bar"><div class="bp-fill" id="bp-fill"></div></div></div>
+</div>
+<div id="main">
+  <div id="viewport">
+    <div id="three-mount"></div>
+    <div id="empty-state"><div class="empty-icon">🪐</div><div class="empty-title">select parameters and generate</div><div class="empty-desc">albedo · depth · normal · specular · emissive</div></div>
+    <button id="mob-sidebar-btn" onclick="document.getElementById('sidebar').classList.toggle('open');this.textContent=document.getElementById('sidebar').classList.contains('open')?'✕ Close':'Maps ▸'">Maps ▸</button>
+  </div>
+  <div id="sidebar">
+    <div class="side-head"><span>Outputs</span><span class="tag">2:1 Equirect</span></div>
+    <div class="side-section"><button class="map-btn active" data-map="render" id="btn-render">◉ PBR Render</button></div>
+    <div class="side-section" id="map-buttons"></div>
+    <button id="btn-dl-all">⬇ Download All</button>
+    <div id="side-info">
+      <div class="barcode">PLANET-FORGE</div>
+      <div class="info-row"><span class="info-label">Type</span><span class="info-val" id="i-type">Terra</span></div>
+      <div class="info-row"><span class="info-label">Temp</span><span class="info-val yellow" id="i-temp">Comfort</span></div>
+      <div class="info-row"><span class="info-label">Seed</span><span class="info-val" id="i-seed">42</span></div>
+      <div class="info-row"><span class="info-label">Size</span><span class="info-val" id="i-size">2048×1024</span></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

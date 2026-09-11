@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FLARE STUDY // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="label-bar">
+<div class="col-label" data-col="0" onclick="selectFlare(0)">SPARSE<br><span class="sub">PC:2 CS:0.00</span></div>
+<div class="col-label" data-col="1" onclick="selectFlare(1)">TEAL<br><span class="sub">PC:4 CS:1.05</span></div>
+<div class="col-label" data-col="2" onclick="selectFlare(2)">VIOLET<br><span class="sub">PC:6 CS:2.10</span></div>
+<div class="col-label" data-col="3" onclick="selectFlare(3)">INVERSE<br><span class="sub">PC:10 CS:3.14</span></div>
+<div class="col-label" data-col="4" onclick="selectFlare(4)">DENSE<br><span class="sub">PC:18 CS:4.20</span></div>
+<div class="col-label" data-col="5" onclick="selectFlare(5)">BLOOM<br><span class="sub">PC:30 CS:5.25</span></div>
+<div class="col-label" data-col="6" onclick="selectFlare(6)">CUSTOM<br><span class="sub">PC:6 CS:0.00</span></div>
+</div>
+
+<div id="main">
+  <div id="strip">
+<div class="col" id="col0" data-col="0" onclick="selectFlare(0)"><canvas id="c0"></canvas><div class="sel-ring" id="ring0"></div><div class="var-tag">SPARSE</div></div>
+<div class="col" id="col1" data-col="1" onclick="selectFlare(1)"><canvas id="c1"></canvas><div class="sel-ring" id="ring1"></div><div class="var-tag">TEAL</div></div>
+<div class="col" id="col2" data-col="2" onclick="selectFlare(2)"><canvas id="c2"></canvas><div class="sel-ring" id="ring2"></div><div class="var-tag">VIOLET</div></div>
+<div class="col" id="col3" data-col="3" onclick="selectFlare(3)"><canvas id="c3"></canvas><div class="sel-ring" id="ring3"></div><div class="var-tag">INVERSE</div></div>
+<div class="col" id="col4" data-col="4" onclick="selectFlare(4)"><canvas id="c4"></canvas><div class="sel-ring" id="ring4"></div><div class="var-tag">DENSE</div></div>
+<div class="col" id="col5" data-col="5" onclick="selectFlare(5)"><canvas id="c5"></canvas><div class="sel-ring" id="ring5"></div><div class="var-tag">BLOOM</div></div>
+<div class="col" id="col6" data-col="6" onclick="selectFlare(6)"><canvas id="c6"></canvas><div class="sel-ring" id="ring6"></div><div class="var-tag">CUSTOM</div></div>
+  </div>
+
+  <div id="ctrl-panel">
+    <div id="ctrl-header">
+      <h3>&#9889; FLARE</h3>
+      <p>CLICK COLUMN TO SELECT</p>
+      <div id="sel-indicator">&#9654; SPARSE (0)</div>
+    </div>
+    <div id="ctrl-inner">
+      <div class="section"><span class="sec-lbl">Origin</span><div class="sec-line"></div></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">X Pos</span><span class="ctrl-val" id="v-posX">0.89</span></div><input type="range" id="posX" min="0" max="1" step="0.01" value="0.89"></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Y Pos</span><span class="ctrl-val" id="v-posY">0.27</span></div><input type="range" id="posY" min="0" max="1" step="0.01" value="0.27"></div>
+      <div class="section"><span class="sec-lbl">Brightness</span><div class="sec-line"></div></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Intensity</span><span class="ctrl-val" id="v-intensity">8.00</span></div><input type="range" id="intensity" min="0.1" max="8" step="0.05" value="8.0"></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Flicker Spd</span><span class="ctrl-val" id="v-flickerSpeed">1.75</span></div><input type="range" id="flickerSpeed" min="0" max="5" step="0.05" value="1.75"></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Flicker Amt</span><span class="ctrl-val" id="v-flickerAmt">0.00</span></div><input type="range" id="flickerAmt" min="0" max="3" step="0.05" value="0.0"></div>
+      <div class="section"><span class="sec-lbl">Trail</span><div class="sec-line"></div></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Length</span><span class="ctrl-val" id="v-trailLength">0.10</span></div><input type="range" id="trailLength" min="0.05" max="4" step="0.05" value="0.10"></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Spread</span><span class="ctrl-val" id="v-trailSpread">0.10</span></div><input type="range" id="trailSpread" min="0" max="5" step="0.05" value="0.10"></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Width</span><span class="ctrl-val" id="v-trailWidth">0.50</span></div><input type="range" id="trailWidth" min="0.05" max="12" step="0.05" value="0.5"></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Particles</span><span class="ctrl-val" id="v-particleCount">6</span></div><input type="range" id="particleCount" min="1" max="50" step="1" value="6"></div>
+      <div class="section"><span class="sec-lbl">Color</span><div class="sec-line"></div></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Color Shift</span><span class="ctrl-val" id="v-colorShift">0.00</span></div><input type="range" id="colorShift" min="0" max="6.28" step="0.05" value="0.0"></div>
+      <div class="section"><span class="sec-lbl">Noise</span><div class="sec-line"></div></div>
+      <div class="ctrl"><div class="ctrl-row"><span class="ctrl-name">Strength</span><span class="ctrl-val" id="v-noiseStrength">1.00</span></div><input type="range" id="noiseStrength" min="0" max="3" step="0.05" value="1.0"></div>
+      <button id="reset-btn">&#8635; Reset This Flare</button>
+    </div>
+  </div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

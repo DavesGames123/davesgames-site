@@ -1,0 +1,6 @@
+(function(){if(!window.katex)return;const u='#60e0ee',p='#ffc832',v='#ff9050',op='#96c8ff',mu='#c890ff';const o={throwOnError:false,displayMode:true};
+katex.render(String.raw`\frac{\partial \textcolor{${u}}{\vec{u}}}{\partial t}+(\textcolor{${u}}{\vec{u}}\cdot\textcolor{${op}}{\nabla})\textcolor{${u}}{\vec{u}}=-\frac{1}{\rho}\textcolor{${op}}{\nabla}\textcolor{${p}}{p}+\textcolor{${mu}}{\nu}\textcolor{${op}}{\nabla}^2\textcolor{${u}}{\vec{u}}+\textcolor{${v}}{\vec{f}}`,document.getElementById('eq-mom'),o);
+katex.render(String.raw`\textcolor{${op}}{\nabla}\cdot\textcolor{${u}}{\vec{u}}=0`,document.getElementById('eq-cont'),o);
+katex.render(String.raw`\textcolor{${op}}{\nabla}^2\textcolor{${p}}{p}=\frac{\rho}{\Delta t}\textcolor{${op}}{\nabla}\cdot\textcolor{${u}}{\vec{w}}`,document.getElementById('eq-pois'),o);
+katex.render(String.raw`\textcolor{${u}}{\vec{u}}=\textcolor{${u}}{\vec{w}}-\frac{\Delta t}{\rho}\textcolor{${op}}{\nabla}\textcolor{${p}}{p}`,document.getElementById('eq-corr'),o);
+document.getElementById('eq-toggle').addEventListener('click',()=>{const el=document.getElementById('eq-panel');const c=el.classList.toggle('collapsed');el.querySelector('.arrow').textContent=c?'▼':'▲';});})();

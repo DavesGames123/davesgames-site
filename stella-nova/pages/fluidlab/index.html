@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Stable Fluids // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
+<div class="topbar"><div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Stable Fluids</span></div><div class="topbar-r">SYS // <strong>STABLE FLUIDS</strong> · Stam 1999</div></div>
+<div id="main">
+  <div id="panel"><div class="p-body">
+    <div class="p-section"><div class="p-sec-lbl">Colormap</div><div class="cmap-grid" id="cmap-grid">
+      <button class="cmap-btn" data-cmap="0" onclick="setCmap(0)"><canvas></canvas><span class="cmap-label">Predator</span></button>
+      <button class="cmap-btn" data-cmap="1" onclick="setCmap(1)"><canvas></canvas><span class="cmap-label">Viridis</span></button>
+      <button class="cmap-btn" data-cmap="2" onclick="setCmap(2)"><canvas></canvas><span class="cmap-label">Oceanic</span></button>
+      <button class="cmap-btn active" data-cmap="3" onclick="setCmap(3)"><canvas></canvas><span class="cmap-label">Dye</span></button>
+    </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Add Emitter</div><div class="add-grid">
+      <button class="add-btn" onclick="addEmitter('jet')"><span class="icon">▸</span>Jet</button>
+      <button class="add-btn" onclick="addEmitter('point')"><span class="icon">◉</span>Point</button>
+      <button class="add-btn" onclick="addEmitter('vortex')"><span class="icon">◎</span>Vortex</button>
+    </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Add Shape</div><div class="add-grid">
+      <button class="add-btn" onclick="addShape('circle')"><span class="icon">●</span>Circle</button>
+      <button class="add-btn" onclick="addShape('rect')"><span class="icon">▬</span>Rect</button>
+      <button class="add-btn" onclick="addShape('airfoil')"><span class="icon">◗</span>Airfoil</button>
+      <button class="add-btn" onclick="addShape('wedge')"><span class="icon">◣</span>Wedge</button>
+      <button class="add-btn" onclick="addShape('gear')"><span class="icon">⚙</span>Gear</button>
+      <button class="add-btn" onclick="addShape('star')"><span class="icon">★</span>Star</button>
+      <button class="add-btn" onclick="addShape('tesla')"><span class="icon">⇌</span>Tesla</button>
+    </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Objects</div><div class="obj-list" id="obj-list"></div></div>
+    <div class="p-section"><div class="p-sec-lbl">Draw Barrier</div>
+      <div style="display:flex;flex-direction:column;gap:4px"><button class="tog-btn off" id="tog-draw" onclick="toggleDraw()">✎ Draw Mode</button><button class="tog-btn off" id="tog-erase" onclick="toggleErase()">✕ Eraser</button></div>
+      <div class="mag-row" style="margin-top:6px"><span class="mag-row-lbl">Brush</span><input type="range" id="sl-brush" min="4" max="60" value="16" step="1" oninput="SIM.brushSize=+this.value;sg(this);this.nextElementSibling.textContent=this.value"><span class="val">16</span></div>
+      <div style="margin-top:4px"><button class="sim-btn warn" onclick="clearDrawn()" style="width:100%">Clear Drawn</button></div>
+    </div>
+    <div class="p-section"><div class="p-sec-lbl">Presets</div><div class="sim-btns" style="flex-direction:column">
+      <button class="sim-btn" onclick="preset('windtunnel')">Wind Tunnel</button><button class="sim-btn" onclick="preset('karman')">Von Kármán</button>
+      <button class="sim-btn" onclick="preset('propeller')">Propeller</button><button class="sim-btn" onclick="preset('jet')">Jet Stream</button>
+    </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Display</div>
+      <div class="mag-row"><span class="mag-row-lbl">Gain</span><input type="range" id="sl-gain" min="0.02" max="4.0" value="1.5" step="0.01" oninput="SIM.gain=+this.value;sg(this);this.nextElementSibling.textContent=(+this.value).toFixed(2)"><span class="val">1.50</span></div>
+      <div class="mag-row"><span class="mag-row-lbl">Bloom</span><input type="range" id="sl-bloom" min="0" max="1.0" value="0.4" step="0.01" oninput="SIM.bloom=+this.value;sg(this);this.nextElementSibling.textContent=(+this.value).toFixed(2)"><span class="val">0.40</span></div>
+      <div class="mag-row"><span class="mag-row-lbl">Jacobi</span><input type="range" id="sl-jacobi" min="4" max="80" value="40" step="2" oninput="SIM.jacobiIters=+this.value;sg(this);this.nextElementSibling.textContent=this.value"><span class="val">40</span></div>
+      <div class="mag-row"><span class="mag-row-lbl">Visc ν</span><input type="range" id="sl-visc" min="0" max="50" value="0" step="0.5" oninput="SIM.viscosity=+this.value;sg(this);this.nextElementSibling.textContent=(+this.value).toFixed(1)"><span class="val">0.0</span></div>
+      <div style="margin-top:6px"><button class="tog-btn off" id="tog-vectors" onclick="SIM.showVectors=!SIM.showVectors;this.className='tog-btn '+(SIM.showVectors?'on':'off')">→ Vector Field</button></div>
+      <div class="mag-row" style="margin-top:4px"><span class="mag-row-lbl">Cell</span><input type="range" id="sl-cell" min="8" max="60" value="24" step="1" oninput="SIM.cellSize=+this.value;sg(this);this.nextElementSibling.textContent=this.value+'px'"><span class="val">24px</span></div>
+    </div>
+    <div class="p-section"><div class="p-sec-lbl">Simulation</div><div class="sim-btns">
+      <button class="sim-btn active" id="btn-play" onclick="togglePlay()">▶ Play</button><button class="sim-btn" onclick="resetSim()">↺ Reset</button><button class="sim-btn warn" onclick="clearAll()">✕ Clear</button>
+    </div>
+      <div style="margin-top:8px"><button class="tog-btn off" id="tog-gravity" onclick="SIM.gravity=!SIM.gravity;this.className='tog-btn '+(SIM.gravity?'on':'off');this.textContent=SIM.gravity?'⬇ Gravity ON':'⬇ Gravity OFF'">⬇ Gravity OFF</button></div>
+      <div class="mag-row" style="margin-top:4px"><span class="mag-row-lbl">G Str</span><input type="range" id="sl-grav" min="20" max="600" value="200" step="10" oninput="SIM.gravityStr=+this.value;sg(this);this.nextElementSibling.textContent=this.value"><span class="val">200</span></div>
+    </div>
+  </div></div>
+  <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
+  <div id="canvas-wrap"><canvas id="sim-canvas"></canvas>
+    <button id="vec-btn" onclick="SIM.showVectors=!SIM.showVectors;this.className=SIM.showVectors?'on':'';this.innerHTML=SIM.showVectors?'→ Vectors ON':'→ Vectors';document.getElementById('tog-vectors').className='tog-btn '+(SIM.showVectors?'on':'off')">→ Vectors</button>
+    <section class="eq-panel collapsed" id="eq-panel"><div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Stable Fluids — Stam's operator splitting</span><span class="arrow">▼</span></div>
+      <div class="eq-blocks"><div class="eq-block"><div class="eq-sublabel">Momentum</div><div class="eq-row" id="eq-mom"></div></div><div class="eq-block"><div class="eq-sublabel">Incompressibility</div><div class="eq-row" id="eq-cont"></div></div><div class="eq-block"><div class="eq-sublabel">Pressure Poisson</div><div class="eq-row" id="eq-pois"></div></div><div class="eq-block"><div class="eq-sublabel">Velocity Correction</div><div class="eq-row" id="eq-corr"></div></div></div>
+    </section>
+  </div>
+</div>
+<div id="status-bar"><span id="st-obj">0 objects</span><span class="sep"></span><span id="st-res">--</span><span class="sep"></span><span id="st-fps">-- fps</span><span class="sep"></span><span id="st-frame">frame 0</span><span class="sep"></span><span id="st-mode">vortex</span></div>
+
+<script src="equations.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
