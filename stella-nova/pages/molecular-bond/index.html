@@ -4,6 +4,30 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
 <title>Stella Nova // Molecular Bond</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MOLECULAR BOND  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. Two stacked canvases fill the screen: #c is the WebGPU
+   point cloud main.js renders; #ov is the 2D overlay it draws bond lines and
+   labels onto. equations.js renders the KaTeX formulas into the #eq nodes.
+   This file lays out the preset bar, control bar, side panels, and overlays
+   that the scripts bind to by id.
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: atom / particle counts, live energy                      │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ preset bar: molecule cards (H2, HF, N2, …)                       │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ control bar: layout · release 3D · R spacing · E_total           │
+     ├────────────┬───────────────────────────────────┬────────────────┤
+     │ #panel a   │      #c canvas  +  #ov overlay     │ #panel b       │
+     │ atom edit  │      #eqPanel (formulas)           │ atom list      │
+     └────────────┴───────────────────────────────────┴────────────────┘
+   Load order: KaTeX (CDN), style.css, equations.js (classic), main.js (module).
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <meta name="description" content="Interactive WebGPU molecular orbital simulator. LCAO bonding with real hydrogen-like wavefunctions, per-atom element selection, and 3D nuclear dynamics.">
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -11,9 +35,12 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: mark the page when embedded in the site shell iframe so the
+     CSS can hide this page's own chrome. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 
 <div class="grid-bg"></div>
+<!-- #c: WebGPU render target. #ov: 2D overlay for bond lines and atom labels. -->
 <canvas id="c"></canvas>
 <canvas id="ov"></canvas>
 
@@ -174,6 +201,7 @@
 
   <div class="p-section">
     <div class="p-label">Element</div>
+    <!-- Populated by main.js: one button per element in the EL table. -->
     <div class="elem-grid" id="elem-grid"></div>
     <div class="elem-z" id="elem-z">Z<sub>eff</sub> = <span class="z-val">1.00</span> <span class="nm">Hydrogen</span></div>
   </div>
@@ -252,6 +280,7 @@
     <button class="al-btn" id="btn-add">+ Add</button>
     <button class="al-btn" id="btn-sub">− Remove</button>
   </div>
+  <!-- Populated by main.js buildAtomList(): one row per atom, click to select. -->
   <div id="atom-list"></div>
 </aside>
 

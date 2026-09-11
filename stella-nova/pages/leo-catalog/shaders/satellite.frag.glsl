@@ -1,6 +1,20 @@
 
+      // satellite.frag.glsl — satellite point-sprite fragment stage.
+      // Draws one of six object-class glyphs inside each point sprite, chosen by
+      // the vGlyph id, as a signed-distance test in point-local coordinates c.
+      // Pixels outside the glyph are discarded so the sprites are not squares.
+      //
+      //   vGlyph  glyph            class
+      //   ─────── ──────────────── ───────────
+      //     0     diamond          PAYLOAD
+      //     1     framed square    STATION
+      //     2     bar + pip        ROCKET BODY
+      //     3     X                DEBRIS
+      //     4     ring             STORM
+      //    >4     up triangle      STARLINK
       varying vec3 vColor; varying float vAlpha; varying float vGlyph;
       void main() {
+        // Point-local coordinate, origin at the sprite centre.
         vec2 c = gl_PointCoord - vec2(0.5);
         float ax = abs(c.x), ay = abs(c.y);
         float intensity = 0.0;

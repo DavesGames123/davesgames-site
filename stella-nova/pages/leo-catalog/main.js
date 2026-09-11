@@ -1,3 +1,66 @@
+// ============================================================================
+//  LEO CATALOG  ·  live low-Earth-orbit satellite catalog on a 3D globe
+// ----------------------------------------------------------------------------
+//  Fetches real TLE orbital element sets from CelesTrak, propagates every object
+//  with SGP4 (satellite.js) each frame, and draws them as point-sprite glyphs
+//  around a shader-shaded Earth. A time slider scrubs the propagation epoch, so
+//  the whole catalog can be run forward or back. Overlays add orbit trails,
+//  city labels, live storms (NOAA), and an analytical wind-flow streamline field.
+//
+//  SCENE GRAPH
+//  -----------
+//      scene
+//        ├─ earthRoot (group, holds everything that spins with Earth)
+//        │    ├─ earthMesh      SphereGeometry + day/night ShaderMaterial
+//        │    │                              source: shaders/earth.*.glsl
+//        │    ├─ satPoints      one THREE.Points, PERF_CAP glyphs
+//        │    │                              source: shaders/satellite.*.glsl
+//        │    ├─ streamMesh     wind streamlines (LineSegments, GPU-animated)
+//        │    │                              source: shaders/streamline.*.glsl
+//        │    └─ trailLine + stationTrails   orbit paths (THREE.Line)
+//        ├─ atmosphere shell    fresnel glow   source: shaders/atmosphere.*.glsl
+//        └─ stars               THREE.Points backdrop
+//
+//  PER-FRAME PIPELINE   (function animate)
+//  ---------------------------------------
+//      SIM.time += dt·speed ─▶ propagateAll()  SGP4 → ECEF → scene positions
+//                                   │  (writes the satPoints position buffer)
+//                                   ▼
+//      sun direction ─▶ earth uniforms ; controls.update() ; render
+//                                   ▼
+//      HTML overlays reprojected: city / station / sat labels, chip, reticle
+//
+//  COORDINATE FRAMES
+//      ECEF   +X=lon0, +Y=lon90E, +Z=north      (satellite.js output)
+//      scene  +X=lon0, +Y=north,  -Z=lon90E     (ecefToScene remaps)
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      shader load .......... "loadShaders"        fetch .glsl before build
+//      constants ............ "// CONSTANTS"       scene scale, categories, SIM
+//      splash / gauges ...... "// SPLASH LOGGER"   boot log + loading meters
+//      three.js base ........ "// THREE.JS BASE"   renderer, camera, controls
+//      earth map ............ "function buildEarthMap"  canvas-drawn continents
+//      coord helpers ........ "function latLonToVec3"   frame conversions
+//      satellites ........... "// SATELLITES"      point cloud + attributes
+//      propagation .......... "function propagateAll"   SGP4 every frame
+//      storms ............... "function loadStorms"  NOAA active cyclones
+//      wind field ........... "function sampleWindAt"  analytical wind model
+//      streamlines .......... "function traceStreamline"  RK2 trace + GPU comet
+//      cities ............... "function buildCityLabels"  tiered LOD labels
+//      station labels ....... "function rebuildStationLabels"  always-on labels
+//      sat labels ........... "function updateSatLabels"  pooled LOD labels
+//      orbit trails ......... "function buildTrailFor"  selected + station paths
+//      filters / overlays ... "// FILTERS"         checkbox wiring
+//      picking .............. "function pickAt"    hover/lock chip + reticle
+//      tle loader ........... "function loadSource"  CelesTrak fetch + parse
+//      object info .......... "OBJECT_KNOWLEDGE"   curated descriptions panel
+//      fly-to ............... "function flyTo"     animated camera moves
+//      search ............... "function doSearch"  name/NORAD search
+//      time control ......... "// TIME CONTROL"    scrub + rate sliders
+//      boot ................. "function boot"      load groups, then reveal
+//      main loop ............ "function animate"   the per-frame update
+// ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { loadShaders } from '../../lib/shaders.js';
@@ -18,12 +81,17 @@ const SH = await loadShaders(import.meta.url, [
 // ═══════════════════════════════════════════════════════════════════
 // CONSTANTS
 // ═══════════════════════════════════════════════════════════════════
+// Earth radius sets the scene scale: 1 scene unit = 1 Earth radius. MU is the
+// gravitational parameter for orbital-element math. PERF_CAP bounds the object
+// count so mobile stays interactive.
 const EARTH_R_KM   = 6378.137;
 const KM_TO_SCENE  = 1.0 / EARTH_R_KM;
 const MU           = 398600.4418;
 const IS_MOBILE    = window.matchMedia('(max-width: 880px)').matches;
 const PERF_CAP     = IS_MOBILE ? 3500 : 12000;
 
+// Object classes. CAT_INDEX maps each to the glyph id the satellite shader draws;
+// CAT_COLOR and CAT_SIZE give per-class sprite colour and pixel size.
 const CATEGORIES = ['starlink','payload','station','rocket','debris','storm'];
 // Glyph indices used by the shader
 const CAT_INDEX  = { payload:0, station:1, rocket:2, debris:3, storm:4, starlink:5 };
@@ -44,10 +112,14 @@ const CAT_SIZE = {
   storm:    22.0,
 };
 
+// FILTER toggles which classes are shown; OVERLAY toggles the extra layers;
+// highlightCat dims every other class while one is hovered or locked.
 const FILTER  = { starlink:true, payload:true, station:true, rocket:true, debris:true, storm:true };
 const OVERLAY = { trails:true, cities:true, weather:false, satlabels:true };
 let highlightCat = null;
 
+// Simulation clock. time is the propagation epoch; base is "now" (the slider
+// centre); range is the maximum scrub each way; speed multiplies real time.
 const SIM = {
   time:  new Date(),
   base:  new Date(),
@@ -60,10 +132,13 @@ const SIM = {
 // offset = sign(s) * (exp(|s|*K) - 1) / (exp(K) - 1) * range,  s = frac*2 - 1 ∈ [-1, 1]
 const SLIDER_K     = 9;
 const SLIDER_KM1   = Math.exp(SLIDER_K) - 1;
+// Slider fraction [0,1] to a signed time offset in ms. The exponential curve
+// gives fine control near NOW (centre) and days/months toward the edges.
 function fracToOffsetMs(frac) {
   const s = frac * 2 - 1;
   return Math.sign(s) * (Math.exp(Math.abs(s) * SLIDER_K) - 1) / SLIDER_KM1 * SIM.range;
 }
+// Inverse of fracToOffsetMs: a time offset back to a slider fraction.
 function offsetMsToFrac(offsetMs) {
   const r = Math.max(-1, Math.min(1, offsetMs / SIM.range));
   const s = Math.sign(r) * Math.log(1 + Math.abs(r) * SLIDER_KM1) / SLIDER_K;
@@ -75,6 +150,7 @@ let splashGone = false;
 // ═══════════════════════════════════════════════════════════════════
 // SPLASH LOGGER + INSTRUMENTS
 // ═══════════════════════════════════════════════════════════════════
+// Append one line to the boot splash log, capping the visible history.
 const splashLines = document.getElementById('splash-lines');
 function splash(msg, cls = '') {
   if (!splashLines) return;
@@ -88,6 +164,8 @@ function splash(msg, cls = '') {
 
 // ─── Gauges (CATALOG / WIND GRID / STREAMS / STORMS / GEODESY)
 // pct ∈ [0,100]; pass {done:true} or {fail:true} to color-tint when finished.
+// Drive one boot gauge: set its arc fill, sweep the needle, and print the
+// percent; done/fail tint it when the task finishes.
 function setGauge(name, pct, state) {
   const el = document.querySelector(`.gauge[data-prog="${name}"]`);
   if (!el) return;
@@ -104,6 +182,9 @@ function setGauge(name, pct, state) {
 }
 
 // ─── Per-group catalog meters
+// Per-group catalog meters: one progress row per TLE group, mirrored from the
+// load-status panel. meterAdd/Done/Fail create and update rows; the CATALOG
+// gauge is recomputed from how many rows have finished.
 const meterStack = document.getElementById('catalog-meters');
 const meterRows = new Map(); // group → element
 function meterAdd(group) {
@@ -149,6 +230,8 @@ function catalogGaugeRecompute() {
 // ═══════════════════════════════════════════════════════════════════
 // THREE.JS BASE
 // ═══════════════════════════════════════════════════════════════════
+// Renderer, scene, perspective camera pulled back from the globe, and orbit
+// controls (rotate/zoom, no pan) constrained so the camera stays near Earth.
 const canvas = document.getElementById('scene');
 const renderer = new THREE.WebGLRenderer({
   canvas, antialias: !IS_MOBILE, alpha: true,
@@ -180,6 +263,9 @@ const earthUniforms = {
   uSunDir: { value: new THREE.Vector3(1, 0, 0) },
 };
 
+// Build the Earth texture by drawing the world-atlas coastline data and a
+// lat/lon grid into a 2D canvas, then wrap it on a sphere with the day/night
+// shader. Runs at boot; drives the GEODESY gauge as it fetches and draws.
 async function buildEarthMap() {
   splash('fetch continents (110m)');
   setGauge('geo', 10);
@@ -216,6 +302,7 @@ async function buildEarthMap() {
   drawLat(0); drawLon(0); drawLon(180); drawLon(-180);
 
   // Continents
+  // Trace a set of polygon rings (in lon/lat) into the equirectangular canvas.
   function drawRings(rings, op) {
     ctx.beginPath();
     for (const ring of rings) {
@@ -229,6 +316,7 @@ async function buildEarthMap() {
     if (op === 'fill') ctx.fill();
     else if (op === 'stroke') ctx.stroke();
   }
+  // Visit every polygon in the land geometry, calling fn with its rings.
   function walkLand(fn) {
     function walk(g) {
       if (!g) return;
@@ -268,6 +356,8 @@ async function buildEarthMap() {
   splash('earth map ok', 'ok');
 }
 
+// Dark placeholder globe shown until the real Earth texture is built (or if the
+// continent fetch fails); removed once buildEarthMap() succeeds.
 const fallbackShell = new THREE.Mesh(
   new THREE.SphereGeometry(0.992, 64, 48),
   new THREE.MeshBasicMaterial({ color: 0x010906 })
@@ -275,6 +365,7 @@ const fallbackShell = new THREE.Mesh(
 earthRoot.add(fallbackShell);
 
 // Atmosphere fresnel
+// A slightly larger back-side sphere with the atmosphere shader adds a rim glow.
 {
   const g = new THREE.SphereGeometry(1.055, 64, 48);
   const m = new THREE.ShaderMaterial({
@@ -288,6 +379,7 @@ earthRoot.add(fallbackShell);
 }
 
 // Stars
+// Scatter points on a large sphere around the scene as a fixed star backdrop.
 {
   const N = IS_MOBILE ? 800 : 1500;
   const pos = new Float32Array(N*3);
@@ -325,6 +417,9 @@ function ecefToScene(x, y, z, out) {
   out.set(x * KM_TO_SCENE, z * KM_TO_SCENE, -y * KM_TO_SCENE);
   return out;
 }
+// Sun direction in the scene frame for a given date: a low-precision solar
+// ephemeris in ECI, rotated into ECEF by GMST, then remapped to scene axes.
+// Feeds the Earth shader's day/night terminator.
 function sunDirEcef(date) {
   const t = (date.getTime() - Date.UTC(2000,0,1,12,0,0)) / 86400000;
   const L = (280.46 + 0.9856474*t) * Math.PI/180;
@@ -341,6 +436,7 @@ function sunDirEcef(date) {
   const zEc =  zEci;
   return new THREE.Vector3(xEc, zEc, -yEc).normalize();
 }
+// Local east/north/radial basis at a lat/lon on the sphere (scene frame).
 function tangentAt(latDeg, lonDeg) {
   const lat = latDeg * Math.PI/180;
   const lon = lonDeg * Math.PI/180;
@@ -359,11 +455,15 @@ function tangentAt(latDeg, lonDeg) {
 // ═══════════════════════════════════════════════════════════════════
 // SATELLITES
 // ═══════════════════════════════════════════════════════════════════
+// sats is the master catalog array. The typed arrays are the GPU attribute
+// buffers, one entry per object, shared by index with sats. HIDE parks an
+// off-screen or filtered object far away instead of removing it.
 let sats = [];
 let positions, sizesAttr, colorsAttr, alphasAttr, glyphAttr;
 let satGeo, satMat, satPoints;
 const HIDE = -10000;
 
+// Classify an object into a display category from its name.
 function classify(name) {
   const n = name.toUpperCase();
   if (/^STARLINK/.test(n))                                return 'starlink';
@@ -372,6 +472,8 @@ function classify(name) {
   if (/ R\/B|ROCKET BODY| BOOSTER/.test(n))               return 'rocket';
   return 'payload';
 }
+// Parse a two-line-element text block into satellite records (name + SGP4
+// satrec + NORAD id + category), skipping malformed or unparseable triples.
 function parseTLE(text) {
   const lines = text.replace(/\r/g,'').split('\n');
   const out = [];
@@ -389,6 +491,9 @@ function parseTLE(text) {
   return out;
 }
 
+// Allocate the fixed-size point cloud and its dynamic attribute buffers once,
+// then build the THREE.Points with the satellite shader. Frustum culling is
+// off because positions are updated on the GPU-facing buffer every frame.
 function buildPointCloud() {
   const N = PERF_CAP;
   positions  = new Float32Array(N*3).fill(HIDE);
@@ -414,6 +519,8 @@ function buildPointCloud() {
   scene.add(satPoints);
 }
 
+// Refresh the per-object colour and glyph buffers from the current catalog.
+// Called after any load that changes the set of objects or their categories.
 function rebuildAttributesFromSats() {
   for (let i = 0; i < sats.length; i++) {
     const c = CAT_COLOR[sats[i].cat];
@@ -429,11 +536,16 @@ function rebuildAttributesFromSats() {
 // ═══════════════════════════════════════════════════════════════════
 // PROPAGATION
 // ═══════════════════════════════════════════════════════════════════
+// Propagation runs at PROP_HZ, not every frame, to cap SGP4 cost; _tmp avoids
+// per-object allocation.
 const _tmp = new THREE.Vector3();
 let lastPropTime = 0;
 const PROP_HZ = IS_MOBILE ? 12 : 20;
 const PROP_DT = 1000 / PROP_HZ;
 
+// Propagate every object to SIM.time and write its scene position, size, and
+// alpha into the attribute buffers. Filtered objects are parked at HIDE; storms
+// sit at a fixed lat/lon and pulse; everything else runs through SGP4 to ECEF.
 function propagateAll() {
   const date = SIM.time;
   const gmst = satellite.gstime(date);
@@ -477,6 +589,8 @@ function propagateAll() {
 // ═══════════════════════════════════════════════════════════════════
 // STORMS (NOAA)
 // ═══════════════════════════════════════════════════════════════════
+// Fetch active tropical cyclones from NOAA (trying direct then CORS proxies)
+// and add each as a storm-category marker parked at its lat/lon.
 async function loadStorms() {
   setGauge('storms', 25);
   const urls = [
@@ -559,6 +673,9 @@ const CYCLONES = [
   { lat: -32, lon:    5, r: 26, str:  16, spin: +1 },   // S Atlantic High
 ];
 
+// Evaluate the analytical wind field at a lat/lon: the three-cell zonal base,
+// planetary-wave perturbations, and the semi-permanent cyclones sum into a
+// (u,v) vector and its speed. Cheap enough to call per streamline step.
 function sampleWindAt(lat, lon) {
   // ─── 1. Three-cell zonal base
   // u_base is symmetric about equator, alternates sign 3× per hemisphere
@@ -618,6 +735,9 @@ let   streamMesh = null;
 let   streamMat  = null;
 
 // RK2 trace through the analytical field. Writes 2 verts per segment.
+// Trace one streamline from a random seed point through the wind field with an
+// RK2 (midpoint) integrator, writing two vertices per step into the shared line
+// buffers. segPos is the 0..1 position along the line, used by the comet shader.
 function traceStreamline(streamId, vi, positions, arclens, streamIds, speeds, segPos) {
   let lat = -84 + Math.random() * 168;
   let lon = -180 + Math.random() * 360;
@@ -671,6 +791,8 @@ function traceStreamline(streamId, vi, positions, arclens, streamIds, speeds, se
   return vi;
 }
 
+// Trace every streamline into one big buffer and build the LineSegments mesh
+// with the streamline shader. Traced once; animation is purely a shader uniform.
 function buildStreamlineMesh() {
   const segCount  = NUM_STREAMS * STREAM_STEPS;
   const vertCount = segCount * 2;
@@ -706,6 +828,7 @@ function buildStreamlineMesh() {
 
 function initWindFlowField() { /* nothing to allocate up front */ }
 
+// Boot the weather layer: advance its gauges, then trace the streamline mesh.
 async function loadWeather() {
   splash('wind model: 3-cell zonal + planetary waves');
   setGauge('weather', 35);
@@ -755,6 +878,7 @@ const CITIES = [
   ['Bogota',         4.71,  -74.07, 2], ['Nairobi',       -1.29,   36.82, 2],
   ['Cape Town',    -33.92,   18.42, 2], ['Auckland',     -36.85,  174.76, 2],
 ];
+// Create one HTML label per city and cache its world position for projection.
 const cityElements = [];
 function buildCityLabels() {
   for (const [name, lat, lon, tier] of CITIES) {
@@ -766,10 +890,14 @@ function buildCityLabels() {
     cityElements.push({ name, lat, lon, tier, worldPos, el });
   }
 }
+// TIER_THRESHOLD sets how close the camera must be for each city tier to show;
+// _camN and _cv are scratch vectors reused every frame.
 const _camN = new THREE.Vector3();
 const _cv   = new THREE.Vector3();
 const TIER_THRESHOLD = { 5: 8.5, 4: 4.5, 3: 3.2, 2: 2.0 };
 
+// Position and fade city labels each frame: hide those beyond their tier range
+// or on the far side of the globe; fade the rest by distance and facing angle.
 function updateCityLabels() {
   const camDist = camera.position.length();
   const cityModeEl = document.getElementById('stat-citymode');
@@ -803,6 +931,8 @@ function updateCityLabels() {
 // ═══════════════════════════════════════════════════════════════════
 // STATION LABELS (always visible — ISS, Tiangong, CSS)
 // ═══════════════════════════════════════════════════════════════════
+// Station labels are always shown (not gated by zoom). Rebuild the label set
+// from the current catalog; clicking one flies the camera to that station.
 const stationLabels = [];
 function rebuildStationLabels() {
   // Remove old labels
@@ -824,6 +954,8 @@ function rebuildStationLabels() {
     stationLabels.push({ idx, el, isISS });
   }
 }
+// Reposition station labels each frame, hiding any parked object or one hidden
+// behind the Earth (a ray/sphere occlusion test against the unit globe).
 function updateStationLabels() {
   if (!splashGone) {
     for (const sl of stationLabels) sl.el.classList.remove('visible');
@@ -868,6 +1000,8 @@ function updateStationLabels() {
 // SAT LABELS — LOD (zoom-based, for debris analysis)
 // Pool of HTML labels reassigned each frame to the nearest sats in view.
 // ═══════════════════════════════════════════════════════════════════
+// A fixed pool of reusable label elements. Each frame the pool is assigned to
+// the nearest in-view satellites, so at most SAT_LABEL_POOL_SIZE show at once.
 const SAT_LABEL_POOL_SIZE = 30;
 const satLabelPool = [];
 function buildSatLabelPool() {
@@ -886,6 +1020,9 @@ function buildSatLabelPool() {
     satLabelPool.push(entry);
   }
 }
+// Zoom-gated satellite labelling for debris analysis. Reassignment (which sats
+// get a label) runs at ~5 Hz to stop the text strobing; repositioning of the
+// already-chosen labels runs every frame so they track motion.
 const _proj = new THREE.Vector3();
 let satLabelLastTick = 0;
 let satLabelLastReassign = 0;
@@ -971,10 +1108,13 @@ function updateSatLabels() {
 // ═══════════════════════════════════════════════════════════════════
 // ORBIT TRAIL (selected sat)
 // ═══════════════════════════════════════════════════════════════════
+// Orbit trail for the selected object: one closed loop sampled over one period.
 let trailLine = null;
 let trailLastBuildTime = 0;
 let trailLastIdx = -1;
 let chipTrailEnabled = true;
+// Rebuild the selected object's trail by propagating it across one orbital
+// period and stringing the points into a line.
 function buildTrailFor(idx) {
   if (idx < 0 || idx >= sats.length) return;
   const s = sats[idx];
@@ -1006,6 +1146,8 @@ function buildTrailFor(idx) {
   trailLine = new THREE.Line(geom, mat);
   earthRoot.add(trailLine);
 }
+// Rebuild the selected trail only when the selection changes or sim time has
+// drifted far enough that the old loop is stale.
 function maybeRebuildTrail() {
   if (!OVERLAY.trails || !chipTrailEnabled) {
     if (trailLine) { earthRoot.remove(trailLine); trailLine.geometry.dispose(); trailLine = null; }
@@ -1024,6 +1166,8 @@ function maybeRebuildTrail() {
 }
 
 // Always-on orbital trails for every station (ISS, Tiangong, Dragon, Cygnus, etc.)
+// Every station gets a permanent orbit loop (ISS drawn brighter). Rebuilt from
+// the catalog and refreshed periodically as SGP4 drifts.
 const stationTrails = [];
 let lastStationTrailBuild = -Infinity;
 function rebuildStationTrails() {
@@ -1076,6 +1220,8 @@ function maybeRebuildStationTrails() {
 // ═══════════════════════════════════════════════════════════════════
 // FILTERS + OVERLAYS
 // ═══════════════════════════════════════════════════════════════════
+// Category filter rows: the checkbox toggles visibility; clicking the row locks
+// or unlocks a highlight, and hovering previews it while nothing is locked.
 let lockedHighlight = null;
 document.querySelectorAll('.filter-row[data-cat]').forEach(row => {
   const cat = row.dataset.cat;
@@ -1102,6 +1248,8 @@ document.querySelectorAll('.filter-row[data-cat]').forEach(row => {
     if (!lockedHighlight) highlightCat = null;
   });
 });
+// Overlay checkboxes: toggle each optional layer and do any layer-specific
+// cleanup when it is switched off.
 document.querySelectorAll('.filter-row[data-overlay]').forEach(row => {
   const k = row.dataset.overlay;
   const cb = row.querySelector('input[type=checkbox]');
@@ -1115,6 +1263,7 @@ document.querySelectorAll('.filter-row[data-overlay]').forEach(row => {
     }
   });
 });
+// Recount objects per category and update the panel counters.
 function updateCounts() {
   const c = {starlink:0, payload:0, station:0, rocket:0, debris:0, storm:0};
   for (const s of sats) c[s.cat]++;
@@ -1128,6 +1277,9 @@ function updateCounts() {
 // ═══════════════════════════════════════════════════════════════════
 // PICKING (hover chip / lock chip / target reticle)
 // ═══════════════════════════════════════════════════════════════════
+// Picking state: selectedIdx is the locked object, hoveredIdx the one under the
+// pointer, chipLocked whether the info chip is pinned. The raycaster hit-tests
+// the point cloud; the chip and reticle are the HTML overlays that follow it.
 let selectedIdx = -1;
 let hoveredIdx  = -1;
 let chipLocked  = false;
@@ -1139,6 +1291,9 @@ const chipHint  = chip.querySelector('.ch-hint');
 const reticle = document.getElementById('target-reticle');
 const reticleLabel = reticle.querySelector('.tr-label');
 
+// Raycast the point cloud under a screen coordinate and return the nearest
+// object index, or -1. The hit threshold scales with camera distance and widens
+// on a first miss so glyphs stay easy to click.
 function pickAt(clientX, clientY) {
   mouse.x = (clientX / window.innerWidth) * 2 - 1;
   mouse.y = -(clientY / window.innerHeight) * 2 + 1;
@@ -1160,10 +1315,13 @@ function pickAt(clientX, clientY) {
   for (const h of hits) if (h.distanceToRay < best.distanceToRay) best = h;
   return best.index;
 }
+// Format a number to d decimals, or an em dash when it is not finite.
 function fmt(v, d=1) { return Number.isFinite(v) ? v.toFixed(d) : '—'; }
+// Escape a string for safe insertion into innerHTML.
 function escHtml(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+// Derive period, apogee, perigee, and inclination from an SGP4 satrec.
 function orbitalElements(satrec) {
   if (!satrec) return null;
   const periodMin = (2*Math.PI) / satrec.no;
@@ -1177,6 +1335,8 @@ function orbitalElements(satrec) {
     incDeg:  satrec.inclo * 180/Math.PI,
   };
 }
+// Populate the info chip for one object: storm fields for storms, live orbital
+// readouts (altitude, lat/lon, velocity, elements) for satellites.
 function fillChip(idx) {
   if (idx < 0 || idx >= sats.length) return false;
   const s = sats[idx];
@@ -1215,6 +1375,7 @@ function fillChip(idx) {
     (s.notable ? `<div class="ch-row"><span class="k">EVENT</span><span class="v">${escHtml(s.notable)}</span></div>` : '');
   return true;
 }
+// Show the floating chip next to the pointer while hovering (unless locked).
 function showHoverChip(clientX, clientY, idx) {
   if (chipLocked) return;
   if (idx < 0) { chip.style.display = 'none'; return; }
@@ -1226,6 +1387,8 @@ function showHoverChip(clientX, clientY, idx) {
   chipHint.textContent = 'click to lock';
   chipClose.style.display = 'none';
 }
+// Pin the chip to an object: mark it selected, show the reticle and trail, and
+// fill the detailed info panel.
 function lockChipTo(idx) {
   if (idx < 0) { unlockChip(); return; }
   selectedIdx = idx;
@@ -1239,6 +1402,8 @@ function lockChipTo(idx) {
   maybeRebuildTrail();
   showObjectInfo(idx);
 }
+// Clear the selection, hide the chip/reticle/trail, and ease the camera back
+// to looking at Earth's centre.
 function unlockChip() {
   chipLocked = false;
   selectedIdx = -1;
@@ -1253,6 +1418,7 @@ function unlockChip() {
 }
 chipClose.addEventListener('click', (e) => { e.stopPropagation(); unlockChip(); });
 
+// Chip buttons: toggle the selected object's trail, or fly the camera to it.
 const chipTrailBtn = document.getElementById('chip-trail');
 const chipFocusBtn = document.getElementById('chip-focus');
 chipTrailBtn.addEventListener('click', (e) => {
@@ -1267,6 +1433,7 @@ chipFocusBtn.addEventListener('click', (e) => {
   flyToSat(selectedIdx);
 });
 
+// Pointer move: throttle picking to ~20 Hz; between picks just move the chip.
 let hoverThrottle = 0;
 canvas.addEventListener('pointermove', (e) => {
   if (chipLocked) return;
@@ -1285,6 +1452,8 @@ canvas.addEventListener('pointerleave', () => {
   if (!chipLocked) chip.style.display = 'none';
 });
 
+// Click vs drag: remember where the press started, and on release treat it as a
+// pick only if the pointer barely moved (otherwise it was a globe rotation).
 let pointerDownPos = null;
 canvas.addEventListener('pointerdown', (e) => {
   pointerDownPos = { x: e.clientX, y: e.clientY };
@@ -1301,6 +1470,7 @@ canvas.addEventListener('pointerup', (e) => {
   // Don't unlock on empty-space clicks; use the × button on the chip.
 });
 
+// Keep the locked chip beside the selected object as it moves (desktop only).
 function updateChipPositionLocked() {
   if (!chipLocked || selectedIdx < 0) return;
   const px = positions[selectedIdx*3+0];
@@ -1316,6 +1486,8 @@ function updateChipPositionLocked() {
     chip.style.top  = (sy - 30) + 'px';
   }
 }
+// Position the targeting reticle over the selected object, hiding it when the
+// object is off-screen or behind the camera.
 function updateReticle() {
   if (!chipLocked || selectedIdx < 0) {
     reticle.classList.remove('visible');
@@ -1338,6 +1510,7 @@ setInterval(() => { if (chipLocked && selectedIdx >= 0) fillChip(selectedIdx); }
 // ═══════════════════════════════════════════════════════════════════
 // TLE LOADER
 // ═══════════════════════════════════════════════════════════════════
+// Fetch TLE text with an abort-based timeout so a slow source cannot hang boot.
 async function fetchTLE(url, timeout = 25000) {
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeout);
@@ -1351,6 +1524,8 @@ async function fetchTLE(url, timeout = 25000) {
     throw e;
   }
 }
+// Fetch and parse one TLE source, adding new (deduped by NORAD id) objects to
+// the catalog up to PERF_CAP; returns how many were added.
 async function loadSource(url, notableLabel = null, forceCat = null) {
   const txt = await fetchTLE(url);
   const parsed = parseTLE(txt);
@@ -1371,6 +1546,8 @@ const URL_CATNR = (n)     => `https://celestrak.org/NORAD/elements/gp.php?CATNR=
 // ═══════════════════════════════════════════════════════════════════
 // OBJECT INFO PANEL  (replaces encyclopedia)
 // ═══════════════════════════════════════════════════════════════════
+// The info panel shows a curated description plus live orbital elements for the
+// selected object; the banner is a legacy element kept only as a stub target.
 const infoBody = document.getElementById('info-body');
 const banner = document.getElementById('banner');
 
@@ -1459,6 +1636,8 @@ const OBJECT_KNOWLEDGE = [
   }],
 ];
 
+// Pick a description for an object: the first matching curated entry, else a
+// category-level fallback (station, rocket, debris, or generic payload).
 function describeObject(s) {
   if (s._isStorm) {
     return {
@@ -1489,6 +1668,7 @@ function describeObject(s) {
   };
 }
 
+// Build the orbital-element rows for the info panel (storm or satellite).
 function infoOrbitRowsHTML(s) {
   if (s._isStorm) {
     const st = s._stormData;
@@ -1522,6 +1702,8 @@ function infoOrbitRowsHTML(s) {
   );
 }
 
+// Render the full info panel for an object: category, name, description, live
+// elements, and external reference links. Empty prompt when nothing selected.
 function showObjectInfo(idx) {
   if (!infoBody) return;
   if (idx < 0 || idx >= sats.length) {
@@ -1555,6 +1737,8 @@ function showObjectInfo(idx) {
 // Refresh dynamic orbit values periodically while locked
 setInterval(() => { if (chipLocked && selectedIdx >= 0) showObjectInfo(selectedIdx); }, 800);
 
+// Stubs for a removed encyclopedia/banner feature, kept so existing callers
+// (boot, hideBanner, notable events) stay harmless without dead references.
 // Stub the encyclopedia/banner pieces so the rest of the code that references them is harmless
 function renderNotableList() {}
 function showBanner() {}
@@ -1567,6 +1751,8 @@ if (banner) {
   if (btn) btn.addEventListener('click', hideBanner);
 }
 function flyToNotable() {}
+// Fly the camera to an object: propagate its current position, place the camera
+// just outside it, still aimed at Earth's centre, and lock the chip onto it.
 function flyToSat(idx) {
   if (idx < 0 || idx >= sats.length) return;
   const s = sats[idx];
@@ -1589,6 +1775,8 @@ function flyToSat(idx) {
 }
 
 // flyTo with cancellation — only one animation runs at a time
+// Ease the camera position and look-at target from current to given over dur ms
+// with a cubic in/out curve, cancelling any in-flight move first.
 let flyToFrameId = null;
 function flyTo(targetPos, lookAt, dur = 1500) {
   if (flyToFrameId !== null) {
@@ -1619,6 +1807,8 @@ const searchInput   = document.getElementById('search-input');
 const searchResults = document.getElementById('search-results');
 let searchTimer = null;
 
+// Search the catalog by name or NORAD id, rank stations and payloads first, and
+// render clickable results that fly the camera to the chosen object.
 function doSearch(query) {
   if (!searchResults) return;
   if (!query || !query.trim()) { searchResults.innerHTML = ''; return; }
@@ -1652,6 +1842,7 @@ function doSearch(query) {
     });
   });
 }
+// Debounce typing before searching; Escape clears the box and results.
 if (searchInput) {
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
@@ -1661,6 +1852,7 @@ if (searchInput) {
     if (e.key === 'Escape') { searchInput.value = ''; searchResults.innerHTML = ''; }
   });
 }
+// Quick-tag buttons run a preset search query.
 document.querySelectorAll('.qtag').forEach(b => {
   b.addEventListener('click', () => {
     if (!searchInput) return;
@@ -1681,6 +1873,7 @@ const btnPlay = document.getElementById('btn-play');
 const btnNow = document.getElementById('btn-now');
 const btnRewind = document.getElementById('btn-rewind');
 
+// Format a Date as a UTC timestamp string.
 function fmtTime(d) {
   const Y = d.getUTCFullYear();
   const M = String(d.getUTCMonth()+1).padStart(2,'0');
@@ -1690,6 +1883,7 @@ function fmtTime(d) {
   const s = String(d.getUTCSeconds()).padStart(2,'0');
   return `${Y}-${M}-${D} ${h}:${m}:${s}Z`;
 }
+// Format a signed time offset from NOW compactly (minutes, hours, or days).
 function fmtDelta(ms) {
   if (Math.abs(ms) < 60000) return '+0m';
   const sign = ms > 0 ? '+' : '−';
@@ -1699,6 +1893,7 @@ function fmtDelta(ms) {
   return `${sign}${(s/86400).toFixed(1)}d`;
 }
 
+// Move the time handle to pointer x and set SIM.time from the log-scale mapping.
 let sliderDragging = false;
 function setSliderPos(x) {
   const rect = slider.getBoundingClientRect();
@@ -1707,6 +1902,7 @@ function setSliderPos(x) {
   sliderHandle.style.left = (frac * 100) + '%';
   SIM.time = new Date(SIM.base.getTime() + fracToOffsetMs(frac));
 }
+// Time slider drag: pause playback and scrub SIM.time as the handle moves.
 slider.addEventListener('pointerdown', (e) => {
   sliderDragging = true;
   SIM.playing = false;
@@ -1724,6 +1920,7 @@ slider.addEventListener('pointerup', (e) => {
   sliderDragging = false;
   try { slider.releasePointerCapture(e.pointerId); } catch (_) {}
 });
+// Transport buttons: play/pause, jump to NOW (recentre), and rewind one day.
 btnPlay.addEventListener('click', () => {
   SIM.playing = !SIM.playing;
   btnPlay.classList.toggle('playing', SIM.playing);
@@ -1752,8 +1949,10 @@ btnRewind.addEventListener('click', () => {
 //   frac=2/3  → 1000×
 //   frac=1    → 100000×
 const RATE_K = 6;
+// Log-scale mapping between the rate slider fraction and SIM.speed, and back.
 function rateFracToSpeed(frac) { return 0.1 * Math.pow(10, frac * RATE_K); }
 function rateSpeedToFrac(speed) { return Math.log10(Math.max(speed, 0.001) / 0.1) / RATE_K; }
+// Format the playback rate compactly (×, k×).
 function fmtRate(s) {
   if (s < 1)     return s.toFixed(2) + '×';
   if (s < 10)    return s.toFixed(1) + '×';
@@ -1764,6 +1963,7 @@ function fmtRate(s) {
 const rateSlider = document.getElementById('rate-slider');
 const rateHandle = document.getElementById('rate-slider-handle');
 const rateValue  = document.getElementById('rate-value');
+// Apply a rate-slider fraction: set SIM.speed, move the handle, update the label.
 function applyRate(frac) {
   frac = Math.max(0, Math.min(1, frac));
   SIM.speed = rateFracToSpeed(frac);
@@ -1771,6 +1971,7 @@ function applyRate(frac) {
   rateValue.textContent = fmtRate(SIM.speed);
 }
 applyRate(rateSpeedToFrac(SIM.speed)); // init from default SIM.speed (3×)
+// Rate slider drag: set playback speed from the pointer x.
 let rateDragging = false;
 function setRateFromX(x) {
   const rect = rateSlider.getBoundingClientRect();
@@ -1792,6 +1993,7 @@ rateSlider.addEventListener('pointerup', (e) => {
 // ═══════════════════════════════════════════════════════════════════
 // MOBILE MENU
 // ═══════════════════════════════════════════════════════════════════
+// Mobile menu buttons: open one side panel and close the other.
 document.getElementById('menu-btn').addEventListener('click', () => {
   document.getElementById('leftpanel').classList.toggle('open');
   document.getElementById('rightpanel').classList.remove('open');
@@ -1804,6 +2006,7 @@ document.getElementById('menu-btn-right').addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════════════════
 // RESIZE
 // ═══════════════════════════════════════════════════════════════════
+// Keep renderer, camera aspect, and the sprite pixel-ratio uniform in sync.
 window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -1814,15 +2017,19 @@ window.addEventListener('resize', () => {
 // ═══════════════════════════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════════════════════════
+// Set the status readout text and colour class.
 const statusEl = document.getElementById('stat-status');
 function setStatus(text, cls) { statusEl.className = cls; statusEl.innerHTML = text; }
 
+// Allocate scene resources before any data loads.
 buildPointCloud();
 initWindFlowField();
 buildCityLabels();
 buildSatLabelPool();
 renderNotableList();
 
+// Hard-coded fallback catalog (ISS, Tiangong, Hubble) used only when every
+// network TLE source fails, so the globe is never empty.
 function demoDataset() {
   const tles = [
 `ISS (ZARYA)
@@ -1848,6 +2055,8 @@ function demoDataset() {
 }
 
 // Persistent load-status panel
+// Load-status panel: a persistent row per TLE group showing load/ok/fail/retry
+// and the object count, mirrored into the splash meters.
 const loadRowsEl = document.getElementById('load-rows');
 const loadDotEl  = document.getElementById('load-dot');
 const loadRows = new Map();
@@ -1884,6 +2093,8 @@ function setLoadStatus(group, status, count) {
 }
 
 // Alternate URLs for groups that often fail (rate limit, response size)
+// Groups that often rate-limit or return oversized responses get alternate URLs
+// tried in order; urlsForGroup falls back to the standard GP endpoint.
 const GROUP_URLS = {
   starlink: [
     'https://celestrak.org/NORAD/elements/supplemental/sup-gp.php?FILE=starlink&FORMAT=tle',
@@ -1894,6 +2105,8 @@ function urlsForGroup(group) {
   return GROUP_URLS[group] || [URL_GP(group)];
 }
 
+// Load one TLE group: try its URLs in order, add deduped objects, refresh the
+// buffers and counts, and mark the load row ok or fail.
 async function loadGroup(group, opts = {}) {
   const forceCat = opts.forceCat || null;
   if (!loadRows.has(group)) addLoadRow(group);
@@ -1924,6 +2137,8 @@ async function loadGroup(group, opts = {}) {
 }
 
 // Run async tasks with a max parallel count to avoid swamping CelesTrak
+// Run fn over items with at most `limit` in flight, to respect CelesTrak's
+// concurrent-connection guideline.
 async function parallelLimit(items, limit, fn) {
   let cursor = 0;
   async function worker() {
@@ -1935,6 +2150,9 @@ async function parallelLimit(items, limit, fn) {
   await Promise.all(Array.from({length: Math.min(limit, items.length)}, worker));
 }
 
+// Boot sequence: build the Earth map, load stations first (fast labels), then
+// the remaining groups in parallel with retries, add storms and weather, and
+// finally fade the splash screen. Falls back to the demo dataset if all fail.
 async function boot() {
   splash('init renderer', 'ok');
   try { await buildEarthMap(); earthRoot.remove(fallbackShell); }
@@ -1993,6 +2211,9 @@ async function boot() {
 let lastFrame = performance.now();
 const statTimePill = document.getElementById('stat-time-pill');
 
+// The per-frame loop. Advances SIM.time, updates the sun, propagates objects at
+// PROP_HZ, tracks the locked object with the camera, reprojects every HTML
+// overlay, animates the wind field, renders, and updates the time readouts.
 function animate(now) {
   requestAnimationFrame(animate);
   const dt = now - lastFrame;
@@ -2047,6 +2268,7 @@ function animate(now) {
   if (statTimePill) statTimePill.textContent = t;
 }
 
+// Kick off data loading and start the render loop.
 boot();
 animate(performance.now());
 

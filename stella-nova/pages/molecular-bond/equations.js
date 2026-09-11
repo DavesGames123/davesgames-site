@@ -1,5 +1,21 @@
+// ============================================================================
+//  equations.js · rendered reference equations + mobile drawer toggles
+// ----------------------------------------------------------------------------
+//  A classic script loaded before main.js. On load it renders the molecular-
+//  orbital equations into the info panel with KaTeX, colour-coding each symbol
+//  so the maths matches the on-screen legend. It also defines the mobile drawer
+//  open/close helpers used by the inline onclick handlers in index.html.
+//
+//  SECTION MAP  (jump with grep -n "<anchor>" equations.js)
+//      equation render ...... "katex.render"       colour-coded LaTeX into #eq-*
+//      panel collapse ....... "eqCollapseBtn"      show/hide the equation panel
+//      drawer toggles ....... "function toggleDrawer"  mobile side panels
+// ============================================================================
+// Render the equations once the page and KaTeX have loaded.
 (function(){
+  // Bail if KaTeX failed to load; the page still runs without the equations.
   if(!window.katex) return;
+  // Per-symbol colours, matched to the simulator legend (ψ, φ, E, R, Z, S, J/K).
   const C_psi='#7ad87a', C_phi='#7ad87a', C_E='#ffc832', C_R='#96c8ff',
         C_Z='#ff9050', C_S='#d870c8', C_JK='#d870c8', C_N='#dde3f0';
   const opts={throwOnError:false,displayMode:true};
@@ -32,6 +48,7 @@
     document.getElementById('eq-overlap'), opts
   );
 
+  // Collapse toggle: fold the equation panel and flip the caret glyph.
   const panel=document.getElementById('eqPanel');
   const btn=document.getElementById('eqCollapseBtn');
   btn.addEventListener('click',()=>{
@@ -42,6 +59,8 @@
 })();
 
 // Drawer toggles (mobile)
+// Open or close one side drawer (a or b), closing the other first so only one
+// is open at a time, and toggle the shared backdrop.
 function toggleDrawer(which){
   const p=document.getElementById('panel-'+which);
   const fab=document.getElementById('fab'+which.toUpperCase());
@@ -55,6 +74,7 @@ function toggleDrawer(which){
   fab.classList.toggle('open',open);
   bd.classList.toggle('show',open);
 }
+// Force both drawers and the backdrop closed (used after loading a preset).
 function closeDrawers(){
   document.getElementById('panel-a').classList.remove('open');
   document.getElementById('panel-b').classList.remove('open');

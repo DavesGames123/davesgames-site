@@ -4,15 +4,37 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>STELLA NOVA // Explosion Viewer</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   EXPLOSION VIEWER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js (classic script at the end of body) creates the
+   WebGPU context on the #cv canvas and renders the explosion; this file
+   only lays out the player chrome the script binds to by id.
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────┐
+     │ viewport: #cv canvas, top/bottom chrome (res, FPS)       │
+     ├─────────────────────────────────────────────────────────┤
+     │ controls: #timeline · transport · zoom + quality tiers   │
+     ├─────────────────────────────────────────────────────────┤
+     │ dope sheet: legend + #dsCv curve editor canvas           │
+     └─────────────────────────────────────────────────────────┘
+   #dbg is a hidden overlay main.js reveals to print errors.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="player">
+  <!-- Viewport: the WebGPU canvas with resolution and FPS readouts. -->
   <div class="viewport">
     <div class="vp-chrome top"><span>VOLUMETRIC EXPLOSION // DUKE</span><span id="resLabel">--</span></div>
     <canvas id="cv"></canvas>
     <div class="vp-chrome bottom"><span id="fpsLabel">-- FPS</span><span>DRAG TO ROTATE · SCROLL TO ZOOM</span></div>
   </div>
+  <!-- Controls: scrub timeline, transport row (play, step, seed, speed), and
+       the zoom slider with the render-quality tiers. -->
   <div class="controls">
     <div class="timeline" id="timeline"><div class="tl-track"><div class="tl-fill" id="tlFill" style="width:0%"></div></div></div>
     <div class="transport">
@@ -41,6 +63,8 @@
       </div>
     </div>
   </div>
+  <!-- Dope sheet: legend toggles plus the #dsCv canvas where main.js draws and
+       edits the scale / brightness / density animation curves. -->
   <div class="dope-sheet">
     <div class="ds-head">
       <span class="ds-title">▸ Dope Sheet — Drag Points to Reshape Curves</span>
@@ -57,8 +81,11 @@
     </div>
   </div>
 </div>
+<!-- Hidden error overlay; main.js sets it visible and prints failures into it. -->
 <div id="dbg"></div>
 
+<!-- Classic script: runs after the markup is parsed, sets up WebGPU, and starts
+     the render loop. -->
 <script src="main.js"></script>
 </body>
 </html>

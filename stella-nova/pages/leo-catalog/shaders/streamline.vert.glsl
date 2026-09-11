@@ -1,4 +1,8 @@
 
+      // streamline.vert.glsl — orbital streamline vertex stage.
+      // Each streamline is a line strip. A bright "comet head" travels along it
+      // over time; this stage computes each vertex's brightness from how far it
+      // sits behind the moving head, and passes a normalized speed for colour.
       attribute float arclen;
       attribute float streamId;
       attribute float speed;

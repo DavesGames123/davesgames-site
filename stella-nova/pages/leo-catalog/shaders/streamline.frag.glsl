@@ -1,6 +1,10 @@
 
+      // streamline.frag.glsl — orbital streamline fragment stage.
+      // Colours each streamline pixel by orbital speed through a four-stop ramp,
+      // scaled by the comet-head brightness so the moving head glows brightest.
       varying float vBright;
       varying float vSpeed;
+      // Speed-to-colour ramp: violet, blue, cyan, orange, white across t in 0..1.
       vec3 speedColor(float t) {
         t = clamp(t, 0.0, 1.0);
         vec3 c0 = vec3(0.05, 0.02, 0.30);

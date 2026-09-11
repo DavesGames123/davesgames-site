@@ -4,6 +4,36 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>LEO / CAT — low earth orbit catalog & chronograph</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   LEO CATALOG  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js (type=module) renders the WebGL globe into the
+   #scene canvas and drives every readout, label, and overlay here by id. The
+   splash rack is the boot dashboard main.js fills with gauges, meters, and log
+   lines while it fetches the satellite catalog.
+
+   LOAD ORDER  (order matters)
+     1. satellite.js   SGP4 propagator (global "satellite")
+     2. topojson       coastline decoder (global "topojson")
+     3. importmap      maps the bare specifier "three" to the CDN (must be inline)
+     4. main.js        type=module; resolves "three", then fetches shaders
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ #brand-bar (top-left)          #scene canvas (full-screen globe)  │
+     ├────────────┬───────────────────────────────────┬────────────────┤
+     │ #leftpanel │        globe + HTML overlays        │ #rightpanel    │
+     │ search     │        (#chip, #target-reticle,     │ object info    │
+     │ load       │         city / station / sat labels) │                │
+     │ filters    │                                      │                │
+     │ overlays   │                                      │                │
+     ├────────────┴───────────────────────────────────┴────────────────┤
+     │ #timepanel: clock · time slider · transport · rate slider        │
+     └─────────────────────────────────────────────────────────────────┘
+   #splash covers everything until boot finishes, then fades out.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
@@ -11,8 +41,11 @@
 </head>
 <body>
 
+<!-- Full-screen WebGL target; main.js attaches the renderer to this canvas. -->
 <canvas id="scene"></canvas>
 
+<!-- Splash: boot dashboard shown over the scene until the catalog is loaded.
+     main.js drives the gauges (by data-prog), the per-group meters, and the log. -->
 <!-- Splash -->
 <div id="splash">
   <div class="splash-header">
@@ -120,6 +153,8 @@
   <button id="menu-btn-right" class="menu-btn">i</button>
 </div>
 
+<!-- Unified time panel: the clock readout, the log-scale time-scrub slider (its
+     ticks label the exponential offsets), transport buttons, and rate slider. -->
 <!-- Unified time panel (bottom) -->
 <div id="timepanel" class="panel corners">
   <span class="ctl"></span><span class="ctr"></span>
@@ -278,6 +313,8 @@
 <!-- Hidden time fallback for mobile (kept for layout symmetry) -->
 <span id="mobile-time" style="display:none">—</span>
 
+<!-- Hover/Lock chip: floating info card main.js fills and positions; it follows
+     the pointer while hovering and pins to the selected object when locked. -->
 <!-- Hover/Lock Chip -->
 <div id="chip" class="panel corners">
   <div class="ch-head">
@@ -305,6 +342,8 @@
   <span class="tr-label">LOCKED</span>
 </div>
 
+<!-- Legacy event banner. main.js stubs its show logic, so it stays hidden; kept
+     so the close-button wiring and layout references remain valid. -->
 <!-- KSP-style banner -->
 <div id="banner" class="panel corners">
   <span class="ctl"></span><span class="ctr"></span>
@@ -319,6 +358,8 @@
   </div>
 </div>
 
+<!-- Libraries: SGP4 propagator and coastline decoder as globals, then the
+     import map for three, then the module entry point. -->
 <!-- Libraries -->
 <script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>

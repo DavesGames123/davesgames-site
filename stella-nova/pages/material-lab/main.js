@@ -1,4 +1,49 @@
+// ============================================================================
+//  MATERIAL LAB  ·  PBR material generator and real-time WebGL preview
+// ----------------------------------------------------------------------------
+//  A classic (non-module) script. It uploads a source image to a Python server
+//  that returns PBR maps (albedo, mask, depth, normals, roughness, metallic,
+//  AO) as base64 PNGs, then previews them through a WebGL PBR shader that lives
+//  in <script type="x-shader"> blocks in index.html. The user relights the
+//  result with a point light (a draggable sphere widget) and/or an HDRI, and
+//  can hand-edit the depth map. The shaders are in the page, not .glsl files.
+//
+//  DATA FLOW
+//  ---------
+//      image ─▶ apiPost(/segment|/depth|/normals|/pbr) ─▶ base64 PNG maps
+//                                    │
+//                                    ▼
+//        setMap(key,img) ─┬─ uploadTex()  → WebGL texture unit
+//                         ├─ thumbnail strip
+//                         └─ schedRender()
+//                                    ▼
+//        render()  binds maps 0..5 + env 6, sets uniforms, draws one quad
+//                                    ▼
+//                              #gl-canvas
+//
+//  LIGHTING INPUTS
+//      point light  ← light sphere widget (azimuth/elevation) + sliders
+//      IBL          ← HDRI (.hdr parsed here) or LDR env image
+//      lightMode    0 point · 1 IBL · 2 both
+//
+//  SECTION MAP  (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      state ................ "MAP_DEFS"           the 7 PBR map slots + S
+//      thumbnail tabs ....... "Build map thumbnail"  build the map strip
+//      tab switching ........ "function showRender" render vs map inspect
+//      download ............. "function downloadMap"  blob download (iframe safe)
+//      set map .............. "function setMap"     store + upload + thumbnail
+//      file upload .......... "File upload"         drag/drop and picker
+//      api calls ............ "function apiPost"    POST to the Python server
+//      hdri ................. "function loadHDR"    Radiance .hdr parser
+//      depth editor ......... "function openDepthEditor"  paint the depth map
+//      webgl ................ "function initGL"     program, quad, textures
+//      render ............... "function render"     bind maps, set uniforms, draw
+//      light sphere ......... "Light Sphere Widget" azimuth/elevation picker
+//      boot ................. "Boot"                init GL + server health check
+// ============================================================================
 /* ═══ State ═══ */
+// The seven PBR map slots: storage key, panel label, and accent colour.
 var MAP_DEFS = [
   { key: 'albedo',    label: 'Albedo',    color: '#c0cfe0' },
   { key: 'mask',      label: 'Mask',      color: '#64c864' },
@@ -9,18 +54,23 @@ var MAP_DEFS = [
   { key: 'ao',        label: 'AO',        color: '#00d4b4' }
 ];
 
+// Global app state: the source file and image, decoded maps, GPU textures,
+// the busy flag that serializes API calls, env-map state, and the active tab.
 var S = {
   file: null, img: null, maps: {}, tex: {},
   busy: false, envTex: null, hasEnv: false, lightMode: 0,
   activeTab: 'render'
 };
 
+// The processing server base URL, trailing slashes trimmed.
 function API() {
   return document.getElementById('server-url').value.replace(/\/+$/, '');
 }
 
 
 /* ═══ Build map thumbnail tabs ═══ */
+// Build one thumbnail tab per map: a preview canvas, a label, and a download
+// button. Clicking a tab inspects that map; the button downloads its PNG.
 (function() {
   var strip = document.getElementById('map-strip');
   MAP_DEFS.forEach(function(d) {
@@ -40,6 +90,7 @@ function API() {
 
 
 /* ═══ Tab switching ═══ */
+// Switch to the 3D render view: hide the inspector, highlight the render tab.
 function showRender() {
   S.activeTab = 'render';
   document.getElementById('map-inspect').classList.add('hidden');
@@ -48,6 +99,7 @@ function showRender() {
   });
 }
 
+// Inspect one map full-resolution in the overlay canvas and highlight its tab.
 function showMap(key) {
   if (!S.maps[key]) return;
   S.activeTab = key;
@@ -68,6 +120,9 @@ function showMap(key) {
 }
 
 
+// Download a map as a PNG. Draws it to a blob and clicks a temporary link;
+// when embedded in an iframe it appends the link to the parent document so the
+// browser allows the download.
 // ── NEW (works in iframes via blob URL + parent document) ────
 function downloadMap(key) {
   if (!S.maps[key]) return;
@@ -99,6 +154,9 @@ function downloadMap(key) {
 
 
 /* ═══ Set map data ═══ */
+// Store a decoded map and wire up everything that depends on it: thumbnail,
+// download button, GPU texture, a re-render, and any map-specific UI (the
+// upload prompt hides on albedo; depth tools enable on depth).
 function setMap(key, img) {
   S.maps[key] = img;
 
@@ -144,6 +202,7 @@ function setMap(key, img) {
   if (S.activeTab === key) showMap(key);
 }
 
+// Snapshot the live WebGL canvas into the "Render" thumbnail (letterboxed).
 function updateRenderThumb() {
   // Small delay to let WebGL render, then snapshot
   setTimeout(function() {
@@ -162,6 +221,7 @@ function updateRenderThumb() {
 
 
 /* ═══ File upload ═══ */
+// File picker: load the chosen image as the source.
 var fileInput = document.getElementById('file-input');
 
 fileInput.addEventListener('change', function() {
@@ -169,6 +229,7 @@ fileInput.addEventListener('change', function() {
 });
 
 // Drag & drop on viewport
+// Drop an image anywhere on the viewport to load it.
 var vp = document.getElementById('viewport');
 vp.addEventListener('dragover', function(e) { e.preventDefault(); });
 vp.addEventListener('drop', function(e) {
@@ -176,6 +237,7 @@ vp.addEventListener('drop', function(e) {
   if (e.dataTransfer.files && e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]);
 });
 
+// Load an image file as the albedo source, then enable the processing buttons.
 function loadFile(f) {
   S.file = f;
   var img = new Image();
@@ -193,6 +255,8 @@ function loadFile(f) {
   img.src = URL.createObjectURL(f);
 }
 
+// Reset everything: drop the source, free GPU textures, clear thumbnails and
+// maps, disable buttons, and re-show the upload prompt.
 function clearAll() {
   S.file = null;
   S.img = null;
@@ -223,6 +287,7 @@ function clearAll() {
 
 
 /* ═══ API calls ═══ */
+// Set the status dot colour class and its message text.
 function setStatus(t, m) {
   document.getElementById('status-dot').className = 'status-dot ' + t;
   document.getElementById('status-text').textContent = m;
@@ -235,6 +300,7 @@ function hideProgress() {
   document.getElementById('progress').classList.add('hidden');
 }
 
+// Decode a base64 PNG string from the server into an Image, resolving on load.
 function b64Img(b) {
   return new Promise(function(resolve) {
     var img = new Image();
@@ -243,6 +309,8 @@ function b64Img(b) {
   });
 }
 
+// POST a form to the server and return the parsed JSON. The busy flag prevents
+// overlapping requests; the status bar shows progress, timing, or the error.
 async function apiPost(endpoint, formData, label) {
   if (S.busy) return null;
   S.busy = true;
@@ -265,24 +333,29 @@ async function apiPost(endpoint, formData, label) {
   }
 }
 
+// Wrap the current source file in a FormData for a POST.
 function fileFD() {
   var fd = new FormData();
   fd.append('file', S.file);
   return fd;
 }
 
+// Server actions: each posts the source image and stores the returned map(s).
+// Segment produces the mask.
 async function doSegment() {
   if (!S.file) return;
   var d = await apiPost('/segment', fileFD(), 'Segmenting...');
   if (d) { setMap('mask', await b64Img(d.mask)); setStatus('ok', 'Done'); }
 }
 
+// Depth produces the depth map.
 async function doDepth() {
   if (!S.file) return;
   var d = await apiPost('/depth', fileFD(), 'Depth...');
   if (d) { setMap('depth', await b64Img(d.depth)); setStatus('ok', 'Done'); }
 }
 
+// Normals produces the normal map (and depth), smoothed by the slider value.
 async function doNormals() {
   if (!S.file) return;
   var smooth = document.getElementById('depth-smooth').value;
@@ -294,6 +367,7 @@ async function doNormals() {
   setStatus('ok', 'Done');
 }
 
+// Full PBR produces every map in one call.
 async function doPBR() {
   if (!S.file) return;
   var d = await apiPost('/pbr', fileFD(), 'Full PBR...');
@@ -305,6 +379,8 @@ async function doPBR() {
   setStatus('ok', 'PBR done');
 }
 
+// Normals-from-depth: recompute normals from the (possibly hand-edited) depth
+// map instead of the source image, so depth-editor changes flow into normals.
 async function doNFD() {
   if (!S.maps.depth || S.busy) return;
   S.busy = true;
@@ -339,6 +415,7 @@ async function doNFD() {
 
 
 /* ═══ HDRI ═══ */
+// HDRI picker: parse .hdr files here; load other image types as LDR env maps.
 document.getElementById('hdri-input').addEventListener('change', function() {
   if (!this.files || !this.files[0]) return;
   var f = this.files[0];
@@ -349,6 +426,7 @@ document.getElementById('hdri-input').addEventListener('change', function() {
   }
 });
 
+// Load a standard image as the environment map and switch to IBL lighting.
 function loadLDREnv(f) {
   var img = new Image();
   img.onload = function() {
@@ -360,6 +438,8 @@ function loadLDREnv(f) {
   img.src = URL.createObjectURL(f);
 }
 
+// Read a Radiance .hdr file, tone-map its float pixels to an 8-bit canvas
+// (1 - exp(-x) compresses the high dynamic range), then upload as the env map.
 function loadHDR(file) {
   var reader = new FileReader();
   reader.onload = function() {
@@ -393,6 +473,9 @@ function loadHDR(file) {
   reader.readAsArrayBuffer(file);
 }
 
+// Parse a Radiance RGBE (.hdr) byte array into a Float32 RGB image. Skips the
+// text header, reads the resolution line, then decodes each scanline and turns
+// the shared exponent byte back into linear float radiance.
 function parseHDR(b) {
   var i = 0;
   // Skip header
@@ -427,6 +510,9 @@ function parseHDR(b) {
   return { width: W, height: H, data: data };
 }
 
+// Decode one RGBE scanline. Handles both flat scanlines and the new-style
+// run-length encoding (marker bytes 2,2), where each of the four channels is
+// stored separately as alternating runs and literal spans.
 function decodeScanline(b, o, W) {
   var i = o;
   if (W < 8 || W > 32767 || b[i] !== 2 || b[i+1] !== 2) {
@@ -455,6 +541,8 @@ function decodeScanline(b, o, W) {
   return { px: px, next: i };
 }
 
+// Upload the environment image as a WebGL texture, wrapping horizontally so the
+// equirectangular map is seamless as it rotates. Replaces any previous env map.
 function uploadEnvTex(img) {
   if (!gl) return;
   if (S.envTex) gl.deleteTexture(S.envTex);
@@ -470,6 +558,7 @@ function uploadEnvTex(img) {
   schedRender();
 }
 
+// Switch lighting mode (0 point, 1 IBL, 2 both) and highlight its button.
 function setLightMode(m) {
   S.lightMode = m;
   document.querySelectorAll('#mode-toggle button').forEach(function(b) {
@@ -480,8 +569,11 @@ function setLightMode(m) {
 
 
 /* ═══ Depth Editor ═══ */
+// deOrig snapshots the depth image for Reset; deCtx is the editor canvas context.
 var deOrig = null, deCtx = null;
 
+// Open the depth painter: draw the current depth map into the editor canvas and
+// wire up brush painting (a grey disc, its value and opacity from the sliders).
 function openDepthEditor() {
   if (!S.maps.depth) return;
   document.getElementById('de-overlay').classList.remove('hidden');
@@ -515,6 +607,7 @@ function openDepthEditor() {
   cv.onmouseup = cv.onmouseleave = function() { painting = false; };
 }
 
+// Blur the whole depth canvas once (soften painted edges).
 function deBlur() {
   if (!deCtx) return;
   var c = document.getElementById('de-canvas');
@@ -526,10 +619,12 @@ function deBlur() {
   deCtx.drawImage(t, 0, 0);
 }
 
+// Restore the depth canvas to the snapshot taken when the editor opened.
 function deReset() {
   if (deCtx && deOrig) deCtx.putImageData(deOrig, 0, 0);
 }
 
+// Commit the edited depth canvas back into the depth map and close the editor.
 function deApply() {
   var c = document.getElementById('de-canvas');
   var img = new Image();
@@ -540,14 +635,18 @@ function deApply() {
   img.src = c.toDataURL('image/png');
 }
 
+// Close the depth editor without applying changes.
 function deCancel() {
   document.getElementById('de-overlay').classList.add('hidden');
 }
 
 
 /* ═══ WebGL ═══ */
+// gl is the context, prog the PBR program, renderPending coalesces redraws.
 var gl, prog, renderPending = false;
 
+// Create the WebGL context and PBR program from the in-page shader scripts, set
+// up the full-screen quad, assign texture units, and seed placeholder textures.
 function initGL() {
   var c = document.getElementById('gl-canvas');
   gl = c.getContext('webgl', { antialias: false, premultipliedAlpha: false });
@@ -588,6 +687,7 @@ function initGL() {
   schedRender();
 }
 
+// Compile one shader stage from source, logging any compile error.
 function compileShader(type, src) {
   var s = gl.createShader(type);
   gl.shaderSource(s, src);
@@ -598,6 +698,8 @@ function compileShader(type, src) {
   return s;
 }
 
+// Make a 1x1 solid-colour texture, used where a map is missing (flat normal is
+// [128,128,255], everything else black) so the shader always has a bound sampler.
 function makePlaceholder(rgba) {
   var t = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, t);
@@ -608,6 +710,7 @@ function makePlaceholder(rgba) {
   return t;
 }
 
+// Upload a decoded map image as the GPU texture for that map key.
 function uploadTex(key, img) {
   if (!gl) return;
   if (S.tex[key]) gl.deleteTexture(S.tex[key]);
@@ -621,6 +724,7 @@ function uploadTex(key, img) {
   S.tex[key] = t;
 }
 
+// Match the canvas backing store to the viewport size times device pixel ratio.
 function resizeGL() {
   var c  = document.getElementById('gl-canvas');
   var vp = document.getElementById('viewport');
@@ -630,6 +734,8 @@ function resizeGL() {
   if (gl) gl.viewport(0, 0, c.width, c.height);
 }
 
+// Request a single render on the next animation frame, coalescing bursts of
+// control changes into one draw.
 function schedRender() {
   if (!renderPending) {
     renderPending = true;
@@ -637,6 +743,8 @@ function schedRender() {
   }
 }
 
+// Draw one PBR frame: clear, bind the six map textures and the env map, push
+// every material and lighting uniform from the controls, then draw the quad.
 function render() {
   renderPending = false;
   if (!gl) return;
@@ -659,6 +767,7 @@ function render() {
   gl.bindTexture(gl.TEXTURE_2D, S.envTex || makePlaceholder([0,0,0,255]));
 
   // Uniforms
+  // u() looks up a uniform location; v() reads a control value as a float.
   var u = function(n) { return gl.getUniformLocation(prog, n); };
   var v = function(id) { return parseFloat(document.getElementById(id).value); };
 
@@ -691,6 +800,8 @@ function render() {
 
 
 /* ═══ Viewport drag: IBL rotation only ═══ */
+// Dragging the viewport spins the environment map, but only in IBL mode with an
+// env map loaded, so a point-light setup is not disturbed by a stray drag.
 (function() {
   var vp = document.getElementById('viewport');
   var drag = false;
@@ -709,11 +820,14 @@ function render() {
 })();
 
 /* ═══ Light Sphere Widget ═══ */
+// The light direction as spherical angles; the widget draws and edits these.
 var sphereAzimuth = 0.78;  // radians, initial ~45deg
 var sphereElevation = 0.78;
 var sphereCanvas = document.getElementById('sphere-canvas');
 var sphereCtx = sphereCanvas.getContext('2d');
 
+// Draw the light sphere: a shaded hemisphere with grid lines, a direction line
+// from the centre, and a glowing dot marking the current light direction.
 function drawSphere() {
   var w = sphereCanvas.width, h = sphereCanvas.height;
   var cx = w / 2, cy = h / 2, r = w / 2 - 4;
@@ -791,6 +905,8 @@ function drawSphere() {
   ctx.fill();
 }
 
+// Convert the sphere angles and distance into a light position, write it to the
+// hidden light inputs and the readout, redraw the widget, and re-render.
 function updateLightFromSphere() {
   var dist = parseFloat(document.getElementById('light-dist').value);
   var lx = Math.cos(sphereElevation) * Math.sin(sphereAzimuth) * dist;
@@ -806,6 +922,8 @@ function updateLightFromSphere() {
 }
 
 // Sphere interaction
+// Drag inside the sphere to aim the light: the pointer offset from centre maps
+// to azimuth (left-right) and elevation (up-down), clamped to the disc radius.
 (function() {
   var el = document.getElementById('light-sphere');
   var dragging = false;
@@ -837,10 +955,12 @@ function updateLightFromSphere() {
 })();
 
 // Initial draw
+// Place the light and paint the widget once at startup.
 updateLightFromSphere();
 
 
 /* ═══ Boot ═══ */
+// Start WebGL, then probe the server /health endpoint and show its status.
 initGL();
 
 (async function() {

@@ -4,6 +4,31 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Material Lab — Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MATERIAL LAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup plus two GLSL programs. main.js (classic script at the end of
+   body) uploads an image to a processing server, previews the returned PBR
+   maps on #gl-canvas, and relights them. The WebGL vertex and fragment shaders
+   live in the two &lt;script type="x-shader"&gt; blocks below the app markup;
+   main.js reads them by id (vs-quad, fs-pbr). They are GLSL, not .glsl files.
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: upload · segment/depth/normals/pbr · edit · server URL   │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ light sphere widget + material / light sliders                   │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ HDRI row: load env · rotation/exposure · point/IBL/both          │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #viewport: #gl-canvas, map inspector, upload prompt, progress    │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #map-strip: render tab + one thumbnail per map (built by JS)     │
+     └─────────────────────────────────────────────────────────────────┘
+   #de-overlay is the depth painter; the status bar sits at the bottom.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -143,10 +168,15 @@
 <!-- VERTEX SHADER                                          -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <script id="vs-quad" type="x-shader/x-vertex">
+// vs-quad — pass-through vertex stage for the full-screen quad.
+// Maps clip-space corners (-1..1) to uv (0..1) and flips y so the image is
+// upright, since the source textures have their origin at the top-left.
 attribute vec2 aPos;
 varying vec2 vUV;
 void main() {
+  // Clip position to texture coordinates.
   vUV = aPos * 0.5 + 0.5;
+  // Flip y to match image top-left origin.
   vUV.y = 1.0 - vUV.y;
   gl_Position = vec4(aPos, 0.0, 1.0);
 }
@@ -156,6 +186,21 @@ void main() {
 <!-- FRAGMENT SHADER                                        -->
 <!-- ═══════════════════════════════════════════════════════ -->
 <script id="fs-pbr" type="x-shader/x-fragment">
+// fs-pbr — Cook-Torrance PBR fragment stage for the flat material preview.
+//
+//   The quad is a flat card facing the camera; the normal map supplies surface
+//   detail. For each pixel it samples the PBR maps (albedo, normal, roughness,
+//   metallic, AO, mask), then sums direct point-light and image-based lighting
+//   and tone-maps the result.
+//
+//     albedo/normal/rough/metal/AO ─┐
+//                                    ├─▶ Cook-Torrance BRDF (D·F·G) + diffuse
+//     point light (uLightPos) ───────┤        + IBL (env map reflection)
+//     env map (uEnvMap) ─────────────┘        + ambient·AO
+//                                    ▼
+//                       ACES tonemap ─▶ gamma ─▶ gl_FragColor
+//
+//   Uniforms come from render() in main.js; uHas* flags gate each map.
 precision highp float;
 varying vec2 vUV;
 
@@ -171,36 +216,44 @@ uniform bool  uHasAlbedo, uHasNormal, uHasRoughness, uHasMetallic, uHasAO, uHasM
 const float PI  = 3.14159265359;
 const float TAU = 6.28318530718;
 
+// GGX normal distribution: concentrates specular highlights by roughness a.
 float D_GGX(float NdH, float a) {
   float a2 = a * a;
   float d  = NdH * NdH * (a2 - 1.0) + 1.0;
   return a2 / (PI * d * d + 1e-7);
 }
 
+// Schlick Fresnel: reflectance rising toward grazing angles, from base F0.
 vec3 F_Schlick(float cosT, vec3 F0) {
   return F0 + (1.0 - F0) * pow(clamp(1.0 - cosT, 0.0, 1.0), 5.0);
 }
 
+// One Smith geometry term (shadowing/masking) for a single direction.
 float G1(float x, float k) { return x / (x * (1.0 - k) + k); }
 
+// Smith geometry: combine the view and light masking terms.
 float G_Smith(float NdV, float NdL, float r) {
   float k = (r + 1.0);
   k = k * k / 8.0;
   return G1(NdV, k) * G1(NdL, k);
 }
 
+// Checkerboard background pattern for the "Checker" background mode.
 vec3 checker(vec2 uv) {
   float s = 24.0;
   return mix(vec3(0.10, 0.10, 0.12), vec3(0.16, 0.16, 0.18),
              mod(floor(uv.x * s) + floor(uv.y * s), 2.0));
 }
 
+// Map a 3D direction to equirectangular env-map uv, including the rotation.
 vec2 envUV(vec3 d) {
   float phi   = atan(d.x, d.z) + uEnvRot;
   float theta = acos(clamp(d.y, -1.0, 1.0));
   return vec2(mod(phi / TAU + 0.5, 1.0), theta / PI);
 }
 
+// Sample the env map in a direction. For rough surfaces (lod > 0) it averages a
+// 3x3 tap kernel to fake a blurred, lower-detail reflection, scaled by exposure.
 vec3 sampleEnv(vec3 d, float lod) {
   vec2 uv = envUV(d);
   vec3 c  = texture2D(uEnvMap, uv).rgb;
@@ -219,6 +272,9 @@ vec3 sampleEnv(vec3 d, float lod) {
   return c * uEnvExp;
 }
 
+// Shade one pixel: pick the background, letterbox the image into the viewport,
+// sample the material, then accumulate point light, IBL, and ambient before
+// tone-mapping and gamma-correcting the result.
 void main() {
   // Background (always uses raw vUV for checker pattern)
   vec3 bg;
@@ -281,6 +337,8 @@ void main() {
   vec3 V    = normalize(vec3(0.0, 0.0, 2.5) - frag);
   float NdV = max(dot(N, V), 0.001);
 
+  // Base reflectance F0: dielectric 0.04, tinted toward albedo for metals.
+  // kD is the diffuse weight left after specular reflection and metalness.
   vec3 F0 = mix(vec3(0.04), albedo, metallic);
   vec3 F  = F_Schlick(NdV, F0);
   vec3 kD = (1.0 - F) * (1.0 - metallic);
