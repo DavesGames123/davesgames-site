@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Colony Flag Designer // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app">
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Colony Systems</span></div>
+  <div class="topbar-r"><span>SYS // <strong>FLAG DESIGNER</strong></span></div>
+</div>
+
+<!-- Shape Strip (left sidebar) -->
+<div class="shape-strip" id="shapeStrip">
+  <span class="shape-strip-label">Shape</span>
+</div>
+
+<div class="page-body">
+<div class="hero">
+  <div class="hero-sub">Colony Systems // Flag Designer</div>
+  <div class="hero-title">Raise Your <em>Banner</em></div>
+  <div class="hero-body">
+    Every colony needs a <strong>flag</strong> &mdash; a symbol of identity among the stars. Choose from
+    <strong>30 heraldic patterns</strong>, six distinct <strong>shapes</strong>, and optional <strong>emblems</strong>
+    with a dedicated <strong>symbol color</strong> to forge a banner for your settlements, stations, and fleets.
+  </div>
+</div>
+
+<div class="preset-gallery">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-badge" style="color:var(--yellow)">Presets</span>
+      <span class="panel-title">Colony Banners</span>
+      <span class="panel-sub">Click to apply</span>
+    </div>
+    <div class="panel-body">
+      <div class="preset-grid" id="presetGrid"></div>
+    </div>
+  </div>
+</div>
+
+<div class="main-layout">
+  <div class="designer-panel">
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-badge" style="color:var(--yellow)">Preview</span>
+        <span class="panel-title">Flag Preview</span>
+      </div>
+      <div class="panel-body">
+        <div class="preview-wrap"><canvas id="previewCanvas"></canvas></div>
+
+        <div class="color-section">
+          <div class="color-label">Primary Color</div>
+          <div class="cpick">
+            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="primarySwatchBg"></div><input type="color" id="primaryNativePicker" value="#6B1D1D"></div>
+            <div class="cpick-fields">
+              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="primaryHex" value="#6B1D1D" maxlength="7" spellcheck="false"></div>
+              <div class="cpick-rgb-row">
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="primaryR" min="0" max="255" value="107"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="primaryG" min="0" max="255" value="29"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="primaryB" min="0" max="255" value="29"></div>
+              </div>
+            </div>
+          </div>
+          <div class="hsv-wrap">
+            <div class="hsv-sv-wrap" id="primarySvWrap"><canvas id="primarySvCanvas"></canvas><div class="hsv-sv-cursor" id="primarySvCursor"></div></div>
+            <div class="hsv-hue-wrap" id="primaryHueWrap"><canvas id="primaryHueCanvas"></canvas><div class="hsv-hue-cursor" id="primaryHueCursor"></div></div>
+          </div>
+        </div>
+
+        <div class="color-section">
+          <div class="color-label">Secondary Color</div>
+          <div class="cpick">
+            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="secondarySwatchBg"></div><input type="color" id="secondaryNativePicker" value="#C0C8D0"></div>
+            <div class="cpick-fields">
+              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="secondaryHex" value="#C0C8D0" maxlength="7" spellcheck="false"></div>
+              <div class="cpick-rgb-row">
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="secondaryR" min="0" max="255" value="192"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="secondaryG" min="0" max="255" value="200"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="secondaryB" min="0" max="255" value="208"></div>
+              </div>
+            </div>
+          </div>
+          <div class="hsv-wrap">
+            <div class="hsv-sv-wrap" id="secondarySvWrap"><canvas id="secondarySvCanvas"></canvas><div class="hsv-sv-cursor" id="secondarySvCursor"></div></div>
+            <div class="hsv-hue-wrap" id="secondaryHueWrap"><canvas id="secondaryHueCanvas"></canvas><div class="hsv-hue-cursor" id="secondaryHueCursor"></div></div>
+          </div>
+        </div>
+
+        <div class="color-section">
+          <div class="color-label">Symbol Color</div>
+          <div class="cpick">
+            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="tertiarySwatchBg"></div><input type="color" id="tertiaryNativePicker" value="#E8D060"></div>
+            <div class="cpick-fields">
+              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="tertiaryHex" value="#E8D060" maxlength="7" spellcheck="false"></div>
+              <div class="cpick-rgb-row">
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="tertiaryR" min="0" max="255" value="232"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="tertiaryG" min="0" max="255" value="208"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="tertiaryB" min="0" max="255" value="96"></div>
+              </div>
+            </div>
+          </div>
+          <div class="hsv-wrap">
+            <div class="hsv-sv-wrap" id="tertiarySvWrap"><canvas id="tertiarySvCanvas"></canvas><div class="hsv-sv-cursor" id="tertiarySvCursor"></div></div>
+            <div class="hsv-hue-wrap" id="tertiaryHueWrap"><canvas id="tertiaryHueCanvas"></canvas><div class="hsv-hue-cursor" id="tertiaryHueCursor"></div></div>
+          </div>
+        </div>
+
+        <div class="emblem-section">
+          <div class="color-label">Emblem Overlay</div>
+          <div class="emblem-grid" id="emblemGrid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="catalog-panel">
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-badge" style="color:var(--blue)">Catalog</span>
+        <span class="panel-title">Pattern Designs</span>
+        <span class="panel-sub" id="patternCount">30 patterns</span>
+      </div>
+      <div class="panel-body">
+        <div class="pattern-grid" id="patternGrid"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-badge" style="color:var(--blue)">Live</span>
+        <span class="panel-title">Flag Wave Simulation</span>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <div class="wave-wrap" id="waveWrap"><canvas id="waveCanvas"></canvas></div>
+      </div>
+    </div>
+    <div class="wave-controls">
+      <div class="wave-slider-wrap"><span class="wave-slider-label">Wind:</span><input type="range" class="wave-slider" id="windSlider" min="0" max="100" value="50"></div>
+      <button class="wave-btn" id="wavePauseBtn" onclick="toggleWavePause()">Pause</button>
+      <span class="wave-info">cloth simulation &bull; 40&times;25 grid</span>
+    </div>
+  </div>
+</div>
+</div><!-- .page-body -->
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

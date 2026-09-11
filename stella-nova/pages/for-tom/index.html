@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ASTROTECHS — Operational Overview</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+<!-- DIAL/GAUGE/ETC SVG TEMPLATES (defined inline below for portability) -->
+
+<header class="topnav">
+  <div class="brand"><span class="dot"></span>ASTROTECHS · OPS</div>
+  <nav>
+    <a href="#identity">Identity</a><a href="#loop">Loop</a><a href="#controls">Combat</a>
+    <a href="#abilities">Kit</a><a href="#hazards">Devices</a><a href="#enemies">Enemies</a>
+    <a href="#crew">Crew</a><a href="#endstates">End States</a><a href="#register">Register</a>
+  </nav>
+  <div class="chrome">
+    <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><circle cx="20" cy="20" r="10" fill="none" stroke="#2a8a8a" stroke-width="0.5" stroke-dasharray="2,2"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2" filter="drop-shadow(0 0 3px #5be6e6)"/><circle cx="20" cy="6" r="1.5" fill="#5be6e6"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+    <span class="eq"><i style="height:40%"></i><i style="height:70%"></i><i style="height:50%"></i><i style="height:80%"></i><i style="height:60%"></i></span>
+    <span class="btn-pulse"></span>
+  </div>
+</header>
+
+<div class="bootbar wrap">
+  <span><span class="ok">●</span> SHIP-OS v0.5</span>
+  <span>SECTOR <span class="acc">07</span></span>
+  <span>DOC <span class="acc">AT-0079</span></span>
+  <span>CLASSIFICATION: <span class="warn">PRE-RELEASE</span></span>
+  <span>STUDIO: <span class="ok">ALLEGORY PUBLISHING</span></span>
+  <span class="tog"><span class="led"></span>LIFE SUPPORT</span>
+  <span class="tog"><span class="led"></span>NAV LOCK</span>
+  <span class="tog warn"><span class="led"></span>HULL ALERT</span>
+</div>
+
+<!-- HERO -->
+<section class="hero" id="identity">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="kicker"><span class="bar"></span>TACTICAL ACTION · DARK SCI-FI</div>
+      <h1>ASTRO<span class="accent">TECHS</span></h1>
+      <p class="quote">"You're an engineer with a gun and a wrench, and you're the only thing keeping this ship alive."</p>
+      <p class="deck">A tactical action game where you fight <em>corrupted machines</em>, weaponize ship systems, and repair the damage — all under fire.</p>
+      <div class="stats">
+        <span>GENRE<b>Real-Time Tactics</b></span>
+        <span>VIEW<b>Top-Down · Isometric</b></span>
+        <span>MODE<b>Single-Player + NPCs</b></span>
+        <span>STATUS<b>Pre-release · Playtest</b></span>
+      </div>
+    </div>
+    <div class="hero-art">
+      <div class="ph accent" data-dim="540×420" style="min-height:380px;">KEY ART · GAMEPLAY HERO</div>
+      <div class="controls">
+        <div class="row"><span class="tog"><span class="led"></span>FEED</span><span class="btn-pulse cyan" style="width:14px;height:14px;"></span></div>
+        <div class="row"><span class="tog warn"><span class="led"></span>UPLINK</span><span class="btn-pulse amber" style="width:14px;height:14px;"></span></div>
+        <span class="dial slow"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#ff3d8b" stroke-width="1.2"/><circle cx="20" cy="6" r="1.5" fill="#ff3d8b"/></g><circle cx="20" cy="20" r="1.5" fill="#5be6e6"/></svg></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 01 PILLARS -->
+<section class="section" id="pillars">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">01 //</span>
+      <h2>Standing Orders <small>Three Design Pillars</small></h2>
+      <span class="meta">Authoritative · Per Steam Brief</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">SYS</span>
+      <span class="dial"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/><circle cx="20" cy="6" r="1.5" fill="#5be6e6"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+      <span class="eq"><i style="height:40%"></i><i style="height:80%"></i><i style="height:55%"></i><i style="height:75%"></i><i style="height:45%"></i></span>
+      <span class="tog"><span class="led"></span>NOMINAL</span>
+      <span class="scanner"></span>
+      <span class="label">SECT 01</span>
+    </div>
+    <div class="grid-3">
+      <div class="frame pillar"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Pillar A</span><span class="pip">●</span></p>
+        <div class="ph" data-dim="320×140">PILLAR · TACTICS</div>
+        <h3>Tactics, not reflexes</h3>
+        <p>Bullets matter, movement is tuned for decisions, and the tension is claustrophobic, not chaotic. Fights reward positioning, patience, and smart use of the environment over raw reflexes.</p>
+      </div>
+      <div class="frame pillar"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Pillar B</span><span class="pip">●</span></p>
+        <div class="ph" data-dim="320×140">PILLAR · ROLE</div>
+        <h3>Engineer. Soldier. Survivor.</h3>
+        <p>You're not a red shirt. You're a mechanically inclined (but battle-trained) engineer — and the only one who can keep the ship running.</p>
+      </div>
+      <div class="frame pillar accent"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Pillar C</span><span class="pip">●</span></p>
+        <div class="ph accent" data-dim="320×140">PILLAR · ENVIRONMENT</div>
+        <h3>Use the environment to your advantage</h3>
+        <p>Weaponize the ship. Trigger hazards and environmental kills — but watch out, because stray bullets from enemy robots can cause problems for you, too.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 02 OPERATIONAL LOOP -->
+<section class="section" id="loop">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">02 //</span><h2>Operational Loop <small>Gameplay Flow Diagram</small></h2><span class="meta">Hover Nodes To Inspect</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">LOOP</span>
+      <span class="knob spin"></span>
+      <span class="gauge"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 10 50 A 40 40 0 0 1 50 10" fill="none" stroke="#5be6e6" stroke-width="2"/><g class="needle"><line x1="50" y1="50" x2="50" y2="14" stroke="#ff3d8b" stroke-width="1.5" filter="drop-shadow(0 0 3px #ff3d8b)"/><circle cx="50" cy="50" r="3" fill="#5be6e6"/></g></svg><span class="lbl">CYCLE</span></span>
+      <span class="scanner"></span>
+      <span class="tog"><span class="led"></span>RUNNING</span>
+    </div>
+    <div class="grid-asym" style="margin-bottom:18px;">
+      <div class="ph" data-dim="780×280" style="min-height:280px;">SCREENSHOT · MAP VIEW / STRATEGIC OVERLAY</div>
+      <div class="ph" data-dim="380×280" style="min-height:280px;">SCREENSHOT · ROUND START</div>
+    </div>
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Round Lifecycle · Interactive</span><span class="pip">REC</span></p>
+      <div class="flow-wrap">
+        <svg class="flow-svg" id="flowLoop" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet">
+          <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker></defs>
+          <path class="edge" d="M 90 60 L 170 60"/>
+          <path class="edge" d="M 270 60 L 350 60"/>
+          <path class="edge" d="M 450 60 L 530 60"/>
+          <path class="edge" d="M 610 80 L 610 130"/>
+          <path class="edge" d="M 530 160 L 450 160"/>
+          <path class="edge" d="M 350 160 L 270 160"/>
+          <path class="edge" d="M 170 180 L 170 230"/>
+          <path class="edge loop" d="M 270 250 Q 400 290 530 250" marker-end="url(#arrow)"/>
+          <path class="edge" d="M 610 230 L 610 180"/>
+          <g class="node start" data-key="start"><rect x="20" y="40" width="70" height="40" rx="3"/><text x="55" y="65" text-anchor="middle">START</text></g>
+          <g class="node" data-key="media-res"><rect x="170" y="40" width="100" height="40" rx="3"/><text x="220" y="65" text-anchor="middle">IN MEDIA RES</text></g>
+          <g class="node" data-key="map"><rect x="350" y="40" width="100" height="40" rx="3"/><text x="400" y="65" text-anchor="middle">MAP VIEW</text></g>
+          <g class="node" data-key="prioritize"><rect x="530" y="40" width="160" height="40" rx="3"/><text x="610" y="65" text-anchor="middle">PRIORITIZE THREATS</text></g>
+          <g class="node" data-key="navigate"><rect x="530" y="140" width="160" height="40" rx="3"/><text x="610" y="165" text-anchor="middle">NAVIGATE + SOLVE</text></g>
+          <g class="node" data-key="combat"><rect x="350" y="140" width="100" height="40" rx="3"/><text x="400" y="165" text-anchor="middle">FIREFIGHT</text></g>
+          <g class="node" data-key="repair"><rect x="170" y="140" width="100" height="40" rx="3"/><text x="220" y="165" text-anchor="middle">REPAIR</text></g>
+          <g class="node" data-key="newprob"><rect x="120" y="230" width="160" height="40" rx="3"/><text x="200" y="255" text-anchor="middle">NEW PROBLEMS SPAWN</text></g>
+          <text class="label-out" x="380" y="285" text-anchor="middle">↻ LOOP TO PRIORITIZE</text>
+        </svg>
+        <div class="flow-side" id="loopSide">
+          <div class="meta">Node Profile</div><h4>Hover a node →</h4>
+          <p>Click or hover any block in the diagram to inspect that phase of the operational loop.</p>
+          <p class="dim" style="font-size:12px;">The loop runs continuously: every problem solved spawns new ones via attack events, ratcheting pressure on the player.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 03 COMBAT -->
+<section class="section" id="controls">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">03 //</span><h2>Combat Decision Tree <small>Movement · Aim · Recoil</small></h2><span class="meta">Hover Nodes · Trace Branches</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">FIRE CTRL</span>
+      <span class="knob"></span>
+      <span class="gauge"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 70 50 A 40 40 0 0 1 90 50" fill="none" stroke="#ff3d8b" stroke-width="2"/><g class="needle fast"><line x1="50" y1="50" x2="80" y2="22" stroke="#ff3d8b" stroke-width="1.5" filter="drop-shadow(0 0 3px #ff3d8b)"/><circle cx="50" cy="50" r="3" fill="#5be6e6"/></g></svg><span class="lbl">RECOIL</span></span>
+      <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+      <span class="eq magenta"><i style="height:60%"></i><i style="height:30%"></i><i style="height:80%"></i><i style="height:50%"></i><i style="height:90%"></i></span>
+      <span class="scanner"></span>
+      <span class="tog warn"><span class="led"></span>ARMED</span>
+    </div>
+    <div class="grid-3" style="margin-bottom:18px;">
+      <div class="ph" data-dim="380×220">SCREENSHOT · ENGAGEMENT</div>
+      <div class="ph" data-dim="380×220">SCREENSHOT · COVER</div>
+      <div class="ph" data-dim="380×220">SCREENSHOT · DEVICE TRIGGER</div>
+    </div>
+    <div class="frame" style="margin-bottom:18px;">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Input → Outcome Decision Tree</span><span class="pip">REC</span></p>
+      <div class="flow-wrap">
+        <svg class="flow-svg" id="flowCombat" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet">
+          <defs><marker id="arrow2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker></defs>
+          <path class="edge" d="M 130 60 L 220 60" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 30" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 90" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 140" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 200" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 310 60 L 400 260" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 30 L 620 30" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 90 L 620 90" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 140 L 620 140" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 200 L 620 200" marker-end="url(#arrow2)"/>
+          <path class="edge" d="M 540 260 L 620 260" marker-end="url(#arrow2)"/>
+          <g class="node start" data-key="player"><rect x="40" y="40" width="90" height="40" rx="3"/><text x="85" y="65" text-anchor="middle">PLAYER</text></g>
+          <g class="node" data-key="input"><polygon points="220,60 265,40 310,60 265,80"/><text x="265" y="64" text-anchor="middle">INPUT</text></g>
+          <g class="node" data-key="lmb-enemy"><rect x="400" y="10" width="140" height="34" rx="3"/><text x="470" y="32" text-anchor="middle">LMB · ON ENEMY</text></g>
+          <g class="node" data-key="lmb-device"><rect x="400" y="70" width="140" height="34" rx="3"/><text x="470" y="92" text-anchor="middle">LMB · ON DEVICE</text></g>
+          <g class="node" data-key="rmb"><rect x="400" y="125" width="140" height="34" rx="3"/><text x="470" y="147" text-anchor="middle">RMB · ANYWHERE</text></g>
+          <g class="node" data-key="click-move"><rect x="400" y="183" width="140" height="34" rx="3"/><text x="470" y="205" text-anchor="middle">CLICK · GROUND</text></g>
+          <g class="node" data-key="click-npc"><rect x="400" y="243" width="140" height="34" rx="3"/><text x="470" y="265" text-anchor="middle">CLICK · NPC</text></g>
+          <g class="node" data-key="o-burst"><rect x="620" y="10" width="80" height="34" rx="3"/><text x="660" y="32" text-anchor="middle">BURST</text></g>
+          <g class="node" data-key="o-hazard"><rect x="620" y="70" width="80" height="34" rx="3"/><text x="660" y="92" text-anchor="middle">HAZARD</text></g>
+          <g class="node" data-key="o-free"><rect x="620" y="125" width="80" height="34" rx="3"/><text x="660" y="147" text-anchor="middle">FREE FIRE</text></g>
+          <g class="node" data-key="o-move"><rect x="620" y="183" width="80" height="34" rx="3"/><text x="660" y="205" text-anchor="middle">MOVE</text></g>
+          <g class="node" data-key="o-command"><rect x="620" y="243" width="80" height="34" rx="3"/><text x="660" y="265" text-anchor="middle">COMMAND</text></g>
+        </svg>
+        <div class="flow-side" id="combatSide">
+          <div class="meta">Branch Profile</div><h4>Trace a branch →</h4>
+          <p>Each player input maps to a distinct in-game outcome. Hover a node to inspect mechanics, recoil model, and specific quoted behavior.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-asym">
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Recoil Curve · Live</span><span class="pip">REC</span></p>
+        <div class="recoil">
+          <div class="hint">Click + hold inside the frame to hold fire — release to reset</div>
+          <svg id="recoilSvg" viewBox="0 0 600 200" preserveAspectRatio="none">
+            <line x1="0" y1="180" x2="600" y2="180" stroke="#2a8a8a" stroke-width="1"/>
+            <line x1="0" y1="20" x2="600" y2="20" stroke="#2a8a8a" stroke-width="1" stroke-dasharray="2,4"/>
+            <text x="8" y="14" fill="#2a8a8a" font-size="9" font-family="JetBrains Mono">RECOIL CEILING</text>
+            <text x="8" y="194" fill="#2a8a8a" font-size="9" font-family="JetBrains Mono">PERFECT ACCURACY</text>
+            <path id="recoilCurve" d="M 0 180" stroke="#5be6e6" stroke-width="2" fill="none" class="bloom"/>
+            <circle id="recoilDot" cx="0" cy="180" r="4" fill="#ff3d8b" class="bloom"/>
+          </svg>
+          <div class="row">
+            <span>HOLD <b id="holdTime">0.0s</b></span>
+            <span>SPREAD <b id="spread">0%</b></span>
+            <span>ADVISORY <b style="color:var(--phos);text-shadow:var(--bloom-phos);">PACE BURSTS</b></span>
+          </div>
+        </div>
+        <p style="margin-top:14px;font-size:13px;color:var(--text-dim);"><em style="color:var(--cyan);font-style:normal;">"Your recoil gets bigger so pacing your shots will resolve in perfectly accurate burst."</em></p>
+      </div>
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Input Map</span><span class="pip">●</span></p>
+        <div class="ph sm" data-dim="360×140">DIAGRAM · INPUT BINDINGS</div>
+        <ul class="tk" style="margin-top:14px;">
+          <li><b>Movement</b> — click-to-move. <kbd>WASD</kbd> currently <span class="tag review">Under Review</span></li>
+          <li><b>Primary fire</b> — <kbd>LMB</kbd> on enemy. Auto-aim snaps to center mass.</li>
+          <li><b>Free fire</b> — <kbd>RMB</kbd>. Fires anywhere the player chooses.</li>
+          <li><b>Weaponize</b> — <kbd>LMB</kbd> on a destructible device. Triggers its hazard.</li>
+        </ul>
+        <div class="term" style="margin-top:12px;">
+          <span class="l">&gt;</span> aim_mode <span class="b">SNAP_CENTER</span><br>
+          <span class="l">&gt;</span> recoil_curve <span class="b">EXPONENTIAL</span><br>
+          <span class="l">&gt;</span> friendly_fire <span class="m">ENABLED</span><br>
+          <span class="l">&gt;</span> dilation <span class="a">v2_PARTIAL</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 04 TACTICAL PAUSE -->
+<section class="section" id="dilation">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">04 //</span><h2>Tactical Pause v2 <small>SUPERHOT-Like Time Dilation</small></h2><span class="meta">In Implementation</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">DILATION</span>
+      <span class="knob amber spin"></span>
+      <span class="gauge slow"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 10 50 A 40 40 0 0 1 64 13" fill="none" stroke="#ffb000" stroke-width="2"/><g class="needle slow"><line x1="50" y1="50" x2="64" y2="13" stroke="#ffb000" stroke-width="1.5" filter="drop-shadow(0 0 3px #ffb000)"/><circle cx="50" cy="50" r="3" fill="#5be6e6"/></g></svg><span class="lbl">SPEED</span></span>
+      <span class="dial slow"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#ff3d8b" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#5be6e6"/></svg></span>
+      <span class="scanner"></span>
+      <span class="tog warn"><span class="led"></span>v2 PARTIAL</span>
+    </div>
+    <div class="grid-asym-r">
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Doctrine</span><span class="pip">●</span></p>
+        <div class="ph" data-dim="440×220">SCREENSHOT · TIME-DILATED MOMENT</div>
+        <p class="quote cyan" style="margin-top:14px;">"Starts very slow motion, but speeds up to about 70% when you decide to act."</p>
+        <p>Time dilates around player intent. At rest the simulation runs in heavy slow-motion; the moment the player commits to an action — moving, shooting, interacting with a device, or casting an ability — time accelerates to roughly <strong>70% real-speed</strong>.</p>
+        <p class="dim" style="font-size:13px;">Net effect: planning happens almost-paused; commitment costs you tempo. Action and analysis share the same control surface.</p>
+      </div>
+      <div class="frame accent"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Live Sim · Drag To Test</span><span class="pip" id="dilStateLabel">AT REST</span></p>
+        <div class="dilation">
+          <div class="readout"><span>SIM SPEED</span><b id="dilVal">10%</b></div>
+          <input type="range" min="10" max="100" value="10" id="dilSlider">
+          <div class="ticks"><span>10%</span><span>40%</span><span style="color:var(--magenta);">70% COMMIT</span><span>100%</span></div>
+          <svg id="dilOrbit" viewBox="0 0 200 100">
+            <circle cx="100" cy="50" r="42" fill="none" stroke="rgba(91,230,230,0.3)" stroke-width="1"/>
+            <circle cx="100" cy="50" r="3" fill="#5be6e6" class="bloom"/>
+            <circle id="dilPlanet" cx="142" cy="50" r="6" fill="#ff3d8b" class="bloom"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 05 LOADOUT -->
+<section class="section" id="abilities">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">05 //</span><h2>Loadout <small>Five-Slot Kit · Weapon Variants</small></h2><span class="meta">Skill Tree Upgradable</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">LOADOUT</span>
+      <span class="dial"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+      <span class="eq"><i style="height:50%"></i><i style="height:80%"></i><i style="height:60%"></i><i style="height:40%"></i><i style="height:70%"></i></span>
+      <span class="tog"><span class="led"></span>3 / 5 LOCKED</span>
+      <span class="scanner"></span>
+      <span class="btn-pulse amber"></span>
+    </div>
+    <div class="frame" style="margin-bottom:18px;">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Ability Slots</span><span class="pip">●</span></p>
+      <div class="abilities">
+        <div class="slot"><div class="num">01</div><div class="ph" data-dim="120×80">ICON</div><div class="name">Power Shot</div><div class="status">SHIPPING</div></div>
+        <div class="slot"><div class="num">02</div><div class="ph" data-dim="120×80">ICON</div><div class="name">Shield</div><div class="status">SHIPPING</div></div>
+        <div class="slot"><div class="num">03</div><div class="ph" data-dim="120×80">ICON</div><div class="name">Grenade</div><div class="status">SHIPPING</div></div>
+        <div class="slot cut"><div class="num">04</div><div class="ph" data-dim="120×80">ICON</div><div class="name">AOE Explosion</div><div class="status">CUT-CANDIDATE</div></div>
+        <div class="slot hidden"><div class="num">05</div><div class="ph" data-dim="120×80">ICON</div><div class="name">Flare</div><div class="status">HIDDEN · SECRET</div></div>
+      </div>
+      <p class="dim" style="font-size:13px;margin-top:14px;margin-bottom:0;">AOE Explosion is slated to be removed; Flare is slated to be a secret and hidden from the player.</p>
+    </div>
+    <div class="grid-2">
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Primary Weapon Variants</span><span class="pip">●</span></p>
+        <div class="ph sm" data-dim="380×140">DIAGRAM · WEAPON TIERS</div>
+        <ul class="tk" style="margin-top:14px;">
+          <li><b>Burst Fire</b> <span class="tag ship">Shipping</span></li>
+          <li><b>Bolt Fire</b> <span class="tag ship">Shipping</span></li>
+          <li><b>Shotgun</b> <span class="tag ship">Shipping</span></li>
+          <li><b>SMG</b> <span class="tag stretch">Stretch</span></li>
+          <li><b>Pistol</b> <span class="tag stretch">Stretch</span></li>
+        </ul>
+      </div>
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Skill Tree Upgrades</span><span class="pip">●</span></p>
+        <div class="ph sm" data-dim="380×140">DIAGRAM · SKILL TREE BRANCH</div>
+        <ul class="tk" style="margin-top:14px;">
+          <li><b>Multi-target chaining shots</b> — shots can chain to additional targets.</li>
+          <li><b>Splitting projectiles</b> — projectiles split mid-flight for area coverage.</li>
+          <li><b>Per-ability upgrades</b> — every slot in the five-ability kit upgrades down its own branch.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 06 DEVICES -->
+<section class="section" id="hazards">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">06 //</span><h2>Devices <small>Playtester-Visible Roster</small></h2><span class="meta">Click Device · Inspect</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">DEVICES</span>
+      <span class="knob spin"></span>
+      <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#ff3d8b" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ffb000"/></svg></span>
+      <span class="eq magenta"><i style="height:80%"></i><i style="height:40%"></i><i style="height:90%"></i><i style="height:30%"></i><i style="height:70%"></i></span>
+      <span class="scanner"></span>
+      <span class="tog warn"><span class="led"></span>HOT</span>
+    </div>
+
+    <div class="frame" style="margin-bottom:18px;">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Roster Scope</span><span class="pip">●</span></p>
+      <p class="dim" style="font-size:13px;margin:0;">Tested device set. <em style="color:var(--cyan);font-style:normal;">"What the play testers will see is going to be the smallest list of just a couple of them"</em> — five devices visible to playtesters, with stretch interconnects between them flagged where applicable.</p>
+    </div>
+
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Device Profile · Selectable</span><span class="pip">●</span></p>
+      <div class="haz">
+        <div class="opts">
+          <div class="opt on" data-haz="window">WINDOW <small>VACUUM · 3-STATE</small></div>
+          <div class="opt" data-haz="door">DOOR <small>AUTO · DURABLE</small></div>
+          <div class="opt" data-haz="bomb">BARREL BOMB <small>EXPLOSION</small></div>
+          <div class="opt" data-haz="fire">FIRE BARREL <small>SPREADING FIRE</small></div>
+          <div class="opt" data-haz="conduit">POWER CONDUIT <small>STUN TRAP</small></div>
+        </div>
+        <div class="detail" id="hazDetail">
+          <div class="topbar"><div class="hmeta">PROFILE 01 / 05</div><div style="display:flex;gap:8px;align-items:center;"><span class="dial fast" style="width:24px;height:24px;"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.5"/></g></svg></span><span class="btn-pulse cyan" style="width:10px;height:10px;"></span></div></div>
+          <h4>Window</h4>
+          <div class="ph" data-dim="500×120">SCREENSHOT · DECOMPRESSION KILL</div>
+          <p><strong>Three states:</strong> <span class="tag ship">Working / Closed</span> <span class="tag" style="color:var(--magenta);border-color:var(--magenta);">Broken</span> <span class="tag" style="color:var(--cyan);border-color:var(--cyan-mid);">Broken-Shielded</span></p>
+          <p>When broken, a window <em style="color:var(--cyan);font-style:normal;">"will create a sucking area of effect"</em>, then after a couple seconds of that <em style="color:var(--cyan);font-style:normal;">"they will shield themselves and become broken shielded."</em></p>
+          <p style="font-size:13px;color:var(--text-dim);"><span class="tag stretch">STRETCH</span> Wire a window to a power conduit — <em style="color:var(--cyan);font-style:normal;">"if the power [conduit] is destroyed, the window will not shield itself."</em></p>
+          <svg class="diag" viewBox="0 0 400 100">
+            <rect x="20" y="20" width="360" height="60" fill="none" stroke="#5be6e6" stroke-dasharray="4,4"/>
+            <circle cx="60" cy="50" r="6" fill="#ff3d8b" class="bloom"/>
+            <circle cx="120" cy="50" r="6" fill="#ff3d8b" class="bloom"/>
+            <circle cx="180" cy="50" r="6" fill="#ff3d8b" class="bloom"/>
+            <line x1="60" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/>
+            <line x1="120" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/>
+            <line x1="180" y1="50" x2="380" y2="50" stroke="#5be6e6" stroke-width="1"/>
+            <text x="385" y="54" fill="#5be6e6" font-size="9" font-family="JetBrains Mono">→ VACUUM</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Implementation Plans / Stretch -->
+    <div class="frame accent" style="margin-top:18px;">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Implementation Plans &amp; Stretch Interconnects</span><span class="pip">PLANNED</span></p>
+      <ul class="tk">
+        <li><b>Window ↔ Conduit wiring</b> <span class="tag stretch">Stretch</span> — destroy the linked conduit and the broken window will not shield itself, leaving the suction zone permanent.</li>
+        <li><b>Doors as enemy hosts</b> <span class="tag hidden">Likely Add</span> — a door can be enemy-infected; walk through without clearing it and the door fires an attack at you.</li>
+        <li><b>Pressurized doors</b> <span class="tag stretch">Stretch</span> — wired to an oxygen generator on one side. Unequal pressure disables auto-open. Manual click vents <em style="color:var(--cyan);font-style:normal;">"a short burst of air in one direction that is away from pressure"</em> before becoming shielded or a walkable windy area. Final behavior pending.</li>
+        <li><b>Oxygen generators</b> <span class="tag review">TBD</span> — device does not currently exist. Leading theory: reuse the existing ice mechanic.</li>
+        <li><b>Damaged doors auto-shut</b> <span class="tag review">Considering</span> — open/closed both take damage; "I wouldn't mind it shutting every time it gets damaged."</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+<!-- 07 ENEMIES -->
+<section class="section" id="enemies">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">07 //</span><h2>Threat Composition <small>Born From Nanotechnology Run Amok</small></h2><span class="meta">Hover To Inspect</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">THREAT</span>
+      <span class="gauge"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#ff5a5a" stroke-width="2"/><g class="needle fast"><line x1="50" y1="50" x2="78" y2="22" stroke="#ff5a5a" stroke-width="1.5" filter="drop-shadow(0 0 3px #ff5a5a)"/><circle cx="50" cy="50" r="3" fill="#5be6e6"/></g></svg><span class="lbl">RISING</span></span>
+      <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#7a1818" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#ff5a5a" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff5a5a"/></svg></span>
+      <span class="eq magenta"><i style="height:60%"></i><i style="height:90%"></i><i style="height:40%"></i><i style="height:80%"></i><i style="height:55%"></i></span>
+      <span class="scanner"></span>
+      <span class="tog warn"><span class="led"></span>HOSTILES</span>
+    </div>
+    <div class="grid-3" style="margin-bottom:18px;">
+      <div class="ph" data-dim="380×220">SCREEN · SNIPER NEST</div>
+      <div class="ph" data-dim="380×220">SCREEN · SPIDER SWARM</div>
+      <div class="ph" data-dim="380×220">SCREEN · SENTRY DROID</div>
+    </div>
+    <div class="grid-asym">
+      <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Enemy Composition</span><span class="pip">●</span></p>
+        <div class="threats">
+          <div class="bar">
+            <div data-t="snipers" style="background:#ff3d8b;flex:1.6;">SNIPERS</div>
+            <div data-t="spiders" style="background:#ffb000;flex:1.4;">SPIDERS</div>
+            <div data-t="sentry" style="background:#5be6e6;flex:1.4;">SENTRY DROIDS</div>
+            <div data-t="boss" style="background:#a08458;flex:1;">BOSSES</div>
+          </div>
+          <div class="legend">
+            <span><i style="background:#ff3d8b;"></i>Snipers</span>
+            <span><i style="background:#ffb000;"></i>Spiders</span>
+            <span><i style="background:#5be6e6;"></i>Sentry Droids</span>
+            <span><i style="background:#a08458;"></i>Environmental Bosses</span>
+          </div>
+          <div id="threatDetail">Hover a band above to view threat profile.</div>
+        </div>
+      </div>
+      <div class="frame accent"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>World Behavior</span><span class="pip">●</span></p>
+        <div class="ph accent sm" data-dim="380×140">SCREEN · NEST MUTATION</div>
+        <p style="margin-top:14px;">Parts of the ship <strong>"mutate"</strong> around you, forming nests of violent machines.</p>
+        <p>The narrative hook: the ship has been <strong>rerouted from its original mission</strong>. Recovered AstroTechs share intel as you piece together why.</p>
+        <div class="term" style="margin-top:12px;">
+          <span class="l">&gt;</span> nests <span class="m">SPAWNING</span><br>
+          <span class="l">&gt;</span> mutation_rate <span class="a">RISING</span><br>
+          <span class="l">&gt;</span> route <span class="m">UNCONFIRMED</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 08 CREW -->
+<section class="section" id="crew">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">08 //</span><h2>Crew Command Flow <small>NPC Squad Layer</small></h2><span class="meta">Hover Personalities · Trace Behavior</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">CREW</span>
+      <span class="dial slow"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff3d8b"/></svg></span>
+      <span class="knob"></span>
+      <span class="eq"><i style="height:50%"></i><i style="height:70%"></i><i style="height:40%"></i><i style="height:80%"></i><i style="height:60%"></i></span>
+      <span class="tog"><span class="led"></span>SQUAD READY</span>
+      <span class="scanner"></span>
+    </div>
+    <div class="grid-2 crew" style="margin-bottom:18px;">
+      <div class="frame card"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <div class="role">Class A · Civilian</div>
+        <div class="ph" data-dim="500×160">PORTRAIT · BOB</div>
+        <h4>Bobs</h4>
+        <p>Regular ship crew. Pistol-armed, fragile, scattered through the ship. They flee when combat draws near. <strong>Must be protected</strong> — they are the labor force keeping the ship operational.</p>
+      </div>
+      <div class="frame card alt"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <div class="role">Class B · Combat</div>
+        <div class="ph accent" data-dim="500×160">PORTRAIT · ASTROTECH</div>
+        <h4>Fellow AstroTechs</h4>
+        <p>Other engineer-soldiers. Multiple abilities they will use autonomously when enemies are near. Combat-capable peers — recoverable through play and addable to your squad.</p>
+      </div>
+    </div>
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Command Surface · Click → Personality → Behavior</span><span class="pip">●</span></p>
+      <div class="flow-wrap">
+        <svg class="flow-svg" id="flowCrew" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet">
+          <defs><marker id="arrow3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker></defs>
+          <path class="edge" d="M 130 60 L 220 60" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 130 60 L 220 200" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 60 L 400 30" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 60 L 400 80" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 60 L 400 130" marker-end="url(#arrow3)"/>
+          <path class="edge loop" d="M 320 60 L 400 180" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 200 L 400 230" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 320 200 L 400 280" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 30 L 620 30" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 80 L 620 80" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 130 L 620 130" marker-end="url(#arrow3)"/>
+          <path class="edge loop" d="M 540 180 L 620 180" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 230 L 620 230" marker-end="url(#arrow3)"/>
+          <path class="edge" d="M 540 280 L 620 280" marker-end="url(#arrow3)"/>
+          <g class="node start" data-key="player2"><rect x="40" y="40" width="90" height="40" rx="3"/><text x="85" y="65" text-anchor="middle">PLAYER</text></g>
+          <g class="node" data-key="bob"><rect x="220" y="40" width="100" height="40" rx="3"/><text x="270" y="65" text-anchor="middle">CLICK · BOB</text></g>
+          <g class="node" data-key="atech"><rect x="220" y="180" width="100" height="40" rx="3"/><text x="270" y="205" text-anchor="middle">CLICK · ASTROTECH</text></g>
+          <g class="node" data-key="follow"><rect x="400" y="10" width="140" height="34" rx="3"/><text x="470" y="32" text-anchor="middle">FOLLOW</text></g>
+          <g class="node" data-key="guard"><rect x="400" y="60" width="140" height="34" rx="3"/><text x="470" y="82" text-anchor="middle">GUARD</text></g>
+          <g class="node" data-key="default"><rect x="400" y="110" width="140" height="34" rx="3"/><text x="470" y="132" text-anchor="middle">DEFAULT</text></g>
+          <g class="node" data-key="work"><rect x="400" y="160" width="140" height="34" rx="3" style="stroke:var(--amber);"/><text x="470" y="182" text-anchor="middle" style="fill:var(--amber);">WORK · STRETCH</text></g>
+          <g class="node" data-key="follow2"><rect x="400" y="210" width="140" height="34" rx="3"/><text x="470" y="232" text-anchor="middle">SAME 4 OPTIONS</text></g>
+          <g class="node" data-key="abilities-auto"><rect x="400" y="260" width="140" height="34" rx="3"/><text x="470" y="282" text-anchor="middle">+ ABILITY USE</text></g>
+          <g class="node" data-key="o-follow"><rect x="620" y="10" width="80" height="34" rx="3"/><text x="660" y="32" text-anchor="middle">TRAILS</text></g>
+          <g class="node" data-key="o-guard"><rect x="620" y="60" width="80" height="34" rx="3"/><text x="660" y="82" text-anchor="middle">HOLDS</text></g>
+          <g class="node" data-key="o-default"><rect x="620" y="110" width="80" height="34" rx="3"/><text x="660" y="132" text-anchor="middle">FLEES</text></g>
+          <g class="node" data-key="o-work"><rect x="620" y="160" width="80" height="34" rx="3" style="stroke:var(--amber);"/><text x="660" y="182" text-anchor="middle" style="fill:var(--amber);">REPAIRS</text></g>
+          <g class="node" data-key="o-engaged"><rect x="620" y="210" width="80" height="34" rx="3"/><text x="660" y="232" text-anchor="middle">ENGAGES</text></g>
+          <g class="node" data-key="o-cast"><rect x="620" y="260" width="80" height="34" rx="3"/><text x="660" y="282" text-anchor="middle">CASTS</text></g>
+        </svg>
+        <div class="flow-side" id="crewSide">
+          <div class="meta">Personality Profile</div><h4>Hover a personality →</h4>
+          <p>Personalities determine autonomous behavior between commands. <span class="accent">Work</span> is a stretch personality — adds autonomous repair labor.</p>
+          <p class="dim" style="font-size:12px;">Click any NPC to override personality with direct orders.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 09 END STATES -->
+<section class="section" id="endstates">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">09 //</span><h2>End States <small>Win &amp; Fail Conditions</small></h2><span class="meta">Hover Branches · Inspect</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">END</span>
+      <span class="gauge"><svg viewBox="0 0 100 60"><path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#2a8a8a" stroke-width="1"/><path d="M 50 10 A 40 40 0 0 1 90 50" fill="none" stroke="#39ff7a" stroke-width="2"/><path d="M 10 50 A 40 40 0 0 1 50 10" fill="none" stroke="#ff5a5a" stroke-width="2"/><g class="needle"><line x1="50" y1="50" x2="50" y2="14" stroke="#5be6e6" stroke-width="1.5" filter="drop-shadow(0 0 3px #5be6e6)"/><circle cx="50" cy="50" r="3" fill="#fff"/></g></svg><span class="lbl">OUTCOME</span></span>
+      <span class="dial"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#39ff7a" stroke-width="1.2"/></g><circle cx="20" cy="20" r="1.5" fill="#ff5a5a"/></svg></span>
+      <span class="eq"><i style="height:50%"></i><i style="height:60%"></i><i style="height:90%"></i><i style="height:30%"></i><i style="height:70%"></i></span>
+      <span class="scanner"></span>
+      <span class="tog"><span class="led"></span>RESOLVING</span>
+    </div>
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Outcome Branch Tree</span><span class="pip">●</span></p>
+      <div class="flow-wrap">
+        <svg class="flow-svg" id="flowEnd" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <marker id="arrow4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker>
+            <marker id="arrowFail" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff5a5a"/></marker>
+          </defs>
+          <g class="node start" data-key="round"><rect x="40" y="140" width="100" height="40" rx="3"/><text x="90" y="165" text-anchor="middle">ROUND ACTIVE</text></g>
+          <text class="label-out" x="200" y="100" fill="#39ff7a">VICTORY PATH</text>
+          <text class="label-out" x="200" y="240" fill="#ff5a5a">FAILURE PATH</text>
+          <path class="edge" d="M 140 150 L 220 110" marker-end="url(#arrow4)"/>
+          <path class="edge fail" d="M 140 170 L 220 220" marker-end="url(#arrowFail)"/>
+          <g class="node" data-key="systems-up"><rect x="220" y="90" width="140" height="40" rx="3"/><text x="290" y="115" text-anchor="middle">SYSTEMS REPAIRED</text></g>
+          <path class="edge" d="M 360 110 L 430 110" marker-end="url(#arrow4)"/>
+          <g class="node" data-key="objective"><rect x="430" y="90" width="140" height="40" rx="3"/><text x="500" y="115" text-anchor="middle">OBJECTIVE COMPLETE</text></g>
+          <path class="edge" d="M 570 110 L 620 110" marker-end="url(#arrow4)"/>
+          <g class="node win" data-key="win"><rect x="620" y="90" width="80" height="40" rx="3"/><text x="660" y="115" text-anchor="middle">VICTORY</text></g>
+          <g class="node" data-key="fail-trigger"><polygon points="220,220 265,200 310,220 265,240"/><text x="265" y="224" text-anchor="middle">FAIL TRIGGER</text></g>
+          <path class="edge fail" d="M 310 220 L 400 180" marker-end="url(#arrowFail)"/>
+          <path class="edge fail" d="M 310 220 L 400 220" marker-end="url(#arrowFail)"/>
+          <path class="edge fail" d="M 310 220 L 400 260" marker-end="url(#arrowFail)"/>
+          <g class="node end" data-key="death"><rect x="400" y="160" width="160" height="34" rx="3"/><text x="480" y="182" text-anchor="middle">PLAYER DOWN</text></g>
+          <g class="node end" data-key="ship-loss"><rect x="400" y="200" width="160" height="34" rx="3"/><text x="480" y="222" text-anchor="middle">CRITICAL SYSTEMS LOST</text></g>
+          <g class="node end" data-key="overrun"><rect x="400" y="240" width="160" height="34" rx="3"/><text x="480" y="262" text-anchor="middle">OVERRUN</text></g>
+          <path class="edge fail" d="M 560 180 L 620 220" marker-end="url(#arrowFail)"/>
+          <path class="edge fail" d="M 560 220 L 620 220" marker-end="url(#arrowFail)"/>
+          <path class="edge fail" d="M 560 260 L 620 220" marker-end="url(#arrowFail)"/>
+          <g class="node end" data-key="defeat"><rect x="620" y="200" width="80" height="40" rx="3"/><text x="660" y="225" text-anchor="middle">DEFEAT</text></g>
+        </svg>
+        <div class="flow-side" id="endSide">
+          <div class="meta">Outcome Profile</div><h4>Hover a branch →</h4>
+          <p>Two paths exit every round: victory (objective + repairs intact) or defeat (player down, critical systems lost, or hostile overrun). Hover any node to inspect.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 10 MODES -->
+<section class="section" id="modes">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">10 //</span><h2>Game Modes <small>Defense · Horde</small></h2><span class="meta">Two Manifests</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">MODES</span>
+      <span class="dial"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g></svg></span>
+      <span class="eq magenta"><i style="height:60%"></i><i style="height:80%"></i><i style="height:50%"></i><i style="height:70%"></i><i style="height:40%"></i></span>
+      <span class="tog"><span class="led"></span>2 MANIFESTS</span>
+      <span class="scanner"></span>
+    </div>
+    <div class="grid-2 modes">
+      <div class="frame card"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <div class="role">Mode 01 · Story</div>
+        <div class="ph" data-dim="540×180">SCREEN · DEFENSE OBJECTIVE</div>
+        <h4>Defense Mode</h4>
+        <p>Live out the AstroTechs story. Repair damaged systems and complete objectives. Solve puzzles, overcome powerful enemies, speak with fellow AstroTechs to unravel the mystery of why the ship has been rerouted from its original mission, and rescue crew members to bring them to safety.</p>
+      </div>
+      <div class="frame card"><span class="corner-tr"></span><span class="corner-bl"></span>
+        <div class="role">Mode 02 · Survival</div>
+        <div class="ph" data-dim="540×180">SCREEN · HORDE WAVES</div>
+        <h4>Horde Mode</h4>
+        <p>Survive escalating waves as you open new areas, activate traps, and upgrade your arsenal. Combat-first; no narrative beats.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 11 REGISTER -->
+<section class="section" id="register">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="num">11 //</span><h2>Stretch &amp; Cut Register <small>Playtest Priority Scanner</small></h2><span class="meta">Filter · Solicit Feedback</span>
+    </div>
+    <div class="section-chrome">
+      <span class="label">SCAN</span>
+      <span class="dial fast"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g></svg></span>
+      <span class="knob"></span>
+      <span class="eq"><i style="height:30%"></i><i style="height:90%"></i><i style="height:50%"></i><i style="height:70%"></i><i style="height:40%"></i></span>
+      <span class="tog warn"><span class="led"></span>FEEDBACK OPEN</span>
+      <span class="scanner"></span>
+    </div>
+    <div class="frame">
+      <span class="corner-tr"></span><span class="corner-bl"></span>
+      <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Asset Status · Filterable</span><span class="pip">●</span></p>
+      <div class="regfilters">
+        <button class="on" data-filter="all">All</button>
+        <button data-filter="stretch">Stretch</button>
+        <button data-filter="cut">Cut-Candidate</button>
+        <button data-filter="hidden">Hidden</button>
+        <button data-filter="review">Under Review</button>
+      </div>
+      <table class="reg">
+        <thead><tr><th style="width:18%">Status</th><th style="width:24%">Item</th><th>Detail</th></tr></thead>
+        <tbody id="regBody">
+          <tr data-row="cut"><td><span class="tag cut">Cut-Candidate</span></td><td><b>AOE Explosion</b> · ability</td><td>Slated to be removed. Feedback wanted on whether it earns its slot.</td></tr>
+          <tr data-row="hidden"><td><span class="tag hidden">Hidden</span></td><td><b>Flare</b> · ability</td><td>Slated to be a secret and hidden from the player. Discovery-gated.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>SMG</b> · weapon variant</td><td>Additional primary-weapon variant beyond burst / bolt / shotgun.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Pistol</b> · weapon variant</td><td>Additional primary-weapon variant beyond burst / bolt / shotgun.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Work</b> · NPC personality</td><td>New commandable personality alongside Follow / Guard / Default — assigns crew to autonomous repair labor.</td></tr>
+          <tr data-row="review"><td><span class="tag review">Under Review</span></td><td><b>WASD movement</b></td><td>Click-to-move is the default. WASD is currently on hold; no commitment either way.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Window ↔ Conduit wiring</b> · device link</td><td>Wire a window to a power conduit — destroy the conduit and the broken window will not shield itself.</td></tr>
+          <tr data-row="hidden"><td><span class="tag hidden">Likely Add</span></td><td><b>Enemy-infected doors</b> · device behavior</td><td>A door can be enemy-infected; walk through without clearing it and the door fires an attack at you.</td></tr>
+          <tr data-row="stretch"><td><span class="tag stretch">Stretch</span></td><td><b>Pressurized doors</b> · device link</td><td>Wired to oxygen generator on one side. Unequal pressure disables auto-open. Manual click vents short air burst before shielding.</td></tr>
+          <tr data-row="review"><td><span class="tag review">TBD</span></td><td><b>Oxygen generators</b> · new device</td><td>Device does not currently exist. Leading theory: reuse the existing ice mechanic.</td></tr>
+          <tr data-row="review"><td><span class="tag review">Considering</span></td><td><b>Damaged doors auto-shut</b> · behavior</td><td>"I wouldn't mind it shutting every time it gets damaged."</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div>ASTROTECHS <span class="dot">●</span> ALLEGORY PUBLISHING L.L.C. <span class="dot">●</span> 2026</div>
+    <div>DOC <b>AT-0079 · REV 0.6</b></div>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <span class="dial slow"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.2"/></g></svg></span>
+      <span class="btn-pulse cyan" style="width:14px;height:14px;"></span>
+      END OF TRANSMISSION
+    </div>
+  </div>
+</footer>
+
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

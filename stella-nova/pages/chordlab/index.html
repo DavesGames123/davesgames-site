@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>ChordLab // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<script>
+/* Device-aware mobile switch. iOS Safari expands iframes to content size,
+   so media queries on viewport width lie inside the index shell — check the
+   physical device (coarse pointer + screen dims) as well. */
+(function(){
+  function chk(){
+    var vw=window.visualViewport?window.visualViewport.width:window.innerWidth;
+    var coarse=window.matchMedia&&matchMedia('(pointer:coarse)').matches;
+    var dev=Math.min(screen.width,screen.height);
+    document.documentElement.classList.toggle('mob',vw<=860||(coarse&&dev<=860));
+  }
+  chk();
+  addEventListener('resize',chk);
+  addEventListener('orientationchange',chk);
+  if(window.visualViewport)visualViewport.addEventListener('resize',chk);
+})();
+</script>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">ChordLab · ♪</span></div>
+  <div class="topbar-r">SYS // <strong>LIVE CHORD DETECTION</strong></div>
+</div>
+
+<div id="main">
+  <!-- LEFT: what's playing right now -->
+  <div class="col" id="now">
+    <div class="zone-lbl"><span class="dot"></span>Now Playing</div>
+    <div id="domBar">
+      <span id="domTag">Likely Chords</span>
+      <div id="domList"><span class="domEmpty">listening for a passage…</span></div>
+      <span id="domHint">this passage</span>
+    </div>
+    <div id="nowBody">
+      <canvas id="meterCanvas"></canvas>
+      <div id="ringArea">
+        <div id="ringWrap">
+          <canvas id="ringCanvas"></canvas>
+          <div id="chordDisp">
+            <div id="chordRoot">···</div>
+            <div id="chordQual">listening</div>
+            <div id="chordConf">— %</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="micGate">
+      <button id="micBtn">🎤&nbsp; Start Listening</button>
+      <div id="micHint">Play a chord on any instrument.<br>ChordLab hears it, names it, and shows you how to play it.</div>
+      <div id="micErr"></div>
+    </div>
+  </div>
+
+  <!-- MIDDLE: how to play it + what's been detected -->
+  <div class="col" id="diag">
+    <div class="zone-lbl"><span class="dot" style="background:#ffc832;box-shadow:0 0 8px #ffc832"></span>How To Play It</div>
+    <div class="seg" id="instSeg">
+      <button data-i="guitar" class="on">Guitar</button>
+      <button data-i="bass">Bass</button>
+      <button data-i="ukulele">Uke</button>
+      <button data-i="violin">Violin</button>
+    </div>
+    <div id="diagWrap"><canvas id="diagCanvas"></canvas></div>
+    <div id="voicings"></div>
+    <button id="strumBtn">♪ Hear this chord</button>
+    <div id="tallyHead">Most Detected · this span</div>
+    <div id="tally"><div id="tallyEmpty">play something — chords tally up here…</div></div>
+  </div>
+
+  <!-- RIGHT: tuner + live spectrogram -->
+  <div class="col" id="tuner">
+    <div class="zone-lbl"><span class="dot" style="background:#c890ff;box-shadow:0 0 8px #c890ff"></span>Tuner · Spectrogram</div>
+    <div id="tunerTop">
+      <div id="tunerNote">—</div>
+      <div id="tunerFreq">— Hz</div>
+    </div>
+    <div id="centsBar"><div id="centsNeedle"></div></div>
+    <div id="centsLbl"><span>♭ −50</span><span>in tune</span><span>+50 ♯</span></div>
+    <div id="tuneTargetLbl">target auto · tap a string to lock</div>
+    <canvas id="specCanvas"></canvas>
+    <div id="stringRow"></div>
+  </div>
+</div>
+
+<!-- BOTTOM: the running staff -->
+<div id="staffZone">
+  <div class="zone-lbl"><span class="dot" style="background:#64c864;box-shadow:0 0 8px #64c864"></span>Chord Log · 4-bar staff</div>
+  <div id="staffBtns"><button class="sbtn" id="clearStaff">✕ Clear</button></div>
+  <div id="staffScroll"><canvas id="staffCanvas"></canvas></div>
+</div>
+
+<div id="status-bar">
+  <span id="st-mic">mic off</span><span class="sep"></span>
+  <span id="st-level">level —</span><span class="sep"></span>
+  <span id="st-tune">tuning —</span><span class="sep"></span>
+  <span id="st-chord">chord —</span><span class="sep"></span>
+  <span id="st-log">0 logged</span><span class="sep"></span>
+  <span id="st-fps">-- fps</span>
+</div>
+
+<nav id="mobTabs">
+  <button data-t="now"   class="on"><span class="ti">◉</span><span class="tl">Listen</span></button>
+  <button data-t="diag"><span class="ti">⌗</span><span class="tl">Chords</span></button>
+  <button data-t="tuner"><span class="ti">∿</span><span class="tl">Tuner</span></button>
+  <button data-t="staff"><span class="ti">♩</span><span class="tl">Staff</span></button>
+</nav>
+
+<script src="main.js"></script>
+</body>
+</html>

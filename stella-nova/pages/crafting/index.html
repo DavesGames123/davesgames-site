@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Crafting Database // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div id="app">
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Crafting DB</span></div>
+  <div class="topbar-r"><span>SYS // <strong>RESOURCES</strong></span></div>
+</div>
+<div class="hero">
+  <div class="hero-text">
+    <div class="hero-sub">SYS // Stella Nova</div>
+    <h1 class="hero-title">Crafting Database</h1>
+    <p class="hero-lead"><span class="nums">52</span> resources, <span class="nums">41</span> recipes, <span class="nums">14</span> station modules, <span class="nums">1</span> orbital constructable. Production chain pulled live from the game source.</p>
+
+    <div class="prod-modules">
+      <div class="pm-head">Four Production Modules</div>
+      <div class="pm-row">
+        <span class="pm-name" style="color:var(--foundry)">Foundry</span>
+        <span class="pm-desc">T0 ore to T1 ingot, <strong>1:1 ratio</strong>. Auto-detects the ore kind on hand, no recipe selection.</span>
+      </div>
+      <div class="pm-row">
+        <span class="pm-name" style="color:var(--assembler)">Assembler</span>
+        <span class="pm-desc">T1 ingots to T2 alloy. Player assigns one recipe per module.</span>
+      </div>
+      <div class="pm-row">
+        <span class="pm-name" style="color:var(--complab)">Comp Lab</span>
+        <span class="pm-desc">T1 and T2 to T3 component. <strong>L1 to L2 to L3</strong> dependency depth, 20 components total.</span>
+      </div>
+      <div class="pm-row">
+        <span class="pm-name" style="color:var(--fuelproc)">Fuel Proc</span>
+        <span class="pm-desc">Carbon Brick + Aluminum Ingot + Rare Earth Ingot to <strong>75 Oxidized Fuel</strong> per 20s batch.</span>
+      </div>
+    </div>
+
+    <div class="hero-facts">
+      <div class="hero-fact"><span class="hf-label">Orbital</span>Only Station Core. Placed as a blueprint, constructor bots haul resources from orbit. <strong>About 50 ore</strong> end to end.</div>
+      <div class="hero-fact"><span class="hf-label">Grid</span>14 station module types built from the station stockpile. Deconstructing returns <strong>25 to 65%</strong> per material line, randomized per resource.</div>
+    </div>
+
+    <p class="hero-howto"><strong>Hover</strong> any card to see its recipe and total raw ore cost. <strong>Click</strong> to queue it in the build calculator at the bottom of the page.</p>
+  </div>
+  <div class="hero-stats">
+    <div class="hs-box"><div class="hs-val" id="stat-res">0</div><div class="hs-label">Resources</div></div>
+    <div class="hs-box"><div class="hs-val" id="stat-rec">0</div><div class="hs-label">Recipes</div></div>
+    <div class="hs-box yellow"><div class="hs-val" id="stat-mod">0</div><div class="hs-label">Station Modules</div></div>
+    <div class="hs-box yellow"><div class="hs-val" id="stat-sc">0</div><div class="hs-label">Station Core Ore</div></div>
+  </div>
+</div>
+<div class="search-wrap"><input type="text" class="search-input" id="searchInput" placeholder="Search resources..."></div>
+<div class="tiers" id="tiers"><svg class="svg-layer" id="svgLayer"></svg></div>
+<div class="constr-wrap" id="constrWrap"></div>
+<div class="tip" id="tip"></div>
+</div>
+<div class="calc-panel" id="calcPanel"><div class="calc-inner" id="calcInner"></div></div>
+<div class="calc-toggle" id="calcToggle" onclick="toggleCalc()">
+  <div class="calc-toggle-l">
+    <span class="calc-toggle-label">&#9874; Crafting Calculator</span>
+    <span class="calc-toggle-count" id="calcCount">Empty. Click any card to add.</span>
+  </div>
+  <span class="calc-toggle-hint" id="calcHint"></span>
+  <span class="arrow">&#9650;</span>
+</div>
+<script src="main.js"></script>
+</body>
+</html>

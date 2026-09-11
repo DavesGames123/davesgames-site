@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Stations // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app">
+  <div class="topbar">
+    <span class="sys-name">STATIONS</span>
+    <div class="status-pill">LIVE PRACTICE</div>
+    <div class="tb-readouts">
+      <span>SCENARIO <strong id="hud-scn">01/06</strong></span>
+      <span>MODULES <strong id="hud-mods">0</strong></span>
+      <span>ENCLOSED <strong id="hud-enc">0</strong></span>
+    </div>
+  </div>
+
+  <div class="scn-bar" id="scnBar"></div>
+
+  <div class="ctrl-bar">
+    <span class="ctrl-label">CTRL</span>
+    <button class="ctrl-btn warn" onclick="resetScenario()">↻ RESET</button>
+    <button class="ctrl-btn" id="autoBtn" onclick="toggleAuto()">▶ AUTO-BUILD</button>
+    <button class="ctrl-btn" id="rotBtn" style="display:none" onclick="rotateFoundry()">⤿ ROTATE OUTPUT</button>
+    <span class="ctrl-info">CLICK CELLS TO PLACE · CLICK MODULES TO REMOVE</span>
+  </div>
+
+  <div class="main">
+    <div class="canvas-area" id="canvasArea">
+      <canvas id="cv"></canvas>
+      <div class="hint-bar" id="hint" style="--ac:var(--yellow)"></div>
+      <div class="sel-bar" id="sel">—</div>
+      <div class="toast" id="toast"></div>
+      <div class="palette" id="palette" style="display:none"></div>
+      <div class="tasks" id="taskBox" style="display:none"></div>
+    </div>
+    <aside class="sidebar-r" id="sideR">
+      <div class="panel">
+        <div class="scn-headline" id="scnHead"></div>
+        <div class="scn-desc" id="scnDesc"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">How it works</div>
+        <ul class="notes-list" id="scnNotes"></ul>
+      </div>
+      <div class="panel" id="refPanel" style="border-bottom:none">
+        <div class="panel-title" id="refTitle">Reference</div>
+        <div id="refBody"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<button class="fab" id="fab" onclick="toggleDrawer()">Info ≡</button>
+<div class="drawer-backdrop" id="bd" onclick="closeDrawer()"></div>
+
+<script src="main.js"></script>
+</body>
+</html>
