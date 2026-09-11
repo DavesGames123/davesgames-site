@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Twenty to Four // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<button id="mob-btn" onclick="document.getElementById('rail').classList.toggle('open')">☰</button>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Twenty to Four</span></div>
+  <div class="topbar-r">SYS // <strong>ELECTRODYNAMICS</strong></div>
+</div>
+
+<div id="main">
+  <!-- LEFT RAIL -->
+  <div id="rail">
+    <div class="r-sec">
+      <div class="r-lbl">Source</div>
+      <div class="hint" style="margin-bottom:9px">Drag the glowing charge anywhere on the field.</div>
+      <div class="r-row"><span class="r-row-lbl">Freq</span><input type="range" id="sl-freq" min="0.3" max="3" value="1" step="0.05" oninput="setFreq(this)"><span class="val" id="vl-freq">1.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Wavelen</span><input type="range" id="sl-lambda" min="70" max="260" value="140" step="5" oninput="setLambda(this)"><span class="val" id="vl-lambda">140</span></div>
+      <div class="r-row"><span class="r-row-lbl">Axis°</span><input type="range" id="sl-axis" min="0" max="180" value="90" step="1" oninput="setAxis(this)"><span class="val" id="vl-axis">90</span></div>
+    </div>
+    <div class="r-sec">
+      <div class="r-lbl">Field view</div>
+      <button class="tog on" id="tog-vectors" onclick="tog('showVectors',this)">↗ E-field vectors</button>
+      <button class="tog on" id="tog-lines" onclick="tog('showLines',this)">⥲ Field lines</button>
+      <button class="tog on" id="tog-flow" onclick="tog('showFlow',this)">→ Energy pulse</button>
+      <button class="tog on" id="tog-bfield" onclick="tog('showB',this)">⊙ Magnetic field</button>
+      <button class="tog" id="tog-fronts" onclick="tog('showFronts',this)">◜ Wavefronts</button>
+      <div class="r-row" style="margin-top:8px"><span class="r-row-lbl">Loops</span><input type="range" id="sl-density" min="20" max="100" value="42" step="2" oninput="setDensity(this)"><span class="val" id="vl-density">42</span></div>
+    </div>
+    <div class="r-sec">
+      <div class="r-lbl">Coefficients</div>
+      <div class="hint" style="margin-bottom:9px">Tune the field live — overall strength and the weight of each falloff term.</div>
+      <div class="r-row"><span class="r-row-lbl">Strength</span><input type="range" id="sl-amp" min="0.2" max="4" value="1" step="0.05" oninput="setCoef('amp',this)"><span class="val" id="vl-amp">1.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Near 1/r³</span><input type="range" id="sl-near" min="0" max="3" value="1" step="0.05" oninput="setCoef('cNear',this)"><span class="val" id="vl-near">1.0</span></div>
+      <div class="r-row"><span class="r-row-lbl">Radiate 1/r</span><input type="range" id="sl-rad" min="0" max="3" value="1" step="0.05" oninput="setCoef('cRad',this)"><span class="val" id="vl-rad">1.0</span></div>
+    </div>
+    <div class="r-sec">
+      <div class="r-lbl">Time</div>
+      <div class="btns"><button class="btn active" id="btn-play" onclick="togglePlay()">▶ Play</button><button class="btn" onclick="setSpeed(0.25)">◑ Slow</button><button class="btn" onclick="setSpeed(1)">1×</button></div>
+    </div>
+    <div class="r-sec">
+      <div class="r-lbl">Read it</div>
+      <div class="hint">Hover any equation on the right and the canvas shows the exact <b>field quantity</b> that equation governs — its magnitude and sign across space.</div>
+    </div>
+  </div>
+  <div class="mob-overlay" onclick="document.getElementById('rail').classList.remove('open')"></div>
+
+  <!-- CENTER STAGE -->
+  <div id="stage">
+    <canvas id="sim-canvas"></canvas>
+    <div id="stage-tip">oscillating charge · radiating light · 2D + time</div>
+    <div id="ovl-caption"></div>
+  </div>
+
+  <!-- RIGHT EQUATION PANEL -->
+  <div id="eqpanel">
+    <div class="eq-top">
+      <h2><span class="y1">Maxwell 1865</span> <span class="ar">→</span> <span class="y2">Heaviside 1884</span></h2>
+      <p>The same physics, two hands. On the left, Maxwell's original components — every one hoverable to light up the field it controls. On the right, the single vector equation Heaviside's calculus folds them into.</p>
+      <div class="colhdr"><span>20 scalar equations</span><span></span><span class="c2">4 vector equations</span></div>
+    </div>
+    <div class="eq-scroll" id="eq-scroll"></div>
+  </div>
+</div>
+
+<div id="status-bar">
+  <span>λ <b id="st-lambda">140</b>px</span><span class="sep"></span>
+  <span>c <b id="st-c">—</b></span><span class="sep"></span>
+  <span>φ <b id="st-phase">0.00</b></span><span class="sep"></span>
+  <span id="st-ovl">showing: <b>field lines</b></span><span class="sep"></span>
+  <span id="st-fps">-- fps</span>
+</div>
+
+<!-- ════════ EQUATION PANEL (build + hover) ════════ -->
+<script src="concepts.js"></script>
+
+<!-- ════════ FIELD SIMULATION ════════ -->
+<script src="main.js"></script>
+</body>
+</html>

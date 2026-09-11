@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Aperture Diffraction // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<button id="mob-menu">☰ Settings</button>
+<div id="mob-overlay"></div>
+<div id="canvas-grid" class="view-1"></div>
+
+<div id="quick-panel">
+  <div class="qp-head"><div class="qp-id"><span class="qp-subshell" id="qp-title">Aperture Diffraction</span><span class="qp-ket" id="qp-summary">Aa Text · D65 · z=200mm</span></div><button class="qp-collapse-btn" id="qp-collapse-btn">◀</button></div>
+  <div class="qp-body">
+    <div class="qp-section"><div class="qp-sec-lbl">Element</div><select id="element-select" class="qp-select"></select></div>
+    <div class="qp-section"><div class="qp-sec-lbl">Parameters</div><div id="params-container"></div></div>
+    <div class="qp-section"><div class="qp-sec-lbl">Source</div>
+      <div class="qp-modes" id="source-modes"><button class="qp-mode" data-source="mono">Mono λ</button><button class="qp-mode active" data-source="white">White D65</button></div>
+      <div id="mono-params" style="display:none;margin-top:4px"><div class="row"><span class="row-lbl">λ</span><input type="range" id="sl-lam" min="380" max="780" value="633" step="1"><span class="val" id="vl-lam">633</span><span class="wl-dot" id="wl-dot"></span></div></div>
+      <div id="white-params" style="margin-top:4px"><div class="row"><span class="row-lbl">Div</span><input type="range" id="sl-div" min="6" max="30" value="15" step="1"><span class="val" id="vl-div">15</span></div></div>
+    </div>
+    <div class="qp-section"><div class="qp-sec-lbl">View</div>
+      <div class="qp-modes" id="view-modes"><button class="qp-mode" data-view="4">2×2 · RGBC</button><button class="qp-mode active" data-view="1">1×1 · Fast</button></div>
+    </div>
+    <div class="qp-section"><div class="qp-sec-lbl">Grid</div>
+      <div class="res-grid"><button class="res-btn" data-n="128">128²</button><button class="res-btn active" data-n="256">256²</button><button class="res-btn" data-n="512">512²</button></div>
+    </div>
+    <div class="qp-section"><div class="qp-sec-lbl">Custom Text</div>
+      <input type="text" id="custom-text" class="qp-text-input" value="davesgames.io" placeholder="Type text…">
+      <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-txtsz" min="8" max="100" value="28" step="1"><span class="val" id="vl-txtsz">28</span></div>
+      <button class="qp-action-btn yellow" id="btn-set-text">⟶ Set as Aperture</button>
+    </div>
+    <div class="qp-section"><div class="qp-sec-lbl">Presets</div><div class="preset-grid" id="preset-grid"></div></div>
+    <div class="qp-section" id="export-section"><div class="qp-sec-lbl">Export</div>
+      <div class="res-grid" id="ar-btns" style="grid-template-columns:repeat(5,1fr);margin-bottom:5px"><button class="res-btn active" data-ar="1:1">1:1</button><button class="res-btn" data-ar="16:9">16:9</button><button class="res-btn" data-ar="9:16">9:16</button><button class="res-btn" data-ar="4:3">4:3</button><button class="res-btn" data-ar="3:4">3:4</button></div>
+      <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-exw" min="512" max="3840" value="1920" step="1"><span class="val" id="vl-exw" style="min-width:60px">1920×1920</span></div>
+      <select class="qp-select" id="sel-dir" style="margin-bottom:5px"><option value="bounce" selected>↔ Bounce (0 → max → 0)</option><option value="fwd">→ Forward (0 → max)</option><option value="rev">← Reverse (max → 0)</option></select>
+      <select class="qp-select" id="sel-interp" style="margin-bottom:5px"><option value="linear" selected>Linear</option><option value="ease-in">Ease In (accelerate)</option><option value="ease-out">Ease Out (decelerate)</option><option value="ease-in-out">Ease In-Out (smooth)</option></select>
+      <div class="row"><span class="row-lbl">Dur</span><input type="range" id="sl-dur" min="1" max="30" value="5" step="1"><span class="val" id="vl-dur">5s</span></div>
+      <div class="row"><span class="row-lbl">Reps</span><input type="range" id="sl-rep" min="1" max="10" value="1" step="1"><span class="val" id="vl-rep">1</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:2px"><button class="qp-action-btn yellow" id="btn-export-png">⬇ PNG Still</button><button class="qp-action-btn yellow" id="btn-export-vid">⬇ Video</button></div>
+      <div id="export-status" style="font-size:0.46rem;color:var(--text-faint);margin-top:4px;text-align:center"></div>
+    </div>
+    <div class="qp-section"><button class="qp-action-btn red" id="btn-reset">↺ Reset to Default</button></div>
+  </div>
+</div>
+
+<div id="ui">
+  <div class="topbar"><div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Aperture Diffraction</span></div><div class="topbar-r">SYS // <strong>WAVE OPTICS</strong></div></div>
+  <section class="eq-panel" id="eq-panel">
+    <button class="eq-collapse" id="eq-collapse-btn">▲</button>
+    <div class="eq-head"><span class="dot"></span><span class="lbl">Governing Equations</span></div>
+    <div class="eq-block"><div class="eq-sublabel">Helmholtz Wave Equation</div><div class="eq-row" id="eq-helm"></div></div>
+    <div class="eq-block"><div class="eq-sublabel">Angular Spectrum Propagation</div><div class="eq-row" id="eq-asm"></div></div>
+    <div class="eq-block"><div class="eq-sublabel" id="eq-t-label">Transmittance · Hexagonal Aperture</div><div class="eq-row" id="eq-trans"></div></div>
+    <div class="eq-block"><div class="eq-sublabel">CIE 1931 → sRGB</div><div class="eq-row" id="eq-cie"></div></div>
+  </section>
+  <div id="status-display"><div class="status-main" id="st-main"></div><div class="status-sub" id="st-sub"></div></div>
+</div>
+<input type="file" id="file-input" accept="image/*" style="display:none">
+
+<script src="equations.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

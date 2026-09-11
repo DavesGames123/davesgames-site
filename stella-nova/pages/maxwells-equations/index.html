@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Maxwell's Equations // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Maxwell's Equations</span></div>
+</div>
+<div id="main">
+  <div id="panel"><div class="p-body">
+    <div class="p-section">
+      <div class="p-sec-lbl">Maxwell's Equations</div>
+      <div class="eq-tabs">
+        <button class="eq-tab active" data-eq="0" onclick="switchEq(0)">
+          <span class="tab-num">I</span><span class="tab-name">Gauss's Law</span><span class="tab-sym">∇·E</span>
+        </button>
+        <button class="eq-tab" data-eq="1" onclick="switchEq(1)">
+          <span class="tab-num">II</span><span class="tab-name">No Monopoles</span><span class="tab-sym">∇·B</span>
+        </button>
+        <button class="eq-tab" data-eq="2" onclick="switchEq(2)">
+          <span class="tab-num">III</span><span class="tab-name">Faraday's Law</span><span class="tab-sym">∇×E</span>
+        </button>
+        <button class="eq-tab" data-eq="3" onclick="switchEq(3)">
+          <span class="tab-num">IV</span><span class="tab-name">Ampère–Maxwell</span><span class="tab-sym">∇×B</span>
+        </button>
+      </div>
+    </div>
+    <div class="p-section" id="ctrl-section">
+      <div class="p-sec-lbl">Controls</div>
+      <div class="ctrl-area" id="ctrl-area"></div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">About</div>
+      <div class="ctrl-hint" id="about-text"></div>
+    </div>
+  </div></div>
+  <div id="canvas-wrap">
+    <canvas id="sim-canvas"></canvas>
+    <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
+    <div class="eq-display" id="eq-display">
+      <div class="eq-title"><span class="dot" id="eq-dot"></span><span id="eq-title-text"></span></div>
+      <div class="eq-katex" id="eq-katex"></div>
+      <div class="eq-english" id="eq-english"></div>
+    </div>
+  </div>
+</div>
+<div id="status-bar">
+  <span id="st-eq">I · Gauss</span><span class="sep"></span>
+  <span id="st-info">--</span><span class="sep"></span>
+  <span id="st-fps">-- fps</span>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

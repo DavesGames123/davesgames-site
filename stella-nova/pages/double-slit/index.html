@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Double-Slit Diffraction // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-l">
+      <span class="sys-name">Stella Nova</span>
+      <span class="sys-status">FDTD Wave Sim</span>
+    </div>
+    <div class="topbar-r" id="perf-info">SYS // <strong>OPTICS</strong></div>
+  </div>
+
+  <div id="main">
+    <div id="sim">
+      <canvas id="waveCanvas"></canvas>
+
+      <div id="overlay">
+        <div>t = <span class="v" id="ot">0.000</span> fs</div>
+        <div>steps = <span class="v" id="os">0</span></div>
+        <div>grid = <span class="v" id="og">—</span></div>
+      </div>
+
+      <div id="det-wrap">
+        <div class="lbl">Intensity</div>
+        <canvas id="detectorCanvas" width="44"></canvas>
+      </div>
+
+      <!-- EQUATION PANEL — floating, collapsible -->
+      <section class="eq-panel" id="eq-panel">
+        <div class="eq-head">
+          <span class="dot"></span>
+          <span class="lbl">Governing Equations</span>
+          <button class="eq-collapse" id="eq-collapse-btn" title="Collapse">▲</button>
+        </div>
+        <div class="eq-blocks">
+          <div class="eq-block">
+            <div class="eq-sublabel">Scalar Wave Equation</div>
+            <div class="eq-row" id="eq-wave"></div>
+          </div>
+          <div class="eq-block">
+            <div class="eq-sublabel">FDTD Discretization</div>
+            <div class="eq-row" id="eq-fdtd"></div>
+          </div>
+          <div class="eq-block">
+            <div class="eq-sublabel">Stability · Channels</div>
+            <div class="eq-row" id="eq-rgb"></div>
+          </div>
+        </div>
+      </section>
+
+      <button class="fab" id="fab" onclick="toggleDrawer()">Controls ≡</button>
+      <div class="drawer-bg" id="drawer-bg" onclick="closeDrawer()"></div>
+    </div>
+
+    <div id="controls">
+      <div class="sec">
+        <div class="sec-lbl">RGB Channels</div>
+        <div class="channel-row"><div class="dot" style="background:#ff6b6b"></div><label style="color:#ff6b6b">Red λ</label><span class="vd" id="val-lr" style="color:#ff6b6b">44</span></div>
+        <input type="range" id="sl-lr" min="30" max="80" value="44" step="1">
+        <div class="channel-row"><div class="dot" style="background:#51cf66"></div><label style="color:#51cf66">Green λ</label><span class="vd" id="val-lg" style="color:#51cf66">32</span></div>
+        <input type="range" id="sl-lg" min="16" max="60" value="32" step="1">
+        <div class="channel-row"><div class="dot" style="background:#339af0"></div><label style="color:#339af0">Blue λ</label><span class="vd" id="val-lb" style="color:#339af0">22</span></div>
+        <input type="range" id="sl-lb" min="10" max="44" value="22" step="1">
+        <div class="br" style="margin-top:4px">
+          <button class="btn r active" id="tog-r">R</button>
+          <button class="btn g active" id="tog-g">G</button>
+          <button class="btn b active" id="tog-b">B</button>
+          <button class="btn active" id="tog-all">All</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Barrier / Slits</div>
+        <div class="row"><label>Slit width</label><span class="vd" id="val-sw">15</span></div>
+        <input type="range" id="sl-sw" min="2" max="120" value="15" step="1">
+        <div class="row"><label>Separation</label><span class="vd" id="val-ss">111</span></div>
+        <input type="range" id="sl-ss" min="4" max="300" value="111" step="1">
+        <div class="row"><label>Position</label><span class="vd" id="val-bx">0.30</span></div>
+        <input type="range" id="sl-bx" min="0.05" max="0.90" value="0.30" step="0.01">
+        <div class="br">
+          <button class="btn active" data-slits="double">Double</button>
+          <button class="btn" data-slits="single">Single</button>
+          <button class="btn" data-slits="none">None</button>
+          <button class="btn" data-slits="triple">Triple</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Simulation</div>
+        <div class="row"><label>Δt</label><span class="vd" id="val-dt">0.50</span></div>
+        <input type="range" id="sl-dt" min="0.10" max="0.70" value="0.50" step="0.05">
+        <div class="row"><label>Dissipation</label><span class="vd" id="val-diss">0.995</span></div>
+        <input type="range" id="sl-diss" min="0.950" max="1.000" value="0.995" step="0.001">
+        <div class="row"><label>Gain</label><span class="vd" id="val-gain">1.0</span></div>
+        <input type="range" id="sl-gain" min="0.3" max="100.0" value="1.0" step="0.1">
+        <div class="row"><label>Resolution</label><span class="vd" id="val-scale">2</span></div>
+        <input type="range" id="sl-scale" min="1" max="4" value="2" step="1">
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Display</div>
+        <div class="br">
+          <button class="btn active" data-disp="amplitude">Amplitude</button>
+          <button class="btn" data-disp="intensity">Intensity</button>
+          <button class="btn" data-disp="phase">Phase</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-lbl">Interaction</div>
+        <div class="row"><label>Brush</label><span class="vd" id="val-br">6</span></div>
+        <input type="range" id="sl-br" min="1" max="30" value="6" step="1">
+        <div class="br">
+          <button class="btn" data-src="sine">Sine</button>
+          <button class="btn active" data-src="impulse">Impulse</button>
+          <button class="btn" data-src="wall">Wall</button>
+          <button class="btn" data-src="erase">Erase</button>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="br">
+          <button class="btn" id="btn-pause">⏸ Pause</button>
+          <button class="btn" id="btn-reset">⟲ Reset</button>
+          <button class="btn" id="btn-clr">✕ Walls</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KaTeX Equation Rendering -->
+<script src="equations.js"></script>
+
+<script src="main.js"></script>
+</body>
+</html>
