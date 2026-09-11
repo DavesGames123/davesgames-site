@@ -4,15 +4,39 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cube SDF + Branched Flow</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CUBE SDF + BRANCHED FLOW  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js renders both the ray-marched SDF surface and the
+   traced filaments into <canvas id="gl">. Everything else here is the control
+   panel main.js fills in (buildUI writes into #pb) and the FPS readout.
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ #gl  full-screen WebGL canvas (cube + filaments)                 │
+     │  #panel                                                          │
+     │    #ph  title + collapse toggle (#tog)                           │
+     │    #pb  generated sliders, toggles, Shuffle / Reset              │
+     │                                              #info  fps + counts │
+     └─────────────────────────────────────────────────────────────────┘
+
+   main.js is a classic script at the end of body; it fetches the four shaders,
+   builds two programs, and drives the four-pass frame loop.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- The one render surface; main.js sizes it and both offscreen targets. -->
 <canvas id="gl"></canvas>
+<!-- Control panel: header toggles it; #pb is filled by main.js buildUI(). -->
 <div id="panel">
   <div class="ph" id="ph"><h1>SDF + Branched Flow</h1><span class="t" id="tog">▼</span></div>
   <div class="hint">drag orbit · scroll zoom</div>
   <div id="pb"></div>
 </div>
+<!-- FPS and filament/edge counts, updated each frame. -->
 <div id="info"></div>
 <script src="main.js"></script>
 </body>

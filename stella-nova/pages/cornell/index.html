@@ -4,6 +4,34 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Cornell Box // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CORNELL BOX  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js (classic script at the end of body) owns the
+   three stacked canvases and binds every control here by id. Nothing here draws
+   the scene; this file is the editor chrome: the left tool panel, the stacked
+   render surfaces, and the status bar.
+
+   THREE STACKED CANVASES  (same box, one shown per mode)
+     #gl    WebGL2 path trace   (GPU backend)
+     #cpu   CPU path trace      (fallback backend)
+     #wire  2D overlay          (wireframe, shaded preview, gizmos) — always on top
+
+   LAYOUT  (# marks an element id)
+     ┌────────────┬──────────────────────────────────────────────┐
+     │ #panel     │ #canvas-wrap                                   │
+     │  Viewport  │   #gl / #cpu / #wire   (the box)               │
+     │  mode+back │   #mob-btn  (mobile panel toggle)             │
+     │  Explorer  │   #err      (error overlay)                    │
+     │  Create /  │                                                │
+     │   Modify   │                                                │
+     │  Camera    │                                                │
+     ├────────────┴──────────────────────────────────────────────┤
+     │ #status-bar   mode · camera · selection · spp/fps          │
+     └─────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -14,7 +42,9 @@
   <div class="topbar-r">SYS // <strong>PATH TRACER</strong></div>
 </div>
 <div id="main">
+  <!-- Left tool panel: viewport mode, scene tree, create/modify, camera presets. -->
   <div id="panel"><div class="p-body">
+    <!-- Viewport: mode segment (wire/shaded/render) and render backend (GPU/CPU). -->
     <div class="rollout"><div class="ro-head">Viewport</div><div class="ro-body">
       <div class="seg" id="modeSeg"><button onclick="APP.setMode('wire')">▫ Wire</button><button onclick="APP.setMode('shaded')">◐ Shaded</button><button class="on" onclick="APP.setMode('render')">◆ Render</button></div>
       <div class="seg" id="bkSeg" style="margin-top:5px"><button id="bGpu" class="on" onclick="APP.setBackend('gpu')">GPU</button><button id="bCpu" onclick="APP.setBackend('cpu')">CPU</button></div>
@@ -32,6 +62,8 @@
       <div class="seg"><button onclick="APP.preset('brand')">Brand</button><button onclick="APP.preset('classic')">Classic</button><button onclick="APP.preset('dim')">Dim</button></div>
     </div></div>
   </div></div>
+  <!-- Render area: the three stacked canvases plus the error overlay. main.js
+       shows the right one per mode; #wire always sits on top for gizmos. -->
   <div id="canvas-wrap">
     <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('open')">☰</button>
     <canvas id="gl"></canvas>

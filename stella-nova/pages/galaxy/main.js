@@ -1,40 +1,103 @@
+// ============================================================================
+//  GALAXY  ·  procedural spiral galaxy on the GPU
+// ----------------------------------------------------------------------------
+//  Two draw passes composite a galaxy: a fullscreen quad paints the smooth core
+//  and disk glow, then one GL_POINTS draw scatters every star as an additive
+//  point sprite. Stars are generated once on the CPU into a packed vertex buffer
+//  (10 floats each: orbit and appearance), and the star vertex shader advances
+//  each orbit analytically per frame, so the whole galaxy turns with no CPU work
+//  after generation. Mouse drag rotates the view; the wheel zooms.
+//
+//  RENDER PIPELINE
+//  ---------------
+//      generateStars() ─▶ VBO 10 floats/star ─▶ starVAO
+//                                                  │
+//      per frame:                                  ▼
+//        coreProg   fullscreen quad, BLEND off   draw bulge + disk glow
+//                                        source: shaders/core.*.glsl
+//        starProg   GL_POINTS, additive BLEND    one sprite per star
+//                                        source: shaders/star.*.glsl
+//                              │
+//                              ▼
+//                           <canvas>
+//
+//  STAR RECORD  (per vertex, STRIDE = 10 floats)
+//  --------------------------------------------------------------------------
+//      radius speed phase ecc radScatter spiralOff specHash briHash incl node
+//      └─ orbit geometry ──────────────┘ └─ arm ─┘ └ color/brightness ┘└ 3D tilt
+//
+//  DISTRIBUTION  (generateStars)
+//  --------------------------------------------------------------------------
+//      first 25% ─ bulge   large-radius, old red population, high inclination
+//      rest      ─ disk    log radius, snapped to numArms spiral arms, thin
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      shader load .......... "await fetch"        fetch .glsl before build
+//      program build ........ "function makeProgram" compile + link a program
+//      uniform lookup ....... "const coreU"         cache uniform/attr locations
+//      rng .................. "function hash"        deterministic hash + gauss
+//      star gen ............. "function generateStars" build the packed VBO
+//      input ................ "addEventListener('mousedown'" drag + wheel
+//      resize ............... "function resize"      match canvas to viewport
+//      params ............... "let timescale"        tunables + slider wiring
+//      frame loop ........... "function frame"        the per-frame two-pass draw
+// ============================================================================
 (async () => {
+// Shader source lives in real .glsl files. Fetch all four before building any
+// program, so the rest of init runs in its original synchronous order.
 const CORE_VS = await (await fetch(new URL('shaders/core.vert.glsl', document.baseURI))).text();
 const CORE_FS = await (await fetch(new URL('shaders/core.frag.glsl', document.baseURI))).text();
 const STAR_VS = await (await fetch(new URL('shaders/star.vert.glsl', document.baseURI))).text();
 const STAR_FS = await (await fetch(new URL('shaders/star.frag.glsl', document.baseURI))).text();
 
+// WebGL2 is required: the star shader uses many vertex attributes and a VAO.
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2', { antialias:false, alpha:false, powerPreference:'high-performance' });
 if (!gl) { document.body.innerHTML='<h1 style="color:red;padding:2em">WebGL 2 required</h1>'; throw ''; }
 
+// Compile a vertex + fragment pair into a linked program. Compile and link
+// errors are logged, not thrown, so a bad shader shows in the console.
 function makeProgram(vsSrc, fsSrc) {
   function compile(src,type) { const s=gl.createShader(type); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s)); return s; }
   const p=gl.createProgram(); gl.attachShader(p,compile(vsSrc,gl.VERTEX_SHADER)); gl.attachShader(p,compile(fsSrc,gl.FRAGMENT_SHADER)); gl.linkProgram(p); if(!gl.getProgramParameter(p,gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(p)); return p;
 }
 
+// Two programs: the core glow (fullscreen quad) and the stars (points).
 const coreProg=makeProgram(CORE_VS,CORE_FS), starProg=makeProgram(STAR_VS,STAR_FS);
 
+// The fullscreen quad the core pass draws over, as a triangle strip.
 const quadBuf=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,quadBuf);
 gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
 
+// Cache uniform and attribute locations once so the frame loop never queries.
 const coreU={}; ['u_res','u_mouse','u_zoom','u_tilt'].forEach(n=>coreU[n]=gl.getUniformLocation(coreProg,n));
 const coreAttrPos=gl.getAttribLocation(coreProg,'a_pos');
 
+// Star uniforms and the 10 per-vertex attributes, in the same order they pack
+// into the VBO (see STRIDE in generateStars).
 const starU={}; ['u_time','u_timescale','u_res','u_mouse','u_zoom','u_tilt','u_spiral'].forEach(n=>starU[n]=gl.getUniformLocation(starProg,n));
 const ATTRS=['a_radius','a_speed','a_phase','a_ecc','a_radScatter','a_spiralOff','a_specHash','a_briHash','a_incl','a_node'];
 const starAttr={}; ATTRS.forEach(n=>starAttr[n]=gl.getAttribLocation(starProg,n));
 
+// Deterministic hash in [0,1): same seed always yields the same star, so a
+// regenerate at a new density reproduces the earlier stars exactly.
 function hash(n){return((Math.sin(n)*43758.5453123)%1+1)%1}
+// Box-Muller normal draw from two hashes, for scatter that clusters near zero.
 function gaussRand(s1,s2){const u1=Math.max(hash(s1),0.0001),u2=hash(s2);return Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2)}
 
 let starVAO=null, starBuf=null, starCount=0;
 
+// Build the whole star population into one packed vertex buffer. Each star gets
+// deterministic orbit and appearance values from its seed; the first quarter
+// form the round old bulge, the rest the thin spiral disk. Called at start and
+// whenever the density slider changes.
 function generateStars(count,numArms){
   const STRIDE=10, data=new Float32Array(count*STRIDE);
   const TAU=Math.PI*2, PI=Math.PI;
   const bulgeCount=Math.floor(count*0.25);
 
+  // Ten independent hashes per star, from one seed, drive every random field.
   for(let i=0;i<count;i++){
     const seed=i*7.31+0.5;
     const h0=hash(seed),h1=hash(seed+41),h2=hash(seed+73),h3=hash(seed+109);
@@ -44,6 +107,8 @@ function generateStars(count,numArms){
     let radius,speed,phase,ecc,radScatter,spiralOff,specHash,briHash,incl,node;
 
     if(i<bulgeCount){
+      // Bulge stars: exponential radius falloff, slow near-solid-body spin, a
+      // large inclination range (a round bulge), and a red specHash bias.
       // ── BULGE: larger radius range, old red/orange population ──
       const rNorm=-0.7*Math.log(1.0-h0*0.97);
       radius=6+rNorm*65;  // bigger bulge
@@ -59,6 +124,9 @@ function generateStars(count,numArms){
       if(h8<0.5) incl=-incl;
       node=h9*TAU;
     } else {
+      // Disk stars: wider log radius, speed falling with radius (flat-ish
+      // rotation curve), phase snapped to one of numArms arms with scatter,
+      // and a near-zero inclination so the disk stays thin.
       const rNorm=-1.2*Math.log(1.0-h0*0.985);
       radius=18+rNorm*85;
       speed=1.0/Math.pow(radius/18,1.15);
@@ -73,12 +141,14 @@ function generateStars(count,numArms){
       node=h9*TAU;
     }
 
+    // Pack the ten fields for this star at its stride offset.
     const off=i*STRIDE;
     data[off]=radius;data[off+1]=speed;data[off+2]=phase;data[off+3]=ecc;
     data[off+4]=radScatter;data[off+5]=spiralOff;data[off+6]=specHash;
     data[off+7]=briHash;data[off+8]=incl;data[off+9]=node;
   }
 
+  // Upload the buffer and point every attribute at its float within the stride.
   if(!starBuf) starBuf=gl.createBuffer();
   if(!starVAO) starVAO=gl.createVertexArray();
   gl.bindVertexArray(starVAO);
@@ -91,6 +161,8 @@ function generateStars(count,numArms){
   document.getElementById('starcount').textContent=count.toLocaleString()+' stars';
 }
 
+// Drag to orbit: accumulate pointer delta into dragX/dragY, which the shaders
+// read as view rotation and tilt. Touch mirrors the mouse handlers.
 let dragX=0,dragY=0,dragging=false,lmx=0,lmy=0;
 canvas.addEventListener('mousedown',e=>{dragging=true;lmx=e.clientX;lmy=e.clientY});
 window.addEventListener('mouseup',()=>dragging=false);
@@ -99,27 +171,37 @@ canvas.addEventListener('touchstart',e=>{dragging=true;const t=e.touches[0];lmx=
 window.addEventListener('touchend',()=>dragging=false);
 window.addEventListener('touchmove',e=>{if(!dragging)return;const t=e.touches[0];dragX+=(t.clientX-lmx)*0.006;dragY+=(t.clientY-lmy)*0.006;lmx=t.clientX;lmy=t.clientY},{passive:true});
 
+// Wheel zoom, clamped to a wide range so the galaxy never inverts or vanishes.
 let zoom=1.0;
 canvas.addEventListener('wheel',e=>{e.preventDefault();zoom*=e.deltaY>0?0.92:1.08;zoom=Math.max(0.05,Math.min(30,zoom))},{passive:false});
 
+// Size the drawing buffer to the viewport at up to 2x device pixels.
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=window.innerWidth*dpr;canvas.height=window.innerHeight*dpr;gl.viewport(0,0,canvas.width,canvas.height);document.getElementById('res').textContent=canvas.width+'×'+canvas.height}
 window.addEventListener('resize',resize);resize();
 
+// Live tunables. arms and TIME_OFFSET are randomized once per page load so each
+// visit starts a different galaxy at a different point in its rotation.
 let timescale=0.5,density=10000,spiral=0.7,tilt=2.8;
 const arms=Math.floor(Math.random()*4)+2;
 const TIME_OFFSET=500+Math.random()*800;
+// The density slider cannot rebuild the VBO mid-draw; it sets this flag and the
+// frame loop regenerates at the top of the next frame.
 let needsRegen=false;
 
+// Wire one slider to its callback and live readout.
 function bind(id,valId,cb){const s=document.getElementById(id),l=document.getElementById(valId);s.addEventListener('input',()=>cb(s,l))}
 bind('timescale','tsVal',(s,l)=>{timescale=parseInt(s.value)/100;l.textContent=timescale.toFixed(2)+'×'});
 bind('density','densityVal',(s,l)=>{density=parseInt(s.value);l.textContent=density;needsRegen=true});
 bind('spiral','spiralVal',(s,l)=>{spiral=parseInt(s.value)/100;l.textContent=spiral.toFixed(2)});
 bind('tilt','tiltVal',(s,l)=>{tilt=parseInt(s.value)/10;l.textContent=tilt.toFixed(1)});
 
+// Build the initial population before the first frame.
 generateStars(density,arms);
 
 let frames=0,lastT=performance.now();const t0=performance.now();
 
+// Per-frame loop: regenerate stars if pending, then draw the core glow with
+// blending off, then the stars additively over it.
 function frame(){
   const now=performance.now(),time=(now-t0)/1000+TIME_OFFSET;
   frames++;if(now-lastT>500){document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';frames=0;lastT=now}
@@ -127,6 +209,7 @@ function frame(){
 
   const w=canvas.width,h=canvas.height;
 
+  // Pass 1: the core and disk glow, opaque, filling the whole frame.
   gl.disable(gl.BLEND);
   gl.useProgram(coreProg);
   gl.uniform2f(coreU.u_res,w,h);gl.uniform4f(coreU.u_mouse,dragX,dragY,0,0);
@@ -137,6 +220,7 @@ function frame(){
   gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
   gl.disableVertexAttribArray(coreAttrPos);
 
+  // Pass 2: stars, additive blend so overlapping sprites sum to bright cores.
   gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
   gl.useProgram(starProg);
   gl.uniform1f(starU.u_time,time);gl.uniform1f(starU.u_timescale,timescale);

@@ -1,3 +1,17 @@
+// core.frag.glsl — galaxy core + disk glow, fragment stage
+//
+//   Paints the smooth, star-free light of the galaxy: a bright round bulge and
+//   a wide flattened disk haze. There is no geometry here; every pixel measures
+//   its distance to the galaxy centre in two squashed, rotated frames (one for
+//   the disk, one for the rounder bulge) and sums several inverse-square glow
+//   terms. The stars are drawn additively on top in a separate pass.
+//
+//     screen pixel ──▶ centre-relative p ──┬─ disk frame  (squashed by tilt) ─▶ dD
+//                                          └─ bulge frame (nearly round)     ─▶ dB
+//                       glow = Σ  k / (d^2 + c)   then vignette + soft rolloff
+//
+//   The rotation (rotAngle) and the flatten factor (tilt) follow the mouse so
+//   the glow tracks the same view as the stars.
 #version 300 es
 precision highp float;
 uniform vec2  u_res;
@@ -7,6 +21,7 @@ uniform float u_tilt;
 out vec4 O;
 
 void main(){
+    // Rotation and tilt track the mouse, matching the star pass exactly.
     vec2 fc = gl_FragCoord.xy;
     float rotAngle = 0.45 + u_mouse.x * 0.5;
     float tilt = max(1.2, u_tilt + u_mouse.y * 2.0);
@@ -26,6 +41,8 @@ void main(){
     float dB = length(pb);
 
     vec3 col = vec3(0.0);
+    // Layered warm bulge: tight bright core plus successively wider, dimmer
+    // haloes, each an inverse-square falloff with a softening constant.
     // Prominent warm bulge
     col += 8.0 / (dB + 0.6) * vec3(1.0, 0.86, 0.65);
     col += 500.0 / (dB*dB + 15.0) * vec3(1.0, 0.82, 0.58) * 0.08;
@@ -35,6 +52,8 @@ void main(){
     col += 30000.0 / (dD*dD + 8000.0) * vec3(0.9, 0.74, 0.55) * 0.01;
     col += 150000.0 / (dD*dD + 60000.0) * vec3(0.8, 0.66, 0.50) * 0.006;
 
+    // Vignette toward the frame edges, then a soft rolloff (Reinhard-like) so
+    // the bright centre does not clip hard to white.
     vec2 vuv = fc / u_res - 0.5;
     col *= 1.0 - dot(vuv, vuv) * 0.5;
     col = col / (1.0 + col * 0.1);

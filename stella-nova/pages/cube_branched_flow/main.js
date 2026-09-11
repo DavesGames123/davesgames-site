@@ -1,4 +1,61 @@
+// ============================================================================
+//  CUBE SDF + BRANCHED FLOW  ·  ray-marched solid crossed with flowing filaments
+// ----------------------------------------------------------------------------
+//  Two renderers share one scene. A ray-marched signed-distance surface (a
+//  rounded cube with a torus carved through it) is the solid body; thousands of
+//  thin filaments are traced on the CPU through a 3D "branched flow" vector
+//  field, then drawn as instanced screen-space ribbons. The filaments reflect in
+//  the metallic surface, and the surface occludes the filaments behind it, so
+//  the two passes read as one object.
+//
+//  RENDER PIPELINE   (per frame)
+//  ---------------------------------------------------------------------------
+//      CPU (if filaments on):
+//        genSeeds() ─▶ traceAll() integrate the flow field ─▶ buildBuf() ─▶ filBuf
+//                                                             (instanced edges)
+//      GPU passes:
+//        1. filament ─▶ filFBO      no occlusion      = reflection source
+//        2. sdf (u_mode=1) ─▶ distFBO   scene depth   t/500 packed in red
+//        3. sdf (u_mode=0) ─▶ screen    metallic body, samples filFBO to reflect
+//        4. filament ─▶ screen      occluded by distFBO depth (discard if behind)
+//                              │
+//                              ▼
+//                           <canvas #gl>
+//
+//  FILAMENT TRACE   (CPU, traceAll)
+//  ---------------------------------------------------------------------------
+//      seed on torus rings ─▶ step along velocity v:
+//        v += field3D(p)              branched-flow sinusoidal field
+//        v -= (v·n) n                 project off the SDF gradient (hug surface)
+//        v -= curve · dist · n        pull toward / push off the surface
+//        v += curl(n, toCentre)       swirl term
+//      positions become polyline nodes ─▶ edges ─▶ instanced ribbon quads
+//
+//  STATE
+//  ---------------------------------------------------------------------------
+//      P_   parameter defs (sliders + baked + shuffle-only + locked)
+//      C_   checkbox defs (visibility + baked toggles)
+//      cur  live numeric values (P_ -> cur); chk  live booleans (C_ -> chk)
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ---------------------------------------------------------------------------
+//      shader load .......... "await fetch"        fetch .glsl before build
+//      math ................. "MATH"               3x3 / 4x4, persp, lookAt
+//      cpu sdf .............. "TORUS SDF ON CPU"    torus distance + gradient
+//      parameters ........... "const P_"           tunables and their metadata
+//      webgl setup .......... "WEBGL"              programs, uniforms, VAOs
+//      fbo .................. "function mkFBO"      distance + reflection targets
+//      flow field ........... "function field3D"    the branched-flow field
+//      seeds + tracing ...... "function genSeeds"   seed and integrate filaments
+//      buffer build ......... "function buildBuf"   filaments -> instanced edges
+//      camera ............... "let resScale"        orbit state + resize
+//      ui ................... "function buildUI"    sliders, toggles, shuffle
+//      input ................ "canvas.onmousedown"  drag / wheel / touch
+//      render ............... "function render"     the four-pass frame loop
+// ============================================================================
 (async () => {
+// Shader source lives in real .glsl files. Fetch all four before building any
+// program, so init runs in its original synchronous order.
 const SDF_VS = await (await fetch(new URL('shaders/sdf.vert.glsl', document.baseURI))).text();
 const SDF_FS = await (await fetch(new URL('shaders/sdf.frag.glsl', document.baseURI))).text();
 const FIL_VS = await (await fetch(new URL('shaders/filament.vert.glsl', document.baseURI))).text();
@@ -10,6 +67,9 @@ const FIL_FS = await (await fetch(new URL('shaders/filament.frag.glsl', document
 
 
 // ═══════════════ MATH ═══════════════
+// Small linear-algebra kit used by the CPU trace and camera. rX3/rY3/rZ3 build
+// 3x3 axis rotations; mM3/mV3 multiply; tM3 transposes; nrm normalizes; persp
+// and lookAt build the 4x4 projection and view matrices; mM4 multiplies them.
 const PI=Math.PI,TAU=PI*2;
 function rX3(a){const c=Math.cos(a),s=Math.sin(a);return[1,0,0,0,c,-s,0,s,c];}
 function rY3(a){const c=Math.cos(a),s=Math.sin(a);return[c,0,-s,0,1,0,s,0,c];}
@@ -34,6 +94,10 @@ function mM4(a,b){const r=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j
   r[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];return r;}
 
 // ═══════════════ TORUS SDF ON CPU ═══════════════
+// A CPU copy of the torus distance field the shader carves with, so the trace
+// can steer filaments along the same surface. pmF is a smooth-min, paF/pa3J are
+// smooth-abs (rounded mirror folds). torDist returns signed distance to the
+// carved torus; torGrad is its numeric gradient (surface normal direction).
 function pmF(a,b,k){const h=Math.max(0,Math.min(1,.5+.5*(b-a)/k));return b+(a-b)*h-k*h*(1-h);}
 function paF(a,k){return -pmF(a,-a,k);}
 function pa3J(v,k){return[paF(v[0],k),paF(v[1],k),paF(v[2],k)];}
@@ -49,6 +113,8 @@ function torGrad(wp,R,C,t){const e=.02,d0=torDist(wp,R,C,t);
 
 // ═══════════════ PARAMETERS ═══════════════
 // Visible controls — everything else baked. Spin params shuffle-only (no sliders).
+// Each entry: v default, mn/mx range, s step, l label, g group. A group of '_'
+// and a label of '_' mean the value has no slider (baked or shuffle-only).
 const P_={
 // ── Playback ──
 timeScale:{v:1,mn:0,mx:3,s:.05,l:'Time Scale',g:'_'},
@@ -96,6 +162,7 @@ cRS:{v:0,mn:0,mx:1,s:.01,l:'_',g:'_'},
 mEnv:{v:0,mn:0,mx:1,s:.01,l:'_',g:'_'},mRough:{v:.35,mn:0,mx:1,s:.05,l:'_',g:'_'},
 mBrush:{v:.15,mn:0,mx:1,s:.01,l:'_',g:'_'},
 };
+// Boolean toggles: the first three get checkboxes; the rest are baked-on.
 const C_={
 sSdf:{v:true,l:'Show SDF',g:'vis'},sFil:{v:true,l:'Show Filaments',g:'vis'},
 sPause:{v:false,l:'Pause',g:'vis'},
@@ -107,23 +174,32 @@ const GROUPS=[
   {k:'struct',l:'Structure'},
   {k:'vis',l:'Toggles'},
 ];
+// Flatten the defs into live state: cur holds numbers, chk holds booleans.
 const cur={};for(const[k,p]of Object.entries(P_))cur[k]=p.v;
 const chk={};for(const[k,c]of Object.entries(C_))chk[k]=c.v;
 
 // ═══════════════ WEBGL ═══════════════
+// WebGL2 context on the one canvas; the page needs instancing and float work.
 const canvas=document.getElementById('gl');
 const gl=canvas.getContext('webgl2',{antialias:false,alpha:false});
+// Compile + link a program from vertex and fragment source; log any error.
 function mkP(vs,fs){const cs=(s,t)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
   if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error('SHADER ERR:',gl.getShaderInfoLog(o));return o;};
   const p=gl.createProgram();gl.attachShader(p,cs(vs,gl.VERTEX_SHADER));
   gl.attachShader(p,cs(fs,gl.FRAGMENT_SHADER));gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS))console.error('LINK ERR:',gl.getProgramInfoLog(p));return p;}
+// Two programs: the SDF surface and the filament ribbons.
 const sdfP=mkP(SDF_VS,SDF_FS),filP=mkP(FIL_VS,FIL_FS);
+// Cache every uniform location for each program, keyed by name.
 const sU={},fU={};
 ['u_res','u_time','u_ro','u_sR','u_pK','u_tO','u_tM','u_tm','u_cD','u_pM','u_rS','u_gP','u_gH','u_mode','u_filTex','u_vp','u_mBase','u_mMetal','u_mFres','u_mEnv','u_mRough','u_mBrush','u_rA','u_rB','u_rC','u_pulse','u_pulseR']
   .forEach(n=>sU[n]=gl.getUniformLocation(sdfP,n));
 ['u_vp','u_res','u_width','u_taper','u_eStep','u_rootHue','u_tipHue','u_sat','u_val','u_hotHue','u_hotThresh','u_hotInt','u_ringSpread','u_grad','u_bright','u_sdfDist','u_cam']
   .forEach(n=>fU[n]=gl.getUniformLocation(filP,n));
+// The SDF pass draws a bare fullscreen triangle (no attributes). The filament
+// pass is instanced: one instance per edge, six vertices making a ribbon quad.
+// Each instance record is 32 bytes: endpoint A (vec3), endpoint B (vec3),
+// along-length t (float), brightness (float); divisor 1 advances per instance.
 const sdfVAO=gl.createVertexArray(),filVAO=gl.createVertexArray(),filBuf=gl.createBuffer();
 gl.bindVertexArray(filVAO);gl.bindBuffer(gl.ARRAY_BUFFER,filBuf);const ST=32;
 gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,3,gl.FLOAT,false,ST,0);gl.vertexAttribDivisor(0,1);
@@ -133,6 +209,9 @@ gl.enableVertexAttribArray(3);gl.vertexAttribPointer(3,1,gl.FLOAT,false,ST,28);g
 gl.bindVertexArray(null);
 
 // ═══════════════ FBO for SDF distance texture ═══════════════
+// Two offscreen targets, rebuilt on resize: distTex holds the SDF scene depth
+// (nearest filtering, read for filament occlusion), filTex holds the rendered
+// filaments (linear filtering, read as the surface reflection source).
 let distTex,distFBO,filTex,filFBO;
 function mkFBO(w,h){
   if(distTex)gl.deleteTexture(distTex);
@@ -148,6 +227,7 @@ function mkFBO(w,h){
   gl.bindFramebuffer(gl.FRAMEBUFFER,distFBO);
   gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,distTex,0);
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+  // Filament reflection texture (linear so reflections stay smooth).
   // Filament reflection texture
   if(filTex)gl.deleteTexture(filTex);
   if(filFBO)gl.deleteFramebuffer(filFBO);
@@ -165,6 +245,10 @@ function mkFBO(w,h){
 }
 
 // ═══════════════ FLOW FIELD ═══════════════
+// The branched-flow velocity field a filament follows. It sums three fixed
+// sinusoidal "gradient" directions (curl-noise style) at the sample point, each
+// animated by time, then optionally adds a radial standing wave. This is what
+// makes the filaments branch and braid instead of running straight.
 function field3D(p,seed,time,C){
   const s1=seed*17,s2=seed*39,fr=C.fFr,fz=C.fFrZ;
   const q=[p[0]*fr,p[1]*fr,p[2]*fz];
@@ -183,16 +267,24 @@ function field3D(p,seed,time,C){
   return F;}
 
 // ═══════════════ SEEDS + TRACING ═══════════════
+// The global spin: build the animated rotation matrix and its transpose so the
+// CPU trace and the shader agree on the scene's orientation over time.
 function computeGRot(t,sp){const tm=t*sp;
   const g=mM3(rX3(cur.moRA*tm),mM3(rZ3(cur.moRB*tm),rY3(cur.moRC*tm)));
   return{R:tM3(g),Rt:g};}
+// Torus radial offset, pulsing over time (matches the shader's carve motion).
 function pOff(C,t){return C.tO+Math.sin(t*C.moPulseR)*C.moPulse;}
+// Integer hash in [0,1): deterministic jitter for seed placement.
 function jH(i){let x=Math.imul(i,2654435761)>>>0;x^=x>>>15;x=Math.imul(x,0x846ca68b)>>>0;return(x>>>8)/16777216;}
+// Map a torus angle to a world position for one cube-corner sign octant.
 function torusToWorld(theta,s,Rt,C,t){
   const tp=[C.tM*Math.cos(theta),0,C.tM*Math.sin(theta)];
   const off=pOff(C,t);
   let p=mV3(Rt,tp);p=[s[0]*(p[0]+off),s[1]*(p[1]+off),s[2]*(p[2]+off)];
   return mV3(Rt,mV3(Rt,p));}
+// Build the filament start points: rings of seeds laid around tori attached to
+// the eight cube-corner octants, jittered along and across the ring. Each seed
+// carries its position, tangent, outward direction, and a per-seed noise seed.
 function genSeeds(C,R,Rt,t){
   const seeds=[],
     ALL=[[-1,-1,-1],[-1,-1,1],[-1,1,-1],[-1,1,1],[1,-1,-1],[1,-1,1],[1,1,-1],[1,1,1]];
@@ -215,6 +307,10 @@ function genSeeds(C,R,Rt,t){
       seeds.push({pos:pw,tan:tn,out:ot,
         seed:theta*.1+i*.01+(sign[0]+sign[1]+sign[2])*.001+layer*.1});}}
   return seeds;}
+// Integrate every seed into a polyline. At each node the velocity is nudged by
+// the flow field, projected off the SDF gradient so filaments hug the surface,
+// pulled toward or off the surface by distance, and given a curl swirl; the
+// resulting node positions become the filament's points.
 function traceAll(seeds,C,R,Rt,time){
   const nodes=Math.round(C.sNd),sub=Math.round(C.sSub),maxFils=2000;
   const step=C.sSl*C.tM*.03/sub;
@@ -237,10 +333,13 @@ function traceAll(seeds,C,R,Rt,time){
         const fp=oa?mV3(R,x):x;
         const F=field3D(fp,sd.seed,time,C);
         const fW=oa?mV3(Rt,F):F;
+        // Remove the component along the surface normal so flow runs tangentially.
         if(pr>.01){const nd=grad[0]*fW[0]+grad[1]*fW[1]+grad[2]*fW[2];
           fW[0]-=nd*grad[0]*pr;fW[1]-=nd*grad[1]*pr;fW[2]-=nd*grad[2]*pr;}
+        // Attract toward the surface (distance-proportional pull along -normal).
         const cd=Math.max(-5,Math.min(5,dist));
         if(cfj>.01){fW[0]-=cfj*cd*grad[0];fW[1]-=cfj*cd*grad[1];fW[2]-=cfj*cd*grad[2];}
+        // Add a curl swirl about the axis toward the scene centre.
         if(curS>.01){const cx=-x[0],cy=-x[1],cz=-x[2];
           const cl=Math.sqrt(cx*cx+cy*cy+cz*cz)||1e-8;
           const tx=grad[1]*(cz/cl)-grad[2]*(cy/cl),ty=grad[2]*(cx/cl)-grad[0]*(cz/cl),tz=grad[0]*(cy/cl)-grad[1]*(cx/cl);
@@ -253,6 +352,8 @@ function traceAll(seeds,C,R,Rt,time){
       pts[j*3]=x[0];pts[j*3+1]=x[1];pts[j*3+2]=x[2];}
     fils.push(pts);}
   return fils;}
+// Flatten the traced polylines into the instanced edge buffer: one 8-float
+// record per edge (endpoint A, endpoint B, along-length t, tapering brightness).
 function buildBuf(fils,nodes){const edges=nodes-1,tot=fils.length*edges;
   const buf=new Float32Array(tot*8);let off=0;
   for(const f of fils)for(let e=0;e<edges;e++){if((e+1)*3+2>=f.length)break;
@@ -262,16 +363,23 @@ function buildBuf(fils,nodes){const edges=nodes-1,tot=fils.length*edges;
   return{data:buf.subarray(0,off),count:off/8};}
 
 // ═══════════════ CAMERA ═══════════════
+// Orbit state: theta, phi, distance, plus a render-resolution scale. resize
+// rebuilds the canvas and both FBOs to the scaled device resolution.
 let resScale=.85,camT=.5,camP=.25,camD=55,drg=false,lmx,lmy;
 function resize(){const d=Math.min(devicePixelRatio||1,2);
   canvas.width=Math.floor(innerWidth*d*resScale);canvas.height=Math.floor(innerHeight*d*resScale);
   gl.viewport(0,0,canvas.width,canvas.height);mkFBO(canvas.width,canvas.height);}
 addEventListener('resize',resize);resize();
+// 1x1 red fallback occlusion texture: its red channel decodes to t=500, so with
+// no depth pass every filament passes the occlusion test.
 // 1x1 fallback: sdfT=500 → all filaments pass
 const noOccTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,noOccTex);
 gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA8,1,1,0,gl.RGBA,gl.UNSIGNED_BYTE,new Uint8Array([255,0,0,255]));
 
 // ═══════════════ UI ═══════════════
+// Build the control panel from P_/C_: one collapsible section per group, a
+// slider per visible parameter and a checkbox per visible toggle, plus Shuffle
+// (randomize a chosen subset), Reset (restore defaults), and a Time Scale row.
 const pb=document.getElementById('pb');
 function fmt(v){return Math.abs(v)>=10?v.toFixed(1):Math.abs(v)>=1?v.toFixed(2):v.toFixed(3);}
 function buildUI(){pb.innerHTML='';
@@ -293,12 +401,14 @@ function buildUI(){pb.innerHTML='';
       inp.onchange=()=>{chk[k]=inp.checked;};r.append(inp,lb);gp.appendChild(r);}
     pb.appendChild(gp);}
   const btns=document.createElement('div');
+  // Shuffle randomizes only this curated subset (color, material, spin, density).
   const shuf=document.createElement('button');shuf.className='btn';shuf.textContent='Shuffle';
   shuf.onclick=()=>{const ks=['cRH','cTH','cSat','cGrad','gH','gP','mBase','mMetal','mFres','rS','moRA','moRB','moRC','sN','rCw'];
     for(const k of ks){const p=P_[k];if(!p)continue;
       cur[k]=Math.round((p.mn+Math.random()*(p.mx-p.mn))/p.s)*p.s;
       cur[k]=Math.max(p.mn,Math.min(p.mx,cur[k]));
       const el=document.getElementById('p_'+k);if(el){el.value=cur[k];document.getElementById('v_'+k).textContent=fmt(cur[k]);}}};
+  // Reset restores every default value, toggle, and camera pose.
   const rst=document.createElement('button');rst.className='btn';rst.textContent='Reset';
   rst.onclick=()=>{for(const[k,p]of Object.entries(P_)){cur[k]=p.v;
     const el=document.getElementById('p_'+k);if(el){el.value=p.v;document.getElementById('v_'+k).textContent=fmt(p.v);}}
@@ -313,9 +423,11 @@ function buildUI(){pb.innerHTML='';
   tsi.oninput=()=>{cur.timeScale=parseFloat(tsi.value);tsv.textContent=fmt(cur.timeScale);};
   tsd.append(tsl,tsi,tsv);pb.appendChild(tsd);}
 buildUI();
+// Panel header toggles the whole control panel open/closed.
 document.getElementById('ph').onclick=()=>{const c=pb.classList.toggle('collapsed');
   document.getElementById('tog').textContent=c?'▶':'▼';};
 
+// Input: drag orbits (theta/phi), wheel dollies, one-finger touch mirrors drag.
 // Mouse
 canvas.onmousedown=e=>{drg=true;lmx=e.clientX;lmy=e.clientY;canvas.style.cursor='grabbing';};
 onmousemove=e=>{if(!drg)return;camT-=(e.clientX-lmx)*.005;camP+=(e.clientY-lmy)*.005;
@@ -331,6 +443,8 @@ canvas.ontouchend=()=>{drg=false;};
 const infoEl=document.getElementById('info');
 let fc=0,lt_=0,simTime=0,lastNow=0;
 
+// Push all SDF-program uniforms for this frame: resolution, sim time, camera
+// origin, torus/box shape, glow, material, and spin parameters.
 function setSdfUniforms(ro){
   gl.uniform2f(sU.u_res,canvas.width,canvas.height);gl.uniform1f(sU.u_time,simTime);
   gl.uniform3f(sU.u_ro,ro[0],ro[1],ro[2]);
@@ -344,6 +458,8 @@ function setSdfUniforms(ro){
   gl.uniform1f(sU.u_rA,cur.moRA);gl.uniform1f(sU.u_rB,cur.moRB);gl.uniform1f(sU.u_rC,cur.moRC);
   gl.uniform1f(sU.u_pulse,cur.moPulse);gl.uniform1f(sU.u_pulseR,cur.moPulseR);}
 
+// The frame loop: advance sim time, build the camera and shared view-projection
+// matrix, trace filaments on the CPU, then run the four GPU passes.
 function render(now){requestAnimationFrame(render);
   const dt=(now-lastNow)/1000;lastNow=now;if(!chk.sPause)simTime+=dt*cur.timeScale;
   fc++;if(now-lt_>1000){infoEl.textContent=Math.round(fc*1000/(now-lt_))+' fps';fc=0;lt_=now;}
@@ -351,10 +467,12 @@ function render(now){requestAnimationFrame(render);
   const W=canvas.width,H=canvas.height;
 
   // Compute VP matrix (shared by all passes)
+  // The row negation flips handedness so the filament and SDF passes agree.
   const fovY=2*Math.atan(.5/Math.tan(PI/3)),asp=W/H;
   const vp=mM4(persp(fovY,asp,.1,1e3),lookAt(ro,[0,0,0],[0,1,0]));
   vp[0]*=-1;vp[4]*=-1;vp[8]*=-1;vp[12]*=-1;
 
+  // CPU: trace filaments once, then upload the instanced edge buffer.
   // CPU: trace filaments once
   let filData=null,filCount=0,filN=0,nFils=0;
   if(chk.sFil){
@@ -366,6 +484,8 @@ function render(now){requestAnimationFrame(render);
     if(filCount>0){gl.bindBuffer(gl.ARRAY_BUFFER,filBuf);gl.bufferData(gl.ARRAY_BUFFER,filData,gl.DYNAMIC_DRAW);}
   }
 
+  // Draw the filament ribbons additively, in two size passes (core then halo).
+  // withOcclusion picks the real depth texture or the pass-all fallback.
   function drawFils(withOcclusion){
     gl.useProgram(filP);gl.bindVertexArray(filVAO);
     gl.enable(gl.BLEND);gl.blendFunc(gl.ONE,gl.ONE);
@@ -388,6 +508,7 @@ function render(now){requestAnimationFrame(render);
     gl.disable(gl.BLEND);
   }
 
+  // Pass 1: draw filaments unoccluded into filFBO; the SDF pass reflects it.
   // Pass 1: Filaments → filFBO (reflection source, no occlusion)
   if(chk.sFil&&filCount>0){
     gl.bindFramebuffer(gl.FRAMEBUFFER,filFBO);gl.viewport(0,0,W,H);
@@ -396,6 +517,7 @@ function render(now){requestAnimationFrame(render);
     gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,W,H);
   }
 
+  // Pass 2: render the SDF depth (u_mode=1) into distFBO for filament occlusion.
   // Pass 2: SDF distance → distFBO
   gl.useProgram(sdfP);gl.bindVertexArray(sdfVAO);gl.disable(gl.BLEND);
   if(chk.sFil){
@@ -407,6 +529,8 @@ function render(now){requestAnimationFrame(render);
     gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,W,H);
   }
 
+  // Pass 3: render the shaded SDF surface (u_mode=0) to screen, sampling filTex
+  // as its reflection. If the surface is hidden, just clear to the background.
   // Pass 3: SDF color → screen (with filament reflection texture)
   if(chk.sSdf){
     gl.useProgram(sdfP);gl.bindVertexArray(sdfVAO);gl.disable(gl.BLEND);
@@ -417,9 +541,11 @@ function render(now){requestAnimationFrame(render);
     gl.drawArrays(gl.TRIANGLES,0,3);
   }else{gl.clearColor(.02,.02,.04,1);gl.clear(gl.COLOR_BUFFER_BIT);}
 
+  // Pass 4: draw filaments to screen, now occluded by the SDF depth texture.
   // Pass 4: Filaments → screen (with occlusion)
   if(chk.sFil&&filCount>0){drawFils(true);}
 
+  // Append filament and edge counts to the FPS readout.
   if(chk.sFil)infoEl.textContent=(infoEl.textContent.split('|')[0].trim())+' | '+nFils+' fils '+filCount+' edges';
 }
 requestAnimationFrame(render);

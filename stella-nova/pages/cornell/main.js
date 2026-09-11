@@ -1,10 +1,72 @@
+// ============================================================================
+//  CORNELL BOX  ·  interactive path-traced studio
+// ----------------------------------------------------------------------------
+//  A Cornell box the user can edit and render three ways. The same scene (a unit
+//  box with coloured walls, a ceiling light, and up to 8 SDF objects) is drawn
+//  as an editable wireframe, a fast shaded preview, or a progressive path trace.
+//  The path tracer exists twice from one scene description: a scalar CPU core
+//  (headless-testable) and a WebGL2 GPU port. Both converge by averaging many
+//  low-noise samples over successive frames.
+//
+//  VIEWPORT MODES                       RENDER / ACCUMULATION PIPELINE
+//  --------------                       ------------------------------
+//      wire    editable wireframe           GPU: ping-pong float FBOs
+//      shaded  1-bounce raycast preview          ┌──────────────┐
+//      render  path trace (CPU or GPU)      tracer│ radiance()   │ tex[ping]
+//                                            frag │ + running avg│───┐
+//  scene ─▶ hitScene (analytic walls               └──────────────┘   │ swap
+//           + marched SDF objects)                        ▲           │
+//              │                                          └───────────┘
+//              ▼                                     display frag: ACES + gamma
+//        radiance() bounces ─▶ accumulate ─▶ tonemap ─▶ <canvas>
+//                                            CPU: Float32 accum, ACES in step()
+//
+//  CAMERA FRAME  (cameraBasis / camRay)
+//  --------------------------------------------------------------------------
+//      orbit by (az, el) at radius R about target (tx,ty,tz)
+//              forward f ─▶ right = f x up ─▶ up = right x f
+//      a fragment ray = f + right*ndc.x*tan*aspect + up*ndc.y*tan
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  --------------------------------------------------------------------------
+//      error trap ........... "function showErr"     on-page error overlay
+//      scalar core .......... "==CORE START=="       CPU tracer, headless-safe
+//      scene + camera ....... "var SCENE="           the editable scene state
+//      SDF text ............. "buildTextSDF"          Felzenszwalb EDT to SDF
+//      shape SDFs ........... "function shapeSDF"     8 primitive distance funcs
+//      scene hit ............ "function hitScene"     walls + marched objects
+//      light sampling ....... "function sampleLightS" next-event estimation
+//      path integrator ...... "function radiance"     the bounce loop
+//      camera ............... "function camRay"       per-pixel ray builder
+//      shared vec math ...... "function vsub"         vec helpers + cameraBasis
+//      CPU backend .......... "function makeCPU"      chunked Float32 accum
+//      GPU backend .......... "function makeGPU"      WebGL2 ping-pong tracer
+//      wireframe geometry ... "function genWire"      per-shape edge lists
+//      controller ........... "var APP="             the whole editor UI
+//      projection ........... "function project"      world to screen
+//      transform gizmo ...... "function drawGizmo"    move/rotate/scale handles
+//      picking .............. "function pickGizmo"    hit-test gizmo + objects
+//      input ................ "function down"         mouse/touch/pinch/wheel
+//      sizing ............... "function renderDims"   aspect-correct buffers
+//      frame loop ........... "function loop"         per-frame mode dispatch
+//      shaded preview ....... "function drawShaded"   progressive raycast
+//      3D text .............. "function genTextSDF"   rasterize string to SDF
+//      scene CRUD ........... "function newObj"       add/delete/select objects
+//      UI builders .......... "function buildModify"  Create + Modify panels
+//      bootstrap ............ "APP.init"              fetch shaders, then start
+// ============================================================================
 "use strict";
+// On-page error overlay. Any thrown error or window.onerror lands in #err so a
+// GPU or shader failure is visible without opening the console.
 function showErr(e){ try{ var d=document.getElementById('err'); if(d){ d.style.display='block'; d.textContent='\u26a0 '+((e&&e.message)?e.message:e)+((e&&e.stack)?('\n'+e.stack.split('\n').slice(0,3).join('\n')):''); } }catch(_){ } }
 window.onerror=function(m,s,l,c,err){ showErr(err||(m+' @'+l+':'+c)); };
 
 // ==CORE START==
 // SDF Cornell core (scalar, headless-testable). Hybrid: analytic walls + ray-marched objects.
 // SDF primitives ported from Inigo Quilez (iquilezles.org, MIT). Tracer after RTOW (CC0).
+// The scene: the unit box wall colours (wl/wr/ww), the ceiling light, and the
+// object list. Each object carries a shape id, a material id, a radius, a centre,
+// and Euler angles that setupRot bakes into a rotation matrix.
 var SCENE={
   light:18, lsize:0.33, lcol:[1.0,0.95,0.86],
   wl:[0.08,0.55,0.66], wr:[0.07,0.11,0.42], ww:[0.74,0.78,0.82],
@@ -15,46 +77,66 @@ var SCENE={
   ],
   bounces:5
 };
+// Orbit camera: azimuth, elevation, distance R, field of view, and target.
 var CAM={az:90,el:14,R:2.45,fov:52,tx:0,ty:-0.10,tz:0};
+// Ray-march step budget for the CPU tracer's SDF objects.
 var MSTEPS=44;
 // shape: 0 sphere,1 box,2 roundbox,3 torus,4 cylinder,5 octahedron,6 capsule
 // mat:   0 diffuse,2 mirror,3 glass,4 glossy
 
+// Scratch globals: gObj is the object id the last map hit; gnx/gny/gnz its normal.
+// The core avoids per-call allocation by writing results into these.
 var gObj=0, gnx=0,gny=1,gnz=0;
+// Row-major 3x3 helpers: multiply, build a rotation from Euler angles, and cache
+// both the object->world matrix (m) and its transpose world->object (mt).
 function matMul3(A,B){ var C=new Array(9); for(var r=0;r<3;r++)for(var c=0;c<3;c++){ C[r*3+c]=A[r*3]*B[c]+A[r*3+1]*B[3+c]+A[r*3+2]*B[6+c]; } return C; }
 function eulerM(rx,ry,rz){ var cx=Math.cos(rx),sx=Math.sin(rx),cy=Math.cos(ry),sy=Math.sin(ry),cz=Math.cos(rz),sz=Math.sin(rz);
   return [ cz*cy, cz*sy*sx - sz*cx, cz*sy*cx + sz*sx,
            sz*cy, sz*sy*sx + cz*cx, sz*sy*cx - cz*sx,
            -sy,   cy*sx,            cy*cx ]; }
 function setObjMatrix(s,M){ s.m=M; s.mt=[M[0],M[3],M[6], M[1],M[4],M[7], M[2],M[5],M[8]]; } // mt = world->object (transpose)
+// Bake each object's rotation matrix once at load.
 function setupRot(){ for(var i=0;i<SCENE.spheres.length;i++){ var s=SCENE.spheres[i]; if(!s.m) setObjMatrix(s, eulerM(s.rx||0,s.ry||0,s.rz||0)); } }
 setupRot();
 
+// Signed distance to an axis-aligned box (Inigo Quilez form).
 function sdBox(x,y,z,bx,by,bz){ var qx=Math.abs(x)-bx,qy=Math.abs(y)-by,qz=Math.abs(z)-bz;
   var ox=qx>0?qx:0, oy=qy>0?qy:0, oz=qz>0?qz:0;
   return Math.sqrt(ox*ox+oy*oy+oz*oz)+Math.min(Math.max(qx,Math.max(qy,qz)),0); }
 /* ---- 3D text: signed distance field (Felzenszwalb exact EDT) ---- */
+// A rasterized string is turned into a 2D signed distance field. _edt1d is the
+// 1D exact Euclidean distance transform; _edt2d runs it over columns then rows;
+// buildTextSDF combines inside and outside transforms into a signed field, and
+// sampleText reads it bilinearly. shapeSDF case 8 extrudes this field into a slab.
 var TEXTSDF={data:null,w:0,h:0,aspect:4,u8:null};
+// 1D squared-distance transform of a parabola lower envelope (Felzenszwalb).
 function _edt1d(f,d,v,z,n){ v[0]=0; z[0]=-1e20; z[1]=1e20; var k=0,q,s;
   for(q=1;q<n;q++){ s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]);
     while(s<=z[k]){ k--; s=((f[q]+q*q)-(f[v[k]]+v[k]*v[k]))/(2*q-2*v[k]); }
     k++; v[k]=q; z[k]=s; z[k+1]=1e20; }
   for(q=0,k=0;q<n;q++){ while(z[k+1]<q)k++; var dd=q-v[k]; d[q]=dd*dd+f[v[k]]; } }
+// Separable 2D transform: columns first, then rows.
 function _edt2d(grid,W,H){ var m=Math.max(W,H), f=new Float64Array(m), d=new Float64Array(m), v=new Int32Array(m+1), z=new Float64Array(m+1), x,y;
   for(x=0;x<W;x++){ for(y=0;y<H;y++)f[y]=grid[y*W+x]; _edt1d(f,d,v,z,H); for(y=0;y<H;y++)grid[y*W+x]=d[y]; }
   for(y=0;y<H;y++){ for(x=0;x<W;x++)f[x]=grid[y*W+x]; _edt1d(f,d,v,z,W); for(x=0;x<W;x++)grid[y*W+x]=d[x]; } }
+// Inside minus outside distance gives a signed field, normalized to [-1,1]
+// and also stored as a u8 texture the GPU tracer samples.
 function buildTextSDF(inside,W,H,aspect){ var INF=1e20, n=W*H, outer=new Float64Array(n), inner=new Float64Array(n), i;
   for(i=0;i<n;i++){ if(inside[i]){ outer[i]=INF; inner[i]=0; } else { outer[i]=0; inner[i]=INF; } }
   _edt2d(outer,W,H); _edt2d(inner,W,H);
   var data=new Float32Array(n), u8=new Uint8Array(n);
   for(i=0;i<n;i++){ var dpx=Math.sqrt(inner[i])-Math.sqrt(outer[i]), nrm=dpx*2/H; if(nrm>1)nrm=1; if(nrm<-1)nrm=-1; data[i]=nrm; u8[i]=Math.round((nrm*0.5+0.5)*255); }
   TEXTSDF={data:data,w:W,h:H,aspect:aspect,u8:u8}; return TEXTSDF; }
+// Bilinear read of the signed text field at normalized (u,v).
 function sampleText(u,v){ var T=TEXTSDF; if(!T.data)return 1;
   var fx=u*(T.w-1), fy=v*(T.h-1); if(fx<0)fx=0; if(fx>T.w-1)fx=T.w-1; if(fy<0)fy=0; if(fy>T.h-1)fy=T.h-1;
   var x0=fx|0,y0=fy|0,x1=x0+1<T.w?x0+1:x0,y1=y0+1<T.h?y0+1:y0,tx=fx-x0,ty=fy-y0,d=T.data;
   var a=d[y0*T.w+x0],b=d[y0*T.w+x1],c=d[y1*T.w+x0],e=d[y1*T.w+x1];
   return (a*(1-tx)+b*tx)*(1-ty)+(c*(1-tx)+e*tx)*ty; }
 
+// Signed distance for one primitive in object space, dispatched by shape id:
+// 0 sphere, 1 box, 2 rounded box, 3 torus, 4 cylinder, 5 octahedron, 6 capsule,
+// 8 extruded SDF text; the default (7) is a cone.
 function shapeSDF(sh,x,y,z,r){
   if(sh===0) return Math.sqrt(x*x+y*y+z*z)-r;
   if(sh===1) return sdBox(x,y,z,r*0.82,r*0.82,r*0.82);
@@ -75,22 +157,32 @@ function shapeSDF(sh,x,y,z,r){
   var cbx=qx-k1x+k2x*dk, cby=qy-k1y+k2y*dk; var sgn=(cbx<0&&cay<0)?-1:1;
   return sgn*Math.sqrt(Math.min(cax*cax+cay*cay, cbx*cbx+cby*cby));
 }
+// Nearest SDF object to a world point: transform into each object's local frame
+// via mt, evaluate its shapeSDF, and keep the minimum. Records the id in gObj.
 function mapObjects(px,py,pz){ var best=1e9,bi=0,sp=SCENE.spheres;
   for(var i=0;i<sp.length;i++){ var s=sp[i]; if(s.vis===false) continue; var dx=px-s.c[0],dy=py-s.c[1],dz=pz-s.c[2]; var m=s.mt;
     var lx=m[0]*dx+m[1]*dy+m[2]*dz, ly=m[3]*dx+m[4]*dy+m[5]*dz, lz=m[6]*dx+m[7]*dy+m[8]*dz;
     var d=shapeSDF(s.shape,lx,ly,lz,s.r); if(d<best){best=d;bi=i;} }
   gObj=bi; return best; }
+// Sphere-trace the object field from the ray origin to tMax; returns the hit
+// distance or -1. Step is 0.9 of the distance estimate for safety.
 function marchObjects(ox,oy,oz,dx,dy,dz,tMax){ var t=2e-3;
   for(var i=0;i<MSTEPS;i++){ var d=mapObjects(ox+dx*t,oy+dy*t,oz+dz*t); var ad=d<0?-d:d;
     if(ad<6e-4*(1.0+t*0.5)) return t; t+=ad*0.9; if(t>tMax) return -1; }
   return -1; }
+// Surface normal by central differences of the object field; writes gnx/gny/gnz.
 function normalObjects(px,py,pz){ var e=5e-4;
   var nx=mapObjects(px+e,py,pz)-mapObjects(px-e,py,pz);
   var ny=mapObjects(px,py+e,pz)-mapObjects(px,py-e,pz);
   var nz=mapObjects(px,py,pz+e)-mapObjects(px,py,pz-e);
   var l=Math.sqrt(nx*nx+ny*ny+nz*nz)||1; gnx=nx/l;gny=ny/l;gnz=nz/l; }
 
+// hr is the single reused hit record: distance, material type, normal, albedo
+// (a*), emission (e*), roughness. The tracer reads it after each hitScene call.
 var hr={t:0,type:0,nx:0,ny:1,nz:0,ax:0,ay:0,az:0,ex:0,ey:0,ez:0,rough:0};
+// Intersect the ray with the whole scene: the six analytic box walls first
+// (each a plane clipped to the unit square), then the marched SDF objects,
+// limited to the nearest wall so objects never punch through a wall.
 function hitScene(ox,oy,oz,dx,dy,dz){
   var bt=Infinity,bty=-1,nx=0,ny=1,nz=0,ax=0,ay=0,az=0,ex=0,ey=0,ez=0,rgh=0,t,px,py,pz,W=SCENE.ww;
   if(dx>1e-6||dx<-1e-6){
@@ -108,12 +200,15 @@ function hitScene(ox,oy,oz,dx,dy,dz){
   if(dz>1e-6||dz<-1e-6){
     t=(-1-oz)/dz; if(t>1e-3&&t<bt){px=ox+dx*t;py=oy+dy*t; if(px<=1&&px>=-1&&py<=1&&py>=-1){bt=t;bty=0;nx=0;ny=0;nz=1;ax=W[0];ay=W[1];az=W[2];ex=ey=ez=0;}}
   }
+  // Then the SDF objects; a nearer object hit overrides the wall hit above.
   // ray-marched objects, limited to the nearest wall distance
   var tObj=marchObjects(ox,oy,oz,dx,dy,dz, bt===Infinity?6.0:bt);
   if(tObj>0){ var s=SCENE.spheres[gObj]; var hx=ox+dx*tObj,hy=oy+dy*tObj,hz=oz+dz*tObj; normalObjects(hx,hy,hz);
     bt=tObj; bty=s.mat; nx=gnx;ny=gny;nz=gnz; ax=s.alb[0];ay=s.alb[1];az=s.alb[2]; if(s.mat===5&&s.emis){ex=s.emis[0];ey=s.emis[1];ez=s.emis[2];}else{ex=ey=ez=0;} rgh=(s.rough||0); }
   hr.t=bt;hr.type=bty;hr.nx=nx;hr.ny=ny;hr.nz=nz;hr.ax=ax;hr.ay=ay;hr.az=az;hr.ex=ex;hr.ey=ey;hr.ez=ez;hr.rough=rgh;
 }
+// Cosine-weighted hemisphere sample about a normal (for diffuse bounces).
+// Writes the direction into gx/gy/gz.
 function cosineHemiS(nx,ny,nz,rand){
   var u1=rand(),u2=rand(); var rr=Math.sqrt(u1),th=6.283185307*u2, ct=Math.cos(th),st=Math.sin(th);
   var tx,ty,tz; if(nx>0.9||nx<-0.9){tx=0;ty=1;tz=0;} else {tx=1;ty=0;tz=0;}
@@ -122,7 +217,10 @@ function cosineHemiS(nx,ny,nz,rand){
   var ddx=tx*rr*ct+bx*rr*st+nx*sq, ddy=ty*rr*ct+by*rr*st+ny*sq, ddz=tz*rr*ct+bz*rr*st+nz*sq;
   var l=1/Math.sqrt(ddx*ddx+ddy*ddy+ddz*ddz); gx=ddx*l;gy=ddy*l;gz=ddz*l;
 }
+// gx/gy/gz hold the last sampled direction; sr/sg/sb the last direct-light term.
 var gx=0,gy=0,gz=0, sr=0,sg=0,sb=0;
+// Next-event estimation: sample a point on the ceiling light, test visibility,
+// and return its contribution weighted by geometry and the light area (sr/sg/sb).
 function sampleLightS(px,py,pz,nx,ny,nz,ax,ay,az,rand){
   var lx=(rand()*2-1)*SCENE.lsize, lz=(rand()*2-1)*SCENE.lsize;
   var dx=lx-px,dy=0.999-py,dz=lz-pz; var dist=Math.sqrt(dx*dx+dy*dy+dz*dz),inv=1/dist;
@@ -132,6 +230,9 @@ function sampleLightS(px,py,pz,nx,ny,nz,ax,ay,az,rand){
   var area=(2*SCENE.lsize)*(2*SCENE.lsize); var g=ndl*cosl*inv*inv*area*0.3183098862, e=SCENE.light;
   sr=ax*SCENE.lcol[0]*e*g; sg=ay*SCENE.lcol[1]*e*g; sb=az*SCENE.lcol[2]*e*g;
 }
+// The path integrator: follow the ray for up to SCENE.bounces bounces, adding
+// direct light at each diffuse hit and carrying the running throughput (tx/ty/tz).
+// Materials: 0 diffuse, 1 light-facing wall, 2 mirror, 3 glass, 5 emitter, else glossy.
 function radiance(ox,oy,oz,dx,dy,dz,rand){
   var cx=0,cy=0,cz=0,tx=1,ty=1,tz=1,spec=true;
   for(var b=0;b<SCENE.bounces;b++){
@@ -155,6 +256,8 @@ function radiance(ox,oy,oz,dx,dy,dz,rand){
   }
   return [cx,cy,cz];
 }
+// Build the camera ray for pixel (px,py): place the camera on its orbit, form
+// the forward/right/up basis, and offset through the pixel with jitter for AA.
 function camRay(px,py,W,H,rand){
   var az=CAM.az*Math.PI/180, el=CAM.el*Math.PI/180, tgx=CAM.tx,tgy=CAM.ty,tgz=CAM.tz,R=CAM.R;
   var cpx=tgx+R*Math.cos(el)*Math.cos(az), cpy=tgy+R*Math.sin(el), cpz=tgz+R*Math.cos(el)*Math.sin(az);
@@ -166,16 +269,20 @@ function camRay(px,py,W,H,rand){
   var dl=1/Math.sqrt(ddx*ddx+ddy*ddy+ddz*ddz);
   return [cpx,cpy,cpz, ddx*dl,ddy*dl,ddz*dl];
 }
+// ACES filmic tonemap of one channel, clamped to [0,1].
 function acesT(x){ x=(x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14); return x<0?0:(x>1?1:x); }
 // ==CORE END==
 
 /* ---------- shared vec + camera ---------- */
+// Small vec3 helpers used by the editor (the core above stays scalar for speed).
 function vsub(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
 function vcross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
 function vdot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
 function vnorm(a){var l=Math.sqrt(vdot(a,a))||1;return [a[0]/l,a[1]/l,a[2]/l];}
 function vadd(a,b){return [a[0]+b[0],a[1]+b[1],a[2]+b[2]];}
 function vscale(a,s){return [a[0]*s,a[1]*s,a[2]*s];}
+// The camera's world position and orthonormal basis, shared by the projector
+// and the GPU uniforms so wireframe, shaded, and render all agree on the view.
 function cameraBasis(){
   var az=CAM.az*Math.PI/180, el=CAM.el*Math.PI/180, tgt=[CAM.tx,CAM.ty,CAM.tz], R=CAM.R;
   var cp=[tgt[0]+R*Math.cos(el)*Math.cos(az), tgt[1]+R*Math.sin(el), tgt[2]+R*Math.cos(el)*Math.sin(az)];
@@ -188,9 +295,13 @@ function axisAngleM(ax,ang){ // Rodrigues -> row-major 3x3 (object->world rotati
           t*x*y+s*z, t*y*y+c, t*y*z-s*x,
           t*x*z-s*y, t*y*z+s*x, t*z*z+c];
 }
+// Notify the GPU backend that an object rotation changed (uniforms re-upload).
 function pushGPURot(){ if(gpu&&gpu.syncRot) gpu.syncRot(); }
 
 /* ---------- CPU path tracer ---------- */
+// The CPU backend: a low-res Float32 accumulation buffer filled in row chunks so
+// the page never blocks. Each pass adds one sample per pixel and re-tonemaps the
+// running average with ACES + gamma. setRes allocates, reset clears, step advances.
 function makeCPU(cv){
   var ctx=cv.getContext('2d'); if(!ctx) return null;
   var W=108,H=108, accum=null, img=null, spp=0, y0=0, CHUNK=12;
@@ -207,24 +318,35 @@ function makeCPU(cv){
 }
 
 /* ---------- GPU path tracer ---------- */
+// Shader source, filled by the bootstrap fetch before init.
 var VERT='';
 var TRACE='';
 var DISP='';
+// The GPU backend: a WebGL2 ping-pong path tracer. Two float textures alternate
+// as accumulation targets; each step() runs the tracer program (which reads the
+// previous average and folds in a new sample), then the display program tonemaps
+// the latest texture to the screen. Needs a float-renderable color buffer.
 function makeGPU(cv){
   var gl=null; try{ gl=cv.getContext('webgl2',{antialias:false,preserveDrawingBuffer:false}); }catch(e){}
   if(!gl) return null;
   var CBF=gl.getExtension('EXT_color_buffer_float'); gl.getExtension('EXT_color_buffer_half_float'); gl.getExtension('OES_texture_float_linear');
   var IF=CBF?gl.RGBA32F:gl.RGBA16F, TY=CBF?gl.FLOAT:gl.HALF_FLOAT;
+  // Compile one shader; a compile error is surfaced through the page overlay.
   function sh(t,src){ var s=gl.createShader(t); gl.shaderSource(s,src); gl.compileShader(s); if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){ showErr('shader: '+gl.getShaderInfoLog(s)); return null; } return s; }
   function prog(vs,fs){ var v=sh(gl.VERTEX_SHADER,vs),f=sh(gl.FRAGMENT_SHADER,fs); if(!v||!f) return null; var p=gl.createProgram(); gl.attachShader(p,v); gl.attachShader(p,f); gl.bindAttribLocation(p,0,'p'); gl.linkProgram(p); if(!gl.getProgramParameter(p,gl.LINK_STATUS)){ showErr('link: '+gl.getProgramInfoLog(p)); return null; } return p; }
   var pT=prog(VERT,TRACE), pD=prog(VERT,DISP); if(!pT||!pD) return null;
   var vb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,vb); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
   gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);
+  // W/H render size, tex/fbo the two ping-pong targets, ping the current index,
+  // spp the accumulated sample count, ok whether the framebuffers are complete.
   var W=1,H=1,tex=[],fbo=[],ping=0,spp=0,ok=true;
+  // The SDF text field as an R8 texture the tracer samples for shape id 8.
   var texText=gl.createTexture();
   function setTextSDF(u8,w,h){ gl.bindTexture(gl.TEXTURE_2D,texText); gl.pixelStorei(gl.UNPACK_ALIGNMENT,1); gl.texImage2D(gl.TEXTURE_2D,0,gl.R8,w,h,0,gl.RED,gl.UNSIGNED_BYTE,u8);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE); }
+  // (Re)allocate the two float textures and their framebuffers at the current
+  // size, and check that the driver can render to them.
   function targets(){ for(var i=0;i<tex.length;i++){ gl.deleteTexture(tex[i]); gl.deleteFramebuffer(fbo[i]); } tex=[]; fbo=[];
     for(var k=0;k<2;k++){ var t=gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D,t); gl.texImage2D(gl.TEXTURE_2D,0,IF,W,H,0,gl.RGBA,TY,null);
       gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);
@@ -232,6 +354,8 @@ function makeGPU(cv){
       var f=gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER,f); gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0); tex.push(t); fbo.push(f); }
     gl.bindFramebuffer(gl.FRAMEBUFFER,fbo[0]); ok=(gl.checkFramebufferStatus(gl.FRAMEBUFFER)===gl.FRAMEBUFFER_COMPLETE); gl.bindFramebuffer(gl.FRAMEBUFFER,null); }
   function U(p,n){ return gl.getUniformLocation(p,n); }
+  // Push the camera, box colours, light, and every object (packed into vec4
+  // arrays plus a rotation matrix) into the tracer program's uniforms each step.
   function uniforms(){ var cam=cameraBasis();
     gl.uniform2f(U(pT,'uRes'),W,H); gl.uniform1f(U(pT,'uAspect'),W/H); gl.uniform1f(U(pT,'uTan'),cam.tan);
     gl.uniform3f(U(pT,'uCamPos'),cam.cp[0],cam.cp[1],cam.cp[2]); gl.uniform3f(U(pT,'uFwd'),cam.f[0],cam.f[1],cam.f[2]);
@@ -249,20 +373,29 @@ function makeGPU(cv){
       gl.uniform3f(U(pT,'uRotInvR1['+i+']'),s.mt[3],s.mt[4],s.mt[5]);
       gl.uniform3f(U(pT,'uRotInvR2['+i+']'),s.mt[6],s.mt[7],s.mt[8]); }
     gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D,texText); gl.uniform1i(U(pT,'uTextSDF'),2); gl.uniform1f(U(pT,'uTextAspect'),(TEXTSDF&&TEXTSDF.aspect)||4); gl.activeTexture(gl.TEXTURE0); }
+  // Resize the render targets; reset restarts accumulation without reallocating.
   function setRes(w,h){ W=w; H=h; cv.width=w; cv.height=h; targets(); spp=0; }
   function reset(){ spp=0; }
+  // Advance nsamp samples: for each, render the tracer into the off texture from
+  // the on texture and swap; then tonemap the newest texture to the canvas.
   function step(nsamp){ if(!ok) return; gl.viewport(0,0,W,H); gl.useProgram(pT);
     for(var s=0;s<nsamp;s++){ gl.bindFramebuffer(gl.FRAMEBUFFER,fbo[1-ping]); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tex[ping]);
       gl.uniform1i(U(pT,'uAccum'),0); uniforms(); gl.drawArrays(gl.TRIANGLES,0,3); ping=1-ping; spp++; }
     gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,W,H); gl.useProgram(pD);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tex[ping]); gl.uniform1i(U(pD,'uAccum'),0); gl.uniform2f(U(pD,'uRes'),W,H); gl.drawArrays(gl.TRIANGLES,0,3); }
+  // Read back the frame and report if it is essentially black; the loop uses
+  // this to fall back to the CPU on devices where the GPU path renders nothing.
   function isBlank(){ try{ var px=new Uint8Array(W*H*4); gl.readPixels(0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,px); var mx=0; for(var i=0;i<px.length;i+=4){ if(px[i]>mx)mx=px[i]; if(px[i+1]>mx)mx=px[i+1]; if(px[i+2]>mx)mx=px[i+2]; } return mx<8; }catch(e){ return false; } }
   return { setRes:setRes, reset:reset, step:step, samples:function(){return spp;}, ok:function(){return ok;}, isBlank:isBlank, syncRot:function(){}, setTextSDF:setTextSDF };
 }
 
 /* ---------- wireframe geometry ---------- */
+// Build the edge list the editor draws for each shape. circlePts and polySeg are
+// helpers; genWire returns line segments (in object space) matching the SDF
+// primitive of the given shape, so the wireframe outlines what the tracer renders.
 function circlePts(plane,rad,segs){ var pts=[],i; for(i=0;i<=segs;i++){ var a=i/segs*6.2831853,c=Math.cos(a)*rad,s=Math.sin(a)*rad; if(plane===0)pts.push([c,s,0]); else if(plane===1)pts.push([c,0,s]); else pts.push([0,c,s]); } return pts; }
 function polySeg(pts,out){ for(var i=0;i<pts.length-1;i++) out.push([pts[i][0],pts[i][1],pts[i][2],pts[i+1][0],pts[i+1][1],pts[i+1][2]]); }
+// Per-shape edge list. Each branch emits the outline for one primitive id.
 function genWire(shape,r){ var segs=[],i,j;
   if(shape===8){ var asp=(typeof TEXTSDF!=='undefined'&&TEXTSDF.aspect)||4, hw=asp*r, hh=r, th=r*0.16;
     var rect=function(z){ segs.push([-hw,-hh,z,hw,-hh,z]); segs.push([hw,-hh,z,hw,hh,z]); segs.push([hw,hh,z,-hw,hh,z]); segs.push([-hw,hh,z,-hw,-hh,z]); };
@@ -283,11 +416,16 @@ function genWire(shape,r){ var segs=[],i,j;
   else { var CH=r*0.85, rb=r*0.62, base=[]; for(i=0;i<=24;i++){ var a=i/24*6.2831853; base.push([Math.cos(a)*rb,-CH,Math.sin(a)*rb]); } polySeg(base,segs);
     for(i=0;i<24;i+=4){ var a3=i/24*6.2831853; segs.push([Math.cos(a3)*rb,-CH,Math.sin(a3)*rb,0,CH,0]); } }
   return segs; }
+// Transform an object-space wireframe point into world space for projection.
 // transform local point by object matrix M (object->world) + center
 function objWorld(s,p){ var m=s.m,c=s.c; return [c[0]+m[0]*p[0]+m[1]*p[1]+m[2]*p[2], c[1]+m[3]*p[0]+m[4]*p[1]+m[5]*p[2], c[2]+m[6]*p[0]+m[7]*p[1]+m[8]*p[2]]; }
 
 /* ---------- controller ---------- */
+// The GPU backend instance, created in init (null when unavailable).
 var gpu=null;
+// The editor: one big module that owns the three canvases (gl/cpu/wire), the
+// current mode and backend, the selection, and all input. It draws the wireframe
+// and gizmos itself, drives the CPU/GPU tracers, and builds the side panels.
 var APP=(function(){
   var glCv=document.getElementById('gl'), cpuCv=document.getElementById('cpu'), wcv=document.getElementById('wire');
   var wctx=wcv.getContext('2d');
@@ -299,11 +437,14 @@ var APP=(function(){
   var OBJCOL=['#ff9050','#60e0ee','#c890ff'];
   var fps=0,fpsT=0,fpsN=0,lastT=0;
 
+  // The tracer currently in use, and a full restart of accumulation.
   function active(){ return (mode==='render'&&backend==='gpu'&&gpu)?gpu:cpu; }
   function resetRender(){ checked=false; if(cpu)cpu.reset(); if(gpu)gpu.reset(); }
   function note(t){ var d=document.getElementById('modenote'); if(d) d.innerHTML=t; }
 
   /* projection */
+  // Project a world point to screen pixels using the cached camera basis PROJ;
+  // returns null when the point is behind the camera.
   function project(p){ var cam=PROJ; var rx=p[0]-cam.cp[0],ry=p[1]-cam.cp[1],rz=p[2]-cam.cp[2];
     var dz=rx*cam.f[0]+ry*cam.f[1]+rz*cam.f[2]; if(dz<0.02) return null;
     var cx=rx*cam.rt[0]+ry*cam.rt[1]+rz*cam.rt[2], cy=rx*cam.up[0]+ry*cam.up[1]+rz*cam.up[2];
@@ -311,6 +452,8 @@ var APP=(function(){
   var PROJ=cameraBasis();
 
   /* wireframe draw */
+  // Draw the box, the light quad, every object's wireframe, and the target
+  // cross onto the 2D overlay canvas. drawGizmo adds the selected object's handles.
   function line(a,b,col,w){ var pa=project(a),pb=project(b); if(!pa||!pb)return; wctx.strokeStyle=col; wctx.lineWidth=w||1; wctx.beginPath(); wctx.moveTo(pa.x,pa.y); wctx.lineTo(pb.x,pb.y); wctx.stroke(); }
   function drawScene(opaque){
     PROJ=cameraBasis();
@@ -332,6 +475,8 @@ var APP=(function(){
     }
     if(typeof sel==='number'&&SCENE.spheres[sel]) drawGizmo(SCENE.spheres[sel]);
   }
+  // Transform gizmo: three axis arrows (move), three rings (rotate), and three
+  // cubes (scale), plus a centre handle for screen-plane drag.
   function gizLen(s){ return 0.42+s.r*0.7; }
   var AX=[[1,0,0],[0,1,0],[0,0,1]], AXCOL=['#ff5a5a','#64dd64','#5a9cff'];
   function drawGizmo(s){ var C=s.c, L=gizLen(s); var pc=project(C); if(!pc)return; var aL=L*0.9, sL=L*1.18;
@@ -348,6 +493,9 @@ var APP=(function(){
   }
 
   /* picking */
+  // Hit-test screen clicks: pickGizmo returns which handle (scale/move/rot/plane)
+  // is under the cursor for the selected object; pickObject finds the nearest
+  // object centre. distToSeg measures point-to-segment distance in screen space.
   function distToSeg(px,py,ax,ay,bx,by){ var dx=bx-ax,dy=by-ay,l2=dx*dx+dy*dy; if(l2<1e-6)return Math.hypot(px-ax,py-ay); var t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/l2)); return Math.hypot(px-(ax+t*dx),py-(ay+t*dy)); }
   function pickGizmo(px,py){ if(typeof sel!=='number'||!SCENE.spheres[sel])return null; var s=SCENE.spheres[sel],C=s.c,L=gizLen(s); var pc=project(C); if(!pc)return null; var aL=L*0.9, sL=L*1.18;
     for(var a=0;a<3;a++){ var sc=project(vadd(C,vscale(AX[a],sL))); if(sc&&Math.hypot(px-sc.x,py-sc.y)<14) return {type:'scale',axis:a}; }
@@ -360,6 +508,9 @@ var APP=(function(){
   function pickObject(px,py){ var bestI=-1,bestD=18; for(var i=0;i<SCENE.spheres.length;i++){ var p=project(SCENE.spheres[i].c); if(!p)continue; var d=Math.hypot(px-p.x,py-p.y); if(d<bestD){bestD=d;bestI=i;} } return bestI; }
 
   /* input */
+  // Pointer state. down decides whether a drag grabs a gizmo, selects an object,
+  // or orbits the camera; move applies the active drag; up ends it. Touch adds
+  // pinch-to-zoom and wheel zooms. Any edit in render mode restarts accumulation.
   var drag=null;
   function evPos(e){ var r=wcv.getBoundingClientRect(); var t=e.touches?e.touches[0]:e; return [t.clientX-r.left,t.clientY-r.top]; }
   function down(e){ var pos=evPos(e); var g=pickGizmo(pos[0],pos[1]);
@@ -383,6 +534,9 @@ var APP=(function(){
   wcv.addEventListener('wheel',function(e){ e.preventDefault(); CAM.R=Math.max(1.2,Math.min(6,CAM.R*(e.deltaY>0?1.08:1/1.08))); if(mode==='render')resetRender(); },{passive:false});
 
   /* sizing — render buffers track viewport aspect (no squish) */
+  // Choose render-buffer dimensions that match the viewport aspect (capped), so
+  // the low-res trace is not stretched; applyRes sets CPU and GPU sizes and
+  // resize debounces layout changes before reapplying.
   function renderDims(base){ var asp=WW/WH,w,h; if(asp>=1){ h=base; w=Math.round(base*asp); } else { w=base; h=Math.round(base/asp); }
     var cap=Math.round(base*2.0); if(w>cap){ w=cap; h=Math.round(w/asp); } if(h>cap){ h=cap; w=Math.round(h*asp); } return [Math.max(8,w),Math.max(8,h)]; }
   function applyRes(){ var sm=Math.min(WW,WH)<360; var dc=renderDims(sm?104:150), dg=renderDims(sm?300:440); if(cpu) cpu.setRes(dc[0],dc[1]); if(gpu) gpu.setRes(dg[0],dg[1]); }
@@ -393,6 +547,9 @@ var APP=(function(){
   if(window.ResizeObserver) new ResizeObserver(resize).observe(document.getElementById('canvas-wrap')); else window.addEventListener('resize',resize);
 
   /* loop */
+  // The animation loop dispatches by mode: draw the wireframe, step the shaded
+  // preview, or advance the path trace (2 GPU samples or 1 CPU sample per frame,
+  // capped once converged). It also runs the one-time GPU-blank fallback check.
   function loop(t){ raf=requestAnimationFrame(loop);
     var dt=(t-lastT)/1000; lastT=t; fpsT+=dt; fpsN++; if(fpsT>=0.5){ fps=Math.round(fpsN/fpsT); fpsT=0; fpsN=0; }
     try{
@@ -406,6 +563,7 @@ var APP=(function(){
       updateStatus();
     }catch(e){ showErr(e); if(mode==='render'&&backend==='gpu'){ backend='cpu'; gpuAvail=false; paintBackend(); showCanvas(); } }
   }
+  // Refresh the bottom status bar: mode, camera angles, selection, and spp/fps.
   function updateStatus(){
     var mn = mode==='wire'?'WIREFRAME':(mode==='shaded'?'SHADED':('RENDER \u00b7 '+backend.toUpperCase()));
     document.getElementById('st-mode').textContent=mn;
@@ -417,6 +575,10 @@ var APP=(function(){
   function selName(){ if(sel==='ceiling')return 'Ceiling Light'; if(typeof sel==='number'&&SCENE.spheres[sel])return SCENE.spheres[sel].name; return 'none'; }
 
   /* ---- shaded raycast viewport (solid preview, reuses the SDF scene) ---- */
+  // A real-time solid preview: one primary ray per pixel through hitScene, shaded
+  // with ambient plus the ceiling light plus emitters. It renders at low res while
+  // dragging and progressively refines when idle, caching by a scene signature so
+  // it only recomputes when something actually changed.
   var shadeCv=document.createElement('canvas'), shadeCtx=shadeCv.getContext('2d'), shadeImg=null, shadeRow=0, shadeW=0, shadeH=0, shadeLights=[];
   function half(){ return 0.5; }
   function tone(r,g,b){ return [255*Math.pow(acesT(r),0.4545),255*Math.pow(acesT(g),0.4545),255*Math.pow(acesT(b),0.4545)]; }
@@ -435,6 +597,8 @@ var APP=(function(){
     var hl=Math.max(0,-(nx*q[3]+ny*q[4]+nz*q[5]))*0.14; rC+=hl;gC+=hl;bC+=hl;
     return tone(ax*rC,ay*gC,az*bC);
   }
+  // A string fingerprint of everything that affects the shaded image; when it
+  // changes the preview restarts from row 0.
   var shadeSig='';
   function sceneSig(){ var s=CAM.az+'_'+CAM.el+'_'+CAM.R+'_'+CAM.fov+'_'+CAM.tx+'_'+CAM.ty+'_'+CAM.tz+'|'+sel+'|'+gizmo+'|'+SCENE.light+'_'+SCENE.lsize+'|'+WW+'x'+WH+'|'+TEXTSTR+'|';
     for(var i=0;i<SCENE.spheres.length;i++){ var o=SCENE.spheres[i]; s+=o.shape+'/'+o.mat+'/'+o.r+'/'+o.c.join(',')+'/'+(o.vis===false?'h':'v')+'/'+(o.m?o.m.join(','):'')+'/'+(o.alb?o.alb.join(','):'')+'/'+(o.emisI||0)+';'; } return s; }
@@ -462,12 +626,17 @@ var APP=(function(){
   }
 
   /* ---- canvases / modes ---- */
+  // Show the right canvas for the current mode/backend and paint the mode and
+  // backend button states.
   function usingGpu(){ return backend==='gpu'&&!!gpu; }
   function showCanvas(){ var r=(mode==='render'); glCv.style.display=(r&&usingGpu())?'block':'none'; cpuCv.style.display=(r&&!usingGpu())?'block':'none'; wcv.style.display='block'; }
   function paintMode(){ var b=document.getElementById('modeSeg').children, ms=['wire','shaded','render']; for(var i=0;i<3;i++) b[i].classList.toggle('on',mode===ms[i]); document.getElementById('bkSeg').style.opacity=mode==='render'?'1':'0.4'; }
   function paintBackend(){ document.getElementById('bGpu').classList.toggle('on',backend==='gpu'); document.getElementById('bCpu').classList.toggle('on',backend==='cpu'); document.getElementById('bGpu').disabled=!gpuAvail; }
 
   /* ---- 3D text generation ---- */
+  // Rasterize a string to a bitmap, threshold it to an inside mask, and build the
+  // signed distance field (buildTextSDF) that shape id 8 extrudes. Also uploads
+  // the field to the GPU tracer. Debounced from the text input.
   var TEXTSTR='[ davesgames.io ]';
   function genTextSDF(str){ TEXTSTR=(str==null?TEXTSTR:str)||'davesgames.io';
     var fsz=120, pad=20, font='800 '+fsz+'px Inter, "Helvetica Neue", Helvetica, Arial, sans-serif';
@@ -480,6 +649,8 @@ var APP=(function(){
     buildTextSDF(inside,W,Hh,W/Hh); if(gpu&&gpu.setTextSDF) gpu.setTextSDF(TEXTSDF.u8,W,Hh); }
 
   /* ---- scene CRUD ---- */
+  // Add, delete, show/hide, and select scene objects (max 8). newObj creates
+  // geometry, lights, or text with sensible defaults and bakes the rotation.
   var nameCount={};
   function autoName(base){ nameCount[base]=(nameCount[base]||0)+1; return base+(''+nameCount[base]).padStart(2,'0'); }
   var SHNAME=['Sphere','Box','RBox','Torus','Cylinder','Octa','Capsule','Cone'];
@@ -496,6 +667,9 @@ var APP=(function(){
   function syncLight(o){ o.emis=[o.alb[0]*o.emisI,o.alb[1]*o.emisI,o.alb[2]*o.emisI]; }
 
   /* ---- UI builders ---- */
+  // Build the side panels from the scene: the Create grid, the Modify form for
+  // the selection (shape, material, colour, transform, delete), and the scene
+  // tree. rebuildUI refreshes all three. Helpers make sliders, colour rows, etc.
   function tab(t){ document.getElementById('tabCreate').classList.toggle('on',t==='create'); document.getElementById('tabModify').classList.toggle('on',t==='modify'); document.getElementById('paneCreate').style.display=t==='create'?'block':'none'; document.getElementById('paneModify').style.display=t==='modify'?'block':'none'; }
   function ico(o){ if(o.kind==='text')return 'T'; if(o.kind==='light')return '\u25c9'; return ['\u25ef','\u25a2','\u25a2','\u25cc','\u25ad','\u25c6','\u25ad','\u25b2'][o.shape]||'\u25c6'; }
   function buildCreate(){
@@ -575,6 +749,8 @@ var APP=(function(){
   function rebuildUI(){ buildTree(); buildModify(); paintMode(); }
 
   /* ---- public ---- */
+  // The API exposed to the HTML buttons: switch mode/backend/gizmo, reset the
+  // view, and apply a lighting preset.
   function setMode(m){ mode=m; if(m==='shaded') shadeSig=''; paintMode(); showCanvas(); if(m==='render') resetRender();
     note(m==='wire'?'Wireframe viewport. Drag to orbit \u00b7 scroll / pinch to zoom.':(m==='shaded'?'Solid shaded preview \u2014 real-time. Drag to orbit \u00b7 scroll to zoom.':'Path-traced render. Orbiting re-renders from the new angle.')); updateStatus(); }
   function setBackend(b){ if(b==='gpu'&&!gpuAvail)return; backend=b; paintBackend(); showCanvas(); if(mode==='render')resetRender(); }
@@ -585,6 +761,9 @@ var APP=(function(){
     rebuildUI(); if(mode==='render')resetRender(); }
   function decorateScene(){ SCENE.spheres.forEach(function(o){ if(o.vis===undefined)o.vis=true; if(!o.kind)o.kind=(o.mat===5?'light':'geo'); if(!o.name)o.name=autoName(o.kind==='light'?'Omni':(SHNAME[o.shape]||'Object')); }); }
 
+  // Startup: size the canvases, create both backends, fall back to CPU if the
+  // GPU is unavailable, generate the default logo text, seed the scene, build the
+  // UI, and start the loop.
   function init(){
     resize();
     cpu=makeCPU(cpuCv);
@@ -602,6 +781,8 @@ var APP=(function(){
   return { init:init, setMode:setMode, setBackend:setBackend, setGizmo:setGizmo, resetView:resetView, preset:preset, tab:tab };
 })();
 
+// Bootstrap: fetch the three shader sources, then start the controller. Any
+// failure is routed to the on-page error overlay.
 (async () => {
   VERT = await (await fetch(new URL('shaders/fullscreen.vert.glsl', document.baseURI))).text();
   TRACE = await (await fetch(new URL('shaders/tracer.frag.glsl', document.baseURI))).text();

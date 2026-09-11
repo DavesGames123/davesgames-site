@@ -4,23 +4,59 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Black Hole // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   BLACK HOLE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The one full-screen <canvas id="c"> is rendered by
+   main.js with raw WebGL 2 (no Three.js). Nothing here draws the hole; this
+   file lays out the overlays that main.js reads and writes by id: the GPU
+   warning gate, the HUD, the stats, the equation panel, and the control bars.
+
+   HEAD LOAD ORDER
+     1. KaTeX css + js   typeset the metric and field equations (deferred)
+     2. style.css        the page stylesheet
+     3. main.js          classic script at end of body; runs after markup
+
+   REVEAL GATE
+     The control bars ship with display:none. dismissWarn() in main.js shows
+     them only after the user accepts the GPU-load warning, so the heavy
+     per-pixel trace does not start behind a hidden notice.
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ #gpuWarn  (modal, dismissed first)                               │
+     │ #hud "Black Hole"                              #stats  ▷ #fps    │
+     │                                                        #res #mode │
+     │                    <canvas id="c">                               │
+     │                                                                  │
+     │ #eqPanel (metric + EFE)                                          │
+     │ #bgBar   ✦ ▦ ◧ ☁ ◎   background modes                            │
+     │ #ctrlWrap  Geodesic · RK4 · Disc · Spin · Zoom · quality          │
+     └─────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Render surface. main.js creates the GL context on this canvas and sizes it below native resolution. -->
 <canvas id="c"></canvas>
 
+<!-- GPU-load warning gate. Continue calls dismissWarn(), which reveals the control bars. -->
 <div class="gpu-warn" id="gpuWarn">
   <h2>GPU Intensive</h2>
   <p>This page performs per-pixel Schwarzschild geodesic ray tracing on the GPU. Your device may run warm and fans may spin up. Performance varies by hardware.</p>
   <button class="dismiss" onclick="dismissWarn()">Continue</button>
 </div>
 
+<!-- Title HUD and live stats readouts (fps, render resolution, integrator mode), all written by main.js. -->
 <div class="hud"><h1>Black Hole</h1><div class="sub">Schwarzschild Geodesic Ray Tracer</div></div>
 <div class="stats"><div id="fps"></div><div id="res"></div><div id="mode"></div></div>
 <div class="hint" id="hint">drag to orbit · scroll to zoom</div>
 
+<!-- Equation panel: KaTeX renders the Schwarzschild metric and Einstein field equations into #eq1/#eq2. -->
 <div class="eq-panel" id="eqPanel" style="display:none" onclick="if(this.classList.contains('collapsed'))toggleEqPanel()">
   <button class="eq-toggle" id="eqToggleBtn" onclick="event.stopPropagation();toggleEqPanel()" aria-label="Toggle equations">−</button>
   <div class="eq-content">
@@ -36,6 +72,7 @@
   <span class="eq-collapsed-label">Equations</span>
 </div>
 
+<!-- Background selector: each icon calls setBg(n) to switch the sky sampled behind the hole (stars, grid, UV, nebula, rings). -->
 <div class="bg-bar" id="bgBar" style="display:none">
   <div class="bg-icon bg-stars active" id="bgStars" onclick="setBg(0)">
     <span class="ico">✦</span>
@@ -59,6 +96,7 @@
   </div>
 </div>
 
+<!-- Control bar: integrator toggles (Geodesic, RK4), disc and spin toggles, zoom slider, and the three quality presets. -->
 <div class="ctrl-wrap" id="ctrlWrap" style="display:none">
   <button class="toggle-btn on" id="btnGeodesic" onclick="toggleGeodesic()">Geodesic</button>
   <button class="toggle-btn" id="btnRK4" onclick="toggleRK4()">RK4</button>
@@ -75,6 +113,7 @@
   <button class="toggle-btn" id="btnQHigh" onclick="setQuality(2)">High</button>
 </div>
 
+<!-- Classic script at end of body: the WebGL host runs after the markup exists. -->
 <script src="main.js"></script>
 </body>
 </html>

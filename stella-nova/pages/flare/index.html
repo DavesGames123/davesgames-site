@@ -3,11 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <title>FLARE STUDY // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FLARE STUDY  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js runs the flare shader in seven canvases (c0..c6),
+   one per column, and binds the label bar and control sliders by id. Nothing
+   here paints a flare; this file lays out the strip and the editor panel.
+
+   LAYOUT  (# marks an element id, cN are the seven canvases)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ #label-bar   SPARSE  TEAL  VIOLET  INVERSE  DENSE  BLOOM  CUSTOM  │
+     ├───────────────────────────────────────────────┬─────────────────┤
+     │ #strip                                         │ #ctrl-panel     │
+     │  .col c0 c1 c2 c3 c4 c5 c6  (live flares)      │  #sel-indicator │
+     │  each with a .sel-ring and .var-tag            │  Origin/Bright/ │
+     │                                                │  Trail/Color/   │
+     │                                                │  Noise sliders  │
+     └───────────────────────────────────────────────┴─────────────────┘
+
+   selectFlare(i) (defined in main.js, exposed on window) drives selection from
+   both the label bar and the columns.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
+<!-- Label bar: one clickable header per column, mirroring the strip selection. -->
 <div id="label-bar">
 <div class="col-label" data-col="0" onclick="selectFlare(0)">SPARSE<br><span class="sub">PC:2 CS:0.00</span></div>
 <div class="col-label" data-col="1" onclick="selectFlare(1)">TEAL<br><span class="sub">PC:4 CS:1.05</span></div>
@@ -19,6 +43,7 @@
 </div>
 
 <div id="main">
+  <!-- The strip: seven flare canvases c0..c6, each main.js renders into. -->
   <div id="strip">
 <div class="col" id="col0" data-col="0" onclick="selectFlare(0)"><canvas id="c0"></canvas><div class="sel-ring" id="ring0"></div><div class="var-tag">SPARSE</div></div>
 <div class="col" id="col1" data-col="1" onclick="selectFlare(1)"><canvas id="c1"></canvas><div class="sel-ring" id="ring1"></div><div class="var-tag">TEAL</div></div>
@@ -29,6 +54,7 @@
 <div class="col" id="col6" data-col="6" onclick="selectFlare(6)"><canvas id="c6"></canvas><div class="sel-ring" id="ring6"></div><div class="var-tag">CUSTOM</div></div>
   </div>
 
+  <!-- Editor: sliders whose ids match CTRL_KEYS; each edits the selected flare. -->
   <div id="ctrl-panel">
     <div id="ctrl-header">
       <h3>&#9889; FLARE</h3>

@@ -1,3 +1,19 @@
+// star.vert.glsl — per-star placement, vertex stage
+//
+//   Runs once per star. It advances the star's circular orbit analytically for
+//   the current time, tilts that orbit in 3D (inclination + node), rotates and
+//   flattens the whole galaxy for the view, and projects to clip space. It also
+//   derives the star's spectral colour and luminosity from its hashes, passing
+//   colour and brightness to the fragment stage on SEPARATE channels so tint
+//   survives additive blending.
+//
+//     orbit(t) in disk plane ──▶ incline by a_incl about node a_node ──▶ 3D pos
+//         │                                                                │
+//         └─ r = a_radius·a_radScatter·(1 + a_ecc·cos(t/2))                ▼
+//                                  view rotate + flatten by tilt ──▶ screen ──▶ ndc
+//
+//   gl_PointSize scales with luminosity and zoom; the fragment shader shapes
+//   the sprite. specHash drives a pow(h,4) skew toward redder, dimmer stars.
 #version 300 es
 precision highp float;
 
@@ -55,6 +71,8 @@ vec3 blackbodyColor(float h){
     return clamp(c, 0.0, 1.0);
 }
 
+// Luminosity by spectral class: hotter (higher t) stars are far brighter,
+// following the same class breakpoints as blackbodyColor. scatter adds spread.
 float starLuminosity(float h, float scatter){
     float t = h * h * h * h;
     float lum;
@@ -69,16 +87,21 @@ float starLuminosity(float h, float scatter){
 }
 
 void main(){
+    // Orbit angle: advances with time; u_spiral shears outer stars back to
+    // wind the arms. Radius breathes slightly with eccentricity.
     float time = u_time * u_timescale;
     float tOrb = time * a_speed + a_phase + u_spiral * a_spiralOff;
     float r = a_radius * a_radScatter * (1.0 + a_ecc * cos(tOrb * 0.5));
 
+    // Position on the flat orbit, then tilt it out of plane by inclination and
+    // rotate that tilt about the ascending node, giving a 3D galactic position.
     float ox = cos(tOrb) * r, oy = sin(tOrb) * r;
     float ci = cos(a_incl), si = sin(a_incl);
     float cn = cos(a_node), sn = sin(a_node);
     float ix = ox, iy = oy * ci, iz = oy * si;
     float gx = cn*ix - sn*iy, gy = sn*ix + cn*iy, gz = iz;
 
+    // View transform: rotate in-plane, then flatten by tilt to fake perspective.
     float tilt = max(1.2, u_tilt + u_mouse.y * 2.0);
     float rotAngle = 0.45 + u_mouse.x * 0.5;
     float cR = cos(rotAngle), sR = sin(rotAngle);
@@ -94,6 +117,7 @@ void main(){
     v_color = blackbodyColor(a_specHash);
     v_lum = lum;
 
+    // Sprite size grows with brightness and zoom, clamped to a sane pixel range.
     float sz = (0.4 + lum * 0.8) * u_zoom;
     sz = clamp(sz, 0.4, 6.0);
     gl_PointSize = sz;

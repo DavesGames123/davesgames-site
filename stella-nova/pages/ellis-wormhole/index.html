@@ -4,14 +4,48 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Wormhole // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ELLIS WORMHOLE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js renders the geodesic ray tracer into
+   <canvas id="c"> and draws the throat cross-section into <canvas id="minimap">.
+   Everything else here is overlay: a GPU-load gate, the HUD, the A/B traverse
+   bar, the KaTeX equation panel, and the control row. main.js binds all of it
+   by id and by the global on* handlers it defines on window.
+
+   HEAD LOAD ORDER
+     1. KaTeX css + js (CDN, deferred)  renders the metric equations
+     2. style.css                        page stylesheet
+     3. main.js (end of body)            fetches shaders, drives the frame loop
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ #c  full-screen ray-traced wormhole            #minimap (throat) │
+     │ .hud  title / universe            .stats  #fps #res #mode         │
+     │                                                                   │
+     │  #eqPanel  metric tensor / throat / stress-energy                 │
+     │  #traverseBar   B ◀──── #zoomSlider ────▶ A   #playBtn            │
+     │  #ctrlWrap   Geodesic RK4 Disc Glow Spin · bg modes · K L · Q     │
+     └─────────────────────────────────────────────────────────────────┘
+
+   CONTROL MODEL
+     u_camL sign = which universe holds the camera (A: l>0, B: l<0).
+     K = throat radius, L = flat-throat half-width; both feed the shader.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- The ray-traced view; main.js sizes it below native resolution for speed. -->
 <canvas id="c"></canvas>
+<!-- Side minimap: a rotating cross-section of the throat with the camera dot. -->
 <canvas id="minimap" width="280" height="480" style="display:none"></canvas>
 
+<!-- GPU-load gate: shown first; Continue calls dismissWarn(), which reveals the
+     controls, traverse bar, equations, and (on desktop) the minimap. -->
 <div class="gpu-warn" id="gpuWarn">
   <h2>GPU Intensive</h2>
   <p>Per-pixel geodesic ray tracing through an Ellis wormhole metric. Drag to look around, scroll or pinch to fly through.</p>
