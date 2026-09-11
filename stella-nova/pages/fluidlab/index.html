@@ -4,13 +4,47 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Stable Fluids // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FLUIDLAB / STABLE FLUIDS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The fluid is solved and drawn by main.js on
+   #sim-canvas; a 2D overlay canvas is added above it at runtime. This file
+   lays out the left control panel (colormap, emitters, shapes, object list,
+   barrier draw, presets, display, simulation) and the status bar. Most
+   buttons call global handlers main.js exposes on window.
+
+   LOAD ORDER
+     1. fonts + KaTeX css/js (KaTeX renders the equation panel)
+     2. style.css
+     3. equations.js   typeset the Navier-Stokes panel
+     4. main.js        fetch shaders, build the solver, run the loop
+
+   LAYOUT  (# marks an element id)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Stable Fluids                                 │
+     ├──────────────┬────────────────────────────────────────────────────┤
+     │ #panel       │ #canvas-wrap                                         │
+     │  colormap    │   <canvas id=sim-canvas>  (overlay added on top)     │
+     │  emitters    │   #vec-btn                                           │
+     │  shapes      │   #eq-panel  (Navier-Stokes, KaTeX)                  │
+     │  #obj-list   │                                                      │
+     │  draw/presets│                                                      │
+     │  display/sim │                                                      │
+     ├──────────────┴────────────────────────────────────────────────────┤
+     │ #status-bar: objects · resolution · fps · frame · mode              │
+     └───────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: tag the page when embedded in the site shell iframe. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Mobile hamburger: slide the control panel in and out. -->
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 <div class="topbar"><div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Stable Fluids</span></div><div class="topbar-r">SYS // <strong>STABLE FLUIDS</strong> · Stam 1999</div></div>
 <div id="main">
@@ -70,6 +104,7 @@
 </div>
 <div id="status-bar"><span id="st-obj">0 objects</span><span class="sep"></span><span id="st-res">--</span><span class="sep"></span><span id="st-fps">-- fps</span><span class="sep"></span><span id="st-frame">frame 0</span><span class="sep"></span><span id="st-mode">vortex</span></div>
 
+<!-- equations.js typesets the Navier-Stokes panel; main.js runs the solver. -->
 <script src="equations.js"></script>
 <script src="main.js"></script>
 </body>

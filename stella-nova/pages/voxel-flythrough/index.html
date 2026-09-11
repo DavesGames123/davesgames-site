@@ -4,11 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Voxel Flythrough // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   VOXEL FLYTHROUGH  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js raymarches the voxel field onto #gl and draws
+   the flight path and HUD onto the #pathOverlay canvas above it. This file
+   lays out the left control rail (camera, procedural gen, data fauna, glow and
+   colour, CRT and view), the stage with its two stacked canvases, and the
+   status bar. Slider and button handlers call globals main.js exposes.
+
+   LOAD ORDER
+     1. fonts + style.css
+     2. main.js (classic script): fetch 6 shaders, build GL, run the loop
+
+   LAYOUT  (# marks an element id)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Voxel Flythrough                              │
+     ├──────────────┬────────────────────────────────────────────────────┤
+     │ #rail        │ #stage                                              │
+     │  camera      │   <canvas id=gl>          (raymarched scene)         │
+     │  gen         │   <canvas id=pathOverlay> (flight path + HUD)        │
+     │  fauna       │   #ctrlLegend                                        │
+     │  glow/color  │                                                      │
+     │  CRT/view    │                                                      │
+     ├──────────────┴────────────────────────────────────────────────────┤
+     │ #status-bar: mode · seed · pos · steps · fps                        │
+     └───────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: tag the page when embedded in the site shell iframe. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Mobile hamburger: open and close the control rail. -->
 <button id="mob-btn" onclick="document.getElementById('rail').classList.toggle('open')">☰</button>
 
 <div class="topbar">
@@ -73,7 +104,7 @@
   </div>
   <div class="mob-overlay" onclick="document.getElementById('rail').classList.remove('open')"></div>
 
-  <!-- CENTER STAGE -->
+  <!-- CENTER STAGE: WebGL scene canvas with the 2D path/HUD overlay stacked on top -->
   <div id="stage">
     <canvas id="gl"></canvas>
     <canvas id="pathOverlay"></canvas>

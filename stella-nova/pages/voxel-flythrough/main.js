@@ -1,9 +1,72 @@
+// ============================================================================
+//  VOXEL FLYTHROUGH  ·  raymarched voxel field with a GPU boid swarm and an
+//                       auto-piloted flight path
+// ----------------------------------------------------------------------------
+//  A fragment shader DDA-raymarches an infinite procedural voxel terrain into
+//  an offscreen buffer; a CRT post pass composites it to screen. A GPU boid
+//  swarm (positions/velocities held in ping-pong textures) flies through the
+//  same field and draws over the scene, depth-tested against it. On the CPU, a
+//  flight planner relaxes a closed loop into the open corridors of the current
+//  terrain, and the camera cruises that loop; a 2D overlay draws the path and a
+//  radar-style HUD. Two modes: 'fly' (auto pilot) and 'walk' (WASD free flight).
+//
+//  RENDER PIPELINE  (draw(), per frame)
+//  ------------------------------------
+//      buildCamera() ─▶ ro / right / up / fwd
+//                        │
+//      pass 1  sceneProg ► DDA voxel raymarch ──▶ FBO (fboTex)
+//              scene.frag.glsl; alpha channel carries view-space depth
+//                        │
+//      pass 2  postProg ► FXAA + bloom + tonemap + scanlines ──▶ <canvas id=gl>
+//              post.frag.glsl, samples fboTex
+//                        │
+//      boids   boidsStep ► update pos/vel textures (MRT ping-pong)
+//              boidsRender ► additive points, discarded where behind fboTex depth
+//                        │
+//      overlay drawPath() ─▶ 2D flight path + HUD on <canvas id=pathOverlay>
+//
+//  BOID SIM DATA FLOW  (boid-sim.frag.glsl, one MRT pass)
+//  ------------------------------------------------------
+//      posT[cur], velT[cur]  ─read─▶  boid-sim  ─write─▶  posT[1-cur], velT[1-cur]
+//      forces: wall avoid (density gradient) · separation/alignment/cohesion ·
+//              curl wander · keep-near-camera · wall cling ; then swap cur.
+//      boid.vert reads posT/velT by gl_VertexID; boid.frag draws each as a dot
+//      or falling-code glyph, discarding fragments behind the scene depth.
+//
+//  The SAME density() field is implemented three times, in lockstep: in
+//  scene.frag.glsl (render), boid-sim.frag.glsl (swarm), and densJS() here (the
+//  planner). All three must agree or the path and swarm would clip the terrain.
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ------------------------------------------------------------------------
+//      state .............. "const S="        camera / mode / planner state
+//      params ............. "const U="        shader uniform values (sliders)
+//      gl helpers ......... "function sh"      compile / link / FBO
+//      vector math ........ "vector helpers"   vec3 ops, smoothstep
+//      morph .............. "steppedMorph"     hold-then-snap terrain evolution
+//      density (JS) ....... "function densJS"  planner's copy of the field
+//      flight planner ..... "function planFlight" elastic-band path relax
+//      loop sampling ...... "function loopPos" arc-length lookup on the path
+//      camera ............. "function buildCamera" fly rail vs walk camera
+//      resize ............. "function resize"  render targets + pixel budget
+//      overlay/HUD ........ "function drawHUD" radar HUD; "drawPath" the rails
+//      render ............. "function draw"    the two scene passes + boids
+//      walk ............... "function updateWalk" WASD movement
+//      main loop .......... "function loop"    advance, draw, re-plan
+//      controls ........... "function setU"    slider/button wiring
+//      input .............. "applyDrag"        mouse / touch / keyboard
+//      boids .............. "boid swarm plumbing" init/step/render the swarm
+//      boot ............... "async function boot" fetch shaders, start loop
+// ============================================================================
 const canvas=document.getElementById('gl');
 const stage=document.getElementById('stage');
 const overlay=document.getElementById('pathOverlay');
 const octx=overlay.getContext('2d');
 const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
 
+// Session state: camera mode and playback, render scaling, the two clocks that
+// drive terrain evolution, the seed, the planned flight loop and traversal
+// distance, plus the walk-camera pose and free-look offsets.
 /* ---- state ---- */
 const S={
   mode:'fly', playing:true,
@@ -19,14 +82,20 @@ const S={
   lookYaw:0, lookPitch:0,
   keys:{}, dragging:false, lx:0, ly:0,
 };
+// Shader uniform values, one per slider: terrain shape (freq/octaves/height/
+// threshold/slope), colour region, clear bubble around the camera, morph amount,
+// edge glow and look, and post/quality knobs. Pushed into the scene shader each
+// frame; PLAN_KEYS below marks the ones that force a flight re-plan when changed.
 const U={
   uFreq:0.07, uOct:2, uHeight:22, uThresh:12, uSlope:0.06, uRegion:14,
   uClearR:2, uMorphAmt:1.1,
   uEdgeGlow:1.9, uEdgeW:0.07, uBaseBright:0.62, uSat:1.0, uDuotone:0,
   uBloom:0.2, uScan:0.12, uFog:0.02, uFocal:1.0, uMaxSteps:150,
 };
+// CW/CH are the stage CSS size; RW/RH the render buffer size (scaled down).
 let CW=2,CH=2,RW=2,RH=2;
 
+// Shader source, filled by boot() before initGL builds the programs.
 /* ---- shaders ---- */
 let VS='';
 
@@ -38,6 +107,8 @@ let POST_FS='';
 let BOID_SIM_FS='';
 let BOID_VS='';
 let BOID_FS='';
+// Compile one shader stage (logs the source on error). prog() links a program
+// pairing the shared fullscreen vertex shader with the given fragment source.
 /* ---- gl helpers ---- */
 function sh(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
   if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s),src);}
@@ -46,6 +117,9 @@ function prog(fs){const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHAD
   if(!gl.getProgramParameter(p,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(p));}
   return p;}
 
+// Build the scene and post programs, an empty VAO (the vertex shader generates
+// its own triangle from gl_VertexID), and cache uniform locations. floatRT
+// records whether float render targets exist (needed by the boid swarm).
 let sceneProg,postProg,vao,fbo,fboTex,fboW=0,fboH=0,floatRT=false;
 function initGL(){
   if(!gl){const l=document.getElementById('ctrlLegend');if(l){l.style.display='block';l.textContent='WebGL2 not available in this browser';}return false;}
@@ -61,6 +135,8 @@ function initGL(){
 }
 let sceneLoc,postLoc;
 
+// (Re)create the scene render target. RGBA16F when float RTs exist (so the alpha
+// depth channel keeps range), else RGBA8. Linear filtering feeds the post pass.
 function makeFBO(w,h){
   if(fbo){gl.deleteFramebuffer(fbo);gl.deleteTexture(fboTex);}
   fboTex=gl.createTexture();
@@ -79,6 +155,7 @@ function makeFBO(w,h){
   fboW=w;fboH=h;
 }
 
+// Plain array vec3 math used by the planner and camera.
 /* ---- vector helpers ---- */
 const v=(x,y,z)=>[x,y,z];
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
@@ -88,6 +165,9 @@ const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0
 const norm=a=>{const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];};
 function smoothstep(a,b,x){x=Math.min(1,Math.max(0,(x-a)/(b-a)));return x*x*(3-2*x);}
 // hold-then-snap: terrain holds frozen for most of a cycle, then rapidly morphs to the next state
+// Terrain evolution timing: hold the field frozen for most of a cycle, then snap
+// quickly to the next integer state. Both the shader morph time and the planner
+// read this so the geometry only shifts during the brief snap window.
 function steppedMorph(phase){
   const cyclePeriod=1/Math.max(S.morphSpeed,1e-4);
   const snapFrac=Math.min(0.55, 1.8/cyclePeriod);   // ~1.8s snap regardless of cycle length
@@ -96,12 +176,18 @@ function steppedMorph(phase){
 }
 
 // seed offset directions — randomize explores ONE OF THREE distinct axes through noise space
+// Three near-orthogonal directions through noise space; the seed slides along one
+// so Randomize (which picks an axis) explores genuinely different terrains.
 const SEED_DIRS=[[1.7,0.25,0.45],[0.4,1.55,0.6],[0.55,0.4,1.7]];
+// The current seed offset added to every noise sample; shared by shader and JS.
 function seedVec(){ const d=SEED_DIRS[S.seedAxis]||SEED_DIRS[0]; return [S.seed*d[0], S.seed*d[1], S.seed*d[2]]; }
 
 /* ════════ FLIGHT PLANNER — plots an obstacle-avoiding trajectory through the field ════════ */
 const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
 const fract=x=>x-Math.floor(x);
+// jhash13 / jvnoise are the JS twins of the shader's hash13 / vnoise value noise;
+// they must stay bit-for-bit in step with scene.frag.glsl so the planner sees the
+// same terrain the GPU draws.
 // density field ported from the shader so the planner can "see" the voxels it must avoid
 function jhash13(px,py,pz){
   let x=fract(px*0.1031), y=fract(py*0.1031), z=fract(pz*0.1031);
@@ -119,6 +205,9 @@ function jvnoise(x,y,z){
   const x00=L(n000,n100,ux),x10=L(n010,n110,ux),x01=L(n001,n101,ux),x11=L(n011,n111,ux);
   return L(L(x00,x10,uy),L(x01,x11,uy),uz);
 }
+// The signed voxel density in JS: positive is solid. fBm of value noise minus a
+// height slope and threshold, offset by morph time. Mirrors density() in the
+// scene and boid-sim shaders.
 function densJS(x,y,z,morphT){
   const sv=seedVec();
   let qx=x*U.uFreq+sv[0], qy=y*U.uFreq+sv[1], qz=z*U.uFreq+sv[2];
@@ -135,6 +224,8 @@ function gradN(x,y,z,m){
                 densJS(x,y+e,z,m)-densJS(x,y-e,z,m),
                 densJS(x,y,z+e,m)-densJS(x,y,z-e,m) ]);
 }
+// The unrelaxed reference circuit: a smooth closed Lissajous-like loop the
+// planner tethers to so the relaxed path stays a coherent tour.
 // base circuit (2π-periodic closed loop)
 function baseLoop(s){
   return [ 90*Math.sin(s) + 38*Math.sin(2*s+1.3) + 16*Math.sin(3*s+0.5),
@@ -145,6 +236,13 @@ function baseLoop(s){
 // Each node feels: a smoothing pull (taut curve), repulsion away from solids — sampled at the
 // node AND the mid-points to its neighbours so the smoothed spline itself clears walls — and a
 // weak tether to the base route so it stays a coherent circuit instead of drifting off.
+// Plan a flight loop through the current terrain. Sample the base circuit at K
+// nodes, then iterate an elastic-band relaxation: each node feels a smoothing
+// pull toward its neighbours' midpoint, repulsion out of any solid (sampled at
+// the node and both midpoints so the smoothed spline itself clears walls), and a
+// weak tether back to the base route. Build the traversable spline, then, on a
+// re-plan, re-anchor to the camera's current position and capture the residual
+// offset so the camera drifts onto the new route instead of snapping.
 function planFlight(){
   const morphT = (S.mode==='fly') ? steppedMorph(S.morphClock) : S.bakeMorph;
   S.planMorph = morphT;
@@ -188,6 +286,7 @@ function planFlight(){
   }
   S.needPlan=false; S.lastPlanMs=performance.now();
 }
+// Catmull-Rom spline point between p1 and p2 (p0,p3 are the neighbours).
 // Catmull-Rom through the closed waypoint list → dense arc-length-parameterised samples
 function crom(p0,p1,p2,p3,t){
   const t2=t*t,t3=t2*t; const out=[0,0,0];
@@ -196,6 +295,8 @@ function crom(p0,p1,p2,p3,t){
   }
   return out;
 }
+// Turn the relaxed waypoints into a dense Catmull-Rom polyline with a cumulative
+// arc-length table, so loopPos() can look up a point by distance travelled.
 function buildLoop(wp){
   const K=wp.length, SUB=12; const pts=[];
   for(let k=0;k<K;k++){
@@ -206,6 +307,8 @@ function buildLoop(wp){
   for(let i=0;i<N;i++){ const a=pts[i],b=pts[(i+1)%N]; cum[i+1]=cum[i]+Math.hypot(b[0]-a[0],b[1]-a[1],b[2]-a[2]); }
   S.loop={pts,cum,total:cum[N],N};
 }
+// Position on the loop at arc-length d (wraps). Binary-searches the cumulative
+// table, then lerps within the found segment.
 function loopPos(d){
   const Lp=S.loop; if(!Lp) return [0,38,0];
   let x=d%Lp.total; if(x<0)x+=Lp.total;
@@ -216,11 +319,17 @@ function loopPos(d){
   const a=Lp.pts[i], b=Lp.pts[(i+1)%Lp.N];
   return [a[0]+(b[0]-a[0])*f, a[1]+(b[1]-a[1])*f, a[2]+(b[2]-a[2])*f];
 }
+// Plan a route if none exists or one was requested.
 function ensurePlan(){ if(S.needPlan || !S.loop) planFlight(); }
 
 
+// Camera basis (origin, right, up, forward) rebuilt each frame by buildCamera.
 let camRO=[0,16,0], camR=[1,0,0], camU=[0,1,0], camF=[0,0,-1];
 let lastDt=0.016;
+// Build the camera. In fly mode ride the planned loop: eye above the rail,
+// forward along the tangent, banking into curvature (coordinated turn), with a
+// slow hand-over drift after a re-plan and an optional free-look offset. In walk
+// mode build a first-person basis from yaw/pitch.
 function buildCamera(){
   if(S.mode==='fly'){
     ensurePlan();
@@ -267,6 +376,9 @@ function buildCamera(){
   }
 }
 
+// Size the render buffer to the stage times res_scale times DPR, then clamp the
+// total pixel count to a budget so the per-pixel raymarch stays tractable on 4K.
+// The overlay canvas is sized separately at a higher cap for crisp HUD text.
 /* ---- resize ---- */
 function resize(){
   CW=stage.clientWidth; CH=stage.clientHeight;
@@ -291,6 +403,8 @@ window.addEventListener('orientationchange',()=>setTimeout(resize,120));
 window.addEventListener('load',()=>setTimeout(resize,80));
 if(document.fonts&&document.fonts.ready){document.fonts.ready.then(()=>resize());}
 
+// Is world point P hidden behind terrain from the eye? March cell by cell toward
+// P and report the first solid voxel; used to occlude the drawn flight path.
 /* ---- trajectory overlay: project the planned path to screen, occluded by geometry ---- */
 function pathOccluded(P,morphT){
   // march from the eye toward P; if the voxel CELL we pass is solid (what the renderer draws),
@@ -307,6 +421,9 @@ function pathOccluded(P,morphT){
 }
 // subtle Oblivion-radar-style HUD: trajectory readouts, reticle, corner brackets, scanning radar.
 // original implementation (not a port) — low-alpha cyan, house mono type.
+// Draw the radar-style HUD onto the overlay: corner brackets, a trajectory
+// readout panel (status, velocity, heading, bank, position, track progress), a
+// centre reticle, and a sweeping radar with blips. Purely decorative.
 function drawHUD(ctx,W,H){
   const now=performance.now()*0.001;
   const C=a=>'rgba(150,232,248,'+a+')';
@@ -371,6 +488,9 @@ function drawHUD(ctx,W,H){
   ctx.fillStyle=C(0.40); ctx.fillText('RNG 120u',rx+R+8,ry+R+4); ctx.textAlign='left';
   ctx.restore();
 }
+// Draw the flight path and HUD on the 2D overlay. Project the loop ahead of the
+// camera to screen, skipping occluded segments, and stroke ten offset rails plus
+// cross-ties in additive layers so it reads as a glowing 3D track. Then the HUD.
 function drawPath(){
   const ctx=octx; if(!ctx) return;
   ctx.setTransform(1,0,0,1,0,0);
@@ -379,6 +499,8 @@ function drawPath(){
   if(S.mode!=='fly') return;
   const odpr=overlay._dpr||1; ctx.setTransform(odpr,0,0,odpr,0,0);
   const W=CW,H=CH, focal=U.uFocal, morphT=steppedMorph(S.morphClock);
+  // Project a world point to overlay pixels using the same camera basis and
+  // focal length as the shader; returns null if it is behind the eye.
   function proj(P){
     const rel=[P[0]-camRO[0],P[1]-camRO[1],P[2]-camRO[2]];
     const vz=dot(rel,camF); if(vz<=0.1) return null;
@@ -443,12 +565,17 @@ function drawPath(){
   drawHUD(ctx,W,H);
 }
 
+// One rendered frame: build the camera, raymarch the scene into the FBO (pass 1),
+// composite it to screen with the CRT post shader (pass 2), then step and draw
+// the boid swarm over the result.
 /* ---- render ---- */
 function draw(){
   if(!gl) return;
   buildCamera();
   const morphT = (S.mode==='fly') ? steppedMorph(S.morphClock) : S.bakeMorph;
 
+  // Pass 1: raymarch the voxel scene into the offscreen FBO. Push the camera
+  // basis and every terrain/look uniform, then draw the full-screen triangle.
   // pass 1 → scene fbo
   gl.bindFramebuffer(gl.FRAMEBUFFER,fbo);
   gl.viewport(0,0,RW,RH);
@@ -480,6 +607,8 @@ function draw(){
   gl.uniform1f(sceneLoc.uFog,U.uFog);
   gl.drawArrays(gl.TRIANGLES,0,3);
 
+  // Pass 2: composite the FBO to the screen through the CRT post shader (FXAA,
+  // bloom, tonemap, optional scanlines).
   // pass 2 → screen
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   gl.viewport(0,0,RW,RH);
@@ -497,6 +626,8 @@ function draw(){
   if(BO.on){ if(S.playing) boidsStep(lastDt, morphT); boidsRender(); }
 }
 
+// WASD free flight: build a forward/right basis from yaw/pitch, sum the pressed
+// movement keys (space/shift for up/down), and advance the walk position.
 /* ---- walk update ---- */
 function updateWalk(dt){
   const cp=Math.cos(S.pitch),sp=Math.sin(S.pitch),cy=Math.cos(S.yaw),sy=Math.sin(S.yaw);
@@ -510,6 +641,9 @@ function updateWalk(dt){
   if(l>1e-4){mv=mul(mv,1/l);S.pos=add(S.pos,mul(mv,S.moveSpeed*dt));}
 }
 
+// Main animation loop: advance traversal distance and the morph clock in fly
+// mode, request a re-plan only once the terrain has snapped to a new state, ease
+// the free-look back to centre, run walk movement, then render and update the HUD.
 /* ---- loop ---- */
 let last=0,fc=0,ft=0;
 function loop(time){
@@ -540,6 +674,9 @@ function loop(time){
   document.getElementById('st-pos').textContent=`${p[0].toFixed(0)}, ${p[1].toFixed(0)}, ${p[2].toFixed(0)}`;
 }
 
+// Slider/readout wiring. sg paints a range fill. PLAN_KEYS lists the terrain
+// uniforms whose change must trigger a flight re-plan. setU/setUi write a float or
+// int uniform, setF writes a state field, and the rest are special-cased sliders.
 /* ---- controls ---- */
 function sg(el){if(!el)return;const mn=+el.min,mx=+el.max;el.style.setProperty('--pct',((el.value-mn)/(mx-mn)*100)+'%');}
 const PLAN_KEYS={uFreq:1,uOct:1,uHeight:1,uThresh:1,uSlope:1,uMorphAmt:1};
@@ -551,6 +688,9 @@ function setMorph(el){S.morphSpeed=+el.value;const v=+el.value;document.getEleme
 function setResScale(el){S.resScale=+el.value;document.getElementById('vl-resscale').textContent=(+el.value).toFixed(2);sg(el);resize();}
 window.setU=setU;window.setUi=setUi;window.setF=setF;window.setClear=setClear;window.setResScale=setResScale;window.setMorph=setMorph;
 
+// Switch between fly and walk. Entering walk freezes the terrain at the current
+// morph state and seeds the walk camera from the current flythrough vantage, so
+// the takeover is seamless.
 function setMode(m){
   S.mode=m;
   document.getElementById('btn-fly').classList.toggle('active',m==='fly');
@@ -569,6 +709,7 @@ function setMode(m){
   }
 }
 window.setMode=setMode;
+// Show the on-screen control hint on desktop, with mode-specific text.
 // on-screen control legend — clearly states WASD flight on desktop
 function isDesktop(){ return window.matchMedia('(pointer:fine)').matches && window.innerWidth>980; }
 function updateLegend(){
@@ -586,22 +727,30 @@ function updateLegend(){
   }
 }
 window.addEventListener('resize',updateLegend);
+// Pause/resume traversal and terrain evolution.
 function togglePlay(){S.playing=!S.playing;const b=document.getElementById('btn-play');b.textContent=S.playing?'❚❚ Pause':'▶ Play';b.classList.toggle('active',S.playing);}
 window.togglePlay=togglePlay;
+// Seed control: set the noise offset, update readouts, and request a re-plan.
 const AXL=['X','Y','Z'];
 function setSeed(el){S.seed=+el.value;const v=(+el.value).toFixed(1);document.getElementById('vl-seed').textContent=v;document.getElementById('st-seed').textContent=v+'·'+AXL[S.seedAxis];sg(el);S.needPlan=true;if(S.mode==='walk')S.bakeMorph=steppedMorph(S.morphClock);}
 window.setSeed=setSeed;
+// Randomize: pick a new noise axis and a random seed value along it.
 function randomizeSeed(){S.seedAxis=Math.floor(Math.random()*3);const sl=document.getElementById('sl-seed');sl.value=(Math.random()*200).toFixed(1);setSeed(sl);}
 window.randomizeSeed=randomizeSeed;
+// Rebake: jump the morph clock forward to a fresh frozen terrain state.
 function rebake(){S.morphClock=Math.round(S.morphClock)+1+Math.floor(Math.random()*5);S.bakeMorph=steppedMorph(S.morphClock);S.needPlan=true;}
 window.rebake=rebake;
+// Palette vs duotone colour mode.
 function setPalette(d){U.uDuotone=d;document.getElementById('btn-pal-full').classList.toggle('active',d===0);document.getElementById('btn-pal-duo').classList.toggle('active',d===1);}
 window.setPalette=setPalette;
+// Toggle scanlines (read in the post pass) and the drawn flight path.
 function togScan(btn){btn.classList.toggle('on');}
 window.togScan=togScan;
 function togPath(btn){btn.classList.toggle('on');S.showPath=btn.classList.contains('on');}
 window.togPath=togPath;
 
+// Drag-to-look: rotate the walk camera, or add a clamped free-look offset in fly
+// mode. Wired to mouse and single-finger touch below; wheel adjusts FOV.
 /* ---- pointer / keyboard ---- */
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function applyDrag(dx,dy){
@@ -636,6 +785,8 @@ canvas.addEventListener('touchstart',e=>{ const t=e.touches[0]; S.dragging=true;
 canvas.addEventListener('touchmove',e=>{ if(!S.dragging)return; const t=e.touches[0]; applyDrag(t.clientX-S.lx,t.clientY-S.ly); S.lx=t.clientX; S.ly=t.clientY; e.preventDefault(); },{passive:false});
 window.addEventListener('touchend',()=>S.dragging=false);
 
+// Keyboard: a movement key in fly mode seamlessly takes over into walk mode and
+// then feeds updateWalk via the S.keys map.
 window.addEventListener('keydown',e=>{
   const k=e.key.toLowerCase();
   const isMove = ['w','a','s','d',' '].includes(k) || k==='shift';
@@ -651,11 +802,19 @@ window.addEventListener('keyup',e=>{
   if(k==='shift')S.keys['shift']=false;
 });
 
+// Boid swarm state. Positions and velocities live in W×W float textures (N boids)
+// that ping-pong: posT/velT hold two copies, fbo the two MRT framebuffers, cur
+// the current read index. loc/ploc cache the sim and draw uniform locations.
 /* ════════ boid swarm plumbing ════════ */
 const BO={ W:280, N:280*280, speed:16, avoid:6, cling:0.4, cohesion:1.7, wander:0.2, glow:1.4, region:130,
   on:true, prog:null, pts:null, posT:[], velT:[], fbo:[], cur:0, loc:{}, ploc:{} };
+// Link a program from explicit vertex and fragment sources (used for both boid
+// programs, which do not share the scene's vertex shader).
 function linkP(vsSrc,fsSrc){ const p=gl.createProgram(); gl.attachShader(p,sh(gl.VERTEX_SHADER,vsSrc)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,fsSrc)); gl.linkProgram(p);
   if(!gl.getProgramParameter(p,gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(p)); return p; }
+// Set up the swarm: needs float render targets (else disable). Link the sim and
+// point programs, seed the position/velocity textures with random boids around
+// the field, and attach the two MRT framebuffers for ping-pong.
 function boidsInit(){
   if(!floatRT){ BO.on=false; const t=document.getElementById('tog-swarm'); if(t){ t.classList.remove('on'); t.textContent='✦ Swarm — float RT needed'; t.disabled=true; } return; }
   BO.prog=linkP(VS,BOID_SIM_FS);
@@ -677,6 +836,9 @@ function boidsInit(){
   gl.bindFramebuffer(gl.FRAMEBUFFER,null); BO.cur=0;
   const c=document.getElementById('vl-bcount'); if(c)c.textContent=(N/1000).toFixed(0)+'k';
 }
+// Advance the swarm one tick: render into the OTHER ping-pong target with the
+// sim shader (which reads the current pos/vel textures and the terrain uniforms),
+// writing new positions and velocities to both MRT attachments, then flip cur.
 function boidsStep(dt,morphT){
   if(!BO.on||!BO.prog) return;
   gl.bindFramebuffer(gl.FRAMEBUFFER,BO.fbo[1-BO.cur]);
@@ -695,6 +857,9 @@ function boidsStep(dt,morphT){
   gl.drawArrays(gl.TRIANGLES,0,3);
   gl.bindFramebuffer(gl.FRAMEBUFFER,null); BO.cur=1-BO.cur;
 }
+// Draw the swarm additively over the composited scene. The point vertex shader
+// reads each boid's position by gl_VertexID; the fragment shader discards points
+// that fall behind the scene's depth (fboTex alpha), so terrain occludes them.
 function boidsRender(){
   if(!BO.on||!BO.pts) return;
   gl.viewport(0,0,RW,RH);
@@ -713,10 +878,13 @@ function boidsRender(){
   gl.drawArrays(gl.POINTS,0,BO.N);
   gl.disable(gl.BLEND);
 }
+// Swarm slider write and on/off toggle.
 function setB(key,el,dp){ BO[key]=+el.value; const o=document.getElementById('vl-'+el.id.slice(3)); if(o)o.textContent=(+el.value).toFixed(dp); sg(el); }
 function togSwarm(btn){ if(btn.disabled)return; btn.classList.toggle('on'); BO.on=btn.classList.contains('on'); }
 window.setB=setB; window.togSwarm=togSwarm;
 
+// Boot: fetch all six shader sources, build the GL programs and the swarm, wire
+// slider fills and readouts, then start the render loop.
 /* ---- boot ---- */
 async function boot(){
   VS = await (await fetch(new URL('shaders/fullscreen.vert.glsl', document.baseURI))).text();

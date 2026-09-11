@@ -1,8 +1,16 @@
 #version 300 es
+// boid.frag.glsl — swarm point, fragment stage
+//
+//   Shade each boid point: discard it if it is behind the terrain (compare the
+//   boid's view depth against the scene depth in uDepth's alpha). Small boids
+//   draw as a soft dot, larger ones as a flickering "falling code" glyph.
+//   Colour runs matrix-green to cyan with speed; fog fades it into the distance.
+//   Drawn with additive blending, so this only ever adds light.
 precision highp float;
 in float vVZ; in float vSeed; in float vT; in float vSize;
 uniform sampler2D uDepth; uniform vec2 uRes; uniform float uGlow,uFog,uTime;
 out vec4 o;
+// Procedural 3x5 dot-matrix glyph, seeded per boid, for the falling-code look.
 float glyph(vec2 uv,float seed){
   vec2 g=floor(uv*vec2(3.0,5.0)); float gi=g.x+g.y*3.0;
   float on=step(0.45, fract(sin((gi+1.0)*12.9898 + seed*78.233)*43758.5453));

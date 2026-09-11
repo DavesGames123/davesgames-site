@@ -1,42 +1,115 @@
+// ============================================================================
+//  PLANET FORGE  ·  procedural planet texture generator (CPU noise → PBR maps)
+// ----------------------------------------------------------------------------
+//  Everything but the atmosphere is computed on the CPU. For each planet type
+//  a generator samples a 3D simplex-noise stack on the unit sphere, once per
+//  texel of a 2:1 equirectangular map, producing height, albedo, specular and
+//  emissive. Those become five canvases (albedo, depth, normal, specular,
+//  emissive) that feed a Three.js MeshStandardMaterial on a sphere. A thin
+//  fresnel shell adds the atmosphere (shaders/atmosphere.*.glsl).
+//
+//  GENERATION PIPELINE
+//  ───────────────────
+//      type + temp + seed ─▶ seedN() permutation ─▶ GEN[type](u,v,temp)
+//                                                        │  per texel
+//                                   ┌────────────────────┴───────────────┐
+//                                   ▼                                     ▼
+//                       height / specular / emissive              albedo RGB
+//                                   │                                     │
+//               genNorm() from height ─▶ normal map                       │
+//                                   ▼                                     ▼
+//                    5 canvases: depth · normal · specular · emissive · albedo
+//                                   │
+//                                   ▼
+//              setAct('render') binds them to MeshStandardMaterial (pmat)
+//                                   ▼
+//                    Three.js sphere + atmosphere shell ─▶ <canvas>
+//
+//  NOISE STACK
+//  ───────────
+//      n3()  3D simplex          fbm()  fractal sum      rig()  ridged
+//      wrp() single domain warp  mw()   multi warp       uv2s() uv → sphere
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ────────────────────────────────────────────────────────────────────────
+//      shader fetch ....... "fetch(new URL"     load atmosphere .glsl
+//      simplex ............ "SIMPLEX 3D"         seedN + n3 noise
+//      noise utils ........ "NOISE UTILS"        fbm / ridged / warp / helpers
+//      palettes ........... "TEMPERATURE-SHIFTED" per-type gradient stops
+//      atmosphere colour .. "atmoColor"          rim tint per type+temp
+//      generators ......... "GENERATORS"         GEN[type](u,v,temp) per texel
+//      map build .......... "MAP BUILD"          normals, float→canvas, generate
+//      three scene ........ "THREE.JS SCENE"     renderer, sphere, stars, sun
+//      controls ........... "// CONTROLS"        orbit, zoom, sun, toggles
+//      sidebar ............ "// SIDEBAR"         map switch, download, generate
+//      batch .............. "BATCH GENERATION"   queue → ZIP of many planets
+// ============================================================================
 (async () => {
 "use strict";
+// Fetch the atmosphere shell shader source before building the scene.
 const V_atmosphere = await (await fetch(new URL('shaders/atmosphere.vert.glsl', document.baseURI))).text();
 const F_atmosphere = await (await fetch(new URL('shaders/atmosphere.frag.glsl', document.baseURI))).text();
 
 "use strict";
+// Topbar clock: refresh the HH:MM:SS readout once a second.
 setInterval(()=>{document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8)},1000);
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // SIMPLEX 3D
 // ═══════════════════════════════════════════════════════════════════════════════
+// GR: the 12 gradient directions for 3D simplex noise. PP is the doubled
+// permutation table; PM is the same indices folded into 0..11 to pick a GR row.
 const GR=[[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
 const PP=new Uint8Array(512),PM=new Uint8Array(512);
+// Seed the permutation tables. A deterministic LCG shuffles 0..255 so the same
+// seed always yields the same planet; PP/PM are rebuilt from that shuffle.
 function seedN(sd){const p=Array.from({length:256},(_,i)=>i);let s=(sd^0xdeadbeef)|0;const r=()=>{s=Math.imul(s,1103515245)+12345|0;return(s>>>16)&0x7fff};for(let i=255;i>0;i--){const j=r()%(i+1);[p[i],p[j]]=[p[j],p[i]]}for(let i=0;i<512;i++){PP[i]=p[i&255];PM[i]=PP[i]%12}}
+// 3D simplex noise, one value in roughly [-1,1]. Skew the point into the simplex
+// grid, find its enclosing tetrahedron corners, sum the gradient contributions
+// weighted by the radial falloff at each corner. This is the base of every map.
 function n3(x,y,z){const F=1/3,G=1/6,s=(x+y+z)*F,i=Math.floor(x+s),j=Math.floor(y+s),k=Math.floor(z+s),t=(i+j+k)*G,x0=x-i+t,y0=y-j+t,z0=z-k+t;let i1,j1,k1,i2,j2,k2;if(x0>=y0){if(y0>=z0){i1=1;j1=0;k1=0;i2=1;j2=1;k2=0}else if(x0>=z0){i1=1;j1=0;k1=0;i2=1;j2=0;k2=1}else{i1=0;j1=0;k1=1;i2=1;j2=0;k2=1}}else{if(y0<z0){i1=0;j1=0;k1=1;i2=0;j2=1;k2=1}else if(x0<z0){i1=0;j1=1;k1=0;i2=0;j2=1;k2=1}else{i1=0;j1=1;k1=0;i2=1;j2=1;k2=0}}const x1=x0-i1+G,y1=y0-j1+G,z1=z0-k1+G,x2=x0-i2+G*2,y2=y0-j2+G*2,z2=z0-k2+G*2,x3=x0-.5,y3=y0-.5,z3=z0-.5,ii=i&255,jj=j&255,kk=k&255;let n=0,t0=.6-x0*x0-y0*y0-z0*z0;if(t0>0){t0*=t0;const g=GR[PM[ii+PP[jj+PP[kk]]]];n+=t0*t0*(g[0]*x0+g[1]*y0+g[2]*z0)}let t1=.6-x1*x1-y1*y1-z1*z1;if(t1>0){t1*=t1;const g=GR[PM[ii+i1+PP[jj+j1+PP[kk+k1]]]];n+=t1*t1*(g[0]*x1+g[1]*y1+g[2]*z1)}let t2=.6-x2*x2-y2*y2-z2*z2;if(t2>0){t2*=t2;const g=GR[PM[ii+i2+PP[jj+j2+PP[kk+k2]]]];n+=t2*t2*(g[0]*x2+g[1]*y2+g[2]*z2)}let t3=.6-x3*x3-y3*y3-z3*z3;if(t3>0){t3*=t3;const g=GR[PM[ii+1+PP[jj+1+PP[kk+1]]]];n+=t3*t3*(g[0]*x3+g[1]*y3+g[2]*z3)}return 32*n}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // NOISE UTILS
 // ═══════════════════════════════════════════════════════════════════════════════
 const PI=Math.PI,TAU=PI*2;
+// Fractal Brownian motion: sum o octaves of n3, each at lacunarity l higher
+// frequency and gain p lower amplitude, starting at base frequency f. Gives the
+// soft, cloud-like relief used for continents and broad terrain.
 function fbm(x,y,z,o,l,p,f){let v=0,a=1,ff=f;for(let i=0;i<o;i++){v+=n3(x*ff,y*ff,z*ff)*a;ff*=l;a*=p}return v}
+// Ridged multifractal: fold each octave with 1-|noise| so ridges form sharp
+// crests, and weight later octaves by the previous one. Used for craters, ice
+// cracks, and mountain ridge lines.
 function rig(x,y,z,o,l,p,f){let v=0,a=1,ff=f,w=1;for(let i=0;i<o;i++){let s=1-Math.abs(n3(x*ff,y*ff,z*ff));s*=s*w;w=Math.min(1,Math.max(0,s*2));v+=s*a;ff*=l;a*=p}return v}
+// Domain warp: displace a point by noise sampled at large fixed offsets, so the
+// following noise looks pushed and swirled instead of grid-aligned.
 function wrp(x,y,z,f,a){return[x+n3(x*f+137,y*f+253,z*f+319)*a,y+n3(x*f+467,y*f+541,z*f+631)*a,z+n3(x*f+743,y*f+853,z*f+929)*a]}
+// Multi-warp: apply wrp n times at rising frequency and falling amplitude for a
+// mistier, more organic distortion (used by the ice giant).
 function mw(x,y,z,f,a,n){let p=[x,y,z],ff=f,aa=a;for(let i=0;i<n;i++){p=wrp(p[0],p[1],p[2],ff,aa);ff*=1.5;aa*=.6}return p}
+// Map equirectangular (u,v) in [0,1] to a point on the unit sphere. u is
+// longitude, v is latitude; sampling noise here avoids seams and pole pinching.
 function uv2s(u,v){const p=u*TAU,t=v*PI,st=Math.sin(t);return[st*Math.cos(p),Math.cos(t),st*Math.sin(p)]}
+// Small math helpers: clamp, scalar lerp, colour (vec3) lerp, and smoothstep.
 const cl=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 const lp=(a,b,t)=>a+(b-a)*t;
 const lc=(a,b,t)=>[lp(a[0],b[0],t),lp(a[1],b[1],t),lp(a[2],b[2],t)];
 const sm=(e,s,t)=>{const x=cl((t-e)/(s-e));return x*x*(3-2*x)};
+// Sample a gradient: find the stop pair bracketing t and lerp between them.
 function grd(stops,t){t=cl(t);for(let i=0;i<stops.length-1;i++){if(t<=stops[i+1][0]){const f=(t-stops[i][0])/(stops[i+1][0]-stops[i][0]);return lc(stops[i][1],stops[i+1][1],f)}}return stops[stops.length-1][1]}
-// Desaturate helper
+// Desaturate helper: mix colour c toward its luminance grey by amount a.
 function desat(c,a){const g=c[0]*.3+c[1]*.59+c[2]*.11;return lc(c,[g,g,g],a)}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TEMPERATURE-SHIFTED PALETTES
 // Each is a function(temp) returning gradient stops. temp 0=hot,1=warm,2=comfort,3=cool,4=cold
 // ═══════════════════════════════════════════════════════════════════════════════
+// Blend a hot palette toward a cold one by temperature t (0..4). Each PALS entry
+// keeps two gradients and interpolates per stop, so one type spans hot to cold.
 function mkPal(hot,cold,t){return hot.map((s,i)=>([s[0],lc(s[1],cold[i][1],t/4)]))}
 
+// Per-type palettes. Each is a function(temp) returning gradient stops used by
+// grd() to colour that surface; hot and cold variants blend by temperature.
 const PALS={
   selena(t){
     const hot=[[0,[.12,.04,.02]],[.2,[.22,.10,.06]],[.4,[.35,.18,.10]],[.6,[.44,.28,.18]],[.8,[.52,.36,.26]],[1,[.60,.44,.34]]];
@@ -78,6 +151,8 @@ const PALS={
 // ═══════════════════════════════════════════════════════════════════════════════
 // ATMOSPHERE COLORS per type+temp
 // ═══════════════════════════════════════════════════════════════════════════════
+// Atmosphere rim tint per planet type, blended by temperature. Feeds the shell
+// shader's uColor so each world gets a believable sky colour.
 function atmoColor(type,t){
   const T=t/4;
   if(type==='selena')return lc([.15,.08,.04],[.10,.10,.14],T);
@@ -93,7 +168,11 @@ function atmoColor(type,t){
 // ═══════════════════════════════════════════════════════════════════════════════
 // GENERATORS
 // ═══════════════════════════════════════════════════════════════════════════════
+// Surface generators, one per planet type. Each takes equirectangular (u,v) and
+// temperature t and returns one texel: {height, albedo, specular, emissive}. The
+// generate() loop calls the chosen entry for every texel of the map.
 const GEN={
+  // Moon (selena): ridged craters over broad relief, dust-grey palette.
   selena(u,v,t){
     const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1.8,.06);
     const r1=rig(wx,wy,wz,8,2,.48,3.5),r2=fbm(x,y,z,6,2.3,.4,12)*.14;
@@ -103,6 +182,7 @@ const GEN={
     return{height:h,albedo:col,specular:.03+cl(h)*.02,emissive:0};
   },
 
+  // Desert: broad dunes plus a fine grain, warm sand palette darkened in hollows.
   desert(u,v,t){
     const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1.5,.1);
     const broad=fbm(wx,wy,wz,7,2,.48,2)*.5+.5;
@@ -117,6 +197,8 @@ const GEN={
     return{height:h,albedo:col,specular:.03,emissive:0};
   },
 
+  // Earth-like: continents from warped fBm split at a sea level, latitude-banded
+  // biomes above water, ocean palette below, and city lights baked into emissive.
   terra(u,v,t){
     const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1.2,.18);
     const cont=fbm(wx,wy,wz,6,2.05,.44,1.6);
@@ -126,6 +208,8 @@ const GEN={
     const lat=Math.abs(y);
     const latN=cl(lat+fbm(x*6,y*6,z*6,3,2,.5,4)*.05);
 
+    // City lights (emissive): only on land, denser near coasts and mid-latitudes,
+    // clustered by a low-frequency mask; poles and deep interiors stay dark.
     let em=0;
     if(h>=sea){
       const cn=fbm(x*14,y*14,z*14,4,2,.5,9);
@@ -136,11 +220,13 @@ const GEN={
     }
     // Clouds
 
+    // Below sea level: colour by depth from the ocean palette, high specular.
     if(h<sea){
       const d=(sea-h)/sea;
       const opal=PALS.ocean(t);
       return{height:h,albedo:grd(opal,d),specular:.9,emissive:em};
     }
+    // Above sea level: land fraction lt drives biome and snow blending below.
     const lt=cl((h-sea)/(1-sea));
     const moist=cl(fbm(x*2.5,y*2.5,z*2.5,4,2,.5,1.2)*.5+.5);
     const lpal=PALS.land(t);
@@ -162,6 +248,7 @@ const GEN={
     return{height:h,albedo:col,specular:.04+moist*.05,emissive:em};
   },
 
+  // Ocean world: mostly water with rare shoals rising to sandy shallows.
   water(u,v,t){
     const[x,y,z]=uv2s(u,v),[wx,wy,wz]=wrp(x,y,z,1,.2);
     const h=fbm(wx,wy,wz,5,2,.45,1.5)*.3+.5;
@@ -174,6 +261,7 @@ const GEN={
     return{height:h,albedo:col,specular:.3,emissive:0};
   },
 
+  // Ice world: bright plains veined by ridged cracks, high glossy specular.
   ice(u,v,t){
     const[x,y,z]=uv2s(u,v);
     const base=fbm(x,y,z,6,2,.48,2)*.5+.5;
@@ -189,6 +277,8 @@ const GEN={
     return{height:h,albedo:col,specular:.3+cl(h)*.4,emissive:0};
   },
 
+  // Gas giant: latitude-locked bands (a sine of latitude), turbulence only at the
+  // band edges, longitudinal streaks, and occasional storm spots.
   gas_giant(u,v,t){
     const[x,y,z]=uv2s(u,v);
     // PROPER BANDING: regular latitude-locked bands
@@ -213,6 +303,7 @@ const GEN={
     return{height:val,albedo:col,specular:.08+storm*.1,emissive:0};
   },
 
+  // Ice giant: fewer, softer bands under heavy domain warp for a hazy blue look.
   ice_giant(u,v,t){
     const[x,y,z]=uv2s(u,v);
     const lat=y;
@@ -238,11 +329,21 @@ const GEN={
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAP BUILD
 // ═══════════════════════════════════════════════════════════════════════════════
+// Build a tangent-space normal map from the height map with a Sobel filter. The
+// X gradient wraps in longitude (seamless) and clamps in latitude; encode the
+// slope vector into RGB. s scales the bump strength.
 function genNorm(hm,w,h,s){s=s||2.5;const d=new Uint8ClampedArray(w*h*4);const g=(px,py)=>{px=((px%w)+w)%w;py=Math.max(0,Math.min(h-1,py));return hm[py*w+px]};for(let y=0;y<h;y++)for(let x=0;x<w;x++){const l=g(x-1,y-1)+g(x-1,y)*2+g(x-1,y+1),r=g(x+1,y-1)+g(x+1,y)*2+g(x+1,y+1),t=g(x-1,y-1)+g(x,y-1)*2+g(x+1,y-1),b=g(x-1,y+1)+g(x,y+1)*2+g(x+1,y+1),dx=(r-l)*s,dy=(b-t)*s,ln=Math.sqrt(dx*dx+dy*dy+1),i=(y*w+x)*4;d[i]=(-dx/ln*.5+.5)*255|0;d[i+1]=(-dy/ln*.5+.5)*255|0;d[i+2]=(1/ln*.5+.5)*255|0;d[i+3]=255}return d}
+// Float array → grayscale RGBA bytes (depth and specular maps).
 function f2g(a,w,h){const d=new Uint8ClampedArray(w*h*4);for(let i=0;i<a.length;i++){const v=cl(a[i])*255|0,j=i*4;d[j]=v;d[j+1]=v;d[j+2]=v;d[j+3]=255}return d}
+// RGBA bytes → a canvas element via putImageData.
 function d2c(r,w,h){const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').putImageData(new ImageData(r,w,h),0,0);return c}
+// Canvas → Three.js texture. Repeat in longitude, clamp in latitude to match the
+// seam handling in the maps.
 function c2t(c){const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.wrapT=THREE.ClampToEdgeWrapping;return t}
 
+// Generate all five maps for one planet. Loop every texel in latitude bands of B
+// rows, yield to the browser between bands (so the progress bar animates), then
+// normalize height, derive the normal map, and pack emissive with a warm tint.
 async function generate(type,temp,seed,width,prog){
   const H=width/2;seedN(seed);const gen=GEN[type];
   const hm=new Float32Array(width*H),sp=new Float32Array(width*H),em=new Float32Array(width*H),al=new Uint8ClampedArray(width*H*4);
@@ -255,6 +356,8 @@ async function generate(type,temp,seed,width,prog){
     }
     prog(ey/H);await new Promise(r=>requestAnimationFrame(r));
   }
+  // Normalize the raw height range to 0..1 so the depth/normal maps use the full
+  // dynamic range regardless of the generator's absolute output.
   let mn=1e9,mx=-1e9;for(let i=0;i<hm.length;i++){if(hm[i]<mn)mn=hm[i];if(hm[i]>mx)mx=hm[i]}
   const rng=mx-mn||1,hmN=new Float32Array(hm.length);for(let i=0;i<hm.length;i++)hmN[i]=(hm[i]-mn)/rng;
   const emD=new Uint8ClampedArray(width*H*4);
@@ -266,6 +369,8 @@ async function generate(type,temp,seed,width,prog){
 // ═══════════════════════════════════════════════════════════════════════════════
 // THREE.JS SCENE
 // ═══════════════════════════════════════════════════════════════════════════════
+// Renderer: ACES filmic tone mapping and a dark clear colour so the lit planet
+// reads against space. Mounted inside #three-mount, sized to that element.
 const mount=document.getElementById('three-mount');
 const ren=new THREE.WebGLRenderer({antialias:true});
 ren.setSize(mount.clientWidth,mount.clientHeight);
@@ -275,16 +380,21 @@ ren.toneMapping=THREE.ACESFilmicToneMapping;
 ren.toneMappingExposure=1.0;
 mount.appendChild(ren.domElement);
 
+// Scene and camera. The camera sits on +Z looking at the origin; wheel zoom
+// moves it along Z between fixed limits.
 const scn=new THREE.Scene();
 const cam=new THREE.PerspectiveCamera(38,mount.clientWidth/mount.clientHeight,.1,200);
 cam.position.z=3;
 
-// Planet
+// Planet mesh. A high-tessellation sphere with a standard PBR material; setAct()
+// swaps in the generated albedo / normal / roughness / emissive maps.
 const pgeo=new THREE.SphereGeometry(1,256,128);
 const pmat=new THREE.MeshStandardMaterial({color:0x1c2436,roughness:.9,metalness:0});
 const pmsh=new THREE.Mesh(pgeo,pmat);scn.add(pmsh);
 
-// Atmosphere rim shell
+// Atmosphere shell: a slightly larger sphere drawn additively with the fresnel
+// rim shader. Hidden until a planet exists; uColor/uIntensity/uPow are set per
+// type after generate() finishes.
 const ageo=new THREE.SphereGeometry(1.025,64,32);
 const amat=new THREE.ShaderMaterial({
   uniforms:{
@@ -299,17 +409,19 @@ const amat=new THREE.ShaderMaterial({
 });
 const amsh=new THREE.Mesh(ageo,amat);amsh.visible=false;scn.add(amsh);
 
-// Lighting
+// Lighting: a faint blue ambient fill plus a warm directional sun; the sun is
+// the key light whose angle the sliders control.
 const amb=new THREE.AmbientLight(0x121828,0.06);scn.add(amb);
 const sun=new THREE.DirectionalLight(0xfff0d0,3.0);scn.add(sun);
 
-// Stars
+// Starfield: 5000 points scattered on random shells around the scene.
 const sbuf=new THREE.BufferGeometry(),sv=[];
 for(let i=0;i<5000;i++){const r=15+Math.random()*80,t=Math.random()*TAU,p=Math.acos(2*Math.random()-1);sv.push(r*Math.sin(p)*Math.cos(t),r*Math.sin(p)*Math.sin(t),r*Math.cos(p))}
 sbuf.setAttribute('position',new THREE.Float32BufferAttribute(sv,3));
 scn.add(new THREE.Points(sbuf,new THREE.PointsMaterial({color:0xb0b8d0,size:.06,sizeAttenuation:true})));
 
-// Sun pos
+// Sun direction from the two spherical angles (azimuth phi, polar theta). Places
+// the directional light and updates the atmosphere shader's sun uniform together.
 let sunPhi=40*PI/180,sunTh=65*PI/180;
 function updSun(){
   const st=Math.sin(sunTh);
@@ -319,14 +431,20 @@ function updSun(){
 }
 updSun();
 
+// Drag state: d=dragging, lx/ly=last pointer, rx/ry=planet rotation. When not
+// dragging the planet spins slowly on its own.
 const dr={d:false,lx:0,ly:0,rx:.2,ry:0};
+// Render loop: idle auto-spin, apply rotation to planet and atmosphere, draw.
 function anim(){requestAnimationFrame(anim);if(!dr.d)dr.ry+=.0008;pmsh.rotation.x=dr.rx;pmsh.rotation.y=dr.ry;amsh.rotation.x=dr.rx;amsh.rotation.y=dr.ry;ren.render(scn,cam)}
 anim();
+// Keep the camera aspect and renderer size matched to the mount element.
 window.addEventListener('resize',()=>{const w=mount.clientWidth,h=mount.clientHeight;cam.aspect=w/h;cam.updateProjectionMatrix();ren.setSize(w,h)});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONTROLS
 // ═══════════════════════════════════════════════════════════════════════════════
+// Viewport pointer + wheel: drag rotates the planet (pitch clamped), wheel zooms
+// the camera along Z within limits.
 const vp=document.getElementById('viewport');
 vp.addEventListener('pointerdown',e=>{dr.d=true;dr.lx=e.clientX;dr.ly=e.clientY});
 vp.addEventListener('pointermove',e=>{if(!dr.d)return;dr.ry+=(e.clientX-dr.lx)*.005;dr.rx+=(e.clientY-dr.ly)*.005;dr.rx=Math.max(-1.4,Math.min(1.4,dr.rx));dr.lx=e.clientX;dr.ly=e.clientY});
@@ -334,18 +452,23 @@ vp.addEventListener('pointerup',()=>{dr.d=false});
 vp.addEventListener('pointerleave',()=>{dr.d=false});
 vp.addEventListener('wheel',e=>{e.preventDefault();cam.position.z=cl(cam.position.z+e.deltaY*.003,1.5,8)},{passive:false});
 
+// Sun angle sliders (degrees → radians), each re-derives the sun direction.
 document.getElementById('rng-phi').oninput=function(){sunPhi=+this.value*PI/180;updSun()};
 document.getElementById('rng-theta').oninput=function(){sunTh=+this.value*PI/180;updSun()};
 
+// Normal-map strength slider, applied live to the material's normalScale.
 let normStr=0.4;
 document.getElementById('rng-norm').oninput=function(){normStr=+this.value/10;if(pmat.normalMap){pmat.normalScale.set(normStr,normStr);pmat.needsUpdate=true}};
 
+// Toggles: city lights (emissive intensity) and atmosphere shell visibility.
+// btn-rand rolls a new seed into both desktop and mobile seed inputs.
 let showCities=true,showAtmo=true;
 document.getElementById('btn-cities').onclick=function(){showCities=!showCities;this.textContent=showCities?'On':'Off';this.classList.toggle('active',showCities);if(curMaps&&actMap==='render'){pmat.emissiveIntensity=showCities?2:0;pmat.needsUpdate=true}};
 document.getElementById('btn-atmo').onclick=function(){showAtmo=!showAtmo;this.textContent=showAtmo?'On':'Off';this.classList.toggle('active',showAtmo);amsh.visible=showAtmo&&!!curMaps};
 document.getElementById('btn-rand').onclick=()=>{var s=Math.floor(Math.random()*99999);document.getElementById('inp-seed').value=s;if(document.getElementById('m-inp-seed'))document.getElementById('m-inp-seed').value=s};
 
-// Mobile generate button triggers desktop one
+// Mobile generate button: copy the mobile control values into the desktop
+// controls, then click the desktop Generate so one code path does the work.
 if(document.getElementById('m-btn-gen')){
   document.getElementById('m-btn-gen').onclick=function(){
     // Sync mobile → desktop
@@ -360,10 +483,13 @@ if(document.getElementById('m-btn-gen')){
 // ═══════════════════════════════════════════════════════════════════════════════
 // SIDEBAR
 // ═══════════════════════════════════════════════════════════════════════════════
+// Map list and temperature labels. curMaps holds the last generated set of
+// canvases; actMap is the currently displayed output ('render' or a map name).
 const MAPS=['albedo','depth','normal','specular','emissive'];
 const TNAMES=['Hot','Warm','Comfort','Cool','Cold'];
 let curMaps=null,actMap='render';
 
+// Build one sidebar button and preview slot per map output.
 const mbC=document.getElementById('map-buttons');
 MAPS.forEach(n=>{
   const w=document.createElement('div');
@@ -374,6 +500,9 @@ MAPS.forEach(n=>{
   mbC.appendChild(w);
 });
 
+// Switch what the sphere shows. 'render' binds the full PBR material (albedo,
+// normal, inverted-specular as roughness, emissive city lights, atmosphere). Any
+// other name shows that single map flat, with lighting effects stripped off.
 function setAct(name){
   actMap=name;
   document.querySelectorAll('.map-btn').forEach(b=>b.classList.toggle('active',b.dataset.map===name));
@@ -382,6 +511,8 @@ function setAct(name){
     pmat.map=c2t(curMaps.albedo);pmat.map.colorSpace=THREE.SRGBColorSpace;
     pmat.normalMap=c2t(curMaps.normal);pmat.normalScale.set(normStr,normStr);
     const rc=document.createElement('canvas');rc.width=curMaps.width;rc.height=curMaps.height;
+    // Roughness is the inverse of specular, so invert the specular map's pixels
+    // before using it as the roughness map.
     const rx=rc.getContext('2d');rx.drawImage(curMaps.specular,0,0);
     const rd=rx.getImageData(0,0,curMaps.width,curMaps.height);
     for(let i=0;i<rd.data.length;i+=4){rd.data[i]=255-rd.data[i];rd.data[i+1]=255-rd.data[i+1];rd.data[i+2]=255-rd.data[i+2]}
@@ -400,13 +531,20 @@ function setAct(name){
   pmat.needsUpdate=true;
 }
 
+// Wire the PBR render button and each map button to switch the active output.
 document.getElementById('btn-render').onclick=()=>setAct('render');
 mbC.querySelectorAll('.map-btn').forEach(b=>{b.onclick=()=>{if(curMaps)setAct(b.dataset.map)}});
 
+// Download one map as a PNG named type_seed_map.
 function dl(name){if(!curMaps||!curMaps[name])return;const a=document.createElement('a');a.download=document.getElementById('sel-type').value+'_'+document.getElementById('inp-seed').value+'_'+name+'.png';a.href=curMaps[name].toDataURL('image/png');a.click()}
+// Per-map download icons (stop the click from also switching the map) and the
+// download-all button.
 mbC.querySelectorAll('.dl').forEach(el=>{el.onclick=e=>{e.stopPropagation();dl(el.closest('.map-btn').dataset.map)}});
 document.getElementById('btn-dl-all').onclick=()=>MAPS.forEach(m=>dl(m));
 
+// Main Generate handler: read the controls, run generate() with a progress
+// callback, populate the sidebar previews, set the atmosphere colour per type,
+// and show the PBR render.
 document.getElementById('btn-gen').onclick=async function(){
   const type=document.getElementById('sel-type').value;
   const temp=parseInt(document.getElementById('sel-temp').value);
@@ -440,9 +578,11 @@ document.getElementById('btn-gen').onclick=async function(){
 // ═══════════════════════════════════════════════════════════════════════════════
 // BATCH GENERATION
 // ═══════════════════════════════════════════════════════════════════════════════
+// Batch queue: a list of {type,temp,seed,res} jobs to generate in one run.
 const TNAMES_B=['Hot','Warm','Comfort','Cool','Cold'];
 const batchQueue=[];
 
+// Redraw the queue list and update the count and the enabled state of Go.
 function renderQueue(){
   const list=document.getElementById('batch-list');
   list.innerHTML='';
@@ -455,6 +595,7 @@ function renderQueue(){
   document.getElementById('batch-go').disabled=batchQueue.length===0;
 }
 
+// Queue editing: add the current settings, add five random seeds, or clear.
 document.getElementById('batch-add').onclick=function(){
   batchQueue.push({
     type:document.getElementById('sel-type').value,
@@ -477,10 +618,13 @@ document.getElementById('batch-add5').onclick=function(){
 
 document.getElementById('batch-clear').onclick=function(){batchQueue.length=0;renderQueue()};
 
+// Promise wrapper around canvas.toBlob for the ZIP writer.
 function canvasToBlob(canvas){
   return new Promise(r=>canvas.toBlob(b=>r(b),'image/png'));
 }
 
+// Batch run: generate every queued planet, write each map into a per-planet
+// folder in a JSZip archive, then download the whole archive as one ZIP.
 document.getElementById('batch-go').onclick=async function(){
   if(batchQueue.length===0)return;
   this.disabled=true;this.textContent='Working...';
@@ -518,5 +662,7 @@ document.getElementById('batch-go').onclick=async function(){
   bp.style.display='none';bpFill.style.width='0';
   this.disabled=false;this.textContent='▶ Generate All & ZIP';
 };
+// Expose these two on window so the inline remove handler in each queue row
+// (onclick in renderQueue's markup) can reach them.
 window.batchQueue=batchQueue;window.renderQueue=renderQueue;
 })();

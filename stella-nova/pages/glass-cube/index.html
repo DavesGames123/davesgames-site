@@ -4,16 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Refraction // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   GLASS CUBE / REFRACTION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The refracting glass cube is drawn entirely by a
+   fragment shader on the full-screen canvas; this file supplies the canvas,
+   the title HUD, and an empty control panel that main.js fills at runtime.
+
+   LOAD ORDER
+     1. style.css   page stylesheet
+     2. in-frame guard (inline)   tag body when embedded in the site shell
+     3. main.js (classic script)  fetch shaders, build UI, run the loop
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────┐
+     │ .hud  "Refraction" title                          ☰ #toggle  │
+     │                                                              │
+     │        <canvas id=gl>   full-screen shader                   │
+     │                                              #ui  (sliders    │
+     │                                               built by JS) ▶ │
+     └─────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: when embedded in the site shell iframe, tag body so the CSS
+     hides this page's own HUD. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.body.classList.add('in-frame');</script>
+<!-- Render surface: main.js sizes it to the display and draws the shader here. -->
 <canvas id="gl"></canvas>
+<!-- Title HUD, static text only. -->
 <div class="hud">
   <h1>Refraction</h1>
   <div class="sub">Bilinear Patch &middot; Fresnel &middot; IOR</div>
 </div>
+<!-- Hamburger: toggles the .hidden class on #ui to show or hide the panel. -->
 <div id="toggle-btn">☰</div>
+<!-- Empty control panel; buildUI() in main.js fills it with sliders. -->
 <div id="ui"></div>
 <script src="main.js"></script>
 </body>

@@ -1,4 +1,36 @@
 #version 300 es
+// ============================================================================
+//  scene.frag.glsl — voxel field, fragment stage (the raymarcher)
+// ----------------------------------------------------------------------------
+//  Per pixel: build a camera ray, DDA-step through the integer voxel grid until
+//  a solid cell is hit, then shade that cell face with lighting, ambient
+//  occlusion, and glowing exposed edges. Distance fades to black; the alpha
+//  channel carries view-space depth for the boid pass and the CRT post pass.
+//
+//  DDA GRID TRAVERSAL  (amanatides-woo)
+//  -----------------------------------
+//      ro ●──rd──▶  step to the nearest cell boundary each iteration:
+//        ┌──┬──┬──┐   mask = which axis boundary (dis) is closest
+//        │  │▓▓│  │   dis += mask*dlt ; pos += mask*rs   (advance one cell)
+//        └──┴──┴──┘   stop when solid(pos), a far cap, or uMaxSteps
+//
+//  DENSITY: fBm value noise minus a height slope and threshold; solid where it
+//  is positive. This function is duplicated in main.js (densJS) and
+//  boid-sim.frag.glsl and all three must agree. uClearR carves an empty bubble
+//  around the camera so the eye never sits inside a wall.
+//
+//  EDGE TEST: an edge is drawn only where the in-plane neighbour cell is empty
+//  (a silhouette) or the cell above it is solid (a concave seam); coplanar
+//  interior grid lines stay hidden.
+//
+//  SECTION MAP   (grep -n "<anchor>" scene.frag.glsl)
+//      palette ...... "const vec3 PAL"  the voxel colour set
+//      noise ........ "float hash13"    value-noise basis
+//      density ...... "float density"   the signed voxel field
+//      solid ........ "bool solid"      cell occupancy (+ camera bubble)
+//      colour ....... "vec3 voxColor"   per-voxel hue from iso-bands
+//      main ......... "void main"       ray build, DDA, face shading
+// ============================================================================
 precision highp float;
 out vec4 outColor;
 uniform vec2 uRes;
@@ -22,6 +54,8 @@ const vec3 PAL[8]=vec3[8](
   vec3(0.600,0.340,1.000),  // 6 purple
   vec3(0.130,0.880,1.000)); // 7 (spare cyan)
 
+// Hash-based value noise: hash13 gives a pseudo-random scalar per lattice point,
+// vnoise trilinearly interpolates it with a smoothstep fade for smooth noise.
 float hash13(vec3 p){ p=fract(p*0.1031); p+=dot(p,p.yzx+33.33); return fract((p.x+p.y)*p.z); }
 float vnoise(vec3 x){
   vec3 i=floor(x), f=fract(x); vec3 u=f*f*(3.0-2.0*f);
@@ -30,6 +64,9 @@ float vnoise(vec3 x){
   float x00=mix(n000,n100,u.x), x10=mix(n010,n110,u.x), x01=mix(n001,n101,u.x), x11=mix(n011,n111,u.x);
   return mix(mix(x00,x10,u.y), mix(x01,x11,u.y), u.z);
 }
+// Signed voxel density: fBm of value noise scaled by height, minus a vertical
+// slope and a threshold. Positive is solid. The morph offset slides the noise
+// so the terrain evolves. Kept identical to densJS in main.js.
 float density(vec3 p){
   vec3 q=p*uFreq + uSeedVec;
   q += vec3(0.5,1.0,0.4)*(uMorphAmt*uMorphTime);
@@ -38,12 +75,17 @@ float density(vec3 p){
   f/=max(nrm,1e-4);
   return uHeight*f - uSlope*p.y - uThresh;
 }
+// Is a grid cell solid? Test density at its centre, but force empty inside the
+// clear bubble of radius uClearR around the camera so the eye stays in open air.
 bool solid(vec3 cell){
   vec3 c=cell+0.5;
   bool s = density(c) > 0.0;
   if(uClearR>0.5 && length(c-uRO)<uClearR) s=false;
   return s;
 }
+// Per-voxel colour. Quantize a coarse noise sample into iso-bands, hash each
+// band to a hue, and pick from the palette so colour patches drape along the
+// terrain's contours (duotone mode collapses to two hues).
 vec3 voxColor(vec3 cell){
   // sample the SAME field that sculpts the terrain (coarse) so colour patches
   // drape along the geometry's form — boundaries fall on the shape's iso-contours
@@ -67,17 +109,23 @@ vec3 voxColor(vec3 cell){
 }
 
 void main(){
+  // Build the camera ray for this pixel from the camera basis and focal length;
+  // nudge near-zero components so the 1/rd reciprocals below stay finite.
   vec2 uv=(2.0*gl_FragCoord.xy-uRes)/uRes.y;
   vec3 rd=normalize(uv.x*uRight + uv.y*uUp + uFocal*uFwd);
   rd += step(abs(rd),vec3(1e-4))*1e-4;
   vec3 ro=uRO;
 
+  // DDA setup: start cell, step direction per axis (rs), distance to cross one
+  // cell per axis (dlt), and distance to the first boundary per axis (dis).
   vec3 pos=floor(ro);
   vec3 rs=sign(rd);
   vec3 ri=1.0/rd;
   vec3 dlt=min(abs(ri),1e4);
   vec3 dis=(pos-ro + 0.5 + rs*0.5)*ri;
 
+  // Walk the grid: each step advances along whichever axis boundary is nearest
+  // (mask), until a solid cell is hit, the ray runs past FAR, or steps run out.
   bvec3 mask=bvec3(false);
   bool hit=false;
   const float FAR=1300.0;
@@ -93,6 +141,8 @@ void main(){
   vec3 col=vec3(0.0); float vz=1e4;  // black void — distant geometry fades into it
 
   if(hit){
+    // The face normal is the axis we last stepped along; recover the exact hit
+    // distance t and point hp, and the view-space depth vz for compositing.
     vec3 n=-vec3(mask)*rs;
     vec3 mini=(pos-ro + 0.5 - 0.5*rs)*ri;
     float t=max(mini.x,max(mini.y,mini.z));
@@ -120,6 +170,8 @@ void main(){
     float gPx=max(1.0-s1,a1), gNx=max(1.0-s2,a2);
     float gPy=max(1.0-s3,a3), gNy=max(1.0-s4,a4);
 
+    // Feather each of the four face borders by uEdgeW, gated by the exposure
+    // flags above, and take the strongest as the edge intensity.
     float w=uEdgeW;
     vec2 aaw=clamp(fwidth(fuv)*0.9, vec2(1e-4), vec2(0.5));  // screen footprint → analytic AA
     float bNx=1.0-smoothstep(w-aaw.x, w+aaw.x, fuv.x);
@@ -137,6 +189,9 @@ void main(){
     vec3 albedo = base * mix(0.34, 0.68, uBaseBright);
     albedo = mix(vec3(dot(albedo,vec3(0.299,0.587,0.114))), albedo, uSat);
 
+    // Shade the face: directional key light plus a sky term, times AO, on the
+    // voxel's albedo; add the emissive edge glow; then fade both into black with
+    // distance. The alpha out is normalized view depth for later passes.
     vec3 L=normalize(vec3(0.0,0.30,1.0));   // directly northward, low on the horizon
     float dif=clamp(dot(n,L),0.0,1.0);
     float sky=0.5+0.5*n.y;

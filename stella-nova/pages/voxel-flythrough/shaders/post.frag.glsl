@@ -1,4 +1,19 @@
 #version 300 es
+// ============================================================================
+//  post.frag.glsl — CRT post pass (composite the scene to screen)
+// ----------------------------------------------------------------------------
+//  Take the raymarched scene texture and finish it: FXAA edge smoothing, a
+//  faint chromatic split, a thresholded multi-ring bloom for the CRT glow, a
+//  hue-preserving tonemap, and optional scanlines plus a vignette.
+//
+//  PIPELINE
+//      uScene ─▶ fxaa ─▶ chroma split ─▶ + bloom ─▶ tonemap ─▶ scanlines/vignette
+//
+//  SECTION MAP   (grep -n "<anchor>" post.frag.glsl)
+//      tonemap ...... "vec3 tonemap"   luminance tonemap that keeps chroma
+//      fxaa ......... "vec3 fxaa"      edge-directed antialiasing
+//      main ......... "void main"      chroma, bloom, tone, scanlines, vignette
+// ============================================================================
 precision highp float;
 out vec4 outColor;
 uniform sampler2D uScene;
@@ -40,6 +55,8 @@ vec3 fxaa(vec2 uv, vec2 px){
 void main(){
   vec2 uv=gl_FragCoord.xy/uRes;
   vec2 px=1.0/uRes;
+  // Start from the FXAA-resolved scene, then split R and B slightly for a lens
+  // chromatic shimmer.
   // anti-aliased scene (FXAA), with a subtle chromatic shimmer on top
   vec3 c=fxaa(uv,px);
   vec2 ca=(uv-0.5)*0.0035;
@@ -63,6 +80,7 @@ void main(){
   b/=max(wsum,1e-4);
   c += b*uBloom*2.2;
 
+  // Tonemap, then optional CRT scanlines and a corner vignette.
   c=tonemap(c*1.1);
 
   if(uScanOn==1){

@@ -1,9 +1,56 @@
+// ============================================================================
+//  PLATONIC MIRRORS  ·  raw WebGL2 raymarched Wythoff polyhedron
+// ----------------------------------------------------------------------------
+//  No Three.js. A single fragment shader ray-marches a reflecting/refracting
+//  polyhedron built by Wythoff kaleidoscopic folding. main.js is the loader,
+//  the control panel, and the per-frame uniform push. computePoly() turns the
+//  U/V/W sliders and the symmetry order into the fold planes the shader uses;
+//  all geometry and optics live in shaders/raymarch.frag.glsl.
+//
+//  RENDER PIPELINE
+//  ───────────────
+//      fetch .glsl ─▶ compile + link program ─▶ fullscreen quad (4 verts)
+//                                     │
+//      S (slider state) ─▶ computePoly() ─▶ fold planes ┐
+//      S colours ─▶ hsv2rgb() ─────────────────────────┤ frame(): push uniforms
+//                                                       ▼
+//                       gl.drawArrays(TRIANGLE_STRIP, 0, 4)
+//                                     ▼
+//                                <canvas id=c>
+//
+//  WYTHOFF PARAMS
+//  ──────────────
+//      poly_type = symmetry order (2..5) → mirror plane normal nc
+//      U,V,W     = barycentric weights of the seed point p over the three
+//                  fundamental-domain corners (pab, pbc, pca)
+//      The shader folds space across nc poly_type times, then measures distance
+//      to the seed point's planes/edges/corner: a whole solid family from 5
+//      numbers.
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ────────────────────────────────────────────────────────────────────────
+//      shader fetch ....... "fetch(new URL"    load .glsl before GL setup
+//      state .............. "======== STATE"   the mutable parameter object S
+//      presets ............ "const PRESETS"    named solids
+//      hsv ................ "hsv2rgb"          colour pickers → RGB uniforms
+//      poly params ........ "computePoly"      Wythoff fold planes from U/V/W
+//      webgl setup ........ "======== WEBGL"   context, program, quad, uniforms
+//      resize ............. "function resize"  size buffer to DPR + res_scale
+//      ui ................. "======== UI"      sections, sliders, colour groups
+//      presets grid ....... "======== PRESETS" build preset buttons
+//      randomize .......... "======== RANDOMIZE" draw a whole random solid
+//      input .............. "WHEEL ZOOM"       wheel, drag, touch, panel toggle
+//      render loop ........ "RENDER LOOP"      orbit drift, uniforms, draw, FPS
+// ============================================================================
 (async () => {
+// Fetch both shader stages as text before any GL setup.
 const SH = {};
 for (const _n of ['shaders/raymarch.vert.glsl', 'shaders/raymarch.frag.glsl']) {
   SH[_n] = await (await fetch(new URL(_n, document.baseURI))).text();
 }
 
+// The one mutable state object read every frame. Geometry, camera, per-light
+// HSV colours, and quality knobs; each field maps to a slider and/or uniform.
 // ======== STATE ========
 const S = {
   rot_x: 0.3, rot_y: 0.0, orbit_speed: 0.15,
@@ -27,8 +74,12 @@ const S = {
   res_scale: 1.0,
 };
 
+// Snapshot of the initial state (kept for reference; not wired to a reset here).
 const DEFAULTS = { ...S };
 
+// Named solids. Each preset sets only the Wythoff numbers (symmetry order and
+// U/V/W weights) plus zoom, so a click reshapes the polyhedron without touching
+// camera or colours.
 const PRESETS = {
   'Default':     { poly_type:3, poly_U:1.0, poly_V:0.5, poly_W:1.0, poly_zoom:2.0 },
   'Icosa':       { poly_type:3, poly_U:1.0, poly_V:1.0, poly_W:0.0, poly_zoom:2.0 },
@@ -41,6 +92,8 @@ const PRESETS = {
   'Gem':         { poly_type:4, poly_U:0.5, poly_V:0.5, poly_W:1.0, poly_zoom:2.0 },
 };
 
+// Convert a colour picker's H,S,V into linear RGB for the shader. Each light in
+// the scene is stored as HSV in S and pushed as an RGB uniform every frame.
 // ======== HSV→RGB ========
 function hsv2rgb(h, s, v) {
   h = ((h % 1) + 1) % 1;
@@ -57,15 +110,24 @@ function hsv2rgb(h, s, v) {
   ];
 }
 
+// Build the Wythoff fundamental domain for the current symmetry order. nc is the
+// third mirror plane normal; pab/pbc/pca are the three corner directions of the
+// spherical triangle. The seed point p is their U/V/W-weighted, normalized sum.
+// The shader folds space across these mirrors and measures distance to p, so
+// these few vectors define the entire solid. Mirrors kaleido code in the shader.
 // ======== POLY PARAMS ========
 function computePoly() {
   const t = S.poly_type;
+  // Half-angle of the symmetry wedge sets the mirror geometry.
   const cospin = Math.cos(Math.PI / t);
   const scospin = Math.sqrt(Math.max(0, 0.75 - cospin * cospin));
+  // Third mirror normal and the three fundamental-domain corner directions.
   const nc = [-0.5, -cospin, scospin];
   const pab = [0, 0, 1];
   const pbc_ = [scospin, 0, 0.5];
   const pca_ = [0, scospin, cospin];
+  // Seed point p: weight the three corners by U/V/W, then normalize. pbc/pca are
+  // also returned normalized because the shader uses them as plane normals.
   const pr = [
     S.poly_U * pab[0] + S.poly_V * pbc_[0] + S.poly_W * pca_[0],
     S.poly_U * pab[1] + S.poly_V * pbc_[1] + S.poly_W * pca_[1],
@@ -80,6 +142,7 @@ function computePoly() {
   return { nc, pab, pbc, pca, p };
 }
 
+// WebGL2 context, opaque and without MSAA (a single shaded quad needs neither).
 // ======== WEBGL ========
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
@@ -89,6 +152,7 @@ const VERT = SH['shaders/raymarch.vert.glsl'];
 
 const FRAG = SH['shaders/raymarch.frag.glsl'];
 
+// Compile one shader stage; log and return null on error.
 function compileShader(src, type) {
   const s = gl.createShader(type);
   gl.shaderSource(s, src);
@@ -100,6 +164,7 @@ function compileShader(src, type) {
   return s;
 }
 
+// Compile both stages, link, and use the program.
 const vs = compileShader(VERT, gl.VERTEX_SHADER);
 const fs = compileShader(FRAG, gl.FRAGMENT_SHADER);
 const prog = gl.createProgram();
@@ -111,6 +176,8 @@ if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
 }
 gl.useProgram(prog);
 
+// The covering geometry: four clip-space corners drawn as a triangle strip so
+// the fragment shader runs once per pixel. a_pos is wired to it.
 // Fullscreen quad
 const buf = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -119,6 +186,8 @@ const aPos = gl.getAttribLocation(prog, 'a_pos');
 gl.enableVertexAttribArray(aPos);
 gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
+// Cache every uniform location once, keyed by name, so the frame loop does not
+// look them up per draw.
 // Uniform locations
 const U = {};
 const uNames = [
@@ -130,6 +199,9 @@ const uNames = [
 ];
 for (const n of uNames) U[n] = gl.getUniformLocation(prog, n);
 
+// Size the drawing buffer to the window times device pixel ratio times the
+// res_scale quality slider, then match the GL viewport. Lowering res_scale is
+// the cheapest way to raise frame rate on this heavy shader.
 // ======== RESIZE ========
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -141,6 +213,8 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
+// Declarative panel description: a list of collapsible sections, each holding
+// either slider params or HSV colour groups. buildUI() renders this to the DOM.
 // ======== UI ========
 const SECTIONS = [
   { id: 'shape', label: 'Shape', params: [
@@ -181,11 +255,15 @@ const SECTIONS = [
   ]},
 ];
 
+// Format a value for its readout: a param's custom fmt wins, else pick decimals
+// by magnitude so small values keep precision.
 function fmtVal(v, p) {
   if (p && p.fmt) return p.fmt(v);
   return Number(v).toFixed(v < 0.01 ? 4 : v < 1 ? 3 : 2);
 }
 
+// Render every section into #controls: a collapsible header, then its sliders or
+// colour groups, plus the rotation reset button where requested.
 function buildUI() {
   const container = document.getElementById('controls');
   container.innerHTML = '';
@@ -236,6 +314,8 @@ function buildUI() {
   }
 }
 
+// Build one slider row bound to S[p.key]. Integer-step params store ints; the
+// res_scale slider also triggers a resize so the change takes effect at once.
 function makeSlider(p) {
   const row = document.createElement('div');
   row.className = 'param-row';
@@ -263,6 +343,8 @@ function makeSlider(p) {
   return row;
 }
 
+// Build a colour control: a swatch plus H/S/I sliders. Intensity ranges differ
+// per light (log-scale glows and sun, wider for absorption), hence isLog/iMax.
 function makeColorGroup(c) {
   const group = document.createElement('div');
   group.className = 'color-group';
@@ -291,6 +373,8 @@ function makeColorGroup(c) {
   return group;
 }
 
+// Repaint one colour group's swatch from its current HSV (intensity clamped to 1
+// so the swatch stays a visible colour rather than blowing out).
 function updateSwatch(prefix) {
   const el = document.getElementById('swatch-'+prefix);
   if (!el) return;
@@ -298,12 +382,15 @@ function updateSwatch(prefix) {
   el.style.background = `rgb(${rgb.map(v=>Math.round(v*255)).join(',')})`;
 }
 
+// Repaint every colour swatch (called each frame so drift/randomize show live).
 function updateAllSwatches() {
   for (const sec of SECTIONS) {
     if (sec.colors) sec.colors.forEach(c => updateSwatch(c.prefix));
   }
 }
 
+// Build one button per preset. A click copies the preset's values into S, syncs
+// those sliders, and marks the button active.
 // ======== PRESETS ========
 const presetsDiv = document.getElementById('presets');
 for (const [name, vals] of Object.entries(PRESETS)) {
@@ -321,8 +408,11 @@ for (const [name, vals] of Object.entries(PRESETS)) {
   presetsDiv.appendChild(btn);
 }
 
+// Render the panel now that sections and presets are defined.
 buildUI();
 
+// Push S[key] back onto its slider and readout. Used whenever code (preset,
+// randomize, drag, drift) changes a value so the panel stays in step.
 // ======== SYNC HELPER ========
 function syncSlider(key) {
   const sl = document.getElementById('sl-'+key);
@@ -338,15 +428,19 @@ function syncSlider(key) {
   }
 }
 
+// Sync every slider from S at once (after randomize).
 function syncAll() {
   for (const k of Object.keys(S)) syncSlider(k);
 }
 
+// Random helpers: float range, inclusive int range, and array pick.
 // ======== RANDOMIZE ========
 function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
 function randInt(lo, hi) { return Math.floor(rand(lo, hi + 1)); }
 function randPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
+// Draw a whole new solid: symmetry, U/V/W, camera, optics, and every light, each
+// from a hand-tuned range so the result stays renderable. Then sync the panel.
 function randomize() {
   S.poly_type = randInt(2, 5);
   S.poly_U = rand(0, 2.5);
@@ -373,6 +467,7 @@ function randomize() {
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
 }
 
+// Prepend the Randomize button to the preset row.
 // Add randomize button
 const randBtn = document.createElement('button');
 randBtn.className = 'preset-btn rand';
@@ -380,6 +475,7 @@ randBtn.textContent = '🎲 Random';
 randBtn.onclick = randomize;
 presetsDiv.insertBefore(randBtn, presetsDiv.firstChild);
 
+// Wheel zoom: move the camera along its distance axis within limits.
 // ======== MOUSE WHEEL ZOOM ========
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
@@ -388,6 +484,8 @@ canvas.addEventListener('wheel', (e) => {
   syncSlider('cam_z');
 }, { passive: false });
 
+// Drag to rotate: pointer delta feeds yaw (rot_y) and pitch (rot_x). While
+// dragging, the auto orbit drift in the render loop pauses.
 // ======== MOUSE DRAG ROTATION ========
 let dragging = false, dragX = 0, dragY = 0;
 canvas.addEventListener('mousedown', (e) => {
@@ -407,6 +505,7 @@ window.addEventListener('mouseup', () => {
   canvas.style.cursor = 'crosshair';
 });
 
+// Single-finger touch drag, tracked by touch identifier, mirrors mouse rotation.
 // Touch drag
 let touchId = null;
 canvas.addEventListener('touchstart', (e) => {
@@ -429,6 +528,7 @@ canvas.addEventListener('touchmove', (e) => {
 }, { passive: false });
 canvas.addEventListener('touchend', () => { touchId = null; });
 
+// Show/hide the control panel and flip the toggle arrow.
 // Toggle panel
 const toggleBtn = document.getElementById('toggle-btn');
 const panel = document.getElementById('panel');
@@ -438,12 +538,15 @@ toggleBtn.onclick = () => {
   toggleBtn.textContent = panel.classList.contains('hidden') ? '▶' : '◀';
 };
 
+// FPS accounting: lastTime for dt, accTime/frameCount to average over 0.5 s.
 // ======== RENDER LOOP ========
 let lastTime = 0;
 let accTime = 0;
 let frameCount = 0;
 let displayFps = 0;
 
+// Per-frame loop: update the FPS readout, apply auto orbit drift, recompute the
+// Wythoff planes, push every uniform, and draw the covering quad.
 function frame(now) {
   requestAnimationFrame(frame);
   const nowSec = now / 1000;
@@ -462,6 +565,8 @@ function frame(now) {
 
   updateAllSwatches();
 
+  // Auto-rotate when idle. The two irrational-looking factors keep pitch and yaw
+  // out of phase so the solid never settles into a repeating pose.
   // Orbit drift
   if (S.orbit_speed > 0 && !dragging) {
     const d = Math.min(dt, 0.1) * S.orbit_speed;
@@ -470,8 +575,11 @@ function frame(now) {
     syncSlider('rot_x'); syncSlider('rot_y');
   }
 
+  // Rebuild the fold planes for this frame's U/V/W and symmetry order.
   const poly = computePoly();
 
+  // Push scalar and vector uniforms: resolution, rotation, geometry, optics,
+  // camera origin.
   gl.uniform2f(U.u_resolution, canvas.width, canvas.height);
   gl.uniform1f(U.u_rot_x, S.rot_x);
   gl.uniform1f(U.u_rot_y, S.rot_y);
@@ -483,6 +591,8 @@ function frame(now) {
   gl.uniform1f(U.u_fov, S.fov);
   gl.uniform3f(U.u_ray_origin, 0, S.cam_y, S.cam_z);
 
+  // Convert every light from HSV to RGB and push it. The absorption colour is
+  // negated because the shader uses it as a Beer-Lambert extinction coefficient.
   const sun = hsv2rgb(S.sun_h, S.sun_s, S.sun_i);
   const floor = hsv2rgb(S.floor_h, S.floor_s, S.floor_i);
   const sky = hsv2rgb(S.sky_h, S.sky_s, S.sky_i);
@@ -497,18 +607,22 @@ function frame(now) {
   gl.uniform3fv(U.u_glow_col1, g1);
   gl.uniform3fv(U.u_beer_col, beer.map(v => -v));
 
+  // Push the Wythoff fold planes and seed point computed above.
   gl.uniform3fv(U.u_poly_nc, poly.nc);
   gl.uniform3fv(U.u_poly_p, poly.p);
   gl.uniform3fv(U.u_poly_pab, poly.pab);
   gl.uniform3fv(U.u_poly_pbc, poly.pbc);
   gl.uniform3fv(U.u_poly_pca, poly.pca);
 
+  // March-count and edge-width quality uniforms.
   gl.uniform1i(U.u_marches_inner, S.marches_inner);
   gl.uniform1i(U.u_marches_outer, S.marches_outer);
   gl.uniform1f(U.u_edge_thick, S.edge_thick);
 
+  // One draw: the covering quad runs the ray-march shader per pixel.
   gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 }
 
+// Start the render loop.
 requestAnimationFrame(frame);
 })();

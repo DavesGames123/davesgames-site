@@ -1,19 +1,87 @@
+// ============================================================================
+//  FLUIDLAB  ·  real-time 2D stable-fluids solver on the GPU (Stam 1999)
+// ----------------------------------------------------------------------------
+//  A Navier-Stokes fluid solved by operator splitting, one pass per stage, all
+//  state held in floating-point textures. Velocity and dye ping-pong between
+//  read/write framebuffers; each solver stage is one full-screen quad draw of
+//  its own shader. Rigid shapes and hand-drawn walls become a barrier texture
+//  the solver treats as no-flow cells. The CPU also runs a light rigid-body
+//  physics pass coupled to the fluid by reading velocity back with readPixels.
+//
+//  SIMULATION DATA FLOW   (one step(); ► = a full-screen shader pass)
+//  ------------------------------------------------------------------------
+//     emitters · mouse · gravity · shape spin   (forces, added during advect)
+//                        │
+//     vF ►advect(uMode 0)──▶ vF*   ── if ν>0: copy u* to u0F, then ─┐
+//        semi-Lagrangian backtrace + forces        diffuse ×20 ◀────┘  vF
+//                        │  (velocity now advected, optionally viscous)
+//     dyF ►advect(uMode 1, samples vF)──▶ dyF      dye carried by velocity
+//                        │
+//     vF ►divergence──▶ dvF ►jacobi ×N (pressure Poisson)──▶ pF
+//                        │
+//     vF, pF ►gradient──▶ vF        subtract ∇p, making vF divergence-free
+//                        ▼
+//                 display ► colormap + bloom ──▶ <canvas> ──▶ 2D overlay
+//
+//  TEXTURE ROLES
+//  -------------
+//     vF  velocity   (DoubleFBO, ping-pong)   pF  pressure   (DoubleFBO)
+//     dyF dye/colour (DoubleFBO)              dvF divergence (single FBO)
+//     u0F stashed u* for viscous solve (single)   barrierTex  no-flow mask
+//     mkDF() builds a ping-pong pair (read/write/swap); mkF() a single FBO.
+//
+//  BARRIER: shapes are rasterized (drawShapePath) plus the drawn-wall canvas
+//  into barrierCanvas, uploaded to barrierTex; every solver shader zeroes flow
+//  where barrier > 0.1.
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ------------------------------------------------------------------------
+//      shader fetch ....... "const RAW"        load all .glsl before setup
+//      format detect ...... "detectTexFormat"  pick a renderable float format
+//      read-back .......... "decodeReadValue"  readPixels type handling
+//      state .............. "const SIM"        solver + UI state
+//      colormaps .......... "COLORMAPS"        dye/speed palettes
+//      objects ............ "createEmitter"    emitter / shape factories
+//      barrier ............ "BARRIER"          rasterize shapes to no-flow mask
+//      rigid body ......... "RIGID BODY"       fluid-coupled CPU physics
+//      gl helpers ......... "WEBGL"            compile, FBO, ping-pong, quad
+//      programs ........... "const aP="        one program per solver stage
+//      viscosity .......... "VISCOUS DIFFUSION" implicit diffuse solve
+//      fbos ............... "initFBOs"         allocate sim grid textures
+//      step ............... "function step"    the per-frame solver pipeline
+//      display ............ "function display" render pass + overlays
+//      overlays ........... "OVERLAY"          2D icons, vectors, brush
+//      input .............. "INPUT"            mouse/touch: drag, draw, vortex
+//      ui list ............ "rebuildList"      object cards + sliders
+//      presets ............ "function preset"  scene setups
+//      loop ............... "function loop"    rAF: step + display + FPS
+// ============================================================================
 (async () => {
+// Fetch every shader stage in parallel before any GL setup, keyed by path.
 const RAW = {};
 await Promise.all(["shaders/quad.vert.glsl","shaders/bilerp.frag.glsl","shaders/advect.frag.glsl","shaders/divergence.frag.glsl","shaders/jacobi.frag.glsl","shaders/gradient.frag.glsl","shaders/display.frag.glsl","shaders/copy.frag.glsl","shaders/diffuse.frag.glsl"].map(async (n) => {
   const r = await fetch(new URL(n, document.baseURI));
   if (!r.ok) throw new Error('shader fetch failed ('+r.status+'): '+n);
   RAW[n] = await r.text();
 }));
+// WebGL2 context. preserveDrawingBuffer:true so the 2D overlay can copy the
+// rendered frame; no depth/stencil since everything is full-screen 2D passes.
 const canvas=document.getElementById('sim-canvas');const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
 if(!gl){alert('WebGL2 required');throw new Error('No WebGL2');}
 
+// Enable float render targets and probe whether float/half-float textures can
+// be linearly filtered; the sim needs renderable float textures for velocity
+// and pressure, and falls back to manual bilinear filtering where hardware
+// linear filtering of floats is missing.
 // ═══ MOBILE FIX: Properly detect float texture + linear filtering support ═══
 gl.getExtension('EXT_color_buffer_float');
 gl.getExtension('EXT_color_buffer_half_float');
 const hasFloatLinear=!!gl.getExtension('OES_texture_float_linear');
 const hasHalfFloatLinear=!!gl.getExtension('OES_texture_half_float_linear');
 
+// Find the best texture format the GPU can both render to and (ideally) filter.
+// Try RGBA32F, then RGBA16F, then RGBA8, building a test framebuffer for each
+// and keeping the first that reports FRAMEBUFFER_COMPLETE.
 function detectTexFormat(){
   while(gl.getError()!==gl.NO_ERROR){}
   const formats=[[gl.RGBA32F,gl.FLOAT,'RGBA32F'],[gl.RGBA16F,gl.HALF_FLOAT,'RGBA16F'],[gl.RGBA16F,gl.FLOAT,'RGBA16F/FLOAT'],[gl.RGBA8,gl.UNSIGNED_BYTE,'RGBA8']];
@@ -44,6 +112,8 @@ const{fmt:TEX_FMT,type:TEX_TYPE,name:TEX_NAME,canLinear:TEX_CAN_LINEAR}=detectTe
 const TEX_FILTER=TEX_CAN_LINEAR?gl.LINEAR:gl.NEAREST;
 
 // MOBILE FIX: Detect the correct readPixels type for the chosen framebuffer format
+// readPixels on a float framebuffer may only accept a specific type; ask the
+// implementation and pick the matching typed-array constructor for read-back.
 let READ_TYPE=gl.FLOAT;
 let ReadArrayCtor=Float32Array;
 (function detectReadFormat(){
@@ -67,6 +137,8 @@ let ReadArrayCtor=Float32Array;
   console.log('FluidLab: readPixels type='+implType+' (FLOAT='+gl.FLOAT+', HALF='+gl.HALF_FLOAT+', UBYTE='+gl.UNSIGNED_BYTE+')');
 })();
 
+// Convert one read-back sample to a float regardless of the buffer's type:
+// pass Float32 through, remap bytes, or decode a half-float by hand.
 // Helper: decode read buffer value to float regardless of source type
 function decodeReadValue(arr,i){
   if(ReadArrayCtor===Float32Array)return arr[i];
@@ -78,24 +150,41 @@ function decodeReadValue(arr,i){
   return(s?-1:1)*Math.pow(2,e-15)*(1+m/1024);
 }
 
+// Hard caps on emitters and shapes; the shader declares uniform arrays this big.
 const MAX_E=24,MAX_S=12;
+// The one global state object: play/pause, display gains, solver iteration
+// counts, edit modes, colormap, vector overlay, gravity, and viscosity.
 const SIM={playing:true,gain:1.5,bloom:0.4,jacobiIters:40,drawMode:false,eraseMode:false,brushSize:16,selectedId:-1,selectedType:'',cmap:3,showVectors:false,cellSize:24,gravity:false,gravityStr:200,viscosity:0};
+// Object lists and running counters. CW/CH are canvas CSS size; simW/simH the
+// simulation grid resolution (smaller than the canvas for speed).
 let emitters=[],shapes=[],nextId=0,frame=0,CW=100,CH=100,simW=100,simH=100;
 let lastTime=performance.now(),deltaTime=0.016,fpsAccum=0,fpsCount=0;
 
+// Palette stops for the three speed colormaps (a fourth "Dye" mode shows the
+// carried dye directly). Mirrored in display.frag.glsl for the GPU render.
 /* ═══ COLORMAPS ═══ */
 const CMAPS={predator:[[0,0,0],[.08,.02,.22],[.25,.05,.45],[.55,.08,.35],[.8,.2,.05],[1,.55,0],[1,.85,.3],[1,1,.92]],viridis:[[.267,.004,.329],[.283,.141,.458],[.254,.265,.530],[.164,.471,.558],[.128,.567,.551],[.134,.658,.517],[.478,.821,.318],[.993,.906,.144]],oceanic:[[.02,.02,.15],[.02,.1,.35],[0,.25,.55],[0,.45,.55],[0,.6,.5],[.1,.75,.45],[.4,.85,.3],[1,.95,.3]]};
+// Paint each colormap button's preview strip by sampling its gradient.
 function renderCmapPreviews(){document.querySelectorAll('.cmap-btn').forEach(btn=>{const c=btn.querySelector('canvas');c.width=120;c.height=24;const ctx=c.getContext('2d');const cm=+btn.dataset.cmap;const stops=cm===0?CMAPS.predator:cm===1?CMAPS.viridis:cm===2?CMAPS.oceanic:null;for(let x=0;x<120;x++){const t=x/119;if(stops){const n=stops.length-1,i=Math.min(Math.floor(t*n),n-1),f=t*n-i;ctx.fillStyle=`rgb(${(stops[i][0]+(stops[i+1][0]-stops[i][0])*f)*255|0},${(stops[i][1]+(stops[i+1][1]-stops[i][1])*f)*255|0},${(stops[i][2]+(stops[i+1][2]-stops[i][2])*f)*255|0})`;}else ctx.fillStyle=`hsl(${t*360},80%,55%)`;ctx.fillRect(x,0,1,24);}});}
+// Select colormap i and mark its button active.
 function setCmap(i){SIM.cmap=i;document.querySelectorAll('.cmap-btn').forEach(b=>b.classList.toggle('active',+b.dataset.cmap===i));}
 
+// Object factories. An emitter injects velocity and dye (jet=directional line,
+// point=omni, vortex=swirl); a shape is a rigid barrier with size and physics.
 /* ═══ OBJECTS ═══ */
 function createEmitter(t,x,y){return{id:nextId++,kind:'emitter',type:t,x,y,angle:0,strength:t==='jet'?200:80,mult:1,width:t==='jet'?0.04:0.06,spin:0,dyeR:Math.random()*.7+.3,dyeG:Math.random()*.7+.3,dyeB:Math.random()*.7+.3,active:true};}
 function createShape(t,x,y){const s={id:nextId++,kind:'shape',type:t,x,y,angle:0,spin:0,fixed:true,vx:0,vy:0,va:0,mass:2,w:60,h:60,teeth:10,points:5};
   if(t==='rect'){s.w=80;s.h=30;}if(t==='airfoil'){s.w=100;s.h=24;}if(t==='wedge'){s.w=60;s.h=50;}if(t==='gear'){s.w=70;s.h=70;}if(t==='star'){s.w=70;s.h=70;}if(t==='tesla'){s.w=160;s.h=60;}return s;}
 
+// Barrier state. barrierCanvas is the combined no-flow mask (shapes + drawn
+// walls) uploaded to barrierTex; drawnCanvas holds only the hand-drawn walls so
+// they persist while shapes move. barrierDirty forces a re-raster next frame.
 /* ═══ BARRIER ═══ */
 let barrierCanvas,barrierCtx,barrierTex,drawnCanvas,drawnCtx,barrierDirty=true;
+// Allocate the two offscreen canvases at simulation resolution.
 function initBarrierCanvas(){barrierCanvas=document.createElement('canvas');barrierCanvas.width=simW;barrierCanvas.height=simH;barrierCtx=barrierCanvas.getContext('2d',{willReadFrequently:true});drawnCanvas=document.createElement('canvas');drawnCanvas.width=simW;drawnCanvas.height=simH;drawnCtx=drawnCanvas.getContext('2d');barrierDirty=true;}
+// Trace one shape's filled path into a 2D context at the origin (caller has
+// already translated/rotated). Each shape type is a different canvas path.
 function drawShapePath(ctx,type,sw,sh,teeth,pts){
   teeth=teeth||10;pts=pts||5;
   if(type==='circle'){ctx.beginPath();ctx.ellipse(0,0,sw/2,sh/2,0,0,Math.PI*2);ctx.fill();}
@@ -105,8 +194,13 @@ function drawShapePath(ctx,type,sw,sh,teeth,pts){
   else if(type==='gear'){const ys=sh/sw;ctx.save();ctx.scale(1,ys);const or=sw/2,ir=sw*.34,tw=Math.PI/teeth*.55;ctx.beginPath();for(let i=0;i<teeth;i++){const a=i/teeth*Math.PI*2;ctx.lineTo(Math.cos(a-tw)*or,Math.sin(a-tw)*or);ctx.lineTo(Math.cos(a+tw)*or,Math.sin(a+tw)*or);const m=a+Math.PI/teeth;ctx.lineTo(Math.cos(m-tw*.6)*ir,Math.sin(m-tw*.6)*ir);ctx.lineTo(Math.cos(m+tw*.6)*ir,Math.sin(m+tw*.6)*ir);}ctx.closePath();ctx.fill();ctx.globalCompositeOperation='destination-out';ctx.beginPath();ctx.arc(0,0,sw*.15,0,Math.PI*2);ctx.fill();ctx.globalCompositeOperation='source-over';ctx.restore();}
   else if(type==='star'){const ys=sh/sw;ctx.save();ctx.scale(1,ys);const or=sw/2,ir=sw*.2;ctx.beginPath();for(let i=0;i<pts*2;i++){const a=i/pts*Math.PI-Math.PI/2,r=i%2===0?or:ir;ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);}ctx.closePath();ctx.fill();ctx.restore();}
   else if(type==='tesla'){const hw=sw/2,hh=sh/2,wt=sh*.08;ctx.fillRect(-hw,-hh,sw,wt);ctx.fillRect(-hw,hh-wt,sw,wt);const nd=3,seg=sw/(nd+1);for(let i=0;i<nd;i++){const cx=-hw+seg*(i+1),dir=i%2===0?-1:1;ctx.save();ctx.translate(cx,0);ctx.beginPath();ctx.moveTo(-seg*.3,dir*wt*.5);ctx.quadraticCurveTo(-seg*.05,dir*hh*.7,seg*.15,dir*hh*.5);ctx.lineTo(seg*.15,dir*(hh*.5-wt));ctx.quadraticCurveTo(-seg*.05,dir*(hh*.7-wt),-seg*.3,dir*(wt*.5+wt));ctx.closePath();ctx.fill();if(dir>0)ctx.fillRect(-wt/2,-hh*.3,wt,hh*.5);else ctx.fillRect(-wt/2,-hh*.2,wt,hh*.5);ctx.restore();}}}
+// Rebuild the no-flow mask: clear, draw every shape in white at its sim-space
+// position and rotation, composite the drawn walls, then upload to barrierTex.
+// Y is flipped (1 - y) because sim space has its origin at the bottom.
 function renderBarrierCanvas(){const ctx=barrierCtx;ctx.clearRect(0,0,simW,simH);ctx.fillStyle='#fff';for(const s of shapes){const sx=s.x/CW*simW,sy=(1-s.y/CH)*simH,sw=s.w/CW*simW,sh=s.h/CH*simH;ctx.save();ctx.translate(sx,sy);ctx.rotate(-s.angle);drawShapePath(ctx,s.type,sw,sh,s.teeth,s.points);ctx.restore();}ctx.drawImage(drawnCanvas,0,0);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,gl.RGBA,gl.UNSIGNED_BYTE,barrierCanvas);}
 
+// Read the fluid velocity at one world point by reading back a single pixel of
+// the velocity texture. Used to push dynamic (non-fixed) shapes with the flow.
 /* ═══ FLUID-COUPLED RIGID BODY PHYSICS ═══ */
 function sampleVelocityAt(wx,wy){
   try{
@@ -126,6 +220,11 @@ function sampleVelocityAt(wx,wy){
     return[0,0];
   }
 }
+// CPU rigid-body step, run once per frame before the fluid step. Spin driven
+// shapes rotate; dynamic shapes are pushed by the sampled fluid velocity (drag),
+// gravity, and a torque from the left/right velocity difference, then bounced
+// off walls. The final loops resolve shape-shape collisions (penetration
+// pushout plus a restitution impulse). Fixed shapes and the dragged object skip.
 function integrateShapes(){
   for(const s of shapes){if(s.spin!==0&&s!==dragObj)s.angle+=s.spin*deltaTime;}
   for(const e of emitters){if(e.spin!==0&&e!==dragObj)e.angle+=e.spin*deltaTime;}
@@ -144,6 +243,8 @@ function integrateShapes(){
     if(s.y<M){s.y=M;s.vy=Math.abs(s.vy)*0.3;}if(s.y>CH-M){s.y=CH-M;s.vy=-Math.abs(s.vy)*0.3;}
     s.vx*=0.99;s.vy*=0.99;s.va*=0.95;s.va=Math.max(-6,Math.min(6,s.va));
   }
+  // Broad-phase by bounding radius, then resolve overlap and contact response.
+  // REST=restitution, PAD/SKIN=contact margins, CD=contact damping.
   const REST=0.15,PAD=8,SKIN=20,CD=10;
   for(let i=0;i<shapes.length;i++){const a=shapes[i],ra=Math.max(a.w,a.h)*.5+PAD;
     for(let j=i+1;j<shapes.length;j++){const b=shapes[j],rb=Math.max(b.w,b.h)*.5+PAD;
@@ -157,24 +258,37 @@ function integrateShapes(){
       if(!aF)a.va*=.8;if(!bF)b.va*=.8;}}
 }
 
+// GL plumbing: compile a shader, link a program, cache uniform locations.
 /* ═══ WEBGL ═══ */
 function compS(t,s){const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);if(!gl.getShaderParameter(sh,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(sh));throw new Error('Shader');}return sh;}
 function mkP(v,f){const p=gl.createProgram();gl.attachShader(p,compS(gl.VERTEX_SHADER,v));gl.attachShader(p,compS(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);if(!gl.getProgramParameter(p,gl.LINK_STATUS))throw new Error('Link');return p;}
 function gU(p,ns){const u={};for(const n of ns)u[n]=gl.getUniformLocation(p,n);return u;}
+// Build a ping-pong pair (DoubleFBO): two float textures with framebuffers, and
+// read/write getters plus swap(). Each solver stage reads read and draws to
+// write, then swaps, so the new state feeds the next stage.
 function mkDF(w,h){const mk=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
     const data=TEX_TYPE===gl.FLOAT?new Float32Array(w*h*4):TEX_TYPE===gl.HALF_FLOAT?new Uint16Array(w*h*4):new Uint8Array(w*h*4);
     gl.texImage2D(gl.TEXTURE_2D,0,TEX_FMT,w,h,0,gl.RGBA,TEX_TYPE,data);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,TEX_FILTER);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,TEX_FILTER);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return{tex:t,fbo:f};};let a=mk(),b=mk();return{get read(){return a},get write(){return b},swap(){[a,b]=[b,a]}};}
+// Build a single float texture + framebuffer (no ping-pong): used for
+// divergence (dvF) and the stashed pre-diffusion velocity (u0F).
 function mkF(w,h){const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
   const data=TEX_TYPE===gl.FLOAT?new Float32Array(w*h*4):TEX_TYPE===gl.HALF_FLOAT?new Uint16Array(w*h*4):new Uint8Array(w*h*4);
   gl.texImage2D(gl.TEXTURE_2D,0,TEX_FMT,w,h,0,gl.RGBA,TEX_TYPE,data);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,TEX_FILTER);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,TEX_FILTER);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return{tex:t,fbo:f};}
+// The covering quad shared by every pass, and dq() to draw it once per pass.
 const qVAO=gl.createVertexArray();gl.bindVertexArray(qVAO);const qb=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,qb);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,0,0);function dq(){gl.bindVertexArray(qVAO);gl.drawArrays(gl.TRIANGLE_STRIP,0,4);}
+// The shared vertex shader source.
 const VS=RAW['shaders/quad.vert.glsl'];
 
+// Where hardware cannot linearly filter floats, splice in a manual bilinear
+// function and swap the sampling expressions the advect/display shaders use.
+// These strings are interpolated into the shader source below.
 // Manual bilinear interpolation for mobile GPUs without OES_texture_float_linear
 const BILERP_GLSL=TEX_CAN_LINEAR?'':RAW['shaders/bilerp.frag.glsl'];
 const SAMPLE_VEL=TEX_CAN_LINEAR?'texture(uVelocity,sp).xy':'bilerp(uVelocity,sp,uInvRes).xy';
 const SAMPLE_DYE=TEX_CAN_LINEAR?'texture(uDye,sp)':'bilerp(uDye,sp,uInvRes)';
 
+// advect.frag.glsl and display.frag.glsl are template literals: eval fills their
+// placeholders (MAX_E, MAX_S, the sampling helpers) from the constants above.
 const ADV_FS=eval('`'+RAW['shaders/advect.frag.glsl']+'`');
 
 const DIV_FS=RAW['shaders/divergence.frag.glsl'];
@@ -185,6 +299,9 @@ const GRD_FS=RAW['shaders/gradient.frag.glsl'];
 
 const DSP_FS=eval('`'+RAW['shaders/display.frag.glsl']+'`');
 
+// One program per solver stage, each with its uniform locations cached:
+//   aP advect (also injects forces and carries dye)   dP divergence
+//   jP jacobi pressure solve   gP gradient subtract   rP display
 const aP=mkP(VS,ADV_FS),aU=gU(aP,['uVelocity','uDye','uBarrier','uInvRes','uDt','uAspect','uMode','uMousePos','uMouseDown','uMouseVortex','uGravity','uNumEmitters','uNumShapes',...Array.from({length:MAX_E},(_,i)=>[`uEmitA[${i}]`,`uEmitB[${i}]`,`uEmitC[${i}]`]).flat(),...Array.from({length:MAX_S},(_,i)=>`uShapeA[${i}]`)]);
 const dP=mkP(VS,DIV_FS),dU=gU(dP,['uVelocity','uBarrier','uInvRes']);
 const jP=mkP(VS,JAC_FS),jU=gU(jP,['uPressure','uDivergence','uBarrier','uInvRes']);
@@ -195,13 +312,19 @@ const rP=mkP(VS,DSP_FS),rU=gU(rP,['uVelocity','uDye','uBarrier','uGain','uBloom'
    Implicit backward-Euler: (I - νΔt∇²)u = u*, Jacobi-solved.
    Unconditionally stable, well-conditioned (diagonal 1+4a dominates), so ~20 sweeps converge.
    Only runs when ν>0, so the default (ν=0) path is identical in cost to before. */
+// Extra programs for the optional viscous solve: cP copies u* aside, fP is one
+// implicit diffusion Jacobi sweep.
 const COPY_FS=RAW['shaders/copy.frag.glsl'];
 const DIFF_FS=RAW['shaders/diffuse.frag.glsl'];
 const cP=mkP(VS,COPY_FS),cU=gU(cP,['uTex']);
 const fP=mkP(VS,DIFF_FS),fU=gU(fP,['uVel','uVel0','uBarrier','uInvRes','uA']);
 const DIFFUSE_ITERS=20;
 
+// The simulation textures: velocity, pressure, divergence, dye, and stashed u*.
 let vF,pF,dvF,dyF,u0F;
+// Allocate them at a grid resolution derived from the canvas aspect and a device
+// scale, capped by maxSide. Also creates the barrier texture and the offscreen
+// barrier canvases, and reports the grid size to the status bar.
 function initFBOs(){const isMob=window.innerWidth<600;const scale=isMob?0.5:0.75;
   // MOBILE FIX: Maintain screen aspect ratio in sim grid.
   // Old code forced 384×384 square on portrait screens, distorting all shapes.
@@ -210,12 +333,19 @@ function initFBOs(){const isMob=window.innerWidth<600;const scale=isMob?0.5:0.75
   else{simH=Math.min(Math.floor(canvas.height*scale),maxSide);simW=Math.max(64,Math.round(simH*canvas.width/canvas.height));}
   simW=Math.max(simW,64);simH=Math.max(simH,64);vF=mkDF(simW,simH);pF=mkDF(simW,simH);dvF=mkF(simW,simH);dyF=mkDF(simW,simH);u0F=mkF(simW,simH);
   barrierTex=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA,simW,simH,0,gl.RGBA,gl.UNSIGNED_BYTE,null);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.NEAREST);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);initBarrierCanvas();document.getElementById('st-res').textContent=simW+'×'+simH+(TEX_CAN_LINEAR?'':' [nearest]');}
+// Match canvas backing size to the wrapper and reallocate the sim grid.
 function resize(){const w=document.getElementById('canvas-wrap');CW=w.clientWidth;CH=w.clientHeight;if(CW<10||CH<10){CW=300;CH=300;}const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=Math.floor(CW*dpr);canvas.height=Math.floor(CH*dpr);initFBOs();frame=0;}
 if(window.ResizeObserver)new ResizeObserver(()=>resize()).observe(document.getElementById('canvas-wrap'));else window.addEventListener('resize',resize);
 
+// One simulation step: the full Stam pipeline (advect → [diffuse] → advect dye →
+// divergence → pressure jacobi → gradient subtract). Each stage is a quad draw
+// into a framebuffer; ping-pong swaps make the output feed the next stage.
 function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
+  // Re-raster the barrier if a shape moved or spun, so no-flow cells track them.
   let nb=barrierDirty;for(const s of shapes)if(s.spin!==0||!s.fixed){nb=true;break;}if(nb){renderBarrierCanvas();barrierDirty=false;}
   gl.viewport(0,0,simW,simH);
+  // Stage 1 - advect velocity (uMode 0): semi-Lagrangian backtrace of vF, plus
+  // emitter/mouse/gravity forces and shape solid-body velocity. Writes vF.write.
   gl.bindFramebuffer(gl.FRAMEBUFFER,vF.write.fbo);gl.useProgram(aP);
   gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(aU.uVelocity,0);
   gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(aU.uDye,1);
@@ -226,9 +356,15 @@ function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
   gl.uniform1f(aU.uMouseVortex,mouseVortex);
   gl.uniform1f(aU.uGravity,SIM.gravity?SIM.gravityStr:0);
   gl.uniform1i(aU.uNumEmitters,emitters.length);gl.uniform1i(aU.uNumShapes,shapes.length);
+  // Pack each active emitter into three vec4 uniforms (position+direction,
+  // strength/width/type, dye colour); direction depends on the emitter type.
   for(let i=0;i<MAX_E;i++){const e=emitters[i];if(e&&e.active){const ca=Math.cos(e.angle),sa=Math.sin(e.angle);let dx=ca,dy=-sa;const et=e.type==='jet'?0:e.type==='point'?1:2;if(e.type==='point'){dx=0;dy=0;}if(e.type==='vortex'){dx=-sa;dy=-ca;}gl.uniform4f(aU[`uEmitA[${i}]`],e.x/CW,1-e.y/CH,dx,dy);gl.uniform4f(aU[`uEmitB[${i}]`],e.strength*(e.mult||1),e.width,et,1);gl.uniform4f(aU[`uEmitC[${i}]`],e.dyeR,e.dyeG,e.dyeB,0);}else{gl.uniform4f(aU[`uEmitA[${i}]`],0,0,0,0);gl.uniform4f(aU[`uEmitB[${i}]`],0,0,0,0);gl.uniform4f(aU[`uEmitC[${i}]`],0,0,0,0);}}
+  // Pack each shape's centre, spin, and radius so the advect shader can stamp
+  // its rotational solid-body velocity into barrier cells.
   for(let i=0;i<MAX_S;i++){const s=shapes[i];if(s)gl.uniform4f(aU[`uShapeA[${i}]`],s.x/CW,1-s.y/CH,s.spin,Math.max(s.w,s.h)/2/CW);else gl.uniform4f(aU[`uShapeA[${i}]`],0,0,0,0);}
   dq();vF.swap();
+  // Stage 2 - viscous diffusion (only when ν>0). Solve (I - νΔt∇²)u = u* by
+  // Jacobi: stash u* in u0F as the fixed right-hand side, then sweep diffuse.
   // ── Viscous diffusion (only when ν>0; zero cost otherwise) ──
   if(SIM.viscosity>1e-4){
     const a=SIM.viscosity*deltaTime;
@@ -243,18 +379,35 @@ function step(){const inv=[1/simW,1/simH],asp=simW/simH;integrateShapes();
       dq();vF.swap();
     }
   }
+  // Stage 3 - advect dye (uMode 1): carry the colour field along the new
+  // velocity, so the dye traces the flow. Writes dyF.write, then swap.
   gl.useProgram(aP);gl.bindFramebuffer(gl.FRAMEBUFFER,dyF.write.fbo);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(aU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(aU.uDye,1);gl.uniform1i(aU.uMode,1);dq();dyF.swap();
+  // Stage 4 - divergence: measure ∇·u of the advected velocity into dvF (the
+  // right-hand side of the pressure Poisson equation).
   gl.bindFramebuffer(gl.FRAMEBUFFER,dvF.fbo);gl.useProgram(dP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(dU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(dU.uBarrier,1);gl.uniform2f(dU.uInvRes,inv[0],inv[1]);dq();
+  // Stage 5 - pressure Poisson solve: jacobiIters Jacobi sweeps, pF ping-ponging
+  // against the fixed divergence, converging toward the pressure that will
+  // cancel divergence.
   gl.useProgram(jP);for(let i=0;i<SIM.jacobiIters;i++){gl.bindFramebuffer(gl.FRAMEBUFFER,pF.write.fbo);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,pF.read.tex);gl.uniform1i(jU.uPressure,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dvF.tex);gl.uniform1i(jU.uDivergence,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(jU.uBarrier,2);gl.uniform2f(jU.uInvRes,inv[0],inv[1]);dq();pF.swap();}
+  // Stage 6 - gradient subtract (projection): u = u - ∇p, leaving the velocity
+  // divergence-free (incompressible). Writes vF.write, then swap.
   gl.bindFramebuffer(gl.FRAMEBUFFER,vF.write.fbo);gl.useProgram(gP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,pF.read.tex);gl.uniform1i(gUn.uPressure,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(gUn.uVelocity,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(gUn.uBarrier,2);gl.uniform2f(gUn.uInvRes,inv[0],inv[1]);dq();vF.swap();}
 
+// Render the current velocity/dye/barrier to the screen with the chosen colormap
+// and bloom, then draw the 2D overlay (icons, vectors, brush) on top.
 function display(){
   if(barrierDirty){renderBarrierCanvas();barrierDirty=false;}
   gl.viewport(0,0,canvas.width,canvas.height);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.useProgram(rP);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,vF.read.tex);gl.uniform1i(rU.uVelocity,0);gl.activeTexture(gl.TEXTURE1);gl.bindTexture(gl.TEXTURE_2D,dyF.read.tex);gl.uniform1i(rU.uDye,1);gl.activeTexture(gl.TEXTURE2);gl.bindTexture(gl.TEXTURE_2D,barrierTex);gl.uniform1i(rU.uBarrier,2);gl.uniform1f(rU.uGain,SIM.gain);gl.uniform1f(rU.uBloom,SIM.bloom);gl.uniform1i(rU.uCmap,SIM.cmap);dq();drawOverlays();}
 
+// The 2D overlay canvas sits above the WebGL canvas and draws object icons,
+// selection highlights, the vector field, and the draw brush.
 /* ═══ OVERLAY ═══ */
 let overlayCanvas,overlayCtx;
+// Create the overlay canvas and add it over the sim canvas.
 function initOverlay(){overlayCanvas=document.createElement('canvas');overlayCanvas.id='display-canvas';overlayCanvas.style.cssText='position:absolute;top:0;left:0;width:100%;height:100%;z-index:5;cursor:crosshair';document.getElementById('canvas-wrap').appendChild(overlayCanvas);overlayCtx=overlayCanvas.getContext('2d');}
+// Redraw the overlay each frame: blit the WebGL frame, then draw emitter and
+// shape icons with their selection state and spin arcs, then optionally the
+// vector field and the brush cursor.
 function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(overlayCanvas.width!==Math.floor(CW*dpr)||overlayCanvas.height!==Math.floor(CH*dpr)){overlayCanvas.width=Math.floor(CW*dpr);overlayCanvas.height=Math.floor(CH*dpr);}const ctx=overlayCtx;ctx.setTransform(1,0,0,1,0,0);
   ctx.drawImage(canvas,0,0,overlayCanvas.width,overlayCanvas.height);
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -270,6 +423,8 @@ function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(over
     ctx.setLineDash([]);if(s.spin!==0){ctx.strokeStyle='rgba(100,200,100,0.35)';ctx.lineWidth=1;const r=Math.max(s.w,s.h)*.4,dir=s.spin>0?1:-1;ctx.beginPath();ctx.arc(0,0,r,0,dir*Math.PI*1.2);ctx.stroke();}
     if(!s.fixed){ctx.strokeStyle='rgba(100,200,100,0.3)';ctx.lineWidth=1;ctx.setLineDash([3,3]);ctx.beginPath();ctx.arc(0,0,Math.max(s.w,s.h)*.6,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);}ctx.restore();}
 
+  // Vector field overlay: read back the whole velocity texture once, then draw a
+  // little arrow per grid cell showing local flow direction and speed.
   // Vector field overlay
   if(SIM.showVectors && vF){
     const cs=SIM.cellSize;
@@ -311,40 +466,56 @@ function drawOverlays(){const dpr=Math.min(window.devicePixelRatio||1,2);if(over
 
   if(SIM.drawMode||SIM.eraseMode){ctx.strokeStyle=SIM.eraseMode?'rgba(255,80,80,0.5)':'rgba(150,200,255,0.5)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(mouse.screenX,mouse.screenY,SIM.brushSize/2,0,Math.PI*2);ctx.stroke();}}
 
+// Pointer state and interaction. Depending on mode, a press either drags/rotates
+// an object, paints the barrier brush, or stirs the fluid with a mouse vortex.
 /* ═══ INPUT ═══ */
 let mouse={x:0,y:0,screenX:0,screenY:0,down:false,px:0,py:0};
 let dragObj=null,dragOffX=0,dragOffY=0,rotating=false;
 let mouseVortex=0;
 
+// Pointer position in canvas-local pixels (mouse or first touch).
 function gp(e){const r=document.getElementById('canvas-wrap').getBoundingClientRect();const t=e.touches?e.touches[0]:e;return{sx:t.clientX-r.left,sy:t.clientY-r.top};}
+// Hit-test emitters then shapes (topmost first) at a screen point.
 function hitObj(sx,sy){for(let i=emitters.length-1;i>=0;i--){const e=emitters[i];if(Math.sqrt((sx-e.x)**2+(sy-e.y)**2)<e.width*CH+15)return{obj:e,type:'emitter'};}
   for(let i=shapes.length-1;i>=0;i--){const s=shapes[i];const ca=Math.cos(-s.angle),sa=Math.sin(-s.angle);const dx=sx-s.x,dy=sy-s.y;if(Math.abs(dx*ca-dy*sa)<s.w/2+12&&Math.abs(dx*sa+dy*ca)<s.h/2+12)return{obj:s,type:'shape'};}return null;}
 
+// Press: paint if in draw/erase mode; else grab an object under the cursor
+// (shift to rotate); else start stirring (left = vortex one way, right = other).
 function onDown(e){e.preventDefault();const{sx,sy}=gp(e);mouse.screenX=sx;mouse.screenY=sy;
   if(SIM.drawMode||SIM.eraseMode){mouse.down=true;drawBrush(sx,sy);return;}
   const hit=hitObj(sx,sy);
   if(hit){dragObj=hit.obj;dragOffX=hit.obj.x-sx;dragOffY=hit.obj.y-sy;rotating=e.shiftKey;SIM.selectedId=hit.obj.id;SIM.selectedType=hit.type;rebuildList();}
   else{mouse.down=true;mouseVortex=(e.button===2)?-1:1;
     mouse.x=sx/CW;mouse.y=1-sy/CH;mouse.px=mouse.x;mouse.py=mouse.y;SIM.selectedId=-1;rebuildList();}}
+// Move: continue painting, drag/rotate the held object, or update the stir point.
 function onMove(e){const{sx,sy}=gp(e);mouse.screenX=sx;mouse.screenY=sy;
   if(SIM.drawMode||SIM.eraseMode){if(mouse.down)drawBrush(sx,sy);return;}
   if(dragObj){e.preventDefault();if(rotating)dragObj.angle=Math.atan2(sy-dragObj.y,sx-dragObj.x);else{dragObj.x=sx+dragOffX;dragObj.y=sy+dragOffY;}barrierDirty=true;return;}
   if(mouse.down){mouse.x=sx/CW;mouse.y=1-sy/CH;}}
+// Release: drop any held object (zeroing its velocity) and stop stirring.
 function onUp(){if(dragObj){dragObj.vx=0;dragObj.vy=0;}dragObj=null;rotating=false;mouse.down=false;mouseVortex=0;}
 
+// Barrier brush: stamp (or erase) a filled circle into the drawn-wall canvas at
+// sim resolution and flag the barrier for re-upload.
 /* ═══ DRAW ═══ */
 function drawBrush(sx,sy){const bx=sx/CW*simW,by=(1-sy/CH)*simH,r=SIM.brushSize/CW*simW;
   if(SIM.eraseMode){drawnCtx.globalCompositeOperation='destination-out';drawnCtx.beginPath();drawnCtx.arc(bx,by,r,0,Math.PI*2);drawnCtx.fill();drawnCtx.globalCompositeOperation='source-over';}
   else{drawnCtx.fillStyle='#fff';drawnCtx.beginPath();drawnCtx.arc(bx,by,r,0,Math.PI*2);drawnCtx.fill();}barrierDirty=true;}
+// Erase all drawn walls.
 function clearDrawn(){drawnCtx.clearRect(0,0,simW,simH);barrierDirty=true;}
+// Draw/erase mode toggles (mutually exclusive).
 function toggleDraw(){SIM.drawMode=!SIM.drawMode;if(SIM.drawMode)SIM.eraseMode=false;updD();}
 function toggleErase(){SIM.eraseMode=!SIM.eraseMode;if(SIM.eraseMode)SIM.drawMode=false;updD();}
+// Reflect the current mode in the buttons, cursor, and status bar.
 function updD(){document.getElementById('tog-draw').className='tog-btn '+(SIM.drawMode?'on':'off');document.getElementById('tog-erase').className='tog-btn '+(SIM.eraseMode?'on':'off');if(overlayCanvas)overlayCanvas.style.cursor=(SIM.drawMode||SIM.eraseMode)?'none':'crosshair';document.getElementById('st-mode').textContent=SIM.drawMode?'draw':SIM.eraseMode?'erase':'vortex';}
 
+// Paint a range input's filled portion via the --pct CSS variable.
 /* ═══ UI ═══ */
 function sg(el){el.style.setProperty('--pct',((el.value-el.min)/(el.max-el.min)*100)+'%');}
 document.querySelectorAll('#panel input[type=range]').forEach(sg);
 
+// Bind a per-object slider (in an object card) to obj[prop], updating its readout
+// and, for shapes, flagging the barrier dirty so the change re-rasters.
 function bindSlider(inp, obj, prop, kind) {
   inp.addEventListener('input', function() {
     obj[prop] = +this.value;
@@ -359,6 +530,9 @@ function bindSlider(inp, obj, prop, kind) {
   });
 }
 
+// Rebuild the object panel: one card per emitter and shape, sorted by id, each
+// with type-specific sliders (strength/width, size, spin, colour) and its
+// duplicate/delete/fixed controls wired up.
 function rebuildList(){
   const list=document.getElementById('obj-list');list.innerHTML='';
   const eI={jet:'▸',point:'◉',vortex:'◎'},sI={circle:'●',rect:'▬',airfoil:'◗',wedge:'◣',gear:'⚙',star:'★',tesla:'⇌'};
@@ -439,8 +613,11 @@ function rebuildList(){
   }
   document.getElementById('st-obj').textContent=(emitters.length+shapes.length)+' objects';
 }
+// Flip a shape between fixed (immovable barrier) and dynamic (fluid-driven).
 function toggleFixed(id){const s=shapes.find(o=>o.id===id);if(!s)return;s.fixed=!s.fixed;s.vx=0;s.vy=0;s.va=0;rebuildList();}
+// Find a free spot for a new object by spiralling out from the centre.
 function findSpot(){const all=[...emitters,...shapes];for(let ring=0;ring<8;ring++){const r=ring*60,steps=Math.max(1,ring*6);for(let s=0;s<steps;s++){const a=s/steps*Math.PI*2,tx=CW/2+Math.cos(a)*r,ty=CH/2+Math.sin(a)*r;let ok=true;for(const o of all)if((tx-o.x)**2+(ty-o.y)**2<3600){ok=false;break;}if(ok)return{x:Math.max(40,Math.min(CW-40,tx)),y:Math.max(40,Math.min(CH-40,ty))};}}return{x:CW/2,y:CH/2};}
+// Add / remove / duplicate objects, respecting the MAX_E / MAX_S caps.
 function addEmitter(t){if(emitters.length>=MAX_E)return;const{x,y}=findSpot();const e=createEmitter(t,x,y);emitters.push(e);SIM.selectedId=e.id;SIM.selectedType='emitter';rebuildList();if(window.innerWidth<600)document.getElementById('panel').classList.remove('mob-open');}
 function addShape(t){if(shapes.length>=MAX_S)return;const{x,y}=findSpot();const s=createShape(t,x,y);shapes.push(s);SIM.selectedId=s.id;SIM.selectedType='shape';barrierDirty=true;rebuildList();if(window.innerWidth<600)document.getElementById('panel').classList.remove('mob-open');}
 function removeObj(id,kind){if(kind==='emitter')emitters=emitters.filter(e=>e.id!==id);else{shapes=shapes.filter(s=>s.id!==id);barrierDirty=true;}if(SIM.selectedId===id)SIM.selectedId=-1;rebuildList();}
@@ -453,10 +630,13 @@ function duplicateObj(id,kind){
   arr.push(copy);SIM.selectedId=copy.id;SIM.selectedType=kind;
   if(kind==='shape')barrierDirty=true;rebuildList();
 }
+// Play/pause, reset (reallocate the grid, keep objects), and clear everything.
 function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'▶ Play':'▐▐ Pause';b.classList.toggle('active',SIM.playing);}
 function resetSim(){frame=0;initFBOs();barrierDirty=true;}
 function clearAll(){emitters=[];shapes=[];SIM.selectedId=-1;if(drawnCtx)drawnCtx.clearRect(0,0,simW,simH);barrierDirty=true;resetSim();rebuildList();}
 
+// Named demo scenes: wind tunnel (rainbow jets past a disc), Von Kármán vortex
+// street, a spinning propeller, and colliding jets.
 function preset(name){clearAll();
   if(name==='windtunnel'){
     const n=20;for(let i=0;i<n;i++){
@@ -471,16 +651,22 @@ function preset(name){clearAll();
   else if(name==='jet'){const e1=createEmitter('jet',CW*.15,CH/2);e1.strength=300;e1.width=.02;e1.dyeR=1;e1.dyeG=.3;e1.dyeB=.1;emitters.push(e1);const e2=createEmitter('jet',CW*.15,CH*.35);e2.angle=.3;e2.strength=250;e2.width=.015;e2.dyeR=.1;e2.dyeG=.5;e2.dyeB=1;emitters.push(e2);const e3=createEmitter('jet',CW*.15,CH*.65);e3.angle=-.3;e3.strength=250;e3.width=.015;e3.dyeR=.2;e3.dyeG=1;e3.dyeB=.3;emitters.push(e3);}
   barrierDirty=true;rebuildList();}
 
+// The scene shown on first load: two opposing coloured jets and a central disc.
 function defaultSetup(){
   const e1=createEmitter('jet',40,CH*.42);e1.strength=100;e1.width=.06;e1.dyeR=.15;e1.dyeG=.5;e1.dyeB=1;emitters.push(e1);
   const e2=createEmitter('jet',40,CH*.58);e2.strength=100;e2.width=.06;e2.dyeR=1;e2.dyeG=.35;e2.dyeB=.1;emitters.push(e2);
   const s=createShape('circle',CW*.35,CH*.5);s.w=100;s.h=100;shapes.push(s);
   barrierDirty=true;rebuildList();}
 
+// Main loop: clamp the timestep (so a stall cannot blow up the solver), step the
+// simulation when playing, always display, and update the FPS/frame readouts.
 function loop(now){requestAnimationFrame(loop);deltaTime=Math.min((now-lastTime)/1000,.033);lastTime=now;fpsAccum+=deltaTime;fpsCount++;
   if(fpsAccum>=.5){document.getElementById('st-fps').textContent=Math.round(fpsCount/fpsAccum)+' fps';fpsAccum=0;fpsCount=0;}
   if(SIM.playing){step();frame++;}display();document.getElementById('st-frame').textContent='frame '+frame;}
 
+// Boot: create the overlay, wire pointer/touch events, size everything, draw the
+// colormap previews, then load the default scene and start the loop. The last
+// line exposes the handlers the inline HTML onclick attributes call.
 initOverlay();
 overlayCanvas.addEventListener('contextmenu',e=>e.preventDefault());
 overlayCanvas.addEventListener('mousedown',onDown);window.addEventListener('mousemove',onMove);window.addEventListener('mouseup',onUp);

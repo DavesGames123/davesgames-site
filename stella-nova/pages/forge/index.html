@@ -4,10 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Planet Forge // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PLANET FORGE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js generates the planet textures on the CPU and
+   renders the sphere into #three-mount. This file lays out two parallel sets
+   of controls (mobile row and desktop bar) that write into the same inputs,
+   the batch queue panel, the viewport, and the outputs sidebar. main.js binds
+   everything by id.
+
+   LOAD ORDER
+     1. fonts + style.css
+     2. three.js r128 (global THREE), then JSZip (global JSZip)
+     3. main.js (classic script, async IIFE)
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Planet Forge                     #clock     │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ control bar: type · temp · seed · res · sun · toggles · Generate  │
+     ├──────────────────────────────────────────────┬──────────────────┤
+     │ #viewport                                     │ #sidebar         │
+     │   #three-mount  (planet)                      │   PBR render btn  │
+     │   #empty-state / #mob-sidebar-btn             │   #map-buttons ▶ │
+     │                                               │   info readouts   │
+     └──────────────────────────────────────────────┴──────────────────┘
+
+   Many inline onchange/onclick handlers mirror a mobile control into its
+   desktop twin, so main.js only reads the desktop ids.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: tag the page when embedded in the site shell iframe. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
 <div id="app">
@@ -119,6 +151,8 @@
 </div>
 </div>
 
+<!-- three.js (global THREE) for the sphere, JSZip (global JSZip) for batch export,
+     then main.js which uses both. Load order matters. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="main.js"></script>

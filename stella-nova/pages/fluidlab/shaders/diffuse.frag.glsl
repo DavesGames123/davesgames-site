@@ -1,4 +1,12 @@
 #version 300 es
+// diffuse.frag.glsl — solver stage 2 (optional): one viscous diffusion sweep
+//
+//   Implicit backward-Euler viscosity, solved by Jacobi: (I - a*laplacian)u = u*,
+//   where a = nu*dt and u* is the fixed pre-diffusion velocity (uVel0). Each
+//   sweep updates uVel toward the smoothed solution; main.js runs 20 of them and
+//   only when viscosity nu > 0. This scheme is unconditionally stable.
+//
+//       u_new = ( u0 + a*(l + r + d + u) ) / (1 + 4a)
 precision highp float;in vec2 vUV;out vec4 fragColor;
 uniform sampler2D uVel,uVel0,uBarrier;uniform vec2 uInvRes;uniform float uA;
 void main(){vec2 uv=vUV;vec2 src=texture(uVel0,uv).xy;

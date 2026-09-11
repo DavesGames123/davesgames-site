@@ -1,7 +1,14 @@
 #version 300 es
+// boid.vert.glsl — swarm point, vertex stage
+//
+//   One vertex per boid, drawn as a GL point. Look this boid up in the position
+//   and velocity textures by gl_VertexID, project it with the camera basis, and
+//   size the point by distance. Behind-camera boids are pushed off-screen. The
+//   fragment stage reads the varyings for depth test, colour, and glyph choice.
 precision highp float;
 uniform sampler2D uPos,uVel; uniform float uW;
 uniform vec3 uRO,uRight,uUp,uFwd; uniform float uFocal,uPoint; uniform vec2 uRes;
+// To fragment: view depth, per-boid seed, speed factor, and point size.
 out float vVZ; out float vSeed; out float vT; out float vSize;
 void main(){
   int W=int(uW); int id=gl_VertexID;
