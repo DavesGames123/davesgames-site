@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spin Storage // Stella Nova · davesgames.io</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head><body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QFT · storage</span></div>
+  <div class="topbar-r">SYS // <strong>SPIN DATA STORE</strong></div>
+</div>
+
+<div id="main">
+  <div id="panel">
+    <div class="card">
+      <div class="lbl">Payload <span class="tag">your data</span></div>
+      <textarea id="payload" rows="3" spellcheck="false">Hello, Stella Nova!</textarea>
+      <div class="cap"><div class="capbar"><div id="capfill"></div></div><div class="capnum" id="capnum"></div>
+        <div class="capnum" id="holevo" style="color:var(--amber)"></div></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Register <span class="tag">storage medium</span></div>
+      <div class="row">
+        <span class="name">qubits&nbsp;<b style="color:var(--ink)">n</b></span>
+        <div class="stepper"><button id="n-minus">−</button><span class="v" id="n-val">10</span><button id="n-plus">+</button></div>
+      </div>
+      <div class="slider"><div class="head"><span class="k">bits / angle <b>B</b></span><span class="val" id="b-val">8</span></div>
+        <input type="range" class="amber" id="bits" min="4" max="12" step="1" value="8"></div>
+      <div class="toggle-row"><span>amplitude axis too (θ)</span><button class="sw on" id="ampmode"></button></div>
+      <div class="note" id="reg-note"></div>
+    </div>
+  </div>
+
+  <div id="viz">
+    <header>
+      <div class="kicker">Lossless encode · spin rotations → bits → spin rotations</div>
+      <h1>Store data in <em>the angles</em></h1>
+      <p class="sub">The honest way to use spin states as memory: write your bytes straight into the rotation angles each qubit actually controls, then read them back. n qubits give <b>2n real dials</b> (a θ and φ each); quantize each to B bits and you have a clean, exact <b>2nB-bit</b> register. No fitting, no approximation, no loss — the data lives where the hardware lives.</p>
+    </header>
+
+    <div class="card">
+      <div class="lbl">① Register state <span class="tag" id="slots-tag"></span></div>
+      <div id="dials"></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">② Round trip <span class="tag">decode the angles back</span></div>
+      <div class="rt"><div class="rtlab">decoded</div><div class="rtval" id="decoded"></div></div>
+      <div id="match"></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">③ The waveform your bytes make <span class="tag">spectrum of the stored state</span></div>
+      <canvas class="viz" id="cv-wave" height="170"></canvas>
+      <div class="note">A fun aside: this is the power spectrum the stored rotations happen to produce. It carries no meaning — it's just what your data looks like as a quantum signal. The <b>meaning</b> is in the angles, recovered exactly above; the curve is a derived shadow.</div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">What you're watching</div>
+      <div class="explain">You're storing bits in the <b>degrees of freedom the device controls</b> — 2 angles per qubit — and decoding them exactly. This is the opposite of the lossy approach where you try to cram a 2ⁿ-sample <em>curve</em> into 2n knobs (a lossy 2ⁿ→2n squeeze that can never be exact). Here we store exactly <b>2nB bits</b>, matched to the 2n dials, and read them straight back. Capacity scales <b>linearly</b> with qubits, decode is trivial, fidelity is perfect. If you wanted to store a full 2ⁿ-amplitude vector instead, you'd need an entangling write circuit and full state tomography to read — exponential, and not what you want for a dummy data channel.<br><br><b>The catch that matters:</b> the 2nB figure is a property of this <b>classical simulator</b>, which reads the float angles back perfectly. On a real device you can't read an angle — a measurement returns one bit per qubit and destroys the state, and no-cloning forbids copying it. <b>Holevo's theorem (1973)</b> caps what's retrievable from n qubits at exactly <b>n classical bits</b>, no matter how finely you slice the angles. So as a simulator data structure this is a fancy float array; as a claim about quantum storage, the ceiling is n bits.</div>
+    </div>
+  </div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

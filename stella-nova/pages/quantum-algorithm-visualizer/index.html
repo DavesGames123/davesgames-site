@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>QAVE · ρ(t) // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QAVE · ρ(t)</span></div>
+  <div class="topbar-r">SYS // <strong>DENSITY MATRIX</strong></div>
+</div>
+<div id="main">
+  <div id="panel"><div class="p-body">
+    <div class="p-section"><div class="p-sec-lbl">Algorithm</div>
+      <div class="preset-grid" id="preset-grid">
+        <button class="preset-btn" data-preset="bell">Bell</button>
+        <button class="preset-btn" data-preset="ghz">GHZ</button>
+        <button class="preset-btn" data-preset="plus">|+⟩ⁿ</button>
+        <button class="preset-btn active" data-preset="qft">QFT</button>
+        <button class="preset-btn" data-preset="iqft">iQFT</button>
+        <button class="preset-btn" data-preset="grover">Grover</button>
+        <button class="preset-btn" data-preset="dj">Deutsch–J</button>
+        <button class="preset-btn" data-preset="bv">Bernstein</button>
+        <button class="preset-btn" data-preset="toffoli">Toffoli</button>
+        <button class="preset-btn" data-preset="kick">Kickback</button>
+        <button class="preset-btn" data-preset="teleport">Teleport</button>
+        <button class="preset-btn" data-preset="scramble">Scramble</button>
+      </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Build</div>
+      <div class="qrow"><span class="qrow-lbl">Qubits</span><div class="stepper"><button class="step" id="q-minus">−</button><span class="stepval" id="q-count">3</span><button class="step" id="q-plus">+</button></div></div>
+      <div class="qrow"><span class="qrow-lbl">Target q</span><div class="stepper"><button class="step" id="t-minus">−</button><span class="stepval" id="t-val">0</span><button class="step" id="t-plus">+</button></div></div>
+      <div class="qrow"><span class="qrow-lbl">Control q</span><div class="stepper"><button class="step" id="c-minus">−</button><span class="stepval" id="c-val">1</span><button class="step" id="c-plus">+</button></div></div>
+      <div class="qrow"><span class="qrow-lbl">Angle θ</span><input type="range" id="sl-angle" min="0" max="6.283" value="1.5708" step="0.0628"><span class="val" id="vl-angle">π/2</span></div>
+      <div class="gate-grid" style="margin-top:8px">
+        <button class="gate-btn" data-g="h">H</button><button class="gate-btn" data-g="x">X</button><button class="gate-btn" data-g="y">Y</button><button class="gate-btn" data-g="z">Z</button>
+        <button class="gate-btn" data-g="s">S</button><button class="gate-btn" data-g="t">T</button><button class="gate-btn" data-g="rx">Rx</button><button class="gate-btn" data-g="ry">Ry</button>
+        <button class="gate-btn" data-g="rz">Rz</button><button class="gate-btn two" data-g="cx">CX</button><button class="gate-btn two" data-g="cz">CZ</button><button class="gate-btn two" data-g="swap">SW</button>
+      </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Sequence</div>
+      <div class="gate-list" id="gate-list"></div>
+      <div class="sim-btns" style="margin-top:8px"><button class="sim-btn" id="btn-measure">⊡ Measure</button><button class="sim-btn warn" id="btn-clear">✕ Clear</button></div></div>
+    <div class="p-section"><div class="p-sec-lbl">ρ Coloring</div>
+      <div class="mode-grid">
+        <button class="mode-btn active" data-cm="mag">|ρ|</button>
+        <button class="mode-btn" data-cm="real">Re(ρ)</button>
+        <button class="mode-btn" data-cm="phase">∠ρ</button>
+      </div>
+      <div class="cmap-grid" id="cmap-grid" style="margin-top:6px">
+        <button class="cmap-btn active" data-cmap="inferno"><canvas></canvas><span class="cmap-label">Inferno</span></button>
+        <button class="cmap-btn" data-cmap="viridis"><canvas></canvas><span class="cmap-label">Viridis</span></button>
+        <button class="cmap-btn" data-cmap="turbo"><canvas></canvas><span class="cmap-label">Turbo</span></button>
+        <button class="cmap-btn" data-cmap="ice"><canvas></canvas><span class="cmap-label">Ice</span></button>
+        <button class="cmap-btn" data-cmap="plasma"><canvas></canvas><span class="cmap-label">Plasma</span></button>
+        <button class="cmap-btn" data-cmap="mono"><canvas></canvas><span class="cmap-label">Mono</span></button>
+      </div>
+      <div style="margin-top:11px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px">
+          <span class="qrow-lbl" style="width:auto">Tone curve</span>
+          <button id="curve-reset" class="curve-reset">reset γ</button>
+        </div>
+        <canvas id="curve-cv" width="252" height="150"></canvas>
+        <div class="curve-hint">input |ρ| → output · drag the point to reshape</div>
+      </div>
+    </div>
+    <div class="p-section"><div class="p-sec-lbl">Shape</div>
+      <div class="shape-grid" id="shape-grid">
+        <button class="mode-btn active" data-shape="round" title="Rounded cube">▢</button>
+        <button class="mode-btn" data-shape="box" title="Sharp box">◻</button>
+        <button class="mode-btn" data-shape="sphere" title="Sphere">●</button>
+        <button class="mode-btn" data-shape="octa" title="Octahedron">◆</button>
+      </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Background</div>
+      <div class="bg-grid" id="bg-grid">
+        <button class="bg-sw" data-bg="navy" title="Navy" style="background:linear-gradient(180deg,#16294d,#05070f)"></button>
+        <button class="bg-sw active" data-bg="black" title="Black" style="background:#000"></button>
+        <button class="bg-sw" data-bg="slate" title="Slate" style="background:#12161e"></button>
+        <button class="bg-sw" data-bg="steel" title="Steel grey" style="background:#2a3340"></button>
+        <button class="bg-sw" data-bg="dusk" title="Dusk" style="background:linear-gradient(180deg,#2a1a3e,#0a0812)"></button>
+        <button class="bg-sw" data-bg="paper" title="Paper (light)" style="background:#e8ecf2"></button>
+      </div></div>
+    <div class="p-section"><div class="p-sec-lbl">Scene</div>
+      <button class="tog-btn" id="tog-full">⬢ Full structure (show all layers)</button>
+      <button class="tog-btn on" id="tog-rotate">⟳ Auto-orbit</button>
+      <button class="tog-btn" id="tog-floor">▦ Floor grid</button>
+      <button class="tog-btn on" id="tog-net">⇌ Shot-stack network</button>
+      <button class="tog-btn on" id="tog-labels">⊞ Basis labels</button>
+      <button class="tog-btn on" id="tog-inspect">◎ Step inspector (active gate)</button>
+      <button class="tog-btn on" id="tog-grid2d">▦ 2D matrix grid</button></div>
+  </div></div>
+  <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
+  <div id="canvas-wrap">
+    <div id="circuit-dock">
+      <div id="cd-head">
+        <span class="cd-title">ρ(t)</span>
+        <span id="hud-step">step 0/0 · phase —</span>
+        <div id="cd-views">
+          <button class="dock-view active" data-view="stack">▣ LAYER STACK</button>
+          <button class="dock-view" data-view="floor">▦ FLOOR FIELD</button>
+        </div>
+        <button id="cd-qiskit-btn">&lt;/&gt; QISKIT</button>
+      </div>
+      <div id="circuit-frame">
+        <div id="circuit-scroll"><canvas id="circuit-canvas"></canvas></div>
+        <canvas id="cgutter"></canvas>
+      </div>
+      <div id="cd-transport">
+        <button class="cd-tbtn active" id="btn-play">▶ Play</button>
+        <button class="cd-tbtn" id="btn-step">⇥ Step</button>
+        <button class="cd-tbtn" id="btn-restart">↺ Restart</button>
+        <button class="cd-tbtn sample" id="btn-sample">⚲ Sample</button>
+      </div>
+      <div id="cd-sliders">
+        <div class="cd-srow"><span>Scrub</span><input type="range" id="sl-scrub" min="0" max="100" value="0" step="1"><span class="val" id="vl-scrub">0%</span></div>
+        <button id="adv-toggle" class="adv-toggle"><span class="arw">▸</span>Advanced settings</button>
+        <div id="adv-rows" class="adv-rows">
+          <div class="cd-srow"><span>Speed</span><input type="range" id="sl-speed" min="0.1" max="3" value="2" step="0.1"><span class="val" id="vl-speed">2.0</span></div>
+          <div class="cd-srow"><span>Hold</span><input type="range" id="sl-hold" min="0.1" max="4" value="0.7" step="0.1"><span class="val" id="vl-hold">0.7s</span></div>
+          <div class="cd-srow"><span>Seed</span><input type="range" id="sl-seed" min="0" max="255" value="24" step="1"><span class="val" id="vl-seed">24</span></div>
+          <div class="cd-srow"><span>Shots</span><input type="range" id="sl-shots" min="0" max="4096" value="2048" step="1"><span class="val" id="vl-shots">2048</span></div>
+          <div class="cd-srow"><span>Gap</span><input type="range" id="sl-gap" min="0" max="1.5" value="0.7" step="0.05"><span class="val" id="vl-gap">0.70s</span></div>
+        </div>
+        <div class="cd-srow cd-heatrow"><span>Heat ≥</span><input type="range" id="sl-thresh" min="0" max="1" value="0" step="0.01"><span class="val" id="vl-thresh">0.00</span></div>
+      </div>
+      <div id="qiskit-panel" hidden>
+        <div id="qiskit-editor">
+          <pre id="qiskit-hl" aria-hidden="true"></pre>
+          <textarea id="qiskit-src" spellcheck="false" readonly></textarea>
+        </div>
+        <div id="qiskit-bar">
+          <button id="qiskit-custom">✎ Create custom</button>
+          <button id="qiskit-run" hidden>▶ Run circuit</button>
+          <span id="qiskit-msg">live code for the active algorithm</span>
+          <span id="qiskit-hint">h x y z s t rx ry rz cx cz swap ccx cswap · measure_all() · pi</span>
+        </div>
+      </div>
+    </div>
+    <div id="gl-host">
+      <canvas id="gl"></canvas>
+      <div class="hud hud-tr" id="hud-tr"></div>
+      <div class="hud hud-bottom" id="hud-bottom"></div>
+      <div class="legend" id="legend"></div>
+      <div id="step-inspector"><div id="insp-title">step —</div><canvas id="insp-cv"></canvas></div>
+      <div id="grid2d-panel"><div id="grid2d-title">ρ · 2D</div><div id="grid2d-stack"><canvas id="grid2d-cv"></canvas><canvas id="grid2d-ov"></canvas></div></div>
+      <button id="orient-btn">⬍ Vertical stack</button>
+      <div id="hist-panel">
+        <div id="hist-head"><span>Measurement sampling</span><span id="hist-info"></span><button id="hist-close">✕</button></div>
+        <canvas id="hist-canvas"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="status-bar">
+  <span id="st-qubits">3 qubits</span><span class="sep"></span>
+  <span id="st-dim">8×8 cells</span><span class="sep"></span>
+  <span id="st-layers">1 layer</span><span class="sep"></span>
+  <span id="st-step">step 0/0</span><span class="sep"></span>
+  <span id="st-outcome">outcome —</span><span class="sep"></span>
+  <span id="st-fps">-- fps</span>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Circular Polarization // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="grid-bg"></div>
+<canvas id="scene"></canvas>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Circular Polarization</span></div>
+  <div class="topbar-r">SYS // <strong>ELECTROMAGNETISM</strong></div>
+</div>
+
+<div class="err" id="err"></div>
+
+<div id="ui">
+  <section class="eq-panel">
+    <div class="eq-head">
+      <span class="dot"></span>
+      <span class="lbl">Field Equations</span>
+    </div>
+    <div class="eq-row" id="eq1"></div>
+    <div class="eq-row" id="eq2"></div>
+  </section>
+
+  <aside class="modes">
+    <button class="mode-btn" data-mode="single" type="button" aria-label="Single helix">
+      <span class="tip">Single</span>
+      <svg viewBox="0 0 24 24"><path d="M2.5 12 Q 5 5.5, 7.5 12 T 12.5 12 T 17.5 12 T 22.5 12"/><line x1="2.5" y1="12" x2="22.5" y2="12" stroke-dasharray="1.5,2" opacity="0.35"/></svg>
+    </button>
+    <button class="mode-btn active" data-mode="ring" type="button" aria-label="Radial ring">
+      <span class="tip">Radial</span>
+      <svg viewBox="0 0 24 24">
+        <ellipse cx="12" cy="12" rx="9" ry="3.2"/>
+        <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+        <circle cx="21" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="3" cy="12" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="17.5" cy="13.6" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="6.5" cy="13.6" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="17.5" cy="10.4" r="1.2" fill="currentColor" stroke="none"/>
+        <circle cx="6.5" cy="10.4" r="1.2" fill="currentColor" stroke="none"/>
+      </svg>
+    </button>
+    <button class="mode-btn" data-mode="sphere" type="button" aria-label="Full sphere">
+      <span class="tip">Spherical</span>
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9"/>
+        <ellipse cx="12" cy="12" rx="9" ry="3.5"/>
+        <ellipse cx="12" cy="12" rx="3.5" ry="9"/>
+      </svg>
+    </button>
+  </aside>
+
+  <section class="ctrl">
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Helices</span><span class="ctrl-val" id="vNum">36</span></div>
+      <input type="range" id="numHelices" min="1" max="800" value="36">
+    </div>
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Wavenumber <em>k</em></span><span class="ctrl-val" id="vK">2.0</span></div>
+      <input type="range" id="k" min="0.4" max="5" step="0.1" value="2.0">
+    </div>
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Frequency <em>ω</em></span><span class="ctrl-val" id="vW">1.00</span></div>
+      <input type="range" id="omega" min="0" max="4" step="0.05" value="1.0">
+    </div>
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Magnetic Field</span></div>
+      <label class="tog">
+        <input type="checkbox" id="showB" checked>
+        <span class="sw"></span>
+        <span class="tog-lbl">B-field</span>
+      </label>
+    </div>
+    <div class="ctrl-cell">
+      <div class="ctrl-row"><span class="ctrl-lbl">Field Lobes</span></div>
+      <label class="tog tog-lobes">
+        <input type="checkbox" id="showLobes">
+        <span class="sw"></span>
+        <span class="tog-lbl">E · B</span>
+      </label>
+    </div>
+  </section>
+
+  <div class="hint"><span>drag</span> rotate · <span>scroll</span> zoom · <span>right-drag</span> pan</div>
+  <div class="credits">davesgames.io</div>
+</div>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>

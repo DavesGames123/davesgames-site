@@ -1,0 +1,1572 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ════════════════════════════════════════════════════════════
+   (no Web Worker — computed synchronously; see computeBField)
+   ════════════════════════════════════════════════════════════ */
+
+/* ════════════════════════════════════════════════════════════
+   PHYSICS
+   ════════════════════════════════════════════════════════════ */
+function factorial(n){if(n<=1)return 1;let r=1;for(let i=2;i<=n;i++)r*=i;return r;}
+
+function radialR(r,n,l){
+  const rho=2*r/n,k=n-l-1,alpha=2*l+1;let L=1;
+  if(k===1){L=1+alpha-rho;}else if(k>1){let Lm2=1,Lm1=1+alpha-rho;for(let j=2;j<=k;j++){const t=((2*j-1+alpha-rho)*Lm1-(j-1+alpha)*Lm2)/j;Lm2=Lm1;Lm1=t;}L=Lm1;}
+  return Math.sqrt(Math.pow(2/n,3)*factorial(n-l-1)/(2*n*factorial(n+l)))*Math.exp(-rho/2)*Math.pow(rho,l)*L;
+}
+
+function legendrePlm(x,l,m){
+  const am=Math.abs(m);let Pmm=1;
+  if(am>0){const s=Math.sqrt((1-x)*(1+x));let f=1;for(let j=1;j<=am;j++){Pmm*=-f*s;f+=2;}}
+  if(l===am)return Pmm;let Pm1m=x*(2*am+1)*Pmm;if(l===am+1)return Pm1m;
+  let pp=Pmm;for(let ll=am+2;ll<=l;ll++){const t=((2*ll-1)*x*Pm1m-(ll+am-1)*pp)/(ll-am);pp=Pm1m;Pm1m=t;}return Pm1m;
+}
+
+const HEAT=[[0,0,0],[.3,0,.6],[.8,0,0],[1,.5,0],[1,1,0],[1,1,1]];
+function heatmap(v){v=Math.max(0,Math.min(1,v));const sv=v*5,i=Math.min(Math.floor(sv),4),t=sv-i;return[HEAT[i][0]+t*(HEAT[i+1][0]-HEAT[i][0]),HEAT[i][1]+t*(HEAT[i+1][1]-HEAT[i][1]),HEAT[i][2]+t*(HEAT[i+1][2]-HEAT[i][2])];}
+function diverging(v){v=Math.max(-1,Math.min(1,v));if(v>=0){const t=v;return[Math.min(1,t*2),Math.min(1,Math.max(0,t*2-.5)),0];}const t=-v;return[0,Math.min(1,Math.max(0,t*2-.5)),Math.min(1,t*2)];}
+
+function particleColor(x,y,z,n,l,m,t,mode,scaler){
+  const r=Math.sqrt(x*x+y*y+z*z);if(r<1e-6)return[0,0,0];
+  const R=radialR(r,n,l),Plm=legendrePlm(y/r,l,m),phi=Math.atan2(z,x);
+  const phase=m*phi-t/(2*n*n);
+  if(mode===0)return heatmap(R*R*Plm*Plm*scaler);
+  if(mode===1)return diverging(R*Plm*Math.cos(phase)*scaler*.05);
+  if(mode===2)return diverging(R*Plm*Math.sin(phase)*scaler*.05);
+  const phiE=((phase%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+  const hh=phiE/(2*Math.PI)*6,hi=Math.floor(hh)%6,ff=hh-Math.floor(hh),q=1-ff;
+  return[[1,ff,0],[q,1,0],[0,1,ff],[0,q,1],[ff,0,1],[1,0,q]][hi];
+}
+
+// Probability current J = m/(r*sinθ) in phi-hat direction
+function probabilityFlow(x,y,z,m){
+  const r=Math.sqrt(x*x+y*y+z*z);if(r<1e-6)return[0,0,0];
+  const theta=Math.acos(Math.max(-1,Math.min(1,y/r))),phi=Math.atan2(z,x);
+  const st=Math.max(Math.abs(Math.sin(theta)),1e-4)*Math.sign(Math.sin(theta)||1);
+  const vm=m/(r*st);
+  return[-vm*Math.sin(phi),0,vm*Math.cos(phi)];
+}
+
+// Field color ramp: dark-purple → blue → cyan → green → orange → white
+function fieldColor(mag,gamma=1){
+  const lv=Math.log10(1+mag*99)/2;
+  const lc=Math.pow(Math.max(0,Math.min(1,lv)),1/Math.max(0.1,gamma));
+  const stops=[[0.05,0,0.3],[0,0.2,1],[0,1,0.8],[0.2,1,0],[1,0.5,0],[1,1,1]];
+  const sv=lc*5,i=Math.min(Math.floor(sv),4),t=sv-i;
+  return[stops[i][0]+t*(stops[i+1][0]-stops[i][0]),stops[i][1]+t*(stops[i+1][1]-stops[i][1]),stops[i][2]+t*(stops[i+1][2]-stops[i][2])];
+}
+
+// CDF samplers
+function buildRadialCDF(n,l){const M=4096,rMax=10*n*n;const cdf=new Float64Array(M);let sum=0;for(let i=0;i<M;i++){const r=i*rMax/(M-1),R=radialR(r,n,l);sum+=r*r*R*R;cdf[i]=sum;}for(let i=0;i<M;i++)cdf[i]/=sum;return{cdf,rMax,M};}
+function buildThetaCDF(l,m){const M=2048;const cdf=new Float64Array(M);let sum=0;for(let i=0;i<M;i++){const theta=i*Math.PI/(M-1),Plm=legendrePlm(Math.cos(theta),l,m);sum+=Math.sin(theta)*Plm*Plm;cdf[i]=sum;}for(let i=0;i<M;i++)cdf[i]/=sum;return{cdf,M};}
+function sampleCDF(d,maxVal){const{cdf,M}=d;const u=Math.random();let lo=0,hi=M-1;while(lo<hi){const mid=(lo+hi)>>1;if(cdf[mid]<u)lo=mid+1;else hi=mid;}return lo*maxVal/(M-1);}
+
+/* ════════════════════════════════════════════════════════════
+   STATE
+   ════════════════════════════════════════════════════════════ */
+const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||innerWidth<768;
+const S={
+  n:3,l:1,m:1,
+  N:100000, scale:0.13,
+  colorMode:0, scaler:800,
+  evolving:true, timeSpeed:1, simTime:0,
+  viewMode:0, cutAxis:1, cutPos:0,
+  // Flow
+  animateFlow:true, showFlowTr:false, flowSpeed:0.5,
+  flowTrCount:400, flowTrTrail:30,
+  // B field — on by default at max resolution, minimum arrow scale, fast update
+  showBField:true, bGridDim:24, bGridExtent:40,
+  bArrowScale:0.1, bColGamma:1.0, bUpdateEvery:10,
+  showBTr:true, bTrSpeed:1.0, bTrSpawn:750, bTrTrail:50,
+  // Misc
+  showFlow:false, showAxes:false,
+  psize:0.035,
+  dirty:true, colDirty:false,
+};
+
+/* ════════════════════════════════════════════════════════════
+   PRE-ALLOCATED PARTICLE BUFFERS (2 M cap)
+   posArr  — Three.js-unit positions  (x·scale, y·scale, z·scale)
+   sphArr  — spherical coords in a.u. (r, θ, φ) — used by flow anim & color update
+   colArr  — RGB colors
+   Never reallocated; only liveCount and pGeo.drawRange change.
+   ════════════════════════════════════════════════════════════ */
+const MAX_P = 2_000_000;
+const posArr = new Float32Array(MAX_P * 3);
+const colArr = new Float32Array(MAX_P * 3);
+const sphArr = new Float32Array(MAX_P * 3);
+
+// Aliases kept for functions that used old names
+const storedPos = posArr;   // NOTE: now holds scaled positions, not atomic
+const storedSph = sphArr;
+
+// CDF state — rebuilt when (n,l) or (l,m) change
+let rCDF = null, tCDF = null;
+let cdfN = -1, cdfL = -1, cdfM = -999;
+
+let liveCount  = 0;   // particles currently rendered
+let targetCount = 0;  // what we're growing toward
+let spawning   = false;
+let colorRollIdx = 0; // rolling window pointer for chunked color updates
+const SPAWN_CHUNK = 15_000;
+const COLOR_CHUNK =  80_000;
+
+/* ════════════════════════════════════════════════════════════
+   THREE.JS SETUP
+   ════════════════════════════════════════════════════════════ */
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.setClearColor(0x0e1118,1); // AR will override to transparent
+renderer.xr.enabled=true;
+
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.01,100000);
+camera.position.set(0,1.8,8.5);
+
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.target.set(0,0,0);controls.enableDamping=true;controls.dampingFactor=.05;
+controls.minDistance=.3;controls.maxDistance=60;
+renderer.xr.addEventListener('sessionend',()=>controls.enabled=true);
+
+// Starfield
+{const N=2200,pos=new Float32Array(N*3),col=new Float32Array(N*3);for(let i=0;i<N;i++){const R=90+Math.random()*130,th=Math.random()*Math.PI,ph=Math.random()*6.28;pos[i*3]=R*Math.sin(th)*Math.cos(ph);pos[i*3+1]=R*Math.cos(th);pos[i*3+2]=R*Math.sin(th)*Math.sin(ph);const t=Math.random();col[i*3]=.4+.6*t;col[i*3+1]=.6+.4*t;col[i*3+2]=1;}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));scene.add(new THREE.Points(g,new THREE.PointsMaterial({size:.07,vertexColors:true,transparent:true,opacity:.5,sizeAttenuation:true})));}
+
+// Orbital group — everything that should be grabbable/scaleable lives here
+const orbitalGroup = new THREE.Group();
+scene.add(orbitalGroup);
+
+/* ── AR: Bounding cube wireframe — contains the orbital in physical space ── */
+const boundingCube = new THREE.LineSegments(
+  new THREE.EdgesGeometry(new THREE.BoxGeometry(6,6,6)),
+  new THREE.LineBasicMaterial({color:0x96c8ff,transparent:true,opacity:0.22,
+    blending:THREE.AdditiveBlending,depthWrite:false})
+);
+boundingCube.visible=false;
+orbitalGroup.add(boundingCube);
+
+/* ── AR: Surface reticle — yellow ring shown on detected surfaces ── */
+const reticleGeo = new THREE.RingGeometry(0.07,0.11,36);
+reticleGeo.rotateX(-Math.PI/2);
+const reticle = new THREE.Mesh(reticleGeo,
+  new THREE.MeshBasicMaterial({color:0xffc832,transparent:true,opacity:0.9,
+    side:THREE.DoubleSide,depthWrite:false}));
+reticle.matrixAutoUpdate=false;
+reticle.visible=false;
+scene.add(reticle);
+
+/* Background dim plane — large black plane that follows camera.
+   depthWrite:false lets 3D objects draw on top; only background pixels are dimmed. */
+const bgDimGeo = new THREE.PlaneGeometry(1000, 1000);
+const bgDimMat = new THREE.MeshBasicMaterial({
+  color:0x000000, transparent:true, opacity:0,
+  depthTest:false, depthWrite:false, side:THREE.DoubleSide
+});
+const bgDimMesh = new THREE.Mesh(bgDimGeo, bgDimMat);
+bgDimMesh.renderOrder = -1000;
+bgDimMesh.frustumCulled = false;
+bgDimMesh.visible = false;
+scene.add(bgDimMesh);
+
+/* ════════════════════════════════════════════════════════════
+   AR 3D PANEL — world-space canvas texture GUI
+   Floats beside the bounding cube; finger-poke interaction.
+   GREP: initARPanel | drawARPanel | updateARPanel | checkARPoke
+   ════════════════════════════════════════════════════════════ */
+const ARP = {
+  PW:0.28, PH:0.50,   // metres
+  CW:512,  CH:915,    // canvas pixel resolution
+  mesh:null, tex:null, ctx:null,
+  buttons:[],
+  cooldown:0,
+  dirty:true,
+  bgOpacity:0,         // 0=full passthrough, 1=full black
+};
+
+/* Hand joint visualization — always-on-top dots so panel can't occlude hands */
+const _HAND_JOINTS=[
+  'wrist',
+  'thumb-metacarpal','thumb-phalanx-proximal','thumb-phalanx-distal','thumb-tip',
+  'index-finger-metacarpal','index-finger-phalanx-proximal',
+  'index-finger-phalanx-intermediate','index-finger-phalanx-distal','index-finger-tip',
+  'middle-finger-tip','ring-finger-tip','pinky-finger-tip',
+];
+const _handDotGeo=new THREE.SphereGeometry(0.007,6,6);
+const _handDotMat=new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:0.55,depthTest:false,depthWrite:false});
+const _handDots=[];
+for(let i=0;i<28;i++){const m=new THREE.Mesh(_handDotGeo,_handDotMat.clone());m.visible=false;m.renderOrder=9998;scene.add(m);_handDots.push(m);}
+
+function updateHandDots(frame,refSpace){
+  let di=0;
+  const sess=renderer.xr.getSession();
+  if(sess&&frame&&refSpace){
+    for(const src of sess.inputSources){
+      if(!src.hand) continue;
+      for(const jn of _HAND_JOINTS){
+        const j=src.hand.get(jn); if(!j) continue;
+        const p=frame.getJointPose(j,refSpace); if(!p||di>=_handDots.length) continue;
+        const pos=p.transform.position;
+        _handDots[di].position.set(pos.x,pos.y,pos.z);
+        _handDots[di].visible=true; di++;
+      }
+    }
+  }
+  for(let i=di;i<_handDots.length;i++) _handDots[i].visible=false;
+}
+
+// ── Canvas helpers ──
+function _rrect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+  ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+  ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
+  ctx.closePath();
+}
+function _div(ctx,W,y){
+  ctx.save();ctx.strokeStyle='rgba(150,200,255,0.1)';ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(18,y);ctx.lineTo(W-18,y);ctx.stroke();ctx.restore();
+}
+
+function initARPanel(){
+  if(ARP.mesh) return;
+  const canvas=document.createElement('canvas');
+  canvas.width=ARP.CW; canvas.height=ARP.CH;
+  ARP.ctx=canvas.getContext('2d');
+  ARP.tex=new THREE.CanvasTexture(canvas);
+  ARP.tex.minFilter=THREE.LinearFilter;
+  ARP.tex.generateMipmaps=false;
+  const mat=new THREE.MeshBasicMaterial({
+    map:ARP.tex, transparent:true,
+    side:THREE.DoubleSide, depthWrite:false,
+  });
+  ARP.mesh=new THREE.Mesh(new THREE.PlaneGeometry(ARP.PW,ARP.PH), mat);
+  ARP.mesh.renderOrder=999;
+  ARP.mesh.visible=false;
+  scene.add(ARP.mesh);
+}
+
+function drawARPanel(){
+  const ctx=ARP.ctx;
+  const W=ARP.CW, H=ARP.CH;
+  ARP.buttons=[];
+  ctx.clearRect(0,0,W,H);
+
+  // Background + border
+  ctx.fillStyle='rgba(6,9,18,0.95)';
+  _rrect(ctx,0,0,W,H,20); ctx.fill();
+  ctx.strokeStyle='rgba(150,200,255,0.28)';ctx.lineWidth=2;
+  _rrect(ctx,1,1,W-2,H-2,20); ctx.stroke();
+
+  // Top accent gradient
+  const gr=ctx.createLinearGradient(0,0,W,0);
+  gr.addColorStop(0,'rgba(150,200,255,0)');
+  gr.addColorStop(0.5,'rgba(150,200,255,0.55)');
+  gr.addColorStop(1,'rgba(150,200,255,0)');
+  ctx.fillStyle=gr; ctx.fillRect(0,0,W,3);
+
+  const SUBS=['s','p','d','f','g','h'];
+  const{n,l,m}=S; const ms=(m>=0?'+':'')+m;
+  let y=18;
+
+  // Title
+  ctx.textAlign='center';
+  ctx.font='italic 500 26px "Cormorant Garamond",serif';
+  ctx.fillStyle='rgba(150,200,255,0.55)';
+  ctx.fillText(`${n}${SUBS[l]??'?'} orbital`,W/2,y+26); y+=28;
+  ctx.font='500 13px "JetBrains Mono",monospace';
+  ctx.fillStyle='rgba(150,200,255,0.28)';
+  ctx.fillText(`|${n},${l},${ms}⟩`,W/2,y+16); y+=28;
+
+  _div(ctx,W,y); y+=16;
+
+  // ── QN stepper rows ──
+  function qnRow(sym,val,qn,minV,maxV){
+    const RH=68, BW=68, BH=46;
+    const cx=W/2, by=y+(RH-BH)/2;
+    // Label
+    ctx.font='italic 700 32px "Cormorant Garamond",serif';
+    ctx.fillStyle='rgba(150,200,255,0.6)';
+    ctx.textAlign='left';
+    ctx.fillText(sym,20,y+RH*0.72);
+    // Value
+    ctx.font='bold 24px "JetBrains Mono",monospace';
+    ctx.fillStyle='#e8ecf4';
+    ctx.textAlign='center';
+    ctx.fillText(String(val),cx,y+RH*0.72);
+    // − button
+    const bxM=cx-BW*1.55, bxP=cx+BW*0.55;
+    [[bxM,'−',false],[bxP,'+',true]].forEach(([bx,lbl,isPlus])=>{
+      ctx.fillStyle='rgba(150,200,255,0.07)';
+      _rrect(ctx,bx,by,BW,BH,9); ctx.fill();
+      ctx.strokeStyle='rgba(150,200,255,0.22)';ctx.lineWidth=1.2;
+      _rrect(ctx,bx,by,BW,BH,9); ctx.stroke();
+      ctx.font='bold 24px "JetBrains Mono",monospace';
+      ctx.fillStyle='rgba(150,200,255,0.75)';
+      ctx.textAlign='center';
+      ctx.fillText(lbl,bx+BW/2,by+BH*0.75);
+      ARP.buttons.push({u0:bx/W,v0:by/H,u1:(bx+BW)/W,v1:(by+BH)/H,
+        action:()=>{
+          let{n:nn,l:ll,m:mm}=S;
+          const d=isPlus?1:-1;
+          if(qn==='n')nn+=d; else if(qn==='l')ll+=d; else mm+=d;
+          applyQN(nn,ll,mm); S.dirty=true;
+        }
+      });
+    });
+    y+=RH;
+  }
+  qnRow('n',n,'n',1,6);
+  qnRow('ℓ',l,'l',0,n-1);
+  qnRow('m',m,'m',-l,l);
+
+  _div(ctx,W,y); y+=14;
+
+  // ── B Field toggle ──
+  const bOn=S.showBField;
+  ctx.fillStyle=bOn?'rgba(150,200,255,0.11)':'rgba(255,60,60,0.08)';
+  _rrect(ctx,16,y,W-32,66,12); ctx.fill();
+  ctx.strokeStyle=bOn?'rgba(150,200,255,0.45)':'rgba(255,80,80,0.35)';
+  ctx.lineWidth=1.5; _rrect(ctx,16,y,W-32,66,12); ctx.stroke();
+  ctx.font='bold 18px "JetBrains Mono",monospace';
+  ctx.fillStyle=bOn?'#96c8ff':'#e06060';
+  ctx.textAlign='center';
+  ctx.fillText(bOn?'⊕  B FIELD  ON':'⊗  B FIELD  OFF',W/2,y+42);
+  ARP.buttons.push({u0:16/W,v0:y/H,u1:(W-16)/W,v1:(y+66)/H,
+    action:()=>{
+      const enabling=!S.showBField;
+      setMagField(enabling);
+      // Force fresh Biot-Savart with current AR grid settings (bGridDim=9)
+      if(enabling){ bFieldData=null; if(!bFieldScheduled){bFieldScheduled=true;setTimeout(computeBField,0);} }
+    }});
+  y+=80;
+
+  _div(ctx,W,y); y+=14;
+
+  // ── Color mode ──
+  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.fillStyle='rgba(150,200,255,0.3)';
+  ctx.textAlign='left';
+  ctx.fillText('VISUALIZE',18,y+13); y+=20;
+  const modes=['|ψ|²','Re','Im','∠'];
+  const mw=(W-36)/4-5;
+  for(let i=0;i<4;i++){
+    const bx=18+i*(mw+5), act=S.colorMode===i;
+    ctx.fillStyle=act?'rgba(255,200,50,0.14)':'rgba(255,255,255,0.03)';
+    _rrect(ctx,bx,y,mw,50,8); ctx.fill();
+    ctx.strokeStyle=act?'rgba(255,200,50,0.5)':'rgba(150,200,255,0.14)';
+    ctx.lineWidth=1.2; _rrect(ctx,bx,y,mw,50,8); ctx.stroke();
+    ctx.font=(act?'bold ':'')+'15px "JetBrains Mono",monospace';
+    ctx.fillStyle=act?'#ffc832':'rgba(150,200,255,0.55)';
+    ctx.textAlign='center';
+    ctx.fillText(modes[i],bx+mw/2,y+33);
+    const ii=i;
+    ARP.buttons.push({u0:bx/W,v0:y/H,u1:(bx+mw)/W,v1:(y+50)/H,
+      action:()=>setColorMode(ii)});
+  }
+  y+=64;
+
+  _div(ctx,W,y); y+=14;
+
+  // ── Particle count presets ──
+  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.fillStyle='rgba(150,200,255,0.3)';
+  ctx.textAlign='left';
+  ctx.fillText('PARTICLES',18,y+13); y+=20;
+  const presets=[['5k',5000],['10k',10000],['25k',25000],['50k',50000]];
+  const pw=(W-36)/4-5;
+  for(let i=0;i<4;i++){
+    const bx=18+i*(pw+5), act=Math.abs(S.N-presets[i][1])<500;
+    ctx.fillStyle=act?'rgba(150,200,255,0.12)':'rgba(255,255,255,0.03)';
+    _rrect(ctx,bx,y,pw,46,8); ctx.fill();
+    ctx.strokeStyle=act?'rgba(150,200,255,0.45)':'rgba(150,200,255,0.12)';
+    ctx.lineWidth=1.2; _rrect(ctx,bx,y,pw,46,8); ctx.stroke();
+    ctx.font=(act?'bold ':'')+'14px "JetBrains Mono",monospace';
+    ctx.fillStyle=act?'#96c8ff':'rgba(150,200,255,0.5)';
+    ctx.textAlign='center';
+    ctx.fillText(presets[i][0],bx+pw/2,y+30);
+    const pi=i;
+    ARP.buttons.push({u0:bx/W,v0:y/H,u1:(bx+pw)/W,v1:(y+46)/H,
+      action:()=>setN(presets[pi][1])});
+  }
+  y+=60;
+
+  _div(ctx,W,y); y+=14;
+
+  // ── Background opacity ──
+  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.fillStyle='rgba(150,200,255,0.3)';
+  ctx.textAlign='left';
+  ctx.fillText('BACKGROUND',18,y+13); y+=20;
+  const bgLevels=[[0,'Pass'],[0.25,'25%'],[0.5,'50%'],[0.75,'75%'],[1,'VR']];
+  const bw=(W-36)/5-4;
+  for(let i=0;i<5;i++){
+    const bx=18+i*(bw+4);
+    const act=Math.abs(ARP.bgOpacity-bgLevels[i][0])<0.05;
+    ctx.fillStyle=act?(i===4?'rgba(255,200,50,0.18)':'rgba(150,200,255,0.12)'):'rgba(255,255,255,0.03)';
+    _rrect(ctx,bx,y,bw,46,7); ctx.fill();
+    ctx.strokeStyle=act?(i===4?'rgba(255,200,50,0.5)':'rgba(150,200,255,0.45)'):'rgba(150,200,255,0.12)';
+    ctx.lineWidth=1.2; _rrect(ctx,bx,y,bw,46,7); ctx.stroke();
+    ctx.font=(act?'bold ':'')+'13px "JetBrains Mono",monospace';
+    ctx.fillStyle=act?(i===4?'#ffc832':'#96c8ff'):'rgba(150,200,255,0.5)';
+    ctx.textAlign='center';
+    ctx.fillText(bgLevels[i][1],bx+bw/2,y+30);
+    const level=bgLevels[i][0];
+    ARP.buttons.push({u0:bx/W,v0:y/H,u1:(bx+bw)/W,v1:(y+46)/H,
+      action:()=>setARBgOpacity(level)});
+  }
+  y+=58;
+
+  ARP.tex.needsUpdate=true;
+}
+
+function setARBgOpacity(v){
+  ARP.bgOpacity=v;
+  bgDimMat.opacity = v;
+  bgDimMesh.visible = v > 0.01;
+  ARP.dirty=true;
+}
+
+function updateARPanel(frame){
+  const refSpace=renderer.xr.getReferenceSpace();
+  // Hand dots always update in AR (depthTest:false keeps them on top of everything)
+  if(frame&&refSpace) updateHandDots(frame,refSpace);
+
+  if(!ARP.mesh||!ARP.mesh.visible) return;
+
+  // Dock panel directly below the bounding cube, face camera
+  const wp=new THREE.Vector3();
+  orbitalGroup.getWorldPosition(wp);
+  const sz=Math.max(orbitalGroup.scale.x,0.04);
+  const cubeHalf=3*sz; // half-extent of 6-unit local cube in world space
+  // Hang below cube bottom edge, at front face Z — panel top aligns with cube bottom
+  ARP.mesh.position.set(wp.x, wp.y - cubeHalf - ARP.PH*0.5 - 0.01, wp.z + cubeHalf);
+  ARP.mesh.lookAt(camera.position);
+
+  if(ARP.dirty){ARP.dirty=false;drawARPanel();}
+
+  if(ARP.cooldown>0){ARP.cooldown--;return;}
+  if(!frame||!refSpace) return;
+  // Continuous finger-poke detection — user physically touches panel surface
+  const sess=renderer.xr.getSession(); if(!sess) return;
+  for(const src of sess.inputSources){
+    if(!src.hand) continue;
+    const tip=_jointWorldPos(src.hand,'index-finger-tip',frame,refSpace); if(!tip) continue;
+    const local=ARP.mesh.worldToLocal(tip.clone());
+    if(Math.abs(local.z)>0.035) continue; // must be within 3.5cm of panel surface
+    const u=(local.x+ARP.PW/2)/ARP.PW;
+    const v=1-(local.y+ARP.PH/2)/ARP.PH;
+    if(u<0||u>1||v<0||v>1) continue;
+    for(const btn of ARP.buttons){
+      if(u>=btn.u0&&u<=btn.u1&&v>=btn.v0&&v<=btn.v1){
+        btn.action(); ARP.dirty=true; ARP.cooldown=22; return;
+      }
+    }
+  }
+}
+
+
+// Nucleus
+const nucleusGroup=new THREE.Group();orbitalGroup.add(nucleusGroup);
+nucleusGroup.add(new THREE.Mesh(new THREE.SphereGeometry(.055,20,20),new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:.9})));
+for(let i=0;i<3;i++){const ring=new THREE.Mesh(new THREE.RingGeometry(.09+i*.04,.10+i*.04,48),new THREE.MeshBasicMaterial({color:0x5a8cc0,transparent:true,opacity:.18-i*.04,side:THREE.DoubleSide}));ring.rotation.x=Math.random()*Math.PI;ring.rotation.y=Math.random()*Math.PI;ring.userData.spinSpeed=(.4+Math.random()*.4)*(Math.random()>.5?1:-1);ring.userData.spinAxis=new THREE.Vector3(Math.random()-.5,Math.random()-.5,Math.random()-.5).normalize();nucleusGroup.add(ring);}
+
+// Circle sprite texture (avoids square particles)
+function makeCircleTex(){
+  const c=document.createElement('canvas');c.width=64;c.height=64;
+  const ctx=c.getContext('2d');
+  const g=ctx.createRadialGradient(32,32,0,32,32,32);
+  g.addColorStop(0,'rgba(255,255,255,1)');
+  g.addColorStop(0.55,'rgba(255,255,255,0.9)');
+  g.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=g;ctx.fillRect(0,0,64,64);
+  return new THREE.CanvasTexture(c);
+}
+
+// Main particle cloud — attributes point permanently into pre-allocated arrays
+const pGeo=new THREE.BufferGeometry();
+const pPosAttr=new THREE.BufferAttribute(posArr,3); pPosAttr.setUsage(THREE.DynamicDrawUsage);
+const pColAttr=new THREE.BufferAttribute(colArr,3); pColAttr.setUsage(THREE.DynamicDrawUsage);
+pGeo.setAttribute('position',pPosAttr);
+pGeo.setAttribute('color',pColAttr);
+pGeo.setDrawRange(0,0);
+const pMat=new THREE.PointsMaterial({size:S.psize,vertexColors:true,transparent:true,opacity:1.0,sizeAttenuation:true,depthWrite:true,blending:THREE.NormalBlending,map:makeCircleTex(),alphaTest:0.5});
+const pSystem=new THREE.Points(pGeo,pMat);
+pSystem.frustumCulled=false; // never cull — particles must render at all camera distances/angles
+pGeo.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,0,0),Infinity); // explicit infinite sphere
+orbitalGroup.add(pSystem);
+
+// Static flow arrows
+const flowGeo=new THREE.BufferGeometry();
+const flowMat=new THREE.LineBasicMaterial({color:0x5a8cc0,transparent:true,opacity:.35});
+const flowLines=new THREE.LineSegments(flowGeo,flowMat);
+orbitalGroup.add(flowLines);flowLines.visible=false;
+
+// Axes
+const axesHelper=new THREE.AxesHelper(4);axesHelper.visible=false;orbitalGroup.add(axesHelper);
+
+/* ════════════════════════════════════════════════════════════
+   B FIELD ARROW SYSTEM
+   ════════════════════════════════════════════════════════════ */
+// B-field arrows: instanced 3D cylinders + cones (thick lines impossible in WebGL)
+const MAX_BARROWS = 24*24*24;
+const _bShaftGeo = new THREE.CylinderGeometry(0.008,0.008,1,6,1);
+const _bHeadGeo  = new THREE.ConeGeometry(0.022,0.08,6,1);
+const _bInstMat  = new THREE.MeshBasicMaterial({transparent:true,opacity:0.85,blending:THREE.AdditiveBlending,depthWrite:false});
+const bArrowShaft = new THREE.InstancedMesh(_bShaftGeo,_bInstMat.clone(),MAX_BARROWS);
+const bArrowHead  = new THREE.InstancedMesh(_bHeadGeo, _bInstMat.clone(),MAX_BARROWS);
+bArrowShaft.count=0; bArrowHead.count=0;
+bArrowShaft.frustumCulled=false; bArrowHead.frustumCulled=false;
+bArrowShaft.visible=false; bArrowHead.visible=false;
+orbitalGroup.add(bArrowShaft); orbitalGroup.add(bArrowHead);
+// Keep bArrowLines as alias for visibility checks (will be null-stubbed)
+const bArrowLines={visible:false,get _stub(){return true;}};
+
+let bFieldData=null;   // Float32Array [x,y,z,dx,dy,dz,mag × ng]
+let bFieldFrameCount=0;
+let bFieldDim=7, bFieldExt=25*S.scale;
+
+/* ════════════════════════════════════════════════════════════
+   B FIELD — SYNCHRONOUS BIOT-SAVART
+   J is purely azimuthal so Jy = 0 always.
+   Cross product J×d simplifies to 3 mults instead of 6.
+   Source J vectors precomputed once, then reused for every
+   grid point — avoids trig inside the inner loop.
+   Timing: 5³=125 pts × 300 src ≈ 1 ms. 8³=512 × 400 ≈ 8 ms.
+   ════════════════════════════════════════════════════════════ */
+let bFieldScheduled=false;
+
+function computeBField(){
+  if(!storedPos)return;
+  bFieldScheduled=false;
+  const{m,bGridDim,bGridExtent,scale,bArrowScale,bColGamma}=S;
+  const count=liveCount; if(count===0)return;
+
+  const G=Math.min(bGridDim,24);  // cap: 24³=13824 pts
+  const ext=bGridExtent*scale;
+  const ng=G*G*G;
+
+  // ── Subsample sources (max 400) and precompute J ──
+  const maxSrc=400;
+  const step=Math.max(1,Math.floor(count/maxSrc));
+  const ns=Math.min(maxSrc,Math.floor(count/step));
+  const ssx=new Float32Array(ns),ssy=new Float32Array(ns),ssz=new Float32Array(ns);
+  const sjx=new Float32Array(ns),sjz=new Float32Array(ns); // Jy=0 always
+  for(let si=0;si<ns;si++){
+    const i=si*step;
+    // posArr holds Three.js-unit (scaled) positions
+    ssx[si]=posArr[i*3]; ssy[si]=posArr[i*3+1]; ssz[si]=posArr[i*3+2];
+    // probabilityFlow needs atomic-unit coords → divide by scale
+    const ax=posArr[i*3]/scale, ay=posArr[i*3+1]/scale, az=posArr[i*3+2]/scale;
+    const r=Math.sqrt(ax*ax+ay*ay+az*az); if(r<1e-6)continue;
+    const theta=Math.acos(Math.max(-1,Math.min(1,ay/r)));
+    const phi=Math.atan2(az,ax);
+    const st=Math.max(Math.abs(Math.sin(theta)),1e-4);
+    const vm=m/(r*st);
+    sjx[si]=-vm*Math.sin(phi);  // Jx
+    sjz[si]= vm*Math.cos(phi);  // Jz  (Jy=0)
+  }
+
+  // ── Biot-Savart on grid ──
+  const out=new Float32Array(ng*7);
+  let maxMag=0, gi=0;
+  const step2=G>1?2*ext/(G-1):1;
+  for(let xi=0;xi<G;xi++){
+    const px=G>1?-ext+xi*step2:0;
+    for(let yi=0;yi<G;yi++){
+      const py=G>1?-ext+yi*step2:0;
+      for(let zi=0;zi<G;zi++){
+        const pz=G>1?-ext+zi*step2:0;
+        let Bx=0,By=0,Bz=0;
+        for(let si=0;si<ns;si++){
+          const dx=px-ssx[si],dy=py-ssy[si],dz=pz-ssz[si];
+          const d2=dx*dx+dy*dy+dz*dz;
+          if(d2<0.001)continue;
+          const inv3=1/(d2*Math.sqrt(d2));
+          // B += (J×d)/|d|³  with Jy=0:
+          // Bx = Jy·dz - Jz·dy = -Jz·dy
+          // By = Jz·dx - Jx·dz
+          // Bz = Jx·dy - Jy·dx =  Jx·dy
+          const jx=sjx[si],jz=sjz[si];
+          Bx+=(-jz*dy)*inv3;
+          By+=(jz*dx-jx*dz)*inv3;
+          Bz+=(jx*dy)*inv3;
+        }
+        const mag=Math.sqrt(Bx*Bx+By*By+Bz*Bz);
+        if(mag>maxMag)maxMag=mag;
+        out[gi*7]=px;out[gi*7+1]=py;out[gi*7+2]=pz;
+        out[gi*7+3]=Bx;out[gi*7+4]=By;out[gi*7+5]=Bz;out[gi*7+6]=mag;
+        gi++;
+      }
+    }
+  }
+
+  // ── Normalize ──
+  if(maxMag>1e-10){
+    for(let i=0;i<ng;i++){
+      const mag=out[i*7+6];
+      if(mag>1e-12){const inv=1/mag;out[i*7+3]*=inv;out[i*7+4]*=inv;out[i*7+5]*=inv;}
+      out[i*7+6]/=maxMag;
+    }
+  }
+
+  bFieldData=out;
+  bFieldDim=G;
+  bFieldExt=ext;
+  document.getElementById('bstatus').textContent='ready';
+  document.getElementById('bstatus').className='status-txt ready';
+  uploadBArrows();
+}
+
+// Reusable temporaries for uploadBArrows
+const _bDummy=new THREE.Object3D();
+const _bUp=new THREE.Vector3(0,1,0);
+const _bDir=new THREE.Vector3();
+const _bQ=new THREE.Quaternion();
+const _bAxisX=new THREE.Vector3(1,0,0);
+const _bCol=new THREE.Color();
+
+function uploadBArrows(){
+  if(!bFieldData||!S.showBField){
+    bArrowShaft.visible=false; return;
+  }
+  const{bArrowScale,bColGamma}=S;
+  const ng=Math.min(bFieldData.length/7|0, MAX_BARROWS);
+  const HEAD_LEN=0.08;
+  for(let i=0;i<ng;i++){
+    const ox=bFieldData[i*7],oy=bFieldData[i*7+1],oz=bFieldData[i*7+2];
+    const dx=bFieldData[i*7+3],dy=bFieldData[i*7+4],dz=bFieldData[i*7+5];
+    const mag=bFieldData[i*7+6];
+    const lv=Math.log10(1+mag*99)/2;
+    const len=bArrowScale*(0.06+lv*0.9);
+    const [r,g,b]=fieldColor(mag,bColGamma);
+    _bDir.set(dx,dy,dz).normalize();
+    // Safe quaternion: handle antiparallel-to-up edge case
+    if(_bDir.dot(_bUp)<-0.999) _bQ.setFromAxisAngle(_bAxisX,Math.PI);
+    else _bQ.setFromUnitVectors(_bUp,_bDir);
+    // Shaft: Y-cylinder centered at mid-point of shaft portion
+    const shaftLen=Math.max(0.001,len-HEAD_LEN);
+    _bDummy.position.set(ox+dx*shaftLen*0.5, oy+dy*shaftLen*0.5, oz+dz*shaftLen*0.5);
+    _bDummy.quaternion.copy(_bQ);
+    _bDummy.scale.set(1,shaftLen,1);
+    _bDummy.updateMatrix();
+    bArrowShaft.setMatrixAt(i,_bDummy.matrix);
+    _bCol.setRGB(r*0.35,g*0.35,b*0.35); bArrowShaft.setColorAt(i,_bCol);
+  }
+  bArrowShaft.count=ng;
+  bArrowShaft.instanceMatrix.needsUpdate=true;
+  if(bArrowShaft.instanceColor) bArrowShaft.instanceColor.needsUpdate=true;
+  bArrowShaft.visible=true;
+  bArrowHead.visible=false; // arrowheads disabled
+}
+
+// Trilinear interpolation of precomputed B field
+function sampleBField(px,py,pz){
+  if(!bFieldData||bFieldDim<2)return[0,1,0,0];
+  const G=bFieldDim,ext=bFieldExt,step=2*ext/(G-1);
+  const gx=(px+ext)/step,gy=(py+ext)/step,gz=(pz+ext)/step;
+  const x0=Math.max(0,Math.min(G-2,Math.floor(gx)));
+  const y0=Math.max(0,Math.min(G-2,Math.floor(gy)));
+  const z0=Math.max(0,Math.min(G-2,Math.floor(gz)));
+  const tx=Math.max(0,Math.min(1,gx-x0)),ty=Math.max(0,Math.min(1,gy-y0)),tz=Math.max(0,Math.min(1,gz-z0));
+  function cell(xi,yi,zi){const i=(xi*G*G+yi*G+zi)*7;return bFieldData.subarray(i,i+7);}
+  const w=[(1-tx)*(1-ty)*(1-tz),tx*(1-ty)*(1-tz),(1-tx)*ty*(1-tz),tx*ty*(1-tz),(1-tx)*(1-ty)*tz,tx*(1-ty)*tz,(1-tx)*ty*tz,tx*ty*tz];
+  const corners=[[x0,y0,z0],[x0+1,y0,z0],[x0,y0+1,z0],[x0+1,y0+1,z0],[x0,y0,z0+1],[x0+1,y0,z0+1],[x0,y0+1,z0+1],[x0+1,y0+1,z0+1]];
+  let dx=0,dy=0,dz=0,mag=0;
+  for(let c=0;c<8;c++){const cl=cell(corners[c][0],corners[c][1],corners[c][2]);dx+=w[c]*cl[3];dy+=w[c]*cl[4];dz+=w[c]*cl[5];mag+=w[c]*cl[6];}
+  const len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+  if(len>1e-6){dx/=len;dy/=len;dz/=len;}
+  return[dx,dy,dz,mag];
+}
+
+/* ════════════════════════════════════════════════════════════
+   FLOW TRACERS  (follow probability current J, azimuthal rotation)
+   ════════════════════════════════════════════════════════════ */
+const MAX_FT=2000, MAX_FT_TRAIL=80;
+const ftPosArr=new Float32Array(MAX_FT*MAX_FT_TRAIL*2*3);
+const ftColArr=new Float32Array(MAX_FT*MAX_FT_TRAIL*2*3);
+const ftLineGeo=new THREE.BufferGeometry();
+ftLineGeo.setAttribute('position',new THREE.BufferAttribute(ftPosArr,3));
+ftLineGeo.setAttribute('color',new THREE.BufferAttribute(ftColArr,3));
+const ftLineMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:.8});
+const ftLines=new THREE.LineSegments(ftLineGeo,ftLineMat);
+orbitalGroup.add(ftLines);ftLines.visible=false;
+
+let flowTracers=[];
+
+function updateFlowTracers(dt){
+  if(!S.showFlowTr||S.m===0){ftLines.visible=false;return;}
+  ftLines.visible=true;
+  const{m,scale,flowSpeed,flowTrCount,flowTrTrail}=S;
+  const fdt=dt*flowSpeed*2;
+  const ext=bFieldExt>0?bFieldExt:5;
+
+  // Move + age
+  for(let i=flowTracers.length-1;i>=0;i--){
+    const tr=flowTracers[i];
+    tr.age+=dt;
+    // Rotate in phi (azimuthal probability current)
+    const r=tr.r,theta=tr.theta;
+    const st=Math.max(Math.abs(Math.sin(theta)),1e-4);
+    tr.phi+=m/(r*st)*fdt;
+    const sinT=Math.sin(theta);
+    const sx=r*sinT*Math.cos(tr.phi)*scale;
+    const sy=r*Math.cos(theta)*scale; // y unchanged
+    const sz=r*sinT*Math.sin(tr.phi)*scale;
+    tr.trail.unshift([sx,sy,sz]);
+    if(tr.trail.length>flowTrTrail)tr.trail.pop();
+    if(tr.age>=tr.maxAge)flowTracers.splice(i,1);
+  }
+
+  // Spawn from particle cloud
+  while(flowTracers.length<flowTrCount){
+    if(liveCount===0)break;
+    const idx=Math.floor(Math.random()*liveCount);
+    const r=storedSph[idx*3],theta=storedSph[idx*3+1],phi=storedSph[idx*3+2];
+    if(r<0.5)continue;
+    flowTracers.push({r,theta,phi,trail:[],age:0,maxAge:2.5+Math.random()*2});
+  }
+
+  // Build line buffer
+  const posA=ftLineGeo.attributes.position.array;
+  const colA=ftLineGeo.attributes.color.array;
+  let vi=0;
+  for(const tr of flowTracers){
+    const tl=tr.trail.length;if(tl<2)continue;
+    const ageA=tr.age<0.1?tr.age/0.1:tr.age>tr.maxAge*0.8?(tr.maxAge-tr.age)/(tr.maxAge*0.2):1;
+    for(let s=0;s<tl-1;s++){
+      const a0=(1-s/flowTrTrail)*ageA, a1=(1-(s+1)/flowTrTrail)*ageA*.3;
+      const pt=tr.trail[s],pn=tr.trail[s+1];
+      posA[vi*3]=pt[0];posA[vi*3+1]=pt[1];posA[vi*3+2]=pt[2];
+      colA[vi*3]=0.2*a0;colA[vi*3+1]=0.7*a0;colA[vi*3+2]=1.0*a0; vi++;
+      posA[vi*3]=pn[0];posA[vi*3+1]=pn[1];posA[vi*3+2]=pn[2];
+      colA[vi*3]=0.05*a1;colA[vi*3+1]=0.3*a1;colA[vi*3+2]=0.7*a1; vi++;
+    }
+  }
+  ftLineGeo.attributes.position.needsUpdate=true;
+  ftLineGeo.attributes.color.needsUpdate=true;
+  ftLineGeo.setDrawRange(0,vi);
+}
+
+/* ════════════════════════════════════════════════════════════
+   B-FIELD TRACERS  (advect along interpolated B field)
+   ════════════════════════════════════════════════════════════ */
+const MAX_BT=50000, MAX_BT_TRAIL=40;
+const btPosArr=new Float32Array(MAX_BT*MAX_BT_TRAIL*2*3);
+const btColArr=new Float32Array(MAX_BT*MAX_BT_TRAIL*2*3);
+const btLineGeo=new THREE.BufferGeometry();
+btLineGeo.setAttribute('position',new THREE.BufferAttribute(btPosArr,3));
+btLineGeo.setAttribute('color',new THREE.BufferAttribute(btColArr,3));
+const btLineMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,blending:THREE.AdditiveBlending,depthWrite:false,opacity:.9});
+const btLines=new THREE.LineSegments(btLineGeo,btLineMat);
+orbitalGroup.add(btLines);btLines.visible=false;
+
+let bTracers=[];
+
+function updateBTracers(dt){
+  if(!S.showBTr||!bFieldData){btLines.visible=false;return;}
+  btLines.visible=true;
+  const{bTrSpeed,bTrSpawn,bTrTrail,bColGamma}=S;
+  const ext=bFieldExt;
+
+  for(let i=bTracers.length-1;i>=0;i--){
+    const tr=bTracers[i];tr.age+=dt;
+    const[dx,dy,dz,mag]=sampleBField(tr.x,tr.y,tr.z);
+    tr.x+=dx*bTrSpeed*dt;tr.y+=dy*bTrSpeed*dt;tr.z+=dz*bTrSpeed*dt;
+    tr.trail.unshift([tr.x,tr.y,tr.z,mag]);
+    if(tr.trail.length>bTrTrail)tr.trail.pop();
+    if(tr.age>=tr.maxAge||Math.abs(tr.x)>ext||Math.abs(tr.y)>ext||Math.abs(tr.z)>ext)bTracers.splice(i,1);
+  }
+  // Spawn: fractional accumulator so rate is exact regardless of framerate
+  const spawnF = bTrSpawn * dt;
+  const spawnN = Math.floor(spawnF) + (Math.random() < (spawnF % 1) ? 1 : 0);
+  for(let s=0; s<spawnN && bTracers.length<MAX_BT; s++){
+    const e=ext*.9;
+    bTracers.push({x:(Math.random()*2-1)*e,y:(Math.random()*2-1)*e,z:(Math.random()*2-1)*e,trail:[],age:0,maxAge:2+Math.random()*2});
+  }
+
+  const posA=btLineGeo.attributes.position.array;
+  const colA=btLineGeo.attributes.color.array;
+  let vi=0;
+  for(const tr of bTracers){
+    const tl=tr.trail.length;if(tl<2)continue;
+    const ageA=tr.age<0.1?tr.age/0.1:tr.age>tr.maxAge*0.8?(tr.maxAge-tr.age)/(tr.maxAge*0.2):1;
+    for(let s=0;s<tl-1;s++){
+      const pt=tr.trail[s],pn=tr.trail[s+1];
+      const a0=(1-s/bTrTrail)*ageA,a1=(1-(s+1)/bTrTrail)*ageA*.25;
+      const[r0,g0,b0]=fieldColor(pt[3]||0,bColGamma);
+      const[r1,g1,b1]=fieldColor(pn[3]||0,bColGamma);
+      posA[vi*3]=pt[0];posA[vi*3+1]=pt[1];posA[vi*3+2]=pt[2];
+      colA[vi*3]=r0*a0;colA[vi*3+1]=g0*a0;colA[vi*3+2]=b0*a0;vi++;
+      posA[vi*3]=pn[0];posA[vi*3+1]=pn[1];posA[vi*3+2]=pn[2];
+      colA[vi*3]=r1*a1;colA[vi*3+1]=g1*a1;colA[vi*3+2]=b1*a1;vi++;
+    }
+  }
+  btLineGeo.attributes.position.needsUpdate=true;
+  btLineGeo.attributes.color.needsUpdate=true;
+  btLineGeo.setDrawRange(0,vi);
+}
+
+/* ════════════════════════════════════════════════════════════
+   PARTICLE GENERATION — chunked streamer
+   startRebuild(): clears cloud, begins filling toward targetCount
+   startGrow():    keeps existing particles, adds up to targetCount
+   spawnChunk():   called every frame, adds SPAWN_CHUNK particles
+   ════════════════════════════════════════════════════════════ */
+function startRebuild(){
+  liveCount=0; pGeo.setDrawRange(0,0); colorRollIdx=0;
+  flowTracers=[]; bTracers=[];
+  const{n,l,m}=S;
+  if(n!==cdfN||l!==cdfL) rCDF=buildRadialCDF(n,l);
+  if(l!==cdfL||m!==cdfM) tCDF=buildThetaCDF(l,m);
+  cdfN=n; cdfL=l; cdfM=m;
+  targetCount=Math.min(S.N, MAX_P);
+  spawning=true;
+  loadingEl.classList.add('show');
+}
+
+function startGrow(){
+  targetCount=Math.min(S.N, MAX_P);
+  if(targetCount<=liveCount){ // shrink
+    liveCount=targetCount; pGeo.setDrawRange(0,liveCount);
+    pPosAttr.needsUpdate=true; pColAttr.needsUpdate=true;
+    updateInfoBar(liveCount); return;
+  }
+  spawning=true;
+  loadingEl.classList.add('show');
+}
+
+// Legacy alias used by the dirty-flag path
+function rebuildParticles(){ startRebuild(); }
+
+function spawnChunk(){
+  if(!spawning) return;
+  if(liveCount>=targetCount){
+    spawning=false;
+    loadingEl.classList.remove('show');
+    updateInfoBar(liveCount);
+    if(S.showFlow) rebuildStaticFlow();
+    if(S.showBField&&!bFieldScheduled){bFieldScheduled=true;setTimeout(computeBField,100);}
+    return;
+  }
+
+  const{n,l,m,scale,viewMode,cutAxis,cutPos,simTime,colorMode,scaler}=S;
+  const toAdd=Math.min(SPAWN_CHUNK, targetCount-liveCount);
+  let added=0, attempts=0;
+
+  while(added<toAdd && attempts<toAdd*8 && liveCount+added<MAX_P){
+    attempts++;
+    const r=sampleCDF(rCDF,rCDF.rMax), th=sampleCDF(tCDF,Math.PI), ph=Math.random()*6.2831853;
+    if(r<1e-6) continue;
+    const sinT=Math.sin(th);
+    const x=r*sinT*Math.cos(ph), y=r*Math.cos(th), z=r*sinT*Math.sin(ph);
+    const cv=cutAxis===0?x:cutAxis===1?y:z;
+    if(viewMode===1&&cv>cutPos) continue;
+    if(viewMode===2&&cv<cutPos) continue;
+
+    const i=liveCount+added;
+    sphArr[i*3]=r; sphArr[i*3+1]=th; sphArr[i*3+2]=ph;
+    posArr[i*3]=x*scale; posArr[i*3+1]=y*scale; posArr[i*3+2]=z*scale;
+    const c=particleColor(x,y,z,n,l,m,simTime,colorMode,scaler);
+    colArr[i*3]=c[0]; colArr[i*3+1]=c[1]; colArr[i*3+2]=c[2];
+    added++;
+  }
+
+  liveCount+=added;
+  pPosAttr.needsUpdate=true;
+  pColAttr.needsUpdate=true;
+  pGeo.setDrawRange(0,liveCount);
+  updateInfoBar(liveCount);
+}
+
+/* ════════════════════════════════════════════════════════════
+   COLOR UPDATE — rolling window
+   Processes COLOR_CHUNK particles per frame so even 2 M particles
+   stay smooth. Full pass completes in ceil(liveCount/COLOR_CHUNK) frames.
+   For mode 0 with pure flow animation, colors never need updating
+   (|ψ|² is constant along φ-orbits).
+   ════════════════════════════════════════════════════════════ */
+function updateColors(){
+  if(liveCount===0) return;
+  const{n,l,m,simTime,colorMode,scaler}=S;
+  const count=liveCount;
+  // Roll through COLOR_CHUNK particles per call
+  const end=Math.min(colorRollIdx+COLOR_CHUNK, count);
+  for(let i=colorRollIdx;i<end;i++){
+    const r=sphArr[i*3],th=sphArr[i*3+1],ph=sphArr[i*3+2];
+    const sinT=Math.sin(th);
+    const x=r*sinT*Math.cos(ph), y=r*Math.cos(th), z=r*sinT*Math.sin(ph);
+    const c=particleColor(x,y,z,n,l,m,simTime,colorMode,scaler);
+    colArr[i*3]=c[0]; colArr[i*3+1]=c[1]; colArr[i*3+2]=c[2];
+  }
+  colorRollIdx = end>=count ? 0 : end;
+  pColAttr.needsUpdate=true;
+}
+
+/* ════════════════════════════════════════════════════════════
+   PROBABILITY FLOW ANIMATION
+   sphArr[i] = (r, θ, φ) in atomic units.
+   Each frame: advance φ by m/(r·sinθ)·dt, recompute x,z into posArr.
+   No acos/atan2 — only cos/sin → fast even at 2 M particles.
+   ════════════════════════════════════════════════════════════ */
+function animateFlow(dt){
+  if(liveCount===0) return;
+  const{m,scale,flowSpeed}=S;
+  if(m===0) return;
+  const fdt=dt*flowSpeed;
+  for(let i=0;i<liveCount;i++){
+    const r=sphArr[i*3], theta=sphArr[i*3+1];
+    const st=Math.max(Math.abs(Math.sin(theta)),1e-4);
+    sphArr[i*3+2]+=m/(r*st)*fdt;        // advance φ
+    const ph=sphArr[i*3+2];
+    const sinT=Math.sin(theta);
+    posArr[i*3  ]=r*sinT*Math.cos(ph)*scale;
+    posArr[i*3+2]=r*sinT*Math.sin(ph)*scale; // posArr[i*3+1] (y) unchanged
+  }
+  pPosAttr.needsUpdate=true;
+}
+
+/* ── Static flow arrows ── */
+function rebuildStaticFlow(){
+  const geo=flowGeo;while(geo.attributes.position)geo.deleteAttribute('position');
+  if(!S.showFlow){flowLines.visible=false;return;}
+  flowLines.visible=true;
+  const{m,n,scale}=S,rMax=7*n*n;
+  const pts=[];
+  for(let i=0;i<350;i++){
+    let rx,ry,rz,r;
+    do{rx=(Math.random()*2-1)*rMax;ry=(Math.random()*2-1)*rMax;rz=(Math.random()*2-1)*rMax;r=Math.sqrt(rx*rx+ry*ry+rz*rz);}while(r<3||r>rMax*.75);
+    const J=probabilityFlow(rx,ry,rz,m);
+    const fl=Math.sqrt(J[0]*J[0]+J[1]*J[1]+J[2]*J[2]);if(fl<1e-8)continue;
+    const len=2;
+    pts.push(rx*scale,ry*scale,rz*scale);
+    pts.push((rx+J[0]/fl*len)*scale,(ry+J[1]/fl*len)*scale,(rz+J[2]/fl*len)*scale);
+  }
+  const pa=new Float32Array(pts);
+  geo.setAttribute('position',new THREE.BufferAttribute(pa,3));
+  geo.setDrawRange(0,pts.length/3);
+}
+
+/* ════════════════════════════════════════════════════════════
+   VR THUMBSTICK INPUT — rotate orbital cloud left/right
+   ════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════
+   HAND GESTURE SYSTEM
+   One-hand pinch  → grab & translate orbitalGroup
+   Two-hand pinch  → scale (and translate midpoint)
+   Thumbstick X    → rotate (controller fallback)
+
+   Uses WebXR Hand Tracking API joint poses.
+   Pinch = thumb-tip ↔ index-finger-tip distance < PINCH_THRESH metres.
+   ════════════════════════════════════════════════════════════ */
+// System pinch state — driven by XR selectstart/selectend, not manual distance.
+const _sysActive = { left: false, right: false };
+let _pendingPanelCheck = null; // inputSource set by selectstart, consumed next frame for panel
+
+// Pinch indicator dots (kept for visual feedback)
+const _pinchGeo = new THREE.SphereGeometry(0.012, 8, 8);
+const pinchMeshL = new THREE.Mesh(_pinchGeo,
+  new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:0.85,depthWrite:false}));
+const pinchMeshR = new THREE.Mesh(_pinchGeo,
+  new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:0.85,depthWrite:false}));
+pinchMeshL.visible=false; pinchMeshR.visible=false;
+scene.add(pinchMeshL); scene.add(pinchMeshR);
+
+// Gesture state
+const HS = {
+  grabbing:false, grabStartWorld:new THREE.Vector3(), grabStartGroupPos:new THREE.Vector3(),
+  scaling:false,  scaleStartDist:1,
+  scaleStartGroupScale:new THREE.Vector3(1,1,1),
+  scaleStartMid:new THREE.Vector3(), scaleStartGroupPos:new THREE.Vector3(),
+};
+
+function _jointWorldPos(hand, jointName, frame, refSpace){
+  if(!hand) return null;
+  const joint = hand.get(jointName); if(!joint) return null;
+  const pose  = frame.getJointPose(joint, refSpace); if(!pose) return null;
+  const p = pose.transform.position;
+  return new THREE.Vector3(p.x, p.y, p.z);
+}
+
+function getPinchPos(inputSource, frame, refSpace){
+  if(!inputSource.hand) return null;
+  const hand = inputSource.handedness === 'left' ? 'left' : 'right';
+  if(!_sysActive[hand]) return null; // XR system says not pinching
+  return _jointWorldPos(inputSource.hand, 'index-finger-tip', frame, refSpace);
+}
+
+function updateHandTracking(frame){
+  const sess = renderer.xr.getSession(); if(!sess) return;
+  const refSpace = renderer.xr.getReferenceSpace(); if(!refSpace) return;
+
+  let lPos=null, rPos=null;
+  for(const src of sess.inputSources){
+    if(!src.hand) continue;
+    const p = getPinchPos(src, frame, refSpace);
+    if(src.handedness==='left')  lPos=p;
+    else                         rPos=p;
+  }
+
+  // Update pinch indicators
+  pinchMeshL.visible=!!lPos; if(lPos) pinchMeshL.position.copy(lPos);
+  pinchMeshR.visible=!!rPos; if(rPos) pinchMeshR.position.copy(rPos);
+
+  if(lPos && rPos){
+    // ── TWO-HAND PINCH: scale + translate ──
+    const mid  = lPos.clone().lerp(rPos, 0.5);
+    const dist = lPos.distanceTo(rPos);
+
+    if(!HS.scaling){
+      HS.scaling=true; HS.grabbing=false;
+      HS.scaleStartDist=Math.max(dist,0.01);
+      HS.scaleStartGroupScale.copy(orbitalGroup.scale);
+      HS.scaleStartMid.copy(mid);
+      HS.scaleStartGroupPos.copy(orbitalGroup.position);
+    }
+
+    const sf = dist / HS.scaleStartDist;
+    orbitalGroup.scale.copy(HS.scaleStartGroupScale).multiplyScalar(sf);
+    // Translate with midpoint so scaling feels anchored between hands
+    const delta = mid.clone().sub(HS.scaleStartMid);
+    orbitalGroup.position.copy(HS.scaleStartGroupPos).add(delta);
+
+  } else if(lPos || rPos){
+    // ── ONE-HAND PINCH: grab and translate ──
+    const pinch = lPos || rPos;
+    HS.scaling=false;
+
+    if(!HS.grabbing){
+      HS.grabbing=true;
+      HS.grabStartWorld.copy(pinch);
+      HS.grabStartGroupPos.copy(orbitalGroup.position);
+    }
+
+    orbitalGroup.position.copy(HS.grabStartGroupPos)
+      .add(pinch.clone().sub(HS.grabStartWorld));
+
+  } else {
+    // ── No pinch — release ──
+    HS.grabbing=false;
+    HS.scaling=false;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   AR SESSION — immersive-ar with surface hit-test placement
+   ════════════════════════════════════════════════════════════ */
+{
+  const arBtn = document.getElementById('ar-btn');
+
+  // ── Visible status/error — shown in headset since no console ──
+  function arStatus(msg, isErr){
+    const el = document.getElementById('ar-status');
+    if(!el) return;
+    el.textContent = msg;
+    el.className = 'ar-status-msg' + (isErr?' ar-err':'');
+    el.style.display = 'block';
+    if(!isErr) setTimeout(()=>{ el.style.display='none'; }, 4000);
+  }
+
+  let arSession    = null;
+  let hitTestSrc   = null;
+  let hasHitTest   = false;
+  let arPlaced     = false;
+  let arSpawnDone  = false;  // true after spawn anim completes — hand gestures own scale
+  let arScaleTarget= 1;
+  let inARSession  = false;
+  let arSaved      = null;   // saved settings restored on exit
+  const AR_SCALE   = 0.05;
+  const AR_HOVER   = 0.10;
+
+  // ── Support check ──
+  if(navigator.xr){
+    navigator.xr.isSessionSupported('immersive-ar')
+      .then(ok => {
+        if(ok){ arBtn.classList.add('vr-ready'); }
+        else  { arBtn.textContent='AR unavailable'; arBtn.disabled=true; }
+      })
+      .catch(e => { arBtn.textContent='AR check failed'; arBtn.disabled=true; });
+  } else {
+    arBtn.textContent='No WebXR'; arBtn.disabled=true;
+  }
+
+  arBtn.addEventListener('click', async () => {
+    if(arSession){ arSession.end(); return; }
+
+    arStatus('Requesting AR session…');
+
+    let s;
+    try {
+      s = await navigator.xr.requestSession('immersive-ar', {
+        requiredFeatures: ['local'],
+        optionalFeatures: ['hit-test','local-floor','hand-tracking','light-estimation'],
+        // dom-overlay intentionally omitted — it renders above the system hand compositor
+        // and obscures passthrough hands. All AR UI is in 3D world space instead.
+      });
+    } catch(e) {
+      arStatus('Session failed: ' + (e.message||String(e)), true);
+      return;
+    }
+
+    arStatus('AR started ✓');
+    arSession    = s;
+    arPlaced     = false;
+    arSpawnDone  = false;
+    arScaleTarget= 0;
+    inARSession  = true;
+    orbitalGroup.scale.setScalar(0);
+    orbitalGroup.position.set(0,0,0);
+    reticle.visible      = false;
+    boundingCube.visible = false;
+
+    renderer.setClearColor(0x000000, 0);
+
+    try {
+      await renderer.xr.setSession(s);
+    } catch(e) {
+      arStatus('setSession failed: '+(e.message||String(e)), true);
+      s.end(); return;
+    }
+
+    controls.enabled = false;
+    document.body.classList.add('xr-active','ar-mode');
+    arBtn.textContent = 'Exit AR';
+
+    // ── Reduce simulation load for AR ──
+    arSaved = {
+      N: S.N, psize: S.psize,
+      showBField: S.showBField, showBTr: S.showBTr,
+      bGridDim: S.bGridDim, bUpdateEvery: S.bUpdateEvery, bTrSpawn: S.bTrSpawn,
+      bArrowScale: S.bArrowScale, bTrSpeed: S.bTrSpeed, bTrTrail: S.bTrTrail,
+    };
+    S.N = 25000; startGrow();
+    pMat.size = 0.005;
+    // AR B-field: coarser grid, lower spawn, faster + longer-trail tracers
+    S.bGridDim = 9; S.bUpdateEvery = 90; S.bArrowScale = 0.6;
+    S.bTrSpawn = 300;   // lower than desktop 750 — less particle overdraw in AR
+    S.bTrSpeed = 2.5;   // faster so flows look dynamic at AR scale
+    S.bTrTrail = 80;    // longer trail for visual clarity
+    bFieldData = null;  // force fresh recompute with AR grid settings
+    setMagField(false);
+
+    // ── System pinch events — drive _sysActive + panel checks ──
+    s.addEventListener('selectstart', e => {
+      if(!e.inputSource.hand) return;
+      const h = e.inputSource.handedness === 'left' ? 'left' : 'right';
+      _sysActive[h] = true;
+      if(ARP.mesh && ARP.mesh.visible) _pendingPanelCheck = e.inputSource;
+    });
+    s.addEventListener('selectend', e => {
+      if(!e.inputSource.hand) return;
+      const h = e.inputSource.handedness === 'left' ? 'left' : 'right';
+      _sysActive[h] = false;
+    });
+
+    // ── Hit-test (optional) ──
+    hasHitTest = false;
+    try {
+      const viewerSpace = await s.requestReferenceSpace('viewer');
+      hitTestSrc = await s.requestHitTestSource({ space: viewerSpace });
+      hasHitTest = true;
+      document.getElementById('ar-hint').style.display = 'flex';
+      arStatus('Point at a surface to place');
+    } catch(e) {
+      arStatus('Hit-test unavailable — tap to place at fixed depth');
+      document.getElementById('ar-hint').style.display = 'flex';
+    }
+
+    // ── Placement via select — one-time only, reticle stops after placement ──
+    s.addEventListener('select', () => {
+      if(arPlaced) return; // one placement only
+
+      let placePos = new THREE.Vector3();
+
+      if(hasHitTest && reticle.visible){
+        placePos.setFromMatrixPosition(
+          new THREE.Matrix4().fromArray(reticle.matrix.elements));
+        placePos.y += AR_HOVER;
+      } else {
+        const cam = renderer.xr.getCamera();
+        const fwd = new THREE.Vector3(0,0,-0.6).applyQuaternion(cam.quaternion);
+        placePos.copy(cam.position).add(fwd);
+      }
+
+      orbitalGroup.position.copy(placePos);
+      orbitalGroup.rotation.set(0,0,0);
+      vrRotY = 0;
+      arPlaced     = true;
+      arSpawnDone  = false;
+      arScaleTarget= AR_SCALE;
+      boundingCube.visible = true;
+
+      document.getElementById('ar-hint').style.display = 'none';
+      // Cancel hit test — reticle gone, no re-placement
+      if(hitTestSrc){ hitTestSrc.cancel(); hitTestSrc=null; }
+      reticle.visible = false;
+      // Show 3D world-space control panel
+      initARPanel();
+      ARP.mesh.visible = true;
+      ARP.dirty = true;
+      arStatus('Placed · poke panel to control');
+    });
+
+    // ── Cleanup on session end ──
+    s.addEventListener('end', () => {
+      if(ARP.mesh) ARP.mesh.visible = false;
+      _handDots.forEach(d=>d.visible=false);
+      ARP.bgOpacity=0;
+      _sysActive.left=false; _sysActive.right=false; _pendingPanelCheck=null;
+      arSession = null; hitTestSrc = null;
+      arPlaced = false; arSpawnDone = false; hasHitTest = false;
+      inARSession = false; arScaleTarget = 1;
+      renderer.setClearColor(0x0e1118, 1);
+      controls.enabled = true;
+      document.body.classList.remove('xr-active','ar-mode');
+      document.getElementById('ar-hint').style.display = 'none';
+      document.getElementById('ar-status').style.display = 'none';
+      arBtn.textContent = 'Enter AR';
+      orbitalGroup.scale.setScalar(1);
+      orbitalGroup.position.set(0,0,0);
+      orbitalGroup.rotation.set(0,0,0);
+      boundingCube.visible = false;
+      reticle.visible = false;
+      // Restore saved settings
+      if(arSaved){
+        S.N = arSaved.N; startGrow();
+        S.psize = arSaved.psize; pMat.size = S.psize;
+        S.bGridDim = arSaved.bGridDim; S.bUpdateEvery = arSaved.bUpdateEvery;
+        S.bTrSpawn = arSaved.bTrSpawn; S.bArrowScale = arSaved.bArrowScale;
+        S.bTrSpeed = arSaved.bTrSpeed; S.bTrTrail = arSaved.bTrTrail;
+        if(arSaved.showBField) setMagField(true);
+        arSaved = null;
+      }
+      bgDimMesh.visible = false; bgDimMat.opacity = 0; ARP.bgOpacity = 0;
+    });
+  });
+
+  // Called from animation loop — hit test reticle update
+  window._arUpdateHitTest = function(frame){
+    if(!hitTestSrc || !frame) return;
+    const refSpace = renderer.xr.getReferenceSpace(); if(!refSpace) return;
+    const results = frame.getHitTestResults(hitTestSrc);
+    if(results.length > 0){
+      const pose = results[0].getPose(refSpace);
+      reticle.visible = true;
+      reticle.matrix.fromArray(pose.transform.matrix);
+    } else {
+      reticle.visible = false;
+    }
+  };
+
+  // Spawn animation — lerps scale from 0 to AR_SCALE once, then stops forever.
+  // After arSpawnDone=true, hand gestures own orbitalGroup.scale freely.
+  window._arUpdateScale = function(dt){
+    if(!inARSession || arSpawnDone) return;
+    const cur  = orbitalGroup.scale.x;
+    const next = cur + (arScaleTarget - cur) * Math.min(1, dt*8);
+    orbitalGroup.scale.setScalar(next);
+    if(arPlaced && Math.abs(next - arScaleTarget) < 0.0005){
+      orbitalGroup.scale.setScalar(arScaleTarget);
+      arSpawnDone = true; // hand gestures take over from here
+    }
+  };
+}
+
+let vrRotY=0;
+function handleVRInput(frame){
+  const sess=renderer.xr.getSession(); if(!sess) return;
+
+  // Hand tracking gestures (runs when hand-tracking feature is available)
+  if(frame) updateHandTracking(frame);
+
+  // Controller thumbstick → rotate orbitalGroup (fallback when using controllers)
+  for(const src of sess.inputSources){
+    if(!src.gamepad||src.hand) continue; // skip hand sources
+    const ax=src.gamepad.axes;
+    const stX=ax[2]??ax[0]??0;
+    if(Math.abs(stX)>.12){
+      vrRotY-=stX*.018;
+      orbitalGroup.rotation.y=vrRotY;
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════
+   UI WIRING — Quick Panel + Advanced Panel
+   GREP: updateDisplay | syncQN | applyQN | setN | setColorMode
+         setAnimate | setMagField | toggleAdv | toggleQPCollapse
+   ════════════════════════════════════════════════════════════ */
+const SUBSHELLS=['s','p','d','f','g','h'];
+
+/* ── Display helpers ── */
+function updateDisplay(){
+  const{n,l,m}=S; const ms=(m>=0?'+':'')+m;
+  // State display (top-right ket)
+  document.getElementById('ket-disp').textContent=`|${n},${l},${ms}⟩`;
+  document.getElementById('orb-disp').textContent=`${n}${SUBSHELLS[l]??'?'} orbital`;
+  // Quick panel
+  const ss=`${n}${SUBSHELLS[l]??'?'}`;
+  document.getElementById('qp-subshell').textContent=ss;
+  document.getElementById('qp-ket').textContent=`|${n},${l},${ms}⟩`;
+  document.getElementById('qp-n').textContent=n;
+  document.getElementById('qp-l').textContent=l;
+  document.getElementById('qp-m').textContent=ms;
+  document.getElementById('qp-icon-nlm').textContent=ss;
+  // Advanced panel
+  document.getElementById('vl-n').textContent=n;
+  document.getElementById('vl-l').textContent=l;
+  document.getElementById('vl-m').textContent=ms;
+}
+
+function updateInfoBar(count){
+  const{n,l,m}=S; const ms=(m>=0?'+':'')+m;
+  const el=document.getElementById('info-bar');
+  if(el) el.innerHTML=`n=${n} l=${l} m=${ms} · ${count} pts`;
+  const k=count>=1000?(count/1000).toFixed(1).replace('.0','')+'k':count;
+  const qv=document.getElementById('qp-n-val'); if(qv) qv.textContent=k;
+}
+
+function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
+
+/* ── Panel toggles ── */
+function toggleAdv(){
+  const p=document.getElementById('adv-panel');
+  const b=document.getElementById('qp-adv-btn');
+  const open=p.classList.toggle('adv-open');
+  b.classList.toggle('adv-open-active',open);
+  b.textContent=open?'✕ Close Adv':'⚙ Advanced';
+}
+function toggleQPCollapse(){
+  document.getElementById('quick-panel').classList.toggle('qp-collapsed');
+}
+window.toggleAdv=toggleAdv;
+window.toggleQPCollapse=toggleQPCollapse;
+
+/* ── Quantum numbers ── */
+function applyQN(n,l,m){
+  n=Math.max(1,Math.min(6,n));
+  l=Math.max(0,Math.min(l,n-1));
+  m=Math.max(-l,Math.min(m,l));
+  document.getElementById('sl-n').value=n;
+  const sl=document.getElementById('sl-l'); sl.max=n-1; sl.value=l;
+  const sm=document.getElementById('sl-m'); sm.min=-l; sm.max=l; sm.value=m;
+  ['sl-n','sl-l','sl-m'].forEach(id=>sg(document.getElementById(id)));
+  S.n=n;S.l=l;S.m=m;
+  updateDisplay();
+  if(ARP.mesh) ARP.dirty=true;
+}
+function syncQN(){
+  applyQN(+document.getElementById('sl-n').value,
+          +document.getElementById('sl-l').value,
+          +document.getElementById('sl-m').value);
+}
+// QN steppers (quick panel)
+document.querySelectorAll('.qp-step').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const qn=btn.dataset.qn,dir=+btn.dataset.dir;
+    let{n,l,m}=S;
+    if(qn==='n')n+=dir; else if(qn==='l')l+=dir; else if(qn==='m')m+=dir;
+    applyQN(n,l,m); S.dirty=true;
+  });
+});
+// QN sliders (advanced panel)
+['sl-n','sl-l','sl-m'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener('input',()=>{syncQN();S.dirty=true;});
+  sg(el);
+});
+
+/* ── Particle count — synced between quick and adv sliders ── */
+function setN(val){
+  S.N=val;
+  const k=val>=1000000?(val/1000000).toFixed(1).replace('.0','')+'M':(val/1000).toFixed(1).replace('.0','')+'k';
+  document.getElementById('vl-N').textContent=k;
+  document.getElementById('qp-n-val').textContent=k;
+  const qs=document.getElementById('qp-sl-n'); qs.value=val; sg(qs);
+  const as=document.getElementById('sl-N');   as.value=val; sg(as);
+  startGrow();
+}
+document.getElementById('qp-sl-n').addEventListener('input',function(){setN(+this.value);sg(this);});
+sg(document.getElementById('qp-sl-n'));
+document.getElementById('sl-N').addEventListener('input',function(){setN(+this.value);});
+sg(document.getElementById('sl-N'));
+document.getElementById('sl-sz').addEventListener('input',function(){S.psize=+this.value;pMat.size=S.psize;document.getElementById('vl-sz').textContent=S.psize.toFixed(3);sg(this);});sg(document.getElementById('sl-sz'));
+document.getElementById('sl-ls').addEventListener('input',function(){S.scaler=+this.value;document.getElementById('vl-ls').textContent=S.scaler;sg(this);S.colDirty=true;});sg(document.getElementById('sl-ls'));
+
+/* ── Color mode — synced quick and adv ── */
+function setColorMode(mode){
+  S.colorMode=mode; S.colDirty=true;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',+b.dataset.mode===mode));
+  document.querySelectorAll('.qp-mode').forEach(b=>b.classList.toggle('active',+b.dataset.mode===mode));
+  if(ARP.mesh) ARP.dirty=true;
+}
+document.querySelectorAll('.mode-btn').forEach(b=>b.addEventListener('click',()=>setColorMode(+b.dataset.mode)));
+document.querySelectorAll('.qp-mode').forEach(b=>b.addEventListener('click',()=>setColorMode(+b.dataset.mode)));
+
+/* ── Animate toggle — synced quick panel toggle + adv checkbox ── */
+function setAnimate(on){
+  S.animateFlow=on;
+  document.getElementById('cb-flow-anim').checked=on;
+  const tb=document.getElementById('qp-tog-anim');
+  tb.classList.toggle('on',on); tb.classList.toggle('off',!on);
+  tb.textContent=on?'▶ Animate':'▐▐ Paused';
+  const ib=document.getElementById('qp-icon-anim');
+  if(ib){ib.classList.toggle('on',on);ib.classList.toggle('off',!on);}
+}
+document.getElementById('cb-flow-anim').addEventListener('change',function(){setAnimate(this.checked);});
+document.getElementById('qp-tog-anim').addEventListener('click',()=>setAnimate(!S.animateFlow));
+window.setAnimate=setAnimate;
+
+/* ── B field toggle — synced quick panel, adv big-toggles, icon strip ── */
+function setMagField(on){
+  S.showBField=on; S.showBTr=on;
+  const bb=document.getElementById('btn-bfield-toggle');
+  const bl=document.getElementById('bfield-state-lbl');
+  const tb=document.getElementById('btn-btr-toggle');
+  const tl=document.getElementById('btr-state-lbl');
+  if(bb){bb.classList.toggle('active',on);bb.classList.toggle('off',!on);}
+  if(bl) bl.textContent=on?'ON':'OFF';
+  if(tb){tb.classList.toggle('active',on);tb.classList.toggle('off',!on);}
+  if(tl) tl.textContent=on?'ON':'OFF';
+  document.getElementById('bfield-opts').style.display=on?'block':'none';
+  const qb=document.getElementById('qp-tog-b');
+  qb.classList.toggle('on',on); qb.classList.toggle('off',!on);
+  qb.textContent=on?'⊕ B Field':'⊗ B Field';
+  const ib=document.getElementById('qp-icon-b');
+  if(ib){ib.classList.toggle('on',on);ib.classList.toggle('off',!on);}
+  if(!on){bArrowShaft.visible=false;btLines.visible=false;bTracers=[];}
+  else if(!bFieldData) computeBField();
+  if(ARP.mesh) ARP.dirty=true;
+}
+document.getElementById('btn-bfield-toggle').addEventListener('click',()=>{S.showBField=!S.showBField;setMagField(S.showBField);});
+document.getElementById('qp-tog-b').addEventListener('click',()=>setMagField(!S.showBField));
+window.setMagField=setMagField;
+// Wrappers for icon-strip inline onclick — S is module-scoped, not on window
+window.toggleAnimateQP = () => setAnimate(!S.animateFlow);
+window.toggleBFieldQP  = () => setMagField(!S.showBField);
+
+/* ── B tracers adv toggle ── */
+(function(){
+  const btn=document.getElementById('btn-btr-toggle');
+  const lbl=document.getElementById('btr-state-lbl');
+  function sync(){
+    btn.classList.toggle('active',S.showBTr);btn.classList.toggle('off',!S.showBTr);
+    lbl.textContent=S.showBTr?'ON':'OFF';
+    document.getElementById('btr-opts').style.display=S.showBTr?'block':'none';
+    if(!S.showBTr){btLines.visible=false;bTracers=[];}
+  }
+  btn.addEventListener('click',()=>{S.showBTr=!S.showBTr;sync();});
+  sync();
+})();
+
+/* ── B resolution presets ── */
+document.querySelectorAll('.res-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    S.bGridDim=+btn.dataset.dim;
+    document.querySelectorAll('.res-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    if(S.showBField) computeBField();
+  });
+});
+
+/* ── Remaining adv sliders ── */
+document.getElementById('cb-ev').addEventListener('change',function(){S.evolving=this.checked;});
+document.getElementById('sl-sp').addEventListener('input',function(){S.timeSpeed=+this.value;document.getElementById('vl-sp').textContent=S.timeSpeed.toFixed(1);sg(this);});sg(document.getElementById('sl-sp'));
+document.getElementById('cb-flow-tr').addEventListener('change',function(){S.showFlowTr=this.checked;document.getElementById('flow-tr-opts').style.display=this.checked?'block':'none';if(!this.checked){ftLines.visible=false;flowTracers=[];}});
+document.getElementById('sl-fspd').addEventListener('input',function(){S.flowSpeed=+this.value;document.getElementById('vl-fspd').textContent=S.flowSpeed.toFixed(2);sg(this);});sg(document.getElementById('sl-fspd'));
+document.getElementById('sl-ftr-n').addEventListener('input',function(){S.flowTrCount=+this.value;document.getElementById('vl-ftr-n').textContent=this.value;sg(this);});sg(document.getElementById('sl-ftr-n'));
+document.getElementById('sl-ftr-tl').addEventListener('input',function(){S.flowTrTrail=+this.value;document.getElementById('vl-ftr-tl').textContent=this.value;sg(this);});sg(document.getElementById('sl-ftr-tl'));
+document.getElementById('sl-bgext').addEventListener('input',function(){S.bGridExtent=+this.value;document.getElementById('vl-bgext').textContent=this.value;sg(this);});sg(document.getElementById('sl-bgext'));
+document.getElementById('sl-basc').addEventListener('input',function(){S.bArrowScale=+this.value;document.getElementById('vl-basc').textContent=S.bArrowScale.toFixed(1);sg(this);if(bFieldData)uploadBArrows();});sg(document.getElementById('sl-basc'));
+document.getElementById('sl-bgam').addEventListener('input',function(){S.bColGamma=+this.value;document.getElementById('vl-bgam').textContent=S.bColGamma.toFixed(1);sg(this);if(bFieldData)uploadBArrows();});sg(document.getElementById('sl-bgam'));
+document.getElementById('sl-buev').addEventListener('input',function(){S.bUpdateEvery=+this.value;document.getElementById('vl-buev').textContent=this.value;sg(this);});sg(document.getElementById('sl-buev'));
+document.getElementById('btn-brecompute').addEventListener('click',()=>{if(S.showBField)computeBField();});
+document.getElementById('sl-bspd').addEventListener('input',function(){S.bTrSpeed=+this.value;document.getElementById('vl-bspd').textContent=S.bTrSpeed.toFixed(1);sg(this);});sg(document.getElementById('sl-bspd'));
+document.getElementById('sl-bspwn').addEventListener('input',function(){S.bTrSpawn=+this.value;document.getElementById('vl-bspwn').textContent=this.value;sg(this);});sg(document.getElementById('sl-bspwn'));
+document.getElementById('sl-btrl').addEventListener('input',function(){S.bTrTrail=+this.value;document.getElementById('vl-btrl').textContent=this.value;sg(this);});sg(document.getElementById('sl-btrl'));
+document.querySelectorAll('.view-btn[data-view]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.view-btn[data-view]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');S.viewMode=+btn.dataset.view;document.getElementById('cut-row').style.display=S.viewMode!==0?'block':'none';S.dirty=true;}));
+document.querySelectorAll('.view-btn[data-axis]').forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll('.view-btn[data-axis]').forEach(b=>b.classList.remove('active'));btn.classList.add('active');S.cutAxis=+btn.dataset.axis;S.dirty=true;}));
+document.getElementById('sl-cut').addEventListener('input',function(){S.cutPos=+this.value;document.getElementById('vl-cut').textContent=S.cutPos.toFixed(1);sg(this);S.dirty=true;});sg(document.getElementById('sl-cut'));
+document.getElementById('cb-flow').addEventListener('change',function(){S.showFlow=this.checked;rebuildStaticFlow();});
+document.getElementById('cb-axes').addEventListener('change',function(){S.showAxes=this.checked;axesHelper.visible=this.checked;});
+
+window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
+
+// Init all toggles and displays
+setMagField(S.showBField);
+setAnimate(S.animateFlow);
+
+// Sync adv panel detail sliders to state defaults
+document.getElementById('sl-bgext').value=S.bGridExtent; sg(document.getElementById('sl-bgext'));
+document.getElementById('sl-basc').value=S.bArrowScale;  sg(document.getElementById('sl-basc'));
+document.getElementById('sl-buev').value=S.bUpdateEvery; sg(document.getElementById('sl-buev'));
+document.getElementById('sl-bspwn').value=S.bTrSpawn;    sg(document.getElementById('sl-bspwn'));
+document.getElementById('vl-bgext').textContent=S.bGridExtent;
+document.getElementById('vl-basc').textContent=S.bArrowScale.toFixed(1);
+document.getElementById('vl-buev').textContent=S.bUpdateEvery;
+document.getElementById('vl-bspwn').textContent=S.bTrSpawn;
+
+
+const clock=new THREE.Clock();
+const loadingEl=document.getElementById('loading');
+// Guarantee material size matches state regardless of initialization order
+pMat.size = S.psize;
+startRebuild();
+
+renderer.setAnimationLoop((time, frame)=>{
+  const dt=clock.getDelta();
+
+  // Quantum state changed → full clear and rebuild
+  if(S.dirty){S.dirty=false;S.colDirty=false;colorRollIdx=0;startRebuild();return;}
+
+  // Grow/shrink particle count each frame
+  spawnChunk();
+
+  // Time-evolve phase (rolling window so large counts stay smooth)
+  if(S.evolving&&S.colorMode!==0){S.simTime+=dt*S.timeSpeed*12;updateColors();}
+  else if(S.colDirty){S.colDirty=false;colorRollIdx=0;updateColors();}
+
+  // Animate particle positions along J
+  if(S.animateFlow&&S.m!==0){
+    animateFlow(dt);
+    if(S.colorMode!==0) updateColors();
+  }
+
+  // Flow tracers
+  updateFlowTracers(dt);
+
+  // B field: periodic recompute
+  if(S.showBField){
+    bFieldFrameCount++;
+    if(bFieldFrameCount>=S.bUpdateEvery){
+      bFieldFrameCount=0;
+      if(!bFieldScheduled){bFieldScheduled=true;setTimeout(computeBField,0);}
+    }
+  }
+
+  // B-field tracers
+  updateBTracers(dt);
+
+  // Nucleus spin animation
+  nucleusGroup.children.forEach(c=>{if(c.userData.spinSpeed)c.rotateOnAxis(c.userData.spinAxis,c.userData.spinSpeed*dt);});
+
+  handleVRInput(frame);
+  if(frame && window._arUpdateHitTest) _arUpdateHitTest(frame);
+  if(window._arUpdateScale) _arUpdateScale(dt);
+  updateARPanel(frame);
+  // Safety: clamp scale back to 1 if something collapsed it outside AR mode
+  if(!document.body.classList.contains('ar-mode') && orbitalGroup.scale.x < 0.05)
+    orbitalGroup.scale.setScalar(1);
+  // Track bgDimMesh to camera so it always covers the full AR passthrough background
+  if(bgDimMesh.visible){
+    bgDimMesh.position.copy(camera.position);
+    bgDimMesh.quaternion.copy(camera.quaternion);
+    bgDimMesh.translateZ(-10);
+  }
+  controls.update();
+  renderer.render(scene,camera);
+});
+
+syncQN();

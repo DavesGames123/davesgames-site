@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QFT Flow // Stella Nova · davesgames.io</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QFT · ρ→spectrum</span></div>
+  <div class="topbar-r">SYS // <strong>FOURIER TRANSFORM</strong></div>
+</div>
+<div id="main">
+  <div id="panel">
+    <div class="card">
+      <div class="lbl">Register <span class="tag">2ⁿ amplitudes</span></div>
+      <div class="row">
+        <span class="name">qubits&nbsp;<b style="color:var(--ink)">n</b></span>
+        <div class="stepper">
+          <button id="n-minus">−</button>
+          <span class="v" id="n-val">4 <small id="dim-val">· 16 bins</small></span>
+          <button id="n-plus">+</button>
+        </div>
+      </div>
+      <div class="lbl" style="margin-top:6px">Phase rotations <span class="tag">Rz(φⱼ) per qubit</span></div>
+      <div id="phi-sliders"></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Linear ramp <span class="tag">φⱼ = α·2ʲ</span></div>
+      <div class="slider">
+        <div class="head"><span class="k">slope <b>α</b></span><span class="val" id="alpha-val">0.00</span></div>
+        <input type="range" class="amber" id="alpha" min="0" max="6.2832" step="0.001" value="0">
+      </div>
+      <div class="btns">
+        <button class="amber" data-preset="flat">Flat</button>
+        <button class="amber" data-preset="ramp">Clean tone</button>
+        <button class="amber" data-preset="detune">Detune</button>
+        <button class="amber" data-preset="random">Random</button>
+      </div>
+      <div class="note">A perfect <b>1:2:4:8</b> ramp is a pure tone → one bin. Drag α to slide that tone across the spectrum; nudge a single φⱼ off the ramp to watch energy <b>leak</b> into neighbours.</div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Measurement <span class="tag">finite shots</span></div>
+      <div class="slider">
+        <div class="head"><span class="k">shots <b>S</b></span><span class="val" id="shots-val">exact</span></div>
+        <input type="range" id="shots" min="0" max="20" step="1" value="0">
+      </div>
+      <div class="btns"><button id="resample">↻ Resample</button></div>
+      <div class="note">At <b>S = exact</b> you see the true state. Add shots to sample it — the rose histogram is one measurement run, wobbling around the curve by <b>√</b>shot noise.</div>
+    </div>
+  </div>
+
+  <!-- ── VISUALS ── -->
+  <div id="viz">
+    <header>
+      <div class="kicker">Quantum Fourier Transform · input → output</div>
+      <h1>Four knobs, <em>one spectrum</em></h1>
+      <p class="sub">Turn <b>n</b> single-qubit phase rotations and watch the whole pipeline: the flat-magnitude signal they encode, the <b>smooth continuous spectrum</b> an ideal machine holds, and the <b>discrete probability histogram</b> you'd actually measure. The bars are samples of the curve.</p>
+    </header>
+    <div class="card">
+      <div class="lbl">① Input signal <span class="tag">the n rotations, encoded</span></div>
+      <div class="split">
+        <div>
+          <div class="viz-cap"><span class="t">|amplitude|<span>constant modulus</span></span><span class="r" id="mag-r">1/√N</span></div>
+          <canvas class="viz" id="cv-mag" height="150"></canvas>
+        </div>
+        <div>
+          <div class="viz-cap"><span class="t">phase θ(x)<span>= Σ φⱼ·xⱼ</span></span><span class="r" id="phase-r"></span></div>
+          <canvas class="viz" id="cv-phase" height="150"></canvas>
+        </div>
+      </div>
+      <div class="flow" style="margin-top:14px"><span>flat magnitude · phase ramp</span><span class="arr">▼</span><span style="color:var(--cyan-d)">QFT</span></div>
+      <div class="formula">$P(k)=\bigl|\tfrac{1}{N}\sum_{x} e^{i\theta(x)}\,e^{-2\pi i kx/N}\bigr|^2$&nbsp;&nbsp;<span style="color:var(--faint)">— power spectrum of a constant-modulus sequence</span></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">② Output <span class="tag">smooth state vs measured histogram</span></div>
+      <div class="viz-cap"><span class="t">P(k)<span>probability over the 2ⁿ basis states</span></span><span class="r" id="out-r"></span></div>
+      <canvas class="viz" id="cv-out" height="300"></canvas>
+      <div class="legend">
+        <span><i class="swatch-curve"></i>continuous spectrum |V(κ)|² (ideal)</span>
+        <span><i class="swatch-bar"></i>exact bin probability P(k)</span>
+        <span><i class="swatch-hist"></i>measured histogram (S shots)</span>
+      </div>
+      <div class="stats">
+        <div class="stat amber"><div class="sl">peak bin</div><div class="sv" id="st-peak">0</div></div>
+        <div class="stat"><div class="sl">peak prob</div><div class="sv" id="st-prob">100<small>%</small></div></div>
+        <div class="stat rose"><div class="sl">spread</div><div class="sv" id="st-spread">1.0<small> bins</small></div></div>
+        <div class="stat"><div class="sl">ramp → bin</div><div class="sv" id="st-pred">0.0</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">What you're watching</div>
+      <div class="explain">
+        <p><b>The input is the least impulse-like thing there is.</b> Every one of the 2ⁿ amplitudes has the <span class="c">same magnitude</span>; all your information lives in the <span class="c">phase</span> θ(x) = Σⱼ φⱼ·xⱼ. Because that phase is additive over the bits, n knobs only reach an n-parameter family of signals — you steer <b>where</b> the energy lands and <b>how sharp</b> it is, not an arbitrary shape.</p>
+        <p><b>The smooth curve is the ideal state; the bars sample it.</b> An infinite-resolution machine would hold the continuous spectrum |V(κ)|². A real n-qubit register only has <span class="a">2ⁿ slots</span>, so it reads off that curve at the integer bins. When the ramp lands the peak exactly on an integer, every other bin sits on a <b>zero</b> of the curve → a single clean spike. Land it between integers and the bins sample the skirts → <b>spectral leakage</b>.</p>
+        <p><b>The leak law.</b> Detune one qubit's phase by δ and the peak drops to exactly <b>cos²(δ/2)</b>, the rest bleeding into neighbours — same for any qubit, because each splits the indices evenly.</p>
+        <p><b>The axis wraps around.</b> Frequency bin <span class="c">N</span> is the same state as bin <span class="c">0</span> — the spectrum is periodic. So when the peak sits at <span class="a">|0…0⟩</span>, the curve <em>also</em> climbs at the far-right edge: that's the same spike seen through the wrap, <b>not</b> a second peak at <span class="a">|1…1⟩</span>. Trust the orange dots, not the rising skirt.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">The math <span class="tag">QFT, formally</span></div>
+      <div class="eq"><div class="cap"><b>Input state</b> — flat magnitude, phase set by your n rotations</div>
+        <div class="math">$$|\psi_{\text{in}}\rangle=\frac{1}{\sqrt{N}}\sum_{x=0}^{N-1} e^{\,i\theta(x)}\,|x\rangle,\qquad \theta(x)=\sum_{j=0}^{n-1}\varphi_j\,x_j,\quad N=2^{\,n}$$</div></div>
+      <div class="eq"><div class="cap"><b>QFT amplitude</b> on basis state $|k\rangle$</div>
+        <div class="math">$$V[k]=\langle k|\,\mathrm{QFT}\,|\psi_{\text{in}}\rangle=\frac{1}{N}\sum_{x=0}^{N-1} e^{\,i\theta(x)}\,e^{-2\pi i\,kx/N}$$</div></div>
+      <div class="eq"><div class="cap"><b>Measured probability</b> and its smooth continuation $|V(\kappa)|^2$</div>
+        <div class="math">$$P(k)=\bigl|V[k]\bigr|^2,\qquad \kappa\in[0,N)\ \text{continuous}$$</div></div>
+      <div class="eq"><div class="cap"><b>Clean-tone condition</b> — a 1:2:4:8 ramp is a single frequency</div>
+        <div class="math">$$\varphi_j=\alpha\,2^{\,j}\;\Rightarrow\;\theta(x)=\alpha x\;\Rightarrow\;\text{peak at }k=\frac{\alpha N}{2\pi}$$</div></div>
+      <div class="eq"><div class="cap"><b>Leak law</b> — cost of detuning qubit $j$ by $\delta_j$</div>
+        <div class="math">$$P_{\text{peak}}=\prod_{j=0}^{n-1}\cos^2\!\Bigl(\tfrac{\delta_j}{2}\Bigr)$$</div></div>
+      <div class="eq"><div class="cap"><b>Periodicity</b> — why the curve rises again on the right</div>
+        <div class="math">$$V[k+N]=V[k]\quad\Longleftrightarrow\quad |k\rangle\ \text{and}\ |k+N\rangle\ \text{label the same bin}$$</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

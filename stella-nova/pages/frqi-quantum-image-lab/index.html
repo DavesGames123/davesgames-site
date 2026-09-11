@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Image Encoding // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="topbar">
+  <div class="topbar-l">
+    <span class="sys-name">Quantum&nbsp;<em>Image Encoding</em></span>
+    <span class="sys-status">Encoder Online</span>
+  </div>
+  <div class="topbar-r">Amplitude-encoded images · <strong>davesgames.io</strong></div>
+</div>
+
+<div id="main">
+  <div id="menu-tog" onclick="document.getElementById('panel').classList.toggle('open')">≡</div>
+  <div id="panel"><div class="p-body">
+
+    <div class="p-section">
+      <div class="p-sec-lbl">Quantum Register</div>
+      <div class="qreg">
+        <div class="qrow"><span class="ql">Position qubits</span>
+          <div class="stepper"><button class="step" id="q-dn">−</button><span class="stepval" id="q-pos">4</span><button class="step" id="q-up">+</button></div></div>
+        <div class="qrow"><span class="ql">Color qubits</span><span class="stepval" style="color:var(--amber);min-width:auto">1</span></div>
+        <div class="qtotal"><span class="qt-l"><span id="q-side">4</span>×<span id="q-side2">4</span> image</span><span class="qt-v"><span id="q-total">5</span> <small>qubits</small></span></div>
+      </div>
+      <div class="note">Even position qubits → square <b>n×n</b>. 2/4/6/8/10 qubits = <b>2×2 … 32×32</b>. ρ is 2ⁿ×2ⁿ — at 8+ qubits the stack renders the <b>strongest ρ cells</b> (a full matrix is 4ⁿ).</div>
+    </div>
+
+    <div class="p-section">
+      <div class="p-sec-lbl">Source Image</div>
+      <div class="preset-grid">
+        <button class="preset-btn active" data-preset="cross">Cross</button>
+        <button class="preset-btn" data-preset="gradient">Gradient</button>
+        <button class="preset-btn" data-preset="checker">Checker</button>
+        <button class="preset-btn" data-preset="phantom">Phantom</button>
+        <button class="preset-btn" data-preset="rings">Rings</button>
+        <button class="preset-btn" data-preset="blank">Blank</button>
+      </div>
+      <div class="note">Paint in the <b style="color:var(--blue)">SOURCE</b> tile, or load a photo — it downsamples to the grid.</div>
+    </div>
+
+    <div class="p-section">
+      <div class="p-sec-lbl">ρ Colour</div>
+      <div class="mode-grid">
+        <button class="btn active" data-mode="mag">|ρ|</button>
+        <button class="btn" data-mode="phase">∠ρ</button>
+        <button class="btn" data-mode="real">Re ρ</button>
+      </div>
+      <div class="cmap-grid" id="cmap-grid" style="margin-top:6px"></div>
+      <button class="btn" id="spin-toggle" style="width:100%;margin-top:6px">Spin&nbsp;% labels: OFF</button>
+      <div class="slider-row"><span class="sl-lbl">Heat ≥</span><input type="range" id="thresh" min="0" max="0.5" value="0" step="0.005"><span class="val" id="thresh-v">0.00</span></div>
+      <div class="note">Colour curve matches the Quantum Algorithm Visualizer.</div>
+    </div>
+
+    <div class="p-section">
+      <div class="p-sec-lbl">Quantum Operations</div>
+      <div class="xform-grid">
+        <button class="xform-btn" data-xform="negative">Negative<span class="gx">X · color</span></button>
+        <button class="xform-btn" data-xform="phaseZ">Phase flip<span class="gx">Z · color</span></button>
+        <button class="xform-btn" data-xform="phaseS">Phase S<span class="gx">S · color</span></button>
+        <button class="xform-btn" data-xform="flalth">Mirror ↔<span class="gx">X · x-bits</span></button>
+      </div>
+    </div>
+
+    <div class="p-section">
+      <div class="p-sec-lbl">Decode</div>
+      <div class="two-grid">
+        <button class="btn active" data-decode="frqi">arcsin √P₁</button>
+        <button class="btn" data-decode="linear">Linear · P₁</button>
+      </div>
+      <div class="note">Sampling lives on the <b>Reconstruction</b> panel →</div>
+    </div>
+
+    <div class="p-section" style="border-bottom:none">
+      <div class="p-sec-lbl">State Register</div>
+      <div class="readout" id="readout"></div>
+      <div id="eq-main"></div>
+    </div>
+
+  </div></div>
+
+  <div id="grid">
+    <div class="module" id="m-field">
+      <div class="mod-head"><span class="mod-title">Amplitude Field</span><span class="mod-sub">paint · split into |0⟩cos + |1⟩sin</span><span class="mod-tag" id="field-tag">MAG</span></div>
+      <div class="mod-body" id="field-body">
+        <div class="fld-src">
+          <div class="src-canvas-wrap"><canvas id="src-cv"></canvas><span class="panel-title" style="color:rgba(150,200,255,0.8)">SOURCE · paint</span></div>
+          <div id="paint-bar">
+            <span class="pb-lbl">ink</span>
+            <div class="sw" data-ink="0" style="background:#000" title="0"></div>
+            <div class="sw" data-ink="64" style="background:#404040" title="64"></div>
+            <div class="sw" data-ink="128" style="background:#808080" title="128"></div>
+            <div class="sw" data-ink="192" style="background:#c0c0c0" title="192"></div>
+            <div class="sw active" data-ink="255" style="background:#fff" title="255"></div>
+            <span class="pb-lbl" style="margin-left:4px">size</span>
+            <button class="pb-btn" id="brush-dn">−</button><span class="val" id="brush-sz" style="color:var(--blue);min-width:14px">1</span><button class="pb-btn" id="brush-up">+</button>
+            <button class="pb-btn" id="paint-fill">▦ fill</button>
+            <button class="pb-btn" id="paint-clear">✕ clear</button>
+            <button class="pb-btn" id="paint-upload">⤒ image</button>
+            <input type="file" id="file-in" accept="image/*" style="display:none">
+          </div>
+        </div>
+        <div class="fld-amp">
+          <div class="amp-cell"><canvas id="amp0-cv"></canvas><span class="panel-title" style="color:rgba(105,168,255,0.85)">|0⟩ · cos θ</span><div class="legend" id="field-legend"></div></div>
+          <div class="amp-cell"><canvas id="amp1-cv"></canvas><span class="panel-title" style="color:rgba(255,185,72,0.85)">|1⟩ · sin θ</span><span class="cap" id="field-cap"></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="module" id="m-stack">
+      <div class="mod-head"><span class="mod-title">ρ(t) State Stack</span><span class="mod-sub">density matrix · scrub the score</span><span class="mod-tag">3D · drag</span></div>
+      <div class="mod-body" style="display:flex;flex-direction:column">
+        <div id="score-wrap"><canvas id="score-cv"></canvas></div>
+        <canvas id="score-gutter"></canvas>
+        <div id="stack-gl-wrap"><canvas id="stack-gl"></canvas>
+          <div class="stack-ctrl">
+            <button id="st-first" title="first">⏮</button><button id="st-prev" title="prev">◀</button>
+            <button id="st-play" title="play">▶</button><button id="st-next" title="next">▶</button><button id="st-last" title="last">⏭</button>
+            <span class="st-lbl" id="st-lbl">init</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="module" id="m-recon">
+      <div class="mod-head"><span class="mod-title">Reconstruction</span><span class="mod-sub">sample · decode · compare</span><span class="mod-tag" id="recon-tag">idle</span></div>
+      <div class="mod-body" id="recon-body"><canvas id="recon-cv"></canvas><span class="cap">original → P(|1⟩) → decode → |error|</span></div>
+      <div id="recon-foot">
+        <div class="rf-sl"><span>shots</span><input type="range" id="shots" min="64" max="20000" value="4000" step="64"><span class="val" id="shots-v">4000</span></div>
+        <div class="rf-sl"><span>gap</span><input type="range" id="gap" min="0" max="1.5" value="0.7" step="0.05"><span class="val" id="gap-v">0.70s</span></div>
+        <label class="rf-chk"><input type="checkbox" id="show-labels" checked><span>labels</span></label>
+        <button id="run-shots">⚲ Sample</button>
+      </div>
+    </div>
+
+    <div class="module" id="m-circuit">
+      <div class="mod-head"><span class="mod-title">Encoding Circuit</span><span class="mod-sub">click to scrub · synced to stack</span><span class="mod-tag"><b style="color:var(--text-dim)">○</b>=0 <b style="color:var(--amber)">●</b>=1</span></div>
+      <div class="mod-body" id="circuit-body"><canvas id="circuit-cv"></canvas></div>
+    </div>
+  </div>
+</div>
+<div id="cell-tip"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
