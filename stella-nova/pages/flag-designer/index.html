@@ -4,6 +4,47 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Colony Flag Designer // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   COLONY FLAG DESIGNER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static frame for the flag composer; main.js fills the interior and drives the
+   canvases. The shape strip, preset gallery, emblem grid, and pattern catalog
+   are all injected by script into the empty containers here. Three canvas-based
+   color pickers and two output canvases (the preview and the waving cloth) are
+   wired by id.
+
+   LAYOUT  (# marks an element id)
+     ┌──────────┬──────────────────────────────────────────────────────────┐
+     │ #shape   │ .hero  copy                                               │
+     │  Strip   ├──────────────────────────────────────────────────────────┤
+     │  (shape  │ #presetGrid   ready-made banners                          │
+     │  picker) ├───────────────────────────┬──────────────────────────────┤
+     │          │ .designer-panel           │ .catalog-panel               │
+     │          │  #previewCanvas           │  #patternGrid  (30 designs)   │
+     │          │  Primary  color-section   │  #waveCanvas   (cloth sim)    │
+     │          │  Secondary color-section  │  wind slider + pause          │
+     │          │  Symbol   color-section   │                              │
+     │          │  #emblemGrid              │                              │
+     └──────────┴───────────────────────────┴──────────────────────────────┘
+
+   COLOR SECTION  (repeated three times: primary, secondary, tertiary/symbol)
+     .cpick     swatch + native picker, hex field, R/G/B fields
+     .hsv-wrap  saturation/value square canvas + hue strip canvas + cursors
+     Every id is prefixed by the color name, so main.js addresses each set with
+     one code path keyed on that prefix.
+
+   SECTION MAP  (jump with grep -n "<anchor>" index.html)
+     shape picker mount . "id=\"shapeStrip\""
+     preset mount ....... "id=\"presetGrid\""
+     preview canvas ..... "id=\"previewCanvas\""
+     color pickers ...... "class=\"color-section\""   primary, secondary, symbol
+     emblem mount ....... "id=\"emblemGrid\""
+     pattern mount ...... "id=\"patternGrid\""
+     wave canvas ........ "id=\"waveCanvas\""
+     wave controls ...... "id=\"windSlider\""          wind slider and pause button
+   ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -16,6 +57,8 @@
   <div class="topbar-r"><span>SYS // <strong>FLAG DESIGNER</strong></span></div>
 </div>
 
+<!-- Shape picker. buildShapes() appends one button per SHAPES entry after this
+     label, each showing a mini SVG of the shape outline. -->
 <!-- Shape Strip (left sidebar) -->
 <div class="shape-strip" id="shapeStrip">
   <span class="shape-strip-label">Shape</span>
@@ -39,6 +82,7 @@
       <span class="panel-title">Colony Banners</span>
       <span class="panel-sub">Click to apply</span>
     </div>
+    <!-- buildPresets() fills this with a thumbnail per preset banner. -->
     <div class="panel-body">
       <div class="preset-grid" id="presetGrid"></div>
     </div>
@@ -53,8 +97,13 @@
         <span class="panel-title">Flag Preview</span>
       </div>
       <div class="panel-body">
+        <!-- Large live preview; repainted by renderPreview() on any change. -->
         <div class="preview-wrap"><canvas id="previewCanvas"></canvas></div>
 
+        <!-- Primary color picker. The four inputs (native picker, hex, R/G/B) and
+             the HSV square and hue strip below all read and write the same color;
+             main.js keeps them in sync through setPrimary(). The secondary and
+             symbol sections repeat this exact structure with their own id prefix. -->
         <div class="color-section">
           <div class="color-label">Primary Color</div>
           <div class="cpick">
@@ -74,6 +123,7 @@
           </div>
         </div>
 
+        <!-- Secondary color: same picker structure, secondary* ids. -->
         <div class="color-section">
           <div class="color-label">Secondary Color</div>
           <div class="cpick">
@@ -93,6 +143,7 @@
           </div>
         </div>
 
+        <!-- Symbol color: the tertiary picker; this color paints the emblem. -->
         <div class="color-section">
           <div class="color-label">Symbol Color</div>
           <div class="cpick">
@@ -112,6 +163,8 @@
           </div>
         </div>
 
+        <!-- Emblem picker. buildEmblems() fills this with a mini canvas per
+             emblem; the selected one is drawn centered in the symbol color. -->
         <div class="emblem-section">
           <div class="color-label">Emblem Overlay</div>
           <div class="emblem-grid" id="emblemGrid"></div>
@@ -127,6 +180,8 @@
         <span class="panel-title">Pattern Designs</span>
         <span class="panel-sub" id="patternCount">30 patterns</span>
       </div>
+      <!-- Pattern catalog. buildPatternGrid() fills this with a card per design;
+           each thumbnail previews the pattern in the current colors and shape. -->
       <div class="panel-body">
         <div class="pattern-grid" id="patternGrid"></div>
       </div>
@@ -137,10 +192,13 @@
         <span class="panel-badge" style="color:var(--blue)">Live</span>
         <span class="panel-title">Flag Wave Simulation</span>
       </div>
+      <!-- Waving-cloth preview. main.js runs a Verlet cloth sim here and textures
+           the mesh with the current flag; the pole pins the left edge. -->
       <div class="panel-body" style="padding:0">
         <div class="wave-wrap" id="waveWrap"><canvas id="waveCanvas"></canvas></div>
       </div>
     </div>
+    <!-- Wind strength slider and pause toggle for the cloth sim. -->
     <div class="wave-controls">
       <div class="wave-slider-wrap"><span class="wave-slider-label">Wind:</span><input type="range" class="wave-slider" id="windSlider" min="0" max="100" value="50"></div>
       <button class="wave-btn" id="wavePauseBtn" onclick="toggleWavePause()">Pause</button>
@@ -151,6 +209,7 @@
 </div><!-- .page-body -->
 </div>
 
+<!-- Flag composer and cloth simulation; runs after the markup is parsed. -->
 <script src="main.js"></script>
 </body>
 </html>

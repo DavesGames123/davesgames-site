@@ -1,11 +1,66 @@
+// ============================================================================
+//  COLONY FLAG DESIGNER  ·  canvas flag composer with a cloth wave preview
+// ----------------------------------------------------------------------------
+//  Classic script. A flag is four choices: a pattern (background design), a
+//  shape (the outline it is clipped to), an optional emblem, and three colors
+//  (primary, secondary, and a symbol color for the emblem). All drawing is 2D
+//  canvas. The same renderFlag() paints the big preview, every catalog and
+//  preset thumbnail, and the texture fed into the waving-cloth simulation.
+//
+//  FLAG RENDER PIPELINE  (renderFlag)
+//  ----------------------------------------------------------------------------
+//      pattern.draw(c1,c2) ─▶ offscreen canvas
+//      emblem.draw(c3)     ─▶ same offscreen (centered)
+//                                     │
+//      shape.path(W,H) ─▶ clip ───────┤
+//                                     ▼
+//                         drawImage offscreen ─▶ visible canvas ─▶ outline
+//
+//  COLOR MODEL  (three identical pickers: primary, secondary, tertiary)
+//  ----------------------------------------------------------------------------
+//      native <input type=color> ┐
+//      hex text field            ├─▶ setX(hex) ─▶ state + every field + swatch
+//      R/G/B number fields       │              └─▶ syncHsvFromHex ─▶ SV/hue canvas
+//      HSV square + hue strip ───┘
+//      any change ─▶ colorChanged() ─▶ repaint preview, catalog, presets
+//
+//  CLOTH SIMULATION  (Verlet grid, waveLoop)
+//  ----------------------------------------------------------------------------
+//      points (41×26) ─▶ integrate (velocity + gravity + wind)
+//                     ─▶ solve distance constraints ×5 (pinned left edge)
+//                     ─▶ draw as textured quads sampling the flag pixels
+//
+//  SECTION MAP  (jump with grep -n "<anchor>" main.js)
+//    color math ........... "function hexToRgb"      hex/rgb/hsv conversions
+//    live state ........... "var primaryColor"       current selection
+//    shapes ............... "var SHAPES"             outline polygons
+//    emblems .............. "var EMBLEMS"            centered symbol drawers
+//    patterns ............. "var PATTERNS"           30 background designs
+//    presets .............. "var PRESETS"            named ready-made banners
+//    core render .......... "function renderFlag"    pattern + emblem + clip
+//    catalog build ........ "function buildShapes"   populate the pickers
+//    color pickers ........ "function setPrimary"    push a color everywhere
+//    hsv pickers .......... "var hsvState"           square/hue canvas logic
+//    cloth sim ............ "function initCloth"     verlet grid setup
+//    cloth step ........... "function updateCloth"   integrate and constrain
+//    cloth draw ........... "function renderWave"    texture the mesh
+//    boot ................. "function init"          wire everything and start
+// ============================================================================
+
 // ── COLOR UTILITIES ──
+// Conversions between the three color representations the pickers share: hex
+// string, RGB bytes, and HSV floats in 0..1. clamp() bounds an RGB channel.
 function hexToRgb(h){h=h.replace('#','');if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];return{r:parseInt(h.substring(0,2),16),g:parseInt(h.substring(2,4),16),b:parseInt(h.substring(4,6),16)};}
 function rgbToHex(r,g,b){return'#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1).toUpperCase();}
 function clamp(v){return Math.max(0,Math.min(255,Math.round(v)));}
+// RGB bytes to HSV: hue from which channel is the max, saturation from the
+// max-to-min spread, value from the max. Hue is returned as a 0..1 fraction.
 function rgbToHsv(r,g,b){r/=255;g/=255;b/=255;var mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,h=0,s=mx===0?0:d/mx,v=mx;if(d!==0){if(mx===r)h=((g-b)/d+(g<b?6:0))/6;else if(mx===g)h=((b-r)/d+2)/6;else h=((r-g)/d+4)/6;}return{h:h,s:s,v:v};}
+// HSV to RGB: pick one of six hue sextants and interpolate. Inverse of rgbToHsv.
 function hsvToRgb(h,s,v){var i=Math.floor(h*6),f=h*6-i,p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s);var r,g,b;switch(i%6){case 0:r=v;g=t;b=p;break;case 1:r=q;g=v;b=p;break;case 2:r=p;g=v;b=t;break;case 3:r=p;g=q;b=v;break;case 4:r=t;g=p;b=v;break;case 5:r=v;g=p;b=q;break;}return{r:Math.round(r*255),g:Math.round(g*255),b:Math.round(b*255)};}
 
 // ── STATE ──
+// The current selection. Every control writes here and every renderer reads it.
 var primaryColor = '#6B1D1D';
 var secondaryColor = '#C0C8D0';
 var tertiaryColor = '#E8D060';
@@ -14,6 +69,9 @@ var currentShape = 'rectangle';
 var currentEmblem = 'star5';
 
 // ── FLAG SHAPES ──
+// Outline definitions. Each path(W,H) returns a polygon in canvas coordinates;
+// renderFlag clips the drawn flag to it. The mini SVG in the shape picker reuses
+// the same path at thumbnail size.
 var SHAPES = [
   {id:'rectangle', name:'Standard', path:function(W,H){return[[0,0],[W,0],[W,H],[0,H]];}},
   {id:'pennant', name:'Pennant', path:function(W,H){return[[0,0],[W,H*0.5],[0,H]];}},
@@ -24,6 +82,9 @@ var SHAPES = [
 ];
 
 // ── EMBLEMS ──
+// Centered symbols. Each draw(ctx,cx,cy,r,c) paints one emblem of radius r in
+// color c at (cx,cy). 'none' draws nothing. The crescent uses a destination-out
+// pass to subtract an offset disc, carving the moon shape.
 var EMBLEMS = [
   {id:'none', label:'None', draw:function(){}},
   {id:'star5', label:'Star', draw:function(ctx,cx,cy,r,c){drawStar(ctx,cx,cy,r,5,c);}},
@@ -37,6 +98,8 @@ var EMBLEMS = [
   {id:'anchor', label:'Anchor', draw:function(ctx,cx,cy,r,c){ctx.strokeStyle=c;ctx.lineWidth=r*0.18;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(cx,cy-r*0.8);ctx.lineTo(cx,cy+r*0.7);ctx.stroke();ctx.beginPath();ctx.arc(cx,cy+r*0.15,r*0.55,Math.PI*0.15,Math.PI*0.85);ctx.stroke();ctx.beginPath();ctx.moveTo(cx-r*0.35,cy-r*0.8);ctx.lineTo(cx+r*0.35,cy-r*0.8);ctx.stroke();ctx.beginPath();ctx.arc(cx,cy-r*0.55,r*0.25,0,Math.PI*2);ctx.stroke();}},
 ];
 
+// Draw a filled star with pts points. It steps 2×pts vertices around the center,
+// alternating the outer radius r and an inner radius (0.45r) to make the notches.
 function drawStar(ctx,cx,cy,r,pts,c){
   ctx.beginPath();
   for(var i=0;i<pts*2;i++){var a=(i*Math.PI/pts)-Math.PI/2;var rr=i%2===0?r:r*0.45;ctx.lineTo(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr);}
@@ -44,6 +107,9 @@ function drawStar(ctx,cx,cy,r,pts,c){
 }
 
 // ── PATTERN DEFINITIONS ──
+// The 30 background designs. Each draw(ctx,W,H,c1,c2) fills the full flag field
+// using the primary and secondary colors; the emblem and shape clip are applied
+// later by renderFlag. Order here sets the catalog grid order.
 var PATTERNS = [
   {id:'solid', name:'Solid', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);}},
   {id:'bicolor_h', name:'Bicolor H', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H/2);ctx.fillStyle=c2;ctx.fillRect(0,H/2,W,H/2);}},
@@ -78,6 +144,8 @@ var PATTERNS = [
 ];
 
 // ── PRESET BANNERS: [name, c1, c2, c3_symbol, pattern, shape, emblem] ──
+// Ready-made banners. Each row is a complete selection; clicking one applies all
+// seven fields at once. The positional tuple order is documented on this line.
 var PRESETS = [
   ['Viper','#6B1D1D','#C0C8D0','#E8D060','cross','rectangle','star5'],
   ['Terran','#18244A','#C0C8D0','#D4443B','canton','rectangle','star5'],
@@ -102,6 +170,11 @@ var PRESETS = [
 ];
 
 // ── RENDER FLAG ──
+// The one renderer for every flag on the page. It paints the pattern and emblem
+// onto an offscreen canvas, then clips that image to the chosen shape on the
+// target canvas and strokes the outline. Drawing to an offscreen first lets the
+// clip apply to the whole composed design at once. preview thins the outline for
+// thumbnails. Sizing the canvas here (W/H) also clears any previous contents.
 function renderFlag(canvas, W, H, c1, c2, c3, patternId, shapeId, emblemId, preview) {
   canvas.width = W; canvas.height = H;
   var ctx = canvas.getContext('2d');
@@ -147,12 +220,15 @@ function renderFlag(canvas, W, H, c1, c2, c3, patternId, shapeId, emblemId, prev
   ctx.stroke();
 }
 
+// Repaint the large preview from the current selection.
 function renderPreview() {
   var c = document.getElementById('previewCanvas');
   renderFlag(c, 480, 320, primaryColor, secondaryColor, tertiaryColor, currentPattern, currentShape, currentEmblem, false);
 }
 
 // ── BUILD UI ──
+// Populate the shape strip. Each button shows a mini SVG of the shape path and,
+// on click, sets currentShape and repaints the preview, catalog, and presets.
 function buildShapes() {
   var g = document.getElementById('shapeStrip');
   SHAPES.forEach(function(s) {
@@ -173,6 +249,8 @@ function buildShapes() {
   });
 }
 
+// Populate the emblem grid. Each button renders its emblem into a 32px canvas
+// (an X for 'none'); clicking sets currentEmblem and repaints.
 function buildEmblems() {
   var g = document.getElementById('emblemGrid');
   EMBLEMS.forEach(function(emb) {
@@ -200,6 +278,9 @@ function buildEmblems() {
   });
 }
 
+// Populate the pattern catalog. Each card holds a canvas and a name; clicking
+// sets currentPattern. The thumbnails are painted separately so they can be
+// repainted when colors, shape, or emblem change without rebuilding the cards.
 function buildPatternGrid() {
   var g = document.getElementById('patternGrid');
   PATTERNS.forEach(function(pat) {
@@ -220,6 +301,8 @@ function buildPatternGrid() {
   renderAllPatternCards();
 }
 
+// Repaint every catalog thumbnail with the current colors, shape, and emblem so
+// each card previews how that pattern would look in the active selection.
 function renderAllPatternCards() {
   document.querySelectorAll('.pattern-card').forEach(function(card) {
     var c = card.querySelector('canvas');
@@ -227,6 +310,9 @@ function renderAllPatternCards() {
   });
 }
 
+// Populate the preset gallery. Clicking a preset loads all seven fields into
+// state, pushes the colors through the pickers, syncs the active markers on the
+// shape, pattern, and emblem controls, then repaints.
 function buildPresets() {
   var g = document.getElementById('presetGrid');
   PRESETS.forEach(function(p, i) {
@@ -253,6 +339,8 @@ function buildPresets() {
   renderAllPresets();
 }
 
+// Repaint every preset thumbnail from its own fixed tuple (not the current
+// selection), so the gallery always shows each banner as designed.
 function renderAllPresets() {
   document.querySelectorAll('.preset-item').forEach(function(item) {
     var c = item.querySelector('canvas');
@@ -261,6 +349,8 @@ function renderAllPresets() {
   });
 }
 
+// Highlight a preset only when the current selection matches it exactly across
+// all three colors, pattern, shape, and emblem; otherwise none is active.
 function updatePresetActive() {
   document.querySelectorAll('.preset-item').forEach(function(item) {
     var p = PRESETS[+item.dataset.idx];
@@ -273,6 +363,11 @@ function updatePresetActive() {
 }
 
 // ── COLOR PICKER WIRING ──
+// setPrimary/setSecondary/setTertiary are the single write path for each color.
+// Given a hex, each updates state, the native picker, the hex field, the R/G/B
+// fields, the swatch, and the HSV canvases, so all representations stay in sync
+// no matter which control changed. They do not repaint the flag; colorChanged()
+// does, called by the event handlers after setX.
 function setPrimary(hex) {
   primaryColor = hex;
   var rgb = hexToRgb(hex);
@@ -307,12 +402,16 @@ function setTertiary(hex) {
   syncHsvFromHex('tertiary', hex);
 }
 
+// Repaint everything that depends on the colors after a change.
 function colorChanged() { renderPreview(); renderAllPatternCards(); renderAllPresets(); updatePresetActive(); }
 
+// Native OS color pickers: apply the picked value straight through.
 document.getElementById('primaryNativePicker').addEventListener('input', function() { setPrimary(this.value); colorChanged(); });
 document.getElementById('secondaryNativePicker').addEventListener('input', function() { setSecondary(this.value); colorChanged(); });
 document.getElementById('tertiaryNativePicker').addEventListener('input', function() { setTertiary(this.value); colorChanged(); });
 
+// Hex text fields: accept with or without a leading #, and apply only when the
+// value is a valid six-digit hex so a half-typed entry does not repaint.
 document.getElementById('primaryHex').addEventListener('change', function() {
   var v = this.value.trim(); if (v[0] !== '#') v = '#' + v;
   if (/^#[0-9a-fA-F]{6}$/.test(v)) { setPrimary(v); colorChanged(); }
@@ -326,6 +425,7 @@ document.getElementById('tertiaryHex').addEventListener('change', function() {
   if (/^#[0-9a-fA-F]{6}$/.test(v)) { setTertiary(v); colorChanged(); }
 });
 
+// R/G/B number fields: read all three, clamp to 0..255, and rebuild the hex.
 ['primaryR','primaryG','primaryB'].forEach(function(id) {
   document.getElementById(id).addEventListener('input', function() {
     var r = clamp(+document.getElementById('primaryR').value), g = clamp(+document.getElementById('primaryG').value), b = clamp(+document.getElementById('primaryB').value);
@@ -346,8 +446,13 @@ document.getElementById('tertiaryHex').addEventListener('change', function() {
 });
 
 // ── HSV PICKER LOGIC ──
+// Per-color HSV position, kept alongside the hex so the square and hue cursors
+// have somewhere to live even when the hex loses hue (pure black/white/gray).
 var hsvState = { primary: {h:0,s:0,v:0}, secondary: {h:0,s:0,v:0}, tertiary: {h:0,s:0,v:0} };
 
+// Paint the saturation/value square for a hue: fill the hue, overlay a
+// white-to-transparent gradient left to right (saturation) and a
+// transparent-to-black gradient top to bottom (value). Sized in device pixels.
 function renderSvCanvas(canvasId, hue) {
   var c = document.getElementById(canvasId);
   var rect = c.parentElement.getBoundingClientRect();
@@ -366,6 +471,7 @@ function renderSvCanvas(canvasId, hue) {
   ctx.fillStyle = gB; ctx.fillRect(0, 0, W, H);
 }
 
+// Paint the vertical hue strip: a gradient through the six hue stops top to bottom.
 function renderHueCanvas(canvasId) {
   var c = document.getElementById(canvasId);
   var rect = c.parentElement.getBoundingClientRect();
@@ -378,9 +484,14 @@ function renderHueCanvas(canvasId) {
   ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
 }
 
+// Position the square and hue cursors from the stored HSV: saturation across,
+// inverted value down, hue down the strip.
 function updateSvCursor(which) { var st = hsvState[which]; var cur = document.getElementById(which + 'SvCursor'); cur.style.left = (st.s*100)+'%'; cur.style.top = ((1-st.v)*100)+'%'; }
 function updateHueCursor(which) { var st = hsvState[which]; document.getElementById(which + 'HueCursor').style.top = (st.h*100)+'%'; }
 
+// Sync the HSV state and cursors to a hex value. When the color is (near) gray
+// its hue is undefined, so the previous hue is kept to stop the cursor jumping
+// to red as the user drags value or saturation toward an edge.
 function syncHsvFromHex(which, hex) {
   var rgb = hexToRgb(hex), hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
   if (hsv.s < 0.01 && hsvState[which].h !== undefined) hsv.h = hsvState[which].h;
@@ -390,6 +501,11 @@ function syncHsvFromHex(which, hex) {
   updateSvCursor(which); updateHueCursor(which);
 }
 
+// Wire pointer dragging for one color picker. handleSv maps a point in the
+// square to saturation/value; handleHue maps a point in the strip to hue and
+// repaints the square. Both convert back to hex through setFn and repaint. Mouse
+// and touch share the handlers; window-level move/up listeners keep a drag alive
+// when the pointer leaves the control.
 function setupHsvInteraction(which, setFn) {
   var svWrap = document.getElementById(which + 'SvWrap');
   var hueWrap = document.getElementById(which + 'HueWrap');
@@ -425,6 +541,10 @@ function setupHsvInteraction(which, setFn) {
 }
 
 // ── FLAG WAVE SIMULATION ──
+// A Verlet cloth: a grid of points whose motion is stored as current and
+// previous position (no explicit velocity). windStrength comes from the slider,
+// wavePaused freezes the step. The grid is CLOTH_W×CLOTH_H cells, so there are
+// (CLOTH_W+1)×(CLOTH_H+1) points.
 var waveCanvas = document.getElementById('waveCanvas');
 var waveCtx = waveCanvas.getContext('2d');
 var waveWrap = document.getElementById('waveWrap');
@@ -436,6 +556,9 @@ var CLOTH_W = 40, CLOTH_H = 25;
 var clothPoints = [];
 var clothRestLen;
 
+// Build the point grid. Each point stores its live position (x,y), a rest anchor
+// (ox,oy), its previous position (px,py) for Verlet integration, a pinned flag
+// (the left column is nailed to the pole), and its u,v texture coordinate.
 function initCloth() {
   clothPoints = [];
   var spacing = 8;
@@ -453,8 +576,14 @@ function initCloth() {
   }
 }
 
+// Flatten a grid (x,y) into the clothPoints array index (row stride CLOTH_W+1).
 function getClothIdx(x, y) { return y * (CLOTH_W + 1) + x; }
 
+// Advance the cloth one step. Each free point moves by its Verlet velocity
+// (current minus previous, scaled by damping) plus gravity and a time-varying
+// wind push, then the previous position is stored. After integration the
+// distance constraints are relaxed several times to hold neighbors near rest
+// length; more iterations make the cloth stiffer. Pinned points never move.
 function updateCloth(dt) {
   if (wavePaused) return;
   var gravity = 0.15;
@@ -488,6 +617,9 @@ function updateCloth(dt) {
   }
 }
 
+// Relax one distance constraint between two points: measure the gap, and push
+// each half of the error back toward the rest length. A pinned point holds, so
+// its neighbor takes the whole correction, anchoring that edge to the pole.
 function solveConstraint(i1, i2) {
   var p1 = clothPoints[i1], p2 = clothPoints[i2];
   var dx = p2.x - p1.x, dy = p2.y - p1.y;
@@ -499,6 +631,11 @@ function solveConstraint(i1, i2) {
   if (!p2.pinned) { p2.x -= ox; p2.y -= oy; }
 }
 
+// Draw one frame of the waving flag: a starfield backdrop, the pole, and the
+// cloth mesh drawn as textured quads. It renders the current flag once to an
+// offscreen canvas, then for each grid cell samples that flag pixel, shades it
+// by a cheap normal approximation (how stretched the cell is horizontally), and
+// fills the quad. Cached fields (_stars, _flagCanvas) are built once and reused.
 function renderWave() {
   waveCtx.fillStyle = '#050810';
   waveCtx.fillRect(0, 0, waveW, waveH);
@@ -517,6 +654,8 @@ function renderWave() {
   // First render current flag to offscreen
   if (!renderWave._flagCanvas) { renderWave._flagCanvas = document.createElement('canvas'); }
   var fc = renderWave._flagCanvas;
+  // Always render the wave texture rectangular; the mesh itself provides the
+  // waving silhouette, so the selected shape clip is ignored here.
   renderFlag(fc, 400, 250, primaryColor, secondaryColor, tertiaryColor, currentPattern, 'rectangle', currentEmblem, true);
 
   // Scale cloth to canvas
@@ -584,6 +723,7 @@ function renderWave() {
   waveCtx.strokeRect(6, 6, waveW - 12, waveH - 12);
 }
 
+// Match the wave canvas backing store to its box in device pixels.
 function resizeWave() {
   var rect = waveWrap.getBoundingClientRect();
   waveW = Math.floor(rect.width * devicePixelRatio);
@@ -592,6 +732,9 @@ function resizeWave() {
   waveCanvas.height = waveH;
 }
 
+// Animation loop. It clamps the frame delta (so a background tab does not lurch
+// the sim), runs three smaller physics substeps per frame for stability, draws,
+// and reschedules.
 var waveLastTime = 0;
 function waveLoop(t) {
   var dt = Math.min((t - waveLastTime) / 1000, 0.033);
@@ -601,6 +744,7 @@ function waveLoop(t) {
   requestAnimationFrame(waveLoop);
 }
 
+// Pause button: freeze or resume the sim and update the button label and state.
 function toggleWavePause() {
   wavePaused = !wavePaused;
   var btn = document.getElementById('wavePauseBtn');
@@ -608,11 +752,15 @@ function toggleWavePause() {
   btn.textContent = wavePaused ? 'Resume' : 'Pause';
 }
 
+// Wind slider drives windStrength as a 0..1 fraction of the 0..100 range.
 document.getElementById('windSlider').addEventListener('input', function() {
   windStrength = this.value / 100;
 });
 
 // ── INIT ──
+// Boot: paint the hue strips, wire the three HSV pickers, seed the color state,
+// build the shape/emblem/pattern/preset controls, draw the preview, then start
+// the cloth simulation loop.
 function init() {
   renderHueCanvas('primaryHueCanvas');
   renderHueCanvas('secondaryHueCanvas');
@@ -637,6 +785,8 @@ function init() {
   requestAnimationFrame(waveLoop);
 }
 
+// On resize, refit the wave canvas and repaint each picker canvas, since the
+// HSV canvases are sized from their box in device pixels.
 window.addEventListener('resize', function() {
   resizeWave();
   ['primary','secondary','tertiary'].forEach(function(which) {
@@ -647,4 +797,5 @@ window.addEventListener('resize', function() {
   });
 });
 
+// Start the app.
 init();

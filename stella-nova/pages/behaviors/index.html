@@ -4,11 +4,53 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Citizen Behaviors // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CITIZEN BEHAVIORS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static field manual describing the eight citizen behaviors. The markup is a
+   fixed left sidebar of navigation buttons beside a scrolling content column.
+   main.js (loaded at the end of body) links the two: a button scrolls its
+   section into view, and scrolling flips the active button. Nothing here is
+   generated at runtime; every section is authored in place.
+
+   LAYOUT  (# marks an element id)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ .topbar   Stella Nova · Field Manual · Citizen Behaviors           │
+     ├─────────────────┬─────────────────────────────────────────────────┤
+     │ #sidebar        │ #content  (the scroll container main.js watches)  │
+     │  The Six Skills │   .page-hero    intro                             │
+     │   nav-btn ●     │   .beh-section  #beh-search                       │
+     │   nav-btn       │   .beh-section  #beh-collect                      │
+     │   ...           │   ...                                             │
+     │  Automatic      │   .beh-section  #beh-rest                         │
+     │   nav-btn       │   .beh-section  #beh-other                        │
+     └─────────────────┴─────────────────────────────────────────────────┘
+
+   SECTION ANATOMY  (each .beh-section repeats this shape)
+     .beh-header    icon, name, tagline, skill line
+     .beh-lead      one-line summary
+     .beh-body      prose paragraphs
+     .lifecycle     the four or five step strip
+     .highlight     notable facts
+     .pull          play advice (tip), hazard (warn), or danger callout
+
+   SECTION MAP  (jump with grep -n "<anchor>" index.html)
+     in-frame guard ..... "in-frame"        hide the topbar inside the shell
+     sidebar nav ........ "id=\"sidebar\""     buttons wired to main.js by data-beh
+     scroll content ..... "id=\"content\""     the column the scroll spy observes
+     one behavior ....... "id=\"beh-search\""  first of the repeating sections
+   ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: when this page loads inside the site shell iframe, mark the
+     root .in-frame so the CSS hides this page own topbar. Kept inline so it runs
+     before paint and the topbar never flashes. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Decorative fixed background grid. -->
 <div class="grid-bg"></div>
 
 <div id="app">
@@ -18,6 +60,10 @@
 </div>
 
 <div id="shell">
+<!-- Sidebar navigation. Each button carries a data-beh key and an onclick that
+     calls goToBeh(this, key); main.js scrolls to #beh-<key> and, in reverse,
+     sets the matching button active as its section scrolls into view. The nav
+     splits into the six trainable skills and the two automatic behaviors. -->
 <div id="sidebar">
   <div class="side-head"><span>Behaviors</span><span class="tag">6 + 2</span></div>
   <div class="side-section">
@@ -36,8 +82,12 @@
   <div class="side-barcode">STELLANOVA-FM</div>
 </div>
 
+<!-- Scroll container. main.js registers every .beh-section inside here with an
+     IntersectionObserver whose root is this element, so the active nav button
+     tracks the reader position. -->
 <div id="content">
 
+<!-- Intro hero above the first behavior section. -->
 <div class="page-hero">
   <div class="ph-eyebrow">Field Manual</div>
   <h1 class="ph-title">Citizen <em>Behaviors</em></h1>
@@ -46,6 +96,10 @@
   <div class="ph-ornament"><div class="ph-ornament-mark">&middot; &middot; &middot;</div></div>
 </div>
 
+<!-- One behavior per .beh-section. The id (beh-<key>) is the scroll target and
+     the observer key; the inline accent custom property sets the section color
+     that the CSS applies to the icon, rules, and callouts. The eight sections
+     below all follow the same anatomy documented in the header. -->
 <!-- SEARCH -->
 <div class="beh-section" id="beh-search" style="--beh-c:#c896ff">
   <div class="beh-header">
@@ -399,6 +453,8 @@
 </div>
 <div class="beh-divider"><div class="beh-divider-inner"><span class="beh-divider-glyph">&middot; &middot; &middot;</span></div></div>
 
+<!-- OTHER: the closing section drops the lifecycle and callout anatomy for a
+     compact .other-list of automatic, non-toggle behaviors. -->
 <!-- OTHER -->
 <div class="beh-section" id="beh-other" style="--beh-c:#7c8094">
   <div class="beh-header">
@@ -463,6 +519,7 @@
 </div>
 </div>
 
+<!-- Scroll-spy navigation script; runs after the markup is parsed. -->
 <script src="main.js"></script>
 </body>
 </html>

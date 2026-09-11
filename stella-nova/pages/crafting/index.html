@@ -4,10 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Crafting Database // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CRAFTING DATABASE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. It provides the fixed frame; main.js fills the interior
+   at runtime. The tier grid, the SVG link overlay, the constructable cards,
+   the tooltip, and the calculator panel are all injected by script into the
+   empty containers below. This file supplies the hero copy and the hooks
+   (element ids) main.js writes into.
+
+   PAGE STRUCTURE  (# marks an element id that main.js targets)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ .hero    copy + #stat-res #stat-rec #stat-mod #stat-sc counters     │
+     ├───────────────────────────────────────────────────────────────────┤
+     │ #searchInput   filter box                                          │
+     ├───────────────────────────────────────────────────────────────────┤
+     │ #tiers   resource card grid  (contains #svgLayer link overlay)     │
+     │ #constrWrap   constructable and module cards                       │
+     │ #tip     floating recipe tooltip                                   │
+     ├───────────────────────────────────────────────────────────────────┤
+     │ #calcPanel / #calcToggle   build calculator (slides up)            │
+     └───────────────────────────────────────────────────────────────────┘
+
+   SECTION MAP  (jump with grep -n "<anchor>" index.html)
+     in-frame guard ..... "in-frame"          hide the topbar inside the shell
+     hero counters ...... "id=\"stat-res\""      main.js writes the totals here
+     search box ......... "id=\"searchInput\""
+     grid mount ......... "id=\"tiers\""         cards and #svgLayer injected here
+     construction mount . "id=\"constrWrap\""
+     tooltip mount ...... "id=\"tip\""
+     calculator ......... "id=\"calcPanel\""     panel body is #calcInner
+   ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: mark the root .in-frame inside the shell iframe so the CSS
+     hides this page own topbar. Inline so it runs before paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
 <div id="app">
@@ -48,6 +83,7 @@
 
     <p class="hero-howto"><strong>Hover</strong> any card to see its recipe and total raw ore cost. <strong>Click</strong> to queue it in the build calculator at the bottom of the page.</p>
   </div>
+  <!-- Counters start at zero; main.js overwrites each from the data on load. -->
   <div class="hero-stats">
     <div class="hs-box"><div class="hs-val" id="stat-res">0</div><div class="hs-label">Resources</div></div>
     <div class="hs-box"><div class="hs-val" id="stat-rec">0</div><div class="hs-label">Recipes</div></div>
@@ -55,11 +91,18 @@
     <div class="hs-box yellow"><div class="hs-val" id="stat-sc">0</div><div class="hs-label">Station Core Ore</div></div>
   </div>
 </div>
+<!-- Name filter. main.js hides cards whose name does not match on input. -->
 <div class="search-wrap"><input type="text" class="search-input" id="searchInput" placeholder="Search resources..."></div>
+<!-- Tier grid mount. main.js injects the resource cards after #svgLayer, which
+     stays first so the link overlay draws on top of the cards. -->
 <div class="tiers" id="tiers"><svg class="svg-layer" id="svgLayer"></svg></div>
+<!-- Constructable and station-module cards; filled by renderConstruction(). -->
 <div class="constr-wrap" id="constrWrap"></div>
+<!-- Floating recipe tooltip; positioned and filled by showTip(). -->
 <div class="tip" id="tip"></div>
 </div>
+<!-- Build calculator: #calcInner holds the queue and totals; #calcToggle is the
+     always-visible tab that slides the panel open. -->
 <div class="calc-panel" id="calcPanel"><div class="calc-inner" id="calcInner"></div></div>
 <div class="calc-toggle" id="calcToggle" onclick="toggleCalc()">
   <div class="calc-toggle-l">
@@ -69,6 +112,7 @@
   <span class="calc-toggle-hint" id="calcHint"></span>
   <span class="arrow">&#9650;</span>
 </div>
+<!-- Database, renderers, and calculator; runs after the markup is parsed. -->
 <script src="main.js"></script>
 </body>
 </html>
