@@ -4,6 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Navier–Stokes 3D · Navier–Stokes</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   NAVIER–STOKES BLOWUP EXPLORER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The engine (main.js) draws into the two canvases and
+   binds every control below by id. This file paints nothing itself. Six pages
+   share the same markup and the same three scripts; each pins itself to one
+   view with the NS_FIXED_VIEW line above, so this page opens on Burgers alone.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts       Google Fonts stylesheet
+     2. KaTeX       CSS then JS, for the equations in the mathematics panel
+     3. importmap   maps the bare specifier "three" to the CDN; MUST stay
+                    inline (an import map cannot be an external file)
+     4. style.css   the page stylesheet
+   Scripts at the end of body, in dependency order:
+     script-1.js  MATH content + buildMath   (defines a global, no DOM writes)
+     script-2.js  FFT + solvers              (globals, no DOM)
+     main.js      type=module engine         (reads NS_FIXED_VIEW, runs the loop)
+
+   LAYOUT  (the hash marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: title · #status · #chapter-sel (hidden when view-pinned)  │
+     ├────────────┬───────────────────────────────────┬────────────────┤
+     │ #qp        │ #stage                             │ #mp            │
+     │  controls  │   #c2d  (2D field and plots)       │  the           │
+     │  per view  │   #c3d  (WebGL: flow3d, vortex)    │  mathematics   │
+     │  sliders   │   #stage-overlay  KaTeX labels     │  panel,        │
+     │  toggles   │   #stage-scrub    timeline bar     │  built per     │
+     │  readout   │   #stage-caption                   │  view          │
+     └────────────┴───────────────────────────────────┴────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <script>window.NS_FIXED_VIEW='flow3d';</script>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -19,6 +52,8 @@
 <body>
 <div class="grid-bg"></div>
 
+<!-- Top bar: title, the running/paused #status readout, and the chapter selector
+     (hidden by the .off class on a view-pinned page). -->
 <div class="topbar">
   <div class="topbar-l">
     <div class="sys-name">Navier–<i>Stokes</i></div>
@@ -28,6 +63,8 @@
   <div class="topbar-r">from the equations to the singularity · Córdoba–Martínez-Zoroa → Alpöge–Buckmaster → <a href="https://openai.com/index/navier-stokes-solution/" target="_blank" rel="noopener">OpenAI NS, Sep 2026</a></div>
 </div>
 
+<!-- Stage: the two stacked canvases the engine draws into, the KaTeX label
+     overlay, the timeline scrubber bar, and the caption line. -->
 <div id="stage">
   <canvas id="c2d" class="active"></canvas>
   <canvas id="c3d"></canvas>
@@ -43,6 +80,8 @@
     <button class="collapse-btn" id="qp-col" title="collapse">◀</button>
   </div>
   <div class="qp-body">
+    <!-- View picker: the seven chapters. main.js wires each data-view button to
+         setView; only one control section below is shown at a time. -->
     <div class="views">
       <div class="grp">foundations — what a healthy equation does</div>
       <button class="view-btn on" data-view="equations"><span class="vn">Equations</span><span class="vd">Where Navier–Stokes comes from, what pressure is, what we can prove.</span></button>
@@ -55,12 +94,15 @@
       <button class="view-btn" data-view="vortex"><span class="vn">Vortex</span><span class="vd">3D: the reported Navier–Stokes shape and its scaling.</span></button>
     </div>
 
+    <!-- Controls for each view; only the active section carries the .on class.
+         Equations: one button to draw a fresh random field for the projection. -->
     <div class="sec on" id="sec-equations">
       <div class="btnrow"><button class="btn primary" id="e-new">new random field</button></div>
       <div class="sec-lbl">projection</div>
       <div class="ro" id="e-ro"></div>
       <div class="note">Any smooth field <b>f</b> = <b>Pf</b> + <b>∇φ</b>. Solving the momentum equation means applying <b>P</b> to the transport term every instant: the pressure gradient is whatever is needed to keep the flow divergence-free. The middle panel is the only part the fluid ever sees.</div>
     </div>
+    <!-- Burgers: play/reset, timeline scrub, profile choice, viscosity, speed. -->
     <div class="sec" id="sec-burgers">
       <div class="btnrow"><button class="btn primary" id="b-play">pause</button><button class="btn" id="b-reset">reset</button></div>
       <div class="ctl"><label>timeline — drag to scrub</label><span class="v" id="v-btl">—</span><input type="range" id="r-btl" min="0" max="0" step="1" value="0"></div>
@@ -75,6 +117,7 @@
       <div class="ro" id="b-ro"></div>
       <div class="note"><b>What to watch.</b> Top: the profile. Tall parts move right faster than low parts, so the downhill front steepens; the red mark tracks the steepest point. Middle: the same run as a space–time map — the colour bands are what the characteristics carry, and where they would cross (red line, <b>t_b</b>) the inviscid profile turns vertical. With viscosity the bands merge into one sharp line, the shock, and the slope (right) saturates instead of diverging. Lower <b>ν</b>: sharper shock, higher ceiling, never infinite.</div>
     </div>
+    <!-- Flow 2D: play/reset/step, timeline, initial vorticity, viscosity, speed. -->
     <div class="sec" id="sec-flow2d">
       <div class="btnrow"><button class="btn primary" id="f-play">pause</button><button class="btn" id="f-reset">reset</button><button class="btn" id="f-step">step ▸</button></div>
       <div class="ctl"><label>timeline — drag to scrub</label><span class="v" id="v-ftl">—</span><input type="range" id="r-ftl" min="0" max="0" step="1" value="0"></div>
@@ -89,6 +132,8 @@
       <div class="ro" id="f-ro"></div>
       <div class="note">Taylor–Green and Lamb–Oseen have <b>zero</b> nonlinear term and decay exactly — the red dashed curve. Dipole, shear and random are fully nonlinear: vortices merge, layers roll up, and still nothing ever exceeds its initial maximum.</div>
     </div>
+    <!-- Flow 3D: play/reset, timeline, initial velocity, grid size, viscosity,
+         tracer width and length, tracer and orbit-camera toggles. -->
     <div class="sec" id="sec-flow3d">
       <div class="btnrow"><button class="btn primary" id="g-play">pause</button><button class="btn" id="g-reset">reset</button></div>
       <div class="ctl"><label>timeline — drag to scrub</label><span class="v" id="v-gtl">—</span><input type="range" id="r-gtl" min="0" max="0" step="1" value="0"></div>
@@ -161,6 +206,8 @@
 </aside>
 
 <!-- ═══════ RIGHT: mathematics ═══════ -->
+<!-- Mathematics panel: buildMath(view) fills #mp-body per view; on flow3d it also
+     hosts the two live diagnostic canvases that main.js draws into. -->
 <aside id="mp">
   <div class="mp-head"><span class="t">the mathematics</span><button class="collapse-btn" id="mp-col" title="collapse">▶</button></div>
   <div class="mp-body" id="mp-body"></div>

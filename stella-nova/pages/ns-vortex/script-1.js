@@ -1,5 +1,36 @@
+// ============================================================================
+//  MATHEMATICS PANEL CONTENT  ·  per-view prose and equations (loaded early)
+// ----------------------------------------------------------------------------
+//  MATH maps each view id to an ordered list of blocks; buildMath(view) turns
+//  that list into DOM inside #mp-body and renders the equations with KaTeX. This
+//  file is content, not logic: the one function at the bottom does the rendering.
+//
+//  BLOCK TUPLE  [kind, value]
+//  ----------------------------------------------------------------------------
+//      'h'    heading            → <h3>
+//      'p'    paragraph (HTML)   → <p>
+//      'e'    equation (TeX)     → KaTeX display block
+//      'c'    equation caption   → small line under an equation
+//      's'    sources            → reference footer (HTML)
+//      'live' live plot canvases → [[canvasId, caption], ...] (flow3d only)
+//
+//  R = String.raw keeps TeX backslashes literal, so `\frac` is not an escape.
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" script-1.js)
+//  ----------------------------------------------------------------------------
+//      equations ... "equations: ["    what the equations are, pressure, energy
+//      burgers ..... "burgers: ["      1D steepening vs diffusion
+//      flow2d ...... "flow2d: ["       why 2D is a solved problem
+//      flow3d ...... "flow3d: ["       vortex stretching, the regularity ledger
+//      wave ........ "wave: ["         the exact affine-wave reduction
+//      cascade ..... "cascade: ["      nesting and the finite-time schedule
+//      vortex ...... "vortex: ["       the reported collapse and its scaling
+//      renderer .... "function buildMath"  list → DOM + KaTeX
+// ============================================================================
 const R = String.raw;
+// Per-view content. Each value is the ordered block list rendered by buildMath.
 const MATH = {
+// Foundations 1: what the equations are, why pressure is nonlocal, the one bound.
 equations: [
  ['h','Fluid as a continuum'],
  ['p','Forget molecules. At every point x and time t there is a velocity u(x,t) and a pressure p(x,t). Newton\'s second law applied to a small parcel that <b>moves with the flow</b> gives the equations. The acceleration of that parcel is not ∂ₜu — the parcel has moved — but the material derivative:'],
@@ -28,6 +59,7 @@ equations: [
  ['p','For smooth data a smooth solution exists for a short time (Leray, Kato). It stays smooth for all time if any one of these holds: the Beale–Kato–Majda integral ∫₀ᵀ‖ω(t)‖∞ dt is finite; a Ladyzhenskaya–Prodi–Serrin norm ‖u‖_{L^q_t L^p_x} with 2/q + 3/p = 1 is finite; or (Escauriaza–Seregin–Šverák) ‖u(t)‖_{L³} stays bounded. Caffarelli–Kohn–Nirenberg: even for weak solutions the singular set has zero one-dimensional parabolic measure — a singularity, if any, is a point-like event, not a surface. Small data, or large viscosity, gives global smoothness outright. The next three chapters watch each of these quantities in a running simulation.'],
  ['s','Standard references: Constantin &amp; Foias, <i>Navier–Stokes Equations</i>; Tao, <a href="https://terrytao.wordpress.com/2007/03/18/why-global-regularity-for-navier-stokes-is-hard/" target="_blank" rel="noopener">Why global regularity for Navier–Stokes is hard</a> (2007); the Clay problem statement by Fefferman.']
 ],
+// Foundations 2: Burgers — steepening vs diffusion, why viscosity always wins.
 burgers: [
  ['h','Navier–Stokes with everything removed but the fight'],
  ['e', R`\partial_t u+u\,\partial_x u=\nu\,\partial_{xx}u`],
@@ -45,6 +77,7 @@ burgers: [
  ['p','Does not carry over: the maximum principle. In 3D Navier–Stokes there is no pointwise bound on u or ω; vortex stretching can amplify vorticity without limit as far as anyone could prove. Every "toy" blowup result — Tao\'s averaged Navier–Stokes (2016), the dyadic and shell models, and now the layered constructions — is about engineering a version of this steepening that viscosity cannot reach in time.'],
  ['s','Cole (1951), Hopf (1950). The x–t characteristics picture is in any PDE text, e.g. Evans, <i>Partial Differential Equations</i>, §3.4.']
 ],
+// Foundations 3: Flow 2D — carried-and-diffused vorticity, a solved problem.
 flow2d: [
  ['h','The vorticity–streamfunction form'],
  ['e', R`\partial_t\omega+u\cdot\nabla\omega=\nu\Delta\omega,\qquad u=\nabla^\perp\psi,\quad \Delta\psi=\omega`],
@@ -62,6 +95,8 @@ flow2d: [
  ['p','128² grid, pseudo-spectral: derivatives are exact in Fourier space, products are computed in physical space, and the top third of wavenumbers is zeroed each step (the 2/3 rule) so the quadratic product cannot alias back into the resolved range. Time stepping is classical RK4 with the step set by the CFL condition. Re shown is U·2π/ν with U = √(2E).'],
  ['s','Kraichnan, <i>Inertial ranges in two-dimensional turbulence</i> (1967); Yudovich (1963); Majda &amp; Bertozzi, <i>Vorticity and Incompressible Flow</i>, ch. 2–3.']
 ],
+// Foundations 4: Flow 3D — vortex stretching alive, and the regularity ledger.
+// Opens with two live plot canvases fed by drawFlow3D in main.js.
 flow3d: [
  ['live',[['mp-c1','energy · enstrophy · max|ω| — live from the solver on the stage'],['mp-c2','Beale–Kato–Majda integral ∫‖ω‖∞ and 2νZ = −dE/dt']]],
  ['h','Now the stretching term is alive'],
@@ -82,6 +117,7 @@ flow3d: [
  ['p','The forced constructions win the race between stretching and viscosity by stacking exactly-solvable pieces: at each stage the background is an <b>affine</b> strain D·x near the origin — precisely the thing that stretches vortex lines at a constant exponential rate — and a plane wave riding on it feels only that strain, never its own nonlinearity. The next chapter is that single piece, alone.'],
  ['s','Taylor &amp; Green (1937); Brachet et al., <i>Small-scale structure of the Taylor–Green vortex</i> (1983); Beale–Kato–Majda (1984); Dombre et al. on ABC flows (1986).']
 ],
+// Blowup 1: Wave — the exact affine-wave reduction to three ODEs, and steering.
 wave: [
  ['h','The equation'],
  ['p','Inviscid Boussinesq on the plane: a temperature anomaly θ carried by a divergence-free velocity u, feeding back through buoyancy. Vorticity ω = curl u is created wherever temperature varies horizontally.'],
@@ -105,6 +141,7 @@ wave: [
  ['e', R`\text{end of steering:}\quad \Omega=0,\ \ \zeta_1=0,\ \ \nabla\vartheta(0)=\lambda\Theta\zeta \ \text{retained}`],
  ['s','Alpöge &amp; Buckmaster, <a href="https://cims.nyu.edu/~tristanb/boussinesq.pdf" target="_blank" rel="noopener">Blowup for the Boussinesq equations with smooth forcing</a>, §1.2 and Lemma 3.1; the multiscale strategy is Córdoba &amp; Martínez-Zoroa (IPM, arXiv 2410.22920). Tao\'s summary: <a href="https://terrytao.wordpress.com/2026/09/07/" target="_blank" rel="noopener">What\'s new, 7 Sep 2026</a>.']
 ],
+// Blowup 2: Cascade — nesting layers inside layers, and why the time is finite.
 cascade: [
  ['h','Layers inside layers'],
  ['p','Replace sin s by a profile F(s) that is exactly linear near s = 0. Then wherever |λ_q ζ_q·x| is small, layer q is not a wave but a <b>straight ramp</b> — an affine background. Insert layer q+1 there, at a far higher frequency. It sees only the sum of all earlier ramps, so the same exact ODE applies with a steeper G.'],
@@ -125,6 +162,7 @@ cascade: [
  ['p','Away from the origin the cutoffs g_q create localization errors. Each layer adds a finite tower of corrections cancelling those errors to an order that increases with q, and the leftover is declared to be the force. Summability of that leftover, with every mixed derivative, is what makes f ∈ C^∞ through T_*. This bookkeeping is most of the 76 pages.'],
  ['s','Same sources as the Wave view. The 3D Euler paper of Alpöge–Buckmaster runs the identical program on a different linearization; OpenAI reports the same layer-and-cancel strategy for Navier–Stokes with viscosity, but their writeup has not yet been digested by the community.']
 ],
+// Blowup 3: Vortex — the reported self-similar collapse and its Leray scaling.
 vortex: [
  ['h','What OpenAI reports'],
  ['p','An initially resting fluid, pushed by a smooth force, develops a vortex that spirals inward and elongates like spaghetti. The core shrinks while speeding up so that kinetic energy stays finite. The technical content: every term in the equation — acceleration, pressure gradient, advection, viscosity — becomes large, yet they <b>cancel</b> to leave a smooth force. Statements C and D of the Clay formulation are claimed, with a Lean formalization.'],
@@ -141,6 +179,9 @@ vortex: [
  ['s','OpenAI, <a href="https://openai.com/index/navier-stokes-solution/" target="_blank" rel="noopener">On the Navier–Stokes Millennium Prize Problem</a>, 8 Sep 2026 (proof PDF and Lean repo linked there). The 3D field in this view is a kinematic illustration, not their solution.']
 ]
 };
+// Render one view's block list into #mp-body: build the matching element per
+// block kind, rendering 'e' blocks with KaTeX (falling back to raw TeX on error)
+// and 'live' blocks as caption + canvas pairs that main.js later draws into.
 function buildMath(view){
   const body=document.getElementById('mp-body'); body.innerHTML='';
   for(const [k,v] of MATH[view]){

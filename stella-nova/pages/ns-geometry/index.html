@@ -4,6 +4,35 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Blowup: Geometry · Navier–Stokes</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   BLOWUP GEOMETRY  ·  long-form article page
+  ───────────────────────────────────────────────────────────────────────────
+   A scrolling essay, not an app. It explains the singular construction one
+   clause at a time; each numbered section carries a <canvas> figure that
+   main.js draws. Unlike the ns-* solver pages this is a classic (non-module)
+   page with no three.js and no import map: KaTeX renders the equations, and one
+   plain script draws every figure onto a 2D canvas.
+
+   HEAD LOAD ORDER
+     1. fonts       Google Fonts stylesheet
+     2. KaTeX       CSS then JS, for the display equations
+     3. style.css   the page stylesheet
+     main.js loads at the end of body and draws all figures.
+
+   FIGURES  (canvas id ▶ the draw block in main.js)
+     #f-strain ▶ figure 1   affine background (strain + gradient ramp)
+     #f-wave   ▶ figure 2   one plane wave, interactive tilt
+     #f-growth ▶ figure 3   same growth rate, gradients 100× apart
+     #f-steer  ▶ figure 4   steering animation, Ω driven to zero
+     #f-nest   ▶ figure 5   three nested zooms
+     #f-cone   ▶ figure 6   gradients adding inside one cone
+     #f-time   ▶ figure 7   stage lengths, finite T∗
+     #f-tube   ▶ figure 8   vortex tube under axial strain
+     #f-play   ▶ figure 9   "explore the construction", the one interactive figure
+   Equations use <div class="eq" data-tex="..."> and are rendered on load.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -11,6 +40,8 @@
 </head>
 <body>
 <div class="grid"></div>
+<!-- Error bar: hidden until main.js catches a script error, then shown with the
+     real message (the preview sandbox otherwise reports only "Script error."). -->
 <div id="errbar" style="display:none;white-space:pre-wrap;font-family:'JetBrains Mono',monospace;font-size:.7rem;color:#e34a6a;background:rgba(227,74,106,.08);border-bottom:1px solid rgba(227,74,106,.4);padding:8px 28px"></div>
 <div class="topbar"><div class="sys">Navier–<i>Stokes</i></div><div class="r">the shape of the singularity · Córdoba–Martínez-Zoroa → Alpöge–Buckmaster → OpenAI, Sep 2026</div></div>
 <main>
@@ -23,6 +54,10 @@
 <h2>Explore the construction</h2>
 <p>This is not a picture of the shape; it is the shape being <b>built</b>. The active layer obeys the exact reduced system of section 2 — its wavevector ζ, temperature amplitude Θ and vorticity amplitude Ω, driven by the gradient of all older layers — through the growth, steering and hold stages of sections 3 and 4 below, with steering pulses found by shooting as in the proof. Finished layers are ramps near the origin, so they only get carried along: each later steering rotates their wavevectors a little, which is how the cone forms. Change any parameter and the whole construction is recomputed; then scrub time and scale.</p>
 <p>Things to try. Turn <b>steering</b> off: every layer keeps its vorticity, and with <b>shear coupling</b> on, that shear rotates and distorts every later wavevector — the cone falls apart and the gradient stops adding up. Push the <b>tilt</b> up: faster growth, but the steering has more to undo. Raise the <b>frequency ratio</b>: the layers separate cleanly but the stage lengths collapse until only the first stage is visible in time — that is the real regime, where Q ≥ 200 makes every stage after the second instantaneous. Lower the <b>gradient growth</b> toward 1: the gradients stop dominating their predecessors and the nesting stops being self-similar.</p>
+<!-- Figure 0, the one interactive figure (drawn by main.js "figure 9"): the whole
+     layered construction, integrated and scrubbable in time and scale. The x-*
+     controls below feed the parameter object P; changing a structural one rebuilds
+     the run, while time and zoom only redraw. -->
 <figure><canvas id="f-play" height="600"></canvas>
 <div class="ctl"><button id="x-rand">randomize</button><span>time</span><input type="range" id="x-t" min="0" max="1" step="0.001" value="1"><button id="x-play">play</button><span>zoom</span><input type="range" id="x-z" min="0" max="4.5" step="0.01" value="0"><span class="v" id="x-z-v" style="min-width:60px"></span><button id="x-auto">auto-zoom</button></div>
 <div class="ctl"><span>background gradient A₀</span><input type="range" id="x-A0" min="0.3" max="3" step="0.05" value="1"><span class="v" id="x-A0-v" style="min-width:50px"></span><span>base frequency λ₁</span><input type="range" id="x-lam" min="8" max="40" step="1" value="20"><span class="v" id="x-lam-v" style="min-width:36px"></span></div>
@@ -34,6 +69,7 @@
 
 <h2>1 · The background is straight</h2>
 <p>Near the origin, before any wave is added, the flow is <b>affine</b>: velocity u = D·x with D a constant trace-free matrix, temperature θ = G·x with G a constant vector. Straight streamlines, uniform strain, uniform gradient. Nothing about this looks like it could blow up — it is the tamest flow imaginable. But it has one property that matters: a uniform strain stretches every material line at a constant exponential rate, and a uniform gradient sits there as a fixed source of energy for anything that tilts it.</p>
+<!-- Figure 1: the affine background — strain streamlines over the gradient ramp. -->
 <figure><canvas id="f-strain" height="300"></canvas></figure>
 <div class="cap"><b>Figure 1.</b> An affine flow: streamlines of u = D·x for a pure strain (hyperbolae), with the temperature gradient G drawn as the background colour ramp, cold above warm. A wave inserted here feels only this: rotation of its wavevector by D, and buoyancy from G.</div>
 
@@ -41,6 +77,8 @@
 <p>Put a single plane wave on that background — a temperature wave Θ sin(λζ·x) and a vorticity wave Ω cos(λζ·x), stripes perpendicular to the wavevector ζ. The wave's velocity is v = (Ω/λ|ζ|²) Jζ sin(λζ·x), where J is a quarter-turn: the velocity points <b>along the crests</b>. That is the entire trick.</p>
 <div class="eq" data-tex="v\parallel J\zeta,\qquad \nabla\vartheta\parallel\zeta\qquad\Longrightarrow\qquad v\cdot\nabla\vartheta=v\cdot\nabla\varpi=0"></div>
 <p>A wave whose velocity runs along its own crests cannot advect itself. Plugging the ansatz into the equation, every product of the wave with itself is identically zero — not small, zero. What survives is linear: the background strain turns the wavevector, ζ̇ = −Dᵀζ, and the background gradient feeds the amplitudes. The PDE has been reduced, exactly, to three ordinary differential equations. In 3D Euler these are Kelvin's waves of 1887; for Navier–Stokes they are the Craik–Criminale solutions — one of the very few families of exact nonlinear solutions the equations possess. The construction is built from the only exact object available.</p>
+<!-- Figure 2: one plane wave on the background; the tilt slider drives the growth
+     rate curve √A·sin s. -->
 <figure><canvas id="f-wave" height="340"></canvas>
 <div class="ctl"><span>tilt s</span><input type="range" id="r-s" min="0" max="1.3" step="0.01" value="0.4"><span class="v" id="v-s"></span></div></figure>
 <div class="cap"><b>Figure 2.</b> The wave on the background. Stripes perpendicular to ζ (orange arrow); the wave's velocity (white arrows) runs along the stripes and alternates in sign. Drag the tilt: the growth rate is √A·sin s, zero for vertical stripes, and it does not depend on λ at all.</div>
@@ -49,34 +87,40 @@
 <p>Why tilt the stripes? Because vorticity is produced by <b>horizontal</b> variation of temperature — that is what ∂₁θ in the vorticity equation says. Vertical stripes have no horizontal variation and do nothing. Tilted stripes do: the horizontal component of the temperature wave creates vorticity along the stripes, the vorticity shears the fluid along the stripes, the shear carries warm fluid up and cold fluid down (cold over warm is Rayleigh–Taylor unstable), and that reinforces the temperature wave. A 2×2 linear system with eigenvalues ±√A sin s.</p>
 <div class="eq" data-tex="\dot\Theta=\frac{A\sin s}{\lambda}\,\Omega,\qquad \dot\Omega=\lambda\sin s\;\Theta,\qquad\text{eigenvalues }\pm\sqrt{A}\sin s,\qquad \nabla\vartheta(0)=\lambda\,\Theta\,\zeta"></div>
 <p>The growth rate contains A and s but not λ. So the frequency is a free parameter, and it can be made as large as one likes without slowing the growth. The amplitude Θ stays tiny; the gradient λΘ is whatever you want. This is the decoupling the whole proof rests on: <b>a wave can carry an enormous gradient while carrying almost no energy.</b></p>
+<!-- Figure 3: two waves, same rate, frequencies 100× apart — gradients diverge. -->
 <figure><canvas id="f-growth" height="240"></canvas></figure>
 <div class="cap"><b>Figure 3.</b> Two waves with the same background and tilt but frequencies differing by 100×. Their amplitudes (thin) grow at exactly the same rate; their gradients λ|Θ| (thick) differ by the factor 100 throughout.</div>
 
 <h2>4 · Steering: stand the stripes up</h2>
 <p>Growth leaves a problem behind. The vorticity wave Ω is now large, and it is a shear that the <i>next</i> layer would feel as a chaotic background. It has to be removed — and it can be, geometrically. Rotate the background gradient and the wavevector <b>together</b> by a common angle. A common rotation leaves Jζ·G and |ζ| unchanged, so the temperature equation does not notice it at all; but it changes the laboratory component ζ₁, and Ω̇ = λζ₁Θ flips sign when ζ passes vertical. A short overshoot past vertical drives Ω back to exactly zero, and then, with ζ vertical, both derivatives vanish and the layer is frozen: a large temperature gradient, no shear, standing straight.</p>
+<!-- Figure 4: steering animation — ζ and G rotate together and Ω lands on zero. -->
 <figure><canvas id="f-steer" height="300"></canvas>
 <div class="ctl"><button id="b-steer">replay</button><span id="v-steer"></span></div></figure>
 <div class="cap"><b>Figure 4.</b> Steering. Left: the wavevector ζ (orange) and gradient G (pale) rotate together; ζ swings past vertical and settles on it. Right: the vorticity amplitude Ω rises during growth, reverses during the overshoot, and lands on zero. The pulse size is chosen by shooting so that it lands exactly.</div>
 
 <h2>5 · Nesting: the same picture at every scale</h2>
 <p>Now replace the sine by a profile F that is <b>exactly linear</b> near zero. Then wherever |λζ·x| is small — a neighbourhood of the origin of size ~1/λ — the wave is not a wave but a straight ramp: a new affine background, steeper than the old one by the gradient just created. Insert the next wave there, at a far higher frequency λ' = λ^Q with Q ≥ 200. It sees only the sum of all earlier ramps, so the same exact reduction applies, with a larger A and therefore a faster growth.</p>
+<!-- Figure 5: three nested zooms — each parent flattens to a ramp for its child. -->
 <figure><canvas id="f-nest" height="300"></canvas></figure>
 <div class="cap"><b>Figure 5.</b> Three consecutive zooms toward the origin. In each frame the previous layer has flattened into a ramp (the smooth background gradient) and the next layer's stripes live inside it, slightly rotated. The real ratio between frames is λ^{Q−1} with Q ≥ 200; here it is drawn as ~15× so that the stripes stay visible.</div>
 <p>Two geometric facts make the nesting consistent. First, each new layer is placed inside a cut-off region so small that all earlier layers are still in their linear zone there — the layer never sees oscillation, only slope. Second, each new layer's gradient is made to <b>dominate</b> everything before it (the old gradient sum is at most a tiny fraction of the new one), so from the new layer's point of view the background is essentially just its immediate parent, freshly stood upright by steering. The picture is genuinely self-similar: zoom by λ_q, rotate slightly, and you are looking at the same thing.</p>
 
 <h2>6 · The cone, and the point</h2>
 <p>Every layer's gradient is steered into a single acute cone of directions. That is what makes the gradients <b>add</b> rather than cancel: ‖∇θ‖ at the origin is a sum of λ_q|Θ_q| over all layers, each term larger than the last, while the temperature itself, a sum of the tiny amplitudes λ_q^{−7/8}, stays bounded. Infinitely many stripe systems, each contributing a gradient in roughly the same direction, at scales converging to one point. The singularity is a point — the origin — which is the only kind of singularity Navier–Stokes is allowed to have: Caffarelli–Kohn–Nirenberg proved in 1982 that the singular set of any suitable weak solution has zero one-dimensional parabolic measure. A curve of singular points is impossible; an isolated point at an isolated time is not.</p>
+<!-- Figure 6: layer gradients inside one acute cone; the resultant grows unbounded. -->
 <figure><canvas id="f-cone" height="260"></canvas></figure>
 <div class="cap"><b>Figure 6.</b> Gradient contributions of successive layers, each inside the same acute cone. The resultant grows without bound; the amplitudes that produced it, drawn as the small discs, shrink summably.</div>
 
 <h2>7 · Why the whole thing takes finite time</h2>
 <p>Layer q must grow by a fixed factor e^{L} at rate ≈ σ_{q−1} sin s_q, where σ_{q−1}² is the gradient it sits on. The insertion angle is chosen as s_q ≈ σ_{q−2}/σ_{q−1}, which makes the stage length collapse to roughly 1/σ_{q−2}: each stage is as short as the growth scale two layers back. Because the gradients grow like λ_q^{1/8} and λ_q is a tower, those stage lengths shrink faster than any geometric series. The sum is finite. Infinitely many layers fit before T<sub>*</sub>.</p>
 <div class="eq" data-tex="T_*=\sum_q|\text{stage }q|\ \lesssim\ \sum_q\frac{1}{\sigma_{q-2}}<\infty,\qquad \sigma_q\sim\lambda_q^{1/16},\ \ \lambda_q=\lambda_{q-1}^{Q}"></div>
+<!-- Figure 7: stage lengths stacked to a finite T∗ (later stages vanish). -->
 <figure><canvas id="f-time" height="180"></canvas></figure>
 <div class="cap"><b>Figure 7.</b> Stage lengths, stacked. With the real exponents almost all of T<sub>*</sub> is spent on the first two layers; every later layer is effectively instantaneous.</div>
 
 <h2>8 · The same shape in three dimensions</h2>
 <p>For 3D Euler and Navier–Stokes the role of temperature is played by vorticity, and the role of the buoyancy coupling by <b>vortex stretching</b>. A vortex tube aligned with the stretching direction of an affine strain thins and spins up at a constant exponential rate; a plane wave riding that strain is a Kelvin mode. The reported Navier–Stokes solution — a vortex that spirals inward and stretches along its axis — is this geometry seen through vorticity: the stripes become the windings of the spiral, the axial strain plays the part of the background gradient, and steering keeps the tube aligned with the stretching axis. Viscosity adds one new constraint: a mode at frequency λ is damped at rate νλ²|ζ|², so each layer must out-grow its own damping before it is frozen. That race is the new difficulty, and winning it at every scale is where the Navier–Stokes proof lives.</p>
+<!-- Figure 8: a vortex tube under axial strain, plus the three scalings vs ℓ. -->
 <figure><canvas id="f-tube" height="300"></canvas></figure>
 <div class="cap"><b>Figure 8.</b> A material vortex tube under axial strain. Halve ℓ: the radius halves, the length quadruples (volume is conserved), the same windings spread out along it, and the angular speed quadruples. Right: the three scalings on a log axis as ℓ → 0. Vorticity concentrates without limit while the tube carries the same circulation — the 3D counterpart of a gradient growing while the amplitude stays small.</div>
 

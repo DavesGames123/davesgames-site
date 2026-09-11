@@ -1,18 +1,72 @@
+// ============================================================================
+//  BLOWUP GEOMETRY  ·  figure renderer for the article page
+// ----------------------------------------------------------------------------
+//  One classic script (no modules, no three.js). It renders the display
+//  equations, then draws nine 2D-canvas figures for the essay. Each figure is
+//  wrapped in guarded() so one failing figure cannot take down the rest, and its
+//  error is shown in the page's #errbar.
+//
+//  STATIC vs ANIMATED
+//  ------------------
+//      Static figures push their draw function into STATIC and call it once; a
+//      window resize re-runs every STATIC draw at the new width. The two animated
+//      figures (steering, and the interactive explorer) drive themselves with
+//      requestAnimationFrame instead.
+//
+//  THE INTERACTIVE FIGURE (guarded 'figure 9', canvas #f-play)
+//  ----------------------------------------------------------------------------
+//      controls ▶ P (params) ─rebuild()▶ integrate the layered ODE system,
+//      saving samples ─▶ draw(): sampleAt(time) ─▶ field + gradient/Ω/cone plots.
+//      Structural controls rebuild; time and zoom only redraw.
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      error bar ........... "errbar"            show real script errors on page
+//      equations ........... "data-tex"          KaTeX render of the display eqs
+//      guarded wrapper ..... "function guarded"  per-figure error isolation
+//      colour + palette .... "function inferno"  inferno map and named colours
+//      canvas setup ........ "function setup"    DPR-aware sizing, resize redraw
+//      draw helpers ........ "function arrow"    arrow / label / heat
+//      figure 1 ............ "figure 1"          affine background
+//      figure 2 ............ "figure 2"          one wave, interactive tilt
+//      figure 3 ............ "figure 3"          same rate, gradients apart
+//      figure 4 ............ "figure 4"          steering animation
+//      figure 5 ............ "figure 5"          nested zooms
+//      figure 6 ............ "figure 6"          the cone
+//      figure 7 ............ "figure 7"          stage lengths
+//      figure 8 ............ "figure 8"          vortex tube scalings
+//      figure 9 ............ "figure 9"          interactive explorer + ODE system
+// ============================================================================
 // any error is shown on the page with its real message (the preview sandbox otherwise reports only "Script error.")
 window.addEventListener('error',e=>{ const b=document.getElementById('errbar'); b.style.display='block'; b.textContent+='error: '+(e.message||'?')+(e.lineno?' @ line '+e.lineno:'')+'\n'; });
+// Render every display equation from its data-tex attribute, falling back to raw
+// TeX if KaTeX is missing or throws.
 document.querySelectorAll('.eq[data-tex]').forEach(el=>{ if(window.katex){ try{ katex.render(el.dataset.tex,el,{displayMode:true,throwOnError:false}); }catch(err){ el.textContent=el.dataset.tex; } } else el.textContent=el.dataset.tex; });
+// Run one figure's setup inside a try/catch so a failure stays local and is shown.
 function guarded(name,fn){ try{ fn(); }catch(err){ console.error('['+name+']',err); const b=document.getElementById('errbar'); b.style.display='block'; b.textContent+=name+': '+err.message+'\n'; } }
+// inferno colour map: the same degree-6 polynomial fit used by the solver pages.
 const _IC=[[0.0002189403691192265,0.001651004631001012,-0.01948089843709184],[0.1065134194856116,0.5639564367884091,3.932712388889277],[11.60249308247187,-3.972853965665698,-15.9423044794981],[-41.70399613139459,17.43639888205313,44.35414519872813],[77.162935699427,-33.40235894210092,-81.80730925738993],[-71.31942824499214,32.62606426397723,73.20951985803202],[25.13112622477341,-12.24266895238567,-23.07032500287172]];
+// Map t in [0,1] to an inferno [r,g,b] in 0..255 (Horner evaluation).
 function inferno(t){ t=Math.max(0,Math.min(1,t)); const o=[0,0,0]; for(let c=0;c<3;c++){ let v=_IC[6][c]; for(let i=5;i>=0;i--) v=_IC[i][c]+t*v; o[c]=Math.max(0,Math.min(255,v*255)); } return o; }
+// [r,g,b] triple to a CSS colour string, and the page's named palette.
 const rgb=c=>`rgb(${c[0]|0},${c[1]|0},${c[2]|0})`;
 const ACC='#f6a03f',PALE='#fcf1a4',RED='#e34a6a',CYAN='#38bdf8',DIM='#9b8e98',WHITE='rgba(243,238,238,0.85)';
 const _fig={}; // canvases are sized to their CSS width; if the page is resized every static figure is redrawn and the animated ones pick up the new size on their next frame
+// Size a canvas to its CSS width at device resolution and return {context, W, H};
+// cached per id and reused until the width changes.
 function setup(id){ const c=document.getElementById(id); const DPR=Math.min(2,devicePixelRatio||1); const W=c.clientWidth, H=parseInt(c.getAttribute('height')); const k=_fig[id]; if(k&&k.W===W) return k; c.width=W*DPR; c.height=H*DPR; c.style.height=H+'px'; const x=c.getContext('2d'); x.setTransform(DPR,0,0,DPR,0,0); return _fig[id]={c,x,W,H}; }
+// Registry of static figure draws; a debounced resize re-runs them all.
 const STATIC=[]; let _rt=null; window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(()=>{ for(const f of STATIC) f(); },120); });
+// Arrow with a filled head (first argument is the 2D context here).
 function arrow(x,x0,y0,x1,y1,col,w=1.2){ const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy); if(L<0.5) return; x.strokeStyle=col;x.fillStyle=col;x.lineWidth=w; x.beginPath();x.moveTo(x0,y0);x.lineTo(x1,y1);x.stroke(); const h=Math.min(8,L*0.5),ux=dx/L,uy=dy/L; x.beginPath();x.moveTo(x1,y1);x.lineTo(x1-h*ux+h*.5*uy,y1-h*uy-h*.5*ux);x.lineTo(x1-h*ux-h*.5*uy,y1-h*uy+h*.5*ux);x.closePath();x.fill(); }
+// Monospace canvas label.
 function label(x,t,px,py,col=DIM,size=11,al='left'){ x.fillStyle=col; x.font=`${size}px 'JetBrains Mono'`; x.textAlign=al; x.textBaseline='middle'; x.fillText(t,px,py); }
+// Rasterise a scalar field fn over [-1,1]² into an n×n image (divergent inferno)
+// and blit it to (px,py) at size S.
 function heat(x,fn,px,py,S,n=96){ const cv=document.createElement('canvas'); cv.width=n; cv.height=n; const cx=cv.getContext('2d'); const img=cx.createImageData(n,n); const d=img.data; for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const u=-1+2*(i+.5)/n, v=1-2*(j+.5)/n; const c=inferno(0.5+0.5*Math.max(-1,Math.min(1,fn(u,v)))); const k=4*(j*n+i); d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255; } cx.putImageData(img,0,0); x.imageSmoothingEnabled=true; x.drawImage(cv,px,py,S,S); }
 
+// Figure 1: the affine background — hyperbolic strain streamlines drawn over the
+// cold-above temperature ramp, with the gradient vector G.
 guarded('figure 1',()=>{
 /* 1 strain */
 STATIC.push(function(){ const {x,W,H}=setup('f-strain'); x.clearRect(0,0,W,H); const S=Math.min(H-30,W*0.5), px=(W-S)/2, py=(H-S)/2; heat(x,(u,v)=>-v,px,py,S);
@@ -22,6 +76,8 @@ STATIC.push(function(){ const {x,W,H}=setup('f-strain'); x.clearRect(0,0,W,H); c
 
 
 });
+// Figure 2: one plane wave on the background. The tilt slider redraws the field,
+// the along-crest velocity arrows, the ζ diagram, and the √A·sin s rate curve.
 guarded('figure 2',()=>{
 /* 2 wave, interactive tilt */
 { const {x,W,H}=setup('f-wave'); const rs=document.getElementById('r-s'), vs=document.getElementById('v-s');
@@ -40,6 +96,8 @@ guarded('figure 2',()=>{
 
 
 });
+// Figure 3: two waves with the same growth rate but frequencies 100× apart; their
+// amplitudes coincide while their gradients λ|Θ| stay two decades apart.
 guarded('figure 3',()=>{
 /* 3 growth: same rate, different gradient */
 STATIC.push(function(){ const {x,W,H}=setup('f-growth'); x.clearRect(0,0,W,H); const M=40, gx=M, gy=16, gw=W-2*M, gh=H-40; x.strokeStyle='rgba(252,180,120,0.2)'; x.strokeRect(gx+.5,gy+.5,gw-1,gh-1);
@@ -51,16 +109,24 @@ STATIC.push(function(){ const {x,W,H}=setup('f-growth'); x.clearRect(0,0,W,H); c
 
 
 });
+// Figure 4: the steering animation. It integrates one growth-then-steer run once
+// (with the pulse μ found by shooting), then animates ζ/G rotating together while
+// Ω rises, reverses on the overshoot, and lands on zero.
 guarded('figure 4',()=>{
 /* 4 steering animation */
 { const btn=document.getElementById('b-steer'), lbl=document.getElementById('v-steer'); let t0=performance.now();
   const s=0.5, lam=12, A=1, a=A*Math.sin(s)/lam, g=Math.sqrt(A)*Math.sin(s), L=5, Lam=3; const sm=t=>t<=0?0:t>=1?1:t*t*t*(t*(t*6-15)+10), bump=y=>(y<=0||y>=1)?0:30*y*y*(1-y)*(1-y);
   const z=(tau,mu)=>tau<1?1-sm(tau):tau<=1+1/Lam?-mu*Lam*bump(Lam*(tau-1)):0; const phiOf=(tau,mu)=>Math.asin(Math.max(-0.98,Math.min(0.98,Math.sin(s)*z(tau,mu))));
   // simulate once: growth then steering with shot mu
+  // Integrate one run for a trial pulse mu (growth at fixed tilt s, then steering)
+  // and return its history; the shooter below picks the mu that lands Ω at zero.
   const dt=0.004; const tg=L/g; function run(mu){ let Th=-1e-3, Om=lam/Math.sqrt(A)*Th, t=0; const H_=[]; const phi=t=>t<tg?s:phiOf(g*(t-tg),mu); const tEnd=tg+(1+1/Lam)/g;
     while(t<tEnd){ const f=(T,O,tt)=>[a*O,lam*Math.sin(phi(tt))*T]; const k1=f(Th,Om,t),k2=f(Th+dt/2*k1[0],Om+dt/2*k1[1],t+dt/2),k3=f(Th+dt/2*k2[0],Om+dt/2*k2[1],t+dt/2),k4=f(Th+dt*k3[0],Om+dt*k3[1],t+dt); Th+=dt/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]); Om+=dt/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1]); t+=dt; H_.push({t,Th,Om,phi:phi(t)}); } return H_; }
+  // Bracket then bisect the pulse amplitude that returns Ω to zero, then keep that run.
   let lo=0,hi=1; while(run(hi).at(-1).Om<0&&hi<64) hi*=2; for(let i=0;i<30;i++){ const m=(lo+hi)/2; run(m).at(-1).Om<0?lo=m:hi=m; } const mu=(lo+hi)/2; const HIST=run(mu); const tEnd=HIST.at(-1).t; const OmMax=Math.max(...HIST.map(h=>Math.abs(h.Om)));
+  // Replay button restarts the clock.
   btn.onclick=()=>t0=performance.now();
+  // Per-frame draw: index into the precomputed history by wall-clock time.
   function frame(){ const {x,W,H}=setup('f-steer'); const tt=Math.min(tEnd,((performance.now()-t0)/1000)*(tEnd/8)); const i=Math.min(HIST.length-1,Math.floor(tt/dt)); const h=HIST[i]; x.clearRect(0,0,W,H);
     const S=Math.min(H-40,W*0.4), px=W*0.08, py=(H-S)/2, cx=px+S/2, cy=py+S/2, R=S*0.4; x.strokeStyle='rgba(252,180,120,0.2)'; x.strokeRect(px+.5,py+.5,S-1,S-1);
     x.setLineDash([3,4]); x.strokeStyle='rgba(243,238,238,0.35)'; x.beginPath(); x.moveTo(cx,cy-R*1.05); x.lineTo(cx,cy+R*1.05); x.stroke(); x.setLineDash([]);
@@ -77,6 +143,8 @@ guarded('figure 4',()=>{
 
 
 });
+// Figure 5: three consecutive zooms toward the origin — each parent layer appears
+// as a straight ramp with the next layer's stripes nested inside it.
 guarded('figure 5',()=>{
 /* 5 nesting: three zooms */
 STATIC.push(function(){ const {x,W,H}=setup('f-nest'); x.clearRect(0,0,W,H); const n=3, gap=26, S=Math.min(H-44,(W-(n+1)*gap)/n); const y0=(H-S)/2+6;
@@ -92,6 +160,8 @@ STATIC.push(function(){ const {x,W,H}=setup('f-nest'); x.clearRect(0,0,W,H); con
 
 
 });
+// Figure 6: successive layer gradients drawn head-to-tail inside one acute cone;
+// the resultant grows without bound while the amplitude discs shrink summably.
 guarded('figure 6',()=>{
 /* 6 cone */
 STATIC.push(function(){ const {x,W,H}=setup('f-cone'); x.clearRect(0,0,W,H); const ox=W*0.18, oy=H*0.82; x.strokeStyle='rgba(252,180,120,0.25)'; x.setLineDash([4,4]); x.beginPath(); x.moveTo(ox,oy); x.lineTo(ox+W*0.75*Math.cos(-0.15),oy+W*0.75*Math.sin(-0.15)); x.moveTo(ox,oy); x.lineTo(ox+W*0.75*Math.cos(-0.75),oy+W*0.75*Math.sin(-0.75)); x.stroke(); x.setLineDash([]); label(x,'acute cone',ox+W*0.72*Math.cos(-0.45),oy+W*0.72*Math.sin(-0.45),DIM,10);
@@ -100,6 +170,8 @@ STATIC.push(function(){ const {x,W,H}=setup('f-cone'); x.clearRect(0,0,W,H); con
 
 
 });
+// Figure 7: the finite-time schedule as stacked stage-length bars. Durations
+// collapse fast (here Q=1.5 for visibility; the real Q≥200 hides all but the first).
 guarded('figure 7',()=>{
 /* 7 stage lengths */
 STATIC.push(function(){ const {x,W,H}=setup('f-time'); x.clearRect(0,0,W,H); const Q=1.5, l1=4, L=3; const sig=[1]; const dur=[]; for(let q=1;q<=14;q++){ const ln=Math.pow(Q,q-1)*l1; const A=Math.exp(ln/8); const sq=q===1?0.3:Math.min(L*sig[q-2]/sig[q-1],1.2); dur.push((L+3)/(sig[q-1]*Math.sin(sq))); sig.push(Math.sqrt((q>1?sig[q-1]*sig[q-1]:1)+A)); }
@@ -108,6 +180,8 @@ STATIC.push(function(){ const {x,W,H}=setup('f-time'); x.clearRect(0,0,W,H); con
 
 
 });
+// Figure 8: a material vortex tube before and after halving its length ℓ (radius
+// halves, length quadruples, spin quadruples), plus the three ℓ-scalings on a log axis.
 guarded('figure 8',()=>{
 /* 8 tube under strain: before / after, plus the scalings */
 STATIC.push(function(){ const {x,W,H}=setup('f-tube'); x.clearRect(0,0,W,H);
@@ -127,18 +201,25 @@ STATIC.push(function(){ const {x,W,H}=setup('f-tube'); x.clearRect(0,0,W,H);
 
 
 });
+// Figure 9: the interactive explorer. P holds every parameter; structural changes
+// rebuild the whole construction, while time and zoom only redraw. The ODE system,
+// the RK4 integrator, the build loop, and the composite draw all live here.
 guarded('figure 9',()=>{
 /* 9 explore the construction: the layered affine-wave ODE system, integrated, scrubbable in time and scale */
 { const P={A0:1,lam1:20,ratio:20,s:0.35,sd:0.55,L:5,g:3,n:4,steer:true,lin:true,shear:true,arrows:true,z:0,t:1,play:false,Lam:3}; const UPD={};
+  // Bind one slider to P[key]; structural keys schedule a rebuild, z/t only redraw.
   const bind=(id,key,fmt)=>{ const el=document.getElementById(id), vv=document.getElementById(id+'-v'); const upd=()=>{ P[key]=parseFloat(el.value); if(vv) vv.textContent=fmt?fmt(P[key]):P[key]; }; UPD[key]=upd; el.addEventListener('input',()=>{ upd(); if(!['z','t'].includes(key)) scheduleRebuild(); else draw(); }); upd(); };
+  // Debounce rebuilds so dragging a slider does not recompute on every input.
   let _rb=null; function scheduleRebuild(){ clearTimeout(_rb); _rb=setTimeout(rebuild,160); }
   bind('x-A0','A0',v=>v.toFixed(2)); bind('x-lam','lam1',v=>v.toFixed(0)); bind('x-r','ratio',v=>'×'+v.toFixed(0)); bind('x-s','s',v=>v.toFixed(2)+' rad'); bind('x-sd','sd',v=>v.toFixed(2)); bind('x-L','L',v=>'e^'+v.toFixed(1)); bind('x-g','g',v=>'×'+v.toFixed(1)); bind('x-n','n',v=>v.toFixed(0)); bind('x-z','z',v=>'×'+Math.pow(10,v).toExponential(1)); bind('x-t','t',v=>'');
   for(const [id,key] of [['x-steer','steer'],['x-lin','lin'],['x-shear','shear'],['x-arrows','arrows']]) document.getElementById(id).addEventListener('change',e=>{ P[key]=e.target.checked; key==='arrows'?draw():scheduleRebuild(); });
+  // Play toggles the time animation; randomize sets fresh parameters and rebuilds.
   document.getElementById('x-play').onclick=()=>{ P.play=!P.play; document.getElementById('x-play').textContent=P.play?'pause':'play'; if(P.play) playTick(); };
   const rnd=(a,b)=>a+Math.random()*(b-a); const setv=(id,key,v,dp=2)=>{ const el=document.getElementById(id); el.value=(+v).toFixed(dp); UPD[key](); };
   document.getElementById('x-rand').onclick=()=>{ setv('x-A0','A0',rnd(0.5,2.2)); setv('x-lam','lam1',Math.round(rnd(10,32)),0); setv('x-r','ratio',Math.round(rnd(8,32)),0); setv('x-s','s',rnd(0.15,0.6)); setv('x-sd','sd',rnd(0.35,0.8)); setv('x-L','L',rnd(3,7),1); setv('x-g','g',rnd(2,5),1); setv('x-n','n',Math.round(rnd(3,6)),0);
     P.t=1; document.getElementById('x-t').value=1; P.z=0; document.getElementById('x-z').value=0; UPD.z(); rebuild(); }; // always the finished construction, fully zoomed out
   let auto=false; document.getElementById('x-auto').onclick=()=>{ auto=!auto; document.getElementById('x-auto').textContent=auto?'stop zoom':'auto-zoom'; if(auto) zoomTick(); };
+  // Two self-driving loops: playTick advances time, zoomTick ramps magnification.
   function playTick(){ if(!P.play) return; P.t+=0.004; if(P.t>1){ P.t=0; } document.getElementById('x-t').value=P.t; draw(); requestAnimationFrame(playTick); }
   function zoomTick(){ if(!auto) return; P.z+=0.012; if(P.z>4.5) P.z=0; document.getElementById('x-z').value=P.z; draw(); requestAnimationFrame(zoomTick); }
 
@@ -147,7 +228,11 @@ guarded('figure 9',()=>{
      Θ̇_j = −(Jζ_j·G_j)/(λ_j|ζ_j|²) Ω_j        G_j = G0 + Σ_{k<j} λ_kΘ_kζ_k  (older layers are its affine background)
      Ω̇_j = λ_j ζ_{j,1} Θ_j                       horizontal temperature variation makes vorticity
      ζ̇_j = −Dᵀ ζ_j,  Ġ0 = −Dᵀ G0                 D = α̇J (steering) + Σ_{k<j} (Ω_k/|ζ_k|²) Jζ_k ζ_kᵀ (shear of unsteered older layers, optional) */
+  // Quarter-turn J (rotate a 2-vector by 90°).
   const J=v=>[-v[1],v[0]];
+  // Right-hand side of the layered system: transport every wavevector by the
+  // background D, and for the one active layer advance Θ and Ω from the gradient of
+  // all older layers. Finished layers are frozen ramps that only get carried.
   function deriv(S,adot,shearOn){ const d={G0:[0,0],L:S.L.map(()=>({z:[0,0],Th:0,Om:0}))}; const Dt=(v,D)=>[-(D[0][0]*v[0]+D[1][0]*v[1]),-(D[0][1]*v[0]+D[1][1]*v[1])]; // −Dᵀv
     const D=[[0,-adot],[adot,0]]; // prescribed background: α̇J during steering, zero otherwise (the smooth force absorbs everything affine)
     if(shearOn) for(let k=0;k<S.L.length;k++){ const o=S.L[k]; if(!o.on||k===S.act||o.Om===0) continue; const n2=o.z[0]*o.z[0]+o.z[1]*o.z[1]; const c=o.Om/n2, Jz=J(o.z); D[0][0]+=c*Jz[0]*o.z[0]; D[0][1]+=c*Jz[0]*o.z[1]; D[1][0]+=c*Jz[1]*o.z[0]; D[1][1]+=c*Jz[1]*o.z[1]; } // leftover shear of unsteered finished layers
@@ -156,15 +241,22 @@ guarded('figure 9',()=>{
       let G=[S.G0[0],S.G0[1]]; for(let k=0;k<j;k++){ const o=S.L[k]; if(o.on){ G[0]+=o.lam*o.Th*o.z[0]; G[1]+=o.lam*o.Th*o.z[1]; } }
       const n2=l.z[0]*l.z[0]+l.z[1]*l.z[1], Jz=J(l.z); d.L[j].Th=-(Jz[0]*G[0]+Jz[1]*G[1])/(l.lam*n2)*l.Om; d.L[j].Om=l.lam*l.z[0]*l.Th; }
     d.G0=Dt(S.G0,D); return d; }
+  // Deep-copy a state (so RK4 stages do not alias the buffers of earlier stages).
   const copy=S=>({G0:[...S.G0],act:S.act,L:S.L.map(l=>({...l,z:[...l.z]}))});
+  // One RK4 step of the whole layered state (adotAt supplies the steering rate α̇).
   function rk4(S,dt,adotAt,t,shearOn){ const add=(S,d,h)=>{ const T=copy(S); T.G0[0]+=h*d.G0[0]; T.G0[1]+=h*d.G0[1]; T.L.forEach((l,j)=>{ if(!l.on) return; l.z[0]+=h*d.L[j].z[0]; l.z[1]+=h*d.L[j].z[1]; l.Th+=h*d.L[j].Th; l.Om+=h*d.L[j].Om; }); return T; };
     const k1=deriv(S,adotAt(t),shearOn), k2=deriv(add(S,k1,dt/2),adotAt(t+dt/2),shearOn), k3=deriv(add(S,k2,dt/2),adotAt(t+dt/2),shearOn), k4=deriv(add(S,k3,dt),adotAt(t+dt),shearOn);
     const R=copy(S); R.G0[0]+=dt/6*(k1.G0[0]+2*k2.G0[0]+2*k3.G0[0]+k4.G0[0]); R.G0[1]+=dt/6*(k1.G0[1]+2*k2.G0[1]+2*k3.G0[1]+k4.G0[1]);
     R.L.forEach((l,j)=>{ if(!l.on) return; for(const f of ['Th','Om']) l[f]+=dt/6*(k1.L[j][f]+2*k2.L[j][f]+2*k3.L[j][f]+k4.L[j][f]); for(const i of [0,1]) l.z[i]+=dt/6*(k1.L[j].z[i]+2*k2.L[j].z[i]+2*k3.L[j].z[i]+k4.L[j].z[i]); }); return R; }
+  // Smootherstep, bump, and the steering tilt profile (same shapes as the wave view).
   const sm=t=>t<=0?0:t>=1?1:t*t*t*(t*(t*6-15)+10), bump=y=>(y<=0||y>=1)?0:30*y*y*(1-y)*(1-y);
   const zprof=(tau,mu)=>tau<1?1-sm(tau):tau<=1+1/P.Lam?-mu*P.Lam*bump(P.Lam*(tau-1)):0;
 
   let RUN=null;
+  // Build the whole construction: for each layer, seed it on the growing eigenline
+  // of its background, integrate growth until its gradient dominates, then (if
+  // steering is on) shoot the pulse that zeroes Ω and hold. Samples are kept for
+  // the time slider; stages are kept for the shaded phase bands.
   function rebuild(){ // integrate the whole construction; keep samples for scrubbing
     const n=P.n, samples=[], stages=[]; let S={G0:[0,-P.A0],act:-1,L:[]}; for(let q=0;q<n;q++) S.L.push({lam:P.lam1*Math.pow(P.ratio,q),z:[0,1],Th:0,Om:0,on:false,R:q?0.5/(P.lam1*Math.pow(P.ratio,q-1)):1});
     let t=0; const push=(ph,q)=>samples.push({t,S:copy(S),ph,q});
@@ -181,10 +273,18 @@ guarded('figure 9',()=>{
     RUN={samples,stages,T:t}; const st=[]; for(const s of stages) st.push(s); draw(); }
   // profile: sine, or a triangle wave — exactly linear (slope 1) on the whole rise, periodic, so every layer is a train of stripes
   const tri=s=>{ const p=2*Math.PI; let x=s-Math.floor(s/p+0.25)*p; return x<=Math.PI/2? x : Math.PI-x; }; // rises with slope 1 on [−π/2, π/2], falls back to −π/2 by 3π/2
+  // F is the stripe profile; env is the radial cutoff nesting a layer in its parent.
   const F=s=>P.lin?tri(s):Math.sin(s);
   const env=(r,R)=>{ const u=r/R; return u<0.55?1:u>1?0:(t=>t*t*(3-2*t))((1-u)/0.45); };
+  // Binary-search the sample nearest a given time, for scrubbing.
   function sampleAt(tt){ const s=RUN.samples; let lo=0,hi=s.length-1; while(lo<hi){ const m=(lo+hi)>>1; s[m].t<tt?lo=m+1:hi=m; } return s[lo]; }
+  // Composite draw: the magnified, contrast-stretched field (with active-layer
+  // velocity arrows and layer-envelope circles) on the left, and three stacked
+  // right-column plots — gradient vs amplitude, per-layer Ω, and the ζ cone — plus
+  // a readout.
   function draw(){ if(!RUN) return; const {x,W,H}=setup('f-play'); x.clearRect(0,0,W,H); const S=Math.min(H-40,W*0.55), px=16, py=16; const Z=Math.pow(10,P.z), w=1/Z; const tt=P.t*RUN.T; const smp=sampleAt(tt); const st=smp.S;
+    // Temperature at (u,v): background gradient plus every layer coarse enough to
+    // resolve at this zoom and inside its cutoff radius.
     const theta=(u,v)=>{ let th=st.G0[0]*u+st.G0[1]*v; const r=Math.hypot(u,v); st.L.forEach((l,q)=>{ if(!l.on||l.lam>90*Z||r>l.R) return; th+=l.Th*F(l.lam*(l.z[0]*u+l.z[1]*v))*env(r,l.R); }); return th; };
     const n=140, cv=document.createElement('canvas'); cv.width=n; cv.height=n; const cx=cv.getContext('2d'); const img=cx.createImageData(n,n); const vals=new Float32Array(n*n); let mn=1e9,mx=-1e9;
     for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const u=(-1+2*(i+.5)/n)*w, v=(1-2*(j+.5)/n)*w; const t=theta(u,v); vals[j*n+i]=t; if(t<mn)mn=t; if(t>mx)mx=t; }
@@ -217,6 +317,7 @@ guarded('figure 9',()=>{
     const rox=rx+cw+12; const grad=(()=>{ let G=[st.G0[0],st.G0[1]]; st.L.forEach(l=>{ if(!l.on) return; G[0]+=l.lam*l.Th*l.z[0]; G[1]+=l.lam*l.Th*l.z[1]; }); return Math.hypot(G[0],G[1]); })();
     const ro=[['T∗',RUN.T.toFixed(3)],['stages',RUN.stages.length],['gradient now',grad.toExponential(2)],['sup |θ| now',(P.A0+st.L.reduce((a,l)=>a+(l.on?Math.abs(l.Th):0),0)).toFixed(4)],['pulses μ',RUN.stages.filter(s=>s.mu!=null).map(s=>s.mu.toFixed(2)).join(' ')||'—']];
     ro.forEach(([k,v],i)=>{ label(x,k,rox,ry+14+i*15,DIM,10); label(x,String(v),rx+rw-6,ry+14+i*15,ACC,10,'right'); }); }
+  // Build once on load, and register draw so a resize repaints at the new width.
   rebuild(); STATIC.push(draw); }
 
 });

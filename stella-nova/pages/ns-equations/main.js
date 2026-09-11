@@ -1,3 +1,57 @@
+// ============================================================================
+//  NAVIER–STOKES BLOWUP EXPLORER  ·  engine (shared, byte-identical on 6 pages)
+// ----------------------------------------------------------------------------
+//  One <stage> holds two stacked canvases: a 2D canvas (c2d) for field and plot
+//  views, and a WebGL canvas (c3d) for the two three.js views. A single
+//  requestAnimationFrame loop dispatches to one draw function per active VIEW.
+//  Each page pins itself to one view through window.NS_FIXED_VIEW in its HTML,
+//  so this same file drives ns-burgers, ns-equations, ns-flow2d, ns-flow3d,
+//  ns-vortex and ns-wave without change.
+//
+//  THE SEVEN VIEWS
+//  ---------------
+//      equations  Helmholtz–Leray projection demo        drawEquations  (2D)
+//      burgers    1D viscous Burgers, space–time map      drawBurgers    (2D)
+//      flow2d     2D Navier–Stokes, vorticity form        drawFlow2D     (2D)
+//      flow3d     3D Navier–Stokes, advected tracers      drawFlow3D     (3D)
+//      wave       exact affine-wave ODE, one layer        drawWave       (2D)
+//      cascade    nested layers, finite-time schedule     drawCascade    (2D)
+//      vortex     self-similar collapse, kinematic        drawVortex     (3D)
+//
+//  DATA FLOW   (numerics live in script-2.js; math prose in script-1.js)
+//  ----------------------------------------------------------------------------
+//      script-2.js  Burgers / Flow2D / Flow3D solvers + FFT   (globals, no DOM)
+//                        │  stepped by the draw functions in this file
+//                        ▼
+//      solver state ─▶ Timeline (ring of snapshots) ─▶ draw ─▶ canvas
+//                        │                                └▶ readout DOM (#*-ro)
+//                        └▶ scrubber slider seeks a past frame for replay
+//      script-1.js  buildMath(view) ─▶ #mp-body   (KaTeX, per-view prose)
+//
+//  PER-FRAME LOOP
+//  --------------
+//      loop() ▶ loopBody(dt): pick VIEW ▶ advance its solver by dt ▶ draw ▶
+//               scrubSync(); the first thrown error is trapped and shown in
+//               #status so a dead view never spins silently.
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      shared ui ............ "shared ui"          $, colours, toggles, fmt
+//      view switch .......... "function setView"   swap one view's DOM + math
+//      resize ............... "function resize"    size both canvases to stage
+//      stage overlay ........ "KaTeX overlay"      floating equation labels
+//      scrubber ............. "on-stage scrubber"  mirror active view's slider
+//      colour maps .......... "colour maps"        inferno, tracer palette
+//      tracers .............. "class TracerBundle" fat-line 3D trails
+//      wave ................. "WAVE — the exact"   affine-wave ODE + shooting
+//      cascade .............. "CASCADE — nested"   layer schedule + zoom
+//      vortex ............... "VORTEX — self"      collapse particles (three.js)
+//      equations ............ "─── Equations"      Helmholtz projection panels
+//      burgers .............. "─── Burgers"        profile + space–time map
+//      flow2d ............... "─── Flow 2D"        vorticity field + plots
+//      flow3d ............... "Flow 3D:"           advected tracers + plots
+//      main loop ............ "main loop"          view dispatch + error trap
+// ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
@@ -5,23 +59,38 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 
 /* ───────── shared ui ───────── */
+// Element lookup shorthand, the two stacked canvases, and the 2D context.
+// MAINCTX keeps a handle to the stage context so drawFlow3D can borrow ctx for
+// the mathematics-panel plots and then restore it.
 const $ = id => document.getElementById(id);
 const stage = $('stage'), c2d = $('c2d'), c3d = $('c3d'); let ctx = c2d.getContext('2d'); const MAINCTX = ctx;
+// Cap device pixel ratio at 2: past that the extra pixels cost more than they show.
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
+// Palette. Names read as blue/yellow but the hexes are warm amber/gold: the page
+// is drawn in one warm scheme, and the "blue"/"yellow" keys are kept only so the
+// two-colour divergent maps stay legible in the code that references them.
 const COL = { bg:'#0a0810', blue:'#f6a03f', blueDim:'#a85f14', yellow:'#fcf1a4', yellowDim:'#b9a865',
   text:'#d9d0d3', dim:'#9b8e98', faint:'#5e5361', green:'#7ec27e', red:'#e34a6a', border:'rgba(252,180,120,0.2)' };
+// Display toggles, one per checkbox row; the row wiring below flips these.
 const TOG = { arrows:true, phaseplane:true, series:true, trails:true, spin:true, chars:true, inviscid:true, fixed:true };
+// The active view. setView() overwrites it; the loop dispatches on it.
 let VIEW = 'wave';
+// Number formatters: fmt keeps a fixed decimal count but drops to scientific for
+// tiny non-zero values; fmtE picks scientific for very large or very small.
 const fmt = (x,d=3) => Math.abs(x) < 1e-3 && x !== 0 ? x.toExponential(2) : x.toFixed(d);
 const fmtE = x => x === 0 ? '0' : (Math.abs(x) >= 1e4 || Math.abs(x) < 1e-3 ? x.toExponential(2) : x.toPrecision(4));
 
+// Event wiring: view buttons switch view; toggle rows flip a TOG flag and its dot.
 document.querySelectorAll('.view-btn').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
 document.querySelectorAll('.tog-row').forEach(r => r.addEventListener('click', () => {
   const k = r.dataset.tog; TOG[k] = !TOG[k]; r.querySelector('.tog').classList.toggle('on', TOG[k]);
 }));
+// Collapse buttons for the left control panel and right mathematics panel; the
+// stage width changes, so a resize is queued.
 $('qp-col').onclick = () => { document.body.classList.toggle('qp-collapsed'); queueResize(); };
 $('mp-col').onclick = () => { document.body.classList.toggle('mp-collapsed'); queueResize(); };
 
+// Per-view title (name + subtitle) and stage caption, keyed by view id.
 const TITLES = { equations:['Navier–Stokes 1D','the equations: derivation and structure'], burgers:['burgers','one dimension, one fight'], flow2d:['flow 2D','a solved problem, live'], flow3d:['flow 3D','vortex stretching, live'], wave:['wave','exact affine-wave ODE'], cascade:['cascade','layers to a finite-time limit'], vortex:['vortex','self-similar collapse'] };
 const CAPTIONS = {
   equations:'<b>Helmholtz–Leray decomposition.</b> Left: an arbitrary smooth vector field with its divergence in colour. Middle: the divergence-free part the fluid keeps. Right: the gradient part, with its potential φ in colour — this is what pressure removes, instantly, everywhere.',
@@ -32,22 +101,38 @@ const CAPTIONS = {
   cascade:'<b>left</b> the temperature field, magnified about the origin. Each zoom level shows the previous layer as a flat ramp and the next layer as fresh stripes inside it. <b>right</b> the gradient norm climbing an accelerating staircase toward <b>T<sub>*</sub></b> while the temperature norm stays bounded.',
   vortex:'A kinematic stand-in for the reported solution: fluid parcels spiral inward, the core shrinks as ℓ(t) and stretches along the axis to conserve volume, and angular speed rises as ℓ<sup>−2</sup>. Colour is angular speed. Drag to orbit, scroll to zoom.'
 };
+// Switch the whole page to view v: highlight its button, show its control
+// section, retitle, pick the right canvas, enable only the matching OrbitControls,
+// rebuild the mathematics panel, and record the view in the URL hash.
 function setView(v){
   VIEW = v;
   document.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('on', b.dataset.view === v));
   document.querySelectorAll('.sec').forEach(s => s.classList.toggle('on', s.id === 'sec-' + v));
   $('qp-title').innerHTML = `${TITLES[v][0]}<small>${TITLES[v][1]}</small>`;
   $('stage-caption').innerHTML = CAPTIONS[v];
+  // Only vortex and flow3d use the WebGL canvas; the 2D canvas stays on top for
+  // captions and overlays either way.
   const three = v==='vortex'||v==='flow3d'; c2d.classList.add('active'); c3d.classList.toggle('active', three);
   if(VX.controls) VX.controls.enabled = v==='vortex'; if(F3.controls) F3.controls.enabled = v==='flow3d';
+  // Rebuild the math prose for this view, then move the live control section to
+  // the top of the panel and stamp a chapter heading above it.
   buildMath(v); const body=$('mp-body'); const sec=$('sec-'+v); if(sec){ sec.classList.add('on'); body.prepend(sec); } const chap=document.createElement('div'); chap.className='qp-title mp-chap'; chap.innerHTML=`${TITLES[v][0]}<small>${TITLES[v][1]}</small>`; body.prepend(chap);
+  // Sync the chapter dropdown, clear stale overlay labels, flag the equations
+  // panel dirty, and resize for the new layout.
   const sel=$('chapter-sel'); if(sel) sel.value=v; ovBegin(); ovEnd(); EQ_dirty(); queueResize();
+  // Reflect the view in the URL hash, but only once the page is a free-standing
+  // embed (a fixed-view page must not fight its own pin).
   if(!EMBED_READY) return; if(location.hash!=='#'+v){ try{ history.replaceState(null,'','#'+v); }catch(e){} }
 }
 let EMBED_READY=false;
+// Force the equations panel to repaint on its next frame (it caches otherwise).
 function EQ_dirty(){ if(typeof EQ!=='undefined') EQ.dirty=true; }
+// Coalesce resize requests to one per frame, then resize again after 240 ms so
+// the layout settles once a panel's slide-in transition has finished.
 let resizeQueued = false;
 function queueResize(){ if(!resizeQueued){ resizeQueued = true; requestAnimationFrame(()=>{ resizeQueued=false; setTimeout(resize, 240); resize(); }); } }
+// Match both canvases to the stage size (in device pixels) and update the camera
+// aspects. Skips work when the size has not changed.
 let _lastW=0,_lastH=0;
 function resize(){
   const W = stage.clientWidth, H = stage.clientHeight; if(W===_lastW&&H===_lastH) return; _lastW=W; _lastH=H; EQ_dirty();
@@ -59,49 +144,82 @@ window.addEventListener('resize', resize);
 
 
 /* ───────── KaTeX overlay labels on the stage ───────── */
+// Floating HTML labels (rendered by KaTeX) positioned over the canvas. Each label
+// is cached by id and reused across frames; ovBegin/ov/ovEnd form a retained-mode
+// pass so unused labels are hidden instead of recreated every frame.
 const OV=$('stage-overlay'), ovCache=new Map(); let ovUsed=new Set();
+// Render only the $...$ spans of a string as math, leaving plain text between.
 const texify=str=>str.split('$').map((p,i)=>i%2?katex.renderToString(p,{throwOnError:false}):p).join('');
+// Start a label pass: mark every cached label as unused until ov() claims it.
 function ovBegin(){ ovUsed=new Set(); }
+// Place or update one label: reuse its cached node, re-render only when the
+// source or class changed, then set its position and alignment.
 function ov(id,src,x,y,o={}){ let c=ovCache.get(id); if(!c){ const el=document.createElement('div'); OV.appendChild(el); c={el,src:null,cls:null}; ovCache.set(id,c); }
   const cls='ov'+(o.cls?' '+o.cls:''); if(c.cls!==cls){ c.el.className=cls; c.cls=cls; }
   if(c.src!==src){ c.src=src; if(o.display===true) katex.render(src,c.el,{throwOnError:false,displayMode:true}); else if(o.display===false) katex.render(src,c.el,{throwOnError:false}); else c.el.innerHTML=texify(src); }
   const st=c.el.style; st.left=x+'px'; st.top=y+'px'; st.maxWidth=o.w?o.w+'px':''; st.textAlign=o.align||'left'; st.transform=o.align==='center'?'translateX(-50%)':o.align==='right'?'translateX(-100%)':''; st.display=''; ovUsed.add(id); }
+// End a label pass: hide any cached label that ov() did not touch this frame.
 function ovEnd(){ for(const [id,c] of ovCache) if(!ovUsed.has(id)) c.el.style.display='none'; }
 
 
 /* ───────── on-stage scrubber, mirrors the active view's slider ───────── */
+// The bar along the bottom of the stage is a proxy for whichever timeline slider
+// the active view owns. SCRUB maps each view to [rangeId, valueId, name]; a null
+// entry means the view has no timeline (equations).
 const SCRUB={equations:null, burgers:['r-btl','v-btl','timeline'], flow2d:['r-ftl','v-ftl','timeline'], flow3d:['r-gtl','v-gtl','timeline'], wave:['r-wtl','v-wtl','timeline'], cascade:['r-zoom','v-zoom','magnification'], vortex:['r-xt','v-xt','t / T∗']};
+// Stage drawing height leaves room for the scrubber bar only when the view has one.
 const SCRUB_H=48; const stageH=()=>stage.clientHeight-(SCRUB[VIEW]?SCRUB_H:0);
+// Track whether the user is dragging, so scrubSync does not fight their input.
 let ssDrag=false; for(const ev of ['pointerdown','touchstart','mousedown']) $('ss-range').addEventListener(ev,()=>ssDrag=true); for(const ev of ['pointerup','touchend','mouseup','pointercancel']) window.addEventListener(ev,()=>ssDrag=false);
+// Dragging the stage scrubber writes through to the real view slider and fires
+// its input handler, so both stay in step.
 $('ss-range').addEventListener('input',e=>{ const m=SCRUB[VIEW]; if(!m) return; const t=$(m[0]); t.value=e.target.value; t.dispatchEvent(new Event('input')); });
+// Each frame, copy the active view slider's range and value onto the scrubber,
+// unless the user is currently dragging the scrubber itself.
 function scrubSync(){ const m=SCRUB[VIEW]; const el=$('stage-scrub'); el.classList.toggle('off',!m); if(!m) return; const t=$(m[0]); const r=$('ss-range'); if(r.min!==t.min) r.min=t.min; if(r.max!==t.max) r.max=t.max; if(r.step!==t.step) r.step=t.step; if(!ssDrag&&document.activeElement!==r) r.value=t.value; $('ss-val').textContent=$(m[1]).textContent; $('ss-name').textContent=m[2]; }
 
 /* ───────── colour maps ───────── */
-// inferno (Zucker's polynomial fit), and the two maps the page uses
+// inferno (Zucker's polynomial fit): six degree-6 coefficient rows, one triple
+// per output channel, evaluated by Horner's method below.
 const _IC=[[0.0002189403691192265,0.001651004631001012,-0.01948089843709184],[0.1065134194856116,0.5639564367884091,3.932712388889277],[11.60249308247187,-3.972853965665698,-15.9423044794981],[-41.70399613139459,17.43639888205313,44.35414519872813],[77.162935699427,-33.40235894210092,-81.80730925738993],[-71.31942824499214,32.62606426397723,73.20951985803202],[25.13112622477341,-12.24266895238567,-23.07032500287172]];
+// Map t in [0,1] to an inferno [r,g,b] in 0..255 (Horner on the fitted polynomial).
 function inferno(t){ t=Math.max(0,Math.min(1,t)); const o=[0,0,0]; for(let c=0;c<3;c++){ let v=_IC[6][c]; for(let i=5;i>=0;i--) v=_IC[i][c]+t*v; o[c]=Math.max(0,Math.min(255,v*255)); } return o; }
+// Divergent map for a signed field in [-1,1]: negative dark, zero mid, positive bright.
 function divRGB(u){ return inferno(0.5+0.5*Math.max(-1,Math.min(1,u))); } // signed field: negative dark, zero mid, positive bright
+// Sequential map for a non-negative intensity in [0,1].
 function heatRGB(u){ return inferno(u); }
 // tracer palette: cyan → pale cyan → white, 0..1 floats (never dark, so no violet against the inferno particles)
+// Two-segment linear ramp through the three anchor colours a, b, c.
 function cyanRGB(u){ u=Math.max(0,Math.min(1,u)); const a=[0.08,0.30,0.62], b=[0.16,0.62,0.95], c=[0.30,0.90,1.0]; if(u<0.5){ const t=u/0.5; return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; } const t=(u-0.5)/0.5; return [b[0]+(c[0]-b[0])*t,b[1]+(c[1]-b[1])*t,b[2]+(c[2]-b[2])*t]; }
 // all tracers of a scene in one fat-line geometry per layer; tracers are joined by black segments, invisible under additive blending
 // keep a trail's path length at most L world units by dropping tail points
+// (walks from the head back until the accumulated arc length exceeds L)
 function trimTrail(t,L){ let acc=0; for(let j=t.length-1;j>0;j--){ const a=t[j],b=t[j-1]; acc+=Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]); if(acc>L){ t.splice(0,j); return; } } }
+// One fat-line geometry holding every tracer of a 3D scene. Three overlaid line
+// materials (core, halo, wide halo) at falling opacity fake a soft glow under
+// additive blending. Colour encodes each point's stretching rate.
 class TracerBundle{
   constructor(scene,w=1.4){ this.mats=[new LineMaterial({linewidth:w,vertexColors:true,transparent:true,opacity:0.55,depthWrite:false,blending:THREE.AdditiveBlending,worldUnits:false}),
       new LineMaterial({linewidth:w*2.2,vertexColors:true,transparent:true,opacity:0.03,depthWrite:false,blending:THREE.AdditiveBlending,worldUnits:false}),
       new LineMaterial({linewidth:w*3,vertexColors:true,transparent:true,opacity:0.0,depthWrite:false,blending:THREE.AdditiveBlending,worldUnits:false})];
     this.setWidth(w); this.gain=0.35;
     this.g=new LineGeometry(); this.g.setPositions([0,0,0,0,0,0.001]); this.g.setColors([0,0,0,0,0,0]); this.lines=this.mats.map(m=>new Line2(this.g,m)); this.lines.slice().reverse().forEach(l=>scene.add(l)); }
+  // Resize the three line widths together (core, halo, wide halo).
   setWidth(w){ this.mats[0].linewidth=w; this.mats[1].linewidth=w*2.2; this.mats[2].linewidth=w*3; }
+  // Rebuild the geometry from a list of trails (each an array of [x,y,z,stretch]
+  // points). Adjacent trails are joined by a black segment that is invisible under
+  // additive blending, so one geometry can hold them all.
   set(trails,visible){ this.lines.forEach(l=>l.visible=visible); if(!visible) return; const W=stage.clientWidth,H=stage.clientHeight; for(const m of this.mats) m.resolution.set(W,H);
     let n=0; for(const t of trails) if(t.length>=2) n+=t.length+2; if(n<2){ this.lines.forEach(l=>l.visible=false); return; }
     // colour by stretching rate, normalised to the 95th percentile of all trail points this frame
     const samp=[]; let q=0; for(const t of trails) for(const p of t){ if((q++&7)===0) samp.push(Math.max(0,p[3])); } samp.sort((a,b)=>a-b); const p95=Math.max(1e-9,samp[Math.floor(samp.length*0.95)]||1); this.p95=p95;
     const pos=new Float32Array(n*3), col=new Float32Array(n*3); let o=0; const put=(p,r,g,b)=>{ pos[3*o]=p[0];pos[3*o+1]=p[1];pos[3*o+2]=p[2]; col[3*o]=r;col[3*o+1]=g;col[3*o+2]=b; o++; };
+    // Emit each trail bracketed by a black point at either end (the join),
+    // fading the head-to-tail brightness and colouring by stretch rate / p95.
     for(const t of trails){ if(t.length<2) continue; const L=t.length; put(t[0],0,0,0); for(let j=0;j<L;j++){ const p=t[j]; const f=0.3+0.7*Math.pow(j/(L-1),1.3); const c=cyanRGB(Math.max(0,p[3])/p95); const g=this.gain; put(p,c[0]*f*g,c[1]*f*g,c[2]*f*g); } put(t[L-1],0,0,0); }
     this.g.setPositions(pos); this.g.setColors(col); this.g.computeBoundingSphere(); }
 }
+// 2D arrow with a filled head, used for velocity fields on the canvas.
 function arrow(x0,y0,x1,y1,col,w=1.2){
   const dx=x1-x0, dy=y1-y0, L=Math.hypot(dx,dy); if(L<0.5) return;
   ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=w;
@@ -109,6 +227,7 @@ function arrow(x0,y0,x1,y1,col,w=1.2){
   const h=Math.min(7,L*0.5), ux=dx/L, uy=dy/L;
   ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x1-h*ux+h*0.5*uy, y1-h*uy-h*0.5*ux); ctx.lineTo(x1-h*ux-h*0.5*uy, y1-h*uy+h*0.5*ux); ctx.closePath(); ctx.fill();
 }
+// Monospace canvas label, and an italic serif one for single-symbol math marks.
 function label(txt,x,y,col=COL.dim,size=10,align='left',font='JetBrains Mono'){ ctx.fillStyle=col; ctx.font=`${size}px '${font}'`; ctx.textAlign=align; ctx.textBaseline='middle'; ctx.fillText(txt,x,y); }
 function serifLabel(txt,x,y,col,size=15,align='left'){ ctx.fillStyle=col; ctx.font=`italic ${size}px 'Cormorant Garamond'`; ctx.textAlign=align; ctx.textBaseline='middle'; ctx.fillText(txt,x,y); }
 
@@ -118,30 +237,45 @@ function serifLabel(txt,x,y,col,size=15,align='left'){ ctx.fillStyle=col; ctx.fo
    Θ̇ = a Ω  with a = A sin s /(λ r)   (invariant under common rotation)
    Ω̇ = λ r sin φ Θ                     (uses the laboratory component ζ₁)
    ═══════════════════════════════════════════════ */
+// WV holds the wave view's parameters (A gradient, λ frequency, s tilt, L log
+// gain) and live ODE state (Θ, Ω, φ). A is the background strength that sets the
+// growth rate; the frequency λ does not enter it — that decoupling is the trick.
 const WV = { A:1, lam:14, s:0.4, r:1, L:6, spd:1.5, seed:5e-4, Lambda:3, playing:true };
+// Quintic smootherstep, and a bump with unit integral on (0,1) used for the
+// steering pulse shape.
 const smootherstep = t => t<=0?0:t>=1?1:t*t*t*(t*(t*6-15)+10);
 const bump = y => (y<=0||y>=1)?0:30*y*y*(1-y)*(1-y); // unit integral on (0,1)
+// Steering schedule: during growth (tau<1) the tilt eases from full to zero;
+// during the overshoot it dips negative by a shot amplitude mu, then holds at 0.
 WV.zprofile = (tau, mu) => tau < 1 ? 1 - smootherstep(tau) : tau <= 1 + 1/WV.Lambda ? -mu*WV.Lambda*bump(WV.Lambda*(tau-1)) : 0;
+// Lab angle φ of the wavevector, clamped so asin stays defined.
 WV.phiOf = (tau, mu) => Math.asin(Math.max(-0.98, Math.min(0.98, Math.sin(WV.s)*WV.zprofile(tau,mu))));
+// Growth rate γ = √A sin s (the ODE eigenvalue), and the Θ̇ coefficient a.
 WV.gamma = () => Math.sqrt(WV.A)*Math.sin(WV.s);
 WV.a = () => WV.A*Math.sin(WV.s)/(WV.lam*WV.r);
+// Reset to the start of the growth phase, seeded on the growing eigenline so the
+// unstable mode dominates from the first step.
 function wvReset(){
   WV.view=-1; WV.t=0; WV.phase='growth'; WV.phi=WV.s; WV.alpha=0; WV.mu=null; WV.t1=0;
   WV.Th = -WV.seed; WV.Om = (WV.lam*WV.r/Math.sqrt(WV.A))*WV.Th; // growing eigenline
   WV.hist=[]; WV.steerEnd=0; WV.frameAcc=0;
 }
+// One RK4 step of the 2×2 wave ODE (Θ̇ = aΩ, Ω̇ = λr sinφ · Θ).
 function rk4(Th,Om,t,dt,phiAt){ // phiAt(t) gives ζ angle; a is constant
   const a=WV.a(), f=(T,O,tt)=>[a*O, WV.lam*WV.r*Math.sin(phiAt(tt))*T];
   const k1=f(Th,Om,t), k2=f(Th+0.5*dt*k1[0],Om+0.5*dt*k1[1],t+0.5*dt),
         k3=f(Th+0.5*dt*k2[0],Om+0.5*dt*k2[1],t+0.5*dt), k4=f(Th+dt*k3[0],Om+dt*k3[1],t+dt);
   return [Th+dt/6*(k1[0]+2*k2[0]+2*k3[0]+k4[0]), Om+dt/6*(k1[1]+2*k2[1]+2*k3[1]+k4[1])];
 }
+// Integrate one trial steering pulse of amplitude mu and report the final Ω;
+// the shooter drives this to zero.
 function steerEndpoint(mu){ // integrate steering from (t1,Th1,Om1) for trial mu; return Ω at end
   const g=WV.gamma(), T=(1+1/WV.Lambda)/g, n=800, dt=T/n; let Th=WV.Th1, Om=WV.Om1, t=WV.t1;
   const phiAt = tt => WV.phiOf(g*(tt-WV.t1), mu);
   for(let i=0;i<n;i++){ [Th,Om]=rk4(Th,Om,t,dt,phiAt); t+=dt; }
   return Om;
 }
+// Shooting method: bracket then bisect the pulse amplitude μ that lands Ω at zero.
 function shoot(){ // least μ with Ω(end)=0 : Ω(0)<0, Ω grows with μ
   let lo=0, hi=1; let vhi=steerEndpoint(hi), guard=0;
   while(vhi<0 && guard++<12){ lo=hi; hi*=2; vhi=steerEndpoint(hi); }
@@ -149,17 +283,26 @@ function shoot(){ // least μ with Ω(end)=0 : Ω(0)<0, Ω grows with μ
   for(let i=0;i<40;i++){ const m=0.5*(lo+hi); if(steerEndpoint(m)<0) lo=m; else hi=m; }
   return 0.5*(lo+hi);
 }
+// Advance the wave state by dtTot in small RK4 steps, walking the three-stage
+// machine: growth (fixed tilt s) until Θ reaches its target gain, then steer
+// (shot pulse) until the overshoot ends, then hold (frozen, Ω = 0). Samples are
+// appended to WV.hist for the plots and the timeline slider.
 function wvAdvance(dtTot){
   const g=WV.gamma(); const dt=Math.min(0.01, 0.04/g); let rem=dtTot;
   while(rem>0){
     const h=Math.min(dt,rem);
+    // Growth: hold the tilt at s; when the amplitude has multiplied by e^L,
+    // freeze the entry state and shoot for the steering pulse.
     if(WV.phase==='growth'){
       [WV.Th,WV.Om]=rk4(WV.Th,WV.Om,WV.t,h,()=>WV.s); WV.t+=h; WV.phi=WV.s;
       if(Math.abs(WV.Th)>=WV.seed*Math.exp(WV.L)){ WV.phase='steer'; WV.t1=WV.t; WV.Th1=WV.Th; WV.Om1=WV.Om; WV.mu=shoot(); WV.steerEnd=WV.t1+(1+1/WV.Lambda)/g; }
+    // Steer: swing the wavevector past vertical along the shot profile; when the
+    // pulse ends, snap Ω to exactly zero and enter hold.
     } else if(WV.phase==='steer'){
       const phiAt=tt=>WV.phiOf(g*(tt-WV.t1),WV.mu);
       [WV.Th,WV.Om]=rk4(WV.Th,WV.Om,WV.t,h,phiAt); WV.t+=h; WV.phi=phiAt(WV.t);
       if(WV.t>=WV.steerEnd){ WV.phase='hold'; WV.Om=0; WV.phi=0; }
+    // Hold: ζ vertical, both derivatives zero — the gradient is frozen in.
     } else { WV.t+=h; WV.phi=0; }
     WV.alpha=WV.s-WV.phi; rem-=h;
   }
@@ -167,6 +310,8 @@ function wvAdvance(dtTot){
   if(!last || WV.t-last.t>0.02){ H.push({t:WV.t,Th:WV.Th,Om:WV.Om,phase:WV.phase,phi:WV.phi,alpha:WV.alpha,mu:WV.mu}); if(H.length>4000) H.splice(0,H.length-4000); }
 }
 // controls
+// Generic slider binder: on input, parse through f into obj[key], print via show,
+// and (for the wave view) reset, or (for cascade) mark the schedule dirty.
 const bindRange=(id,vid,obj,key,f=x=>x,show=x=>x)=>{ const r=$(id); const upd=()=>{ obj[key]=f(parseFloat(r.value)); $(vid).textContent=show(obj[key]); }; r.addEventListener('input',()=>{upd(); if(obj===WV) wvReset(); if(obj===CS){ CS.dirty=true; } }); upd(); };
 bindRange('r-A','v-A',WV,'A',x=>x,x=>x.toFixed(2));
 bindRange('r-lam','v-lam',WV,'lam',x=>x,x=>x.toFixed(0));
@@ -180,17 +325,26 @@ $('w-step').onclick=()=>{ WV.playing=false; $('w-play').textContent='play'; wvAd
 wvReset();
 
 // wave field rendering
+// Two small offscreen canvases (total field, wave-only) rasterised at FN×FN and
+// then scaled up onto the stage.
 const FN=112; const fieldCvs=[0,1].map(()=>{ const c=document.createElement('canvas'); c.width=FN; c.height=FN; const x=c.getContext('2d'); return {c,x,img:x.createImageData(FN,FN)}; });
+// Sample the scalar field fn over [-1,1]² into one offscreen canvas, colour it
+// with the divergent map at the given scale, and blit it to (dx,dy) at size S.
 function paintField(fn, scale, dx, dy, S, idx=0){
   const {c:fieldCv,x:fctx,img:fimg}=fieldCvs[idx]; const d=fimg.data; for(let j=0;j<FN;j++){ const y=1-2*(j+0.5)/FN; for(let i=0;i<FN;i++){ const x=-1+2*(i+0.5)/FN; const c=divRGB(fn(x,y)/scale); const k=4*(j*FN+i); d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255; } }
   fctx.putImageData(fimg,0,0); ctx.imageSmoothingEnabled=true; ctx.drawImage(fieldCv,dx,dy,S,S);
   ctx.strokeStyle=COL.border; ctx.lineWidth=1; ctx.strokeRect(dx+0.5,dy+0.5,S-1,S-1);
 }
+// Render the wave view: total-temperature field, wave-only field, the ζ/G/φ
+// diagram, the phase plane and time series, and the readout. D is the frame to
+// draw — the live state, or a past history entry when the slider is scrubbed.
 function drawWave(){
   const W=stage.clientWidth, H=stageH(); ctx.clearRect(0,0,W,H);
   const wr=$('r-wtl'); wr.max=Math.max(0,WV.hist.length-1); if(WV.view<0) wr.value=WV.hist.length-1; const D=(WV.view>=0&&WV.hist[WV.view])?WV.hist[WV.view]:WV; $('v-wtl').textContent='t = '+D.t.toFixed(2)+(WV.view<0?'  live':'');
   const narrow=W<760; const showBottom = TOG.phaseplane||TOG.series; const hb = showBottom? Math.max(150, H*0.3) : 0;
   const top=22, S=narrow?Math.max(80,Math.min((H-hb-top-70)/2,W-40)):Math.max(80, Math.min(H-hb-top-40, (W-70)/2)); const gx=narrow?(W-S)/2:(W-(2*S+26))/2, gy=top+8; const ox2=narrow?gx:gx+S+26, oy2=narrow?gy+S+30:gy;
+  // Wavevector ζ at lab angle φ, and gradient G rotated by the common angle α;
+  // the total field is the affine background plus the plane wave.
   const zx=Math.sin(D.phi), zy=Math.cos(D.phi); const Gx=WV.A*Math.sin(D.alpha), Gy=-WV.A*Math.cos(D.alpha);
   const theta=(x,y)=>Gx*x+Gy*y + D.Th*Math.sin(WV.lam*WV.r*(zx*x+zy*y));
   const wave =(x,y)=>D.Th*Math.sin(WV.lam*WV.r*(zx*x+zy*y));
@@ -230,7 +384,11 @@ function drawWave(){
     ['pulse <i>μ</i> (shot)', D.mu==null?'—':fmt(D.mu,3), ''],
   ].map(([k,v,c])=>`<span class="k">${k}</span><span class="n ${c}">${v}</span>`).join('');
 }
+// Signed log scale: linear near zero (below the seed), logarithmic past it, so
+// exponential growth over many decades fits in one panel.
 const symlog = x => Math.sign(x)*Math.log10(1+Math.abs(x)/WV.seed);
+// The (Θ, Ω̂) phase plane with the ±Θ eigenlines drawn; the trajectory runs out
+// along the growing eigenline during growth and turns during steering.
 function drawPhasePlane(x,y,w,h){
   const sz=Math.min(w,h), cx=x+w/2, cy=y+sz/2; const maxv=symlog(WV.seed*Math.exp(WV.L)*1.3);
   const px=v=>cx+symlog(v)/maxv*sz/2, py=v=>cy-symlog(v)/maxv*sz/2;
@@ -245,6 +403,8 @@ function drawPhasePlane(x,y,w,h){
   serifLabel('Θ',cx+sz/2-12,cy+10,COL.dim,14); serifLabel('Ω̂',cx+6,cy-sz/2+10,COL.dim,14);
   label('eigenlines Ω̂ = ±Θ · symlog axes',cx-sz/2+4,cy+sz/2+10,COL.faint,9);
 }
+// Amplitude history on a log axis: |Θ|, the gradient λ|Θ|, and |Ω̂| over time,
+// with the growth/steer/hold phases shaded and the predicted growth slope dashed.
 function drawSeries(x,y,w,h){
   const g=WV.gamma(); const tExp=(WV.L+1+1/WV.Lambda)/g*1.25; const tmax=Math.max(tExp,WV.t*1.05);
   const lo=Math.log10(WV.seed)-0.3, hi=Math.log10(WV.seed*Math.exp(WV.L)*WV.lam*WV.r)+0.4;
@@ -271,6 +431,8 @@ function drawSeries(x,y,w,h){
 /* ═══════════════════════════════════════════════
    CASCADE — nested layers and the finite-time schedule
    ═══════════════════════════════════════════════ */
+// CS holds the cascade view: zoom z, frequency exponent Q, base log-frequency l1,
+// per-layer log gain L, and a dirty flag that forces the schedule to recompute.
 const CS = { z:0, Q:1.5, l1:4, L:3, auto:false, dirty:true, ratio:20, nDisp:6 };
 bindRange('r-zoom','v-zoom',CS,'z',x=>x,x=>'×'+fmtE(Math.pow(10,x)));
 bindRange('r-Q','v-Q',CS,'Q',x=>x,x=>x.toFixed(2));
@@ -278,14 +440,22 @@ bindRange('r-l1','v-l1',CS,'l1',x=>x,x=>x.toFixed(1)+'  (λ₁='+fmtE(Math.exp(x
 bindRange('r-CL','v-CL',CS,'L',x=>x,x=>x.toFixed(1));
 $('c-auto').onclick=()=>{ CS.auto=!CS.auto; $('c-auto').textContent=CS.auto?'stop':'auto-zoom'; };
 $('c-zreset').onclick=()=>{ CS.z=0; $('r-zoom').value=0; $('v-zoom').textContent='×1'; CS.auto=false; $('c-auto').textContent='auto-zoom'; };
-// display layers for the zoom picture
+// display layers for the zoom picture: each has a frequency, a slightly rotated
+// wavevector, an amplitude, and a radius R shrinking with layer index so it nests
+// inside its parent's linear zone.
 CS.disp = Array.from({length:CS.nDisp},(_,i)=>{ const q=i+1, lam=Math.pow(CS.ratio,q); const ang=0.42*(1-Math.pow(0.65,q)); return { q, lam, Th: 2.5*Math.pow(3,q)/lam, zx:Math.sin(ang), zy:Math.cos(ang), R: q===1?1.0:0.5/Math.pow(CS.ratio,q-1) }; }); // gradient λΘ = 2.5·3^q: each layer dominates its predecessors, amplitudes Σ(3/20)^q stay bounded
+// Radial cutoff for a layer: 1 in the core, smootherstep taper to 0 by radius R.
 const env=(r,R)=>{ const u=r/R; return u<0.55?1:u>1?0:smootherstep((1-u)/0.45); };
+// Temperature at (x,y) for the current zoom: cold-above base ramp plus every
+// display layer coarse enough to resolve at magnification Z and inside its cutoff.
 function cascadeTheta(x,y,Z){
   let th=-y; // base: cold above
   for(const l of CS.disp){ if(l.lam>90*Z) break; const r=Math.hypot(x,y); if(r>l.R) continue; th+=l.Th*Math.sin(l.lam*(l.zx*x+l.zy*y))*env(r,l.R); }
   return th;
 }
+// Build the finite-time schedule: for each layer q compute its frequency, growth
+// rate, insertion angle, duration and running gradient/amplitude sums, and add up
+// the stage lengths into T*. The durations collapse fast, so the sum converges.
 function schedule(){
   const Q=CS.Q, L=CS.L; const out=[]; let sig=[1], lnlam=[]; let T=0;
   for(let q=1;q<=80;q++){
@@ -297,14 +467,20 @@ function schedule(){
     const G=Gprev+A, Tn=Tprev+Th;            // gradients add (one cone); amplitudes summable
     const s2=Math.sqrt(G); sig.push(s2);     // σ_q² = |G_{<q+1}|
     out.push({q,ln,A,sq,gam,dur,t0:T,Th,G,T:Tn,sig:s2}); T+=dur;
+    // Stop once a stage is negligibly short relative to T* (or non-finite).
     if(dur<T*1e-7||!isFinite(dur)) break;
   }
   return {layers:out,Tstar:T};
 }
+// Offscreen buffer for the zoomed temperature field.
 const csField=document.createElement('canvas'); const CN=150; csField.width=CN; csField.height=CN; const csctx=csField.getContext('2d'); const csimg=csctx.createImageData(CN,CN);
 let SCH=null;
+// Render the cascade view: the auto-contrast zoomed field with layer envelope
+// circles on the left, and the gradient/amplitude staircase toward T* on the right.
 function drawCascade(dtFrame){
+  // Auto-zoom ramps z up and wraps back to 0.
   if(CS.auto){ CS.z+=dtFrame*0.25; if(CS.z>4.6){CS.z=0;} $('r-zoom').value=CS.z; $('v-zoom').textContent='×'+fmtE(Math.pow(10,CS.z)); }
+  // Recompute the schedule only when a parameter changed.
   if(CS.dirty||!SCH){ SCH=schedule(); CS.dirty=false; }
   const W=stage.clientWidth, H=stage.clientHeight; ctx.clearRect(0,0,W,H);
   const narrow=W<760; const S=narrow?Math.min(W-56,(H-120)*0.5):Math.min(H-70, (W-80)*0.46); const gx=28, gy=30; const Z=Math.pow(10,CS.z), wdt=1/Z;
@@ -346,6 +522,10 @@ function drawCascade(dtFrame){
 /* ═══════════════════════════════════════════════
    VORTEX — self-similar collapse, three.js
    ═══════════════════════════════════════════════ */
+// VX holds the vortex view: collapse progress u in [0,1), the exponent γ that
+// sets how core length ℓ = (1−u)^γ shrinks, circulation, and particle/trail
+// counts. This view is a kinematic stand-in — parcels are pushed along a
+// prescribed self-similar field, not a solved one.
 const VX = { u:0, gam:0.5, circ:1.2, spd:0.25, playing:true, N:7000, trailsN:110, trailLen:6.0 };
 bindRange('r-gam','v-gam',VX,'gam',x=>x,x=>x.toFixed(2));
 bindRange('r-circ','v-circ',VX,'circ',x=>x,x=>x.toFixed(2));
@@ -355,6 +535,9 @@ $('r-xlen').addEventListener('input',e=>{VX.trailLen=parseFloat(e.target.value);
 $('r-xw').addEventListener('input',e=>{const w=parseFloat(e.target.value);VX.bundle.setWidth(w);$('v-xw').textContent=w.toFixed(1)});
 $('x-play').onclick=()=>{VX.playing=!VX.playing;$('x-play').textContent=VX.playing?'pause':'play';};
 $('x-reset').onclick=()=>vxSeek(0);
+// Build the vortex scene once: the shared WebGL renderer (also used by flow3d),
+// the particle cloud, the tracer bundle, and an axis plus reference ring. Each
+// particle gets an initial radius, angle and height it collapses inward from.
 function vxInit(){
   VX.renderer=new THREE.WebGLRenderer({canvas:c3d,antialias:true,alpha:true}); VX.renderer.setPixelRatio(DPR); VX.renderer.setClearColor(0x0a0810,0);
   VX.scene=new THREE.Scene(); VX.camera=new THREE.PerspectiveCamera(48,1,0.05,200); VX.camera.position.set(6.0,2.6,6.8);
@@ -374,6 +557,9 @@ function vxInit(){
   VX.trailHist=Array.from({length:VX.trailsN},()=>[]);
   vxSeek(0);
 }
+// Advance the collapse by dt: shrink each parcel's radius and stretch it along
+// the axis (volume-preserving), spin it up as 1/radius², colour by angular speed,
+// and extend its trail. S is the per-parcel axial stretch factor.
 function vxStep(dt){
   VX.u=Math.min(0.985,VX.u+dt); const ell=Math.pow(1-VX.u,VX.gam); VX.ell=ell;
   const Smax=Math.min(1/(ell*ell),40); const N=VX.N; let maxw=0, minw=1e30; if(!VX.w){ VX.w=new Float32Array(N); VX.S=new Float32Array(N).fill(1); VX.str=new Float32Array(N); }
@@ -387,7 +573,11 @@ function vxStep(dt){
   VX.maxw=maxw; VX.points.geometry.attributes.position.needsUpdate=true; VX.points.geometry.attributes.color.needsUpdate=true;
   for(let k=0;k<VX.trailsN;k++){ const i=VX.trailIdx[k]; const h=VX.trailHist[k]; const lp=h[h.length-1]; if(!lp||Math.hypot(VX.pos[3*i]-lp[0],VX.pos[3*i+1]-lp[1],VX.pos[3*i+2]-lp[2])>0.02) h.push([VX.pos[3*i],VX.pos[3*i+1],VX.pos[3*i+2],VX.str[i]]); trimTrail(h,VX.trailLen); }
 }
+// Seek the collapse to progress u: reset angles, warm the trails with 500 steps
+// at u held near zero so tracers reach full length, then integrate up to u.
 function vxSeek(u){ VX.u=0; for(let i=0;i<VX.N;i++) VX.th[i]=VX.th0[i]; VX.trailHist.forEach(h=>h.length=0); for(let i=0;i<500;i++){ vxStep(0.004); VX.u=0; } const n=Math.max(1,Math.round(u/0.0025)); for(let i=0;i<n;i++) vxStep(u/n); VX.u=u; $('r-xt').value=u; $('v-xt').textContent=u.toFixed(3); }
+// Render the vortex view: advance if playing, rebuild the tracer geometry, render
+// the WebGL scene into the scissored stage rect, and print the scaling readout.
 function drawVortex(dtFrame){ ctx.clearRect(0,0,stage.clientWidth,stage.clientHeight);
   if(VX.playing){ vxStep(dtFrame*VX.spd*0.12); if(VX.u>=0.985){ VX.playing=false; $('x-play').textContent='play'; } $('r-xt').value=VX.u; $('v-xt').textContent=VX.u.toFixed(3); }
   VX.bundle.set(VX.trailHist,TOG.trails);
@@ -402,9 +592,15 @@ function drawVortex(dtFrame){ ctx.clearRect(0,0,stage.clientWidth,stage.clientHe
    FOUNDATIONS — equations · burgers · flow 2d · flow 3d
    Layout rule: every panel has a measured header block above it; panels are placed below their header.
    ═══════════════════════════════════════════════ */
+// Draw a plot frame (a thin bordered rectangle).
 const plotBox=(x,y,w,h)=>{ ctx.strokeStyle=COL.border; ctx.strokeRect(x+.5,y+.5,w-1,h-1); };
 let frameNo=0;
+// Place a measured header block (KaTeX overlay) and return its height plus a gap,
+// so the panel below can be positioned under it. Height is cached and re-measured
+// on change or every 40th frame.
 function hdr(id,html,x,y,w,align){ ov(id,html,x,y,{w,cls:'hdr',align}); const c=ovCache.get(id); if(c.h==null||c.hw!==w||c.hsrc!==html||frameNo%40===0){ c.h=c.el.offsetHeight; c.hw=w; c.hsrc=html; } return c.h+8; }
+// General log-y line plot: draws decade gridlines, then each series (with optional
+// dash and label), clipped to the box, plus an optional time cursor.
 function logPlot(x,y,w,h,series,tmax,lo,hi,opts={}){
   plotBox(x,y,w,h); ctx.save(); ctx.beginPath(); ctx.rect(x,y,w,h); ctx.clip();
   const px=t=>x+t/tmax*w, py=v=>y+h-(v-lo)/(hi-lo)*h;
@@ -413,24 +609,39 @@ function logPlot(x,y,w,h,series,tmax,lo,hi,opts={}){
   if(opts.cursor!=null){ ctx.strokeStyle='rgba(243,238,238,0.35)'; ctx.setLineDash([2,3]); ctx.beginPath(); ctx.moveTo(px(opts.cursor),y); ctx.lineTo(px(opts.cursor),y+h); ctx.stroke(); ctx.setLineDash([]); }
   ctx.restore(); let ly=y+h-8; for(const s of [...series].reverse()){ if(s.label){ label(s.label,x+6,ly,s.col,10); ly-=12; } }
 }
+// A capped ring of solver snapshots, recorded at spacing dt for scrubbing and
+// replay. When full it halves its resolution (keep every other frame, double dt)
+// so the whole run stays in a fixed number of frames. view = -1 means "live".
 class Timeline{ constructor(cap,dt){ this.cap=cap; this.dt=dt; this.dt0=dt; this.frames=[]; this.view=-1; }
+  // Record a snapshot only if enough sim time has passed; thin when over capacity.
   push(t,make){ const last=this.frames[this.frames.length-1]; if(last&&t-last.t<this.dt-1e-9) return; this.frames.push(make()); if(this.frames.length>this.cap){ this.frames=this.frames.filter((_,i)=>i%2===0); this.dt*=2; } }
   clear(){ this.frames=[]; this.view=-1; this.dt=this.dt0; }
+  // The frame to draw: latest when live, else the scrubbed one.
   current(){ return this.view<0?this.frames[this.frames.length-1]:this.frames[this.view]; }
+  // Wire a slider: scrubbing to the last frame returns to live, else pins a frame.
   bind(rid,lid,onScrub){ this.range=$(rid); this.label=$(lid); this.range.addEventListener('input',()=>{ const i=parseInt(this.range.value); this.view=(i>=this.frames.length-1)?-1:i; onScrub(); }); }
+  // Keep the slider range and time label matched to the recorded frames.
   sync(){ const n=this.frames.length; this.range.max=Math.max(0,n-1); if(this.view<0) this.range.value=n-1; const f=this.current(); this.label.textContent=f?('t = '+f.t.toFixed(2)+(this.view<0?'  live':'')):'—'; }
 }
 const M=22; // margin
+// Stage width/height and a narrow-layout flag; also scales overlay font with width.
 function stageDims(){ const W=stage.clientWidth,H=stageH(); const narrow=W<760; OV.style.fontSize=(narrow?0.86:Math.min(1,0.8+W/4000))+'rem'; return {W,H,narrow}; }
 
 /* ─── Equations ─── */
+// The Helmholtz–Leray demo: eqNew() computes a fresh random field and its
+// divergence-free / gradient parts (helmholtz() lives in script-2.js).
 const EQ={H:null,dirty:true}; function eqNew(){ EQ.H=helmholtz(64); EQ.dirty=true; }
 $('e-new').onclick=eqNew; eqNew();
 const eqCvs=[0,1,2].map(()=>{ const c=document.createElement('canvas'); c.width=64; c.height=64; const x=c.getContext('2d'); return {c,x,img:x.createImageData(64,64)}; }); // one scratch canvas per panel: a shared one gets blitted after it has been overwritten (deferred canvas copies)
+// Draw one Helmholtz panel: the scalar field (divergence or potential) as colour,
+// with the vector field drawn as an arrow grid on top.
 function eqPanel(idx,x,y,S,scalar,scale,ax,ay,arrowCol){ const {c:eqCv,x:eqctx,img:eqimg}=eqCvs[idx]; const n=64,d=eqimg.data; for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const p=i+n*(n-1-j); const c=divRGB(scalar[p]/scale); const k=4*(j*n+i); d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255; }
   eqctx.putImageData(eqimg,0,0); ctx.imageSmoothingEnabled=true; ctx.drawImage(eqCv,x,y,S,S); plotBox(x,y,S,S);
   const m=13, cell=S/m; let vmax=1e-9; for(let p=0;p<n*n;p++) vmax=Math.max(vmax,Math.hypot(ax[p],ay[p]));
   for(let j=0;j<m;j++) for(let i=0;i<m;i++){ const gi=Math.floor((i+.5)/m*n), gj=Math.floor((j+.5)/m*n), p=gi+n*gj; const vx=ax[p]/vmax, vy=ay[p]/vmax; const cx=x+(i+.5)*cell, cy=y+S-(j+.5)*cell; arrow(cx-vx*cell*.45,cy+vy*cell*.45,cx+vx*cell*.45,cy-vy*cell*.45,arrowCol,1.1); } }
+// Render the equations view: three panels — the raw field f, its divergence-free
+// part Pf, and the gradient part ∇φ — laid out f = Pf + ∇φ. Static, so it only
+// repaints when dirty or forced (or every 40th frame as a safety net).
 function drawEquations(force){ frameNo++; if(!EQ.dirty&&!force&&frameNo%40) return; EQ.dirty=false; const {W,H,narrow}=stageDims(); ctx.clearRect(0,0,W,H); const H_=EQ.H;
   let pmax=0; for(let p=0;p<64*64;p++) pmax=Math.max(pmax,Math.abs(H_.phi[p]));
   ovBegin();
@@ -446,18 +657,31 @@ function drawEquations(force){ frameNo++; if(!EQ.dirty&&!force&&frameNo%40) retu
   $('e-ro').innerHTML=[['max |∇·f|',fmt(H_.divMax,3)],['max |∇·Pf|',H_.divProjMax.toExponential(1)],['grid','64² spectral']].map(([k,v])=>`<span class="k">${k}</span><span class="n">${v}</span>`).join(''); }
 
 /* ─── Burgers ─── */
+// The 1D solver (from script-2.js), its timeline, and a space–time waterfall
+// buffer bgWF: BROWS rows, each a colour strip of u(x) at one recorded time.
 const BG=new Burgers(1024); BG.playing=true; BG.spd=1; BG.tEnd=3; const BT=new Timeline(400,0.01); const BW=256, BROWS=301; const bgWF=new Uint8ClampedArray(BW*BROWS*4); let bgRows=0;
 const bgNu=$('r-bnu'); const bgNuUpd=()=>{ BG.nu=Math.pow(10,parseFloat(bgNu.value)); $('v-bnu').textContent=BG.nu.toFixed(4); }; bgNu.addEventListener('input',()=>{bgNuUpd(); bgReset();}); bgNuUpd();
 $('r-bspd').addEventListener('input',e=>{BG.spd=parseFloat(e.target.value);$('v-bspd').textContent=BG.spd.toFixed(1)+'×'});
+// Snapshot the profile to the timeline and paint any waterfall rows the current
+// time has now reached (one row per time band up to BROWS).
 function bgSnap(){ BT.push(BG.t,()=>({t:BG.t,u:Float32Array.from(BG.u)})); const row=Math.round(BG.t/BG.tEnd*(BROWS-1)); while(bgRows<=row&&bgRows<BROWS){ for(let i=0;i<BW;i++){ const c=divRGB(BG.u[Math.floor(i/BW*BG.n)]/1.2); const k=4*(bgRows*BW+i); bgWF[k]=c[0];bgWF[k+1]=c[1];bgWF[k+2]=c[2];bgWF[k+3]=255; } bgRows++; } }
+// Reinitialise from the chosen profile and start playing.
 function bgReset(){ BG.setIC(); BG.record(); BT.clear(); bgRows=0; bgSnap(); BG.playing=true; $('b-play').textContent='pause'; }
+// Resume live playback from a scrubbed frame: load that profile back into the
+// solver (transform to spectral, restore time), truncate history and the
+// waterfall to that point, and go live.
 function bgResumeFromView(){ if(BT.view<0) return; const fr=BT.frames[BT.view]; const n=BG.n; for(let i=0;i<n;i++){ BG.ur[i]=fr.u[i]; BG.ui[i]=0; } fft1(BG.ur,BG.ui,n,false); BG.t=fr.t; BG.phys(); BG.hist=BG.hist.filter(h=>h.t<=fr.t+1e-9); BT.frames.length=BT.view+1; BT.view=-1; bgRows=Math.min(BROWS,Math.round(fr.t/BG.tEnd*(BROWS-1))+1); }
 $('b-play').onclick=()=>{ BG.playing=!BG.playing; if(BG.playing) bgResumeFromView(); $('b-play').textContent=BG.playing?'pause':'play'; }; $('b-reset').onclick=bgReset;
 BT.bind('r-btl','v-btl',()=>{ BG.playing=false; $('b-play').textContent='play'; });
 document.querySelectorAll('[data-bic]').forEach(b=>b.onclick=()=>{ document.querySelectorAll('[data-bic]').forEach(x=>x.classList.toggle('on',x===b)); BG.setIC(b.dataset.bic); BG.record(); BT.clear(); bgRows=0; bgSnap(); });
 bgReset();
+// Exact inviscid solution by the method of characteristics: Newton-solve the foot
+// ξ of the characteristic through (x,t) from x = ξ + u₀(ξ)·t, then u = u₀(ξ).
 function inviscidU(x,t){ let xi=x; for(let it=0;it<30;it++){ const u=BG.u0(xi), du=(BG.u0(xi+1e-5)-BG.u0(xi-1e-5))/2e-5; const g=xi+t*u-x; const dg=1+t*du; if(Math.abs(dg)<1e-6) break; xi-=g/dg; if(Math.abs(g)<1e-10) break; } return BG.u0(xi); }
 const bgWFcv=document.createElement('canvas'); bgWFcv.width=BW; bgWFcv.height=BROWS; const bgWFctx=bgWFcv.getContext('2d');
+// Draw the profile panel: motion arrows (each point moves right at its height),
+// the faint initial condition, the dashed inviscid overlay, the current profile,
+// and the steepest-slope marker. Returns the measured steepest slope.
 function bgProfile(x0,y0,pw,ph,U,T,tb){ const n=BG.n; plotBox(x0,y0,pw,ph); const umax=1.6; const px=i=>x0+i/n*pw, py=u=>y0+ph/2-u/umax*ph/2;
   ctx.strokeStyle='rgba(252,180,120,0.12)'; ctx.beginPath(); ctx.moveTo(x0,py(0)); ctx.lineTo(x0+pw,py(0)); ctx.stroke();
   // motion arrows: each point moves right at speed u
@@ -472,6 +696,8 @@ function bgProfile(x0,y0,pw,ph,U,T,tb){ const n=BG.n; plotBox(x0,y0,pw,ph); cons
   label('steepest slope  q = '+qm.toFixed(2),sx+8,sy-14,COL.red,10,sx>x0+pw*0.6?'right':'left');
   label('u(x,t)',x0+pw-6,y0+ph-14,COL.yellow,10,'right'); label('u₀',x0+pw-6,y0+ph-28,'rgba(243,238,238,0.55)',10,'right'); if(TOG.inviscid&&T<tb*0.985) label('inviscid (characteristics)',x0+pw-6,y0+ph-42,COL.blue,10,'right');
   label('x →',x0+4,y0+ph-8,COL.faint,9); return qm; }
+// Draw the space–time map: colour bands are u(x,t) with time upward, overlaid with
+// the inviscid characteristics, the breaking-time line t_b, and the "now" line.
 function bgWaterfall(x0,y0,w,h,T,tb){ plotBox(x0,y0,w,h); const img=new ImageData(bgWF,BW,BROWS); bgWFctx.putImageData(img,0,0);
   ctx.save(); ctx.beginPath(); ctx.rect(x0,y0,w,h); ctx.clip(); ctx.imageSmoothingEnabled=true;
   // rows: time upward. draw only computed rows, mapped so t=0 is the bottom
@@ -483,7 +709,11 @@ function bgWaterfall(x0,y0,w,h,T,tb){ plotBox(x0,y0,w,h); const img=new ImageDat
   if(tb<BG.tEnd){ ctx.setLineDash([4,3]); ctx.strokeStyle=COL.red; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(x0,y0+h-tb/BG.tEnd*h); ctx.lineTo(x0+w,y0+h-tb/BG.tEnd*h); ctx.stroke(); ctx.setLineDash([]); label('t_b — characteristics cross; inviscid profile would be vertical',x0+6,y0+h-tb/BG.tEnd*h-9,COL.red,10); }
   ctx.strokeStyle=COL.yellow; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(x0,y0+h-T/BG.tEnd*h); ctx.lineTo(x0+w,y0+h-T/BG.tEnd*h); ctx.stroke(); label('now',x0+w-6,y0+h-T/BG.tEnd*h-8,COL.yellow,10,'right');
   ctx.restore(); label('t ↑',x0+4,y0+10,COL.faint,9); label('x →',x0+w-4,y0+h-8,COL.faint,9,'right'); }
+// Render the Burgers view: step the solver at fixed dt while playing, then lay out
+// the profile, the space–time map, and the slope-vs-inviscid-law plot (with a
+// narrow single-column fallback), and fill the readout.
 function drawBurgers(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRect(0,0,W,H);
+  // Advance in fixed h sub-steps up to tEnd, recording history and waterfall rows.
   if(BG.playing){ let adv=dt*BG.spd*0.45; const h=0.002; while(adv>0&&BG.t<BG.tEnd){ BG.step(h); adv-=h; if(BG.t-BG.hist[BG.hist.length-1].t>0.01) BG.record(); bgSnap(); } if(BG.t>=BG.tEnd){ BG.playing=false; $('b-play').textContent='play'; } }
   BT.sync(); const fr=BT.current(); const U=fr.u, T=fr.t; const tb=1/Math.max(BG.q0,1e-9);
   const hProf=R`$\partial_t u+u\,\partial_x u=\nu\,\partial_{xx}u$ &nbsp; with $\nu=$`+BG.nu.toFixed(4)+R`, $t=$`+T.toFixed(2)+R`. &nbsp; Each point of the profile moves to the right at its own height $u$ (small arrows): crests overtake troughs, so the front between them steepens. Viscosity pulls the front back toward a smooth ramp. The red mark is the steepest point.`;
@@ -500,11 +730,17 @@ function drawBurgers(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRe
 }
 
 /* ─── Flow 2D ─── */
+// The 2D vorticity solver (script-2.js) and its timeline. Viscosity is set on a
+// log slider (Re shown alongside); changing it or the initial condition resets.
 const F2=new Flow2D(128); F2.playing=true; F2.spd=1; const FT=new Timeline(300,0.04);
 const f2Nu=$('r-fnu'); const f2NuUpd=()=>{ F2.nu=Math.pow(10,parseFloat(f2Nu.value)); $('v-fnu').textContent=F2.nu.toFixed(4)+'  (Re≈'+(2*Math.PI/F2.nu).toFixed(0)+')'; }; f2Nu.addEventListener('input',()=>{f2NuUpd(); f2Reset();}); f2NuUpd();
 $('r-fspd').addEventListener('input',e=>{F2.spd=parseFloat(e.target.value);$('v-fspd').textContent=F2.spd.toFixed(1)+'×'});
+// Snapshot the vorticity field plus a coarse 16×16 velocity grid for the arrows.
 function f2Snap(){ FT.push(F2.t,()=>{ const n=F2.n,m=16,ux=new Float32Array(m*m),uy=new Float32Array(m*m); for(let j=0;j<m;j++) for(let i=0;i<m;i++){ const p=Math.floor((i+.5)/m*n)+n*Math.floor((j+.5)/m*n); ux[i+m*j]=F2.u[p]; uy[i+m*j]=F2.v[p]; } return {t:F2.t,om:Float32Array.from(F2.om),ux,uy,max:F2.maxOm()}; }); }
+// Reinitialise the field and seed the diagnostics from the initial state.
 function f2Reset(){ F2.setIC(); F2.lastE=F2.E0; F2.lastZ=F2.Z0; F2.lastMax=F2.w0max; F2.record(); FT.clear(); f2Snap(); F2.playing=true; $('f-play').textContent='pause'; }
+// Resume live from a scrubbed frame: reload that vorticity field into the solver,
+// recompute the diagnostics, and truncate history to that time.
 function f2ResumeFromView(){ if(FT.view<0) return; const fr=FT.frames[FT.view]; const N=F2.N; for(let p=0;p<N;p++){ F2.wr[p]=fr.om[p]; F2.wi[p]=0; } fftND(F2.wr,F2.wi,F2.dims,false); F2.wr[0]=0; F2.wi[0]=0; F2.t=fr.t; F2.rhs(F2.wr,F2.wi,F2.S[0],F2.S[1]); F2.lastE=F2.energy(); F2.lastZ=F2.enstrophy(); F2.lastMax=F2.maxOm(); F2.hist=F2.hist.filter(h=>h.t<=fr.t+1e-9); FT.frames.length=FT.view+1; FT.view=-1; }
 $('f-play').onclick=()=>{ F2.playing=!F2.playing; if(F2.playing) f2ResumeFromView(); $('f-play').textContent=F2.playing?'pause':'play'; }; $('f-reset').onclick=f2Reset; $('f-step').onclick=()=>{F2.playing=false;$('f-play').textContent='play';f2ResumeFromView();F2.step(F2.dtCFL());F2.record();F2.rhs(F2.wr,F2.wi,F2.S[0],F2.S[1]);f2Snap();};
 FT.bind('r-ftl','v-ftl',()=>{ F2.playing=false; $('f-play').textContent='play'; });
@@ -512,12 +748,18 @@ document.querySelectorAll('[data-fic]').forEach(b=>b.onclick=()=>{ document.quer
 f2Reset();
 const f2Cv=document.createElement('canvas'); f2Cv.width=128; f2Cv.height=128; const f2ctx=f2Cv.getContext('2d'); const f2img=f2ctx.createImageData(128,128);
 const ICTEX={'taylor-green':R`Taylor–Green: $\omega_0=2\sin x\sin y$, so $u\!\cdot\!\nabla\omega\equiv0$ and $\omega=\omega_0e^{-2\nu t}$ exactly`,'lamb-oseen':R`Lamb–Oseen: $\omega=\frac{\Gamma}{4\pi\nu(t_0+t)}e^{-r^2/4\nu(t_0+t)}$, pure diffusion`,'dipole':'a vortex pair propagates by mutual induction','shear':'Kelvin–Helmholtz: shear layers roll up into vortices','random':'like-signed vortices merge; energy moves to large scales'};
+// Draw the vorticity field (divergent colour, either a fixed initial scale so
+// decay shows, or auto-scaled) with the velocity arrow grid on top.
 function f2Field(gx,gy,S,fr){ const n=F2.n; const scale=TOG.fixed?F2.w0max:Math.max(fr.max,1e-9); const d=f2img.data;
   for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const p=i+n*(n-1-j); const c=divRGB(fr.om[p]/scale); const k=4*(j*n+i); d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255; }
   f2ctx.putImageData(f2img,0,0); ctx.imageSmoothingEnabled=true; ctx.drawImage(f2Cv,gx,gy,S,S); plotBox(gx,gy,S,S);
   if(TOG.arrows){ const m=16, cell=S/m; let vmax=1e-9; for(let p=0;p<m*m;p++) vmax=Math.max(vmax,Math.hypot(fr.ux[p],fr.uy[p])); for(let j=0;j<m;j++) for(let i=0;i<m;i++){ const p=i+m*j; const vx=fr.ux[p]/vmax, vy=fr.uy[p]/vmax; const cx=gx+(i+.5)*cell, cy=gy+S-(j+.5)*cell; arrow(cx-vx*cell*.4,cy+vy*cell*.4,cx+vx*cell*.4,cy-vy*cell*.4,'rgba(243,238,238,0.65)',1); } }
   return scale; }
+// Render the Flow 2D view: step under a CFL-limited dt (budgeted to ~28 ms/frame),
+// draw the field, and plot the three monotone diagnostics plus the live check that
+// −dE/dt equals 2νZ.
 function drawFlow2D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRect(0,0,W,H);
+  // Advance within a time budget so a small viscosity cannot stall the frame.
   if(F2.playing){ let adv=dt*F2.spd*0.8; const t0=performance.now(); while(adv>0&&performance.now()-t0<28){ const h=Math.min(F2.dtCFL(),adv); F2.step(h); adv-=h; if(F2.t-F2.hist[F2.hist.length-1].t>0.02) F2.record(); f2Snap(); } }
   FT.sync(); const fr=FT.current(); const tmax=Math.max(1,F2.t*1.05); const scale=TOG.fixed?F2.w0max:Math.max(fr.max,1e-9);
   const hF=R`$\partial_t\omega+u\!\cdot\!\nabla\omega=\nu\Delta\omega$, &nbsp; $u=\nabla^{\perp}\psi$, $\Delta\psi=\omega$ &nbsp; at $t=$`+fr.t.toFixed(2)+'<br>'+ICTEX[F2.ic]+'. Colour scale ±'+fmt(scale,2)+(TOG.fixed?' (fixed at the initial maximum, so decay shows)':' (auto)')+R`; $128^2$ pseudo-spectral, 2/3 dealiased, RK4.`;
@@ -525,6 +767,8 @@ function drawFlow2D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRec
   const hP2=R`$\dot E=-2\nu Z$, checked live: the two curves should coincide`;
   const ex=[]; if(F2.ic==='taylor-green'){ for(let t=0;t<=tmax;t+=tmax/60) ex.push([t,2*Math.exp(-2*F2.nu*t)]); } else if(F2.ic==='lamb-oseen'){ for(let t=0;t<=tmax;t+=tmax/60) ex.push([t,F2.w0max*F2.t0/(F2.t0+t)]); }
   const lo=Math.log10(Math.min(F2.E0,F2.Z0)*0.02), hi=Math.log10(Math.max(F2.w0max,F2.Z0)*1.5);
+  // Energy identity check: measured −dE/dt by central difference vs the predicted
+  // 2νZ; they should coincide for a healthy solver.
   const de=[], rhs=[]; const hh=F2.hist; for(let i=1;i<hh.length-1;i++){ const dEdt=(hh[i+1].E-hh[i-1].E)/(hh[i+1].t-hh[i-1].t); de.push([hh[i].t,-dEdt]); rhs.push([hh[i].t,2*F2.nu*hh[i].Z]); }
   const dmax=Math.max(1e-9,...rhs.map(r=>r[1]));
   const P1=(x,y,w,h)=>logPlot(x,y,w,h,[{pts:hh.map(h=>[h.t,h.E]),col:COL.blue,width:1.6,label:'energy'},{pts:hh.map(h=>[h.t,h.Z]),col:COL.yellow,width:1.6,label:'enstrophy'},{pts:hh.map(h=>[h.t,h.m]),col:'rgba(243,238,238,0.7)',label:'max|ω|'},...(ex.length?[{pts:ex,col:COL.red,dash:[4,3],label:'exact'}]:[])],tmax,lo,hi,{cursor:fr.t});
@@ -539,6 +783,9 @@ function drawFlow2D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRec
 }
 
 /* ─── Flow 3D: particles and tracers advected through the simulated field ─── */
+// F3 holds the Flow 3D view: the solver instance, grid size n, particle count np,
+// tracer count nt, and the tracer arc-length budget. Particles and tracers are
+// advected through the solver's computed velocity field, not a cartoon.
 const F3={sim:null,n:32,playing:true,nu:0.01,spd:1,np:7000,nt:110,len:6.0,ic:'column',cylR:2.9}; const GT=new Timeline(240,0);
 const f3Nu=$('r-gnu'); const f3NuUpd=()=>{ F3.nu=Math.pow(10,parseFloat(f3Nu.value)); $('v-gnu').textContent=F3.nu.toFixed(4)+'  (Re≈'+(1/F3.nu).toFixed(0)+')'; }; f3Nu.addEventListener('input',()=>{f3NuUpd(); f3Reset();}); f3NuUpd();
 $('r-glen').addEventListener('input',e=>{F3.len=parseFloat(e.target.value);$('v-glen').textContent=F3.len.toFixed(1)});
@@ -548,6 +795,8 @@ GT.bind('r-gtl','v-gtl',()=>{ F3.playing=false; $('g-play').textContent='play'; 
 document.querySelectorAll('[data-gic]').forEach(b=>b.onclick=()=>{ document.querySelectorAll('[data-gic]').forEach(x=>x.classList.toggle('on',x===b)); F3.ic=b.dataset.gic; f3Reset(); });
 document.querySelectorAll('[data-gn]').forEach(b=>b.onclick=()=>{ document.querySelectorAll('[data-gn]').forEach(x=>x.classList.toggle('on',x===b)); F3.n=parseInt(b.dataset.gn); f3Reset(); });
 const F3SCALE=4.3; const W2S=v=>(v/Math.PI-1)*F3SCALE; // sim [0,2π) → world, scaled up so the column fills the pane and runs off the top and bottom like the vortex
+// Build the Flow 3D scene: box edges (or an open column layout for the vortex-
+// column case), the particle cloud, and the tracer bundle.
 function f3Init3D(){ F3.scene=new THREE.Scene(); F3.camera=new THREE.PerspectiveCamera(42,1,0.05,100); F3.camera.position.set(6.0,2.6,6.8); F3.controls=new OrbitControls(F3.camera,c3d); F3.controls.enableDamping=true; F3.controls.autoRotate=true; F3.controls.autoRotateSpeed=0.4; F3.controls.enabled=false;
   const e=new THREE.EdgesGeometry(new THREE.BoxGeometry(2*F3SCALE,2*F3SCALE,2*F3SCALE)); F3.scene.add(new THREE.LineSegments(e,new THREE.LineBasicMaterial({color:0xa85f14,transparent:true,opacity:0.35})));
   const N=F3.np; F3.pos=new Float32Array(N*3); F3.col=new Float32Array(N*3); const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(F3.pos,3)); g.setAttribute('color',new THREE.BufferAttribute(F3.col,3));
@@ -558,7 +807,12 @@ function f3Init3D(){ F3.scene=new THREE.Scene(); F3.camera=new THREE.Perspective
   cyl.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,-9,0),new THREE.Vector3(0,9,0)]),new THREE.LineBasicMaterial({color:0x5a8cc0,transparent:true,opacity:0.35})));
   F3.scene.add(cyl); F3.cyl=cyl; F3.cube=F3.scene.children[0];
   F3.px=new Float32Array(N*3); F3.gen=new Uint16Array(F3.nt); }
+// Seed particle i: inside the core disc for the vortex column, or uniformly over
+// the periodic box otherwise.
 function f3Seed(i){ const s=F3.sim; if(F3.ic==='column'){ const r=Math.sqrt(Math.random())*F3.cylR*0.97, a=Math.random()*6.2832; F3.px[3*i]=(Math.PI+r*Math.cos(a)+6.2832)%6.2832; F3.px[3*i+1]=(Math.PI+r*Math.sin(a)+6.2832)%6.2832; F3.px[3*i+2]=Math.PI+(Math.random()*2-1)*0.9*Math.PI/F3SCALE; } else { F3.px[3*i]=Math.random()*6.2832; F3.px[3*i+1]=Math.random()*6.2832; F3.px[3*i+2]=Math.random()*6.2832; } }
+// Advect every particle one step by midpoint integration through velAt(), wrapping
+// periodically. Tracers take 4 substeps and record their path; for them the local
+// line-stretching rate is measured by finite difference along the tangent.
 function f3Advect(dt,warm){ const s=F3.sim, N=F3.np, v=[0,0,0], w=[0,0,0]; const TP=2*Math.PI; if(!F3.spd_) F3.spd_=new Float32Array(N); 
   const a=[0,0,0], b=[0,0,0]; if(!F3.str) F3.str=new Float32Array(F3.nt);
   const move=(i,h)=>{ let x=F3.px[3*i],y=F3.px[3*i+1],z=F3.px[3*i+2]; s.velAt(x,y,z,v); s.velAt(x+0.5*h*v[0],y+0.5*h*v[1],z+0.5*h*v[2],w); x+=h*w[0]; y+=h*w[1]; z+=h*w[2]; x-=Math.floor(x/TP)*TP; y-=Math.floor(y/TP)*TP; z-=Math.floor(z/TP)*TP; F3.px[3*i]=x; F3.px[3*i+1]=y; F3.px[3*i+2]=z; const sp=Math.hypot(w[0],w[1],w[2]); F3.spd_[i]=sp;
@@ -571,10 +825,17 @@ function f3Advect(dt,warm){ const s=F3.sim, N=F3.np, v=[0,0,0], w=[0,0,0]; const
   // speed normalisation: 95th percentile of a sample, so hot spots and dead zones both show
   const samp=[]; for(let i=0;i<N;i+=Math.max(1,(N/600)|0)) samp.push(F3.spd_[i]); samp.sort((a,b)=>a-b); F3.s95=Math.max(1e-6,samp[Math.floor(samp.length*0.95)]);
   }
+// Snapshot particle world positions (axes swapped y↔z for display) and speeds,
+// so the timeline can replay past frames.
 function f3Snap(){ const s=F3.sim; GT.push(s.t,()=>{ const N=F3.np, pos=new Float32Array(N*3), sp=new Float32Array(N); for(let i=0;i<N;i++){ pos[3*i]=W2S(F3.px[3*i]); pos[3*i+1]=W2S(F3.px[3*i+2]); pos[3*i+2]=W2S(F3.px[3*i+1]); sp[i]=F3.spd_?F3.spd_[i]:0; } return {t:s.t,pos,sp,str:F3.str?Float32Array.from(F3.str):new Float32Array(F3.nt),gen:Uint16Array.from(F3.gen)}; }); }
+// Reset the 3D view: rebuild the solver if the grid changed, set the initial
+// condition, reseed particles, and warm the tracers through the frozen field.
 function f3Reset(){ if(!F3.sim||F3.sim.n!==F3.n) F3.sim=new Flow3D(F3.n); F3.sim.nu=F3.nu; F3.sim.setIC(F3.ic); F3.sim.record(); for(let i=0;i<F3.np;i++) f3Seed(i); F3.gen.fill(0); F3.s95=1; F3.spd_=null; F3.tr=Array.from({length:F3.nt},()=>[]);
   const h=F3.sim.dtCFL(); for(let i=0;i<400;i++) f3Advect(h,true); f3Advect(h,false); // warm-up: tracers get their full length through the frozen initial field
   F3.cyl.visible=F3.ic==='column'; F3.cube.visible=F3.ic!=='column'; GT.clear(); f3Snap(); F3.playing=true; $('g-play').textContent='pause'; }
+// Push the current (or scrubbed) frame to the GPU buffers: particle positions and
+// speed-mapped colours, plus the tracer trails. When scrubbing, trails are rebuilt
+// by walking snapshots backward until the arc-length budget or a generation break.
 function f3Show(){ const frames=GT.frames, idx=GT.view<0?frames.length-1:GT.view, fr=frames[idx]; if(!fr) return;
   let mx=1e-9,mn=1e30; for(let i=0;i<F3.np;i++){ const v=fr.sp[i]; if(v>mx)mx=v; if(v<mn)mn=v; } mn=Math.max(mn,mx*1e-3); const lr=Math.log(mx/mn)||1;
   for(let i=0;i<F3.np;i++){ F3.pos[3*i]=fr.pos[3*i]; F3.pos[3*i+1]=fr.pos[3*i+1]; F3.pos[3*i+2]=fr.pos[3*i+2]; const u=Math.pow(Math.max(0,Math.log(Math.max(fr.sp[i],mn)/mn))/lr,2.4); const c=inferno(u); F3.col[3*i]=c[0]/255; F3.col[3*i+1]=c[1]/255; F3.col[3*i+2]=c[2]/255; }
@@ -583,6 +844,9 @@ function f3Show(){ const frames=GT.frames, idx=GT.view<0?frames.length-1:GT.view
   if(GT.view<0){ trails=F3.tr; }
   else { trails=[]; for(let k=0;k<F3.nt;k++){ const pts=[]; const gen=fr.gen[k]; let px=null,py=null,pz=null; let acc=0; for(let j=idx;j>=0&&acc<F3.len;j--){ const f=frames[j]; if(f.gen[k]!==gen) break; const x=f.pos[3*k],y=f.pos[3*k+1],z=f.pos[3*k+2]; if(px!==null){ const d=Math.hypot(x-px,y-py,z-pz); if(d>0.8*F3SCALE) break; acc+=d; } pts.push([x,y,z,f.str[k]]); px=x;py=y;pz=z; } pts.reverse(); trails.push(pts); } }
   F3.bundle.set(trails,TOG.trails); }
+// Render the Flow 3D view: step the solver, advect, render the WebGL scene, and
+// draw the two diagnostic plots into the mathematics panel (enstrophy growth, and
+// the Beale–Kato–Majda integral). The plots borrow ctx and restore it after.
 function drawFlow3D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRect(0,0,W,H); const s=F3.sim;
   if(F3.playing){ const h=s.dtCFL(); s.step(h); s.record(); f3Advect(h,false); f3Snap(); }
   GT.sync(); f3Show(); const fr=GT.current(); const tmax=Math.max(2,s.t*1.05);
@@ -597,6 +861,8 @@ function drawFlow3D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRec
   F3.controls.autoRotate=TOG.spin; F3.controls.update(); r.render(F3.scene,F3.camera); r.setScissorTest(false);
   ovBegin(); ovEnd();
   // diagnostics live in the mathematics panel
+  // The 3D diagnostics live in canvases inside the math panel; point ctx at each
+  // in turn so the shared logPlot helper draws into them, then restore MAINCTX.
   const c1=$('mp-c1'), c2=$('mp-c2'); if(c1&&c2&&!document.body.classList.contains('mp-collapsed')){ for(const [c,fn,title] of [[c1,P1,hP1],[c2,P2,hP2]]){ const w=c.parentElement.clientWidth-2, h=170; if(c.width!==w*DPR||c.height!==h*DPR){ c.width=w*DPR; c.height=h*DPR; c.style.width=w+'px'; c.style.height=h+'px'; } const pc=c.getContext('2d'); pc.setTransform(DPR,0,0,DPR,0,0); pc.clearRect(0,0,w,h); ctx=pc; fn(0,0,w,h); ctx=MAINCTX; } }
   $('g-ro').innerHTML=[['t (live)',s.t.toFixed(3)],['energy / E₀',fmt(s.lastE/s.E0,4)],['enstrophy / Z₀',fmt(s.lastZ/s.Z0,4)],['max|ω| / initial',fmt(s.lastMax/s.m0,4)],['∫‖ω‖∞ dt',fmt(s.bkm,3)],['particles · tracers',F3.np+' · '+F3.nt],['stretch rate, 95th pct',fmtE(F3.bundle.p95||0)],['ms / step',s.msStep.toFixed(0)]].map(([k,v])=>`<span class="k">${k}</span><span class="n">${v}</span>`).join('');
 }
@@ -605,18 +871,30 @@ f3Init3D(); f3Reset();
 
 /* ───────── main loop ───────── */
 const VIEWS=['equations','burgers','flow2d','flow3d','wave','cascade','vortex'];
+// Read a valid view from the URL hash, or null.
 const hashView=()=>{ const h=(location.hash||'').replace(/^#/,''); return VIEWS.includes(h)?h:null; };
+// NS_FIXED_VIEW pins this page to one view (set in each page's index.html). A
+// pinned page, an iframe, or ?embed all count as embedded: hide the chapter menu
+// and suppress hash routing so the page stays on its one view.
 const FIXED=window.NS_FIXED_VIEW||null; const EMBED=(window.self!==window.top)||/[?&]embed/.test(location.search)||!!FIXED; if(EMBED) document.body.classList.add('embed');
 $('chapter-sel').classList.toggle('off',!!FIXED); $('chapter-sel').addEventListener('change',e=>setView(e.target.value));
+// Build the 3D scene once, then open the fixed / hashed / default view.
 vxInit(); setView(FIXED||hashView()||'equations'); resize();
+// Follow hash changes only when not pinned; then allow setView to write the hash.
 window.addEventListener('hashchange',()=>{ if(FIXED) return; const v=hashView(); if(v&&v!==VIEW) setView(v); }); EMBED_READY=!FIXED;
+// Surface uncaught errors and promise rejections in the #status readout, so a
+// failure in the preview sandbox is visible on the page.
 window.addEventListener('error',e=>{ const st=$('status'); st.textContent='error: '+(e.message||'?')+(e.filename?' @ '+e.filename.split('/').pop()+':'+e.lineno:''); st.classList.add('paused'); });
 window.addEventListener('unhandledrejection',e=>{ const st=$('status'); st.textContent='error: '+(e.reason&&e.reason.message||e.reason); st.classList.add('paused'); });
 let last=performance.now(); let loopErr=null;
+// The animation loop: run the frame, and trap the first thrown error so the page
+// reports it once instead of spamming the console every frame.
 function loop(now){
   try{ loopBody(now); }catch(e){ if(!loopErr){ loopErr=e; console.error('[ns-blowup] '+VIEW+' view failed:', e); const st=$('status'); st.textContent='error in '+VIEW+': '+e.message; st.classList.add('paused'); } }
   requestAnimationFrame(loop);
 }
+// One frame: clamp the timestep, update the running/paused status, dispatch to the
+// active view's draw function, and sync the scrubber.
 function loopBody(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
   if(!loopErr){ $('status').textContent = ({wave:WV.playing,vortex:VX.playing,burgers:BG.playing,flow2d:F2.playing,flow3d:F3.playing}[VIEW]??true) ? 'running' : 'paused'; $('status').classList.toggle('paused', $('status').textContent==='paused'); }
