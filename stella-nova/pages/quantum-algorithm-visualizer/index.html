@@ -4,6 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>QAVE · ρ(t) // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   QAVE · quantum algorithm visualizer  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js simulates a quantum circuit, forms the density
+   matrix ρ = |ψ⟩⟨ψ| after each gate, and renders those matrices as a 3D stack
+   of colored cells into <canvas id="gl">. This file lays out the build panel,
+   the circuit dock (score, transport, Qiskit editor), the WebGL host with its
+   HUD overlays, and the status bar; main.js binds every control by id.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. importmap    maps the bare specifier "three" to the CDN; MUST stay
+                     inline (an import map cannot be an external file)
+     3. style.css    the page stylesheet
+     4. main.js      type=module; builds the scene, resolves "three"
+
+   LAYOUT  (the leading hash marks an element id)
+     ┌──────────────────────────────────────────────────────────────────────┐
+     │ topbar: "Stella Nova · QAVE · ρ(t)"                                    │
+     ├───────────────┬────────────────────────────────────────────────────┬─┤
+     │ #panel        │ #circuit-dock                                        │ │
+     │  Algorithm    │   score canvas + gutter · transport · Qiskit panel   │ │
+     │  Build gates  ├────────────────────────────────────────────────────┤ │
+     │  ρ Coloring   │ #gl-host                                             │ │
+     │  Tone curve   │   <canvas id=gl>  ρ layer stack / floor field        │ │
+     │  Shape        │   HUDs · #step-inspector · #grid2d-panel · #legend   │ │
+     │  Background    │   #hist-panel (measurement sampling)                │ │
+     │  Scene toggles│                                                      │ │
+     └───────────────┴────────────────────────────────────────────────────┴─┘
+     │ #status-bar: qubits · cells · layers · step · outcome · fps           │
+     └──────────────────────────────────────────────────────────────────────┘
+
+   The mobile hamburger (#mob-btn) slides #panel over the view on narrow screens.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
@@ -11,14 +47,19 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. Inline so it runs before paint, with no topbar flash. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Mobile only: toggles the build panel as a slide-over sheet. -->
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QAVE · ρ(t)</span></div>
   <div class="topbar-r">SYS // <strong>DENSITY MATRIX</strong></div>
 </div>
 <div id="main">
+  <!-- Left build panel. Every button/slider here is bound by id in main.js. -->
   <div id="panel"><div class="p-body">
+    <!-- Preset algorithm circuits; loadPreset() rebuilds the trace. -->
     <div class="p-section"><div class="p-sec-lbl">Algorithm</div>
       <div class="preset-grid" id="preset-grid">
         <button class="preset-btn" data-preset="bell">Bell</button>
@@ -34,6 +75,7 @@
         <button class="preset-btn" data-preset="teleport">Teleport</button>
         <button class="preset-btn" data-preset="scramble">Scramble</button>
       </div></div>
+    <!-- Manual gate builder: qubit count, target/control, angle, gate palette. -->
     <div class="p-section"><div class="p-sec-lbl">Build</div>
       <div class="qrow"><span class="qrow-lbl">Qubits</span><div class="stepper"><button class="step" id="q-minus">−</button><span class="stepval" id="q-count">3</span><button class="step" id="q-plus">+</button></div></div>
       <div class="qrow"><span class="qrow-lbl">Target q</span><div class="stepper"><button class="step" id="t-minus">−</button><span class="stepval" id="t-val">0</span><button class="step" id="t-plus">+</button></div></div>
@@ -44,9 +86,11 @@
         <button class="gate-btn" data-g="s">S</button><button class="gate-btn" data-g="t">T</button><button class="gate-btn" data-g="rx">Rx</button><button class="gate-btn" data-g="ry">Ry</button>
         <button class="gate-btn" data-g="rz">Rz</button><button class="gate-btn two" data-g="cx">CX</button><button class="gate-btn two" data-g="cz">CZ</button><button class="gate-btn two" data-g="swap">SW</button>
       </div></div>
+    <!-- The current gate list (renderList) plus measure and clear actions. -->
     <div class="p-section"><div class="p-sec-lbl">Sequence</div>
       <div class="gate-list" id="gate-list"></div>
       <div class="sim-btns" style="margin-top:8px"><button class="sim-btn" id="btn-measure">⊡ Measure</button><button class="sim-btn warn" id="btn-clear">✕ Clear</button></div></div>
+    <!-- How each ρ cell is colored: mode (|ρ|/Re/phase), colormap, tone curve. -->
     <div class="p-section"><div class="p-sec-lbl">ρ Coloring</div>
       <div class="mode-grid">
         <button class="mode-btn active" data-cm="mag">|ρ|</button>
@@ -86,6 +130,8 @@
         <button class="bg-sw" data-bg="dusk" title="Dusk" style="background:linear-gradient(180deg,#2a1a3e,#0a0812)"></button>
         <button class="bg-sw" data-bg="paper" title="Paper (light)" style="background:#e8ecf2"></button>
       </div></div>
+    <!-- Scene toggles: show-all layers, auto-orbit, floor grid, network, labels,
+         step inspector, and the 2D matrix panel. Each maps to a VS flag. -->
     <div class="p-section"><div class="p-sec-lbl">Scene</div>
       <button class="tog-btn" id="tog-full">⬢ Full structure (show all layers)</button>
       <button class="tog-btn on" id="tog-rotate">⟳ Auto-orbit</button>
@@ -96,7 +142,11 @@
       <button class="tog-btn on" id="tog-grid2d">▦ 2D matrix grid</button></div>
   </div></div>
   <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
+  <!-- Center column: the circuit dock (score + transport + Qiskit) above the
+       WebGL host that shows ρ(t). -->
   <div id="canvas-wrap">
+    <!-- Circuit dock: the musical-score view of the circuit, playback transport,
+         and a slide-out Qiskit code panel. -->
     <div id="circuit-dock">
       <div id="cd-head">
         <span class="cd-title">ρ(t)</span>
@@ -107,6 +157,8 @@
         </div>
         <button id="cd-qiskit-btn">&lt;/&gt; QISKIT</button>
       </div>
+      <!-- The score canvas scrolls horizontally; the gutter canvas is a pinned
+           overlay drawing the qubit labels so they stay in view. -->
       <div id="circuit-frame">
         <div id="circuit-scroll"><canvas id="circuit-canvas"></canvas></div>
         <canvas id="cgutter"></canvas>
@@ -129,6 +181,8 @@
         </div>
         <div class="cd-srow cd-heatrow"><span>Heat ≥</span><input type="range" id="sl-thresh" min="0" max="1" value="0" step="0.01"><span class="val" id="vl-thresh">0.00</span></div>
       </div>
+      <!-- Qiskit panel: shows generated code for the active circuit, and lets the
+           user edit and Run custom code (parseQiskit). Hidden until opened. -->
       <div id="qiskit-panel" hidden>
         <div id="qiskit-editor">
           <pre id="qiskit-hl" aria-hidden="true"></pre>
@@ -142,6 +196,8 @@
         </div>
       </div>
     </div>
+    <!-- WebGL host: the 3D ρ view plus floating overlays (HUD text, step
+         inspector, 2D matrix, legend, orientation button, sampling histogram). -->
     <div id="gl-host">
       <canvas id="gl"></canvas>
       <div class="hud hud-tr" id="hud-tr"></div>
@@ -157,6 +213,7 @@
     </div>
   </div>
 </div>
+<!-- Bottom status bar: live counts and the current step / outcome / fps. -->
 <div id="status-bar">
   <span id="st-qubits">3 qubits</span><span class="sep"></span>
   <span id="st-dim">8×8 cells</span><span class="sep"></span>
@@ -166,6 +223,7 @@
   <span id="st-fps">-- fps</span>
 </div>
 
+<!-- The one module: engine, renderer, and all UI wiring. -->
 <script type="module" src="main.js"></script>
 </body>
 </html>

@@ -1,3 +1,61 @@
+// ============================================================================
+//  QAVE · QUANTUM ALGORITHM VISUALIZER  ·  density matrix ρ(t) in 3D
+// ----------------------------------------------------------------------------
+//  Simulates a quantum circuit on the CPU (a faithful port of the Python
+//  statevector engine), forms the density matrix ρ = |ψ⟩⟨ψ| after every gate,
+//  and renders each ρ as a DIM×DIM grid of colored cells. The grids stack one
+//  per gate into a tower (layer-stack view) or morph on a floor (floor-field
+//  view). A musical-score canvas shows the circuit; a transport scrubs time; a
+//  Gaussian-paced sampler draws measurement shots as a growing bar chart.
+//
+//  DATA PIPELINE
+//  -------------
+//      circuit {numQubits, gates} ─▶ buildTrace()      statevector sim + phases
+//                                        │  per gate: applyUnitary, fractional U^τ
+//                                        ▼
+//      layerStates[L] (one |ψ⟩ per step) ─▶ densityToCell()  ρ = |ψ⟩⟨ψ|
+//                                        ▼
+//      layerCell[L] = Float32[DIM*DIM*3] (mag, re, im per cell)
+//                                        │  cellColor() = colormap · tone curve
+//                                        ▼
+//      InstancedMesh cubes  ─▶ RenderPass ─▶ UnrealBloom ─▶ OutputPass ─▶ <canvas>
+//
+//  LAYER-STACK LAYOUT  (one slab per computation step)
+//  ---------------------------------------------------
+//      +Y (or +X)     each slab is a DIM×DIM grid of ρ cells
+//        ▲            row r = ⟨r| , col c = |c⟩  →  cell = ρ_rc
+//        │  ┌───────┐   the main diagonal (r==c) holds the populations |ρ_ii|
+//   L2   │  │▦▦ ▦▦▦│   off-diagonal cells are coherences
+//   L1   │  │▦ ▦▦ ▦│   built once per layer and cached (builtStage/layerEndArr)
+//   L0   │  │▦     ▦│   L0 = initial state, then one layer per gate upward
+//        └──┴───────┘
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      gate matrices ........ "Base single-qubit"   I2/X/Y/Z/H/S/T, CX/CZ/SWAP…
+//      matrix for a gate .... "matrixForGate"       validate + pick the unitary
+//      apply a unitary ...... "applyUnitary"        gather/scatter over base idx
+//      state hashing ........ "canonicalizeGlobalPhase"  numpy-faithful hash
+//      fractional gate ...... "fractionalGateMatrix"  in-gate U^τ for animation
+//      trace builder ........ "buildTrace"          per-step states + phases
+//      color maps ........... "color maps"          CMAPS + heatColor
+//      tone curve ........... "buildCurve"          monotone-cubic |ρ| shaping
+//      circuit model ........ "circuit model"       VS state, presetGates
+//      density cell ......... "densityToCell"       ρ = |ψ⟩⟨ψ| to cell buffer
+//      rebuild .............. "function rebuild"    trace ▶ meshes ▶ camera
+//      three.js scene ....... "three.js scene"      renderer, bloom, group
+//      build meshes ......... "rebuildMeshes"       instanced cells, edges, bars
+//      stack view ........... "STACK view"          buildStackUpTo (append-once)
+//      floor view ........... "FLOOR view"          updateFloor
+//      circuit lens ......... "drawLens"            the score canvas
+//      RZ angle editor ...... "RZ angle editor"     retune a gate's phase
+//      HUD .................. "function updateHud"  step inspector + 2D grid
+//      Qiskit ............... "parseQiskit"         parse / codegen / highlight
+//      sampling ............. "runSampling"         shot histogram animation
+//      main loop ............ "function loop"       per-frame update
+//      UI wiring ............ "UI wiring"           panel controls
+//      init picker .......... "init-state picker"   click layer 0 to set |b⟩
+// ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -12,8 +70,10 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 // Faithful to the Python definitions: same matrices, same qubit-order conventions.
 
 const SQRT1_2 = Math.SQRT1_2; // 1/sqrt(2)
+// Thrown for any gate the statevector backend does not implement.
 class UnsupportedGateError extends Error {}
 
+// Complex number as a [real, imag] pair; every matrix entry is one of these.
 const c = (re, im = 0) => [re, im];
 
 // Base single-qubit gates (identical to gates.py)
@@ -43,6 +103,7 @@ const SWAP = [
   [c(0), c(0), c(0), c(1)],
 ];
 
+// Build a permutation matrix from a row→column map, for the 3-qubit gates below.
 function permMatrix(perm) {
   const n = perm.length;
   const M = Array.from({ length: n }, () => Array.from({ length: n }, () => c(0)));
@@ -53,6 +114,7 @@ function permMatrix(perm) {
 const CCX = permMatrix([0, 1, 2, 3, 4, 5, 7, 6]);
 // CSWAP: identity except swap basis 5<->6. Matches CSWAP in gates.py.
 const CSWAP = permMatrix([0, 1, 2, 3, 4, 6, 5, 7]);
+// Parametric rotation gates. Each is a function of the angle θ.
 function rx(theta) {
   const cc = Math.cos(theta / 2);
   const ss = Math.sin(theta / 2); // matrix entries are -i*sin
@@ -71,6 +133,8 @@ function rz(theta) {
 }
 
 // Returns { matrix, qubits } for a supported gate, faithful to matrix_for_gate().
+// Validates the control/target/param arity per gate name, then returns the
+// matrix plus the qubit list in gate-basis order (controls before targets).
 function matrixForGate(gate) {
   const name = gate.name.toLowerCase();
   if (gate.kind !== "unitary") {
@@ -114,6 +178,7 @@ function matrixForGate(gate) {
 
 // Port of qave_backend/simulator/statevector_engine.py (core paths)
 // State = { re: Float64Array, im: Float64Array }, little-endian qubit indexing.
+// Fresh |0…0⟩ state: a 2^n complex vector with amplitude 1 at index 0.
 function initializeState(numQubits) {
   const dim = 1 << numQubits;
   const re = new Float64Array(dim);
@@ -121,12 +186,17 @@ function initializeState(numQubits) {
   re[0] = 1.0;
   return { re, im };
 }
+// Deep copy of a state vector.
 function cloneState(s) {
   return { re: Float64Array.from(s.re), im: Float64Array.from(s.im) };
 }
 
 // Apply a k-qubit unitary. qubits[0] is the most-significant index of the gate
 // matrix basis, matching Python's axes = [num_qubits-1-q for q in qubits] convention.
+// Apply a k-qubit unitary to the full 2^n state. For every "base" flat index
+// (the acted qubits all zero), gather the 2^k amplitudes that differ only in the
+// acted bits, multiply by the gate matrix, and scatter the result back. This
+// touches each amplitude once, so cost is O(2^n · 2^k) rather than O(2^2n).
 function applyUnitary(state, matrix, qubits, numQubits) {
   if (!qubits.length) return cloneState(state);
   const k = qubits.length;
@@ -183,6 +253,8 @@ function applyUnitary(state, matrix, qubits, numQubits) {
 }
 
 // ---- deterministic state hashing (matches StatevectorEngine.state_hash) ----
+// Remove the arbitrary global phase: divide the whole vector by the phase of its
+// first non-negligible amplitude, so states equal up to phase hash identically.
 function canonicalizeGlobalPhase(state) {
   const re = Float64Array.from(state.re);
   const im = Float64Array.from(state.im);
@@ -206,6 +278,7 @@ function canonicalizeGlobalPhase(state) {
 }
 
 // numpy np.round semantics: rint(x*1e12)/1e12 with round-half-to-even.
+// Round-half-to-even matches numpy so the JS hash equals the Python one bit for bit.
 function rintHalfEven(y) {
   const fl = Math.floor(y);
   const diff = y - fl;
@@ -223,6 +296,8 @@ function round12(x) {
 
 // Build the exact byte buffer numpy hashes: column_stack((re,im)) rounded to 12,
 // signed-zero normalized, C-order float64 little-endian -> interleaved [re0,im0,...].
+// Produce the exact byte buffer numpy would hash: phase-canonical amplitudes,
+// rounded to 12 decimals, with negative zero normalized to zero.
 function canonicalBuffer(state) {
   const canon = canonicalizeGlobalPhase(state);
   const dim = canon.re.length;
@@ -239,6 +314,8 @@ function canonicalBuffer(state) {
 }
 
 // ---- measurement (exact, deterministic given outcome index) ----
+// Marginal outcome distribution over the measured qubits: sum |amp|² into the
+// bin named by those qubits' bits, then normalize.
 function measurementProbabilities(state, qubits) {
   const dim = state.re.length;
   if (!qubits.length) return Float64Array.from([1.0]);
@@ -254,6 +331,7 @@ function measurementProbabilities(state, qubits) {
   for (let i = 0; i < probs.length; i++) probs[i] /= total;
   return probs;
 }
+// Project the state onto one measured outcome and renormalize (the collapse).
 function collapseState(state, qubits, outcomeIndex) {
   if (!qubits.length) return cloneState(state);
   const dim = state.re.length;
@@ -281,8 +359,10 @@ function collapseState(state, qubits, outcomeIndex) {
 
 // ---- fractional gate U^tau (no eigensolver; principal-branch faithful) ----
 
+// Gates that are their own inverse (U² = I); their fractional power has a closed form.
 const INVOLUTIONS = new Set(["x", "y", "z", "h", "cx", "cz", "swap", "ccx", "toffoli", "cswap"]);
 
+// Identity matrix of size d as [re,im] pairs.
 function eye(d) {
   const M = Array.from({ length: d }, (_, i) =>
     Array.from({ length: d }, (_, j) => [i === j ? 1 : 0, 0]));
@@ -310,6 +390,9 @@ function involutionPow(U, tau) {
 }
 
 // Returns { matrix: U^tau, qubits } faithful to gate semantics.
+// The in-gate animation needs a partial application U^τ, 0≤τ≤1. Rotations scale
+// their angle, S/T scale their phase, involutions use the closed form above; the
+// endpoints short-circuit to identity (τ=0) and the full gate (τ=1).
 function fractionalGateMatrix(gate, tau) {
   const name = gate.name.toLowerCase();
   const { matrix: U, qubits } = matrixForGate(gate);
@@ -330,6 +413,7 @@ function fractionalGateMatrix(gate, tau) {
 }
 
 // ---- observables ----
+// Per-basis-state probabilities |amp|² over the whole vector.
 function probabilities(state) {
   const dim = state.re.length;
   const p = new Float64Array(dim);
@@ -354,6 +438,7 @@ function blochVector(state, qubit) {
 }
 
 // ---- deterministic RNG (mulberry32) ----
+// A small seeded PRNG so a given seed always samples the same shot sequence.
 function makeRng(seed) {
   let a = (seed >>> 0) || 1;
   return function () {
@@ -363,6 +448,7 @@ function makeRng(seed) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }
+// Draw one outcome index from a probability array by inverse-CDF selection.
 function sampleOutcome(rng, probs) {
   const u = rng();
   let acc = 0;
@@ -371,7 +457,10 @@ function sampleOutcome(rng, probs) {
 }
 
 // ---- phase schedule (faithful to statevector_engine._phase_schedule) ----
+// Each gate animates through three phases, splitting its substeps by these ratios:
+// a pre-gate hold, the apply ramp (τ 0→1), and a settle hold at the new state.
 const PHASE_RATIOS = { pre_gate: 0.2, apply_gate: 0.55, settle: 0.25 };
+// Expand the ratios into a concrete list of [phase, playhead t, τ] substeps.
 function phaseSchedule(totalSubsteps) {
   const total = Math.max(6, totalSubsteps);
   const pre = Math.max(1, Math.round(total * PHASE_RATIOS.pre_gate));
@@ -393,6 +482,9 @@ function phaseSchedule(totalSubsteps) {
 // ---- trace builder ----
 // circuit: { numQubits, gates: [{name, kind, targets, controls?, params?}] }
 // returns { numQubits, steps, frames } with frames carrying real in-gate states.
+// Simulate the whole circuit and record everything the viewer needs: the resting
+// state before each gate, the fractional in-gate frames across the phase schedule,
+// and each step's end state. Measurements sample once and hold the collapsed state.
 function buildTrace(circuit, { substeps = 24, seed = 42 } = {}) {
   const N = circuit.numQubits;
   let state = initializeState(N);
@@ -449,7 +541,9 @@ function buildTrace(circuit, { substeps = 24, seed = 42 } = {}) {
 }
 
 /* ════════ color maps ════════ */
+// Clamp to [0,1].
 function clamp01(x){return x<0?0:x>1?1:x;}
+// Linear interpolate between two RGB triples.
 function lerp3(a,b,t){return[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
 // Selectable density colormaps (0–255). Low end is never flat black.
 const CMAPS={
@@ -460,10 +554,16 @@ const CMAPS={
   plasma:[[24,12,110],[84,2,163],[139,10,165],[185,50,137],[219,92,104],[244,136,73],[254,188,43],[240,249,33]],
   mono:[[24,26,34],[62,67,80],[110,117,134],[158,166,186],[206,214,232],[245,249,255]]
 };
+// The colormap the |ρ| mode currently uses; swapped by the colormap swatches.
 let ACTIVE_HEAT=CMAPS.inferno;
+// Map v in [0,1] onto the active colormap with linear interpolation.
 function heatColor(v){v=clamp01(v);const H=ACTIVE_HEAT,s=v*(H.length-1),i=Math.min(Math.floor(s),H.length-2),t=s-i;return lerp3(H[i],H[i+1],t);}
 // ── tone curve: input |ρ| → colormap position, shaped by draggable keys (Photoshop-style) ──
+// The tone curve: three control points (ends pinned, middle draggable) plus a
+// 256-entry lookup table sampled from them.
 const CURVE={pts:[{x:0,y:0},{x:0.5,y:Math.pow(0.5,0.2)},{x:1,y:1}],lut:new Float32Array(256)};
+// Rebuild the LUT with a monotone cubic (Fritsch-Carlson) interpolation of the
+// control points, so the curve never overshoots or inverts between keys.
 function buildCurve(){
   const P=CURVE.pts;P.sort((a,b)=>a.x-b.x);const n=P.length;
   const xs=P.map(p=>p.x),ys=P.map(p=>p.y),dx=[],m=[];
@@ -475,14 +575,22 @@ function buildCurve(){
     const h=dx[i],s=(x-xs[i])/h,h00=(1+2*s)*(1-s)*(1-s),h10=s*(1-s)*(1-s),h01=s*s*(3-2*s),h11=s*s*(s-1);
     CURVE.lut[k]=Math.min(1,Math.max(0,h00*ys[i]+h10*h*t[i]+h01*ys[i+1]+h11*h*t[i+1]));}
 }
+// Read the tone curve at v via the LUT.
 function curveEval(v){v=clamp01(v);return CURVE.lut[Math.min(255,(v*255)|0)];}
 buildCurve();
+// CSS gradient string for a colormap, used for the legend swatch.
 function cmapCss(name){const H=CMAPS[name];return 'linear-gradient(90deg,'+H.map((c,i)=>'rgb('+c[0]+','+c[1]+','+c[2]+') '+Math.round(i/(H.length-1)*100)+'%').join(',')+')';}
 function currentCmap(){for(const k in CMAPS)if(CMAPS[k]===ACTIVE_HEAT)return k;return 'inferno';}
+// Accent colors reused across the 3D scene and 2D overlays.
 const C_CYAN=[69,211,255],C_AMBER=[255,185,72],C_NAVY=[36,52,78];
+// Re(ρ) coloring: amber for negative, navy at zero, cyan for positive.
 function densityColorReal(re){const t=(Math.max(-1,Math.min(1,re))+1)*0.5;return t<0.5?lerp3(C_AMBER,C_NAVY,t*2):lerp3(C_NAVY,C_CYAN,(t-0.5)*2);}
+// Phase(ρ) coloring: map the angle onto a cyan→violet→amber ramp.
 function amplitudeColorArr(ph){let n=(ph+Math.PI)/(2*Math.PI);n=clamp01(n);const c0=[75,215,255],c1=[130,115,255],c2=[255,177,92];return n<0.5?lerp3(c0,c1,n*2):lerp3(c1,c2,(n-0.5)*2);}
+// Color for the animation phase (pre-gate, apply, settle), used on the score.
 function phaseColorArr(p){return p==='pre_gate'?[105,168,255]:p==='apply_gate'?[72,224,252]:p==='settle'?[255,194,94]:[182,196,216];}
+// Final color for one ρ cell. The tone curve weights every mode; magnitude also
+// picks a position on the heat ramp for |ρ| mode.
 function cellColor(mag,re,im){
   const w=curveEval(clamp01(mag));                       // tone-curve (gamma) weight — now applied in EVERY color mode
   if(VS.colorMode==='real'){const c=densityColorReal(re);return [c[0]*w,c[1]*w,c[2]*w];}
@@ -495,11 +603,20 @@ function glowGain(mag){const v=clamp01(mag);return 1+1.9*v;}   // linear ramp: v
 function smooth(t){t=clamp01(t);return t*t*(3-2*t);}
 
 /* ════════ circuit model ════════ */
+// VS is the single view/state object: the circuit (numQubits, gates), the current
+// build selection, playback state, and every rendering/scene preference. UI writes
+// into VS; rebuild(), the loop, and the draw functions read from it.
 const VS={numQubits:4,gates:[],target:0,control:1,angle:Math.PI/2,seed:24,substeps:24,
   playing:true,speed:2,frameIndex:0,stageTime:0,holdTime:0.7,threshold:0,threshDirty:false,preset:'qft',colorMode:'mag',viewMode:'stack',
   autoRotate:true,floorGrid:false,network:true,labels:true,shape:'round',showFull:false,bg:'black',gamma:0.2,stackAxis:'vertical',autoOrient:true,stepInspect:true,grid2d:true};
+// Derived render state. trace: the built simulation. layerStates/layerCell: one
+// entry per layer (state and its ρ cells). builtStage/layerEndArr/edgeEndArr:
+// the append-once cache of which cell/edge instances each layer occupies.
+// initBasis: the chosen start basis state |b⟩ (0 = |0…0⟩).
 let trace=null,layerStates=[],layerCell=[],totalLayers=1,builtStage=-1,layerEndArr=[],edgeEndArr=[],initBasis=0;
 const PRESET_N={bell:2,grover:3,dj:3,bv:4,toffoli:3,kick:2,teleport:3}; // fixed-size presets; others scale with the qubit count
+// Build the gate list for a named algorithm at n qubits. The local helpers (H, X,
+// CX, CP controlled-phase, CCZ, QFT, and so on) are small circuit-writing shorthands.
 function presetGates(name,n){const g=[];
   const H=q=>g.push({name:'h',kind:'unitary',targets:[q],controls:[]});
   const X=q=>g.push({name:'x',kind:'unitary',targets:[q],controls:[]});
@@ -516,6 +633,8 @@ function presetGates(name,n){const g=[];
     for(let to=0;to<m;to++){const tg=qs[m-1-to];H(tg);for(let co=to+1;co<m;co++)CP(qs[m-1-co],tg,s*Math.PI/Math.pow(2,co-to));}
     for(let i=0;i<(m>>1);i++)SWAP(qs[i],qs[m-1-i]);};
   const all=Array.from({length:n},(_,i)=>i);
+  // One branch per algorithm: emit its gate sequence into g. Entangling and
+  // interference families (Bell, GHZ, QFT, Grover, Deutsch-Jozsa, and so on).
   if(name==='bell'){H(0);CX(0,1);MEAS();}
   else if(name==='ghz'){H(0);for(let q=1;q<n;q++)CX(0,q);MEAS();}
   else if(name==='plus'){for(const q of all)H(q);}                            // uniform superposition: every ρ cell equal
@@ -532,6 +651,8 @@ function presetGates(name,n){const g=[];
     for(let i=0;i<n-1;i++)CX(i,i+1);if(n>1)CX(n-1,0);for(const q of all)H(q);for(let i=0;i<n-1;i++)CZ(i,i+1);}
   return g;}
 
+// Form the density matrix ρ = |ψ⟩⟨ψ| and pack each entry as (magnitude, re, im).
+// ρ_rc = amp_r · conj(amp_c); this is what every cell in the 3D grid displays.
 function densityToCell(state){ // returns Float32Array[DIM*DIM*3] = mag,re,im
   const re=state.re,im=state.im,out=new Float32Array(DIM*DIM*3);
   for(let r=0;r<DIM;r++){const cr=re[r],ci=im[r];for(let c=0;c<DIM;c++){
@@ -539,6 +660,9 @@ function densityToCell(state){ // returns Float32Array[DIM*DIM*3] = mag,re,im
     out[k]=Math.hypot(rRe,rIm);out[k+1]=rRe;out[k+2]=rIm;}}
   return out;}
 
+// Rebuild everything after any circuit change: run buildTrace, derive one ρ cell
+// buffer per layer, reset the instance cache, rebuild meshes, and refresh the HUD.
+// keepPos restores the current playhead position so edits do not jump the view.
 function rebuild(keepPos){
   if(typeof stopSampling==='function')stopSampling();const hp=document.getElementById('hist-panel');if(hp)hp.classList.remove('show');
   if(VS.gates.length===0){trace=null;VS.frameIndex=0;renderList();return;}
@@ -559,31 +683,41 @@ function rebuild(keepPos){
   document.getElementById('st-dim').textContent=DIM+'×'+DIM+' cells';
   document.getElementById('st-layers').textContent=totalLayers+' layer'+(totalLayers>1?'s':'');
 }
+// Load a named algorithm: set its qubit count if fixed, generate its gates,
+// highlight its button, rebuild, and mirror the code into the Qiskit editor.
 function loadPreset(name){VS.preset=name;initBasis=0;if(PRESET_N[name]){VS.numQubits=PRESET_N[name];clampQ();}VS.gates=presetGates(name,VS.numQubits);
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.toggle('active',b.dataset.preset===name));rebuild();setQiskitFromState();}
 
 /* ════════ three.js scene ════════ */
+// Renderer with exact color (no tone mapping); OutputPass later does linear→sRGB.
 const canvas=document.getElementById('gl');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
 renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
 renderer.setClearColor(0x0a0d14,1);                  // dark navy-black, matches #canvas-wrap
 renderer.toneMapping=THREE.NoToneMapping;renderer.outputColorSpace=THREE.SRGBColorSpace; // exact colors, no highlight roll-off
 const scene=new THREE.Scene(); // no fog: full grid stays visible at any size
+// Build a vertical gradient texture for the gradient backgrounds.
 function bgGrad(c0,c1,c2){const cv=document.createElement('canvas');cv.width=4;cv.height=512;const g=cv.getContext('2d');
   const grd=g.createLinearGradient(0,0,0,512);grd.addColorStop(0,c0);grd.addColorStop(0.5,c1);grd.addColorStop(1,c2);
   g.fillStyle=grd;g.fillRect(0,0,4,512);const tx=new THREE.CanvasTexture(cv);tx.colorSpace=THREE.SRGBColorSpace;return tx;}
+// Background presets: each returns a fresh color or gradient texture.
 const BGS={navy:()=>bgGrad('#16294d','#0d1830','#05070f'),black:()=>new THREE.Color(0x000000),slate:()=>new THREE.Color(0x12161e),
   steel:()=>new THREE.Color(0x2a3340),dusk:()=>bgGrad('#2a1a3e','#1a1530','#0a0812'),paper:()=>new THREE.Color(0xe8ecf2)};
+// Apply a background: set the scene texture, match the renderer clear color, and
+// mark the active swatch.
 function setBg(name){if(!BGS[name])return;VS.bg=name;scene.background=BGS[name]();
   const solid={black:0x000000,slate:0x12161e,steel:0x2a3340,paper:0xe8ecf2,navy:0x0a0d14,dusk:0x0a0812};renderer.setClearColor(solid[name]??0x0a0d14,1);
   document.querySelectorAll('.bg-sw').forEach(b=>b.classList.toggle('active',b.dataset.bg===name));}
 setBg('black');
+// Camera and orbit controls. Auto-orbit pauses on user drag and resumes after 3.5 s.
 const camera=new THREE.PerspectiveCamera(46,1,0.1,6000);
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.enableDamping=true;controls.dampingFactor=0.08;controls.minDistance=4;controls.maxDistance=2000;
 controls.autoRotate=true;controls.autoRotateSpeed=0.55;
 controls.addEventListener('start',()=>{controls.autoRotate=false;clearTimeout(window._arT);});
 controls.addEventListener('end',()=>{if(VS.autoRotate)window._arT=setTimeout(()=>controls.autoRotate=true,3500);});
+// Soft fill plus two directional lights; cells use MeshBasicMaterial so lighting
+// mostly shapes the edges and any lit non-basic geometry.
 scene.add(new THREE.AmbientLight(0x556682,1.1));
 const dir=new THREE.DirectionalLight(0xcfe6ff,0.8);dir.position.set(10,26,14);scene.add(dir);
 const dir2=new THREE.DirectionalLight(0x4878b0,0.4);dir2.position.set(-12,10,-8);scene.add(dir2);
@@ -594,15 +728,20 @@ const bloom=new UnrealBloomPass(new THREE.Vector2(1,1),0.4,0.5,0.15); // strengt
 composer.addPass(bloom);
 composer.addPass(new OutputPass());   // REQUIRED in r152+: applies tonemap + linear→sRGB; without it bg & heatmap colors render wrong
 
+// grp holds every ρ mesh so orientation (vertical vs horizontal stack) is one
+// group rotation. All the meshes below are (re)created by rebuildMeshes().
 const grp=new THREE.Group();scene.add(grp);
 let cellMesh=null,edgeLines=null,edgeBuf=null,floorMesh=null,floorGrid=null,netLines=null,labelGroup=null,sampleMesh=null;
 let histGroup=null,histBars=null,histMarks=null;
 let inspMesh=null,lastInspStep=-99;
 let last2dLayer=-99,grid2dDirty=true;
+// Layout constants: cell PITCH, cube size, max floor-field height, gap between layers.
 const PITCH=1.0,CUBE=0.82,MAXH=4.4,LAYER_GAP=1.15;       // NO instance cap — render everything the circuit produces
 const BARMAX=4.6;                                         // tallest sampling-histogram bar (world units)
 const dummy=new THREE.Object3D(),_col=new THREE.Color();
 let DIM=8;
+// _EI lists the 8 cube corners paired into the 12 edges (24 vertex references),
+// used to draw zero-probability cells as clean wireframes with no face diagonals.
 const _EH=CUBE/2,_EI=[0,1,1,2,2,3,3,0,4,5,5,6,6,7,7,4,0,4,1,5,2,6,3,7]; // 12 cube edges = 24 verts (no face diagonals)
 function writeBoxEdges(buf,voff,cx,cy,cz,h){              // write one cube's 12 edges as line-segment verts
   const x0=cx-_EH,x1=cx+_EH,z0=cz-_EH,z1=cz+_EH,y0=cy,y1=cy+h;
@@ -611,9 +750,13 @@ function writeBoxEdges(buf,voff,cx,cy,cz,h){              // write one cube's 12
   return voff+24;
 }
 
+// Free the GPU resources of a group before discarding it, to avoid leaks on rebuild.
 function disposeGroup(g){if(!g)return;g.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());}});}
 function edgeColor3(){const c=heatColor(0.01);return new THREE.Color().setRGB(c[0]/255,c[1]/255,c[2]/255,THREE.SRGBColorSpace);} // 1% floor color for zero-cell ghosts
 
+// Recreate every mesh for the current DIM and shape: the instanced ρ cells, the
+// wireframe ghosts, the sampling glow/bars/marks, the step-inspector highlight,
+// the floor and grid, the network lines, the basis labels, and the init picker.
 function rebuildMeshes(){
   while(grp.children.length){const c=grp.children.pop();disposeGroup(c);}
   histGroup=null;histBars=null;histMarks=null;
@@ -670,6 +813,8 @@ function rebuildMeshes(){
   buildLabels();
   ensureInitPicker();
 }
+// Build the basis-state labels (binary kets) along two edges of the grid, drawn as
+// canvas-texture sprites. Skipped when DIM exceeds 16 (too many to read).
 function buildLabels(){
   if(labelGroup){disposeGroup(labelGroup);}
   labelGroup=new THREE.Group();grp.add(labelGroup);
@@ -685,6 +830,8 @@ function buildLabels(){
     b.position.set((i-(DIM-1)/2)*PITCH,0.05,-half-0.7);b.scale.set(1.1,0.55,1);labelGroup.add(b);}
   labelGroup.visible=VS.labels;
 }
+// Position the camera to frame the whole structure for the active view and
+// orientation, leaving room above the tower for the sampling bar chart.
 function frameCamera(){
   const span=DIM*PITCH;
   if(VS.viewMode==='stack'){
@@ -708,6 +855,7 @@ function frameCamera(){
 }
 
 /* ════════ shared helpers ════════ */
+// The measured basis-state index for this circuit, or -1 if no measurement fired.
 function selectedOutcomeIndex(){if(!trace)return -1;const ms=trace.steps.find(s=>s.selectedOutcome!=null);return ms?(parseInt(ms.selectedOutcome,2)||0):-1;}
 
 /* ════════ STACK view ════════
@@ -717,13 +865,21 @@ function selectedOutcomeIndex(){if(!trace)return -1;const ms=trace.steps.find(s=
 function stageDuration(){return Math.max(0.06,VS.holdTime);}          // dwell per stage (seconds)
 function totalStackTime(){return (totalLayers+1)*stageDuration();}     // +1 = final hold before loop
 function currentStageFor(t){return Math.max(0,Math.min(totalLayers-1,Math.floor(t/stageDuration())));}
+// Synthesize a settled frame object for a whole stack stage (used to drive the
+// HUD and score without a per-substep frame).
 function stageFrame(stage){const si=stage-1,st=trace.steps[si];
   return {stepIndex:si,gateName:si<0?'init':(st?st.name:'?'),phase:'settle',measurement:!!(st&&st.kind==='measurement'),t:1,state:layerStates[stage]};}
 function maxBuildableStage(){return builtStage<0?totalLayers-1:builtStage;}
 function ghostsEnabled(){return VS.numQubits<=4;}          // 5+ qubits: render NOTHING for zero-probability cells (too dense otherwise)
 function heatCut(){return Math.max(1e-4,VS.threshold);}   // |ρ| below this renders as a transparent ghost (edges only); Heat slider raises it
+// Cumulative instance counts: how many solid cells / ghost edges exist through
+// layer L. These make revealing a layer a matter of setting count and drawRange.
 function layerEnd(L){return L<0?0:(layerEndArr[L]||0);}
 function edgeEnd(L){return L<0?0:(edgeEndArr[L]||0);}
+// Ensure every layer up to `stage` has its instances written, appending only the
+// newly revealed layers (append-once). Each cell above the heat cutoff becomes a
+// colored cube; zeros become wireframe ghosts (dropped past 4 qubits). The final
+// lines just set count/drawRange so only the shown layers render.
 function buildStackUpTo(stage){
   stage=Math.min(stage,totalLayers-1);
   const CUT=heatCut(),ghosts=ghostsEnabled();
@@ -754,6 +910,8 @@ function buildStackUpTo(stage){
   cellMesh.count=shown<0?0:layerEnd(shown);edgeLines.geometry.setDrawRange(0,shown<0?0:edgeEnd(shown));
   return shown;
 }
+// Draw the "shot-stack network": lines from the source population cells in the
+// layer below a measurement up to the single collapsed outcome cell above it.
 function drawStackNetwork(stage){
   let measLayer=-1;
   for(let L=1;L<=stage;L++){if(trace.steps[L-1]&&trace.steps[L-1].kind==='measurement'){measLayer=L;break;}}
@@ -777,6 +935,9 @@ function applyThreshold(){ // rewrite matrices of already-built cells to honor b
       cellMesh.setMatrixAt(inst++,dummy.matrix);}}
   cellMesh.instanceMatrix.needsUpdate=true;
 }
+// Per-frame stack update: lay the group on its side for horizontal orientation,
+// build instances up to the current stage (or all layers when showFull), reveal
+// only the stage the playhead has reached, and refresh the network lines.
 function updateStack(dt){
   floorMesh.visible=VS.floorGrid;floorGrid.visible=VS.floorGrid;
   if(VS.floorGrid&&floorGrid.material){floorPulse+=dt*0.6;floorGrid.material.opacity=0.06+0.05*(0.5+0.5*Math.sin(floorPulse));}
@@ -791,7 +952,11 @@ function updateStack(dt){
 }
 
 /* ════════ FLOOR view (tucked-away morphing grid) ════════ */
+// Phase accumulator for the animated floor grid opacity.
 let floorPulse=0;
+// Floor-field view: a single ρ grid laid flat, cell height proportional to |ρ|,
+// rebuilt every frame from the current animation frame's state. Draws the same
+// measurement network lines as the stack when a collapse is in view.
 function updateFloor(frame,dt){
   grp.scale.setScalar(1);grp.rotation.set(0,0,0);          // floor field is always flat
   floorMesh.visible=true;floorGrid.visible=true;
@@ -826,13 +991,20 @@ function updateFloor(frame,dt){
 }
 
 /* ════════ circuit lens ════════ */
+// The circuit "score": a 2D canvas drawing qubit wires as staff lines and gates as
+// notes, with a playhead, bar lines every 4 columns, and a pinned qubit-label gutter.
 const circ=document.getElementById('circuit-canvas'),cctx=circ.getContext('2d');
 const cgut=document.getElementById('cgutter'),gctx=cgut.getContext('2d');
 const cscroll=document.getElementById('circuit-scroll');
 const COLW=46,GUT=30,PADR=20;                              // fixed column pitch → no squeeze; long circuits scroll like a score
 let circLayout={colW:COLW,x0:GUT+6,steps:0};
+// Vertical center of qubit q's staff line.
 function laneY(q,padT,laneH){return padT+laneH*(q+0.5);}
+// Rounded-rectangle path helper for the gate note boxes.
 function roundRect(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+// Redraw the whole score for the given frame: size the canvas (growing to scroll
+// for long circuits), draw bar lines, the playhead, the wires, each gate note,
+// the layer numbers, and the sticky gutter labels.
 function drawLens(frame){
   const dpr=Math.min(devicePixelRatio||1,2);
   const N=VS.numQubits,steps=VS.gates.length;
@@ -883,10 +1055,13 @@ function drawLens(frame){
 }
 /* ── scrub by dragging on the score (== moving the Scrub slider) ── */
 function revealMode(){VS.showFull=false;const t=document.getElementById('tog-full');if(t)t.classList.remove('on');} // scrub/play/step drop "show all" so layers reveal one at a time
+// Map a pointer x on the score to a layer and move the playhead there, pausing play.
 function circuitScrubTo(clientX){if(!trace)return;const rect=circ.getBoundingClientRect();const x=clientX-rect.left;
   const {colW,x0,steps}=circLayout;if(steps<1)return;let s=Math.floor((x-x0)/colW);s=Math.max(0,Math.min(steps-1,s));
   if(VS.viewMode==='stack')VS.stageTime=(s+1)*stageDuration()+1e-3;else VS.frameIndex=((s+0.5)/steps)*(trace.frames.length-1);
   revealMode();VS.playing=false;const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}}
+// Score pointer wiring: clicking an RZ note opens its angle editor; otherwise a
+// press-drag scrubs the playhead. Move sets the cursor and drives scrubbing.
 let scrubbing=false;
 circ.addEventListener('pointerdown',e=>{
   const rs=rzGateAt(e.clientX,e.clientY);
@@ -898,13 +1073,16 @@ circ.addEventListener('pointermove',e=>{
   circ.style.cursor=rzGateAt(e.clientX,e.clientY)>=0?'pointer':'ew-resize';});
 
 /* ════════ RZ angle editor — click an RZ note on the score to retune its phase ════════ */
+// editSel: index of the RZ gate being edited; rzEd: the lazily-built popup element.
 let editSel=-1, rzEd=null;
+// Format an angle as a fraction of π when it is close to a common value, else radians.
 function fmtPi(v){
   const r=v/Math.PI, near=(a,b)=>Math.abs(a-b)<0.012, sgn=r<0?'−':'';
   const fr=[[0,'0'],[1/16,'π/16'],[1/8,'π/8'],[1/6,'π/6'],[1/4,'π/4'],[1/3,'π/3'],[1/2,'π/2'],[3/4,'3π/4'],[1,'π'],[3/2,'3π/2'],[2,'2π']];
   for(const [k,s] of fr){if(near(Math.abs(r),k))return k===0?'0':sgn+s;}
   return v.toFixed(3);
 }
+// Hit-test the score: return the index of an RZ gate note under the pointer, or -1.
 function rzGateAt(clientX,clientY){
   if(!VS.gates.length||!circLayout||circLayout.padT==null)return -1;
   const rect=circ.getBoundingClientRect(),x=clientX-rect.left,y=clientY-rect.top;
@@ -915,6 +1093,8 @@ function rzGateAt(clientX,clientY){
     if(Math.abs(x-gx)<=bw/2+3&&Math.abs(y-gy)<=bh/2+3)return s;}
   return -1;
 }
+// Build the RZ editor popup once (slider, +/- steps, number field) and wire each
+// control to setAngle so retuning is live.
 function buildRzEditor(){
   rzEd=document.createElement('div');rzEd.id='rz-editor';
   rzEd.style.cssText='position:fixed;z-index:500;display:none;width:218px;background:rgba(9,12,20,0.98);'
@@ -943,6 +1123,7 @@ function buildRzEditor(){
   rzEd.querySelector('#rz-x').addEventListener('click',closeAngleEditor);
   return rzEd;
 }
+// Reflect the edited gate's current angle into the popup's widgets.
 function syncRzEditor(){
   if(editSel<0||!rzEd)return;const v=VS.gates[editSel].params[0];
   rzEd.querySelector('#rz-rad').textContent=v.toFixed(3);
@@ -950,6 +1131,8 @@ function syncRzEditor(){
   const sl=rzEd.querySelector('#rz-slider');if(document.activeElement!==sl)sl.value=v;
   const nm=rzEd.querySelector('#rz-num');if(document.activeElement!==nm)nm.value=v.toFixed(3);
 }
+// Apply a new angle to the edited gate: mark the circuit custom, pause, and
+// rebuild the trace (keeping the playhead) so the change shows immediately.
 function setAngle(v){
   if(editSel<0)return;
   VS.gates[editSel].params[0]=v;
@@ -957,6 +1140,7 @@ function setAngle(v){
   VS.playing=false;const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}
   rebuild(true);syncRzEditor();
 }
+// Open the editor for gate s near the pointer, clamped to stay on screen.
 function openAngleEditor(s,clientX,clientY){
   editSel=s;const g=VS.gates[s];if(!rzEd)buildRzEditor();
   rzEd.querySelector('#rz-title').textContent='RZ · q'+g.targets[0]+' · L'+(s+1);
@@ -967,12 +1151,15 @@ function openAngleEditor(s,clientX,clientY){
   if(y<8)y=clientY+pad;if(y+h>innerHeight-8)y=innerHeight-8-h;
   rzEd.style.left=x+'px';rzEd.style.top=y+'px';
 }
+// Close the RZ editor.
 function closeAngleEditor(){editSel=-1;if(rzEd)rzEd.style.display='none';}
+// Close it on any outside press (capture phase so it beats other handlers).
 document.addEventListener('pointerdown',e=>{
   if(editSel<0)return;
   if(rzEd&&rzEd.contains(e.target))return;
   if(e.target===circ)return;
   closeAngleEditor();},true);
+// Advance or rewind by one layer (stack) or one gate's worth of frames (floor).
 function stepLayer(dir){
   if(!trace)return;revealMode();VS.playing=false;
   const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}
@@ -983,6 +1170,7 @@ function stepLayer(dir){
   if(dir>0){let j=fi+1;while(j<trace.frames.length&&trace.frames[j].stepIndex===cur)j++;VS.frameIndex=Math.min(j,trace.frames.length-1);}
   else{let j=fi;while(j>0&&trace.frames[j].stepIndex===cur)j--;const pst=trace.frames[j].stepIndex;while(j>0&&trace.frames[j-1].stepIndex===pst)j--;VS.frameIndex=Math.max(0,j);}
 }
+// Keyboard transport: arrows step, Escape closes the editor; ignored in inputs.
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){closeAngleEditor();return;}
   const t=e.target,tn=t&&t.tagName;
@@ -992,6 +1180,8 @@ document.addEventListener('keydown',e=>{
 });
 circ.addEventListener('pointerup',()=>{scrubbing=false;});
 circ.addEventListener('pointercancel',()=>{scrubbing=false;});
+// Keep the playhead in view: nudge the score's horizontal scroll to track it,
+// snapping while scrubbing and easing while playing.
 function followPlayhead(){if(!trace)return;const {colW,x0,steps}=circLayout;if(steps<1)return;
   let s=VS.viewMode==='stack'?Math.max(0,currentStageFor(VS.stageTime)-1):Math.floor((VS.frameIndex/Math.max(1,trace.frames.length-1))*steps);
   const cx=x0+colW*(s+0.5),vw=cscroll.clientWidth,left=cscroll.scrollLeft;
@@ -999,6 +1189,7 @@ function followPlayhead(){if(!trace)return;const {colW,x0,steps}=circLayout;if(s
   else if(VS.playing){cscroll.scrollLeft+=((cx-vw/2)-left)*0.12;}}
 
 /* ════════ HUD ════════ */
+// Canvas contexts for the two overlay panels: the step inspector and the 2D grid.
 const inspCv=document.getElementById('insp-cv'),ictx=inspCv.getContext('2d');
 const g2dCv=document.getElementById('grid2d-cv'),g2ctx=g2dCv.getContext('2d');
 function draw2DGrid(si){                                     // flat crossword-style heatmap of the current layer's ρ, updates as it builds
@@ -1022,11 +1213,16 @@ function draw2DGrid(si){                                     // flat crossword-s
   if(gridHover)renderGridOverlay();
 }
 /* hover the 2D grid → show how the active layer's gate operates (operator support + cell readout) */
+// Overlay canvas + floating tooltip for hovering the 2D grid.
 const g2ov=document.getElementById('grid2d-ov'),g2octx=g2ov.getContext('2d');
 const gridTip=document.createElement('div');gridTip.id='grid-tip';document.body.appendChild(gridTip);
 let gridHover=null;const G2SZ=186;
+// Binary ket string for a basis index at the current qubit count.
 function bitstr(v){return v.toString(2).padStart(VS.numQubits,'0');}
+// All subsets of a bit mask (used to enumerate the cells a gate couples).
 function gateSubmasks(mask){const s=[];let x=mask;for(;;x=(x-1)&mask){s.push(x);if(x===0)break;}return s;}
+// Draw the hover overlay: shade the cells the active gate touches and outline the
+// hovered cell.
 function renderGridOverlay(){
   const dpr=Math.min(devicePixelRatio||1,2);
   if(g2ov.width!==(G2SZ*dpr|0)){g2ov.width=G2SZ*dpr|0;g2ov.height=G2SZ*dpr|0;g2ov.style.width=G2SZ+'px';g2ov.style.height=G2SZ+'px';}
@@ -1040,9 +1236,12 @@ function renderGridOverlay(){
       const subs=gateSubmasks(mask);for(let i=0;i<DIM;i++)for(const s of subs){const j=i^s;g2octx.fillRect(j*cell,i*cell,Math.max(1,cell),Math.max(1,cell));}}}
   g2octx.strokeStyle='#fff';g2octx.lineWidth=1.5;g2octx.strokeRect(gridHover.c*cell,gridHover.r*cell,Math.max(2,cell),Math.max(2,cell));
 }
+// Map a mouse event over the 2D grid to a (row, col) cell, or null if outside.
 function gridCellFromEvent(e){const r=g2dCv.getBoundingClientRect(),cell=G2SZ/DIM;
   const c=Math.floor((e.clientX-r.left)/cell),rr=Math.floor((e.clientY-r.top)/cell);
   if(c<0||rr<0||c>=DIM||rr>=DIM)return null;return {r:rr,c};}
+// Tooltip for a hovered ρ cell: name the gate and cell ⟨r|ρ|c⟩, show |ρ| and its
+// phase, and say whether the active gate couples this cell.
 function showGridTip(e){const hc=gridCellFromEvent(e);if(!hc||!trace){hideGridTip();return;}
   gridHover=hc;renderGridOverlay();
   const L=last2dLayer,g=(L>=1&&trace.steps[L-1])?trace.steps[L-1]:null,cells=layerCell[L];
@@ -1065,6 +1264,7 @@ function showGridTip(e){const hc=gridCellFromEvent(e);if(!hc||!trace){hideGridTi
 function hideGridTip(){gridHover=null;gridTip.style.display='none';renderGridOverlay();}
 g2dCv.addEventListener('mousemove',showGridTip);
 g2dCv.addEventListener('mouseleave',hideGridTip);
+// Draw the step inspector panel and, in stack view, highlight the coupled cells.
 function drawStepInspector(si){                              // mini score-column of the active step: gate glyph + highlighted qubits
   const panel=document.getElementById('step-inspector');
   if(!VS.stepInspect||!trace){panel.classList.remove('show');if(inspMesh)inspMesh.count=0;lastInspStep=-99;return;}
@@ -1101,6 +1301,9 @@ function drawStepInspector(si){                              // mini score-colum
   document.getElementById('insp-title').innerHTML=lbl+'<span class="note">'+note+'</span>';
   highlightStepCells(si,g);
 }
+// Place additive highlight cubes on exactly the cells (i,j) the active gate can
+// couple: those agreeing on every spectator qubit, i.e. (i^j) has no bits outside
+// the gate's qubit mask. Diagonals glow brighter than off-diagonals.
 function highlightStepCells(si,g){                          // tint the array cells this gate's operator couples (diagonal + cross-correlation off-diagonals)
   if(!inspMesh)return;
   const Q=g?(g.targets||[]).concat(g.controls||[]):[],k=Q.length;
@@ -1118,11 +1321,15 @@ function highlightStepCells(si,g){                          // tint the array ce
   }
   inspMesh.count=n;inspMesh.instanceMatrix.needsUpdate=true;if(inspMesh.instanceColor)inspMesh.instanceColor.needsUpdate=true;
 }
+// Update the parts of the HUD that change only on a rebuild: qubit count and the
+// color legend for the active coloring mode.
 function updateHudStatic(){document.getElementById('st-qubits').textContent=VS.numQubits+' qubits';
   const lg=document.getElementById('legend');
   if(VS.colorMode==='mag')lg.innerHTML='<span><i style="background:'+cmapCss(currentCmap())+'"></i>|ρ| low→high</span>';
   else if(VS.colorMode==='real')lg.innerHTML='<span><i style="background:linear-gradient(90deg,#ffb948,#24344e,#45d3ff)"></i>Re(ρ) −→+</span>';
   else lg.innerHTML='<span><i style="background:linear-gradient(90deg,#4bd7ff,#8273ff,#ffb15c)"></i>∠ρ phase</span>';}
+// Per-frame HUD: refresh the inspector and 2D grid, then rewrite the step/phase,
+// outcome, and telemetry readouts for the current frame.
 function updateHud(frame){const steps=VS.gates.length,si=frame?frame.stepIndex:0;
   drawStepInspector(si);draw2DGrid(si);
   const ph=frame?frame.phase:'—';const c=phaseColorArr(ph);
@@ -1138,6 +1345,8 @@ function updateHud(frame){const steps=VS.gates.length,si=frame?frame.stepIndex:0
   else b.innerHTML='<span class="tag">floor field:</span> single ρ(t) grid morphing on the animated floor. height ∝ |ρ<sub>ij</sub>|.';}
 
 /* ════════ Qiskit programming (hidden dock panel) ════════ */
+// Parse a small Qiskit-like source into {n, gates}: read QuantumCircuit(n), then
+// one gate per method call. Angles allow pi and arithmetic; unknown ops throw.
 function parseQiskit(src){
   const num=tok=>{const e=tok.trim().replace(/pi/gi,'Math.PI');if(!/^[-+0-9.\s*/()MathPI]*$/.test(e)||e==='')throw 'bad angle: '+tok;return Function('return ('+e+')')();};
   const qi=a=>{const v=parseInt(a,10);if(!Number.isInteger(v))throw 'bad qubit: '+a;return v;};
@@ -1162,9 +1371,11 @@ function parseQiskit(src){
     else for(const q of g.targets.concat(g.controls||[]))if(!(q>=0&&q<n))throw 'qubit '+q+' out of range for n='+n;}
   return {n,gates};
 }
+// Toggle the Qiskit panel open/closed and refresh highlighting when shown.
 document.getElementById('cd-qiskit-btn').onclick=function(){const p=document.getElementById('qiskit-panel');p.hidden=!p.hidden;this.classList.toggle('on',!p.hidden);if(!p.hidden)syncQiskitHL();resize();};
 
 /* ---- Qiskit: codegen for the active algorithm + live syntax highlighting ---- */
+// Emit Qiskit source for the current gate list (the inverse of parseQiskit).
 function gatesToQiskit(gates,n){
   const fmt=x=>String(+(+x).toFixed(6));
   const out=['qc = QuantumCircuit('+n+')'];
@@ -1179,6 +1390,8 @@ function gatesToQiskit(gates,n){
     else if(g.kind==='measurement')out.push('qc.measure_all()');}
   return out.join('\n');
 }
+// Turn source into highlighted HTML by tokenizing and wrapping keywords, gate
+// names, numbers, pi, and comments in colored spans. Drawn under the textarea.
 function highlightQiskit(src){
   const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const single=/^(h|x|y|z|s|t|rx|ry|rz)$/,multi=/^(cx|cnot|cz|swap|ccx|toffoli|cswap|fredkin|measure|measure_all|barrier)$/;
@@ -1198,6 +1411,7 @@ function highlightQiskit(src){
     return out||' ';
   }).join('\n');
 }
+// Repaint the highlight layer from the textarea and keep the two scroll-aligned.
 function syncQiskitHL(){const ta=document.getElementById('qiskit-src'),hl=document.getElementById('qiskit-hl');hl.innerHTML=highlightQiskit(ta.value);hl.scrollTop=ta.scrollTop;hl.scrollLeft=ta.scrollLeft;}
 function setQiskitFromState(){                              // mirror the active algorithm into the editor (read-only display)
   const ta=document.getElementById('qiskit-src');ta.value=gatesToQiskit(VS.gates,VS.numQubits);ta.readOnly=true;
@@ -1205,6 +1419,7 @@ function setQiskitFromState(){                              // mirror the active
   const msg=document.getElementById('qiskit-msg');msg.textContent='live code for the active algorithm';msg.className='';
   syncQiskitHL();
 }
+// Switch the editor from read-only mirror to an editable custom circuit.
 document.getElementById('qiskit-custom').onclick=function(){
   const ta=document.getElementById('qiskit-src');ta.readOnly=false;ta.focus();
   this.hidden=true;document.getElementById('qiskit-run').hidden=false;
@@ -1212,6 +1427,8 @@ document.getElementById('qiskit-custom').onclick=function(){
 (function(){const ta=document.getElementById('qiskit-src');
   ta.addEventListener('input',syncQiskitHL);
   ta.addEventListener('scroll',()=>{const hl=document.getElementById('qiskit-hl');hl.scrollTop=ta.scrollTop;hl.scrollLeft=ta.scrollLeft;});})();
+// Run the custom circuit: parse it, load it as the active circuit, and report ok
+// or the parse error inline.
 document.getElementById('qiskit-run').onclick=()=>{const msg=document.getElementById('qiskit-msg');try{
   const {n,gates}=parseQiskit(document.getElementById('qiskit-src').value);
   VS.numQubits=n;VS.preset='custom';VS.gates=gates;initBasis=0;clampQ();
@@ -1220,18 +1437,24 @@ document.getElementById('qiskit-run').onclick=()=>{const msg=document.getElement
 }catch(e){msg.textContent='✕ '+e;msg.className='err';}};
 
 /* ════════ measurement sampling — lit one shot at a time, Gaussian-paced ════════ */
+// 2D histogram canvas and the current sampling animation state (null when idle).
 const histCv=document.getElementById('hist-canvas'),hctx=histCv.getContext('2d');
 let sampleAnim=null;
+// Abramowitz-Stegun approximation of the error function, for the pacing curve.
 function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);
   const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y;}
 const _S0=0.5*(1+erf((0-0.5)/(0.19*Math.SQRT2))),_S1=0.5*(1+erf((1-0.5)/(0.19*Math.SQRT2)));
 function sCurve(p){const s=0.5*(1+erf((p-0.5)/(0.19*Math.SQRT2)));return Math.min(1,Math.max(0,(s-_S0)/(_S1-_S0)));} // integral of a Gaussian rate: slow→fast→slow
+// Position the additive glow cubes over the diagonal (population) cells of the
+// sampling layer, ready to be lit as shots arrive.
 function placeSampleGlow(L){                                 // diagonal (population) cells of the sampling layer
   for(let i=0;i<DIM;i++){const x=(i-(DIM-1)/2)*PITCH,z=(i-(DIM-1)/2)*PITCH;
     const y=(VS.viewMode==='floor')?CUBE*0.5:L*LAYER_GAP+CUBE*0.5;
     dummy.position.set(x,y,z);dummy.scale.set(1,1,1);dummy.updateMatrix();sampleMesh.setMatrixAt(i,dummy.matrix);}
   sampleMesh.instanceMatrix.needsUpdate=true;sampleMesh.count=DIM;
 }
+// Size the 3D result bars from the empirical counts and place the amber crossbar
+// at each state's true probability, so the bars visibly converge to the marks.
 function updateHistBars(A){
   if(!histBars||histBars.count!==A.D)return;
   const baseY=(VS.viewMode==='floor')?CUBE:A.layer*LAYER_GAP+CUBE;     // top of the sampling layer's cells
@@ -1247,6 +1470,9 @@ function updateHistBars(A){
   histBars.instanceMatrix.needsUpdate=true;if(histBars.instanceColor)histBars.instanceColor.needsUpdate=true;
   histMarks.instanceMatrix.needsUpdate=true;
 }
+// Start the measurement sampler: force the stack view fully revealed, pick the
+// layer just before collapse, compute its true |ψ|² distribution, and set up the
+// animation state (counts, pulses, seeded RNG) plus the on-screen bars.
 function runSampling(){
   if(!trace)return;
   if(VS.viewMode!=='stack'){VS.viewMode='stack';document.querySelectorAll('.dock-view').forEach(b=>b.classList.toggle('active',b.dataset.view==='stack'));}
@@ -1268,6 +1494,8 @@ function runSampling(){
   histGroup.visible=true;
   document.getElementById('hist-panel').classList.add('show');frameCamera();
 }
+// Advance sampling each frame: emit shots at a Gaussian-shaped rate (slow at the
+// ends, fast in the middle), decay the per-cell pulses, and repaint bars/glow.
 function updateSampling(dt){
   const A=sampleAnim;if(!A)return;A.gp+=dt*5;
   if(!A.done){
@@ -1285,7 +1513,9 @@ function updateSampling(dt){
   const decay=Math.exp(-dt*4);for(let i=0;i<A.D;i++)A.pulses[i]*=decay;
   paintSampleGlow(A);updateHistBars(A);drawHistogram(A);
 }
+// Draw one measurement shot: sample an outcome, bump its count, flash its pulse.
 function oneShot(A){const idx=sampleOutcome(A.rng,A.probs);A.counts[idx]++;A.pulses[idx]=1;A.drawn++;if(A.counts[idx]>A.maxc)A.maxc=A.counts[idx];}
+// Light the diagonal glow cubes: steady brightness by count, spike on a fresh hit.
 function paintSampleGlow(A){
   if(!sampleMesh||sampleMesh.count!==A.D)return;
   const breathe=0.75+0.25*Math.sin(A.gp);
@@ -1296,6 +1526,8 @@ function paintSampleGlow(A){
     sampleMesh.setColorAt(i,_col);}
   if(sampleMesh.instanceColor)sampleMesh.instanceColor.needsUpdate=true;
 }
+// Draw the 2D histogram panel: empirical bars per basis state with an amber line
+// at the true probability, plus the shots-drawn readout.
 function drawHistogram(A){
   const dpr=Math.min(devicePixelRatio||1,2),W=histCv.clientWidth||600,H=histCv.clientHeight||96;
   if(histCv.width!==Math.round(W*dpr)||histCv.height!==Math.round(H*dpr)){histCv.width=Math.round(W*dpr);histCv.height=Math.round(H*dpr);}
@@ -1310,12 +1542,17 @@ function drawHistogram(A){
   hctx.strokeStyle='rgba(70,95,135,0.5)';hctx.lineWidth=1;hctx.beginPath();hctx.moveTo(padL,padB+0.5);hctx.lineTo(padR,padB+0.5);hctx.stroke();
   document.getElementById('hist-info').innerHTML='<b>'+A.drawn+'</b> / '+A.shots+' shots · '+D+' basis states · amber line = true |ψ|²';
 }
+// Stop and clear the sampler and hide its 3D bars.
 function stopSampling(){sampleAnim=null;if(sampleMesh)sampleMesh.count=0;if(histGroup)histGroup.visible=false;if(histBars)histBars.count=0;if(histMarks)histMarks.count=0;}
 document.getElementById('btn-sample').onclick=runSampling;
 document.getElementById('hist-close').onclick=()=>{document.getElementById('hist-panel').classList.remove('show');stopSampling();};
 
 /* ════════ loop ════════ */
+// FPS bookkeeping; TL_FPS is the nominal frame rate the floor timeline steps at.
 let last=0,fc=0,ft=0;const TL_FPS=26;
+// Main render loop: advance the playhead (stack stage or floor frame index),
+// update the active view, redraw the score and HUD, sync the scrub slider, run
+// the sampler, then render through the bloom composer.
 function loop(t){requestAnimationFrame(loop);const dt=Math.min((t-last)/1000,0.05);last=t;
   fc++;ft+=dt;if(ft>=0.5){document.getElementById('st-fps').textContent=Math.round(fc/ft)+' fps';fc=0;ft=0;}
   if(trace){
@@ -1343,6 +1580,7 @@ function applyAutoOrient(W,H){                              // wide window → h
     if(b)b.textContent=want==='horizontal'?'⬌ Horizontal (auto)':'⬍ Vertical (auto)';
     if(typeof frameCamera==='function')frameCamera();}
 }
+// Tracks the last mobile/desktop decision so the layout only switches on change.
 let wasMobile=null;
 function applyMobileLayout(W){                              // narrow viewport: kill the overlay panels (they cover the 3D view)
   const mob=W<760;if(mob===wasMobile)return;wasMobile=mob;
@@ -1352,18 +1590,27 @@ function applyMobileLayout(W){                              // narrow viewport: 
   else{VS.stepInspect=true;VS.grid2d=true;grid2dDirty=true;last2dLayer=-99;
     const a=document.getElementById('tog-inspect'),b=document.getElementById('tog-grid2d');if(a)a.classList.add('on');if(b)b.classList.add('on');}
 }
+// Match renderer, composer, and camera to the GL host size, then re-apply the
+// auto orientation and mobile layout. Driven by a ResizeObserver on the host.
 function resize(){const w=document.getElementById('gl-host');const W=w.clientWidth||600,H=w.clientHeight||400;renderer.setSize(W,H,false);composer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();applyAutoOrient(W,H);applyMobileLayout(window.innerWidth||W);}
 if(window.ResizeObserver)new ResizeObserver(resize).observe(document.getElementById('gl-host'));else window.addEventListener('resize',resize);
 
 /* ════════ UI wiring ════════ */
+// Short id lookup used throughout the wiring below.
 const $=id=>document.getElementById(id);
+// Paint a slider's filled portion via the --pct custom property the CSS reads.
 function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
+// Keep target/control qubit selections within the current qubit count and update
+// their readouts.
 function clampQ(){VS.target=Math.max(0,Math.min(VS.numQubits-1,VS.target));VS.control=Math.max(0,Math.min(VS.numQubits-1,VS.control));$('t-val').textContent=VS.target;$('c-val').textContent=VS.control;$('q-count').textContent=VS.numQubits;}
+// Rebuild the sequence list from VS.gates, one row per gate with a delete button.
 function renderList(){const list=$('gate-list');list.innerHTML='';if(VS.gates.length===0){list.innerHTML='<div class="gate-empty">pick a preset or build</div>';return;}
   VS.gates.forEach((g,i)=>{const d=document.createElement('div');d.className='gate-item';let q;
     if(g.kind==='measurement')q='all';else if(g.controls&&g.controls.length)q='c'+g.controls[0]+'→t'+g.targets[0];else if(g.name==='swap')q=g.targets[0]+'↔'+g.targets[1];else q='q'+g.targets[0]+(g.params&&g.params.length?' ('+g.params[0].toFixed(2)+')':'');
     d.innerHTML=`<span class="gi-idx">${i}</span><span class="gi-name">${g.kind==='measurement'?'MEAS':g.name.toUpperCase()}</span><span class="gi-q">${q}</span><button class="gi-del" data-i="${i}">✕</button>`;list.appendChild(d);});
   list.querySelectorAll('.gi-del').forEach(b=>b.addEventListener('click',()=>{VS.gates.splice(+b.dataset.i,1);VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));rebuild();}));}
+// Append a gate from the palette using the current target/control/angle. Two-qubit
+// gates need distinct qubits; a measurement is always removed first so it stays last.
 function addGate(name){const two=['cx','cz','swap'].includes(name),rot=['rx','ry','rz'].includes(name);let g;
   if(name==='swap')g={name,kind:'unitary',targets:[VS.target,VS.control],controls:[]};
   else if(two)g={name,kind:'unitary',targets:[VS.target],controls:[VS.control]};
@@ -1371,6 +1618,8 @@ function addGate(name){const two=['cx','cz','swap'].includes(name),rot=['rx','ry
   else g={name,kind:'unitary',targets:[VS.target],controls:[]};
   if(two&&VS.target===VS.control){const e=$('c-val');e.style.color='var(--red)';setTimeout(()=>e.style.color='',300);return;}
   VS.gates=VS.gates.filter(x=>x.kind!=='measurement');VS.gates.push(g);VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));rebuild();}
+// Qubit-count and target/control steppers; changing the count reloads a preset or
+// rebuilds a custom circuit at the new size.
 $('q-minus').onclick=()=>{VS.numQubits=Math.max(1,VS.numQubits-1);initBasis=0;clampQ();if(VS.preset!=='custom')loadPreset(VS.preset);else rebuild();};
 $('q-plus').onclick=()=>{VS.numQubits=Math.min(8,VS.numQubits+1);initBasis=0;clampQ();if(VS.preset!=='custom')loadPreset(VS.preset);else rebuild();};
 $('t-minus').onclick=()=>{VS.target--;clampQ();};$('t-plus').onclick=()=>{VS.target++;clampQ();};
@@ -1378,7 +1627,9 @@ $('c-minus').onclick=()=>{VS.control--;clampQ();};$('c-plus').onclick=()=>{VS.co
 $('sl-angle').addEventListener('input',function(){VS.angle=+this.value;sg(this);const f=this.value/Math.PI;$('vl-angle').textContent=Math.abs(f-0.5)<0.02?'π/2':Math.abs(f-1)<0.02?'π':f.toFixed(2)+'π';});sg($('sl-angle'));
 document.querySelectorAll('.gate-btn').forEach(b=>b.addEventListener('click',()=>addGate(b.dataset.g)));
 /* ── hover a gate → show its unitary (operator) matrix at the cursor ── */
+// Floating tooltip that shows a gate's operator matrix while hovering its button.
 const gateTip=document.createElement('div');gateTip.id='gate-tip';document.body.appendChild(gateTip);
+// The display matrix (and label/prefactor) for each palette gate.
 function gateMatrix(g){switch(g){
   case 'h':return{n:'Hadamard',f:'1/√2',m:[['1','1'],['1','−1']]};
   case 'x':return{n:'Pauli-X (NOT)',m:[['0','1'],['1','0']]};
@@ -1407,30 +1658,41 @@ document.querySelectorAll('.gate-btn').forEach(b=>{
   b.addEventListener('mouseenter',()=>showGateTip(b.dataset.g));
   b.addEventListener('mousemove',moveGateTip);
   b.addEventListener('mouseleave',()=>{gateTip.style.display='none';});});
+// Append a measurement over all qubits (only one, always last), or clear the circuit.
 $('btn-measure').onclick=()=>{VS.gates=VS.gates.filter(x=>x.kind!=='measurement');VS.gates.push({name:'measure',kind:'measurement',targets:Array.from({length:VS.numQubits},(_,i)=>i)});rebuild();};
 $('btn-clear').onclick=()=>{VS.gates=[];VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));rebuild();};
+// Preset buttons load an algorithm.
 document.querySelectorAll('.preset-btn').forEach(b=>b.addEventListener('click',()=>loadPreset(b.dataset.preset)));
+// View switch (layer stack vs floor field): reset the instance cache and reframe.
 document.querySelectorAll('.dock-view').forEach(b=>b.addEventListener('click',()=>{VS.viewMode=b.dataset.view;stopSampling();document.getElementById('hist-panel').classList.remove('show');builtStage=-1;layerEndArr=[];edgeEndArr=[];document.querySelectorAll('.dock-view').forEach(x=>x.classList.toggle('active',x===b));frameCamera();updateHudStatic();if(typeof updateDiagGuide==='function')updateDiagGuide();hideInitHover();}));
+// Coloring mode (|ρ| / Re / phase): reset the cache so cells recolor.
 document.querySelectorAll('.mode-grid .mode-btn').forEach(b=>b.addEventListener('click',()=>{VS.colorMode=b.dataset.cm;document.querySelectorAll('.mode-grid .mode-btn').forEach(x=>x.classList.toggle('active',x===b));builtStage=-1;layerEndArr=[];edgeEndArr=[];grid2dDirty=true;updateHudStatic();}));
 // colormap grid (fluidlab-style swatches)
+// Paint each colormap swatch by sampling its ramp across the preview canvas.
 function renderCmapPreviews(){document.querySelectorAll('.cmap-btn').forEach(btn=>{const cv=btn.querySelector('canvas');cv.width=120;cv.height=24;const x=cv.getContext('2d');const H=CMAPS[btn.dataset.cmap];for(let px=0;px<120;px++){const t=px/119,s=t*(H.length-1),i=Math.min(Math.floor(s),H.length-2),f=s-i;x.fillStyle='rgb('+((H[i][0]+(H[i+1][0]-H[i][0])*f)|0)+','+((H[i][1]+(H[i+1][1]-H[i][1])*f)|0)+','+((H[i][2]+(H[i+1][2]-H[i][2])*f)|0)+')';x.fillRect(px,0,1,24);}});}
 document.querySelectorAll('.cmap-btn').forEach(b=>b.addEventListener('click',()=>{ACTIVE_HEAT=CMAPS[b.dataset.cmap];document.querySelectorAll('.cmap-btn').forEach(x=>x.classList.toggle('active',x===b));if(edgeLines)edgeLines.material.color.copy(edgeColor3());builtStage=-1;layerEndArr=[];edgeEndArr=[];if(typeof drawCurveEditor==='function')drawCurveEditor();grid2dDirty=true;updateHudStatic();}));
 renderCmapPreviews();
-// shape grid
+// shape grid: the cell primitive (rounded cube, box, sphere, octahedron) needs a
+// mesh rebuild because the geometry changes.
 document.querySelectorAll('.shape-grid .mode-btn').forEach(b=>b.addEventListener('click',()=>{VS.shape=b.dataset.shape;document.querySelectorAll('.shape-grid .mode-btn').forEach(x=>x.classList.toggle('active',x===b));builtStage=-1;layerEndArr=[];edgeEndArr=[];rebuildMeshes();}));
 // background swatches
 document.querySelectorAll('.bg-sw').forEach(b=>b.addEventListener('click',()=>setBg(b.dataset.bg)));
+// Transport buttons: play/pause, single step, restart.
 $('btn-play').onclick=function(){VS.playing=!VS.playing;if(VS.playing)revealMode();this.textContent=VS.playing?'▐▐ Pause':'▶ Play';this.classList.toggle('active',VS.playing);};
 $('btn-step').onclick=()=>{if(!trace)return;revealMode();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');
   if(VS.viewMode==='stack'){const ns=currentStageFor(VS.stageTime)+1;VS.stageTime=(ns>=totalLayers?0:ns)*stageDuration();return;}
   const fi=Math.floor(VS.frameIndex),cur=trace.frames[Math.min(fi,trace.frames.length-1)].stepIndex;let j=fi+1;while(j<trace.frames.length&&trace.frames[j].stepIndex===cur)j++;VS.frameIndex=j<trace.frames.length?j:0;};
 $('btn-restart').onclick=()=>{VS.frameIndex=0;VS.stageTime=0;builtStage=-1;layerEndArr=[];edgeEndArr=[];};
+// Playback and sampling sliders: each stores its value into VS and updates its readout.
 $('sl-speed').addEventListener('input',function(){VS.speed=+this.value;$('vl-speed').textContent=(+this.value).toFixed(1);sg(this);});sg($('sl-speed'));
 $('sl-hold').addEventListener('input',function(){VS.holdTime=+this.value;$('vl-hold').textContent=(+this.value).toFixed(1)+'s';sg(this);});sg($('sl-hold'));
 $('sl-thresh').addEventListener('input',function(){VS.threshold=+this.value;$('vl-thresh').textContent=(+this.value).toFixed(2);VS.threshDirty=true;sg(this);});sg($('sl-thresh'));
 /* ---- tone curve editor (Photoshop-style draggable keys) ---- */
+// The small canvas that draws the tone curve and lets the middle key be dragged.
+// CVP is the inner padding; cvGX/cvGY map curve coords to canvas pixels.
 const curveCv=$('curve-cv'),cux=curveCv.getContext('2d');let curveDrag=-1;const CVP=9;
 const cvGX=(x,W)=>CVP+x*(W-2*CVP),cvGY=(y,H)=>H-CVP-y*(H-2*CVP);
+// Redraw the curve editor: grid, identity diagonal, the current curve, and keys.
 function drawCurveEditor(){
   const dpr=Math.min(devicePixelRatio||1,2),W=curveCv.clientWidth||230,H=curveCv.clientHeight||128;
   if(curveCv.width!==(W*dpr|0)||curveCv.height!==(H*dpr|0)){curveCv.width=W*dpr|0;curveCv.height=H*dpr|0;}
@@ -1445,21 +1707,27 @@ function drawCurveEditor(){
     cux.beginPath();cux.arc(X,Y,mid?(curveDrag===1?6:5):3,0,7);cux.fillStyle=mid?'#0a0e16':cs;cux.fill();
     if(mid){cux.lineWidth=2;cux.strokeStyle=curveDrag===1?'#fff':cs;cux.stroke();}}
 }
+// Convert a pointer event to normalized curve coordinates in [0,1].
 function curvePt(e){const r=curveCv.getBoundingClientRect(),W=r.width,H=r.height;
   return {x:Math.min(1,Math.max(0,((e.clientX-r.left)-CVP)/(W-2*CVP))),y:Math.min(1,Math.max(0,1-((e.clientY-r.top)-CVP)/(H-2*CVP)))};}
+// Which control point (if any) is near the pointer.
 function curveHit(pt){const r=curveCv.getBoundingClientRect(),W=r.width,H=r.height;
   for(let i=0;i<CURVE.pts.length;i++){const dx=(CURVE.pts[i].x-pt.x)*(W-2*CVP),dy=(CURVE.pts[i].y-pt.y)*(H-2*CVP);if(dx*dx+dy*dy<110)return i;}return -1;}
+// Rebuild the LUT and invalidate the cell cache so the new curve takes effect.
 function curveChanged(){buildCurve();builtStage=-1;layerEndArr=[];edgeEndArr=[];grid2dDirty=true;drawCurveEditor();}
+// Move the middle key to the pointer (clamped) and apply the change.
 function curveSet(e){const pt=curvePt(e);CURVE.pts[1].x=Math.min(0.98,Math.max(0.02,pt.x));CURVE.pts[1].y=Math.min(1,Math.max(0,pt.y));curveChanged();}
 curveCv.addEventListener('pointerdown',e=>{e.preventDefault();curveDrag=1;curveCv.setPointerCapture(e.pointerId);curveSet(e);});
 curveCv.addEventListener('pointermove',e=>{if(curveDrag!==1)return;curveSet(e);});
 curveCv.addEventListener('pointerup',e=>{curveDrag=-1;try{curveCv.releasePointerCapture(e.pointerId);}catch(_){}drawCurveEditor();});
 $('curve-reset').onclick=()=>{CURVE.pts=[{x:0,y:0},{x:0.5,y:Math.pow(0.5,0.2)},{x:1,y:1}];curveDrag=-1;curveChanged();};
 drawCurveEditor();
+// Scrub slider: map 0..100 to the playhead for the active view, pausing play.
 $('sl-scrub').addEventListener('input',function(){if(trace){const f=+this.value/100;if(VS.viewMode==='stack')VS.stageTime=f*totalStackTime();else VS.frameIndex=f*(trace.frames.length-1);revealMode();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');}sg(this);});
 $('sl-seed').addEventListener('input',function(){VS.seed=+this.value;$('vl-seed').textContent=this.value;sg(this);rebuild();});sg($('sl-seed'));
 $('sl-shots').addEventListener('input',function(){$('vl-shots').textContent=this.value;sg(this);});sg($('sl-shots'));
 $('sl-gap').addEventListener('input',function(){$('vl-gap').textContent=(+this.value).toFixed(2)+'s';sg(this);if(sampleAnim)sampleAnim.gap=+this.value;});sg($('sl-gap'));
+// Scene toggle buttons: each flips one VS flag and syncs its button state.
 $('tog-full').onclick=function(){VS.showFull=!VS.showFull;this.classList.toggle('on',VS.showFull);
   if(VS.showFull){VS.stageTime=totalStackTime();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');}};
 $('tog-rotate').onclick=function(){VS.autoRotate=!VS.autoRotate;controls.autoRotate=VS.autoRotate;this.classList.toggle('on',VS.autoRotate);};
@@ -1469,6 +1737,7 @@ $('tog-labels').onclick=function(){VS.labels=!VS.labels;if(labelGroup)labelGroup
 $('tog-inspect').onclick=function(){VS.stepInspect=!VS.stepInspect;this.classList.toggle('on',VS.stepInspect);if(!VS.stepInspect)document.getElementById('step-inspector').classList.remove('show');};
 $('tog-grid2d').onclick=function(){VS.grid2d=!VS.grid2d;this.classList.toggle('on',VS.grid2d);grid2dDirty=true;last2dLayer=-99;if(!VS.grid2d)document.getElementById('grid2d-panel').classList.remove('show');};
 $('adv-toggle').onclick=function(){const open=document.getElementById('adv-rows').classList.toggle('open');this.classList.toggle('open',open);};
+// Orientation button cycles auto ▶ manual vertical ▶ manual horizontal ▶ auto.
 $('orient-btn').onclick=function(){
   if(VS.autoOrient){VS.autoOrient=false;VS.stackAxis='vertical';}        // auto → manual vertical
   else if(VS.stackAxis==='vertical'){VS.stackAxis='horizontal';}         // vertical → horizontal
@@ -1480,12 +1749,16 @@ $('orient-btn').onclick=function(){
   frameCamera();};
 
 /* ════════ init-state picker — hover bottom grid (layer 0) for |b⟩, click to set the start state ════════ */
+// Raycaster and scratch NDC vector for picking cells under the pointer.
 const _ray=new THREE.Raycaster(),_ndc=new THREE.Vector2();
+// pickPlane: invisible ground for the raycast; pickHi: hover highlight; diagGuide:
+// the instanced markers on the diagonal (start-state candidates).
 let pickPlane=null,pickHi=null,diagGuide=null,_downXY=null;
 const DIAG_CAP=300;
 const initTip=document.createElement('div');initTip.id='init-tip';
 initTip.style.cssText='position:fixed;z-index:600;pointer-events:none;display:none;background:rgba(9,12,20,0.97);border:1px solid rgba(150,200,255,0.35);border-radius:7px;padding:7px 10px;font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#cdd6e6;box-shadow:0 6px 22px rgba(0,0,0,0.55);max-width:230px;line-height:1.4';
 document.body.appendChild(initTip);
+// Lazily create the picker helpers (plane, highlight, diagonal guides) under grp.
 function ensureInitPicker(){
   if(!grp)return;
   if(!pickPlane||pickPlane.parent!==grp){const pg=new THREE.PlaneGeometry(600,600);pickPlane=new THREE.Mesh(pg,new THREE.MeshBasicMaterial({visible:false}));pickPlane.rotation.x=-Math.PI/2;pickPlane.frustumCulled=false;grp.add(pickPlane);}
@@ -1496,6 +1769,7 @@ function ensureInitPicker(){
     diagGuide.setColorAt(0,_col.setRGB(0.27,0.78,0.95,THREE.SRGBColorSpace));diagGuide.count=0;diagGuide.frustumCulled=false;grp.add(diagGuide);}
   updateDiagGuide();
 }
+// Refresh the diagonal guide markers, raising and recoloring the current |b⟩.
 function updateDiagGuide(){
   if(!diagGuide)return;const off=(DIM-1)/2,n=Math.min(DIM,DIAG_CAP);
   for(let i=0;i<n;i++){const sel=(i===initBasis);dummy.position.set((i-off)*PITCH,0,(i-off)*PITCH);dummy.scale.set(1,sel?3.2:1,1);dummy.updateMatrix();diagGuide.setMatrixAt(i,dummy.matrix);
@@ -1503,7 +1777,9 @@ function updateDiagGuide(){
   diagGuide.count=n;diagGuide.instanceMatrix.needsUpdate=true;if(diagGuide.instanceColor)diagGuide.instanceColor.needsUpdate=true;
   diagGuide.visible=(VS.viewMode==='stack');
 }
+// Binary ket string for a basis index.
 function ketStr(idx){return idx.toString(2).padStart(Math.max(1,VS.numQubits),'0');}
+// Raycast the pointer onto layer 0 and return the (row, col) cell it hits, or null.
 function pickRC(e){
   if(VS.viewMode!=='stack'||!grp){return null;}ensureInitPicker();
   const rect=canvas.getBoundingClientRect();
@@ -1513,7 +1789,10 @@ function pickRC(e){
   const c=Math.round(lp.x/PITCH+off),r=Math.round(lp.z/PITCH+off);
   if(r<0||c<0||r>=DIM||c>=DIM)return null;return {r,c,off};
 }
+// Hide the init hover highlight and tooltip.
 function hideInitHover(){if(pickHi)pickHi.visible=false;initTip.style.display='none';}
+// On hover, highlight the cell and show a tooltip; only diagonal cells are pickable
+// start states, off-diagonal cells just read out as coherences.
 function onInitMove(e){
   const rc=pickRC(e);if(!rc){hideInitHover();return;}
   const {r,c,off}=rc,diag=(r===c);
@@ -1525,6 +1804,9 @@ function onInitMove(e){
   let x=e.clientX+pad,y=e.clientY+pad;if(x+w>innerWidth-6)x=e.clientX-pad-w;if(y+h>innerHeight-6)y=e.clientY-pad-h;
   initTip.style.left=x+'px';initTip.style.top=y+'px';
 }
+// Picker pointer wiring: hover previews a start state; a click (not a drag) on a
+// diagonal cell sets |b⟩ and rebuilds from there. The press/release distance test
+// separates a pick from an orbit drag.
 canvas.addEventListener('pointermove',onInitMove);
 canvas.addEventListener('pointerleave',hideInitHover);
 canvas.addEventListener('pointerdown',e=>{_downXY=[e.clientX,e.clientY];});
@@ -1533,4 +1815,5 @@ canvas.addEventListener('pointerup',e=>{if(!_downXY)return;const dx=e.clientX-_d
   const rc=pickRC(e);if(rc&&rc.r===rc.c){initBasis=rc.r;rebuild(true);VS.stageTime=0;VS.frameIndex=0;onInitMove(e);}
 });
 
+// Boot: size to the host, clamp selections, load the default algorithm, start the loop.
 resize();clampQ();loadPreset('qft');requestAnimationFrame(loop);

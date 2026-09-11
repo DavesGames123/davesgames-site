@@ -4,6 +4,43 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Atomic Orbital // Stella Nova · Redesigned</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ATOMIC ORBITAL VR  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws the hydrogenic orbital as a particle cloud
+   into <canvas id="c">; katex.js typesets the governing equations. This file
+   lays out the two control panels, the equations panel, the state readout, and
+   the AR entry button that main.js binds to by id.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. KaTeX        math css then the katex.min.js bundle (both absolute)
+     3. importmap    maps the bare specifier "three" to the CDN; MUST stay
+                     inline (an import map cannot be an external file)
+     4. style.css    the page stylesheet
+     5. katex.js     classic script; renders equations once KaTeX is ready
+     6. main.js      type=module; builds the scene and resolves "three"
+
+   LAYOUT  (the leading hash marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: "Stella Nova · Atomic Orbital Viewer"  (hidden in frame)  │
+     ├────────────┬───────────────────────────────────┬────────────────┤
+     │ #quick     │                                    │ #adv-panel     │
+     │  panel     │        <canvas id=c> particles     │  (slides in    │
+     │  n ℓ m     │         ▶ orbital cloud            │   from right)  │
+     │  modes     │                                    │  fine tuning   │
+     │  count     │        #state-display ▷            │  B field, cut  │
+     ├────────────┴───────────────────────────────────┴────────────────┤
+     │ #eq-panel: Schrödinger · wavefunction · Biot-Savart              │
+     └───────────────────────── #ar-btn · #ar-hint · #ar-status ────────┘
+
+   AR NOTE
+     #ar-btn requests an immersive-ar session. All in-headset controls live in
+     a 3D world-space panel built by main.js, not in this DOM, so passthrough
+     hands stay visible. #ar-hint and #ar-status give placement guidance.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
@@ -18,8 +55,11 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. Inline so it runs before paint, with no topbar flash. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
+<!-- The WebGL surface. main.js takes this canvas by id and renders the cloud. -->
 <canvas id="c"></canvas>
 
 <div id="ui">
@@ -211,6 +251,8 @@
     </div>
   </div>
 
+  <!-- Governing-equations panel. katex.js fills #eq-schrod / #eq-wavefn /
+       #eq-biot; the collapse button toggles .collapsed on this section. -->
   <section class="eq-panel" id="eq-panel">
     <button class="eq-collapse" id="eq-collapse-btn" title="Collapse equations">▲</button>
     <div class="eq-head">
@@ -228,11 +270,15 @@
     </div>
   </section>
 
+  <!-- State readout overlay: the current ket and orbital name, kept in sync by
+       updateDisplay() in main.js as the n / ℓ / m steppers change. -->
   <div id="state-display">
     <div class="ket-main" id="ket-disp">|3,1,+1⟩</div>
     <div class="ket-sub"  id="orb-disp">3p orbital</div>
   </div>
+  <!-- Shown while the chunked particle streamer fills the cloud. -->
   <div id="loading">Generating···</div>
+  <!-- AR entry. main.js enables this once immersive-ar support is confirmed. -->
   <div id="vr-wrap"><button id="ar-btn" class="vr-btn-el">Enter AR</button></div>
   <div id="ar-hint">
     <div class="ar-hint-inner">
@@ -243,6 +289,7 @@
   <div id="ar-status" class="ar-status-msg" style="display:none"></div>
 </div>
 
+<!-- Equations first (classic script, needs the DOM above it), then the module. -->
 <script src="katex.js"></script>
 
 <script type="module" src="main.js"></script>

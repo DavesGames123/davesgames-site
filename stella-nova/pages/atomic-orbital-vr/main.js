@@ -1,3 +1,70 @@
+// ============================================================================
+//  ATOMIC ORBITAL VR  ·  hydrogenic orbital as a live particle cloud
+// ----------------------------------------------------------------------------
+//  Samples the hydrogen wavefunction ψ(n,ℓ,m) as hundreds of thousands of GPU
+//  points, colors each by |ψ|², Re(ψ), Im(ψ) or phase, and animates the points
+//  along the probability current. On top of the cloud it computes a magnetic
+//  field from that current (discrete Biot-Savart) and draws it as arrows and
+//  advected tracers. The whole scene is grabbable in WebXR immersive-ar with a
+//  world-space control panel poked by the fingertip.
+//
+//  SAMPLING PIPELINE
+//  -----------------
+//      (n,ℓ,m) ─▶ buildRadialCDF / buildThetaCDF     inverse-CDF sampling tables
+//                        │
+//      spawnChunk() ─────┴─▶ sample (r,θ,φ) ─▶ sphArr (a.u.)  ┐
+//                                             ─▶ posArr (scaled) ├─▶ pGeo points
+//                             particleColor() ─▶ colArr          ┘
+//      animateFlow(): advance φ by m/(r·sinθ)·dt each frame (azimuthal current)
+//      computeBField(): Biot-Savart over a grid ─▶ arrows + tracers
+//
+//  SCENE GRAPH
+//  -----------
+//      scene
+//        ├─ starfield Points
+//        ├─ reticle / bgDim plane / hand dots / pinch dots   (AR helpers)
+//        ├─ ARP.mesh          world-space control panel (canvas texture)
+//        └─ orbitalGroup      grabbed / scaled / rotated as one unit
+//             ├─ boundingCube      AR extent wireframe
+//             ├─ nucleusGroup      core sphere + spinning rings
+//             ├─ pSystem           the particle cloud (pre-allocated buffers)
+//             ├─ bArrowShaft       InstancedMesh B-field arrows
+//             ├─ ftLines           probability-flow tracers
+//             └─ btLines           B-field tracers
+//
+//  XR FLOW
+//  -------
+//      Enter AR ─▶ hit-test reticle ─▶ select places orbitalGroup ─▶ spawn-scale
+//      one-hand pinch = grab/translate · two-hand pinch = scale · thumbstick = rotate
+//      fingertip within 3.5 cm of ARP.mesh ─▶ button hit ─▶ action
+//
+//  RENDER LOOP  (renderer.setAnimationLoop)
+//  ----------------------------------------
+//      dirty? rebuild : spawnChunk ▶ evolve colors ▶ animateFlow ▶ tracers
+//      ▶ periodic B recompute ▶ nucleus spin ▶ XR input ▶ AR panel ▶ render
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      physics .............. "PHYSICS"           radial R, Legendre P, colors
+//      inverse-CDF sampler .. "CDF samplers"      radial + theta sampling tables
+//      state ................ "STATE"             the one mutable state object S
+//      particle buffers ..... "PRE-ALLOCATED"     posArr / sphArr / colArr
+//      three.js setup ....... "THREE.JS SETUP"    renderer, camera, controls
+//      AR world panel ....... "AR 3D PANEL"       canvas-texture GUI, finger poke
+//      hand dots ............ "updateHandDots"    joint visualization
+//      B field arrows ....... "B FIELD ARROW"     instanced cylinders
+//      Biot-Savart .......... "computeBField"     synchronous field solve
+//      B interpolation ...... "sampleBField"      trilinear lookup
+//      flow tracers ......... "FLOW TRACERS"      current-following streaks
+//      B tracers ............ "B-FIELD TRACERS"   field-line advection
+//      particle streamer .... "startRebuild"      chunked spawn / grow / shrink
+//      color update ......... "updateColors"      rolling-window recolor
+//      flow animation ....... "function animateFlow"  azimuthal φ advance
+//      hand gestures ........ "HAND GESTURE"      pinch grab / scale
+//      AR session ........... "AR SESSION"        immersive-ar setup + placement
+//      UI wiring ............ "UI WIRING"         quick + advanced panels
+//      render loop .......... "setAnimationLoop"  the per-frame update
+// ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
@@ -8,14 +75,20 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 /* ════════════════════════════════════════════════════════════
    PHYSICS
    ════════════════════════════════════════════════════════════ */
+// Plain factorial, used by the radial normalization constant below.
 function factorial(n){if(n<=1)return 1;let r=1;for(let i=2;i<=n;i++)r*=i;return r;}
 
+// Hydrogenic radial wavefunction R(n,ℓ) at radius r (atomic units). The middle
+// block evaluates the associated Laguerre polynomial by upward recurrence, then
+// the return multiplies in the normalization, the exp decay, and the ρ^ℓ factor.
 function radialR(r,n,l){
   const rho=2*r/n,k=n-l-1,alpha=2*l+1;let L=1;
   if(k===1){L=1+alpha-rho;}else if(k>1){let Lm2=1,Lm1=1+alpha-rho;for(let j=2;j<=k;j++){const t=((2*j-1+alpha-rho)*Lm1-(j-1+alpha)*Lm2)/j;Lm2=Lm1;Lm1=t;}L=Lm1;}
   return Math.sqrt(Math.pow(2/n,3)*factorial(n-l-1)/(2*n*factorial(n+l)))*Math.exp(-rho/2)*Math.pow(rho,l)*L;
 }
 
+// Associated Legendre P_ℓ^m(x), the polar (θ) factor of the spherical harmonic.
+// Builds P_m^m from the closed form, then climbs ℓ by the standard recurrence.
 function legendrePlm(x,l,m){
   const am=Math.abs(m);let Pmm=1;
   if(am>0){const s=Math.sqrt((1-x)*(1+x));let f=1;for(let j=1;j<=am;j++){Pmm*=-f*s;f+=2;}}
@@ -23,10 +96,16 @@ function legendrePlm(x,l,m){
   let pp=Pmm;for(let ll=am+2;ll<=l;ll++){const t=((2*ll-1)*x*Pm1m-(ll+am-1)*pp)/(ll-am);pp=Pm1m;Pm1m=t;}return Pm1m;
 }
 
+// Probability colormap for |ψ|²: black ▶ violet ▶ red ▶ orange ▶ yellow ▶ white.
 const HEAT=[[0,0,0],[.3,0,.6],[.8,0,0],[1,.5,0],[1,1,0],[1,1,1]];
+// Map v in [0,1] onto the HEAT ramp with linear interpolation between stops.
 function heatmap(v){v=Math.max(0,Math.min(1,v));const sv=v*5,i=Math.min(Math.floor(sv),4),t=sv-i;return[HEAT[i][0]+t*(HEAT[i+1][0]-HEAT[i][0]),HEAT[i][1]+t*(HEAT[i+1][1]-HEAT[i][1]),HEAT[i][2]+t*(HEAT[i+1][2]-HEAT[i][2])];}
+// Signed colormap for Re(ψ) / Im(ψ): negative reads blue, positive reads red.
 function diverging(v){v=Math.max(-1,Math.min(1,v));if(v>=0){const t=v;return[Math.min(1,t*2),Math.min(1,Math.max(0,t*2-.5)),0];}const t=-v;return[0,Math.min(1,Math.max(0,t*2-.5)),Math.min(1,t*2)];}
 
+// Color one particle from the wavefunction at its position. Rebuilds R and P_ℓ^m
+// there, forms the time-dependent phase m·φ − t/(2n²), then selects by mode:
+// 0 |ψ|² heatmap · 1 Re · 2 Im · 3 phase (hue wheel around the azimuth).
 function particleColor(x,y,z,n,l,m,t,mode,scaler){
   const r=Math.sqrt(x*x+y*y+z*z);if(r<1e-6)return[0,0,0];
   const R=radialR(r,n,l),Plm=legendrePlm(y/r,l,m),phi=Math.atan2(z,x);
@@ -49,6 +128,7 @@ function probabilityFlow(x,y,z,m){
 }
 
 // Field color ramp: dark-purple → blue → cyan → green → orange → white
+// Compresses magnitude with a log curve, then a gamma, before the ramp lookup.
 function fieldColor(mag,gamma=1){
   const lv=Math.log10(1+mag*99)/2;
   const lc=Math.pow(Math.max(0,Math.min(1,lv)),1/Math.max(0.1,gamma));
@@ -57,15 +137,24 @@ function fieldColor(mag,gamma=1){
   return[stops[i][0]+t*(stops[i+1][0]-stops[i][0]),stops[i][1]+t*(stops[i+1][1]-stops[i][1]),stops[i][2]+t*(stops[i+1][2]-stops[i][2])];
 }
 
-// CDF samplers
+// CDF samplers.
+// Inverse-transform sampling: tabulate the cumulative radial probability
+// r²·R(r)² out to rMax, normalize to 1, and later invert it with a binary search
+// so uniform draws land at physically correct radii.
 function buildRadialCDF(n,l){const M=4096,rMax=10*n*n;const cdf=new Float64Array(M);let sum=0;for(let i=0;i<M;i++){const r=i*rMax/(M-1),R=radialR(r,n,l);sum+=r*r*R*R;cdf[i]=sum;}for(let i=0;i<M;i++)cdf[i]/=sum;return{cdf,rMax,M};}
+// Same idea for the polar angle: cumulative sinθ·P_ℓ^m(cosθ)² over [0,π].
 function buildThetaCDF(l,m){const M=2048;const cdf=new Float64Array(M);let sum=0;for(let i=0;i<M;i++){const theta=i*Math.PI/(M-1),Plm=legendrePlm(Math.cos(theta),l,m);sum+=Math.sin(theta)*Plm*Plm;cdf[i]=sum;}for(let i=0;i<M;i++)cdf[i]/=sum;return{cdf,M};}
+// Draw one sample: binary-search a uniform u into the CDF, scale index to maxVal.
 function sampleCDF(d,maxVal){const{cdf,M}=d;const u=Math.random();let lo=0,hi=M-1;while(lo<hi){const mid=(lo+hi)>>1;if(cdf[mid]<u)lo=mid+1;else hi=mid;}return lo*maxVal/(M-1);}
 
 /* ════════════════════════════════════════════════════════════
    STATE
    ════════════════════════════════════════════════════════════ */
+// Coarse mobile check, used to trim defaults on small or touch devices.
 const isMobile=/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)||innerWidth<768;
+// S is the single mutable state object. Every control writes into S; the render
+// loop and the update functions read from it. dirty forces a full cloud rebuild;
+// colDirty forces a recolor pass without moving any particle.
 const S={
   n:3,l:1,m:1,
   N:100000, scale:0.13,
@@ -115,6 +204,8 @@ const COLOR_CHUNK =  80_000;
 /* ════════════════════════════════════════════════════════════
    THREE.JS SETUP
    ════════════════════════════════════════════════════════════ */
+// Renderer: alpha true so AR passthrough can show through; xr.enabled turns on
+// the WebXR animation path. Pixel ratio capped at 2 to bound fill cost.
 const canvas=document.getElementById('c');
 const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));
@@ -126,15 +217,18 @@ const scene=new THREE.Scene();
 const camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,.01,100000);
 camera.position.set(0,1.8,8.5);
 
+// Desktop orbit controls. Re-enabled on XR session end since AR disables them.
 const controls=new OrbitControls(camera,renderer.domElement);
 controls.target.set(0,0,0);controls.enableDamping=true;controls.dampingFactor=.05;
 controls.minDistance=.3;controls.maxDistance=60;
 renderer.xr.addEventListener('sessionend',()=>controls.enabled=true);
 
-// Starfield
+// Starfield: a fixed shell of faint bluish points for depth on the black ground.
+// Scoped in a block so its scratch arrays do not leak into module scope.
 {const N=2200,pos=new Float32Array(N*3),col=new Float32Array(N*3);for(let i=0;i<N;i++){const R=90+Math.random()*130,th=Math.random()*Math.PI,ph=Math.random()*6.28;pos[i*3]=R*Math.sin(th)*Math.cos(ph);pos[i*3+1]=R*Math.cos(th);pos[i*3+2]=R*Math.sin(th)*Math.sin(ph);const t=Math.random();col[i*3]=.4+.6*t;col[i*3+1]=.6+.4*t;col[i*3+2]=1;}const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));scene.add(new THREE.Points(g,new THREE.PointsMaterial({size:.07,vertexColors:true,transparent:true,opacity:.5,sizeAttenuation:true})));}
 
-// Orbital group — everything that should be grabbable/scaleable lives here
+// Orbital group — everything that should be grabbable/scaleable lives here.
+// AR gestures move, scale, and rotate this one node so the whole scene follows.
 const orbitalGroup = new THREE.Group();
 scene.add(orbitalGroup);
 
@@ -175,6 +269,9 @@ scene.add(bgDimMesh);
    Floats beside the bounding cube; finger-poke interaction.
    GREP: initARPanel | drawARPanel | updateARPanel | checkARPoke
    ════════════════════════════════════════════════════════════ */
+// ARP holds the whole world-space control panel: a 2D canvas drawn each time it
+// is dirty, uploaded as a texture on a plane, with a list of buttons in UV space
+// that fingertip pokes hit-test against.
 const ARP = {
   PW:0.28, PH:0.50,   // metres
   CW:512,  CH:915,    // canvas pixel resolution
@@ -186,6 +283,7 @@ const ARP = {
 };
 
 /* Hand joint visualization — always-on-top dots so panel can't occlude hands */
+// The subset of WebXR hand joints drawn as dots, one entry per tracked joint.
 const _HAND_JOINTS=[
   'wrist',
   'thumb-metacarpal','thumb-phalanx-proximal','thumb-phalanx-distal','thumb-tip',
@@ -198,6 +296,7 @@ const _handDotMat=new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,o
 const _handDots=[];
 for(let i=0;i<28;i++){const m=new THREE.Mesh(_handDotGeo,_handDotMat.clone());m.visible=false;m.renderOrder=9998;scene.add(m);_handDots.push(m);}
 
+// Move the pool of dots onto each tracked joint pose; hide the unused tail.
 function updateHandDots(frame,refSpace){
   let di=0;
   const sess=renderer.xr.getSession();
@@ -217,6 +316,7 @@ function updateHandDots(frame,refSpace){
 }
 
 // ── Canvas helpers ──
+// Trace a rounded rectangle path for the panel's cards and buttons.
 function _rrect(ctx,x,y,w,h,r){
   ctx.beginPath();
   ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
@@ -225,11 +325,14 @@ function _rrect(ctx,x,y,w,h,r){
   ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
   ctx.closePath();
 }
+// Draw a faint horizontal divider between panel sections.
 function _div(ctx,W,y){
   ctx.save();ctx.strokeStyle='rgba(150,200,255,0.1)';ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(18,y);ctx.lineTo(W-18,y);ctx.stroke();ctx.restore();
 }
 
+// Build the panel mesh once: an offscreen canvas becomes a CanvasTexture on a
+// small plane. Later draws reuse the same canvas and flag the texture dirty.
 function initARPanel(){
   if(ARP.mesh) return;
   const canvas=document.createElement('canvas');
@@ -248,6 +351,9 @@ function initARPanel(){
   scene.add(ARP.mesh);
 }
 
+// Repaint the whole panel and rebuild ARP.buttons. Each control draws itself and
+// pushes a UV-space rectangle plus an action closure, so poke detection stays a
+// simple point-in-rect test in updateARPanel().
 function drawARPanel(){
   const ctx=ARP.ctx;
   const W=ARP.CW, H=ARP.CH;
@@ -283,6 +389,8 @@ function drawARPanel(){
   _div(ctx,W,y); y+=16;
 
   // ── QN stepper rows ──
+  // Draw one quantum-number row (label, value, minus/plus). Each button records
+  // its UV rect and an action that steps n / ℓ / m through applyQN().
   function qnRow(sym,val,qn,minV,maxV){
     const RH=68, BW=68, BH=46;
     const cx=W/2, by=y+(RH-BH)/2;
@@ -325,6 +433,8 @@ function drawARPanel(){
   _div(ctx,W,y); y+=14;
 
   // ── B Field toggle ──
+  // One wide button. Turning it on clears any cached field and schedules a fresh
+  // Biot-Savart solve at the AR grid resolution.
   const bOn=S.showBField;
   ctx.fillStyle=bOn?'rgba(150,200,255,0.11)':'rgba(255,60,60,0.08)';
   _rrect(ctx,16,y,W-32,66,12); ctx.fill();
@@ -346,6 +456,7 @@ function drawARPanel(){
   _div(ctx,W,y); y+=14;
 
   // ── Color mode ──
+  // Four visualization modes (|ψ|², Re, Im, phase), highlighting the active one.
   ctx.font='11px "JetBrains Mono",monospace';
   ctx.fillStyle='rgba(150,200,255,0.3)';
   ctx.textAlign='left';
@@ -371,6 +482,7 @@ function drawARPanel(){
   _div(ctx,W,y); y+=14;
 
   // ── Particle count presets ──
+  // Fixed count choices tuned for AR headroom; the match test allows ±500.
   ctx.font='11px "JetBrains Mono",monospace';
   ctx.fillStyle='rgba(150,200,255,0.3)';
   ctx.textAlign='left';
@@ -396,6 +508,8 @@ function drawARPanel(){
   _div(ctx,W,y); y+=14;
 
   // ── Background opacity ──
+  // Dim the AR passthrough behind the cloud: Pass keeps it fully see-through, VR
+  // paints it solid black. Level feeds the camera-tracking bgDim plane.
   ctx.font='11px "JetBrains Mono",monospace';
   ctx.fillStyle='rgba(150,200,255,0.3)';
   ctx.textAlign='left';
@@ -422,6 +536,8 @@ function drawARPanel(){
   ARP.tex.needsUpdate=true;
 }
 
+// Set passthrough dimming: drive the bgDim plane's opacity and show it only when
+// some dimming is asked for.
 function setARBgOpacity(v){
   ARP.bgOpacity=v;
   bgDimMat.opacity = v;
@@ -429,6 +545,9 @@ function setARBgOpacity(v){
   ARP.dirty=true;
 }
 
+// Per-frame panel work: keep the hand dots current, dock the panel under the
+// bounding cube facing the camera, repaint if dirty, then test the index-finger
+// tip against every button. A short cooldown prevents a single poke re-firing.
 function updateARPanel(frame){
   const refSpace=renderer.xr.getReferenceSpace();
   // Hand dots always update in AR (depthTest:false keeps them on top of everything)
@@ -468,12 +587,14 @@ function updateARPanel(frame){
 }
 
 
-// Nucleus
+// Nucleus: a small glowing core sphere plus three tilted rings that spin about
+// random axes (userData carries each ring's axis and speed for the loop).
 const nucleusGroup=new THREE.Group();orbitalGroup.add(nucleusGroup);
 nucleusGroup.add(new THREE.Mesh(new THREE.SphereGeometry(.055,20,20),new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:.9})));
 for(let i=0;i<3;i++){const ring=new THREE.Mesh(new THREE.RingGeometry(.09+i*.04,.10+i*.04,48),new THREE.MeshBasicMaterial({color:0x5a8cc0,transparent:true,opacity:.18-i*.04,side:THREE.DoubleSide}));ring.rotation.x=Math.random()*Math.PI;ring.rotation.y=Math.random()*Math.PI;ring.userData.spinSpeed=(.4+Math.random()*.4)*(Math.random()>.5?1:-1);ring.userData.spinAxis=new THREE.Vector3(Math.random()-.5,Math.random()-.5,Math.random()-.5).normalize();nucleusGroup.add(ring);}
 
 // Circle sprite texture (avoids square particles)
+// A soft radial-alpha disc used as the point sprite so particles read as dots.
 function makeCircleTex(){
   const c=document.createElement('canvas');c.width=64;c.height=64;
   const ctx=c.getContext('2d');
@@ -485,7 +606,10 @@ function makeCircleTex(){
   return new THREE.CanvasTexture(c);
 }
 
-// Main particle cloud — attributes point permanently into pre-allocated arrays
+// Main particle cloud — attributes point permanently into pre-allocated arrays.
+// DynamicDrawUsage marks them for frequent re-upload; only drawRange and the
+// dirty flags change, never the buffers themselves. Frustum culling is off and
+// the bounding sphere is infinite so points never vanish at any camera pose.
 const pGeo=new THREE.BufferGeometry();
 const pPosAttr=new THREE.BufferAttribute(posArr,3); pPosAttr.setUsage(THREE.DynamicDrawUsage);
 const pColAttr=new THREE.BufferAttribute(colArr,3); pColAttr.setUsage(THREE.DynamicDrawUsage);
@@ -498,7 +622,8 @@ pSystem.frustumCulled=false; // never cull — particles must render at all came
 pGeo.boundingSphere=new THREE.Sphere(new THREE.Vector3(0,0,0),Infinity); // explicit infinite sphere
 orbitalGroup.add(pSystem);
 
-// Static flow arrows
+// Static flow arrows: a fixed sample of probability-current vectors, off by
+// default and rebuilt by rebuildStaticFlow() when the Extras toggle turns on.
 const flowGeo=new THREE.BufferGeometry();
 const flowMat=new THREE.LineBasicMaterial({color:0x5a8cc0,transparent:true,opacity:.35});
 const flowLines=new THREE.LineSegments(flowGeo,flowMat);
@@ -511,6 +636,8 @@ const axesHelper=new THREE.AxesHelper(4);axesHelper.visible=false;orbitalGroup.a
    B FIELD ARROW SYSTEM
    ════════════════════════════════════════════════════════════ */
 // B-field arrows: instanced 3D cylinders + cones (thick lines impossible in WebGL)
+// One InstancedMesh per part sized to the largest grid (24³); uploadBArrows()
+// positions and colors each instance from the solved field.
 const MAX_BARROWS = 24*24*24;
 const _bShaftGeo = new THREE.CylinderGeometry(0.008,0.008,1,6,1);
 const _bHeadGeo  = new THREE.ConeGeometry(0.022,0.08,6,1);
@@ -524,6 +651,9 @@ orbitalGroup.add(bArrowShaft); orbitalGroup.add(bArrowHead);
 // Keep bArrowLines as alias for visibility checks (will be null-stubbed)
 const bArrowLines={visible:false,get _stub(){return true;}};
 
+// Solved field, packed 7 floats per grid point (position, unit direction, mag).
+// bFieldFrameCount paces periodic recompute; bFieldDim/bFieldExt describe the
+// grid so sampleBField() can interpolate it.
 let bFieldData=null;   // Float32Array [x,y,z,dx,dy,dz,mag × ng]
 let bFieldFrameCount=0;
 let bFieldDim=7, bFieldExt=25*S.scale;
@@ -536,8 +666,12 @@ let bFieldDim=7, bFieldExt=25*S.scale;
    grid point — avoids trig inside the inner loop.
    Timing: 5³=125 pts × 300 src ≈ 1 ms. 8³=512 × 400 ≈ 8 ms.
    ════════════════════════════════════════════════════════════ */
+// Guards against scheduling more than one deferred solve at a time.
 let bFieldScheduled=false;
 
+// Solve B on a G³ grid from the particle cloud. Subsample up to 400 source
+// points, precompute their azimuthal current J once, then sum Biot-Savart at
+// every grid point. Normalize direction and magnitude, then upload the arrows.
 function computeBField(){
   if(!storedPos)return;
   bFieldScheduled=false;
@@ -620,7 +754,7 @@ function computeBField(){
   uploadBArrows();
 }
 
-// Reusable temporaries for uploadBArrows
+// Reusable temporaries for uploadBArrows — allocated once to avoid per-frame GC.
 const _bDummy=new THREE.Object3D();
 const _bUp=new THREE.Vector3(0,1,0);
 const _bDir=new THREE.Vector3();
@@ -628,6 +762,9 @@ const _bQ=new THREE.Quaternion();
 const _bAxisX=new THREE.Vector3(1,0,0);
 const _bCol=new THREE.Color();
 
+// Push the solved field into the instanced shafts: length scales with magnitude,
+// color from fieldColor, orientation from a quaternion that maps +Y to the field
+// direction. Arrowheads stay disabled; shafts alone carry the read.
 function uploadBArrows(){
   if(!bFieldData||!S.showBField){
     bArrowShaft.visible=false; return;
@@ -662,7 +799,9 @@ function uploadBArrows(){
   bArrowHead.visible=false; // arrowheads disabled
 }
 
-// Trilinear interpolation of precomputed B field
+// Trilinear interpolation of precomputed B field.
+// Convert a world point into grid coordinates, clamp to the last full cell, then
+// blend the eight corner samples by fractional weights; return unit dir + mag.
 function sampleBField(px,py,pz){
   if(!bFieldData||bFieldDim<2)return[0,1,0,0];
   const G=bFieldDim,ext=bFieldExt,step=2*ext/(G-1);
@@ -684,6 +823,8 @@ function sampleBField(px,py,pz){
 /* ════════════════════════════════════════════════════════════
    FLOW TRACERS  (follow probability current J, azimuthal rotation)
    ════════════════════════════════════════════════════════════ */
+// Pre-allocated line buffers for the flow tracers: MAX_FT tracers, each a trail
+// of up to MAX_FT_TRAIL segments (2 verts per segment, 3 floats per vert).
 const MAX_FT=2000, MAX_FT_TRAIL=80;
 const ftPosArr=new Float32Array(MAX_FT*MAX_FT_TRAIL*2*3);
 const ftColArr=new Float32Array(MAX_FT*MAX_FT_TRAIL*2*3);
@@ -694,8 +835,12 @@ const ftLineMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,
 const ftLines=new THREE.LineSegments(ftLineGeo,ftLineMat);
 orbitalGroup.add(ftLines);ftLines.visible=false;
 
+// Live tracer list; each holds spherical seed coords, a trail, and an age.
 let flowTracers=[];
 
+// Advance the probability-flow tracers: age and rotate each in φ along the
+// azimuthal current, prepend to its trail, respawn from the cloud to keep the
+// target count, then pack all trails into the line buffer with a fade by age.
 function updateFlowTracers(dt){
   if(!S.showFlowTr||S.m===0){ftLines.visible=false;return;}
   ftLines.visible=true;
@@ -753,6 +898,7 @@ function updateFlowTracers(dt){
 /* ════════════════════════════════════════════════════════════
    B-FIELD TRACERS  (advect along interpolated B field)
    ════════════════════════════════════════════════════════════ */
+// Same buffer scheme for the B-field tracers, sized for many short field lines.
 const MAX_BT=50000, MAX_BT_TRAIL=40;
 const btPosArr=new Float32Array(MAX_BT*MAX_BT_TRAIL*2*3);
 const btColArr=new Float32Array(MAX_BT*MAX_BT_TRAIL*2*3);
@@ -763,8 +909,12 @@ const btLineMat=new THREE.LineBasicMaterial({vertexColors:true,transparent:true,
 const btLines=new THREE.LineSegments(btLineGeo,btLineMat);
 orbitalGroup.add(btLines);btLines.visible=false;
 
+// Live B-tracer list; each walks the interpolated field like a field line.
 let bTracers=[];
 
+// Advect the B-field tracers: step each along the sampled field, trail it, and
+// retire it when old or out of bounds. Spawn uses a fractional accumulator so the
+// spawn rate stays exact regardless of frame rate. Color follows field magnitude.
 function updateBTracers(dt){
   if(!S.showBTr||!bFieldData){btLines.visible=false;return;}
   btLines.visible=true;
@@ -815,6 +965,8 @@ function updateBTracers(dt){
    startGrow():    keeps existing particles, adds up to targetCount
    spawnChunk():   called every frame, adds SPAWN_CHUNK particles
    ════════════════════════════════════════════════════════════ */
+// Clear the cloud and start filling from zero. Rebuilds the CDF tables only when
+// (n,ℓ) or (ℓ,m) actually changed, then aims spawning at the target count.
 function startRebuild(){
   liveCount=0; pGeo.setDrawRange(0,0); colorRollIdx=0;
   flowTracers=[]; bTracers=[];
@@ -827,6 +979,8 @@ function startRebuild(){
   loadingEl.classList.add('show');
 }
 
+// Change the count without rebuilding: keep existing particles and either grow
+// toward the new target or, if smaller, just shrink the draw range.
 function startGrow(){
   targetCount=Math.min(S.N, MAX_P);
   if(targetCount<=liveCount){ // shrink
@@ -841,6 +995,9 @@ function startGrow(){
 // Legacy alias used by the dirty-flag path
 function rebuildParticles(){ startRebuild(); }
 
+// Add one SPAWN_CHUNK of particles per frame while spawning. Each accepted point
+// is sampled from the CDF tables, rejected if it falls outside the active cross
+// section, then written into all three buffers. Finishing kicks off flow and B.
 function spawnChunk(){
   if(!spawning) return;
   if(liveCount>=targetCount){
@@ -929,6 +1086,8 @@ function animateFlow(dt){
 }
 
 /* ── Static flow arrows ── */
+// Rebuild the fixed set of current arrows: draw random points in the shell, take
+// the probability-current direction there, and emit a short line segment each.
 function rebuildStaticFlow(){
   const geo=flowGeo;while(geo.attributes.position)geo.deleteAttribute('position');
   if(!S.showFlow){flowLines.visible=false;return;}
@@ -974,7 +1133,8 @@ const pinchMeshR = new THREE.Mesh(_pinchGeo,
 pinchMeshL.visible=false; pinchMeshR.visible=false;
 scene.add(pinchMeshL); scene.add(pinchMeshR);
 
-// Gesture state
+// Gesture state — the anchor poses and starting transforms captured at the moment
+// a grab or scale begins, so each frame applies a delta rather than an absolute.
 const HS = {
   grabbing:false, grabStartWorld:new THREE.Vector3(), grabStartGroupPos:new THREE.Vector3(),
   scaling:false,  scaleStartDist:1,
@@ -982,6 +1142,7 @@ const HS = {
   scaleStartMid:new THREE.Vector3(), scaleStartGroupPos:new THREE.Vector3(),
 };
 
+// World position of one named hand joint, or null if it is not being tracked.
 function _jointWorldPos(hand, jointName, frame, refSpace){
   if(!hand) return null;
   const joint = hand.get(jointName); if(!joint) return null;
@@ -990,6 +1151,8 @@ function _jointWorldPos(hand, jointName, frame, refSpace){
   return new THREE.Vector3(p.x, p.y, p.z);
 }
 
+// Pinch anchor for a hand: the index-finger tip, but only while the XR system
+// reports that hand as actively pinching (selectstart/selectend drive _sysActive).
 function getPinchPos(inputSource, frame, refSpace){
   if(!inputSource.hand) return null;
   const hand = inputSource.handedness === 'left' ? 'left' : 'right';
@@ -997,6 +1160,9 @@ function getPinchPos(inputSource, frame, refSpace){
   return _jointWorldPos(inputSource.hand, 'index-finger-tip', frame, refSpace);
 }
 
+// Read both pinch anchors this frame and act: two anchors scale (and translate by
+// the midpoint), one anchor grabs and translates, none releases. Group transform
+// deltas are computed against the pose captured when the gesture began.
 function updateHandTracking(frame){
   const sess = renderer.xr.getSession(); if(!sess) return;
   const refSpace = renderer.xr.getReferenceSpace(); if(!refSpace) return;
@@ -1056,10 +1222,12 @@ function updateHandTracking(frame){
 /* ════════════════════════════════════════════════════════════
    AR SESSION — immersive-ar with surface hit-test placement
    ════════════════════════════════════════════════════════════ */
+// Whole AR flow scoped in a block so its session-local state stays private.
 {
   const arBtn = document.getElementById('ar-btn');
 
   // ── Visible status/error — shown in headset since no console ──
+  // In-headset toast: errors stick, informational messages clear after 4 s.
   function arStatus(msg, isErr){
     const el = document.getElementById('ar-status');
     if(!el) return;
@@ -1081,6 +1249,7 @@ function updateHandTracking(frame){
   const AR_HOVER   = 0.10;
 
   // ── Support check ──
+  // Enable the button only when immersive-ar is actually supported.
   if(navigator.xr){
     navigator.xr.isSessionSupported('immersive-ar')
       .then(ok => {
@@ -1092,6 +1261,8 @@ function updateHandTracking(frame){
     arBtn.textContent='No WebXR'; arBtn.disabled=true;
   }
 
+  // Enter (or exit) AR. Requests the session, hands it to the renderer, shrinks
+  // the simulation for headset budget, and wires pinch, hit-test, and placement.
   arBtn.addEventListener('click', async () => {
     if(arSession){ arSession.end(); return; }
 
@@ -1135,6 +1306,8 @@ function updateHandTracking(frame){
     arBtn.textContent = 'Exit AR';
 
     // ── Reduce simulation load for AR ──
+    // Snapshot desktop settings, then drop count, point size, and B-field detail
+    // so the headset holds frame rate. The end handler restores this snapshot.
     arSaved = {
       N: S.N, psize: S.psize,
       showBField: S.showBField, showBTr: S.showBTr,
@@ -1213,6 +1386,8 @@ function updateHandTracking(frame){
     });
 
     // ── Cleanup on session end ──
+    // Reset every AR-only piece of state, restore the clear color and controls,
+    // return the group to the origin at unit scale, and reload saved settings.
     s.addEventListener('end', () => {
       if(ARP.mesh) ARP.mesh.visible = false;
       _handDots.forEach(d=>d.visible=false);
@@ -1274,7 +1449,10 @@ function updateHandTracking(frame){
   };
 }
 
+// Accumulated controller-driven yaw of the orbital group.
 let vrRotY=0;
+// Per-frame XR input: run hand gestures, and as a controller fallback map the
+// thumbstick X axis to yaw. The deadzone ignores small stick drift.
 function handleVRInput(frame){
   const sess=renderer.xr.getSession(); if(!sess) return;
 
@@ -1301,6 +1479,8 @@ function handleVRInput(frame){
 const SUBSHELLS=['s','p','d','f','g','h'];
 
 /* ── Display helpers ── */
+// Repaint every place the current n / ℓ / m and subshell name appear: the state
+// ket, the quick panel, and the (hidden) advanced-panel readouts.
 function updateDisplay(){
   const{n,l,m}=S; const ms=(m>=0?'+':'')+m;
   // State display (top-right ket)
@@ -1320,6 +1500,7 @@ function updateDisplay(){
   document.getElementById('vl-m').textContent=ms;
 }
 
+// Update the live particle-count readouts as the streamer grows the cloud.
 function updateInfoBar(count){
   const{n,l,m}=S; const ms=(m>=0?'+':'')+m;
   const el=document.getElementById('info-bar');
@@ -1328,6 +1509,7 @@ function updateInfoBar(count){
   const qv=document.getElementById('qp-n-val'); if(qv) qv.textContent=k;
 }
 
+// Paint a slider's filled portion by setting the --pct custom property the CSS reads.
 function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
 
 /* ── Panel toggles ── */
@@ -1345,6 +1527,8 @@ window.toggleAdv=toggleAdv;
 window.toggleQPCollapse=toggleQPCollapse;
 
 /* ── Quantum numbers ── */
+// Clamp (n,ℓ,m) to the physically legal ranges (1≤n≤6, 0≤ℓ<n, |m|≤ℓ), push them
+// into the hidden sliders, store into S, and refresh the display and AR panel.
 function applyQN(n,l,m){
   n=Math.max(1,Math.min(6,n));
   l=Math.max(0,Math.min(l,n-1));
@@ -1362,7 +1546,8 @@ function syncQN(){
           +document.getElementById('sl-l').value,
           +document.getElementById('sl-m').value);
 }
-// QN steppers (quick panel)
+// QN steppers (quick panel): each minus/plus nudges one quantum number, then
+// flags the cloud dirty so the loop rebuilds it.
 document.querySelectorAll('.qp-step').forEach(btn=>{
   btn.addEventListener('click',()=>{
     const qn=btn.dataset.qn,dir=+btn.dataset.dir;
@@ -1379,6 +1564,7 @@ document.querySelectorAll('.qp-step').forEach(btn=>{
 });
 
 /* ── Particle count — synced between quick and adv sliders ── */
+// Set the target count, format the k/M readout, mirror both sliders, and grow.
 function setN(val){
   S.N=val;
   const k=val>=1000000?(val/1000000).toFixed(1).replace('.0','')+'M':(val/1000).toFixed(1).replace('.0','')+'k';
@@ -1396,6 +1582,8 @@ document.getElementById('sl-sz').addEventListener('input',function(){S.psize=+th
 document.getElementById('sl-ls').addEventListener('input',function(){S.scaler=+this.value;document.getElementById('vl-ls').textContent=S.scaler;sg(this);S.colDirty=true;});sg(document.getElementById('sl-ls'));
 
 /* ── Color mode — synced quick and adv ── */
+// Switch the visualization mode and flag colDirty so the loop recolors without
+// rebuilding positions; keep both button rows and the AR panel in sync.
 function setColorMode(mode){
   S.colorMode=mode; S.colDirty=true;
   document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',+b.dataset.mode===mode));
@@ -1406,6 +1594,7 @@ document.querySelectorAll('.mode-btn').forEach(b=>b.addEventListener('click',()=
 document.querySelectorAll('.qp-mode').forEach(b=>b.addEventListener('click',()=>setColorMode(+b.dataset.mode)));
 
 /* ── Animate toggle — synced quick panel toggle + adv checkbox ── */
+// Turn the probability-flow animation on or off across every control that shows it.
 function setAnimate(on){
   S.animateFlow=on;
   document.getElementById('cb-flow-anim').checked=on;
@@ -1420,6 +1609,8 @@ document.getElementById('qp-tog-anim').addEventListener('click',()=>setAnimate(!
 window.setAnimate=setAnimate;
 
 /* ── B field toggle — synced quick panel, adv big-toggles, icon strip ── */
+// Turn the magnetic field (arrows and tracers) on or off everywhere. Off hides
+// the arrows and clears tracers; on with no cached field triggers a solve.
 function setMagField(on){
   S.showBField=on; S.showBTr=on;
   const bb=document.getElementById('btn-bfield-toggle');
@@ -1462,6 +1653,7 @@ window.toggleBFieldQP  = () => setMagField(!S.showBField);
 })();
 
 /* ── B resolution presets ── */
+// Pick the Biot-Savart grid size (5³…24³) and resolve immediately if B is on.
 document.querySelectorAll('.res-btn').forEach(btn=>{
   btn.addEventListener('click',()=>{
     S.bGridDim=+btn.dataset.dim;
@@ -1472,6 +1664,8 @@ document.querySelectorAll('.res-btn').forEach(btn=>{
 });
 
 /* ── Remaining adv sliders ── */
+// One input listener per advanced control: store into S, update the readout and
+// fill, and trigger a rebuild, recolor, or B re-upload only where that is needed.
 document.getElementById('cb-ev').addEventListener('change',function(){S.evolving=this.checked;});
 document.getElementById('sl-sp').addEventListener('input',function(){S.timeSpeed=+this.value;document.getElementById('vl-sp').textContent=S.timeSpeed.toFixed(1);sg(this);});sg(document.getElementById('sl-sp'));
 document.getElementById('cb-flow-tr').addEventListener('change',function(){S.showFlowTr=this.checked;document.getElementById('flow-tr-opts').style.display=this.checked?'block':'none';if(!this.checked){ftLines.visible=false;flowTracers=[];}});
@@ -1492,9 +1686,11 @@ document.getElementById('sl-cut').addEventListener('input',function(){S.cutPos=+
 document.getElementById('cb-flow').addEventListener('change',function(){S.showFlow=this.checked;rebuildStaticFlow();});
 document.getElementById('cb-axes').addEventListener('change',function(){S.showAxes=this.checked;axesHelper.visible=this.checked;});
 
+// Keep camera aspect and canvas size matched to the window.
 window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);});
 
 // Init all toggles and displays
+// Run the toggle setters once so button states match S at start.
 setMagField(S.showBField);
 setAnimate(S.animateFlow);
 
@@ -1509,12 +1705,18 @@ document.getElementById('vl-buev').textContent=S.bUpdateEvery;
 document.getElementById('vl-bspwn').textContent=S.bTrSpawn;
 
 
+// Frame clock and the loading overlay reference used by the streamer.
 const clock=new THREE.Clock();
 const loadingEl=document.getElementById('loading');
 // Guarantee material size matches state regardless of initialization order
 pMat.size = S.psize;
+// First fill of the cloud.
 startRebuild();
 
+// The per-frame loop, driven by WebXR when in a session and by rAF otherwise.
+// Order: rebuild if dirty, otherwise stream/evolve/animate the cloud, update the
+// tracers and periodic B solve, spin the nucleus, then handle XR input, the AR
+// panel, and the passthrough dim plane before rendering.
 renderer.setAnimationLoop((time, frame)=>{
   const dt=clock.getDelta();
 
@@ -1569,4 +1771,5 @@ renderer.setAnimationLoop((time, frame)=>{
   renderer.render(scene,camera);
 });
 
+// Seed the display from the default sliders once wiring is complete.
 syncQN();
