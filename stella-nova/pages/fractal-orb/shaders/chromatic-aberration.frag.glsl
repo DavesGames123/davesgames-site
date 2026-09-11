@@ -1,3 +1,6 @@
+// chromatic-aberration.frag.glsl — full-screen post pass, fragment stage
+// Offsets the red and blue samples radially from screen centre by uAmount,
+// masked to bright areas, so highlights fringe toward the edges.
 uniform sampler2D tDiffuse;uniform float uAmount;varying vec2 vUv;
 void main(){
   vec4 base=texture2D(tDiffuse,vUv);

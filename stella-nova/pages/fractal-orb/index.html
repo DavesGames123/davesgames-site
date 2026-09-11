@@ -4,6 +4,36 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Fractal Orb // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FRACTAL ORB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The full-screen <canvas> is created by main.js and
+   inserted before #ui, so the WebGL orb renders behind the overlay panels.
+   Nothing here paints the orb; this file lays out the two control panels and
+   the readouts that main.js binds to by id.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. importmap    maps the bare specifier "three" to the CDN; MUST stay
+                     inline (an import map cannot be an external file)
+     3. style.css    the page stylesheet (extracted from the old style block)
+     4. main.js      type=module; runs after parse, resolves "three" via the
+                     import map, then fetches shaders (top-level await)
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: "Stella Nova · Fractal Orb Engine"     (hidden in frame)  │
+     ├────────────┬───────────────────────────────────┬────────────────┤
+     │ #quick     │                                    │ #adv-panel     │
+     │  panel     │         <canvas>  orb              │  (slides in    │
+     │  presets   │         (behind #ui overlay)       │   from right)  │
+     │  colors    │                  #state-display ▷  │  many sliders  │
+     │  sliders   │                                    │                │
+     └────────────┴───────────────────────────────────┴──── #fps ──────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <script type="importmap">
 {
@@ -16,6 +46,9 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: when loaded inside the site shell's iframe, add .in-frame so
+     the CSS hides this page's own topbar (the shell provides one). Kept inline so
+     it runs before the body renders and there is no flash of the topbar. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
 

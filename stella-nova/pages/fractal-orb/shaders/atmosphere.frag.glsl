@@ -1,3 +1,6 @@
+// atmosphere.frag.glsl — fresnel shell, fragment stage
+// Alpha rises where the surface faces away from the camera (grazing rim) and
+// is shaped by uLevel/uGlow, giving a soft additive halo around the orb.
 uniform vec3 uColor;uniform float uGlow;uniform float uLevel;
 varying vec3 vNormal;varying vec3 vViewPosition;
 void main(){

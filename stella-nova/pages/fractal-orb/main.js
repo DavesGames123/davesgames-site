@@ -1,3 +1,57 @@
+// ============================================================================
+//  FRACTAL ORB  ·  volumetric fractal rendered inside a sphere
+// ----------------------------------------------------------------------------
+//  A single sphere mesh carries a fragment shader that ray-marches a volumetric
+//  fractal in the sphere's local space. A second, slightly larger sphere adds a
+//  fresnel atmosphere. A post pass adds chromatic aberration. Two side panels
+//  drive one shared state object S, which is pushed into GPU uniforms every time
+//  a control changes.
+//
+//  RENDER PIPELINE
+//  ---------------
+//      scene ─┬─ orb mesh    SphereGeometry + ShaderMaterial (ray-march volume)
+//             │                                        source: shaders/orb.*.glsl
+//             └─ atmosphere  same geometry, scaled up, additive fresnel shell
+//                                                source: shaders/atmosphere.*.glsl
+//                      │
+//                      ▼
+//              EffectComposer
+//                ├─ RenderPass(scene, camera)          draw the two meshes
+//                └─ ShaderPass(chromatic aberration)   split RGB toward edges
+//                                        source: shaders/chromatic-aberration.*.glsl
+//                      │
+//                      ▼
+//                   <canvas>
+//
+//  PER-FRAGMENT RAY-MARCH   (inside shaders/orb.frag.glsl; drawn here for the map)
+//  --------------------------------------------------------------------------
+//      camera ●───ray───────────▶        rd = normalize(vLocalPosition - camPos)
+//                 ╱   sphere r=2  ╲
+//                (   •─▶─▶─▶─▶─•   )      getVolumeBounds() → [tNear, tFar]
+//                 ╲   accumulate  ╱       traceEnergy() marches 64 steps, summing
+//                  ╲────────────╱         emission = color · fractal-density
+//
+//  STATE FLOW
+//  ----------
+//      preset click / slider input ─▶ S ─▶ applyState() ─▶ uniforms ─▶ GPU
+//                                       └─▶ syncAllUI()  ─▶ DOM widgets
+//      animate(): uTime += dt·speed ; orb.rotation += dt·orbRotation ; render
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      shader load .......... "loadShaders"          fetch .glsl before build
+//      presets .............. "PRESETS"              8 named parameter sets
+//      state ................ "const S ="            the one mutable state object
+//      three.js setup ....... "THREE.JS SETUP"       scene, camera, renderer
+//      orb material ......... "const material ="      the ray-march ShaderMaterial
+//      atmosphere ........... "atmosphereMaterial"   the fresnel shell
+//      post processing ...... "ChromaticAberration"  the composer pass
+//      state -> uniforms .... "function applyState"  push S into the GPU
+//      state -> widgets ..... "function syncAllUI"   push S into the DOM
+//      preset grid .......... "BUILD PRESET GRID"    build the preset buttons
+//      control bindings ..... "BIND QUICK PANEL"     wire inputs back to S
+//      animation loop ....... "function animate"     the per-frame update
+// ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -16,6 +70,9 @@ const SH = await loadShaders(import.meta.url, [
   'shaders/chromatic-aberration.frag.glsl',
 ]);
 
+// Each preset is a complete snapshot of every tunable parameter. Selecting one
+// copies its values into S wholesale; editing any control afterward switches the
+// preset label to 'Custom'. Colours are hex; the rest feed shader uniforms.
 // ═══════════════════ PRESETS ═══════════════════
 const presets = {
   'Default': {
@@ -71,6 +128,10 @@ const presets = {
 // ═══════════════════ STATE ═══════════════════
 const S = { preset:'Neutron', ...presets['Neutron'] };
 
+// Standard Three.js stack: a scene, a perspective camera 6 units out, and a
+// WebGL renderer inserted before the #ui overlay so the canvas sits behind the
+// panels. OrbitControls gives drag-to-orbit and scroll-to-zoom, with panning
+// disabled so the orb stays centred.
 // ═══════════════════ THREE.JS SETUP ═══════════════════
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
@@ -95,6 +156,9 @@ const vertexShader = SH['shaders/orb.vert.glsl'];
 
 const fragmentShader = SH['shaders/orb.frag.glsl'];
 
+// Uniforms are the live channel from JS state S into the GPU. Each field here
+// mirrors one control; applyState() writes new values, animate() advances uTime
+// and uLocalCamPos every frame.
 const uniforms = {
   uTime:{value:0},
   uLocalCamPos:{value:new THREE.Vector3()},
@@ -109,6 +173,9 @@ const uniforms = {
   uAsymmetry:{value:S.asymmetry}
 };
 
+// The orb material. Additive blending makes overlapping density read as light;
+// DoubleSide + depthWrite:false let the camera see the far wall of the volume,
+// so the ray can march all the way through the sphere.
 const material = new THREE.ShaderMaterial({
   vertexShader, fragmentShader, uniforms,
   transparent:true, side:THREE.DoubleSide, depthWrite:false, blending:THREE.AdditiveBlending
@@ -120,6 +187,8 @@ const atmosphereUniforms = {
   uGlow:{value:S.atmosphereGlow},
   uLevel:{value:S.atmosphereLevel}
 };
+// The atmosphere shell: the same sphere geometry scaled slightly larger, drawn
+// front-side with additive blending so its fresnel rim reads as a soft glow.
 const atmosphereMaterial = new THREE.ShaderMaterial({
   vertexShader: SH['shaders/atmosphere.vert.glsl'],
   fragmentShader: SH['shaders/atmosphere.frag.glsl'],
@@ -127,6 +196,8 @@ const atmosphereMaterial = new THREE.ShaderMaterial({
   transparent:true, side:THREE.FrontSide, depthWrite:false, blending:THREE.AdditiveBlending
 });
 
+// One geometry shared by both meshes. The atmosphere is a child of the orb, so
+// it inherits the orb's rotation and sits at atmosphereScale times its size.
 const geometry = new THREE.SphereGeometry(2.0, 128, 128);
 const orb = new THREE.Mesh(geometry, material);
 scene.add(orb);
@@ -140,6 +211,8 @@ const composer = new EffectComposer(renderer);
 composer.setPixelRatio(S.dpr);
 composer.addPass(new RenderPass(scene, camera));
 
+// Chromatic aberration post pass: samples the rendered frame three times with a
+// small radial offset per channel, so bright edges fringe red/blue toward the rim.
 const ChromaticAberrationShader = {
   uniforms:{"tDiffuse":{value:null},"uAmount":{value:S.chromaticAberration}},
   vertexShader: SH['shaders/chromatic-aberration.vert.glsl'],
@@ -149,6 +222,8 @@ const caPass = new ShaderPass(ChromaticAberrationShader);
 composer.addPass(caPass);
 
 // ═══════════════════ APPLY STATE → UNIFORMS ═══════════════════
+// Push every value in S into the GPU uniforms and renderer. Called once at start
+// and after any control change, so the render always reflects the current state.
 function applyState(){
   uniforms.uPrimaryColor.value.set(S.primaryEnergy);
   uniforms.uSecondaryColor.value.set(S.secondaryEnergy);
@@ -169,11 +244,16 @@ function applyState(){
 }
 
 // ═══════════════════ UI SYNC ═══════════════════
+// Paint a range input's filled portion: set the --pct custom property the CSS
+// gradient reads, so the track shows progress up to the thumb.
 function sg(el){
   const min=parseFloat(el.min),max=parseFloat(el.max),val=parseFloat(el.value);
   el.style.setProperty('--pct',((val-min)/(max-min)*100)+'%');
 }
 
+// The inverse of the bindings: write S back out to every widget (both panels),
+// the preset highlight, and the readouts. Called after a preset load so the two
+// panels and the state display all agree.
 function syncAllUI(){
   // Quick panel
   document.getElementById('qp-col-pri').value=S.primaryEnergy;
@@ -215,6 +295,8 @@ function syncAllUI(){
   document.getElementById('disp-info').textContent=`ITER ${S.fractalIters} · FRACTAL ENERGY`;
 }
 
+// Set one slider to a value: move the thumb, repaint the fill, and format the
+// numeric readout to the given decimal places.
 function setSlider(sliderId,valId,val,decimals){
   const el=document.getElementById(sliderId);
   el.value=val;
@@ -239,6 +321,8 @@ for(const name of Object.keys(presets)){
 }
 
 // ═══════════════════ BIND QUICK PANEL ═══════════════════
+// Wire one quick-panel slider to S: on input, store the value under key, update
+// its readout and fill, mark the preset Custom, and re-push state to the GPU.
 function bindQP(sliderId,valId,key,decimals){
   const el=document.getElementById(sliderId);
   sg(el);
@@ -263,6 +347,8 @@ document.getElementById('qp-col-sec').addEventListener('input',function(){
 });
 
 // ═══════════════════ BIND ADVANCED PANEL ═══════════════════
+// Same wiring for the advanced panel. applyFn lets a control run a custom apply
+// step instead of the default applyState(), though here all use the default.
 function bindAdv(sliderId,valId,key,decimals,applyFn){
   const el=document.getElementById(sliderId);
   sg(el);
@@ -309,6 +395,7 @@ window.toggleAdv=function(){
 };
 
 // ═══════════════════ RESIZE ═══════════════════
+// Keep the camera aspect and both render targets matched to the window size.
 window.addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;
   camera.updateProjectionMatrix();
@@ -316,6 +403,10 @@ window.addEventListener('resize',()=>{
   composer.setSize(innerWidth,innerHeight);
 });
 
+// The per-frame loop. It advances shader time by real elapsed seconds scaled by
+// speed, spins the orb on two axes, recomputes the camera position in the orb's
+// local frame (the shader ray-marches in local space), then renders through the
+// composer. A once-per-second counter reports FPS.
 // ═══════════════════ ANIMATION ═══════════════════
 const clock=new THREE.Clock();
 let frameCount=0,fpsTime=0;

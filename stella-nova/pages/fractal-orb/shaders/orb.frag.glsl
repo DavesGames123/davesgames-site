@@ -1,3 +1,15 @@
+// orb.frag.glsl — orb volume, fragment stage (the ray-marcher)
+//
+//   For each pixel on the sphere: build a ray from the camera through the
+//   fragment's local position, clip it to the sphere, then march it, summing
+//   emitted light from a folded fractal density field.
+//
+//     ro ●───rd──▶  getVolumeBounds() clips ray to sphere -> [tNear, tFar]
+//                   traceEnergy() steps t from tNear to tFar (<=64 steps)
+//                   at each step: d = evaluateStructure(p)  (fractal density)
+//                   emission += color(d) * d ; front-to-back accumulate
+//
+//   Uniforms are driven from main.js (see uDensity, uFractalIters, ...).
 uniform float uTime;
 uniform vec3 uLocalCamPos;
 uniform vec3 uPrimaryColor;
@@ -15,6 +27,9 @@ varying vec3 vLocalPosition;
 varying vec3 vNormal;
 varying vec3 vViewPosition;
 
+// Fold space repeatedly (rotate, square, invert) to build a fractal, and return
+// an accumulated density. uFractalIters controls depth; the animation twist and
+// asymmetry rotations make it churn and break symmetry.
 float evaluateStructure(vec3 pos){
   float densityAcc=0.0;
   vec3 anchor=pos;
@@ -41,6 +56,8 @@ float evaluateStructure(vec3 pos){
   return densityAcc*0.5;
 }
 
+// Ray/sphere intersection. Returns the two hit distances, or negative if the
+// ray misses, so the marcher knows where to start and stop.
 vec2 getVolumeBounds(vec3 origin,vec3 dir,float radius){
   float b=dot(origin,dir),c=dot(origin,origin)-radius*radius;
   float discriminant=b*b-c;
@@ -49,6 +66,8 @@ vec2 getVolumeBounds(vec3 origin,vec3 dir,float radius){
   return vec2(-b-root,-b+root);
 }
 
+// March the ray through the volume, front to back, accumulating emitted light.
+// Step size grows where the field is thin (exp term) to save samples.
 vec3 traceEnergy(vec3 origin,vec3 dir,vec2 limits){
   float currentDepth=limits.x,marchStep=0.02;
   vec3 finalEnergy=vec3(0.0);
@@ -67,6 +86,8 @@ vec3 traceEnergy(vec3 origin,vec3 dir,vec2 limits){
   return finalEnergy;
 }
 
+// Build the view ray in local space, spin it slowly over time, clip to the
+// sphere, march it, then shade the rim and write colour with density-based alpha.
 void main(){
   vec3 rayOrig=uLocalCamPos;
   vec3 rayDir=normalize(vLocalPosition-uLocalCamPos);
