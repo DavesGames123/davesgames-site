@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Ship Designer // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app">
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Ship Designer</span></div>
+  <div class="topbar-r"><span>SYS // <strong>LIVERY</strong></span></div>
+</div>
+<div class="hero">
+  <div class="hero-sub">Ship Systems // Livery Designer</div>
+  <div class="hero-title">Paint Your <em>Wings</em>: with assets by Nisha Sposato</div>
+  <div class="hero-body">
+    Every ship in Stella Nova is built from <strong>layered composites</strong> &mdash; a greyscale hull,
+    accent plating, and a reinforced cockpit canopy. Choose your <strong>hull color</strong> and <strong>accent trim</strong>
+    to create a unique livery. The simulation below shows your design in action across an asteroid field.
+  </div>
+</div>
+
+<div class="livery-gallery">
+  <div class="panel">
+    <div class="panel-head">
+      <span class="panel-badge" style="color:var(--yellow)">Liveries</span>
+      <span class="panel-title">Choose Your Livery</span>
+      <span style="font-size:0.34rem;color:var(--text-faint);margin-left:auto;letter-spacing:0.1em;text-transform:uppercase">Click to apply</span>
+    </div>
+    <div class="panel-body">
+      <div class="livery-grid" id="liveryPresets"></div>
+    </div>
+  </div>
+</div>
+
+<div class="main-layout">
+  <div class="designer-panel">
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-badge" style="color:var(--yellow)">Preview</span>
+        <span class="panel-title">Ship Preview</span>
+      </div>
+      <div class="panel-body">
+        <div class="preview-wrap"><canvas id="previewCanvas" width="512" height="512"></canvas></div>
+
+        <div class="color-section">
+          <div class="color-label">Hull Color</div>
+          <div class="cpick" id="cpickBody">
+            <div class="cpick-swatch">
+              <div class="cpick-swatch-bg" id="bodySwatchBg"></div>
+              <input type="color" id="bodyNativePicker" value="#1a6b3a">
+            </div>
+            <div class="cpick-fields">
+              <div class="cpick-hex-row">
+                <span class="cpick-hex-label">HEX</span>
+                <input type="text" class="cpick-hex-input" id="bodyHexInput" value="#1A6B3A" maxlength="7" spellcheck="false">
+              </div>
+              <div class="cpick-rgb-row">
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="bodyR" min="0" max="255" value="26"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="bodyG" min="0" max="255" value="107"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="bodyB" min="0" max="255" value="58"></div>
+              </div>
+            </div>
+          </div>
+          <div class="hsv-wrap">
+            <div class="hsv-sv-wrap" id="bodySvWrap"><canvas id="bodySvCanvas"></canvas><div class="hsv-sv-cursor" id="bodySvCursor"></div></div>
+            <div class="hsv-hue-wrap" id="bodyHueWrap"><canvas id="bodyHueCanvas"></canvas><div class="hsv-hue-cursor" id="bodyHueCursor"></div></div>
+          </div>
+        </div>
+
+        <div class="color-section">
+          <div class="color-label">Accent Trim</div>
+          <div class="cpick" id="cpickAccent">
+            <div class="cpick-swatch">
+              <div class="cpick-swatch-bg" id="accentSwatchBg"></div>
+              <input type="color" id="accentNativePicker" value="#b8901e">
+            </div>
+            <div class="cpick-fields">
+              <div class="cpick-hex-row">
+                <span class="cpick-hex-label">HEX</span>
+                <input type="text" class="cpick-hex-input" id="accentHexInput" value="#B8901E" maxlength="7" spellcheck="false">
+              </div>
+              <div class="cpick-rgb-row">
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="accentR" min="0" max="255" value="184"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="accentG" min="0" max="255" value="144"></div>
+                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="accentB" min="0" max="255" value="30"></div>
+              </div>
+            </div>
+          </div>
+          <div class="hsv-wrap">
+            <div class="hsv-sv-wrap" id="accentSvWrap"><canvas id="accentSvCanvas"></canvas><div class="hsv-sv-cursor" id="accentSvCursor"></div></div>
+            <div class="hsv-hue-wrap" id="accentHueWrap"><canvas id="accentHueCanvas"></canvas><div class="hsv-hue-cursor" id="accentHueCursor"></div></div>
+          </div>
+        </div>
+
+
+        <div class="layer-info">
+          <div class="color-label" style="margin-bottom:4px">Composite Layers</div>
+          <div class="layer-row"><span class="layer-dot" style="background:var(--yellow)"></span><span class="layer-name">Accent Spot Color</span><span class="layer-mode">Overlay</span></div>
+          <div class="layer-row"><span class="layer-dot" style="background:#aaa"></span><span class="layer-name">Accents (Greyscale)</span><span class="layer-mode">Normal</span></div>
+          <div class="layer-row"><span class="layer-dot" style="background:var(--blue)"></span><span class="layer-name">Cockpit / Greys</span><span class="layer-mode">Normal &bull; Locked</span></div>
+          <div class="layer-row"><span class="layer-dot" style="background:var(--green)"></span><span class="layer-name">Body Spot Color</span><span class="layer-mode">Overlay</span></div>
+          <div class="layer-row"><span class="layer-dot" style="background:#888"></span><span class="layer-name">Base Ship (Greyscale)</span><span class="layer-mode">Normal</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sim-panel">
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-badge" style="color:var(--blue)">Live</span>
+        <span class="panel-title">Asteroid Field Simulation</span>
+      </div>
+      <div class="panel-body" style="padding:0">
+        <div class="sim-canvas-wrap" id="simWrap"><canvas id="simCanvas"></canvas></div>
+      </div>
+    </div>
+    <div class="sim-controls">
+      <span class="zoom-label">Zoom:</span>
+      <button class="sim-btn" onclick="simZoom(0.8)">&#8722;</button>
+      <button class="sim-btn" onclick="simZoom(1.25)">+</button>
+      <button class="sim-btn" onclick="simZoom('reset')">Reset</button>
+      <button class="sim-btn" id="pauseBtn" onclick="togglePause()">Pause</button>
+      <div class="ship-slider-wrap"><span class="ship-slider-label">Ship Size:</span><input type="range" class="ship-slider" id="shipSizeSlider" min="1" max="8" step="0.25" value="3"><span class="ship-slider-val" id="shipSizeVal">1.5x</span></div>
+      <span class="sim-info">50 ships &bull; scroll to zoom</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

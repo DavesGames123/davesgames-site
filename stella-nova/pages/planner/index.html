@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Station Planner // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app">
+  <div class="topbar"><div class="topbar-l"><span class="sys-name">STATION PLANNER</span><div class="sys-status">DESIGN MODE</div></div><div class="topbar-r"><span>Modules: <strong id="hud-modules">1</strong></span><span>Enclosed: <strong id="hud-enclosed">0</strong></span><span>Regions: <strong id="hud-regions">0</strong></span></div></div>
+  <div class="ctrl-bar">
+    <span class="ctrl-label">Name</span><span class="ctrl-name"><input id="stationName" value="my_station" spellcheck="false"></span><div class="ctrl-sep"></div>
+    <span class="ctrl-label">Load</span>
+    <button class="ctrl-btn" onclick="loadPreset('outpost')">Outpost</button><button class="ctrl-btn" onclick="loadPreset('colony')">Colony</button><button class="ctrl-btn" onclick="loadPreset('fortress')">Fortress</button><button class="ctrl-btn" onclick="loadPreset('citadel')">Citadel</button><button class="ctrl-btn" onclick="loadPreset('base')">Base</button>
+    <div class="ctrl-sep"></div><button class="ctrl-btn danger" onclick="clearGrid()">✕ Clear</button><button class="ctrl-btn" onclick="undoAction()">↩ Undo</button><button class="ctrl-btn" onclick="centerView()">⊙ Center</button>
+    <div class="ctrl-sep"></div><button class="ctrl-btn export" onclick="showExportModal()">⟨/⟩ Export Rust</button><button class="ctrl-btn export" onclick="copyCode()">⎘ Copy</button>
+  </div>
+  <div class="main">
+    <div class="sidebar-l">
+      <div class="pal-section">
+        <div class="pal-header">STRUCTURE <span>— drag to draw walls</span></div>
+        <div class="struct-card" data-mod="StructureOrange" onclick="selectModule('StructureOrange')"><span class="sym">▣</span><div class="info"><div class="name" style="color:rgb(220,140,60)">Structure (Orange)</div><div class="desc">3× Iron Ingot · drag to draw lines</div></div></div>
+        <div class="struct-card" data-mod="StructureWhite" onclick="selectModule('StructureWhite')"><span class="sym">▢</span><div class="info"><div class="name" style="color:rgb(200,200,210)">Structure (White)</div><div class="desc">3× Iron Ingot · drag to draw lines</div></div></div>
+      </div>
+      <div class="pal-section">
+        <div class="pal-header">COMPONENTS <span>— click to place</span></div>
+        <div class="pal-cat">Habitation</div><div class="pal-strip" id="hab-strip"></div>
+        <div class="pal-cat">Infrastructure</div><div class="pal-strip" id="inf-strip"></div>
+        <div class="pal-cat">Production</div><div class="pal-strip" id="prod-strip"></div>
+      </div>
+      <div class="tool-section"><div class="tool-header">Tools</div>
+        <div class="tool-row"><button class="tool-btn red" id="demolishBtn" onclick="toggleDemolish()">✕ Demolish</button></div>
+        <div class="dir-row" id="dirSelector" style="display:none;margin-top:6px"><span class="dir-label">Output</span><button class="dir-btn" data-dir="North" onclick="setDirection('North')">↑</button><button class="dir-btn active" data-dir="South" onclick="setDirection('South')">↓</button><button class="dir-btn" data-dir="East" onclick="setDirection('East')">→</button><button class="dir-btn" data-dir="West" onclick="setDirection('West')">←</button></div>
+      </div>
+      <div class="tool-section"><div class="tool-header">Symmetry</div>
+        <div class="tool-row"><button class="tool-btn" id="symX" onclick="toggleSym('x')">↔ Mirror X</button><button class="tool-btn" id="symY" onclick="toggleSym('y')">↕ Mirror Y</button><button class="tool-btn" id="symXY" onclick="toggleSym('xy')">✦ Both</button></div>
+      </div>
+      <div class="tool-section"><div class="tool-header">File</div>
+        <div class="tool-row"><button class="tool-btn" onclick="saveStation()">⬇ Save .station</button><button class="tool-btn" onclick="document.getElementById('stationFileInput').click()">⬆ Load .station</button></div>
+        <input type="file" id="stationFileInput" accept=".station,.json" style="display:none" onchange="loadStation(event)">
+      </div>
+      <div class="sel-info" id="selInfo"><div class="si-hint">Select a module above to begin placing.<br>Structural: drag to draw lines.<br>Functional: click to place one at a time.<br>Shift+click to remove. Middle-click to pan.<br><strong style="color:var(--yellow)">Right-click</strong> a placed production module to rotate its output direction.</div></div>
+    </div>
+    <div class="canvas-area" id="canvasArea"><canvas id="gridCanvas"></canvas><div class="hover-info" id="hoverInfo" style="display:none"></div>
+      <div class="zoom-bar"><button class="zoom-btn" onclick="zoomIn()">+</button><button class="zoom-btn" onclick="zoomOut()">−</button><button class="zoom-btn" onclick="fitView()" title="Fit all modules in view">⊞</button><button class="zoom-btn" onclick="centerView()">⊙</button></div>
+      <div class="bottom-badge left" id="enclosedBadge">Enclosed: <strong>0</strong> cells · <strong>0</strong> regions</div>
+      <div class="bottom-badge right" id="symBadge">SYMMETRY: OFF</div>
+    </div>
+    <div class="sidebar-r">
+      <div class="panel"><div class="panel-title">Station Stats</div>
+        <div class="stat-row"><span class="label"><span class="ico">🏠</span> Housing</span><span class="value blue" id="stat-housing">4</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🚀</span> Docking</span><span class="value blue" id="stat-docking">2</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🌱</span> Food/day</span><span class="value green" id="stat-food">0.0</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🎮</span> Morale</span><span class="value yellow" id="stat-morale">+0%</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🏥</span> Health</span><span class="value yellow" id="stat-health">+0%</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">🛡</span> Shields</span><span class="value blue" id="stat-shields">0</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">▣</span> Integrity</span><span class="value blue" id="stat-integrity">0</span></div>
+        <div class="stat-row"><span class="label"><span class="ico">📦</span> Storage</span><span class="value" id="stat-storage">0</span></div>
+      </div>
+      <div class="panel"><div class="panel-title">Modules <span class="val" id="totalModules">1</span></div><div id="moduleCounts"></div></div>
+      <div class="panel" style="max-height:260px;overflow-y:auto"><div class="panel-title">Build Cost</div><div id="resourceCosts"><span style="font-size:13px;color:var(--text-faint)">No resources needed</span></div></div>
+      <div class="code-panel"><div class="panel-title">Rust Code</div><textarea class="code-area" id="codeOutput" readonly></textarea><button class="copy-btn" onclick="copyCode()">⎘ COPY TO CLIPBOARD</button></div>
+    </div>
+  </div>
+</div>
+<button class="fab left" id="fabL" onclick="toggleDrawer('l')">Palette &equiv;</button>
+<button class="fab right" id="fabR" onclick="toggleDrawer('r')">Stats &equiv;</button>
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawers()"></div>
+<div class="modal-overlay" id="exportModal"><div class="modal"><h2>Exported Rust Code</h2><pre id="exportCode"></pre><div class="modal-btns"><button class="mbtn green" onclick="copyModalCode()">⎘ Copy to Clipboard</button><button class="mbtn" onclick="closeModal()">Close</button></div></div></div>
+<script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Selection // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="grid-bg"></div>
+<div id="app">
+  <div class="topbar">
+    <span class="sys-name">SELECTION</span>
+    <div class="status-pill">LIVE PRACTICE</div>
+    <div class="tb-readouts">
+      <span>SCENARIO <strong id="hud-scn">01/06</strong></span>
+      <span>ENTITIES <strong id="hud-ents">0</strong></span>
+      <span>SELECTED <strong id="hud-sel">0</strong></span>
+      <span>MOD <strong id="hud-mod">OFF</strong></span>
+    </div>
+  </div>
+
+  <div class="scn-bar" id="scnBar"></div>
+
+  <div class="ctrl-bar">
+    <span class="ctrl-label">MOD</span>
+    <button class="ctrl-btn" id="modBtn" onclick="toggleMod()">⌘ HOLD</button>
+    <div class="ctrl-sep"></div>
+    <button class="ctrl-btn warn" onclick="resetScenario()">↻ RESET</button>
+    <button class="ctrl-btn" id="zoomOut" style="display:none" onclick="adjustZoom(-1)">− ZOOM</button>
+    <button class="ctrl-btn" id="zoomIn" style="display:none" onclick="adjustZoom(1)">+ ZOOM</button>
+    <span class="ctrl-info">DESKTOP: HOLD <strong style="color:var(--text-dim)">⌘ / CTRL</strong> · MOBILE: TAP MOD</span>
+  </div>
+
+  <div class="main">
+    <div class="canvas-area">
+      <canvas id="cv"></canvas>
+      <div class="hint-bar" id="hint" style="--ac:var(--yellow)"></div>
+      <div class="sel-bar" id="sel">Nothing selected</div>
+      <div class="toast" id="toast"></div>
+    </div>
+    <aside class="sidebar-r" id="sideR">
+      <div class="panel">
+        <div class="scn-headline" id="scnHead"></div>
+        <div class="scn-desc" id="scnDesc"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">How it works</div>
+        <ul class="notes-list" id="scnNotes"></ul>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Click priority</div>
+        <div id="legendC"></div>
+      </div>
+      <div class="panel" style="border-bottom:none">
+        <div class="panel-title">Box priority</div>
+        <div id="legendB"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<button class="fab" id="fab" onclick="toggleDrawer()">Info ≡</button>
+<div class="drawer-backdrop" id="bd" onclick="closeDrawer()"></div>
+
+<script src="main.js"></script>
+</body>
+</html>
