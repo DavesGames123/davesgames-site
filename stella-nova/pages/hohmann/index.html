@@ -4,16 +4,46 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>Stella Nova // Hohmann Transfer Calculator</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   HOHMANN TRANSFER CALCULATOR  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws the whole simulation into the single
+   canvas and wires every button and readout by id; this file just lays out the
+   frame. katex.js renders the reference equations into the floating panel.
+
+   HEAD LOAD ORDER
+     1. fonts       Google Fonts stylesheet
+     2. KaTeX       CSS then JS from CDN (KaTeX must exist before katex.js runs)
+     3. style.css   the page stylesheet
+     (main.js and katex.js load at the end of body, after the markup exists)
+
+   LAYOUT  (the ▓ mark shows an element id)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ topbar ▓simStatus ▓smsg ▓bodyCount ▓fpsRead ▓timeRead              │
+     ├───────────────────────────────────────────────────────────────────┤
+     │ action bar: preset cards ▶ ▓btnLaunch ▓btnHop Clear ▓spSlider      │
+     ├──────────────────────────────────────────┬────────────────────────┤
+     │ canvas ▓cvs   ▓hoverbox                   │  ▓mathpanel             │
+     │   floating eq panel ▓eqPanel             │   ▓tbar (banner)        │
+     │   ▓fabMath (opens drawer on mobile)      │   ▓mathcontent          │
+     └──────────────────────────────────────────┴────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS can
+     hide this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 
+<!-- Decorative background grid, painted by CSS. -->
 <div class="grid-bg"></div>
 
+<!-- Topbar: system name plus live readouts (status, planet count, FPS, time). -->
 <div class="topbar">
   <div class="topbar-l">
     <span class="sys-name">Stella Nova</span>
@@ -29,9 +59,13 @@
 </div>
 
 <!-- ACTION BAR (presets + actions, always visible) -->
+<!-- Each preset card carries an inline SVG mini map of its system and calls
+     loadPreset(name,this). The action buttons call launch, toggleHopMode, and
+     clearSel; the speed slider feeds the sim time scale in main.js. -->
 <nav class="action-bar">
   <span class="ab-label">Systems</span>
 
+  <!-- Random system preset. -->
   <button class="pcard active" data-preset="random" onclick="loadPreset('random',this)">
     <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
       <circle cx="20" cy="20" r="2.8" fill="#ffe080"/>
@@ -46,6 +80,7 @@
     <span class="pcard-name">Random</span>
   </button>
 
+  <!-- Inner system preset: tight cluster of small orbits. -->
   <button class="pcard" data-preset="inner" onclick="loadPreset('inner',this)">
     <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
       <circle cx="20" cy="20" r="3.2" fill="#ffe080"/>
@@ -59,6 +94,7 @@
     <span class="pcard-name">Inner</span>
   </button>
 
+  <!-- Outer system preset: a few widely spaced giants. -->
   <button class="pcard" data-preset="outer" onclick="loadPreset('outer',this)">
     <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
       <circle cx="20" cy="20" r="2.8" fill="#ffe080"/>
@@ -70,6 +106,7 @@
     <span class="pcard-name">Outer</span>
   </button>
 
+  <!-- Laplace system preset: exact 2:1 period resonance chain. -->
   <button class="pcard" data-preset="laplace" onclick="loadPreset('laplace',this)">
     <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
       <circle cx="20" cy="20" r="2.5" fill="#ffe080"/>
@@ -85,6 +122,7 @@
     <span class="pcard-name">Laplace</span>
   </button>
 
+  <!-- Binary system preset: two close planets. -->
   <button class="pcard" data-preset="binary" onclick="loadPreset('binary',this)">
     <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
       <circle cx="20" cy="20" r="3" fill="#ffe080"/>
@@ -98,12 +136,15 @@
 
   <span class="ab-divider"></span>
 
+  <!-- Actions: Launch fires the transfer (disabled until both orbits picked),
+       Hop toggles chained-transfer mode, Clear resets the selection. -->
   <button class="act-btn go" id="btnLaunch" disabled onclick="launch()">&#9654; Launch</button>
   <button class="act-btn green" id="btnHop" onclick="toggleHopMode()">&#11041; Hop</button>
   <button class="act-btn red" onclick="clearSel()">&#x2715; Clear</button>
 
   <span class="ab-divider"></span>
 
+  <!-- Speed control: sets sim years per real second. -->
   <div class="speed-ctl">
     <span>Speed</span>
     <input type="range" id="spSlider" min="0.05" max="0.5" step="0.005" value="0.25">
@@ -111,13 +152,19 @@
   </div>
 </nav>
 
+<!-- Main split: the render canvas on the left, the live math panel on the right. -->
 <div id="main">
 
+  <!-- Canvas area: the simulation surface plus its floating overlays. -->
   <div class="canvas-area" id="canvasArea">
+    <!-- main.js sizes and draws everything into this one canvas. -->
     <canvas id="cvs"></canvas>
+    <!-- Hover readout: shows the pointed-at planet's orbital data. -->
     <div class="hoverbox" id="hoverbox">hover over a planet</div>
 
     <!-- FLOATING EQUATION PANEL -->
+    <!-- Reference formulas rendered by katex.js into the eq-* rows; eqState
+         flips to LIVE (set in main.js) once a transfer is computed. -->
     <section class="eq-panel" id="eqPanel">
       <div class="eq-head">
         <span class="eq-dot"></span>
@@ -142,10 +189,13 @@
       </div>
     </section>
 
+    <!-- Mobile: floating button and backdrop that open or close the math drawer. -->
     <button class="fab" id="fabMath" onclick="toggleMathDrawer()">Math &equiv;</button>
     <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeMathDrawer()"></div>
   </div>
 
+  <!-- Math panel: main.js fills tbar with a status banner and mathcontent with
+       the live step-by-step computation. -->
   <aside id="mathpanel">
     <div class="p-head">
       <span>Live Computation</span>
@@ -157,8 +207,10 @@
 
 </div>
 
+<!-- katex.js renders the reference equations; load it before main.js. -->
 <script src="katex.js"></script>
 
+<!-- main.js: the whole simulation, drawing and control logic. -->
 <script src="main.js"></script>
 </body>
 </html>

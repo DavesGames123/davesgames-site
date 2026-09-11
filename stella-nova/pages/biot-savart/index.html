@@ -4,13 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Biot–Savart Law // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   BIOT–SAVART LAW  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws everything on #sim-canvas; katex.js fills
+   the equation panel. This file lays out the control panel, the canvas, the
+   equation panel, and the status bar, all bound to main.js by element id.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. KaTeX        CSS then JS from CDN, so window.katex exists for katex.js
+     3. style.css    the page stylesheet
+   Scripts load at end of body: katex.js first, then main.js.
+
+   LAYOUT  (● marks an element id)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: "Stella Nova · Biot–Savart Law"                           │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ ●panel     │  ●canvas-wrap                                        │
+     │  add wire  │    ●sim-canvas   (wires, field, tracers, probe)      │
+     │  ●wire-list│                                                       │
+     │  probe     │    ●eq-panel  ▷ Biot–Savart formulas (KaTeX)         │
+     │  display   │                                                       │
+     │  presets   │                                                       │
+     ├────────────┴─────────────────────────────────────────────────────┤
+     │ ●status-bar: wires · tracers · fps · probe |B|                    │
+     └──────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell's iframe, add .in-frame so the CSS
+     hides this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Mobile hamburger: toggles the side panel open on narrow screens. -->
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 
 <div class="topbar">
@@ -19,7 +51,9 @@
 </div>
 
 <div id="main">
+  <!-- Left control panel: add/list wires, probe, field display, presets. -->
   <div id="panel"><div class="p-body">
+    <!-- Add a wire carrying current out of (⊙) or into (⊗) the page. -->
     <div class="p-section">
       <div class="p-sec-lbl">Add Wire (cross-section)</div>
       <div class="add-grid">
@@ -30,10 +64,12 @@
         Place infinite wires perpendicular to screen. Each creates a circular B field via Biot–Savart.
       </div>
     </div>
+    <!-- Live wire cards, rebuilt by main.js rebuildWireList() from wires[]. -->
     <div class="p-section">
       <div class="p-sec-lbl">Wires</div>
       <div class="wire-list" id="wire-list"></div>
     </div>
+    <!-- Probe controls: the draggable field sampler and step-through mode. -->
     <div class="p-section">
       <div class="p-sec-lbl">Probe</div>
       <button class="tog-btn on" id="tog-probe" onclick="toggleProbe()">◎ Probe Point</button>
@@ -45,6 +81,7 @@
         Animates contributions one wire at a time, showing how B accumulates.
       </div>
     </div>
+    <!-- Field visualization toggles and the tracer count/speed sliders. -->
     <div class="p-section">
       <div class="p-sec-lbl">Field Display</div>
       <div style="display:flex;flex-direction:column;gap:4px">
@@ -63,6 +100,7 @@
         <span class="val" id="vl-ts">1.5</span>
       </div>
     </div>
+    <!-- Preset wire arrangements: parallel, anti-parallel, triangle, quad. -->
     <div class="p-section">
       <div class="p-sec-lbl">Presets</div>
       <div class="sim-btns" style="margin-bottom:6px">
@@ -81,9 +119,11 @@
     </div>
   </div></div>
 
+  <!-- Canvas stage: the sim surface plus the overlaid equation panel. -->
   <div id="canvas-wrap">
     <canvas id="sim-canvas"></canvas>
     <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
+    <!-- Collapsible equation panel, filled by katex.js. -->
     <section class="eq-panel" id="eq-panel">
       <div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Biot–Savart Law</span><span class="arrow">▲</span></div>
       <div class="eq-blocks">
@@ -104,6 +144,7 @@
   </div>
 </div>
 
+<!-- Status bar: wire count, tracer count, FPS, and the probe field magnitude. -->
 <div id="status-bar">
   <span id="st-wires">0 wires</span><span class="sep"></span>
   <span id="st-tracers">2000 tracers</span><span class="sep"></span>
@@ -111,9 +152,11 @@
   <span id="st-probe">probe: --</span>
 </div>
 
+<!-- KaTeX equation-panel renderer; must run after the KaTeX CDN script. -->
 <!-- KaTeX -->
 <script src="katex.js"></script>
 
+<!-- Main simulation: builds the canvas scene and drives the render loop. -->
 <script src="main.js"></script>
 </body>
 </html>

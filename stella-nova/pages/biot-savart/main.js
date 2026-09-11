@@ -1,3 +1,55 @@
+// ============================================================================
+//  BIOT-SAVART LAW  ·  interactive cross-section of straight-wire magnetic fields
+// ----------------------------------------------------------------------------
+//  A 2D canvas looks down the barrel of a set of infinite straight wires that
+//  run perpendicular to the screen. Each wire carries a current out of the page
+//  (⊙, positive) or into it (⊗, negative). In that plane the field of one wire
+//  is circular: B = μ₀I/(2πr), pointing along φ̂ (tangent to the circle around
+//  the wire). The total field at any point is the vector sum over all wires
+//  (superposition). Nothing is integrated over time for the physics; the field
+//  is a closed-form function of position, recomputed wherever it is sampled.
+//
+//  WORLD FRAME  (canvas pixels are world units; camera pans/zooms on top)
+//  ---------------------------------------------------------------------------
+//      current OUT of page (⊙, I>0)  ─▶  field circulates counter-clockwise
+//
+//                  ▲ +y (down in screen space)
+//                  │        φ̂  (B direction)
+//                  │      ╭────▶───╮
+//                  │     │    ●     │     ● = wire (into/out of screen)
+//                  │     │  ⊙ wire  │     r = distance wire ─▶ sample point
+//                  │      ╲────◀───╯      B = μ₀I/(2πr) along φ̂ = (-dy,dx)/r
+//     ─────────────┼─────────────────▶ +x
+//
+//  SAMPLING / RENDER PIPELINE  (drawn every frame in render())
+//  ---------------------------------------------------------------------------
+//      wires[] ─┬─ renderHeatmap()  per-cell |B|, log-mapped to a color ramp
+//               ├─ renderArrows()   field direction on a fixed grid
+//               ├─ renderTracers()  particles advected along B (streamlines)
+//               ├─ renderWires()    the ⊙/⊗ glyphs and current rings
+//               └─ renderProbe()    per-wire dB vectors + total B + compass
+//                        │
+//                        ▼   totalField(x,y) = Σ wireField(...) over wires[]
+//                     <canvas>
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ---------------------------------------------------------------------------
+//      state ................ "const SIM="          the one mutable sim state
+//      camera ............... "CAM ="               pan/zoom, screenToWorld
+//      physics .............. "wireField"           single-wire B, superposition
+//      color ramp ........... "fieldColorRGB"       |B| to RGB for field draws
+//      tracers .............. "spawnTracers"        streamline particle pool
+//      render ............... "function render"     per-frame draw orchestration
+//      probe ................ "function renderProbe" vector decomposition + compass
+//      wire list UI ......... "rebuildWireList"     the side-panel wire cards
+//      add/remove ........... "function addWire"    place, delete, edit wires
+//      presets .............. "function preset"     parallel/anti/triangle/quad
+//      pointer .............. "function onDown"     drag wires/probe, pan
+//      pinch/wheel zoom ..... "wheel"               zoom keeping cursor fixed
+//      resize ............... "function resize"     canvas sizing, DPR clamp
+//      loop ................. "function loop"       rAF: step, advect, render
+//      init ................. "INIT"                first layout, anti preset
+// ============================================================================
 /* ════════════════════════════════════════════════════════════
    BIOT-SAVART LAW — INTERACTIVE EDUCATIONAL SIMULATOR
    Cross-section view: infinite wires ⊥ to screen.
@@ -5,8 +57,12 @@
    ════════════════════════════════════════════════════════════ */
 const canvas=document.getElementById('sim-canvas');
 const ctx=canvas.getContext('2d');
+// CW/CH are the canvas size in world (CSS) pixels; set for real by resize().
 let CW=100,CH=100;
 
+// The single mutable state object. Every toggle and slider writes one field
+// here; render() and the loop read it. probeX/probeY track the draggable probe;
+// stepping/stepIdx/stepTimer drive the "accumulate one wire at a time" mode.
 const SIM={
   showTracers:true,showArrows:true,showHeatmap:false,
   tracerCount:2000,tracerSpeed:1.5,tracerTrail:35,
@@ -14,13 +70,19 @@ const SIM={
   stepping:false,stepIdx:0,stepTimer:0,
   selectedId:-1,
 };
+// wires: the sources. tracers: the streamline particle pool. nextId: a
+// monotonic counter so every wire has a stable id across list rebuilds.
 let wires=[],tracers=[],nextId=0;
 
 /* ═══ CAMERA ═══ */
+// Pan/zoom about the canvas center. zoom scales, (x,y) offsets in world units.
 const CAM={x:0,y:0,zoom:1};
+// Invert the camera transform: screen pixel to world coordinate. The exact
+// inverse of the translate/scale/translate applied in render().
 function screenToWorld(sx,sy){return[(sx-CW/2)/CAM.zoom+CW/2-CAM.x,(sy-CH/2)/CAM.zoom+CH/2-CAM.y];}
 
-// Wire colors for probe decomposition
+// One stable color per wire, indexed by position. The probe draws each wire's
+// dB in its own color so the superposition can be read apart visually.
 const WIRE_COLORS=['#60e0ee','#64c864','#ff9050','#c890ff','#ffc832','#ff6b6b','#b896ff','#64dcc8','#f5c842','#ff8830'];
 
 /* ═══ PHYSICS: INFINITE WIRE FIELD ═══ */
@@ -28,15 +90,20 @@ const WIRE_COLORS=['#60e0ee','#64c864','#ff9050','#c890ff','#ffc832','#ff6b6b','
 // In 2D: wire at (wx,wy) with current I (positive=out of screen)
 // At point (px,py): B direction is (-dy,dx)/r (rotated 90° CCW for I>0)
 function wireField(px,py,wx,wy,current){
+  // Displacement from wire to sample point, and its squared length.
   const dx=px-wx,dy=py-wy;
   const r2=dx*dx+dy*dy;
   if(r2<25) return[0,0]; // avoid singularity within 5px
   const r=Math.sqrt(r2);
+  // Magnitude B = μ₀I/(2πr); 6.2832 is 2π, and μ₀/2π is folded into the
+  // display scale so the numbers read cleanly rather than in SI units.
   // B = μ₀I/(2πr), direction = (-dy,dx)/r for I>0 (CCW circulation)
   const B=current/(r*6.2832); // μ₀/4π absorbed into display scaling
+  // Rotate the unit radial (dx,dy)/r by 90° CCW to get φ̂, then scale by B.
   return[-dy/r*B, dx/r*B];
 }
 
+// Superposition: the total field is the plain vector sum of every wire's field.
 function totalField(px,py){
   let Bx=0,By=0;
   for(const w of wires){
@@ -47,35 +114,53 @@ function totalField(px,py){
 }
 
 /* ═══ FIELD COLOR (matches MagnetLab/orbital viewer) ═══ */
+// Map a field magnitude to an RGB triple on a 6-stop ramp. |B| spans many
+// decades near a wire, so it is compressed with log10 before lookup.
 function fieldColorRGB(mag,gamma){
   gamma=gamma||1;
+  // Log-compress and normalize into roughly [0,1]; 12 and 2.2 shape the curve.
   const lv=Math.log10(1+mag*12)/2.2;
+  // Optional gamma to bias the ramp toward low or high magnitudes.
   const lc=Math.pow(Math.max(0,Math.min(1,lv)),1/Math.max(0.1,gamma));
+  // Six color stops: deep violet ▶ blue ▶ cyan ▶ green ▶ orange ▶ white.
   const S=[[0.05,0,0.3],[0,0.2,1],[0,1,0.8],[0.2,1,0],[1,0.5,0],[1,1,1]];
+  // Pick the segment (si) and interpolation fraction (sf), then lerp per channel.
   const sv=lc*5,si=Math.min(Math.floor(sv),4),sf=sv-si;
   return[S[si][0]+sf*(S[si+1][0]-S[si][0]),S[si][1]+sf*(S[si+1][1]-S[si][1]),S[si][2]+sf*(S[si+1][2]-S[si][2])];
 }
 
 /* ═══ TRACERS ═══ */
+// Fill the pool with particles at random positions. Each carries a trail buffer
+// and a random lifetime so respawns are staggered rather than synchronized.
 function spawnTracers(){
   tracers=[];
   for(let i=0;i<SIM.tracerCount;i++){
     tracers.push({x:Math.random()*CW,y:Math.random()*CH,trail:[],age:0,maxAge:2.5+Math.random()*4});
   }
 }
+// Advect every tracer one step along the local field direction (a streamline
+// integrator). Because it follows B̂ at fixed speed, tracers trace field lines
+// regardless of |B|; the trail records |B| per point for coloring.
 function updateTracers(dt){
+  // 80 px/s at speed 1.0; the slider scales this pixel rate.
   const speed=SIM.tracerSpeed*80;
   for(const tr of tracers){
     tr.age+=dt;
+    // Move along the unit field vector (forward Euler on the normalized field).
     const[Bx,By]=totalField(tr.x,tr.y);
     const Bmag=Math.sqrt(Bx*Bx+By*By);
     if(Bmag>1e-6){tr.x+=(Bx/Bmag)*speed*dt;tr.y+=(By/Bmag)*speed*dt;}
+    // Push the new head onto the trail; drop the oldest past the trail length.
     tr.trail.unshift([tr.x,tr.y,Bmag]);
     if(tr.trail.length>SIM.tracerTrail) tr.trail.pop();
     // Check if inside any wire
     let inWire=false;
     for(const w of wires){const dx=tr.x-w.x,dy=tr.y-w.y;if(dx*dx+dy*dy<144){inWire=true;break;}}
+    // Retire when aged out, off-screen, or swallowed by a wire (r<12px), then
+    // respawn to keep the pool full.
     if(tr.age>tr.maxAge||tr.x<-20||tr.x>CW+20||tr.y<-20||tr.y>CH+20||inWire){
+      // Bias 60% of respawns to a ring around a random wire so field lines stay
+      // populated near the sources where the structure is most interesting.
       // Respawn biased near wires
       if(wires.length>0&&Math.random()<0.6){
         const w=wires[Math.floor(Math.random()*wires.length)];
@@ -88,16 +173,22 @@ function updateTracers(dt){
 }
 
 /* ═══ RENDER ═══ */
+// Draw one frame. Order matters: clear, apply camera, then paint layers back to
+// front so wires and the probe sit on top of the field visualization.
 function render(){
+  // Clear in device space (identity transform), then paint the background in
+  // world space, before the camera transform is applied.
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();
   ctx.fillStyle='#0e1118';ctx.fillRect(0,0,CW,CH);
 
+  // Apply the pan/zoom: translate to center, scale, translate back plus offset.
   // Camera transform
   ctx.save();
   ctx.translate(CW/2,CH/2);
   ctx.scale(CAM.zoom,CAM.zoom);
   ctx.translate(-CW/2+CAM.x,-CH/2+CAM.y);
 
+  // Reference grid, snapped to a 50px world lattice across the visible extent.
   // Grid
   const gx0=Math.floor(((0-CW/2)/CAM.zoom+CW/2-CAM.x)/50)*50;
   const gy0=Math.floor(((0-CH/2)/CAM.zoom+CH/2-CAM.y)/50)*50;
@@ -106,6 +197,8 @@ function render(){
   for(let x=gx0;x<vx1;x+=50){ctx.beginPath();ctx.moveTo(x,gy0);ctx.lineTo(x,vy1);ctx.stroke();}
   for(let y=gy0;y<vy1;y+=50){ctx.beginPath();ctx.moveTo(gx0,y);ctx.lineTo(vx1,y);ctx.stroke();}
 
+  // Field layers first (heatmap, arrows, tracers), then the wire glyphs, then
+  // the probe on top. Each layer is gated by its toggle in SIM.
   if(SIM.showHeatmap) renderHeatmap();
   if(SIM.showArrows) renderArrows();
   if(SIM.showTracers) renderTracers();
@@ -114,6 +207,7 @@ function render(){
   ctx.restore(); // camera transform
 }
 
+// Field-magnitude heatmap: color a coarse cell grid by |B| at each cell center.
 function renderHeatmap(){
   const step=12;
   for(let x=0;x<CW;x+=step)for(let y=0;y<CH;y+=step){
@@ -125,6 +219,8 @@ function renderHeatmap(){
   }
 }
 
+// Field-direction arrows on a fixed 30px grid. 'lighter' compositing makes
+// overlapping strokes add up as light. Length and alpha scale with log |B|.
 function renderArrows(){
   ctx.save();ctx.globalCompositeOperation='lighter';
   const step=30,maxLen=13;
@@ -133,11 +229,13 @@ function renderArrows(){
     const Bmag=Math.sqrt(Bx*Bx+By*By);
     if(Bmag<1e-5)continue;
     const[r,g,b]=fieldColorRGB(Bmag);
+    // Same log map as the color ramp, reused to set arrow length and opacity.
     const lv=Math.min(1,Math.log10(1+Bmag*12)/2.2);
     const len=Math.max(2,lv*maxLen);
     const nx=Bx/Bmag,ny=By/Bmag,alpha=Math.max(0.05,Math.min(0.45,lv*0.5));
     ctx.strokeStyle=`rgba(${(r*0.35*255)|0},${(g*0.35*255)|0},${(b*0.35*255)|0},${alpha})`;
     ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+nx*len,y+ny*len);ctx.stroke();
+    // Draw a small filled arrowhead only when the shaft is long enough to read.
     if(len>3){
       const ax=x+nx*len,ay=y+ny*len,px=-ny*2,py=nx*2;
       ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(ax-nx*3+px,ay-ny*3+py);ctx.lineTo(ax-nx*3-px,ay-ny*3-py);ctx.closePath();
@@ -147,15 +245,21 @@ function renderArrows(){
   ctx.restore();
 }
 
+// Draw the streamline trails. Each segment fades toward the tail and toward the
+// start/end of the particle's life; a wide dim stroke plus a thin bright core
+// gives a glow. 'lighter' compositing sums overlapping trails.
 function renderTracers(){
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
   for(const tr of tracers){
     const tl=tr.trail.length;if(tl<2)continue;
+    // Life-fade envelope: fade in over the first 0.1s, fade out over the last 20%.
     const ageA=tr.age<0.1?tr.age/0.1:tr.age>tr.maxAge*0.8?(tr.maxAge-tr.age)/(tr.maxAge*0.2):1;
     for(let s=0;s<tl-1;s++){
       const pt=tr.trail[s],pn=tr.trail[s+1];
+      // Per-segment alpha: older trail points (higher s) are dimmer.
       const a0=(1-s/SIM.tracerTrail)*ageA;
       if(a0<0.01)continue;
+      // Color the segment by the |B| that was recorded at that trail point.
       const[r,g,b]=fieldColorRGB(pt[2]||0);
       ctx.strokeStyle=`rgba(${(r*a0*0.12*255)|0},${(g*a0*0.12*255)|0},${(b*a0*0.12*255)|0},1)`;
       ctx.lineWidth=Math.max(1,5*a0);ctx.beginPath();ctx.moveTo(pt[0],pt[1]);ctx.lineTo(pn[0],pn[1]);ctx.stroke();
@@ -166,9 +270,12 @@ function renderTracers(){
   ctx.restore();
 }
 
+// Draw each wire: a body disk, its current glyph (⊙ out / ⊗ into the page), a
+// dashed ring whose radius grows with |I|, and a current label.
 function renderWires(){
   for(const w of wires){
     const sel=w.id===SIM.selectedId;
+    // Positive current points out of the screen (⊙); negative into it (⊗).
     const out=w.current>0;
     // Wire body
     ctx.beginPath();ctx.arc(w.x,w.y,10,0,Math.PI*2);
@@ -199,18 +306,25 @@ function renderWires(){
   }
 }
 
+// The probe: decompose the field at one draggable point into per-wire dB
+// vectors, sum them into a total B, and show a compass that aligns with B. In
+// step-through mode only the first stepIdx wires are summed, so the total grows
+// one contribution at a time.
 function renderProbe(){
   const px=SIM.probeX,py=SIM.probeY;
+  // How many wires currently count toward the total (all, unless stepping).
   const maxWires=SIM.stepping?SIM.stepIdx:wires.length;
 
   // Draw individual contribution vectors
   let totalBx=0,totalBy=0;
   for(let i=0;i<wires.length;i++){
     const w=wires[i];
+    // Each wire's field at the probe; only active wires add to the running sum.
     const[bx,by]=wireField(px,py,w.x,w.y,w.current);
     const active=i<maxWires;
     if(active){totalBx+=bx;totalBy+=by;}
 
+    // Scale the tiny field vector up to a visible pixel length (800x).
     // Contribution vector
     const scale=800;
     const vx=bx*scale,vy=by*scale;
@@ -235,6 +349,7 @@ function renderProbe(){
     ctx.globalAlpha=1;
   }
 
+  // The resultant: sum of the active contributions, drawn thick and white.
   // Total B vector (white, thick)
   const tvx=totalBx*800,tvy=totalBy*800;
   const tlen=Math.sqrt(tvx*tvx+tvy*tvy);
@@ -248,6 +363,8 @@ function renderProbe(){
     ctx.globalAlpha=1;
   }
 
+  // A compass whose red (N) half points along B, the physical behavior of a
+  // magnetic needle placed at the probe. angle is the field direction.
   // Compass needle — rotates to align with total B
   const Bmag=Math.sqrt(totalBx*totalBx+totalBy*totalBy);
   const angle=Math.atan2(totalBy,totalBx);
@@ -283,8 +400,11 @@ function renderProbe(){
 }
 
 /* ═══ UI ═══ */
+// Paint a range input's filled track: set the --pct custom property the CSS reads.
 function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
 
+// Rebuild the side-panel wire cards from wires[]. Each card shows the current
+// glyph, name, a delete button, and a current slider bound back to the wire.
 function rebuildWireList(){
   const list=document.getElementById('wire-list');list.innerHTML='';
   wires.forEach((w,i)=>{
@@ -300,6 +420,9 @@ function rebuildWireList(){
   document.getElementById('st-wires').textContent=wires.length+' wire'+(wires.length!==1?'s':'');
 }
 
+// Add a wire with current direction dir (+1 out, -1 into). It searches outward
+// from center for a horizontal slot at least 50px from existing wires so new
+// wires do not land on top of one another.
 function addWire(dir){
   // Spawn along horizontal center, spaced apart
   let cx=CW/2,cy=CH/2,placed=false;
@@ -319,21 +442,30 @@ function addWire(dir){
   rebuildWireList();spawnTracers();
   if(window.innerWidth<600)document.getElementById('panel').classList.remove('mob-open');
 }
+// Delete a wire by id, then rebuild the list and reseed tracers.
 function removeWire(id){wires=wires.filter(w=>w.id!==id);rebuildWireList();spawnTracers();}
+// Set one property of a wire (used by the card's current slider) and refresh its
+// filled track and numeric readout without a full list rebuild.
 function setWireProp(id,prop,val,el){
   const w=wires.find(w=>w.id===id);if(!w)return;w[prop]=val;if(el)sg(el);
   const row=el.closest('.mag-row');if(row)row.querySelector('.val').textContent=val.toFixed(1);
 }
+// Remove every wire and clear the selection.
 function clearAll(){wires=[];SIM.selectedId=-1;rebuildWireList();spawnTracers();}
 
+// Toggle probe visibility and reflect the state on its button.
 function toggleProbe(){SIM.showProbe=!SIM.showProbe;const b=document.getElementById('tog-probe');b.classList.toggle('on',SIM.showProbe);b.classList.toggle('off',!SIM.showProbe);}
+// Toggle step-through accumulation mode, resetting the accumulation counter.
 function toggleStep(){
   SIM.stepping=!SIM.stepping;SIM.stepIdx=0;SIM.stepTimer=0;
   const b=document.getElementById('tog-step');b.classList.toggle('on',SIM.stepping);b.classList.toggle('off',!SIM.stepping);
   document.getElementById('step-info').style.display=SIM.stepping?'block':'none';
 }
+// Generic boolean toggle for a display option keyed by name, syncing its button.
 function toggleOpt(key,btnId){SIM[key]=!SIM[key];const b=document.getElementById(btnId);b.classList.toggle('on',SIM[key]);b.classList.toggle('off',!SIM[key]);}
 
+// Load a named wire arrangement. sp is the base spacing between wires; the anti,
+// triangle, and quad layouts alternate current sign to show interference.
 function preset(name){
   wires=[];nextId=0;
   const cx=CW/2,cy=CH/2,sp=70;
@@ -360,10 +492,17 @@ function preset(name){
 }
 
 /* ═══ DRAG ═══ */
+// Interaction state: which wire is being dragged, whether the probe is grabbed,
+// and pan bookkeeping. dragOff keeps the grab offset so the wire does not jump.
 let dragWire=null,dragProbe=false,dragOff=[0,0],isPanning=false,panLast=[0,0];
+// Pointer position in screen (canvas) pixels, handling both mouse and touch.
 function getScreenPos(e){const r=canvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return[t.clientX-r.left,t.clientY-r.top];}
+// Pointer position in world coordinates.
 function getPos(e){const[sx,sy]=getScreenPos(e);return screenToWorld(sx,sy);}
 
+// Wheel zoom: zoom toward the cursor by keeping its world point fixed. Take the
+// world point before and after the zoom change, then shift the camera by the
+// difference so the pixel under the cursor stays put.
 // Wheel zoom
 canvas.addEventListener('wheel',e=>{
   e.preventDefault();const[sx,sy]=getScreenPos(e);const[wx,wy]=screenToWorld(sx,sy);
@@ -371,6 +510,8 @@ canvas.addEventListener('wheel',e=>{
   const[wx2,wy2]=screenToWorld(sx,sy);CAM.x+=wx2-wx;CAM.y+=wy2-wy;
 },{passive:false});
 
+// Two-finger pinch: record the initial finger distance and midpoint on start,
+// then scale zoom by the distance ratio and pan by the midpoint drift.
 // Pinch zoom
 let pinchD0=0,pinchZ0=1,pinchMX=0,pinchMY=0,pinchCX=0,pinchCY=0,touchN=0;
 canvas.addEventListener('touchstart',e=>{
@@ -398,6 +539,8 @@ canvas.addEventListener('touchmove',e=>{
 canvas.addEventListener('touchend',e=>{touchN=e.touches.length;if(!touchN)onUp();},{passive:false});
 
 canvas.addEventListener('mousedown',onDown);
+// Press: hit-test the probe first, then wires (topmost first), else start a pan.
+// The 400/zoom hit radius keeps a constant screen-space grab area at any zoom.
 function onDown(e){
   e.preventDefault();const[x,y]=getPos(e);
   if(SIM.showProbe){const dx=x-SIM.probeX,dy=y-SIM.probeY;if(dx*dx+dy*dy<400/CAM.zoom){dragProbe=true;return;}}
@@ -405,6 +548,8 @@ function onDown(e){
   isPanning=true;const[sx,sy]=getScreenPos(e);panLast=[sx,sy];
 }
 window.addEventListener('mousemove',onMove);
+// Move: pan the camera, or drag the probe, or slide the grabbed wire. Wires move
+// horizontally only (dragOff carries the x grab offset, y is pinned).
 function onMove(e){
   if(isPanning&&!dragWire&&!dragProbe){
     const[sx,sy]=getScreenPos(e);CAM.x+=(sx-panLast[0])/CAM.zoom;CAM.y+=(sy-panLast[1])/CAM.zoom;panLast=[sx,sy];return;}
@@ -413,9 +558,12 @@ function onMove(e){
   else{dragWire.x=x+dragOff[0];} // horizontal only
 }
 window.addEventListener('mouseup',onUp);
+// Release: clear all drag/pan flags.
 function onUp(){dragWire=null;dragProbe=false;isPanning=false;}
 
 /* ═══ RESIZE ═══ */
+// Match the canvas backing store to its container. DPR is clamped to 2 so the
+// pixel count stays bounded on high-density displays.
 function resize(){
   const w=document.getElementById('canvas-wrap');
   CW=w.clientWidth;CH=w.clientHeight;
@@ -424,16 +572,23 @@ function resize(){
   canvas.width=CW*dpr;canvas.height=CH*dpr;
   ctx.setTransform(dpr,0,0,dpr,0,0);
 }
+// Track container size with a ResizeObserver where available, else window resize.
+// Reseed tracers on resize because the world extent changed.
 if(window.ResizeObserver)new ResizeObserver(()=>{resize();spawnTracers();}).observe(document.getElementById('canvas-wrap'));
 else window.addEventListener('resize',()=>{resize();spawnTracers();});
 
 /* ═══ LOOP ═══ */
+// FPS bookkeeping alongside the frame timer.
 let lastTime=0,fpsC=0,fpsT=0;
+// The per-frame loop: advance step-through, advect tracers, then render.
 function loop(time){
   requestAnimationFrame(loop);
+  // Real elapsed seconds, clamped to 50ms so a tab switch does not jump tracers.
   const dt=Math.min((time-lastTime)/1000,0.05);lastTime=time;
   fpsC++;fpsT+=dt;if(fpsT>=0.5){document.getElementById('st-fps').textContent=Math.round(fpsC/fpsT)+' fps';fpsC=0;fpsT=0;}
 
+  // Advance the accumulation index every 0.8s, wrapping past the last wire back
+  // to zero so the "one wire at a time" build-up replays.
   // Step-through animation
   if(SIM.stepping&&wires.length>0){
     SIM.stepTimer+=dt;
@@ -445,7 +600,10 @@ function loop(time){
 }
 
 /* ═══ INIT ═══ */
+// Paint every panel slider's filled track once at load.
 document.querySelectorAll('#panel input[type=range]').forEach(sg);
+// Defer first layout so the container has its final size, then seed the probe,
+// load the anti-parallel preset, and start the render loop.
 setTimeout(()=>{
   resize();spawnTracers();rebuildWireList();
   SIM.probeX=CW/2+100;SIM.probeY=CH/2;

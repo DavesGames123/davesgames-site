@@ -4,13 +4,58 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>FlowLab // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FLOWLAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws into the two canvases and binds every
+   control by id. This file lays out the left control panel, the canvas stage
+   with its equation and physical-model overlays, and the bottom status bar.
+
+   HEAD LOAD ORDER
+     1. fonts        Google Fonts stylesheet
+     2. KaTeX css + js  from CDN; renders the governing-equation blocks
+     3. style.css    the page stylesheet
+     4. main.js      classic script at end of body; runs after the DOM parses
+
+   LAYOUT  (# marks an element id)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · FlowLab                                       │
+     ├────────────┬──────────────────────────────────────────────────────┤
+     │ #panel     │  #canvas-wrap                                          │
+     │  system    │    #sim-canvas  (phase portrait, tracers)             │
+     │  params    │      ┌ #eq-panel  governing equations (KaTeX) ┐       │
+     │  tracers   │      └ #msim-panel physical-model inset       ┘       │
+     │  color     │                                                        │
+     │  tone      │                                                        │
+     │  display   │                                                        │
+     │  sim btns  │                                                        │
+     ├────────────┴──────────────────────────────────────────────────────┤
+     │ #status-bar: system · tracers · state · zoom · fps                 │
+     └───────────────────────────────────────────────────────────────────┘
+
+   SECTION MAP   (jump with grep -n "<anchor>" index.html)
+     panel ............ id="panel"        left control column
+     parameters ....... id="params"       per-system sliders (built by JS)
+     tracers .......... id="rDen"         density / speed / trail sliders
+     tone curve ....... id="toneCurve"    palette + gamma/contrast/exposure
+     display .......... id="tDom"         domain / arrows / axes / model toggles
+     stage ............ id="canvas-wrap"  canvas plus overlays
+     equations ........ id="eq-panel"     KaTeX equation blocks
+     inset ............ id="msim-panel"   physical-model mini canvas
+     status ........... id="status-bar"   bottom readouts
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In frame guard: inside the site shell iframe, add .in-frame so the CSS
+     hides this page's own topbar. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Mobile hamburger: toggles the slide-in control panel on narrow screens. -->
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 
 <div class="topbar">
@@ -19,22 +64,27 @@
 </div>
 
 <div id="main">
+  <!-- Left control panel: JS fills the dropdown, parameter rows, and readouts. -->
   <div id="panel"><div class="p-body">
+    <!-- System picker: options grouped into flows and complex maps by main.js. -->
     <div class="p-section">
       <div class="p-sec-lbl">System</div>
       <select id="sysSel"></select>
       <div class="sys-blurb" id="sysBlurb"></div>
     </div>
+    <!-- Per-system parameter sliders, built at runtime from SYS[cur].params. -->
     <div class="p-section">
       <div class="p-sec-lbl">Parameters</div>
       <div id="params"></div>
     </div>
+    <!-- Tracer pool controls: count, integration speed, and trail length. -->
     <div class="p-section">
       <div class="p-sec-lbl">Tracers</div>
       <div class="mrow"><span class="mrow-lbl">Density</span><input type="range" id="rDen" min="200" max="5000" step="50" value="2200"><span class="val" id="vDen">2200</span></div>
       <div class="mrow"><span class="mrow-lbl">Speed</span><input type="range" id="rSpd" min="2" max="40" value="14"><span class="val" id="vSpd">1.4</span></div>
       <div class="mrow"><span class="mrow-lbl">Trail</span><input type="range" id="rTrl" min="5" max="80" value="36"><span class="val" id="vTrl">36</span></div>
     </div>
+    <!-- Tracer coloring: mode segment plus palette; feed the speed/phase ramps. -->
     <div class="p-section">
       <div class="p-sec-lbl">Tracer Color</div>
       <div class="seg" id="colMode">
@@ -47,6 +97,8 @@
       </select></div>
       <div class="mini-note">Palette &amp; gamma/contrast shape Speed mode; Exposure brightens all modes.</div>
     </div>
+    <!-- Tone curve: preview canvas plus gamma/contrast/exposure that shape the
+         speed-mode magnitude ramp. -->
     <div class="p-section">
       <div class="p-sec-lbl">Tone Curve</div>
       <canvas id="toneCurve" width="244" height="62"></canvas>
@@ -54,6 +106,7 @@
       <div class="mrow"><span class="mrow-lbl">Contrast</span><input type="range" id="rContrast" min="0.5" max="2" step="0.05" value="1"><span class="val" id="vContrast">1.00</span></div>
       <div class="mrow"><span class="mrow-lbl">Exposure</span><input type="range" id="rExposure" min="0.2" max="3" step="0.05" value="1"><span class="val" id="vExposure">1.00</span></div>
     </div>
+    <!-- Display toggles: domain image, field arrows, axes/grid, physical model. -->
     <div class="p-section">
       <div class="p-sec-lbl">Display</div>
       <button class="tog-btn" id="tDom">▦ Domain coloring</button>
@@ -61,6 +114,7 @@
       <button class="tog-btn on" id="tAxes">✛ Axes &amp; grid</button>
       <button class="tog-btn on" id="tSim">⚙ Physical model</button>
     </div>
+    <!-- Playback: play/pause the loop, reset the model, clear tracer trails. -->
     <div class="p-section">
       <div class="p-sec-lbl">Simulation</div>
       <div class="sim-btns">
@@ -71,11 +125,14 @@
     </div>
   </div></div>
 
+  <!-- Scrim behind the mobile panel; tap to close. -->
   <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
 
+  <!-- Canvas stage: the phase-portrait canvas plus its two floating overlays. -->
   <div id="canvas-wrap">
     <canvas id="sim-canvas"></canvas>
 
+    <!-- Governing equations overlay; header toggles collapse. -->
     <section class="eq-panel" id="eq-panel">
       <div class="eq-head" id="eq-toggle">
         <span class="dot"></span><span class="lbl">Governing Equations</span><span class="arrow">▲</span>
@@ -83,6 +140,7 @@
       <div class="eq-blocks" id="eq-blocks"></div>
     </section>
 
+    <!-- Physical-model inset: its own small canvas plus a variable readout. -->
     <section id="msim-panel">
       <div class="msim-head"><span class="dot"></span><span class="lbl" id="msim-title">Physical Model</span></div>
       <canvas id="msim-canvas"></canvas>
@@ -91,6 +149,7 @@
   </div>
 </div>
 
+<!-- Bottom status bar: system name, tracer count, state, zoom, and FPS. -->
 <div id="status-bar">
   <span id="st-sys">—</span><span class="sep"></span>
   <span id="st-tr">2200 tracers</span><span class="sep"></span>
@@ -99,6 +158,7 @@
   <span id="st-fps">-- fps</span>
 </div>
 
+<!-- Classic script at end of body: reads the DOM above, drives both canvases. -->
 <script src="main.js"></script>
 </body>
 </html>

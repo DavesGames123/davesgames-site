@@ -4,14 +4,48 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>Gravity Playground // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   GRAVITY PLAYGROUND  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The N-body physics and all canvas drawing live in
+   main.js; the coloured governing equations are rendered by katex.js. This
+   file lays out the chrome those scripts bind to by id: the top status bar, a
+   preset bar of scene cards, two side panels, and the canvas area between them.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet
+     2. KaTeX CSS    then KaTeX JS from the CDN, needed by katex.js
+     3. style.css    the page stylesheet
+     4. body scripts katex.js then main.js, at the end of body
+
+   LAYOUT  (▸ marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar  status ▸simStatus   readouts ▸hud-bodies ▸hud-dt ▸hud-time│
+     ├─────────────────────────────────────────────────────────────────┤
+     │ preset-bar  ▸presetBar   5 scene cards (.pcard)                   │
+     ├────────────┬───────────────────────────────────┬────────────────┤
+     │ ▸panelL    │ ▸canvasArea                        │ ▸panelR         │
+     │  controls  │   ▸simCanvas   the N-body scene    │  energy graph   │
+     │  presets   │   ▸eqPanel     governing equations │  momentum       │
+     │  display   │   zoom-bar     ▸hudInfo hover HUD  │  selected body  │
+     │  bodies    │                                    │  ▸resonanceCanvas│
+     └────────────┴───────────────────────────────────┴────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: mark the document when it runs inside the site shell's
+     iframe so the CSS can hide this page's own topbar. Inline so it runs before
+     first paint and the topbar never flashes. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 
+<!-- Top bar: run status on the left, live body count, step size, and sim time
+     on the right, all updated by main.js. -->
 <div class="topbar">
   <div class="topbar-l">
     <span class="sys-name">GRAVITY PLAYGROUND</span>
@@ -24,6 +58,9 @@
   </div>
 </div>
 
+<!-- Preset bar: one card per scene. Each button calls loadPreset() with its key
+     and passes `this` so the handler can highlight the active card. The inline
+     SVG is a static thumbnail of the configuration, not a live view. -->
 <nav class="preset-bar" id="presetBar">
   <span class="pbar-label">Presets</span>
 
@@ -116,11 +153,15 @@
 
 </nav>
 
+<!-- Main three-column area: left controls, centre canvas, right readouts. -->
 <div id="main">
 
+  <!-- Left panel: run controls, physics sliders, display toggles, body list. -->
   <aside id="panelL">
     <div class="panel-body">
 
+      <!-- Simulation controls: play/pause, single step, clear, recentre, plus the
+           time-scale and gravitational-constant G sliders (wired inline to globals). -->
       <div class="sec">
         <div class="sec-label">Simulation</div>
         <div class="sim-btns">
@@ -141,6 +182,8 @@
         </div>
       </div>
 
+      <!-- Display toggles: each switch flips one show* global via tog(); the two
+           sliders set trail length and vector display scale. -->
       <div class="sec">
         <div class="sec-label">Display</div>
         <div class="tog-row"><span class="label"><span class="dot" style="background:var(--cyan)"></span>Force vectors</span><div class="toggle on" onclick="tog(this,'showForce')"></div></div>
@@ -160,6 +203,8 @@
         </div>
       </div>
 
+      <!-- Body list: filled by updateBodyList(); each card selects its body and
+           carries a delete button. -->
       <div class="sec">
         <div class="sec-label">Bodies <span class="ct" id="bodyCount">4</span></div>
         <div id="bodyList"></div>
@@ -169,6 +214,8 @@
     </div>
   </aside>
 
+  <!-- Centre canvas area: the main scene canvas, a hover HUD, zoom buttons, the
+       equations panel, and the mobile drawer controls. -->
   <div class="canvas-area" id="canvasArea">
     <canvas id="simCanvas"></canvas>
     <div class="hud tl" id="hudInfo" style="display:none"></div>
@@ -178,6 +225,8 @@
       <button class="zoom-btn" onclick="centerCamera()" title="Reset view">&#9737;</button>
     </div>
 
+    <!-- Governing equations: empty rows here; katex.js renders the coloured math
+         into each by id and wires the collapse button. -->
     <section class="eq-panel" id="eqPanel">
       <div class="eq-head">
         <span class="eq-dot"></span>
@@ -200,13 +249,18 @@
       </div>
     </section>
 
+    <!-- Floating action buttons open the side panels as drawers on narrow screens;
+         the backdrop closes them on tap. -->
     <button class="fab left" id="fabL" onclick="toggleDrawer('l')">&#9776; Controls</button>
     <button class="fab right" id="fabR" onclick="toggleDrawer('r')">Readouts &#9776;</button>
     <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawers()"></div>
   </div>
 
+  <!-- Right panel: conserved-quantity readouts, the selected-body inspector, and
+       the resonance dial, all refreshed by main.js. -->
   <aside id="panelR">
     <div class="panel-body">
+      <!-- System energy: kinetic, potential, total, plus the history graph. -->
       <div class="sec">
         <div class="sec-label">System Energy</div>
         <div class="readout"><span class="rl">Kinetic K</span><span class="rv blue" id="eKin">0.00</span></div>
@@ -215,16 +269,19 @@
         <canvas class="graph-canvas" id="energyGraph"></canvas>
         <div class="hint">Total stays flat for a stable integrator. Drift means dt or time scale is too large.</div>
       </div>
+      <!-- Total linear momentum and its components; stays constant on a closed system. -->
       <div class="sec">
         <div class="sec-label">Momentum</div>
         <div class="readout"><span class="rl">Total |p|</span><span class="rv green" id="eMom">0.00</span></div>
         <div class="readout"><span class="rl">p<sub>x</sub></span><span class="rv" id="eMomX">0.00</span></div>
         <div class="readout"><span class="rl">p<sub>y</sub></span><span class="rv" id="eMomY">0.00</span></div>
       </div>
+      <!-- Selected-body inspector: filled by updateSelPanel() when a body is picked. -->
       <div class="sec">
         <div class="sec-label">Selected Body</div>
         <div id="selBody"><span class="hint">Click a body to inspect.</span></div>
       </div>
+      <!-- Resonance dial: each body's polar angle plotted on one circle. -->
       <div class="sec">
         <div class="sec-label">Orbital Resonance</div>
         <canvas class="resonance-vis" id="resonanceCanvas"></canvas>
@@ -235,6 +292,8 @@
 
 </div>
 
+<!-- katex.js renders the equation panel; main.js runs the simulation. Both are
+     classic scripts loaded at end of body so the DOM exists when they run. -->
 <script src="katex.js"></script>
 
 <script src="main.js"></script>

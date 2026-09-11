@@ -4,13 +4,48 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>AttractorLab // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ATTRACTORLAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The WebGL canvas (#gl) is rendered into by main.js; this
+   file lays out the left control panel and the elements main.js binds to by id.
+   Nothing here computes the attractor.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts       Google Fonts stylesheet
+     2. KaTeX       CSS then JS, from CDN; typesets the governing equations
+     3. style.css   the page stylesheet
+   Scripts at end of body: three.js r128 (defines global THREE), then main.js.
+   main.js is a classic script and needs THREE already present, so its tag
+   comes after the three.js tag.
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: "Stella Nova · AttractorLab"                              │
+     ├────────────┬────────────────────────────────────────────────────┤
+     │ #panel     │  #gl-host                                           │
+     │  system    │    <canvas id="gl">   attractor tracers            │
+     │  params    │    #eq-panel  ▷ governing equations (KaTeX)         │
+     │  tracers   │    #hint      drag to orbit                        │
+     │  color     │                                                    │
+     │  tone      │                                                    │
+     │  view      │                                                    │
+     ├────────────┴────────────────────────────────────────────────────┤
+     │ #status-bar: system · points · v_max · fps                       │
+     └──────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Mobile hamburger: toggles the .mob-open slide-in state of the control panel. -->
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 
 <div class="topbar">
@@ -19,12 +54,15 @@
 </div>
 
 <div id="main">
+  <!-- Control panel: main.js fills #sysSel, #params, and #sysBlurb per system. -->
   <div id="panel"><div class="p-body">
+    <!-- System picker: dropdown of attractors plus the selected system's blurb. -->
     <div class="p-section">
       <div class="p-sec-lbl">System</div>
       <select id="sysSel"></select>
       <div class="sys-blurb" id="sysBlurb"></div>
     </div>
+    <!-- Parameters: sliders generated per system into #params; buttons reset/randomize. -->
     <div class="p-section">
       <div class="p-sec-lbl">Parameters</div>
       <div id="params"></div>
@@ -33,6 +71,7 @@
         <button class="sim-btn warn" id="btnRand">Randomize</button>
       </div>
     </div>
+    <!-- Tracers: particle count, trail length, flow speed, and additive glow. -->
     <div class="p-section">
       <div class="p-sec-lbl">Tracers</div>
       <div class="mrow"><span class="mrow-lbl">Count</span><input type="range" id="rCount" min="1" max="1000" value="100"><span class="val" id="vCount">100</span></div>
@@ -40,6 +79,7 @@
       <div class="mrow"><span class="mrow-lbl">Flow speed</span><input type="range" id="rSpeed" min="0.1" max="2" step="0.1" value="1"><span class="val" id="vSpeed">1</span></div>
       <div class="mrow"><span class="mrow-lbl">Glow</span><input type="range" id="rGlow" min="3" max="30" value="13"><span class="val" id="vGlow">1.3</span></div>
     </div>
+    <!-- Tracer color: mode (speed/spectrum/mono) and the palette for speed mode. -->
     <div class="p-section">
       <div class="p-sec-lbl">Tracer Color</div>
       <div class="seg" id="colMode">
@@ -52,6 +92,8 @@
       </select></div>
       <div class="mini-note">Palette &amp; gamma/contrast shape Speed mode; Exposure brightens all modes.</div>
     </div>
+    <!-- Tone curve: preview canvas plus gamma/contrast/exposure sliders that
+         shape how speed maps to palette color. -->
     <div class="p-section">
       <div class="p-sec-lbl">Tone Curve</div>
       <canvas id="toneCurve" width="244" height="62"></canvas>
@@ -59,6 +101,7 @@
       <div class="mrow"><span class="mrow-lbl">Contrast</span><input type="range" id="rContrast" min="0.5" max="2" step="0.05" value="1"><span class="val" id="vContrast">1.00</span></div>
       <div class="mrow"><span class="mrow-lbl">Exposure</span><input type="range" id="rExposure" min="0.2" max="3" step="0.05" value="1"><span class="val" id="vExposure">1.00</span></div>
     </div>
+    <!-- View: auto-orbit and depth-fog toggles, plus a camera reset. -->
     <div class="p-section">
       <div class="p-sec-lbl">View</div>
       <button class="tog-btn on" id="tRot">⟳ Auto-orbit</button>
@@ -69,10 +112,13 @@
     </div>
   </div></div>
 
+  <!-- Tap-away scrim: closes the mobile panel when the canvas area is tapped. -->
   <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
 
+  <!-- Render host: holds the WebGL canvas, the equation panel, and the hint. -->
   <div id="gl-host">
     <canvas id="gl"></canvas>
+    <!-- Governing equations: header toggles collapse; #eq-blocks filled by KaTeX. -->
     <section class="eq-panel" id="eq-panel">
       <div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Governing Equations</span><span class="arrow">▲</span></div>
       <div class="eq-blocks" id="eq-blocks"></div>
@@ -81,6 +127,7 @@
   </div>
 </div>
 
+<!-- Status bar: live readouts (system, point count, peak speed, fps) from frame(). -->
 <div id="status-bar">
   <span id="st-sys">—</span><span class="sep"></span>
   <span id="st-pts">— pts</span><span class="sep"></span>
@@ -88,6 +135,7 @@
   <span id="st-fps">-- fps</span>
 </div>
 
+<!-- three.js r128 first (defines global THREE), then main.js which uses it. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="main.js"></script>
 </body>
