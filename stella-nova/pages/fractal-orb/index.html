@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Fractal Orb // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+
+<div id="ui">
+  <div class="topbar">
+    <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Fractal Orb Engine</span></div>
+    <div class="topbar-r">SYS // <strong>VOLUMETRIC FRACTAL</strong></div>
+  </div>
+
+  <!-- ═══ QUICK PANEL ═══ -->
+  <div id="quick-panel">
+    <div class="qp-head">
+      <div class="qp-id">
+        <span class="qp-subshell" id="qp-preset-name">Neutron</span>
+        <span class="qp-ket" id="qp-ket">Iter 3 · ρ 3.5</span>
+      </div>
+      <button class="qp-collapse-btn" onclick="toggleQPCollapse()" title="Collapse panel">◀</button>
+    </div>
+    <div class="qp-icons">
+      <div class="qp-icon-row" id="qp-icon-preset">NEU</div>
+      <button class="qp-icon-adv" title="Advanced" onclick="toggleAdv()">⚙</button>
+    </div>
+    <div class="qp-body">
+
+      <!-- Presets -->
+      <div class="qp-section">
+        <div class="qp-sec-lbl">Presets</div>
+        <div class="qp-presets" id="preset-grid"></div>
+      </div>
+
+      <!-- Colors -->
+      <div class="qp-section">
+        <div class="qp-sec-lbl">Energy Colors</div>
+        <div class="qp-color-row">
+          <span class="qp-color-lbl">Primary</span>
+          <input type="color" class="qp-color-input" id="qp-col-pri" value="#e0e8ff">
+        </div>
+        <div class="qp-color-row">
+          <span class="qp-color-lbl">Secondary</span>
+          <input type="color" class="qp-color-input" id="qp-col-sec" value="#4488ff">
+        </div>
+      </div>
+
+      <!-- Key sliders -->
+      <div class="qp-section">
+        <div class="qp-sec-lbl">Quick Controls</div>
+        <div class="qp-row">
+          <div class="qp-row-hdr"><span class="qp-row-lbl">Speed</span><span class="qp-row-val" id="qp-vl-spd">1.0</span></div>
+          <input type="range" class="qp-range" id="qp-sl-spd" min="0.1" max="1.0" value="1.0" step="0.1">
+        </div>
+        <div class="qp-row">
+          <div class="qp-row-hdr"><span class="qp-row-lbl">Density</span><span class="qp-row-val" id="qp-vl-den">3.5</span></div>
+          <input type="range" class="qp-range" id="qp-sl-den" min="0.1" max="5.0" value="3.5" step="0.1">
+        </div>
+        <div class="qp-row">
+          <div class="qp-row-hdr"><span class="qp-row-lbl">Iterations</span><span class="qp-row-val" id="qp-vl-iter">3</span></div>
+          <input type="range" class="qp-range" id="qp-sl-iter" min="2" max="12" value="3" step="1">
+        </div>
+      </div>
+
+      <div class="qp-footer">
+        <button class="qp-adv-btn" id="qp-adv-btn" onclick="toggleAdv()">⚙ Advanced</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ADVANCED PANEL ═══ -->
+  <div id="adv-panel">
+    <div class="adv-head">
+      <span class="adv-badge">ADV</span>
+      <span class="adv-title">Fractal Parameters</span>
+      <span class="adv-live">Live</span>
+      <button class="adv-close" onclick="toggleAdv()">✕</button>
+    </div>
+    <div class="adv-body">
+
+      <div class="sec-label">Energy Style</div>
+      <div class="color-row"><span class="color-lbl">Primary</span><input type="color" class="color-input" id="adv-col-pri" value="#e0e8ff"><span class="color-hex" id="adv-hex-pri">#e0e8ff</span></div>
+      <div class="color-row"><span class="color-lbl">Secondary</span><input type="color" class="color-input" id="adv-col-sec" value="#4488ff"><span class="color-hex" id="adv-hex-sec">#4488ff</span></div>
+      <div class="row"><span class="row-lbl">Speed</span><input type="range" id="adv-spd" min="0.1" max="1.0" value="1.0" step="0.1"><span class="val" id="adv-vl-spd">1.0</span></div>
+      <div class="row"><span class="row-lbl">Density</span><input type="range" id="adv-den" min="0.1" max="5.0" value="3.0" step="0.1"><span class="val" id="adv-vl-den">3.0</span></div>
+      <div class="row"><span class="row-lbl">Rotation</span><input type="range" id="adv-rot" min="0.0" max="1.0" value="0.89" step="0.01"><span class="val" id="adv-vl-rot">0.89</span></div>
+      <div class="row"><span class="row-lbl">DPR</span><input type="range" id="adv-dpr" min="0.3" max="2.0" value="0.7" step="0.1"><span class="val" id="adv-vl-dpr">0.7</span></div>
+
+      <div class="sec-label">Atmosphere</div>
+      <div class="row"><span class="row-lbl">Glow</span><input type="range" id="adv-aglow" min="0.0" max="5.0" value="0.15" step="0.01"><span class="val" id="adv-vl-aglow">0.15</span></div>
+      <div class="row"><span class="row-lbl">Level</span><input type="range" id="adv-alev" min="0.1" max="1.0" value="1.0" step="0.01"><span class="val" id="adv-vl-alev">1.00</span></div>
+      <div class="row"><span class="row-lbl">Scale</span><input type="range" id="adv-ascl" min="1.0" max="1.15" value="1.03" step="0.001"><span class="val" id="adv-vl-ascl">1.030</span></div>
+
+      <div class="sec-label">Fractal Structure</div>
+      <div class="row"><span class="row-lbl">Iterations</span><input type="range" id="adv-iter" min="2" max="12" value="4" step="1"><span class="val" id="adv-vl-iter">4</span></div>
+      <div class="row"><span class="row-lbl">Scale</span><input type="range" id="adv-fscl" min="0.3" max="1.5" value="0.97" step="0.01"><span class="val" id="adv-vl-fscl">0.97</span></div>
+      <div class="row"><span class="row-lbl">Decay</span><input type="range" id="adv-fdec" min="-25.0" max="-5.0" value="-16.7" step="0.1"><span class="val" id="adv-vl-fdec">-16.7</span></div>
+      <div class="row"><span class="row-lbl">Anim Spd</span><input type="range" id="adv-ianim" min="0.0" max="2.0" value="0.43" step="0.01"><span class="val" id="adv-vl-ianim">0.43</span></div>
+      <div class="row"><span class="row-lbl">Smooth</span><input type="range" id="adv-smooth" min="0.0" max="0.15" value="0.031" step="0.001"><span class="val" id="adv-vl-smooth">0.031</span></div>
+      <div class="row"><span class="row-lbl">Asymmetry</span><input type="range" id="adv-asym" min="0.0" max="1.0" value="0.55" step="0.01"><span class="val" id="adv-vl-asym">0.55</span></div>
+
+      <div class="sec-label">Post Processing</div>
+      <div class="row"><span class="row-lbl">Chroma</span><input type="range" id="adv-ca" min="0.0" max="0.05" value="0.025" step="0.001"><span class="val" id="adv-vl-ca">0.025</span></div>
+
+      <div class="info-bar">
+        Drag to orbit · Scroll to zoom<br>
+        All parameters update in real-time
+      </div>
+    </div>
+  </div>
+
+  <!-- State display overlay -->
+  <div id="state-display">
+    <div class="ket-main" id="disp-preset">Neutron</div>
+    <div class="ket-sub" id="disp-info">ITER 3 · FRACTAL ENERGY</div>
+  </div>
+</div>
+
+<div id="fps"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
