@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Harmony Wheel — Stella Nova · davesgames.io</title>
+<meta name="description" content="An interactive map of chord resolution. Tap a chord to hear it and see where it wants to go — dominants fall a fifth, diminished chords rise a half step.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;1,500&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+<script src="mobile-switch.js"></script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot pulse"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;MUSIC.HARMONY</div>
+  <div class="pagetitle">Harmony Wheel</div>
+  <div class="toplinks">
+    <a href="../../chordlab.html">ChordLab</a>
+    <a href="../../chord-chart.html">Chord Chart</a>
+    <a href="../../spectrogram.html">Spectrogram</a>
+  </div>
+</div>
+
+<canvas id="wheel"></canvas>
+<button id="hamburger" aria-label="Setup">⚙</button>
+
+<div id="keystrip"></div>
+
+<div id="dock">
+  <div id="dockrow">
+    <div id="kbwrap">
+      <div id="kbhead"><span id="kbCount">TAP KEYS TO FILTER THE WHEEL BY NOTE</span><button id="kbClear">CLEAR</button></div>
+      <div id="kb"></div>
+    </div>
+    <div id="rollwrap">
+      <div id="rollhead"><span>NOTE TIMELINE</span><span>unbroken bar = held voice</span></div>
+      <canvas id="roll"></canvas>
+    </div>
+  </div>
+  <div id="seq">
+    <div id="seqhead">
+      <span id="seqTitle" title="Tap to collapse">PATTERN ▾</span>
+      <span id="seqhint">wheel taps fill the active line · tap a chord to change its length · ×N repeats a line</span>
+      <span class="sp"></span>
+      <button class="sbtn" id="addLine" title="Add line">＋</button>
+      <button class="sbtn" id="playBtn" title="Play pattern">▶</button>
+      <button class="sbtn" id="loopBtn" title="Loop pattern">∞</button>
+      <button class="sbtn" id="undoBtn" title="Remove last chord of active line">⌫</button>
+      <button class="sbtn" id="clearBtn" title="Clear all">✕</button>
+    </div>
+    <div id="seqbody"></div>
+  </div>
+</div>
+
+<div id="panel">
+  <button id="panelClose" aria-label="Close setup">✕</button>
+  <div class="sec-label">COMPLEXITY</div>
+  <div class="modes" id="tiers">
+    <button data-tier="simple">SIMPLE</button>
+    <button data-tier="standard">STANDARD</button>
+    <button data-tier="full" class="on">FULL</button>
+  </div>
+  <div class="hint" id="tierHint"></div>
+
+  <div class="sec-label">LAYERS</div>
+  <div class="tgl on" data-layer="dom"><span class="t-label">Dominant ring</span><span class="sw"></span></div>
+  <div class="tgl on" data-layer="dim"><span class="t-label">Diminished ring</span><span class="sw"></span></div>
+  <div class="tgl on" data-layer="star"><span class="t-label">Dim7 symmetry star</span><span class="sw"></span></div>
+  <div class="tgl on" data-layer="outer"><span class="t-label">Outer motion arcs</span><span class="sw"></span></div>
+
+  <div class="sec-label">MODE</div>
+  <div class="modes">
+    <button id="mExplore" class="on">EXPLORE</button>
+    <button id="mWander">WANDER</button>
+  </div>
+  <div class="hint" id="modeHint"><b>Explore:</b> tap a chord to hear it and light up every place it can resolve. Taps build the progression strip below.</div>
+
+  <div class="sec-label">SOUND</div>
+  <div class="row"><label>Tempo</label><input type="range" id="tempo" min="40" max="200" value="96"><span class="val" id="tempoVal">96</span></div>
+  <div class="row"><label>Volume</label><input type="range" id="vol" min="0" max="100" value="70"><span class="val" id="volVal">70%</span></div>
+
+  <div class="sec-label">VIEW</div>
+  <div class="hint">Drag to pan · pinch / scroll to zoom · double-tap to reset.</div>
+
+  <div class="sec-label mob-rules-label" style="display:none"></div>
+  <div class="mob-rules">
+    <div class="sec-label">HOW TO READ THE WHEEL</div>
+    <b>Dominants fall a fifth</b> — every X7 points at the chord five below it (G7 → C). ·
+    <b>Diminished rises a half step</b> — B° leans into C, and a symmetric dim7 can rise from any of its four notes: the lines crossing the center. ·
+    <b>Any chord can be tonicized</b> — tap a triad to reveal its secondary dominants.
+  </div>
+</div>
+
+<div id="theory" class="open">
+  <div class="head" id="theoryHead"><span>HOW TO READ THE WHEEL</span><span id="theoryArrow">▾</span></div>
+  <div class="body">
+    <div class="rule r1"><b>Dominants fall a fifth.</b> Every X7 points at the chord five below it: G7 → C, E7 → Am. Tension, then home.</div>
+    <div class="rule r2"><b>Diminished rises a half step.</b> B° leans up into C. And because a dim7 is perfectly symmetric, it can rise from any of its four notes — those are the long lines crossing the center.</div>
+    <div class="rule r3"><b>Any chord can be tonicized.</b> Tap a triad to reveal its secondary dominants — the borrowed V7s that pull toward each of its neighbors.</div>
+  </div>
+</div>
+
+<div id="status">
+  <span id="fnMain" class="fn">Tap any chord.</span>
+  <span class="right" id="fnRight">24 spokes · 12 keys · 3 rules</span>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

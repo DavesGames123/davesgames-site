@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Chord Chart // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<script src="mobile-switch.js"></script>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Chord Chart · ♪</span></div>
+  <div class="topbar-r">SYS // <strong>CHORD REFERENCE</strong></div>
+</div>
+
+<div id="rootStrip"></div>
+
+<div id="chartHead">
+  <div id="bigRoot">C</div>
+  <div class="seg" id="instSeg">
+    <button data-i="guitar" class="on">Guitar</button>
+    <button data-i="bass">Bass</button>
+    <button data-i="ukulele">Uke</button>
+    <button data-i="violin">Violin</button>
+  </div>
+</div>
+
+<div id="chartBody">
+  <div class="gsec-lbl">The Essentials<span class="gs-note">start here — major · minor · 7</span></div>
+  <div id="gridBasic"></div>
+  <div class="gsec-lbl">More Flavors<span class="gs-note">color &amp; tension</span></div>
+  <div id="gridMore"></div>
+</div>
+
+<div id="status-bar">
+  <span>root <b id="st-root">C</b></span><span class="sep"></span>
+  <span id="st-inst">guitar</span><span class="sep"></span>
+  <span>8 qualities · tap ♪ to hear</span>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
