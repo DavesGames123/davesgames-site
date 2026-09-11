@@ -4,11 +4,47 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>ChordLab // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CHORDLAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js opens the mic, reads one AnalyserNode, and paints
+   every canvas below from the detected chord, pitch, and spectrum. This file
+   only lays out the four zones and the elements main.js binds to by id.
+
+   HEAD LOAD ORDER
+     1. in-frame guard   adds .in-frame when embedded in the site shell
+     2. mobile switch    adds .mob by device, not just viewport width
+     3. fonts + style     Google Fonts stylesheet, then style.css
+     4. main.js           classic script at end of body, runs after markup
+
+   LAYOUT  (▦ marks a canvas · # marks an element id)
+     ┌─────────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · ChordLab                                        │
+     ├───────────────┬───────────────────────────┬─────────────────────────┤
+     │ #now  Listen  │ #diag  How To Play It      │ #tuner  Tuner           │
+     │  #domBar      │  instrument segments        │  #tunerNote #tunerFreq  │
+     │  ▦meterCanvas │  ▦diagCanvas  fretboard     │  #centsBar needle       │
+     │  ▦ringCanvas  │  #voicings  #strumBtn       │  ▦specCanvas waterfall  │
+     │  chord readout│  #tally  most detected      │  #stringRow buttons     │
+     │  #micGate     │                             │                         │
+     ├───────────────┴───────────────────────────┴─────────────────────────┤
+     │ #staffZone  ▦staffCanvas  running 4-bar notation                      │
+     ├───────────────────────────────────────────────────────────────────────
+     │ #status-bar   mic · level · tuning · chord · logged · fps             │
+     └───────────────────────────────────────────────────────────────────────
+     #mobTabs: narrow-screen switch between the four zones (Listen/Chords/Tuner/Staff)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: mark the document when embedded in the site shell iframe so
+     CSS can hide this page's own topbar. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Device-aware mobile switch: toggles the .mob class that enables the tabbed
+     single-column layout. Checks physical device size, not just viewport width. -->
 <script>
 /* Device-aware mobile switch. iOS Safari expands iframes to content size,
    so media queries on viewport width lie inside the index shell — check the
@@ -27,11 +63,13 @@
 })();
 </script>
 
+<!-- Page header bar (hidden by CSS when running inside the site shell). -->
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">ChordLab · ♪</span></div>
   <div class="topbar-r">SYS // <strong>LIVE CHORD DETECTION</strong></div>
 </div>
 
+<!-- Three-column workspace: Now Playing, How To Play It, Tuner. -->
 <div id="main">
   <!-- LEFT: what's playing right now -->
   <div class="col" id="now">
@@ -41,6 +79,8 @@
       <div id="domList"><span class="domEmpty">listening for a passage…</span></div>
       <span id="domHint">this passage</span>
     </div>
+    <!-- Left strip: input meter (scope + bands). Center: chroma ring with the
+         current chord name, quality, and match confidence overlaid. -->
     <div id="nowBody">
       <canvas id="meterCanvas"></canvas>
       <div id="ringArea">
@@ -55,6 +95,8 @@
       </div>
     </div>
 
+    <!-- Mic gate: the start button (required user gesture) and any error text.
+         main.js hides this once the stream is live. -->
     <div id="micGate">
       <button id="micBtn">🎤&nbsp; Start Listening</button>
       <div id="micHint">Play a chord on any instrument.<br>ChordLab hears it, names it, and shows you how to play it.</div>
@@ -71,9 +113,12 @@
       <button data-i="ukulele">Uke</button>
       <button data-i="violin">Violin</button>
     </div>
+    <!-- Fretboard/staff diagram for the selected instrument, the voicing picker,
+         and a button that plays the shown chord through the strum synth. -->
     <div id="diagWrap"><canvas id="diagCanvas"></canvas></div>
     <div id="voicings"></div>
     <button id="strumBtn">♪ Hear this chord</button>
+    <!-- Per-span histogram of the most-detected chords. -->
     <div id="tallyHead">Most Detected · this span</div>
     <div id="tally"><div id="tallyEmpty">play something — chords tally up here…</div></div>
   </div>
@@ -81,6 +126,8 @@
   <!-- RIGHT: tuner + live spectrogram -->
   <div class="col" id="tuner">
     <div class="zone-lbl"><span class="dot" style="background:#c890ff;box-shadow:0 0 8px #c890ff"></span>Tuner · Spectrogram</div>
+    <!-- Autocorrelation tuner readout: detected note, frequency, and a cents
+         needle against the active target string. -->
     <div id="tunerTop">
       <div id="tunerNote">—</div>
       <div id="tunerFreq">— Hz</div>
@@ -88,7 +135,9 @@
     <div id="centsBar"><div id="centsNeedle"></div></div>
     <div id="centsLbl"><span>♭ −50</span><span>in tune</span><span>+50 ♯</span></div>
     <div id="tuneTargetLbl">target auto · tap a string to lock</div>
+    <!-- Waterfall spectrogram with string reference lines and tuning ladder. -->
     <canvas id="specCanvas"></canvas>
+    <!-- Buttons to sound each open string and lock the tuning target. -->
     <div id="stringRow"></div>
   </div>
 </div>
@@ -100,6 +149,7 @@
   <div id="staffScroll"><canvas id="staffCanvas"></canvas></div>
 </div>
 
+<!-- Live status line: mic state, level, tuning, chord, log count, and fps. -->
 <div id="status-bar">
   <span id="st-mic">mic off</span><span class="sep"></span>
   <span id="st-level">level —</span><span class="sep"></span>
@@ -109,6 +159,7 @@
   <span id="st-fps">-- fps</span>
 </div>
 
+<!-- Bottom tab bar shown only on narrow screens; switches the visible zone. -->
 <nav id="mobTabs">
   <button data-t="now"   class="on"><span class="ti">◉</span><span class="tl">Listen</span></button>
   <button data-t="diag"><span class="ti">⌗</span><span class="tl">Chords</span></button>

@@ -1,6 +1,86 @@
+// ════════════════════════════════════════════════════════════════════
+//  STATIONS  ·  interactive tutorial for the station-building game
+// ────────────────────────────────────────────────────────────────────
+//  One 2D <canvas> teaches six game mechanics, one scenario at a time. A
+//  scenario card bar selects the active lesson; the render loop dispatches
+//  by scenario id and paints only that lesson. Every scenario shares one
+//  square grid, one flood-fill enclosure test, and one mutable state
+//  object. Selecting a scenario clears state and runs that scenario's
+//  setup(), which seeds the modules, resources, citizens, or graph the
+//  lesson needs.
+//
+//  The six scenarios each demonstrate one system of the real game:
+//      1 Placement    grid rules: connected, no 2×2 block, placement tags
+//      2 Enclosure    walls that fully surround empty cells make storage
+//      3 Decompress   breaking a wall ejects the stored resources
+//      4 Foundry      a foundry wall smelts ore from one bay into the other
+//      5 Crew         citizens pick tasks by priority and skill toggles
+//      6 Tiers        the resource dependency graph, T0 ore up to T5 fuel
+//
+//  Several routines carry a note naming the Rust source they mirror (for
+//  example crew.rs, metallurgy.rs, requests.rs). The tutorial reproduces
+//  the engine behaviour so the demo matches the shipped game.
+//
+//  SCREEN LAYOUT  (# marks an element id in index.html)
+//      ┌──────────────────────────────────────────────────────────────┐
+//      │ topbar     STATIONS · LIVE PRACTICE · HUD readouts            │
+//      ├──────────────────────────────────────────────────────────────┤
+//      │ #scnBar    ◰ ◫ ◐ ◈ ◇ ◆   six scenario cards                   │
+//      ├──────────────────────────────────────────────────────────────┤
+//      │ ctrl-bar   ↻ RESET · ▶ AUTO-BUILD · ⤿ ROTATE OUTPUT           │
+//      ├───────────────────────────────────┬──────────────────────────┤
+//      │ #canvasArea                        │ #sideR                   │
+//      │   #cv   the lesson canvas          │   headline + description │
+//      │   #hint #sel #toast overlays       │   How it works notes     │
+//      │   #palette (placement scenarios)   │   #refPanel reference    │
+//      │   #taskBox (crew scenario)         │                          │
+//      └───────────────────────────────────┴──────────────────────────┘
+//
+//  FRAME PIPELINE  (render, once per animation frame)
+//      resize ▶ phosphor fade ▶ space grid ▶ dispatch by scenario id ▶
+//        tiers  : drawTiers
+//        others : enclosed cells ▶ resources ▶ per-scenario update ▶
+//                 modules ▶ crew/foundry actors ▶ particles ▶ hover
+//      ▶ updateHud ▶ requestAnimationFrame(render)
+//
+//  SCENARIO DISPATCH  (one input path, one draw path, keyed by s.id)
+//      onTap(p) ─┬─ placement  ─▶ handlePlacement
+//                ├─ enclosure  ─▶ handleEnclosure
+//                ├─ decompress ─▶ handleDecompress
+//                ├─ foundry    ─▶ handleFoundry
+//                ├─ crew       ─▶ (DOM task toggles only)
+//                └─ tiers      ─▶ handleTiers
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ────────────────────────────────────────────────────────────────────
+//      module library ....... "const MOD ="        module types + rules
+//      grid utilities ....... "GRID UTILITIES"      key/screen/adjacency
+//      enclosure test ....... "computeEnclosed"     flood fill from outside
+//      state ................ "const state ="       the one mutable object
+//      scenarios ............ "const SCENARIOS ="   the six lesson configs
+//      tier graph data ...... "TIER_NODES"          nodes and edges
+//      reference panel ...... "function refContent" right-panel html
+//      auto-orient .......... "autoOrientFoundry"   pick output direction
+//      scenario lifecycle ... "function loadScenario" reset + seed a lesson
+//      palette / tasks ...... "function buildPalette" bottom-bar controls
+//      input ................ "function onTap"      pointer to scenario
+//      readouts ............. "function updateHud"  HUD + selection bar
+//      rendering ............ "function resize"     canvas + draw helpers
+//      foundry worker ....... "updateFoundryWorker" smelting state machine
+//      crew simulation ...... "function pickCitizenTask" task priority
+//      tier rendering ....... "function layoutTierNodes" graph draw
+//      main loop ............ "function render"     the per-frame update
+//      scenario bar ......... "function buildScnBar" the card row
+//      mobile drawer ........ "function toggleDrawer" side-panel toggle
+//      boot ................. "buildScnBar()"        start the page
+// ════════════════════════════════════════════════════════════════════
+
 /* ════════════════════════════════════════════════════════════════════
    MODULE LIBRARY
    ──────────────────────────────────────────────────────────────────── */
+// Every placeable module type, keyed by its single-letter glyph. name is
+// the label, color drives every draw, placement is the grid rule (auto /
+// any / interior / exterior), tag groups it, work is the build cost.
 const MOD = {
   C: {name:'Core',        color:'#c878d8', placement:'auto',     tag:'STRUCT', work:0},
   W: {name:'Wall',        color:'#ff8844', placement:'any',      tag:'STRUCT', work:150},
@@ -20,30 +100,43 @@ const MOD = {
 /* ════════════════════════════════════════════════════════════════════
    GRID UTILITIES — shared by placement/enclosure/decompression/foundry
    ──────────────────────────────────────────────────────────────────── */
+// cellSize is pixels per cell; cx/cy is the screen pixel of grid origin
+// (0,0). centerGrid() keeps the origin at the canvas centre on resize.
 const GRID = {cellSize: 30, cx: 0, cy: 0};
 
+// String key for a grid cell, used as a Set/map key for walls and cells.
 function gKey(gx,gy){ return gx+','+gy; }
+// Grid cell centre to canvas pixel.
 function gridToScreen(gx,gy){ return {x: GRID.cx + gx*GRID.cellSize, y: GRID.cy + gy*GRID.cellSize}; }
+// Canvas pixel to nearest grid cell (inverse of gridToScreen).
 function screenToGrid(sx,sy){
   return {gx: Math.round((sx - GRID.cx) / GRID.cellSize),
           gy: Math.round((sy - GRID.cy) / GRID.cellSize)};
 }
+// The module occupying a cell, or undefined.
 function moduleAt(gx,gy){ return state.modules.find(m=>m.gx===gx && m.gy===gy); }
 
+// A new cell is connected if any of its four neighbours holds a module
+// (the first module placed is connected by definition).
 function isConnected(gx,gy){
   if(state.modules.length===0) return true;
   const dirs = [[0,-1],[0,1],[-1,0],[1,0]];
   return dirs.some(([dx,dy]) => moduleAt(gx+dx,gy+dy));
 }
+// The crossword rule: no filled 2×2 square. Test the four 2×2 blocks that
+// could contain (gx,gy) as a corner, treating that cell as filled.
 function makes2x2(gx,gy){
   // With (gx,gy) hypothetically filled, does any 2x2 block become full?
   const has = (x,y) => (x===gx && y===gy) || !!moduleAt(x,y);
   const tlCands = [[gx-1,gy-1],[gx,gy-1],[gx-1,gy],[gx,gy]];
   return tlCands.some(([tx,ty]) => has(tx,ty) && has(tx+1,ty) && has(tx,ty+1) && has(tx+1,ty+1));
 }
+// A cell is interior when all four neighbours hold modules (walled in).
 function isInterior(gx,gy){
   return [[0,-1],[0,1],[-1,0],[1,0]].every(([dx,dy]) => moduleAt(gx+dx,gy+dy));
 }
+// Gate a placement against every grid rule and report the first failure:
+// occupied, disconnected, forms a 2×2, or breaks the type's placement tag.
 function validatePlacement(gx,gy,type){
   if(moduleAt(gx,gy)) return {ok:false, reason:'occupied'};
   if(!isConnected(gx,gy)) return {ok:false, reason:'not connected to station'};
@@ -55,15 +148,23 @@ function validatePlacement(gx,gy,type){
 }
 
 /* Flood-fill enclosure detection */
+// A cell is "enclosed" storage when it is empty and cannot be reached from
+// outside the station. Flood the exterior from a corner two cells beyond
+// the module bounding box; any empty cell the flood never reaches is walled
+// in. Returns the set of enclosed cell keys.
 function computeEnclosed(){
   if(state.modules.length<3) return new Set();
+  // Treat every module cell as a wall the flood cannot cross.
   const walls = new Set(state.modules.map(m=>gKey(m.gx,m.gy)));
+  // Bounding box of all modules.
   let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
   for(const m of state.modules){
     minX=Math.min(minX,m.gx); maxX=Math.max(maxX,m.gx);
     minY=Math.min(minY,m.gy); maxY=Math.max(maxY,m.gy);
   }
+  // Pad by 2 so the flood surrounds the station on every side.
   minX-=2; maxX+=2; minY-=2; maxY+=2;
+  // Breadth-first flood of everything reachable from the padded corner.
   const reach = new Set();
   const q = [[minX,minY]];
   reach.add(gKey(minX,minY));
@@ -77,6 +178,7 @@ function computeEnclosed(){
       q.push([nx,ny]);
     }
   }
+  // Any interior cell that is neither a wall nor reachable is enclosed.
   const enclosed = new Set();
   for(let x=minX+1;x<=maxX-1;x++){
     for(let y=minY+1;y<=maxY-1;y++){
@@ -91,6 +193,9 @@ function computeEnclosed(){
 /* ════════════════════════════════════════════════════════════════════
    STATE
    ──────────────────────────────────────────────────────────────────── */
+// The one mutable object every scenario reads and writes. loadScenario()
+// clears it and each scenario's setup() fills only the fields it needs, so
+// unused fields stay empty for the active lesson.
 const state = {
   scnIdx: 0,
   modules: [],         // {gx, gy, type, built}
@@ -110,6 +215,9 @@ const state = {
   t: 0,
 };
 let ents_dummy = [];
+// W/H are the canvas CSS size in pixels; dpr scales the backing store for
+// crisp lines on high-density displays. cv/ctx are the canvas and its 2D
+// drawing context.
 let W=0, H=0;
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
@@ -118,7 +226,13 @@ const dpr = window.devicePixelRatio||1;
 /* ════════════════════════════════════════════════════════════════════
    SCENARIOS
    ──────────────────────────────────────────────────────────────────── */
+// Each scenario is a self-contained lesson config. Shared fields: id (the
+// dispatch key), name/icon/accent (the card), head/desc/notes/hint (the
+// panel text), showPalette / autoBuildable / rotBtn flags (which controls
+// appear), setup() (seed state for the lesson), and ref (right-panel
+// reference content). loadScenario() reads all of these.
 const SCENARIOS = [
+  // 1 · Placement — free build from the core under the grid rules.
   {
     id:'placement', name:'Placement', icon:'◰', accent:'#96c8ff',
     head:'Grid <em>Placement</em>',
@@ -131,12 +245,14 @@ const SCENARIOS = [
     hint:'Pick a module from the palette · click an empty cell · invalid placements flash red',
     showPalette: true,
     autoBuildable: true,
+    // Seed a lone core; the player builds outward with the wall palette.
     setup(){
       state.modules = [{gx:0,gy:0,type:'C',built:true}];
       state.paletteSel = 'W';
     },
     ref: {title:'Module Library', body:'moduleLibrary'}
   },
+  // 2 · Enclosure — close wall gaps so empty cells become storage.
   {
     id:'enclosure', name:'Enclosure', icon:'◫', accent:'#4ad8e0',
     head:'Enclosed <em>Storage</em>',
@@ -149,6 +265,7 @@ const SCENARIOS = [
     hint:'Place walls (<code>W</code>) to close the gaps · enclosed cells turn teal · they fill with resources',
     showPalette: true,
     autoBuildable: true,
+    // Seed a nearly-closed ring with a few gaps for the player to fill.
     setup(){
       // Pre-built U-shape with 3 missing wall cells
       const m = [];
@@ -170,6 +287,7 @@ const SCENARIOS = [
       }
       // Drop the core duplicate at (0,0) — it's already in the loop with type W? no, core is at 0,0
       // Filter duplicates at (0,0)
+      // Keep the first module at each cell so the core is not overwritten.
       const seen = new Set();
       state.modules = m.filter(mm=>{
         const k = gKey(mm.gx,mm.gy);
@@ -181,6 +299,7 @@ const SCENARIOS = [
     },
     ref: {title:'Storage Rules', body:'storageRules'}
   },
+  // 3 · Decompression — breaking a wall vents the resources it enclosed.
   {
     id:'decompress', name:'Decompression', icon:'◐', accent:'#ff5050',
     head:'<em>Decompression</em>',
@@ -193,6 +312,7 @@ const SCENARIOS = [
     hint:'Click any orange wall · watch the bay decompress · resources scatter as ejecta',
     showPalette: false,
     autoBuildable: false,
+    // Seed a sealed bay already packed with mixed resources.
     setup(){
       // Fully enclosed rectangle, full of resources
       const m = [{gx:0,gy:0,type:'C',built:true}];
@@ -210,6 +330,8 @@ const SCENARIOS = [
         return true;
       });
       // Pack the interior with resources
+      // Give each enclosed cell one resource stack, cycling the label list
+      // and randomising the count so the bay reads as full of mixed ore.
       state.resources = {};
       const enc = computeEnclosed();
       const labels = ['Fe','Cu','C','Al','Si','Ti','Au'];
@@ -226,6 +348,7 @@ const SCENARIOS = [
     },
     ref: {title:'Ejection Physics', body:'ejectionPhysics'}
   },
+  // 4 · Foundry Flow — a foundry wall smelts ore from one bay to the other.
   {
     id:'foundry', name:'Foundry Flow', icon:'◈', accent:'#ff8844',
     head:'Foundry <em>Membrane</em>',
@@ -238,6 +361,8 @@ const SCENARIOS = [
     hint:'Click <strong>↺ ROTATE OUTPUT</strong> · or click input cells to add ore · a Metallurgy worker will dock and process',
     showPalette: false,
     autoBuildable: false,
+    // Seed two bays split by a divider, a foundry in the divider gap, and
+    // one Metallurgy worker to dock and smelt.
     setup(){
       // Pre-built foundry station
       const m = [{gx:0,gy:0,type:'C',built:true}];
@@ -265,6 +390,8 @@ const SCENARIOS = [
         workDone:0, workNeeded:0,
       };
       // Stock left bay with iron ore
+      // Left bay (gx<0) is the input and gets ore; right bay stays empty as
+      // the output the foundry fills with ingots.
       const enc = computeEnclosed();
       state.resources = {};
       for(const k of enc){
@@ -280,6 +407,7 @@ const SCENARIOS = [
     },
     ref: {title:'Tier 1 Smelting', body:'smeltingTable'}
   },
+  // 5 · Crew & Tasks — citizens choose tasks from the enabled toggles.
   {
     id:'crew', name:'Crew & Tasks', icon:'◇', accent:'#c8a01e',
     head:'Crew <em>Tasks</em>',
@@ -292,6 +420,8 @@ const SCENARIOS = [
     hint:'Toggle <strong>Mine</strong>, <strong>Construct</strong>, <strong>Collect</strong> · watch citizens switch tasks · colors match the task',
     showPalette: false,
     autoBuildable: false,
+    // Seed a small station, a crew of citizens, an orbit of asteroids, and
+    // a few planned modules to give the tasks something to act on.
     setup(){
       // Background station (pre-built)
       const m = [{gx:0,gy:0,type:'C',built:true}];
@@ -305,6 +435,7 @@ const SCENARIOS = [
         const k = gKey(mm.gx,mm.gy); if(seen.has(k))return false; seen.add(k); return true;
       });
       // Citizens (3..6)
+      // Scatter the crew across the right half of the canvas.
       const ncit = 5;
       state.citizens = [];
       const names = ['Astrid','Björn','Celeste','Dmitri','Elena','Finn'];
@@ -314,6 +445,7 @@ const SCENARIOS = [
         state.citizens.push({x:cx,y:cy,vx:0,vy:0,task:'idle',target:null,name:names[i],dir:0,work:0});
       }
       // Asteroids
+      // Build drifting ore rocks with a jagged random polygon outline.
       state.asteroids = [];
       for(let i=0;i<10;i++){
         const ax = W*0.65 + Math.random()*W*0.30;
@@ -328,15 +460,19 @@ const SCENARIOS = [
         state.asteroids.push({x:ax,y:ay,vx:(Math.random()-0.5)*0.15,vy:(Math.random()-0.5)*0.15,dir:Math.random()*6.28,spin:(Math.random()-0.5)*0.018,verts,r:14,ore:1});
       }
       // Planned modules to build (mining/build targets)
+      // Unbuilt blueprints (built:false) are Construct targets; delivered
+      // rises toward need as citizens work them.
       state.modules.push({gx:-3,gy:0,type:'W',built:false,delivered:0,need:3});
       state.modules.push({gx:-3,gy:-1,type:'W',built:false,delivered:0,need:3});
       state.modules.push({gx:0,gy:3,type:'D',built:false,delivered:0,need:5});
       // Task toggles
+      // taskOn drives which tasks citizens may pick; taskCount is the HUD.
       state.taskOn = {Mine:true, Construct:true, Collect:true, Search:false, Harvest:false, Metallurgy:false, Rest:false};
       state.taskCount = {Mine:0, Construct:0, Collect:0, Search:0, Harvest:0, Metallurgy:0, Rest:0, Idle:ncit};
     },
     ref: {title:'Task Reference', body:'taskRef'}
   },
+  // 6 · Tier Chain — the resource dependency graph, click to trace a node.
   {
     id:'tiers', name:'Tier Chain', icon:'◆', accent:'#58b870',
     head:'Resource <em>Tiers</em>',
@@ -349,6 +485,7 @@ const SCENARIOS = [
     hint:'Click any node · ancestors highlight in yellow · descendants in green',
     showPalette: false,
     autoBuildable: false,
+    // No world to seed; the graph is static. Just clear the selection.
     setup(){
       state.tierSel = null;
     },
@@ -359,6 +496,8 @@ const SCENARIOS = [
 /* ════════════════════════════════════════════════════════════════════
    TIER GRAPH DATA
    ──────────────────────────────────────────────────────────────────── */
+// Every node in the crafting graph, tagged with its tier (0 raw ore up to
+// 5 fuel). tier sets the row and colour when the graph is laid out.
 const TIER_NODES = [
   // T0 ores
   {id:'fe', label:'Iron', tier:0},      {id:'cu', label:'Copper', tier:0},
@@ -385,6 +524,9 @@ const TIER_NODES = [
   {id:'fuel', label:'Fuel', tier:5},
 ];
 
+// Directed edges [source, destination]: source is an input, destination is
+// the crafted output. getAncestors/getDescendants walk these to trace a
+// node's full input tree or output tree.
 const TIER_EDGES = [
   // T0 → T1 (smelting)
   ['fe','fei'],['cu','cui'],['c','cb'],['al','ali'],['si','siw'],['ti','tii'],['au','aui'],['u','ui'],['re','rei'],
@@ -406,29 +548,36 @@ const TIER_EDGES = [
   ['cb','fuel'],['ali','fuel'],['rei','fuel'],
 ];
 
+// One colour per tier index, used for nodes, edges, and tier labels.
 const TIER_COLORS = ['#d08050','#c8a840','#6898d0','#58b870','#78b848','#e88040'];
 
 /* ════════════════════════════════════════════════════════════════════
    REFERENCE PANEL CONTENT
    ──────────────────────────────────────────────────────────────────── */
+// Build the right-panel reference HTML for a scenario. Each scenario names
+// a body key in its ref; this returns the matching markup string.
 function refContent(key){
+  // One row per module type (the core is omitted, it is not placeable).
   if(key==='moduleLibrary'){
     return Object.entries(MOD).filter(([k])=>k!=='C').map(([k,v])=>(
       '<div class="ref-row" style="--rc:'+v.color+'"><span class="ref-glyph">'+k+'</span><span>'+v.name+'</span><span class="ref-tag">'+v.tag+'</span></div>'
     )).join('');
   }
+  // How enclosed cells hold, filter, and group into shared regions.
   if(key==='storageRules'){
     return '<div class="scn-desc">'+
       '<p>Each enclosed cell holds up to <strong>64 units</strong> of one resource type.</p>'+
       '<p style="margin-top:6px">Right-click a cell in-game to set a filter — restrict the zone to specific resource categories.</p>'+
       '<p style="margin-top:6px">Connected enclosed cells form one <strong>region</strong> with a shared ID, used by foundries to know where to pull and deposit.</p></div>';
   }
+  // What happens to stored stacks when an enclosure breaks.
   if(key==='ejectionPhysics'){
     return '<div class="scn-desc">'+
       '<p>When a wall breaks, the enclosure recomputes. Cells now reachable from outside <strong>decompress</strong> — all stored stacks eject as floating items with radial velocity from the breach point.</p>'+
       '<p style="margin-top:6px">In-game these are collectable: any citizen with <strong>Collect</strong> enabled will gather them back.</p>'+
       '<p style="margin-top:6px">Deconstructing a built module also ejects 25–65% of its build cost as a partial refund.</p></div>';
   }
+  // Tier-1 smelting table: each ore, its ingot, the 1:7 yield, and time.
   if(key==='smeltingTable'){
     const rows = [
       ['Fe','Iron Ingot','×7','8s'],['Cu','Copper Ingot','×7','7s'],['C','Carbon Brick','×7','6s'],
@@ -439,6 +588,7 @@ function refContent(key){
       rows.map(r=>'<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--border)"><span style="color:var(--orange);font-weight:600;width:24px">'+r[0]+'</span><span style="flex:1">'+r[1]+'</span><span style="color:var(--yellow)">'+r[2]+'</span><span style="color:var(--text-faint)">'+r[3]+'</span></div>').join('')+
       '</div>';
   }
+  // One row per crew task with its colour and skill label.
   if(key==='taskRef'){
     const tasks = [
       {n:'Search',     c:'#8c5ac8', s:'Prospecting'},
@@ -453,6 +603,7 @@ function refContent(key){
       '<div class="ref-row" style="--rc:'+t.c+'"><span class="ref-glyph">'+t.n.charAt(0)+'</span><span>'+t.n+'</span><span class="ref-tag">'+t.s+'</span></div>'
     )).join('');
   }
+  // A worked example: the full input tree of a Reactor Core.
   if(key==='reactorChain'){
     return '<div class="scn-desc"><p>Reactor Core: <strong>2× Uranium Ingot + 3× Steel + 2× Titanium Alloy</strong> · 20s craft.</p>'+
       '<p style="margin-top:6px">Full chain reaches <strong>4 ores</strong>: Uranium, Iron, Carbon, Titanium, Aluminum.</p>'+
@@ -493,8 +644,13 @@ function autoOrientFoundry(gx, gy){
 /* ════════════════════════════════════════════════════════════════════
    SCENARIO LIFECYCLE
    ──────────────────────────────────────────────────────────────────── */
+// Switch to scenario i: wipe all world state, recentre the grid, run the
+// scenario's setup(), then rebuild every panel, overlay, and control the
+// lesson uses. This is the single entry point for both card clicks and
+// RESET.
 function loadScenario(i){
   state.scnIdx = i;
+  // Clear every world field so no data leaks between lessons.
   state.modules = [];
   state.enclosed = new Set();
   state.particles = [];
@@ -510,13 +666,16 @@ function loadScenario(i){
   state.hover = null;
   centerGrid();
 
+  // Seed the lesson, then compute enclosure from the seeded modules.
   const s = SCENARIOS[i];
   s.setup();
   state.enclosed = computeEnclosed();
 
+  // HUD scenario counter and active card highlight.
   document.getElementById('hud-scn').textContent = String(i+1).padStart(2,'0')+'/'+String(SCENARIOS.length).padStart(2,'0');
   document.querySelectorAll('.scn-card').forEach((b,k)=>b.classList.toggle('active',k===i));
 
+  // Fill the hint bar and side panel text from the scenario config.
   const hint = document.getElementById('hint');
   hint.innerHTML = s.hint;
   hint.style.setProperty('--ac', s.accent);
@@ -536,6 +695,7 @@ function loadScenario(i){
   document.getElementById('autoBtn').style.display = s.autoBuildable ? '' : 'none';
   document.getElementById('autoBtn').classList.toggle('active', false);
 
+  // Build the overlays the shown controls need.
   if(s.showPalette) buildPalette();
   if(s.id==='crew') buildTaskBox();
 
@@ -553,8 +713,11 @@ function loadScenario(i){
 
   updateHud();
 }
+// RESET reloads the current scenario from scratch.
 function resetScenario(){ loadScenario(state.scnIdx); }
 
+// Build the module palette bar for placement-style scenarios: one button
+// per selectable type, wired to selPalette.
 function buildPalette(){
   const p = document.getElementById('palette');
   const types = ['W','V','Q','D','G','M','F','A','L','S'];
@@ -566,19 +729,24 @@ function buildPalette(){
       '<span class="pal-tag">'+m.tag+'</span>'+
     '</button>';
   }).join('');
+  // Defer the active highlight until after innerHTML lands the buttons.
   setTimeout(()=>{
     document.querySelectorAll('.pal-btn').forEach(b=>b.classList.toggle('active', b.dataset.k===state.paletteSel));
   },0);
 }
+// Select a palette module type and repaint the active button.
 function selPalette(k){
   state.paletteSel = k;
   document.querySelectorAll('.pal-btn').forEach(b=>b.classList.toggle('active', b.dataset.k===k));
 }
+// Toggle auto-build: placed modules arrive as blueprints and fill in over
+// time instead of appearing built.
 function toggleAuto(){
   state.autoBuild = !state.autoBuild;
   document.getElementById('autoBtn').classList.toggle('active', state.autoBuild);
 }
 
+// Build the crew task toggle box: one row per task, wired to toggleTask.
 function buildTaskBox(){
   const box = document.getElementById('taskBox');
   const tasks = [
@@ -598,12 +766,16 @@ function buildTaskBox(){
     '</div>'
   )).join('');
 }
+// Flip a task on or off; citizens re-prioritise on the next frame.
 function toggleTask(name){
   state.taskOn[name] = !state.taskOn[name];
   const row = document.querySelector('.task-row[data-task="'+name+'"]');
   if(row) row.classList.toggle('on', !!state.taskOn[name]);
 }
 
+// Rotate the foundry output one quarter turn. Changing the output side
+// invalidates any docked worker, so release the claim and send it away
+// (mirrors release_foundry_claim in the engine).
 function rotateFoundry(){
   if(!state.foundry) return;
   state.foundry.dir = (state.foundry.dir + 1) % 4;
@@ -621,6 +793,8 @@ function rotateFoundry(){
 /* ════════════════════════════════════════════════════════════════════
    INPUT
    ──────────────────────────────────────────────────────────────────── */
+// Canvas-local pointer coordinate for a mouse or touch event. Reads
+// touches / changedTouches first so both drag and tap-end resolve.
 function getPt(e){
   const r = cv.getBoundingClientRect();
   if(e.touches && e.touches.length){
@@ -632,6 +806,8 @@ function getPt(e){
   return {x:e.clientX-r.left, y:e.clientY-r.top};
 }
 
+// Route one tap to the active scenario's handler. Crew handles input
+// through DOM toggles, so it takes no canvas tap.
 function onTap(p){
   const s = SCENARIOS[state.scnIdx];
   if(s.id==='placement') return handlePlacement(p);
@@ -642,8 +818,12 @@ function onTap(p){
   if(s.id==='tiers') return handleTiers(p);
 }
 
+// Placement scenario tap: click a module to remove it, click an empty
+// valid cell to place the selected type. Placed processing modules auto-
+// orient to a valid output direction.
 function handlePlacement(p){
   const {gx,gy} = screenToGrid(p.x, p.y);
+  // Tapping an existing module removes it (the core is protected).
   const existing = moduleAt(gx,gy);
   if(existing){
     if(existing.type==='C'){ flash('Cannot remove the Core'); return; }
@@ -652,6 +832,7 @@ function handlePlacement(p){
     updateHud();
     return;
   }
+  // Otherwise validate and place; built depends on the auto-build toggle.
   const v = validatePlacement(gx,gy,state.paletteSel);
   if(!v.ok){ flash('Invalid: '+v.reason); return; }
   state.modules.push({gx,gy,type:state.paletteSel,built:!state.autoBuild,delivered:0,need:MOD[state.paletteSel].work});
@@ -671,6 +852,8 @@ function handlePlacement(p){
   updateHud();
 }
 
+// Enclosure scenario tap: same place/remove flow as placement, but when a
+// placement newly seals cells, fill them with random resources and report.
 function handleEnclosure(p){
   const {gx,gy} = screenToGrid(p.x, p.y);
   const existing = moduleAt(gx,gy);
@@ -684,6 +867,7 @@ function handleEnclosure(p){
   const v = validatePlacement(gx,gy,state.paletteSel);
   if(!v.ok){ flash('Invalid: '+v.reason); return; }
   state.modules.push({gx,gy,type:state.paletteSel,built:!state.autoBuild,delivered:0,need:MOD[state.paletteSel].work});
+  // Compare enclosure size before and after to detect newly sealed cells.
   const prev = state.enclosed.size;
   state.enclosed = computeEnclosed();
   if(state.enclosed.size > prev){
@@ -701,15 +885,19 @@ function handleEnclosure(p){
   updateHud();
 }
 
+// Decompression scenario tap: remove the clicked wall, recompute
+// enclosure, and eject the resources of any cell that lost its seal.
 function handleDecompress(p){
   const {gx,gy} = screenToGrid(p.x, p.y);
   const m = moduleAt(gx,gy);
   if(!m){ return; }
   if(m.type==='C'){ flash('Cannot remove the Core'); return; }
+  // Snapshot the enclosure, drop the wall, recompute the enclosure.
   const wallCellsBefore = state.enclosed;
   state.modules = state.modules.filter(mm=>!(mm.gx===gx && mm.gy===gy));
   const wallCellsAfter = computeEnclosed();
   // Cells lost from enclosure now eject their resources
+  // The lost cells are those enclosed before but not after.
   const lost = new Set();
   for(const k of wallCellsBefore){ if(!wallCellsAfter.has(k)) lost.add(k); }
   let totalEjected = 0;
@@ -721,6 +909,8 @@ function handleDecompress(p){
       //   angle = (i/count)*TAU + jitter(±0.3 rad)
       //   burst_speed = 800-1200 game-units/s, scaled to canvas px/frame
       //   one Resource entity per UNIT in the stack (not per stack)
+      // One particle per unit in the stack, spread evenly around a circle
+      // from a random base angle with jitter, so the burst reads radial.
       const N = r.count;
       const baseAngle = Math.random()*Math.PI*2;
       const pos = gridToScreen(lx,ly);
@@ -745,6 +935,8 @@ function handleDecompress(p){
   updateHud();
 }
 
+// Foundry scenario tap: click an input-bay cell to add ore. Clicking the
+// output side is rejected with a hint.
 function handleFoundry(p){
   // Click an input cell to refill ore
   const {gx,gy} = screenToGrid(p.x, p.y);
@@ -755,6 +947,7 @@ function handleFoundry(p){
   const isOutput = (dir===0 && gx>0) || (dir===2 && gx<0) || (dir===1 && gy>0) || (dir===3 && gy<0);
   if(isOutput){ flash('That side is the output — try the input bay','info'); return; }
   // Add ore
+  // Add ore, clamped to the 64-unit cell cap.
   if(!state.resources[k]) state.resources[k] = [];
   const stk = state.resources[k];
   if(stk.length===0) stk.push({label:'Fe', color:'#d08050', count:0});
@@ -762,6 +955,8 @@ function handleFoundry(p){
   flash('+16 Iron Ore added','info');
 }
 
+// Tiers scenario tap: hit-test every node and toggle the nearest within
+// 22px as the selection (clicking the selected node clears it).
 function handleTiers(p){
   const nodes = layoutTierNodes();
   let best = null, bestD = Infinity;
@@ -777,6 +972,8 @@ function handleTiers(p){
   }
 }
 
+// Pointer wiring: mouse and touch both update state.hover on move and call
+// onTap on release. preventDefault stops scrolling and text selection.
 let mouseHandled = false;
 cv.addEventListener('mousedown', e=>{
   e.preventDefault();
@@ -800,6 +997,9 @@ cv.addEventListener('touchend',   e=>{ e.preventDefault(); const p = getPt(e); o
 /* ════════════════════════════════════════════════════════════════════
    READOUTS
    ──────────────────────────────────────────────────────────────────── */
+// Refresh the top HUD counters and the per-scenario selection bar. The
+// selection bar text is chosen by scenario id so each lesson reports the
+// figure that matters to it.
 function updateHud(){
   document.getElementById('hud-mods').textContent = state.modules.length;
   document.getElementById('hud-enc').textContent  = state.enclosed.size;
@@ -835,6 +1035,8 @@ function updateHud(){
   }
 }
 
+// Show a transient toast message. kind sets the colour class; the toast
+// hides itself after 1.8s, and each call resets that timer.
 let toastTimer;
 function flash(msg, kind){
   const t = document.getElementById('toast');
@@ -847,6 +1049,9 @@ function flash(msg, kind){
 /* ════════════════════════════════════════════════════════════════════
    RENDERING
    ──────────────────────────────────────────────────────────────────── */
+// Match the canvas backing store to its CSS box and the device pixel ratio,
+// then recentre the grid. Called every frame so a container resize is
+// picked up without a resize event.
 function resize(){
   const r = document.getElementById('canvasArea').getBoundingClientRect();
   W = r.width; H = r.height;
@@ -855,6 +1060,8 @@ function resize(){
   ctx.setTransform(dpr,0,0,dpr,0,0);
   centerGrid();
 }
+// Put grid origin at the canvas centre and size cells to the smaller
+// dimension, clamped to 22..38px.
 function centerGrid(){
   GRID.cx = Math.floor(W/2);
   GRID.cy = Math.floor(H/2);
@@ -862,6 +1069,7 @@ function centerGrid(){
   GRID.cellSize = Math.max(22, Math.min(38, Math.floor(Math.min(W,H)/22)));
 }
 
+// Faint blue background lattice, offset so lines fall on cell boundaries.
 function drawSpaceGrid(){
   ctx.strokeStyle = 'rgba(80,130,200,0.045)';
   ctx.lineWidth = 1;
@@ -875,6 +1083,7 @@ function drawSpaceGrid(){
   }
 }
 
+// Teal phosphor fill and outline on every enclosed storage cell.
 function drawEnclosedCells(){
   const cs = GRID.cellSize;
   ctx.save();
@@ -891,6 +1100,8 @@ function drawEnclosedCells(){
   ctx.restore();
 }
 
+// Draw the top resource stack in each enclosed cell: label above, count
+// below, tinted and glowing with the resource colour.
 function drawResources(){
   const cs = GRID.cellSize;
   for(const k of state.enclosed){
@@ -914,6 +1125,9 @@ function drawResources(){
   }
 }
 
+// Draw one module. Built modules get a solid glowing box plus a glyph (the
+// core shows a hexagon, a foundry shows its output arrow and progress);
+// planned modules get a dashed blueprint box with a construction bar.
 function drawModule(m){
   const cs = GRID.cellSize;
   const t = MOD[m.type];
@@ -952,6 +1166,8 @@ function drawModule(m){
     }
 
     // Foundry output arrow
+    // Arrow points along the output direction; the claim ring and progress
+    // bar mirror the worker's docked state.
     if(m.type==='F' && state.foundry){
       const dir = state.foundry.dir;
       const ang = dir*Math.PI/2;
@@ -1007,6 +1223,8 @@ function drawModule(m){
   ctx.restore();
 }
 
+// Preview the cell under the pointer in placement scenarios: a dashed ghost
+// tinted the module colour when valid, red when the placement would fail.
 function drawHoverPlacement(){
   if(!state.hover) return;
   const s = SCENARIOS[state.scnIdx];
@@ -1037,6 +1255,8 @@ function drawHoverPlacement(){
   ctx.restore();
 }
 
+// Advance and draw ejecta particles. Each frame integrates velocity, applies
+// drag and spin, ages the particle, and culls it off-screen or at life 0.
 function drawParticles(){
   for(let i = state.particles.length - 1; i >= 0; i--){
     const p = state.particles[i];
@@ -1067,6 +1287,9 @@ function drawParticles(){
 /* Metallurgy worker — mirrors behaviors/metallurgy.rs state machine:
    searching → approaching → processing → (loop if more input) → departing.
    foundry_worker + foundry_progress set on Docking, cleared on Undocking. */
+// Find the input-bay cell the worker should pull from next: any non-output
+// enclosed cell that holds ore, chosen in top-to-bottom, left-to-right
+// reading order (mirrors get_region_resources_by_position).
 function findInputCellWithOre(){
   if(!state.foundry) return null;
   const f = state.foundry;
@@ -1087,12 +1310,15 @@ function findInputCellWithOre(){
   return cells[0] || null;
 }
 
+// One smelt: take 1 ore from the chosen input cell and add 7 ingots to the
+// output cell, capped at 64. Returns false when there is no ore to consume.
 function executeFoundryTransfer(){
   // Consume 1 ore from input, produce 7 ingots to output — matches Foundry smelt 1:7
   const cell = findInputCellWithOre();
   if(!cell) return false;
   cell.stk[0].count--;
   const f = state.foundry;
+  // Output cell is the neighbour in the foundry's output direction.
   const ofs = [[1,0],[0,1],[-1,0],[0,-1]][f.dir];
   const ogx = f.gx + ofs[0], ogy = f.gy + ofs[1];
   const okey = gKey(ogx, ogy);
@@ -1108,6 +1334,16 @@ function executeFoundryTransfer(){
   return true;
 }
 
+// The Metallurgy worker state machine, advanced one step per frame:
+//
+//   searching ─input?─▶ approaching ─docked─▶ processing ─┐
+//       ▲                                          │       │ batch done,
+//       │                                          │       │ more input
+//       └───────────── departing ◀────no input────┴───────┘
+//
+// searching drifts in orbit until input appears; approaching flies to the
+// foundry and docks; processing accrues work and smelts a batch each time
+// the meter fills; departing flies back to the hold, then loops.
 function updateFoundryWorker(){
   const w = state.foundryWorker;
   if(!w || !state.foundry) return;
@@ -1116,6 +1352,7 @@ function updateFoundryWorker(){
   const speed = 2.2;
 
   switch(w.state){
+    // Idle drift until an input cell has ore, then approach.
     case 'searching':
       // Drift slowly in orbit while no input available
       if(!findInputCellWithOre()){
@@ -1127,6 +1364,8 @@ function updateFoundryWorker(){
       w.state = 'approaching';
       break;
 
+    // Fly toward the foundry; on arrival dock, claim it, and set the work
+    // needed for one batch.
     case 'approaching': {
       const dx = fpos.x - w.x, dy = fpos.y - w.y;
       const d = Math.hypot(dx, dy);
@@ -1148,6 +1387,8 @@ function updateFoundryWorker(){
       break;
     }
 
+    // Accrue work while docked; smelt one batch each time the meter fills,
+    // and undock when the input runs out.
     case 'processing': {
       // Need input still available (or undock)
       if(!findInputCellWithOre()){
@@ -1170,6 +1411,7 @@ function updateFoundryWorker(){
       break;
     }
 
+    // Fly back to the off-station hold, then return to searching.
     case 'departing': {
       // Fly back to off-station hold position
       const tx = W*0.08, ty = H*0.50;
@@ -1187,6 +1429,8 @@ function updateFoundryWorker(){
   }
 }
 
+// Draw the foundry worker as a small ship, coloured and captioned by state
+// (IDLE / DOCKING / METALLURGY / UNDOCKING).
 function drawFoundryWorker(){
   const w = state.foundryWorker;
   if(!w) return;
@@ -1224,12 +1468,16 @@ function drawFoundryWorker(){
 /* ════════════════════════════════════════════════════════════════════
    CREW SIMULATION
    ──────────────────────────────────────────────────────────────────── */
+// Colour per task, used to tint each citizen by what they are doing.
 const TASK_COLORS = {
   Search:'#8c5ac8', Collect:'#2878c8', Construct:'#c8a01e',
   Mine:'#be8232',   Harvest:'#3ca032', Metallurgy:'#b45028',
   Rest:'#6878a0',   Idle:'#6878a0',
 };
 
+// Assign a citizen its next task by walking the priority order and taking
+// the first enabled task with available work, claiming the target so two
+// citizens do not chase the same one. Falls through to Idle.
 function pickCitizenTask(c){
   // Priority: Construct > Metallurgy > Mine > Collect > Rest > Idle (when toggled on)
   if(state.taskOn.Construct){
@@ -1269,6 +1517,9 @@ function pickCitizenTask(c){
   c.task = 'Idle'; c.target = null;
 }
 
+// Per-frame crew step: reset counts, drop stale claims, re-pick a task for
+// any citizen whose target is gone, then move each citizen toward its
+// target and run the task action on arrival. Also updates the DOM counts.
 function updateCrew(){
   // Count by task
   state.taskCount = {Search:0,Collect:0,Construct:0,Mine:0,Harvest:0,Metallurgy:0,Rest:0,Idle:0};
@@ -1276,6 +1527,7 @@ function updateCrew(){
   for(const m of state.modules){ if(m.built){ delete m._claimedBy; } }
   for(const a of state.asteroids){ if(a.ore<=0){ delete a._claimedBy; } }
 
+  // Re-pick a task when the citizen has none or its target is finished.
   for(const c of state.citizens){
     if(!c.target || (c.target.type==='asteroid' && c.target.ref.ore<=0) ||
        (c.target.type==='module' && c.target.ref.built) ||
@@ -1292,6 +1544,8 @@ function updateCrew(){
       } else {
         c.vx = 0; c.vy = 0;
         // At target - do task
+        // Mining chips the asteroid's ore and periodically spawns a
+        // collectable ore particle; a depleted rock respawns shortly.
         if(c.task==='Mine' && c.target.ref){
           // Matches behaviors/mine.rs: "Creates new Resource objects in orbit"
           c.target.ref.ore -= 0.008;
@@ -1313,12 +1567,15 @@ function updateCrew(){
             // Asteroid depleted — respawn after a moment
             setTimeout(()=>{ c.target.ref.ore = 1; }, 700);
           }
+        // Construction adds progress; a finished blueprint becomes built
+        // and may seal new enclosure.
         } else if(c.task==='Construct' && c.target.ref){
           c.target.ref.delivered = (c.target.ref.delivered||0) + 4;
           if(c.target.ref.delivered >= c.target.ref.need){
             c.target.ref.built = true;
             state.enclosed = computeEnclosed();
           }
+        // Collecting removes the ore particle from orbit.
         } else if(c.task==='Collect' && c.target.ref){
           // Remove the particle
           const idx = state.particles.indexOf(c.target.ref);
@@ -1330,6 +1587,7 @@ function updateCrew(){
     state.taskCount[c.task] = (state.taskCount[c.task]||0) + 1;
   }
   // Update task counts in DOM
+  // Mirror the live task counts into the task box (crew scenario only).
   if(SCENARIOS[state.scnIdx].id === 'crew'){
     for(const t of ['Search','Collect','Construct','Mine','Harvest','Metallurgy','Rest']){
       const el = document.getElementById('tcnt-'+t);
@@ -1338,6 +1596,8 @@ function updateCrew(){
   }
 }
 
+// Draw each citizen as a small ship tinted by task, with the task name
+// captioned below.
 function drawCrew(){
   for(const c of state.citizens){
     const color = TASK_COLORS[c.task] || '#6878a0';
@@ -1366,12 +1626,15 @@ function drawCrew(){
   }
 }
 
+// Drift, spin, and draw each ore asteroid as its jagged polygon; depleted
+// rocks are skipped until they respawn.
 function drawAsteroids(){
   for(const a of state.asteroids){
     if(a.ore<=0) continue;
     a.x += a.vx; a.y += a.vy;
     a.dir += a.spin;
     // Bounds
+    // Bounce off the canvas edges.
     if(a.x<a.r||a.x>W-a.r) a.vx*=-1;
     if(a.y<a.r||a.y>H-a.r) a.vy*=-1;
     ctx.save();
@@ -1394,6 +1657,9 @@ function drawAsteroids(){
 /* ════════════════════════════════════════════════════════════════════
    TIER RENDERING
    ──────────────────────────────────────────────────────────────────── */
+// Position every node: group by tier into rows, place each row at a fixed
+// vertical fraction (T0 low, T5 high), and space nodes evenly across the
+// width. Returns nodes with x/y added; both draw and hit-test use it.
 function layoutTierNodes(){
   const tiers = [[],[],[],[],[],[]];
   for(const n of TIER_NODES) tiers[n.tier].push(n);
@@ -1411,6 +1677,8 @@ function layoutTierNodes(){
   return result;
 }
 
+// Every node the given node depends on: walk edges backward (dst→src)
+// depth-first to collect the full input tree.
 function getAncestors(id){
   const set = new Set();
   const stack = [id];
@@ -1422,6 +1690,8 @@ function getAncestors(id){
   }
   return set;
 }
+// Every node built from the given node: walk edges forward (src→dst)
+// depth-first to collect the full output tree.
 function getDescendants(id){
   const set = new Set();
   const stack = [id];
@@ -1434,11 +1704,15 @@ function getDescendants(id){
   return set;
 }
 
+// Draw the whole tier graph: tier labels, bezier edges, then nodes. When a
+// node is selected, ancestors glow yellow, descendants green, and the rest
+// dim so the traced dependency tree stands out.
 function drawTiers(){
   const nodes = layoutTierNodes();
   const nodeMap = {};
   for(const n of nodes) nodeMap[n.id] = n;
 
+  // Resolve the selection's input tree (anc) and output tree (desc).
   const sel = state.tierSel;
   const anc = sel ? getAncestors(sel) : new Set();
   const desc = sel ? getDescendants(sel) : new Set();
@@ -1458,6 +1732,7 @@ function drawTiers(){
   ctx.restore();
 
   // Draw edges
+  // Draw edges as vertical bezier curves; highlight those on the traced tree.
   for(const [src,dst] of TIER_EDGES){
     const a = nodeMap[src], b = nodeMap[dst];
     if(!a || !b) continue;
@@ -1482,6 +1757,8 @@ function drawTiers(){
   }
 
   // Draw nodes
+  // Draw nodes; colour and glow by selection role (self / ancestor /
+  // descendant / dimmed).
   for(const n of nodes){
     let color = TIER_COLORS[n.tier];
     let blur = 8;
@@ -1518,10 +1795,14 @@ function drawTiers(){
 /* ════════════════════════════════════════════════════════════════════
    MAIN LOOP
    ──────────────────────────────────────────────────────────────────── */
+// The per-frame update: resize, lay down the phosphor fade and grid, then
+// draw the active scenario. Tiers is its own path; every other scenario
+// shares the grid draw order. Ends by scheduling the next frame.
 function render(){
   resize();
   state.t++;
 
+  // Semi-transparent fill each frame leaves fading trails behind moving art.
   // Phosphor trail
   ctx.fillStyle = 'rgba(7,10,16,0.32)';
   ctx.fillRect(0,0,W,H);
@@ -1530,6 +1811,7 @@ function render(){
 
   const s = SCENARIOS[state.scnIdx];
 
+  // Tiers draws the dependency graph; all others draw the grid world.
   if(s.id==='tiers'){
     drawTiers();
   } else {
@@ -1555,6 +1837,8 @@ function render(){
     }
 
     // Auto-build for placement / enclosure
+    // With auto-build on, advance one blueprint per frame; finishing one
+    // may seal new enclosure and, in the enclosure lesson, fill it.
     if(state.autoBuild && (s.id==='placement' || s.id==='enclosure')){
       // Advance one planned module's progress
       const planned = state.modules.find(m=>m.built===false);
@@ -1589,6 +1873,7 @@ function render(){
 /* ════════════════════════════════════════════════════════════════════
    SCENARIO BAR
    ──────────────────────────────────────────────────────────────────── */
+// Build the top row of scenario cards, each wired to loadScenario(i).
 function buildScnBar(){
   const bar = document.getElementById('scnBar');
   bar.innerHTML = SCENARIOS.map((s,i)=>(
@@ -1605,6 +1890,8 @@ function buildScnBar(){
 /* ════════════════════════════════════════════════════════════════════
    MOBILE DRAWER
    ──────────────────────────────────────────────────────────────────── */
+// On narrow screens the FAB slides the right panel in as a drawer over a
+// backdrop; the three elements toggle together.
 function toggleDrawer(){
   const panel = document.getElementById('sideR');
   const fab = document.getElementById('fab');
@@ -1614,6 +1901,7 @@ function toggleDrawer(){
   fab.classList.toggle('open', willOpen);
   bd.classList.toggle('show', willOpen);
 }
+// Close the drawer (backdrop tap).
 function closeDrawer(){
   document.getElementById('sideR').classList.remove('open');
   document.getElementById('fab').classList.remove('open');
@@ -1623,10 +1911,14 @@ function closeDrawer(){
 /* ════════════════════════════════════════════════════════════════════
    BOOT
    ──────────────────────────────────────────────────────────────────── */
+// Build the card bar, size the canvas, keep it sized on resize, load the
+// first scenario, and start the render loop.
 buildScnBar();
 resize();
 window.addEventListener('resize', resize);
 loadScenario(0);
 render();
 
+// When embedded in the site shell iframe, add .in-frame so the CSS hides
+// this page's own chrome. A cross-origin access throw also means embedded.
 try{ if(window.self!==window.top) document.body.classList.add('in-frame'); }catch(e){ document.body.classList.add('in-frame'); }

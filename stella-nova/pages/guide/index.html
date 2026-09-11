@@ -4,12 +4,46 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Stations // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   STATIONS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws every lesson into #cv and fills the
+   panels, cards, and overlays by id; this file just lays them out. The
+   scenario cards (#scnBar) and control buttons call main.js functions
+   inline (loadScenario, resetScenario, toggleAuto, rotateFoundry).
+
+   LOAD ORDER
+     1. fonts      Google Fonts stylesheet (absolute)
+     2. style.css  the page stylesheet
+     3. main.js    classic script at end of body; runs after the markup
+                   parses, so getElementById calls resolve
+
+   LAYOUT  (# marks an element id)
+     ┌──────────────────────────────────────────────────────────────┐
+     │ topbar     name · LIVE PRACTICE · HUD readouts                │
+     ├──────────────────────────────────────────────────────────────┤
+     │ #scnBar    scenario cards (built by main.js)                  │
+     ├──────────────────────────────────────────────────────────────┤
+     │ ctrl-bar   RESET · AUTO-BUILD · ROTATE OUTPUT                 │
+     ├───────────────────────────────────┬──────────────────────────┤
+     │ #canvasArea                        │ #sideR                   │
+     │   #cv the lesson canvas            │   headline + description │
+     │   #hint #sel #toast overlays       │   How it works notes     │
+     │   #palette #taskBox controls       │   #refPanel reference    │
+     └───────────────────────────────────┴──────────────────────────┘
+     #fab + #bd  float the right panel in as a drawer on narrow screens
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- Decorative background lattice, painted by CSS. -->
 <div class="grid-bg"></div>
 <div id="app">
+  <!-- Top bar: system name, status pill, and the three HUD readouts that
+       main.js updates (scenario counter, module count, enclosed count). -->
   <div class="topbar">
     <span class="sys-name">STATIONS</span>
     <div class="status-pill">LIVE PRACTICE</div>
@@ -20,8 +54,11 @@
     </div>
   </div>
 
+  <!-- Scenario card row; buildScnBar() fills it with one card per lesson. -->
   <div class="scn-bar" id="scnBar"></div>
 
+  <!-- Control bar: RESET reloads the lesson; AUTO-BUILD and ROTATE OUTPUT
+       show only in the scenarios that use them (main.js toggles display). -->
   <div class="ctrl-bar">
     <span class="ctrl-label">CTRL</span>
     <button class="ctrl-btn warn" onclick="resetScenario()">↻ RESET</button>
@@ -30,7 +67,13 @@
     <span class="ctrl-info">CLICK CELLS TO PLACE · CLICK MODULES TO REMOVE</span>
   </div>
 
+  <!-- Main split: the lesson canvas on the left, the reference panel on the
+       right. -->
   <div class="main">
+    <!-- Canvas area: the render target plus floating overlays. hint is the
+         instruction line, sel the selection readout, toast the transient
+         message, palette the module picker, taskBox the crew toggles. The
+         palette and taskBox start hidden and main.js shows them per lesson. -->
     <div class="canvas-area" id="canvasArea">
       <canvas id="cv"></canvas>
       <div class="hint-bar" id="hint" style="--ac:var(--yellow)"></div>
@@ -39,6 +82,8 @@
       <div class="palette" id="palette" style="display:none"></div>
       <div class="tasks" id="taskBox" style="display:none"></div>
     </div>
+    <!-- Right panel: headline, description, How-it-works notes, and the
+         per-lesson reference block. main.js fills every field by id. -->
     <aside class="sidebar-r" id="sideR">
       <div class="panel">
         <div class="scn-headline" id="scnHead"></div>
@@ -56,9 +101,11 @@
   </div>
 </div>
 
+<!-- Mobile drawer: the FAB opens the right panel and the backdrop closes it. -->
 <button class="fab" id="fab" onclick="toggleDrawer()">Info ≡</button>
 <div class="drawer-backdrop" id="bd" onclick="closeDrawer()"></div>
 
+<!-- main.js runs last so every element above already exists. -->
 <script src="main.js"></script>
 </body>
 </html>

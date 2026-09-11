@@ -1,3 +1,43 @@
+// ============================================================================
+//  ASTROTECHS · OPS  ·  interactive behavior for the game-design overview page
+// ----------------------------------------------------------------------------
+//  A classic script loaded after the markup (index.html ends with
+//  <script src="main.js">). It drives every interactive block on the page:
+//  four SVG flow diagrams, a live recoil-curve sim, a time-dilation sim, a
+//  threat-composition bar, a selectable device panel, a filterable register
+//  table, and smooth-scroll nav. Each block reads static markup by id and
+//  writes text or SVG attributes back. Nothing here builds layout (index.html
+//  does that); there is no network fetch and no module import.
+//
+//  DATA FLOW   (every interactive block is independent — no shared state)
+//  ----------------------------------------------------------------------------
+//      flowProfiles ──▶ bindFlow() ──▶ .node mouseenter ──▶ #<side> innerHTML
+//                                       (4 diagrams: loop · combat · crew · end)
+//
+//      #recoilSvg hold ─▶ tick() rAF loop  ─▶ curve path + spread readout
+//      #dilSlider input ─▶ frame() rAF loop ─▶ orbiting dot + state label
+//      .threats .bar hover ─▶ #threatDetail innerHTML
+//      .haz .opt click ─▶ hazards{} ─▶ #hazDetail innerHTML (copy + inline SVG)
+//      .regfilters button ─▶ show / hide #regBody rows by data-row
+//      .topnav a click ─▶ smooth scrollIntoView
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      flow node copy ....... "const flowProfiles"   node-key → profile text
+//      flow wiring .......... "function bindFlow"     hover a node → side panel
+//      recoil sim ........... "recoilSvg"             hold-to-fire spread curve
+//      time dilation ........ "dilSlider"             SUPERHOT-like sim speed
+//      threat bar ........... "threatDetail"          enemy composition hover
+//      device panel ......... "const hazards"         selectable device detail
+//      register filter ...... "regfilters"            table row filtering
+//      smooth scroll ........ "topnav a"              anchor nav
+// ============================================================================
+
+// One lookup table shared by all four flow diagrams. Each key matches a
+// data-key on an SVG <g class="node">; the value is the profile shown in the
+// diagram's side panel on hover. t=title, c=body copy (may hold inline HTML),
+// accent=true flags a critical/quoted node so bindFlow tags it "⚠ Critical".
+// Entries are grouped by diagram: loop nodes, then combat, then crew, then end.
 const flowProfiles = {
   start:{t:'Round Start',c:'Player drops in. The first five attacks have already resolved — you arrive in media res, with chaos already in progress.',accent:false},
   'media-res':{t:'In Media Res',c:'<span class="accent">5 random attacks pre-resolved.</span> Fires already burning, systems already damaged, enemies already deployed. The game does not begin in calm.',accent:true},
@@ -44,12 +84,16 @@ const flowProfiles = {
   overrun:{t:'Overrun',c:'Hostile mass exceeds containable threshold. Position lost.',accent:false},
   defeat:{t:'DEFEAT',c:'Round resolves to loss. Restart or load.',accent:false}
 };
+// Wire one flow diagram to its side panel. On node hover, clear the previous
+// highlight, mark this node active, look up its profile by data-key, and paint
+// the profile into the side panel. Unknown keys are skipped silently.
 function bindFlow(svgId, sideId){
   const svg = document.getElementById(svgId);
   const side = document.getElementById(sideId);
   const nodes = svg.querySelectorAll('.node');
   nodes.forEach(n=>{
     n.addEventListener('mouseenter',()=>{
+      // Single-selection highlight: only the hovered node keeps .active.
       nodes.forEach(x=>x.classList.remove('active'));
       n.classList.add('active');
       const k = n.dataset.key; const p = flowProfiles[k]; if(!p) return;
@@ -57,38 +101,64 @@ function bindFlow(svgId, sideId){
     });
   });
 }
+// Bind all four diagrams: operational loop, combat tree, crew tree, end states.
 bindFlow('flowLoop','loopSide');bindFlow('flowCombat','combatSide');bindFlow('flowCrew','crewSide');bindFlow('flowEnd','endSide');
 
+// ── RECOIL CURVE · live sim ────────────────────────────────────────────────
+// Models the "pace your bursts" mechanic: hold to fire and spread climbs an
+// exponential toward a ceiling; release and it decays back to perfect accuracy.
+// A running self-scheduling rAF loop redraws the curve, the tracer dot, and the
+// hold-time / spread readouts every frame.
 (function(){
   const svg=document.getElementById('recoilSvg'),path=document.getElementById('recoilCurve'),dot=document.getElementById('recoilDot'),tEl=document.getElementById('holdTime'),sEl=document.getElementById('spread');
+  // t = accumulated hold time (0..4s); holding = fire button down; points = the
+  // traced curve so far (a rolling window, capped below).
   let t=0,holding=false,points=[];
   function tick(){
+    // Hold ramps t up slowly; release decays it faster, so recovery feels quick.
     if(holding){t=Math.min(t+0.05,4);}else{t=Math.max(t-0.15,0);}
+    // Map t to screen space: x spans the 600-wide viewBox; y rises from the
+    // baseline (180) toward the ceiling on an exponential approach curve.
     const x=(t/4)*600,y=180-(1-Math.exp(-t*0.9))*150;
+    // While firing, append the point and cap the trail at 120 samples.
     if(holding){points.push([x,y]);if(points.length>120)points.shift();}
+    // Fully recovered and released: clear the trail so the next burst starts clean.
     if(!holding&&t<=0){points=[];}
+    // Rebuild the path string from the baseline through every traced point.
     let d="M 0 180";points.forEach(p=>{d+=` L ${p[0].toFixed(1)} ${p[1].toFixed(1)}`;});
     path.setAttribute('d',d);dot.setAttribute('cx',x);dot.setAttribute('cy',y);
+    // Spread percent mirrors the same exponential; warn once past 60%.
     const spread=((1-Math.exp(-t*0.9))*100).toFixed(0);
     tEl.textContent=t.toFixed(1)+'s';sEl.textContent=spread+'%';sEl.className=spread>60?'warn':'';
     requestAnimationFrame(tick);
   }
+  // Press starts the hold; touchstart cancels default to avoid scroll/zoom.
   svg.addEventListener('mousedown',()=>{holding=true;});
   svg.addEventListener('touchstart',e=>{e.preventDefault();holding=true;},{passive:false});
+  // Release is bound on window so letting go outside the frame still resets.
   window.addEventListener('mouseup',()=>{holding=false;});
   window.addEventListener('touchend',()=>{holding=false;});
   tick();
 })();
+// ── TIME DILATION · live sim ───────────────────────────────────────────────
+// Demonstrates the SUPERHOT-like tactical pause: an orbiting dot advances at a
+// rate set by the sim-speed slider. Slider input also updates the numeric
+// readout and a named state label (rest → committing → commit → overdrive).
 (function(){
   const slider=document.getElementById('dilSlider'),val=document.getElementById('dilVal'),planet=document.getElementById('dilPlanet'),stateLabel=document.getElementById('dilStateLabel');
+  // angle = current orbit phase; lastT = previous frame timestamp for delta time.
   let angle=0,lastT=0;
   function frame(t){
+    // Advance the orbit by real elapsed seconds scaled by slider speed. 1.4 is
+    // a visual tuning factor for orbit rate; 42 is the orbit radius, centre (100,50).
     if(!lastT)lastT=t;const dt=(t-lastT)/1000;lastT=t;
     const speed=+slider.value/100;angle+=dt*speed*1.4;
     const cx=100+Math.cos(angle)*42,cy=50+Math.sin(angle)*42;
     planet.setAttribute('cx',cx.toFixed(2));planet.setAttribute('cy',cy.toFixed(2));
     requestAnimationFrame(frame);
   }
+  // Slider drag: show the percentage and label the dilation band. 70% is the
+  // "commit" threshold from the design brief, given its own narrow band.
   slider.addEventListener('input',()=>{
     const v=+slider.value;val.textContent=v+'%';
     if(v<=20)stateLabel.textContent='AT REST';else if(v<70)stateLabel.textContent='COMMITTING';
@@ -96,15 +166,28 @@ bindFlow('flowLoop','loopSide');bindFlow('flowCombat','combatSide');bindFlow('fl
   });
   requestAnimationFrame(frame);
 })();
+// ── THREAT COMPOSITION BAR · hover ─────────────────────────────────────────
+// The stacked enemy-mix bar. Each band carries a data-t key; hovering a band
+// looks up its profile and writes it into the shared #threatDetail line.
 (function(){
+  // Enemy profiles keyed by band. n=display name, c=body copy.
   const data={snipers:{n:'SNIPERS',c:'Long-range corrupted units. Force you to break sightlines and approach via cover or environmental hazards.'},
     spiders:{n:'SPIDERS',c:'Fast, low-profile machines. Punish stationary play. Vulnerable to suction zones and live-wire traps.'},
     sentry:{n:'SENTRY DROIDS',c:'Garrisoned area-denial. Hold key chokepoints — dislodge with grenades, AOE, or environmental detonation.'},
     boss:{n:'ENVIRONMENTAL BOSSES',c:'"Powerful environmental boss-enemies." Fight is structured around the room itself — windows, conduits, barrels.'}};
   const detail=document.getElementById('threatDetail');const bands=document.querySelectorAll('.threats .bar div');
+  // Hover a band: single-selection highlight, then paint its profile.
   bands.forEach(b=>{b.addEventListener('mouseenter',()=>{bands.forEach(x=>x.classList.remove('active'));b.classList.add('active');const d=data[b.dataset.t];detail.innerHTML=`<b>${d.n}</b>${d.c}`;});});
 })();
+// ── DEVICE PROFILE PANEL · click to select ─────────────────────────────────
+// The selectable device roster. Each .opt carries a data-haz key; clicking one
+// rebuilds #hazDetail from the hazards table below — a header, screenshot slot,
+// prose (with quoted design copy), and an inline SVG state diagram.
 (function(){
+  // Device profiles keyed by data-haz. Fields per entry:
+  //   n  = device name        m  = "PROFILE nn / 05" meta label
+  //   ph = screenshot caption e  = detail HTML body (states, quotes, stretch)
+  //   svg = the state-diagram SVG fragment injected into the .diag element.
   const hazards={
     window:{n:'Window',m:'PROFILE 01 / 05',ph:'SCREENSHOT · DECOMPRESSION KILL',
       e:`<p><strong>Three states:</strong> <span class="tag ship">Working / Closed</span> <span class="tag" style="color:var(--magenta);border-color:var(--magenta);">Broken</span> <span class="tag" style="color:var(--cyan);border-color:var(--cyan-mid);">Broken-Shielded</span></p>
@@ -145,15 +228,24 @@ bindFlow('flowLoop','loopSide');bindFlow('flowCombat','combatSide');bindFlow('fl
             <text x="200" y="92" fill="#ffb000" font-size="9" font-family="JetBrains Mono" text-anchor="middle">STUN ZONE — STICKY TRAP</text>`}
   };
   const detail=document.getElementById('hazDetail');const opts=document.querySelectorAll('.haz .opt');
+  // Click a device tab: single-selection highlight, then rebuild the whole
+  // detail pane (meta bar, chrome dial, screenshot slot, prose, state diagram).
   opts.forEach(o=>{o.addEventListener('click',()=>{
     opts.forEach(x=>x.classList.remove('on'));o.classList.add('on');
     const h=hazards[o.dataset.haz];
     detail.innerHTML=`<div class="topbar"><div class="hmeta">${h.m}</div><div style="display:flex;gap:8px;align-items:center;"><span class="dial fast" style="width:24px;height:24px;"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="none" stroke="#2a8a8a" stroke-width="1"/><g class="sweep"><line x1="20" y1="20" x2="20" y2="6" stroke="#5be6e6" stroke-width="1.5"/></g></svg></span><span class="btn-pulse cyan" style="width:10px;height:10px;"></span></div></div><h4>${h.n}</h4><div class="ph" data-dim="500×120">${h.ph}</div>${h.e}<svg class="diag" viewBox="0 0 400 100"><defs><marker id="hazArrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker></defs>${h.svg}</svg>`;
   });});
 })();
+// ── REGISTER TABLE · filter ────────────────────────────────────────────────
+// The stretch/cut register. Each filter button carries a data-filter value;
+// clicking one hides every row whose data-row does not match ("all" shows all).
 (function(){
   const buttons=document.querySelectorAll('.regfilters button');const rows=document.querySelectorAll('#regBody tr');
+  // Click a filter: highlight it, then toggle the .hide class per row.
   buttons.forEach(b=>{b.addEventListener('click',()=>{buttons.forEach(x=>x.classList.remove('on'));b.classList.add('on');
     const f=b.dataset.filter;rows.forEach(r=>{if(f==='all'||r.dataset.row===f)r.classList.remove('hide');else r.classList.add('hide');});});});
 })();
+// ── SMOOTH-SCROLL NAV ──────────────────────────────────────────────────────
+// Intercept top-nav anchor clicks: resolve the #id target, cancel the default
+// jump, and scroll it into view smoothly. Unknown targets fall through.
 document.querySelectorAll('.topnav a').forEach(a=>{a.addEventListener('click',e=>{const id=a.getAttribute('href').slice(1);const el=document.getElementById(id);if(el){e.preventDefault();el.scrollIntoView({behavior:'smooth',block:'start'});}});});

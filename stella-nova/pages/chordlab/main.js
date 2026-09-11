@@ -1,4 +1,73 @@
 "use strict";
+// ════════════════════════════════════════════════════════════════════════════
+//  CHORDLAB  ·  live microphone chord detection, tuning, and notation
+// ────────────────────────────────────────────────────────────────────────────
+//  One mic stream feeds a single AnalyserNode. Every animation frame reads two
+//  views of the same signal: the dB magnitude spectrum drives chord detection
+//  and the spectrogram, the raw time-domain waveform drives the autocorrelation
+//  tuner. Detection turns the spectrum into a 12-bin chroma, matches it against
+//  chord templates, and smooths the scores so the named chord holds steady. The
+//  UI (chroma ring, fretboard diagrams, running staff, tuner) reads that state.
+//
+//  AUDIO PIPELINE  (one pass per frame; entry point is "MAIN LOOP" · loop())
+//  ──────────────────────────────────────────────────────────────────────────
+//    mic ● getUserMedia ─▶ MediaStreamSource
+//                              │
+//                              ▼
+//        AnalyserNode   fftSize 16384  ·  ≈2.9 Hz/bin  ·  smoothing 0.5
+//                              │
+//          ┌───────────────────┴────────────────────┐
+//          │ getFloatFrequencyData                   │ getFloatTimeDomainData
+//          ▼ freqData[]  (dB spectrum)               ▼ tdBuf[]  (waveform)
+//      ┌───┴─────────────────┐                   ┌───┴──────────────┐
+//      │ drawSpec()          │                   │ autoCorrelate()  │
+//      │  waterfall image    │                   │  ACF2+ period    │
+//      └─────────────────────┘                   │      │           │
+//      ┌─────────────────────┐                   │      ▼           │
+//      │ analyzeFrame()  CHORD PATH              updateTuner()       │
+//      │   extractPeaks()    parabolic-interpolated spectral peaks   │
+//      │   estimateTuning()  circular mean of cents deviation        │
+//      │   peaksToChroma()   iterative pitch salience with harmonic  │
+//      │                     SUBTRACTION ─▶ 12-bin chroma            │
+//      │   cosine vs QUALS templates + bass-root bonus               │
+//      │   score EMA + switch margin ─▶ curChord ─▶ setChord()       │
+//      └────────────────────────────────────────────────────────────┘
+//
+//  RENDER TARGETS  (each is a <canvas> repainted from detection state)
+//    ring   chroma wheel, chord tones lit ......... drawRing()
+//    meter  oscilloscope + log band bars .......... drawMeter()
+//    diag   fretboard / staff per instrument ...... redrawDiagram()
+//    staff  running 4-bar notation of the log ..... drawStaff()
+//    spec   rainbow waterfall + tuning ladder ..... drawSpec()
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ──────────────────────────────────────────────────────────────────────────
+//    pitch classes ........ "NOTE_NAMES"       chroma wheel names + colors
+//    chord templates ...... "const QUALS"      interval sets per quality
+//    audio state .......... "audio state"      shared analyser + chroma buffers
+//    mic start ............ "async function startMic"  getUserMedia + analyser
+//    detection params ..... "const DP"         tuned thresholds and weights
+//    peak picking ......... "function extractPeaks"    spectrum ─▶ peak list
+//    tuning estimate ...... "function estimateTuning"  off-A440 correction
+//    chroma build ......... "function peaksToChroma"   salience + subtraction
+//    decision ............. "function analyzeFrame"    templates ─▶ curChord
+//    dominant chord ....... "function renderDominant"  passage-level winner
+//    set chord ............ "function setChord"        commit + log + diagram
+//    session tally ........ "function bumpTally"       per-span histogram
+//    chroma ring .......... "function drawRing"        the wheel canvas
+//    guitar library ....... "OPEN_SHAPES"      open + movable voicings
+//    ukulele search ....... "function ukeVoicings"     exhaustive first-position
+//    bass map ............. "function drawBass"        chord-tone fretboard
+//    chord box ............ "function drawChordBox"    guitar/uke diagram
+//    violin map ........... "function drawViolin"      first-position tones
+//    input meter .......... "function drawMeter"       scope + bands
+//    staff ................ "function drawStaff"       running notation
+//    tuner ................ "autoCorrelate"    ACF2+ pitch detector
+//    spectrogram .......... "function drawSpec"        waterfall + ladder
+//    strum synth .......... "function strum"           audible chord preview
+//    main loop ............ "function loop"    per-frame scheduler
+//    mobile tabs .......... "function setMTab" narrow-screen column switch
+// ════════════════════════════════════════════════════════════════════════════
 /* ════════════════════════════════════════════════════════════
    ChordLab — live chord detection
    mic → FFT → peak picking → pitch salience → chord
@@ -7,12 +76,19 @@
    ════════════════════════════════════════════════════════════ */
 
 /* ── pitch classes & colors: the chroma wheel ── */
+// The 12 pitch classes indexed 0=C..11=B. Every chord tone, chroma bin, and
+// canvas color keys off this index, so one pitch class always paints one hue.
 const NOTE_NAMES=['C','C♯','D','D♯','E','F','F♯','G','G♯','A','A♯','B'];
 const FLAT_NAMES=['C','D♭','D','E♭','E','F','G♭','G','A♭','A','B♭','B'];
+// Map a pitch class to a hue: 30 degrees per semitone wraps the octave to a
+// full color wheel. l is lightness percent, a is alpha for the transparent form.
 const pcColor=(pc,l=64)=>`hsl(${pc*30},88%,${l}%)`;
 const pcColorA=(pc,a,l=64)=>`hsla(${pc*30},88%,${l}%,${a})`;
 
 /* ── chord templates ── */
+// Each chord quality is a set of semitone intervals above the root (iv) plus a
+// spelled-out name. These interval sets seed both the detection templates and
+// the diagram/strum chord-tone sets, so detection and display never disagree.
 const QUALS={
   ''    :{iv:[0,4,7],       full:'major'},
   'm'   :{iv:[0,3,7],       full:'minor'},
@@ -26,6 +102,8 @@ const QUALS={
 const QUAL_KEYS=Object.keys(QUALS);
 
 /* ── audio state ── */
+// AC is the AudioContext, analyser the single AnalyserNode both paths read.
+// freqData holds the current dB spectrum; binHz is the width of one FFT bin.
 let AC=null, analyser=null, micOn=false;
 let freqData=null, binHz=0;
 const chroma=new Float32Array(12);      // smoothed, normalized 0..1 (drives the ring)
@@ -34,11 +112,16 @@ let curChord=null;                       // {root,q,score} confirmed
 let lastLogT=0;
 
 /* ── detected-chord log for the staff ── */
+// Ordered history of committed chords, capped so the staff stays bounded.
 const chordLog=[];   // {root, q}
 const MAX_LOG=64;
 
 /* ═══════════ MIC ═══════════ */
+// Short id lookup used everywhere below.
 const $=id=>document.getElementById(id);
+// Open the mic and wire the analyser. getUserMedia disables echo cancel and
+// noise suppression (they eat harmonic content) but keeps auto gain so quiet
+// and loud instruments both reach a usable level.
 async function startMic(){
   try{
     AC=new (window.AudioContext||window.webkitAudioContext)();
@@ -48,6 +131,8 @@ async function startMic(){
     analyser.fftSize=16384;              // 2.9 Hz/bin — resolves semitones at low E
     analyser.smoothingTimeConstant=0.5;
     src.connect(analyser);
+    // Allocate the spectrum buffer and record bin width so every consumer maps
+    // frequency to bin index the same way.
     freqData=new Float32Array(analyser.frequencyBinCount);
     binHz=AC.sampleRate/analyser.fftSize;
     micOn=true;
@@ -59,6 +144,7 @@ async function startMic(){
     el.textContent='Microphone unavailable — check browser permissions and try again. ('+(e.name||e.message)+')';
   }
 }
+// The Start Listening button is the required user gesture that unlocks audio.
 $('micBtn').addEventListener('click',startMic);
 
 /* ════════════════════════════════════════════════════════════
@@ -76,6 +162,25 @@ $('micBtn').addEventListener('click',startMic);
      5. score-domain EMA smoothing with a switch margin
    GREP: extractPeaks | peaksToChroma | analyzeFrame
    ════════════════════════════════════════════════════════════ */
+// Detection tuning constants, grouped by pipeline stage. Values were fixed by
+// the offline benchmark above; each is named so a stage can be retuned in place.
+//   FMIN/FMAX ...... analysis band in Hz
+//   PEAK_* ......... peak floor: absolute dB and dB above local median
+//   MAX_PEAKS ...... keep only the loudest N peaks
+//   SAL_NH ......... harmonics summed when scoring a candidate pitch
+//   SAL_DECAY ...... per-harmonic weight falloff
+//   SUB_STRENGTH ... fraction of a found note's harmonics subtracted out
+//   MAX_NOTES ...... max simultaneous pitches extracted
+//   SAL_STOP ....... stop when salience drops below this share of the first
+//   MIDI_LO/HI ..... pitch search range in MIDI numbers
+//   TOL ............ half-window in semitones for matching a peak to a target
+//   TMPL_* ......... template harmonic residual depth and decay
+//   ROOT_W ......... extra template weight on the root pitch class
+//   BASS_BONUS ..... reward a template whose root is in the bass register
+//   CPOW ........... chroma compression exponent (tames dominant peaks)
+//   SM_ALPHA ....... per-frame EMA rate on template scores
+//   SWITCH_MARGIN .. how far a rival must beat the incumbent to take over
+//   SCORE_FLOOR .... reject a best match weaker than this
 const DP={
   FMIN:62,FMAX:2500,PEAK_FLOOR_DB:-78,PEAK_ABOVE_MED:10,MAX_PEAKS:34,
   SAL_NH:6,SAL_DECAY:0.75,SUB_STRENGTH:0.92,MAX_NOTES:8,SAL_STOP:0.16,
@@ -83,75 +188,114 @@ const DP={
   TMPL_NH:2,TMPL_DECAY:0.10,ROOT_W:1.15,BASS_BONUS:0.085,CPOW:0.7,
   SM_ALPHA:0.38,SWITCH_MARGIN:0.02,SCORE_FLOOR:0.55,
 };
+// Harmonic series offsets from a fundamental. HARM_ST is in exact semitones
+// (fractional: the 3rd harmonic is 19.02 st, not 19), used to place salience
+// probes on the true overtone frequencies. HARM_PC is the same rounded to
+// pitch classes, used when folding template harmonics into 12 bins.
 const HARM_ST=[0,12,19.02,24,27.86,31.02];
 const HARM_PC=[0,12,19,24,28];
 
 /* templates: near-binary + light harmonic residual, unit-normalized */
+// Precompute one 12-bin reference vector per (root, quality). Each chord tone
+// gets weight 1 (root gets ROOT_W), plus a faint TMPL_DECAY-scaled echo on its
+// first overtones so the template resembles the chroma a real instrument makes.
+// Unit-normalizing every vector turns the later dot product into a cosine.
 const detTemplates=[];
 const tmplIdx={};
 for(const q of QUAL_KEYS){
   for(let root=0;root<12;root++){
     const v=new Float32Array(12);
+    // Deposit each interval, weighting the root and adding TMPL_NH harmonics.
     QUALS[q].iv.forEach((iv,idx)=>{
       const nw=idx===0?DP.ROOT_W:1.0;
       for(let h=0;h<DP.TMPL_NH;h++)v[(root+iv+HARM_PC[h])%12]+=nw*Math.pow(DP.TMPL_DECAY,h);
     });
+    // L2-normalize so template magnitude never biases the cosine score.
     let n=0;for(let i=0;i<12;i++)n+=v[i]*v[i];n=Math.sqrt(n);
     for(let i=0;i<12;i++)v[i]/=n;
+    // Remember each template's array position by "root|quality" for fast lookup.
     tmplIdx[root+'|'+q]=detTemplates.length;
     detTemplates.push({root,q,v});
   }
 }
+// detScores: raw per-frame cosine. smScores: EMA-smoothed scores that decide.
 const detScores=new Float32Array(detTemplates.length);
 const smScores=new Float32Array(detTemplates.length);
+// Scratch buffers reused every frame to avoid per-frame allocation.
 const detPeaks=[];
 const bassChroma=new Float32Array(12);
 const rawChroma=new Float32Array(12);
+// tuningCents: running off-A440 estimate. noteCount/quietTicks: frame counters.
 let tuningCents=0,noteCount=0,quietTicks=0;
 
+// STAGE 1 — spectral peak picking. Walk the analysis band, keep local maxima
+// above an adaptive floor, and refine each to sub-bin frequency with a parabola.
 function extractPeaks(){
+  // Convert the Hz band to bin indices, staying one bin inside each edge so the
+  // three-point parabola never reads out of bounds.
   const i0=Math.max(2,Math.floor(DP.FMIN/binHz));
   const i1=Math.min(freqData.length-2,Math.ceil(DP.FMAX/binHz));
+  // Coarse median (every 4th bin) estimates the noise floor of this frame.
   let med=0,cnt=0;
   for(let i=i0;i<=i1;i+=4){med+=freqData[i];cnt++;}
   med=cnt?med/cnt:-100;
+  // A peak must clear both the absolute floor and the local median by a margin.
   const floor=Math.max(DP.PEAK_FLOOR_DB,med+DP.PEAK_ABOVE_MED);
   detPeaks.length=0;
   let energy=0;
   for(let i=i0;i<=i1;i++){
     const y=freqData[i];
     if(y<floor)continue;
+    // Keep only strict local maxima (higher than both neighbours).
     if(y<=freqData[i-1]||y<freqData[i+1])continue;
+    // Parabolic interpolation over the three dB samples gives the true peak
+    // offset (off) and amplitude between bins — sub-bin frequency accuracy.
     const a=freqData[i-1],b=y,c=freqData[i+1];
     const den=a-2*b+c;
     const off=den!==0?0.5*(a-c)/den:0;
     const f=(i+off)*binHz;
+    // Interpolated dB back to linear magnitude; also store MIDI number for later.
     const m=Math.pow(10,(b-0.25*(a-c)*off)/20);
     detPeaks.push({f,m,midi:69+12*Math.log2(f/440)});
     energy+=m;
   }
+  // Cap the peak list to the loudest MAX_PEAKS so salience search stays cheap.
   if(detPeaks.length>DP.MAX_PEAKS){
     detPeaks.sort((x,y)=>y.m-x.m);
     detPeaks.length=DP.MAX_PEAKS;
   }
+  // Summed peak magnitude is the input level gate the rest of the loop reads.
   level=Math.min(1,energy*9);
 }
+// STAGE 2 — tuning estimate. Each peak's deviation from its nearest semitone is
+// an angle on a circle; the magnitude-weighted circular mean gives how far the
+// whole instrument sits off A440, in cents. Circular averaging handles the wrap
+// at ±50 cents that a plain average would smear.
 function estimateTuning(){
   let sx=0,sy=0;
   for(const p of detPeaks){
+    // Deviation in fractional semitones ─▶ angle; weight by amplitude root.
     const dev=p.midi-Math.round(p.midi);
     const ang=dev*2*Math.PI,w=Math.sqrt(p.m);
     sx+=Math.cos(ang)*w;sy+=Math.sin(ang)*w;
   }
+  // No peaks: hold the last estimate. Otherwise mean angle back to cents.
   if(sx===0&&sy===0)return tuningCents;
   return Math.atan2(sy,sx)/(2*Math.PI)*100;
 }
+// STAGE 3 — iterative pitch salience with harmonic subtraction. Repeatedly find
+// the MIDI pitch whose harmonic comb collects the most peak energy, record it,
+// then remove that comb from the peaks so its overtones cannot be mistaken for
+// separate notes. This is what stops E's 3rd harmonic from reading as a B.
 function peaksToChroma(){
   rawChroma.fill(0);bassChroma.fill(0);noteCount=0;
   const nP=detPeaks.length;if(!nP)return;
+  // Shift every peak by the tuning estimate so probes align to true semitones.
   const tune=tuningCents/100;
+  // Working copies: mags is mutated by subtraction; midis is tuning-corrected.
   const mags=detPeaks.map(p=>p.m);
   const midis=detPeaks.map(p=>p.midi-tune);
+  // Find the strongest remaining peak within TOL semitones of a target pitch.
   function magNear(target){
     let best=-1,bm=0;
     for(let i=0;i<nP;i++){
@@ -161,6 +305,8 @@ function peaksToChroma(){
     }
     return{i:best,m:bm};
   }
+  // Salience of a candidate fundamental: decay-weighted sum of the magnitudes
+  // found at each of its harmonics. A real note lights its whole comb.
   function salience(m0){
     let s=0;
     for(let h=0;h<DP.SAL_NH;h++){
@@ -170,19 +316,25 @@ function peaksToChroma(){
     return s;
   }
   let firstSal=0;
+  // Extract up to MAX_NOTES pitches, strongest first.
   for(let it=0;it<DP.MAX_NOTES;it++){
+    // Scan the MIDI range for the most salient fundamental this round.
     let bestM=-1,bestS=0;
     for(let m0=DP.MIDI_LO;m0<=DP.MIDI_HI;m0++){
       const s=salience(m0);
       if(s>bestS){bestS=s;bestM=m0;}
     }
     if(bestM<0)break;
+    // Remember the first (loudest) salience; stop once notes fade below its share.
     if(it===0)firstSal=bestS;
     else if(bestS<firstSal*DP.SAL_STOP)break;
+    // Bank this pitch's energy into its chroma bin (and the bass bin if low).
     const pc=((bestM%12)+12)%12;
     rawChroma[pc]+=bestS;
     if(bestM<DP.BASS_MIDI)bassChroma[pc]+=bestS;
     noteCount++;
+    // SUBTRACTION: scale the found note's whole comb out of the peak list so the
+    // next round sees only energy this note did not explain.
     const f1=magNear(bestM);
     const A=f1.i>=0?f1.m:bestS*0.5;
     for(let h=0;h<DP.SAL_NH;h++){
@@ -190,18 +342,25 @@ function peaksToChroma(){
       if(r.i>=0)mags[r.i]=Math.max(0,mags[r.i]-A*Math.pow(DP.SAL_DECAY,h)*DP.SUB_STRENGTH);
     }
   }
+  // Compress with CPOW so a few loud tones do not swamp softer chord tones,
+  // then normalize the chroma to a 0..1 profile.
   let mx=0;
   for(let i=0;i<12;i++){rawChroma[i]=Math.pow(rawChroma[i],DP.CPOW);if(rawChroma[i]>mx)mx=rawChroma[i];}
   if(mx>0)for(let i=0;i<12;i++)rawChroma[i]/=mx;
+  // Normalize the bass chroma separately; it feeds only the bass-root bonus.
   let bmx=0;
   for(let i=0;i<12;i++)if(bassChroma[i]>bmx)bmx=bassChroma[i];
   if(bmx>0)for(let i=0;i<12;i++)bassChroma[i]/=bmx;
 }
 
 /* ═══════════ DECISION — smoothed scores + switch margin ═══════════ */
+// Minimum level below which a frame counts as silence.
 const GATE=0.045;
+// STAGE 4/5 — run the pipeline, score templates, and commit a smoothed chord.
+// Called at ~16 Hz from the main loop (every 0.06 s), not every render frame.
 function analyzeFrame(){
   extractPeaks();
+  // Silence: bleed smoothed scores toward zero and drop the chord after a beat.
   if(level<GATE||!detPeaks.length){
     quietTicks++;
     for(let i=0;i<smScores.length;i++)smScores[i]*=0.8;
@@ -216,9 +375,11 @@ function analyzeFrame(){
   // display chroma follows the cleaned profile
   for(let i=0;i<12;i++)chroma[i]+=(rawChroma[i]-chroma[i])*0.4;
   // cosine vs templates + bass bonus
+  // n normalizes rawChroma so the dot product below is a true cosine similarity.
   let n=0;for(let i=0;i<12;i++)n+=rawChroma[i]*rawChroma[i];
   if(n<1e-9)return;
   n=Math.sqrt(n);
+  // Score every template, add the bass-root bonus, and EMA-smooth each score.
   for(let t=0;t<detTemplates.length;t++){
     const tm=detTemplates[t];
     let s=0;for(let i=0;i<12;i++)s+=(rawChroma[i]/n)*tm.v[i];
@@ -227,6 +388,8 @@ function analyzeFrame(){
     smScores[t]+=(s-smScores[t])*DP.SM_ALPHA;
   }
   // single note: only one pitch class alive
+  // Count chroma bins above 0.3; one lone bin plus one extracted note means the
+  // player sounded a single note, so report it as a note, not a chord.
   let live=0,domPc=0;
   for(let i=0;i<12;i++)if(rawChroma[i]>0.3){live++;domPc=i;}
   if(noteCount<=1&&live<=1){
@@ -234,10 +397,13 @@ function analyzeFrame(){
     return;
   }
   // best smoothed chord
+  // Pick the top smoothed template; reject it if even the best is too weak.
   let bestI=0;
   for(let t=1;t<smScores.length;t++)if(smScores[t]>smScores[bestI])bestI=t;
   const bestS=smScores[bestI],bt=detTemplates[bestI];
   if(bestS<DP.SCORE_FLOOR)return;
+  // Hysteresis: the incumbent chord holds unless a rival beats it by the switch
+  // margin. This stops flicker between near-tied qualities of the same root.
   const curI=curChord&&curChord.q!=='·note'?tmplIdx[curChord.root+'|'+curChord.q]:-1;
   if(curI<0||bestI===curI||bestS>smScores[curI]+DP.SWITCH_MARGIN){
     if(!curChord||curChord.root!==bt.root||curChord.q!==bt.q)
@@ -246,6 +412,7 @@ function analyzeFrame(){
   }else{
     curChord.score=smScores[curI];
   }
+  // Feed the passage-level vote so the dominant banner can name the winner.
   if(curChord&&curChord.q!=='·note')
     domScores[curChord.root+'|'+curChord.q]=(domScores[curChord.root+'|'+curChord.q]||0)+1;
 }
@@ -254,8 +421,11 @@ function analyzeFrame(){
    Instant detection flickers between near-ties; this is a decaying
    vote with switch hysteresis, so the banner names the chord that is
    actually carrying the passage. */
+// domScores: decaying vote per "root|quality". domKey: the current leader.
 const domScores=Object.create(null);
 let domKey=null;
+// Paint the Likely Chords banner: rank the votes, hold the leader unless clearly
+// beaten, and size each pill by its share of the winner.
 function renderDominant(){
   const el=$('domList');
   let entries=Object.entries(domScores).sort((a,b)=>b[1]-a[1]);
@@ -269,6 +439,7 @@ function renderDominant(){
   let bk=entries[0][0];
   if(domKey&&bk!==domKey&&bv<=(domScores[domKey]||0)*1.3)bk=domKey;
   domKey=bk;
+  // Keep the top few chords worth showing, then force the leader into slot 1.
   entries=entries.filter(([k,v])=>v>bv*0.12).slice(0,5);
   entries.sort((a,b)=>(a[0]===bk?-1:b[0]===bk?1:b[1]-a[1]));
   const max=domScores[bk]||bv;
@@ -283,6 +454,8 @@ function renderDominant(){
     </div>`;
   }).join('');
 }
+// Commit a detected chord: update the center readout, log real chords to the
+// staff and tally, and drive the fretboard diagram. A null argument clears it.
 function setChord(c){
   curChord=c;
   const rEl=$('chordRoot'),qEl=$('chordQual'),cEl=$('chordConf');
@@ -301,6 +474,7 @@ function setChord(c){
   qEl.style.color=pcColor(c.root,52);
   $('st-chord').innerHTML='chord <b>'+NOTE_NAMES[c.root]+c.q.replace('·note','')+'</b>';
   // log real chords to the staff (rate-limited)
+  // Rate-limit to one entry per 380 ms so a held chord logs once, not per frame.
   const now=performance.now();
   if(!isNote && now-lastLogT>380){
     lastLogT=now;
@@ -316,12 +490,15 @@ function setChord(c){
 }
 
 /* ═══════════ SESSION TALLY — which chords live in this span ═══════════ */
+// Per-span histogram: how many times each chord has been committed since clear.
 const tally=Object.create(null);
+// Increment one chord's count and repaint the Most Detected list.
 function bumpTally(root,q){
   const k=root+'|'+q;
   tally[k]=(tally[k]||0)+1;
   renderTally();
 }
+// Render the top six tallied chords as labeled proportional bars.
 function renderTally(){
   const el=$('tally');
   const entries=Object.entries(tally).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -340,9 +517,13 @@ function renderTally(){
 }
 
 /* ═══════════ CHROMA RING ═══════════ */
+// The wheel behind the chord name: 12 wedges, one per pitch class, each growing
+// outward with its chroma energy. Tones of the current chord are lit and ringed.
 const ringC=$('ringCanvas'),ringX=ringC.getContext('2d');
+// Per-wedge smoothed height so wedges ease rather than jump between frames.
 let ringPulse=new Float32Array(12);
 function drawRing(){
+  // Match the backing store to CSS size at device pixel ratio (capped at 2).
   const dpr=Math.min(devicePixelRatio||1,2);
   const w=ringC.clientWidth,h=ringC.clientHeight;
   if(w<10||h<10)return;
@@ -352,12 +533,16 @@ function drawRing(){
   const cx=w/2,cy=h/2;
   const R1=Math.min(w,h)*0.335;              // inner radius
   const RMAX=Math.min(w,h)*0.475;            // max outer
+  // Collect the pitch classes belonging to the current chord (or lone note).
   const chordPCs=new Set();
   if(curChord&&QUALS[curChord.q])QUALS[curChord.q].iv.forEach(iv=>chordPCs.add((curChord.root+iv)%12));
   if(curChord&&curChord.q==='·note')chordPCs.add(curChord.root);
   for(let pc=0;pc<12;pc++){
+    // Ease each wedge toward chroma*level; the 2.2 gain exaggerates weak tones.
     ringPulse[pc]+=(chroma[pc]*level*2.2-ringPulse[pc])*0.3;
     const v=Math.min(1,ringPulse[pc]);
+    // Wedge angular span: C at top (-90 deg), 30 deg per pitch class, 0.42 of a
+    // slot half-width leaves a gap between wedges. Outer radius grows with v.
     const a0=-Math.PI/2+(pc-0.42)*Math.PI/6, a1=-Math.PI/2+(pc+0.42)*Math.PI/6;
     const R2=R1+6+(RMAX-R1-6)*v;
     const inChord=chordPCs.has(pc);
@@ -389,16 +574,21 @@ function drawRing(){
 /* ════════════════════════════════════════════════════════════
    GUITAR & VIOLIN DIAGRAMS
    ════════════════════════════════════════════════════════════ */
+// Which instrument the right panel draws, and which chord/voicing it shows.
+// diagDirty flags the canvas for a repaint on the next loop iteration.
 let instrument='guitar';
 let diagChord={root:0,q:''};   // what's drawn on the right
 let voicingIdx=0;
 let diagDirty=true;
 
+// Instrument selector: switch the active instrument and rebuild its voicings.
 $('instSeg').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b)return;
   [...$('instSeg').children].forEach(x=>x.classList.remove('on'));
   b.classList.add('on');instrument=b.dataset.i;diagDirty=true;buildVoicingBtns();
 });
+// Set the diagram's chord, resetting to its first voicing. Skips redundant work
+// when the chord has not changed, so a held chord does not thrash the diagram.
 function setDiagramChord(root,q){
   if(diagChord.root===root&&diagChord.q===q)return;
   diagChord={root,q};voicingIdx=0;diagDirty=true;buildVoicingBtns();
@@ -416,14 +606,20 @@ const OPEN_SHAPES={
   '9|sus4':[-1,0,2,2,3,0],'2|sus4':[-1,-1,0,2,3,3],'4|sus4':[0,2,2,2,0,0],
   '2|dim':[-1,-1,0,1,3,1],
 };
+// Movable barre shapes rooted on the low E and A strings (open-position forms
+// at fret 0). Sliding one up by f frets transposes it, giving every root.
 const E_SHAPE={'':[0,2,2,1,0,0],'m':[0,2,2,0,0,0],'7':[0,2,0,1,0,0],'m7':[0,2,0,0,0,0],'maj7':[0,-1,1,1,0,-1],'sus4':[0,2,2,2,0,0],'sus2':null,'dim':null};
 const A_SHAPE={'':[-1,0,2,2,2,0],'m':[-1,0,2,2,1,0],'7':[-1,0,2,0,2,0],'m7':[-1,0,2,0,1,0],'maj7':[-1,0,2,1,2,0],'sus4':[-1,0,2,2,3,0],'sus2':[-1,0,2,2,0,0],'dim':[-1,0,1,2,1,-1]};
 const D_DIM=[-1,-1,0,1,3,1]; // movable dim rooted on D string
+// Transpose a shape up f frets, leaving muted strings (-1) muted.
 function barreAt(shape,f){return shape.map(v=>v<0?-1:v+f);}
+// Assemble the playable voicings for a guitar chord: the open form if one exists
+// plus movable E-shape and A-shape barres, ordered lowest position first.
 function guitarVoicings(root,q){
   const out=[];
   const open=OPEN_SHAPES[root+'|'+q];
   if(open)out.push({name:'Open',frets:open,pos:0});
+  // Barre fret = distance from the shape's home root (E=4, A=9) to this root.
   const eF=((root-4)%12+12)%12, aF=((root-9)%12+12)%12;
   if(E_SHAPE[q]&&eF>=1&&eF<=11)out.push({name:eF+'fr · E-shape',frets:barreAt(E_SHAPE[q],eF),barre:eF,pos:eF});
   if(A_SHAPE[q]&&aF>=1&&aF<=11)out.push({name:aF+'fr · A-shape',frets:barreAt(A_SHAPE[q],aF),barre:aF,pos:aF});
@@ -432,6 +628,8 @@ function guitarVoicings(root,q){
   if(!out.length)out.push({name:'—',frets:[-1,-1,-1,-1,-1,-1]});
   return out;
 }
+// Build the row of voicing-picker buttons for the current chord and wire each
+// to select its voicing. Only guitar and ukulele have selectable voicings.
 function buildVoicingBtns(){
   const el=$('voicings');
   if(instrument!=='guitar'&&instrument!=='ukulele'){el.innerHTML='';return;}
@@ -441,10 +639,13 @@ function buildVoicingBtns(){
   [...el.children].forEach(b=>b.addEventListener('click',()=>{voicingIdx=+b.dataset.v;diagDirty=true;buildVoicingBtns();}));
 }
 
+// Open-string MIDI pitches per instrument, low string first. These map a
+// (string, fret) pair to a pitch class as (MIDI+fret)%12 throughout the diagrams.
 const GTR_MIDI=[40,45,50,55,59,64];
 const UKE_MIDI=[67,60,64,69];            // g C E A — re-entrant high-g
 const BASS_MIDI=[28,33,38,43], BASS_NAMES=['E','A','D','G'];
 
+// Dispatch to the right voicing generator for the active instrument.
 function voicingsFor(root,q){
   return instrument==='ukulele'?ukeVoicings(root,q):guitarVoicings(root,q);
 }
@@ -452,12 +653,16 @@ function voicingsFor(root,q){
 /* ── ukulele: exhaustive first-positions search ──
    4 strings, window of 4 frets; full chord-tone coverage required,
    except 4-note chords may drop the 5th (standard uke practice). */
+// Memoize results by "root|quality"; the search below is exhaustive.
 const _ukeCache=Object.create(null);
 function ukeVoicings(root,q){
   const ck=root+'|'+q;
   if(_ukeCache[ck])return _ukeCache[ck];
+  // The pitch classes this chord must contain.
   const need=(QUALS[q]||QUALS['']).iv.map(iv=>(root+iv)%12);
   const found=[];
+  // Slide a 4-fret window up the neck; at each base position enumerate, per
+  // string, the frets in reach that land on a needed chord tone.
   for(let base=0;base<=9;base++){
     const opts=UKE_MIDI.map(m=>{
       const o=[];
@@ -467,23 +672,29 @@ function ukeVoicings(root,q){
       }
       return o;
     });
+    // If any string can reach no chord tone, this base yields no voicing.
     if(opts.some(o=>!o.length))continue;
+    // Cartesian product of the per-string options: every candidate fingering.
     for(const f0 of opts[0])for(const f1 of opts[1])for(const f2 of opts[2])for(const f3 of opts[3]){
       const fr=[f0,f1,f2,f3];
       const pcs=new Set(fr.map((f,st)=>(UKE_MIDI[st]+f)%12));
+      // Require full chord-tone coverage.
       let ok=need.every(pc=>pcs.has(pc));
       let dropped5=false;
+      // 4-note chords may omit the 5th (index 2), standard on 4 strings.
       if(!ok&&need.length===4){
         ok=need.every((pc,idx)=>idx===2||pcs.has(pc));
         dropped5=ok;
       }
       if(!ok)continue;
+      // Reject spans wider than 4 frets; score favors low, tight, complete shapes.
       const pos=fr.filter(f=>f>0);
       const lo=pos.length?Math.min(...pos):0, hi=pos.length?Math.max(...pos):0;
       if(hi-lo>3)continue;
       found.push({frets:fr,base:lo,score:fr.reduce((a,b)=>a+b,0)+hi*0.6+(dropped5?2.5:0)});
     }
   }
+  // Easiest first, then keep up to 3 distinct fingerings.
   found.sort((a,b)=>a.score-b.score);
   const seen=new Set(),out=[];
   for(const v of found){
@@ -503,8 +714,10 @@ function drawBass(){
   if(!fitDiag())return;
   const w=diagC.clientWidth,h=diagC.clientHeight;
   diagX.clearRect(0,0,w,h);
+  // Chord-tone pitch classes to mark on the fretboard.
   const tones=new Set();
   (QUALS[diagChord.q]||QUALS['']).iv.forEach(iv=>tones.add((diagChord.root+iv)%12));
+  // Layout: padding gutters and NF frets. sx/fy map string index and fret to px.
   const pad={t:64,b:30,l:42,r:24}, NF=5;
   const gw=w-pad.l-pad.r,gh=h-pad.t-pad.b;
   const sx=i=>pad.l+gw*i/3, fy=f=>pad.t+gh*f/NF;
@@ -534,6 +747,8 @@ function drawBass(){
     diagX.fillText(BASS_NAMES[st],sx(st),fy(NF)+20);
   }
   // chord-tone markers
+  // For every string/fret in range, dot the chord tones; the root gets a ring.
+  // Open notes (fret 0) draw as an open circle above the nut.
   const dR=Math.min(12,gw/9);
   for(let st=0;st<4;st++)for(let f=0;f<=NF;f++){
     const pc=(BASS_MIDI[st]+f)%12;
@@ -560,6 +775,7 @@ function drawBass(){
   diagX.fillText('chord tones · ◎ = root',w/2,h-6);
 }
 
+// Route to the drawing routine for the active instrument.
 function redrawDiagram(){
   if(instrument==='guitar')drawChordBox(GTR_MIDI);
   else if(instrument==='ukulele')drawChordBox(UKE_MIDI);
@@ -568,6 +784,8 @@ function redrawDiagram(){
 }
 
 const diagC=$('diagCanvas'),diagX=diagC.getContext('2d');
+// Size the diagram canvas backing store to its CSS box at device pixel ratio.
+// Returns false when the element is collapsed (for example a hidden mobile tab).
 function fitDiag(){
   const dpr=Math.min(devicePixelRatio||1,2);
   const w=diagC.clientWidth,h=diagC.clientHeight;
@@ -576,16 +794,22 @@ function fitDiag(){
   diagX.setTransform(dpr,0,0,dpr,0,0);
   return true;
 }
+// The chord name shown above each diagram.
 function chordTitle(){return NOTE_NAMES[diagChord.root]+diagChord.q;}
 
+// Standard vertical chord box for guitar or ukulele: strings as columns, frets
+// as rows, one selected voicing drawn as fretted dots, open circles, and mutes.
 function drawChordBox(MIDI){
   const NS=MIDI.length;
   if(!fitDiag())return;
   const w=diagC.clientWidth,h=diagC.clientHeight;
   diagX.clearRect(0,0,w,h);
+  // Resolve the chosen voicing to a fret array.
   const vs=voicingsFor(diagChord.root,diagChord.q);
   const v=vs[Math.min(voicingIdx,vs.length-1)];
   const frets=v.frets;
+  // Choose the window: below the 5th fret show from the nut, otherwise scroll to
+  // the lowest fretted note so a high barre shape stays framed.
   const played=frets.filter(f=>f>=0);
   const fMax=played.length?Math.max(...played):3;
   const fMinPos=played.filter(f=>f>0);
@@ -620,6 +844,7 @@ function drawChordBox(MIDI){
     diagX.fillText(base+'fr',pad.l-8,fy(0.5)+4);
   }
   // barre band — only across the strings actually fretted at the barre
+  // Draw the barre as a rounded band spanning just the strings held at that fret.
   if(v.barre&&base>0){
     const barred=frets.map((f,s)=>f===v.barre?s:-1).filter(s=>s>=0);
     if(barred.length>1){
@@ -632,6 +857,8 @@ function drawChordBox(MIDI){
     }
   }
   // dots / open / mute
+  // Per string: muted (✕ above nut), open (ring above nut), or a fretted dot
+  // labeled with its note name.
   const dR=Math.min(12.5,gw/12);
   for(let s=0;s<NS;s++){
     const f=frets[s];
@@ -661,10 +888,13 @@ function drawChordBox(MIDI){
 
 /* violin: first-position map of chord tones on G-D-A-E */
 const VLN_MIDI=[55,62,69,76], VLN_NAMES=['G','D','A','E'];
+// Fingerboard map for bowed strings: every chord tone reachable in first
+// position, since violin has no frets and players find notes by chord tone.
 function drawViolin(){
   if(!fitDiag())return;
   const w=diagC.clientWidth,h=diagC.clientHeight;
   diagX.clearRect(0,0,w,h);
+  // Chord-tone pitch classes to place on the four strings.
   const tones=new Set();
   const q=QUALS[diagChord.q]||QUALS[''];
   q.iv.forEach(iv=>tones.add((diagChord.root+iv)%12));
@@ -706,6 +936,8 @@ function drawViolin(){
     diagX.fillText(VLN_NAMES[s],sx(s),pad.t+gh+24);
   }
   // chord-tone markers (open + stopped)
+  // Scan each string across the first-position semitone range; dot every chord
+  // tone, ring the root, and draw open strings above the nut.
   const dR=Math.min(13,gw/9);
   for(let s=0;s<4;s++){
     for(let st=0;st<=NPOS;st++){
@@ -741,7 +973,9 @@ function drawViolin(){
    waveform, below = 20 log-spaced band bars (low at bottom) with
    peak-hold ticks, inferno-colored by level like the spectrogram. */
 const meterC=$('meterCanvas'),meterX=meterC.getContext('2d');
+// 20 log-spaced bands from 60 Hz to 4200 Hz; MLOGR is the total log span.
 const MBANDS=20,MF0=60,MF1=4200,MLOGR=Math.log(MF1/MF0);
+// Slowly decaying peak-hold per band.
 const meterPeaks=new Float32Array(MBANDS);
 let scopeBuf=null,scopePhase=0;
 function drawMeter(){
@@ -758,6 +992,7 @@ function drawMeter(){
   meterX.strokeStyle='rgba(150,200,255,0.1)';meterX.lineWidth=1;
   meterX.beginPath();meterX.moveTo(4,mid);meterX.lineTo(cw-4,mid);meterX.stroke();
   if(micOn){
+    // Read the raw waveform and trace it; glow grows with input level.
     if(!scopeBuf)scopeBuf=new Float32Array(2048);
     analyser.getFloatTimeDomainData(scopeBuf);
     const amp=Math.min(1,level*4+0.15);
@@ -786,6 +1021,8 @@ function drawMeter(){
   const bandH=(bBot-bTop)/MBANDS;
   const barX=4,barW=cw-8;
   meterX.textBaseline='middle';
+  // Each band: take the loudest bin in its frequency range, normalize to the
+  // display dB window, then draw the bar and a decaying peak-hold tick.
   for(let b=0;b<MBANDS;b++){
     const f0=MF0*Math.exp(b/MBANDS*MLOGR);
     const f1=MF0*Math.exp((b+1)/MBANDS*MLOGR);
@@ -827,6 +1064,7 @@ function drawMeter(){
 /* ═══════════ STAFF ═══════════ */
 const staffC=$('staffCanvas'),staffX=staffC.getContext('2d');
 let staffDirty=true;
+// Clear button: reset the log, tally, and dominant votes, then repaint empty.
 $('clearStaff').addEventListener('click',()=>{
   chordLog.length=0;
   for(const k in tally)delete tally[k];
@@ -836,13 +1074,19 @@ $('clearStaff').addEventListener('click',()=>{
   $('st-log').textContent='0 logged';staffDirty=true;
 });
 /* diatonic step index of pc for staff placement (C=0..B=6) + sharp flag */
+// PC_STEP maps a pitch class to its letter step so sharps share a line with the
+// natural below them; PC_SHARP flags which pitch classes draw a sharp glyph.
 const PC_STEP=[0,0,1,1,2,3,3,4,4,5,5,6];
 const PC_SHARP=[0,1,0,1,0,0,1,0,1,0,1,0];
+// Render the running staff: five lines, treble clef, bar lines every four
+// slots, and one notehead per logged chord root, colored by pitch class.
 function drawStaff(){
   staffDirty=false;
   const dpr=Math.min(devicePixelRatio||1,2);
   const H=132;
+  // SLOT is the horizontal step per chord; LEAD reserves room for clef and meter.
   const SLOT=64, LEAD=86;
+  // Width grows with the log so the strip scrolls; minimum 16 slots keeps it full.
   const n=Math.max(16,chordLog.length+2);
   const W=Math.max($('staffScroll').clientWidth,LEAD+n*SLOT+30);
   staffC.style.width=W+'px';
@@ -872,6 +1116,8 @@ function drawStaff(){
     staffX.beginPath();staffX.moveTo(x,lineY(0));staffX.lineTo(x,lineY(4));staffX.stroke();
   }
   // notes — roots placed E4..D5 window for readability
+  // One notehead per logged chord: compute its staff row from the diatonic step,
+  // add a ledger line and sharp where needed, then draw head, stem, and symbol.
   staffX.textAlign='center';
   chordLog.forEach((e,i)=>{
     const x=LEAD+i*SLOT+6;
@@ -911,6 +1157,7 @@ function drawStaff(){
     staffX.fillText('chords you play will land here, in order…',LEAD+10,lineY(2)+5);
   }
   // autoscroll to latest
+  // Keep the newest chord in view as the log grows.
   const sc=$('staffScroll');sc.scrollLeft=sc.scrollWidth;
 }
 
@@ -921,15 +1168,21 @@ function drawStaff(){
    GREP: autoCorrelate | updateTuner | drawSpec
    ════════════════════════════════════════════════════════════ */
 const specC=$('specCanvas'),specX=specC.getContext('2d');
+// Spectrogram frequency window (70..1300 Hz, log-scaled) and its total log span.
 const SFMIN=70,SFMAX=1300,SLOGR=Math.log(SFMAX/SFMIN);
 const DB_LO=-90,DB_HI=-25;               // display dynamic range
 const AXIS_L=36,AXIS_R=22,AXIS_T=6,AXIS_B=16;  // CSS-px gutters
+// Standard guitar tuning: name, octave, frequency, and pitch class per string.
+// Drives the reference lines, the tuning ladder, and the string buttons.
 const GTR_STRINGS=[
   {n:'E',o:2,f:82.41,pc:4},{n:'A',o:2,f:110.00,pc:9},{n:'D',o:3,f:146.83,pc:2},
   {n:'G',o:3,f:196.00,pc:7},{n:'B',o:3,f:246.94,pc:11},{n:'E',o:4,f:329.63,pc:4}
 ];
+// Latest detected pitch (Hz), its pitch class, and cents error for the tuner.
 let lastPitch=0,lastPitchPc=0,lastCents=999;
 let tuneTarget=-1;   // index into GTR_STRINGS, -1 = auto (follow detected pitch)
+// The string the tuner measures against: a locked one, or the nearest string to
+// the detected pitch when in auto mode (null if nothing is close enough).
 function currentTuneTarget(){
   if(tuneTarget>=0)return GTR_STRINGS[tuneTarget];
   if(lastPitch>0){
@@ -944,6 +1197,8 @@ function currentTuneTarget(){
 }
 
 /* inferno colormap LUT — perceptually uniform, amplitude → color */
+// Precompute a 256-entry RGB lookup table by linearly interpolating the inferno
+// control points, so the spectrogram maps normalized dB to color with one index.
 const INFERNO=[[0,0,0.016],[0.087,0.044,0.224],[0.258,0.039,0.406],[0.416,0.090,0.433],
   [0.578,0.148,0.404],[0.735,0.215,0.330],[0.865,0.316,0.226],[0.955,0.455,0.120],
   [0.987,0.622,0.145],[0.964,0.790,0.318],[0.988,0.998,0.645]];
@@ -953,25 +1208,33 @@ for(let i=0;i<256;i++){
   for(let c=0;c<3;c++)ILUT[i*3+c]=255*(INFERNO[k][c]+fr*(INFERNO[k+1][c]-INFERNO[k][c]));
 }
 
+// Frequency grid lines; entries with lbl are labeled, the rest are faint guides.
 const FREQ_TICKS=[
   {f:80,lbl:'80'},{f:100},{f:150,lbl:'150'},{f:200},{f:300,lbl:'300'},
   {f:500,lbl:'500'},{f:700},{f:1000,lbl:'1k'},{f:1300}
 ];
 
+// Offscreen waterfall buffer, its per-column image scratch, and the timestamp of
+// each column so the time ruler can label real elapsed seconds.
 let specBuf=null,specBufX=null,colImg=null,specPW=0,specPH=0,specDpr=1;
 let colTimes=[];
 function colAt(tms){ // first column with timestamp ≥ tms
+  // Binary search the column times for the ruler tick placement.
   let lo=0,hi=colTimes.length-1;
   while(lo<hi){const m=(lo+hi)>>1;if(colTimes[m]<tms)lo=m+1;else hi=m;}
   return lo;
 }
 
+// Draw the scrolling spectrogram: shift the buffer left one pixel, paint a fresh
+// FFT column on the right, then overlay axes, string lines, and the tuning ladder.
 function drawSpec(){
   const cssW=specC.clientWidth,cssH=specC.clientHeight;
   if(cssW<80||cssH<80)return;
   const dpr=Math.min(devicePixelRatio||1,2);
+  // Plot area in device pixels, inside the axis gutters.
   const pw=Math.round((cssW-AXIS_L-AXIS_R)*dpr);
   const ph=Math.round((cssH-AXIS_T-AXIS_B)*dpr);
+  // On first run or resize, allocate the offscreen buffer and rescale old content.
   if(specC.width!==Math.round(cssW*dpr)||specC.height!==Math.round(cssH*dpr)||pw!==specPW||ph!==specPH){
     specC.width=Math.round(cssW*dpr);specC.height=Math.round(cssH*dpr);
     const nb=document.createElement('canvas');nb.width=pw;nb.height=ph;
@@ -987,9 +1250,11 @@ function drawSpec(){
   /* ── new column: exact per-device-pixel sampling of the FFT ──
      Rows covering >1 bin take the max (peaks never vanish);
      rows finer than a bin interpolate linearly (no staircase). */
+  // Scroll one pixel left, then build the new rightmost column top-down.
   specBufX.drawImage(specBuf,-1,0);
   const D=colImg.data,NB=freqData.length;
   for(let y=0;y<ph;y++){
+    // Log-map this row back to a frequency range, then to FFT bin indices.
     const f1=SFMIN*Math.exp((1-y/ph)*SLOGR);
     const f0=SFMIN*Math.exp((1-(y+1)/ph)*SLOGR);
     const b0=f0/binHz,b1=f1/binHz;
@@ -1003,10 +1268,12 @@ function drawSpec(){
       const bc=(b0+b1)/2,i=Math.max(1,Math.min(NB-2,Math.floor(bc))),fr=bc-i;
       db=freqData[i]+(freqData[i+1]-freqData[i])*fr;
     }
+    // Normalize dB to 0..1 and look up the inferno color for this pixel.
     let t=(db-DB_LO)/(DB_HI-DB_LO);t=t<0?0:t>1?1:t;
     const li=(t*255)|0;
     D[y*4]=ILUT[li*3];D[y*4+1]=ILUT[li*3+1];D[y*4+2]=ILUT[li*3+2];D[y*4+3]=255;
   }
+  // Blit the fresh column and advance the per-column timestamp ring.
   specBufX.putImageData(colImg,pw-1,0);
   colTimes.push(performance.now());colTimes.shift();
 
@@ -1017,6 +1284,7 @@ function drawSpec(){
   specX.drawImage(specBuf,Math.round(AXIS_L*dpr),Math.round(AXIS_T*dpr));
   specX.setTransform(dpr,0,0,dpr,0,0);
   const px0=AXIS_L,py0=AXIS_T,pwc=pw/dpr,phc=ph/dpr;
+  // Map any frequency to its y in the plot (log axis, low at the bottom).
   const yOf=f=>py0+phc*(1-Math.log(f/SFMIN)/SLOGR);
 
   // frequency grid + tick marks + labels
@@ -1052,6 +1320,8 @@ function drawSpec(){
   specX.fillText('now ▸',px0+pwc,py0+phc+5);
 
   // guitar string reference lines — dashed, labeled at the right edge
+  // Dashed line at each open-string frequency; the active target is dimmed here
+  // because the tuning ladder below draws it in full.
   const tgt=currentTuneTarget();
   specX.setLineDash([3,3]);
   specX.textBaseline='bottom';
@@ -1090,6 +1360,8 @@ function drawSpec(){
     }
     specX.setLineDash([]);
     // measured comb: where the played harmonics actually are right now
+    // Draw arrowheads at the played fundamental and its overtones; when they sit
+    // on the target's rungs the string is in tune. Green means within 5 cents.
     if(lastPitch>0&&Math.abs(Math.log2(lastPitch/tgt.f))<0.45){
       const inTune=Math.abs(lastCents)<=5;
       const mCol=inTune?'#64c864':pcColor(lastPitchPc,64);
@@ -1109,6 +1381,7 @@ function drawSpec(){
   }
 
   // dB colorbar in the right gutter
+  // Vertical legend from DB_HI (top) to DB_LO (bottom) using the same LUT.
   const cbX=px0+pwc+5,cbW=5;
   for(let y=0;y<phc;y++){
     const li=(255*(1-y/phc))|0;
@@ -1128,6 +1401,7 @@ function drawSpec(){
   specX.restore();
 
   // detected fundamental crosshair (comb markers cover the rest when targeting)
+  // In auto mode, mark the detected pitch with a faint line and an arrowhead.
   if(lastPitch>=SFMIN&&lastPitch<=SFMAX){
     const y=yOf(lastPitch);
     specX.strokeStyle=pcColorA(lastPitchPc,0.35);specX.lineWidth=1;
@@ -1146,34 +1420,46 @@ function drawSpec(){
 }
 
 /* classic time-domain autocorrelation (ACF2+) */
+// Estimate one fundamental frequency from a waveform window. The waveform aligns
+// with copies of itself shifted by its period, so the first strong peak of the
+// autocorrelation after the initial dip gives the period; sr/period is the pitch.
 let tdBuf=null;
 function autoCorrelate(buf,sr){
   const SIZE=buf.length;
+  // Reject near-silence by RMS so noise never produces a spurious pitch.
   let rms=0;for(let i=0;i<SIZE;i++)rms+=buf[i]*buf[i];
   rms=Math.sqrt(rms/SIZE);
   if(rms<0.006)return -1;
+  // Trim quiet head and tail to the first samples above a threshold (ACF2+ trick).
   let r1=0,r2=SIZE-1;const thres=0.2;
   for(let i=0;i<SIZE/2;i++)if(Math.abs(buf[i])<thres){r1=i;break;}
   for(let i=1;i<SIZE/2;i++)if(Math.abs(buf[SIZE-i])<thres){r2=SIZE-i;break;}
   const b2=buf.slice(r1,r2);const N=b2.length;
   if(N<64)return -1;
+  // Autocorrelation: c[lag] is the overlap of the signal with itself at lag.
   const c=new Float32Array(N);
   for(let lag=0;lag<N;lag++){let s=0;for(let i=0;i<N-lag;i++)s+=b2[i]*b2[i+lag];c[lag]=s;}
+  // Skip past the descending zero-lag lobe, then take the tallest later peak.
   let d=0;while(d<N-1&&c[d]>c[d+1])d++;
   let maxval=-1,maxpos=-1;
   for(let i=d;i<N;i++)if(c[i]>maxval){maxval=c[i];maxpos=i;}
   let T0=maxpos;if(T0<=0)return -1;
+  // Parabolic interpolation around the peak refines the period to sub-sample.
   const x1=c[T0-1],x2=c[T0],x3=T0+1<N?c[T0+1]:x2;
   const a=(x1+x3-2*x2)/2,b=(x3-x1)/2;
   if(a)T0=T0-b/(2*a);
   return sr/T0;
 }
 
+// Run the pitch detector on the newest waveform and update the tuner readout:
+// note name, frequency, cents error, and the needle position.
 function updateTuner(){
   if(!tdBuf)tdBuf=new Float32Array(analyser.fftSize);
   analyser.getFloatTimeDomainData(tdBuf);
+  // Use a 2048-sample window: enough cycles for low strings, still cheap.
   const p=autoCorrelate(tdBuf.subarray(0,2048),AC.sampleRate);
   const nEl=$('tunerNote'),fEl=$('tunerFreq'),nd=$('centsNeedle');
+  // Outside the instrument's plausible range: blank the tuner.
   if(p<50||p>1400){
     lastPitch=0;lastCents=999;
     nEl.textContent='—';nEl.style.color='var(--text-faint)';nEl.style.textShadow='none';
@@ -1181,6 +1467,7 @@ function updateTuner(){
     nd.style.left='50%';nd.style.background='var(--text-faint)';nd.style.boxShadow='none';
     return;
   }
+  // Convert Hz to MIDI, find the nearest note, and the cents error from it.
   const midi=69+12*Math.log2(p/440), nearest=Math.round(midi);
   const cents=Math.round((midi-nearest)*100);
   const pc=((nearest%12)+12)%12, oct=Math.floor(nearest/12)-1;
@@ -1203,6 +1490,8 @@ function updateTuner(){
 }
 
 /* reference-tone buttons: tap a string to hear it */
+// Play a 2.2 s reference pitch: one triangle oscillator through a gain envelope
+// with a fast attack and exponential release.
 function playRef(freq){
   if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();
   if(AC.state==='suspended')AC.resume();
@@ -1216,6 +1505,7 @@ function playRef(freq){
   o.start(t);o.stop(t+2.3);
 }
 const strBtns=[];
+// Reflect the locked/auto target in the string buttons and the label.
 function syncStrBtns(){
   strBtns.forEach((b,i)=>b.classList.toggle('pinned',i===tuneTarget));
   const lbl=$('tuneTargetLbl');
@@ -1226,6 +1516,8 @@ function syncStrBtns(){
     lbl.textContent='target auto · tap a string to lock';
   }
 }
+// Build one button per string: tapping plays its reference tone and toggles the
+// tuning lock onto that string.
 GTR_STRINGS.forEach((s,i)=>{
   const b=document.createElement('button');
   b.className='strBtn';
@@ -1241,11 +1533,15 @@ GTR_STRINGS.forEach((s,i)=>{
 syncStrBtns();
 
 /* ═══════════ STRUM SYNTH ═══════════ */
+// Audibly preview the shown chord. Collect the MIDI pitches for the current
+// instrument and voicing, then play them staggered so it sounds like a strum.
 function strum(){
   if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();
   if(AC.state==='suspended')AC.resume();
+  // stag is the delay between strings; dur is each note's length.
   let midis=[],stag=0.055,dur=2.4;
   if(instrument==='guitar'||instrument==='ukulele'){
+    // Fretted strings of the selected voicing become pitches (open MIDI + fret).
     const MIDI=instrument==='guitar'?GTR_MIDI:UKE_MIDI;
     const vs=voicingsFor(diagChord.root,diagChord.q);
     const v=vs[Math.min(voicingIdx,vs.length-1)];
@@ -1255,15 +1551,18 @@ function strum(){
     midis=[base,base+7,base+12];                    // root · fifth · octave walk
     stag=0.22;dur=2.9;
   }else{
+    // Violin (and fallback): block chord tones around middle C plus a low root.
     const q=QUALS[diagChord.q]||QUALS[''];
     midis=q.iv.map(iv=>60+((diagChord.root+iv)%12)+(diagChord.root+iv>=12?12:0));
     midis.unshift(48+diagChord.root);
   }
+  // One master gain feeds the output; each note gets its own voice and envelope.
   const t0=AC.currentTime+0.03;
   const master=AC.createGain();master.gain.value=0.5;master.connect(AC.destination);
   midis.forEach((mn,i)=>{
     const f=440*Math.pow(2,(mn-69)/12);
     const t=t0+i*stag;
+    // Triangle fundamental plus a faint detuned octave sine for a warmer timbre.
     const o1=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain(),g2=AC.createGain();
     o1.type='triangle';o1.frequency.value=f;
     o2.type='sine';o2.frequency.value=f*2;o2.detune.value=4;g2.gain.value=0.18;
@@ -1277,35 +1576,48 @@ function strum(){
 $('strumBtn').addEventListener('click',strum);
 
 /* ═══════════ MAIN LOOP ═══════════ */
+// Frame timers: last frame time, FPS accumulators, and per-task interval clocks.
 let last=0,fc=0,ft=0,anTick=0,tunTick=0,domTick=0;
+// The requestAnimationFrame driver. It reads the spectrum once, then runs each
+// task on its own cadence so the expensive detection does not run every frame.
 function loop(t){
   requestAnimationFrame(loop);
+  // Delta time, clamped so a background tab does not produce a huge step.
   const dt=Math.min((t-last)/1000,0.1);last=t;
+  // FPS counter, updated twice a second.
   fc++;ft+=dt;if(ft>=0.5){$('st-fps').textContent=Math.round(fc/ft)+' fps';fc=0;ft=0;}
   if(micOn){
+    // One spectrum read per frame feeds both the spectrogram and detection.
     analyser.getFloatFrequencyData(freqData);
     drawSpec();
+    // Chord detection at ~16 Hz; update the match-confidence readout.
     anTick+=dt;
     if(anTick>0.06){anTick=0;analyzeFrame();
       if(curChord&&curChord.score)$('chordConf').textContent=Math.round(curChord.score*100)+' % match';}
+    // Tuner at ~11 Hz.
     tunTick+=dt;
     if(tunTick>0.09){tunTick=0;updateTuner();}
+    // Dominant-chord banner at 4 Hz.
     domTick+=dt;
     if(domTick>0.25){domTick=0;renderDominant();}
     $('st-level').innerHTML='level <b>'+(level*100|0)+'</b>';
     $('st-tune').innerHTML='tuning <b>'+(tuningCents>0?'+':'')+tuningCents.toFixed(0)+'¢</b>';
   }
+  // Always animate the ring and meter; repaint diagram/staff only when dirty.
   drawRing();
   drawMeter();
   if(diagDirty){diagDirty=false;redrawDiagram();}
   if(staffDirty)drawStaff();
 }
+// Repaint the diagram and staff canvases when their boxes resize.
 if(window.ResizeObserver){
   new ResizeObserver(()=>{diagDirty=true;staffDirty=true;}).observe($('diagCanvas'));
   new ResizeObserver(()=>{staffDirty=true;}).observe($('staffScroll'));
 }else window.addEventListener('resize',()=>{diagDirty=true;staffDirty=true;});
 
 /* ═══════════ MOBILE TABS ═══════════ */
+// On narrow screens only one column shows at a time. Set the body class that CSS
+// keys off, highlight the active tab, and flag canvases to redraw on reveal.
 const mobTabs=$('mobTabs');
 function setMTab(t){
   document.body.className=document.body.className.replace(/\bmtab-\w+/g,'').trim();
@@ -1318,6 +1630,7 @@ mobTabs.addEventListener('click',e=>{
 });
 setMTab('now');
 
+// Start on a friendly default chord and kick off the render loop.
 setDiagramChord(0,'');   // C major as the friendly default
 buildVoicingBtns();
 requestAnimationFrame(loop);

@@ -3,6 +3,56 @@
 <head>
 <meta charset="UTF-8">
 <title>ASTROTECHS — Operational Overview</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ASTROTECHS · OPS  ·  game-design overview  (page shell)
+  ───────────────────────────────────────────────────────────────────────────
+   A single long-scroll document that presents the ASTROTECHS game design as an
+   in-fiction "ship OS" dossier. Static markup plus style.css paint the look;
+   main.js (loaded at the end of body) wires every interactive block by id.
+   The page is a stack of numbered sections, each a <section class="section">
+   with its own #id anchored from the fixed top nav.
+
+   PAGE LAYOUT  (# marks an element id, numbers match the section headers)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ .topnav  brand · anchor links · chrome dials         (sticky)     │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ .bootbar   status strip: ship OS · sector · classification        │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ #identity   HERO   title · quote · deck · stat grid · key art     │
+     │ #pillars    01  three design pillars                              │
+     │ #loop       02  operational loop      ◀ #flowLoop  · #loopSide    │
+     │ #controls   03  combat decision tree  ◀ #flowCombat · recoil sim  │
+     │ #dilation   04  tactical pause v2     ◀ #dilSlider live sim       │
+     │ #abilities  05  loadout · five slots · weapon variants           │
+     │ #hazards    06  devices               ◀ .haz .opt → #hazDetail    │
+     │ #enemies    07  threat composition    ◀ .threats bar → #threatDetail
+     │ #crew       08  crew command flow     ◀ #flowCrew · #crewSide     │
+     │ #endstates  09  end states            ◀ #flowEnd · #endSide       │
+     │ #modes      10  game modes (defense · horde)                      │
+     │ #register   11  stretch and cut register ◀ .regfilters → #regBody │
+     ├─────────────────────────────────────────────────────────────────┤
+     │ footer   studio · doc revision · end of transmission              │
+     └─────────────────────────────────────────────────────────────────┘
+
+   SECTION MAP  (jump with grep -n "<anchor>" index.html)
+     top nav ............ 'class="topnav"'   sticky anchor bar
+     status strip ....... 'class="bootbar"'  ship OS readout row
+     hero ............... 'id="identity"'    title block and key art
+     pillars ............ 'id="pillars"'     01  three pillars
+     loop ............... 'id="loop"'        02  round lifecycle diagram
+     combat ............. 'id="controls"'    03  input tree and recoil sim
+     dilation ........... 'id="dilation"'    04  time-dilation sim
+     loadout ............ 'id="abilities"'   05  ability slots and weapons
+     devices ............ 'id="hazards"'     06  selectable device profiles
+     enemies ............ 'id="enemies"'     07  threat bar and world behavior
+     crew ............... 'id="crew"'        08  NPC command flow
+     end states ......... 'id="endstates"'   09  win and fail branch tree
+     modes .............. 'id="modes"'       10  defense and horde
+     register ........... 'id="register"'    11  filterable stretch/cut table
+     script tag ......... 'src="main.js"'    behavior, loaded last
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,6 +64,9 @@
 
 <!-- DIAL/GAUGE/ETC SVG TEMPLATES (defined inline below for portability) -->
 
+<!-- Sticky top nav: brand mark, in-page anchor links (each href maps to a
+     section id), and decorative chrome dials. main.js upgrades the anchor
+     clicks to smooth scrolling. -->
 <header class="topnav">
   <div class="brand"><span class="dot"></span>ASTROTECHS · OPS</div>
   <nav>
@@ -28,6 +81,8 @@
   </div>
 </header>
 
+<!-- Status strip: in-fiction ship OS readout. Purely decorative flavor text
+     that frames the document as a classified pre-release dossier. -->
 <div class="bootbar wrap">
   <span><span class="ok">●</span> SHIP-OS v0.5</span>
   <span>SECTOR <span class="acc">07</span></span>
@@ -39,7 +94,8 @@
   <span class="tog warn"><span class="led"></span>HULL ALERT</span>
 </div>
 
-<!-- HERO -->
+<!-- HERO · #identity ─ title block: kicker, game name, pull quote, deck copy,
+     a four-cell stat grid, and the key-art placeholder with faux telemetry. -->
 <section class="hero" id="identity">
   <div class="wrap hero-grid">
     <div>
@@ -65,7 +121,8 @@
   </div>
 </section>
 
-<!-- 01 PILLARS -->
+<!-- 01 PILLARS · #pillars ─ three design-pillar cards in a .grid-3. Static;
+     the third card carries the .accent variant. -->
 <section class="section" id="pillars">
   <div class="wrap">
     <div class="section-head">
@@ -104,7 +161,10 @@
   </div>
 </section>
 
-<!-- 02 OPERATIONAL LOOP -->
+<!-- 02 OPERATIONAL LOOP · #loop ─ interactive round-lifecycle flow diagram.
+     The SVG #flowLoop holds <g class="node" data-key> blocks; hovering one
+     paints #loopSide via bindFlow('flowLoop','loopSide') in main.js. Edges
+     are static <path class="edge"> arrows drawn between the node rects. -->
 <section class="section" id="loop">
   <div class="wrap">
     <div class="section-head">
@@ -124,6 +184,10 @@
     <div class="frame">
       <span class="corner-tr"></span><span class="corner-bl"></span>
       <p class="frame-title"><span class="left"><span class="btn-pulse cyan" style="width:10px;height:10px;"></span>Round Lifecycle · Interactive</span><span class="pip">REC</span></p>
+      <!-- Flow diagram convention (shared by all four): <path class="edge">
+           draws the connectors, each <g class="node" data-key="…"> is a
+           hoverable block, and the trailing #loopSide div is the profile
+           panel main.js writes into. -->
       <div class="flow-wrap">
         <svg class="flow-svg" id="flowLoop" viewBox="0 0 720 320" preserveAspectRatio="xMidYMid meet">
           <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#2a8a8a"/></marker></defs>
@@ -156,7 +220,9 @@
   </div>
 </section>
 
-<!-- 03 COMBAT -->
+<!-- 03 COMBAT · #controls ─ two interactive pieces. The SVG #flowCombat maps
+     each input (LMB/RMB/click) to an outcome, wired by bindFlow to #combatSide.
+     Below it, #recoilSvg runs the live hold-to-fire recoil sim from main.js. -->
 <section class="section" id="controls">
   <div class="wrap">
     <div class="section-head">
@@ -216,6 +282,10 @@
     <div class="grid-asym">
       <div class="frame"><span class="corner-tr"></span><span class="corner-bl"></span>
         <p class="frame-title"><span class="left"><span class="btn-pulse" style="width:10px;height:10px;"></span>Recoil Curve · Live</span><span class="pip">REC</span></p>
+        <!-- Recoil sim canvas: main.js redraws #recoilCurve and #recoilDot
+             while the pointer is held, and updates the #holdTime / #spread
+             readouts. The two horizontal rules mark the accuracy floor and
+             the recoil ceiling. -->
         <div class="recoil">
           <div class="hint">Click + hold inside the frame to hold fire — release to reset</div>
           <svg id="recoilSvg" viewBox="0 0 600 200" preserveAspectRatio="none">
@@ -254,7 +324,9 @@
   </div>
 </section>
 
-<!-- 04 TACTICAL PAUSE -->
+<!-- 04 TACTICAL PAUSE · #dilation ─ the SUPERHOT-like time-dilation model. The
+     #dilSlider drives a live sim in main.js: it sets the orbit speed of
+     #dilPlanet and updates #dilVal plus the state label #dilStateLabel. -->
 <section class="section" id="dilation">
   <div class="wrap">
     <div class="section-head">
@@ -293,7 +365,9 @@
   </div>
 </section>
 
-<!-- 05 LOADOUT -->
+<!-- 05 LOADOUT · #abilities ─ static kit reference: five ability slots (with
+     cut/hidden variants flagged by class), weapon-variant list, and skill-tree
+     upgrade notes. No scripted behavior. -->
 <section class="section" id="abilities">
   <div class="wrap">
     <div class="section-head">
@@ -344,7 +418,10 @@
   </div>
 </section>
 
-<!-- 06 DEVICES -->
+<!-- 06 DEVICES · #hazards ─ selectable device roster. Each .haz .opt carries a
+     data-haz key; clicking one makes main.js rebuild #hazDetail from its
+     hazards table entry. The initial #hazDetail markup below mirrors the
+     "window" entry so the pane is populated before any click. -->
 <section class="section" id="hazards">
   <div class="wrap">
     <div class="section-head">
@@ -413,7 +490,9 @@
   </div>
 </section>
 
-<!-- 07 ENEMIES -->
+<!-- 07 ENEMIES · #enemies ─ threat composition. The stacked .threats .bar has
+     one div per enemy type (data-t); hovering a band makes main.js write its
+     profile into #threatDetail. The adjacent frame is static world-behavior copy. -->
 <section class="section" id="enemies">
   <div class="wrap">
     <div class="section-head">
@@ -466,7 +545,9 @@
   </div>
 </section>
 
-<!-- 08 CREW -->
+<!-- 08 CREW · #crew ─ two crew-class cards, then the #flowCrew command tree.
+     It branches player → click target (Bob / AstroTech) → personality →
+     behavior, wired by bindFlow to #crewSide. Amber nodes flag stretch goals. -->
 <section class="section" id="crew">
   <div class="wrap">
     <div class="section-head">
@@ -540,7 +621,9 @@
   </div>
 </section>
 
-<!-- 09 END STATES -->
+<!-- 09 END STATES · #endstates ─ the #flowEnd outcome tree. From ROUND ACTIVE
+     it forks a green victory path and a red failure path (.edge.fail arrows);
+     bindFlow paints #endSide on hover. -->
 <section class="section" id="endstates">
   <div class="wrap">
     <div class="section-head">
@@ -594,7 +677,7 @@
   </div>
 </section>
 
-<!-- 10 MODES -->
+<!-- 10 MODES · #modes ─ two static cards: Defense (story) and Horde (survival). -->
 <section class="section" id="modes">
   <div class="wrap">
     <div class="section-head">
@@ -624,7 +707,9 @@
   </div>
 </section>
 
-<!-- 11 REGISTER -->
+<!-- 11 REGISTER · #register ─ filterable stretch/cut table. Each .regfilters
+     button carries a data-filter; main.js shows only #regBody rows whose
+     data-row matches (or every row for "all"). -->
 <section class="section" id="register">
   <div class="wrap">
     <div class="section-head">
@@ -668,6 +753,7 @@
   </div>
 </section>
 
+<!-- Footer: studio credit, document revision, and closing telemetry chrome. -->
 <footer>
   <div class="wrap">
     <div>ASTROTECHS <span class="dot">●</span> ALLEGORY PUBLISHING L.L.C. <span class="dot">●</span> 2026</div>
@@ -682,6 +768,7 @@
 
 </div>
 
+<!-- Behavior loaded last so every element it binds is already parsed. -->
 <script src="main.js"></script>
 </body>
 </html>
