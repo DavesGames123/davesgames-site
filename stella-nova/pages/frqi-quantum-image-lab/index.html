@@ -4,6 +4,51 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Quantum Image Encoding // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FRQI QUANTUM IMAGE LAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js (a module) builds four linked modules: a paint
+   field, a 3D density-matrix state stack (Three.js), a reconstruction panel,
+   and an encoding-circuit view. This file lays out those modules, the side
+   control panel, and the tooltips main.js binds to by id.
+
+   FRQI ENCODING PIPELINE  (Flexible Representation of Quantum Images)
+     grayscale image
+        │  θᵢ = (pixel/255)·(π/2)          intensity → rotation angle
+        ▼
+     H on every position qubit  +  one controlled-RY(2θᵢ) per lit pixel
+        │
+        ▼
+     |φ⟩ = (1/√N) Σᵢ (cos θᵢ|0⟩ + sin θᵢ|1⟩) ⊗ |i⟩     one color qubit
+        │
+        ▼
+     ρ(t) at each circuit step ─▶ 3D cell stack (diagonal + coherences)
+        │  sample the final state (shots)
+        ▼
+     P(|1⟩) per pixel ─▶ decode (arcsin√P or linear) ─▶ reconstruction + MAE
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet
+     2. katex        KaTeX CSS then JS, for the state equation
+     3. importmap    maps the bare specifier "three" to the CDN; MUST stay
+                     inline (an import map cannot be an external file)
+     4. style.css    the page stylesheet
+     5. main.js      type=module
+
+   LAYOUT  (# marks an element id)
+     ┌──────────┬──────────────────────────────────────────────────────┐
+     │ #panel   │ #grid  (four modules)                                 │
+     │  register│   ┌───────────────┬───────────────┐                   │
+     │  presets │   │ Amplitude     │ ρ(t) State    │                   │
+     │  ρ colour│   │  Field        │  Stack (3D)   │                   │
+     │  ops     │   ├───────────────┼───────────────┤                   │
+     │  decode  │   │ Reconstruction│ Encoding      │                   │
+     │  readout │   │               │  Circuit      │                   │
+     │          │   └───────────────┴───────────────┘                   │
+     └──────────┴──────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
@@ -22,9 +67,13 @@
 </div>
 
 <div id="main">
+  <!-- Hamburger that toggles the side panel open on narrow screens. -->
   <div id="menu-tog" onclick="document.getElementById('panel').classList.toggle('open')">≡</div>
+  <!-- Side control panel; every control id below is bound in main.js. -->
   <div id="panel"><div class="p-body">
 
+    <!-- Register: step position qubits (even only). Total qubits = position + 1
+         color qubit; the grid is n×n where n = 2^(position/2). -->
     <div class="p-section">
       <div class="p-sec-lbl">Quantum Register</div>
       <div class="qreg">
@@ -36,6 +85,7 @@
       <div class="note">Even position qubits → square <b>n×n</b>. 2/4/6/8/10 qubits = <b>2×2 … 32×32</b>. ρ is 2ⁿ×2ⁿ — at 8+ qubits the stack renders the <b>strongest ρ cells</b> (a full matrix is 4ⁿ).</div>
     </div>
 
+    <!-- Source presets; data-preset picks a generated test image in makePreset. -->
     <div class="p-section">
       <div class="p-sec-lbl">Source Image</div>
       <div class="preset-grid">
@@ -49,6 +99,8 @@
       <div class="note">Paint in the <b style="color:var(--blue)">SOURCE</b> tile, or load a photo — it downsamples to the grid.</div>
     </div>
 
+    <!-- ρ colour: data-mode chooses magnitude, phase, or real part; the colour
+         map grid, spin-label toggle, and heat threshold shape the stack. -->
     <div class="p-section">
       <div class="p-sec-lbl">ρ Colour</div>
       <div class="mode-grid">
@@ -62,6 +114,8 @@
       <div class="note">Colour curve matches the Quantum Algorithm Visualizer.</div>
     </div>
 
+    <!-- Quantum ops: data-xform applies a gate on the encoded state (color X,
+         Z, S, or a position-bit X mirror) in applyXform. -->
     <div class="p-section">
       <div class="p-sec-lbl">Quantum Operations</div>
       <div class="xform-grid">
@@ -72,6 +126,8 @@
       </div>
     </div>
 
+    <!-- Decode: data-decode selects the P(|1⟩)→intensity map. arcsin√P inverts
+         the FRQI encoding exactly; linear treats P as brightness. -->
     <div class="p-section">
       <div class="p-sec-lbl">Decode</div>
       <div class="two-grid">
@@ -81,6 +137,8 @@
       <div class="note">Sampling lives on the <b>Reconstruction</b> panel →</div>
     </div>
 
+    <!-- Live register readout (updateReadout) and the FRQI state equation
+         (renderEquation, via KaTeX). -->
     <div class="p-section" style="border-bottom:none">
       <div class="p-sec-lbl">State Register</div>
       <div class="readout" id="readout"></div>
@@ -89,10 +147,15 @@
 
   </div></div>
 
+  <!-- The four visualization modules. -->
   <div id="grid">
+    <!-- Module 1: paint the source, and see it split into |0⟩·cosθ and |1⟩·sinθ
+         amplitude tiles (drawField). -->
     <div class="module" id="m-field">
       <div class="mod-head"><span class="mod-title">Amplitude Field</span><span class="mod-sub">paint · split into |0⟩cos + |1⟩sin</span><span class="mod-tag" id="field-tag">MAG</span></div>
       <div class="mod-body" id="field-body">
+        <!-- Paintable source grid plus its brush toolbar (ink, size, fill,
+             clear, image upload). -->
         <div class="fld-src">
           <div class="src-canvas-wrap"><canvas id="src-cv"></canvas><span class="panel-title" style="color:rgba(150,200,255,0.8)">SOURCE · paint</span></div>
           <div id="paint-bar">
@@ -117,6 +180,8 @@
       </div>
     </div>
 
+    <!-- Module 2: the 3D density-matrix stack. The score strip (#score-cv) and
+         its pinned gutter drive the playhead; #stack-gl is the WebGL canvas. -->
     <div class="module" id="m-stack">
       <div class="mod-head"><span class="mod-title">ρ(t) State Stack</span><span class="mod-sub">density matrix · scrub the score</span><span class="mod-tag">3D · drag</span></div>
       <div class="mod-body" style="display:flex;flex-direction:column">
@@ -132,6 +197,8 @@
       </div>
     </div>
 
+    <!-- Module 3: reconstruction. #recon-cv shows original, decoded, and error
+         panels; the footer controls shots, sampling gap, labels, and Sample. -->
     <div class="module" id="m-recon">
       <div class="mod-head"><span class="mod-title">Reconstruction</span><span class="mod-sub">sample · decode · compare</span><span class="mod-tag" id="recon-tag">idle</span></div>
       <div class="mod-body" id="recon-body"><canvas id="recon-cv"></canvas><span class="cap">original → P(|1⟩) → decode → |error|</span></div>
@@ -143,12 +210,15 @@
       </div>
     </div>
 
+    <!-- Module 4: the encoding circuit (drawCircuit), scrubbable and synced to
+         the stack playhead. Filled dots are 1-controls, open dots 0-controls. -->
     <div class="module" id="m-circuit">
       <div class="mod-head"><span class="mod-title">Encoding Circuit</span><span class="mod-sub">click to scrub · synced to stack</span><span class="mod-tag"><b style="color:var(--text-dim)">○</b>=0 <b style="color:var(--amber)">●</b>=1</span></div>
       <div class="mod-body" id="circuit-body"><canvas id="circuit-cv"></canvas></div>
     </div>
   </div>
 </div>
+<!-- Floating pixel/cell tooltip, positioned by main.js on hover. -->
 <div id="cell-tip"></div>
 
 <script type="module" src="main.js"></script>

@@ -4,9 +4,41 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Circular Polarization // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CIRCULAR POLARIZATION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws everything on the #scene canvas: a
+   radiating source wrapped in E and B helices. This file lays out the overlay
+   that main.js binds to by id (equation panel, mode buttons, sliders).
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. katex        KaTeX CSS then JS, for the two field equations
+     3. in-frame     tiny inline guard, runs before markup renders
+     4. importmap    maps the bare specifier "three" to the CDN; MUST stay
+                     inline (an import map cannot be an external file)
+     5. style.css    the page stylesheet
+     6. main.js      type=module; dynamically import()s three, then builds scene
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: "Stella Nova · Circular Polarization"                     │
+     ├──────────────┬────────────────────────────────────┬─────────────┤
+     │ .eq-panel    │                                     │ .modes      │
+     │  #eq1 #eq2   │        #scene  (canvas)             │  single     │
+     │  E and B     │        helices around source        │  ring       │
+     │  equations   │                                     │  sphere     │
+     ├──────────────┴────────────────────────────────────┴─────────────┤
+     │ .ctrl: Helices · k · ω · B-field · Field Lobes                    │
+     └──────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. Kept inline so it runs before the body renders. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <script type="importmap">
 {
@@ -20,6 +52,7 @@
 </head>
 <body>
 
+<!-- Decorative grid backdrop, then the WebGL target main.js renders into. -->
 <div class="grid-bg"></div>
 <canvas id="scene"></canvas>
 
@@ -28,9 +61,11 @@
   <div class="topbar-r">SYS // <strong>ELECTROMAGNETISM</strong></div>
 </div>
 
+<!-- Error overlay; main.js unhides this and fills it when something throws. -->
 <div class="err" id="err"></div>
 
 <div id="ui">
+  <!-- Field equations, rendered into #eq1 and #eq2 by KaTeX in main.js. -->
   <section class="eq-panel">
     <div class="eq-head">
       <span class="dot"></span>
@@ -40,6 +75,8 @@
     <div class="eq-row" id="eq2"></div>
   </section>
 
+  <!-- Distribution mode buttons; data-mode is read by the mode-btn handler to
+       switch between one ray, an equatorial ring, and a full sphere. -->
   <aside class="modes">
     <button class="mode-btn" data-mode="single" type="button" aria-label="Single helix">
       <span class="tip">Single</span>
@@ -68,6 +105,8 @@
     </button>
   </aside>
 
+  <!-- Control cells; each input id is bound in main.js and writes into params.
+       vNum / vK / vW are the live numeric readouts. -->
   <section class="ctrl">
     <div class="ctrl-cell">
       <div class="ctrl-row"><span class="ctrl-lbl">Helices</span><span class="ctrl-val" id="vNum">36</span></div>

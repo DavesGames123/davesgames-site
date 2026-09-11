@@ -4,6 +4,40 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Spin Storage // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SPIN STORAGE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js (a classic, non-module script) encodes the
+   payload text into qubit rotation angles and decodes it back, then draws the
+   dials, the round-trip badge, and a derived spectrum. This file lays out the
+   left control panel and the right visualization column.
+
+   THE ROUND TRIP main.js RUNS
+     payload bytes ─▶ bitstream (MSB first) ─▶ slot levels ─▶ angles θ, φ
+                                                                  │  read back
+                                                                  ▼
+     recovered text ◀─ bytes ◀─ slot levels ◀─ round(angle / step)
+
+     n qubits × (2 dials each: θ and φ) × B bits  =  a 2nB-bit register.
+     The simulator recovers it exactly; Holevo caps a real device at n bits.
+
+   HEAD LOAD ORDER  (order matters)
+     1. preconnect   warm the font host connections
+     2. fonts        Google Fonts stylesheet
+     3. katex        KaTeX CSS, JS, then auto-render
+     4. style.css    the page stylesheet
+
+   LAYOUT  (# marks an element id)
+     ┌────────────────┬─────────────────────────────────────────────────┐
+     │ #panel         │ #viz                                             │
+     │  Payload text  │  ① register state  #dials (one per qubit)        │
+     │  Register:     │  ② round trip      #decoded  #match              │
+     │   n, bits B,   │  ③ waveform        #cv-wave (derived spectrum)   │
+     │   θ toggle     │  what you're watching (Holevo caveat)            │
+     └────────────────┴─────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -12,6 +46,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head><body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QFT · storage</span></div>
@@ -19,7 +55,11 @@
 </div>
 
 <div id="main">
+  <!-- Left control panel: the payload text, and the register shape (n, bits per
+       angle, and whether the θ axis is used too). -->
   <div id="panel">
+    <!-- Payload card: the text to store. The capacity bar and byte/bit counts
+         below are filled by render(); holevo shows the n-bit hardware ceiling. -->
     <div class="card">
       <div class="lbl">Payload <span class="tag">your data</span></div>
       <textarea id="payload" rows="3" spellcheck="false">Hello, Stella Nova!</textarea>
@@ -27,6 +67,8 @@
         <div class="capnum" id="holevo" style="color:var(--amber)"></div></div>
     </div>
 
+    <!-- Register card: n qubits (stepper), bits per angle B (slider), and the
+         amplitude-axis toggle that adds a θ dial per qubit. -->
     <div class="card">
       <div class="lbl">Register <span class="tag">storage medium</span></div>
       <div class="row">
@@ -40,6 +82,7 @@
     </div>
   </div>
 
+  <!-- Right column: the three stages of the store/read demonstration. -->
   <div id="viz">
     <header>
       <div class="kicker">Lossless encode · spin rotations → bits → spin rotations</div>
@@ -47,23 +90,31 @@
       <p class="sub">The honest way to use spin states as memory: write your bytes straight into the rotation angles each qubit actually controls, then read them back. n qubits give <b>2n real dials</b> (a θ and φ each); quantize each to B bits and you have a clean, exact <b>2nB-bit</b> register. No fitting, no approximation, no loss — the data lives where the hardware lives.</p>
     </header>
 
+    <!-- Stage ①: one SVG dial per qubit, built by buildDials(); the needle
+         angle is φ and the tilt shows θ. -->
     <div class="card">
       <div class="lbl">① Register state <span class="tag" id="slots-tag"></span></div>
       <div id="dials"></div>
     </div>
 
+    <!-- Stage ②: the decoded text and a badge saying whether the round trip was
+         exact (or how many bytes were dropped for lack of capacity). -->
     <div class="card">
       <div class="lbl">② Round trip <span class="tag">decode the angles back</span></div>
       <div class="rt"><div class="rtlab">decoded</div><div class="rtval" id="decoded"></div></div>
       <div id="match"></div>
     </div>
 
+    <!-- Stage ③: a decorative power spectrum of the stored rotations, drawn by
+         drawWave(). It carries no meaning; the data lives in the angles. -->
     <div class="card">
       <div class="lbl">③ The waveform your bytes make <span class="tag">spectrum of the stored state</span></div>
       <canvas class="viz" id="cv-wave" height="170"></canvas>
       <div class="note">A fun aside: this is the power spectrum the stored rotations happen to produce. It carries no meaning — it's just what your data looks like as a quantum signal. The <b>meaning</b> is in the angles, recovered exactly above; the curve is a derived shadow.</div>
     </div>
 
+    <!-- Prose: why angle storage is lossless in this simulator (2nB bits), and
+         the Holevo ceiling that caps a real device at n retrievable bits. -->
     <div class="card">
       <div class="lbl">What you're watching</div>
       <div class="explain">You're storing bits in the <b>degrees of freedom the device controls</b> — 2 angles per qubit — and decoding them exactly. This is the opposite of the lossy approach where you try to cram a 2ⁿ-sample <em>curve</em> into 2n knobs (a lossy 2ⁿ→2n squeeze that can never be exact). Here we store exactly <b>2nB bits</b>, matched to the 2n dials, and read them straight back. Capacity scales <b>linearly</b> with qubits, decode is trivial, fidelity is perfect. If you wanted to store a full 2ⁿ-amplitude vector instead, you'd need an entangling write circuit and full state tomography to read — exponential, and not what you want for a dummy data channel.<br><br><b>The catch that matters:</b> the 2nB figure is a property of this <b>classical simulator</b>, which reads the float angles back perfectly. On a real device you can't read an angle — a measurement returns one bit per qubit and destroys the state, and no-cloning forbids copying it. <b>Holevo's theorem (1973)</b> caps what's retrievable from n qubits at exactly <b>n classical bits</b>, no matter how finely you slice the angles. So as a simulator data structure this is a fancy float array; as a claim about quantum storage, the ceiling is n bits.</div>
@@ -71,6 +122,7 @@
   </div>
 </div>
 
+<!-- Classic (non-module) script; runs after the markup it binds to is parsed. -->
 <script src="main.js"></script>
 </body>
 </html>

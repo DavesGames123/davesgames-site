@@ -1,55 +1,128 @@
+// ============================================================================
+//  QFT FLOW  ·  Quantum Fourier Transform, input → spectrum → measurement
+// ----------------------------------------------------------------------------
+//  A flat-magnitude state on n qubits carries all its information in the phase
+//  θ(x) = Σⱼ φⱼ·xⱼ (additive over the bits). Its QFT power spectrum has a
+//  closed form, so no FFT is run: specClosed() evaluates
+//      P(k) = Πⱼ cos²((φⱼ − 2π·k·2ʲ / N) / 2)
+//  which is exact and O(n) per point, so the curve is drawn at any n. Three
+//  Canvas 2D panels show the input magnitude, the input phase, and the output
+//  spectrum (smooth curve + exact bins + optional measured histogram).
+//
+//  DATA FLOW
+//  ----------------------------------------------------------------------------
+//      controls ─▶ S (n, φ[], shotsIdx) ─▶ compute() ─▶ R {curve, probs, peak}
+//                                              │
+//               resample(R) (finite shots) ───┤
+//                                              ▼
+//                       drawMag · drawPhase · drawOut · updateStats
+//
+//  WHY THE CURVE RISES AGAIN ON THE RIGHT
+//      The spectrum is periodic: bin N is the same state as bin 0. A peak near
+//      bin 0 shows its wrapped skirt climbing at the far right edge — not a
+//      second peak. The exact-bin dots are the truth, not the rising skirt.
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      state ................ "const S ="          n, φ[], shot index
+//      math helpers ......... "function thetaAt"   θ(x), π-formatting, wrap
+//      spectrum ............. "function specClosed" closed-form P(k)
+//      compute .............. "function compute"    curve + bins + peak
+//      sampling ............. "function resample"   finite-shot histogram
+//      canvas fit ........... "function fit"        DPR-aware clear
+//      input magnitude ...... "function drawMag"    the flat |amplitude|
+//      input phase .......... "function drawPhase"  θ(x) dotted curve
+//      output spectrum ...... "function drawOut"    curve + bins + histogram
+//      stats ................ "function updateStats" peak, spread, prediction
+//      render ............... "function render"     recompute and repaint all
+//      φ sliders ............ "function buildPhiSliders" per-qubit controls
+//      n stepper ............ "function setN"       resize the register
+//      linear ramp .......... "function applyRamp"  φⱼ = α·2ʲ pure tone
+//      presets .............. "data-preset"         flat / ramp / detune / random
+//      init ................. "setN(8)"             first paint
+// ============================================================================
+
+// $ is the id lookup shorthand; TAU is one turn; S is the single mutable state:
+// n qubits, the per-qubit phases φ[], the shot-count index, and cached samples.
 const $=id=>document.getElementById(id);
 const TAU=Math.PI*2;
 const S = { n:8, phi:[0,0,0,0,0,0,0,0], shotsIdx:0, sampleCounts:null, sampleTotal:0 };
+// The shots slider is an index into this table of shot counts (0 = exact state).
 const SHOT_TABLE=[0,16,32,64,128,256,512,1024,2048,4096,8192,16384,32768,65536,131072,262144,524288,1048576,2097152,4194304,8388608];
 
+// Wrap an angle into (−π, π].
 const wrap=a=>{a=((a+Math.PI)%TAU+TAU)%TAU-Math.PI;return a;};
+// Format an angle as a fraction of π when it is close to a common value, else
+// as a decimal; used for the φ slider readouts.
 function fmtPi(v){
   const r=v/Math.PI,near=(a,b)=>Math.abs(a-b)<0.01,s=r<0?'−':'';
   const fr=[[0,'0'],[0.25,'π/4'],[0.5,'π/2'],[0.75,'3π/4'],[1,'π']];
   for(const[k,t]of fr)if(near(Math.abs(r),k))return k===0?'0':s+t;
   return v.toFixed(2);
 }
+// N = 2\u207F, the number of basis states / spectrum bins.
 const N=()=>2**S.n;
+// Caps that bound work as n grows: draw discrete bins only up to BAR_CAP, print
+// ket labels up to KET_CAP, sample only up to SAMP_CAP, subsample the input
+// strips to STRIP_CAP columns, and evaluate the smooth curve at CURVE_M points.
 const BAR_CAP=512, KET_CAP=16, SAMP_CAP=4096, STRIP_CAP=220, CURVE_M=1200;
 const w2=j=>2**j;                                  // 2^j, safe past bit 31
+// \u03B8(x) = \u03A3\u2C7C \u03C6\u2C7C\u00B7x\u2C7C : sum the phases of the bits set in index x.
 function thetaAt(x){let s=0;for(let j=0;j<S.n;j++){if(Math.floor(x/w2(j))%2===1)s+=S.phi[j];}return s;}
+// Binary string and Dirac ket for a basis index.
 const bin=(k,n)=>k.toString(2).padStart(n,'0');
 const ket=(k,n)=>'|'+bin(k,n)+'\u27E9';
 
 /* ── physics: closed-form spectrum of a bit-additive-phase flat signal ──
    P(k) = Π_j cos²((φ_j − 2π·k·2^j / N)/2).  Exact, O(n) per point → works at any n. */
+// The closed-form spectrum, evaluated at any continuous frequency kappa. Each
+// qubit contributes one cos² factor; the product is exact and costs O(n).
 function specClosed(kappa,N0){let p=1;for(let j=0;j<S.n;j++){const psi=S.phi[j]-TAU*kappa*w2(j)/N0;const c=Math.cos(psi*0.5);p*=c*c;}return p;}
+// Build everything the panels need for the current state: the smooth curve, the
+// exact bin probabilities (only while N fits BAR_CAP), and the peak bin.
 function compute(){
   const N0=N(),M=CURVE_M,curve=new Float64Array(M+1);
+  // Sample the smooth spectrum across [0, N) at M+1 points.
   for(let i=0;i<=M;i++)curve[i]=specClosed(i/M*N0,N0);
+  // Exact per-bin probabilities, but only when the bin count is small enough.
   let probs=null;
   if(N0<=BAR_CAP){probs=new Float64Array(N0);for(let k=0;k<N0;k++)probs[k]=specClosed(k,N0);}
   // exact peak: refine the curve's argmax to the nearest integer bin
   let bi=0,bm=-1;for(let i=0;i<=M;i++)if(curve[i]>bm){bm=curve[i];bi=i;}
   let kpk=Math.round(bi/M*N0)%N0,pk=specClosed(kpk,N0);
+  // Check the two neighbouring bins in case rounding landed off the true peak.
   for(const kk of [kpk-1,kpk+1]){const k2=((kk%N0)+N0)%N0,p2=specClosed(k2,N0);if(p2>pk){pk=p2;kpk=k2;}}
   return {N0,probs,curve,M,peak:kpk,peakP:pk};
 }
 
 /* ── sampling (only feasible while the full 2^n distribution fits) ── */
+// Draw S0 measurement shots from the exact distribution by inverse-CDF sampling.
+// Only feasible while the full 2ⁿ distribution fits in memory.
 function resample(R){
   const N0=R.N0,S0=SHOT_TABLE[S.shotsIdx];S.sampleTotal=S0;
   if(S0===0||!R.probs||N0>SAMP_CAP){S.sampleCounts=null;return;}
+  // Build the cumulative distribution once.
   const cum=new Float64Array(N0);let acc=0;for(let k=0;k<N0;k++){acc+=R.probs[k];cum[k]=acc;}
   const counts=new Float64Array(N0);
+  // Each shot: pick a uniform point under the total mass, binary-search the bin.
   for(let s=0;s<S0;s++){const r=Math.random()*acc;let lo=0,hi=N0-1;
     while(lo<hi){const m=(lo+hi)>>1;if(cum[m]<r)lo=m+1;else hi=m;}counts[lo]++;}
   S.sampleCounts=counts;
 }
 
 /* ── canvas helpers ── */
+// Size a canvas to its CSS box at device pixel ratio (capped at 2), reset the
+// transform, clear it, and return the 2D context and CSS dimensions.
 function fit(cv){const dpr=Math.min(devicePixelRatio||1,2),w=cv.clientWidth,h=cv.clientHeight;
   if(cv.width!==(w*dpr|0)||cv.height!==(h*dpr|0)){cv.width=w*dpr|0;cv.height=h*dpr|0;}
   const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);return {c,w,h};}
+// Map a phase to a hue so each phase dot is coloured by its value.
 const phaseHue=p=>{const n=(wrap(p)+Math.PI)/TAU;return `hsl(${(n*340+10)|0} 90% 62%)`;};
 
+// Input magnitude panel: every amplitude has the same modulus 1/√N, so the bars
+// are all equal — the point is that magnitude carries no information here.
 function drawMag(R){
+  // m = columns actually drawn (subsampled to STRIP_CAP when N is large).
   const {c,w,h}=fit($('cv-mag')),N0=R.N0,m=Math.min(N0,STRIP_CAP),pad=10,bw=(w-pad*2)/m,base=h-22,amp=1/Math.sqrt(N0);
   c.strokeStyle='rgba(90,130,180,0.10)';c.lineWidth=1;
   for(let g=0;g<=4;g++){const y=14+(base-14)*g/4;c.beginPath();c.moveTo(pad,y);c.lineTo(w-pad,y);c.stroke();}
@@ -61,10 +134,14 @@ function drawMag(R){
   c.fillText(N0>m?('all '+N0.toLocaleString()+' equal · '+m+' shown'):'all bars equal — magnitude carries no info',w/2,h-6);
   $('mag-r').textContent='all = '+(amp>=0.01?amp.toFixed(3):amp.toExponential(1));
 }
+// Input phase panel: the ramp θ(x) as a dotted curve, each dot coloured by its
+// wrapped phase. This is where all the information lives.
 function drawPhase(R){
   const {c,w,h}=fit($('cv-phase')),N0=R.N0,m=Math.min(N0,STRIP_CAP),pad=10,bw=(w-pad*2)/m,top=14,bot=h-22;
+  // Evaluate θ at m sampled indices (subsampled across the full range when big).
   const th=new Array(m);
   for(let i=0;i<m;i++){const x=m<N0?Math.round(i/(m-1)*(N0-1)):i;th[i]=thetaAt(x);}
+  // Auto-scale the vertical axis to the phase range, widening it when flat.
   let mn=Infinity,mx=-Infinity;for(let i=0;i<m;i++){mn=Math.min(mn,th[i]);mx=Math.max(mx,th[i]);}
   if(mx-mn<1e-6){mn-=Math.PI;mx+=Math.PI;}
   const pad2=(mx-mn)*0.12;mn-=pad2;mx+=pad2;
@@ -82,7 +159,10 @@ function drawPhase(R){
   c.fillText('x = 0 … '+(N0-1).toLocaleString()+(m<N0?' · '+m+' sampled':'')+'  (basis index)',w/2,h-6);
   $('phase-r').textContent='span '+(mx-mn-2*pad2).toFixed(2)+' rad';
 }
+// Compact frequency-axis label formatter.
 function fmtK(v){return v>=100000?v.toExponential(1):''+Math.round(v);}
+// Output spectrum panel: the filled smooth curve │V(κ)│², the exact bin
+// probabilities (dots/stems), and the measured histogram (rose steps) on top.
 function drawOut(R){
   const {c,w,h}=fit($('cv-out')),N0=R.N0,padL=12,padR=12,top=16,bot=h-26;
   const plotW=w-padL-padR;
@@ -92,6 +172,7 @@ function drawOut(R){
   const X=k=>padL+(k/N0)*plotW, Y=p=>bot-(p/yMax)*(bot-top);
   c.strokeStyle='rgba(90,130,180,0.09)';c.lineWidth=1;
   for(let g=0;g<=4;g++){const y=top+(bot-top)*g/4;c.beginPath();c.moveTo(padL,y);c.lineTo(w-padR,y);c.stroke();}
+  // Dashed guide at the bin the linear ramp predicts, when a ramp is active.
   const pred=predBin();if(pred!=null){const gx=X(pred+0.5);c.strokeStyle='rgba(255,182,72,0.35)';c.setLineDash([4,4]);
     c.beginPath();c.moveTo(gx,top);c.lineTo(gx,bot);c.stroke();c.setLineDash([]);}
   // smooth continuous spectrum (filled + glow)
@@ -103,11 +184,13 @@ function drawOut(R){
   c.shadowColor='rgba(69,211,255,0.55)';c.shadowBlur=9;c.strokeStyle='rgba(120,235,255,0.92)';c.lineWidth=1.6;
   c.beginPath();for(let i=0;i<=R.M;i++){const x=padL+(i/R.M)*plotW,y=Y(R.curve[i]);i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
   c.shadowBlur=0;
+  // Exact bins: a stem per bin, plus a dot when there are few enough to read.
   const slot=plotW/N0;
   if(R.probs){const dots=N0<=64;
     for(let k=0;k<N0;k++){const cx=X(k)+slot/2,y=Y(R.probs[k]);
       c.strokeStyle='rgba(255,182,72,0.45)';c.lineWidth=Math.min(1.4,Math.max(0.5,slot*0.5));c.beginPath();c.moveTo(cx,bot);c.lineTo(cx,y);c.stroke();
       if(dots){c.fillStyle='#ffb648';c.beginPath();c.arc(cx,y,Math.max(2,Math.min(3.5,slot*0.18)),0,TAU);c.fill();}}
+    // Measured histogram: one run of finite shots, drawn as rose step outlines.
     if(S.sampleCounts){const tot=S.sampleTotal;
       c.strokeStyle='rgba(255,107,138,0.9)';c.lineWidth=1.3;c.beginPath();
       for(let k=0;k<N0;k++){const p=S.sampleCounts[k]/tot,x0=X(k)+slot*0.18,x1=X(k)+slot*0.82,y=Y(p);
@@ -116,13 +199,16 @@ function drawOut(R){
     c.fillStyle='rgba(120,170,230,0.55)';c.font="9px 'JetBrains Mono'";c.textAlign='center';
     c.fillText('2\u207F = '+N0.toLocaleString()+' bins — too dense to resolve individually; exact continuous spectrum shown',w/2,bot-8);
   }
+  // Reminder that the axis wraps: bin N is the same state as bin 0.
   // periodic-wrap marker
   c.fillStyle='rgba(120,170,230,0.5)';c.font="8px 'JetBrains Mono'";c.textAlign='right';
   c.fillText('\u21BB k\u2261'+N0.toLocaleString()+' \u2261 0',w-padR-2,top+11);
+  // Frequency ticks: full binary ket labels when few bins, else four numbers.
   // axis ticks
   c.fillStyle='rgba(86,100,128,0.92)';c.textAlign='center';
   if(N0<=KET_CAP){c.font="8px 'JetBrains Mono'";for(let k=0;k<N0;k++)c.fillText(bin(k,S.n),X(k)+slot/2,h-9);}
   else{c.font="9px 'JetBrains Mono'";for(let t=0;t<=4;t++)c.fillText(fmtK(t/4*N0),padL+(t/4)*plotW,h-9);}
+  // Label the peak bin and its probability, placed to avoid the right edge.
   // peak callout
   const peak=R.peak,pk=R.peakP,px=X(peak)+slot/2,py=Y(pk),left=peak<N0*0.6;
   const lab=(S.n<=10?ket(peak,S.n):'bin '+peak.toLocaleString())+'  '+(pk*100).toFixed(1)+'%';
@@ -133,10 +219,15 @@ function drawOut(R){
 }
 
 /* ── stats / readouts ── */
+// Predict the peak bin from the ramp slope alone: a clean tone φⱼ=α·2ʲ peaks at
+// k = αN/2π. Returns null when no ramp is set.
 function predBin(){ // peak bin implied by the linear-ramp part of phi (uses phi_0 weight ladder)
   const a=parseFloat($('alpha').value); // displayed ramp slope
   if(a<=0)return null; const b=a*N()/TAU; return Math.max(0,Math.min(N()-1,b));
 }
+// Fill the four stat tiles: peak bin, peak probability, spread (inverse
+// participation ratio), and the ramp→bin prediction. Spread is approximated
+// from the smooth curve when exact bins are not available.
 function updateStats(R){
   const N0=R.N0,peak=R.peak,pk=R.peakP;
   let ipr,approx=false;
@@ -152,6 +243,8 @@ function updateStats(R){
 }
 
 /* ── render ── */
+// Recompute the state and repaint all three panels and the stats. Disables the
+// shots control once the register is too large to sample.
 function render(){const R=compute();
   const tooBig=R.N0>SAMP_CAP, sl=$('shots');
   if(sl){sl.disabled=tooBig;sl.style.opacity=tooBig?0.4:1;}
@@ -161,6 +254,8 @@ function render(){const R=compute();
 }
 
 /* ── controls ── */
+// Rebuild the per-qubit φ sliders (one row per qubit, each with π-value chips).
+// Editing any slider or chip clears the ramp slope and repaints.
 function buildPhiSliders(){
   const host=$('phi-sliders');host.innerHTML='';
   const CH=[['0',0],['π/2',Math.PI/2],['π',Math.PI],['3π/2',3*Math.PI/2],['2π',TAU]];
@@ -178,20 +273,28 @@ function buildPhiSliders(){
     S.phi[+b.dataset.j]=parseFloat(b.dataset.v);clearAlpha();syncPhiLabels();render();}));
   syncPhiLabels();
 }
+// Editing a single φ breaks the ramp, so reset the α control to zero.
 function clearAlpha(){$('alpha').value=0;$('alpha-val').textContent='0.00';}
+// Push S.phi back out to every slider readout, slider position, and active chip.
 function syncPhiLabels(){for(let j=0;j<S.n;j++){const v=$('pv'+j);if(v)v.textContent=fmtPi(S.phi[j])+'  '+S.phi[j].toFixed(2);
   const sl=$('ph'+j);if(sl&&document.activeElement!==sl)sl.value=S.phi[j];
   const ch=$('ch'+j);if(ch){const cur=S.phi[j];ch.querySelectorAll('button').forEach(b=>b.classList.toggle('on',Math.abs(parseFloat(b.dataset.v)-cur)<0.02));}}}
+// Resize the register: clamp n to 1..20, preserve existing phases, rebuild the
+// sliders, and repaint.
 function setN(n){n=Math.max(1,Math.min(20,n));S.n=n;S.phi=Array.from({length:n},(_,j)=>S.phi[j]||0);
   $('n-val').firstChild.textContent=n+' ';$('dim-val').textContent='· '+(n<=20?(2**n).toLocaleString():'2^'+n)+' bins';
   S.sampleCounts=null;buildPhiSliders();render();}
 
+// Set every qubit phase to the 1:2:4:8 ramp φⱼ=α·2ʲ, the pure-tone condition.
 function applyRamp(a){for(let j=0;j<S.n;j++)S.phi[j]=wrap(a*(1<<j));$('alpha').value=a;$('alpha-val').textContent=a.toFixed(2);syncPhiLabels();render();}
 $('alpha').addEventListener('input',e=>applyRamp(parseFloat(e.target.value)));
 
+// Qubit-count steppers.
 $('n-minus').onclick=()=>setN(S.n-1);
 $('n-plus').onclick=()=>setN(S.n+1);
 
+// Preset buttons: flat (all zero), a clean tone at ~0.31·N, that tone with qubit
+// 0 detuned to show leakage, and fully random phases.
 document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{
   const p=b.dataset.preset,N0=N();
   if(p==='flat'){S.phi=Array(S.n).fill(0);$('alpha').value=0;$('alpha-val').textContent='0.00';}
@@ -202,12 +305,17 @@ document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click'
   syncPhiLabels();render();
 }));
 
+// Shots slider indexes SHOT_TABLE; clearing sampleCounts forces a fresh draw.
 $('shots').addEventListener('input',e=>{S.shotsIdx=+e.target.value;
   $('shots-val').textContent=S.shotsIdx===0?'exact':SHOT_TABLE[S.shotsIdx].toLocaleString();
   S.sampleCounts=null;render();});
+// Resample: draw a new measurement run at the current shot count.
 $('resample').onclick=()=>{if(S.shotsIdx>0){S.sampleCounts=null;render();}};
 
+// Repaint on resize so the canvases track their CSS box.
 window.addEventListener('resize',()=>render());
+// First paint: 8 qubits, flat phases.
 setN(8);applyRamp(0);
+// Typeset the KaTeX math blocks once, if auto-render loaded.
 if(window.renderMathInElement)renderMathInElement(document.body,{delimiters:[
   {left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});

@@ -4,6 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>QFT Flow // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   QFT FLOW  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js (a classic, non-module script) draws the three
+   canvases and wires every control by id. This file lays out the left control
+   panel and the right visualization column, and hosts the KaTeX math blocks.
+
+   THE PIPELINE THE PAGE VISUALIZES
+     n phase rotations φⱼ                       encode a flat-magnitude state
+        │  θ(x) = Σⱼ φⱼ·xⱼ  (bit-additive)     phase carries all information
+        ▼
+     input signal   ─ #cv-mag (all equal)  +  #cv-phase (the ramp)
+        │  QFT
+        ▼
+     P(k) spectrum  ─ #cv-out : smooth curve │V(κ)│²  +  exact bin dots
+        │  finite shots                         +  measured histogram
+        ▼
+     what you measure (rose bars wobble by √shot noise)
+
+   HEAD LOAD ORDER  (order matters)
+     1. preconnect   warm the font host connections
+     2. fonts        Google Fonts stylesheet
+     3. katex        KaTeX CSS, JS, then auto-render (renders $…$ at init)
+     4. style.css    the page stylesheet
+
+   LAYOUT  (# marks an element id)
+     ┌────────────────┬─────────────────────────────────────────────────┐
+     │ #panel         │ #viz                                             │
+     │  Register (n)  │  ① input signal  #cv-mag  #cv-phase              │
+     │  φⱼ sliders    │  ② output        #cv-out  (+ stats)              │
+     │  Linear ramp α │  what you're watching (prose)                    │
+     │  Measurement   │  the math (KaTeX)                                │
+     └────────────────┴─────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -13,13 +49,19 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QFT · ρ→spectrum</span></div>
   <div class="topbar-r">SYS // <strong>FOURIER TRANSFORM</strong></div>
 </div>
 <div id="main">
+  <!-- Left control panel. n-minus/n-plus step the qubit count; #phi-sliders is
+       filled by buildPhiSliders(); alpha drives the linear ramp; shots controls
+       measurement sampling. -->
   <div id="panel">
+    <!-- Register card: qubit count n, and the derived bin count 2ⁿ. -->
     <div class="card">
       <div class="lbl">Register <span class="tag">2ⁿ amplitudes</span></div>
       <div class="row">
@@ -34,6 +76,8 @@
       <div id="phi-sliders"></div>
     </div>
 
+    <!-- Linear ramp card: α sets a 1:2:4:8 phase ramp (a pure tone). Presets
+         jump to flat, a clean tone, a detuned tone, and random phases. -->
     <div class="card">
       <div class="lbl">Linear ramp <span class="tag">φⱼ = α·2ʲ</span></div>
       <div class="slider">
@@ -49,6 +93,8 @@
       <div class="note">A perfect <b>1:2:4:8</b> ramp is a pure tone → one bin. Drag α to slide that tone across the spectrum; nudge a single φⱼ off the ramp to watch energy <b>leak</b> into neighbours.</div>
     </div>
 
+    <!-- Measurement card: shots slider indexes SHOT_TABLE; at exact you see the
+         true state, adding shots samples it. Resample redraws one run. -->
     <div class="card">
       <div class="lbl">Measurement <span class="tag">finite shots</span></div>
       <div class="slider">
@@ -60,13 +106,16 @@
     </div>
   </div>
 
-  <!-- ── VISUALS ── -->
+  <!-- Right column: the three visualization stages plus prose and math. -->
+  <!-- ══ VISUALS ══ -->
   <div id="viz">
     <header>
       <div class="kicker">Quantum Fourier Transform · input → output</div>
       <h1>Four knobs, <em>one spectrum</em></h1>
       <p class="sub">Turn <b>n</b> single-qubit phase rotations and watch the whole pipeline: the flat-magnitude signal they encode, the <b>smooth continuous spectrum</b> an ideal machine holds, and the <b>discrete probability histogram</b> you'd actually measure. The bars are samples of the curve.</p>
     </header>
+    <!-- Stage ①: the encoded input. #cv-mag shows the flat magnitude (all bars
+         equal, so magnitude carries no information); #cv-phase shows θ(x). -->
     <div class="card">
       <div class="lbl">① Input signal <span class="tag">the n rotations, encoded</span></div>
       <div class="split">
@@ -83,6 +132,10 @@
       <div class="formula">$P(k)=\bigl|\tfrac{1}{N}\sum_{x} e^{i\theta(x)}\,e^{-2\pi i kx/N}\bigr|^2$&nbsp;&nbsp;<span style="color:var(--faint)">— power spectrum of a constant-modulus sequence</span></div>
     </div>
 
+    <!-- Stage ②: the output spectrum. #cv-out overlays the smooth continuous
+         curve │V(κ)│², the exact bin probabilities, and the sampled histogram.
+         The stat tiles below report peak bin, peak probability, spread, and the
+         ramp→bin prediction. -->
     <div class="card">
       <div class="lbl">② Output <span class="tag">smooth state vs measured histogram</span></div>
       <div class="viz-cap"><span class="t">P(k)<span>probability over the 2ⁿ basis states</span></span><span class="r" id="out-r"></span></div>
@@ -100,6 +153,8 @@
       </div>
     </div>
 
+    <!-- Prose explainer: additive phase, sampling the ideal curve, the leak law
+         cos²(δ/2), and the periodic wrap (bin N ≡ bin 0). -->
     <div class="card">
       <div class="lbl">What you're watching</div>
       <div class="explain">
@@ -110,6 +165,9 @@
       </div>
     </div>
 
+    <!-- The formal math, rendered by KaTeX auto-render: input state, QFT
+         amplitude, measured probability, clean-tone condition, leak law, and
+         periodicity. -->
     <div class="card">
       <div class="lbl">The math <span class="tag">QFT, formally</span></div>
       <div class="eq"><div class="cap"><b>Input state</b> — flat magnitude, phase set by your n rotations</div>
@@ -128,6 +186,7 @@
   </div>
 </div>
 
+<!-- Classic (non-module) script; runs after the markup it binds to is parsed. -->
 <script src="main.js"></script>
 </body>
 </html>
