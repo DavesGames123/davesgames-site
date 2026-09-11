@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>Stella Nova // Molecular Bond</title>
+<meta name="description" content="Interactive WebGPU molecular orbital simulator. LCAO bonding with real hydrogen-like wavefunctions, per-atom element selection, and 3D nuclear dynamics.">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+
+<div class="grid-bg"></div>
+<canvas id="c"></canvas>
+<canvas id="ov"></canvas>
+
+<div class="topbar">
+  <div class="topbar-l">
+    <span class="sys-name">Stella Nova</span>
+    <span class="sys-sub">Molecular Bond</span>
+    <div class="sys-status">Live</div>
+  </div>
+  <div class="topbar-r">
+    <span class="hide-narrow">Atoms <strong id="bodyCount">2</strong></span>
+    <span class="hide-narrow">Particles <strong id="partCount">0</strong></span>
+    <span class="e-live" id="e-live-top">E = 0.000 Ha</span>
+  </div>
+</div>
+
+<!-- PRESET BAR -->
+<nav class="preset-bar">
+  <span class="pbar-label">Systems</span>
+
+  <button class="pcard active" data-pr="h2" onclick="loadPresetUI('h2',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="20" cy="20" rx="11" ry="5.5" fill="rgba(150,200,255,0.16)" stroke="rgba(150,200,255,0.45)" stroke-width="0.5"/>
+      <circle cx="14" cy="20" r="3" fill="#e0e0e0"/>
+      <circle cx="26" cy="20" r="3" fill="#e0e0e0"/>
+    </svg></span>
+    <span class="pcard-meta">
+      <span class="pcard-name">H₂⁺ Bond</span>
+      <span class="pcard-sub">σ(1s) exact</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-pr="hf" onclick="loadPresetUI('hf',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="22" cy="20" rx="13" ry="6" fill="rgba(144,224,80,0.16)" stroke="rgba(144,224,80,0.45)" stroke-width="0.5"/>
+      <circle cx="11" cy="20" r="2.4" fill="#e0e0e0"/>
+      <circle cx="29" cy="20" r="4.2" fill="#90e050"/>
+    </svg></span>
+    <span class="pcard-meta">
+      <span class="pcard-name">H–F Polar</span>
+      <span class="pcard-sub">Polar σ bond</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-pr="n2" onclick="loadPresetUI('n2',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="20" cy="20" rx="13" ry="4.5" fill="rgba(48,80,248,0.16)" stroke="rgba(48,80,248,0.45)" stroke-width="0.5"/>
+      <circle cx="12" cy="20" r="4" fill="#3050f8"/>
+      <circle cx="28" cy="20" r="4" fill="#3050f8"/>
+    </svg></span>
+    <span class="pcard-meta">
+      <span class="pcard-name">N₂ σ</span>
+      <span class="pcard-sub">2pσ bond</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-pr="co" onclick="loadPresetUI('co',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="22" cy="20" rx="13" ry="5" fill="rgba(255,32,16,0.14)" stroke="rgba(255,32,16,0.4)" stroke-width="0.5"/>
+      <circle cx="12" cy="20" r="3.4" fill="#808080"/>
+      <circle cx="28" cy="20" r="4.2" fill="#ff2010"/>
+    </svg></span>
+    <span class="pcard-meta">
+      <span class="pcard-name">C–O</span>
+      <span class="pcard-sub">Asymmetric σ</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-pr="lih" onclick="loadPresetUI('lih',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="14" cy="20" rx="14" ry="6" fill="rgba(204,128,255,0.12)" stroke="rgba(204,128,255,0.4)" stroke-width="0.5"/>
+      <circle cx="9" cy="20" r="5" fill="#cc80ff"/>
+      <circle cx="30" cy="20" r="2.4" fill="#e0e0e0"/>
+    </svg></span>
+    <span class="pcard-meta">
+      <span class="pcard-name">Li–H Ionic</span>
+      <span class="pcard-sub">Z asymmetry</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-pr="anti" onclick="loadPresetUI('anti',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 14 13 Q 8 20 14 27" fill="none" stroke="rgba(92,216,232,0.5)" stroke-width="0.6"/>
+      <path d="M 26 13 Q 32 20 26 27" fill="none" stroke="rgba(232,116,102,0.5)" stroke-width="0.6"/>
+      <circle cx="14" cy="20" r="3.2" fill="#5cd8e8"/>
+      <circle cx="26" cy="20" r="3.2" fill="#e87466"/>
+      <line x1="20" y1="9" x2="20" y2="31" stroke="rgba(220,168,56,0.5)" stroke-width="0.6" stroke-dasharray="1.5,2"/>
+    </svg></span>
+    <span class="pcard-meta">
+      <span class="pcard-name">Antibond*</span>
+      <span class="pcard-sub">σ*(1s) repulsive</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-pr="chain" onclick="loadPresetUI('chain',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="20" cy="20" rx="18" ry="3.5" fill="rgba(128,128,128,0.14)" stroke="rgba(128,128,128,0.4)" stroke-width="0.5"/>
+      <circle cx="5" cy="20" r="2.4" fill="#808080"/>
+      <circle cx="15" cy="20" r="2.4" fill="#808080"/>
+      <circle cx="25" cy="20" r="2.4" fill="#808080"/>
+      <circle cx="35" cy="20" r="2.4" fill="#808080"/>
+    </svg></span>
+    <span class="pcard-meta">
+      <span class="pcard-name">4-Chain</span>
+      <span class="pcard-sub">Delocalised</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-pr="cluster" onclick="loadPresetUI('cluster',this)">
+    <span class="pcard-icon"><svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+      <rect x="9" y="9" width="22" height="22" fill="rgba(48,80,248,0.12)" stroke="rgba(48,80,248,0.4)" stroke-width="0.5"/>
+      <circle cx="13" cy="13" r="2.8" fill="#3050f8"/>
+      <circle cx="27" cy="13" r="2.8" fill="#3050f8"/>
+      <circle cx="13" cy="27" r="2.8" fill="#3050f8"/>
+      <circle cx="27" cy="27" r="2.8" fill="#3050f8"/>
+    </svg></span>
+    <span class="pcard-meta">
+      <span class="pcard-name">4-Cluster</span>
+      <span class="pcard-sub">2D lattice</span>
+    </span>
+  </button>
+</nav>
+
+<!-- CONTROL BAR -->
+<nav class="control-bar">
+  <span class="cb-label">Layout</span>
+  <div class="layout-btns">
+    <button class="layout-btn on" id="btn-grid">Grid</button>
+    <button class="layout-btn" id="btn-line">Line</button>
+  </div>
+
+  <span class="cb-divider"></span>
+
+  <button class="act-btn go" id="btn-release">&#9654; Release 3D</button>
+
+  <span class="cb-divider"></span>
+
+  <div class="dist-ctl">
+    <span class="lbl">R</span>
+    <input type="range" id="sl-d" min="1" max="10" value="3.5" step="0.1">
+    <span class="dist-val" id="vl-d">3.5</span>
+    <span class="dist-unit">a₀</span>
+  </div>
+
+  <div class="e-readout">
+    <span class="lbl">E_total</span>
+    <span class="val" id="h-e-val">0.000</span>
+    <span class="unit">Ha</span>
+  </div>
+</nav>
+
+<!-- LEFT PANEL: atom controls -->
+<aside class="panel" id="panel-a">
+  <div class="p-head">
+    <div class="p-title" id="sel-title">Atom 1</div>
+    <div class="p-sub">Selected Atom</div>
+  </div>
+
+  <div class="p-section">
+    <div class="p-label">Element</div>
+    <div class="elem-grid" id="elem-grid"></div>
+    <div class="elem-z" id="elem-z">Z<sub>eff</sub> = <span class="z-val">1.00</span> <span class="nm">Hydrogen</span></div>
+  </div>
+
+  <div class="p-section">
+    <div class="p-label">Orbital</div>
+    <div class="p-shell">n = 1</div>
+    <div class="p-orb-row">
+      <button class="p-orb active" data-orb="0">1s</button>
+    </div>
+    <div class="p-shell">n = 2</div>
+    <div class="p-orb-row">
+      <button class="p-orb" data-orb="1">2s</button>
+      <button class="p-orb" data-orb="2">2pσ</button>
+      <button class="p-orb" data-orb="3">2pπ</button>
+    </div>
+    <div class="p-shell">n = 3</div>
+    <div class="p-orb-row">
+      <button class="p-orb" data-orb="4">3s</button>
+      <button class="p-orb" data-orb="5">3pσ</button>
+      <button class="p-orb" data-orb="6">3pπ</button>
+    </div>
+    <div class="p-orb-row">
+      <button class="p-orb" data-orb="7">3dσ</button>
+      <button class="p-orb" data-orb="8">3dπ</button>
+      <button class="p-orb" data-orb="9">3dδ</button>
+    </div>
+  </div>
+
+  <div class="p-section">
+    <div class="p-label">Phase</div>
+    <div class="p-togs">
+      <button class="p-tog on" id="tog-plus">+ Bond</button>
+      <button class="p-tog" id="tog-minus">− Flip</button>
+    </div>
+  </div>
+
+  <div class="p-section">
+    <div class="p-label">Visualize</div>
+    <div class="p-modes">
+      <button class="p-mode active" data-mode="0">|ψ|²</button>
+      <button class="p-mode" data-mode="1">Δρ</button>
+      <button class="p-mode" data-mode="2">sign</button>
+    </div>
+  </div>
+
+  <div class="p-section">
+    <div class="p-label">Particles</div>
+    <div class="p-row">
+      <span class="p-row-lbl">N</span>
+      <input type="range" id="sl-N" min="5000" max="400000" value="80000" step="5000">
+      <span class="p-row-val" id="vl-N">80k</span>
+    </div>
+    <div class="p-row">
+      <span class="p-row-lbl">size</span>
+      <input type="range" id="sl-sz" min="0.01" max="0.2" value="0.06" step="0.005">
+      <span class="p-row-val" id="vl-sz">.060</span>
+    </div>
+    <div class="p-row">
+      <span class="p-row-lbl">gain</span>
+      <input type="range" id="sl-gain" min="0.5" max="20" value="4" step="0.5">
+      <span class="p-row-val" id="vl-gain">4.0</span>
+    </div>
+  </div>
+
+  <div class="p-info" id="p-info">—</div>
+</aside>
+
+<!-- RIGHT PANEL: atom list -->
+<aside class="panel" id="panel-b">
+  <div class="p-head">
+    <div class="p-title">Atoms</div>
+    <div class="p-sub">Tap to Edit</div>
+  </div>
+  <div class="al-bar">
+    <button class="al-btn" id="btn-add">+ Add</button>
+    <button class="al-btn" id="btn-sub">− Remove</button>
+  </div>
+  <div id="atom-list"></div>
+</aside>
+
+<!-- CANVAS AREA OVERLAYS -->
+<div class="canvas-area">
+  <section class="eq-panel" id="eqPanel">
+    <div class="eq-head">
+      <span class="eq-dot"></span>
+      <span class="lbl">Molecular Orbital Theory</span>
+      <button class="eq-collapse" id="eqCollapseBtn" title="Collapse">&#9650;</button>
+    </div>
+    <div class="eq-block">
+      <div class="eq-sublabel">LCAO &middot; Linear Combination of Atomic Orbitals</div>
+      <div class="eq-row" id="eq-lcao"></div>
+      <div class="eq-row" id="eq-norm"></div>
+    </div>
+    <div class="eq-block">
+      <div class="eq-sublabel">Hydrogen-like Atomic Orbital with Z<sub>eff</sub></div>
+      <div class="eq-row" id="eq-ao"></div>
+    </div>
+    <div class="eq-block">
+      <div class="eq-sublabel">H₂⁺ Bonding Energy &middot; Exact one-electron diatomic</div>
+      <div class="eq-row" id="eq-eplus"></div>
+      <div class="eq-row" id="eq-overlap"></div>
+    </div>
+  </section>
+
+  <div id="ket">
+    <div class="ket-main" id="ket-main">H – H</div>
+    <div class="ket-sub" id="ket-sub">2-atom LCAO Molecular Orbital</div>
+  </div>
+
+  <div class="force-legend">
+    <div class="fl-item"><div class="fl-line" style="background:var(--cyan)"></div><span style="color:var(--cyan)">Attractive</span></div>
+    <div class="fl-item"><div class="fl-line" style="background:var(--red)"></div><span style="color:var(--red)">Repulsive</span></div>
+  </div>
+</div>
+
+<button class="fab left" id="fabA" onclick="toggleDrawer('a')">Atom &equiv;</button>
+<button class="fab right" id="fabB" onclick="toggleDrawer('b')">List &equiv;</button>
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawers()"></div>
+
+<div id="loading">Sampling···</div>
+<div id="no-webgpu"><h2>WebGPU Required</h2><p>This page uses WebGPU compute shaders for the live wavefunction. Chrome 113+, Edge 113+, or Safari 18+ with WebGPU enabled.</p></div>
+<div id="gpu-err"></div>
+
+<!-- ───────── Color-coded reference equations ───────── -->
+<script src="equations.js"></script>
+
+<!-- ───────── Physics + WebGPU (preserved verbatim) ───────── -->
+<script type="module" src="main.js"></script>
+</body>
+</html>

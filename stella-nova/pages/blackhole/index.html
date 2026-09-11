@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Black Hole // Stella Nova</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div class="gpu-warn" id="gpuWarn">
+  <h2>GPU Intensive</h2>
+  <p>This page performs per-pixel Schwarzschild geodesic ray tracing on the GPU. Your device may run warm and fans may spin up. Performance varies by hardware.</p>
+  <button class="dismiss" onclick="dismissWarn()">Continue</button>
+</div>
+
+<div class="hud"><h1>Black Hole</h1><div class="sub">Schwarzschild Geodesic Ray Tracer</div></div>
+<div class="stats"><div id="fps"></div><div id="res"></div><div id="mode"></div></div>
+<div class="hint" id="hint">drag to orbit · scroll to zoom</div>
+
+<div class="eq-panel" id="eqPanel" style="display:none" onclick="if(this.classList.contains('collapsed'))toggleEqPanel()">
+  <button class="eq-toggle" id="eqToggleBtn" onclick="event.stopPropagation();toggleEqPanel()" aria-label="Toggle equations">−</button>
+  <div class="eq-content">
+    <div class="eq-group">
+      <div class="eq-title">Schwarzschild Metric</div>
+      <div class="eq-row" id="eq1"></div>
+    </div>
+    <div class="eq-group">
+      <div class="eq-title">Einstein Field Equations</div>
+      <div class="eq-row" id="eq2"></div>
+    </div>
+  </div>
+  <span class="eq-collapsed-label">Equations</span>
+</div>
+
+<div class="bg-bar" id="bgBar" style="display:none">
+  <div class="bg-icon bg-stars active" id="bgStars" onclick="setBg(0)">
+    <span class="ico">✦</span>
+    <span class="lbl">Stars</span>
+  </div>
+  <div class="bg-icon bg-grid" id="bgGrid" onclick="setBg(1)">
+    <span class="ico">▦</span>
+    <span class="lbl">Grid</span>
+  </div>
+  <div class="bg-icon bg-uv" id="bgUV" onclick="setBg(2)">
+    <span class="ico">◧</span>
+    <span class="lbl">UV</span>
+  </div>
+  <div class="bg-icon bg-nebula" id="bgNebula" onclick="setBg(3)">
+    <span class="ico">☁</span>
+    <span class="lbl">Nebula</span>
+  </div>
+  <div class="bg-icon bg-rings" id="bgRings" onclick="setBg(4)">
+    <span class="ico">◎</span>
+    <span class="lbl">Rings</span>
+  </div>
+</div>
+
+<div class="ctrl-wrap" id="ctrlWrap" style="display:none">
+  <button class="toggle-btn on" id="btnGeodesic" onclick="toggleGeodesic()">Geodesic</button>
+  <button class="toggle-btn" id="btnRK4" onclick="toggleRK4()">RK4</button>
+  <div class="ctrl-sep"></div>
+  <button class="toggle-btn on" id="btnDisc" onclick="toggleDisc()">Disc</button>
+  <button class="toggle-btn on" id="btnSpin" onclick="toggleSpin()">⟳ Spin</button>
+  <div class="ctrl-sep"></div>
+  <span class="ctrl-label">Zoom</span>
+  <input type="range" id="zoomSlider" min="5" max="200" value="32">
+  <span class="ctrl-val" id="zoomVal">32</span>
+  <div class="ctrl-sep"></div>
+  <button class="toggle-btn" id="btnQLow" onclick="setQuality(0)">Low</button>
+  <button class="toggle-btn on" id="btnQMed" onclick="setQuality(1)">Med</button>
+  <button class="toggle-btn" id="btnQHigh" onclick="setQuality(2)">High</button>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>

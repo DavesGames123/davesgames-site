@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Cornell Box // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Cornell Box Studio</span></div>
+  <div class="topbar-r">SYS // <strong>PATH TRACER</strong></div>
+</div>
+<div id="main">
+  <div id="panel"><div class="p-body">
+    <div class="rollout"><div class="ro-head">Viewport</div><div class="ro-body">
+      <div class="seg" id="modeSeg"><button onclick="APP.setMode('wire')">▫ Wire</button><button onclick="APP.setMode('shaded')">◐ Shaded</button><button class="on" onclick="APP.setMode('render')">◆ Render</button></div>
+      <div class="seg" id="bkSeg" style="margin-top:5px"><button id="bGpu" class="on" onclick="APP.setBackend('gpu')">GPU</button><button id="bCpu" onclick="APP.setBackend('cpu')">CPU</button></div>
+      <div class="modenote" id="modenote"></div>
+    </div></div>
+    <div class="rollout"><div class="ro-head">Scene Explorer</div><div class="ro-body" style="padding-top:7px"><div class="tree" id="tree"></div></div></div>
+    <div class="cmd">
+      <div class="cmd-tabs"><button id="tabCreate" onclick="APP.tab('create')">+ Create</button><button id="tabModify" class="on" onclick="APP.tab('modify')">✎ Modify</button></div>
+      <div class="cmd-pane" id="paneCreate" style="display:none"><div class="ro-sub">Standard Primitives</div><div class="create-grid" id="createGeo"></div><div class="ro-sub">Lights</div><div class="create-grid" id="createLight"></div></div>
+      <div class="cmd-pane" id="paneModify"><div id="modifyBody"></div></div>
+    </div>
+    <div class="rollout"><div class="ro-head">Camera &amp; Scene</div><div class="ro-body">
+      <button class="pbtn" onclick="APP.resetView()">⟲ Reset View</button>
+      <div class="ro-sub">Lighting Presets</div>
+      <div class="seg"><button onclick="APP.preset('brand')">Brand</button><button onclick="APP.preset('classic')">Classic</button><button onclick="APP.preset('dim')">Dim</button></div>
+    </div></div>
+  </div></div>
+  <div id="canvas-wrap">
+    <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('open')">☰</button>
+    <canvas id="gl"></canvas>
+    <canvas id="cpu"></canvas>
+    <canvas id="wire"></canvas>
+    <div id="err"></div>
+  </div>
+</div>
+<div id="status-bar">
+  <span id="st-mode">WIREFRAME</span><span class="sep"></span>
+  <span id="st-cam">az 90 · el 14 · d 2.0</span><span class="sep"></span>
+  <span id="st-sel">sel: Center</span><span class="sep"></span>
+  <span id="st-extra">--</span>
+</div>
+<script src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>STELLA NOVA // Explosion Viewer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="player">
+  <div class="viewport">
+    <div class="vp-chrome top"><span>VOLUMETRIC EXPLOSION // DUKE</span><span id="resLabel">--</span></div>
+    <canvas id="cv"></canvas>
+    <div class="vp-chrome bottom"><span id="fpsLabel">-- FPS</span><span>DRAG TO ROTATE · SCROLL TO ZOOM</span></div>
+  </div>
+  <div class="controls">
+    <div class="timeline" id="timeline"><div class="tl-track"><div class="tl-fill" id="tlFill" style="width:0%"></div></div></div>
+    <div class="transport">
+      <button class="t-btn" id="btnFrameBack">⏮</button>
+      <button class="t-btn" id="btnPlay">▶</button>
+      <button class="t-btn" id="btnFrameFwd">⏭</button>
+      <div class="t-time"><strong id="timeNow">0.00</strong> / <span id="timeDur">8.00</span>s</div>
+      <button class="t-btn" id="btnSeed">🎲 <span id="seedLabel" style="color:var(--yellow)">--</span></button>
+      <div class="t-sep"></div>
+      <button class="t-btn" data-spd="0.1">⅒×</button>
+      <button class="t-btn" data-spd="0.25">¼×</button>
+      <button class="t-btn" data-spd="0.5">½×</button>
+      <button class="t-btn active" data-spd="1">1×</button>
+      <button class="t-btn" data-spd="2">2×</button>
+    </div>
+    <div class="ctrl-row">
+      <div class="slider-group">
+        <label>Zoom</label>
+        <input type="range" id="sldZoom" min="0" max="3" step="0.01" value="0.5">
+        <span class="sv" id="valZoom">0.50</span>
+      </div>
+      <div style="display:flex;gap:3px">
+        <button class="t-btn" data-q="0">56</button>
+        <button class="t-btn" data-q="1">86</button>
+        <button class="t-btn active" data-q="2">128</button>
+      </div>
+    </div>
+  </div>
+  <div class="dope-sheet">
+    <div class="ds-head">
+      <span class="ds-title">▸ Dope Sheet — Drag Points to Reshape Curves</span>
+      <div class="ds-legend">
+        <div class="ds-leg-item on" data-curve="scale"><div class="swatch" style="background:#ffc832"></div>Scale</div>
+        <div class="ds-leg-item on" data-curve="bright"><div class="swatch" style="background:#96c8ff"></div>Bright</div>
+        <div class="ds-leg-item on" data-curve="density"><div class="swatch" style="background:#64c864"></div>Density</div>
+      </div>
+      <button class="t-btn" id="btnResetCurves">Reset</button>
+    </div>
+    <div class="ds-body">
+      <canvas id="dsCv"></canvas>
+      <div class="ds-info">click to add · right-click to remove · drag to move</div>
+    </div>
+  </div>
+</div>
+<div id="dbg"></div>
+
+<script src="main.js"></script>
+</body>
+</html>
