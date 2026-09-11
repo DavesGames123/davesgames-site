@@ -1,7 +1,66 @@
+// ============================================================================
+//  TWENTY TO FOUR  ·  radiating-dipole field simulation
+// ----------------------------------------------------------------------------
+//  A single oscillating charge (a point dipole) radiates in a 2D slice. The
+//  canvas draws the electric field E as vectors and stream-function contour
+//  lines, the magnetic field B⊥ as a heatmap or glyphs, and outward wavefronts.
+//  The equation panel (built by concepts.js) hovers each of Maxwell's original
+//  scalar components; on hover it calls window.__setOverlay to paint the exact
+//  field quantity that component governs.
+//
+//  FIELD MODEL   (dipole along the axis, evaluated at radius r, retarded phase)
+//  --------------------------------------------------------------------------
+//      u = k·r − t                 retarded phase; k = 2π/λ
+//      near/induction ∝ cos u / r³ + k·sin u / r²     dominates close in
+//      radiation      ∝ k²·cos u / r                  dominates far out, is light
+//      E = amp·( near·(3cosθ r̂ − â) + radiation·(â − cosθ r̂) )
+//      B⊥ = amp·(r̂ × â)·( radiation + near )          out of / into the plane
+//
+//  COORDINATE FRAME   (canvas pixels; y increases downward)
+//  --------------------------------------------------------------------------
+//      (0,0) ┌─────────────▶ x
+//            │        â  axis (axisDeg, y flipped so degrees read upward)
+//            │       ╱
+//            │   ● SRC ─── r̂ ──▶ • sample (x,y)
+//            │   dipole          r = |sample − SRC|
+//            ▼ y
+//
+//  RENDER ORDER   (render(), back to front)
+//  --------------------------------------------------------------------------
+//      background grid ─▶ heatmap (overlay quantity or B⊥) ─▶ wavefronts
+//        ─▶ field-line contours ─▶ E vectors ─▶ overlay component vectors
+//        ─▶ source glow
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  --------------------------------------------------------------------------
+//      state ............... "const SIM="            all live parameters
+//      color ramp .......... "function fieldColorRGB"  magnitude → RGB
+//      field model ......... "function fieldAt"       the dipole E and B
+//      overlays ............ "OVERLAYS"               hover → quantity table
+//      heatmap ............. "function drawHeatmap"   dense scalar field paint
+//      vector arrows ....... "function drawArrowField"  arrow grid renderer
+//      Bz glyphs ........... "function drawBzGlyphs"  out/into-plane symbols
+//      field lines ......... "function buildGrid"     stream function + march
+//      contour march ....... "function marchAll"      marching squares
+//      render .............. "function render"        the per-frame draw
+//      source glow ......... "function renderSource"  the oscillating charge
+//      controls ............ "function sg"            slider wiring
+//      pointer ............. "function ptr"           drag the source
+//      resize .............. "function resize"        canvas sizing and DPR
+//      loop ................ "function loop"          time advance and FPS
+// ============================================================================
+
+// The drawing canvas and its 2D context. CW/CH are the CSS pixel size (the
+// backing store is scaled by device pixel ratio in resize()).
 const canvas=document.getElementById('sim-canvas');
 const ctx=canvas.getContext('2d');
 let CW=100,CH=100;
 
+// The single mutable state. t is the phase clock; lambda is the wavelength in
+// pixels; axisDeg is the dipole orientation; density controls how many contour
+// levels appear; amp/cNear/cRad scale the overall strength and the two field
+// terms; the show* flags toggle each render layer; overlay names the hovered
+// quantity or is null.
 const SIM={
   playing:true, speed:1.0, t:0,
   freq:1.0, lambda:140, axisDeg:90, density:42,
@@ -9,9 +68,14 @@ const SIM={
   amp:1.0, cNear:1.0, cRad:1.0,
   overlay:null,
 };
+// The source (dipole) position in canvas pixels, and the drag offset while it is
+// being moved.
 const SRC={x:0,y:0};
 let dragging=false,dragDX=0,dragDY=0;
 
+// Map a field magnitude to an RGB color along a six-stop ramp (deep blue → cyan
+// → green → orange → white). The magnitude is log-compressed because the field
+// spans many orders between the near zone and the far zone.
 function fieldColorRGB(mag,gamma){
   gamma=gamma||1.0;
   const lv=Math.log10(1+mag*9e6)/6.6;
@@ -22,9 +86,17 @@ function fieldColorRGB(mag,gamma){
           stops[si][1]+sf*(stops[si+1][1]-stops[si][1]),
           stops[si][2]+sf*(stops[si+1][2]-stops[si][2])];
 }
+// Wavenumber k = 2π/λ.
 function kOf(){return 2*Math.PI/SIM.lambda;}
+// Unit vector along the dipole axis. Y is negated so the degree readout matches
+// the usual math convention (counterclockwise from the x-axis) on a y-down canvas.
 function axisVec(){const a=SIM.axisDeg*Math.PI/180;return [Math.cos(a),-Math.sin(a)];}
 
+// The dipole field at a point and time. Combines the near/induction term
+// (1/r³ and 1/r², weighted by cNear) with the radiation term (1/r, weighted by
+// cRad). nvx/nvy is the radial-dominated component, tvx/tvy the transverse
+// radiation component, and Bz the out-of-plane magnetic field from r̂ × â.
+// r is clamped to 7 px to avoid the singularity at the source.
 // field at an arbitrary time (needed for d/dt overlays). amp/cNear/cRad are live coefficients.
 function fieldAt(x,y,t){
   const k=kOf(),[ax,ay]=axisVec();
@@ -39,15 +111,24 @@ function fieldAt(x,y,t){
   const Bz=SIM.amp*crossZ*(SIM.cRad*k*k*cu/r + SIM.cNear*k*su/r2);
   return {Ex,Ey,Bz,Emag:Math.hypot(Ex,Ey)};
 }
+// Field at the current simulation time.
 function field(x,y){return fieldAt(x,y,SIM.t);}
 
 /* ─── OVERLAYS: hover a Maxwell equation → see that quantity ───
    .fn  = signed scalar for the heatmap
    .cvec= the COMPONENT vector drawn over the base E vectors, or 'glyph' (B⊥), or null */
+// HT is the time step for the ∂/∂t central difference; hS is the spatial step
+// for ∂/∂x and ∂/∂y central differences.
 const HT=0.05, hS=2;
+// Central-difference time derivative of one field component (displacement current).
 function dEdt(x,y,comp){const a=fieldAt(x,y,SIM.t+HT),b=fieldAt(x,y,SIM.t-HT);return (a[comp]-b[comp])/(2*HT);}
+// Central-difference spatial derivatives of B⊥ (the curl-of-H components).
 function dBz_dy(x,y){return (field(x,y+hS).Bz-field(x,y-hS).Bz)/(2*hS);}
 function dBz_dx(x,y){return (field(x+hS,y).Bz-field(x-hS,y).Bz)/(2*hS);}
+// Overlay table: for each hoverable equation component, fn is the signed scalar
+// the heatmap paints, and cvec is the component vector drawn over the base E
+// arrows ('glyph' means draw B⊥ symbols, null means nothing to draw). ov keys
+// in concepts.js index into this table.
 const OVL={
   Ex:{lab:'Eₓ — electric field, x-component', fn:(x,y)=>field(x,y).Ex, cvec:(x,y)=>[field(x,y).Ex,0]},
   Ey:{lab:'E_y — electric field, y-component', fn:(x,y)=>field(x,y).Ey, cvec:(x,y)=>[0,field(x,y).Ey]},
@@ -59,8 +140,11 @@ const OVL={
   divE:{lab:'∇·E — sources of the field (≈ 0 away from the charge)', fn:(x,y)=>(dExdx(x,y)+dEydy(x,y)), cvec:null},
   zero:{lab:'≡ 0 for an in-plane dipole — this component vanishes in the slice', fn:null, cvec:null},
 };
+// Spatial derivatives of the E components, summed for the divergence overlay.
 function dExdx(x,y){return (field(x+hS,y).Ex-field(x-hS,y).Ex)/(2*hS);}
 function dEydy(x,y){return (field(x,y+hS).Ey-field(x,y-hS).Ey)/(2*hS);}
+// Called by concepts.js on hover: set the active overlay, update the caption and
+// the status readout, or clear back to the field-line view when kind is null.
 window.__setOverlay=function(kind){
   SIM.overlay=(kind&&OVL[kind])?kind:null;
   const cap=document.getElementById('ovl-caption'),stov=document.getElementById('st-ovl');
@@ -73,7 +157,11 @@ window.__setOverlay=function(kind){
 };
 
 /* ─── smooth high-resolution field heatmap (computed dense, upscaled with smoothing) ─── */
+// Offscreen buffer for the heatmap: the scalar field is sampled sparsely onto a
+// small canvas, then upscaled with smoothing for a fast, soft heatmap.
 const hmCanvas=document.createElement('canvas'); const hmCtx=hmCanvas.getContext('2d');
+// Paint the signed scalar fn as a heatmap: amber for positive, blue for
+// negative, with log-compressed alpha so both near and far zones stay visible.
 function drawHeatmap(fn){
   const step=7;
   const bw=Math.max(2,Math.ceil(CW/step)), bh=Math.max(2,Math.ceil(CH/step));
@@ -96,7 +184,11 @@ function drawHeatmap(fn){
 }
 
 /* ─── vector field arrows ─── */
+// Arrow grid spacing, scaled to the canvas size.
 function arrowGS(){return Math.max(30,Math.round(Math.min(CW,CH)/14));}
+// Draw a vector field vf as a grid of arrows. Lengths and opacities are
+// log-scaled to the grid maximum; additive blending makes overlapping arrows
+// glow. lenMul scales arrow length, rgb is the base color.
 function drawArrowField(vf,rgb,alpha,lenMul){
   const gs=arrowGS(); let mx=1e-30; const pts=[];
   for(let y=gs/2;y<CH;y+=gs)for(let x=gs/2;x<CW;x+=gs){const v=vf(x,y);const m=Math.hypot(v[0],v[1]);if(m>mx)mx=m;pts.push([x,y,v[0],v[1],m]);}
@@ -115,6 +207,8 @@ function drawArrowField(vf,rgb,alpha,lenMul){
   }
   ctx.restore();
 }
+// Draw B⊥ as glyphs on the arrow grid: a filled dot for field out of the plane,
+// a cross for field into the plane, sized by log-scaled magnitude.
 function drawBzGlyphs(){
   const gs=arrowGS(); let mx=1e-30; const pts=[];
   for(let y=gs/2;y<CH;y+=gs)for(let x=gs/2;x<CW;x+=gs){const v=field(x,y).Bz;const a=Math.abs(v);if(a>mx)mx=a;pts.push([x,y,v]);}
@@ -130,6 +224,8 @@ function drawBzGlyphs(){
   }
   ctx.restore();
 }
+// Draw the hovered overlay's component vectors (or B⊥ glyphs) in amber over the
+// base E field.
 function renderComponentVectors(kind){
   const o=OVL[kind]; if(!o) return;
   if(o.cvec==='glyph'){drawBzGlyphs();return;}
@@ -137,7 +233,12 @@ function renderComponentVectors(kind){
 }
 
 /* ─── stream-function field lines (contours; smooth in time) ─── */
+// Grid state for the field-line contours: cell size GS, grid width/height GW/GH,
+// and the sampled stream-function and magnitude arrays.
 let GS=0,GW=0,GH=0,psiGrid=null,magGrid=null;
+// Sample the dipole stream function psi and the field magnitude onto a grid.
+// Field lines are the level curves of psi, so contouring psi traces the E field
+// lines without integrating them. sin²θ weighting gives the dipole lobe shape.
 function buildGrid(){
   GS=Math.min(10,Math.max(5,Math.round(Math.sqrt(CW*CH)/130)));
   GW=Math.ceil(CW/GS)+1;GH=Math.ceil(CH/GS)+1;const N=GW*GH;
@@ -152,6 +253,9 @@ function buildGrid(){
       magGrid[idx]=amp*Math.sqrt(4*cosT*cosT*gw*gw+sin2*gh*gh);
     }}
 }
+// Build the set of psi contour levels, geometrically spaced (ratio 1.5) and
+// mirrored in sign, so both field-line densities near and far from the source
+// stay legible. The count grows with the density control.
 function contourLevels(){
   const k=kOf();
   const M=Math.max(7,Math.min(20,Math.round(SIM.density/3.8)));
@@ -160,7 +264,11 @@ function contourLevels(){
   out.sort((a,b)=>a-b);
   return out;
 }
+// Nearest-cell lookup of the field magnitude, used to color a contour segment.
 function sampleMag(x,y){const gi=Math.min(GW-1,Math.max(0,(x/GS)|0)),gj=Math.min(GH-1,Math.max(0,(y/GS)|0));return magGrid[gj*GW+gi];}
+// Marching squares over psiGrid: for every cell and every level that crosses it,
+// interpolate the crossing points on the cell edges and emit line segments into
+// segs. Empty and single-value cells are skipped for speed.
 function marchAll(levels,segs){
   const NL=levels.length;
   for(let j=0;j<GH-1;j++){const rowA=j*GW,rowB=(j+1)*GW,y0=j*GS,y1=y0+GS;
@@ -178,10 +286,14 @@ function marchAll(levels,segs){
       }}}
 }
 
+// The per-frame draw. Clear, paint the faint background grid, then layer the
+// heatmap, wavefronts, field lines, E vectors, any overlay vectors, and finally
+// the source glow, back to front.
 /* ─── render ─── */
 function render(){
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();
   ctx.fillStyle='#0b0e15';ctx.fillRect(0,0,CW,CH);
+  // Faint reference grid every 46 px.
   ctx.strokeStyle='rgba(150,200,255,0.022)';ctx.lineWidth=1;
   for(let x=0;x<CW;x+=46){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
   for(let y=0;y<CH;y+=46){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
@@ -196,12 +308,18 @@ function render(){
   if(SIM.overlay) renderComponentVectors(SIM.overlay);
   renderSource();
 }
+// Dashed concentric circles marking successive wavefronts, spaced one wavelength
+// apart and advancing outward with the phase clock.
 function renderFronts(){
   const k=kOf();ctx.save();ctx.strokeStyle='rgba(150,200,255,0.13)';ctx.lineWidth=1;ctx.setLineDash([2,6]);
   for(let n=0;n<16;n++){const r=(2*Math.PI*n+SIM.t)/k;if(r<8||r>Math.hypot(CW,CH))continue;
     ctx.beginPath();ctx.arc(SRC.x,SRC.y,r,0,Math.PI*2);ctx.stroke();}
   ctx.restore();
 }
+// Draw the E field lines as contours of the stream function. Each segment is
+// colored by local magnitude and drawn twice: a soft wide glow pass then a thin
+// bright pass. When the energy pulse is on, a traveling sine brightens the lines
+// outward from the source; overlays dim the lines so the overlay reads clearly.
 function renderLines(){
   buildGrid();
   const levels=contourLevels();const segs=[];marchAll(levels,segs);
@@ -224,6 +342,8 @@ function renderLines(){
   }
   ctx.restore();
 }
+// Draw the oscillating charge: a short axis tick and a radial glow whose color
+// and position swing with sin(t), so the charge visibly vibrates along the axis.
 function renderSource(){
   const [ax,ay]=axisVec();const osc=Math.sin(SIM.t);const off=osc*7;
   const cx=SRC.x,cy=SRC.y;ctx.save();
@@ -238,6 +358,9 @@ function renderSource(){
   ctx.restore();
 }
 
+// Control wiring. sg paints a slider's filled track; each set* handler writes one
+// SIM field and updates its readout; tog flips a boolean layer; togglePlay and
+// setSpeed drive the time clock. These are called from inline handlers in the HTML.
 /* ─── controls ─── */
 function sg(el){if(!el)return;const min=+el.min,max=+el.max;el.style.setProperty('--pct',((el.value-min)/(max-min)*100)+'%');}
 function setFreq(el){SIM.freq=+el.value;document.getElementById('vl-freq').textContent=SIM.freq.toFixed(2);sg(el);}
@@ -249,6 +372,9 @@ function tog(key,btn){SIM[key]=!SIM[key];btn.classList.toggle('on',SIM[key]);}
 function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'▶ Play':'❚❚ Pause';b.classList.toggle('active',SIM.playing);}
 function setSpeed(s){SIM.speed=s;}
 
+// Pointer handling: drag the source when the press lands near it. ptr maps a
+// mouse or touch event to canvas pixels; the handlers store the grab offset so
+// the charge follows the cursor without snapping its center to it.
 /* ─── pointer: drag source ─── */
 function ptr(e){const r=canvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return [t.clientX-r.left,t.clientY-r.top];}
 canvas.addEventListener('mousedown',e=>{const[x,y]=ptr(e);if(Math.hypot(x-SRC.x,y-SRC.y)<60){dragging=true;dragDX=SRC.x-x;dragDY=SRC.y-y;}});
@@ -258,6 +384,8 @@ canvas.addEventListener('touchstart',e=>{const[x,y]=ptr(e);if(Math.hypot(x-SRC.x
 canvas.addEventListener('touchmove',e=>{if(!dragging)return;const[x,y]=ptr(e);SRC.x=x+dragDX;SRC.y=y+dragDY;e.preventDefault();},{passive:false});
 window.addEventListener('touchend',()=>dragging=false);
 
+// Fit the canvas to the stage element, scale the backing store by device pixel
+// ratio (capped at 2), and place the source near the center on first size.
 /* ─── resize ─── */
 function resize(){
   const s=document.getElementById('stage');CW=s.clientWidth;CH=s.clientHeight;
@@ -265,9 +393,12 @@ function resize(){
   const dpr=Math.min(devicePixelRatio,2);canvas.width=CW*dpr;canvas.height=CH*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);
   if(SRC.x===0&&SRC.y===0){SRC.x=CW*0.46;SRC.y=CH*0.5;}
 }
+// Prefer a ResizeObserver on the stage; fall back to the window resize event.
 if(window.ResizeObserver){new ResizeObserver(()=>resize()).observe(document.getElementById('stage'));}
 else{window.addEventListener('resize',resize);}
 
+// The animation loop. Advance the phase clock by real elapsed time (scaled by
+// freq and speed) when playing, refresh the FPS and status readouts, and render.
 /* ─── loop ─── */
 let last=0,fc=0,ft=0;
 function loop(time){
@@ -279,5 +410,7 @@ function loop(time){
   document.getElementById('st-phase').textContent=(SIM.t%(2*Math.PI)).toFixed(2);
   render();
 }
+// Boot: paint every slider's initial fill, then size the canvas and start the
+// loop after a short delay so the layout has settled.
 document.querySelectorAll('#rail input[type=range]').forEach(sg);
 setTimeout(()=>{resize();requestAnimationFrame(loop);},60);

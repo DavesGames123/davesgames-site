@@ -4,13 +4,48 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Twenty to Four // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   TWENTY TO FOUR  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup for the Maxwell to Heaviside page. main.js runs the radiating
+   dipole field in #sim-canvas; concepts.js builds the equation panel inside
+   #eq-scroll and, on hover, drives the canvas overlay through
+   window.__setOverlay. This file lays out the left control rail, the center
+   stage, the right equation panel, and the status bar. Nothing here computes
+   the field.
+
+   HEAD LOAD ORDER   (order matters)
+     ● fonts        Google Fonts stylesheet
+     ● KaTeX        CSS then JS, so concepts.js can render on load
+     ● style.css    the page stylesheet
+     ● concepts.js  at body end, builds the equation panel and hover wiring
+     ● main.js      at body end, runs the field sim and defines __setOverlay
+
+   LAYOUT   (the leading marker is an element id)
+     ┌────────────────────────────────────────────────────────────────────┐
+     │ topbar  Stella Nova · Twenty to Four                                 │
+     ├──────────────┬───────────────────────────────┬─────────────────────┤
+     │ #rail        │ #stage                        │ #eqpanel            │
+     │  source       │   #sim-canvas  dipole field    │  Maxwell → Heaviside │
+     │  field view   │   #ovl-caption overlay label   │  #eq-scroll         │
+     │  coefficients │                                │   20 → 4 blocks      │
+     │  time         │                                │                     │
+     ├──────────────┴───────────────────────────────┴─────────────────────┤
+     │ #status-bar  λ · c · φ · overlay · fps                               │
+     └────────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Mobile button: toggle the control rail open on narrow screens. -->
 <button id="mob-btn" onclick="document.getElementById('rail').classList.toggle('open')">☰</button>
 
 <div class="topbar">
@@ -21,6 +56,7 @@
 <div id="main">
   <!-- LEFT RAIL -->
   <div id="rail">
+    <!-- Source controls: dipole frequency, wavelength, and axis orientation. -->
     <div class="r-sec">
       <div class="r-lbl">Source</div>
       <div class="hint" style="margin-bottom:9px">Drag the glowing charge anywhere on the field.</div>
@@ -28,6 +64,7 @@
       <div class="r-row"><span class="r-row-lbl">Wavelen</span><input type="range" id="sl-lambda" min="70" max="260" value="140" step="5" oninput="setLambda(this)"><span class="val" id="vl-lambda">140</span></div>
       <div class="r-row"><span class="r-row-lbl">Axis°</span><input type="range" id="sl-axis" min="0" max="180" value="90" step="1" oninput="setAxis(this)"><span class="val" id="vl-axis">90</span></div>
     </div>
+    <!-- Layer toggles and the field-line density slider. -->
     <div class="r-sec">
       <div class="r-lbl">Field view</div>
       <button class="tog on" id="tog-vectors" onclick="tog('showVectors',this)">↗ E-field vectors</button>
@@ -37,6 +74,7 @@
       <button class="tog" id="tog-fronts" onclick="tog('showFronts',this)">◜ Wavefronts</button>
       <div class="r-row" style="margin-top:8px"><span class="r-row-lbl">Loops</span><input type="range" id="sl-density" min="20" max="100" value="42" step="2" oninput="setDensity(this)"><span class="val" id="vl-density">42</span></div>
     </div>
+    <!-- Live field coefficients: overall strength and the two falloff-term weights. -->
     <div class="r-sec">
       <div class="r-lbl">Coefficients</div>
       <div class="hint" style="margin-bottom:9px">Tune the field live — overall strength and the weight of each falloff term.</div>
@@ -44,6 +82,7 @@
       <div class="r-row"><span class="r-row-lbl">Near 1/r³</span><input type="range" id="sl-near" min="0" max="3" value="1" step="0.05" oninput="setCoef('cNear',this)"><span class="val" id="vl-near">1.0</span></div>
       <div class="r-row"><span class="r-row-lbl">Radiate 1/r</span><input type="range" id="sl-rad" min="0" max="3" value="1" step="0.05" oninput="setCoef('cRad',this)"><span class="val" id="vl-rad">1.0</span></div>
     </div>
+    <!-- Time transport: play/pause and speed. -->
     <div class="r-sec">
       <div class="r-lbl">Time</div>
       <div class="btns"><button class="btn active" id="btn-play" onclick="togglePlay()">▶ Play</button><button class="btn" onclick="setSpeed(0.25)">◑ Slow</button><button class="btn" onclick="setSpeed(1)">1×</button></div>
@@ -53,8 +92,10 @@
       <div class="hint">Hover any equation on the right and the canvas shows the exact <b>field quantity</b> that equation governs — its magnitude and sign across space.</div>
     </div>
   </div>
+  <!-- Dimmed backdrop that closes the mobile rail on tap. -->
   <div class="mob-overlay" onclick="document.getElementById('rail').classList.remove('open')"></div>
 
+  <!-- Center stage: the field canvas plus its tip and overlay caption. -->
   <!-- CENTER STAGE -->
   <div id="stage">
     <canvas id="sim-canvas"></canvas>
@@ -62,6 +103,7 @@
     <div id="ovl-caption"></div>
   </div>
 
+  <!-- Equation panel: concepts.js fills #eq-scroll with the 20 to 4 collapse. -->
   <!-- RIGHT EQUATION PANEL -->
   <div id="eqpanel">
     <div class="eq-top">
@@ -73,6 +115,7 @@
   </div>
 </div>
 
+<!-- Status bar: wavelength, wave speed, phase, active overlay, and FPS. -->
 <div id="status-bar">
   <span>λ <b id="st-lambda">140</b>px</span><span class="sep"></span>
   <span>c <b id="st-c">—</b></span><span class="sep"></span>

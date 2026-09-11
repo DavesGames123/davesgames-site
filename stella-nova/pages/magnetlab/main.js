@@ -1,25 +1,84 @@
+// ============================================================================
+//  MAGNETLAB  ·  2D magnetic field simulator  (canvas 2D)
+// ----------------------------------------------------------------------------
+//  Every magnet is a rigid body carrying a set of point dipoles ("poles"). The
+//  field at any point is the vector sum of each pole's dipole field. Massless
+//  tracer particles ride that field like iron filings, and dynamic magnets feel
+//  the force and torque the field exerts on their own poles. All of it draws to
+//  one canvas through a pan/zoom camera transform.
+//
+//  FIELD MODEL   (one pole, in the pole's local frame)
+//  --------------------------------------------------------------------------
+//      B(r) = FIELD_SCALE * ( 3(m·r̂)r̂ − m ) / r³        point dipole
+//
+//         S ●━━━▶━━━ N        m points S→N; field loops N back to S
+//          ╲   ╱ ╲   ╱
+//           ╲ ╱   ╲ ╱         tracers follow B̂, biased to spawn near tips
+//            ●     ●
+//
+//  SIMULATION LOOP   (loop(), 60 Hz via requestAnimationFrame)
+//  --------------------------------------------------------------------------
+//      integrateMagnets()  spin, then force+torque, then collisions
+//      updateTracers(dt)   step each tracer along B̂, respawn when dead
+//      render()            clear ▶ camera transform ▶ grid ▶ layers ▶ magnets
+//
+//  COORDINATE FRAMES
+//      screen px ── screenToWorld() ──▶ world px ── camera transform ──▶ canvas
+//      CW / CH   = logical CSS-pixel size of the canvas (physics units)
+//      CAM.x/y   = world offset from centre;  CAM.zoom = scale factor
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  --------------------------------------------------------------------------
+//      state ................ "const SIM ="        sim flags + tuning
+//      camera / viewport .... "CAMERA / VIEWPORT"   screen↔world mapping
+//      magnet factory ....... "MAGNET FACTORY"      pole layouts per type
+//      physics .............. "PHYSICS"             field, forces, collisions
+//      tracers .............. "TRACERS"             spawn + step iron filings
+//      colors ............... "COLORS"              field magnitude → RGB ramp
+//      render ............... "function render"     the per-frame draw
+//      magnet drawing ....... "function renderMagnets"  per-type glyphs
+//      ui wiring ............ "UI WIRING"           panel + card controls
+//      drag + zoom .......... "DRAG + ZOOM"         mouse/touch input
+//      resize ............... "function resize"     ResizeObserver sizing
+//      loop ................. "function loop"        the frame driver
+//      init ................. "INIT"                first magnet + start
+// ============================================================================
+
 /* ════════════════════════════════════════════════════════════
    MAGNETLAB — 2D MAGNETIC FIELD SIMULATOR
    CW / CH = logical CSS-pixel dimensions of the canvas.
    All physics, spawning, hit-testing, and rendering use CW/CH.
    ════════════════════════════════════════════════════════════ */
+
+// The canvas and its 2D context. CW/CH track the wrapper's CSS size and are the
+// unit system for all physics, spawning, hit-testing, and rendering.
 const canvas = document.getElementById('sim-canvas');
 const ctx = canvas.getContext('2d');
 let CW = 100, CH = 100;
 
+// The one mutable state bag: display toggles, tracer tuning, the physics
+// timestep, velocity damping factors, and which magnet is selected.
 const SIM = {
   playing:true, showTracers:true, showArrows:true, showHeatmap:false,
   tracerCount:2500, tracerSpeed:1.5, tracerTrail:40,
   dt:1/60, damping:0.97, angDamping:0.85, selectedId:-1,
 };
+
+// The scene: all magnets, all tracer particles, and a monotonic id counter.
 let magnets=[], tracers=[], nextId=0;
 
 /* ═══ CAMERA / VIEWPORT ═══ */
 const CAM = { x:0, y:0, zoom:1 }; // x,y = world offset from center, zoom = scale factor
+
+// Invert the camera transform: map a screen pixel back to a world coordinate.
+// Used by input handling and by the spawn/visibility tests below.
 function screenToWorld(sx, sy){
   return [(sx - CW/2) / CAM.zoom + CW/2 - CAM.x,
           (sy - CH/2) / CAM.zoom + CH/2 - CAM.y];
 }
+
+// World-space rectangle currently on screen; tracers respawn and cull against
+// this so off-screen work is avoided at any zoom.
 function visibleBounds(){
   const [x0,y0]=screenToWorld(0,0);
   const [x1,y1]=screenToWorld(CW,CH);
@@ -27,20 +86,29 @@ function visibleBounds(){
 }
 
 /* ═══ MAGNET FACTORY ═══ */
+// Build one magnet of the given type at (x,y). Every type shares the same rigid
+// body fields; the switch fills in size, mass, inertia, and the pole layout.
+// A pole is {dx,dy,mx,my}: an offset in the body frame and a dipole-moment
+// vector. angle starts at -PI/2 so bar-like magnets point up on spawn.
 function createMagnet(type,x,y){
   const m={id:nextId++,type,x,y,angle:-Math.PI/2,strength:1.0,spin:0,fixed:true,vx:0,vy:0,va:0,mass:1,inertia:1};
   switch(type){
+    // Bar magnet: five aligned poles in a row make a smooth two-ended field.
     case 'bar':
       m.w=100;m.h=30;m.poles=[];
       for(let i=-2;i<=2;i++) m.poles.push({dx:i*20,dy:0,mx:1,my:0});
       m.mass=2;m.inertia=2;break;
+    // Dipole: a single point pole; the simplest field source.
     case 'dipole':
       m.w=36;m.h=36;m.poles=[{dx:0,dy:0,mx:1,my:0}];
       m.mass=0.5;m.inertia=0.3;break;
+    // Solenoid: a denser, stronger row of poles, standing in for a coil.
     case 'solenoid':
       m.w=80;m.h=50;m.poles=[];m.strength=1.5;
       for(let i=-3;i<=3;i++) m.poles.push({dx:i*10,dy:0,mx:2,my:0});
       m.mass=3;m.inertia=3;break;
+    // Horseshoe: poles trace a U so both tips point the same way, concentrating
+    // the field in the gap between the arms.
     case 'horseshoe':
       m.w=60;m.h=70;m.poles=[
         {dx:25,dy:-30,mx:0,my:-1},{dx:25,dy:-15,mx:0.5,my:-0.5},
@@ -49,17 +117,22 @@ function createMagnet(type,x,y){
         {dx:-25,dy:15,mx:-0.5,my:0.5},{dx:-25,dy:0,mx:-1,my:0},{dx:-25,dy:-15,mx:-0.5,my:-0.5},
         {dx:-25,dy:-30,mx:0,my:-1}
       ];m.mass=2.5;m.inertia=2.5;break;
+    // Buzzer: a dense disc of aligned poles, a strong compact dipole.
     case 'buzzer':
       m.w=44;m.h=44;m.poles=[{dx:0,dy:0,mx:1.5,my:0}];
       // Dense disc: center + 6 in a ring, all aligned
       for(let i=0;i<6;i++){const a=i*Math.PI/3;m.poles.push({dx:Math.cos(a)*14,dy:Math.sin(a)*14,mx:1,my:0});}
       m.mass=1.5;m.inertia=1.2;break;
+    // Ring: eight poles pointing radially outward, so the field blooms outward
+    // all around rather than from two ends.
     case 'ring':
       m.w=56;m.h=56;m.poles=[];
       // 8 dipoles pointing radially outward
       for(let i=0;i<8;i++){const a=i*Math.PI/4;const cx=Math.cos(a),sy=Math.sin(a);
         m.poles.push({dx:cx*22,dy:sy*22,mx:cx*1.2,my:sy*1.2});}
       m.mass=2;m.inertia=2;break;
+    // Quadrupole: two N and two S poles at the cardinal points, giving the
+    // four-lobed field that focuses charged beams in accelerators.
     case 'quadrupole':
       m.w=50;m.h=50;m.poles=[
         {dx:22,dy:0,mx:1.5,my:0},   // N right
@@ -67,6 +140,8 @@ function createMagnet(type,x,y){
         {dx:-22,dy:0,mx:-1.5,my:0}, // S left (points inward = N right repels)
         {dx:0,dy:-22,mx:0,my:-1.5}  // S up
       ];m.mass=2;m.inertia=2;m.strength=1.2;break;
+    // Halbach array: each pole is rotated 90 degrees from the last, which
+    // reinforces the field on one face and cancels it on the other.
     case 'halbach':
       m.w=130;m.h=30;m.poles=[];
       // Each dipole rotated 90° from previous → field concentrates on one side
@@ -81,12 +156,18 @@ function createMagnet(type,x,y){
 /* ═══ PHYSICS ═══ */
 const FIELD_SCALE = 80000; // compensates for 1/r³ falloff at pixel-scale distances
 
+// The point-dipole field at offset (px,py) from a pole with moment (mx,my).
+// This is B = (3(m·r̂)r̂ − m)/r³ written out in Cartesian form. The r<5 guard
+// clamps the singularity at the pole so the field stays finite up close.
 function dipoleField(px,py,mx,my){
   const r2=px*px+py*py,r=Math.sqrt(r2);
   if(r<5)return[0,0];
   const r3=r2*r,r5=r3*r2,mdotr=mx*px+my*py;
   return[(3*mdotr*px/r5-mx/r3)*FIELD_SCALE,(3*mdotr*py/r5-my/r3)*FIELD_SCALE];
 }
+
+// Total field at a world point: sum every pole of every magnet. Each pole is
+// rotated into world space by its magnet's angle, then scaled by strength.
 function totalField(wx,wy){
   let Bx=0,By=0;
   for(const mag of magnets){
@@ -100,6 +181,8 @@ function totalField(wx,wy){
   }
   return[Bx,By];
 }
+// Same sum as totalField, but skipping one magnet by id. A magnet must not feel
+// its own field, so force and torque use this to see only its neighbours.
 function fieldFromOthers(wx,wy,exId){
   let Bx=0,By=0;
   for(const mag of magnets){
@@ -114,6 +197,9 @@ function fieldFromOthers(wx,wy,exId){
   }
   return[Bx,By];
 }
+// Advance every magnet one physics step: driven spin, then magnetic force and
+// torque on dynamic bodies, then collision resolution. Fixed magnets and the
+// one being dragged are held in place but still act as field sources.
 function integrateMagnets(){
   // ── Apply preset spin to ALL magnets (fixed or dynamic) ──
   for(const mag of magnets){
@@ -129,6 +215,8 @@ function integrateMagnets(){
       const sx=mag.x+p.dx*ca-p.dy*sa,sy=mag.y+p.dx*sa+p.dy*ca;
       const mmx=(p.mx*ca-p.my*sa)*mag.strength,mmy=(p.mx*sa+p.my*ca)*mag.strength;
       const[Bx,By]=fieldFromOthers(sx,sy,mag.id);
+      // Force on a dipole is F = grad(m·B). Sample B at four points a step h
+      // apart and take central differences to get the gradient numerically.
       const h=2;
       const[Bxr,Byr]=fieldFromOthers(sx+h,sy,mag.id);
       const[Bxl,Byl]=fieldFromOthers(sx-h,sy,mag.id);
@@ -136,30 +224,41 @@ function integrateMagnets(){
       const[Bxd,Byd]=fieldFromOthers(sx,sy-h,mag.id);
       Fx+=(mmx*(Bxr-Bxl)+mmy*(Byr-Byl))/(2*h)*6000;
       Fy+=(mmx*(Bxu-Bxd)+mmy*(Byu-Byd))/(2*h)*6000;
+      // Torque on a dipole is m × B; in 2D that cross product is the scalar
+      // (mx*By − my*Bx), which turns the magnet toward field alignment.
       torque+=(mmx*By-mmy*Bx)*1200;
     }
+    // Clamp force and torque so a close approach cannot blow the body up.
     const fMag=Math.sqrt(Fx*Fx+Fy*Fy),fMax=4000;
     if(fMag>fMax){Fx*=fMax/fMag;Fy*=fMax/fMag;}
     torque=Math.max(-1500,Math.min(1500,torque));
+    // Semi-implicit Euler: integrate velocity from force, then damp it. Linear
+    // and angular velocities decay each step so motion settles.
     mag.vx=(mag.vx+Fx/mag.mass*SIM.dt)*SIM.damping;
     mag.vy=(mag.vy+Fy/mag.mass*SIM.dt)*SIM.damping;
     mag.va=(mag.va+torque/mag.inertia*SIM.dt)*SIM.angDamping;
     // Hard cap on angular velocity to prevent spin blowup
     mag.va=Math.max(-3,Math.min(3,mag.va));
     mag.x+=mag.vx*SIM.dt;mag.y+=mag.vy*SIM.dt;mag.angle+=mag.va*SIM.dt;
-    // Wall bounce
+    // Wall bounce: keep the body inside a margin and reverse velocity at half
+    // energy so it does not escape the canvas.
     const M=40;
     if(mag.x<M){mag.x=M;mag.vx*=-0.5;}if(mag.x>CW-M){mag.x=CW-M;mag.vx*=-0.5;}
     if(mag.y<M){mag.y=M;mag.vy*=-0.5;}if(mag.y>CH-M){mag.y=CH-M;mag.vy*=-0.5;}
   }
 
   // ── Magnet-magnet collisions with contact damping (spring-dashpot) ──
+  // Each pair is resolved as a soft spring plus a dashpot: a graduated repulsion
+  // as they near, position correction and an impulse on hard overlap, and
+  // velocity damping throughout so bodies settle instead of jittering.
   const restitution = 0.1;  // nearly inelastic — magnets stick rather than bounce
   const COLL_PAD = 14;      // padding so magnets settle with a visible gap
   const SKIN = 30;          // proximity zone for soft forces
   const CONTACT_DAMP = 12;  // dashpot coefficient — absorbs relative velocity
   const ANG_CONTACT_DAMP = 0.7; // angular damping when in proximity
 
+  // Test each unordered pair once; radii are half the larger body dimension
+  // plus padding so magnets keep a visible gap at rest.
   for(let i=0;i<magnets.length;i++){
     const a=magnets[i];
     const ra=Math.max(a.w,a.h)*0.5 + COLL_PAD;
@@ -227,6 +326,10 @@ function integrateMagnets(){
 }
 
 /* ═══ TRACERS ═══ */
+// Tracers are massless particles that ride the field like iron filings. They
+// spawn biased toward pole tips (where the field is richest), step along the
+// field direction each frame, and respawn when they age out or leave view.
+
 // Collect world-space positions of magnet pole tips for biased spawning
 function getPoleTips(){
   const tips=[];
@@ -252,6 +355,8 @@ function getPoleTips(){
   return tips;
 }
 
+// Pick a spawn point: usually near a pole tip (Gaussian-ish clustered radius),
+// sometimes anywhere in view, and never inside a magnet body.
 function spawnPos(){
   const tips=getPoleTips();
   // 65% near poles, 35% random — reject positions inside magnets
@@ -285,6 +390,8 @@ function isInsideMagnet(px,py){
   return false;
 }
 
+// Rebuild the whole tracer pool. Called on count change, magnet edits, and
+// resize. Each tracer gets a random lifetime so respawns stay staggered.
 function spawnTracers(){
   tracers=[];
   for(let i=0;i<SIM.tracerCount;i++){
@@ -292,6 +399,10 @@ function spawnTracers(){
     tracers.push({x,y,trail:[],age:0,maxAge:2.5+Math.random()*4});
   }
 }
+
+// Step every tracer one frame: move along the unit field vector, push the new
+// point onto its trail, then respawn if it aged out, left view, or entered a
+// magnet. Trail stores [x,y,Bmag] so the renderer can colour by strength.
 function updateTracers(dt){
   const speed=SIM.tracerSpeed*80,trailLen=SIM.tracerTrail;
   const threshold=1e-6;
@@ -321,6 +432,9 @@ function updateTracers(dt){
 /* ═══ COLORS — ported from orbital viewer's B-field tracer system ═══ */
 // Returns [r,g,b] in 0-1 range, matching the orbital viewer exactly
 // Ramp: dark-purple → blue → cyan → green → orange → white
+// Map a field magnitude to an [r,g,b] ramp. A log curve compresses the huge
+// dynamic range of a 1/r³ field, gamma reshapes it, and the result indexes a
+// six-stop colour ramp from dark purple through to white.
 function fieldColorRGB(mag, gamma){
   gamma = gamma || 1.0;
   const lv = Math.log10(1 + mag * 8) / 2.2;
@@ -333,12 +447,16 @@ function fieldColorRGB(mag, gamma){
     stops[si][2] + sf * (stops[si+1][2] - stops[si][2])
   ];
 }
+// Same ramp as fieldColorRGB, formatted as an rgba() string at the given alpha.
 function fieldColorCSS(mag, alpha, gamma){
   const [r,g,b] = fieldColorRGB(mag, gamma);
   return `rgba(${(r*255)|0},${(g*255)|0},${(b*255)|0},${alpha})`;
 }
 
 /* ═══ RENDER ═══ */
+// Draw one frame: clear in device space, paint the background, apply the camera
+// transform, then draw the grid and each enabled layer under it. Layer order is
+// heatmap, arrows, tracers, magnets, so magnets sit on top.
 function render(){
   ctx.save();
   ctx.setTransform(1,0,0,1,0,0);
@@ -371,6 +489,8 @@ function render(){
   ctx.restore();
 }
 
+// Heatmap layer: fill a coarse grid of cells, each tinted by the field
+// magnitude sampled at its origin.
 function renderHeatmap(){
   const step=14;
   for(let x=0;x<CW;x+=step)for(let y=0;y<CH;y+=step){
@@ -379,6 +499,8 @@ function renderHeatmap(){
     ctx.fillRect(x,y,step,step);
   }
 }
+// Arrow layer: at each grid node draw a short arrow along the field direction,
+// with length and brightness scaled by the log of the field magnitude.
 function renderArrows(){
   ctx.save();
   ctx.globalCompositeOperation='lighter'; // additive blend like orbital viewer
@@ -405,6 +527,8 @@ function renderArrows(){
   }
   ctx.restore();
 }
+// Tracer layer: draw each trail as a fading polyline. Two passes per segment,
+// a wide dim glow under a thin bright core, give the additive bloom look.
 function renderTracers(){
   ctx.save();
   ctx.globalCompositeOperation='lighter'; // additive blend — matches THREE.AdditiveBlending
@@ -441,6 +565,8 @@ function renderTracers(){
   }
   ctx.restore();
 }
+// Magnet layer: translate and rotate into each body's frame, dispatch to the
+// per-type glyph drawer, and ring dynamic magnets with a dashed halo.
 function renderMagnets(){
   for(const mag of magnets){
     ctx.save();ctx.translate(mag.x,mag.y);ctx.rotate(mag.angle);
@@ -460,6 +586,11 @@ function renderMagnets(){
     ctx.restore();
   }
 }
+// Per-type glyph drawers. Each runs in the magnet's local frame (already
+// translated and rotated) and paints red for N, blue for S, brighter if
+// selected. They draw appearance only; the poles above carry the physics.
+
+// Bar: red N half, blue S half, N/S labels.
 function drawBar(m,sel){
   const hw=m.w/2,hh=m.h/2;
   ctx.fillStyle=sel?'rgba(220,60,60,0.85)':'rgba(200,50,50,0.65)';ctx.fillRect(0,-hh,hw,m.h);
@@ -468,6 +599,7 @@ function drawBar(m,sel){
   ctx.font='bold 13px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(255,255,255,0.8)';ctx.fillText('N',hw/2,0);ctx.fillText('S',-hw/2,0);
 }
+// Dipole: a split disc with an arrow showing moment direction.
 function drawDipole(m,sel){
   const r=16;
   ctx.beginPath();ctx.arc(0,0,r,0,Math.PI*2);
@@ -478,6 +610,7 @@ function drawDipole(m,sel){
   ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=2;
   ctx.beginPath();ctx.moveTo(-7,0);ctx.lineTo(7,0);ctx.moveTo(4,-3);ctx.lineTo(7,0);ctx.lineTo(4,3);ctx.stroke();
 }
+// Solenoid: a coil-wound block with vertical winding lines and end labels.
 function drawSolenoid(m,sel){
   const hw=m.w/2,hh=m.h/2;
   ctx.fillStyle=sel?'rgba(80,60,40,0.8)':'rgba(60,45,30,0.65)';ctx.fillRect(-hw,-hh,m.w,m.h);
@@ -488,6 +621,7 @@ function drawSolenoid(m,sel){
   ctx.fillStyle='rgba(220,60,60,0.8)';ctx.fillText('N',hw-10,0);
   ctx.fillStyle='rgba(60,100,220,0.8)';ctx.fillText('S',-hw+10,0);
 }
+// Horseshoe: two coloured arms joined by a bend, N and S tips at the top.
 function drawHorseshoe(m,sel){
   const lc=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.35)';ctx.lineCap='round';
   ctx.beginPath();ctx.moveTo(25,-30);ctx.lineTo(25,15);ctx.strokeStyle='rgba(220,80,80,0.65)';ctx.lineWidth=10;ctx.stroke();
@@ -501,6 +635,7 @@ function drawHorseshoe(m,sel){
   ctx.fillStyle='rgba(255,200,200,0.9)';ctx.fillText('N',25,-22);
   ctx.fillStyle='rgba(200,200,255,0.9)';ctx.fillText('S',-25,-22);
 }
+// Buzzer: a metallic disc split N/S with a centre dot.
 function drawBuzzer(m,sel){
   const r=20;
   // Metallic disc body
@@ -520,6 +655,7 @@ function drawBuzzer(m,sel){
   ctx.font='bold 8px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillText('N',10,0);ctx.fillText('S',-10,0);
 }
+// Ring: an annulus with radial ticks marking the outward pole directions.
 function drawRing(m,sel){
   const ro=26,ri=14;
   // Ring body with radial gradient
@@ -537,6 +673,7 @@ function drawRing(m,sel){
   ctx.font='bold 7px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fillText('RING',0,0);
 }
+// Quadrupole: four pole circles on a cross, alternating N and S.
 function drawQuadrupole(m,sel){
   const s=22,r=8;
   // Four pole circles at cardinal directions
@@ -555,6 +692,8 @@ function drawQuadrupole(m,sel){
   // Center marker
   ctx.beginPath();ctx.arc(0,0,3,0,Math.PI*2);ctx.fillStyle='rgba(255,200,50,0.5)';ctx.fill();
 }
+// Halbach: segmented bar with a rotation arrow per segment showing the 90
+// degree step that steers the field to one face.
 function drawHalbach(m,sel){
   const hw=m.w/2,hh=m.h/2,ns=6,sw=m.w/ns;
   // Draw segments with arrows showing rotation
@@ -584,7 +723,13 @@ function drawHalbach(m,sel){
 }
 
 /* ═══ UI WIRING ═══ */
+// Paint a range input's filled portion: set the --pct custom property the CSS
+// gradient reads, so the track shows progress up to the thumb.
 function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
+
+// Rebuild the magnet list panel from scratch. One card per magnet carries the
+// strength, angle, spin, and fixed/dynamic controls, each wired to setMagProp.
+// Called after any add, remove, select, drag, or property change.
 function rebuildMagnetList(){
   const list=document.getElementById('mag-list');if(!list)return;list.innerHTML='';
   const icons={bar:'▮',dipole:'◉',solenoid:'⊞',horseshoe:'⊍',buzzer:'⊚',ring:'◎',quadrupole:'✦',halbach:'⇶'};
@@ -603,6 +748,8 @@ function rebuildMagnetList(){
   document.getElementById('st-magnets').textContent=magnets.length+' magnet'+(magnets.length!==1?'s':'');
 }
 
+// Add a magnet of the given type at a free spot near centre, select it, and
+// respawn tracers so filings gather at the new poles.
 function addMagnet(type){
   // Find a position that doesn't overlap existing magnets
   let cx=CW/2, cy=CH/2;
@@ -634,9 +781,15 @@ function addMagnet(type){
   if(window.innerWidth<600) document.getElementById('panel').classList.remove('mob-open');
 }
 
+// Slide the left panel in or out on narrow screens.
 function toggleMobilePanel(){
   document.getElementById('panel').classList.toggle('mob-open');
 }
+
+// The remaining control handlers: remove/select a magnet, edit a property,
+// toggle fixed/dynamic, toggle each display layer, retune tracers, and run the
+// transport buttons. Each keeps SIM and the DOM in sync, respawning tracers
+// where the field geometry changed.
 function removeMagnet(id){magnets=magnets.filter(m=>m.id!==id);if(SIM.selectedId===id)SIM.selectedId=magnets.length?magnets[0].id:-1;rebuildMagnetList();spawnTracers();}
 function selectMagnet(id){SIM.selectedId=id;rebuildMagnetList();}
 function setMagProp(id,prop,val,el){
@@ -656,18 +809,25 @@ function stopAll(){magnets.forEach(m=>{m.vx=0;m.vy=0;m.va=0;m.spin=0;});rebuildM
 function clearAll(){magnets=[];SIM.selectedId=-1;rebuildMagnetList();spawnTracers();}
 
 /* ═══ DRAG + ZOOM ═══ */
+// Input state: which magnet is being dragged, the grab offset, whether Shift
+// is rotating it, and whether an empty-space drag is panning the camera.
 let dragMag=null,dragOffX=0,dragOffY=0,rotating=false;
 let isPanning=false, panLastX=0, panLastY=0;
 
+// Mouse or touch position relative to the canvas, in screen pixels.
 function getScreenPos(e){
   const rect=canvas.getBoundingClientRect();
   const t=e.touches?e.touches[0]:e;
   return[t.clientX-rect.left, t.clientY-rect.top];
 }
+// Same, but mapped through the camera into world coordinates.
 function getCanvasPos(e){
   const [sx,sy]=getScreenPos(e);
   return screenToWorld(sx,sy);
 }
+
+// Topmost magnet under a world point, tested in each body's local frame against
+// its padded bounding box. Iterates back to front so the top magnet wins.
 function hitTest(wx,wy){
   for(let i=magnets.length-1;i>=0;i--){
     const m=magnets[i],ca=Math.cos(-m.angle),sa=Math.sin(-m.angle);
@@ -690,9 +850,12 @@ canvas.addEventListener('wheel',e=>{
 },{passive:false});
 
 // ── Touch: pinch zoom + pan ──
+// Snapshot taken at the start of a two-finger gesture: initial pinch distance,
+// zoom, midpoint, and camera offset, so move events can compute deltas.
 let pinchDist0=0, pinchZoom0=1, pinchMidX=0, pinchMidY=0, pinchCamX=0, pinchCamY=0;
 let touchCount=0;
 
+// Two fingers begin a pinch; one finger falls through to the drag handler.
 canvas.addEventListener('touchstart',e=>{
   touchCount=e.touches.length;
   if(touchCount===2){
@@ -711,6 +874,8 @@ canvas.addEventListener('touchstart',e=>{
   if(touchCount===1) onDown(e);
 },{passive:false});
 
+// Two-finger move: zoom by the distance ratio about the pinch midpoint, then
+// pan by how far that midpoint drifted. One finger falls through to onMove.
 canvas.addEventListener('touchmove',e=>{
   if(e.touches.length===2){
     e.preventDefault();
@@ -741,6 +906,8 @@ canvas.addEventListener('touchend',e=>{
 },{passive:false});
 
 // ── Mouse drag ──
+// Press: grab a magnet under the cursor (Shift to rotate it), or start panning
+// on empty space.
 canvas.addEventListener('mousedown',onDown);
 function onDown(e){
   e.preventDefault();const[x,y]=getCanvasPos(e);const hit=hitTest(x,y);
@@ -750,6 +917,8 @@ function onDown(e){
     isPanning=true;const[sx,sy]=getScreenPos(e);panLastX=sx;panLastY=sy;
   }
 }
+// Move: pan the camera, rotate the grabbed magnet toward the cursor, or drag it
+// by the stored grab offset.
 window.addEventListener('mousemove',onMove);
 function onMove(e){
   if(isPanning&&!dragMag){
@@ -763,10 +932,14 @@ function onMove(e){
   else{dragMag.x=x+dragOffX;dragMag.y=y+dragOffY;}
   rebuildMagnetList();
 }
+// Release: zero the dropped magnet's velocity so it does not fling off, and
+// clear all drag/pan state.
 window.addEventListener('mouseup',onUp);
 function onUp(){if(dragMag){dragMag.vx=0;dragMag.vy=0;}dragMag=null;rotating=false;isPanning=false;}
 
 /* ═══ RESIZE — uses ResizeObserver on the wrapper div ═══ */
+// Match the canvas backing store to the wrapper size times the device pixel
+// ratio (capped at 2), and set the transform so drawing stays in CSS pixels.
 function resize(){
   const wrap=document.getElementById('canvas-wrap');
   CW=wrap.clientWidth;
@@ -779,6 +952,8 @@ function resize(){
   document.getElementById('st-dims').textContent=CW+'×'+CH;
 }
 
+// Prefer ResizeObserver so the canvas tracks the wrapper through layout changes,
+// not just window resizes; fall back to the resize event where it is absent.
 // Use ResizeObserver for reliable sizing
 if(window.ResizeObserver){
   new ResizeObserver(()=>{resize();spawnTracers();}).observe(document.getElementById('canvas-wrap'));
@@ -787,6 +962,8 @@ if(window.ResizeObserver){
 }
 
 /* ═══ LOOP ═══ */
+// Frame driver: measure dt (clamped so a stalled tab cannot jump the physics),
+// step the simulation when playing, refresh the status readouts, and render.
 let lastTime=0,fpsCounter=0,fpsTime=0;
 function loop(time){
   requestAnimationFrame(loop);
@@ -803,6 +980,9 @@ function loop(time){
 }
 
 /* ═══ INIT ═══ */
+// Paint the fixed panel sliders once, then start after a short delay so the
+// wrapper has a measured size. Init sizes the canvas, spawns tracers, builds
+// the list, drops one bar magnet, and kicks off the loop.
 document.querySelectorAll('#panel input[type=range]').forEach(sg);
 // Delay init slightly to ensure layout is computed
 setTimeout(()=>{

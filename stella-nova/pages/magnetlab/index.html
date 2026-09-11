@@ -4,16 +4,50 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>MagnetLab // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MAGNETLAB  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js paints everything into #sim-canvas and binds
+   the panel controls by id; equations.js paints the KaTeX overlay. This file
+   lays out the left control panel, the canvas area, and the status bar.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet
+     2. katex css    KaTeX stylesheet, then the KaTeX script
+     3. style.css    the page stylesheet
+     4. equations.js classic script, paints the equation panel
+     5. main.js      classic script, runs the whole simulator
+
+   LAYOUT  (# marks an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar: "Stella Nova · MagnetLab"          (hidden when in frame) │
+     ├────────────┬────────────────────────────────────────────────────┤
+     │ #panel     │  #canvas-wrap                                        │
+     │  add grid  │    <canvas #sim-canvas>  field tracers, arrows, mags │
+     │  #mag-list │    #eq-panel  ▷  KaTeX overlay (collapsible)         │
+     │  toggles   │                                                      │
+     │  sim btns  │                                                      │
+     ├────────────┴────────────────────────────────────────────────────┤
+     │ #status-bar: magnets · tracers · fps · B · zoom · dims           │
+     └──────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In frame guard: when loaded inside the site shell iframe, add .in-frame so
+     the CSS hides this page's own topbar. Kept inline so it runs before the body
+     renders and there is no flash of the topbar. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 
+<!-- Mobile hamburger: toggles the .mob-open class on #panel (see main.js). -->
 <button id="mob-btn" onclick="toggleMobilePanel()">☰</button>
 
+<!-- Top status strip; hidden when the page runs inside the shell. -->
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">MagnetLab</span></div>
   <div class="topbar-r">SYS // <strong>ELECTROMAGNETISM</strong></div>
@@ -22,6 +56,8 @@
 <div id="main">
   <!-- LEFT PANEL -->
   <div id="panel"><div class="p-body">
+    <!-- Add Magnet: each button calls addMagnet(type); type strings match the
+         switch in createMagnet() inside main.js. -->
     <div class="p-section">
       <div class="p-sec-lbl">Add Magnet</div>
       <div class="add-grid">
@@ -35,10 +71,14 @@
         <button class="add-btn" onclick="addMagnet('halbach')"><span class="icon">⇶</span>Halbach</button>
       </div>
     </div>
+    <!-- Magnets: rebuildMagnetList() fills #mag-list with one card per magnet,
+         each carrying strength, angle, spin, and fixed/dynamic controls. -->
     <div class="p-section">
       <div class="p-sec-lbl">Magnets</div>
       <div class="mag-list" id="mag-list"></div>
     </div>
+    <!-- Field Display: toggles for the three field visualisations plus the
+         tracer count, speed, and trail sliders. -->
     <div class="p-section">
       <div class="p-sec-lbl">Field Display</div>
       <div style="display:flex;flex-direction:column;gap:4px">
@@ -62,6 +102,8 @@
         <span class="val" id="vl-tracer-trail">40</span>
       </div>
     </div>
+    <!-- Simulation transport: play/pause, stop (zero velocities), reset (also
+         clears spin), and clear (remove all magnets). -->
     <div class="p-section">
       <div class="p-sec-lbl">Simulation</div>
       <div class="sim-btns">
@@ -73,12 +115,14 @@
     </div>
   </div></div>
 
-  <!-- CANVAS AREA -->
+  <!-- Canvas area: the wrapper is what the ResizeObserver in main.js watches,
+       so CW and CH follow this box. The tap overlay closes the mobile panel. -->
   <div class="mob-overlay" onclick="toggleMobilePanel()"></div>
   <div id="canvas-wrap">
     <canvas id="sim-canvas"></canvas>
 
-    <!-- Equation panel overlays canvas -->
+    <!-- Equation panel overlays the canvas; equations.js paints it and wires
+         the collapse toggle. -->
     <section class="eq-panel collapsed" id="eq-panel">
       <div class="eq-head" id="eq-toggle">
         <span class="dot"></span>
@@ -103,6 +147,8 @@
   </div>
 </div>
 
+<!-- Status bar: main.js updates these readouts every frame (magnet count,
+     tracer count, fps, field magnitude at centre, zoom, canvas dims). -->
 <div id="status-bar">
   <span id="st-magnets">0 magnets</span><span class="sep"></span>
   <span id="st-tracers">2500 tracers</span><span class="sep"></span>
@@ -112,9 +158,10 @@
   <span id="st-dims">--</span>
 </div>
 
-<!-- KaTeX -->
+<!-- KaTeX equation panel renderer; runs before the simulator. -->
 <script src="equations.js"></script>
 
+<!-- The simulator: physics, tracers, rendering, and all control wiring. -->
 <script src="main.js"></script>
 </body>
 </html>

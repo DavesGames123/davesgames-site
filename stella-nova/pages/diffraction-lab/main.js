@@ -1,26 +1,120 @@
+// ============================================================================
+//  APERTURE DIFFRACTION  ·  angular-spectrum wave-optics engine
+// ----------------------------------------------------------------------------
+//  A complex scalar field E leaves a flat aperture (the transmittance mask t of
+//  the chosen element), propagates a distance z through free space, and lands on
+//  a screen where its intensity |E|² is shown. Propagation uses the angular
+//  spectrum method (ASM): a 2D FFT into spatial frequencies, a per-frequency
+//  phase advance, then an inverse FFT. White light sums many wavelengths through
+//  the CIE 1931 color-matching functions and the D65 illuminant into sRGB.
+//
+//  PROPAGATION PIPELINE   (per wavelength λ)
+//  --------------------------------------------------------------------------
+//      aperture plane                 screen plane at z
+//      ┌───────────┐                  ┌───────────┐
+//      │  E0 = 1    │   FFT      ×H     IFFT        │  E(z)     │
+//      │  ·  t(x,y) │ ───────▶ spectrum ───▶ ─────▶ │  |E|² →   │
+//      └───────────┘         S(fx,fy)                │  color    │
+//        transmittance        H = exp(i·kz·z)        └───────────┘
+//        mask (EL[...])       kz = √(k² − kx² − ky²)
+//                             k  = 2π/λ ; kz imaginary → evanescent decay
+//
+//  COLOR PATH
+//  --------------------------------------------------------------------------
+//      mono   : |E|² × wlRGB(λ)                       one wavelength tint
+//      white  : Σ_λ |E|² · D65(λ) · [x̄,ȳ,z̄]  → XYZ → sRGB (sGam gamma)
+//
+//  SCREEN LAYOUT   (the leading marker is an element id)
+//  --------------------------------------------------------------------------
+//      #quick-panel  element, source, view, grid, presets, export
+//      #canvas-grid  one composite cell, or a 2×2 of composite + R + G + B
+//      #eq-panel     Helmholtz, ASM, transmittance, CIE equations
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  --------------------------------------------------------------------------
+//      complex + FFT ....... "function fft1d"        radix-2 FFT, 1D and 2D
+//      propagator .......... "function prop"         the angular spectrum step
+//      CIE + color ......... "function cieX"         color-matching and sRGB
+//      geometry helpers .... "function inPoly"       point-in-polygon, star
+//      raster helper ....... "function rasterToField"  text/image → mask
+//      elements ............ "const EL="             aperture transmittances
+//      state ............... "const S="              the one mutable state
+//      channel cells ....... "BUILD 4 CELLS"         composite + RGB canvases
+//      canvas paint ........ "function renderCh"     field RGB → one canvas
+//      recompute ........... "function recompute"    the live render path
+//      bar sync + anim ..... "SYNC 4 BARS"           z sliders and z animation
+//      param UI ............ "function buildParamUI" per-element sliders
+//      events .............. "EVENTS"                element/source/view wiring
+//      export .............. "EXPORT SYSTEM"         PNG still and WebM video
+//      presets ............. "const PR="             named element setups
+// ============================================================================
+
+// Base constants and unit scales. TAU = 2π; mm/um/nm convert millimeter,
+// micrometer, and nanometer figures into the SI meters the physics uses.
 const PI=Math.PI,TAU=2*PI,mm=1e-3,um=1e-6,nm=1e-9;
+// Complex-array helpers: a field is stored as parallel real and imaginary
+// Float64Arrays. czeros makes an all-zero field; cones makes a uniform unit
+// field (the incident plane wave before the aperture).
 function czeros(n){return{re:new Float64Array(n),im:new Float64Array(n)}}function cones(n){const r=new Float64Array(n);r.fill(1);return{re:r,im:new Float64Array(n)}}
+// Elementwise complex multiply (incident field times transmittance mask).
 function cmul(a,b){const n=a.re.length,o=czeros(n);for(let i=0;i<n;i++){o.re[i]=a.re[i]*b.re[i]-a.im[i]*b.im[i];o.im[i]=a.re[i]*b.im[i]+a.im[i]*b.re[i]}return o}
+// Squared magnitude |E|² of a complex field: the physical intensity.
 function cabs2(a){const n=a.re.length,o=new Float64Array(n);for(let i=0;i<n;i++)o[i]=a.re[i]*a.re[i]+a.im[i]*a.im[i];return o}
+// In-place radix-2 Cooley-Tukey FFT of one length-n row (n must be a power of
+// two). First a bit-reversal permutation, then log2(n) butterfly stages. inv
+// runs the inverse transform and divides by n. Twiddle factors advance by the
+// running complex root (uR,uI) instead of a per-index trig call.
 function fft1d(re,im,n,inv){for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}for(let len=2;len<=n;len<<=1){const h=len>>1,a=(inv?1:-1)*TAU/len,wR=Math.cos(a),wI=Math.sin(a);for(let i=0;i<n;i+=len){let uR=1,uI=0;for(let j=0;j<h;j++){const e=i+j,o=i+j+h,tR=uR*re[o]-uI*im[o],tI=uR*im[o]+uI*re[o];re[o]=re[e]-tR;im[o]=im[e]-tI;re[e]+=tR;im[e]+=tI;const nu=uR*wR-uI*wI;uI=uR*wI+uI*wR;uR=nu}}}if(inv)for(let i=0;i<n;i++){re[i]/=n;im[i]/=n}}
+// 2D FFT by separability: transform every row, then every column, reusing one
+// scratch buffer pair. Returns fresh real/imag arrays and leaves f untouched.
 function fft2d(f,Nx,Ny,inv){const re=new Float64Array(f.re),im=new Float64Array(f.im),rB=new Float64Array(Math.max(Nx,Ny)),iB=new Float64Array(Math.max(Nx,Ny));for(let y=0;y<Ny;y++){const o=y*Nx;for(let x=0;x<Nx;x++){rB[x]=re[o+x];iB[x]=im[o+x]}fft1d(rB,iB,Nx,inv);for(let x=0;x<Nx;x++){re[o+x]=rB[x];im[o+x]=iB[x]}}for(let x=0;x<Nx;x++){for(let y=0;y<Ny;y++){rB[y]=re[y*Nx+x];iB[y]=im[y*Nx+x]}fft1d(rB,iB,Ny,inv);for(let y=0;y<Ny;y++){re[y*Nx+x]=rB[y];im[y*Nx+x]=iB[y]}}return{re,im}}
+// fftshift: swap diagonal quadrants so the zero frequency moves to the center,
+// matching the centered fftfreqS frequency axis used to build the propagator.
 function fftshift(f,Nx,Ny){const n=Nx*Ny,re=new Float64Array(n),im=new Float64Array(n),hx=Nx>>1,hy=Ny>>1;for(let y=0;y<Ny;y++)for(let x=0;x<Nx;x++){const s=((y+hy)%Ny)*Nx+((x+hx)%Nx),d=y*Nx+x;re[d]=f.re[s];im[d]=f.im[s]}return{re,im}}
+// Centered spatial-frequency axis for a length-N transform with sample pitch d,
+// in cycles per meter. Zero sits at the middle, matching fftshift.
 function fftfreqS(N,d){const f=new Float64Array(N),h=N>>1;for(let i=0;i<N;i++)f[i]=(i-h)/(N*d);return f}
+// Angular spectrum propagation of field E over distance z at wavelength lam.
+// Steps: FFT to the spectrum, shift zero to center, build the transfer function
+// H = exp(i·kz·z) per frequency, multiply, shift back, inverse FFT. When
+// k² − kx² − ky² < 0 the wave is evanescent, so H becomes a real decaying
+// exponential instead of a phase. z = 0 returns a copy unchanged.
 function prop(E,Nx,Ny,dx,dy,z,lam){if(z===0)return{re:new Float64Array(E.re),im:new Float64Array(E.im)};let sp=fft2d(E,Nx,Ny,false);sp=fftshift(sp,Nx,Ny);const fx=fftfreqS(Nx,dx),fy=fftfreqS(Ny,dy),k=TAU/lam,k2=k*k,N=Nx*Ny,Hr=new Float64Array(N),Hi=new Float64Array(N);for(let iy=0;iy<Ny;iy++){const ky2=(TAU*fy[iy])**2;for(let ix=0;ix<Nx;ix++){const idx=iy*Nx+ix,kx2=(TAU*fx[ix])**2,arg=k2-kx2-ky2;if(arg>=0){const kz=Math.sqrt(arg);Hr[idx]=Math.cos(kz*z);Hi[idx]=Math.sin(kz*z)}else Hr[idx]=Math.exp(-Math.sqrt(-arg)*z)}}const sr=sp.re,si=sp.im;for(let i=0;i<N;i++){const a=sr[i]*Hr[i]-si[i]*Hi[i],b=sr[i]*Hi[i]+si[i]*Hr[i];sr[i]=a;si[i]=b}sp=fftshift({re:sr,im:si},Nx,Ny);return fft2d(sp,Nx,Ny,true)}
+// Asymmetric (piecewise) Gaussian: different spread below and above the mean mu.
+// It is the building block of the CIE color-matching function fits.
 function pG(x,mu,s1,s2){return Math.exp(-.5*((x-mu)/(x<mu?s1:s2))**2)}
+// CIE 1931 x̄/ȳ/z̄ color-matching functions of wavelength l (nm), from the
+// standard multi-lobe Gaussian approximation. These weight each wavelength's
+// intensity into XYZ tristimulus values.
 function cieX(l){return 1.056*pG(l,599.8,37.9,31)+.362*pG(l,442,16,26.7)-.065*pG(l,501.1,20.4,26.2)}
 function cieY(l){return .821*pG(l,568.8,46.9,40.5)+.286*pG(l,530.9,16.3,31.1)}
 function cieZ(l){return 1.217*pG(l,437,11.8,36)+.681*pG(l,459,26,13.8)}
+// D65 daylight illuminant spectrum, sampled every 10 nm from 380 to 780 nm.
+// It is the reference white for the white-light color path.
 const D65=[49.98,52.31,54.65,68.70,82.75,87.12,91.49,92.46,93.43,90.06,86.68,95.77,104.87,110.94,117.01,117.41,117.81,116.34,114.86,115.39,115.92,112.37,108.81,109.08,109.35,108.58,107.80,106.30,104.79,106.24,107.69,106.05,104.41,104.22,104.05,102.02,100,98.17,96.33,96.06,95.79];
+// Linearly interpolate the D65 table at an arbitrary wavelength l (nm).
 function d65(l){const t=(l-380)/10,i=Math.max(0,Math.min(39,Math.floor(t)));return D65[i]+(D65[i+1]-D65[i])*(t-i)}
+// sRGB transfer function (gamma): map a linear channel value into display space.
 function sGam(v){return v<=.0031308?12.92*v:1.055*Math.pow(v,1/2.4)-.055}
+// Approximate visible-spectrum RGB tint for a single wavelength l (nm), used by
+// the monochromatic path and the wavelength swatch. Includes an intensity
+// falloff near the violet and red ends where the eye is less sensitive.
 function wlRGB(l){let r=0,g=0,b=0;if(l>=380&&l<440){r=(440-l)/60;b=1}else if(l<490){g=(l-440)/50;b=1}else if(l<510){g=1;b=(510-l)/20}else if(l<580){r=(l-510)/70;g=1}else if(l<645){r=1;g=(645-l)/65}else if(l<=780)r=1;let f=1;if(l<420)f=.3+.7*(l-380)/40;else if(l>700)f=.3+.7*(780-l)/80;return[Math.pow(r*f,.8),Math.pow(g*f,.8),Math.pow(b*f,.8)]}
+// Ray-cast point-in-polygon test, used to rasterize the star aperture.
 function inPoly(px,py,vs){let c=false;for(let i=0,j=vs.length-1;i<vs.length;j=i++){const xi=vs[i][0],yi=vs[i][1],xj=vs[j][0],yj=vs[j][1];if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi))c=!c}return c}
+// Build the 2n vertices of an n-point star, alternating outer radius R and
+// inner radius r around the circle.
 function starV(n,R,r){const v=[];for(let i=0;i<n*2;i++){const a=i*PI/n-PI/2;v.push([(i%2?r:R)*Math.cos(a),(i%2?r:R)*Math.sin(a)])}return v}
 
 /* ═══ RASTER HELPER (flips Y so text/images appear right-side up) ═══ */
 function rasterToField(imgData,side,N){const t=czeros(N);for(let iy=0;iy<side;iy++)for(let ix=0;ix<side;ix++){const si=iy*side+ix,ci=(side-1-iy)*side+ix;t.re[si]=imgData.data[ci*4]/255}return t}
 
+// The element catalog. Each entry is an aperture or optic: its t(xx,yy,l,N,p)
+// returns the complex transmittance mask over the sampled grid, params drive its
+// sliders, wlDep marks masks that depend on wavelength (lens, zone plate, phase
+// grating) so the white-light path cannot cache one mask across wavelengths, and
+// tex returns the KaTeX string shown in the equation panel. Amplitude apertures
+// set only the real part; phase optics write a unit-magnitude complex phase.
 /* ═══ ELEMENTS ═══ */
 const EL={
   hex:{name:'Hexagonal',sym:'⬡',wlDep:false,params:[{id:'radius',label:'R',min:.01,max:5,value:.7,step:.01}],t(xx,yy,l,N,p){const R=p.radius*mm,s3=Math.sqrt(3),t=czeros(N);for(let i=0;i<N;i++){const ax=Math.abs(xx[i]),ay=Math.abs(yy[i]);t.re[i]=(ax+ay/s3<=R&&ay<=R*s3/2)?1:0}return t},tex(){return String.raw`\textcolor{${_C.T}}{t}\!=\!\begin{cases}1&|x|+|y|/\!\sqrt3\le R\\0\end{cases}`}},
@@ -39,13 +133,23 @@ const EL={
   image:{name:'Image',sym:'◫',wlDep:false,params:[{id:'file',label:'Image',type:'file'},{id:'inv',label:'Invert',min:0,max:1,value:0,step:1}],t(xx,yy,l,N,p){if(!window._imgMask||window._imgMask.length!==N)return cones(N);const t=czeros(N),inv=p.inv>.5;for(let i=0;i<N;i++)t.re[i]=inv?1-window._imgMask[i]:window._imgMask[i];return t},tex(){return String.raw`\textcolor{${_C.T}}{t}\!=\!\text{grayscale}(\text{image})`}},
 };
 
+// Fill the element dropdown from EL, defaulting the selection to the text mask.
 /* Populate element select */
 (function(){const sel=document.getElementById('element-select');Object.entries(EL).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.sym+' '+v.name;if(k==='text')o.selected=true;sel.appendChild(o)})})();
 
+// The single mutable state. source is 'mono' or 'white'; z is the propagation
+// distance in mm; extent is the physical grid width in mm; N is the grid side;
+// divs is the number of wavelength samples for white light; viewMode 1 or 4
+// selects composite-only or the 2×2 channel split; params holds element sliders.
 const S={element:'text',source:'white',lambda:633,z:200,extent:5,N:256,divs:15,speed:5,viewMode:1,params:{}};
+// z-animation state: direction (−1/0/+1) and a dwell countdown at each endpoint.
 let animDir=0,animDwell=0;
+// Paint a range input's filled portion via the --pct custom property.
 function sg(el){el.style.setProperty('--pct',(el.value-el.min)/(el.max-el.min)*100+'%')}
 
+// Build the four output cells (composite plus one per RGB channel). Each cell
+// carries its own canvas and a control bar with a z slider, an extent slider, a
+// speed slider, and the transport buttons; the bars are kept in sync elsewhere.
 /* ═══ BUILD 4 CELLS WITH BARS ═══ */
 const CHANNELS=[{id:'cv-rgb',label:'Composite',cls:''},{id:'cv-r',label:'Red',cls:'ch-r'},{id:'cv-g',label:'Green',cls:'ch-g'},{id:'cv-b',label:'Blue',cls:'ch-b'}];
 const grid=document.getElementById('canvas-grid');
@@ -61,32 +165,59 @@ CHANNELS.forEach((ch,idx)=>{
   grid.appendChild(cell);
 });
 
+// Paint one channel of the computed rgb buffer to its canvas. Draw into an
+// offscreen ImageData at grid resolution (flipping Y so the image is upright),
+// then scale it, letterboxed and centered, into the visible canvas. ch selects
+// which channels to keep: 'rgb' composite, or 'r'/'g'/'b' isolated.
 function renderCh(canvas,rgb,Nx,Ny,ch){const cell=canvas.parentElement,cw=cell.clientWidth*devicePixelRatio,barH=cell.querySelector('.cell-bar').offsetHeight||50,ch2=(cell.clientHeight-barH)*devicePixelRatio;if(ch2<1)return;canvas.width=cw;canvas.height=ch2;const ctx=canvas.getContext('2d');ctx.fillStyle='#060810';ctx.fillRect(0,0,cw,ch2);const off=document.createElement('canvas');off.width=Nx;off.height=Ny;const oc=off.getContext('2d'),img=oc.createImageData(Nx,Ny),d=img.data;for(let iy=0;iy<Ny;iy++)for(let ix=0;ix<Nx;ix++){const si=(Ny-1-iy)*Nx+ix,di=(iy*Nx+ix)*4,r=rgb[si*3],g=rgb[si*3+1],b=rgb[si*3+2];if(ch==='rgb'){d[di]=r;d[di+1]=g;d[di+2]=b}else if(ch==='r'){d[di]=r;d[di+1]=0;d[di+2]=0}else if(ch==='g'){d[di]=0;d[di+1]=g;d[di+2]=0}else{d[di]=0;d[di+1]=0;d[di+2]=b}d[di+3]=255}oc.putImageData(img,0,0);const sc=Math.min(cw/Nx,ch2/Ny),dw=Nx*sc,dh=Ny*sc;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(off,(cw-dw)/2,(ch2-dh)/2,dw,dh)}
 
+// Read the current element's slider and text values into a plain params object
+// and cache it on S. File-type params (image upload) are handled separately.
 function readParams(){const el=EL[S.element],p={};el.params.forEach(pd=>{if(pd.type==='file')return;const sl=document.getElementById('sl-p-'+pd.id);p[pd.id]=pd.type==='text'?(sl?sl.value:pd.value):(sl?parseFloat(sl.value):pd.value)});S.params=p;return p}
 
+// The live render path. Sample a physical grid centered on the aperture, build
+// the transmittance mask, propagate it to z, and convert intensity to an RGB
+// buffer, then paint the visible cells and update the readouts and equation.
 function recompute(){
+  // Physical sample coordinates: dx,dy are the grid pitch (extent / N).
   const p=readParams(),el=EL[S.element],N=S.N,Nx=N,Ny=N,ext=S.extent*mm,dx=ext/Nx,dy=ext/Ny,z=S.z*mm;
   const xx=new Float64Array(N*N),yy=new Float64Array(N*N);
   for(let iy=0;iy<Ny;iy++){const y_=dy*(iy-Ny/2);for(let ix=0;ix<Nx;ix++){xx[iy*Nx+ix]=dx*(ix-Nx/2);yy[iy*Nx+ix]=y_}}
   let rgb;
+  // Monochromatic: one wavelength. Propagate, normalize |E|² to its peak, then
+  // tint by the wavelength's RGB. sqrt of intensity gives a perceptual amplitude.
   if(S.source==='mono'){
     const lam=S.lambda*nm,tr=el.t(xx,yy,lam,N*N,p);let E=cmul(cones(N*N),tr);E=prop(E,Nx,Ny,dx,dy,z,lam);const I=cabs2(E);let mx=0;for(let i=0;i<I.length;i++)if(I[i]>mx)mx=I[i];if(mx<1e-30)mx=1;const wl=wlRGB(S.lambda);rgb=new Uint8Array(N*N*3);for(let i=0;i<N*N;i++){const v=Math.sqrt(I[i]/mx);rgb[i*3]=Math.min(255,v*wl[0]*255)|0;rgb[i*3+1]=Math.min(255,v*wl[1]*255)|0;rgb[i*3+2]=Math.min(255,v*wl[2]*255)|0}
   } else {
+    // White light: sweep divs wavelengths across 380 to 780 nm. Each wavelength
+    // propagates independently; its intensity is weighted by the D65 spectrum and
+    // the CIE color-matching functions and accumulated into XYZ. A non-dispersive
+    // mask is computed once (tC) and reused across wavelengths.
     const nD=S.divs,dl=(780-380)/nD,X=new Float64Array(N*N),Y=new Float64Array(N*N),Z=new Float64Array(N*N);let tC=null;if(!el.wlDep)tC=el.t(xx,yy,550*nm,N*N,p);
     for(let d=0;d<nD;d++){const ln=380+(d+.5)*dl,lam=ln*nm,Sd=d65(ln)*dl,xw=cieX(ln)*Sd,yw=cieY(ln)*Sd,zw=cieZ(ln)*Sd,tr=tC||el.t(xx,yy,lam,N*N,p);let E=cmul(cones(N*N),tr);E=prop(E,Nx,Ny,dx,dy,z,lam);const I=cabs2(E);for(let i=0;i<N*N;i++){X[i]+=I[i]*xw;Y[i]+=I[i]*yw;Z[i]+=I[i]*zw}}
+    // Normalize by peak luminance Y, then convert XYZ to linear sRGB and apply
+    // the gamma. Negative channels (out-of-gamut) are clamped to zero.
     let mY=0;for(let i=0;i<N*N;i++)if(Y[i]>mY)mY=Y[i];if(mY<1e-30)mY=1;const sc=1/mY;rgb=new Uint8Array(N*N*3);
     for(let i=0;i<N*N;i++){const x=X[i]*sc,y=Y[i]*sc,zv=Z[i]*sc;let r=3.2406*x-1.5372*y-.4986*zv,g=-.9689*x+1.8758*y+.0415*zv,b=.0557*x-.204*y+1.057*zv;r=Math.max(0,r);g=Math.max(0,g);b=Math.max(0,b);rgb[i*3]=Math.min(255,sGam(r)*255)|0;rgb[i*3+1]=Math.min(255,sGam(g)*255)|0;rgb[i*3+2]=Math.min(255,sGam(b)*255)|0}
   }
+  // Always paint the composite; paint the isolated R/G/B cells only in 2×2 view.
   renderCh(document.getElementById('cv-rgb'),rgb,Nx,Ny,'rgb');
   if(S.viewMode===4){renderCh(document.getElementById('cv-r'),rgb,Nx,Ny,'r');renderCh(document.getElementById('cv-g'),rgb,Nx,Ny,'g');renderCh(document.getElementById('cv-b'),rgb,Nx,Ny,'b')}
   document.getElementById('st-main').textContent=`${N}² · dx=${(dx/um).toFixed(1)}µm · z=${S.z.toFixed(0)}mm`;
+  // Fresnel number N_F = a²/(λz) classifies the regime: large means geometric
+  // shadow, near one is Fresnel (near-field), small is Fraunhofer (far-field).
   const aC=p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0;if(aC>0&&S.z>0){const l0=(S.source==='mono'?S.lambda:550)*nm,Nf=(aC*mm)**2/(l0*z);document.getElementById('st-sub').textContent=`N_F=${Nf.toFixed(2)} · ${Nf>5?'geometric':Nf>.5?'Fresnel':'Fraunhofer'}`}else document.getElementById('st-sub').textContent='';
   document.getElementById('qp-title').textContent='Aperture Diffraction';document.getElementById('qp-summary').textContent=el.sym+' '+el.name+' · '+(S.source==='white'?'D65':'λ='+S.lambda+'nm')+' · z='+S.z.toFixed(0)+'mm';
+  // Re-render the transmittance equation for the current element, if KaTeX loaded.
   if(window.katex&&window._ko&&el.tex){document.getElementById('eq-t-label').textContent='Transmittance · '+el.name;try{katex.render(el.tex(p),document.getElementById('eq-trans'),window._ko)}catch(e){}}
 }
+// Coalesce many rapid changes into one recompute per animation frame.
 let _sc=false;function scheduleRecompute(){if(!_sc){_sc=true;requestAnimationFrame(()=>{_sc=false;recompute()})}}
 
+// The four cells each have their own z/extent/speed sliders and transport
+// buttons. syncBars writes S back to every copy so they stay identical, and the
+// input handlers below read any one of them into S. The z animation drives z
+// back and forth between 0 and its max, dwelling briefly at each endpoint.
 /* ═══ SYNC 4 BARS ═══ */
 const allZ=document.querySelectorAll('.cb-z'),allZV=document.querySelectorAll('.cb-z-v'),allSpd=document.querySelectorAll('.cb-spd'),allSpdV=document.querySelectorAll('.cb-spd-v'),allExt=document.querySelectorAll('.cb-ext'),allExtV=document.querySelectorAll('.cb-ext-v'),allBtns=document.querySelectorAll('.cb-btn');
 function syncBars(){allZ.forEach(s=>{s.value=Math.min(+s.max,S.z);sg(s)});allZV.forEach(v=>v.textContent=S.z.toFixed(0)+' mm');allSpd.forEach(s=>{s.value=S.speed;sg(s)});allSpdV.forEach(v=>v.textContent=`×${S.speed}`);allExt.forEach(s=>{s.value=S.extent;sg(s)});allExtV.forEach(v=>v.textContent=S.extent.toFixed(1)+' mm');allBtns.forEach(b=>{const d=+b.dataset.d;b.classList.toggle('on',d!==0&&d===animDir)})}
@@ -94,13 +225,24 @@ allZ.forEach(s=>{sg(s);s.addEventListener('input',function(){S.z=+this.value;syn
 allSpd.forEach(s=>{sg(s);s.addEventListener('input',function(){S.speed=+this.value;syncBars()})});
 allExt.forEach(s=>{sg(s);s.addEventListener('input',function(){S.extent=+this.value;syncBars();scheduleRecompute()})});
 allBtns.forEach(b=>b.addEventListener('click',function(){const d=+this.dataset.d;if(d===0)animDir=0;else if(animDir===d)animDir=0;else{animDir=d;requestAnimationFrame(animLoop)}syncBars()}));
+// One z-animation tick: advance z by a speed-scaled step, reverse and dwell at
+// each end, then recompute and reschedule.
 function animLoop(){if(!animDir)return;if(animDwell>0){animDwell--;requestAnimationFrame(animLoop);return}const zMin=0,zMax=+allZ[0].max||500;S.z+=animDir*S.speed*(zMax-zMin)/400;if(S.z>=zMax){S.z=zMax;animDir=-1;animDwell=60}if(S.z<=zMin){S.z=zMin;animDir=1;animDwell=60}syncBars();recompute();requestAnimationFrame(animLoop)}
 
+// Rebuild the parameter widgets for the current element. Text params get a text
+// input, file params get a file-picker button, and numeric params get a slider
+// with a decimal precision inferred from the step. Every widget schedules a
+// recompute on change.
 /* ═══ PARAM UI ═══ */
 function buildParamUI(){const c=document.getElementById('params-container'),el=EL[S.element];c.innerHTML='';el.params.forEach(pd=>{if(pd.type==='text'){const d=document.createElement('div');d.innerHTML=`<input type="text" id="sl-p-${pd.id}" value="${pd.value}" class="qp-text-input" placeholder="${pd.label}">`;c.appendChild(d);d.querySelector('input').addEventListener('input',()=>scheduleRecompute())}else if(pd.type==='file'){const d=document.createElement('div');d.innerHTML=`<button class="qp-file-btn">Choose Image</button>`;c.appendChild(d);d.querySelector('button').addEventListener('click',()=>document.getElementById('file-input').click())}else{const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const row=document.createElement('div');row.className='row';row.innerHTML=`<span class="row-lbl">${pd.label}</span><input type="range" id="sl-p-${pd.id}" min="${pd.min}" max="${pd.max}" value="${pd.value}" step="${pd.step}"><span class="val" id="vl-p-${pd.id}">${pd.value.toFixed(dec)}</span>`;c.appendChild(row);const sl=row.querySelector('input');sg(sl);sl.addEventListener('input',function(){document.getElementById('vl-p-'+pd.id).textContent=(+this.value).toFixed(dec);sg(this);scheduleRecompute()})}});readParams()}
 
+// Image upload: draw the chosen file centered on an N×N canvas, then read its
+// luminance (flipping Y) into window._imgMask for the 'image' element's mask.
 document.getElementById('file-input').addEventListener('change',function(){const f=this.files[0];if(!f)return;const r=new FileReader();r.onload=function(e){const img=new Image();img.onload=function(){const N=S.N,cv=document.createElement('canvas');cv.width=N;cv.height=N;const ctx=cv.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,N,N);const sc=Math.min(N/img.width,N/img.height)*.85,w=img.width*sc,h=img.height*sc;ctx.drawImage(img,(N-w)/2,(N-h)/2,w,h);const id=ctx.getImageData(0,0,N,N);window._imgMask=new Float64Array(N*N);for(let iy=0;iy<N;iy++)for(let ix=0;ix<N;ix++){const si=iy*N+ix,ci=(N-1-iy)*N+ix;window._imgMask[si]=(id.data[ci*4]+id.data[ci*4+1]+id.data[ci*4+2])/765}scheduleRecompute()};img.src=e.target.result};r.readAsDataURL(f)});
 
+// Top-level control wiring: element choice, source mode (which shows the mono or
+// white sub-panel), grid resolution, view mode, and the wavelength/division
+// sliders with their live swatch. Each writes S and schedules a recompute.
 /* ═══ EVENTS ═══ */
 document.getElementById('element-select').addEventListener('change',function(){S.element=this.value;buildParamUI();scheduleRecompute()});
 document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#source-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.source=b.dataset.source;document.getElementById('mono-params').style.display=S.source==='mono'?'block':'none';document.getElementById('white-params').style.display=S.source==='white'?'block':'none';scheduleRecompute()}));
@@ -108,14 +250,19 @@ document.querySelectorAll('.res-btn[data-n]').forEach(b=>b.addEventListener('cli
 document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#view-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.viewMode=+b.dataset.view;const g=document.getElementById('canvas-grid');g.classList.toggle('view-1',S.viewMode===1);document.getElementById('export-section').style.display=S.viewMode===1?'':'none';scheduleRecompute()}));
 ['sl-lam','sl-div'].forEach(id=>{const el=document.getElementById(id);if(!el)return;sg(el);el.addEventListener('input',function(){sg(this);const v=+this.value;if(id==='sl-lam'){S.lambda=v;document.getElementById('vl-lam').textContent=v.toFixed(0);const rgb=wlRGB(v),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs}else{S.divs=v;document.getElementById('vl-div').textContent=v.toFixed(0)}scheduleRecompute()})});
 document.getElementById('sl-txtsz').addEventListener('input',function(){sg(this);document.getElementById('vl-txtsz').textContent=this.value});sg(document.getElementById('sl-txtsz'));
+// Collapse the control panel and slide the canvas grid over to fill the space.
 document.getElementById('qp-collapse-btn').addEventListener('click',()=>{const p=document.getElementById('quick-panel'),c=p.classList.toggle('collapsed');document.getElementById('qp-collapse-btn').textContent=c?'▶':'◀';document.getElementById('canvas-grid').style.left=c?'44px':'';setTimeout(scheduleRecompute,250)});
+// Mobile drawer: slide the control panel over a dimmed overlay on small screens.
 /* Mobile drawer */
 function toggleMobilePanel(){const p=document.getElementById('quick-panel'),o=document.getElementById('mob-overlay');const isOpen=p.classList.toggle('mob-open');o.classList.toggle('show',isOpen)}
 document.getElementById('mob-menu').addEventListener('click',toggleMobilePanel);
 document.getElementById('mob-overlay').addEventListener('click',toggleMobilePanel);
 window.addEventListener('resize',()=>scheduleRecompute());
 
+// Close the mobile drawer after an action on narrow screens.
 function closeMob(){if(window.innerWidth<=700){document.getElementById('quick-panel').classList.remove('mob-open');document.getElementById('mob-overlay').classList.remove('show')}}
+// Custom text button: switch to the text element and push the typed string and
+// size into its params, so the diffracted image spells the user's text.
 /* Custom text button */
 document.getElementById('btn-set-text').addEventListener('click',()=>{
   const txt=document.getElementById('custom-text').value||'A';
@@ -127,6 +274,8 @@ document.getElementById('btn-set-text').addEventListener('click',()=>{
   scheduleRecompute();closeMob();
 });
 
+// Reset: restore every state field and control to its default, clear any
+// uploaded image, and recompute.
 /* Reset */
 document.getElementById('btn-reset').addEventListener('click',()=>{animDir=0;S.element='text';S.source='white';S.lambda=633;S.z=200;S.extent=5;S.N=256;S.divs=15;S.speed=5;window._imgMask=null;
   document.getElementById('element-select').value='text';
@@ -138,18 +287,28 @@ document.getElementById('btn-reset').addEventListener('click',()=>{animDir=0;S.e
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
   buildParamUI();syncBars();scheduleRecompute();closeMob()});
 
+// Export: render a still PNG at the current z, or a WebM video that sweeps z
+// over time. Both reuse renderFrame, which runs the same propagation as the live
+// path but into a standalone canvas at the export resolution.
 /* ═══ EXPORT SYSTEM ═══ */
+// Aspect ratio state and the named ratio presets.
 let exAR=[1,1]; // [w,h] ratio
 const AR_MAP={'1:1':[1,1],'16:9':[16,9],'9:16':[9,16],'4:3':[4,3],'3:4':[3,4]};
+// Easing curves for the z sweep over a video, mapping frame fraction 0..1.
 const EASE={linear:t=>t,'ease-in':t=>t*t,'ease-out':t=>1-(1-t)*(1-t),'ease-in-out':t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2};
+// Output pixel dimensions from the width slider and the chosen aspect ratio.
 function exDims(){const w=+document.getElementById('sl-exw').value;const h=Math.round(w*exAR[1]/exAR[0]);return[w,h]}
 function updateExLabel(){const[w,h]=exDims();document.getElementById('vl-exw').textContent=w+'×'+h}
 
+// Export control wiring: aspect ratio, output size, duration, and repeat count.
 document.querySelectorAll('#ar-btns .res-btn').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#ar-btns .res-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');exAR=AR_MAP[b.dataset.ar]||[1,1];updateExLabel()}));
 const slExw=document.getElementById('sl-exw');sg(slExw);slExw.addEventListener('input',function(){sg(this);updateExLabel()});
 const slDur=document.getElementById('sl-dur');sg(slDur);slDur.addEventListener('input',function(){sg(this);document.getElementById('vl-dur').textContent=this.value+'s'});
 const slRep=document.getElementById('sl-rep');sg(slRep);slRep.addEventListener('input',function(){sg(this);document.getElementById('vl-rep').textContent=this.value});
 
+// Render one export frame: run the full mono or white propagation on an Nx×Ny
+// sim grid at distance z (mm), draw it to a sim canvas, then scale it to fill
+// the exW×exH output canvas. This mirrors recompute but writes to a fresh canvas.
 function renderFrame(Nx,Ny,exW,exH,z){
   const p=readParams(),el=EL[S.element];
   const maxN=Math.max(Nx,Ny),ext=S.extent*mm;
@@ -177,6 +336,8 @@ function renderFrame(Nx,Ny,exW,exH,z){
   return outCv;
 }
 
+// Map a video frame index to a z value along the chosen direction and easing:
+// forward 0→max, reverse max→0, or bounce 0→max→0.
 function getZForFrame(frame,total,dir,ease){
   const zMax=+allZ[0].max||500;
   let t=frame/Math.max(1,total-1); // 0→1
@@ -187,9 +348,13 @@ function getZForFrame(frame,total,dir,ease){
   return t<0.5 ? (t*2)*zMax : (2-t*2)*zMax;
 }
 
+// Choose a power-of-two sim grid roughly half the output size, floored at 128,
+// so the FFT stays fast while the result upscales cleanly.
 /* Half each dimension, snap to power of 2 */
 function exSimDims(w,h){return[Math.pow(2,Math.max(7,Math.round(Math.log2(w/2)))),Math.pow(2,Math.max(7,Math.round(Math.log2(h/2))))]}
 
+// PNG export: freeze any animation, render one frame at the captured z, and
+// download it as a PNG. The setTimeout lets the status text paint first.
 /* PNG export */
 document.getElementById('btn-export-png').addEventListener('click',()=>{
   const wasAnimating=animDir;animDir=0;syncBars(); // pause to freeze preview
@@ -212,6 +377,9 @@ document.getElementById('btn-export-png').addEventListener('click',()=>{
   },50);
 });
 
+// Video export runs in two phases: pre-render every frame to an ImageData array
+// (so the slow propagation never competes with real-time encoding), then play
+// those frames onto a canvas whose captureStream feeds a MediaRecorder to WebM.
 /* Video export — pre-render all frames then encode */
 let exporting=false;
 document.getElementById('btn-export-vid').addEventListener('click',()=>{
@@ -233,6 +401,7 @@ document.getElementById('btn-export-vid').addEventListener('click',()=>{
   const sN=S.N; // WYSIWYG: same sim grid as preview
   stat.textContent='Rendering frame 1/'+totalFrames+'…';
 
+  // Render frames one at a time via setTimeout so the UI stays responsive.
   function computeNext(){
     if(f>=totalFrames){startEncoding();return}
     const cycleFrame=f%framesPerCycle;
@@ -244,6 +413,8 @@ document.getElementById('btn-export-vid').addEventListener('click',()=>{
     setTimeout(computeNext,0);
   }
 
+  // Phase 2: pick a supported WebM codec, record the played-back frames, and
+  // download the resulting blob. Fails gracefully if MediaRecorder is missing.
   function startEncoding(){
     stat.textContent='Encoding video…';
     const recCv=document.createElement('canvas');recCv.width=w;recCv.height=h;
@@ -285,6 +456,8 @@ document.getElementById('btn-export-vid').addEventListener('click',()=>{
   computeNext();
 });
 
+// Named presets: each sets an element, its params, and the viewing distance,
+// extent, and wavelength divisions for a recognizable diffraction pattern.
 /* ═══ PRESETS ═══ */
 const PR=[
   {name:'Hex',el:'hex',p:{radius:.7},ext:5,z:200,div:15},
@@ -300,6 +473,8 @@ const PR=[
   {name:'Slit',el:'rect',p:{width:.1,height:3},ext:5,z:200,div:15},
   {name:'6-Star',el:'star',p:{pts:6,radius:.6,inner:.45},ext:3,z:200,div:15},
 ];
+// Apply one preset: copy its fields into S, sync every control to match, rebuild
+// the parameter UI, push the preset's param values, and recompute.
 function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=pr.lam||633;S.extent=pr.ext;S.z=pr.z;S.N=pr.N||256;S.divs=pr.div||15;S.speed=5;
   document.getElementById('element-select').value=pr.el;allZ.forEach(s=>s.max=Math.max(500,pr.z*3));
   document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.classList.toggle('active',b.dataset.source===(pr.src||'white')));
@@ -309,6 +484,8 @@ function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
   buildParamUI();const el=EL[pr.el];el.params.forEach(pd=>{if(pd.type==='file')return;if(pr.p[pd.id]!==undefined){const sl=document.getElementById('sl-p-'+pd.id);if(sl){if(pd.type==='text')sl.value=pr.p[pd.id];else{sl.value=pr.p[pd.id];sg(sl);const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const vl=document.getElementById('vl-p-'+pd.id);if(vl)vl.textContent=pr.p[pd.id].toFixed(dec)}}}});
   syncBars();scheduleRecompute()}
+// Build the preset button grid.
 (function(){const g=document.getElementById('preset-grid');PR.forEach(pr=>{const b=document.createElement('button');b.className='preset-btn';b.textContent=pr.name;b.addEventListener('click',()=>{applyP(pr);b.classList.add('on');closeMob()});g.appendChild(b)})})();
 
+// Boot: set the wavelength swatch, build the param UI, sync the bars, and render.
 (function(){const rgb=wlRGB(S.lambda),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs;buildParamUI();syncBars();scheduleRecompute()})();

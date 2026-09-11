@@ -4,12 +4,44 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Double-Slit Diffraction // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   DOUBLE-SLIT DIFFRACTION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup for the FDTD wave sim. main.js paints the field into
+   #waveCanvas and the fringe profile into #detectorCanvas; equations.js fills
+   the KaTeX equation panel. This file lays out the canvas, the readout
+   overlay, the detector strip, and the control sidebar that main.js binds by
+   id. Nothing here computes the wave.
+
+   HEAD LOAD ORDER   (order matters)
+     ● fonts        Google Fonts stylesheet
+     ● KaTeX        CSS then JS, so equations.js can render on load
+     ● style.css    the page stylesheet
+     ● equations.js at body end, renders the equation panel
+     ● main.js      at body end, runs the sim after markup exists
+
+   LAYOUT   (the leading marker is an element id)
+     ┌─────────────────────────────────────────────────────────────────┐
+     │ topbar  Stella Nova · FDTD Wave Sim              #perf-info       │
+     ├──────────────────────────────────────────────┬──────────────────┤
+     │ #sim                                          │ #controls        │
+     │   #waveCanvas   the 2D field                  │  RGB channels    │
+     │   #overlay      t / steps / grid readout      │  barrier / slits │
+     │   #det-wrap     #detectorCanvas fringe strip  │  simulation      │
+     │   #eq-panel     governing equations           │  display         │
+     │   #fab          mobile drawer button          │  interaction     │
+     └──────────────────────────────────────────────┴──────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
 
@@ -23,15 +55,18 @@
   </div>
 
   <div id="main">
+    <!-- Simulation stage: the field canvas plus its floating overlays. -->
     <div id="sim">
       <canvas id="waveCanvas"></canvas>
 
+      <!-- Live readout: simulation time, step count, and grid dimensions. -->
       <div id="overlay">
         <div>t = <span class="v" id="ot">0.000</span> fs</div>
         <div>steps = <span class="v" id="os">0</span></div>
         <div>grid = <span class="v" id="og">—</span></div>
       </div>
 
+      <!-- Detector strip: the accumulated interference intensity profile. -->
       <div id="det-wrap">
         <div class="lbl">Intensity</div>
         <canvas id="detectorCanvas" width="44"></canvas>
@@ -60,11 +95,14 @@
         </div>
       </section>
 
+      <!-- Mobile drawer trigger and its dimmed backdrop. -->
       <button class="fab" id="fab" onclick="toggleDrawer()">Controls ≡</button>
       <div class="drawer-bg" id="drawer-bg" onclick="closeDrawer()"></div>
     </div>
 
+    <!-- Control sidebar: every widget main.js binds by id. -->
     <div id="controls">
+      <!-- Per-channel wavelengths and on/off toggles. -->
       <div class="sec">
         <div class="sec-lbl">RGB Channels</div>
         <div class="channel-row"><div class="dot" style="background:#ff6b6b"></div><label style="color:#ff6b6b">Red λ</label><span class="vd" id="val-lr" style="color:#ff6b6b">44</span></div>
@@ -81,6 +119,7 @@
         </div>
       </div>
 
+      <!-- Slit geometry: width, separation, barrier position, and slit count. -->
       <div class="sec">
         <div class="sec-lbl">Barrier / Slits</div>
         <div class="row"><label>Slit width</label><span class="vd" id="val-sw">15</span></div>
@@ -97,6 +136,7 @@
         </div>
       </div>
 
+      <!-- Solver knobs: timestep (Courant α), dissipation, gain, resolution. -->
       <div class="sec">
         <div class="sec-lbl">Simulation</div>
         <div class="row"><label>Δt</label><span class="vd" id="val-dt">0.50</span></div>
@@ -109,6 +149,7 @@
         <input type="range" id="sl-scale" min="1" max="4" value="2" step="1">
       </div>
 
+      <!-- Field display mode: amplitude, intensity, or phase. -->
       <div class="sec">
         <div class="sec-lbl">Display</div>
         <div class="br">
@@ -118,6 +159,7 @@
         </div>
       </div>
 
+      <!-- Brush size and source mode: sine, impulse, wall, or erase. -->
       <div class="sec">
         <div class="sec-lbl">Interaction</div>
         <div class="row"><label>Brush</label><span class="vd" id="val-br">6</span></div>
@@ -130,6 +172,7 @@
         </div>
       </div>
 
+      <!-- Transport: pause, reset the fields, clear painted walls. -->
       <div class="sec">
         <div class="br">
           <button class="btn" id="btn-pause">⏸ Pause</button>

@@ -1,10 +1,44 @@
+// ============================================================================
+//  TWENTY TO FOUR  ·  equation panel builder
+// ----------------------------------------------------------------------------
+//  Builds the scrollable panel that shows how Maxwell's original 20 scalar
+//  equations collapse into Heaviside's 4 vector equations. Each concept renders
+//  its scalar component lines on the left, an arrow, and the folded vector form
+//  plus a plain-language note on the right. Hovering a scalar line lights it and
+//  drives the canvas overlay through window.__setOverlay (defined in main.js).
+//  Self-invoking; bails out quietly if KaTeX did not load.
+//
+//  PANEL STRUCTURE   (per concept block)
+//  --------------------------------------------------------------------------
+//      ┌ concept-head  role badge + name                                    ┐
+//      │ mw-col   scalar lines (hoverable, each carries an overlay key ov)  │
+//      │   →      arrow                                                     │
+//      │ hv-col   folded vector equation + note                            │
+//      └───────────────────────────────────────────────────────────────────┘
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" concepts.js)
+//  --------------------------------------------------------------------------
+//      palette ............. "const E="            per-symbol tint constants
+//      concept data ........ "const concepts"      the 20 → 4 collapse table
+//      block build ......... "concepts.forEach"    render each concept block
+//      summary ............. "// summary"          the four surviving equations
+//      inline katex ........ "renderInlineKatex"   render \( \) inside notes
+//      hover wiring ........ "pointerenter"        line hover → canvas overlay
+// ============================================================================
 (function(){
+  // Skip everything if KaTeX is unavailable, so the page still runs.
   if(!window.katex) return;
+  // Per-symbol tint constants, matched to the field colors on the canvas.
   const E='#ffc832',B='#60e0ee',A='#c890ff',J='#ffb84d',op='#96c8ff',rho='#ff9050',mu='#7fd6a0',phi='#c890ff';
+  // KaTeX options, a short render helper, and a raw-string tag alias.
   const ro={throwOnError:false,displayMode:false};
   const R=(tex,el)=>el&&katex.render(tex,el,ro);
   const S=String.raw;
 
+  // The concept table drives the whole panel. Each entry names a concept, its
+  // role (CORE survives, SET ASIDE and REDUNDANT do not), the scalar component
+  // lines (each with an ov overlay key read on the canvas), the folded Heaviside
+  // vector form (heav) or a text explanation (heavText), and a note.
   // concepts: destination-grouped — how the 20 collapse into the 4 (+ what falls away)
   const concepts=[
     {color:E, role:'CORE', name:'Gauss · electric', grp:'G · free charge   ·   E · elasticity',
@@ -64,6 +98,9 @@
      note:''},
   ];
 
+  // Build one block per concept: the head, the scalar line column (each line
+  // tagged with its concept and overlay key), the arrow, and the Heaviside
+  // column with its equation, optional text, and note.
   const scroll=document.getElementById('eq-scroll');
   concepts.forEach((c,ci)=>{
     const block=document.createElement('div');block.className='concept';block.style.setProperty('--cc',c.color);
@@ -92,6 +129,7 @@
     scroll.appendChild(block);
   });
 
+  // Append the summary: the four vector equations that remain after the collapse.
   // summary
   const sm=document.createElement('div');sm.className='summary';
   sm.innerHTML=`<h3>The four that remain</h3>`;
@@ -102,6 +140,8 @@
   ].forEach(t=>{const d=document.createElement('div');d.className='seq';R(t,d);sm.appendChild(d);});
   scroll.appendChild(sm);
 
+  // Replace every \( ... \) span inside a note's HTML with rendered KaTeX, so
+  // inline math appears within the prose.
   // render \( \) inline katex inside note/text html
   function renderInlineKatex(el){
     el.innerHTML=el.innerHTML.replace(/\\\((.+?)\\\)/g,(m,tex)=>{
@@ -109,6 +149,8 @@
     });
   }
 
+  // Wire each scalar line: on hover, light the line and its block and ask the
+  // canvas to show that overlay; on leave, clear both.
   // hover → drive canvas overlay (functions defined in sim script via window)
   scroll.querySelectorAll('.mw-line').forEach(row=>{
     row.addEventListener('pointerenter',()=>{

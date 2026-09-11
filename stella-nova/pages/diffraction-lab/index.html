@@ -4,40 +4,83 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Aperture Diffraction // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   APERTURE DIFFRACTION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup for the angular-spectrum diffraction engine. main.js builds
+   the output canvas cells inside #canvas-grid, computes the diffracted field,
+   and paints it; equations.js fills the KaTeX panel. This file lays out the
+   control panel, the equation panel, and the status readout that main.js binds
+   by id. Nothing here computes the field.
+
+   HEAD LOAD ORDER   (order matters)
+     ● fonts        Google Fonts stylesheet
+     ● KaTeX        CSS then JS, so equations.js can render on load
+     ● style.css    the page stylesheet
+     ● equations.js at body end, renders the equation panel and exports _C/_ko
+     ● main.js      at body end, runs the engine after markup exists
+
+   LAYOUT   (the leading marker is an element id)
+     ┌──────────────┬──────────────────────────────────────────────────────┐
+     │ #quick-panel │ #canvas-grid                                          │
+     │  element      │   one composite cell, or a 2×2 of composite + R,G,B   │
+     │  parameters   │   each cell has its own z / extent / speed bar         │
+     │  source       │                                                       │
+     │  view / grid  ├──────────────────────────────────────────────────────┤
+     │  custom text  │ #ui  topbar · #eq-panel equations · #status-display   │
+     │  presets      │                                                       │
+     │  export       │                                                       │
+     └──────────────┴──────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="grid-bg"></div>
+<!-- Mobile menu button and its dimmed overlay. -->
 <button id="mob-menu">☰ Settings</button>
 <div id="mob-overlay"></div>
+<!-- Output stage: main.js fills this with the composite and per-channel cells. -->
 <div id="canvas-grid" class="view-1"></div>
 
+<!-- Control panel: every widget main.js binds by id. -->
 <div id="quick-panel">
   <div class="qp-head"><div class="qp-id"><span class="qp-subshell" id="qp-title">Aperture Diffraction</span><span class="qp-ket" id="qp-summary">Aa Text · D65 · z=200mm</span></div><button class="qp-collapse-btn" id="qp-collapse-btn">◀</button></div>
   <div class="qp-body">
+    <!-- Aperture or optic choice; main.js fills the option list from EL. -->
     <div class="qp-section"><div class="qp-sec-lbl">Element</div><select id="element-select" class="qp-select"></select></div>
+    <!-- Per-element parameter sliders, rebuilt on element change. -->
     <div class="qp-section"><div class="qp-sec-lbl">Parameters</div><div id="params-container"></div></div>
+    <!-- Illumination: single wavelength or full white light (D65). -->
     <div class="qp-section"><div class="qp-sec-lbl">Source</div>
       <div class="qp-modes" id="source-modes"><button class="qp-mode" data-source="mono">Mono λ</button><button class="qp-mode active" data-source="white">White D65</button></div>
       <div id="mono-params" style="display:none;margin-top:4px"><div class="row"><span class="row-lbl">λ</span><input type="range" id="sl-lam" min="380" max="780" value="633" step="1"><span class="val" id="vl-lam">633</span><span class="wl-dot" id="wl-dot"></span></div></div>
       <div id="white-params" style="margin-top:4px"><div class="row"><span class="row-lbl">Div</span><input type="range" id="sl-div" min="6" max="30" value="15" step="1"><span class="val" id="vl-div">15</span></div></div>
     </div>
+    <!-- Composite-only or 2x2 channel split. -->
     <div class="qp-section"><div class="qp-sec-lbl">View</div>
       <div class="qp-modes" id="view-modes"><button class="qp-mode" data-view="4">2×2 · RGBC</button><button class="qp-mode active" data-view="1">1×1 · Fast</button></div>
     </div>
+    <!-- FFT grid resolution; higher is sharper but slower. -->
     <div class="qp-section"><div class="qp-sec-lbl">Grid</div>
       <div class="res-grid"><button class="res-btn" data-n="128">128²</button><button class="res-btn active" data-n="256">256²</button><button class="res-btn" data-n="512">512²</button></div>
     </div>
+    <!-- Type text to use as the aperture mask. -->
     <div class="qp-section"><div class="qp-sec-lbl">Custom Text</div>
       <input type="text" id="custom-text" class="qp-text-input" value="davesgames.io" placeholder="Type text…">
       <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-txtsz" min="8" max="100" value="28" step="1"><span class="val" id="vl-txtsz">28</span></div>
       <button class="qp-action-btn yellow" id="btn-set-text">⟶ Set as Aperture</button>
     </div>
+    <!-- Named element setups; main.js fills this grid. -->
     <div class="qp-section"><div class="qp-sec-lbl">Presets</div><div class="preset-grid" id="preset-grid"></div></div>
+    <!-- PNG still and WebM video export controls (hidden in 2x2 view). -->
     <div class="qp-section" id="export-section"><div class="qp-sec-lbl">Export</div>
       <div class="res-grid" id="ar-btns" style="grid-template-columns:repeat(5,1fr);margin-bottom:5px"><button class="res-btn active" data-ar="1:1">1:1</button><button class="res-btn" data-ar="16:9">16:9</button><button class="res-btn" data-ar="9:16">9:16</button><button class="res-btn" data-ar="4:3">4:3</button><button class="res-btn" data-ar="3:4">3:4</button></div>
       <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-exw" min="512" max="3840" value="1920" step="1"><span class="val" id="vl-exw" style="min-width:60px">1920×1920</span></div>
@@ -52,8 +95,10 @@
   </div>
 </div>
 
+<!-- Overlay layer: topbar, the equation panel, and the status readout. -->
 <div id="ui">
   <div class="topbar"><div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Aperture Diffraction</span></div><div class="topbar-r">SYS // <strong>WAVE OPTICS</strong></div></div>
+  <!-- Governing equations, rendered by equations.js; transmittance updates live. -->
   <section class="eq-panel" id="eq-panel">
     <button class="eq-collapse" id="eq-collapse-btn">▲</button>
     <div class="eq-head"><span class="dot"></span><span class="lbl">Governing Equations</span></div>
@@ -62,8 +107,10 @@
     <div class="eq-block"><div class="eq-sublabel" id="eq-t-label">Transmittance · Hexagonal Aperture</div><div class="eq-row" id="eq-trans"></div></div>
     <div class="eq-block"><div class="eq-sublabel">CIE 1931 → sRGB</div><div class="eq-row" id="eq-cie"></div></div>
   </section>
+  <!-- Readout: grid size and pitch on top, Fresnel-number regime below. -->
   <div id="status-display"><div class="status-main" id="st-main"></div><div class="status-sub" id="st-sub"></div></div>
 </div>
+<!-- Hidden file input for the image aperture. -->
 <input type="file" id="file-input" accept="image/*" style="display:none">
 
 <script src="equations.js"></script>

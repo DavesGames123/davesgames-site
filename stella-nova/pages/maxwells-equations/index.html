@@ -4,19 +4,52 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>Maxwell's Equations // Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MAXWELL'S EQUATIONS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup for the four-tab explorer. main.js draws each equation's
+   scene into #sim-canvas, fills the per-tab controls into #ctrl-area, and
+   renders the formula card with KaTeX. This file lays out the tab panel, the
+   canvas stage with its floating equation card, and the status bar that main.js
+   binds by id. Nothing here computes a field.
+
+   HEAD LOAD ORDER   (order matters)
+     ● fonts        Google Fonts stylesheet
+     ● KaTeX        CSS then JS, so main.js can render the formula card
+     ● style.css    the page stylesheet
+     ● main.js      at body end, runs the explorer after markup exists
+
+   LAYOUT   (the leading marker is an element id)
+     ┌──────────────┬───────────────────────────────────────────────────────┐
+     │ #panel       │ #canvas-wrap                                           │
+     │  eq-tabs      │   #sim-canvas  active equation scene                   │
+     │   I II III IV │   #eq-display  formula card (dot · title · math · text) │
+     │  #ctrl-area   │                                                       │
+     │  About        │                                                       │
+     ├──────────────┴───────────────────────────────────────────────────────┤
+     │ #status-bar  active equation · info · fps                              │
+     └───────────────────────────────────────────────────────────────────────┘
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
+     this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<!-- Mobile button: toggle the control panel open on narrow screens. -->
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Maxwell's Equations</span></div>
 </div>
 <div id="main">
+  <!-- Control panel: equation tabs, the active tab's controls, and About text. -->
   <div id="panel"><div class="p-body">
+    <!-- Tab strip: one button per equation; each calls switchEq with its index. -->
     <div class="p-section">
       <div class="p-sec-lbl">Maxwell's Equations</div>
       <div class="eq-tabs">
@@ -34,18 +67,22 @@
         </button>
       </div>
     </div>
+    <!-- Per-tab controls; main.js rebuilds this on every equation switch. -->
     <div class="p-section" id="ctrl-section">
       <div class="p-sec-lbl">Controls</div>
       <div class="ctrl-area" id="ctrl-area"></div>
     </div>
+    <!-- Historical and physical context for the active equation. -->
     <div class="p-section">
       <div class="p-sec-lbl">About</div>
       <div class="ctrl-hint" id="about-text"></div>
     </div>
   </div></div>
+  <!-- Canvas stage: the field scene, a tap-to-close backdrop, and the formula card. -->
   <div id="canvas-wrap">
     <canvas id="sim-canvas"></canvas>
     <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
+    <!-- Formula card: accent dot and title, the KaTeX equation, and the prose. -->
     <div class="eq-display" id="eq-display">
       <div class="eq-title"><span class="dot" id="eq-dot"></span><span id="eq-title-text"></span></div>
       <div class="eq-katex" id="eq-katex"></div>
@@ -53,6 +90,7 @@
     </div>
   </div>
 </div>
+<!-- Status bar: active equation name, per-scene info, and FPS. -->
 <div id="status-bar">
   <span id="st-eq">I · Gauss</span><span class="sep"></span>
   <span id="st-info">--</span><span class="sep"></span>

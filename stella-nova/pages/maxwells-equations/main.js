@@ -1,17 +1,73 @@
+// ============================================================================
+//  MAXWELL'S EQUATIONS  ·  interactive explorer
+// ----------------------------------------------------------------------------
+//  Four tabbed canvas visualizations, one per equation. A tab selects activeEq;
+//  switchEq re-renders the equation display, rebuilds the tab's controls, and
+//  re-seeds its scene. One render(dt) dispatches to the active equation's own
+//  draw routine each frame. All scene state lives in STATE; controls and drag
+//  handlers mutate it in place.
+//
+//  THE FOUR TABS
+//  --------------------------------------------------------------------------
+//      0  Gauss ∇·E = ρ/ε₀      charges + a Gaussian surface; flux = enclosed Q
+//      1  Gauss ∇·B = 0         a dipole magnet; every closed surface nets zero
+//      2  Faraday ∇×E = −∂B/∂t  oscillating B induces a circulating E (Lenz sign)
+//      3  Ampère–Maxwell        wire currents give μ₀J·B, plus the capacitor's
+//                               displacement current ε₀∂E/∂t circulating B
+//
+//  SCREEN LAYOUT   (the leading marker is an element id)
+//  --------------------------------------------------------------------------
+//      #panel       tabs, per-equation controls, About text
+//      #canvas-wrap #sim-canvas plus the floating #eq-display card
+//      #status-bar  active equation · info · fps
+//
+//  FRAME PIPELINE
+//  --------------------------------------------------------------------------
+//      loop(t) ─ render(dt) ─ clear + grid ─▶ renderGauss / renderMonopoles /
+//                                             renderFaraday / renderAmpere
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  --------------------------------------------------------------------------
+//      constants ........... "EQ_COLORS"           per-tab colors and labels
+//      state ............... "const STATE="        all scene state
+//      equation display .... "EQUATION DISPLAY"     LaTeX and prose per tab
+//      controls ............ "function buildControls"  per-tab control markup
+//      tab switch .......... "function switchEq"    change the active equation
+//      per-tab init ........ "function initEq"      seed a scene on entry
+//      physics ............. "function eField"      field formulas
+//      actions ............. "function addCharge"   add/clear scene objects
+//      field color ......... "function fColor"      magnitude → tinted color
+//      render dispatch ..... "function render"      clear, grid, dispatch
+//      Gauss draw .......... "function renderGauss" tab 0
+//      monopoles draw ...... "function renderMonopoles"  tab 1
+//      Faraday draw ........ "function renderFaraday"    tab 2
+//      Ampère draw ......... "function renderAmpere"     tab 3
+//      drag ................ "function getPos"      pointer picking and drag
+//      resize .............. "function resize"      canvas sizing and DPR
+//      loop ................ "function loop"        per-frame driver
+// ============================================================================
 /* ════════════════════════════════════════════════════════════
    MAXWELL'S EQUATIONS — INTERACTIVE EXPLORER
    4 tabbed visualizations, one per equation.
    ════════════════════════════════════════════════════════════ */
+// The drawing canvas and its 2D context. CW/CH are the CSS size; activeEq is the
+// index of the currently shown equation (0 to 3).
 const canvas=document.getElementById('sim-canvas');
 const ctx=canvas.getContext('2d');
 let CW=100,CH=100,activeEq=0;
 
+// Per-tab accent color and the label strings shown on the tab, status bar, and
+// equation title. Index by activeEq.
 // Colors matching the equation accents
 const EQ_COLORS=['#ff9050','#60e0ee','#64c864','#c890ff'];
 const EQ_NAMES=['I · Gauss\'s Law','II · No Monopoles','III · Faraday\'s Law','IV · Ampère–Maxwell'];
 const EQ_TITLES=['GAUSS\'S LAW · ELECTRIC','GAUSS\'S LAW · MAGNETIC','FARADAY\'S LAW · INDUCTION','AMPÈRE–MAXWELL LAW'];
 const EQ_ROMAN=['I','II','III','IV'];
 
+// All scene state, grouped by equation. Gauss holds the charge list and the
+// Gaussian surface; monopoles hold the dipole pose; Faraday holds the drive rate
+// and phase clock; Ampère holds the wire list and its clock. Positions are in
+// canvas pixels; angles in radians.
 // Per-equation state
 const STATE={
   // Eq 0: Gauss - charges
@@ -28,8 +84,10 @@ const STATE={
   showArrows:true,showTracers:true,
 };
 
+// Paint a range input's filled track via the --pct custom property.
 function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProperty('--pct',pct+'%');}
 
+// The four equations as KaTeX source, color-coded to the field accents.
 /* ═══ EQUATION DISPLAY ═══ */
 const EQ_LATEX=[
   `\\textcolor{#ff9050}{\\nabla \\cdot \\vec{E}} \\;=\\; \\frac{\\textcolor{#ffc832}{\\rho}}{\\textcolor{#c890ff}{\\varepsilon_0}}`,
@@ -37,6 +95,7 @@ const EQ_LATEX=[
   `\\textcolor{#64c864}{\\nabla \\times \\vec{E}} \\;=\\; -\\frac{\\partial \\textcolor{#60e0ee}{\\vec{B}}}{\\partial t}`,
   `\\textcolor{#c890ff}{\\nabla \\times \\vec{B}} \\;=\\; \\textcolor{#c890ff}{\\mu_0}\\!\\left(\\textcolor{#ffb84d}{\\vec{J}} + \\textcolor{#c890ff}{\\varepsilon_0}\\frac{\\partial \\textcolor{#ff9050}{\\vec{E}}}{\\partial t}\\right)`,
 ];
+// Plain-language explanation of each equation, shown under the formula.
 const EQ_ENGLISH=[
   `<strong>Electric charges create electric field.</strong> Positive charges are sources (field radiates outward). Negative charges are sinks (field points inward). The total flux through any closed surface equals the enclosed charge. Drag charges and the Gaussian surface to see this.`,
   `<strong>There are no magnetic monopoles.</strong> Magnetic field lines always form closed loops — they never start or end. The total magnetic flux through any closed surface is always zero. Every north pole has a south pole. Drag the dipole and watch the lines close on themselves.`,
@@ -44,6 +103,8 @@ const EQ_ENGLISH=[
   `<strong>Electric currents and changing electric fields create magnetic field.</strong> Steady currents (J) create circulating B — that's the Biot–Savart law. Maxwell's genius: he added the ∂E/∂t term, predicting that even without wire, a changing E field creates B. This completed the equations and predicted electromagnetic waves.`,
 ];
 
+// Fill the equation card for the active tab: accent dot, title, prose, and the
+// rendered LaTeX formula.
 function renderEqDisplay(){
   const col=EQ_COLORS[activeEq];
   document.getElementById('eq-dot').style.background=col;
@@ -56,12 +117,15 @@ function renderEqDisplay(){
   }catch(e){}
 }
 
+// Rebuild the control panel and About text for the active tab. Each case injects
+// the widgets that tab needs, wired through inline handlers that write STATE.
 /* ═══ CONTROLS PER EQUATION ═══ */
 function buildControls(){
   const area=document.getElementById('ctrl-area');
   area.innerHTML='';
   const about=document.getElementById('about-text');
   switch(activeEq){
+    // Gauss: add charges of either sign and resize the Gaussian surface.
     case 0:
       area.innerHTML=`
         <button class="tog-btn on" onclick="addCharge(1)">+ Add Positive Charge</button>
@@ -72,6 +136,7 @@ function buildControls(){
         <button class="tog-btn" onclick="clearCharges()" style="margin-top:4px;color:var(--yellow);border-color:rgba(255,200,50,0.3)">✕ Clear Charges</button>`;
       about.textContent='Coulomb discovered (1785) that electric force follows an inverse-square law. Gauss showed this means the total flux through any closed surface depends only on enclosed charge — not the surface shape. Place charges and resize the Gaussian surface to verify.';
       break;
+    // No monopoles: set the dipole strength and orientation angle.
     case 1:
       area.innerHTML=`
         <div class="mag-row"><span class="mag-row-lbl">Str</span>
@@ -82,6 +147,7 @@ function buildControls(){
           <span class="val">${(STATE.dipAngle*180/Math.PI).toFixed(0)}°</span></div>`;
       about.textContent='No one has ever found an isolated magnetic pole. Break a magnet in half and you get two smaller magnets, each with both N and S. This equation — ∇·B = 0 — encodes that fact. Gauss (1835) formalized it. The field lines must close, unlike electric field lines which can start on + and end on −.';
       break;
+    // Faraday: set how fast B oscillates and the field region radius.
     case 2:
       area.innerHTML=`
         <div class="mag-row"><span class="mag-row-lbl">Rate</span>
@@ -92,6 +158,7 @@ function buildControls(){
           <span class="val">${STATE.faradayR}</span></div>`;
       about.textContent='Faraday discovered (1831) that a changing magnetic field induces an electric current. He moved magnets through coils and saw current flow. The negative sign means the induced E opposes the change (Lenz\'s law) — nature resists changes in flux. This is how generators, transformers, and induction cooktops work.';
       break;
+    // Ampère–Maxwell: add current-carrying wires (current out of or into plane).
     case 3:
       area.innerHTML=`
         <button class="tog-btn on" onclick="addAmpWire(1)">⊙ Add Wire (I out)</button>
@@ -103,6 +170,8 @@ function buildControls(){
   area.querySelectorAll('input[type=range]').forEach(sg);
 }
 
+// Switch the active equation: highlight its tab, update the status label, and
+// refresh the display, controls, and scene.
 /* ═══ EQUATION SWITCH ═══ */
 function switchEq(idx){
   activeEq=idx;
@@ -113,6 +182,8 @@ function switchEq(idx){
   initEq();
 }
 
+// Seed a tab's scene when it becomes active or after a resize: place default
+// charges and the surface, center the dipole, or place a first wire.
 /* ═══ INIT PER EQUATION ═══ */
 function initEq(){
   switch(activeEq){
@@ -135,7 +206,12 @@ function initEq(){
   }
 }
 
+// Field formulas. All are 2D and use pixel distances; the numeric constants are
+// tuned for visible arrow lengths, not physical units.
 /* ═══ PHYSICS ═══ */
+// Electric field of a point charge: magnitude q/r² (Coulomb inverse square),
+// pointing away from a positive charge. Clamped inside r² = 100 px² to avoid the
+// singularity at the charge.
 // Electric field from point charge
 function eField(px,py,cx,cy,q){
   const dx=px-cx,dy=py-cy,r2=dx*dx+dy*dy;
@@ -143,11 +219,14 @@ function eField(px,py,cx,cy,q){
   const r=Math.sqrt(r2),F=q*12000/(r2);
   return[F*dx/r,F*dy/r];
 }
+// Superpose the field of every charge.
 function totalE(px,py){
   let Ex=0,Ey=0;
   for(const c of STATE.charges){const[ex,ey]=eField(px,py,c.x,c.y,c.q);Ex+=ex;Ey+=ey;}
   return[Ex,Ey];
 }
+// Magnetic dipole field: the standard 3(m·r̂)r̂ − m form, falling off as 1/r³,
+// with moment (mx,my) and strength str. Clamped near the dipole.
 // Magnetic dipole field
 function dipField(px,py,dx0,dy0,mx,my,str){
   const dx=px-dx0,dy=py-dy0,r2=dx*dx+dy*dy;
@@ -156,10 +235,13 @@ function dipField(px,py,dx0,dy0,mx,my,str){
   const mdotr=mx*dx+my*dy;
   return[(3*mdotr*dx/r5-mx/r3)*str*100000,(3*mdotr*dy/r5-my/r3)*str*100000];
 }
+// Dipole field at the current pose, moment set by the angle control.
 function totalB_dip(px,py){
   const mx=Math.cos(STATE.dipAngle),my=Math.sin(STATE.dipAngle);
   return dipField(px,py,STATE.dipX,STATE.dipY,mx,my,STATE.dipStr);
 }
+// Magnetic field of a straight wire (Biot–Savart): magnitude μ₀I/2πr, tangent to
+// circles around the wire. The returned (−dy, dx)/r direction is that tangent.
 // Wire B field (same as biot-savart page)
 function wireB(px,py,wx,wy,I){
   const dx=px-wx,dy=py-wy,r2=dx*dx+dy*dy;
@@ -167,17 +249,23 @@ function wireB(px,py,wx,wy,I){
   const r=Math.sqrt(r2),B=I*5/(r*6.2832); // 5x boost for visibility
   return[-dy/r*B,dx/r*B];
 }
+// Superpose the field of every wire.
 function totalB_amp(px,py){
   let Bx=0,By=0;
   for(const w of STATE.ampWires){const[bx,by]=wireB(px,py,w.x,w.y,w.I);Bx+=bx;By+=by;}
   return[Bx,By];
 }
 
+// Scene actions invoked from the control buttons.
 /* ═══ ACTIONS ═══ */
+// Add a charge of sign q near the center with a small random offset.
 function addCharge(q){
   STATE.charges.push({x:CW/2+(Math.random()-0.5)*100,y:CH/2+(Math.random()-0.5)*100,q});
 }
+// Remove all charges.
 function clearCharges(){STATE.charges=[];}
+// Add a wire with current direction dir, searching outward in rings for a free
+// slot so wires do not overlap.
 function addAmpWire(dir){
   const cx=CW/2,cy=CH/2;
   let x=cx,placed=false;
@@ -191,6 +279,8 @@ function addAmpWire(dir){
   STATE.ampWires.push({x,y:cy,I:dir*2});
 }
 
+// Map a field magnitude to a tinted, log-compressed color. hue selects the field
+// family: e orange (E), b blue (B), g green (induced E), p purple (Ampère B).
 /* ═══ FIELD COLOR ═══ */
 function fColor(mag,alpha,hue){
   // Simple: hue-tinted brightness
@@ -205,6 +295,8 @@ function fColor(mag,alpha,hue){
   }
 }
 
+// Per-frame draw: clear, paint the background grid, then dispatch to the active
+// equation's own renderer.
 /* ═══ RENDER ═══ */
 function render(dt){
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();
@@ -222,6 +314,9 @@ function render(dt){
   }
 }
 
+// Tab 0. Draw the E field as an arrow grid, the charges, the draggable Gaussian
+// surface, and the flux arrows on it. Sum the enclosed charge and show that the
+// net flux is zero exactly when the enclosed charge is zero.
 /* ── EQ 0: GAUSS'S LAW ── */
 function renderGauss(dt){
   const step=28;
@@ -288,6 +383,9 @@ function renderGauss(dt){
   document.getElementById('st-info').textContent=`Q_enc=${Qenc} · ${STATE.charges.length} charges`;
 }
 
+// Tab 1. Draw the dipole B field as arrows, the bar-magnet glyph, and a closed
+// surface annotated to show its net magnetic flux is always zero: field lines
+// close on themselves, so every line entering the surface also leaves it.
 /* ── EQ 1: NO MONOPOLES ── */
 function renderMonopoles(dt){
   const step=24;
@@ -328,8 +426,14 @@ function renderMonopoles(dt){
   document.getElementById('st-info').textContent='∇·B = 0 everywhere';
 }
 
+// Tab 2. A circular region carries an oscillating B (drawn as into/out-of-plane
+// glyphs). Its time derivative induces a circulating E outside the region; the
+// induced magnitude tracks |dB/dt| and the circulation sense follows Lenz's law,
+// opposing the change.
 /* ── EQ 2: FARADAY'S LAW ── */
 function renderFaraday(dt){
+  // Advance the drive clock, then read off B, its rate, the induced E magnitude,
+  // and the Lenz-law circulation direction.
   STATE.faradayTime+=dt*STATE.faradayRate;
   const cx=CW/2,cy=CH/2,R=STATE.faradayR;
   const Bval=Math.sin(STATE.faradayTime*2); // oscillating B
@@ -383,6 +487,11 @@ function renderFaraday(dt){
   document.getElementById('st-info').textContent=`B=${Bval.toFixed(2)} · dB/dt=${dBdt.toFixed(2)}`;
 }
 
+// Tab 3. Two halves of the same law. Part 1: wire currents produce a circulating
+// B (the μ₀J term), shown with an arrow grid, streaming tracers that follow the
+// field, and an Amperian loop. Part 2: a charging capacitor whose changing E in
+// the gap acts as a displacement current (the ε₀∂E/∂t term), circulating B even
+// though no charge crosses the gap.
 /* ── EQ 3: AMPERE-MAXWELL with tracers + displacement current ── */
 function renderAmpere(dt){
   STATE.ampTime=(STATE.ampTime||0)+dt;
@@ -547,6 +656,9 @@ function renderAmpere(dt){
   document.getElementById('st-info').textContent=`${STATE.ampWires.length} wires · ∂E/∂t=${Math.abs(dEdt).toFixed(2)} · ∇×B = μ₀(J + ε₀∂E/∂t)`;
 }
 
+// Pointer dragging. onDown picks the nearest draggable object for the active tab
+// (a charge or the surface, the dipole, or a wire); onMove updates its position;
+// release clears the grab. getPos maps a mouse or touch event to canvas pixels.
 /* ═══ DRAG ═══ */
 let dragObj=null,dragOff=[0,0];
 function getPos(e){const r=canvas.getBoundingClientRect();const t=e.touches?e.touches[0]:e;return[t.clientX-r.left,t.clientY-r.top];}
@@ -578,6 +690,8 @@ function onMove(e){
 window.addEventListener('mouseup',()=>dragObj=null);
 window.addEventListener('touchend',()=>dragObj=null);
 
+// Fit the canvas to its wrapper and scale the backing store by device pixel
+// ratio (capped at 2). Reseeding the scene on resize is wired below.
 /* ═══ RESIZE ═══ */
 function resize(){
   const w=document.getElementById('canvas-wrap');
@@ -590,6 +704,8 @@ function resize(){
 if(window.ResizeObserver)new ResizeObserver(()=>{resize();initEq();}).observe(document.getElementById('canvas-wrap'));
 else window.addEventListener('resize',()=>{resize();initEq();});
 
+// The animation loop: measure the frame delta, update the FPS readout twice a
+// second, and render the active equation.
 /* ═══ LOOP ═══ */
 let lastTime=0,fpsC=0,fpsT=0;
 function loop(time){
@@ -599,6 +715,8 @@ function loop(time){
   render(dt);
 }
 
+// Boot after a short delay so layout settles: size the canvas, open the first
+// equation, and start the loop.
 /* ═══ INIT ═══ */
 setTimeout(()=>{
   resize();
