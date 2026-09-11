@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Biot–Savart Law // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Biot–Savart Law</span></div>
+  <div class="topbar-r">SYS // <strong>ELECTROMAGNETISM</strong></div>
+</div>
+
+<div id="main">
+  <div id="panel"><div class="p-body">
+    <div class="p-section">
+      <div class="p-sec-lbl">Add Wire (cross-section)</div>
+      <div class="add-grid">
+        <button class="add-btn out" onclick="addWire(1)"><span class="icon">⊙</span>I Out (⊙)</button>
+        <button class="add-btn in" onclick="addWire(-1)"><span class="icon">⊗</span>I Into (⊗)</button>
+      </div>
+      <div style="margin-top:6px;font-size:0.52rem;color:var(--text-faint);line-height:1.5;letter-spacing:0.04em">
+        Place infinite wires perpendicular to screen. Each creates a circular B field via Biot–Savart.
+      </div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Wires</div>
+      <div class="wire-list" id="wire-list"></div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Probe</div>
+      <button class="tog-btn on" id="tog-probe" onclick="toggleProbe()">◎ Probe Point</button>
+      <div class="probe-info" id="probe-info" style="margin-top:6px">
+        Drag the <strong>yellow ◎</strong> probe to see individual wire contributions decomposed as vectors. Each colored arrow = one wire's dB. White arrow = total B.
+      </div>
+      <button class="tog-btn off" id="tog-step" onclick="toggleStep()" style="margin-top:4px">▶ Step Through</button>
+      <div id="step-info" style="display:none;margin-top:4px;font-size:0.52rem;color:var(--yellow);letter-spacing:0.04em;line-height:1.5">
+        Animates contributions one wire at a time, showing how B accumulates.
+      </div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Field Display</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <button class="tog-btn on" id="tog-tracers" onclick="toggleOpt('showTracers','tog-tracers')">⇌ Field Tracers</button>
+        <button class="tog-btn on" id="tog-arrows" onclick="toggleOpt('showArrows','tog-arrows')">→ Field Arrows</button>
+        <button class="tog-btn off" id="tog-heat" onclick="toggleOpt('showHeatmap','tog-heat')">▦ Field Magnitude</button>
+      </div>
+      <div class="mag-row" style="margin-top:6px">
+        <span class="mag-row-lbl">Count</span>
+        <input type="range" id="sl-tc" min="200" max="4000" value="2000" step="50" oninput="SIM.tracerCount=+this.value;document.getElementById('vl-tc').textContent=this.value;sg(this);spawnTracers()">
+        <span class="val" id="vl-tc">2000</span>
+      </div>
+      <div class="mag-row">
+        <span class="mag-row-lbl">Speed</span>
+        <input type="range" id="sl-ts" min="0.1" max="5" value="1.5" step="0.1" oninput="SIM.tracerSpeed=+this.value;document.getElementById('vl-ts').textContent=(+this.value).toFixed(1);sg(this)">
+        <span class="val" id="vl-ts">1.5</span>
+      </div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Presets</div>
+      <div class="sim-btns" style="margin-bottom:6px">
+        <button class="sim-btn" onclick="preset('parallel')">∥ Parallel</button>
+        <button class="sim-btn" onclick="preset('anti')">⇅ Anti-∥</button>
+      </div>
+      <div class="sim-btns">
+        <button class="sim-btn" onclick="preset('triangle')">△ Triangle</button>
+        <button class="sim-btn" onclick="preset('quad')">◇ Quad</button>
+      </div>
+    </div>
+    <div class="p-section">
+      <div class="sim-btns">
+        <button class="sim-btn warn" onclick="clearAll()">✕ Clear All</button>
+      </div>
+    </div>
+  </div></div>
+
+  <div id="canvas-wrap">
+    <canvas id="sim-canvas"></canvas>
+    <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
+    <section class="eq-panel" id="eq-panel">
+      <div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Biot–Savart Law</span><span class="arrow">▲</span></div>
+      <div class="eq-blocks">
+        <div class="eq-block">
+          <div class="eq-sublabel">General · Line Current (s = r − ℓ)</div>
+          <div class="eq-row" id="eq-bs"></div>
+        </div>
+        <div class="eq-block">
+          <div class="eq-sublabel">Infinite Straight Wire</div>
+          <div class="eq-row" id="eq-wire"></div>
+        </div>
+        <div class="eq-block">
+          <div class="eq-sublabel">Superposition · Green's Function</div>
+          <div class="eq-row" id="eq-super"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div id="status-bar">
+  <span id="st-wires">0 wires</span><span class="sep"></span>
+  <span id="st-tracers">2000 tracers</span><span class="sep"></span>
+  <span id="st-fps">-- fps</span><span class="sep"></span>
+  <span id="st-probe">probe: --</span>
+</div>
+
+<!-- KaTeX -->
+<script src="katex.js"></script>
+
+<script src="main.js"></script>
+</body>
+</html>

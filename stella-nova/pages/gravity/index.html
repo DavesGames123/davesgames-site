@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Gravity Playground // Stella Nova</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+
+<div class="topbar">
+  <div class="topbar-l">
+    <span class="sys-name">GRAVITY PLAYGROUND</span>
+    <div class="sys-status" id="simStatus">RUNNING</div>
+  </div>
+  <div class="topbar-r">
+    <span>Bodies <strong id="hud-bodies">4</strong></span>
+    <span class="hide-narrow">dt <strong id="hud-dt">0.0100</strong></span>
+    <span>t <strong id="hud-time">0.00</strong></span>
+  </div>
+</div>
+
+<nav class="preset-bar" id="presetBar">
+  <span class="pbar-label">Presets</span>
+
+  <button class="pcard active" data-preset="laplace" onclick="loadPreset('laplace',this)">
+    <span class="pcard-icon">
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="20" cy="20" r="3.2" fill="#ffeebb"/>
+        <circle cx="20" cy="20" r="7" fill="none" stroke="rgba(150,200,255,0.4)" stroke-width="0.5"/>
+        <circle cx="20" cy="20" r="12" fill="none" stroke="rgba(150,200,255,0.4)" stroke-width="0.5"/>
+        <circle cx="20" cy="20" r="17" fill="none" stroke="rgba(150,200,255,0.4)" stroke-width="0.5"/>
+        <circle cx="27" cy="20" r="1.4" fill="#ffc832"/>
+        <circle cx="32" cy="20" r="1.8" fill="#5cd8e8"/>
+        <circle cx="37" cy="20" r="2.2" fill="#e87466"/>
+      </svg>
+    </span>
+    <span class="pcard-meta">
+      <span class="pcard-name">Laplace</span>
+      <span class="pcard-sub">1:2:4 resonance</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-preset="binary" onclick="loadPreset('binary',this)">
+    <span class="pcard-icon">
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="20" cy="20" rx="10" ry="3" fill="none" stroke="rgba(150,200,255,0.32)" stroke-width="0.5"/>
+        <ellipse cx="20" cy="20" rx="18" ry="14" fill="none" stroke="rgba(150,200,255,0.2)" stroke-width="0.4"/>
+        <circle cx="14" cy="20" r="3.5" fill="#ffc832"/>
+        <circle cx="26" cy="20" r="3.5" fill="#5cd8e8"/>
+        <circle cx="20" cy="7" r="1.6" fill="#7ad87a"/>
+      </svg>
+    </span>
+    <span class="pcard-meta">
+      <span class="pcard-name">Binary Star</span>
+      <span class="pcard-sub">Twin suns + planet</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-preset="figure8" onclick="loadPreset('figure8',this)">
+    <span class="pcard-icon">
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 7,20 C 7,12 16,12 20,20 C 24,28 33,28 33,20 C 33,12 24,12 20,20 C 16,28 7,28 7,20 Z" fill="none" stroke="rgba(255,200,50,0.6)" stroke-width="1"/>
+        <circle cx="9.5" cy="20" r="2" fill="#ffc832"/>
+        <circle cx="30.5" cy="20" r="2" fill="#5cd8e8"/>
+        <circle cx="20" cy="20" r="2" fill="#e87466"/>
+      </svg>
+    </span>
+    <span class="pcard-meta">
+      <span class="pcard-name">Figure-8</span>
+      <span class="pcard-sub">3-body choreography</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-preset="solar" onclick="loadPreset('solar',this)">
+    <span class="pcard-icon">
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="20" cy="20" r="3.8" fill="#ffe080"/>
+        <circle cx="20" cy="20" r="7" fill="none" stroke="rgba(150,200,255,0.25)" stroke-width="0.4"/>
+        <circle cx="20" cy="20" r="11" fill="none" stroke="rgba(150,200,255,0.25)" stroke-width="0.4"/>
+        <circle cx="20" cy="20" r="16" fill="none" stroke="rgba(150,200,255,0.25)" stroke-width="0.4"/>
+        <circle cx="26" cy="20" r="1" fill="#c8a060"/>
+        <circle cx="20" cy="13" r="1.3" fill="#e0c880"/>
+        <circle cx="13" cy="22" r="1.5" fill="#5090e0"/>
+        <circle cx="28" cy="28" r="1.2" fill="#e05030"/>
+        <circle cx="9" cy="15" r="2.2" fill="#e0a050"/>
+      </svg>
+    </span>
+    <span class="pcard-meta">
+      <span class="pcard-name">Mini Solar</span>
+      <span class="pcard-sub">Sun + 5 planets</span>
+    </span>
+  </button>
+
+  <button class="pcard" data-preset="chaos" onclick="loadPreset('chaos',this)">
+    <span class="pcard-icon">
+      <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+        <path d="M 8,14 Q 18,4 30,16" fill="none" stroke="rgba(255,200,50,0.35)" stroke-width="0.6"/>
+        <path d="M 10,28 Q 22,32 32,22" fill="none" stroke="rgba(150,200,255,0.3)" stroke-width="0.6"/>
+        <circle cx="9" cy="13" r="2.4" fill="#ffc832"/>
+        <circle cx="29" cy="11" r="2" fill="#5cd8e8"/>
+        <circle cx="31" cy="27" r="2.2" fill="#e87466"/>
+        <circle cx="10" cy="29" r="1.8" fill="#7ad87a"/>
+        <circle cx="20" cy="20" r="2" fill="#d870c8"/>
+      </svg>
+    </span>
+    <span class="pcard-meta">
+      <span class="pcard-name">5-Body Chaos</span>
+      <span class="pcard-sub">Unstable n-body</span>
+    </span>
+  </button>
+
+</nav>
+
+<div id="main">
+
+  <aside id="panelL">
+    <div class="panel-body">
+
+      <div class="sec">
+        <div class="sec-label">Simulation</div>
+        <div class="sim-btns">
+          <button class="sim-btn green" id="playBtn" onclick="togglePause()">&#9208; Pause</button>
+          <button class="sim-btn" onclick="stepOnce()">&#9197; Step</button>
+        </div>
+        <div class="sim-btns">
+          <button class="sim-btn red" onclick="clearBodies()">&#x2715; Clear</button>
+          <button class="sim-btn" onclick="centerCamera()">&#9737; Center</button>
+        </div>
+        <div class="slider-row">
+          <div class="slider-label">Time scale <span class="sv" id="tsVal">1.0&times;</span></div>
+          <input type="range" min="0" max="40" value="10" id="tsSlider" oninput="setTimeScale(this.value)">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label">G constant <span class="sv" id="gVal">1000</span></div>
+          <input type="range" min="100" max="5000" value="1000" step="100" id="gSlider" oninput="G=+this.value;document.getElementById('gVal').textContent=this.value">
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-label">Display</div>
+        <div class="tog-row"><span class="label"><span class="dot" style="background:var(--cyan)"></span>Force vectors</span><div class="toggle on" onclick="tog(this,'showForce')"></div></div>
+        <div class="tog-row"><span class="label"><span class="dot" style="background:var(--green)"></span>Velocity vectors</span><div class="toggle on" onclick="tog(this,'showVel')"></div></div>
+        <div class="tog-row"><span class="label"><span class="dot" style="background:var(--magenta)"></span>Acceleration vectors</span><div class="toggle" onclick="tog(this,'showAcc')"></div></div>
+        <div class="tog-row"><span class="label"><span class="dot" style="background:rgba(255,255,255,0.4)"></span>Orbital trails</span><div class="toggle on" onclick="tog(this,'showTrails')"></div></div>
+        <div class="tog-row"><span class="label"><span class="dot" style="background:rgba(150,200,255,0.4)"></span>Gravity field</span><div class="toggle" onclick="tog(this,'showField')"></div></div>
+        <div class="tog-row"><span class="label"><span class="dot" style="background:var(--yellow)"></span>Force lines</span><div class="toggle" onclick="tog(this,'showLines')"></div></div>
+        <div class="tog-row"><span class="label"><span class="dot" style="background:rgba(255,255,255,0.2)"></span>Grid</span><div class="toggle on" onclick="tog(this,'showGrid')"></div></div>
+        <div class="slider-row" style="margin-top:6px">
+          <div class="slider-label">Trail length <span class="sv" id="tlVal">400</span></div>
+          <input type="range" min="50" max="2000" value="400" step="50" id="tlSlider" oninput="trailLen=+this.value;document.getElementById('tlVal').textContent=this.value">
+        </div>
+        <div class="slider-row">
+          <div class="slider-label">Vector scale <span class="sv" id="vsVal">1.0&times;</span></div>
+          <input type="range" min="1" max="40" value="10" id="vsSlider" oninput="vecScale=this.value/10;document.getElementById('vsVal').textContent=vecScale.toFixed(1)+'\u00d7'">
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-label">Bodies <span class="ct" id="bodyCount">4</span></div>
+        <div id="bodyList"></div>
+        <div class="hint">Click and drag on canvas to launch new bodies. Drag distance sets initial speed.</div>
+      </div>
+
+    </div>
+  </aside>
+
+  <div class="canvas-area" id="canvasArea">
+    <canvas id="simCanvas"></canvas>
+    <div class="hud tl" id="hudInfo" style="display:none"></div>
+    <div class="zoom-bar">
+      <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">+</button>
+      <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">&minus;</button>
+      <button class="zoom-btn" onclick="centerCamera()" title="Reset view">&#9737;</button>
+    </div>
+
+    <section class="eq-panel" id="eqPanel">
+      <div class="eq-head">
+        <span class="eq-dot"></span>
+        <span class="lbl">Governing Equations</span>
+        <button class="eq-collapse" id="eqCollapseBtn" title="Collapse">&#9650;</button>
+      </div>
+      <div class="eq-block">
+        <div class="eq-sublabel">Newton &middot; Inverse Square Law</div>
+        <div class="eq-row" id="eq-newton"></div>
+      </div>
+      <div class="eq-block">
+        <div class="eq-sublabel">Conserved Quantities</div>
+        <div class="eq-row" id="eq-energy"></div>
+        <div class="eq-row" id="eq-angmom"></div>
+      </div>
+      <div class="eq-block">
+        <div class="eq-sublabel">Kepler &middot; Orbital Motion</div>
+        <div class="eq-row" id="eq-kepler2"></div>
+        <div class="eq-row" id="eq-kepler3"></div>
+      </div>
+    </section>
+
+    <button class="fab left" id="fabL" onclick="toggleDrawer('l')">&#9776; Controls</button>
+    <button class="fab right" id="fabR" onclick="toggleDrawer('r')">Readouts &#9776;</button>
+    <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawers()"></div>
+  </div>
+
+  <aside id="panelR">
+    <div class="panel-body">
+      <div class="sec">
+        <div class="sec-label">System Energy</div>
+        <div class="readout"><span class="rl">Kinetic K</span><span class="rv blue" id="eKin">0.00</span></div>
+        <div class="readout"><span class="rl">Potential U</span><span class="rv red" id="ePot">0.00</span></div>
+        <div class="readout"><span class="rl">Total E</span><span class="rv yellow" id="eTotal">0.00</span></div>
+        <canvas class="graph-canvas" id="energyGraph"></canvas>
+        <div class="hint">Total stays flat for a stable integrator. Drift means dt or time scale is too large.</div>
+      </div>
+      <div class="sec">
+        <div class="sec-label">Momentum</div>
+        <div class="readout"><span class="rl">Total |p|</span><span class="rv green" id="eMom">0.00</span></div>
+        <div class="readout"><span class="rl">p<sub>x</sub></span><span class="rv" id="eMomX">0.00</span></div>
+        <div class="readout"><span class="rl">p<sub>y</sub></span><span class="rv" id="eMomY">0.00</span></div>
+      </div>
+      <div class="sec">
+        <div class="sec-label">Selected Body</div>
+        <div id="selBody"><span class="hint">Click a body to inspect.</span></div>
+      </div>
+      <div class="sec">
+        <div class="sec-label">Orbital Resonance</div>
+        <canvas class="resonance-vis" id="resonanceCanvas"></canvas>
+        <div class="hint">Angular positions on a shared circle. In resonance, the pattern repeats periodically.</div>
+      </div>
+    </div>
+  </aside>
+
+</div>
+
+<script src="katex.js"></script>
+
+<script src="main.js"></script>
+
+</body>
+</html>

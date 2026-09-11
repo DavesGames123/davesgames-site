@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>FlowLab // Stella Nova · davesgames.io</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
+
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">FlowLab · ∂</span></div>
+  <div class="topbar-r">SYS // <strong>VECTOR FIELDS</strong></div>
+</div>
+
+<div id="main">
+  <div id="panel"><div class="p-body">
+    <div class="p-section">
+      <div class="p-sec-lbl">System</div>
+      <select id="sysSel"></select>
+      <div class="sys-blurb" id="sysBlurb"></div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Parameters</div>
+      <div id="params"></div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Tracers</div>
+      <div class="mrow"><span class="mrow-lbl">Density</span><input type="range" id="rDen" min="200" max="5000" step="50" value="2200"><span class="val" id="vDen">2200</span></div>
+      <div class="mrow"><span class="mrow-lbl">Speed</span><input type="range" id="rSpd" min="2" max="40" value="14"><span class="val" id="vSpd">1.4</span></div>
+      <div class="mrow"><span class="mrow-lbl">Trail</span><input type="range" id="rTrl" min="5" max="80" value="36"><span class="val" id="vTrl">36</span></div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Tracer Color</div>
+      <div class="seg" id="colMode">
+        <button data-m="speed" class="on">Speed</button>
+        <button data-m="phase">Phase</button>
+        <button data-m="mono">Mono</button>
+      </div>
+      <div class="mrow" style="margin-top:9px"><span class="mrow-lbl">Palette</span><select id="palSel">
+        <option value="stella">Stella</option><option value="plasma">Plasma</option><option value="viridis">Viridis</option><option value="inferno">Inferno</option><option value="ice">Ice</option><option value="ember">Ember</option>
+      </select></div>
+      <div class="mini-note">Palette &amp; gamma/contrast shape Speed mode; Exposure brightens all modes.</div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Tone Curve</div>
+      <canvas id="toneCurve" width="244" height="62"></canvas>
+      <div class="mrow"><span class="mrow-lbl">Gamma</span><input type="range" id="rGamma" min="0.3" max="3" step="0.05" value="1"><span class="val" id="vGamma">1.00</span></div>
+      <div class="mrow"><span class="mrow-lbl">Contrast</span><input type="range" id="rContrast" min="0.5" max="2" step="0.05" value="1"><span class="val" id="vContrast">1.00</span></div>
+      <div class="mrow"><span class="mrow-lbl">Exposure</span><input type="range" id="rExposure" min="0.2" max="3" step="0.05" value="1"><span class="val" id="vExposure">1.00</span></div>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Display</div>
+      <button class="tog-btn" id="tDom">▦ Domain coloring</button>
+      <button class="tog-btn" id="tArr">→ Field arrows</button>
+      <button class="tog-btn on" id="tAxes">✛ Axes &amp; grid</button>
+      <button class="tog-btn on" id="tSim">⚙ Physical model</button>
+    </div>
+    <div class="p-section">
+      <div class="p-sec-lbl">Simulation</div>
+      <div class="sim-btns">
+        <button class="sim-btn active" id="btnPlay">▶ Play</button>
+        <button class="sim-btn" id="btnReset">↺ Reset</button>
+        <button class="sim-btn warn" id="btnClear">✕ Clear</button>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
+
+  <div id="canvas-wrap">
+    <canvas id="sim-canvas"></canvas>
+
+    <section class="eq-panel" id="eq-panel">
+      <div class="eq-head" id="eq-toggle">
+        <span class="dot"></span><span class="lbl">Governing Equations</span><span class="arrow">▲</span>
+      </div>
+      <div class="eq-blocks" id="eq-blocks"></div>
+    </section>
+
+    <section id="msim-panel">
+      <div class="msim-head"><span class="dot"></span><span class="lbl" id="msim-title">Physical Model</span></div>
+      <canvas id="msim-canvas"></canvas>
+      <div id="msim-vars"></div>
+    </section>
+  </div>
+</div>
+
+<div id="status-bar">
+  <span id="st-sys">—</span><span class="sep"></span>
+  <span id="st-tr">2200 tracers</span><span class="sep"></span>
+  <span id="st-state">x — y —</span><span class="sep"></span>
+  <span id="st-zoom">1.0×</span><span class="sep"></span>
+  <span id="st-fps">-- fps</span>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
