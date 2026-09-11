@@ -4,6 +4,39 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Ship Designer // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SHIP DESIGNER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static frame for the livery painter. main.js owns three canvases here: the
+   #previewCanvas sprite, the two HSV pickers per colour, and the #simCanvas
+   asteroid field. The colour fields and preset grid all feed the two colours
+   the compositor tints the ship with.
+
+   LAYOUT  (# marks an element id)
+     ┌───────────────────────────────────────────────────────────────┐
+     │ hero copy                                                      │
+     ├───────────────────────────────────────────────────────────────┤
+     │ #liveryPresets  swatch pairs (built by initPresets)            │
+     ├──────────────────────────────┬────────────────────────────────┤
+     │ designer-panel               │ sim-panel                      │
+     │  #previewCanvas  the sprite  │  #simCanvas  live field         │
+     │  hull colour  cpick + HSV    │  zoom / pause / ship-size       │
+     │  accent colour  cpick + HSV  │                                 │
+     │  composite layer legend      │                                 │
+     └──────────────────────────────┴────────────────────────────────┘
+
+   SECTION MAP   (jump with grep -n "<anchor>" index.html)
+     preset grid ...... id=liveryPresets  filled by initPresets()
+     preview .......... id=previewCanvas  composited sprite
+     hull picker ...... id=cpickBody      hex/rgb/native + HSV
+     accent picker .... id=cpickAccent    hex/rgb/native + HSV
+     hsv canvases ..... id=bodySvCanvas   SV square and hue strip
+     layer legend ..... class=layer-info  the composite stack, top to bottom
+     simulation ....... id=simCanvas      asteroid field preview
+     sim controls ..... class=sim-controls  zoom, pause, ship size
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -24,6 +57,8 @@
   </div>
 </div>
 
+<!-- Preset gallery. #liveryPresets is empty; initPresets() fills it with one
+     swatch pair per livery, each applying its two colours on click. -->
 <div class="livery-gallery">
   <div class="panel">
     <div class="panel-head">
@@ -45,8 +80,11 @@
         <span class="panel-title">Ship Preview</span>
       </div>
       <div class="panel-body">
+        <!-- The composited sprite; compositeShip() draws here at 512x512. -->
         <div class="preview-wrap"><canvas id="previewCanvas" width="512" height="512"></canvas></div>
 
+        <!-- Hull colour controls: swatch + native picker, hex and RGB fields,
+             and the HSV square/hue strip. All are kept in sync by setBody(). -->
         <div class="color-section">
           <div class="color-label">Hull Color</div>
           <div class="cpick" id="cpickBody">
@@ -72,6 +110,7 @@
           </div>
         </div>
 
+        <!-- Accent colour controls: identical layout, kept in sync by setAccent(). -->
         <div class="color-section">
           <div class="color-label">Accent Trim</div>
           <div class="cpick" id="cpickAccent">
@@ -98,6 +137,8 @@
         </div>
 
 
+        <!-- Static legend of the composite stack, listed top layer first; it
+             mirrors the layer order compositeShip() draws in main.js. -->
         <div class="layer-info">
           <div class="color-label" style="margin-bottom:4px">Composite Layers</div>
           <div class="layer-row"><span class="layer-dot" style="background:var(--yellow)"></span><span class="layer-name">Accent Spot Color</span><span class="layer-mode">Overlay</span></div>
@@ -110,6 +151,8 @@
     </div>
   </div>
 
+  <!-- Simulation panel. #simCanvas is drawn by the render loop; the controls
+       below drive zoom, pause, and the ship-size scale. -->
   <div class="sim-panel">
     <div class="panel">
       <div class="panel-head">

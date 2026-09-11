@@ -1,3 +1,42 @@
+// ============================================================================
+//  CONTROLS  ·  interactive keyboard and mouse reference
+// ----------------------------------------------------------------------------
+//  A classic script that paints a to-scale QWERTY keyboard from a data table,
+//  colours each key by binding category, and reacts to hover and legend
+//  clicks. One checkbox persists the invert-scroll preference to localStorage.
+//  A left-nav plus an IntersectionObserver keep the active section in sync
+//  with the scroll position of #content.
+//
+//  KEY DATA MODEL
+//  --------------
+//      KB = [ row, row, ... ]                 one array per physical row
+//        row = [ entry, entry, ... ]          left to right
+//          entry = [label, widthUnits, type, desc]
+//                    label  text on the keycap, or null for a gap spacer
+//                    width  multiple of --kw (the CSS key-unit width)
+//                    type   game | system | modifier | none  (drives colour)
+//                    desc   hover text; present only on bound keys
+//
+//  HOVER / FILTER FLOW
+//  -------------------
+//      mouseenter key ─▶ showHover()  ─▶ fill #hoverBar, glow same-type keys
+//      legend click   ─▶ filterKeys() ─▶ toggle: dim others, glow this type
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//  ----------------------------------------------------------------------------
+//      key table .......... "const KB ="        the whole keyboard layout
+//      build grid ......... "function renderKeyboard"  DOM from KB
+//      hover bar .......... "function showHover"  describe hovered key
+//      legend filter ...... "function filterKeys" isolate one category
+//      invert scroll ...... "stnv_invert_scroll" persisted checkbox
+//      nav scroll ......... "function goTo"       click a nav button
+//      scroll spy ......... "IntersectionObserver" active nav on scroll
+//      boot ............... "renderKeyboard()"    last line runs the build
+// ============================================================================
+
+// The keyboard, row by row, top to bottom. Each entry is
+// [label, widthUnits, type, desc]; a [null, width] entry is a blank spacer.
+// Only keys with a real binding carry a type and a desc.
 const KB = [
   // ROW_ESC
   [
@@ -63,6 +102,9 @@ const KB = [
   ],
 ];
 
+// Build the keyboard DOM from KB. Each row becomes a .kb-row; each entry
+// becomes a .kb-key (or a fixed-width .kb-spacer for a null gap). Bound keys
+// get a data-desc and wire mouseenter/mouseleave to the hover bar.
 function renderKeyboard(){
   const grid = document.getElementById('kbGrid');
   grid.innerHTML = '';
@@ -72,11 +114,13 @@ function renderKeyboard(){
     row.forEach(entry => {
       const [label, w, type, desc] = entry;
       const el = document.createElement('div');
+      // A null label marks a gap between key clusters; render an empty spacer.
       if (label === null) {
         el.className = 'kb-spacer';
         el.style.width = `calc(var(--kw) * ${w})`;
       } else {
         el.className = `kb-key t-${type || 'none'}`;
+        // Labels longer than two characters (Esc, Ctrl, Space) shrink their font.
         if (label.length > 2) el.classList.add('long-label');
         el.style.width = `calc(var(--kw) * ${w})`;
         el.textContent = label;
@@ -94,12 +138,15 @@ function renderKeyboard(){
   });
 }
 
+// Fill the hover bar with the hovered key and its binding, and glow every key
+// that shares the same category so the group reads as one system.
 function showHover(label, desc, type){
   const bar = document.getElementById('hoverBar');
   bar.innerHTML = `<span class="hb-key">${label}</span><span class="hb-desc">${desc}</span>`;
   bar.dataset.active = type;
   document.querySelectorAll(`.kb-key.t-${type}`).forEach(k => k.classList.add('glow'));
 }
+// Restore the hover bar's default prompt and drop every glow.
 function hideHover(){
   const bar = document.getElementById('hoverBar');
   bar.innerHTML = `<span class="hb-default">Hover a colored key to see what it does</span>`;
@@ -107,9 +154,12 @@ function hideHover(){
   document.querySelectorAll('.kb-key.glow').forEach(k => k.classList.remove('glow'));
 }
 
+// The legend acts as a category filter. Clicking a legend item glows that
+// category and dims the rest; clicking the active one again clears the filter.
 let activeFilter = null;
 function filterKeys(el, type){
   const all = document.querySelectorAll('.kb-key');
+  // Clicking the already-active category is a toggle-off: clear all styling.
   if (activeFilter === type) {
     activeFilter = null;
     el.classList.remove('on');
@@ -126,6 +176,8 @@ function filterKeys(el, type){
   });
 }
 
+// Invert-scroll option. Restore the saved choice on load and write it back on
+// every change, so the preference survives across visits.
 (() => {
   const cb = document.getElementById('invertScroll');
   cb.checked = localStorage.getItem('stnv_invert_scroll') === '1';
@@ -134,6 +186,7 @@ function filterKeys(el, type){
   });
 })();
 
+// Nav click: mark the button active and smooth-scroll #content to its section.
 function goTo(btn, id){
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
@@ -141,6 +194,8 @@ function goTo(btn, id){
   if (el) document.getElementById('content').scrollTo({ top: el.offsetTop - 20, behavior: 'smooth' });
 }
 
+// Scroll spy: as each section crosses a quarter of the viewport, highlight its
+// matching nav button. This keeps the sidebar in sync with manual scrolling.
 const obs = new IntersectionObserver(entries => {
   entries.forEach(e => {
     if (e.isIntersecting) {
@@ -154,7 +209,10 @@ const obs = new IntersectionObserver(entries => {
   if (el) obs.observe(el);
 });
 
+// In-frame guard: when embedded in the site shell iframe, add .in-frame so the
+// CSS drops this page's own chrome. A cross-origin access throw counts as framed.
 try { if (window.self !== window.top) document.body.classList.add('in-frame'); }
 catch (e) { document.body.classList.add('in-frame'); }
 
+// Boot: build the keyboard once the script has parsed.
 renderKeyboard();

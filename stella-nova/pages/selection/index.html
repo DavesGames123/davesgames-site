@@ -4,6 +4,40 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Selection // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SELECTION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static frame for the selection trainer. The #cv canvas is the sandbox;
+   main.js draws entities into it and reads pointer input from it. Everything
+   else here is chrome that main.js fills by id: the HUD readouts, the scenario
+   bar, the control bar, and the right sidebar of lesson copy and legends.
+
+   LAYOUT  (# marks an element id)
+     ┌───────────────────────────────────────────────────────────────┐
+     │ topbar  SCENARIO #hud-scn  ENTITIES #hud-ents  SELECTED  MOD    │
+     ├───────────────────────────────────────────────────────────────┤
+     │ #scnBar   scenario cards (built by buildScnBar)                 │
+     ├───────────────────────────────────────────────────────────────┤
+     │ ctrl-bar  MOD toggle · RESET · ZOOM (hidden until enabled)      │
+     ├──────────────────────────────────────┬────────────────────────┤
+     │ canvas-area                          │ #sideR sidebar          │
+     │   #cv  (draw + input)                │   headline + desc       │
+     │   #hint  #sel  #toast overlays       │   how it works          │
+     │                                      │   click / box legends   │
+     └──────────────────────────────────────┴────────────────────────┘
+     #fab + #bd drive the mobile sidebar drawer.
+
+   SECTION MAP   (jump with grep -n "<anchor>" index.html)
+     hud readouts ..... id=hud-scn      counts updated each pick
+     scenario bar ..... id=scnBar       filled by buildScnBar()
+     control bar ...... class=ctrl-bar  MOD, RESET, ZOOM buttons
+     canvas ........... id=cv           the sandbox surface
+     overlays ......... class=hint-bar  hint, selection, toast
+     sidebar copy ..... id=scnHead      lesson text per scenario
+     legends .......... id=legendC      click and box priority ladders
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
@@ -21,8 +55,11 @@
     </div>
   </div>
 
+  <!-- Scenario picker. Empty here; buildScnBar() fills it with one card each. -->
   <div class="scn-bar" id="scnBar"></div>
 
+  <!-- Control bar. MOD toggles touch modifier mode; RESET reloads the scenario;
+       the ZOOM buttons stay hidden until a scenario sets enableZoom. -->
   <div class="ctrl-bar">
     <span class="ctrl-label">MOD</span>
     <button class="ctrl-btn" id="modBtn" onclick="toggleMod()">⌘ HOLD</button>
@@ -34,12 +71,16 @@
   </div>
 
   <div class="main">
+    <!-- The sandbox. #cv is sized and drawn by main.js; the three overlays show
+         the current hint, the live selection summary, and transient toasts. -->
     <div class="canvas-area">
       <canvas id="cv"></canvas>
       <div class="hint-bar" id="hint" style="--ac:var(--yellow)"></div>
       <div class="sel-bar" id="sel">Nothing selected</div>
       <div class="toast" id="toast"></div>
     </div>
+    <!-- Right sidebar: lesson copy plus the two priority ladders. All filled by
+         loadScenario() and buildLegends(). -->
     <aside class="sidebar-r" id="sideR">
       <div class="panel">
         <div class="scn-headline" id="scnHead"></div>
@@ -61,6 +102,7 @@
   </div>
 </div>
 
+<!-- Mobile drawer: the FAB opens the sidebar over a dimming backdrop. -->
 <button class="fab" id="fab" onclick="toggleDrawer()">Info ≡</button>
 <div class="drawer-backdrop" id="bd" onclick="closeDrawer()"></div>
 

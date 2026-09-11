@@ -4,12 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Controls // Stella Nova</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CONTROLS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup for the controls reference. A left nav (#sidebar) scrolls the
+   right column (#content) through three sections. main.js fills #kbGrid with
+   the keyboard, wires hover and legend filtering, and drives the scroll spy.
+   Nothing here is painted by script except the keyboard grid.
+
+   LAYOUT  (# marks an element id, the rest are class hooks)
+     ┌────────────┬──────────────────────────────────────────────┐
+     │ #sidebar   │ #content (scrolls)                            │
+     │  nav btns  │   page hero                                   │
+     │  keyboard  │   #sec-keyboard  #kbGrid + #hoverBar + legend │
+     │  options   │   #sec-options   invert-scroll toggle         │
+     │  tips      │   #sec-tips      worth-knowing list           │
+     └────────────┴──────────────────────────────────────────────┘
+
+   SECTION MAP   (jump with grep -n "<anchor>" index.html)
+     nav buttons ...... nav-btn         call goTo() in main.js
+     keyboard slot .... id=kbGrid       main.js renders keys here
+     hover readout .... id=hoverBar     binding text on key hover
+     legend ........... kb-legend       click to filter by category
+     mouse diagram .... mouse-svg-wrap  inline SVG of the mouse
+     options .......... id=invertScroll the one persisted setting
+     tips ............. tips-list       static advice cards
+  ═══════════════════════════════════════════════════════════════════════════
+-->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="grid-bg"></div>
 <div id="app"><div id="shell">
+<!-- Left nav. Each button carries data-sec; goTo() scrolls #content to the
+     matching #sec-* block and the scroll spy toggles .active back. -->
 <nav id="sidebar">
   <div class="side-head">Controls<span class="tag">GUIDE</span></div>
   <div class="side-section">
@@ -29,6 +59,8 @@
   <div class="ph-line"></div>
 </div>
 
+<!-- Keyboard section. #kbGrid is empty markup; main.js builds the keys into it.
+     The hover bar, legend, and note below sit under the generated grid. -->
 <div class="sec" id="sec-keyboard">
   <div class="sec-hdr-line">
     <span class="sec-hdr-tag">INPUT</span>
@@ -44,6 +76,7 @@
         <span class="hb-default">Hover a colored key to see what it does</span>
       </div>
 
+      <!-- Legend doubles as a category filter; each item calls filterKeys(). -->
       <div class="kb-legend">
         <div class="leg-item" style="--lc:var(--c-game)" onclick="filterKeys(this,'game')"><div class="leg-dot"></div>Game</div>
         <div class="leg-item" style="--lc:var(--c-system)" onclick="filterKeys(this,'system')"><div class="leg-dot"></div>System</div>
@@ -56,6 +89,8 @@
       </div>
     </div>
 
+    <!-- Mouse reference. A hand-drawn SVG plus a static list of button roles;
+         colours match the keyboard categories. -->
     <div class="mouse-section">
       <div class="mouse-svg-wrap">
         <svg width="120" height="170" viewBox="0 0 100 140" fill="none">
@@ -78,6 +113,7 @@
   </div>
 </div>
 
+<!-- Options section. Only one setting; main.js persists it to localStorage. -->
 <div class="sec" id="sec-options">
   <div class="sec-hdr-line">
     <span class="sec-hdr-tag">SYS.OPT</span>
@@ -94,6 +130,7 @@
   </div>
 </div>
 
+<!-- Tips section. Purely static advice cards, each coloured by its own tc var. -->
 <div class="sec" id="sec-tips">
   <div class="sec-hdr-line">
     <span class="sec-hdr-tag">TIPS</span>
