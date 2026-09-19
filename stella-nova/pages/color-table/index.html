@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Color & Tone Table // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   COLOR & TONE TABLE  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the data and hands it to the shared
+   table-engine, which builds the sidebar and the frame loop and drives page.js.
+   Color and tone operators applied to a source field the sidebar picks; a fragment shader per cell reads a shared source texture.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet (from the old style block)
+     3. main.js      type=module; fetches the pack, noise pack and spec, then boots
+
+   LAYOUT  (the leading hash marks an element id)
+     topbar (hidden in the site shell iframe through .in-frame)
+     #side left · source thumbs, generators, palette; #stage grid of cells; #modal inspector
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Color & Tone Table</span></div>
+  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+</div>
+<div id="side">
+  <div class="side-head"><div class="big">color</div><div class="sub">|30 mappings · 5 families⟩</div></div>
+  <div class="legend"><span class="f-ramps"><i></i>Ramps</span><span class="f-spaces"><i></i>Spaces</span><span class="f-tonemap"><i></i>Tonemap</span><span class="f-quantize"><i></i>Quantize</span><span class="f-effects"><i></i>Effects</span></div>
+  
+<div class="sec"><div class="sec-lbl">Field</div>
+  <div class="thumbs" id="thumbs"></div>
+  <div class="mini">the scalar every cell maps to color</div>
+</div>
+
+  <div id="gens"></div>
+  <div class="sec"><div class="sec-lbl">Palette</div><div class="swatches"><label class="swatch"><span>Ink</span><input type="color" id="sw-ink" value="#0e1118"></label><label class="swatch"><span>Tone</span><input type="color" id="sw-tone" value="#5a8cc0"></label><label class="swatch"><span>Cream</span><input type="color" id="sw-cream" value="#e8ecf4"></label></div></div>
+  <div class="sec"><button class="chip on" id="hoveronly" type="button" aria-pressed="true">◉ animate on hover only</button></div>
+  <div class="fps" id="fps"></div>
+</div>
+<div id="nogpu" class="nogpu" hidden>WebGPU is not available in this browser, so the table cannot render. Chrome, Edge, and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
+<div id="stage"><div id="table"><div class="cell f-ramps" role="button" tabindex="0" id="tile-rail" aria-label="rail: the site rail: ink → tone → cream, with a gamma"><canvas></canvas><span class="orb-status"></span><span class="tag">rail</span></div><div class="cell f-ramps" role="button" tabindex="0" id="tile-cosine" aria-label="cosine: Quilez cosine palette a + b·cos(2π(c·t + d)), phases drifting on hover"><canvas></canvas><span class="orb-status"></span><span class="tag">cosine</span></div><div class="cell f-ramps" role="button" tabindex="0" id="tile-viridis" aria-label="viridis: viridis, the perceptually uniform default, as a polynomial fit"><canvas></canvas><span class="orb-status"></span><span class="tag">viridis</span></div><div class="cell f-ramps" role="button" tabindex="0" id="tile-magma" aria-label="magma: magma, the same family in black → purple → yellow"><canvas></canvas><span class="orb-status"></span><span class="tag">magma</span></div><div class="cell f-ramps" role="button" tabindex="0" id="tile-turbo" aria-label="turbo: Google&#x27;s turbo rainbow, Mikhailov&#x27;s fit"><canvas></canvas><span class="orb-status"></span><span class="tag">turbo</span></div><div class="cell f-ramps" role="button" tabindex="0" id="tile-grey_gamma" aria-label="grey_gamma: greyscale through a power curve"><canvas></canvas><span class="orb-status"></span><span class="tag">grey gamma</span></div><div class="cell f-spaces" role="button" tabindex="0" id="tile-hsv_sweep" aria-label="hsv_sweep: hue sweep in HSV — note the dark blue and bright yellow"><canvas></canvas><span class="orb-status"></span><span class="tag">hsv sweep</span></div><div class="cell f-spaces" role="button" tabindex="0" id="tile-oklch_sweep" aria-label="oklch_sweep: the same sweep at constant OKLCH lightness and chroma"><canvas></canvas><span class="orb-status"></span><span class="tag">oklch sweep</span></div><div class="cell f-spaces" role="button" tabindex="0" id="tile-oklab_mix" aria-label="oklab_mix: tone → cream interpolated in OKLab (left) vs sRGB (right)"><canvas></canvas><span class="orb-status"></span><span class="tag">oklab mix</span></div><div class="cell f-spaces" role="button" tabindex="0" id="tile-linear_vs_srgb" aria-label="linear_vs_srgb: red → blue in sRGB (top) vs linear light (bottom): the dark seam"><canvas></canvas><span class="orb-status"></span><span class="tag">linear vs srgb</span></div><div class="cell f-spaces" role="button" tabindex="0" id="tile-blackbody" aria-label="blackbody: the Planckian locus, 1000 K to 12000 K"><canvas></canvas><span class="orb-status"></span><span class="tag">blackbody</span></div><div class="cell f-spaces" role="button" tabindex="0" id="tile-lab_lightness" aria-label="lab_lightness: OKLab lightness ramp at the tone&#x27;s hue and chroma"><canvas></canvas><span class="orb-status"></span><span class="tag">lab lightness</span></div><div class="cell f-tonemap" role="button" tabindex="0" id="tile-clip" aria-label="clip: no tonemapping: HDR light clipped at 1 — the reference"><canvas></canvas><span class="orb-status"></span><span class="tag">clip</span></div><div class="cell f-tonemap" role="button" tabindex="0" id="tile-reinhard" aria-label="reinhard: Reinhard x/(1+x)"><canvas></canvas><span class="orb-status"></span><span class="tag">reinhard</span></div><div class="cell f-tonemap" role="button" tabindex="0" id="tile-reinhard_ext" aria-label="reinhard_ext: extended Reinhard with a white point"><canvas></canvas><span class="orb-status"></span><span class="tag">reinhard ext</span></div><div class="cell f-tonemap" role="button" tabindex="0" id="tile-aces" aria-label="aces: ACES filmic, Narkowicz&#x27;s fit"><canvas></canvas><span class="orb-status"></span><span class="tag">aces</span></div><div class="cell f-tonemap" role="button" tabindex="0" id="tile-hable" aria-label="hable: Hable&#x27;s Uncharted 2 curve"><canvas></canvas><span class="orb-status"></span><span class="tag">hable</span></div><div class="cell f-tonemap" role="button" tabindex="0" id="tile-agx" aria-label="agx: AgX, the sigmoid fit of Blender&#x27;s default view"><canvas></canvas><span class="orb-status"></span><span class="tag">agx</span></div><div class="cell f-tonemap" role="button" tabindex="0" id="tile-pbr_neutral" aria-label="pbr_neutral: Khronos PBR Neutral: hue-preserving with desaturation only at the peak"><canvas></canvas><span class="orb-status"></span><span class="tag">pbr neutral</span></div><div class="cell f-quantize" role="button" tabindex="0" id="tile-posterize" aria-label="posterize: the value snapped to n levels"><canvas></canvas><span class="orb-status"></span><span class="tag">posterize</span></div><div class="cell f-quantize" role="button" tabindex="0" id="tile-bayer" aria-label="bayer: 4×4 Bayer ordered dither to n levels"><canvas></canvas><span class="orb-status"></span><span class="tag">bayer</span></div><div class="cell f-quantize" role="button" tabindex="0" id="tile-ign_dither" aria-label="ign_dither: interleaved-gradient-noise dither to n levels"><canvas></canvas><span class="orb-status"></span><span class="tag">ign dither</span></div><div class="cell f-quantize" role="button" tabindex="0" id="tile-palette_snap" aria-label="palette_snap: nearest of eight fixed colors, with optional dither"><canvas></canvas><span class="orb-status"></span><span class="tag">palette snap</span></div><div class="cell f-quantize" role="button" tabindex="0" id="tile-duotone" aria-label="duotone: a threshold to ink or cream, dither optional"><canvas></canvas><span class="orb-status"></span><span class="tag">duotone</span></div><div class="cell f-quantize" role="button" tabindex="0" id="tile-contours" aria-label="contours: banded rail with iso-lines"><canvas></canvas><span class="orb-status"></span><span class="tag">contours</span></div><div class="cell f-effects" role="button" tabindex="0" id="tile-cycle" aria-label="cycle: the rail cycling on hover — palette rotation"><canvas></canvas><span class="orb-status"></span><span class="tag">cycle</span></div><div class="cell f-effects" role="button" tabindex="0" id="tile-hue_spin" aria-label="hue_spin: hue rotation of the rail in YIQ, spinning on hover"><canvas></canvas><span class="orb-status"></span><span class="tag">hue spin</span></div><div class="cell f-effects" role="button" tabindex="0" id="tile-protanopia" aria-label="protanopia: protanopia simulation (Machado 2009) of a hue sweep; top half is normal vision"><canvas></canvas><span class="orb-status"></span><span class="tag">protanopia</span></div><div class="cell f-effects" role="button" tabindex="0" id="tile-deuteranopia" aria-label="deuteranopia: deuteranopia simulation of the same sweep"><canvas></canvas><span class="orb-status"></span><span class="tag">deuteranopia</span></div><div class="cell f-effects" role="button" tabindex="0" id="tile-split_tone" aria-label="split_tone: one tone in the shadows, another in the highlights"><canvas></canvas><span class="orb-status"></span><span class="tag">split tone</span></div></div></div>
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <div class="sheet-side">
+      <canvas id="m-orb" width="220" height="220"></canvas>
+      <h3 id="m-name"></h3><div class="fn" id="m-fn"></div><p id="m-species"></p><div id="m-knobs"></div>
+    </div>
+    <div class="sheet-main">
+      <div class="sheet-head"><span class="lbl" id="m-src-lbl">WGSL</span><button class="panel-btn" id="m-copy" type="button">Copy function</button><button class="panel-btn" id="m-copy-pack" type="button">Copy library</button><button class="panel-btn" id="m-close" type="button">Close ✕</button></div>
+      <pre id="m-src" tabindex="0"></pre>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
