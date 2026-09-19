@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Composition Bench // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   COMPOSITION BENCH  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js fetches the node libraries and the WGSL headers,
+   then builds the graph, the canvas and the GPU passes. This file lays out the
+   toolbar, the graph world (#world/#xf/#wires/#nodes), the code editor pane and
+   the palette that main.js binds to by id. A node graph: each pass owns editable
+   WGSL and wires carry textures between passes.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet (from the old style block)
+     3. main.js      type=module; fetches the libraries and headers, then boots
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Composition Bench</span></div>
+  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+</div>
+<div id="nogpu" class="nogpu" hidden>WebGPU is not available in this browser, so node previews cannot render — the graph, the editors and the exported pack still work.</div>
+<div id="stage" style="left:0">
+  <div id="world"><div id="xf"><svg id="wires" width="1" height="1"></svg><div id="nodes"></div></div></div>
+  <div id="tools">
+    <div class="grp"><div class="lbl">Library node</div>
+      <select class="sel" id="libpick"></select><select class="sel" id="fnpick"></select>
+      <button class="chip" id="add-lib" type="button">+ add</button></div>
+    <div class="grp"><div class="lbl">Graph node</div><div class="libs">
+      <button class="chip" id="add-transform" type="button">transform</button><button class="chip" id="add-warp" type="button">warp</button>
+      <button class="chip" id="add-displace" type="button">displace</button><button class="chip" id="add-blend" type="button">blend</button>
+      <button class="chip" id="add-map" type="button">map</button></div></div>
+    <div class="grp"><div class="lbl">Graph</div>
+      <div class="row"><button class="chip" id="preset" type="button">example</button><button class="chip" id="shuffle" type="button">⚄ random</button></div>
+      <div class="row" style="margin-top:4px"><button class="chip" id="clear" type="button">↺ clear</button><button class="chip" id="fit" type="button">⊡ fit</button></div>
+      <div class="row" style="margin-top:4px"><button class="chip" id="save" type="button">copy graph</button><button class="chip" id="load" type="button">paste graph</button></div></div>
+    <div class="grp"><div class="lbl">Time <span id="tempo-now" style="color:var(--green)">1.00x</span></div>
+      <input type="range" id="tempo" min="0" max="1" step="0.01" value="0.5" style="width:100%">
+      <button class="chip" id="pause" type="button" style="margin-top:6px">❚❚ pause</button></div>
+    <div class="grp"><div class="lbl">Palette</div><div class="swatches">
+      <label class="swatch"><span>Ink</span><input type="color" id="sw-ink" value="#0e1118"></label>
+      <label class="swatch"><span>Tone</span><input type="color" id="sw-tone" value="#5a8cc0"></label>
+      <label class="swatch"><span>Cream</span><input type="color" id="sw-cream" value="#e8ecf4"></label></div></div>
+    <button class="chip" id="code" type="button" style="background:rgba(9,12,20,0.94)">&lt;/&gt; shader editor</button>
+    <button class="chip" id="copy-pack" type="button" style="background:rgba(9,12,20,0.94)">Copy pack</button>
+  </div>
+  <div id="hint">drag a header to move · drag an output dot onto an input dot to wire · click a wire to cut it · scroll to zoom, drag the background to pan · &lt;/&gt; on a node opens its shader · ⌘/ctrl-enter applies · blue sockets carry images and fields, green carry coordinates</div>
+  <div class="fps" id="fps"></div>
+  <div id="codepane">
+    <div class="sheet-head"><span class="lbl" id="ed-title">shader editor</span><button class="panel-btn" id="ed-apply" type="button">Apply</button><button class="panel-btn" id="ed-revert" type="button">Revert</button><button class="panel-btn" id="ed-copy" type="button">Copy</button><button class="panel-btn" id="ed-pack" type="button">Pack</button><button class="panel-btn" id="close-code" type="button">✕</button></div>
+    <textarea id="editor" spellcheck="false" wrap="off"></textarea>
+    <pre id="packview"></pre>
+    <div id="edstatus"></div>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
