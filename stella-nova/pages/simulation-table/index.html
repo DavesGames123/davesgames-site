@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulation Table // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   SIMULATION TABLE  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the data and hands it to the shared
+   table-engine, which builds the sidebar and the frame loop and drives page.js.
+   24 cellular automata, reaction-diffusion systems and PDEs; one WGSL compute shader per cell, ping-ponged across two textures.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet (from the old style block)
+     3. main.js      type=module; fetches the pack and spec, then boots
+
+   LAYOUT  (the leading hash marks an element id)
+     topbar (hidden in the site shell iframe through .in-frame)
+     #side left · generators, palette, reset all; #stage grid of cells; #modal inspector
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Simulation Table</span></div>
+  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+</div>
+<div id="side">
+  <div class="side-head"><div class="big">sims</div><div class="sub">|24 kernels · 3 families⟩</div></div>
+  <div class="legend"><span class="f-automata"><i></i>Automata</span><span class="f-reaction"><i></i>Reaction–diffusion</span><span class="f-pde"><i></i>Continuum</span></div>
+  <div class="sec"><button class="chip" id="resetall" type="button">↺ reset every simulation</button><div class="mini">simulations step only while hovered and reset when the pointer leaves · tempo scales the step rate</div></div>
+  <div id="gens"></div>
+  <div class="sec"><div class="sec-lbl">Palette</div><div class="swatches"><label class="swatch"><span>Ink</span><input type="color" id="sw-ink" value="#0e1118"></label><label class="swatch"><span>Tone</span><input type="color" id="sw-tone" value="#5a8cc0"></label><label class="swatch"><span>Cream</span><input type="color" id="sw-cream" value="#e8ecf4"></label></div></div>
+  <div class="sec"><button class="chip on" id="hoveronly" type="button" aria-pressed="true">◉ animate on hover only</button></div>
+  <div class="fps" id="fps"></div>
+</div>
+<div id="nogpu" class="nogpu" hidden>WebGPU is not available in this browser, so the table cannot render. Chrome, Edge, and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
+<div id="stage"><div id="table"><div class="cell f-automata" role="button" tabindex="0" id="tile-life" aria-label="life: Conway&#x27;s Game of Life; age shades survivors toward the tone"><canvas></canvas><span class="orb-status"></span><span class="tag">life</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-brain" aria-label="brain: Brian&#x27;s Brain: firing → refractory → off, a gas of gliders"><canvas></canvas><span class="orb-status"></span><span class="tag">brain</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-excitable" aria-label="excitable: Greenberg–Hastings excitable medium: spirals from noise"><canvas></canvas><span class="orb-status"></span><span class="tag">excitable</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-cyclic" aria-label="cyclic: cyclic CA: each color is eaten by the next, spirals form"><canvas></canvas><span class="orb-status"></span><span class="tag">cyclic</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-forest" aria-label="forest: Drossel–Schwabl forest fire: growth, lightning, fronts"><canvas></canvas><span class="orb-status"></span><span class="tag">forest</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-ising" aria-label="ising: Ising model, checkerboard Metropolis; T near critical shows domains"><canvas></canvas><span class="orb-status"></span><span class="tag">ising</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-rps" aria-label="rps: rock–paper–scissors: three species chasing each other in spirals"><canvas></canvas><span class="orb-status"></span><span class="tag">rps</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-schelling" aria-label="schelling: Schelling segregation: unhappy cells switch to their neighbours"><canvas></canvas><span class="orb-status"></span><span class="tag">schelling</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-sandpile" aria-label="sandpile: Bak–Tang–Wiesenfeld sandpile: grains dropped at the center, avalanches"><canvas></canvas><span class="orb-status"></span><span class="tag">sandpile</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-dla" aria-label="dla: diffusion-limited aggregation from a walker field"><canvas></canvas><span class="orb-status"></span><span class="tag">dla</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-majority" aria-label="majority: Vichniac&#x27;s twisted majority vote"><canvas></canvas><span class="orb-status"></span><span class="tag">majority</span></div><div class="cell f-automata" role="button" tabindex="0" id="tile-hodgepodge" aria-label="hodgepodge: the hodgepodge machine — a Belousov–Zhabotinsky-style reaction CA"><canvas></canvas><span class="orb-status"></span><span class="tag">hodgepodge</span></div><div class="cell f-reaction" role="button" tabindex="0" id="tile-gray_scott" aria-label="gray_scott: Gray–Scott reaction–diffusion; feed and kill choose spots, stripes, coral, mitosis"><canvas></canvas><span class="orb-status"></span><span class="tag">gray scott</span></div><div class="cell f-reaction" role="button" tabindex="0" id="tile-fitzhugh" aria-label="fitzhugh: FitzHugh–Nagumo excitable medium: traveling pulses and spirals"><canvas></canvas><span class="orb-status"></span><span class="tag">fitzhugh</span></div><div class="cell f-reaction" role="button" tabindex="0" id="tile-mitosis" aria-label="mitosis: Gray–Scott in the mitosis regime: spots that divide like cells"><canvas></canvas><span class="orb-status"></span><span class="tag">mitosis</span></div><div class="cell f-reaction" role="button" tabindex="0" id="tile-lenia" aria-label="lenia: Lenia: continuous Life with a ring kernel and a bell growth"><canvas></canvas><span class="orb-status"></span><span class="tag">lenia</span></div><div class="cell f-reaction" role="button" tabindex="0" id="tile-smoothlife" aria-label="smoothlife: SmoothLife: inner/outer disc sums through sigmoids"><canvas></canvas><span class="orb-status"></span><span class="tag">smoothlife</span></div><div class="cell f-reaction" role="button" tabindex="0" id="tile-eden" aria-label="eden: Eden growth: the cluster edge accretes with a crowding penalty — coral"><canvas></canvas><span class="orb-status"></span><span class="tag">eden</span></div><div class="cell f-pde" role="button" tabindex="0" id="tile-heat" aria-label="heat: the heat equation with a wandering hot spot"><canvas></canvas><span class="orb-status"></span><span class="tag">heat</span></div><div class="cell f-pde" role="button" tabindex="0" id="tile-wave" aria-label="wave: the wave equation, leapfrog; drops fall while hovered"><canvas></canvas><span class="orb-status"></span><span class="tag">wave</span></div><div class="cell f-pde" role="button" tabindex="0" id="tile-advect" aria-label="advect: dye advected through a swirl, semi-Lagrangian"><canvas></canvas><span class="orb-status"></span><span class="tag">advect</span></div><div class="cell f-pde" role="button" tabindex="0" id="tile-lbm" aria-label="lbm: a moment-based lattice fluid past a cylinder: vortex shedding"><canvas></canvas><span class="orb-status"></span><span class="tag">lbm</span></div><div class="cell f-pde" role="button" tabindex="0" id="tile-sand" aria-label="sand: falling sand: grains pour from the top, pile and slide"><canvas></canvas><span class="orb-status"></span><span class="tag">sand</span></div><div class="cell f-pde" role="button" tabindex="0" id="tile-erosion" aria-label="erosion: thermal erosion: slopes above the talus angle shed material"><canvas></canvas><span class="orb-status"></span><span class="tag">erosion</span></div></div></div>
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <div class="sheet-side">
+      <canvas id="m-orb" width="220" height="220"></canvas>
+      <h3 id="m-name"></h3><div class="fn" id="m-fn"></div><p id="m-species"></p><div id="m-knobs"></div>
+    </div>
+    <div class="sheet-main">
+      <div class="sheet-head"><span class="lbl" id="m-src-lbl">WGSL</span><button class="panel-btn" id="m-copy" type="button">Copy function</button><button class="panel-btn" id="m-copy-pack" type="button">Copy library</button><button class="panel-btn" id="m-close" type="button">Close ✕</button></div>
+      <pre id="m-src" tabindex="0"></pre>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
