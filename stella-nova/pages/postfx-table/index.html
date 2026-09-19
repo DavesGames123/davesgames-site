@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Post-Process Table // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   POST-PROCESS TABLE  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the data and hands it to the shared
+   table-engine, which builds the sidebar and the frame loop and drives page.js.
+   30 image operators applied to a shared source you pick, upload or drop; a fragment shader per cell reads the source texture.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet (from the old style block)
+     3. main.js      type=module; fetches the pack, noise pack, photos and spec, then boots
+
+   LAYOUT  (the leading hash marks an element id)
+     topbar (hidden in the site shell iframe through .in-frame)
+     #side left · source thumbs and upload, generators, palette; #stage grid; #modal inspector
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Post-Process Table</span></div>
+  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+</div>
+<div id="side">
+  <div class="side-head"><div class="big">post</div><div class="sub">|30 operators · 5 families⟩</div></div>
+  <div class="legend"><span class="f-blur"><i></i>Blur</span><span class="f-color"><i></i>Color</span><span class="f-texture"><i></i>Texture</span><span class="f-edges"><i></i>Edges</span><span class="f-lens"><i></i>Lens</span></div>
+  
+<div class="sec"><div class="sec-lbl">Source</div>
+  <div class="thumbs" id="thumbs"></div>
+  <div class="mini">click a thumbnail · drop an image here or <label style="color:var(--yellow);cursor:pointer">choose one<input type="file" id="upload" accept="image/*" hidden></label></div>
+</div>
+
+  <div id="gens"></div>
+  <div class="sec"><div class="sec-lbl">Palette</div><div class="swatches"><label class="swatch"><span>Ink</span><input type="color" id="sw-ink" value="#0e1118"></label><label class="swatch"><span>Tone</span><input type="color" id="sw-tone" value="#5a8cc0"></label><label class="swatch"><span>Cream</span><input type="color" id="sw-cream" value="#e8ecf4"></label></div></div>
+  <div class="sec"><button class="chip on" id="hoveronly" type="button" aria-pressed="true">◉ animate on hover only</button></div>
+  <div class="fps" id="fps"></div>
+</div>
+<div id="nogpu" class="nogpu" hidden>WebGPU is not available in this browser, so the table cannot render. Chrome, Edge, and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
+<div id="stage"><div id="table"><div class="cell f-blur" role="button" tabindex="0" id="tile-gaussian" aria-label="gaussian: 5×5 Gaussian, the reference blur"><canvas></canvas><span class="orb-status"></span><span class="tag">gaussian</span></div><div class="cell f-blur" role="button" tabindex="0" id="tile-bokeh" aria-label="bokeh: disc blur on a golden-angle spiral, bright taps weighted up"><canvas></canvas><span class="orb-status"></span><span class="tag">bokeh</span></div><div class="cell f-blur" role="button" tabindex="0" id="tile-radial_blur" aria-label="radial_blur: taps along the ray from the center — the zoom blur"><canvas></canvas><span class="orb-status"></span><span class="tag">radial blur</span></div><div class="cell f-blur" role="button" tabindex="0" id="tile-motion_blur" aria-label="motion_blur: taps along one direction"><canvas></canvas><span class="orb-status"></span><span class="tag">motion blur</span></div><div class="cell f-blur" role="button" tabindex="0" id="tile-tilt_shift" aria-label="tilt_shift: blur that grows with distance from a focus band"><canvas></canvas><span class="orb-status"></span><span class="tag">tilt shift</span></div><div class="cell f-blur" role="button" tabindex="0" id="tile-unsharp" aria-label="unsharp: source plus (source − blur): the classic sharpen"><canvas></canvas><span class="orb-status"></span><span class="tag">unsharp</span></div><div class="cell f-color" role="button" tabindex="0" id="tile-curves" aria-label="curves: contrast, gamma and lift"><canvas></canvas><span class="orb-status"></span><span class="tag">curves</span></div><div class="cell f-color" role="button" tabindex="0" id="tile-saturation" aria-label="saturation: saturation, plus vibrance that spares the already-saturated"><canvas></canvas><span class="orb-status"></span><span class="tag">saturation</span></div><div class="cell f-color" role="button" tabindex="0" id="tile-hue_rotate" aria-label="hue_rotate: hue rotation in YIQ, spinning on hover"><canvas></canvas><span class="orb-status"></span><span class="tag">hue rotate</span></div><div class="cell f-color" role="button" tabindex="0" id="tile-gradient_map" aria-label="gradient_map: luminance through the ink → tone → cream ramp"><canvas></canvas><span class="orb-status"></span><span class="tag">gradient map</span></div><div class="cell f-color" role="button" tabindex="0" id="tile-posterize" aria-label="posterize: each channel snapped to n levels"><canvas></canvas><span class="orb-status"></span><span class="tag">posterize</span></div><div class="cell f-color" role="button" tabindex="0" id="tile-duotone" aria-label="duotone: luminance between two chosen tones"><canvas></canvas><span class="orb-status"></span><span class="tag">duotone</span></div><div class="cell f-texture" role="button" tabindex="0" id="tile-grain" aria-label="grain: hashed film grain, re-rolled every frame on hover"><canvas></canvas><span class="orb-status"></span><span class="tag">grain</span></div><div class="cell f-texture" role="button" tabindex="0" id="tile-halftone" aria-label="halftone: a rotated dot screen, dot size from luminance"><canvas></canvas><span class="orb-status"></span><span class="tag">halftone</span></div><div class="cell f-texture" role="button" tabindex="0" id="tile-hatching" aria-label="hatching: engraver&#x27;s hatching, layers added as luminance falls"><canvas></canvas><span class="orb-status"></span><span class="tag">hatching</span></div><div class="cell f-texture" role="button" tabindex="0" id="tile-pixelate" aria-label="pixelate: mosaic, optionally with a reduced palette"><canvas></canvas><span class="orb-status"></span><span class="tag">pixelate</span></div><div class="cell f-texture" role="button" tabindex="0" id="tile-kuwahara" aria-label="kuwahara: mean of the least-variant quadrant — the oil-paint filter"><canvas></canvas><span class="orb-status"></span><span class="tag">kuwahara</span></div><div class="cell f-texture" role="button" tabindex="0" id="tile-dither" aria-label="dither: interleaved-gradient-noise dither to n levels"><canvas></canvas><span class="orb-status"></span><span class="tag">dither</span></div><div class="cell f-edges" role="button" tabindex="0" id="tile-sobel" aria-label="sobel: Sobel gradient magnitude"><canvas></canvas><span class="orb-status"></span><span class="tag">sobel</span></div><div class="cell f-edges" role="button" tabindex="0" id="tile-emboss" aria-label="emboss: directional derivative on grey — the relief"><canvas></canvas><span class="orb-status"></span><span class="tag">emboss</span></div><div class="cell f-edges" role="button" tabindex="0" id="tile-dog_sketch" aria-label="dog_sketch: difference of Gaussians, thresholded to pencil"><canvas></canvas><span class="orb-status"></span><span class="tag">dog sketch</span></div><div class="cell f-edges" role="button" tabindex="0" id="tile-edge_glow" aria-label="edge_glow: Sobel edges added back as light"><canvas></canvas><span class="orb-status"></span><span class="tag">edge glow</span></div><div class="cell f-lens" role="button" tabindex="0" id="tile-bloom" aria-label="bloom: bright-pass over a wide disc, added"><canvas></canvas><span class="orb-status"></span><span class="tag">bloom</span></div><div class="cell f-lens" role="button" tabindex="0" id="tile-vignette" aria-label="vignette: darkened corners"><canvas></canvas><span class="orb-status"></span><span class="tag">vignette</span></div><div class="cell f-lens" role="button" tabindex="0" id="tile-aberration" aria-label="aberration: radial RGB split"><canvas></canvas><span class="orb-status"></span><span class="tag">aberration</span></div><div class="cell f-lens" role="button" tabindex="0" id="tile-barrel" aria-label="barrel: Brown–Conrady radial distortion"><canvas></canvas><span class="orb-status"></span><span class="tag">barrel</span></div><div class="cell f-lens" role="button" tabindex="0" id="tile-crt" aria-label="crt: scanlines, shadow mask and screen curvature"><canvas></canvas><span class="orb-status"></span><span class="tag">crt</span></div><div class="cell f-lens" role="button" tabindex="0" id="tile-glitch" aria-label="glitch: row displacement, block corruption and channel split"><canvas></canvas><span class="orb-status"></span><span class="tag">glitch</span></div><div class="cell f-lens" role="button" tabindex="0" id="tile-shimmer" aria-label="shimmer: sine-field refraction — heat haze"><canvas></canvas><span class="orb-status"></span><span class="tag">shimmer</span></div><div class="cell f-lens" role="button" tabindex="0" id="tile-old_film" aria-label="old_film: grain, scratches, flicker, faded color and a vignette"><canvas></canvas><span class="orb-status"></span><span class="tag">old film</span></div></div></div>
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <div class="sheet-side">
+      <canvas id="m-orb" width="220" height="220"></canvas>
+      <h3 id="m-name"></h3><div class="fn" id="m-fn"></div><p id="m-species"></p><div id="m-knobs"></div>
+    </div>
+    <div class="sheet-main">
+      <div class="sheet-head"><span class="lbl" id="m-src-lbl">WGSL</span><button class="panel-btn" id="m-copy" type="button">Copy function</button><button class="panel-btn" id="m-copy-pack" type="button">Copy library</button><button class="panel-btn" id="m-close" type="button">Close ✕</button></div>
+      <pre id="m-src" tabindex="0"></pre>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
