@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lighting Table // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   LIGHTING TABLE  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the data and hands it to the shared
+   table-engine, which builds the sidebar and the frame loop and drives page.js.
+   30 lighting models on an analytic sphere; one WGSL fragment per cell. Drag a cell to orbit the key light; the light also orbits while a cell is hovered.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet (from the old style block)
+     3. main.js      type=module; fetches the pack and spec, then boots
+
+   LAYOUT  (the leading hash marks an element id)
+     topbar (hidden in the site shell iframe through .in-frame)
+     #side left · generators, palette; #stage grid of cells; #modal inspector (drag to orbit the light)
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Lighting Table</span></div>
+  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+</div>
+<div id="side">
+  <div class="side-head"><div class="big">light</div><div class="sub">|30 models · 4 families⟩</div></div>
+  <div class="legend"><span class="f-diffuse"><i></i>Diffuse</span><span class="f-specular"><i></i>Specular</span><span class="f-layers"><i></i>Fresnel & layers</span><span class="f-stylized"><i></i>Stylized</span></div>
+  <div class="sec"><button class="chip on" id="orbit" type="button">↻ light orbits on hover</button><div class="mini">press and drag across the table: the pointer is the light, every cell looks toward it</div></div>
+  <div id="gens"></div>
+  <div class="sec"><div class="sec-lbl">Palette</div><div class="swatches"><label class="swatch"><span>Ink</span><input type="color" id="sw-ink" value="#0e1118"></label><label class="swatch"><span>Tone</span><input type="color" id="sw-tone" value="#5a8cc0"></label><label class="swatch"><span>Cream</span><input type="color" id="sw-cream" value="#e8ecf4"></label></div></div>
+  <div class="sec"><button class="chip on" id="hoveronly" type="button" aria-pressed="true">◉ animate on hover only</button></div>
+  <div class="fps" id="fps"></div>
+</div>
+<div id="nogpu" class="nogpu" hidden>WebGPU is not available in this browser, so the table cannot render. Chrome, Edge, and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
+<div id="stage"><div id="table"><div class="cell f-diffuse round" role="button" tabindex="0" id="tile-lambert" aria-label="lambert: Lambert: albedo/π · n·l — the reference diffuse"><canvas></canvas><span class="orb-status"></span><span class="tag">lambert</span></div><div class="cell f-diffuse round" role="button" tabindex="0" id="tile-half_lambert" aria-label="half_lambert: Valve&#x27;s half-Lambert: (½ n·l + ½)² — no black terminator"><canvas></canvas><span class="orb-status"></span><span class="tag">half lambert</span></div><div class="cell f-diffuse round" role="button" tabindex="0" id="tile-wrap" aria-label="wrap: wrap lighting: (n·l + w)/(1 + w), light bleeds past the terminator"><canvas></canvas><span class="orb-status"></span><span class="tag">wrap</span></div><div class="cell f-diffuse round" role="button" tabindex="0" id="tile-oren_nayar" aria-label="oren_nayar: Oren–Nayar rough diffuse: flat-lit like clay or the moon"><canvas></canvas><span class="orb-status"></span><span class="tag">oren nayar</span></div><div class="cell f-diffuse round" role="button" tabindex="0" id="tile-burley" aria-label="burley: Disney/Burley diffuse with the retro-reflective grazing term"><canvas></canvas><span class="orb-status"></span><span class="tag">burley</span></div><div class="cell f-diffuse round" role="button" tabindex="0" id="tile-minnaert" aria-label="minnaert: Minnaert&#x27;s lunar model: (n·l · n·v)^(k−1) darkens the limb"><canvas></canvas><span class="orb-status"></span><span class="tag">minnaert</span></div><div class="cell f-diffuse round" role="button" tabindex="0" id="tile-lommel_seeliger" aria-label="lommel_seeliger: Lommel–Seeliger: 1/(n·l + n·v), the classic regolith law"><canvas></canvas><span class="orb-status"></span><span class="tag">lommel seeliger</span></div><div class="cell f-diffuse round" role="button" tabindex="0" id="tile-hemisphere" aria-label="hemisphere: hemisphere ambient alone: sky tone above, ink below"><canvas></canvas><span class="orb-status"></span><span class="tag">hemisphere</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-phong" aria-label="phong: Phong: (r·v)^n, normalized"><canvas></canvas><span class="orb-status"></span><span class="tag">phong</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-blinn_phong" aria-label="blinn_phong: Blinn–Phong: (n·h)^n, normalized"><canvas></canvas><span class="orb-status"></span><span class="tag">blinn phong</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-gaussian" aria-label="gaussian: a Gaussian lobe in the half-angle"><canvas></canvas><span class="orb-status"></span><span class="tag">gaussian</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-beckmann" aria-label="beckmann: Beckmann distribution with Schlick Fresnel"><canvas></canvas><span class="orb-status"></span><span class="tag">beckmann</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-ggx" aria-label="ggx: GGX / Trowbridge–Reitz: the long-tailed lobe"><canvas></canvas><span class="orb-status"></span><span class="tag">ggx</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-gtr" aria-label="gtr: Burley&#x27;s GTR: γ = 1 Berry, γ = 2 GGX, higher is tighter"><canvas></canvas><span class="orb-status"></span><span class="tag">gtr</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-cook_torrance" aria-label="cook_torrance: Cook–Torrance: GGX D · Smith G · Schlick F, energy-split diffuse"><canvas></canvas><span class="orb-status"></span><span class="tag">cook torrance</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-kelemen" aria-label="kelemen: Kelemen–Szirmay-Kalos: G/(4 n·l n·v) ≈ 1/(v·h)²"><canvas></canvas><span class="orb-status"></span><span class="tag">kelemen</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-ward" aria-label="ward: Ward&#x27;s anisotropic Gaussian, brushed around y"><canvas></canvas><span class="orb-status"></span><span class="tag">ward</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-ashikhmin_shirley" aria-label="ashikhmin_shirley: Ashikhmin–Shirley anisotropic Phong with its coupled diffuse"><canvas></canvas><span class="orb-status"></span><span class="tag">ashikhmin shirley</span></div><div class="cell f-specular round" role="button" tabindex="0" id="tile-ggx_aniso" aria-label="ggx_aniso: anisotropic GGX: αx/αy stretched by an anisotropy knob"><canvas></canvas><span class="orb-status"></span><span class="tag">ggx aniso</span></div><div class="cell f-layers round" role="button" tabindex="0" id="tile-fresnel" aria-label="fresnel: Schlick Fresnel alone: reflectance rising toward the limb"><canvas></canvas><span class="orb-status"></span><span class="tag">fresnel</span></div><div class="cell f-layers round" role="button" tabindex="0" id="tile-metal" aria-label="metal: dielectric (left) vs metal (right): F0 from albedo, no diffuse"><canvas></canvas><span class="orb-status"></span><span class="tag">metal</span></div><div class="cell f-layers round" role="button" tabindex="0" id="tile-clearcoat" aria-label="clearcoat: Disney clearcoat: a sharp GTR₁ lobe over a rough base"><canvas></canvas><span class="orb-status"></span><span class="tag">clearcoat</span></div><div class="cell f-layers round" role="button" tabindex="0" id="tile-sheen" aria-label="sheen: Charlie sheen (Estevez–Kulla): velvet&#x27;s bright grazing rim"><canvas></canvas><span class="orb-status"></span><span class="tag">sheen</span></div><div class="cell f-layers round" role="button" tabindex="0" id="tile-subsurface" aria-label="subsurface: Disney subsurface approximation plus a wrapped back-light"><canvas></canvas><span class="orb-status"></span><span class="tag">subsurface</span></div><div class="cell f-layers round" role="button" tabindex="0" id="tile-thin_film" aria-label="thin_film: thin-film interference: soap-bubble iridescence by film thickness"><canvas></canvas><span class="orb-status"></span><span class="tag">thin film</span></div><div class="cell f-stylized round" role="button" tabindex="0" id="tile-toon" aria-label="toon: cel shading: banded diffuse, hard specular, hard rim"><canvas></canvas><span class="orb-status"></span><span class="tag">toon</span></div><div class="cell f-stylized round" role="button" tabindex="0" id="tile-gooch" aria-label="gooch: Gooch cool-to-warm technical illustration"><canvas></canvas><span class="orb-status"></span><span class="tag">gooch</span></div><div class="cell f-stylized round" role="button" tabindex="0" id="tile-rim" aria-label="rim: Fresnel rim light: (1 − n·v)^p"><canvas></canvas><span class="orb-status"></span><span class="tag">rim</span></div><div class="cell f-stylized round" role="button" tabindex="0" id="tile-matcap" aria-label="matcap: a procedural matcap indexed by the view-space normal"><canvas></canvas><span class="orb-status"></span><span class="tag">matcap</span></div><div class="cell f-stylized round" role="button" tabindex="0" id="tile-hatching" aria-label="hatching: cross-hatching layered by darkness, a tonal art map"><canvas></canvas><span class="orb-status"></span><span class="tag">hatching</span></div></div></div>
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <div class="sheet-side">
+      <canvas id="m-orb" width="220" height="220"></canvas>
+      <h3 id="m-name"></h3><div class="fn" id="m-fn"></div><p id="m-species"></p><div id="m-knobs"></div>
+    </div>
+    <div class="sheet-main">
+      <div class="sheet-head"><span class="lbl" id="m-src-lbl">WGSL</span><button class="panel-btn" id="m-copy" type="button">Copy function</button><button class="panel-btn" id="m-copy-pack" type="button">Copy library</button><button class="panel-btn" id="m-close" type="button">Close ✕</button></div>
+      <pre id="m-src" tabindex="0"></pre>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
