@@ -4,14 +4,12 @@
   --blue:#96c8ff; --blue-dim:#5a8cc0; --blue-faint:rgba(150,200,255,0.05);
   --yellow:#ffc832; --yellow-dim:#b8901e; --yellow-faint:rgba(255,200,50,0.05);
   --green:#64c864; --text:#c8d0e0; --text-dim:#8090b0; --text-faint:#506080; --text-bright:#e8ecf4;
-  --scan:rgba(0,0,0,0.06);
   --top:48px; --cell:100px;
   color-scheme:dark;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased;font-size:14px}
-body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
 body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,0.4))}
 .grid-bg{position:fixed;inset:0;z-index:0;pointer-events:none;background-image:linear-gradient(rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.018) 1px,transparent 1px),linear-gradient(rgba(150,200,255,0.006) 1px,transparent 1px),linear-gradient(90deg,rgba(150,200,255,0.006) 1px,transparent 1px);background-size:300px 300px,300px 300px,50px 50px,50px 50px}
 button{font-family:inherit}
