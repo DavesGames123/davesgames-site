@@ -58,21 +58,24 @@ export const PAGE = {
     const enc = device.createCommandEncoder(); const pass = enc.beginRenderPass({ colorAttachments: [{ view, clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
     pass.setPipeline(this.npipes[n]); pass.setBindGroup(0, this.nbind); pass.draw(3); pass.end(); device.queue.submit([enc.finish()]);
   },
+  copyWork() { this.ctx.device.queue.copyExternalImageToTexture({ source: this.work }, { texture: this.tex }, [512, 512]); },
+  // A source click records only the latest pending write. tick() applies one write
+  // per frame, before the grid draws, so rapid switching can neither stack GPU work
+  // nor let a cell read the source texture while that texture is being written.
+  tick() { if (!this.pending) return; const apply = this.pending; this.pending = null; apply(); return true; },
   select(id, kind, btn) {
-    const { device, $ } = this.ctx;
-    $('thumbs').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
-    if (kind === 'photo') { const img = this.photos[id]; const go = () => { this.wctx.drawImage(img, 0, 0, 512, 512); device.queue.copyExternalImageToTexture({ source: this.work }, { texture: this.tex }, [512, 512]); this.ctx.markAllDirty(); }; if (img.complete && img.naturalWidth) go(); else img.addEventListener('load', go, { once: true }); }
-    else if (kind === '2d') { SRC2D[id](this.wctx, 512); device.queue.copyExternalImageToTexture({ source: this.work }, { texture: this.tex }, [512, 512]); }
-    else if (kind === 'noise') this.renderNoise(id, this.tex.createView(), 512);
-    this.ctx.markAllDirty();
+    this.ctx.$('thumbs').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+    if (kind === 'photo') { const img = this.photos[id]; const put = () => { this.wctx.drawImage(img, 0, 0, 512, 512); this.pending = () => this.copyWork(); }; if (img.complete && img.naturalWidth) put(); else img.addEventListener('load', put, { once: true }); }
+    else if (kind === '2d') { SRC2D[id](this.wctx, 512); this.pending = () => this.copyWork(); }
+    else if (kind === 'noise') this.pending = () => this.renderNoise(id, this.tex.createView(), 512);
   },
   loadImage(file) {
     const img = new Image(); img.onload = () => { const s = Math.max(512 / img.width, 512 / img.height); const w = img.width * s, h = img.height * s;
       this.wctx.fillStyle = '#000'; this.wctx.fillRect(0, 0, 512, 512); this.wctx.drawImage(img, (512 - w) / 2, (512 - h) / 2, w, h);
-      this.ctx.device.queue.copyExternalImageToTexture({ source: this.work }, { texture: this.tex }, [512, 512]);
+      this.pending = () => this.copyWork();
       const uc = this.upBtn.cv.getContext('2d'); uc.drawImage(this.work, 0, 0, 96, 96);
       this.ctx.$('thumbs').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === this.upBtn.b));
-      this.ctx.markAllDirty(); URL.revokeObjectURL(img.src); };
+      URL.revokeObjectURL(img.src); };
     img.src = URL.createObjectURL(file);
   },
   bind(surf) { if (!surf.page.bind) surf.page.bind = this.ctx.device.createBindGroup({ layout: this.bgl, entries: [{ binding: 0, resource: { buffer: surf.buf } }, { binding: 1, resource: this.tex.createView() }, { binding: 2, resource: this.smp }] }); return surf.page.bind; },

@@ -47,11 +47,15 @@ export const PAGE = {
     const enc = device.createCommandEncoder(); const pass = enc.beginRenderPass({ colorAttachments: [{ view, clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
     pass.setPipeline(this.npipes[n]); pass.setBindGroup(0, this.nbind); pass.draw(3); pass.end(); device.queue.submit([enc.finish()]);
   },
+  copyWork() { this.ctx.device.queue.copyExternalImageToTexture({ source: this.work }, { texture: this.tex }, [512, 512]); },
+  // A source click records only the latest pending write. tick() applies one write
+  // per frame, before the grid draws, so rapid switching can neither stack GPU work
+  // nor let a cell read the source texture while that texture is being written.
+  tick() { if (!this.pending) return; const apply = this.pending; this.pending = null; apply(); return true; },
   select(n, btn) {
-    const { device, $ } = this.ctx; $('thumbs').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
-    if (n === 'ramp' || n === 'radial') { this.draw2d(n, this.wctx, 512); device.queue.copyExternalImageToTexture({ source: this.work }, { texture: this.tex }, [512, 512]); }
-    else this.renderNoise(n, this.tex.createView(), 512);
-    this.ctx.markAllDirty();
+    this.ctx.$('thumbs').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
+    if (n === 'ramp' || n === 'radial') { this.draw2d(n, this.wctx, 512); this.pending = () => this.copyWork(); }
+    else this.pending = () => this.renderNoise(n, this.tex.createView(), 512);
   },
   bind(surf) { if (!surf.page.bind) surf.page.bind = this.ctx.device.createBindGroup({ layout: this.bgl, entries: [{ binding: 0, resource: { buffer: surf.buf } }, { binding: 1, resource: this.tex.createView() }, { binding: 2, resource: this.smp }] }); return surf.page.bind; },
   draw(enc, t, surf, rect, dpr, dt, now, moving) {
