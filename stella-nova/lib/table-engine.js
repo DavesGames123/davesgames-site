@@ -126,7 +126,11 @@ export async function bootTable(PAGE, data) {
   for (const s of STYLES) {
     const el = $('tile-' + s.name);
     const t = { s, el, canvas: el.querySelector('canvas'), status: el.querySelector('.orb-status'), phase: 0, rate: 0, hover: false, dirty: true, knobs: s.defaults.slice(), pipeline: null, surf: null, page: {} };
-    el.addEventListener('pointerenter', () => { t.hover = true; }); el.addEventListener('pointerleave', () => { t.hover = false; if (PAGE.leave && inspected !== t) PAGE.leave(t); });
+    el.addEventListener('pointerenter', () => { t.hover = true; });
+    el.addEventListener('pointerdown', e => { if (e.button !== 0) return; t.drag = { x: e.clientX, y: e.clientY, moved: false }; try { el.setPointerCapture(e.pointerId); } catch (_) {} if (PAGE.pointer) PAGE.pointer(t, 'down', e, el); });
+    el.addEventListener('pointermove', e => { if (!t.drag) return; if (Math.hypot(e.clientX - t.drag.x, e.clientY - t.drag.y) > 4) t.drag.moved = true; if (t.drag.moved && PAGE.pointer) PAGE.pointer(t, 'move', e, el); });
+    const endDrag = e => { if (!t.drag) return; const moved = t.drag.moved; t.drag = null; t.dragMoved = moved; if (PAGE.pointer) PAGE.pointer(t, 'up', e, el); };
+    el.addEventListener('pointerup', endDrag); el.addEventListener('pointercancel', endDrag); el.addEventListener('pointerleave', () => { t.hover = false; if (PAGE.leave && inspected !== t) PAGE.leave(t); });
     tiles.push(t);
   }
   const visible = new Set();
@@ -152,7 +156,12 @@ export async function bootTable(PAGE, data) {
     modal.classList.add('open'); $('m-close').focus();
   }
   function close() { modal.classList.remove('open'); inspected = null; }
-  for (const t of tiles) { t.el.addEventListener('click', () => open(t)); t.el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(t); } }); }
+  { const mc = $('m-orb'); let md = null;
+    mc.addEventListener('pointerdown', e => { if (!inspected || e.button !== 0) return; md = true; try { mc.setPointerCapture(e.pointerId); } catch (_) {} if (PAGE.pointer) PAGE.pointer(inspected, 'down', e, mc); });
+    mc.addEventListener('pointermove', e => { if (md && PAGE.pointer) PAGE.pointer(inspected, 'move', e, mc); });
+    const mend = e => { if (!md) return; md = null; if (PAGE.pointer) PAGE.pointer(inspected, 'up', e, mc); };
+    mc.addEventListener('pointerup', mend); mc.addEventListener('pointercancel', mend); }
+  for (const t of tiles) { t.el.addEventListener('click', () => { if (t.dragMoved) { t.dragMoved = false; return; } open(t); }); t.el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(t); } }); }
   $('m-close').addEventListener('click', close); modal.addEventListener('click', e => { if (e.target === modal) close(); });
   window.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
   const copy = (text, btn, label) => navigator.clipboard.writeText(text).then(() => { btn.textContent = 'Copied'; setTimeout(() => btn.textContent = label, 1200); }).catch(() => { btn.textContent = 'Select the text to copy'; setTimeout(() => btn.textContent = label, 2000); });
