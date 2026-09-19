@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Field Table // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   FIELD TABLE  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the data and hands it to the shared
+   table-engine, which builds the sidebar and the frame loop and drives page.js.
+   24 vector and scalar fields; one WGSL compute shader per cell, combed into a background flow so each reads at rest.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet (from the old style block)
+     3. main.js      type=module; fetches the pack and spec, then boots
+
+   LAYOUT  (the leading hash marks an element id)
+     topbar (hidden in the site shell iframe through .in-frame)
+     #side left · generators, palette; #stage grid of cells; #modal inspector
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Field Table</span></div>
+  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+</div>
+<div id="side">
+  <div class="side-head"><div class="big">fields</div><div class="sub">|24 fields · 4 families⟩</div></div>
+  <div class="legend"><span class="f-potential"><i></i>Potential flow</span><span class="f-physics"><i></i>Physics</span><span class="f-dynamics"><i></i>Phase portraits</span><span class="f-noise"><i></i>Noise</span></div>
+  
+  <div id="gens"></div>
+  <div class="sec"><div class="sec-lbl">Palette</div><div class="swatches"><label class="swatch"><span>Ink</span><input type="color" id="sw-ink" value="#0e1118"></label><label class="swatch"><span>Tone</span><input type="color" id="sw-tone" value="#5a8cc0"></label><label class="swatch"><span>Cream</span><input type="color" id="sw-cream" value="#e8ecf4"></label></div></div>
+  <div class="sec"><button class="chip on" id="hoveronly" type="button" aria-pressed="true">◉ animate on hover only</button></div>
+  <div class="fps" id="fps"></div>
+</div>
+<div id="nogpu" class="nogpu" hidden>WebGPU is not available in this browser, so the table cannot render. Chrome, Edge, and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
+<div id="stage"><div id="table"><div class="cell f-potential" role="button" tabindex="0" id="tile-uniform" aria-label="uniform: a uniform stream, direction from the knob"><canvas></canvas><span class="orb-status"></span><span class="tag">uniform</span></div><div class="cell f-potential" role="button" tabindex="0" id="tile-source" aria-label="source: a point source (or sink), 1/r outward"><canvas></canvas><span class="orb-status"></span><span class="tag">source</span></div><div class="cell f-potential" role="button" tabindex="0" id="tile-vortex" aria-label="vortex: a free vortex, 1/r around the center"><canvas></canvas><span class="orb-status"></span><span class="tag">vortex</span></div><div class="cell f-potential" role="button" tabindex="0" id="tile-rankine" aria-label="rankine: Rankine vortex: solid-body core, free vortex outside"><canvas></canvas><span class="orb-status"></span><span class="tag">rankine</span></div><div class="cell f-potential" role="button" tabindex="0" id="tile-doublet" aria-label="doublet: a doublet — source and sink merged"><canvas></canvas><span class="orb-status"></span><span class="tag">doublet</span></div><div class="cell f-potential" role="button" tabindex="0" id="tile-cylinder" aria-label="cylinder: stream plus doublet plus circulation: flow past a cylinder with lift"><canvas></canvas><span class="orb-status"></span><span class="tag">cylinder</span></div><div class="cell f-potential" role="button" tabindex="0" id="tile-spiral_sink" aria-label="spiral_sink: vortex plus sink: the drain"><canvas></canvas><span class="orb-status"></span><span class="tag">spiral sink</span></div><div class="cell f-potential" role="button" tabindex="0" id="tile-taylor_green" aria-label="taylor_green: Taylor–Green vortex lattice"><canvas></canvas><span class="orb-status"></span><span class="tag">taylor green</span></div><div class="cell f-potential" role="button" tabindex="0" id="tile-shear" aria-label="shear: a shear layer with a tanh profile, lightly perturbed"><canvas></canvas><span class="orb-status"></span><span class="tag">shear</span></div><div class="cell f-potential" role="button" tabindex="0" id="tile-dipole_pair" aria-label="dipole_pair: two counter-rotating vortices — a vortex pair"><canvas></canvas><span class="orb-status"></span><span class="tag">dipole pair</span></div><div class="cell f-physics" role="button" tabindex="0" id="tile-gravity" aria-label="gravity: the gravitational field of three orbiting masses (softened)"><canvas></canvas><span class="orb-status"></span><span class="tag">gravity</span></div><div class="cell f-physics" role="button" tabindex="0" id="tile-coulomb" aria-label="coulomb: the electric field of two charges, like or unlike"><canvas></canvas><span class="orb-status"></span><span class="tag">coulomb</span></div><div class="cell f-physics" role="button" tabindex="0" id="tile-magnetic_dipole" aria-label="magnetic_dipole: the field of a magnetic dipole, slowly turning"><canvas></canvas><span class="orb-status"></span><span class="tag">magnetic dipole</span></div><div class="cell f-dynamics" role="button" tabindex="0" id="tile-pendulum" aria-label="pendulum: the pendulum&#x27;s phase portrait: angle across, angular velocity up"><canvas></canvas><span class="orb-status"></span><span class="tag">pendulum</span></div><div class="cell f-dynamics" role="button" tabindex="0" id="tile-vanderpol" aria-label="vanderpol: van der Pol oscillator: every orbit spirals onto the limit cycle"><canvas></canvas><span class="orb-status"></span><span class="tag">vanderpol</span></div><div class="cell f-dynamics" role="button" tabindex="0" id="tile-duffing" aria-label="duffing: the Duffing oscillator, forced on hover"><canvas></canvas><span class="orb-status"></span><span class="tag">duffing</span></div><div class="cell f-dynamics" role="button" tabindex="0" id="tile-lotka" aria-label="lotka: Lotka–Volterra predator–prey cycles"><canvas></canvas><span class="orb-status"></span><span class="tag">lotka</span></div><div class="cell f-dynamics" role="button" tabindex="0" id="tile-hopf" aria-label="hopf: the Hopf normal form: a limit cycle is born as mu crosses zero"><canvas></canvas><span class="orb-status"></span><span class="tag">hopf</span></div><div class="cell f-dynamics" role="button" tabindex="0" id="tile-saddle" aria-label="saddle: a saddle point, rotated"><canvas></canvas><span class="orb-status"></span><span class="tag">saddle</span></div><div class="cell f-dynamics" role="button" tabindex="0" id="tile-lorenz" aria-label="lorenz: the Lorenz flow projected onto (x, z)"><canvas></canvas><span class="orb-status"></span><span class="tag">lorenz</span></div><div class="cell f-noise" role="button" tabindex="0" id="tile-curl" aria-label="curl: curl noise: the rotated gradient of fbm, divergence-free"><canvas></canvas><span class="orb-status"></span><span class="tag">curl</span></div><div class="cell f-noise" role="button" tabindex="0" id="tile-gradient" aria-label="gradient: the gradient of fbm: particles collect in the hills"><canvas></canvas><span class="orb-status"></span><span class="tag">gradient</span></div><div class="cell f-noise" role="button" tabindex="0" id="tile-curl_plus_stream" aria-label="curl_plus_stream: curl noise on top of a uniform stream"><canvas></canvas><span class="orb-status"></span><span class="tag">curl plus stream</span></div><div class="cell f-noise" role="button" tabindex="0" id="tile-wind" aria-label="wind: two scales of curl noise plus a gusting stream — weather"><canvas></canvas><span class="orb-status"></span><span class="tag">wind</span></div></div></div>
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <div class="sheet-side">
+      <canvas id="m-orb" width="220" height="220"></canvas>
+      <h3 id="m-name"></h3><div class="fn" id="m-fn"></div><p id="m-species"></p><div id="m-knobs"></div>
+    </div>
+    <div class="sheet-main">
+      <div class="sheet-head"><span class="lbl" id="m-src-lbl">WGSL</span><button class="panel-btn" id="m-copy" type="button">Copy function</button><button class="panel-btn" id="m-copy-pack" type="button">Copy library</button><button class="panel-btn" id="m-close" type="button">Close ✕</button></div>
+      <pre id="m-src" tabindex="0"></pre>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
