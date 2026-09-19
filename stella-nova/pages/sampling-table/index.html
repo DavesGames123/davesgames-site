@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sampling Table // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   SAMPLING TABLE  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the data and hands it to the shared
+   table-engine, which builds the sidebar and the frame loop and drives page.js.
+   30 point-sampling patterns; one WGSL function sample_<name>(i, n, k) per cell. A cell draws the first n points of its pattern.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet (from the old style block)
+     3. main.js      type=module; fetches the pack and spec, then boots
+
+   LAYOUT  (the leading hash marks an element id)
+     topbar (hidden in the site shell iframe through .in-frame)
+     #side left · generators, palette; #stage grid of cells; #modal inspector
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Sampling Table</span></div>
+  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+</div>
+<div id="side">
+  <div class="side-head"><div class="big">sample</div><div class="sub">|30 patterns · 4 families⟩</div></div>
+  <div class="legend"><span class="f-random"><i></i>Random</span><span class="f-quasi"><i></i>Quasi-random</span><span class="f-lattice"><i></i>Lattices</span><span class="f-warp"><i></i>Warps</span></div>
+  
+  <div id="gens"></div>
+  <div class="sec"><div class="sec-lbl">Palette</div><div class="swatches"><label class="swatch"><span>Ink</span><input type="color" id="sw-ink" value="#0e1118"></label><label class="swatch"><span>Tone</span><input type="color" id="sw-tone" value="#5a8cc0"></label><label class="swatch"><span>Cream</span><input type="color" id="sw-cream" value="#e8ecf4"></label></div></div>
+  <div class="sec"><button class="chip on" id="hoveronly" type="button" aria-pressed="true">◉ animate on hover only</button></div>
+  <div class="fps" id="fps"></div>
+</div>
+<div id="nogpu" class="nogpu" hidden>WebGPU is not available in this browser, so the table cannot render. Chrome, Edge, and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
+<div id="stage"><div id="table"><div class="cell f-random" role="button" tabindex="0" id="tile-uniform" aria-label="uniform: independent uniform random: clumps and gaps, the reference to beat"><canvas></canvas><span class="orb-status"></span><span class="tag">uniform</span></div><div class="cell f-random" role="button" tabindex="0" id="tile-stratified" aria-label="stratified: stratified / jittered: one random point per grid cell"><canvas></canvas><span class="orb-status"></span><span class="tag">stratified</span></div><div class="cell f-random" role="button" tabindex="0" id="tile-nrooks" aria-label="nrooks: N-rooks (Latin hypercube): one point per row and per column"><canvas></canvas><span class="orb-status"></span><span class="tag">nrooks</span></div><div class="cell f-random" role="button" tabindex="0" id="tile-multijitter" aria-label="multijitter: correlated multi-jittered (Kensler): stratified in 2D and in each 1D projection"><canvas></canvas><span class="orb-status"></span><span class="tag">multijitter</span></div><div class="cell f-random" role="button" tabindex="0" id="tile-poisson_disc" aria-label="poisson_disc: Poisson disc by grid dominance: no two points closer than r"><canvas></canvas><span class="orb-status"></span><span class="tag">poisson disc</span></div><div class="cell f-random" role="button" tabindex="0" id="tile-jittered_hex" aria-label="jittered_hex: a hex lattice with per-point jitter"><canvas></canvas><span class="orb-status"></span><span class="tag">jittered hex</span></div><div class="cell f-random" role="button" tabindex="0" id="tile-gaussian_cloud" aria-label="gaussian_cloud: a Gaussian cloud from Box–Muller on random input"><canvas></canvas><span class="orb-status"></span><span class="tag">gaussian cloud</span></div><div class="cell f-quasi" role="button" tabindex="0" id="tile-halton" aria-label="halton: Halton (2, 3): radical inverses in two bases"><canvas></canvas><span class="orb-status"></span><span class="tag">halton</span></div><div class="cell f-quasi" role="button" tabindex="0" id="tile-cp_rotation" aria-label="cp_rotation: Halton with a Cranley–Patterson rotation: shifted, still low-discrepancy"><canvas></canvas><span class="orb-status"></span><span class="tag">cp rotation</span></div><div class="cell f-quasi" role="button" tabindex="0" id="tile-hammersley" aria-label="hammersley: Hammersley: i/n against the base-2 radical inverse"><canvas></canvas><span class="orb-status"></span><span class="tag">hammersley</span></div><div class="cell f-quasi" role="button" tabindex="0" id="tile-sobol" aria-label="sobol: Sobol, first two dimensions — every power-of-two prefix is stratified"><canvas></canvas><span class="orb-status"></span><span class="tag">sobol</span></div><div class="cell f-quasi" role="button" tabindex="0" id="tile-r2" aria-label="r2: Roberts&#x27; R2: fract(i · (φ₂⁻¹, φ₂⁻²)) with the plastic constant"><canvas></canvas><span class="orb-status"></span><span class="tag">r2</span></div><div class="cell f-quasi" role="button" tabindex="0" id="tile-golden_spiral" aria-label="golden_spiral: Vogel&#x27;s sunflower: √i radius, golden-angle steps"><canvas></canvas><span class="orb-status"></span><span class="tag">golden spiral</span></div><div class="cell f-quasi" role="button" tabindex="0" id="tile-fibonacci_lattice" aria-label="fibonacci_lattice: the Fibonacci lattice: i/n against fract(i/φ)"><canvas></canvas><span class="orb-status"></span><span class="tag">fibonacci lattice</span></div><div class="cell f-quasi" role="button" tabindex="0" id="tile-rank1_lattice" aria-label="rank1_lattice: a rank-1 (Korobov) lattice fract(i/n · (1, a))"><canvas></canvas><span class="orb-status"></span><span class="tag">rank1 lattice</span></div><div class="cell f-quasi" role="button" tabindex="0" id="tile-bayer" aria-label="bayer: Bayer order: points appear as an ordered-dither matrix turns them on"><canvas></canvas><span class="orb-status"></span><span class="tag">bayer</span></div><div class="cell f-lattice" role="button" tabindex="0" id="tile-grid" aria-label="grid: the regular grid: cell centres"><canvas></canvas><span class="orb-status"></span><span class="tag">grid</span></div><div class="cell f-lattice" role="button" tabindex="0" id="tile-hex" aria-label="hex: the hexagonal lattice, the densest packing"><canvas></canvas><span class="orb-status"></span><span class="tag">hex</span></div><div class="cell f-lattice" role="button" tabindex="0" id="tile-brick" aria-label="brick: brick: rows shifted by a fraction of a cell"><canvas></canvas><span class="orb-status"></span><span class="tag">brick</span></div><div class="cell f-lattice" role="button" tabindex="0" id="tile-quincunx" aria-label="quincunx: quincunx: a grid plus its cell centres"><canvas></canvas><span class="orb-status"></span><span class="tag">quincunx</span></div><div class="cell f-lattice" role="button" tabindex="0" id="tile-rotated_grid" aria-label="rotated_grid: rotated grid (RGSS): a grid turned so projections don&#x27;t align"><canvas></canvas><span class="orb-status"></span><span class="tag">rotated grid</span></div><div class="cell f-lattice" role="button" tabindex="0" id="tile-spiral" aria-label="spiral: an Archimedean spiral at constant arc parameter"><canvas></canvas><span class="orb-status"></span><span class="tag">spiral</span></div><div class="cell f-warp" role="button" tabindex="0" id="tile-disc_polar" aria-label="disc_polar: square → disc with r = u: points crowd the centre"><canvas></canvas><span class="orb-status"></span><span class="tag">disc polar</span></div><div class="cell f-warp" role="button" tabindex="0" id="tile-disc_sqrt" aria-label="disc_sqrt: square → disc with r = √u: uniform by area"><canvas></canvas><span class="orb-status"></span><span class="tag">disc sqrt</span></div><div class="cell f-warp" role="button" tabindex="0" id="tile-disc_concentric" aria-label="disc_concentric: Shirley–Chiu concentric map: strata survive as strata"><canvas></canvas><span class="orb-status"></span><span class="tag">disc concentric</span></div><div class="cell f-warp" role="button" tabindex="0" id="tile-annulus" aria-label="annulus: square → annulus, area-uniform between two radii"><canvas></canvas><span class="orb-status"></span><span class="tag">annulus</span></div><div class="cell f-warp" role="button" tabindex="0" id="tile-gaussian_bm" aria-label="gaussian_bm: Box–Muller on stratified input: the strata become rings"><canvas></canvas><span class="orb-status"></span><span class="tag">gaussian bm</span></div><div class="cell f-warp" role="button" tabindex="0" id="tile-tent" aria-label="tent: grid jitter drawn from a tent filter — importance-sampled reconstruction"><canvas></canvas><span class="orb-status"></span><span class="tag">tent</span></div><div class="cell f-warp" role="button" tabindex="0" id="tile-sphere_fib" aria-label="sphere_fib: spherical Fibonacci seen from above: density piles up at the limb"><canvas></canvas><span class="orb-status"></span><span class="tag">sphere fib</span></div><div class="cell f-warp" role="button" tabindex="0" id="tile-triangle" aria-label="triangle: uniform in a triangle via the √ barycentric warp"><canvas></canvas><span class="orb-status"></span><span class="tag">triangle</span></div></div></div>
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <div class="sheet-side">
+      <canvas id="m-orb" width="220" height="220"></canvas>
+      <h3 id="m-name"></h3><div class="fn" id="m-fn"></div><p id="m-species"></p><div id="m-knobs"></div>
+    </div>
+    <div class="sheet-main">
+      <div class="sheet-head"><span class="lbl" id="m-src-lbl">WGSL</span><button class="panel-btn" id="m-copy" type="button">Copy function</button><button class="panel-btn" id="m-copy-pack" type="button">Copy library</button><button class="panel-btn" id="m-close" type="button">Close ✕</button></div>
+      <pre id="m-src" tabindex="0"></pre>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
