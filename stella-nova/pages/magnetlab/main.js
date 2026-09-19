@@ -435,17 +435,23 @@ function updateTracers(dt){
 // Map a field magnitude to an [r,g,b] ramp. A log curve compresses the huge
 // dynamic range of a 1/r³ field, gamma reshapes it, and the result indexes a
 // six-stop colour ramp from dark purple through to white.
+// Map a normalized level 0..1 to the six-stop ramp. Both the tracer color
+// buckets and fieldColorRGB read this one stop table, so the ramp has a single
+// source. lc is the already-shaped level (log + gamma done by the caller).
+const FIELD_RAMP_STOPS = [[0.05,0,0.3],[0,0.2,1],[0,1,0.8],[0.2,1,0],[1,0.5,0],[1,1,1]];
+function rampStopRGB(lc){
+  const sv = lc * 5, si = Math.min(Math.floor(sv), 4), sf = sv - si;
+  return [
+    FIELD_RAMP_STOPS[si][0] + sf * (FIELD_RAMP_STOPS[si+1][0] - FIELD_RAMP_STOPS[si][0]),
+    FIELD_RAMP_STOPS[si][1] + sf * (FIELD_RAMP_STOPS[si+1][1] - FIELD_RAMP_STOPS[si][1]),
+    FIELD_RAMP_STOPS[si][2] + sf * (FIELD_RAMP_STOPS[si+1][2] - FIELD_RAMP_STOPS[si][2])
+  ];
+}
 function fieldColorRGB(mag, gamma){
   gamma = gamma || 1.0;
   const lv = Math.log10(1 + mag * 8) / 2.2;
   const lc = Math.pow(Math.max(0, Math.min(1, lv)), 1 / Math.max(0.1, gamma));
-  const stops = [[0.05,0,0.3],[0,0.2,1],[0,1,0.8],[0.2,1,0],[1,0.5,0],[1,1,1]];
-  const sv = lc * 5, si = Math.min(Math.floor(sv), 4), sf = sv - si;
-  return [
-    stops[si][0] + sf * (stops[si+1][0] - stops[si][0]),
-    stops[si][1] + sf * (stops[si+1][1] - stops[si][1]),
-    stops[si][2] + sf * (stops[si+1][2] - stops[si][2])
-  ];
+  return rampStopRGB(lc);
 }
 // Same ramp as fieldColorRGB, formatted as an rgba() string at the given alpha.
 function fieldColorCSS(mag, alpha, gamma){
@@ -527,13 +533,41 @@ function renderArrows(){
   }
   ctx.restore();
 }
-// Tracer layer: draw each trail as a fading polyline. Two passes per segment,
-// a wide dim glow under a thin bright core, give the additive bloom look.
+// Tracer bucket tables. Each trail segment carries a color level (field
+// magnitude) and a fade level (trail position times age). Both quantize into a
+// small grid, so all segments that share a bucket stroke as one path. The blend
+// is additive, and additive sum is order-independent, so the batch draws the
+// same result as per-segment strokes. Color and width per bucket stay constant
+// across frames, so the loop below precomputes them once.
+const TR_NC=16, TR_NA=10;              // color levels, fade levels
+const _trGlowStyle=[], _trCoreStyle=[]; // [fade][color] rgba strings
+const _trGlowW=[], _trCoreW=[];         // [fade] line widths
+for(let a=0;a<TR_NA;a++){
+  const a0=(a+0.5)/TR_NA;
+  _trGlowW[a]=Math.max(1,5*a0);
+  _trCoreW[a]=Math.max(0.5,1.8*a0);
+  _trGlowStyle[a]=[]; _trCoreStyle[a]=[];
+  for(let c=0;c<TR_NC;c++){
+    const [r,g,b]=rampStopRGB(c/(TR_NC-1));
+    _trGlowStyle[a][c]=`rgba(${(r*a0*0.12*255)|0},${(g*a0*0.12*255)|0},${(b*a0*0.12*255)|0},1)`;
+    _trCoreStyle[a][c]=`rgba(${(r*a0*0.55*255)|0},${(g*a0*0.55*255)|0},${(b*a0*0.55*255)|0},1)`;
+  }
+}
+// One Path2D per bucket, reused each frame. _trUsed lists the buckets that got
+// segments, so the stroke loop touches only non-empty buckets.
+const _trPaths=new Array(TR_NC*TR_NA).fill(null);
+const _trUsed=[];
+
+// Tracer layer: sort every trail segment into a color/fade bucket, then stroke
+// each bucket once. A wide dim glow pass under a thin bright core pass gives the
+// additive bloom look. Draw calls per frame stay bounded by the bucket count,
+// so they do not grow with the tracer count.
 function renderTracers(){
   ctx.save();
   ctx.globalCompositeOperation='lighter'; // additive blend — matches THREE.AdditiveBlending
   ctx.lineCap='round';
 
+  _trUsed.length=0;
   for(const tr of tracers){
     const tl=tr.trail.length;if(tl<2)continue;
     // Age alpha: fast fade-in, slow sustain, fade-out in last 20%
@@ -543,26 +577,39 @@ function renderTracers(){
                : 1;
 
     for(let s=0;s<tl-1;s++){
-      const pt=tr.trail[s], pn=tr.trail[s+1];
-      // Trail alpha: head bright, tail dim (0.25× at tail end, matching orbital viewer)
+      // Trail alpha: head bright, tail dim. Quantize to a fade level.
       const a0 = (1 - s / SIM.tracerTrail) * ageA;
-      const a1 = (1 - (s+1) / SIM.tracerTrail) * ageA * 0.25;
       if(a0 < 0.01) continue;
+      let aIdx=(a0*TR_NA)|0; if(aIdx>=TR_NA)aIdx=TR_NA-1;
 
+      // Color level from field magnitude, shaped like fieldColorRGB (gamma 1).
+      const pt=tr.trail[s], pn=tr.trail[s+1];
       const Bmag = pt[2] || 0;
-      const [r,g,b] = fieldColorRGB(Bmag);
+      let lc=Math.log10(1+Bmag*8)/2.2; if(lc<0)lc=0; else if(lc>1)lc=1;
+      let cIdx=(lc*TR_NC)|0; if(cIdx>=TR_NC)cIdx=TR_NC-1;
 
-      // Glow pass: wider, dimmer line underneath for bloom effect
-      ctx.strokeStyle = `rgba(${(r*a0*0.12*255)|0},${(g*a0*0.12*255)|0},${(b*a0*0.12*255)|0},1)`;
-      ctx.lineWidth = Math.max(1, 5 * a0);
-      ctx.beginPath(); ctx.moveTo(pt[0],pt[1]); ctx.lineTo(pn[0],pn[1]); ctx.stroke();
-
-      // Core pass: bright, thin — color multiplied by alpha like vertex colors
-      ctx.strokeStyle = `rgba(${(r*a0*0.55*255)|0},${(g*a0*0.55*255)|0},${(b*a0*0.55*255)|0},1)`;
-      ctx.lineWidth = Math.max(0.5, 1.8 * a0);
-      ctx.beginPath(); ctx.moveTo(pt[0],pt[1]); ctx.lineTo(pn[0],pn[1]); ctx.stroke();
+      const bi=cIdx*TR_NA+aIdx;
+      let p=_trPaths[bi];
+      if(!p){ p=_trPaths[bi]=new Path2D(); _trUsed.push(bi); }
+      p.moveTo(pt[0],pt[1]); p.lineTo(pn[0],pn[1]);
     }
   }
+
+  // Glow pass: wider, dimmer line under each bucket for the bloom.
+  for(const bi of _trUsed){
+    const aIdx=bi%TR_NA, cIdx=(bi/TR_NA)|0;
+    ctx.strokeStyle=_trGlowStyle[aIdx][cIdx]; ctx.lineWidth=_trGlowW[aIdx];
+    ctx.stroke(_trPaths[bi]);
+  }
+  // Core pass: bright, thin line over each bucket.
+  for(const bi of _trUsed){
+    const aIdx=bi%TR_NA, cIdx=(bi/TR_NA)|0;
+    ctx.strokeStyle=_trCoreStyle[aIdx][cIdx]; ctx.lineWidth=_trCoreW[aIdx];
+    ctx.stroke(_trPaths[bi]);
+  }
+  // Release this frame's paths so the next frame starts each bucket empty.
+  for(const bi of _trUsed) _trPaths[bi]=null;
+
   ctx.restore();
 }
 // Magnet layer: translate and rotate into each body's frame, dispatch to the
