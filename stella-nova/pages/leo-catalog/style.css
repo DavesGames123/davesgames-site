@@ -183,6 +183,7 @@
 
   /* ── Left panel ── */
   #leftpanel {
+    position: fixed;
     top: 52px; left: 8px; width: 260px;
     max-height: calc(100vh - 220px);
     overflow-y: auto;
@@ -244,6 +245,7 @@
 
   /* ── Right panel (object info) ── */
   #rightpanel {
+    position: fixed;
     top: 52px; right: 8px; width: 320px;
     max-height: calc(100vh - 220px);
     overflow-y: auto;
