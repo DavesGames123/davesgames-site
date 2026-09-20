@@ -53,16 +53,17 @@ button{font-family:inherit;color:inherit;cursor:pointer;border:none;background:n
 .lg-grn{background:rgba(100,200,100,0.6);border:1px solid var(--green)}
 
 /* ---------- map ---------- */
-#map{flex:1;min-height:0;width:100%;background:#0b0f16;z-index:1}
-.leaflet-container{background:#0b0f16;font-family:'JetBrains Mono',monospace}
+#map{flex:1;min-height:0;width:100%;background:#eae6df;z-index:1}
+.leaflet-container{background:#eae6df;font-family:'JetBrains Mono',monospace}
 .leaflet-control-attribution{font-size:9px!important;background:rgba(10,12,17,0.7)!important;color:#7f96b3!important}
 .leaflet-control-attribution a{color:#96c8ff!important}
 .leaflet-bar a{background:var(--card)!important;color:var(--text)!important;border-color:var(--border-b)!important}
 .leaflet-bar a:hover{background:var(--card2)!important}
 
 /* sector center label */
-.slab{font:600 10px/1 'JetBrains Mono',monospace;color:rgba(255,255,255,0.9);
-  text-shadow:0 1px 2px rgba(0,0,0,0.85);pointer-events:none;white-space:nowrap;text-align:center}
+.slab{font:700 10px/1 'JetBrains Mono',monospace;color:#12203a;
+  text-shadow:0 0 2px #fff,0 0 3px #fff,0 1px 1px rgba(255,255,255,0.95);
+  pointer-events:none;white-space:nowrap;text-align:center}
 
 /* pin marker */
 .pin{width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,0.6);

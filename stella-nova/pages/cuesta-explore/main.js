@@ -155,8 +155,10 @@ function setPin(id,s){ s=clampS(s); if(id[0]==='p') STATE.pinS[+id.slice(1)]=s; 
 function buildMap(){
   map = L.map('map',{ zoomControl:true, attributionControl:true, tap:true })
         .fitBounds([[GRID.south,GRID.west],[GRID.north,GRID.east]]);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    maxZoom:19, attribution:'&copy; OpenStreetMap contributors'
+  // Carto Voyager: a bright, Google-style street basemap. No API key needed.
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',{
+    subdomains:'abcd', maxZoom:20,
+    attribution:'&copy; OpenStreetMap contributors &copy; CARTO'
   }).addTo(map);
   drawSectors();
   drawPins();
