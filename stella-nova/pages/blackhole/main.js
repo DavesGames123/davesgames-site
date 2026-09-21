@@ -60,6 +60,9 @@ const FS = await (await fetch(new URL('shaders/raytracer.frag.glsl', document.ba
 const canvas=document.getElementById('c');
 const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
 if(!gl){document.body.innerHTML='<h1 style="color:red;padding:2em">WebGL 2 required</h1>';throw '';}
+// The tab shell removes this iframe on a page swap. Drop the context so the
+// browser does not run out of live WebGL contexts during heavy swapping.
+window.addEventListener('pagehide',function(){try{if(gl)gl.getExtension('WEBGL_lose_context').loseContext();}catch(e){}});
 // Compile one shader stage; log and return null on a compile error.
 function compile(src,type){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
 if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s));return null;}return s;}

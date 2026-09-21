@@ -182,6 +182,9 @@ const chk={};for(const[k,c]of Object.entries(C_))chk[k]=c.v;
 // WebGL2 context on the one canvas; the page needs instancing and float work.
 const canvas=document.getElementById('gl');
 const gl=canvas.getContext('webgl2',{antialias:false,alpha:false});
+// The tab shell removes this iframe on a page swap. Drop the context so the
+// browser does not run out of live WebGL contexts during heavy swapping.
+window.addEventListener('pagehide',function(){try{if(gl)gl.getExtension('WEBGL_lose_context').loseContext();}catch(e){}});
 // Compile + link a program from vertex and fragment source; log any error.
 function mkP(vs,fs){const cs=(s,t)=>{const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);
   if(!gl.getShaderParameter(o,gl.COMPILE_STATUS))console.error('SHADER ERR:',gl.getShaderInfoLog(o));return o;};

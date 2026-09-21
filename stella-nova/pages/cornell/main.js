@@ -329,6 +329,9 @@ var DISP='';
 function makeGPU(cv){
   var gl=null; try{ gl=cv.getContext('webgl2',{antialias:false,preserveDrawingBuffer:false}); }catch(e){}
   if(!gl) return null;
+  // The tab shell removes this iframe on a page swap. Drop the context so the
+  // browser does not run out of live WebGL contexts during heavy swapping.
+  window.addEventListener('pagehide',function(){try{if(gl)gl.getExtension('WEBGL_lose_context').loseContext();}catch(e){}});
   var CBF=gl.getExtension('EXT_color_buffer_float'); gl.getExtension('EXT_color_buffer_half_float'); gl.getExtension('OES_texture_float_linear');
   var IF=CBF?gl.RGBA32F:gl.RGBA16F, TY=CBF?gl.FLOAT:gl.HALF_FLOAT;
   // Compile one shader; a compile error is surfaced through the page overlay.

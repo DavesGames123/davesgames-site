@@ -437,6 +437,9 @@ function makeNoiseTex(){var S=256,data=new Uint8Array(S*S*4),s=48271;for(var i=0
   dbg('3:device');
   // Open a logical device for creating resources.
   var device=await adapter.requestDevice();
+  // The tab shell removes this iframe on a page swap. Release the device so
+  // the renderer does not run out of GPU memory during heavy swapping.
+  window.addEventListener('pagehide',function(){try{device.destroy();}catch(e){}});
   dbg('4:shader');
   var format=navigator.gpu.getPreferredCanvasFormat();
   // Compile the WGSL module and surface any compile errors before continuing.

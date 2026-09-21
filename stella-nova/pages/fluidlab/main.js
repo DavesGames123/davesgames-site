@@ -68,6 +68,9 @@ await Promise.all(["shaders/quad.vert.glsl","shaders/bilerp.frag.glsl","shaders/
 // rendered frame; no depth/stencil since everything is full-screen 2D passes.
 const canvas=document.getElementById('sim-canvas');const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,depth:false,stencil:false,preserveDrawingBuffer:true,powerPreference:'high-performance'});
 if(!gl){alert('WebGL2 required');throw new Error('No WebGL2');}
+// The tab shell removes this iframe on a page swap. Drop the context so the
+// browser does not run out of live WebGL contexts during heavy swapping.
+window.addEventListener('pagehide',function(){try{if(gl)gl.getExtension('WEBGL_lose_context').loseContext();}catch(e){}});
 
 // Enable float render targets and probe whether float/half-float textures can
 // be linearly filtered; the sim needs renderable float textures for velocity

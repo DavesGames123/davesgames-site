@@ -651,6 +651,9 @@ function initGL() {
   var c = document.getElementById('gl-canvas');
   gl = c.getContext('webgl', { antialias: false, premultipliedAlpha: false });
   if (!gl) return;
+  // The tab shell removes this iframe on a page swap. Drop the context so the
+  // browser does not run out of live WebGL contexts during heavy swapping.
+  window.addEventListener('pagehide', function () { try { if (gl) gl.getExtension('WEBGL_lose_context').loseContext(); } catch (e) {} });
 
   var vs = compileShader(gl.VERTEX_SHADER, document.getElementById('vs-quad').textContent);
   var fs = compileShader(gl.FRAGMENT_SHADER, document.getElementById('fs-pbr').textContent);

@@ -147,6 +147,9 @@ function computePoly() {
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2', { antialias: false, alpha: false });
 if (!gl) { document.body.innerHTML = '<h1 style="color:#fff;padding:40px">WebGL2 required</h1>'; throw 'no gl'; }
+// The tab shell removes this iframe on a page swap. Drop the context so the
+// browser does not run out of live WebGL contexts during heavy swapping.
+window.addEventListener('pagehide', function () { try { if (gl) gl.getExtension('WEBGL_lose_context').loseContext(); } catch (e) {} });
 
 const VERT = SH['shaders/raymarch.vert.glsl'];
 

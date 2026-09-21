@@ -48,6 +48,9 @@ const canvas=document.getElementById('gl');
 // the shader shades every pixel itself and MSAA on a single quad buys nothing.
 const gl=canvas.getContext('webgl2',{alpha:false,antialias:false});
 if(!gl){document.body.innerHTML='<p style="color:#fff;padding:2em">WebGL 2 required</p>';throw 0;}
+// The tab shell removes this iframe on a page swap. Drop the context so the
+// browser does not run out of live WebGL contexts during heavy swapping.
+window.addEventListener('pagehide',function(){try{if(gl)gl.getExtension('WEBGL_lose_context').loseContext();}catch(e){}});
 
 // Parameter table. One row per slider: k=state key and uniform suffix (u_<k>),
 // l=label, min/max/step/def=range and default, sec=starts a new labelled group.

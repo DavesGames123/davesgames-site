@@ -230,6 +230,9 @@ async function initGPU(){
   if(!navigator.gpu){document.getElementById('no-webgpu').style.display='flex';return null}
   var a=await navigator.gpu.requestAdapter();if(!a){document.getElementById('no-webgpu').style.display='flex';return null}
   var dv=await a.requestDevice();dv.lost.then(function(i){showErr('Lost: '+i.message)});
+  // The tab shell removes this iframe on a page swap. Release the device so
+  // the renderer does not run out of GPU memory during heavy swapping.
+  window.addEventListener('pagehide',function(){try{dv.destroy();}catch(e){}});
   var cv=document.getElementById('c'),cx=cv.getContext('webgpu');if(!cx){showErr('No ctx');return null}
   var fm=navigator.gpu.getPreferredCanvasFormat(),dp=Math.min(devicePixelRatio,2);
   cv.width=innerWidth*dp;cv.height=innerHeight*dp;cx.configure({device:dv,format:fm,alphaMode:'premultiplied'});

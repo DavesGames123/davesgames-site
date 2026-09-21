@@ -63,6 +63,9 @@ const stage=document.getElementById('stage');
 const overlay=document.getElementById('pathOverlay');
 const octx=overlay.getContext('2d');
 const gl=canvas.getContext('webgl2',{antialias:false,alpha:false,powerPreference:'high-performance'});
+// The tab shell removes this iframe on a page swap. Drop the context so the
+// browser does not run out of live WebGL contexts during heavy swapping.
+window.addEventListener('pagehide',function(){try{if(gl)gl.getExtension('WEBGL_lose_context').loseContext();}catch(e){}});
 
 // Session state: camera mode and playback, render scaling, the two clocks that
 // drive terrain evolution, the seed, the planned flight loop and traversal

@@ -55,6 +55,9 @@ const STAR_FS = await (await fetch(new URL('shaders/star.frag.glsl', document.ba
 const canvas = document.getElementById('c');
 const gl = canvas.getContext('webgl2', { antialias:false, alpha:false, powerPreference:'high-performance' });
 if (!gl) { document.body.innerHTML='<h1 style="color:red;padding:2em">WebGL 2 required</h1>'; throw ''; }
+// The tab shell removes this iframe on a page swap. Drop the context so the
+// browser does not run out of live WebGL contexts during heavy swapping.
+window.addEventListener('pagehide', function () { try { if (gl) gl.getExtension('WEBGL_lose_context').loseContext(); } catch (e) {} });
 
 // Compile a vertex + fragment pair into a linked program. Compile and link
 // errors are logged, not thrown, so a bad shader shows in the console.

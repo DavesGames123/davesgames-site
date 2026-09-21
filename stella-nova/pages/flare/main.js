@@ -74,6 +74,9 @@ function makeInst(canvasId) {
   var canvas = document.getElementById(canvasId);
   var gl = canvas.getContext('webgl2', {antialias:false});
   if (!gl) return null;
+  // The tab shell removes this iframe on a page swap. Drop the context so the
+  // browser does not run out of live WebGL contexts during heavy swapping.
+  window.addEventListener('pagehide', function () { try { if (gl) gl.getExtension('WEBGL_lose_context').loseContext(); } catch (e) {} });
 
   function mkShader(type, src) {
     var s = gl.createShader(type);
