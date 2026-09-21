@@ -173,6 +173,12 @@ export async function bootTable(PAGE, data) {
   let device;
   try { const adapter = await navigator.gpu.requestAdapter(); device = await adapter.requestDevice(); }
   catch (e) { $('nogpu').hidden = false; $('fps').textContent = 'no WebGPU device'; return; }
+  // The tab shell swaps pages by removing this iframe. Removal fires pagehide,
+  // so a handler here releases the device and stops the loop. Without it every
+  // swap orphans a live device and the renderer runs out of GPU memory.
+  let torn = false;
+  const teardown = () => { if (torn) return; torn = true; try { device.destroy(); } catch (_) {} };
+  addEventListener('pagehide', teardown);
   const format = navigator.gpu.getPreferredCanvasFormat();
   function makeSurface(canvas) {
     const ctx = canvas.getContext('webgpu'); ctx.configure({ device, format, alphaMode: 'opaque', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING });
@@ -186,10 +192,18 @@ export async function bootTable(PAGE, data) {
   try { await PAGE.init(ctx); } catch (e) { $('fps').textContent = 'init failed: ' + String(e.message || e).slice(0, 80); console.error(e); return; }
 
   // ---------------------------------------------------------- frame loop
+  // ANIM_CAP bounds how many tiles run the animated redraw in one frame. A
+  // mouse sweep leaves many tiles easing out at once. Each tile owns its own
+  // canvas, so an overrun frame lets neighbours present out of step, which
+  // reads as flicker. Hovered and inspected tiles always draw; the easing-out
+  // overflow holds its last frame until the budget frees.
+  const ANIM_CAP = 12;
   let fpsT = 0, frames = 0;
   function frame() {
+    if (torn) return;
     requestAnimationFrame(frame);
     const dt = tickSignals(); const now = sigT;
+    let animBudget = ANIM_CAP;
     frames++; if (now - fpsT > 1) { $('fps').textContent = `${Math.round(frames / (now - fpsT))} FPS · ${tiles.filter(t => t.pipeline).length}/${tiles.length}`; fpsT = now; frames = 0; }
     if (PAGE.tick) { if (PAGE.tick(dt, now) === true) globalDirty = true; }
     const dpr = Math.min(devicePixelRatio || 1, 3);
@@ -205,7 +219,12 @@ export async function bootTable(PAGE, data) {
       const rect = t.canvas.getBoundingClientRect(); if (rect.width < 1) continue;
       // a resized canvas comes back blank, so a size change is a reason to draw on its own
       const resized = sizeSurf(t.surf, rect, dpr);
-      if (!(moving || t.dirty || globalDirty || resized)) continue;
+      const mustDraw = t.dirty || globalDirty || resized;
+      if (!mustDraw) {
+        if (!moving) continue;
+        const priority = t.hover || inspected === t;   // what the pointer is on draws every frame
+        if (!priority) { if (animBudget <= 0) continue; animBudget--; }
+      }
       PAGE.draw(enc, t, t.surf, rect, dpr, dt, now, moving); t.dirty = false; any = true;
     }
     globalDirty = false;
