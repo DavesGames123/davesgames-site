@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Refraction Table // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   REFRACTION TABLE  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the pack, the noise pack and the spec. It
+   hands them to the shared table-engine. The engine builds the sidebar and the
+   frame loop and drives page.js. Each cell runs one WGSL fragment shader: an
+   analytic rounded-rect SDF, a vector-Snell bezel, per-channel dispersion,
+   frost, tint, rim and sheen rings, and a depth shadow. The optics follow
+   quick-liquid (MIT).
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet (from the old style block)
+     3. main.js      type=module; fetches the pack, the noise pack and the spec, then boots
+
+   LAYOUT  (the leading hash marks an element id)
+     topbar (hidden in the site shell iframe through .in-frame)
+     #stage grid of cells; #modal inspector
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Refraction Table</span></div>
+  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+</div>
+<div id="side">
+  <div class="side-head"><div class="big">glass</div><div class="sub">|18 studies · 3 families⟩</div></div>
+  <div class="legend"><span class="f-material"><i></i>Materials</span><span class="f-optics"><i></i>Optics</span><span class="f-shape"><i></i>Shape & light</span></div>
+  
+<div class="sec"><div class="sec-lbl">Backdrop</div>
+  <div class="thumbs" id="thumbs"></div>
+  <div class="mini">click a thumbnail · drop an image here or <label style="color:var(--yellow);cursor:pointer">choose one<input type="file" id="upload" accept="image/*" hidden></label></div>
+</div>
+<div class="sec"><button class="chip on" id="appearance" type="button">◐ backdrop reads as dark</button><div class="mini">the appearance pass: rim and sheen intensity follow the backdrop luminance; the drop shadow becomes a cool halo on dark</div></div>
+  <div id="gens"></div>
+  <div class="sec"><div class="sec-lbl">Palette</div><div class="swatches"><label class="swatch"><span>Ink</span><input type="color" id="sw-ink" value="#0e1118"></label><label class="swatch"><span>Tone</span><input type="color" id="sw-tone" value="#5a8cc0"></label><label class="swatch"><span>Cream</span><input type="color" id="sw-cream" value="#e8ecf4"></label></div></div>
+  <div class="sec"><button class="chip on" id="hoveronly" type="button" aria-pressed="true">◉ animate on hover only</button></div>
+  <div class="fps" id="fps"></div>
+</div>
+<div id="nogpu" class="nogpu" hidden>WebGPU is not available in this browser, so the table cannot render. Chrome, Edge, and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
+<div id="stage"><div id="table"><div class="cell f-material" role="button" tabindex="0" id="tile-default" aria-label="default: the default material: 3 px frost, 22 px rim lensing, 34 px bezel, 24 px slab, n = 1.5"><canvas></canvas><span class="orb-status"></span><span class="tag">default</span></div><div class="cell f-material" role="button" tabindex="0" id="tile-clear" aria-label="clear: clear — transparent, strong lensing (2 px frost, 26 px strength, 36 px bezel)"><canvas></canvas><span class="orb-status"></span><span class="tag">clear</span></div><div class="cell f-material" role="button" tabindex="0" id="tile-thin" aria-label="thin: thin — 6 px frost, 18 px strength, 26 px bezel"><canvas></canvas><span class="orb-status"></span><span class="tag">thin</span></div><div class="cell f-material" role="button" tabindex="0" id="tile-regular" aria-label="regular: regular — frosted, softer lensing (14 px frost, 16 px strength)"><canvas></canvas><span class="orb-status"></span><span class="tag">regular</span></div><div class="cell f-material" role="button" tabindex="0" id="tile-thick" aria-label="thick: thick — 22 px frost, 12 px strength, 28 px bezel"><canvas></canvas><span class="orb-status"></span><span class="tag">thick</span></div><div class="cell f-material" role="button" tabindex="0" id="tile-ultra" aria-label="ultra: ultra — 30 px frost, 10 px strength, the heaviest frost"><canvas></canvas><span class="orb-status"></span><span class="tag">ultra</span></div><div class="cell f-optics" role="button" tabindex="0" id="tile-lens_only" aria-label="lens_only: refraction alone: no frost, tint, rings or shadow — the displacement field on its own"><canvas></canvas><span class="orb-status"></span><span class="tag">lens only</span></div><div class="cell f-optics" role="button" tabindex="0" id="tile-high_index" aria-label="high_index: n = 2.2: the same bezel bends light much further (Δ grows with n)"><canvas></canvas><span class="orb-status"></span><span class="tag">high index</span></div><div class="cell f-optics" role="button" tabindex="0" id="tile-low_index" aria-label="low_index: n = 1.15: barely more than air — the lens almost disappears"><canvas></canvas><span class="orb-status"></span><span class="tag">low index</span></div><div class="cell f-optics" role="button" tabindex="0" id="tile-wide_bezel" aria-label="wide_bezel: a 70 px bezel on a 44 px slab: the bend spreads deep into the element"><canvas></canvas><span class="orb-status"></span><span class="tag">wide bezel</span></div><div class="cell f-optics" role="button" tabindex="0" id="tile-knife_bezel" aria-label="knife_bezel: a 10 px bezel: all the bending in a thin bright band at the rim"><canvas></canvas><span class="orb-status"></span><span class="tag">knife bezel</span></div><div class="cell f-optics" role="button" tabindex="0" id="tile-dispersion" aria-label="dispersion: chromatic aberration at 1.0 with 30 px strength: R, G, B refract at 0.90×, 1×, 1.14×"><canvas></canvas><span class="orb-status"></span><span class="tag">dispersion</span></div><div class="cell f-shape" role="button" tabindex="0" id="tile-pill" aria-label="pill: a capsule: bezel clamped to half the height, so it becomes a full dome with no ridge"><canvas></canvas><span class="orb-status"></span><span class="tag">pill</span></div><div class="cell f-shape" role="button" tabindex="0" id="tile-circle" aria-label="circle: a disc: the dome case in the round"><canvas></canvas><span class="orb-status"></span><span class="tag">circle</span></div><div class="cell f-shape" role="button" tabindex="0" id="tile-sharp" aria-label="sharp: 6 px corners: the corner-circle branch of the SDF nearly vanishes"><canvas></canvas><span class="orb-status"></span><span class="tag">sharp</span></div><div class="cell f-shape" role="button" tabindex="0" id="tile-light_side" aria-label="light_side: light from 90°: the two rim lobes swing to the sides"><canvas></canvas><span class="orb-status"></span><span class="tag">light side</span></div><div class="cell f-shape" role="button" tabindex="0" id="tile-light_page" aria-label="light_page: the light-backdrop pass: luminance 0.8 drives brighter rims and a grey drop shadow"><canvas></canvas><span class="orb-status"></span><span class="tag">light page</span></div><div class="cell f-shape" role="button" tabindex="0" id="tile-map" aria-label="map: the displacement map the engine would rasterize: R = dx, G = dy, neutral grey at 128"><canvas></canvas><span class="orb-status"></span><span class="tag">map</span></div></div></div>
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <div class="sheet-side">
+      <canvas id="m-orb" width="220" height="220"></canvas>
+      <h3 id="m-name"></h3><div class="fn" id="m-fn"></div><p id="m-species"></p><div id="m-knobs"></div>
+    </div>
+    <div class="sheet-main">
+      <div class="sheet-head"><span class="lbl" id="m-src-lbl">WGSL</span><button class="panel-btn" id="m-copy" type="button">Copy function</button><button class="panel-btn" id="m-copy-pack" type="button">Copy library</button><button class="panel-btn" id="m-close" type="button">Close ✕</button></div>
+      <pre id="m-src" tabindex="0"></pre>
+    </div>
+  </div>
+</div>
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
