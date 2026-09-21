@@ -287,6 +287,9 @@ import { loadShaders } from '../../lib/shaders.js';
   if (navigator.gpu) { try { const adapter = await navigator.gpu.requestAdapter(); device = await adapter.requestDevice(); } catch (e) { device = null; } }
   if (!device) { $('nogpu').hidden = false; $('fps').textContent = 'no WebGPU'; }
   else {
+    // The tab shell removes this iframe on a page swap. Release the device so
+    // the renderer does not run out of GPU memory during heavy swapping.
+    window.addEventListener('pagehide', () => { try { device.destroy(); } catch (e) {} });
     format = navigator.gpu.getPreferredCanvasFormat();
     bgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }, { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: {} }, { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }] });
     layout = device.createPipelineLayout({ bindGroupLayouts: [bgl] });
