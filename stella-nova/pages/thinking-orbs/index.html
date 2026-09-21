@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thinking Orbs // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   THINKING ORBS  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js loads the pack and the spec. It hands them to the
+   shared table-engine. The engine builds the sidebar and the frame loop and
+   drives page.js. Each cell computes dots as instanced sprites in the vertex
+   shader: orbits, globe, rubik, wave, ribbon and morph, at the 64 px and 20 px
+   presets and the fine base profiles. The forms follow RareFormLabs'
+   thinking-orbs (MIT).
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet (from the old style block)
+     3. main.js      type=module; fetches the pack and the spec, then boots
+
+   LAYOUT  (the leading hash marks an element id)
+     topbar (hidden in the site shell iframe through .in-frame)
+     #stage grid of cells; #modal inspector
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Thinking Orbs</span></div>
+  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+</div>
+<div id="side">
+  <div class="side-head"><div class="big">thinking</div><div class="sub">|6 modes · 64 · 20 · fine⟩</div></div>
+  <div class="legend"><span class="f-avatar"><i></i>64 px preset</span><span class="f-inline"><i></i>20 px preset</span><span class="f-fine"><i></i>fine profile</span></div>
+  <div class="sec"><div class="mini">the six thinking-orbs states at their two shipped presets (64 px chat-avatar, 20 px inline), magnified to the cell, plus the fine 300 pt profiles they were tuned from · dots are instanced sprites computed in the vertex shader</div></div>
+  <div id="gens"></div>
+  <div class="sec"><div class="sec-lbl">Palette</div><div class="swatches"><label class="swatch"><span>Ink</span><input type="color" id="sw-ink" value="#0e1118"></label><label class="swatch"><span>Tone</span><input type="color" id="sw-tone" value="#5a8cc0"></label><label class="swatch"><span>Cream</span><input type="color" id="sw-cream" value="#e8ecf4"></label></div></div>
+  <div class="sec"><button class="chip on" id="hoveronly" type="button" aria-pressed="true">◉ animate on hover only</button></div>
+  <div class="fps" id="fps"></div>
+</div>
+<div id="nogpu" class="nogpu" hidden>WebGPU is not available in this browser, so the table cannot render. Chrome, Edge, and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
+<div id="stage"><div id="table"><div class="cell f-avatar round" role="button" tabindex="0" id="tile-working_64" aria-label="working_64: particles on tilted orbits — ghost paths and the particles doing the work · the 64 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">working 64</span></div><div class="cell f-avatar round" role="button" tabindex="0" id="tile-searching_64" aria-label="searching_64: a lat/long dot field; a scan meridian sweeps it as a size ripple · the 64 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">searching 64</span></div><div class="cell f-avatar round" role="button" tabindex="0" id="tile-solving_64" aria-label="solving_64: bands twist in quarter turns: scramble, then replay in reverse to solved · the 64 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">solving 64</span></div><div class="cell f-avatar round" role="button" tabindex="0" id="tile-listening_64" aria-label="listening_64: a waveform rolls through the rings, two tempi that never quite repeat · the 64 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">listening 64</span></div><div class="cell f-avatar round" role="button" tabindex="0" id="tile-composing_64" aria-label="composing_64: an undulating sash of parallel strands rides a great circle · the 64 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">composing 64</span></div><div class="cell f-avatar round" role="button" tabindex="0" id="tile-shaping_64" aria-label="shaping_64: a dotted outline cycling circle → triangle → square, evenly spaced throughout · the 64 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">shaping 64</span></div><div class="cell f-inline round" role="button" tabindex="0" id="tile-working_20" aria-label="working_20: particles on tilted orbits — ghost paths and the particles doing the work · the 20 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">working 20</span></div><div class="cell f-inline round" role="button" tabindex="0" id="tile-searching_20" aria-label="searching_20: a lat/long dot field; a scan meridian sweeps it as a size ripple · the 20 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">searching 20</span></div><div class="cell f-inline round" role="button" tabindex="0" id="tile-solving_20" aria-label="solving_20: bands twist in quarter turns: scramble, then replay in reverse to solved · the 20 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">solving 20</span></div><div class="cell f-inline round" role="button" tabindex="0" id="tile-listening_20" aria-label="listening_20: a waveform rolls through the rings, two tempi that never quite repeat · the 20 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">listening 20</span></div><div class="cell f-inline round" role="button" tabindex="0" id="tile-composing_20" aria-label="composing_20: an undulating sash of parallel strands rides a great circle · the 20 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">composing 20</span></div><div class="cell f-inline round" role="button" tabindex="0" id="tile-shaping_20" aria-label="shaping_20: a dotted outline cycling circle → triangle → square, evenly spaced throughout · the 20 px preset, magnified"><canvas></canvas><span class="orb-status"></span><span class="tag">shaping 20</span></div><div class="cell f-fine round" role="button" tabindex="0" id="tile-orbits_fine" aria-label="orbits_fine: particles on tilted orbits — ghost paths and the particles doing the work · the inkform fine profile at 300 pt"><canvas></canvas><span class="orb-status"></span><span class="tag">orbits fine</span></div><div class="cell f-fine round" role="button" tabindex="0" id="tile-globe_fine" aria-label="globe_fine: a lat/long dot field; a scan meridian sweeps it as a size ripple · the inkform fine profile at 300 pt"><canvas></canvas><span class="orb-status"></span><span class="tag">globe fine</span></div><div class="cell f-fine round" role="button" tabindex="0" id="tile-rubik_fine" aria-label="rubik_fine: bands twist in quarter turns: scramble, then replay in reverse to solved · the inkform fine profile at 300 pt"><canvas></canvas><span class="orb-status"></span><span class="tag">rubik fine</span></div><div class="cell f-fine round" role="button" tabindex="0" id="tile-wave_fine" aria-label="wave_fine: a waveform rolls through the rings, two tempi that never quite repeat · the inkform fine profile at 300 pt"><canvas></canvas><span class="orb-status"></span><span class="tag">wave fine</span></div><div class="cell f-fine round" role="button" tabindex="0" id="tile-ribbon_fine" aria-label="ribbon_fine: an undulating sash of parallel strands rides a great circle · the inkform fine profile at 300 pt"><canvas></canvas><span class="orb-status"></span><span class="tag">ribbon fine</span></div><div class="cell f-fine round" role="button" tabindex="0" id="tile-morph_fine" aria-label="morph_fine: a dotted outline cycling circle → triangle → square, evenly spaced throughout · the inkform fine profile at 300 pt"><canvas></canvas><span class="orb-status"></span><span class="tag">morph fine</span></div></div></div>
+<div id="modal" role="dialog" aria-modal="true" aria-labelledby="m-name">
+  <div class="sheet">
+    <div class="sheet-side">
+      <canvas id="m-orb" width="220" height="220"></canvas>
+      <h3 id="m-name"></h3><div class="fn" id="m-fn"></div><p id="m-species"></p><div id="m-knobs"></div>
+    </div>
+    <div class="sheet-main">
+      <div class="sheet-head"><span class="lbl" id="m-src-lbl">WGSL</span><button class="panel-btn" id="m-copy" type="button">Copy function</button><button class="panel-btn" id="m-copy-pack" type="button">Copy library</button><button class="panel-btn" id="m-close" type="button">Close ✕</button></div>
+      <pre id="m-src" tabindex="0"></pre>
+    </div>
+  </div>
+</div>
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
