@@ -100,6 +100,44 @@ fn v_wind(p: vec2f, t: f32, k: vec4f) -> vec2f { let g1 = grad_fbm(p * 1.5, t * 
 fn v_sine_flow(p: vec2f, t: f32, k: vec4f) -> vec2f { let a = mix(1.0, 4.0, k.x); return vec2f(sin(p.y * a * PI + t * 0.5), sin(p.x * a * PI - t * 0.4)) * 0.5; }
 fn v_abc_slice(p: vec2f, t: f32, k: vec4f) -> vec2f { let A = 1.0; let B = mix(0.4, 1.2, k.x); let C = mix(0.4, 1.2, k.y); let z = t * 0.2; let q = p * PI; return vec2f(A * sin(z) + C * cos(q.y), B * sin(q.x) + A * cos(z)) * 0.3; }
 
+// —— more potential flow ————————————————————————————————————————————————————
+fn v_stagnation(p: vec2f, t: f32, k: vec4f) -> vec2f { return rot2(k.y * PI) * (vec2f(p.x, -p.y) * mix(0.4, 1.5, k.x)); }
+fn v_source_vortex(p: vec2f, t: f32, k: vec4f) -> vec2f { let r = max(length(p), 0.05); return (p * mix(0.2, 1.0, k.x) + vec2f(-p.y, p.x) * mix(0.3, 1.5, k.y)) / r; }
+fn v_vortex_street(p: vec2f, t: f32, k: vec4f) -> vec2f {
+    var v = vec2f(0.0);
+    for (var i: i32 = -2; i <= 2; i++) {
+        let even = (i & 1) == 0;
+        let cx = f32(i) * 0.5 - t * mix(0.0, 0.3, k.y);
+        let dd = p - vec2f(cx, select(-0.16, 0.16, even));
+        v += select(-1.0, 1.0, even) * vec2f(-dd.y, dd.x) / max(dot(dd, dd), 0.02);
+    }
+    return v * mix(0.05, 0.2, k.x) + vec2f(mix(0.0, 0.6, k.z), 0.0);
+}
+fn v_rankine_halfbody(p: vec2f, t: f32, k: vec4f) -> vec2f { let r2 = max(dot(p, p), 0.01); return vec2f(mix(0.3, 1.0, k.y), 0.0) + p / r2 * mix(0.2, 0.8, k.x); }
+fn v_channel(p: vec2f, t: f32, k: vec4f) -> vec2f { return vec2f((1.0 - p.y * p.y) * mix(0.5, 1.6, k.x), 0.0); }
+fn v_couette(p: vec2f, t: f32, k: vec4f) -> vec2f { return vec2f(p.y * mix(0.5, 1.6, k.x) + mix(0.0, 0.5, k.y), 0.0); }
+fn v_stokeslet(p: vec2f, t: f32, k: vec4f) -> vec2f { let f = rot2(k.y * TAU) * vec2f(1.0, 0.0); let r = max(length(p), 0.06); let rh = p / r; return (f * (-log(r)) + rh * dot(f, rh)) * mix(0.1, 0.4, k.x); }
+fn v_jet(p: vec2f, t: f32, k: vec4f) -> vec2f { let env = exp(-p.y * p.y * mix(3.0, 12.0, k.z)); return vec2f(mix(0.4, 1.4, k.x) * env, cos(p.x * mix(2.0, 6.0, k.y) * PI + t * 0.6) * 0.4 * env); }
+fn v_double_vortex(p: vec2f, t: f32, k: vec4f) -> vec2f { let pa = p - vec2f(-0.35, 0.0); let pb = p - vec2f(0.35, 0.0); let s = mix(0.3, 1.2, k.x); return s * (vec2f(-pa.y, pa.x) / max(dot(pa, pa), 0.02) + vec2f(-pb.y, pb.x) / max(dot(pb, pb), 0.02)); }
+fn v_source_sink(p: vec2f, t: f32, k: vec4f) -> vec2f { let pa = p - vec2f(-0.4, 0.0); let pb = p - vec2f(0.4, 0.0); return (pa / max(dot(pa, pa), 0.02) - pb / max(dot(pb, pb), 0.02)) * mix(0.1, 0.5, k.x); }
+
+// —— more physics ————————————————————————————————————————————————————————————
+fn v_orbit(p: vec2f, t: f32, k: vec4f) -> vec2f { let c = vec2f(cos(t * 0.3), sin(t * 0.3)) * mix(0.0, 0.4, k.y); let d = p - c; let r = max(length(d), 0.06); return (-d / (r * r * r) + vec2f(-d.y, d.x) / r * mix(0.0, 1.5, k.x)) * 0.1; }
+fn v_charged_ring(p: vec2f, t: f32, k: vec4f) -> vec2f { let r = length(p); let R = mix(0.3, 0.6, k.x); return normalize(p + vec2f(1e-4)) * (r - R) * mix(1.0, 3.0, k.y); }
+fn v_two_body(p: vec2f, t: f32, k: vec4f) -> vec2f { let ph = t * 0.4; let c1 = vec2f(cos(ph), sin(ph)) * 0.35; let d1 = c1 - p; let d2 = -c1 - p; let e = mix(0.02, 0.15, k.y); return (d1 / pow(dot(d1, d1) + e * e, 1.5) + d2 / pow(dot(d2, d2) + e * e, 1.5)) * 0.05 * mix(0.5, 1.5, k.x); }
+
+// —— more phase portraits —————————————————————————————————————————————————————
+fn v_spiral(p: vec2f, t: f32, k: vec4f) -> vec2f { let a = mix(-0.6, 0.3, k.x); let w = mix(0.5, 2.0, k.y); return vec2f(a * p.x - w * p.y, w * p.x + a * p.y); }
+fn v_limit_cycle(p: vec2f, t: f32, k: vec4f) -> vec2f { let r = length(p); let R = mix(0.3, 0.7, k.x); let rh = p / max(r, 1e-3); return (rh * (R - r) * mix(1.0, 3.0, k.y) + vec2f(-rh.y, rh.x) * mix(0.5, 1.5, k.z)) * 0.8; }
+fn v_selkov(p: vec2f, t: f32, k: vec4f) -> vec2f { let x = (p.x + 1.0) * 1.5; let y = (p.y + 1.0) * 1.5; let a = mix(0.05, 0.15, k.x); let b = mix(0.4, 1.0, k.y); return vec2f(-x + a * y + x * x * y, b - a * y - x * x * y) * 0.4; }
+fn v_brusselator(p: vec2f, t: f32, k: vec4f) -> vec2f { let x = (p.x + 1.0) * 1.5; let y = (p.y + 1.0) * 1.5; let A = mix(0.5, 1.5, k.x); let B = mix(1.5, 3.5, k.y); return vec2f(A - (B + 1.0) * x + x * x * y, B * x - x * x * y) * 0.3; }
+fn v_fitzhugh_ph(p: vec2f, t: f32, k: vec4f) -> vec2f { let vv = p.x * 2.0; let w = p.y * 2.0; let a = mix(0.5, 0.9, k.x); let eps = mix(0.05, 0.2, k.y); return vec2f(vv - vv * vv * vv / 3.0 - w, eps * (vv + a)) * 0.6; }
+fn v_pitchfork(p: vec2f, t: f32, k: vec4f) -> vec2f { let r = mix(-0.5, 0.5, k.x); return vec2f(r * p.x - p.x * p.x * p.x, -p.y) * mix(0.5, 1.5, k.y); }
+
+// —— more noise-driven ————————————————————————————————————————————————————————
+fn v_perlin_curl(p: vec2f, t: f32, k: vec4f) -> vec2f { let g = grad_fbm(p * mix(0.8, 2.5, k.x), t * 0.05 * k.y, 53u); return vec2f(g.y, -g.x) * 0.5; }
+fn v_turbulent(p: vec2f, t: f32, k: vec4f) -> vec2f { let g = grad_fbm(abs(p) * mix(1.0, 4.0, k.x), t * 0.1 * k.y, 59u); return vec2f(g.y, -g.x) * 0.4; }
+
 // ═══════════════════════════════════════════════════════════ the runtime
 struct Particle { p: vec2f, v: vec2f }
 @group(0) @binding(0) var<uniform> u: FieldU;
