@@ -48,6 +48,17 @@ initControls();
 if (await initGPU(STYLES, PACK)) {
   initInspector(PACK);
 
+  // The tab shell removes this iframe on a page swap, which fires pagehide.
+  // Release the device and stop the loop there. Without it every swap orphans
+  // a live device and the renderer runs out of GPU memory.
+  let torn = false;
+  addEventListener('pagehide', () => { if (torn) return; torn = true; try { device.destroy(); } catch (_) {} });
+
+  // ANIM_CAP bounds how many tiles run the animated redraw in one frame. A
+  // mouse sweep leaves many tiles easing out at once, and each tile owns its
+  // own canvas, so an overrun frame lets neighbours present out of step. That
+  // reads as flicker. The hovered tile always draws; the overflow holds.
+  const ANIM_CAP = 12;
   let fpsT = 0, frames = 0, prev = { scale: 1, gain: 1, ink: '', tone: '', cream: '' };
   function fill(t, surf, rect, dpr) {
     const d = surf.data;
@@ -65,8 +76,10 @@ if (await initGPU(STYLES, PACK)) {
     pass.setPipeline(t.pipeline); pass.setBindGroup(0, surf.bind); pass.draw(3); pass.end();
   }
   function frame() {
+    if (torn) return;
     requestAnimationFrame(frame);
     const dt = tickSignals(); const now = sigTime();
+    let animBudget = ANIM_CAP;
     frames++; if (now - fpsT > 1) { $('fps').textContent = `${Math.round(frames / (now - fpsT))} FPS · ${stats.compiled}/${tiles.length}`; fpsT = now; frames = 0; }
     // global changes redraw everything once
     const key = { scale: G.scale, gain: G.gain, ink: G.ink.join(), tone: G.tone.join(), cream: G.cream.join() };
@@ -81,9 +94,14 @@ if (await initGPU(STYLES, PACK)) {
       const moving = t.rate > 0.002;
       if (moving) t.phase += dt * t.rate * G.tempo;
       if (!t.pipeline) continue;
-      const needs = moving || t.dirty || globalDirty;
+      const mustDraw = t.dirty || globalDirty;
+      const needs = moving || mustDraw;
       if (inspected === t && needs) { drawTo(enc, t, msurf, msurf.canvas.getBoundingClientRect(), dpr); any = true; }
       if (!visible.has(t) || !needs) continue;
+      if (!mustDraw) {
+        const priority = t.hover || inspected === t;   // what the pointer is on draws every frame
+        if (!priority) { if (animBudget <= 0) continue; animBudget--; }
+      }
       const rect = t.canvas.getBoundingClientRect(); if (rect.width < 1) continue;
       drawTo(enc, t, t.surf, rect, dpr); t.dirty = false; any = true;
     }
