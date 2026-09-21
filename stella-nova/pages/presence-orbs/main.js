@@ -84,7 +84,13 @@ if (await initGPU(STYLES, PACKS)) {
     const pass = enc.beginRenderPass({ colorAttachments: [{ view: surf.ctx.getCurrentTexture().createView(), clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }] });
     pass.setPipeline(t.pipeline); pass.setBindGroup(0, surf.bind); pass.draw(3); pass.end();
   }
+  // The tab shell removes this iframe on a page swap, which fires pagehide.
+  // Release the device and stop the loop there. Without it every swap orphans
+  // a live device and the renderer runs out of GPU memory.
+  let torn = false;
+  addEventListener('pagehide', () => { if (torn) return; torn = true; try { device.destroy(); } catch (_) {} });
   function frame() {
+    if (torn) return;
     requestAnimationFrame(frame);
     const now = clock();
     let dt = Math.min(Math.max(now - last, 0), 0.25); last = now;
