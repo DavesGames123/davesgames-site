@@ -138,7 +138,9 @@ fn corner(uv: vec2f) -> vec2f { return vec2f(uv.x + 0.5, 1.0 - uv.y); }
 // spread along y (>1 reaches further down, <1 stays tight).
 fn diffCorner(c: vec2f, cond: f32, aniso: f32) -> f32 {
     let d = c * vec2f(1.0, 1.0 / max(aniso, 0.05));
-    return exp(-length(d) / max(cond, 0.02));
+    // reach boosted x1.9 and given a gentler tail (pow < 1) so the heat spreads
+    // much further and more strongly across the plate
+    return exp(-pow(length(d) / (max(cond, 0.02) * 1.9), 0.82));
 }
 fn hotspot(uv: vec2f, c: vec2f, r: f32) -> f32 { let d = uv - c; return exp(-dot(d, d) / max(r * r, 1e-4)); }
 fn metalSparks(uv: vec2f, t: f32, density: f32, speed: f32, seed: u32) -> f32 {
@@ -156,17 +158,52 @@ fn metalSparks(uv: vec2f, t: f32, density: f32, speed: f32, seed: u32) -> f32 {
     return s;
 }
 
-// ── the finisher ────────────────────────────────────────────────────────────
+// ── color and the finisher ──────────────────────────────────────────────────
+// An artistic hot-metal emission ramp. Blackbody-informed but hand-tuned for a
+// pleasing curve: deep ember red, red-orange, orange, gold, pale, white. No
+// hard step anywhere, so there is no glow barrier.
+fn heatColor(x: f32) -> vec3f {
+    let t = clamp(x, 0.0, 1.0);
+    var c = mix(vec3f(0.06, 0.0, 0.0), vec3f(0.55, 0.03, 0.01), smoothstep(0.0, 0.18, t));
+    c = mix(c, vec3f(0.95, 0.14, 0.02), smoothstep(0.15, 0.36, t));
+    c = mix(c, vec3f(1.0, 0.42, 0.07), smoothstep(0.33, 0.54, t));
+    c = mix(c, vec3f(1.0, 0.74, 0.26), smoothstep(0.5, 0.72, t));
+    c = mix(c, vec3f(1.0, 0.94, 0.72), smoothstep(0.68, 0.88, t));
+    c = mix(c, vec3f(1.0, 1.0, 1.0), smoothstep(0.86, 1.0, t));
+    return c;
+}
+// tonemap so highlights roll off smoothly (extended Reinhard, white point w)
+fn shoulder(c: vec3f, w: f32) -> vec3f { return c * (1.0 + c / (w * w)) / (1.0 + c); }
+
 fn metalPresent(heat: f32, surf: f32, uv: vec2f, sparkField: f32) -> vec4f {
-    let T = clamp(heat * u.energy, 0.0, 1.4);
-    let Tc = clamp(T, 0.0, 1.0);
-    let tempK = mix(700.0, 6800.0, Tc);
-    let emit = blackbody(tempK) * smoothstep(0.06, 0.42, T) * (0.12 + 1.5 * T);
-    let cold = u.ink.rgb * (0.5 + 0.75 * surf);
-    var col = cold * (1.0 - smoothstep(0.32, 0.95, T)) + emit;
-    let sparkVis = sparkField * smoothstep(0.5, 0.85, T);
-    col += blackbody(mix(2400.0, 6500.0, Tc)) * sparkVis * (0.8 + 1.1 * u.glow);
-    return vec4f(clamp(col, vec3f(0.0), vec3f(1.7)), 1.0);
+    let hot = clamp(heat * u.energy, 0.0, 1.6);
+    let hc = clamp(hot, 0.0, 1.0);
+    // emissive color: the artistic ramp nudged a little toward true blackbody
+    let emCol = mix(heatColor(hot), blackbody(mix(900.0, 6800.0, hc)), 0.28);
+    let sss = pow(hc, 0.55);   // broad, soft inner spread — the subsurface term
+    let core = hc * hc;        // tight bright core
+    // cold metal is ALWAYS present (never cut out), so the glow adds over it and
+    // there is no barrier ring
+    var col = u.ink.rgb * (0.42 + 0.7 * surf);
+    // subsurface: a warm bleed glowing up from inside the metal, felt even faint
+    col += vec3f(0.85, 0.26, 0.07) * pow(sss, 1.35) * 0.6;
+    // the glow itself: a broad soft halo plus the bright core
+    col += emCol * (0.5 * sss + 1.4 * core);
+    // sparks, colored at the top of the ramp
+    let sparkVis = sparkField * smoothstep(0.3, 0.72, hot);
+    col += heatColor(1.0) * sparkVis * (0.9 + 1.2 * u.glow);
+    // bloom on the very hottest, scaled by the Glow control
+    col += emCol * max(hot - 0.8, 0.0) * 0.7 * u.glow;
+    return vec4f(clamp(shoulder(col, 2.4), vec3f(0.0), vec3f(1.4)), 1.0);
+}
+// oxide (tempering) finisher: keeps the temper palette but gives it the same
+// inner glow, so the film reads as lit from within toward the hot end
+fn oxidePresent(x: f32, surf: f32) -> vec4f {
+    let xc = clamp(x, 0.0, 1.0);
+    var col = temperColor(xc) * (0.5 + 0.7 * surf);
+    col += temperColor(xc) * (xc * xc) * 0.55;                 // inner luminosity
+    col += vec3f(0.5, 0.18, 0.06) * pow(xc, 3.0) * 0.45;       // faint warm bleed
+    return vec4f(clamp(shoulder(col, 2.2), vec3f(0.0), vec3f(1.3)), 1.0);
 }
 `;
 
@@ -381,35 +418,35 @@ C('residual', 'quench', 'only a faint residual warmth left at the corner', ['con
 C('temper_rings', 'oxide', 'tempering rings radiating from the hot corner', ['reach', 'noise', '', ''],
  `  let c = corner(uv); let surf = brushed(uv, mix(40.0, 80.0, k.y), 0.1, 0.8);
   let x = clamp(1.0 - length(c) / mix(0.4, 1.0, k.x), 0.0, 1.0) * u.energy;
-  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+  return oxidePresent(x, surf);`);
 C('temper_grow', 'oxide', 'temper colors climbing outward as it heats', ['reach', 'rate', '', ''],
  `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
   let grow = 0.4 + 0.6 * (0.5 + 0.5 * sin(t * mix(0.3, 0.9, k.y)));
   let x = clamp(1.0 - length(c) / (mix(0.4, 0.9, k.x) * grow), 0.0, 1.0);
-  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+  return oxidePresent(x, surf);`);
 C('heat_tint_corner', 'oxide', 'a weld heat-tint fanning from the corner', ['reach', 'width', '', ''],
  `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.6, 0.8);
   let x = clamp(1.0 - length(c) * mix(1.5, 3.0, k.y), 0.0, 1.0);
-  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+  return oxidePresent(x, surf);`);
 C('bluing_corner', 'oxide', 'gun-bluing deepening toward the hot corner', ['reach', 'depth', '', ''],
  `  let c = corner(uv); let surf = brushed(uv, mix(50.0, 80.0, k.x), 0.1, 0.8);
   let x = clamp(1.0 - length(c) / mix(0.5, 1.1, k.y), 0.0, 1.0) * 0.9 + 0.1;
-  return vec4f(clamp(temperColor(x) * (0.4 + 0.6 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+  return oxidePresent(x, surf);`);
 C('temper_grain', 'oxide', 'tempering colors following the grain from the corner', ['reach', 'angle', '', ''],
  `  let ang = mix(0.0, 1.2, k.y); let surf = brushed(uv, 70.0, ang, 0.9);
   let c = rot2(ang) * corner(uv) * vec2f(1.0, 0.45);
   let x = clamp(1.0 - length(c) / mix(0.4, 0.9, k.x), 0.0, 1.0);
-  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+  return oxidePresent(x, surf);`);
 C('temper_marble', 'oxide', 'oxide tempering marbled around the corner', ['scale', 'flow', '', ''],
  `  var c = corner(uv); c += vec2f(fbm(c * mix(2.0, 4.0, k.x) + t * 0.03, 4, 33u), fbm(c * 2.0 + 5.2, 4, 41u)) * mix(0.15, 0.4, k.y);
   let surf = brushed(uv, 55.0, 0.1, 0.8);
   let x = clamp(1.0 - length(c) / 0.7, 0.0, 1.0);
-  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+  return oxidePresent(x, surf);`);
 C('temper_bands', 'oxide', 'banded tempering colors stepping out from the corner', ['reach', 'bands', '', ''],
  `  let c = corner(uv); let surf = brushed(uv, 70.0, 0.1, 0.9);
   let x = clamp(1.0 - length(c) / mix(0.5, 1.0, k.x), 0.0, 1.0);
   let banded = floor(x * mix(4.0, 8.0, k.y)) / mix(4.0, 8.0, k.y);
-  return vec4f(clamp(temperColor(banded) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+  return oxidePresent(banded, surf);`);
 
 // ---------------------------------------------------------------- surface (metal finishes, corner heat glowing through)
 C('brushed_finish', 'surface', 'brushed steel with the corner glowing through the grain', ['freq', 'reach', '', ''],
@@ -449,8 +486,8 @@ const spec = {
   uniform_bytes: 96,
   cells: CELLS.map(([name, family, species, knobs]) => ({ name, family, species, knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'fs_' + name })),
   gens: [
-    { id: 'energy', title: 'Energy · temperature', fn: 'flat', period: 12, amp: 0.4, bias: 0.55, phase: 0,
-      map: 'y => 1.6 * y', unit: "v => (700 + v / 1.6 * 6100).toFixed(0) + ' K'" },
+    { id: 'energy', title: 'Energy · heat drive', fn: 'flat', period: 12, amp: 0.45, bias: 0.6, phase: 0,
+      map: 'y => 2.1 * y', unit: "v => (v * 100).toFixed(0) + '%'" },
     { id: 'tempo', title: 'Tempo · hover speed', fn: 'flat', period: 8, amp: 0.0, bias: 0.5, phase: 0,
       map: 'y => 0.1 + 2.9 * y', unit: "v => v.toFixed(2) + 'x'" },
     { id: 'glow', title: 'Glow · spark bloom', fn: 'flat', period: 10, amp: 0.0, bias: 0.5, phase: 0,
