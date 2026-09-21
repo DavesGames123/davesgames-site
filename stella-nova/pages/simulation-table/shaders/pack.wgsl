@@ -376,3 +376,157 @@ fn cell_state(fp: vec2f) -> vec4f {
     else if (mode == 14) { c = select(pu.ink.rgb, mix(pu.cream.rgb, pu.tone.rgb, clamp(s.y / 3000.0, 0.0, 1.0)), s.x > 0.5); }
     return vec4f(c, 1.0);
 }
+
+// ═══════════════════════════════════════════════════════════ more automata (mode 0)
+// outer-totalistic Life-family rules: same step, different birth/survive sets on the Moore sum
+fn life_step(p: vec2i, bn: f32, sv: f32) {
+    let a = ld(p).x; let v = select(bn, sv, a > 0.5);
+    textureStore(dst, p, vec4f(v, select(0.0, ld(p).y + 1.0, v > 0.5), 0.0, 1.0));
+}
+fn life_seed(p: vec2i) -> bool {
+    if (u.reset > 0.5) { textureStore(dst, p, vec4f(select(0.0, 1.0, rnd(p, u.seed) < mix(0.1, 0.6, u.k.x)), 0.0, 0.0, 1.0)); return true; }
+    return false;
+}
+@compute @workgroup_size(8, 8) fn cs_highlife(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 3.0 || n == 6.0), select(0.0, 1.0, n == 2.0 || n == 3.0));
+}
+@compute @workgroup_size(8, 8) fn cs_daynight(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 3.0 || n == 6.0 || n == 7.0 || n == 8.0), select(0.0, 1.0, n == 3.0 || n == 4.0 || n == 6.0 || n == 7.0 || n == 8.0));
+}
+@compute @workgroup_size(8, 8) fn cs_seeds(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 2.0), 0.0);
+}
+@compute @workgroup_size(8, 8) fn cs_maze(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 3.0), select(0.0, 1.0, n >= 1.0 && n <= 5.0));
+}
+@compute @workgroup_size(8, 8) fn cs_coral(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 3.0), select(0.0, 1.0, n >= 4.0));
+}
+@compute @workgroup_size(8, 8) fn cs_replicator(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    let odd = select(0.0, 1.0, n == 1.0 || n == 3.0 || n == 5.0 || n == 7.0); life_step(p, odd, odd);
+}
+@compute @workgroup_size(8, 8) fn cs_anneal(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 4.0 || n == 6.0 || n == 7.0 || n == 8.0), select(0.0, 1.0, n == 3.0 || n == 5.0 || n == 6.0 || n == 7.0 || n == 8.0));
+}
+@compute @workgroup_size(8, 8) fn cs_gnarl(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    let one = select(0.0, 1.0, n == 1.0); life_step(p, one, one);
+}
+@compute @workgroup_size(8, 8) fn cs_move(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 3.0 || n == 6.0 || n == 8.0), select(0.0, 1.0, n == 2.0 || n == 4.0 || n == 5.0));
+}
+@compute @workgroup_size(8, 8) fn cs_stains(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 3.0 || n == 6.0 || n == 7.0 || n == 8.0), select(0.0, 1.0, n == 2.0 || n == 3.0 || n == 5.0 || n == 6.0 || n == 7.0 || n == 8.0));
+}
+@compute @workgroup_size(8, 8) fn cs_amoeba(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 3.0 || n == 5.0 || n == 7.0), select(0.0, 1.0, n == 1.0 || n == 3.0 || n == 5.0 || n == 8.0));
+}
+@compute @workgroup_size(8, 8) fn cs_diamoeba(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (life_seed(p)) { return; } let n = moore(p, 0);
+    life_step(p, select(0.0, 1.0, n == 3.0 || n == 5.0 || n == 6.0 || n == 7.0 || n == 8.0), select(0.0, 1.0, n >= 5.0));
+}
+
+// ═══════════════════════════════════════════════════════════ more reaction (Gray-Scott regimes, mode 3)
+fn gs_seed(p: vec2i) -> bool {
+    if (u.reset > 0.5) { let c = cen(p); let seed = select(0.0, 1.0, length(c) < 0.04 || rnd(p, u.seed) > 0.996); textureStore(dst, p, vec4f(1.0 - 0.5 * seed, 0.25 * seed, 0.0, 1.0)); return true; }
+    return false;
+}
+fn gs_step(p: vec2i, f: f32, kk: f32) {
+    let s = ld(p); let L = lap8(p); let uvv = s.x * s.y * s.y;
+    let un = s.x + (0.2097 * L.x - uvv + f * (1.0 - s.x));
+    let vn = s.y + (0.1050 * L.y + uvv - (f + kk) * s.y);
+    textureStore(dst, p, vec4f(clamp(un, 0.0, 1.0), clamp(vn, 0.0, 1.0), 0.0, 1.0));
+}
+@compute @workgroup_size(8, 8) fn cs_worms(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (gs_seed(p)) { return; }
+    gs_step(p, mix(0.050, 0.062, u.k.x), mix(0.060, 0.066, u.k.y));
+}
+@compute @workgroup_size(8, 8) fn cs_waves_rd(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (gs_seed(p)) { return; }
+    gs_step(p, mix(0.010, 0.020, u.k.x), mix(0.042, 0.050, u.k.y));
+}
+@compute @workgroup_size(8, 8) fn cs_labyrinth(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (gs_seed(p)) { return; }
+    gs_step(p, mix(0.026, 0.034, u.k.x), mix(0.055, 0.062, u.k.y));
+}
+@compute @workgroup_size(8, 8) fn cs_solitons(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (gs_seed(p)) { return; }
+    gs_step(p, mix(0.028, 0.034, u.k.x), mix(0.058, 0.062, u.k.y));
+}
+@compute @workgroup_size(8, 8) fn cs_holes(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; } if (gs_seed(p)) { return; }
+    gs_step(p, mix(0.036, 0.042, u.k.x), mix(0.056, 0.060, u.k.y));
+}
+// FitzHugh-Nagumo in a spiral-wave regime (mode 9): x = excitation, y = recovery
+@compute @workgroup_size(8, 8) fn cs_bz_spiral(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
+    if (u.reset > 0.5) { let c = cen(p); textureStore(dst, p, vec4f(select(-1.0, 1.0, c.x > 0.0), select(-0.5, 0.5, c.y > 0.0), 0.0, 1.0)); return; }
+    let s = ld(p); let L = lap(p).x; let a = mix(0.5, 0.8, u.k.x); let eps = mix(0.02, 0.08, u.k.y); let b = mix(0.05, 0.2, u.k.z);
+    let un = s.x + (0.16 * L + s.x - s.x * s.x * s.x / 3.0 - s.y) * 0.35;
+    let vn = s.y + eps * (s.x + a - b * s.y) * 0.35;
+    textureStore(dst, p, vec4f(clamp(un, -2.0, 2.0), clamp(vn, -2.0, 2.0), 0.0, 1.0));
+}
+
+// ═══════════════════════════════════════════════════════════ more PDEs
+// Fisher–KPP travelling front (mode 4): logistic growth plus diffusion
+@compute @workgroup_size(8, 8) fn cs_fisher_kpp(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
+    if (u.reset > 0.5) { textureStore(dst, p, vec4f(select(0.0, 1.0, rnd(p, u.seed) > 0.992), 0.0, 0.0, 1.0)); return; }
+    let s = ld(p).x; let L = lap(p).x; let v = clamp(s + mix(0.05, 0.2, u.k.x) * L + mix(0.05, 0.3, u.k.y) * s * (1.0 - s), 0.0, 1.0);
+    textureStore(dst, p, vec4f(v, 0.0, 0.0, 1.0));
+}
+// Allen–Cahn phase separation (mode 9): a double-well potential coarsens the domains
+@compute @workgroup_size(8, 8) fn cs_allen_cahn(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
+    if (u.reset > 0.5) { textureStore(dst, p, vec4f(rnd(p, u.seed) * 2.0 - 1.0, 0.0, 0.0, 1.0)); return; }
+    let s = ld(p).x; let L = lap(p).x; let eps = mix(0.5, 1.8, u.k.x);
+    let v = clamp(s + 0.1 * (eps * L - (s * s * s - s)), -1.5, 1.5);
+    textureStore(dst, p, vec4f(v, 0.0, 0.0, 1.0));
+}
+// viscous Burgers equation (mode 9): nonlinear steepening plus diffusion
+@compute @workgroup_size(8, 8) fn cs_burgers(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
+    if (u.reset > 0.5) { textureStore(dst, p, vec4f(rnd(vec2i(p.x / 6, p.y / 6), u.seed) * 2.0 - 1.0, 0.0, 0.0, 1.0)); return; }
+    let c = ld(p).x; let gx = (ld(p + vec2i(1, 0)).x - ld(p - vec2i(1, 0)).x) * 0.5; let gy = (ld(p + vec2i(0, 1)).x - ld(p - vec2i(0, 1)).x) * 0.5;
+    let v = clamp(c + 0.1 * (mix(0.05, 0.2, u.k.x) * lap(p).x - c * (gx + gy)), -2.0, 2.0);
+    textureStore(dst, p, vec4f(v, 0.0, 0.0, 1.0));
+}
+// telegraph / damped wave (mode 9): the wave equation with a loss term; x = now, y = before
+@compute @workgroup_size(8, 8) fn cs_telegraph(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
+    if (u.reset > 0.5) { textureStore(dst, p, vec4f(0.0, 0.0, 0.0, 1.0)); return; }
+    let s = ld(p); let L = lap(p).x; var v = 2.0 * s.x - s.y + mix(0.05, 0.4, u.k.x) * L - mix(0.0, 0.09, u.k.y) * (s.x - s.y);
+    let r = rnd(vec2i(i32(u.frame), 0), u.seed); let drop = vec2f(rnd(vec2i(i32(u.frame), 1), u.seed), rnd(vec2i(i32(u.frame), 2), u.seed)) - 0.5;
+    if (r < mix(0.01, 0.08, u.k.z) && length(cen(p) - drop) < 0.02) { v += 0.8; }
+    textureStore(dst, p, vec4f(v, s.x, 0.0, 1.0));
+}
+// Perona–Malik anisotropic diffusion (mode 4): diffusion that stops at edges
+@compute @workgroup_size(8, 8) fn cs_perona_malik(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
+    if (u.reset > 0.5) { textureStore(dst, p, vec4f(rnd(vec2i(p.x / 8, p.y / 8), u.seed), 0.0, 0.0, 1.0)); return; }
+    let c = ld(p).x; let K = mix(0.05, 0.3, u.k.y); var flux = 0.0;
+    var dirs = array<vec2i, 4>(vec2i(1, 0), vec2i(-1, 0), vec2i(0, 1), vec2i(0, -1));
+    for (var i: i32 = 0; i < 4; i++) { let d = ld(p + dirs[i]).x - c; flux += d / (1.0 + (d / K) * (d / K)); }
+    let v = clamp(c + mix(0.05, 0.22, u.k.x) * flux * 0.25, 0.0, 1.0);
+    textureStore(dst, p, vec4f(v, 0.0, 0.0, 1.0));
+}
+// complex Ginzburg–Landau (mode 9): amplitude-limited spirals and defect turbulence; x = Re, y = Im
+@compute @workgroup_size(8, 8) fn cs_ginzburg_landau(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
+    if (u.reset > 0.5) { textureStore(dst, p, vec4f(rnd(p, u.seed) * 2.0 - 1.0, rnd(p, u.seed + 3.0) * 2.0 - 1.0, 0.0, 1.0)); return; }
+    let s = ld(p); let re = s.x; let im = s.y; let a2 = re * re + im * im;
+    let al = mix(0.0, 1.4, u.k.x); let be = mix(-1.4, 1.4, u.k.y); let L = lap(p);
+    let ren = re + 0.1 * (re + (L.x - al * L.y) - a2 * (re - be * im));
+    let imn = im + 0.1 * (im + (L.y + al * L.x) - a2 * (im + be * re));
+    textureStore(dst, p, vec4f(clamp(ren, -2.0, 2.0), clamp(imn, -2.0, 2.0), 0.0, 1.0));
+}
