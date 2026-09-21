@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RandomA11y // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   RANDOMA11Y  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   An accessible-pair generator. The page rolls two random hex colors and keeps
+   the pairs that pass a contrast gate. Each pair gets a WCAG 2 ratio and an
+   APCA Lc score. A reference panel prints the running algorithm, the two
+   contrast formulas, and the source credits.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts        Google Fonts stylesheet (absolute)
+     2. style.css    the page stylesheet
+     3. main.js      type=module; imports contrast.js and drives the page
+
+   FILE MAP
+     contrast.js  the pair math, no DOM: randomHex, wcagRatio, apcaLc, generatePair
+     main.js      the UI: state, render, the roll loop, and the reference panel
+     style.css    the page stylesheet
+
+   LAYOUT  (the leading hash marks an element id)
+     topbar (hidden in the site shell iframe through .in-frame)
+     #preview the pair sample; #metrics WCAG and APCA cards; #reference the code
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+<div class="grid-bg"></div>
+<div class="topbar">
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">RandomA11y</span></div>
+  <div class="topbar-r">SYS // <strong>ACCESSIBLE PAIRS</strong></div>
+</div>
+
+<main id="wrap">
+
+  <section id="preview" aria-label="color pair sample">
+    <div class="pv-glyph">Aa</div>
+    <p class="pv-line">The quick brown fox jumps over the lazy dog. 0123456789</p>
+    <button type="button" class="pv-btn">Sample button</button>
+    <div class="pv-chips">
+      <button type="button" class="chip" id="chip-bg"><span class="chip-role">background</span><span class="chip-hex" id="hex-bg">#0e1118</span></button>
+      <button type="button" class="chip" id="chip-fg"><span class="chip-role">foreground</span><span class="chip-hex" id="hex-fg">#e8ecf4</span></button>
+    </div>
+  </section>
+
+  <section id="panel">
+    <div class="controls">
+      <button type="button" id="gen" class="btn primary">Generate <kbd>space</kbd></button>
+      <label class="field"><span>Gate</span>
+        <select id="threshold">
+          <option value="wcag-aa">WCAG AA · 4.5</option>
+          <option value="wcag-aaa">WCAG AAA · 7</option>
+          <option value="apca-60">APCA · Lc 60</option>
+          <option value="apca-75">APCA · Lc 75</option>
+        </select>
+      </label>
+      <button type="button" id="swap" class="btn">Swap</button>
+      <button type="button" id="lock-bg" class="btn toggle" aria-pressed="false">Lock bg</button>
+      <button type="button" id="lock-fg" class="btn toggle" aria-pressed="false">Lock fg</button>
+      <button type="button" id="copy" class="btn">Copy pair</button>
+      <span class="tries" id="tries">1 try</span>
+    </div>
+
+    <div id="metrics">
+      <div class="card" id="card-wcag">
+        <div class="card-head"><span class="card-lbl">WCAG 2 contrast</span><span class="card-note" id="wcag-note"></span></div>
+        <div class="card-big" id="wcag-ratio">—</div>
+        <div class="badges">
+          <span class="badge" data-k="aa">AA <em id="b-aa">·</em></span>
+          <span class="badge" data-k="aaa">AAA <em id="b-aaa">·</em></span>
+          <span class="badge" data-k="aal">AA large <em id="b-aal">·</em></span>
+          <span class="badge" data-k="aaal">AAA large <em id="b-aaal">·</em></span>
+        </div>
+      </div>
+      <div class="card" id="card-apca">
+        <div class="card-head"><span class="card-lbl">APCA Lc</span><span class="card-note" id="apca-pol"></span></div>
+        <div class="card-big" id="apca-lc">—</div>
+        <div class="card-band" id="apca-band"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="reference">
+    <h2>Code reference</h2>
+    <p class="ref-intro">The panel prints the functions the page runs. The gate loop rolls random pairs and keeps the first pass.</p>
+    <div class="ref-grid">
+      <div class="ref-block"><div class="ref-head"><span class="ref-lbl">the roll loop</span><button type="button" class="ref-copy" data-src="loop">Copy</button></div><pre id="src-loop" tabindex="0"></pre></div>
+      <div class="ref-block"><div class="ref-head"><span class="ref-lbl">WCAG 2 ratio</span><button type="button" class="ref-copy" data-src="wcag">Copy</button></div><pre id="src-wcag" tabindex="0"></pre></div>
+      <div class="ref-block"><div class="ref-head"><span class="ref-lbl">APCA Lc</span><button type="button" class="ref-copy" data-src="apca">Copy</button></div><pre id="src-apca" tabindex="0"></pre></div>
+    </div>
+    <div class="credits">
+      <span class="credits-lbl">Source</span>
+      <p>The idea and the reject-until-pass loop follow <a href="https://randoma11y.com" target="_blank" rel="noopener">randoma11y.com</a>:
+        <a href="https://github.com/components-ai/randoma11y" target="_blank" rel="noopener">components-ai/randoma11y</a> (the app) and
+        <a href="https://github.com/johno/random-a11y-combo" target="_blank" rel="noopener">johno/random-a11y-combo</a> (the core). Both are MIT.
+        The APCA math follows APCA-W3 0.1.9. The WCAG math follows WCAG 2.</p>
+    </div>
+  </section>
+
+</main>
+
+<script type="module" src="main.js"></script>
+
+</body>
+</html>
