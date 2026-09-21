@@ -272,3 +272,164 @@ fn sobel(uv: vec2f, s: f32) -> vec2f {
     c *= 1.0 - smoothstep(0.3, 0.85, length(uv - 0.5)) * 0.7;
     return done(uv, c);
 }
+
+// ═══════════════════════════════════════════════════════════ more operators
+// —— more blur / focus ————————————————————————————————————————————————————
+@fragment fn fs_box_blur(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let r = mix(0.5, 6.0, u.k.x); var c = vec3f(0.0);
+    for (var y: i32 = -2; y <= 2; y++) { for (var x: i32 = -2; x <= 2; x++) { c += src(uv + vec2f(f32(x), f32(y)) * r * texel()); } }
+    return done(uv, c / 25.0);
+}
+@fragment fn fs_spin_blur(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let d = uv - 0.5; let ang = mix(0.02, 0.3, u.k.x); var c = vec3f(0.0);
+    for (var i: i32 = 0; i < 9; i++) { let a = (f32(i) - 4.0) / 4.0 * ang; c += src(0.5 + rot2(a) * d); }
+    return done(uv, c / 9.0);
+}
+@fragment fn fs_zoom_blur(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let d = uv - 0.5; let amt = mix(0.02, 0.4, u.k.x); var c = vec3f(0.0);
+    for (var i: i32 = 0; i < 9; i++) { let s = 1.0 - amt * f32(i) / 8.0; c += src(0.5 + d * s); }
+    return done(uv, c / 9.0);
+}
+@fragment fn fs_bilateral(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let r = mix(1.0, 4.0, u.k.x); let sc = src(uv); var c = vec3f(0.0); var nrm = 0.0;
+    for (var y: i32 = -2; y <= 2; y++) { for (var x: i32 = -2; x <= 2; x++) {
+        let o = vec2f(f32(x), f32(y)); let s = src(uv + o * r * texel());
+        let ws = exp(-dot(o, o) * 0.3); let dc = s - sc; let wc = exp(-dot(dc, dc) * mix(4.0, 40.0, u.k.y));
+        let w = ws * wc; c += s * w; nrm += w; } }
+    return done(uv, c / max(nrm, 1e-3));
+}
+@fragment fn fs_defocus(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let d = length(uv - 0.5); let r = smoothstep(mix(0.0, 0.4, u.k.y), 0.7, d) * mix(1.0, 8.0, u.k.x);
+    return done(uv, gauss2d(uv, r + 0.001));
+}
+@fragment fn fs_soft_focus(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let sharp = src(uv); let soft = gauss2d(uv, mix(2.0, 8.0, u.k.x));
+    let c = mix(sharp, max(sharp, soft), mix(0.3, 0.9, u.k.y)) + soft * 0.15 * u.k.z;
+    return done(uv, c);
+}
+
+// —— more color ———————————————————————————————————————————————————————————
+@fragment fn fs_levels(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let bl = mix(0.0, 0.4, u.k.x); let wh = mix(0.6, 1.0, u.k.y);
+    return done(uv, clamp((src(uv) - bl) / max(wh - bl, 1e-3), vec3f(0.0), vec3f(1.0)));
+}
+@fragment fn fs_temperature(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let t = mix(-0.3, 0.3, u.k.x);
+    return done(uv, clamp(src(uv) + vec3f(t, 0.0, -t), vec3f(0.0), vec3f(1.0)));
+}
+@fragment fn fs_vibrance(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv); let l = luma(c); let sat = length(c - vec3f(l));
+    let boost = mix(0.0, 2.0, u.k.x) * (1.0 - smoothstep(0.0, 0.5, sat));
+    return done(uv, mix(vec3f(l), c, 1.0 + boost));
+}
+@fragment fn fs_sepia(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let l = luma(src(uv)); let c = mix(u.ink.rgb, u.cream.rgb, l) * vec3f(1.07, 0.99, 0.82);
+    return done(uv, mix(vec3f(l), c, mix(0.3, 1.0, u.k.x)));
+}
+@fragment fn fs_invert(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv); return done(uv, mix(c, 1.0 - c, u.k.x));
+}
+@fragment fn fs_solarize(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv); let th = mix(0.3, 0.7, u.k.x);
+    return done(uv, select(c, 1.0 - c, c > vec3f(th)));
+}
+
+// —— more texture —————————————————————————————————————————————————————————
+@fragment fn fs_scanlines(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let s = 0.5 + 0.5 * sin(uv.y * mix(80.0, 400.0, u.k.x) * PI);
+    return done(uv, src(uv) * mix(1.0, s, mix(0.2, 0.9, u.k.y)));
+}
+@fragment fn fs_stipple(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let sc = mix(120.0, 400.0, u.k.x); let g = floor(uv * sc);
+    let l = luma(src((g + 0.5) / sc)); let ink = step(hash21(g), 1.0 - l);
+    return done(uv, mix(u.cream.rgb, u.ink.rgb, ink));
+}
+@fragment fn fs_mosaic(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let sc = mix(10.0, 50.0, u.k.x); let g = uv * sc;
+    let cell = floor(g); var best = 1e9; var pick = cell;
+    for (var y: i32 = -1; y <= 1; y++) { for (var x: i32 = -1; x <= 1; x++) {
+        let o = cell + vec2f(f32(x), f32(y)); let jit = vec2f(hash21(o), hash21(o + 7.0)); let cc = o + jit;
+        let d = distance(g, cc); if (d < best) { best = d; pick = cc; } } }
+    return done(uv, src(pick / sc));
+}
+@fragment fn fs_crosshatch(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let l = luma(src(uv)); let sc = mix(40.0, 120.0, u.k.x); let th = 0.25; var ink = 0.0;
+    if (l < 0.75) { ink = max(ink, step(fract((uv.x + uv.y) * sc), th)); }
+    if (l < 0.5) { ink = max(ink, step(fract((uv.x - uv.y) * sc), th)); }
+    if (l < 0.25) { ink = max(ink, step(fract(uv.y * sc * 1.4), th)); }
+    return done(uv, mix(u.cream.rgb, u.ink.rgb, ink * mix(0.6, 1.0, u.k.y)));
+}
+@fragment fn fs_dot_screen(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let sc = mix(30.0, 120.0, u.k.x); let ang = u.k.y * PI * 0.5;
+    let q = rot2(ang) * (uv - 0.5) * sc; let g = fract(q) - 0.5;
+    let l = luma(src(uv)); let r = sqrt(max(1.0 - l, 0.0)) * 0.7; let dotm = 1.0 - smoothstep(r - 0.1, r + 0.1, length(g));
+    return done(uv, src(uv) * mix(1.0, mix(0.4, 1.0, dotm), mix(0.5, 1.0, u.k.z)));
+}
+@fragment fn fs_engrave(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let l = luma(src(uv)); let sc = mix(60.0, 220.0, u.k.x);
+    let line = step(1.0 - l, fract(uv.y * sc));
+    return done(uv, mix(u.ink.rgb, u.cream.rgb, line));
+}
+
+// —— more edges ———————————————————————————————————————————————————————————
+@fragment fn fs_laplacian(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let e = texel() * mix(1.0, 3.0, u.k.x);
+    let c = luma(src(uv)) * 4.0 - luma(src(uv + vec2f(e, 0.0))) - luma(src(uv - vec2f(e, 0.0))) - luma(src(uv + vec2f(0.0, e))) - luma(src(uv - vec2f(0.0, e)));
+    let edge = clamp(abs(c) * mix(2.0, 8.0, u.k.y), 0.0, 1.0);
+    return done(uv, mix(u.cream.rgb, u.ink.rgb, edge));
+}
+@fragment fn fs_prewitt(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let e = texel() * mix(1.0, 3.0, u.k.x); var gx = 0.0; var gy = 0.0;
+    for (var i: i32 = -1; i <= 1; i++) {
+        gx += luma(src(uv + vec2f(e, f32(i) * e))) - luma(src(uv + vec2f(-e, f32(i) * e)));
+        gy += luma(src(uv + vec2f(f32(i) * e, e))) - luma(src(uv + vec2f(f32(i) * e, -e))); }
+    let g = clamp(sqrt(gx * gx + gy * gy) * mix(1.0, 4.0, u.k.y), 0.0, 1.0);
+    return done(uv, mix(u.ink.rgb, u.cream.rgb, g));
+}
+@fragment fn fs_cartoon(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let e = texel() * 1.5;
+    let ed = abs(luma(src(uv + vec2f(e, 0.0))) - luma(src(uv - vec2f(e, 0.0)))) + abs(luma(src(uv + vec2f(0.0, e))) - luma(src(uv - vec2f(0.0, e))));
+    let edge = 1.0 - smoothstep(0.05, 0.2, ed * mix(1.0, 4.0, u.k.y));
+    let n = mix(3.0, 8.0, u.k.x); let c = floor(src(uv) * n) / n;
+    return done(uv, c * edge);
+}
+
+// —— more lens ————————————————————————————————————————————————————————————
+@fragment fn fs_pincushion(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let d = uv - 0.5; let r2 = dot(d, d); let k = mix(0.0, 0.8, u.k.x);
+    return done(uv, src(0.5 + d * (1.0 - k * r2)));
+}
+@fragment fn fs_fisheye(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let d = uv - 0.5; let r = length(d) * 2.0; let k = mix(0.5, 2.0, u.k.x);
+    let rr = pow(r, k) * 0.5; let dir = normalize(d + vec2f(1e-5));
+    return done(uv, src(0.5 + dir * rr));
+}
+@fragment fn fs_chromatic_zoom(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let d = uv - 0.5; let amt = mix(0.0, 0.06, u.k.x) * length(d) * 2.0;
+    let r = src(0.5 + d * (1.0 + amt)).r; let g = src(uv).g; let b = src(0.5 + d * (1.0 - amt)).b;
+    return done(uv, vec3f(r, g, b));
+}
+@fragment fn fs_bleach_bypass(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv); let l = luma(c);
+    let blend = mix(c * vec3f(l) * 2.0, 1.0 - 2.0 * (1.0 - c) * (1.0 - vec3f(l)), step(0.5, l));
+    return done(uv, mix(c, blend, mix(0.3, 1.0, u.k.x)));
+}
+@fragment fn fs_dreamy(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv); let soft = gauss2d(uv, mix(3.0, 10.0, u.k.x)); let l = luma(c);
+    return done(uv, mix(c, max(c, soft), 0.6) + soft * smoothstep(0.5, 1.0, l) * mix(0.0, 0.4, u.k.y));
+}
+@fragment fn fs_vhs(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let jit = (hash21(vec2f(floor(uv.y * 200.0), floor(u.time * 12.0))) - 0.5) * mix(0.0, 0.03, u.k.x);
+    let r = src(uv + vec2f(jit + 0.004, 0.0)).r; let g = src(uv + vec2f(jit, 0.0)).g; let b = src(uv + vec2f(jit - 0.004, 0.0)).b;
+    return done(uv, vec3f(r, g, b) * (0.9 + 0.1 * sin(uv.y * 300.0)));
+}
+@fragment fn fs_tonemap(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv) * mix(0.5, 3.0, u.k.x);
+    let m = (c * (2.51 * c + 0.03)) / (c * (2.43 * c + 0.59) + 0.14);
+    return done(uv, clamp(m, vec3f(0.0), vec3f(1.0)));
+}
+@fragment fn fs_thin_film(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv); let l = luma(c); let ph = l * mix(4.0, 16.0, u.k.x) + u.time * 0.4;
+    let tint = 0.5 + 0.5 * cos(vec3f(ph, ph + 2.09, ph + 4.19));
+    return done(uv, mix(c, c * tint * 1.4, mix(0.2, 0.8, u.k.y)));
+}
