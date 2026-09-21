@@ -124,13 +124,13 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .f-effects{--fam:rgba(120,230,200,0.12);--fam-bg:rgba(120,230,200,0.06)}
 
 /* ── metal families (appended by build.mjs) ──────────────────────────────── */
-.f-forge{--fam:rgba(255,120,40,0.14);--fam-bg:rgba(255,120,40,0.06)}
-.f-diffusion{--fam:rgba(255,150,60,0.13);--fam-bg:rgba(255,150,60,0.06)}
-.f-hotspot{--fam:rgba(255,90,40,0.14);--fam-bg:rgba(255,90,40,0.06)}
-.f-gradient{--fam:rgba(255,170,80,0.13);--fam-bg:rgba(255,170,80,0.06)}
-.f-quench{--fam:rgba(120,150,200,0.13);--fam-bg:rgba(120,150,200,0.06)}
-.f-brushed{--fam:rgba(180,190,205,0.12);--fam-bg:rgba(180,190,205,0.06)}
+.f-conduction{--fam:rgba(255,120,40,0.14);--fam-bg:rgba(255,120,40,0.06)}
+.f-transient{--fam:rgba(255,150,60,0.13);--fam-bg:rgba(255,150,60,0.06)}
+.f-anisotropic{--fam:rgba(255,90,40,0.14);--fam-bg:rgba(255,90,40,0.06)}
+.f-defect{--fam:rgba(255,170,80,0.13);--fam-bg:rgba(255,170,80,0.06)}
 .f-spark{--fam:rgba(255,220,140,0.14);--fam-bg:rgba(255,220,140,0.06)}
+.f-quench{--fam:rgba(120,150,200,0.13);--fam-bg:rgba(120,150,200,0.06)}
 .f-oxide{--fam:rgba(150,120,200,0.13);--fam-bg:rgba(150,120,200,0.06)}
+.f-surface{--fam:rgba(180,190,205,0.12);--fam-bg:rgba(180,190,205,0.06)}
 .side-head .big{color:#ff8a3c}
 .legend span{text-transform:capitalize}

@@ -8,18 +8,22 @@
 //  colors. Run with:  node build.mjs
 //
 //  MODEL
-//    A cell computes a heat field (0..1), a brushed-metal surface value and a
-//    spark field, then calls metalPresent. metalPresent turns heat into a
-//    temperature through the Energy generator, colors it by blackbody, blends
-//    the cold metal out as it glows, and adds sparks that only appear once the
-//    metal is hot. The heat fields fake the heat-equation sims single-pass:
-//    diffusing hotspots, gradients, weld points and quench patterns.
+//    Every cell heats from a point source at the TOP-LEFT CORNER. The heat
+//    field is a pointwise conduction function: temperature falls off with
+//    distance from the corner (diffCorner), so a tile reads white-hot at the
+//    corner and fades to cold steel across the plate. A cell also computes a
+//    brushed surface and a spark field, then calls metalPresent, which turns
+//    heat into a temperature through the Energy generator, colors it by
+//    blackbody, blends the cold metal out as it glows, and adds sparks that
+//    appear only where the metal is hot. The 60 cells differ in HOW the heat
+//    conducts from that corner: conductivity, anisotropy, transient growth,
+//    defects that reroute it, sparks, quench and tempering.
 //
 //  GREP MAP (pack.wgsl)
 //    struct MetalU .... uniform block  ·  fn blackbody .. temperature to RGB
 //    fn temperColor ... steel tempering (oxide) ramp
 //    fn brushed ....... anisotropic brushed-metal surface
-//    fn diffuseHeat ... heat-equation-like spreading field
+//    fn corner ........ top-left origin  ·  fn diffCorner .. pointwise conduction
 //    fn metalSparks ... rising sparks  ·  fn metalPresent .. the finisher
 //    @fragment fs_* ... the 60 cells
 // ============================================================================
@@ -30,14 +34,14 @@ import { dirname, join } from 'node:path';
 const DIR = dirname(fileURLToPath(import.meta.url));
 
 const FAM = {
-  forge:     'rgba(255,120,40,0.14)',
-  diffusion: 'rgba(255,150,60,0.13)',
-  hotspot:   'rgba(255,90,40,0.14)',
-  gradient:  'rgba(255,170,80,0.13)',
-  quench:    'rgba(120,150,200,0.13)',
-  brushed:   'rgba(180,190,205,0.12)',
-  spark:     'rgba(255,220,140,0.14)',
-  oxide:     'rgba(150,120,200,0.13)',
+  conduction:  'rgba(255,120,40,0.14)',
+  transient:   'rgba(255,150,60,0.13)',
+  anisotropic: 'rgba(255,90,40,0.14)',
+  defect:      'rgba(255,170,80,0.13)',
+  spark:       'rgba(255,220,140,0.14)',
+  quench:      'rgba(120,150,200,0.13)',
+  oxide:       'rgba(150,120,200,0.13)',
+  surface:     'rgba(180,190,205,0.12)',
 };
 
 const HELPERS = `// ═══════════════════════════════════════════════════════════════════════════
@@ -127,11 +131,14 @@ fn brushed(uv: vec2f, freq: f32, ang: f32, detail: f32) -> f32 {
     let micro = fbm01(p * vec2f(4.0, 44.0), 2, 9u);
     return clamp(0.35 + 0.5 * lines * detail + 0.25 * micro, 0.0, 1.0);
 }
-fn diffuseHeat(uv: vec2f, t: f32, sc: f32, seed: u32) -> f32 {
-    let p = uv * sc;
-    let n = fbm(p, 5, seed);
-    let n2 = fbm(p * 0.5 + vec2f(t * 0.05, -t * 0.04), 3, seed + 3u);
-    return clamp(0.5 + 0.55 * n + 0.3 * n2, 0.0, 1.0);
+// top-left corner as the origin: (0,0) at top-left, (1,1) at bottom-right
+fn corner(uv: vec2f) -> vec2f { return vec2f(uv.x + 0.5, 1.0 - uv.y); }
+// pointwise conduction from the corner: temperature falls off with distance.
+// cond is the conduction length (how far heat reaches); aniso stretches the
+// spread along y (>1 reaches further down, <1 stays tight).
+fn diffCorner(c: vec2f, cond: f32, aniso: f32) -> f32 {
+    let d = c * vec2f(1.0, 1.0 / max(aniso, 0.05));
+    return exp(-length(d) / max(cond, 0.02));
 }
 fn hotspot(uv: vec2f, c: vec2f, r: f32) -> f32 { let d = uv - c; return exp(-dot(d, d) / max(r * r, 1e-4)); }
 fn metalSparks(uv: vec2f, t: f32, density: f32, speed: f32, seed: u32) -> f32 {
@@ -166,286 +173,267 @@ fn metalPresent(heat: f32, surf: f32, uv: vec2f, sparkField: f32) -> vec4f {
 const cells = [];
 const C = (name, family, species, knobs, body) => cells.push([name, family, species, knobs, body]);
 
-// ---------------------------------------------------------------- forge (whole billet heats)
-C('billet', 'forge', 'a billet heating evenly, color climbing the blackbody curve', ['grain', 'noise', '', ''],
- `  let surf = brushed(uv, mix(30.0, 70.0, k.x), 0.1, 0.8);
-  let heat = 0.55 + 0.35 * fbm(uv * 3.0, 4, 3u) * mix(0.3, 1.0, k.y);
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.5, 0.9, 71u));`);
-C('forge_pulse', 'forge', 'the forge pumping: temperature surges with the bellows', ['grain', 'rate', '', ''],
- `  let surf = brushed(uv, mix(30.0, 70.0, k.x), 0.1, 0.8);
-  let pulse = 0.5 + 0.5 * sin(t * mix(0.6, 1.8, k.y) - 1.0);
-  let heat = 0.35 + 0.6 * pulse + 0.1 * fbm(uv * 3.0, 4, 3u);
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.6, 1.0, 71u));`);
-C('bar_stock', 'forge', 'a heated bar, hotter along its length', ['grain', 'noise', '', ''],
- `  let surf = brushed(uv, mix(40.0, 80.0, k.x), 1.5708, 0.9);
-  let bar = smoothstep(0.35, 0.0, abs(uv.y)) * (0.6 + 0.4 * fbm(uv * 4.0, 4, 3u) * mix(0.4, 1.0, k.y));
-  return metalPresent(bar + 0.15, surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
-C('anvil_face', 'forge', 'a work-piece on the anvil, hottest in the middle', ['grain', 'spread', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.05, 0.7);
-  let heat = hotspot(uv, vec2f(0.0, 0.0), mix(0.2, 0.4, k.y)) * 1.1 + 0.1 * fbm(uv * 3.0, 4, 3u);
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.5, 1.0, 71u));`);
-C('crucible', 'forge', 'a crucible glowing near melt, roiling', ['grain', 'roil', '', ''],
- `  let surf = brushed(uv, mix(20.0, 50.0, k.x), 0.0, 0.5);
-  var p = uv * 3.0; p += vec2f(fbm(p + t * 0.2, 3, 5u), fbm(p + 5.0 - t * 0.15, 3, 9u)) * mix(0.3, 1.0, k.y);
-  let heat = 0.7 + 0.4 * fbm(p, 4, 3u);
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.6, 1.1, 71u));`);
-C('ingot', 'forge', 'a cast ingot cooling at the edges, hot at the core', ['grain', 'edge', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
-  let core = 1.0 - smoothstep(0.1, mix(0.4, 0.6, k.y), length(uv));
-  return metalPresent(core * 0.9 + 0.15, surf, uv, metalSparks(uv, t, 0.35, 0.8, 61u));`);
-C('reheat', 'forge', 'metal reheating, the glow sweeping in from a face', ['grain', 'front', '', ''],
- `  let surf = brushed(uv, mix(35.0, 70.0, k.x), 0.1, 0.8);
-  let front = smoothstep(0.5, -0.5, uv.x - (fract(t * 0.15) * 2.0 - 1.0) * mix(0.5, 1.0, k.y));
-  let heat = front * (0.7 + 0.3 * fbm(uv * 3.0, 4, 3u));
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.4, 0.9, 71u));`);
-C('white_hot', 'forge', 'a billet driven to white heat, near sparks', ['grain', 'noise', '', ''],
- `  let surf = brushed(uv, mix(30.0, 70.0, k.x), 0.1, 0.7);
-  let heat = 0.85 + 0.3 * fbm(uv * 3.5, 4, 3u) * mix(0.3, 1.0, k.y);
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.8, 1.2, 71u));`);
+// ---------------------------------------------------------------- conduction (pointwise from top-left)
+C('point_source', 'conduction', 'a point heat source at the top-left, conducting outward', ['conductivity', 'aniso', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 70.0, k.x), 0.1, 0.8);
+  return metalPresent(diffCorner(c, mix(0.15, 0.55, k.x), mix(0.6, 1.6, k.y)), surf, uv, metalSparks(uv, t, 0.5, 0.9, 71u));`);
+C('slow_conductor', 'conduction', 'a poor conductor: heat stays clamped to the corner', ['conductivity', 'grain', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(40.0, 80.0, k.y), 0.1, 0.8);
+  return metalPresent(diffCorner(c, mix(0.08, 0.2, k.x), 1.0), surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
+C('fast_conductor', 'conduction', 'a good conductor: heat reaches deep across the plate', ['conductivity', 'grain', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.y), 0.1, 0.7);
+  return metalPresent(diffCorner(c, mix(0.4, 0.9, k.x), 1.0), surf, uv, metalSparks(uv, t, 0.35, 0.8, 61u));`);
+C('aniso_down', 'conduction', 'heat conducting further down than across', ['conductivity', 'aniso', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 1.5708, 0.8);
+  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.x), mix(1.6, 3.0, k.y)), surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
+C('aniso_right', 'conduction', 'heat conducting further across than down', ['conductivity', 'aniso', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.0, 0.8);
+  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.x), mix(0.6, 0.35, k.y)), surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
+C('sharp_core', 'conduction', 'a sharp hot core with a steep falloff', ['conductivity', 'grain', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(35.0, 70.0, k.y), 0.1, 0.8);
+  let r = length(c); let h = 1.0 / (1.0 + r * r / mix(0.02, 0.1, k.x));
+  return metalPresent(h, surf, uv, metalSparks(uv, t, 0.5, 1.0, 71u));`);
+C('broad_soak', 'conduction', 'heat soaked broadly and evenly from the corner', ['conductivity', 'grain', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.y), 0.1, 0.7);
+  return metalPresent(diffCorner(c, mix(0.6, 1.1, k.x), 1.0) * 1.05, surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
+C('bimetal', 'conduction', 'a seam where conductivity changes across the plate', ['conductivity', 'seam', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
+  let side = step(mix(0.3, 0.7, k.y), c.x);
+  let cond = mix(0.15, 0.5, side);
+  return metalPresent(diffCorner(c, cond, 1.0), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
 
-// ---------------------------------------------------------------- diffusion
-C('spreading', 'diffusion', 'heat spreading through the plate like the heat equation', ['scale', 'flow', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.7);
-  return metalPresent(diffuseHeat(uv, t, mix(2.0, 4.0, k.x), 7u) * mix(0.8, 1.2, k.y), surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
-C('conduction', 'diffusion', 'slow conduction blooming from seeds', ['scale', 'flow', '', ''],
- `  let surf = brushed(uv, mix(40.0, 70.0, k.x), 0.0, 0.8);
-  let h = diffuseHeat(uv, t * 0.5, mix(2.5, 4.5, k.x), 17u);
-  return metalPresent(smoothstep(0.3, 0.9, h) * mix(0.8, 1.2, k.y), surf, uv, metalSparks(uv, t, 0.35, 0.8, 61u));`);
-C('hot_veins', 'diffusion', 'heat running along veins in the metal', ['scale', 'sharp', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.7);
-  let v = 1.0 - abs(fbm(uv * mix(2.5, 5.0, k.x), 5, 21u));
-  return metalPresent(pow(v, mix(2.0, 5.0, k.y)) * 1.2, surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
-C('marbled_heat', 'diffusion', 'heat marbled into the surface', ['scale', 'flow', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.7);
-  var p = uv * mix(2.0, 4.0, k.x); p += vec2f(fbm(p + t * 0.05, 4, 33u), fbm(p + 5.2, 4, 41u)) * mix(0.4, 1.2, k.y);
-  return metalPresent(fbm01(p, 5, 3u), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
-C('creeping_heat', 'diffusion', 'a heat front creeping across cold metal', ['scale', 'speed', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.7);
-  let n = fbm01(vec2f(uv.x * mix(2.0, 5.0, k.x) - t * mix(0.2, 0.6, k.y), uv.y * 3.0), 5, 17u);
-  let front = smoothstep(0.4, 0.7, n);
-  return metalPresent(front * 1.1, surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('cell_diffuse', 'diffusion', 'cellular heat pockets that merge', ['scale', 'flow', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.0, 0.7);
-  let a = diffuseHeat(uv, t, mix(3.0, 5.0, k.x), 5u); let b = diffuseHeat(uv, t + 4.0, mix(3.0, 5.0, k.x) * 1.7, 9u);
-  return metalPresent(mix(a, b, mix(0.3, 0.7, k.y)), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
-C('thermal_wave', 'diffusion', 'a traveling thermal wave through the bar', ['freq', 'speed', '', ''],
- `  let surf = brushed(uv, mix(40.0, 70.0, k.x), 1.5708, 0.8);
-  let n = fbm(uv * 2.0, 4, 7u);
-  let w = 0.5 + 0.5 * sin(uv.x * mix(4.0, 10.0, k.x) - t * mix(1.5, 3.5, k.y) + n * 3.0);
-  return metalPresent(smoothstep(0.4, 0.95, w), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('flux', 'diffusion', 'roiling heat flux across the surface', ['scale', 'roil', '', ''],
- `  let surf = brushed(uv, mix(25.0, 55.0, k.x), 0.1, 0.6);
-  var p = uv * mix(2.5, 4.5, k.x); p += vec2f(fbm(p + t * 0.2, 3, 5u), fbm(p - t * 0.15 + 5.0, 3, 9u)) * mix(0.4, 1.2, k.y);
-  return metalPresent(0.5 + 0.6 * fbm(p, 4, 3u), surf, uv, metalSparks(uv, t, 0.4, 1.0, 71u));`);
+// ---------------------------------------------------------------- transient (the front grows in time)
+C('heating_up', 'transient', 'the metal heating up: the front advances from the corner', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 65.0, k.x), 0.1, 0.8);
+  let grow = smoothstep(0.0, 0.75, fract(t * mix(0.08, 0.22, k.y)));
+  return metalPresent(diffCorner(c, mix(0.06, 0.6, k.x) * grow, 1.0), surf, uv, metalSparks(uv, t, 0.5, 1.0, 71u));`);
+C('reheat_pulse', 'transient', 'the source pulsing: heat breathing out and back', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 65.0, k.x), 0.1, 0.8);
+  let g = 0.4 + 0.6 * (0.5 + 0.5 * sin(t * mix(0.8, 2.2, k.y)));
+  return metalPresent(diffCorner(c, mix(0.15, 0.5, k.x) * g, 1.0), surf, uv, metalSparks(uv, t, 0.5, 1.0, 71u));`);
+C('torch_hold', 'transient', 'a torch held on the corner, flickering hot', ['conductivity', 'flicker', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.7);
+  let fl = 0.85 + 0.15 * sin(t * 7.0 + fbm(uv * 5.0, 2, 9u) * 4.0) * mix(0.3, 1.0, k.y);
+  return metalPresent(diffCorner(c, mix(0.18, 0.5, k.x), 1.0) * fl, surf, uv, metalSparks(uv, t, 0.6, 1.2, 71u));`);
+C('front_advance', 'transient', 'a visible diffusion front sweeping from the corner', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 65.0, k.x), 0.1, 0.8);
+  let rad = fract(t * mix(0.1, 0.3, k.y)) * 1.6;
+  let front = smoothstep(rad, rad - 0.4, length(c));
+  return metalPresent(front * diffCorner(c, mix(0.3, 0.7, k.x), 1.0) * 1.3, surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
+C('ramp_soak', 'transient', 'a slow ramp up to a held soak temperature', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
+  let ph = fract(t * mix(0.05, 0.15, k.y)); let grow = smoothstep(0.0, 0.5, ph) * (1.0 - smoothstep(0.85, 1.0, ph));
+  return metalPresent(diffCorner(c, mix(0.1, 0.55, k.x) * (0.3 + 0.7 * grow), 1.0), surf, uv, metalSparks(uv, t, 0.45, 0.9, 71u));`);
+C('flicker_source', 'transient', 'an unsteady source, its output guttering', ['conductivity', 'gutter', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
+  let gate = 0.5 + 0.5 * sin(t * mix(2.0, 5.0, k.y) + fbm(vec2f(t * 0.8, 0.0), 2, 9u) * 4.0);
+  return metalPresent(diffCorner(c, mix(0.15, 0.5, k.x), 1.0) * mix(0.4, 1.0, gate), surf, uv, metalSparks(uv, t, 0.5, 1.0, 71u));`);
+C('surge', 'transient', 'periodic surges pushing the heat further each beat', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
+  let s = pow(0.5 + 0.5 * sin(t * mix(1.0, 3.0, k.y)), 3.0);
+  return metalPresent(diffCorner(c, mix(0.15, 0.4, k.x) * (0.6 + 1.0 * s), 1.0), surf, uv, metalSparks(uv, t, 0.5, 1.1, 71u));`);
+C('breathing', 'transient', 'the conduction length breathing in and out', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
+  let g = 0.5 + 0.5 * sin(t * mix(0.6, 1.6, k.y));
+  return metalPresent(diffCorner(c, mix(0.12, 0.55, k.x) * (0.5 + g), 1.0), surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
 
-// ---------------------------------------------------------------- hotspot
-C('weld_point', 'hotspot', 'a welding arc point, blindingly hot and sparking', ['size', 'spark', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.7);
-  let h = hotspot(uv, vec2f(0.0, 0.0), mix(0.06, 0.15, k.x)) * 1.6;
-  let sp = metalSparks(uv, t, 0.8, 1.4, 71u) * mix(0.6, 1.3, k.y);
-  return metalPresent(h + 0.1, surf, uv, sp + hotspot(uv, vec2f(0.0), 0.2) * sp);`);
-C('torch', 'hotspot', 'a torch playing over one spot', ['size', 'wander', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.7);
-  let c = vec2f(sin(t * 0.7), cos(t * 0.5)) * mix(0.0, 0.25, k.y);
-  return metalPresent(hotspot(uv, c, mix(0.1, 0.2, k.x)) * 1.4 + 0.08, surf, uv, metalSparks(uv, t, 0.5, 1.1, 71u));`);
-C('twin_welds', 'hotspot', 'two weld points bridging heat between them', ['size', 'gap', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.7);
-  let g = mix(0.15, 0.3, k.y);
-  let h = hotspot(uv, vec2f(-g, 0.0), 0.1) + hotspot(uv, vec2f(g, 0.0), 0.1);
-  return metalPresent(h * 1.4 + 0.08, surf, uv, metalSparks(uv, t, 0.6, 1.2, 71u));`);
-C('drill_point', 'hotspot', 'friction heat under a drill, throwing swarf sparks', ['size', 'spark', '', ''],
- `  let surf = brushed(uv, mix(40.0, 80.0, k.x), t * 2.0, 0.8);
-  let h = hotspot(uv, vec2f(0.0, 0.0), mix(0.05, 0.12, k.x)) * 1.5;
-  return metalPresent(h + 0.1, surf, uv, metalSparks(uv, t, 0.9, 1.6, 71u) * mix(0.6, 1.4, k.y));`);
-C('plasma_cut', 'hotspot', 'a plasma cut streaking a hot line', ['size', 'speed', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.7);
-  let cx = (fract(t * mix(0.1, 0.3, k.y)) * 2.0 - 1.0) * 0.6;
-  let line = exp(-(uv.x - cx) * (uv.x - cx) / mix(0.004, 0.02, k.x));
-  return metalPresent(line * 1.5, surf, uv, metalSparks(uv, t, 0.9, 1.8, 71u) * line);`);
-C('rivet', 'hotspot', 'a rivet heated cherry-red in the middle', ['size', 'noise', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.7);
-  let ring = smoothstep(mix(0.15, 0.3, k.x), 0.0, length(uv));
-  return metalPresent(ring * (0.7 + 0.3 * fbm(uv * 4.0, 4, 3u) * mix(0.3, 1.0, k.y)), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('wandering_arc', 'hotspot', 'an arc wandering and leaving a warm trail', ['size', 'speed', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.7);
-  let c = vec2f(sin(t * mix(0.6, 1.6, k.y)), sin(t * mix(0.4, 1.1, k.y) * 1.3)) * 0.3;
-  let trail = fbm01(uv * 3.0 - vec2f(t * 0.2, 0.0), 4, 5u) * 0.25;
-  return metalPresent(hotspot(uv, c, mix(0.06, 0.13, k.x)) * 1.5 + trail, surf, uv, metalSparks(uv, t, 0.7, 1.3, 71u));`);
-C('cluster', 'hotspot', 'a cluster of hot pits pulsing', ['size', 'rate', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.7);
-  var h = 0.0;
-  for (var i: i32 = 0; i < 4; i++) { let fi = f32(i); let c = vec2f(sin(fi * 2.1), cos(fi * 1.7)) * 0.28; h += hotspot(uv, c, mix(0.05, 0.1, k.x)) * (0.6 + 0.4 * sin(t * mix(1.0, 3.0, k.y) + fi)); }
-  return metalPresent(h * 1.3 + 0.08, surf, uv, metalSparks(uv, t, 0.5, 1.1, 71u));`);
+// ---------------------------------------------------------------- anisotropic (grain-directed conduction)
+C('grain_flow', 'anisotropic', 'heat following the brushed grain out of the corner', ['angle', 'reach', '', ''],
+ `  let ang = mix(0.2, 1.3, k.x); let surf = brushed(uv, 70.0, ang, 0.9);
+  let c = rot2(ang) * corner(uv);
+  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 2.2), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
+C('diagonal_conduct', 'anisotropic', 'conduction stretched along a diagonal', ['angle', 'reach', '', ''],
+ `  let ang = 0.785; let surf = brushed(uv, 60.0, ang, 0.8);
+  let c = rot2(ang) * corner(uv);
+  return metalPresent(diffCorner(c, mix(0.2, 0.5, k.y), mix(1.8, 3.2, k.x)), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
+C('laminated', 'anisotropic', 'a laminated sheet conducting along its layers', ['pitch', 'reach', '', ''],
+ `  let surf = 0.4 + 0.4 * (0.5 + 0.5 * sin(uv.y * mix(20.0, 44.0, k.x)));
+  let c = corner(uv);
+  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 0.35) * (0.6 + 0.5 * surf), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
+C('fiber', 'anisotropic', 'fibrous conduction, streaky along the grain', ['scale', 'reach', '', ''],
+ `  let c = corner(uv); let streak = fbm01(corner(uv) * vec2f(3.0, mix(14.0, 30.0, k.x)), 3, 13u);
+  let surf = clamp(0.3 + 0.6 * streak, 0.0, 1.0);
+  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.y), 1.0) * (0.6 + 0.7 * streak), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('crystal', 'anisotropic', 'crystalline directional conduction in facets', ['facets', 'reach', '', ''],
+ `  let c = corner(uv); let a = atan2(c.y, c.x); let fac = floor(a * mix(2.0, 5.0, k.x) / PI * 4.0);
+  let dir = 0.7 + 0.3 * sin(fac);
+  let surf = brushed(uv, 55.0, 0.4, 0.7);
+  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.y) * dir, 1.0), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
+C('rolled_dir', 'anisotropic', 'rolled steel: heat runs fast in the roll direction', ['reach', 'grain', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.y), 0.0, 0.7);
+  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.x), 0.4), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
+C('weld_haz', 'anisotropic', 'an elongated heat-affected zone from the corner', ['reach', 'aniso', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.6, 0.8);
+  return metalPresent(diffCorner(rot2(0.6) * c, mix(0.2, 0.45, k.x), mix(2.0, 3.5, k.y)), surf, uv, metalSparks(uv, t, 0.4, 1.0, 71u));`);
+C('vane', 'anisotropic', 'vane-like directional spread with a hard edge', ['spread', 'reach', '', ''],
+ `  let c = corner(uv); let a = atan2(c.y, c.x);
+  let vane = smoothstep(mix(0.9, 1.4, k.x), 0.2, a);
+  let surf = brushed(uv, 60.0, 0.3, 0.8);
+  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.4 + 0.8 * vane), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
 
-// ---------------------------------------------------------------- gradient
-C('edge_heat', 'gradient', 'one edge hot, cooling across to the other', ['grain', 'falloff', '', ''],
- `  let surf = brushed(uv, mix(35.0, 70.0, k.x), 0.1, 0.8);
-  let g = smoothstep(0.5, -0.5, uv.x) * mix(0.9, 1.2, k.y) + 0.08 * fbm(uv * 4.0, 3, 3u);
-  return metalPresent(g, surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('bottom_heat', 'gradient', 'heat rising from the hot base of the plate', ['grain', 'falloff', '', ''],
- `  let surf = brushed(uv, mix(35.0, 70.0, k.x), 1.5708, 0.8);
-  let g = smoothstep(0.5, -0.3, uv.y) * mix(0.9, 1.2, k.y) + 0.08 * fbm(uv * 4.0, 3, 3u);
-  return metalPresent(g, surf, uv, metalSparks(uv, t, 0.4, 1.0, 61u));`);
-C('corner_heat', 'gradient', 'heat pooling into one corner', ['grain', 'falloff', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.8);
-  let g = smoothstep(1.2, 0.0, length(uv - vec2f(-0.4, -0.4))) * mix(0.9, 1.2, k.y);
-  return metalPresent(g, surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('band_gradient', 'gradient', 'a hot band graded into cool metal', ['grain', 'width', '', ''],
- `  let surf = brushed(uv, mix(35.0, 70.0, k.x), 0.1, 0.8);
-  let g = exp(-uv.y * uv.y / mix(0.03, 0.15, k.y));
-  return metalPresent(g * 1.1 + 0.05 * fbm(uv * 4.0, 3, 3u), surf, uv, metalSparks(uv, t, 0.4, 1.0, 61u));`);
-C('radial_gradient', 'gradient', 'a hot center fading radially to cold', ['grain', 'radius', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
-  let g = smoothstep(mix(0.3, 0.6, k.y), 0.0, length(uv));
-  return metalPresent(g * 1.1, surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('diagonal_grade', 'gradient', 'a diagonal temperature grade', ['grain', 'angle', '', ''],
- `  let surf = brushed(uv, mix(35.0, 70.0, k.x), 0.1, 0.8);
-  let d = dot(uv, normalize(vec2f(1.0, mix(-1.0, 1.0, k.y))));
-  return metalPresent(smoothstep(0.5, -0.5, d) + 0.06 * fbm(uv * 4.0, 3, 3u), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('wavy_front', 'gradient', 'a rippling hot-cold boundary', ['grain', 'ripple', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.8);
-  let edge = uv.x + mix(0.05, 0.25, k.y) * sin(uv.y * 6.0 + t);
-  return metalPresent(smoothstep(0.3, -0.3, edge), surf, uv, metalSparks(uv, t, 0.4, 1.0, 61u));`);
+// ---------------------------------------------------------------- defect (heat rerouted by material)
+C('inclusions', 'defect', 'heat conducting around cold inclusions', ['scale', 'block', '', ''],
+ `  let c = corner(uv); let block = smoothstep(0.45, 0.6, fbm01(c * mix(4.0, 8.0, k.x), 4, 5u)) * mix(1.0, 3.0, k.y);
+  let surf = brushed(uv, 55.0, 0.1, 0.8);
+  return metalPresent(exp(-length(c) * (1.0 + block) / 0.4), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('hot_veins', 'defect', 'veins that conduct heat faster out of the corner', ['scale', 'sharp', '', ''],
+ `  let c = corner(uv); let vein = pow(1.0 - abs(fbm(c * mix(3.0, 6.0, k.x), 5, 21u)), mix(2.0, 5.0, k.y));
+  let surf = brushed(uv, 55.0, 0.1, 0.7);
+  return metalPresent(exp(-length(c) / (0.25 + 0.5 * vein)) , surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
+C('porous', 'defect', 'porous metal with patchy, broken conduction', ['scale', 'pore', '', ''],
+ `  let c = corner(uv); let pore = fbm01(c * mix(4.0, 9.0, k.x), 4, 8u);
+  let surf = brushed(uv, 45.0, 0.1, 0.7);
+  return metalPresent(diffCorner(c, 0.4, 1.0) * smoothstep(mix(0.3, 0.5, k.y), 0.7, pore) * 1.3, surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('cracked', 'defect', 'cracks that block heat, throwing dark shadows', ['scale', 'sharp', '', ''],
+ `  let c = corner(uv); let crack = smoothstep(0.02, 0.0, abs(fbm(c * mix(3.0, 6.0, k.x), 5, 31u)));
+  let surf = brushed(uv, 50.0, 0.1, 0.8);
+  return metalPresent(diffCorner(c, 0.45, 1.0) * (1.0 - crack * mix(0.6, 1.0, k.y)), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('grainy', 'defect', 'a noisy conductivity field, mottling the falloff', ['scale', 'noise', '', ''],
+ `  let c = corner(uv); let n = 0.7 + 0.6 * fbm(c * mix(3.0, 7.0, k.x), 4, 5u) * mix(0.4, 1.2, k.y);
+  let surf = brushed(uv, 55.0, 0.1, 0.8);
+  return metalPresent(exp(-length(c) * n / 0.4), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('marbled_conduct', 'defect', 'marbled conduction warping the heat path', ['scale', 'flow', '', ''],
+ `  var c = corner(uv); c += vec2f(fbm(c * mix(2.0, 4.0, k.x) + t * 0.03, 4, 33u), fbm(c * 2.0 + 5.2, 4, 41u)) * mix(0.1, 0.35, k.y);
+  let surf = brushed(uv, 50.0, 0.1, 0.7);
+  return metalPresent(diffCorner(c, 0.4, 1.0), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
+C('dendritic', 'defect', 'heat branching in dendrites from the corner', ['scale', 'sharp', '', ''],
+ `  let c = corner(uv); let a = atan2(c.y, c.x);
+  let branch = pow(0.5 + 0.5 * sin(a * mix(6.0, 14.0, k.x) + length(c) * 8.0), mix(2.0, 5.0, k.y));
+  let surf = brushed(uv, 55.0, 0.1, 0.7);
+  return metalPresent(diffCorner(c, 0.45, 1.0) * (0.4 + 0.9 * branch), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('mottled', 'defect', 'mottled heat pockets budding off the corner', ['scale', 'flow', '', ''],
+ `  let c = corner(uv); let pock = fbm01(c * mix(3.0, 6.0, k.x) - vec2f(0.0, t * 0.1), 4, 8u);
+  let surf = brushed(uv, 50.0, 0.1, 0.7);
+  return metalPresent(diffCorner(c, 0.4, 1.0) * (0.5 + pock * mix(0.6, 1.0, k.y)), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
 
-// ---------------------------------------------------------------- quench
-C('quench', 'quench', 'hot metal quenching, the glow fading from the rim in', ['grain', 'rate', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.8);
-  let cool = fract(t * mix(0.1, 0.3, k.y));
-  let h = smoothstep(cool, cool + 0.4, length(uv)) * 1.1;
-  return metalPresent(1.2 - h, surf, uv, 0.0);`);
-C('cooling_cracks', 'quench', 'cooling reveals a web of hot cracks', ['scale', 'sharp', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
-  let v = 1.0 - abs(fbm(uv * mix(3.0, 6.0, k.x), 5, 21u));
-  let cool = 0.5 + 0.4 * sin(t * 0.4);
-  return metalPresent(pow(v, mix(3.0, 6.0, k.y)) * cool * 1.3, surf, uv, 0.0);`);
-C('oxide_swirl', 'quench', 'oxide swirling on a cooling surface', ['scale', 'flow', '', ''],
- `  let surf = brushed(uv, mix(25.0, 50.0, k.x), 0.1, 0.6);
-  var p = uv * mix(2.0, 4.0, k.x); p += vec2f(fbm(p + t * 0.05, 4, 33u), fbm(p + 5.2 - t * 0.03, 4, 41u)) * mix(0.4, 1.0, k.y);
-  return metalPresent((0.4 + 0.5 * fbm(p, 4, 3u)) * (0.6 + 0.3 * sin(t * 0.3)), surf, uv, 0.0);`);
-C('receding_glow', 'quench', 'the last glow receding into the metal', ['grain', 'rate', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.8);
-  let g = smoothstep(mix(0.2, 0.5, k.y) * (0.5 + 0.5 * sin(t * 0.4)), 0.0, length(uv));
-  return metalPresent(g, surf, uv, 0.0);`);
-C('steam_quench', 'quench', 'a hot spot pocked by quench-steam patches', ['scale', 'patch', '', ''],
- `  let surf = brushed(uv, mix(35.0, 65.0, k.x), 0.1, 0.8);
-  let h = hotspot(uv, vec2f(0.0), 0.35);
-  let steam = smoothstep(mix(0.4, 0.6, k.y), 0.75, fbm01(uv * mix(4.0, 8.0, k.x) - vec2f(0.0, t), 4, 8u));
-  return metalPresent(h * (1.0 - steam) * 1.2, surf, uv, 0.0);`);
-C('flame_hardening', 'quench', 'a surface flame-hardened in a moving band', ['grain', 'speed', '', ''],
- `  let surf = brushed(uv, mix(35.0, 70.0, k.x), 1.5708, 0.8);
-  let cx = (fract(t * mix(0.08, 0.2, k.y)) * 2.0 - 1.0);
-  let band = exp(-(uv.x - cx) * (uv.x - cx) / 0.02);
-  let residual = smoothstep(cx, cx - 0.6, uv.x) * 0.3;
-  return metalPresent(band * 1.3 + residual, surf, uv, 0.0);`);
-C('cold_shut', 'quench', 'cold metal with a fading warm seam', ['scale', 'seam', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
-  let seam = exp(-abs(uv.x + mix(0.1, 0.3, k.y) * sin(uv.y * 4.0)) * 8.0) * (0.5 + 0.3 * sin(t * 0.5));
-  return metalPresent(seam * 1.2 + 0.05, surf, uv, 0.0);`);
+// ---------------------------------------------------------------- spark (hot corner throwing sparks)
+C('corner_sparks', 'spark', 'the hot corner throwing a scatter of sparks', ['conductivity', 'density', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.7);
+  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, mix(0.6, 1.0, k.y), 1.3, 71u);
+  return metalPresent(diffCorner(c, mix(0.2, 0.4, k.x), 1.0) * 1.1, surf, uv, sp * 1.3);`);
+C('grinding_corner', 'spark', 'a grinder biting the corner, fanning sparks', ['conductivity', 'density', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 80.0, t * 3.0, 0.8);
+  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, mix(0.7, 1.0, k.y), 1.9, 71u) + metalSparks(uv + vec2f(0.5, 0.0), t + 5.0, 0.8, 2.1, 88u);
+  return metalPresent(diffCorner(c, mix(0.18, 0.35, k.x), 1.0) * 1.3, surf, uv, sp * 1.4);`);
+C('welding_corner', 'spark', 'an arc struck at the corner, spitting bright', ['conductivity', 'density', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.7);
+  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, mix(0.7, 1.0, k.y), 1.6, 71u);
+  return metalPresent(diffCorner(c, mix(0.14, 0.3, k.x), 1.0) * 1.5, surf, uv, sp * 1.6);`);
+C('spark_shower_corner', 'spark', 'a dense shower streaming off the corner', ['conductivity', 'density', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 55.0, 0.1, 0.6);
+  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, 0.9, mix(1.4, 2.2, k.y), 71u) + metalSparks(uv + vec2f(0.5, 0.0), t + 3.0, 0.9, 2.0, 88u);
+  return metalPresent(diffCorner(c, mix(0.2, 0.4, k.x), 1.0) * 1.2, surf, uv, sp * 1.3);`);
+C('cutting_corner', 'spark', 'a cutting torch at the corner, dripping slag', ['conductivity', 'density', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.7);
+  let sp = metalSparks(uv + vec2f(0.5, -0.2), t, mix(0.7, 1.0, k.y), 2.2, 71u);
+  return metalPresent(diffCorner(c, mix(0.14, 0.3, k.x), 1.4) * 1.4, surf, uv, sp * 1.4);`);
+C('burst_corner', 'spark', 'the corner spitting sparks in periodic bursts', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.7);
+  let burst = pow(0.5 + 0.5 * sin(t * mix(1.5, 4.0, k.y)), 4.0);
+  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, 0.8, 1.7, 71u) * (0.3 + burst);
+  return metalPresent(diffCorner(c, mix(0.16, 0.34, k.x), 1.0) * 1.3, surf, uv, sp * 1.5);`);
+C('fountain_corner', 'spark', 'a fountain of sparks rising from the corner', ['conductivity', 'density', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 50.0, 0.1, 0.6);
+  var sp = 0.0;
+  for (var i: i32 = 0; i < 3; i++) { let a = f32(i) * 0.5 - 0.5; sp += metalSparks(rot2(a) * (uv + vec2f(0.5, -0.5)) + vec2f(0.0, -0.5), t + f32(i) * 3.0, mix(0.7, 1.0, k.y), 1.8, 71u + u32(i)); }
+  return metalPresent(diffCorner(c, mix(0.18, 0.36, k.x), 1.0) * 1.2, surf, uv, sp * 1.2);`);
+C('slag_corner', 'spark', 'molten slag beading and sparking at the corner', ['conductivity', 'density', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 45.0, 0.1, 0.6);
+  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, mix(0.5, 0.9, k.y), 1.3, 71u);
+  return metalPresent(diffCorner(c, mix(0.16, 0.32, k.x), 1.2) * 1.25, surf, uv, sp * 1.2);`);
 
-// ---------------------------------------------------------------- brushed
-C('brushed_glow', 'brushed', 'heat glowing along a brushed grain', ['freq', 'noise', '', ''],
- `  let surf = brushed(uv, mix(40.0, 90.0, k.x), 0.0, 1.0);
-  let heat = (0.4 + 0.4 * surf) * (0.6 + 0.4 * fbm(uv * 3.0, 4, 3u) * mix(0.3, 1.0, k.y));
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('damascus', 'brushed', 'folded damascus pattern heating up', ['freq', 'fold', '', ''],
- `  let p = vec2f(uv.x, uv.y + 0.15 * sin(uv.x * mix(6.0, 14.0, k.y)));
+// ---------------------------------------------------------------- quench (source pulled, heat recedes to the corner)
+C('quench', 'quench', 'the source pulled away, the glow shrinking to the corner', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
+  let cool = 0.4 + 0.5 * (0.5 + 0.5 * sin(t * mix(0.3, 0.9, k.y) - 1.5));
+  return metalPresent(diffCorner(c, mix(0.1, 0.5, k.x) * cool, 1.0), surf, uv, 0.0);`);
+C('cooling_front', 'quench', 'a cool front advancing from the far edge toward the corner', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
+  let front = 1.5 - fract(t * mix(0.1, 0.3, k.y)) * 1.6;
+  let mask = smoothstep(front - 0.3, front, length(c));
+  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.x), 1.0) * (1.0 - mask), surf, uv, 0.0);`);
+C('receding_glow', 'quench', 'the last glow receding into the corner', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
+  let g = mix(0.35, 0.6, k.x) * (0.4 + 0.6 * abs(sin(t * mix(0.3, 0.8, k.y))));
+  return metalPresent(diffCorner(c, g, 1.0), surf, uv, 0.0);`);
+C('oxide_cooling', 'quench', 'cooling metal skinning over with oxide', ['scale', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 45.0, 0.1, 0.6);
+  var p = c * mix(2.0, 4.0, k.x); p += vec2f(fbm(p + t * 0.04, 4, 33u), fbm(p + 5.2, 4, 41u)) * 0.4;
+  let cool = 0.5 + 0.4 * sin(t * mix(0.3, 0.7, k.y));
+  return metalPresent(diffCorner(c, 0.4, 1.0) * (0.5 + 0.5 * fbm01(p, 4, 3u)) * cool, surf, uv, 0.0);`);
+C('steam_quench', 'quench', 'quench steam pocking the hot corner', ['scale', 'patch', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
+  let steam = smoothstep(mix(0.4, 0.6, k.y), 0.75, fbm01(c * mix(4.0, 8.0, k.x) - vec2f(0.0, t), 4, 8u));
+  return metalPresent(diffCorner(c, 0.4, 1.0) * (1.0 - steam), surf, uv, 0.0);`);
+C('flash_cool', 'quench', 'a flash quench: the corner darkening in pulses', ['conductivity', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
+  let flash = 1.0 - pow(0.5 + 0.5 * sin(t * mix(1.5, 4.0, k.y)), 3.0) * 0.7;
+  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.x), 1.0) * flash, surf, uv, 0.0);`);
+C('uneven_quench', 'quench', 'patchy quenching, cold streaks eating the glow', ['scale', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 55.0, 0.1, 0.8);
+  let patchN = fbm01(c * mix(3.0, 6.0, k.x) + vec2f(0.0, t * 0.1), 4, 8u);
+  return metalPresent(diffCorner(c, 0.4, 1.0) * smoothstep(mix(0.3, 0.5, k.y), 0.7, patchN), surf, uv, 0.0);`);
+C('residual', 'quench', 'only a faint residual warmth left at the corner', ['conductivity', 'level', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 65.0, 0.1, 0.8);
+  return metalPresent(diffCorner(c, mix(0.08, 0.2, k.x), 1.0) * mix(0.3, 0.7, k.y), surf, uv, 0.0);`);
+
+// ---------------------------------------------------------------- oxide (tempering colors from the corner)
+C('temper_rings', 'oxide', 'tempering rings radiating from the hot corner', ['reach', 'noise', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(40.0, 80.0, k.y), 0.1, 0.8);
+  let x = clamp(1.0 - length(c) / mix(0.4, 1.0, k.x), 0.0, 1.0) * u.energy;
+  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+C('temper_grow', 'oxide', 'temper colors climbing outward as it heats', ['reach', 'rate', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
+  let grow = 0.4 + 0.6 * (0.5 + 0.5 * sin(t * mix(0.3, 0.9, k.y)));
+  let x = clamp(1.0 - length(c) / (mix(0.4, 0.9, k.x) * grow), 0.0, 1.0);
+  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+C('heat_tint_corner', 'oxide', 'a weld heat-tint fanning from the corner', ['reach', 'width', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.6, 0.8);
+  let x = clamp(1.0 - length(c) * mix(1.5, 3.0, k.y), 0.0, 1.0);
+  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+C('bluing_corner', 'oxide', 'gun-bluing deepening toward the hot corner', ['reach', 'depth', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(50.0, 80.0, k.x), 0.1, 0.8);
+  let x = clamp(1.0 - length(c) / mix(0.5, 1.1, k.y), 0.0, 1.0) * 0.9 + 0.1;
+  return vec4f(clamp(temperColor(x) * (0.4 + 0.6 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+C('temper_grain', 'oxide', 'tempering colors following the grain from the corner', ['reach', 'angle', '', ''],
+ `  let ang = mix(0.0, 1.2, k.y); let surf = brushed(uv, 70.0, ang, 0.9);
+  let c = rot2(ang) * corner(uv) * vec2f(1.0, 0.45);
+  let x = clamp(1.0 - length(c) / mix(0.4, 0.9, k.x), 0.0, 1.0);
+  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+C('temper_marble', 'oxide', 'oxide tempering marbled around the corner', ['scale', 'flow', '', ''],
+ `  var c = corner(uv); c += vec2f(fbm(c * mix(2.0, 4.0, k.x) + t * 0.03, 4, 33u), fbm(c * 2.0 + 5.2, 4, 41u)) * mix(0.15, 0.4, k.y);
+  let surf = brushed(uv, 55.0, 0.1, 0.8);
+  let x = clamp(1.0 - length(c) / 0.7, 0.0, 1.0);
+  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+C('temper_bands', 'oxide', 'banded tempering colors stepping out from the corner', ['reach', 'bands', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, 70.0, 0.1, 0.9);
+  let x = clamp(1.0 - length(c) / mix(0.5, 1.0, k.x), 0.0, 1.0);
+  let banded = floor(x * mix(4.0, 8.0, k.y)) / mix(4.0, 8.0, k.y);
+  return vec4f(clamp(temperColor(banded) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+
+// ---------------------------------------------------------------- surface (metal finishes, corner heat glowing through)
+C('brushed_finish', 'surface', 'brushed steel with the corner glowing through the grain', ['freq', 'reach', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(40.0, 90.0, k.x), 0.0, 1.0);
+  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.7 + 0.5 * surf), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('damascus_finish', 'surface', 'a damascus billet, its pattern warmed from the corner', ['freq', 'reach', '', ''],
+ `  let p = vec2f(uv.x, uv.y + 0.15 * sin(uv.x * mix(6.0, 14.0, k.x)));
   let surf = 0.4 + 0.5 * (0.5 + 0.5 * sin(p.y * mix(20.0, 50.0, k.x) + fbm(p * 4.0, 3, 5u) * 4.0));
-  return metalPresent(0.55 + 0.35 * surf, surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('anisotropic', 'brushed', 'anisotropic surface catching the heat glow', ['freq', 'angle', '', ''],
- `  let surf = brushed(uv, mix(40.0, 90.0, k.x), mix(0.0, 1.5708, k.y), 1.0);
-  return metalPresent(0.5 + 0.4 * fbm(uv * 3.0, 4, 3u), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('scratched', 'brushed', 'a scratched plate, heat pooling in the grooves', ['freq', 'depth', '', ''],
+  let c = corner(uv);
+  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.7 + 0.5 * surf), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('scratched_finish', 'surface', 'a scratched plate, heat pooling in the grooves', ['freq', 'reach', '', ''],
  `  let scr = fbm01(uv * vec2f(mix(3.0, 6.0, k.x), 60.0), 3, 13u);
   let surf = clamp(0.3 + 0.7 * scr, 0.0, 1.0);
-  let heat = 0.5 + 0.4 * scr * mix(0.5, 1.2, k.y);
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('rolled_steel', 'brushed', 'rolled steel sheet with a mill finish', ['freq', 'noise', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.05, 0.6);
-  return metalPresent(0.55 + 0.3 * fbm(uv * vec2f(2.0, 6.0), 4, 3u) * mix(0.4, 1.0, k.y), surf, uv, metalSparks(uv, t, 0.25, 0.8, 61u));`);
-C('mesh_grate', 'brushed', 'a grate heating, the bars glowing first', ['pitch', 'noise', '', ''],
+  let c = corner(uv);
+  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.6 + 0.7 * scr), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('mesh_finish', 'surface', 'a grate heating, the bars nearest the corner first', ['pitch', 'reach', '', ''],
  `  let g = mix(6.0, 16.0, k.x);
   let bars = max(abs(fract(uv.x * g) - 0.5), abs(fract(uv.y * g) - 0.5));
   let surf = smoothstep(0.2, 0.45, bars);
-  let heat = surf * (0.7 + 0.3 * fbm(uv * 3.0, 3, 3u) * mix(0.3, 1.0, k.y));
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('coil', 'brushed', 'a heating coil glowing along its windings', ['pitch', 'noise', '', ''],
- `  let surf = 0.4 + 0.5 * (0.5 + 0.5 * sin(uv.y * mix(14.0, 34.0, k.x)));
-  let heat = surf * (0.7 + 0.3 * sin(t * 0.6)) * mix(0.8, 1.2, k.y);
-  return metalPresent(heat, surf, uv, metalSparks(uv, t, 0.2, 0.8, 61u));`);
-
-// ---------------------------------------------------------------- spark
-C('grinder', 'spark', 'a grinding wheel throwing a fan of sparks', ['density', 'speed', '', ''],
- `  let surf = brushed(uv, mix(50.0, 90.0, k.x), t * 3.0, 0.8);
-  let hot = hotspot(uv, vec2f(0.0, -0.2), 0.25) * 1.3;
-  let sp = metalSparks(uv, t, mix(0.7, 1.0, k.x), mix(1.4, 2.2, k.y), 71u) + metalSparks(uv, t + 5.0, 0.8, 1.8, 88u);
-  return metalPresent(hot + 0.3, surf, uv, sp * 1.4);`);
-C('welding', 'spark', 'an arc weld spitting bright sparks', ['density', 'speed', '', ''],
- `  let surf = brushed(uv, mix(40.0, 70.0, k.x), 0.1, 0.7);
-  let arc = hotspot(uv, vec2f(0.0, 0.0), 0.12) * 1.7;
-  let sp = metalSparks(uv, t, mix(0.7, 1.0, k.x), mix(1.2, 2.0, k.y), 71u);
-  return metalPresent(arc + 0.2, surf, uv, sp * 1.5);`);
-C('spark_fountain', 'spark', 'a fountain of sparks off molten metal', ['density', 'speed', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.6);
-  let pool = smoothstep(0.5, -0.2, uv.y) * 1.2;
-  let sp = metalSparks(uv, t, mix(0.8, 1.0, k.x), mix(1.3, 2.2, k.y), 71u);
-  return metalPresent(pool + 0.2, surf, uv, sp * 1.4);`);
-C('cutting_torch', 'spark', 'a cutting torch and its shower of slag', ['density', 'speed', '', ''],
- `  let surf = brushed(uv, mix(40.0, 70.0, k.x), 0.1, 0.7);
-  let cut = exp(-uv.x * uv.x / 0.01) * 1.5;
-  let sp = metalSparks(vec2f(uv.x, uv.y), t, mix(0.7, 1.0, k.x), mix(1.5, 2.5, k.y), 71u);
-  return metalPresent(cut + 0.2, surf, uv, sp * 1.4);`);
-C('sparkler', 'spark', 'a sparkler crackling in all directions', ['density', 'speed', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.6);
-  var sp = 0.0;
-  for (var i: i32 = 0; i < 3; i++) { let a = f32(i) * 2.094; sp += metalSparks(rot2(a) * uv, t + f32(i) * 3.0, mix(0.7, 1.0, k.x), mix(1.2, 2.0, k.y), 71u + u32(i)); }
-  return metalPresent(hotspot(uv, vec2f(0.0), 0.15) * 1.3 + 0.2, surf, uv, sp * 1.2);`);
-C('slag', 'spark', 'molten slag dripping and sparking', ['density', 'drip', '', ''],
- `  let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.6);
-  let drip = smoothstep(0.6, -0.4, uv.y) * (0.7 + 0.3 * fbm(uv * vec2f(6.0, 3.0), 4, 3u));
-  let sp = metalSparks(uv, t, mix(0.6, 0.9, k.x), mix(1.0, 1.8, k.y), 71u);
-  return metalPresent(drip * 1.2 + 0.15, surf, uv, sp * 1.2);`);
-C('spark_burst', 'spark', 'periodic bursts of sparks from a hot seam', ['density', 'rate', '', ''],
- `  let surf = brushed(uv, mix(40.0, 70.0, k.x), 0.1, 0.7);
-  let burst = pow(0.5 + 0.5 * sin(t * mix(1.5, 4.0, k.y)), 4.0);
-  let seam = exp(-uv.y * uv.y / 0.02) * 1.2;
-  let sp = metalSparks(uv, t, mix(0.7, 1.0, k.x), 1.6, 71u) * (0.4 + burst);
-  return metalPresent(seam + 0.2, surf, uv, sp * 1.5);`);
-C('foundry', 'spark', 'a foundry pour glowing white and spitting', ['density', 'speed', '', ''],
- `  let surf = brushed(uv, mix(25.0, 55.0, k.x), 0.1, 0.6);
-  let pour = exp(-uv.x * uv.x / mix(0.02, 0.06, k.x)) * 1.4;
-  let sp = metalSparks(uv, t, 0.9, mix(1.4, 2.4, k.y), 71u);
-  return metalPresent(pour + 0.3, surf, uv, sp * 1.3);`);
-
-// ---------------------------------------------------------------- oxide (tempering colors)
-C('temper', 'oxide', 'steel tempering: straw to bronze to purple to blue', ['range', 'noise', '', ''],
- `  let surf = brushed(uv, mix(40.0, 80.0, k.x), 0.0, 0.8);
-  let x = (0.5 + 0.5 * uv.x) * mix(0.6, 1.0, k.y) + 0.05 * fbm(uv * 3.0, 3, 3u);
-  return vec4f(clamp(temperColor(x * u.energy) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
-C('temper_sweep', 'oxide', 'temper colors sweeping across as it heats', ['range', 'speed', '', ''],
- `  let surf = brushed(uv, mix(40.0, 80.0, k.x), 0.0, 0.8);
-  let x = fract(t * mix(0.05, 0.2, k.y)) + uv.x * 0.5;
-  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
-C('temper_rings', 'oxide', 'tempering rings around a hot spot', ['range', 'rings', '', ''],
- `  let surf = brushed(uv, mix(40.0, 80.0, k.x), 0.0, 0.8);
-  let x = clamp(1.0 - length(uv) * mix(1.2, 2.2, k.y), 0.0, 1.0);
-  return vec4f(clamp(temperColor(x * u.energy) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
-C('temper_marble', 'oxide', 'oxide tempering marbled into the steel', ['scale', 'flow', '', ''],
- `  let surf = brushed(uv, mix(35.0, 70.0, k.x), 0.0, 0.8);
-  var p = uv * mix(2.0, 4.0, k.x); p += vec2f(fbm(p + t * 0.03, 4, 33u), fbm(p + 5.2, 4, 41u)) * mix(0.4, 1.0, k.y);
-  return vec4f(clamp(temperColor(fbm01(p, 4, 3u) * u.energy) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
-C('temper_bands', 'oxide', 'banded tempering colors across a blade', ['range', 'bands', '', ''],
- `  let surf = brushed(uv, mix(50.0, 90.0, k.x), 1.5708, 0.9);
-  let x = clamp(0.5 + 0.5 * uv.y, 0.0, 1.0) * u.energy;
-  let banded = floor(x * mix(4.0, 8.0, k.y)) / mix(4.0, 8.0, k.y);
-  return vec4f(clamp(temperColor(banded) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
-C('bluing', 'oxide', 'gun-bluing deepening toward blue-black', ['scale', 'depth', '', ''],
- `  let surf = brushed(uv, mix(40.0, 80.0, k.x), 0.0, 0.8);
-  let x = mix(0.6, 0.95, k.y) + 0.06 * fbm(uv * 4.0, 3, 3u);
-  return vec4f(clamp(temperColor(x) * (0.4 + 0.6 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
-C('heat_tint', 'oxide', 'a weld heat-tint rainbow beside the seam', ['range', 'width', '', ''],
- `  let surf = brushed(uv, mix(40.0, 80.0, k.x), 1.5708, 0.8);
-  let x = clamp(1.0 - abs(uv.x) * mix(2.0, 4.0, k.y), 0.0, 1.0);
-  return vec4f(clamp(temperColor(x) * (0.5 + 0.7 * surf), vec3f(0.0), vec3f(1.0)), 1.0);`);
+  let c = corner(uv);
+  return metalPresent(diffCorner(c, mix(0.3, 0.55, k.y), 1.0) * surf, surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
+C('mill_finish', 'surface', 'a rolled mill finish warmed from the corner', ['freq', 'reach', '', ''],
+ `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.05, 0.6);
+  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.7 + 0.4 * fbm01(uv * vec2f(2.0, 6.0), 3, 3u)), surf, uv, metalSparks(uv, t, 0.25, 0.8, 61u));`);
 
 const CELLS = cells;
 
