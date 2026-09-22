@@ -117,20 +117,17 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .thumbs button.active{border-color:var(--yellow);box-shadow:0 0 0 1px var(--yellow)}
 .thumbs canvas,.thumbs img{display:block;width:100%;height:100%;object-fit:cover}
 .mini{font-size:0.58rem;color:var(--text-faint);letter-spacing:0.08em;margin-top:6px;line-height:1.6}
-.f-ramps{--fam:rgba(255,200,50,0.12);--fam-bg:rgba(255,200,50,0.06)}
-.f-spaces{--fam:rgba(150,200,255,0.12);--fam-bg:rgba(150,200,255,0.06)}
-.f-tonemap{--fam:rgba(255,160,120,0.12);--fam-bg:rgba(255,160,120,0.06)}
-.f-quantize{--fam:rgba(200,160,255,0.12);--fam-bg:rgba(200,160,255,0.06)}
-.f-effects{--fam:rgba(120,230,200,0.12);--fam-bg:rgba(120,230,200,0.06)}
+.f-automata{--fam:rgba(150,200,255,0.12);--fam-bg:rgba(150,200,255,0.06)}
+.f-reaction{--fam:rgba(255,200,50,0.12);--fam-bg:rgba(255,200,50,0.06)}
+.f-pde{--fam:rgba(120,230,200,0.12);--fam-bg:rgba(120,230,200,0.06)}
 
 /* ── metal families (appended by build.mjs) ──────────────────────────────── */
-.f-conduction{--fam:rgba(255,120,40,0.14);--fam-bg:rgba(255,120,40,0.06)}
-.f-transient{--fam:rgba(255,150,60,0.13);--fam-bg:rgba(255,150,60,0.06)}
-.f-anisotropic{--fam:rgba(255,90,40,0.14);--fam-bg:rgba(255,90,40,0.06)}
-.f-defect{--fam:rgba(255,170,80,0.13);--fam-bg:rgba(255,170,80,0.06)}
-.f-spark{--fam:rgba(255,220,140,0.14);--fam-bg:rgba(255,220,140,0.06)}
-.f-quench{--fam:rgba(120,150,200,0.13);--fam-bg:rgba(120,150,200,0.06)}
-.f-oxide{--fam:rgba(150,120,200,0.13);--fam-bg:rgba(150,120,200,0.06)}
-.f-surface{--fam:rgba(180,190,205,0.12);--fam-bg:rgba(180,190,205,0.06)}
+.f-wander{--fam:rgba(255,120,40,0.14);--fam-bg:rgba(255,120,40,0.06)}
+.f-forge{--fam:rgba(255,90,30,0.14);--fam-bg:rgba(255,90,30,0.06)}
+.f-emitters{--fam:rgba(255,160,60,0.13);--fam-bg:rgba(255,160,60,0.06)}
+.f-quench{--fam:rgba(200,90,60,0.13);--fam-bg:rgba(200,90,60,0.06)}
+.f-anisotropic{--fam:rgba(255,140,70,0.13);--fam-bg:rgba(255,140,70,0.06)}
+.f-turbulent{--fam:rgba(255,110,50,0.14);--fam-bg:rgba(255,110,50,0.06)}
+.f-reaction{--fam:rgba(255,70,30,0.14);--fam-bg:rgba(255,70,30,0.06)}
 .side-head .big{color:#ff8a3c}
 .legend span{text-transform:capitalize}

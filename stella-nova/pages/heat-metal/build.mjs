@@ -1,31 +1,27 @@
 // ============================================================================
 //  HEAT METAL TABLE  ·  build.mjs — the single source of truth for the page
 // ────────────────────────────────────────────────────────────────────────────
-//  60 cells of metal heating from underneath a surface. The color follows an
-//  idealized blackbody curve (Tanner Helland's temperature-to-RGB fit): cold
-//  steel, then dull red, cherry, orange, yellow and white as the energy rises.
-//  Hot metal throws sparks. One family instead shows steel tempering (oxide)
-//  colors. Run with:  node build.mjs
+//  Reimagined around a real heat-equation compute simulation. Every cell owns
+//  two rgba32float textures (ping-pong); a compute kernel diffuses temperature
+//  and injects it from a moving source, and a present pass colors the field
+//  through a magma/inferno metal palette with a white-hot core. Run with:
+//      node build.mjs
 //
 //  MODEL
-//    Every cell heats from a point source at the TOP-LEFT CORNER. The heat
-//    field is a pointwise conduction function: temperature falls off with
-//    distance from the corner (diffCorner), so a tile reads white-hot at the
-//    corner and fades to cold steel across the plate. A cell also computes a
-//    brushed surface and a spark field, then calls metalPresent, which turns
-//    heat into a temperature through the Energy generator, colors it by
-//    blackbody, blends the cold metal out as it glows, and adds sparks that
-//    appear only where the metal is hot. The 60 cells differ in HOW the heat
-//    conducts from that corner: conductivity, anisotropy, transient growth,
-//    defects that reroute it, sparks, quench and tempering.
+//    state.x is temperature in 0..1. A kernel reads the neighbourhood (ld/lap),
+//    steps the heat equation v = T + D*laplacian, injects heat from a source,
+//    and cools everywhere so a trail fades behind a moving emitter. The 60
+//    cells vary the source (orbiting, drifting, twin, line, rain), the
+//    diffusion (isotropic, anisotropic, advected by a swirl) and combustion
+//    (autocatalytic fire fronts). Each cell picks one of eight palettes.
+//    Simulations step only while hovered and reset when the pointer leaves.
 //
 //  GREP MAP (pack.wgsl)
-//    struct MetalU .... uniform block  ·  fn blackbody .. temperature to RGB
-//    fn temperColor ... steel tempering (oxide) ramp
-//    fn brushed ....... anisotropic brushed-metal surface
-//    fn corner ........ top-left origin  ·  fn diffCorner .. pointwise conduction
-//    fn metalSparks ... rising sparks  ·  fn metalPresent .. the finisher
-//    @fragment fs_* ... the 60 cells
+//    struct SimU ...... uniform block  ·  const N .. 128 grid
+//    fn ld/lap/lapAniso ... neighbourhood reads and diffusion stencils
+//    fn emit/flick .... moving heat source  ·  fn swirl/advectT .. turbulence
+//    fn inferno/pMagma/pForge/... the eight palettes
+//    @compute cs_* .... the 60 heat kernels  ·  fn fs_present .. colorize
 // ============================================================================
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -34,477 +30,505 @@ import { dirname, join } from 'node:path';
 const DIR = dirname(fileURLToPath(import.meta.url));
 
 const FAM = {
-  conduction:  'rgba(255,120,40,0.14)',
-  transient:   'rgba(255,150,60,0.13)',
-  anisotropic: 'rgba(255,90,40,0.14)',
-  defect:      'rgba(255,170,80,0.13)',
-  spark:       'rgba(255,220,140,0.14)',
-  quench:      'rgba(120,150,200,0.13)',
-  oxide:       'rgba(150,120,200,0.13)',
-  surface:     'rgba(180,190,205,0.12)',
+  wander:      'rgba(255,120,40,0.14)',
+  forge:       'rgba(255,90,30,0.14)',
+  emitters:    'rgba(255,160,60,0.13)',
+  quench:      'rgba(200,90,60,0.13)',
+  anisotropic: 'rgba(255,140,70,0.13)',
+  turbulent:   'rgba(255,110,50,0.14)',
+  reaction:    'rgba(255,70,30,0.14)',
 };
+
+// palette names -> present mode index (must match fs_present below)
+const PAL = { inferno: 0, magma: 1, forge: 2, ember: 3, plasma: 4, copper: 5, steel: 6, gold: 7 };
 
 const HELPERS = `// ═══════════════════════════════════════════════════════════════════════════
-//  HEAT METAL TABLE  ·  one fragment shader per cell. Metal heats from below a
-//  surface. A cell computes a heat field, a brushed surface and a spark field,
-//  then calls metalPresent. Color follows an idealized blackbody curve (Tanner
-//  Helland fit): cold steel to dull red to cherry to orange to yellow to white.
-//  Hot metal throws sparks. The oxide family uses a steel-tempering ramp
-//  instead. Noise after Perlin (pcg3d hashing).
+//  HEAT METAL TABLE  ·  a heat-equation compute simulation, one kernel per cell.
+//  Each cell owns two rgba32float textures (ping-pong). state.x is temperature
+//  in 0..1. A kernel reads src, writes dst; the present pass colors dst through
+//  a metal palette. Heat diffuses (v = T + D*laplacian), is injected from a
+//  moving source, and cools everywhere so a trail fades behind the emitter.
+//  Heat equation is explicit FTCS; the advected cells back-trace a swirl field.
 // ═══════════════════════════════════════════════════════════════════════════
-const PI: f32 = 3.141592653589793;
-const TAU: f32 = 6.283185307179586;
-
-struct MetalU {
+struct SimU {
     size: vec2f, time: f32, pixelScale: f32,
     ink: vec4f, tone: vec4f, cream: vec4f,
-    energy: f32, glow: f32, pad0: f32, pad1: f32,
     k: vec4f,
-};
-@group(0) @binding(0) var<uniform> u: MetalU;
+    frame: f32, seed: f32, dt: f32, reset: f32,
+}
+@group(0) @binding(0) var<uniform> u: SimU;
+@group(0) @binding(1) var src: texture_2d<f32>;
+@group(0) @binding(2) var dst: texture_storage_2d<rgba32float, write>;
 
+const N: i32 = 128;
+const PI: f32 = 3.14159265358979;
+const TAU: f32 = 6.28318530717959;
+
+fn pcg(vin: vec3u) -> vec3u { var v = vin * 1664525u + 1013904223u; v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y; v ^= v >> vec3u(16u); v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y; return v; }
+fn rnd(p: vec2i, s: f32) -> f32 { return f32(pcg(vec3u(u32(p.x + 65536), u32(p.y + 65536), u32(s * 1000.0) + 7u)).x) / 4294967295.0; }
+fn wrap(p: vec2i) -> vec2i { return ((p % N) + N) % N; }
+fn ld(p: vec2i) -> vec4f { return textureLoad(src, wrap(p), 0); }
+fn lap(p: vec2i) -> f32 { return ld(p + vec2i(1, 0)).x + ld(p - vec2i(1, 0)).x + ld(p + vec2i(0, 1)).x + ld(p - vec2i(0, 1)).x - 4.0 * ld(p).x; }
+fn lapAniso(p: vec2i, ax: f32, ay: f32) -> f32 { return ax * (ld(p + vec2i(1, 0)).x + ld(p - vec2i(1, 0)).x) + ay * (ld(p + vec2i(0, 1)).x + ld(p - vec2i(0, 1)).x) - 2.0 * (ax + ay) * ld(p).x; }
+fn cen(p: vec2i) -> vec2f { return (vec2f(p) + 0.5) / f32(N) - 0.5; }
+fn emit(p: vec2i, ctr: vec2f, radius: f32) -> f32 { let d = length(cen(p) - ctr); return exp(-(d * d) / (radius * radius)); }
+fn flick(p: vec2i, t: f32) -> f32 { return 0.55 + 0.45 * rnd(p, floor(t * 10.0)); }
+fn swirl(c: vec2f, t: f32) -> vec2f { let r = length(c) + 0.08; return vec2f(-c.y, c.x) / r * 0.35 + 0.2 * vec2f(sin(c.y * 9.0 + t), cos(c.x * 9.0 - t)); }
+fn advectT(p: vec2i, vel: vec2f) -> f32 {
+    let q = vec2f(p) + 0.5 - vel; let i = vec2i(floor(q)); let f = fract(q);
+    let a = ld(i).x; let b = ld(i + vec2i(1, 0)).x; let cc = ld(i + vec2i(0, 1)).x; let d = ld(i + vec2i(1, 1)).x;
+    return mix(mix(a, b, f.x), mix(cc, d, f.x), f.y);
+}
+`;
+
+// ── the 60 heat kernels. body reads p, t, k and ends with a textureStore. ────
+const cells = [];
+const C = (name, family, species, knobs, pal, steps, body) => cells.push({ name, family, species, knobs, pal, steps, body });
+const KHEAT = ['diffusion', 'source', 'cooling', ''];
+// standard heat body: diffuse, inject at ctr, cool. ctr is a WGSL vec2f expr.
+const heat = (ctr, opt = {}) => {
+  const rad = opt.rad || 'mix(0.06, 0.13, k.y)';
+  const wob = opt.wob === false ? '' : ` * (0.85 + 0.15 * sin(t * 5.0 + d * 40.0))`;
+  const src = opt.src || '0.35';
+  return `  let T = ld(p).x; let v0 = T + mix(0.05, 0.24, k.x) * lap(p);
+  let ctr = ${ctr};
+  let d = length(cen(p) - ctr);
+  let radius = ${rad}${wob};
+  let core = exp(-(d * d) / (radius * radius));
+  var v = v0 + ${src} * core * flick(p, t) * (0.55 + k.y);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`;
+};
+
+// ---------------------------------------------------------------- wander (the hero: a hot emitter roams, leaving a cooling trail)
+C('orbit', 'wander', 'a hot spot orbiting the centre, trailing a cooling wake', KHEAT, 'inferno', 4,
+  heat('0.30 * vec2f(cos(t * 0.7), sin(t * 0.9))'));
+C('orbit_fast', 'wander', 'a fast orbit that smears heat into a glowing ring', KHEAT, 'inferno', 4,
+  heat('0.30 * vec2f(cos(t * 1.8), sin(t * 1.8))', { src: '0.4' }));
+C('orbit_slow', 'wander', 'a slow orbit, a heavy molten pool dragging behind', KHEAT, 'magma', 5,
+  heat('0.28 * vec2f(cos(t * 0.35), sin(t * 0.35))', { rad: 'mix(0.09, 0.18, k.y)' }));
+C('lissajous', 'wander', 'the emitter tracing a lissajous knot of heat', KHEAT, 'magma', 4,
+  heat('vec2f(0.32 * sin(t * 0.8), 0.30 * sin(t * 1.3 + 1.0))'));
+C('drift', 'wander', 'a wandering drift that never repeats its path', KHEAT, 'inferno', 4,
+  heat('0.30 * vec2f(sin(t * 0.4) + 0.4 * sin(t * 1.1), cos(t * 0.5))'));
+C('figure8', 'wander', 'a figure-eight weld path', KHEAT, 'forge', 4,
+  heat('vec2f(0.32 * sin(t * 0.9), 0.26 * sin(t * 1.8))'));
+C('spiral', 'wander', 'the source spiralling in and flinging back out', KHEAT, 'magma', 4,
+  heat('(0.06 + 0.26 * abs(sin(t * 0.3))) * vec2f(cos(t * 2.0), sin(t * 2.0))'));
+C('comet', 'wander', 'a fast comet of heat with a long slow-cooling tail', ['diffusion', 'source', 'tail', ''], 'inferno', 5,
+  heat('0.32 * vec2f(cos(t * 1.3), sin(t * 1.1))', { rad: 'mix(0.05, 0.09, k.y)', src: '0.5' }));
+C('jitter', 'wander', 'a jittering source, sputtering like a bad torch', KHEAT, 'ember', 4,
+  heat('0.28 * vec2f(cos(t * 0.6), sin(t * 0.8)) + 0.05 * vec2f(rnd(vec2i(i32(t * 20.0), 0), 1.0) - 0.5, rnd(vec2i(i32(t * 20.0), 7), 1.0) - 0.5)'));
+C('wobble_ring', 'wander', 'the hot patch pulsing wide then tight as it circles', KHEAT, 'gold', 4,
+  heat('0.30 * vec2f(cos(t * 0.7), sin(t * 0.9))', { rad: 'mix(0.05, 0.16, k.y) * (0.6 + 0.5 * sin(t * 2.0))' }));
+
+// ---------------------------------------------------------------- forge (steady strong heating of a billet)
+C('billet', 'forge', 'a billet soaking evenly to a bright working heat', KHEAT, 'forge', 5,
+  heat('vec2f(0.0)', { rad: 'mix(0.2, 0.36, k.y)', wob: false, src: '0.4' }));
+C('billet_pulse', 'forge', 'the forge pumping heat with the bellows', KHEAT, 'forge', 5,
+  `  let T = ld(p).x; let v0 = T + mix(0.06, 0.24, k.x) * lap(p);
+  let pulse = 0.5 + 0.5 * sin(t * 1.2);
+  var v = v0 + 0.45 * emit(p, vec2f(0.0), mix(0.2, 0.34, k.y)) * (0.4 + 0.9 * pulse);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('soak', 'forge', 'a long soak, heat conducting evenly through the mass', KHEAT, 'gold', 6,
+  heat('vec2f(0.0)', { rad: 'mix(0.25, 0.45, k.y)', wob: false, src: '0.3' }));
+C('blast', 'forge', 'a furnace blast driving the whole face white-hot', KHEAT, 'steel', 5,
+  `  let T = ld(p).x; let v0 = T + mix(0.08, 0.24, k.x) * lap(p);
+  let blast = pow(0.5 + 0.5 * sin(t * 0.8), 2.0);
+  var v = v0 + 0.6 * emit(p, vec2f(0.0), mix(0.28, 0.5, k.y)) * (0.5 + blast) * flick(p, t);
+  v *= 1.0 - mix(0.008, 0.04, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('even_glow', 'forge', 'the plate glowing near-uniform at temperature', KHEAT, 'forge', 6,
+  heat('vec2f(0.0)', { rad: 'mix(0.35, 0.6, k.y)', wob: false, src: '0.25' }));
+C('core_bloom', 'forge', 'a central core blooming and breathing', KHEAT, 'magma', 5,
+  heat('vec2f(0.0)', { rad: 'mix(0.1, 0.28, k.y) * (0.7 + 0.4 * sin(t * 1.5))', wob: false, src: '0.45' }));
+C('ramp_soak', 'forge', 'a slow ramp up to a held soak temperature', KHEAT, 'forge', 5,
+  `  let T = ld(p).x; let v0 = T + mix(0.06, 0.24, k.x) * lap(p);
+  let ramp = smoothstep(0.0, 0.5, fract(t * 0.1)) * (1.0 - smoothstep(0.85, 1.0, fract(t * 0.1)));
+  var v = v0 + 0.4 * emit(p, vec2f(0.0), mix(0.2, 0.38, k.y)) * (0.3 + ramp);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('white_hot', 'forge', 'a billet driven past yellow into white heat', KHEAT, 'steel', 5,
+  heat('vec2f(0.0)', { rad: 'mix(0.22, 0.4, k.y)', wob: false, src: '0.6' }));
+
+// ---------------------------------------------------------------- emitters (multiple / structured sources)
+C('twin', 'emitters', 'two orbiting torches bridging heat between them', KHEAT, 'inferno', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.24, k.x) * lap(p);
+  let a = 0.28 * vec2f(cos(t * 0.7), sin(t * 0.9)); let b = -a;
+  var v = v0 + 0.35 * (emit(p, a, mix(0.06, 0.11, k.y)) + emit(p, b, mix(0.06, 0.11, k.y))) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('triple', 'emitters', 'three sources rotating like a burner head', KHEAT, 'magma', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.24, k.x) * lap(p);
+  var s = 0.0; for (var i: i32 = 0; i < 3; i++) { let a = f32(i) * 2.094 + t * 0.6; s += emit(p, 0.26 * vec2f(cos(a), sin(a)), mix(0.05, 0.1, k.y)); }
+  var v = v0 + 0.34 * s * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('line_sweep_h', 'emitters', 'a hot line sweeping left to right, a plasma cut', KHEAT, 'plasma', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.22, k.x) * lap(p);
+  let xc = (fract(t * 0.15) * 2.0 - 1.0) * 0.45;
+  let line = exp(-(cen(p).x - xc) * (cen(p).x - xc) / mix(0.001, 0.006, k.y));
+  var v = v0 + 0.5 * line * flick(p, t);
+  v *= 1.0 - mix(0.02, 0.07, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('line_sweep_v', 'emitters', 'a hot bar rising through the plate', KHEAT, 'forge', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.22, k.x) * lap(p);
+  let yc = (fract(t * 0.13) * 2.0 - 1.0) * 0.45;
+  let line = exp(-(cen(p).y - yc) * (cen(p).y - yc) / mix(0.001, 0.006, k.y));
+  var v = v0 + 0.5 * line * flick(p, t);
+  v *= 1.0 - mix(0.02, 0.07, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('rain', 'emitters', 'sparks raining down, each blooming a hot bloom', ['diffusion', 'density', 'cooling', ''], 'inferno', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.06, 0.2, k.x) * lap(p);
+  var v = v0 + step(1.0 - mix(0.002, 0.02, k.y), rnd(p, floor(t * 8.0))) * 0.9;
+  v *= 1.0 - mix(0.02, 0.07, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('scatter', 'emitters', 'a scatter of fixed hot rivets pulsing together', KHEAT, 'copper', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.22, k.x) * lap(p);
+  var s = 0.0; for (var i: i32 = 0; i < 5; i++) { let r = rnd(vec2i(i, 0), 3.0); let a = rnd(vec2i(i, 1), 3.0); s += emit(p, 0.35 * vec2f(cos(a * TAU), sin(a * TAU)) * r, mix(0.05, 0.1, k.y)); }
+  var v = v0 + 0.3 * s * (0.5 + 0.5 * sin(t * 1.5));
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('chase', 'emitters', 'a source chasing fast around the rim', KHEAT, 'plasma', 4,
+  heat('0.36 * vec2f(cos(t * 2.2), sin(t * 2.2))', { rad: 'mix(0.04, 0.08, k.y)', src: '0.5' }));
+C('ring_source', 'emitters', 'an annulus of heat pumping in and out', KHEAT, 'gold', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.22, k.x) * lap(p);
+  let rr = 0.2 + 0.12 * sin(t * 1.2);
+  let ring = exp(-(length(cen(p)) - rr) * (length(cen(p)) - rr) / mix(0.001, 0.006, k.y));
+  var v = v0 + 0.4 * ring * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('pulse_grid', 'emitters', 'a grid of pilot flames pulsing in waves', KHEAT, 'inferno', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.2, k.x) * lap(p);
+  let g = fract(cen(p) * mix(3.0, 6.0, k.y)) - 0.5;
+  let dot = exp(-dot(g, g) * 30.0) * (0.5 + 0.5 * sin(t * 2.0 + length(cen(p)) * 12.0));
+  var v = v0 + 0.35 * dot;
+  v *= 1.0 - mix(0.02, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+
+// ---------------------------------------------------------------- quench (heat builds then is pulled away)
+C('quench_fade', 'quench', 'the torch lifts and the glow bleeds cooler', KHEAT, 'ember', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.06, 0.22, k.x) * lap(p);
+  let on = smoothstep(0.5, 0.35, fract(t * 0.15));
+  var v = v0 + 0.4 * emit(p, 0.2 * vec2f(cos(t * 0.7), sin(t * 0.9)), mix(0.08, 0.16, k.y)) * on;
+  v *= 1.0 - mix(0.03, 0.1, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('hard_quench', 'quench', 'a fierce quench, the heat sucked out fast', KHEAT, 'ember', 4,
+  heat('0.24 * vec2f(cos(t * 0.8), sin(t * 0.6))', { src: '0.5' }).replace('mix(0.01, 0.06, k.z)', 'mix(0.06, 0.16, k.z)'));
+C('receding', 'quench', 'a shrinking source, the pool receding to a point', KHEAT, 'copper', 4,
+  heat('vec2f(0.0)', { rad: 'mix(0.04, 0.24, k.y) * (0.4 + 0.6 * abs(sin(t * 0.4)))', wob: false, src: '0.4' }));
+C('flicker_die', 'quench', 'a guttering source dying out in fits', KHEAT, 'ember', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.2, k.x) * lap(p);
+  let gate = 0.5 + 0.5 * sin(t * 3.0 + rnd(vec2i(i32(t * 4.0), 0), 1.0) * 6.0);
+  var v = v0 + 0.4 * emit(p, vec2f(0.0), mix(0.1, 0.2, k.y)) * gate * gate;
+  v *= 1.0 - mix(0.03, 0.09, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('cool_wave', 'quench', 'a cool front washing across the hot plate', KHEAT, 'copper', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.06, 0.22, k.x) * lap(p);
+  var v = v0 + 0.4 * emit(p, vec2f(0.0), mix(0.15, 0.3, k.y));
+  let cx = (fract(t * 0.12) * 2.0 - 1.0);
+  v *= 1.0 - mix(0.02, 0.1, k.z) * (1.0 + 2.0 * smoothstep(cx + 0.2, cx - 0.2, cen(p).x));
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('ember_die', 'quench', 'the last embers winking out across a dark plate', KHEAT, 'ember', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.04, 0.16, k.x) * lap(p);
+  var v = v0 + step(1.0 - mix(0.002, 0.01, k.y), rnd(p, floor(t * 4.0))) * 0.8;
+  v *= 1.0 - mix(0.04, 0.12, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('gutter', 'quench', 'heat sloshing and guttering low', KHEAT, 'ember', 4,
+  heat('0.2 * vec2f(sin(t * 0.9), cos(t * 1.3))', { rad: 'mix(0.07, 0.15, k.y)' }).replace('mix(0.01, 0.06, k.z)', 'mix(0.04, 0.11, k.z)'));
+C('breathe', 'quench', 'the whole plate breathing between glow and dark', KHEAT, 'copper', 5,
+  `  let T = ld(p).x; let v0 = T + mix(0.08, 0.24, k.x) * lap(p);
+  let br = 0.5 + 0.5 * sin(t * mix(0.5, 1.5, k.y));
+  var v = v0 + 0.4 * emit(p, vec2f(0.0), 0.3) * br;
+  v *= 1.0 - mix(0.03, 0.08, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+
+// ---------------------------------------------------------------- anisotropic (grain-directed conduction)
+C('grain_h', 'anisotropic', 'heat conducting fast along a horizontal grain', ['diffusion', 'anisotropy', 'cooling', ''], 'forge', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.2, k.x) * lapAniso(p, mix(1.0, 3.0, k.y), 0.3);
+  var v = v0 + 0.35 * emit(p, 0.25 * vec2f(cos(t * 0.7), sin(t * 0.9)), 0.09) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('grain_v', 'anisotropic', 'heat conducting fast along a vertical grain', ['diffusion', 'anisotropy', 'cooling', ''], 'forge', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.2, k.x) * lapAniso(p, 0.3, mix(1.0, 3.0, k.y));
+  var v = v0 + 0.35 * emit(p, 0.25 * vec2f(cos(t * 0.7), sin(t * 0.9)), 0.09) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('weave', 'anisotropic', 'a woven plate, heat crossing at the tows', ['diffusion', 'anisotropy', 'cooling', ''], 'copper', 4,
+  `  let bias = select(vec2f(mix(1.0, 3.0, k.y), 0.4), vec2f(0.4, mix(1.0, 3.0, k.y)), (p.x / 8 + p.y / 8) % 2 == 0);
+  let T = ld(p).x; let v0 = T + mix(0.05, 0.2, k.x) * lapAniso(p, bias.x, bias.y);
+  var v = v0 + 0.35 * emit(p, vec2f(0.0), 0.2);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('streaky', 'anisotropic', 'streaky conduction, hot lines pulling out', ['diffusion', 'anisotropy', 'cooling', ''], 'forge', 4,
+  `  let ax = 0.4 + mix(0.0, 2.6, k.y) * (0.5 + 0.5 * sin(cen(p).y * 30.0));
+  let T = ld(p).x; let v0 = T + mix(0.05, 0.2, k.x) * lapAniso(p, ax, 0.4);
+  var v = v0 + 0.35 * emit(p, 0.22 * vec2f(cos(t * 0.6), sin(t * 0.8)), 0.1) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('fiber', 'anisotropic', 'fibrous metal, heat wicking along the fibres', ['diffusion', 'anisotropy', 'cooling', ''], 'gold', 4,
+  `  let ay = 0.4 + mix(0.0, 2.6, k.y) * (0.5 + 0.5 * sin(cen(p).x * 34.0));
+  let T = ld(p).x; let v0 = T + mix(0.05, 0.2, k.x) * lapAniso(p, 0.4, ay);
+  var v = v0 + 0.35 * emit(p, vec2f(0.0), 0.15);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('layered', 'anisotropic', 'laminated sheet conducting along its layers', ['diffusion', 'anisotropy', 'cooling', ''], 'copper', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.2, k.x) * lapAniso(p, mix(1.5, 3.0, k.y), 0.2);
+  var v = v0 + 0.4 * emit(p, 0.2 * vec2f(cos(t * 0.5), 0.0) + vec2f(0.0, sin(t * 0.6) * 0.2), 0.08) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('rolled', 'anisotropic', 'rolled steel, heat racing in the roll direction', ['diffusion', 'anisotropy', 'cooling', ''], 'forge', 4,
+  `  let T = ld(p).x; let v0 = T + mix(0.06, 0.22, k.x) * lapAniso(p, mix(1.2, 3.2, k.y), 0.5);
+  var v = v0 + 0.45 * emit(p, vec2f(-0.35, 0.0), mix(0.1, 0.2, k.y));
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('diagonal', 'anisotropic', 'heat drawn out along the diagonal grain', ['diffusion', 'anisotropy', 'cooling', ''], 'magma', 4,
+  `  let ld0 = ld(p).x;
+  let dg = ld(p + vec2i(1, 1)).x + ld(p - vec2i(1, 1)).x - 2.0 * ld0;
+  let T = ld0; let v0 = T + mix(0.05, 0.2, k.x) * (lap(p) * 0.4 + dg * mix(0.5, 1.6, k.y));
+  var v = v0 + 0.35 * emit(p, 0.25 * vec2f(cos(t * 0.7), sin(t * 0.7)), 0.1) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+
+// ---------------------------------------------------------------- turbulent (heat advected by a swirl)
+C('advect_swirl', 'turbulent', 'heat dragged around a swirling convection cell', ['diffusion', 'flow', 'cooling', 'swirl'], 'magma', 4,
+  `  let vel = swirl(cen(p), t) * mix(0.5, 3.0, k.w) * f32(N);
+  let T = advectT(p, vel * 0.02); let v0 = T + mix(0.03, 0.12, k.x) * lap(p);
+  var v = v0 + 0.35 * emit(p, 0.2 * vec2f(cos(t * 0.6), sin(t * 0.8)), mix(0.06, 0.12, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('vortex', 'turbulent', 'a vortex winding the molten glow into a spiral', ['diffusion', 'flow', 'cooling', 'swirl'], 'inferno', 4,
+  `  let c = cen(p); let vel = vec2f(-c.y, c.x) / (length(c) + 0.06) * mix(0.5, 2.5, k.w) * f32(N);
+  let T = advectT(p, vel * 0.02); let v0 = T + mix(0.03, 0.1, k.x) * lap(p);
+  var v = v0 + 0.35 * emit(p, vec2f(0.22, 0.0), mix(0.06, 0.12, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('boil', 'turbulent', 'molten metal boiling and roiling in place', ['diffusion', 'flow', 'cooling', 'churn'], 'magma', 4,
+  `  let c = cen(p); let vel = vec2f(sin(c.y * 12.0 + t * mix(1.0, 3.0, k.w)), cos(c.x * 12.0 - t * mix(1.0, 3.0, k.w))) * f32(N);
+  let T = advectT(p, vel * 0.015); let v0 = T + mix(0.03, 0.12, k.x) * lap(p);
+  var v = v0 + 0.35 * emit(p, vec2f(0.0), mix(0.14, 0.3, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('curl_drift', 'turbulent', 'heat carried on a curling draught', ['diffusion', 'flow', 'cooling', 'swirl'], 'inferno', 4,
+  `  let vel = (swirl(cen(p), t) + vec2f(0.15, 0.0)) * mix(0.5, 2.5, k.w) * f32(N);
+  let T = advectT(p, vel * 0.02); let v0 = T + mix(0.03, 0.12, k.x) * lap(p);
+  var v = v0 + 0.35 * emit(p, vec2f(-0.3, 0.0), mix(0.07, 0.13, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('eddies', 'turbulent', 'nested eddies shredding the hot streaks', ['diffusion', 'flow', 'cooling', 'swirl'], 'plasma', 4,
+  `  let c = cen(p); let vel = (vec2f(-c.y, c.x) / (length(c) + 0.1) + 0.4 * vec2f(sin(c.y * 20.0 + t), cos(c.x * 20.0 - t))) * mix(0.5, 2.0, k.w) * f32(N);
+  let T = advectT(p, vel * 0.018); let v0 = T + mix(0.03, 0.1, k.x) * lap(p);
+  var v = v0 + 0.35 * emit(p, 0.2 * vec2f(cos(t * 0.5), sin(t * 0.7)), 0.1) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('plume_rise', 'turbulent', 'a thermal plume of heat rising and mushrooming', ['diffusion', 'flow', 'cooling', 'lift'], 'inferno', 4,
+  `  let c = cen(p); let vel = (vec2f(0.0, mix(0.3, 1.2, k.w)) + 0.3 * vec2f(sin(c.y * 8.0 + t), 0.0)) * f32(N);
+  let T = advectT(p, vel * 0.02); let v0 = T + mix(0.03, 0.12, k.x) * lap(p);
+  var v = v0 + 0.4 * emit(p, vec2f(0.0, -0.35), mix(0.08, 0.16, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('convection', 'turbulent', 'convection rolls carrying heat up and over', ['diffusion', 'flow', 'cooling', 'roll'], 'magma', 4,
+  `  let c = cen(p); let vel = vec2f(sin(c.x * 6.0) * cos(c.y * 6.0), -cos(c.x * 6.0) * sin(c.y * 6.0)) * mix(0.5, 2.5, k.w) * f32(N);
+  let T = advectT(p, vel * 0.02); let v0 = T + mix(0.03, 0.12, k.x) * lap(p);
+  var v = v0 + 0.35 * emit(p, vec2f(0.0, -0.3), mix(0.1, 0.2, k.y));
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('storm', 'turbulent', 'a full storm of hot turbulence', ['diffusion', 'flow', 'cooling', 'swirl'], 'inferno', 4,
+  `  let c = cen(p); let vel = (swirl(c, t) + swirl(c * 2.3 + 4.0, t * 1.4) * 0.6) * mix(0.6, 3.0, k.w) * f32(N);
+  let T = advectT(p, vel * 0.02); let v0 = T + mix(0.03, 0.1, k.x) * lap(p);
+  var v = v0 + 0.35 * emit(p, 0.2 * vec2f(cos(t * 0.9), sin(t * 1.2)), 0.1) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('smoke_heat', 'turbulent', 'heat bleeding upward like smoke off the surface', ['diffusion', 'flow', 'cooling', 'lift'], 'copper', 4,
+  `  let c = cen(p); let vel = (vec2f(0.0, mix(0.2, 0.9, k.w)) + 0.4 * swirl(c, t)) * f32(N);
+  let T = advectT(p, vel * 0.02); let v0 = T + mix(0.03, 0.12, k.x) * lap(p);
+  var v = v0 + 0.35 * emit(p, vec2f(sin(t * 0.5) * 0.2, -0.35), mix(0.08, 0.15, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.02, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+
+// ---------------------------------------------------------------- reaction (autocatalytic combustion fronts)
+C('combustion', 'reaction', 'a fire front igniting and spreading through fuel', ['diffusion', 'ignition', 'burnout', 'spread'], 'inferno', 6,
+  `  let T = ld(p).x; let v0 = T + mix(0.04, 0.12, k.x) * lap(p);
+  var v = v0 + mix(0.5, 1.6, k.w) * v0 * (1.0 - v0) * step(0.12, v0);
+  v += 0.5 * emit(p, vec2f(0.0), mix(0.03, 0.07, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.02, 0.08, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('fire_front', 'reaction', 'a travelling combustion front sweeping the plate', ['diffusion', 'ignition', 'burnout', 'spread'], 'forge', 6,
+  `  let T = ld(p).x; let v0 = T + mix(0.04, 0.12, k.x) * lap(p);
+  var v = v0 + mix(0.6, 1.8, k.w) * v0 * (1.0 - v0) * step(0.1, v0);
+  v += 0.6 * emit(p, vec2f(-0.4, 0.0), mix(0.03, 0.06, k.y));
+  v *= 1.0 - mix(0.02, 0.07, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('kpp_spread', 'reaction', 'Fisher-KPP logistic spread of heat', ['diffusion', 'ignition', 'burnout', 'growth'], 'magma', 6,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.15, k.x) * lap(p);
+  var v = v0 + mix(0.3, 1.2, k.w) * v0 * (1.0 - v0);
+  v += 0.4 * emit(p, 0.25 * vec2f(cos(t * 0.4), sin(t * 0.5)), mix(0.03, 0.07, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.02, 0.07, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('ignite_wander', 'reaction', 'a wandering torch lighting fires as it goes', ['diffusion', 'ignition', 'burnout', 'spread'], 'inferno', 6,
+  `  let T = ld(p).x; let v0 = T + mix(0.04, 0.12, k.x) * lap(p);
+  var v = v0 + mix(0.5, 1.5, k.w) * v0 * (1.0 - v0) * step(0.14, v0);
+  v += 0.5 * emit(p, 0.3 * vec2f(cos(t * 0.7), sin(t * 0.9)), mix(0.03, 0.06, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.03, 0.09, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('flare', 'reaction', 'periodic flares igniting and burning out', ['diffusion', 'ignition', 'burnout', 'spread'], 'plasma', 6,
+  `  let T = ld(p).x; let v0 = T + mix(0.04, 0.12, k.x) * lap(p);
+  var v = v0 + mix(0.5, 1.6, k.w) * v0 * (1.0 - v0) * step(0.12, v0);
+  v += 0.7 * emit(p, vec2f(0.0), 0.05) * pow(0.5 + 0.5 * sin(t * 1.5), 3.0);
+  v *= 1.0 - mix(0.03, 0.09, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('autocatalytic', 'reaction', 'runaway autocatalytic heating, hard to quench', ['diffusion', 'ignition', 'burnout', 'spread'], 'steel', 6,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.14, k.x) * lap(p);
+  var v = v0 + mix(0.8, 2.0, k.w) * v0 * (1.0 - v0);
+  v += 0.4 * emit(p, vec2f(0.0), mix(0.04, 0.08, k.y)) * flick(p, t);
+  v *= 1.0 - mix(0.01, 0.05, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('wildfire', 'reaction', 'many ignition seeds racing into a wildfire', ['diffusion', 'seeds', 'burnout', 'spread'], 'inferno', 6,
+  `  let T = ld(p).x; let v0 = T + mix(0.04, 0.12, k.x) * lap(p);
+  var v = v0 + mix(0.6, 1.8, k.w) * v0 * (1.0 - v0) * step(0.1, v0);
+  v += step(1.0 - mix(0.001, 0.008, k.y), rnd(p, floor(t * 3.0))) * 0.8;
+  v *= 1.0 - mix(0.02, 0.08, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+C('chain', 'reaction', 'a chain reaction rippling out in rings', ['diffusion', 'ignition', 'burnout', 'spread'], 'magma', 6,
+  `  let T = ld(p).x; let v0 = T + mix(0.05, 0.14, k.x) * lap(p);
+  var v = v0 + mix(0.5, 1.6, k.w) * v0 * (1.0 - v0) * step(0.12, v0);
+  let rr = fract(t * 0.2) * 0.6;
+  v += 0.6 * exp(-(length(cen(p)) - rr) * (length(cen(p)) - rr) / mix(0.001, 0.005, k.y));
+  v *= 1.0 - mix(0.02, 0.08, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));`);
+
+const CELLS = cells;
+const MODES = {}; const STEPS = {};
+for (const c of CELLS) { MODES[c.name] = PAL[c.pal]; STEPS[c.name] = c.steps; }
+
+// ── emit pack.wgsl ───────────────────────────────────────────────────────────
+const kernel = c =>
+  `@compute @workgroup_size(8, 8) fn cs_${c.name}(@builtin(global_invocation_id) id: vec3u) {\n  let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }\n  if (u.reset > 0.5) { textureStore(dst, p, vec4f(0.0, 0.0, 0.0, 1.0)); return; }\n  let t = u.time; let k = u.k;\n${c.body}\n}`;
+
+const PRESENT = `
+// ─────────────────────────────────────────────── present: temperature → metal color
+@group(0) @binding(0) var<uniform> pu: SimU;
+@group(0) @binding(1) var pTex: texture_2d<f32>;
 @vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
     var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
     return vec4f(p[i], 0.0, 1.0);
 }
-fn fuv(fp: vec2f) -> vec2f {
-    let p = fp / max(u.pixelScale, 0.001);
-    let n = (p - 0.5 * u.size) / max(min(u.size.x, u.size.y), 1.0);
-    return vec2f(n.x, 0.5 - n.y);
+// Inferno colormap (matplotlib), 7th-order polynomial fit.
+fn inferno(t: f32) -> vec3f {
+    let x = clamp(t, 0.0, 1.0);
+    return vec3f(0.00021894, 0.00165100, -0.01948090)
+      + x * (vec3f(0.10651342, 0.56395644, 3.93271239)
+      + x * (vec3f(11.60249308, -3.97285397, -15.94239411)
+      + x * (vec3f(-41.70399613, 17.43639888, 44.35414520)
+      + x * (vec3f(77.16293570, -33.40235894, -81.80730926)
+      + x * (vec3f(-71.31942824, 32.62606426, 73.20951986)
+      + x * (vec3f(25.13112622, -12.24266895, -23.07032500)))))));
 }
-
-// ── Perlin noise and fractal sums ───────────────────────────────────────────
-fn fade2(t: vec2f) -> vec2f { return t * t * t * (t * (t * 6.0 - 15.0) + 10.0); }
-fn pcg3d(vin: vec3u) -> vec3u {
-    var v = vin * 1664525u + 1013904223u;
-    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
-    v ^= v >> vec3u(16u);
-    v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
-    return v;
-}
-fn h3(p: vec3i, seed: u32) -> vec3f {
-    let q = pcg3d(vec3u(p + vec3i(32768)) ^ vec3u(seed, seed * 3u + 1u, seed * 7u + 5u));
-    return vec3f(q) * (1.0 / 4294967295.0);
-}
-fn h21(p: vec2i, seed: u32) -> f32 { return h3(vec3i(p, 0), seed).x; }
-fn grad2(i: vec2i, seed: u32) -> vec2f { let a = h21(i, seed) * TAU; return vec2f(cos(a), sin(a)); }
-fn pnoise(p: vec2f, seed: u32) -> f32 {
-    let i = vec2i(floor(p)); let f = fract(p); let w = fade2(f);
-    let a = dot(grad2(i, seed), f);
-    let b = dot(grad2(i + vec2i(1, 0), seed), f - vec2f(1.0, 0.0));
-    let c = dot(grad2(i + vec2i(0, 1), seed), f - vec2f(0.0, 1.0));
-    let d = dot(grad2(i + vec2i(1, 1), seed), f - vec2f(1.0, 1.0));
-    return mix(mix(a, b, w.x), mix(c, d, w.x), w.y) * 1.414;
-}
-fn rot2(a: f32) -> mat2x2f { let c = cos(a); let s = sin(a); return mat2x2f(c, s, -s, c); }
-fn fbm(p0: vec2f, oct: i32, seed: u32) -> f32 {
-    var p = p0; var a = 0.5; var s = 0.0; var nrm = 0.0;
-    for (var i: i32 = 0; i < 8; i++) { if (i >= oct) { break; } s += a * pnoise(p, seed + u32(i)); nrm += a; a *= 0.5; p = rot2(0.5) * p * 2.0; }
-    return s / max(nrm, 1e-4);
-}
-fn fbm01(p: vec2f, oct: i32, seed: u32) -> f32 { return 0.5 + 0.5 * fbm(p, oct, seed); }
-
-// ── blackbody: temperature (Kelvin) to approximate sRGB (Tanner Helland) ─────
-fn blackbody(tk: f32) -> vec3f {
-    let T = clamp(tk, 500.0, 12000.0) / 100.0;
-    var r: f32; var g: f32; var b: f32;
-    if (T <= 66.0) { r = 255.0; } else { r = 329.698727446 * pow(T - 60.0, -0.1332047592); }
-    if (T <= 66.0) { g = 99.4708025861 * log(T) - 161.1195681661; } else { g = 288.1221695283 * pow(T - 60.0, -0.0755148492); }
-    if (T >= 66.0) { b = 255.0; } else if (T <= 19.0) { b = 0.0; } else { b = 138.5177312231 * log(T - 10.0) - 305.0447927307; }
-    return clamp(vec3f(r, g, b) / 255.0, vec3f(0.0), vec3f(1.0));
-}
-// steel tempering (oxide) colors: straw, bronze, purple, blue, grey-blue
-fn temperColor(x: f32) -> vec3f {
-    let s = clamp(x, 0.0, 1.0) * 5.0;
-    let cs = array<vec3f, 6>(
-        vec3f(0.66, 0.64, 0.56), vec3f(0.86, 0.66, 0.30), vec3f(0.55, 0.30, 0.18),
-        vec3f(0.42, 0.24, 0.52), vec3f(0.22, 0.34, 0.74), vec3f(0.48, 0.58, 0.72));
-    let i = i32(floor(s)); let f = fract(s);
-    let a = cs[clamp(i, 0, 5)]; let b = cs[clamp(i + 1, 0, 5)];
-    return mix(a, b, f);
-}
-
-// ── metal surface and heat fields ───────────────────────────────────────────
-fn brushed(uv: vec2f, freq: f32, ang: f32, detail: f32) -> f32 {
-    let p = rot2(ang) * uv;
-    let lines = 0.5 + 0.5 * sin(p.y * freq + fbm(p * vec2f(2.0, 22.0), 3, 5u) * 3.0);
-    let micro = fbm01(p * vec2f(4.0, 44.0), 2, 9u);
-    return clamp(0.35 + 0.5 * lines * detail + 0.25 * micro, 0.0, 1.0);
-}
-// top-left corner as the origin: (0,0) at top-left, (1,1) at bottom-right
-fn corner(uv: vec2f) -> vec2f { return vec2f(uv.x + 0.5, 1.0 - uv.y); }
-// pointwise conduction from the corner: temperature falls off with distance.
-// cond is the conduction length (how far heat reaches); aniso stretches the
-// spread along y (>1 reaches further down, <1 stays tight).
-fn diffCorner(c: vec2f, cond: f32, aniso: f32) -> f32 {
-    let d = c * vec2f(1.0, 1.0 / max(aniso, 0.05));
-    // reach boosted x1.9 and given a gentler tail (pow < 1) so the heat spreads
-    // much further and more strongly across the plate
-    return exp(-pow(length(d) / (max(cond, 0.02) * 1.9), 0.82));
-}
-fn hotspot(uv: vec2f, c: vec2f, r: f32) -> f32 { let d = uv - c; return exp(-dot(d, d) / max(r * r, 1e-4)); }
-fn metalSparks(uv: vec2f, t: f32, density: f32, speed: f32, seed: u32) -> f32 {
-    let scale = mix(7.0, 16.0, density);
-    let q = vec2f(uv.x * scale, (uv.y - t * speed) * scale);
-    let i = vec2i(floor(q)); let f = fract(q); var s = 0.0;
-    for (var y: i32 = -1; y <= 1; y++) { for (var x: i32 = -1; x <= 1; x++) {
-        let o = vec2i(x, y); let r = h3(vec3i(i + o, 0), seed);
-        if (r.z < 0.6) { continue; }
-        let life = fract(r.x + t * speed * 0.5);
-        let d = f - vec2f(o) - vec2f(r.x, r.y * 0.4);
-        let tw = 0.6 + 0.4 * sin(t * 7.0 + r.y * TAU);
-        s += tw * (1.0 - life) * exp(-dot(d, d) * 45.0);
-    } }
-    return s;
-}
-
-// ── color and the finisher ──────────────────────────────────────────────────
-// An artistic hot-metal emission ramp. Blackbody-informed but hand-tuned for a
-// pleasing curve: deep ember red, red-orange, orange, gold, pale, white. No
-// hard step anywhere, so there is no glow barrier.
-fn heatColor(x: f32) -> vec3f {
+fn pMagma(x: f32) -> vec3f {
     let t = clamp(x, 0.0, 1.0);
-    var c = mix(vec3f(0.06, 0.0, 0.0), vec3f(0.55, 0.03, 0.01), smoothstep(0.0, 0.18, t));
-    c = mix(c, vec3f(0.95, 0.14, 0.02), smoothstep(0.15, 0.36, t));
-    c = mix(c, vec3f(1.0, 0.42, 0.07), smoothstep(0.33, 0.54, t));
-    c = mix(c, vec3f(1.0, 0.74, 0.26), smoothstep(0.5, 0.72, t));
-    c = mix(c, vec3f(1.0, 0.94, 0.72), smoothstep(0.68, 0.88, t));
-    c = mix(c, vec3f(1.0, 1.0, 1.0), smoothstep(0.86, 1.0, t));
-    return c;
+    var c = mix(vec3f(0.001, 0.0, 0.014), vec3f(0.12, 0.06, 0.28), smoothstep(0.0, 0.22, t));
+    c = mix(c, vec3f(0.42, 0.11, 0.42), smoothstep(0.2, 0.42, t));
+    c = mix(c, vec3f(0.78, 0.24, 0.36), smoothstep(0.4, 0.6, t));
+    c = mix(c, vec3f(0.98, 0.55, 0.32), smoothstep(0.58, 0.78, t));
+    c = mix(c, vec3f(0.99, 0.86, 0.62), smoothstep(0.76, 0.94, t));
+    return mix(c, vec3f(1.0, 0.99, 0.9), smoothstep(0.92, 1.0, t));
 }
-// tonemap so highlights roll off smoothly (extended Reinhard, white point w)
-fn shoulder(c: vec3f, w: f32) -> vec3f { return c * (1.0 + c / (w * w)) / (1.0 + c); }
-
-fn metalPresent(heat: f32, surf: f32, uv: vec2f, sparkField: f32) -> vec4f {
-    let hot = clamp(heat * u.energy, 0.0, 1.6);
-    let hc = clamp(hot, 0.0, 1.0);
-    // emissive color: the artistic ramp nudged a little toward true blackbody
-    let emCol = mix(heatColor(hot), blackbody(mix(900.0, 6800.0, hc)), 0.28);
-    let sss = pow(hc, 0.55);   // broad, soft inner spread — the subsurface term
-    let core = hc * hc;        // tight bright core
-    // cold metal is ALWAYS present (never cut out), so the glow adds over it and
-    // there is no barrier ring
-    var col = u.ink.rgb * (0.42 + 0.7 * surf);
-    // subsurface: a warm bleed glowing up from inside the metal, felt even faint
-    col += vec3f(0.85, 0.26, 0.07) * pow(sss, 1.35) * 0.6;
-    // the glow itself: a broad soft halo plus the bright core
-    col += emCol * (0.5 * sss + 1.4 * core);
-    // sparks, colored at the top of the ramp
-    let sparkVis = sparkField * smoothstep(0.3, 0.72, hot);
-    col += heatColor(1.0) * sparkVis * (0.9 + 1.2 * u.glow);
-    // bloom on the very hottest, scaled by the Glow control
-    col += emCol * max(hot - 0.8, 0.0) * 0.7 * u.glow;
-    return vec4f(clamp(shoulder(col, 2.4), vec3f(0.0), vec3f(1.4)), 1.0);
+fn pForge(x: f32) -> vec3f {
+    let t = clamp(x, 0.0, 1.0);
+    var c = mix(vec3f(0.02, 0.0, 0.0), vec3f(0.5, 0.03, 0.01), smoothstep(0.0, 0.2, t));
+    c = mix(c, vec3f(0.92, 0.18, 0.02), smoothstep(0.18, 0.42, t));
+    c = mix(c, vec3f(1.0, 0.55, 0.08), smoothstep(0.4, 0.62, t));
+    c = mix(c, vec3f(1.0, 0.85, 0.35), smoothstep(0.6, 0.82, t));
+    return mix(c, vec3f(1.0, 1.0, 0.95), smoothstep(0.82, 1.0, t));
 }
-// oxide (tempering) finisher: keeps the temper palette but gives it the same
-// inner glow, so the film reads as lit from within toward the hot end
-fn oxidePresent(x: f32, surf: f32) -> vec4f {
-    let xc = clamp(x, 0.0, 1.0);
-    var col = temperColor(xc) * (0.5 + 0.7 * surf);
-    col += temperColor(xc) * (xc * xc) * 0.55;                 // inner luminosity
-    col += vec3f(0.5, 0.18, 0.06) * pow(xc, 3.0) * 0.45;       // faint warm bleed
-    return vec4f(clamp(shoulder(col, 2.2), vec3f(0.0), vec3f(1.3)), 1.0);
+fn pEmber(x: f32) -> vec3f {
+    let t = clamp(x, 0.0, 1.0);
+    var c = mix(vec3f(0.02, 0.0, 0.0), vec3f(0.35, 0.03, 0.01), smoothstep(0.0, 0.3, t));
+    c = mix(c, vec3f(0.75, 0.14, 0.02), smoothstep(0.28, 0.55, t));
+    c = mix(c, vec3f(0.98, 0.42, 0.08), smoothstep(0.52, 0.8, t));
+    return mix(c, vec3f(1.0, 0.68, 0.28), smoothstep(0.8, 1.0, t));
+}
+fn pPlasma(x: f32) -> vec3f {
+    let t = clamp(x, 0.0, 1.0);
+    var c = mix(vec3f(0.05, 0.03, 0.53), vec3f(0.4, 0.0, 0.66), smoothstep(0.0, 0.28, t));
+    c = mix(c, vec3f(0.72, 0.18, 0.53), smoothstep(0.26, 0.5, t));
+    c = mix(c, vec3f(0.93, 0.47, 0.29), smoothstep(0.48, 0.72, t));
+    c = mix(c, vec3f(0.98, 0.79, 0.19), smoothstep(0.7, 0.92, t));
+    return mix(c, vec3f(0.99, 0.95, 0.6), smoothstep(0.9, 1.0, t));
+}
+fn pCopper(x: f32) -> vec3f {
+    let t = clamp(x, 0.0, 1.0);
+    var c = mix(vec3f(0.01, 0.0, 0.0), vec3f(0.24, 0.09, 0.04), smoothstep(0.0, 0.25, t));
+    c = mix(c, vec3f(0.58, 0.27, 0.13), smoothstep(0.22, 0.5, t));
+    c = mix(c, vec3f(0.87, 0.53, 0.3), smoothstep(0.48, 0.74, t));
+    c = mix(c, vec3f(1.0, 0.82, 0.58), smoothstep(0.72, 0.92, t));
+    return mix(c, vec3f(1.0, 0.96, 0.86), smoothstep(0.9, 1.0, t));
+}
+fn pSteel(x: f32) -> vec3f {
+    let t = clamp(x, 0.0, 1.0);
+    var c = mix(vec3f(0.0, 0.0, 0.0), vec3f(0.35, 0.03, 0.01), smoothstep(0.0, 0.2, t));
+    c = mix(c, vec3f(0.95, 0.4, 0.1), smoothstep(0.18, 0.42, t));
+    c = mix(c, vec3f(1.0, 0.9, 0.6), smoothstep(0.4, 0.62, t));
+    c = mix(c, vec3f(0.85, 0.92, 1.0), smoothstep(0.62, 0.82, t));
+    return mix(c, vec3f(0.7, 0.85, 1.0), smoothstep(0.82, 1.0, t));
+}
+fn pGold(x: f32) -> vec3f {
+    let t = clamp(x, 0.0, 1.0);
+    var c = mix(vec3f(0.02, 0.0, 0.0), vec3f(0.2, 0.1, 0.0), smoothstep(0.0, 0.22, t));
+    c = mix(c, vec3f(0.55, 0.32, 0.03), smoothstep(0.2, 0.45, t));
+    c = mix(c, vec3f(0.88, 0.64, 0.12), smoothstep(0.43, 0.68, t));
+    c = mix(c, vec3f(1.0, 0.88, 0.45), smoothstep(0.66, 0.88, t));
+    return mix(c, vec3f(1.0, 1.0, 0.9), smoothstep(0.86, 1.0, t));
+}
+fn palette(mode: i32, t: f32) -> vec3f {
+    if (mode == 0) { return inferno(t); }
+    else if (mode == 1) { return pMagma(t); }
+    else if (mode == 2) { return pForge(t); }
+    else if (mode == 3) { return pEmber(t); }
+    else if (mode == 4) { return pPlasma(t); }
+    else if (mode == 5) { return pCopper(t); }
+    else if (mode == 6) { return pSteel(t); }
+    return pGold(t);
+}
+fn cell_state(fp: vec2f) -> vec4f {
+    let pos = fp / pu.pixelScale; let uv = (pos - 0.5 * pu.size) / max(min(pu.size.x, pu.size.y), 1.0) + 0.5;
+    return textureLoad(pTex, clamp(vec2i(uv * f32(N)), vec2i(0), vec2i(N - 1)), 0);
+}
+@fragment fn fs_present(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let s = cell_state(fp.xy); let mode = i32(pu.reset);   // present reuses the reset slot as the palette mode
+    let t = clamp(s.x, 0.0, 1.0);
+    var c = palette(mode, t);
+    // white-hot core: the hottest metal over-saturates toward white, like real emission
+    c += vec3f(1.0, 0.92, 0.75) * smoothstep(0.72, 1.0, t) * 1.5;
+    return vec4f(c, 1.0);
 }
 `;
 
-const cells = [];
-const C = (name, family, species, knobs, body) => cells.push([name, family, species, knobs, body]);
-
-// ---------------------------------------------------------------- conduction (pointwise from top-left)
-C('point_source', 'conduction', 'a point heat source at the top-left, conducting outward', ['conductivity', 'aniso', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 70.0, k.x), 0.1, 0.8);
-  return metalPresent(diffCorner(c, mix(0.15, 0.55, k.x), mix(0.6, 1.6, k.y)), surf, uv, metalSparks(uv, t, 0.5, 0.9, 71u));`);
-C('slow_conductor', 'conduction', 'a poor conductor: heat stays clamped to the corner', ['conductivity', 'grain', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(40.0, 80.0, k.y), 0.1, 0.8);
-  return metalPresent(diffCorner(c, mix(0.08, 0.2, k.x), 1.0), surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
-C('fast_conductor', 'conduction', 'a good conductor: heat reaches deep across the plate', ['conductivity', 'grain', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.y), 0.1, 0.7);
-  return metalPresent(diffCorner(c, mix(0.4, 0.9, k.x), 1.0), surf, uv, metalSparks(uv, t, 0.35, 0.8, 61u));`);
-C('aniso_down', 'conduction', 'heat conducting further down than across', ['conductivity', 'aniso', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 1.5708, 0.8);
-  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.x), mix(1.6, 3.0, k.y)), surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
-C('aniso_right', 'conduction', 'heat conducting further across than down', ['conductivity', 'aniso', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.0, 0.8);
-  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.x), mix(0.6, 0.35, k.y)), surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
-C('sharp_core', 'conduction', 'a sharp hot core with a steep falloff', ['conductivity', 'grain', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(35.0, 70.0, k.y), 0.1, 0.8);
-  let r = length(c); let h = 1.0 / (1.0 + r * r / mix(0.02, 0.1, k.x));
-  return metalPresent(h, surf, uv, metalSparks(uv, t, 0.5, 1.0, 71u));`);
-C('broad_soak', 'conduction', 'heat soaked broadly and evenly from the corner', ['conductivity', 'grain', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.y), 0.1, 0.7);
-  return metalPresent(diffCorner(c, mix(0.6, 1.1, k.x), 1.0) * 1.05, surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
-C('bimetal', 'conduction', 'a seam where conductivity changes across the plate', ['conductivity', 'seam', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
-  let side = step(mix(0.3, 0.7, k.y), c.x);
-  let cond = mix(0.15, 0.5, side);
-  return metalPresent(diffCorner(c, cond, 1.0), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-
-// ---------------------------------------------------------------- transient (the front grows in time)
-C('heating_up', 'transient', 'the metal heating up: the front advances from the corner', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 65.0, k.x), 0.1, 0.8);
-  let grow = smoothstep(0.0, 0.75, fract(t * mix(0.08, 0.22, k.y)));
-  return metalPresent(diffCorner(c, mix(0.06, 0.6, k.x) * grow, 1.0), surf, uv, metalSparks(uv, t, 0.5, 1.0, 71u));`);
-C('reheat_pulse', 'transient', 'the source pulsing: heat breathing out and back', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 65.0, k.x), 0.1, 0.8);
-  let g = 0.4 + 0.6 * (0.5 + 0.5 * sin(t * mix(0.8, 2.2, k.y)));
-  return metalPresent(diffCorner(c, mix(0.15, 0.5, k.x) * g, 1.0), surf, uv, metalSparks(uv, t, 0.5, 1.0, 71u));`);
-C('torch_hold', 'transient', 'a torch held on the corner, flickering hot', ['conductivity', 'flicker', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.7);
-  let fl = 0.85 + 0.15 * sin(t * 7.0 + fbm(uv * 5.0, 2, 9u) * 4.0) * mix(0.3, 1.0, k.y);
-  return metalPresent(diffCorner(c, mix(0.18, 0.5, k.x), 1.0) * fl, surf, uv, metalSparks(uv, t, 0.6, 1.2, 71u));`);
-C('front_advance', 'transient', 'a visible diffusion front sweeping from the corner', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 65.0, k.x), 0.1, 0.8);
-  let rad = fract(t * mix(0.1, 0.3, k.y)) * 1.6;
-  let front = smoothstep(rad, rad - 0.4, length(c));
-  return metalPresent(front * diffCorner(c, mix(0.3, 0.7, k.x), 1.0) * 1.3, surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
-C('ramp_soak', 'transient', 'a slow ramp up to a held soak temperature', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
-  let ph = fract(t * mix(0.05, 0.15, k.y)); let grow = smoothstep(0.0, 0.5, ph) * (1.0 - smoothstep(0.85, 1.0, ph));
-  return metalPresent(diffCorner(c, mix(0.1, 0.55, k.x) * (0.3 + 0.7 * grow), 1.0), surf, uv, metalSparks(uv, t, 0.45, 0.9, 71u));`);
-C('flicker_source', 'transient', 'an unsteady source, its output guttering', ['conductivity', 'gutter', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
-  let gate = 0.5 + 0.5 * sin(t * mix(2.0, 5.0, k.y) + fbm(vec2f(t * 0.8, 0.0), 2, 9u) * 4.0);
-  return metalPresent(diffCorner(c, mix(0.15, 0.5, k.x), 1.0) * mix(0.4, 1.0, gate), surf, uv, metalSparks(uv, t, 0.5, 1.0, 71u));`);
-C('surge', 'transient', 'periodic surges pushing the heat further each beat', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
-  let s = pow(0.5 + 0.5 * sin(t * mix(1.0, 3.0, k.y)), 3.0);
-  return metalPresent(diffCorner(c, mix(0.15, 0.4, k.x) * (0.6 + 1.0 * s), 1.0), surf, uv, metalSparks(uv, t, 0.5, 1.1, 71u));`);
-C('breathing', 'transient', 'the conduction length breathing in and out', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.1, 0.8);
-  let g = 0.5 + 0.5 * sin(t * mix(0.6, 1.6, k.y));
-  return metalPresent(diffCorner(c, mix(0.12, 0.55, k.x) * (0.5 + g), 1.0), surf, uv, metalSparks(uv, t, 0.4, 0.9, 61u));`);
-
-// ---------------------------------------------------------------- anisotropic (grain-directed conduction)
-C('grain_flow', 'anisotropic', 'heat following the brushed grain out of the corner', ['angle', 'reach', '', ''],
- `  let ang = mix(0.2, 1.3, k.x); let surf = brushed(uv, 70.0, ang, 0.9);
-  let c = rot2(ang) * corner(uv);
-  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 2.2), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('diagonal_conduct', 'anisotropic', 'conduction stretched along a diagonal', ['angle', 'reach', '', ''],
- `  let ang = 0.785; let surf = brushed(uv, 60.0, ang, 0.8);
-  let c = rot2(ang) * corner(uv);
-  return metalPresent(diffCorner(c, mix(0.2, 0.5, k.y), mix(1.8, 3.2, k.x)), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('laminated', 'anisotropic', 'a laminated sheet conducting along its layers', ['pitch', 'reach', '', ''],
- `  let surf = 0.4 + 0.4 * (0.5 + 0.5 * sin(uv.y * mix(20.0, 44.0, k.x)));
-  let c = corner(uv);
-  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 0.35) * (0.6 + 0.5 * surf), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
-C('fiber', 'anisotropic', 'fibrous conduction, streaky along the grain', ['scale', 'reach', '', ''],
- `  let c = corner(uv); let streak = fbm01(corner(uv) * vec2f(3.0, mix(14.0, 30.0, k.x)), 3, 13u);
-  let surf = clamp(0.3 + 0.6 * streak, 0.0, 1.0);
-  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.y), 1.0) * (0.6 + 0.7 * streak), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('crystal', 'anisotropic', 'crystalline directional conduction in facets', ['facets', 'reach', '', ''],
- `  let c = corner(uv); let a = atan2(c.y, c.x); let fac = floor(a * mix(2.0, 5.0, k.x) / PI * 4.0);
-  let dir = 0.7 + 0.3 * sin(fac);
-  let surf = brushed(uv, 55.0, 0.4, 0.7);
-  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.y) * dir, 1.0), surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('rolled_dir', 'anisotropic', 'rolled steel: heat runs fast in the roll direction', ['reach', 'grain', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.y), 0.0, 0.7);
-  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.x), 0.4), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
-C('weld_haz', 'anisotropic', 'an elongated heat-affected zone from the corner', ['reach', 'aniso', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.6, 0.8);
-  return metalPresent(diffCorner(rot2(0.6) * c, mix(0.2, 0.45, k.x), mix(2.0, 3.5, k.y)), surf, uv, metalSparks(uv, t, 0.4, 1.0, 71u));`);
-C('vane', 'anisotropic', 'vane-like directional spread with a hard edge', ['spread', 'reach', '', ''],
- `  let c = corner(uv); let a = atan2(c.y, c.x);
-  let vane = smoothstep(mix(0.9, 1.4, k.x), 0.2, a);
-  let surf = brushed(uv, 60.0, 0.3, 0.8);
-  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.4 + 0.8 * vane), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-
-// ---------------------------------------------------------------- defect (heat rerouted by material)
-C('inclusions', 'defect', 'heat conducting around cold inclusions', ['scale', 'block', '', ''],
- `  let c = corner(uv); let block = smoothstep(0.45, 0.6, fbm01(c * mix(4.0, 8.0, k.x), 4, 5u)) * mix(1.0, 3.0, k.y);
-  let surf = brushed(uv, 55.0, 0.1, 0.8);
-  return metalPresent(exp(-length(c) * (1.0 + block) / 0.4), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('hot_veins', 'defect', 'veins that conduct heat faster out of the corner', ['scale', 'sharp', '', ''],
- `  let c = corner(uv); let vein = pow(1.0 - abs(fbm(c * mix(3.0, 6.0, k.x), 5, 21u)), mix(2.0, 5.0, k.y));
-  let surf = brushed(uv, 55.0, 0.1, 0.7);
-  return metalPresent(exp(-length(c) / (0.25 + 0.5 * vein)) , surf, uv, metalSparks(uv, t, 0.35, 0.9, 61u));`);
-C('porous', 'defect', 'porous metal with patchy, broken conduction', ['scale', 'pore', '', ''],
- `  let c = corner(uv); let pore = fbm01(c * mix(4.0, 9.0, k.x), 4, 8u);
-  let surf = brushed(uv, 45.0, 0.1, 0.7);
-  return metalPresent(diffCorner(c, 0.4, 1.0) * smoothstep(mix(0.3, 0.5, k.y), 0.7, pore) * 1.3, surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('cracked', 'defect', 'cracks that block heat, throwing dark shadows', ['scale', 'sharp', '', ''],
- `  let c = corner(uv); let crack = smoothstep(0.02, 0.0, abs(fbm(c * mix(3.0, 6.0, k.x), 5, 31u)));
-  let surf = brushed(uv, 50.0, 0.1, 0.8);
-  return metalPresent(diffCorner(c, 0.45, 1.0) * (1.0 - crack * mix(0.6, 1.0, k.y)), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('grainy', 'defect', 'a noisy conductivity field, mottling the falloff', ['scale', 'noise', '', ''],
- `  let c = corner(uv); let n = 0.7 + 0.6 * fbm(c * mix(3.0, 7.0, k.x), 4, 5u) * mix(0.4, 1.2, k.y);
-  let surf = brushed(uv, 55.0, 0.1, 0.8);
-  return metalPresent(exp(-length(c) * n / 0.4), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('marbled_conduct', 'defect', 'marbled conduction warping the heat path', ['scale', 'flow', '', ''],
- `  var c = corner(uv); c += vec2f(fbm(c * mix(2.0, 4.0, k.x) + t * 0.03, 4, 33u), fbm(c * 2.0 + 5.2, 4, 41u)) * mix(0.1, 0.35, k.y);
-  let surf = brushed(uv, 50.0, 0.1, 0.7);
-  return metalPresent(diffCorner(c, 0.4, 1.0), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
-C('dendritic', 'defect', 'heat branching in dendrites from the corner', ['scale', 'sharp', '', ''],
- `  let c = corner(uv); let a = atan2(c.y, c.x);
-  let branch = pow(0.5 + 0.5 * sin(a * mix(6.0, 14.0, k.x) + length(c) * 8.0), mix(2.0, 5.0, k.y));
-  let surf = brushed(uv, 55.0, 0.1, 0.7);
-  return metalPresent(diffCorner(c, 0.45, 1.0) * (0.4 + 0.9 * branch), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('mottled', 'defect', 'mottled heat pockets budding off the corner', ['scale', 'flow', '', ''],
- `  let c = corner(uv); let pock = fbm01(c * mix(3.0, 6.0, k.x) - vec2f(0.0, t * 0.1), 4, 8u);
-  let surf = brushed(uv, 50.0, 0.1, 0.7);
-  return metalPresent(diffCorner(c, 0.4, 1.0) * (0.5 + pock * mix(0.6, 1.0, k.y)), surf, uv, metalSparks(uv, t, 0.3, 0.8, 61u));`);
-
-// ---------------------------------------------------------------- spark (hot corner throwing sparks)
-C('corner_sparks', 'spark', 'the hot corner throwing a scatter of sparks', ['conductivity', 'density', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.7);
-  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, mix(0.6, 1.0, k.y), 1.3, 71u);
-  return metalPresent(diffCorner(c, mix(0.2, 0.4, k.x), 1.0) * 1.1, surf, uv, sp * 1.3);`);
-C('grinding_corner', 'spark', 'a grinder biting the corner, fanning sparks', ['conductivity', 'density', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 80.0, t * 3.0, 0.8);
-  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, mix(0.7, 1.0, k.y), 1.9, 71u) + metalSparks(uv + vec2f(0.5, 0.0), t + 5.0, 0.8, 2.1, 88u);
-  return metalPresent(diffCorner(c, mix(0.18, 0.35, k.x), 1.0) * 1.3, surf, uv, sp * 1.4);`);
-C('welding_corner', 'spark', 'an arc struck at the corner, spitting bright', ['conductivity', 'density', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.7);
-  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, mix(0.7, 1.0, k.y), 1.6, 71u);
-  return metalPresent(diffCorner(c, mix(0.14, 0.3, k.x), 1.0) * 1.5, surf, uv, sp * 1.6);`);
-C('spark_shower_corner', 'spark', 'a dense shower streaming off the corner', ['conductivity', 'density', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 55.0, 0.1, 0.6);
-  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, 0.9, mix(1.4, 2.2, k.y), 71u) + metalSparks(uv + vec2f(0.5, 0.0), t + 3.0, 0.9, 2.0, 88u);
-  return metalPresent(diffCorner(c, mix(0.2, 0.4, k.x), 1.0) * 1.2, surf, uv, sp * 1.3);`);
-C('cutting_corner', 'spark', 'a cutting torch at the corner, dripping slag', ['conductivity', 'density', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.7);
-  let sp = metalSparks(uv + vec2f(0.5, -0.2), t, mix(0.7, 1.0, k.y), 2.2, 71u);
-  return metalPresent(diffCorner(c, mix(0.14, 0.3, k.x), 1.4) * 1.4, surf, uv, sp * 1.4);`);
-C('burst_corner', 'spark', 'the corner spitting sparks in periodic bursts', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.7);
-  let burst = pow(0.5 + 0.5 * sin(t * mix(1.5, 4.0, k.y)), 4.0);
-  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, 0.8, 1.7, 71u) * (0.3 + burst);
-  return metalPresent(diffCorner(c, mix(0.16, 0.34, k.x), 1.0) * 1.3, surf, uv, sp * 1.5);`);
-C('fountain_corner', 'spark', 'a fountain of sparks rising from the corner', ['conductivity', 'density', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 50.0, 0.1, 0.6);
-  var sp = 0.0;
-  for (var i: i32 = 0; i < 3; i++) { let a = f32(i) * 0.5 - 0.5; sp += metalSparks(rot2(a) * (uv + vec2f(0.5, -0.5)) + vec2f(0.0, -0.5), t + f32(i) * 3.0, mix(0.7, 1.0, k.y), 1.8, 71u + u32(i)); }
-  return metalPresent(diffCorner(c, mix(0.18, 0.36, k.x), 1.0) * 1.2, surf, uv, sp * 1.2);`);
-C('slag_corner', 'spark', 'molten slag beading and sparking at the corner', ['conductivity', 'density', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 45.0, 0.1, 0.6);
-  let sp = metalSparks(uv + vec2f(0.5, 0.0), t, mix(0.5, 0.9, k.y), 1.3, 71u);
-  return metalPresent(diffCorner(c, mix(0.16, 0.32, k.x), 1.2) * 1.25, surf, uv, sp * 1.2);`);
-
-// ---------------------------------------------------------------- quench (source pulled, heat recedes to the corner)
-C('quench', 'quench', 'the source pulled away, the glow shrinking to the corner', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
-  let cool = 0.4 + 0.5 * (0.5 + 0.5 * sin(t * mix(0.3, 0.9, k.y) - 1.5));
-  return metalPresent(diffCorner(c, mix(0.1, 0.5, k.x) * cool, 1.0), surf, uv, 0.0);`);
-C('cooling_front', 'quench', 'a cool front advancing from the far edge toward the corner', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
-  let front = 1.5 - fract(t * mix(0.1, 0.3, k.y)) * 1.6;
-  let mask = smoothstep(front - 0.3, front, length(c));
-  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.x), 1.0) * (1.0 - mask), surf, uv, 0.0);`);
-C('receding_glow', 'quench', 'the last glow receding into the corner', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
-  let g = mix(0.35, 0.6, k.x) * (0.4 + 0.6 * abs(sin(t * mix(0.3, 0.8, k.y))));
-  return metalPresent(diffCorner(c, g, 1.0), surf, uv, 0.0);`);
-C('oxide_cooling', 'quench', 'cooling metal skinning over with oxide', ['scale', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 45.0, 0.1, 0.6);
-  var p = c * mix(2.0, 4.0, k.x); p += vec2f(fbm(p + t * 0.04, 4, 33u), fbm(p + 5.2, 4, 41u)) * 0.4;
-  let cool = 0.5 + 0.4 * sin(t * mix(0.3, 0.7, k.y));
-  return metalPresent(diffCorner(c, 0.4, 1.0) * (0.5 + 0.5 * fbm01(p, 4, 3u)) * cool, surf, uv, 0.0);`);
-C('steam_quench', 'quench', 'quench steam pocking the hot corner', ['scale', 'patch', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
-  let steam = smoothstep(mix(0.4, 0.6, k.y), 0.75, fbm01(c * mix(4.0, 8.0, k.x) - vec2f(0.0, t), 4, 8u));
-  return metalPresent(diffCorner(c, 0.4, 1.0) * (1.0 - steam), surf, uv, 0.0);`);
-C('flash_cool', 'quench', 'a flash quench: the corner darkening in pulses', ['conductivity', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
-  let flash = 1.0 - pow(0.5 + 0.5 * sin(t * mix(1.5, 4.0, k.y)), 3.0) * 0.7;
-  return metalPresent(diffCorner(c, mix(0.2, 0.45, k.x), 1.0) * flash, surf, uv, 0.0);`);
-C('uneven_quench', 'quench', 'patchy quenching, cold streaks eating the glow', ['scale', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 55.0, 0.1, 0.8);
-  let patchN = fbm01(c * mix(3.0, 6.0, k.x) + vec2f(0.0, t * 0.1), 4, 8u);
-  return metalPresent(diffCorner(c, 0.4, 1.0) * smoothstep(mix(0.3, 0.5, k.y), 0.7, patchN), surf, uv, 0.0);`);
-C('residual', 'quench', 'only a faint residual warmth left at the corner', ['conductivity', 'level', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 65.0, 0.1, 0.8);
-  return metalPresent(diffCorner(c, mix(0.08, 0.2, k.x), 1.0) * mix(0.3, 0.7, k.y), surf, uv, 0.0);`);
-
-// ---------------------------------------------------------------- oxide (tempering colors from the corner)
-C('temper_rings', 'oxide', 'tempering rings radiating from the hot corner', ['reach', 'noise', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(40.0, 80.0, k.y), 0.1, 0.8);
-  let x = clamp(1.0 - length(c) / mix(0.4, 1.0, k.x), 0.0, 1.0) * u.energy;
-  return oxidePresent(x, surf);`);
-C('temper_grow', 'oxide', 'temper colors climbing outward as it heats', ['reach', 'rate', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.1, 0.8);
-  let grow = 0.4 + 0.6 * (0.5 + 0.5 * sin(t * mix(0.3, 0.9, k.y)));
-  let x = clamp(1.0 - length(c) / (mix(0.4, 0.9, k.x) * grow), 0.0, 1.0);
-  return oxidePresent(x, surf);`);
-C('heat_tint_corner', 'oxide', 'a weld heat-tint fanning from the corner', ['reach', 'width', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 60.0, 0.6, 0.8);
-  let x = clamp(1.0 - length(c) * mix(1.5, 3.0, k.y), 0.0, 1.0);
-  return oxidePresent(x, surf);`);
-C('bluing_corner', 'oxide', 'gun-bluing deepening toward the hot corner', ['reach', 'depth', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(50.0, 80.0, k.x), 0.1, 0.8);
-  let x = clamp(1.0 - length(c) / mix(0.5, 1.1, k.y), 0.0, 1.0) * 0.9 + 0.1;
-  return oxidePresent(x, surf);`);
-C('temper_grain', 'oxide', 'tempering colors following the grain from the corner', ['reach', 'angle', '', ''],
- `  let ang = mix(0.0, 1.2, k.y); let surf = brushed(uv, 70.0, ang, 0.9);
-  let c = rot2(ang) * corner(uv) * vec2f(1.0, 0.45);
-  let x = clamp(1.0 - length(c) / mix(0.4, 0.9, k.x), 0.0, 1.0);
-  return oxidePresent(x, surf);`);
-C('temper_marble', 'oxide', 'oxide tempering marbled around the corner', ['scale', 'flow', '', ''],
- `  var c = corner(uv); c += vec2f(fbm(c * mix(2.0, 4.0, k.x) + t * 0.03, 4, 33u), fbm(c * 2.0 + 5.2, 4, 41u)) * mix(0.15, 0.4, k.y);
-  let surf = brushed(uv, 55.0, 0.1, 0.8);
-  let x = clamp(1.0 - length(c) / 0.7, 0.0, 1.0);
-  return oxidePresent(x, surf);`);
-C('temper_bands', 'oxide', 'banded tempering colors stepping out from the corner', ['reach', 'bands', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, 70.0, 0.1, 0.9);
-  let x = clamp(1.0 - length(c) / mix(0.5, 1.0, k.x), 0.0, 1.0);
-  let banded = floor(x * mix(4.0, 8.0, k.y)) / mix(4.0, 8.0, k.y);
-  return oxidePresent(banded, surf);`);
-
-// ---------------------------------------------------------------- surface (metal finishes, corner heat glowing through)
-C('brushed_finish', 'surface', 'brushed steel with the corner glowing through the grain', ['freq', 'reach', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(40.0, 90.0, k.x), 0.0, 1.0);
-  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.7 + 0.5 * surf), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('damascus_finish', 'surface', 'a damascus billet, its pattern warmed from the corner', ['freq', 'reach', '', ''],
- `  let p = vec2f(uv.x, uv.y + 0.15 * sin(uv.x * mix(6.0, 14.0, k.x)));
-  let surf = 0.4 + 0.5 * (0.5 + 0.5 * sin(p.y * mix(20.0, 50.0, k.x) + fbm(p * 4.0, 3, 5u) * 4.0));
-  let c = corner(uv);
-  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.7 + 0.5 * surf), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('scratched_finish', 'surface', 'a scratched plate, heat pooling in the grooves', ['freq', 'reach', '', ''],
- `  let scr = fbm01(uv * vec2f(mix(3.0, 6.0, k.x), 60.0), 3, 13u);
-  let surf = clamp(0.3 + 0.7 * scr, 0.0, 1.0);
-  let c = corner(uv);
-  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.6 + 0.7 * scr), surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('mesh_finish', 'surface', 'a grate heating, the bars nearest the corner first', ['pitch', 'reach', '', ''],
- `  let g = mix(6.0, 16.0, k.x);
-  let bars = max(abs(fract(uv.x * g) - 0.5), abs(fract(uv.y * g) - 0.5));
-  let surf = smoothstep(0.2, 0.45, bars);
-  let c = corner(uv);
-  return metalPresent(diffCorner(c, mix(0.3, 0.55, k.y), 1.0) * surf, surf, uv, metalSparks(uv, t, 0.3, 0.9, 61u));`);
-C('mill_finish', 'surface', 'a rolled mill finish warmed from the corner', ['freq', 'reach', '', ''],
- `  let c = corner(uv); let surf = brushed(uv, mix(30.0, 60.0, k.x), 0.05, 0.6);
-  return metalPresent(diffCorner(c, mix(0.25, 0.5, k.y), 1.0) * (0.7 + 0.4 * fbm01(uv * vec2f(2.0, 6.0), 3, 3u)), surf, uv, metalSparks(uv, t, 0.25, 0.8, 61u));`);
-
-const CELLS = cells;
-
-// ── emit pack.wgsl ───────────────────────────────────────────────────────────
-const frag = ([name, , , , body]) =>
-  `@fragment fn fs_${name}(@builtin(position) fp: vec4f) -> @location(0) vec4f {\n  let uv = fuv(fp.xy);\n  let t = u.time;\n  let k = u.k;\n${body}\n}`;
-const pack = HELPERS + '\n// ── the 60 metal cells ───────────────────────────────────────────────────────\n' +
-  CELLS.map(frag).join('\n\n') + '\n';
+const pack = HELPERS + '\n// ── the 60 heat kernels ──────────────────────────────────────────────────────\n' +
+  CELLS.map(kernel).join('\n\n') + '\n' + PRESENT;
 
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
   uniform_bytes: 96,
-  cells: CELLS.map(([name, family, species, knobs]) => ({ name, family, species, knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'fs_' + name })),
+  cells: CELLS.map(c => ({ name: c.name, family: c.family, species: c.species, knobs: c.knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'cs_' + c.name })),
   gens: [
-    { id: 'energy', title: 'Energy · heat drive', fn: 'flat', period: 12, amp: 0.45, bias: 0.6, phase: 0,
-      map: 'y => 2.1 * y', unit: "v => (v * 100).toFixed(0) + '%'" },
-    { id: 'tempo', title: 'Tempo · hover speed', fn: 'flat', period: 8, amp: 0.0, bias: 0.5, phase: 0,
-      map: 'y => 0.1 + 2.9 * y', unit: "v => v.toFixed(2) + 'x'" },
-    { id: 'glow', title: 'Glow · spark bloom', fn: 'flat', period: 10, amp: 0.0, bias: 0.5, phase: 0,
-      map: 'y => 1.5 * y', unit: "v => (v * 100).toFixed(0) + '%'" },
+    { id: 'tempo', title: 'Tempo · simulation speed', fn: 'flat', period: 8, amp: 0.0, bias: 0.5, phase: 0,
+      map: 'y => 0.2 + 2.8 * y', unit: "v => v.toFixed(2) + 'x'" },
   ],
   swatches: [
-    { id: 'ink', label: 'Cold steel', hex: '#22262e' },
-    { id: 'tone', label: 'Patina', hex: '#8a5a2a' },
-    { id: 'cream', label: 'Sheen', hex: '#d8dee8' },
+    { id: 'ink', label: 'Ink', hex: '#0a0604' },
+    { id: 'tone', label: 'Tone', hex: '#e2531a' },
+    { id: 'cream', label: 'Cream', hex: '#ffd27a' },
   ],
 };
 
 // ── emit index.html ──────────────────────────────────────────────────────────
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#x27;');
 const legend = Object.keys(FAM).map(f => `<span class="f-${f}"><i></i>${f}</span>`).join('');
-const tiles = CELLS.map(([name, family, species]) =>
-  `<div class="cell f-${family}" role="button" tabindex="0" id="tile-${name}" aria-label="${esc(name.replace(/_/g, ' ') + ': ' + species)}"><canvas></canvas><span class="orb-status"></span><span class="tag">${name.replace(/_/g, ' ')}</span></div>`).join('');
+const tiles = CELLS.map(c =>
+  `<div class="cell f-${c.family}" role="button" tabindex="0" id="tile-${c.name}" aria-label="${esc(c.name.replace(/_/g, ' ') + ': ' + c.species)}"><canvas></canvas><span class="orb-status"></span><span class="tag">${c.name.replace(/_/g, ' ')}</span></div>`).join('');
 const swatchHtml = spec.swatches.map(s => `<label class="swatch"><span>${s.label}</span><input type="color" id="sw-${s.id}" value="${s.hex}"></label>`).join('');
 
 const indexHtml = `<!DOCTYPE html>
@@ -517,8 +541,9 @@ const indexHtml = `<!DOCTYPE html>
   ════════════════════════════════════════════════════════════════════════════
    HEAT METAL TABLE  ·  page shell (GENERATED by build.mjs)
   ────────────────────────────────────────────────────────────────────────────
-   ${CELLS.length} cells of metal heating under a surface. Color follows an idealized
-   blackbody curve; hot metal throws sparks; the oxide family shows tempering.
+   ${CELLS.length} heat-equation compute simulations. A wandering source diffuses heat
+   through metal; the present pass colors temperature through a metal palette.
+   Simulations step only while hovered and reset when the pointer leaves.
   ════════════════════════════════════════════════════════════════════════════
 -->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -530,13 +555,14 @@ const indexHtml = `<!DOCTYPE html>
 <div class="grid-bg"></div>
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Heat Metal Table</span></div>
-  <div class="topbar-r">SYS // <strong>WGSL SHADER LAB</strong></div>
+  <div class="topbar-r">SYS // <strong>WGSL COMPUTE LAB</strong></div>
 </div>
 <div id="side">
-  <div class="side-head"><div class="big">metal</div><div class="sub">|${CELLS.length} cells · ${Object.keys(FAM).length} families⟩</div></div>
+  <div class="side-head"><div class="big">heat metal</div><div class="sub">|${CELLS.length} sims · ${Object.keys(FAM).length} families⟩</div></div>
   <div class="legend">${legend}</div>
   <div id="gens"></div>
-  <div class="sec"><div class="sec-lbl">Metal &amp; sheen</div><div class="swatches">${swatchHtml}</div></div>
+  <div class="sec"><button class="chip" id="resetall" type="button">↺ reset every simulation</button><div class="mini">sims step only while hovered and reset when the pointer leaves · tempo scales the step rate</div></div>
+  <div class="sec"><div class="sec-lbl">Backdrop</div><div class="swatches">${swatchHtml}</div></div>
   <div class="sec"><button class="chip on" id="hoveronly" type="button" aria-pressed="true">◉ animate on hover only</button></div>
   <div class="fps" id="fps"></div>
 </div>
@@ -579,40 +605,66 @@ bootTable(PAGE, { spec, pack: SH['shaders/pack.wgsl'] });
 const pageJs = `// ============================================================================
 //  HEAT METAL TABLE  ·  page.js — the per-page PAGE object (GENERATED)
 // ────────────────────────────────────────────────────────────────────────────
-//  ${CELLS.length} uniform-only cells; one fragment shader per cell. Same contract as the
-//  fire tables. Energy is the master temperature; Glow scales spark bloom.
-//  UNIFORM LAYOUT (96 bytes, struct MetalU in shaders/pack.wgsl)
-//    0..1 size · 2 time · 3 pixelScale · 4..7 ink · 8..11 tone · 12..15 cream
-//    16 energy · 17 glow · 18 pad · 19 pad · 20..23 k
+//  ${CELLS.length} heat-equation compute simulations; one compute kernel per cell,
+//  ping-ponged across two rgba32float textures. The present pass colors the
+//  temperature field through a metal palette (MODES picks it per cell). Same
+//  runtime as the simulation table. Regenerate with: node build.mjs
 // ============================================================================
+const MODES = ${JSON.stringify(MODES)};
+const STEPS = ${JSON.stringify(STEPS)};
 export const PAGE = {
   async init(ctx) {
-    const { device, format, tiles, PACK } = ctx; this.ctx = ctx;
-    this.bgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }] });
-    const layout = device.createPipelineLayout({ bindGroupLayouts: [this.bgl] });
+    const { device, format, tiles, PACK, $ } = ctx; this.ctx = ctx; const N = 128;
     const module = device.createShaderModule({ code: PACK });
     module.getCompilationInfo().then(info => { const errs = info.messages.filter(m => m.type === 'error'); if (errs.length) for (const t of tiles) ctx.setStatus(t, errs[0].message.slice(0, 120), true); });
-    for (const t of tiles) device.createRenderPipelineAsync({ layout, vertex: { module, entryPoint: 'vs_main' }, fragment: { module, entryPoint: 'fs_' + t.s.name, targets: [{ format }] }, primitive: { topology: 'triangle-list' } })
-      .then(p => { t.pipeline = p; t.dirty = true; }).catch(e => ctx.setStatus(t, String(e.message || e).slice(0, 120), true));
+    this.cbgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } }, { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float' } }, { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { format: 'rgba32float', access: 'write-only' } }] });
+    this.pbgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }, { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } }] });
+    const clayout = device.createPipelineLayout({ bindGroupLayouts: [this.cbgl] }); const playout = device.createPipelineLayout({ bindGroupLayouts: [this.pbgl] });
+    this.present = await device.createRenderPipelineAsync({ layout: playout, vertex: { module, entryPoint: 'vs_main' }, fragment: { module, entryPoint: 'fs_present', targets: [{ format }] }, primitive: { topology: 'triangle-list' } });
+    for (const t of tiles) {
+      const pg = t.page; pg.N = N; pg.frame = 0; pg.seed = Math.random() * 100; pg.reset = true; pg.cur = 0;
+      pg.tex = [0, 1].map(() => device.createTexture({ size: [N, N], format: 'rgba32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }));
+      pg.ubufs = []; pg.cbind = []; pg.ring = 0; pg.udata = new Float32Array(24);
+      for (let r = 0; r < 8; r++) { const b = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST }); pg.ubufs.push(b);
+        pg.cbind.push([0, 1].map(i => device.createBindGroup({ layout: this.cbgl, entries: [{ binding: 0, resource: { buffer: b } }, { binding: 1, resource: pg.tex[i].createView() }, { binding: 2, resource: pg.tex[1 - i].createView() }] }))); }
+      device.createComputePipelineAsync({ layout: clayout, compute: { module, entryPoint: 'cs_' + t.s.name } })
+        .then(p => { pg.cpipe = p; t.pipeline = this.present; t.dirty = true; }).catch(e => ctx.setStatus(t, String(e.message || e).slice(0, 120), true));
+    }
+    const rb = $('resetall'); if (rb) rb.addEventListener('click', () => { for (const t of tiles) { t.page.reset = true; t.page.seed = Math.random() * 100; t.dirty = true; } });
   },
-  bind(surf) { if (!surf.page.bind) surf.page.bind = this.ctx.device.createBindGroup({ layout: this.bgl, entries: [{ binding: 0, resource: { buffer: surf.buf } }] }); return surf.page.bind; },
+  leave(t) { t.page.pendingReset = true; t.page.acc = 0; },
+  tick(dt, now) { for (const t of this.ctx.tiles) { const pg = t.page; if (pg.pendingReset && t.rate <= 0.002) { pg.pendingReset = false; pg.reset = true; t.dirty = true; } } },
+  step(enc, t, reset) {
+    const { device } = this.ctx; const pg = t.page; const d = pg.udata;
+    d[0] = pg.N; d[1] = pg.N; d[2] = t.phase; d[3] = 1; d.set(t.knobs, 16); d[20] = pg.frame; d[21] = pg.seed; d[22] = 1 / 60; d[23] = reset ? 1 : 0;
+    const r = pg.ring; pg.ring = (pg.ring + 1) % 8; device.queue.writeBuffer(pg.ubufs[r], 0, d);
+    const pass = enc.beginComputePass(); pass.setPipeline(pg.cpipe); pass.setBindGroup(0, pg.cbind[r][pg.cur]); pass.dispatchWorkgroups(pg.N / 8, pg.N / 8); pass.end();
+    pg.cur = 1 - pg.cur; pg.frame++;
+  },
+  pbind(surf, t) { const key = t.s.name + ':' + t.page.cur; if (surf.page.key !== key) { surf.page.key = key; surf.page.bind = this.ctx.device.createBindGroup({ layout: this.pbgl, entries: [{ binding: 0, resource: { buffer: surf.buf } }, { binding: 1, resource: t.page.tex[t.page.cur].createView() }] }); } return surf.page.bind; },
   draw(enc, t, surf, rect, dpr, dt, now, moving) {
-    const { device, G } = this.ctx; const d = surf.data;
+    const { device, G } = this.ctx; const pg = t.page; if (!pg.cpipe) return;
+    if (pg.lastFrame !== this.ctx.sigTime()) {
+      pg.lastFrame = this.ctx.sigTime();
+      if (pg.reset) { pg.reset = false; pg.frame = 0; this.step(enc, t, true); }
+      else if (moving && !pg.pendingReset) { pg.acc = (pg.acc || 0) + dt * STEPS[t.s.name] * 12 * (G.tempo || 1) * t.rate; const n = Math.min(8, Math.floor(pg.acc)); pg.acc -= n; for (let i = 0; i < n; i++) this.step(enc, t, false); }
+    }
+    const d = surf.data;
     d[0] = rect.width; d[1] = rect.height; d[2] = t.phase; d[3] = dpr;
     d.set([G.ink[0], G.ink[1], G.ink[2], 1], 4); d.set([G.tone[0], G.tone[1], G.tone[2], 1], 8); d.set([G.cream[0], G.cream[1], G.cream[2], 1], 12);
-    d[16] = G.energy; d[17] = G.glow; d[18] = 0; d[19] = 0; d.set(t.knobs, 20);
+    d.set(t.knobs, 16); d[20] = pg.frame; d[21] = pg.seed; d[22] = 0; d[23] = MODES[t.s.name];
     device.queue.writeBuffer(surf.buf, 0, d);
     const pass = enc.beginRenderPass({ colorAttachments: [{ view: surf.ctx.getCurrentTexture().createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
-    pass.setPipeline(t.pipeline); pass.setBindGroup(0, this.bind(surf)); pass.draw(3); pass.end();
+    pass.setPipeline(this.present); pass.setBindGroup(0, this.pbind(surf, t)); pass.draw(3); pass.end();
   },
-  source(t) { return this.ctx.fnSource('fs_' + t.s.name); },
+  source(t) { return this.ctx.fnSource('cs_' + t.s.name); },
 };
 `;
 
-// ── emit style.css (clone color-table, append metal families) ────────────────
+// ── emit style.css (clone simulation-table, append metal families) ───────────
 const famCss = Object.entries(FAM).map(([f, c]) =>
   `.f-${f}{--fam:${c};--fam-bg:${c.replace(/[\d.]+\)$/, '0.06)')}}`).join('\n');
-const baseCss = readFileSync(join(DIR, '..', 'color-table', 'style.css'), 'utf8');
+const baseCss = readFileSync(join(DIR, '..', 'simulation-table', 'style.css'), 'utf8');
 const css = baseCss + `
 /* ── metal families (appended by build.mjs) ──────────────────────────────── */
 ${famCss}
@@ -629,9 +681,10 @@ writeFileSync(join(DIR, 'main.js'), mainJs);
 writeFileSync(join(DIR, 'page.js'), pageJs);
 writeFileSync(join(DIR, 'style.css'), css);
 
-const fam = {}; for (const [, f] of CELLS) fam[f] = (fam[f] || 0) + 1;
+const fam = {}; for (const c of CELLS) fam[c.family] = (fam[c.family] || 0) + 1;
 console.log('cells       : ' + CELLS.length);
 console.log('families    : ' + JSON.stringify(fam));
-console.log('fs_ entries : ' + (pack.match(/@fragment fn fs_/g) || []).length);
-console.log('names unique: ' + (new Set(CELLS.map(c => c[0])).size === CELLS.length));
+console.log('cs_ kernels : ' + (pack.match(/@compute @workgroup_size\(8, 8\) fn cs_/g) || []).length);
+console.log('names unique: ' + (new Set(CELLS.map(c => c.name)).size === CELLS.length));
+console.log('palettes    : ' + JSON.stringify([...new Set(CELLS.map(c => c.pal))]));
 console.log('wrote pack.wgsl, spec.json, index.html, main.js, page.js, style.css');
