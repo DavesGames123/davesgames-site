@@ -239,13 +239,23 @@ fn cen(p: vec2i) -> vec2f { return (vec2f(p) + 0.5) / f32(N) - 0.5; }
 }
 
 // ─────────────────────────────────────────────── continuum PDEs
-// heat equation, explicit; x = temperature, hot spots injected while hovering
+// heat equation, explicit; x = temperature. A wide soft hot spot wanders and
+// leaves a cooling trail. The present pass maps x through inferno (mode 16).
 @compute @workgroup_size(8, 8) fn cs_heat(@builtin(global_invocation_id) id: vec3u) {
     let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
-    if (u.reset > 0.5) { textureStore(dst, p, vec4f(select(0.0, 1.0, rnd(p, u.seed) > 0.985), 0.0, 0.0, 1.0)); return; }
+    if (u.reset > 0.5) { textureStore(dst, p, vec4f(0.0, 0.0, 0.0, 1.0)); return; }
     let s = ld(p).x; let L = lap(p).x; var v = s + mix(0.05, 0.24, u.k.x) * L;
-    let c = cen(p) - 0.3 * vec2f(cos(u.time * 0.7), sin(u.time * 0.9)); v += select(0.0, 0.08, length(c) < 0.03) * u.k.y;
-    v *= 1.0 - 0.002 * u.k.z;
+    // the emitter orbits the centre. Its radius wobbles, so the hot patch reads
+    // as flame, not a clean disc. Source (k.y) widens and brightens it together.
+    let ctr = 0.30 * vec2f(cos(u.time * 0.7), sin(u.time * 0.9));
+    let d = length(cen(p) - ctr);
+    let radius = mix(0.06, 0.13, u.k.y) * (0.85 + 0.15 * sin(u.time * 5.0 + d * 40.0));
+    let core = exp(-(d * d) / (radius * radius));
+    // a per-cell flicker shimmers the heated section instead of a flat blob
+    let flick = 0.55 + 0.45 * rnd(p, floor(u.time * 10.0));
+    v += 0.35 * core * flick * u.k.y;
+    // cool everywhere, so the tail behind the emitter fades as the emitter moves
+    v *= 1.0 - mix(0.01, 0.06, u.k.z);
     textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));
 }
 // wave equation, leapfrog; x = height now, y = height before; drops fall while hovering
@@ -350,6 +360,17 @@ fn cen(p: vec2i) -> vec2f { return (vec2f(p) + 0.5) / f32(N) - 0.5; }
 }
 fn rail(v: f32) -> vec3f { let lo = mix(pu.ink.rgb, pu.tone.rgb, smoothstep(0.0, 0.62, v)); return mix(lo, pu.cream.rgb, smoothstep(0.62, 1.0, v)); }
 fn hsv(h: f32, s: f32, v: f32) -> vec3f { let k = fract(vec3f(h, h + 2.0 / 3.0, h + 1.0 / 3.0)) * 6.0; let p = abs(k - 3.0) - 1.0; return v * mix(vec3f(1.0), clamp(p, vec3f(0.0), vec3f(1.0)), s); }
+// Inferno colormap (matplotlib), 7th-order polynomial fit, t in [0, 1].
+fn inferno(t: f32) -> vec3f {
+    let x = clamp(t, 0.0, 1.0);
+    return vec3f(0.00021894, 0.00165100, -0.01948090)
+      + x * (vec3f(0.10651342, 0.56395644, 3.93271239)
+      + x * (vec3f(11.60249308, -3.97285397, -15.94239411)
+      + x * (vec3f(-41.70399613, 17.43639888, 44.35414520)
+      + x * (vec3f(77.16293570, -33.40235894, -81.80730926)
+      + x * (vec3f(-71.31942824, 32.62606426, 73.20951986)
+      + x * (vec3f(25.13112622, -12.24266895, -23.07032500)))))));
+}
 fn cell_state(fp: vec2f) -> vec4f {
     let pos = fp / pu.pixelScale; let uv = (pos - 0.5 * pu.size) / max(min(pu.size.x, pu.size.y), 1.0) + 0.5;
     return textureLoad(pTex, clamp(vec2i(uv * f32(N)), vec2i(0), vec2i(N - 1)), 0);
@@ -374,6 +395,12 @@ fn cell_state(fp: vec2f) -> vec4f {
     else if (mode == 13) { c = select(rail(clamp((s.x - s.y) / max(1.0 - s.y, 0.05) * 0.6, 0.0, 0.6)), pu.cream.rgb, s.x >= 1.0); }
     else if (mode == 15) { c = select(pu.ink.rgb, mix(pu.cream.rgb, pu.tone.rgb, fract(s.y / 1200.0)), s.x > 0.5); }
     else if (mode == 14) { c = select(pu.ink.rgb, mix(pu.cream.rgb, pu.tone.rgb, clamp(s.y / 3000.0, 0.0, 1.0)), s.x > 0.5); }
+    // mode 16 — heat: temperature through inferno, blazing white at the top so
+    // the hot core over-saturates like real hot metal
+    else if (mode == 16) {
+        let t = clamp(s.x, 0.0, 1.0);
+        c = inferno(t) + vec3f(1.0, 0.9, 0.7) * smoothstep(0.7, 1.0, t) * 1.6;
+    }
     return vec4f(c, 1.0);
 }
 
