@@ -105,26 +105,40 @@
   }
 
   // ------------------------------------------------------------------ render
-  let simU = 0;            // simulation position, in loop periods
+  // The tip advances slowly along the path and heats the phosphor buffer. The
+  // buffer cools a little each frame, so the tip leaves a warm trail behind it.
+  // A whole ratio retraces one loop; a detuned ratio drifts and fills a denser
+  // figure. A dim context loop shows the closed shape a whole ratio would trace.
+  let simU = 0, prevU = 0;   // tip position, in loop periods
   let last = performance.now();
 
   const isWhole = () => Number.isInteger(G.A) && Number.isInteger(G.B) && Math.abs(G.detune) < 1e-6;
   const px = u => Math.sin(2 * Math.PI * (G.A + G.detune) * u + G.phase * 2 * Math.PI);
   const py = u => Math.sin(2 * Math.PI * G.B * u);
 
-  function fadeAcc(amount) {
+  function clearAcc() {
+    actx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    actx.globalCompositeOperation = 'source-over';
+    actx.fillStyle = '#0a0c11'; actx.fillRect(0, 0, W, H);
+  }
+
+  // cool the whole buffer toward black by a small amount each frame
+  function coolAcc(amount) {
+    actx.setTransform(dpr, 0, 0, dpr, 0, 0);
     actx.globalCompositeOperation = 'source-over';
     actx.fillStyle = 'rgba(10,12,17,' + amount + ')';
     actx.fillRect(0, 0, W, H);
   }
 
+  // heat the newly traced arc onto the buffer, brightest at the leading tip
   function plotSegment(u0, u1) {
     const b = box();
-    const steps = Math.max(2, Math.ceil((u1 - u0) * 900));
+    const steps = Math.max(2, Math.ceil((u1 - u0) * 1400));
+    actx.setTransform(dpr, 0, 0, dpr, 0, 0);
     actx.globalCompositeOperation = 'lighter';
     actx.lineCap = 'round'; actx.lineJoin = 'round';
-    actx.shadowColor = C_LOOP; actx.shadowBlur = 14;
-    actx.strokeStyle = 'rgba(255,180,90,0.55)'; actx.lineWidth = 2.2;
+    actx.shadowColor = C_LOOP; actx.shadowBlur = 12;
+    actx.strokeStyle = 'rgba(255,200,120,0.85)'; actx.lineWidth = 2.4;
     actx.beginPath();
     for (let i = 0; i <= steps; i++) {
       const u = u0 + (u1 - u0) * i / steps;
@@ -132,27 +146,25 @@
       i ? actx.lineTo(X, Y) : actx.moveTo(X, Y);
     }
     actx.stroke();
-    // bright thin core, no blur
-    actx.shadowBlur = 0; actx.strokeStyle = 'rgba(255,235,200,0.5)'; actx.lineWidth = 0.9;
+    actx.shadowBlur = 0; actx.strokeStyle = 'rgba(255,245,220,0.7)'; actx.lineWidth = 1.0;
     actx.stroke();
   }
 
-  function drawAnalyticLoop() {
+  // dim outline of the closed loop, so the whole shape stays legible
+  function drawContextLoop() {
     const b = box();
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.shadowColor = C_LOOP; ctx.shadowBlur = 22;
-    ctx.strokeStyle = 'rgba(255,190,110,0.85)'; ctx.lineWidth = 2.4;
+    ctx.shadowColor = C_LOOP; ctx.shadowBlur = 6;
+    ctx.strokeStyle = 'rgba(255,170,90,0.14)'; ctx.lineWidth = 1.4;
     ctx.beginPath();
-    const N = 1400;
+    const N = 1200;
     for (let i = 0; i <= N; i++) {
       const u = i / N;
       const X = mapX(px(u), b), Y = mapY(py(u), b);
       i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y);
     }
-    ctx.stroke();
-    ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255,240,210,0.9)'; ctx.lineWidth = 1;
     ctx.stroke();
     ctx.restore();
   }
@@ -162,7 +174,7 @@
     const X = mapX(px(u), b), Y = mapY(py(u), b);
     const top = b.cy - b.r - 26, left = b.cx - b.r - 26;
     ctx.save();
-    // guide lines from the moving point to the two axis lights
+    // guide lines from the tip to the two axis lights
     ctx.strokeStyle = 'rgba(150,200,255,0.18)'; ctx.lineWidth = 1;
     ctx.setLineDash([3, 5]);
     ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(X, top); ctx.stroke();
@@ -175,8 +187,6 @@
     // the two axis lights (horizontal = A, vertical = B)
     glowDot(X, top, C_X, 6);
     glowDot(left, Y, C_Y, 6);
-    // the moving head
-    glowDot(X, Y, '#fff3d6', 5);
     // labels
     ctx.fillStyle = C_X; ctx.font = "600 12px 'JetBrains Mono',monospace"; ctx.textAlign = 'center';
     ctx.fillText('A=' + G.A, b.cx, top - 12);
@@ -194,32 +204,44 @@
     ctx.restore();
   }
 
+  // the hot tip: a white-hot core that fades through amber to nothing
+  function drawHotTip(u) {
+    const b = box();
+    const X = mapX(px(u), b), Y = mapY(py(u), b);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(X, Y, 0, X, Y, 22);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)');
+    g.addColorStop(0.22, 'rgba(255,236,190,0.8)');
+    g.addColorStop(0.55, 'rgba(255,150,70,0.35)');
+    g.addColorStop(1, 'rgba(255,120,40,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(X, Y, 22, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
   function draw(now) {
     const dt = Math.min((now - last) / 1000, 0.05); last = now;
-    const whole = isWhole();
+    prevU = simU;
+    simU += dt * G.speed;
+    if (simU > 1e6) { simU %= 1; prevU = simU; }
 
-    if (whole) {
-      // analytic path: clear each frame, draw the crisp closed loop and head
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#0a0c11'; ctx.fillRect(0, 0, W, H);
-      drawAnalyticLoop();
-      simU += dt * G.speed;
-      drawAxes(simU % 1);
-    } else {
-      // simulated phosphor: fade, add new arc, never fully closes when detuned
-      fadeAcc(0.055);
-      const u0 = simU, u1 = simU + dt * G.speed;
-      plotSegment(u0, u1);
-      simU = u1;
-      if (simU > 1e5) simU = 0;
-      // composite the buffer, then live overlays
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.drawImage(acc, 0, 0);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      drawAxes(simU % 1);
-    }
+    // update the phosphor buffer: cool, then heat the new arc
+    coolAcc(0.03);
+    plotSegment(prevU, simU);
+
+    // compose the frame: bg, dim context, hot trail buffer, overlays, tip
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = '#0a0c11'; ctx.fillRect(0, 0, W, H);
+    if (isWhole()) drawContextLoop();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(acc, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    drawAxes(simU % 1);
+    drawHotTip(simU % 1);
     requestAnimationFrame(draw);
   }
 
@@ -246,7 +268,7 @@
       const el = document.createElement('button');
       el.innerHTML = '<b>' + a + ':' + b + '</b>' + nameFor(a, b);
       el.addEventListener('click', () => { G.A = a; G.B = b; G.detune = 0;
-        document.getElementById('detune').value = 0; fmt('detune'); syncSteppers(); markPreset(); refreshStatus(); });
+        document.getElementById('detune').value = 0; fmt('detune'); syncSteppers(); markPreset(); clearAcc(); refreshStatus(); });
       pc.appendChild(el);
     });
     markPreset();
@@ -256,7 +278,7 @@
       document.getElementById(id).querySelectorAll('button').forEach(btn => {
         btn.addEventListener('click', () => {
           G[key] = Math.max(1, Math.min(12, G[key] + (+btn.dataset.d)));
-          syncSteppers(); markPreset(); refreshStatus();
+          syncSteppers(); markPreset(); clearAcc(); refreshStatus();
         });
       });
     };
@@ -264,8 +286,8 @@
     syncSteppers();
 
     // sliders
-    bindRange('phase', 'phase', v => v.toFixed(2) + 'τ');
-    bindRange('detune', 'detune', v => (v >= 0 ? '+' : '') + v.toFixed(3));
+    bindRange('phase', 'phase', v => v.toFixed(2) + 'τ', clearAcc);
+    bindRange('detune', 'detune', v => (v >= 0 ? '+' : '') + v.toFixed(3), clearAcc);
     bindRange('speed', 'speed', v => v.toFixed(2) + '×');
     bindRange('base', 'baseHz', v => v.toFixed(0) + ' Hz');
     bindRange('vol', 'vol', v => v.toFixed(0) + '%');
@@ -282,10 +304,10 @@
       document.getElementById('panel').classList.remove('open'));
   }
 
-  function bindRange(id, key, fmtFn) {
+  function bindRange(id, key, fmtFn, after) {
     const inp = document.getElementById(id), out = document.getElementById(id + 'V');
     inp._fmt = fmtFn;
-    const upd = () => { G[key] = +inp.value; out.textContent = fmtFn(+inp.value); refreshStatus(); };
+    const upd = () => { G[key] = +inp.value; out.textContent = fmtFn(+inp.value); if (after) after(); refreshStatus(); };
     inp.addEventListener('input', upd); upd();
   }
   function fmt(id) {
