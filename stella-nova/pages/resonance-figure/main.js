@@ -128,7 +128,7 @@
   // ------------------------------------------------------------------ trail
   const LIFE = 7.5;             // seconds a point stays in the trail (long cool-down)
   const MAXPTS = MOB ? 700 : 1600;
-  let simU = 0, prevU = 0, last = performance.now();
+  let simU = 0, prevU = 0, last = performance.now() / 1000;   // seconds, matches draw()
   let hist = [];               // { x, y, u, born }
   function clearTrail() { hist = []; }
 
@@ -350,7 +350,7 @@
 
   // ------------------------------------------------------------------ frame
   function draw(now) {
-    const t = now / 1000, dt = Math.min((t - last), 0.05); last = t;
+    const t = now / 1000, dt = Math.min(Math.max(t - last, 0), 0.05); last = t;   // guard the first frame
     prevU = simU; simU += dt * G.speed; if (simU > 1e6) { simU %= 1; prevU = simU; }
     pushHistory(t, prevU, simU);
 
