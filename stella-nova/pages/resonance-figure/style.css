@@ -5,10 +5,10 @@
    The control panel slides in from the right. The status bar sits at the base.
    ========================================================================== */
 :root{
-  --bg:#0a0c11; --bg2:#0e1118; --panel:#0c0f16;
-  --ink:#c0cfe0; --dim:#5a7090; --faint:#2a3850;
-  --line:rgba(150,200,255,0.10); --line-b:rgba(150,200,255,0.18);
-  --warm:#ffc832; --warm2:#ff7b00; --pink:#ff8ac2; --blue:#96c8ff;
+  --bg:#05040a; --bg2:#0c0912; --panel:#0b0812;
+  --ink:#d6cfe0; --dim:#8a7a9a; --faint:#3a2a48;
+  --line:rgba(220,150,200,0.10); --line-b:rgba(240,150,120,0.22);
+  --warm:#fca35e; --warm2:#f1605d; --pink:#cd4071; --blue:#9f2f7f;
   --panel-w:300px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -120,9 +120,19 @@ html.in-frame #panel{padding-top:24px}
 #status .right{color:var(--dim)}
 
 @media(max-width:768px){
-  #panel{width:min(88vw,320px)}
-  #gear{display:block}
-  #panel{transform:translateX(100%)}
-  #status{max-width:100%;font-size:0.6rem}
+  #panel{width:min(90vw,340px);transform:translateX(100%);padding:20px 18px 28px}
+  #panel.open{transform:translateX(0)}
+  #gear{display:block;width:46px;height:46px;font-size:1.25rem}
+  #status{max-width:100%;font-size:0.62rem;padding:8px 14px}
   .pagetitle{display:none}
+  .stepper button{width:40px;height:40px;font-size:1.3rem}
+  .stepper .num{font-size:1.7rem;min-width:40px}
+  .presets button{padding:11px 8px;font-size:0.66rem}
+  .presets button b{font-size:0.82rem}
+  .row input[type=range]{height:22px}
+  .modes button{padding:14px}
+  .sec-label{font-size:0.66rem}
+}
+@media(max-width:768px) and (orientation:landscape){
+  #panel{width:min(70vw,320px)}
 }
