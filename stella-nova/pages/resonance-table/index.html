@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Resonance Table — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   RESONANCE TABLE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js builds a grid of Lissajous cells. Each cell is
+   one ratio A:B. The column integer is A (horizontal tone), the row integer is
+   B (vertical tone). A whole ratio closes, so main.js draws each loop as a
+   crisp glowing shape. A simple ratio makes a sparse shape; a complex ratio
+   makes a denser shape. main.js colors each cell by consonance: warm gold for
+   a simple ratio, dim blue for a complex one.
+
+   LOAD ORDER
+     1. in-frame guard   adds .in-frame when embedded in the site shell iframe
+     2. style.css        page stylesheet
+     3. main.js          classic script at end of body; builds the grid
+
+   LAYOUT  (# marks an element id main.js writes into or reads)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Resonance Table                              │
+     │ #bar   size  base  volume     legend: consonant -> dissonant       │
+     ├──────────────────────────────────────────────────────────────────┤
+     │ #grid  (A across the top, B down the side, one loop per cell)      │
+     ├──────────────────────────────────────────────────────────────────┤
+     │ #status  selected ratio · interval name · both frequencies         │
+     └──────────────────────────────────────────────────────────────────┘
+
+   GREP MAP  (main.js)
+     grep -n 'AUDIO'      the Web Audio tone pair
+     grep -n 'consonance' the ratio-complexity color map
+     grep -n 'drawCell'   the per-cell loop render
+     grep -n 'buildGrid'  the grid construction
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A grid of resonances. Every cell traces the loop of one whole-number ratio, colored from consonant to dissonant. Tap a cell to hear the two tones.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;MUSIC.RESONANCE</div>
+  <div class="pagetitle">Resonance Table</div>
+</div>
+
+<!-- Control strip: grid size, base note, volume, and the consonance legend. -->
+<div id="bar">
+  <div class="ctl"><label>Size</label><input type="range" id="size" min="4" max="9" step="1" value="7"><span class="val" id="sizeV"></span></div>
+  <div class="ctl"><label>Base</label><input type="range" id="base" min="80" max="330" step="1" value="131"><span class="val" id="baseV"></span></div>
+  <div class="ctl"><label>Volume</label><input type="range" id="vol" min="0" max="100" value="55"><span class="val" id="volV"></span></div>
+  <div class="legend"><span>consonant</span><i class="grad"></i><span>dissonant</span></div>
+</div>
+
+<!-- main.js builds the grid of cells here. -->
+<div id="gridwrap"><div id="grid"></div></div>
+
+<div id="status">
+  <span id="stMain" class="fn">Tap a cell to hear its ratio.</span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
