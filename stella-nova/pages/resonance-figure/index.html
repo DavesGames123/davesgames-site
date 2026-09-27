@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Resonance Figure — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   RESONANCE FIGURE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws one Lissajous figure onto the full-screen
+   canvas and fills the empty control panel with generated controls. Two
+   perpendicular oscillators trace the curve: x = sin(2*pi*A*t + phase), and
+   y = sin(2*pi*B*t). A simple ratio A:B gives a closed loop. Web Audio plays
+   one tone per axis at baseHz*A and baseHz*B.
+
+   LOAD ORDER
+     1. in-frame guard   adds .in-frame when embedded in the site shell iframe
+     2. style.css        page stylesheet
+     3. main.js          classic script at end of body; builds and animates
+
+   LAYOUT  (# marks an element id that main.js writes into or reads)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Resonance Figure                   #gear     │
+     ├──────────────────────────────────────────────────────────────────┤
+     │                                                #panel  (slides in) │
+     │        #fig  (full-screen canvas, the traced loop)     ratio       │
+     │              top axis = A tone, left axis = B tone     phase       │
+     │                                                        detune      │
+     │                                                        sound       │
+     ├──────────────────────────────────────────────────────────────────┤
+     │ #status  ratio · interval name · closed / open · frequencies       │
+     └──────────────────────────────────────────────────────────────────┘
+
+   GREP MAP  (main.js)
+     grep -n 'AUDIO'      the Web Audio tone pair
+     grep -n 'INTERVAL'   the ratio-to-interval-name table
+     grep -n 'draw()'     the canvas render of the loop and the axis dots
+     grep -n 'buildUI'    the control panel construction
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Two perpendicular swings trace one loop. A simple frequency ratio closes the loop and sounds consonant. Pick a ratio, hear the two tones, watch the shape.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<!-- In-frame guard: when embedded in the site shell iframe, tag <html> so the
+     CSS hides this page's own topbar. Inline so it runs before first paint. -->
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;MUSIC.RESONANCE</div>
+  <div class="pagetitle">Resonance Figure</div>
+</div>
+
+<!-- The figure canvas main.js draws into. -->
+<canvas id="fig"></canvas>
+<button id="gear" aria-label="Controls">⚙</button>
+
+<!-- Control panel: main.js builds the ratio steppers, presets, sliders and the
+     sound row inside these containers. -->
+<div id="panel" class="open">
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">RATIO</div>
+  <div class="ratio-row">
+    <div class="stepper" id="stepA">
+      <button data-d="-1" aria-label="A down">−</button>
+      <span class="num" id="numA">3</span>
+      <button data-d="1" aria-label="A up">+</button>
+      <span class="axis-tag ax">horizontal</span>
+    </div>
+    <span class="colon">:</span>
+    <div class="stepper" id="stepB">
+      <button data-d="-1" aria-label="B down">−</button>
+      <span class="num" id="numB">2</span>
+      <button data-d="1" aria-label="B up">+</button>
+      <span class="axis-tag ay">vertical</span>
+    </div>
+  </div>
+
+  <div class="sec-label">COMMON INTERVALS</div>
+  <div class="presets" id="presets"></div>
+
+  <div class="sec-label">SHAPE</div>
+  <div class="row"><label>Phase</label><input type="range" id="phase" min="0" max="1" step="0.005" value="0.25"><span class="val" id="phaseV"></span></div>
+  <div class="row"><label>Detune</label><input type="range" id="detune" min="-0.06" max="0.06" step="0.001" value="0"><span class="val" id="detuneV"></span></div>
+  <div class="row"><label>Speed</label><input type="range" id="speed" min="0" max="2" step="0.01" value="0.6"><span class="val" id="speedV"></span></div>
+  <div class="hint">Detune nudges one swing off the exact ratio, so the loop drifts and never quite sits still — as a real string does.</div>
+
+  <div class="sec-label">SOUND</div>
+  <div class="modes">
+    <button id="soundBtn">▶ PLAY TONES</button>
+  </div>
+  <div class="row"><label>Base</label><input type="range" id="base" min="80" max="330" step="1" value="131"><span class="val" id="baseV"></span></div>
+  <div class="row"><label>Volume</label><input type="range" id="vol" min="0" max="100" value="55"><span class="val" id="volV"></span></div>
+  <div class="hint">Each axis is one tone. The horizontal tone is baseHz times A, the vertical is baseHz times B. Simple ratios beat slowly and lock; complex ratios clash.</div>
+</div>
+
+<!-- Live readout main.js rewrites: the ratio, the nearest interval, whether the
+     loop is closed, and the two tone frequencies. -->
+<div id="status">
+  <span id="stMain" class="fn">Perfect fifth · 3 : 2 · closed loop</span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<!-- Builds the controls, wires audio, and runs the animation loop. -->
+<script src="main.js"></script>
+</body>
+</html>
