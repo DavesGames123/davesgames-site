@@ -24,6 +24,20 @@
   const TAU = Math.PI * 2, S = 1.5;
 
   const G = { A:3, B:2, C:4, phaseX:0, phaseY:0.25, detune:0, spin:0.3, baseHz:131, vol:50, playing:false };
+  const MOB = window.matchMedia('(max-width:768px)').matches || window.matchMedia('(pointer:coarse)').matches;
+
+  // --------------------------------------------------------------- magma ramp
+  const MAGMA = [
+    [0.001,0.000,0.014],[0.106,0.058,0.243],[0.271,0.063,0.454],[0.447,0.122,0.506],
+    [0.624,0.184,0.494],[0.804,0.251,0.443],[0.945,0.376,0.365],[0.992,0.585,0.404],[0.988,0.992,0.749],
+  ];
+  function magma(t, o) {
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const x = t * (MAGMA.length - 1), i = Math.min(Math.floor(x), MAGMA.length - 2), f = x - i;
+    const a = MAGMA[i], b = MAGMA[i + 1];
+    o[0] = a[0] + (b[0] - a[0]) * f; o[1] = a[1] + (b[1] - a[1]) * f; o[2] = a[2] + (b[2] - a[2]) * f;
+    return o;
+  }
 
   // --------------------------------------------------------------- three setup
   const canvas = document.getElementById('gl');
@@ -74,7 +88,13 @@
   const head = new THREE.Sprite(new THREE.SpriteMaterial({
     map: SPRITE, color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false,
   }));
-  head.scale.setScalar(0.24); scene.add(head);
+  head.scale.setScalar(MOB ? 0.3 : 0.24); scene.add(head);
+
+  // the moving frame: velocity plus the two vectors perpendicular to it
+  const arrowV = new THREE.ArrowHelper(new THREE.Vector3(0, 1, 0), new THREE.Vector3(), 0.6, 0xfff2c0, 0.18, 0.11);
+  const arrowN = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 0.45, 0xfd9567, 0.14, 0.09);
+  const arrowB = new THREE.ArrowHelper(new THREE.Vector3(0, 0, 1), new THREE.Vector3(), 0.45, 0xcd4071, 0.14, 0.09);
+  [arrowV, arrowN, arrowB].forEach(a => { a.line.material.depthTest = false; a.cone.material.depthTest = false; scene.add(a); });
 
   // ------------------------------------------------------------------- helpers
   const pt = (u, out) => {
@@ -88,20 +108,19 @@
   const isWhole = () => Number.isInteger(G.A) && Number.isInteger(G.B) && Number.isInteger(G.C) && Math.abs(G.detune) < 1e-6;
 
   // ------------------------------------------------------------------ buildCurve
-  const _p = new THREE.Vector3();
+  const _p = new THREE.Vector3(), _col = [0, 0, 0];
   let CURVE = null, COL = null, VT = null, VCOUNT = 0, RING = 0;
-  const baseWarm = [1.0, 0.5, 0.18], hotWhite = [1.0, 1.0, 0.92];
   function buildCurve() {
     const whole = isWhole();
-    const periods = whole ? 1 : 40;
-    const perPeriod = whole ? 900 : 90;
+    const periods = whole ? 1 : (MOB ? 28 : 40);
+    const perPeriod = whole ? (MOB ? 640 : 900) : (MOB ? 60 : 90);
     const n = periods * perPeriod;
     const pts = [];
     for (let i = 0; i < n; i++) pts.push(pt(i / perPeriod, new THREE.Vector3()));
     CURVE = new THREE.CatmullRomCurve3(pts, whole, 'centripetal');
 
-    const TUB = whole ? 1200 : n;   // tubular segments along the path
-    const RSEG = 6;                 // segments around the tube
+    const TUB = whole ? (MOB ? 700 : 1200) : n;   // tubular segments along the path
+    const RSEG = MOB ? 4 : 6;                      // segments around the tube
     const geo = new THREE.TubeGeometry(CURVE, TUB, whole ? 0.02 : 0.014, RSEG, whole);
     VCOUNT = geo.attributes.position.count;
     RING = RSEG + 1;
@@ -116,20 +135,38 @@
     updateHeat(0);
   }
 
-  // heat the tube: hottest just behind the tip tt, cooling to a dim warm base
+  // heat the tube on the magma ramp: white-hot just behind the tip tt, cooling
+  // through orange and red to deep purple over a long tail
   function updateHeat(tt) {
     if (!COL) return;
     const a = COL.array;
     for (let i = 0; i < VCOUNT; i++) {
       let d = tt - VT[i]; if (d < 0) d += 1;      // distance behind the tip
-      const heat = Math.exp(-d * 13);
-      const glow = 0.2 + 1.5 * heat;              // dim base plus a hot spike
-      const w = Math.min(1, Math.max(0, (heat - 0.45) * 2));
-      a[i * 3]     = (baseWarm[0] + (hotWhite[0] - baseWarm[0]) * w) * glow;
-      a[i * 3 + 1] = (baseWarm[1] + (hotWhite[1] - baseWarm[1]) * w) * glow;
-      a[i * 3 + 2] = (baseWarm[2] + (hotWhite[2] - baseWarm[2]) * w) * glow;
+      const heat = Math.exp(-d * 3.5);            // long, slow cool-down
+      const temp = 0.25 + 0.75 * heat;            // magma parameter: indigo -> cream
+      const glow = 0.5 + 1.7 * heat;              // dim base, very hot tip
+      magma(temp, _col);
+      a[i * 3] = _col[0] * glow; a[i * 3 + 1] = _col[1] * glow; a[i * 3 + 2] = _col[2] * glow;
     }
     COL.needsUpdate = true;
+  }
+
+  // analytic velocity, then the Frenet frame: velocity + two perpendiculars
+  const _V = new THREE.Vector3(), _Aa = new THREE.Vector3(), _T = new THREE.Vector3(), _N = new THREE.Vector3(), _Bn = new THREE.Vector3();
+  function updateFrame(u) {
+    const a = TAU * (G.A + G.detune), b = TAU * G.B, c = TAU * G.C, pxs = G.phaseX * TAU, pys = G.phaseY * TAU;
+    pt(u, _p);
+    _V.set(a * Math.cos(a * u + pxs), b * Math.cos(b * u + pys), c * Math.cos(c * u)).multiplyScalar(S);
+    _Aa.set(-a * a * Math.sin(a * u + pxs), -b * b * Math.sin(b * u + pys), -c * c * Math.sin(c * u)).multiplyScalar(S);
+    _T.copy(_V); if (_T.length() < 1e-6) _T.set(1, 0, 0); _T.normalize();
+    _N.copy(_Aa).addScaledVector(_T, -_Aa.dot(_T));
+    if (_N.length() < 1e-6) { _N.set(-_T.y, _T.x, 0); if (_N.length() < 1e-6) _N.set(0, -_T.z, _T.y); }
+    _N.normalize();
+    _Bn.crossVectors(_T, _N).normalize();
+    const Lv = 0.55, Ln = 0.42;
+    arrowV.position.copy(_p); arrowV.setDirection(_T); arrowV.setLength(Lv, 0.16, 0.1);
+    arrowN.position.copy(_p); arrowN.setDirection(_N); arrowN.setLength(Ln, 0.13, 0.085);
+    arrowB.position.copy(_p); arrowB.setDirection(_Bn); arrowB.setLength(Ln, 0.13, 0.085);
   }
 
   // ------------------------------------------------------------------ AUDIO
@@ -175,22 +212,39 @@
     camera.lookAt(0, 0, 0);
     tt = (tt + dt * TRACE) % 1;
     updateHeat(tt);
-    if (CURVE) { CURVE.getPointAt(tt, _p); head.position.copy(_p); }
+    if (CURVE) { CURVE.getPointAt(tt, _p); head.position.copy(_p); updateFrame(tt); }
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
 
-  // ------------------------------------------------------------------ camera drag
-  let drag = false, lx = 0, ly = 0;
-  canvas.addEventListener('pointerdown', e => { drag = true; lx = e.clientX; ly = e.clientY; canvas.setPointerCapture(e.pointerId); });
-  canvas.addEventListener('pointermove', e => {
-    if (!drag) return;
-    view.theta -= (e.clientX - lx) * 0.006;
-    view.phi = Math.max(0.2, Math.min(Math.PI - 0.2, view.phi - (e.clientY - ly) * 0.006));
-    lx = e.clientX; ly = e.clientY;
+  // ------------------------------------------------------- camera drag + pinch
+  // One pointer orbits. Two pointers pinch to zoom, so touch works with no wheel.
+  const ptrs = new Map();
+  let pinchD = 0;
+  const clampPhi = p => Math.max(0.2, Math.min(Math.PI - 0.2, p));
+  function pdist() { const v = [...ptrs.values()]; return Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y); }
+  canvas.addEventListener('pointerdown', e => {
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { canvas.setPointerCapture(e.pointerId); } catch (x) {}
+    if (ptrs.size === 2) pinchD = pdist();
   });
-  canvas.addEventListener('pointerup', e => { drag = false; try { canvas.releasePointerCapture(e.pointerId); } catch (x) {} });
-  canvas.addEventListener('wheel', e => { e.preventDefault(); view.R = Math.max(2.2, Math.min(12, view.R * (1 + e.deltaY * 0.001))); }, { passive: false });
+  canvas.addEventListener('pointermove', e => {
+    const prev = ptrs.get(e.pointerId); if (!prev) return;
+    if (ptrs.size === 1) {
+      view.theta -= (e.clientX - prev.x) * 0.006;
+      view.phi = clampPhi(view.phi - (e.clientY - prev.y) * 0.006);
+    }
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2) {
+      const d = pdist();
+      if (pinchD > 0) view.R = Math.max(2.2, Math.min(14, view.R * pinchD / d));
+      pinchD = d;
+    }
+  });
+  const drop = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchD = 0; try { canvas.releasePointerCapture(e.pointerId); } catch (x) {} };
+  canvas.addEventListener('pointerup', drop);
+  canvas.addEventListener('pointercancel', drop);
+  canvas.addEventListener('wheel', e => { e.preventDefault(); view.R = Math.max(2.2, Math.min(14, view.R * (1 + e.deltaY * 0.001))); }, { passive: false });
 
   // ------------------------------------------------------------------ status
   function refreshStatus() {
@@ -233,8 +287,10 @@
     bindRange('vol', 'vol', v => v.toFixed(0) + '%', null);
 
     document.getElementById('soundBtn').addEventListener('click', () => G.playing ? stopTones() : startTones());
-    document.getElementById('gear').addEventListener('click', () => document.getElementById('panel').classList.add('open'));
-    document.getElementById('panelClose').addEventListener('click', () => document.getElementById('panel').classList.remove('open'));
+    const panel = document.getElementById('panel');
+    document.getElementById('gear').addEventListener('click', () => panel.classList.toggle('open'));
+    document.getElementById('panelClose').addEventListener('click', () => panel.classList.remove('open'));
+    if (MOB) panel.classList.remove('open');    // start closed on phones
   }
   function bindRange(id, key, fmtFn, after) {
     const inp = document.getElementById(id), out = document.getElementById(id + 'V');
