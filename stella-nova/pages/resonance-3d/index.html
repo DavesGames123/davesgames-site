@@ -93,7 +93,12 @@
 
   <div class="sec-label">VIEW</div>
   <div class="modes"><button id="projBtn">PERSPECTIVE</button></div>
-  <div class="row"><label>Spin</label><input type="range" id="spin" min="0" max="1" step="0.01" value="0.3"><span class="val" id="spinV"></span></div>
+  <div class="presets" id="snaps">
+    <button id="snapXY" title="Look down Z">XY</button>
+    <button id="snapXZ" title="Look down Y">XZ</button>
+    <button id="snapYZ" title="Look down X">YZ</button>
+  </div>
+  <div class="row"><label>Spin</label><input type="range" id="spin" min="0" max="1" step="0.01" value="0"><span class="val" id="spinV"></span></div>
 
   <div class="sec-label">SOUND</div>
   <div class="modes"><button id="soundBtn">▶ PLAY TRIAD</button></div>

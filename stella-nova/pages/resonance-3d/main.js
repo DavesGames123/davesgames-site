@@ -28,7 +28,7 @@
     phaseX:0, phaseY:0.25, phaseZ:0,      // static phase offsets, in turns
     pRateX:0, pRateY:0, pRateZ:0,         // phase animation rates, in turns/sec
     detuneCoarse:0, detuneFine:0,         // detune split into two adjusters
-    spin:0.3, baseHz:131, vol:50, playing:false,
+    spin:0, baseHz:131, vol:50, playing:false,
   };
   const detv = () => G.detuneCoarse + G.detuneFine;          // effective detune
   const animating = () => G.pRateX || G.pRateY || G.pRateZ;  // any phase moving
@@ -59,7 +59,7 @@
   const ORTHO_H = 2.4;                     // half-height the ortho frustum frames
   let useOrtho = false;
   const cam = () => (useOrtho ? ortho : persp);
-  const view = { theta: 0.9, phi: 1.15, R: 5 };
+  const view = { theta: 0.9, phi: 1.15, R: 5, up: new THREE.Vector3(0, 1, 0), snapUp: false };
 
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight, a = w / h;
@@ -90,6 +90,28 @@
     new THREE.LineBasicMaterial({ color: 0x2a3850, transparent: true, opacity: 0.5 })
   );
   scene.add(box);
+
+  // labeled X/Y/Z axes: a colored line per axis and a text sprite at its end
+  function makeLabel(text, hex) {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const g = c.getContext('2d');
+    g.fillStyle = hex; g.font = "bold 46px 'JetBrains Mono',monospace"; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, 32, 34);
+    const t = new THREE.Texture(c); t.needsUpdate = true;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false }));
+    s.scale.setScalar(MOB ? 0.5 : 0.42); return s;
+  }
+  function axisLine(ax, hex) {
+    const e = S * 1.15;
+    const p = ax === 0 ? [-e, 0, 0, e, 0, 0] : ax === 1 ? [0, -e, 0, 0, e, 0] : [0, 0, -e, 0, 0, e];
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(p), 3));
+    return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: hex, transparent: true, opacity: 0.6, depthTest: false }));
+  }
+  scene.add(axisLine(0, 0xff5a5a)); scene.add(axisLine(1, 0x64d264)); scene.add(axisLine(2, 0x64a0ff));
+  const lblX = makeLabel('X', '#ff8a8a'), lblY = makeLabel('Y', '#8ae08a'), lblZ = makeLabel('Z', '#8ac0ff');
+  lblX.position.set(S * 1.3, 0, 0); lblY.position.set(0, S * 1.3, 0); lblZ.position.set(0, 0, S * 1.3);
+  scene.add(lblX); scene.add(lblY); scene.add(lblZ);
 
   // the knot: one continuous tube, not a series of points. A Catmull-Rom curve
   // stitches the samples, so the render is a smooth line with real thickness.
@@ -234,7 +256,12 @@
     view.theta += G.spin * 0.0025;
     const c = cam(), st = Math.sin(view.phi), ct = Math.cos(view.phi);
     c.position.set(view.R * st * Math.sin(view.theta), view.R * ct, view.R * st * Math.cos(view.theta));
-    c.lookAt(0, 0, 0);
+    // pick an up that stays stable at the poles (straight up / straight down)
+    if (!view.snapUp) {
+      if (Math.abs(ct) > 0.985) view.up.set(Math.sin(view.theta), 0, Math.cos(view.theta));
+      else view.up.set(0, 1, 0);
+    }
+    c.up.copy(view.up); c.lookAt(0, 0, 0);
     if (useOrtho) { ortho.zoom = 5 / view.R; ortho.updateProjectionMatrix(); }   // wheel/pinch still zoom
     tt = (tt + dt * TRACE) % 1;
     updateHeat(tt);
@@ -247,7 +274,7 @@
   // One pointer orbits. Two pointers pinch to zoom, so touch works with no wheel.
   const ptrs = new Map();
   let pinchD = 0;
-  const clampPhi = p => Math.max(0.2, Math.min(Math.PI - 0.2, p));
+  const clampPhi = p => Math.max(0.001, Math.min(Math.PI - 0.001, p));   // allow straight down/up
   function pdist() { const v = [...ptrs.values()]; return Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y); }
   canvas.addEventListener('pointerdown', e => {
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -257,6 +284,7 @@
   canvas.addEventListener('pointermove', e => {
     const prev = ptrs.get(e.pointerId); if (!prev) return;
     if (ptrs.size === 1) {
+      view.snapUp = false;                    // free orbit returns to the dynamic up
       view.theta -= (e.clientX - prev.x) * 0.006;
       view.phi = clampPhi(view.phi - (e.clientY - prev.y) * 0.006);
     }
@@ -323,12 +351,17 @@
     bindRange('vol', 'vol', v => v.toFixed(0) + '%', null);
 
     const projBtn = document.getElementById('projBtn');
-    projBtn.addEventListener('click', () => {
-      useOrtho = !useOrtho;
-      projBtn.textContent = useOrtho ? 'ORTHOGRAPHIC' : 'PERSPECTIVE';
-      projBtn.classList.toggle('on', useOrtho);
-      resize();                                  // set the ortho frustum for the current size
-    });
+    const setOrtho = on => { useOrtho = on; projBtn.textContent = on ? 'ORTHOGRAPHIC' : 'PERSPECTIVE'; projBtn.classList.toggle('on', on); resize(); };
+    projBtn.addEventListener('click', () => setOrtho(!useOrtho));
+
+    // snap straight onto a plane, in orthographic, looking down the third axis
+    function snap(theta, phi, ux, uy, uz) {
+      view.theta = theta; view.phi = phi; view.up.set(ux, uy, uz); view.snapUp = true;
+      G.spin = 0; setVal('spin', 0); setOrtho(true);
+    }
+    document.getElementById('snapXY').addEventListener('click', () => snap(0, Math.PI / 2, 0, 1, 0));         // down +Z
+    document.getElementById('snapXZ').addEventListener('click', () => snap(0, 0.001, 0, 0, -1));              // down +Y
+    document.getElementById('snapYZ').addEventListener('click', () => snap(Math.PI / 2, Math.PI / 2, 0, 1, 0)); // down +X
 
     document.getElementById('soundBtn').addEventListener('click', () => G.playing ? stopTones() : startTones());
     const panel = document.getElementById('panel');
