@@ -61,19 +61,20 @@
   );
   scene.add(box);
 
-  // the knot points
-  const mat = new THREE.PointsMaterial({
-    size: 0.06, map: SPRITE, vertexColors: true, transparent: true,
-    blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, sizeAttenuation: true,
+  // the knot: one continuous tube, not a series of points. A Catmull-Rom curve
+  // stitches the samples, so the render is a smooth line with real thickness.
+  const tubeMat = new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, blending: THREE.AdditiveBlending,
+    depthTest: false, depthWrite: false,
   });
-  let points = new THREE.Points(new THREE.BufferGeometry(), mat);
-  scene.add(points);
+  let tube = new THREE.Mesh(new THREE.BufferGeometry(), tubeMat);
+  scene.add(tube);
 
-  // the travelling head
+  // the travelling hot tip
   const head = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: SPRITE, color: 0xfff2d6, transparent: true, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false,
+    map: SPRITE, color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false,
   }));
-  head.scale.setScalar(0.3); scene.add(head);
+  head.scale.setScalar(0.24); scene.add(head);
 
   // ------------------------------------------------------------------- helpers
   const pt = (u, out) => {
@@ -86,38 +87,49 @@
   };
   const isWhole = () => Number.isInteger(G.A) && Number.isInteger(G.B) && Number.isInteger(G.C) && Math.abs(G.detune) < 1e-6;
 
-  // gradient gold -> pink along the path
-  function colorAt(f, o) {
-    const stops = [[1, 0.78, 0.2], [1, 0.48, 0.24], [1, 0.35, 0.55]];
-    const x = f * (stops.length - 1), i = Math.min(Math.floor(x), stops.length - 2), t = x - i;
-    o.r = stops[i][0] + (stops[i + 1][0] - stops[i][0]) * t;
-    o.g = stops[i][1] + (stops[i + 1][1] - stops[i][1]) * t;
-    o.b = stops[i][2] + (stops[i + 1][2] - stops[i][2]) * t;
-  }
-
   // ------------------------------------------------------------------ buildCurve
-  const _p = new THREE.Vector3(), _c = { r: 0, g: 0, b: 0 };
+  const _p = new THREE.Vector3();
+  let CURVE = null, COL = null, VT = null, VCOUNT = 0, RING = 0;
+  const baseWarm = [1.0, 0.5, 0.18], hotWhite = [1.0, 1.0, 0.92];
   function buildCurve() {
     const whole = isWhole();
-    const periods = whole ? 1 : 80;
-    const perPeriod = whole ? 2400 : 320;
-    const total = periods * perPeriod;
-    const pos = new Float32Array(total * 3), col = new Float32Array(total * 3);
-    for (let i = 0; i < total; i++) {
-      const u = (i / perPeriod);
-      pt(u, _p);
-      pos[i * 3] = _p.x; pos[i * 3 + 1] = _p.y; pos[i * 3 + 2] = _p.z;
-      colorAt((i / total), _c);
-      col[i * 3] = _c.r; col[i * 3 + 1] = _c.g; col[i * 3 + 2] = _c.b;
+    const periods = whole ? 1 : 40;
+    const perPeriod = whole ? 900 : 90;
+    const n = periods * perPeriod;
+    const pts = [];
+    for (let i = 0; i < n; i++) pts.push(pt(i / perPeriod, new THREE.Vector3()));
+    CURVE = new THREE.CatmullRomCurve3(pts, whole, 'centripetal');
+
+    const TUB = whole ? 1200 : n;   // tubular segments along the path
+    const RSEG = 6;                 // segments around the tube
+    const geo = new THREE.TubeGeometry(CURVE, TUB, whole ? 0.02 : 0.014, RSEG, whole);
+    VCOUNT = geo.attributes.position.count;
+    RING = RSEG + 1;
+    const colors = new Float32Array(VCOUNT * 3);
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    tube.geometry.dispose();
+    tube.geometry = geo;
+    COL = geo.attributes.color;
+    // path parameter t per vertex, so the heat band can be found quickly
+    VT = new Float32Array(VCOUNT);
+    for (let i = 0; i < VCOUNT; i++) VT[i] = Math.floor(i / RING) / TUB;
+    updateHeat(0);
+  }
+
+  // heat the tube: hottest just behind the tip tt, cooling to a dim warm base
+  function updateHeat(tt) {
+    if (!COL) return;
+    const a = COL.array;
+    for (let i = 0; i < VCOUNT; i++) {
+      let d = tt - VT[i]; if (d < 0) d += 1;      // distance behind the tip
+      const heat = Math.exp(-d * 13);
+      const glow = 0.2 + 1.5 * heat;              // dim base plus a hot spike
+      const w = Math.min(1, Math.max(0, (heat - 0.45) * 2));
+      a[i * 3]     = (baseWarm[0] + (hotWhite[0] - baseWarm[0]) * w) * glow;
+      a[i * 3 + 1] = (baseWarm[1] + (hotWhite[1] - baseWarm[1]) * w) * glow;
+      a[i * 3 + 2] = (baseWarm[2] + (hotWhite[2] - baseWarm[2]) * w) * glow;
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    points.geometry.dispose();
-    points.geometry = geo;
-    // denser shells dim each point so the whole shell stays readable
-    mat.opacity = whole ? 0.95 : 0.5;
-    mat.size = whole ? 0.06 : 0.05;
+    COL.needsUpdate = true;
   }
 
   // ------------------------------------------------------------------ AUDIO
@@ -153,15 +165,17 @@
   }
 
   // ------------------------------------------------------------------ frame
-  let last = performance.now(), headU = 0;
+  const TRACE = 0.06;                 // tip speed, in path lengths per second (gentle)
+  let last = performance.now(), tt = 0;
   function frame(now) {
     const dt = Math.min((now - last) / 1000, 0.05); last = now;
-    view.theta += G.spin * 0.004;
+    view.theta += G.spin * 0.0025;
     const st = Math.sin(view.phi), ct = Math.cos(view.phi);
     camera.position.set(view.R * st * Math.sin(view.theta), view.R * ct, view.R * st * Math.cos(view.theta));
     camera.lookAt(0, 0, 0);
-    headU = (headU + dt * 0.16) % 1;
-    pt(headU, _p); head.position.copy(_p);
+    tt = (tt + dt * TRACE) % 1;
+    updateHeat(tt);
+    if (CURVE) { CURVE.getPointAt(tt, _p); head.position.copy(_p); }
     renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
