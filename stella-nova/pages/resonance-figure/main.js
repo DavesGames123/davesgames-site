@@ -44,12 +44,16 @@
   // Layout: the wave panels get a wide band; the figure gets what is left. A
   // gap separates each panel from the figure so all three have their own frame.
   function box() {
-    const pad = MOB ? 12 : 22;
-    const gap = MOB ? 10 : 16;
-    const avail = Math.min(W, H) - pad * 2;
+    const pad = MOB ? 10 : 22;
+    const gap = MOB ? 8 : 16;
+    const botRes = MOB ? 40 : 24;                            // clear of the status bar
+    const usableW = W, usableH = H - botRes;
+    const avail = Math.min(usableW, usableH) - pad * 2;
     const strip = Math.round(avail * (MOB ? 0.26 : 0.30));   // wave panels: more space
-    const r = Math.max(40, (avail - strip - gap) / 2);       // figure: less space
-    const cx = pad + strip + gap + r, cy = pad + strip + gap + r;
+    const r = Math.max(36, (avail - strip - gap) / 2);       // figure: less space
+    const blk = strip + gap + 2 * r;                          // whole diagram block
+    const ox = Math.max(pad, (usableW - blk) / 2), oy = Math.max(pad, (usableH - blk) / 2);
+    const cx = ox + strip + gap + r, cy = oy + strip + gap + r;
     return { cx, cy, r, strip, gap, pad,
       figL: cx - r, figR: cx + r, figT: cy - r, figB: cy + r };
   }
