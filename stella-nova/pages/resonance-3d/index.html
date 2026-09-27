@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Resonance 3D — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   RESONANCE 3D  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws a 3D resonance knot into the WebGL canvas
+   (#gl) with three.js r128. Three perpendicular oscillators trace it:
+       x = sin(2*pi*A*u + phaseX)     y = sin(2*pi*B*u + phaseY)     z = sin(2*pi*C*u)
+   A whole triple A:B:C closes into one clean glowing knot. A detuned or
+   non-whole triple never closes, so the path fills a denser shell. Web Audio
+   plays one sine tone per axis.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts       Google Fonts stylesheet
+     2. style.css   the page stylesheet
+   Scripts at end of body: three.js r128 (defines global THREE), then main.js.
+   main.js is a classic script and needs THREE present, so its tag comes after.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Resonance 3D                        #gear    │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │  #gl   the knot; drag to orbit, scroll to zoom        │
+     │  ratio     │  #hint drag to orbit                                  │
+     │  presets   │                                                       │
+     │  shape     │                                                       │
+     │  sound     │                                                       │
+     ├────────────┴─────────────────────────────────────────────────────┤
+     │ #status  ratio · closed / drifting · three frequencies             │
+     └──────────────────────────────────────────────────────────────────┘
+
+   GREP MAP  (main.js)
+     grep -n 'AUDIO'        the three-tone Web Audio triad
+     grep -n 'buildCurve'   the knot geometry build
+     grep -n 'glowSprite'   the soft point texture
+     grep -n 'camera'       the hand-rolled spherical orbit
+     grep -n 'buildUI'      the control panel construction
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A resonance in three axes. Three perpendicular swings trace a knot. A whole ratio closes it; an off ratio fills a denser shell. Drag to orbit, tap to hear the triad.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;MUSIC.RESONANCE</div>
+  <div class="pagetitle">Resonance 3D</div>
+</div>
+
+<canvas id="gl"></canvas>
+<div id="hint">drag to orbit · scroll to zoom</div>
+<button id="gear" aria-label="Controls">⚙</button>
+
+<div id="panel" class="open">
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">RATIO  A : B : C</div>
+  <div class="ratio-row">
+    <div class="stepper" id="stepA"><button data-d="-1">−</button><span class="num" id="numA">3</span><button data-d="1">+</button><span class="axis-tag" style="color:#ff5a5a">x</span></div>
+    <div class="stepper" id="stepB"><button data-d="-1">−</button><span class="num" id="numB">2</span><button data-d="1">+</button><span class="axis-tag" style="color:#64d264">y</span></div>
+    <div class="stepper" id="stepC"><button data-d="-1">−</button><span class="num" id="numC">4</span><button data-d="1">+</button><span class="axis-tag" style="color:#64a0ff">z</span></div>
+  </div>
+
+  <div class="sec-label">KNOTS</div>
+  <div class="presets" id="presets"></div>
+
+  <div class="sec-label">SHAPE</div>
+  <div class="row"><label>Phase X</label><input type="range" id="phaseX" min="0" max="1" step="0.005" value="0"><span class="val" id="phaseXV"></span></div>
+  <div class="row"><label>Phase Y</label><input type="range" id="phaseY" min="0" max="1" step="0.005" value="0.25"><span class="val" id="phaseYV"></span></div>
+  <div class="row"><label>Detune</label><input type="range" id="detune" min="-0.04" max="0.04" step="0.001" value="0"><span class="val" id="detuneV"></span></div>
+  <div class="row"><label>Spin</label><input type="range" id="spin" min="0" max="1" step="0.01" value="0.3"><span class="val" id="spinV"></span></div>
+  <div class="hint">Detune breaks the exact triple, so the knot stops closing and fills a denser shell — the 3D form of a dissonant, restless ratio.</div>
+
+  <div class="sec-label">SOUND</div>
+  <div class="modes"><button id="soundBtn">▶ PLAY TRIAD</button></div>
+  <div class="row"><label>Base</label><input type="range" id="base" min="80" max="330" step="1" value="131"><span class="val" id="baseV"></span></div>
+  <div class="row"><label>Volume</label><input type="range" id="vol" min="0" max="100" value="50"><span class="val" id="volV"></span></div>
+</div>
+
+<div id="status">
+  <span id="stMain" class="fn">3 : 2 : 4 · closed knot</span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<!-- three.js r128 first (defines global THREE), then main.js which uses it. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
