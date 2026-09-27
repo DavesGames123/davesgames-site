@@ -54,13 +54,19 @@
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+  const persp = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+  const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, -100, 100);
+  const ORTHO_H = 2.4;                     // half-height the ortho frustum frames
+  let useOrtho = false;
+  const cam = () => (useOrtho ? ortho : persp);
   const view = { theta: 0.9, phi: 1.15, R: 5 };
 
   function resize() {
-    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const w = canvas.clientWidth, h = canvas.clientHeight, a = w / h;
     renderer.setSize(w, h, false);
-    camera.aspect = w / h; camera.updateProjectionMatrix();
+    persp.aspect = a; persp.updateProjectionMatrix();
+    ortho.left = -ORTHO_H * a; ortho.right = ORTHO_H * a; ortho.top = ORTHO_H; ortho.bottom = -ORTHO_H;
+    ortho.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize);
 
@@ -161,15 +167,17 @@
     COL.needsUpdate = true;
   }
 
-  // analytic velocity, then the Frenet frame: velocity + two perpendiculars
-  const _V = new THREE.Vector3(), _Aa = new THREE.Vector3(), _T = new THREE.Vector3(), _N = new THREE.Vector3(), _Bn = new THREE.Vector3();
-  function updateFrame(u) {
-    const a = TAU * (G.A + detv()), b = TAU * G.B, c = TAU * G.C;
-    pt(u, _p);
-    _V.set(a * Math.cos(a * u + ephX), b * Math.cos(b * u + ephY), c * Math.cos(c * u + ephZ)).multiplyScalar(S);
-    _Aa.set(-a * a * Math.sin(a * u + ephX), -b * b * Math.sin(b * u + ephY), -c * c * Math.sin(c * u + ephZ)).multiplyScalar(S);
-    _T.copy(_V); if (_T.length() < 1e-6) _T.set(1, 0, 0); _T.normalize();
-    _N.copy(_Aa).addScaledVector(_T, -_Aa.dot(_T));
+  // The frame comes from the curve itself, at the same arc-length fraction the
+  // head uses, so the vectors sit exactly on the tracer point. tt is arc-length,
+  // not the raw parameter, so pt(tt) would land elsewhere.
+  const _T = new THREE.Vector3(), _N = new THREE.Vector3(), _Bn = new THREE.Vector3(), _T2 = new THREE.Vector3();
+  function updateFrame(tt) {
+    if (!CURVE) return;
+    CURVE.getPointAt(tt, _p);                          // exactly the head position
+    CURVE.getTangentAt(tt, _T); if (_T.length() < 1e-6) _T.set(1, 0, 0); _T.normalize();
+    CURVE.getTangentAt((tt + 1e-3) % 1, _T2);          // tangent just ahead
+    _N.copy(_T2).sub(_T);                              // dT: turns toward the normal
+    _N.addScaledVector(_T, -_N.dot(_T));               // drop the tangential part
     if (_N.length() < 1e-6) { _N.set(-_T.y, _T.x, 0); if (_N.length() < 1e-6) _N.set(0, -_T.z, _T.y); }
     _N.normalize();
     _Bn.crossVectors(_T, _N).normalize();
@@ -224,13 +232,14 @@
     if (animating()) buildCurve();      // rebuild the morphing knot each frame
 
     view.theta += G.spin * 0.0025;
-    const st = Math.sin(view.phi), ct = Math.cos(view.phi);
-    camera.position.set(view.R * st * Math.sin(view.theta), view.R * ct, view.R * st * Math.cos(view.theta));
-    camera.lookAt(0, 0, 0);
+    const c = cam(), st = Math.sin(view.phi), ct = Math.cos(view.phi);
+    c.position.set(view.R * st * Math.sin(view.theta), view.R * ct, view.R * st * Math.cos(view.theta));
+    c.lookAt(0, 0, 0);
+    if (useOrtho) { ortho.zoom = 5 / view.R; ortho.updateProjectionMatrix(); }   // wheel/pinch still zoom
     tt = (tt + dt * TRACE) % 1;
     updateHeat(tt);
     if (CURVE) { CURVE.getPointAt(tt, _p); head.position.copy(_p); updateFrame(tt); }
-    renderer.render(scene, camera);
+    renderer.render(scene, c);
     requestAnimationFrame(frame);
   }
 
@@ -312,6 +321,14 @@
     bindRange('spin', 'spin', v => v.toFixed(2), null);
     bindRange('base', 'baseHz', v => v.toFixed(0) + ' Hz', null);
     bindRange('vol', 'vol', v => v.toFixed(0) + '%', null);
+
+    const projBtn = document.getElementById('projBtn');
+    projBtn.addEventListener('click', () => {
+      useOrtho = !useOrtho;
+      projBtn.textContent = useOrtho ? 'ORTHOGRAPHIC' : 'PERSPECTIVE';
+      projBtn.classList.toggle('on', useOrtho);
+      resize();                                  // set the ortho frustum for the current size
+    });
 
     document.getElementById('soundBtn').addEventListener('click', () => G.playing ? stopTones() : startTones());
     const panel = document.getElementById('panel');
