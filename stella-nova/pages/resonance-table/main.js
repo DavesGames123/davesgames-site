@@ -16,10 +16,28 @@
   'use strict';
 
   const G = { N:7, baseHz:131, vol:55 };
-  const CELL = 104;                 // logical cell size in px
+  let CELL = 104;                   // logical cell size in px, fitted per build
   const PHASE = Math.PI / 2;        // quarter-turn offset gives a circle at 1:1
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
   let active = null;                // { A, B, el }
+
+  // fit the cell to the viewport so the grid stays usable on a phone
+  function fitCell() {
+    const avail = Math.min(window.innerWidth, 980) - 54;   // minus the row header
+    CELL = Math.max(44, Math.min(104, Math.floor(avail / (G.N + 0.4))));
+  }
+
+  // --------------------------------------------------------------- magma ramp
+  const MAGMA = [
+    [0.001,0.000,0.014],[0.106,0.058,0.243],[0.271,0.063,0.454],[0.447,0.122,0.506],
+    [0.624,0.184,0.494],[0.804,0.251,0.443],[0.945,0.376,0.365],[0.992,0.585,0.404],[0.988,0.992,0.749],
+  ];
+  function magma(t) {
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    const x = t * (MAGMA.length - 1), i = Math.min(Math.floor(x), MAGMA.length - 2), f = x - i;
+    const a = MAGMA[i], b = MAGMA[i + 1];
+    return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f];
+  }
 
   // --------------------------------------------------------------- INTERVAL
   const gcd = (a, b) => b ? gcd(b, a % b) : a;
@@ -43,10 +61,10 @@
     return Math.log2(p * q);
   }
   function cellColor(a, b) {
-    const t = Math.min(consonance(a, b) / 6, 1);
-    const lerp = (u, v) => Math.round(u + (v - u) * t);
-    const r = lerp(255, 122), g = lerp(200, 134), bl = lerp(80, 180);
-    return { rgb: `rgb(${r},${g},${bl})`, alpha: 0.9 - 0.5 * t };
+    const t = Math.min(consonance(a, b) / 6, 1);   // 0 consonant .. 1 dissonant
+    const temp = 0.95 - 0.66 * t;                    // consonant = hot magma, dissonant = cold
+    const c = magma(temp);
+    return { rgb: `rgb(${c[0] * 255 | 0},${c[1] * 255 | 0},${c[2] * 255 | 0})`, alpha: 0.95 - 0.45 * t };
   }
 
   // ------------------------------------------------------------------ AUDIO
@@ -78,7 +96,7 @@
     const cx = canvas.getContext('2d');
     canvas.width = Math.round(CELL * dpr); canvas.height = Math.round(CELL * dpr);
     cx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    cx.fillStyle = '#0b0e14'; cx.fillRect(0, 0, CELL, CELL);
+    cx.fillStyle = '#08060e'; cx.fillRect(0, 0, CELL, CELL);
     const r = CELL * 0.38, mx = CELL / 2, my = CELL / 2;
     const { rgb, alpha } = cellColor(A, B);
     // the closed loop, drawn analytically because a whole ratio closes
@@ -103,6 +121,7 @@
   // ------------------------------------------------------------------ buildGrid
   function buildGrid() {
     stopTones(); active = null;
+    fitCell();
     const grid = document.getElementById('grid');
     grid.innerHTML = '';
     grid.style.gridTemplateColumns = 'auto repeat(' + G.N + ', ' + CELL + 'px)';
@@ -163,4 +182,8 @@
 
   // The size control's initial upd() already ran buildGrid once.
   setStatus();
+
+  // refit the cells when the viewport changes, for example on phone rotation
+  let rt = 0;
+  window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(buildGrid, 150); });
 })();
