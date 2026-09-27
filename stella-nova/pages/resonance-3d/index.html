@@ -75,12 +75,24 @@
   <div class="sec-label">KNOTS</div>
   <div class="presets" id="presets"></div>
 
-  <div class="sec-label">SHAPE</div>
-  <div class="row"><label>Phase X</label><input type="range" id="phaseX" min="0" max="1" step="0.005" value="0"><span class="val" id="phaseXV"></span></div>
-  <div class="row"><label>Phase Y</label><input type="range" id="phaseY" min="0" max="1" step="0.005" value="0.25"><span class="val" id="phaseYV"></span></div>
-  <div class="row"><label>Detune</label><input type="range" id="detune" min="-0.04" max="0.04" step="0.001" value="0"><span class="val" id="detuneV"></span></div>
+  <div class="sec-label">PHASE OFFSET</div>
+  <div class="row"><label>X</label><input type="range" id="phaseX" min="0" max="1" step="0.005" value="0"><span class="val" id="phaseXV"></span></div>
+  <div class="row"><label>Y</label><input type="range" id="phaseY" min="0" max="1" step="0.005" value="0.25"><span class="val" id="phaseYV"></span></div>
+  <div class="row"><label>Z</label><input type="range" id="phaseZ" min="0" max="1" step="0.005" value="0"><span class="val" id="phaseZV"></span></div>
+
+  <div class="sec-label">PHASE ANIMATION · turns/sec</div>
+  <div class="row"><label>X rate</label><input type="range" id="rateX" min="-0.5" max="0.5" step="0.005" value="0"><span class="val" id="rateXV"></span></div>
+  <div class="row"><label>Y rate</label><input type="range" id="rateY" min="-0.5" max="0.5" step="0.005" value="0"><span class="val" id="rateYV"></span></div>
+  <div class="row"><label>Z rate</label><input type="range" id="rateZ" min="-0.5" max="0.5" step="0.005" value="0"><span class="val" id="rateZV"></span></div>
+  <div class="hint">A nonzero rate advances that component's phase over time, so the knot slowly rotates and morphs. Give each axis a different rate for a drifting weave.</div>
+
+  <div class="sec-label">DETUNE</div>
+  <div class="row"><label>Coarse</label><input type="range" id="detuneCoarse" min="-0.5" max="0.5" step="0.01" value="0"><span class="val" id="detuneCoarseV"></span></div>
+  <div class="row"><label>Fine</label><input type="range" id="detuneFine" min="-0.02" max="0.02" step="0.0005" value="0"><span class="val" id="detuneFineV"></span></div>
+  <div class="hint">Detune breaks the exact triple, so the knot stops closing and fills a denser shell. Coarse sweeps wide; fine nudges by thousandths.</div>
+
+  <div class="sec-label">VIEW</div>
   <div class="row"><label>Spin</label><input type="range" id="spin" min="0" max="1" step="0.01" value="0.3"><span class="val" id="spinV"></span></div>
-  <div class="hint">Detune breaks the exact triple, so the knot stops closing and fills a denser shell — the 3D form of a dissonant, restless ratio.</div>
 
   <div class="sec-label">SOUND</div>
   <div class="modes"><button id="soundBtn">▶ PLAY TRIAD</button></div>

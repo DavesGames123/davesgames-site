@@ -23,7 +23,17 @@
   'use strict';
   const TAU = Math.PI * 2, S = 1.5;
 
-  const G = { A:3, B:2, C:4, phaseX:0, phaseY:0.25, detune:0, spin:0.3, baseHz:131, vol:50, playing:false };
+  const G = {
+    A:3, B:2, C:4,
+    phaseX:0, phaseY:0.25, phaseZ:0,      // static phase offsets, in turns
+    pRateX:0, pRateY:0, pRateZ:0,         // phase animation rates, in turns/sec
+    detuneCoarse:0, detuneFine:0,         // detune split into two adjusters
+    spin:0.3, baseHz:131, vol:50, playing:false,
+  };
+  const detv = () => G.detuneCoarse + G.detuneFine;          // effective detune
+  const animating = () => G.pRateX || G.pRateY || G.pRateZ;  // any phase moving
+  let ephX = 0, ephY = 0, ephZ = 0;                          // live phases, radians
+  const startT = performance.now();
   const MOB = window.matchMedia('(max-width:768px)').matches || window.matchMedia('(pointer:coarse)').matches;
 
   // --------------------------------------------------------------- magma ramp
@@ -99,27 +109,27 @@
   // ------------------------------------------------------------------- helpers
   const pt = (u, out) => {
     out.set(
-      Math.sin(TAU * (G.A + G.detune) * u + G.phaseX * TAU) * S,
-      Math.sin(TAU * G.B * u + G.phaseY * TAU) * S,
-      Math.sin(TAU * G.C * u) * S
+      Math.sin(TAU * (G.A + detv()) * u + ephX) * S,
+      Math.sin(TAU * G.B * u + ephY) * S,
+      Math.sin(TAU * G.C * u + ephZ) * S
     );
     return out;
   };
-  const isWhole = () => Number.isInteger(G.A) && Number.isInteger(G.B) && Number.isInteger(G.C) && Math.abs(G.detune) < 1e-6;
+  const isWhole = () => Number.isInteger(G.A) && Number.isInteger(G.B) && Number.isInteger(G.C) && Math.abs(detv()) < 1e-6;
 
   // ------------------------------------------------------------------ buildCurve
   const _p = new THREE.Vector3(), _col = [0, 0, 0];
   let CURVE = null, COL = null, VT = null, VCOUNT = 0, RING = 0;
   function buildCurve() {
-    const whole = isWhole();
-    const periods = whole ? 1 : (MOB ? 28 : 40);
-    const perPeriod = whole ? (MOB ? 640 : 900) : (MOB ? 60 : 90);
+    const whole = isWhole(), anim = animating();   // animating reduces detail for speed
+    const periods = whole ? 1 : (MOB ? 26 : 38);
+    const perPeriod = whole ? (anim ? (MOB ? 340 : 560) : (MOB ? 640 : 900)) : (anim ? (MOB ? 44 : 60) : (MOB ? 60 : 90));
     const n = periods * perPeriod;
     const pts = [];
     for (let i = 0; i < n; i++) pts.push(pt(i / perPeriod, new THREE.Vector3()));
     CURVE = new THREE.CatmullRomCurve3(pts, whole, 'centripetal');
 
-    const TUB = whole ? (MOB ? 700 : 1200) : n;   // tubular segments along the path
+    const TUB = whole ? (anim ? (MOB ? 340 : 560) : (MOB ? 700 : 1200)) : n;   // tubular segments
     const RSEG = MOB ? 4 : 6;                      // segments around the tube
     const geo = new THREE.TubeGeometry(CURVE, TUB, whole ? 0.02 : 0.014, RSEG, whole);
     VCOUNT = geo.attributes.position.count;
@@ -154,10 +164,10 @@
   // analytic velocity, then the Frenet frame: velocity + two perpendiculars
   const _V = new THREE.Vector3(), _Aa = new THREE.Vector3(), _T = new THREE.Vector3(), _N = new THREE.Vector3(), _Bn = new THREE.Vector3();
   function updateFrame(u) {
-    const a = TAU * (G.A + G.detune), b = TAU * G.B, c = TAU * G.C, pxs = G.phaseX * TAU, pys = G.phaseY * TAU;
+    const a = TAU * (G.A + detv()), b = TAU * G.B, c = TAU * G.C;
     pt(u, _p);
-    _V.set(a * Math.cos(a * u + pxs), b * Math.cos(b * u + pys), c * Math.cos(c * u)).multiplyScalar(S);
-    _Aa.set(-a * a * Math.sin(a * u + pxs), -b * b * Math.sin(b * u + pys), -c * c * Math.sin(c * u)).multiplyScalar(S);
+    _V.set(a * Math.cos(a * u + ephX), b * Math.cos(b * u + ephY), c * Math.cos(c * u + ephZ)).multiplyScalar(S);
+    _Aa.set(-a * a * Math.sin(a * u + ephX), -b * b * Math.sin(b * u + ephY), -c * c * Math.sin(c * u + ephZ)).multiplyScalar(S);
     _T.copy(_V); if (_T.length() < 1e-6) _T.set(1, 0, 0); _T.normalize();
     _N.copy(_Aa).addScaledVector(_T, -_Aa.dot(_T));
     if (_N.length() < 1e-6) { _N.set(-_T.y, _T.x, 0); if (_N.length() < 1e-6) _N.set(0, -_T.z, _T.y); }
@@ -178,7 +188,7 @@
   }
   function startTones() {
     ensureAudio(); stopTones();
-    [G.A + G.detune, G.B, G.C].forEach(mult => {
+    [G.A + detv(), G.B, G.C].forEach(mult => {
       const o = AC.createOscillator(), g = AC.createGain();
       o.type = 'sine'; o.frequency.value = G.baseHz * mult; g.gain.value = 0.34;
       o.connect(g).connect(master); o.start(); osc.push(o);
@@ -191,7 +201,7 @@
   }
   function updateFreqs() {
     if (!AC || osc.length !== 3) return;
-    const t = AC.currentTime, m = [G.A + G.detune, G.B, G.C];
+    const t = AC.currentTime, m = [G.A + detv(), G.B, G.C];
     osc.forEach((o, i) => o.frequency.setTargetAtTime(G.baseHz * m[i], t, 0.02));
     if (master) master.gain.setTargetAtTime(G.vol / 100 * 0.4, t, 0.02);
   }
@@ -206,6 +216,13 @@
   let last = performance.now(), tt = 0;
   function frame(now) {
     const dt = Math.min((now - last) / 1000, 0.05); last = now;
+    // live phases = static offset + rate * elapsed time
+    const el = (now - startT) / 1000;
+    ephX = (G.phaseX + G.pRateX * el) * TAU;
+    ephY = (G.phaseY + G.pRateY * el) * TAU;
+    ephZ = (G.phaseZ + G.pRateZ * el) * TAU;
+    if (animating()) buildCurve();      // rebuild the morphing knot each frame
+
     view.theta += G.spin * 0.0025;
     const st = Math.sin(view.phi), ct = Math.cos(view.phi);
     camera.position.set(view.R * st * Math.sin(view.theta), view.R * ct, view.R * st * Math.cos(view.theta));
@@ -263,8 +280,8 @@
       const el = document.createElement('button');
       el.textContent = a + ':' + b + ':' + c;
       el.addEventListener('click', () => {
-        G.A = a; G.B = b; G.C = c; G.detune = 0;
-        document.getElementById('detune').value = 0; fmt('detune');
+        G.A = a; G.B = b; G.C = c; G.detuneCoarse = 0; G.detuneFine = 0;
+        setVal('detuneCoarse', 0); setVal('detuneFine', 0);
         syncSteppers(); markPreset(); buildCurve(); refreshStatus();
       });
       pc.appendChild(el);
@@ -279,9 +296,19 @@
     bindStep('stepA', 'A'); bindStep('stepB', 'B'); bindStep('stepC', 'C');
     syncSteppers();
 
-    bindRange('phaseX', 'phaseX', v => v.toFixed(2), buildCurve);
-    bindRange('phaseY', 'phaseY', v => v.toFixed(2), buildCurve);
-    bindRange('detune', 'detune', v => (v >= 0 ? '+' : '') + v.toFixed(3), buildCurve);
+    // a static offset rebuilds only when nothing is animating (the frame loop
+    // rebuilds otherwise); a rate change rebuilds once when it returns to still
+    const onStill = () => { if (!animating()) buildCurve(); };
+    const turns = v => v.toFixed(2) + 'τ';
+    const rate = v => (v >= 0 ? '+' : '') + v.toFixed(3);
+    bindRange('phaseX', 'phaseX', turns, onStill);
+    bindRange('phaseY', 'phaseY', turns, onStill);
+    bindRange('phaseZ', 'phaseZ', turns, onStill);
+    bindRange('rateX', 'pRateX', rate, onStill);
+    bindRange('rateY', 'pRateY', rate, onStill);
+    bindRange('rateZ', 'pRateZ', rate, onStill);
+    bindRange('detuneCoarse', 'detuneCoarse', v => (v >= 0 ? '+' : '') + v.toFixed(2), onStill);
+    bindRange('detuneFine', 'detuneFine', v => (v >= 0 ? '+' : '') + v.toFixed(4), onStill);
     bindRange('spin', 'spin', v => v.toFixed(2), null);
     bindRange('base', 'baseHz', v => v.toFixed(0) + ' Hz', null);
     bindRange('vol', 'vol', v => v.toFixed(0) + '%', null);
@@ -299,6 +326,7 @@
     inp.addEventListener('input', upd); upd();
   }
   function fmt(id) { const inp = document.getElementById(id), out = document.getElementById(id + 'V'); if (inp._fmt) out.textContent = inp._fmt(+inp.value); }
+  function setVal(id, v) { const inp = document.getElementById(id); if (inp) { inp.value = v; fmt(id); } }
   function syncSteppers() {
     document.getElementById('numA').textContent = G.A;
     document.getElementById('numB').textContent = G.B;
@@ -307,7 +335,7 @@
   function markPreset() {
     document.querySelectorAll('#presets button').forEach((el, i) => {
       const [a, b, c] = PRESETS[i];
-      el.classList.toggle('on', a === G.A && b === G.B && c === G.C && Math.abs(G.detune) < 1e-6);
+      el.classList.toggle('on', a === G.A && b === G.B && c === G.C && Math.abs(detv()) < 1e-6);
     });
   }
 
