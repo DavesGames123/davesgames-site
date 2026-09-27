@@ -41,12 +41,17 @@
   window.addEventListener('resize', resize);
 
   // ------------------------------------------------------------ geometry map
+  // Layout: the wave panels get a wide band; the figure gets what is left. A
+  // gap separates each panel from the figure so all three have their own frame.
   function box() {
-    const strip = MOB ? 64 : 104;           // room for the axis wave panels
-    const pad = MOB ? 16 : 26;
-    const s = Math.min(W - strip - pad * 2, H - strip - pad * 2);
-    const r = Math.max(40, s / 2);
-    return { cx: pad + strip + r, cy: pad + strip + r, r, strip };
+    const pad = MOB ? 12 : 22;
+    const gap = MOB ? 10 : 16;
+    const avail = Math.min(W, H) - pad * 2;
+    const strip = Math.round(avail * (MOB ? 0.26 : 0.30));   // wave panels: more space
+    const r = Math.max(40, (avail - strip - gap) / 2);       // figure: less space
+    const cx = pad + strip + gap + r, cy = pad + strip + gap + r;
+    return { cx, cy, r, strip, gap, pad,
+      figL: cx - r, figR: cx + r, figT: cy - r, figB: cy + r };
   }
   const mapX = (x, b) => b.cx + x * b.r;
   const mapY = (y, b) => b.cy - y * b.r;
@@ -174,43 +179,85 @@
     ctx.restore();
   }
 
-  // The two component sine waves that draw the object, each on its own axis.
-  // Amplitude aligns with the figure axis it feeds; time runs away from the
-  // figure. The newest sample sits on the figure edge, above/left of the tip.
+  // --- static frames: bounding box, grid lines, axes and labels ---------------
+  const GRID = 'rgba(200,170,210,0.09)', AXIS = 'rgba(212,182,222,0.30)', BOX = 'rgba(212,182,222,0.34)';
+  const TICK = 'rgba(185,155,195,0.65)';
+  const cyclesX = () => Math.min(2.4, LIFE * Math.abs(G.A + G.detune) * G.speed);
+  const cyclesY = () => Math.min(2.4, LIFE * Math.abs(G.B) * G.speed);
+
+  function drawFigureFrame(b) {
+    ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 1;
+    for (let k = -2; k <= 2; k++) {                     // grid at -1, -0.5, 0, 0.5, 1
+      const gx = b.cx + k * 0.5 * b.r, gy = b.cy + k * 0.5 * b.r, mid = k === 0;
+      ctx.strokeStyle = mid ? AXIS : GRID;
+      ctx.beginPath(); ctx.moveTo(gx, b.figT); ctx.lineTo(gx, b.figB); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(b.figL, gy); ctx.lineTo(b.figR, gy); ctx.stroke();
+    }
+    ctx.strokeStyle = BOX; ctx.lineWidth = 1.2; ctx.strokeRect(b.figL, b.figT, 2 * b.r, 2 * b.r);
+    ctx.fillStyle = TICK; ctx.font = "500 " + (MOB ? 9 : 11) + "px 'JetBrains Mono',monospace";
+    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('x', b.figR - 4, b.figB - 3);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('y', b.figL + 4, b.figT + 3);
+    ctx.restore();
+  }
+
+  function drawWaveFrames(b) {
+    const pBot = b.figT - b.gap, pTop = pBot - b.strip;         // top panel
+    const pRight = b.figL - b.gap, pLeft = pRight - b.strip;    // left panel
+    ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 1;
+    ctx.font = "500 " + (MOB ? 8 : 10) + "px 'JetBrains Mono',monospace";
+
+    // ---- top panel: horizontal component; amplitude across, time up ----
+    for (let k = -2; k <= 2; k++) {                             // amplitude grid (vertical)
+      const gx = b.cx + k * 0.5 * b.r, mid = k === 0; ctx.strokeStyle = mid ? AXIS : GRID;
+      ctx.beginPath(); ctx.moveTo(gx, pTop); ctx.lineTo(gx, pBot); ctx.stroke();
+    }
+    const cX = cyclesX();                                       // time grid (per period)
+    for (let p = 1; p <= cX; p++) { const gy = pBot - (p / cX) * b.strip; ctx.strokeStyle = GRID; ctx.beginPath(); ctx.moveTo(b.figL, gy); ctx.lineTo(b.figR, gy); ctx.stroke(); }
+    ctx.strokeStyle = BOX; ctx.lineWidth = 1.2; ctx.strokeRect(b.figL, pTop, 2 * b.r, b.strip);
+    ctx.fillStyle = magStr(0.86, 0.85); ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('x = sin 2π·' + G.A + '·t', b.figL + 4, pTop + 3);
+    ctx.fillStyle = TICK; ctx.textBaseline = 'bottom'; ctx.textAlign = 'left'; ctx.fillText('−1', b.figL + 2, pBot - 2);
+    ctx.textAlign = 'right'; ctx.fillText('+1', b.figR - 2, pBot - 2);
+    ctx.save(); ctx.translate(b.figR + 3, pTop + b.strip / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillText('t →', 0, 0); ctx.restore();
+
+    // ---- left panel: vertical component; amplitude down, time left ----
+    for (let k = -2; k <= 2; k++) {                             // amplitude grid (horizontal)
+      const gy = b.cy + k * 0.5 * b.r, mid = k === 0; ctx.strokeStyle = mid ? AXIS : GRID;
+      ctx.beginPath(); ctx.moveTo(pLeft, gy); ctx.lineTo(pRight, gy); ctx.stroke();
+    }
+    const cY = cyclesY();                                       // time grid (per period)
+    for (let p = 1; p <= cY; p++) { const gx = pRight - (p / cY) * b.strip; ctx.strokeStyle = GRID; ctx.beginPath(); ctx.moveTo(gx, b.figT); ctx.lineTo(gx, b.figB); ctx.stroke(); }
+    ctx.strokeStyle = BOX; ctx.lineWidth = 1.2; ctx.strokeRect(pLeft, b.figT, b.strip, 2 * b.r);
+    ctx.fillStyle = magStr(0.66, 0.85); ctx.save(); ctx.translate(pLeft + 3, b.figB - 4); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('y = sin 2π·' + G.B + '·t', 0, 0); ctx.restore();
+    ctx.fillStyle = TICK; ctx.textAlign = 'right'; ctx.textBaseline = 'top'; ctx.fillText('+1', pRight - 2, b.figT + 2);
+    ctx.textBaseline = 'bottom'; ctx.fillText('−1', pRight - 2, b.figB - 2);
+    ctx.restore();
+  }
+
+  // The two moving component sine waves. Amplitude aligns with the figure axis;
+  // time runs away from the figure. The newest sample sits on the panel edge.
   function drawAxisWaves(b, now) {
     if (hist.length < 2) return;
-    const topEdge = b.cy - b.r, leftEdge = b.cx - b.r;
+    const pBot = b.figT - b.gap, pRight = b.figL - b.gap;
     const fx = Math.abs(G.A + G.detune) * G.speed, fy = Math.abs(G.B) * G.speed;   // cycles/sec
-    const winX = Math.min(LIFE, 2.2 / Math.max(fx, 1e-3));
-    const winY = Math.min(LIFE, 2.2 / Math.max(fy, 1e-3));
-    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-    // --- amplitude baselines (zero line) and time-axis labels ---
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = 'rgba(200,170,210,0.14)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(b.cx, topEdge); ctx.lineTo(b.cx, topEdge - b.strip); ctx.stroke();      // top zero line
-    ctx.beginPath(); ctx.moveTo(leftEdge, b.cy); ctx.lineTo(leftEdge - b.strip, b.cy); ctx.stroke();     // left zero line
-    ctx.font = "600 " + (MOB ? 9 : 11) + "px 'JetBrains Mono',monospace";
-    ctx.fillStyle = magStr(0.86, 0.9); ctx.textAlign = 'left';
-    ctx.fillText('x = sin 2π·' + G.A + '·t  ↑t', leftEdge + 4, topEdge - b.strip + (MOB ? 10 : 12));
-    ctx.save(); ctx.translate(leftEdge - b.strip + (MOB ? 10 : 12), topEdge + 4); ctx.rotate(-Math.PI / 2);
-    ctx.fillStyle = magStr(0.66, 0.9); ctx.fillText('y = sin 2π·' + G.B + '·t  ←t', 0, 0); ctx.restore();
-
-    // --- the waves themselves (glow) ---
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = magStr(0.86, 0.85); ctx.lineWidth = 1.8; ctx.shadowColor = magStr(0.86, 1); ctx.shadowBlur = 6;
+    const winX = Math.min(LIFE, cyclesX() / Math.max(fx, 1e-6));
+    const winY = Math.min(LIFE, cyclesY() / Math.max(fy, 1e-6));
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = magStr(0.86, 0.9); ctx.lineWidth = 1.8; ctx.shadowColor = magStr(0.86, 1); ctx.shadowBlur = 6;
     ctx.beginPath();                                             // horizontal component, top panel
     for (let i = hist.length - 1, first = true; i >= 0; i--) {
       const age = now - hist[i].born; if (age > winX) break;
-      const X = mapX(hist[i].x, b), Y = topEdge - (age / winX) * b.strip;
+      const X = mapX(hist[i].x, b), Y = pBot - (age / winX) * b.strip;
       first ? (ctx.moveTo(X, Y), first = false) : ctx.lineTo(X, Y);
     }
     ctx.stroke();
-    ctx.strokeStyle = magStr(0.66, 0.85); ctx.shadowColor = magStr(0.66, 1);
+    ctx.strokeStyle = magStr(0.66, 0.9); ctx.shadowColor = magStr(0.66, 1);
     ctx.beginPath();                                             // vertical component, left panel
     for (let i = hist.length - 1, first = true; i >= 0; i--) {
       const age = now - hist[i].born; if (age > winY) break;
-      const X = leftEdge - (age / winY) * b.strip, Y = mapY(hist[i].y, b);
+      const X = pRight - (age / winY) * b.strip, Y = mapY(hist[i].y, b);
       first ? (ctx.moveTo(X, Y), first = false) : ctx.lineTo(X, Y);
     }
     ctx.stroke(); ctx.restore();
@@ -219,16 +266,16 @@
   // the pointer lines and dots that connect each wave to the moving tip
   function drawGuides(b, u) {
     const X = mapX(px(u), b), Y = mapY(py(u), b);
-    const topEdge = b.cy - b.r, leftEdge = b.cx - b.r;
+    const pBot = b.figT - b.gap, pRight = b.figL - b.gap;
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
-    ctx.setLineDash([2, 4]); ctx.lineWidth = 1.4;
-    ctx.strokeStyle = magStr(0.86, 0.5);
-    ctx.beginPath(); ctx.moveTo(X, topEdge); ctx.lineTo(X, Y); ctx.stroke();     // top wave -> tip
-    ctx.strokeStyle = magStr(0.66, 0.5);
-    ctx.beginPath(); ctx.moveTo(leftEdge, Y); ctx.lineTo(X, Y); ctx.stroke();    // left wave -> tip
+    ctx.setLineDash([2, 4]); ctx.lineWidth = 1.2;
+    ctx.strokeStyle = magStr(0.86, 0.45);
+    ctx.beginPath(); ctx.moveTo(X, pBot); ctx.lineTo(X, Y); ctx.stroke();        // top wave -> tip
+    ctx.strokeStyle = magStr(0.66, 0.45);
+    ctx.beginPath(); ctx.moveTo(pRight, Y); ctx.lineTo(X, Y); ctx.stroke();      // left wave -> tip
     ctx.setLineDash([]);
-    glowDot(X, topEdge, magStr(0.9, 1), MOB ? 4 : 5);      // attach dot on the top edge
-    glowDot(leftEdge, Y, magStr(0.66, 1), MOB ? 4 : 5);    // attach dot on the left edge
+    glowDot(X, pBot, magStr(0.9, 1), MOB ? 4 : 5);         // attach dot, top panel edge
+    glowDot(pRight, Y, magStr(0.66, 1), MOB ? 4 : 5);      // attach dot, left panel edge
     ctx.restore();
   }
 
@@ -242,25 +289,26 @@
     const m = Math.hypot(dx, dy) || 1, ux = dx / m, uy = dy / m, ex = x + ux * len, ey = y + uy * len;
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'round';
-    ctx.shadowColor = color; ctx.shadowBlur = 7;
+    ctx.shadowColor = color; ctx.shadowBlur = 3;
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
-    const hl = Math.min(10, len * 0.42), a = 0.5, ca = Math.cos(a), sa = Math.sin(a);
+    const hl = Math.min(6, len * 0.34), a = 0.5, ca = Math.cos(a), sa = Math.sin(a);
     ctx.beginPath(); ctx.moveTo(ex, ey);
     ctx.lineTo(ex - hl * (ux * ca - uy * sa), ey - hl * (uy * ca + ux * sa));
     ctx.lineTo(ex - hl * (ux * ca + uy * sa), ey - hl * (uy * ca - ux * sa));
     ctx.closePath(); ctx.fill(); ctx.restore();
   }
 
-  // velocity vector plus the single vector perpendicular to it (2D has one)
+  // velocity vector plus the single vector perpendicular to it (2D has one).
+  // Kept small and dim, so it reads as an annotation, not the main mark.
   function drawFrame(b, u) {
     const X = mapX(px(u), b), Y = mapY(py(u), b);
     const dx = vx(u), dy = -vy(u);                 // screen-space velocity (y is flipped)
     const sp = Math.hypot(dx, dy) || 1, tx = dx / sp, ty = dy / sp;
     const nx = -ty, ny = tx;                        // in-plane perpendicular (normal)
-    const Lv = Math.max(0.1, Math.min(0.34, sp / (TAU * Math.max(G.A, G.B) + 1))) * b.r;
-    const Ln = b.r * 0.17;
-    arrow(X, Y, tx, ty, Lv, magStr(1.0, 0.95), 3);         // velocity (white-hot)
-    arrow(X, Y, nx, ny, Ln, magStr(0.66, 0.9), 2);         // perpendicular (normal)
+    const Lv = Math.max(0.06, Math.min(0.16, sp / (TAU * Math.max(G.A, G.B) + 1))) * b.r;
+    const Ln = b.r * 0.09;
+    arrow(X, Y, tx, ty, Lv, magStr(0.95, 0.7), 1.6);       // velocity
+    arrow(X, Y, nx, ny, Ln, magStr(0.6, 0.6), 1.3);        // perpendicular (normal)
   }
 
   function drawHotTip(b, u) {
@@ -284,6 +332,8 @@
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = '#05040a'; ctx.fillRect(0, 0, W, H);
+    drawFigureFrame(b);          // bounded box, grid, axes for the pattern
+    drawWaveFrames(b);           // bounded boxes, grids, axes for both waves
     if (isWholeCtx()) drawContextLoop(b);
     drawAxisWaves(b, t);
     drawTrail(b, t);
