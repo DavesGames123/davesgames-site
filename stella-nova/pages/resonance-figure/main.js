@@ -42,10 +42,11 @@
 
   // ------------------------------------------------------------ geometry map
   function box() {
-    const strip = MOB ? 34 : 52;            // room for the axis waves
-    const s = Math.min(W - strip - 24, H - strip - 24) * 0.9;
+    const strip = MOB ? 64 : 104;           // room for the axis wave panels
+    const pad = MOB ? 16 : 26;
+    const s = Math.min(W - strip - pad * 2, H - strip - pad * 2);
     const r = Math.max(40, s / 2);
-    return { cx: (W + strip) / 2, cy: (H + strip) / 2, r, strip };
+    return { cx: pad + strip + r, cy: pad + strip + r, r, strip };
   }
   const mapX = (x, b) => b.cx + x * b.r;
   const mapY = (y, b) => b.cy - y * b.r;
@@ -117,18 +118,21 @@
 
   // ------------------------------------------------------------------ trail
   const LIFE = 7.5;             // seconds a point stays in the trail (long cool-down)
+  const MAXPTS = MOB ? 700 : 1600;
   let simU = 0, prevU = 0, last = performance.now();
   let hist = [];               // { x, y, u, born }
   function clearTrail() { hist = []; }
 
+  // sample the arc densely, so the curve and its gradient stay smooth
   function pushHistory(now, u0, u1) {
-    const du = u1 - u0, steps = Math.max(1, Math.ceil(du * 700));
+    const du = u1 - u0, steps = Math.max(2, Math.ceil(du * 1600));
     for (let i = 1; i <= steps; i++) {
       const u = u0 + du * i / steps;
       hist.push({ x: px(u), y: py(u), u, born: now });
     }
     const cut = now - LIFE;
     let k = 0; while (k < hist.length && hist[k].born < cut) k++;
+    if (hist.length - k > MAXPTS) k = hist.length - MAXPTS;
     if (k) hist.splice(0, k);
   }
 
@@ -143,65 +147,88 @@
     ctx.stroke(); ctx.restore();
   }
 
-  // the magma trail: contiguous bands by heat, hottest (newest) last
+  // the magma trail: one soft glow pass, then a true per-segment gradient by age
   function drawTrail(b, now) {
     if (hist.length < 2) return;
-    const B = 22;
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    const heatOf = p => 1 - (now - p.born) / LIFE;
-    const bandOf = p => Math.max(0, Math.min(B - 1, Math.floor(heatOf(p) * B)));
-    let s = 0;
-    while (s < hist.length) {
-      const band = bandOf(hist[s]);
-      let e = s; while (e + 1 < hist.length && bandOf(hist[e + 1]) === band) e++;
-      const temp = band / (B - 1);
-      ctx.beginPath();
-      const end = Math.min(e + 1, hist.length - 1);
-      for (let i = s; i <= end; i++) { const X = mapX(hist[i].x, b), Y = mapY(hist[i].y, b); i === s ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y); }
-      ctx.shadowColor = magStr(temp, 1); ctx.shadowBlur = 3 + temp * (MOB ? 10 : 18);
-      ctx.strokeStyle = magStr(temp, 0.12 + 0.85 * temp);
-      ctx.lineWidth = (1.2 + temp * 3.2) * (MOB ? 0.85 : 1);
-      ctx.stroke();
-      s = e + 1;
+
+    // pass 1: soft magma glow under the whole trail, one cheap stroke
+    ctx.beginPath();
+    for (let i = 0; i < hist.length; i++) { const X = mapX(hist[i].x, b), Y = mapY(hist[i].y, b); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+    ctx.strokeStyle = magStr(0.72, 0.10); ctx.lineWidth = MOB ? 6 : 10;
+    ctx.shadowColor = magStr(0.82, 1); ctx.shadowBlur = MOB ? 8 : 16; ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // pass 2: crisp color per segment, so the gradient is exact along the line
+    let px0 = mapX(hist[0].x, b), py0 = mapY(hist[0].y, b);
+    for (let i = 1; i < hist.length; i++) {
+      const p = hist[i], heat = 1 - (now - p.born) / LIFE;
+      const X = mapX(p.x, b), Y = mapY(p.y, b);
+      if (heat >= 0) {
+        ctx.beginPath(); ctx.moveTo(px0, py0); ctx.lineTo(X, Y);
+        ctx.strokeStyle = magStr(heat, 0.15 + 0.8 * heat);
+        ctx.lineWidth = (0.9 + heat * 2.8) * (MOB ? 0.9 : 1); ctx.stroke();
+      }
+      px0 = X; py0 = Y;
     }
     ctx.restore();
   }
 
-  // the component sine waves drawing the object, along the top and left axes
+  // The two component sine waves that draw the object, each on its own axis.
+  // Amplitude aligns with the figure axis it feeds; time runs away from the
+  // figure. The newest sample sits on the figure edge, above/left of the tip.
   function drawAxisWaves(b, now) {
     if (hist.length < 2) return;
-    const topY = b.cy - b.r, leftX = b.cx - b.r, span = b.strip - 6;
-    ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    // horizontal component along the top: x value sets screen-x, age climbs upward
-    ctx.strokeStyle = magStr(0.86, 0.7); ctx.lineWidth = 1.6; ctx.shadowColor = magStr(0.86, 1); ctx.shadowBlur = 6;
-    ctx.beginPath();
-    for (let i = hist.length - 1; i >= 0; i--) {
-      const age = (now - hist[i].born) / LIFE; if (age > 1) break;
-      const X = mapX(hist[i].x, b), Y = topY - age * span;
-      i === hist.length - 1 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y);
+    const topEdge = b.cy - b.r, leftEdge = b.cx - b.r;
+    const fx = Math.abs(G.A + G.detune) * G.speed, fy = Math.abs(G.B) * G.speed;   // cycles/sec
+    const winX = Math.min(LIFE, 2.2 / Math.max(fx, 1e-3));
+    const winY = Math.min(LIFE, 2.2 / Math.max(fy, 1e-3));
+    ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+    // --- amplitude baselines (zero line) and time-axis labels ---
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = 'rgba(200,170,210,0.14)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(b.cx, topEdge); ctx.lineTo(b.cx, topEdge - b.strip); ctx.stroke();      // top zero line
+    ctx.beginPath(); ctx.moveTo(leftEdge, b.cy); ctx.lineTo(leftEdge - b.strip, b.cy); ctx.stroke();     // left zero line
+    ctx.font = "600 " + (MOB ? 9 : 11) + "px 'JetBrains Mono',monospace";
+    ctx.fillStyle = magStr(0.86, 0.9); ctx.textAlign = 'left';
+    ctx.fillText('x = sin 2π·' + G.A + '·t  ↑t', leftEdge + 4, topEdge - b.strip + (MOB ? 10 : 12));
+    ctx.save(); ctx.translate(leftEdge - b.strip + (MOB ? 10 : 12), topEdge + 4); ctx.rotate(-Math.PI / 2);
+    ctx.fillStyle = magStr(0.66, 0.9); ctx.fillText('y = sin 2π·' + G.B + '·t  ←t', 0, 0); ctx.restore();
+
+    // --- the waves themselves (glow) ---
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.strokeStyle = magStr(0.86, 0.85); ctx.lineWidth = 1.8; ctx.shadowColor = magStr(0.86, 1); ctx.shadowBlur = 6;
+    ctx.beginPath();                                             // horizontal component, top panel
+    for (let i = hist.length - 1, first = true; i >= 0; i--) {
+      const age = now - hist[i].born; if (age > winX) break;
+      const X = mapX(hist[i].x, b), Y = topEdge - (age / winX) * b.strip;
+      first ? (ctx.moveTo(X, Y), first = false) : ctx.lineTo(X, Y);
     }
     ctx.stroke();
-    // vertical component along the left: y value sets screen-y, age climbs leftward
-    ctx.strokeStyle = magStr(0.68, 0.7); ctx.shadowColor = magStr(0.68, 1);
-    ctx.beginPath();
-    for (let i = hist.length - 1; i >= 0; i--) {
-      const age = (now - hist[i].born) / LIFE; if (age > 1) break;
-      const X = leftX - age * span, Y = mapY(hist[i].y, b);
-      i === hist.length - 1 ? ctx.moveTo(X, Y) : ctx.lineTo(X, Y);
+    ctx.strokeStyle = magStr(0.66, 0.85); ctx.shadowColor = magStr(0.66, 1);
+    ctx.beginPath();                                             // vertical component, left panel
+    for (let i = hist.length - 1, first = true; i >= 0; i--) {
+      const age = now - hist[i].born; if (age > winY) break;
+      const X = leftEdge - (age / winY) * b.strip, Y = mapY(hist[i].y, b);
+      first ? (ctx.moveTo(X, Y), first = false) : ctx.lineTo(X, Y);
     }
     ctx.stroke(); ctx.restore();
   }
 
+  // the pointer lines and dots that connect each wave to the moving tip
   function drawGuides(b, u) {
     const X = mapX(px(u), b), Y = mapY(py(u), b);
-    const topY = b.cy - b.r - b.strip, leftX = b.cx - b.r - b.strip;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(200,180,220,0.16)'; ctx.lineWidth = 1; ctx.setLineDash([3, 5]);
-    ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(X, topY); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(leftX, Y); ctx.stroke();
+    const topEdge = b.cy - b.r, leftEdge = b.cx - b.r;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.setLineDash([2, 4]); ctx.lineWidth = 1.4;
+    ctx.strokeStyle = magStr(0.86, 0.5);
+    ctx.beginPath(); ctx.moveTo(X, topEdge); ctx.lineTo(X, Y); ctx.stroke();     // top wave -> tip
+    ctx.strokeStyle = magStr(0.66, 0.5);
+    ctx.beginPath(); ctx.moveTo(leftEdge, Y); ctx.lineTo(X, Y); ctx.stroke();    // left wave -> tip
     ctx.setLineDash([]);
-    glowDot(mapX(px(u), b), topY, magStr(0.86, 1), MOB ? 5 : 6);
-    glowDot(leftX, mapY(py(u), b), magStr(0.68, 1), MOB ? 5 : 6);
+    glowDot(X, topEdge, magStr(0.9, 1), MOB ? 4 : 5);      // attach dot on the top edge
+    glowDot(leftEdge, Y, magStr(0.66, 1), MOB ? 4 : 5);    // attach dot on the left edge
     ctx.restore();
   }
 
