@@ -21,10 +21,18 @@
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
   let active = null;                // { A, B, el }
 
-  // fit the cell to the viewport so the grid stays usable on a phone
+  // fit the cell so the grid fills the wrapper in both axes without scrolling
   function fitCell() {
-    const avail = Math.min(window.innerWidth, 980) - 54;   // minus the row header
-    CELL = Math.max(44, Math.min(104, Math.floor(avail / (G.N + 0.4))));
+    const wrap = document.getElementById('gridwrap');
+    const cs = getComputedStyle(wrap);
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const gap = window.innerWidth <= 768 ? 5 : 8;    // matches #grid gap in CSS
+    const hdrW = 30, hdrH = 26;                       // the row/column header tracks
+    const w = (wrap.clientWidth - padX) || 600, h = (wrap.clientHeight - padY) || 600;
+    const cw = (w - hdrW - G.N * gap) / G.N;
+    const ch = (h - hdrH - G.N * gap) / G.N;
+    CELL = Math.max(40, Math.floor(Math.min(cw, ch)));
   }
 
   // --------------------------------------------------------------- magma ramp
@@ -144,7 +152,9 @@
         const cv = document.createElement('canvas');
         cell.appendChild(cv);
         const nm = document.createElement('div'); nm.className = 'name'; nm.textContent = nameFor(a, b);
+        nm.style.fontSize = Math.max(8, Math.min(15, CELL * 0.11)) + 'px';
         const lb = document.createElement('div'); lb.className = 'lbl'; lb.textContent = a + ':' + b;
+        lb.style.fontSize = Math.max(9, Math.min(18, CELL * 0.14)) + 'px';
         cell.appendChild(nm); cell.appendChild(lb);
         drawCell(cv, a, b);
         cell.addEventListener('click', () => select(a, b, cell));
