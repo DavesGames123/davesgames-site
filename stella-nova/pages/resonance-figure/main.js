@@ -44,12 +44,12 @@
   // Layout: the wave panels get a wide band; the figure gets what is left. A
   // gap separates each panel from the figure so all three have their own frame.
   function box() {
-    const pad = MOB ? 10 : 22;
-    const gap = MOB ? 8 : 16;
-    const botRes = MOB ? 40 : 24;                            // clear of the status bar
+    const pad = MOB ? 8 : 14;
+    const gap = MOB ? 8 : 12;
+    const botRes = MOB ? 38 : 22;                            // clear of the status bar
     const usableW = W, usableH = H - botRes;
     const avail = Math.min(usableW, usableH) - pad * 2;
-    const strip = Math.round(avail * (MOB ? 0.26 : 0.30));   // wave panels: more space
+    const strip = Math.round(avail * (MOB ? 0.28 : 0.32));   // wave panels: more space
     const r = Math.max(36, (avail - strip - gap) / 2);       // figure: less space
     const blk = strip + gap + 2 * r;                          // whole diagram block
     const ox = Math.max(pad, (usableW - blk) / 2), oy = Math.max(pad, (usableH - blk) / 2);
@@ -240,31 +240,53 @@
     ctx.restore();
   }
 
+  // Time windows in phase units (loops of u). Timing by u, not wall clock, keeps
+  // every sub-sample distinct, so the wave is smooth instead of stair-stepped.
+  const winUX = () => cyclesX() / Math.max(Math.abs(G.A + G.detune), 1e-6);
+  const winUY = () => cyclesY() / Math.max(Math.abs(G.B), 1e-6);
+
   // The two moving component sine waves. Amplitude aligns with the figure axis;
   // time runs away from the figure. The newest sample sits on the panel edge.
-  function drawAxisWaves(b, now) {
+  function drawAxisWaves(b) {
     if (hist.length < 2) return;
     const pBot = b.figT - b.gap, pRight = b.figL - b.gap;
-    const fx = Math.abs(G.A + G.detune) * G.speed, fy = Math.abs(G.B) * G.speed;   // cycles/sec
-    const winX = Math.min(LIFE, cyclesX() / Math.max(fx, 1e-6));
-    const winY = Math.min(LIFE, cyclesY() / Math.max(fy, 1e-6));
+    const wX = winUX(), wY = winUY();
     ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.globalCompositeOperation = 'lighter';
-    ctx.strokeStyle = magStr(0.86, 0.9); ctx.lineWidth = 1.8; ctx.shadowColor = magStr(0.86, 1); ctx.shadowBlur = 6;
+    ctx.strokeStyle = magStr(0.86, 0.95); ctx.lineWidth = 2; ctx.shadowColor = magStr(0.86, 1); ctx.shadowBlur = 6;
     ctx.beginPath();                                             // horizontal component, top panel
     for (let i = hist.length - 1, first = true; i >= 0; i--) {
-      const age = now - hist[i].born; if (age > winX) break;
-      const X = mapX(hist[i].x, b), Y = pBot - (age / winX) * b.strip;
+      const pa = simU - hist[i].u; if (pa > wX) break;
+      const X = mapX(hist[i].x, b), Y = pBot - (pa / wX) * b.strip;
       first ? (ctx.moveTo(X, Y), first = false) : ctx.lineTo(X, Y);
     }
     ctx.stroke();
-    ctx.strokeStyle = magStr(0.66, 0.9); ctx.shadowColor = magStr(0.66, 1);
+    ctx.strokeStyle = magStr(0.66, 0.95); ctx.shadowColor = magStr(0.66, 1);
     ctx.beginPath();                                             // vertical component, left panel
     for (let i = hist.length - 1, first = true; i >= 0; i--) {
-      const age = now - hist[i].born; if (age > winY) break;
-      const X = pRight - (age / winY) * b.strip, Y = mapY(hist[i].y, b);
+      const pa = simU - hist[i].u; if (pa > wY) break;
+      const X = pRight - (pa / wY) * b.strip, Y = mapY(hist[i].y, b);
       first ? (ctx.moveTo(X, Y), first = false) : ctx.lineTo(X, Y);
     }
     ctx.stroke(); ctx.restore();
+  }
+
+  // Velocity and its perpendicular on each wave pane, at the current sample dot.
+  // The curve is parameterised by u; the tangent is its u-derivative in screen.
+  function drawPaneVectors(b, u) {
+    const pBot = b.figT - b.gap, pRight = b.figL - b.gap;
+    const kX = b.strip / winUX(), kY = b.strip / winUY();       // px per loop of u
+    const L = b.strip * 0.22;
+    // top pane: position (cx + x*r, pBot - (simU-u)/winUX*strip) -> d/du
+    let tx = b.r * vx(u), ty = kX;                              // toward older samples (down)
+    drawPaneFrame(mapX(px(u), b), pBot, tx, ty, L, 0.86);
+    // left pane: position (pRight - (simU-u)/winUY*strip, cy - y*r) -> d/du
+    let ux = kY, uy = -b.r * vy(u);
+    drawPaneFrame(pRight, mapY(py(u), b), ux, uy, L, 0.66);
+  }
+  function drawPaneFrame(X, Y, tx, ty, L, hue) {
+    const m = Math.hypot(tx, ty) || 1, ex = tx / m, ey = ty / m;
+    arrow(X, Y, ex, ey, L, magStr(0.98, 0.7), 1.6);            // velocity (tangent)
+    arrow(X, Y, -ey, ex, L * 0.7, magStr(hue, 0.75), 1.4);     // perpendicular (normal)
   }
 
   // the pointer lines and dots that connect each wave to the moving tip
@@ -339,10 +361,11 @@
     drawFigureFrame(b);          // bounded box, grid, axes for the pattern
     drawWaveFrames(b);           // bounded boxes, grids, axes for both waves
     if (isWholeCtx()) drawContextLoop(b);
-    drawAxisWaves(b, t);
+    drawAxisWaves(b);
     drawTrail(b, t);
     const u = simU % 1;
     drawGuides(b, u);
+    drawPaneVectors(b, u);
     drawFrame(b, u);
     drawHotTip(b, u);
     requestAnimationFrame(draw);
