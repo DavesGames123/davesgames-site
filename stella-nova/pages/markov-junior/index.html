@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MarkovJunior</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MARKOVJUNIOR  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A JavaScript port of the MarkovJunior interpreter (Maxim Gumin,
+   github.com/mxgmn/MarkovJunior, MIT; see LICENSE-MarkovJunior.txt) with a
+   WebGPU view. The interpreter rewrites a grid with pattern rules; the view
+   draws the grid and six analysis passes of how the rules act on it.
+
+   LAYOUT  (# marks an element id)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ #gl     one WebGPU canvas; render.js draws 1, 2 or 4 viewports     │
+     │ #views  DOM grid on top: one .view per viewport, pass <select>     │
+     │         drag = pan, wheel = zoom                                   │
+     │ #toggle                                      #panel  (main.js      │
+     │                                                fills #pbody)       │
+     └──────────────────────────────────────────────────────────────────┘
+
+   FILES
+     main.js         DOM, panel, program tree, rule glyphs, run loop
+     interpreter.js  the MarkovJunior port (no DOM)
+     render.js       WebGPU cell texture and view draw (no DOM)
+     shaders/grid.wgsl
+     models.json     92 bundled 2D models + palette (build-models.mjs)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="stage" id="stage">
+  <canvas id="gl"></canvas>
+  <div class="views l1" id="views"></div>
+  <div class="fallback" id="fallback"></div>
+</div>
+<button class="toggle" id="toggle" type="button" title="Show or hide the panel (P)">Panel</button>
+<div class="hud" id="hud"></div>
+<aside class="panel" id="panel">
+  <header><h1>MarkovJunior</h1><small>rewrite rules · WebGPU view</small></header>
+  <div class="scroll" id="pbody"></div>
+</aside>
+<script type="module" src="main.js"></script>
+</body>
+</html>
