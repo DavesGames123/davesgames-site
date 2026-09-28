@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SDF Clouds</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SDF CLOUDS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A WebGPU port of the core of SDF Clouds (Alex Foulon, github.com/X13-A/
+   SDF-clouds): a voxel cloud volume turns into a signed distance field, the
+   view rays sphere-trace the empty space, and a baked transmittance volume
+   replaces the nested light march.
+
+   LAYOUT  (# marks an element id)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ #gl     one WebGPU canvas; engine.js draws 1, 2 or 4 viewports     │
+     │ #views  DOM grid on top of the canvas: one .view per viewport,     │
+     │         each with a pass <select>. Drag = orbit, wheel = zoom.     │
+     │ #toggle                                      #panel  (main.js      │
+     │                                                fills #pbody)       │
+     └──────────────────────────────────────────────────────────────────┘
+
+   FILES
+     main.js    DOM, panel, camera input, views, frame loop
+     engine.js  pipelines, bake stages, view draw (no DOM)
+     params.js  control catalogue, pass list, uniform packing (no DOM)
+     shaders/   common, shape, jfa, worley, cloud, light, march (.wgsl)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="stage" id="stage">
+  <canvas id="gl"></canvas>
+  <div class="views l4" id="views"></div>
+  <div class="fallback" id="fallback"></div>
+</div>
+<button class="toggle" id="toggle" type="button" title="Show or hide the panel (P)">Panel</button>
+<div class="hud" id="hud"></div>
+<aside class="panel" id="panel">
+  <header><h1>SDF Clouds</h1><small>voxel SDF · baked light</small></header>
+  <div class="scroll" id="pbody"></div>
+</aside>
+<script type="module" src="main.js"></script>
+</body>
+</html>
