@@ -3,7 +3,11 @@
 // ----------------------------------------------------------------------------
 //  initGPU(styles, pack) sets up the device, builds one surface per tile, and
 //  compiles one render pipeline per cell from the single WGSL pack. Each
-//  surface owns a canvas context, a 96-byte uniform buffer and a bind group.
+//  surface owns a canvas context, a 96-byte uniform buffer, a bind group and
+//  a persistent cache texture. A cell draws into its cache; present() copies
+//  the cache into the canvas. main.js presents every visible surface on each
+//  active frame, so Safari never composites a canvas buffer that was not
+//  drawn in that frame (it shows a stale or cleared buffer as a flash).
 //  The whole pack compiles once as one shader module; every cell draws with
 //  entry point fs_<name>. The compile is async, so stats.compiled counts the
 //  pipelines as they finish and main.js reads it for the FPS line. Each tile
@@ -20,6 +24,8 @@
 //      visible ... the set of on-screen tiles, kept by an IntersectionObserver
 //      stats ..... { compiled } — the pipeline count for the FPS line
 //      makeSurface(canvas) .... build a surface record for a canvas
+//      sizeSurface(surf,w,h) .. match canvas and cache to w x h; true on a change
+//      present(enc, surf) ..... copy a drawn cache into its canvas
 //      initGPU(styles, pack) .. async setup; true on success
 // ============================================================================
 import { $, tiles, stage } from './state.js';
@@ -33,10 +39,23 @@ export const stats = { compiled: 0 };
 let format = null, bgl = null, layout = null;
 
 export function makeSurface(canvas) {
-  const ctx = canvas.getContext('webgpu'); ctx.configure({ device, format, alphaMode: 'opaque' });
+  const gpu = canvas.getContext('webgpu'); gpu.configure({ device, format, alphaMode: 'opaque', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST });
   const buf = device.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
   const bind = device.createBindGroup({ layout: bgl, entries: [{ binding: 0, resource: { buffer: buf } }] });
-  return { canvas, ctx, buf, bind, data: new Float32Array(24), w: 0, h: 0 };
+  return { canvas, gpu, cache: null, drawn: false, buf, bind, data: new Float32Array(24), w: 0, h: 0 };
+}
+
+export function sizeSurface(surf, w, h) {
+  if (surf.cache && surf.canvas.width === w && surf.canvas.height === h) return false;
+  surf.canvas.width = w; surf.canvas.height = h;
+  if (surf.cache) surf.cache.destroy();
+  surf.cache = device.createTexture({ size: [w, h], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+  surf.drawn = false; return true;
+}
+
+export function present(enc, surf) {
+  if (!surf.drawn) return;
+  enc.copyTextureToTexture({ texture: surf.cache }, { texture: surf.gpu.getCurrentTexture() }, [surf.cache.width, surf.cache.height]);
 }
 
 export async function initGPU(styles, pack) {

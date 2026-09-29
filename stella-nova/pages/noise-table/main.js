@@ -20,14 +20,15 @@
 //
 //  FRAME LOOP  (requestAnimationFrame)
 //  ----------------------------------------------------------------------------
-//      tick signals -> ease each tile's hover rate -> advance the hovered phase
-//      -> redraw the moving, dirty or globally changed tiles -> submit if any
+//      tick signals -> ease each tile's hover rate -> pick the tiles that draw
+//      -> advance their clocks -> draw them into their caches -> on an active
+//      frame, present every visible cache into its canvas -> submit
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
 import { $, G, stage, tiles } from './state.js';
 import { initSignals, tickSignals, sigTime } from './signals.js';
 import { initControls } from './controls.js';
-import { initGPU, device, msurf, visible, stats } from './gpu.js';
+import { initGPU, device, msurf, visible, stats, sizeSurface, present } from './gpu.js';
 import { initInspector, currentInspected } from './inspector.js';
 
 // Pack source lives in a real .wgsl file under shaders/. Fetch it up front.
@@ -54,12 +55,18 @@ if (await initGPU(STYLES, PACK)) {
   let torn = false;
   addEventListener('pagehide', () => { if (torn) return; torn = true; try { device.destroy(); } catch (_) {} });
 
-  // ANIM_CAP bounds how many tiles run the animated redraw in one frame. A
-  // mouse sweep leaves many tiles easing out at once, and each tile owns its
-  // own canvas, so an overrun frame lets neighbours present out of step. That
-  // reads as flicker. The hovered tile always draws; the overflow holds.
-  const ANIM_CAP = 12;
-  let fpsT = 0, frames = 0, prev = { scale: 1, gain: 1, ink: '', tone: '', cream: '' };
+  // ANIM_CAP bounds how many easing-out tiles run the shader in one frame. A
+  // mouse sweep leaves many tiles easing out at once. The hovered and
+  // inspected tiles always draw. The overflow goes to the tiles that drew
+  // least recently, and a tile that does not draw does not advance its
+  // clock, so it pauses and does not jump.
+  //
+  // Presentation is separate from drawing. On an active frame (a draw, a
+  // scroll, or HOLD seconds after one), every visible surface copies its
+  // cache into its canvas, drawn or not. See gpu.js.
+  const ANIM_CAP = 12, HOLD = 0.5;
+  let fpsT = 0, frames = 0, frameNo = 0, activeUntil = 0, prev = { scale: 1, gain: 1, ink: '', tone: '', cream: '' };
+  stage.addEventListener('scroll', () => { activeUntil = sigTime() + HOLD; }, { passive: true });
   function fill(t, surf, rect, dpr) {
     const d = surf.data;
     d[0] = rect.width; d[1] = rect.height; d[2] = t.phase; d[3] = dpr;
@@ -68,18 +75,17 @@ if (await initGPU(STYLES, PACK)) {
     d.set(t.knobs, 20);
     device.queue.writeBuffer(surf.buf, 0, d);
   }
+  const sizeTo = (surf, rect, dpr) => sizeSurface(surf, Math.max(1, Math.round(rect.width * dpr)), Math.max(1, Math.round(rect.height * dpr)));
   function drawTo(enc, t, surf, rect, dpr) {
-    const w = Math.max(1, Math.round(rect.width * dpr)), h = Math.max(1, Math.round(rect.height * dpr));
-    if (surf.canvas.width !== w || surf.canvas.height !== h) { surf.canvas.width = w; surf.canvas.height = h; t.dirty = true; }
     fill(t, surf, rect, dpr);
-    const pass = enc.beginRenderPass({ colorAttachments: [{ view: surf.ctx.getCurrentTexture().createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
+    const pass = enc.beginRenderPass({ colorAttachments: [{ view: surf.cache.createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
     pass.setPipeline(t.pipeline); pass.setBindGroup(0, surf.bind); pass.draw(3); pass.end();
+    surf.drawn = true;
   }
   function frame() {
     if (torn) return;
     requestAnimationFrame(frame);
-    const dt = tickSignals(); const now = sigTime();
-    let animBudget = ANIM_CAP;
+    const dt = tickSignals(); const now = sigTime(); frameNo++;
     frames++; if (now - fpsT > 1) { $('fps').textContent = `${Math.round(frames / (now - fpsT))} FPS · ${stats.compiled}/${tiles.length}`; fpsT = now; frames = 0; }
     // global changes redraw everything once
     const key = { scale: G.scale, gain: G.gain, ink: G.ink.join(), tone: G.tone.join(), cream: G.cream.join() };
@@ -87,25 +93,41 @@ if (await initGPU(STYLES, PACK)) {
     const dpr = Math.min(devicePixelRatio || 1, 3);
     const enc = device.createCommandEncoder(); let any = false;
     const inspected = currentInspected();
+    // pass 1: ease the rates (the clock eases in and out, nothing snaps), size the surfaces, pick the tiles that draw
+    const eased = [];
     for (const t of tiles) {
-      // the hovered cell's clock eases in over ~0.4 s and eases out again; nothing snaps
       const want = (!G.hoverOnly || t.hover || inspected === t) ? 1 : 0;
       t.rate += (want - t.rate) * (1 - Math.exp(-dt / 0.18));
-      const moving = t.rate > 0.002;
-      if (moving) t.phase += dt * t.rate * G.tempo;
-      if (!t.pipeline) continue;
-      const mustDraw = t.dirty || globalDirty;
-      const needs = moving || mustDraw;
-      if (inspected === t && needs) { drawTo(enc, t, msurf, msurf.canvas.getBoundingClientRect(), dpr); any = true; }
-      if (!visible.has(t) || !needs) continue;
-      if (!mustDraw) {
-        const priority = t.hover || inspected === t;   // what the pointer is on draws every frame
-        if (!priority) { if (animBudget <= 0) continue; animBudget--; }
+      t.moving = t.rate > 0.002; t.go = false; t.rect = null;
+      if (!t.pipeline) { if (t.moving) t.phase += dt * t.rate * G.tempo; continue; }
+      if (visible.has(t)) {
+        const rect = t.canvas.getBoundingClientRect();
+        if (rect.width >= 1) {
+          t.rect = rect;
+          // a resized surface has a new, empty cache, so a size change is a reason to draw on its own
+          const resized = sizeTo(t.surf, rect, dpr);
+          if (t.dirty || globalDirty || resized || t.hover || inspected === t) t.go = true;
+          else if (t.moving) eased.push(t);
+        }
       }
-      const rect = t.canvas.getBoundingClientRect(); if (rect.width < 1) continue;
-      drawTo(enc, t, t.surf, rect, dpr); t.dirty = false; any = true;
+      if (inspected === t) t.go = true;
     }
-    if (any) device.queue.submit([enc.finish()]);
+    eased.sort((a, b) => (a.lastDraw || 0) - (b.lastDraw || 0));
+    for (let i = 0; i < eased.length && i < ANIM_CAP; i++) eased[i].go = true;
+    // pass 2: advance the clocks of the tiles that draw, then draw
+    for (const t of tiles) {
+      if (!t.pipeline) continue;
+      if (t.moving && (t.go || !t.rect)) t.phase += dt * t.rate * G.tempo;
+      if (inspected === t) { const r = msurf.canvas.getBoundingClientRect(); const rs = sizeTo(msurf, r, dpr); if (t.moving || t.dirty || globalDirty || rs) { drawTo(enc, t, msurf, r, dpr); any = true; } }
+      if (!t.go || !t.rect) continue;
+      drawTo(enc, t, t.surf, t.rect, dpr); t.dirty = false; t.lastDraw = frameNo; any = true;
+    }
+    if (any) activeUntil = now + HOLD;
+    if (now <= activeUntil) {
+      for (const t of tiles) if (t.rect) present(enc, t.surf);
+      if (inspected) present(enc, msurf);
+      device.queue.submit([enc.finish()]);
+    }
   }
   requestAnimationFrame(frame);
 }
