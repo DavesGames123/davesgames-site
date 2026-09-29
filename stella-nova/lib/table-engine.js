@@ -180,10 +180,23 @@ export async function bootTable(PAGE, data) {
   const teardown = () => { if (torn) return; torn = true; try { device.destroy(); } catch (_) {} };
   addEventListener('pagehide', teardown);
   const format = navigator.gpu.getPreferredCanvasFormat();
+  // A surface draws into its own persistent texture (surf.cache), not into
+  // the canvas. surf.ctx is a shim, so PAGE.draw still calls
+  // surf.ctx.getCurrentTexture() and gets the cache. present() copies the
+  // cache into the real canvas texture (surf.gpu). The frame loop presents
+  // every visible surface on each active frame, so no canvas is composited
+  // with a swap-chain buffer that was not drawn in that frame. Safari shows
+  // such a buffer (stale or cleared) as a flash when many tiles ease at once.
   function makeSurface(canvas) {
-    const ctx = canvas.getContext('webgpu'); ctx.configure({ device, format, alphaMode: 'opaque', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING });
+    const gpu = canvas.getContext('webgpu'); gpu.configure({ device, format, alphaMode: 'opaque', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_DST });
     const buf = device.createBuffer({ size: SPEC.uniform_bytes, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    return { canvas, ctx, buf, data: new Float32Array(SPEC.uniform_bytes / 4), w: 0, h: 0, page: {} };
+    const surf = { canvas, gpu, cache: null, drawn: false, buf, data: new Float32Array(SPEC.uniform_bytes / 4), w: 0, h: 0, page: {} };
+    surf.ctx = { getCurrentTexture: () => { surf.drawn = true; return surf.cache; } };
+    return surf;
+  }
+  function present(enc, surf) {
+    if (!surf.drawn) return;
+    enc.copyTextureToTexture({ texture: surf.cache }, { texture: surf.gpu.getCurrentTexture() }, [surf.cache.width, surf.cache.height]);
   }
   for (const t of tiles) t.surf = makeSurface(t.canvas);
   const msurf = makeSurface($('m-orb'));
@@ -192,48 +205,70 @@ export async function bootTable(PAGE, data) {
   try { await PAGE.init(ctx); } catch (e) { $('fps').textContent = 'init failed: ' + String(e.message || e).slice(0, 80); console.error(e); return; }
 
   // ---------------------------------------------------------- frame loop
-  // ANIM_CAP bounds how many tiles run the animated redraw in one frame. A
-  // mouse sweep leaves many tiles easing out at once. Each tile owns its own
-  // canvas, so an overrun frame lets neighbours present out of step, which
-  // reads as flicker. Hovered and inspected tiles always draw; the easing-out
-  // overflow holds its last frame until the budget frees.
-  const ANIM_CAP = 12;
-  let fpsT = 0, frames = 0;
+  // ANIM_CAP bounds how many easing-out tiles run the shader in one frame. A
+  // mouse sweep leaves many tiles easing out at once. Hovered and inspected
+  // tiles always draw. The overflow goes to the tiles that drew least
+  // recently, and a tile that does not draw does not advance its clock, so
+  // it pauses and continues. It does not jump.
+  //
+  // Presentation is separate from drawing. On an active frame (a draw, a
+  // scroll, or HOLD seconds after one), every visible surface copies its
+  // cache into its canvas, drawn or not. See makeSurface.
+  const ANIM_CAP = 12, HOLD = 0.5;
+  let fpsT = 0, frames = 0, frameNo = 0, activeUntil = 0;
+  stage.addEventListener('scroll', () => { activeUntil = sigT + HOLD; }, { passive: true });
   function frame() {
     if (torn) return;
     requestAnimationFrame(frame);
-    const dt = tickSignals(); const now = sigT;
-    let animBudget = ANIM_CAP;
+    const dt = tickSignals(); const now = sigT; frameNo++;
     frames++; if (now - fpsT > 1) { $('fps').textContent = `${Math.round(frames / (now - fpsT))} FPS · ${tiles.filter(t => t.pipeline).length}/${tiles.length}`; fpsT = now; frames = 0; }
     if (PAGE.tick) { if (PAGE.tick(dt, now) === true) globalDirty = true; }
     const dpr = Math.min(devicePixelRatio || 1, 3);
     const enc = device.createCommandEncoder(); let any = false;
+    // pass 1: ease the rates, size the surfaces, pick the tiles that draw
+    const eased = [];
     for (const t of tiles) {
       const want = (!G.hoverOnly || t.hover || inspected === t) ? 1 : 0;
       t.rate += (want - t.rate) * (1 - Math.exp(-dt / 0.18));
-      const moving = t.rate > 0.002;
-      if (moving) t.phase += dt * t.rate * (G.tempo || 1);
-      if (!t.pipeline) continue;
-      if (inspected === t) { const r = msurf.canvas.getBoundingClientRect(); const rs = sizeSurf(msurf, r, dpr); if (moving || t.dirty || globalDirty || rs) { PAGE.draw(enc, t, msurf, r, dpr, dt, now, moving); any = true; } }
-      if (!visible.has(t)) continue;
-      const rect = t.canvas.getBoundingClientRect(); if (rect.width < 1) continue;
-      // a resized canvas comes back blank, so a size change is a reason to draw on its own
-      const resized = sizeSurf(t.surf, rect, dpr);
-      const mustDraw = t.dirty || globalDirty || resized;
-      if (!mustDraw) {
-        if (!moving) continue;
-        const priority = t.hover || inspected === t;   // what the pointer is on draws every frame
-        if (!priority) { if (animBudget <= 0) continue; animBudget--; }
+      t.moving = t.rate > 0.002; t.go = false; t.rect = null;
+      if (!t.pipeline) { if (t.moving) t.phase += dt * t.rate * (G.tempo || 1); continue; }
+      if (visible.has(t)) {
+        const rect = t.canvas.getBoundingClientRect();
+        if (rect.width >= 1) {
+          t.rect = rect;
+          // a resized surface has a new, empty cache, so a size change is a reason to draw on its own
+          const resized = sizeSurf(t.surf, rect, dpr);
+          if (t.dirty || globalDirty || resized || t.hover || inspected === t) t.go = true;
+          else if (t.moving) eased.push(t);
+        }
       }
-      PAGE.draw(enc, t, t.surf, rect, dpr, dt, now, moving); t.dirty = false; any = true;
+      if (inspected === t) t.go = true;
+    }
+    eased.sort((a, b) => (a.lastDraw || 0) - (b.lastDraw || 0));
+    for (let i = 0; i < eased.length && i < ANIM_CAP; i++) eased[i].go = true;
+    // pass 2: advance the clocks of the tiles that draw, then draw
+    for (const t of tiles) {
+      if (!t.pipeline) continue;
+      if (t.moving && (t.go || !t.rect)) t.phase += dt * t.rate * (G.tempo || 1);
+      if (inspected === t) { const r = msurf.canvas.getBoundingClientRect(); const rs = sizeSurf(msurf, r, dpr); if (t.moving || t.dirty || globalDirty || rs) { PAGE.draw(enc, t, msurf, r, dpr, dt, now, t.moving); any = true; } }
+      if (!t.go || !t.rect) continue;
+      PAGE.draw(enc, t, t.surf, t.rect, dpr, dt, now, t.moving); t.dirty = false; t.lastDraw = frameNo; any = true;
     }
     globalDirty = false;
-    if (any) device.queue.submit([enc.finish()]);
+    if (any) activeUntil = now + HOLD;
+    if (now <= activeUntil) {
+      for (const t of tiles) if (t.rect) present(enc, t.surf);
+      if (inspected) present(enc, msurf);
+      device.queue.submit([enc.finish()]);
+    }
   }
   function sizeSurf(surf, rect, dpr) {
     const w = Math.max(1, Math.round(rect.width * dpr)), h = Math.max(1, Math.round(rect.height * dpr));
-    if (surf.canvas.width !== w || surf.canvas.height !== h) { surf.canvas.width = w; surf.canvas.height = h; surf.resized = true; return true; }
-    surf.resized = false; return false;
+    if (surf.cache && surf.canvas.width === w && surf.canvas.height === h) { surf.resized = false; return false; }
+    surf.canvas.width = w; surf.canvas.height = h;
+    if (surf.cache) surf.cache.destroy();
+    surf.cache = device.createTexture({ size: [w, h], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING });
+    surf.drawn = false; surf.resized = true; return true;
   }
   requestAnimationFrame(frame);
 }
