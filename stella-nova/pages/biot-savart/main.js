@@ -39,6 +39,7 @@
 //      physics .............. "wireField"           single-wire B, superposition
 //      color ramp ........... "fieldColorRGB"       |B| to RGB for field draws
 //      tracers .............. "spawnTracers"        streamline particle pool
+//      trail draw ........... "function renderTracers"  one WebGL2 call; 2D fallback
 //      render ............... "function render"     per-frame draw orchestration
 //      probe ................ "function renderProbe" vector decomposition + compass
 //      wire list UI ......... "rebuildWireList"     the side-panel wire cards
@@ -245,10 +246,31 @@ function renderArrows(){
   ctx.restore();
 }
 
+// All trail segments go to one WebGL2 draw (lib/glow-lines.js). The 2D loop
+// below cost about 1 us per stroke: 2000 tracers x 35 segments x 2 passes
+// held the page at 30 fps. renderTracers2D stays as the fallback when
+// WebGL2 is not available. Both use the same fade, color and widths.
+const GLOW=window.GlowLines?GlowLines.create():null;
+function renderTracers(){
+  if(!GLOW||!GLOW.begin(ctx)){renderTracers2D();return;}
+  for(const tr of tracers){
+    const tl=tr.trail.length;if(tl<2)continue;
+    const ageA=tr.age<0.1?tr.age/0.1:tr.age>tr.maxAge*0.8?(tr.maxAge-tr.age)/(tr.maxAge*0.2):1;
+    for(let s=0;s<tl-1;s++){
+      const pt=tr.trail[s],pn=tr.trail[s+1];
+      const a0=(1-s/SIM.tracerTrail)*ageA;
+      if(a0<0.01)continue;
+      const[r,g,b]=fieldColorRGB(pt[2]||0);
+      GLOW.seg(pt[0],pt[1],pn[0],pn[1],r*a0*0.12,g*a0*0.12,b*a0*0.12,Math.max(1,5*a0));
+      GLOW.seg(pt[0],pt[1],pn[0],pn[1],r*a0*0.55,g*a0*0.55,b*a0*0.55,Math.max(0.5,1.8*a0));
+    }
+  }
+  GLOW.flush(ctx);
+}
 // Draw the streamline trails. Each segment fades toward the tail and toward the
 // start/end of the particle's life; a wide dim stroke plus a thin bright core
 // gives a glow. 'lighter' compositing sums overlapping trails.
-function renderTracers(){
+function renderTracers2D(){
   ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
   for(const tr of tracers){
     const tl=tr.trail.length;if(tl<2)continue;
