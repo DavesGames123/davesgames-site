@@ -27,6 +27,7 @@ const P_cx = 0; const P_cy = 1; const P_hw = 2; const P_hh = 3; const P_radius =
 const P_strength = 8; const P_blur = 9; const P_saturation = 10; const P_tintOp = 11; const P_tintR = 12; const P_tintG = 13; const P_tintB = 14; const P_ca = 15;
 const P_lightAngle = 16; const P_edgeHighlight = 17; const P_specular = 18; const P_fresnelPower = 19; const P_elevation = 20; const P_noiseOp = 21; const P_noiseScale = 22; const P_luma = 23;
 const P_dark = 24; const P_hoverGlow = 25; const P_peak = 26; const P_tintBlend = 27; const P_reduce = 28; const P_showMap = 29;
+const P_superN = 30;   // superellipse exponent; 0 keeps the rounded rectangle
 fn cfg(i: i32) -> f32 { return u.p[i / 4][i % 4]; }
 
 @vertex fn vs_main(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
@@ -46,6 +47,25 @@ fn sdfRoundedRect(p: vec2f, c: vec2f, half: vec2f, radius: f32) -> Sdf {
     else if (q.x > q.y) { s.m = vec2f(sg.x, 0.0); }
     else { s.m = vec2f(0.0, sg.y); }
     return s;
+}
+
+// —— superellipse (squircle) |x/a|^n + |y/b|^n = 1 ————————————————————————————
+// F(p) = (|x/a|^n + |y/b|^n)^(1/n) is 1 on the boundary. The distance is the first-order
+// estimate (F − 1)/|∇F|: exact on the flat sides, close at the corners, and good across
+// the bezel band, which is all the lens reads. The outward normal is ∇F/|∇F|.
+fn sdfSuperellipse(p: vec2f, c: vec2f, half: vec2f, n: f32) -> Sdf {
+    let q = max(abs(p - c) / half, vec2f(1e-5));
+    let qn = pow(q, vec2f(n));
+    let F = pow(qn.x + qn.y, 1.0 / n);
+    let g = pow(F, 1.0 - n) * pow(q, vec2f(n - 1.0)) / half * select(vec2f(-1.0), vec2f(1.0), p - c >= vec2f(0.0));
+    let gl = max(length(g), 1e-6);
+    var s: Sdf; s.d = (F - 1.0) / gl; s.m = g / gl;
+    return s;
+}
+// the element's outline: the squircle when P_superN is set, else the library's rounded rectangle
+fn sdfShape(p: vec2f, c: vec2f, half: vec2f, radius: f32) -> Sdf {
+    if (cfg(P_superN) > 0.0) { return sdfSuperellipse(p, c, half, cfg(P_superN)); }
+    return sdfRoundedRect(p, c, half, radius);
 }
 
 // —— core/optics.ts · exact vector-Snell displacement for a convex circular bezel ——
@@ -94,7 +114,7 @@ fn hash21(p: vec2f) -> f32 { var q = fract(p * vec2f(123.34, 456.21)); q += dot(
     let radius = min(cfg(P_radius), min(half.x, half.y));
     let B = min(cfg(P_bezel), min(half.x, half.y));      // pill clamp: the bezel becomes a full dome
     let T = cfg(P_thickness); let n = cfg(P_ior);
-    let s = sdfRoundedRect(pos, c, half, radius); let d = -s.d;   // distance inward from the boundary
+    let s = sdfShape(pos, c, half, radius); let d = -s.d;   // distance inward from the boundary
     let dark = cfg(P_dark) > 0.5; let L = cfg(P_luma); let e = cfg(P_elevation);
 
     // LAYER −1 · box-shadow stack (outside the element only; CSS clips it under the box)
@@ -103,7 +123,7 @@ fn hash21(p: vec2f) -> f32 { var q = fract(p * vec2f(123.34, 456.21)); q += dot(
         let t = max(1.0, T / 8.0);
         let sh = -d;   // distance outside
         // each shadow: offset dy, blur radius, alpha — Gaussian-ish falloff of the offset SDF
-        let dOff = -sdfRoundedRect(pos - vec2f(0.0, 6.0 * t * e), c, half, radius).d; let dOff2 = -sdfRoundedRect(pos - vec2f(0.0, 1.5 * e), c, half, radius).d;
+        let dOff = -sdfShape(pos - vec2f(0.0, 6.0 * t * e), c, half, radius).d; let dOff2 = -sdfShape(pos - vec2f(0.0, 1.5 * e), c, half, radius).d;
         let g1 = exp(-max(-dOff, 0.0) * max(-dOff, 0.0) / (2.0 * pow(max(select(22.0, 24.0, dark) * t * e, 1.0) * 0.5, 2.0)));
         let g2 = exp(-max(-dOff2, 0.0) * max(-dOff2, 0.0) / (2.0 * pow(max(5.0 * e, 1.0) * 0.5, 2.0)));
         if (dark) {
@@ -115,6 +135,9 @@ fn hash21(p: vec2f) -> f32 { var q = fract(p * vec2f(123.34, 456.21)); q += dot(
             col = over(col, vec4f(sc, 0.13 * e * g1)); col = over(col, vec4f(sc, 0.08 * e * g2));
         }
     }
+    // the squircle's outer glow: a soft tone halo that fades over about 18 px outside the edge
+    let squircle = cfg(P_superN) > 0.0;
+    if (squircle && d < 0.0) { col = col + u.tone.rgb * 0.8 * exp(-(-d) / 18.0) * (0.75 + 0.25 * cfg(P_hoverGlow)); }
     let cover = smoothstep(-0.7, 0.7, d);   // the element's anti-aliased edge
     if (cover <= 0.0) { return vec4f(col, 1.0); }
 
@@ -158,6 +181,12 @@ fn hash21(p: vec2f) -> f32 { var q = fract(p * vec2f(123.34, 456.21)); q += dot(
     let sheenMask = 1.0 - smoothstep(sw - 1.0, sw + 1.0, d);   // .ql-sheen — bezel-band-wide, soft lobes + dark flanks
     let sheen = ringColor(conic(rel, pw, sp * 0.23, 0.0, sp * 0.16));
     g = over(g, vec4f(sheen.rgb, sheen.a * sheenMask * ringOp));
+
+    // the squircle's border: a 1.5 px cream line inset 5 px from the edge, brighter toward the light
+    if (squircle) {
+        let bw = 1.0 - smoothstep(0.75 - 0.6, 0.75 + 0.6, abs(d - 5.0));
+        g = over(g, vec4f(u.cream.rgb, bw * (0.35 + 0.35 * abs(cos(rel)))));
+    }
 
     // NOISE · fractal grain, feTurbulence stand-in
     let no = cfg(P_noiseOp);

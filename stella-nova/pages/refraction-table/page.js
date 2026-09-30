@@ -96,7 +96,7 @@ export const PAGE = {
     const { device, G } = this.ctx; const d = surf.data; const c = this.resolve(t);
     // the cell is a 420 CSS-px virtual frame: the library's px parameters keep their meaning at any cell size
     const zoom = Math.min(rect.width, rect.height) / 420; const W = rect.width / zoom, H = rect.height / zoom; const cell = Math.min(W, H); const shape = t.s.cfg.shape || 'rect';
-    const half = shape === 'pill' ? [0.39, 0.17] : shape === 'circle' ? [0.26, 0.26] : [0.36, 0.26];
+    const half = shape === 'pill' ? [0.39, 0.17] : shape === 'circle' ? [0.26, 0.26] : shape === 'squircle' ? [0.3, 0.3] : [0.36, 0.26];
     const hw = half[0] * cell, hh = half[1] * cell; const radius = shape === 'rect' ? c.borderRadius : 1e4;
     const drift = G.drift; const cx = W / 2 + drift * 0.17 * cell * Math.sin(t.phase * 0.6), cy = H / 2 + drift * 0.1 * cell * Math.sin(t.phase * 0.45 + 1.3);
     const dark = t.s.cfg.appearance ? t.s.cfg.appearance === 'dark' : this.darkBackdrop; const L = dark ? LUMA_DARK : LUMA_LIGHT;
@@ -105,7 +105,7 @@ export const PAGE = {
     d[0] = W; d[1] = H; d[2] = t.phase; d[3] = dpr * zoom;
     d.set([G.ink[0], G.ink[1], G.ink[2], 1], 4); d.set([G.tone[0], G.tone[1], G.tone[2], 1], 8); d.set([G.cream[0], G.cream[1], G.cream[2], 1], 12);
     d.set([cx, cy, hw, hh, radius, c.bezelWidth, c.thickness, c.ior, c.refractionStrength, c.blur, c.saturation, c.tintOpacity, tint[0], tint[1], tint[2], c.chromaticAberration,
-      c.lightAngle, c.edgeHighlight, c.specularStrength, c.fresnelPower, c.elevation, c.noiseOpacity, c.noiseScale, L, dark ? 1 : 0, t.rate, peak, c.adaptiveTint ? 1 : 0, 0, c.showMap || 0, 0, 0], 16);
+      c.lightAngle, c.edgeHighlight, c.specularStrength, c.fresnelPower, c.elevation, c.noiseOpacity, c.noiseScale, L, dark ? 1 : 0, t.rate, peak, c.adaptiveTint ? 1 : 0, 0, c.showMap || 0, c.superN || 0, 0], 16);
     d.set(t.knobs, 48);
     device.queue.writeBuffer(surf.buf, 0, d);
     const pass = enc.beginRenderPass({ colorAttachments: [{ view: surf.ctx.getCurrentTexture().createView(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'store' }] });
