@@ -2,11 +2,12 @@
 //
 // An orthographic globe, drawn on a 2D canvas. Land and large lakes come
 // from data/world.json (Natural Earth 1:50m, simplified). A graticule every
-// 30 degrees. A marker box shows the view extent. A tiny extent gets a ring
+// 30 degrees. An outline shows the view extent, with the aspect of the view.
+// A tiny outline grows to a minimum size and gets a ring
 // so that it stays visible. setTarget() turns the globe to a new center over
 // about 0.9 s.
 //
-// grep: function createLocator  function project  function drawRing
+// grep: function createLocator  function project  function outline  function drawRing
 
 const D2R = Math.PI / 180;
 
@@ -54,6 +55,21 @@ export function createLocator(canvas, worldUrl) {
     }
     cx2.closePath();
     return any;
+  }
+
+  // The view extent as screen points: each edge of the lon/lat box sampled,
+  // so that the outline follows the curve of the globe.
+  function outline(quad, c, R, ox, oy) {
+    const out = [];
+    const N = 8;
+    for (let e = 0; e < 4; e++) {
+      const [a0, b0] = quad[e], [a1, b1] = quad[(e + 1) % 4];
+      for (let i = 0; i < N; i++) {
+        const [x, y] = project(a0 + (a1 - a0) * i / N, b0 + (b1 - b0) * i / N, c);
+        out.push([ox + x * R, oy - y * R]);
+      }
+    }
+    return out;
   }
 
   function draw() {
@@ -135,18 +151,27 @@ export function createLocator(canvas, worldUrl) {
     cx2.lineWidth = Math.max(0.7, 0.6 * px);
     cx2.stroke();
 
-    // the view extent: a box, and a ring when the box is tiny
+    // the view extent: its outline, and a ring when the outline is tiny
     if (corners) {
-      const pts = corners.map(([lon, lat]) => project(lon, lat, c)).map(([x, y]) => [ox + x * R, oy - y * R]);
+      const pts = outline(corners, c, R, ox, oy);
       const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]);
       const mx = (Math.min(...xs) + Math.max(...xs)) / 2, my = (Math.min(...ys) + Math.max(...ys)) / 2;
       const size = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+      // A tiny outline grows about its center to a minimum size. The growth
+      // is uniform, so the outline keeps the aspect of the view.
+      const grow = size > 0 ? Math.max(1, 5 * px / size) : 1;
       cx2.strokeStyle = '#ffd36b';
       cx2.shadowColor = 'rgba(255, 200, 90, 0.9)';
       cx2.shadowBlur = 4 * px;
       cx2.lineWidth = Math.max(1, 1.1 * px);
-      const s = Math.max(size, 5 * px) / 2;
-      cx2.strokeRect(mx - s, my - s, 2 * s, 2 * s);
+      cx2.lineJoin = 'round';
+      cx2.beginPath();
+      pts.forEach(([x, y], i) => {
+        const sx = mx + (x - mx) * grow, sy = my + (y - my) * grow;
+        if (i === 0) cx2.moveTo(sx, sy); else cx2.lineTo(sx, sy);
+      });
+      cx2.closePath();
+      cx2.stroke();
       if (size < 8 * px) {
         cx2.beginPath();
         cx2.arc(mx, my, 9 * px, 0, Math.PI * 2);
