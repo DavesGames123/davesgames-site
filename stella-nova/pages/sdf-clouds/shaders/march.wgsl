@@ -7,7 +7,8 @@
 // The march follows ScreenTransmittance.compute cloudMarch:
 //   - inside the cloud box, sphere-trace empty space by the SDF and take
 //     fixed minimum steps inside the cloud (the step grows with distance);
-//   - outside the box, take fixed fog steps, or jump to the box if fog is off;
+//   - outside the box, take fixed fog steps on a grid that each pixel jitters,
+//     or jump to the box if fog is off;
 //   - fog is a second medium: its density adds to the cloud density at each
 //     sample, and the same T and lighting math uses the sum;
 //   - T_light comes from the baked transmittance volume inside the box, or
@@ -135,7 +136,10 @@ struct MR {
   hitT: f32,       // distance to the first cloud density, -1 if none
 };
 
-fn marchRay(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> MR {
+// u in 0..1 is the per-pixel jitter. Fog samples sit on the grid
+// (k + u) * fogStep from the eye, so the fog bands turn into noise and a low
+// step count stays smooth. The cloud entry moves by u min steps.
+fn marchRay(ro: vec3f, rd: vec3f, tEnd: f32, u: f32) -> MR {
   var r: MR;
   r.T = 1.0; r.Tc = 1.0; r.hitT = -1.0;
   var Tf = 1.0;
@@ -150,12 +154,12 @@ fn marchRay(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> MR {
   let sunL = P.sunCol.rgb * P.sun.w;
   let amb = skyAmbient() * P.sunCol.w + BOLT_COL * P.anim2.w * 0.004;
 
+  let jBox = u * P.march.y;
   var t = 0.0;
   if (!fogOn) {
     if (!hitsBox) { return r; }
-    t = hb.x;
+    t = hb.x + jBox;
   }
-  t += jit;
   let maxS = i32(P.march.x);
   for (var i = 0; i < 4096; i++) {
     if (i >= maxS || t >= tEnd) { break; }
@@ -186,9 +190,12 @@ fn marchRay(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> MR {
       r.prim += 1.0;
     } else {
       let fogLeft = fogOn && t < fogEnd;
-      if (hitsBox && t < hb.x) { dt = hb.x - t + 1e-3; }
+      if (hitsBox && t < hb.x) { dt = hb.x + jBox - t + 1e-3; }
       else if (!fogLeft) { break; }
-      if (fogLeft) { dt = min(dt, fogStep); }
+      if (fogLeft) {
+        let next = (floor(t / fogStep - u + 1e-4) + 1.0 + u) * fogStep;
+        dt = min(dt, max(next - t, 1e-3));
+      }
     }
     dt = min(dt, tEnd - t + 1e-3);
     var fog = 0.0;
@@ -208,12 +215,17 @@ fn marchRay(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> MR {
       } else {
         Tl = shadowAt(w);
       }
-      let hgt = mix(0.45, 1.0, clamp(boxUVW(w).y, 0.0, 1.0));
+      // A fog-only sample (sig = 0) skips the cloud source term.
       let bg = boltAt(w);
-      let Sc = sunL * Tl * ph * pw + amb * hgt + bg;
       let Sf = sunL * Tl * phF + amb * 0.5 + bg * 0.3;
-      let a = 1.0 - exp(-ext);
-      r.L += r.T * a * (Sc * sig + Sf * fog) / (sig + fog);
+      var Sc = vec3f(0.0);
+      var S = Sf;
+      if (sig > 0.0) {
+        let hgt = mix(0.45, 1.0, clamp(boxUVW(w).y, 0.0, 1.0));
+        Sc = sunL * Tl * ph * pw + amb * hgt + bg;
+        S = (Sc * sig + Sf * fog) / (sig + fog);
+      }
+      r.L += r.T * (1.0 - exp(-ext)) * S;
       r.T *= exp(-ext);
       if (sig > 0.0) {
         if (r.hitT < 0.0) { r.hitT = t; }
@@ -309,8 +321,7 @@ fn fs(@builtin(position) fc: vec4f) -> @location(0) vec4f {
   let tEnd = min(tG, FAR);
   let groundHit = tG < FAR;
 
-  let jit = P.march2.z * P.march.y * ign(fc.xy);
-  let r = marchRay(ro, rd, tEnd, jit);
+  let r = marchRay(ro, rd, tEnd, P.march2.z * ign(fc.xy));
 
   var bg: vec3f;
   if (groundHit) { bg = groundCol(ro + rd * tG, tG, false); } else { bg = skyCol(rd); }

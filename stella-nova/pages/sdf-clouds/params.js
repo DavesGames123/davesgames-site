@@ -75,7 +75,7 @@ export const GROUPS = [
     R('iso', 'Iso offset', -0.3, 0.3, 0.005, 0, 'light', 'Shifts the surface along the SDF. Positive inflates.'),
     B('sdfSkip', 'SDF skip', true, 'light', 'Sphere-trace empty space by the SDF. Off = fixed steps everywhere.'),
     B('sdfInside', 'SDF inside', false, null, 'Also step by |SDF| inside the cloud. Faster; upstream notes it breaks the lighting.'),
-    R('jitter', 'Jitter', 0, 1, 0.01, 1, null, 'Random start offset per pixel, in min steps. Trades banding for noise.'),
+    R('jitter', 'Jitter', 0, 1, 0.01, 1, null, 'Random offset per pixel: min steps at the cloud entry, fog steps for the fog samples. Trades banding for noise.'),
     R('renderScale', 'Render scale', 0.25, 1, 0.05, 0.75, null, 'Canvas resolution relative to the display.'),
   ]},
   { id: 'density', title: 'Density + erosion', controls: [
@@ -144,7 +144,7 @@ export const GROUPS = [
   { id: 'atmos', title: 'Fog, ground, output', controls: [
     R('fog', 'Fog density', 0, 0.1, 0.0005, 0.008, null, 'Second medium, marched with the clouds. 0 = off.'),
     R('fogFalloff', 'Fog falloff', 0, 2, 0.01, 0.45, null, 'Exponential falloff with height.'),
-    R('fogSteps', 'Fog steps', 4, 96, 1, 32, null, 'Fixed steps over the first 60 units of the ray.'),
+    R('fogSteps', 'Fog steps', 4, 96, 1, 12, null, 'Fixed steps over the first 60 units of the ray, jittered per pixel. Every pixel pays for every step, sky included.'),
     B('ground', 'Ground', true, null, ''),
     B('groundShadows', 'Cloud shadows', true, null, 'Project ground points onto the transmittance volume.'),
     B('softShadows', 'Soft shadows', true, null, '5-tap kernel on the projection.'),
