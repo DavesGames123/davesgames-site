@@ -35,6 +35,28 @@ fn advectT(p: vec2i, vel: vec2f) -> f32 {
     let a = ld(i).x; let b = ld(i + vec2i(1, 0)).x; let cc = ld(i + vec2i(0, 1)).x; let d = ld(i + vec2i(1, 1)).x;
     return mix(mix(a, b, f.x), mix(cc, d, f.x), f.y);
 }
+// value noise on a float domain, 0..1. dwell_stamp uses it to rag the disc edges.
+fn vnz(c: vec2f, s: f32) -> f32 {
+    let i = vec2i(floor(c)); let f = fract(c); let w = f * f * (3.0 - 2.0 * f);
+    let a = rnd(i, s); let b = rnd(i + vec2i(1, 0), s); let cc = rnd(i + vec2i(0, 1), s); let d = rnd(i + vec2i(1, 1), s);
+    return mix(mix(a, b, w.x), mix(cc, d, w.x), w.y);
+}
+// dwell_stamp source i at time t: it rests at one waypoint, then glides to the
+// next. Waypoints gather round four attractors, so the sources linger there.
+fn dwellPos(i: i32, t: f32, s: f32) -> vec2f {
+    let per = mix(1.6, 3.4, rnd(vec2i(i, 11), s));
+    let ph = t / per + rnd(vec2i(i, 12), s);
+    let seg = i32(floor(ph)); let f = fract(ph);
+    let glide = smoothstep(0.62, 1.0, f);
+    return mix(dwellWay(i, seg, s), dwellWay(i, seg + 1, s), glide);
+}
+fn dwellWay(i: i32, seg: i32, s: f32) -> vec2f {
+    let j = i32(floor(rnd(vec2i(i * 131 + seg, 3), s) * 4.0));
+    let a = f32(j) * 1.5708 + 0.6 + 0.5 * rnd(vec2i(j, 5), s);
+    let hub = vec2f(cos(a), sin(a)) * mix(0.12, 0.3, rnd(vec2i(j, 6), s));
+    let off = vec2f(rnd(vec2i(i, seg), s + 1.0), rnd(vec2i(i, seg), s + 2.0)) - 0.5;
+    return hub + off * 0.22;
+}
 
 // ── the 60 heat kernels ──────────────────────────────────────────────────────
 @compute @workgroup_size(8, 8) fn cs_orbit(@builtin(global_invocation_id) id: vec3u) {
@@ -382,6 +404,29 @@ fn advectT(p: vec2i, vel: vec2f) -> f32 {
   let dot = exp(-dot(g, g) * 30.0) * (0.5 + 0.5 * sin(t * 2.0 + length(cen(p)) * 12.0));
   var v = v0 + 0.35 * dot;
   v *= 1.0 - mix(0.02, 0.06, k.z);
+  textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));
+}
+
+@compute @workgroup_size(8, 8) fn cs_dwell_stamp(@builtin(global_invocation_id) id: vec3u) {
+  let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
+  if (u.reset > 0.5) { textureStore(dst, p, vec4f(0.0, 0.0, 0.0, 1.0)); return; }
+  let t = u.time; let k = u.k;
+  let T = ld(p).x; let c = cen(p);
+  // a little conduction softens the stamps; decay lets old dwell fade
+  var v = T + 0.14 * lap(p);
+  let n = i32(mix(8.0, 64.0, k.x)); let r = 0.052;
+  var stamp = 0.0;
+  for (var i: i32 = 0; i < 64; i++) {
+    if (i >= n) { break; }
+    let d = length(c - dwellPos(i, t, u.seed));
+    if (d > r * 1.4) { continue; }
+    // ragged edge: noise moves the rim of each disc in and out
+    let rag = vnz(c * 26.0 + vec2f(f32(i) * 7.31, t * 0.9), 9.0);
+    let re = r * (0.7 + 0.6 * rag);
+    stamp += smoothstep(re, re * 0.45, d);
+  }
+  v += mix(0.003, 0.016, k.y) * stamp;
+  v *= 1.0 - mix(0.002, 0.015, k.z);
   textureStore(dst, p, vec4f(clamp(v, 0.0, 1.0), 0.0, 0.0, 1.0));
 }
 
