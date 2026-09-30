@@ -35,12 +35,14 @@
 //                                  when a readback is still in flight.
 //                                  cx, cy: the circular mean of A, in cells.
 //   engine.readState()             Promise<Float32Array(W * H)>
-//   engine.setView({mode, palette, zoom, cx, cy})
+//   engine.setView({mode, palette, zoom, cx, cy, ox, oy})
 //                                  mode 'world' | 'potential' | 'growth';
 //                                  palette: 256 x rgb Float32Array or a name
 //                                  from PALETTES; zoom: screen px per cell as
 //                                  a multiple of the "cover" fit; cx, cy: the
-//                                  world cell at the canvas center
+//                                  world cell at the view center; ox, oy: the
+//                                  view center minus the canvas center, in
+//                                  CSS px (a sheet over part of the canvas)
 //   engine.cellPx()                screen px per cell (CSS px)
 //   engine.resize(pixelW, pixelH, dpr)
 //   engine.render()
@@ -268,7 +270,7 @@ const RENDER_WGSL = /* wgsl */`
 struct View {
   canvas: vec2f, center: vec2f,
   world: vec2f, cellPx: f32, mode: u32,
-  m: f32, pad0: f32, pad1: f32, pad2: f32,
+  m: f32, pad0: f32, offset: vec2f,
 }
 @group(0) @binding(0) var<uniform> v: View;
 @group(0) @binding(1) var<storage, read> world: array<f32>;
@@ -317,7 +319,7 @@ fn diverging(t: f32) -> vec3f {
 
 @fragment
 fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
-  let p = (pos.xy - v.canvas * 0.5) / v.cellPx + v.center;
+  let p = (pos.xy - v.canvas * 0.5 - v.offset) / v.cellPx + v.center;
   let t = clamp(sampleAt(p), 0.0, 1.0);
   var c: vec3f;
   if (v.mode == 2u) {
@@ -396,7 +398,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
   let reading = false;
 
   const rule = { R: 13, T: 10, m: 0.15, s: 0.015, b: [1], kn: 1, gn: 1 };
-  const view = { mode: 'world', zoom: 1, cx: 0, cy: 0 };
+  const view = { mode: 'world', zoom: 1, cx: 0, cy: 0, ox: 0, oy: 0 };
   let px = { w: 1, h: 1, dpr: 1 };
   engine.view = view;
 
@@ -576,7 +578,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
   };
 
   engine.setView = o => {
-    for (const k of ['mode', 'zoom', 'cx', 'cy']) if (o[k] !== undefined && o[k] !== null) view[k] = o[k];
+    for (const k of ['mode', 'zoom', 'cx', 'cy', 'ox', 'oy']) if (o[k] !== undefined && o[k] !== null) view[k] = o[k];
     if (o.palette) device.queue.writeBuffer(palBuf, 0, typeof o.palette === 'string' ? paletteData(o.palette) : o.palette);
   };
   engine.setView({ palette: 'lenia' });
@@ -598,7 +600,7 @@ export async function createEngine(canvas, { mobile = false } = {}) {
     f[0] = px.w; f[1] = px.h; f[2] = view.cx; f[3] = view.cy;
     f[4] = info.W; f[5] = info.H; f[6] = engine.cellPx() * px.dpr;
     u[7] = view.mode === 'potential' ? 1 : view.mode === 'growth' ? 2 : 0;
-    f[8] = rule.m;
+    f[8] = rule.m; f[10] = view.ox * px.dpr; f[11] = view.oy * px.dpr;
     device.queue.writeBuffer(viewBuf, 0, d);
     const enc = device.createCommandEncoder();
     const pass = enc.beginRenderPass({
