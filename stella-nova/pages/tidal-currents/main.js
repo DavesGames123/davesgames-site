@@ -5,7 +5,8 @@
 // the screen shows. This file does everything else. It floats the title,
 // legend, credit and locator blocks over the quietest parts of the
 // view, places the place labels, runs the clock, and switches the location
-// with a short fade through black.
+// with a short fade through black. quality.js lowers the particle share and
+// the render scale when the frames do not keep up with the display.
 //
 //   Left / Right   previous / next location     Space   play / pause
 //   M              atlas (location menu)        I       caption
@@ -19,6 +20,7 @@
 
 import { computeView, lonLatToScreen, metersPerScreenPx, viewCornersLonLat, coreOf } from './view.js';
 import { createLocator } from './locator.js';
+import { createGovernor, LEVELS } from './quality.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -91,6 +93,17 @@ let coverSrc = null;          // the canvas that holds the full mask at low res
 let locator = null;
 let locatorBlock = null;
 const metaCache = new Map();  // id -> meta (for the atlas)
+let renderScale = 1;          // backing store scale that the quality governor sets
+
+// Quality governor: fewer particles, then a smaller backing store, when the
+// frames do not keep up with the display (quality.js).
+const governor = createGovernor((level) => {
+  const q = LEVELS[level];
+  engine?.setParticleShare?.(q.share);
+  document.body.dataset.quality = String(level);
+  if (q.res !== renderScale) { renderScale = q.res; relayout(); }
+});
+window.__tidalQuality = governor;   // debug handle: level and stats from the console
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const el = (tag, cls, html) => {
@@ -263,8 +276,8 @@ function relayout() {
   const dprMax = phone || tablet ? 2 : 4;
   const longMax = phone ? 2400 : tablet ? 3200 : 3840;
   const dpr = Math.min(window.devicePixelRatio || 1, dprMax);
-  let bw = Math.max(1, Math.round(w * dpr));
-  let bh = Math.max(1, Math.round(h * dpr));
+  let bw = Math.max(1, Math.round(w * dpr * renderScale));
+  let bh = Math.max(1, Math.round(h * dpr * renderScale));
   const k = Math.min(1, longMax / Math.max(bw, bh));
   bw = Math.max(1, Math.round(bw * k));
   bh = Math.max(1, Math.round(bh * k));
@@ -710,7 +723,7 @@ function bindInput() {
   let rz = 0;
   const onResize = () => {
     cancelAnimationFrame(rz);
-    rz = requestAnimationFrame(() => { relayout(); syncScrim(); });
+    rz = requestAnimationFrame(() => { relayout(); syncScrim(); governor.hold(); });
   };
   window.addEventListener('resize', onResize);
   window.visualViewport?.addEventListener('resize', onResize);
@@ -767,6 +780,7 @@ async function switchTo(i, initial = false) {
   buildOverlay();
   buildCoverSource(ds.images);
   if (engine) engine.setDataset(ds);
+  governor.hold();
   loadingEl.hidden = true;
   loadingEl.lastChild.textContent = 'Loading';
   if (!captionEl.hidden) setCaption(true);
@@ -780,9 +794,10 @@ async function switchTo(i, initial = false) {
 // ─── frame loop ─────────────────────────────────────────────────────────────
 function frame(t) {
   requestAnimationFrame(frame);
-  const dt = lastT == null ? 0 : Math.min(0.1, Math.max(0, (t - lastT) / 1000));
+  const rawMs = lastT == null ? 0 : t - lastT;
+  const dt = Math.min(0.1, Math.max(0, rawMs / 1000));
   lastT = t;
-  if (!meta) return;
+  if (!meta || !engine || !dataset) { governor.idle(rawMs); if (!meta) return; }
   const span = lastHour();
   if (playing && !scrubbing) {
     hour += dt * (span / WEEK_SECONDS);
@@ -792,6 +807,7 @@ function frame(t) {
   if (engine && dataset) {
     try {
       engine.render(hour, dt);
+      governor.sample(rawMs, engine.info.gpuMs);
     } catch (err) {
       console.error('tidal-currents: render failed', err);
       engine = null;

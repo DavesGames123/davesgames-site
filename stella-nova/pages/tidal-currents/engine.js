@@ -18,6 +18,10 @@
 //   7 meter    render   every meterEvery frames: 64x64 lit samples, read back
 //                       async, for the auto exposure
 //
+// Particle share: setParticleShare(f) keeps f of the particle count live.
+// engine.info.gpuMs is the submit-to-done time of a recent frame. main.js
+// reads the two for its quality governor (quality.js).
+//
 // Auto exposure: the meter gives the mean lit luminance over water. If it is
 // above TUNE.autoTarget, the exposure scale moves down toward
 // autoTarget / mean (never below autoMin, never above 1). So calm scenes do
@@ -43,7 +47,7 @@
 //
 // grep: function loadDataset  function createEngine  function coefRows
 //       function particleCount  function waterFraction  TUNE  BLOOM  readMeter  buildDevice  buildDataset
-//       buildSize  render(  resize(  setView(  setDataset(  destroy(  readField(
+//       buildSize  render(  resize(  setView(  setDataset(  setParticleShare(  destroy(  readField(
 
 import { rampAt } from './colormap.js';
 
@@ -79,6 +83,7 @@ const TUNE = {
   autoMin: 0.45,             // lowest auto exposure scale
   autoTau: 1.5,              // seconds for the auto exposure to move 63% of the way
   meterEvery: 30,            // frames between exposure meter reads
+  shareGain: 0.7,            // deposit scale = share^-shareGain when the governor drops particles
   meterWarmup: 60,           // frames after a reseed before the first meter read
 };
 
@@ -209,6 +214,8 @@ export async function createEngine(canvas, opts = {}) {
   let reseed = true, clearTrail = true, frame = 0;
   let destroyed = false, rebuilding = false, lostOnce = false;
   let fpsEma = 60;
+  let share = 1;           // fraction of the particle count that is live (setParticleShare)
+  let gpuBusy = false, gpuMs = 0;   // GPU time probe: one frame in flight at a time
   let autoScale = 1, autoGoal = 1;   // auto exposure: current and goal scale
   let meterBusy = false, sinceReseed = 0, snapNext = true;
   const coefs = new Float32Array(20);
@@ -338,7 +345,8 @@ export async function createEngine(canvas, opts = {}) {
 
   function updateActive() {
     if (!sizeGpu) return;
-    active = Math.min(particleCount(width, height, waterFraction(grid, view), cap), sizeGpu.count);
+    const n = particleCount(width, height, waterFraction(grid, view), cap);
+    active = Math.min(Math.max(Math.round(n * share), Math.min(n, TUNE.minParticles)), sizeGpu.count);
     engine.info.particles = active;
   }
 
@@ -442,7 +450,17 @@ export async function createEngine(canvas, opts = {}) {
   active = sizeGpu.count;
 
   const engine = {
-    info: { particles: sizeGpu.count, fpsHint: 60, exposure: 1, meterLum: 0 },
+    info: { particles: sizeGpu.count, fpsHint: 60, exposure: 1, meterLum: 0, gpuMs: 0 },
+
+    // Set the live fraction of the particle count (0..1). The quality governor
+    // in main.js lowers it when the GPU cannot keep the frame rate. The new
+    // particles above the old count are dead, so the advect pass respawns them.
+    setParticleShare(f) {
+      const next = Math.min(1, Math.max(0.05, Number(f) || 1));
+      if (next === share) return;
+      share = next;
+      updateActive();
+    },
 
     // Swap the dataset. Frees the old textures and reseeds the particles.
     setDataset(next) {
@@ -509,7 +527,8 @@ export async function createEngine(canvas, opts = {}) {
       advF.set(view, 12);
       device.queue.writeBuffer(dev.advBuf, 0, advU);
       // Scale the deposit by the frame time, so the trail density does not change with the refresh rate.
-      trailU.set([width, height, TUNE.lineGain * Math.max(dtScale, 0.25), TUNE.lenRef]);
+      // A lower particle share gets a larger deposit, so the water does not go dark.
+      trailU.set([width, height, TUNE.lineGain * Math.max(dtScale, 0.25) * Math.pow(share, -TUNE.shareGain), TUNE.lenRef]);
       device.queue.writeBuffer(dev.trailBuf, 0, trailU);
       compU.set([width, height, meta.legendF.min, meta.legendF.max,
         meta.speedRef, TUNE.trailGain, TUNE.baseGlow, TUNE.exposure * autoScale,
@@ -568,6 +587,19 @@ export async function createEngine(canvas, opts = {}) {
       }
       device.queue.submit([enc.finish()]);
       if (meterNow) readMeter(dev, autoScale);
+      // GPU time probe: submit to done. A GPU that falls behind queues the
+      // frames, so this time grows above the frame period.
+      if (!gpuBusy) {
+        gpuBusy = true;
+        const t0 = performance.now();
+        const d = dev;
+        device.queue.onSubmittedWorkDone().then(() => {
+          gpuBusy = false;
+          if (dev !== d) return;
+          gpuMs = performance.now() - t0;
+          engine.info.gpuMs = gpuMs;
+        }, () => { gpuBusy = false; });
+      }
       reseed = false; clearTrail = false;
     },
 
