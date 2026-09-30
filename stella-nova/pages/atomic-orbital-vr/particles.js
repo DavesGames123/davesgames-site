@@ -62,6 +62,12 @@ function makeCircleTex(){
 const pGeo=new THREE.BufferGeometry();
 const pPosAttr=new THREE.BufferAttribute(posArr,3); pPosAttr.setUsage(THREE.DynamicDrawUsage);
 const pColAttr=new THREE.BufferAttribute(colArr,3); pColAttr.setUsage(THREE.DynamicDrawUsage);
+// Mark particles [start, start+count) for upload. The arrays hold MAX_P
+// points, so without a range three.js sends all 2 M points each frame.
+function markRange(attr,start,count){
+  if(count<=0)return;
+  attr.addUpdateRange(start*3,count*3); attr.needsUpdate=true;
+}
 pGeo.setAttribute('position',pPosAttr);
 pGeo.setAttribute('color',pColAttr);
 pGeo.setDrawRange(0,0);
@@ -107,7 +113,7 @@ export function startGrow(){
   RT.targetCount=Math.min(S.N, MAX_P);
   if(RT.targetCount<=RT.liveCount){ // shrink
     RT.liveCount=RT.targetCount; pGeo.setDrawRange(0,RT.liveCount);
-    pPosAttr.needsUpdate=true; pColAttr.needsUpdate=true;
+    markRange(pPosAttr,0,RT.liveCount); markRange(pColAttr,0,RT.liveCount);
     updateInfoBar(RT.liveCount); return;
   }
   RT.spawning=true;
@@ -153,9 +159,9 @@ export function spawnChunk(){
     added++;
   }
 
+  markRange(pPosAttr,RT.liveCount,added);
+  markRange(pColAttr,RT.liveCount,added);
   RT.liveCount+=added;
-  pPosAttr.needsUpdate=true;
-  pColAttr.needsUpdate=true;
   pGeo.setDrawRange(0,RT.liveCount);
   updateInfoBar(RT.liveCount);
 }
@@ -173,6 +179,7 @@ export function updateColors(){
   const count=RT.liveCount;
   // Roll through COLOR_CHUNK particles per call
   const end=Math.min(RT.colorRollIdx+COLOR_CHUNK, count);
+  markRange(pColAttr,RT.colorRollIdx,end-RT.colorRollIdx);
   for(let i=RT.colorRollIdx;i<end;i++){
     const r=sphArr[i*3],th=sphArr[i*3+1],ph=sphArr[i*3+2];
     const sinT=Math.sin(th);
@@ -181,7 +188,6 @@ export function updateColors(){
     colArr[i*3]=c[0]; colArr[i*3+1]=c[1]; colArr[i*3+2]=c[2];
   }
   RT.colorRollIdx = end>=count ? 0 : end;
-  pColAttr.needsUpdate=true;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -204,14 +210,15 @@ export function animateFlow(dt){
     posArr[i*3  ]=r*sinT*Math.cos(ph)*scale;
     posArr[i*3+2]=r*sinT*Math.sin(ph)*scale; // posArr[i*3+1] (y) unchanged
   }
-  pPosAttr.needsUpdate=true;
+  markRange(pPosAttr,0,RT.liveCount);
 }
 
 /* ── Static flow arrows ── */
 // Rebuild the fixed set of current arrows: draw random points in the shell, take
 // the probability-current direction there, and emit a short line segment each.
 export function rebuildStaticFlow(){
-  const geo=flowGeo;while(geo.attributes.position)geo.deleteAttribute('position');
+  // Release the GPU buffer of the old arrows before the new data replaces it.
+  const geo=flowGeo;geo.dispose();while(geo.attributes.position)geo.deleteAttribute('position');
   if(!S.showFlow){flowLines.visible=false;return;}
   flowLines.visible=true;
   const{m,n,scale}=S,rMax=7*n*n;

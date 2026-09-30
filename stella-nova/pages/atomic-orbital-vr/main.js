@@ -25,6 +25,7 @@
 //
 //  RENDER LOOP  (renderer.setAnimationLoop) — orchestration kept here
 //  ----------------------------------------------------------------------------
+//      hidden? skip : dt = min(delta, MAX_DT)
 //      dirty? rebuild : spawnChunk ▶ evolve colors ▶ animateFlow ▶ tracers
 //      ▶ periodic B recompute ▶ nucleus spin ▶ XR input ▶ AR panel ▶ render
 // ============================================================================
@@ -48,6 +49,13 @@ let bFieldFrameCount=0;
 
 // Frame clock.
 const clock=new THREE.Clock();
+// Largest step one frame can take, in seconds. After a stall or a hidden
+// tab, the loop continues from the last state and does not replay the gap.
+const MAX_DT=0.1;
+// When the page is hidden, the loop does no work. On return, the clock
+// restarts, so the first frame does not get the hidden time as dt.
+let pageHidden=document.hidden;
+document.addEventListener('visibilitychange',()=>{pageHidden=document.hidden;clock.getDelta();});
 // Guarantee material size matches state regardless of initialization order.
 pMat.size = S.psize;
 // First fill of the cloud.
@@ -58,7 +66,11 @@ startRebuild();
 // tracers and periodic B solve, spin the nucleus, then handle XR input, the AR
 // panel, and the passthrough dim plane before rendering.
 renderer.setAnimationLoop((time, frame)=>{
-  const dt=clock.getDelta();
+  const rawDt=clock.getDelta();
+  // Stop here while hidden. An XR session continues, because the headset
+  // can show the page when the 2D document is hidden.
+  if(pageHidden&&!renderer.xr.isPresenting)return;
+  const dt=Math.min(rawDt,MAX_DT);
 
   // Quantum state changed → full clear and rebuild
   if(S.dirty){S.dirty=false;S.colDirty=false;RT.colorRollIdx=0;startRebuild();return;}
