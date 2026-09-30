@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Smith Chart — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SMITH CHART  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws an interactive Smith chart into the 2D
+   canvas (#chart). The chart is the plane of the reflection coefficient:
+       gamma = (Z - Z0) / (Z + Z0)
+   A drag on the chart moves the load. A line length turns gamma clockwise
+   toward the generator. A shunt stub can match the load to Z0.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts       Google Fonts stylesheet
+     2. KaTeX       CSS then JS, so main.js can render the equations on load
+     3. style.css   the page stylesheet
+   Scripts at end of body, in this order:
+     rf.js          defines global RF (complex math, no DOM)
+     main.js        the chart, the controls, and the frame loop
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Smith Chart                         #gear    │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │  #chart   the chart; drag to move the load            │
+     │  load      │  #tip     the z and y values under the pointer        │
+     │  line      │  #hint    drag on the chart                            │
+     │  match     │                                                       │
+     │  chart     │                                                       │
+     │  readout   │                                                       │
+     │  about     │                                                       │
+     ├────────────┴─────────────────────────────────────────────────────┤
+     │ #status  z · |gamma| · VSWR                                        │
+     └──────────────────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock      fixed at the base: #dockPanel opens the panel, #dockGrid
+                picks the grid (Z, Y, Z+Y), #dockPlay walks the line.
+     #panel     portrait: a bottom sheet above the dock. #sheetGrip toggles
+                half and full height, and a drag down closes the sheet.
+                landscape: a drawer on the right edge.
+     main.js measures the panel, the dock, and the bars each frame, and fits
+     the chart in the part of the canvas that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function buildGrid'    the Z and Y grid lines and labels
+     grep -n 'function drawRim'      the wavelength and angle scales
+     grep -n 'function frame'        the render loop and the overlays
+     grep -n 'function clearRect'    the overlay margins that fit the chart
+     grep -n 'function refresh'      the readout and the status bar
+     grep -n 'function buildUI'      the control panel construction
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="An interactive Smith chart. Drag a load, walk it down a transmission line, sweep a series RLC, and match it with a shunt stub.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;RF.SMITH</div>
+  <div class="pagetitle">Smith Chart</div>
+</div>
+
+<canvas id="chart"></canvas>
+<div id="tip"></div>
+<div id="hint">drag on the chart to move the load</div>
+<button id="gear" aria-label="Controls">⚙</button>
+
+<div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">LOAD</div>
+  <div class="modes">
+    <button id="loadZ" class="on">R + jX</button>
+    <button id="loadRLC">SERIES RLC</button>
+  </div>
+  <div id="boxZ">
+    <div class="row"><label>R  Ω</label><input type="range" id="rS" min="0" max="0.99" step="0.001"><input class="num" type="number" id="rN" min="0" step="any"></div>
+    <div class="row"><label>X  Ω</label><input type="range" id="xS" min="-0.97" max="0.97" step="0.001"><input class="num" type="number" id="xN" step="any"></div>
+    <div class="presets" id="presets">
+      <button data-r="0" data-x="0">SHORT</button>
+      <button data-r="1e9" data-x="0">OPEN</button>
+      <button data-r="1" data-x="0">MATCH</button>
+      <button data-r="0.5" data-x="0">R = Z0/2</button>
+      <button data-r="1.2" data-x="-1.6">1.2 − j1.6</button>
+      <button data-r="0.4" data-x="0.8">0.4 + j0.8</button>
+    </div>
+  </div>
+  <div id="boxRLC" class="off">
+    <div class="row"><label>R  Ω</label><input type="range" id="rlcR" min="1" max="200" step="0.5" value="30"><span class="val" id="rlcRV"></span></div>
+    <div class="row"><label>L  nH</label><input type="range" id="rlcL" min="1" max="200" step="0.5" value="40"><span class="val" id="rlcLV"></span></div>
+    <div class="row"><label>C  pF</label><input type="range" id="rlcC" min="0.5" max="50" step="0.1" value="6"><span class="val" id="rlcCV"></span></div>
+    <div class="row"><label>f  MHz</label><input type="range" id="rlcF" min="0" max="1" step="0.001" value="0.6"><span class="val" id="rlcFV"></span></div>
+    <div class="hint">The trace is Z(f) from 50 MHz to 5 GHz. It crosses the real axis at f0 = 1/(2π√LC), where X = 0.</div>
+  </div>
+
+  <div class="sec-label">LINE</div>
+  <div class="presets" id="z0Presets">
+    <button data-z0="50" class="on">Z0 50 Ω</button>
+    <button data-z0="75">75 Ω</button>
+    <button data-z0="100">100 Ω</button>
+  </div>
+  <div class="row"><label>Length</label><input type="range" id="len" min="0" max="0.5" step="0.001" value="0"><span class="val" id="lenV"></span></div>
+  <div class="modes">
+    <button id="walkBtn">▶ WALK LINE</button>
+    <button id="lenReset">LENGTH 0</button>
+  </div>
+  <div class="hint">A lossless line keeps |Γ|. The point turns clockwise, toward the generator. One full turn is λ/2.</div>
+
+  <div class="sec-label">SHUNT STUB MATCH</div>
+  <div class="presets" id="stubModes">
+    <button data-stub="off" class="on">OFF</button>
+    <button data-stub="short">SHORT</button>
+    <button data-stub="open">OPEN</button>
+  </div>
+  <div class="presets two" id="stubPick">
+    <button data-sol="0" class="on">SOLUTION 1</button>
+    <button data-sol="1">SOLUTION 2</button>
+  </div>
+  <div class="hint" id="stubHint"></div>
+
+  <div class="sec-label">CHART</div>
+  <div class="presets" id="gridModes">
+    <button data-grid="z" class="on">Z</button>
+    <button data-grid="y">Y</button>
+    <button data-grid="zy">Z + Y</button>
+  </div>
+  <div class="modes" style="margin-top:8px">
+    <button id="circleBtn" class="on">|Γ| CIRCLE · ON</button>
+    <button id="rimBtn" class="on">RIM SCALE · ON</button>
+  </div>
+
+  <div class="sec-label">READOUT</div>
+  <div class="eq" id="eq-gamma">Γ = (Z − Z0) / (Z + Z0)</div>
+  <div class="eq" id="eq-zin">Zin = Z0 (ZL + jZ0 tan βl) / (Z0 + jZL tan βl)</div>
+  <table class="readout">
+    <tr><td>Z<sub>L</sub></td><td id="rdZ"></td></tr>
+    <tr><td>z<sub>L</sub> = Z/Z0</td><td id="rdz"></td></tr>
+    <tr><td>Y<sub>L</sub></td><td id="rdY"></td></tr>
+    <tr><td>Γ<sub>L</sub></td><td id="rdG"></td></tr>
+    <tr><td>VSWR</td><td id="rdS"></td></tr>
+    <tr><td>return loss</td><td id="rdRL"></td></tr>
+    <tr><td>mismatch loss</td><td id="rdML"></td></tr>
+    <tr><td>load at</td><td id="rdW"></td></tr>
+    <tr><td>line βl</td><td id="rdBL"></td></tr>
+    <tr><td>Z<sub>in</sub></td><td id="rdZin"></td></tr>
+    <tr id="rowF0"><td>f0</td><td id="rdF0"></td></tr>
+    <tr id="rowStub"><td>stub</td><td id="rdStub"></td></tr>
+  </table>
+
+  <div class="sec-label">ABOUT</div>
+  <div class="about">
+    <p>The Smith chart is the plane of the reflection coefficient Γ. The center is Γ = 0, a matched load. The rim is |Γ| = 1, where all the power reflects. The left end is a short circuit. The right end is an open circuit.</p>
+    <p>The <span class="cz">cyan</span> circles are constant resistance r. The arcs are constant reactance x. The upper half is inductive, and the lower half is capacitive.</p>
+    <p>The <span class="cy">pink</span> grid is the same grid turned by 180°. It gives the admittance y = 1/z at the same point. Shunt parts add in y, so a stub match is easy to see on it.</p>
+    <p>A length of lossless line does not change |Γ|. It only turns the point on a circle about the center. Half a wavelength is one full turn, so a λ/4 line changes z to 1/z.</p>
+    <p>A stub match first moves along the line until g = 1. The stub then cancels the susceptance, and the point goes along the g = 1 circle to the center.</p>
+  </div>
+</div>
+
+<div id="status">
+  <span id="stMain" class="fn"></span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockGrid" class="seg">
+    <button data-grid="z" class="on">Z</button>
+    <button data-grid="y">Y</button>
+    <button data-grid="zy">Z + Y</button>
+  </div>
+  <button id="dockPlay" aria-label="Walk the line">▶</button>
+</nav>
+
+<!-- rf.js first (defines global RF), then main.js. -->
+<script src="rf.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
