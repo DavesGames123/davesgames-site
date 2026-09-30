@@ -34,8 +34,9 @@
      │ topbar: Stella Nova · Hydrogen Table          (hidden in frame)   │
      ├────────────┬─────────────────────────────────────────────────────┤
      │ #panel     │  header: title, subtitle, #eqPsi, #cbar, caption     │
-     │  table     │  #table   rows by n, columns by (l, m)               │
-     │  orbitals  │           the page scrolls down                      │
+     │  table     │  #table   rows by n, columns by (l, m). A shell too  │
+     │  orbitals  │           wide wraps below. More shells load as the  │
+     │            │           page scrolls down, to n = 10.              │
      │  color     │  #foot    render time and tile count                 │
      │  contrast  │                                                      │
      │  readout   │  #detail  a tile opened large (modal, or a sheet     │
@@ -50,7 +51,8 @@
      #table     three columns (two below 330 px), grouped by n.
 
    GREP MAP  (main.js)
-     grep -n 'function layout'      aligned table or n-bands, tile size
+     grep -n 'function layout'      grid or n-bands, tile size
+     grep -n 'function maybeExtend' add shells as the page scrolls
      grep -n 'function render'      the job list and the worker pool
      grep -n 'function openDetail'  the large tile and its readout
      grep -n 'function drawRadial'  the r^2 R^2 plot
@@ -107,7 +109,7 @@
 
   <div class="sec-label">TABLE</div>
   <div class="ratio-row">
-    <div class="stepper" id="stepN"><button data-d="-1" aria-label="Fewer shells">−</button><span class="num" id="numN">4</span><button data-d="1" aria-label="More shells">+</button><span class="axis-tag">n max</span></div>
+    <div class="stepper" id="stepN"><button data-d="-1" aria-label="Fewer shells">−</button><span class="num" id="numN">10</span><button data-d="1" aria-label="More shells">+</button><span class="axis-tag">n max</span></div>
     <div class="hint" id="nHint" style="flex:1;margin:0 0 14px 8px"></div>
   </div>
 
@@ -145,6 +147,7 @@
   <div class="sec-label">ABOUT</div>
   <div class="about">
     <p>Each tile is a flat cut through the nucleus. Bright shows where the electron is likely to be. The vertical axis is z.</p>
+    <p>Scroll down for more shells, to n = 10. "n max" sets the last shell.</p>
     <p>The tiles do not share one scale. Each tile has its own size, about n² Bohr radii, and its own brightest point.</p>
     <p>For complex orbitals, |ψ|² does not change when you turn about z. So the cut through z shows the full shape. The density of m and −m is the same.</p>
     <p>A real orbital is a mix of +m and −m, with cos mφ or sin mφ. It has |m| nodal planes through z. Each real tile is cut through its lobes: the x–y plane when |m| = l, else a vertical plane.</p>

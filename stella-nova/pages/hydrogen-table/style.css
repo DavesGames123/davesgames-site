@@ -71,7 +71,12 @@ html.in-frame #page{padding-top:22px}
 
 /* ---------------------------------------------------------------- TABLE */
 #table{margin:0 auto;display:block}
-#table.aligned{display:grid;gap:var(--gap);justify-content:center;grid-template-columns:auto repeat(var(--cols),var(--tile))}
+#table.grid{display:grid;gap:var(--gap);justify-content:center;grid-template-columns:62px repeat(var(--cols),var(--tile))}
+/* A shell too wide for the aligned rows: a head line, then wrapped tiles
+   that always show their orbital name. */
+.shead{font-family:var(--serif);font-style:italic;font-size:1rem;color:var(--dim);border-bottom:1px solid var(--line);padding:14px 0 3px;align-self:end;word-spacing:0.35em}
+.nlab.top{justify-content:flex-start;padding-top:12px}
+.tile.wrap .nm{opacity:1}
 .lhead{font-family:var(--serif);font-size:0.95rem;color:var(--dim);text-align:center;border-bottom:1px solid var(--line);padding-bottom:3px;align-self:end}
 .lhead i{font-style:italic;color:var(--gold);font-size:1.15rem;margin-right:4px}
 .nlab{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;padding-right:6px;font-family:var(--serif);color:var(--ink);white-space:nowrap}

@@ -13,13 +13,20 @@
    gamma, exposure or log scale only colors the cached fields again.
 
    LAYOUT. Two forms, picked by width:
-     aligned   one grid. Row n, column (l, m), the same column in each row,
-               as in the classic plot. Used when a tile can be 88px or more.
-     bands     one band for each n, with a fixed column count: three on a
-               phone (two below 330px), else as many 150px tiles as fit.
+     grid      one CSS grid. Shells 1 … nb are aligned: row n, column
+               (l, m), the same column in each row, as in the classic plot.
+               nb is the largest n whose row fits at 120px tiles or more.
+               A shell above nb gets a head row, then wraps at the same
+               tile size in K columns. It is not aligned to the l headers.
+     bands     phone. One band for each n, three columns (two below 330px).
+   SCROLL. The page starts with 4 shells, or fewer if G.nMax is lower. When
+   the foot comes within 900px of the view, the next shell is added and only
+   its tiles fill. This stops at G.nMax (the "n max" stepper, 10 at most).
 
    GREP MAP
-     grep -n 'function layout'      aligned table or n-bands, tile size
+     grep -n 'function layout'      grid or bands, tile size, a full build
+     grep -n 'function addShell'    one shell: aligned row, wrapped, or band
+     grep -n 'function maybeExtend' add shells as the page scrolls
      grep -n 'function render'      the job list and the worker pool
      grep -n 'function onTiles'     draw the bitmaps that come back
      grep -n 'function openDetail'  the large tile and its readout
@@ -28,15 +35,15 @@
      grep -n 'function buildUI'     the controls, the phone sheet and dock
      grep -n 'function startPool'   workers, or the page-thread fallback
    ========================================================================== */
-import { tileList, tileSpec, radialR, legendre, energyEV, meanR, L_LETTER, fillTile } from './physics.js';
+import { shellTiles, colIndex, tileSpec, radialR, legendre, energyEV, meanR, L_LETTER, fillTile } from './physics.js';
 import { MAPS, lut, colorize } from './colormaps.js';
 
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const $ = id => document.getElementById(id);
 const table = $('table');
 
-const G = { nMax: 4, kind: 'complex', cmap: 'inferno', gamma: 0.75, expo: 0.3, log: false, decades: 4, outerLobe: true };
-const N_MIN = 1, N_MAX = 7;
+const G = { nMax: 10, kind: 'complex', cmap: 'inferno', gamma: 0.75, expo: 0.3, log: false, decades: 4, outerLobe: true };
+const N_MIN = 1, N_MAX = 10;
 const look = () => ({ cmap: G.cmap, gamma: G.gamma, exposure: Math.pow(2, G.expo), log: G.log, decades: G.decades, outerLobe: G.outerLobe });
 const fmtM = m => (m < 0 ? '−' + (-m) : String(m));
 
@@ -91,84 +98,137 @@ function mainThreadWorker() {
 }
 
 // ------------------------------------------------------------ layout
-let TILES = [], gen = 0, layoutKey = '', mode = 'aligned';
+// shown is the count of shells in the DOM. It grows as the page scrolls, up
+// to G.nMax. geo holds the geometry of the current build.
+let TILES = [], gen = 0, layoutKey = '', mode = 'grid', shown = 0, geo = null;
+const LAB_W = 62, MIN_T = 120, MAX_T = 178, N_START = 4;
 const GAP = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap')) || 7;
+const colsFor = n => G.kind === 'complex' ? n * (n + 1) / 2 : n * n;
 
+// Pick the geometry. grid: the tile size is the largest that still lets
+// shells 1 … nb sit aligned at MIN_T or more. K columns fit at that size.
+// bands (phone): one band for each n with K = 3 (2 below 330px).
 function layout(force) {
   const W = table.clientWidth || document.documentElement.clientWidth - 32;
   const phone = PHONE_Q.matches, gap = GAP();
-  const list = tileList(G.nMax, G.kind);
-  const C = G.kind === 'complex' ? G.nMax * (G.nMax + 1) / 2 : G.nMax * G.nMax;
-  const labW = 62;
-  let tile = Math.floor((W - labW - gap * C) / C), K = C;
-  if (!phone && tile >= 88 && C > 1) { mode = 'aligned'; tile = Math.min(tile, 178); }
-  else {
-    mode = 'bands';
-    K = phone ? (W < 330 ? 2 : 3) : Math.max(3, Math.min(C, Math.floor((W + gap) / (150 + gap))));
-    tile = Math.min(phone ? 200 : 178, Math.floor((W - gap * (K - 1)) / K));
-    if (C === 1) { K = 1; tile = Math.min(tile, 178); }
+  const fit = C => Math.floor((W - LAB_W - gap * C) / C);
+  let m = 'bands', T = 0, K = 0, nb = 0;
+  if (!phone) {
+    for (let n = G.nMax; n >= 1; n--) if (fit(colsFor(n)) >= MIN_T) { nb = n; break; }
+    if (nb) { m = 'grid'; T = Math.min(MAX_T, fit(colsFor(nb))); K = Math.floor((W - LAB_W) / (T + gap)); }
+  }
+  if (m === 'bands') {
+    K = phone ? (W < 330 ? 2 : 3) : Math.max(2, Math.floor((W + gap) / (150 + gap)));
+    T = Math.min(phone ? 200 : MAX_T, Math.floor((W - gap * (K - 1)) / K));
   }
   const dpr = window.devicePixelRatio || 1;
-  const key = [mode, K, tile, dpr, G.nMax, G.kind].join('|');
+  const key = [m, K, T, nb, dpr, G.nMax, G.kind].join('|');
   if (key === layoutKey && !force) return false;
-  layoutKey = key; gen++;
-  table.style.setProperty('--tile', tile + 'px');
+  layoutKey = key; gen++; mode = m;
+  geo = { K, T, nb, gap, size: Math.max(16, Math.round((T - 2) * dpr)), row: 2 };
+  table.style.setProperty('--tile', T + 'px');
   table.style.setProperty('--cols', K);
-  table.className = mode;
+  table.className = m;
   table.textContent = '';
-  const inner = tile - 2, size = Math.max(16, Math.round(inner * dpr));
-  const mkTile = (t, i) => {
-    const b = document.createElement('button');
-    b.className = 'tile'; b.dataset.i = i;
-    const name = t.spec.name.split(' ');
-    b.title = `${t.spec.name} · n=${t.n}, l=${t.l}, m=${fmtM(t.m)} · tap for details`;
-    b.setAttribute('aria-label', `Orbital ${t.spec.name}, n ${t.n}, l ${t.l}, m ${t.m}`);
-    const cv = document.createElement('canvas'); cv.width = size; cv.height = size;
-    const lb = document.createElement('span'); lb.className = 'lbl'; lb.textContent = `(${t.n},${t.l},${fmtM(t.m)})`;
-    const nm = document.createElement('span'); nm.className = 'nm';
-    nm.textContent = name[0];
-    const extra = [name.slice(1).join(' '), G.kind === 'real' && t.l > 0 ? '· ' + t.spec.planeLabel : ''].filter(Boolean).join(' ');
-    if (extra) { const s = document.createElement('small'); s.textContent = extra; nm.appendChild(s); }
-    b.append(cv, lb, nm);
-    t.el = b; t.cv = cv; t.ctx = cv.getContext('2d', { alpha: false }); t.size = size; t.drawn = -1;
-    return b;
+  if (m === 'grid') table.appendChild(Object.assign(document.createElement('div'), { className: 'corner' }));
+  TILES = [];
+  const target = Math.min(G.nMax, Math.max(shown, N_START));
+  shown = 0;
+  addShells(target);
+  return true;
+}
+
+function mkTile(t, wrap) {
+  const i = TILES.length;
+  t.spec = tileSpec(t.n, t.l, t.m, G.kind);
+  const b = document.createElement('button');
+  b.className = wrap ? 'tile wrap' : 'tile'; b.dataset.i = i;
+  const name = t.spec.name.split(' ');
+  b.title = `${t.spec.name} · n=${t.n}, l=${t.l}, m=${fmtM(t.m)} · tap for details`;
+  b.setAttribute('aria-label', `Orbital ${t.spec.name}, n ${t.n}, l ${t.l}, m ${t.m}`);
+  const cv = document.createElement('canvas'); cv.width = geo.size; cv.height = geo.size;
+  const lb = document.createElement('span'); lb.className = 'lbl'; lb.textContent = `(${t.n},${t.l},${fmtM(t.m)})`;
+  const nm = document.createElement('span'); nm.className = 'nm';
+  nm.textContent = name[0];
+  const extra = [name.slice(1).join(' '), G.kind === 'real' && t.l > 0 ? '· ' + t.spec.planeLabel : ''].filter(Boolean).join(' ');
+  if (extra) { const s = document.createElement('small'); s.textContent = extra; nm.appendChild(s); }
+  b.append(cv, lb, nm);
+  t.el = b; t.cv = cv; t.ctx = cv.getContext('2d', { alpha: false }); t.size = geo.size; t.drawn = -1;
+  TILES.push(t);
+  return b;
+}
+
+const shellNames = n => Array.from({ length: n }, (_, l) => n + L_LETTER[l]).join(' ');
+
+// Append shell n to the table.
+//   grid, n <= nb   one row. Tile (l, m) goes to its fixed column, under the
+//                   l header. The l = n - 1 header is added with the shell.
+//   grid, n > nb    a head row, then the tiles in K columns. An l group
+//                   starts a new row when it does not fit the rest of the
+//                   row, if it fits in a full row.
+//   bands           a band with its head and a K-column grid.
+function addShell(n) {
+  const list = shellTiles(n, G.kind), frag = document.createDocumentFragment();
+  const nlab = (cls, extra) => {
+    const d = document.createElement('div'); d.className = cls;
+    d.innerHTML = `<span class="nn"><i>n</i> = ${n}</span><span class="ne">${energyEV(n).toFixed(2)} eV${extra || ''}</span>`;
+    return d;
   };
-  TILES = list.map(t => ({ ...t, spec: tileSpec(t.n, t.l, t.m, G.kind) }));
-  const frag = document.createDocumentFragment();
-  if (mode === 'aligned') {
-    frag.appendChild(Object.assign(document.createElement('div'), { className: 'corner' }));
-    for (let l = 0; l < G.nMax; l++) {
-      const h = document.createElement('div'); h.className = 'lhead';
-      const span = G.kind === 'complex' ? l + 1 : 2 * l + 1;
-      const start = (G.kind === 'complex' ? l * (l + 1) / 2 : l * l) + 2;
-      h.style.gridColumn = `${start} / span ${span}`; h.style.gridRow = '1';
-      h.innerHTML = `<i>${L_LETTER[l]}</i>ℓ = ${l}`;
-      frag.appendChild(h);
+  if (mode === 'grid' && n <= geo.nb) {
+    const l = n - 1, h = document.createElement('div'); h.className = 'lhead';
+    h.style.gridColumn = `${colIndex(l, 0, G.kind) + 2} / span ${G.kind === 'complex' ? l + 1 : 2 * l + 1}`; h.style.gridRow = '1';
+    h.innerHTML = `<i>${L_LETTER[l]}</i>ℓ = ${l}`;
+    const lab = nlab('nlab'); lab.style.gridColumn = '1'; lab.style.gridRow = String(geo.row);
+    frag.append(h, lab);
+    for (const t of list) { const b = mkTile(t, false); b.style.gridColumn = String(t.col + 2); b.style.gridRow = String(geo.row); frag.appendChild(b); }
+    geo.row++;
+  } else if (mode === 'grid') {
+    const K = geo.K, r0 = geo.row;
+    let c = 0, r = 0, lPrev = -1;
+    const place = [];
+    for (const t of list) {
+      if (t.l !== lPrev) {
+        const g = G.kind === 'complex' ? t.l + 1 : 2 * t.l + 1;
+        if (c > 0 && c + g > K && g <= K) { r++; c = 0; }
+        lPrev = t.l;
+      }
+      if (c === K) { r++; c = 0; }
+      place.push([t, r, c]); c++;
     }
-    for (let n = 1; n <= G.nMax; n++) {
-      const lab = document.createElement('div'); lab.className = 'nlab';
-      lab.style.gridColumn = '1'; lab.style.gridRow = String(n + 1);
-      lab.innerHTML = `<span class="nn"><i>n</i> = ${n}</span><span class="ne">${energyEV(n).toFixed(2)} eV</span>`;
-      frag.appendChild(lab);
-    }
-    TILES.forEach((t, i) => { const b = mkTile(t, i); b.style.gridColumn = String(t.col + 2); b.style.gridRow = String(t.n + 1); frag.appendChild(b); });
+    const head = document.createElement('div'); head.className = 'shead';
+    head.style.gridColumn = `2 / span ${K}`; head.style.gridRow = String(r0);
+    head.textContent = shellNames(n);
+    const lab = nlab('nlab top'); lab.style.gridColumn = '1'; lab.style.gridRow = `${r0} / span ${r + 2}`;
+    frag.append(head, lab);
+    for (const [t, rr, cc] of place) { const b = mkTile(t, true); b.style.gridColumn = String(cc + 2); b.style.gridRow = String(r0 + 1 + rr); frag.appendChild(b); }
+    geo.row = r0 + r + 2;
   } else {
-    for (let n = 1; n <= G.nMax; n++) {
-      const band = document.createElement('section'); band.className = 'band';
-      band.style.width = (K * tile + (K - 1) * gap) + 'px';
-      const shells = Array.from({ length: n }, (_, l) => n + L_LETTER[l]).join(' ');
-      band.innerHTML = `<div class="band-head"><span class="nn"><i>n</i> = ${n}</span><span class="ne">${energyEV(n).toFixed(2)} eV · ${shells}</span></div>`;
-      const grid = document.createElement('div'); grid.className = 'band-grid';
-      TILES.forEach((t, i) => { if (t.n === n) grid.appendChild(mkTile(t, i)); });
-      band.appendChild(grid); frag.appendChild(band);
-    }
+    const band = document.createElement('section'); band.className = 'band';
+    band.style.width = (geo.K * geo.T + (geo.K - 1) * geo.gap) + 'px';
+    band.appendChild(nlab('band-head', ' · ' + shellNames(n)));
+    const grid = document.createElement('div'); grid.className = 'band-grid';
+    for (const t of list) grid.appendChild(mkTile(t, false));
+    band.appendChild(grid); frag.appendChild(band);
   }
   table.appendChild(frag);
-  const px = TILES.length * size * size;
-  $('rdTiles').textContent = `${TILES.length} · ${mode}${mode === 'bands' ? ' ×' + K : ''}`;
-  $('rdPx').textContent = `${size}² each · ${(px / 1e6).toFixed(2)} Mpx`;
-  $('nHint').textContent = `${TILES.length} tiles, n = 1 … ${G.nMax}`;
-  return true;
+}
+
+function addShells(upTo) {
+  while (shown < upTo) addShell(++shown);
+  const px = TILES.length * geo.size * geo.size;
+  $('rdTiles').textContent = `${TILES.length} · ${mode}${mode === 'bands' ? ' ×' + geo.K : ''}`;
+  $('rdPx').textContent = `${geo.size}² each · ${(px / 1e6).toFixed(2)} Mpx`;
+  $('nHint').textContent = `${TILES.length} tiles, n = 1 … ${shown}` + (shown < G.nMax ? ' · scroll for more' : '');
+}
+
+// Add the next shell while the foot is less than one screen below the view.
+const EXTEND_MARGIN = 900;
+function maybeExtend() {
+  if (!geo || shown >= G.nMax) return;
+  if ($('foot').getBoundingClientRect().top > window.innerHeight + EXTEND_MARGIN) return;
+  addShells(shown + 1);
+  render(true);
+  requestAnimationFrame(maybeExtend);
 }
 
 // ------------------------------------------------------------ render
@@ -176,7 +236,8 @@ let seq = 0, busy = false, pending = false, outstanding = 0, t0 = 0, curSeq = 0,
 const history = [];
 window.__hyd = { G, history, get engine() { return engine; }, get tiles() { return TILES.length; }, render: () => render() };
 
-function render() {
+// onlyNew: fill only the tiles that were never drawn (a shell just added).
+function render(onlyNew) {
   if (!pool.length || !TILES.length) return;
   if (busy) { pending = true; return; }
   busy = true; pending = false;
@@ -187,7 +248,7 @@ function render() {
   const order = TILES.map((t, i) => {
     const r = t.el.getBoundingClientRect();
     return { i, d: r.bottom < 0 ? -r.bottom + vh : r.top > vh ? r.top : 0 };
-  }).sort((a, b) => a.d - b.d);
+  }).filter(o => !onlyNew || TILES[o.i].drawn < 0).sort((a, b) => a.d - b.d);
   const jobs = pool.map(() => []);
   for (const { i } of order) {
     const t = TILES[i];
@@ -379,7 +440,7 @@ function buildUI() {
     window.HydEq && window.HydEq.setKind(G.kind);
     drawColorbar();
   };
-  const relayout = () => { sync(); layout(true); render(); };
+  const relayout = () => { sync(); layout(true); render(); maybeExtend(); };
   const recolor = () => { sync(); render(); if (detailIndex >= 0) openDetail(detailIndex); };
 
   $('stepN').addEventListener('click', e => {
@@ -442,5 +503,7 @@ function buildUI() {
 buildUI();
 layout(true);
 let rsTimer = 0;
-new ResizeObserver(() => { clearTimeout(rsTimer); rsTimer = setTimeout(() => { if (layout(false)) render(); }, 90); }).observe(table);
+new ResizeObserver(() => { clearTimeout(rsTimer); rsTimer = setTimeout(() => { if (layout(false)) { render(); maybeExtend(); } }, 90); }).observe(table);
+new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) maybeExtend(); }, { rootMargin: `0px 0px ${EXTEND_MARGIN}px 0px` }).observe($('foot'));
+requestAnimationFrame(maybeExtend);
 startPool().then(() => { $('rdEngine').textContent = engine; render(); });

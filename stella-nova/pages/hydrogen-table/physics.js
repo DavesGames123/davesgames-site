@@ -30,11 +30,12 @@
      grep -n 'export function psiAt'       exact psi at a point of a tile
      grep -n 'export function fillTile'    the fast fill (lookup tables)
      grep -n 'export function tileList'    the tiles of the table, in order
+     grep -n 'export function shellTiles'  the tiles of one shell n
    ========================================================================== */
 
 export const HARTREE_EV = 27.211386245988;   // CODATA 2018
 export const E1_EV = -HARTREE_EV / 2;        // -13.6057 eV
-export const L_LETTER = 'spdfghik';
+export const L_LETTER = 'spdfghiklm';      // no j, by convention
 
 export function factorial(k) { let f = 1; for (let i = 2; i <= k; i++) f *= i; return f; }
 
@@ -210,7 +211,14 @@ export function fillTile(S, size, out) {
 // m = 0, +1, -1, +2, -2 ... so that each row holds n^2 tiles.
 export function tileList(nMax, kind) {
   const out = [];
-  for (let n = 1; n <= nMax; n++) for (let l = 0; l < n; l++) {
+  for (let n = 1; n <= nMax; n++) out.push(...shellTiles(n, kind));
+  return out;
+}
+
+// The tiles of one shell n, in the order of tileList.
+export function shellTiles(n, kind) {
+  const out = [];
+  for (let l = 0; l < n; l++) {
     if (kind === 'complex') for (let m = 0; m <= l; m++) out.push({ n, l, m, col: colIndex(l, m, kind) });
     else { out.push({ n, l, m: 0, col: colIndex(l, 0, kind) }); for (let k = 1; k <= l; k++) { out.push({ n, l, m: k, col: colIndex(l, k, kind) }); out.push({ n, l, m: -k, col: colIndex(l, -k, kind) }); } }
   }
