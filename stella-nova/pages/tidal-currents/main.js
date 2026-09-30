@@ -132,6 +132,7 @@ function stamp(h) {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${hh}:00 ${meta?.tzLabel ?? ''}`.trim();
 }
 const modelShort = (m) => (m?.modelShort || m?.model || '').toUpperCase();
+const agencyOf = (m) => m?.agency || 'NOAA';   // NOAA, or the Marine Institute for Dublin
 
 // A phone is a coarse pointer with a short side under 600 CSS px.
 const coarse = matchMedia('(pointer: coarse)');
@@ -195,7 +196,7 @@ function buildOverlay() {
 
   // data credit
   const b = el('div', 'blk credit');
-  b.appendChild(el('div', 'c-line mono first', esc(`NOAA ${modelShort(meta)} model`)));
+  b.appendChild(el('div', 'c-line mono first', esc(`${agencyOf(meta)} ${modelShort(meta)} model`)));
   b.appendChild(el('div', 'c-line mono', esc(meta.dates ?? '')));
 
   // locator globe: one canvas for the page, so it can turn between locations
@@ -518,7 +519,7 @@ function captionHTML() {
     }
   }
   paras.push('<p>Color shows the water temperature at the surface. Brightness shows the speed of the current.</p>');
-  const model = meta.modelLong || `NOAA ${modelShort(meta)}`;
+  const model = meta.modelLong || `${agencyOf(meta)} ${modelShort(meta)}`;
   paras.push(`<p class="data">Data: ${esc(model)} (${esc(modelShort(meta))}, model), ${esc(titleCase(meta.dates ?? ''))}. Hourly surface currents and temperature.</p>`);
   return paras.join('');
 }
@@ -565,7 +566,7 @@ async function buildAtlas() {
   const infos = await Promise.all(locs.map(async (l) => {
     const needMeta = !l.region || !(l.modelShort || l.model);
     const m = needMeta ? await metaFor(l.id) : null;
-    return { ...l, region: l.region || m?.region || 'Other waters', model: modelShort(l.modelShort ? l : (m ?? l)) };
+    return { ...l, region: l.region || m?.region || 'Other waters', model: modelShort(l.modelShort ? l : (m ?? l)), agency: agencyOf(l.agency ? l : (m ?? l)) };
   }));
   const groups = new Map();
   infos.forEach((l, i) => {
@@ -583,7 +584,7 @@ async function buildAtlas() {
       b.dataset.index = String(it.i);
       b.appendChild(thumbFor(it));
       const cap = el('span', 'a-cap');
-      cap.append(el('span', 'a-title', esc(it.title)), el('span', 'a-model mono', esc(it.model ? `NOAA ${it.model}` : '')));
+      cap.append(el('span', 'a-title', esc(it.title)), el('span', 'a-model mono', esc(it.model ? `${it.agency} ${it.model}` : '')));
       b.appendChild(cap);
       b.addEventListener('click', () => { setAtlas(false); if (it.i !== locIndex) switchTo(it.i); });
       grid.appendChild(b);
