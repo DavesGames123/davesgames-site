@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Holocloth — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   HOLOCLOTH  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A port of Holocloth by Dmitry Kurash (MIT, see LICENSE):
+   https://github.com/dmitrykurash/holocloth
+   A Verlet cloth in zero gravity with an iridescent foil material. Grab and
+   throw the cloth, put an image or an SVG on it, and export a PNG.
+
+   The upstream app is React + DialKit on Vite. This port has no build step:
+   plain ES modules, three.js 0.185.1 (the upstream version) from jsDelivr
+   through the importmap, and a plain DOM control panel.
+
+   LOAD ORDER  (order matters)
+     1. style.css   the page stylesheet
+     2. importmap   maps "three" and "three/addons/" to the CDN (inline)
+     3. main.js     type=module; builds the panel, then starts scene.js
+
+   FILES
+     main.js         panel, presets, versions, uploads   (upstream App.tsx)
+     scene.js        renderer, post chain, grab, export  (upstream scene.ts)
+     cloth.js        Verlet solver                       (upstream cloth.ts)
+     holoMaterial.js foil shader injection               (upstream holoMaterial.ts)
+     dofPass.js      depth of field pass                 (upstream dofPass.ts)
+     decals.js       UV-space image compositor           (upstream decals.ts)
+     textures.js     normal and roughness maps, and the procedural scratch
+                     bump and poster that replace the upstream JPEGs
+     bakedPose.js    the start drape                     (upstream bakedPose.ts)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     #stage     the canvas host, full screen
+     #panel     the controls. Desktop: a card at the top right, like the
+                upstream DialKit panel. Phone portrait: a bottom sheet above
+                the dock. Phone landscape: a drawer on the right edge.
+     #dock      phone only: panel button, material presets, reset
+     #credit    the upstream credit link, bottom left
+     #loader    the ring shown until the cloth is ready
+
+   GREP MAP  (main.js)
+     grep -n 'PRESET_VALUES'     the Holo / Chrome / Black Cloth bundles
+     grep -n 'function buildPanel'  the panel construction
+     grep -n 'function occlusion'   the phone framing margins
+     grep -n 'VERSIONS'          saved versions in localStorage
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Holocloth: a holographic foil cloth in zero gravity. Grab it, throw it, print an image on it, and export a PNG. A port of Holocloth by Dmitry Kurash (MIT).">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div id="stage"></div>
+
+<aside id="panel" aria-label="Holocloth controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <div class="p-head">
+    <div class="p-title">Holocloth</div>
+    <button id="panelClose" class="icon-btn" aria-label="Close controls">✕</button>
+  </div>
+  <div class="p-versions">
+    <button id="verAdd" class="icon-btn" title="Save as a new version" aria-label="Save as a new version">+</button>
+    <select id="verSelect" aria-label="Version"></select>
+    <button id="verDel" class="icon-btn" title="Delete this version" aria-label="Delete this version">−</button>
+  </div>
+  <div id="panelBody"></div>
+  <div class="p-credit">
+    <a href="https://github.com/dmitrykurash/holocloth" target="_blank" rel="noopener">Holocloth by Dmitry Kurash (MIT)</a>
+  </div>
+</aside>
+
+<button id="panelOpen" class="icon-btn" aria-label="Open controls" title="Controls">☰</button>
+
+<a id="credit" href="https://github.com/dmitrykurash/holocloth" target="_blank" rel="noopener">Holocloth by Dmitry Kurash (MIT)</a>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockPresets" class="seg">
+    <button data-preset="Holo" class="on">HOLO</button>
+    <button data-preset="Chrome">CHROME</button>
+    <button data-preset="Black Cloth">BLACK</button>
+  </div>
+  <button id="dockPoke" aria-label="Poke the cloth" title="Poke">✦</button>
+  <button id="dockReset" aria-label="Reset the cloth" title="Reset cloth">↺</button>
+</nav>
+
+<div id="hint">drag the cloth to grab it · drag space to orbit · pinch to zoom</div>
+
+<div id="loader" aria-hidden="true">
+  <svg width="72" height="72" viewBox="0 0 72 72">
+    <circle cx="36" cy="36" r="26" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="2"/>
+    <circle class="arc" cx="36" cy="36" r="26" fill="none" stroke="rgba(255,255,255,0.85)" stroke-width="2" stroke-linecap="round" stroke-dasharray="163.4" stroke-dashoffset="120" transform="rotate(-90 36 36)"/>
+  </svg>
+</div>
+
+<input id="fileDecal" type="file" accept="image/*,.svg" hidden>
+<input id="fileCloth" type="file" accept="image/*,.svg" hidden>
+<input id="fileBump" type="file" accept="image/*" hidden>
+
+<script type="importmap">
+{ "imports": {
+  "three":         "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
