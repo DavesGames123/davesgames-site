@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Tidal Currents — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   TIDAL CURRENTS  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A gallery of posters. Each poster shows one week of surface currents from
+   a NOAA operational forecast model. Fine particle trails follow the current.
+   Color shows the water temperature. Brightness shows the speed.
+
+   One poster fills the window with "contain" fit on black. There is no zoom,
+   no pan and no scroll. The control strip changes the location.
+
+   FILES
+     main.js      poster layout, overlay text, clock, controls, captions
+     engine.js    WebGPU particles and composite (no DOM text)
+     colormap.js  the temperature ramp; engine and legend use the same ramp
+     shaders/     WGSL programs that engine.js fetches at run time
+     data/<id>/   meta.json and the PNG field textures for each location
+     data/index.json  the location list, in gallery order
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌─────────────────────────── #stage (black) ───────────────────────────┐
+     │        ┌──────────── #poster (contain fit) ────────────┐             │
+     │        │ #map      WebGPU canvas, poster size          │             │
+     │        │ #overlay  labels + title/legend/brand/credit   │             │
+     │        │           blocks, scale bar, north arrow       │             │
+     │        │ #fade     black cover for the crossfade        │             │
+     │        │ #loading  small loading line                   │             │
+     │        │ #fallback message when WebGPU is not there     │             │
+     │        └────────────────────────────────────────────────┘             │
+     │   #stackA / #stackB  hold the text blocks beside or under a poster     │
+     │             that is small on a phone (stack-v / stack-h modes)        │
+     │   #caption  caption panel; a bottom sheet on a phone                  │
+     │   #controls  ‹  name  • • • • •  ›   play/pause   i                   │
+     └──────────────────────────────────────────────────────────────────────┘
+
+   GREP MAP  (main.js)
+     grep -n 'function layoutPoster'   fit mode, safe areas, canvas backing size
+     grep -n 'function placeBlocks'    move blocks between poster and stacks
+     grep -n 'function thinLabels'     hide labels that collide on a small poster
+     grep -n 'function buildOverlay'   blocks and labels from meta
+     grep -n 'function placeScale'     scale bar and north arrow corner
+     grep -n 'function switchTo'       crossfade and dataset load
+     grep -n 'function frame'          clock and render loop
+     grep -n 'const CAPTIONS'          hand-written caption per location
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A week of tidal currents in five places, drawn as fine particle trails over NOAA model data. Color is water temperature and brightness is speed.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Source+Serif+4:opsz,wght@8..60,300;8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main id="stage">
+  <div id="poster">
+    <canvas id="map" aria-label="Animated map of surface currents"></canvas>
+    <div id="overlay"></div>
+    <div id="fade"></div>
+    <div id="loading" hidden><span></span>Loading</div>
+    <div id="fallback" hidden></div>
+  </div>
+  <div id="stackA" class="stack"></div>
+  <div id="stackB" class="stack"></div>
+</main>
+
+<aside id="caption" hidden aria-live="polite">
+  <div id="capGrip" aria-hidden="true"></div>
+  <button id="capClose" type="button" aria-label="Close caption">×</button>
+  <h2 id="capTitle"></h2>
+  <div id="capBody"></div>
+</aside>
+
+<nav id="controls" aria-label="Location">
+  <button id="prev" type="button" aria-label="Previous location" title="Previous location (Left)">‹</button>
+  <div class="where">
+    <div id="locName"></div>
+    <div id="dots"></div>
+  </div>
+  <button id="next" type="button" aria-label="Next location" title="Next location (Right)">›</button>
+  <span class="sep"></span>
+  <button id="play" type="button" aria-label="Pause" title="Play / pause (Space)"></button>
+  <button id="info" type="button" aria-label="About this map" title="About this map (I)">i</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
