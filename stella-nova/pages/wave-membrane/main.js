@@ -27,8 +27,15 @@
      grep -n 'function drawLegend'   the colorbar and its numeric scale
      grep -n 'function buildNodal'   the analytic nodal-line overlay
      grep -n 'function frame'        the render loop, substeps, and camera
+     grep -n 'function occlusion'    the overlay margins that frame the camera
      grep -n 'function refreshReadout'  equation readout, energy, drift
      grep -n 'function buildUI'      the control panel construction
+     grep -n 'function setOpen'      the panel, the phone sheet, and the dock
+
+   FRAMING. The panel, the dock, and the bars cover parts of the canvas.
+   occlusion() measures them each frame. The camera then shifts its view so
+   the membrane sits in the center of the clear part, and it moves back until
+   the membrane fits there. The shift eases, so it follows a sliding panel.
    ========================================================================== */
 (() => {
   'use strict';
@@ -38,7 +45,8 @@
   const GRID = 96;          // solver nodes per side
   const CFL = 0.5;          // below the 2D limit 1/sqrt(2)
   const STEP_RATE = 110;    // solver steps per real second at c = 1, rate = 1
-  const MOB = window.matchMedia('(max-width:768px)').matches || window.matchMedia('(pointer:coarse)').matches;
+  // The phone layout. This query matches the PHONE block in style.css.
+  const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 
   // Mode limits per shape. The square needs m, n >= 1. The drum allows m = 0.
   const LIM = {
@@ -82,9 +90,8 @@
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 100);
-  const view = { theta: 0.75, phi: 1.02, R: 5.4 };
-  // A tall, narrow view needs the camera further out to show the full width.
-  view.R /= Math.min(1, (canvas.clientWidth || 1) / (canvas.clientHeight || 1));
+  const VIEW0 = { theta: 0.75, phi: 1.02 };
+  const view = { theta: VIEW0.theta, phi: VIEW0.phi, zoom: 1, R: 5.4 };
 
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -92,6 +99,37 @@
     camera.aspect = w / h; camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize);
+
+  // Overlay margins in CSS px. An overlay wider than tall (relative to the
+  // canvas) covers the top or the base. Any other overlay covers a side. An
+  // overlay counts only when it spans half of that edge or more, so a small
+  // corner box (the desktop legend) does not move the membrane.
+  const OVERLAYS = ['panel', 'dock', 'status', 'legend'].map(id => document.getElementById(id))
+    .concat([document.querySelector('.topbar')]).filter(Boolean);
+  const occ = { l: 0, r: 0, t: 0, b: 0 };
+  function occlusion(w, h) {
+    const o = { l: 0, r: 0, t: 0, b: 0 };
+    for (const el of OVERLAYS) {
+      const q = el.getBoundingClientRect();
+      const x0 = Math.max(0, q.left), x1 = Math.min(w, q.right);
+      const y0 = Math.max(0, q.top), y1 = Math.min(h, q.bottom);
+      if (x1 - x0 < 1 || y1 - y0 < 1) continue;
+      const fw = (x1 - x0) / w, fh = (y1 - y0) / h;
+      if (fw >= fh) {
+        if (fw < 0.5) continue;
+        if (y0 + y1 > h) o.b = Math.max(o.b, h - y0); else o.t = Math.max(o.t, y1);
+      } else {
+        if (fh < 0.5) continue;
+        if (x0 + x1 < w) o.l = Math.max(o.l, x1); else o.r = Math.max(o.r, w - x0);
+      }
+    }
+    return o;
+  }
+  // Camera distance that fits the membrane in the clear part. At R = 5.4 the
+  // membrane spans about 0.85 h across and 0.55 h high, with h the canvas
+  // height. The fit keeps it inside 92% of the clear width and 85% of the
+  // clear height. 5.4 is the floor, so a large screen keeps the desktop view.
+  function fitR(w, h, wV, hV) { return Math.max(5.4, 4.96 * h / wV, 3.5 * h / hV); }
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.62));
   const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(3, 5, 2); scene.add(sun);
@@ -312,6 +350,11 @@
       stepCarry -= k;
       if (k > 0) { sim.step(k); updateMesh(); }
     }
+    const w = canvas.clientWidth, h = canvas.clientHeight, o = occlusion(w, h);
+    for (const k in occ) occ[k] += (o[k] - occ[k]) * 0.18;
+    const wV = Math.max(80, w - occ.l - occ.r), hV = Math.max(80, h - occ.t - occ.b);
+    view.R = fitR(w, h, wV, hV) * view.zoom;
+    camera.setViewOffset(w, h, (occ.r - occ.l) / 2, (occ.b - occ.t) / 2, w, h);
     const st = Math.sin(view.phi), ct = Math.cos(view.phi);
     camera.position.set(view.R * st * Math.sin(view.theta), view.R * ct, view.R * st * Math.cos(view.theta));
     camera.lookAt(0, -0.15, 0);
@@ -326,7 +369,13 @@
   let pinchD = 0;
   const clampPhi = p => Math.max(0.05, Math.min(Math.PI - 0.05, p));
   function pdist() { const v = [...ptrs.values()]; return Math.hypot(v[0].x - v[1].x, v[0].y - v[1].y); }
+  // A short tap with no drag, twice within 320 ms, resets the view.
+  const ZOOM = [0.4, 2.6];
+  let tap = null, lastTap = 0;
+  const hint = document.getElementById('hint');
   canvas.addEventListener('pointerdown', e => {
+    if (hint) hint.classList.add('gone');
+    tap = ptrs.size === 0 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     try { canvas.setPointerCapture(e.pointerId); } catch (x) {}
     if (ptrs.size === 2) pinchD = pdist();
@@ -340,14 +389,22 @@
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (ptrs.size === 2) {
       const d = pdist();
-      if (pinchD > 0) view.R = Math.max(2.2, Math.min(14, view.R * pinchD / d));
+      if (pinchD > 0) view.zoom = Math.max(ZOOM[0], Math.min(ZOOM[1], view.zoom * pinchD / d));
       pinchD = d;
     }
   });
   const drop = e => { ptrs.delete(e.pointerId); if (ptrs.size < 2) pinchD = 0; try { canvas.releasePointerCapture(e.pointerId); } catch (x) {} };
-  canvas.addEventListener('pointerup', drop);
+  canvas.addEventListener('pointerup', e => {
+    const now = performance.now();
+    if (tap && ptrs.size === 1 && now - tap.t < 250 && Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 10) {
+      if (now - lastTap < 320) { view.theta = VIEW0.theta; view.phi = VIEW0.phi; view.zoom = 1; lastTap = 0; }
+      else lastTap = now;
+    }
+    tap = null;
+    drop(e);
+  });
   canvas.addEventListener('pointercancel', drop);
-  canvas.addEventListener('wheel', e => { e.preventDefault(); view.R = Math.max(2.2, Math.min(14, view.R * (1 + e.deltaY * 0.001))); }, { passive: false });
+  canvas.addEventListener('wheel', e => { e.preventDefault(); view.zoom = Math.max(ZOOM[0], Math.min(ZOOM[1], view.zoom * (1 + e.deltaY * 0.001))); }, { passive: false });
 
   // --------------------------------------------------------------- readout
   function setText(id, s) { const el = document.getElementById(id); if (el && el.textContent !== s) el.textContent = s; }
@@ -437,8 +494,15 @@
     bindRange('speed', 'speed', v => v.toFixed(2) + '×', null);
 
     const pauseBtn = document.getElementById('pauseBtn');
-    const setPaused = p => { G.paused = p; pauseBtn.textContent = p ? '▶ PLAY' : '❚❚ PAUSE'; pauseBtn.classList.toggle('on', p); };
+    const dockPlay = document.getElementById('dockPlay');
+    const setPaused = p => {
+      G.paused = p;
+      pauseBtn.textContent = p ? '▶ PLAY' : '❚❚ PAUSE'; pauseBtn.classList.toggle('on', p);
+      dockPlay.textContent = p ? '▶' : '❚❚'; dockPlay.classList.toggle('on', p);
+      dockPlay.setAttribute('aria-label', p ? 'Play' : 'Pause');
+    };
     pauseBtn.addEventListener('click', () => setPaused(!G.paused));
+    dockPlay.addEventListener('click', () => setPaused(!G.paused));
     document.getElementById('stepBtn').addEventListener('click', () => {
       setPaused(true);
       const T = TAU / sim.omega(G.m1, G.n1);
@@ -447,9 +511,11 @@
     });
     document.getElementById('resetBtn').addEventListener('click', () => { applyModes(); refreshLegendScale(); });
 
-    document.querySelectorAll('#colorModes button').forEach(b => b.addEventListener('click', () => {
+    // The panel and the phone dock each hold the three color buttons.
+    const colorBtns = document.querySelectorAll('#colorModes button, #dockColors button');
+    colorBtns.forEach(b => b.addEventListener('click', () => {
       G.color = b.dataset.mode;
-      document.querySelectorAll('#colorModes button').forEach(x => x.classList.toggle('on', x === b));
+      colorBtns.forEach(x => x.classList.toggle('on', x.dataset.mode === G.color));
       runMax = 1e-9; paint(); drawLegend(); refreshLegendScale();
     }));
     const nodalBtn = document.getElementById('nodalBtn');
@@ -460,10 +526,34 @@
       if (nodal) nodal.visible = G.nodal;
     });
 
-    const panel = document.getElementById('panel');
-    document.getElementById('gear').addEventListener('click', () => panel.classList.toggle('open'));
-    document.getElementById('panelClose').addEventListener('click', () => panel.classList.remove('open'));
-    if (MOB) panel.classList.remove('open');    // start closed on phones
+    const panel = document.getElementById('panel'), dockPanel = document.getElementById('dockPanel');
+    function setOpen(open) {
+      panel.classList.toggle('open', open);
+      if (!open) panel.classList.remove('full');
+      document.body.classList.toggle('panel-closed', !open);
+      dockPanel.classList.toggle('on', open);
+      dockPanel.setAttribute('aria-expanded', String(open));
+    }
+    const toggle = () => setOpen(!panel.classList.contains('open'));
+    document.getElementById('gear').addEventListener('click', toggle);
+    dockPanel.addEventListener('click', toggle);
+    document.getElementById('panelClose').addEventListener('click', () => setOpen(false));
+    setOpen(!PHONE_Q.matches);                  // start closed on phones
+    PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
+
+    // The grip of the phone sheet. A tap switches half and full height. A drag
+    // up gives full height. A drag down gives half height, then closes.
+    const grip = document.getElementById('sheetGrip');
+    let gripY = null;
+    grip.addEventListener('pointerdown', e => { gripY = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) {} });
+    grip.addEventListener('pointerup', e => {
+      if (gripY === null) return;
+      const dy = e.clientY - gripY; gripY = null;
+      if (Math.abs(dy) < 8) panel.classList.toggle('full');
+      else if (dy < -40) panel.classList.add('full');
+      else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setOpen(false); }
+    });
+    grip.addEventListener('pointercancel', () => { gripY = null; });
     syncSteppers();
   }
   // Bind a slider to G[key]. The after hook runs on input, not at boot,

@@ -4,6 +4,14 @@
    Dark shell, the same palette as Resonance 3D. The WebGL canvas fills the
    frame. The control panel slides in from the left. The colorbar legend sits
    at the lower right. The status bar sits at the base.
+
+   PHONE (max-width 768px, or a short landscape touch screen). A dock at the
+   base holds the panel button, the three color modes, and play. In portrait
+   the panel is a bottom sheet above the dock. In landscape it is a drawer on
+   the right edge. Every control is at least 44px high.
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      the phone block
+     grep -n 'LANDSCAPE'  the landscape overrides
    ========================================================================== */
 :root{
   --bg:#04030880; --bg2:#0c0912; --ink:#d6cfe0; --dim:#8a7a9a; --faint:#3a2a48;
@@ -26,6 +34,10 @@ body{font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;color:va
 html.in-frame .topbar{display:none}
 
 #gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+#hint{transition:opacity 0.6s}
+#hint.gone{opacity:0}
+#dock,#sheetGrip{display:none}
 #hint{
   position:fixed;left:50%;bottom:52px;transform:translateX(-50%);z-index:20;
   font-size:0.6rem;letter-spacing:0.14em;color:var(--dim);pointer-events:none;text-transform:uppercase;
@@ -104,6 +116,9 @@ html.in-frame #panel{padding-top:24px}
 @media(min-width:769px){
   #status{left:var(--panel-w)}
   .topbar{padding-left:calc(var(--panel-w) + 20px)}
+  body.panel-closed #gear{display:block}
+  body.panel-closed #status{left:0}
+  body.panel-closed .topbar{padding-left:68px}
 }
 
 #legend{
@@ -116,19 +131,109 @@ html.in-frame #panel{padding-top:24px}
 #lgBar{display:block;width:180px;height:10px;border-radius:2px}
 .lg-ticks{display:flex;justify-content:space-between;font-size:0.58rem;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}
 
-@media(max-width:768px){
-  #panel{width:min(90vw,320px);transform:translateX(-100%);padding:20px 18px 28px}
+/* TOUCH. Any touch screen or narrow window, phone or tablet: every target is
+   44px or more, and all text is 11px or more. The layout does not change. */
+@media (pointer:coarse), (max-width:768px){
+  :root{--panel-w:320px}
+  #panelClose{width:44px;height:44px}
+  .lg-title,.lg-ticks{font-size:0.72rem}
+  #status{font-size:0.72rem}
+  #hint{font-size:0.7rem}
+  .sec-label{font-size:0.7rem;margin:22px 0 10px}
+  .stepper{padding-bottom:18px}
+  .stepper button{width:44px;height:44px;font-size:1.3rem;border-radius:10px}
+  .stepper .num{min-width:34px;font-size:1.55rem}
+  .axis-tag{font-size:0.7rem}
+  .modes button,.presets button{min-height:46px;font-size:0.74rem;border-radius:10px}
+  .row{min-height:44px;margin:4px 0}
+  .row label{flex:0 0 80px;font-size:0.76rem}
+  .row .val{flex:0 0 54px;font-size:0.76rem}
+  .hint{font-size:0.74rem}
+  .eq .katex{font-size:1.08rem}
+  .readout{font-size:0.76rem}
+  .readout td{padding:7px 0}
+  .about p{font-size:0.82rem;line-height:1.65}
+  .row input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
+  .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--warm);border:3px solid #1a1320;box-shadow:0 0 0 1px var(--warm)}
+  .row input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--warm);border:3px solid #1a1320}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--dock-h:calc(64px + env(safe-area-inset-bottom))}
+  .topbar{height:calc(48px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
+  .brand{font-size:1.05rem;letter-spacing:0.18em}
+  .sys,.pagetitle{display:none}
+  #gear,body.panel-closed #gear{display:none}
+
+  #dock{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(9,8,14,0.94);border-top:1px solid var(--line-b);backdrop-filter:blur(8px);
+  }
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
+  #dock > button.on{border-color:var(--warm);color:var(--warm)}
+  .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
+  .seg button{flex:1;min-width:0;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim);font-family:inherit;font-size:0.72rem;letter-spacing:0.04em;cursor:pointer}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:rgba(252,163,94,0.14);color:var(--warm)}
+
+  #status{left:0;right:0;bottom:var(--dock-h);max-width:none;gap:10px;padding:6px calc(14px + env(safe-area-inset-right)) 6px calc(14px + env(safe-area-inset-left));white-space:nowrap;overflow:hidden}
+  #status span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  /* The legend is a slim strip under the topbar, so it never covers the
+     membrane. main.js counts it as an overlay when it frames the camera. */
+  #legend{
+    left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));top:calc(50px + env(safe-area-inset-top));bottom:auto;
+    display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:center;padding:6px 10px;
+  }
+  html.in-frame #legend{top:8px}
+  .lg-title{grid-row:1 / 3;margin:0;white-space:nowrap}
+  #lgBar{grid-column:2;width:100%;height:8px}
+  .lg-ticks{grid-column:2;margin-top:3px}
+  #hint{bottom:auto;top:calc(100px + env(safe-area-inset-top));left:16px;right:16px;transform:none;text-align:center;line-height:1.6}
+  html.in-frame #hint{top:58px}
+  body:not(.panel-closed) #hint{opacity:0}
+
+  /* The panel is a bottom sheet above the dock. */
+  #panel{
+    top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;
+    height:min(48vh,520px);height:min(48dvh,520px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(18px + env(safe-area-inset-right)) 24px calc(18px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  }
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  html.in-frame #panel{padding-top:0}
+  #panelClose{display:none}
+  #sheetGrip{
+    display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -18px 0;
+    background:linear-gradient(180deg,rgba(12,15,22,1) 65%,rgba(12,15,22,0));touch-action:none;cursor:grab;
+  }
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right edge. The dock is a
+   tab at the lower left. The topbar and the status bar are hidden, because
+   the readout in the panel shows the same values. */
+@media (max-height:500px) and (orientation:landscape){
+  .topbar,#status{display:none}
+  #hint{top:10px;left:25%;right:25%}
+  #legend,html.in-frame #legend{display:block;top:10px;right:auto;left:calc(10px + env(safe-area-inset-left))}
+  #lgBar{width:130px;height:10px}
+  .lg-ticks{margin-top:4px}
+  #dock{right:auto;width:min(440px,56vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel,#panel.full{
+    top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;
+    border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 20px 16px;
+    transform:translateX(100%);
+  }
   #panel.open{transform:translateX(0)}
-  #gear{display:block;width:46px;height:46px;font-size:1.25rem}
-  #status{max-width:100%;font-size:0.62rem;padding:8px 14px}
-  .pagetitle{display:none}
-  #hint{bottom:44px}
-  .stepper button{width:34px;height:36px;font-size:1.15rem}
-  .stepper .num{font-size:1.5rem}
-  .presets button{padding:12px 4px;font-size:0.72rem}
-  .row input[type=range]{height:22px}
-  .modes button{padding:14px 4px}
-  #legend{right:10px;bottom:auto;top:12px}
-  html:not(.in-frame) #legend{top:60px}
-  #lgBar{width:130px}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;width:44px;height:44px;z-index:2;background:var(--bg2)}
 }

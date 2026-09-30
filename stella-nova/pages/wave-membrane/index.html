@@ -43,6 +43,15 @@
      │ #status  mode · omega · period                                     │
      └──────────────────────────────────────────────────────────────────┘
 
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock      fixed at the base: #dockPanel opens the panel, #dockColors
+                picks the color mode, #dockPlay pauses. All are one tap.
+     #panel     portrait: a bottom sheet above the dock. #sheetGrip toggles
+                half and full height, and a drag down closes the sheet.
+                landscape: a drawer on the right edge.
+     main.js measures the panel, the dock, and the bars each frame, and
+     centers the membrane in the part of the canvas that stays clear.
+
    GREP MAP  (main.js)
      grep -n 'function buildMesh'    the membrane geometry for each shape
      grep -n 'function paint'        per-vertex color for each color mode
@@ -69,7 +78,7 @@
 </div>
 
 <canvas id="gl"></canvas>
-<div id="hint">drag to orbit · pinch or scroll to zoom</div>
+<div id="hint">drag to orbit · pinch or scroll to zoom · double-tap to reset</div>
 <button id="gear" aria-label="Controls">⚙</button>
 
 <div id="legend">
@@ -79,6 +88,7 @@
 </div>
 
 <div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" aria-label="Close controls">✕</button>
 
   <div class="sec-label">SHAPE</div>
@@ -152,6 +162,16 @@
   <span id="stMain" class="fn"></span>
   <span class="right" id="stRight"></span>
 </div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockColors" class="seg">
+    <button data-mode="height" class="on">HEIGHT</button>
+    <button data-mode="accmag">|ACCEL|</button>
+    <button data-mode="accsgn">± ACCEL</button>
+  </div>
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+</nav>
 
 <!-- three.js r128 first (defines global THREE), then the solver, the equations, and main.js. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
