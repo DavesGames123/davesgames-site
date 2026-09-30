@@ -1,0 +1,39 @@
+# Build and deploy the site to GitHub Pages.
+# The site is the repository as it is, plus the leo-catalog TLE snapshot that
+# tle-snapshot.sh writes. The schedule refreshes the snapshot every 2 h, so
+# visitors load the TLE data from this site and not from CelesTrak.
+# Requires Settings > Pages > Source = "GitHub Actions".
+name: pages
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write leo-catalog TLE snapshot
+        run: bash stella-nova/pages/leo-catalog/tools/tle-snapshot.sh
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
