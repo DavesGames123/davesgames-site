@@ -70,5 +70,17 @@
   "title": "Tampa Bay",
   "region": "Gulf of Mexico",
   "aspect": 1.147
+ },
+ {
+  "id": "new-york-harbor",
+  "title": "New York Harbor",
+  "region": "Mid-Atlantic",
+  "aspect": 1.0732
+ },
+ {
+  "id": "dublin-bay",
+  "title": "Dublin Bay",
+  "region": "Ireland",
+  "aspect": 1.4926
  }
 ]
