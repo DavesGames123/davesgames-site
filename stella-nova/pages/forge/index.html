@@ -55,7 +55,7 @@
     </select>
   </div>
   <div class="ctrl-group"><span class="ctrl-label">Temp</span>
-    <select id="m-sel-temp" style="width:64px" onchange="document.getElementById('sel-temp').value=this.value">
+    <select id="m-sel-temp" onchange="document.getElementById('sel-temp').value=this.value">
       <option value="0">Hot</option><option value="1">Warm</option><option value="2" selected>Comfort</option><option value="3">Cool</option><option value="4">Cold</option>
     </select>
   </div>
@@ -132,7 +132,7 @@
 <div id="main">
   <div id="viewport">
     <div id="three-mount"></div>
-    <div id="empty-state"><div class="empty-icon">🪐</div><div class="empty-title">select parameters and generate</div><div class="empty-desc">albedo · depth · normal · specular · emissive</div></div>
+    <div id="empty-state"><div class="empty-title">select parameters and generate</div><div class="empty-desc">albedo · depth · normal · specular · emissive</div></div>
     <button id="mob-sidebar-btn" onclick="document.getElementById('sidebar').classList.toggle('open');this.textContent=document.getElementById('sidebar').classList.contains('open')?'✕ Close':'Maps ▸'">Maps ▸</button>
   </div>
   <div id="sidebar">

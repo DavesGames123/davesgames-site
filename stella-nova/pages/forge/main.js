@@ -40,6 +40,8 @@
 //      generators ......... "GENERATORS"         GEN[type](u,v,temp) per texel
 //      map build .......... "MAP BUILD"          normals, float→canvas, generate
 //      three scene ........ "THREE.JS SCENE"     renderer, sphere, stars, sun
+//      placeholder globe .. "const holo"         wire rings before first planet
+//      framing ............ "function fitCam"    fit planet to the clear viewport
 //      controls ........... "// CONTROLS"        orbit, zoom, sun, toggles
 //      sidebar ............ "// SIDEBAR"         map switch, download, generate
 //      batch .............. "BATCH GENERATION"   queue → ZIP of many planets
@@ -373,7 +375,7 @@ async function generate(type,temp,seed,width,prog){
 // reads against space. Mounted inside #three-mount, sized to that element.
 const mount=document.getElementById('three-mount');
 const ren=new THREE.WebGLRenderer({antialias:true});
-ren.setSize(mount.clientWidth,mount.clientHeight);
+ren.setSize(mount.clientWidth||1,mount.clientHeight||1);
 ren.setPixelRatio(Math.min(window.devicePixelRatio,2));
 ren.setClearColor(new THREE.Color('#0a0d14'));
 ren.toneMapping=THREE.ACESFilmicToneMapping;
@@ -389,7 +391,7 @@ cam.position.z=3;
 // Planet mesh. A high-tessellation sphere with a standard PBR material; setAct()
 // swaps in the generated albedo / normal / roughness / emissive maps.
 const pgeo=new THREE.SphereGeometry(1,256,128);
-const pmat=new THREE.MeshStandardMaterial({color:0x1c2436,roughness:.9,metalness:0});
+const pmat=new THREE.MeshStandardMaterial({color:0x05070c,roughness:.9,metalness:0});
 const pmsh=new THREE.Mesh(pgeo,pmat);scn.add(pmsh);
 
 // Atmosphere shell: a slightly larger sphere drawn additively with the fresnel
@@ -408,6 +410,19 @@ const amat=new THREE.ShaderMaterial({
   transparent:true,depthWrite:false,side:THREE.FrontSide,blending:THREE.AdditiveBlending,
 });
 const amsh=new THREE.Mesh(ageo,amat);amsh.visible=false;scn.add(amsh);
+
+// Placeholder globe: lat/lon wire rings drawn additively over the dark planet
+// sphere until the first planet exists. The sphere hides the far-side rings.
+const holo=(()=>{
+  const v=[],N=96,seg=(a,b)=>v.push(a[0],a[1],a[2],b[0],b[1],b[2]),R=1.004;
+  for(let la=-75;la<=75;la+=15){const t=la*PI/180,y=Math.sin(t)*R,r=Math.cos(t)*R;
+    for(let i=0;i<N;i++){const a0=i/N*TAU,a1=(i+1)/N*TAU;seg([r*Math.cos(a0),y,r*Math.sin(a0)],[r*Math.cos(a1),y,r*Math.sin(a1)])}}
+  for(let lo=0;lo<180;lo+=15){const p=lo*PI/180,c=Math.cos(p)*R,s=Math.sin(p)*R;
+    for(let i=0;i<N;i++){const a0=i/N*TAU,a1=(i+1)/N*TAU;seg([c*Math.sin(a0),Math.cos(a0)*R,s*Math.sin(a0)],[c*Math.sin(a1),Math.cos(a1)*R,s*Math.sin(a1)])}}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(v,3));
+  const m=new THREE.LineBasicMaterial({color:0x96c8ff,transparent:true,opacity:.3,blending:THREE.AdditiveBlending,depthWrite:false});
+  const l=new THREE.LineSegments(g,m);scn.add(l);return l;
+})();
 
 // Lighting: a faint blue ambient fill plus a warm directional sun; the sun is
 // the key light whose angle the sliders control.
@@ -434,11 +449,43 @@ updSun();
 // Drag state: d=dragging, lx/ly=last pointer, rx/ry=planet rotation. When not
 // dragging the planet spins slowly on its own.
 const dr={d:false,lx:0,ly:0,rx:.2,ry:0};
-// Render loop: idle auto-spin, apply rotation to planet and atmosphere, draw.
-function anim(){requestAnimationFrame(anim);if(!dr.d)dr.ry+=.0008;pmsh.rotation.x=dr.rx;pmsh.rotation.y=dr.ry;amsh.rotation.x=dr.rx;amsh.rotation.y=dr.ry;ren.render(scn,cam)}
+// FRAMING. fitCam() moves the camera back until the planet (radius RFIT with
+// the atmosphere) fills FILL of the clear part of the viewport. On phones the
+// Maps sheet and the button dock cover the bottom, so occ() measures them and
+// the view shifts up to centre the planet in the clear part. zoom is the wheel
+// and pinch multiplier. The distance and the shift ease, so they follow the
+// sliding sheet.
+const PHONE_Q=window.matchMedia('(max-width:768px)');
+const FILL=.72,RFIT=1.06,DOCK_H=64;
+let zoom=1,offY=0;
+function occ(){
+  const o={t:0,b:0};if(!PHONE_Q.matches)return o;
+  const vr=mount.getBoundingClientRect(),sb=document.getElementById('sidebar').getBoundingClientRect();
+  if(sb.top<vr.bottom-1&&sb.width>vr.width*.5)o.b=vr.bottom-sb.top;
+  o.b=Math.max(o.b,DOCK_H);
+  return o;
+}
+function fitCam(snap){
+  const w=mount.clientWidth,h=mount.clientHeight;if(!w||!h)return;
+  const o=occ(),ch=Math.max(120,h-o.t-o.b);
+  const fpx=(h/2)/Math.tan(cam.fov*PI/360);
+  const a=Math.atan(FILL*Math.min(w,ch)/2/fpx);
+  const d=Math.max(1.3,RFIT/Math.sin(a)*zoom),k=snap?1:.18;
+  cam.position.z+=(d-cam.position.z)*k;
+  offY+=((o.b-o.t)/2-offY)*k;
+  cam.setViewOffset(w,h,0,offY,w,h);
+}
+// Keep the renderer and camera aspect matched to the mount element. A
+// ResizeObserver catches layout changes that are not window resizes (for
+// example the batch panel or a wrapped toolbar row).
+function resize(){const w=mount.clientWidth,h=mount.clientHeight;if(!w||!h)return;cam.aspect=w/h;cam.updateProjectionMatrix();ren.setSize(w,h);fitCam(true)}
+new ResizeObserver(resize).observe(mount);
+resize();
+
+// Render loop: idle auto-spin, apply rotation to planet, atmosphere and the
+// placeholder globe, frame the camera, draw.
+function anim(){requestAnimationFrame(anim);if(!dr.d)dr.ry+=.0008;for(const m of [pmsh,amsh,holo]){m.rotation.x=dr.rx;m.rotation.y=dr.ry}fitCam(false);ren.render(scn,cam)}
 anim();
-// Keep the camera aspect and renderer size matched to the mount element.
-window.addEventListener('resize',()=>{const w=mount.clientWidth,h=mount.clientHeight;cam.aspect=w/h;cam.updateProjectionMatrix();ren.setSize(w,h)});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONTROLS
@@ -446,11 +493,14 @@ window.addEventListener('resize',()=>{const w=mount.clientWidth,h=mount.clientHe
 // Viewport pointer + wheel: drag rotates the planet (pitch clamped), wheel zooms
 // the camera along Z within limits.
 const vp=document.getElementById('viewport');
-vp.addEventListener('pointerdown',e=>{dr.d=true;dr.lx=e.clientX;dr.ly=e.clientY});
-vp.addEventListener('pointermove',e=>{if(!dr.d)return;dr.ry+=(e.clientX-dr.lx)*.005;dr.rx+=(e.clientY-dr.ly)*.005;dr.rx=Math.max(-1.4,Math.min(1.4,dr.rx));dr.lx=e.clientX;dr.ly=e.clientY});
-vp.addEventListener('pointerup',()=>{dr.d=false});
-vp.addEventListener('pointerleave',()=>{dr.d=false});
-vp.addEventListener('wheel',e=>{e.preventDefault();cam.position.z=cl(cam.position.z+e.deltaY*.003,1.5,8)},{passive:false});
+// Two touch points pinch the zoom multiplier; one drags the rotation.
+const pts=new Map();let pinch0=0,zoom0=1;
+const pdist=()=>{const [a,b]=[...pts.values()];return Math.hypot(a.x-b.x,a.y-b.y)};
+vp.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2){pinch0=pdist();zoom0=zoom;dr.d=false;return}dr.d=true;dr.lx=e.clientX;dr.ly=e.clientY});
+vp.addEventListener('pointermove',e=>{if(pts.has(e.pointerId))pts.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pts.size===2&&pinch0){zoom=cl(zoom0*pinch0/Math.max(1,pdist()),.45,2.5);return}if(!dr.d)return;dr.ry+=(e.clientX-dr.lx)*.005;dr.rx+=(e.clientY-dr.ly)*.005;dr.rx=Math.max(-1.4,Math.min(1.4,dr.rx));dr.lx=e.clientX;dr.ly=e.clientY});
+const pend=e=>{pts.delete(e.pointerId);if(pts.size<2)pinch0=0;dr.d=false};
+vp.addEventListener('pointerup',pend);vp.addEventListener('pointercancel',pend);vp.addEventListener('pointerleave',pend);
+vp.addEventListener('wheel',e=>{e.preventDefault();zoom=cl(zoom*Math.exp(e.deltaY*.0015),.45,2.5)},{passive:false});
 
 // Sun angle sliders (degrees → radians), each re-derives the sun direction.
 document.getElementById('rng-phi').oninput=function(){sunPhi=+this.value*PI/180;updSun()};
@@ -525,7 +575,7 @@ function setAct(name){
     pmat.map=curMaps[name]?c2t(curMaps[name]):null;
     if(pmat.map)pmat.map.colorSpace=THREE.SRGBColorSpace;
     pmat.normalMap=null;pmat.roughnessMap=null;pmat.emissiveMap=null;pmat.emissive=new THREE.Color(0);pmat.roughness=.9;pmat.metalness=0;
-    pmat.color=new THREE.Color(curMaps[name]?0xffffff:0x1c2436);
+    pmat.color=new THREE.Color(curMaps[name]?0xffffff:0x05070c);
     amsh.visible=false;
   }
   pmat.needsUpdate=true;
@@ -570,6 +620,7 @@ document.getElementById('btn-gen').onclick=async function(){
   amat.uniforms.uIntensity.value=(type==='selena'?.3:type==='desert'?.5:1.0);
   amat.uniforms.uPow.value=(type==='gas_giant'||type==='ice_giant')?2.2:3.2;
 
+  holo.visible=false;
   setAct('render');
   document.getElementById('prog-wrap').style.display='none';
   this.disabled=false;this.textContent='▶ Generate';
