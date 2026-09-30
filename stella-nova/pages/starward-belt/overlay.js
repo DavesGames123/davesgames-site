@@ -1,25 +1,36 @@
-// overlay.js — the SVG layer: approach rings, routes, cost tags, stations,
-// labels and the hit targets. Reads data.js and icons.js. No GPU.
+// overlay.js — the SVG layer: approach rings, routes, traffic, cost tags,
+// stations, labels and the hit targets. Reads a map object (contract M in
+// data.js) and icons.js. No GPU.
 //
-// createOverlay() builds every element once. update(view) then moves them
-// for a new camera view without new elements, and setState() only sets
-// classes and opacity, so CSS transitions do the fades.
+// createOverlay(svg, map, handlers) builds every element once. update(view)
+// then moves them for a new camera view without new elements, and
+// setState() only sets classes and opacity, so CSS transitions do the fades.
+// setMap(map) removes every element of the old map (the hit listeners go
+// with their elements) and builds the new map.
 //
 // Two coordinate spaces:
 //   world group  the dashed approach rings. One transform per frame, plus
 //                stroke width and dash on the group so both stay constant
 //                in CSS px.
-//   screen       routes, tags, stations, labels, hits. update() writes the
-//                route paths in CSS px (the route ends stop at the station
-//                edge, which depends on zoom) and one translate/scale per
-//                size-kept element.
+//   screen       routes, traffic, tags, stations, labels, hits. update()
+//                writes the route paths in CSS px (the route ends stop at
+//                the station edge, which depends on zoom) and one
+//                translate/scale per size-kept element.
 // Size-kept elements scale by sizeScale(): constant at fit, and they grow
-// gently when the camera zooms in.
+// gently when the camera zooms in. view.fit (camera.js) gives the fit zoom.
 //
-// grep: function createOverlay  function buildStation  function buildHub
-//       function sizeScale  function placeTag  function routeGeom  extent(  update(  setState(  STYLE
+// Animate mode (setState({ animate: true })): small ship marks travel along
+// the routes and fade out inside the approach rings, the ring dashes turn
+// and the hub hatch band turns. A frame loop in this file moves them with
+// transforms and opacity only. The clock is handlers.clock (s), or
+// performance.now. With prefers-reduced-motion the motion runs at REDUCED.
+//
+// grep: function createOverlay  function buildScene  function buildStation
+//       function buildHub  function buildTraffic  function sizeScale
+//       function placeTag  function routeGeom  function tick  extent(
+//       update(  setState(  setMap(  STYLE  SHIP_  RING_SPIN  HUB_SPIN
 
-import { NODES, ROUTES, NODE_BY_ID, TIER_BY_ID } from './data.js';
+import { indexMap } from './data.js';
 import { ICONS, ICON_VIEW_R } from './icons.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -34,6 +45,16 @@ const TAG_H = 15;           // tag box height, CSS px at fit
 const LABEL_FS = 9.5;       // label font size, CSS px at fit
 const LABEL_LS = 0.5;       // label letter gap, em
 const HIT_R = 26;           // hit circle radius, CSS px at fit
+
+// Animate mode.
+const SHIP_V = 24;          // ship speed, world units per s
+const SHIP_PAIR = 300;      // a route this long (world units) or longer gets two ships
+const SHIP_D = 'M4.8,0L-3.4,-3.7L-1.5,0L-3.4,3.7Z';   // dart, nose at +x, CSS px at fit
+const SHIP_OP = 0.8;        // ship opacity on a plain route
+const RING_SPIN = 3;        // ring dash travel, CSS px per s
+const HUB_SPIN = 1.2;       // hub hatch band turn, degrees per s
+const REDUCED = 0.06;       // motion rate under prefers-reduced-motion
+const FADE_MS = 600;        // traffic fade in and out
 
 // Keyframes, transitions and state rules. Every selector has the sb- prefix.
 const STYLE = `
@@ -50,20 +71,28 @@ const STYLE = `
 .sb-node.sb-picked .sb-sel { opacity: 1; }
 .sb-node.sb-picked .sb-pulse { animation: sb-pulse 1.6s ease-out infinite; }
 .sb-pulse { opacity: 0; transform-box: fill-box; transform-origin: center; }
+.sb-traffic { opacity: 0; transition: opacity ${FADE_MS}ms ease; }
+.sb-traffic.sb-live { opacity: 1; }
+.sb-ship { transition: opacity 180ms ease; }
 @keyframes sb-spin { to { transform: rotate(360deg); } }
 @keyframes sb-flow { to { stroke-dashoffset: -30; } }
 @keyframes sb-pulse {
   0%   { transform: scale(1);   opacity: 0.9; }
   100% { transform: scale(2.2); opacity: 0; }
 }
+@media (prefers-reduced-motion: reduce) {
+  .sb-ring { animation-duration: 2400s; }
+  .sb-route.sb-on { animation-duration: 9s; }
+}
 `;
 
 // Scale of the size-kept elements. It is sqrt(zoom / fit), so they grow
 // gently when the camera zooms in. On a screen whose fit zoom is below the
-// 1400 x 900 desktop fit (0.514), the chart is smaller, so they shrink a
-// little too, down to 0.86.
-function sizeScale(zoom, w, h) {
-  const fit = Math.min(w / 900, h / 1750);
+// 1400 x 900 desktop fit of the canon map (0.514), the chart is smaller, so
+// they shrink a little too, down to 0.86.
+function sizeScale(view) {
+  const { zoom, w, h } = view;
+  const fit = view.fit || Math.min(w / 900, h / 1750);
   const base = Math.min(1, Math.max(0.86, Math.sqrt(fit / 0.514)));
   return base * Math.sqrt(Math.max(1, zoom / fit));
 }
@@ -76,9 +105,9 @@ function el(tag, attrs, parent) {
 }
 
 // A glyph from icons.js, scaled so its radius ICON_VIEW_R becomes r.
-function glyph(id, r, parent) {
+function glyph(icon, r, parent) {
   const g = el('g', { transform: `scale(${(r / ICON_VIEW_R).toFixed(4)})`, color: INK }, parent);
-  g.innerHTML = ICONS[id] || '';
+  g.innerHTML = ICONS[icon] || '';
   return g;
 }
 
@@ -90,11 +119,13 @@ function buildStation(n, g) {
   el('circle', { class: 'sb-edge', r: 16.9, fill: 'none', stroke: '#8a8a8a', 'stroke-width': 1.1, style: 'transition: stroke 180ms ease' }, g);
   el('circle', { r: 13.7, fill: 'none', stroke: '#f2f2f2', 'stroke-width': 1.7 }, g);
   el('circle', { r: 10.6, fill: '#f2f2f2' }, g);
-  glyph(n.id, 7.6, g);
+  glyph(n.icon, 7.6, g);
+  return null;
 }
 
 // Large hub ('l', Darkside): concentric thin rings, a band of short slanted
 // ticks between two rings, and a white core with the hex-cluster glyph.
+// Returns the band, which turns in animate mode.
 function buildHub(n, g) {
   el('circle', { r: 31, fill: INK }, g);
   el('circle', { class: 'sb-halo sb-fade', r: 34.5, fill: 'none', stroke: '#fff', 'stroke-width': 1, opacity: 0 }, g);
@@ -109,13 +140,14 @@ function buildHub(n, g) {
     d += `M${(r0 * Math.cos(a)).toFixed(2)},${(r0 * Math.sin(a)).toFixed(2)}` +
          `L${(r1 * Math.cos(b)).toFixed(2)},${(r1 * Math.sin(b)).toFixed(2)}`;
   }
-  el('path', { d, stroke: '#e2e2e2', 'stroke-width': 1.9, 'stroke-linecap': 'butt', fill: 'none' }, g);
+  const band = el('path', { d, stroke: '#e2e2e2', 'stroke-width': 1.9, 'stroke-linecap': 'butt', fill: 'none' }, g);
   for (const [r, w, c] of [[20.8, 1.1, '#d0d0d0'], [17, 0.8, '#a8a8a8'], [13.4, 0.8, '#bdbdbd']]) {
     el('circle', { r, fill: 'none', stroke: c, 'stroke-width': w }, g);
   }
   el('circle', { r: 10.4, fill: 'none', stroke: '#f2f2f2', 'stroke-width': 1.2 }, g);
   el('circle', { r: 8.6, fill: '#f2f2f2' }, g);
-  glyph(n.id, 7.2, g);
+  glyph(n.icon, 7.2, g);
+  return band;
 }
 
 // Screen geometry of one route: its end points, trimmed to the station edge,
@@ -140,103 +172,160 @@ function routeGeom(r, a, b, ra, rb) {
   return { at, t0, t1, L, ux: dx / L, uy: dy / L, bend };
 }
 
-export function createOverlay(svg, { onHover = () => {}, onPick = () => {} } = {}) {
+// A small stable hash of a route index, 0..1, for ship phases.
+function hash01(i, k) {
+  const s = Math.sin(i * 127.1 + k * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+// Ships of one route: one ship on a short route, one each way on a long
+// route. dir0 is the direction without a plotted course, +1 = from -> to.
+function buildTraffic(r, i, A, B, color, parent) {
+  const len = Math.hypot(B.x - A.x, B.y - A.y) || 1;
+  const two = len >= SHIP_PAIR;
+  const out = [];
+  const n = two ? 2 : 1;
+  for (let j = 0; j < n; j++) {
+    const g = el('g', { class: 'sb-ship', opacity: 0 }, null);
+    el('path', {
+      d: SHIP_D, fill: color, stroke: INK, 'stroke-width': 1.8,
+      'stroke-linejoin': 'round', 'paint-order': 'stroke',
+    }, g);
+    parent.appendChild(g);
+    const dir0 = two ? (j ? -1 : 1) : (hash01(i, 3) < 0.5 ? 1 : -1);
+    out.push({ g, dir0, dir: dir0, phase: hash01(i, j + 1) * 0.5 + j * 0.5 });
+  }
+  return { len, ships: out };
+}
+
+export function createOverlay(svg, map, { onHover = () => {}, onPick = () => {}, clock = null } = {}) {
   svg.textContent = '';
   svg.setAttribute('overflow', 'hidden');
   const style = el('style', {}, svg);
   style.textContent = STYLE;
 
-  const gWorld = el('g', { class: 'sb-world', 'pointer-events': 'none' }, svg);
-  const gRings = el('g', { fill: 'none', stroke: GREY, 'stroke-linecap': 'butt' }, gWorld);
-  const gRoutes = el('g', { fill: 'none', 'stroke-linecap': 'round', 'pointer-events': 'none' }, svg);
-  const gTags = el('g', { 'pointer-events': 'none' }, svg);
-  const gNodes = el('g', { 'pointer-events': 'none' }, svg);
-  const gLabels = el('g', { 'pointer-events': 'none' }, svg);
-  const gHits = el('g', {}, svg);
+  const now = clock || (() => performance.now() / 1000);
+  const reduce = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
 
-  // Per node: approach ring, station group, label, hit circle.
-  const nodes = NODES.map(n => {
-    const ringCore = el('circle', { class: 'sb-ringcore', cx: n.x, cy: n.y, r: n.ring, stroke: '#fff', 'stroke-dasharray': 'none', opacity: 0 }, gRings);
-    const ring = el('circle', { class: 'sb-ring', cx: n.x, cy: n.y, r: n.ring }, gRings);
-    const g = el('g', { class: 'sb-node sb-fade' }, gNodes);
-    const inner = el('g', {}, g);
-    // Selection marks sit under the station body.
-    const R = OUTER[n.size] || OUTER.m;
-    el('circle', { class: 'sb-sel', r: R + 3.5, fill: 'none', stroke: '#fff', 'stroke-width': 1.4, style: 'transition: opacity 180ms ease' }, inner);
-    el('circle', { class: 'sb-pulse', r: R + 3.5, fill: 'none', stroke: '#fff', 'stroke-width': 1.2 }, inner);
-    (n.size === 'l' ? buildHub : buildStation)(n, inner);
-
-    // The label box centre sits at (dx, dy) CSS px from the station at fit.
-    // The offset scales with k, the same as the station, so the label keeps
-    // its place in the gaps between the routes at every zoom.
-    const label = el('text', {
-      class: 'sb-label',
-      'text-anchor': 'middle', 'dominant-baseline': 'central',
-      'font-family': FONT, 'font-weight': 500, 'font-size': LABEL_FS,
-      'letter-spacing': `${LABEL_LS}em`, fill: '#e8e8e8', opacity: 0.88,
-      stroke: INK, 'stroke-width': 3, 'stroke-linejoin': 'round', 'paint-order': 'stroke',
-      // The text carries one trailing letter gap. Move half of it back.
-      dx: `${LABEL_LS / 2}em`,
-    }, gLabels);
-    label.textContent = n.name.toUpperCase();
-
-    const hit = el('circle', { r: HIT_R, fill: 'transparent', 'pointer-events': 'all', style: 'cursor: pointer' }, gHits);
-    hit.addEventListener('pointerenter', () => onHover(n.id));
-    hit.addEventListener('pointerleave', () => onHover(null));
-    hit.addEventListener('click', ev => { ev.stopPropagation(); onPick(n.id); });
-
-    // Label half size at fit, CSS px. The font load below measures the width.
-    const lw = n.name.length * LABEL_FS * 0.55, lh = LABEL_FS * 0.6;
-    return { n, R, ring, ringCore, g, label, hit, sx: 0, sy: 0, lx: 0, ly: 0, lw, lh };
-  });
-  const nodeIndex = Object.fromEntries(nodes.map((o, i) => [o.n.id, i]));
-
-  // Per route: path, tag box and tag text.
-  const routes = ROUTES.map((r, i) => {
-    const color = (TIER_BY_ID[r.tier] || TIER_BY_ID.none).color;
-    const path = el('path', { class: 'sb-route sb-fade', stroke: color, 'stroke-width': 1.3 }, gRoutes);
-    const tag = el('g', { class: 'sb-fade' }, gTags);
-    const w = String(r.cost).length + 1;
-    const w0 = w * TAG_FS * 0.58 + 6;
-    const box = el('rect', { x: -w0 / 2, y: -TAG_H / 2, width: w0, height: TAG_H, fill: INK, stroke: color, 'stroke-width': 1.2 }, tag);
-    const t = el('text', {
-      'text-anchor': 'middle', 'dominant-baseline': 'central', y: 0.5,
-      'font-family': FONT, 'font-weight': 400, 'font-size': TAG_FS, fill: color,
-    }, tag);
-    t.textContent = `-${r.cost}`;
-    return { r, i, path, tag, box, text: t, w: w0, a: nodeIndex[r.from], b: nodeIndex[r.to] };
-  });
-
-  // After the font loads, fit each tag box to its measured text once.
-  if (document.fonts && document.fonts.ready) {
-    document.fonts.ready.then(() => {
-      for (const o of routes) {
-        let tw = 0;
-        try { tw = o.text.getComputedTextLength(); } catch { /* not rendered yet */ }
-        if (tw > 0) {
-          o.w = tw + 6;
-          o.box.setAttribute('x', (-o.w / 2).toFixed(2));
-          o.box.setAttribute('width', o.w.toFixed(2));
-        }
-      }
-      for (const o of nodes) {
-        try {
-          const b = o.label.getBBox();
-          // The box holds one trailing letter gap. Leave it out.
-          if (b.width > 0) o.lw = (b.width - LABEL_FS * LABEL_LS) / 2 + 1;
-        } catch { /* not rendered yet */ }
-      }
-      if (last) api.update(last);
-    });
-  }
-
-  let last = null;
+  let sc = null;              // the scene of the current map
+  let gen = 0;                // build count, so a late font callback of an old map does nothing
+  let last = null;            // the last view
+  let lastState = {};
   let sizeW = -1, sizeH = -1;
 
+  // Animate mode clock. travel is motion time: it stops when animate is off
+  // and runs slow under prefers-reduced-motion.
+  let animate = false, raf = 0, clockAt = null, travel = 0, offAt = 0;
+
+  // ── scene ────────────────────────────────────────────────────────────────
+  function buildScene(m) {
+    const M = m.NODE_BY_ID && m.TIER_BY_ID ? m : indexMap(m);
+    const { NODES, ROUTES, TIER_BY_ID } = M;
+    const my = ++gen;
+
+    const gWorld = el('g', { class: 'sb-world', 'pointer-events': 'none' }, svg);
+    const gRings = el('g', { fill: 'none', stroke: GREY, 'stroke-linecap': 'butt' }, gWorld);
+    const gRoutes = el('g', { fill: 'none', 'stroke-linecap': 'round', 'pointer-events': 'none' }, svg);
+    const gTraffic = el('g', { class: 'sb-traffic', 'pointer-events': 'none', style: 'display: none' }, svg);
+    const gTags = el('g', { 'pointer-events': 'none' }, svg);
+    const gNodes = el('g', { 'pointer-events': 'none' }, svg);
+    const gLabels = el('g', { 'pointer-events': 'none' }, svg);
+    const gHits = el('g', {}, svg);
+
+    // Per node: approach ring, station group, label, hit circle.
+    const nodes = NODES.map(n => {
+      const ringCore = el('circle', { class: 'sb-ringcore', cx: n.x, cy: n.y, r: n.ring, stroke: '#fff', 'stroke-dasharray': 'none', opacity: 0 }, gRings);
+      const ring = el('circle', { class: 'sb-ring', cx: n.x, cy: n.y, r: n.ring }, gRings);
+      const g = el('g', { class: 'sb-node sb-fade' }, gNodes);
+      const inner = el('g', {}, g);
+      // Selection marks sit under the station body.
+      const R = OUTER[n.size] || OUTER.m;
+      el('circle', { class: 'sb-sel', r: R + 3.5, fill: 'none', stroke: '#fff', 'stroke-width': 1.4, style: 'transition: opacity 180ms ease' }, inner);
+      el('circle', { class: 'sb-pulse', r: R + 3.5, fill: 'none', stroke: '#fff', 'stroke-width': 1.2 }, inner);
+      const band = (n.size === 'l' ? buildHub : buildStation)(n, inner);
+
+      // The label box centre sits at (dx, dy) CSS px from the station at fit.
+      // The offset scales with k, the same as the station, so the label keeps
+      // its place in the gaps between the routes at every zoom.
+      const label = el('text', {
+        class: 'sb-label',
+        'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'font-family': FONT, 'font-weight': 500, 'font-size': LABEL_FS,
+        'letter-spacing': `${LABEL_LS}em`, fill: '#e8e8e8', opacity: 0.88,
+        stroke: INK, 'stroke-width': 3, 'stroke-linejoin': 'round', 'paint-order': 'stroke',
+        // The text carries one trailing letter gap. Move half of it back.
+        dx: `${LABEL_LS / 2}em`,
+      }, gLabels);
+      label.textContent = n.name.toUpperCase();
+
+      const hit = el('circle', { r: HIT_R, fill: 'transparent', 'pointer-events': 'all', style: 'cursor: pointer' }, gHits);
+      hit.addEventListener('pointerenter', () => onHover(n.id));
+      hit.addEventListener('pointerleave', () => onHover(null));
+      hit.addEventListener('click', ev => { ev.stopPropagation(); onPick(n.id); });
+
+      // Label half size at fit, CSS px. The font load below measures the width.
+      const lw = n.name.length * LABEL_FS * 0.55, lh = LABEL_FS * 0.6;
+      return { n, R, ring, ringCore, g, band, label, hit, sx: 0, sy: 0, lx: 0, ly: 0, lw, lh };
+    });
+    const nodeIndex = Object.fromEntries(nodes.map((o, i) => [o.n.id, i]));
+
+    // Per route: path, ships, tag box and tag text. A route to an unknown
+    // node is left out.
+    const routes = [];
+    ROUTES.forEach((r, i) => {
+      if (nodeIndex[r.from] === undefined || nodeIndex[r.to] === undefined) return;
+      const color = (TIER_BY_ID[r.tier] || TIER_BY_ID.none).color;
+      const path = el('path', { class: 'sb-route sb-fade', stroke: color, 'stroke-width': 1.3 }, gRoutes);
+      const traffic = buildTraffic(r, i, M.NODE_BY_ID[r.from], M.NODE_BY_ID[r.to], color, gTraffic);
+      const tag = el('g', { class: 'sb-fade' }, gTags);
+      const w = String(r.cost).length + 1;
+      const w0 = w * TAG_FS * 0.58 + 6;
+      const box = el('rect', { x: -w0 / 2, y: -TAG_H / 2, width: w0, height: TAG_H, fill: INK, stroke: color, 'stroke-width': 1.2 }, tag);
+      const t = el('text', {
+        'text-anchor': 'middle', 'dominant-baseline': 'central', y: 0.5,
+        'font-family': FONT, 'font-weight': 400, 'font-size': TAG_FS, fill: color,
+      }, tag);
+      t.textContent = `-${r.cost}`;
+      routes.push({ r, i, path, tag, box, text: t, w: w0, a: nodeIndex[r.from], b: nodeIndex[r.to],
+        ...traffic, geo: null, shipOp: 0 });
+    });
+    const routeByIndex = new Map(routes.map(o => [o.i, o]));
+
+    // After the font loads, fit each tag box to its measured text once.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(() => {
+        if (my !== gen) return;
+        for (const o of routes) {
+          let tw = 0;
+          try { tw = o.text.getComputedTextLength(); } catch { /* not rendered yet */ }
+          if (tw > 0) {
+            o.w = tw + 6;
+            o.box.setAttribute('x', (-o.w / 2).toFixed(2));
+            o.box.setAttribute('width', o.w.toFixed(2));
+          }
+        }
+        for (const o of nodes) {
+          try {
+            const b = o.label.getBBox();
+            // The box holds one trailing letter gap. Leave it out.
+            if (b.width > 0) o.lw = (b.width - LABEL_FS * LABEL_LS) / 2 + 1;
+          } catch { /* not rendered yet */ }
+        }
+        if (last) api.update(last);
+      });
+    }
+
+    const hub = nodes.filter(o => o.band);
+    const groups = [gWorld, gRoutes, gTraffic, gTags, gNodes, gLabels, gHits];
+    return { M, nodes, routes, routeByIndex, hub, gRings, gTraffic, groups, ringPhase: 0, hubTurn: 0 };
+  }
+
+  // ── tags ─────────────────────────────────────────────────────────────────
   // Slide the tag along its route until it clears every station, label and
   // tag placed before it. placed holds the boxes of the placed tags.
   const placed = [];
   function placeTag(o, g, k) {
+    const { nodes } = sc;
     const hw = (o.w / 2) * k, hh = (TAG_H / 2) * k;
     const ext = Math.abs(hw * g.ux) + Math.abs(hh * g.uy);        // half size along the route
     const pad = 4;
@@ -268,13 +357,75 @@ export function createOverlay(svg, { onHover = () => {}, onPick = () => {} } = {
     return p;
   }
 
+  // ── animate mode ─────────────────────────────────────────────────────────
+  // Move the ships, the ring dashes and the hub band to the motion time.
+  // Transforms and opacity only.
+  function tick() {
+    const t = now();
+    const dt = clockAt === null ? 0 : Math.min(Math.max(t - clockAt, 0), 0.1);
+    clockAt = t;
+    travel += dt * (reduce && reduce.matches ? REDUCED : 1);
+    if (!sc || !last) return;
+    const zoom = last.zoom;
+
+    // Ring dashes: one dash offset on the ring group, in world units.
+    sc.gRings.setAttribute('stroke-dashoffset', (-(travel * RING_SPIN) / zoom).toFixed(3));
+    for (const o of sc.hub) o.band.setAttribute('transform', `rotate(${(travel * HUB_SPIN % 360).toFixed(2)})`);
+
+    for (const o of sc.routes) {
+      const G = o.geo;
+      for (const s of o.ships) {
+        if (!G || o.shipOp <= 0) { s.g.setAttribute('opacity', 0); continue; }
+        const u0 = s.phase + (travel * SHIP_V) / o.len;
+        const u = u0 - Math.floor(u0);
+        const f = s.dir > 0 ? u : 1 - u;                  // 0 at from, 1 at to
+        const tt = G.t0 + (G.t1 - G.t0) * f;
+        const p = G.at(tt);
+        const e = 0.004 * s.dir;
+        const q = G.at(tt + e), r = G.at(tt - e);
+        const ang = Math.atan2(q.y - r.y, q.x - r.x) * 57.29578;
+        // Fade inside the approach ring: 0 at the station edge, 1 at the ring.
+        const dA = f * G.seg, dB = (1 - f) * G.seg;
+        const fa = Math.min(1, Math.max(0, dA / G.fadeA)), fb = Math.min(1, Math.max(0, dB / G.fadeB));
+        const fade = Math.min(fa * fa * (3 - 2 * fa), fb * fb * (3 - 2 * fb));
+        s.g.setAttribute('transform', `translate(${p.x.toFixed(2)},${p.y.toFixed(2)}) rotate(${ang.toFixed(1)}) scale(${G.k.toFixed(4)})`);
+        s.g.setAttribute('opacity', (o.shipOp * fade).toFixed(3));
+      }
+    }
+  }
+
+  function loop() {
+    raf = 0;
+    tick();
+    const fading = !animate && now() - offAt < FADE_MS / 1000 + 0.1;
+    if (animate || fading) raf = requestAnimationFrame(loop);
+    else if (sc) sc.gTraffic.style.display = 'none';
+  }
+
+  function setAnimate(on) {
+    if (on === animate) return;
+    animate = on;
+    if (!sc) return;
+    if (on) {
+      sc.gTraffic.style.display = '';
+      clockAt = null;
+      tick();
+      // One frame at opacity 0 first, so the CSS fade runs.
+      requestAnimationFrame(() => { if (animate && sc) sc.gTraffic.classList.add('sb-live'); });
+    } else {
+      offAt = now();
+      sc.gTraffic.classList.remove('sb-live');
+    }
+    if (!raf) raf = requestAnimationFrame(loop);
+  }
+
   const api = {
     // Screen box of every station and label for a view, without a layout
     // pass. With band = [y0, y1], only the boxes that touch that row count.
     // The page uses it to keep the home view clear of its UI.
     extent(view, band = null) {
       const { cx, cy, zoom, w, h } = view;
-      const k = sizeScale(zoom, w, h);
+      const k = sizeScale(view);
       const ox = w / 2 - cx * zoom, oy = h / 2 - cy * zoom;
       const e = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
       const add = (x0, y0, x1, y1) => {
@@ -282,7 +433,7 @@ export function createOverlay(svg, { onHover = () => {}, onPick = () => {} } = {
         e.x0 = Math.min(e.x0, x0); e.y0 = Math.min(e.y0, y0);
         e.x1 = Math.max(e.x1, x1); e.y1 = Math.max(e.y1, y1);
       };
-      for (const o of nodes) {
+      for (const o of sc.nodes) {
         const sx = o.n.x * zoom + ox, sy = o.n.y * zoom + oy, r = o.R * k;
         add(sx - r, sy - r, sx + r, sy + r);
         const lx = sx + o.n.label.dx * k, ly = sy + o.n.label.dy * k;
@@ -294,19 +445,20 @@ export function createOverlay(svg, { onHover = () => {}, onPick = () => {} } = {
     update(view) {
       last = view;
       const { cx, cy, zoom, w, h } = view;
+      const { nodes, routes } = sc;
       if (w !== sizeW || h !== sizeH) {
         sizeW = w; sizeH = h;
         svg.setAttribute('width', w);
         svg.setAttribute('height', h);
         svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
       }
-      const k = sizeScale(zoom, w, h);
+      const k = sizeScale(view);
       const ox = w / 2 - cx * zoom, oy = h / 2 - cy * zoom;
 
       // World group: one transform, and a stroke that stays 2.5 CSS px.
-      gWorld.setAttribute('transform', `matrix(${zoom},0,0,${zoom},${ox.toFixed(2)},${oy.toFixed(2)})`);
-      gRings.setAttribute('stroke-width', (2.5 / zoom).toFixed(4));
-      gRings.setAttribute('stroke-dasharray', `${(10 / zoom).toFixed(3)} ${(7 / zoom).toFixed(3)}`);
+      sc.groups[0].setAttribute('transform', `matrix(${zoom},0,0,${zoom},${ox.toFixed(2)},${oy.toFixed(2)})`);
+      sc.gRings.setAttribute('stroke-width', (2.5 / zoom).toFixed(4));
+      sc.gRings.setAttribute('stroke-dasharray', `${(10 / zoom).toFixed(3)} ${(7 / zoom).toFixed(3)}`);
 
       for (const o of nodes) {
         o.sx = o.n.x * zoom + ox; o.sy = o.n.y * zoom + oy;
@@ -325,7 +477,7 @@ export function createOverlay(svg, { onHover = () => {}, onPick = () => {} } = {
         const A = nodes[o.a], B = nodes[o.b];
         const g = routeGeom(o.r, { x: A.sx, y: A.sy }, { x: B.sx, y: B.sy }, A.R * k, B.R * k);
         if (o.r.bend) g.bend = o.r.bend * zoom;
-        let d;
+        let d, seg = g;
         if (!o.r.bend) {
           const p = g.at(g.t0), q = g.at(g.t1);
           d = `M${p.x.toFixed(2)},${p.y.toFixed(2)}L${q.x.toFixed(2)},${q.y.toFixed(2)}`;
@@ -337,15 +489,27 @@ export function createOverlay(svg, { onHover = () => {}, onPick = () => {} } = {
             d += (s ? 'L' : 'M') + p.x.toFixed(2) + ',' + p.y.toFixed(2);
           }
           g.at = gb.at;
+          seg = gb;
         }
         o.path.setAttribute('d', d);
         const p = placeTag(o, g, k);
         placed.push({ x: p.x, y: p.y, hw: (o.w / 2) * k, hh: (TAG_H / 2) * k });
         o.tag.setAttribute('transform', `translate(${p.x.toFixed(2)},${p.y.toFixed(2)}) scale(${k.toFixed(4)})`);
+
+        // Ship geometry: the drawn segment, and the fade length at each end
+        // (station edge to approach ring, at least 8 CSS px).
+        const len = (seg.t1 - seg.t0) * seg.L;
+        o.geo = {
+          at: seg.at, t0: seg.t0, t1: seg.t1, seg: len, k,
+          fadeA: Math.max(8, A.n.ring * zoom - A.R * k), fadeB: Math.max(8, B.n.ring * zoom - B.R * k),
+        };
       }
+      if (animate || raf) tick();
     },
 
-    setState({ hover = null, selected = [], path = null, tiers = null } = {}) {
+    setState({ hover = null, selected = [], path = null, tiers = null, animate: anim = false } = {}) {
+      lastState = { hover, selected, path, tiers, animate: anim };
+      const { nodes, routes, M } = sc;
       const onRoute = new Set(path ? path.routes : []);
       const onNode = new Set(path ? path.nodes : []);
       const picked = new Set(selected || []);
@@ -354,19 +518,30 @@ export function createOverlay(svg, { onHover = () => {}, onPick = () => {} } = {
       const rev = new Set();
       if (path) {
         path.routes.forEach((ri, j) => {
-          const r = ROUTES[ri];
+          const r = M.ROUTES[ri];
           if (r && r.from === path.nodes[j + 1] && r.to === path.nodes[j]) rev.add(ri);
         });
       }
 
       for (const o of routes) {
-        let op = !tiers || tiers.has(o.r.tier) ? 1 : 0.12;
+        const tierOn = !tiers || tiers.has(o.r.tier);
+        let op = tierOn ? 1 : 0.12;
         if (path) op = Math.min(op, onRoute.has(o.i) ? 1 : 0.2);
-        if (hover) op = Math.min(op, o.r.from === hover || o.r.to === hover ? 1 : 0.35);
+        const hot = hover && (o.r.from === hover || o.r.to === hover);
+        if (hover) op = Math.min(op, hot ? 1 : 0.35);
         o.path.style.opacity = op;
         o.tag.style.opacity = op;
         o.path.classList.toggle('sb-on', onRoute.has(o.i));
         o.path.classList.toggle('sb-rev', rev.has(o.i));
+
+        // Traffic: none on a hidden tier, none off a plotted course, full
+        // on the course and on the routes of the hovered station. A course
+        // route runs in the travel direction only.
+        let so = tierOn ? SHIP_OP : 0;
+        if (path) so = onRoute.has(o.i) ? 1 : 0;
+        if (hover) so = hot ? Math.max(so, tierOn ? 1 : 0) : so * 0.35;
+        o.shipOp = so;
+        for (const s of o.ships) s.dir = onRoute.has(o.i) ? (rev.has(o.i) ? -1 : 1) : s.dir0;
       }
 
       for (const o of nodes) {
@@ -380,9 +555,25 @@ export function createOverlay(svg, { onHover = () => {}, onPick = () => {} } = {
         o.label.classList.toggle('sb-hot', hot || onNode.has(id));
         o.label.style.opacity = path && !onNode.has(id) && !hot ? 0.5 : '';
       }
+      setAnimate(!!anim);
+      if (animate) tick();
+    },
+
+    // Build a new map. Hover, picks and the course belong to the old map,
+    // so they clear; the tiers and animate mode stay. The caller sends its
+    // own setState after this.
+    setMap(m) {
+      if (sc) for (const g of sc.groups) g.remove();
+      const wasAnimate = animate;
+      animate = false;
+      sc = buildScene(m);
+      if (last) api.update(last);
+      api.setState({ tiers: lastState.tiers, animate: wasAnimate });
+      if (wasAnimate) sc.gTraffic.classList.add('sb-live');
     },
   };
 
+  sc = buildScene(map);
   api.setState({});
   return api;
 }

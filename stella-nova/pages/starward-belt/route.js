@@ -1,29 +1,29 @@
 // route.js — the cheapest jump course under the enabled tiers. No DOM, no GPU.
 //
-// Dijkstra over ROUTES as an undirected graph. A route is usable only when
-// its tier is in the enabled set. The graph has ten nodes, so a linear scan
+// Dijkstra over map.ROUTES as an undirected graph. A route is usable only
+// when its tier is in the enabled set. A map has few nodes, so a linear scan
 // for the next node is faster and simpler than a heap. On an equal cost the
 // course with fewer jumps wins, so the result does not depend on data order.
 //
 // grep: function cheapest  function adjacency
 
-import { NODES, ROUTES } from './data.js';
-
-// For each node id, the list of { to, ri } where ri is an index into ROUTES.
-function adjacency(tiers) {
-  const adj = Object.fromEntries(NODES.map((n) => [n.id, []]));
-  ROUTES.forEach((r, ri) => {
-    if (!tiers.has(r.tier)) return;
+// For each node id, the list of { to, ri } where ri is an index into
+// map.ROUTES. A route to an unknown node is left out.
+function adjacency(map, tiers) {
+  const adj = Object.fromEntries(map.NODES.map((n) => [n.id, []]));
+  map.ROUTES.forEach((r, ri) => {
+    if (!tiers.has(r.tier) || !adj[r.from] || !adj[r.to]) return;
     adj[r.from].push({ to: r.to, ri });
     adj[r.to].push({ to: r.from, ri });
   });
   return adj;
 }
 
-// Returns { nodes: [ids from start to end], routes: [ROUTES indices], cost }
+// Returns { nodes: [ids from start to end], routes: [map.ROUTES indices], cost }
 // or null when no course exists. The same start and end gives a zero course.
-export function cheapest(fromId, toId, tiers) {
-  const adj = adjacency(tiers);
+export function cheapest(map, fromId, toId, tiers) {
+  const { NODES, ROUTES } = map;
+  const adj = adjacency(map, tiers);
   if (!adj[fromId] || !adj[toId]) return null;
   const cost = {}, hops = {}, prev = {}, done = new Set();
   for (const n of NODES) { cost[n.id] = Infinity; hops[n.id] = Infinity; }

@@ -1,25 +1,37 @@
 // engine.js — WebGPU field layer of the Starward Belt page. No DOM beyond
 // the canvas.
 //
-// createField(canvas) compiles shaders/field.wgsl, writes the scene buffer
-// (rail frame, dust clouds, hatch discs) once, and returns resize() and
-// render(). render() writes one 64-byte frame uniform and draws one
-// fullscreen triangle. All of the dust, rails, contours and hatch come from
-// the fragment shader, in world coordinates.
+// createField(canvas, map) compiles shaders/field.wgsl, writes the scene
+// buffer (rail frame, dust clouds, hatch discs) of the map, and returns
+// resize(), render() and setMap(). render() writes one 64-byte frame
+// uniform and draws one fullscreen triangle. All of the dust, rails,
+// contours and hatch come from the fragment shader, in world coordinates.
+// setMap() writes the scene buffer again; the pipeline stays.
 //
 //   binding  buffer   size   written
-//   0        frame    64 B   every render(): camera, viewport, time, hover
-//   1        scene    736 B  once: RAIL, CLOUDS, HATCH from data.js
+//   0        frame    64 B   every render(): camera, viewport, time, hover, anim
+//   1        scene    992 B  createField() and setMap(): RAIL, CLOUDS, HATCH
 //
-// grep: function createField  function packScene  resize(  render(
+// Animate mode: render() eases a fade toward fx.animate (0.8 s) and
+// integrates travel time = fade x motion x dt. The shader drifts the dust by
+// the travel time and swings the warp by the fade, so the field glides in
+// and out of motion. A zero fade gives the static field exactly. With
+// prefers-reduced-motion the travel time runs at REDUCED of the speed.
+//
+// grep: function createField  function packScene  MAX_  REDUCED  resize(  render(  setMap(
 
-import { RAIL, CLOUDS, HATCH } from './data.js';
+import { STARWARD_MAP } from './data.js';
 
-const MAX_CLOUDS = 12, MAX_REGIONS = 4, MAX_DISCS = 16;
+// Scene limits. field.wgsl sizes its arrays to match.
+const MAX_CLOUDS = 16, MAX_REGIONS = 4, MAX_DISCS = 24;
 const SCENE_FLOATS = 8 + MAX_CLOUDS * 8 + MAX_REGIONS * 4 + MAX_DISCS * 4;
+const FADE_S = 0.8;         // time constant of the animate fade, s
+const REDUCED = 0.06;       // motion rate under prefers-reduced-motion
 
-// Pack the fixed chart data into the Scene struct layout of field.wgsl.
-function packScene() {
+// Pack the map data into the Scene struct layout of field.wgsl. Data past
+// the limits is left out.
+function packScene(map) {
+  const { RAIL, CLOUDS = [], HATCH = [] } = map;
   const f = new Float32Array(SCENE_FLOATS);
   const ax = RAIL.b.x - RAIL.a.x, ay = RAIL.b.y - RAIL.a.y;
   const len = Math.hypot(ax, ay);
@@ -37,7 +49,7 @@ function packScene() {
   return f;
 }
 
-export async function createField(canvas) {
+export async function createField(canvas, map = STARWARD_MAP) {
   if (!navigator.gpu) throw new Error('This browser has no WebGPU. Try a recent Chrome, Edge or Safari.');
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) throw new Error('WebGPU is present, but no GPU adapter is available.');
@@ -63,9 +75,8 @@ export async function createField(canvas) {
 
   const U = GPUBufferUsage;
   const frameBuf = device.createBuffer({ size: 64, usage: U.UNIFORM | U.COPY_DST });
-  const scene = packScene();
-  const sceneBuf = device.createBuffer({ size: scene.byteLength, usage: U.UNIFORM | U.COPY_DST });
-  device.queue.writeBuffer(sceneBuf, 0, scene);
+  const sceneBuf = device.createBuffer({ size: SCENE_FLOATS * 4, usage: U.UNIFORM | U.COPY_DST });
+  device.queue.writeBuffer(sceneBuf, 0, packScene(map));
   const bind = device.createBindGroup({
     layout: pipeline.getBindGroupLayout(0),
     entries: [
@@ -76,8 +87,10 @@ export async function createField(canvas) {
 
   device.lost.then((e) => console.warn('starward-belt: GPU device lost:', e.message));
 
+  const reduce = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
   const frame = new Float32Array(16);
   let cssW = 1;
+  let lastT = null, fade = 0, travel = 0;
 
   return {
     // Size the canvas backing store in device pixels. dpr stops at 2.
@@ -87,15 +100,30 @@ export async function createField(canvas) {
       canvas.width = Math.max(1, Math.round(w * d));
       canvas.height = Math.max(1, Math.round(h * d));
     },
-    // Draw one frame. view comes from camera.view(); fx.hover is a world point or null.
+    // Use a new map: one buffer write, the same pipeline and bind group.
+    setMap(m) {
+      device.queue.writeBuffer(sceneBuf, 0, packScene(m));
+    },
+    // Draw one frame. view comes from camera.view(). fx.hover is a world
+    // point or null, fx.animate turns the motion on.
     render(view, timeSec = 0, fx = {}) {
       const scale = canvas.width / (view.w || cssW);   // exact device px per css px
-      const fit = Math.min(view.w / 900, view.h / 1750);
+      const fit = view.fit || Math.min(view.w / 900, view.h / 1750);
       const hv = fx && fx.hover;
+
+      // Ease the fade toward the animate flag and integrate the travel time.
+      const dt = lastT === null ? 0 : Math.min(Math.max(timeSec - lastT, 0), 0.1);
+      lastT = timeSec;
+      const goal = fx && fx.animate ? 1 : 0;
+      fade += (goal - fade) * (1 - Math.exp(-dt / FADE_S));
+      if (Math.abs(goal - fade) < 1e-3) fade = goal;
+      travel += fade * (reduce && reduce.matches ? REDUCED : 1) * dt;
+
       frame.set([
         view.cx, view.cy, view.zoom, scale,
         view.w, view.h, timeSec, fit,
         hv ? hv.x : 0, hv ? hv.y : 0, hv ? 1 : 0, 0,
+        travel, fade, 0, 0,
       ]);
       device.queue.writeBuffer(frameBuf, 0, frame);
       const enc = device.createCommandEncoder();

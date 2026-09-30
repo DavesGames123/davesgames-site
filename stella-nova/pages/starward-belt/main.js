@@ -1,24 +1,35 @@
-// main.js — Starward Belt page: wiring, input, legend, card and frame loop.
+// main.js — Starward Belt page: wiring, URL hash, input, UI and frame loop.
 //
 // camera.js holds the view. overlay.js draws the SVG chart and reports hover
-// and pick. engine.js draws the WebGPU field under it. This file owns the
-// page state, turns input into camera moves, plots a course with route.js,
-// and writes the legend and the readout card.
+// and pick. engine.js draws the WebGPU field under it. generate.js makes a
+// random map from a seed. This file owns the page state and the URL hash,
+// turns input into camera moves, plots a course with route.js, and writes
+// the title, the plate, the legend, the card, the toolbar, the rail
+// scrubber, the zoom buttons and the help card.
+//
+// The hash holds the map and the animate switch: #seed=<code>&anim=1.
+// No seed means the original Starward Belt map.
 //
 // Without WebGPU the page still works: the SVG overlay draws over the flat
 // black stage and a short note shows in #fallback.
 //
-//   wheel        slide along the belt           ctrl + wheel, pinch   zoom
-//   drag         pan (the rail clamps it)       click two stations    plot a course
-//   arrows, WASD slide and drift                + / -                 zoom
-//   H            home                           Escape                clear the course
+//   wheel          zoom at the cursor        shift + wheel, sideways scroll   slide along the belt
+//   ctrl + wheel   zoom (trackpad pinch)     drag                             pan (the rail clamps it)
+//   click two stations   plot a course       double-click                     focus a station, or zoom in
+//   arrows, W S    slide and drift           + / -                            zoom
+//   H home   R random map   O original map   A animate   ? help   Escape clear
 //
-// grep: function buildLegend  function goHome  function pick  function plot  function frameCourse  function renderCard  function tick  function wake  KEYS
+// grep: function readHash  function writeHash  function makeMap  function swapTo  function applyMap
+//       function randomize  function original  function setAnimate  function buildLegend  function showTitles
+//       function goHome  function pick  function plot  function frameCourse  function renderCard
+//       function buildScrub  function drawScrub  function onWheel  function toggleHelp  KEYS
+//       function tick  function wake  function boot
 
-import { TIERS, ROUTES, NODE_BY_ID, TIER_BY_ID, RAIL } from './data.js';
-import { createCamera, AXIS } from './camera.js';
+import { TIERS, STARWARD_MAP, indexMap } from './data.js';
+import { createCamera } from './camera.js';
 import { createOverlay } from './overlay.js';
 import { cheapest } from './route.js';
+import { generateMap, randomSeed } from './generate.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -27,26 +38,189 @@ const svg = $('overlay');
 const legend = $('legend');
 const card = $('card');
 const hint = $('hint');
+const seedBtn = $('seed');
+const helpCard = $('help');
+const scrub = $('scrub');
+const scrubTicks = $('scrub-ticks');
+const scrubThumb = $('scrub-thumb');
+const scrubTip = $('scrub-tip');
+const btn = {
+  random: $('btn-random'), original: $('btn-original'), anim: $('btn-anim'), help: $('btn-help'),
+  zin: $('z-in'), zout: $('z-out'), zfit: $('z-fit'),
+};
 
 const SHORT = { none: 'None', haznav: 'Haznav', engine: 'Engine', spoof: 'Spoof' };
 const DRAG_PX = 5;          // a press that moves more than this is a drag, not a click
 const RING_PAD = 90;        // world units of margin around a framed course
+const FADE_OUT = 180;       // ms, map swap: fade out, then swap, then fade in (CSS)
+const ANIM_KEY = 'starward-belt:animate';
+const FINE = matchMedia('(pointer: fine)');
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)');
 
 const state = {
   hover: null,
   selected: [],
   path: null,
   tiers: new Set(TIERS.map((t) => t.id)),
+  animate: false,
 };
 
-const camera = createCamera();
-const overlay = createOverlay(svg, { onHover: hover, onPick: pick });
+let map = null;               // the indexed map on show
+let camera = null;
+let overlay = null;
 let field = null;
 let dirty = true;             // the overlay needs a new layout
 let sized = false;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const esc = (s) => s.replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
+// ─── URL hash ───────────────────────────────────────────────────────────────
+// A seed keeps letters and digits only, so the hash can not inject markup.
+// generate.js reads a seed in upper case, so the hash does too.
+function cleanSeed(s) {
+  const v = (s || '').replace(/[^0-9A-Za-z]/g, '').slice(0, 32).toUpperCase();
+  return v || null;
+}
+
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  return { seed: cleanSeed(p.get('seed')), anim: p.has('anim') ? p.get('anim') === '1' : null };
+}
+
+function hashFor(seed, anim) {
+  const parts = [];
+  if (seed) parts.push(`seed=${seed}`);
+  if (anim) parts.push('anim=1');
+  return parts.length ? `#${parts.join('&')}` : '';
+}
+
+// Write the hash for the current map and animate state. push = true adds a
+// history entry (a map change). Otherwise the entry changes in place.
+function writeHash(push) {
+  const url = location.pathname + location.search + hashFor(map.seed, state.animate);
+  if (url === location.pathname + location.search + location.hash) return;
+  try {
+    if (push) history.pushState(null, '', url); else history.replaceState(null, '', url);
+  } catch { /* a sandboxed frame can refuse history writes */ }
+}
+
+// ─── maps ───────────────────────────────────────────────────────────────────
+// The map for a seed, indexed. A seed that the generator refuses gives the
+// original map.
+function makeMap(seed) {
+  let m = STARWARD_MAP;
+  if (seed) {
+    try { m = generateMap(seed); } catch (err) { console.warn('[starward-belt] seed refused:', seed, err); m = STARWARD_MAP; }
+  }
+  return m.NODE_BY_ID ? m : indexMap(m);
+}
+
+// Fade the map out, swap it, fade it in. A second swap during the fade wins.
+let swapToken = 0;
+let wanted = null;            // the seed on show or on its way (null = original)
+function swapTo(seed) {
+  const my = ++swapToken;
+  wanted = seed || null;
+  const next = makeMap(seed);
+  document.body.classList.add('swapping');
+  setTimeout(() => {
+    if (my !== swapToken) return;
+    applyMap(next);
+    // Two frames: the first draws the new map under the veil.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (my === swapToken) document.body.classList.remove('swapping');
+    }));
+  }, FADE_OUT);
+}
+
+// Put a map on the page. Selection, course and hover reset. Tiers and the
+// animate switch stay.
+function applyMap(next) {
+  map = next;
+  state.hover = null;
+  state.selected = [];
+  state.path = null;
+  camera.setRail(map.RAIL, map.NODES);
+  overlay.setMap(map);
+  field?.setMap(map);
+  showTitles();
+  buildScrub();
+  dirty = true;
+  goHome(true);
+  sync();
+}
+
+function randomize() {
+  let s = randomSeed();
+  for (let i = 0; i < 4 && s === map.seed; i++) s = randomSeed();
+  firstTouch();
+  // The hashchange handler does the swap, so the back button works the same way.
+  location.hash = hashFor(s, state.animate);
+}
+
+function original() {
+  if (!map.seed) { goHome(); wake(); return; }
+  firstTouch();
+  const url = location.pathname + location.search + hashFor(null, state.animate);
+  try { history.pushState(null, '', url); } catch { location.hash = hashFor(null, state.animate); }
+  applyHash();
+}
+
+// Follow the hash: back, forward, a pasted link, or randomize().
+function applyHash() {
+  const h = readHash();
+  if ((h.seed || null) !== wanted) swapTo(h.seed);
+  // An anim part in the hash sets the switch. Without one, the switch stays
+  // and the hash gets its anim part back.
+  if (h.anim !== null && h.anim !== state.animate) setAnimate(h.anim);
+  else if (h.anim === null && state.animate) writeHash(false);
+}
+window.addEventListener('hashchange', applyHash);
+window.addEventListener('popstate', applyHash);
+
+// ─── animate ────────────────────────────────────────────────────────────────
+function storedAnimate() {
+  try { const v = localStorage.getItem(ANIM_KEY); return v === null ? null : v === '1'; } catch { return null; }
+}
+
+function setAnimate(on) {
+  state.animate = !!on;
+  btn.anim.setAttribute('aria-pressed', String(state.animate));
+  try { localStorage.setItem(ANIM_KEY, state.animate ? '1' : '0'); } catch { /* storage off */ }
+  writeHash(false);
+  sync();
+}
+
+// ─── titles ─────────────────────────────────────────────────────────────────
+function showTitles() {
+  const t = map.title;
+  $('title-game').textContent = t.game;
+  $('title-vector').textContent = t.vector;
+  $('plate-top').textContent = t.plateTop;
+  $('plate-name').textContent = t.plate;
+  legend.setAttribute('aria-label', `${t.vector}: route tiers`);
+  document.title = map.seed ? `${t.plate} · ${map.seed}` : 'Starward Belt';
+  seedBtn.hidden = !map.seed;
+  if (map.seed) { seedBtn.dataset.seed = map.seed; seedBtn.querySelector('b').textContent = map.seed; seedBtn.classList.remove('copied'); }
+  btn.original.hidden = !map.seed;
+}
+
+async function copyLink() {
+  const url = location.href;
+  let ok = false;
+  try { await navigator.clipboard.writeText(url); ok = true; } catch {
+    const ta = document.createElement('textarea');
+    ta.value = url; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.append(ta); ta.select();
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+  }
+  seedBtn.classList.toggle('copied', ok);
+  seedBtn.querySelector('i').textContent = ok ? 'link copied' : 'copy failed';
+  clearTimeout(copyLink.t);
+  copyLink.t = setTimeout(() => { seedBtn.classList.remove('copied'); seedBtn.querySelector('i').textContent = 'copy link'; }, 1600);
+}
 
 // ─── legend ─────────────────────────────────────────────────────────────────
 function buildLegend() {
@@ -80,7 +254,7 @@ function hover(id) {
 
 // A pick fills selected[0], then selected[1]. A third pick starts over.
 function pick(id) {
-  if (dragged || !NODE_BY_ID[id]) return;
+  if (dragged || !map.NODE_BY_ID[id]) return;
   pickedNow = true;
   const s = state.selected;
   if (s.includes(id)) return;
@@ -97,7 +271,7 @@ function clearSelection() {
 // Recompute the course for the current selection and tiers.
 function plot(frame) {
   const [a, b] = state.selected;
-  state.path = a && b ? cheapest(a, b, state.tiers) : null;
+  state.path = a && b ? cheapest(map, a, b, state.tiers) : null;
   sync();
   if (frame && b) frameCourse(state.path ? state.path.nodes : [a, b]);
 }
@@ -107,7 +281,7 @@ function plot(frame) {
 function frameCourse(ids) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const id of ids) {
-    const n = NODE_BY_ID[id];
+    const n = map.NODE_BY_ID[id];
     x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y);
     x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y);
   }
@@ -136,44 +310,54 @@ function clearRect(v) {
 
 // Home view. On a wide screen, move the belt right until the stations and
 // labels in the rows of the legend clear it, but keep the belt on the screen.
+// On a phone the legend is a row on top: move a random belt down until it
+// clears the row, while the bottom of the belt stays on the screen. The
+// original map keeps the home view of the first version.
 function goHome(instant = false) {
   const v = camera.view();
-  let sx = 0;
+  const R = map.RAIL;
+  const home = { cx: (R.a.x + R.b.x) / 2, cy: (R.a.y + R.b.y) / 2, zoom: camera.fitZoom, w: v.w, h: v.h, fit: camera.fitZoom };
+  const lg = legend.getBoundingClientRect();
+  const all = overlay.extent(home);
+  let sx = 0, sy = 0;
   if (v.w > 600) {
-    const home = { cx: (RAIL.a.x + RAIL.b.x) / 2, cy: (RAIL.a.y + RAIL.b.y) / 2, zoom: camera.fitZoom, w: v.w, h: v.h };
-    const lg = legend.getBoundingClientRect();
     const e = overlay.extent(home, [lg.top - 8, lg.bottom + 8]);
-    const all = overlay.extent(home);
-    sx = Math.max(0, Math.min(lg.right + 16 - e.x0, v.w - 16 - all.x1));
+    // The scrubber and the zoom buttons take a strip on the right.
+    const right = v.w - (scrubShown() ? 48 : 16);
+    if (Number.isFinite(e.x0)) sx = Math.max(0, Math.min(lg.right + 16 - e.x0, right - all.x1));
+  } else if (map.seed && Number.isFinite(all.y0)) {
+    sy = Math.max(0, Math.min(lg.bottom + 6 - all.y0, v.h - 8 - all.y1));
   }
-  camera.home(instant, sx, 0);
+  camera.home(instant, sx, sy);
+  wake();
 }
 
 function focusNode(id) {
-  const n = NODE_BY_ID[id];
+  const n = map.NODE_BY_ID[id];
   camera.focus(n.x, n.y, camera.fitZoom * 2.6);
   wake();
 }
 
 // Push the state to the overlay and the card.
 function sync() {
-  overlay.setState({ hover: state.hover, selected: state.selected, path: state.path, tiers: state.tiers });
+  overlay.setState({ hover: state.hover, selected: state.selected, path: state.path, tiers: state.tiers, animate: state.animate });
   renderCard();
   wake();
 }
 
 // ─── card ───────────────────────────────────────────────────────────────────
 function costTag(tier, cost) {
-  return `<span class="cost" style="--c:${TIER_BY_ID[tier].color}">-${cost}</span>`;
+  return `<span class="cost" style="--c:${map.TIER_BY_ID[tier].color}">-${cost}</span>`;
 }
 
 function stationCard(id, note) {
-  const n = NODE_BY_ID[id];
-  const rows = ROUTES
+  const N = map.NODE_BY_ID;
+  const n = N[id];
+  const rows = map.ROUTES
     .filter((r) => r.from === id || r.to === id)
     .sort((p, q) => p.cost - q.cost)
     .map((r) => {
-      const other = NODE_BY_ID[r.from === id ? r.to : r.from];
+      const other = N[r.from === id ? r.to : r.from];
       const off = state.tiers.has(r.tier) ? '' : ' off';
       return `<div class="row${off}"><span class="to">› ${esc(other.name)}</span>${costTag(r.tier, r.cost)}</div>`;
     }).join('');
@@ -183,19 +367,20 @@ function stationCard(id, note) {
 }
 
 function courseCard() {
+  const N = map.NODE_BY_ID;
   const [a, b] = state.selected;
   const p = state.path;
   const head = `<div class="kind">Plotted course</div>`;
   if (!p) {
-    return head + `<div class="chain"><span>${esc(NODE_BY_ID[a].name)}</span> <i>›</i> <span>${esc(NODE_BY_ID[b].name)}</span></div>` +
+    return head + `<div class="chain"><span>${esc(N[a].name)}</span> <i>›</i> <span>${esc(N[b].name)}</span></div>` +
       `<div class="none">No course — enable more upgrades</div>`;
   }
-  const chain = p.nodes.map((id) => `<span>${esc(NODE_BY_ID[id].name)}</span>`).join(' <i>›</i> ');
+  const chain = p.nodes.map((id) => `<span>${esc(N[id].name)}</span>`).join(' <i>›</i> ');
   const legs = p.routes.map((ri, k) => {
-    const r = ROUTES[ri];
-    return `<div class="row"><span class="to">${esc(NODE_BY_ID[p.nodes[k]].name)} › ${esc(NODE_BY_ID[p.nodes[k + 1]].name)}</span>${costTag(r.tier, r.cost)}</div>`;
+    const r = map.ROUTES[ri];
+    return `<div class="row"><span class="to">${esc(N[p.nodes[k]].name)} › ${esc(N[p.nodes[k + 1]].name)}</span>${costTag(r.tier, r.cost)}</div>`;
   }).join('');
-  const used = TIERS.filter((t) => p.routes.some((ri) => ROUTES[ri].tier === t.id))
+  const used = TIERS.filter((t) => p.routes.some((ri) => map.ROUTES[ri].tier === t.id))
     .map((t) => `<span data-tier="${t.id}" style="--c:${t.color}">${esc(t.label)}</span>`).join('');
   return head + `<div class="chain">${chain}</div><div class="rows">${legs}</div>` +
     `<div class="total"><span>${p.routes.length} jump${p.routes.length === 1 ? '' : 's'}</span><b>-${p.cost}</b></div>` +
@@ -204,13 +389,106 @@ function courseCard() {
 
 function renderCard() {
   let html = '';
-  if (state.hover) html = stationCard(state.hover);
+  if (state.hover && map.NODE_BY_ID[state.hover]) html = stationCard(state.hover);
   else if (state.selected.length === 2) html = courseCard();
   else if (state.selected.length === 1) html = stationCard(state.selected[0], 'Pick a destination');
   card.hidden = !html;
   // A hover readout can open under the cursor. It must not take the click.
   card.classList.toggle('passive', !!state.hover);
   if (html) card.innerHTML = html;
+}
+
+// ─── rail scrubber ──────────────────────────────────────────────────────────
+// A vertical track for the belt from end to end. The end of the belt that is
+// higher on the chart is at the top of the track. s is 0 at RAIL.a, 1 at RAIL.b.
+function topIsB() { return map.RAIL.b.y <= map.RAIL.a.y; }
+function sToFrac(s) { return topIsB() ? 1 - s : s; }
+function fracToS(f) { return topIsB() ? 1 - f : f; }
+
+// Position along the axis of a world point, as a fraction of the belt.
+function sOf(x, y) {
+  const ax = camera.axis, a = map.RAIL.a;
+  return ((x - a.x) * ax.ux + (y - a.y) * ax.uy) / ax.len;
+}
+
+let ticks = [];
+// A fixed element has no offsetParent, so ask the computed style.
+function scrubShown() { return getComputedStyle(scrub).display !== 'none'; }
+
+function buildScrub() {
+  scrubTicks.textContent = '';
+  ticks = map.NODES.map((n) => {
+    const f = clamp(sToFrac(sOf(n.x, n.y)), 0, 1);
+    const t = document.createElement('span');
+    t.className = n.size === 'l' ? 'tick hub' : 'tick';
+    t.style.top = `${(f * 100).toFixed(3)}%`;
+    scrubTicks.append(t);
+    return { f, name: n.name, el: t };
+  });
+}
+
+// The thumb spans the part of the belt axis on the screen, measured along
+// the line through the view centre.
+function drawScrub(view) {
+  if (!scrubShown()) return;
+  const ax = camera.axis;
+  const hw = view.w / 2 / view.zoom, hh = view.h / 2 / view.zoom;
+  const tmax = Math.min(Math.abs(ax.ux) > 1e-6 ? hw / Math.abs(ax.ux) : Infinity, Math.abs(ax.uy) > 1e-6 ? hh / Math.abs(ax.uy) : Infinity);
+  const sc = sOf(view.cx, view.cy), ds = tmax / ax.len;
+  const f0 = clamp(sToFrac(sc - ds), 0, 1), f1 = clamp(sToFrac(sc + ds), 0, 1);
+  const lo = Math.min(f0, f1), hi = Math.max(f0, f1);
+  scrubThumb.style.top = `${(lo * 100).toFixed(3)}%`;
+  scrubThumb.style.height = `${((hi - lo) * 100).toFixed(3)}%`;
+}
+
+// Glide the view centre along the axis to belt fraction f of the track.
+function scrubTo(f) {
+  const v = camera.view(), ax = camera.axis;
+  const ds = fracToS(clamp(f, 0, 1)) - sOf(v.cx, v.cy);
+  camera.focus(v.cx + ax.ux * ds * ax.len, v.cy + ax.uy * ds * ax.len);
+  wake();
+}
+
+let scrubDrag = null;   // { off } fraction offset from the pointer to the thumb centre
+function scrubFrac(e) {
+  const r = scrubTicks.getBoundingClientRect();
+  return (e.clientY - r.top) / Math.max(1, r.height);
+}
+scrub.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  firstTouch();
+  const f = scrubFrac(e);
+  const tr = scrubThumb.getBoundingClientRect(), r = scrubTicks.getBoundingClientRect();
+  const mid = (tr.top + tr.height / 2 - r.top) / Math.max(1, r.height);
+  // A press on the thumb drags it. A press on the track glides there first.
+  const onThumb = e.clientY >= tr.top - 3 && e.clientY <= tr.bottom + 3;
+  scrubDrag = { off: onThumb ? mid - f : 0 };
+  scrub.setPointerCapture(e.pointerId);
+  scrub.classList.add('active');
+  if (!onThumb) scrubTo(f);
+});
+scrub.addEventListener('pointermove', (e) => {
+  const f = scrubFrac(e);
+  if (scrubDrag) { scrubTo(f + scrubDrag.off); showTip(null); return; }
+  // Tooltip: the station tick nearest the pointer, within 7 px.
+  const h = scrubTicks.getBoundingClientRect().height;
+  let best = null, bd = 7;
+  for (const t of ticks) { const d = Math.abs(t.f - f) * h; if (d < bd) { bd = d; best = t; } }
+  showTip(best);
+});
+function endScrub() { scrubDrag = null; scrub.classList.remove('active'); }
+scrub.addEventListener('pointerup', endScrub);
+scrub.addEventListener('pointercancel', endScrub);
+scrub.addEventListener('pointerleave', () => { if (!scrubDrag) showTip(null); });
+scrub.addEventListener('wheel', (e) => onWheel(e), { passive: false });
+
+function showTip(t) {
+  for (const k of ticks) k.el.classList.toggle('hot', k === t);
+  if (!t) { scrubTip.hidden = true; return; }
+  scrubTip.textContent = t.name;
+  scrubTip.style.top = `${(t.f * 100).toFixed(3)}%`;
+  scrubTip.hidden = false;
 }
 
 // ─── pointer input ──────────────────────────────────────────────────────────
@@ -270,39 +548,55 @@ stage.addEventListener('click', () => {
   pickedNow = false;
 });
 
+// Double-click: on a station, focus it. On empty map, zoom in there.
 stage.addEventListener('dblclick', (e) => {
   const id = nearestStation(e.clientX, e.clientY);
   if (id) focusNode(id);
+  else { camera.zoomAt(2, e.clientX, e.clientY); wake(); }
 });
 
 // The station whose disc is under a screen point, from the camera alone.
 function nearestStation(sx, sy) {
   let best = null, bestD = Infinity;
-  for (const id in NODE_BY_ID) {
-    const n = NODE_BY_ID[id];
+  for (const n of map.NODES) {
     const s = camera.toScreen(n.x, n.y);
     const d = Math.hypot(s.x - sx, s.y - sy);
-    if (d < bestD) { bestD = d; best = id; }
+    if (d < bestD) { bestD = d; best = n.id; }
   }
   const r = Math.max(22, 40 * camera.view().zoom);
   return bestD <= r ? best : null;
 }
 
-// Wheel: slide along the belt. Scroll down goes toward the lower end of the
-// belt, like reading down the chart. Ctrl + wheel (and trackpad pinch) zooms.
-stage.addEventListener('wheel', (e) => {
+// Wheel, the map way. A vertical wheel zooms at the cursor. Shift + wheel,
+// or a sideways trackpad scroll, slides along the belt. Ctrl + wheel is a
+// trackpad pinch and zooms too.
+function onWheel(e) {
   e.preventDefault();
   firstTouch();
   const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? camera.view().h : 1;
   const dy = e.deltaY * unit, dx = e.deltaX * unit;
+  const v = camera.view(), ax = camera.axis;
+  const perPx = 1 / (v.zoom * ax.len);           // belt fraction per screen px
+  // Screen-down along the belt: the sign that moves s toward the lower end.
+  const down = ax.uy >= 0 ? 1 : -1, right = ax.ux >= 0 ? 1 : -1;
+  const inStage = e.currentTarget === stage;
+  const cx = inStage ? e.clientX : v.w / 2, cy = inStage ? e.clientY : v.h / 2;
   if (e.ctrlKey) {
-    camera.zoomAt(Math.exp(-clamp(dy, -60, 60) * 0.008), e.clientX, e.clientY);
+    camera.zoomAt(Math.exp(-clamp(dy, -50, 50) * 0.012), cx, cy);
+  } else if (e.shiftKey) {
+    // Chrome turns shift + wheel into deltaX. Down or right goes to the lower end.
+    const d = dy || dx;
+    camera.slide(down * d * perPx);
+  } else if (Math.abs(dx) > Math.abs(dy)) {
+    camera.slide(right * dx * perPx);
+  } else if (!inStage) {
+    camera.slide(down * dy * perPx);
   } else {
-    camera.slide(-dy / (camera.view().zoom * AXIS.len));
-    if (dx) camera.panBy(-dx, 0);
+    camera.zoomAt(Math.exp(-clamp(dy, -120, 120) * 0.0022), cx, cy);
   }
   wake();
-}, { passive: false });
+}
+stage.addEventListener('wheel', onWheel, { passive: false });
 
 // Safari sends gesture events for a trackpad pinch.
 let gestureScale = 1;
@@ -314,22 +608,55 @@ stage.addEventListener('gesturechange', (e) => {
   wake();
 });
 
+// ─── buttons ────────────────────────────────────────────────────────────────
+function zoomBy(f) {
+  const v = camera.view();
+  camera.zoomAt(f, v.w / 2, v.h / 2);
+  firstTouch();
+  wake();
+}
+
+function toggleHelp(open = helpCard.hidden) {
+  helpCard.hidden = !open;
+  btn.help.setAttribute('aria-expanded', String(open));
+  if (open) firstTouch();
+}
+
+btn.random.addEventListener('click', randomize);
+btn.original.addEventListener('click', original);
+btn.anim.addEventListener('click', () => setAnimate(!state.animate));
+btn.help.addEventListener('click', () => toggleHelp());
+btn.zin.addEventListener('click', () => zoomBy(1.4));
+btn.zout.addEventListener('click', () => zoomBy(1 / 1.4));
+btn.zfit.addEventListener('click', () => { firstTouch(); goHome(); });
+seedBtn.addEventListener('click', copyLink);
+$('help-close').addEventListener('click', () => toggleHelp(false));
+
 // ─── keys ───────────────────────────────────────────────────────────────────
-// KEYS
+// KEYS  A toggles animate, so the drift keys are the side arrows only.
 window.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]')) return;
   const v = camera.view();
   const step = 0.06 * camera.fitZoom / v.zoom;
-  const k = e.key.toLowerCase();
-  if (k === 'arrowup' || k === 'w') camera.slide(step);
-  else if (k === 'arrowdown' || k === 's') camera.slide(-step);
-  else if (k === 'arrowleft' || k === 'a') camera.panBy(80, 0);
-  else if (k === 'arrowright' || k === 'd') camera.panBy(-80, 0);
+  const down = camera.axis.uy >= 0 ? 1 : -1;
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key.toLowerCase();
+  if (k === 'arrowup' || k === 'w') camera.slide(-down * step);
+  else if (k === 'arrowdown' || k === 's') camera.slide(down * step);
+  else if (k === 'arrowleft') camera.panBy(80, 0);
+  else if (k === 'arrowright') camera.panBy(-80, 0);
   else if (k === '+' || k === '=') camera.zoomAt(1.25, v.w / 2, v.h / 2);
   else if (k === '-' || k === '_') camera.zoomAt(1 / 1.25, v.w / 2, v.h / 2);
   else if (k === 'h') goHome();
-  else if (k === 'escape') { clearSelection(); if (state.hover) hover(null); }
-  else return;
+  else if (k === 'r') randomize();
+  else if (k === 'o') original();
+  else if (k === 'a') setAnimate(!state.animate);
+  else if (k === '?' || k === '/') toggleHelp();
+  else if (k === 'escape') {
+    if (!helpCard.hidden) toggleHelp(false);
+    else { clearSelection(); if (state.hover) hover(null); }
+  } else return;
+  // Enter and space on a focused button stay with the button.
   e.preventDefault();
   firstTouch();
   wake();
@@ -344,7 +671,6 @@ function applySize() {
   dirty = true;
   wake();
 }
-new ResizeObserver(applySize).observe(stage);
 
 // ─── frame loop ─────────────────────────────────────────────────────────────
 // The loop runs every frame while the field is live (it drifts slowly) and
@@ -364,10 +690,10 @@ function tick(now) {
   const view = camera.view();
   // Any change of view, eased or instant, gets a new overlay layout.
   const key = `${view.cx} ${view.cy} ${view.zoom} ${view.w} ${view.h}`;
-  if (dirty || key !== lastKey) { overlay.update(view); dirty = false; lastKey = key; }
+  if (dirty || key !== lastKey) { overlay.update(view); drawScrub(view); dirty = false; lastKey = key; }
   if (field) {
-    const h = state.hover && NODE_BY_ID[state.hover];
-    field.render(view, (now - t0) / 1000, { hover: h ? { x: h.x, y: h.y } : null });
+    const h = state.hover && map.NODE_BY_ID[state.hover];
+    field.render(view, (now - t0) / 1000, { hover: h ? { x: h.x, y: h.y } : null, animate: state.animate });
   }
   if (field || moving) raf = requestAnimationFrame(tick);
 }
@@ -384,12 +710,37 @@ function showFallback(msg) {
   fb.hidden = false;
 }
 
+function showHint() {
+  hint.textContent = FINE.matches
+    ? 'scroll to zoom · shift-scroll or drag to slide · click two stations to plot a course · ? help'
+    : 'drag to slide the belt · pinch to zoom · tap two stations to plot a course';
+}
+
 async function boot() {
+  const h = readHash();
+  // Animate: the hash wins, then the stored choice. Reduced motion keeps
+  // the stored choice off, so only an explicit hash or click turns it on.
+  const stored = REDUCED.matches ? null : storedAnimate();
+  state.animate = h.anim ?? stored ?? false;
+  btn.anim.setAttribute('aria-pressed', String(state.animate));
+  if (REDUCED.matches) btn.anim.title = 'Animate (A). Off by default: your system asks for reduced motion.';
+
+  map = makeMap(h.seed);
+  wanted = map.seed || null;
+  camera = createCamera(map.RAIL, map.NODES);
+  overlay = createOverlay(svg, map, { onHover: hover, onPick: pick });
   buildLegend();
+  showTitles();
+  showHint();
+  buildScrub();
+  new ResizeObserver(applySize).observe(stage);
+  writeHash(false);
   sync();
   try {
     const { createField } = await import('./engine.js');
-    field = await createField(canvas);
+    const shown = map;
+    field = await createField(canvas, map);
+    if (map !== shown) field.setMap(map);
     field.resize(stage.clientWidth, stage.clientHeight, window.devicePixelRatio || 1);
     wake();
   } catch (err) {
@@ -399,5 +750,9 @@ async function boot() {
   }
 }
 
-window.__sb = { camera, state, overlay, pick, wake, home: goHome, get field() { return field; }, get input() { return { pointers: pointers.size, dragged, pickedNow }; } };
+window.__sb = {
+  get camera() { return camera; }, get map() { return map; }, state,
+  get overlay() { return overlay; }, pick, wake, home: goHome, randomize, original, setAnimate, toggleHelp,
+  get field() { return field; }, get input() { return { pointers: pointers.size, dragged, pickedNow }; },
+};
 boot();

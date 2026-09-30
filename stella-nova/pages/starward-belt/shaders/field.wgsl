@@ -15,22 +15,29 @@
 // the same screen width at every zoom. World features (stripes, hollow
 // circles) scale with the zoom.
 //
+// Animate mode (F.anim, from engine.js): each dust and rock layer drifts
+// along the belt at its own speed (anim.x is the travel time), and the warp
+// phases swing slowly, so the dashed contours breathe. anim.y fades the
+// swing in and out. With anim = 0 the shader runs the same sums as the
+// static field, so the static look is bit for bit the same.
+//
 // grep: struct Frame  struct Scene  fn vs  fn fs  fn rails  fn dust  fn rocks
 //       fn clouds  fn warp  fn smoothDensity  fn hatchSdf  fn pcg3  fn vnoise  fn fbm
+//       DRIFT_  BREATH
 
 struct Frame {
   cam: vec4f,     // cx, cy, zoom (css px per world unit), scale (device px per css px)
   vp: vec4f,      // css w, css h, time s, fit zoom
   hover: vec4f,   // x, y, 1 when a station is hovered, 0
-  pad: vec4f,
+  anim: vec4f,    // travel time s, fade 0..1, 0, 0 (engine.js integrates them)
 };
 
 struct Scene {
   rail: vec4f,                  // a.x, a.y, axis unit x, axis unit y
   info: vec4f,                  // axis length, rail spacing, cloud count, region count
-  clouds: array<vec4f, 24>,     // pairs: (x, y, rx, ry), (w, 0, 0, 0)
+  clouds: array<vec4f, 32>,     // 16 clouds, pairs: (x, y, rx, ry), (w, 0, 0, 0)
   regions: array<vec4f, 4>,     // first disc, disc count, smooth k, 0
-  discs: array<vec4f, 16>,      // x, y, r, 0
+  discs: array<vec4f, 24>,      // x, y, r, 0
 };
 
 @group(0) @binding(0) var<uniform> F: Frame;
@@ -43,6 +50,14 @@ const ROCK_C = vec3f(0.50);
 const LINE_C = vec3f(0.74);
 const HATCH_C = vec3f(0.541);         // #8a8a8a
 const TAU = 6.2831853;
+
+// Animate mode: drift speeds along the belt, world units per s of travel
+// time. The fine dust moves fastest, the rocks slowest, so the layers part.
+const DRIFT_DUST = vec3f(8.0, 6.2, 9.5);    // fine dots, coarse dots, stray dots
+const DRIFT_ROCK = vec2f(3.0, 2.0);         // small rocks, large rocks
+// Warp phase swing: amplitude (rad) and period (s) of each of the 3 waves.
+const BREATH_A = vec3f(0.55, 0.75, 0.9);
+const BREATH_T = vec3f(47.0, 31.0, 23.0);
 
 @vertex
 fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
@@ -149,7 +164,18 @@ fn warp(p: vec2f) -> f32 {
              + 0.14 * sin(dot(p, vec2f(0.28, -0.96)) / 55.0 + 0.6);
 }
 
-fn smoothDensity(p: vec2f) -> f32 {
+// The same waves with a phase swing sw per wave, for animate mode. warp()
+// stays a separate function: with the swing folded in, the compiler fuses
+// the sums in a different order and a few contour pixels move by one level.
+fn warpSwing(p: vec2f, sw: vec3f) -> f32 {
+  return 0.5 + 0.3 * sin(dot(p, vec2f(0.62, 0.78)) / 140.0 + 1.7 + sw.x)
+             + 0.2 * sin(dot(p, vec2f(-0.91, 0.41)) / 90.0 + 4.2 + sw.y)
+             + 0.14 * sin(dot(p, vec2f(0.28, -0.96)) / 55.0 + 0.6 + sw.z);
+}
+
+// Smooth density of the dust. anim.y > 0 (a uniform) picks the swung warp.
+fn smoothDensity(p: vec2f, sw: vec3f) -> f32 {
+  if (F.anim.y > 0.0) { return clouds(p) * (0.78 + 0.44 * warpSwing(p, sw)); }
   return clouds(p) * (0.78 + 0.44 * warp(p));
 }
 
@@ -225,8 +251,11 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   let css = pos.xy / scale;
   let p = (css - 0.5 * F.vp.xy) / zoom + F.cam.xy;
 
+  // Warp swing: slow sines of the travel time, scaled by the fade in anim.y.
+  let sw = BREATH_A * sin(TAU * F.anim.x / BREATH_T + vec3f(0.0, 2.1, 4.4)) * F.anim.y;
+
   // Everything that needs screen derivatives runs here, in uniform flow.
-  let sd = smoothDensity(p);
+  let sd = smoothDensity(p, sw);
   let gx = dpdx(sd);
   let gy = dpdy(sd);
   let gl = max(length(vec2f(gx, gy)), 1e-6);
@@ -240,9 +269,15 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   let hs = hatchSdf(p);
   let inside = 1.0 - smoothstep(-6.0, 2.0, hs);
 
-  // Dust dots drift slowly along the belt axis.
-  let drift = axisU() * (F.vp.z * 0.35);
-  let pd = p - drift;
+  // Dust dots drift slowly along the belt axis. Animate mode adds a faster
+  // stream per layer.
+  let slow = F.vp.z * 0.35;
+  let tr = F.anim.x;
+  let pd = p - axisU() * (slow + DRIFT_DUST.x * tr);
+  let pd2 = p - axisU() * (slow + DRIFT_DUST.y * tr);
+  let pd3 = p - axisU() * (slow + DRIFT_DUST.z * tr);
+  let pr1 = p - axisU() * (slow + DRIFT_ROCK.x * tr);
+  let pr2 = p - axisU() * (slow + DRIFT_ROCK.y * tr);
   let rough = fbm(p / 60.0);
   let dens = sd * mix(0.15, 2.1, rough * rough);
   var hov = 1.0;
@@ -255,15 +290,15 @@ fn fs(@builtin(position) pos: vec4f) -> @location(0) vec4f {
   let dim = 1.0 - 0.5 * inside;
   let pr = clamp(dens * 0.72, 0.0, 0.85) * dim;
   var dc = dust(pd, 6.0, 1u, pr, rDot, devPerWorld);
-  dc = max(dc, dust(pd + vec2f(3.1, 1.7), 8.5, 2u, pr * 0.8, rDot, devPerWorld));
+  dc = max(dc, dust(pd2 + vec2f(3.1, 1.7), 8.5, 2u, pr * 0.8, rDot, devPerWorld));
   let stray = band(p);
-  dc = max(dc, dust(pd, 23.0, 3u, stray * 0.10, rDot, devPerWorld));
+  dc = max(dc, dust(pd3, 23.0, 3u, stray * 0.10, rDot, devPerWorld));
   col = mix(col, DUST_C * min(hov, 1.4), dc * min(0.85 * hov, 1.0));
 
   // Hollow rocks: a common small layer and a rare large layer.
   let rp = clamp(0.05 * stray + 0.12 * sd, 0.0, 0.3) * dim;
-  var rc = rocks(pd, 36.0, 4u, rp, 1.6, 5.5, 5.0, devPerWorld);
-  rc = max(rc, rocks(pd + vec2f(17.0, 41.0), 105.0, 5u, 0.35 * stray, 3.5, 9.0, 3.0, devPerWorld));
+  var rc = rocks(pr1, 36.0, 4u, rp, 1.6, 5.5, 5.0, devPerWorld);
+  rc = max(rc, rocks(pr2 + vec2f(17.0, 41.0), 105.0, 5u, 0.35 * stray, 3.5, 9.0, 3.0, devPerWorld));
   col = mix(col, ROCK_C * min(hov, 1.4), rc * 0.8);
 
   // Density contour: a thin dashed isoline at a high threshold. The dash

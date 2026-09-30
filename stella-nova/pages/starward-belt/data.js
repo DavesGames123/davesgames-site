@@ -4,7 +4,7 @@
 // y down. The field shader, the SVG overlay and the camera all read these
 // numbers, so a change here moves every layer at once.
 //
-// grep: WORLD  RAIL  TIERS  NODES  ROUTES  HATCH  CLOUDS
+// grep: WORLD  RAIL  TIERS  NODES  ROUTES  HATCH  CLOUDS  STARWARD_MAP  indexMap
 
 export const WORLD = { w: 1351, h: 1999 };
 
@@ -104,3 +104,24 @@ export const CLOUDS = [
 // Lookup helpers shared by the overlay and the route solver.
 export const NODE_BY_ID = Object.fromEntries(NODES.map(n => [n.id, n]));
 export const TIER_BY_ID = Object.fromEntries(TIERS.map(t => [t.id, t]));
+
+// The original chart as one map object (contract M). Every node uses its
+// own glyph, so icon = id. generate.js makes maps of the same shape.
+export const STARWARD_MAP = {
+  id: 'starward',
+  seed: null,
+  title: { game: 'Citizen Sleeper 2', vector: 'Starward Vector', plateTop: 'Map of the', plate: 'Starward Belt' },
+  WORLD, RAIL, TIERS,
+  NODES: NODES.map((n) => ({ ...n, icon: n.id })),
+  ROUTES, HATCH, CLOUDS,
+};
+
+// A map plus its lookup tables. The overlay, the route solver and the page
+// read nodes and tiers by id through these.
+export function indexMap(map) {
+  return {
+    ...map,
+    NODE_BY_ID: Object.fromEntries(map.NODES.map((n) => [n.id, n])),
+    TIER_BY_ID: Object.fromEntries(map.TIERS.map((t) => [t.id, t])),
+  };
+}

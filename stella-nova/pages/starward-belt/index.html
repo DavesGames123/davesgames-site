@@ -16,20 +16,26 @@
 
    LAYOUT  (# marks an element id)
      ┌──────────────────────────────────────────────────────────────────┐
-     │ #title   game + vector name              #field  WebGPU canvas   │
-     │ #legend  one button per route tier       #overlay SVG, same view │
-     │                                                                  │
-     │ #card    station / route readout         #plate  map title       │
+     │ #title   game + vector name            #toolbar  random, original│
+     │ #legend  one button per route tier               animate, help   │
+     │                                        #help     controls card   │
+     │                                        #scrub    belt scrubber  ┃│
+     │ #field   WebGPU canvas                                          ┃│
+     │ #overlay SVG, same view                #zoom     + - fit         │
+     │ #card    station / route readout       #plate    map title, #seed│
      └──────────────────────────────────────────────────────────────────┘
+   The URL hash holds the map and the animate switch: #seed=<code>&anim=1.
 
    FILES
-     data.js     nodes, routes, tiers, hatch regions, dust clouds (no DOM)
+     data.js     the original map as data, plus indexMap (no DOM)
+     generate.js random map from a seed, same shape as the original (no DOM)
      camera.js   rail camera: slide along the belt, drift, zoom (no DOM)
      engine.js   WebGPU field layer (no DOM beyond the canvas)
      icons.js    one station glyph per node, SVG strings
      overlay.js  SVG layer: rings, routes, tags, stations, labels
      route.js    cheapest jump path under the active tiers (no DOM)
-     main.js     wiring, input, legend, card, frame loop
+     main.js     wiring, URL hash, input, toolbar, legend, card, scrubber,
+                 frame loop
      shaders/    field.wgsl
   ═══════════════════════════════════════════════════════════════════════════
 -->
@@ -46,20 +52,72 @@
 </div>
 
 <header class="title" id="title">
-  <h1>Citizen Sleeper 2</h1>
-  <h2>Starward Vector</h2>
+  <h1 id="title-game">Citizen Sleeper 2</h1>
+  <h2 id="title-vector">Starward Vector</h2>
 </header>
 
 <nav class="legend" id="legend" aria-label="Route tiers"></nav>
 
+<nav class="toolbar" id="toolbar" aria-label="Map">
+  <button type="button" class="tb" id="btn-random" title="New random map (R)" aria-label="Randomize">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11"/><circle cx="5.5" cy="5.5" r="1"/><circle cx="10.5" cy="10.5" r="1"/><circle cx="8" cy="8" r="1"/></svg><span>Randomize</span>
+  </button>
+  <button type="button" class="tb" id="btn-original" title="Back to the original map (O)" aria-label="Original map" hidden>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8a4.5 4.5 0 1 0 1.4-3.3"/><path d="M4.5 1.8v3.2h3.2"/></svg><span>Original</span>
+  </button>
+  <button type="button" class="tb" id="btn-anim" title="Animate (A)" aria-label="Animate" aria-pressed="false">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 8c1.6-3.2 3.4-3.2 5 0s3.4 3.2 5 0 2.6-2.4 3 0"/></svg><span>Animate</span>
+  </button>
+  <button type="button" class="tb tb-help" id="btn-help" title="Controls (?)" aria-label="Controls" aria-expanded="false" aria-controls="help"><span>?</span></button>
+</nav>
+
+<aside class="help" id="help" aria-label="Controls" hidden>
+  <div class="help-head"><span>Controls</span><button type="button" id="help-close" aria-label="Close">×</button></div>
+  <div class="help-sec">Mouse</div>
+  <dl>
+    <dt>Scroll</dt><dd>Zoom at the cursor</dd>
+    <dt>Shift + scroll</dt><dd>Slide along the belt</dd>
+    <dt>Pinch</dt><dd>Zoom (trackpad)</dd>
+    <dt>Drag</dt><dd>Pan the chart</dd>
+    <dt>Click</dt><dd>Two stations plot a course</dd>
+    <dt>Double-click</dt><dd>Focus a station, or zoom in</dd>
+    <dt>Scrubber</dt><dd>Drag or click to glide</dd>
+  </dl>
+  <div class="help-sec">Keys</div>
+  <dl>
+    <dt>↑ ↓ W S</dt><dd>Slide along the belt</dd>
+    <dt>← →</dt><dd>Drift across the belt</dd>
+    <dt>+ −</dt><dd>Zoom</dd>
+    <dt>H</dt><dd>Home</dd>
+    <dt>R</dt><dd>Random map</dd>
+    <dt>O</dt><dd>Original map</dd>
+    <dt>A</dt><dd>Animate on or off</dd>
+    <dt>?</dt><dd>This card</dd>
+    <dt>Esc</dt><dd>Clear the course</dd>
+  </dl>
+</aside>
+
+<div class="scrub" id="scrub" aria-hidden="true">
+  <div class="scrub-ticks" id="scrub-ticks"></div>
+  <div class="scrub-thumb" id="scrub-thumb"></div>
+  <div class="scrub-tip" id="scrub-tip" hidden></div>
+</div>
+
+<div class="zoom" id="zoom" role="group" aria-label="Zoom">
+  <button type="button" class="tb" id="z-in" title="Zoom in (+)" aria-label="Zoom in"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg></button>
+  <button type="button" class="tb" id="z-out" title="Zoom out (−)" aria-label="Zoom out"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg></button>
+  <button type="button" class="tb" id="z-fit" title="Fit the belt (H)" aria-label="Fit the belt"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg></button>
+</div>
+
 <aside class="card" id="card" hidden></aside>
 
 <footer class="plate" id="plate">
-  <span>Map of the</span>
-  <strong>Starward Belt</strong>
+  <span id="plate-top">Map of the</span>
+  <strong id="plate-name">Starward Belt</strong>
+  <button type="button" class="seed" id="seed" title="Copy a link to this map" hidden>seed <b></b> · <i>copy link</i></button>
 </footer>
 
-<div class="hint" id="hint">drag or scroll to slide the belt · click two stations to plot a course · H home</div>
+<div class="hint" id="hint">scroll to zoom · drag to slide the belt · click two stations to plot a course · ? help</div>
 
 <script type="module" src="main.js"></script>
 </body>

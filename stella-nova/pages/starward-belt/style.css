@@ -1,11 +1,13 @@
 /* style.css — Starward Belt page.
  *
  * The map fills the viewport: #field (WebGPU) under #overlay (SVG), both in
- * #stage. The title, the legend, the card, the plate and the hint float on
- * top. Only the legend buttons and the card take pointer input, so every
- * other pixel sends drag, wheel and click to the map.
+ * #stage. The title, the legend, the toolbar, the help card, the scrubber,
+ * the zoom buttons, the card, the plate and the hint float on top. Only the
+ * buttons, the cards and the scrubber take pointer input, so every other
+ * pixel sends drag, wheel and click to the map.
  *
- * grep: :root  .stage  .title  .legend  .sw  .card  .plate  .hint  .fallback  @media
+ * grep: :root  .stage  .swapping  .title  .legend  .sw  .tb  .toolbar  .help  .scrub  .zoom
+ *       .card  .plate  .seed  .hint  .fallback  @media
  */
 
 :root {
@@ -46,6 +48,14 @@ html, body {
 }
 .stage.dragging { cursor: grabbing; }
 
+/* Map swap: the map and the names fade out, change, and fade in. */
+.stage,
+.title h1, .title h2,
+.plate span, .plate strong, .seed { transition: opacity 250ms ease; }
+.swapping .stage,
+.swapping .title h1, .swapping .title h2,
+.swapping .plate span, .swapping .plate strong, .swapping .seed { opacity: 0; transition-duration: 180ms; }
+
 .stage > canvas,
 .stage > svg {
   position: absolute;
@@ -60,7 +70,7 @@ html, body {
 .fallback {
   position: absolute;
   right: var(--pad);
-  top: calc(var(--pad) + 76px);
+  top: calc(var(--pad) + 110px);
   z-index: 2;
   max-width: 300px;
   padding: 8px 12px;
@@ -161,6 +171,177 @@ html, body {
   text-decoration-thickness: 1px;
 }
 
+/* ─── toolbar and zoom buttons ───────────────────────────────────────────── */
+
+.tb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  height: 30px;
+  min-width: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  background: rgba(11, 11, 11, 0.9);
+  color: #cfcfcf;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, color 0.15s;
+}
+.tb[hidden] { display: none; }
+.tb span { margin-right: -0.3em; }
+.tb svg {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.2;
+  stroke-linecap: square;
+}
+.tb svg circle { fill: currentColor; stroke: none; }
+@media (hover: hover) { .tb:hover { border-color: var(--grey); color: #fff; } }
+.tb:focus { outline: none; }
+.tb:focus-visible { outline: 1px solid var(--grey); outline-offset: 3px; }
+.tb[aria-pressed="true"],
+.tb[aria-expanded="true"] { border-color: var(--ink); color: #fff; }
+.tb-help { padding: 0; width: 30px; font-size: 13px; }
+.tb-help span { margin: 0; }
+
+.toolbar {
+  position: fixed;
+  right: var(--pad);
+  top: calc(var(--pad) - 4px);
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.zoom {
+  position: fixed;
+  right: var(--pad);
+  bottom: calc(var(--pad) + 100px);
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+  pointer-events: none;
+}
+.zoom .tb { padding: 0; width: 30px; }
+
+/* ─── help card ──────────────────────────────────────────────────────────── */
+
+.help {
+  position: fixed;
+  right: var(--pad);
+  top: calc(var(--pad) + 40px);
+  z-index: 6;
+  width: 372px;
+  max-height: calc(100% - 2 * var(--pad) - 50px);
+  overflow-y: auto;
+  padding: 14px 18px 12px;
+  border: 1px solid var(--line);
+  background: rgba(11, 11, 11, 0.94);
+  font-size: 10.5px;
+  line-height: 1.5;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+.help[hidden] { display: none; }
+.help-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff;
+  font-size: 12px;
+  letter-spacing: 0.4em;
+}
+.help-head button {
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--grey);
+  font: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.help-head button:hover { color: #fff; }
+.help-sec { margin: 12px 0 6px; padding-top: 8px; border-top: 1px solid var(--line); color: var(--grey); letter-spacing: 0.4em; }
+.help dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.help dt { color: #fff; white-space: nowrap; }
+.help dd { margin: 0; color: #a8a8a8; }
+
+/* ─── rail scrubber ──────────────────────────────────────────────────────── */
+
+/* The track is the belt from end to end. Ticks mark the stations. The
+ * thumb spans the part of the belt on the screen. */
+.scrub {
+  position: fixed;
+  right: 11px;
+  top: calc(var(--pad) + 100px);
+  bottom: calc(var(--pad) + 150px);
+  z-index: 3;
+  width: 18px;
+  cursor: pointer;
+  touch-action: none;
+}
+.scrub::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line);
+  transition: background 0.15s;
+}
+.scrub:hover::before, .scrub.active::before { background: var(--grey); }
+.scrub-ticks { position: absolute; inset: 0; pointer-events: none; }
+.tick {
+  position: absolute;
+  left: 50%;
+  width: 7px;
+  height: 1px;
+  margin-left: -3.5px;
+  background: var(--grey);
+}
+.tick.hub { width: 11px; margin-left: -5.5px; background: #cfcfcf; }
+.tick.hot { width: 13px; margin-left: -6.5px; background: #fff; }
+.scrub-thumb {
+  position: absolute;
+  left: 50%;
+  width: 9px;
+  min-height: 8px;
+  margin-left: -4.5px;
+  border: 1px solid #cfcfcf;
+  background: rgba(242, 242, 242, 0.06);
+  cursor: grab;
+}
+.scrub.active .scrub-thumb { border-color: #fff; cursor: grabbing; }
+.scrub-tip {
+  position: absolute;
+  right: 22px;
+  transform: translateY(-50%);
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  background: rgba(11, 11, 11, 0.92);
+  color: #fff;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.scrub-tip[hidden] { display: none; }
+
 /* ─── card ───────────────────────────────────────────────────────────────── */
 
 .card {
@@ -259,12 +440,33 @@ html, body {
   color: #fff;
 }
 
+/* The seed of a random map. A click copies the link. */
+.seed {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--grey);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.3em;
+  margin-right: -0.3em;
+  text-transform: uppercase;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.seed[hidden] { display: none; }
+.seed b { font-weight: 500; color: #cfcfcf; }
+.seed i { font-style: normal; }
+.seed:hover i, .seed.copied i { color: #fff; }
+.seed:focus { outline: none; }
+.seed:focus-visible { outline: 1px solid var(--grey); outline-offset: 3px; }
+
 /* ─── hint ───────────────────────────────────────────────────────────────── */
 
 .hint {
   position: fixed;
   right: var(--pad);
-  top: calc(var(--pad) + 2px);
+  top: calc(var(--pad) + 46px);
   z-index: 3;
   max-width: 300px;
   color: var(--grey);
@@ -289,8 +491,16 @@ html, body {
   .plate span { font-size: 14px; }
   .plate strong { font-size: 24px; }
   /* The belt reaches the top right here. Put the hint above the plate. */
-  .hint { max-width: 220px; top: auto; bottom: calc(var(--pad) + 84px); }
-  .fallback { top: calc(var(--pad) + 92px); max-width: 220px; }
+  .hint { max-width: 220px; top: auto; bottom: calc(var(--pad) + 120px); }
+  .fallback { top: calc(var(--pad) + 44px); max-width: 220px; }
+  .zoom { bottom: calc(var(--pad) + 76px); }
+  .scrub { top: calc(var(--pad) + 60px); bottom: calc(var(--pad) + 124px); }
+}
+
+/* ─── touch: no scrubber, no help card (no mouse, no keys) ───────────────── */
+
+@media (max-width: 600px), (pointer: coarse) {
+  .scrub, .tb-help, .help { display: none; }
 }
 
 /* ─── phone width ────────────────────────────────────────────────────────── */
@@ -330,5 +540,13 @@ html, body {
   .plate strong { font-size: 16px; letter-spacing: 0.45em; margin-right: -0.45em; }
 
   .fallback { top: 104px; left: var(--pad); right: var(--pad); max-width: none; text-align: center; font-size: 9px; letter-spacing: 0.2em; }
-  .hint { top: auto; bottom: 64px; left: var(--pad); right: var(--pad); max-width: none; text-align: center; font-size: 9px; letter-spacing: 0.2em; }
+  /* Icons only. The Original button shows only on a random map, where the
+   * title is shorter. */
+  .toolbar { top: 10px; right: var(--pad); gap: 6px; }
+  .toolbar .tb { width: 28px; height: 28px; min-width: 28px; padding: 0; }
+  .toolbar .tb span { display: none; }
+  .zoom { display: none; }
+  .seed { font-size: 9px; letter-spacing: 0.24em; margin-right: -0.24em; }
+
+  .hint { top: auto; bottom: 84px; left: var(--pad); right: var(--pad); max-width: none; text-align: center; font-size: 9px; letter-spacing: 0.2em; }
 }
