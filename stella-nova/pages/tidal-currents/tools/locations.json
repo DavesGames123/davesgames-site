@@ -1,0 +1,446 @@
+{
+  "window": {
+    "startLocal": "2026-09-21T00:00",
+    "hours": 169
+  },
+  "locations": [
+    {
+      "id": "puget-sound",
+      "title": "Puget Sound",
+      "model": "sscofs",
+      "modelShort": "SSCOFS",
+      "modelLong": "NOAA Salish Sea and Columbia River Operational Forecast System",
+      "tzLabel": "PDT",
+      "utcOffsetHours": -7,
+      "bbox": {
+        "lon0": -123.22,
+        "lon1": -121.82,
+        "lat0": 46.86,
+        "lat1": 48.54
+      },
+      "width": 720,
+      "height": 1280,
+      "labels": [
+        {
+          "name": "PORT TOWNSEND",
+          "lon": -122.76,
+          "lat": 48.117,
+          "size": "sm",
+          "side": "left"
+        },
+        {
+          "name": "EVERETT",
+          "lon": -122.202,
+          "lat": 47.979,
+          "size": "md",
+          "side": "right"
+        },
+        {
+          "name": "BREMERTON",
+          "lon": -122.633,
+          "lat": 47.567,
+          "size": "sm",
+          "side": "left"
+        },
+        {
+          "name": "SEATTLE",
+          "lon": -122.335,
+          "lat": 47.606,
+          "size": "lg",
+          "side": "right"
+        },
+        {
+          "name": "TACOMA",
+          "lon": -122.444,
+          "lat": 47.253,
+          "size": "md",
+          "side": "right"
+        },
+        {
+          "name": "OLYMPIA",
+          "lon": -122.9,
+          "lat": 47.038,
+          "size": "md",
+          "side": "left"
+        }
+      ],
+      "layout": {
+        "title": {
+          "x": 0.93,
+          "y": 0.075,
+          "align": "right"
+        },
+        "legend": {
+          "x": 0.075,
+          "y": 0.325,
+          "align": "left"
+        },
+        "brand": {
+          "x": 0.93,
+          "y": 0.43,
+          "align": "right"
+        },
+        "credit": {
+          "x": 0.93,
+          "y": 0.945,
+          "align": "right"
+        }
+      }
+    },
+    {
+      "id": "sf-bay",
+      "title": "San Francisco Bay",
+      "model": "sfbofs",
+      "modelShort": "SFBOFS",
+      "openBoundaryFade": [
+        {
+          "lon0": -122.7,
+          "lon1": -122.505,
+          "lat0": 37.3,
+          "lat1": 37.59,
+          "note": "SFBOFS open ocean boundary south of 37.6 N"
+        }
+      ],
+      "modelLong": "NOAA San Francisco Bay Operational Forecast System",
+      "tzLabel": "PDT",
+      "utcOffsetHours": -7,
+      "bbox": {
+        "lon0": -122.67,
+        "lon1": -121.94,
+        "lat0": 37.31,
+        "lat1": 38.33
+      },
+      "width": 720,
+      "height": 1280,
+      "labels": [
+        {
+          "name": "VALLEJO",
+          "lon": -122.256,
+          "lat": 38.104,
+          "size": "sm",
+          "side": "right"
+        },
+        {
+          "name": "RICHMOND",
+          "lon": -122.348,
+          "lat": 37.936,
+          "size": "sm",
+          "side": "left"
+        },
+        {
+          "name": "SAUSALITO",
+          "lon": -122.485,
+          "lat": 37.859,
+          "size": "xs",
+          "side": "left"
+        },
+        {
+          "name": "SAN FRANCISCO",
+          "lon": -122.419,
+          "lat": 37.775,
+          "size": "lg",
+          "side": "left"
+        },
+        {
+          "name": "OAKLAND",
+          "lon": -122.271,
+          "lat": 37.804,
+          "size": "md",
+          "side": "left"
+        },
+        {
+          "name": "HAYWARD",
+          "lon": -122.081,
+          "lat": 37.669,
+          "size": "sm",
+          "side": "right"
+        },
+        {
+          "name": "SAN MATEO",
+          "lon": -122.325,
+          "lat": 37.563,
+          "size": "sm",
+          "side": "left"
+        },
+        {
+          "name": "PALO ALTO",
+          "lon": -122.143,
+          "lat": 37.442,
+          "size": "sm",
+          "side": "left"
+        }
+      ],
+      "layout": {
+        "title": {
+          "x": 0.6,
+          "y": 0.3,
+          "align": "left"
+        },
+        "legend": {
+          "x": 0.6,
+          "y": 0.47,
+          "align": "left"
+        },
+        "brand": {
+          "x": 0.065,
+          "y": 0.74,
+          "align": "left"
+        },
+        "credit": {
+          "x": 0.065,
+          "y": 0.945,
+          "align": "left"
+        }
+      }
+    },
+    {
+      "id": "san-juan-islands",
+      "title": "San Juan Islands",
+      "model": "sscofs",
+      "modelShort": "SSCOFS",
+      "modelLong": "NOAA Salish Sea and Columbia River Operational Forecast System",
+      "tzLabel": "PDT",
+      "utcOffsetHours": -7,
+      "bbox": {
+        "lon0": -123.55,
+        "lon1": -122.4,
+        "lat0": 48.0,
+        "lat1": 49.35
+      },
+      "width": 720,
+      "height": 1280,
+      "labels": [
+        {
+          "name": "VANCOUVER",
+          "lon": -123.116,
+          "lat": 49.283,
+          "size": "md",
+          "side": "right"
+        },
+        {
+          "name": "BELLINGHAM",
+          "lon": -122.479,
+          "lat": 48.75,
+          "size": "md",
+          "side": "left"
+        },
+        {
+          "name": "FRIDAY HARBOR",
+          "lon": -123.013,
+          "lat": 48.535,
+          "size": "sm",
+          "side": "right"
+        },
+        {
+          "name": "ANACORTES",
+          "lon": -122.612,
+          "lat": 48.512,
+          "size": "sm",
+          "side": "right"
+        },
+        {
+          "name": "SIDNEY",
+          "lon": -123.398,
+          "lat": 48.65,
+          "size": "xs",
+          "side": "left"
+        },
+        {
+          "name": "VICTORIA",
+          "lon": -123.365,
+          "lat": 48.428,
+          "size": "lg",
+          "side": "left"
+        },
+        {
+          "name": "PORT ANGELES",
+          "lon": -123.43,
+          "lat": 48.118,
+          "size": "sm",
+          "side": "right"
+        }
+      ],
+      "layout": {
+        "title": {
+          "x": 0.93,
+          "y": 0.64,
+          "align": "right"
+        },
+        "legend": {
+          "x": 0.93,
+          "y": 0.8,
+          "align": "right"
+        },
+        "brand": {
+          "x": 0.065,
+          "y": 0.05,
+          "align": "left"
+        },
+        "credit": {
+          "x": 0.93,
+          "y": 0.945,
+          "align": "right"
+        }
+      }
+    },
+    {
+      "id": "cook-inlet",
+      "title": "Cook Inlet",
+      "model": "ciofs",
+      "modelShort": "CIOFS",
+      "modelLong": "NOAA Cook Inlet Operational Forecast System",
+      "tzLabel": "AKDT",
+      "utcOffsetHours": -8,
+      "bbox": {
+        "lon0": -152.0,
+        "lon1": -148.9,
+        "lat0": 60.6,
+        "lat1": 61.605
+      },
+      "width": 1280,
+      "height": 853,
+      "labels": [
+        {
+          "name": "ANCHORAGE",
+          "lon": -149.9,
+          "lat": 61.218,
+          "size": "lg",
+          "side": "right"
+        },
+        {
+          "name": "TYONEK",
+          "lon": -151.137,
+          "lat": 61.068,
+          "size": "sm",
+          "side": "left"
+        },
+        {
+          "name": "HOPE",
+          "lon": -149.64,
+          "lat": 60.92,
+          "size": "sm",
+          "side": "right"
+        },
+        {
+          "name": "GIRDWOOD",
+          "lon": -149.166,
+          "lat": 60.942,
+          "size": "sm",
+          "side": "left"
+        },
+        {
+          "name": "NIKISKI",
+          "lon": -151.289,
+          "lat": 60.69,
+          "size": "sm",
+          "side": "right"
+        },
+        {
+          "name": "WASILLA",
+          "lon": -149.441,
+          "lat": 61.581,
+          "size": "xs",
+          "side": "right"
+        }
+      ],
+      "layout": {
+        "title": {
+          "x": 0.05,
+          "y": 0.07,
+          "align": "left"
+        },
+        "legend": {
+          "x": 0.95,
+          "y": 0.7,
+          "align": "right"
+        },
+        "brand": {
+          "x": 0.05,
+          "y": 0.8,
+          "align": "left"
+        },
+        "credit": {
+          "x": 0.05,
+          "y": 0.93,
+          "align": "left"
+        }
+      }
+    },
+    {
+      "id": "straits-of-mackinac",
+      "title": "Straits of Mackinac",
+      "model": "lmhofs",
+      "modelShort": "LMHOFS",
+      "modelLong": "NOAA Lake Michigan-Huron Operational Forecast System",
+      "tzLabel": "EDT",
+      "utcOffsetHours": -4,
+      "bbox": {
+        "lon0": -85.4,
+        "lon1": -83.9,
+        "lat0": 45.45,
+        "lat1": 46.15
+      },
+      "width": 1280,
+      "height": 853,
+      "labels": [
+        {
+          "name": "ST. IGNACE",
+          "lon": -84.727,
+          "lat": 45.866,
+          "size": "md",
+          "side": "left"
+        },
+        {
+          "name": "MACKINAW CITY",
+          "lon": -84.727,
+          "lat": 45.777,
+          "size": "md",
+          "side": "left"
+        },
+        {
+          "name": "MACKINAC ISLAND",
+          "lon": -84.618,
+          "lat": 45.849,
+          "size": "sm",
+          "side": "right"
+        },
+        {
+          "name": "CHEBOYGAN",
+          "lon": -84.474,
+          "lat": 45.647,
+          "size": "sm",
+          "side": "right"
+        },
+        {
+          "name": "CEDARVILLE",
+          "lon": -84.36,
+          "lat": 45.996,
+          "size": "xs",
+          "side": "right"
+        }
+      ],
+      "layout": {
+        "title": {
+          "x": 0.05,
+          "y": 0.07,
+          "align": "left"
+        },
+        "legend": {
+          "x": 0.36,
+          "y": 0.8,
+          "align": "left"
+        },
+        "brand": {
+          "x": 0.95,
+          "y": 0.07,
+          "align": "right"
+        },
+        "credit": {
+          "x": 0.95,
+          "y": 0.93,
+          "align": "right"
+        }
+      }
+    }
+  ]
+}

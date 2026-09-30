@@ -1,0 +1,22 @@
+[
+ {
+  "id": "puget-sound",
+  "title": "Puget Sound",
+  "aspect": "portrait"
+ },
+ {
+  "id": "sf-bay",
+  "title": "San Francisco Bay",
+  "aspect": "portrait"
+ },
+ {
+  "id": "san-juan-islands",
+  "title": "San Juan Islands",
+  "aspect": "portrait"
+ },
+ {
+  "id": "straits-of-mackinac",
+  "title": "Straits of Mackinac",
+  "aspect": "landscape"
+ }
+]
