@@ -1,7 +1,8 @@
 // ============================================================================
 //  LEO CATALOG  ·  live low-Earth-orbit satellite catalog on a 3D globe
 // ----------------------------------------------------------------------------
-//  Fetches real TLE orbital element sets from CelesTrak, propagates every object
+//  Loads real TLE orbital element sets (a same-origin snapshot of CelesTrak,
+//  see tools/tle-snapshot.sh), propagates every object
 //  with SGP4 (satellite.js) each frame, and draws them as point-sprite glyphs
 //  around a shader-shaded Earth. A time slider scrubs the propagation epoch, so
 //  the whole catalog can be run forward or back. Overlays add orbit trails,
@@ -54,7 +55,8 @@
 //      orbit trails ......... "function buildTrailFor"  selected + station paths
 //      filters / overlays ... "// FILTERS"         checkbox wiring
 //      picking .............. "function pickAt"    hover/lock chip + reticle
-//      tle loader ........... "function loadSource"  CelesTrak fetch + parse
+//      tle loader ........... "function fetchTLE"    snapshot/CelesTrak fetch
+//      tle sources .......... "TLE_SNAPSHOT_DIRS"   source order per group
 //      object info .......... "OBJECT_KNOWLEDGE"   curated descriptions panel
 //      fly-to ............... "function flyTo"     animated camera moves
 //      search ............... "function doSearch"  name/NORAD search
@@ -1614,9 +1616,13 @@ setInterval(() => { if (chipLocked && selectedIdx >= 0) fillChip(selectedIdx); }
 // about every 2 h and blocks clients that download more often, so a reload in
 // that window reads the cache. A stale cache entry is the fallback when the
 // network fetch fails.
+// CelesTrak sends 403 (IP block) or 429 (rate limit) to a client that
+// downloads too much. Each new request extends the block, so after the first
+// 403 or 429 this page sends no more requests to CelesTrak.
 const TLE_CACHE   = 'leo-catalog-tle-v1';
 const TLE_TTL_MS  = 2 * 60 * 60 * 1000;
 const HAS_CACHE   = typeof caches !== 'undefined';
+let celestrakBlocked = false;
 async function cacheRead(url) {
   if (!HAS_CACHE) return null;
   try {
@@ -1636,11 +1642,17 @@ async function cacheWrite(url, text) {
 async function fetchTLE(url, timeout = 25000) {
   const cached = await cacheRead(url);
   if (cached && cached.fresh) return cached.text;
+  const isCelestrak = url.startsWith('https://celestrak.org/');
+  if (isCelestrak && celestrakBlocked) {
+    if (cached) return cached.text;
+    throw new Error('CelesTrak blocked');
+  }
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeout);
   try {
     const res = await fetch(url, { mode: 'cors', signal: ctrl.signal });
     clearTimeout(id);
+    if (isCelestrak && (res.status === 403 || res.status === 429)) celestrakBlocked = true;
     if (!res.ok) throw new Error('HTTP '+res.status);
     const text = await res.text();
     // CelesTrak answers a rate-limited request with 200 and a plain-text notice.
@@ -2216,17 +2228,19 @@ function setLoadStatus(group, status, count) {
   acqSegSet(group, status);
 }
 
-// Alternate URLs for groups that often fail (rate limit, response size)
-// Groups that often rate-limit or return oversized responses get alternate URLs
-// tried in order; urlsForGroup falls back to the standard GP endpoint.
-const GROUP_URLS = {
-  starlink: [
-    'https://celestrak.org/NORAD/elements/supplemental/sup-gp.php?FILE=starlink&FORMAT=tle',
-    'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=tle',
-  ],
-};
+// Each group has three sources, tried in order:
+//   1. data/<group>.txt next to this module. The tle-snapshot workflow
+//      downloads it from CelesTrak every 2 h and puts it in the Pages deploy.
+//   2. The same file on the live site, for local servers that have no data/.
+//      GitHub Pages sends Access-Control-Allow-Origin: *.
+//   3. CelesTrak, only when neither snapshot is available.
+// So a visitor sends no request to CelesTrak while a snapshot exists.
+const TLE_SNAPSHOT_DIRS = [...new Set([
+  new URL('data/', import.meta.url).href,
+  'https://davesgames.io/stella-nova/pages/leo-catalog/data/',
+])];
 function urlsForGroup(group) {
-  return GROUP_URLS[group] || [URL_GP(group)];
+  return [...TLE_SNAPSHOT_DIRS.map(d => d + group + '.txt'), URL_GP(group)];
 }
 
 // Load one TLE group: try its URLs in order, add deduped objects, refresh the
@@ -2269,48 +2283,18 @@ async function loadGroup(group, opts = {}) {
   return -1;
 }
 
-// Run async tasks with a max parallel count to avoid swamping CelesTrak
-// Run fn over items with at most `limit` in flight, to respect CelesTrak's
-// concurrent-connection guideline.
-async function parallelLimit(items, limit, fn) {
-  let cursor = 0;
-  async function worker() {
-    while (cursor < items.length) {
-      const item = items[cursor++];
-      await fn(item);
-    }
-  }
-  await Promise.all(Array.from({length: Math.min(limit, items.length)}, worker));
-}
-
-// Stations first (fast labels and trails), then the remaining groups at most
-// 4 at a time, then two retry rounds with backoff for failed groups. Objects
+// Stations first (fast labels and trails), then 'active'. The 'active' group
+// holds every active payload, so it also holds the objects of the old
+// per-constellation groups (starlink, oneweb, gnss, and so on). classify()
+// sets the category from the name, so the group does not change it. Objects
 // land on the globe as each group finishes (see loadGroup).
 async function loadCatalog() {
+  addLoadRow('stations');
+  addLoadRow('active');
   await loadGroup('stations', { forceCat: 'station' });
   rebuildStationLabels();
   rebuildStationTrails();
-
-  const groups = [
-    'starlink', 'active', 'oneweb', 'gnss', 'gps-ops', 'galileo', 'glo-ops',
-    'last-30-days', 'geo', 'science', 'weather', 'noaa', 'visual', 'cubesat',
-  ];
-  for (const g of groups) addLoadRow(g);
-
-  // Max 4 parallel connections — CelesTrak guideline
-  await parallelLimit(groups, 4, g => loadGroup(g));
-
-  // Retry failures with exponential backoff
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    const failed = groups.filter(g => {
-      const row = loadRows.get(g);
-      return row && row.querySelector('.lr-status').classList.contains('fail');
-    });
-    if (!failed.length) break;
-    for (const g of failed) setLoadStatus(g, 'retry');
-    await new Promise(r => setTimeout(r, 1500 * attempt));
-    await parallelLimit(failed, 2, g => loadGroup(g));
-  }
+  await loadGroup('active');
 }
 
 // Intro camera: swing in from far out and to the side to the default view.
