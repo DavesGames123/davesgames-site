@@ -750,7 +750,9 @@ def build(loc, cache, window, qdir, ne):
     tf = TT[wcore[valid]].astype(np.float64) * 9 / 5 + 32
     p2, p50, p98, p995 = np.percentile(tf, [2, 50, 98, 99.5])
     lmin = int(math.floor(p2))
-    lf = (lmin, max(lmin + 10, int(math.ceil(p995))))
+    # The median must sit at 0.45 of the ramp or lower, in the blue band.
+    lf = (lmin, max(lmin + 10, int(math.ceil(p995)),
+                    int(math.ceil(lmin + (p50 - lmin) / 0.45))))
     log(f'  water temp deg F (core): p2 {p2:.1f}, p50 {p50:.1f}, p98 {p98:.1f}, p99.5 {p995:.1f}')
     del tf
     tstats = dict(p2=round(float(p2), 1), p50=round(float(p50), 1), p98=round(float(p98), 1),
