@@ -332,7 +332,7 @@ function drawRadial(n, l, hw, nodes) {
   const X = r => pad.l + r / rMax * (w - pad.l - pad.r), Y = v => h - pad.b - v / yMax * (h - pad.t - pad.b) * 0.92;
   // grid ticks in a0
   const stepT = [1, 2, 5, 10, 20, 25, 50, 100].find(s => rMax / s <= 7) || 100;
-  ctx.font = '10px JetBrains Mono, monospace'; ctx.fillStyle = '#8f8499'; ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+  ctx.font = '10px Inter, system-ui, sans-serif'; ctx.fillStyle = '#8f8499'; ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
   for (let r = 0; r <= rMax; r += stepT) { const x = Math.round(X(r)) + 0.5; ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, h - pad.b); ctx.stroke(); ctx.fillText(String(r), x - (r ? 6 : 0), h - 7); }
   ctx.fillText('r / a₀', w - 44, h - 7);
   // tile edge
