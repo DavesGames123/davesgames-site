@@ -43,6 +43,7 @@
 //      earth map ............ "function buildEarthMap"  canvas-drawn continents
 //      coord helpers ........ "function latLonToVec3"   frame conversions
 //      satellites ........... "// SATELLITES"      point cloud + attributes
+//      arrival .............. "function stampBirths"    fall-in times, ping rings
 //      propagation .......... "function propagateAll"   SGP4 every frame
 //      storms ............... "function loadStorms"  NOAA active cyclones
 //      wind field ........... "function sampleWindAt"  analytical wind model
@@ -459,7 +460,7 @@ function tangentAt(latDeg, lonDeg) {
 // buffers, one entry per object, shared by index with sats. HIDE parks an
 // off-screen or filtered object far away instead of removing it.
 let sats = [];
-let positions, sizesAttr, colorsAttr, alphasAttr, glyphAttr;
+let positions, sizesAttr, colorsAttr, alphasAttr, glyphAttr, birthAttr;
 let satGeo, satMat, satPoints;
 const HIDE = -10000;
 
@@ -501,15 +502,17 @@ function buildPointCloud() {
   sizesAttr  = new Float32Array(N);
   alphasAttr = new Float32Array(N);
   glyphAttr  = new Float32Array(N);
+  birthAttr  = new Float32Array(N).fill(1e9);
   satGeo = new THREE.BufferGeometry();
   satGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
   satGeo.setAttribute('aColor',   new THREE.BufferAttribute(colorsAttr, 3).setUsage(THREE.DynamicDrawUsage));
   satGeo.setAttribute('aSize',    new THREE.BufferAttribute(sizesAttr, 1).setUsage(THREE.DynamicDrawUsage));
   satGeo.setAttribute('aAlpha',   new THREE.BufferAttribute(alphasAttr, 1).setUsage(THREE.DynamicDrawUsage));
   satGeo.setAttribute('aGlyph',   new THREE.BufferAttribute(glyphAttr, 1).setUsage(THREE.DynamicDrawUsage));
+  satGeo.setAttribute('aBirth',   new THREE.BufferAttribute(birthAttr, 1).setUsage(THREE.DynamicDrawUsage));
 
   satMat = new THREE.ShaderMaterial({
-    uniforms: { uPixelRatio: { value: renderer.getPixelRatio() } },
+    uniforms: { uPixelRatio: { value: renderer.getPixelRatio() }, uTime: { value: 0 } },
     vertexShader: SH['shaders/satellite.vert.glsl'],
     fragmentShader: SH['shaders/satellite.frag.glsl'],
     transparent: true, depthWrite: false,
@@ -531,6 +534,47 @@ function rebuildAttributesFromSats() {
   }
   satGeo.attributes.aColor.needsUpdate = true;
   satGeo.attributes.aGlyph.needsUpdate = true;
+}
+
+// Give sats[from..to) a landing time in the next `spread` seconds, so a group
+// rains in over a short window instead of all at once. The satellite shader
+// runs the fall-in animation from these times (see satellite.vert.glsl).
+function stampBirths(from, to, spread = 1.8) {
+  const now = performance.now() / 1000;
+  for (let i = from; i < to; i++) birthAttr[i] = now + Math.random() * spread;
+  satGeo.attributes.aBirth.needsUpdate = true;
+}
+
+// Ping rings: camera-facing rings that grow out from the globe rim and fade,
+// one per landed TLE group. A small pool is reused; pingGlobe takes the next.
+const PING_S = 1.6;
+const pings = [];
+for (let i = 0; i < 4; i++) {
+  const m = new THREE.Mesh(
+    new THREE.RingGeometry(1.0, 1.012, 160),
+    new THREE.MeshBasicMaterial({ color: 0x66e0ff, transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  m.visible = false;
+  scene.add(m);
+  pings.push({ mesh: m, t0: -1 });
+}
+let pingNext = 0;
+function pingGlobe(color = 0x66e0ff) {
+  const p = pings[pingNext++ % pings.length];
+  p.mesh.material.color.set(color);
+  p.t0 = performance.now() / 1000;
+  p.mesh.visible = true;
+}
+function updatePings(tSec) {
+  for (const p of pings) {
+    if (!p.mesh.visible) continue;
+    const k = (tSec - p.t0) / PING_S;
+    if (k >= 1) { p.mesh.visible = false; continue; }
+    const e = 1 - Math.pow(1 - k, 3);
+    p.mesh.quaternion.copy(camera.quaternion);
+    p.mesh.scale.setScalar(1.0 + 0.9 * e);
+    p.mesh.material.opacity = 0.7 * (1 - k);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -629,6 +673,7 @@ async function loadStorms() {
     }
     setGauge('storms', 100, { done: true });
     splash(`storms ${storms.length}`, 'ok');
+    const first = sats.length;
     for (const st of storms) {
       if (sats.length >= PERF_CAP) break;
       sats.push({
@@ -639,6 +684,7 @@ async function loadStorms() {
       });
     }
     rebuildAttributesFromSats();
+    stampBirths(first, sats.length, 0.6);
     updateCounts();
   } catch (e) {
     splash('noaa storms: parse fail', 'err');
@@ -2151,6 +2197,7 @@ async function loadGroup(group, opts = {}) {
       const parsed = parseTLE(txt);
       // Count locally: other groups push into sats during the await above.
       let n = 0;
+      const first = sats.length;
       for (const p of parsed) {
         if (sats.length >= PERF_CAP) break;
         if (knownIds.has(p.noradId)) continue;
@@ -2161,6 +2208,10 @@ async function loadGroup(group, opts = {}) {
       }
       setLoadStatus(group, 'ok', n);
       rebuildAttributesFromSats();
+      if (n > 0) {
+        stampBirths(first, sats.length);
+        pingGlobe(CAT_COLOR[sats[first].cat]);
+      }
       updateCounts();
       return n;
     } catch (e) {
@@ -2224,6 +2275,7 @@ async function boot() {
     splash('demo dataset', 'err');
     sats = demoDataset();
     for (const d of sats) knownIds.add(d.noradId);
+    stampBirths(0, sats.length);
   }
   rebuildAttributesFromSats();
   updateCounts();
@@ -2263,6 +2315,8 @@ function animate(now) {
     }
   }
   earthUniforms.uSunDir.value.copy(sunDirEcef(SIM.time));
+  satMat.uniforms.uTime.value = now / 1000;
+  updatePings(now / 1000);
   controls.update();
   if (sats.length > 0 && now - lastPropTime >= PROP_DT) {
     propagateAll();

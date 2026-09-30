@@ -12,7 +12,11 @@
       //     3     X                DEBRIS
       //     4     ring             STORM
       //    >4     up triangle      STARLINK
+      //
+      // vFlash (1 → 0 while the object arrives) adds a shrinking halo ring and
+      // mixes the colour toward white. See satellite.vert.glsl.
       varying vec3 vColor; varying float vAlpha; varying float vGlyph;
+      varying float vFlash;
       void main() {
         // Point-local coordinate, origin at the sprite centre.
         vec2 c = gl_PointCoord - vec2(0.5);
@@ -50,6 +54,12 @@
           float maxX = t01 * 0.45;
           intensity = step(yBot, c.y) * step(c.y, yTop) * step(abs(c.x), maxX);
         }
+        if (vFlash > 0.0) {
+          float r = 0.46 - 0.22 * (1.0 - vFlash);
+          float halo = 1.0 - smoothstep(0.0, 0.035, abs(length(c) - r));
+          intensity = max(intensity, halo * vFlash);
+        }
         if (intensity < 0.01) discard;
-        gl_FragColor = vec4(vColor, vAlpha * intensity);
+        vec3 col = mix(vColor, vec3(1.0), 0.6 * vFlash);
+        gl_FragColor = vec4(col, vAlpha * intensity);
       }
