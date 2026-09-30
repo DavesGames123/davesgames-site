@@ -3,7 +3,7 @@
 // engine.js draws the map into #map with WebGPU. The map fills the whole
 // window at every aspect: view.js picks the part of the extent raster that
 // the screen shows. This file does everything else. It floats the title,
-// legend, brand/credit and locator blocks over the quietest parts of the
+// legend, credit and locator blocks over the quietest parts of the
 // view, places the place labels, runs the clock, and switches the location
 // with a short fade through black.
 //
@@ -180,10 +180,8 @@ function buildOverlay() {
   const scale = el('div', 'scale mono');
   g.appendChild(scale);
 
-  // brand and credit
-  const b = el('div', 'blk brand');
-  b.appendChild(el('div', 'b-name', '<span class="star">✦</span>STELLA NOVA'));
-  b.appendChild(el('div', 'b-url mono', 'davesgames.io'));
+  // data credit
+  const b = el('div', 'blk credit');
   b.appendChild(el('div', 'c-line mono first', esc(`NOAA ${modelShort(meta)} model`)));
   b.appendChild(el('div', 'c-line mono', esc(meta.dates ?? '')));
 
@@ -210,7 +208,7 @@ function buildOverlay() {
     labels.push({ node: n, lb });
   }
 
-  ui = { time, prog, fill, knob, tt, scale, labels, blocks: { title: t, legend: g, brand: b, locator: l } };
+  ui = { time, prog, fill, knob, tt, scale, labels, blocks: { title: t, legend: g, credit: b, locator: l } };
   shownHour = -1;
   updateClockUI(true);
 }
@@ -454,7 +452,7 @@ function placeBlocks(labelBoxes) {
   put('legend', k.legend, {
     pref: (x, y, w, h) => (tr ? 0.3 * Math.hypot(x + w / 2 - (tr.x0 + tr.x1) / 2, y - tr.y1) / diag : 0) + 0.08 * edge(x, w),
   });
-  put('brand', k.brand, { pref: (x, y, w, h) => 0.3 * (1 - (y + h) / H) + 0.1 * edge(x, w) });
+  put('credit', k.credit, { pref: (x, y, w, h) => 0.3 * (1 - (y + h) / H) + 0.1 * edge(x, w) });
 
   // A locator on a busy spot is noise: hide it on a phone.
   if (phone && placed.locator && placed.locator.cost > 0.55) k.locator.hidden = true;

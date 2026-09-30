@@ -153,12 +153,9 @@ body.idle #stage { cursor: none; }
 .scale .row.mi { align-items: flex-start; }
 .scale .row.mi i { border-width: 1px 1px 0; }
 
-/* brand and credit block */
-.b-name { font-family: var(--serif); font-weight: 600; font-size: max(10px, calc(var(--u) * 17)); letter-spacing: 0.22em; color: #f0f0ec; white-space: nowrap; }
-.b-name .star { display: inline-block; margin-right: 0.5em; font-weight: 400; color: #d8d8d2; letter-spacing: 0; }
-.b-url { margin-top: max(3px, calc(var(--u) * 5)); font-size: max(8px, calc(var(--u) * 10.5)); color: var(--ink3); letter-spacing: 0.16em; text-transform: none; }
+/* credit block */
 .c-line { font-size: max(8px, calc(var(--u) * 11)); line-height: 1.75; color: var(--ink3); white-space: nowrap; }
-.c-line.first { margin-top: max(8px, calc(var(--u) * 14)); color: var(--ink2); }
+.c-line.first { color: var(--ink2); }
 
 /* locator block */
 .blk.locator { width: var(--loc, 120px); height: var(--loc, 120px); }
