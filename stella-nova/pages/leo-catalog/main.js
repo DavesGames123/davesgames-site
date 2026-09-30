@@ -1511,19 +1511,51 @@ setInterval(() => { if (chipLocked && selectedIdx >= 0) fillChip(selectedIdx); }
 // TLE LOADER
 // ═══════════════════════════════════════════════════════════════════
 // Fetch TLE text with an abort-based timeout so a slow source cannot hang boot.
+// Responses go into the Cache API for TLE_TTL_MS. CelesTrak updates each group
+// about every 2 h and blocks clients that download more often, so a reload in
+// that window reads the cache. A stale cache entry is the fallback when the
+// network fetch fails.
+const TLE_CACHE   = 'leo-catalog-tle-v1';
+const TLE_TTL_MS  = 2 * 60 * 60 * 1000;
+const HAS_CACHE   = typeof caches !== 'undefined';
+async function cacheRead(url) {
+  if (!HAS_CACHE) return null;
+  try {
+    const hit = await (await caches.open(TLE_CACHE)).match(url);
+    if (!hit) return null;
+    const at = Number(hit.headers.get('x-fetched-at')) || 0;
+    return { text: await hit.text(), fresh: Date.now() - at < TLE_TTL_MS };
+  } catch (e) { return null; }
+}
+async function cacheWrite(url, text) {
+  if (!HAS_CACHE) return;
+  try {
+    const c = await caches.open(TLE_CACHE);
+    await c.put(url, new Response(text, { headers: { 'x-fetched-at': String(Date.now()) } }));
+  } catch (e) {}
+}
 async function fetchTLE(url, timeout = 25000) {
+  const cached = await cacheRead(url);
+  if (cached && cached.fresh) return cached.text;
   const ctrl = new AbortController();
   const id = setTimeout(() => ctrl.abort(), timeout);
   try {
     const res = await fetch(url, { mode: 'cors', signal: ctrl.signal });
     clearTimeout(id);
     if (!res.ok) throw new Error('HTTP '+res.status);
-    return await res.text();
+    const text = await res.text();
+    // CelesTrak answers a rate-limited request with 200 and a plain-text notice.
+    if (!/^1 \d/m.test(text)) throw new Error('no TLE in response');
+    cacheWrite(url, text);
+    return text;
   } catch (e) {
     clearTimeout(id);
+    if (cached) return cached.text;
     throw e;
   }
 }
+// NORAD ids already in sats, so each dedupe check is O(1).
+const knownIds = new Set();
 // Fetch and parse one TLE source, adding new (deduped by NORAD id) objects to
 // the catalog up to PERF_CAP; returns how many were added.
 async function loadSource(url, notableLabel = null, forceCat = null) {
@@ -1532,10 +1564,11 @@ async function loadSource(url, notableLabel = null, forceCat = null) {
   let added = 0;
   for (const p of parsed) {
     if (sats.length >= PERF_CAP) break;
-    if (sats.some(a => a.noradId === p.noradId)) continue;
+    if (knownIds.has(p.noradId)) continue;
     if (notableLabel) p.notable = notableLabel;
     if (forceCat)     p.cat = forceCat;
     sats.push(p);
+    knownIds.add(p.noradId);
     added++;
   }
   return added;
@@ -2110,20 +2143,22 @@ function urlsForGroup(group) {
 async function loadGroup(group, opts = {}) {
   const forceCat = opts.forceCat || null;
   if (!loadRows.has(group)) addLoadRow(group);
-  const before = sats.length;
   const urls = urlsForGroup(group);
   let lastErr = null;
   for (const url of urls) {
     try {
       const txt = await fetchTLE(url);
       const parsed = parseTLE(txt);
+      // Count locally: other groups push into sats during the await above.
+      let n = 0;
       for (const p of parsed) {
         if (sats.length >= PERF_CAP) break;
-        if (sats.some(a => a.noradId === p.noradId)) continue;
+        if (knownIds.has(p.noradId)) continue;
         if (forceCat) p.cat = forceCat;
         sats.push(p);
+        knownIds.add(p.noradId);
+        n++;
       }
-      const n = sats.length - before;
       setLoadStatus(group, 'ok', n);
       rebuildAttributesFromSats();
       updateCounts();
@@ -2188,6 +2223,7 @@ async function boot() {
   if (sats.length === 0) {
     splash('demo dataset', 'err');
     sats = demoDataset();
+    for (const d of sats) knownIds.add(d.noradId);
   }
   rebuildAttributesFromSats();
   updateCounts();
