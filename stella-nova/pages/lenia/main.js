@@ -13,9 +13,13 @@
      frame          ──> engine.step(n) ──> engine.render()
                     ──> every 6th frame engine.stats() ──> status, follow
 
-   WORLD SIZE. The short side of the world is the World select (128 to 384
-   cells). The long side follows the canvas aspect, so the world fills the
-   screen at zoom 1 on a phone in portrait and on a wide monitor.
+   WORLD SIZE. The short side of the world is the World select (96 to 384)
+   times the Detail select (1 to 3). The long side follows the canvas aspect,
+   so the world fills the screen at zoom 1 on a phone in portrait and on a
+   wide monitor. Detail also multiplies the R of every creature and the size
+   of its start cells, so a creature keeps its size on the screen and gets
+   more cells. The default is 2 on desktop and 1.5 on phones.
+   A creature flagged fixed in creatures.json always runs at detail 1.
 
    NO WEBGPU. If createEngine fails, the page keeps the catalog, the plots and
    the About text, and shows #nogpu.
@@ -53,9 +57,12 @@ const S = {
   tool: 'stamp', brush: 1.5,
   view: { mode: 'world', palette: 'lenia', zoom: 1, follow: false },
   worldShort: 128, stats: null, time: 0,
+  // Cells per unit of length. The world and every creature scale by it, so
+  // a creature keeps its size on the screen and gets detail x more cells.
+  detail: 2,
   // Centroid velocity in cells per unit of time, for the follow camera.
   vel: { x: 0, y: 0 }, statT: 0,
-  maxSteps: 48,
+  maxSteps: 48, stepCap: 48,
 };
 // ?debug exposes the page state for the headless checks.
 if (/[?&]debug\b/.test(location.search)) window.lenia = S;
@@ -145,9 +152,10 @@ async function boot() {
   buildBrowser();
 
   const mobile = PHONE_Q.matches || !FINE_Q.matches;
-  S.maxSteps = mobile ? 16 : 48;
   S.worldShort = mobile ? 96 : 128;
+  S.detail = mobile ? 1.5 : 2;
   $('worldSel').value = String(S.worldShort);
+  $('detailSel').value = String(S.detail);
   try {
     S.engine = await createEngine($('gl'), { mobile });
     S.engine.onLost = () => toast('The GPU device was lost. Reload the page to start again.', true, 10000);
@@ -189,9 +197,11 @@ function selectCreature(i) {
   const sub = $('curSub');
   sub.textContent = '';
   const cn = document.createElement('span'); cn.className = 'cn'; cn.textContent = c.cname;
-  sub.append(`${c.code} · `, cn);
+  sub.append(c.code);
+  if (c.cname) sub.append(' · ', cn);
   if (c.rank[3] && !c.rank[3].startsWith('(')) sub.append(` · ${c.rank[3]}`);
   if (c.cls === 'grow') sub.append(' · grows without limit');
+  if (c.fixed) sub.append(' · detail 1× only');
   setText('dockName', c.name);
   $('dockDot').style.setProperty('--c', familyColor(fam));
   markBrowser();
@@ -200,6 +210,7 @@ function selectCreature(i) {
   renderEquations();
   drawPlots();
   if (S.engine) {
+    sizeWorld();
     S.engine.setRule(engineRule());
     placeCreature();
   }
@@ -207,7 +218,7 @@ function selectCreature(i) {
 
 function engineRule() {
   const c = S.c;
-  return { R: c.R * S.rule.scale, T: S.rule.T, m: S.rule.m, s: S.rule.s, b: c.b, kn: c.kn, gn: c.gn };
+  return { R: c.R * S.rule.scale * det(), T: S.rule.T, m: S.rule.m, s: S.rule.s, b: c.b, kn: c.kn, gn: c.gn };
 }
 
 // Clear the world and stamp the creature in the middle at the current scale.
@@ -215,7 +226,7 @@ function placeCreature() {
   if (!S.engine || !S.c) return;
   S.engine.clear();
   const { W, H } = S.engine.info;
-  S.engine.stamp(resample(cellsOf(S.c), S.rule.scale), W / 2, H / 2);
+  S.engine.stamp(resample(cellsOf(S.c), S.rule.scale * det()), W / 2, H / 2);
   S.engine.setView({ cx: W / 2, cy: H / 2 });
   S.time = 0; S.acc = 0;
   S.stats = null; S.vel = { x: 0, y: 0 };
@@ -224,8 +235,10 @@ function placeCreature() {
 function soup() {
   if (!S.engine || !S.c) return;
   const { W, H } = S.engine.info;
+  // The noise is made at detail 1 and scaled up. Cell-size white noise at a
+  // high detail averages out over the larger kernel, and nothing grows.
   const R = S.c.R * S.rule.scale;
-  const pw = Math.round(W * 0.7), ph = Math.round(H * 0.7);
+  const pw = Math.round(W * 0.7 / det()), ph = Math.round(H * 0.7 / det());
   const data = new Float32Array(pw * ph);
   const blobs = Math.max(4, Math.round(pw * ph / (R * R * 9)));
   for (let k = 0; k < blobs; k++) {
@@ -237,7 +250,7 @@ function soup() {
     }
   }
   S.engine.clear();
-  S.engine.stamp({ w: pw, h: ph, data }, W / 2, H / 2);
+  S.engine.stamp(resample({ w: pw, h: ph, data }, det()), W / 2, H / 2);
   S.time = 0;
 }
 
@@ -264,7 +277,7 @@ function buildRule() {
       const v = S.rule[r.key];
       val.textContent = r.key === 'scale' ? `×${v.toFixed(2)}` : v.toFixed(r.dec);
       rst.classList.toggle('same', Math.abs(v - base) < r.step / 2);
-      if (r.key === 'scale') lab.textContent = `R = ${Math.round(c.R * v * 10) / 10}`;
+      if (r.key === 'scale') lab.textContent = `R = ${Math.round(c.R * v * det() * 10) / 10}`;
     };
     const set = (v, commit) => {
       S.rule[r.key] = v;
@@ -435,7 +448,7 @@ function fillList() {
       const t = document.createElement('span'); t.className = 't';
       const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = c.name;
       const ct = document.createElement('span'); ct.className = 'ct';
-      ct.textContent = `${c.code} · ${c.cname} · R ${Math.round(c.R * c.scale)}${c.cls === 'grow' ? ' · grows' : ''}`;
+      ct.textContent = `${c.code}${c.cname ? ' · ' + c.cname : ''} · R ${Math.round(c.R * c.scale)}${c.cls === 'grow' ? ' · grows' : ''}`;
       t.append(nm, ct);
       b.append(th, t);
       g.append(b);
@@ -552,6 +565,11 @@ function buildStatic() {
   sp.addEventListener('input', () => { S.speed = +sp.value; setText('speedV', `${S.speed} t/s`); });
   sp.dispatchEvent(new Event('input'));
   $('worldSel').addEventListener('change', e => { S.worldShort = +e.target.value; sizeWorld(); });
+  $('detailSel').addEventListener('change', e => {
+    S.detail = +e.target.value;
+    if (S.c) buildRule();
+    sizeWorld(true);
+  });
 
   for (const b of $('tools').children) b.addEventListener('click', () => setTool(b.dataset.tool));
   $('dockTool').addEventListener('click', () => {
@@ -620,17 +638,31 @@ function setMode(mode) {
 }
 
 // -------------------------------------------------------------- world size
-// The short side is S.worldShort. The long side follows the canvas aspect,
-// clamped to 2.2 : 1, and both are multiples of 16.
-function sizeWorld() {
+// The detail of the current creature. A creature flagged fixed in the
+// catalog changes class at detail 2 (all Game of Life patterns, and 5
+// Lenia creatures), so it always runs at detail 1.
+function det() { return S.c && S.c.fixed ? 1 : S.detail; }
+
+// The step cost per cell grows with R^2, so a higher detail gets fewer steps
+// per frame. The cap keeps a slow GPU from a queue of frames.
+function setMaxSteps(mobile) {
+  S.maxSteps = Math.max(2, Math.round((mobile ? 16 : 48) / (det() * det())));
+  S.stepCap = S.maxSteps;
+}
+
+// The short side is S.worldShort * det(). The long side follows the
+// canvas aspect, clamped to 2.2 : 1, and both are multiples of 16.
+function sizeWorld(force = false) {
   if (!S.engine) return;
   const cv = $('gl');
   const a = Math.min(2.2, Math.max(1 / 2.2, (cv.clientWidth || 1) / (cv.clientHeight || 1)));
   const r16 = v => Math.max(64, Math.round(v / 16) * 16);
-  const W = r16(a >= 1 ? S.worldShort * a : S.worldShort);
-  const H = r16(a >= 1 ? S.worldShort : S.worldShort / a);
+  setMaxSteps(PHONE_Q.matches || !FINE_Q.matches);
+  const n = S.worldShort * det();
+  const W = r16(a >= 1 ? n * a : n);
+  const H = r16(a >= 1 ? n : n / a);
   const { W: w0, H: h0 } = S.engine.info;
-  if (W === w0 && H === h0) return;
+  if (W === w0 && H === h0 && !force) return;
   S.engine.setWorld(W, H);
   if (S.c) { S.engine.setRule(engineRule()); placeCreature(); }
 }
@@ -696,9 +728,13 @@ function frame(now) {
   lastT = now;
   if (S.playing && S.c) {
     S.acc += S.speed * S.rule.T * dt;
-    const n = Math.min(S.maxSteps, Math.floor(S.acc));
+    // A slow frame means the GPU is behind: take fewer steps per frame, so
+    // the world runs slower and the picture stays smooth.
+    if (dt > 1 / 45) S.stepCap = Math.max(1, Math.floor(S.stepCap * 0.75));
+    else if (dt < 1 / 55) S.stepCap = Math.min(S.maxSteps, S.stepCap + 1);
+    const n = Math.min(S.stepCap, Math.floor(S.acc));
     S.acc -= n;
-    if (S.acc > S.maxSteps) S.acc = 0;   // the GPU is behind; do not build a backlog
+    if (S.acc > S.stepCap) S.acc = 0;   // do not build a backlog
     if (n > 0) { S.engine.step(n); S.time += n / S.rule.T; stepsWin += n; }
   }
   if (S.view.follow && S.stats && S.stats.mass > 1e-3 && S.stats.focus > 0.2) {
@@ -755,10 +791,16 @@ function bindPointer() {
   function brushAt(p) {
     const R = S.engine.info.R, r = Math.max(1.5, S.brush * R);
     const n = Math.ceil(r) * 2 + 1, data = new Float32Array(n * n), c = (n - 1) / 2;
+    // The draw noise is made at detail 1 and scaled up, as in soup().
+    let noise = null;
+    if (S.tool !== 'erase') {
+      const k = Math.max(1, Math.ceil(n / det()));
+      noise = resample({ w: k, h: k, data: new Float32Array(k * k).map(Math.random) }, n / k);
+    }
     for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
       const d = Math.hypot(x - c, y - c) / r;
       if (d >= 1) continue;
-      data[y * n + x] = S.tool === 'erase' ? Math.min(1, (1 - d) * 3) : Math.random();
+      data[y * n + x] = S.tool === 'erase' ? Math.min(1, (1 - d) * 3) : noise.data[Math.min(y, noise.h - 1) * noise.w + Math.min(x, noise.w - 1)];
     }
     S.engine.stamp({ w: n, h: n, data }, p.x, p.y, S.tool === 'erase' ? 'erase' : 'set');
   }
@@ -773,7 +815,7 @@ function bindPointer() {
     last = p;
   }
   function stampAt(p) {
-    const patch = rotate(resample(cellsOf(S.c), S.rule.scale), Math.floor(Math.random() * 4));
+    const patch = rotate(resample(cellsOf(S.c), S.rule.scale * det()), Math.floor(Math.random() * 4));
     S.engine.stamp(patch, p.x, p.y, 'set');
   }
   function pan(dxPx, dyPx) {
@@ -807,7 +849,7 @@ function bindPointer() {
   });
   cv.addEventListener('pointermove', e => {
     if (e.pointerType === 'mouse') {
-      const d = (S.tool === 'stamp' ? S.c.R * S.rule.scale : Math.max(1.5, S.brush * S.engine.info.R)) * 2 * S.engine.cellPx();
+      const d = (S.tool === 'stamp' ? S.c.R * S.rule.scale * det() : Math.max(1.5, S.brush * S.engine.info.R)) * 2 * S.engine.cellPx();
       cursor.style.width = cursor.style.height = d + 'px';
       cursor.style.left = e.clientX + 'px'; cursor.style.top = e.clientY + 'px';
       cursor.classList.add('on');
