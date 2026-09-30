@@ -16,10 +16,10 @@
 
    HEAD LOAD ORDER
      1. fonts       Google Fonts stylesheet
-     2. KaTeX       CSS then JS, so equations.js can render on load
-     3. style.css   the page stylesheet
+     2. style.css   the page stylesheet
    Scripts at end of body:
-     equations.js   classic script, renders the KaTeX formulas
+     equations.js   classic script, puts the formulas in as static SVG.
+                    typeset.mjs makes it with MathJax (run by hand).
      main.js        module: layout, controls, the worker pool, the detail sheet
    main.js starts worker.js (module worker). worker.js and main.js import
    physics.js (the wave function) and colormaps.js (the color ramps).
@@ -61,8 +61,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>

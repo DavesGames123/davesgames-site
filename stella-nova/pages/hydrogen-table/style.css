@@ -53,11 +53,11 @@ html.in-frame #page{padding-top:22px}
 .hero h1{font-family:'Playfair Display','Didot','Bodoni 72',Georgia,serif;font-weight:800;font-size:clamp(1.9rem,3.4vw,3.3rem);line-height:1.02;color:#fff;letter-spacing:0.005em}
 .hero .sub{font-family:'Cormorant Garamond',Georgia,serif;font-style:italic;font-size:clamp(1.05rem,1.5vw,1.45rem);color:#d9d2dc;margin-top:4px}
 .hero-math{display:flex;flex-direction:column;align-items:center;min-width:0;max-width:100%}
-.formula{color:#f2eef4;max-width:100%;overflow-x:auto;overflow-y:hidden;text-align:center;font-size:0.8rem;scrollbar-width:none}
-.formula::-webkit-scrollbar{display:none}
-.formula .katex{font-size:1.05rem}
-.formula .katex-display{margin:4px 0}
-.formula.small .katex{font-size:0.86rem;color:#c9c0cf}
+/* The formulas are SVG from equations.js. Sizes are in ex, so font-size
+   scales them. max-width shrinks a formula to fit, and the aspect stays. */
+.formula{color:#f2eef4;max-width:100%;text-align:center;font-size:0.8rem;margin:4px 0}
+.formula svg{display:block;margin:0 auto;max-width:100%;height:auto;font-size:1.12rem}
+.formula.small svg{font-size:0.9rem;color:#c9c0cf}
 .cbar-row{display:flex;align-items:center;gap:10px;margin-top:6px}
 #cbar{width:min(300px,56vw);height:22px;border:1px solid var(--frame);image-rendering:auto}
 .cb-end{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:1.6rem;line-height:1;color:#fff;min-width:18px;text-align:center}
@@ -212,8 +212,8 @@ html.in-frame #panel{padding-top:24px}
   #page{padding:calc(60px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(var(--dock-h) + 24px) calc(16px + env(safe-area-inset-left))}
   html.in-frame #page{padding-top:16px}
   .hero{gap:6px}
-  .formula .katex{font-size:0.8rem}
-  .formula.small .katex{font-size:0.74rem}
+  .formula svg{font-size:1rem}
+  .formula.small svg{font-size:0.86rem}
   .qn{flex-direction:column;align-items:flex-start;gap:4px;margin:6px 0 14px}
   .band{margin-bottom:14px}
 

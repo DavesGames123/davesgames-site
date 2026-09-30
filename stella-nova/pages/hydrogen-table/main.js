@@ -27,7 +27,6 @@
      grep -n 'function drawColorbar'  the header colorbar
      grep -n 'function buildUI'     the controls, the phone sheet and dock
      grep -n 'function startPool'   workers, or the page-thread fallback
-     grep -n 'function fitFormulas' shrink the KaTeX lines to fit a phone
    ========================================================================== */
 import { tileList, tileSpec, radialR, legendre, energyEV, meanR, L_LETTER, fillTile } from './physics.js';
 import { MAPS, lut, colorize } from './colormaps.js';
@@ -378,7 +377,6 @@ function buildUI() {
       : 'm = 0, +1, −1 … Each tile is cut through its lobes. Its plane shows at the top left.';
     document.body.classList.toggle('real', G.kind === 'real');
     window.HydEq && window.HydEq.setKind(G.kind);
-    if (typeof fitFormulas === 'function') fitFormulas();
     drawColorbar();
   };
   const relayout = () => { sync(); layout(true); render(); };
@@ -440,22 +438,8 @@ function buildUI() {
   sync();
 }
 
-// Shrink a KaTeX formula until it fits its box, so a phone shows all of it.
-function fitFormulas() {
-  for (const el of document.querySelectorAll('.formula')) {
-    const k = el.querySelector('.katex'); if (!k) continue;
-    k.style.fontSize = '';
-    const base = parseFloat(getComputedStyle(k).fontSize);
-    let fs = base;
-    while (el.scrollWidth > el.clientWidth + 1 && fs > base * 0.5) { fs *= 0.94; k.style.fontSize = fs + 'px'; }
-  }
-}
-
 // ------------------------------------------------------------ start
 buildUI();
-fitFormulas();
-if (document.fonts) document.fonts.ready.then(fitFormulas);
-window.addEventListener('resize', fitFormulas);
 layout(true);
 let rsTimer = 0;
 new ResizeObserver(() => { clearTimeout(rsTimer); rsTimer = setTimeout(() => { if (layout(false)) render(); }, 90); }).observe(table);
