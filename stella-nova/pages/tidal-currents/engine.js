@@ -53,13 +53,13 @@ const TUNE = {
   minParticles: 20000,
   maxParticles: 1600000,     // buffer cap (desktop)
   maxParticlesMobile: 700000,
-  stepPxPer1080: 2.4,        // px per 60 fps frame at speedRef, per 1080 px of short side
+  stepPxPer1080: 1.2,        // px per 60 fps frame at speedRef, per 1080 px of short side
   gamma: 0.6,                // step length = stepPx * (speed / speedRef)^gamma
-  minLife: 40,               // frames at 60 fps
-  maxLife: 150,
+  minLife: 80,               // frames at 60 fps. Twice the old life at half the old step keeps the strand length
+  maxLife: 300,
   fade: 0.955,               // trail kept per 60 fps frame
-  lineGain: 0.14,            // density per segment
-  lenRef: 1.5,               // segment px with full weight
+  lineGain: 0.2,             // density per segment. Half-speed water passes a pixel half as often, so this is higher than 0.14
+  lenRef: 0.75,              // segment px with full weight. Half of 1.5, because the step is half
   trailGain: 1.3,            // density -> 1 - exp(-d * gain)
   hairGain: 1.9,             // weight of the trail density in the lit image
   baseGlow: 0.12,            // water light without trails
@@ -67,11 +67,11 @@ const TUNE = {
   brightGamma: 0.8,          // brightness = floor + (1 - floor) * (speed / speedRef)^gamma
   hairWhite: 0.1,            // how far a dense trail moves toward white
   pastel: 0.04,              // how far every water color moves toward white
-  speedWhite: 0.12,          // extra move toward white, times (speed / speedRef)^2
-  white: 0.2,                // how far the brightest water moves toward white
+  speedWhite: 0.05,          // extra move toward white, times (speed / speedRef)^2
+  white: 0.1,                // how far the brightest water moves toward white
   exposure: 1.8,
-  bloom: 1.1,                // bloom strength
-  bloomThreshold: 0.7,       // lit luminance below this adds no bloom
+  bloom: 0.8,                // bloom strength
+  bloomThreshold: 0.85,      // lit luminance below this adds no bloom
   bloomLand: 0.5,            // bloom kept over land (0..1), a soft halo at the coast
   coast: 0.17,               // coast line gray level
   vignette: 1.0,
