@@ -334,6 +334,39 @@ fn n_tiled(p: vec2f, t: f32, k: vec4f) -> f32 {
     return mix(v, 1.0, k.z * (1.0 - smoothstep(0.0, 0.02, edge)));
 }
 
+// tri_lattice_lod: a triangular lattice with three levels of detail. p is skewed
+// by tan30 into rhombus cells, and the rhombus diagonal splits each into two
+// triangles. The fwidth footprint (lattice units per pixel) fades each level's
+// lines and fills to their mean before they alias, so a zoom out stays clean.
+fn tri_level(q: vec2f, w: f32, seed: u32) -> vec2f {
+    let s = vec2f(q.x - q.y * 0.57735027, q.y * 1.15470054);   // skew: x - y tan30, y / cos30
+    let cell = vec2i(floor(s)); let f = fract(s);
+    let up = f.x + f.y > 1.0;
+    let bary = select(vec3f(f.x, f.y, 1.0 - f.x - f.y), vec3f(1.0 - f.x, 1.0 - f.y, f.x + f.y - 1.0), up);
+    let d = min(bary.x, min(bary.y, bary.z)) * 0.8660254;     // distance to the nearest edge
+    let lw = 0.035;
+    // a line thinner than a pixel spreads over the pixel at lower strength, so its energy holds
+    let ew = max(lw, 0.5 * w);
+    let line = (1.0 - smoothstep(ew - 0.5 * w, ew + 0.5 * w, d)) * (lw / ew);
+    let meanLine = 1.0 - pow(1.0 - lw / 0.2886751, 2.0);       // edge band area over triangle area
+    let fill = h21(cell * 2 + vec2i(select(0, 1, up), 0), seed);
+    let keepLine = 1.0 - smoothstep(0.06, 0.22, w);
+    let keepFill = 1.0 - smoothstep(0.12, 0.4, w);
+    return vec2f(mix(meanLine, line, keepLine), mix(0.5, fill, keepFill));
+}
+fn n_tri_lattice_lod(p: vec2f, t: f32, k: vec4f) -> f32 {
+    // the zoom breathes out to 2^(zoom range) and back, so all three levels take turns
+    let z = exp2(mix(0.5, 4.5, k.y) * (0.5 - 0.5 * cos(t * mix(0.1, 0.6, k.z))));
+    let q = p * mix(0.8, 3.0, k.x) * z;
+    let fw = fwidth(q); let w0 = max(fw.x, fw.y) * 1.1;
+    let l0 = tri_level(q, w0, 311u);
+    let l1 = tri_level(q * 4.0 + 0.37, w0 * 4.0, 313u);
+    let l2 = tri_level(q * 16.0 + 0.71, w0 * 16.0, 317u);
+    var v = 0.14 + 0.26 * l0.y + 0.1 * (l1.y - 0.5);
+    v += 0.62 * l0.x + 0.36 * l1.x + 0.22 * l2.x;
+    return clamp(v, 0.0, 1.0);
+}
+
 // —— fractal ——————————————————————————————————————————————————————————————
 fn n_fbm(p: vec2f, t: f32, k: vec4f) -> f32 { return fbm01(p * mix(0.5, 6.0, k.x) + vec2f(t * 0.2 * k.w, 0.0), i32(mix(1.0, 8.0, k.y)), 2.0, mix(0.3, 0.8, k.z), 23u); }
 fn n_turbulence(p: vec2f, t: f32, k: vec4f) -> f32 { return turbulence(p * mix(0.5, 6.0, k.x) + vec2f(t * 0.2 * k.w, 0.0), i32(mix(1.0, 8.0, k.y)), 2.0, mix(0.3, 0.8, k.z), 23u) * 1.6; }
@@ -402,6 +435,31 @@ fn n_worley_fbm(p: vec2f, t: f32, k: vec4f) -> f32 {
     for (var i: i32 = 0; i < 5; i++) { if (i >= oct) { break; }
         s += a * worley(q, k.z, 0, 223u + u32(i)).x; nrm += a; a *= 0.5; q = rot2(0.6) * q * 2.0; }
     return s / nrm;
+}
+
+// warped_voronoi: Voronoi cells in a domain pushed by fbm. The push length is
+// proportional to an fbm height field, and the present step shows that height
+// as heat, so the cells stretch most where the field glows hottest.
+fn wv_parts(p: vec2f, t: f32, k: vec4f) -> vec4f {
+    let q = p * mix(1.2, 5.0, k.x);
+    let dr = vec2f(t * 0.07 * k.w, -t * 0.05 * k.w);
+    let h = smoothstep(0.22, 0.78, fbm01(q * 0.24 + dr, 4, 2.0, 0.5, 331u));
+    let a = fbm(q * 0.16 - dr + 3.1, 2, 2.0, 0.5, 337u) * TAU * 1.5;
+    let off = mix(0.0, 1.3, k.y) * h * vec2f(cos(a), sin(a));
+    let w = worley(q + off, mix(0.5, 1.0, k.z), 0, 347u);
+    return vec4f(h, w.x, w.y - w.x, w.z);
+}
+fn n_warped_voronoi(p: vec2f, t: f32, k: vec4f) -> f32 {
+    let w = wv_parts(p, t, k);
+    return (0.25 + 0.75 * w.x) * smoothstep(0.02, 0.12, w.z) * (0.8 + 0.3 * (1.0 - w.y));
+}
+// the heat ramp for warped_voronoi: ink, then ember red, orange, gold and white
+fn heat_ramp(x: f32) -> vec3f {
+    let v = clamp(x, 0.0, 1.0);
+    var c = mix(u.ink.rgb, vec3f(0.45, 0.04, 0.03), smoothstep(0.0, 0.3, v));
+    c = mix(c, vec3f(0.92, 0.3, 0.05), smoothstep(0.25, 0.55, v));
+    c = mix(c, vec3f(1.0, 0.72, 0.2), smoothstep(0.5, 0.8, v));
+    return mix(c, vec3f(1.0, 0.97, 0.86), smoothstep(0.8, 1.0, v));
 }
 
 // —— periodic ——————————————————————————————————————————————————————————————
@@ -676,6 +734,10 @@ fn domain(fp: vec2f) -> vec2f {
     return present(n_tiled(domain(fp.xy), u.time, u.k));
 }
 
+@fragment fn fs_tri_lattice_lod(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    return present(n_tri_lattice_lod(domain(fp.xy), u.time, u.k));
+}
+
 @fragment fn fs_fbm(@builtin(position) fp: vec4f) -> @location(0) vec4f {
     return present(n_fbm(domain(fp.xy), u.time, u.k));
 }
@@ -750,6 +812,16 @@ fn domain(fp: vec2f) -> vec2f {
 
 @fragment fn fs_worley_fbm(@builtin(position) fp: vec4f) -> @location(0) vec4f {
     return present(n_worley_fbm(domain(fp.xy), u.time, u.k));
+}
+
+@fragment fn fs_warped_voronoi(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let w = wv_parts(domain(fp.xy), u.time, u.k);
+    let edge = smoothstep(0.02, 0.12, w.z);
+    // each cell domes: brighter at its seed, darker toward the border
+    let dome = 1.0 - 0.45 * smoothstep(0.1, 0.75, w.y);
+    let body = heat_ramp(w.x * (0.55 + 0.5 * dome) + 0.1 * (w.w - 0.5)) * (0.65 + 0.35 * dome);
+    let col = mix(u.ink.rgb * 0.5, body, edge) + vec3f(1.0, 0.5, 0.15) * w.x * w.x * (1.0 - edge) * 0.4;
+    return vec4f(col, 1.0);
 }
 
 @fragment fn fs_sine(@builtin(position) fp: vec4f) -> @location(0) vec4f {

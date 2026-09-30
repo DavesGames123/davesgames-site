@@ -17,8 +17,8 @@
 //                       autoplay line (playhead), pixel-ratio cap
 //
 //  DATA
-//      shaders/noise.wgsl .. the one pack, 78 fragment entry points, fetched
-//      styles.json ......... the 78 primitive records (name/family/fn/knobs)
+//      shaders/noise.wgsl .. the one pack, 80 fragment entry points, fetched
+//      styles.json ......... the 80 primitive records (name/family/fn/knobs)
 //
 //  FRAME LOOP  (requestAnimationFrame)
 //  ----------------------------------------------------------------------------
