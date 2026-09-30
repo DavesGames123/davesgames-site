@@ -1,7 +1,7 @@
 // ============================================================================
 //  LIGHTING TABLE  ·  page.js — the per-page PAGE object
 // ────────────────────────────────────────────────────────────────────────────
-//  30 lighting models on an analytic sphere; one WGSL fragment per cell. Drag a cell to orbit the key light; the light also orbits while a cell is hovered.
+//  35 lighting models on an analytic sphere; one WGSL fragment per cell. Drag a cell to orbit the key light; the light also orbits while a cell is hovered.
 //  The shared table-engine drives this object through its ctx. main.js fetches
 //  the data and calls bootTable(PAGE, data); the engine calls PAGE.init and
 //  PAGE.draw from there.

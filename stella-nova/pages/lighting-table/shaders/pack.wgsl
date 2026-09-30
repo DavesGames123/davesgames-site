@@ -11,7 +11,9 @@
 //  Smith G); Ward 1992; Ashikhmin–Shirley 2000; Kelemen–Szirmay-Kalos 2001;
 //  Schlick 1994; Estevez & Kulla 2017 (Charlie sheen); Belcour & Barla 2017
 //  (thin-film, simplified); Gooch et al. 1998; Lake et al. 2000 (cel shading);
-//  Praun et al. 2001 (tonal art maps / hatching).
+//  Praun et al. 2001 (tonal art maps / hatching). The gem, glint and skin
+//  cells are original: per-channel Blinn lobes, hashed micro-facet glints,
+//  and fbm, starfield and hologram skins.
 // ═══════════════════════════════════════════════════════════════════════════
 
 struct LightU {
@@ -189,6 +191,58 @@ fn d_charlie(ndh: f32, a: f32) -> f32 { let inv = 1.0 / max(a, 1e-3); let s2 = 1
     return shade(s, albedo() / PI, vec3f(sp) * 0.5);
 }
 
+// —— hash and value noise for the glint and skin cells (integer hash, no sin) ——
+fn pcg(v: u32) -> u32 { let st = v * 747796405u + 2891336453u; let w = ((st >> ((st >> 28u) + 4u)) ^ st) * 277803737u; return (w >> 22u) ^ w; }
+fn hash2(p: vec2f, k: u32) -> f32 { let q = bitcast<vec2u>(vec2i(floor(p))); return f32(pcg(q.x + pcg(q.y + pcg(k)))) / 4294967295.0; }
+fn vnoise(p: vec2f) -> f32 {
+    let i = floor(p); let f = fract(p); let w = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash2(i, 0u), hash2(i + vec2f(1.0, 0.0), 0u), w.x), mix(hash2(i + vec2f(0.0, 1.0), 0u), hash2(i + vec2f(1.0, 1.0), 0u), w.x), w.y);
+}
+fn fbm(p0: vec2f) -> f32 {
+    var p = p0; var a = 0.5; var v = 0.0;
+    for (var i = 0; i < 5; i++) { v += a * vnoise(p); p = mat2x2f(1.6, 1.2, -1.2, 1.6) * p + vec2f(3.1, 1.7); a *= 0.5; }
+    return v / 0.96875;
+}
+// chromatic gem specular: one Blinn lobe per channel. Red is wide, green is mid, blue is tight,
+// so the white core fringes to yellow and then red at its edge, as a prism splits light.
+@fragment fn fs_gem_prism(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let s = setup(fp.xy); let n = mix(12.0, 160.0, u.k.x * u.k.x);
+    let pw = vec3f(n * 0.28, n, n * 3.6);
+    let lobe = pow(vec3f(s.ndh), pw) * pow((pw + 8.0) / (8.0 * PI), vec3f(0.35));
+    let fr = f_schlick(vec3f(0.06), s.ndv);
+    let body = albedo() * albedo() * 0.9;   // a deep, saturated gem body
+    let rim = pow(1.0 - s.ndv, 3.0) * srgb_to_linear(u.tone.rgb) * 0.9;
+    let c = (body / PI + lobe * mix(0.3, 1.6, u.k.y)) * light() * s.ndl + body * ambient(s.n) * 2.0 + rim + fr * 0.08;
+    return out(s, c);
+}
+// micro-facet glint: the surface is a grid of tiny facets. Each facet tilts its normal by a hash,
+// and a hash gate lets only some facets carry a mirror. A tight lobe on the tilted normal flashes
+// when that facet faces the half vector. Each flash breathes on a slow sine with its own rate and
+// phase, so the glitter twinkles and does not strobe.
+@fragment fn fs_facet_glint(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let s = setup(fp.xy); let N = mix(18.0, 54.0, u.k.x); let dens = mix(0.15, 0.75, u.k.y);
+    var g = vec3f(0.0);
+    let q = s.uv * N;
+    for (var j = 0; j < 4; j++) {   // the facet and its three nearest neighbors, so a flare may cross a facet edge
+        let id = floor(q - 0.5) + vec2f(f32(j & 1), f32(j >> 1));
+        let gate = hash2(id, 1u);
+        if (gate > dens) { continue; }
+        let c = id + 0.2 + 0.6 * vec2f(hash2(id, 2u), hash2(id, 3u));
+        let tilt = (vec3f(hash2(id, 4u), hash2(id, 5u), hash2(id, 6u)) - 0.5) * vec3f(1.3, 1.3, 0.4);
+        let nf = normalize(s.n + tilt);
+        let spec = pow(max(dot(nf, s.h), 0.0), 90.0) * step(0.0, dot(nf, s.l));
+        let tw = pow(0.5 + 0.5 * sin(u.time * mix(0.8, 2.2, hash2(id, 7u)) + TAU * hash2(id, 8u)), 3.0);
+        let dq = q - c; let r2 = dot(dq, dq);
+        let flare = exp(-r2 * 12.0) + 0.45 * exp(-abs(dq.x) * 7.0 - dq.y * dq.y * 220.0) + 0.45 * exp(-abs(dq.y) * 7.0 - dq.x * dq.x * 220.0);
+        let hue = mix(vec3f(1.0), vec3f(1.0, 0.85, 0.7) + vec3f(0.0, 0.1, 0.35) * hash2(id, 9u), 0.5);
+        g += hue * spec * tw * flare;
+    }
+    let base = albedo() * 0.45;
+    let bl = pow(s.ndh, 40.0) * 0.25;
+    let c = (base / PI + vec3f(bl)) * light() * s.ndl + base * ambient(s.n) + g * srgb_to_linear(u.cream.rgb) * 9.0 * s.mask;
+    return out(s, c);
+}
+
 // ═══ FRESNEL & LAYERS ════════════════════════════════════════════════════════
 @fragment fn fs_fresnel(@builtin(position) fp: vec4f) -> @location(0) vec4f {
     let s = setup(fp.xy); let ior = mix(1.0, 2.5, u.k.x); let f0 = sq((ior - 1.0) / (ior + 1.0));
@@ -275,4 +329,91 @@ fn d_charlie(ndh: f32, a: f32) -> f32 { let inv = 1.0 / max(a, 1e-3); let s2 = 1
     let s = setup(fp.xy); let e = pow(1.0 - s.ndv, mix(0.5, 3.0, u.k.x));
     let c = srgb_to_linear(u.tone.rgb) * e * 2.0 + srgb_to_linear(u.cream.rgb) * pow(e, 4.0);
     return out(s, c);
+}
+
+// ═══ SKINS ═══════════════════════════════════════════════════════════════════
+// Skins are whole materials on the sphere. Each one keeps the key light for its shape cue.
+// lava: flowing fbm, domain-warped, on the sphere's stereographic coordinates. The 0.5 contour
+// splits dark crust (lit by the key light) from molten rock (emissive). A glow rides the contour.
+@fragment fn fs_skin_lava(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let s = setup(fp.xy); let t = u.time;
+    let p = s.n.xy / (1.0 + s.n.z) * mix(2.0, 4.5, u.k.x) + vec2f(0.0, t * 0.12);
+    let w = vec2f(fbm(p + vec2f(0.0, t * 0.05)), fbm(p + vec2f(5.2, 1.3) - vec2f(t * 0.04, 0.0)));
+    let f = fbm(p + 1.6 * w);
+    let aa = max(fwidth(f), 1e-4);
+    let crust = smoothstep(0.5 - aa, 0.5 + aa, f);
+    let heat = clamp((0.5 - f) * 5.0, 0.0, 1.0);
+    let molten = mix(vec3f(0.6, 0.05, 0.01), mix(vec3f(1.6, 0.45, 0.05), vec3f(2.2, 1.6, 0.6), heat * heat), sqrt(heat)) * mix(0.6, 1.6, u.k.y);
+    let edge = exp(-abs(f - 0.5) * 45.0);
+    let glow = vec3f(2.4, 0.7, 0.12) * edge * mix(0.6, 1.6, u.k.y);
+    let rock = vec3f(0.035, 0.03, 0.03) * (0.7 + 0.6 * fbm(p * 5.0));
+    let cool = rock / PI * light() * s.ndl + rock * ambient(s.n) * 2.0 + vec3f(pow(s.ndh, 30.0) * 0.05) * s.ndl;
+    let hot = crust * smoothstep(0.5, 0.62, f);
+    let c = mix(molten, cool + vec3f(1.2, 0.25, 0.04) * exp(-(f - 0.5) * 18.0) * 0.25, crust) + glow * (1.0 - hot);
+    return out(s, c);
+}
+// galaxy: a window into space in screen space, clipped to the sphere. The nebula is fbm, the stars
+// are hashed points in two layers. The layers shift with the normal for a little depth, and a rim
+// and a soft highlight keep the sphere readable.
+@fragment fn fs_skin_galaxy(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let s = setup(fp.xy); let t = u.time;
+    let sp = (fp.xy / u.pixelScale) / max(min(u.size.x, u.size.y), 1.0);
+    let q = sp * 3.0 + s.n.xy * 0.08 + vec2f(t * 0.015, 0.0);
+    let warp = vec2f(fbm(q * 0.8 + 7.0), fbm(q * 0.8 + 3.0));
+    let neb = fbm(q + 1.8 * warp);
+    let neb2 = fbm(q * 2.1 - warp + 11.0);
+    let tone = srgb_to_linear(u.tone.rgb);
+    var c = vec3f(0.004, 0.003, 0.012);
+    c += tone * pow(smoothstep(0.35, 0.9, neb), 2.0) * 1.1 * mix(0.4, 1.6, u.k.y);
+    c += vec3f(0.55, 0.08, 0.45) * pow(smoothstep(0.45, 0.95, neb2), 2.5) * 0.9 * mix(0.4, 1.6, u.k.y);
+    let dens = mix(0.03, 0.12, u.k.x);
+    for (var L = 0; L < 2; L++) {
+        let sc = select(90.0, 38.0, L == 1);
+        let g = (sp + s.n.xy * select(0.02, 0.05, L == 1)) * sc;
+        let id = floor(g); let fq = fract(g);
+        if (hash2(id, 20u + u32(L)) < dens) {
+            let c0 = 0.25 + 0.5 * vec2f(hash2(id, 22u), hash2(id, 23u));
+            let d = length(fq - c0);
+            let tw = 0.6 + 0.4 * sin(t * mix(0.7, 1.9, hash2(id, 24u)) + TAU * hash2(id, 25u));
+            let b = exp(-d * d * select(900.0, 260.0, L == 1)) * tw * select(1.6, 3.0, L == 1);
+            c += mix(vec3f(0.8, 0.9, 1.2), vec3f(1.2, 0.95, 0.75), hash2(id, 26u)) * b;
+        }
+    }
+    let rim = pow(1.0 - s.ndv, 2.5) * tone * 1.4;
+    let hl = pow(s.ndh, 60.0) * 0.5 * s.ndl;
+    c = c * (0.55 + 0.45 * s.ndl + 0.2) + rim + srgb_to_linear(u.cream.rgb) * hl;
+    return out(s, c);
+}
+// hologram: one sample of the hologram at a pixel offset. Scanlines, a Fresnel rim, a thin fill
+// and a slow sweep band. The glitch calls it once per channel with different offsets.
+fn holo_at(fp: vec2f, t: f32) -> vec3f {
+    let s = setup(fp);
+    let py = fp.y / u.pixelScale;
+    let scan = 0.5 + 0.5 * sin(py * TAU / 3.2 - t * 5.0);
+    let fr = pow(1.0 - s.ndv, 2.2);
+    let sweepY = fract(t * 0.25) * 2.6 - 1.3;
+    let sweep = exp(-sq((s.uv.y - sweepY) * 7.0));
+    let tone = srgb_to_linear(u.tone.rgb); let cream = srgb_to_linear(u.cream.rgb);
+    // a latitude and longitude wire grid, so the band split shows inside the silhouette too
+    let lat = asin(clamp(s.n.y, -1.0, 1.0)) / PI * 12.0; let lon = atan2(s.n.x, s.n.z) / PI * 12.0;
+    let wl = fwidth(lat) + fwidth(lon) + 1e-4;
+    let grid = max(1.0 - smoothstep(0.0, 1.2 * wl, abs(fract(lat + 0.5) - 0.5)), 1.0 - smoothstep(0.0, 1.2 * wl, abs(fract(lon + 0.5) - 0.5)));
+    let body = (tone * (0.03 + 0.08 * s.ndl) + tone * grid * 0.35 * (0.3 + 0.7 * s.ndv) + tone * fr * 1.6 + cream * pow(fr, 3.0) * 0.9) * (0.35 + 0.65 * scan) + tone * sweep * 0.3;
+    return body * s.mask;
+}
+// hologram with a time-stepped band glitch: the clock is cut into steps, and in each step a hash
+// picks a few horizontal bands. Inside a band, R and B sample at opposite offsets, so the channels split.
+@fragment fn fs_skin_holo(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let t = u.time; let step_ = floor(t * mix(3.0, 10.0, u.k.y));
+    let short = max(min(u.size.x, u.size.y), 1.0);
+    let bandH = short * 0.07; let band = floor((fp.y / u.pixelScale) / bandH);
+    let on = step(1.0 - mix(0.05, 0.35, u.k.x), hash2(vec2f(band, step_), 40u));
+    let off = (hash2(vec2f(band, step_), 41u) - 0.5) * short * 0.12 * on * u.pixelScale;
+    let r = holo_at(fp.xy + vec2f(off, 0.0), t).r;
+    let g = holo_at(fp.xy + vec2f(off * 0.25, 0.0), t).g;
+    let b = holo_at(fp.xy - vec2f(off, 0.0), t).b;
+    let flick = 0.92 + 0.08 * hash2(vec2f(step_, 0.0), 42u);
+    let bg = srgb_to_linear(u.ink.rgb);
+    let col = bg + vec3f(r, g, b) * flick * u.exposure;
+    return vec4f(clamp(linear_to_srgb(col), vec3f(0.0), vec3f(1.0)), 1.0);
 }

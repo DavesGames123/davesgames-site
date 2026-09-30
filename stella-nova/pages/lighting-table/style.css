@@ -121,3 +121,4 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .f-specular{--fam:rgba(255,200,50,0.12);--fam-bg:rgba(255,200,50,0.06)}
 .f-layers{--fam:rgba(120,230,200,0.12);--fam-bg:rgba(120,230,200,0.06)}
 .f-stylized{--fam:rgba(200,160,255,0.12);--fam-bg:rgba(200,160,255,0.06)}
+.f-skin{--fam:rgba(255,140,100,0.12);--fam-bg:rgba(255,140,100,0.06)}
