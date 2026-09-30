@@ -72,9 +72,11 @@
   const DIVERGE = [
     [0.66,0.85,1.00],[0.20,0.45,0.85],[0.08,0.06,0.11],[0.85,0.36,0.18],[1.00,0.88,0.62],
   ];
-  // Height ramp: purple below, a lit neutral at zero, warm orange above.
+  // Height ramp: bright violet below, a dark neutral at zero, bright amber
+  // above. The two ends differ in hue, and both differ in lightness from zero,
+  // so a crest, a trough, and a nodal line each read clearly.
   const HEIGHTR = [
-    [0.36,0.16,0.50],[0.55,0.35,0.62],[0.60,0.55,0.66],[0.88,0.58,0.40],[0.99,0.72,0.42],
+    [0.62,0.44,1.00],[0.42,0.20,0.78],[0.13,0.10,0.17],[0.93,0.42,0.12],[1.00,0.86,0.45],
   ];
   function ramp(R, t, o) {
     t = t < 0 ? 0 : t > 1 ? 1 : t;
@@ -131,21 +133,22 @@
   // clear height. 5.4 is the floor, so a large screen keeps the desktop view.
   function fitR(w, h, wV, hV) { return Math.max(5.4, 4.96 * h / wV, 3.5 * h / hV); }
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.62));
-  const sun = new THREE.DirectionalLight(0xffffff, 0.55); sun.position.set(3, 5, 2); scene.add(sun);
+  // Low ambient and a strong key light, so the slope of the membrane shades.
+  scene.add(new THREE.AmbientLight(0xffffff, 0.42));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.85); sun.position.set(3, 5, 2); scene.add(sun);
   const fill = new THREE.DirectionalLight(0xffd8c0, 0.18); fill.position.set(-3, -2, -2); scene.add(fill);
 
   // The mesh sits one step behind in depth, so the nodal lines at u = 0 win.
   const memMat = new THREE.MeshPhongMaterial({
-    vertexColors: true, side: THREE.DoubleSide, shininess: 28, specular: 0x222222,
+    vertexColors: true, side: THREE.DoubleSide, shininess: 40, specular: 0x3a3a3a,
     polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
   });
   const membrane = new THREE.Mesh(new THREE.BufferGeometry(), memMat);
   scene.add(membrane);
 
-  const rimMat = new THREE.LineBasicMaterial({ color: 0x8a7a9a, transparent: true, opacity: 0.8 });
+  const rimMat = new THREE.LineBasicMaterial({ color: 0xd6cfe0, transparent: true, opacity: 0.9 });
   let rim = null;
-  const nodalMat = new THREE.LineBasicMaterial({ color: 0xfcfdbf, transparent: true, opacity: 0.85 });
+  const nodalMat = new THREE.LineBasicMaterial({ color: 0xfcfdbf, transparent: true, opacity: 1 });
   let nodal = null;
 
   // A faint floor grid under the membrane, for depth.
