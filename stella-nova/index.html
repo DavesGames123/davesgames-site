@@ -85,6 +85,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .nav-sub.c-comp{color:#b896ff;border-left-color:#b896ff;background:linear-gradient(90deg,rgba(184,150,255,0.08) 0%,transparent 70%)}
 .nav-sub.c-vol{color:#96c8ff;border-left-color:#96c8ff;background:linear-gradient(90deg,rgba(150,200,255,0.08) 0%,transparent 70%)}
 .nav-sub.c-fx{color:#e58bd0;border-left-color:#e58bd0;background:linear-gradient(90deg,rgba(229,139,208,0.08) 0%,transparent 70%)}
+.nav-sub.c-data{color:#64c8f0;border-left-color:#64c8f0;background:linear-gradient(90deg,rgba(100,200,240,0.08) 0%,transparent 70%)}
 #translate-cycle{transition:opacity 0.4s ease}
 .nav-label{font-size:0.88rem;letter-spacing:0.04em;color:#8aa8c8;transition:color 0.15s}
 .nav-badge{margin-left:auto;font-size:0.55rem;letter-spacing:0.12em;text-transform:uppercase;color:#5a7a98;padding:2px 6px;border:1px solid rgba(150,200,255,0.12);border-radius:2px}
@@ -180,7 +181,6 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item fl" data-tab="ns-wave" onclick="switchTab('ns-wave')"><span class="nav-label">Blowup: Wave</span><span class="nav-badge">MATH</span></button>
           <button class="nav-item fl" data-tab="ns-geometry" onclick="switchTab('ns-geometry')"><span class="nav-label">Blowup: Geometry</span><span class="nav-badge">SIM</span></button>
                     <button class="nav-item fl" data-tab="ns-vortex" onclick="switchTab('ns-vortex')"><span class="nav-label">Blowup: Vortex</span><span class="nav-badge">3D</span></button>
-          <button class="nav-item fl" data-tab="tidal-currents" onclick="switchTab('tidal-currents')"><span class="nav-label">Tidal Currents</span><span class="nav-badge">DATA</span></button>
           <div class="nav-sub c-em">Electromagnetism</div>
           <button class="nav-item em" data-tab="magnetlab" onclick="switchTab('magnetlab')"><span class="nav-label">MagnetLab</span><span class="nav-badge">NEW</span></button>
           <button class="nav-item em" data-tab="biot-savart" onclick="switchTab('biot-savart')"><span class="nav-label">Biot&#8211;Savart Law</span><span class="nav-badge">NEW</span></button>
@@ -242,6 +242,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item sn" data-tab="mandelbulber" onclick="switchTab('mandelbulber')"><span class="nav-label">Mandelbulber</span><span class="nav-badge">WGSL</span></button>
           <button class="nav-item fx" data-tab="explosion" onclick="switchTab('explosion')"><span class="nav-label">Explosion</span></button>
           <button class="nav-item fx" data-tab="flare" onclick="switchTab('flare')"><span class="nav-label">Engine Propulsion Effects</span></button>
+          <div class="nav-sub c-data">Data Visualization</div>
+          <button class="nav-item sn" data-tab="tidal-currents" onclick="switchTab('tidal-currents')"><span class="nav-label">Tidal Currents</span><span class="nav-badge">DATA</span></button>
         </div>
       </div>
       <div class="cluster" id="cl-solar">
