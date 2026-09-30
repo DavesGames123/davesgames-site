@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Reaction–Diffusion — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   REACTION–DIFFUSION  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. engine.js steps a grid of up to four chemicals on the
+   GPU (WebGPU compute) and draws it into #gl. Each preset in presets.json
+   gives the formula, the parameters, the start state, and the view. The
+   patterns and equations come from Ready (GollyGang). Every description on
+   the page is our own text.
+       d(chem)/dt = D * laplacian(chem) + reaction(a, b, c, d)
+       chem_new   = chem + timestep * delta_chem       (forward Euler)
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts       Google Fonts stylesheet
+     2. KaTeX       CSS then JS, so equations.js can render at once
+     3. style.css   the page stylesheet
+   Scripts at end of body:
+     main.js        ES module. It imports equations.js, engine.js and
+                    colormaps.js, and fetches presets.json.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Reaction–Diffusion                          │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │  #gl       the grid; paint on it in brush mode        │
+     │  preset    │  #axes     parameter-map axis labels and ticks        │
+     │  equations │  #cursor   the brush circle (mouse only)              │
+     │  params    │  #browser  the preset browser (a drawer)              │
+     │  run       │  #nogpu    the message when WebGPU is missing         │
+     │  brush     │                                                       │
+     │  view      │                                                       │
+     │  about     │                                                       │
+     ├────────────┴─────────────────────────────────────────────────────┤
+     │ #status  preset · grid · steps/s · credit                         │
+     └──────────────────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock      fixed at the base: play, reset, preset name (opens the
+                browser), brush mode, settings (opens the panel).
+     #panel     portrait: a bottom sheet above the dock. #sheetGrip toggles
+                half and full height, and a drag down closes the sheet.
+                landscape: a drawer on the right edge.
+     #browser   a full-height sheet with search.
+     A tap on the grid hides or shows the dock when brush mode is off.
+
+   GREP MAP  (main.js)
+     grep -n 'function selectPreset'   load a preset into the engine and UI
+     grep -n 'function buildParams'    one slider per preset parameter
+     grep -n 'function buildBrowser'   the grouped, searchable preset list
+     grep -n 'function gridUV'         canvas pixel -> grid (u, v)
+     grep -n 'function drawAxes'       parameter-map axis labels
+     grep -n 'function frame'          the render loop
+     grep -n 'function bindPointer'    painting and dock taps
+     grep -n 'function bindKeys'       keyboard shortcuts
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Reaction–diffusion patterns on the GPU: spots, stripes, spirals and waves from two to four chemicals. Pick a preset, change the rates, paint chemicals on the grid.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;REACTION.DIFFUSION</div>
+  <div class="pagetitle">Reaction–Diffusion</div>
+</div>
+
+<canvas id="gl"></canvas>
+<div id="axes" aria-hidden="true"></div>
+<div id="cursor" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<button id="gear" aria-label="Controls">⚙</button>
+
+<div id="nogpu" hidden>
+  <div class="ng-title">This browser has no WebGPU</div>
+  <p>The simulation runs on the GPU with WebGPU. Try a recent Chrome or Edge, or Safari 26 and later. You can still read every preset, its equations and its source.</p>
+  <div class="eq" id="ngEq"></div>
+</div>
+
+<div id="fail" hidden>
+  <div class="ng-title">This preset did not compile</div>
+  <p>The GPU did not accept the shader for this preset. Pick another preset. The message from the compiler:</p>
+  <pre id="failMsg"></pre>
+</div>
+
+<div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">PRESET</div>
+  <div class="cur">
+    <div class="cur-top"><span class="chip" id="curFamily"></span><span class="cur-idx" id="curIdx"></span></div>
+    <div class="cur-name" id="curName">Loading…</div>
+  </div>
+  <div class="modes">
+    <button id="prevBtn" aria-label="Previous preset" title="Previous preset (←)">◀</button>
+    <button id="browseBtn" class="grow" title="Browse presets">BROWSE ALL</button>
+    <button id="nextBtn" aria-label="Next preset" title="Next preset (→)">▶</button>
+  </div>
+  <p class="desc" id="curDesc"></p>
+
+  <div class="sec-label">EQUATIONS</div>
+  <div id="eqs"></div>
+  <div class="cite" id="curCite"></div>
+  <div class="credit"><a href="https://github.com/GollyGang/ready" target="_blank" rel="noopener">Patterns and equations from Ready (GollyGang) — github.com/GollyGang/ready</a></div>
+
+  <div class="sec-label">PARAMETERS</div>
+  <div id="params"></div>
+  <div class="hint" id="mapHint" hidden></div>
+
+  <div class="sec-label">RUN</div>
+  <div class="modes">
+    <button id="playBtn">❚❚ PAUSE</button>
+    <button id="stepBtn" title="Advance one frame of steps">STEP</button>
+  </div>
+  <div class="modes">
+    <button id="resetBtn" title="Reset (R)">RESET</button>
+    <button id="seedBtn" title="Reset with a new random seed">NEW SEED</button>
+  </div>
+  <div class="row"><label for="spf">Steps/frame</label><input type="range" id="spf" min="1" max="100" step="1" value="10"><span class="val" id="spfV"></span></div>
+
+  <div class="sec-label">BRUSH</div>
+  <div class="modes"><button id="brushBtn" title="Paint on the grid">BRUSH · OFF</button></div>
+  <div class="row"><label for="brushChem">Chemical</label><select id="brushChem"></select></div>
+  <div class="presets two" id="brushKind">
+    <button data-kind="value" class="on">VALUE</button>
+    <button data-kind="noise">NOISE</button>
+  </div>
+  <div class="row" id="brushValRow"><label for="brushVal">Value</label><input type="range" id="brushVal" min="0" max="1" step="0.01" value="1"><span class="val" id="brushValV"></span></div>
+  <div class="row"><label for="brushSize">Size</label><input type="range" id="brushSize" min="0.005" max="0.25" step="0.005" value="0.04"><span class="val" id="brushSizeV"></span></div>
+  <div class="hint" id="brushHint">With the mouse, the brush is always on: drag on the grid to paint. Keys [ and ] change the size.</div>
+
+  <div class="sec-label">VIEW</div>
+  <div class="swatches" id="cmaps"></div>
+  <div class="row"><label for="viewChem">Show</label><select id="viewChem"></select></div>
+  <div class="row"><label for="viewLo">Low</label><input type="range" id="viewLo" min="0" max="1" step="0.001"><span class="val" id="viewLoV"></span></div>
+  <div class="row"><label for="viewHi">High</label><input type="range" id="viewHi" min="0" max="1" step="0.001"><span class="val" id="viewHiV"></span></div>
+  <div class="modes"><button id="heightBtn">RELIEF SHADING · OFF</button></div>
+  <div class="row" id="reliefRow"><label for="relief">Relief</label><input type="range" id="relief" min="1" max="24" step="0.5" value="6"><span class="val" id="reliefV"></span></div>
+  <div class="row" id="lightRow"><label for="light">Light</label><input type="range" id="light" min="0" max="360" step="1" value="126"><span class="val" id="lightV"></span></div>
+
+  <div class="sec-label">KEYS</div>
+  <table class="readout keys">
+    <tr><td>Space</td><td>play / pause</td></tr>
+    <tr><td>R</td><td>reset</td></tr>
+    <tr><td>[ ]</td><td>brush size</td></tr>
+    <tr><td>← →</td><td>previous / next preset</td></tr>
+  </table>
+
+  <div class="sec-label">ABOUT</div>
+  <div class="about">
+    <div class="eq" id="eq-general"></div>
+    <p>Each cell of the grid holds an amount of two or more chemicals. Two processes change these amounts. <b>Reaction</b>: at each cell, the chemicals make or use up one another, at rates that depend on how much of each is there. <b>Diffusion</b>: each chemical spreads to the cells next to it, from more to less.</p>
+    <p>Diffusion alone makes everything smooth and equal. Alan Turing saw in 1952 that diffusion together with reaction can do the opposite: it can make a pattern grow out of an almost uniform start.</p>
+    <p>His idea needs two chemicals. The <b>activator</b> makes more of itself, and it also makes the <b>inhibitor</b>. The inhibitor stops the activator, and it spreads faster. A small peak of activator then grows where it is, but the inhibitor it makes moves out into a ring around it, and stops other peaks near it. This is <b>local activation and long-range inhibition</b>.</p>
+    <p>The peaks cannot come too near each other, and there is nothing to stop them further away. So they settle at a spacing that the rates set, not the start. Spots, stripes and labyrinths come from this. Other presets here make waves, spirals and moving spots, from similar rules with different reactions.</p>
+    <p>The page steps the equations on a grid with forward Euler: each step adds <i>timestep × rate of change</i> to every cell. A timestep that is too large makes the values grow without limit. Each preset gives a safe one.</p>
+  </div>
+</div>
+
+<div id="browser" aria-label="Presets" hidden>
+  <div class="br-head">
+    <input id="search" type="search" placeholder="Search presets, families, authors" autocomplete="off" spellcheck="false" aria-label="Search presets">
+    <button id="browserClose" aria-label="Close presets">✕</button>
+  </div>
+  <div class="br-families" id="famChips"></div>
+  <div class="br-list" id="list"></div>
+</div>
+
+<div id="status">
+  <span id="stMain" class="fn"></span>
+  <span id="stRight" class="right"></span>
+  <a class="credit-line" href="https://github.com/GollyGang/ready" target="_blank" rel="noopener">Patterns and equations from Ready (GollyGang) — github.com/GollyGang/ready</a>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+  <button id="dockReset" aria-label="Reset">↺</button>
+  <button id="dockPreset" class="name" aria-label="Browse presets"><span class="chip-dot" id="dockDot"></span><span id="dockName">…</span></button>
+  <button id="dockBrush" aria-label="Brush mode" aria-pressed="false">✎</button>
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
