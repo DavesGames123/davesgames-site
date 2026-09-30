@@ -1,0 +1,1899 @@
+{
+ "_about": "Hand-written catalog data for build_presets.py. Every description and equation here is our own text. Values come from the Ready pattern named in 'source'. See tools/README.md for the keys.",
+ "families": {
+  "Gray–Scott": {
+   "citation": "P. Gray & S. K. Scott (1984) Chem. Eng. Sci. 39:1087; J. E. Pearson (1993) Science 261:189",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a - a b^2 + F\\,(1 - a)",
+    "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K)\\, b"
+   ],
+   "render": {
+    "colormap": "spectral",
+    "height": true
+   }
+  },
+  "FitzHugh–Nagumo": {
+   "citation": "R. FitzHugh (1961) Biophys. J. 1:445; J. Nagumo, S. Arimoto & S. Yoshizawa (1962) Proc. IRE 50:2061; Hagberg & Meron (1994) Nonlinearity 7:805",
+   "equations": [
+    "\\partial_t a = k_1 a - k_2 a^2 - a^3 - b + \\nabla^2 a",
+    "\\partial_t b = \\epsilon\\,(k_3 a - a_1 b - a_0) + \\delta\\, \\nabla^2 b"
+   ],
+   "render": {
+    "colormap": "ice",
+    "height": false
+   }
+  },
+  "Ginzburg–Landau": {
+   "citation": "I. S. Aranson & L. Kramer (2002) Rev. Mod. Phys. 74:99",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + \\alpha a - \\gamma b + (-\\beta a + \\delta b)(a^2 + b^2)",
+    "\\partial_t b = D_b \\nabla^2 b + \\alpha b + \\gamma a + (-\\beta b - \\delta a)(a^2 + b^2)"
+   ],
+   "names": [
+    "a (real part)",
+    "b (imaginary part)"
+   ],
+   "render": {
+    "colormap": "magma",
+    "height": false
+   }
+  },
+  "Turing": {
+   "citation": "A. M. Turing (1952) Phil. Trans. R. Soc. B 237:37",
+   "equations": [
+    "\\partial_t a = k\\,(16 - a b) + D_a \\nabla^2 a",
+    "\\partial_t b = \\max\\big(-b,\\; k\\,(a b - b - 12) + D_b \\nabla^2 b\\big)"
+   ],
+   "render": {
+    "colormap": "leopard",
+    "height": true
+   }
+  },
+  "Yang (coupled Brusselators)": {
+   "citation": "L. Yang, M. Dolnik, A. M. Zhabotinsky & I. R. Epstein (2002) Phys. Rev. Lett. 88:208303",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + \\alpha(c - a) + p_1 - (1 + p_2) a + a^2 b",
+    "\\partial_t b = D_b \\nabla^2 b + \\alpha(d - b) + p_2 a - a^2 b",
+    "\\partial_t c = D_c \\nabla^2 c + \\alpha(a - c) + p_1 - (1 + p_2) c + c^2 d",
+    "\\partial_t d = D_d \\nabla^2 d + \\alpha(b - d) + p_2 c - c^2 d"
+   ],
+   "render": {
+    "colormap": "spectral",
+    "height": true
+   }
+  },
+  "Kytta (coupled Brusselators)": {
+   "citation": "K. Kyttä (2007) MSc thesis, Helsinki University of Technology; L. Yang et al. (2002) Phys. Rev. Lett. 88:208303",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + q\\,a c\\,(c - a) + p_1 - (1 + p_2) a + a^2 b",
+    "\\partial_t b = D_b \\nabla^2 b + q\\,b d\\,(d - b) + p_2 a - a^2 b",
+    "\\partial_t c = D_c \\nabla^2 c + q\\,a c\\,(a - c) + p_1 - (1 + p_2) c + c^2 d",
+    "\\partial_t d = D_d \\nabla^2 d + q\\,b d\\,(b - d) + p_2 c - c^2 d"
+   ],
+   "render": {
+    "colormap": "spectral",
+    "height": true
+   }
+  },
+  "Swift–Hohenberg": {
+   "citation": "M. Pennybacker & A. C. Newell (2013) Phys. Rev. Lett. 110:248104; J. Swift & P. C. Hohenberg (1977) Phys. Rev. A 15:319",
+   "equations": [
+    "\\partial_t a = \\mu a - (1 + \\nabla^2)^2 a + \\beta a^2 - a^3"
+   ],
+   "render": {
+    "colormap": "coral",
+    "height": true
+   }
+  },
+  "Kuramoto–Sivashinsky": {
+   "citation": "Y. Kuramoto & T. Tsuzuki (1976) Prog. Theor. Phys. 55:356; G. I. Sivashinsky (1977) Acta Astronautica 4:1177",
+   "equations": [
+    "\\partial_t a = w_4 \\nabla^4 a + w_2 \\nabla^2 a + w_g\\, |\\nabla a|^2 + s\\, a"
+   ],
+   "render": {
+    "colormap": "viridis",
+    "height": true
+   }
+  },
+  "Rosenzweig–MacArthur": {
+   "citation": "M. L. Rosenzweig & R. H. MacArthur (1963) Am. Nat. 97:209",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + a(1 - a) - \\frac{a}{a + h}\\, b",
+    "\\partial_t b = D_b \\nabla^2 b + k \\frac{a}{a + h}\\, b - m b"
+   ],
+   "names": [
+    "a (prey)",
+    "b (predator)"
+   ],
+   "render": {
+    "colormap": "viridis",
+    "height": false
+   }
+  },
+  "Morozov (plankton)": {
+   "citation": "A. Morozov, S. Petrovskii & B.-L. Li (2008) J. Theor. Biol. 250:22",
+   "names": [
+    "a (phytoplankton)",
+    "b (competitor)",
+    "c (zooplankton)"
+   ],
+   "render": {
+    "colormap": "viridis",
+    "height": false
+   }
+  },
+  "Heat and waves": {
+   "citation": "J. Fourier (1822) Théorie analytique de la chaleur",
+   "render": {
+    "colormap": "magma",
+    "height": false
+   }
+  }
+ },
+ "presets": [
+  {
+   "id": "gs-pearson-theta",
+   "source": "GrayScott1984/Pearson1993.vti",
+   "name": "Pearson θ: spots and stripes",
+   "family": "Gray–Scott",
+   "description": "A small square of catalyst in a sea of fresh substrate. With K = 0.06 and F = 0.04 the front breaks into a slow mix of spots and short stripes that fills the whole torus.",
+   "params": {
+    "D_a": {
+     "min": 5e-06,
+     "max": 4e-05,
+     "step": 1e-06
+    },
+    "D_b": {
+     "min": 2e-06,
+     "max": 2e-05,
+     "step": 1e-06
+    },
+    "K": {
+     "min": 0.03,
+     "max": 0.07,
+     "step": 0.0001
+    },
+    "F": {
+     "min": 0.0,
+     "max": 0.1,
+     "step": 0.0001
+    }
+   },
+   "speed": 24
+  },
+  {
+   "id": "gs-mitosis",
+   "source": "GrayScott1984/Pearson1993.vti",
+   "set": {
+    "F": 0.0367,
+    "K": 0.0649
+   },
+   "name": "Mitosis",
+   "family": "Gray–Scott",
+   "description": "Spots that grow, pinch in the middle and split in two, again and again, until they pack the plane. Same model and seed as Pearson θ, with F and K moved into the self-replicating region.",
+   "params": {
+    "D_a": {
+     "min": 5e-06,
+     "max": 4e-05,
+     "step": 1e-06
+    },
+    "D_b": {
+     "min": 2e-06,
+     "max": 2e-05,
+     "step": 1e-06
+    },
+    "K": {
+     "min": 0.03,
+     "max": 0.07,
+     "step": 0.0001
+    },
+    "F": {
+     "min": 0.0,
+     "max": 0.1,
+     "step": 0.0001
+    }
+   },
+   "speed": 24
+  },
+  {
+   "id": "gs-coral",
+   "source": "GrayScott1984/Pearson1993.vti",
+   "set": {
+    "F": 0.0545,
+    "K": 0.062
+   },
+   "name": "Coral growth",
+   "family": "Gray–Scott",
+   "description": "Branching fingers grow out from the seed and fold into a coral-like maze. The fingers never cross, so the finished pattern is one connected labyrinth.",
+   "params": {
+    "D_a": {
+     "min": 5e-06,
+     "max": 4e-05,
+     "step": 1e-06
+    },
+    "D_b": {
+     "min": 2e-06,
+     "max": 2e-05,
+     "step": 1e-06
+    },
+    "K": {
+     "min": 0.03,
+     "max": 0.07,
+     "step": 0.0001
+    },
+    "F": {
+     "min": 0.0,
+     "max": 0.1,
+     "step": 0.0001
+    }
+   },
+   "speed": 24
+  },
+  {
+   "id": "gs-waves",
+   "source": "GrayScott1984/Pearson1993.vti",
+   "set": {
+    "F": 0.014,
+    "K": 0.047
+   },
+   "name": "Chaotic waves",
+   "family": "Gray–Scott",
+   "description": "At low feed rate the medium is excitable: pulses of catalyst run outward, collide, and break into turbulent, ever-changing wave fronts.",
+   "params": {
+    "D_a": {
+     "min": 5e-06,
+     "max": 4e-05,
+     "step": 1e-06
+    },
+    "D_b": {
+     "min": 2e-06,
+     "max": 2e-05,
+     "step": 1e-06
+    },
+    "K": {
+     "min": 0.03,
+     "max": 0.07,
+     "step": 0.0001
+    },
+    "F": {
+     "min": 0.0,
+     "max": 0.1,
+     "step": 0.0001
+    }
+   },
+   "speed": 24
+  },
+  {
+   "id": "gs-u-skate",
+   "source": "GrayScott1984/U-Skate/Munafo_glider.vti",
+   "name": "U-Skate glider",
+   "family": "Gray–Scott",
+   "citation": "R. P. Munafo (2014) U-Skate World, mrob.com/pub/comp/xmorphia; J. E. Pearson (1993) Science 261:189",
+   "description": "Near F = 0.062, K = 0.0609 the uniform state is almost stable and small structures keep their shape. Three blocks cut from the catalyst make a U-shaped glider that slides across the grid until it meets the wall.",
+   "size": [
+    256,
+    128
+   ],
+   "embed": true,
+   "params": {
+    "K": {
+     "min": 0.058,
+     "max": 0.064,
+     "step": 1e-05
+    },
+    "F": {
+     "min": 0.055,
+     "max": 0.07,
+     "step": 0.0001
+    }
+   },
+   "render": {
+    "low": 0.0,
+    "high": 0.45,
+    "height": false
+   },
+   "speed": 30
+  },
+  {
+   "id": "gs-o-ring",
+   "source": "GrayScott1984/U-Skate/o-ring_2D.vti",
+   "name": "U-Skate rings",
+   "family": "Gray–Scott",
+   "citation": "R. P. Munafo (2014) U-Skate World, mrob.com/pub/comp/xmorphia; J. E. Pearson (1993) Science 261:189",
+   "description": "In the same near-stable U-Skate regime, a ring and three holes cut into the catalyst. The ring slowly opens and the holes drift; the structures change shape only a little at a time.",
+   "size": [
+    256,
+    128
+   ],
+   "embed": true,
+   "params": {
+    "K": {
+     "min": 0.058,
+     "max": 0.064,
+     "step": 1e-05
+    },
+    "F": {
+     "min": 0.055,
+     "max": 0.07,
+     "step": 0.0001
+    }
+   },
+   "render": {
+    "low": 0.0,
+    "high": 0.45,
+    "height": false
+   },
+   "speed": 30
+  },
+  {
+   "id": "gs-self-replicating",
+   "source": "GrayScott1984/self-replicating_spots.vti",
+   "name": "Self-replicating spots",
+   "family": "Gray–Scott",
+   "description": "A noisy block of catalyst, with the substrate lowered by the same amount, breaks into spots. Each spot grows, divides, and the daughters push away from each other until spots fill the box.",
+   "size": [
+    256,
+    128
+   ],
+   "params": {
+    "K": {
+     "min": 0.05,
+     "max": 0.07,
+     "step": 0.0001
+    },
+    "F": {
+     "min": 0.02,
+     "max": 0.05,
+     "step": 0.0001
+    }
+   },
+   "speed": 16
+  },
+  {
+   "id": "gs-noisy-mitosis",
+   "source": "GrayScott1984/noisy_solitons_mitosis.vti",
+   "name": "Noisy mitosis",
+   "family": "Gray–Scott",
+   "citation": "A. Lesmes, D. Hochberg, F. Morán & J. Pérez-Mercader (2003) Phys. Rev. Lett. 91:238301",
+   "description": "Gray–Scott with a noise source. A third field c holds a pseudo-random value in [-1, 1] that the formula remixes every step and feeds into the substrate. Three seeds split into a few spots that jitter and drift instead of sitting still.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a - a b^2 + F(1 - a) + \\sigma\\, \\xi",
+    "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + k) b",
+    "\\xi \\leftarrow (\\xi + \\nabla^2 \\xi) \\bmod 1"
+   ],
+   "names": [
+    "a",
+    "b",
+    "c (noise)"
+   ],
+   "size": [
+    128,
+    128
+   ],
+   "params": {
+    "noise": {
+     "min": 0,
+     "max": 1,
+     "step": 0.01
+    },
+    "k": {
+     "min": 0.05,
+     "max": 0.075,
+     "step": 0.0001
+    },
+    "F": {
+     "min": 0.01,
+     "max": 0.06,
+     "step": 0.0001
+    }
+   },
+   "speed": 60
+  },
+  {
+   "id": "gs-lesmes-noisy",
+   "source": "GrayScott1984/Lesmes_noisy.vti",
+   "name": "Noise-driven spots",
+   "family": "Gray–Scott",
+   "citation": "A. Lesmes, D. Hochberg, F. Morán & J. Pérez-Mercader (2003) Phys. Rev. Lett. 91:238301",
+   "description": "With these values the plain Gray–Scott spots would die. Added noise keeps the pattern alive: it grows from three seeds into a restless field of spots and fragments.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a - a b^2 + F(1 - a) + \\sigma\\, \\xi",
+    "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + k) b",
+    "\\xi \\leftarrow (\\xi + \\nabla^2 \\xi) \\bmod 1"
+   ],
+   "names": [
+    "a",
+    "b",
+    "c (noise)"
+   ],
+   "size": [
+    256,
+    256
+   ],
+   "params": {
+    "noise": {
+     "min": 0,
+     "max": 1,
+     "step": 0.01
+    },
+    "k": {
+     "min": 0.05,
+     "max": 0.075,
+     "step": 0.0001
+    },
+    "F": {
+     "min": 0.01,
+     "max": 0.08,
+     "step": 0.0001
+    }
+   },
+   "speed": 30
+  },
+  {
+   "id": "gs-parameter-map",
+   "source": "GrayScott1984/parameter-map.vti",
+   "name": "Gray–Scott parameter map",
+   "family": "Gray–Scott",
+   "description": "K grows from left to right and F grows along the vertical axis, so each part of the grid runs a different Gray–Scott system. Spots, stripes, mazes, waves and empty regions sit next to each other like Pearson's catalog.",
+   "equations": [
+    "\\partial_t a = 2D \\nabla^2 a - a b^2 + F(y)\\,(1 - a)",
+    "\\partial_t b = D \\nabla^2 b + a b^2 - (F(y) + k(x))\\, b"
+   ],
+   "size": [
+    512,
+    512
+   ],
+   "init": [
+    {
+     "op": "fill",
+     "chem": "a",
+     "value": 1
+    },
+    {
+     "op": "noise",
+     "chem": "b",
+     "low": 0,
+     "high": 1,
+     "region": {
+      "rect": [
+       0.2,
+       0.2,
+       0.8,
+       0.8
+      ]
+     }
+    }
+   ],
+   "params": {
+    "diff": {
+     "min": 0.02,
+     "max": 0.1,
+     "step": 0.001
+    }
+   },
+   "speed": 60
+  },
+  {
+   "id": "gs-parameter-modulation",
+   "source": "parameter_modulation_demo.vti",
+   "name": "Stenciled feed rate",
+   "family": "Gray–Scott",
+   "description": "A third field c works as a stencil: where c = 1 the kill rate is a little lower. Spots grow and divide only inside the stenciled letters-like blocks and stay out of the rest.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a - a b^2 + F(1 - a)",
+    "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K - 0.005\\,c)\\, b"
+   ],
+   "citation": "J. E. Pearson (1993) Science 261:189; parameter stencil idea from Ready (GollyGang)",
+   "names": [
+    "a",
+    "b",
+    "c (stencil)"
+   ],
+   "size": [
+    256,
+    256
+   ],
+   "speed": 20
+  },
+  {
+   "id": "froese-2014",
+   "source": "Froese2014/Froese2014_Fig3.vti",
+   "name": "Froese: spots with waste",
+   "family": "Gray–Scott",
+   "citation": "T. Froese, N. Virgo & T. Ikegami (2014) Artificial Life 20:55",
+   "description": "A Gray–Scott variant in which the catalyst leaves a waste product c that slows its own reaction. Spots move away from their own trails and leave dark tracks behind them.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a - e^{-w c} a b^2 + r(1 - a)",
+    "\\partial_t b = D_b \\nabla^2 b + e^{-w c} a b^2 - k b",
+    "\\partial_t c = k b - k_c c"
+   ],
+   "names": [
+    "a (food)",
+    "b (cells)",
+    "c (waste)"
+   ],
+   "render": {
+    "colormap": "grey",
+    "low": 0,
+    "high": 15,
+    "height": false
+   },
+   "speed": 30
+  },
+  {
+   "id": "brusselator",
+   "source": "Brusselator.vti",
+   "name": "Brusselator",
+   "family": "Brusselator",
+   "citation": "I. Prigogine & R. Lefever (1968) J. Chem. Phys. 48:1695",
+   "description": "The classic model of an autocatalytic chemical oscillator. With B above the Hopf threshold the random start turns into a field of oscillating, drifting patches and spiral fragments.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + k_1 A + k_2 a^2 b - k_3 B a - k_4 a",
+    "\\partial_t b = D_b \\nabla^2 b - k_2 a^2 b + k_3 B a"
+   ],
+   "render": {
+    "colormap": "spectral",
+    "height": false
+   },
+   "size": [
+    256,
+    256
+   ],
+   "speed": 20
+  },
+  {
+   "id": "fhn-tip-splitting",
+   "source": "FitzHugh-Nagumo/tip-splitting.vti",
+   "name": "Tip splitting",
+   "family": "FitzHugh–Nagumo",
+   "description": "Excited fronts grow into the resting medium. Each tip becomes unstable and splits in two, so the fronts branch again and again into a labyrinth.",
+   "size": [
+    256,
+    256
+   ],
+   "params": {
+    "epsilon": {
+     "min": 0.0,
+     "max": 0.1,
+     "step": 0.001
+    },
+    "delta": {
+     "min": 0,
+     "max": 8,
+     "step": 0.05
+    }
+   },
+   "speed": 30
+  },
+  {
+   "id": "fhn-ising",
+   "source": "FitzHugh-Nagumo/Ising_regime.vti",
+   "name": "Ising fronts",
+   "family": "FitzHugh–Nagumo",
+   "description": "In this regime the medium has two stable states, like the up and down spins of an Ising magnet. A noisy vertical strip splits into a pair of fronts; the fronts slowly ripple and fold into a field of stripes.",
+   "size": [
+    256,
+    256
+   ],
+   "params": {
+    "epsilon": {
+     "min": 0.0,
+     "max": 0.1,
+     "step": 0.001
+    },
+    "delta": {
+     "min": 0,
+     "max": 8,
+     "step": 0.05
+    }
+   },
+   "speed": 100
+  },
+  {
+   "id": "fhn-pulsate",
+   "source": "FitzHugh-Nagumo/pulsate.vti",
+   "name": "Pulsating spots",
+   "family": "FitzHugh–Nagumo",
+   "description": "A 2D slice of a 3D Ready pattern. Excited blobs grow, break, and pulse; the pieces become spots that breathe in and out.",
+   "size": [
+    256,
+    128
+   ],
+   "params": {
+    "epsilon": {
+     "min": 0.0,
+     "max": 0.1,
+     "step": 0.001
+    },
+    "delta": {
+     "min": 0,
+     "max": 8,
+     "step": 0.05
+    }
+   },
+   "speed": 30
+  },
+  {
+   "id": "fhn-parameter-map",
+   "source": "FitzHugh-Nagumo/FHN_parameter_map.vti",
+   "name": "FitzHugh–Nagumo parameter map",
+   "family": "FitzHugh–Nagumo",
+   "description": "ε grows from left to right and the diffusion ratio δ grows along the vertical axis. One grid shows the stationary Turing spots and stripes, the travelling waves, and the uniform states of the model.",
+   "equations": [
+    "\\partial_t a = a - a^3 - b + D \\nabla^2 a",
+    "\\partial_t b = \\epsilon(x)\\,(a - a_1 b - a_0) + \\delta(y)\\, D \\nabla^2 b"
+   ],
+   "size": [
+    512,
+    512
+   ],
+   "speed": 20
+  },
+  {
+   "id": "fhn-tip-splitting-web",
+   "source": "Experiments/CornusAmmonis/tip-splitting-web.vti",
+   "name": "Tip-splitting web",
+   "family": "FitzHugh–Nagumo",
+   "citation": "Ready community pattern by Cornus Ammonis; FitzHugh–Nagumo after Hagberg & Meron (1994) Nonlinearity 7:805",
+   "description": "An experimental FitzHugh–Nagumo variant. A Sobel edge term couples the two fields along their gradients, and the splitting fronts weave into a fine web.",
+   "equations": [
+    "\\partial_t a = s\\,(\\nabla_S a \\cdot \\nabla_S b) + k_1 a - k_2 a^2 - a^3 - b + \\nabla^2 a",
+    "\\partial_t b = D_u (D_{us} \\textstyle\\sum_{8} a - a) + \\epsilon(k_3 a - a_1 b - a_0) + \\delta \\nabla^2 b"
+   ],
+   "size": [
+    512,
+    512
+   ],
+   "speed": 20
+  },
+  {
+   "id": "cgl-waves",
+   "source": "Ginzburg-Landau/complex_Ginzburg-Landau.vti",
+   "name": "Complex Ginzburg–Landau",
+   "family": "Ginzburg–Landau",
+   "description": "The general equation for a field that oscillates near a Hopf bifurcation. Small noise grows into phase waves that organise around spiral defects. The view shows the real part.",
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "colormap": "grey",
+    "low": -0.25,
+    "high": 0.25
+   },
+   "speed": 10
+  },
+  {
+   "id": "cgl-magnitude",
+   "source": "Ginzburg-Landau/complex_Ginzburg-Landau_magnitude.vti",
+   "name": "Ginzburg–Landau defects",
+   "family": "Ginzburg–Landau",
+   "description": "The same equation, but the view shows the amplitude |A| in a third field. Spiral cores show as dark points where the amplitude falls to zero.",
+   "names": [
+    "a (real part)",
+    "b (imaginary part)",
+    "c = |A|"
+   ],
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "colormap": "magma",
+    "low": 0,
+    "high": 0.25
+   },
+   "speed": 10
+  },
+  {
+   "id": "cgl-ramps",
+   "source": "Experiments/DanWills/cglrd_ramps_example.vti",
+   "name": "Ginzburg–Landau ramps",
+   "family": "Ginzburg–Landau",
+   "citation": "Ready community pattern by Dan Wills; I. S. Aranson & L. Kramer (2002) Rev. Mod. Phys. 74:99",
+   "description": "Some coefficients ramp up from the vertical centre line to the left and right edges. The waves change character across the grid, from fine turbulence to broad spirals.",
+   "equations": [
+    "r = |2x - 1|^{p}",
+    "\\partial_t a = (D_a + \\rho_{D} r) \\nabla^2 a + \\alpha a - \\gamma b + (-(\\beta + \\rho_\\beta r) a + \\delta b)(a^2 + b^2)",
+    "\\partial_t b = D_b \\nabla^2 b + \\alpha b + \\gamma a + (-(\\beta + \\rho_\\beta r) b - \\delta a)(a^2 + b^2)"
+   ],
+   "names": [
+    "a (real part)",
+    "b (imaginary part)",
+    "c = |A|",
+    "d (ramp)"
+   ],
+   "size": [
+    256,
+    512
+   ],
+   "render": {
+    "chem": "c",
+    "colormap": "magma",
+    "low": 0,
+    "high": 0.5
+   },
+   "speed": 10
+  },
+  {
+   "id": "guo-2014",
+   "source": "Guo2014/guo.vti",
+   "name": "Guo: branching root",
+   "family": "Meinhardt",
+   "citation": "Y. Guo, M. H. Guo, J. Wu, et al. (2014) Frontiers in Plant Science; activator–inhibitor model after H. Meinhardt (1982) Models of Biological Pattern Formation",
+   "description": "An activator–inhibitor system with a substrate and a slow differentiation field d. From one seed a network grows and branches, and each new branch leaves a line of differentiated cells behind it.",
+   "equations": [
+    "\\partial_t a = C a^2 c / b - M a + s D_a \\nabla^2 a + r_A d",
+    "\\partial_t b = C a^2 c - N b + s D_h \\nabla^2 b + r_H d",
+    "\\partial_t c = C_z - G c - E_{ps}\\, d c + s D_s \\nabla^2 c",
+    "\\partial_t d = D a - E d + \\frac{d^2}{1 + F d^2}"
+   ],
+   "names": [
+    "a (activator)",
+    "b (inhibitor)",
+    "c (substrate)",
+    "d (differentiation)"
+   ],
+   "render": {
+    "chem": "d",
+    "colormap": "coral",
+    "low": 0,
+    "high": 1,
+    "height": false
+   },
+   "speed": 160
+  },
+  {
+   "id": "kpz-erosion",
+   "source": "KardarParisiZhang1986/erosion.vti",
+   "name": "Erosion",
+   "family": "Kardar–Parisi–Zhang",
+   "citation": "M. Kardar, G. Parisi & Y.-C. Zhang (1986) Phys. Rev. Lett. 56:889",
+   "description": "A height field a erodes where it is steep, faster where the rock b is soft. Ridges and valleys sharpen out of a gentle hill. Ready uses Perlin noise for the rock; here a sum of sine waves stands in for it.",
+   "equations": [
+    "\\partial_t a = f \\nabla^2 a - g\\, |\\nabla a|^{e}\\, (1 + h\\,(b - 1))"
+   ],
+   "names": [
+    "a (height)",
+    "b (rock softness)"
+   ],
+   "init": [
+    {
+     "op": "fill",
+     "chem": "a",
+     "value": 0.2
+    },
+    {
+     "op": "gauss",
+     "chem": "a",
+     "amplitude": 1,
+     "center": [
+      0.5,
+      0.5
+     ],
+     "sigma": 0.2,
+     "mode": "add"
+    },
+    {
+     "op": "sine",
+     "chem": "a",
+     "amplitude": 0.1,
+     "kx": 2,
+     "ky": 0,
+     "phase": 0,
+     "mode": "add"
+    },
+    {
+     "op": "sine",
+     "chem": "a",
+     "amplitude": 0.1,
+     "kx": 0,
+     "ky": 2,
+     "phase": 0,
+     "mode": "add"
+    },
+    {
+     "op": "fill",
+     "chem": "b",
+     "value": 0.5
+    },
+    {
+     "op": "sine",
+     "chem": "b",
+     "amplitude": 0.18,
+     "kx": 3,
+     "ky": 5,
+     "phase": 0.7,
+     "mode": "add"
+    },
+    {
+     "op": "sine",
+     "chem": "b",
+     "amplitude": 0.12,
+     "kx": -7,
+     "ky": 4,
+     "phase": 2.1,
+     "mode": "add"
+    },
+    {
+     "op": "sine",
+     "chem": "b",
+     "amplitude": 0.08,
+     "kx": 11,
+     "ky": -9,
+     "phase": 4.0,
+     "mode": "add"
+    },
+    {
+     "op": "sine",
+     "chem": "b",
+     "amplitude": 0.05,
+     "kx": 17,
+     "ky": 21,
+     "phase": 1.3,
+     "mode": "add"
+    },
+    {
+     "op": "noise",
+     "chem": "b",
+     "low": -0.03,
+     "high": 0.03,
+     "mode": "add"
+    }
+   ],
+   "render": {
+    "colormap": "viridis",
+    "low": 0,
+    "high": 0.6,
+    "height": true
+   },
+   "speed": 3
+  },
+  {
+   "id": "kobayashi-crystal",
+   "source": "Kobayashi1993/crystal.vti",
+   "name": "Dendritic crystal",
+   "family": "Phase field",
+   "citation": "R. Kobayashi (1993) Physica D 63:410",
+   "description": "A phase-field model of a solid growing into undercooled liquid. The interface energy depends on the direction of the surface, so a small disc grows six main arms with side branches, like a snowflake.",
+   "equations": [
+    "\\tau\\, \\partial_t \\phi = \\nabla\\cdot(\\epsilon^2 \\nabla \\phi) - \\partial_x(\\epsilon \\epsilon' \\partial_y \\phi) + \\partial_y(\\epsilon \\epsilon' \\partial_x \\phi) + \\phi(1 - \\phi)(\\phi - \\tfrac12 + m)",
+    "\\partial_t T = \\nabla^2 T + K\\, \\partial_t \\phi",
+    "\\epsilon = \\bar\\epsilon\\,(1 + \\delta \\cos(j\\,(\\theta + \\theta_0))),\\quad m = \\tfrac{\\alpha}{\\pi} \\arctan(\\gamma (T_{eq} - T))"
+   ],
+   "names": [
+    "a (phase φ)",
+    "b (temperature T)"
+   ],
+   "formula": [
+    "var gpx = array<f32, 5>((a_e - a_w) / dx, (a_ne - a_nw) / dx, (a_e2 - a) / dx, (a_se - a_sw) / dx, (a - a_w2) / dx);",
+    "var gpy = array<f32, 5>((a_s - a_n) / dy, (a - a_n2) / dy, (a_se - a_ne) / dy, (a_s2 - a) / dy, (a_sw - a_nw) / dy);",
+    "var eps: array<f32, 5>;",
+    "var epsd: array<f32, 5>;",
+    "for (var i = 0; i < 5; i++) {",
+    "  let zero = gpx[i] == 0.0 && gpy[i] == 0.0;",
+    "  let angle = select(atan2(gpy[i], gpx[i]), 0.0, zero) + rotate;",
+    "  eps[i] = epsbar * (1.0 + delta * cos(anisotropy * angle));",
+    "  epsd[i] = -epsbar * anisotropy * delta * sin(anisotropy * angle);",
+    "}",
+    "let grad_eps2_x = (eps[2] * eps[2] - eps[4] * eps[4]) / dx;",
+    "let grad_eps2_y = (eps[3] * eps[3] - eps[1] * eps[1]) / dy;",
+    "let pi = 3.14159265358979;",
+    "let m = alpha * atan(gamma * (teq - b)) / pi;",
+    "let edgp_x = (eps[4] * epsd[4] * gpy[4] - eps[2] * epsd[2] * gpy[2]) / dx;",
+    "let edgp_y = (eps[3] * epsd[3] * gpx[3] - eps[1] * epsd[1] * gpx[1]) / dy;",
+    "delta_a = (eps[0] * eps[0] * laplacian_a + edgp_x + edgp_y + grad_eps2_x * gpx[0] + grad_eps2_y * gpy[0] + a * (1.0 - a) * (a - 0.5 + m)) / tau;",
+    "delta_b = laplacian_b + k * delta_a;"
+   ],
+   "notes": "Hand translation: Ready's formula uses C arrays and a for loop. atan2(0, 0) is made 0, as in OpenCL.",
+   "size": [
+    512,
+    512
+   ],
+   "render": {
+    "colormap": "ice",
+    "low": 0,
+    "high": 1,
+    "height": true
+   },
+   "speed": 20
+  },
+  {
+   "id": "kobayashi-laplacian-growth",
+   "source": "Kobayashi1993/laplacian_growth.vti",
+   "name": "Laplacian growth",
+   "family": "Phase field",
+   "citation": "R. Kobayashi (1993) Physica D 63:410",
+   "description": "The isotropic version of the phase-field model. A flat solid front on the left edge grows into noisy undercooled liquid and breaks into fingers that race and split.",
+   "equations": [
+    "\\tau\\, \\partial_t \\phi = \\bar\\epsilon^2 \\nabla^2 \\phi + \\phi(1 - \\phi)(\\phi - \\tfrac12 + m)",
+    "\\partial_t T = \\nabla^2 T + K\\, \\partial_t \\phi,\\quad m = \\tfrac{\\alpha}{\\pi} \\arctan(\\gamma (T_{eq} - T))"
+   ],
+   "names": [
+    "a (phase φ)",
+    "b (temperature T)"
+   ],
+   "size": [
+    512,
+    256
+   ],
+   "render": {
+    "colormap": "ice",
+    "low": 0,
+    "high": 1,
+    "height": false
+   },
+   "speed": 40
+  },
+  {
+   "id": "ks-chaos",
+   "source": "KuramotoSivashinsky1978/Kuramoto-Sivashinsky.vti",
+   "name": "Kuramoto–Sivashinsky chaos",
+   "family": "Kuramoto–Sivashinsky",
+   "description": "A model of flame fronts and thin falling films. Long waves grow, short waves decay, and the nonlinear term moves energy between them, so the surface forms restless cells that merge and split.",
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "low": 65,
+    "high": 120
+   },
+   "speed": 10
+  },
+  {
+   "id": "ks-cells",
+   "source": "KuramotoSivashinsky1978/Kuramoto-Sivashinsky_multistable.vti",
+   "name": "Kuramoto–Sivashinsky cells",
+   "family": "Kuramoto–Sivashinsky",
+   "description": "The same equation on a finer grid with a smaller box. Only a few cells fit in, and the surface settles into slowly drifting cellular patterns.",
+   "size": [
+    128,
+    128
+   ],
+   "render": {
+    "low": 66,
+    "high": 80
+   },
+   "speed": 20
+  },
+  {
+   "id": "lotka-volterra",
+   "source": "LotkaVolterra1926/Lotka-Volterra.vti",
+   "name": "Lotka–Volterra",
+   "family": "Lotka–Volterra",
+   "citation": "A. J. Lotka (1925) Elements of Physical Biology; V. Volterra (1926) Nature 118:558",
+   "description": "Prey a grow and are eaten by predators b, which die without food. With diffusion, the local boom and bust cycles fall out of step and form travelling waves of predators chasing prey.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + \\alpha a - \\beta a b",
+    "\\partial_t b = D_b \\nabla^2 b + \\delta a b - \\gamma b"
+   ],
+   "names": [
+    "a (prey)",
+    "b (predator)"
+   ],
+   "render": {
+    "colormap": "viridis",
+    "low": 0,
+    "high": 3,
+    "height": false
+   },
+   "speed": 10
+  },
+  {
+   "id": "maginu-parameter-map",
+   "source": "Maginu1975/maginu_parameter_map.vti",
+   "name": "Maginu parameter map",
+   "family": "FitzHugh–Nagumo",
+   "citation": "K. Maginu (1975) Mathematical Biosciences 27:17",
+   "description": "Maginu's variant of the FitzHugh–Nagumo system. α grows from left to right and γ grows along the vertical axis, so one grid shows waves, stationary patterns and uniform states side by side.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + \\alpha(x)\\,(a - a^3) - b",
+    "\\partial_t b = D_b \\nabla^2 b + \\epsilon\\,(a - \\gamma(y)\\, b)"
+   ],
+   "size": [
+    512,
+    512
+   ],
+   "render": {
+    "colormap": "spectral"
+   },
+   "speed": 20
+  },
+  {
+   "id": "morozov-fig2",
+   "source": "Morozov2008/Fig2.vti",
+   "name": "Plankton patches",
+   "family": "Morozov (plankton)",
+   "description": "Phytoplankton a, a competitor b and zooplankton c that grazes on a. From one seed in the centre, a ring of plankton spreads and breaks into irregular, drifting patches.",
+   "equations": [
+    "\\partial_t a = \\nabla^2 a - \\alpha a - e a^2 + \\frac{\\mu_1 a b}{1 + \\omega_1 b} - \\frac{a c}{1 + \\gamma a}",
+    "\\partial_t b = \\epsilon_1 \\nabla^2 b - b - b^2 + \\frac{\\mu_2 a b}{1 + \\omega_2 a}",
+    "\\partial_t c = \\epsilon_2 \\nabla^2 c + \\frac{a c}{1 + \\gamma a} - \\delta c"
+   ],
+   "speed": 30
+  },
+  {
+   "id": "morozov-fig4",
+   "source": "Morozov2008/Fig4.vti",
+   "name": "Plankton invasion",
+   "family": "Morozov (plankton)",
+   "description": "Phytoplankton compete with a second species and are grazed by zooplankton. The invasion front from the centre leaves behind a patchy, chaotic mix of the three populations.",
+   "equations": [
+    "\\partial_t a = \\nabla^2 a + a(1 - a - \\chi_{12} b) - \\frac{a c}{1 + \\gamma a}",
+    "\\partial_t b = \\epsilon_1 \\nabla^2 b + r b(1 - b - \\chi_{21} a)",
+    "\\partial_t c = \\epsilon_2 \\nabla^2 c + \\frac{g a c}{1 + \\gamma a} - \\delta c"
+   ],
+   "render": {
+    "low": 0,
+    "high": 1
+   },
+   "speed": 40
+  },
+  {
+   "id": "morozov-delta-map",
+   "source": "Morozov2008/Fig5678_delta_map.vti",
+   "name": "Plankton: mortality map",
+   "family": "Morozov (plankton)",
+   "description": "The same plankton model, but the zooplankton death rate δ grows from left to right. Regular rings on one side turn into patchy spatiotemporal chaos on the other.",
+   "equations": [
+    "\\partial_t a = \\nabla^2 a + a(1 - a - \\chi_{12} b) - \\frac{a c}{1 + \\gamma a}",
+    "\\partial_t b = \\epsilon_1 \\nabla^2 b + r b(1 - b - \\chi_{21} a)",
+    "\\partial_t c = \\epsilon_2 \\nabla^2 c + \\frac{g a c}{1 + \\gamma a} - \\delta(x)\\, c"
+   ],
+   "size": [
+    512,
+    256
+   ],
+   "speed": 80
+  },
+  {
+   "id": "sh-spots",
+   "source": "Pennybacker2013/spots.vti",
+   "name": "Hexagonal spots",
+   "family": "Swift–Hohenberg",
+   "description": "The Swift–Hohenberg equation picks one wavelength. With a quadratic term β the chosen pattern is hexagons: a single bump in the centre seeds a growing lattice of spots.",
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "low": -0.4,
+    "high": 0.5
+   },
+   "speed": 60
+  },
+  {
+   "id": "sh-stripes",
+   "source": "Pennybacker2013/stripes.vti",
+   "name": "Stripes",
+   "family": "Swift–Hohenberg",
+   "description": "With β = 0 the symmetric equation prefers rolls. Stripes spread from the central bump and from the noise, and then slowly anneal their defects.",
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "low": -1.0,
+    "high": 1.0
+   },
+   "speed": 40
+  },
+  {
+   "id": "sh-phyllotaxis-hexagons",
+   "source": "Pennybacker2013/phyllotaxis_hexagons.vti",
+   "name": "Phyllotaxis hexagons",
+   "family": "Swift–Hohenberg",
+   "description": "Pennybacker and Newell's plant-growth model adds a gradient term that makes hexagons robust. From one bump, a hexagonal lattice of primordia, like the florets of a sunflower, spreads out.",
+   "equations": [
+    "\\partial_t a = \\mu a - (1 + \\nabla^2)^2 a - \\beta\\,(|\\nabla a|^2 + 2 a \\nabla^2 a) - a^3"
+   ],
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "low": -0.5,
+    "high": 2.5
+   },
+   "speed": 80
+  },
+  {
+   "id": "sh-phyllotaxis-fibonacci",
+   "source": "Pennybacker2013/phyllotaxis_fibonacci.vti",
+   "name": "Phyllotaxis ring",
+   "family": "Swift–Hohenberg",
+   "description": "The plant-growth model seeded with a ring of bumps near the edge, like the rim of a growing shoot. New bumps fill in between the old ones and pack inward.",
+   "equations": [
+    "\\partial_t a = \\mu a - (1 + \\nabla^2)^2 a - \\beta\\,(|\\nabla a|^2 + 2 a \\nabla^2 a) - a^3"
+   ],
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "low": -0.5,
+    "high": 2.5
+   },
+   "speed": 40
+  },
+  {
+   "id": "sh-parameter-map",
+   "source": "Pennybacker2013/parameter_map.vti",
+   "name": "Swift–Hohenberg parameter map",
+   "family": "Swift–Hohenberg",
+   "description": "μ grows from left to right and β grows along the vertical axis. The grid shows the uniform state, stripes, hexagonal spots and inverted spots, with smooth changes between them.",
+   "equations": [
+    "\\partial_t a = \\mu(x)\\, a - (1 + \\nabla^2)^2 a + \\beta(y)\\, a^2 - a^3"
+   ],
+   "init": [
+    {
+     "op": "noise",
+     "chem": "a",
+     "low": -0.1,
+     "high": 0.1
+    }
+   ],
+   "size": [
+    512,
+    512
+   ],
+   "render": {
+    "low": -0.5,
+    "high": 2.5
+   },
+   "speed": 40
+  },
+  {
+   "id": "purwins-glider",
+   "source": "Purwins1999/glider.vti",
+   "name": "Dissipative solitons",
+   "family": "Purwins",
+   "citation": "C. P. Schenk, M. Or-Guil, M. Bode & H.-G. Purwins (1997) Phys. Rev. Lett. 78:3781",
+   "description": "A three-component model of gas-discharge spots. Seven offset pairs of blobs turn into particle-like spots that move, collide, scatter and sometimes merge.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + \\lambda a - a^3 - k_3 c - b + k_1",
+    "\\tau\\, \\partial_t b = D_b \\nabla^2 b + a - b",
+    "\\theta\\, \\partial_t c = D_c \\nabla^2 c + a - c"
+   ],
+   "rename": {
+    "lambda": "lambda_"
+   },
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "colormap": "magma",
+    "low": -1.5,
+    "high": 1.5,
+    "height": false
+   },
+   "speed": 30
+  },
+  {
+   "id": "purwins-multi-glider",
+   "source": "Purwins1999/multiGlider.vti",
+   "name": "Soliton molecules",
+   "family": "Purwins",
+   "citation": "C. P. Schenk, M. Or-Guil, M. Bode & H.-G. Purwins (1997) Phys. Rev. Lett. 78:3781",
+   "description": "The gas-discharge model with other constants. The moving spots bind together into small groups that travel as one, like molecules made of solitons.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + \\lambda a - a^3 - k_3 c - b + k_1",
+    "\\tau\\, \\partial_t b = D_b \\nabla^2 b + a - b",
+    "\\theta\\, \\partial_t c = D_c \\nabla^2 c + a - c"
+   ],
+   "rename": {
+    "lambda": "lambda_"
+   },
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "colormap": "magma",
+    "low": -1.5,
+    "high": 1.5,
+    "height": false
+   },
+   "speed": 30
+  },
+  {
+   "id": "rm-predator-prey",
+   "source": "RosenzweigMacArthur1963/predator-prey.vti",
+   "name": "Predator–prey spirals",
+   "family": "Rosenzweig–MacArthur",
+   "description": "Prey grow to a carrying capacity and predators have a saturating appetite. The local cycles are stable limit cycles, and with diffusion they form spiral waves and patchy chaos.",
+   "speed": 10
+  },
+  {
+   "id": "rm-hk-map",
+   "source": "RosenzweigMacArthur1963/hk_parameter_map.vti",
+   "name": "Predator–prey map (h, k)",
+   "family": "Rosenzweig–MacArthur",
+   "description": "The half-saturation h grows from left to right and the conversion rate k grows along the vertical axis. Steady coexistence, waves and turbulence share one grid.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + a(1 - a) - \\frac{a}{a + h(x)}\\, b",
+    "\\partial_t b = D_b \\nabla^2 b + k(y) \\frac{a}{a + h(x)}\\, b - m b"
+   ],
+   "size": [
+    512,
+    512
+   ],
+   "speed": 10
+  },
+  {
+   "id": "rm-hm-map",
+   "source": "RosenzweigMacArthur1963/hm_parameter_map.vti",
+   "name": "Predator–prey map (h, m)",
+   "family": "Rosenzweig–MacArthur",
+   "description": "The half-saturation h grows from left to right and the predator death rate m grows along the vertical axis. Where m is high the predators die out and the grid goes flat.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + a(1 - a) - \\frac{a}{a + h(x)}\\, b",
+    "\\partial_t b = D_b \\nabla^2 b + k \\frac{a}{a + h(x)}\\, b - m(y)\\, b"
+   ],
+   "size": [
+    512,
+    512
+   ],
+   "speed": 10
+  },
+  {
+   "id": "schlogl",
+   "source": "Schlogl.vti",
+   "name": "Schlögl domains",
+   "family": "Bistable",
+   "citation": "F. Schlögl (1972) Z. Physik 253:147",
+   "description": "A single chemical with two stable states, +1 and −1. Tiny noise decides which state wins at each place, and the domains then coarsen as curved walls shrink.",
+   "equations": [
+    "\\partial_t a = \\nabla^2 a + a - a^3"
+   ],
+   "size": [
+    256,
+    128
+   ],
+   "render": {
+    "colormap": "grey",
+    "low": -1,
+    "high": 1,
+    "height": false
+   },
+   "speed": 4
+  },
+  {
+   "id": "schrodinger-two-slit",
+   "source": "Schrodinger1926/two_slit.vti",
+   "name": "Two-slit interference",
+   "family": "Schrödinger",
+   "citation": "E. Schrödinger (1926) Phys. Rev. 28:1049",
+   "description": "A quantum wave packet, written as its real part a and imaginary part b, moves right toward a wall with two slits. The view shows the probability |ψ|² (plus the wall), with the familiar interference fringes behind the wall.",
+   "equations": [
+    "\\partial_t a = -\\nabla^2 b - V b",
+    "\\partial_t b = \\nabla^2 a + V a",
+    "d = a^2 + b^2 + V"
+   ],
+   "names": [
+    "a (Re ψ)",
+    "b (Im ψ)",
+    "c (potential V)",
+    "d (|ψ|² + V)"
+   ],
+   "init": [
+    {
+     "op": "sine",
+     "chem": "a",
+     "amplitude": 1,
+     "kx": 20,
+     "ky": 0,
+     "phase": 0
+    },
+    {
+     "op": "gauss",
+     "chem": "a",
+     "amplitude": 1,
+     "center": [
+      0.2,
+      0.5
+     ],
+     "sigma": 0.05,
+     "mode": "mul"
+    },
+    {
+     "op": "sine",
+     "chem": "b",
+     "amplitude": 1,
+     "kx": 20,
+     "ky": 0,
+     "phase": -1.5708
+    },
+    {
+     "op": "gauss",
+     "chem": "b",
+     "amplitude": 1,
+     "center": [
+      0.2,
+      0.5
+     ],
+     "sigma": 0.05,
+     "mode": "mul"
+    },
+    {
+     "op": "set",
+     "chem": "c",
+     "value": 4,
+     "region": {
+      "rect": [
+       0.5,
+       0.0,
+       0.52,
+       0.4
+      ]
+     }
+    },
+    {
+     "op": "set",
+     "chem": "c",
+     "value": 4,
+     "region": {
+      "rect": [
+       0.5,
+       0.44,
+       0.52,
+       0.56
+      ]
+     }
+    },
+    {
+     "op": "set",
+     "chem": "c",
+     "value": 4,
+     "region": {
+      "rect": [
+       0.5,
+       0.6,
+       0.52,
+       1.0
+      ]
+     }
+    },
+    {
+     "op": "copy",
+     "chem": "d",
+     "from": "c"
+    }
+   ],
+   "size": [
+    128,
+    128
+   ],
+   "render": {
+    "chem": "d",
+    "colormap": "magma",
+    "low": 0,
+    "high": 0.04,
+    "height": false
+   },
+   "speed": 60
+  },
+  {
+   "id": "schrodinger-reflect",
+   "source": "Schrodinger1926/packet_reflect2D.vti",
+   "name": "Wave packet on a barrier",
+   "family": "Schrödinger",
+   "citation": "E. Schrödinger (1926) Phys. Rev. 28:1049",
+   "description": "A Gaussian wave packet hits a potential step. Part of it reflects and part of it tunnels through, and the two parts interfere where they overlap.",
+   "equations": [
+    "\\partial_t a = -\\nabla^2 b - V b",
+    "\\partial_t b = \\nabla^2 a + V a",
+    "d = a^2 + b^2 + V"
+   ],
+   "names": [
+    "a (Re ψ)",
+    "b (Im ψ)",
+    "c (potential V)",
+    "d (|ψ|² + V)"
+   ],
+   "init": [
+    {
+     "op": "sine",
+     "chem": "a",
+     "amplitude": 1,
+     "kx": 20,
+     "ky": 0,
+     "phase": 0
+    },
+    {
+     "op": "gauss",
+     "chem": "a",
+     "amplitude": 1,
+     "center": [
+      0.2,
+      0.5
+     ],
+     "sigma": 0.05,
+     "mode": "mul"
+    },
+    {
+     "op": "sine",
+     "chem": "b",
+     "amplitude": 1,
+     "kx": 20,
+     "ky": 0,
+     "phase": -1.5708
+    },
+    {
+     "op": "gauss",
+     "chem": "b",
+     "amplitude": 1,
+     "center": [
+      0.2,
+      0.5
+     ],
+     "sigma": 0.05,
+     "mode": "mul"
+    },
+    {
+     "op": "set",
+     "chem": "c",
+     "value": 4,
+     "region": {
+      "rect": [
+       0.4,
+       0.2,
+       0.5,
+       0.8
+      ]
+     }
+    },
+    {
+     "op": "copy",
+     "chem": "d",
+     "from": "c"
+    }
+   ],
+   "size": [
+    128,
+    128
+   ],
+   "render": {
+    "chem": "d",
+    "colormap": "magma",
+    "low": 0,
+    "high": 0.2,
+    "height": false
+   },
+   "speed": 60
+  },
+  {
+   "id": "turing-spots",
+   "source": "Turing1952/spots.vti",
+   "name": "Turing's spots",
+   "family": "Turing",
+   "description": "The model from Turing's 1952 paper on morphogenesis, the first reaction–diffusion account of biological pattern. A random start separates into regular dappled spots.",
+   "size": [
+    128,
+    128
+   ],
+   "render": {
+    "low": 0,
+    "high": 7
+   },
+   "speed": 20
+  },
+  {
+   "id": "turing-spots-noisy",
+   "source": "Turing1952/spots_noisy.vti",
+   "name": "Turing's spots with noise",
+   "family": "Turing",
+   "description": "Turing's model started from a flat state, with a noise field c that keeps disturbing b. The noise alone is enough to seed the spots.",
+   "equations": [
+    "\\partial_t a = k\\,(16 - a b) + D_a \\nabla^2 a",
+    "\\partial_t b = \\max\\big(-b,\\; k\\,(a b - b - 12) + 2\\xi + D_b \\nabla^2 b\\big)",
+    "\\xi \\leftarrow (\\xi + \\nabla^2 \\xi) \\bmod 1"
+   ],
+   "names": [
+    "a",
+    "b",
+    "c (noise)"
+   ],
+   "size": [
+    128,
+    128
+   ],
+   "render": {
+    "low": 0,
+    "high": 7
+   },
+   "speed": 20
+  },
+  {
+   "id": "turing-parameter-map",
+   "source": "Turing1952/turing_parameter_map.vti",
+   "name": "Turing parameter map",
+   "family": "Turing",
+   "description": "The reaction rate k grows from left to right and the inhibitor diffusion D_b grows along the vertical axis. Spot size and spacing change smoothly across the grid.",
+   "equations": [
+    "\\partial_t a = k(x)\\,(16 - a b) + D_a \\nabla^2 a",
+    "\\partial_t b = \\max\\big(-b,\\; k(x)\\,(a b - b - 12) + D_b(y)\\, \\nabla^2 b\\big)"
+   ],
+   "size": [
+    512,
+    512
+   ],
+   "render": {
+    "low": 2,
+    "high": 7,
+    "colormap": "spectral"
+   },
+   "speed": 20
+  },
+  {
+   "id": "yang-1",
+   "source": "Yang2002/Yang_1.vti",
+   "name": "Yang: target waves",
+   "family": "Yang (coupled Brusselators)",
+   "description": "Two Brusselator layers, each with its own diffusion rates, coupled cell by cell. One layer makes Turing spots and the other makes waves, and the mix gives patterns that neither layer makes alone.",
+   "speed": 40
+  },
+  {
+   "id": "yang-2b",
+   "source": "Yang2002/Yang_2b.vti",
+   "name": "Yang: oscillating spots",
+   "family": "Yang (coupled Brusselators)",
+   "description": "With weak coupling, the Turing layer forms spots that blink on and off in step with the oscillating layer.",
+   "render": {
+    "low": 2.5,
+    "high": 3.15
+   },
+   "speed": 40
+  },
+  {
+   "id": "yang-3a",
+   "source": "Yang2002/Yang_3a.vti",
+   "name": "Yang: black-eye",
+   "family": "Yang (coupled Brusselators)",
+   "description": "Two Turing modes with different wavelengths interact. Large hexagons carry smaller spots in their centres, the so-called black-eye pattern.",
+   "render": {
+    "low": 0,
+    "high": 3.5
+   },
+   "speed": 40
+  },
+  {
+   "id": "yang-3c",
+   "source": "Yang2002/Yang_3c.vti",
+   "name": "Yang: superlattice",
+   "family": "Yang (coupled Brusselators)",
+   "description": "Two spatial modes lock into a superlattice: a regular array of large and small spots with a longer repeat than either mode alone.",
+   "render": {
+    "low": 0,
+    "high": 5
+   },
+   "speed": 40
+  },
+  {
+   "id": "yang-4",
+   "source": "Yang2002/Yang_4.vti",
+   "name": "Yang: twinkling eyes",
+   "family": "Yang (coupled Brusselators)",
+   "description": "A Turing lattice whose spots oscillate out of phase with their neighbours, so the pattern seems to twinkle.",
+   "render": {
+    "low": 0,
+    "high": 4
+   },
+   "speed": 40
+  },
+  {
+   "id": "kytta-5-7a",
+   "source": "Kytta2007/Fig5.7a.vti",
+   "name": "Kyttä: labyrinth",
+   "family": "Kytta (coupled Brusselators)",
+   "description": "Kyttä's version of the coupled Brusselators uses a cubic coupling. With these rates the layers settle into a labyrinth of stripes.",
+   "render": {
+    "low": 0,
+    "high": 8
+   },
+   "speed": 40
+  },
+  {
+   "id": "kytta-5-8c",
+   "source": "Kytta2007/Fig5.8c.vti",
+   "name": "Kyttä: spots in spots",
+   "family": "Kytta (coupled Brusselators)",
+   "description": "Weak cubic coupling between two Turing layers with very different wavelengths. Fine spots of one layer sit on the coarse pattern of the other.",
+   "render": {
+    "low": 0,
+    "high": 4.5
+   },
+   "speed": 40
+  },
+  {
+   "id": "kytta-5-8f",
+   "source": "Kytta2007/Fig5.8f.vti",
+   "name": "Kyttä: strong coupling",
+   "family": "Kytta (coupled Brusselators)",
+   "description": "The same layers with stronger coupling. The two wavelengths lock together and the result is a more regular, mixed pattern.",
+   "render": {
+    "low": 0,
+    "high": 5
+   },
+   "speed": 40
+  },
+  {
+   "id": "oregonator",
+   "source": "oregonator.vti",
+   "name": "Oregonator spirals",
+   "family": "Oregonator",
+   "citation": "R. J. Field & R. M. Noyes (1974) J. Chem. Phys. 60:1877; J. J. Tyson & P. C. Fife (1980) J. Chem. Phys. 73:2224",
+   "description": "The two-variable Oregonator, a model of the Belousov–Zhabotinsky reaction. Two broken wave segments curl up at their free ends into a pair of counter-rotating spirals.",
+   "equations": [
+    "\\partial_t a = D_a \\nabla^2 a + \\frac{1}{\\epsilon}\\Big(a - a^2 - f b\\, \\frac{a - q}{a + q}\\Big)",
+    "\\partial_t b = D_b \\nabla^2 b + a - b"
+   ],
+   "render": {
+    "colormap": "spectral",
+    "low": 0,
+    "high": 0.8,
+    "height": false
+   },
+   "speed": 40
+  },
+  {
+   "id": "heat-equation",
+   "source": "heat_equation.vti",
+   "name": "Heat equation",
+   "family": "Heat and waves",
+   "description": "Two noisy hot blocks cool by pure diffusion. The noise vanishes first, then the blocks blur into smooth blobs, and the box relaxes toward one uniform temperature.",
+   "equations": [
+    "\\partial_t a = \\nabla^2 a"
+   ],
+   "size": [
+    256,
+    128
+   ],
+   "speed": 4
+  },
+  {
+   "id": "heat-interpolation",
+   "source": "heat_equation_interpolation.vti",
+   "name": "Laplace interpolation",
+   "family": "Heat and waves",
+   "description": "Diffusion runs only where the mask b is zero, and the masked shapes keep their values. The field relaxes to the harmonic function that fills the gaps between them.",
+   "equations": [
+    "\\partial_t a = [\\,b = 0\\,]\\; \\nabla^2 a"
+   ],
+   "names": [
+    "a (field)",
+    "b (fixed mask)"
+   ],
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "colormap": "magma",
+    "low": 0,
+    "high": 1
+   },
+   "speed": 40
+  },
+  {
+   "id": "biharmonic-interpolation",
+   "source": "bilaplacian_interpolation.vti",
+   "name": "Biharmonic interpolation",
+   "family": "Heat and waves",
+   "citation": "Biharmonic (thin-plate) interpolation; stencil from M. Patra & M. Karttunen (2006) Numer. Methods PDE 22:936",
+   "description": "The same fill-in problem with the bi-Laplacian. The result is the smooth surface of a thin plate pinned to the shapes, with gentle overshoot between them.",
+   "equations": [
+    "\\partial_t a = -[\\,b = 0\\,]\\; \\nabla^4 a"
+   ],
+   "names": [
+    "a (field)",
+    "b (fixed mask)"
+   ],
+   "size": [
+    128,
+    128
+   ],
+   "render": {
+    "colormap": "magma",
+    "low": 0,
+    "high": 1,
+    "height": true
+   },
+   "speed": 40
+  },
+  {
+   "id": "wave-equation",
+   "source": "wave_equation.vti",
+   "name": "Wave equation",
+   "family": "Heat and waves",
+   "citation": "J. le Rond d'Alembert (1747) Hist. Acad. R. Sci. Berlin 3:214",
+   "description": "A bump released at rest spreads as a circular wave that reflects from the walls. The second field b holds the velocity; the step updates b first and then a, which keeps the scheme stable.",
+   "equations": [
+    "\\partial_t b = \\nabla^2 a",
+    "\\partial_t a = b"
+   ],
+   "names": [
+    "a (height)",
+    "b (velocity)"
+   ],
+   "render": {
+    "colormap": "ice",
+    "low": -0.5,
+    "high": 0.5,
+    "height": true
+   },
+   "speed": 4
+  },
+  {
+   "id": "shallow-water",
+   "source": "shallow_water_equations.vti",
+   "name": "Shallow water",
+   "family": "Heat and waves",
+   "citation": "A. J. C. de Saint-Venant (1871) C. R. Acad. Sci. Paris 73:147",
+   "description": "Linearised shallow-water flow in a basin with a wall along the edges and a breakwater in the middle. A mound of water collapses and its waves reflect and diffract around the barrier.",
+   "equations": [
+    "\\partial_t h = -\\max(0, h - z)\\,(\\partial_x u + \\partial_y v)",
+    "\\partial_t u = -g\\, \\partial_x h - k u",
+    "\\partial_t v = -g\\, \\partial_y h - k v"
+   ],
+   "names": [
+    "a (height h)",
+    "b (velocity u)",
+    "c (velocity v)",
+    "d (ground z)"
+   ],
+   "render": {
+    "colormap": "ice",
+    "low": -0.05,
+    "high": 0.06,
+    "height": true
+   },
+   "speed": 8
+  },
+  {
+   "id": "splats",
+   "source": "Experiments/CornusAmmonis/splats.vti",
+   "name": "Splats",
+   "family": "Experiments",
+   "citation": "Ready community pattern by Cornus Ammonis",
+   "description": "Two Swift–Hohenberg-like fields, each smoothed by a Gaussian blur and weakly coupled to the other. They separate into round splats that jostle and slowly lock into place.",
+   "equations": [
+    "\\partial_t a = g_a G*a + w_4 \\nabla^4 a + w_2 \\nabla^2 a + s a - a^3 + D_b b",
+    "\\partial_t b = g_b G*b + w_4' \\nabla^4 b + w_2' \\nabla^2 b + s b - b^3 + D_a a"
+   ],
+   "render": {
+    "colormap": "leopard",
+    "low": -1,
+    "high": 1,
+    "height": true
+   },
+   "speed": 20
+  },
+  {
+   "id": "rock-paper-scissors",
+   "source": "Experiments/TihaVonGhyczy/RockScissorPaper.vti",
+   "name": "Rock–paper–scissors",
+   "family": "Experiments",
+   "citation": "Ready community pattern by Tiha von Ghyczy; cyclic competition as in T. Reichenbach, M. Mobilia & E. Frey (2007) Nature 448:1046",
+   "description": "Three species in cyclic dominance: a beats b, b beats c, c beats a. None can win for good, so the populations chase each other in rotating spirals.",
+   "equations": [
+    "\\partial_t a = k \\nabla^2 a + g a(1 - a) + m(a b - c a)",
+    "\\partial_t b = k \\nabla^2 b + g b(1 - b) + m(b c - a b)",
+    "\\partial_t c = k \\nabla^2 c + g c(1 - c) + m(c a - b c)"
+   ],
+   "names": [
+    "a (rock)",
+    "b (scissors)",
+    "c (paper)"
+   ],
+   "render": {
+    "colormap": "spectral",
+    "low": 0,
+    "high": 1,
+    "height": false
+   },
+   "speed": 20
+  },
+  {
+   "id": "sobel-waves",
+   "source": "Experiments/TihaVonGhyczy/sobel_waves.vti",
+   "name": "Sobel waves",
+   "family": "Experiments",
+   "citation": "Ready community pattern by Tiha von Ghyczy",
+   "description": "Diffusion plus a Sobel edge filter that points to the south-west. The filter acts like advection with a grain, and the noise flows into diagonal wave trains.",
+   "equations": [
+    "\\partial_t a = k_1 \\nabla^2 a + k_2\\, S_{SW} * a"
+   ],
+   "render": {
+    "colormap": "grey",
+    "low": -0.3,
+    "high": 0.3,
+    "height": true
+   },
+   "speed": 8
+  },
+  {
+   "id": "surfing-solitons",
+   "source": "Experiments/CornusAmmonis/surfing-solitons.vti",
+   "name": "Surfing solitons",
+   "family": "Experiments",
+   "citation": "Ready community pattern by Cornus Ammonis",
+   "description": "The complex worms rule with a Sobel edge coupling and a local-sum field. Compact blobs form and ride the wave fronts like surfers.",
+   "equations": [
+    "\\partial_t a = D_a (a^2 - b^2) + s_a \\nabla^2 b + c_a b - \\kappa_a\\, \\mathrm{sgn}(a) a^2",
+    "\\partial_t b = d_s |\\nabla_S a \\cdot \\nabla_S b|_{\\mathbb C} + D_b a b - s_b \\nabla^2 a + c_b a - \\kappa_b\\, \\mathrm{sgn}(b) b^2"
+   ],
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "colormap": "coral",
+    "low": -40,
+    "high": 55,
+    "height": false,
+    "chem": "d"
+   },
+   "speed": 20
+  },
+  {
+   "id": "orbits",
+   "source": "Experiments/DanWills/orbits_sharpWaves-init.vti",
+   "name": "Orbits",
+   "family": "Experiments",
+   "citation": "Ready community pattern by Dan Wills",
+   "description": "Each cell iterates a complex power map, as in fractal orbit art, and the pair (a, b) diffuses and cross-diffuses. The result is sharp, fast-moving wave fronts.",
+   "equations": [
+    "z = a + i b,\\quad w = z + z_0",
+    "\\partial_t z = \\mathrm{clamp}\\big(\\Delta t\\, w^{p} + D \\nabla^2 z + z_c\\big)"
+   ],
+   "size": [
+    256,
+    256
+   ],
+   "render": {
+    "colormap": "magma",
+    "low": 0,
+    "high": 13,
+    "height": false,
+    "chem": "c"
+   },
+   "speed": 10
+  }
+ ],
+ "dropped": {
+  "GrayScott1984/U-Skate/Hutton-and-helix-gliders.vti": "3D pattern (its gliders need the third dimension)",
+  "FitzHugh-Nagumo/spiral_turbulence.vti": "did not show spirals in our runs (fronts and blobs only), so the description could not be honest",
+  "Experiments/CornusAmmonis/worms2.vti": "grid-scale salt-and-pepper noise: the cross-diffusion rule has no damping and only the clamp holds it",
+  "KardarParisiZhang1986/uniform_snowfall.vti": "its look depends on Perlin noise detail; a smooth stand-in gave a featureless dome",
+  "Kobayashi1993/crystals.vti": "same rule as crystal.vti at 1024x1024 with many seeds; crystal.vti is kept",
+  "Meinhardt1982/stripes.vti": "5 chemicals (the engine holds 4)",
+  "KortewegDeVries1895/kdv.vti": "1D pattern",
+  "parameter_modulation_demo2.vti": "needs a radial-gradient IC and repeats parameter_modulation_demo.vti",
+  "Experiments/DanWills/heat-equation-boiling-history-wave_glidersUnstable.vti": "Ready marks it unstable; the look depends on a fine balance of 30 tuned parameters",
+  "Schrodinger1926/packet.vti": "1D pattern",
+  "Schrodinger1926/packet_pass.vti": "1D pattern",
+  "Schrodinger1926/packet_reflect.vti": "1D pattern",
+  "Schrodinger1926/quantum_tunnelling.vti": "1D pattern",
+  "Experiments/CornusAmmonis/smoke.vti": "decays to rest from its IC (our GPU run and a numpy reference agree); it needs the user to paint",
+  "KuramotoSivashinsky1978/Kuramoto-Sivashinsky_travelling_waves.vti": "its look comes from stored image data (Ready loads it with apply_when_loading=false)",
+  "KuramotoSivashinsky1978/Kuramoto-Sivashinsky_travelling_waves2.vti": "its look comes from stored image data (Ready loads it with apply_when_loading=false)",
+  "Kytta2007/Fig5.7c.vti": "near-duplicate figure of the same model; three Kyttä and five Yang figures are kept",
+  "Kytta2007/Fig5.8d.vti": "near-duplicate figure of the same model; three Kyttä and five Yang figures are kept",
+  "Kytta2007/Fig5.8e.vti": "near-duplicate figure of the same model; three Kyttä and five Yang figures are kept",
+  "Kytta2007/Fig5.8g.vti": "near-duplicate figure of the same model; three Kyttä and five Yang figures are kept",
+  "Yang2002/Yang_2c.vti": "near-duplicate figure of the same model; three Kyttä and five Yang figures are kept",
+  "Yang2002/Yang_2d.vti": "near-duplicate figure of the same model; three Kyttä and five Yang figures are kept",
+  "Yang2002/Yang_3b.vti": "near-duplicate figure of the same model; three Kyttä and five Yang figures are kept",
+  "Yang2002/Yang_3d.vti": "near-duplicate figure of the same model; three Kyttä and five Yang figures are kept",
+  "Experiments/DanWills/orbitsNova_buildAndDestroyBlobs.vti": "another tuning of the same orbit-map experiment; orbits_sharpWaves-init.vti is kept",
+  "Experiments/DanWills/orbits_ddd_epochs_init.djw.vti": "another tuning of the same orbit-map experiment; orbits_sharpWaves-init.vti is kept",
+  "Experiments/DanWills/orbits_ddd_questionSpaceships-answer_init_djw.vti": "another tuning of the same orbit-map experiment; orbits_sharpWaves-init.vti is kept",
+  "Experiments/DanWills/orbits_epochs.vti": "another tuning of the same orbit-map experiment; orbits_sharpWaves-init.vti is kept",
+  "Experiments/DanWills/orbits_explodey_init.vti": "another tuning of the same orbit-map experiment; orbits_sharpWaves-init.vti is kept",
+  "Experiments/DanWills/orbits_nova_ddd_chicken_init.vti": "another tuning of the same orbit-map experiment; orbits_sharpWaves-init.vti is kept",
+  "Experiments/DanWills/grayscott-sharpenTweak_cellTrailDetail_512px_init.vti": "a Gray–Scott tuning experiment; the Gray–Scott family is already large"
+ }
+}

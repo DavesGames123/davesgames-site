@@ -1,0 +1,8092 @@
+[
+ {
+  "id": "gs-pearson-theta",
+  "name": "Pearson θ: spots and stripes",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/Pearson1993.vti",
+  "citation": "P. Gray & S. K. Scott (1984) Chem. Eng. Sci. 39:1087; J. E. Pearson (1993) Science 261:189",
+  "credit": "Ready (GollyGang)",
+  "description": "A small square of catalyst in a sea of fresh substrate. With K = 0.06 and F = 0.04 the front breaks into a slow mix of spots and short stripes that fills the whole torus.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F\\,(1 - a)",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K)\\, b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 2e-05,
+    "min": 5e-06,
+    "max": 4e-05,
+    "step": 1e-06,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1e-05,
+    "min": 2e-06,
+    "max": 2e-05,
+    "step": 1e-06,
+    "label": "D_b"
+   },
+   {
+    "name": "K",
+    "value": 0.06,
+    "min": 0.03,
+    "max": 0.07,
+    "step": 0.0001,
+    "label": "K"
+   },
+   {
+    "name": "F",
+    "value": 0.04,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.0001,
+    "label": "F"
+   }
+  ],
+  "timestep": 1.0,
+  "dx": 0.009765625,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a);\ndelta_b = D_b * laplacian_b + a*b*b - (F+K)*b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.49,
+    "high": 0.51,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.24,
+    "high": 0.26,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0.2,
+   "high": 1.0,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 24
+ },
+ {
+  "id": "gs-mitosis",
+  "name": "Mitosis",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/Pearson1993.vti",
+  "citation": "P. Gray & S. K. Scott (1984) Chem. Eng. Sci. 39:1087; J. E. Pearson (1993) Science 261:189",
+  "credit": "Ready (GollyGang)",
+  "description": "Spots that grow, pinch in the middle and split in two, again and again, until they pack the plane. Same model and seed as Pearson θ, with F and K moved into the self-replicating region.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F\\,(1 - a)",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K)\\, b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 2e-05,
+    "min": 5e-06,
+    "max": 4e-05,
+    "step": 1e-06,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1e-05,
+    "min": 2e-06,
+    "max": 2e-05,
+    "step": 1e-06,
+    "label": "D_b"
+   },
+   {
+    "name": "K",
+    "value": 0.0649,
+    "min": 0.03,
+    "max": 0.07,
+    "step": 0.0001,
+    "label": "K"
+   },
+   {
+    "name": "F",
+    "value": 0.0367,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.0001,
+    "label": "F"
+   }
+  ],
+  "timestep": 1.0,
+  "dx": 0.009765625,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a);\ndelta_b = D_b * laplacian_b + a*b*b - (F+K)*b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.49,
+    "high": 0.51,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.24,
+    "high": 0.26,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0.2,
+   "high": 1.0,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 24
+ },
+ {
+  "id": "gs-coral",
+  "name": "Coral growth",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/Pearson1993.vti",
+  "citation": "P. Gray & S. K. Scott (1984) Chem. Eng. Sci. 39:1087; J. E. Pearson (1993) Science 261:189",
+  "credit": "Ready (GollyGang)",
+  "description": "Branching fingers grow out from the seed and fold into a coral-like maze. The fingers never cross, so the finished pattern is one connected labyrinth.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F\\,(1 - a)",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K)\\, b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 2e-05,
+    "min": 5e-06,
+    "max": 4e-05,
+    "step": 1e-06,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1e-05,
+    "min": 2e-06,
+    "max": 2e-05,
+    "step": 1e-06,
+    "label": "D_b"
+   },
+   {
+    "name": "K",
+    "value": 0.062,
+    "min": 0.03,
+    "max": 0.07,
+    "step": 0.0001,
+    "label": "K"
+   },
+   {
+    "name": "F",
+    "value": 0.0545,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.0001,
+    "label": "F"
+   }
+  ],
+  "timestep": 1.0,
+  "dx": 0.009765625,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a);\ndelta_b = D_b * laplacian_b + a*b*b - (F+K)*b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.49,
+    "high": 0.51,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.24,
+    "high": 0.26,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0.2,
+   "high": 1.0,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 24
+ },
+ {
+  "id": "gs-waves",
+  "name": "Chaotic waves",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/Pearson1993.vti",
+  "citation": "P. Gray & S. K. Scott (1984) Chem. Eng. Sci. 39:1087; J. E. Pearson (1993) Science 261:189",
+  "credit": "Ready (GollyGang)",
+  "description": "At low feed rate the medium is excitable: pulses of catalyst run outward, collide, and break into turbulent, ever-changing wave fronts.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F\\,(1 - a)",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K)\\, b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 2e-05,
+    "min": 5e-06,
+    "max": 4e-05,
+    "step": 1e-06,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1e-05,
+    "min": 2e-06,
+    "max": 2e-05,
+    "step": 1e-06,
+    "label": "D_b"
+   },
+   {
+    "name": "K",
+    "value": 0.047,
+    "min": 0.03,
+    "max": 0.07,
+    "step": 0.0001,
+    "label": "K"
+   },
+   {
+    "name": "F",
+    "value": 0.014,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.0001,
+    "label": "F"
+   }
+  ],
+  "timestep": 1.0,
+  "dx": 0.009765625,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a);\ndelta_b = D_b * laplacian_b + a*b*b - (F+K)*b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.49,
+    "high": 0.51,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.24,
+    "high": 0.26,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0.2,
+   "high": 1.0,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 24
+ },
+ {
+  "id": "gs-u-skate",
+  "name": "U-Skate glider",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/U-Skate/Munafo_glider.vti",
+  "citation": "R. P. Munafo (2014) U-Skate World, mrob.com/pub/comp/xmorphia; J. E. Pearson (1993) Science 261:189",
+  "credit": "Ready (GollyGang)",
+  "description": "Near F = 0.062, K = 0.0609 the uniform state is almost stable and small structures keep their shape. Three blocks cut from the catalyst make a U-shaped glider that slides across the grid until it meets the wall.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F\\,(1 - a)",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K)\\, b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.164,
+    "min": 0.0,
+    "max": 0.328,
+    "step": 0.002,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.082,
+    "min": 0.0,
+    "max": 0.164,
+    "step": 0.001,
+    "label": "D_b"
+   },
+   {
+    "name": "K",
+    "value": 0.06093,
+    "min": 0.058,
+    "max": 0.064,
+    "step": 1e-05,
+    "label": "K"
+   },
+   {
+    "name": "F",
+    "value": 0.062,
+    "min": 0.055,
+    "max": 0.07,
+    "step": 0.0001,
+    "label": "F"
+   }
+  ],
+  "timestep": 1.0,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 128,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a);\ndelta_b = D_b * laplacian_b + a*b*b - (F+K)*b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 0.5
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 0.3
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.0,
+    "region": {
+     "rect": [
+      0.45,
+      0.56,
+      0.53,
+      0.62
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.0,
+    "region": {
+     "rect": [
+      0.45,
+      0.45,
+      0.53,
+      0.51
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.0,
+    "region": {
+     "rect": [
+      0.49,
+      0.5,
+      0.53,
+      0.56
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 0.45,
+   "colormap": "spectral",
+   "height": false
+  },
+  "speed": 30
+ },
+ {
+  "id": "gs-o-ring",
+  "name": "U-Skate rings",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/U-Skate/o-ring_2D.vti",
+  "citation": "R. P. Munafo (2014) U-Skate World, mrob.com/pub/comp/xmorphia; J. E. Pearson (1993) Science 261:189",
+  "credit": "Ready (GollyGang)",
+  "description": "In the same near-stable U-Skate regime, a ring and three holes cut into the catalyst. The ring slowly opens and the holes drift; the structures change shape only a little at a time.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F\\,(1 - a)",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K)\\, b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.164,
+    "min": 0.0,
+    "max": 0.328,
+    "step": 0.002,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.082,
+    "min": 0.0,
+    "max": 0.164,
+    "step": 0.001,
+    "label": "D_b"
+   },
+   {
+    "name": "K",
+    "value": 0.06093,
+    "min": 0.058,
+    "max": 0.064,
+    "step": 1e-05,
+    "label": "K"
+   },
+   {
+    "name": "F",
+    "value": 0.062,
+    "min": 0.055,
+    "max": 0.07,
+    "step": 0.0001,
+    "label": "F"
+   }
+  ],
+  "timestep": 1.0,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 128,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a);\ndelta_b = D_b * laplacian_b + a*b*b - (F+K)*b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 0.5
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 0.3
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.0,
+    "region": {
+     "circle": [
+      0.5,
+      0.5,
+      0.075
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.3,
+    "region": {
+     "circle": [
+      0.5,
+      0.5,
+      0.04
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.0,
+    "region": {
+     "circle": [
+      0.5,
+      0.5,
+      0.02
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.0,
+    "region": {
+     "circle": [
+      0.4,
+      0.6,
+      0.02
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.0,
+    "region": {
+     "circle": [
+      0.38,
+      0.5,
+      0.02
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 0.45,
+   "colormap": "spectral",
+   "height": false
+  },
+  "speed": 30
+ },
+ {
+  "id": "gs-self-replicating",
+  "name": "Self-replicating spots",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/self-replicating_spots.vti",
+  "citation": "P. Gray & S. K. Scott (1984) Chem. Eng. Sci. 39:1087; J. E. Pearson (1993) Science 261:189",
+  "credit": "Ready (GollyGang)",
+  "description": "A noisy block of catalyst, with the substrate lowered by the same amount, breaks into spots. Each spot grows, divides, and the daughters push away from each other until spots fill the box.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F\\,(1 - a)",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K)\\, b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.082,
+    "min": 0.0,
+    "max": 0.164,
+    "step": 0.001,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.041,
+    "min": 0.0,
+    "max": 0.082,
+    "step": 0.0005,
+    "label": "D_b"
+   },
+   {
+    "name": "K",
+    "value": 0.064,
+    "min": 0.05,
+    "max": 0.07,
+    "step": 0.0001,
+    "label": "K"
+   },
+   {
+    "name": "F",
+    "value": 0.035,
+    "min": 0.02,
+    "max": 0.05,
+    "step": 0.0001,
+    "label": "F"
+   }
+  ],
+  "timestep": 1.0,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 128,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a);\ndelta_b = D_b * laplacian_b + a*b*b - (F+K)*b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.2,
+      0.4,
+      0.5
+     ]
+    }
+   },
+   {
+    "op": "copy",
+    "chem": "a",
+    "from": "b",
+    "scale": -1.0,
+    "offset": 1.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.2,
+      0.4,
+      0.5
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 1.0,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 16
+ },
+ {
+  "id": "gs-noisy-mitosis",
+  "name": "Noisy mitosis",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/noisy_solitons_mitosis.vti",
+  "citation": "A. Lesmes, D. Hochberg, F. Morán & J. Pérez-Mercader (2003) Phys. Rev. Lett. 91:238301",
+  "credit": "Ready (GollyGang)",
+  "description": "Gray–Scott with a noise source. A third field c holds a pseudo-random value in [-1, 1] that the formula remixes every step and feeds into the substrate. Three seeds split into a few spots that jitter and drift instead of sitting still.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F(1 - a) + \\sigma\\, \\xi",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + k) b",
+   "\\xi \\leftarrow (\\xi + \\nabla^2 \\xi) \\bmod 1"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a",
+   "b",
+   "c (noise)"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.2,
+    "min": 0.0,
+    "max": 0.4,
+    "step": 0.002,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "D_b"
+   },
+   {
+    "name": "k",
+    "value": 0.0648,
+    "min": 0.05,
+    "max": 0.075,
+    "step": 0.0001,
+    "label": "k"
+   },
+   {
+    "name": "F",
+    "value": 0.03,
+    "min": 0.01,
+    "max": 0.06,
+    "step": 0.0001,
+    "label": "F"
+   },
+   {
+    "name": "noise",
+    "value": 0.2,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "noise"
+   }
+  ],
+  "timestep": 0.06,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 128,
+  "height": 128,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a) + c*noise;\ndelta_b = D_b * laplacian_b + a*b*b - (F+k)*b;\nc = ((c+laplacian_c) % (1.0));",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.4,
+    "high": 0.6,
+    "region": {
+     "circle": [
+      0.2,
+      0.2,
+      0.02
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.4,
+    "high": 0.6,
+    "region": {
+     "circle": [
+      0.5,
+      0.3,
+      0.02
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.4,
+    "high": 0.6,
+    "region": {
+     "circle": [
+      0.7,
+      0.5,
+      0.02
+     ]
+    }
+   },
+   {
+    "op": "add",
+    "chem": "a",
+    "value": -0.5,
+    "region": {
+     "circle": [
+      0.2,
+      0.2,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "add",
+    "chem": "a",
+    "value": -0.5,
+    "region": {
+     "circle": [
+      0.5,
+      0.3,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "add",
+    "chem": "a",
+    "value": -0.5,
+    "region": {
+     "circle": [
+      0.7,
+      0.5,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "c",
+    "low": -1.0,
+    "high": 1.0
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 1.0,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 60
+ },
+ {
+  "id": "gs-lesmes-noisy",
+  "name": "Noise-driven spots",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/Lesmes_noisy.vti",
+  "citation": "A. Lesmes, D. Hochberg, F. Morán & J. Pérez-Mercader (2003) Phys. Rev. Lett. 91:238301",
+  "credit": "Ready (GollyGang)",
+  "description": "With these values the plain Gray–Scott spots would die. Added noise keeps the pattern alive: it grows from three seeds into a restless field of spots and fragments.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F(1 - a) + \\sigma\\, \\xi",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + k) b",
+   "\\xi \\leftarrow (\\xi + \\nabla^2 \\xi) \\bmod 1"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a",
+   "b",
+   "c (noise)"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.4,
+    "min": 0.0,
+    "max": 0.8,
+    "step": 0.005,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.2,
+    "min": 0.0,
+    "max": 0.4,
+    "step": 0.002,
+    "label": "D_b"
+   },
+   {
+    "name": "k",
+    "value": 0.0655,
+    "min": 0.05,
+    "max": 0.075,
+    "step": 0.0001,
+    "label": "k"
+   },
+   {
+    "name": "F",
+    "value": 0.05,
+    "min": 0.01,
+    "max": 0.08,
+    "step": 0.0001,
+    "label": "F"
+   },
+   {
+    "name": "noise",
+    "value": 0.3,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "noise"
+   }
+  ],
+  "timestep": 0.2,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a) + c*noise;\ndelta_b = D_b * laplacian_b + a*b*b - (F+k)*b;\nc = ((c+laplacian_c) % (1.0));",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 1.0,
+    "region": {
+     "circle": [
+      0.5,
+      0.5,
+      0.02
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 1.0,
+    "region": {
+     "circle": [
+      0.8,
+      0.7,
+      0.02
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 1.0,
+    "region": {
+     "circle": [
+      0.2,
+      0.45,
+      0.02
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "c",
+    "low": -1.0,
+    "high": 1.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0.0,
+   "high": 1.0,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 30
+ },
+ {
+  "id": "gs-parameter-map",
+  "name": "Gray–Scott parameter map",
+  "family": "Gray–Scott",
+  "source": "Patterns/GrayScott1984/parameter-map.vti",
+  "citation": "P. Gray & S. K. Scott (1984) Chem. Eng. Sci. 39:1087; J. E. Pearson (1993) Science 261:189",
+  "credit": "Ready (GollyGang)",
+  "description": "K grows from left to right and F grows along the vertical axis, so each part of the grid runs a different Gray–Scott system. Spots, stripes, mazes, waves and empty regions sit next to each other like Pearson's catalog.",
+  "equations": [
+   "\\partial_t a = 2D \\nabla^2 a - a b^2 + F(y)\\,(1 - a)",
+   "\\partial_t b = D \\nabla^2 b + a b^2 - (F(y) + k(x))\\, b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "diff",
+    "value": 0.07,
+    "min": 0.02,
+    "max": 0.1,
+    "step": 0.001,
+    "label": "diff"
+   },
+   {
+    "name": "k",
+    "value": 0.05,
+    "min": 0.03,
+    "max": 0.07,
+    "step": 0.0005,
+    "label": "k"
+   },
+   {
+    "name": "F",
+    "value": 0.05,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.0005,
+    "label": "F"
+   }
+  ],
+  "timestep": 0.2,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 512,
+  "height": 512,
+  "formula": "delta_a = 2.0 * diff * laplacian_a - a*b*b + F*(1.0-a);\ndelta_b = diff * laplacian_b + a*b*b - (F+k)*b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0,
+    "high": 1,
+    "region": {
+     "rect": [
+      0.2,
+      0.2,
+      0.8,
+      0.8
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 1.0,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 60,
+  "paramMap": {
+   "x": "k",
+   "x0": 0.03,
+   "x1": 0.07,
+   "y": "F",
+   "y0": 0.0,
+   "y1": 0.1
+  }
+ },
+ {
+  "id": "gs-parameter-modulation",
+  "name": "Stenciled feed rate",
+  "family": "Gray–Scott",
+  "source": "Patterns/parameter_modulation_demo.vti",
+  "citation": "J. E. Pearson (1993) Science 261:189; parameter stencil idea from Ready (GollyGang)",
+  "credit": "Ready (GollyGang)",
+  "description": "A third field c works as a stencil: where c = 1 the kill rate is a little lower. Spots grow and divide only inside the stenciled letters-like blocks and stay out of the rest.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - a b^2 + F(1 - a)",
+   "\\partial_t b = D_b \\nabla^2 b + a b^2 - (F + K - 0.005\\,c)\\, b"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a",
+   "b",
+   "c (stencil)"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.082,
+    "min": 0.0,
+    "max": 0.164,
+    "step": 0.001,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.041,
+    "min": 0.0,
+    "max": 0.082,
+    "step": 0.0005,
+    "label": "D_b"
+   },
+   {
+    "name": "K",
+    "value": 0.064,
+    "min": 0.0,
+    "max": 0.128,
+    "step": 0.001,
+    "label": "K"
+   },
+   {
+    "name": "F",
+    "value": 0.035,
+    "min": 0.0,
+    "max": 0.07,
+    "step": 0.0005,
+    "label": "F"
+   }
+  ],
+  "timestep": 1.0,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a - a*b*b + F*(1.0-a);\ndelta_b = D_b * laplacian_b + a*b*b - (F+K-c*0.005)*b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.6,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.2,
+      0.4,
+      0.8
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.2,
+      0.4,
+      0.8
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.55,
+      0.5,
+      0.72,
+      0.7
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.55,
+      0.2,
+      0.75,
+      0.45
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.55,
+      0.2,
+      0.8,
+      0.3
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.4,
+      0.7,
+      0.7,
+      0.8
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.4,
+      0.45,
+      0.65,
+      0.6
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 1.0,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 20
+ },
+ {
+  "id": "froese-2014",
+  "name": "Froese: spots with waste",
+  "family": "Gray–Scott",
+  "source": "Patterns/Froese2014/Froese2014_Fig3.vti",
+  "citation": "T. Froese, N. Virgo & T. Ikegami (2014) Artificial Life 20:55",
+  "credit": "Ready (GollyGang)",
+  "description": "A Gray–Scott variant in which the catalyst leaves a waste product c that slows its own reaction. Spots move away from their own trails and leave dark tracks behind them.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a - e^{-w c} a b^2 + r(1 - a)",
+   "\\partial_t b = D_b \\nabla^2 b + e^{-w c} a b^2 - k b",
+   "\\partial_t c = k b - k_c c"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a (food)",
+   "b (cells)",
+   "c (waste)"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.3,
+    "min": 0.0,
+    "max": 0.6,
+    "step": 0.005,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.15,
+    "min": 0.0,
+    "max": 0.3,
+    "step": 0.002,
+    "label": "D_b"
+   },
+   {
+    "name": "k",
+    "value": 0.0942,
+    "min": 0.0,
+    "max": 0.1884,
+    "step": 0.001,
+    "label": "k"
+   },
+   {
+    "name": "k_c",
+    "value": 0.0002,
+    "min": 0.0,
+    "max": 0.0004,
+    "step": 2e-06,
+    "label": "k_c"
+   },
+   {
+    "name": "w",
+    "value": 0.015,
+    "min": 0.0,
+    "max": 0.03,
+    "step": 0.0002,
+    "label": "w"
+   },
+   {
+    "name": "r",
+    "value": 0.032,
+    "min": 0.0,
+    "max": 0.064,
+    "step": 0.0005,
+    "label": "r"
+   }
+  ],
+  "timestep": 0.5,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a - exp(-w*c)*a*b*b + r*(1.0-a);\ndelta_b = D_b * laplacian_b + exp(-w*c)*a*b*b - k*b;\ndelta_c = k*b - k_c*c;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.3,
+    "high": 1.0,
+    "region": {
+     "circle": [
+      0.4,
+      0.5,
+      0.04
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.3,
+    "high": 1.0,
+    "region": {
+     "circle": [
+      0.2,
+      0.3,
+      0.04
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 0.36,
+    "region": {
+     "circle": [
+      0.4,
+      0.5,
+      0.04
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 0.36,
+    "region": {
+     "circle": [
+      0.2,
+      0.3,
+      0.04
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "c",
+   "low": 0,
+   "high": 15,
+   "colormap": "grey",
+   "height": false
+  },
+  "speed": 30
+ },
+ {
+  "id": "brusselator",
+  "name": "Brusselator",
+  "family": "Brusselator",
+  "source": "Patterns/Brusselator.vti",
+  "citation": "I. Prigogine & R. Lefever (1968) J. Chem. Phys. 48:1695",
+  "credit": "Ready (GollyGang)",
+  "description": "The classic model of an autocatalytic chemical oscillator. With B above the Hopf threshold the random start turns into a field of oscillating, drifting patches and spiral fragments.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + k_1 A + k_2 a^2 b - k_3 B a - k_4 a",
+   "\\partial_t b = D_b \\nabla^2 b - k_2 a^2 b + k_3 B a"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.05,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.0005,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.005,
+    "min": 0.0,
+    "max": 0.01,
+    "step": 5e-05,
+    "label": "D_b"
+   },
+   {
+    "name": "k1",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k1"
+   },
+   {
+    "name": "k2",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k2"
+   },
+   {
+    "name": "k3",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k3"
+   },
+   {
+    "name": "k4",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k4"
+   },
+   {
+    "name": "A",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "A"
+   },
+   {
+    "name": "B",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "B"
+   }
+  ],
+  "timestep": 0.01,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a + k1*A + k2*a*a*b - k3*B*a - k4*a;\ndelta_b = D_b * laplacian_b        - k2*a*a*b + k3*B*a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.0,
+    "high": 2.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 2.0,
+    "high": 4.5
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 4.5,
+   "colormap": "spectral",
+   "height": false
+  },
+  "speed": 20
+ },
+ {
+  "id": "fhn-tip-splitting",
+  "name": "Tip splitting",
+  "family": "FitzHugh–Nagumo",
+  "source": "Patterns/FitzHugh-Nagumo/tip-splitting.vti",
+  "citation": "R. FitzHugh (1961) Biophys. J. 1:445; J. Nagumo, S. Arimoto & S. Yoshizawa (1962) Proc. IRE 50:2061; Hagberg & Meron (1994) Nonlinearity 7:805",
+  "credit": "Ready (GollyGang)",
+  "description": "Excited fronts grow into the resting medium. Each tip becomes unstable and splits in two, so the fronts branch again and again into a labyrinth.",
+  "equations": [
+   "\\partial_t a = k_1 a - k_2 a^2 - a^3 - b + \\nabla^2 a",
+   "\\partial_t b = \\epsilon\\,(k_3 a - a_1 b - a_0) + \\delta\\, \\nabla^2 b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "a0",
+    "value": -0.1,
+    "min": -0.2,
+    "max": 0.0,
+    "step": 0.001,
+    "label": "a0"
+   },
+   {
+    "name": "a1",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "a1"
+   },
+   {
+    "name": "epsilon",
+    "value": 0.05,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.001,
+    "label": "epsilon"
+   },
+   {
+    "name": "delta",
+    "value": 4.0,
+    "min": 0.0,
+    "max": 8.0,
+    "step": 0.05,
+    "label": "delta"
+   },
+   {
+    "name": "k1",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k1"
+   },
+   {
+    "name": "k2",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "k2"
+   },
+   {
+    "name": "k3",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k3"
+   }
+  ],
+  "timestep": 0.02,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = k1*a - k2*a*a - a*a*a - b + laplacian_a;\ndelta_b = epsilon*(k3*a - a1*b - a0) + delta*laplacian_b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": -1.0
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.6,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.4,
+      0.5,
+      0.6
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.6,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.5,
+      0.5,
+      0.8,
+      0.65
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1.0,
+   "high": 1.0,
+   "colormap": "ice",
+   "height": false
+  },
+  "speed": 30
+ },
+ {
+  "id": "fhn-ising",
+  "name": "Ising fronts",
+  "family": "FitzHugh–Nagumo",
+  "source": "Patterns/FitzHugh-Nagumo/Ising_regime.vti",
+  "citation": "R. FitzHugh (1961) Biophys. J. 1:445; J. Nagumo, S. Arimoto & S. Yoshizawa (1962) Proc. IRE 50:2061; Hagberg & Meron (1994) Nonlinearity 7:805",
+  "credit": "Ready (GollyGang)",
+  "description": "In this regime the medium has two stable states, like the up and down spins of an Ising magnet. A noisy vertical strip splits into a pair of fronts; the fronts slowly ripple and fold into a field of stripes.",
+  "equations": [
+   "\\partial_t a = k_1 a - k_2 a^2 - a^3 - b + \\nabla^2 a",
+   "\\partial_t b = \\epsilon\\,(k_3 a - a_1 b - a_0) + \\delta\\, \\nabla^2 b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "a0",
+    "value": -0.1,
+    "min": -0.2,
+    "max": 0.0,
+    "step": 0.001,
+    "label": "a0"
+   },
+   {
+    "name": "a1",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "a1"
+   },
+   {
+    "name": "epsilon",
+    "value": 0.05,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.001,
+    "label": "epsilon"
+   },
+   {
+    "name": "delta",
+    "value": 4.0,
+    "min": 0.0,
+    "max": 8.0,
+    "step": 0.05,
+    "label": "delta"
+   },
+   {
+    "name": "k1",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k1"
+   },
+   {
+    "name": "k2",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "k2"
+   },
+   {
+    "name": "k3",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k3"
+   }
+  ],
+  "timestep": 0.02,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = k1*a - k2*a*a - a*a*a - b + laplacian_a;\ndelta_b = epsilon*(k3*a - a1*b - a0) + delta*laplacian_b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": -0.3
+   },
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": -0.7
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.9,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.0,
+      0.24,
+      1.0
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1.0,
+   "high": 1.0,
+   "colormap": "ice",
+   "height": false
+  },
+  "speed": 100
+ },
+ {
+  "id": "fhn-pulsate",
+  "name": "Pulsating spots",
+  "family": "FitzHugh–Nagumo",
+  "source": "Patterns/FitzHugh-Nagumo/pulsate.vti",
+  "citation": "R. FitzHugh (1961) Biophys. J. 1:445; J. Nagumo, S. Arimoto & S. Yoshizawa (1962) Proc. IRE 50:2061; Hagberg & Meron (1994) Nonlinearity 7:805",
+  "credit": "Ready (GollyGang)",
+  "description": "A 2D slice of a 3D Ready pattern. Excited blobs grow, break, and pulse; the pieces become spots that breathe in and out.",
+  "equations": [
+   "\\partial_t a = k_1 a - k_2 a^2 - a^3 - b + \\nabla^2 a",
+   "\\partial_t b = \\epsilon\\,(k_3 a - a_1 b - a_0) + \\delta\\, \\nabla^2 b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "a0",
+    "value": -0.1,
+    "min": -0.2,
+    "max": 0.0,
+    "step": 0.001,
+    "label": "a0"
+   },
+   {
+    "name": "a1",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "a1"
+   },
+   {
+    "name": "epsilon",
+    "value": 0.018,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.001,
+    "label": "epsilon"
+   },
+   {
+    "name": "delta",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 8.0,
+    "step": 0.05,
+    "label": "delta"
+   },
+   {
+    "name": "k1",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k1"
+   },
+   {
+    "name": "k2",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "k2"
+   },
+   {
+    "name": "k3",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k3"
+   }
+  ],
+  "timestep": 0.02,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 128,
+  "formula": "delta_a = k1*a - k2*a*a - a*a*a - b + laplacian_a;\ndelta_b = epsilon*(k3*a - a1*b - a0) + delta*laplacian_b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": -1.0
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.6,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.4,
+      0.5,
+      0.6
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.6,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.5,
+      0.5,
+      0.8,
+      0.65
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.6,
+    "high": 1.0,
+    "region": {
+     "circle": [
+      0.5,
+      0.5,
+      0.2
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1.0,
+   "high": 1.0,
+   "colormap": "ice",
+   "height": false
+  },
+  "speed": 30
+ },
+ {
+  "id": "fhn-parameter-map",
+  "name": "FitzHugh–Nagumo parameter map",
+  "family": "FitzHugh–Nagumo",
+  "source": "Patterns/FitzHugh-Nagumo/FHN_parameter_map.vti",
+  "citation": "R. FitzHugh (1961) Biophys. J. 1:445; J. Nagumo, S. Arimoto & S. Yoshizawa (1962) Proc. IRE 50:2061; Hagberg & Meron (1994) Nonlinearity 7:805",
+  "credit": "Ready (GollyGang)",
+  "description": "ε grows from left to right and the diffusion ratio δ grows along the vertical axis. One grid shows the stationary Turing spots and stripes, the travelling waves, and the uniform states of the model.",
+  "equations": [
+   "\\partial_t a = a - a^3 - b + D \\nabla^2 a",
+   "\\partial_t b = \\epsilon(x)\\,(a - a_1 b - a_0) + \\delta(y)\\, D \\nabla^2 b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "a0",
+    "value": -0.1,
+    "min": -0.2,
+    "max": 0.0,
+    "step": 0.001,
+    "label": "a0"
+   },
+   {
+    "name": "a1",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "a1"
+   },
+   {
+    "name": "diff",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "diff"
+   },
+   {
+    "name": "epsilon",
+    "value": 0.05,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.0005,
+    "label": "epsilon"
+   },
+   {
+    "name": "delta",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "delta"
+   }
+  ],
+  "timestep": 0.06,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 512,
+  "height": 512,
+  "formula": "delta_a = a - a*a*a - b + diff*laplacian_a;\ndelta_b = epsilon*(a - a1*b - a0) + delta*diff*laplacian_b;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -1.0,
+    "high": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -1.0,
+    "high": 1.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1.0,
+   "high": 1.0,
+   "colormap": "ice",
+   "height": false
+  },
+  "speed": 20,
+  "paramMap": {
+   "x": "epsilon",
+   "x0": 0.0,
+   "x1": 0.1,
+   "y": "delta",
+   "y0": 0.0,
+   "y1": 6.0
+  }
+ },
+ {
+  "id": "fhn-tip-splitting-web",
+  "name": "Tip-splitting web",
+  "family": "FitzHugh–Nagumo",
+  "source": "Patterns/Experiments/CornusAmmonis/tip-splitting-web.vti",
+  "citation": "Ready community pattern by Cornus Ammonis; FitzHugh–Nagumo after Hagberg & Meron (1994) Nonlinearity 7:805",
+  "credit": "Ready (GollyGang)",
+  "description": "An experimental FitzHugh–Nagumo variant. A Sobel edge term couples the two fields along their gradients, and the splitting fronts weave into a fine web.",
+  "equations": [
+   "\\partial_t a = s\\,(\\nabla_S a \\cdot \\nabla_S b) + k_1 a - k_2 a^2 - a^3 - b + \\nabla^2 a",
+   "\\partial_t b = D_u (D_{us} \\textstyle\\sum_{8} a - a) + \\epsilon(k_3 a - a_1 b - a_0) + \\delta \\nabla^2 b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "a0",
+    "value": -0.1,
+    "min": -0.2,
+    "max": 0.0,
+    "step": 0.001,
+    "label": "a0"
+   },
+   {
+    "name": "a1",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "a1"
+   },
+   {
+    "name": "epsilon",
+    "value": 0.05,
+    "min": 0.0,
+    "max": 0.1,
+    "step": 0.0005,
+    "label": "epsilon"
+   },
+   {
+    "name": "delta",
+    "value": 5.0,
+    "min": 0.0,
+    "max": 10.0,
+    "step": 0.05,
+    "label": "delta"
+   },
+   {
+    "name": "k1",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k1"
+   },
+   {
+    "name": "k2",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "k2"
+   },
+   {
+    "name": "k3",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k3"
+   },
+   {
+    "name": "dpS",
+    "value": -0.6,
+    "min": -1.2,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "dpS"
+   },
+   {
+    "name": "D_u",
+    "value": 1.7,
+    "min": 0.0,
+    "max": 3.4,
+    "step": 0.02,
+    "label": "D_u"
+   },
+   {
+    "name": "D_us",
+    "value": 0.125,
+    "min": 0.0,
+    "max": 0.25,
+    "step": 0.002,
+    "label": "D_us"
+   }
+  ],
+  "timestep": 0.02,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 512,
+  "height": 512,
+  "formula": "let sobelN_a: f32 = (-rd_ld(rd_x - 1, rd_y - 1).x - 2.0 * rd_ld(rd_x, rd_y - 1).x - rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x - 1, rd_y + 1).x + 2.0 * rd_ld(rd_x, rd_y + 1).x + rd_ld(rd_x + 1, rd_y + 1).x);\nlet sobelN_b: f32 = (-rd_ld(rd_x - 1, rd_y - 1).y - 2.0 * rd_ld(rd_x, rd_y - 1).y - rd_ld(rd_x + 1, rd_y - 1).y + rd_ld(rd_x - 1, rd_y + 1).y + 2.0 * rd_ld(rd_x, rd_y + 1).y + rd_ld(rd_x + 1, rd_y + 1).y);\nlet sobelE_a: f32 = (-rd_ld(rd_x - 1, rd_y - 1).x + rd_ld(rd_x + 1, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y).x + 2.0 * rd_ld(rd_x + 1, rd_y).x - rd_ld(rd_x - 1, rd_y + 1).x + rd_ld(rd_x + 1, rd_y + 1).x);\nlet sobelE_b: f32 = (-rd_ld(rd_x - 1, rd_y - 1).y + rd_ld(rd_x + 1, rd_y - 1).y - 2.0 * rd_ld(rd_x - 1, rd_y).y + 2.0 * rd_ld(rd_x + 1, rd_y).y - rd_ld(rd_x - 1, rd_y + 1).y + rd_ld(rd_x + 1, rd_y + 1).y);\nlet a_nw: f32 = rd_ld(rd_x - 1, rd_y + 1).x;\nlet a_ne: f32 = rd_ld(rd_x + 1, rd_y + 1).x;\nlet a_sw: f32 = rd_ld(rd_x - 1, rd_y - 1).x;\nlet a_se: f32 = rd_ld(rd_x + 1, rd_y - 1).x;\nlet a_n: f32 = rd_ld(rd_x, rd_y + 1).x;\nlet a_w: f32 = rd_ld(rd_x - 1, rd_y).x;\nlet a_e: f32 = rd_ld(rd_x + 1, rd_y).x;\nlet a_s: f32 = rd_ld(rd_x, rd_y - 1).x;\nlet ua = a_nw + a_ne + a_sw + a_se + a_n + a_w + a_e + a_s;\nlet uax = sobelE_a;\nlet uay = sobelN_a;\nlet ubx = sobelE_b;\nlet uby = sobelN_b;\nlet dp = uax * ubx + uay * uby;\ndelta_a = dpS * dp + k1*a - k2*a*a - a*a*a - b + laplacian_a;\ndelta_b = D_u * (D_us * ua - a) + epsilon*(k3*a - a1*b - a0) + delta*laplacian_b;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": -1.0
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.6,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.4,
+      0.5,
+      0.6
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.6,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.5,
+      0.5,
+      0.8,
+      0.65
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1.0,
+   "high": 1.0,
+   "colormap": "ice",
+   "height": false
+  },
+  "speed": 20
+ },
+ {
+  "id": "cgl-waves",
+  "name": "Complex Ginzburg–Landau",
+  "family": "Ginzburg–Landau",
+  "source": "Patterns/Ginzburg-Landau/complex_Ginzburg-Landau.vti",
+  "citation": "I. S. Aranson & L. Kramer (2002) Rev. Mod. Phys. 74:99",
+  "credit": "Ready (GollyGang)",
+  "description": "The general equation for a field that oscillates near a Hopf bifurcation. Small noise grows into phase waves that organise around spiral defects. The view shows the real part.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\alpha a - \\gamma b + (-\\beta a + \\delta b)(a^2 + b^2)",
+   "\\partial_t b = D_b \\nabla^2 b + \\alpha b + \\gamma a + (-\\beta b - \\delta a)(a^2 + b^2)"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (real part)",
+   "b (imaginary part)"
+  ],
+  "params": [
+   {
+    "name": "alpha",
+    "value": 0.0625,
+    "min": 0.0,
+    "max": 0.125,
+    "step": 0.001,
+    "label": "alpha"
+   },
+   {
+    "name": "beta",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "beta"
+   },
+   {
+    "name": "delta",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "delta"
+   },
+   {
+    "name": "gamma",
+    "value": 0.0625,
+    "min": 0.0,
+    "max": 0.125,
+    "step": 0.001,
+    "label": "gamma"
+   },
+   {
+    "name": "D_a",
+    "value": 0.2,
+    "min": 0.0,
+    "max": 0.4,
+    "step": 0.002,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.2,
+    "min": 0.0,
+    "max": 0.4,
+    "step": 0.002,
+    "label": "D_b"
+   }
+  ],
+  "timestep": 0.2,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a + alpha*a - gamma*b + (-beta*a + delta*b)*(a*a+b*b);\ndelta_b = D_b * laplacian_b + alpha*b + gamma*a + (-beta*b - delta*a)*(a*a+b*b);",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.1,
+    "high": 0.1
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -0.1,
+    "high": 0.1
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -0.25,
+   "high": 0.25,
+   "colormap": "grey",
+   "height": false
+  },
+  "speed": 10
+ },
+ {
+  "id": "cgl-magnitude",
+  "name": "Ginzburg–Landau defects",
+  "family": "Ginzburg–Landau",
+  "source": "Patterns/Ginzburg-Landau/complex_Ginzburg-Landau_magnitude.vti",
+  "citation": "I. S. Aranson & L. Kramer (2002) Rev. Mod. Phys. 74:99",
+  "credit": "Ready (GollyGang)",
+  "description": "The same equation, but the view shows the amplitude |A| in a third field. Spiral cores show as dark points where the amplitude falls to zero.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\alpha a - \\gamma b + (-\\beta a + \\delta b)(a^2 + b^2)",
+   "\\partial_t b = D_b \\nabla^2 b + \\alpha b + \\gamma a + (-\\beta b - \\delta a)(a^2 + b^2)"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a (real part)",
+   "b (imaginary part)",
+   "c = |A|"
+  ],
+  "params": [
+   {
+    "name": "alpha",
+    "value": 0.0625,
+    "min": 0.0,
+    "max": 0.125,
+    "step": 0.001,
+    "label": "alpha"
+   },
+   {
+    "name": "beta",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "beta"
+   },
+   {
+    "name": "delta",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "delta"
+   },
+   {
+    "name": "gamma",
+    "value": 0.0625,
+    "min": 0.0,
+    "max": 0.125,
+    "step": 0.001,
+    "label": "gamma"
+   },
+   {
+    "name": "D_a",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "D_b"
+   }
+  ],
+  "timestep": 0.2,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a + alpha*a - gamma*b + (-beta*a + delta*b)*(a*a+b*b);\ndelta_b = D_b * laplacian_b + alpha*b + gamma*a + (-beta*b - delta*a)*(a*a+b*b);\nc = sqrt(a*a + b*b);",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.1,
+    "high": 0.1
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -0.1,
+    "high": 0.1
+   }
+  ],
+  "render": {
+   "chem": "c",
+   "low": 0,
+   "high": 0.25,
+   "colormap": "magma",
+   "height": false
+  },
+  "speed": 10
+ },
+ {
+  "id": "cgl-ramps",
+  "name": "Ginzburg–Landau ramps",
+  "family": "Ginzburg–Landau",
+  "source": "Patterns/Experiments/DanWills/cglrd_ramps_example.vti",
+  "citation": "Ready community pattern by Dan Wills; I. S. Aranson & L. Kramer (2002) Rev. Mod. Phys. 74:99",
+  "credit": "Ready (GollyGang)",
+  "description": "Some coefficients ramp up from the vertical centre line to the left and right edges. The waves change character across the grid, from fine turbulence to broad spirals.",
+  "equations": [
+   "r = |2x - 1|^{p}",
+   "\\partial_t a = (D_a + \\rho_{D} r) \\nabla^2 a + \\alpha a - \\gamma b + (-(\\beta + \\rho_\\beta r) a + \\delta b)(a^2 + b^2)",
+   "\\partial_t b = D_b \\nabla^2 b + \\alpha b + \\gamma a + (-(\\beta + \\rho_\\beta r) b - \\delta a)(a^2 + b^2)"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a (real part)",
+   "b (imaginary part)",
+   "c = |A|",
+   "d (ramp)"
+  ],
+  "params": [
+   {
+    "name": "alpha",
+    "value": 0.1525,
+    "min": 0.0,
+    "max": 0.305,
+    "step": 0.002,
+    "label": "alpha"
+   },
+   {
+    "name": "beta",
+    "value": 0.92,
+    "min": 0.0,
+    "max": 1.84,
+    "step": 0.01,
+    "label": "beta"
+   },
+   {
+    "name": "delta",
+    "value": 1.15,
+    "min": 0.0,
+    "max": 2.3,
+    "step": 0.02,
+    "label": "delta"
+   },
+   {
+    "name": "gamma",
+    "value": 0.1775,
+    "min": 0.0,
+    "max": 0.355,
+    "step": 0.002,
+    "label": "gamma"
+   },
+   {
+    "name": "D_a",
+    "value": 0.075,
+    "min": 0.0,
+    "max": 0.15,
+    "step": 0.001,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1.3,
+    "min": 0.0,
+    "max": 2.6,
+    "step": 0.02,
+    "label": "D_b"
+   },
+   {
+    "name": "rampPower",
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "label": "rampPower"
+   },
+   {
+    "name": "rampAlpha",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "rampAlpha"
+   },
+   {
+    "name": "rampBeta",
+    "value": 0.01,
+    "min": 0.0,
+    "max": 0.02,
+    "step": 0.0001,
+    "label": "rampBeta"
+   },
+   {
+    "name": "rampDelta",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "rampDelta"
+   },
+   {
+    "name": "rampGamma",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "rampGamma"
+   },
+   {
+    "name": "rampD_a",
+    "value": 0.2,
+    "min": 0.0,
+    "max": 0.4,
+    "step": 0.002,
+    "label": "rampD_a"
+   },
+   {
+    "name": "rampD_b",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "rampD_b"
+   }
+  ],
+  "timestep": 0.15,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 512,
+  "formula": "d = abs(x_pos - 0.5) * 2.0;\nd = pow(d, rampPower);\ndelta_a = (D_a + rampD_a * d) * laplacian_a + (alpha + rampAlpha * d)*a - (gamma + rampGamma * d)*b + (-(beta + rampBeta * d)*a + (delta + rampDelta * d)*b)*(a*a+b*b);\ndelta_b = (D_b + rampD_b * d) * laplacian_b + (alpha + rampAlpha * d)*b + (gamma + rampGamma * d)*a + (-(beta + rampBeta * d)*b - (delta + rampDelta * d)*a)*(a*a+b*b);\nc = sqrt(a*a + b*b);",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.1,
+    "high": 0.1
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -0.1,
+    "high": 0.1
+   }
+  ],
+  "render": {
+   "chem": "c",
+   "low": 0,
+   "high": 0.5,
+   "colormap": "magma",
+   "height": false
+  },
+  "speed": 10
+ },
+ {
+  "id": "guo-2014",
+  "name": "Guo: branching root",
+  "family": "Meinhardt",
+  "source": "Patterns/Guo2014/guo.vti",
+  "citation": "Y. Guo, M. H. Guo, J. Wu, et al. (2014) Frontiers in Plant Science; activator–inhibitor model after H. Meinhardt (1982) Models of Biological Pattern Formation",
+  "credit": "Ready (GollyGang)",
+  "description": "An activator–inhibitor system with a substrate and a slow differentiation field d. From one seed a network grows and branches, and each new branch leaves a line of differentiated cells behind it.",
+  "equations": [
+   "\\partial_t a = C a^2 c / b - M a + s D_a \\nabla^2 a + r_A d",
+   "\\partial_t b = C a^2 c - N b + s D_h \\nabla^2 b + r_H d",
+   "\\partial_t c = C_z - G c - E_{ps}\\, d c + s D_s \\nabla^2 c",
+   "\\partial_t d = D a - E d + \\frac{d^2}{1 + F d^2}"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a (activator)",
+   "b (inhibitor)",
+   "c (substrate)",
+   "d (differentiation)"
+  ],
+  "params": [
+   {
+    "name": "scale",
+    "value": 8.0,
+    "min": 0.0,
+    "max": 16.0,
+    "step": 0.1,
+    "label": "scale"
+   },
+   {
+    "name": "Eps",
+    "value": 1.2,
+    "min": 0.0,
+    "max": 2.4,
+    "step": 0.02,
+    "label": "Eps"
+   },
+   {
+    "name": "rH",
+    "value": 3e-05,
+    "min": 0.0,
+    "max": 6e-05,
+    "step": 5e-07,
+    "label": "rH"
+   },
+   {
+    "name": "rA",
+    "value": 0.03,
+    "min": 0.0,
+    "max": 0.06,
+    "step": 0.0005,
+    "label": "rA"
+   },
+   {
+    "name": "D",
+    "value": 0.004,
+    "min": 0.0,
+    "max": 0.008,
+    "step": 5e-05,
+    "label": "D"
+   },
+   {
+    "name": "C",
+    "value": 0.002,
+    "min": 0.0,
+    "max": 0.004,
+    "step": 2e-05,
+    "label": "C"
+   },
+   {
+    "name": "M",
+    "value": 0.16,
+    "min": 0.0,
+    "max": 0.32,
+    "step": 0.002,
+    "label": "M"
+   },
+   {
+    "name": "N",
+    "value": 0.04,
+    "min": 0.0,
+    "max": 0.08,
+    "step": 0.0005,
+    "label": "N"
+   },
+   {
+    "name": "Cz",
+    "value": 0.02,
+    "min": 0.0,
+    "max": 0.04,
+    "step": 0.0002,
+    "label": "Cz"
+   },
+   {
+    "name": "G",
+    "value": 0.02,
+    "min": 0.0,
+    "max": 0.04,
+    "step": 0.0002,
+    "label": "G"
+   },
+   {
+    "name": "E",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "E"
+   },
+   {
+    "name": "F",
+    "value": 10.0,
+    "min": 0.0,
+    "max": 20.0,
+    "step": 0.1,
+    "label": "F"
+   },
+   {
+    "name": "D_a",
+    "value": 0.02,
+    "min": 0.0,
+    "max": 0.04,
+    "step": 0.0002,
+    "label": "D_a"
+   },
+   {
+    "name": "D_h",
+    "value": 0.26,
+    "min": 0.0,
+    "max": 0.52,
+    "step": 0.005,
+    "label": "D_h"
+   },
+   {
+    "name": "D_s",
+    "value": 0.06,
+    "min": 0.0,
+    "max": 0.12,
+    "step": 0.001,
+    "label": "D_s"
+   }
+  ],
+  "timestep": 0.02,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = C*a*a*c/b - M*a + scale*D_a*laplacian_a + rA*d;\ndelta_b = C*a*a*c - N*b + scale*D_h*laplacian_b + rH*d;\ndelta_c = Cz - G*c - Eps*d*c + scale*D_s*laplacian_c;\ndelta_d = D*a - E*d + d*d / (1.0 + F*d*d);",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 0.001
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 0.01
+   },
+   {
+    "op": "fill",
+    "chem": "c",
+    "value": 0.6
+   },
+   {
+    "op": "fill",
+    "chem": "d",
+    "value": 0.1
+   },
+   {
+    "op": "add",
+    "chem": "d",
+    "value": 1.0,
+    "region": {
+     "circle": [
+      0.5,
+      0.5,
+      0.005
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "d",
+   "low": 0,
+   "high": 1,
+   "colormap": "coral",
+   "height": false
+  },
+  "speed": 160
+ },
+ {
+  "id": "kpz-erosion",
+  "name": "Erosion",
+  "family": "Kardar–Parisi–Zhang",
+  "source": "Patterns/KardarParisiZhang1986/erosion.vti",
+  "citation": "M. Kardar, G. Parisi & Y.-C. Zhang (1986) Phys. Rev. Lett. 56:889",
+  "credit": "Ready (GollyGang)",
+  "description": "A height field a erodes where it is steep, faster where the rock b is soft. Ridges and valleys sharpen out of a gentle hill. Ready uses Perlin noise for the rock; here a sum of sine waves stands in for it.",
+  "equations": [
+   "\\partial_t a = f \\nabla^2 a - g\\, |\\nabla a|^{e}\\, (1 + h\\,(b - 1))"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (height)",
+   "b (rock softness)"
+  ],
+  "params": [
+   {
+    "name": "e",
+    "value": 1.5,
+    "min": 0.0,
+    "max": 3.0,
+    "step": 0.02,
+    "label": "e"
+   },
+   {
+    "name": "f",
+    "value": 0.02,
+    "min": 0.0,
+    "max": 0.04,
+    "step": 0.0002,
+    "label": "f"
+   },
+   {
+    "name": "g",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "g"
+   },
+   {
+    "name": "h",
+    "value": 0.8,
+    "min": 0.0,
+    "max": 1.6,
+    "step": 0.01,
+    "label": "h"
+   }
+  ],
+  "timestep": 0.4,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = f * laplacian_a - g * pow(sqrt(gradient_mag_squared_a), e) * (1.0 + h * (b - 1.0));",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 0.2
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 1,
+    "center": [
+     0.5,
+     0.5
+    ],
+    "sigma": 0.2,
+    "mode": "add"
+   },
+   {
+    "op": "sine",
+    "chem": "a",
+    "amplitude": 0.1,
+    "kx": 2,
+    "ky": 0,
+    "phase": 0,
+    "mode": "add"
+   },
+   {
+    "op": "sine",
+    "chem": "a",
+    "amplitude": 0.1,
+    "kx": 0,
+    "ky": 2,
+    "phase": 0,
+    "mode": "add"
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 0.5
+   },
+   {
+    "op": "sine",
+    "chem": "b",
+    "amplitude": 0.18,
+    "kx": 3,
+    "ky": 5,
+    "phase": 0.7,
+    "mode": "add"
+   },
+   {
+    "op": "sine",
+    "chem": "b",
+    "amplitude": 0.12,
+    "kx": -7,
+    "ky": 4,
+    "phase": 2.1,
+    "mode": "add"
+   },
+   {
+    "op": "sine",
+    "chem": "b",
+    "amplitude": 0.08,
+    "kx": 11,
+    "ky": -9,
+    "phase": 4.0,
+    "mode": "add"
+   },
+   {
+    "op": "sine",
+    "chem": "b",
+    "amplitude": 0.05,
+    "kx": 17,
+    "ky": 21,
+    "phase": 1.3,
+    "mode": "add"
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -0.03,
+    "high": 0.03,
+    "mode": "add"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 0.6,
+   "colormap": "viridis",
+   "height": true
+  },
+  "speed": 3
+ },
+ {
+  "id": "kobayashi-crystal",
+  "name": "Dendritic crystal",
+  "family": "Phase field",
+  "source": "Patterns/Kobayashi1993/crystal.vti",
+  "citation": "R. Kobayashi (1993) Physica D 63:410",
+  "credit": "Ready (GollyGang)",
+  "description": "A phase-field model of a solid growing into undercooled liquid. The interface energy depends on the direction of the surface, so a small disc grows six main arms with side branches, like a snowflake.",
+  "equations": [
+   "\\tau\\, \\partial_t \\phi = \\nabla\\cdot(\\epsilon^2 \\nabla \\phi) - \\partial_x(\\epsilon \\epsilon' \\partial_y \\phi) + \\partial_y(\\epsilon \\epsilon' \\partial_x \\phi) + \\phi(1 - \\phi)(\\phi - \\tfrac12 + m)",
+   "\\partial_t T = \\nabla^2 T + K\\, \\partial_t \\phi",
+   "\\epsilon = \\bar\\epsilon\\,(1 + \\delta \\cos(j\\,(\\theta + \\theta_0))),\\quad m = \\tfrac{\\alpha}{\\pi} \\arctan(\\gamma (T_{eq} - T))"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (phase φ)",
+   "b (temperature T)"
+  ],
+  "params": [
+   {
+    "name": "dy",
+    "value": 0.03,
+    "min": 0.0,
+    "max": 0.06,
+    "step": 0.0005,
+    "label": "dy"
+   },
+   {
+    "name": "tau",
+    "value": 0.0003,
+    "min": 0.0,
+    "max": 0.0006,
+    "step": 5e-06,
+    "label": "tau"
+   },
+   {
+    "name": "epsbar",
+    "value": 0.01,
+    "min": 0.0,
+    "max": 0.02,
+    "step": 0.0001,
+    "label": "epsbar"
+   },
+   {
+    "name": "k",
+    "value": 1.8,
+    "min": 0.0,
+    "max": 3.6,
+    "step": 0.02,
+    "label": "k"
+   },
+   {
+    "name": "delta",
+    "value": 0.01,
+    "min": 0.0,
+    "max": 0.02,
+    "step": 0.0001,
+    "label": "delta"
+   },
+   {
+    "name": "anisotropy",
+    "value": 7.0,
+    "min": 0.0,
+    "max": 14.0,
+    "step": 0.1,
+    "label": "anisotropy"
+   },
+   {
+    "name": "rotate",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "rotate"
+   },
+   {
+    "name": "alpha",
+    "value": 0.9,
+    "min": 0.0,
+    "max": 1.8,
+    "step": 0.01,
+    "label": "alpha"
+   },
+   {
+    "name": "gamma",
+    "value": 10.0,
+    "min": 0.0,
+    "max": 20.0,
+    "step": 0.1,
+    "label": "gamma"
+   },
+   {
+    "name": "teq",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "teq"
+   }
+  ],
+  "timestep": 0.0002,
+  "dx": 0.03,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 512,
+  "height": 512,
+  "formula": "let a_e: f32 = rd_ld(rd_x + 1, rd_y).x;\nlet a_w: f32 = rd_ld(rd_x - 1, rd_y).x;\nlet a_ne: f32 = rd_ld(rd_x + 1, rd_y + 1).x;\nlet a_nw: f32 = rd_ld(rd_x - 1, rd_y + 1).x;\nlet a_e2: f32 = rd_ld(rd_x + 2, rd_y).x;\nlet a_se: f32 = rd_ld(rd_x + 1, rd_y - 1).x;\nlet a_sw: f32 = rd_ld(rd_x - 1, rd_y - 1).x;\nlet a_w2: f32 = rd_ld(rd_x - 2, rd_y).x;\nlet a_s: f32 = rd_ld(rd_x, rd_y - 1).x;\nlet a_n: f32 = rd_ld(rd_x, rd_y + 1).x;\nlet a_n2: f32 = rd_ld(rd_x, rd_y + 2).x;\nlet a_s2: f32 = rd_ld(rd_x, rd_y - 2).x;\nvar gpx = array<f32, 5>((a_e - a_w) / dx, (a_ne - a_nw) / dx, (a_e2 - a) / dx, (a_se - a_sw) / dx, (a - a_w2) / dx);\nvar gpy = array<f32, 5>((a_s - a_n) / dy, (a - a_n2) / dy, (a_se - a_ne) / dy, (a_s2 - a) / dy, (a_sw - a_nw) / dy);\nvar eps: array<f32, 5>;\nvar epsd: array<f32, 5>;\nfor (var i = 0; i < 5; i++) {\n  let zero = gpx[i] == 0.0 && gpy[i] == 0.0;\n  let angle = select(atan2(gpy[i], gpx[i]), 0.0, zero) + rotate;\n  eps[i] = epsbar * (1.0 + delta * cos(anisotropy * angle));\n  epsd[i] = -epsbar * anisotropy * delta * sin(anisotropy * angle);\n}\nlet grad_eps2_x = (eps[2] * eps[2] - eps[4] * eps[4]) / dx;\nlet grad_eps2_y = (eps[3] * eps[3] - eps[1] * eps[1]) / dy;\nlet pi = 3.14159265358979;\nlet m = alpha * atan(gamma * (teq - b)) / pi;\nlet edgp_x = (eps[4] * epsd[4] * gpy[4] - eps[2] * epsd[2] * gpy[2]) / dx;\nlet edgp_y = (eps[3] * epsd[3] * gpx[3] - eps[1] * epsd[1] * gpx[1]) / dy;\ndelta_a = (eps[0] * eps[0] * laplacian_a + edgp_x + edgp_y + grad_eps2_x * gpx[0] + grad_eps2_y * gpy[0] + a * (1.0 - a) * (a - 0.5 + m)) / tau;\ndelta_b = laplacian_b + k * delta_a;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 0.0
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.0,
+    "region": {
+     "circle": [
+      0.5,
+      0.5,
+      0.01
+     ]
+    }
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 0.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 1,
+   "colormap": "ice",
+   "height": true
+  },
+  "speed": 20,
+  "notes": "Hand translation: Ready's formula uses C arrays and a for loop. atan2(0, 0) is made 0, as in OpenCL."
+ },
+ {
+  "id": "kobayashi-laplacian-growth",
+  "name": "Laplacian growth",
+  "family": "Phase field",
+  "source": "Patterns/Kobayashi1993/laplacian_growth.vti",
+  "citation": "R. Kobayashi (1993) Physica D 63:410",
+  "credit": "Ready (GollyGang)",
+  "description": "The isotropic version of the phase-field model. A flat solid front on the left edge grows into noisy undercooled liquid and breaks into fingers that race and split.",
+  "equations": [
+   "\\tau\\, \\partial_t \\phi = \\bar\\epsilon^2 \\nabla^2 \\phi + \\phi(1 - \\phi)(\\phi - \\tfrac12 + m)",
+   "\\partial_t T = \\nabla^2 T + K\\, \\partial_t \\phi,\\quad m = \\tfrac{\\alpha}{\\pi} \\arctan(\\gamma (T_{eq} - T))"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (phase φ)",
+   "b (temperature T)"
+  ],
+  "params": [
+   {
+    "name": "k",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "k"
+   },
+   {
+    "name": "tau",
+    "value": 0.0003,
+    "min": 0.0,
+    "max": 0.0006,
+    "step": 5e-06,
+    "label": "tau"
+   },
+   {
+    "name": "epsilonbar",
+    "value": 0.01,
+    "min": 0.0,
+    "max": 0.02,
+    "step": 0.0001,
+    "label": "epsilonbar"
+   },
+   {
+    "name": "alpha",
+    "value": 0.9,
+    "min": 0.0,
+    "max": 1.8,
+    "step": 0.01,
+    "label": "alpha"
+   },
+   {
+    "name": "gamma",
+    "value": 10.0,
+    "min": 0.0,
+    "max": 20.0,
+    "step": 0.1,
+    "label": "gamma"
+   },
+   {
+    "name": "teq",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "teq"
+   }
+  ],
+  "timestep": 0.0001,
+  "dx": 0.03,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 512,
+  "height": 256,
+  "formula": "let pi = 3.14159265358979323846;\nlet m = (alpha / pi) * atan(gamma*(teq-b));\ndelta_a = (epsilonbar*epsilonbar*laplacian_a + a*(1.0-a)*(a-0.5+m))/tau;\ndelta_b = laplacian_b + k*delta_a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.0,
+    "high": 0.01
+   },
+   {
+    "op": "add",
+    "chem": "a",
+    "value": 0.99,
+    "region": {
+     "rect": [
+      0.0,
+      0.0,
+      0.01,
+      1.0
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -1.0,
+    "high": 1.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 1,
+   "colormap": "ice",
+   "height": false
+  },
+  "speed": 40
+ },
+ {
+  "id": "ks-chaos",
+  "name": "Kuramoto–Sivashinsky chaos",
+  "family": "Kuramoto–Sivashinsky",
+  "source": "Patterns/KuramotoSivashinsky1978/Kuramoto-Sivashinsky.vti",
+  "citation": "Y. Kuramoto & T. Tsuzuki (1976) Prog. Theor. Phys. 55:356; G. I. Sivashinsky (1977) Acta Astronautica 4:1177",
+  "credit": "Ready (GollyGang)",
+  "description": "A model of flame fronts and thin falling films. Long waves grow, short waves decay, and the nonlinear term moves energy between them, so the surface forms restless cells that merge and split.",
+  "equations": [
+   "\\partial_t a = w_4 \\nabla^4 a + w_2 \\nabla^2 a + w_g\\, |\\nabla a|^2 + s\\, a"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [
+   {
+    "name": "stabilize",
+    "value": -0.05,
+    "min": -0.1,
+    "max": 0.0,
+    "step": 0.0005,
+    "label": "stabilize"
+   },
+   {
+    "name": "gms_weight",
+    "value": 0.2,
+    "min": 0.0,
+    "max": 0.4,
+    "step": 0.002,
+    "label": "gms_weight"
+   },
+   {
+    "name": "lapweight",
+    "value": -1.0,
+    "min": -2.0,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "lapweight"
+   },
+   {
+    "name": "bilapweight",
+    "value": -1.0,
+    "min": -2.0,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "bilapweight"
+   }
+  ],
+  "timestep": 0.005,
+  "dx": 0.5,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "let rd_bilaplacian_a: f32 = (rd_ld(rd_x - 1, rd_y - 2).x + rd_ld(rd_x, rd_y - 2).x + rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x - 2, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y - 1).x - 10.0 * rd_ld(rd_x, rd_y - 1).x - 2.0 * rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x + 2, rd_y - 1).x + rd_ld(rd_x - 2, rd_y).x - 10.0 * rd_ld(rd_x - 1, rd_y).x + 36.0 * a - 10.0 * rd_ld(rd_x + 1, rd_y).x + rd_ld(rd_x + 2, rd_y).x + rd_ld(rd_x - 2, rd_y + 1).x - 2.0 * rd_ld(rd_x - 1, rd_y + 1).x - 10.0 * rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x + rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 1, rd_y + 2).x + rd_ld(rd_x, rd_y + 2).x + rd_ld(rd_x + 1, rd_y + 2).x) / (3.0 * dx * dx * dx * dx);\ndelta_a = bilapweight * rd_bilaplacian_a + lapweight * laplacian_a + gradient_mag_squared_a * gms_weight + a * stabilize;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 65.0,
+    "high": 120.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 65,
+   "high": 120,
+   "colormap": "viridis",
+   "height": true
+  },
+  "speed": 10
+ },
+ {
+  "id": "ks-cells",
+  "name": "Kuramoto–Sivashinsky cells",
+  "family": "Kuramoto–Sivashinsky",
+  "source": "Patterns/KuramotoSivashinsky1978/Kuramoto-Sivashinsky_multistable.vti",
+  "citation": "Y. Kuramoto & T. Tsuzuki (1976) Prog. Theor. Phys. 55:356; G. I. Sivashinsky (1977) Acta Astronautica 4:1177",
+  "credit": "Ready (GollyGang)",
+  "description": "The same equation on a finer grid with a smaller box. Only a few cells fit in, and the surface settles into slowly drifting cellular patterns.",
+  "equations": [
+   "\\partial_t a = w_4 \\nabla^4 a + w_2 \\nabla^2 a + w_g\\, |\\nabla a|^2 + s\\, a"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [
+   {
+    "name": "stabilize",
+    "value": -0.05,
+    "min": -0.1,
+    "max": 0.0,
+    "step": 0.0005,
+    "label": "stabilize"
+   },
+   {
+    "name": "gms_weight",
+    "value": 0.2,
+    "min": 0.0,
+    "max": 0.4,
+    "step": 0.002,
+    "label": "gms_weight"
+   },
+   {
+    "name": "lapweight",
+    "value": -1.0,
+    "min": -2.0,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "lapweight"
+   },
+   {
+    "name": "bilapweight",
+    "value": -1.0,
+    "min": -2.0,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "bilapweight"
+   }
+  ],
+  "timestep": 0.00025,
+  "dx": 0.25,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 128,
+  "height": 128,
+  "formula": "let rd_bilaplacian_a: f32 = (rd_ld(rd_x - 1, rd_y - 2).x + rd_ld(rd_x, rd_y - 2).x + rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x - 2, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y - 1).x - 10.0 * rd_ld(rd_x, rd_y - 1).x - 2.0 * rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x + 2, rd_y - 1).x + rd_ld(rd_x - 2, rd_y).x - 10.0 * rd_ld(rd_x - 1, rd_y).x + 36.0 * a - 10.0 * rd_ld(rd_x + 1, rd_y).x + rd_ld(rd_x + 2, rd_y).x + rd_ld(rd_x - 2, rd_y + 1).x - 2.0 * rd_ld(rd_x - 1, rd_y + 1).x - 10.0 * rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x + rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 1, rd_y + 2).x + rd_ld(rd_x, rd_y + 2).x + rd_ld(rd_x + 1, rd_y + 2).x) / (3.0 * dx * dx * dx * dx);\ndelta_a = bilapweight * rd_bilaplacian_a + lapweight * laplacian_a + gradient_mag_squared_a * gms_weight + a * stabilize;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 55.0,
+    "high": 120.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 66,
+   "high": 80,
+   "colormap": "viridis",
+   "height": true
+  },
+  "speed": 20
+ },
+ {
+  "id": "lotka-volterra",
+  "name": "Lotka–Volterra",
+  "family": "Lotka–Volterra",
+  "source": "Patterns/LotkaVolterra1926/Lotka-Volterra.vti",
+  "citation": "A. J. Lotka (1925) Elements of Physical Biology; V. Volterra (1926) Nature 118:558",
+  "credit": "Ready (GollyGang)",
+  "description": "Prey a grow and are eaten by predators b, which die without food. With diffusion, the local boom and bust cycles fall out of step and form travelling waves of predators chasing prey.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\alpha a - \\beta a b",
+   "\\partial_t b = D_b \\nabla^2 b + \\delta a b - \\gamma b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (prey)",
+   "b (predator)"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_b"
+   },
+   {
+    "name": "alpha",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "alpha"
+   },
+   {
+    "name": "beta",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "beta"
+   },
+   {
+    "name": "gamma",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "gamma"
+   },
+   {
+    "name": "delta",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "delta"
+   }
+  ],
+  "timestep": 0.05,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a + alpha * a - beta * a * b;\ndelta_b = D_b * laplacian_b + delta * a * b - gamma * b;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.0,
+    "high": 0.5
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 0.5
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0,
+   "high": 3,
+   "colormap": "viridis",
+   "height": false
+  },
+  "speed": 10
+ },
+ {
+  "id": "maginu-parameter-map",
+  "name": "Maginu parameter map",
+  "family": "FitzHugh–Nagumo",
+  "source": "Patterns/Maginu1975/maginu_parameter_map.vti",
+  "citation": "K. Maginu (1975) Mathematical Biosciences 27:17",
+  "credit": "Ready (GollyGang)",
+  "description": "Maginu's variant of the FitzHugh–Nagumo system. α grows from left to right and γ grows along the vertical axis, so one grid shows waves, stationary patterns and uniform states side by side.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\alpha(x)\\,(a - a^3) - b",
+   "\\partial_t b = D_b \\nabla^2 b + \\epsilon\\,(a - \\gamma(y)\\, b)"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_b"
+   },
+   {
+    "name": "epsilon",
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "label": "epsilon"
+   },
+   {
+    "name": "alpha",
+    "value": 2.505,
+    "min": 0.01,
+    "max": 5.0,
+    "step": 0.05,
+    "label": "alpha"
+   },
+   {
+    "name": "gamma",
+    "value": 1.505,
+    "min": 0.01,
+    "max": 3.0,
+    "step": 0.02,
+    "label": "gamma"
+   }
+  ],
+  "timestep": 0.1,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 512,
+  "height": 512,
+  "formula": "delta_a = D_a * laplacian_a + alpha * (a - a*a*a) - b;\ndelta_b = D_b * laplacian_b + epsilon * (a - gamma * b);",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.11,
+    "high": 0.11
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -0.11,
+    "high": 0.11
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1.3,
+   "high": 1.3,
+   "colormap": "spectral",
+   "height": false
+  },
+  "speed": 20,
+  "paramMap": {
+   "x": "alpha",
+   "x0": 0.01,
+   "x1": 5.0,
+   "y": "gamma",
+   "y0": 0.01,
+   "y1": 3.0
+  }
+ },
+ {
+  "id": "morozov-fig2",
+  "name": "Plankton patches",
+  "family": "Morozov (plankton)",
+  "source": "Patterns/Morozov2008/Fig2.vti",
+  "citation": "A. Morozov, S. Petrovskii & B.-L. Li (2008) J. Theor. Biol. 250:22",
+  "credit": "Ready (GollyGang)",
+  "description": "Phytoplankton a, a competitor b and zooplankton c that grazes on a. From one seed in the centre, a ring of plankton spreads and breaks into irregular, drifting patches.",
+  "equations": [
+   "\\partial_t a = \\nabla^2 a - \\alpha a - e a^2 + \\frac{\\mu_1 a b}{1 + \\omega_1 b} - \\frac{a c}{1 + \\gamma a}",
+   "\\partial_t b = \\epsilon_1 \\nabla^2 b - b - b^2 + \\frac{\\mu_2 a b}{1 + \\omega_2 a}",
+   "\\partial_t c = \\epsilon_2 \\nabla^2 c + \\frac{a c}{1 + \\gamma a} - \\delta c"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a (phytoplankton)",
+   "b (competitor)",
+   "c (zooplankton)"
+  ],
+  "params": [
+   {
+    "name": "alpha",
+    "value": 0.75,
+    "min": 0.0,
+    "max": 1.5,
+    "step": 0.01,
+    "label": "alpha"
+   },
+   {
+    "name": "e",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "e"
+   },
+   {
+    "name": "mu1",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "mu1"
+   },
+   {
+    "name": "mu2",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "mu2"
+   },
+   {
+    "name": "gamma",
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "label": "gamma"
+   },
+   {
+    "name": "omega1",
+    "value": 0.25,
+    "min": 0.0,
+    "max": 0.5,
+    "step": 0.005,
+    "label": "omega1"
+   },
+   {
+    "name": "omega2",
+    "value": 0.25,
+    "min": 0.0,
+    "max": 0.5,
+    "step": 0.005,
+    "label": "omega2"
+   },
+   {
+    "name": "delta",
+    "value": 0.71,
+    "min": 0.0,
+    "max": 1.42,
+    "step": 0.01,
+    "label": "delta"
+   },
+   {
+    "name": "epsilon1",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "epsilon1"
+   },
+   {
+    "name": "epsilon2",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "epsilon2"
+   }
+  ],
+  "timestep": 0.1,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = laplacian_a - alpha*a - e*a*a + mu1*a*b/(1.0+omega1*b) - a*c/(1.0+gamma*a);\ndelta_b = epsilon1 * laplacian_b - b - b*b + mu2*a*b/(1.0+omega2*a);\ndelta_c = epsilon2 * laplacian_c + a*c/(1.0 + gamma*a) - delta*c;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 0.0
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 5.0,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 0.0
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 5.0,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   },
+   {
+    "op": "fill",
+    "chem": "c",
+    "value": 0.0
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 12.0,
+    "region": {
+     "rect": [
+      0.45,
+      0.45,
+      0.51,
+      0.51
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0.0,
+   "high": 12.0,
+   "colormap": "viridis",
+   "height": false
+  },
+  "speed": 30
+ },
+ {
+  "id": "morozov-fig4",
+  "name": "Plankton invasion",
+  "family": "Morozov (plankton)",
+  "source": "Patterns/Morozov2008/Fig4.vti",
+  "citation": "A. Morozov, S. Petrovskii & B.-L. Li (2008) J. Theor. Biol. 250:22",
+  "credit": "Ready (GollyGang)",
+  "description": "Phytoplankton compete with a second species and are grazed by zooplankton. The invasion front from the centre leaves behind a patchy, chaotic mix of the three populations.",
+  "equations": [
+   "\\partial_t a = \\nabla^2 a + a(1 - a - \\chi_{12} b) - \\frac{a c}{1 + \\gamma a}",
+   "\\partial_t b = \\epsilon_1 \\nabla^2 b + r b(1 - b - \\chi_{21} a)",
+   "\\partial_t c = \\epsilon_2 \\nabla^2 c + \\frac{g a c}{1 + \\gamma a} - \\delta c"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a (phytoplankton)",
+   "b (competitor)",
+   "c (zooplankton)"
+  ],
+  "params": [
+   {
+    "name": "r",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "r"
+   },
+   {
+    "name": "chi12",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "chi12"
+   },
+   {
+    "name": "chi21",
+    "value": 10.0,
+    "min": 0.0,
+    "max": 20.0,
+    "step": 0.1,
+    "label": "chi21"
+   },
+   {
+    "name": "gamma",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "gamma"
+   },
+   {
+    "name": "g",
+    "value": 1.1,
+    "min": 0.0,
+    "max": 2.2,
+    "step": 0.02,
+    "label": "g"
+   },
+   {
+    "name": "epsilon1",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "epsilon1"
+   },
+   {
+    "name": "epsilon2",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "epsilon2"
+   },
+   {
+    "name": "delta",
+    "value": 0.094,
+    "min": 0.0,
+    "max": 0.188,
+    "step": 0.001,
+    "label": "delta"
+   }
+  ],
+  "timestep": 0.01,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = laplacian_a + a*(1.0-a-chi12*b) - a*c/(1.0+gamma*a);\ndelta_b = epsilon1*laplacian_b + r*b*(1.0-b-chi21*a);\ndelta_c = epsilon2*laplacian_c + g*a*c/(1.0 + gamma*a) - delta*c;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 0.0
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 1.0
+   },
+   {
+    "op": "fill",
+    "chem": "c",
+    "value": 0.0
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 0.5,
+    "region": {
+     "rect": [
+      0.45,
+      0.45,
+      0.51,
+      0.51
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 1,
+   "colormap": "viridis",
+   "height": false
+  },
+  "speed": 40
+ },
+ {
+  "id": "morozov-delta-map",
+  "name": "Plankton: mortality map",
+  "family": "Morozov (plankton)",
+  "source": "Patterns/Morozov2008/Fig5678_delta_map.vti",
+  "citation": "A. Morozov, S. Petrovskii & B.-L. Li (2008) J. Theor. Biol. 250:22",
+  "credit": "Ready (GollyGang)",
+  "description": "The same plankton model, but the zooplankton death rate δ grows from left to right. Regular rings on one side turn into patchy spatiotemporal chaos on the other.",
+  "equations": [
+   "\\partial_t a = \\nabla^2 a + a(1 - a - \\chi_{12} b) - \\frac{a c}{1 + \\gamma a}",
+   "\\partial_t b = \\epsilon_1 \\nabla^2 b + r b(1 - b - \\chi_{21} a)",
+   "\\partial_t c = \\epsilon_2 \\nabla^2 c + \\frac{g a c}{1 + \\gamma a} - \\delta(x)\\, c"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a (phytoplankton)",
+   "b (competitor)",
+   "c (zooplankton)"
+  ],
+  "params": [
+   {
+    "name": "r",
+    "value": 0.75,
+    "min": 0.0,
+    "max": 1.5,
+    "step": 0.01,
+    "label": "r"
+   },
+   {
+    "name": "chi12",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "chi12"
+   },
+   {
+    "name": "chi21",
+    "value": 10.0,
+    "min": 0.0,
+    "max": 20.0,
+    "step": 0.1,
+    "label": "chi21"
+   },
+   {
+    "name": "gamma",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "gamma"
+   },
+   {
+    "name": "g",
+    "value": 1.1,
+    "min": 0.0,
+    "max": 2.2,
+    "step": 0.02,
+    "label": "g"
+   },
+   {
+    "name": "epsilon1",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "epsilon1"
+   },
+   {
+    "name": "epsilon2",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "epsilon2"
+   },
+   {
+    "name": "delta",
+    "value": 0.1225,
+    "min": 0.095,
+    "max": 0.15,
+    "step": 0.0005,
+    "label": "delta"
+   }
+  ],
+  "timestep": 0.01,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 512,
+  "height": 256,
+  "formula": "delta_a = laplacian_a + a*(1.0-a-chi12*b) - a*c/(1.0+gamma*a);\ndelta_b = epsilon1*laplacian_b + r*b*(1.0-b-chi21*a);\ndelta_c = epsilon2*laplacian_c + g*a*c/(1.0 + gamma*a) - delta*c;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 0.0
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.46,
+      0.46,
+      0.54,
+      0.54
+     ]
+    }
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 1.0
+   },
+   {
+    "op": "fill",
+    "chem": "c",
+    "value": 0.0
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 0.5,
+    "region": {
+     "rect": [
+      0.45,
+      0.45,
+      0.51,
+      0.51
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0.0,
+   "high": 0.6,
+   "colormap": "viridis",
+   "height": false
+  },
+  "speed": 80,
+  "paramMap": {
+   "x": "delta",
+   "x0": 0.095,
+   "x1": 0.15
+  }
+ },
+ {
+  "id": "sh-spots",
+  "name": "Hexagonal spots",
+  "family": "Swift–Hohenberg",
+  "source": "Patterns/Pennybacker2013/spots.vti",
+  "citation": "M. Pennybacker & A. C. Newell (2013) Phys. Rev. Lett. 110:248104; J. Swift & P. C. Hohenberg (1977) Phys. Rev. A 15:319",
+  "credit": "Ready (GollyGang)",
+  "description": "The Swift–Hohenberg equation picks one wavelength. With a quadratic term β the chosen pattern is hexagons: a single bump in the centre seeds a growing lattice of spots.",
+  "equations": [
+   "\\partial_t a = \\mu a - (1 + \\nabla^2)^2 a + \\beta a^2 - a^3"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [
+   {
+    "name": "mu",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "mu"
+   },
+   {
+    "name": "beta",
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "label": "beta"
+   }
+  ],
+  "timestep": 0.002,
+  "dx": 0.4,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "let rd_bilaplacian_a: f32 = (rd_ld(rd_x - 1, rd_y - 2).x + rd_ld(rd_x, rd_y - 2).x + rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x - 2, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y - 1).x - 10.0 * rd_ld(rd_x, rd_y - 1).x - 2.0 * rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x + 2, rd_y - 1).x + rd_ld(rd_x - 2, rd_y).x - 10.0 * rd_ld(rd_x - 1, rd_y).x + 36.0 * a - 10.0 * rd_ld(rd_x + 1, rd_y).x + rd_ld(rd_x + 2, rd_y).x + rd_ld(rd_x - 2, rd_y + 1).x - 2.0 * rd_ld(rd_x - 1, rd_y + 1).x - 10.0 * rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x + rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 1, rd_y + 2).x + rd_ld(rd_x, rd_y + 2).x + rd_ld(rd_x + 1, rd_y + 2).x) / (3.0 * dx * dx * dx * dx);\ndelta_a = mu * a - rd_bilaplacian_a - 2.0*laplacian_a - a + beta*a*a - a*a*a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.1,
+    "high": 0.1,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.5,
+     0.5
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -0.4,
+   "high": 0.5,
+   "colormap": "coral",
+   "height": true
+  },
+  "speed": 60
+ },
+ {
+  "id": "sh-stripes",
+  "name": "Stripes",
+  "family": "Swift–Hohenberg",
+  "source": "Patterns/Pennybacker2013/stripes.vti",
+  "citation": "M. Pennybacker & A. C. Newell (2013) Phys. Rev. Lett. 110:248104; J. Swift & P. C. Hohenberg (1977) Phys. Rev. A 15:319",
+  "credit": "Ready (GollyGang)",
+  "description": "With β = 0 the symmetric equation prefers rolls. Stripes spread from the central bump and from the noise, and then slowly anneal their defects.",
+  "equations": [
+   "\\partial_t a = \\mu a - (1 + \\nabla^2)^2 a + \\beta a^2 - a^3"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [
+   {
+    "name": "mu",
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "label": "mu"
+   },
+   {
+    "name": "beta",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "beta"
+   }
+  ],
+  "timestep": 0.002,
+  "dx": 0.4,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "let rd_bilaplacian_a: f32 = (rd_ld(rd_x - 1, rd_y - 2).x + rd_ld(rd_x, rd_y - 2).x + rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x - 2, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y - 1).x - 10.0 * rd_ld(rd_x, rd_y - 1).x - 2.0 * rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x + 2, rd_y - 1).x + rd_ld(rd_x - 2, rd_y).x - 10.0 * rd_ld(rd_x - 1, rd_y).x + 36.0 * a - 10.0 * rd_ld(rd_x + 1, rd_y).x + rd_ld(rd_x + 2, rd_y).x + rd_ld(rd_x - 2, rd_y + 1).x - 2.0 * rd_ld(rd_x - 1, rd_y + 1).x - 10.0 * rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x + rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 1, rd_y + 2).x + rd_ld(rd_x, rd_y + 2).x + rd_ld(rd_x + 1, rd_y + 2).x) / (3.0 * dx * dx * dx * dx);\ndelta_a = mu * a - rd_bilaplacian_a - 2.0*laplacian_a - a + beta*a*a - a*a*a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.1,
+    "high": 0.1,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.5,
+     0.5
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1.0,
+   "high": 1.0,
+   "colormap": "coral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "sh-phyllotaxis-hexagons",
+  "name": "Phyllotaxis hexagons",
+  "family": "Swift–Hohenberg",
+  "source": "Patterns/Pennybacker2013/phyllotaxis_hexagons.vti",
+  "citation": "M. Pennybacker & A. C. Newell (2013) Phys. Rev. Lett. 110:248104; J. Swift & P. C. Hohenberg (1977) Phys. Rev. A 15:319",
+  "credit": "Ready (GollyGang)",
+  "description": "Pennybacker and Newell's plant-growth model adds a gradient term that makes hexagons robust. From one bump, a hexagonal lattice of primordia, like the florets of a sunflower, spreads out.",
+  "equations": [
+   "\\partial_t a = \\mu a - (1 + \\nabla^2)^2 a - \\beta\\,(|\\nabla a|^2 + 2 a \\nabla^2 a) - a^3"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [
+   {
+    "name": "mu",
+    "value": 0.001,
+    "min": 0.0,
+    "max": 0.002,
+    "step": 1e-05,
+    "label": "mu"
+   },
+   {
+    "name": "beta",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "beta"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 0.4,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "let rd_bilaplacian_a: f32 = (rd_ld(rd_x - 1, rd_y - 2).x + rd_ld(rd_x, rd_y - 2).x + rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x - 2, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y - 1).x - 10.0 * rd_ld(rd_x, rd_y - 1).x - 2.0 * rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x + 2, rd_y - 1).x + rd_ld(rd_x - 2, rd_y).x - 10.0 * rd_ld(rd_x - 1, rd_y).x + 36.0 * a - 10.0 * rd_ld(rd_x + 1, rd_y).x + rd_ld(rd_x + 2, rd_y).x + rd_ld(rd_x - 2, rd_y + 1).x - 2.0 * rd_ld(rd_x - 1, rd_y + 1).x - 10.0 * rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x + rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 1, rd_y + 2).x + rd_ld(rd_x, rd_y + 2).x + rd_ld(rd_x + 1, rd_y + 2).x) / (3.0 * dx * dx * dx * dx);\ndelta_a = mu * a - rd_bilaplacian_a - 2.0*laplacian_a - a - beta*(gradient_mag_squared_a + 2.0*a*laplacian_a) - a*a*a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.1,
+    "high": 0.1,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.5,
+     0.5
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -0.5,
+   "high": 2.5,
+   "colormap": "coral",
+   "height": true
+  },
+  "speed": 80
+ },
+ {
+  "id": "sh-phyllotaxis-fibonacci",
+  "name": "Phyllotaxis ring",
+  "family": "Swift–Hohenberg",
+  "source": "Patterns/Pennybacker2013/phyllotaxis_fibonacci.vti",
+  "citation": "M. Pennybacker & A. C. Newell (2013) Phys. Rev. Lett. 110:248104; J. Swift & P. C. Hohenberg (1977) Phys. Rev. A 15:319",
+  "credit": "Ready (GollyGang)",
+  "description": "The plant-growth model seeded with a ring of bumps near the edge, like the rim of a growing shoot. New bumps fill in between the old ones and pack inward.",
+  "equations": [
+   "\\partial_t a = \\mu a - (1 + \\nabla^2)^2 a - \\beta\\,(|\\nabla a|^2 + 2 a \\nabla^2 a) - a^3"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [
+   {
+    "name": "mu",
+    "value": 0.001,
+    "min": 0.0,
+    "max": 0.002,
+    "step": 1e-05,
+    "label": "mu"
+   },
+   {
+    "name": "beta",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "beta"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 0.55,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "let rd_bilaplacian_a: f32 = (rd_ld(rd_x - 1, rd_y - 2).x + rd_ld(rd_x, rd_y - 2).x + rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x - 2, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y - 1).x - 10.0 * rd_ld(rd_x, rd_y - 1).x - 2.0 * rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x + 2, rd_y - 1).x + rd_ld(rd_x - 2, rd_y).x - 10.0 * rd_ld(rd_x - 1, rd_y).x + 36.0 * a - 10.0 * rd_ld(rd_x + 1, rd_y).x + rd_ld(rd_x + 2, rd_y).x + rd_ld(rd_x - 2, rd_y + 1).x - 2.0 * rd_ld(rd_x - 1, rd_y + 1).x - 10.0 * rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x + rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 1, rd_y + 2).x + rd_ld(rd_x, rd_y + 2).x + rd_ld(rd_x + 1, rd_y + 2).x) / (3.0 * dx * dx * dx * dx);\ndelta_a = mu * a - rd_bilaplacian_a - 2.0*laplacian_a - a - beta*(gradient_mag_squared_a + 2.0*a*laplacian_a) - a*a*a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.1,
+    "high": 0.1,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.98,
+     0.5
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.97,
+     0.6
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.94,
+     0.69
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.89,
+     0.78
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.82,
+     0.85
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.74,
+     0.91
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.65,
+     0.95
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.55,
+     0.97
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.45,
+     0.97
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.35,
+     0.95
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.26,
+     0.91
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.18,
+     0.85
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.11,
+     0.78
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.06,
+     0.69
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.03,
+     0.6
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.02,
+     0.5
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.03,
+     0.4
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.06,
+     0.31
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.11,
+     0.22
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.18,
+     0.15
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.26,
+     0.09
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.35,
+     0.05
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.45,
+     0.03
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.55,
+     0.03
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.65,
+     0.05
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.74,
+     0.09
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.82,
+     0.15
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.89,
+     0.22
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.94,
+     0.31
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 3.0,
+    "center": [
+     0.97,
+     0.4
+    ],
+    "sigma": 0.01,
+    "mode": "add"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -0.5,
+   "high": 2.5,
+   "colormap": "coral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "sh-parameter-map",
+  "name": "Swift–Hohenberg parameter map",
+  "family": "Swift–Hohenberg",
+  "source": "Patterns/Pennybacker2013/parameter_map.vti",
+  "citation": "M. Pennybacker & A. C. Newell (2013) Phys. Rev. Lett. 110:248104; J. Swift & P. C. Hohenberg (1977) Phys. Rev. A 15:319",
+  "credit": "Ready (GollyGang)",
+  "description": "μ grows from left to right and β grows along the vertical axis. The grid shows the uniform state, stripes, hexagonal spots and inverted spots, with smooth changes between them.",
+  "equations": [
+   "\\partial_t a = \\mu(x)\\, a - (1 + \\nabla^2)^2 a + \\beta(y)\\, a^2 - a^3"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [
+   {
+    "name": "mu",
+    "value": 2.0,
+    "min": -1.0,
+    "max": 5.0,
+    "step": 0.05,
+    "label": "mu"
+   },
+   {
+    "name": "beta",
+    "value": 0.0,
+    "min": -3.0,
+    "max": 3.0,
+    "step": 0.05,
+    "label": "beta"
+   }
+  ],
+  "timestep": 0.002,
+  "dx": 0.4,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 512,
+  "height": 512,
+  "formula": "let rd_bilaplacian_a: f32 = (rd_ld(rd_x - 1, rd_y - 2).x + rd_ld(rd_x, rd_y - 2).x + rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x - 2, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y - 1).x - 10.0 * rd_ld(rd_x, rd_y - 1).x - 2.0 * rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x + 2, rd_y - 1).x + rd_ld(rd_x - 2, rd_y).x - 10.0 * rd_ld(rd_x - 1, rd_y).x + 36.0 * a - 10.0 * rd_ld(rd_x + 1, rd_y).x + rd_ld(rd_x + 2, rd_y).x + rd_ld(rd_x - 2, rd_y + 1).x - 2.0 * rd_ld(rd_x - 1, rd_y + 1).x - 10.0 * rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x + rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 1, rd_y + 2).x + rd_ld(rd_x, rd_y + 2).x + rd_ld(rd_x + 1, rd_y + 2).x) / (3.0 * dx * dx * dx * dx);\ndelta_a = mu * a - rd_bilaplacian_a - 2.0*laplacian_a - a + beta*a*a - a*a*a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.1,
+    "high": 0.1
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -0.5,
+   "high": 2.5,
+   "colormap": "coral",
+   "height": true
+  },
+  "speed": 40,
+  "paramMap": {
+   "x": "mu",
+   "x0": -1.0,
+   "x1": 5.0,
+   "y": "beta",
+   "y0": -3.0,
+   "y1": 3.0
+  }
+ },
+ {
+  "id": "purwins-glider",
+  "name": "Dissipative solitons",
+  "family": "Purwins",
+  "source": "Patterns/Purwins1999/glider.vti",
+  "citation": "C. P. Schenk, M. Or-Guil, M. Bode & H.-G. Purwins (1997) Phys. Rev. Lett. 78:3781",
+  "credit": "Ready (GollyGang)",
+  "description": "A three-component model of gas-discharge spots. Seven offset pairs of blobs turn into particle-like spots that move, collide, scatter and sometimes merge.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\lambda a - a^3 - k_3 c - b + k_1",
+   "\\tau\\, \\partial_t b = D_b \\nabla^2 b + a - b",
+   "\\theta\\, \\partial_t c = D_c \\nabla^2 c + a - c"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a",
+   "b",
+   "c"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.00015,
+    "min": 0.0,
+    "max": 0.0003,
+    "step": 2e-06,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.00015,
+    "min": 0.0,
+    "max": 0.0003,
+    "step": 2e-06,
+    "label": "D_b"
+   },
+   {
+    "name": "D_c",
+    "value": 0.0096,
+    "min": 0.0,
+    "max": 0.0192,
+    "step": 0.0001,
+    "label": "D_c"
+   },
+   {
+    "name": "k3",
+    "value": 8.5,
+    "min": 0.0,
+    "max": 17.0,
+    "step": 0.1,
+    "label": "k3"
+   },
+   {
+    "name": "lambda_",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "lambda"
+   },
+   {
+    "name": "k1",
+    "value": -6.92,
+    "min": -13.84,
+    "max": 0.0,
+    "step": 0.1,
+    "label": "k1"
+   },
+   {
+    "name": "theta",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "theta"
+   },
+   {
+    "name": "tau",
+    "value": 48.0,
+    "min": 0.0,
+    "max": 96.0,
+    "step": 0.5,
+    "label": "tau"
+   }
+  ],
+  "timestep": 0.002,
+  "dx": 0.009,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a - b - k3*c + lambda_*a - a*a*a + k1;\ndelta_b = ( D_b * laplacian_b + a - b ) / tau;\ndelta_c = ( D_c * laplacian_c + a - c ) / theta;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": -0.82
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": -0.87
+   },
+   {
+    "op": "fill",
+    "chem": "c",
+    "value": -0.843297
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.5,
+      0.5,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.3,
+      0.7,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.5,
+      0.82,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.5,
+      0.2,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.2,
+      0.2,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.8,
+      0.8,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.82,
+      0.3,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.47,
+      0.5,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.33,
+      0.7,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.53,
+      0.8,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.5,
+      0.23,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.2,
+      0.23,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.8,
+      0.83,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.8,
+      0.36,
+      0.05
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1.5,
+   "high": 1.5,
+   "colormap": "magma",
+   "height": false
+  },
+  "speed": 30
+ },
+ {
+  "id": "purwins-multi-glider",
+  "name": "Soliton molecules",
+  "family": "Purwins",
+  "source": "Patterns/Purwins1999/multiGlider.vti",
+  "citation": "C. P. Schenk, M. Or-Guil, M. Bode & H.-G. Purwins (1997) Phys. Rev. Lett. 78:3781",
+  "credit": "Ready (GollyGang)",
+  "description": "The gas-discharge model with other constants. The moving spots bind together into small groups that travel as one, like molecules made of solitons.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\lambda a - a^3 - k_3 c - b + k_1",
+   "\\tau\\, \\partial_t b = D_b \\nabla^2 b + a - b",
+   "\\theta\\, \\partial_t c = D_c \\nabla^2 c + a - c"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a",
+   "b",
+   "c"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 9e-05,
+    "min": 0.0,
+    "max": 0.00018,
+    "step": 1e-06,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.0007,
+    "min": 0.0,
+    "max": 0.0014,
+    "step": 1e-05,
+    "label": "D_b"
+   },
+   {
+    "name": "D_c",
+    "value": 0.015,
+    "min": 0.0,
+    "max": 0.03,
+    "step": 0.0002,
+    "label": "D_c"
+   },
+   {
+    "name": "k3",
+    "value": 11.0,
+    "min": 0.0,
+    "max": 22.0,
+    "step": 0.2,
+    "label": "k3"
+   },
+   {
+    "name": "lambda_",
+    "value": 2.4,
+    "min": 0.0,
+    "max": 4.8,
+    "step": 0.05,
+    "label": "lambda"
+   },
+   {
+    "name": "k1",
+    "value": -8.29,
+    "min": -16.58,
+    "max": 0.0,
+    "step": 0.1,
+    "label": "k1"
+   },
+   {
+    "name": "theta",
+    "value": 4.0,
+    "min": 0.0,
+    "max": 8.0,
+    "step": 0.05,
+    "label": "theta"
+   },
+   {
+    "name": "tau",
+    "value": 33.0,
+    "min": 0.0,
+    "max": 66.0,
+    "step": 0.5,
+    "label": "tau"
+   }
+  ],
+  "timestep": 0.003,
+  "dx": 0.0088,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a - b - k3*c + lambda_*a - a*a*a + k1;\ndelta_b = ( D_b * laplacian_b + a - b ) / tau;\ndelta_c = ( D_c * laplacian_c + a - c ) / theta;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": -0.808
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": -0.808
+   },
+   {
+    "op": "fill",
+    "chem": "c",
+    "value": -0.808
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.5,
+      0.5,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.3,
+      0.7,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.5,
+      0.82,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.5,
+      0.2,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.2,
+      0.2,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.8,
+      0.8,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "a",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.82,
+      0.3,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.47,
+      0.5,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.33,
+      0.7,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.53,
+      0.8,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.5,
+      0.23,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.2,
+      0.23,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.8,
+      0.83,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.3,
+    "region": {
+     "circle": [
+      0.8,
+      0.36,
+      0.05
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1.5,
+   "high": 1.5,
+   "colormap": "magma",
+   "height": false
+  },
+  "speed": 30
+ },
+ {
+  "id": "rm-predator-prey",
+  "name": "Predator–prey spirals",
+  "family": "Rosenzweig–MacArthur",
+  "source": "Patterns/RosenzweigMacArthur1963/predator-prey.vti",
+  "citation": "M. L. Rosenzweig & R. H. MacArthur (1963) Am. Nat. 97:209",
+  "credit": "Ready (GollyGang)",
+  "description": "Prey grow to a carrying capacity and predators have a saturating appetite. The local cycles are stable limit cycles, and with diffusion they form spiral waves and patchy chaos.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + a(1 - a) - \\frac{a}{a + h}\\, b",
+   "\\partial_t b = D_b \\nabla^2 b + k \\frac{a}{a + h}\\, b - m b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (prey)",
+   "b (predator)"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_b"
+   },
+   {
+    "name": "m",
+    "value": 0.3,
+    "min": 0.0,
+    "max": 0.6,
+    "step": 0.005,
+    "label": "m"
+   },
+   {
+    "name": "h",
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "label": "h"
+   },
+   {
+    "name": "k",
+    "value": 5.0,
+    "min": 0.0,
+    "max": 10.0,
+    "step": 0.05,
+    "label": "k"
+   }
+  ],
+  "timestep": 0.05,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a * laplacian_a + a * (1.0 - a) - (a / (a + h)) * b;\ndelta_b = D_b * laplacian_b + k * (a / (a + h)) * b - m * b;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.0,
+    "high": 0.5
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 0.5
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 1.0,
+   "colormap": "viridis",
+   "height": false
+  },
+  "speed": 10
+ },
+ {
+  "id": "rm-hk-map",
+  "name": "Predator–prey map (h, k)",
+  "family": "Rosenzweig–MacArthur",
+  "source": "Patterns/RosenzweigMacArthur1963/hk_parameter_map.vti",
+  "citation": "M. L. Rosenzweig & R. H. MacArthur (1963) Am. Nat. 97:209",
+  "credit": "Ready (GollyGang)",
+  "description": "The half-saturation h grows from left to right and the conversion rate k grows along the vertical axis. Steady coexistence, waves and turbulence share one grid.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + a(1 - a) - \\frac{a}{a + h(x)}\\, b",
+   "\\partial_t b = D_b \\nabla^2 b + k(y) \\frac{a}{a + h(x)}\\, b - m b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (prey)",
+   "b (predator)"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_b"
+   },
+   {
+    "name": "m",
+    "value": 0.3,
+    "min": 0.0,
+    "max": 0.6,
+    "step": 0.005,
+    "label": "m"
+   },
+   {
+    "name": "h",
+    "value": 0.65,
+    "min": 0.1,
+    "max": 1.2,
+    "step": 0.01,
+    "label": "h"
+   },
+   {
+    "name": "k",
+    "value": 5.0,
+    "min": 0.0,
+    "max": 10.0,
+    "step": 0.05,
+    "label": "k"
+   }
+  ],
+  "timestep": 0.05,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 512,
+  "height": 512,
+  "formula": "delta_a = D_a * laplacian_a + a * (1.0 - a) - (a / (a + h)) * b;\ndelta_b = D_b * laplacian_b + k * (a / (a + h)) * b - m * b;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.0,
+    "high": 0.5
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 0.5
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 1.0,
+   "colormap": "viridis",
+   "height": false
+  },
+  "speed": 10,
+  "paramMap": {
+   "x": "h",
+   "x0": 0.1,
+   "x1": 1.2,
+   "y": "k",
+   "y0": 0.0,
+   "y1": 10.0
+  }
+ },
+ {
+  "id": "rm-hm-map",
+  "name": "Predator–prey map (h, m)",
+  "family": "Rosenzweig–MacArthur",
+  "source": "Patterns/RosenzweigMacArthur1963/hm_parameter_map.vti",
+  "citation": "M. L. Rosenzweig & R. H. MacArthur (1963) Am. Nat. 97:209",
+  "credit": "Ready (GollyGang)",
+  "description": "The half-saturation h grows from left to right and the predator death rate m grows along the vertical axis. Where m is high the predators die out and the grid goes flat.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + a(1 - a) - \\frac{a}{a + h(x)}\\, b",
+   "\\partial_t b = D_b \\nabla^2 b + k \\frac{a}{a + h(x)}\\, b - m(y)\\, b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (prey)",
+   "b (predator)"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_b"
+   },
+   {
+    "name": "k",
+    "value": 5.0,
+    "min": 0.0,
+    "max": 10.0,
+    "step": 0.05,
+    "label": "k"
+   },
+   {
+    "name": "h",
+    "value": 0.45,
+    "min": 0.1,
+    "max": 0.8,
+    "step": 0.005,
+    "label": "h"
+   },
+   {
+    "name": "m",
+    "value": 2.5,
+    "min": 0.0,
+    "max": 5.0,
+    "step": 0.05,
+    "label": "m"
+   }
+  ],
+  "timestep": 0.05,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 512,
+  "height": 512,
+  "formula": "delta_a = D_a * laplacian_a + a * (1.0 - a) - (a / (a + h)) * b;\ndelta_b = D_b * laplacian_b + k * (a / (a + h)) * b - m * b;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.0,
+    "high": 0.5
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 0.5
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0.0,
+   "high": 1.0,
+   "colormap": "viridis",
+   "height": false
+  },
+  "speed": 10,
+  "paramMap": {
+   "x": "h",
+   "x0": 0.1,
+   "x1": 0.8,
+   "y": "m",
+   "y0": 0.0,
+   "y1": 5.0
+  }
+ },
+ {
+  "id": "schlogl",
+  "name": "Schlögl domains",
+  "family": "Bistable",
+  "source": "Patterns/Schlogl.vti",
+  "citation": "F. Schlögl (1972) Z. Physik 253:147",
+  "credit": "Ready (GollyGang)",
+  "description": "A single chemical with two stable states, +1 and −1. Tiny noise decides which state wins at each place, and the domains then coarsen as curved walls shrink.",
+  "equations": [
+   "\\partial_t a = \\nabla^2 a + a - a^3"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [],
+  "timestep": 0.1,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 128,
+  "formula": "delta_a = laplacian_a + a - a*a*a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -0.005,
+    "high": 0.005
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1,
+   "high": 1,
+   "colormap": "grey",
+   "height": false
+  },
+  "speed": 4
+ },
+ {
+  "id": "schrodinger-two-slit",
+  "name": "Two-slit interference",
+  "family": "Schrödinger",
+  "source": "Patterns/Schrodinger1926/two_slit.vti",
+  "citation": "E. Schrödinger (1926) Phys. Rev. 28:1049",
+  "credit": "Ready (GollyGang)",
+  "description": "A quantum wave packet, written as its real part a and imaginary part b, moves right toward a wall with two slits. The view shows the probability |ψ|² (plus the wall), with the familiar interference fringes behind the wall.",
+  "equations": [
+   "\\partial_t a = -\\nabla^2 b - V b",
+   "\\partial_t b = \\nabla^2 a + V a",
+   "d = a^2 + b^2 + V"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a (Re ψ)",
+   "b (Im ψ)",
+   "c (potential V)",
+   "d (|ψ|² + V)"
+  ],
+  "params": [],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 128,
+  "height": 128,
+  "formula": "delta_a = -laplacian_b - c*b;\ndelta_b =  laplacian_a + c*a;\nd = a*a + b*b + c;",
+  "init": [
+   {
+    "op": "sine",
+    "chem": "a",
+    "amplitude": 1,
+    "kx": 20,
+    "ky": 0,
+    "phase": 0
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 1,
+    "center": [
+     0.2,
+     0.5
+    ],
+    "sigma": 0.05,
+    "mode": "mul"
+   },
+   {
+    "op": "sine",
+    "chem": "b",
+    "amplitude": 1,
+    "kx": 20,
+    "ky": 0,
+    "phase": -1.5708
+   },
+   {
+    "op": "gauss",
+    "chem": "b",
+    "amplitude": 1,
+    "center": [
+     0.2,
+     0.5
+    ],
+    "sigma": 0.05,
+    "mode": "mul"
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 4,
+    "region": {
+     "rect": [
+      0.5,
+      0.0,
+      0.52,
+      0.4
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 4,
+    "region": {
+     "rect": [
+      0.5,
+      0.44,
+      0.52,
+      0.56
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 4,
+    "region": {
+     "rect": [
+      0.5,
+      0.6,
+      0.52,
+      1.0
+     ]
+    }
+   },
+   {
+    "op": "copy",
+    "chem": "d",
+    "from": "c"
+   }
+  ],
+  "render": {
+   "chem": "d",
+   "low": 0,
+   "high": 0.04,
+   "colormap": "magma",
+   "height": false
+  },
+  "speed": 60
+ },
+ {
+  "id": "schrodinger-reflect",
+  "name": "Wave packet on a barrier",
+  "family": "Schrödinger",
+  "source": "Patterns/Schrodinger1926/packet_reflect2D.vti",
+  "citation": "E. Schrödinger (1926) Phys. Rev. 28:1049",
+  "credit": "Ready (GollyGang)",
+  "description": "A Gaussian wave packet hits a potential step. Part of it reflects and part of it tunnels through, and the two parts interfere where they overlap.",
+  "equations": [
+   "\\partial_t a = -\\nabla^2 b - V b",
+   "\\partial_t b = \\nabla^2 a + V a",
+   "d = a^2 + b^2 + V"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a (Re ψ)",
+   "b (Im ψ)",
+   "c (potential V)",
+   "d (|ψ|² + V)"
+  ],
+  "params": [],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 128,
+  "height": 128,
+  "formula": "delta_a = -laplacian_b - c*b;\ndelta_b =  laplacian_a + c*a;\nd = a*a + b*b + c;",
+  "init": [
+   {
+    "op": "sine",
+    "chem": "a",
+    "amplitude": 1,
+    "kx": 20,
+    "ky": 0,
+    "phase": 0
+   },
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 1,
+    "center": [
+     0.2,
+     0.5
+    ],
+    "sigma": 0.05,
+    "mode": "mul"
+   },
+   {
+    "op": "sine",
+    "chem": "b",
+    "amplitude": 1,
+    "kx": 20,
+    "ky": 0,
+    "phase": -1.5708
+   },
+   {
+    "op": "gauss",
+    "chem": "b",
+    "amplitude": 1,
+    "center": [
+     0.2,
+     0.5
+    ],
+    "sigma": 0.05,
+    "mode": "mul"
+   },
+   {
+    "op": "set",
+    "chem": "c",
+    "value": 4,
+    "region": {
+     "rect": [
+      0.4,
+      0.2,
+      0.5,
+      0.8
+     ]
+    }
+   },
+   {
+    "op": "copy",
+    "chem": "d",
+    "from": "c"
+   }
+  ],
+  "render": {
+   "chem": "d",
+   "low": 0,
+   "high": 0.2,
+   "colormap": "magma",
+   "height": false
+  },
+  "speed": 60
+ },
+ {
+  "id": "turing-spots",
+  "name": "Turing's spots",
+  "family": "Turing",
+  "source": "Patterns/Turing1952/spots.vti",
+  "citation": "A. M. Turing (1952) Phil. Trans. R. Soc. B 237:37",
+  "credit": "Ready (GollyGang)",
+  "description": "The model from Turing's 1952 paper on morphogenesis, the first reaction–diffusion account of biological pattern. A random start separates into regular dappled spots.",
+  "equations": [
+   "\\partial_t a = k\\,(16 - a b) + D_a \\nabla^2 a",
+   "\\partial_t b = \\max\\big(-b,\\; k\\,(a b - b - 12) + D_b \\nabla^2 b\\big)"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.25,
+    "min": 0.0,
+    "max": 0.5,
+    "step": 0.005,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.0625,
+    "min": 0.0,
+    "max": 0.125,
+    "step": 0.001,
+    "label": "D_b"
+   },
+   {
+    "name": "k",
+    "value": 0.0625,
+    "min": 0.0,
+    "max": 0.125,
+    "step": 0.001,
+    "label": "k"
+   }
+  ],
+  "timestep": 0.1,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 128,
+  "height": 128,
+  "formula": "delta_a = k * (16.0 - a * b) + D_a * laplacian_a;\ndelta_b = max( -b, k * (a * b - b - 12.0) + D_b * laplacian_b );",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 3.0,
+    "high": 5.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 3.0,
+    "high": 5.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 7,
+   "colormap": "leopard",
+   "height": true
+  },
+  "speed": 20
+ },
+ {
+  "id": "turing-spots-noisy",
+  "name": "Turing's spots with noise",
+  "family": "Turing",
+  "source": "Patterns/Turing1952/spots_noisy.vti",
+  "citation": "A. M. Turing (1952) Phil. Trans. R. Soc. B 237:37",
+  "credit": "Ready (GollyGang)",
+  "description": "Turing's model started from a flat state, with a noise field c that keeps disturbing b. The noise alone is enough to seed the spots.",
+  "equations": [
+   "\\partial_t a = k\\,(16 - a b) + D_a \\nabla^2 a",
+   "\\partial_t b = \\max\\big(-b,\\; k\\,(a b - b - 12) + 2\\xi + D_b \\nabla^2 b\\big)",
+   "\\xi \\leftarrow (\\xi + \\nabla^2 \\xi) \\bmod 1"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a",
+   "b",
+   "c (noise)"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "step": 0.005,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.125,
+    "min": 0.0,
+    "max": 0.25,
+    "step": 0.002,
+    "label": "D_b"
+   },
+   {
+    "name": "k",
+    "value": 0.0625,
+    "min": 0.0,
+    "max": 0.125,
+    "step": 0.001,
+    "label": "k"
+   }
+  ],
+  "timestep": 0.1,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 128,
+  "height": 128,
+  "formula": "delta_a = k * (16.0 - a * b) + D_a * laplacian_a;\ndelta_b = max( -b, k * (a * b - b - 12.0) + c + c + D_b * laplacian_b );\nc = ((c+laplacian_c) % (1.0));",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 4.0
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "c",
+    "low": -1.0,
+    "high": 1.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 7,
+   "colormap": "leopard",
+   "height": true
+  },
+  "speed": 20
+ },
+ {
+  "id": "turing-parameter-map",
+  "name": "Turing parameter map",
+  "family": "Turing",
+  "source": "Patterns/Turing1952/turing_parameter_map.vti",
+  "citation": "A. M. Turing (1952) Phil. Trans. R. Soc. B 237:37",
+  "credit": "Ready (GollyGang)",
+  "description": "The reaction rate k grows from left to right and the inhibitor diffusion D_b grows along the vertical axis. Spot size and spacing change smoothly across the grid.",
+  "equations": [
+   "\\partial_t a = k(x)\\,(16 - a b) + D_a \\nabla^2 a",
+   "\\partial_t b = \\max\\big(-b,\\; k(x)\\,(a b - b - 12) + D_b(y)\\, \\nabla^2 b\\big)"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 2.5,
+    "min": 0.0,
+    "max": 5.0,
+    "step": 0.05,
+    "label": "D_a"
+   },
+   {
+    "name": "k",
+    "value": 0.04,
+    "min": 0.0,
+    "max": 0.08,
+    "step": 0.0005,
+    "label": "k"
+   },
+   {
+    "name": "D_b",
+    "value": 0.455,
+    "min": 0.01,
+    "max": 0.9,
+    "step": 0.005,
+    "label": "D_b"
+   }
+  ],
+  "timestep": 0.1,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 512,
+  "height": 512,
+  "formula": "delta_a = k * (16.0 - a * b) + D_a * laplacian_a;\ndelta_b = max( -b, k * (a * b - b - 12.0) + D_b * laplacian_b );",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 3.0,
+    "high": 5.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 3.0,
+    "high": 5.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 2,
+   "high": 7,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 20,
+  "paramMap": {
+   "x": "k",
+   "x0": 0.0,
+   "x1": 0.08,
+   "y": "D_b",
+   "y0": 0.01,
+   "y1": 0.9
+  }
+ },
+ {
+  "id": "yang-1",
+  "name": "Yang: target waves",
+  "family": "Yang (coupled Brusselators)",
+  "source": "Patterns/Yang2002/Yang_1.vti",
+  "citation": "L. Yang, M. Dolnik, A. M. Zhabotinsky & I. R. Epstein (2002) Phys. Rev. Lett. 88:208303",
+  "credit": "Ready (GollyGang)",
+  "description": "Two Brusselator layers, each with its own diffusion rates, coupled cell by cell. One layer makes Turing spots and the other makes waves, and the mix gives patterns that neither layer makes alone.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\alpha(c - a) + p_1 - (1 + p_2) a + a^2 b",
+   "\\partial_t b = D_b \\nabla^2 b + \\alpha(d - b) + p_2 a - a^2 b",
+   "\\partial_t c = D_c \\nabla^2 c + \\alpha(a - c) + p_1 - (1 + p_2) c + c^2 d",
+   "\\partial_t d = D_d \\nabla^2 d + \\alpha(b - d) + p_2 c - c^2 d"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "p1",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "p1"
+   },
+   {
+    "name": "p2",
+    "value": 9.0,
+    "min": 0.0,
+    "max": 18.0,
+    "step": 0.1,
+    "label": "p2"
+   },
+   {
+    "name": "alpha",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "alpha"
+   },
+   {
+    "name": "Da",
+    "value": 5.0,
+    "min": 0.0,
+    "max": 10.0,
+    "step": 0.05,
+    "label": "Da"
+   },
+   {
+    "name": "Db",
+    "value": 14.0,
+    "min": 0.0,
+    "max": 28.0,
+    "step": 0.2,
+    "label": "Db"
+   },
+   {
+    "name": "Dc",
+    "value": 54.9,
+    "min": 0.0,
+    "max": 109.8,
+    "step": 1.0,
+    "label": "Dc"
+   },
+   {
+    "name": "Dd",
+    "value": 159.8,
+    "min": 0.0,
+    "max": 319.6,
+    "step": 2.0,
+    "label": "Dd"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = Da * laplacian_a + alpha*(c-a) + p1 - (1.0+p2)*a + a*a*b;\ndelta_b = Db * laplacian_b + alpha*(d-b) + p2*a             - a*a*b;\ndelta_c = Dc * laplacian_c + alpha*(a-c) + p1 - (1.0+p2)*c + c*c*d;\ndelta_d = Dd * laplacian_d + alpha*(b-d) + p2*c             - c*c*d;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "c",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "d",
+    "low": 2.0,
+    "high": 4.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0.0,
+   "high": 4.5,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "yang-2b",
+  "name": "Yang: oscillating spots",
+  "family": "Yang (coupled Brusselators)",
+  "source": "Patterns/Yang2002/Yang_2b.vti",
+  "citation": "L. Yang, M. Dolnik, A. M. Zhabotinsky & I. R. Epstein (2002) Phys. Rev. Lett. 88:208303",
+  "credit": "Ready (GollyGang)",
+  "description": "With weak coupling, the Turing layer forms spots that blink on and off in step with the oscillating layer.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\alpha(c - a) + p_1 - (1 + p_2) a + a^2 b",
+   "\\partial_t b = D_b \\nabla^2 b + \\alpha(d - b) + p_2 a - a^2 b",
+   "\\partial_t c = D_c \\nabla^2 c + \\alpha(a - c) + p_1 - (1 + p_2) c + c^2 d",
+   "\\partial_t d = D_d \\nabla^2 d + \\alpha(b - d) + p_2 c - c^2 d"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "p1",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "p1"
+   },
+   {
+    "name": "p2",
+    "value": 9.0,
+    "min": 0.0,
+    "max": 18.0,
+    "step": 0.1,
+    "label": "p2"
+   },
+   {
+    "name": "alpha",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "alpha"
+   },
+   {
+    "name": "Da",
+    "value": 16.7,
+    "min": 0.0,
+    "max": 33.4,
+    "step": 0.2,
+    "label": "Da"
+   },
+   {
+    "name": "Db",
+    "value": 36.4,
+    "min": 0.0,
+    "max": 72.8,
+    "step": 0.5,
+    "label": "Db"
+   },
+   {
+    "name": "Dc",
+    "value": 49.5,
+    "min": 0.0,
+    "max": 99.0,
+    "step": 0.5,
+    "label": "Dc"
+   },
+   {
+    "name": "Dd",
+    "value": 117.6,
+    "min": 0.0,
+    "max": 235.2,
+    "step": 2.0,
+    "label": "Dd"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = Da * laplacian_a + alpha*(c-a) + p1 - (1.0+p2)*a + a*a*b;\ndelta_b = Db * laplacian_b + alpha*(d-b) + p2*a             - a*a*b;\ndelta_c = Dc * laplacian_c + alpha*(a-c) + p1 - (1.0+p2)*c + c*c*d;\ndelta_d = Dd * laplacian_d + alpha*(b-d) + p2*c             - c*c*d;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "c",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "d",
+    "low": 2.0,
+    "high": 4.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 2.5,
+   "high": 3.15,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "yang-3a",
+  "name": "Yang: black-eye",
+  "family": "Yang (coupled Brusselators)",
+  "source": "Patterns/Yang2002/Yang_3a.vti",
+  "citation": "L. Yang, M. Dolnik, A. M. Zhabotinsky & I. R. Epstein (2002) Phys. Rev. Lett. 88:208303",
+  "credit": "Ready (GollyGang)",
+  "description": "Two Turing modes with different wavelengths interact. Large hexagons carry smaller spots in their centres, the so-called black-eye pattern.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\alpha(c - a) + p_1 - (1 + p_2) a + a^2 b",
+   "\\partial_t b = D_b \\nabla^2 b + \\alpha(d - b) + p_2 a - a^2 b",
+   "\\partial_t c = D_c \\nabla^2 c + \\alpha(a - c) + p_1 - (1 + p_2) c + c^2 d",
+   "\\partial_t d = D_d \\nabla^2 d + \\alpha(b - d) + p_2 c - c^2 d"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "p1",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "p1"
+   },
+   {
+    "name": "p2",
+    "value": 9.0,
+    "min": 0.0,
+    "max": 18.0,
+    "step": 0.1,
+    "label": "p2"
+   },
+   {
+    "name": "alpha",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "alpha"
+   },
+   {
+    "name": "Da",
+    "value": 12.6,
+    "min": 0.0,
+    "max": 25.2,
+    "step": 0.2,
+    "label": "Da"
+   },
+   {
+    "name": "Db",
+    "value": 27.5,
+    "min": 0.0,
+    "max": 55.0,
+    "step": 0.5,
+    "label": "Db"
+   },
+   {
+    "name": "Dc",
+    "value": 47.5,
+    "min": 0.0,
+    "max": 95.0,
+    "step": 0.5,
+    "label": "Dc"
+   },
+   {
+    "name": "Dd",
+    "value": 141.5,
+    "min": 0.0,
+    "max": 283.0,
+    "step": 2.0,
+    "label": "Dd"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = Da * laplacian_a + alpha*(c-a) + p1 - (1.0+p2)*a + a*a*b;\ndelta_b = Db * laplacian_b + alpha*(d-b) + p2*a             - a*a*b;\ndelta_c = Dc * laplacian_c + alpha*(a-c) + p1 - (1.0+p2)*c + c*c*d;\ndelta_d = Dd * laplacian_d + alpha*(b-d) + p2*c             - c*c*d;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "c",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "d",
+    "low": 2.0,
+    "high": 4.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 3.5,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "yang-3c",
+  "name": "Yang: superlattice",
+  "family": "Yang (coupled Brusselators)",
+  "source": "Patterns/Yang2002/Yang_3c.vti",
+  "citation": "L. Yang, M. Dolnik, A. M. Zhabotinsky & I. R. Epstein (2002) Phys. Rev. Lett. 88:208303",
+  "credit": "Ready (GollyGang)",
+  "description": "Two spatial modes lock into a superlattice: a regular array of large and small spots with a longer repeat than either mode alone.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\alpha(c - a) + p_1 - (1 + p_2) a + a^2 b",
+   "\\partial_t b = D_b \\nabla^2 b + \\alpha(d - b) + p_2 a - a^2 b",
+   "\\partial_t c = D_c \\nabla^2 c + \\alpha(a - c) + p_1 - (1 + p_2) c + c^2 d",
+   "\\partial_t d = D_d \\nabla^2 d + \\alpha(b - d) + p_2 c - c^2 d"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "p1",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "p1"
+   },
+   {
+    "name": "p2",
+    "value": 6.0,
+    "min": 0.0,
+    "max": 12.0,
+    "step": 0.1,
+    "label": "p2"
+   },
+   {
+    "name": "alpha",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "alpha"
+   },
+   {
+    "name": "Da",
+    "value": 1.31,
+    "min": 0.0,
+    "max": 2.62,
+    "step": 0.02,
+    "label": "Da"
+   },
+   {
+    "name": "Db",
+    "value": 9.87,
+    "min": 0.0,
+    "max": 19.74,
+    "step": 0.1,
+    "label": "Db"
+   },
+   {
+    "name": "Dc",
+    "value": 34.0,
+    "min": 0.0,
+    "max": 68.0,
+    "step": 0.5,
+    "label": "Dc"
+   },
+   {
+    "name": "Dd",
+    "value": 344.9,
+    "min": 0.0,
+    "max": 689.8,
+    "step": 5.0,
+    "label": "Dd"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = Da * laplacian_a + alpha*(c-a) + p1 - (1.0+p2)*a + a*a*b;\ndelta_b = Db * laplacian_b + alpha*(d-b) + p2*a             - a*a*b;\ndelta_c = Dc * laplacian_c + alpha*(a-c) + p1 - (1.0+p2)*c + c*c*d;\ndelta_d = Dd * laplacian_d + alpha*(b-d) + p2*c             - c*c*d;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "c",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "d",
+    "low": 2.0,
+    "high": 4.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 5,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "yang-4",
+  "name": "Yang: twinkling eyes",
+  "family": "Yang (coupled Brusselators)",
+  "source": "Patterns/Yang2002/Yang_4.vti",
+  "citation": "L. Yang, M. Dolnik, A. M. Zhabotinsky & I. R. Epstein (2002) Phys. Rev. Lett. 88:208303",
+  "credit": "Ready (GollyGang)",
+  "description": "A Turing lattice whose spots oscillate out of phase with their neighbours, so the pattern seems to twinkle.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\alpha(c - a) + p_1 - (1 + p_2) a + a^2 b",
+   "\\partial_t b = D_b \\nabla^2 b + \\alpha(d - b) + p_2 a - a^2 b",
+   "\\partial_t c = D_c \\nabla^2 c + \\alpha(a - c) + p_1 - (1 + p_2) c + c^2 d",
+   "\\partial_t d = D_d \\nabla^2 d + \\alpha(b - d) + p_2 c - c^2 d"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "p1",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "p1"
+   },
+   {
+    "name": "p2",
+    "value": 9.9,
+    "min": 0.0,
+    "max": 19.8,
+    "step": 0.1,
+    "label": "p2"
+   },
+   {
+    "name": "alpha",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "alpha"
+   },
+   {
+    "name": "Da",
+    "value": 8.33,
+    "min": 0.0,
+    "max": 16.66,
+    "step": 0.1,
+    "label": "Da"
+   },
+   {
+    "name": "Db",
+    "value": 8.33,
+    "min": 0.0,
+    "max": 16.66,
+    "step": 0.1,
+    "label": "Db"
+   },
+   {
+    "name": "Dc",
+    "value": 46.0,
+    "min": 0.0,
+    "max": 92.0,
+    "step": 0.5,
+    "label": "Dc"
+   },
+   {
+    "name": "Dd",
+    "value": 120.0,
+    "min": 0.0,
+    "max": 240.0,
+    "step": 2.0,
+    "label": "Dd"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = Da * laplacian_a + alpha*(c-a) + p1 - (1.0+p2)*a + a*a*b;\ndelta_b = Db * laplacian_b + alpha*(d-b) + p2*a             - a*a*b;\ndelta_c = Dc * laplacian_c + alpha*(a-c) + p1 - (1.0+p2)*c + c*c*d;\ndelta_d = Dd * laplacian_d + alpha*(b-d) + p2*c             - c*c*d;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "c",
+    "low": 2.0,
+    "high": 4.0
+   },
+   {
+    "op": "noise",
+    "chem": "d",
+    "low": 2.0,
+    "high": 4.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 4,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "kytta-5-7a",
+  "name": "Kyttä: labyrinth",
+  "family": "Kytta (coupled Brusselators)",
+  "source": "Patterns/Kytta2007/Fig5.7a.vti",
+  "citation": "K. Kyttä (2007) MSc thesis, Helsinki University of Technology; L. Yang et al. (2002) Phys. Rev. Lett. 88:208303",
+  "credit": "Ready (GollyGang)",
+  "description": "Kyttä's version of the coupled Brusselators uses a cubic coupling. With these rates the layers settle into a labyrinth of stripes.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + q\\,a c\\,(c - a) + p_1 - (1 + p_2) a + a^2 b",
+   "\\partial_t b = D_b \\nabla^2 b + q\\,b d\\,(d - b) + p_2 a - a^2 b",
+   "\\partial_t c = D_c \\nabla^2 c + q\\,a c\\,(a - c) + p_1 - (1 + p_2) c + c^2 d",
+   "\\partial_t d = D_d \\nabla^2 d + q\\,b d\\,(b - d) + p_2 c - c^2 d"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "q",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "q"
+   },
+   {
+    "name": "p1",
+    "value": 4.5,
+    "min": 0.0,
+    "max": 9.0,
+    "step": 0.05,
+    "label": "p1"
+   },
+   {
+    "name": "p2",
+    "value": 11.0,
+    "min": 0.0,
+    "max": 22.0,
+    "step": 0.2,
+    "label": "p2"
+   },
+   {
+    "name": "Da",
+    "value": 1.85,
+    "min": 0.0,
+    "max": 3.7,
+    "step": 0.02,
+    "label": "Da"
+   },
+   {
+    "name": "Db",
+    "value": 16.66,
+    "min": 0.0,
+    "max": 33.32,
+    "step": 0.2,
+    "label": "Db"
+   },
+   {
+    "name": "Dc",
+    "value": 25.741,
+    "min": 0.0,
+    "max": 51.482,
+    "step": 0.5,
+    "label": "Dc"
+   },
+   {
+    "name": "Dd",
+    "value": 196.0,
+    "min": 0.0,
+    "max": 392.0,
+    "step": 2.0,
+    "label": "Dd"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = Da * laplacian_a + q*a*c*(c-a) + p1 - (1.0+p2)*a + a*a*b;\ndelta_b = Db * laplacian_b + q*b*d*(d-b) + p2*a             - a*a*b;\ndelta_c = Dc * laplacian_c + q*a*c*(a-c) + p1 - (1.0+p2)*c + c*c*d;\ndelta_d = Dd * laplacian_d + q*b*d*(b-d) + p2*c             - c*c*d;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 4.5
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 11.0
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.2222222222222222,
+    "mode": "mul"
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -0.01,
+    "high": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "fill",
+    "chem": "c",
+    "value": 4.5
+   },
+   {
+    "op": "fill",
+    "chem": "d",
+    "value": 11.0
+   },
+   {
+    "op": "set",
+    "chem": "d",
+    "value": 0.2222222222222222,
+    "mode": "mul"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 8,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "kytta-5-8c",
+  "name": "Kyttä: spots in spots",
+  "family": "Kytta (coupled Brusselators)",
+  "source": "Patterns/Kytta2007/Fig5.8c.vti",
+  "citation": "K. Kyttä (2007) MSc thesis, Helsinki University of Technology; L. Yang et al. (2002) Phys. Rev. Lett. 88:208303",
+  "credit": "Ready (GollyGang)",
+  "description": "Weak cubic coupling between two Turing layers with very different wavelengths. Fine spots of one layer sit on the coarse pattern of the other.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + q\\,a c\\,(c - a) + p_1 - (1 + p_2) a + a^2 b",
+   "\\partial_t b = D_b \\nabla^2 b + q\\,b d\\,(d - b) + p_2 a - a^2 b",
+   "\\partial_t c = D_c \\nabla^2 c + q\\,a c\\,(a - c) + p_1 - (1 + p_2) c + c^2 d",
+   "\\partial_t d = D_d \\nabla^2 d + q\\,b d\\,(b - d) + p_2 c - c^2 d"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "q",
+    "value": 0.01,
+    "min": 0.0,
+    "max": 0.02,
+    "step": 0.0001,
+    "label": "q"
+   },
+   {
+    "name": "p1",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "p1"
+   },
+   {
+    "name": "p2",
+    "value": 9.0,
+    "min": 0.0,
+    "max": 18.0,
+    "step": 0.1,
+    "label": "p2"
+   },
+   {
+    "name": "Da",
+    "value": 1.85,
+    "min": 0.0,
+    "max": 3.7,
+    "step": 0.02,
+    "label": "Da"
+   },
+   {
+    "name": "Db",
+    "value": 5.66,
+    "min": 0.0,
+    "max": 11.32,
+    "step": 0.1,
+    "label": "Db"
+   },
+   {
+    "name": "Dc",
+    "value": 50.6,
+    "min": 0.0,
+    "max": 101.2,
+    "step": 1.0,
+    "label": "Dc"
+   },
+   {
+    "name": "Dd",
+    "value": 186.0,
+    "min": 0.0,
+    "max": 372.0,
+    "step": 2.0,
+    "label": "Dd"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = Da * laplacian_a + q*a*c*(c-a) + p1 - (1.0+p2)*a + a*a*b;\ndelta_b = Db * laplacian_b + q*b*d*(d-b) + p2*a             - a*a*b;\ndelta_c = Dc * laplacian_c + q*a*c*(a-c) + p1 - (1.0+p2)*c + c*c*d;\ndelta_d = Dd * laplacian_d + q*b*d*(b-d) + p2*c             - c*c*d;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 3.0
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 9.0
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.3333333333333333,
+    "mode": "mul"
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -0.01,
+    "high": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "fill",
+    "chem": "c",
+    "value": 3.0
+   },
+   {
+    "op": "fill",
+    "chem": "d",
+    "value": 9.0
+   },
+   {
+    "op": "set",
+    "chem": "d",
+    "value": 0.3333333333333333,
+    "mode": "mul"
+   },
+   {
+    "op": "noise",
+    "chem": "d",
+    "low": -0.01,
+    "high": 0.01,
+    "mode": "add"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 4.5,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "kytta-5-8f",
+  "name": "Kyttä: strong coupling",
+  "family": "Kytta (coupled Brusselators)",
+  "source": "Patterns/Kytta2007/Fig5.8f.vti",
+  "citation": "K. Kyttä (2007) MSc thesis, Helsinki University of Technology; L. Yang et al. (2002) Phys. Rev. Lett. 88:208303",
+  "credit": "Ready (GollyGang)",
+  "description": "The same layers with stronger coupling. The two wavelengths lock together and the result is a more regular, mixed pattern.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + q\\,a c\\,(c - a) + p_1 - (1 + p_2) a + a^2 b",
+   "\\partial_t b = D_b \\nabla^2 b + q\\,b d\\,(d - b) + p_2 a - a^2 b",
+   "\\partial_t c = D_c \\nabla^2 c + q\\,a c\\,(a - c) + p_1 - (1 + p_2) c + c^2 d",
+   "\\partial_t d = D_d \\nabla^2 d + q\\,b d\\,(b - d) + p_2 c - c^2 d"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "q",
+    "value": 0.15,
+    "min": 0.0,
+    "max": 0.3,
+    "step": 0.002,
+    "label": "q"
+   },
+   {
+    "name": "p1",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "p1"
+   },
+   {
+    "name": "p2",
+    "value": 9.0,
+    "min": 0.0,
+    "max": 18.0,
+    "step": 0.1,
+    "label": "p2"
+   },
+   {
+    "name": "Da",
+    "value": 1.85,
+    "min": 0.0,
+    "max": 3.7,
+    "step": 0.02,
+    "label": "Da"
+   },
+   {
+    "name": "Db",
+    "value": 5.66,
+    "min": 0.0,
+    "max": 11.32,
+    "step": 0.1,
+    "label": "Db"
+   },
+   {
+    "name": "Dc",
+    "value": 50.6,
+    "min": 0.0,
+    "max": 101.2,
+    "step": 1.0,
+    "label": "Dc"
+   },
+   {
+    "name": "Dd",
+    "value": 186.0,
+    "min": 0.0,
+    "max": 372.0,
+    "step": 2.0,
+    "label": "Dd"
+   }
+  ],
+  "timestep": 0.001,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = Da * laplacian_a + q*a*c*(c-a) + p1 - (1.0+p2)*a + a*a*b;\ndelta_b = Db * laplacian_b + q*b*d*(d-b) + p2*a             - a*a*b;\ndelta_c = Dc * laplacian_c + q*a*c*(a-c) + p1 - (1.0+p2)*c + c*c*d;\ndelta_d = Dd * laplacian_d + q*b*d*(b-d) + p2*c             - c*c*d;",
+  "init": [
+   {
+    "op": "fill",
+    "chem": "a",
+    "value": 3.0
+   },
+   {
+    "op": "fill",
+    "chem": "b",
+    "value": 9.0
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.3333333333333333,
+    "mode": "mul"
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -0.01,
+    "high": 0.01,
+    "mode": "add"
+   },
+   {
+    "op": "fill",
+    "chem": "c",
+    "value": 3.0
+   },
+   {
+    "op": "fill",
+    "chem": "d",
+    "value": 9.0
+   },
+   {
+    "op": "set",
+    "chem": "d",
+    "value": 0.3333333333333333,
+    "mode": "mul"
+   },
+   {
+    "op": "noise",
+    "chem": "d",
+    "low": -0.01,
+    "high": 0.01,
+    "mode": "add"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 5,
+   "colormap": "spectral",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "oregonator",
+  "name": "Oregonator spirals",
+  "family": "Oregonator",
+  "source": "Patterns/oregonator.vti",
+  "citation": "R. J. Field & R. M. Noyes (1974) J. Chem. Phys. 60:1877; J. J. Tyson & P. C. Fife (1980) J. Chem. Phys. 73:2224",
+  "credit": "Ready (GollyGang)",
+  "description": "The two-variable Oregonator, a model of the Belousov–Zhabotinsky reaction. Two broken wave segments curl up at their free ends into a pair of counter-rotating spirals.",
+  "equations": [
+   "\\partial_t a = D_a \\nabla^2 a + \\frac{1}{\\epsilon}\\Big(a - a^2 - f b\\, \\frac{a - q}{a + q}\\Big)",
+   "\\partial_t b = D_b \\nabla^2 b + a - b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.6,
+    "min": 0.0,
+    "max": 1.2,
+    "step": 0.01,
+    "label": "D_b"
+   },
+   {
+    "name": "epsilon",
+    "value": 0.01,
+    "min": 0.0,
+    "max": 0.02,
+    "step": 0.0001,
+    "label": "epsilon"
+   },
+   {
+    "name": "f",
+    "value": 1.4,
+    "min": 0.0,
+    "max": 2.8,
+    "step": 0.02,
+    "label": "f"
+   },
+   {
+    "name": "q",
+    "value": 0.002,
+    "min": 0.0,
+    "max": 0.004,
+    "step": 2e-05,
+    "label": "q"
+   }
+  ],
+  "timestep": 0.0001,
+  "dx": 0.2,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = D_a*laplacian_a + (a - a*a - f*b*(a-q)/(a+q)) / epsilon;\ndelta_b = D_b*laplacian_b + a - b;",
+  "init": [
+   {
+    "op": "linear",
+    "chem": "b",
+    "x0": 0.2,
+    "y0": 0.5,
+    "x1": 0.6,
+    "y1": 0.5,
+    "v0": 0.0,
+    "v1": 0.2,
+    "region": {
+     "rect": [
+      0.2,
+      0.45,
+      0.6,
+      0.55
+     ]
+    }
+   },
+   {
+    "op": "linear",
+    "chem": "b",
+    "x0": 0.2,
+    "y0": 0.5,
+    "x1": 0.6,
+    "y1": 0.5,
+    "v0": 0.2,
+    "v1": 0.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.75,
+      0.6,
+      0.85
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.0,
+    "high": 0.1,
+    "mode": "add"
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 0.1,
+    "mode": "add"
+   }
+  ],
+  "render": {
+   "chem": "b",
+   "low": 0,
+   "high": 0.8,
+   "colormap": "spectral",
+   "height": false
+  },
+  "speed": 40
+ },
+ {
+  "id": "heat-equation",
+  "name": "Heat equation",
+  "family": "Heat and waves",
+  "source": "Patterns/heat_equation.vti",
+  "citation": "J. Fourier (1822) Théorie analytique de la chaleur",
+  "credit": "Ready (GollyGang)",
+  "description": "Two noisy hot blocks cool by pure diffusion. The noise vanishes first, then the blocks blur into smooth blobs, and the box relaxes toward one uniform temperature.",
+  "equations": [
+   "\\partial_t a = \\nabla^2 a"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [],
+  "timestep": 0.1,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 128,
+  "formula": "delta_a = laplacian_a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.8,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.2,
+      0.3,
+      0.3,
+      0.6
+     ]
+    }
+   },
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.8,
+    "high": 1.0,
+    "region": {
+     "rect": [
+      0.4,
+      0.5,
+      0.8,
+      0.9
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0.0,
+   "high": 1.0,
+   "colormap": "magma",
+   "height": false
+  },
+  "speed": 4
+ },
+ {
+  "id": "heat-interpolation",
+  "name": "Laplace interpolation",
+  "family": "Heat and waves",
+  "source": "Patterns/heat_equation_interpolation.vti",
+  "citation": "J. Fourier (1822) Théorie analytique de la chaleur",
+  "credit": "Ready (GollyGang)",
+  "description": "Diffusion runs only where the mask b is zero, and the masked shapes keep their values. The field relaxes to the harmonic function that fills the gaps between them.",
+  "equations": [
+   "\\partial_t a = [\\,b = 0\\,]\\; \\nabla^2 a"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (field)",
+   "b (fixed mask)"
+  ],
+  "params": [],
+  "timestep": 0.2,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = laplacian_a * select(0.0, 1.0, (-b) >= (-0.01));",
+  "init": [
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.7,
+    "region": {
+     "rect": [
+      0.2,
+      0.2,
+      0.4,
+      0.8
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.5,
+    "region": {
+     "rect": [
+      0.55,
+      0.2,
+      0.8,
+      0.3
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.0,
+    "region": {
+     "circle": [
+      0.7,
+      0.8,
+      0.1
+     ]
+    }
+   },
+   {
+    "op": "copy",
+    "chem": "a",
+    "from": "b"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 1,
+   "colormap": "magma",
+   "height": false
+  },
+  "speed": 40
+ },
+ {
+  "id": "biharmonic-interpolation",
+  "name": "Biharmonic interpolation",
+  "family": "Heat and waves",
+  "source": "Patterns/bilaplacian_interpolation.vti",
+  "citation": "Biharmonic (thin-plate) interpolation; stencil from M. Patra & M. Karttunen (2006) Numer. Methods PDE 22:936",
+  "credit": "Ready (GollyGang)",
+  "description": "The same fill-in problem with the bi-Laplacian. The result is the smooth surface of a thin plate pinned to the shapes, with gentle overshoot between them.",
+  "equations": [
+   "\\partial_t a = -[\\,b = 0\\,]\\; \\nabla^4 a"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (field)",
+   "b (fixed mask)"
+  ],
+  "params": [],
+  "timestep": 0.002,
+  "dx": 0.4,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 128,
+  "height": 128,
+  "formula": "let rd_bilaplacian_a: f32 = (rd_ld(rd_x - 1, rd_y - 2).x + rd_ld(rd_x, rd_y - 2).x + rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x - 2, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y - 1).x - 10.0 * rd_ld(rd_x, rd_y - 1).x - 2.0 * rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x + 2, rd_y - 1).x + rd_ld(rd_x - 2, rd_y).x - 10.0 * rd_ld(rd_x - 1, rd_y).x + 36.0 * a - 10.0 * rd_ld(rd_x + 1, rd_y).x + rd_ld(rd_x + 2, rd_y).x + rd_ld(rd_x - 2, rd_y + 1).x - 2.0 * rd_ld(rd_x - 1, rd_y + 1).x - 10.0 * rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x + rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 1, rd_y + 2).x + rd_ld(rd_x, rd_y + 2).x + rd_ld(rd_x + 1, rd_y + 2).x) / (3.0 * dx * dx * dx * dx);\ndelta_a = -rd_bilaplacian_a * select(0.0, 1.0, (-b) >= (-0.01));",
+  "init": [
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.7,
+    "region": {
+     "rect": [
+      0.2,
+      0.2,
+      0.4,
+      0.8
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 0.5,
+    "region": {
+     "rect": [
+      0.55,
+      0.2,
+      0.8,
+      0.3
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "b",
+    "value": 1.0,
+    "region": {
+     "circle": [
+      0.7,
+      0.8,
+      0.1
+     ]
+    }
+   },
+   {
+    "op": "copy",
+    "chem": "a",
+    "from": "b"
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 1,
+   "colormap": "magma",
+   "height": true
+  },
+  "speed": 40
+ },
+ {
+  "id": "wave-equation",
+  "name": "Wave equation",
+  "family": "Heat and waves",
+  "source": "Patterns/wave_equation.vti",
+  "citation": "J. le Rond d'Alembert (1747) Hist. Acad. R. Sci. Berlin 3:214",
+  "credit": "Ready (GollyGang)",
+  "description": "A bump released at rest spreads as a circular wave that reflects from the walls. The second field b holds the velocity; the step updates b first and then a, which keeps the scheme stable.",
+  "equations": [
+   "\\partial_t b = \\nabla^2 a",
+   "\\partial_t a = b"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a (height)",
+   "b (velocity)"
+  ],
+  "params": [],
+  "timestep": 0.6,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "b += laplacian_a * timestep;\ndelta_a = b;",
+  "init": [
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 4.0,
+    "center": [
+     0.4,
+     0.3
+    ],
+    "sigma": 0.05
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -0.5,
+   "high": 0.5,
+   "colormap": "ice",
+   "height": true
+  },
+  "speed": 4
+ },
+ {
+  "id": "shallow-water",
+  "name": "Shallow water",
+  "family": "Heat and waves",
+  "source": "Patterns/shallow_water_equations.vti",
+  "citation": "A. J. C. de Saint-Venant (1871) C. R. Acad. Sci. Paris 73:147",
+  "credit": "Ready (GollyGang)",
+  "description": "Linearised shallow-water flow in a basin with a wall along the edges and a breakwater in the middle. A mound of water collapses and its waves reflect and diffract around the barrier.",
+  "equations": [
+   "\\partial_t h = -\\max(0, h - z)\\,(\\partial_x u + \\partial_y v)",
+   "\\partial_t u = -g\\, \\partial_x h - k u",
+   "\\partial_t v = -g\\, \\partial_y h - k v"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a (height h)",
+   "b (velocity u)",
+   "c (velocity v)",
+   "d (ground z)"
+  ],
+  "params": [
+   {
+    "name": "g",
+    "value": 9.8,
+    "min": 0.0,
+    "max": 19.6,
+    "step": 0.1,
+    "label": "g"
+   },
+   {
+    "name": "k",
+    "value": 0.03,
+    "min": 0.0,
+    "max": 0.06,
+    "step": 0.0005,
+    "label": "k"
+   }
+  ],
+  "timestep": 0.01,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": false,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = - max(0.0, a - d) * (x_gradient_b + y_gradient_c);\ndelta_b = - g * x_gradient_a - k * b;\ndelta_c = - g * y_gradient_a - k * c;",
+  "init": [
+   {
+    "op": "gauss",
+    "chem": "a",
+    "amplitude": 1.0,
+    "center": [
+     0.3,
+     0.3
+    ],
+    "sigma": 0.05,
+    "mode": "add"
+   },
+   {
+    "op": "fill",
+    "chem": "d",
+    "value": -1.0
+   },
+   {
+    "op": "set",
+    "chem": "d",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.0,
+      0.0,
+      0.05,
+      1.0
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "d",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.0,
+      0.0,
+      1.0,
+      0.05
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "d",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.95,
+      0.0,
+      1.0,
+      1.0
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "d",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.0,
+      0.95,
+      1.0,
+      1.0
+     ]
+    }
+   },
+   {
+    "op": "set",
+    "chem": "d",
+    "value": 1.0,
+    "region": {
+     "rect": [
+      0.5,
+      0.0,
+      0.55,
+      0.4
+     ]
+    }
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -0.05,
+   "high": 0.06,
+   "colormap": "ice",
+   "height": true
+  },
+  "speed": 8
+ },
+ {
+  "id": "splats",
+  "name": "Splats",
+  "family": "Experiments",
+  "source": "Patterns/Experiments/CornusAmmonis/splats.vti",
+  "citation": "Ready community pattern by Cornus Ammonis",
+  "credit": "Ready (GollyGang)",
+  "description": "Two Swift–Hohenberg-like fields, each smoothed by a Gaussian blur and weakly coupled to the other. They separate into round splats that jostle and slowly lock into place.",
+  "equations": [
+   "\\partial_t a = g_a G*a + w_4 \\nabla^4 a + w_2 \\nabla^2 a + s a - a^3 + D_b b",
+   "\\partial_t b = g_b G*b + w_4' \\nabla^4 b + w_2' \\nabla^2 b + s b - b^3 + D_a a"
+  ],
+  "chemicals": 2,
+  "names": [
+   "a",
+   "b"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": -0.3,
+    "min": -0.6,
+    "max": 0.0,
+    "step": 0.005,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.3,
+    "min": 0.0,
+    "max": 0.6,
+    "step": 0.005,
+    "label": "D_b"
+   },
+   {
+    "name": "sk",
+    "value": -0.9,
+    "min": -1.8,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "sk"
+   },
+   {
+    "name": "abla",
+    "value": -1.0,
+    "min": -2.0,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "abla"
+   },
+   {
+    "name": "bblb",
+    "value": -1.0,
+    "min": -2.0,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "bblb"
+   },
+   {
+    "name": "ala",
+    "value": -2.0,
+    "min": -4.0,
+    "max": 0.0,
+    "step": 0.02,
+    "label": "ala"
+   },
+   {
+    "name": "blb",
+    "value": -2.0,
+    "min": -4.0,
+    "max": 0.0,
+    "step": 0.02,
+    "label": "blb"
+   },
+   {
+    "name": "aga",
+    "value": 1.1,
+    "min": 0.0,
+    "max": 2.2,
+    "step": 0.02,
+    "label": "aga"
+   },
+   {
+    "name": "bgb",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "bgb"
+   }
+  ],
+  "timestep": 0.05,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "let rd_bilaplacian_a: f32 = (rd_ld(rd_x - 1, rd_y - 2).x + rd_ld(rd_x, rd_y - 2).x + rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x - 2, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y - 1).x - 10.0 * rd_ld(rd_x, rd_y - 1).x - 2.0 * rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x + 2, rd_y - 1).x + rd_ld(rd_x - 2, rd_y).x - 10.0 * rd_ld(rd_x - 1, rd_y).x + 36.0 * a - 10.0 * rd_ld(rd_x + 1, rd_y).x + rd_ld(rd_x + 2, rd_y).x + rd_ld(rd_x - 2, rd_y + 1).x - 2.0 * rd_ld(rd_x - 1, rd_y + 1).x - 10.0 * rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x + rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 1, rd_y + 2).x + rd_ld(rd_x, rd_y + 2).x + rd_ld(rd_x + 1, rd_y + 2).x) / (3.0 * dx * dx * dx * dx);\nlet rd_bilaplacian_b: f32 = (rd_ld(rd_x - 1, rd_y - 2).y + rd_ld(rd_x, rd_y - 2).y + rd_ld(rd_x + 1, rd_y - 2).y + rd_ld(rd_x - 2, rd_y - 1).y - 2.0 * rd_ld(rd_x - 1, rd_y - 1).y - 10.0 * rd_ld(rd_x, rd_y - 1).y - 2.0 * rd_ld(rd_x + 1, rd_y - 1).y + rd_ld(rd_x + 2, rd_y - 1).y + rd_ld(rd_x - 2, rd_y).y - 10.0 * rd_ld(rd_x - 1, rd_y).y + 36.0 * b - 10.0 * rd_ld(rd_x + 1, rd_y).y + rd_ld(rd_x + 2, rd_y).y + rd_ld(rd_x - 2, rd_y + 1).y - 2.0 * rd_ld(rd_x - 1, rd_y + 1).y - 10.0 * rd_ld(rd_x, rd_y + 1).y - 2.0 * rd_ld(rd_x + 1, rd_y + 1).y + rd_ld(rd_x + 2, rd_y + 1).y + rd_ld(rd_x - 1, rd_y + 2).y + rd_ld(rd_x, rd_y + 2).y + rd_ld(rd_x + 1, rd_y + 2).y) / (3.0 * dx * dx * dx * dx);\nlet gaussian_a: f32 = (rd_ld(rd_x - 2, rd_y - 2).x + 4.0 * rd_ld(rd_x - 1, rd_y - 2).x + 7.0 * rd_ld(rd_x, rd_y - 2).x + 4.0 * rd_ld(rd_x + 1, rd_y - 2).x + rd_ld(rd_x + 2, rd_y - 2).x + 4.0 * rd_ld(rd_x - 2, rd_y - 1).x + 16.0 * rd_ld(rd_x - 1, rd_y - 1).x + 26.0 * rd_ld(rd_x, rd_y - 1).x + 16.0 * rd_ld(rd_x + 1, rd_y - 1).x + 4.0 * rd_ld(rd_x + 2, rd_y - 1).x + 7.0 * rd_ld(rd_x - 2, rd_y).x + 26.0 * rd_ld(rd_x - 1, rd_y).x + 41.0 * a + 26.0 * rd_ld(rd_x + 1, rd_y).x + 7.0 * rd_ld(rd_x + 2, rd_y).x + 4.0 * rd_ld(rd_x - 2, rd_y + 1).x + 16.0 * rd_ld(rd_x - 1, rd_y + 1).x + 26.0 * rd_ld(rd_x, rd_y + 1).x + 16.0 * rd_ld(rd_x + 1, rd_y + 1).x + 4.0 * rd_ld(rd_x + 2, rd_y + 1).x + rd_ld(rd_x - 2, rd_y + 2).x + 4.0 * rd_ld(rd_x - 1, rd_y + 2).x + 7.0 * rd_ld(rd_x, rd_y + 2).x + 4.0 * rd_ld(rd_x + 1, rd_y + 2).x + rd_ld(rd_x + 2, rd_y + 2).x) / (273.0);\nlet gaussian_b: f32 = (rd_ld(rd_x - 2, rd_y - 2).y + 4.0 * rd_ld(rd_x - 1, rd_y - 2).y + 7.0 * rd_ld(rd_x, rd_y - 2).y + 4.0 * rd_ld(rd_x + 1, rd_y - 2).y + rd_ld(rd_x + 2, rd_y - 2).y + 4.0 * rd_ld(rd_x - 2, rd_y - 1).y + 16.0 * rd_ld(rd_x - 1, rd_y - 1).y + 26.0 * rd_ld(rd_x, rd_y - 1).y + 16.0 * rd_ld(rd_x + 1, rd_y - 1).y + 4.0 * rd_ld(rd_x + 2, rd_y - 1).y + 7.0 * rd_ld(rd_x - 2, rd_y).y + 26.0 * rd_ld(rd_x - 1, rd_y).y + 41.0 * b + 26.0 * rd_ld(rd_x + 1, rd_y).y + 7.0 * rd_ld(rd_x + 2, rd_y).y + 4.0 * rd_ld(rd_x - 2, rd_y + 1).y + 16.0 * rd_ld(rd_x - 1, rd_y + 1).y + 26.0 * rd_ld(rd_x, rd_y + 1).y + 16.0 * rd_ld(rd_x + 1, rd_y + 1).y + 4.0 * rd_ld(rd_x + 2, rd_y + 1).y + rd_ld(rd_x - 2, rd_y + 2).y + 4.0 * rd_ld(rd_x - 1, rd_y + 2).y + 7.0 * rd_ld(rd_x, rd_y + 2).y + 4.0 * rd_ld(rd_x + 1, rd_y + 2).y + rd_ld(rd_x + 2, rd_y + 2).y) / (273.0);\ndelta_a = aga * gaussian_a + abla * rd_bilaplacian_a + ala * laplacian_a + sk * a - a * a * a + D_b * b;\ndelta_b = bgb * gaussian_b + bblb * rd_bilaplacian_b + blb * laplacian_b + sk * b - b * b * b + D_a * a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -1.0,
+    "high": 1.0
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": -1.0,
+    "high": 1.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -1,
+   "high": 1,
+   "colormap": "leopard",
+   "height": true
+  },
+  "speed": 20
+ },
+ {
+  "id": "rock-paper-scissors",
+  "name": "Rock–paper–scissors",
+  "family": "Experiments",
+  "source": "Patterns/Experiments/TihaVonGhyczy/RockScissorPaper.vti",
+  "citation": "Ready community pattern by Tiha von Ghyczy; cyclic competition as in T. Reichenbach, M. Mobilia & E. Frey (2007) Nature 448:1046",
+  "credit": "Ready (GollyGang)",
+  "description": "Three species in cyclic dominance: a beats b, b beats c, c beats a. None can win for good, so the populations chase each other in rotating spirals.",
+  "equations": [
+   "\\partial_t a = k \\nabla^2 a + g a(1 - a) + m(a b - c a)",
+   "\\partial_t b = k \\nabla^2 b + g b(1 - b) + m(b c - a b)",
+   "\\partial_t c = k \\nabla^2 c + g c(1 - c) + m(c a - b c)"
+  ],
+  "chemicals": 3,
+  "names": [
+   "a (rock)",
+   "b (scissors)",
+   "c (paper)"
+  ],
+  "params": [
+   {
+    "name": "g",
+    "value": 0.08,
+    "min": 0.0,
+    "max": 0.16,
+    "step": 0.001,
+    "label": "g"
+   },
+   {
+    "name": "m",
+    "value": 3.0,
+    "min": 0.0,
+    "max": 6.0,
+    "step": 0.05,
+    "label": "m"
+   },
+   {
+    "name": "k",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "k"
+   }
+  ],
+  "timestep": 0.05,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "delta_a = k*laplacian_a + g*a*(1.0-a) + m*(a*b - c*a);\ndelta_b = k*laplacian_b + g*b*(1.0-b) + m*(b*c - a*b);\ndelta_c = k*laplacian_c + g*c*(1.0-c) + m*(c*a - b*c);",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": 0.0,
+    "high": 0.5
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.0,
+    "high": 0.5
+   },
+   {
+    "op": "noise",
+    "chem": "c",
+    "low": 0.0,
+    "high": 0.5
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": 0,
+   "high": 1,
+   "colormap": "spectral",
+   "height": false
+  },
+  "speed": 20
+ },
+ {
+  "id": "sobel-waves",
+  "name": "Sobel waves",
+  "family": "Experiments",
+  "source": "Patterns/Experiments/TihaVonGhyczy/sobel_waves.vti",
+  "citation": "Ready community pattern by Tiha von Ghyczy",
+  "credit": "Ready (GollyGang)",
+  "description": "Diffusion plus a Sobel edge filter that points to the south-west. The filter acts like advection with a grain, and the noise flows into diagonal wave trains.",
+  "equations": [
+   "\\partial_t a = k_1 \\nabla^2 a + k_2\\, S_{SW} * a"
+  ],
+  "chemicals": 1,
+  "names": [
+   "a"
+  ],
+  "params": [
+   {
+    "name": "k1",
+    "value": 0.1,
+    "min": 0.0,
+    "max": 0.2,
+    "step": 0.001,
+    "label": "k1"
+   },
+   {
+    "name": "k2",
+    "value": 0.18,
+    "min": 0.0,
+    "max": 0.36,
+    "step": 0.002,
+    "label": "k2"
+   }
+  ],
+  "timestep": 0.1,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "let sobelSW_a: f32 = (2.0 * rd_ld(rd_x - 1, rd_y - 1).x + rd_ld(rd_x, rd_y - 1).x + rd_ld(rd_x - 1, rd_y).x - rd_ld(rd_x + 1, rd_y).x - rd_ld(rd_x, rd_y + 1).x - 2.0 * rd_ld(rd_x + 1, rd_y + 1).x);\ndelta_a = k1 * laplacian_a + k2 * sobelSW_a;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -1.0,
+    "high": 1.0
+   }
+  ],
+  "render": {
+   "chem": "a",
+   "low": -0.3,
+   "high": 0.3,
+   "colormap": "grey",
+   "height": true
+  },
+  "speed": 8
+ },
+ {
+  "id": "surfing-solitons",
+  "name": "Surfing solitons",
+  "family": "Experiments",
+  "source": "Patterns/Experiments/CornusAmmonis/surfing-solitons.vti",
+  "citation": "Ready community pattern by Cornus Ammonis",
+  "credit": "Ready (GollyGang)",
+  "description": "The complex worms rule with a Sobel edge coupling and a local-sum field. Compact blobs form and ride the wave fronts like surfers.",
+  "equations": [
+   "\\partial_t a = D_a (a^2 - b^2) + s_a \\nabla^2 b + c_a b - \\kappa_a\\, \\mathrm{sgn}(a) a^2",
+   "\\partial_t b = d_s |\\nabla_S a \\cdot \\nabla_S b|_{\\mathbb C} + D_b a b - s_b \\nabla^2 a + c_b a - \\kappa_b\\, \\mathrm{sgn}(b) b^2"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "D_a",
+    "value": 0.025,
+    "min": 0.0,
+    "max": 0.05,
+    "step": 0.0005,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.064,
+    "min": 0.0,
+    "max": 0.128,
+    "step": 0.001,
+    "label": "D_b"
+   },
+   {
+    "name": "aConst",
+    "value": 0.6,
+    "min": 0.0,
+    "max": 1.2,
+    "step": 0.01,
+    "label": "aConst"
+   },
+   {
+    "name": "bConst",
+    "value": -1.26,
+    "min": -2.52,
+    "max": 0.0,
+    "step": 0.02,
+    "label": "bConst"
+   },
+   {
+    "name": "dps",
+    "value": 0.017,
+    "min": 0.0,
+    "max": 0.034,
+    "step": 0.0002,
+    "label": "dps"
+   },
+   {
+    "name": "aScale",
+    "value": 10.0,
+    "min": 0.0,
+    "max": 20.0,
+    "step": 0.1,
+    "label": "aScale"
+   },
+   {
+    "name": "bScale",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "bScale"
+   },
+   {
+    "name": "acS",
+    "value": 0.16,
+    "min": 0.0,
+    "max": 0.32,
+    "step": 0.002,
+    "label": "acS"
+   },
+   {
+    "name": "bcS",
+    "value": 0.24,
+    "min": 0.0,
+    "max": 0.48,
+    "step": 0.005,
+    "label": "bcS"
+   }
+  ],
+  "timestep": 0.02,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "let sobelN_a: f32 = (-rd_ld(rd_x - 1, rd_y - 1).x - 2.0 * rd_ld(rd_x, rd_y - 1).x - rd_ld(rd_x + 1, rd_y - 1).x + rd_ld(rd_x - 1, rd_y + 1).x + 2.0 * rd_ld(rd_x, rd_y + 1).x + rd_ld(rd_x + 1, rd_y + 1).x);\nlet sobelN_b: f32 = (-rd_ld(rd_x - 1, rd_y - 1).y - 2.0 * rd_ld(rd_x, rd_y - 1).y - rd_ld(rd_x + 1, rd_y - 1).y + rd_ld(rd_x - 1, rd_y + 1).y + 2.0 * rd_ld(rd_x, rd_y + 1).y + rd_ld(rd_x + 1, rd_y + 1).y);\nlet sobelE_a: f32 = (-rd_ld(rd_x - 1, rd_y - 1).x + rd_ld(rd_x + 1, rd_y - 1).x - 2.0 * rd_ld(rd_x - 1, rd_y).x + 2.0 * rd_ld(rd_x + 1, rd_y).x - rd_ld(rd_x - 1, rd_y + 1).x + rd_ld(rd_x + 1, rd_y + 1).x);\nlet sobelE_b: f32 = (-rd_ld(rd_x - 1, rd_y - 1).y + rd_ld(rd_x + 1, rd_y - 1).y - 2.0 * rd_ld(rd_x - 1, rd_y).y + 2.0 * rd_ld(rd_x + 1, rd_y).y - rd_ld(rd_x - 1, rd_y + 1).y + rd_ld(rd_x + 1, rd_y + 1).y);\nlet b_nw: f32 = rd_ld(rd_x - 1, rd_y + 1).y;\nlet b_n: f32 = rd_ld(rd_x, rd_y + 1).y;\nlet b_ne: f32 = rd_ld(rd_x + 1, rd_y + 1).y;\nlet b_w: f32 = rd_ld(rd_x - 1, rd_y).y;\nlet b_e: f32 = rd_ld(rd_x + 1, rd_y).y;\nlet b_sw: f32 = rd_ld(rd_x - 1, rd_y - 1).y;\nlet b_s: f32 = rd_ld(rd_x, rd_y - 1).y;\nlet b_se: f32 = rd_ld(rd_x + 1, rd_y - 1).y;\nlet c_nw: f32 = rd_ld(rd_x - 1, rd_y + 1).z;\nlet c_n: f32 = rd_ld(rd_x, rd_y + 1).z;\nlet c_ne: f32 = rd_ld(rd_x + 1, rd_y + 1).z;\nlet c_w: f32 = rd_ld(rd_x - 1, rd_y).z;\nlet c_e: f32 = rd_ld(rd_x + 1, rd_y).z;\nlet c_sw: f32 = rd_ld(rd_x - 1, rd_y - 1).z;\nlet c_s: f32 = rd_ld(rd_x, rd_y - 1).z;\nlet c_se: f32 = rd_ld(rd_x + 1, rd_y - 1).z;\nlet uax = sobelE_a;\nlet uay = sobelN_a;\nlet ubx = sobelE_b;\nlet uby = sobelN_b;\nlet mm_b = b_nw + b_n + b_ne + b_w + b_e + b_sw + b_s + b_se;\nlet mm_c = c_nw + c_n + c_ne + c_w + c_e + c_sw + c_s + c_se;\nlet dp = pow(((uax * ubx - uay * uby) * (uax * ubx - uay * uby)) + ((uay * ubx + uax * uby) * (uay * ubx + uax * uby)), 0.5);\nc = (((mm_b + b + 3.0)/10.0) * ((mm_b + b + 3.0)/10.0) * ((mm_b + b + 3.0)/10.0) * ((mm_b + b + 3.0)/10.0) * ((mm_b + b + 3.0)/10.0))*20.0;\nd = (mm_c + c) * 0.1;\ndelta_a = (D_a * (a * a - b * b)) + aScale * laplacian_b + aConst * b - acS * sign(a) * a * a;\ndelta_b = dps * dp + D_b * a * b - bScale * laplacian_a + bConst * a - bcS * sign(b) * b * b;",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -9.05,
+    "high": -0.9
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.7,
+    "high": 5.9
+   }
+  ],
+  "render": {
+   "chem": "d",
+   "low": -40,
+   "high": 55,
+   "colormap": "coral",
+   "height": false
+  },
+  "speed": 20
+ },
+ {
+  "id": "orbits",
+  "name": "Orbits",
+  "family": "Experiments",
+  "source": "Patterns/Experiments/DanWills/orbits_sharpWaves-init.vti",
+  "citation": "Ready community pattern by Dan Wills",
+  "credit": "Ready (GollyGang)",
+  "description": "Each cell iterates a complex power map, as in fractal orbit art, and the pair (a, b) diffuses and cross-diffuses. The result is sharp, fast-moving wave fronts.",
+  "equations": [
+   "z = a + i b,\\quad w = z + z_0",
+   "\\partial_t z = \\mathrm{clamp}\\big(\\Delta t\\, w^{p} + D \\nabla^2 z + z_c\\big)"
+  ],
+  "chemicals": 4,
+  "names": [
+   "a",
+   "b",
+   "c",
+   "d"
+  ],
+  "params": [
+   {
+    "name": "clampMin",
+    "value": -2.0,
+    "min": -4.0,
+    "max": 0.0,
+    "step": 0.02,
+    "label": "clampMin"
+   },
+   {
+    "name": "clampMax",
+    "value": 2.0,
+    "min": 0.0,
+    "max": 4.0,
+    "step": 0.02,
+    "label": "clampMax"
+   },
+   {
+    "name": "constReal",
+    "value": -0.09,
+    "min": -0.18,
+    "max": 0.0,
+    "step": 0.001,
+    "label": "constReal"
+   },
+   {
+    "name": "constImag",
+    "value": 0.04,
+    "min": 0.0,
+    "max": 0.08,
+    "step": 0.0005,
+    "label": "constImag"
+   },
+   {
+    "name": "constRealInner",
+    "value": -0.87,
+    "min": -1.74,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "constRealInner"
+   },
+   {
+    "name": "constImagInner",
+    "value": -0.3,
+    "min": -0.6,
+    "max": 0.0,
+    "step": 0.005,
+    "label": "constImagInner"
+   },
+   {
+    "name": "realPower",
+    "value": 1.2,
+    "min": 0.0,
+    "max": 2.4,
+    "step": 0.02,
+    "label": "realPower"
+   },
+   {
+    "name": "imagPower",
+    "value": -1.0,
+    "min": -2.0,
+    "max": 0.0,
+    "step": 0.01,
+    "label": "imagPower"
+   },
+   {
+    "name": "D_a",
+    "value": 0.12,
+    "min": 0.0,
+    "max": 0.24,
+    "step": 0.002,
+    "label": "D_a"
+   },
+   {
+    "name": "D_b",
+    "value": 0.35,
+    "min": 0.0,
+    "max": 0.7,
+    "step": 0.005,
+    "label": "D_b"
+   },
+   {
+    "name": "unDa_b",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "unDa_b"
+   },
+   {
+    "name": "unDb_a",
+    "value": -0.5,
+    "min": -1.0,
+    "max": 0.0,
+    "step": 0.005,
+    "label": "unDb_a"
+   },
+   {
+    "name": "mag_amp",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "mag_amp"
+   },
+   {
+    "name": "mag_power",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "mag_power"
+   },
+   {
+    "name": "mag_zeroPt",
+    "value": 0.0,
+    "min": -1.0,
+    "max": 1.0,
+    "step": 0.01,
+    "label": "mag_zeroPt"
+   },
+   {
+    "name": "phaseOffset",
+    "value": 0.4,
+    "min": 0.0,
+    "max": 0.8,
+    "step": 0.005,
+    "label": "phaseOffset"
+   },
+   {
+    "name": "phaseAmp",
+    "value": 1.0,
+    "min": 0.0,
+    "max": 2.0,
+    "step": 0.01,
+    "label": "phaseAmp"
+   },
+   {
+    "name": "eConst",
+    "value": 2.71828,
+    "min": 0.0,
+    "max": 5.43656,
+    "step": 0.05,
+    "label": "eConst"
+   }
+  ],
+  "timestep": 0.05,
+  "dx": 1.0,
+  "neighborhood": "vertex",
+  "wrap": true,
+  "width": 256,
+  "height": 256,
+  "formula": "c = pow((a+constRealInner)*(a+constRealInner) + (b+constImagInner)*(b+constImagInner), mag_power) * mag_amp + mag_zeroPt;\nd = select(atan2(b+constRealInner, a+constRealInner), 0.0, (a+constRealInner) == 0.0 && (b+constRealInner) == 0.0) * phaseAmp + phaseOffset;\ndelta_a = clamp( timestep * pow(c, realPower) * pow(eConst, -imagPower*d) * cos( imagPower * log( c ) + realPower * d ) + D_a * laplacian_a - unDa_b * laplacian_b + constReal, clampMin, clampMax );\ndelta_b = clamp( timestep * pow(c, realPower) * pow(eConst, -imagPower*d) * sin( imagPower * log( c ) + realPower * d ) + D_b * laplacian_b - unDb_a * laplacian_a + constImag, clampMin, clampMax );",
+  "init": [
+   {
+    "op": "noise",
+    "chem": "a",
+    "low": -9.05,
+    "high": -0.9
+   },
+   {
+    "op": "noise",
+    "chem": "b",
+    "low": 0.7,
+    "high": 5.9
+   }
+  ],
+  "render": {
+   "chem": "c",
+   "low": 0,
+   "high": 13,
+   "colormap": "magma",
+   "height": false
+  },
+  "speed": 10
+ }
+]
