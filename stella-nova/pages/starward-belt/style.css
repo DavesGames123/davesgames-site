@@ -1,0 +1,334 @@
+/* style.css — Starward Belt page.
+ *
+ * The map fills the viewport: #field (WebGPU) under #overlay (SVG), both in
+ * #stage. The title, the legend, the card, the plate and the hint float on
+ * top. Only the legend buttons and the card take pointer input, so every
+ * other pixel sends drag, wheel and click to the map.
+ *
+ * grep: :root  .stage  .title  .legend  .sw  .card  .plate  .hint  .fallback  @media
+ */
+
+:root {
+  --bg: #0b0b0b;
+  --ink: #f2f2f2;
+  --grey: #7a7a7a;
+  --line: #3a3a3a;
+  --red: #e8365d;
+  --pad: 40px;
+  --font: 'Chakra Petch', 'Eurostile', 'Bank Gothic', ui-sans-serif, system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+/* ─── map layers ─────────────────────────────────────────────────────────── */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.stage.dragging { cursor: grabbing; }
+
+.stage > canvas,
+.stage > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+.stage > svg { z-index: 1; overflow: hidden; }
+
+.fallback {
+  position: absolute;
+  right: var(--pad);
+  top: calc(var(--pad) + 76px);
+  z-index: 2;
+  max-width: 300px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  background: rgba(11, 11, 11, 0.9);
+  color: var(--grey);
+  font-size: 10px;
+  line-height: 1.7;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  text-align: right;
+  pointer-events: none;
+}
+.fallback[hidden] { display: none; }
+
+/* ─── title ──────────────────────────────────────────────────────────────── */
+
+.title {
+  position: fixed;
+  left: var(--pad);
+  top: calc(var(--pad) - 4px);
+  z-index: 3;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+.title h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: 0.55em;
+  color: #fff;
+}
+.title h2 {
+  margin: 10px 0 0;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: 0.55em;
+  color: var(--grey);
+}
+
+/* ─── legend ─────────────────────────────────────────────────────────────── */
+
+.legend {
+  position: fixed;
+  left: var(--pad);
+  top: calc(var(--pad) + 108px);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.tier {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--c);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.55;
+  letter-spacing: 0.45em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+.tier[data-tier="none"] { color: #fff; }
+.tier:focus { outline: none; }
+.tier:focus-visible .sw { outline: 1px solid var(--grey); outline-offset: 4px; }
+
+/* The swatch: a square in the tier color with one diagonal, lower left to upper right. */
+.sw {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border: 1.5px solid var(--c);
+  background: linear-gradient(to top right,
+    transparent calc(50% - 0.8px), var(--c) calc(50% - 0.6px),
+    var(--c) calc(50% + 0.6px), transparent calc(50% + 0.8px));
+  transition: opacity 0.15s, transform 0.15s;
+}
+.tier .lab { max-width: 16em; transition: opacity 0.15s; }
+.tier .short { display: none; }
+.tier:hover .sw { transform: scale(1.06); }
+
+.tier[aria-pressed="false"] .sw { opacity: 0.25; }
+.tier[aria-pressed="false"] .lab {
+  opacity: 0.35;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+/* ─── card ───────────────────────────────────────────────────────────────── */
+
+.card {
+  position: fixed;
+  left: var(--pad);
+  bottom: var(--pad);
+  z-index: 4;
+  width: 330px;
+  max-height: calc(100% - 2 * var(--pad) - 340px);
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px 14px;
+  border: 1px solid var(--line);
+  background: rgba(11, 11, 11, 0.9);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+.card[hidden] { display: none; }
+.card.passive { pointer-events: none; }
+
+.card .kind { color: var(--grey); letter-spacing: 0.4em; }
+.card .name {
+  margin: 4px 0 12px;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.42em;
+  color: #fff;
+}
+.card .rows { display: grid; gap: 3px; }
+.card .row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+}
+.card .row .to { color: #cfcfcf; }
+.card .row.off { opacity: 0.32; }
+.card .cost { color: var(--c); font-variant-numeric: tabular-nums; letter-spacing: 0.12em; }
+.card .cost::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border: 1px solid var(--c);
+  vertical-align: 0;
+}
+.card .chain { margin: 4px 0 12px; font-size: 13px; font-weight: 500; letter-spacing: 0.34em; color: #fff; }
+.card .chain span { white-space: nowrap; }
+.card .chain i { font-style: normal; color: var(--grey); padding: 0 0.2em; }
+.card .total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  color: var(--grey);
+}
+.card .total b { font-size: 16px; font-weight: 500; color: #fff; letter-spacing: 0.15em; }
+.card .used { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; }
+.card .used span { color: var(--c); }
+.card .used span[data-tier="none"] { color: #fff; }
+.card .note { margin-top: 10px; color: var(--grey); }
+.card .none { margin-top: 4px; color: var(--red); letter-spacing: 0.34em; }
+
+/* ─── plate ──────────────────────────────────────────────────────────────── */
+
+.plate {
+  position: fixed;
+  right: var(--pad);
+  bottom: calc(var(--pad) - 6px);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  text-align: right;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.plate span {
+  font-size: 18px;
+  letter-spacing: 0.55em;
+  margin-right: -0.55em;
+  color: var(--grey);
+}
+.plate strong {
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: 0.55em;
+  margin-right: -0.55em;
+  color: #fff;
+}
+
+/* ─── hint ───────────────────────────────────────────────────────────────── */
+
+.hint {
+  position: fixed;
+  right: var(--pad);
+  top: calc(var(--pad) + 2px);
+  z-index: 3;
+  max-width: 300px;
+  color: var(--grey);
+  font-size: 10px;
+  line-height: 1.8;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  text-align: right;
+  opacity: 0.85;
+  pointer-events: none;
+  transition: opacity 1.2s ease;
+}
+.hint.gone { opacity: 0; }
+
+/* ─── mid width: keep the plate clear of the card ────────────────────────── */
+
+@media (max-width: 1100px) {
+  :root { --pad: 28px; }
+  .title h1 { font-size: 24px; }
+  .title h2 { font-size: 16px; }
+  .legend { top: calc(var(--pad) + 86px); }
+  .plate span { font-size: 14px; }
+  .plate strong { font-size: 24px; }
+  /* The belt reaches the top right here. Put the hint above the plate. */
+  .hint { max-width: 220px; top: auto; bottom: calc(var(--pad) + 84px); }
+  .fallback { top: calc(var(--pad) + 92px); max-width: 220px; }
+}
+
+/* ─── phone width ────────────────────────────────────────────────────────── */
+
+@media (max-width: 600px) {
+  :root { --pad: 16px; }
+  .title { top: 14px; }
+  .title h1 { font-size: 15px; letter-spacing: 0.42em; }
+  .title h2 { margin-top: 5px; font-size: 11px; letter-spacing: 0.42em; }
+
+  .legend {
+    top: 62px;
+    right: var(--pad);
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+  }
+  .tier { gap: 7px; font-size: 10px; letter-spacing: 0.22em; line-height: 1; }
+  .sw { width: 22px; height: 22px; border-width: 1px; }
+  .tier .full { display: none; }
+  .tier .short { display: inline; }
+
+  .card {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 42%;
+    padding: 12px var(--pad) 14px;
+    border-width: 1px 0 0;
+    letter-spacing: 0.22em;
+  }
+  .card .name { font-size: 15px; margin-bottom: 8px; }
+
+  .plate { bottom: 14px; gap: 4px; }
+  .plate span { font-size: 10px; letter-spacing: 0.45em; margin-right: -0.45em; }
+  .plate strong { font-size: 16px; letter-spacing: 0.45em; margin-right: -0.45em; }
+
+  .fallback { top: 104px; left: var(--pad); right: var(--pad); max-width: none; text-align: center; font-size: 9px; letter-spacing: 0.2em; }
+  .hint { top: auto; bottom: 64px; left: var(--pad); right: var(--pad); max-width: none; text-align: center; font-size: 9px; letter-spacing: 0.2em; }
+}

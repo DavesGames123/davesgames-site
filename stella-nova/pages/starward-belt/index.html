@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Starward Belt</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   STARWARD BELT  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   An interactive star chart after the Starward Belt map in Citizen Sleeper 2
+   (Jump Over The Age). The chart is clean vector cartography: no CRT pass,
+   no scanlines. A WebGPU field shader draws the dust, the asteroids, the
+   density contours, the rails and the hatched hazard regions. An SVG layer
+   on top draws the stations, the routes, the cost tags and the labels.
+
+   LAYOUT  (# marks an element id)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ #title   game + vector name              #field  WebGPU canvas   │
+     │ #legend  one button per route tier       #overlay SVG, same view │
+     │                                                                  │
+     │ #card    station / route readout         #plate  map title       │
+     └──────────────────────────────────────────────────────────────────┘
+
+   FILES
+     data.js     nodes, routes, tiers, hatch regions, dust clouds (no DOM)
+     camera.js   rail camera: slide along the belt, drift, zoom (no DOM)
+     engine.js   WebGPU field layer (no DOM beyond the canvas)
+     icons.js    one station glyph per node, SVG strings
+     overlay.js  SVG layer: rings, routes, tags, stations, labels
+     route.js    cheapest jump path under the active tiers (no DOM)
+     main.js     wiring, input, legend, card, frame loop
+     shaders/    field.wgsl
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="stage" id="stage">
+  <canvas id="field"></canvas>
+  <svg id="overlay" xmlns="http://www.w3.org/2000/svg"></svg>
+  <div class="fallback" id="fallback" hidden></div>
+</div>
+
+<header class="title" id="title">
+  <h1>Citizen Sleeper 2</h1>
+  <h2>Starward Vector</h2>
+</header>
+
+<nav class="legend" id="legend" aria-label="Route tiers"></nav>
+
+<aside class="card" id="card" hidden></aside>
+
+<footer class="plate" id="plate">
+  <span>Map of the</span>
+  <strong>Starward Belt</strong>
+</footer>
+
+<div class="hint" id="hint">drag or scroll to slide the belt · click two stations to plot a course · H home</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
