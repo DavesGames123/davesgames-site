@@ -1,7 +1,7 @@
 // ============================================================================
 //  FIRE TABLE (EVOLVED 1)  ·  page.js — the per-page PAGE object (GENERATED)
 // ────────────────────────────────────────────────────────────────────────────
-//  60 procedural fires; one fragment shader per cell, each reading only a
+//  61 procedural fires; one fragment shader per cell, each reading only a
 //  shared uniform buffer. Identical contract to the first fire table.
 //  UNIFORM LAYOUT (96 bytes, struct FireU in shaders/pack.wgsl)
 //    0..1 size · 2 time · 3 pixelScale · 4..7 ink · 8..11 tone · 12..15 cream

@@ -678,6 +678,48 @@ fn hazeUV(uv: vec2f, t: f32, amt: f32) -> vec2f {
   return firePresent(h * (0.8 + 0.6 * k.z));
 }
 
+@fragment fn fs_spiral_streak_cinders(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+  let uv = fuv(fp.xy);
+  let t = u.time;
+  let k = u.k;
+  // sparks leave a hot core and ride a log spiral out and up. Radius grows as
+  // exp(g * age), so speed grows with radius and the outer streaks are longest.
+  let ctr = vec2f(0.0, 0.3);
+  let n = i32(mix(20.0, 64.0, k.x));
+  let om = mix(2.5, 7.0, k.y);                 // turn over one life, radians
+  let g = 2.6;                                 // radial growth over one life
+  let blur = mix(0.03, 0.14, k.z);             // shutter, in lives
+  let wpx = 1.6 / max(min(u.size.x, u.size.y), 1.0);
+  var h = 0.0;
+  for (var i: i32 = 0; i < 64; i++) {
+    if (i >= n) { break; }
+    let life = 2.2 + 1.6 * h3(vec3i(i, 0, 0), 91u).x;
+    let ph = t / life + h3(vec3i(i, 0, 0), 91u).y;
+    let gen = i32(floor(ph)); let a = fract(ph);
+    let r3 = h3(vec3i(i, gen, 1), 97u);
+    let arm = floor(r3.x * 3.0) * 2.0944 + r3.y * 0.6;
+    let r0 = 0.025 + 0.035 * r3.z;
+    let lift = 0.35 + 0.2 * r3.y;
+    // position and velocity (per life) at age a, and a little before (the shutter)
+    let ang = arm + om * a; let rad = r0 * exp(g * a);
+    let pos = ctr + rad * vec2f(cos(ang), sin(ang) * 0.62) + vec2f(0.0, lift * a);
+    let vel = rad * (g * vec2f(cos(ang), sin(ang) * 0.62) + om * vec2f(-sin(ang), cos(ang) * 0.62)) + vec2f(0.0, lift);
+    let tail = pos - vel * blur;
+    // distance to the streak segment; the tail end is dimmer
+    let pa = uv - tail; let ba = pos - tail;
+    let s = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+    let d = length(pa - ba * s);
+    let fade = pow(1.0 - a, 0.9) * smoothstep(0.0, 0.05, a);
+    let core = exp(-d * d / (wpx * wpx)) * (0.35 + 0.65 * s);
+    let glow = exp(-d * d / (16.0 * wpx * wpx)) * 0.18;
+    h += (core * 2.4 + glow) * fade * (0.6 + 0.8 * r3.z);
+  }
+  // the hot core the sparks leave, a breathing ember glow
+  let dc = length((uv - ctr) * vec2f(1.0, 1.6));
+  h += exp(-dc * dc * 220.0) * (0.4 + 0.1 * sin(t * 3.1)) + exp(-dc * dc * 14.0) * 0.1;
+  return firePresent(clamp(h, 0.0, 2.2));
+}
+
 @fragment fn fs_sparks_01(@builtin(position) fp: vec4f) -> @location(0) vec4f {
   let uv = fuv(fp.xy);
   let t = u.time;
