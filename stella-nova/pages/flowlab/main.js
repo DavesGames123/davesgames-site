@@ -28,10 +28,19 @@
 //              ▼
 //      render():  clear ─▶ domain image ─▶ grid ─▶ arrows ─▶ tracers ─▶ marker
 //      drawMSim(): pendulum | well | oscillator | populations | trajectory
+//  The loop stops while the page is hidden (visibilitychange).
+//
+//  TRACER DRAW
+//  --------------------------------------------------------------------------
+//      Trails live in typed ring buffers (TRAIL_MAX slots for each tracer).
+//      renderTracersGL() draws all trails in one instanced WebGL call on a
+//      hidden canvas. The vertex shader does the palette, tone curve and hue.
+//      render() adds that canvas with 'lighter'. drawTracers2D() is the
+//      fallback when WebGL is not available.
 //
 //  TRACER LIFECYCLE
 //  --------------------------------------------------------------------------
-//      spawn ●─▶ advect (midpoint) ─▶ trail.unshift ─▶ age++ ─┐
+//      spawn ●─▶ advect (midpoint) ─▶ ring write ───▶ age++ ─┐
 //              ▲                                               │
 //              └──── respawn when slow / old / off-screen ◀────┘
 //
@@ -44,7 +53,11 @@
 //      field accessor ...... "function fieldAt"      one field for both families
 //      palettes / tone ..... "const PALETTES="       magnitude -> color ramp
 //      domain coloring ..... "function buildDomain"  complex-plane hue image
+//      streamer budget ..... "function tracerBudget" default count by area
 //      tracers ............. "function spawnTracers" spawn + advect the trails
+//      tracer draw ......... "function renderTracersGL"  one instanced call
+//      2D fallback ......... "function drawTracers2D"    per-segment strokes
+//      hidden page ......... "visibilitychange"      stop / restart loop
 //      physical integrator . "function rk4"          RK4 for the model state
 //      main render ......... "function render"       grid, arrows, tracers, marker
 //      mini model .......... "function drawMSim"     the inset physical model
@@ -199,8 +212,17 @@ const cfg={den:2200,spd:14,trl:36,colMode:"speed",palette:"stella",gamma:1.0,con
 // view maps world math units to screen: world point (cx,cy) sits at canvas
 // center, scale is pixels per world unit.
 const view={cx:0,cy:0,scale:90};
-// The advected particle pool. Rebuilt on density change or system switch.
-let tracers=[];
+// The advected particle pool, as parallel typed arrays. Each tracer owns
+// TRAIL_MAX ring slots for its trail, so a frame allocates nothing. trS is the
+// speed level (0..1) and trH the phase hue (0..1) of each trail point. The
+// pool is rebuilt on density change or system switch.
+const TRAIL_MAX=80;                      // = max of the Trail slider
+let TR_N=0;
+let tX=new Float64Array(0), tY=new Float64Array(0);
+let tAge=new Float32Array(0), tMax=new Float32Array(0);
+let trX=new Float32Array(0), trY=new Float32Array(0);
+let trS=new Float32Array(0), trH=new Float32Array(0);
+let trHead=new Int32Array(0), trLen=new Int32Array(0);
 // Offscreen domain-coloring image and its dirty flag; rebuilt lazily.
 let domCache=null, domDirty=true;
 
@@ -222,6 +244,7 @@ function resize(){
   CW=wrap.clientWidth||600; CH=wrap.clientHeight||400;
   DPR=Math.min(devicePixelRatio||1,2);
   canvas.width=CW*DPR; canvas.height=CH*DPR;
+  glCanvas.width=canvas.width; glCanvas.height=canvas.height;
   msc.width=MW*MDPR; msc.height=MH*MDPR;
   MDPR=Math.min(devicePixelRatio||1,2);
   msc.width=MW*MDPR; msc.height=MH*MDPR;
@@ -315,47 +338,70 @@ function buildDomain(){
 function hslArr(h,s,l){h=((h%1)+1)%1;const a=s*Math.min(l,1-l);const f=n=>{const k=(n+h*12)%12;return 255*(l-a*Math.max(-1,Math.min(k-3,Math.min(9-k,1))));};return[f(0),f(8),f(4)];}
 
 /* ════════ tracers ════════ */
-// Pick a random world position inside the visible box. positive systems are
-// confined to the first quadrant so tracers never seed on invalid populations.
-function spawnPos(){
-  const S=SYS[cur];
-  const x0=wx(0),y0=wy(CH),x1=wx(CW),y1=wy(0);
-  for(let i=0;i<8;i++){
-    let x=x0+Math.random()*(x1-x0), y=y1+Math.random()*(y0-y1);
-    if(S.positive){x=0.02+Math.random()*Math.max(0.1,x1-0.02);y=0.02+Math.random()*Math.max(0.1,y0-0.02);}
-    return [x,y];
-  }
-  return [view.cx,view.cy];
+// Streamer budget. The default count follows the canvas area, so a phone does
+// not get the same pool as a desktop. The Density slider can still set any
+// value up to 5000.
+function tracerBudget(){
+  const n=Math.round(CW*CH*0.0018/50)*50;
+  return Math.max(600,Math.min(2200,n));
 }
-// Fill the pool with cfg.den tracers, each with an empty trail and a randomized
-// lifespan so they do not all respawn on the same frame.
-function spawnTracers(){tracers=[];for(let i=0;i<cfg.den;i++){const[x,y]=spawnPos();tracers.push({x,y,trail:[],age:0,maxAge:2.5+Math.random()*3.5});}}
+// Pick a random world position inside the visible box and write it to SPX/SPY.
+// positive systems are confined to the first quadrant so tracers never seed on
+// invalid populations.
+let SPX=0, SPY=0;
+function spawnPos(){
+  const x0=wx(0),y0=wy(CH),x1=wx(CW),y1=wy(0);
+  if(SYS[cur].positive){SPX=0.02+Math.random()*Math.max(0.1,x1-0.02);SPY=0.02+Math.random()*Math.max(0.1,y0-0.02);}
+  else{SPX=x0+Math.random()*(x1-x0);SPY=y1+Math.random()*(y0-y1);}
+}
+// Put tracer i at a fresh spawn with an empty trail and a random lifespan, so
+// the pool does not respawn all on the same frame.
+function respawnTracer(i){
+  spawnPos(); tX[i]=SPX; tY[i]=SPY; tAge[i]=0; tMax[i]=2.5+Math.random()*3.5;
+  trLen[i]=0; trHead[i]=0;
+}
+// Fill the pool with cfg.den tracers. The arrays grow only when the count
+// is more than their size.
+function spawnTracers(){
+  const n=cfg.den;
+  if(tX.length<n){
+    tX=new Float64Array(n); tY=new Float64Array(n); tAge=new Float32Array(n); tMax=new Float32Array(n);
+    trX=new Float32Array(n*TRAIL_MAX); trY=new Float32Array(n*TRAIL_MAX);
+    trS=new Float32Array(n*TRAIL_MAX); trH=new Float32Array(n*TRAIL_MAX);
+    trHead=new Int32Array(n); trLen=new Int32Array(n);
+  }
+  TR_N=n;
+  for(let i=0;i<n;i++) respawnTracer(i);
+}
 // Advance every tracer one step along the field with a midpoint (RK2) update,
-// record the new point in its trail, and respawn any tracer that has stalled,
-// aged out, or left the box.
+// write the new point into its trail ring, and respawn any tracer that has
+// stalled, aged out, or left the box.
 function updateTracers(dt){
-  const S=SYS[cur], step=cfg.spd/10*0.016, trl=cfg.trl;
+  const positive=SYS[cur].positive, step=cfg.spd/10*0.016;
   const maxMove=0.7/view.scale*CH;          // cap world-units per frame (poles)
   // Slightly enlarged bounds so trails can leave the frame before respawning.
   const x0=wx(0)-1,y0=wy(CH)-1,x1=wx(CW)+1,y1=wy(0)+1;
-  for(const tr of tracers){
-    tr.age+=dt;
-    const f=fieldAt(tr.x,tr.y); let m=Math.hypot(f[0],f[1]);
+  const TWO_PI=2*Math.PI;
+  for(let i=0;i<TR_N;i++){
+    tAge[i]+=dt;
+    const x=tX[i], y=tY[i];
+    const f=fieldAt(x,y), fx=f[0], fy=f[1], m=Math.hypot(fx,fy);
     // Retire a tracer that is on a singularity, too slow, too old, or off-box.
-    let bad=(!isFinite(m)||m<1e-4||tr.age>tr.maxAge||tr.x<x0||tr.x>x1||tr.y<y0||tr.y>y1||(S.positive&&(tr.x<=0||tr.y<=0)));
-    if(!bad){
-      // Shrink the step near fast regions (poles) so no single jump overshoots.
-      let h=step; if(m*h>maxMove)h=maxMove/m;
-      // Midpoint integration: sample the field at the half-step, then move.
-      const mx=tr.x+f[0]*h*0.5,my=tr.y+f[1]*h*0.5,f2=fieldAt(mx,my);
-      tr.x+=f2[0]*h; tr.y+=f2[1]*h;
-      // Push [x, y, speed, angle] to the trail front; drop the oldest past trl.
-      tr.trail.unshift([tr.x,tr.y,m,Math.atan2(f[1],f[0])]);
-      if(tr.trail.length>trl)tr.trail.pop();
-    } else {
-      // Recycle: place it at a fresh spawn and reset its trail and lifespan.
-      const[nx,ny]=spawnPos(); tr.x=nx;tr.y=ny;tr.trail=[];tr.age=0;tr.maxAge=2.5+Math.random()*3.5;
+    if(!isFinite(m)||m<1e-4||tAge[i]>tMax[i]||x<x0||x>x1||y<y0||y>y1||(positive&&(x<=0||y<=0))){
+      respawnTracer(i); continue;
     }
+    // Shrink the step near fast regions (poles) so no single jump overshoots.
+    let h=step; if(m*h>maxMove)h=maxMove/m;
+    // Midpoint integration: sample the field at the half-step, then move.
+    const f2=fieldAt(x+fx*h*0.5,y+fy*h*0.5);
+    const nx=x+f2[0]*h, ny=y+f2[1]*h;
+    tX[i]=nx; tY[i]=ny;
+    // Write [x, y, speed level, phase hue] to the next ring slot. The speed
+    // level is the log compression of rampRGB, so the draw does no log.
+    const hd=trHead[i]+1===TRAIL_MAX?0:trHead[i]+1, o=i*TRAIL_MAX+hd;
+    const lc=Math.log10(1+m*2.2)/1.5;
+    trX[o]=nx; trY[o]=ny; trS[o]=lc<0?0:lc>1?1:lc; trH[o]=(Math.atan2(fy,fx)+Math.PI)/TWO_PI;
+    trHead[i]=hd; if(trLen[i]<TRAIL_MAX)trLen[i]++;
   }
 }
 
@@ -432,33 +478,211 @@ function drawArrows(){
   }
   ctx.restore();
 }
-// Draw each tracer as a fading polyline. Additive blending sums overlapping
-// trails into the flow glow; each segment is drawn twice, a soft wide halo then
-// a bright core.
-function drawTracers(){
-  ctx.save(); ctx.globalCompositeOperation="lighter"; ctx.lineCap="round"; const EX=cfg.exposure;
-  for(const tr of tracers){
-    const tl=tr.trail.length; if(tl<2)continue;
-    // Per-tracer envelope: fade in on spawn, fade out near end of life.
-    const ageA=tr.age<0.1?tr.age/0.1:(tr.age>tr.maxAge*0.8?(tr.maxAge-tr.age)/(tr.maxAge*0.2):1);
-    for(let s=0;s<tl-1;s++){
-      // Segment alpha tapers toward the tail and by the age envelope.
-      const a0=(1-s/cfg.trl)*ageA; if(a0<0.01)continue;
-      const p=tr.trail[s],q=tr.trail[s+1];
-      let r,g,b;
-      // Color by stored speed, stored phase angle, or a fixed cyan (mono).
-      if(cfg.colMode==="speed"){[r,g,b]=rampRGB(p[2]);}
-      else if(cfg.colMode==="phase"){[r,g,b]=hueRGB((p[3]+Math.PI)/(2*Math.PI));}
-      else {r=0.3;g=0.82;b=1.0;}
-      r*=EX;g*=EX;b*=EX;
-      const x0=sx(p[0]),y0=sy(p[1]),x1=sx(q[0]),y1=sy(q[1]);
-      // Wide dim underlay for the glow.
-      ctx.strokeStyle=`rgba(${r*a0*0.12*255|0},${g*a0*0.12*255|0},${b*a0*0.12*255|0},1)`; ctx.lineWidth=Math.max(1,5*a0);
-      ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
-      // Bright thin core on top.
-      ctx.strokeStyle=`rgba(${r*255|0},${g*255|0},${b*255|0},${a0})`; ctx.lineWidth=Math.max(0.7,1.6*a0);
-      ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+/* ════════ tracer draw (WebGL, one instanced call) ════════ */
+// All trails draw in one instanced call on a hidden WebGL canvas. Each instance
+// is one segment A->B. It reads four slots P, A, B, N from one vertex buffer,
+// [x, y, value, fade] per point. P and N are the neighbors, used for miter
+// joins, so the quads of one trail share their joint edges: no gaps and no
+// overlaps. The old round caps on every segment made beads. Slot 0 is a pad,
+// so instance i starts at slot i. Each tracer uses trl+1 slots. The last slot
+// has fade -1, so the segment into the next tracer collapses. On the newest
+// point, value has +2 added. That flag gives the head a round cap.
+//
+// value is the speed level or the phase hue, as colMode selects. The vertex
+// shader does the tone curve, the palette ramp, the hue wheel and exposure, so
+// palette and tone changes apply at once to all trails. Color and fade
+// interpolate along each quad, so the gradient along a trail is smooth.
+//
+// The fragment shader adds a wide dim glow and a thin bright core, the same
+// widths and gains as the old two stroke passes: glow max(1,5f) at 0.12, core
+// max(0.7,1.6f) at 1.0, in CSS px, where f is the fade.
+const glCanvas=document.createElement("canvas");
+let gl=null, glInst=null, glOK=false, glLoc=null, glVBuf=null;
+let glData=new Float32Array(0), glView=null, glViewLen=-1;
+const MAX_STOPS=8;
+const TR_VS=`
+attribute vec2 aCorner; attribute vec4 aP; attribute vec4 aA; attribute vec4 aB; attribute vec4 aN;
+uniform vec2 uRes; uniform vec3 uView; uniform float uDpr;
+uniform float uMode; uniform vec3 uStops[${MAX_STOPS}]; uniform float uNS; uniform vec3 uTone;
+varying float vDist; varying float vAlong; varying float vGlow; varying float vCore; varying float vFade; varying vec3 vCol;
+vec2 toScreen(vec2 w){ return vec2(0.5*uRes.x+(w.x-uView.x)*uView.z, 0.5*uRes.y-(w.y-uView.y)*uView.z); }
+vec2 dirOf(vec2 a,vec2 b,vec2 fb){ vec2 d=b-a; float l=length(d); return l>1e-5?d/l:fb; }
+// Miter offset at a joint: the bisector of the two segment normals, scaled so
+// the line keeps its width. The scale is clamped on sharp turns.
+vec2 miter(vec2 n,vec2 dOther,bool has){
+  if(!has) return n;
+  vec2 m=normalize(n+vec2(-dOther.y,dOther.x)+1e-6);
+  return m/max(dot(m,n),0.5);
+}
+// Palette ramp as a chain of mix() calls. Unused stops repeat the last stop.
+vec3 ramp(float t){
+  float s=clamp(t,0.0,1.0)*uNS; vec3 c=uStops[0];
+  for(int k=1;k<${MAX_STOPS};k++) c=mix(c,uStops[k],clamp(s-float(k-1),0.0,1.0));
+  return c;
+}
+// toneMap(): contrast about 0.5, then gamma. uTone = (contrast, gamma, exposure).
+float tone(float t){ t=clamp(0.5+(clamp(t,0.0,1.0)-0.5)*uTone.x,0.0,1.0); return pow(t,1.0/uTone.y); }
+// hueRGB(): the HSL hue wheel at s 0.85, l 0.6.
+vec3 hue(float h){ vec3 k=mod(vec3(0.0,8.0,4.0)+fract(h)*12.0,12.0); return 0.6-0.34*clamp(min(k-3.0,9.0-k),-1.0,1.0); }
+vec3 colorOf(float v){
+  vec3 c=uMode<0.5?ramp(tone(v)):(uMode<1.5?hue(v):vec3(0.3,0.82,1.0));
+  return min(c*uTone.z,vec3(1.0));
+}
+void main(){
+  vDist=0.0; vAlong=0.0; vGlow=0.0; vCore=0.0; vFade=0.0; vCol=vec3(0.0);
+  if(aA.w<0.0||aB.w<0.0){ gl_Position=vec4(2.0,2.0,2.0,1.0); return; }
+  vec2 sA=toScreen(aA.xy), sB=toScreen(aB.xy);
+  vec2 d=sB-sA; float L=length(d);
+  vec2 dir=L>1e-5?d/L:vec2(1.0,0.0);
+  vec2 n=vec2(-dir.y,dir.x);
+  // Joint normal at this end: A joins P->A, B joins B->N.
+  bool atB=aCorner.x>0.5;
+  vec2 j=atB?miter(n,dirOf(sB,toScreen(aN.xy),dir),aN.w>=0.0)
+            :miter(n,dirOf(toScreen(aP.xy),sA,dir),aP.w>=0.0);
+  float f=mix(aA.w,aB.w,aCorner.x);
+  float glow=max(1.0,5.0*f)*uDpr, core=max(0.7,1.6*f)*uDpr;
+  float halfExt=0.5*max(glow,1.0)+1.0;
+  float vA=aA.z, cap=0.0;
+  if(vA>=2.0){ vA-=2.0; cap=halfExt/uDpr; }
+  float along=mix(-cap,L,aCorner.x);
+  vec2 s=sA+dir*along+j*(aCorner.y*halfExt/uDpr);
+  gl_Position=vec4(s.x/uRes.x*2.0-1.0,1.0-s.y/uRes.y*2.0,0.0,1.0);
+  vDist=aCorner.y*halfExt; vAlong=along*uDpr; vGlow=glow; vCore=core; vFade=f;
+  vCol=atB?colorOf(aB.z):colorOf(vA);
+}`;
+const TR_FS=`
+precision mediump float;
+varying float vDist; varying float vAlong; varying float vGlow; varying float vCore; varying float vFade; varying vec3 vCol;
+float cov(float w,float d){ float we=max(w,1.0); return clamp(0.5*we+0.5-d,0.0,1.0)*(w/we); }
+void main(){
+  float dx=max(0.0,-vAlong);          // > 0 only inside the head cap
+  float d=sqrt(dx*dx+vDist*vDist);
+  vec3 c=vCol*(vFade*(0.12*cov(vGlow,d)+cov(vCore,d)));
+  gl_FragColor=vec4(c,max(c.r,max(c.g,c.b)));
+}`;
+
+// Make the WebGL context, program and buffers. Returns false if WebGL or
+// instancing is not available. Then drawTracers2D() draws the tracers.
+function initTracerGL(){
+  try{
+    const o={alpha:true,premultipliedAlpha:true,antialias:false,depth:false,stencil:false,preserveDrawingBuffer:false};
+    gl=glCanvas.getContext("webgl2",o);
+    if(gl){
+      glInst={div:(l,d)=>gl.vertexAttribDivisor(l,d),draw:(m,f,c,n)=>gl.drawArraysInstanced(m,f,c,n)};
+    }else{
+      gl=glCanvas.getContext("webgl",o); if(!gl) return false;
+      const e=gl.getExtension("ANGLE_instanced_arrays"); if(!e) return false;
+      glInst={div:(l,d)=>e.vertexAttribDivisorANGLE(l,d),draw:(m,f,c,n)=>e.drawArraysInstancedANGLE(m,f,c,n)};
     }
+    const sh=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;};
+    const p=gl.createProgram();
+    gl.attachShader(p,sh(gl.VERTEX_SHADER,TR_VS)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,TR_FS));
+    gl.linkProgram(p); if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    gl.useProgram(p);
+    const U=n=>gl.getUniformLocation(p,n);
+    glLoc={corner:gl.getAttribLocation(p,"aCorner"),P:gl.getAttribLocation(p,"aP"),A:gl.getAttribLocation(p,"aA"),
+      B:gl.getAttribLocation(p,"aB"),N:gl.getAttribLocation(p,"aN"),
+      res:U("uRes"),view:U("uView"),dpr:U("uDpr"),mode:U("uMode"),stops:U("uStops"),ns:U("uNS"),tone:U("uTone")};
+    // Static quad corners: x = 0 at A and 1 at B, y = -1 or +1 across the line.
+    const cb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,cb);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,-1,1,-1,0,1,1,1]),gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(glLoc.corner);
+    gl.vertexAttribPointer(glLoc.corner,2,gl.FLOAT,false,0,0); glInst.div(glLoc.corner,0);
+    glVBuf=gl.createBuffer();
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE); // additive, as the old 'lighter' strokes
+    glCanvas.addEventListener("webglcontextlost",e=>{e.preventDefault();glOK=false;});
+    return true;
+  }catch(err){ console.warn("flowlab: WebGL tracers off, 2D fallback.",err); return false; }
+}
+glOK=initTracerGL();
+// The tab shell removes the iframe on a page swap. Release the context then.
+window.addEventListener("pagehide",function(){try{if(gl)gl.getExtension("WEBGL_lose_context").loseContext();}catch(e){}});
+
+// Fill the vertex buffer: one -1 pad slot, then per tracer the newest trl
+// points of its ring, newest first, then one -1 slot, then a final -1 pad
+// slot. Fade is (1 - s/trl) * ageA, as before. Returns the slot count
+// without the two pads.
+function fillTracerVerts(){
+  const TL=Math.min(cfg.trl,TRAIL_MAX), stride=TL+1, need=(TR_N*stride+2)*4;
+  if(glData.length<need) glData=new Float32Array((TR_N*(TRAIL_MAX+1)+2)*4);
+  const V=cfg.colMode==="speed"?trS:cfg.colMode==="phase"?trH:null;
+  glData[3]=-1;
+  let w=4;
+  for(let i=0;i<TR_N;i++){
+    // Age envelope: fade in on spawn, fade out over the last 20 % of life.
+    const age=tAge[i], mx=tMax[i];
+    const ageA=age<0.1?age/0.1:age>mx*0.8?Math.max(0,(mx-age)/(mx*0.2)):1;
+    const L=trLen[i]<TL?trLen[i]:TL, base=i*TRAIL_MAX;
+    let h=trHead[i];
+    for(let s=0;s<L;s++){
+      const o=base+h, v=V?V[o]:0;
+      glData[w]=trX[o]; glData[w+1]=trY[o]; glData[w+2]=s===0?v+2:v; // +2 = head
+      glData[w+3]=(1-s/TL)*ageA; w+=4;
+      h=h===0?TRAIL_MAX-1:h-1;
+    }
+    for(let s=L;s<stride;s++){ glData[w+3]=-1; w+=4; }
+  }
+  glData[w+3]=-1;
+  return TR_N*stride;
+}
+
+// Draw the tracers into glCanvas. Returns false if WebGL is not in use.
+const _stops=new Float32Array(MAX_STOPS*3);
+function renderTracersGL(){
+  if(!glOK) return false;
+  gl.viewport(0,0,glCanvas.width,glCanvas.height);
+  gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+  const slots=fillTracerVerts();
+  if(slots<2) return true;
+  const len=(slots+2)*4;
+  if(len!==glViewLen){ glView=glData.subarray(0,len); glViewLen=len; }
+  gl.bindBuffer(gl.ARRAY_BUFFER,glVBuf);
+  gl.bufferData(gl.ARRAY_BUFFER,glView,gl.DYNAMIC_DRAW);
+  // Instance i reads slots i..i+3 as P, A, B, N.
+  const at=[glLoc.P,glLoc.A,glLoc.B,glLoc.N];
+  for(let k=0;k<4;k++){ gl.enableVertexAttribArray(at[k]); gl.vertexAttribPointer(at[k],4,gl.FLOAT,false,16,16*k); glInst.div(at[k],1); }
+  const S=PALETTES[cfg.palette]||PALETTES.stella;
+  for(let k=0;k<MAX_STOPS;k++){const c=S[Math.min(k,S.length-1)];_stops[k*3]=c[0];_stops[k*3+1]=c[1];_stops[k*3+2]=c[2];}
+  gl.uniform3fv(glLoc.stops,_stops); gl.uniform1f(glLoc.ns,S.length-1);
+  gl.uniform1f(glLoc.mode,cfg.colMode==="speed"?0:cfg.colMode==="phase"?1:2);
+  gl.uniform3f(glLoc.tone,cfg.contrast,cfg.gamma,cfg.exposure);
+  gl.uniform2f(glLoc.res,CW,CH); gl.uniform3f(glLoc.view,view.cx,view.cy,view.scale);
+  gl.uniform1f(glLoc.dpr,glCanvas.width/CW);
+  glInst.draw(gl.TRIANGLE_STRIP,0,4,slots-1);
+  return true;
+}
+
+// Tracer layer entry point, called from render(). With WebGL, add glCanvas to
+// the 2D canvas in device space. Without WebGL, use the 2D path.
+function drawTracers(){
+  if(renderTracersGL()){
+    ctx.save(); ctx.setTransform(1,0,0,1,0,0); ctx.globalCompositeOperation="lighter";
+    ctx.drawImage(glCanvas,0,0); ctx.restore();
+    return;
+  }
+  drawTracers2D();
+}
+// 2D fallback: the old per-segment strokes, a soft wide halo then a bright
+// core, read from the same vertex buffer. It is slow, but it runs only when
+// WebGL is not available.
+function drawTracers2D(){
+  ctx.save(); ctx.globalCompositeOperation="lighter"; ctx.lineCap="round"; const EX=cfg.exposure;
+  const slots=fillTracerVerts(), d=glData;
+  for(let i=1;i<slots;i++){
+    const o=i*4, a0=d[o+3];
+    if(a0<0.01||d[o+7]<0) continue;
+    const v=d[o+2]>=2?d[o+2]-2:d[o+2];
+    let r,g,b;
+    if(cfg.colMode==="speed"){[r,g,b]=ramp(PALETTES[cfg.palette]||PALETTES.stella,toneMap(v));}
+    else if(cfg.colMode==="phase"){[r,g,b]=hueRGB(v);}
+    else {r=0.3;g=0.82;b=1.0;}
+    r*=EX;g*=EX;b*=EX;
+    const x0=sx(d[o]),y0=sy(d[o+1]),x1=sx(d[o+4]),y1=sy(d[o+5]);
+    ctx.strokeStyle=`rgba(${r*a0*0.12*255|0},${g*a0*0.12*255|0},${b*a0*0.12*255|0},1)`; ctx.lineWidth=Math.max(1,5*a0);
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+    ctx.strokeStyle=`rgba(${r*255|0},${g*255|0},${b*255|0},${a0})`; ctx.lineWidth=Math.max(0.7,1.6*a0);
+    ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
   }
   ctx.restore();
 }
@@ -676,7 +900,7 @@ tog("tSim","sim",()=>{$("msim-panel").classList.toggle("hidden",!cfg.sim);});
 // Playback controls: pause/resume the loop, reset the model + tracers, clear trails.
 $("btnPlay").addEventListener("click",function(){cfg.playing=!cfg.playing;this.textContent=cfg.playing?"▶ Play":"▐▐ Pause";this.classList.toggle("active",cfg.playing);});
 $("btnReset").addEventListener("click",()=>{resetPS();spawnTracers();});
-$("btnClear").addEventListener("click",()=>{tracers.forEach(t=>t.trail=[]);});
+$("btnClear").addEventListener("click",()=>{trLen.fill(0);});
 // Collapse/expand the governing-equations panel.
 $("eq-toggle").addEventListener("click",()=>{const p=$("eq-panel");const c=p.classList.toggle("collapsed");p.querySelector(".arrow").textContent=c?"▼":"▲";});
 
@@ -697,9 +921,9 @@ canvas.addEventListener("touchend",()=>pinch=0);
 /* loop */
 // Per-frame driver: step physics when playing, render, and throttle the status
 // bar and FPS readout to a few updates per second.
-let last=0,fc=0,ft=0,capT=0;
+let last=0,fc=0,ft=0,capT=0,rafId=0,started=false;
 function loop(t){
-  requestAnimationFrame(loop);
+  rafId=requestAnimationFrame(loop);
   const dt=Math.min((t-last)/1000,0.05); last=t;
   fc++;ft+=dt; if(ft>=0.5){$("st-fps").textContent=Math.round(fc/ft)+" fps";fc=0;ft=0;}
   if(cfg.playing){updateTracers(dt); updatePS(dt);}
@@ -707,7 +931,7 @@ function loop(t){
   if(cfg.sim) drawMSim();
   capT+=dt;
   if(capT>0.12){capT=0;
-    $("st-tr").textContent=cfg.den+" tracers";
+    $("st-tr").textContent=TR_N+" tracers";
     $("st-state").innerHTML="x <b>"+ps.x.toFixed(2)+"</b> y <b>"+ps.y.toFixed(2)+"</b>";
     $("st-zoom").textContent=(view.scale/(Math.min(CW,CH)/(2*SYS[cur].view.span))).toFixed(2)+"×";
     if(cfg.sim)$("msim-vars").innerHTML=varCaption();
@@ -718,6 +942,19 @@ function loop(t){
 if(window.ResizeObserver)new ResizeObserver(()=>{resize();spawnTracers();}).observe(document.getElementById("canvas-wrap"));
 else window.addEventListener("resize",()=>{resize();spawnTracers();});
 
-// Boot after a short delay so layout has settled: size, draw the tone curve,
-// select the default system, and start the loop.
-setTimeout(()=>{resize();drawToneCurve();selectSystem("pendulum");requestAnimationFrame(loop);},40);
+// Stop the loop while the page is hidden. The browser already stops rAF in a
+// hidden tab. On return, reset last so the first dt is near zero.
+document.addEventListener("visibilitychange",()=>{
+  if(document.hidden){ if(rafId){cancelAnimationFrame(rafId);rafId=0;} }
+  else if(!rafId&&started){ last=performance.now(); rafId=requestAnimationFrame(loop); }
+});
+
+// Boot after a short delay so layout has settled: size, set the default
+// tracer count from the canvas area, draw the tone curve, select the default
+// system, and start the loop.
+setTimeout(()=>{
+  resize();
+  const r=$("rDen"); r.value=cfg.den=tracerBudget(); $("vDen").textContent=r.value; setRange(r);
+  drawToneCurve(); selectSystem("pendulum");
+  started=true; last=performance.now(); rafId=requestAnimationFrame(loop);
+},40);
