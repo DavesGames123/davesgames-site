@@ -50,7 +50,8 @@
 
    PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
      #dock      fixed at the base: #dockPanel opens the panel, #dockLeft and
-                #dockRight step the view, #dockAuto starts auto-scroll.
+                #dockRight step the view, #dockAuto stops and starts
+                auto-scroll. Auto-scroll is on at boot.
      #panel     portrait: a bottom sheet above the dock. #sheetGrip toggles
                 half and full height, and a drag down closes the sheet.
                 landscape: a drawer on the right edge.
@@ -86,7 +87,7 @@
 <div id="stage" tabindex="0" aria-label="Landscape scroll. Drag or use the arrow keys to pan.">
   <div id="BG"></div>
 </div>
-<div id="hint">drag to pan · shift + wheel · ← → keys</div>
+<div id="hint">drag or wheel to pan · ← → keys · ❚❚ to stop</div>
 <button id="gear" aria-label="Controls">☰</button>
 
 <div id="panel" class="open">

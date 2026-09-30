@@ -25,12 +25,17 @@
    and --svg-h, and style.css applies them to the SVG. The CSS variables stay
    when update() replaces the SVG. One CSS px is unitsPerPx() SVG units.
 
-   PAN. Drag, touch drag, wheel (deltaX, or shift + deltaY), the arrow keys,
-   the step buttons, and auto-scroll all call panBy(). refresh() then runs
+   PAN. Drag, touch drag, wheel (deltaX or deltaY), the arrow keys, the
+   step buttons, and auto-scroll all call panBy(). Auto-scroll is on at boot.
+   A drag holds auto-scroll until the pointer comes up. refresh() then runs
    once per animation frame. It calls update() at once when the engine needs
    new chunks, or when the view leaves the rendered band of chunks. In the
    other cases it calls viewupdate(), and it calls update() 180 ms after the
    last pan to center the rendered band again.
+
+   FOCUS. In the Stella Nova shell the page is an iframe, and key events go
+   to the shell until the frame has focus. The boot and each mouse entry
+   focus #stage, so the arrow keys reach this page.
 
    GREP MAP
      grep -n 'function fitScale'     the CSS scale of the SVG
@@ -54,7 +59,8 @@
   const G = {
     step: 200,       // step size in SVG units, as upstream INC_STEP
     speed: 100,      // auto-scroll speed in SVG units per second
-    auto: false,
+    auto: false,     // setAuto(true) at BOOT starts the scroll
+    held: false,     // true while a drag holds auto-scroll
   };
 
   const stage = $('stage'), BG = $('BG');
@@ -133,7 +139,7 @@
   function tick(now) {
     const dt = Math.min((now - lastT) / 1000, 0.05); lastT = now;
     let d = 0;
-    if (G.auto) d += G.speed * dt;
+    if (G.auto && !G.held) d += G.speed * dt;
     if (glide) {
       const f = Math.min(1, (now - glide.t0) / glide.ms);
       const e = 1 - Math.pow(1 - f, 3);
@@ -152,7 +158,7 @@
     glide = { from: 0, dist: d, done: 0, t0: now, ms: 320 };
     startLoop();
   }
-  function setAuto(on) {
+  function setAuto(on, quiet) {
     G.auto = on;
     const b = $('autoBtn'), k = $('dockAuto');
     b.textContent = on ? '❚❚ STOP AUTO-SCROLL' : '▶ AUTO-SCROLL';
@@ -160,7 +166,7 @@
     k.textContent = on ? '❚❚' : '▶▶';
     k.classList.toggle('on', on);
     k.setAttribute('aria-label', on ? 'Stop auto-scroll' : 'Start auto-scroll');
-    if (on) { hideHint(); startLoop(); }
+    if (on) { if (!quiet) hideHint(); startLoop(); }
   }
 
   // ---------------------------------------------------------- paperTexture
@@ -243,6 +249,7 @@
     stage.addEventListener('pointerdown', e => {
       if (drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
       drag = { id: e.pointerId, x: e.clientX };
+      G.held = true;
       try { stage.setPointerCapture(e.pointerId); } catch (x) {}
       stage.classList.add('drag');
       stage.focus({ preventScroll: true });
@@ -257,16 +264,18 @@
     const endDrag = e => {
       if (!drag || e.pointerId !== drag.id) return;
       drag = null;
+      G.held = false;
       stage.classList.remove('drag');
       try { stage.releasePointerCapture(e.pointerId); } catch (x) {}
     };
     stage.addEventListener('pointerup', endDrag);
     stage.addEventListener('pointercancel', endDrag);
 
-    // Wheel and trackpad. deltaX pans. With shift, deltaY pans too.
+    // Wheel and trackpad. The page does not scroll up or down, so the larger
+    // of deltaX and deltaY pans. A plain mouse wheel pans too.
     stage.addEventListener('wheel', e => {
-      let d = e.deltaX;
-      if (!d && e.shiftKey) d = e.deltaY;
+      const d0 = Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      let d = d0;
       if (!d) return;
       e.preventDefault();
       if (e.deltaMode === 1) d *= 16;
@@ -275,11 +284,16 @@
       panBy(d * unitsPerPx());
     }, { passive: false });
 
+    // Focus for the arrow keys. A mouse entry takes focus from the shell. A
+    // touch entry does not, because focus can open the phone keyboard.
+    stage.addEventListener('pointerenter', e => {
+      if (e.pointerType === 'mouse' && !isTyping(document.activeElement)) focusStage();
+    });
+
     // Arrow keys: a quarter step. With shift: a full step.
     window.addEventListener('keydown', e => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-      const t = e.target;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (isTyping(e.target)) return;
       e.preventDefault();
       hideHint();
       const d = (e.shiftKey ? G.step : G.step / 4) * (e.key === 'ArrowLeft' ? -1 : 1);
@@ -353,6 +367,10 @@
 
     setTimeout(hideHint, 7000);
   }
+  function isTyping(t) {
+    return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+  }
+  function focusStage() { try { stage.focus({ preventScroll: true }); } catch (x) {} }
   function bindRange(id, key, fmtFn) {
     const inp = $(id), out = $(id + 'V');
     const show = () => { G[key] = +inp.value; out.textContent = fmtFn(+inp.value); };
@@ -369,4 +387,6 @@
   paperTexture();                          // 4. paper; reads Math.random
   buildUI();                               // 5. controls, no Math.random
   refreshStatus();
+  focusStage();                            // 6. the arrow keys reach the page
+  setAuto(true, true);                     // 7. the scroll moves by default
 })();
