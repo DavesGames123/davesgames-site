@@ -30,6 +30,14 @@
      ├──────────────┴───────────────────────────────────────────────────────┤
      │ #status-bar  active equation · info · fps                              │
      └───────────────────────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock       at the base: #dockPanel opens the panel, #dockEqs selects
+                 an equation. All are one tap.
+     #panel      portrait: a bottom sheet above the dock. #sheetGrip toggles
+                 half and full height, and a drag down closes the sheet.
+                 landscape: a drawer on the right edge.
+     main.js fits the scene in the canvas area below the equation card.
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -41,14 +49,15 @@
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
      this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<!-- Mobile button: toggle the control panel open on narrow screens. -->
-<button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 <div class="topbar">
   <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Maxwell's Equations</span></div>
 </div>
 <div id="main">
   <!-- Control panel: equation tabs, the active tab's controls, and About text. -->
-  <div id="panel"><div class="p-body">
+  <div id="panel">
+  <!-- Phone only: the grip of the bottom sheet. -->
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <div class="p-body">
     <!-- Tab strip: one button per equation; each calls switchEq with its index. -->
     <div class="p-section">
       <div class="p-sec-lbl">Maxwell's Equations</div>
@@ -78,10 +87,9 @@
       <div class="ctrl-hint" id="about-text"></div>
     </div>
   </div></div>
-  <!-- Canvas stage: the field scene, a tap-to-close backdrop, and the formula card. -->
+  <!-- Canvas stage: the field scene and the formula card. -->
   <div id="canvas-wrap">
     <canvas id="sim-canvas"></canvas>
-    <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
     <!-- Formula card: accent dot and title, the KaTeX equation, and the prose. -->
     <div class="eq-display" id="eq-display">
       <div class="eq-title"><span class="dot" id="eq-dot"></span><span id="eq-title-text"></span></div>
@@ -93,9 +101,19 @@
 <!-- Status bar: active equation name, per-scene info, and FPS. -->
 <div id="status-bar">
   <span id="st-eq">I · Gauss</span><span class="sep"></span>
-  <span id="st-info">--</span><span class="sep"></span>
+  <span id="st-info">--</span><span class="sep sep-fps"></span>
   <span id="st-fps">-- fps</span>
 </div>
+<!-- Phone only: the dock. The panel button and one button per equation. -->
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockEqs" class="seg">
+    <button data-eq="0" style="--c:#ff9050" onclick="switchEq(0)" aria-label="Gauss's Law"><span class="n">I</span><span class="s">∇·E</span></button>
+    <button data-eq="1" style="--c:#60e0ee" onclick="switchEq(1)" aria-label="No Monopoles"><span class="n">II</span><span class="s">∇·B</span></button>
+    <button data-eq="2" style="--c:#64c864" onclick="switchEq(2)" aria-label="Faraday's Law"><span class="n">III</span><span class="s">∇×E</span></button>
+    <button data-eq="3" style="--c:#c890ff" onclick="switchEq(3)" aria-label="Ampère–Maxwell"><span class="n">IV</span><span class="s">∇×B</span></button>
+  </div>
+</nav>
 
 <script src="main.js"></script>
 </body>
