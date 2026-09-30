@@ -1,7 +1,8 @@
 // advect.wgsl — move every particle one frame through the current field.
 //
-// Positions are normalized poster coordinates (0..1, y down). The step is
-// RK2 (midpoint) with bilinear field samples. The step length in backing
+// Positions are normalized screen coordinates (0..1, y down). The view rect
+// maps a screen point to extent coordinates, where the field is sampled.
+// The step is RK2 (midpoint) with bilinear field samples. The step length in backing
 // pixels is stepPx * (speed / speedRef)^gamma, so slow water still drifts and
 // the fastest channels make long streaks. A particle that leaves the water
 // or ends its life respawns on a random water point (rejection sampling on
@@ -29,6 +30,7 @@ struct AdvectU {
   reseed: u32,      // 1: respawn all particles at a random life phase
   frame: u32,
   pad: u32,
+  view: vec4f,      // x0, y0, x1, y1 of the view rect in extent coordinates
 };
 
 @group(0) @binding(0) var<uniform> A: AdvectU;
@@ -47,8 +49,9 @@ fn rnd(s: ptr<function, u32>) -> f32 {
   return f32(*s >> 8u) / 16777216.0;
 }
 
+// Sample the field at screen point p.
 fn fieldAt(p: vec2f) -> vec4f {
-  return textureSampleLevel(field, samp, p, 0.0);
+  return textureSampleLevel(field, samp, mix(A.view.xy, A.view.zw, p), 0.0);
 }
 
 // Displacement in normalized coordinates for one step from point p.
@@ -64,7 +67,7 @@ fn stepAt(p: vec2f) -> vec2f {
 fn respawn(q: ptr<function, Particle>, s: ptr<function, u32>, randomPhase: bool) {
   var found = false;
   var c = vec2f(0.0);
-  for (var i = 0; i < 24; i++) {
+  for (var i = 0; i < 32; i++) {
     c = vec2f(rnd(s), rnd(s));
     // Accept with a probability equal to the coverage, so the particle
     // density follows a soft coverage fade.
