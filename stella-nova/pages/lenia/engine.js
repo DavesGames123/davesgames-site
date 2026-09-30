@@ -5,6 +5,8 @@
 //   U  = K * A                    convolution with a ring kernel K of radius R
 //   G  = growth(U; m, s)          a bump in [-1, 1], positive near U = m
 //   A' = clip(A + G / T, 0, 1)    T steps make one unit of time
+// The field buffer keeps U and the clipped change (A' - A) T of each cell
+// for the potential and growth views.
 // The world is a torus of W x H cells.
 //
 // The convolution is direct, not FFT. kernelTaps() lists every kernel cell
@@ -183,10 +185,12 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     yy = select(yy, yy + H, yy < 0);
     u += t.z * src[yy * W + xx];
   }
-  let g = growth(u);
   let k = id.y * rule.w + id.x;
-  dst[k] = clamp(src[k] + rule.dt * g, 0.0, 1.0);
-  fld[k] = vec2f(u, g);
+  let a = clamp(src[k] + rule.dt * growth(u), 0.0, 1.0);
+  dst[k] = a;
+  // The real change per unit of time, after the clip. An empty cell with
+  // G = -1 cannot decay, so it shows 0 in the growth view, not -1.
+  fld[k] = vec2f(u, (a - src[k]) / rule.dt);
 }
 `;
 
