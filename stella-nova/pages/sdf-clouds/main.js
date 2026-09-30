@@ -19,6 +19,13 @@
 // The URL hash keeps the layout, the passes and every control that differs
 // from its default, so a link reopens the same study.
 //
+// The HUD shows GPU time of the view pass, as a mean over the last 0.5 s,
+// when the device has timestamp-query. The frame interval comes from
+// requestAnimationFrame, and vsync caps it, so it does not show GPU cost.
+// Without the feature, the HUD shows only the frame interval and labels it.
+// GPU time is the elapsed time between the pass timestamps. It includes GPU
+// clock changes and other GPU work on the machine, so it is not a fixed cost.
+//
 // grep: function buildPanel  function buildViews  function viewRects  function tick  KEYS
 
 import { loadShaders } from '../../lib/shaders.js';
@@ -386,7 +393,9 @@ async function boot() {
   if (!navigator.gpu) return fail('This page needs WebGPU. Open it in a current Chrome, Edge or Safari.');
   const adapter = await navigator.gpu.requestAdapter();
   if (!adapter) return fail('No WebGPU adapter is available on this device.');
-  const device = await adapter.requestDevice();
+  const device = await adapter.requestDevice({
+    requiredFeatures: adapter.features.has('timestamp-query') ? ['timestamp-query'] : [],
+  });
   device.lost.then((info) => fail(`The GPU device was lost: ${info.message || info.reason}`));
   device.addEventListener('uncapturederror', (e) => console.error('[sdf-clouds]', e.error.message));
   const names = ['common', 'cloud', 'shape', 'jfa', 'worley', 'light', 'march'];
@@ -399,6 +408,7 @@ async function boot() {
 
   let last = performance.now();
   let time = 0, frame = 0, fpsT = 0, fpsN = 0, fps = 0, lastBake = '—', lastLayoutClass = '';
+  let gpuSum = 0, gpuN = 0;
   const tick = (now) => {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
@@ -416,24 +426,35 @@ async function boot() {
     const info = engine.frame(enc, ctx.getCurrentTexture().createView(), viewRects(),
       { state: animate(state, time), cam: animateCam(cam, state, time), time, frame: frame++ });
     device.queue.submit([enc.finish()]);
+    engine.afterSubmit();
     if (info.stages.length) lastBake = info.stages.join(' + ');
+    const g = engine.gpu();
+    if (g && g.view > 0) { gpuSum += g.view; gpuN++; }
 
     fpsN++; fpsT += dt;
     if (fpsT > 0.5) {
       fps = fpsN / fpsT; fpsN = 0; fpsT = 0;
-      showStats(info, fps, lastBake, w, h);
+      const gpu = g ? { view: gpuN ? gpuSum / gpuN : 0, bake: g.bake, bakeAt: g.bakeAt } : null;
+      gpuSum = 0; gpuN = 0;
+      showStats(info, fps, lastBake, w, h, gpu);
     }
     requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
 }
 
-function showStats(info, fps, lastBake, w, h) {
+function showStats(info, fps, lastBake, w, h, gpu) {
   const d = info.dims;
   const n = (v) => v.reduce((a, b) => a * b, 1);
   const big = (v) => (v >= 1e6 ? `${(v / 1e6).toFixed(1)} M` : `${(v / 1e3).toFixed(0)} k`);
   const live = w * h * state.maxSteps;
-  hud.textContent = `${fps.toFixed(0)} fps · ${(1000 / Math.max(fps, 1e-3)).toFixed(1)} ms · ${w}×${h}`;
+  const interval = `${(1000 / Math.max(fps, 1e-3)).toFixed(1)} ms frame`;
+  const gpuView = gpu ? `GPU ${gpu.view.toFixed(2)} ms` : 'GPU time n/a';
+  hud.textContent = `${gpuView} · ${fps.toFixed(0)} fps · ${interval} · ${w}×${h}`;
+  const gpuRows = gpu
+    ? `<b>GPU view</b> ${gpu.view.toFixed(2)} ms (all views, mean over 0.5 s)<br>` +
+      `<b>GPU last bake</b> ${gpu.bakeAt ? `${gpu.bake.toFixed(2)} ms` : '—'}<br>`
+    : '<b>GPU time</b> n/a: no timestamp-query on this device<br>';
   statsEl.innerHTML =
     `<b>SDF volume</b> ${d.vol.join('×')} = ${big(n(d.vol))} voxels<br>` +
     `<b>Light volume</b> ${d.lit.join('×')} = ${big(n(d.lit))} voxels<br>` +
@@ -441,7 +462,8 @@ function showStats(info, fps, lastBake, w, h) {
     `<b>Last bake</b> ${lastBake}<br>` +
     `<b>Secondary rays / bake</b> ${big(n(d.lit))} (one per light voxel)<br>` +
     `<b>Live, worst case</b> ${big(live)} per frame (pixels × max steps)<br>` +
-    `<b>Frame</b> ${fps.toFixed(0)} fps at ${w}×${h}`;
+    gpuRows +
+    `<b>Frame</b> ${fps.toFixed(0)} fps at ${w}×${h} (vsync caps this)`;
 }
 
 boot().catch((e) => { console.error(e); fail(`WebGPU start failed: ${e.message}`); });

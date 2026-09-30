@@ -16,7 +16,14 @@
 // sdf, ero and light are rgba16float so they filter without the
 // float32-filterable feature. Seeds stay rgba32float and use textureLoad.
 //
+// GPU timing: when the device has timestamp-query, the bake pass and the view
+// pass write timestamps. frame() copies them into a free readback buffer, and
+// afterSubmit() maps that buffer after the caller submits. The map never
+// blocks a frame. If no readback buffer is free, the frame is not timed.
+// gpu() returns the latest times in ms, or null without the feature.
+//
 // grep: function createEngine  function alloc  function encodeBake  frame(
+//       function makeTimer  afterSubmit(  gpu()
 
 import { PARAM_VEC4, ERO_RES, pack, dims, bakeNeeded } from './params.js';
 
@@ -34,6 +41,47 @@ function bgl(device, entries) {
       return e;
     }),
   });
+}
+
+// Timestamp slots: 0, 1 bake pass begin and end; 2, 3 view pass begin and end.
+function makeTimer(device) {
+  if (!device.features.has('timestamp-query')) return null;
+  const U = GPUBufferUsage;
+  const qs = device.createQuerySet({ type: 'timestamp', count: 4 });
+  const resolve = device.createBuffer({ size: 32, usage: U.QUERY_RESOLVE | U.COPY_SRC });
+  const free = [...Array(3)].map(() => device.createBuffer({ size: 32, usage: U.MAP_READ | U.COPY_DST }));
+  const last = { view: 0, bake: 0, bakeAt: 0 };
+  let cur = null;       // readback buffer of the frame in encode
+  let pending = null;   // readback buffer of the frame the caller submits next
+  return {
+    last,
+    begin(baked) { cur = free.length ? { buf: free.pop(), baked } : null; },
+    writes(pass) {
+      if (!cur) return undefined;
+      const i = pass === 'bake' ? 0 : 2;
+      return { querySet: qs, beginningOfPassWriteIndex: i, endOfPassWriteIndex: i + 1 };
+    },
+    end(enc) {
+      if (!cur) return;
+      enc.resolveQuerySet(qs, 0, 4, resolve, 0);
+      enc.copyBufferToBuffer(resolve, 0, cur.buf, 0, 32);
+      pending = cur;
+      cur = null;
+    },
+    afterSubmit() {
+      const p = pending;
+      pending = null;
+      if (!p) return;
+      p.buf.mapAsync(GPUMapMode.READ).then(() => {
+        const q = new BigUint64Array(p.buf.getMappedRange());
+        const ms = (a, b) => (q[b] > q[a] ? Number(q[b] - q[a]) / 1e6 : 0);
+        last.view = ms(2, 3);
+        if (p.baked) { last.bake = ms(0, 1); last.bakeAt = performance.now(); }
+        p.buf.unmap();
+        free.push(p.buf);
+      }, () => {});
+    },
+  };
 }
 
 export async function createEngine(device, format, SH) {
@@ -151,7 +199,7 @@ export async function createEngine(device, format, SH) {
 
   const wg = (n) => Math.ceil(n / 4);
   function encodeBake(enc, d, stages) {
-    const cp = enc.beginComputePass({ label: 'bake' });
+    const cp = enc.beginComputePass({ label: 'bake', timestampWrites: timer?.writes('bake') });
     const disp = (pipe, bg, size) => {
       cp.setPipeline(pipe); cp.setBindGroup(0, bg);
       cp.dispatchWorkgroups(wg(size[0]), wg(size[1]), wg(size[2]));
@@ -169,6 +217,7 @@ export async function createEngine(device, format, SH) {
 
   let baked = null;
   const viewData = new Float32Array(8);
+  const timer = makeTimer(device);
 
   return {
     // views: [{ x, y, w, h, pass }] in target pixels.
@@ -183,6 +232,7 @@ export async function createEngine(device, format, SH) {
       if (state.lightErosion && state.erosion && (state.wind > 0 || state.boil > 0) && state.timeScale > 0) stages.add('light');
       alloc(d);
       device.queue.writeBuffer(paramBuf, 0, pack(params, state, cam, time, frame));
+      timer?.begin(stages.size > 0);
       if (stages.size) encodeBake(enc, d, stages);
       baked = { ...state };
 
@@ -191,7 +241,8 @@ export async function createEngine(device, format, SH) {
         device.queue.writeBuffer(viewBuf, i * 256, viewData);
       });
       const rp = enc.beginRenderPass({ colorAttachments: [{
-        view: target, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0.03, g: 0.04, b: 0.07, a: 1 } }] });
+        view: target, loadOp: 'clear', storeOp: 'store', clearValue: { r: 0.03, g: 0.04, b: 0.07, a: 1 } }],
+        timestampWrites: timer?.writes('view') });
       rp.setPipeline(pMarch);
       rp.setBindGroup(0, R.bgMarch);
       views.forEach((v, i) => {
@@ -201,8 +252,13 @@ export async function createEngine(device, format, SH) {
         rp.draw(3);
       });
       rp.end();
+      timer?.end(enc);
       return { stages: [...stages], dims: d };
     },
+    // Call after the queue submit of the frame() encoder.
+    afterSubmit() { timer?.afterSubmit(); },
+    // { view, bake, bakeAt } in ms, bakeAt a performance.now() stamp; null without timestamp-query.
+    gpu() { return timer ? timer.last : null; },
     invalidate() { baked = null; },
   };
 }
