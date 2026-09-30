@@ -103,8 +103,8 @@ fn ign(p: vec2f) -> f32 { return fract(52.9829189 * fract(dot(p, vec2f(0.0671105
     return out(select(s, l, uv.y > 0.5));
 }
 // black-body: Kang et al. fit of the Planckian locus, 1000–12000 K
-@fragment fn fs_blackbody(@builtin(position) fp: vec4f) -> @location(0) vec4f {
-    let t = field(cell_uv(fp.xy)); let T = mix(1000.0, 12000.0, t);
+// planck_rgb returns linear sRGB for temperature T in kelvin, max channel = 1
+fn planck_rgb(T: f32) -> vec3f {
     var x = 0.0;
     if (T < 4000.0) { x = -0.2661239e9 / (T * T * T) - 0.2343589e6 / (T * T) + 0.8776956e3 / T + 0.179910; }
     else { x = -3.0258469e9 / (T * T * T) + 2.1070379e6 / (T * T) + 0.2226347e3 / T + 0.240390; }
@@ -114,8 +114,11 @@ fn ign(p: vec2f) -> f32 { return fract(52.9829189 * fract(dot(p, vec2f(0.0671105
     else { y = 3.0817580 * x * x * x - 5.87338670 * x * x + 3.75112997 * x - 0.37001483; }
     let Y = 1.0; let X = Y * x / y; let Z = Y * (1.0 - x - y) / y;
     let rgb = vec3f(3.2406 * X - 1.5372 * Y - 0.4986 * Z, -0.9689 * X + 1.8758 * Y + 0.0415 * Z, 0.0557 * X - 0.2040 * Y + 1.0570 * Z);
-    let n = rgb / max(max(rgb.r, rgb.g), rgb.b);
-    return out(linear_to_srgb(max(n, vec3f(0.0)) * mix(0.3, 1.0, u.k.x)));
+    return max(rgb / max(max(rgb.r, rgb.g), rgb.b), vec3f(0.0));
+}
+@fragment fn fs_blackbody(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let t = field(cell_uv(fp.xy)); let T = mix(1000.0, 12000.0, t);
+    return out(linear_to_srgb(planck_rgb(T) * mix(0.3, 1.0, u.k.x)));
 }
 @fragment fn fs_lab_lightness(@builtin(position) fp: vec4f) -> @location(0) vec4f {
     let t = field(cell_uv(fp.xy)); let lab = linear_to_oklab(srgb_to_linear(u.tone.rgb));
@@ -189,3 +192,82 @@ fn agx_curve(x: vec3f) -> vec3f { let x2 = x * x; let x4 = x2 * x2; return 15.5 
     return out(mix(u.ink.rgb, mix(sh, hi, smoothstep(0.3, 0.8, t)), pow(t, 0.7)));
 }
 @fragment fn fs_contours(@builtin(position) fp: vec4f) -> @location(0) vec4f { let t = field(cell_uv(fp.xy)); let n = mix(4.0, 20.0, u.k.x); let f = fract(t * n); let line = 1.0 - smoothstep(0.0, 0.12, min(f, 1.0 - f)); return out(mix(rail(floor(t * n) / n), u.cream.rgb, line * u.k.y)); }
+
+// —— grading and heat ramps ———————————————————————————————————————————————————
+// white balance in linear light: temperature moves blue ↔ amber, tint moves green ↔ magenta
+fn white_balance(c: vec3f, temp: f32, tint: f32) -> vec3f {
+    let wb = vec3f(1.0 + 0.32 * temp, 1.0 - 0.22 * tint, 1.0 - 0.32 * temp) * vec3f(1.0 + 0.11 * tint, 1.0, 1.0 + 0.11 * tint);
+    return c * wb / luma(wb);
+}
+// one wheel: an RGB offset of zero mean, at hue angle a and radius r
+fn wheel(a: f32, r: f32) -> vec3f { let h = hsv2rgb(a / TAU, 1.0, 1.0); return (h - vec3f(luma(h))) * r; }
+// lift/gamma/gain in the ASC CDL form: out = (in·slope + offset)^power, per channel.
+// lift is the offset, gain is the slope, gamma is 1/power. lift pivots at white, so white stays put.
+fn lgg(c: vec3f, lift: vec3f, gamma: vec3f, gain: vec3f) -> vec3f {
+    let x = c * gain + lift * (1.0 - c);
+    return pow(max(x, vec3f(0.0)), 1.0 / max(gamma, vec3f(0.05)));
+}
+// the wheel badge: a hue ring with a dot at the wheel offset
+fn wheel_badge(p: vec2f, c: vec2f, R: f32, a: f32, r: f32, bg: vec3f) -> vec3f {
+    let q = p - c; let d = length(q); let px = 1.0 / max(min(u.size.x, u.size.y), 1.0);
+    var col = mix(bg, bg * 0.35, smoothstep(R + 2.0 * px, R, d));
+    let ring = smoothstep(0.16 * R, 0.16 * R - 1.5 * px, abs(d - 0.86 * R));
+    col = mix(col, hsv2rgb(atan2(q.y, q.x) / TAU, 0.75, 0.95), ring);
+    let dotp = c + vec2f(cos(a), sin(a)) * min(r * 3.5, 1.0) * 0.72 * R;
+    col = mix(col, vec3f(0.3), smoothstep(0.5 * px, -0.5 * px, abs(q.x) - 0.35 * px) * step(d, 0.72 * R) * 0.3);
+    col = mix(col, vec3f(0.3), smoothstep(0.5 * px, -0.5 * px, abs(q.y) - 0.35 * px) * step(d, 0.72 * R) * 0.3);
+    col = mix(col, u.cream.rgb, smoothstep(0.2 * R, 0.2 * R - 1.5 * px, length(p - dotp)));
+    return col;
+}
+// one grading chain on a test chart: white balance → lift → gamma → gain.
+// top: the field through the rail; bottom: an 11-step grey scale, graded (upper row) over ungraded (lower row).
+// the three badges show the wheel offsets; the wheels orbit on hover.
+@fragment fn fs_lift_gamma_gain(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy);
+    let temp = mix(-1.0, 1.0, u.k.x); let tint = mix(-1.0, 1.0, u.k.y); let amt = mix(0.0, 0.3, u.k.z);
+    let spin = u.time * 0.5;
+    let aL = 3.7 + spin; let aG = 0.9 + spin * 0.7; let aH = 0.6 - spin * 0.4;   // teal shadows, warm mids and highlights
+    let lift = vec3f(0.02) + wheel(aL, amt); let gamma = vec3f(1.0) + wheel(aG, amt * 1.6); let gain = vec3f(1.0) + wheel(aH, amt * 1.3);
+    let chart = uv.y > 0.8;
+    var src = rail(field(uv));
+    if (chart) { src = vec3f(floor(clamp(uv.x, 0.0, 0.999) * 11.0) / 10.0); }
+    let lin = white_balance(srgb_to_linear(src), temp, tint);
+    let graded = linear_to_srgb(clamp(lgg(lin, lift, gamma, gain), vec3f(0.0), vec3f(1.0)));
+    var col = graded;
+    if (chart && uv.y > 0.9) { col = src; }
+    let px = 1.0 / max(min(u.size.x, u.size.y), 1.0);
+    col = mix(col, u.ink.rgb, smoothstep(1.5 * px, 0.0, abs(uv.y - 0.8)));   // hairline over the chart
+    col = mix(col, u.ink.rgb, 0.6 * smoothstep(1.0 * px, 0.0, abs(uv.y - 0.9)));
+    let R = 0.075; let y0 = 0.1;
+    col = wheel_badge(uv, vec2f(0.2, y0), R, aL, amt, col);
+    col = wheel_badge(uv, vec2f(0.5, y0), R, aG, amt * 1.6, col);
+    col = wheel_badge(uv, vec2f(0.8, y0), R, aH, amt * 1.3, col);
+    return out(col);
+}
+// ARTIST RAMPS ARE NOT TEMPERATURE. The same heat value drives two maps:
+// left, a 2-stop artist fire ramp, dark char → hot, the kind a game hand-picks;
+// right, the Planckian locus from 1000 K to 12000 K, the color a black body really has.
+// Heat maps to temperature on a log scale, and the Planck side takes the artist side's luminance,
+// so the two halves differ in hue only. The artist ramp never turns white or blue.
+// A real black body passes through white near 6500 K and then goes blue.
+@fragment fn fs_ramp_vs_planck(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let px = 1.0 / max(min(u.size.x, u.size.y), 1.0);
+    let split = 0.5 + 0.015 * sin(u.time * 0.8);
+    var heat = field(uv);
+    let strip = uv.y > 0.84;
+    if (strip) { heat = clamp((uv.x - 0.04) / 0.92, 0.0, 1.0); }
+    let charC = srgb_to_linear(vec3f(0.10, 0.035, 0.03)); let hotC = srgb_to_linear(vec3f(1.0, 0.62, 0.18));
+    let artist = mix(charC, hotC, smoothstep(0.05, 0.95, heat));
+    let pk = planck_rgb(1000.0 * pow(12.0, heat));
+    let planck = pk * luma(artist) / max(luma(pk), 1e-4) * mix(1.0, 2.0, u.k.x);
+    var col = select(artist, planck, uv.x > split);
+    if (strip) { col = select(artist, planck, uv.y > 0.92); }
+    var c = linear_to_srgb(col);
+    c = mix(c, u.ink.rgb, smoothstep(2.0 * px, 0.0, abs(uv.x - split)) * select(1.0, 0.0, strip));
+    c = mix(c, u.cream.rgb, smoothstep(0.8 * px, 0.0, abs(uv.x - split)) * select(1.0, 0.0, strip));
+    c = mix(c, u.ink.rgb, smoothstep(2.0 * px, 0.0, abs(uv.y - 0.84)));
+    // white point tick on the Planck strip: 6500 K
+    let x65 = 0.04 + 0.92 * log2(6.5) / log2(12.0);
+    c = mix(c, u.ink.rgb, smoothstep(1.2 * px, 0.0, abs(uv.x - x65)) * step(0.92, uv.y) * 0.8);
+    return out(c);
+}
