@@ -42,6 +42,7 @@
 //      Bz glyphs ........... "function drawBzGlyphs"  out/into-plane symbols
 //      field lines ......... "function buildGrid"     stream function + march
 //      contour march ....... "function marchAll"      marching squares
+//      line draw ........... "function renderLines"   one WebGL2 call; 2D fallback
 //      render .............. "function render"        the per-frame draw
 //      source glow ......... "function renderSource"  the oscillating charge
 //      controls ............ "function sg"            slider wiring
@@ -316,6 +317,7 @@ function renderFronts(){
     ctx.beginPath();ctx.arc(SRC.x,SRC.y,r,0,Math.PI*2);ctx.stroke();}
   ctx.restore();
 }
+const GLOW=window.GlowLines?GlowLines.create():null;
 // Draw the E field lines as contours of the stream function. Each segment is
 // colored by local magnitude and drawn twice: a soft wide glow pass then a thin
 // bright pass. When the energy pulse is on, a traveling sine brightens the lines
@@ -323,8 +325,26 @@ function renderFronts(){
 function renderLines(){
   buildGrid();
   const levels=contourLevels();const segs=[];marchAll(levels,segs);
-  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
   const k=kOf(),flowPhase=SIM.t/k, dim=SIM.overlay?0.3:1;
+  // One WebGL2 draw for all segments (lib/glow-lines.js); the 2D strokes below
+  // are the fallback. Same colors, alphas and widths in both paths.
+  if(GLOW&&GLOW.begin(ctx)){
+    for(let s=0;s<segs.length;s+=4){
+      const x0=segs[s],y0=segs[s+1],x1=segs[s+2],y1=segs[s+3];
+      const mx=(x0+x1)*0.5,my=(y0+y1)*0.5,m=sampleMag(mx,my);
+      const [r,g,b]=fieldColorRGB(m);
+      let pulse=1;
+      if(SIM.showFlow){const rr=Math.hypot(mx-SRC.x,my-SRC.y);pulse=0.4+0.6*Math.max(0,Math.sin((rr-flowPhase)*k));}
+      const lv=Math.min(1,Math.log10(1+m*9e6)/6.6);
+      const a=Math.min(0.92,0.16+lv*0.95)*pulse*dim;
+      if(a<0.02)continue;
+      GLOW.seg(x0,y0,x1,y1,r*a*0.18,g*a*0.18,b*a*0.18,4.5*pulse);
+      GLOW.seg(x0,y0,x1,y1,r*a,g*a,b*a,1.4);
+    }
+    GLOW.flush(ctx);
+    return;
+  }
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
   for(let pass=0;pass<2;pass++){
     for(let s=0;s<segs.length;s+=4){
       const x0=segs[s],y0=segs[s+1],x1=segs[s+2],y1=segs[s+3];
