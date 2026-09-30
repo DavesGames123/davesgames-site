@@ -351,6 +351,49 @@ fn cen(p: vec2i) -> vec2f { return (vec2f(p) + 0.5) / f32(N) - 0.5; }
     textureStore(dst, p, vec4f(h + dh * mix(0.2, 1.0, u.k.y), 0.0, 0.0, 1.0));
 }
 
+// ─────────────────────────────────────────────── fog of war with explored memory (mode 17)
+// Scouts move over a hidden map. Each scout reveals a soft disc whose rim is
+// moved in and out by noise. The kernel keeps state.x = the explored memory,
+// a max-blend of every past reveal, so ground stays dimly known after the
+// scout leaves. The present pass draws the current reveal at full resolution
+// with the same fogReveal, so the bright band and its glow stay sharp.
+// These helpers read no uniform, so the compute and the present pass share them.
+fn fogH(i: vec2i, s: f32) -> f32 { return f32(pcg(vec3u(u32(i.x + 65536), u32(i.y + 65536), u32(s * 997.0) + 3u)).x) / 4294967295.0; }
+fn fogN(c: vec2f, s: f32) -> f32 {
+    let i = vec2i(floor(c)); let f = fract(c); let w = f * f * (3.0 - 2.0 * f);
+    return mix(mix(fogH(i, s), fogH(i + vec2i(1, 0), s), w.x), mix(fogH(i + vec2i(0, 1), s), fogH(i + vec2i(1, 1), s), w.x), w.y);
+}
+fn fogFbm(c: vec2f, s: f32) -> f32 { return 0.5 * fogN(c, s) + 0.3 * fogN(c * 2.1 + 5.3, s + 1.0) + 0.2 * fogN(c * 4.3 + 1.7, s + 2.0); }
+// scout i wanders on two detuned sine pairs, inside the map
+fn fogPos(i: i32, t: f32, s: f32) -> vec2f {
+    let a = fogH(vec2i(i, 1), s); let b = fogH(vec2i(i, 2), s); let c = fogH(vec2i(i, 3), s);
+    let fa = 0.22 + 0.2 * a; let fb = 0.19 + 0.2 * b;
+    return vec2f(0.33 * sin(t * fa + c * 6.28) + 0.07 * sin(t * fa * 2.7 + b * 6.28),
+                 0.33 * sin(t * fb + a * 6.28 + 1.3) + 0.07 * cos(t * fb * 3.1 + c * 6.28));
+}
+fn fogCount(k: vec4f) -> i32 { return i32(mix(1.0, 5.0, k.x) + 0.5); }
+fn fogRadius(k: vec4f) -> f32 { return mix(0.08, 0.19, k.y); }
+// the soft reveal band: 1 inside the sight of any scout, 0 outside, a noisy rim
+fn fogReveal(c: vec2f, t: f32, k: vec4f, s: f32) -> f32 {
+    let n = fogCount(k); let R = fogRadius(k); var v = 0.0;
+    for (var i: i32 = 0; i < 5; i++) {
+        if (i >= n) { break; }
+        let d = length(c - fogPos(i, t, s));
+        if (d > R * 1.6) { continue; }
+        let rim = R * (0.78 + 0.44 * fogFbm(c * 16.0 + vec2f(f32(i) * 3.7, t * 0.35), s + 7.0));
+        v = max(v, smoothstep(rim, rim * 0.62, d));
+    }
+    return v;
+}
+@compute @workgroup_size(8, 8) fn cs_fog_reveal_memory(@builtin(global_invocation_id) id: vec3u) {
+    let p = vec2i(id.xy); if (p.x >= N || p.y >= N) { return; }
+    let cur = fogReveal(cen(p), u.time, u.k, u.seed);
+    if (u.reset > 0.5) { textureStore(dst, p, vec4f(cur, cur, 0.0, 1.0)); return; }
+    // max-blend: memory never drops below a past reveal, unless forget (k.z) is up
+    let mem = ld(p).x * (1.0 - mix(0.0, 0.004, u.k.z));
+    textureStore(dst, p, vec4f(max(mem, cur), cur, 0.0, 1.0));
+}
+
 // ─────────────────────────────────────────────── present: state → color, one per sim family
 @group(0) @binding(0) var<uniform> pu: SimU;
 @group(0) @binding(1) var pTex: texture_2d<f32>;
@@ -401,7 +444,59 @@ fn cell_state(fp: vec2f) -> vec4f {
         let t = clamp(s.x, 0.0, 1.0);
         c = inferno(t) + vec3f(1.0, 0.9, 0.7) * smoothstep(0.7, 1.0, t) * 1.6;
     }
+    // mode 17 — fog of war: memory from the state, current reveal recomputed per pixel
+    else if (mode == 17) { c = fogPresent(fp.xy); }
     return vec4f(c, 1.0);
+}
+// the hidden map: fbm terrain with water, sand, grass, forest, rock and snow, hillshade and contours
+fn fogTerrain(c: vec2f, s: f32) -> vec3f {
+    let q = c * 3.4 + vec2f(s * 0.37, s * 0.21);
+    let h = fogFbm(q, s + 20.0); let e = 0.01;
+    let gx = fogFbm(q + vec2f(e, 0.0), s + 20.0) - h; let gy = fogFbm(q + vec2f(0.0, e), s + 20.0) - h;
+    let shade = clamp(0.8 - (gx - gy) * 32.0, 0.45, 1.25);
+    var col = mix(vec3f(0.04, 0.12, 0.26), vec3f(0.10, 0.34, 0.50), smoothstep(0.25, 0.44, h));
+    col = mix(col, vec3f(0.78, 0.70, 0.48), smoothstep(0.44, 0.46, h));
+    col = mix(col, vec3f(0.30, 0.52, 0.22), smoothstep(0.47, 0.52, h));
+    col = mix(col, vec3f(0.14, 0.33, 0.16), smoothstep(0.56, 0.62, h));
+    col = mix(col, vec3f(0.46, 0.42, 0.38), smoothstep(0.66, 0.72, h));
+    col = mix(col, vec3f(0.93, 0.94, 0.97), smoothstep(0.76, 0.8, h));
+    let land = smoothstep(0.44, 0.46, h);
+    col *= mix(1.0, shade, land);
+    let iso = abs(fract(h * 14.0) - 0.5);
+    col *= 1.0 - 0.22 * land * (1.0 - smoothstep(0.0, 0.06, iso));
+    return col;
+}
+fn fogPresent(fp: vec2f) -> vec3f {
+    let pos = fp / pu.pixelScale; let uv = (pos - 0.5 * pu.size) / max(min(pu.size.x, pu.size.y), 1.0) + 0.5;
+    let c = uv - 0.5;
+    // bilinear read of the 128x128 explored memory, so its edge is soft
+    let g = uv * f32(N) - 0.5; let i = vec2i(floor(g)); let f = fract(g);
+    let m00 = textureLoad(pTex, clamp(i, vec2i(0), vec2i(N - 1)), 0).x;
+    let m10 = textureLoad(pTex, clamp(i + vec2i(1, 0), vec2i(0), vec2i(N - 1)), 0).x;
+    let m01 = textureLoad(pTex, clamp(i + vec2i(0, 1), vec2i(0), vec2i(N - 1)), 0).x;
+    let m11 = textureLoad(pTex, clamp(i + vec2i(1, 1), vec2i(0), vec2i(N - 1)), 0).x;
+    let mem = smoothstep(0.05, 0.9, mix(mix(m00, m10, f.x), mix(m01, m11, f.x), f.y));
+    let cur = fogReveal(c, pu.time, pu.k, pu.seed);
+    let land = fogTerrain(c, pu.seed);
+    // unexplored: drifting fog clouds over near-black
+    let cloud = fogFbm(c * 5.0 + vec2f(pu.time * 0.05, -pu.time * 0.03), 40.0);
+    let fog = mix(vec3f(0.018, 0.022, 0.035), vec3f(0.11, 0.12, 0.16), smoothstep(0.3, 0.8, cloud));
+    // explored memory: the map, dimmed, cooled and desaturated
+    let grey = dot(land, vec3f(0.3, 0.55, 0.15));
+    let known = mix(vec3f(grey), land, 0.35) * vec3f(0.36, 0.4, 0.5) + fog * 0.35;
+    var col = mix(fog, known, mem);
+    col = mix(col, land * 1.2, cur);
+    // glow on the reveal rim, warm, strongest mid-band
+    let rim = cur * (1.0 - cur) * 4.0;
+    col += vec3f(1.0, 0.72, 0.34) * rim * 0.55;
+    // the scouts: a bright core with a halo
+    let n = fogCount(pu.k);
+    for (var j: i32 = 0; j < 5; j++) {
+        if (j >= n) { break; }
+        let d = length(c - fogPos(j, pu.time, pu.seed));
+        col += vec3f(1.0, 0.85, 0.55) * (smoothstep(0.012, 0.004, d) * 1.2 + exp(-d * d / 0.0012) * 0.25);
+    }
+    return col;
 }
 
 // ═══════════════════════════════════════════════════════════ more automata (mode 0)
