@@ -22,6 +22,7 @@
    GREP MAP
      grep -n 'const STOPS'             the stop lists
      grep -n 'export function lut'     256-entry RGB table of one ramp
+     grep -n 'export function outerGain' the OUTER LOBE exposure gain
      grep -n 'export function colorize'  field to RGBA pixels
    ========================================================================== */
 export const STOPS = {
@@ -63,6 +64,14 @@ function transfer(look) {
   for (let i = 0; i <= TN; i++) { const s = i / TN, t = Math.min(1, s * s * look.exposure); tLin[i] = Math.round(Math.pow(t, look.gamma) * 255); }
   for (let i = 0; i <= 4096; i++) tPow[i] = Math.round(Math.pow(i / 4096, look.gamma) * 255);
 }
+
+// Exposure gain of the OUTER LOBE scale. outer is the peak |psi| of the
+// outer lobe over the tile peak. A full gain of outer^-2 puts the outer lobe
+// at the top of the ramp, but at n >= 5 the gain goes above 100 and the
+// inner rings clip to hard white bands. outer^-1.5 keeps the outer lobe
+// warm and visible, and clips less.
+export const OUTER_POW = 1.5;
+export function outerGain(outer) { return Math.pow(outer > 0 ? outer : 1, -OUTER_POW); }
 
 export function colorize(f, size, look) {
   transfer(look);

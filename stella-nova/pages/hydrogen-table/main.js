@@ -36,7 +36,7 @@
      grep -n 'function startPool'   workers, or the page-thread fallback
    ========================================================================== */
 import { shellTiles, colIndex, tileSpec, radialR, legendre, energyEV, meanR, L_LETTER, fillTile } from './physics.js';
-import { MAPS, lut, colorize } from './colormaps.js';
+import { MAPS, lut, colorize, outerGain } from './colormaps.js';
 
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const $ = id => document.getElementById(id);
@@ -85,7 +85,7 @@ function mainThreadWorker() {
           const t0 = performance.now(), f = new Float32Array(j.size * j.size);
           const S = tileSpec(j.n, j.l, j.m, j.kind);
           fillTile(S, j.size, f);
-          const lk = d.look.outerLobe && !d.look.log ? { ...d.look, exposure: d.look.exposure / (S.outer * S.outer) } : d.look;
+          const lk = d.look.outerLobe && !d.look.log ? { ...d.look, exposure: d.look.exposure * outerGain(S.outer) } : d.look;
           const t1 = performance.now(), px = colorize(f, j.size, lk);
           fillMs += t1 - t0; colorMs += performance.now() - t1;
           items.push({ id: j.id, size: j.size, buf: px.buffer });

@@ -8,7 +8,7 @@
    MESSAGES
      in   { type:'render', seq, jobs:[{id,n,l,m,kind,size}], look }
           look = { cmap, gamma, exposure, log, decades, outerLobe }
-          outerLobe: the exposure is divided by (outer lobe peak / peak)^2,
+          outerLobe: the exposure is times outerGain(outer lobe peak / peak),
                      on the linear scale only
      out  { type:'tiles', seq, items:[{id, size, bmp | buf}] }   in chunks
      out  { type:'done', seq, fillMs, colorMs, fills }
@@ -24,7 +24,7 @@
      grep -n 'onmessage'           the job loop
    ========================================================================== */
 import { tileSpec, fillTile } from './physics.js';
-import { colorize } from './colormaps.js';
+import { colorize, outerGain } from './colormaps.js';
 
 const cache = new Map();
 let cacheFloats = 0;
@@ -58,7 +58,7 @@ self.onmessage = async (e) => {
     const t0 = performance.now();
     const { f, filled } = field(j);
     const t1 = performance.now();
-    const px = colorize(f, j.size, d.look.outerLobe && !d.look.log ? { ...d.look, exposure: d.look.exposure / (f.outer * f.outer) } : d.look);
+    const px = colorize(f, j.size, d.look.outerLobe && !d.look.log ? { ...d.look, exposure: d.look.exposure * outerGain(f.outer) } : d.look);
     const t2 = performance.now();
     fillMs += t1 - t0; colorMs += t2 - t1; if (filled) fills++;
     if (canBitmap) {
