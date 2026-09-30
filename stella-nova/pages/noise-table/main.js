@@ -13,6 +13,8 @@
 //      highlight.js ... WGSL colorizer for the inspector
 //      gpu.js ......... device, surfaces, tiles, pipelines (initGPU)
 //      inspector.js ... the modal (initInspector/currentInspected)
+//      ../../lib/table-mobile.js .. phone columns, controls drawer, touch
+//                       autoplay line (playhead), pixel-ratio cap
 //
 //  DATA
 //      shaders/noise.wgsl .. the one pack, 78 fragment entry points, fetched
@@ -30,19 +32,21 @@ import { initSignals, tickSignals, sigTime } from './signals.js';
 import { initControls } from './controls.js';
 import { initGPU, device, msurf, visible, stats, sizeSurface, present } from './gpu.js';
 import { initInspector, currentInspected } from './inspector.js';
+import { TOUCH, fitTable, playhead, maxDpr, initMobile } from '../../lib/table-mobile.js';
 
 // Pack source lives in a real .wgsl file under shaders/. Fetch it up front.
 const SH = await loadShaders(import.meta.url, ['shaders/noise.wgsl']);
 const PACK = SH['shaders/noise.wgsl'];
 const STYLES = await (await fetch(new URL('styles.json', import.meta.url))).json();
 
-// table sizing: 6 wide, square cells, the stage scrolls
+// table sizing: 6 wide on a desktop, 3 or 4 on a phone, square cells, the stage scrolls
 const COLS = 6;
-function fit() { const w = stage.clientWidth - 24; document.documentElement.style.setProperty('--cell', Math.max(40, Math.floor(w / COLS)) + 'px'); }
+const fit = () => fitTable(stage, COLS);
 new ResizeObserver(fit).observe(stage); fit();
 
 initSignals();
 initControls();
+initMobile();
 
 // initGPU reports its own failure (the note plus the FPS line), so a false
 // return ends the boot; a true return means the table is live.
@@ -90,25 +94,27 @@ if (await initGPU(STYLES, PACK)) {
     // global changes redraw everything once
     const key = { scale: G.scale, gain: G.gain, ink: G.ink.join(), tone: G.tone.join(), cream: G.cream.join() };
     const globalDirty = Object.keys(key).some(k => key[k] !== prev[k]); prev = key;
-    const dpr = Math.min(devicePixelRatio || 1, 3);
+    const dpr = Math.min(devicePixelRatio || 1, maxDpr());
     const enc = device.createCommandEncoder(); let any = false;
     const inspected = currentInspected();
+    // on a touch screen with no hover, the row under the playhead line animates (t.focus)
+    const band = (TOUCH && G.hoverOnly && !inspected) ? playhead(stage) : null;
     // pass 1: ease the rates (the clock eases in and out, nothing snaps), size the surfaces, pick the tiles that draw
     const eased = [];
     for (const t of tiles) {
-      const want = (!G.hoverOnly || t.hover || inspected === t) ? 1 : 0;
+      t.go = false; t.rect = null;
+      if (t.pipeline && visible.has(t)) { const rect = t.canvas.getBoundingClientRect(); if (rect.width >= 1) t.rect = rect; }
+      const focus = band !== null && !!t.rect && t.rect.top <= band && t.rect.bottom > band;
+      if (focus !== !!t.focus) { t.focus = focus; t.el.classList.toggle('tm-live', focus); }
+      const want = (!G.hoverOnly || t.hover || t.focus || inspected === t) ? 1 : 0;
       t.rate += (want - t.rate) * (1 - Math.exp(-dt / 0.18));
-      t.moving = t.rate > 0.002; t.go = false; t.rect = null;
+      t.moving = t.rate > 0.002;
       if (!t.pipeline) { if (t.moving) t.phase += dt * t.rate * G.tempo; continue; }
-      if (visible.has(t)) {
-        const rect = t.canvas.getBoundingClientRect();
-        if (rect.width >= 1) {
-          t.rect = rect;
-          // a resized surface has a new, empty cache, so a size change is a reason to draw on its own
-          const resized = sizeTo(t.surf, rect, dpr);
-          if (t.dirty || globalDirty || resized || t.hover || inspected === t) t.go = true;
-          else if (t.moving) eased.push(t);
-        }
+      if (t.rect) {
+        // a resized surface has a new, empty cache, so a size change is a reason to draw on its own
+        const resized = sizeTo(t.surf, t.rect, dpr);
+        if (t.dirty || globalDirty || resized || t.hover || t.focus || inspected === t) t.go = true;
+        else if (t.moving) eased.push(t);
       }
       if (inspected === t) t.go = true;
     }

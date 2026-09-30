@@ -7,6 +7,7 @@
 //  "animate on hover only" and "animate everything".
 // ============================================================================
 import { $, G, hexToRgb } from './state.js';
+import { HOVER_LABEL } from '../../lib/table-mobile.js';
 
 const setChip = (id, on) => { $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', String(on)); };
 
@@ -14,5 +15,5 @@ export function initControls() {
   $('inkc').addEventListener('input', e => { G.ink = hexToRgb(e.target.value); });
   $('tone').addEventListener('input', e => { G.tone = hexToRgb(e.target.value); });
   $('cream').addEventListener('input', e => { G.cream = hexToRgb(e.target.value); });
-  $('hoveronly').addEventListener('click', () => { G.hoverOnly = !G.hoverOnly; setChip('hoveronly', G.hoverOnly); $('hoveronly').textContent = G.hoverOnly ? '◉ animate on hover only' : '◉ animate everything'; });
+  $('hoveronly').addEventListener('click', () => { G.hoverOnly = !G.hoverOnly; setChip('hoveronly', G.hoverOnly); $('hoveronly').textContent = G.hoverOnly ? HOVER_LABEL : '◉ animate everything'; });
 }
