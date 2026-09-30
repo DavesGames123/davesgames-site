@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Shan Shui — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SHAN SHUI  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   An endless scroll of Chinese landscape in ink, drawn as SVG. The engine
+   is shan-shui-inf by Lingdong Huang, 2018 (MIT, see
+   LICENSE-shan-shui-inf.txt). The engine files are verbatim upstream code.
+   main.js is the Stella Nova UI: pan, auto-scroll, seed, and download.
+
+   The seed sets the landscape. Math.random is a seeded PRNG, so the same
+   seed and the same pan path give the same scroll. main.js must not call
+   Math.random before the first update(), and it never calls it later.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts       Google Fonts stylesheet
+     2. style.css   the page stylesheet
+   Scripts at end of body, all classic, one shared global scope:
+     prng.js        Prng; replaces Math.random and adds Math.seed
+     seed.js        parseArgs, global SEED from ?seed=, Math.seed(SEED)
+     noise.js       Noise (Perlin noise)
+     polytools.js   PolyTools (polygon helpers)
+     util.js        shared helpers
+     draw.js        stroke, blob, div, texture, and the other brushes
+     tree.js        Tree
+     mount.js       Mount
+     arch.js        Arch
+     man.js         Man
+     scene.js       water, mountplanner, MEM, chunkloader, update, viewupdate
+     main.js        the scale, the pan input, the controls, the boot
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Shan Shui                           #gear    │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │  #stage   the paper; drag, wheel, or arrows to pan   │
+     │  seed      │    #BG    update() writes <svg id="SVG"> here        │
+     │  view      │  #hint    the pan help                               │
+     │  save      │                                                       │
+     │  about     │                                                       │
+     ├────────────┴─────────────────────────────────────────────────────┤
+     │ #status  seed · x position                                         │
+     └──────────────────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock      fixed at the base: #dockPanel opens the panel, #dockLeft and
+                #dockRight step the view, #dockAuto starts auto-scroll.
+     #panel     portrait: a bottom sheet above the dock. #sheetGrip toggles
+                half and full height, and a drag down closes the sheet.
+                landscape: a drawer on the right edge.
+     #stage     always the clear band between the bars. main.js scales the
+                SVG so that its 800 units of height fill that band.
+
+   GREP MAP  (main.js)
+     grep -n 'function fitScale'     the CSS scale of the SVG
+     grep -n 'function panBy'        every pan input ends here
+     grep -n 'function refresh'      viewupdate or update, with the debounce
+     grep -n 'function paperTexture' the upstream paper loop, verbatim
+     grep -n 'function downloadSVG'  the SVG file save
+     grep -n 'function buildUI'      the control wiring
+     grep -n 'function setOpen'      the panel, the phone sheet, and the dock
+     grep -n 'BOOT'                  the boot order (see DETERMINISM)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="An endless scroll of Chinese landscape painting in ink, drawn as SVG from a seed. Drag to travel along it.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;SHAN.SHUI</div>
+  <div class="pagetitle">Shan Shui</div>
+</div>
+
+<div id="stage" tabindex="0" aria-label="Landscape scroll. Drag or use the arrow keys to pan.">
+  <div id="BG"></div>
+</div>
+<div id="hint">drag to pan · shift + wheel · ← → keys</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <div id="closeRow"><button id="panelClose" aria-label="Close controls">✕</button></div>
+
+  <div class="sec-label">SEED</div>
+  <div class="seedrow">
+    <input id="seedInp" type="text" inputmode="text" autocomplete="off" spellcheck="false" aria-label="Seed">
+  </div>
+  <div class="modes">
+    <button id="seedRandom">RANDOM</button>
+    <button id="seedApply">APPLY</button>
+  </div>
+  <div class="hint">The same seed gives the same landscape. A new seed reloads the page.</div>
+
+  <div class="sec-label">VIEW</div>
+  <div class="modes">
+    <button id="stepLeft" aria-label="Step left">◀ STEP</button>
+    <button id="stepRight" aria-label="Step right">STEP ▶</button>
+  </div>
+  <div class="row"><label>Step</label><input type="range" id="step" min="20" max="1000" step="20" value="200"><span class="val" id="stepV"></span></div>
+  <div class="modes"><button id="autoBtn">▶ AUTO-SCROLL</button></div>
+  <div class="row"><label>Speed</label><input type="range" id="speed" min="20" max="600" step="10" value="100"><span class="val" id="speedV"></span></div>
+  <div class="hint">Units are SVG units. The scroll is 800 units high.</div>
+
+  <div class="sec-label">SAVE</div>
+  <div class="modes"><button id="dlBtn">DOWNLOAD SVG</button></div>
+  <div class="hint">Saves the SVG that is on screen now. The file can be large.</div>
+
+  <div class="sec-label">ABOUT</div>
+  <div class="about">
+    <p>Shan shui (山水, "mountain water") is a style of Chinese painting. This scroll has no end. The page draws new mountains, trees, houses, boats, and people as you travel.</p>
+    <p>Each part is a set of brush strokes made from noise and polygons. There is no image data. A seeded random generator makes each seed give the same scroll.</p>
+    <p>Engine: <a href="https://github.com/LingDong-/shan-shui-inf" target="_blank" rel="noopener">shan-shui-inf</a> by Lingdong Huang, 2018. <a href="LICENSE-shan-shui-inf.txt" target="_blank" rel="noopener">MIT License</a>.</p>
+  </div>
+</div>
+
+<div id="status">
+  <span id="stMain" class="fn"></span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div class="seg">
+    <button id="dockLeft" aria-label="Step left">◀</button>
+    <button id="dockRight" aria-label="Step right">▶</button>
+  </div>
+  <button id="dockAuto" aria-label="Start auto-scroll">▶▶</button>
+</nav>
+
+<!-- The upstream paper-texture loop draws into this canvas. -->
+<canvas id="bgcanv" width="512" height="512" hidden></canvas>
+
+<!-- The engine in upstream order, then the UI. -->
+<script src="prng.js"></script>
+<script src="seed.js"></script>
+<script src="noise.js"></script>
+<script src="polytools.js"></script>
+<script src="util.js"></script>
+<script src="draw.js"></script>
+<script src="tree.js"></script>
+<script src="mount.js"></script>
+<script src="arch.js"></script>
+<script src="man.js"></script>
+<script src="scene.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

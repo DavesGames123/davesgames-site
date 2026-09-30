@@ -1,0 +1,235 @@
+/* ============================================================================
+   SHAN SHUI  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Dark shell with the Shader Library pink accent. The landscape keeps the
+   upstream look: ink on a paper texture, with mix-blend-mode multiply.
+
+   STAGE. #stage is the clear band between the top bars and the base bars.
+   Its edges come from --stage-t, --stage-b, and --stage-l. main.js reads the
+   height of #stage and sets --svg-w and --svg-h on #BG. Thus the 800 units of
+   SVG height fill the band, and the page never scrolls.
+
+   PHONE (max-width 768px, or a short landscape touch screen). A dock at the
+   base holds the panel button, the two step buttons, and auto-scroll. In
+   portrait the panel is a bottom sheet above the dock. In landscape it is a
+   drawer on the right edge. Every control is at least 44px high.
+     grep -n 'STAGE'      the landscape band and the SVG scale
+     grep -n 'TOUCH'      target and text sizes for any touch screen
+     grep -n 'PHONE'      the phone block
+     grep -n 'LANDSCAPE'  the landscape overrides
+   ========================================================================== */
+:root{
+  --bg:#040308; --bg2:#0c0912; --ink:#d6cfe0; --dim:#8a7a9a; --faint:#3a2a48;
+  --line:rgba(229,139,208,0.12); --line-b:rgba(229,139,208,0.26);
+  --warm:#e58bd0; --pink:#e58bd0; --paper:#f2ead8; --panel-w:290px;
+  --stage-t:52px; --stage-b:34px; --stage-l:var(--panel-w);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+body{font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;color:var(--ink);-webkit-font-smoothing:antialiased}
+a{color:var(--pink)}
+
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px;
+  background:linear-gradient(180deg,rgba(7,9,13,0.92),rgba(7,9,13,0.6));pointer-events:none;
+}
+.brand{font-family:'Cormorant Garamond',Georgia,serif;font-size:1.35rem;letter-spacing:0.22em;color:#e8eef8;display:flex;align-items:center;gap:9px}
+.brand .dot{width:7px;height:7px;border-radius:50%;background:var(--warm);box-shadow:0 0 9px var(--warm)}
+.sys{font-size:0.62rem;letter-spacing:0.2em;color:var(--dim)}
+.pagetitle{font-size:0.72rem;letter-spacing:0.16em;color:var(--pink);margin-left:auto;text-transform:uppercase}
+html.in-frame .topbar{display:none}
+html.in-frame{--stage-t:0px}
+
+/* STAGE. The paper band. #BG holds the SVG at its scaled size. The SVG
+   overflows to the right when the band is narrow; overflow is clipped. */
+#stage{
+  position:fixed;top:var(--stage-t);bottom:var(--stage-b);left:var(--stage-l);right:0;
+  overflow:hidden;background:var(--paper);touch-action:none;cursor:grab;outline:none;
+  transition:left 0.28s cubic-bezier(0.4,0,0.2,1);
+  -webkit-user-select:none;user-select:none;
+}
+#stage.drag{cursor:grabbing}
+#stage:focus-visible{box-shadow:inset 0 0 0 2px var(--pink)}
+#BG{position:absolute;left:0;top:0;width:var(--svg-w,3000px);height:var(--svg-h,800px);background-color:var(--paper)}
+#BG > svg{display:block;width:var(--svg-w,3000px);height:var(--svg-h,800px)}
+
+button{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+#dock,#sheetGrip{display:none}
+#hint{
+  position:fixed;left:calc(50% + var(--stage-l) / 2);bottom:calc(var(--stage-b) + 12px);transform:translateX(-50%);z-index:20;
+  font-size:0.6rem;letter-spacing:0.14em;color:#f4ecf6;pointer-events:none;text-transform:uppercase;
+  background:rgba(12,9,18,0.72);border:1px solid var(--line);border-radius:7px;padding:6px 10px;
+  transition:opacity 0.6s;white-space:nowrap;
+}
+#hint.gone{opacity:0}
+
+#gear{
+  position:fixed;top:14px;left:14px;z-index:40;width:38px;height:38px;
+  border:1px solid var(--line-b);background:rgba(12,15,22,0.8);color:var(--ink);
+  border-radius:9px;font-size:1.05rem;cursor:pointer;display:none;
+}
+html.in-frame #gear{top:12px}
+#gear:hover{border-color:var(--warm);color:var(--warm)}
+
+#panel{
+  position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;
+  background:linear-gradient(180deg,rgba(12,15,22,0.97),rgba(7,9,13,0.99));
+  border-right:1px solid var(--line-b);padding:64px 18px 20px;overflow-y:auto;
+  transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);backdrop-filter:blur(6px);
+}
+#panel.open{transform:translateX(0)}
+html.in-frame #panel{padding-top:24px}
+#panelClose{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
+#panelClose:hover{color:var(--warm);border-color:var(--warm)}
+
+.sec-label{font-size:0.6rem;letter-spacing:0.2em;color:var(--dim);margin:18px 0 9px;text-transform:uppercase}
+.sec-label:first-of-type{margin-top:0}
+
+.seedrow{margin-bottom:8px}
+#seedInp{
+  width:100%;padding:9px 10px;border:1px solid var(--line-b);border-radius:7px;background:var(--bg2);color:#eef4ff;
+  font-family:inherit;font-size:0.8rem;letter-spacing:0.04em;outline:none;
+}
+#seedInp:focus{border-color:var(--warm)}
+
+.row{display:flex;align-items:center;gap:10px;margin:9px 0}
+.row label{flex:0 0 58px;font-size:0.64rem;color:var(--dim)}
+.row input[type=range]{flex:1;accent-color:var(--warm);height:3px}
+.row .val{flex:0 0 56px;text-align:right;font-size:0.64rem;color:var(--ink)}
+.hint{font-size:0.6rem;line-height:1.5;color:var(--dim);margin:8px 0 2px}
+
+.modes{display:flex;gap:8px}
+.modes + .modes{margin-top:8px}
+.row + .modes{margin-top:8px}
+.modes button{flex:1;padding:9px 4px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:7px;cursor:pointer;font-family:inherit;font-size:0.68rem;letter-spacing:0.08em}
+.modes button.on{border-color:var(--warm);background:rgba(229,139,208,0.10);color:var(--warm)}
+.modes button:hover{border-color:var(--warm)}
+.modes button:disabled{opacity:0.45;cursor:progress}
+
+.about p{font-size:0.62rem;line-height:1.6;color:var(--dim);margin:0 0 8px}
+
+#status{
+  position:fixed;left:0;right:0;bottom:0;z-index:25;display:flex;gap:16px;align-items:center;height:var(--stage-b);padding:0 18px;
+  font-size:0.68rem;color:var(--ink);background:rgba(7,9,13,0.96);border-top:1px solid var(--line);
+  white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums;
+}
+#status .fn{color:var(--warm)}
+#status .right{color:var(--dim);margin-left:auto}
+#status span{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+/* The panel covers the left edge on wide screens. The stage, the status
+   bar, and the topbar content start after it. */
+@media(min-width:769px){
+  #status{left:var(--panel-w)}
+  .topbar{padding-left:calc(var(--panel-w) + 20px)}
+  body.panel-closed{--stage-l:0px}
+  body.panel-closed #gear{display:block}
+  body.panel-closed #status{left:0}
+  body.panel-closed .topbar{padding-left:68px}
+}
+
+/* TOUCH. Any touch screen or narrow window, phone or tablet: every target is
+   44px or more, and all text is 11px or more. Text inputs use 16px, so iOS
+   does not zoom on focus. The layout does not change. */
+@media (pointer:coarse), (max-width:768px){
+  :root{--panel-w:320px}
+  #panelClose{width:44px;height:44px}
+  #gear{width:44px;height:44px}
+  #status{font-size:0.72rem}
+  #hint{font-size:0.7rem}
+  .sec-label{font-size:0.7rem;margin:22px 0 10px}
+  #seedInp{font-size:16px;min-height:46px;border-radius:10px}
+  .modes button{min-height:46px;font-size:0.74rem;border-radius:10px}
+  .row{min-height:44px;margin:4px 0}
+  .row label{flex:0 0 80px;font-size:0.76rem}
+  .row .val{flex:0 0 64px;font-size:0.76rem}
+  .hint{font-size:0.74rem}
+  .about p{font-size:0.82rem;line-height:1.65}
+  .row input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
+  .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--warm);border:3px solid #1a1320;box-shadow:0 0 0 1px var(--warm)}
+  .row input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:var(--warm);border:3px solid #1a1320}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. The stage sits between the
+   topbar and the status bar, and the status bar sits on the dock. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{
+    --dock-h:calc(64px + env(safe-area-inset-bottom)); --status-h:30px;
+    --stage-t:calc(48px + env(safe-area-inset-top)); --stage-b:calc(var(--dock-h) + var(--status-h)); --stage-l:0px;
+  }
+  html.in-frame{--stage-t:0px}
+  .topbar{height:calc(48px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left));background:rgba(7,9,13,0.96)}
+  .brand{font-size:1.05rem;letter-spacing:0.18em}
+  .sys,.pagetitle{display:none}
+  #gear,body.panel-closed #gear{display:none}
+
+  #dock{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(9,8,14,0.97);border-top:1px solid var(--line-b);backdrop-filter:blur(8px);
+  }
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.05rem;cursor:pointer;letter-spacing:-0.1em}
+  #dock > button.on{border-color:var(--warm);color:var(--warm)}
+  .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;overflow:hidden}
+  .seg button{flex:1;min-width:0;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--ink);font-family:inherit;font-size:1rem;cursor:pointer}
+  .seg button:last-child{border-right:0}
+  .seg button:active{background:rgba(229,139,208,0.14);color:var(--warm)}
+
+  #status{left:0;right:0;bottom:var(--dock-h);height:var(--status-h);gap:10px;padding:0 calc(14px + env(safe-area-inset-right)) 0 calc(14px + env(safe-area-inset-left))}
+  #hint{left:16px;right:16px;transform:none;text-align:center;white-space:normal;line-height:1.6}
+  body:not(.panel-closed) #hint{opacity:0}
+
+  /* The panel is a bottom sheet above the dock. */
+  #panel{
+    top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;
+    height:min(48vh,520px);height:min(48dvh,520px);
+    border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(18px + env(safe-area-inset-right)) 24px calc(18px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  }
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  html.in-frame #panel{padding-top:0}
+  #panelClose{display:none}
+  #sheetGrip{
+    display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -18px 0;
+    background:linear-gradient(180deg,rgba(12,15,22,1) 65%,rgba(12,15,22,0));touch-action:none;cursor:grab;
+  }
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right edge. The dock is a
+   tab at the lower left. The topbar and the status bar are hidden, so the
+   stage gets all the height above the dock. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  :root,html.in-frame{--stage-t:0px;--stage-b:var(--dock-h)}
+  .topbar,#status{display:none}
+  #hint{top:10px;bottom:auto;left:25%;right:25%}
+  #dock{right:auto;width:min(360px,50vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel,#panel.full{
+    top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;
+    border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 20px 16px;
+    transform:translateX(100%);
+  }
+  #panel.open{transform:translateX(0)}
+  #sheetGrip{display:none}
+  /* The close row is an opaque sticky bar across the full drawer width.
+     Drawer content scrolls under the bar, so the X covers no control. */
+  #closeRow{
+    position:sticky;top:0;z-index:2;display:flex;justify-content:flex-end;
+    margin:0 calc(-16px - env(safe-area-inset-right)) 8px -16px;padding:10px calc(16px + env(safe-area-inset-right)) 10px 16px;
+    background:rgb(12,15,22);border-bottom:1px solid var(--line);
+  }
+  #panelClose{display:block;position:static;width:44px;height:44px;background:var(--bg2)}
+  /* The dock is a tab, and the stage ends above the dock. This bar fills
+     the strip on the right of the tab, so no bare body shows there. The
+     drawer (z-index 35) and the dock (z-index 45) are above the bar. */
+  body::after{
+    content:'';position:fixed;left:0;right:0;bottom:0;height:var(--dock-h);z-index:15;
+    background:rgb(9,8,14);border-top:1px solid var(--line-b);pointer-events:none;
+  }
+}
