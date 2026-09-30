@@ -28,6 +28,7 @@ import { loadShaders } from '../../lib/shaders.js';
 import { $, STATES, SEED, ENTRY, ease, sstep, ACT_LIFT, LVL_LIFT, ATTACK, RELEASE, G, stage, clock, tiles } from './state.js';
 import { initSignals, tickSignals } from './signals.js';
 import { initControls } from './controls.js';
+import { fitTable, maxDpr, initMobile } from '../../lib/table-mobile.js';
 import { initGPU, device, msurf, visible, stats } from './gpu.js';
 import { initInspector, currentInspected } from './inspector.js';
 
@@ -37,17 +38,14 @@ const SH = await loadShaders(import.meta.url, FAMILIES.map(f => `shaders/${f}.wg
 const PACKS = Object.fromEntries(FAMILIES.map(f => [f, SH[`shaders/${f}.wgsl`]]));
 const STYLES = await (await fetch(new URL('styles.json', import.meta.url))).json();
 
-// table sizing: 6 wide, square cells, the stage scrolls
+// table sizing: 6 wide on a desktop, 3 or 4 on a phone (lib/table-mobile.js), square cells, the stage scrolls
 const COLS = 6;
-function fit() {
-  const w = stage.clientWidth - 24;
-  const cell = Math.max(40, Math.floor(w / COLS));
-  document.documentElement.style.setProperty('--cell', cell + 'px');
-}
+const fit = () => fitTable(stage, COLS);
 new ResizeObserver(fit).observe(stage); fit();
 
 initSignals();
 initControls();
+initMobile();
 
 // initGPU reports its own failure (the note plus the FPS line), so a false
 // return ends the boot; a true return means the grid is live.
@@ -100,7 +98,7 @@ if (await initGPU(STYLES, PACKS)) {
     tickSignals();
     const ap = (v, g) => v + (g - v) * (1 - Math.exp(-dt / (g > v ? ATTACK : RELEASE)));
     G.live.level = ap(G.live.level, G.level); G.live.activity = ap(G.live.activity, G.activity);
-    const dpr = Math.min(devicePixelRatio || 1, 3);
+    const dpr = Math.min(devicePixelRatio || 1, maxDpr());
     const enc = device.createCommandEncoder();
     const inspected = currentInspected();
     const modalOpen = !!inspected;
