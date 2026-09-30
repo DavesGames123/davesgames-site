@@ -1,446 +1,760 @@
 {
-  "window": {
-    "startLocal": "2026-09-21T00:00",
-    "hours": 169
-  },
-  "locations": [
+ "window": {
+  "startLocal": "2026-09-21T00:00",
+  "hours": 169
+ },
+ "locations": [
+  {
+   "id": "puget-sound",
+   "title": "Puget Sound",
+   "titleLines": [
+    "Puget",
+    "Sound"
+   ],
+   "region": "Pacific Northwest",
+   "model": "sscofs",
+   "modelShort": "SSCOFS",
+   "modelLong": "NOAA Salish Sea and Columbia River Operational Forecast System",
+   "tzLabel": "PDT",
+   "utcOffsetHours": -7,
+   "core": {
+    "lon0": -123.22,
+    "lon1": -121.82,
+    "lat0": 46.86,
+    "lat1": 48.54
+   },
+   "labels": [
     {
-      "id": "puget-sound",
-      "title": "Puget Sound",
-      "model": "sscofs",
-      "modelShort": "SSCOFS",
-      "modelLong": "NOAA Salish Sea and Columbia River Operational Forecast System",
-      "tzLabel": "PDT",
-      "utcOffsetHours": -7,
-      "bbox": {
-        "lon0": -123.22,
-        "lon1": -121.82,
-        "lat0": 46.86,
-        "lat1": 48.54
-      },
-      "width": 720,
-      "height": 1280,
-      "labels": [
-        {
-          "name": "PORT TOWNSEND",
-          "lon": -122.76,
-          "lat": 48.117,
-          "size": "sm",
-          "side": "left"
-        },
-        {
-          "name": "EVERETT",
-          "lon": -122.202,
-          "lat": 47.979,
-          "size": "md",
-          "side": "right"
-        },
-        {
-          "name": "BREMERTON",
-          "lon": -122.633,
-          "lat": 47.567,
-          "size": "sm",
-          "side": "left"
-        },
-        {
-          "name": "SEATTLE",
-          "lon": -122.335,
-          "lat": 47.606,
-          "size": "lg",
-          "side": "right"
-        },
-        {
-          "name": "TACOMA",
-          "lon": -122.444,
-          "lat": 47.253,
-          "size": "md",
-          "side": "right"
-        },
-        {
-          "name": "OLYMPIA",
-          "lon": -122.9,
-          "lat": 47.038,
-          "size": "md",
-          "side": "left"
-        }
-      ],
-      "layout": {
-        "title": {
-          "x": 0.93,
-          "y": 0.075,
-          "align": "right"
-        },
-        "legend": {
-          "x": 0.075,
-          "y": 0.325,
-          "align": "left"
-        },
-        "brand": {
-          "x": 0.93,
-          "y": 0.43,
-          "align": "right"
-        },
-        "credit": {
-          "x": 0.93,
-          "y": 0.945,
-          "align": "right"
-        }
-      }
+     "name": "PORT TOWNSEND",
+     "lon": -122.76,
+     "lat": 48.117,
+     "size": "sm",
+     "side": "left"
     },
     {
-      "id": "sf-bay",
-      "title": "San Francisco Bay",
-      "model": "sfbofs",
-      "modelShort": "SFBOFS",
-      "openBoundaryFade": [
-        {
-          "lon0": -122.7,
-          "lon1": -122.505,
-          "lat0": 37.3,
-          "lat1": 37.59,
-          "note": "SFBOFS open ocean boundary south of 37.6 N"
-        }
-      ],
-      "modelLong": "NOAA San Francisco Bay Operational Forecast System",
-      "tzLabel": "PDT",
-      "utcOffsetHours": -7,
-      "bbox": {
-        "lon0": -122.67,
-        "lon1": -121.94,
-        "lat0": 37.31,
-        "lat1": 38.33
-      },
-      "width": 720,
-      "height": 1280,
-      "labels": [
-        {
-          "name": "VALLEJO",
-          "lon": -122.256,
-          "lat": 38.104,
-          "size": "sm",
-          "side": "right"
-        },
-        {
-          "name": "RICHMOND",
-          "lon": -122.348,
-          "lat": 37.936,
-          "size": "sm",
-          "side": "left"
-        },
-        {
-          "name": "SAUSALITO",
-          "lon": -122.485,
-          "lat": 37.859,
-          "size": "xs",
-          "side": "left"
-        },
-        {
-          "name": "SAN FRANCISCO",
-          "lon": -122.419,
-          "lat": 37.775,
-          "size": "lg",
-          "side": "left"
-        },
-        {
-          "name": "OAKLAND",
-          "lon": -122.271,
-          "lat": 37.804,
-          "size": "md",
-          "side": "left"
-        },
-        {
-          "name": "HAYWARD",
-          "lon": -122.081,
-          "lat": 37.669,
-          "size": "sm",
-          "side": "right"
-        },
-        {
-          "name": "SAN MATEO",
-          "lon": -122.325,
-          "lat": 37.563,
-          "size": "sm",
-          "side": "left"
-        },
-        {
-          "name": "PALO ALTO",
-          "lon": -122.143,
-          "lat": 37.442,
-          "size": "sm",
-          "side": "left"
-        }
-      ],
-      "layout": {
-        "title": {
-          "x": 0.6,
-          "y": 0.3,
-          "align": "left"
-        },
-        "legend": {
-          "x": 0.6,
-          "y": 0.47,
-          "align": "left"
-        },
-        "brand": {
-          "x": 0.065,
-          "y": 0.74,
-          "align": "left"
-        },
-        "credit": {
-          "x": 0.065,
-          "y": 0.945,
-          "align": "left"
-        }
-      }
+     "name": "EVERETT",
+     "lon": -122.202,
+     "lat": 47.979,
+     "size": "md",
+     "side": "right"
     },
     {
-      "id": "san-juan-islands",
-      "title": "San Juan Islands",
-      "model": "sscofs",
-      "modelShort": "SSCOFS",
-      "modelLong": "NOAA Salish Sea and Columbia River Operational Forecast System",
-      "tzLabel": "PDT",
-      "utcOffsetHours": -7,
-      "bbox": {
-        "lon0": -123.55,
-        "lon1": -122.4,
-        "lat0": 48.0,
-        "lat1": 49.35
-      },
-      "width": 720,
-      "height": 1280,
-      "labels": [
-        {
-          "name": "VANCOUVER",
-          "lon": -123.116,
-          "lat": 49.283,
-          "size": "md",
-          "side": "right"
-        },
-        {
-          "name": "BELLINGHAM",
-          "lon": -122.479,
-          "lat": 48.75,
-          "size": "md",
-          "side": "left"
-        },
-        {
-          "name": "FRIDAY HARBOR",
-          "lon": -123.013,
-          "lat": 48.535,
-          "size": "sm",
-          "side": "right"
-        },
-        {
-          "name": "ANACORTES",
-          "lon": -122.612,
-          "lat": 48.512,
-          "size": "sm",
-          "side": "right"
-        },
-        {
-          "name": "SIDNEY",
-          "lon": -123.398,
-          "lat": 48.65,
-          "size": "xs",
-          "side": "left"
-        },
-        {
-          "name": "VICTORIA",
-          "lon": -123.365,
-          "lat": 48.428,
-          "size": "lg",
-          "side": "left"
-        },
-        {
-          "name": "PORT ANGELES",
-          "lon": -123.43,
-          "lat": 48.118,
-          "size": "sm",
-          "side": "right"
-        }
-      ],
-      "layout": {
-        "title": {
-          "x": 0.93,
-          "y": 0.64,
-          "align": "right"
-        },
-        "legend": {
-          "x": 0.93,
-          "y": 0.8,
-          "align": "right"
-        },
-        "brand": {
-          "x": 0.065,
-          "y": 0.05,
-          "align": "left"
-        },
-        "credit": {
-          "x": 0.93,
-          "y": 0.945,
-          "align": "right"
-        }
-      }
+     "name": "BREMERTON",
+     "lon": -122.633,
+     "lat": 47.567,
+     "size": "sm",
+     "side": "left"
     },
     {
-      "id": "cook-inlet",
-      "title": "Cook Inlet",
-      "model": "ciofs",
-      "modelShort": "CIOFS",
-      "modelLong": "NOAA Cook Inlet Operational Forecast System",
-      "tzLabel": "AKDT",
-      "utcOffsetHours": -8,
-      "bbox": {
-        "lon0": -152.0,
-        "lon1": -148.9,
-        "lat0": 60.6,
-        "lat1": 61.605
-      },
-      "width": 1280,
-      "height": 853,
-      "labels": [
-        {
-          "name": "ANCHORAGE",
-          "lon": -149.9,
-          "lat": 61.218,
-          "size": "lg",
-          "side": "right"
-        },
-        {
-          "name": "TYONEK",
-          "lon": -151.137,
-          "lat": 61.068,
-          "size": "sm",
-          "side": "left"
-        },
-        {
-          "name": "HOPE",
-          "lon": -149.64,
-          "lat": 60.92,
-          "size": "sm",
-          "side": "right"
-        },
-        {
-          "name": "GIRDWOOD",
-          "lon": -149.166,
-          "lat": 60.942,
-          "size": "sm",
-          "side": "left"
-        },
-        {
-          "name": "NIKISKI",
-          "lon": -151.289,
-          "lat": 60.69,
-          "size": "sm",
-          "side": "right"
-        },
-        {
-          "name": "WASILLA",
-          "lon": -149.441,
-          "lat": 61.581,
-          "size": "xs",
-          "side": "right"
-        }
-      ],
-      "layout": {
-        "title": {
-          "x": 0.05,
-          "y": 0.07,
-          "align": "left"
-        },
-        "legend": {
-          "x": 0.95,
-          "y": 0.7,
-          "align": "right"
-        },
-        "brand": {
-          "x": 0.05,
-          "y": 0.8,
-          "align": "left"
-        },
-        "credit": {
-          "x": 0.05,
-          "y": 0.93,
-          "align": "left"
-        }
-      }
+     "name": "SEATTLE",
+     "lon": -122.335,
+     "lat": 47.606,
+     "size": "lg",
+     "side": "right"
     },
     {
-      "id": "straits-of-mackinac",
-      "title": "Straits of Mackinac",
-      "model": "lmhofs",
-      "modelShort": "LMHOFS",
-      "modelLong": "NOAA Lake Michigan-Huron Operational Forecast System",
-      "tzLabel": "EDT",
-      "utcOffsetHours": -4,
-      "bbox": {
-        "lon0": -85.4,
-        "lon1": -83.9,
-        "lat0": 45.45,
-        "lat1": 46.15
-      },
-      "width": 1280,
-      "height": 853,
-      "labels": [
-        {
-          "name": "ST. IGNACE",
-          "lon": -84.727,
-          "lat": 45.866,
-          "size": "md",
-          "side": "left"
-        },
-        {
-          "name": "MACKINAW CITY",
-          "lon": -84.727,
-          "lat": 45.777,
-          "size": "md",
-          "side": "left"
-        },
-        {
-          "name": "MACKINAC ISLAND",
-          "lon": -84.618,
-          "lat": 45.849,
-          "size": "sm",
-          "side": "right"
-        },
-        {
-          "name": "CHEBOYGAN",
-          "lon": -84.474,
-          "lat": 45.647,
-          "size": "sm",
-          "side": "right"
-        },
-        {
-          "name": "CEDARVILLE",
-          "lon": -84.36,
-          "lat": 45.996,
-          "size": "xs",
-          "side": "right"
-        }
-      ],
-      "layout": {
-        "title": {
-          "x": 0.05,
-          "y": 0.07,
-          "align": "left"
-        },
-        "legend": {
-          "x": 0.36,
-          "y": 0.8,
-          "align": "left"
-        },
-        "brand": {
-          "x": 0.95,
-          "y": 0.07,
-          "align": "right"
-        },
-        "credit": {
-          "x": 0.95,
-          "y": 0.93,
-          "align": "right"
-        }
-      }
+     "name": "TACOMA",
+     "lon": -122.444,
+     "lat": 47.253,
+     "size": "md",
+     "side": "right"
+    },
+    {
+     "name": "OLYMPIA",
+     "lon": -122.9,
+     "lat": 47.038,
+     "size": "md",
+     "side": "left"
     }
-  ]
+   ],
+   "blurb": "Puget Sound is a network of deep channels cut by glaciers. It meets the Pacific through Admiralty Inlet and the Strait of Juan de Fuca, and the tide moves its water in and out twice a day. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "sf-bay",
+   "title": "San Francisco Bay",
+   "titleLines": [
+    "San Francisco",
+    "Bay"
+   ],
+   "region": "California",
+   "model": "sfbofs",
+   "modelShort": "SFBOFS",
+   "modelLong": "NOAA San Francisco Bay Operational Forecast System",
+   "tzLabel": "PDT",
+   "utcOffsetHours": -7,
+   "core": {
+    "lon0": -122.67,
+    "lon1": -121.94,
+    "lat0": 37.31,
+    "lat1": 38.33
+   },
+   "labels": [
+    {
+     "name": "VALLEJO",
+     "lon": -122.256,
+     "lat": 38.104,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "RICHMOND",
+     "lon": -122.348,
+     "lat": 37.936,
+     "size": "sm",
+     "side": "left"
+    },
+    {
+     "name": "SAUSALITO",
+     "lon": -122.485,
+     "lat": 37.859,
+     "size": "xs",
+     "side": "left"
+    },
+    {
+     "name": "SAN FRANCISCO",
+     "lon": -122.419,
+     "lat": 37.775,
+     "size": "lg",
+     "side": "left"
+    },
+    {
+     "name": "OAKLAND",
+     "lon": -122.271,
+     "lat": 37.804,
+     "size": "md",
+     "side": "left"
+    },
+    {
+     "name": "HAYWARD",
+     "lon": -122.081,
+     "lat": 37.669,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "SAN MATEO",
+     "lon": -122.325,
+     "lat": 37.563,
+     "size": "sm",
+     "side": "left"
+    },
+    {
+     "name": "PALO ALTO",
+     "lon": -122.143,
+     "lat": 37.442,
+     "size": "sm",
+     "side": "left"
+    }
+   ],
+   "blurb": "San Francisco Bay meets the Pacific through one narrow strait, the Golden Gate. Twice a day the tide pushes water in through the strait and draws it out again. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "san-juan-islands",
+   "title": "San Juan Islands",
+   "titleLines": [
+    "San Juan",
+    "Islands"
+   ],
+   "region": "Pacific Northwest",
+   "model": "sscofs",
+   "modelShort": "SSCOFS",
+   "modelLong": "NOAA Salish Sea and Columbia River Operational Forecast System",
+   "tzLabel": "PDT",
+   "utcOffsetHours": -7,
+   "core": {
+    "lon0": -123.55,
+    "lon1": -122.4,
+    "lat0": 48.0,
+    "lat1": 49.35
+   },
+   "labels": [
+    {
+     "name": "VANCOUVER",
+     "lon": -123.116,
+     "lat": 49.283,
+     "size": "md",
+     "side": "right"
+    },
+    {
+     "name": "BELLINGHAM",
+     "lon": -122.479,
+     "lat": 48.75,
+     "size": "md",
+     "side": "left"
+    },
+    {
+     "name": "FRIDAY HARBOR",
+     "lon": -123.013,
+     "lat": 48.535,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "ANACORTES",
+     "lon": -122.612,
+     "lat": 48.512,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "SIDNEY",
+     "lon": -123.398,
+     "lat": 48.65,
+     "size": "xs",
+     "side": "left"
+    },
+    {
+     "name": "VICTORIA",
+     "lon": -123.365,
+     "lat": 48.428,
+     "size": "lg",
+     "side": "left"
+    },
+    {
+     "name": "PORT ANGELES",
+     "lon": -123.43,
+     "lat": 48.118,
+     "size": "sm",
+     "side": "right"
+    }
+   ],
+   "blurb": "The San Juan Islands sit where the Strait of Juan de Fuca, Haro Strait and Rosario Strait meet. The tide forces water through the narrow passes between the islands, and the Fraser River sends a plume in from the north. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "cook-inlet",
+   "title": "Cook Inlet",
+   "titleLines": [
+    "Cook",
+    "Inlet"
+   ],
+   "region": "Alaska",
+   "model": "ciofs",
+   "modelShort": "CIOFS",
+   "modelLong": "NOAA Cook Inlet Operational Forecast System",
+   "tzLabel": "AKDT",
+   "utcOffsetHours": -8,
+   "core": {
+    "lon0": -152.0,
+    "lon1": -148.9,
+    "lat0": 60.6,
+    "lat1": 61.605
+   },
+   "labels": [
+    {
+     "name": "ANCHORAGE",
+     "lon": -149.9,
+     "lat": 61.218,
+     "size": "lg",
+     "side": "right"
+    },
+    {
+     "name": "TYONEK",
+     "lon": -151.137,
+     "lat": 61.068,
+     "size": "sm",
+     "side": "left"
+    },
+    {
+     "name": "HOPE",
+     "lon": -149.64,
+     "lat": 60.92,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "GIRDWOOD",
+     "lon": -149.166,
+     "lat": 60.942,
+     "size": "sm",
+     "side": "left"
+    },
+    {
+     "name": "NIKISKI",
+     "lon": -151.289,
+     "lat": 60.69,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "WASILLA",
+     "lon": -149.441,
+     "lat": 61.581,
+     "size": "xs",
+     "side": "right"
+    }
+   ],
+   "blurb": "Cook Inlet has some of the largest tides in North America: near Anchorage the range can be more than 9 m. The tide floods over wide mud flats and drains out again twice a day. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "straits-of-mackinac",
+   "title": "Straits of Mackinac",
+   "titleLines": [
+    "Straits of",
+    "Mackinac"
+   ],
+   "region": "Great Lakes",
+   "model": "lmhofs",
+   "modelShort": "LMHOFS",
+   "modelLong": "NOAA Lake Michigan-Huron Operational Forecast System",
+   "tzLabel": "EDT",
+   "utcOffsetHours": -4,
+   "core": {
+    "lon0": -85.4,
+    "lon1": -83.9,
+    "lat0": 45.45,
+    "lat1": 46.15
+   },
+   "labels": [
+    {
+     "name": "ST. IGNACE",
+     "lon": -84.727,
+     "lat": 45.866,
+     "size": "md",
+     "side": "left"
+    },
+    {
+     "name": "MACKINAW CITY",
+     "lon": -84.727,
+     "lat": 45.777,
+     "size": "md",
+     "side": "left"
+    },
+    {
+     "name": "MACKINAC ISLAND",
+     "lon": -84.618,
+     "lat": 45.849,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "CHEBOYGAN",
+     "lon": -84.474,
+     "lat": 45.647,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "CEDARVILLE",
+     "lon": -84.36,
+     "lat": 45.996,
+     "size": "xs",
+     "side": "right"
+    }
+   ],
+   "blurb": "The Straits of Mackinac join Lake Michigan and Lake Huron, which have the same water level and act as one lake. Wind and seiches, not tides, drive the currents through the straits, and the flow can reverse over hours or days. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "columbia-river-bar",
+   "title": "Columbia River Bar",
+   "titleLines": [
+    "Columbia",
+    "River Bar"
+   ],
+   "region": "Pacific Northwest",
+   "model": "sscofs",
+   "modelShort": "SSCOFS",
+   "modelLong": "NOAA Salish Sea and Columbia River Operational Forecast System",
+   "tzLabel": "PDT",
+   "utcOffsetHours": -7,
+   "core": {
+    "lon0": -124.22,
+    "lon1": -123.7,
+    "lat0": 46.1,
+    "lat1": 46.36
+   },
+   "labels": [
+    {
+     "name": "ASTORIA",
+     "lon": -123.831,
+     "lat": 46.188,
+     "size": "lg",
+     "side": "right"
+    },
+    {
+     "name": "CAPE DISAPPOINTMENT",
+     "lon": -124.052,
+     "lat": 46.276,
+     "size": "sm",
+     "side": "left"
+    },
+    {
+     "name": "ILWACO",
+     "lon": -124.044,
+     "lat": 46.308,
+     "size": "xs",
+     "side": "right"
+    },
+    {
+     "name": "WARRENTON",
+     "lon": -123.924,
+     "lat": 46.165,
+     "size": "sm",
+     "side": "left"
+    },
+    {
+     "name": "CHINOOK",
+     "lon": -123.945,
+     "lat": 46.271,
+     "size": "xs",
+     "side": "right"
+    }
+   ],
+   "blurb": "The Columbia River meets the Pacific at the Columbia River Bar, between Cape Disappointment and Clatsop Spit. River flow and the ebb tide run against the ocean swell here, which makes the bar one of the most dangerous river entrances in the world. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "fraser-river",
+   "title": "Fraser River",
+   "titleLines": [
+    "The Fraser",
+    "River"
+   ],
+   "region": "Pacific Northwest",
+   "model": "sscofs",
+   "modelShort": "SSCOFS",
+   "modelLong": "NOAA Salish Sea and Columbia River Operational Forecast System",
+   "tzLabel": "PDT",
+   "utcOffsetHours": -7,
+   "core": {
+    "lon0": -123.6,
+    "lon1": -122.85,
+    "lat0": 48.95,
+    "lat1": 49.36
+   },
+   "labels": [
+    {
+     "name": "VANCOUVER",
+     "lon": -123.116,
+     "lat": 49.283,
+     "size": "lg",
+     "side": "right"
+    },
+    {
+     "name": "RICHMOND",
+     "lon": -123.137,
+     "lat": 49.166,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "STEVESTON",
+     "lon": -123.183,
+     "lat": 49.125,
+     "size": "xs",
+     "side": "left"
+    },
+    {
+     "name": "NEW WESTMINSTER",
+     "lon": -122.911,
+     "lat": 49.206,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "TSAWWASSEN",
+     "lon": -123.083,
+     "lat": 49.018,
+     "size": "sm",
+     "side": "right"
+    }
+   ],
+   "blurb": "The Fraser River is the longest river in British Columbia. Its fresh, silty water spreads over the salt water of the Strait of Georgia as a surface plume, and the tide turns the plume back and forth. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "bay-of-fundy",
+   "title": "Bay of Fundy",
+   "titleLines": [
+    "Bay of",
+    "Fundy"
+   ],
+   "region": "Atlantic Canada",
+   "model": "gomofs",
+   "modelShort": "GOMOFS",
+   "modelLong": "NOAA Gulf of Maine Operational Forecast System",
+   "tzLabel": "ADT",
+   "utcOffsetHours": -3,
+   "core": {
+    "lon0": -65.4,
+    "lon1": -63.3,
+    "lat0": 44.95,
+    "lat1": 45.8
+   },
+   "labels": [
+    {
+     "name": "WOLFVILLE",
+     "lon": -64.364,
+     "lat": 45.091,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "PARRSBORO",
+     "lon": -64.327,
+     "lat": 45.405,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "TRURO",
+     "lon": -63.28,
+     "lat": 45.366,
+     "size": "md",
+     "side": "left"
+    },
+    {
+     "name": "CAPE SPLIT",
+     "lon": -64.497,
+     "lat": 45.334,
+     "size": "xs",
+     "side": "left"
+    },
+    {
+     "name": "ADVOCATE HARBOUR",
+     "lon": -64.783,
+     "lat": 45.34,
+     "size": "xs",
+     "side": "left"
+    }
+   ],
+   "blurb": "The Bay of Fundy has the highest tides in the world: in the Minas Basin the range can reach about 16 m. The whole basin fills and drains through the Minas Passage, only 5 km wide, twice a day. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "mississippi-delta",
+   "title": "Mississippi River Delta",
+   "titleLines": [
+    "Mississippi",
+    "River Delta"
+   ],
+   "region": "Gulf of Mexico",
+   "model": "ngofs2",
+   "modelShort": "NGOFS2",
+   "modelLong": "NOAA Northern Gulf of Mexico Operational Forecast System",
+   "tzLabel": "CDT",
+   "utcOffsetHours": -5,
+   "core": {
+    "lon0": -89.75,
+    "lon1": -88.85,
+    "lat0": 28.82,
+    "lat1": 29.45
+   },
+   "labels": [
+    {
+     "name": "VENICE",
+     "lon": -89.354,
+     "lat": 29.277,
+     "size": "md",
+     "side": "left"
+    },
+    {
+     "name": "PILOTTOWN",
+     "lon": -89.259,
+     "lat": 29.179,
+     "size": "xs",
+     "side": "right"
+    },
+    {
+     "name": "PORT EADS",
+     "lon": -89.167,
+     "lat": 29.015,
+     "size": "xs",
+     "side": "right"
+    },
+    {
+     "name": "SOUTHWEST PASS",
+     "lon": -89.42,
+     "lat": 28.93,
+     "size": "xs",
+     "side": "left"
+    },
+    {
+     "name": "HEAD OF PASSES",
+     "lon": -89.25,
+     "lat": 29.145,
+     "size": "xs",
+     "side": "left"
+    }
+   ],
+   "blurb": "The Mississippi River reaches the Gulf of Mexico through the Birdfoot, a set of passes that the river has built far out onto the shelf. Its fresh water spreads over the Gulf as a plume that the wind and the small Gulf tide push around. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "chesapeake-mouth",
+   "title": "Mouth of the Chesapeake",
+   "titleLines": [
+    "Mouth of the",
+    "Chesapeake"
+   ],
+   "region": "Mid-Atlantic",
+   "model": "cbofs",
+   "modelShort": "CBOFS",
+   "modelLong": "NOAA Chesapeake Bay Operational Forecast System",
+   "tzLabel": "EDT",
+   "utcOffsetHours": -4,
+   "core": {
+    "lon0": -76.45,
+    "lon1": -75.85,
+    "lat0": 36.8,
+    "lat1": 37.3
+   },
+   "labels": [
+    {
+     "name": "NORFOLK",
+     "lon": -76.285,
+     "lat": 36.847,
+     "size": "lg",
+     "side": "right"
+    },
+    {
+     "name": "HAMPTON",
+     "lon": -76.345,
+     "lat": 37.03,
+     "size": "md",
+     "side": "left"
+    },
+    {
+     "name": "NEWPORT NEWS",
+     "lon": -76.43,
+     "lat": 36.98,
+     "size": "sm",
+     "side": "left"
+    },
+    {
+     "name": "VIRGINIA BEACH",
+     "lon": -75.978,
+     "lat": 36.853,
+     "size": "md",
+     "side": "right"
+    },
+    {
+     "name": "CAPE CHARLES",
+     "lon": -76.017,
+     "lat": 37.264,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "CAPE HENRY",
+     "lon": -76.007,
+     "lat": 36.926,
+     "size": "xs",
+     "side": "right"
+    }
+   ],
+   "blurb": "The Chesapeake Bay, the largest estuary in the United States, meets the Atlantic between Cape Charles and Cape Henry. The Chesapeake Bay Bridge-Tunnel crosses the mouth, and the harbor of Hampton Roads opens off its south side. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "delaware-bay",
+   "title": "Delaware Bay",
+   "titleLines": [
+    "Delaware",
+    "Bay"
+   ],
+   "region": "Mid-Atlantic",
+   "model": "dbofs",
+   "modelShort": "DBOFS",
+   "modelLong": "NOAA Delaware Bay Operational Forecast System",
+   "tzLabel": "EDT",
+   "utcOffsetHours": -4,
+   "core": {
+    "lon0": -75.6,
+    "lon1": -74.8,
+    "lat0": 38.72,
+    "lat1": 39.45
+   },
+   "labels": [
+    {
+     "name": "CAPE MAY",
+     "lon": -74.906,
+     "lat": 38.935,
+     "size": "md",
+     "side": "right"
+    },
+    {
+     "name": "LEWES",
+     "lon": -75.139,
+     "lat": 38.774,
+     "size": "md",
+     "side": "left"
+    },
+    {
+     "name": "FORTESCUE",
+     "lon": -75.168,
+     "lat": 39.236,
+     "size": "xs",
+     "side": "right"
+    },
+    {
+     "name": "BOWERS BEACH",
+     "lon": -75.401,
+     "lat": 39.059,
+     "size": "xs",
+     "side": "left"
+    },
+    {
+     "name": "MILFORD",
+     "lon": -75.428,
+     "lat": 38.913,
+     "size": "sm",
+     "side": "left"
+    }
+   ],
+   "blurb": "Delaware Bay opens to the Atlantic between Cape May and Cape Henlopen. Each flood tide pushes up the bay and into the Delaware River, and the tide is felt as far upriver as Trenton. The fastest surface current in this week of the model was {peak} knots."
+  },
+  {
+   "id": "tampa-bay",
+   "title": "Tampa Bay",
+   "titleLines": [
+    "Tampa",
+    "Bay"
+   ],
+   "region": "Gulf of Mexico",
+   "model": "tbofs",
+   "modelShort": "TBOFS",
+   "modelLong": "NOAA Tampa Bay Operational Forecast System",
+   "tzLabel": "EDT",
+   "utcOffsetHours": -4,
+   "core": {
+    "lon0": -82.86,
+    "lon1": -82.36,
+    "lat0": 27.48,
+    "lat1": 28.05
+   },
+   "labels": [
+    {
+     "name": "TAMPA",
+     "lon": -82.458,
+     "lat": 27.951,
+     "size": "lg",
+     "side": "right"
+    },
+    {
+     "name": "ST. PETERSBURG",
+     "lon": -82.64,
+     "lat": 27.771,
+     "size": "md",
+     "side": "left"
+    },
+    {
+     "name": "CLEARWATER",
+     "lon": -82.8,
+     "lat": 27.966,
+     "size": "sm",
+     "side": "left"
+    },
+    {
+     "name": "BRADENTON",
+     "lon": -82.575,
+     "lat": 27.499,
+     "size": "sm",
+     "side": "right"
+    },
+    {
+     "name": "APOLLO BEACH",
+     "lon": -82.407,
+     "lat": 27.773,
+     "size": "xs",
+     "side": "right"
+    }
+   ],
+   "blurb": "Tampa Bay is the largest open-water estuary in Florida. Its tide is small, but the flow through the main channel under the Sunshine Skyway Bridge is still strong. The fastest surface current in this week of the model was {peak} knots."
+  }
+ ]
 }

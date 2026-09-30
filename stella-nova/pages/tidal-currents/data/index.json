@@ -2,21 +2,73 @@
  {
   "id": "puget-sound",
   "title": "Puget Sound",
-  "aspect": "portrait"
+  "region": "Pacific Northwest",
+  "aspect": 1.5861
  },
  {
   "id": "sf-bay",
   "title": "San Francisco Bay",
-  "aspect": "portrait"
+  "region": "California",
+  "aspect": 1.5744
  },
  {
   "id": "san-juan-islands",
   "title": "San Juan Islands",
-  "aspect": "portrait"
+  "region": "Pacific Northwest",
+  "aspect": 1.5822
+ },
+ {
+  "id": "cook-inlet",
+  "title": "Cook Inlet",
+  "region": "Alaska",
+  "aspect": 0.5969
  },
  {
   "id": "straits-of-mackinac",
   "title": "Straits of Mackinac",
-  "aspect": "landscape"
+  "region": "Great Lakes",
+  "aspect": 0.5958
+ },
+ {
+  "id": "columbia-river-bar",
+  "title": "Columbia River Bar",
+  "region": "Pacific Northwest",
+  "aspect": 0.643
+ },
+ {
+  "id": "fraser-river",
+  "title": "Fraser River",
+  "region": "Pacific Northwest",
+  "aspect": 0.7442
+ },
+ {
+  "id": "bay-of-fundy",
+  "title": "Bay of Fundy",
+  "region": "Atlantic Canada",
+  "aspect": 0.5127
+ },
+ {
+  "id": "mississippi-delta",
+  "title": "Mississippi River Delta",
+  "region": "Gulf of Mexico",
+  "aspect": 0.7133
+ },
+ {
+  "id": "chesapeake-mouth",
+  "title": "Mouth of the Chesapeake",
+  "region": "Mid-Atlantic",
+  "aspect": 0.9283
+ },
+ {
+  "id": "delaware-bay",
+  "title": "Delaware Bay",
+  "region": "Mid-Atlantic",
+  "aspect": 1.0467
+ },
+ {
+  "id": "tampa-bay",
+  "title": "Tampa Bay",
+  "region": "Gulf of Mexico",
+  "aspect": 1.147
  }
 ]

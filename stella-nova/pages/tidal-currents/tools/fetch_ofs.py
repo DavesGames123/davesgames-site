@@ -17,9 +17,32 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from httpfile import HttpFile  # noqa: E402
 
 B = 'https://noaa-nos-ofs-pds.s3.amazonaws.com'
-CYC = {'sfbofs': 3, 'sscofs': 3, 'ciofs': 0, 'lmhofs': 0, 'cbofs': 0, 'dbofs': 0, 'tbofs': 0}
-KIND = {'sfbofs': 'fvcom', 'sscofs': 'fvcom', 'lmhofs': 'fvcom',
-        'ciofs': 'roms', 'cbofs': 'roms', 'dbofs': 'roms', 'tbofs': 'roms'}
+# Per model: cycle hour offset (cycles every 6 h), grid kind, file type, and
+# surface variable access. "fields" files are 3D; "2ds" files hold surface
+# fields only. The script checks the time in each file against the wanted hour.
+MODELS = {
+    'sfbofs': (3, 'fvcom', 'fields'), 'sscofs': (3, 'fvcom', 'fields'),
+    'lmhofs': (0, 'fvcom', 'fields'), 'leofs': (0, 'fvcom', 'fields'),
+    'ngofs2': (3, 'fvcom', '2ds'),
+    'ciofs': (0, 'roms', 'fields'), 'cbofs': (0, 'roms', 'fields'),
+    'dbofs': (0, 'roms', 'fields'), 'tbofs': (0, 'roms', 'fields'),
+    'gomofs': (0, 'roms', '2ds'),
+}
+CYC = {m: v[0] for m, v in MODELS.items()}
+KIND = {m: v[1] for m, v in MODELS.items()}
+
+
+def surface(f, model):
+    """Return surface u, v, temp from an open file."""
+    kind, ftype = MODELS[model][1], MODELS[model][2]
+    if ftype == '2ds':
+        if kind == 'fvcom':
+            return f['u_surface'][0], f['v_surface'][0], f['temp_surface'][0]
+        return f['u_sur'][0], f['v_sur'][0], f['temp_sur'][0]
+    if kind == 'fvcom':
+        return f['u'][0, 0, :], f['v'][0, 0, :], f['temp'][0, 0, :]
+    return f['u'][0, -1], f['v'][0, -1], f['temp'][0, -1]
+
 
 ap = argparse.ArgumentParser()
 ap.add_argument('model')
@@ -42,7 +65,7 @@ def url_for(t):
     while (c.hour - off) % 6:
         c += dt.timedelta(hours=1)
     k = 6 - int((c - t).total_seconds() // 3600)
-    return f"{B}/{model}/netcdf/{c:%Y/%m/%d}/{model}.t{c:%H}z.{c:%Y%m%d}.fields.n{k:03d}.nc"
+    return f"{B}/{model}/netcdf/{c:%Y/%m/%d}/{model}.t{c:%H}z.{c:%Y%m%d}.{MODELS[model][2]}.n{k:03d}.nc"
 
 
 def tval(f):
@@ -62,10 +85,7 @@ def grab(t):
         try:
             f = h5py.File(HttpFile(url), 'r')
             assert tval(f) == t, (tval(f), t)
-            if KIND[model] == 'fvcom':
-                u, v, T = f['u'][0, 0, :], f['v'][0, 0, :], f['temp'][0, 0, :]
-            else:
-                u, v, T = f['u'][0, -1], f['v'][0, -1], f['temp'][0, -1]
+            u, v, T = surface(f, model)
             np.savez(p, u=u.astype(np.float32), v=v.astype(np.float32), temp=T.astype(np.float32))
             if not os.path.exists(f'{out}/grid.npz'):
                 keys = (['lon', 'lat', 'lonc', 'latc', 'nv', 'h'] if KIND[model] == 'fvcom'
