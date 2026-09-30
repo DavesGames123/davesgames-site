@@ -4,6 +4,7 @@
    table-mobile.js loads this file after the page style.css, so a rule here
    wins over the page rule of the same specificity.
      columns ........ #table reads --cols (fitTable writes it)
+     tags ........... hidden until hover on a desktop
      touch .......... (hover:none): tags always on, 44 px targets, big thumbs
      phone layout ... (max-width:700px) or a short touch screen: the sidebar is
                       a bottom sheet (.tm-fab, .tm-scrim, .tm-grab) and the
@@ -12,6 +13,9 @@
 #table{width:calc(var(--cols,6) * var(--cell));grid-template-columns:repeat(var(--cols,6),var(--cell))}
 .cell{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 .cell.tm-live{box-shadow:inset 0 0 0 1px rgba(255,200,50,0.38)}
+/* name tags: the same rule as the table style.css; a page without one (presence-orbs) gets its tags from initMobile */
+.cell .tag{position:absolute;left:6px;bottom:4px;font-size:0.5rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-bright);opacity:0;transition:opacity 0.15s;pointer-events:none;text-shadow:0 0 6px rgba(0,0,0,0.9)}
+.cell:hover .tag{opacity:0.9}
 .tm-fab,.tm-scrim,.tm-grab{display:none}
 
 @media (hover:none){
