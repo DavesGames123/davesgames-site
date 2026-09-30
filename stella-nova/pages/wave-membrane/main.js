@@ -104,7 +104,7 @@
   // canvas) covers the top or the base. Any other overlay covers a side. An
   // overlay counts only when it spans half of that edge or more, so a small
   // corner box (the desktop legend) does not move the membrane.
-  const OVERLAYS = ['panel', 'dock', 'status', 'legend'].map(id => document.getElementById(id))
+  const OVERLAYS = ['panel', 'dock', 'status', 'legend', 'eqPanel'].map(id => document.getElementById(id))
     .concat([document.querySelector('.topbar')]).filter(Boolean);
   const occ = { l: 0, r: 0, t: 0, b: 0 };
   function occlusion(w, h) {

@@ -3,7 +3,9 @@
    ----------------------------------------------------------------------------
    Dark shell, the same palette as Resonance 3D. The WebGL canvas fills the
    frame. The control panel slides in from the left. The colorbar legend sits
-   at the lower right. The status bar sits at the base.
+   at the lower right. The status bar sits at the base. The governing
+   equations sit in their own panel at the upper left of the canvas.
+     grep -n 'EQUATIONS'  the equation panel
 
    PHONE (max-width 768px, or a short landscape touch screen). A dock at the
    base holds the panel button, the three color modes, and play. In portrait
@@ -102,9 +104,35 @@ html.in-frame #panel{padding-top:24px}
 .modes + .modes{margin-top:8px}
 .modes button{padding:9px 4px}
 
-.eq{font-size:0.72rem;color:#eef4ff;margin:6px 0;text-align:center;min-height:1.4em}
-.eq .katex{font-size:0.98rem}
-.eq .katex-display{margin:4px 0}
+/* EQUATIONS. A fixed panel at the upper left of the canvas, the same form as
+   the Atomic Orbital VR panel. A row that is wider than the panel scrolls
+   sideways, so an equation never runs out of its box. */
+#eqPanel{
+  position:fixed;top:64px;left:calc(var(--panel-w) + 24px);z-index:22;
+  max-width:min(560px, calc(100vw - var(--panel-w) - 48px));
+  padding:14px 20px 14px;background:rgba(9,8,14,0.92);border:1px solid var(--line-b);
+  border-radius:8px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+}
+html.in-frame #eqPanel{top:16px}
+.eq-head{display:flex;align-items:center;gap:10px;margin:0 34px 8px 0}
+.eq-head .dot{width:6px;height:6px;background:var(--warm);box-shadow:0 0 8px var(--warm);flex-shrink:0}
+.eq-head .lbl{font-size:0.64rem;letter-spacing:0.24em;text-transform:uppercase;color:var(--warm);font-weight:500;white-space:nowrap}
+.eq-block{padding:4px 0}
+.eq-block + .eq-block{border-top:1px solid var(--line);margin-top:8px;padding-top:10px}
+.eq-sublabel{font-size:0.54rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+.eq-row{font-size:0.9rem;color:#eef4ff;text-align:center;min-height:1.4em;overflow-x:auto;overflow-y:hidden}
+.eq-row::-webkit-scrollbar{height:0}
+#eqPanel .katex{font-size:1.3rem;line-height:1.5}
+#eqPanel .katex-display{margin:0.15em 0}
+#eqCollapse{
+  position:absolute;top:10px;right:10px;width:26px;height:26px;display:flex;align-items:center;justify-content:center;
+  background:transparent;border:1px solid var(--line-b);border-radius:6px;color:var(--dim);font-size:0.62rem;font-family:inherit;cursor:pointer;
+}
+#eqCollapse:hover{border-color:var(--warm);color:var(--warm)}
+#eqPanel.collapsed{padding:10px 16px}
+#eqPanel.collapsed .eq-head{margin-bottom:0}
+#eqPanel.collapsed .eq-block{display:none}
+#eqPanel.collapsed #eqCollapse{top:5px}
 .readout{width:100%;border-collapse:collapse;margin-top:8px;font-size:0.64rem}
 .readout td{padding:3px 0;border-bottom:1px solid var(--line)}
 .readout td:first-child{color:var(--dim)}
@@ -119,6 +147,7 @@ html.in-frame #panel{padding-top:24px}
   body.panel-closed #gear{display:block}
   body.panel-closed #status{left:0}
   body.panel-closed .topbar{padding-left:68px}
+  body.panel-closed #eqPanel{left:24px;max-width:min(560px, calc(100vw - 48px))}
 }
 
 #legend{
@@ -149,7 +178,13 @@ html.in-frame #panel{padding-top:24px}
   .row label{flex:0 0 80px;font-size:0.76rem}
   .row .val{flex:0 0 54px;font-size:0.76rem}
   .hint{font-size:0.74rem}
-  .eq .katex{font-size:1.08rem}
+  #eqCollapse{width:44px;height:44px;top:4px;right:4px;font-size:0.8rem}
+  #eqPanel.collapsed{padding-top:0;padding-bottom:0}
+  #eqPanel.collapsed .eq-head{min-height:44px}
+  #eqPanel.collapsed #eqCollapse{top:0;right:0;border:0}
+  .eq-head{margin-right:44px}
+  .eq-head .lbl{font-size:0.72rem}
+  .eq-sublabel{font-size:0.68rem}
   .readout{font-size:0.76rem}
   .readout td{padding:7px 0}
   .about p{font-size:0.82rem;line-height:1.65}
@@ -193,7 +228,15 @@ html.in-frame #panel{padding-top:24px}
   #lgBar{grid-column:2;width:100%;height:8px}
   .lg-ticks{grid-column:2;margin-top:3px}
   #hint{bottom:auto;top:calc(100px + env(safe-area-inset-top));left:16px;right:16px;transform:none;text-align:center;line-height:1.6}
-  html.in-frame #hint{top:58px}
+  /* The equations sit under the legend strip, full width. */
+  #eqPanel{
+    top:calc(98px + env(safe-area-inset-top));left:calc(10px + env(safe-area-inset-left));right:calc(10px + env(safe-area-inset-right));
+    max-width:none;padding:10px 12px 12px;
+  }
+  html.in-frame #eqPanel{top:56px}
+  #eqPanel .katex{font-size:1.05rem}
+  #hint{top:calc(150px + env(safe-area-inset-top))}
+  html.in-frame #hint{top:108px}
   body:not(.panel-closed) #hint{opacity:0}
 
   /* The panel is a bottom sheet above the dock. */
@@ -224,6 +267,8 @@ html.in-frame #panel{padding-top:24px}
   .topbar,#status{display:none}
   #hint{top:10px;left:25%;right:25%}
   #legend,html.in-frame #legend{display:block;top:10px;right:auto;left:calc(10px + env(safe-area-inset-left))}
+  #eqPanel,html.in-frame #eqPanel,body.panel-closed #eqPanel{top:78px;left:calc(10px + env(safe-area-inset-left));right:auto;width:min(380px,48vw);max-width:none}
+  #hint,html.in-frame #hint{top:10px}
   #lgBar{width:130px;height:10px}
   .lg-ticks{margin-top:4px}
   #dock{right:auto;width:min(440px,56vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}

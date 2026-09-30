@@ -23,7 +23,8 @@
    Scripts at end of body, in this order:
      three.js r128  defines global THREE
      sim.js         defines global MembraneSolver (no DOM, no THREE)
-     equations.js   renders the KaTeX equations, or keeps the plain text
+     equations.js   renders the KaTeX equations, or keeps the plain text,
+                    and wires the #eqPanel collapse toggle
      main.js        the scene, the controls, and the frame loop
 
    LAYOUT  (# marks an element id main.js binds to)
@@ -37,7 +38,7 @@
      │  membrane  │                                                       │
      │  playback  │                                                       │
      │  color     │                                                       │
-     │  readout   │                                                       │
+     │  readout   │  #eqPanel the governing equations, top left           │
      │  about     │                                                       │
      ├────────────┴─────────────────────────────────────────────────────┤
      │ #status  mode · omega · period                                     │
@@ -49,6 +50,7 @@
      #panel     portrait: a bottom sheet above the dock. #sheetGrip toggles
                 half and full height, and a drag down closes the sheet.
                 landscape: a drawer on the right edge.
+     #eqPanel   under the legend strip. It starts collapsed on a phone.
      main.js measures the panel, the dock, and the bars each frame, and
      centers the membrane in the part of the canvas that stays clear.
 
@@ -80,6 +82,21 @@
 <canvas id="gl"></canvas>
 <div id="hint">drag to orbit · pinch or scroll to zoom · double-tap to reset</div>
 <button id="gear" aria-label="Controls">⚙</button>
+
+<!-- Governing-equations panel, the same form as Atomic Orbital VR. equations.js
+     fills #eq-wave and #eq-mode, and #eqCollapse toggles .collapsed. -->
+<section id="eqPanel">
+  <button id="eqCollapse" title="Collapse equations" aria-label="Collapse equations">▲</button>
+  <div class="eq-head"><span class="dot"></span><span class="lbl">Governing Equations</span></div>
+  <div class="eq-block">
+    <div class="eq-sublabel">2D wave equation · clamped edge</div>
+    <div class="eq-row" id="eq-wave">∇²u = (1/c²) ∂²u/∂t²</div>
+  </div>
+  <div class="eq-block">
+    <div class="eq-sublabel">One mode · acceleration</div>
+    <div class="eq-row" id="eq-mode">∂²u/∂t² = c²∇²u = −ω² u</div>
+  </div>
+</section>
 
 <div id="legend">
   <div class="lg-title" id="lgTitle">|∂²u/∂t²|</div>
@@ -137,8 +154,6 @@
   <div class="hint" id="nodalHint"></div>
 
   <div class="sec-label">READOUT</div>
-  <div class="eq" id="eq-wave">∇²u = (1/c²) ∂²u/∂t²</div>
-  <div class="eq" id="eq-mode">∂²u/∂t² = −ω² u   (one mode)</div>
   <table class="readout">
     <tr><td>mode</td><td id="rdMode"></td></tr>
     <tr><td>ω</td><td id="rdOmega"></td></tr>
