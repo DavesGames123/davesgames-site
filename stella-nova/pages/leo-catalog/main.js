@@ -1617,8 +1617,11 @@ setInterval(() => { if (chipLocked && selectedIdx >= 0) fillChip(selectedIdx); }
 // that window reads the cache. A stale cache entry is the fallback when the
 // network fetch fails.
 // CelesTrak sends 403 (IP block) or 429 (rate limit) to a client that
-// downloads too much. Each new request extends the block, so after the first
-// 403 or 429 this page sends no more requests to CelesTrak.
+// downloads too much, or it holds the connection with no response. Each new
+// request extends the block, so after the first 403, 429, timeout or network
+// error this page sends no more requests to CelesTrak.
+// The timeout covers the time to the response headers, not the body, so a
+// large group on a slow link does not trip it.
 const TLE_CACHE   = 'leo-catalog-tle-v1';
 const TLE_TTL_MS  = 2 * 60 * 60 * 1000;
 const HAS_CACHE   = typeof caches !== 'undefined';
@@ -1639,7 +1642,7 @@ async function cacheWrite(url, text) {
     await c.put(url, new Response(text, { headers: { 'x-fetched-at': String(Date.now()) } }));
   } catch (e) {}
 }
-async function fetchTLE(url, timeout = 25000) {
+async function fetchTLE(url, timeout = 8000) {
   const cached = await cacheRead(url);
   if (cached && cached.fresh) return cached.text;
   const isCelestrak = url.startsWith('https://celestrak.org/');
@@ -1661,6 +1664,8 @@ async function fetchTLE(url, timeout = 25000) {
     return text;
   } catch (e) {
     clearTimeout(id);
+    // AbortError is the timeout; TypeError is a network or CORS failure.
+    if (isCelestrak && (e.name === 'AbortError' || e.name === 'TypeError')) celestrakBlocked = true;
     if (cached) return cached.text;
     throw e;
   }
@@ -2243,58 +2248,66 @@ function urlsForGroup(group) {
   return [...TLE_SNAPSHOT_DIRS.map(d => d + group + '.txt'), URL_GP(group)];
 }
 
-// Load one TLE group: try its URLs in order, add deduped objects, refresh the
-// buffers and counts, and mark the load row ok or fail.
-async function loadGroup(group, opts = {}) {
-  const forceCat = opts.forceCat || null;
+// Download one TLE group: try its URLs in order and parse the first that
+// works. Returns the parsed records, or null after every URL failed. Touches
+// no catalog state, so several groups can download at the same time.
+async function fetchGroup(group) {
   if (!loadRows.has(group)) addLoadRow(group);
-  const urls = urlsForGroup(group);
   let lastErr = null;
-  for (const url of urls) {
+  for (const url of urlsForGroup(group)) {
     try {
-      const txt = await fetchTLE(url);
-      const parsed = parseTLE(txt);
-      // Count locally: other groups push into sats during the await above.
-      let n = 0;
-      const first = sats.length;
-      for (const p of parsed) {
-        if (sats.length >= PERF_CAP) break;
-        if (knownIds.has(p.noradId)) continue;
-        if (forceCat) p.cat = forceCat;
-        sats.push(p);
-        knownIds.add(p.noradId);
-        n++;
-      }
-      setLoadStatus(group, 'ok', n);
-      splash(`${group} +${n.toLocaleString()}`, n ? 'ok' : '');
-      rebuildAttributesFromSats();
-      if (n > 0) {
-        stampBirths(first, sats.length);
-        pingGlobe(CAT_COLOR[sats[first].cat]);
-      }
-      updateCounts();
-      return n;
+      return parseTLE(await fetchTLE(url));
     } catch (e) {
       lastErr = e;
     }
   }
   setLoadStatus(group, 'fail', 0);
   splash(`${group}: ${lastErr ? lastErr.message : 'fail'}`, 'err');
-  return -1;
+  return null;
 }
 
-// Stations first (fast labels and trails), then 'active'. The 'active' group
-// holds every active payload, so it also holds the objects of the old
-// per-constellation groups (starlink, oneweb, gnss, and so on). classify()
-// sets the category from the name, so the group does not change it. Objects
-// land on the globe as each group finishes (see loadGroup).
+// Add one downloaded group to the catalog: add deduped objects up to
+// PERF_CAP, refresh the buffers and counts, and mark the load row ok.
+// The first group to merge keeps an object shared by two groups, so the
+// merge order sets which forceCat wins and which group gets PERF_CAP room.
+function mergeGroup(group, parsed, opts = {}) {
+  if (!parsed) return -1;
+  const forceCat = opts.forceCat || null;
+  let n = 0;
+  const first = sats.length;
+  for (const p of parsed) {
+    if (sats.length >= PERF_CAP) break;
+    if (knownIds.has(p.noradId)) continue;
+    if (forceCat) p.cat = forceCat;
+    sats.push(p);
+    knownIds.add(p.noradId);
+    n++;
+  }
+  setLoadStatus(group, 'ok', n);
+  splash(`${group} +${n.toLocaleString()}`, n ? 'ok' : '');
+  rebuildAttributesFromSats();
+  if (n > 0) {
+    stampBirths(first, sats.length);
+    pingGlobe(CAT_COLOR[sats[first].cat]);
+  }
+  updateCounts();
+  return n;
+}
+
+// Both groups download at the same time. The merge order stays stations
+// first, then 'active': 'active' also holds the station modules, and the
+// first merge keeps them with the 'station' category and PERF_CAP room.
+// The 'active' group holds every active payload, so it also holds the
+// objects of the old per-constellation groups (starlink, oneweb, gnss, and
+// so on). classify() sets the category from the name, so the group does not
+// change it. Objects land on the globe as each group merges.
 async function loadCatalog() {
-  addLoadRow('stations');
-  addLoadRow('active');
-  await loadGroup('stations', { forceCat: 'station' });
+  const groups = ['stations', 'active'];
+  const downloads = groups.map(fetchGroup);
+  mergeGroup('stations', await downloads[0], { forceCat: 'station' });
   rebuildStationLabels();
   rebuildStationTrails();
-  await loadGroup('active');
+  mergeGroup('active', await downloads[1]);
 }
 
 // Intro camera: swing in from far out and to the side to the default view.
