@@ -51,7 +51,8 @@ BAND_PX = 6          # field extension into land, field pixels
 SS = 2               # coverage supersampling per axis, at mask resolution
 MASK_SCALE = 2       # mask resolution / field resolution
 MIN_SPECK = 25.0     # water components with less coverage (field pixels) are dropped
-FADE_PX = 40.0       # open-boundary fade length, mask pixels
+FADE_PX = 40.0       # open-boundary fade length, mask pixels (minimum)
+FADE_FRAC = 0.08     # open-boundary fade length as a fraction of the mask long side
 SEA_BUFFER_M = 1000  # reference sea closer than this to reference land is not a seed
 SEED_MIN_KM2 = 25.0  # smaller seed patches (islands missing from the reference) are ignored
 LONG_SIDE = 1280     # field resolution, long side, pixels
@@ -485,7 +486,19 @@ def open_boundary_fade(maskcov, inside, refwater, loc, geo):
         area = ndimage.sum(seeds, lab, index=np.arange(1, n + 1)) * (px_m / 1000.0) ** 2
         ok = np.zeros(n + 1, bool)
         ok[1:] = area >= SEED_MIN_KM2
+        # An open boundary runs out to the raster edge. A patch closed in by
+        # land is a bay or lake that the model leaves out, not open water.
+        edge = np.unique(np.concatenate([lab[0], lab[-1], lab[:, 0], lab[:, -1]]))
+        touch = np.zeros(n + 1, bool)
+        touch[edge] = True
+        ok &= touch
         seeds = ok[lab]
+    # Grow the seeds through non-water pixels that the reference calls water,
+    # a little more than the buffer. This closes the gap between the seeds and
+    # the model water where the open boundary meets a coast.
+    if seeds.any():
+        grow = int(math.ceil(SEA_BUFFER_M / px_m)) + 8
+        seeds = ndimage.binary_dilation(seeds, iterations=grow, mask=(maskcov <= 0) & refwater)
     auto = int(seeds.sum())
     boxes = loc.get('openBoundaryFade') or []
     if boxes:
@@ -495,10 +508,12 @@ def open_boundary_fade(maskcov, inside, refwater, loc, geo):
                       & (maskcov <= 0))
     if not seeds.any():
         return maskcov, seeds, 0.0
-    fade = smoothstep01(ndimage.distance_transform_edt(~seeds) / FADE_PX)
+    # The fade length grows with the raster, so it stays soft on a large screen.
+    fade_px = max(FADE_PX, FADE_FRAC * max(maskcov.shape))
+    fade = smoothstep01(ndimage.distance_transform_edt(~seeds) / fade_px)
     out = (maskcov * fade).astype(np.float32)
     lost = float((maskcov - out).sum()) / MASK_SCALE ** 2
-    log(f'  open-boundary fade: {auto} auto seed px, {len(boxes)} box(es), coverage lost {lost:.0f} field px')
+    log(f'  open-boundary fade: {fade_px:.0f} px, {auto} auto seed px, {len(boxes)} box(es), coverage lost {lost:.0f} field px')
     return out, seeds, lost
 
 
