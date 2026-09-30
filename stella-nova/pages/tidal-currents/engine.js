@@ -15,6 +15,13 @@
 //   4 bright   render   lit image at 1/bloomDiv res, soft threshold -> bloom A
 //   5 blur     render   separable Gaussian, A -> B -> A (twice on desktop)
 //   6 final    render   lit image + bloom, tone map, coast line, vignette -> canvas
+//   7 meter    render   every meterEvery frames: 64x64 lit samples, read back
+//                       async, for the auto exposure
+//
+// Auto exposure: the meter gives the mean lit luminance over water. If it is
+// above TUNE.autoTarget, the exposure scale moves down toward
+// autoTarget / mean (never below autoMin, never above 1). So calm scenes do
+// not change, and views that are mostly fast water do not go white.
 //
 // The view rect {x0, y0, x1, y1} is in normalized extent coordinates (the
 // raster of the dataset). Its aspect matches the canvas. Particles live in
@@ -35,7 +42,7 @@
 // (see function coefRows). The textures do not change with time.
 //
 // grep: function loadDataset  function createEngine  function coefRows
-//       function particleCount  function waterFraction  TUNE  BLOOM  buildDevice  buildDataset
+//       function particleCount  function waterFraction  TUNE  BLOOM  readMeter  buildDevice  buildDataset
 //       buildSize  render(  resize(  setView(  setDataset(  destroy(  readField(
 
 import { rampAt } from './colormap.js';
@@ -68,6 +75,11 @@ const TUNE = {
   bloomLand: 0.5,            // bloom kept over land (0..1), a soft halo at the coast
   coast: 0.17,               // coast line gray level
   vignette: 1.0,
+  autoTarget: 0.62,          // mean lit luminance over water that the auto exposure allows
+  autoMin: 0.45,             // lowest auto exposure scale
+  autoTau: 1.5,              // seconds for the auto exposure to move 63% of the way
+  meterEvery: 30,            // frames between exposure meter reads
+  meterWarmup: 60,           // frames after a reseed before the first meter read
 };
 
 // Bloom cost per device class. div: bloom texture = canvas / div.
@@ -157,6 +169,14 @@ function waterFraction(grid, v) {
   return Math.max(sum / ((x1 - x0) * (y1 - y0)), 0.01);
 }
 
+// Decode one IEEE half float.
+function half(b) {
+  const s = b & 0x8000 ? -1 : 1, e = (b >> 10) & 31, m = b & 1023;
+  if (e === 0) return s * m * 2 ** -24;
+  if (e === 31) return m ? NaN : s * Infinity;
+  return s * (1 + m / 1024) * 2 ** (e - 15);
+}
+
 async function fetchShaders() {
   const pairs = await Promise.all(SHADERS.map(async (name) => {
     const res = await fetch(new URL(`shaders/${name}.wgsl`, import.meta.url));
@@ -189,6 +209,8 @@ export async function createEngine(canvas, opts = {}) {
   let reseed = true, clearTrail = true, frame = 0;
   let destroyed = false, rebuilding = false, lostOnce = false;
   let fpsEma = 60;
+  let autoScale = 1, autoGoal = 1;   // auto exposure: current and goal scale
+  let meterBusy = false, sinceReseed = 0, snapNext = true;
   const coefs = new Float32Array(20);
   const fieldU = new Float32Array(24);
   const advU = new ArrayBuffer(64);
@@ -215,7 +237,7 @@ export async function createEngine(canvas, opts = {}) {
       fragment: { module, entryPoint: fs, targets: [blend ? { format: fmt, blend } : { format: fmt }] },
       primitive: { topology: 'triangle-list' },
     });
-    const [fieldPipe, advectPipe, fadePipe, linePipe, brightPipe, blurPipe, finalPipe] = await Promise.all([
+    const [fieldPipe, advectPipe, fadePipe, linePipe, brightPipe, blurPipe, finalPipe, meterPipe] = await Promise.all([
       device.createComputePipelineAsync({ layout: 'auto', compute: { module: mod.field, entryPoint: 'main' } }),
       device.createComputePipelineAsync({ layout: 'auto', compute: { module: mod.advect, entryPoint: 'main' } }),
       screen(mod.trail, 'fsFade', 'r16float', {
@@ -235,6 +257,7 @@ export async function createEngine(canvas, opts = {}) {
       screen(mod.composite, 'fsBright', 'rgba16float'),
       screen(mod.blur, 'fs', 'rgba16float'),
       screen(mod.composite, 'fsFinal', format),
+      screen(mod.composite, 'fsMeter', 'rgba16float'),
     ]);
 
     // 256x1 ramp texture from colormap.js.
@@ -248,8 +271,12 @@ export async function createEngine(canvas, opts = {}) {
 
     const linear = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
     const buf = (size) => device.createBuffer({ size, usage: U.UNIFORM | U.COPY_DST });
+    const meterTex = device.createTexture({ size: [64, 64], format: 'rgba16float',
+      usage: T.RENDER_ATTACHMENT | T.COPY_SRC });
+    const meterBuf = device.createBuffer({ size: 64 * 64 * 8, usage: U.COPY_DST | U.MAP_READ });
     const d = {
-      device, fieldPipe, advectPipe, fadePipe, linePipe, brightPipe, blurPipe, finalPipe, ramp, linear,
+      device, fieldPipe, advectPipe, fadePipe, linePipe, brightPipe, blurPipe, finalPipe, meterPipe,
+      meterTex, meterView: meterTex.createView(), meterBuf, ramp, linear,
       fieldBuf: buf(96), advBuf: buf(64), trailBuf: buf(16), compBuf: buf(112),
       blurBufs: [buf(16), buf(16)],   // 0: horizontal, 1: vertical
     };
@@ -347,10 +374,33 @@ export async function createEngine(canvas, opts = {}) {
         { binding: 1, resource: { buffer: sizeGpu.particles } },
       ] }),
       bright: comp(dev.brightPipe, false),
+      meter: comp(dev.meterPipe, false),
       final: comp(dev.finalPipe, true),
       blurH: blur(0, sizeGpu.viewA),   // A -> B
       blurV: blur(1, sizeGpu.viewB),   // B -> A
     };
+  }
+
+  // Read the meter back and set the auto exposure goal. scale is the auto
+  // exposure scale that the meter pass used, so mean / scale is the base level.
+  async function readMeter(d, scale) {
+    meterBusy = true;
+    try {
+      await d.meterBuf.mapAsync(GPUMapMode.READ);
+      const h = new Uint16Array(d.meterBuf.getMappedRange().slice(0));
+      d.meterBuf.unmap();
+      let lum = 0, cov = 0;
+      for (let i = 0; i < h.length; i += 4) { lum += half(h[i]); cov += half(h[i + 1]); }
+      if (d !== dev || cov < 4) return;
+      const base = lum / cov / scale;
+      engine.info.meterLum = base;
+      autoGoal = Math.min(1, Math.max(TUNE.autoMin, TUNE.autoTarget / Math.max(base, 1e-4)));
+      if (snapNext) { autoScale = autoGoal; snapNext = false; }
+    } catch (e) {
+      // A lost device or a destroyed buffer ends the read. The next read tries again.
+    } finally {
+      meterBusy = false;
+    }
   }
 
   function freeDataset() {
@@ -392,13 +442,14 @@ export async function createEngine(canvas, opts = {}) {
   active = sizeGpu.count;
 
   const engine = {
-    info: { particles: sizeGpu.count, fpsHint: 60 },
+    info: { particles: sizeGpu.count, fpsHint: 60, exposure: 1, meterLum: 0 },
 
     // Swap the dataset. Frees the old textures and reseeds the particles.
     setDataset(next) {
       ds = next;
       grid = coverageGrid(next.images.mask);
       updateActive();
+      autoScale = 1; autoGoal = 1; snapNext = true;
       if (!dev) return;
       freeDataset();
       dsGpu = buildDataset();
@@ -442,6 +493,9 @@ export async function createEngine(canvas, opts = {}) {
       engine.info.fpsHint = Math.round(fpsEma);
       const dtScale = dt * 60;
       frame = (frame + 1) >>> 0;
+      sinceReseed = reseed ? 0 : sinceReseed + 1;
+      autoScale += (autoGoal - autoScale) * (1 - Math.exp(-dt / TUNE.autoTau));
+      engine.info.exposure = autoScale;
 
       coefRows(meta, hour, coefs);
       fieldU.set(coefs.subarray(0, 20), 0);
@@ -458,7 +512,7 @@ export async function createEngine(canvas, opts = {}) {
       trailU.set([width, height, TUNE.lineGain * Math.max(dtScale, 0.25), TUNE.lenRef]);
       device.queue.writeBuffer(dev.trailBuf, 0, trailU);
       compU.set([width, height, meta.legendF.min, meta.legendF.max,
-        meta.speedRef, TUNE.trailGain, TUNE.baseGlow, TUNE.exposure,
+        meta.speedRef, TUNE.trailGain, TUNE.baseGlow, TUNE.exposure * autoScale,
         frame % 64, TUNE.coast, TUNE.vignette, TUNE.brightFloor,
         TUNE.brightGamma, TUNE.white, TUNE.hairWhite, TUNE.pastel,
         TUNE.speedWhite, dsGpu.maskW, TUNE.hairGain, TUNE.bloom,
@@ -507,7 +561,13 @@ export async function createEngine(canvas, opts = {}) {
         screenPass(sizeGpu.viewA, dev.blurPipe, binds.blurV);
       }
       screenPass(ctx.getCurrentTexture().createView(), dev.finalPipe, binds.final);
+      const meterNow = !meterBusy && sinceReseed >= TUNE.meterWarmup && frame % TUNE.meterEvery === 0;
+      if (meterNow) {
+        screenPass(dev.meterView, dev.meterPipe, binds.meter);
+        enc.copyTextureToBuffer({ texture: dev.meterTex }, { buffer: dev.meterBuf, bytesPerRow: 512 }, [64, 64]);
+      }
       device.queue.submit([enc.finish()]);
+      if (meterNow) readMeter(dev, autoScale);
       reseed = false; clearTrail = false;
     },
 
@@ -522,12 +582,6 @@ export async function createEngine(canvas, opts = {}) {
       await out.mapAsync(GPUMapMode.READ);
       const h = new Uint16Array(out.getMappedRange().slice(0, 8));
       out.destroy();
-      const half = (b) => {
-        const s = b & 0x8000 ? -1 : 1, e = (b >> 10) & 31, m = b & 1023;
-        if (e === 0) return s * m * 2 ** -24;
-        if (e === 31) return m ? NaN : s * Infinity;
-        return s * (1 + m / 1024) * 2 ** (e - 15);
-      };
       return Array.from(h, half);
     },
 
@@ -537,6 +591,8 @@ export async function createEngine(canvas, opts = {}) {
       freeSize();
       if (dev) {
         dev.ramp.destroy();
+        dev.meterTex.destroy();
+        dev.meterBuf.destroy();
         for (const b of ['fieldBuf', 'advBuf', 'trailBuf', 'compBuf']) dev[b].destroy();
         dev.blurBufs.forEach((b) => b.destroy());
         dev.device.destroy();

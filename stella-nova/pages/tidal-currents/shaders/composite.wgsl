@@ -3,6 +3,7 @@
 // lit(uv) = ramp(T) * brightness(speed) * (base glow + trail density) * mask.
 // fsBright draws the bloom source at low resolution: the mean of 4 lit
 // samples (a 4x4 box of screen pixels at 1/4 res), with a soft threshold.
+// fsMeter draws a 64x64 exposure meter (see the end of this file).
 // fsFinal draws the canvas: lit + bloom, a soft tone map, a thin gray coast
 // line from the mask, a soft vignette at the edges and a small dither.
 // The mask (mask.png, or base.R for a v1 dataset) sets the visible coast.
@@ -126,4 +127,16 @@ fn fsFinal(@builtin(position) fc: vec4f) -> @location(0) vec4f {
 
   c += (hash2(fc.xy + C.frame * 17.0) - 0.5) / 255.0;
   return vec4f(clamp(c, vec3f(0.0), vec3f(1.0)), 1.0);
+}
+
+// Exposure meter: one lit sample per texel of a small target. The output is
+// (luminance * coverage, coverage). The engine reads the target back and
+// divides the two sums to get the mean lit luminance over water.
+@fragment
+fn fsMeter(@builtin(position) fc: vec4f) -> @location(0) vec4f {
+  let uv = fc.xy / vec2f(64.0, 64.0);
+  let cov = clamp(coverage(uv), 0.0, 1.0);
+  let e = lit(uv, cov);
+  let lum = dot(e, vec3f(0.3, 0.55, 0.15));
+  return vec4f(lum, cov, 0.0, 1.0);
 }
