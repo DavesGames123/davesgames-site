@@ -1,0 +1,2312 @@
+{
+ "abox4d": {
+  "fn": "F_abox4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_donut4d": {
+  "fn": "F_abox_donut4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_donut4d_v2": {
+  "fn": "F_abox_donut4d_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_klein": {
+  "fn": "F_abox_klein",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mb3d1": {
+  "fn": "F_abox_mb3d1",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod1": {
+  "fn": "F_abox_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod11": {
+  "fn": "F_abox_mod11",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod12": {
+  "fn": "F_abox_mod12",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod13": {
+  "fn": "F_abox_mod13",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod14": {
+  "fn": "F_abox_mod14",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod15": {
+  "fn": "F_abox_mod15",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod2": {
+  "fn": "F_abox_mod2",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod_kali": {
+  "fn": "F_abox_mod_kali",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod_kali_eiffie": {
+  "fn": "F_abox_mod_kali_eiffie",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod_kali_v2": {
+  "fn": "F_abox_mod_kali_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_mod_kali_v3": {
+  "fn": "F_abox_mod_kali_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_smooth": {
+  "fn": "F_abox_smooth",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_sphere4d": {
+  "fn": "F_abox_sphere4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_surf_box": {
+  "fn": "F_abox_surf_box",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_tetra": {
+  "fn": "F_abox_tetra",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_tetra4d": {
+  "fn": "F_abox_tetra4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "abox_vs_icen1": {
+  "fn": "F_abox_vs_icen1",
+  "deps": [],
+  "status": "ok"
+ },
+ "aexion": {
+  "fn": "F_aexion",
+  "deps": [],
+  "status": "ok"
+ },
+ "aexion4d_v2": {
+  "fn": "F_aexion4d_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "aexion_octopus_mod": {
+  "fn": "F_aexion_octopus_mod",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_ifs": {
+  "fn": "F_amazing_ifs",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_surf": {
+  "fn": "F_amazing_surf",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_surf_klein": {
+  "fn": "F_amazing_surf_klein",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_surf_klein_v2": {
+  "fn": "F_amazing_surf_klein_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_surf_m3d": {
+  "fn": "F_amazing_surf_m3d",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_surf_mod1": {
+  "fn": "F_amazing_surf_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_surf_mod2": {
+  "fn": "F_amazing_surf_mod2",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_surf_mod3": {
+  "fn": "F_amazing_surf_mod3",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_surf_mod4": {
+  "fn": "F_amazing_surf_mod4",
+  "deps": [],
+  "status": "ok"
+ },
+ "amazing_surf_multi": {
+  "fn": "F_amazing_surf_multi",
+  "deps": [],
+  "status": "ok"
+ },
+ "benesi": {
+  "fn": "F_benesi",
+  "deps": [],
+  "status": "ok"
+ },
+ "benesi_mag_transforms": {
+  "fn": "F_benesi_mag_transforms",
+  "deps": [],
+  "status": "ok"
+ },
+ "benesi_pine_tree": {
+  "fn": "F_benesi_pine_tree",
+  "deps": [],
+  "status": "ok"
+ },
+ "benesi_pwr2_mandelbulb": {
+  "fn": "F_benesi_pwr2_mandelbulb",
+  "deps": [],
+  "status": "ok"
+ },
+ "benesi_t1_pine_tree": {
+  "fn": "F_benesi_t1_pine_tree",
+  "deps": [],
+  "status": "ok"
+ },
+ "box_fold4d_bulb_pow2": {
+  "fn": "F_box_fold4d_bulb_pow2",
+  "deps": [],
+  "status": "ok"
+ },
+ "box_fold_bulb_menger": {
+  "fn": "F_box_fold_bulb_menger",
+  "deps": [],
+  "status": "ok"
+ },
+ "box_fold_bulb_pow2": {
+  "fn": "F_box_fold_bulb_pow2",
+  "deps": [],
+  "status": "ok"
+ },
+ "box_fold_bulb_pow2_v2": {
+  "fn": "F_box_fold_bulb_pow2_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "box_fold_bulb_pow2_v3": {
+  "fn": "F_box_fold_bulb_pow2_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "box_fold_bulb_v4": {
+  "fn": "F_box_fold_bulb_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "box_fold_quat": {
+  "fn": "F_box_fold_quat",
+  "deps": [],
+  "status": "ok"
+ },
+ "bristorbrot": {
+  "fn": "F_bristorbrot",
+  "deps": [],
+  "status": "ok"
+ },
+ "bristorbrot2": {
+  "fn": "F_bristorbrot2",
+  "deps": [],
+  "status": "ok"
+ },
+ "bristorbrot4d": {
+  "fn": "F_bristorbrot4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "buffalo": {
+  "fn": "F_buffalo",
+  "deps": [],
+  "status": "ok"
+ },
+ "coastalbrot": {
+  "fn": "F_coastalbrot",
+  "deps": [],
+  "status": "ok"
+ },
+ "collatz": {
+  "fn": "F_collatz",
+  "deps": [],
+  "status": "ok"
+ },
+ "collatz_mod": {
+  "fn": "F_collatz_mod",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_amazing_ifs": {
+  "fn": "F_difs_amazing_ifs",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_box_diagonal_v1": {
+  "fn": "F_difs_box_diagonal_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_box_diagonal_v3": {
+  "fn": "F_difs_box_diagonal_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_box_v1": {
+  "fn": "F_difs_box_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_cylinder": {
+  "fn": "F_difs_cylinder",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_ellipsoid": {
+  "fn": "F_difs_ellipsoid",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_greek_ifs": {
+  "fn": "F_difs_greek_ifs",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_hextgrid2": {
+  "fn": "F_difs_hextgrid2",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_menger": {
+  "fn": "F_difs_menger",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_msltoe_donut": {
+  "fn": "F_difs_msltoe_donut",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_multi_v1": {
+  "fn": "F_difs_multi_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_prism": {
+  "fn": "F_difs_prism",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_sphere": {
+  "fn": "F_difs_sphere",
+  "deps": [],
+  "status": "ok"
+ },
+ "difs_torus": {
+  "fn": "F_difs_torus",
+  "deps": [],
+  "status": "ok"
+ },
+ "eiffie_car": {
+  "fn": "F_eiffie_car",
+  "deps": [],
+  "status": "ok"
+ },
+ "eiffie_msltoe": {
+  "fn": "F_eiffie_msltoe",
+  "deps": [],
+  "status": "ok"
+ },
+ "fold_box_mod1": {
+  "fn": "F_fold_box_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "fold_cut_cube": {
+  "fn": "F_fold_cut_cube",
+  "deps": [],
+  "status": "ok"
+ },
+ "generalized_fold_box": {
+  "fn": "F_generalized_fold_box",
+  "deps": [],
+  "status": "override"
+ },
+ "hypercomplex": {
+  "fn": "F_hypercomplex",
+  "deps": [],
+  "status": "ok"
+ },
+ "hypercomplex_v2": {
+  "fn": "F_hypercomplex_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "ides": {
+  "fn": "F_ides",
+  "deps": [],
+  "status": "ok"
+ },
+ "ides2": {
+  "fn": "F_ides2",
+  "deps": [],
+  "status": "ok"
+ },
+ "ifs_gen": {
+  "fn": "F_ifs_gen",
+  "deps": [],
+  "status": "ok"
+ },
+ "ifs_xy": {
+  "fn": "F_ifs_xy",
+  "deps": [],
+  "status": "ok"
+ },
+ "imaginary_scator_power2": {
+  "fn": "F_imaginary_scator_power2",
+  "deps": [],
+  "status": "ok"
+ },
+ "iq_bulb": {
+  "fn": "F_iq_bulb",
+  "deps": [],
+  "status": "ok"
+ },
+ "jos_kleinian": {
+  "fn": "F_jos_kleinian",
+  "deps": [],
+  "status": "ok"
+ },
+ "jos_kleinian_v2": {
+  "fn": "F_jos_kleinian_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "jos_kleinian_v3": {
+  "fn": "F_jos_kleinian_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "jos_kleinian_v4": {
+  "fn": "F_jos_kleinian_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "kaleidoscopic_ifs": {
+  "fn": "F_kaleidoscopic_ifs",
+  "deps": [],
+  "status": "ok"
+ },
+ "kalisets1": {
+  "fn": "F_kalisets1",
+  "deps": [],
+  "status": "ok"
+ },
+ "knot_v1": {
+  "fn": "F_knot_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "knot_v2": {
+  "fn": "F_knot_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "koch": {
+  "fn": "F_koch",
+  "deps": [],
+  "status": "ok"
+ },
+ "koch_ifs": {
+  "fn": "F_koch_ifs",
+  "deps": [],
+  "status": "ok"
+ },
+ "koch_v2": {
+  "fn": "F_koch_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "koch_v3": {
+  "fn": "F_koch_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "koch_v4": {
+  "fn": "F_koch_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "koch_v5": {
+  "fn": "F_koch_v5",
+  "deps": [],
+  "status": "ok"
+ },
+ "lkmitch": {
+  "fn": "F_lkmitch",
+  "deps": [],
+  "status": "ok"
+ },
+ "makin3d2": {
+  "fn": "F_makin3d2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandalay_box_v1": {
+  "fn": "F_mandalay_box_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandalay_box_v2": {
+  "fn": "F_mandalay_box_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandalay_kifs": {
+  "fn": "F_mandalay_kifs",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbar": {
+  "fn": "F_mandelbar",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbar_v2": {
+  "fn": "F_mandelbar_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbar_v3": {
+  "fn": "F_mandelbar_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbox": {
+  "fn": "F_mandelbox",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbox_fast": {
+  "fn": "F_mandelbox_fast",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbox_menger": {
+  "fn": "F_mandelbox_menger",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbox_smooth": {
+  "fn": "F_mandelbox_smooth",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbox_variable": {
+  "fn": "F_mandelbox_variable",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbox_vary_scale4d": {
+  "fn": "F_mandelbox_vary_scale4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb": {
+  "fn": "F_mandelbulb",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb2": {
+  "fn": "F_mandelbulb2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb3": {
+  "fn": "F_mandelbulb3",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb4": {
+  "fn": "F_mandelbulb4",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_abs": {
+  "fn": "F_mandelbulb_abs",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_abs_power2": {
+  "fn": "F_mandelbulb_abs_power2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_atan2_power2": {
+  "fn": "F_mandelbulb_atan2_power2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_bermarte": {
+  "fn": "F_mandelbulb_bermarte",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_eye": {
+  "fn": "F_mandelbulb_eye",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_iq_pow8": {
+  "fn": "F_mandelbulb_iq_pow8",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_iq_v2": {
+  "fn": "F_mandelbulb_iq_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_juliabulb": {
+  "fn": "F_mandelbulb_juliabulb",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_kali": {
+  "fn": "F_mandelbulb_kali",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_kali_multi": {
+  "fn": "F_mandelbulb_kali_multi",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_kosalos": {
+  "fn": "F_mandelbulb_kosalos",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_kosalos_v2": {
+  "fn": "F_mandelbulb_kosalos_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_lambda": {
+  "fn": "F_mandelbulb_lambda",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_multi": {
+  "fn": "F_mandelbulb_multi",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_multi2": {
+  "fn": "F_mandelbulb_multi2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_plus_z": {
+  "fn": "F_mandelbulb_plus_z",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_pow2_v1": {
+  "fn": "F_mandelbulb_pow2_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_pow2_v2": {
+  "fn": "F_mandelbulb_pow2_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_pow2_v3": {
+  "fn": "F_mandelbulb_pow2_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_pow2_v4": {
+  "fn": "F_mandelbulb_pow2_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_power1234": {
+  "fn": "F_mandelbulb_power1234",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_power2": {
+  "fn": "F_mandelbulb_power2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_pupuku": {
+  "fn": "F_mandelbulb_pupuku",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_quadrat": {
+  "fn": "F_mandelbulb_quadrat",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_quat": {
+  "fn": "F_mandelbulb_quat",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_sin_cos": {
+  "fn": "F_mandelbulb_sin_cos",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_sin_cos_v2": {
+  "fn": "F_mandelbulb_sin_cos_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_sin_cos_v3": {
+  "fn": "F_mandelbulb_sin_cos_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_sin_cos_v4": {
+  "fn": "F_mandelbulb_sin_cos_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_tails": {
+  "fn": "F_mandelbulb_tails",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_tails_v2": {
+  "fn": "F_mandelbulb_tails_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelbulb_vary_power_v1": {
+  "fn": "F_mandelbulb_vary_power_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelcup": {
+  "fn": "F_mandelcup",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelnest": {
+  "fn": "F_mandelnest",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelnest4d": {
+  "fn": "F_mandelnest4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelnest_full": {
+  "fn": "F_mandelnest_full",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandelnest_v2": {
+  "fn": "F_mandelnest_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandeltorus": {
+  "fn": "F_mandeltorus",
+  "deps": [],
+  "status": "ok"
+ },
+ "mandeltorus_v2": {
+  "fn": "F_mandeltorus_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger3": {
+  "fn": "F_menger3",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger3_m3d": {
+  "fn": "F_menger3_m3d",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger4d": {
+  "fn": "F_menger4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger4d_mod1": {
+  "fn": "F_menger4d_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger4d_mod2": {
+  "fn": "F_menger4d_mod2",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_chebyshev": {
+  "fn": "F_menger_chebyshev",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_cross_kifs": {
+  "fn": "F_menger_cross_kifs",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_cross_mod1": {
+  "fn": "F_menger_cross_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_middle_mod": {
+  "fn": "F_menger_middle_mod",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_mod1": {
+  "fn": "F_menger_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_octo": {
+  "fn": "F_menger_octo",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_poly_fold": {
+  "fn": "F_menger_poly_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_prism_shape": {
+  "fn": "F_menger_prism_shape",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_prism_shape2": {
+  "fn": "F_menger_prism_shape2",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_pwr2_poly": {
+  "fn": "F_menger_pwr2_poly",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_pyramid": {
+  "fn": "F_menger_pyramid",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_smooth": {
+  "fn": "F_menger_smooth",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_smooth_chebyshev": {
+  "fn": "F_menger_smooth_chebyshev",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_smooth_mod1": {
+  "fn": "F_menger_smooth_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_sponge": {
+  "fn": "F_menger_sponge",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_v2": {
+  "fn": "F_menger_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_v3": {
+  "fn": "F_menger_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_v4": {
+  "fn": "F_menger_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_v5": {
+  "fn": "F_menger_v5",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_v6": {
+  "fn": "F_menger_v6",
+  "deps": [],
+  "status": "ok"
+ },
+ "menger_v7": {
+  "fn": "F_menger_v7",
+  "deps": [],
+  "status": "ok"
+ },
+ "mix_pinski4d": {
+  "fn": "F_mix_pinski4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "modulus_mandelbulb": {
+  "fn": "F_modulus_mandelbulb",
+  "deps": [],
+  "status": "ok"
+ },
+ "modulus_menger_sponge": {
+  "fn": "F_modulus_menger_sponge",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_donut": {
+  "fn": "F_msltoe_donut",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_sym2_mod": {
+  "fn": "F_msltoe_sym2_mod",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_sym3_mod": {
+  "fn": "F_msltoe_sym3_mod",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_sym3_mod2": {
+  "fn": "F_msltoe_sym3_mod2",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_sym3_mod3": {
+  "fn": "F_msltoe_sym3_mod3",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_sym3_mod4": {
+  "fn": "F_msltoe_sym3_mod4",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_sym3_mod5": {
+  "fn": "F_msltoe_sym3_mod5",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_sym3_mod6": {
+  "fn": "F_msltoe_sym3_mod6",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_sym4_mod": {
+  "fn": "F_msltoe_sym4_mod",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_sym4_mod1": {
+  "fn": "F_msltoe_sym4_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_toroidal": {
+  "fn": "F_msltoe_toroidal",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_toroidal_multi": {
+  "fn": "F_msltoe_toroidal_multi",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_toroidal_v2": {
+  "fn": "F_msltoe_toroidal_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "msltoe_toroidal_v3": {
+  "fn": "F_msltoe_toroidal_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "newton_pow3": {
+  "fn": "F_newton_pow3",
+  "deps": [],
+  "status": "ok"
+ },
+ "octahedron": {
+  "fn": "F_octahedron",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian": {
+  "fn": "F_pseudo_kleinian",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian4d": {
+  "fn": "F_pseudo_kleinian4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_mod1": {
+  "fn": "F_pseudo_kleinian_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_mod2": {
+  "fn": "F_pseudo_kleinian_mod2",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_mod3": {
+  "fn": "F_pseudo_kleinian_mod3",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_mod4": {
+  "fn": "F_pseudo_kleinian_mod4",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_mod5": {
+  "fn": "F_pseudo_kleinian_mod5",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_mod6": {
+  "fn": "F_pseudo_kleinian_mod6",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_mod7": {
+  "fn": "F_pseudo_kleinian_mod7",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_std_de": {
+  "fn": "F_pseudo_kleinian_std_de",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_trig": {
+  "fn": "F_pseudo_kleinian_trig",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_trig_v2": {
+  "fn": "F_pseudo_kleinian_trig_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "pseudo_kleinian_trig_v3": {
+  "fn": "F_pseudo_kleinian_trig_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "quaternion": {
+  "fn": "F_quaternion",
+  "deps": [],
+  "status": "ok"
+ },
+ "quaternion3d": {
+  "fn": "F_quaternion3d",
+  "deps": [],
+  "status": "ok"
+ },
+ "quaternion4d": {
+  "fn": "F_quaternion4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "quaternion_cubic4d": {
+  "fn": "F_quaternion_cubic4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "quick_dudley": {
+  "fn": "F_quick_dudley",
+  "deps": [],
+  "status": "ok"
+ },
+ "quick_dudley_mod": {
+  "fn": "F_quick_dudley_mod",
+  "deps": [],
+  "status": "ok"
+ },
+ "riemann_bulb_msltoe_mod2": {
+  "fn": "F_riemann_bulb_msltoe_mod2",
+  "deps": [],
+  "status": "ok"
+ },
+ "riemann_sphere_hobold_multi": {
+  "fn": "F_riemann_sphere_hobold_multi",
+  "deps": [],
+  "status": "ok"
+ },
+ "riemann_sphere_hobold_pow4": {
+  "fn": "F_riemann_sphere_hobold_pow4",
+  "deps": [],
+  "status": "ok"
+ },
+ "riemann_sphere_hobold_pow8": {
+  "fn": "F_riemann_sphere_hobold_pow8",
+  "deps": [],
+  "status": "ok"
+ },
+ "riemann_sphere_msltoe": {
+  "fn": "F_riemann_sphere_msltoe",
+  "deps": [],
+  "status": "ok"
+ },
+ "riemann_sphere_msltoe_m3d": {
+  "fn": "F_riemann_sphere_msltoe_m3d",
+  "deps": [],
+  "status": "ok"
+ },
+ "riemann_sphere_msltoe_v1": {
+  "fn": "F_riemann_sphere_msltoe_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "riemann_sphere_msltoe_v2": {
+  "fn": "F_riemann_sphere_msltoe_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "scator_power2": {
+  "fn": "F_scator_power2",
+  "deps": [],
+  "status": "ok"
+ },
+ "scator_power2_imaginary": {
+  "fn": "F_scator_power2_imaginary",
+  "deps": [],
+  "status": "ok"
+ },
+ "scator_power2_real": {
+  "fn": "F_scator_power2_real",
+  "deps": [],
+  "status": "ok"
+ },
+ "scator_power2_std_r": {
+  "fn": "F_scator_power2_std_r",
+  "deps": [],
+  "status": "ok"
+ },
+ "scator_test": {
+  "fn": "F_scator_test",
+  "deps": [],
+  "status": "ok"
+ },
+ "sierpinski3d": {
+  "fn": "F_sierpinski3d",
+  "deps": [],
+  "status": "ok"
+ },
+ "sierpinski3d_v2": {
+  "fn": "F_sierpinski3d_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "sierpinski3d_v3": {
+  "fn": "F_sierpinski3d_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "sierpinski3d_v4": {
+  "fn": "F_sierpinski3d_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "sierpinski4d": {
+  "fn": "F_sierpinski4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "sphere_cluster": {
+  "fn": "F_sphere_cluster",
+  "deps": [],
+  "status": "ok"
+ },
+ "sphere_cluster_v2": {
+  "fn": "F_sphere_cluster_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "sphere_cluster_v3": {
+  "fn": "F_sphere_cluster_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "spheretree": {
+  "fn": "F_spheretree",
+  "deps": [],
+  "status": "ok"
+ },
+ "spheretree_v2": {
+  "fn": "F_spheretree_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "spheretree_v4": {
+  "fn": "F_spheretree_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "spheretree_v5": {
+  "fn": "F_spheretree_v5",
+  "deps": [],
+  "status": "ok"
+ },
+ "testing": {
+  "fn": "F_testing",
+  "deps": [],
+  "status": "ok"
+ },
+ "testing4d": {
+  "fn": "F_testing4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "testing_log": {
+  "fn": "F_testing_log",
+  "deps": [],
+  "status": "ok"
+ },
+ "testing_transform": {
+  "fn": "F_testing_transform",
+  "deps": [],
+  "status": "ok"
+ },
+ "testing_transform2": {
+  "fn": "F_testing_transform2",
+  "deps": [],
+  "status": "ok"
+ },
+ "tinker_towers": {
+  "fn": "F_tinker_towers",
+  "deps": [],
+  "status": "override"
+ },
+ "transf_abs_add_conditional": {
+  "fn": "F_transf_abs_add_conditional",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_add_conditional2": {
+  "fn": "F_transf_abs_add_conditional2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_add_conditional4d": {
+  "fn": "F_transf_abs_add_conditional4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_add_constant": {
+  "fn": "F_transf_abs_add_constant",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_add_constant4d": {
+  "fn": "F_transf_abs_add_constant4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_add_constant_v2": {
+  "fn": "F_transf_abs_add_constant_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_add_multi": {
+  "fn": "F_transf_abs_add_multi",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_add_multi4d": {
+  "fn": "F_transf_abs_add_multi4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_add_tglad_fold": {
+  "fn": "F_transf_abs_add_tglad_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_add_tglad_fold4d": {
+  "fn": "F_transf_abs_add_tglad_fold4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_rec_fold_xy": {
+  "fn": "F_transf_abs_rec_fold_xy",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_abs_sym3": {
+  "fn": "F_transf_abs_sym3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_constant": {
+  "fn": "F_transf_add_constant",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_constant4d": {
+  "fn": "F_transf_add_constant4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_constant_mod1": {
+  "fn": "F_transf_add_constant_mod1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_constant_mod2": {
+  "fn": "F_transf_add_constant_mod2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_constant_mod3": {
+  "fn": "F_transf_add_constant_mod3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_constant_rot_v1": {
+  "fn": "F_transf_add_constant_rot_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_constant_vary_v1": {
+  "fn": "F_transf_add_constant_vary_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel": {
+  "fn": "F_transf_add_cpixel",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel4d": {
+  "fn": "F_transf_add_cpixel4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_axis_swap": {
+  "fn": "F_transf_add_cpixel_axis_swap",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_cx_cy_axis_swap": {
+  "fn": "F_transf_add_cpixel_cx_cy_axis_swap",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_invert": {
+  "fn": "F_transf_add_cpixel_invert",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_rotated": {
+  "fn": "F_transf_add_cpixel_rotated",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_scator": {
+  "fn": "F_transf_add_cpixel_scator",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_sin_or_cos": {
+  "fn": "F_transf_add_cpixel_sin_or_cos",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_sphere_fold": {
+  "fn": "F_transf_add_cpixel_sphere_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_symmetrical": {
+  "fn": "F_transf_add_cpixel_symmetrical",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_tile": {
+  "fn": "F_transf_add_cpixel_tile",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_cpixel_vary_v1": {
+  "fn": "F_transf_add_cpixel_vary_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_exp2_z": {
+  "fn": "F_transf_add_exp2_z",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_norm": {
+  "fn": "F_transf_add_norm",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_scale_rotate": {
+  "fn": "F_transf_add_scale_rotate",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_add_spherical_invert": {
+  "fn": "F_transf_add_spherical_invert",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_cube_sphere": {
+  "fn": "F_transf_benesi_cube_sphere",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_mag_backward": {
+  "fn": "F_transf_benesi_mag_backward",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_mag_forward": {
+  "fn": "F_transf_benesi_mag_forward",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_sphere_cube": {
+  "fn": "F_transf_benesi_sphere_cube",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_t1": {
+  "fn": "F_transf_benesi_t1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_t1_mod": {
+  "fn": "F_transf_benesi_t1_mod",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_t2": {
+  "fn": "F_transf_benesi_t2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_t3": {
+  "fn": "F_transf_benesi_t3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_t4": {
+  "fn": "F_transf_benesi_t4",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_benesi_t5b": {
+  "fn": "F_transf_benesi_t5b",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_blockify": {
+  "fn": "F_transf_blockify",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_blockify_v2": {
+  "fn": "F_transf_blockify_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_fold": {
+  "fn": "F_transf_box_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_fold4d": {
+  "fn": "F_transf_box_fold4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_fold4d_infy": {
+  "fn": "F_transf_box_fold4d_infy",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_fold4d_tglad": {
+  "fn": "F_transf_box_fold4d_tglad",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_fold_vary_v1": {
+  "fn": "F_transf_box_fold_vary_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_fold_xyz": {
+  "fn": "F_transf_box_fold_xyz",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_offset": {
+  "fn": "F_transf_box_offset",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_tiling4d": {
+  "fn": "F_transf_box_tiling4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_tiling_v2": {
+  "fn": "F_transf_box_tiling_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_tiling_v3": {
+  "fn": "F_transf_box_tiling_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_box_wrap4d": {
+  "fn": "F_transf_box_wrap4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_cayley2_v1": {
+  "fn": "F_transf_cayley2_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_clamp4d": {
+  "fn": "F_transf_clamp4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_de_controls": {
+  "fn": "F_transf_de_controls",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_de_linear_cube": {
+  "fn": "F_transf_de_linear_cube",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_diagonal_fold": {
+  "fn": "F_transf_diagonal_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_amazing_ifs": {
+  "fn": "F_transf_difs_amazing_ifs",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_box": {
+  "fn": "F_transf_difs_box",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_box_frame": {
+  "fn": "F_transf_difs_box_frame",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_box_v2": {
+  "fn": "F_transf_difs_box_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_box_v3": {
+  "fn": "F_transf_difs_box_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_cayley2": {
+  "fn": "F_transf_difs_cayley2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_chessboard": {
+  "fn": "F_transf_difs_chessboard",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_clip_custom": {
+  "fn": "F_transf_difs_clip_custom",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_clip_plane": {
+  "fn": "F_transf_difs_clip_plane",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_cylinder": {
+  "fn": "F_transf_difs_cylinder",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_cylinder_v2": {
+  "fn": "F_transf_difs_cylinder_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_diamond": {
+  "fn": "F_transf_difs_diamond",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_ellipsoid": {
+  "fn": "F_transf_difs_ellipsoid",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_gear_v1": {
+  "fn": "F_transf_difs_gear_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_grid": {
+  "fn": "F_transf_difs_grid",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_grid_v2": {
+  "fn": "F_transf_difs_grid_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_grid_v3": {
+  "fn": "F_transf_difs_grid_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_heart": {
+  "fn": "F_transf_difs_heart",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_helix": {
+  "fn": "F_transf_difs_helix",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_helix_menger": {
+  "fn": "F_transf_difs_helix_menger",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_helix_v2": {
+  "fn": "F_transf_difs_helix_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_hexprism": {
+  "fn": "F_transf_difs_hexprism",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_hexprism_v2": {
+  "fn": "F_transf_difs_hexprism_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_hextgrid2": {
+  "fn": "F_transf_difs_hextgrid2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_hybrid_color": {
+  "fn": "F_transf_difs_hybrid_color",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_octahedron": {
+  "fn": "F_transf_difs_octahedron",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_octahedron_v2": {
+  "fn": "F_transf_difs_octahedron_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_piriform": {
+  "fn": "F_transf_difs_piriform",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_polyhedra": {
+  "fn": "F_transf_difs_polyhedra",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_polyhedra_v2": {
+  "fn": "F_transf_difs_polyhedra_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_prism": {
+  "fn": "F_transf_difs_prism",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_prism_v2": {
+  "fn": "F_transf_difs_prism_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_sphere": {
+  "fn": "F_transf_difs_sphere",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_sphere_grid": {
+  "fn": "F_transf_difs_sphere_grid",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_sphere_grid_v2": {
+  "fn": "F_transf_difs_sphere_grid_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_sphere_grid_v3": {
+  "fn": "F_transf_difs_sphere_grid_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_spring": {
+  "fn": "F_transf_difs_spring",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_supershape": {
+  "fn": "F_transf_difs_supershape",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_supershape_v2": {
+  "fn": "F_transf_difs_supershape_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_torus": {
+  "fn": "F_transf_difs_torus",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_torus_grid": {
+  "fn": "F_transf_difs_torus_grid",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_torus_menger": {
+  "fn": "F_transf_difs_torus_menger",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_torus_twist": {
+  "fn": "F_transf_difs_torus_twist",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_torus_v2": {
+  "fn": "F_transf_difs_torus_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_torus_v3": {
+  "fn": "F_transf_difs_torus_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_torus_v4": {
+  "fn": "F_transf_difs_torus_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_tri_grid": {
+  "fn": "F_transf_difs_tri_grid",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_difs_tube": {
+  "fn": "F_transf_difs_tube",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_dot_fold": {
+  "fn": "F_transf_dot_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_folding_tetra3d": {
+  "fn": "F_transf_folding_tetra3d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_gnarl": {
+  "fn": "F_transf_gnarl",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_hybrid_color": {
+  "fn": "F_transf_hybrid_color",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_hybrid_color2": {
+  "fn": "F_transf_hybrid_color2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_initial4d": {
+  "fn": "F_transf_initial4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_inv_cylindrical": {
+  "fn": "F_transf_inv_cylindrical",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_iteration_weight": {
+  "fn": "F_transf_iteration_weight",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_iteration_weight4d": {
+  "fn": "F_transf_iteration_weight4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_juliabox": {
+  "fn": "F_transf_juliabox",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_juliabox_v2": {
+  "fn": "F_transf_juliabox_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_lin_combine_cxyz": {
+  "fn": "F_transf_lin_combine_cxyz",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_low_res_mode": {
+  "fn": "F_transf_low_res_mode",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_mandalay_fold4d": {
+  "fn": "F_transf_mandalay_fold4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_mandalay_fold_v1": {
+  "fn": "F_transf_mandalay_fold_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_mandalay_fold_v2": {
+  "fn": "F_transf_mandalay_fold_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_menger_fold": {
+  "fn": "F_transf_menger_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_menger_fold_v2": {
+  "fn": "F_transf_menger_fold_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_multiple_angle": {
+  "fn": "F_transf_multiple_angle",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_neg_abs_add_constant": {
+  "fn": "F_transf_neg_abs_add_constant",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_octo_fold": {
+  "fn": "F_transf_octo_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_offset_s_curve4d": {
+  "fn": "F_transf_offset_s_curve4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_parab_fold": {
+  "fn": "F_transf_parab_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_platonic_solid": {
+  "fn": "F_transf_platonic_solid",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_poly_fold_atan": {
+  "fn": "F_transf_poly_fold_atan",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_poly_fold_atan2": {
+  "fn": "F_transf_poly_fold_atan2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_poly_fold_atan2_iter": {
+  "fn": "F_transf_poly_fold_atan2_iter",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_poly_fold_sym": {
+  "fn": "F_transf_poly_fold_sym",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_poly_fold_sym_multi": {
+  "fn": "F_transf_poly_fold_sym_multi",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_poly_fold_sym_xy": {
+  "fn": "F_transf_poly_fold_sym_xy",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_poly_xy_fold_v1": {
+  "fn": "F_transf_poly_xy_fold_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_pwr2_polynomial": {
+  "fn": "F_transf_pwr2_polynomial",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_quadratic_fold4d": {
+  "fn": "F_transf_quadratic_fold4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_quaternion_fold": {
+  "fn": "F_transf_quaternion_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_r_power": {
+  "fn": "F_transf_r_power",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_reciprocal3": {
+  "fn": "F_transf_reciprocal3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_reciprocal4d": {
+  "fn": "F_transf_reciprocal4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rotate_about_vec3": {
+  "fn": "F_transf_rotate_about_vec3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rotation": {
+  "fn": "F_transf_rotation",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rotation4d": {
+  "fn": "F_transf_rotation4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rotation_chebyshev": {
+  "fn": "F_transf_rotation_chebyshev",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rotation_folding": {
+  "fn": "F_transf_rotation_folding",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rotation_folding_plane": {
+  "fn": "F_transf_rotation_folding_plane",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rotation_iter_controls": {
+  "fn": "F_transf_rotation_iter_controls",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rotation_m3d": {
+  "fn": "F_transf_rotation_m3d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rotation_vary_v1": {
+  "fn": "F_transf_rotation_vary_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_rpow3": {
+  "fn": "F_transf_rpow3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_scale": {
+  "fn": "F_transf_scale",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_scale3d": {
+  "fn": "F_transf_scale3d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_scale4d": {
+  "fn": "F_transf_scale4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_scale_offset": {
+  "fn": "F_transf_scale_offset",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_scale_offset_v2": {
+  "fn": "F_transf_scale_offset_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_scale_vary_abox_v2": {
+  "fn": "F_transf_scale_vary_abox_v2",
+  "deps": [],
+  "status": "override"
+ },
+ "transf_scale_vary_multi": {
+  "fn": "F_transf_scale_vary_multi",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_scale_vary_v1": {
+  "fn": "F_transf_scale_vary_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_scale_vary_v212": {
+  "fn": "F_transf_scale_vary_v212",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_scale_vary_vcl": {
+  "fn": "F_transf_scale_vary_vcl",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_sin_add": {
+  "fn": "F_transf_sin_add",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_sin_and_cos": {
+  "fn": "F_transf_sin_and_cos",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_sin_and_cos_max": {
+  "fn": "F_transf_sin_and_cos_max",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_sin_or_cos": {
+  "fn": "F_transf_sin_or_cos",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_sin_tan": {
+  "fn": "F_transf_sin_tan",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_sin_y_m3d": {
+  "fn": "F_transf_sin_y_m3d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_sincos": {
+  "fn": "F_transf_sincos",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_sincos_helix": {
+  "fn": "F_transf_sincos_helix",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_sincos_v2": {
+  "fn": "F_transf_sincos_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_smooth": {
+  "fn": "F_transf_smooth",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_smooth_v2": {
+  "fn": "F_transf_smooth_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_coord_invs": {
+  "fn": "F_transf_spherical_coord_invs",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold": {
+  "fn": "F_transf_spherical_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold4d": {
+  "fn": "F_transf_spherical_fold4d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold4d_v2": {
+  "fn": "F_transf_spherical_fold4d_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_abox": {
+  "fn": "F_transf_spherical_fold_abox",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_chs": {
+  "fn": "F_transf_spherical_fold_chs",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_cuboid": {
+  "fn": "F_transf_spherical_fold_cuboid",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_parab": {
+  "fn": "F_transf_spherical_fold_parab",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_pnorm": {
+  "fn": "F_transf_spherical_fold_pnorm",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_smooth": {
+  "fn": "F_transf_spherical_fold_smooth",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_v1": {
+  "fn": "F_transf_spherical_fold_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_v2": {
+  "fn": "F_transf_spherical_fold_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_v3": {
+  "fn": "F_transf_spherical_fold_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_vary_v1": {
+  "fn": "F_transf_spherical_fold_vary_v1",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_vary_vcl": {
+  "fn": "F_transf_spherical_fold_vary_vcl",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_fold_xyz_bias": {
+  "fn": "F_transf_spherical_fold_xyz_bias",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_inv": {
+  "fn": "F_transf_spherical_inv",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_inv_c": {
+  "fn": "F_transf_spherical_inv_c",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_inv_pnorm": {
+  "fn": "F_transf_spherical_inv_pnorm",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_inv_v2": {
+  "fn": "F_transf_spherical_inv_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_inv_v3": {
+  "fn": "F_transf_spherical_inv_v3",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_inv_v4": {
+  "fn": "F_transf_spherical_inv_v4",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_offset": {
+  "fn": "F_transf_spherical_offset",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_offset_vcl": {
+  "fn": "F_transf_spherical_offset_vcl",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_spherical_pwr_fold": {
+  "fn": "F_transf_spherical_pwr_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_step_xy": {
+  "fn": "F_transf_step_xy",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_supershape": {
+  "fn": "F_transf_supershape",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_surf_box_fold": {
+  "fn": "F_transf_surf_box_fold",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_surf_box_fold_v2": {
+  "fn": "F_transf_surf_box_fold_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_surf_box_fold_v24d": {
+  "fn": "F_transf_surf_box_fold_v24d",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_surf_fold_multi": {
+  "fn": "F_transf_surf_fold_multi",
+  "deps": [],
+  "status": "ok"
+ },
+ "transf_zvector_axis_swap": {
+  "fn": "F_transf_zvector_axis_swap",
+  "deps": [],
+  "status": "ok"
+ },
+ "vicsek": {
+  "fn": "F_vicsek",
+  "deps": [],
+  "status": "ok"
+ },
+ "xenodreambuie": {
+  "fn": "F_xenodreambuie",
+  "deps": [],
+  "status": "ok"
+ },
+ "xenodreambuie_v2": {
+  "fn": "F_xenodreambuie_v2",
+  "deps": [],
+  "status": "ok"
+ },
+ "xenodreambuie_v3": {
+  "fn": "F_xenodreambuie_v3",
+  "deps": [],
+  "status": "ok"
+ }
+}

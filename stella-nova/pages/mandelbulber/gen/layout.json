@@ -1,0 +1,2960 @@
+{
+ "Fractal": {
+  "size": 6416,
+  "align": 16,
+  "stride": 6416,
+  "note": "WGSL storage layout of struct Fractal; one entry per scalar/vector leaf, arrays expanded as path[i]; matrix33 leaves are rows m1/m2/m3 (vec3f).",
+  "fields": {
+   "bulb.power": {
+    "offset": 0,
+    "type": "f32"
+   },
+   "bulb.alphaAngleOffset": {
+    "offset": 4,
+    "type": "f32"
+   },
+   "bulb.betaAngleOffset": {
+    "offset": 8,
+    "type": "f32"
+   },
+   "bulb.gammaAngleOffset": {
+    "offset": 12,
+    "type": "f32"
+   },
+   "IFS.mainRot.m1": {
+    "offset": 16,
+    "type": "vec3f"
+   },
+   "IFS.mainRot.m2": {
+    "offset": 32,
+    "type": "vec3f"
+   },
+   "IFS.mainRot.m3": {
+    "offset": 48,
+    "type": "vec3f"
+   },
+   "IFS.rot[0].m1": {
+    "offset": 64,
+    "type": "vec3f"
+   },
+   "IFS.rot[0].m2": {
+    "offset": 80,
+    "type": "vec3f"
+   },
+   "IFS.rot[0].m3": {
+    "offset": 96,
+    "type": "vec3f"
+   },
+   "IFS.rot[1].m1": {
+    "offset": 112,
+    "type": "vec3f"
+   },
+   "IFS.rot[1].m2": {
+    "offset": 128,
+    "type": "vec3f"
+   },
+   "IFS.rot[1].m3": {
+    "offset": 144,
+    "type": "vec3f"
+   },
+   "IFS.rot[2].m1": {
+    "offset": 160,
+    "type": "vec3f"
+   },
+   "IFS.rot[2].m2": {
+    "offset": 176,
+    "type": "vec3f"
+   },
+   "IFS.rot[2].m3": {
+    "offset": 192,
+    "type": "vec3f"
+   },
+   "IFS.rot[3].m1": {
+    "offset": 208,
+    "type": "vec3f"
+   },
+   "IFS.rot[3].m2": {
+    "offset": 224,
+    "type": "vec3f"
+   },
+   "IFS.rot[3].m3": {
+    "offset": 240,
+    "type": "vec3f"
+   },
+   "IFS.rot[4].m1": {
+    "offset": 256,
+    "type": "vec3f"
+   },
+   "IFS.rot[4].m2": {
+    "offset": 272,
+    "type": "vec3f"
+   },
+   "IFS.rot[4].m3": {
+    "offset": 288,
+    "type": "vec3f"
+   },
+   "IFS.rot[5].m1": {
+    "offset": 304,
+    "type": "vec3f"
+   },
+   "IFS.rot[5].m2": {
+    "offset": 320,
+    "type": "vec3f"
+   },
+   "IFS.rot[5].m3": {
+    "offset": 336,
+    "type": "vec3f"
+   },
+   "IFS.rot[6].m1": {
+    "offset": 352,
+    "type": "vec3f"
+   },
+   "IFS.rot[6].m2": {
+    "offset": 368,
+    "type": "vec3f"
+   },
+   "IFS.rot[6].m3": {
+    "offset": 384,
+    "type": "vec3f"
+   },
+   "IFS.rot[7].m1": {
+    "offset": 400,
+    "type": "vec3f"
+   },
+   "IFS.rot[7].m2": {
+    "offset": 416,
+    "type": "vec3f"
+   },
+   "IFS.rot[7].m3": {
+    "offset": 432,
+    "type": "vec3f"
+   },
+   "IFS.rot[8].m1": {
+    "offset": 448,
+    "type": "vec3f"
+   },
+   "IFS.rot[8].m2": {
+    "offset": 464,
+    "type": "vec3f"
+   },
+   "IFS.rot[8].m3": {
+    "offset": 480,
+    "type": "vec3f"
+   },
+   "IFS.direction[0]": {
+    "offset": 496,
+    "type": "vec4f"
+   },
+   "IFS.direction[1]": {
+    "offset": 512,
+    "type": "vec4f"
+   },
+   "IFS.direction[2]": {
+    "offset": 528,
+    "type": "vec4f"
+   },
+   "IFS.direction[3]": {
+    "offset": 544,
+    "type": "vec4f"
+   },
+   "IFS.direction[4]": {
+    "offset": 560,
+    "type": "vec4f"
+   },
+   "IFS.direction[5]": {
+    "offset": 576,
+    "type": "vec4f"
+   },
+   "IFS.direction[6]": {
+    "offset": 592,
+    "type": "vec4f"
+   },
+   "IFS.direction[7]": {
+    "offset": 608,
+    "type": "vec4f"
+   },
+   "IFS.direction[8]": {
+    "offset": 624,
+    "type": "vec4f"
+   },
+   "IFS.edge": {
+    "offset": 640,
+    "type": "vec3f"
+   },
+   "IFS.offset": {
+    "offset": 656,
+    "type": "vec4f"
+   },
+   "IFS.rotations[0]": {
+    "offset": 672,
+    "type": "vec3f"
+   },
+   "IFS.rotations[1]": {
+    "offset": 688,
+    "type": "vec3f"
+   },
+   "IFS.rotations[2]": {
+    "offset": 704,
+    "type": "vec3f"
+   },
+   "IFS.rotations[3]": {
+    "offset": 720,
+    "type": "vec3f"
+   },
+   "IFS.rotations[4]": {
+    "offset": 736,
+    "type": "vec3f"
+   },
+   "IFS.rotations[5]": {
+    "offset": 752,
+    "type": "vec3f"
+   },
+   "IFS.rotations[6]": {
+    "offset": 768,
+    "type": "vec3f"
+   },
+   "IFS.rotations[7]": {
+    "offset": 784,
+    "type": "vec3f"
+   },
+   "IFS.rotations[8]": {
+    "offset": 800,
+    "type": "vec3f"
+   },
+   "IFS.rotation": {
+    "offset": 816,
+    "type": "vec3f"
+   },
+   "IFS.distance[0]": {
+    "offset": 828,
+    "type": "f32"
+   },
+   "IFS.distance[1]": {
+    "offset": 832,
+    "type": "f32"
+   },
+   "IFS.distance[2]": {
+    "offset": 836,
+    "type": "f32"
+   },
+   "IFS.distance[3]": {
+    "offset": 840,
+    "type": "f32"
+   },
+   "IFS.distance[4]": {
+    "offset": 844,
+    "type": "f32"
+   },
+   "IFS.distance[5]": {
+    "offset": 848,
+    "type": "f32"
+   },
+   "IFS.distance[6]": {
+    "offset": 852,
+    "type": "f32"
+   },
+   "IFS.distance[7]": {
+    "offset": 856,
+    "type": "f32"
+   },
+   "IFS.distance[8]": {
+    "offset": 860,
+    "type": "f32"
+   },
+   "IFS.intensity[0]": {
+    "offset": 864,
+    "type": "f32"
+   },
+   "IFS.intensity[1]": {
+    "offset": 868,
+    "type": "f32"
+   },
+   "IFS.intensity[2]": {
+    "offset": 872,
+    "type": "f32"
+   },
+   "IFS.intensity[3]": {
+    "offset": 876,
+    "type": "f32"
+   },
+   "IFS.intensity[4]": {
+    "offset": 880,
+    "type": "f32"
+   },
+   "IFS.intensity[5]": {
+    "offset": 884,
+    "type": "f32"
+   },
+   "IFS.intensity[6]": {
+    "offset": 888,
+    "type": "f32"
+   },
+   "IFS.intensity[7]": {
+    "offset": 892,
+    "type": "f32"
+   },
+   "IFS.intensity[8]": {
+    "offset": 896,
+    "type": "f32"
+   },
+   "IFS.scale": {
+    "offset": 900,
+    "type": "f32"
+   },
+   "IFS.absX": {
+    "offset": 904,
+    "type": "i32"
+   },
+   "IFS.absY": {
+    "offset": 908,
+    "type": "i32"
+   },
+   "IFS.absZ": {
+    "offset": 912,
+    "type": "i32"
+   },
+   "IFS.enabled[0]": {
+    "offset": 916,
+    "type": "i32"
+   },
+   "IFS.enabled[1]": {
+    "offset": 920,
+    "type": "i32"
+   },
+   "IFS.enabled[2]": {
+    "offset": 924,
+    "type": "i32"
+   },
+   "IFS.enabled[3]": {
+    "offset": 928,
+    "type": "i32"
+   },
+   "IFS.enabled[4]": {
+    "offset": 932,
+    "type": "i32"
+   },
+   "IFS.enabled[5]": {
+    "offset": 936,
+    "type": "i32"
+   },
+   "IFS.enabled[6]": {
+    "offset": 940,
+    "type": "i32"
+   },
+   "IFS.enabled[7]": {
+    "offset": 944,
+    "type": "i32"
+   },
+   "IFS.enabled[8]": {
+    "offset": 948,
+    "type": "i32"
+   },
+   "IFS.mengerSpongeMode": {
+    "offset": 952,
+    "type": "i32"
+   },
+   "IFS.rotationEnabled": {
+    "offset": 956,
+    "type": "i32"
+   },
+   "IFS.edgeEnabled": {
+    "offset": 960,
+    "type": "i32"
+   },
+   "mandelbox.color.factor4D": {
+    "offset": 976,
+    "type": "vec4f"
+   },
+   "mandelbox.color.difs0000": {
+    "offset": 992,
+    "type": "vec4f"
+   },
+   "mandelbox.color.factor": {
+    "offset": 1008,
+    "type": "vec3f"
+   },
+   "mandelbox.color.factorR": {
+    "offset": 1020,
+    "type": "f32"
+   },
+   "mandelbox.color.factorSp1": {
+    "offset": 1024,
+    "type": "f32"
+   },
+   "mandelbox.color.factorSp2": {
+    "offset": 1028,
+    "type": "f32"
+   },
+   "mandelbox.color.difs0": {
+    "offset": 1032,
+    "type": "f32"
+   },
+   "mandelbox.color.difs1": {
+    "offset": 1036,
+    "type": "f32"
+   },
+   "mandelbox.color.auxColorEnabled": {
+    "offset": 1040,
+    "type": "i32"
+   },
+   "mandelbox.color.auxColorEnabledA": {
+    "offset": 1044,
+    "type": "i32"
+   },
+   "mandelbox.color.auxColorEnabledFalse": {
+    "offset": 1048,
+    "type": "i32"
+   },
+   "mandelbox.color.auxColorEnabledAFalse": {
+    "offset": 1052,
+    "type": "i32"
+   },
+   "mandelbox.color.auxColorEnabledBFalse": {
+    "offset": 1056,
+    "type": "i32"
+   },
+   "mandelbox.color.startIterationsA": {
+    "offset": 1060,
+    "type": "i32"
+   },
+   "mandelbox.color.stopIterationsA": {
+    "offset": 1064,
+    "type": "i32"
+   },
+   "mandelbox.color.startIterationsB": {
+    "offset": 1068,
+    "type": "i32"
+   },
+   "mandelbox.color.stopIterationsB": {
+    "offset": 1072,
+    "type": "i32"
+   },
+   "mandelbox.color.int0": {
+    "offset": 1076,
+    "type": "i32"
+   },
+   "mandelbox.color.int2": {
+    "offset": 1080,
+    "type": "i32"
+   },
+   "mandelbox.mainRot.m1": {
+    "offset": 1088,
+    "type": "vec3f"
+   },
+   "mandelbox.mainRot.m2": {
+    "offset": 1104,
+    "type": "vec3f"
+   },
+   "mandelbox.mainRot.m3": {
+    "offset": 1120,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[0][0].m1": {
+    "offset": 1136,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[0][0].m2": {
+    "offset": 1152,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[0][0].m3": {
+    "offset": 1168,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[0][1].m1": {
+    "offset": 1184,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[0][1].m2": {
+    "offset": 1200,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[0][1].m3": {
+    "offset": 1216,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[0][2].m1": {
+    "offset": 1232,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[0][2].m2": {
+    "offset": 1248,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[0][2].m3": {
+    "offset": 1264,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[1][0].m1": {
+    "offset": 1280,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[1][0].m2": {
+    "offset": 1296,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[1][0].m3": {
+    "offset": 1312,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[1][1].m1": {
+    "offset": 1328,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[1][1].m2": {
+    "offset": 1344,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[1][1].m3": {
+    "offset": 1360,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[1][2].m1": {
+    "offset": 1376,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[1][2].m2": {
+    "offset": 1392,
+    "type": "vec3f"
+   },
+   "mandelbox.rot[1][2].m3": {
+    "offset": 1408,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[0][0].m1": {
+    "offset": 1424,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[0][0].m2": {
+    "offset": 1440,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[0][0].m3": {
+    "offset": 1456,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[0][1].m1": {
+    "offset": 1472,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[0][1].m2": {
+    "offset": 1488,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[0][1].m3": {
+    "offset": 1504,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[0][2].m1": {
+    "offset": 1520,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[0][2].m2": {
+    "offset": 1536,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[0][2].m3": {
+    "offset": 1552,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[1][0].m1": {
+    "offset": 1568,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[1][0].m2": {
+    "offset": 1584,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[1][0].m3": {
+    "offset": 1600,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[1][1].m1": {
+    "offset": 1616,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[1][1].m2": {
+    "offset": 1632,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[1][1].m3": {
+    "offset": 1648,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[1][2].m1": {
+    "offset": 1664,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[1][2].m2": {
+    "offset": 1680,
+    "type": "vec3f"
+   },
+   "mandelbox.rotinv[1][2].m3": {
+    "offset": 1696,
+    "type": "vec3f"
+   },
+   "mandelbox.rotationMain": {
+    "offset": 1712,
+    "type": "vec3f"
+   },
+   "mandelbox.rotation[0][0]": {
+    "offset": 1728,
+    "type": "vec3f"
+   },
+   "mandelbox.rotation[0][1]": {
+    "offset": 1744,
+    "type": "vec3f"
+   },
+   "mandelbox.rotation[0][2]": {
+    "offset": 1760,
+    "type": "vec3f"
+   },
+   "mandelbox.rotation[1][0]": {
+    "offset": 1776,
+    "type": "vec3f"
+   },
+   "mandelbox.rotation[1][1]": {
+    "offset": 1792,
+    "type": "vec3f"
+   },
+   "mandelbox.rotation[1][2]": {
+    "offset": 1808,
+    "type": "vec3f"
+   },
+   "mandelbox.offset": {
+    "offset": 1824,
+    "type": "vec4f"
+   },
+   "mandelbox.scale": {
+    "offset": 1840,
+    "type": "f32"
+   },
+   "mandelbox.foldingLimit": {
+    "offset": 1844,
+    "type": "f32"
+   },
+   "mandelbox.foldingValue": {
+    "offset": 1848,
+    "type": "f32"
+   },
+   "mandelbox.foldingSphericalMin": {
+    "offset": 1852,
+    "type": "f32"
+   },
+   "mandelbox.foldingSphericalFixed": {
+    "offset": 1856,
+    "type": "f32"
+   },
+   "mandelbox.sharpness": {
+    "offset": 1860,
+    "type": "f32"
+   },
+   "mandelbox.solid": {
+    "offset": 1864,
+    "type": "f32"
+   },
+   "mandelbox.melt": {
+    "offset": 1868,
+    "type": "f32"
+   },
+   "mandelbox.fR2": {
+    "offset": 1872,
+    "type": "f32"
+   },
+   "mandelbox.mR2": {
+    "offset": 1876,
+    "type": "f32"
+   },
+   "mandelbox.mboxFactor1": {
+    "offset": 1880,
+    "type": "f32"
+   },
+   "mandelbox.rotationsEnabled": {
+    "offset": 1884,
+    "type": "i32"
+   },
+   "mandelbox.mainRotationEnabled": {
+    "offset": 1888,
+    "type": "i32"
+   },
+   "genFoldBox.Nv_tet[0]": {
+    "offset": 1904,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_tet[1]": {
+    "offset": 1920,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_tet[2]": {
+    "offset": 1936,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_tet[3]": {
+    "offset": 1952,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_cube[0]": {
+    "offset": 1968,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_cube[1]": {
+    "offset": 1984,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_cube[2]": {
+    "offset": 2000,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_cube[3]": {
+    "offset": 2016,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_cube[4]": {
+    "offset": 2032,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_cube[5]": {
+    "offset": 2048,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct[0]": {
+    "offset": 2064,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct[1]": {
+    "offset": 2080,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct[2]": {
+    "offset": 2096,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct[3]": {
+    "offset": 2112,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct[4]": {
+    "offset": 2128,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct[5]": {
+    "offset": 2144,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct[6]": {
+    "offset": 2160,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct[7]": {
+    "offset": 2176,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[0]": {
+    "offset": 2192,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[1]": {
+    "offset": 2208,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[2]": {
+    "offset": 2224,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[3]": {
+    "offset": 2240,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[4]": {
+    "offset": 2256,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[5]": {
+    "offset": 2272,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[6]": {
+    "offset": 2288,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[7]": {
+    "offset": 2304,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[8]": {
+    "offset": 2320,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[9]": {
+    "offset": 2336,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[10]": {
+    "offset": 2352,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[11]": {
+    "offset": 2368,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[12]": {
+    "offset": 2384,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_oct_cube[13]": {
+    "offset": 2400,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[0]": {
+    "offset": 2416,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[1]": {
+    "offset": 2432,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[2]": {
+    "offset": 2448,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[3]": {
+    "offset": 2464,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[4]": {
+    "offset": 2480,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[5]": {
+    "offset": 2496,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[6]": {
+    "offset": 2512,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[7]": {
+    "offset": 2528,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[8]": {
+    "offset": 2544,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[9]": {
+    "offset": 2560,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[10]": {
+    "offset": 2576,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_dodeca[11]": {
+    "offset": 2592,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[0]": {
+    "offset": 2608,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[1]": {
+    "offset": 2624,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[2]": {
+    "offset": 2640,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[3]": {
+    "offset": 2656,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[4]": {
+    "offset": 2672,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[5]": {
+    "offset": 2688,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[6]": {
+    "offset": 2704,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[7]": {
+    "offset": 2720,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[8]": {
+    "offset": 2736,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[9]": {
+    "offset": 2752,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[10]": {
+    "offset": 2768,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[11]": {
+    "offset": 2784,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[12]": {
+    "offset": 2800,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[13]": {
+    "offset": 2816,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[14]": {
+    "offset": 2832,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[15]": {
+    "offset": 2848,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[16]": {
+    "offset": 2864,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[17]": {
+    "offset": 2880,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[18]": {
+    "offset": 2896,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_icosa[19]": {
+    "offset": 2912,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box6[0]": {
+    "offset": 2928,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box6[1]": {
+    "offset": 2944,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box6[2]": {
+    "offset": 2960,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box6[3]": {
+    "offset": 2976,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box6[4]": {
+    "offset": 2992,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box6[5]": {
+    "offset": 3008,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box6[6]": {
+    "offset": 3024,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box6[7]": {
+    "offset": 3040,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box5[0]": {
+    "offset": 3056,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box5[1]": {
+    "offset": 3072,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box5[2]": {
+    "offset": 3088,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box5[3]": {
+    "offset": 3104,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box5[4]": {
+    "offset": 3120,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box5[5]": {
+    "offset": 3136,
+    "type": "vec3f"
+   },
+   "genFoldBox.Nv_box5[6]": {
+    "offset": 3152,
+    "type": "vec3f"
+   },
+   "genFoldBox.sides_tet": {
+    "offset": 3168,
+    "type": "i32"
+   },
+   "genFoldBox.sides_cube": {
+    "offset": 3172,
+    "type": "i32"
+   },
+   "genFoldBox.sides_oct": {
+    "offset": 3176,
+    "type": "i32"
+   },
+   "genFoldBox.sides_oct_cube": {
+    "offset": 3180,
+    "type": "i32"
+   },
+   "genFoldBox.sides_dodeca": {
+    "offset": 3184,
+    "type": "i32"
+   },
+   "genFoldBox.sides_icosa": {
+    "offset": 3188,
+    "type": "i32"
+   },
+   "genFoldBox.sides_box6": {
+    "offset": 3192,
+    "type": "i32"
+   },
+   "genFoldBox.sides_box5": {
+    "offset": 3196,
+    "type": "i32"
+   },
+   "genFoldBox.type": {
+    "offset": 3200,
+    "type": "i32",
+    "enum": "enumGeneralizedFoldBoxTypeCl",
+    "wgslName": "type_"
+   },
+   "foldingIntPow.zFactor": {
+    "offset": 3216,
+    "type": "f32"
+   },
+   "foldingIntPow.foldFactor": {
+    "offset": 3220,
+    "type": "f32"
+   },
+   "mandelboxVary4D.fold": {
+    "offset": 3224,
+    "type": "f32"
+   },
+   "mandelboxVary4D.minR": {
+    "offset": 3228,
+    "type": "f32"
+   },
+   "mandelboxVary4D.scaleVary": {
+    "offset": 3232,
+    "type": "f32"
+   },
+   "mandelboxVary4D.wadd": {
+    "offset": 3236,
+    "type": "f32"
+   },
+   "mandelboxVary4D.rPower": {
+    "offset": 3240,
+    "type": "f32"
+   },
+   "aexion.cadd": {
+    "offset": 3244,
+    "type": "f32"
+   },
+   "buffalo.preabsx": {
+    "offset": 3248,
+    "type": "i32"
+   },
+   "buffalo.preabsy": {
+    "offset": 3252,
+    "type": "i32"
+   },
+   "buffalo.preabsz": {
+    "offset": 3256,
+    "type": "i32"
+   },
+   "buffalo.absx": {
+    "offset": 3260,
+    "type": "i32"
+   },
+   "buffalo.absy": {
+    "offset": 3264,
+    "type": "i32"
+   },
+   "buffalo.absz": {
+    "offset": 3268,
+    "type": "i32"
+   },
+   "buffalo.posz": {
+    "offset": 3272,
+    "type": "i32"
+   },
+   "platonicSolid.frequency": {
+    "offset": 3276,
+    "type": "f32"
+   },
+   "platonicSolid.amplitude": {
+    "offset": 3280,
+    "type": "f32"
+   },
+   "platonicSolid.rhoMul": {
+    "offset": 3284,
+    "type": "f32"
+   },
+   "transformCommon.additionConstant0555": {
+    "offset": 3296,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstant0777": {
+    "offset": 3312,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstant000": {
+    "offset": 3328,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstantA000": {
+    "offset": 3344,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstantP000": {
+    "offset": 3360,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstant111": {
+    "offset": 3376,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstantA111": {
+    "offset": 3392,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstant222": {
+    "offset": 3408,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstantNeg100": {
+    "offset": 3424,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier000": {
+    "offset": 3440,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier001": {
+    "offset": 3456,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier010": {
+    "offset": 3472,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier100": {
+    "offset": 3488,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplierA100": {
+    "offset": 3504,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier111": {
+    "offset": 3520,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplierA111": {
+    "offset": 3536,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplierB111": {
+    "offset": 3552,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplierC111": {
+    "offset": 3568,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier121": {
+    "offset": 3584,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier122": {
+    "offset": 3600,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier221": {
+    "offset": 3616,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier222": {
+    "offset": 3632,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier441": {
+    "offset": 3648,
+    "type": "vec4f"
+   },
+   "transformCommon.juliaC": {
+    "offset": 3664,
+    "type": "vec4f"
+   },
+   "transformCommon.offset000": {
+    "offset": 3680,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetA000": {
+    "offset": 3696,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetF000": {
+    "offset": 3712,
+    "type": "vec4f"
+   },
+   "transformCommon.offset001": {
+    "offset": 3728,
+    "type": "vec4f"
+   },
+   "transformCommon.offset002": {
+    "offset": 3744,
+    "type": "vec4f"
+   },
+   "transformCommon.offset010": {
+    "offset": 3760,
+    "type": "vec4f"
+   },
+   "transformCommon.offset100": {
+    "offset": 3776,
+    "type": "vec4f"
+   },
+   "transformCommon.offset101": {
+    "offset": 3792,
+    "type": "vec4f"
+   },
+   "transformCommon.offset110": {
+    "offset": 3808,
+    "type": "vec4f"
+   },
+   "transformCommon.offset1105": {
+    "offset": 3824,
+    "type": "vec4f"
+   },
+   "transformCommon.offset111": {
+    "offset": 3840,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetA111": {
+    "offset": 3856,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetB111": {
+    "offset": 3872,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetC111": {
+    "offset": 3888,
+    "type": "vec4f"
+   },
+   "transformCommon.offset200": {
+    "offset": 3904,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetA200": {
+    "offset": 3920,
+    "type": "vec4f"
+   },
+   "transformCommon.offset222": {
+    "offset": 3936,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetA222": {
+    "offset": 3952,
+    "type": "vec4f"
+   },
+   "transformCommon.offset333": {
+    "offset": 3968,
+    "type": "vec4f"
+   },
+   "transformCommon.power025": {
+    "offset": 3984,
+    "type": "vec4f"
+   },
+   "transformCommon.power8": {
+    "offset": 4000,
+    "type": "vec4f"
+   },
+   "transformCommon.vec111": {
+    "offset": 4016,
+    "type": "vec4f"
+   },
+   "transformCommon.rotation": {
+    "offset": 4032,
+    "type": "vec3f"
+   },
+   "transformCommon.rotation2": {
+    "offset": 4048,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationXYZ": {
+    "offset": 4064,
+    "type": "vec3f"
+   },
+   "transformCommon.rotation2XYZ": {
+    "offset": 4080,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationVary": {
+    "offset": 4096,
+    "type": "vec3f"
+   },
+   "transformCommon.rotation44a": {
+    "offset": 4112,
+    "type": "vec3f"
+   },
+   "transformCommon.rotation44b": {
+    "offset": 4128,
+    "type": "vec3f"
+   },
+   "transformCommon.scaleP222": {
+    "offset": 4144,
+    "type": "vec4f"
+   },
+   "transformCommon.scale3D000": {
+    "offset": 4160,
+    "type": "vec4f"
+   },
+   "transformCommon.scale3D111": {
+    "offset": 4176,
+    "type": "vec4f"
+   },
+   "transformCommon.scale3D222": {
+    "offset": 4192,
+    "type": "vec4f"
+   },
+   "transformCommon.scale3Da222": {
+    "offset": 4208,
+    "type": "vec4f"
+   },
+   "transformCommon.scale3Db222": {
+    "offset": 4224,
+    "type": "vec4f"
+   },
+   "transformCommon.scale3Dc222": {
+    "offset": 4240,
+    "type": "vec4f"
+   },
+   "transformCommon.scale3Dd222": {
+    "offset": 4256,
+    "type": "vec4f"
+   },
+   "transformCommon.scale3D333": {
+    "offset": 4272,
+    "type": "vec4f"
+   },
+   "transformCommon.scale3D444": {
+    "offset": 4288,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstant0000": {
+    "offset": 4304,
+    "type": "vec4f"
+   },
+   "transformCommon.offset0000": {
+    "offset": 4320,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetA0000": {
+    "offset": 4336,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetB0000": {
+    "offset": 4352,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetp5555": {
+    "offset": 4368,
+    "type": "vec4f"
+   },
+   "transformCommon.offset1111": {
+    "offset": 4384,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetA1111": {
+    "offset": 4400,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetB1111": {
+    "offset": 4416,
+    "type": "vec4f"
+   },
+   "transformCommon.offsetNeg1111": {
+    "offset": 4432,
+    "type": "vec4f"
+   },
+   "transformCommon.offset2222": {
+    "offset": 4448,
+    "type": "vec4f"
+   },
+   "transformCommon.additionConstant111d5": {
+    "offset": 4464,
+    "type": "vec4f"
+   },
+   "transformCommon.constantMultiplier1220": {
+    "offset": 4480,
+    "type": "vec4f"
+   },
+   "transformCommon.scale0000": {
+    "offset": 4496,
+    "type": "vec4f"
+   },
+   "transformCommon.scale1111": {
+    "offset": 4512,
+    "type": "vec4f"
+   },
+   "transformCommon.rotationMatrix.m1": {
+    "offset": 4528,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrix.m2": {
+    "offset": 4544,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrix.m3": {
+    "offset": 4560,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrix2.m1": {
+    "offset": 4576,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrix2.m2": {
+    "offset": 4592,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrix2.m3": {
+    "offset": 4608,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrixXYZ.m1": {
+    "offset": 4624,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrixXYZ.m2": {
+    "offset": 4640,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrixXYZ.m3": {
+    "offset": 4656,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrix2XYZ.m1": {
+    "offset": 4672,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrix2XYZ.m2": {
+    "offset": 4688,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrix2XYZ.m3": {
+    "offset": 4704,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrixVary.m1": {
+    "offset": 4720,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrixVary.m2": {
+    "offset": 4736,
+    "type": "vec3f"
+   },
+   "transformCommon.rotationMatrixVary.m3": {
+    "offset": 4752,
+    "type": "vec3f"
+   },
+   "transformCommon.angle0": {
+    "offset": 4768,
+    "type": "f32"
+   },
+   "transformCommon.angleDegA": {
+    "offset": 4772,
+    "type": "f32"
+   },
+   "transformCommon.angleDegB": {
+    "offset": 4776,
+    "type": "f32"
+   },
+   "transformCommon.angleDegC": {
+    "offset": 4780,
+    "type": "f32"
+   },
+   "transformCommon.cosA": {
+    "offset": 4784,
+    "type": "f32"
+   },
+   "transformCommon.cosB": {
+    "offset": 4788,
+    "type": "f32"
+   },
+   "transformCommon.cosC": {
+    "offset": 4792,
+    "type": "f32"
+   },
+   "transformCommon.sinA": {
+    "offset": 4796,
+    "type": "f32"
+   },
+   "transformCommon.sinB": {
+    "offset": 4800,
+    "type": "f32"
+   },
+   "transformCommon.sinC": {
+    "offset": 4804,
+    "type": "f32"
+   },
+   "transformCommon.angle45": {
+    "offset": 4808,
+    "type": "f32"
+   },
+   "transformCommon.angle72": {
+    "offset": 4812,
+    "type": "f32"
+   },
+   "transformCommon.alphaAngleOffset": {
+    "offset": 4816,
+    "type": "f32"
+   },
+   "transformCommon.betaAngleOffset": {
+    "offset": 4820,
+    "type": "f32"
+   },
+   "transformCommon.foldingValue": {
+    "offset": 4824,
+    "type": "f32"
+   },
+   "transformCommon.foldingLimit": {
+    "offset": 4828,
+    "type": "f32"
+   },
+   "transformCommon.invert0": {
+    "offset": 4832,
+    "type": "f32"
+   },
+   "transformCommon.invert1": {
+    "offset": 4836,
+    "type": "f32"
+   },
+   "transformCommon.offset": {
+    "offset": 4840,
+    "type": "f32"
+   },
+   "transformCommon.offset0": {
+    "offset": 4844,
+    "type": "f32"
+   },
+   "transformCommon.offsetA0": {
+    "offset": 4848,
+    "type": "f32"
+   },
+   "transformCommon.offsetB0": {
+    "offset": 4852,
+    "type": "f32"
+   },
+   "transformCommon.offsetC0": {
+    "offset": 4856,
+    "type": "f32"
+   },
+   "transformCommon.offsetD0": {
+    "offset": 4860,
+    "type": "f32"
+   },
+   "transformCommon.offsetE0": {
+    "offset": 4864,
+    "type": "f32"
+   },
+   "transformCommon.offsetF0": {
+    "offset": 4868,
+    "type": "f32"
+   },
+   "transformCommon.offsetR0": {
+    "offset": 4872,
+    "type": "f32"
+   },
+   "transformCommon.offset0005": {
+    "offset": 4876,
+    "type": "f32"
+   },
+   "transformCommon.offsetp01": {
+    "offset": 4880,
+    "type": "f32"
+   },
+   "transformCommon.offsetAp01": {
+    "offset": 4884,
+    "type": "f32"
+   },
+   "transformCommon.offsetBp01": {
+    "offset": 4888,
+    "type": "f32"
+   },
+   "transformCommon.offsetp05": {
+    "offset": 4892,
+    "type": "f32"
+   },
+   "transformCommon.offset01": {
+    "offset": 4896,
+    "type": "f32"
+   },
+   "transformCommon.offsetp1": {
+    "offset": 4900,
+    "type": "f32"
+   },
+   "transformCommon.offset02": {
+    "offset": 4904,
+    "type": "f32"
+   },
+   "transformCommon.offset05": {
+    "offset": 4908,
+    "type": "f32"
+   },
+   "transformCommon.offsetA05": {
+    "offset": 4912,
+    "type": "f32"
+   },
+   "transformCommon.offsetB05": {
+    "offset": 4916,
+    "type": "f32"
+   },
+   "transformCommon.offset1": {
+    "offset": 4920,
+    "type": "f32"
+   },
+   "transformCommon.offsetA1": {
+    "offset": 4924,
+    "type": "f32"
+   },
+   "transformCommon.offsetR1": {
+    "offset": 4928,
+    "type": "f32"
+   },
+   "transformCommon.offsetT1": {
+    "offset": 4932,
+    "type": "f32"
+   },
+   "transformCommon.offset105": {
+    "offset": 4936,
+    "type": "f32"
+   },
+   "transformCommon.offset2": {
+    "offset": 4940,
+    "type": "f32"
+   },
+   "transformCommon.offsetA2": {
+    "offset": 4944,
+    "type": "f32"
+   },
+   "transformCommon.offsetE2": {
+    "offset": 4948,
+    "type": "f32"
+   },
+   "transformCommon.offsetF2": {
+    "offset": 4952,
+    "type": "f32"
+   },
+   "transformCommon.offsetR2": {
+    "offset": 4956,
+    "type": "f32"
+   },
+   "transformCommon.offset3": {
+    "offset": 4960,
+    "type": "f32"
+   },
+   "transformCommon.offset4": {
+    "offset": 4964,
+    "type": "f32"
+   },
+   "transformCommon.multiplication": {
+    "offset": 4968,
+    "type": "f32"
+   },
+   "transformCommon.minR0": {
+    "offset": 4972,
+    "type": "f32"
+   },
+   "transformCommon.minR05": {
+    "offset": 4976,
+    "type": "f32"
+   },
+   "transformCommon.minR06": {
+    "offset": 4980,
+    "type": "f32"
+   },
+   "transformCommon.minR2p25": {
+    "offset": 4984,
+    "type": "f32"
+   },
+   "transformCommon.maxR2d1": {
+    "offset": 4988,
+    "type": "f32"
+   },
+   "transformCommon.maxMinR0factor": {
+    "offset": 4992,
+    "type": "f32"
+   },
+   "transformCommon.maxMinR2factor": {
+    "offset": 4996,
+    "type": "f32"
+   },
+   "transformCommon.radius1": {
+    "offset": 5000,
+    "type": "f32"
+   },
+   "transformCommon.scaleNeg1": {
+    "offset": 5004,
+    "type": "f32"
+   },
+   "transformCommon.scale": {
+    "offset": 5008,
+    "type": "f32"
+   },
+   "transformCommon.scale0": {
+    "offset": 5012,
+    "type": "f32"
+   },
+   "transformCommon.scaleA0": {
+    "offset": 5016,
+    "type": "f32"
+   },
+   "transformCommon.scaleB0": {
+    "offset": 5020,
+    "type": "f32"
+   },
+   "transformCommon.scaleC0": {
+    "offset": 5024,
+    "type": "f32"
+   },
+   "transformCommon.scale025": {
+    "offset": 5028,
+    "type": "f32"
+   },
+   "transformCommon.scale05": {
+    "offset": 5032,
+    "type": "f32"
+   },
+   "transformCommon.scale08": {
+    "offset": 5036,
+    "type": "f32"
+   },
+   "transformCommon.scale1": {
+    "offset": 5040,
+    "type": "f32"
+   },
+   "transformCommon.scaleA1": {
+    "offset": 5044,
+    "type": "f32"
+   },
+   "transformCommon.scaleB1": {
+    "offset": 5048,
+    "type": "f32"
+   },
+   "transformCommon.scaleC1": {
+    "offset": 5052,
+    "type": "f32"
+   },
+   "transformCommon.scaleD1": {
+    "offset": 5056,
+    "type": "f32"
+   },
+   "transformCommon.scaleE1": {
+    "offset": 5060,
+    "type": "f32"
+   },
+   "transformCommon.scaleF1": {
+    "offset": 5064,
+    "type": "f32"
+   },
+   "transformCommon.scaleG1": {
+    "offset": 5068,
+    "type": "f32"
+   },
+   "transformCommon.scale1p1": {
+    "offset": 5072,
+    "type": "f32"
+   },
+   "transformCommon.scale015": {
+    "offset": 5076,
+    "type": "f32"
+   },
+   "transformCommon.scale2": {
+    "offset": 5080,
+    "type": "f32"
+   },
+   "transformCommon.scaleA2": {
+    "offset": 5084,
+    "type": "f32"
+   },
+   "transformCommon.scale3": {
+    "offset": 5088,
+    "type": "f32"
+   },
+   "transformCommon.scaleA3": {
+    "offset": 5092,
+    "type": "f32"
+   },
+   "transformCommon.scaleB3": {
+    "offset": 5096,
+    "type": "f32"
+   },
+   "transformCommon.scale4": {
+    "offset": 5100,
+    "type": "f32"
+   },
+   "transformCommon.scale5": {
+    "offset": 5104,
+    "type": "f32"
+   },
+   "transformCommon.scale6": {
+    "offset": 5108,
+    "type": "f32"
+   },
+   "transformCommon.scale8": {
+    "offset": 5112,
+    "type": "f32"
+   },
+   "transformCommon.scale16": {
+    "offset": 5116,
+    "type": "f32"
+   },
+   "transformCommon.scale25": {
+    "offset": 5120,
+    "type": "f32"
+   },
+   "transformCommon.scaleMain2": {
+    "offset": 5124,
+    "type": "f32"
+   },
+   "transformCommon.scaleVary0": {
+    "offset": 5128,
+    "type": "f32"
+   },
+   "transformCommon.pwr05": {
+    "offset": 5132,
+    "type": "f32"
+   },
+   "transformCommon.pwr4": {
+    "offset": 5136,
+    "type": "f32"
+   },
+   "transformCommon.pwr8": {
+    "offset": 5140,
+    "type": "f32"
+   },
+   "transformCommon.pwr8a": {
+    "offset": 5144,
+    "type": "f32"
+   },
+   "transformCommon.sqtR": {
+    "offset": 5148,
+    "type": "f32"
+   },
+   "transformCommon.mboxFactor1": {
+    "offset": 5152,
+    "type": "f32"
+   },
+   "transformCommon.inv0": {
+    "offset": 5156,
+    "type": "f32"
+   },
+   "transformCommon.inv1": {
+    "offset": 5160,
+    "type": "f32"
+   },
+   "transformCommon.startIterations": {
+    "offset": 5164,
+    "type": "i32"
+   },
+   "transformCommon.startIterations250": {
+    "offset": 5168,
+    "type": "i32"
+   },
+   "transformCommon.stopIterations": {
+    "offset": 5172,
+    "type": "i32"
+   },
+   "transformCommon.stopIterations15": {
+    "offset": 5176,
+    "type": "i32"
+   },
+   "transformCommon.stopIterations50": {
+    "offset": 5180,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsA": {
+    "offset": 5184,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsA": {
+    "offset": 5188,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsB": {
+    "offset": 5192,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsB": {
+    "offset": 5196,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsC": {
+    "offset": 5200,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsC": {
+    "offset": 5204,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsC1": {
+    "offset": 5208,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsCx": {
+    "offset": 5212,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsCx": {
+    "offset": 5216,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsCy": {
+    "offset": 5220,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsCy": {
+    "offset": 5224,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsCz": {
+    "offset": 5228,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsCz": {
+    "offset": 5232,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsD": {
+    "offset": 5236,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsD": {
+    "offset": 5240,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsD1": {
+    "offset": 5244,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsE": {
+    "offset": 5248,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsE": {
+    "offset": 5252,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsF": {
+    "offset": 5256,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsF": {
+    "offset": 5260,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsG": {
+    "offset": 5264,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsG": {
+    "offset": 5268,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsH": {
+    "offset": 5272,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsH": {
+    "offset": 5276,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsI": {
+    "offset": 5280,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsI": {
+    "offset": 5284,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsJ": {
+    "offset": 5288,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsJ": {
+    "offset": 5292,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsK": {
+    "offset": 5296,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsK": {
+    "offset": 5300,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsM": {
+    "offset": 5304,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsM": {
+    "offset": 5308,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsN": {
+    "offset": 5312,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsN": {
+    "offset": 5316,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsO": {
+    "offset": 5320,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsO": {
+    "offset": 5324,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsP": {
+    "offset": 5328,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsP": {
+    "offset": 5332,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsP1": {
+    "offset": 5336,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsR": {
+    "offset": 5340,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsR": {
+    "offset": 5344,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsR1": {
+    "offset": 5348,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsRV": {
+    "offset": 5352,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsRV": {
+    "offset": 5356,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsS": {
+    "offset": 5360,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsS": {
+    "offset": 5364,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsT": {
+    "offset": 5368,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsT": {
+    "offset": 5372,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsT1": {
+    "offset": 5376,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsTM": {
+    "offset": 5380,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsTM1": {
+    "offset": 5384,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsX": {
+    "offset": 5388,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsX": {
+    "offset": 5392,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsY": {
+    "offset": 5396,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsY": {
+    "offset": 5400,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsZ": {
+    "offset": 5404,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsZ": {
+    "offset": 5408,
+    "type": "i32"
+   },
+   "transformCommon.startIterationsZc": {
+    "offset": 5412,
+    "type": "i32"
+   },
+   "transformCommon.stopIterationsZc": {
+    "offset": 5416,
+    "type": "i32"
+   },
+   "transformCommon.stopIterations1": {
+    "offset": 5420,
+    "type": "i32"
+   },
+   "transformCommon.intA": {
+    "offset": 5424,
+    "type": "i32"
+   },
+   "transformCommon.intB": {
+    "offset": 5428,
+    "type": "i32"
+   },
+   "transformCommon.int1": {
+    "offset": 5432,
+    "type": "i32"
+   },
+   "transformCommon.intA1": {
+    "offset": 5436,
+    "type": "i32"
+   },
+   "transformCommon.intB1": {
+    "offset": 5440,
+    "type": "i32"
+   },
+   "transformCommon.int2": {
+    "offset": 5444,
+    "type": "i32"
+   },
+   "transformCommon.int3": {
+    "offset": 5448,
+    "type": "i32"
+   },
+   "transformCommon.int3X": {
+    "offset": 5452,
+    "type": "i32"
+   },
+   "transformCommon.int3Y": {
+    "offset": 5456,
+    "type": "i32"
+   },
+   "transformCommon.int3Z": {
+    "offset": 5460,
+    "type": "i32"
+   },
+   "transformCommon.int6": {
+    "offset": 5464,
+    "type": "i32"
+   },
+   "transformCommon.int8X": {
+    "offset": 5468,
+    "type": "i32"
+   },
+   "transformCommon.int8Y": {
+    "offset": 5472,
+    "type": "i32"
+   },
+   "transformCommon.int8Z": {
+    "offset": 5476,
+    "type": "i32"
+   },
+   "transformCommon.int16": {
+    "offset": 5480,
+    "type": "i32"
+   },
+   "transformCommon.int32": {
+    "offset": 5484,
+    "type": "i32"
+   },
+   "transformCommon.addCpixelEnabled": {
+    "offset": 5488,
+    "type": "i32"
+   },
+   "transformCommon.addCpixelEnabledFalse": {
+    "offset": 5492,
+    "type": "i32"
+   },
+   "transformCommon.alternateEnabledFalse": {
+    "offset": 5496,
+    "type": "i32"
+   },
+   "transformCommon.benesiT1Enabled": {
+    "offset": 5500,
+    "type": "i32"
+   },
+   "transformCommon.benesiT1EnabledFalse": {
+    "offset": 5504,
+    "type": "i32"
+   },
+   "transformCommon.benesiT1MEnabledFalse": {
+    "offset": 5508,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabled4dFalse": {
+    "offset": 5512,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAuxCFalse": {
+    "offset": 5516,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabled": {
+    "offset": 5520,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledFalse": {
+    "offset": 5524,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledx": {
+    "offset": 5528,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledy": {
+    "offset": 5532,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledz": {
+    "offset": 5536,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledw": {
+    "offset": 5540,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledxFalse": {
+    "offset": 5544,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledyFalse": {
+    "offset": 5548,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledzFalse": {
+    "offset": 5552,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledwFalse": {
+    "offset": 5556,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAx": {
+    "offset": 5560,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAy": {
+    "offset": 5564,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAz": {
+    "offset": 5568,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAw": {
+    "offset": 5572,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAxFalse": {
+    "offset": 5576,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAyFalse": {
+    "offset": 5580,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAzFalse": {
+    "offset": 5584,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAwFalse": {
+    "offset": 5588,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledBx": {
+    "offset": 5592,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledBy": {
+    "offset": 5596,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledBz": {
+    "offset": 5600,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledBxFalse": {
+    "offset": 5604,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledByFalse": {
+    "offset": 5608,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledBzFalse": {
+    "offset": 5612,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledBwFalse": {
+    "offset": 5616,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledCx": {
+    "offset": 5620,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledCy": {
+    "offset": 5624,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledCz": {
+    "offset": 5628,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledCxFalse": {
+    "offset": 5632,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledCyFalse": {
+    "offset": 5636,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledCzFalse": {
+    "offset": 5640,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledCwFalse": {
+    "offset": 5644,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledAFalse": {
+    "offset": 5648,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledBFalse": {
+    "offset": 5652,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledCFalse": {
+    "offset": 5656,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledDFalse": {
+    "offset": 5660,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledEFalse": {
+    "offset": 5664,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledFFalse": {
+    "offset": 5668,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledGFalse": {
+    "offset": 5672,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledHFalse": {
+    "offset": 5676,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledIFalse": {
+    "offset": 5680,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledJFalse": {
+    "offset": 5684,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledKFalse": {
+    "offset": 5688,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledM": {
+    "offset": 5692,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledMFalse": {
+    "offset": 5696,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledNFalse": {
+    "offset": 5700,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledOFalse": {
+    "offset": 5704,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledPFalse": {
+    "offset": 5708,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledRFalse": {
+    "offset": 5712,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledSFalse": {
+    "offset": 5716,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledSwFalse": {
+    "offset": 5720,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledTFalse": {
+    "offset": 5724,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledXFalse": {
+    "offset": 5728,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledYFalse": {
+    "offset": 5732,
+    "type": "i32"
+   },
+   "transformCommon.functionEnabledZcFalse": {
+    "offset": 5736,
+    "type": "i32"
+   },
+   "transformCommon.juliaMode": {
+    "offset": 5740,
+    "type": "i32"
+   },
+   "transformCommon.rotationEnabled": {
+    "offset": 5744,
+    "type": "i32"
+   },
+   "transformCommon.rotationEnabledFalse": {
+    "offset": 5748,
+    "type": "i32"
+   },
+   "transformCommon.rotation2EnabledFalse": {
+    "offset": 5752,
+    "type": "i32"
+   },
+   "transformCommon.sphereInversionEnabledFalse": {
+    "offset": 5756,
+    "type": "i32"
+   },
+   "transformCommon.spheresEnabled": {
+    "offset": 5760,
+    "type": "i32"
+   },
+   "analyticDE.scale1": {
+    "offset": 5776,
+    "type": "f32"
+   },
+   "analyticDE.tweak005": {
+    "offset": 5780,
+    "type": "f32"
+   },
+   "analyticDE.offset0": {
+    "offset": 5784,
+    "type": "f32"
+   },
+   "analyticDE.offset1": {
+    "offset": 5788,
+    "type": "f32"
+   },
+   "analyticDE.offset2": {
+    "offset": 5792,
+    "type": "f32"
+   },
+   "analyticDE.enabled": {
+    "offset": 5796,
+    "type": "i32"
+   },
+   "analyticDE.enabledFalse": {
+    "offset": 5800,
+    "type": "i32"
+   },
+   "analyticDE.startIterationsA": {
+    "offset": 5804,
+    "type": "i32"
+   },
+   "analyticDE.stopIterationsA": {
+    "offset": 5808,
+    "type": "i32"
+   },
+   "mandelbulbMulti.acosOrAsin": {
+    "offset": 5812,
+    "type": "i32",
+    "enum": "enumMulti_acosOrAsinCl"
+   },
+   "mandelbulbMulti.acosOrAsinA": {
+    "offset": 5816,
+    "type": "i32",
+    "enum": "enumMulti_acosOrAsinCl"
+   },
+   "mandelbulbMulti.atanOrAtan2": {
+    "offset": 5820,
+    "type": "i32",
+    "enum": "enumMulti_atanOrAtan2Cl"
+   },
+   "mandelbulbMulti.atanOrAtan2A": {
+    "offset": 5824,
+    "type": "i32",
+    "enum": "enumMulti_atanOrAtan2Cl"
+   },
+   "mandelbulbMulti.orderOfXYZ": {
+    "offset": 5828,
+    "type": "i32",
+    "enum": "enumMulti_OrderOfXYZCl"
+   },
+   "mandelbulbMulti.orderOfXYZ2": {
+    "offset": 5832,
+    "type": "i32",
+    "enum": "enumMulti_OrderOfXYZCl"
+   },
+   "mandelbulbMulti.orderOfXYZC": {
+    "offset": 5836,
+    "type": "i32",
+    "enum": "enumMulti_OrderOfXYZCl"
+   },
+   "sinTan2Trig.asinOrAcos": {
+    "offset": 5840,
+    "type": "i32",
+    "enum": "enumMulti_asinOrAcosCl"
+   },
+   "sinTan2Trig.atan2OrAtan": {
+    "offset": 5844,
+    "type": "i32",
+    "enum": "enumMulti_atan2OrAtanCl"
+   },
+   "sinTan2Trig.orderOfZYX": {
+    "offset": 5848,
+    "type": "i32",
+    "enum": "enumMulti_OrderOfZYXCl"
+   },
+   "surfBox.offset1A111": {
+    "offset": 5856,
+    "type": "vec4f"
+   },
+   "surfBox.offset1B111": {
+    "offset": 5872,
+    "type": "vec4f"
+   },
+   "surfBox.offset2A111": {
+    "offset": 5888,
+    "type": "vec4f"
+   },
+   "surfBox.offset2B111": {
+    "offset": 5904,
+    "type": "vec4f"
+   },
+   "surfBox.offset3A111": {
+    "offset": 5920,
+    "type": "vec4f"
+   },
+   "surfBox.offset3B111": {
+    "offset": 5936,
+    "type": "vec4f"
+   },
+   "surfBox.offset1A222": {
+    "offset": 5952,
+    "type": "vec4f"
+   },
+   "surfBox.offset1B222": {
+    "offset": 5968,
+    "type": "vec4f"
+   },
+   "surfBox.scale1Z1": {
+    "offset": 5984,
+    "type": "f32"
+   },
+   "surfBox.enabledX1": {
+    "offset": 5988,
+    "type": "i32"
+   },
+   "surfBox.enabledY1": {
+    "offset": 5992,
+    "type": "i32"
+   },
+   "surfBox.enabledZ1": {
+    "offset": 5996,
+    "type": "i32"
+   },
+   "surfBox.enabledX2False": {
+    "offset": 6000,
+    "type": "i32"
+   },
+   "surfBox.enabledY2False": {
+    "offset": 6004,
+    "type": "i32"
+   },
+   "surfBox.enabledZ2False": {
+    "offset": 6008,
+    "type": "i32"
+   },
+   "surfBox.enabledX3False": {
+    "offset": 6012,
+    "type": "i32"
+   },
+   "surfBox.enabledY3False": {
+    "offset": 6016,
+    "type": "i32"
+   },
+   "surfBox.enabledZ3False": {
+    "offset": 6020,
+    "type": "i32"
+   },
+   "surfBox.enabledX4False": {
+    "offset": 6024,
+    "type": "i32"
+   },
+   "surfBox.enabledY4False": {
+    "offset": 6028,
+    "type": "i32"
+   },
+   "surfBox.enabledZ4False": {
+    "offset": 6032,
+    "type": "i32"
+   },
+   "surfBox.enabledX5False": {
+    "offset": 6036,
+    "type": "i32"
+   },
+   "surfBox.enabledY5False": {
+    "offset": 6040,
+    "type": "i32"
+   },
+   "surfBox.enabledZ5False": {
+    "offset": 6044,
+    "type": "i32"
+   },
+   "surfFolds.orderOfFolds1": {
+    "offset": 6048,
+    "type": "i32",
+    "enum": "enumMulti_orderOfFoldsCl"
+   },
+   "surfFolds.orderOfFolds2": {
+    "offset": 6052,
+    "type": "i32",
+    "enum": "enumMulti_orderOfFoldsCl"
+   },
+   "surfFolds.orderOfFolds3": {
+    "offset": 6056,
+    "type": "i32",
+    "enum": "enumMulti_orderOfFoldsCl"
+   },
+   "surfFolds.orderOfFolds4": {
+    "offset": 6060,
+    "type": "i32",
+    "enum": "enumMulti_orderOfFoldsCl"
+   },
+   "surfFolds.orderOfFolds5": {
+    "offset": 6064,
+    "type": "i32",
+    "enum": "enumMulti_orderOfFoldsCl"
+   },
+   "donut.ringRadius": {
+    "offset": 6068,
+    "type": "f32"
+   },
+   "donut.ringThickness": {
+    "offset": 6072,
+    "type": "f32"
+   },
+   "donut.factor": {
+    "offset": 6076,
+    "type": "f32"
+   },
+   "donut.number": {
+    "offset": 6080,
+    "type": "f32"
+   },
+   "foldColor.factor4D": {
+    "offset": 6096,
+    "type": "vec4f"
+   },
+   "foldColor.difs0000": {
+    "offset": 6112,
+    "type": "vec4f"
+   },
+   "foldColor.factor": {
+    "offset": 6128,
+    "type": "vec3f"
+   },
+   "foldColor.factorR": {
+    "offset": 6140,
+    "type": "f32"
+   },
+   "foldColor.factorSp1": {
+    "offset": 6144,
+    "type": "f32"
+   },
+   "foldColor.factorSp2": {
+    "offset": 6148,
+    "type": "f32"
+   },
+   "foldColor.difs0": {
+    "offset": 6152,
+    "type": "f32"
+   },
+   "foldColor.difs1": {
+    "offset": 6156,
+    "type": "f32"
+   },
+   "foldColor.auxColorEnabled": {
+    "offset": 6160,
+    "type": "i32"
+   },
+   "foldColor.auxColorEnabledA": {
+    "offset": 6164,
+    "type": "i32"
+   },
+   "foldColor.auxColorEnabledFalse": {
+    "offset": 6168,
+    "type": "i32"
+   },
+   "foldColor.auxColorEnabledAFalse": {
+    "offset": 6172,
+    "type": "i32"
+   },
+   "foldColor.auxColorEnabledBFalse": {
+    "offset": 6176,
+    "type": "i32"
+   },
+   "foldColor.startIterationsA": {
+    "offset": 6180,
+    "type": "i32"
+   },
+   "foldColor.stopIterationsA": {
+    "offset": 6184,
+    "type": "i32"
+   },
+   "foldColor.startIterationsB": {
+    "offset": 6188,
+    "type": "i32"
+   },
+   "foldColor.stopIterationsB": {
+    "offset": 6192,
+    "type": "i32"
+   },
+   "foldColor.int0": {
+    "offset": 6196,
+    "type": "i32"
+   },
+   "foldColor.int2": {
+    "offset": 6200,
+    "type": "i32"
+   },
+   "magTransf.orderOfTransf1": {
+    "offset": 6208,
+    "type": "i32",
+    "enum": "enumMulti_orderOfTransfCl"
+   },
+   "magTransf.orderOfTransf2": {
+    "offset": 6212,
+    "type": "i32",
+    "enum": "enumMulti_orderOfTransfCl"
+   },
+   "magTransf.orderOfTransf3": {
+    "offset": 6216,
+    "type": "i32",
+    "enum": "enumMulti_orderOfTransfCl"
+   },
+   "magTransf.orderOfTransf4": {
+    "offset": 6220,
+    "type": "i32",
+    "enum": "enumMulti_orderOfTransfCl"
+   },
+   "magTransf.orderOfTransf5": {
+    "offset": 6224,
+    "type": "i32",
+    "enum": "enumMulti_orderOfTransfCl"
+   },
+   "Cpara.para00": {
+    "offset": 6228,
+    "type": "f32"
+   },
+   "Cpara.paraA0": {
+    "offset": 6232,
+    "type": "f32"
+   },
+   "Cpara.paraB0": {
+    "offset": 6236,
+    "type": "f32"
+   },
+   "Cpara.paraC0": {
+    "offset": 6240,
+    "type": "f32"
+   },
+   "Cpara.parabOffset0": {
+    "offset": 6244,
+    "type": "f32"
+   },
+   "Cpara.para0": {
+    "offset": 6248,
+    "type": "f32"
+   },
+   "Cpara.paraA": {
+    "offset": 6252,
+    "type": "f32"
+   },
+   "Cpara.paraB": {
+    "offset": 6256,
+    "type": "f32"
+   },
+   "Cpara.paraC": {
+    "offset": 6260,
+    "type": "f32"
+   },
+   "Cpara.parabOffset": {
+    "offset": 6264,
+    "type": "f32"
+   },
+   "Cpara.parabSlope": {
+    "offset": 6268,
+    "type": "f32"
+   },
+   "Cpara.parabScale": {
+    "offset": 6272,
+    "type": "f32"
+   },
+   "Cpara.enabledLinear": {
+    "offset": 6276,
+    "type": "i32"
+   },
+   "Cpara.enabledCurves": {
+    "offset": 6280,
+    "type": "i32"
+   },
+   "Cpara.enabledParabFalse": {
+    "offset": 6284,
+    "type": "i32"
+   },
+   "Cpara.enabledParaAddP0": {
+    "offset": 6288,
+    "type": "i32"
+   },
+   "Cpara.iterA": {
+    "offset": 6292,
+    "type": "i32"
+   },
+   "Cpara.iterB": {
+    "offset": 6296,
+    "type": "i32"
+   },
+   "Cpara.iterC": {
+    "offset": 6300,
+    "type": "i32"
+   },
+   "combo.modeA": {
+    "offset": 6304,
+    "type": "i32",
+    "enum": "enumComboCl"
+   },
+   "aSurf3Folds.orderOf3Folds1": {
+    "offset": 6308,
+    "type": "i32",
+    "enum": "enumMulti_orderOf3FoldsCl"
+   },
+   "aSurf3Folds.orderOf3Folds2": {
+    "offset": 6312,
+    "type": "i32",
+    "enum": "enumMulti_orderOf3FoldsCl"
+   },
+   "aSurf3Folds.orderOf3Folds3": {
+    "offset": 6316,
+    "type": "i32",
+    "enum": "enumMulti_orderOf3FoldsCl"
+   },
+   "combo3.combo3": {
+    "offset": 6320,
+    "type": "i32",
+    "enum": "enumMulti_combo3Cl"
+   },
+   "combo4.combo4": {
+    "offset": 6324,
+    "type": "i32",
+    "enum": "enumMulti_combo4Cl"
+   },
+   "combo5.combo5": {
+    "offset": 6328,
+    "type": "i32",
+    "enum": "enumMulti_combo5Cl"
+   },
+   "combo6.combo6": {
+    "offset": 6332,
+    "type": "i32",
+    "enum": "enumMulti_combo6Cl"
+   },
+   "juliaConstant": {
+    "offset": 6336,
+    "type": "vec3f"
+   },
+   "constantMultiplier": {
+    "offset": 6352,
+    "type": "vec3f"
+   },
+   "formulaWeight": {
+    "offset": 6364,
+    "type": "f32"
+   },
+   "initialWAxis": {
+    "offset": 6368,
+    "type": "f32"
+   },
+   "formula": {
+    "offset": 6372,
+    "type": "i32"
+   },
+   "formulaIterations": {
+    "offset": 6376,
+    "type": "i32"
+   },
+   "formulaStartIteration": {
+    "offset": 6380,
+    "type": "i32"
+   },
+   "formulaStopIteration": {
+    "offset": 6384,
+    "type": "i32"
+   },
+   "juliaMode": {
+    "offset": 6388,
+    "type": "i32"
+   },
+   "dontAddCConstant": {
+    "offset": 6392,
+    "type": "i32"
+   },
+   "checkForBailout": {
+    "offset": 6396,
+    "type": "i32"
+   },
+   "formulaMaxiter": {
+    "offset": 6400,
+    "type": "i32"
+   }
+  }
+ }
+}

@@ -1,0 +1,2302 @@
+{
+ "abox4d": {
+  "class": "OK",
+  "score": 0.867,
+  "note": "aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "abox_klein": {
+  "class": "OK",
+  "score": 1,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "abox_mod11": {
+  "class": "OK",
+  "score": 0.915,
+  "note": "aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "abox_mod14": {
+  "class": "OK",
+  "score": 0.263,
+  "note": "thumbnail camera sits inside the object; far view OK; low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "abox_mod_kali": {
+  "class": "OK",
+  "score": 0.522,
+  "note": ""
+ },
+ "abox_mod_kali_v3": {
+  "class": "OK",
+  "score": 0.449,
+  "note": ""
+ },
+ "abox_surf_box": {
+  "class": "OK",
+  "score": 0.932,
+  "note": ""
+ },
+ "abox_vs_icen1": {
+  "class": "OK",
+  "score": 0.595,
+  "note": "thumbnail camera sits inside the object; far view OK; aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "aexion_octopus_mod": {
+  "class": "OK",
+  "score": 0.57,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "amazing_surf_klein": {
+  "class": "OK",
+  "score": 0.976,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "amazing_surf_mod1": {
+  "class": "OK",
+  "score": 0.779,
+  "note": ""
+ },
+ "amazing_surf_mod4": {
+  "class": "OK",
+  "score": 0.577,
+  "note": ""
+ },
+ "benesi_mag_transforms": {
+  "class": "OK",
+  "score": 0.477,
+  "note": ""
+ },
+ "benesi_t1_pine_tree": {
+  "class": "OK",
+  "score": 0.534,
+  "note": ""
+ },
+ "box_fold_bulb_pow2": {
+  "class": "OK",
+  "score": 0.335,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "box_fold_bulb_v4": {
+  "class": "OK",
+  "score": 0.461,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "bristorbrot2": {
+  "class": "OK",
+  "score": 0.314,
+  "note": ""
+ },
+ "coastalbrot": {
+  "class": "OK",
+  "score": 0.815,
+  "note": ""
+ },
+ "custom": {
+  "class": "NA",
+  "score": 0,
+  "note": "custom formula: no upstream kernel, nothing to render"
+ },
+ "difs_box_diagonal_v3": {
+  "class": "OK",
+  "score": 0.383,
+  "note": ""
+ },
+ "difs_ellipsoid": {
+  "class": "OK",
+  "score": 0.47,
+  "note": ""
+ },
+ "difs_menger": {
+  "class": "OK",
+  "score": 0.453,
+  "note": ""
+ },
+ "difs_prism": {
+  "class": "OK",
+  "score": 0.497,
+  "note": ""
+ },
+ "eiffie_car": {
+  "class": "OK",
+  "score": null,
+  "note": ""
+ },
+ "fold_cut_cube": {
+  "class": "OK",
+  "score": 0.531,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "hypercomplex_v2": {
+  "class": "OK",
+  "score": 0.564,
+  "note": ""
+ },
+ "ifs_gen": {
+  "class": "OK",
+  "score": 0.413,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "jos_kleinian": {
+  "class": "OK",
+  "score": 0.498,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "jos_kleinian_v4": {
+  "class": "OK",
+  "score": 1,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "knot_v1": {
+  "class": "OK",
+  "score": 0.146,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "koch_ifs": {
+  "class": "OK",
+  "score": 0.596,
+  "note": ""
+ },
+ "koch_v4": {
+  "class": "OK",
+  "score": 0.434,
+  "note": ""
+ },
+ "makin3d2": {
+  "class": "OK",
+  "score": 0.282,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "mandalay_kifs": {
+  "class": "OK",
+  "score": 0.636,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "mandelbar_v3": {
+  "class": "OK",
+  "score": 0.294,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "mandelbox_menger": {
+  "class": "OK",
+  "score": 0.657,
+  "note": ""
+ },
+ "mandelbox_vary_scale4d": {
+  "class": "OK",
+  "score": 0.617,
+  "note": "thumbnail camera sits inside the object; far view OK; aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "mandelbulb3": {
+  "class": "OK",
+  "score": 0.493,
+  "note": ""
+ },
+ "mandelbulb_abs_power2": {
+  "class": "OK",
+  "score": 0.895,
+  "note": ""
+ },
+ "mandelbulb_eye": {
+  "class": "OK",
+  "score": 0.942,
+  "note": ""
+ },
+ "mandelbulb_juliabulb": {
+  "class": "OK",
+  "score": 0.625,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "mandelbulb_kosalos": {
+  "class": "OK",
+  "score": 0.976,
+  "note": ""
+ },
+ "mandelbulb_multi": {
+  "class": "OK",
+  "score": 0.466,
+  "note": ""
+ },
+ "mandelbulb_pow2_v1": {
+  "class": "OK",
+  "score": 0.288,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "mandelbulb_pow2_v4": {
+  "class": "OK",
+  "score": null,
+  "note": ""
+ },
+ "mandelbulb_pupuku": {
+  "class": "OK",
+  "score": 0.515,
+  "note": ""
+ },
+ "mandelbulb_sin_cos": {
+  "class": "OK",
+  "score": 0.677,
+  "note": ""
+ },
+ "mandelbulb_sin_cos_v4": {
+  "class": "OK",
+  "score": 0.784,
+  "note": ""
+ },
+ "mandelbulb_vary_power_v1": {
+  "class": "OK",
+  "score": 0.559,
+  "note": ""
+ },
+ "mandelnest4d": {
+  "class": "OK",
+  "score": 0.745,
+  "note": ""
+ },
+ "mandeltorus": {
+  "class": "OK",
+  "score": 0.531,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "menger3_m3d": {
+  "class": "OK",
+  "score": 0.564,
+  "note": ""
+ },
+ "menger4d_mod2": {
+  "class": "OK",
+  "score": 0.445,
+  "note": ""
+ },
+ "menger_cross_mod1": {
+  "class": "OK",
+  "score": 0.653,
+  "note": ""
+ },
+ "menger_octo": {
+  "class": "OK",
+  "score": 0.964,
+  "note": ""
+ },
+ "menger_prism_shape2": {
+  "class": "OK",
+  "score": 0.681,
+  "note": ""
+ },
+ "menger_smooth": {
+  "class": "OK",
+  "score": 0.969,
+  "note": ""
+ },
+ "menger_sponge": {
+  "class": "OK",
+  "score": 0.685,
+  "note": ""
+ },
+ "menger_v4": {
+  "class": "OK",
+  "score": 0.58,
+  "note": ""
+ },
+ "menger_v7": {
+  "class": "OK",
+  "score": 0.481,
+  "note": ""
+ },
+ "modulus_menger_sponge": {
+  "class": "OK",
+  "score": 0.942,
+  "note": ""
+ },
+ "msltoe_sym3_mod": {
+  "class": "OK",
+  "score": 0.484,
+  "note": ""
+ },
+ "msltoe_sym3_mod4": {
+  "class": "OK",
+  "score": 0.294,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "msltoe_sym4_mod": {
+  "class": "OK",
+  "score": 0.361,
+  "note": ""
+ },
+ "msltoe_toroidal_multi": {
+  "class": "OK",
+  "score": 0.636,
+  "note": ""
+ },
+ "newton_pow3": {
+  "class": "OK",
+  "score": 0.438,
+  "note": ""
+ },
+ "pseudo_kleinian4d": {
+  "class": "OK",
+  "score": 0.969,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "pseudo_kleinian_mod3": {
+  "class": "OK",
+  "score": 1,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "pseudo_kleinian_mod6": {
+  "class": "OK",
+  "score": 0.376,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "pseudo_kleinian_trig": {
+  "class": "OK",
+  "score": 0.994,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "quaternion": {
+  "class": "OK",
+  "score": 0.341,
+  "note": ""
+ },
+ "quaternion_cubic4d": {
+  "class": "OK",
+  "score": 0.742,
+  "note": ""
+ },
+ "riemann_bulb_msltoe_mod2": {
+  "class": "OK",
+  "score": 0.551,
+  "note": ""
+ },
+ "riemann_sphere_hobold_pow8": {
+  "class": "OK",
+  "score": 0.929,
+  "note": ""
+ },
+ "riemann_sphere_msltoe_v1": {
+  "class": "OK",
+  "score": 0.528,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "scator_power2_imaginary": {
+  "class": "OK",
+  "score": 0.505,
+  "note": ""
+ },
+ "scator_test": {
+  "class": "OK",
+  "score": 0.333,
+  "note": ""
+ },
+ "sierpinski3d_v3": {
+  "class": "OK",
+  "score": 0.165,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "sphere_cluster": {
+  "class": "SOLID",
+  "score": 0.408,
+  "note": "fills the frame at both cameras at defaults; CPU/GPU iteration diff is clean at defaults; not reviewed further"
+ },
+ "spheretree": {
+  "class": "OK",
+  "score": 0.272,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "spheretree_v5": {
+  "class": "OK",
+  "score": 0.557,
+  "note": ""
+ },
+ "testing_log": {
+  "class": "OK",
+  "score": 0.056,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "tinker_towers": {
+  "class": "OK",
+  "score": 0.615,
+  "note": ""
+ },
+ "transf_abs_add_conditional4d": {
+  "class": "TRANSFORM",
+  "score": 0.939,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_abs_add_constant_v2": {
+  "class": "TRANSFORM",
+  "score": 0.501,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_abs_add_tglad_fold": {
+  "class": "TRANSFORM",
+  "score": 0.422,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_abs_sym3": {
+  "class": "TRANSFORM",
+  "score": 0.635,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_constant_mod1": {
+  "class": "TRANSFORM",
+  "score": 0.968,
+  "note": "inside menger_sponge hybrid: OK/far BLANK"
+ },
+ "transf_add_constant_rot_v1": {
+  "class": "TRANSFORM",
+  "score": 0.935,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel4d": {
+  "class": "TRANSFORM",
+  "score": 0.739,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel_invert": {
+  "class": "TRANSFORM",
+  "score": 0.08,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel_sin_or_cos": {
+  "class": "TRANSFORM",
+  "score": 0.958,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel_tile": {
+  "class": "TRANSFORM",
+  "score": 0.629,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_norm": {
+  "class": "TRANSFORM",
+  "score": 0,
+  "note": "inside menger_sponge hybrid: BLANK/far BLANK"
+ },
+ "transf_benesi_cube_sphere": {
+  "class": "TRANSFORM",
+  "score": 0.756,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_benesi_sphere_cube": {
+  "class": "TRANSFORM",
+  "score": 0.767,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_benesi_t2": {
+  "class": "TRANSFORM",
+  "score": 0.638,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_benesi_t5b": {
+  "class": "TRANSFORM",
+  "score": 0,
+  "note": "inside menger_sponge hybrid: BLANK/far BLANK"
+ },
+ "transf_box_fold": {
+  "class": "TRANSFORM",
+  "score": 0.58,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_box_fold4d_tglad": {
+  "class": "TRANSFORM",
+  "score": 0.586,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_box_offset": {
+  "class": "TRANSFORM",
+  "score": 0.838,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_box_tiling_v3": {
+  "class": "TRANSFORM",
+  "score": 0.217,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_clamp4d": {
+  "class": "TRANSFORM",
+  "score": 0.528,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_diagonal_fold": {
+  "class": "TRANSFORM",
+  "score": 0.93,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_box_frame": {
+  "class": "TRANSFORM",
+  "score": 0.332,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_cayley2": {
+  "class": "TRANSFORM",
+  "score": 0.537,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_difs_clip_plane": {
+  "class": "TRANSFORM",
+  "score": 0.38,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_difs_diamond": {
+  "class": "TRANSFORM",
+  "score": 0.496,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_grid": {
+  "class": "TRANSFORM",
+  "score": 0.464,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_difs_heart": {
+  "class": "TRANSFORM",
+  "score": 0.671,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_helix_v2": {
+  "class": "TRANSFORM",
+  "score": 0.483,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_hextgrid2": {
+  "class": "TRANSFORM",
+  "score": 0.327,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_difs_octahedron_v2": {
+  "class": "TRANSFORM",
+  "score": 0.579,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_polyhedra_v2": {
+  "class": "TRANSFORM",
+  "score": 0.511,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_sphere": {
+  "class": "TRANSFORM",
+  "score": 0.632,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_sphere_grid_v3": {
+  "class": "TRANSFORM",
+  "score": 0.759,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_supershape_v2": {
+  "class": "TRANSFORM",
+  "score": 0.674,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_torus_menger": {
+  "class": "TRANSFORM",
+  "score": 0.51,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_difs_torus_v3": {
+  "class": "TRANSFORM",
+  "score": 0.468,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_difs_tube": {
+  "class": "TRANSFORM",
+  "score": 0.712,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_gnarl": {
+  "class": "TRANSFORM",
+  "score": 0.325,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_initial4d": {
+  "class": "TRANSFORM",
+  "score": 0.579,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_iteration_weight4d": {
+  "class": "TRANSFORM",
+  "score": 0.743,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_lin_combine_cxyz": {
+  "class": "TRANSFORM",
+  "score": 0.595,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_mandalay_fold_v1": {
+  "class": "TRANSFORM",
+  "score": 0.637,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_menger_fold_v2": {
+  "class": "TRANSFORM",
+  "score": 0.644,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_octo_fold": {
+  "class": "TRANSFORM",
+  "score": 0.959,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_platonic_solid": {
+  "class": "TRANSFORM",
+  "score": 0.829,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_poly_fold_atan2_iter": {
+  "class": "TRANSFORM",
+  "score": 0.598,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_poly_xy_fold_v1": {
+  "class": "TRANSFORM",
+  "score": 0.748,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_quaternion_fold": {
+  "class": "TRANSFORM",
+  "score": 0.605,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_reciprocal4d": {
+  "class": "TRANSFORM",
+  "score": 0.708,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_rotation4d": {
+  "class": "TRANSFORM",
+  "score": 0.772,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_rotation_folding_plane": {
+  "class": "TRANSFORM",
+  "score": 0.681,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_rotation_vary_v1": {
+  "class": "TRANSFORM",
+  "score": 0.806,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_scale3d": {
+  "class": "TRANSFORM",
+  "score": 0.758,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_scale_offset_v2": {
+  "class": "TRANSFORM",
+  "score": 0.562,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_scale_vary_v212": {
+  "class": "TRANSFORM",
+  "score": 0.802,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_sin_and_cos": {
+  "class": "TRANSFORM",
+  "score": 0.545,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_sin_tan": {
+  "class": "TRANSFORM",
+  "score": 0.732,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_sincos_helix": {
+  "class": "TRANSFORM",
+  "score": 0.615,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_smooth_v2": {
+  "class": "TRANSFORM",
+  "score": 0.665,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold4d": {
+  "class": "TRANSFORM",
+  "score": 0.686,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_chs": {
+  "class": "TRANSFORM",
+  "score": 0.78,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_pnorm": {
+  "class": "TRANSFORM",
+  "score": 0.682,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_v2": {
+  "class": "TRANSFORM",
+  "score": 0.78,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_vary_vcl": {
+  "class": "TRANSFORM",
+  "score": 0.982,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_inv_c": {
+  "class": "TRANSFORM",
+  "score": 0.609,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_inv_v3": {
+  "class": "TRANSFORM",
+  "score": 0.57,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_offset_vcl": {
+  "class": "TRANSFORM",
+  "score": 0.984,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_supershape": {
+  "class": "TRANSFORM",
+  "score": 0.989,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_surf_box_fold_v24d": {
+  "class": "TRANSFORM",
+  "score": 0.473,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "vicsek": {
+  "class": "OK",
+  "score": 0.929,
+  "note": ""
+ },
+ "xenodreambuie_v3": {
+  "class": "OK",
+  "score": 0.809,
+  "note": ""
+ },
+ "abox_donut4d": {
+  "class": "OK",
+  "score": 0.57,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "abox_mb3d1": {
+  "class": "OK",
+  "score": 1,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "abox_mod12": {
+  "class": "OK",
+  "score": 0.56,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "abox_mod15": {
+  "class": "OK",
+  "score": 0.633,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "abox_mod_kali_eiffie": {
+  "class": "OK",
+  "score": 0.648,
+  "note": "thumbnail camera sits inside the object; far view OK; aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "abox_smooth": {
+  "class": "OK",
+  "score": 0.614,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "abox_tetra": {
+  "class": "OK",
+  "score": 0.563,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "aexion": {
+  "class": "OK",
+  "score": 0.399,
+  "note": ""
+ },
+ "amazing_ifs": {
+  "class": "OK",
+  "score": 0.262,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "amazing_surf_klein_v2": {
+  "class": "OK",
+  "score": 0.985,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "amazing_surf_mod2": {
+  "class": "OK",
+  "score": 0.283,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "amazing_surf_multi": {
+  "class": "OK",
+  "score": 0.738,
+  "note": "aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "benesi_pine_tree": {
+  "class": "OK",
+  "score": 0.507,
+  "note": ""
+ },
+ "box_fold4d_bulb_pow2": {
+  "class": "OK",
+  "score": 0.451,
+  "note": ""
+ },
+ "box_fold_bulb_pow2_v2": {
+  "class": "OK",
+  "score": 0.455,
+  "note": ""
+ },
+ "box_fold_quat": {
+  "class": "OK",
+  "score": 0.107,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "bristorbrot4d": {
+  "class": "OK",
+  "score": 0.573,
+  "note": ""
+ },
+ "collatz": {
+  "class": "OK",
+  "score": 0.588,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "difs_amazing_ifs": {
+  "class": "OK",
+  "score": 0.321,
+  "note": ""
+ },
+ "difs_box_v1": {
+  "class": "OK",
+  "score": 0.98,
+  "note": ""
+ },
+ "difs_greek_ifs": {
+  "class": "OK",
+  "score": 0.539,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "difs_msltoe_donut": {
+  "class": "OK",
+  "score": 0.408,
+  "note": ""
+ },
+ "difs_sphere": {
+  "class": "OK",
+  "score": 0.989,
+  "note": ""
+ },
+ "eiffie_msltoe": {
+  "class": "OK",
+  "score": 0.346,
+  "note": ""
+ },
+ "generalized_fold_box": {
+  "class": "OK",
+  "score": 0.612,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "ides": {
+  "class": "OK",
+  "score": 0.225,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "ifs_xy": {
+  "class": "OK",
+  "score": 0.053,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "jos_kleinian_v2": {
+  "class": "OK",
+  "score": 0.984,
+  "note": ""
+ },
+ "kaleidoscopic_ifs": {
+  "class": "BLANK",
+  "score": 0,
+  "note": "all IFS vectors are disabled at defaults, so the orbit only scales out; the upstream thumbnail uses enabled IFS vectors"
+ },
+ "knot_v2": {
+  "class": "OK",
+  "score": 0,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "koch_v2": {
+  "class": "OK",
+  "score": 0.597,
+  "note": ""
+ },
+ "koch_v5": {
+  "class": "OK",
+  "score": 0.61,
+  "note": ""
+ },
+ "mandalay_box_v1": {
+  "class": "OK",
+  "score": 0.623,
+  "note": ""
+ },
+ "mandelbar": {
+  "class": "OK",
+  "score": 0.362,
+  "note": ""
+ },
+ "mandelbox": {
+  "class": "OK",
+  "score": 0.629,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "mandelbox_smooth": {
+  "class": "OK",
+  "score": 0.636,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "mandelbulb": {
+  "class": "OK",
+  "score": 0.95,
+  "note": ""
+ },
+ "mandelbulb4": {
+  "class": "OK",
+  "score": 0.494,
+  "note": ""
+ },
+ "mandelbulb_atan2_power2": {
+  "class": "OK",
+  "score": 0.88,
+  "note": ""
+ },
+ "mandelbulb_iq_pow8": {
+  "class": "OK",
+  "score": 0.738,
+  "note": ""
+ },
+ "mandelbulb_kali": {
+  "class": "OK",
+  "score": 0.954,
+  "note": ""
+ },
+ "mandelbulb_kosalos_v2": {
+  "class": "OK",
+  "score": 0.981,
+  "note": ""
+ },
+ "mandelbulb_multi2": {
+  "class": "OK",
+  "score": 0.864,
+  "note": ""
+ },
+ "mandelbulb_pow2_v2": {
+  "class": "OK",
+  "score": 0.92,
+  "note": ""
+ },
+ "mandelbulb_power1234": {
+  "class": "OK",
+  "score": 0.939,
+  "note": ""
+ },
+ "mandelbulb_quadrat": {
+  "class": "OK",
+  "score": 0.599,
+  "note": ""
+ },
+ "mandelbulb_sin_cos_v2": {
+  "class": "OK",
+  "score": 0.35,
+  "note": ""
+ },
+ "mandelbulb_tails": {
+  "class": "OK",
+  "score": 0.56,
+  "note": ""
+ },
+ "mandelcup": {
+  "class": "OK",
+  "score": 0.422,
+  "note": ""
+ },
+ "mandelnest_full": {
+  "class": "OK",
+  "score": 0.774,
+  "note": ""
+ },
+ "mandeltorus_v2": {
+  "class": "OK",
+  "score": 0.566,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "menger4d": {
+  "class": "OK",
+  "score": 0.976,
+  "note": ""
+ },
+ "menger_chebyshev": {
+  "class": "OK",
+  "score": 0.537,
+  "note": ""
+ },
+ "menger_middle_mod": {
+  "class": "OK",
+  "score": 0.497,
+  "note": ""
+ },
+ "menger_poly_fold": {
+  "class": "OK",
+  "score": 0.969,
+  "note": ""
+ },
+ "menger_pwr2_poly": {
+  "class": "OK",
+  "score": 0.662,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "menger_smooth_chebyshev": {
+  "class": "OK",
+  "score": 0.661,
+  "note": ""
+ },
+ "menger_v2": {
+  "class": "OK",
+  "score": 0.597,
+  "note": ""
+ },
+ "menger_v5": {
+  "class": "OK",
+  "score": 0.617,
+  "note": ""
+ },
+ "mix_pinski4d": {
+  "class": "OK",
+  "score": 0.962,
+  "note": ""
+ },
+ "msltoe_donut": {
+  "class": "OK",
+  "score": 0.484,
+  "note": ""
+ },
+ "msltoe_sym3_mod2": {
+  "class": "OK",
+  "score": 0.344,
+  "note": ""
+ },
+ "msltoe_sym3_mod5": {
+  "class": "OK",
+  "score": 0.397,
+  "note": ""
+ },
+ "msltoe_sym4_mod1": {
+  "class": "OK",
+  "score": 0.27,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "msltoe_toroidal_v2": {
+  "class": "OK",
+  "score": 0.629,
+  "note": ""
+ },
+ "octahedron": {
+  "class": "OK",
+  "score": 0.506,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "pseudo_kleinian_mod1": {
+  "class": "OK",
+  "score": 0.992,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "pseudo_kleinian_mod4": {
+  "class": "OK",
+  "score": 1,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "pseudo_kleinian_mod7": {
+  "class": "OK",
+  "score": null,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "pseudo_kleinian_trig_v2": {
+  "class": "OK",
+  "score": null,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "quaternion3d": {
+  "class": "OK",
+  "score": 0.337,
+  "note": ""
+ },
+ "quick_dudley": {
+  "class": "OK",
+  "score": 0.437,
+  "note": ""
+ },
+ "riemann_sphere_hobold_multi": {
+  "class": "OK",
+  "score": 0.892,
+  "note": ""
+ },
+ "riemann_sphere_msltoe": {
+  "class": "OK",
+  "score": 0.585,
+  "note": ""
+ },
+ "riemann_sphere_msltoe_v2": {
+  "class": "OK",
+  "score": 0.802,
+  "note": ""
+ },
+ "scator_power2_real": {
+  "class": "OK",
+  "score": 0.304,
+  "note": ""
+ },
+ "sierpinski3d": {
+  "class": "OK",
+  "score": 0.93,
+  "note": ""
+ },
+ "sierpinski3d_v4": {
+  "class": "OK",
+  "score": 0.52,
+  "note": ""
+ },
+ "sphere_cluster_v2": {
+  "class": "OK",
+  "score": 0.283,
+  "note": "thumbnail camera sits inside the object; far view OK; low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "spheretree_v2": {
+  "class": "OK",
+  "score": 0.186,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "testing": {
+  "class": "OK",
+  "score": 0.042,
+  "note": "thumbnail camera sits inside the object; far view OK; low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "testing_transform": {
+  "class": "BLANK",
+  "score": 0.012,
+  "note": "upstream test stub; the upstream thumbnail is a Testing text card"
+ },
+ "transf_abs_add_conditional": {
+  "class": "TRANSFORM",
+  "score": 0.772,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_abs_add_constant": {
+  "class": "TRANSFORM",
+  "score": 0.779,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_abs_add_multi": {
+  "class": "TRANSFORM",
+  "score": 0.763,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_abs_add_tglad_fold4d": {
+  "class": "TRANSFORM",
+  "score": 0.674,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_constant": {
+  "class": "TRANSFORM",
+  "score": 0.804,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_constant_mod2": {
+  "class": "TRANSFORM",
+  "score": 0.961,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_constant_vary_v1": {
+  "class": "TRANSFORM",
+  "score": 0.795,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel_axis_swap": {
+  "class": "TRANSFORM",
+  "score": 0.383,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel_rotated": {
+  "class": "TRANSFORM",
+  "score": 0.933,
+  "note": "inside menger_sponge hybrid: OK/far BLANK"
+ },
+ "transf_add_cpixel_sphere_fold": {
+  "class": "TRANSFORM",
+  "score": 0.975,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel_vary_v1": {
+  "class": "TRANSFORM",
+  "score": 0.576,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_scale_rotate": {
+  "class": "TRANSFORM",
+  "score": 0.541,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_benesi_mag_backward": {
+  "class": "TRANSFORM",
+  "score": 0.764,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_benesi_t1": {
+  "class": "TRANSFORM",
+  "score": 0.778,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_benesi_t3": {
+  "class": "TRANSFORM",
+  "score": 0,
+  "note": "inside menger_sponge hybrid: BLANK/far BLANK"
+ },
+ "transf_blockify": {
+  "class": "TRANSFORM",
+  "score": 0.973,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_box_fold4d": {
+  "class": "TRANSFORM",
+  "score": 0.674,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_box_fold_vary_v1": {
+  "class": "TRANSFORM",
+  "score": 0.646,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_box_tiling4d": {
+  "class": "TRANSFORM",
+  "score": 0.248,
+  "note": "inside menger_sponge hybrid: OK/far BLANK"
+ },
+ "transf_box_wrap4d": {
+  "class": "TRANSFORM",
+  "score": 0.964,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_de_controls": {
+  "class": "TRANSFORM",
+  "score": 0.061,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_difs_amazing_ifs": {
+  "class": "TRANSFORM",
+  "score": 0.448,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_difs_box_v2": {
+  "class": "TRANSFORM",
+  "score": 0.631,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_chessboard": {
+  "class": "TRANSFORM",
+  "score": 0.004,
+  "note": "inside menger_sponge hybrid: BLANK/far OK"
+ },
+ "transf_difs_cylinder": {
+  "class": "TRANSFORM",
+  "score": 0.482,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_ellipsoid": {
+  "class": "TRANSFORM",
+  "score": 0.55,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_grid_v2": {
+  "class": "TRANSFORM",
+  "score": 0.48,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_difs_helix": {
+  "class": "TRANSFORM",
+  "score": 0.175,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_hexprism": {
+  "class": "TRANSFORM",
+  "score": 0.674,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_hybrid_color": {
+  "class": "TRANSFORM",
+  "score": 0.317,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_piriform": {
+  "class": "TRANSFORM",
+  "score": 0.468,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_prism": {
+  "class": "TRANSFORM",
+  "score": 0.563,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_sphere_grid": {
+  "class": "TRANSFORM",
+  "score": 0.448,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_spring": {
+  "class": "TRANSFORM",
+  "score": 0.227,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_torus": {
+  "class": "TRANSFORM",
+  "score": 0.417,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_torus_twist": {
+  "class": "TRANSFORM",
+  "score": 0.322,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_torus_v4": {
+  "class": "TRANSFORM",
+  "score": 0.459,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_dot_fold": {
+  "class": "TRANSFORM",
+  "score": 0.665,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_hybrid_color": {
+  "class": "TRANSFORM",
+  "score": 0.814,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_inv_cylindrical": {
+  "class": "TRANSFORM",
+  "score": 0.598,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_juliabox": {
+  "class": "TRANSFORM",
+  "score": 0.568,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_low_res_mode": {
+  "class": "TRANSFORM",
+  "score": 0.627,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_mandalay_fold_v2": {
+  "class": "TRANSFORM",
+  "score": 0.566,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_multiple_angle": {
+  "class": "TRANSFORM",
+  "score": 0.807,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_offset_s_curve4d": {
+  "class": "TRANSFORM",
+  "score": 0.787,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_poly_fold_atan": {
+  "class": "TRANSFORM",
+  "score": 0.953,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_poly_fold_sym_multi": {
+  "class": "TRANSFORM",
+  "score": 0.75,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_pwr2_polynomial": {
+  "class": "TRANSFORM",
+  "score": 0.596,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_r_power": {
+  "class": "TRANSFORM",
+  "score": 0.738,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_rotate_about_vec3": {
+  "class": "TRANSFORM",
+  "score": 0.964,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_rotation_chebyshev": {
+  "class": "TRANSFORM",
+  "score": 0.771,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_rotation_iter_controls": {
+  "class": "TRANSFORM",
+  "score": 0.869,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_rpow3": {
+  "class": "TRANSFORM",
+  "score": 0.674,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_scale4d": {
+  "class": "TRANSFORM",
+  "score": 0.705,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_scale_vary_multi": {
+  "class": "TRANSFORM",
+  "score": 0.514,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_scale_vary_vcl": {
+  "class": "TRANSFORM",
+  "score": 0.968,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_sin_and_cos_max": {
+  "class": "TRANSFORM",
+  "score": 0.526,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_sin_y_m3d": {
+  "class": "TRANSFORM",
+  "score": 0.726,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_sincos_v2": {
+  "class": "TRANSFORM",
+  "score": 0.545,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_spherical_coord_invs": {
+  "class": "TRANSFORM",
+  "score": 0.497,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold4d_v2": {
+  "class": "TRANSFORM",
+  "score": 0.674,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_cuboid": {
+  "class": "TRANSFORM",
+  "score": 0.876,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_smooth": {
+  "class": "TRANSFORM",
+  "score": 0.71,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_v3": {
+  "class": "TRANSFORM",
+  "score": 0.73,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_xyz_bias": {
+  "class": "TRANSFORM",
+  "score": 0.962,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_inv_pnorm": {
+  "class": "TRANSFORM",
+  "score": 0.432,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_spherical_inv_v4": {
+  "class": "TRANSFORM",
+  "score": 0.616,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_pwr_fold": {
+  "class": "TRANSFORM",
+  "score": 0.666,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_surf_box_fold": {
+  "class": "TRANSFORM",
+  "score": 0.965,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_surf_fold_multi": {
+  "class": "TRANSFORM",
+  "score": 0.764,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "xenodreambuie": {
+  "class": "OK",
+  "score": 0.456,
+  "note": ""
+ },
+ "abox_donut4d_v2": {
+  "class": "OK",
+  "score": 0.335,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "abox_mod1": {
+  "class": "OK",
+  "score": 0.48,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "abox_mod13": {
+  "class": "OK",
+  "score": 0.003,
+  "note": "thumbnail view BLANK; far view OK; low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "abox_mod2": {
+  "class": "OK",
+  "score": 0.527,
+  "note": "thumbnail camera sits inside the object; far view OK; aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "abox_mod_kali_v2": {
+  "class": "OK",
+  "score": 0.313,
+  "note": ""
+ },
+ "abox_sphere4d": {
+  "class": "OK",
+  "score": 0.612,
+  "note": "thumbnail camera sits inside the object; far view OK; aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "abox_tetra4d": {
+  "class": "OK",
+  "score": 0.37,
+  "note": "thumbnail camera sits inside the object; far view OK; aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "aexion4d_v2": {
+  "class": "OK",
+  "score": 0.106,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "amazing_surf": {
+  "class": "OK",
+  "score": 0.301,
+  "note": ""
+ },
+ "amazing_surf_m3d": {
+  "class": "OK",
+  "score": 0.409,
+  "note": ""
+ },
+ "amazing_surf_mod3": {
+  "class": "OK",
+  "score": 0.972,
+  "note": ""
+ },
+ "benesi": {
+  "class": "OK",
+  "score": 0.457,
+  "note": ""
+ },
+ "benesi_pwr2_mandelbulb": {
+  "class": "OK",
+  "score": 0.574,
+  "note": ""
+ },
+ "box_fold_bulb_menger": {
+  "class": "OK",
+  "score": 0.021,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "box_fold_bulb_pow2_v3": {
+  "class": "OK",
+  "score": 0.779,
+  "note": ""
+ },
+ "bristorbrot": {
+  "class": "OK",
+  "score": 0.44,
+  "note": ""
+ },
+ "buffalo": {
+  "class": "OK",
+  "score": 0.358,
+  "note": ""
+ },
+ "collatz_mod": {
+  "class": "OK",
+  "score": 0.601,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "difs_box_diagonal_v1": {
+  "class": "OK",
+  "score": 0.964,
+  "note": ""
+ },
+ "difs_cylinder": {
+  "class": "OK",
+  "score": 0.973,
+  "note": ""
+ },
+ "difs_hextgrid2": {
+  "class": "OK",
+  "score": 0.481,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "difs_multi_v1": {
+  "class": "OK",
+  "score": 0.279,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "difs_torus": {
+  "class": "OK",
+  "score": 0.976,
+  "note": ""
+ },
+ "fold_box_mod1": {
+  "class": "OK",
+  "score": 0.579,
+  "note": "thumbnail camera sits inside the object; far view OK; aux.color differs from CPU reference on exact fold compare (float rounding)"
+ },
+ "hypercomplex": {
+  "class": "OK",
+  "score": 0.446,
+  "note": ""
+ },
+ "ides2": {
+  "class": "OK",
+  "score": 0.199,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "iq_bulb": {
+  "class": "OK",
+  "score": 0.786,
+  "note": ""
+ },
+ "jos_kleinian_v3": {
+  "class": "OK",
+  "score": 0.207,
+  "note": "fills the frame (unbounded surface); low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "kalisets1": {
+  "class": "OK",
+  "score": 0.3,
+  "note": ""
+ },
+ "koch": {
+  "class": "OK",
+  "score": 0.609,
+  "note": ""
+ },
+ "koch_v3": {
+  "class": "OK",
+  "score": 0.154,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "lkmitch": {
+  "class": "OK",
+  "score": 0.298,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "mandalay_box_v2": {
+  "class": "OK",
+  "score": 0.51,
+  "note": ""
+ },
+ "mandelbar_v2": {
+  "class": "OK",
+  "score": 0.225,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "mandelbox_fast": {
+  "class": "OK",
+  "score": 0.61,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "mandelbox_variable": {
+  "class": "OK",
+  "score": 0.429,
+  "note": ""
+ },
+ "mandelbulb2": {
+  "class": "OK",
+  "score": 0.498,
+  "note": ""
+ },
+ "mandelbulb_abs": {
+  "class": "OK",
+  "score": 0.775,
+  "note": ""
+ },
+ "mandelbulb_bermarte": {
+  "class": "OK",
+  "score": 0.93,
+  "note": ""
+ },
+ "mandelbulb_iq_v2": {
+  "class": "OK",
+  "score": 0.806,
+  "note": ""
+ },
+ "mandelbulb_kali_multi": {
+  "class": "OK",
+  "score": 0.859,
+  "note": ""
+ },
+ "mandelbulb_lambda": {
+  "class": "OK",
+  "score": 0.982,
+  "note": ""
+ },
+ "mandelbulb_plus_z": {
+  "class": "OK",
+  "score": 0.596,
+  "note": ""
+ },
+ "mandelbulb_pow2_v3": {
+  "class": "OK",
+  "score": 0.434,
+  "note": ""
+ },
+ "mandelbulb_power2": {
+  "class": "OK",
+  "score": 0.43,
+  "note": ""
+ },
+ "mandelbulb_quat": {
+  "class": "OK",
+  "score": 0.471,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "mandelbulb_sin_cos_v3": {
+  "class": "OK",
+  "score": 0.858,
+  "note": ""
+ },
+ "mandelbulb_tails_v2": {
+  "class": "OK",
+  "score": 0.744,
+  "note": ""
+ },
+ "mandelnest": {
+  "class": "OK",
+  "score": 0.644,
+  "note": ""
+ },
+ "mandelnest_v2": {
+  "class": "OK",
+  "score": 0.59,
+  "note": ""
+ },
+ "menger3": {
+  "class": "OK",
+  "score": 0.669,
+  "note": ""
+ },
+ "menger4d_mod1": {
+  "class": "OK",
+  "score": 0.964,
+  "note": ""
+ },
+ "menger_cross_kifs": {
+  "class": "OK",
+  "score": 0.559,
+  "note": ""
+ },
+ "menger_mod1": {
+  "class": "OK",
+  "score": 0.642,
+  "note": ""
+ },
+ "menger_prism_shape": {
+  "class": "OK",
+  "score": 0.606,
+  "note": ""
+ },
+ "menger_pyramid": {
+  "class": "OK",
+  "score": 0.625,
+  "note": ""
+ },
+ "menger_smooth_mod1": {
+  "class": "OK",
+  "score": 0.958,
+  "note": ""
+ },
+ "menger_v3": {
+  "class": "OK",
+  "score": 0.488,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "menger_v6": {
+  "class": "OK",
+  "score": 0.555,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "modulus_mandelbulb": {
+  "class": "OK",
+  "score": 0.84,
+  "note": ""
+ },
+ "msltoe_sym2_mod": {
+  "class": "OK",
+  "score": 0.503,
+  "note": ""
+ },
+ "msltoe_sym3_mod3": {
+  "class": "OK",
+  "score": 0.56,
+  "note": ""
+ },
+ "msltoe_sym3_mod6": {
+  "class": "OK",
+  "score": 0.475,
+  "note": ""
+ },
+ "msltoe_toroidal": {
+  "class": "OK",
+  "score": 0.643,
+  "note": ""
+ },
+ "msltoe_toroidal_v3": {
+  "class": "OK",
+  "score": null,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "pseudo_kleinian": {
+  "class": "OK",
+  "score": 1,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "pseudo_kleinian_mod2": {
+  "class": "OK",
+  "score": 1,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "pseudo_kleinian_mod5": {
+  "class": "OK",
+  "score": 1,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "pseudo_kleinian_std_de": {
+  "class": "OK",
+  "score": 0.902,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "pseudo_kleinian_trig_v3": {
+  "class": "OK",
+  "score": null,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "quaternion4d": {
+  "class": "OK",
+  "score": 0.141,
+  "note": "low mask IoU vs upstream thumbnail; thumbnail uses other params or camera"
+ },
+ "quick_dudley_mod": {
+  "class": "OK",
+  "score": 0.429,
+  "note": ""
+ },
+ "riemann_sphere_hobold_pow4": {
+  "class": "OK",
+  "score": 0.895,
+  "note": ""
+ },
+ "riemann_sphere_msltoe_m3d": {
+  "class": "OK",
+  "score": 0.785,
+  "note": ""
+ },
+ "scator_power2": {
+  "class": "OK",
+  "score": 0.333,
+  "note": "fills the frame (unbounded surface)"
+ },
+ "scator_power2_std_r": {
+  "class": "OK",
+  "score": 0.317,
+  "note": ""
+ },
+ "sierpinski3d_v2": {
+  "class": "OK",
+  "score": 0.421,
+  "note": ""
+ },
+ "sierpinski4d": {
+  "class": "OK",
+  "score": 0.955,
+  "note": ""
+ },
+ "sphere_cluster_v3": {
+  "class": "OK",
+  "score": 0.46,
+  "note": "thumbnail camera sits inside the object; far view OK"
+ },
+ "spheretree_v4": {
+  "class": "OK",
+  "score": 0.722,
+  "note": ""
+ },
+ "testing4d": {
+  "class": "NAN",
+  "score": 0.042,
+  "note": "CPU/GPU iteration diff 100% at iteration 1 (z.x,z.y,z.z); w clamp 1e-21 squares to a denormal; GPU flushes it to 0 and 0/0 gives NaN in z.w; needs an override (clamp 1e-18)"
+ },
+ "testing_transform2": {
+  "class": "BLANK",
+  "score": 0.012,
+  "note": "upstream test stub; the upstream thumbnail is a Testing text card"
+ },
+ "transf_abs_add_conditional2": {
+  "class": "TRANSFORM",
+  "score": 0.975,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_abs_add_constant4d": {
+  "class": "TRANSFORM",
+  "score": 0.708,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_abs_add_multi4d": {
+  "class": "TRANSFORM",
+  "score": 0.952,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_abs_rec_fold_xy": {
+  "class": "TRANSFORM",
+  "score": 0.66,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_constant4d": {
+  "class": "TRANSFORM",
+  "score": 0.645,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_constant_mod3": {
+  "class": "TRANSFORM",
+  "score": 0.649,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel": {
+  "class": "TRANSFORM",
+  "score": 0.594,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel_cx_cy_axis_swap": {
+  "class": "TRANSFORM",
+  "score": 0.617,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel_scator": {
+  "class": "TRANSFORM",
+  "score": 0.943,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_cpixel_symmetrical": {
+  "class": "TRANSFORM",
+  "score": 0.099,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_exp2_z": {
+  "class": "TRANSFORM",
+  "score": 0.967,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_add_spherical_invert": {
+  "class": "TRANSFORM",
+  "score": 0,
+  "note": "inside menger_sponge hybrid: BLANK/far OK"
+ },
+ "transf_benesi_mag_forward": {
+  "class": "TRANSFORM",
+  "score": 0.757,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_benesi_t1_mod": {
+  "class": "TRANSFORM",
+  "score": 0.754,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_benesi_t4": {
+  "class": "TRANSFORM",
+  "score": 0,
+  "note": "inside menger_sponge hybrid: BLANK/far BLANK"
+ },
+ "transf_blockify_v2": {
+  "class": "TRANSFORM",
+  "score": 0.657,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_box_fold4d_infy": {
+  "class": "TRANSFORM",
+  "score": 0.519,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_box_fold_xyz": {
+  "class": "TRANSFORM",
+  "score": 0.58,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_box_tiling_v2": {
+  "class": "TRANSFORM",
+  "score": 0.512,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_cayley2_v1": {
+  "class": "TRANSFORM",
+  "score": 0.55,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_de_linear_cube": {
+  "class": "TRANSFORM",
+  "score": 0.777,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_box": {
+  "class": "TRANSFORM",
+  "score": 0.674,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_box_v3": {
+  "class": "TRANSFORM",
+  "score": 0.578,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_clip_custom": {
+  "class": "TRANSFORM",
+  "score": 0,
+  "note": "inside menger_sponge hybrid: BLANK/far BLANK"
+ },
+ "transf_difs_cylinder_v2": {
+  "class": "TRANSFORM",
+  "score": 0.449,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_gear_v1": {
+  "class": "TRANSFORM",
+  "score": 0.465,
+  "note": "inside menger_sponge hybrid: SOLID/far ERROR"
+ },
+ "transf_difs_grid_v3": {
+  "class": "TRANSFORM",
+  "score": 0.541,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_difs_helix_menger": {
+  "class": "TRANSFORM",
+  "score": 0.347,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_difs_hexprism_v2": {
+  "class": "TRANSFORM",
+  "score": 0.586,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_octahedron": {
+  "class": "TRANSFORM",
+  "score": 0.494,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_polyhedra": {
+  "class": "TRANSFORM",
+  "score": 0.75,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_prism_v2": {
+  "class": "TRANSFORM",
+  "score": 0.567,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_sphere_grid_v2": {
+  "class": "TRANSFORM",
+  "score": 0.552,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_supershape": {
+  "class": "TRANSFORM",
+  "score": 0.417,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_difs_torus_grid": {
+  "class": "TRANSFORM",
+  "score": 0.355,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_torus_v2": {
+  "class": "TRANSFORM",
+  "score": 0.481,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_difs_tri_grid": {
+  "class": "TRANSFORM",
+  "score": 1,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_folding_tetra3d": {
+  "class": "TRANSFORM",
+  "score": 0.739,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_hybrid_color2": {
+  "class": "TRANSFORM",
+  "score": 0.978,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_iteration_weight": {
+  "class": "TRANSFORM",
+  "score": 0.743,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_juliabox_v2": {
+  "class": "TRANSFORM",
+  "score": 0.635,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_mandalay_fold4d": {
+  "class": "TRANSFORM",
+  "score": 0.61,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_menger_fold": {
+  "class": "TRANSFORM",
+  "score": 0.752,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_neg_abs_add_constant": {
+  "class": "TRANSFORM",
+  "score": 0.859,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_parab_fold": {
+  "class": "TRANSFORM",
+  "score": 0.868,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_poly_fold_atan2": {
+  "class": "TRANSFORM",
+  "score": 0.961,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_poly_fold_sym_xy": {
+  "class": "TRANSFORM",
+  "score": 0.964,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_quadratic_fold4d": {
+  "class": "TRANSFORM",
+  "score": 0.608,
+  "note": "inside menger_sponge hybrid: SOLID/far OK"
+ },
+ "transf_reciprocal3": {
+  "class": "TRANSFORM",
+  "score": 0.976,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_rotation": {
+  "class": "TRANSFORM",
+  "score": 0.77,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_rotation_folding": {
+  "class": "TRANSFORM",
+  "score": 0.972,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_rotation_m3d": {
+  "class": "TRANSFORM",
+  "score": 0.638,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_scale": {
+  "class": "TRANSFORM",
+  "score": 0.604,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_scale_offset": {
+  "class": "TRANSFORM",
+  "score": 0.626,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_scale_vary_v1": {
+  "class": "TRANSFORM",
+  "score": 0.746,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_sin_add": {
+  "class": "TRANSFORM",
+  "score": 0.674,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_sin_or_cos": {
+  "class": "TRANSFORM",
+  "score": 0.992,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_sincos": {
+  "class": "TRANSFORM",
+  "score": 0.758,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_smooth": {
+  "class": "TRANSFORM",
+  "score": 0.813,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold": {
+  "class": "TRANSFORM",
+  "score": 0.753,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_abox": {
+  "class": "TRANSFORM",
+  "score": 0.777,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_parab": {
+  "class": "TRANSFORM",
+  "score": 0.936,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_v1": {
+  "class": "TRANSFORM",
+  "score": 0.698,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_fold_vary_v1": {
+  "class": "TRANSFORM",
+  "score": 0.769,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_inv": {
+  "class": "TRANSFORM",
+  "score": 0.548,
+  "note": "inside menger_sponge hybrid: SOLID/far SOLID"
+ },
+ "transf_spherical_inv_v2": {
+  "class": "TRANSFORM",
+  "score": 0.419,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_spherical_offset": {
+  "class": "TRANSFORM",
+  "score": 0.854,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_step_xy": {
+  "class": "TRANSFORM",
+  "score": 0.503,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_surf_box_fold_v2": {
+  "class": "TRANSFORM",
+  "score": 0.986,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "transf_zvector_axis_swap": {
+  "class": "TRANSFORM",
+  "score": 0.769,
+  "note": "inside menger_sponge hybrid: OK/far OK"
+ },
+ "xenodreambuie_v2": {
+  "class": "OK",
+  "score": 0.866,
+  "note": ""
+ }
+}
