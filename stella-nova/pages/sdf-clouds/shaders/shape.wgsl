@@ -12,6 +12,12 @@
 //   preset 3  stratus sheet   thin broken layer
 //   preset 4  voxel sculpt    blocky hand-made-style volume (MagicaVoxel stand-in)
 //   preset 5  torus           analytic shape, to show that any volume works
+//
+// Motion: P.anim.xyz offsets the noise domain (drift + rise) and P.anim.w
+// moves the warp phase (morph). The box masks use q and do not move, so a
+// drifting cloudscape enters at one edge and fades at the other. The puff
+// footprint takes only the horizontal offset, so puffs keep flat bases. The
+// tower and the torus keep their geometry, and only their billow detail moves.
 
 @group(0) @binding(1) var fieldOut : texture_storage_3d<r32float, write>;
 
@@ -39,7 +45,7 @@ fn billow(w: vec3f, seed: u32) -> f32 {
 }
 
 fn warp(w: vec3f, seed: u32) -> vec3f {
-  let q = w * P.shape.z * 0.5;
+  let q = w * P.shape.z * 0.5 + vec3f(1.0, 0.61, -0.83) * P.anim.w;
   let o = vec3f(vnoise(q, seed + 7u), vnoise(q, seed + 19u), vnoise(q, seed + 31u)) - 0.5;
   return w + o * P.misc2.x * 2.0;
 }
@@ -110,7 +116,8 @@ fn torusField(w: vec3f) -> f32 {
 fn shapeField(q: vec3f, w0: vec3f) -> f32 {
   let seed = seedU();
   let preset = i32(P.shape.x);
-  let w = warp(w0, seed);
+  let off = P.anim.xyz;
+  let w = warp(w0 - off, seed);
   let edge = smoothstep(0.0, 0.08, min(q.x, 1.0 - q.x)) * smoothstep(0.0, 0.08, min(q.z, 1.0 - q.z));
   // Round footprint for the layer presets, so the square box edge never shows.
   let disc = 1.0 - smoothstep(0.6, 1.0, length(q.xz - 0.5) * 2.0);
@@ -120,7 +127,9 @@ fn shapeField(q: vec3f, w0: vec3f) -> f32 {
     return raw - (1.0 - P.shape.y) * 0.55;
   }
   if (preset == 1 || preset == 2) {
-    var d = select(tower(w), puffs(w, seed), preset == 1);
+    var d: f32;
+    if (preset == 1) { d = puffs(warp(w0 - vec3f(off.x, 0.0, off.z), seed), seed); }
+    else { d = tower(warp(w0, seed)); }
     d += (0.5 - billow(w, seed)) * 0.9;
     return -d - (1.0 - edge) * 2.0;
   }
@@ -135,7 +144,7 @@ fn shapeField(q: vec3f, w0: vec3f) -> f32 {
     let cellI = vec3i(floor(w0 / 0.5));
     let cc = (vec3f(cellI) + 0.5) * 0.5;
     let env = sdEllipsoid(cc - vec3f(0.0, 2.4, 0.0), vec3f(4.5, 1.2, 3.6));
-    let n = vnoise(cc * 0.6, seed);
+    let n = vnoise((cc - off) * 0.6, seed);
     let on = env + (n - 0.5) * 2.2 < -0.2 + P.shape.y && hash1(cellI, seed) < 0.97;
     return select(-0.5, 0.5, on && edge > 0.5);
   }

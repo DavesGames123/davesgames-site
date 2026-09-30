@@ -180,7 +180,7 @@ export async function createEngine(device, format, SH) {
       if (need.has('shape')) { stages.add('shape'); stages.add('light'); }
       if (need.has('noise')) { stages.add('noise'); stages.add('light'); }
       if (need.has('lres') || need.has('light')) stages.add('light');
-      if (state.lightErosion && state.erosion && state.wind > 0 && state.timeScale > 0) stages.add('light');
+      if (state.lightErosion && state.erosion && (state.wind > 0 || state.boil > 0) && state.timeScale > 0) stages.add('light');
       alloc(d);
       device.queue.writeBuffer(paramBuf, 0, pack(params, state, cam, time, frame));
       if (stages.size) encodeBake(enc, d, stages);

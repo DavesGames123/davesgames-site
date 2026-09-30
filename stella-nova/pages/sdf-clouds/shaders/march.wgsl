@@ -17,7 +17,11 @@
 //   L_media += T * (1 - exp(-sigma_t * ds)) * (p(theta) T_light L_sun + ambient)
 //   pixel    = L_media + T * L_background
 //
-// grep: fn marchRay  fn shadowAt  fn skyCol  fn groundCol  fn fs  PASS_
+// Lightning adds a point glow to the in-scatter term. P.anim2 holds the
+// flash point and energy, and P.anim4.x the glow radius. The glow stands in
+// for multiple scattering from a bolt inside the cloud.
+//
+// grep: fn boltAt  fn marchRay  fn shadowAt  fn skyCol  fn groundCol  fn fs  PASS_
 
 struct View { rect: vec4f, mode: vec4f };   // rect px x y w h; mode x pass
 @group(1) @binding(0) var<uniform> V : View;
@@ -46,6 +50,15 @@ const FAR = 400.0;
 fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
   let p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
   return vec4f(p[i], 0.0, 1.0);
+}
+
+const BOLT_COL = vec3f(0.75, 0.82, 1.0);
+
+fn boltAt(w: vec3f) -> vec3f {
+  if (P.anim2.w <= 0.0) { return vec3f(0.0); }
+  let d = w - P.anim2.xyz;
+  let r = max(P.anim4.x, 0.05);
+  return BOLT_COL * P.anim2.w * exp(-dot(d, d) / (r * r));
 }
 
 fn lightAt(w: vec3f) -> f32 { return textureSampleLevel(lightTex, samp, boxUVW(w), 0.0).r; }
@@ -97,7 +110,8 @@ fn groundCol(p: vec3f, t: f32, shadowOnly: bool) -> vec3f {
   let line = 1.0 - smoothstep(0.0, 0.02 + t * 0.002, min(g.x, g.y));
   let alb = mix(vec3f(0.11, 0.13, 0.10), vec3f(0.20, 0.23, 0.20), line * exp(-t * 0.05));
   let lit = P.sunCol.rgb * P.sun.w * max(P.sun.y, 0.0) * sh + skyAmbient() * P.sunCol.w * 0.8;
-  let c = alb * lit;
+  let bd = p.xz - P.anim2.xz;
+  let c = alb * (lit + BOLT_COL * P.anim2.w * 0.03 * exp(-dot(bd, bd) / 40.0));
   return mix(c, skyBase(0.02), 1.0 - exp(-t * 0.012));
 }
 
@@ -134,7 +148,7 @@ fn marchRay(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> MR {
   let ph = P.phase.y + P.phase.z * hgN(mu, P.phase.x);
   let phF = 0.35 + 0.65 * hgN(mu, 0.4);
   let sunL = P.sunCol.rgb * P.sun.w;
-  let amb = skyAmbient() * P.sunCol.w;
+  let amb = skyAmbient() * P.sunCol.w + BOLT_COL * P.anim2.w * 0.004;
 
   var t = 0.0;
   if (!fogOn) {
@@ -195,8 +209,9 @@ fn marchRay(ro: vec3f, rd: vec3f, tEnd: f32, jit: f32) -> MR {
         Tl = shadowAt(w);
       }
       let hgt = mix(0.45, 1.0, clamp(boxUVW(w).y, 0.0, 1.0));
-      let Sc = sunL * Tl * ph * pw + amb * hgt;
-      let Sf = sunL * Tl * phF + amb * 0.5;
+      let bg = boltAt(w);
+      let Sc = sunL * Tl * ph * pw + amb * hgt + bg;
+      let Sf = sunL * Tl * phF + amb * 0.5 + bg * 0.3;
       let a = 1.0 - exp(-ext);
       r.L += r.T * a * (Sc * sig + Sf * fog) / (sig + fog);
       r.T *= exp(-ext);

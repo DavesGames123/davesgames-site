@@ -12,6 +12,10 @@
 //   B          baked light on / off                    S     SDF skip on / off
 //   Space      pause time                              P     panel on / off
 //
+// The motion groups animate the state. tick() hands animate(state, time) and
+// animateCam(cam, ...) to the engine; the panel, the hash and the keys keep
+// the base values. Space stops the clock, so every motion stops with it.
+//
 // The URL hash keeps the layout, the passes and every control that differs
 // from its default, so a link reopens the same study.
 //
@@ -19,7 +23,7 @@
 
 import { loadShaders } from '../../lib/shaders.js';
 import { createEngine } from './engine.js';
-import { GROUPS, PASSES, CONTROLS, defaults, dims } from './params.js';
+import { GROUPS, PASSES, CONTROLS, RECIPES, MOTION_IDS, defaults, dims, animate, animateCam } from './params.js';
 
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
@@ -135,11 +139,15 @@ function buildPanel() {
         el('button', { type: 'button', onclick: () => setValue('seed', Math.floor(Math.random() * 100)) }, 'New seed'),
         el('button', { type: 'button', onclick: () => engine?.invalidate() }, 'Rebake')));
     }
+    if (g.id === 'motion') {
+      extra.push(el('div', { class: 'buttons' }, ...Object.keys(RECIPES).map((k) =>
+        el('button', { type: 'button', title: `Motion recipe: ${k}`, onclick: () => applyRecipe(k) }, k))));
+    }
     if (g.id === 'camera') {
       extra.push(el('div', { class: 'buttons' }, ...Object.keys(CAM_PRESETS).map((k) =>
         el('button', { type: 'button', onclick: () => { cam = structuredClone(CAM_PRESETS[k]); writeHash(); } }, k))));
     }
-    pbody.append(section(g.id, g.title, g.id === 'shape' || g.id === 'march', ...rows, ...extra));
+    pbody.append(section(g.id, g.title, g.id === 'shape' || g.id === 'march' || g.id === 'motion', ...rows, ...extra));
   }
 
   statsEl = el('div', { class: 'stats' });
@@ -164,8 +172,18 @@ function buildPanel() {
     under the surface, so the extra sample costs only on the edges. Fog is a second medium in the same march, and
     points outside the volume project toward the sun onto it for shafts and ground shadows.</p>
     <p class="spec">Changes from upstream: jump flood instead of radius search; an energy-conserving
-    (1 − e<sup>−σΔs</sup>) scatter term; powder from local depth, applied in the view march.</p>`;
+    (1 − e<sup>−σΔs</sup>) scatter term; powder from local depth, applied in the view march.</p>
+    <p class="spec"><b>Motion has three cost tiers.</b> Erosion wind, boil, lightning, fog pulse and the camera
+    change only the uniform. Sun, breathe and density pulse rerun the light bake every frame. Drift, rise,
+    morph and grow move the shape itself, so they rerun shape + JFA + light at <code>Shape bakes/s</code>.
+    Watch <code>Last bake</code> in the Pipeline section.</p>`;
   pbody.append(about);
+}
+
+function applyRecipe(name) {
+  for (const id of MOTION_IDS) setValue(id, CONTROLS[id].value);
+  for (const [id, v] of Object.entries(RECIPES[name])) setValue(id, v);
+  if (state.timeScale === 0) setValue('timeScale', savedTimeScale);
 }
 
 function refreshPanelViews() {
@@ -395,7 +413,8 @@ async function boot() {
     if (lc !== lastLayoutClass) { viewsEl.className = `views ${lc}`; lastLayoutClass = lc; }
 
     const enc = device.createCommandEncoder();
-    const info = engine.frame(enc, ctx.getCurrentTexture().createView(), viewRects(), { state, cam, time, frame: frame++ });
+    const info = engine.frame(enc, ctx.getCurrentTexture().createView(), viewRects(),
+      { state: animate(state, time), cam: animateCam(cam, state, time), time, frame: frame++ });
     device.queue.submit([enc.finish()]);
     if (info.stages.length) lastBake = info.stages.join(' + ');
 

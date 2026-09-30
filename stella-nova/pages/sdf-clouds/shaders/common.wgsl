@@ -29,6 +29,10 @@ struct Params {
   shape3   : vec4f, // x worley mix y AO intensity  z AO offset  w exposure
   misc     : vec4f, // x light erosion  y fog falloff  z soft shadows  w ground on
   misc2    : vec4f, // x warp       y erosion cells  z fog steps  w light max steps
+  anim     : vec4f, // xyz shape noise offset (world), w warp phase
+  anim2    : vec4f, // xyz lightning point (world),    w lightning energy
+  anim3    : vec4f, // xyz boil layer scroll velocity, w boil mix
+  anim4    : vec4f, // x lightning glow radius,        yzw unused
 };
 
 @group(0) @binding(0) var<uniform> P : Params;

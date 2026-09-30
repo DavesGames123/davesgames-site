@@ -20,9 +20,15 @@ fn boxUVW(w: vec3f) -> vec3f { return (w - P.boxMin.xyz) / (P.boxMax.xyz - P.box
 
 fn sdfAt(w: vec3f) -> f32 { return textureSampleLevel(sdfTex, samp, boxUVW(w), 0.0).r; }
 
+// Boil blends a second layer at a smaller tile that scrolls across the first.
+// The mean of two layers has less contrast, so the blend stretches it back.
 fn erosionAt(w: vec3f) -> f32 {
-  let uvw = w / P.ero.w + P.ero2.xyz * P.camPos.w;
-  return textureSampleLevel(eroTex, sampRep, uvw, 0.0).r;
+  let t = P.camPos.w;
+  let n = textureSampleLevel(eroTex, sampRep, w / P.ero.w + P.ero2.xyz * t, 0.0).r;
+  if (P.anim3.w <= 0.0) { return n; }
+  let n2 = textureSampleLevel(eroTex, sampRep, w / (P.ero.w * 0.73) + P.anim3.xyz * t, 0.0).r;
+  let m = clamp((n + n2 - 1.0) * 0.71 + 0.5, 0.0, 1.0);
+  return mix(n, m, P.anim3.w);
 }
 
 struct Dens { d: f32, ew: f32 };   // extinction sigma_t, erosion weight
