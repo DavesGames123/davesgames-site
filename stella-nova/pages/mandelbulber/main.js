@@ -15,6 +15,12 @@
 //   W A S D     fly: move (Shift = fast)      Q E          fly: down / up
 //   P           panel on / off                Esc          close the formula list
 //
+// Touch: one finger orbits (with inertia), two fingers pinch to dolly and drag to pan,
+// a double tap runs Frame, a long press opens a menu (Frame, Reset view, Fly). In fly mode
+// two thumbsticks move and look. On a phone the panel is a bottom sheet (peek, half, full)
+// or, in landscape, a right drawer. The canvas then covers only the free area, so the
+// camera target and Frame center in the part of the screen the user sees.
+//
 // The URL hash holds the scene diff against the defaults as deflated .fract
 // text (#s=...), so a link reopens the same scene.
 //
@@ -22,6 +28,9 @@
 //       function gradientEditor  function loadScene  function exportFract  function writeHash  function readHash
 //       function camFromScene  function camToScene  function frameView  function pushScene  function tick
 //       function savePng  const MAIN_UI  const SLOT_COMMON  const CREDIT
+//       function applyLayout  function pickMode  function snapTo  function sheetDrag  function syncViewport
+//       function openExamples  function openCtx  function showTip  function stick  function inertiaStep
+//       function renderPaused  const pixelRatio  const renderScale
 
 import { SLOTS, defaultScene, fillDefaults, specFor, parseFract, serialiseFract, parseValue, quantizeColor, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
 
@@ -183,7 +192,7 @@ const refreshers = new Set();
 
 function ctl(spec, bind) {
   const kind = spec.kind;
-  const row = el('div', { class: 'ctl', title: `${spec.tip ? `${spec.tip}\n` : ''}${spec.name || ''}${spec.name ? '\n' : ''}Double-click the label to reset.` });
+  const row = el('div', { class: kind === 'vect3' || kind === 'vect4' ? 'ctl vrow' : 'ctl', title: `${spec.tip ? `${spec.tip}\n` : ''}${spec.name || ''}${spec.name ? '\n' : ''}Double-click the label to reset.` });
   const label = el('span', { class: 'k' }, spec.label);
   row.append(label);
   let set;
@@ -215,7 +224,7 @@ function ctl(spec, bind) {
         if (Number.isFinite(n)) bind.set({ ...bind.get(), [c]: n }); else set(bind.get());
       });
       scrub(i, () => bind.get()[c], (n) => bind.set({ ...bind.get(), [c]: n }), spec);
-      box.append(i);
+      box.append(el('label', { class: 'vc' }, el('i', {}, c), i));
       return i;
     });
     row.append(box);
@@ -246,6 +255,7 @@ function ctl(spec, bind) {
     set = (v) => { range.value = toR(Number(v)); if (document.activeElement !== num) num.value = fmt(v); };
   }
   label.addEventListener('dblclick', () => bind.set(structuredClone(bind.def)));
+  label.addEventListener('click', () => { if (touchUI()) showTip(label, spec, bind); });
   const refresh = () => {
     if (row.isConnected) row._seen = true;
     else if (row._seen) { refreshers.delete(refresh); return; }
@@ -263,7 +273,7 @@ function ctl(spec, bind) {
 // Drag horizontally on a vector field to change it; a click still edits.
 function scrub(input, get, setv, spec) {
   let x0 = null, v0 = 0, moved = false;
-  input.addEventListener('pointerdown', (e) => { if (document.activeElement === input) return; x0 = e.clientX; v0 = get(); moved = false; input.setPointerCapture(e.pointerId); });
+  input.addEventListener('pointerdown', (e) => { if (document.activeElement === input || e.pointerType === 'touch') return; x0 = e.clientX; v0 = get(); moved = false; input.setPointerCapture(e.pointerId); });
   input.addEventListener('pointermove', (e) => {
     if (x0 === null) return;
     const dx = e.clientX - x0;
@@ -331,6 +341,7 @@ function setSlot(s, name, v) {
 }
 
 function loadScene(next, label) {
+  stopInertia();
   scene = next;
   activeSlot = 0;
   buildSlotEditor();
@@ -344,15 +355,26 @@ function loadScene(next, label) {
 
 // ─── panel ──────────────────────────────────────────────────────────────────
 let slotBox, slotStrip, progressEl, sampleLine, exList, exSearch;
-const targetSamples = { value: 64 };
+const coarseMQ = matchMedia('(pointer: coarse)');
+let touchSeen = false;                                // a touch pointer was used at least once
+const touchUI = () => coarseMQ.matches || touchSeen;
+const targetSamples = { value: coarseMQ.matches ? 32 : 64 };
+const SAMPLES_DEFAULT = targetSamples.value;
+// Pixel ratio of the render: the device ratio, capped at 2 (1.5 on touch screens by default).
+const renderScale = { value: coarseMQ.matches ? 1.5 : 2 };
+const RENDER_SCALE_DEFAULT = renderScale.value;
+const pixelRatio = () => Math.max(0.25, Math.min(window.devicePixelRatio || 1, 2, renderScale.value));
+let resizeCanvas = null, resizePending = false;      // set in boot once the engine runs
 
 function buildPanel() {
   // Image: progress, target samples, file actions
   progressEl = el('div', { class: 'progress' }, el('i'));
   sampleLine = el('p', { class: 'spec' });
   const tsRow = ctl({ label: 'Target samples', kind: 'int', min: 1, max: 4096, log: true, tip: 'Stop when this many samples have accumulated.' },
-    { get: () => targetSamples.value, set: (v) => { targetSamples.value = clamp(Math.round(v), 1, 65536); engine?.setMaxSamples?.(targetSamples.value); refreshAll(); }, def: 64 });
-  pbody.append(section('image', 'Image', true, progressEl, sampleLine, tsRow,
+    { get: () => targetSamples.value, set: (v) => { targetSamples.value = clamp(Math.round(v), 1, 65536); engine?.setMaxSamples?.(targetSamples.value); refreshAll(); }, def: SAMPLES_DEFAULT });
+  const prRow = ctl({ label: 'Pixel ratio', kind: 'double', min: 0.5, max: 2, tip: 'Render pixels per CSS pixel, capped at the device ratio. Lower is faster.' },
+    { get: () => renderScale.value, set: (v) => { renderScale.value = clamp(Math.round(v * 4) / 4, 0.5, 2); refreshAll(); resizeCanvas?.(); }, def: RENDER_SCALE_DEFAULT });
+  pbody.append(section('image', 'Image', true, progressEl, sampleLine, tsRow, prRow,
     el('div', { class: 'buttons' },
       el('button', { type: 'button', class: 'primary', onclick: savePng, title: 'Save the accumulated image as PNG' }, 'Render PNG'),
       el('button', { type: 'button', onclick: exportFract, title: 'Download the scene as a .fract file' }, 'Export .fract'),
@@ -370,7 +392,8 @@ function buildPanel() {
     b.addEventListener('click', () => loadExample(i));
     exList.append(b);
   });
-  pbody.append(section('examples', 'Examples', false, exSearch, exList));
+  const browse = el('div', { class: 'buttons exbrowse' }, el('button', { type: 'button', onclick: openExamples }, `Browse ${EXAMPLES.length} examples`));
+  pbody.append(section('examples', 'Examples', false, browse, exSearch, exList));
 
   // Formula slots
   slotStrip = el('div', { class: 'slots' });
@@ -534,14 +557,14 @@ function openPicker(s) {
   pickerSlot = s;
   const cur = scene.main[`formula_${s + 1}`];
   for (const { t, f } of pickerTiles) t.classList.toggle('cur', fnum(f) === cur);
-  picker.classList.remove('hidden');
+  openSheet(picker);
   $('pickerSearch').value = '';
   filterPicker();
   const c = pickerTiles.find((p) => fnum(p.f) === cur);
   c?.t.scrollIntoView({ block: 'center' });
   if (matchMedia('(pointer: fine)').matches) $('pickerSearch').focus();
 }
-function closePicker() { picker.classList.add('hidden'); }
+function closePicker() { closeSheet(picker); }
 function choose(f) {
   closePicker();
   setMain(`formula_${pickerSlot + 1}`, fnum(f));
@@ -789,6 +812,7 @@ function camToScene(c, quiet) {
 }
 
 function resetCamera() {
+  stopInertia();
   for (const k of ['camera', 'target', 'camera_top', 'camera_rotation', 'camera_distance_to_target']) {
     if (P.main[k]) scene.main[k] = structuredClone(P.main[k].default);
   }
@@ -801,6 +825,7 @@ function resetCamera() {
 let framing = 0;
 async function frameView(auto) {
   if (!engine?.frameView) return;
+  stopInertia();
   const job = ++framing;
   if (sceneDirty) pushScene();
   await scenePromise;
@@ -822,64 +847,124 @@ async function frameView(auto) {
 }
 
 // ─── camera input ───────────────────────────────────────────────────────────
+// Mouse: drag orbit, right or Shift drag pan, wheel dolly. Touch: one finger orbit, two
+// fingers pinch (dolly) and drag (pan), double tap Frame, long press menu. A touch orbit
+// keeps turning after release and slows down (inertia); any new input stops it.
 let flying = false;
 const keys = new Set();
 const pointers = new Map();
-let pinch = 0, dragCam = null;
+let dragCam = null, gest = null, lastTap = null, lpTimer = 0;
+const inertia = { on: false, vx: 0, vy: 0, cam: null };
+const fly = { move: { x: 0, y: 0 }, look: { x: 0, y: 0 } };   // thumbstick values, -1..1
 
 function toggleFly() {
+  stopInertia();
   flying = !flying;
   document.body.classList.toggle('flying', flying);
   $('flyBtn').classList.toggle('on', flying);
   $('flyBtn2')?.classList.toggle('on', flying);
-  flash(flying ? 'fly mode: W A S D move, Q E down / up, drag to look' : 'orbit mode');
+  if (flying && L.mode === 'sheet' && L.snap !== 'peek') snapTo('peek');
+  flash(flying ? (touchUI() ? 'fly mode: left stick moves, right stick looks' : 'fly mode: W A S D move, Q E down / up, drag to look') : 'orbit mode');
 }
 $('flyBtn').addEventListener('click', toggleFly);
 
+// world units per CSS pixel at the target distance
+const panScale = (c) => c.dist * 2 * Math.tan((scene.main.fov ?? 53) * DEG / 2) / Math.max(canvas.clientHeight, 1);
+function panBy(c, dx, dy) {
+  const { right, top } = camBasis(c);
+  const k = panScale(c);
+  c.target = V.add(c.target, V.add(V.mul(right, -dx * k), V.mul(top, dy * k)));
+}
+function orbitBy(c, dx, dy) {
+  c.yaw -= dx * 0.006;
+  c.pitch = clamp(c.pitch + dy * 0.006, -89.9 * DEG, 89.9 * DEG);
+}
+function lookBy(c, dx, dy) {                           // turn around the eye, not the target
+  const eye = V.sub(c.target, V.mul(camBasis(c).fwd, c.dist));
+  c.yaw -= dx;
+  c.pitch = clamp(c.pitch - dy, -89.9 * DEG, 89.9 * DEG);
+  c.target = V.add(eye, V.mul(camBasis(c).fwd, c.dist));
+}
+const two = () => { const [a, b] = [...pointers.values()]; return { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, d: Math.hypot(a.x - b.x, a.y - b.y) }; };
+
+window.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch' && !touchSeen) { touchSeen = true; applyLayout(); }
+  if (!e.target.closest?.('#ctx')) hideCtx();
+  if (!e.target.closest?.('#tip, .ctl .k')) hideTip();
+}, true);
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('pointerdown', (e) => {
+  stopInertia();
   canvas.setPointerCapture(e.pointerId);
-  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button });
+  const now = performance.now();
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t0: now, button: e.button, type: e.pointerType, hist: [{ x: e.clientX, y: e.clientY, t: now }] });
   canvas.classList.add('dragging');
   dragCam = camFromScene();
-  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+  if (pointers.size === 1) {
+    gest = { multi: false, moved: false, lp: false };
+    if (e.pointerType !== 'mouse') {
+      lpTimer = setTimeout(() => {
+        if (pointers.size === 1 && gest && !gest.moved) { gest.lp = true; openCtx(e.clientX, e.clientY); }
+      }, 520);
+    }
+  } else if (gest) {
+    clearTimeout(lpTimer);
+    gest.multi = true; gest.moved = true;
+    const t = two(); gest.mid = t.mid; gest.d = t.d;
+  }
 });
 canvas.addEventListener('pointermove', (e) => {
   const p = pointers.get(e.pointerId);
-  if (!p || !dragCam) return;
+  if (!p || !dragCam || !gest) return;
   const dx = e.clientX - p.x, dy = e.clientY - p.y;
   p.x = e.clientX; p.y = e.clientY;
+  const now = performance.now();
+  p.hist.push({ x: p.x, y: p.y, t: now });
+  if (p.hist.length > 8) p.hist.shift();
+  if (!gest.moved && Math.hypot(p.x - p.x0, p.y - p.y0) > 8) { gest.moved = true; clearTimeout(lpTimer); }
+  if (gest.lp) return;
   const c = dragCam;
-  if (pointers.size === 2) {
-    const [a, b] = [...pointers.values()];
-    const d = Math.hypot(a.x - b.x, a.y - b.y);
-    if (pinch > 0 && d > 0) c.dist = clamp(c.dist * pinch / d, 1e-6, 1e6);
-    pinch = d;
-  } else if (p.button === 2 || e.shiftKey) {             // pan
-    const { right, top } = camBasis(c);
-    const k = c.dist * 2 * Math.tan((scene.main.fov ?? 53) * DEG / 2) / Math.max(canvas.clientHeight, 1);
-    c.target = V.add(c.target, V.add(V.mul(right, -dx * k), V.mul(top, dy * k)));
-  } else if (flying) {                                   // look around the camera
-    const { fwd } = camBasis(c);
-    const eye = V.sub(c.target, V.mul(fwd, c.dist));
-    c.yaw -= dx * 0.004;
-    c.pitch = clamp(c.pitch - dy * 0.004, -89.9 * DEG, 89.9 * DEG);
-    c.target = V.add(eye, V.mul(camBasis(c).fwd, c.dist));
-  } else {                                               // orbit around the target
-    c.yaw -= dx * 0.006;
-    c.pitch = clamp(c.pitch + dy * 0.006, -89.9 * DEG, 89.9 * DEG);
-  }
+  if (pointers.size >= 2) {                              // pinch = dolly, midpoint drag = pan
+    const t = two();
+    if (gest.d > 0 && t.d > 0) c.dist = clamp(c.dist * gest.d / t.d, 1e-6, 1e6);
+    panBy(c, t.mid.x - gest.mid.x, t.mid.y - gest.mid.y);
+    gest.mid = t.mid; gest.d = t.d;
+  } else if (gest.multi) return;                         // one finger left after a pinch: wait
+  else if (p.button === 2 || e.shiftKey) panBy(c, dx, dy);
+  else if (flying) lookBy(c, dx * 0.004, dy * 0.004);
+  else orbitBy(c, dx, dy);
   camToScene(c, true);
 });
 const endPointer = (e) => {
+  const p = pointers.get(e.pointerId);
+  if (!p) return;
   pointers.delete(e.pointerId);
-  if (pointers.size < 2) pinch = 0;
-  if (!pointers.size) { canvas.classList.remove('dragging'); dragCam = null; refreshAll(); }
+  clearTimeout(lpTimer);
+  const now = performance.now();
+  const g = gest;
+  if (e.type === 'pointerup' && p.type !== 'mouse' && g && !g.multi && !g.lp && !g.moved && now - p.t0 < 300) {
+    if (lastTap && now - lastTap.t < 350 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 40) { lastTap = null; frameView(false); }
+    else lastTap = { t: now, x: e.clientX, y: e.clientY };
+  }
+  if (pointers.size) return;
+  if (e.type === 'pointerup' && p.type !== 'mouse' && !flying && g && g.moved && !g.multi && !g.lp && dragCam) {
+    p.hist.push({ x: e.clientX, y: e.clientY, t: now });
+    const h = p.hist.filter((q) => now - q.t < 90);
+    if (h.length >= 2) {
+      const a = h[0], b = h[h.length - 1], dt = Math.max(b.t - a.t, 8);
+      const vx = (b.x - a.x) / dt, vy = (b.y - a.y) / dt;   // CSS px per ms
+      if (Math.hypot(vx, vy) > 0.25) Object.assign(inertia, { on: true, vx, vy, cam: dragCam });
+    }
+  }
+  canvas.classList.remove('dragging');
+  dragCam = null; gest = null;
+  if (!inertia.on) refreshAll();
 };
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
+  stopInertia();
   const c = camFromScene();
   c.dist = clamp(c.dist * Math.exp(e.deltaY * 0.0015), 1e-6, 1e6);
   camToScene(c, true);
@@ -888,10 +973,28 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 let wheelTimer = 0;
 
-// Fly step: speed follows the distance estimate when the engine reports one.
+function inertiaStep(dt) {
+  if (!inertia.on) return;
+  orbitBy(inertia.cam, inertia.vx * 1000 * dt, inertia.vy * 1000 * dt);
+  const k = Math.exp(-dt * 3.5);
+  inertia.vx *= k; inertia.vy *= k;
+  camToScene(inertia.cam, true);
+  if (Math.hypot(inertia.vx, inertia.vy) < 0.02) stopInertia();
+}
+function stopInertia() {
+  if (!inertia.on) return;
+  inertia.on = false; inertia.cam = null;
+  refreshAll();
+}
+
+// Fly step: keys and thumbsticks. Speed follows the distance estimate when the engine reports one.
 function flyStep(dt) {
-  if (!flying || !keys.size) return;
+  if (!flying) return;
+  const mag = (v) => Math.hypot(v.x, v.y);
+  const sticks = mag(fly.move) > 0.04 || mag(fly.look) > 0.04;
+  if (!keys.size && !sticks) return;
   const c = camFromScene();
+  if (mag(fly.look) > 0.04) lookBy(c, fly.look.x * Math.abs(fly.look.x) * 1.8 * dt, fly.look.y * Math.abs(fly.look.y) * 1.4 * dt);
   const { fwd, right, top } = camBasis(c);
   let mv = { x: 0, y: 0, z: 0 };
   if (keys.has('w')) mv = V.add(mv, fwd);
@@ -900,29 +1003,363 @@ function flyStep(dt) {
   if (keys.has('a')) mv = V.sub(mv, right);
   if (keys.has('e')) mv = V.add(mv, top);
   if (keys.has('q')) mv = V.sub(mv, top);
-  if (!V.len(mv)) return;
-  const de = Number(engine?.distanceEstimate?.() ?? info?.distance ?? NaN);
-  const scale = Number.isFinite(de) && de > 0 ? de : c.dist;
-  const speed = scale * 0.6 * (keys.has('shift') ? 4 : 1);
-  c.target = V.add(c.target, V.mul(V.norm(mv), speed * dt));
+  let amount = V.len(mv) ? 1 : 0;
+  if (mag(fly.move) > 0.04) {
+    mv = V.add(mv, V.add(V.mul(fwd, -fly.move.y), V.mul(right, fly.move.x)));
+    amount = Math.max(amount, Math.min(1, mag(fly.move)));
+  }
+  if (V.len(mv)) {
+    const de = Number(engine?.distanceEstimate?.() ?? info?.distance ?? NaN);
+    const scale = Number.isFinite(de) && de > 0 ? de : c.dist;
+    const speed = scale * 0.6 * (keys.has('shift') ? 4 : 1) * amount;
+    c.target = V.add(c.target, V.mul(V.norm(mv), speed * dt));
+  }
   camToScene(c, true);
+}
+
+// One thumbstick: writes -1..1 into out while a finger holds it.
+function stick(elm, out) {
+  const knob = elm.querySelector('i');
+  let id = null;
+  const update = (e) => {
+    const r = elm.getBoundingClientRect(), R = r.width / 2, m = R * 0.62;
+    let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R);
+    const l = Math.hypot(dx, dy);
+    if (l > m) { dx *= m / l; dy *= m / l; }
+    out.x = dx / m; out.y = dy / m;
+    knob.style.setProperty('--kx', `${dx}px`); knob.style.setProperty('--ky', `${dy}px`);
+  };
+  elm.addEventListener('pointerdown', (e) => { e.preventDefault(); stopInertia(); id = e.pointerId; elm.setPointerCapture(id); update(e); });
+  elm.addEventListener('pointermove', (e) => { if (e.pointerId === id) update(e); });
+  const end = (e) => {
+    if (e.pointerId !== id) return;
+    id = null; out.x = 0; out.y = 0;
+    knob.style.setProperty('--kx', '0px'); knob.style.setProperty('--ky', '0px');
+    refreshAll();
+  };
+  elm.addEventListener('pointerup', end);
+  elm.addEventListener('pointercancel', end);
+}
+stick($('stickL'), fly.move);
+stick($('stickR'), fly.look);
+
+// Long-press menu on the canvas.
+const ctxMenu = $('ctx');
+function openCtx(x, y) {
+  ctxMenu.querySelector('[data-a=fly]').textContent = flying ? 'Leave fly mode' : 'Fly mode';
+  ctxMenu.hidden = false;
+  const w = ctxMenu.offsetWidth, h = ctxMenu.offsetHeight;
+  ctxMenu.style.left = `${clamp(x - w / 2, 8, innerWidth - w - 8)}px`;
+  ctxMenu.style.top = `${clamp(y - h - 16, 8, innerHeight - h - 8)}px`;
+  navigator.vibrate?.(8);
+}
+function hideCtx() { ctxMenu.hidden = true; }
+ctxMenu.addEventListener('click', (e) => {
+  const a = e.target.closest('button')?.dataset.a;
+  hideCtx();
+  if (a === 'frame') frameView(false);
+  else if (a === 'reset') resetCamera();
+  else if (a === 'fly') toggleFly();
+});
+
+// A tapped control label shows its full text, the tip and a reset button.
+const tipEl = $('tip');
+let tipTimer = 0;
+function showTip(anchor, spec, bind) {
+  tipEl.replaceChildren(el('b', {}, spec.label), spec.tip ? el('span', {}, spec.tip) : null, spec.name ? el('small', {}, spec.name) : null,
+    el('button', { type: 'button', onclick: () => { bind.set(structuredClone(bind.def)); hideTip(); } }, 'Reset to default'));
+  tipEl.hidden = false;
+  const r = anchor.getBoundingClientRect(), w = tipEl.offsetWidth, h = tipEl.offsetHeight;
+  tipEl.style.left = `${clamp(r.left, 12, innerWidth - w - 12)}px`;
+  tipEl.style.top = `${r.bottom + h + 8 < innerHeight ? r.bottom + 4 : Math.max(8, r.top - h - 4)}px`;
+  clearTimeout(tipTimer);
+  tipTimer = setTimeout(hideTip, 6000);
+}
+function hideTip() { tipEl.hidden = true; }
+pbody.addEventListener('scroll', () => { if (!tipEl.hidden) hideTip(); }, { passive: true });
+
+// ─── layout: floating panel, bottom sheet, right drawer ─────────────────────
+// float: fine pointer and a wide window. sheet: portrait phone. drawer: landscape phone
+// or tablet. In sheet and drawer mode the canvas shrinks to the free area (--cover-b,
+// --cover-r), so the camera target, orbit and Frame center where the user can see them.
+// A snap to another sheet height resizes the canvas once; a drag only stretches it.
+const root = document.documentElement;
+const L = { mode: '', snap: 'peek', y: 0, full: 0, peek: 88, half: 320, drawerW: 340, drag: null, focusSnap: null };
+let sheetDragging = false;
+const safeProbe = el('div', { style: 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;'
+  + 'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)' });
+document.body.append(safeProbe);
+function safeInsets() {
+  const cs = getComputedStyle(safeProbe);
+  return { top: parseFloat(cs.paddingTop) || 0, right: parseFloat(cs.paddingRight) || 0, bottom: parseFloat(cs.paddingBottom) || 0, left: parseFloat(cs.paddingLeft) || 0 };
+}
+
+function pickMode() {
+  const w = innerWidth, h = innerHeight;
+  const phone = w <= 720 || (coarseMQ.matches && Math.min(w, h) < 720);
+  if (phone) return w > h ? 'drawer' : 'sheet';
+  return coarseMQ.matches ? 'drawer' : 'float';
+}
+const snapH = (s) => (s === 'full' ? L.full : s === 'half' ? L.half : L.peek);
+const px = (v) => `${Math.round(v)}px`;
+function setSheetY(y, dragging) {
+  L.y = y;
+  root.style.setProperty('--sheet-y', px(y));
+  if (!dragging) root.style.setProperty('--sheet-hidden', px(Math.max(0, y)));
+}
+
+function applyLayout() {
+  const mode = pickMode();
+  if (mode !== L.mode) {
+    document.body.classList.remove('mode-float', 'mode-sheet', 'mode-drawer');
+    document.body.classList.add(`mode-${mode}`);
+    L.mode = mode;
+  }
+  document.body.classList.toggle('touchfly', touchUI());
+  const ins = safeInsets();
+  const hidden = panel.classList.contains('hidden');
+  let coverB = 0, coverR = 0;
+  if (mode === 'sheet') {
+    L.full = Math.round(innerHeight - ins.top - 8);
+    root.style.setProperty('--sheet-full', px(L.full));
+    const pk = $('peek');
+    L.peek = Math.round(pk.offsetTop + pk.offsetHeight + ins.bottom);
+    L.half = Math.round(clamp(innerHeight * 0.5, L.peek + 120, L.full));
+    if (!L.drag) setSheetY(L.full - snapH(L.snap));
+    coverB = hidden ? 0 : Math.min(snapH(L.snap), L.half);
+  } else if (mode === 'drawer') {
+    L.drawerW = Math.round(clamp(innerWidth * 0.42, 280, 360) + ins.right);
+    root.style.setProperty('--drawer-w', px(L.drawerW));
+    coverR = hidden ? 0 : L.drawerW;
+  }
+  root.style.setProperty('--cover-b', px(coverB));
+  root.style.setProperty('--cover-r', px(coverR));
+  syncViewport();
+}
+let layoutQueued = false;
+function queueLayout() { if (layoutQueued) return; layoutQueued = true; requestAnimationFrame(() => { layoutQueued = false; applyLayout(); }); }
+window.addEventListener('resize', queueLayout);
+window.addEventListener('orientationchange', queueLayout);
+coarseMQ.addEventListener?.('change', queueLayout);
+
+function snapTo(s) {
+  L.snap = s;
+  panel.classList.remove('hidden');
+  applyLayout();
+}
+function togglePanel() { panel.classList.toggle('hidden'); applyLayout(); }
+
+// Sheet drag: from the grab handle, the header and the peek bar (pointer events), and from
+// the panel body when it is scrolled to the top and the finger pulls down (touch events).
+function sheetDragBegin(y) {
+  L.drag = { y0: y, h0: L.full - L.y, samples: [{ y, t: performance.now() }] };
+  sheetDragging = true;
+  stopInertia();
+  panel.classList.add('dragging');
+}
+function sheetDragMove(y) {
+  const d = L.drag;
+  const vis = clamp(d.h0 - (y - d.y0), L.peek * 0.6, L.full);
+  d.samples.push({ y, t: performance.now() });
+  if (d.samples.length > 6) d.samples.shift();
+  setSheetY(L.full - vis, true);
+  root.style.setProperty('--cover-b', px(Math.min(vis, L.half)));   // the canvas stretches until the snap
+}
+function sheetDragEnd() {
+  const d = L.drag;
+  if (!d) return;
+  const now = performance.now();
+  d.samples.push({ y: d.samples[d.samples.length - 1].y, t: now });   // a finger that stopped has no speed
+  const recent = d.samples.filter((q) => now - q.t < 100);
+  const a = recent[0], b = recent[recent.length - 1];
+  const v = recent.length > 1 ? (b.y - a.y) / Math.max(b.t - a.t, 8) : 0;   // px per ms, + is down
+  const vis = L.full - L.y;
+  const order = ['peek', 'half', 'full'];
+  let s = order.reduce((best, k) => (Math.abs(snapH(k) - (vis - v * 160)) < Math.abs(snapH(best) - (vis - v * 160)) ? k : best), 'peek');
+  if (Math.abs(v) > 0.5) {                                           // a flick moves at least one step
+    const cur = order.reduce((best, k) => (Math.abs(snapH(k) - vis) < Math.abs(snapH(best) - vis) ? k : best), 'peek');
+    const i = order.indexOf(cur) + (v > 0 ? -1 : 1);
+    if (order.indexOf(s) === order.indexOf(cur)) s = order[clamp(i, 0, 2)];
+  }
+  L.drag = null;
+  sheetDragging = false;
+  panel.classList.remove('dragging');
+  snapTo(s);
+  if (resizePending) { resizePending = false; resizeCanvas?.(); }
+}
+const dragZone = (t) => t.closest?.('#grab, #panel > header, #peek');
+let sheetPtr = null;
+panel.addEventListener('pointerdown', (e) => {
+  if (L.mode !== 'sheet' || !dragZone(e.target) || L.drag) return;
+  sheetPtr = { id: e.pointerId, y0: e.clientY, moved: false, grab: !!e.target.closest('#grab') };
+});
+panel.addEventListener('pointermove', (e) => {
+  if (!sheetPtr || e.pointerId !== sheetPtr.id) return;
+  if (!sheetPtr.moved && Math.abs(e.clientY - sheetPtr.y0) > 6) {
+    sheetPtr.moved = true;
+    panel.setPointerCapture(e.pointerId);                          // capture only now, so a tap still clicks
+    sheetDragBegin(sheetPtr.y0);
+  }
+  if (sheetPtr.moved) sheetDragMove(e.clientY);
+});
+const sheetPtrEnd = (e) => {
+  if (!sheetPtr || e.pointerId !== sheetPtr.id) return;
+  const p = sheetPtr;
+  sheetPtr = null;
+  if (p.moved) {
+    sheetDragEnd();
+    const eat = (ev) => { ev.stopPropagation(); ev.preventDefault(); };   // the drag is not a click
+    window.addEventListener('click', eat, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener('click', eat, true), 80);
+  } else if (p.grab && e.type === 'pointerup') snapTo(L.snap === 'peek' ? 'half' : L.snap === 'half' ? 'full' : 'half');
+};
+panel.addEventListener('pointerup', sheetPtrEnd);
+panel.addEventListener('pointercancel', sheetPtrEnd);
+
+let bodyTouch = null;
+pbody.addEventListener('touchstart', (e) => {
+  if (L.mode !== 'sheet' || e.touches.length !== 1) { bodyTouch = null; return; }
+  bodyTouch = { y0: e.touches[0].clientY, top: pbody.scrollTop <= 0, on: false };
+}, { passive: true });
+pbody.addEventListener('touchmove', (e) => {
+  if (!bodyTouch) return;
+  const y = e.touches[0].clientY;
+  if (!bodyTouch.on) {
+    if (bodyTouch.top && pbody.scrollTop <= 0 && y - bodyTouch.y0 > 8) { bodyTouch.on = true; sheetDragBegin(bodyTouch.y0); } else return;
+  }
+  e.preventDefault();
+  sheetDragMove(y);
+}, { passive: false });
+const bodyTouchEnd = () => { if (bodyTouch?.on) sheetDragEnd(); bodyTouch = null; };
+pbody.addEventListener('touchend', bodyTouchEnd);
+pbody.addEventListener('touchcancel', bodyTouchEnd);
+
+// A text field in the sheet opens the sheet to full, so the keyboard does not cover it.
+const typing = (t) => t instanceof HTMLInputElement && /^(text|search|number)$/.test(t.type);
+panel.addEventListener('focusin', (e) => {
+  if (L.mode !== 'sheet' || !typing(e.target) || !touchUI() || L.snap === 'full') return;
+  L.focusSnap = L.snap; snapTo('full');
+});
+panel.addEventListener('focusout', () => {
+  setTimeout(() => {
+    if (L.focusSnap && !(panel.contains(document.activeElement) && typing(document.activeElement))) { const s = L.focusSnap; L.focusSnap = null; snapTo(s); }
+  }, 60);
+});
+
+// ─── full-screen sheets: formula picker and examples ────────────────────────
+// On a phone they fill the visual viewport, so the search field stays above the keyboard.
+// Swipe down on the head, or on the list when it is scrolled to the top, to close.
+function syncViewport() {
+  const vv = window.visualViewport;
+  root.style.setProperty('--vv-top', px(vv ? vv.offsetTop : 0));
+  root.style.setProperty('--vv-h', px(vv ? vv.height : innerHeight));
+}
+window.visualViewport?.addEventListener('resize', () => { syncViewport(); queueLayout(); });
+window.visualViewport?.addEventListener('scroll', syncViewport);
+
+const exSheet = $('exSheet');
+function openSheet(s) { syncViewport(); s.style.transform = ''; s.classList.remove('hidden'); }
+function closeSheet(s) {
+  if (s.contains(document.activeElement)) document.activeElement.blur();
+  s.classList.add('hidden'); s.style.transform = '';
+}
+function swipeToClose(s, close) {
+  const body = s.querySelector('.pbody');
+  let t = null;
+  s.addEventListener('touchstart', (e) => {
+    if (L.mode === 'float' || e.touches.length !== 1) { t = null; return; }
+    t = { y0: e.touches[0].clientY, t0: performance.now(), ok: !!e.target.closest('.phead') || body.scrollTop <= 0, on: false, dy: 0 };
+  }, { passive: true });
+  s.addEventListener('touchmove', (e) => {
+    if (!t?.ok) return;
+    const dy = e.touches[0].clientY - t.y0;
+    if (!t.on) { if (dy > 10 && (body.scrollTop <= 0 || e.target.closest('.phead'))) { t.on = true; s.classList.add('dragging'); } else return; }
+    e.preventDefault();
+    t.dy = Math.max(0, dy);
+    s.style.transform = `translateY(${t.dy}px)`;
+  }, { passive: false });
+  const end = () => {
+    if (!t?.on) { t = null; return; }
+    s.classList.remove('dragging');
+    const v = t.dy / Math.max(performance.now() - t.t0, 1);
+    if (t.dy > 110 || v > 0.6) close(); else s.style.transform = '';
+    t = null;
+  };
+  s.addEventListener('touchend', end);
+  s.addEventListener('touchcancel', end);
+}
+swipeToClose(picker, closePicker);
+swipeToClose(exSheet, () => closeExamples());
+
+let exTiles = null;
+function buildExamples() {
+  exTiles = EXAMPLES.map((e, i) => {
+    const f = byEnum.get(e._formula) || null;
+    const t = el('button', { type: 'button', class: 'tile', title: e.name, 'data-i': i }, thumb(f, 64), el('span', {}, e.name));
+    t.addEventListener('click', () => {
+      closeExamples();
+      loadExample(i);
+      if (L.mode === 'sheet' && L.snap === 'full') snapTo('half');
+    });
+    return { t, i, key: `${e.name} ${f?.name || ''}`.toLowerCase() };
+  });
+  $('exBody').replaceChildren(el('div', { class: 'grid' }, ...exTiles.map((x) => x.t)), el('p', { class: 'empty', hidden: true }, 'No example matches.'));
+}
+function filterExSheet() {
+  const q = $('exSearch').value.trim().toLowerCase();
+  let any = 0;
+  for (const x of exTiles) { const ok = !q || q.split(/\s+/).every((w) => x.key.includes(w)); x.t.hidden = !ok; any += ok; }
+  $('exBody').querySelector('.empty').hidden = any > 0;
+}
+function openExamples() {
+  if (!exTiles) buildExamples();
+  for (const x of exTiles) x.t.classList.toggle('cur', x.i === currentExample);
+  $('exSearch').value = '';
+  filterExSheet();
+  openSheet(exSheet);
+  exTiles.find((x) => x.i === currentExample)?.t.scrollIntoView({ block: 'center' });
+  if (matchMedia('(pointer: fine)').matches) $('exSearch').focus();
+}
+function closeExamples() { closeSheet(exSheet); }
+$('exSearch').addEventListener('input', filterExSheet);
+$('exSearch').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { const x = exTiles.find((y) => !y.t.hidden); if (x) x.t.click(); }
+  if (e.key === 'Escape') closeExamples();
+});
+$('exClose').addEventListener('click', closeExamples);
+
+$('peekFormula').addEventListener('click', () => openPicker(activeSlot));
+$('peekExamples').addEventListener('click', openExamples);
+$('peekFrame').addEventListener('click', () => frameView(false));
+$('peekSave').addEventListener('click', savePng);
+
+applyLayout();
+syncViewport();
+
+// No render work while nobody can see it: a sheet drag, a full sheet, a full-screen list.
+function renderPaused() {
+  if (saveRequested) return false;
+  if (sheetDragging) return true;
+  if (L.mode === 'sheet' && L.snap === 'full' && !panel.classList.contains('hidden')) return true;
+  return L.mode !== 'float' && (!picker.classList.contains('hidden') || !exSheet.classList.contains('hidden'));
 }
 
 // ─── keys ───────────────────────────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
   const t = e.target;
   if (e.key === 'Escape' && !picker.classList.contains('hidden')) { closePicker(); return; }
+  if (e.key === 'Escape' && !exSheet.classList.contains('hidden')) { closeExamples(); return; }
   if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement || e.metaKey || e.ctrlKey || e.altKey) return;
   const k = e.key.toLowerCase();
   if (flying && 'wasdqe'.includes(k) && k.length === 1) { keys.add(k); e.preventDefault(); return; }
   if (k === 'shift') { keys.add('shift'); return; }
-  if (k === 'p') panel.classList.toggle('hidden');
+  if (k === 'p') togglePanel();
   else if (k === 'f') toggleFly();
   else if (k === 'v') frameView(false);
 });
 window.addEventListener('keyup', (e) => { keys.delete(e.key.toLowerCase()); if (!keys.size) refreshAll(); });
 window.addEventListener('blur', () => keys.clear());
-$('toggle').addEventListener('click', () => panel.classList.toggle('hidden'));
+$('toggle').addEventListener('click', togglePanel);
 
 // ─── status ─────────────────────────────────────────────────────────────────
 let compileStatus = '';
@@ -940,6 +1377,7 @@ function showHud() {
   const st = performance.now() < flashUntil ? flashText : (info?.compiling ? 'compiling…' : compileStatus);
   $('hudStatus').textContent = st;
   hud.classList.toggle('err', /error|fail/i.test(st) || !!info?.stale);
+  $('peekText').textContent = engine ? `${n} / ${targetSamples.value} spp${msPerSample ? ` · ${msPerSample.toFixed(0)} ms` : ''}${renderPaused() ? ' · paused' : ''}` : st;
   if (progressEl) {
     progressEl.firstChild.style.width = `${Math.min(100, 100 * (n + (part ? info.progress : 0)) / targetSamples.value)}%`;
     progressEl.classList.toggle('done', n >= targetSamples.value);
@@ -969,6 +1407,9 @@ function tick(now) {
   lastT = now;
   if (document.hidden || !engine) return;
   flyStep(dt);
+  inertiaStep(dt);
+  if (now - hudT > 150) { hudT = now; showHud(); }
+  if (renderPaused()) { lastFrameT = 0; return; }
   if (sceneDirty) pushScene();
   const want = !info || info.compiling || (info.samples < targetSamples.value && !info.done);
   if (want || saveRequested) {
@@ -988,7 +1429,6 @@ function tick(now) {
       canvas.toBlob((b) => (b ? (download(b, name), flash(`saved ${name}`)) : flash('save failed')), 'image/png');
     }
   } else lastFrameT = 0;
-  if (now - hudT > 150) { hudT = now; showHud(); }
 }
 
 // ─── boot ───────────────────────────────────────────────────────────────────
@@ -1018,6 +1458,7 @@ async function boot() {
 
   scene = (await readHash()) || defaultScene(P);
   buildPanel();
+  applyLayout();
   showHud();
 
   try {
@@ -1030,11 +1471,16 @@ async function boot() {
   }
   engine.onStatus((s) => { compileStatus = String(s); showHud(); });
   engine.setMaxSamples?.(targetSamples.value);
+  engine.setFrameBudget?.(33);                         // about 30 fps while the user drags
+  // Resize only when the pixel size changes, so a layout pass keeps the accumulated image.
+  // During a sheet drag the canvas only stretches (object-fit); the resize waits for the snap.
   const resize = () => {
-    engine.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), Math.min(window.devicePixelRatio || 1, 2));
-    engine.reset();
-    info = null;
+    if (sheetDragging) { resizePending = true; return; }
+    const w0 = canvas.width, h0 = canvas.height;
+    engine.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), pixelRatio());
+    if (canvas.width !== w0 || canvas.height !== h0) info = null;
   };
+  resizeCanvas = resize;
   new ResizeObserver(resize).observe(canvas);
   resize();
   requestAnimationFrame(tick);
@@ -1047,6 +1493,7 @@ window.__mb = {
   defaultScene: () => defaultScene(P), parseFract: (t) => parseFract(t, P), exportText, loadText, loadExample,
   shareHash, decodeShare, setMain, setSlot, openPicker, choose, targetSamples, toggleFly, camFromScene, camToScene,
   frameView, get engine() { return engine; },
+  layout: L, snapTo, openExamples, closeExamples, fly, inertia, renderScale, pixelRatio, togglePanel,
 };
 
 boot().catch((e) => console.error('[mandelbulber]', e));

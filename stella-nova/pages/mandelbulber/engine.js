@@ -18,10 +18,13 @@
 // mode a reset keeps the band position, so a long drag still refreshes every band in turn.
 // Extras: frame() also returns progress (0..1 inside the current sample); frameView() fits
 // the camera to the surface with a few probe rays (see the probe entry in main.wgsl).
+// Frame budget: setFrameBudget(ms) sets the band target and the preview budget. While the
+// user drags, tunePreview() steps the preview scale (2..8) so that one preview frame fits
+// the budget, from the measured preview cost per pixel.
 //
 // grep: createEngine loadSources assembleSource formulaOrder buildCallFormula compileProgram
 //       setScene resize frame reset setPreview onStatus stats frameView probeRays bandRows
-//       BAND_TARGET_MS MIN_BAND_PIXELS PREVIEW_SCALE MAX_QUEUED
+//       BAND_TARGET_MS MIN_BAND_PIXELS PREVIEW_SCALE MAX_QUEUED setFrameBudget tunePreview
 
 import {
   parseWgslStructs, computeLayout, layoutFromJson, packValues, flatten, buildFractalBuffer,
@@ -176,12 +179,15 @@ export async function createEngine(canvas) {
     bindGroup: null, presentBindGroup: null, presentFrom: null,
     seqLen: 1, lastError: '',
     gen: 0,                       // bumps on reset; stale band completions are ignored
+    previewScale: PREVIEW_SCALE,  // preview resolution divisor; tunePreview() steps it
+    previewDown: 0,               // checks in a row that allowed a finer preview
+    budget: BAND_TARGET_MS,       // ms per GPU submission, and per preview frame
   };
   const cache = new Map();         // key -> Promise<program>
 
   const renderSize = () => {
     if (!S.preview) return [S.width, S.height];
-    return [Math.max(1, Math.ceil(S.width / PREVIEW_SCALE)), Math.max(1, Math.ceil(S.height / PREVIEW_SCALE))];
+    return [Math.max(1, Math.ceil(S.width / S.previewScale)), Math.max(1, Math.ceil(S.height / S.previewScale))];
   };
 
   function allocAccum() {
@@ -199,6 +205,23 @@ export async function createEngine(canvas) {
     const t = await fetchText(new URL(`gen/formulas/${f}.wgsl`, base));
     src.formulaText.set(f, t);
     return t;
+  }
+
+  // Step the preview scale by one toward a frame that fits the budget. Returns true on a change.
+  function tunePreview() {
+    const c = S.cost[1];
+    if (!S.preview || !c) return false;
+    const px = S.width * S.height;
+    const cost = s => c * px / (s * s);
+    let s = S.previewScale;
+    // up at once when over budget; down only after 12 checks in a row with room to spare
+    if (cost(s) > S.budget && s < 8) { s++; S.previewDown = 0; }
+    else if (s > 2 && cost(s - 1) < S.budget * 0.6) { if (++S.previewDown >= 12) { s--; S.previewDown = 0; } }
+    else S.previewDown = 0;
+    if (s === S.previewScale) return false;
+    S.previewScale = s;
+    S.presentBindGroup = null;
+    return true;
   }
 
   // compile (or fetch from cache) the program for a sorted formula list
@@ -382,7 +405,8 @@ export async function createEngine(canvas) {
     if (S.costKey !== key) { S.cost = [0, 0]; S.costKey = key; } // new formulas: cost unknown
     S.scene = scene;
     allocAccum();
-    reset(S.preview);
+    const scaled = tunePreview();              // a new preview size cannot continue the old sweep
+    reset(S.preview && !scaled);
     uploadScene(scene, program);
   }
 
@@ -402,6 +426,7 @@ export async function createEngine(canvas) {
     if (on === S.preview) return;
     S.preview = on;
     S.presentBindGroup = null;
+    tunePreview();
     reset();
     if (S.scene && S.program) uploadScene(S.scene, S.program);
   }
@@ -413,7 +438,7 @@ export async function createEngine(canvas) {
     const c = S.cost[S.preview ? 1 : 0];
     if (S.fixedBands) return Math.min(stripes, S.fixedBands);
     if (!c) return S.preview ? 1 : Math.min(most, 8);   // unknown cost: a few bands (a preview is small)
-    return Math.max(1, Math.min(most, Math.ceil(c * w * h / BAND_TARGET_MS)));
+    return Math.max(1, Math.min(most, Math.ceil(c * w * h / S.budget)));
   }
 
   // progress: bands done in the running sample (0..1); sampleMs: time since it started
@@ -568,10 +593,11 @@ export async function createEngine(canvas) {
     frameView, probeRays,
     setMaxSamples(n) { S.maxSamples = Math.max(1, n | 0); },
     setBands(n) { S.fixedBands = Math.max(0, n | 0); },   // tests: a fixed band count, 0 = automatic
+    setFrameBudget(ms) { S.budget = Math.max(8, +ms || BAND_TARGET_MS); },
     stats() {
       return { samples: S.samples, lastSampleMs: S.lastSampleMs, sampleTimes: S.sampleTimes.slice(),
         compileMs: S.compileMs, bands: S.bands, program: S.program?.key, lastError: S.lastError,
-        size: renderSize(), preview: S.preview, progress: S.band / S.bands,
+        size: renderSize(), preview: S.preview, previewScale: S.previewScale, budget: S.budget, progress: S.band / S.bands,
         costMsPerMpx: S.cost.map(c => +(c * 1e6).toFixed(1)), queued: S.queued, presents: S.presents };
     },
     device,

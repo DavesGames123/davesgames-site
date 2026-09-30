@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070b12">
 <title>Mandelbulber</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
@@ -22,7 +23,14 @@
      │ #picker  formula list over the panel           fills #pbody)       │
      │ #hud    samples · ms/sample · compile status                       │
      └──────────────────────────────────────────────────────────────────┘
-     Under 720 px wide the panel is a bottom sheet.
+     main.js picks one of three layouts (body class):
+       mode-float   fine pointer, wide window: floating panel over the canvas
+       mode-sheet   portrait phone: bottom sheet (#grab), snaps peek / half / full
+       mode-drawer  landscape phone or tablet: right drawer
+     In sheet and drawer mode the canvas shrinks to the uncovered area
+     (--cover-b, --cover-r), so the render centers in what the user sees.
+     Touch: 1 finger orbit, 2 fingers pinch dolly + pan, double tap Frame,
+     long press #ctx menu. Fly mode on touch shows the #sticks thumbsticks.
 
    FILES
      index.html  this shell            style.css  panel, picker, hud, bottom sheet
@@ -47,6 +55,7 @@
      ported file are GPL-3.0 as well; the panel has an About / credits entry.
 
    grep: #gl  #panel  #pbody  #picker  #pickerSearch  #hud  #file  #drop  #flyBtn
+         #grab  #peek  #exSheet  #exSearch  #ctx  #sticks  #tip
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -63,7 +72,14 @@
 <button class="toggle fly" id="flyBtn" type="button" title="Fly mode: WASD move, Q E down / up, drag to look (F)">Fly</button>
 <div class="hud" id="hud"><span id="hudSamples">—</span><span id="hudMs"></span><span id="hudStatus">loading</span></div>
 <aside class="panel" id="panel">
-  <header><h1>Mandelbulber</h1><small id="subtitle">formulas · path traced</small></header>
+  <div class="grab" id="grab" aria-hidden="true"><i></i></div>
+  <header><h1>Mandelbulber</h1><small id="subtitle">formulas · path traced</small><small id="peekText" class="peektext"></small></header>
+  <div class="peek" id="peek">
+    <button type="button" id="peekFormula">Formula</button>
+    <button type="button" id="peekExamples">Examples</button>
+    <button type="button" id="peekFrame">Frame</button>
+    <button type="button" id="peekSave" class="primary">Save PNG</button>
+  </div>
   <div class="scroll" id="pbody"></div>
 </aside>
 <div class="picker hidden" id="picker" role="dialog" aria-label="Choose a formula">
@@ -73,6 +89,23 @@
   </div>
   <div class="pbody" id="pickerBody"></div>
 </div>
+<div class="picker hidden" id="exSheet" role="dialog" aria-label="Choose an example">
+  <div class="phead">
+    <input type="search" id="exSearch" placeholder="Search examples" aria-label="Search examples" autocomplete="off">
+    <button type="button" id="exClose" title="Close (Esc)">Close</button>
+  </div>
+  <div class="pbody" id="exBody"></div>
+</div>
+<div class="ctx" id="ctx" role="menu" hidden>
+  <button type="button" role="menuitem" data-a="frame">Frame</button>
+  <button type="button" role="menuitem" data-a="reset">Reset view</button>
+  <button type="button" role="menuitem" data-a="fly">Fly mode</button>
+</div>
+<div class="sticks" id="sticks" aria-hidden="true">
+  <div class="stick" id="stickL"><i></i><span>move</span></div>
+  <div class="stick" id="stickR"><i></i><span>look</span></div>
+</div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
 <input type="file" id="file" accept=".fract,.txt,text/plain" hidden>
 <script type="module" src="main.js"></script>
 </body>
