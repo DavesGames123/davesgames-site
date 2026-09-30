@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Hydrogen Wave Function — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   HYDROGEN TABLE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The page shows |psi_nlm|^2 of hydrogen as a table of
+   square tiles, one tile for each (n, l, m). Each tile is a cut through the
+   nucleus, z up. Rows go by n, columns by (l, m). A tap on a tile opens it
+   large, with its nodes, its energy and its radial curve r^2 R^2.
+
+   HEAD LOAD ORDER
+     1. fonts       Google Fonts stylesheet
+     2. KaTeX       CSS then JS, so equations.js can render on load
+     3. style.css   the page stylesheet
+   Scripts at end of body:
+     equations.js   classic script, renders the KaTeX formulas
+     main.js        module: layout, controls, the worker pool, the detail sheet
+   main.js starts worker.js (module worker). worker.js and main.js import
+   physics.js (the wave function) and colormaps.js (the color ramps).
+
+   RENDER PATH. The CPU in a pool of Web Workers fills each tile at one
+   sample for each device pixel, and sends back an ImageBitmap. No WebGPU is
+   used, so no fallback is needed. If module workers are missing, main.js
+   fills the tiles on the page thread with the same code.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Hydrogen Table          (hidden in frame)   │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │  header: title, subtitle, #eqPsi, #cbar, caption     │
+     │  table     │  #table   rows by n, columns by (l, m)               │
+     │  orbitals  │           the page scrolls down                      │
+     │  color     │  #foot    render time and tile count                 │
+     │  contrast  │                                                      │
+     │  readout   │  #detail  a tile opened large (modal, or a sheet     │
+     │  about     │           on a phone)                                │
+     └────────────┴─────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock      fixed at the base: #dockPanel opens the panel, #dockKind
+                picks complex or real, #dockLog sets the log scale.
+     #panel     a bottom sheet above the dock. #sheetGrip toggles half and
+                full height, and a drag down closes the sheet.
+     #table     three columns (two below 330 px), grouped by n.
+
+   GREP MAP  (main.js)
+     grep -n 'function layout'      aligned table or n-bands, tile size
+     grep -n 'function render'      the job list and the worker pool
+     grep -n 'function openDetail'  the large tile and its readout
+     grep -n 'function drawRadial'  the r^2 R^2 plot
+     grep -n 'function buildUI'     the controls
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="The hydrogen wave function as a table of probability density plots, one tile for each (n, l, m), computed from the Schrödinger solution.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,800;1,400&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;QUANTUM.HYDROGEN</div>
+  <div class="pagetitle">Hydrogen Table</div>
+</div>
+<button id="gear" aria-label="Controls">⚙</button>
+
+<div id="page">
+  <header class="hero">
+    <div class="hero-text">
+      <h1>Hydrogen Wave Function</h1>
+      <p class="sub">Probability density plots</p>
+    </div>
+    <div class="hero-math">
+      <div class="formula" id="eqPsi">ψ_nlm(r,ϑ,φ) = √((2/na₀)³ (n−l−1)! / 2n[(n+l)!]) e^(−ρ/2) ρ^l L^(2l+1)_(n−l−1)(ρ) · Y_lm(ϑ,φ)</div>
+      <div class="formula small" id="eqRho">ρ = 2r / na₀,  E_n = −13.6 eV / n²</div>
+      <div class="cbar-row">
+        <span class="cb-end" id="cbLo">−</span>
+        <canvas id="cbar" width="256" height="1"></canvas>
+        <span class="cb-end" id="cbHi">+</span>
+      </div>
+      <div class="cb-cap" id="cbCap">|ψ|² in the cut plane · each tile scaled to its own peak</div>
+    </div>
+  </header>
+
+  <ul class="qn">
+    <li title="The principal quantum number. It sets the energy, E = −13.6 eV / n², and the size of the cloud, about n² Bohr radii."><b>n</b> the shell. It sets the size and the energy. Radial nodes: n − l − 1.</li>
+    <li title="The angular momentum quantum number, 0 to n − 1. Letters: s p d f g h i."><b>l</b> the shape: s p d f … It gives l angular nodes.</li>
+    <li title="The magnetic quantum number, −l to +l. It is the angular momentum about the z axis."><b>m</b> the turn about the z axis. |m| nodes pass through the axis.</li>
+  </ul>
+
+  <main id="table" aria-label="Probability density table"></main>
+  <div id="foot"></div>
+</div>
+
+<div id="panel" class="open">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">TABLE</div>
+  <div class="ratio-row">
+    <div class="stepper" id="stepN"><button data-d="-1" aria-label="Fewer shells">−</button><span class="num" id="numN">4</span><button data-d="1" aria-label="More shells">+</button><span class="axis-tag">n max</span></div>
+    <div class="hint" id="nHint" style="flex:1;margin:0 0 14px 8px"></div>
+  </div>
+
+  <div class="sec-label">ORBITALS</div>
+  <div class="modes" id="kindBtns">
+    <button data-kind="complex" class="on" title="Complex orbitals e^(imφ). |ψ|² is the same at every φ, so the x–z cut shows all of it.">COMPLEX |ψ|²</button>
+    <button data-kind="real" title="Real orbitals: cos(mφ) and sin(mφ) mixes, for example p_x and d_xy. Each tile is cut through its lobes.">REAL</button>
+  </div>
+  <div class="hint" id="kindHint"></div>
+
+  <div class="sec-label">COLOR</div>
+  <div class="presets" id="cmapBtns"></div>
+
+  <div class="sec-label">BRIGHTNESS SCALE</div>
+  <div class="modes">
+    <button data-norm="outer" class="on" title="Scale each tile to the peak of its outer lobe, as the classic plot does. Inner peaks go to white.">OUTER LOBE</button>
+    <button data-norm="peak" title="Scale each tile to its own brightest point.">TILE PEAK</button>
+  </div>
+
+  <div class="sec-label">CONTRAST</div>
+  <div class="row"><label for="gamma">Gamma</label><input type="range" id="gamma" min="0.15" max="1.5" step="0.01" value="0.75"><span class="val" id="gammaV"></span></div>
+  <div class="row"><label for="expo">Exposure</label><input type="range" id="expo" min="-1" max="4" step="0.01" value="0.3"><span class="val" id="expoV"></span></div>
+  <div class="modes"><button id="logBtn" title="Map log10 of the density. Faint outer lobes then show.">LOG DENSITY · OFF</button></div>
+  <div class="row" id="decRow"><label for="dec">Decades</label><input type="range" id="dec" min="1.5" max="8" step="0.1" value="4"><span class="val" id="decV"></span></div>
+  <div class="hint">Gamma below 1 lifts faint lobes. Exposure above 1 lets the peaks go to white.</div>
+
+  <div class="sec-label">READOUT</div>
+  <table class="readout">
+    <tr><td>tiles</td><td id="rdTiles"></td></tr>
+    <tr><td>pixels</td><td id="rdPx"></td></tr>
+    <tr><td>last render</td><td id="rdMs"></td></tr>
+    <tr><td>engine</td><td id="rdEngine"></td></tr>
+  </table>
+
+  <div class="sec-label">ABOUT</div>
+  <div class="about">
+    <p>Each tile is a flat cut through the nucleus. Bright shows where the electron is likely to be. The vertical axis is z.</p>
+    <p>The tiles do not share one scale. Each tile has its own size, about n² Bohr radii, and its own brightest point.</p>
+    <p>For complex orbitals, |ψ|² does not change when you turn about z. So the cut through z shows the full shape. The density of m and −m is the same.</p>
+    <p>A real orbital is a mix of +m and −m, with cos mφ or sin mφ. It has |m| nodal planes through z. Each real tile is cut through its lobes: the x–y plane when |m| = l, else a vertical plane.</p>
+    <p>Tap a tile to see it large, with its nodes, its energy, and the radial curve r²R².</p>
+  </div>
+</div>
+
+<div id="detail" hidden>
+  <div id="scrim"></div>
+  <div class="dcard" role="dialog" aria-modal="true" aria-labelledby="dName">
+    <div class="dhead">
+      <button id="dPrev" aria-label="Previous orbital">‹</button>
+      <div class="dtitle"><span id="dName">3d</span><span id="dKet">|3,2,1⟩</span></div>
+      <button id="dNext" aria-label="Next orbital">›</button>
+      <button id="dClose" aria-label="Close">✕</button>
+    </div>
+    <div class="dbody">
+      <div class="dplot">
+        <canvas id="dCanvas"></canvas>
+        <span class="ax ax-v" id="dAxV">z</span><span class="ax ax-h" id="dAxH">x</span>
+        <span class="ax ax-s" id="dScale"></span>
+      </div>
+      <div class="dinfo">
+        <table class="readout">
+          <tr><td>n, l, m</td><td id="dQN"></td></tr>
+          <tr><td>orbital</td><td id="dOrb"></td></tr>
+          <tr><td>cut plane</td><td id="dPlane"></td></tr>
+          <tr><td>radial nodes</td><td id="dRad"></td></tr>
+          <tr><td>angular nodes</td><td id="dAng"></td></tr>
+          <tr><td>energy E<sub>n</sub></td><td id="dE"></td></tr>
+          <tr><td>mean radius ⟨r⟩</td><td id="dR"></td></tr>
+        </table>
+        <div class="rlabel">radial probability r²R²(r)</div>
+        <canvas id="dRadial"></canvas>
+        <p class="dnote" id="dNote"></p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockKind" class="seg">
+    <button data-kind="complex" class="on">COMPLEX</button>
+    <button data-kind="real">REAL</button>
+  </div>
+  <button id="dockLog" aria-label="Log density">LOG</button>
+</nav>
+
+<script src="equations.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
