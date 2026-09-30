@@ -16,9 +16,13 @@ for m in sscofs sfbofs lmhofs ciofs cbofs dbofs tbofs leofs ngofs2; do
   python3 tools/fetch_ofs.py $m 6 --out /tmp/ofs/cache
 done
 python3 tools/fetch_ofs.py gomofs 6 --out /tmp/ofs/cache --start 2026-09-21T03 --hours 176
+python3 tools/fetch_grid.py nyofs --out /tmp/ofs/cache
+python3 tools/fetch_grid.py neatl --out /tmp/ofs/cache --start 2026-09-22T23 --hours 169 --bbox=-7.0,52.7,-5.0,54.0
 python3 tools/build_data.py --cache /tmp/ofs/cache
 python3 tools/build_data.py --cache /tmp/ofs/cache --only sf-bay --quicklook /tmp/ofs/quicklook
 ```
+
+`fetch_grid.py` reads the models that `fetch_ofs.py` cannot: NYOFS (POM, NetCDF3, no temperature, so the temperature is the NOAA gauge at the Battery) and the Irish Marine Institute NEATL model (ERDDAP). ERDDAP keeps NEATL for about 11 days only, so fetch a past week soon. Its cache has u and v east/north at the rho points, and `build_data.py` reads it as a ROMS grid.
 
 The default fetch window is 175 hours from 2026-09-21 04:00 UTC. GOMOFS needs the earlier start, because Atlantic time (UTC-3) starts the local week at 03:00 UTC. The CIOFS and CBOFS files are large, so their fetches are slow.
 

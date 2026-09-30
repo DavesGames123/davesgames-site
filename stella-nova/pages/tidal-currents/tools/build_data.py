@@ -6,7 +6,8 @@ Usage:
       [--ne <Natural Earth dir>] [--out <data dir>] [--hours N]
 
 Input: <cache>/<model>/YYYYMMDDHH.npz (UTC hour) and <cache>/<model>/grid.npz,
-written by tools/fetch_ofs.py. Natural Earth 10m land and lakes (GeoJSON) are
+written by tools/fetch_ofs.py (NOAA OFS) or tools/fetch_grid.py (NYOFS, IMI
+NEATL). A fetch_grid.py cache has u and v east/north at the rho points. Natural Earth 10m land and lakes (GeoJSON) are
 read from --ne (default <cache>/naturalearth). The script downloads them when
 they are missing.
 
@@ -45,7 +46,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PAGE = os.path.dirname(HERE)
 OUT = os.path.join(PAGE, 'data')   # set by --out
 KIND = {'sfbofs': 'fvcom', 'sscofs': 'fvcom', 'lmhofs': 'fvcom', 'leofs': 'fvcom', 'ngofs2': 'fvcom',
-        'ciofs': 'roms', 'cbofs': 'roms', 'dbofs': 'roms', 'tbofs': 'roms', 'gomofs': 'roms'}
+        'ciofs': 'roms', 'cbofs': 'roms', 'dbofs': 'roms', 'tbofs': 'roms', 'gomofs': 'roms',
+        'nyofs': 'roms', 'neatl': 'roms'}   # nyofs, neatl: rho-point grids from fetch_grid.py
 VEL_MODES, TEMP_MODES = 12, 4
 BAND_PX = 6          # field extension into land, field pixels
 SS = 2               # coverage supersampling per axis, at mask resolution
@@ -417,12 +419,15 @@ class RomsMapper:
         self.wsum = ndimage.map_coordinates(self.m, self.coords, order=1, mode='nearest')
 
     def _rho_vel(self, d):
-        """Average u, v to rho points (NaN on land), then rotate to east/north."""
+        """Average u, v to rho points (NaN on land), then rotate to east/north.
+        A fetch_grid.py cache has u, v already east/north at the rho points."""
         u = d['u'].astype(np.float64)
         v = d['v'].astype(np.float64)
         u[np.abs(u) > 100] = np.nan
         v[np.abs(v) > 100] = np.nan
         H, W = d['temp'].shape
+        if u.shape == (H, W):
+            return np.nan_to_num(u[self.sl]), np.nan_to_num(v[self.sl])
         up = np.full((H, W + 1), np.nan)
         up[:, 1:W] = u
         vp = np.full((H + 1, W), np.nan)
@@ -625,6 +630,7 @@ def fill_plan(paths):
 
 def build(loc, cache, window, qdir, ne):
     lid, model = loc['id'], loc['model']
+    window = {**window, **loc.get('window', {})}   # a location can have its own week
     log(f'== {lid} ({model})')
     start_local = dt.datetime.strptime(window['startLocal'], '%Y-%m-%dT%H:%M')
     hours = window['hours']
@@ -714,7 +720,9 @@ def build(loc, cache, window, qdir, ne):
     tscales = np.maximum(np.abs(tmodes).max(0), 1e-12)
     qt = dec_signed(enc_signed(tmodes / tscales))
     XTq = TT.astype(np.float64) - qTmean[:, None]
-    tempCoef = np.linalg.solve(qt.T @ qt, qt.T @ XTq).T
+    # lstsq: a temperature with fewer than TEMP_MODES real modes (the one gauge
+    # value of NYOFS) gives empty modes and a singular normal matrix.
+    tempCoef = np.linalg.lstsq(qt, XTq, rcond=None)[0].T
     del XTq
 
     # Statistics from the raw fields over water pixels.
@@ -809,7 +817,7 @@ def build(loc, cache, window, qdir, ne):
         'version': 2,
         'id': lid, 'title': loc['title'], 'titleLines': loc.get('titleLines', [loc['title']]),
         'subtitle': 'A Week of Currents', 'region': loc.get('region', ''), 'blurb': blurb,
-        'model': loc['modelShort'], 'modelLong': loc['modelLong'],
+        'model': loc['modelShort'], 'modelLong': loc['modelLong'], 'agency': loc.get('agency', 'NOAA'),
         'tzLabel': loc['tzLabel'], 'utcOffsetHours': loc['utcOffsetHours'],
         'startLocal': window['startLocal'], 'hours': hours,
         'width': W, 'height': H, 'maskWidth': MW, 'maskHeight': MH,
