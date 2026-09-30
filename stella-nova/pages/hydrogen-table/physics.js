@@ -31,6 +31,10 @@
      grep -n 'export function fillTile'    the fast fill (lookup tables)
      grep -n 'export function tileList'    the tiles of the table, in order
      grep -n 'export function shellTiles'  the tiles of one shell n
+     grep -n 'export function poseMatrix'  R = Rz Ry Rx from three angles
+     grep -n 'export function startNorm'   the start-pose scale of a tile
+     grep -n 'export function fillTileRot' a tile of the turned orbital
+     grep -n 'export function fillPose'    start pose or turned, one call
    ========================================================================== */
 
 export const HARTREE_EV = 27.211386245988;   // CODATA 2018
@@ -233,3 +237,90 @@ export function colIndex(l, m, kind) {
 
 export function energyEV(n) { return E1_EV / (n * n); }
 export function meanR(n, l) { return (3 * n * n - l * (l + 1)) / 2; }
+
+// ------------------------------------------------------------ rotated tiles
+// The rotation animation turns the orbital and keeps the tile plane fixed.
+// rot is the 3x3 matrix R, row-major, from the orbital frame to the lab
+// frame. Tile point (u, v) is at p = u ex + v ey in the lab, so the orbital
+// sees q = R^T p = u a + v b, with a = R^T ex and b = R^T ey.
+
+// R = Rz(gz) Ry(gy) Rx(gx), angles in degrees, row-major.
+export function poseMatrix(gx, gy, gz) {
+  const d = Math.PI / 180;
+  const [cx, sx, cy, sy, cz, sz] = [Math.cos(gx * d), Math.sin(gx * d), Math.cos(gy * d), Math.sin(gy * d), Math.cos(gz * d), Math.sin(gz * d)];
+  return [
+    cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx,
+    sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx,
+    -sy,     cy * sx,                cy * cx,
+  ];
+}
+
+// The peak |psi| and the outer ratio of a tile in its start pose. A rotated
+// tile keeps this scale, so a lobe that turns out of the plane goes dark,
+// and the tile does not jump in brightness. The start plane goes through
+// the lobes, so it holds the peak of the orbital.
+const normCache = new Map();
+export function startNorm(S) {
+  const key = `${S.kind}:${S.n},${S.l},${S.m}`;
+  let v = normCache.get(key);
+  if (!v) {
+    const N = 192, S0 = { ...S }, f = new Float32Array(N * N);
+    const peak = fillTile(S0, N, f);
+    v = { peak, outer: S0.outer };
+    normCache.set(key, v);
+  }
+  return v;
+}
+
+// Fill a tile with the orbital turned by rot. out gets psi / peak, clamped
+// to [-1, 1] (colorize reads a table by |psi| and has no clamp).
+// sin^|m|(theta) e^(i m phi) = (qx + i qy)^|m| / r^|m|, so no atan2 is used.
+// A complex tile shows |psi|: the e^(i m phi) factor has modulus 1.
+export function fillTileRot(S, size, out, rot, peak) {
+  const { n, l, m, kind, hw } = S, am = Math.abs(m);
+  const rMax = hw * Math.SQRT2 * 1.001;
+  const Rt = new Float64Array(LUT_N + 2), At = new Float64Array(LUT_N + 2);
+  for (let i = 0; i <= LUT_N + 1; i++) Rt[i] = radialR(n, l, (i / LUT_N) * rMax);
+  const N = ylmNorm(l, am) * (kind === 'real' && m !== 0 ? Math.SQRT2 * ((am & 1) ? -1 : 1) : 1);
+  for (let i = 0; i <= LUT_N + 1; i++) At[i] = N * legendre(l, am, Math.min(1, -1 + 2 * i / LUT_N), true);
+  const kR = LUT_N / rMax, kA = LUT_N / 2, step = 2 * hw / size, inv = peak > 0 ? 1 / peak : 1;
+  const T = (e, k) => rot[k] * e[0] + rot[3 + k] * e[1] + rot[6 + k] * e[2];
+  const ax = T(S.ex, 0), ay = T(S.ex, 1), az = T(S.ex, 2);
+  const bx = T(S.ey, 0), by = T(S.ey, 1), bz = T(S.ey, 2);
+  const mode = am === 0 ? 0 : kind === 'complex' ? 1 : m > 0 ? 2 : 3;
+  for (let j = 0; j < size; j++) {
+    const v = hw - (j + 0.5) * step, row = j * size;
+    for (let i = 0; i < size; i++) {
+      const u = -hw + (i + 0.5) * step;
+      const qx = u * ax + v * bx, qy = u * ay + v * by, qz = u * az + v * bz;
+      const r = Math.sqrt(qx * qx + qy * qy + qz * qz);
+      let t = r * kR, k = t | 0, f = t - k;
+      const R = Rt[k] + (Rt[k + 1] - Rt[k]) * f;
+      const c = r > 0 ? qz / r : 1;
+      t = (c + 1) * kA; k = t | 0; f = t - k;
+      let a = At[k] + (At[k + 1] - At[k]) * f;
+      if (mode) {
+        if (r === 0) a = 0;
+        else {
+          const x = qx / r, y = qy / r;
+          let re = 1, im = 0;
+          for (let e = 0; e < am; e++) { const t2 = re * x - im * y; im = re * y + im * x; re = t2; }
+          a *= mode === 1 ? Math.sqrt(re * re + im * im) : mode === 2 ? re : im;
+        }
+      }
+      let p = R * a * inv;
+      out[row + i] = p > 1 ? 1 : p < -1 ? -1 : p;
+    }
+  }
+}
+
+// Fill a tile in the pose rot, or in its start pose when rot is null.
+// Sets S.outer and returns the scale peak. worker.js and the page-thread
+// fallback in main.js both call this.
+export function fillPose(S, size, out, rot) {
+  if (!rot) return fillTile(S, size, out);
+  const nz = startNorm(S);
+  fillTileRot(S, size, out, rot, nz.peak);
+  S.outer = nz.outer;
+  return nz.peak;
+}

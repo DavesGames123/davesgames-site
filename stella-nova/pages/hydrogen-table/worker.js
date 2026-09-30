@@ -6,7 +6,10 @@
    tile. The page thread only draws the bitmaps.
 
    MESSAGES
-     in   { type:'render', seq, jobs:[{id,n,l,m,kind,size}], look }
+     in   { type:'render', seq, jobs:[{id,n,l,m,kind,size,rot?,nocache?}], look }
+          rot: the 3x3 pose matrix (row-major) of the rotation animation,
+               or null for the start pose. nocache: an animation frame,
+               used one time, so it does not go in the cache.
           look = { cmap, gamma, exposure, log, decades, outerLobe }
           outerLobe: the exposure is times outerGain(outer lobe peak / peak),
                      on the linear scale only
@@ -14,7 +17,7 @@
      out  { type:'done', seq, fillMs, colorMs, fills }
 
    CACHE. The signed field psi / max|psi| of each tile stays in a map, keyed
-   by kind, n, l, m and size. A change of the color map, gamma, exposure or
+   by kind, n, l, m, size and pose. A change of the color map, gamma, exposure or
    log scale then only colors the tiles again. It does not fill them again.
 
    COLOR. colorize in colormaps.js turns the field into RGBA pixels.
@@ -23,7 +26,7 @@
      grep -n 'function field'      cache lookup and fill
      grep -n 'onmessage'           the job loop
    ========================================================================== */
-import { tileSpec, fillTile } from './physics.js';
+import { tileSpec, fillPose } from './physics.js';
 import { colorize, outerGain } from './colormaps.js';
 
 const cache = new Map();
@@ -31,13 +34,14 @@ let cacheFloats = 0;
 const CACHE_CAP = 8e6;        // floats per worker, 32 MB
 
 function field(j) {
-  const key = `${j.kind}:${j.n},${j.l},${j.m}@${j.size}`;
-  let f = cache.get(key);
+  const key = `${j.kind}:${j.n},${j.l},${j.m}@${j.size}` + (j.rot ? '|' + j.rot.map(v => v.toFixed(6)).join(',') : '');
+  let f = j.nocache ? null : cache.get(key);
   if (f) { cache.delete(key); cache.set(key, f); return { f, filled: false }; }
   f = new Float32Array(j.size * j.size);
   const S = tileSpec(j.n, j.l, j.m, j.kind);
-  fillTile(S, j.size, f);
+  fillPose(S, j.size, f, j.rot || null);
   f.outer = S.outer;
+  if (j.nocache) return { f, filled: true };
   cache.set(key, f); cacheFloats += f.length;
   for (const [k, v] of cache) { if (cacheFloats <= CACHE_CAP || k === key) break; cache.delete(k); cacheFloats -= v.length; }
   return { f, filled: true };

@@ -39,13 +39,15 @@
      │            │           page scrolls down, to n = 10.              │
      │  color     │  #foot    render time and tile count                 │
      │  contrast  │                                                      │
+     │  rotate    │                                                      │
      │  readout   │  #detail  a tile opened large (modal, or a sheet     │
      │  about     │           on a phone)                                │
      └────────────┴─────────────────────────────────────────────────────┘
 
    PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
      #dock      fixed at the base: #dockPanel opens the panel, #dockKind
-                picks complex or real, #dockLog sets the log scale.
+                picks complex or real, #dockPlay starts or pauses the
+                rotation, #dockLog sets the log scale.
      #panel     a bottom sheet above the dock. #sheetGrip toggles half and
                 full height, and a drag down closes the sheet.
      #table     three columns (two below 330 px), grouped by n.
@@ -136,12 +138,24 @@
   <div class="row" id="decRow"><label for="dec">Decades</label><input type="range" id="dec" min="1.5" max="8" step="0.1" value="4"><span class="val" id="decV"></span></div>
   <div class="hint">Gamma below 1 lifts faint lobes. Exposure above 1 lets the peaks go to white.</div>
 
+  <div class="sec-label">ROTATE</div>
+  <div class="modes">
+    <button id="playBtn" title="Turn every orbital in 3D. The cut plane of each tile stays fixed.">▶ ROTATE</button>
+    <button id="poseReset" title="Go back to the start pose.">RESET POSE</button>
+  </div>
+  <div class="row"><label for="rx">About x</label><input type="range" id="rx" min="-120" max="120" step="1" value="24"><span class="val" id="rxV"></span></div>
+  <div class="row"><label for="ry">About y</label><input type="range" id="ry" min="-120" max="120" step="1" value="0"><span class="val" id="ryV"></span></div>
+  <div class="row"><label for="rz">About z</label><input type="range" id="rz" min="-120" max="120" step="1" value="36"><span class="val" id="rzV"></span></div>
+  <div class="hint">Rates in degrees per second. The orbital turns about x, then y, then z. With two or more rates it tumbles. While it turns, only the tiles on the screen fill, at a lower size. Pause for full detail.</div>
+
   <div class="sec-label">READOUT</div>
   <table class="readout">
     <tr><td>tiles</td><td id="rdTiles"></td></tr>
     <tr><td>pixels</td><td id="rdPx"></td></tr>
     <tr><td>last render</td><td id="rdMs"></td></tr>
     <tr><td>engine</td><td id="rdEngine"></td></tr>
+    <tr><td>pose</td><td id="rdPose"></td></tr>
+    <tr><td>frame</td><td id="rdFrame"></td></tr>
   </table>
 
   <div class="sec-label">ABOUT</div>
@@ -194,6 +208,7 @@
     <button data-kind="complex" class="on">COMPLEX</button>
     <button data-kind="real">REAL</button>
   </div>
+  <button id="dockPlay" aria-label="Rotate">▶</button>
   <button id="dockLog" aria-label="Log density">LOG</button>
 </nav>
 

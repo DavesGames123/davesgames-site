@@ -19,6 +19,8 @@
                A shell above nb gets a head row, then wraps at the same
                tile size in K columns. It is not aligned to the l headers.
      bands     phone. One band for each n, three columns (two below 330px).
+   ROTATION. The play button turns every orbital in 3D at three rates, about
+   x, y and z. The tile planes stay fixed. See the animation section.
    SCROLL. The page starts with 4 shells, or fewer if G.nMax is lower. When
    the foot comes within 900px of the view, the next shell is added and only
    its tiles fill. This stops at G.nMax (the "n max" stepper, 10 at most).
@@ -34,8 +36,11 @@
      grep -n 'function drawColorbar'  the header colorbar
      grep -n 'function buildUI'     the controls, the phone sheet and dock
      grep -n 'function startPool'   workers, or the page-thread fallback
+     grep -n 'function setAnim'     start or pause the rotation
+     grep -n 'function sendFrame'   one animation frame: tiles in view
+     grep -n 'function animDone'    frame time and the adaptive size
    ========================================================================== */
-import { shellTiles, colIndex, tileSpec, radialR, legendre, energyEV, meanR, L_LETTER, fillTile } from './physics.js';
+import { shellTiles, colIndex, tileSpec, radialR, legendre, energyEV, meanR, L_LETTER, fillPose, poseMatrix } from './physics.js';
 import { MAPS, lut, colorize, outerGain } from './colormaps.js';
 
 const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -84,7 +89,7 @@ function mainThreadWorker() {
         for (const j of d.jobs) {
           const t0 = performance.now(), f = new Float32Array(j.size * j.size);
           const S = tileSpec(j.n, j.l, j.m, j.kind);
-          fillTile(S, j.size, f);
+          fillPose(S, j.size, f, j.rot || null);
           const lk = d.look.outerLobe && !d.look.log ? { ...d.look, exposure: d.look.exposure * outerGain(S.outer) } : d.look;
           const t1 = performance.now(), px = colorize(f, j.size, lk);
           fillMs += t1 - t0; colorMs += performance.now() - t1;
@@ -238,7 +243,7 @@ window.__hyd = { G, history, get engine() { return engine; }, get tiles() { retu
 
 // onlyNew: fill only the tiles that were never drawn (a shell just added).
 function render(onlyNew) {
-  if (!pool.length || !TILES.length) return;
+  if (!pool.length || !TILES.length || A.on) return;
   if (busy) { pending = true; return; }
   busy = true; pending = false;
   curSeq = ++seq; t0 = performance.now();
@@ -249,10 +254,10 @@ function render(onlyNew) {
     const r = t.el.getBoundingClientRect();
     return { i, d: r.bottom < 0 ? -r.bottom + vh : r.top > vh ? r.top : 0 };
   }).filter(o => !onlyNew || TILES[o.i].drawn < 0).sort((a, b) => a.d - b.d);
-  const jobs = pool.map(() => []);
+  const jobs = pool.map(() => []), rot = poseRot();
   for (const { i } of order) {
     const t = TILES[i];
-    jobs[i % pool.length].push({ id: gen * 100000 + i, n: t.n, l: t.l, m: t.m, kind: G.kind, size: t.size });
+    jobs[i % pool.length].push({ id: gen * 100000 + i, n: t.n, l: t.l, m: t.m, kind: G.kind, size: t.size, rot });
   }
   const lk = look();
   outstanding = 0;
@@ -264,7 +269,7 @@ let detailSeq = 0;
 function onWorker(d) {
   if (d.type === 'tiles') return onTiles(d);
   if (d.type !== 'done') return;
-  if (typeof d.seq === 'string') return;            // a detail job
+  if (typeof d.seq === 'string') { if (d.seq[0] === 'a') animDone(d); return; }   // animation or detail
   if (d.seq !== curSeq) return;
   stats.fillMs += d.fillMs; stats.colorMs += d.colorMs; stats.fills += d.fills;
   if (--outstanding > 0) return;
@@ -281,7 +286,7 @@ function onWorker(d) {
 
 function onTiles(d) {
   for (const it of d.items) {
-    if (typeof d.seq === 'string') { drawDetail(d.seq, it); continue; }
+    if (typeof d.seq === 'string') { if (d.seq[0] === 'a') drawAnim(d.seq, it); else drawDetail(d.seq, it); continue; }
     const g = Math.floor(it.id / 100000), i = it.id % 100000, t = TILES[i];
     if (g !== gen || !t || t.size !== it.size || d.seq < t.drawn) { if (it.bmp) it.bmp.close(); continue; }
     t.drawn = d.seq;
@@ -324,14 +329,14 @@ function openDetail(i) {
   const cv = $('dCanvas'); if (cv.width !== detailSize) { cv.width = detailSize; cv.height = detailSize; }
   detailSpec = S;
   const tag = 'd' + (++detailSeq);
-  pool[0].postMessage({ type: 'render', seq: tag, jobs: [{ id: -1, n: t.n, l: t.l, m: t.m, kind: G.kind, size: detailSize }], look: look() });
+  pool[0].postMessage({ type: 'render', seq: tag, jobs: [{ id: -1, n: t.n, l: t.l, m: t.m, kind: G.kind, size: detailSize, rot: poseRot() }], look: look() });
 
   $('dName').textContent = S.name;
   $('dKet').textContent = `|${t.n}, ${t.l}, ${fmtM(t.m)}⟩`;
   $('dQN').textContent = `n = ${t.n}, l = ${t.l}, m = ${fmtM(t.m)}`;
   $('dOrb').textContent = `${S.name}${G.kind === 'complex' ? ' (complex, e^imφ)' : ' (real)'}`;
   const planeTxt = { xz: 'x–z plane (φ = 0 and 180°)', yz: 'y–z plane (φ = 90°)', xy: 'x–y plane (θ = 90°)', vert: `vertical plane at φ = ${Math.round(S.phi0 * 180 / Math.PI)}°` }[S.plane];
-  $('dPlane').textContent = planeTxt;
+  $('dPlane').textContent = planeTxt + (poseRot() ? ' · orbital turned' : '');
   const rNodes = radialNodes(t.n, t.l);
   $('dRad').textContent = `${S.radialNodes}` + (rNodes.length ? ` · r = ${rNodes.map(r => r.toFixed(2)).join(', ')} a₀` : '');
   const cones = polarNodes(t.l, Math.abs(t.m));
@@ -354,9 +359,21 @@ function openDetail(i) {
 
 function drawDetail(tag, it) {
   if (tag !== 'd' + detailSeq || $('detail').hidden) { if (it.bmp) it.bmp.close(); return; }
-  const ctx = $('dCanvas').getContext('2d', { alpha: false });
-  if (it.bmp) { ctx.drawImage(it.bmp, 0, 0); it.bmp.close(); }
-  else ctx.putImageData(new ImageData(new Uint8ClampedArray(it.buf), it.size, it.size), 0, 0);
+  const cv = $('dCanvas');
+  blit(cv.getContext('2d', { alpha: false }), it, cv.width);
+}
+
+// Draw a returned tile into a W x W canvas. An animation frame is smaller
+// than the canvas, so it is scaled up.
+let scratch = null;
+function blit(ctx, it, W) {
+  if (it.bmp) { ctx.drawImage(it.bmp, 0, 0, W, W); it.bmp.close(); return; }
+  const img = new ImageData(new Uint8ClampedArray(it.buf), it.size, it.size);
+  if (it.size === W) { ctx.putImageData(img, 0, 0); return; }
+  scratch = scratch || document.createElement('canvas');
+  scratch.width = scratch.height = it.size;
+  scratch.getContext('2d').putImageData(img, 0, 0);
+  ctx.drawImage(scratch, 0, 0, W, W);
 }
 
 function closeDetail() {
@@ -416,6 +433,87 @@ function drawRadial(n, l, hw, nodes) {
   ctx.fillStyle = '#8f8499'; if (nodes.length) ctx.fillText('● node', w - 60, pad.t + 9);
 }
 
+// ------------------------------------------------------------ animation
+// The orbitals turn in 3D, and the tile planes stay fixed on the screen.
+// The pose is R = Rz(az) Ry(ay) Rx(ax). Each angle grows at its own rate
+// in deg/s, so two or three rates give a tumble, not one fixed axis.
+// While it runs, only the tiles in view are filled, at A.scale times the
+// tile CSS size. A.scale adapts so that a frame takes about FRAME_MS. A new
+// frame goes out only when the last one is back, so no queue forms. If the
+// detail view is open, only the large tile turns. On pause, render() fills
+// every tile at full size in the current pose.
+const A = { on: false, rate: [24, 0, 36], ang: [0, 0, 0], scale: 0.6, seq: 0, inflight: 0, sent: 0, last: 0, ms: 0 };
+const FRAME_MS = 33;
+function poseRot() { return A.ang.every(v => v === 0) ? null : poseMatrix(A.ang[0], A.ang[1], A.ang[2]); }
+
+function setAnim(on) {
+  if (A.on === on) return;
+  A.on = on; A.last = 0; A.inflight = 0;
+  if (on) requestAnimationFrame(animLoop);
+  else { render(); if (detailIndex >= 0) openDetail(detailIndex); }
+  syncAnim();
+}
+
+function animLoop(now) {
+  if (!A.on) return;
+  const dt = A.last ? Math.min(0.1, (now - A.last) / 1000) : 0;
+  A.last = now;
+  for (let k = 0; k < 3; k++) A.ang[k] = (A.ang[k] + A.rate[k] * dt) % 360;
+  if (!A.inflight && pool.length && geo) sendFrame();
+  requestAnimationFrame(animLoop);
+}
+
+function sendFrame() {
+  const rot = poseMatrix(A.ang[0], A.ang[1], A.ang[2]), tag = 'a' + (++A.seq), lk = look(), K = pool.length;
+  const jobs = pool.map(() => []);
+  if (!$('detail').hidden && detailIndex >= 0) {
+    const t = TILES[detailIndex], css = $('dCanvas').clientWidth || 400;
+    jobs[0].push({ id: -1, n: t.n, l: t.l, m: t.m, kind: G.kind, size: Math.max(64, Math.min(detailSize, Math.round(css * A.scale))), rot, nocache: true });
+  } else {
+    const vh = window.innerHeight, size = Math.max(24, Math.round(geo.T * A.scale));
+    let k = 0;
+    TILES.forEach((t, i) => {
+      const r = t.el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > vh) return;
+      jobs[k++ % K].push({ id: gen * 100000 + i, n: t.n, l: t.l, m: t.m, kind: G.kind, size: Math.min(size, t.size), rot, nocache: true });
+    });
+  }
+  A.inflight = 0; A.sent = performance.now();
+  jobs.forEach((js, k) => { if (js.length) { A.inflight++; pool[k].postMessage({ type: 'render', seq: tag, jobs: js, look: lk }); } });
+}
+
+function drawAnim(tag, it) {
+  if (!A.on || tag !== 'a' + A.seq) { if (it.bmp) it.bmp.close(); return; }
+  if (it.id === -1) {
+    if ($('detail').hidden) { if (it.bmp) it.bmp.close(); return; }
+    const cv = $('dCanvas'); blit(cv.getContext('2d', { alpha: false }), it, cv.width); return;
+  }
+  const g = Math.floor(it.id / 100000), i = it.id % 100000, t = TILES[i];
+  if (g !== gen || !t) { if (it.bmp) it.bmp.close(); return; }
+  t.drawn = Math.max(t.drawn, 0);
+  blit(t.ctx, it, t.size);
+}
+
+function animDone(d) {
+  if (d.seq !== 'a' + A.seq || --A.inflight > 0) return;
+  const ms = performance.now() - A.sent;
+  A.ms = A.ms ? A.ms * 0.8 + ms * 0.2 : ms;
+  if (ms > FRAME_MS * 1.3) A.scale = Math.max(0.25, A.scale * 0.88);
+  else if (ms < FRAME_MS * 0.6) A.scale = Math.min(window.devicePixelRatio || 1, A.scale * 1.06);
+  syncAnim();
+}
+
+function syncAnim() {
+  const f = v => Math.round(((v % 360) + 360) % 360) + '°';
+  $('rdPose').textContent = `x ${f(A.ang[0])} · y ${f(A.ang[1])} · z ${f(A.ang[2])}`;
+  $('rdFrame').textContent = A.on ? `${A.ms.toFixed(0)} ms · ${Math.round(A.scale * 100)}% size` : 'paused';
+  $('playBtn').textContent = A.on ? '❚❚ PAUSE' : '▶ ROTATE';
+  $('playBtn').classList.toggle('on', A.on);
+  $('dockPlay').textContent = A.on ? '❚❚' : '▶';
+  $('dockPlay').classList.toggle('on', A.on);
+  $('dockPlay').setAttribute('aria-label', A.on ? 'Pause rotation' : 'Rotate');
+}
+
 // ------------------------------------------------------------ controls
 function buildUI() {
   const cm = $('cmapBtns');
@@ -433,6 +531,8 @@ function buildUI() {
     $('gammaV').textContent = G.gamma.toFixed(2);
     $('expoV').textContent = '×' + Math.pow(2, G.expo).toFixed(G.expo < 2 ? 2 : 1);
     $('decV').textContent = G.decades.toFixed(1);
+    ['rx', 'ry', 'rz'].forEach((id, k) => { $(id + 'V').textContent = `${A.rate[k]}°/s`; });
+    syncAnim();
     $('kindHint').textContent = G.kind === 'complex'
       ? 'm = 0 … l. The density of −m is the same as of +m.'
       : 'm = 0, +1, −1 … Each tile is cut through its lobes. Its plane shows at the top left.';
@@ -457,6 +557,19 @@ function buildUI() {
   $('logBtn').addEventListener('click', toggleLog);
   document.querySelectorAll('[data-norm]').forEach(b => b.addEventListener('click', () => { G.outerLobe = b.dataset.norm === 'outer'; recolor(); }));
   $('dockLog').addEventListener('click', toggleLog);
+
+  // rotation
+  ['rx', 'ry', 'rz'].forEach((id, k) => {
+    $(id).value = A.rate[k];
+    $(id).addEventListener('input', e => { A.rate[k] = +e.target.value; sync(); });
+  });
+  $('playBtn').addEventListener('click', () => setAnim(!A.on));
+  $('dockPlay').addEventListener('click', () => setAnim(!A.on));
+  $('poseReset').addEventListener('click', () => {
+    A.ang = [0, 0, 0];
+    if (!A.on) { render(); if (detailIndex >= 0) openDetail(detailIndex); }
+    syncAnim();
+  });
 
   // panel, phone sheet, dock
   const panel = $('panel'), dockPanel = $('dockPanel');
