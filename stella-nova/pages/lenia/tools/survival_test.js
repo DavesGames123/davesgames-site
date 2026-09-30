@@ -17,9 +17,15 @@
 // A creature with R > 18 first runs at scale 18 / R, because the page is fast
 // at R <= 18. That scale is kept only when the creature is live at it. Else
 // the creature runs again at scale 1 and gets the class of that run.
+//
+// Detail check: with a creatures.json that already has scales and a
+// detail factor d, each creature runs once at scale * d (the page's
+// Detail setting) and the classes are compared with the stored class.
+//   deno run -A tools/survival_test.js creatures.json detail2.json 2
 import { createEngine, resample } from '../engine.js';
 
-const [inPath, outPath] = Deno.args;
+const [inPath, outPath, detailArg] = Deno.args;
+const detail = detailArg ? +detailArg : 0;
 const doc = JSON.parse(await Deno.readTextFile(inPath));
 const engine = await createEngine(null);
 const keep = {};
@@ -48,6 +54,19 @@ async function trial(c, scale) {
 }
 
 const t0 = performance.now();
+if (detail) {
+  const bad = [];
+  for (const c of doc.creatures) {
+    const res = await trial(c, c.scale * detail);
+    const same = res.cls === c.cls || (c.cls === 'grow' && res.cls !== 'die');
+    if (!same) bad.push(c);
+    console.log(`${same ? 'SAME' : 'DIFF'}  ${String(c.id).padStart(3)} ${c.code.padEnd(8)} ${c.name.slice(0, 34).padEnd(34)} ${c.cls}->${res.cls}  R=${(c.R * c.scale * detail).toFixed(1)}  mass x${res.ratio.toFixed(2)} focus ${res.focus.toFixed(2)}`);
+  }
+  await Deno.writeTextFile(outPath, JSON.stringify(bad.map(c => c.id)));
+  console.log(`\n${doc.creatures.length} tested at detail ${detail}: ${doc.creatures.length - bad.length} same class, ${bad.length} changed; ${((performance.now() - t0) / 1000).toFixed(0)} s`);
+  engine.destroy();
+  Deno.exit(0);
+}
 for (const c of doc.creatures) {
   let res = null, scale = 1;
   if (c.R > 18) {

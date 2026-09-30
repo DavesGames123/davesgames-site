@@ -18,6 +18,8 @@ Output, one object per creature:
     w h cells         start cells, row by row, 0..255 bytes in base64
     scale             the start scale that survival_test.js picked (from --keep)
     cls               'live' or 'grow', the class from survival_test.js
+    fixed             true when the creature changes class at detail 2
+                      (from --fixed); the page runs it at detail 1 only
 
 --keep takes the output of survival_test.js. Without it, every 2D creature
 is written with scale 1, and the result is the input for survival_test.js.
@@ -86,7 +88,7 @@ def clean_rank(name):
     return name
 
 
-def build(animals, keep=None):
+def build(animals, keep=None, fixed=()):
     rank = ['', '', '', '']
     out = []
     for a in animals:
@@ -127,6 +129,8 @@ def build(animals, keep=None):
         out.append(entry)
     for i, e in enumerate(out):
         e['id'] = i
+        if i in fixed:
+            e['fixed'] = True
     return out
 
 
@@ -135,6 +139,7 @@ def main():
     ap.add_argument('animals')
     ap.add_argument('--keep', help='survival_test.js result: {src index: {scale}}')
     ap.add_argument('--out', default='creatures.json')
+    ap.add_argument('--fixed', help='survival_test.js detail result: [creature ids]')
     ap.add_argument('--fixture', help='write the decoded cells of one source index as JSON and stop')
     args = ap.parse_args()
     animals = json.load(open(args.animals))
@@ -143,7 +148,8 @@ def main():
         json.dump({'w': len(rows[0]), 'h': len(rows), 'cells': [v for r in rows for v in r]}, open(args.out, 'w'))
         return
     keep = json.load(open(args.keep)) if args.keep else None
-    creatures = build(animals, keep)
+    fixed = set(json.load(open(args.fixed))) if args.fixed else set()
+    creatures = build(animals, keep, fixed)
     doc = {
         'source': {'repo': REPO, 'rev': REV, 'file': 'Python/animals.json',
                    'license': 'MIT, Copyright (c) 2018 Bert Chan'},
