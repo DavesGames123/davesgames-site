@@ -58,7 +58,7 @@
 
   const G = {
     step: 200,       // step size in SVG units, as upstream INC_STEP
-    speed: 100,      // auto-scroll speed in SVG units per second
+    speed: 20,       // auto-scroll speed in SVG units per second, 10 to 100
     auto: false,     // setAuto(true) at BOOT starts the scroll
     held: false,     // true while a drag holds auto-scroll
   };
