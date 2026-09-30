@@ -1,7 +1,7 @@
 // ============================================================================
 //  POST-PROCESS TABLE  ·  page.js — the per-page PAGE object
 // ────────────────────────────────────────────────────────────────────────────
-//  30 image operators applied to a shared source you pick, upload or drop; a fragment shader per cell reads the source texture.
+//  68 image operators applied to a shared source you pick, upload or drop; a fragment shader per cell reads the source texture.
 //  The shared table-engine drives this object through its ctx. main.js fetches
 //  the data and calls bootTable(PAGE, data); the engine calls PAGE.init and
 //  PAGE.draw from there. The noise pack arrives as ctx.noisePack. The sample photos arrive as ctx.photos.

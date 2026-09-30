@@ -433,3 +433,198 @@ fn sobel(uv: vec2f, s: f32) -> vec2f {
     let tint = 0.5 + 0.5 * cos(vec3f(ph, ph + 2.09, ph + 4.19));
     return done(uv, mix(c, c * tint * 1.4, mix(0.2, 0.8, u.k.y)));
 }
+
+// —— game-lab operators: soft-knee bloom, comic bloom, hex bokeh, IGN tilt shift,
+//    status vignettes, alpha outline, hex transition ————————————————————————
+// tile-space coordinate: 0..1 over the visible cell, not over the source
+fn tile_uv(fp: vec2f) -> vec2f { return (fp / u.pixelScale) / max(u.size, vec2f(1.0)); }
+fn vnoise(p: vec2f) -> f32 {
+    let i = floor(p); let f = fract(p); let w = f * f * (3.0 - 2.0 * f);
+    let a = hash21(i); let b = hash21(i + vec2f(1.0, 0.0));
+    let c = hash21(i + vec2f(0.0, 1.0)); let d = hash21(i + vec2f(1.0, 1.0));
+    return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);
+}
+fn fbm2(p: vec2f) -> f32 { return 0.65 * vnoise(p) + 0.35 * vnoise(p * 2.03 + vec2f(17.1, 9.4)); }
+// soft-knee bright pass: the knee k blends the threshold t in quadratically,
+// so the cutoff has no hard step. Scales the color by its bloom share.
+fn soft_knee(c: vec3f, t: f32, k: f32) -> vec3f {
+    let b = max(c.r, max(c.g, c.b));
+    let q = clamp(b - t + k, 0.0, 2.0 * k);
+    let w = q * q / (4.0 * k + 1e-4);
+    return c * max(w, b - t) / max(b, 1e-4);
+}
+// bloom_softknee: k.x threshold, k.y knee, k.z intensity, k.w radius
+@fragment fn fs_bloom_softknee(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let thr = mix(0.2, 0.95, u.k.x); let knee = mix(0.0, 0.5, u.k.y);
+    let R = mix(0.01, 0.12, u.k.w) * (1.0 + 0.1 * sin(u.time * 0.9));
+    var b = vec3f(0.0); var nrm = 0.0;
+    for (var i: i32 = 0; i < 40; i++) {
+        let r = sqrt((f32(i) + 0.5) / 40.0); let a = f32(i) * 2.39996323;
+        let w = exp(-3.0 * r * r);
+        b += soft_knee(src(uv + vec2f(cos(a), sin(a)) * r * R), thr, knee) * w; nrm += w; }
+    return done(uv, src(uv) + b / nrm * mix(0.0, 6.0, u.k.z));
+}
+// bloom_comic: only saturated, bright pixels bloom (hard step on a
+// saturation mask), and the halo is quantized to flat bands.
+// k.x saturation cut, k.y band count, k.z intensity, k.w radius
+fn comic_mask(c: vec3f, cut: f32) -> f32 {
+    let mx = max(c.r, max(c.g, c.b)); let mn = min(c.r, min(c.g, c.b));
+    let sat = (mx - mn) / max(mx, 1e-4);
+    return step(cut, sat) * step(0.25, mx);
+}
+@fragment fn fs_bloom_comic(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let cut = mix(0.1, 0.8, u.k.x); let R = mix(0.02, 0.14, u.k.w);
+    var h = vec3f(0.0); var nrm = 0.0;
+    for (var i: i32 = 0; i < 40; i++) {
+        let r = sqrt((f32(i) + 0.5) / 40.0); let a = f32(i) * 2.39996323;
+        let s = src(uv + vec2f(cos(a), sin(a)) * r * R); let w = 1.0 - 0.7 * r;
+        h += s * comic_mask(s, cut) * w; nrm += w; }
+    h = h / nrm * mix(1.0, 5.0, u.k.z);
+    let levels = floor(mix(2.0, 6.0, u.k.y));
+    let m = max(h.r, max(h.g, h.b));
+    let q = floor(m * levels + 0.35 + 0.15 * sin(u.time * 2.0)) / levels;
+    let halo = h / max(m, 1e-4) * min(q, 1.0);
+    let c = src(uv);
+    // saturated source pixels get pushed up too, so the mask reads in the image
+    let pop = c * (1.0 + 0.35 * comic_mask(c, cut));
+    return done(uv, max(pop, pop + halo * (1.0 - luma(pop) * 0.5)));
+}
+// bokeh_hex: golden-angle disc taps, each radius remapped so the disc becomes
+// a hexagon (boundary distance cos(30°)/cos(θ mod 60° − 30°)). The spiral
+// turns per pixel by interleaved gradient noise and the radius jitters, so a
+// point light fills a solid hexagon instead of printing the tap pattern.
+// k.x radius, k.y highlights, k.z rotation
+@fragment fn fs_bokeh_hex(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let R = mix(3.0, 30.0, u.k.x) * texel();
+    let spin = mix(0.0, PI / 3.0, u.k.z) + u.time * 0.2;
+    let jit = hash21(fp.xy); let jr = hash21(fp.xy + vec2f(7.3, 1.9));
+    var c = vec3f(0.0);
+    for (var i: i32 = 0; i < 96; i++) {
+        let r = sqrt((f32(i) + jr) / 96.0); let a = f32(i) * 2.39996323 + jit * TAU;
+        let sector = a - (PI / 3.0) * floor(a / (PI / 3.0));
+        let hx = 0.8660254 / cos(sector - PI / 6.0);
+        let s = src(uv + rot2(spin) * vec2f(cos(a), sin(a)) * r * hx * R);
+        // bright taps count as HDR light: a plain mean of boosted taps spreads
+        // each highlight into a flat hexagon that clips to white
+        c += s * (1.0 + mix(0.0, 60.0, u.k.y) * smoothstep(0.88, 1.0, luma(s))); }
+    return done(uv, c / 96.0);
+}
+// tilt_shift_ign: sunflower taps around each pixel. Left half: one fixed tap
+// pattern for every pixel, so the few taps print as ghost copies (banding).
+// Right half: the pattern turns per pixel by interleaved gradient noise
+// (Jimenez 2014), and the ghosts break up into fine noise.
+// k.x radius, k.y focus, k.z band width, k.w tap count
+@fragment fn fs_tilt_shift_ign(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let tu = tile_uv(fp.xy);
+    let focus = mix(0.2, 0.8, u.k.y) + 0.05 * sin(u.time * 0.7);
+    let R = smoothstep(0.0, mix(0.1, 0.4, u.k.z), abs(uv.y - focus)) * mix(2.0, 20.0, u.k.x) * texel();
+    let n = i32(mix(6.0, 24.0, u.k.w)); let right = tu.x > 0.5;
+    let spin = select(0.0, ign(fp.xy) * TAU, right);
+    var c = vec3f(0.0);
+    for (var i: i32 = 0; i < n; i++) {
+        let r = sqrt((f32(i) + 0.5) / f32(n)); let a = f32(i) * 2.39996323 + spin;
+        c += src(uv + vec2f(cos(a), sin(a)) * r * R); }
+    c /= f32(n);
+    // split line and A/B marks
+    let px = 1.0 / max(u.size.x, 1.0);
+    let line = 1.0 - smoothstep(0.0, 1.5 * px, abs(tu.x - 0.5));
+    return done(uv, mix(c, u.cream.rgb, line * 0.8));
+}
+// status vignette: a screen-edge front, warped by two octaves of noise.
+// Returns x = coverage (1 at the edge), y = front glow, z = veins, w = sparkle.
+fn status_front(fp: vec2f, reach: f32, t: f32) -> vec4f {
+    let tu = tile_uv(fp); let asp = u.size.x / max(u.size.y, 1.0);
+    let p = vec2f(tu.x * asp, tu.y) * 5.0;
+    // two-octave domain warp
+    let q = vec2f(fbm2(p + vec2f(0.0, t * 0.15)), fbm2(p + vec2f(5.2, 1.3)));
+    let r2 = vec2f(fbm2(p + 3.0 * q + vec2f(1.7, 9.2)), fbm2(p + 3.0 * q + vec2f(8.3, 2.8 + t * 0.1)));
+    let warp = fbm2(p + 3.5 * r2);
+    let e = min(min(tu.x, 1.0 - tu.x), min(tu.y, 1.0 - tu.y));
+    let f = e - reach - (warp - 0.5) * 0.22;
+    let cover = 1.0 - smoothstep(-0.01, 0.01, f);
+    let glow = exp(-abs(f) * 40.0);
+    // fern-like veins: ridged noise along the warped field, two scales
+    let v1 = 1.0 - abs(2.0 * vnoise(p * 2.2 + 4.0 * r2) - 1.0);
+    let v2 = 1.0 - abs(2.0 * vnoise(p * 5.3 + 2.0 * q + vec2f(3.1, 7.7)) - 1.0);
+    let veins = pow(v1, 14.0) + 0.6 * pow(v2, 18.0);
+    // facet sparkle: one hashed point per grid facet, blinking with time
+    let g = p * 6.0; let id = floor(g); let fc = fract(g) - 0.5;
+    let h = hash21(id + floor(t * 1.5 + hash21(id) * 7.0));
+    let spark = step(0.9, h) * smoothstep(0.18, 0.0, length(fc)) * (0.6 + 0.4 * sin(t * 6.0 + h * 40.0));
+    return vec4f(cover, glow, veins, spark);
+}
+// vignette_frost: k.x reach, k.y vein strength, k.z sparkle
+@fragment fn fs_vignette_frost(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv);
+    let reach = mix(0.05, 0.35, u.k.x) + 0.02 * sin(u.time * 0.8);
+    let s = status_front(fp.xy, reach, u.time);
+    let ice = mix(vec3f(0.55, 0.72, 0.92), vec3f(0.92, 0.97, 1.0), s.z);
+    let frosted = mix(mix(c, vec3f(luma(c)), 0.7) * vec3f(0.75, 0.88, 1.1), ice, 0.55 + 0.4 * s.z * u.k.y * 2.0);
+    var o = mix(c * vec3f(0.92, 0.97, 1.05), frosted, s.x);
+    o += vec3f(0.7, 0.85, 1.0) * s.y * 0.6 + vec3f(1.0) * s.w * s.x * mix(0.0, 2.0, u.k.z);
+    return done(uv, o);
+}
+// vignette_molten: k.x reach, k.y crack strength, k.z ember sparkle
+@fragment fn fs_vignette_molten(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv);
+    let reach = mix(0.05, 0.35, u.k.x) + 0.02 * sin(u.time * 0.8);
+    let s = status_front(fp.xy, reach, u.time * 0.7);
+    let crust = vec3f(0.09, 0.04, 0.03) + c * 0.12;
+    let lava = mix(vec3f(0.9, 0.18, 0.02), vec3f(1.0, 0.75, 0.2), s.z);
+    let inner = mix(crust, lava, clamp(s.z * mix(0.0, 2.5, u.k.y), 0.0, 1.0));
+    var o = mix(c * vec3f(1.05, 0.92, 0.85), inner, s.x);
+    o += vec3f(1.0, 0.4, 0.06) * s.y * 1.1 + vec3f(1.0, 0.8, 0.4) * s.w * s.x * mix(0.0, 2.0, u.k.z);
+    return done(uv, o);
+}
+// alpha_outline: an alpha mask from a chroma key against the backdrop color
+// (the mean of three taps on the top edge), blurred over five taps, inside a
+// soft circle. The outline is max − min of eight alpha taps around the pixel.
+// Inside: desaturate, then tint with the tone swatch. Outside: dim.
+// k.x key threshold, k.y width, k.z tint, k.w circle radius (max: no circle)
+fn outline_alpha(uv: vec2f, bg: vec3f) -> f32 {
+    let thr = mix(0.0, 0.4, u.k.x); let o = 3.0 * texel();
+    let c = 0.4 * src(uv) + 0.15 * (src(uv + vec2f(o, 0.0)) + src(uv - vec2f(o, 0.0)) + src(uv + vec2f(0.0, o)) + src(uv - vec2f(0.0, o)));
+    let key = smoothstep(thr, thr + 0.1, length(c - bg));
+    let rc = mix(0.2, 0.75, u.k.w);
+    let circ = 1.0 - smoothstep(rc - 0.02, rc + 0.02, length(uv - 0.5));
+    return key * circ;
+}
+@fragment fn fs_alpha_outline(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let c = src(uv);
+    let bg = (src(vec2f(0.35, 0.02)) + src(vec2f(0.5, 0.02)) + src(vec2f(0.65, 0.02))) / 3.0;
+    let a = outline_alpha(uv, bg);
+    let w = mix(1.0, 8.0, u.k.y) * texel() * (1.0 + 0.2 * sin(u.time * 3.0));
+    var amin = a; var amax = a;
+    for (var i: i32 = 0; i < 8; i++) {
+        let ang = f32(i) * PI / 4.0; let s = outline_alpha(uv + vec2f(cos(ang), sin(ang)) * w, bg);
+        amin = min(amin, s); amax = max(amax, s); }
+    let edge = clamp(amax - amin, 0.0, 1.0);
+    let tinted = mix(vec3f(luma(c)), vec3f(luma(c)) * u.tone.rgb * 1.8, mix(0.2, 1.0, u.k.z));
+    var o = mix(c * 0.35, tinted, a);
+    o = mix(o, vec3f(1.0, 0.86, 0.3), edge);
+    return done(uv, o);
+}
+// hex_wipe: hex tiles flip between the photo and a gradient-mapped copy.
+// Progress ping-pongs 0 → 1 → 0; each tile turns in order of its distance
+// along a diagonal, with a hashed delay. k.x tile count, k.y spread, k.z edge
+fn hex_cell(p: vec2f) -> vec4f {
+    let r = vec2f(1.0, 1.7320508); let h = r * 0.5;
+    let a = p - r * floor(p / r) - h;
+    let pb = p - h; let b = pb - r * floor(pb / r) - h;
+    let gv = select(b, a, dot(a, a) < dot(b, b));
+    return vec4f(gv, p - gv);
+}
+@fragment fn fs_hex_wipe(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+    let uv = cell_uv(fp.xy); let tu = tile_uv(fp.xy);
+    let n = mix(4.0, 16.0, u.k.x); let asp = u.size.x / max(u.size.y, 1.0);
+    let hc = hex_cell(vec2f(tu.x * asp, tu.y) * n);
+    let prog = 1.0 - abs(2.0 * fract(0.25 + u.time * 0.08) - 1.0);
+    let order = clamp((hc.z / n / asp + hc.w / n) * 0.5, 0.0, 1.0) * 0.8 + hash21(hc.zw) * 0.2;
+    let spread = mix(0.05, 0.4, u.k.y);
+    let s = clamp((prog * (1.0 + spread) - order) / spread, 0.0, 1.0);
+    let ag = abs(hc.xy); let hd = max(dot(ag, vec2f(0.5, 0.8660254)), ag.x);
+    let inside = 1.0 - smoothstep(s * 0.5 - 0.02, s * 0.5, hd);
+    let c = src(uv); let b = ramp(luma(c)) * 1.1;
+    let rim = smoothstep(0.03, 0.0, abs(hd - s * 0.5)) * step(0.001, s) * step(s, 0.999) * mix(0.0, 1.0, u.k.z);
+    return done(uv, mix(c, b, inside) + u.cream.rgb * rim);
+}

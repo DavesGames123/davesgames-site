@@ -122,3 +122,5 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .f-texture{--fam:rgba(200,160,255,0.12);--fam-bg:rgba(200,160,255,0.06)}
 .f-edges{--fam:rgba(120,230,200,0.12);--fam-bg:rgba(120,230,200,0.06)}
 .f-lens{--fam:rgba(255,160,120,0.12);--fam-bg:rgba(255,160,120,0.06)}
+.f-status{--fam:rgba(140,220,255,0.12);--fam-bg:rgba(140,220,255,0.06)}
+.f-transition{--fam:rgba(255,120,200,0.12);--fam-bg:rgba(255,120,200,0.06)}
