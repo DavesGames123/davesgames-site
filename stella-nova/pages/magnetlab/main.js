@@ -18,9 +18,17 @@
 //
 //  SIMULATION LOOP   (loop(), 60 Hz via requestAnimationFrame)
 //  --------------------------------------------------------------------------
-//      integrateMagnets()  spin, then force+torque, then collisions
-//      updateTracers(dt)   step each tracer along B̂, respawn when dead
-//      render()            clear ▶ camera transform ▶ grid ▶ layers ▶ magnets
+//      integrateMagnets()   spin, then force+torque, then collisions
+//      refreshFrameCache()  poles, magnet boxes, spawn tips, view box
+//      updateTracers(dt)    step each tracer along B̂, respawn when dead
+//      render()             clear ▶ camera ▶ grid ▶ layers ▶ magnets
+//  The loop stops while the page is hidden (visibilitychange).
+//
+//  TRACER DRAW
+//      Trails live in typed ring buffers. renderTracersGL() draws all trails
+//      in one instanced WebGL call on a hidden canvas, with a smooth fade and
+//      color along each trail. render() adds that canvas with 'lighter'.
+//      renderTracers2D() is the bucket fallback when WebGL is not available.
 //
 //  COORDINATE FRAMES
 //      screen px ── screenToWorld() ──▶ world px ── camera transform ──▶ canvas
@@ -33,14 +41,20 @@
 //      camera / viewport .... "CAMERA / VIEWPORT"   screen↔world mapping
 //      magnet factory ....... "MAGNET FACTORY"      pole layouts per type
 //      physics .............. "PHYSICS"             field, forces, collisions
+//      pole cache ........... "function refreshFrameCache"  per-frame cache
+//      field sum ............ "function fieldAt"    field from the pole cache
 //      tracers .............. "TRACERS"             spawn + step iron filings
+//      streamer budget ...... "function tracerBudget"  default count by area
 //      colors ............... "COLORS"              field magnitude → RGB ramp
 //      render ............... "function render"     the per-frame draw
+//      tracer shaders ....... "TR_VS" / "TR_FS"     segment quad + glow/core
+//      tracer draw .......... "function renderTracersGL"  one instanced call
 //      magnet drawing ....... "function renderMagnets"  per-type glyphs
 //      ui wiring ............ "UI WIRING"           panel + card controls
 //      drag + zoom .......... "DRAG + ZOOM"         mouse/touch input
 //      resize ............... "function resize"     ResizeObserver sizing
 //      loop ................. "function loop"        the frame driver
+//      hidden page .......... "visibilitychange"     stop / restart loop
 //      init ................. "INIT"                first magnet + start
 // ============================================================================
 
@@ -77,13 +91,6 @@ function screenToWorld(sx, sy){
           (sy - CH/2) / CAM.zoom + CH/2 - CAM.y];
 }
 
-// World-space rectangle currently on screen; tracers respawn and cull against
-// this so off-screen work is avoided at any zoom.
-function visibleBounds(){
-  const [x0,y0]=screenToWorld(0,0);
-  const [x1,y1]=screenToWorld(CW,CH);
-  return {x0,y0,x1,y1};
-}
 
 /* ═══ MAGNET FACTORY ═══ */
 // Build one magnet of the given type at (x,y). Every type shares the same rigid
@@ -166,22 +173,59 @@ function dipoleField(px,py,mx,my){
   return[(3*mdotr*px/r5-mx/r3)*FIELD_SCALE,(3*mdotr*py/r5-my/r3)*FIELD_SCALE];
 }
 
-// Total field at a world point: sum every pole of every magnet. Each pole is
-// rotated into world space by its magnet's angle, then scaled by strength.
-function totalField(wx,wy){
-  let Bx=0,By=0;
+// Pole cache. Once per frame, refreshFrameCache() writes each pole in world
+// space into flat typed arrays. The field loops then read plain numbers. They
+// do not do a sin/cos per magnet or allocate a result array per sample.
+//   _pc   = [sx, sy, mmx, mmy] per pole (world position, scaled moment)
+//   _mb   = [x, y, cos(-a), sin(-a), halfW+pad, halfH+pad] per magnet
+//   _tips = [x, y] per spawn tip, for spawnPos
+//   _vb   = world box on screen; tracers respawn and cull against it
+let _pc=new Float64Array(64*4), _pn=0;
+let _mb=new Float64Array(16*6), _mn=0;
+let _tips=new Float64Array(64*2), _tn=0;
+let _vb={x0:0,y0:0,x1:0,y1:0};
+function refreshFrameCache(){
+  let np=0; for(const m of magnets) np+=m.poles.length;
+  if(_pc.length<np*4) _pc=new Float64Array(np*8);
+  if(_mb.length<magnets.length*6) _mb=new Float64Array(magnets.length*12);
+  if(_tips.length<magnets.length*6) _tips=new Float64Array(magnets.length*12);
+  let k=0, j=0, t=0;
   for(const mag of magnets){
     const ca=Math.cos(mag.angle),sa=Math.sin(mag.angle);
     for(const p of mag.poles){
-      const sx=mag.x+p.dx*ca-p.dy*sa,sy=mag.y+p.dx*sa+p.dy*ca;
-      const mmx=(p.mx*ca-p.my*sa)*mag.strength,mmy=(p.mx*sa+p.my*ca)*mag.strength;
-      const[bx,by]=dipoleField(wx-sx,wy-sy,mmx,mmy);
-      Bx+=bx;By+=by;
+      _pc[k++]=mag.x+p.dx*ca-p.dy*sa; _pc[k++]=mag.y+p.dx*sa+p.dy*ca;
+      _pc[k++]=(p.mx*ca-p.my*sa)*mag.strength; _pc[k++]=(p.mx*sa+p.my*ca)*mag.strength;
     }
+    // Body box for isInsideMagnet: 6 px pad, as before.
+    _mb[j++]=mag.x; _mb[j++]=mag.y; _mb[j++]=ca; _mb[j++]=-sa;
+    _mb[j++]=mag.w*0.5+6; _mb[j++]=mag.h*0.5+6;
+    // Spawn tips: first and last poles, plus the middle pole on long magnets.
+    const P=mag.poles, n=P.length;
+    const tipList = n<=2 ? P : [P[0],P[n-1],P[Math.floor(n/2)]];
+    for(const p of tipList){ _tips[t++]=mag.x+p.dx*ca-p.dy*sa; _tips[t++]=mag.y+p.dx*sa+p.dy*ca; }
   }
-  return[Bx,By];
+  _pn=np; _mn=magnets.length; _tn=t>>1;
+  const [x0,y0]=screenToWorld(0,0), [x1,y1]=screenToWorld(CW,CH);
+  _vb.x0=x0; _vb.y0=y0; _vb.x1=x1; _vb.y1=y1;
 }
-// Same sum as totalField, but skipping one magnet by id. A magnet must not feel
+
+// Total field at a world point from the pole cache. The result goes into FBx
+// and FBy, so a call makes no garbage. Same math as dipoleField, summed over
+// every pole, with the same r<5 guard.
+let FBx=0, FBy=0;
+function fieldAt(wx,wy){
+  let Bx=0,By=0;
+  for(let k=0,e=_pn*4;k<e;k+=4){
+    const px=wx-_pc[k], py=wy-_pc[k+1];
+    const r2=px*px+py*py;
+    if(r2<25) continue;
+    const r=Math.sqrt(r2), r3=r2*r, r5=r3*r2;
+    const mx=_pc[k+2], my=_pc[k+3], md=3*(mx*px+my*py)/r5;
+    Bx+=md*px-mx/r3; By+=md*py-my/r3;
+  }
+  FBx=Bx*FIELD_SCALE; FBy=By*FIELD_SCALE;
+}
+// Same sum as fieldAt, but skipping one magnet by id. A magnet must not feel
 // its own field, so force and torque use this to see only its neighbours.
 function fieldFromOthers(wx,wy,exId){
   let Bx=0,By=0;
@@ -329,103 +373,108 @@ function integrateMagnets(){
 // Tracers are massless particles that ride the field like iron filings. They
 // spawn biased toward pole tips (where the field is richest), step along the
 // field direction each frame, and respawn when they age out or leave view.
+//
+// Storage is flat typed arrays, sized once per spawnTracers(). Each tracer has
+// a ring of TRAIL_MAX trail points. The ring head is the newest point. A frame
+// writes one point per tracer and allocates nothing.
+//   trX/trY/trC  trail point x, y and color level (shaped field magnitude)
+//   trHead/trLen ring head index and number of valid points
+//   tPX/tPY      current position; tAge/tMax age and lifetime in seconds
+const TRAIL_MAX=80; // equal to the Trail slider max
+let TR_N=0;
+let trX=new Float32Array(0), trY=new Float32Array(0), trC=new Float32Array(0);
+let trHead=new Int32Array(0), trLen=new Int32Array(0);
+let tPX=new Float64Array(0), tPY=new Float64Array(0);
+let tAge=new Float32Array(0), tMax=new Float32Array(0);
 
-// Collect world-space positions of magnet pole tips for biased spawning
-function getPoleTips(){
-  const tips=[];
-  for(const mag of magnets){
-    const ca=Math.cos(mag.angle),sa=Math.sin(mag.angle);
-    // Use first and last poles as "tips" (N and S ends)
-    const tipPoles = mag.poles.length<=2 ? mag.poles : [mag.poles[0],mag.poles[mag.poles.length-1]];
-    for(const p of tipPoles){
-      tips.push({
-        x: mag.x + p.dx*ca - p.dy*sa,
-        y: mag.y + p.dx*sa + p.dy*ca
-      });
-    }
-    // Also add intermediate poles for denser coverage near the body
-    if(mag.poles.length>2){
-      const mid=mag.poles[Math.floor(mag.poles.length/2)];
-      tips.push({
-        x: mag.x + mid.dx*ca - mid.dy*sa,
-        y: mag.y + mid.dx*sa + mid.dy*ca
-      });
-    }
-  }
-  return tips;
+// Streamer budget. The default count scales with the canvas area, so a phone
+// does not get the same 2500 tracers as a desktop. The desktop default stays
+// 2500. The Count slider can still set any value.
+function tracerBudget(){
+  const n=Math.round(CW*CH*0.00225/50)*50;
+  return Math.max(800,Math.min(2500,n));
+}
+
+// Color level of a field magnitude: the log + clamp from fieldColorRGB with
+// gamma 1. The trail stores this level, so the draw does no log per point.
+function fieldLevel(B){
+  let lc=Math.log10(1+B*8)/2.2; return lc<0?0:(lc>1?1:lc);
 }
 
 // Pick a spawn point: usually near a pole tip (Gaussian-ish clustered radius),
-// sometimes anywhere in view, and never inside a magnet body.
+// sometimes anywhere in view, and never inside a magnet body. The result goes
+// into SPX/SPY. The tips and view box come from refreshFrameCache().
+let SPX=0, SPY=0;
 function spawnPos(){
-  const tips=getPoleTips();
   // 65% near poles, 35% random — reject positions inside magnets
+  const vb=_vb;
   for(let attempt=0;attempt<10;attempt++){
     let x,y;
-    if(tips.length>0 && Math.random()<0.65){
-      const tip=tips[Math.floor(Math.random()*tips.length)];
+    if(_tn>0 && Math.random()<0.65){
+      const ti=Math.floor(Math.random()*_tn)*2;
       const r=(Math.random()+Math.random()+Math.random())/3 * 35 + 8;
       const a=Math.random()*Math.PI*2;
-      x=tip.x+Math.cos(a)*r; y=tip.y+Math.sin(a)*r;
+      x=_tips[ti]+Math.cos(a)*r; y=_tips[ti+1]+Math.sin(a)*r;
     } else {
-      const vb=visibleBounds();
       x=vb.x0+Math.random()*(vb.x1-vb.x0);
       y=vb.y0+Math.random()*(vb.y1-vb.y0);
     }
-    if(!isInsideMagnet(x,y)) return [x,y];
+    if(!isInsideMagnet(x,y)){ SPX=x; SPY=y; return; }
   }
-  const vb=visibleBounds();
-  return [vb.x0+Math.random()*(vb.x1-vb.x0), vb.y0+Math.random()*(vb.y1-vb.y0)];
+  SPX=vb.x0+Math.random()*(vb.x1-vb.x0); SPY=vb.y0+Math.random()*(vb.y1-vb.y0);
 }
 
-// Test if point is inside any magnet's oriented bounding box (with padding)
+// Test if point is inside any magnet's oriented bounding box (with padding).
+// Reads the magnet boxes from the frame cache.
 function isInsideMagnet(px,py){
-  for(const mag of magnets){
-    const ca=Math.cos(-mag.angle),sa=Math.sin(-mag.angle);
-    const dx=px-mag.x, dy=py-mag.y;
+  for(let j=0,e=_mn*6;j<e;j+=6){
+    const dx=px-_mb[j], dy=py-_mb[j+1];
+    const ca=_mb[j+2], sa=_mb[j+3];
     const lx=dx*ca-dy*sa, ly=dx*sa+dy*ca;
-    const pad=6; // px padding
-    if(Math.abs(lx)<mag.w*0.5+pad && Math.abs(ly)<mag.h*0.5+pad) return true;
+    if(Math.abs(lx)<_mb[j+4] && Math.abs(ly)<_mb[j+5]) return true;
   }
   return false;
+}
+
+// Put tracer i at a new spawn point with an empty trail and a new lifetime.
+function respawnTracer(i){
+  spawnPos(); tPX[i]=SPX; tPY[i]=SPY;
+  trLen[i]=0; tAge[i]=0; tMax[i]=2.5+Math.random()*4;
 }
 
 // Rebuild the whole tracer pool. Called on count change, magnet edits, and
 // resize. Each tracer gets a random lifetime so respawns stay staggered.
 function spawnTracers(){
-  tracers=[];
-  for(let i=0;i<SIM.tracerCount;i++){
-    const [x,y]=spawnPos();
-    tracers.push({x,y,trail:[],age:0,maxAge:2.5+Math.random()*4});
+  refreshFrameCache();
+  const n=SIM.tracerCount;
+  if(n!==TR_N){
+    TR_N=n;
+    trX=new Float32Array(n*TRAIL_MAX); trY=new Float32Array(n*TRAIL_MAX); trC=new Float32Array(n*TRAIL_MAX);
+    trHead=new Int32Array(n); trLen=new Int32Array(n);
+    tPX=new Float64Array(n); tPY=new Float64Array(n);
+    tAge=new Float32Array(n); tMax=new Float32Array(n);
   }
+  for(let i=0;i<n;i++) respawnTracer(i);
 }
 
 // Step every tracer one frame: move along the unit field vector, push the new
-// point onto its trail, then respawn if it aged out, left view, or entered a
-// magnet. Trail stores [x,y,Bmag] so the renderer can colour by strength.
+// point onto its trail ring, then respawn if it aged out, left view, or
+// entered a magnet. The trail point keeps the color level of the field at the
+// step start, as before.
 function updateTracers(dt){
-  const speed=SIM.tracerSpeed*80,trailLen=SIM.tracerTrail;
-  const threshold=1e-6;
-  for(const tr of tracers){
-    tr.age+=dt;
-    const[Bx,By]=totalField(tr.x,tr.y);
-    const Bmag=Math.sqrt(Bx*Bx+By*By);
-    if(Bmag>threshold){
-      const vx=(Bx/Bmag)*speed;
-      const vy=(By/Bmag)*speed;
-      tr.x+=vx*dt;
-      tr.y+=vy*dt;
-    }
-    tr.trail.unshift([tr.x,tr.y,Bmag]);
-    if(tr.trail.length>trailLen)tr.trail.pop();
+  const speed=SIM.tracerSpeed*80, threshold=1e-6, margin=40;
+  const vx0=_vb.x0-margin, vx1=_vb.x1+margin, vy0=_vb.y0-margin, vy1=_vb.y1+margin;
+  for(let i=0;i<TR_N;i++){
+    tAge[i]+=dt;
+    let x=tPX[i], y=tPY[i];
+    fieldAt(x,y);
+    const Bmag=Math.sqrt(FBx*FBx+FBy*FBy);
+    if(Bmag>threshold){ const s=speed*dt/Bmag; x+=FBx*s; y+=FBy*s; tPX[i]=x; tPY[i]=y; }
+    const h=(trHead[i]+1)%TRAIL_MAX, o=i*TRAIL_MAX+h;
+    trHead[i]=h; trX[o]=x; trY[o]=y; trC[o]=fieldLevel(Bmag);
+    if(trLen[i]<TRAIL_MAX) trLen[i]++;
     // Kill if: aged out, out of visible bounds, OR inside a magnet body
-    const vb=visibleBounds();
-    const margin=40;
-    if(tr.age>tr.maxAge||tr.x<vb.x0-margin||tr.x>vb.x1+margin||tr.y<vb.y0-margin||tr.y>vb.y1+margin||isInsideMagnet(tr.x,tr.y)){
-      // Respawn biased toward poles
-      const [nx,ny]=spawnPos();
-      tr.x=nx;tr.y=ny;tr.trail=[];tr.age=0;tr.maxAge=2.5+Math.random()*4;
-    }
+    if(tAge[i]>tMax[i]||x<vx0||x>vx1||y<vy0||y>vy1||isInsideMagnet(x,y)) respawnTracer(i);
   }
 }
 
@@ -480,7 +529,7 @@ function render(){
   ctx.translate(-CW/2 + CAM.x, -CH/2 + CAM.y);
 
   // Grid
-  const vb=visibleBounds();
+  const vb=_vb;
   ctx.strokeStyle='rgba(150,200,255,0.03)';ctx.lineWidth=1/CAM.zoom;
   const gs=50;
   const gx0=Math.floor(vb.x0/gs)*gs, gy0=Math.floor(vb.y0/gs)*gs;
@@ -500,8 +549,8 @@ function render(){
 function renderHeatmap(){
   const step=14;
   for(let x=0;x<CW;x+=step)for(let y=0;y<CH;y+=step){
-    const[Bx,By]=totalField(x,y);
-    ctx.fillStyle=fieldColorCSS(Math.sqrt(Bx*Bx+By*By),0.4);
+    fieldAt(x,y);
+    ctx.fillStyle=fieldColorCSS(Math.sqrt(FBx*FBx+FBy*FBy),0.4);
     ctx.fillRect(x,y,step,step);
   }
 }
@@ -512,8 +561,8 @@ function renderArrows(){
   ctx.globalCompositeOperation='lighter'; // additive blend like orbital viewer
   const step=28,maxLen=14;
   for(let x=step/2;x<CW;x+=step)for(let y=step/2;y<CH;y+=step){
-    const[Bx,By]=totalField(x,y);
-    const Bmag=Math.sqrt(Bx*Bx+By*By);
+    fieldAt(x,y);
+    const Bx=FBx,By=FBy,Bmag=Math.sqrt(Bx*Bx+By*By);
     if(Bmag<1e-5)continue;
     const[r,g,b]=fieldColorRGB(Bmag);
     const lv=Math.min(1,Math.log10(1+Bmag*8)/2.2);
@@ -533,12 +582,187 @@ function renderArrows(){
   }
   ctx.restore();
 }
-// Tracer bucket tables. Each trail segment carries a color level (field
-// magnitude) and a fade level (trail position times age). Both quantize into a
-// small grid, so all segments that share a bucket stroke as one path. The blend
-// is additive, and additive sum is order-independent, so the batch draws the
-// same result as per-segment strokes. Color and width per bucket stay constant
-// across frames, so the loop below precomputes them once.
+// Tracer layer (WebGL). All trails draw in ONE instanced call on a hidden
+// WebGL canvas. render() then adds that canvas onto the 2D canvas with the
+// 'lighter' blend, between the arrows and the magnets.
+//
+// Each instance is one trail segment. It reads four consecutive points P, A,
+// B and N from one vertex buffer, [x, y, colorLevel, fade] per point. The
+// segment is A to B. P and N are the neighbors, used for miter joins, so the
+// quads of one trail share their joint edges: no gaps and no overlaps. Slot 0
+// of the buffer is a pad, so instance i starts at slot i. On the newest
+// point of a trail, colorLevel has +2 added. That flag gives the head segment
+// a round cap at A, as the old round line caps did. Other segments have no
+// cap, so the joints do not add twice. Each tracer uses
+// trailLen+1 slots. The last slot has fade -1, so the segment into the next
+// tracer collapses. The vertex shader expands the segment to a quad. Fade and
+// color level interpolate along the quad, so the gradient along a trail is
+// smooth. The old color and fade buckets made visible steps.
+//
+// The fragment shader adds a wide dim glow and a thin bright core, the same
+// widths and gains as the old two stroke passes: glow max(1,5f) at 0.12, core
+// max(0.5,1.8f) at 0.55, in world units, where f is the fade.
+const glCanvas=document.createElement('canvas');
+let gl=null, glInst=null, glOK=false, glLoc=null, glVBuf=null;
+let glData=new Float32Array(0), glView=null, glViewLen=-1;
+
+// GLSL ramp: the FIELD_RAMP_STOPS table as a chain of mix() calls. For s in
+// [k,k+1], the mix calls before k are at full weight and those after are at
+// zero, so the chain gives the same six-stop ramp as rampStopRGB.
+function glslRamp(){
+  const v=c=>`vec3(${c.map(x=>x.toFixed(3)).join(',')})`;
+  let src=`vec3 ramp(float t){float s=clamp(t,0.0,1.0)*5.0;vec3 c=${v(FIELD_RAMP_STOPS[0])};`;
+  for(let k=1;k<FIELD_RAMP_STOPS.length;k++) src+=`c=mix(c,${v(FIELD_RAMP_STOPS[k])},clamp(s-${(k-1).toFixed(1)},0.0,1.0));`;
+  return src+'return c;}';
+}
+const TR_VS=`
+attribute vec2 aCorner; attribute vec4 aP; attribute vec4 aA; attribute vec4 aB; attribute vec4 aN;
+uniform vec2 uRes; uniform vec2 uCam; uniform float uZoom; uniform float uDpr;
+varying float vDist; varying float vAlong; varying float vGlow; varying float vCore; varying float vFade; varying float vLc;
+vec2 toScreen(vec2 w){ return (w-0.5*uRes+uCam)*uZoom+0.5*uRes; }
+vec2 dirOf(vec2 a,vec2 b,vec2 fb){ vec2 d=b-a; float l=length(d); return l>1e-5?d/l:fb; }
+// Miter offset at a joint: the bisector of the two segment normals, scaled so
+// the line keeps its width. The scale is clamped on sharp turns.
+vec2 miter(vec2 n,vec2 dOther,bool has){
+  if(!has) return n;
+  vec2 m=normalize(n+vec2(-dOther.y,dOther.x)+1e-6);
+  return m/max(dot(m,n),0.5);
+}
+void main(){
+  vDist=0.0; vAlong=0.0; vGlow=0.0; vCore=0.0; vFade=0.0; vLc=0.0;
+  if(aA.w<0.0||aB.w<0.0){ gl_Position=vec4(2.0,2.0,2.0,1.0); return; }
+  vec2 sA=toScreen(aA.xy), sB=toScreen(aB.xy);
+  vec2 d=sB-sA; float L=length(d);
+  vec2 dir=L>1e-5?d/L:vec2(1.0,0.0);
+  vec2 n=vec2(-dir.y,dir.x);
+  // Joint normal at this end: A joins P->A, B joins B->N.
+  bool atB=aCorner.x>0.5;
+  vec2 j=atB?miter(n,dirOf(sB,toScreen(aN.xy),dir),aN.w>=0.0)
+            :miter(n,dirOf(toScreen(aP.xy),sA,dir),aP.w>=0.0);
+  float f=mix(aA.w,aB.w,aCorner.x);
+  float px=uZoom*uDpr;
+  float glow=max(1.0,5.0*f)*px, core=max(0.5,1.8*f)*px;
+  float halfExt=0.5*max(glow,1.0)+1.0;
+  float lcA=aA.z, cap=0.0;
+  if(lcA>=2.0){ lcA-=2.0; cap=halfExt/uDpr; }
+  float along=mix(-cap,L,aCorner.x);
+  vec2 s=sA+dir*along+j*(aCorner.y*halfExt/uDpr);
+  gl_Position=vec4(s.x/uRes.x*2.0-1.0,1.0-s.y/uRes.y*2.0,0.0,1.0);
+  vDist=aCorner.y*halfExt; vAlong=along*uDpr; vGlow=glow; vCore=core; vFade=f; vLc=mix(lcA,aB.z,aCorner.x);
+}`;
+const TR_FS=`
+precision mediump float;
+varying float vDist; varying float vAlong; varying float vGlow; varying float vCore; varying float vFade; varying float vLc;
+${glslRamp()}
+float cov(float w,float d){ float we=max(w,1.0); return clamp(0.5*we+0.5-d,0.0,1.0)*(w/we); }
+void main(){
+  float dx=max(0.0,-vAlong);          // > 0 only inside the head cap
+  float d=sqrt(dx*dx+vDist*vDist);
+  vec3 c=ramp(vLc)*(vFade*(0.12*cov(vGlow,d)+0.55*cov(vCore,d)));
+  gl_FragColor=vec4(c,max(c.r,max(c.g,c.b)));
+}`;
+
+// Make the WebGL context, program and buffers. Returns false if WebGL or
+// instancing is not available. Then renderTracers2D() draws the tracers.
+function initTracerGL(){
+  try{
+    const o={alpha:true,premultipliedAlpha:true,antialias:false,depth:false,stencil:false,preserveDrawingBuffer:false};
+    gl=glCanvas.getContext('webgl2',o);
+    if(gl){
+      glInst={div:(l,d)=>gl.vertexAttribDivisor(l,d),draw:(m,f,c,n)=>gl.drawArraysInstanced(m,f,c,n)};
+    }else{
+      gl=glCanvas.getContext('webgl',o); if(!gl) return false;
+      const e=gl.getExtension('ANGLE_instanced_arrays'); if(!e) return false;
+      glInst={div:(l,d)=>e.vertexAttribDivisorANGLE(l,d),draw:(m,f,c,n)=>e.drawArraysInstancedANGLE(m,f,c,n)};
+    }
+    const sh=(type,src)=>{const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+      if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s;};
+    const p=gl.createProgram();
+    gl.attachShader(p,sh(gl.VERTEX_SHADER,TR_VS)); gl.attachShader(p,sh(gl.FRAGMENT_SHADER,TR_FS));
+    gl.linkProgram(p); if(!gl.getProgramParameter(p,gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    gl.useProgram(p);
+    glLoc={corner:gl.getAttribLocation(p,'aCorner'),P:gl.getAttribLocation(p,'aP'),A:gl.getAttribLocation(p,'aA'),
+      B:gl.getAttribLocation(p,'aB'),N:gl.getAttribLocation(p,'aN'),
+      res:gl.getUniformLocation(p,'uRes'),cam:gl.getUniformLocation(p,'uCam'),
+      zoom:gl.getUniformLocation(p,'uZoom'),dpr:gl.getUniformLocation(p,'uDpr')};
+    // Static quad corners: x = 0 at A and 1 at B, y = -1 or +1 across the line.
+    const cb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,cb);
+    gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,-1,1,-1,0,1,1,1]),gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(glLoc.corner);
+    gl.vertexAttribPointer(glLoc.corner,2,gl.FLOAT,false,0,0); glInst.div(glLoc.corner,0);
+    glVBuf=gl.createBuffer();
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE,gl.ONE); // additive, as the old 'lighter' strokes
+    glCanvas.addEventListener('webglcontextlost',e=>{e.preventDefault();glOK=false;});
+    return true;
+  }catch(err){ console.warn('magnetlab: WebGL tracers off, 2D fallback.',err); return false; }
+}
+glOK=initTracerGL();
+
+// Fill the vertex buffer: one -1 pad slot, then per tracer the newest
+// trailLen points of its ring, newest first, then one -1 slot, then a final
+// -1 pad slot. Fade is (1 - s/trailLen) * ageA, as before. Returns the slot
+// count without the two pads.
+function fillTracerVerts(){
+  const TL=SIM.tracerTrail, stride=TL+1, need=(TR_N*stride+2)*4;
+  if(glData.length<need) glData=new Float32Array((TR_N*(TRAIL_MAX+1)+2)*4);
+  glData[3]=-1;
+  let w=4;
+  for(let i=0;i<TR_N;i++){
+    const age=tAge[i], mx=tMax[i];
+    // Age alpha: fast fade-in, slow sustain, fade-out in last 20%
+    const ageA = age<0.1 ? age/0.1 : age>mx*0.8 ? (mx-age)/(mx*0.2) : 1;
+    const L=trLen[i]<TL?trLen[i]:TL, base=i*TRAIL_MAX;
+    let h=trHead[i];
+    for(let s=0;s<L;s++){
+      const o=base+h;
+      glData[w]=trX[o]; glData[w+1]=trY[o]; glData[w+2]=s===0?trC[o]+2:trC[o]; // +2 = head
+      glData[w+3]=(1-s/TL)*ageA; w+=4;
+      h=h===0?TRAIL_MAX-1:h-1;
+    }
+    for(let s=L;s<stride;s++){ glData[w+3]=-1; w+=4; }
+  }
+  glData[w+3]=-1;
+  return TR_N*stride;
+}
+
+// Draw the tracers into glCanvas. Returns false if WebGL is not in use.
+function renderTracersGL(){
+  if(!glOK) return false;
+  gl.viewport(0,0,glCanvas.width,glCanvas.height);
+  gl.clearColor(0,0,0,0); gl.clear(gl.COLOR_BUFFER_BIT);
+  const slots=fillTracerVerts();
+  if(slots<2) return true;
+  const len=(slots+2)*4;
+  if(len!==glViewLen){ glView=glData.subarray(0,len); glViewLen=len; }
+  gl.bindBuffer(gl.ARRAY_BUFFER,glVBuf);
+  gl.bufferData(gl.ARRAY_BUFFER,glView,gl.DYNAMIC_DRAW);
+  // Instance i reads slots i..i+3 as P, A, B, N.
+  const at=[glLoc.P,glLoc.A,glLoc.B,glLoc.N];
+  for(let k=0;k<4;k++){ gl.enableVertexAttribArray(at[k]); gl.vertexAttribPointer(at[k],4,gl.FLOAT,false,16,16*k); glInst.div(at[k],1); }
+  gl.uniform2f(glLoc.res,CW,CH); gl.uniform2f(glLoc.cam,CAM.x,CAM.y);
+  gl.uniform1f(glLoc.zoom,CAM.zoom); gl.uniform1f(glLoc.dpr,glCanvas.width/CW);
+  glInst.draw(gl.TRIANGLE_STRIP,0,4,slots-1);
+  return true;
+}
+
+// Tracer layer entry point, called from render() under the camera transform.
+// With WebGL, add glCanvas to the 2D canvas in device space. Without WebGL,
+// use the 2D bucket path.
+function renderTracers(){
+  if(renderTracersGL()){
+    ctx.save();
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.globalCompositeOperation='lighter';
+    ctx.drawImage(glCanvas,0,0);
+    ctx.restore();
+    return;
+  }
+  renderTracers2D();
+}
+
+// 2D fallback: the older bucket path. Segments quantize into color and fade
+// buckets, and each bucket strokes once. The fade steps are visible, but this
+// path runs only when WebGL is not available.
 const TR_NC=16, TR_NA=10;              // color levels, fade levels
 const _trGlowStyle=[], _trCoreStyle=[]; // [fade][color] rgba strings
 const _trGlowW=[], _trCoreW=[];         // [fade] line widths
@@ -553,63 +777,34 @@ for(let a=0;a<TR_NA;a++){
     _trCoreStyle[a][c]=`rgba(${(r*a0*0.55*255)|0},${(g*a0*0.55*255)|0},${(b*a0*0.55*255)|0},1)`;
   }
 }
-// One Path2D per bucket, reused each frame. _trUsed lists the buckets that got
-// segments, so the stroke loop touches only non-empty buckets.
 const _trPaths=new Array(TR_NC*TR_NA).fill(null);
 const _trUsed=[];
-
-// Tracer layer: sort every trail segment into a color/fade bucket, then stroke
-// each bucket once. A wide dim glow pass under a thin bright core pass gives the
-// additive bloom look. Draw calls per frame stay bounded by the bucket count,
-// so they do not grow with the tracer count.
-function renderTracers(){
+function renderTracers2D(){
   ctx.save();
-  ctx.globalCompositeOperation='lighter'; // additive blend — matches THREE.AdditiveBlending
+  ctx.globalCompositeOperation='lighter';
   ctx.lineCap='round';
-
   _trUsed.length=0;
-  for(const tr of tracers){
-    const tl=tr.trail.length;if(tl<2)continue;
-    // Age alpha: fast fade-in, slow sustain, fade-out in last 20%
-    // Matches orbital viewer: tr.age<0.1 ? age/0.1 : age>max*0.8 ? (max-age)/(max*0.2) : 1
-    const ageA = tr.age < 0.1 ? tr.age / 0.1
-               : tr.age > tr.maxAge * 0.8 ? (tr.maxAge - tr.age) / (tr.maxAge * 0.2)
-               : 1;
-
-    for(let s=0;s<tl-1;s++){
-      // Trail alpha: head bright, tail dim. Quantize to a fade level.
-      const a0 = (1 - s / SIM.tracerTrail) * ageA;
-      if(a0 < 0.01) continue;
-      let aIdx=(a0*TR_NA)|0; if(aIdx>=TR_NA)aIdx=TR_NA-1;
-
-      // Color level from field magnitude, shaped like fieldColorRGB (gamma 1).
-      const pt=tr.trail[s], pn=tr.trail[s+1];
-      const Bmag = pt[2] || 0;
-      let lc=Math.log10(1+Bmag*8)/2.2; if(lc<0)lc=0; else if(lc>1)lc=1;
-      let cIdx=(lc*TR_NC)|0; if(cIdx>=TR_NC)cIdx=TR_NC-1;
-
-      const bi=cIdx*TR_NA+aIdx;
-      let p=_trPaths[bi];
-      if(!p){ p=_trPaths[bi]=new Path2D(); _trUsed.push(bi); }
-      p.moveTo(pt[0],pt[1]); p.lineTo(pn[0],pn[1]);
-    }
+  const slots=fillTracerVerts(), d=glData;
+  for(let i=1;i<slots;i++){
+    const o=i*4, a0=d[o+3];
+    if(a0<0.01||d[o+7]<0) continue;
+    let aIdx=(a0*TR_NA)|0; if(aIdx>=TR_NA)aIdx=TR_NA-1;
+    const lc=d[o+2]>=2?d[o+2]-2:d[o+2];
+    let cIdx=(lc*TR_NC)|0; if(cIdx>=TR_NC)cIdx=TR_NC-1;
+    const bi=cIdx*TR_NA+aIdx;
+    let p=_trPaths[bi];
+    if(!p){ p=_trPaths[bi]=new Path2D(); _trUsed.push(bi); }
+    p.moveTo(d[o],d[o+1]); p.lineTo(d[o+4],d[o+5]);
   }
-
-  // Glow pass: wider, dimmer line under each bucket for the bloom.
   for(const bi of _trUsed){
-    const aIdx=bi%TR_NA, cIdx=(bi/TR_NA)|0;
-    ctx.strokeStyle=_trGlowStyle[aIdx][cIdx]; ctx.lineWidth=_trGlowW[aIdx];
+    ctx.strokeStyle=_trGlowStyle[bi%TR_NA][(bi/TR_NA)|0]; ctx.lineWidth=_trGlowW[bi%TR_NA];
     ctx.stroke(_trPaths[bi]);
   }
-  // Core pass: bright, thin line over each bucket.
   for(const bi of _trUsed){
-    const aIdx=bi%TR_NA, cIdx=(bi/TR_NA)|0;
-    ctx.strokeStyle=_trCoreStyle[aIdx][cIdx]; ctx.lineWidth=_trCoreW[aIdx];
+    ctx.strokeStyle=_trCoreStyle[bi%TR_NA][(bi/TR_NA)|0]; ctx.lineWidth=_trCoreW[bi%TR_NA];
     ctx.stroke(_trPaths[bi]);
   }
-  // Release this frame's paths so the next frame starts each bucket empty.
   for(const bi of _trUsed) _trPaths[bi]=null;
-
   ctx.restore();
 }
 // Magnet layer: translate and rotate into each body's frame, dispatch to the
@@ -996,6 +1191,8 @@ function resize(){
   canvas.width=CW*dpr;
   canvas.height=CH*dpr;
   ctx.setTransform(dpr,0,0,dpr,0,0);
+  // The WebGL tracer canvas uses the same backing size.
+  glCanvas.width=canvas.width; glCanvas.height=canvas.height;
   document.getElementById('st-dims').textContent=CW+'×'+CH;
 }
 
@@ -1011,20 +1208,32 @@ if(window.ResizeObserver){
 /* ═══ LOOP ═══ */
 // Frame driver: measure dt (clamped so a stalled tab cannot jump the physics),
 // step the simulation when playing, refresh the status readouts, and render.
-let lastTime=0,fpsCounter=0,fpsTime=0;
+// The pole cache refreshes after the magnets move and before any field use.
+let lastTime=0,fpsCounter=0,fpsTime=0,rafId=0;
+const stFps=document.getElementById('st-fps'), stField=document.getElementById('st-field'), stZoom=document.getElementById('st-zoom');
 function loop(time){
-  requestAnimationFrame(loop);
-  const dt=Math.min((time-lastTime)/1000,0.05);lastTime=time;
+  rafId=requestAnimationFrame(loop);
+  const dt=Math.max(0,Math.min((time-lastTime)/1000,0.05));lastTime=time;
   fpsCounter++;fpsTime+=dt;
-  if(fpsTime>=0.5){document.getElementById('st-fps').textContent=Math.round(fpsCounter/fpsTime)+' fps';fpsCounter=0;fpsTime=0;}
-  if(SIM.playing){integrateMagnets();updateTracers(dt);}
+  if(fpsTime>=0.5){stFps.textContent=Math.round(fpsCounter/fpsTime)+' fps';fpsCounter=0;fpsTime=0;}
+  if(SIM.playing) integrateMagnets();
+  refreshFrameCache();
+  if(SIM.playing) updateTracers(dt);
   if(magnets.length>0){
-    const[Bx,By]=totalField(CW/2,CH/2);
-    document.getElementById('st-field').textContent='B: '+Math.sqrt(Bx*Bx+By*By).toExponential(1);
+    fieldAt(CW/2,CH/2);
+    stField.textContent='B: '+Math.sqrt(FBx*FBx+FBy*FBy).toExponential(1);
   }
-  document.getElementById('st-zoom').textContent=CAM.zoom.toFixed(1)+'×';
+  stZoom.textContent=CAM.zoom.toFixed(1)+'×';
   render();
 }
+
+// Stop the loop while the page is hidden. The browser already stops rAF in a
+// hidden tab. This also makes sure that no step runs on return with a long dt.
+// On return, reset lastTime so the first dt is near zero.
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden){ if(rafId){cancelAnimationFrame(rafId);rafId=0;} }
+  else if(!rafId && started){ lastTime=performance.now(); rafId=requestAnimationFrame(loop); }
+});
 
 /* ═══ INIT ═══ */
 // Paint the fixed panel sliders once, then start after a short delay so the
@@ -1032,10 +1241,14 @@ function loop(time){
 // the list, drops one bar magnet, and kicks off the loop.
 document.querySelectorAll('#panel input[type=range]').forEach(sg);
 // Delay init slightly to ensure layout is computed
+let started=false;
 setTimeout(()=>{
   resize();
-  spawnTracers();
+  // Set the default streamer count from the canvas size (see tracerBudget).
+  const sl=document.getElementById('sl-tracer-count');
+  sl.value=tracerBudget(); updateTracerCount(sl);
   rebuildMagnetList();
   addMagnet('bar');
-  requestAnimationFrame(loop);
+  started=true; lastTime=performance.now();
+  if(!document.hidden) rafId=requestAnimationFrame(loop);
 },50);
