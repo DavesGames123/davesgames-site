@@ -38,7 +38,7 @@
 //  ----------------------------------------------------------------------------
 //      shader load .......... "loadShaders"        fetch .glsl before build
 //      constants ............ "// CONSTANTS"       scene scale, categories, SIM
-//      splash / gauges ...... "// SPLASH LOGGER"   boot log + loading meters
+//      splash / strip ....... "// SPLASH LOGGER"   title card, #acq strip, tweens
 //      three.js base ........ "// THREE.JS BASE"   renderer, camera, controls
 //      earth map ............ "function buildEarthMap"  canvas-drawn continents
 //      coord helpers ........ "function latLonToVec3"   frame conversions
@@ -149,83 +149,128 @@ function offsetMsToFrac(offsetMs) {
 let splashGone = false;
 
 // ═══════════════════════════════════════════════════════════════════
-// SPLASH LOGGER + INSTRUMENTS
+// SPLASH LOGGER + ACQUISITION STRIP
 // ═══════════════════════════════════════════════════════════════════
-// Append one line to the boot splash log, capping the visible history.
+// Boot has two surfaces. #splash is a short title card over the scene; it
+// lifts as soon as the Earth map is ready (see revealScene). #acq is the strip
+// at the top that stays up while TLE groups land on the visible globe: one
+// segment per group, an object counter, the latest log line, and one chip per
+// subsystem (GEO, CAT, STM, WND, STR).
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const splashLines = document.getElementById('splash-lines');
+const acqEl      = document.getElementById('acq');
+const acqLine    = document.getElementById('acq-line');
+const acqSegsEl  = document.getElementById('acq-segs');
+const acqCountEl = document.getElementById('acq-count');
+const acqTitle   = document.getElementById('acq-title');
+
+// Log one boot line: append it to the splash log (last 3 kept) and make it the
+// strip's current line, re-running the strip's line-in animation.
 function splash(msg, cls = '') {
-  if (!splashLines) return;
-  const div = document.createElement('div');
-  div.className = 'ln ' + cls;
-  div.textContent = msg;
-  splashLines.appendChild(div);
-  splashLines.scrollTop = splashLines.scrollHeight;
-  if (splashLines.childElementCount > 12) splashLines.firstChild.remove();
+  if (splashLines && splashLines.isConnected) {
+    const div = document.createElement('div');
+    div.className = 'ln ' + cls;
+    div.textContent = msg;
+    splashLines.appendChild(div);
+    while (splashLines.childElementCount > 3) splashLines.firstChild.remove();
+  }
+  if (acqLine) {
+    acqLine.textContent = msg;
+    acqLine.className = 'acq-line ' + cls;
+    void acqLine.offsetWidth;
+    acqLine.classList.add('in');
+  }
 }
 
-// ─── Gauges (CATALOG / WIND GRID / STREAMS / STORMS / GEODESY)
-// pct ∈ [0,100]; pass {done:true} or {fail:true} to color-tint when finished.
-// Drive one boot gauge: set its arc fill, sweep the needle, and print the
-// percent; done/fail tint it when the task finishes.
+// Subsystem chips. pct > 0 marks the chip busy; {done} or {fail} marks the
+// finish. Callers pass percentages from when these were dial gauges; only the
+// state is shown now.
 function setGauge(name, pct, state) {
-  const el = document.querySelector(`.gauge[data-prog="${name}"]`);
+  const el = acqEl && acqEl.querySelector(`[data-sys="${name}"]`);
   if (!el) return;
-  pct = Math.max(0, Math.min(100, pct));
-  const fill = el.querySelector('.g-fill');
-  const needle = el.querySelector('.g-needle');
-  const pctText = el.querySelector('.g-pct');
-  if (fill) fill.setAttribute('stroke-dasharray', `${pct} ${100 - pct}`);
-  // Needle sweep: -135° (0%) → +135° (100%)
-  if (needle) needle.setAttribute('transform', `rotate(${-135 + (pct * 2.7)} 35 35)`);
-  if (pctText) pctText.textContent = Math.round(pct);
-  el.classList.toggle('done', !!(state && state.done));
-  el.classList.toggle('fail', !!(state && state.fail));
+  const st = state && state.fail ? 'fail' : state && state.done ? 'ok' : pct > 0 ? 'busy' : 'idle';
+  if (el.dataset.state !== st) el.dataset.state = st;
 }
 
-// ─── Per-group catalog meters
-// Per-group catalog meters: one progress row per TLE group, mirrored from the
-// load-status panel. meterAdd/Done/Fail create and update rows; the CATALOG
-// gauge is recomputed from how many rows have finished.
-const meterStack = document.getElementById('catalog-meters');
-const meterRows = new Map(); // group → element
-function meterAdd(group) {
-  if (!meterStack || meterRows.has(group)) return;
-  const row = document.createElement('div');
-  row.className = 'meter';
-  row.innerHTML =
-    `<span class="meter-label">${group}</span>` +
-    `<div class="meter-track"><div class="meter-fill indeterminate"></div></div>` +
-    `<span class="meter-value">…</span>`;
-  meterStack.appendChild(row);
-  meterRows.set(group, row);
-  // Auto-recompute the CATALOG gauge from group meters as they progress
+// Group segments, mirrored from the load-status panel by addLoadRow and
+// setLoadStatus. The CAT chip is done when every segment is ok or fail.
+const acqSegs = new Map(); // group → element
+function acqSegAdd(group) {
+  if (!acqSegsEl || acqSegs.has(group)) return;
+  const seg = document.createElement('span');
+  seg.className = 'seg loading';
+  seg.title = group;
+  seg.style.setProperty('--i', acqSegs.size);
+  acqSegsEl.appendChild(seg);
+  acqSegs.set(group, seg);
   catalogGaugeRecompute();
 }
-function meterDone(group, count) {
-  const row = meterRows.get(group);
-  if (!row) return;
-  row.classList.add('done');
-  row.querySelector('.meter-fill').classList.remove('indeterminate');
-  row.querySelector('.meter-fill').style.width = '100%';
-  row.querySelector('.meter-value').textContent = `+${count}`;
-  catalogGaugeRecompute();
-}
-function meterFail(group, msg) {
-  const row = meterRows.get(group);
-  if (!row) return;
-  row.classList.add('fail');
-  row.querySelector('.meter-fill').classList.remove('indeterminate');
-  row.querySelector('.meter-fill').style.width = '100%';
-  row.querySelector('.meter-value').textContent = msg || 'fail';
+function acqSegSet(group, status) {
+  const seg = acqSegs.get(group);
+  if (!seg) return;
+  seg.className = 'seg ' + status;
   catalogGaugeRecompute();
 }
 function catalogGaugeRecompute() {
-  const total = meterRows.size;
-  if (!total) return;
   let done = 0;
-  meterRows.forEach(r => { if (r.classList.contains('done') || r.classList.contains('fail')) done++; });
-  setGauge('catalog', total ? (done / total) * 100 : 0,
-           done === total ? { done: true } : null);
+  acqSegs.forEach(s => { if (s.classList.contains('ok') || s.classList.contains('fail')) done++; });
+  setGauge('catalog', acqSegs.size ? 1 + 99 * done / acqSegs.size : 0,
+           acqSegs.size && done === acqSegs.size ? { done: true } : null);
+}
+
+// Count a number element up (or down) to target over ~0.7 s with an ease-out
+// curve. A new call on the same element takes over from the shown value.
+const tweens = new Map(); // element → { from, to, t0 }
+function tweenNumber(el, to) {
+  if (!el) return;
+  const shown = Number(String(el.textContent).replace(/[^0-9]/g, '')) || 0;
+  if (REDUCED_MOTION || shown === to) { el.textContent = to.toLocaleString(); return; }
+  const had = tweens.size > 0;
+  tweens.set(el, { from: shown, to, t0: performance.now() });
+  if (!had) requestAnimationFrame(stepTweens);
+}
+function stepTweens(now) {
+  tweens.forEach((tw, el) => {
+    const k = Math.min(1, (now - tw.t0) / 700);
+    const e = 1 - Math.pow(1 - k, 3);
+    el.textContent = Math.round(tw.from + (tw.to - tw.from) * e).toLocaleString();
+    if (k >= 1) tweens.delete(el);
+  });
+  if (tweens.size) requestAnimationFrame(stepTweens);
+}
+
+// Re-run a one-shot CSS animation class on an element.
+function retrigger(el, cls) {
+  if (!el) return;
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
+}
+
+// Resolve the splash logo from random glyphs to its text, left to right, over
+// ~0.9 s. Resolves when the minimum title-card time has passed.
+function playIntro() {
+  const logo = document.getElementById('splash-logo');
+  const MIN_MS = REDUCED_MOTION ? 200 : 1500;
+  if (logo && !REDUCED_MOTION) {
+    const final = logo.textContent;
+    const GLYPHS = '<>/\\|#*+=01';
+    const t0 = performance.now();
+    const step = (now) => {
+      const k = (now - t0) / 900;
+      let out = '';
+      for (let i = 0; i < final.length; i++) {
+        const lockAt = (i + 1) / final.length;
+        out += (final[i] === ' ' || k >= lockAt) ? final[i]
+             : GLYPHS[(Math.random() * GLYPHS.length) | 0];
+      }
+      logo.textContent = out;
+      if (k < 1) requestAnimationFrame(step);
+      else logo.textContent = final;
+    };
+    requestAnimationFrame(step);
+  }
+  return new Promise(r => setTimeout(r, MIN_MS));
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -539,7 +584,10 @@ function rebuildAttributesFromSats() {
 // Give sats[from..to) a landing time in the next `spread` seconds, so a group
 // rains in over a short window instead of all at once. The satellite shader
 // runs the fall-in animation from these times (see satellite.vert.glsl).
+// Before revealScene the globe is covered, so nothing is stamped; the reveal
+// stamps every object that arrived during the title card.
 function stampBirths(from, to, spread = 1.8) {
+  if (!revealed) return;
   const now = performance.now() / 1000;
   for (let i = from; i < to; i++) birthAttr[i] = now + Math.random() * spread;
   satGeo.attributes.aBirth.needsUpdate = true;
@@ -548,6 +596,7 @@ function stampBirths(from, to, spread = 1.8) {
 // Ping rings: camera-facing rings that grow out from the globe rim and fade,
 // one per landed TLE group. A small pool is reused; pingGlobe takes the next.
 const PING_S = 1.6;
+let revealed = false;
 const pings = [];
 for (let i = 0; i < 4; i++) {
   const m = new THREE.Mesh(
@@ -560,6 +609,7 @@ for (let i = 0; i < 4; i++) {
 }
 let pingNext = 0;
 function pingGlobe(color = 0x66e0ff) {
+  if (!revealed) return;
   const p = pings[pingNext++ % pings.length];
   p.mesh.material.color.set(color);
   p.t0 = performance.now() / 1000;
@@ -1315,9 +1365,12 @@ function updateCounts() {
   for (const s of sats) c[s.cat]++;
   for (const k of Object.keys(c)) {
     const el = document.getElementById('cnt-'+k);
-    if (el) el.textContent = c[k].toLocaleString();
+    if (!el) continue;
+    if (el.textContent !== c[k].toLocaleString()) retrigger(el.closest('.filter-row'), 'bump');
+    tweenNumber(el, c[k]);
   }
-  document.getElementById('stat-count').textContent = sats.length.toLocaleString();
+  tweenNumber(document.getElementById('stat-count'), sats.length);
+  tweenNumber(acqCountEl, sats.length);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2135,20 +2188,21 @@ function demoDataset() {
 
 // Persistent load-status panel
 // Load-status panel: a persistent row per TLE group showing load/ok/fail/retry
-// and the object count, mirrored into the splash meters.
+// and the object count, mirrored into the #acq strip segments.
 const loadRowsEl = document.getElementById('load-rows');
 const loadDotEl  = document.getElementById('load-dot');
 const loadRows = new Map();
 function addLoadRow(group) {
   const row = document.createElement('div');
-  row.className = 'load-row';
+  row.className = 'load-row lr-in';
+  row.style.setProperty('--i', loadRows.size);
   row.innerHTML =
     `<span class="lr-name">${group}</span>` +
     `<span class="lr-status loading">load</span>` +
     `<span class="lr-count">—</span>`;
   loadRowsEl.appendChild(row);
   loadRows.set(group, row);
-  meterAdd(group); // splash mirror
+  acqSegAdd(group); // strip mirror
 }
 function setLoadStatus(group, status, count) {
   const row = loadRows.get(group);
@@ -2158,17 +2212,8 @@ function setLoadStatus(group, status, count) {
   st.className = 'lr-status ' + status;
   st.textContent = status;
   if (count !== undefined) cn.textContent = `+${count.toLocaleString()}`;
-  // Splash mirror
-  if (status === 'ok')         meterDone(group, count || 0);
-  else if (status === 'fail')  meterFail(group, 'fail');
-  else if (status === 'retry') {
-    const r = meterRows.get(group);
-    if (r) {
-      r.classList.remove('done', 'fail');
-      r.querySelector('.meter-fill').classList.add('indeterminate');
-      r.querySelector('.meter-value').textContent = 'retry';
-    }
-  }
+  retrigger(row, 'lr-flash');
+  acqSegSet(group, status);
 }
 
 // Alternate URLs for groups that often fail (rate limit, response size)
@@ -2207,6 +2252,7 @@ async function loadGroup(group, opts = {}) {
         n++;
       }
       setLoadStatus(group, 'ok', n);
+      splash(`${group} +${n.toLocaleString()}`, n ? 'ok' : '');
       rebuildAttributesFromSats();
       if (n > 0) {
         stampBirths(first, sats.length);
@@ -2219,6 +2265,7 @@ async function loadGroup(group, opts = {}) {
     }
   }
   setLoadStatus(group, 'fail', 0);
+  splash(`${group}: ${lastErr ? lastErr.message : 'fail'}`, 'err');
   return -1;
 }
 
@@ -2236,16 +2283,10 @@ async function parallelLimit(items, limit, fn) {
   await Promise.all(Array.from({length: Math.min(limit, items.length)}, worker));
 }
 
-// Boot sequence: build the Earth map, load stations first (fast labels), then
-// the remaining groups in parallel with retries, add storms and weather, and
-// finally fade the splash screen. Falls back to the demo dataset if all fail.
-async function boot() {
-  splash('init renderer', 'ok');
-  try { await buildEarthMap(); earthRoot.remove(fallbackShell); }
-  catch (e) { splash('continents failed', 'err'); }
-  setStatus('FETCH<span class="blink">_</span>', 'status-warn');
-
-  // Stations first so labels/trails come up fast
+// Stations first (fast labels and trails), then the remaining groups at most
+// 4 at a time, then two retry rounds with backoff for failed groups. Objects
+// land on the globe as each group finishes (see loadGroup).
+async function loadCatalog() {
   await loadGroup('stations', { forceCat: 'station' });
   rebuildStationLabels();
   rebuildStationTrails();
@@ -2270,6 +2311,72 @@ async function boot() {
     await new Promise(r => setTimeout(r, 1500 * attempt));
     await parallelLimit(failed, 2, g => loadGroup(g));
   }
+}
+
+// Intro camera: swing in from far out and to the side to the default view.
+// Spherical coordinates about the origin, eased with a quintic ease-out.
+// Any user drag cancels the move.
+const INTRO_MS = 2600;
+const introEnd = new THREE.Spherical().setFromVector3(camera.position);
+const introStart = new THREE.Spherical(7.5, introEnd.phi + 0.35, introEnd.theta - 1.5);
+const _introSph = new THREE.Spherical();
+let introT0 = -1;
+camera.position.setFromSpherical(introStart);
+controls.addEventListener('start', () => { introT0 = -1; });
+function stepIntroCamera(now) {
+  if (introT0 < 0) return;
+  const k = Math.min(1, (now - introT0) / INTRO_MS);
+  const e = 1 - Math.pow(1 - k, 5);
+  _introSph.set(
+    introStart.radius + (introEnd.radius - introStart.radius) * e,
+    introStart.phi    + (introEnd.phi    - introStart.phi)    * e,
+    introStart.theta  + (introEnd.theta  - introStart.theta)  * e);
+  camera.position.setFromSpherical(_introSph);
+  if (k >= 1) introT0 = -1;
+}
+
+// Lift the title card: start the camera swing, power on the panels (CSS
+// boot-in), show the #acq strip, and let every object that already arrived
+// fall in.
+function revealScene() {
+  revealed = true;
+  const sp = document.getElementById('splash');
+  sp.classList.add('lift');
+  setTimeout(() => sp.remove(), 1100);
+  setTimeout(() => { splashGone = true; }, 700);
+  document.body.classList.replace('boot-wait', 'boot-in');
+  if (acqEl) acqEl.classList.add('on');
+  if (REDUCED_MOTION) camera.position.setFromSpherical(introEnd);
+  else introT0 = performance.now();
+  stampBirths(0, sats.length, 2.2);
+  pingGlobe(0x66e0ff);
+}
+
+// Close the strip: flash it green, then slide it away.
+function finishAcquisition() {
+  if (!acqEl) return;
+  acqTitle.textContent = sats.length ? 'CATALOG NOMINAL' : 'CATALOG OFFLINE';
+  acqEl.classList.add('done');
+  pingGlobe(0x5fb872);
+  setTimeout(() => acqEl.classList.add('off'), 2600);
+}
+
+// Boot sequence: the title card, the Earth map and the catalog start together.
+// The scene is revealed when the title card and the Earth map are both done,
+// so satellites land on a visible globe. Falls back to the demo dataset if
+// every group fails.
+async function boot() {
+  const intro = playIntro();
+  splash('init renderer', 'ok');
+  const earth = buildEarthMap().then(
+    () => earthRoot.remove(fallbackShell),
+    () => splash('continents failed', 'err'));
+  setStatus('FETCH<span class="blink">_</span>', 'status-warn');
+  const catalog = loadCatalog();
+
+  await Promise.all([intro, earth]);
+  revealScene();
+  await catalog;
 
   if (sats.length === 0) {
     splash('demo dataset', 'err');
@@ -2282,15 +2389,11 @@ async function boot() {
   rebuildStationLabels();
   rebuildStationTrails();
   loadStorms();
-  loadWeather();
   if (loadDotEl) loadDotEl.style.animation = 'none';
-  splash(`ready :: ${sats.length} obj`, 'ok');
   setStatus('NOMINAL', 'status-ok');
-  setTimeout(() => {
-    const sp = document.getElementById('splash');
-    sp.classList.add('fade');
-    setTimeout(() => { sp.remove(); splashGone = true; }, 500);
-  }, 600);
+  await loadWeather();
+  splash(`ready :: ${sats.length.toLocaleString()} obj`, 'ok');
+  finishAcquisition();
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2317,6 +2420,7 @@ function animate(now) {
   earthUniforms.uSunDir.value.copy(sunDirEcef(SIM.time));
   satMat.uniforms.uTime.value = now / 1000;
   updatePings(now / 1000);
+  stepIntroCamera(now);
   controls.update();
   if (sats.length > 0 && now - lastPropTime >= PROP_DT) {
     propagateAll();

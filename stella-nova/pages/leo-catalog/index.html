@@ -9,9 +9,15 @@
    LEO CATALOG  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. main.js (type=module) renders the WebGL globe into the
-   #scene canvas and drives every readout, label, and overlay here by id. The
-   splash rack is the boot dashboard main.js fills with gauges, meters, and log
-   lines while it fetches the satellite catalog.
+   #scene canvas and drives every readout, label, and overlay here by id.
+
+   BOOT
+     body.boot-wait  hides the panels until main.js reveals the scene.
+     #splash         title card: the logo resolves, then the card lifts
+                     when the Earth map is ready (revealScene in main.js).
+     #acq            top strip while TLE groups land on the visible globe:
+                     one segment per group, object count, log line, and
+                     subsystem chips. It slides away when boot finishes.
 
    LOAD ORDER  (order matters)
      1. satellite.js   SGP4 propagator (global "satellite")
@@ -31,7 +37,7 @@
      ├────────────┴───────────────────────────────────┴────────────────┤
      │ #timepanel: clock · time slider · transport · rate slider        │
      └─────────────────────────────────────────────────────────────────┘
-   #splash covers everything until boot finishes, then fades out.
+   #splash covers everything for ~1.5 s; #acq sits top-centre after that.
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -39,110 +45,39 @@
 <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="boot-wait">
 
 <!-- Full-screen WebGL target; main.js attaches the renderer to this canvas. -->
 <canvas id="scene"></canvas>
 
-<!-- Splash: boot dashboard shown over the scene until the catalog is loaded.
-     main.js drives the gauges (by data-prog), the per-group meters, and the log. -->
-<!-- Splash -->
+<!-- Splash: title card over the scene. main.js resolves #splash-logo from
+     random glyphs, logs to #splash-lines, and adds .lift to open it. -->
 <div id="splash">
-  <div class="splash-header">
-    <div class="logo">LEO / CAT</div>
+  <div class="splash-iris"></div>
+  <div class="splash-card">
+    <div class="logo" id="splash-logo">LEO / CAT</div>
     <div class="sub">low earth orbit :: catalog &amp; chronograph</div>
-  </div>
-
-  <div class="splash-rack">
-    <!-- Top row: 5 circular gauges -->
-    <div class="gauge-row">
-      <div class="gauge" data-prog="catalog">
-        <svg viewBox="0 0 70 70" class="gauge-svg">
-          <circle class="g-bg"    cx="35" cy="35" r="28" />
-          <circle class="g-tick"  cx="35" cy="35" r="32" />
-          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
-          <g class="g-needle" transform="rotate(-135 35 35)">
-            <line x1="35" y1="35" x2="35" y2="13" />
-            <circle cx="35" cy="35" r="2.5" />
-          </g>
-          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
-        </svg>
-        <div class="g-label">CATALOG</div>
-      </div>
-      <div class="gauge" data-prog="weather">
-        <svg viewBox="0 0 70 70" class="gauge-svg">
-          <circle class="g-bg"    cx="35" cy="35" r="28" />
-          <circle class="g-tick"  cx="35" cy="35" r="32" />
-          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
-          <g class="g-needle" transform="rotate(-135 35 35)">
-            <line x1="35" y1="35" x2="35" y2="13" />
-            <circle cx="35" cy="35" r="2.5" />
-          </g>
-          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
-        </svg>
-        <div class="g-label">WIND GRID</div>
-      </div>
-      <div class="gauge" data-prog="streams">
-        <svg viewBox="0 0 70 70" class="gauge-svg">
-          <circle class="g-bg"    cx="35" cy="35" r="28" />
-          <circle class="g-tick"  cx="35" cy="35" r="32" />
-          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
-          <g class="g-needle" transform="rotate(-135 35 35)">
-            <line x1="35" y1="35" x2="35" y2="13" />
-            <circle cx="35" cy="35" r="2.5" />
-          </g>
-          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
-        </svg>
-        <div class="g-label">STREAMS</div>
-      </div>
-      <div class="gauge" data-prog="storms">
-        <svg viewBox="0 0 70 70" class="gauge-svg">
-          <circle class="g-bg"    cx="35" cy="35" r="28" />
-          <circle class="g-tick"  cx="35" cy="35" r="32" />
-          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
-          <g class="g-needle" transform="rotate(-135 35 35)">
-            <line x1="35" y1="35" x2="35" y2="13" />
-            <circle cx="35" cy="35" r="2.5" />
-          </g>
-          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
-        </svg>
-        <div class="g-label">STORMS</div>
-      </div>
-      <div class="gauge" data-prog="geo">
-        <svg viewBox="0 0 70 70" class="gauge-svg">
-          <circle class="g-bg"    cx="35" cy="35" r="28" />
-          <circle class="g-tick"  cx="35" cy="35" r="32" />
-          <circle class="g-fill"  cx="35" cy="35" r="28" pathLength="100" />
-          <g class="g-needle" transform="rotate(-135 35 35)">
-            <line x1="35" y1="35" x2="35" y2="13" />
-            <circle cx="35" cy="35" r="2.5" />
-          </g>
-          <text class="g-pct" x="35" y="52" text-anchor="middle">0</text>
-        </svg>
-        <div class="g-label">GEODESY</div>
-      </div>
-    </div>
-
-    <!-- Middle: linear meters for individual TLE catalog groups -->
-    <div class="meter-stack" id="catalog-meters">
-      <!-- generated dynamically as each group starts loading -->
-    </div>
-
-    <!-- Bottom: continuous scan bar + spinning indicators -->
-    <div class="rack-bottom">
-      <div class="scan-block">
-        <div class="scan-label">SIGNAL ACQUISITION</div>
-        <div class="scan-track"><div class="scan-bar"></div></div>
-      </div>
-      <div class="spinners">
-        <div class="spinner s1"></div>
-        <div class="spinner s2"></div>
-        <div class="spinner s3"></div>
-      </div>
-    </div>
-
-    <!-- Log stream -->
+    <div class="splash-bar"><span></span></div>
     <div id="splash-lines"></div>
+  </div>
+</div>
+
+<!-- Acquisition strip: shown from the reveal until boot finishes. main.js
+     fills #acq-segs (one span per TLE group), #acq-count and #acq-line, and
+     sets data-state on each [data-sys] chip (idle, busy, ok, fail). -->
+<div id="acq" class="panel corners" aria-live="polite">
+  <span class="ctl"></span><span class="ctr"></span>
+  <div class="acq-head">
+    <span class="acq-spin"></span>
+    <span class="acq-title" id="acq-title">ACQUIRING ORBITAL CATALOG</span>
+    <span class="acq-count"><span id="acq-count">0</span> OBJ</span>
+  </div>
+  <div class="acq-segs" id="acq-segs"></div>
+  <div class="acq-foot">
+    <span class="acq-line" id="acq-line">&nbsp;</span>
+    <span class="acq-sys">
+      <i data-sys="geo">GEO</i><i data-sys="catalog">CAT</i><i data-sys="storms">STM</i><i data-sys="weather">WND</i><i data-sys="streams">STR</i>
+    </span>
   </div>
 </div>
 
