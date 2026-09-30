@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Wave Membrane — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   WAVE MEMBRANE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js draws a clamped membrane into the WebGL canvas
+   (#gl) with three.js r128. sim.js steps the 2D wave equation on the grid:
+       laplacian(u) = (1/c^2) * d2u/dt2
+   The membrane starts at rest in one mode, or in a sum of two modes. The
+   fixed edge only allows some modes, so each one stays a standing wave.
+   The color modes show height, acceleration magnitude, or signed acceleration.
+
+   HEAD LOAD ORDER  (order matters)
+     1. fonts       Google Fonts stylesheet
+     2. KaTeX       CSS then JS, so equations.js can render on load
+     3. style.css   the page stylesheet
+   Scripts at end of body, in this order:
+     three.js r128  defines global THREE
+     sim.js         defines global MembraneSolver (no DOM, no THREE)
+     equations.js   renders the KaTeX equations, or keeps the plain text
+     main.js        the scene, the controls, and the frame loop
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Wave Membrane                       #gear    │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │  #gl      the membrane; drag to orbit, scroll to zoom │
+     │  shape     │  #legend  colorbar and its numeric scale              │
+     │  mode      │  #hint    drag to orbit                               │
+     │  2nd mode  │                                                       │
+     │  membrane  │                                                       │
+     │  playback  │                                                       │
+     │  color     │                                                       │
+     │  readout   │                                                       │
+     │  about     │                                                       │
+     ├────────────┴─────────────────────────────────────────────────────┤
+     │ #status  mode · omega · period                                     │
+     └──────────────────────────────────────────────────────────────────┘
+
+   GREP MAP  (main.js)
+     grep -n 'function buildMesh'    the membrane geometry for each shape
+     grep -n 'function paint'        per-vertex color for each color mode
+     grep -n 'function buildNodal'   the analytic nodal-line overlay
+     grep -n 'function frame'        the render loop, substeps, and camera
+     grep -n 'function buildUI'      the control panel construction
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A clamped membrane in a standing wave. Pick a mode of a square or a drum, add a second mode, and see where the acceleration is largest.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;WAVE.MEMBRANE</div>
+  <div class="pagetitle">Wave Membrane</div>
+</div>
+
+<canvas id="gl"></canvas>
+<div id="hint">drag to orbit · pinch or scroll to zoom</div>
+<button id="gear" aria-label="Controls">⚙</button>
+
+<div id="legend">
+  <div class="lg-title" id="lgTitle">|∂²u/∂t²|</div>
+  <canvas id="lgBar" width="180" height="10"></canvas>
+  <div class="lg-ticks"><span id="lgLo">0</span><span id="lgMid"></span><span id="lgHi">0</span></div>
+</div>
+
+<div id="panel" class="open">
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">SHAPE</div>
+  <div class="modes">
+    <button id="shapeSquare" class="on">SQUARE</button>
+    <button id="shapeCircle">CIRCULAR DRUM</button>
+  </div>
+
+  <div class="sec-label">MODE  (m, n)</div>
+  <div class="ratio-row">
+    <div class="stepper" id="stepM1"><button data-d="-1">−</button><span class="num" id="numM1">2</span><button data-d="1">+</button><span class="axis-tag" id="tagM1">m</span></div>
+    <div class="stepper" id="stepN1"><button data-d="-1">−</button><span class="num" id="numN1">1</span><button data-d="1">+</button><span class="axis-tag" id="tagN1">n</span></div>
+  </div>
+  <div class="hint" id="modeHint"></div>
+
+  <div class="sec-label">SECOND MODE</div>
+  <div class="modes"><button id="mode2Btn">+ ADD SECOND MODE</button></div>
+  <div id="mode2Box" class="off">
+    <div class="ratio-row">
+      <div class="stepper" id="stepM2"><button data-d="-1">−</button><span class="num" id="numM2">1</span><button data-d="1">+</button><span class="axis-tag">m₂</span></div>
+      <div class="stepper" id="stepN2"><button data-d="-1">−</button><span class="num" id="numN2">3</span><button data-d="1">+</button><span class="axis-tag">n₂</span></div>
+    </div>
+    <div class="row"><label>Amp 2</label><input type="range" id="amp2" min="0" max="1" step="0.01" value="0.6"><span class="val" id="amp2V"></span></div>
+    <div class="hint">Two modes with different ω drift out of step. The shape then changes over time, and acceleration is no longer a scaled copy of height.</div>
+  </div>
+
+  <div class="sec-label">MEMBRANE</div>
+  <div class="row"><label>Amplitude</label><input type="range" id="amp" min="0.1" max="1" step="0.01" value="0.7"><span class="val" id="ampV"></span></div>
+  <div class="row"><label>Speed c</label><input type="range" id="c" min="0.5" max="3" step="0.05" value="1"><span class="val" id="cV"></span></div>
+
+  <div class="sec-label">PLAYBACK</div>
+  <div class="row"><label>Rate</label><input type="range" id="speed" min="0.1" max="4" step="0.05" value="1"><span class="val" id="speedV"></span></div>
+  <div class="modes">
+    <button id="pauseBtn">❚❚ PAUSE</button>
+    <button id="stepBtn" title="Advance by one twenty-fourth of the period">STEP T/24</button>
+    <button id="resetBtn">RESET</button>
+  </div>
+
+  <div class="sec-label">COLOR</div>
+  <div class="presets" id="colorModes">
+    <button data-mode="height" class="on">HEIGHT</button>
+    <button data-mode="accmag">|ACCEL|</button>
+    <button data-mode="accsgn">± ACCEL</button>
+  </div>
+  <div class="modes" style="margin-top:8px"><button id="nodalBtn" class="on">NODAL LINES · ON</button></div>
+  <div class="hint" id="nodalHint"></div>
+
+  <div class="sec-label">READOUT</div>
+  <div class="eq" id="eq-wave">∇²u = (1/c²) ∂²u/∂t²</div>
+  <div class="eq" id="eq-mode">∂²u/∂t² = −ω² u   (one mode)</div>
+  <table class="readout">
+    <tr><td>mode</td><td id="rdMode"></td></tr>
+    <tr><td>ω</td><td id="rdOmega"></td></tr>
+    <tr><td>T = 2π/ω</td><td id="rdT"></td></tr>
+    <tr><td>energy E</td><td id="rdE"></td></tr>
+    <tr><td>drift</td><td id="rdDrift"></td></tr>
+    <tr><td>time t</td><td id="rdTime"></td></tr>
+    <tr><td>grid</td><td id="rdGrid"></td></tr>
+  </table>
+
+  <div class="sec-label">ABOUT</div>
+  <div class="about">
+    <p>A standing wave is two equal waves that travel in opposite directions. Their sum does not travel. Each point only moves up and down.</p>
+    <p>The edge is fixed, so u = 0 there. Only waves that fit a whole number of half wavelengths survive. These are the modes (m, n). A square gives sine modes. A drum gives Bessel modes J<sub>m</sub>(kr)·cos mθ.</p>
+    <p>In one mode, ∂²u/∂t² = −ω²u. The acceleration map is then the height map times −ω². It is brightest at the antinodes and zero on the nodal lines.</p>
+    <p>Add a second mode with a different ω, and that proportion breaks. Each mode has its own ω², so the acceleration is a different mix of the two shapes.</p>
+  </div>
+</div>
+
+<div id="status">
+  <span id="stMain" class="fn"></span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<!-- three.js r128 first (defines global THREE), then the solver, the equations, and main.js. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="sim.js"></script>
+<script src="equations.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

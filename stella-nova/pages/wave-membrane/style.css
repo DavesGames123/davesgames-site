@@ -1,0 +1,134 @@
+/* ============================================================================
+   WAVE MEMBRANE  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Dark shell, the same palette as Resonance 3D. The WebGL canvas fills the
+   frame. The control panel slides in from the left. The colorbar legend sits
+   at the lower right. The status bar sits at the base.
+   ========================================================================== */
+:root{
+  --bg:#04030880; --bg2:#0c0912; --ink:#d6cfe0; --dim:#8a7a9a; --faint:#3a2a48;
+  --line:rgba(220,150,200,0.10); --line-b:rgba(240,150,120,0.22);
+  --warm:#fca35e; --pink:#cd4071; --blue:#9f2f7f; --panel-w:290px;
+}
+html,body{background:#040308}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
+body{font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace;color:var(--ink);-webkit-font-smoothing:antialiased}
+
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:52px;z-index:30;display:flex;align-items:center;gap:18px;padding:0 20px;
+  background:linear-gradient(180deg,rgba(7,9,13,0.92),rgba(7,9,13,0.0));pointer-events:none;
+}
+.brand{font-family:'Cormorant Garamond',Georgia,serif;font-size:1.35rem;letter-spacing:0.22em;color:#e8eef8;display:flex;align-items:center;gap:9px}
+.brand .dot{width:7px;height:7px;border-radius:50%;background:var(--warm);box-shadow:0 0 9px var(--warm)}
+.sys{font-size:0.62rem;letter-spacing:0.2em;color:var(--dim)}
+.pagetitle{font-size:0.72rem;letter-spacing:0.16em;color:var(--pink);margin-left:auto;text-transform:uppercase}
+html.in-frame .topbar{display:none}
+
+#gl{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#hint{
+  position:fixed;left:50%;bottom:52px;transform:translateX(-50%);z-index:20;
+  font-size:0.6rem;letter-spacing:0.14em;color:var(--dim);pointer-events:none;text-transform:uppercase;
+}
+
+#gear{
+  position:fixed;top:14px;left:14px;z-index:40;width:38px;height:38px;
+  border:1px solid var(--line-b);background:rgba(12,15,22,0.7);color:var(--ink);
+  border-radius:9px;font-size:1.05rem;cursor:pointer;display:none;
+}
+html.in-frame #gear{top:12px}
+#gear:hover{border-color:var(--warm);color:var(--warm)}
+
+#panel{
+  position:fixed;top:0;left:0;bottom:0;width:var(--panel-w);z-index:35;
+  background:linear-gradient(180deg,rgba(12,15,22,0.96),rgba(7,9,13,0.98));
+  border-right:1px solid var(--line-b);padding:64px 18px 20px;overflow-y:auto;
+  transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);backdrop-filter:blur(6px);
+}
+#panel.open{transform:translateX(0)}
+html.in-frame #panel{padding-top:24px}
+#panelClose{position:absolute;top:14px;right:14px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px;cursor:pointer}
+#panelClose:hover{color:var(--warm);border-color:var(--warm)}
+
+.sec-label{font-size:0.6rem;letter-spacing:0.2em;color:var(--dim);margin:18px 0 9px;text-transform:uppercase}
+.sec-label:first-of-type{margin-top:0}
+
+.ratio-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.stepper{display:grid;grid-template-columns:auto auto auto;align-items:center;gap:4px;position:relative;padding-bottom:15px;justify-items:center}
+.stepper button{width:26px;height:28px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:6px;cursor:pointer;font-size:1rem;line-height:1}
+.stepper button:hover{border-color:var(--warm);color:var(--warm)}
+.stepper .num{min-width:26px;text-align:center;font-size:1.3rem;font-weight:500;color:#eef4ff}
+.axis-tag{position:absolute;bottom:0;left:0;right:0;text-align:center;font-size:0.6rem;letter-spacing:0.14em}
+
+.presets{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.presets button{padding:8px 4px;border:1px solid var(--line);background:var(--bg2);color:var(--dim);border-radius:6px;cursor:pointer;font-family:inherit;font-size:0.66rem;text-align:center}
+.presets button:hover{border-color:var(--line-b);color:var(--ink)}
+.presets button.on{border-color:var(--warm);background:rgba(255,200,50,0.06);color:var(--warm)}
+
+.row{display:flex;align-items:center;gap:10px;margin:9px 0}
+.row label{flex:0 0 58px;font-size:0.64rem;color:var(--dim)}
+.row input[type=range]{flex:1;accent-color:var(--warm);height:3px}
+.row .val{flex:0 0 44px;text-align:right;font-size:0.64rem;color:var(--ink)}
+.hint{font-size:0.6rem;line-height:1.5;color:var(--dim);margin:8px 0 2px}
+
+.modes{display:flex;gap:8px}
+.modes button{flex:1;padding:10px;border:1px solid var(--line-b);background:var(--bg2);color:var(--ink);border-radius:7px;cursor:pointer;font-family:inherit;font-size:0.68rem;letter-spacing:0.08em}
+.modes button.on{border-color:var(--warm);background:rgba(255,200,50,0.08);color:var(--warm)}
+.modes button:hover{border-color:var(--warm)}
+
+#status{
+  position:fixed;left:0;bottom:0;z-index:25;display:flex;gap:16px;align-items:center;padding:10px 18px;
+  font-size:0.68rem;color:var(--ink);background:linear-gradient(0deg,rgba(7,9,13,0.9),rgba(7,9,13,0.0));
+  max-width:calc(100% - var(--panel-w));
+}
+#status .fn{color:var(--warm)}
+#status .right{color:var(--dim)}
+
+#mode2Box.off{display:none}
+#mode2Box{margin-top:10px}
+.stepper button:disabled{opacity:0.35;cursor:default;border-color:var(--line);color:var(--dim)}
+.modes + .modes{margin-top:8px}
+.modes button{padding:9px 4px}
+
+.eq{font-size:0.72rem;color:#eef4ff;margin:6px 0;text-align:center;min-height:1.4em}
+.eq .katex{font-size:0.98rem}
+.eq .katex-display{margin:4px 0}
+.readout{width:100%;border-collapse:collapse;margin-top:8px;font-size:0.64rem}
+.readout td{padding:3px 0;border-bottom:1px solid var(--line)}
+.readout td:first-child{color:var(--dim)}
+.readout td:last-child{text-align:right;color:var(--ink);font-variant-numeric:tabular-nums}
+.about p{font-size:0.62rem;line-height:1.6;color:var(--dim);margin:0 0 8px}
+
+/* The panel covers the left edge on wide screens. The status bar and the
+   topbar content start after it. The stacking order stays as in Resonance 3D. */
+@media(min-width:769px){
+  #status{left:var(--panel-w)}
+  .topbar{padding-left:calc(var(--panel-w) + 20px)}
+}
+
+#legend{
+  position:fixed;right:18px;bottom:46px;z-index:20;padding:9px 11px 7px;
+  background:rgba(12,15,22,0.72);border:1px solid var(--line);border-radius:8px;
+  pointer-events:none;
+}
+#legend.off{display:none}
+.lg-title{font-size:0.6rem;letter-spacing:0.12em;color:var(--dim);margin-bottom:6px}
+#lgBar{display:block;width:180px;height:10px;border-radius:2px}
+.lg-ticks{display:flex;justify-content:space-between;font-size:0.58rem;color:var(--ink);margin-top:4px;font-variant-numeric:tabular-nums}
+
+@media(max-width:768px){
+  #panel{width:min(90vw,320px);transform:translateX(-100%);padding:20px 18px 28px}
+  #panel.open{transform:translateX(0)}
+  #gear{display:block;width:46px;height:46px;font-size:1.25rem}
+  #status{max-width:100%;font-size:0.62rem;padding:8px 14px}
+  .pagetitle{display:none}
+  #hint{bottom:44px}
+  .stepper button{width:34px;height:36px;font-size:1.15rem}
+  .stepper .num{font-size:1.5rem}
+  .presets button{padding:12px 4px;font-size:0.72rem}
+  .row input[type=range]{height:22px}
+  .modes button{padding:14px 4px}
+  #legend{right:10px;bottom:auto;top:12px}
+  html:not(.in-frame) #legend{top:60px}
+  #lgBar{width:130px}
+}
