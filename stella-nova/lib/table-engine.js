@@ -15,7 +15,13 @@
 //  dpr,dt,now,moving), tick(dt,now), leave(t), knob(t,i), source(t), library().
 //  ctx gives the PAGE the device, format, tiles, G, PACK, STYLES, helpers and
 //  the aux fields. The engine reads no DOM data; main.js fetches it and passes it.
+//
+//  PHONE AND TOUCH: table-mobile.js sets the column count, turns the sidebar
+//  into a bottom sheet and caps the pixel ratio. On a touch screen with no
+//  hover, the tiles under playhead() animate (t.focus) and carry .tm-live.
 // ============================================================================
+import { TOUCH, HOVER_LABEL, fitTable, playhead, maxDpr, initMobile } from './table-mobile.js';
+
 export async function bootTable(PAGE, data) {
   const SPEC = data.spec;
   const STYLES = SPEC.cells;
@@ -28,7 +34,7 @@ export async function bootTable(PAGE, data) {
 
   // ---------------------------------------------------------- table sizing
   const COLS = SPEC.cols; const stage = $('stage');
-  function fit() { const w = stage.clientWidth - 24; document.documentElement.style.setProperty('--cell', Math.max(40, Math.floor(w / COLS)) + 'px'); }
+  const fit = () => fitTable(stage, COLS);
   new ResizeObserver(fit).observe(stage); fit();
 
   // ---------------------------------------------------------- signal generators
@@ -84,7 +90,8 @@ export async function bootTable(PAGE, data) {
   const setChip = (id, on) => { $(id).classList.toggle('on', on); $(id).setAttribute('aria-pressed', String(on)); };
   let globalDirty = true;
   for (const sw of SPEC.swatches) $('sw-' + sw.id).addEventListener('input', e => { G[sw.id] = hexToRgb(e.target.value); globalDirty = true; });
-  $('hoveronly').addEventListener('click', () => { G.hoverOnly = !G.hoverOnly; setChip('hoveronly', G.hoverOnly); $('hoveronly').textContent = G.hoverOnly ? '◉ animate on hover only' : '◉ animate everything'; });
+  $('hoveronly').addEventListener('click', () => { G.hoverOnly = !G.hoverOnly; setChip('hoveronly', G.hoverOnly); $('hoveronly').textContent = G.hoverOnly ? HOVER_LABEL : '◉ animate everything'; });
+  initMobile();
 
   // ---------------------------------------------------------- WGSL syntax highlighting
   const KW = new Set('fn let var const struct return if else for while loop break continue continuing switch case default discard true false override alias enable requires const_assert'.split(' '));
@@ -156,7 +163,7 @@ export async function bootTable(PAGE, data) {
     modal.classList.add('open'); $('m-close').focus();
   }
   function close() { modal.classList.remove('open'); inspected = null; }
-  { const mc = $('m-orb'); let md = null;
+  { const mc = $('m-orb'); let md = null; if (PAGE.pointer) mc.style.touchAction = 'none';
     mc.addEventListener('pointerdown', e => { if (!inspected || e.button !== 0) return; md = true; try { mc.setPointerCapture(e.pointerId); } catch (_) {} if (PAGE.pointer) PAGE.pointer(inspected, 'down', e, mc); });
     mc.addEventListener('pointermove', e => { if (md && PAGE.pointer) PAGE.pointer(inspected, 'move', e, mc); });
     const mend = e => { if (!md) return; md = null; if (PAGE.pointer) PAGE.pointer(inspected, 'up', e, mc); };
@@ -223,24 +230,25 @@ export async function bootTable(PAGE, data) {
     const dt = tickSignals(); const now = sigT; frameNo++;
     frames++; if (now - fpsT > 1) { $('fps').textContent = `${Math.round(frames / (now - fpsT))} FPS · ${tiles.filter(t => t.pipeline).length}/${tiles.length}`; fpsT = now; frames = 0; }
     if (PAGE.tick) { if (PAGE.tick(dt, now) === true) globalDirty = true; }
-    const dpr = Math.min(devicePixelRatio || 1, 3);
+    const dpr = Math.min(devicePixelRatio || 1, maxDpr());
+    const band = (TOUCH && G.hoverOnly && !inspected) ? playhead(stage) : null;
     const enc = device.createCommandEncoder(); let any = false;
     // pass 1: ease the rates, size the surfaces, pick the tiles that draw
     const eased = [];
     for (const t of tiles) {
-      const want = (!G.hoverOnly || t.hover || inspected === t) ? 1 : 0;
+      t.go = false; t.rect = null;
+      if (t.pipeline && visible.has(t)) { const rect = t.canvas.getBoundingClientRect(); if (rect.width >= 1) t.rect = rect; }
+      const focus = band !== null && !!t.rect && t.rect.top <= band && t.rect.bottom > band;
+      if (focus !== !!t.focus) { t.focus = focus; t.el.classList.toggle('tm-live', focus); }
+      const want = (!G.hoverOnly || t.hover || t.focus || inspected === t) ? 1 : 0;
       t.rate += (want - t.rate) * (1 - Math.exp(-dt / 0.18));
-      t.moving = t.rate > 0.002; t.go = false; t.rect = null;
+      t.moving = t.rate > 0.002;
       if (!t.pipeline) { if (t.moving) t.phase += dt * t.rate * (G.tempo || 1); continue; }
-      if (visible.has(t)) {
-        const rect = t.canvas.getBoundingClientRect();
-        if (rect.width >= 1) {
-          t.rect = rect;
-          // a resized surface has a new, empty cache, so a size change is a reason to draw on its own
-          const resized = sizeSurf(t.surf, rect, dpr);
-          if (t.dirty || globalDirty || resized || t.hover || inspected === t) t.go = true;
-          else if (t.moving) eased.push(t);
-        }
+      if (t.rect) {
+        // a resized surface has a new, empty cache, so a size change is a reason to draw on its own
+        const resized = sizeSurf(t.surf, t.rect, dpr);
+        if (t.dirty || globalDirty || resized || t.hover || t.focus || inspected === t) t.go = true;
+        else if (t.moving) eased.push(t);
       }
       if (inspected === t) t.go = true;
     }
