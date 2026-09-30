@@ -1,0 +1,1052 @@
+// main.js — Mandelbulber page: panel, formula slots, camera input, frame loop.
+//
+// Part of a port of Mandelbulber2 (Mandelbulber Team, github.com/buddhi1980/
+// mandelbulber2, GPL-3.0, see COPYING). The camera math follows upstream
+// cCameraTarget (src/camera_target.cpp); the slot and render param names are
+// the upstream ones, so the scene object stays in upstream units (contract C5).
+//
+// The GPU work lives in engine.js (contract C6). This file keeps one scene
+// object, builds the panel from gen/catalog.json and gen/params.json, and calls
+// engine.frame() once per animation frame until the target sample count.
+//
+//   drag        orbit around the target       wheel        dolly
+//   right drag  pan (or Shift + drag)         F            fly mode on / off
+//   V           frame the surface (also runs when slot 1 changes with no example loaded)
+//   W A S D     fly: move (Shift = fast)      Q E          fly: down / up
+//   P           panel on / off                Esc          close the formula list
+//
+// The URL hash holds the scene diff against the defaults as deflated .fract
+// text (#s=...), so a link reopens the same scene.
+//
+// grep: function boot  function buildPanel  function buildSlotEditor  function openPicker  function ctl
+//       function gradientEditor  function loadScene  function exportFract  function writeHash  function readHash
+//       function camFromScene  function camToScene  function frameView  function pushScene  function tick
+//       function savePng  const MAIN_UI  const SLOT_COMMON  const CREDIT
+
+import { SLOTS, defaultScene, fillDefaults, specFor, parseFract, serialiseFract, parseValue, quantizeColor, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
+
+const $ = (id) => document.getElementById(id);
+const stage = $('stage');
+const canvas = $('gl');
+const panel = $('panel');
+const pbody = $('pbody');
+const hud = $('hud');
+const picker = $('picker');
+
+// ─── data ───────────────────────────────────────────────────────────────────
+let P, CAT, EXAMPLES, THUMBS;
+let byEnum = new Map();           // formula number as stored in .fract -> catalog entry
+let scene;
+let activeSlot = 0;
+let engine = null;
+let currentExample = -1;
+
+const fnum = (f) => f.enumId ?? f.enum ?? f.id;
+const groupName = (f) => (typeof f.group === 'number' ? CAT.groups?.[f.group]?.name : f.group) ?? 'Formulas';
+const mainSpec = (name) => specFor(P, 'main', name);
+const formulaAt = (s) => byEnum.get(scene.main[`formula_${s + 1}`]) || null;
+const isNone = (f) => !f || f.id === 'none' || fnum(f) === 0;
+
+async function loadJson(name) {
+  const r = await fetch(new URL(`gen/${name}`, import.meta.url));
+  if (!r.ok) throw new Error(`gen/${name}: HTTP ${r.status}`);
+  return r.json();
+}
+
+// ─── panel specs ────────────────────────────────────────────────────────────
+// Main params shown in the panel. A row is skipped when gen/params.json does
+// not list its name. `c` picks one component of a vector param.
+const MAIN_UI = [
+  { id: 'fractal', title: 'Fractal', open: true, rows: [
+    { name: 'N', label: 'Iterations', kind: 'int', min: 1, max: 500 },
+    { name: 'bailout', label: 'Bailout', min: 1, max: 1e6, log: true },
+    { name: 'DE_factor', label: 'DE factor', min: 0.01, max: 2, log: true, tip: 'Ray step factor. Lower it when the surface shows holes or overstep bands.' },
+    { name: 'detail_level', label: 'Detail level', min: 0.05, max: 50, log: true },
+    { name: 'repeat_from', label: 'Repeat from', kind: 'int', min: 1, max: 9, tip: 'Hybrid: slot where the sequence repeats after the last slot.' },
+  ] },
+  { id: 'camera', title: 'Camera', open: false, rows: [
+    { name: 'fov', label: 'Field of view', min: 5, max: 160 },
+    { name: 'camera_distance_to_target', label: 'Distance', min: 1e-5, max: 50, log: true, cam: true },
+  ] },
+  { id: 'light', title: 'Light', open: true, rows: [
+    { name: 'light1_rotation', c: 'x', label: 'Alpha', min: -180, max: 180, tip: 'Main light horizontal angle, degrees.' },
+    { name: 'light1_rotation', c: 'y', label: 'Beta', min: -90, max: 90, tip: 'Main light vertical angle, degrees.' },
+    { name: 'light1_intensity', label: 'Intensity', min: 0, max: 5 },
+    { name: 'light1_color', label: 'Color' },
+    { name: 'light1_cast_shadows', label: 'Shadows' },
+    { name: 'light1_soft_shadow_cone', label: 'Softness', min: 0, max: 20, tip: 'Soft shadow cone angle, degrees.' },
+  ] },
+  { id: 'shading', title: 'Shading', open: false, rows: [
+    { name: 'ambient_occlusion_enabled', label: 'AO' },
+    { name: 'ambient_occlusion', label: 'AO strength', min: 0, max: 3 },
+    { name: 'mat1_shading', label: 'Shading', min: 0, max: 1 },
+    { name: 'mat1_specular', label: 'Specular', min: 0, max: 10 },
+    { name: 'mat1_specular_width', label: 'Spec. width', min: 0.01, max: 1, log: true },
+    { name: 'mat1_use_colors_from_palette', label: 'Use gradient' },
+    { gradient: 'mat1_surface_color_gradient' },
+    { name: 'mat1_coloring_speed', label: 'Color speed', min: 0.01, max: 50, log: true },
+    { name: 'mat1_coloring_palette_offset', label: 'Color offset', min: 0, max: 256 },
+    { name: 'mat1_surface_color', label: 'Surface color' },
+  ] },
+  { id: 'fog', title: 'Fog & glow', open: false, rows: [
+    { name: 'basic_fog_enabled', label: 'Fog' },
+    { name: 'basic_fog_visibility', label: 'Visibility', min: 0.01, max: 1000, log: true },
+    { name: 'basic_fog_color', label: 'Fog color' },
+    { name: 'glow_enabled', label: 'Glow' },
+    { name: 'glow_intensity', label: 'Glow', min: 0, max: 5 },
+    { name: 'glow_color_1', label: 'Glow color 1' },
+    { name: 'glow_color_2', label: 'Glow color 2' },
+  ] },
+  { id: 'background', title: 'Background', open: false, rows: [
+    { name: 'background_color_1', label: 'Top' },
+    { name: 'background_color_2', label: 'Middle' },
+    { name: 'background_color_3', label: 'Bottom' },
+  ] },
+  { id: 'adjust', title: 'Image adjust', open: false, rows: [
+    { name: 'brightness', label: 'Brightness', min: 0, max: 3 },
+    { name: 'contrast', label: 'Contrast', min: 0, max: 3 },
+    { name: 'gamma', label: 'Gamma', min: 0.1, max: 3 },
+    { name: 'saturation', label: 'Saturation', min: 0, max: 3 },
+    { name: 'hdr', label: 'HDR' },
+  ] },
+];
+
+// Per-slot params that upstream shows for every formula (qt/fractal_object.ui
+// and qt/fractal_calculation_parameters.ui).
+const SLOT_COMMON = [
+  { name: 'formula_weight', label: 'Weight', min: 0, max: 1 },
+  { name: 'formula_start_iteration', label: 'Start iter.', kind: 'int', min: 0, max: 250 },
+  { name: 'formula_stop_iteration', label: 'Stop iter.', kind: 'int', min: 0, max: 250 },
+  { name: 'check_for_bailout', label: 'Check bailout' },
+  { name: 'dont_add_c_constant', label: "Don't add C" },
+  { name: 'julia_mode', label: 'Julia mode' },
+  { name: 'julia_c', label: 'Julia C', min: -5, max: 5 },
+  { name: 'fractal_constant_factor', label: 'Constant factor', min: -5, max: 5 },
+  { name: 'initial_waxis', label: 'Initial w', min: -5, max: 5 },
+  { name: 'formula_maxiter', label: 'Max iter.', kind: 'int', min: 1, max: 1000 },
+];
+
+// Upstream credit: the same text is in the header comment of index.html.
+const CREDIT = {
+  html: 'Mandelbulber by Krzysztof Marczak and the Mandelbulber team, GPL-3.0, '
+    + '<a href="https://github.com/buddhi1980/mandelbulber2" target="_blank" rel="noopener">github.com/buddhi1980/mandelbulber2</a>, commit 600da8d.',
+};
+
+// ─── small DOM helpers ──────────────────────────────────────────────────────
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === 'class') e.className = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids) if (k !== null && k !== undefined) e.append(k);
+  return e;
+}
+
+function section(id, title, open, ...kids) {
+  const s = el('section', { class: open ? '' : 'closed', 'data-g': id });
+  const h = el('h2', {}, el('button', { type: 'button', onclick: () => s.classList.toggle('closed') }, title));
+  s.append(h, el('div', { class: 'body' }, ...kids));
+  return s;
+}
+
+function fmt(v) {
+  if (typeof v !== 'number') return String(v);
+  if (!Number.isFinite(v)) return '0';
+  const a = Math.abs(v);
+  if (a !== 0 && (a >= 1e5 || a < 1e-3)) return v.toPrecision(3);
+  return String(+v.toFixed(a >= 100 ? 1 : a >= 10 ? 2 : 4));
+}
+
+const hex2 = (x) => Math.round(Math.min(Math.max(x, 0), 1) * 255).toString(16).padStart(2, '0');
+const rgbToHex = (c) => `#${hex2(c.r)}${hex2(c.g)}${hex2(c.b)}`;
+const hexToRgb = (h) => quantizeColor({ r: parseInt(h.slice(1, 3), 16) / 255, g: parseInt(h.slice(3, 5), 16) / 255, b: parseInt(h.slice(5, 7), 16) / 255 });
+const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+
+// ─── thumbnails ─────────────────────────────────────────────────────────────
+// Percent sprite offsets, so one sprite serves every thumbnail size. px = null
+// leaves the size to CSS.
+function thumb(f, px = 64) {
+  const size = px ? `width:${px}px;height:${px}px;` : '';
+  if (isNone(f) || !THUMBS || f.thumb === undefined || f.thumb === null || f.thumb < 0) return el('div', { class: 'thumb none', style: size }, '∅');
+  const { cols, rows } = THUMBS;
+  const c = f.thumb % cols, r = Math.floor(f.thumb / cols);
+  return el('div', { class: 'thumb', style: `${size}background-image:url(${THUMBS.url});background-size:${cols * 100}% ${rows * 100}%;` +
+    `background-position:${cols > 1 ? (c / (cols - 1)) * 100 : 0}% ${rows > 1 ? (r / (rows - 1)) * 100 : 0}%` });
+}
+
+// ─── control rows ───────────────────────────────────────────────────────────
+// bind = { get(), set(v), def } ; spec = { label, kind, min, max, step, log, options, tip }
+const refreshers = new Set();
+
+function ctl(spec, bind) {
+  const kind = spec.kind;
+  const row = el('div', { class: 'ctl', title: `${spec.tip ? `${spec.tip}\n` : ''}${spec.name || ''}${spec.name ? '\n' : ''}Double-click the label to reset.` });
+  const label = el('span', { class: 'k' }, spec.label);
+  row.append(label);
+  let set;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  if (kind === 'bool') {
+    const b = el('button', { type: 'button', class: 'sw', 'aria-label': spec.label });
+    b.addEventListener('click', () => { bind.set(!bind.get()); });
+    row.append(b);
+    set = (v) => { b.classList.toggle('on', !!v); b.textContent = v ? 'on' : 'off'; };
+  } else if (kind === 'rgb') {
+    const c = el('input', { type: 'color', 'aria-label': spec.label });
+    c.addEventListener('input', () => bind.set(hexToRgb(c.value)));
+    row.append(c);
+    set = (v) => { c.value = rgbToHex(v); };
+  } else if (kind === 'list') {
+    const s = el('select', { 'aria-label': spec.label });
+    (spec.options || []).forEach((o, i) => s.append(el('option', { value: i }, String(o))));
+    s.addEventListener('change', () => bind.set(Number(s.value)));
+    row.append(s);
+    set = (v) => { s.value = String(v); };
+  } else if (kind === 'vect3' || kind === 'vect4') {
+    const comps = kind === 'vect3' ? ['x', 'y', 'z'] : ['x', 'y', 'z', 'w'];
+    const box = el('div', { class: 'vec' });
+    const ins = comps.map((c) => {
+      const i = el('input', { class: 'num', type: 'text', inputmode: 'decimal', 'aria-label': `${spec.label} ${c}` });
+      i.addEventListener('change', () => {
+        const n = Number(i.value.replace(',', '.'));
+        if (Number.isFinite(n)) bind.set({ ...bind.get(), [c]: n }); else set(bind.get());
+      });
+      scrub(i, () => bind.get()[c], (n) => bind.set({ ...bind.get(), [c]: n }), spec);
+      box.append(i);
+      return i;
+    });
+    row.append(box);
+    set = (v) => ins.forEach((i, k) => { if (document.activeElement !== i) i.value = fmt(v[comps[k]]); });
+  } else if (kind === 'string') {
+    const i = el('input', { class: 'field', type: 'text', 'aria-label': spec.label });
+    i.addEventListener('change', () => bind.set(i.value));
+    row.append(i);
+    set = (v) => { i.value = v; };
+  } else {                                           // double, int
+    const isInt = kind === 'int';
+    let lo = spec.min ?? 0, hi = spec.max ?? 1;
+    if (!(hi > lo)) hi = lo + 1;
+    const log = !!spec.log && lo > 0;
+    const range = el('input', { type: 'range', min: 0, max: 1000, step: 1, 'aria-label': spec.label });
+    const toR = (v) => Math.round(1000 * (log ? Math.log(clamp(v, lo, hi) / lo) / Math.log(hi / lo) : (clamp(v, lo, hi) - lo) / (hi - lo)));
+    const fromR = (r) => { const t = r / 1000; let v = log ? lo * Math.pow(hi / lo, t) : lo + t * (hi - lo); if (isInt) v = Math.round(v); else v = +v.toPrecision(5); return v; };
+    const num = el('input', { class: 'num', type: 'text', inputmode: 'decimal', 'aria-label': `${spec.label} value` });
+    range.addEventListener('input', () => bind.set(fromR(Number(range.value))));
+    num.addEventListener('change', () => {
+      let n = Number(num.value.replace(',', '.'));
+      if (!Number.isFinite(n)) return set(bind.get());
+      if (isInt) n = Math.round(n);
+      bind.set(n);
+    });
+    num.addEventListener('keydown', (e) => { if (e.key === 'Enter') num.blur(); });
+    row.append(range, num);
+    set = (v) => { range.value = toR(Number(v)); if (document.activeElement !== num) num.value = fmt(v); };
+  }
+  label.addEventListener('dblclick', () => bind.set(structuredClone(bind.def)));
+  const refresh = () => {
+    if (row.isConnected) row._seen = true;
+    else if (row._seen) { refreshers.delete(refresh); return; }
+    const v = bind.get();
+    set(v);
+    row.classList.toggle('changed', !same(v, bind.def));
+    if (spec.dimIf) row.classList.toggle('dim', spec.dimIf());
+  };
+  refreshers.add(refresh);
+  refresh();
+  row._refresh = refresh;
+  return row;
+}
+
+// Drag horizontally on a vector field to change it; a click still edits.
+function scrub(input, get, setv, spec) {
+  let x0 = null, v0 = 0, moved = false;
+  input.addEventListener('pointerdown', (e) => { if (document.activeElement === input) return; x0 = e.clientX; v0 = get(); moved = false; input.setPointerCapture(e.pointerId); });
+  input.addEventListener('pointermove', (e) => {
+    if (x0 === null) return;
+    const dx = e.clientX - x0;
+    if (!moved && Math.abs(dx) < 3) return;
+    moved = true;
+    const span = (spec.max ?? 1) - (spec.min ?? 0);
+    setv(+(v0 + dx * span / 400 * (e.shiftKey ? 0.1 : 1)).toPrecision(5));
+  });
+  input.addEventListener('pointerup', () => { if (!moved && x0 !== null) { input.focus(); input.select(); } x0 = null; });
+  input.addEventListener('click', (e) => { if (moved) e.preventDefault(); });
+}
+
+const refreshAll = () => refreshers.forEach((r) => r());
+
+// Bind a main param (optionally one vector component).
+function mainBind(name, c) {
+  const d = mainSpec(name);
+  if (!d) return null;
+  if (c) return { get: () => scene.main[name][c], set: (v) => setMain(name, { ...scene.main[name], [c]: v }), def: d.default[c] };
+  return { get: () => scene.main[name], set: (v) => setMain(name, v), def: d.default };
+}
+function slotBind(s, name) {
+  const d = P.fractal[name];
+  if (!d) return null;
+  return { get: () => scene.fractal[s][name], set: (v) => setSlot(s, name, v), def: d.default };
+}
+const kindOf = (type) => ({ double: 'double', int: 'int', bool: 'bool', vect3: 'vect3', vect4: 'vect4', rgb: 'rgb', string: 'string' }[type] || 'double');
+
+// ─── scene changes ──────────────────────────────────────────────────────────
+let sceneDirty = true;
+let previewTimer = 0, previewOn = false;
+let info = null;
+
+// Each change shows a fast preview. Full quality comes back 150 ms after the last change, but
+// only once the preview of that change is on screen (a slow band can hold it up), so a single
+// click on a control still shows its effect at once.
+function touch() {
+  sceneDirty = true;
+  if (engine) {
+    if (!previewOn) { engine.setPreview(true); previewOn = true; }
+    const shown = engine.stats?.().presents ?? 0;
+    const t0 = performance.now();
+    const back = () => {
+      if ((engine.stats?.().presents ?? 1) === shown && performance.now() - t0 < 3000) { previewTimer = setTimeout(back, 50); return; }
+      previewOn = false; engine.setPreview(false); engine.reset(); info = null;
+    };
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(back, 150);
+  }
+  writeHash();
+}
+
+function setMain(name, v) {
+  if (mainSpec(name)?.type === 'rgb') v = quantizeColor(v);
+  scene.main[name] = v;
+  if (/^formula_\d$|^hybrid_fractal_enable$/.test(name)) buildSlotEditor();
+  refreshAll();
+  touch();
+}
+function setSlot(s, name, v) {
+  if (P.fractal[name]?.type === 'rgb') v = quantizeColor(v);
+  scene.fractal[s][name] = v;
+  refreshAll();
+  touch();
+}
+
+function loadScene(next, label) {
+  scene = next;
+  activeSlot = 0;
+  buildSlotEditor();
+  refreshAll();
+  sceneDirty = true;
+  engine?.reset();
+  info = null;
+  writeHash();
+  if (label) flash(label);
+}
+
+// ─── panel ──────────────────────────────────────────────────────────────────
+let slotBox, slotStrip, progressEl, sampleLine, exList, exSearch;
+const targetSamples = { value: 64 };
+
+function buildPanel() {
+  // Image: progress, target samples, file actions
+  progressEl = el('div', { class: 'progress' }, el('i'));
+  sampleLine = el('p', { class: 'spec' });
+  const tsRow = ctl({ label: 'Target samples', kind: 'int', min: 1, max: 4096, log: true, tip: 'Stop when this many samples have accumulated.' },
+    { get: () => targetSamples.value, set: (v) => { targetSamples.value = clamp(Math.round(v), 1, 65536); engine?.setMaxSamples?.(targetSamples.value); refreshAll(); }, def: 64 });
+  pbody.append(section('image', 'Image', true, progressEl, sampleLine, tsRow,
+    el('div', { class: 'buttons' },
+      el('button', { type: 'button', class: 'primary', onclick: savePng, title: 'Save the accumulated image as PNG' }, 'Render PNG'),
+      el('button', { type: 'button', onclick: exportFract, title: 'Download the scene as a .fract file' }, 'Export .fract'),
+      el('button', { type: 'button', onclick: () => $('file').click(), title: 'Load a .fract file (or drop one on the page)' }, 'Import'),
+      el('button', { type: 'button', onclick: copyLink, title: 'Copy a link that holds the scene' }, 'Copy link'),
+      el('button', { type: 'button', onclick: () => { currentExample = -1; markExample(); loadScene(defaultScene(P), 'scene reset'); } }, 'Reset'))));
+
+  // Examples
+  exSearch = el('input', { class: 'exsearch', type: 'search', placeholder: `Search ${EXAMPLES.length} examples`, 'aria-label': 'Search examples' });
+  exList = el('div', { class: 'exlist' });
+  exSearch.addEventListener('input', filterExamples);
+  EXAMPLES.forEach((e, i) => {
+    const f = byEnum.get(e._formula) || null;
+    const b = el('button', { type: 'button', class: 'ex', title: e.name, 'data-i': i }, thumb(f, 32), el('span', {}, e.name));
+    b.addEventListener('click', () => loadExample(i));
+    exList.append(b);
+  });
+  pbody.append(section('examples', 'Examples', false, exSearch, exList));
+
+  // Formula slots
+  slotStrip = el('div', { class: 'slots' });
+  slotBox = el('div');
+  const hyb = P.main.hybrid_fractal_enable ? ctl({ label: 'Hybrid', kind: 'bool', name: 'hybrid_fractal_enable', tip: 'Chain the formulas of slots 1 to 9.' }, mainBind('hybrid_fractal_enable')) : null;
+  pbody.append(section('formula', 'Formula', true, hyb, slotStrip, slotBox));
+  buildSlotEditor();
+
+  // Main param groups
+  for (const g of MAIN_UI) {
+    const rows = [];
+    for (const r of g.rows) {
+      if (r.gradient) { if (mainSpec(r.gradient)) rows.push(gradientEditor(r.gradient)); continue; }
+      const b = mainBind(r.name, r.c);
+      if (!b) continue;
+      const type = r.c ? 'double' : mainSpec(r.name).type;
+      const bind = r.cam ? { ...b, set: (v) => { const c = camFromScene(); c.dist = v; camToScene(c); } } : b;
+      rows.push(ctl({ kind: r.kind || (mainSpec(r.name).options && !r.c ? 'list' : kindOf(type)), options: mainSpec(r.name).options, ...r }, bind));
+    }
+    if (g.id === 'camera') {
+      rows.push(el('div', { class: 'buttons' },
+        el('button', { type: 'button', onclick: resetCamera }, 'Reset view'),
+        el('button', { type: 'button', onclick: () => frameView(false), title: 'Move the camera so that the whole surface fits the view (V)' }, 'Frame'),
+        el('button', { type: 'button', onclick: toggleFly, id: 'flyBtn2' }, 'Fly mode')));
+      const keysHelp = el('p', { class: 'spec' });
+      rows.push(keysHelp);
+      keysHelp.innerHTML = '<kbd>drag</kbd> orbit · <kbd>wheel</kbd> dolly · <kbd>right drag</kbd> or <kbd>Shift</kbd> pan · ' +
+        '<kbd>F</kbd> fly: <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move, <kbd>Q</kbd><kbd>E</kbd> down / up, drag to look · <kbd>V</kbd> frame · <kbd>P</kbd> panel';
+    }
+    if (rows.length) pbody.append(section(g.id, g.title, g.open, ...rows));
+  }
+
+  const about = section('about', 'About / credits', false);
+  about.querySelector('.body').innerHTML = `
+    <p class="spec credit">${CREDIT.html}</p>
+    <p class="spec">This page is a WebGPU port of that program. The formulas are translated from the upstream OpenCL
+    kernels to WGSL in 32-bit floats, so deep zooms lose precision earlier than upstream's 64-bit mode.
+    The license text is in <a href="${new URL('COPYING', import.meta.url).href}" target="_blank" rel="noopener">COPYING</a>.</p>
+    <p class="spec"><b>Hybrid slots.</b> With <code>Hybrid</code> on, each iteration runs the slot formulas in order, each for its
+    own iteration count, then repeats from <code>Repeat from</code>.</p>
+    <p class="spec"><b>Files.</b> Import reads upstream <code>.fract</code> files (drop one on the page). Export writes only the
+    params that differ from the defaults, as upstream does. <code>Copy link</code> puts the same diff in the URL.</p>`;
+  pbody.append(about);
+}
+
+function buildSlotEditor() {
+  if (!slotStrip) return;
+  const hybrid = !!scene.main.hybrid_fractal_enable;
+  if (!hybrid) activeSlot = 0;
+  slotStrip.replaceChildren(...[...Array(SLOTS)].map((_, s) => {
+    const f = formulaAt(s);
+    const b = el('button', { type: 'button', class: `slot${s === activeSlot ? ' active' : ''}${!hybrid && s > 0 ? ' off' : ''}`,
+      title: `Slot ${s + 1}: ${isNone(f) ? 'none' : f.name}${!hybrid && s > 0 ? ' (turn on Hybrid to use it)' : ''}` },
+    thumb(f, null), el('b', {}, String(s + 1)));
+    b.addEventListener('click', () => {
+      if (!hybrid && s > 0) setMain('hybrid_fractal_enable', true);
+      activeSlot = s; buildSlotEditor();
+    });
+    return b;
+  }));
+
+  const s = activeSlot;
+  const f = formulaAt(s);
+  const kids = [];
+  const pick = el('button', { type: 'button', class: 'formula-pick', title: 'Choose the formula of this slot' },
+    thumb(f, 52),
+    el('span', {}, el('strong', {}, isNone(f) ? 'None' : f.name), el('small', {}, `Slot ${s + 1}${isNone(f) ? '' : ` · ${f.id}`}`)),
+    el('em', {}, 'Change'));
+  pick.addEventListener('click', () => openPicker(s));
+  kids.push(pick);
+
+  const itName = `formula_iterations_${s + 1}`;
+  if (P.main[itName]) kids.push(ctl({ label: 'Slot iterations', kind: 'int', min: 1, max: 20, name: itName, tip: 'Iterations of this slot before the next slot runs (hybrid).' }, mainBind(itName)));
+  else if (P.fractal.formula_iterations) kids.push(ctl({ label: 'Slot iterations', kind: 'int', min: 1, max: 20 }, slotBind(s, 'formula_iterations')));
+
+  if (!isNone(f)) {
+    const groups = new Map();
+    for (const p of f.params || []) {
+      if (!P.fractal[p.name]) continue;
+      const g = p.group || 'Params';
+      if (!groups.has(g)) groups.set(g, []);
+      groups.get(g).push(p);
+    }
+    let first = true;
+    for (const [g, list] of groups) {
+      const d = el('details', { open: first || undefined });
+      d.append(el('summary', {}, g, el('small', {}, String(list.length))));
+      for (const p of list) {
+        const kind = p.kind === 'list' ? 'list' : p.kind || kindOf(P.fractal[p.name].type);
+        const gate = p.enabledBy && P.fractal[p.enabledBy] ? () => !scene.fractal[s][p.enabledBy] : null;
+        d.append(ctl({ ...p, kind, label: p.label || p.name, options: p.options || P.fractal[p.name].options, dimIf: gate }, slotBind(s, p.name)));
+      }
+      kids.push(d);
+      first = false;
+    }
+    if (!groups.size) kids.push(el('p', { class: 'spec' }, 'This formula has no params of its own.'));
+  }
+
+  const common = el('details', {});
+  common.append(el('summary', {}, 'Slot common', el('small', {}, 'weight, iterations, Julia')));
+  for (const c of SLOT_COMMON) {
+    const key = P.main[`${c.name}_${s + 1}`] ? `${c.name}_${s + 1}` : null;   // per-slot general params live in main as <base>_<k>
+    const bind = key ? mainBind(key) : slotBind(s, c.name);
+    if (!bind) continue;
+    const type = (key ? P.main[key] : P.fractal[c.name]).type;
+    common.append(ctl({ ...c, name: key || c.name, kind: c.kind || kindOf(type) }, bind));
+  }
+  if (common.children.length > 1) kids.push(common);
+  if (!hybrid) kids.push(el('p', { class: 'spec' }, 'Turn on Hybrid to chain formulas in slots 2 to 9.'));
+  slotBox.replaceChildren(...kids);
+}
+
+// ─── formula picker ─────────────────────────────────────────────────────────
+let pickerSlot = 0;
+let pickerTiles = null;
+
+function buildPicker() {
+  const body = $('pickerBody');
+  pickerTiles = [];
+  const groups = new Map();
+  for (const g of CAT.groups || []) groups.set(typeof g === 'string' ? g : g.name ?? g.id, []);
+  for (const f of CAT.formulas) {
+    if (isNone(f)) continue;
+    const g = groupName(f);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(f);
+  }
+  const none = { id: 'none', name: 'None', enumId: 0 };
+  const mk = (f) => {
+    const t = el('button', { type: 'button', class: 'tile', title: `${f.name} (${f.id})` }, thumb(f, 64), el('span', {}, f.name));
+    t.addEventListener('click', () => choose(f));
+    pickerTiles.push({ t, f, key: `${f.name} ${f.id}`.toLowerCase() });
+    return t;
+  };
+  const blocks = [];
+  blocks.push({ h: el('h3', {}, 'None'), grid: el('div', { class: 'grid' }, mk(none)) });
+  for (const [g, list] of groups) {
+    if (!list.length) continue;
+    list.sort((a, b) => a.name.localeCompare(b.name));
+    blocks.push({ h: el('h3', {}, g, el('small', {}, String(list.length))), grid: el('div', { class: 'grid' }, ...list.map(mk)) });
+  }
+  body.replaceChildren(...blocks.flatMap((b) => [b.h, b.grid]), el('p', { class: 'empty', hidden: true }, 'No formula matches.'));
+  pickerTiles.blocks = blocks;
+}
+
+function filterPicker() {
+  const q = $('pickerSearch').value.trim().toLowerCase();
+  let any = 0;
+  for (const { t, key } of pickerTiles) { const ok = !q || q.split(/\s+/).every((w) => key.includes(w)); t.hidden = !ok; any += ok; }
+  for (const b of pickerTiles.blocks) {
+    const n = [...b.grid.children].filter((c) => !c.hidden).length;
+    b.h.hidden = !n;
+    const small = b.h.querySelector('small');
+    if (small) small.textContent = String(n);
+  }
+  $('pickerBody').querySelector('.empty').hidden = any > 0;
+}
+
+function openPicker(s) {
+  if (!pickerTiles) buildPicker();
+  pickerSlot = s;
+  const cur = scene.main[`formula_${s + 1}`];
+  for (const { t, f } of pickerTiles) t.classList.toggle('cur', fnum(f) === cur);
+  picker.classList.remove('hidden');
+  $('pickerSearch').value = '';
+  filterPicker();
+  const c = pickerTiles.find((p) => fnum(p.f) === cur);
+  c?.t.scrollIntoView({ block: 'center' });
+  if (matchMedia('(pointer: fine)').matches) $('pickerSearch').focus();
+}
+function closePicker() { picker.classList.add('hidden'); }
+function choose(f) {
+  closePicker();
+  setMain(`formula_${pickerSlot + 1}`, fnum(f));
+  // a new shape in slot 1 can enclose the camera: fit the view, unless an example sets it
+  if (pickerSlot === 0 && currentExample < 0 && !isNone(f)) frameView(true);
+}
+$('pickerSearch').addEventListener('input', filterPicker);
+$('pickerSearch').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {                           // exact name, then name prefix, then first match
+    const q = e.target.value.trim().toLowerCase();
+    const vis = pickerTiles.filter((p) => !p.t.hidden);
+    const t = vis.find((p) => p.f.name.toLowerCase() === q) || vis.find((p) => p.f.name.toLowerCase().startsWith(q)) || vis[0];
+    if (t) choose(t.f);
+  }
+  if (e.key === 'Escape') closePicker();
+});
+$('pickerClose').addEventListener('click', closePicker);
+
+// ─── gradient editor (mat1_surface_color_gradient) ──────────────────────────
+function gradientEditor(name) {
+  const box = el('div', { class: 'grad', title: 'Surface color gradient. Click the bar to add a stop, drag a stop to move it.' });
+  const bar = el('div', { class: 'bar' });
+  const color = el('input', { type: 'color', 'aria-label': 'Stop color' });
+  const pos = el('input', { class: 'num', type: 'text', inputmode: 'numeric', 'aria-label': 'Stop position 0 to 9999' });
+  const del = el('button', { type: 'button', title: 'Remove the selected stop' }, 'Remove');
+  const rst = el('button', { type: 'button', title: 'Back to the default gradient' }, 'Reset');
+  box.append(el('div', { class: 'k', style: 'font-size:12px;color:var(--frost-dim);margin-bottom:5px' }, 'Surface gradient'), bar,
+    el('div', { class: 'row' }, 'Stop', color, pos, del, rst));
+  let sel = 0;
+  const stops = () => parseGradient(scene.main[name]);
+  const commit = (list, keep) => { const s = [...list]; const pick = keep ? s[keep] : null; setMain(name, serialiseGradient(s)); if (pick) sel = stops().findIndex((x) => x.pos === Math.round(pick.pos) && x.color === pick.color); };
+  const draw = () => {
+    if (!box.isConnected && bar.childElementCount) { refreshers.delete(draw); return; }
+    const s = stops();
+    sel = clamp(sel, 0, s.length - 1);
+    bar.style.background = s.length > 1 ? `linear-gradient(90deg, ${s.map((x) => `${x.color} ${x.pos / GRADIENT_MAX * 100}%`).join(', ')})` : s[0].color;
+    bar.replaceChildren(...s.map((x, i) => {
+      const h = el('div', { class: `stop${i === sel ? ' sel' : ''}`, style: `left:${x.pos / GRADIENT_MAX * 100}%;background:${x.color}`, title: `${x.pos} ${x.color}` });
+      h.addEventListener('pointerdown', (e) => {
+        e.stopPropagation(); sel = i; h.setPointerCapture(e.pointerId);
+        const list = stops();
+        const move = (ev) => {
+          const r = bar.getBoundingClientRect();
+          list[i] = { ...list[i], pos: Math.round(clamp((ev.clientX - r.left) / r.width, 0, 1) * GRADIENT_MAX) };
+          commit(list, i);
+        };
+        h.addEventListener('pointermove', move);
+        h.addEventListener('pointerup', () => h.removeEventListener('pointermove', move), { once: true });
+        draw();
+      });
+      return h;
+    }));
+    color.value = s[sel].color;
+    if (document.activeElement !== pos) pos.value = s[sel].pos;
+    del.disabled = s.length < 2;
+  };
+  bar.addEventListener('pointerdown', (e) => {
+    const r = bar.getBoundingClientRect();
+    const p = Math.round(clamp((e.clientX - r.left) / r.width, 0, 1) * GRADIENT_MAX);
+    const s = stops();
+    const near = s.reduce((a, b) => (Math.abs(b.pos - p) < Math.abs(a.pos - p) ? b : a));
+    s.push({ pos: p, color: near.color });
+    commit(s, s.length - 1);
+  });
+  color.addEventListener('input', () => { const s = stops(); s[sel] = { ...s[sel], color: color.value }; commit(s, sel); });
+  pos.addEventListener('change', () => { const s = stops(); const n = Number(pos.value); if (Number.isFinite(n)) { s[sel] = { ...s[sel], pos: clamp(Math.round(n), 0, GRADIENT_MAX) }; commit(s, sel); } });
+  del.addEventListener('click', () => { const s = stops(); if (s.length > 1) { s.splice(sel, 1); sel = Math.max(0, sel - 1); commit(s); } });
+  rst.addEventListener('click', () => { sel = 0; setMain(name, mainSpec(name).default); });
+  refreshers.add(draw);
+  requestAnimationFrame(draw);
+  return box;
+}
+
+// ─── examples ───────────────────────────────────────────────────────────────
+function prepareExamples(raw) {
+  const list = Array.isArray(raw) ? raw : raw.examples || [];
+  return list.map((e) => ({ ...e, name: e.name || e.title || e.file || 'example', _formula: e.formula_1 ?? e.main?.formula_1 ?? e.params?.main?.formula_1 ?? P.main.formula_1?.default }));
+}
+
+function exampleScene(e) {
+  if (typeof e.text === 'string') return parseFract(e.text, P).scene;
+  // gen/examples.json holds only the params each file sets, already migrated.
+  const src = e.scene || e.params || { main: e.main, fractal: e.fractal };
+  const val = (d, v) => (typeof v === 'string' && d.type !== 'string' ? parseValue(d, v) : structuredClone(v));
+  const part = { main: {}, fractal: [] };
+  for (const [k, v] of Object.entries(src.main || {})) { const d = mainSpec(k); if (d && v !== null && v !== undefined) part.main[k] = val(d, v); }
+  const fr = src.fractal || [];
+  const entries = Array.isArray(fr) ? fr.map((f, i) => [i, f]) : Object.entries(fr).map(([k, f]) => [Number(k) - 1, f]);
+  for (const [i, f] of entries) {
+    if (!(i >= 0 && i < SLOTS)) continue;
+    while (part.fractal.length <= i) part.fractal.push({});
+    for (const [k, v] of Object.entries(f || {})) if (P.fractal[k] && v !== null && v !== undefined) part.fractal[i][k] = val(P.fractal[k], v);
+  }
+  return fillDefaults(part, P);
+}
+
+function loadExample(i) {
+  const e = EXAMPLES[i];
+  if (!e) return;
+  currentExample = i;
+  markExample();
+  loadScene(exampleScene(e), `example: ${e.name}`);
+}
+function markExample() { exList?.querySelectorAll('.ex').forEach((b) => b.classList.toggle('cur', Number(b.dataset.i) === currentExample)); }
+function filterExamples() {
+  const q = exSearch.value.trim().toLowerCase();
+  exList.querySelectorAll('.ex').forEach((b) => {
+    const e = EXAMPLES[Number(b.dataset.i)];
+    const f = byEnum.get(e._formula);
+    b.hidden = !!q && !`${e.name} ${f?.name || ''}`.toLowerCase().includes(q);
+  });
+}
+
+// ─── import / export / share ────────────────────────────────────────────────
+function loadText(text, name = 'file') {
+  const { scene: sc, meta } = parseFract(text, P);
+  currentExample = -1;
+  markExample();
+  loadScene(sc, `${name}: loaded${meta.skipped.length ? `, ${meta.skipped.length} params not supported` : ''}`);
+  if (meta.skipped.length) console.info('[mandelbulber] params not supported:', meta.skipped.join(' '));
+  return meta;
+}
+
+function exportText() { return serialiseFract(scene, P); }
+
+function exportFract() {
+  const f = formulaAt(0);
+  const base = currentExample >= 0 ? EXAMPLES[currentExample].name : (isNone(f) ? 'scene' : f.id);
+  download(new Blob([exportText()], { type: 'text/plain' }), `${base}.fract`);
+}
+
+function download(blob, name) {
+  const a = el('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+$('file').addEventListener('change', async (e) => {
+  const f = e.target.files?.[0];
+  if (f) loadText(await f.text(), f.name);
+  e.target.value = '';
+});
+let dragDepth = 0;
+window.addEventListener('dragenter', (e) => { if (e.dataTransfer?.types?.includes('Files')) { dragDepth++; stage.classList.add('dropping'); } });
+window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; stage.classList.remove('dropping'); } });
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dragDepth = 0;
+  stage.classList.remove('dropping');
+  const f = e.dataTransfer?.files?.[0];
+  if (f) loadText(await f.text(), f.name);
+});
+
+// Share: the .fract diff text, deflated, base64url, in #s=
+const b64url = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+const unb64url = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+async function pipe(bytes, stream) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer()); }
+
+async function shareHash(sc = scene) {
+  const body = (x) => serialiseFract(x, P).split('\n').filter((l) => l && !l.startsWith('#')).join('\n');
+  const text = body(sc);
+  if (text === body(defaultScene(P))) return '';
+  return `s=${b64url(await pipe(new TextEncoder().encode(text), new CompressionStream('deflate-raw')))}`;
+}
+async function decodeShare(hash) {
+  const m = String(hash).match(/(?:^|[#&])s=([A-Za-z0-9_-]+)/);
+  if (!m) return null;
+  const text = new TextDecoder().decode(await pipe(unb64url(m[1]), new DecompressionStream('deflate-raw')));
+  return parseFract(`# version 2.33\n${text}`, P).scene;
+}
+
+let hashTimer = 0;
+function writeHash() {
+  clearTimeout(hashTimer);
+  hashTimer = setTimeout(async () => {
+    const h = await shareHash();
+    history.replaceState(null, '', h ? `#${h}` : location.pathname + location.search);
+  }, 400);
+}
+async function readHash() {
+  try { return await decodeShare(location.hash); } catch (e) { console.warn('[mandelbulber] bad share link', e); return null; }
+}
+async function copyLink() {
+  clearTimeout(hashTimer);
+  const h = await shareHash();
+  history.replaceState(null, '', h ? `#${h}` : location.pathname + location.search);
+  try { await navigator.clipboard.writeText(location.href); flash('link copied'); } catch { flash('copy the link from the address bar'); }
+}
+
+// ─── camera (upstream cCameraTarget) ────────────────────────────────────────
+const V = {
+  add: (a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }),
+  sub: (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }),
+  mul: (a, k) => ({ x: a.x * k, y: a.y * k, z: a.z * k }),
+  dot: (a, b) => a.x * b.x + a.y * b.y + a.z * b.z,
+  cross: (a, b) => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }),
+  len: (a) => Math.hypot(a.x, a.y, a.z),
+  norm: (a) => { const l = Math.hypot(a.x, a.y, a.z) || 1; return { x: a.x / l, y: a.y / l, z: a.z / l }; },
+  rot: (v, ax, ang) => {                             // CVector3::RotateAroundVectorByAngle
+    const c = Math.cos(ang), s = Math.sin(ang);
+    return V.add(V.add(V.mul(v, c), V.mul(V.cross(ax, v), s)), V.mul(ax, V.dot(ax, v) * (1 - c)));
+  },
+};
+const AX = { x: { x: 1, y: 0, z: 0 }, y: { x: 0, y: 1, z: 0 }, z: { x: 0, y: 0, z: 1 } };
+const DEG = Math.PI / 180;
+
+// Camera state from camera / target / camera_top (SetCameraTargetTop).
+function camFromScene() {
+  const m = scene.main;
+  const cam = m.camera, tgt = m.target;
+  let fwd = V.sub(tgt, cam);
+  const dist = V.len(fwd) || m.camera_distance_to_target || 1;
+  fwd = V.len(fwd) > 0 ? V.norm(fwd) : { x: 0, y: 1, z: 0 };
+  const yaw = Math.atan2(fwd.y, fwd.x) - Math.PI / 2;
+  const pitch = Math.atan2(fwd.z, Math.hypot(fwd.x, fwd.y));
+  let t = V.norm(m.camera_top || AX.z);
+  t = V.rot(t, AX.z, -yaw);
+  t = V.rot(t, AX.x, -pitch);
+  const roll = -Math.atan2(t.z, t.x) + Math.PI / 2;
+  return { target: { ...tgt }, yaw, pitch, roll, dist };
+}
+
+function camBasis(c) {
+  const fwd = { x: -Math.sin(c.yaw) * Math.cos(c.pitch), y: Math.cos(c.yaw) * Math.cos(c.pitch), z: Math.sin(c.pitch) };
+  let top = V.rot(AX.z, AX.y, c.roll);
+  top = V.rot(top, AX.x, c.pitch);
+  top = V.rot(top, AX.z, c.yaw);
+  return { fwd, top, right: V.cross(fwd, top) };
+}
+
+const wrapDeg = (a) => { a = ((a + 180) % 360 + 360) % 360 - 180; return +a.toPrecision(12); };
+function camToScene(c, quiet) {
+  const { fwd, top } = camBasis(c);
+  const m = scene.main;
+  m.target = c.target;
+  m.camera = V.sub(c.target, V.mul(fwd, c.dist));
+  m.camera_top = top;
+  m.camera_rotation = { x: wrapDeg(c.yaw / DEG), y: wrapDeg(c.pitch / DEG), z: wrapDeg(c.roll / DEG) };
+  m.camera_distance_to_target = c.dist;
+  if (!quiet) refreshAll();
+  touch();
+}
+
+function resetCamera() {
+  for (const k of ['camera', 'target', 'camera_top', 'camera_rotation', 'camera_distance_to_target']) {
+    if (P.main[k]) scene.main[k] = structuredClone(P.main[k].default);
+  }
+  refreshAll();
+  touch();
+}
+
+// Frame: the engine probes the surface extent (a center and a radius); the camera keeps its
+// view direction and moves back until a sphere of that radius fits the narrower image axis.
+let framing = 0;
+async function frameView(auto) {
+  if (!engine?.frameView) return;
+  const job = ++framing;
+  if (sceneDirty) pushScene();
+  await scenePromise;
+  if (job !== framing) return;
+  let r = null;
+  try { r = await engine.frameView(); } catch (e) { console.error('[mandelbulber] frame', e); }
+  if (job !== framing || !r) return;
+  if (r.unbounded) return flash('frame: this shape fills space, the camera stays');
+  if (r.empty) return flash('frame: no surface found near the target');
+  const c = camFromScene();
+  const deg = scene.main.fov ?? 53.13;
+  const aspect = Math.max(canvas.clientWidth, 1) / Math.max(canvas.clientHeight, 1);
+  const half = (scene.main.perspective_type ?? 0) === 0
+    ? Math.atan(Math.tan(deg * DEG / 2) * Math.min(1, aspect)) : deg * DEG / 2 * Math.min(1, aspect);
+  c.target = r.center;
+  c.dist = r.radius / Math.sin(Math.max(half, 1 * DEG)) * 1.08;
+  camToScene(c);
+  flash(auto ? 'view framed to the new shape' : 'view framed');
+}
+
+// ─── camera input ───────────────────────────────────────────────────────────
+let flying = false;
+const keys = new Set();
+const pointers = new Map();
+let pinch = 0, dragCam = null;
+
+function toggleFly() {
+  flying = !flying;
+  document.body.classList.toggle('flying', flying);
+  $('flyBtn').classList.toggle('on', flying);
+  $('flyBtn2')?.classList.toggle('on', flying);
+  flash(flying ? 'fly mode: W A S D move, Q E down / up, drag to look' : 'orbit mode');
+}
+$('flyBtn').addEventListener('click', toggleFly);
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('pointerdown', (e) => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button });
+  canvas.classList.add('dragging');
+  dragCam = camFromScene();
+  if (pointers.size === 2) { const [a, b] = [...pointers.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+});
+canvas.addEventListener('pointermove', (e) => {
+  const p = pointers.get(e.pointerId);
+  if (!p || !dragCam) return;
+  const dx = e.clientX - p.x, dy = e.clientY - p.y;
+  p.x = e.clientX; p.y = e.clientY;
+  const c = dragCam;
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const d = Math.hypot(a.x - b.x, a.y - b.y);
+    if (pinch > 0 && d > 0) c.dist = clamp(c.dist * pinch / d, 1e-6, 1e6);
+    pinch = d;
+  } else if (p.button === 2 || e.shiftKey) {             // pan
+    const { right, top } = camBasis(c);
+    const k = c.dist * 2 * Math.tan((scene.main.fov ?? 53) * DEG / 2) / Math.max(canvas.clientHeight, 1);
+    c.target = V.add(c.target, V.add(V.mul(right, -dx * k), V.mul(top, dy * k)));
+  } else if (flying) {                                   // look around the camera
+    const { fwd } = camBasis(c);
+    const eye = V.sub(c.target, V.mul(fwd, c.dist));
+    c.yaw -= dx * 0.004;
+    c.pitch = clamp(c.pitch - dy * 0.004, -89.9 * DEG, 89.9 * DEG);
+    c.target = V.add(eye, V.mul(camBasis(c).fwd, c.dist));
+  } else {                                               // orbit around the target
+    c.yaw -= dx * 0.006;
+    c.pitch = clamp(c.pitch + dy * 0.006, -89.9 * DEG, 89.9 * DEG);
+  }
+  camToScene(c, true);
+});
+const endPointer = (e) => {
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinch = 0;
+  if (!pointers.size) { canvas.classList.remove('dragging'); dragCam = null; refreshAll(); }
+};
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const c = camFromScene();
+  c.dist = clamp(c.dist * Math.exp(e.deltaY * 0.0015), 1e-6, 1e6);
+  camToScene(c, true);
+  clearTimeout(wheelTimer);
+  wheelTimer = setTimeout(refreshAll, 200);
+}, { passive: false });
+let wheelTimer = 0;
+
+// Fly step: speed follows the distance estimate when the engine reports one.
+function flyStep(dt) {
+  if (!flying || !keys.size) return;
+  const c = camFromScene();
+  const { fwd, right, top } = camBasis(c);
+  let mv = { x: 0, y: 0, z: 0 };
+  if (keys.has('w')) mv = V.add(mv, fwd);
+  if (keys.has('s')) mv = V.sub(mv, fwd);
+  if (keys.has('d')) mv = V.add(mv, right);
+  if (keys.has('a')) mv = V.sub(mv, right);
+  if (keys.has('e')) mv = V.add(mv, top);
+  if (keys.has('q')) mv = V.sub(mv, top);
+  if (!V.len(mv)) return;
+  const de = Number(engine?.distanceEstimate?.() ?? info?.distance ?? NaN);
+  const scale = Number.isFinite(de) && de > 0 ? de : c.dist;
+  const speed = scale * 0.6 * (keys.has('shift') ? 4 : 1);
+  c.target = V.add(c.target, V.mul(V.norm(mv), speed * dt));
+  camToScene(c, true);
+}
+
+// ─── keys ───────────────────────────────────────────────────────────────────
+window.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (e.key === 'Escape' && !picker.classList.contains('hidden')) { closePicker(); return; }
+  if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  if (flying && 'wasdqe'.includes(k) && k.length === 1) { keys.add(k); e.preventDefault(); return; }
+  if (k === 'shift') { keys.add('shift'); return; }
+  if (k === 'p') panel.classList.toggle('hidden');
+  else if (k === 'f') toggleFly();
+  else if (k === 'v') frameView(false);
+});
+window.addEventListener('keyup', (e) => { keys.delete(e.key.toLowerCase()); if (!keys.size) refreshAll(); });
+window.addEventListener('blur', () => keys.clear());
+$('toggle').addEventListener('click', () => panel.classList.toggle('hidden'));
+
+// ─── status ─────────────────────────────────────────────────────────────────
+let compileStatus = '';
+let flashText = '', flashUntil = 0;
+function flash(s) { flashText = s; flashUntil = performance.now() + 2500; showHud(); }
+
+let msPerSample = 0;
+function showHud() {
+  const n = info?.samples ?? 0;
+  // progress inside the running sample, shown when one sample takes long enough to notice
+  const part = info && !info.done && n < targetSamples.value && info.sampleMs > 300 && info.progress > 0
+    ? ` · sample ${n + 1}: ${Math.round(info.progress * 100)}%` : '';
+  $('hudSamples').textContent = engine ? `${n} / ${targetSamples.value} spp${part}` : '';
+  $('hudMs').textContent = engine && msPerSample ? `${msPerSample.toFixed(1)} ms/sample` : '';
+  const st = performance.now() < flashUntil ? flashText : (info?.compiling ? 'compiling…' : compileStatus);
+  $('hudStatus').textContent = st;
+  hud.classList.toggle('err', /error|fail/i.test(st) || !!info?.stale);
+  if (progressEl) {
+    progressEl.firstChild.style.width = `${Math.min(100, 100 * (n + (part ? info.progress : 0)) / targetSamples.value)}%`;
+    progressEl.classList.toggle('done', n >= targetSamples.value);
+    sampleLine.textContent = engine
+      ? `${n} of ${targetSamples.value} samples${part}${msPerSample ? ` · ${msPerSample.toFixed(1)} ms per sample` : ''}${info?.compiling ? ' · compiling' : ''}`
+      : (compileStatus || 'no renderer');
+  }
+}
+
+// ─── frame loop ─────────────────────────────────────────────────────────────
+// Hand the engine a snapshot, so a compile that finishes late sees the scene it was given.
+let scenePromise = Promise.resolve();
+function pushScene() {
+  sceneDirty = false;
+  const onErr = (e) => { compileStatus = `error: ${e.message}`; console.error(e); };
+  try { scenePromise = Promise.resolve(engine.setScene(structuredClone(scene))).catch(onErr); } catch (e) { onErr(e); }
+  info = null;
+}
+
+let saveRequested = false;
+function savePng() { if (!engine) return flash('no renderer: nothing to save'); saveRequested = true; }
+
+let lastT = performance.now(), lastFrameT = 0, hudT = 0;
+function tick(now) {
+  requestAnimationFrame(tick);
+  const dt = Math.min((now - lastT) / 1000, 0.1);
+  lastT = now;
+  if (document.hidden || !engine) return;
+  flyStep(dt);
+  if (sceneDirty) pushScene();
+  const want = !info || info.compiling || (info.samples < targetSamples.value && !info.done);
+  if (want || saveRequested) {
+    try {
+      const t0 = performance.now();
+      const r = engine.frame();
+      if (r) info = r;
+      const st = engine.stats?.();
+      if (st && Number.isFinite(st.lastSampleMs) && st.lastSampleMs > 0) msPerSample = st.lastSampleMs;
+      else if (lastFrameT && !info?.compiling) msPerSample = msPerSample ? msPerSample * 0.85 + (t0 - lastFrameT) * 0.15 : t0 - lastFrameT;
+      lastFrameT = t0;
+    } catch (e) { compileStatus = `error: ${e.message}`; console.error(e); }
+    if (saveRequested && (info?.samples ?? 0) > 0) {   // wait for one full sample; the canvas keeps the last presented image
+      saveRequested = false;
+      const f = formulaAt(0);
+      const name = `mandelbulber-${isNone(f) ? 'scene' : f.id}-${info?.samples ?? 0}spp.png`;
+      canvas.toBlob((b) => (b ? (download(b, name), flash(`saved ${name}`)) : flash('save failed')), 'image/png');
+    }
+  } else lastFrameT = 0;
+  if (now - hudT > 150) { hudT = now; showHud(); }
+}
+
+// ─── boot ───────────────────────────────────────────────────────────────────
+function fail(msg) {
+  stage.classList.add('nogpu');
+  $('fallback').textContent = msg;
+  compileStatus = msg;
+  showHud();
+}
+
+async function boot() {
+  let raw;
+  try {
+    [P, CAT, raw, THUMBS] = await Promise.all(['params.json', 'catalog.json', 'examples.json', 'thumbs.json'].map(loadJson));
+  } catch (e) {
+    fail(`The page data did not load: ${e.message}`);
+    throw e;
+  }
+  const size = THUMBS.size ?? THUMBS.tile ?? 64;
+  const cols = THUMBS.cols ?? THUMBS.columns ?? Math.floor((THUMBS.width ?? 64 * 16) / size);
+  const count = THUMBS.count ?? CAT.formulas.length;
+  THUMBS = { cols, rows: Math.ceil((THUMBS.height ?? Math.ceil(count / cols) * size) / size),
+    url: new URL(`gen/${THUMBS.file ?? 'thumbs.jpg'}`, import.meta.url).href };
+  byEnum = new Map(CAT.formulas.map((f) => [fnum(f), f]));
+  EXAMPLES = prepareExamples(raw);
+  $('subtitle').textContent = `${CAT.formulas.filter((f) => !isNone(f)).length} formulas · ${EXAMPLES.length} examples`;
+
+  scene = (await readHash()) || defaultScene(P);
+  buildPanel();
+  showHud();
+
+  try {
+    const { createEngine } = await import('./engine.js');
+    engine = await createEngine(canvas);
+  } catch (e) {
+    console.error(e);
+    fail(e?.message?.includes('WebGPU') ? e.message : `The renderer did not start: ${e.message}. This page needs WebGPU (a current Chrome, Edge or Safari).`);
+    return;
+  }
+  engine.onStatus((s) => { compileStatus = String(s); showHud(); });
+  engine.setMaxSamples?.(targetSamples.value);
+  const resize = () => {
+    engine.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), Math.min(window.devicePixelRatio || 1, 2));
+    engine.reset();
+    info = null;
+  };
+  new ResizeObserver(resize).observe(canvas);
+  resize();
+  requestAnimationFrame(tick);
+}
+
+// Test hooks for the headless check.
+window.__mb = {
+  get scene() { return scene; }, get P() { return P; }, get catalog() { return CAT; }, get info() { return info; },
+  get examples() { return EXAMPLES; }, get activeSlot() { return activeSlot; },
+  defaultScene: () => defaultScene(P), parseFract: (t) => parseFract(t, P), exportText, loadText, loadExample,
+  shareHash, decodeShare, setMain, setSlot, openPicker, choose, targetSamples, toggleFly, camFromScene, camToScene,
+  frameView, get engine() { return engine; },
+};
+
+boot().catch((e) => console.error('[mandelbulber]', e));

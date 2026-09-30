@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mandelbulber</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   MANDELBULBER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A WebGPU (WGSL) port of the Mandelbulber2 ray-marching engine and its
+   formula library (Mandelbulber Team, github.com/buddhi1980/mandelbulber2,
+   GPL-3.0; see COPYING). Up to nine hybrid formula slots, a parameter panel
+   made from the upstream formula forms, the upstream example scenes, and
+   .fract import and export.
+
+   LAYOUT  (# marks an element id)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ #gl     one WebGPU canvas; engine.js adds one band per frame      │
+     │         drag = orbit, wheel = dolly, right/shift drag = pan       │
+     │ #toggle                                      #panel  (main.js      │
+     │ #picker  formula list over the panel           fills #pbody)       │
+     │ #hud    samples · ms/sample · compile status                       │
+     └──────────────────────────────────────────────────────────────────┘
+     Under 720 px wide the panel is a bottom sheet.
+
+   FILES
+     index.html  this shell            style.css  panel, picker, hud, bottom sheet
+     main.js     DOM, panel, camera input, Frame action, frame loop, share link
+     fract.js    .fract text <-> scene object (no DOM; copy of tools/fract-core.mjs)
+     engine.js   WebGPU host: shader assembly, band scheduler, probe rays (no DOM)
+     params.js   scene -> GPU bytes: Fractal structs, hybrid sequence, RenderParams
+     shaders/    hand-ported engine WGSL
+       render_params.wgsl  RenderParams struct + bindings
+       compute_fractal.wgsl  calculate_distance.wgsl  normal.wgsl  fractal_coloring.wgsl
+       shading.wgsl  main.wgsl (renderSample, probeRays)  present.wgsl (average + adjust)
+     gen/        generated, do not edit (node tools/gen.mjs <upstream checkout>)
+       struct.wgsl aux.wgsl helpers.wgsl layout.json   by tools/translate.mjs
+       formulas/<name>.wgsl + formulas/index.json      by tools/translate.mjs
+       params.json catalog.json examples.json thumbs.* by tools/catalog.mjs
+     tools/      generators (Node) and tools/overrides/ hand-fixed formulas
+     COPYING     GPL-3.0 license text
+
+   CREDIT
+     Mandelbulber by Krzysztof Marczak and the Mandelbulber team, GPL-3.0,
+     github.com/buddhi1980/mandelbulber2, commit 600da8d. This page and every
+     ported file are GPL-3.0 as well; the panel has an About / credits entry.
+
+   grep: #gl  #panel  #pbody  #picker  #pickerSearch  #hud  #file  #drop  #flyBtn
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="stage" id="stage">
+  <canvas id="gl"></canvas>
+  <div class="fallback" id="fallback"></div>
+  <div class="drop" id="drop">Drop a .fract file to load it</div>
+</div>
+<button class="toggle" id="toggle" type="button" title="Show or hide the panel (P)">Panel</button>
+<button class="toggle fly" id="flyBtn" type="button" title="Fly mode: WASD move, Q E down / up, drag to look (F)">Fly</button>
+<div class="hud" id="hud"><span id="hudSamples">—</span><span id="hudMs"></span><span id="hudStatus">loading</span></div>
+<aside class="panel" id="panel">
+  <header><h1>Mandelbulber</h1><small id="subtitle">formulas · path traced</small></header>
+  <div class="scroll" id="pbody"></div>
+</aside>
+<div class="picker hidden" id="picker" role="dialog" aria-label="Choose a formula">
+  <div class="phead">
+    <input type="search" id="pickerSearch" placeholder="Search formulas" aria-label="Search formulas" autocomplete="off">
+    <button type="button" id="pickerClose" title="Close (Esc)">Close</button>
+  </div>
+  <div class="pbody" id="pickerBody"></div>
+</div>
+<input type="file" id="file" accept=".fract,.txt,text/plain" hidden>
+<script type="module" src="main.js"></script>
+</body>
+</html>
