@@ -41,6 +41,7 @@
 //      map build .......... "MAP BUILD"          normals, float→canvas, generate
 //      three scene ........ "THREE.JS SCENE"     renderer, sphere, stars, sun
 //      placeholder globe .. "const holo"         wire rings before first planet
+//      animation .......... "function tween"     intro, scan ring, shockwave
 //      framing ............ "function fitCam"    fit planet to the clear viewport
 //      controls ........... "// CONTROLS"        orbit, zoom, sun, toggles
 //      sidebar ............ "// SIDEBAR"         map switch, download, generate
@@ -344,9 +345,10 @@ function d2c(r,w,h){const c=document.createElement('canvas');c.width=w;c.height=
 function c2t(c){const t=new THREE.CanvasTexture(c);t.wrapS=THREE.RepeatWrapping;t.wrapT=THREE.ClampToEdgeWrapping;return t}
 
 // Generate all five maps for one planet. Loop every texel in latitude bands of B
-// rows, yield to the browser between bands (so the progress bar animates), then
+// rows, yield to the browser between bands (so the progress bar animates, and the
+// optional live(albedo,w,h,rowsDone) callback can paint the sphere), then
 // normalize height, derive the normal map, and pack emissive with a warm tint.
-async function generate(type,temp,seed,width,prog){
+async function generate(type,temp,seed,width,prog,live){
   const H=width/2;seedN(seed);const gen=GEN[type];
   const hm=new Float32Array(width*H),sp=new Float32Array(width*H),em=new Float32Array(width*H),al=new Uint8ClampedArray(width*H*4);
   const B=4;
@@ -356,7 +358,7 @@ async function generate(type,temp,seed,width,prog){
       hm[i]=r.height;sp[i]=r.specular;em[i]=r.emissive;
       const p=i*4;al[p]=r.albedo[0]*255|0;al[p+1]=r.albedo[1]*255|0;al[p+2]=r.albedo[2]*255|0;al[p+3]=255;
     }
-    prog(ey/H);await new Promise(r=>requestAnimationFrame(r));
+    prog(ey/H);if(live)live(al,width,H,ey);await new Promise(r=>requestAnimationFrame(r));
   }
   // Normalize the raw height range to 0..1 so the depth/normal maps use the full
   // dynamic range regardless of the generator's absolute output.
@@ -449,6 +451,31 @@ updSun();
 // Drag state: d=dragging, lx/ly=last pointer, rx/ry=planet rotation. When not
 // dragging the planet spins slowly on its own.
 const dr={d:false,lx:0,ly:0,rx:.2,ry:0};
+// ANIMATION. tween(dur,fn) calls fn(e) each frame with eased progress e in
+// [0,1] until dur ms pass. RM (reduced motion) makes every tween jump to its end.
+const RM=window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+const tweens=[];
+const ease=t=>1-Math.pow(1-t,3);
+function tween(dur,fn){if(RM){fn(1);return}tweens.push({t0:performance.now(),dur,fn})}
+function runTweens(now){for(let i=tweens.length-1;i>=0;i--){const w=tweens[i],t=Math.min(1,(now-w.t0)/w.dur);w.fn(ease(t),t);if(t>=1)tweens.splice(i,1)}}
+
+// Scan ring: a thin torus on the planet surface at the latitude that
+// generate() has reached. It rides with the planet rotation (scanG).
+const scanG=new THREE.Group();scn.add(scanG);
+const scan=new THREE.Mesh(new THREE.TorusGeometry(1,.006,6,160),new THREE.MeshBasicMaterial({color:0xffd060,transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false}));
+scan.rotation.x=PI/2;scan.visible=false;scanG.add(scan);
+function setScan(frac){const th=frac*PI,r=Math.sin(th)*1.012;scan.scale.set(Math.max(r,.001),Math.max(r,.001),Math.max(r,.001));scan.position.y=Math.cos(th)*1.012}
+
+// Shockwave: a flat ring facing the camera that grows and fades when a
+// planet finishes.
+const shock=new THREE.Mesh(new THREE.RingGeometry(.97,1,160),new THREE.MeshBasicMaterial({color:0x96c8ff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide}));
+scn.add(shock);
+function pulse(color){shock.material.color.set(color);tween(1400,e=>{const k=1.02+e*.9;shock.scale.set(k,k,k);shock.material.opacity=.7*(1-e)})}
+
+// Intro: the wire globe grows in from a point and its rings brighten.
+holo.scale.setScalar(.01);holo.material.opacity=0;
+tween(1300,(e,t)=>{const b=1+2.2*Math.pow(t-1,3)+1.2*Math.pow(t-1,2);holo.scale.setScalar(Math.max(.01,b));holo.material.opacity=.3*e});
+
 // FRAMING. fitCam() moves the camera back until the planet (radius RFIT with
 // the atmosphere) fills FILL of the clear part of the viewport. On phones the
 // Maps sheet and the button dock cover the bottom, so occ() measures them and
@@ -482,9 +509,9 @@ function resize(){const w=mount.clientWidth,h=mount.clientHeight;if(!w||!h)retur
 new ResizeObserver(resize).observe(mount);
 resize();
 
-// Render loop: idle auto-spin, apply rotation to planet, atmosphere and the
-// placeholder globe, frame the camera, draw.
-function anim(){requestAnimationFrame(anim);if(!dr.d)dr.ry+=.0008;for(const m of [pmsh,amsh,holo]){m.rotation.x=dr.rx;m.rotation.y=dr.ry}fitCam(false);ren.render(scn,cam)}
+// Render loop: idle auto-spin, apply rotation to planet, atmosphere, the
+// placeholder globe and the scan ring, run tweens, frame the camera, draw.
+function anim(now){requestAnimationFrame(anim);if(!dr.d)dr.ry+=.0008;for(const m of [pmsh,amsh,holo,scanG]){m.rotation.x=dr.rx;m.rotation.y=dr.ry}runTweens(now||performance.now());fitCam(false);ren.render(scn,cam)}
 anim();
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -601,6 +628,26 @@ document.getElementById('btn-gen').onclick=async function(){
   const seed=parseInt(document.getElementById('inp-seed').value)||0;
   const res=parseInt(document.getElementById('sel-res').value);
   this.disabled=true;this.textContent='Generating...';
+  const mg=document.getElementById('m-btn-gen');
+  for(const b of [this,mg])if(b)b.classList.add('working');
+  // Live paint: copy the old albedo (or the dark base) into a canvas, bind it
+  // as the only map, and let each generated band overwrite its rows. The
+  // sphere shows the new planet as the scan ring sweeps from pole to pole.
+  const lc=document.createElement('canvas');lc.width=res;lc.height=res/2;
+  const lx=lc.getContext('2d');
+  if(curMaps)lx.drawImage(curMaps.albedo,0,0,res,res/2);else{lx.fillStyle='#05070c';lx.fillRect(0,0,res,res/2)}
+  const ltex=c2t(lc);
+  pmat.map=ltex;pmat.normalMap=null;pmat.roughnessMap=null;pmat.emissiveMap=null;
+  pmat.emissive=new THREE.Color(0);pmat.color=new THREE.Color(0xffffff);pmat.roughness=.85;pmat.needsUpdate=true;
+  amsh.visible=false;scan.visible=true;setScan(0);
+  let img=null,rowY=0,band=0;
+  const holoA=holo.visible?holo.material.opacity:0;
+  const live=(al,w,h,ey)=>{
+    setScan(ey/h);holo.material.opacity=holoA*(1-ey/h);
+    if(++band%4&&ey<h)return;
+    if(!img)img=new ImageData(al,w,h);
+    lx.putImageData(img,0,0,0,rowY,w,ey-rowY);rowY=ey;ltex.needsUpdate=true;
+  };
   document.getElementById('prog-wrap').style.display='block';
   document.getElementById('empty-state').style.display='none';
   document.getElementById('i-type').textContent=type.charAt(0).toUpperCase()+type.slice(1).replace('_',' ');
@@ -608,21 +655,26 @@ document.getElementById('btn-gen').onclick=async function(){
   document.getElementById('i-seed').textContent=seed;
   document.getElementById('i-size').textContent=res+'×'+(res/2);
 
-  curMaps=await generate(type,temp,seed,res,p=>{document.getElementById('prog-bar').style.width=(p*100)+'%'});
+  curMaps=await generate(type,temp,seed,res,p=>{document.getElementById('prog-bar').style.width=(p*100)+'%'},live);
+  scan.visible=false;
 
   mbC.querySelectorAll('.map-btn').forEach(b=>{b.disabled=false;b.querySelector('.dl').style.display='inline'});
-  mbC.querySelectorAll('.preview').forEach(p=>{const n=p.previousElementSibling.dataset.map;if(curMaps[n]){p.style.display='block';p.querySelector('img').src=curMaps[n].toDataURL()}});
+  // Previews develop in one after another (style.css .preview.dev).
+  mbC.querySelectorAll('.preview').forEach((p,i)=>{const n=p.previousElementSibling.dataset.map;if(curMaps[n]){p.style.display='block';p.querySelector('img').src=curMaps[n].toDataURL();p.classList.remove('dev');void p.offsetWidth;p.style.animationDelay=(i*90)+'ms';p.classList.add('dev')}});
   document.getElementById('btn-dl-all').style.display='block';
 
   // Set atmosphere color
   const ac=atmoColor(type,temp);
   amat.uniforms.uColor.value.set(ac[0],ac[1],ac[2]);
-  amat.uniforms.uIntensity.value=(type==='selena'?.3:type==='desert'?.5:1.0);
+  const aI=(type==='selena'?.3:type==='desert'?.5:1.0);
+  amat.uniforms.uIntensity.value=0;tween(1600,e=>{amat.uniforms.uIntensity.value=aI*e});
   amat.uniforms.uPow.value=(type==='gas_giant'||type==='ice_giant')?2.2:3.2;
 
   holo.visible=false;
   setAct('render');
+  pulse(new THREE.Color(ac[0],ac[1],ac[2]).lerp(new THREE.Color(0xffffff),.35));
   document.getElementById('prog-wrap').style.display='none';
+  for(const b of [this,mg])if(b)b.classList.remove('working');
   this.disabled=false;this.textContent='▶ Generate';
 };
 
