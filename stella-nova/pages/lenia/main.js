@@ -1,0 +1,882 @@
+/* ============================================================================
+   LENIA  ·  main script  (ES module)
+   ----------------------------------------------------------------------------
+   engine.js steps and draws the world on the GPU. This script loads the
+   catalog, builds the controls, and sends each change to the engine. It does
+   no simulation work itself.
+
+   DATA PATH
+     creatures.json ──> selectCreature ──> engine.setRule, engine.stamp
+     rule slider    ──> engine.setRule({m | s | T})          (live uniform)
+     scale slider   ──> engine.setRule({R}) and a new stamp at that scale
+     pointer        ──> worldXY ──> engine.stamp(patch, x, y, 'set' | 'erase')
+     frame          ──> engine.step(n) ──> engine.render()
+                    ──> every 6th frame engine.stats() ──> status, follow
+
+   WORLD SIZE. The short side of the world is the World select (128 to 384
+   cells). The long side follows the canvas aspect, so the world fills the
+   screen at zoom 1 on a phone in portrait and on a wide monitor.
+
+   NO WEBGPU. If createEngine fails, the page keeps the catalog, the plots and
+   the About text, and shows #nogpu.
+
+   GREP MAP
+     grep -n 'function boot'            load order and the first creature
+     grep -n 'function selectCreature'  load a creature into the engine and UI
+     grep -n 'function placeCreature'   clear the world and stamp the creature
+     grep -n 'function buildRule'       the m, s, T and scale sliders
+     grep -n 'function drawPlots'       the kernel and growth plots
+     grep -n 'function renderEquations' the KaTeX lines for the current rule
+     grep -n 'function buildBrowser'    the grouped, searchable catalog
+     grep -n 'function drawThumb'       catalog thumbnails
+     grep -n 'function sizeWorld'       world size from the canvas aspect
+     grep -n 'function frame'           the render loop and follow camera
+     grep -n 'function bindPointer'     tools, zoom and pan
+     grep -n 'function bindKeys'        keyboard shortcuts
+     grep -n 'function setOpen'         the panel, the phone sheet, the dock
+   ========================================================================== */
+import { createEngine, kernelShell, GROWTH, resample, PALETTES, paletteData } from './engine.js';
+
+const $ = id => document.getElementById(id);
+// The phone layout. This query matches the PHONE block in style.css.
+const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+const FINE_Q = matchMedia('(pointer:fine)');
+const LS_KEY = 'stella-nova.lenia.creature';
+const DEFAULT_CODE = 'O2u';
+const TOOLS = { stamp: '✦', draw: '✎', erase: '⌫' };
+
+const S = {
+  creatures: [], idx: -1, c: null,
+  engine: null, gpu: true,
+  playing: true, speed: 2, acc: 0,
+  rule: { m: 0, s: 0, T: 10, scale: 1 },
+  tool: 'stamp', brush: 1.5,
+  view: { mode: 'world', palette: 'lenia', zoom: 1, follow: false },
+  worldShort: 128, stats: null, time: 0,
+  // Centroid velocity in cells per unit of time, for the follow camera.
+  vel: { x: 0, y: 0 }, statT: 0,
+  maxSteps: 48,
+};
+// ?debug exposes the page state for the headless checks.
+if (/[?&]debug\b/.test(location.search)) window.lenia = S;
+
+// ------------------------------------------------------------------ helpers
+function setText(el, s) { if (typeof el === 'string') el = $(el); if (el && el.textContent !== s) el.textContent = s; }
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } }
+let toastT = 0;
+function toast(msg, err = false, ms = 2400) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.toggle('err', err);
+  t.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove('show'), ms);
+}
+const wrap = (a, n) => ((a % n) + n) % n;
+const wrapDelta = (d, n) => wrap(d + n / 2, n) - n / 2;
+
+// Family label: the family rank, or the next rank up when the family rank is
+// empty or a note in parentheses.
+function familyOf(c) {
+  for (const k of [2, 1, 0]) { const r = c.rank[k]; if (r && !r.startsWith('(')) return r; }
+  return 'Other';
+}
+const famCache = new Map();
+function familyColor(f) {
+  if (famCache.has(f)) return famCache.get(f);
+  let h = 0;
+  for (const ch of f) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const col = `hsl(${(h * 137.5) % 360} 62% 62%)`;
+  famCache.set(f, col);
+  return col;
+}
+function chipEl(f, tag = 'span') {
+  const c = document.createElement(tag);
+  c.className = 'chip';
+  c.style.setProperty('--c', familyColor(f));
+  c.textContent = f;
+  return c;
+}
+
+// Start cells as a float patch, decoded once per creature.
+const cellCache = new Map();
+function cellsOf(c) {
+  if (cellCache.has(c.id)) return cellCache.get(c.id);
+  const bin = atob(c.cells);
+  const data = new Float32Array(c.w * c.h);
+  for (let i = 0; i < data.length; i++) data[i] = bin.charCodeAt(i) / 255;
+  const p = { w: c.w, h: c.h, data };
+  cellCache.set(c.id, p);
+  return p;
+}
+function rotate(p, q) {
+  let out = p;
+  for (let k = 0; k < q; k++) {
+    const r = { w: out.h, h: out.w, data: new Float32Array(out.data.length) };
+    for (let y = 0; y < out.h; y++) for (let x = 0; x < out.w; x++) r.data[x * r.w + (out.h - 1 - y)] = out.data[y * out.w + x];
+    out = r;
+  }
+  return out;
+}
+
+// 256 rgb entries of a palette as css colors, for 2D canvas work.
+const lutCache = new Map();
+function lut(name) {
+  if (lutCache.has(name)) return lutCache.get(name);
+  const d = paletteData(name);
+  const out = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) for (let c = 0; c < 3; c++) out[i * 3 + c] = Math.round(d[i * 4 + c] * 255);
+  lutCache.set(name, out);
+  return out;
+}
+
+// --------------------------------------------------------------------- boot
+async function boot() {
+  buildStatic();
+  let doc;
+  try {
+    doc = await (await fetch('creatures.json')).json();
+  } catch (e) {
+    toast('The catalog did not load: ' + e.message, true, 8000);
+    return;
+  }
+  S.creatures = doc.creatures;
+  buildBrowser();
+
+  const mobile = PHONE_Q.matches || !FINE_Q.matches;
+  S.maxSteps = mobile ? 16 : 48;
+  S.worldShort = mobile ? 96 : 128;
+  $('worldSel').value = String(S.worldShort);
+  try {
+    S.engine = await createEngine($('gl'), { mobile });
+    S.engine.onLost = () => toast('The GPU device was lost. Reload the page to start again.', true, 10000);
+  } catch (e) {
+    console.warn('[lenia] no engine', e);
+    S.gpu = false;
+    document.body.classList.add('nogpu');
+    $('nogpu').hidden = false;
+  }
+  if (S.engine) {
+    observeSize();
+    sizeWorld();
+    bindPointer();
+    pushView();
+  }
+  const saved = lsGet(LS_KEY);
+  let i = S.creatures.findIndex(c => c.code === saved);
+  if (i < 0) i = S.creatures.findIndex(c => c.code === DEFAULT_CODE);
+  selectCreature(Math.max(0, i));
+  requestAnimationFrame(frame);
+}
+
+// --------------------------------------------------------------- creatures
+function selectCreature(i) {
+  const n = S.creatures.length;
+  if (!n) return;
+  i = wrap(i, n);
+  const c = S.creatures[i];
+  S.idx = i; S.c = c;
+  S.rule = { m: c.m, s: c.s, T: c.T, scale: c.scale };
+  lsSet(LS_KEY, c.code);
+
+  const fam = familyOf(c);
+  const chip = $('curFamily');
+  chip.textContent = fam;
+  chip.style.setProperty('--c', familyColor(fam));
+  setText('curIdx', `${i + 1} / ${n}`);
+  setText('curName', c.name);
+  const sub = $('curSub');
+  sub.textContent = '';
+  const cn = document.createElement('span'); cn.className = 'cn'; cn.textContent = c.cname;
+  sub.append(`${c.code} · `, cn);
+  if (c.rank[3] && !c.rank[3].startsWith('(')) sub.append(` · ${c.rank[3]}`);
+  if (c.cls === 'grow') sub.append(' · grows without limit');
+  setText('dockName', c.name);
+  $('dockDot').style.setProperty('--c', familyColor(fam));
+  markBrowser();
+
+  buildRule();
+  renderEquations();
+  drawPlots();
+  if (S.engine) {
+    S.engine.setRule(engineRule());
+    placeCreature();
+  }
+}
+
+function engineRule() {
+  const c = S.c;
+  return { R: c.R * S.rule.scale, T: S.rule.T, m: S.rule.m, s: S.rule.s, b: c.b, kn: c.kn, gn: c.gn };
+}
+
+// Clear the world and stamp the creature in the middle at the current scale.
+function placeCreature() {
+  if (!S.engine || !S.c) return;
+  S.engine.clear();
+  const { W, H } = S.engine.info;
+  S.engine.stamp(resample(cellsOf(S.c), S.rule.scale), W / 2, H / 2);
+  S.engine.setView({ cx: W / 2, cy: H / 2 });
+  S.time = 0; S.acc = 0;
+  S.stats = null; S.vel = { x: 0, y: 0 };
+}
+
+function soup() {
+  if (!S.engine || !S.c) return;
+  const { W, H } = S.engine.info;
+  const R = S.c.R * S.rule.scale;
+  const pw = Math.round(W * 0.7), ph = Math.round(H * 0.7);
+  const data = new Float32Array(pw * ph);
+  const blobs = Math.max(4, Math.round(pw * ph / (R * R * 9)));
+  for (let k = 0; k < blobs; k++) {
+    const bx = Math.random() * pw, by = Math.random() * ph, br = R * (0.8 + Math.random() * 1.2);
+    const x0 = Math.max(0, Math.floor(bx - br)), x1 = Math.min(pw - 1, Math.ceil(bx + br));
+    const y0 = Math.max(0, Math.floor(by - br)), y1 = Math.min(ph - 1, Math.ceil(by + br));
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      if (Math.hypot(x - bx, y - by) < br) data[y * pw + x] = Math.random();
+    }
+  }
+  S.engine.clear();
+  S.engine.stamp({ w: pw, h: ph, data }, W / 2, H / 2);
+  S.time = 0;
+}
+
+// ------------------------------------------------------------------- rule
+const RULE_ROWS = [
+  { key: 'm', label: 'm · center', min: 0.01, max: 0.6, step: 0.001, dec: 3 },
+  { key: 's', label: 's · width', min: 0.0005, max: 0.1, step: 0.0001, dec: 4 },
+  { key: 'T', label: 'T · steps', min: 1, max: 50, step: 1, dec: 0 },
+  { key: 'scale', label: 'scale', min: 0.4, max: 2.5, step: 0.05, dec: 2 },
+];
+function buildRule() {
+  const box = $('rule');
+  box.textContent = '';
+  const c = S.c;
+  for (const r of RULE_ROWS) {
+    const row = document.createElement('div'); row.className = 'row';
+    const lab = document.createElement('label'); lab.textContent = r.label; lab.htmlFor = 'r-' + r.key; lab.title = r.label;
+    const inp = document.createElement('input'); inp.type = 'range'; inp.id = 'r-' + r.key;
+    const base = r.key === 'scale' ? c.scale : c[r.key];
+    inp.min = Math.min(r.min, base); inp.max = Math.max(r.max, base * 2); inp.step = r.step; inp.value = S.rule[r.key];
+    const val = document.createElement('span'); val.className = 'val acc';
+    const rst = document.createElement('button'); rst.className = 'rst'; rst.textContent = '↺'; rst.title = 'Back to the catalog value';
+    const show = () => {
+      const v = S.rule[r.key];
+      val.textContent = r.key === 'scale' ? `×${v.toFixed(2)}` : v.toFixed(r.dec);
+      rst.classList.toggle('same', Math.abs(v - base) < r.step / 2);
+      if (r.key === 'scale') lab.textContent = `R = ${Math.round(c.R * v * 10) / 10}`;
+    };
+    const set = (v, commit) => {
+      S.rule[r.key] = v;
+      show();
+      if (S.engine) {
+        S.engine.setRule(engineRule());
+        if (r.key === 'scale' && commit) placeCreature();
+      }
+      drawPlots();
+      renderEquations();
+    };
+    inp.addEventListener('input', () => set(+inp.value, false));
+    // A new scale changes R, and the creature must be drawn again at that size.
+    if (r.key === 'scale') inp.addEventListener('change', () => set(+inp.value, true));
+    rst.addEventListener('click', () => { inp.value = base; set(base, true); });
+    show();
+    row.append(lab, inp, val, rst);
+    box.append(row);
+  }
+}
+
+// ------------------------------------------------------------------ plots
+// Left: the kernel as a disc in the current palette. Right: G(u) for u from 0
+// to past m + 4 s, with the growth center m marked.
+function drawPlots() {
+  const cv = $('plots'), c = S.c;
+  if (!c) return;
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  const w = cv.clientWidth || 260, h = cv.clientHeight || 120;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const g = cv.getContext('2d');
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, w, h);
+
+  // Kernel disc.
+  const side = h - 16, n = 64;
+  const img = g.createImageData(n, n), L = lut(S.view.palette);
+  let kmax = 0;
+  const vals = new Float32Array(n * n);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const r = Math.hypot(x + 0.5 - n / 2, y + 0.5 - n / 2) / (n / 2);
+    const v = kernelShell(r, c.b, c.kn);
+    vals[y * n + x] = v; kmax = Math.max(kmax, v);
+  }
+  for (let i = 0; i < n * n; i++) {
+    const k = Math.round(vals[i] / (kmax || 1) * 255);
+    img.data[i * 4] = L[k * 3]; img.data[i * 4 + 1] = L[k * 3 + 1]; img.data[i * 4 + 2] = L[k * 3 + 2]; img.data[i * 4 + 3] = 255;
+  }
+  const tmp = document.createElement('canvas'); tmp.width = n; tmp.height = n;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+  g.imageSmoothingEnabled = true;
+  g.drawImage(tmp, 8, 8, side, side);
+
+  // Growth curve.
+  const { m, s } = S.rule;
+  const x0 = side + 24, x1 = w - 8, y0 = 10, y1 = h - 12;
+  const umax = Math.min(1, Math.max(m * 2, m + 5 * s));
+  const X = u => x0 + (u / umax) * (x1 - x0);
+  const Y = v => y0 + (1 - (v + 1) / 2) * (y1 - y0);
+  g.strokeStyle = 'rgba(140,200,230,0.18)'; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(x0, Y(0)); g.lineTo(x1, Y(0)); g.stroke();
+  g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0, y1); g.stroke();
+  g.setLineDash([3, 3]);
+  g.beginPath(); g.moveTo(X(m), y0); g.lineTo(X(m), y1); g.stroke();
+  g.setLineDash([]);
+  const f = GROWTH[c.gn - 1];
+  g.strokeStyle = '#7ad7f0'; g.lineWidth = 1.6;
+  g.beginPath();
+  for (let i = 0; i <= 200; i++) {
+    const u = umax * i / 200, px = X(u), py = Y(f(u, m, s));
+    if (i) g.lineTo(px, py); else g.moveTo(px, py);
+  }
+  g.stroke();
+  g.fillStyle = 'rgba(211,221,224,0.65)';
+  g.font = '9px JetBrains Mono, monospace';
+  g.fillText('+1', x0 + 3, y0 + 8);
+  g.fillText('−1', x0 + 3, y1 - 2);
+  g.fillText('m', X(m) + 3, y1 - 2);
+  g.textAlign = 'right';
+  g.fillText(umax.toFixed(2), x1, y1 + 10);
+  g.textAlign = 'left';
+}
+
+// ---------------------------------------------------------------- equations
+const GENERAL = String.raw`A^{t+\Delta t} = \Big[\,A^t + \tfrac{1}{T}\,G\big(K * A^t\big)\Big]_0^1`;
+const CORE_TEX = [
+  String.raw`K_c(r) = \big(4r(1-r)\big)^4`,
+  String.raw`K_c(r) = \exp\!\Big(4 - \tfrac{1}{r(1-r)}\Big)`,
+  String.raw`K_c(r) = \mathbf{1}\big[\tfrac14 \le r \le \tfrac34\big]`,
+  String.raw`K_c(r) = \mathbf{1}\big[\tfrac14 \le r \le \tfrac34\big] + \tfrac12\,\mathbf{1}\big[r < \tfrac14\big]`,
+];
+function growthTeX(gn, m, s) {
+  const M = m.toFixed(3), Sv = s.toFixed(4);
+  if (gn === 1) return String.raw`G(u) = 2\Big(1 - \tfrac{(u-${M})^2}{9\cdot ${Sv}^2}\Big)_+^4 - 1`;
+  if (gn === 3) return String.raw`G(u) = \pm 1,\ +1 \text{ if } |u-${M}| \le ${Sv}`;
+  return String.raw`G(u) = 2\exp\!\Big(-\tfrac{(u-${M})^2}{2\cdot ${Sv}^2}\Big) - 1`;
+}
+function tex(el, src, display = true) {
+  if (window.katex) {
+    try { window.katex.render(src, el, { displayMode: display, throwOnError: false }); return; } catch (e) { /* fall through */ }
+  }
+  el.textContent = src;
+}
+function renderEquations() {
+  const c = S.c;
+  if (!c) return;
+  const box = $('eqs');
+  box.textContent = '';
+  const add = src => { const d = document.createElement('div'); d.className = 'eq'; tex(d, src); box.append(d); };
+  add(growthTeX(c.gn, S.rule.m, S.rule.s));
+  add(CORE_TEX[c.kn - 1] + (c.b.length > 1 ? String.raw`,\quad \beta = (${c.b.map(v => +v.toFixed(3)).join(',\\ ')})` : ''));
+}
+
+// ------------------------------------------------------------------ browser
+let famFilter = null;
+function buildBrowser() {
+  const fams = [];
+  for (const c of S.creatures) { const f = familyOf(c); if (!fams.includes(f)) fams.push(f); }
+  const chips = $('famChips');
+  chips.textContent = '';
+  for (const f of fams) {
+    const b = chipEl(f, 'button'); b.type = 'button';
+    b.addEventListener('click', () => {
+      famFilter = famFilter === f ? null : f;
+      for (const x of chips.children) x.classList.toggle('on', x.textContent === famFilter);
+      fillList();
+    });
+    chips.append(b);
+  }
+  $('search').addEventListener('input', fillList);
+  $('search').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { const first = $('list').querySelector('.br-item'); if (first) first.click(); }
+    if (e.key === 'Escape') { e.stopPropagation(); openBrowser(false); }
+  });
+  fillList();
+}
+
+let thumbIO = null;
+function fillList() {
+  const q = $('search').value.trim().toLowerCase();
+  const words = q.split(/\s+/).filter(Boolean);
+  const box = $('list');
+  box.textContent = '';
+  if (thumbIO) thumbIO.disconnect();
+  thumbIO = new IntersectionObserver(ents => {
+    for (const e of ents) if (e.isIntersecting) { drawThumb(e.target); thumbIO.unobserve(e.target); }
+  }, { root: box, rootMargin: '200px' });
+  const groups = new Map();
+  S.creatures.forEach((c, i) => {
+    const f = familyOf(c);
+    if (famFilter && f !== famFilter) return;
+    const hay = [c.name, c.code, c.cname, ...c.rank].join(' ').toLowerCase();
+    if (!words.every(w => hay.includes(w))) return;
+    if (!groups.has(f)) groups.set(f, []);
+    groups.get(f).push(i);
+  });
+  for (const [f, list] of groups) {
+    const g = document.createElement('div'); g.className = 'br-group';
+    const h = document.createElement('div'); h.className = 'br-gh';
+    const dot = document.createElement('span'); dot.className = 'chip-dot'; dot.style.setProperty('--c', familyColor(f));
+    const n = document.createElement('span'); n.className = 'n'; n.textContent = list.length;
+    h.append(dot, f, n);
+    g.append(h);
+    for (const i of list) {
+      const c = S.creatures[i];
+      const b = document.createElement('button'); b.className = 'br-item'; b.dataset.idx = i;
+      const th = document.createElement('canvas'); th.dataset.idx = i;
+      const t = document.createElement('span'); t.className = 't';
+      const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = c.name;
+      const ct = document.createElement('span'); ct.className = 'ct';
+      ct.textContent = `${c.code} · ${c.cname} · R ${Math.round(c.R * c.scale)}${c.cls === 'grow' ? ' · grows' : ''}`;
+      t.append(nm, ct);
+      b.append(th, t);
+      g.append(b);
+      thumbIO.observe(th);
+      b.addEventListener('click', () => { selectCreature(i); if (PHONE_Q.matches) openBrowser(false); });
+    }
+    box.append(g);
+  }
+  if (!groups.size) { const d = document.createElement('div'); d.className = 'br-empty'; d.textContent = 'No creature matches.'; box.append(d); }
+  markBrowser();
+}
+
+// The start cells, fit into the thumbnail with the aspect kept.
+function drawThumb(cv) {
+  const c = S.creatures[+cv.dataset.idx];
+  const p = cellsOf(c), L = lut(S.view.palette);
+  const img = new ImageData(p.w, p.h);
+  for (let i = 0; i < p.w * p.h; i++) {
+    const k = Math.round(p.data[i] * 255);
+    img.data[i * 4] = L[k * 3]; img.data[i * 4 + 1] = L[k * 3 + 1]; img.data[i * 4 + 2] = L[k * 3 + 2]; img.data[i * 4 + 3] = 255;
+  }
+  const tmp = document.createElement('canvas'); tmp.width = p.w; tmp.height = p.h;
+  tmp.getContext('2d').putImageData(img, 0, 0);
+  const size = Math.round((cv.clientWidth || 44) * Math.min(devicePixelRatio || 1, 2));
+  cv.width = cv.height = size;
+  const g = cv.getContext('2d');
+  g.fillStyle = `rgb(${L[0]},${L[1]},${L[2]})`;
+  g.fillRect(0, 0, size, size);
+  const k = size * 0.92 / Math.max(p.w, p.h);
+  g.imageSmoothingEnabled = true;
+  g.drawImage(tmp, (size - p.w * k) / 2, (size - p.h * k) / 2, p.w * k, p.h * k);
+}
+
+function markBrowser() {
+  for (const b of $('list').querySelectorAll('.br-item')) b.classList.toggle('on', +b.dataset.idx === S.idx);
+}
+function openBrowser(open) {
+  const br = $('browser');
+  if (open === undefined) open = !br.classList.contains('open');
+  br.classList.toggle('open', open);
+  br.setAttribute('aria-hidden', String(!open));
+  $('browseBtn').classList.toggle('on', open);
+  $('dockCreature').classList.toggle('on', open);
+  if (open) {
+    if (PHONE_Q.matches) setOpen(false);
+    const cur = $('list').querySelector('.br-item.on');
+    if (cur) cur.scrollIntoView({ block: 'center' });
+    if (FINE_Q.matches) setTimeout(() => $('search').focus({ preventScroll: true }), 50);
+  } else if (document.activeElement === $('search')) $('search').blur();
+}
+
+// ---------------------------------------------------------- panel and dock
+function setOpen(open) {
+  const panel = $('panel');
+  panel.classList.toggle('open', open);
+  if (!open) panel.classList.remove('full');
+  document.body.classList.toggle('panel-closed', !open);
+  $('dockPanel').classList.toggle('on', open);
+  $('dockPanel').setAttribute('aria-expanded', String(open));
+  if (open && PHONE_Q.matches) openBrowser(false);
+}
+function setPlaying(on) {
+  S.playing = on;
+  $('playBtn').textContent = on ? '❚❚ PAUSE' : '▶ PLAY';
+  $('playBtn').classList.toggle('on', !on);
+  $('dockPlay').textContent = on ? '❚❚' : '▶';
+  $('dockPlay').setAttribute('aria-label', on ? 'Pause' : 'Play');
+}
+function setTool(t) {
+  S.tool = t;
+  for (const b of $('tools').children) b.classList.toggle('on', b.dataset.tool === t);
+  $('dockTool').textContent = TOOLS[t];
+  $('dockTool').setAttribute('aria-label', 'Tool: ' + t);
+  const touch = !FINE_Q.matches;
+  const how = {
+    stamp: touch ? 'Tap the world to place a copy of the creature, turned at random.' : 'Click the world to place a copy of the creature, turned at random.',
+    draw: 'Drag on the world to spray random cells. Some rules grow new creatures from them.',
+    erase: 'Drag on the world to remove cells.',
+  }[t];
+  setText('toolHint', how + (touch ? ' Two fingers zoom and pan.' : ' The wheel zooms, a right drag pans.'));
+}
+function setFollow(on) {
+  S.view.follow = on;
+  $('followBtn').textContent = on ? 'FOLLOW · ON' : 'FOLLOW · OFF';
+  $('followBtn').classList.toggle('on', on);
+}
+function setZoom(z) {
+  S.view.zoom = Math.max(0.5, Math.min(6, z));
+  $('zoom').value = S.view.zoom;
+  setText('zoomV', `×${S.view.zoom.toFixed(2)}`);
+  pushView();
+}
+function pushView() {
+  if (!S.engine) return;
+  S.engine.setView({ mode: S.view.mode, zoom: S.view.zoom, palette: S.view.palette });
+}
+
+function buildStatic() {
+  tex($('eq-general'), GENERAL);
+  $('prevBtn').addEventListener('click', () => selectCreature(S.idx - 1));
+  $('nextBtn').addEventListener('click', () => selectCreature(S.idx + 1));
+  $('browseBtn').addEventListener('click', () => openBrowser());
+  $('browserClose').addEventListener('click', () => openBrowser(false));
+
+  $('playBtn').addEventListener('click', () => setPlaying(!S.playing));
+  $('dockPlay').addEventListener('click', () => setPlaying(!S.playing));
+  $('stepBtn').addEventListener('click', () => { setPlaying(false); if (S.engine) { S.engine.step(1); S.time += 1 / S.rule.T; } });
+  $('resetBtn').addEventListener('click', placeCreature);
+  $('dockReset').addEventListener('click', placeCreature);
+  $('soupBtn').addEventListener('click', soup);
+  $('clearBtn').addEventListener('click', () => { if (S.engine) { S.engine.clear(); S.time = 0; } });
+
+  const sp = $('speed');
+  sp.addEventListener('input', () => { S.speed = +sp.value; setText('speedV', `${S.speed} t/s`); });
+  sp.dispatchEvent(new Event('input'));
+  $('worldSel').addEventListener('change', e => { S.worldShort = +e.target.value; sizeWorld(); });
+
+  for (const b of $('tools').children) b.addEventListener('click', () => setTool(b.dataset.tool));
+  $('dockTool').addEventListener('click', () => {
+    const order = Object.keys(TOOLS);
+    setTool(order[(order.indexOf(S.tool) + 1) % order.length]);
+    toast('Tool: ' + S.tool, false, 900);
+  });
+  const br = $('brush');
+  br.addEventListener('input', () => { S.brush = +br.value; setText('brushV', `${S.brush.toFixed(2)} R`); });
+  br.dispatchEvent(new Event('input'));
+  setTool('stamp');
+
+  const pal = $('palettes');
+  for (const name of Object.keys(PALETTES)) {
+    const b = document.createElement('button'); b.dataset.pal = name;
+    const bar = document.createElement('span'); bar.className = 'bar';
+    bar.style.background = `linear-gradient(90deg, ${PALETTES[name].join(', ')})`;
+    const nm = document.createElement('span'); nm.className = 'nm'; nm.textContent = name;
+    b.append(bar, nm);
+    b.classList.toggle('on', name === S.view.palette);
+    b.addEventListener('click', () => {
+      S.view.palette = name;
+      for (const x of pal.children) x.classList.toggle('on', x === b);
+      pushView();
+      drawPlots();
+      if (S.creatures.length) fillList();
+    });
+    pal.append(b);
+  }
+  for (const b of $('modes').children) b.addEventListener('click', () => setMode(b.dataset.mode));
+  $('zoom').addEventListener('input', e => setZoom(+e.target.value));
+  setZoom(1);
+  $('followBtn').addEventListener('click', () => setFollow(!S.view.follow));
+
+  $('gear').addEventListener('click', () => setOpen(true));
+  $('panelClose').addEventListener('click', () => setOpen(false));
+  $('dockPanel').addEventListener('click', () => setOpen(!$('panel').classList.contains('open')));
+  $('dockCreature').addEventListener('click', () => openBrowser());
+  setOpen(!PHONE_Q.matches);
+  PHONE_Q.addEventListener('change', e => { setOpen(!e.matches); openBrowser(false); });
+
+  // The grip of the phone sheet. A tap switches half and full height. A drag
+  // up gives full height. A drag down gives half height, then closes.
+  const grip = $('sheetGrip'), panel = $('panel');
+  let gripY = null;
+  grip.addEventListener('pointerdown', e => { gripY = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) { /* none */ } });
+  grip.addEventListener('pointerup', e => {
+    if (gripY === null) return;
+    const dy = e.clientY - gripY; gripY = null;
+    if (Math.abs(dy) < 8) panel.classList.toggle('full');
+    else if (dy < -40) panel.classList.add('full');
+    else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setOpen(false); }
+  });
+  grip.addEventListener('pointercancel', () => { gripY = null; });
+  new ResizeObserver(() => drawPlots()).observe($('plots'));
+
+  // No browser pinch zoom, no double-tap zoom, no pull to refresh.
+  for (const ev of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(ev, e => e.preventDefault());
+  document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+  bindKeys();
+}
+function setMode(mode) {
+  S.view.mode = mode;
+  for (const b of $('modes').children) b.classList.toggle('on', b.dataset.mode === mode);
+  pushView();
+}
+
+// -------------------------------------------------------------- world size
+// The short side is S.worldShort. The long side follows the canvas aspect,
+// clamped to 2.2 : 1, and both are multiples of 16.
+function sizeWorld() {
+  if (!S.engine) return;
+  const cv = $('gl');
+  const a = Math.min(2.2, Math.max(1 / 2.2, (cv.clientWidth || 1) / (cv.clientHeight || 1)));
+  const r16 = v => Math.max(64, Math.round(v / 16) * 16);
+  const W = r16(a >= 1 ? S.worldShort * a : S.worldShort);
+  const H = r16(a >= 1 ? S.worldShort : S.worldShort / a);
+  const { W: w0, H: h0 } = S.engine.info;
+  if (W === w0 && H === h0) return;
+  S.engine.setWorld(W, H);
+  if (S.c) { S.engine.setRule(engineRule()); placeCreature(); }
+}
+function observeSize() {
+  const cv = $('gl');
+  let sizeT = 0;
+  const apply = () => {
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    S.engine.resize(Math.round(cv.clientWidth * dpr), Math.round(cv.clientHeight * dpr), dpr);
+  };
+  new ResizeObserver(() => {
+    apply();
+    // A new aspect (a phone turned, a window made narrow) gets a new world
+    // after the resize settles, so a drag of the window edge does not clear
+    // the world at each frame.
+    clearTimeout(sizeT);
+    sizeT = setTimeout(() => {
+      const { W, H } = S.engine.info, a = cv.clientWidth / cv.clientHeight;
+      if ((W >= H) !== (a >= 1) || Math.abs(Math.log((W / H) / a)) > 0.45) sizeWorld();
+    }, 400);
+  }).observe(cv);
+  apply();
+}
+
+// Canvas client px -> world cell (x, y), not wrapped.
+function worldXY(clientX, clientY) {
+  const cv = $('gl'), r = cv.getBoundingClientRect(), v = S.engine.view, k = S.engine.cellPx();
+  return { x: (clientX - r.left - r.width / 2 - v.ox) / k + v.cx, y: (clientY - r.top - r.height / 2 - v.oy) / k + v.cy };
+}
+
+// The part of the canvas that no sheet, drawer or dock covers. The view
+// center goes to the middle of that part, so a creature at the center stays
+// in sight when the phone sheet or the catalog opens. Returns the offset of
+// that middle from the canvas center, in CSS px.
+function occlusion() {
+  const cv = $('gl').getBoundingClientRect();
+  let l = cv.left, r = cv.right, t = cv.top, b = cv.bottom;
+  const cover = el => {
+    if (!el.classList.contains('open')) return;
+    const e = el.getBoundingClientRect();
+    if (e.width < 1 || e.height < 1 || e.right <= l || e.left >= r || e.bottom <= t || e.top >= b) return;
+    // A panel along the base (phone sheet) or along a side (drawer).
+    if (e.width >= (r - l) * 0.9) b = Math.min(b, e.top);
+    else if (e.left <= l + 1) l = Math.max(l, e.right);
+    else r = Math.min(r, e.left);
+  };
+  if (PHONE_Q.matches) {
+    const d = $('dock').getBoundingClientRect();
+    if (d.height && d.width >= (r - l) * 0.9) b = Math.min(b, d.top);
+  }
+  cover($('panel'));
+  cover($('browser'));
+  if (r - l < 80 || b - t < 80) return { x: 0, y: 0 };
+  return { x: (l + r) / 2 - (cv.left + cv.right) / 2, y: (t + b) / 2 - (cv.top + cv.bottom) / 2 };
+}
+
+// -------------------------------------------------------------------- frame
+let frames = 0, lastT = 0, lastStat = 0, fps = 0, stepsWin = 0, sps = 0, statBusy = false;
+function frame(now) {
+  requestAnimationFrame(frame);
+  if (!S.engine) return;
+  const dt = lastT ? Math.min(0.1, (now - lastT) / 1000) : 1 / 60;
+  lastT = now;
+  if (S.playing && S.c) {
+    S.acc += S.speed * S.rule.T * dt;
+    const n = Math.min(S.maxSteps, Math.floor(S.acc));
+    S.acc -= n;
+    if (S.acc > S.maxSteps) S.acc = 0;   // the GPU is behind; do not build a backlog
+    if (n > 0) { S.engine.step(n); S.time += n / S.rule.T; stepsWin += n; }
+  }
+  if (S.view.follow && S.stats && S.stats.mass > 1e-3 && S.stats.focus > 0.2) {
+    // The centroid is a few frames old. Move it forward by the velocity.
+    const { W, H } = S.engine.info, v = S.engine.view, age = S.time - S.statT;
+    const tx = S.stats.cx + S.vel.x * age, ty = S.stats.cy + S.vel.y * age;
+    const dx = wrapDelta(tx - v.cx, W), dy = wrapDelta(ty - v.cy, H);
+    S.engine.setView({ cx: wrap(v.cx + dx * 0.12, W), cy: wrap(v.cy + dy * 0.12, H) });
+  }
+  const occ = occlusion(), v = S.engine.view;
+  if (Math.abs(occ.x - v.ox) > 0.5 || Math.abs(occ.y - v.oy) > 0.5) {
+    S.engine.setView({ ox: v.ox + (occ.x - v.ox) * 0.2, oy: v.oy + (occ.y - v.oy) * 0.2 });
+  }
+  S.engine.render();
+  frames++;
+  if (frames % 6 === 0 && !statBusy) {
+    statBusy = true;
+    const t = S.time;
+    S.engine.stats().then(st => {
+      if (!st) return;
+      const prev = S.stats, dt = t - S.statT;
+      if (prev && dt > 1e-6) {
+        const { W, H } = S.engine.info;
+        const vx = wrapDelta(st.cx - prev.cx, W) / dt, vy = wrapDelta(st.cy - prev.cy, H) / dt;
+        S.vel = { x: S.vel.x * 0.7 + vx * 0.3, y: S.vel.y * 0.7 + vy * 0.3 };
+      }
+      S.stats = st; S.statT = t;
+    }).catch(() => {}).finally(() => { statBusy = false; });
+  }
+  if (now - lastStat > 500) {
+    const span = (now - lastStat) / 1000;
+    fps = lastStat ? frames / span : 0; sps = lastStat ? stepsWin / span : 0;
+    frames = 0; stepsWin = 0; lastStat = now;
+    const c = S.c, info = S.engine.info, st = S.stats;
+    setText('stMain', c ? c.name : '');
+    const R = info.R;
+    const mass = st ? (st.mass / (R * R)).toFixed(2) : '–';
+    setText('stRight', [
+      `${info.W}×${info.H}`, `R ${Math.round(R * 10) / 10}`, `t ${S.time.toFixed(1)}`, `mass ${mass}`,
+      `${Math.round(sps)} steps/s`, `${Math.round(fps)} fps`, S.playing ? '' : 'paused',
+    ].filter(Boolean).join(' · '));
+  }
+}
+
+// ------------------------------------------------------------------ pointer
+// Mouse: the left button uses the tool, the right button (or shift + left)
+// pans, the wheel zooms at the cursor. Touch and pen: one finger uses the
+// tool (stamp on a tap), two fingers zoom and pan.
+function bindPointer() {
+  const cv = $('gl'), cursor = $('cursor');
+  const ptrs = new Map();
+  let mode = null, last = null, tap = null, pinch = null;
+
+  function brushAt(p) {
+    const R = S.engine.info.R, r = Math.max(1.5, S.brush * R);
+    const n = Math.ceil(r) * 2 + 1, data = new Float32Array(n * n), c = (n - 1) / 2;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      const d = Math.hypot(x - c, y - c) / r;
+      if (d >= 1) continue;
+      data[y * n + x] = S.tool === 'erase' ? Math.min(1, (1 - d) * 3) : Math.random();
+    }
+    S.engine.stamp({ w: n, h: n, data }, p.x, p.y, S.tool === 'erase' ? 'erase' : 'set');
+  }
+  function brushLine(p) {
+    const R = S.engine.info.R, step = Math.max(1, S.brush * R * 0.5);
+    if (last) {
+      const d = Math.hypot(p.x - last.x, p.y - last.y);
+      const n = Math.min(32, Math.floor(d / step));
+      for (let k = 1; k < n; k++) brushAt({ x: last.x + (p.x - last.x) * k / n, y: last.y + (p.y - last.y) * k / n });
+    }
+    brushAt(p);
+    last = p;
+  }
+  function stampAt(p) {
+    const patch = rotate(resample(cellsOf(S.c), S.rule.scale), Math.floor(Math.random() * 4));
+    S.engine.stamp(patch, p.x, p.y, 'set');
+  }
+  function pan(dxPx, dyPx) {
+    const { W, H } = S.engine.info, v = S.engine.view, k = S.engine.cellPx();
+    S.engine.setView({ cx: wrap(v.cx - dxPx / k, W), cy: wrap(v.cy - dyPx / k, H) });
+  }
+  // Zoom so that the world point under (clientX, clientY) stays under it.
+  function zoomAt(clientX, clientY, z) {
+    const before = worldXY(clientX, clientY);
+    setZoom(z);
+    const after = worldXY(clientX, clientY);
+    const { W, H } = S.engine.info, v = S.engine.view;
+    S.engine.setView({ cx: wrap(v.cx + before.x - after.x, W), cy: wrap(v.cy + before.y - after.y, H) });
+  }
+  const mid = () => { const a = [...ptrs.values()]; return { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2, d: Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y) }; };
+
+  cv.addEventListener('pointerdown', e => {
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    try { cv.setPointerCapture(e.pointerId); } catch (x) { /* none */ }
+    e.preventDefault();
+    if (ptrs.size === 2) { mode = 'pinch'; pinch = { ...mid(), zoom: S.view.zoom }; tap = null; return; }
+    if (ptrs.size > 2) return;
+    const p = worldXY(e.clientX, e.clientY);
+    last = null;
+    if (e.pointerType === 'mouse' && (e.button === 2 || e.button === 1 || e.shiftKey)) { mode = 'pan'; last = { x: e.clientX, y: e.clientY }; return; }
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (S.tool === 'stamp') {
+      if (e.pointerType === 'mouse') { stampAt(p); mode = null; }
+      else { mode = 'tap'; tap = { x: e.clientX, y: e.clientY, t: performance.now() }; }
+    } else { mode = 'brush'; brushLine(p); }
+  });
+  cv.addEventListener('pointermove', e => {
+    if (e.pointerType === 'mouse') {
+      const d = (S.tool === 'stamp' ? S.c.R * S.rule.scale : Math.max(1.5, S.brush * S.engine.info.R)) * 2 * S.engine.cellPx();
+      cursor.style.width = cursor.style.height = d + 'px';
+      cursor.style.left = e.clientX + 'px'; cursor.style.top = e.clientY + 'px';
+      cursor.classList.add('on');
+    }
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (mode === 'pinch' && ptrs.size === 2) {
+      const m = mid();
+      pan(m.x - pinch.x, m.y - pinch.y);
+      zoomAt(m.x, m.y, pinch.zoom * m.d / Math.max(1, pinch.d));
+      pinch.x = m.x; pinch.y = m.y;
+    } else if (mode === 'pan') {
+      pan(e.clientX - last.x, e.clientY - last.y);
+      last = { x: e.clientX, y: e.clientY };
+    } else if (mode === 'brush') {
+      const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+      for (const c of (evs.length ? evs : [e])) brushLine(worldXY(c.clientX, c.clientY));
+    }
+  });
+  cv.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') cursor.classList.remove('on'); });
+  const end = e => {
+    if (!ptrs.has(e.pointerId)) return;
+    ptrs.delete(e.pointerId);
+    try { cv.releasePointerCapture(e.pointerId); } catch (x) { /* none */ }
+    if (e.type === 'pointerup' && mode === 'tap' && tap && performance.now() - tap.t < 400 &&
+        Math.hypot(e.clientX - tap.x, e.clientY - tap.y) < 14) {
+      if (PHONE_Q.matches && ($('panel').classList.contains('open') || $('browser').classList.contains('open'))) {
+        setOpen(false); openBrowser(false);
+      } else stampAt(worldXY(e.clientX, e.clientY));
+    }
+    if (ptrs.size === 0) { mode = null; last = null; tap = null; pinch = null; }
+    else if (mode === 'pinch') mode = null;
+  };
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+  cv.addEventListener('contextmenu', e => e.preventDefault());
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    zoomAt(e.clientX, e.clientY, S.view.zoom * Math.exp(-e.deltaY * 0.0015));
+  }, { passive: false });
+}
+
+// --------------------------------------------------------------------- keys
+function bindKeys() {
+  addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target, tag = t && t.tagName;
+    const typing = tag === 'INPUT' && (t.type === 'search' || t.type === 'text') || tag === 'SELECT' || tag === 'TEXTAREA';
+    if (typing) return;
+    const onRange = tag === 'INPUT' && t.type === 'range';
+    const k = e.key.toLowerCase();
+    if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); if (tag === 'BUTTON') t.blur(); setPlaying(!S.playing); }
+    else if (k === 'r') placeCreature();
+    else if (k === 'n') soup();
+    else if (k === 'c') { if (S.engine) { S.engine.clear(); S.time = 0; } }
+    else if (k === 'f') setFollow(!S.view.follow);
+    else if (k === '1') setMode('world');
+    else if (k === '2') setMode('potential');
+    else if (k === '3') setMode('growth');
+    else if (e.key === '[' || e.key === ']') {
+      const inp = $('brush');
+      inp.value = Math.max(+inp.min, Math.min(+inp.max, +inp.value + (e.key === ']' ? 0.25 : -0.25)));
+      inp.dispatchEvent(new Event('input'));
+    }
+    else if (!onRange && (e.key === 'ArrowRight' || e.key === 'ArrowDown')) { e.preventDefault(); selectCreature(S.idx + 1); }
+    else if (!onRange && (e.key === 'ArrowLeft' || e.key === 'ArrowUp')) { e.preventDefault(); selectCreature(S.idx - 1); }
+    else if (e.key === 'Escape') openBrowser(false);
+    else if (e.key === '/') { e.preventDefault(); openBrowser(true); $('search').focus(); }
+  });
+}
+
+boot();
