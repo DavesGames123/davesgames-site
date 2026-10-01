@@ -34,13 +34,14 @@
 //       function prepareExamples  function presetFamily  function presetThumb  function randomExample
 //       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
 
-import { SLOTS, defaultScene, fillDefaults, parseFract, serialiseFract, parseValue, quantizeColor, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
+import { SLOTS, defaultScene, fillDefaults, parseFract, serialiseFract, parseValue, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
 import { $, stage, canvas, panel, pbody, picker, exSheet, root, el, section, fmt, rgbToHex, hexToRgb, clamp, px, download } from './ui/dom.js';
 import { P, CAT, EXAMPLES, THUMBS, PTHUMBS, COLLECTIONS, byEnum, fnum, groupName, mainSpec, isNone, loadData } from './ui/data.js';
 import { scene, activeSlot, engine, currentExample, info, setScene, setActiveSlot, setEngine, setCurrentExample, setInfo, formulaAt,
   touchSeen, noteTouch, touchUI, coarseMQ, targetSamples, SAMPLES_DEFAULT, renderScale, RENDER_SCALE_DEFAULT, pixelRatio } from './ui/state.js';
 import { compileStatus, setStatus, flash, msPerSample, setMsPerSample, showHud, fail } from './ui/hud.js';
 import { V, camFromScene, camBasis, camToScene, resetCamera, frameView, panBy, orbitBy, lookBy } from './ui/camera.js';
+import { sceneDirty, setMain, setSlot, loadScene, pushScene } from './ui/scene.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -252,54 +253,6 @@ function slotBind(s, name) {
 const kindOf = (type) => ({ double: 'double', int: 'int', bool: 'bool', vect3: 'vect3', vect4: 'vect4', rgb: 'rgb', string: 'string' }[type] || 'double');
 
 // ─── scene changes ──────────────────────────────────────────────────────────
-export let sceneDirty = true;
-let previewTimer = 0, previewOn = false;
-// Each change shows a fast preview. Full quality comes back 150 ms after the last change, but
-// only once the preview of that change is on screen (a slow band can hold it up), so a single
-// click on a control still shows its effect at once.
-export function touch() {
-  sceneDirty = true;
-  if (engine) {
-    if (!previewOn) { engine.setPreview(true); previewOn = true; }
-    const shown = engine.stats?.().presents ?? 0;
-    const t0 = performance.now();
-    const back = () => {
-      if ((engine.stats?.().presents ?? 1) === shown && performance.now() - t0 < 3000) { previewTimer = setTimeout(back, 50); return; }
-      previewOn = false; engine.setPreview(false); engine.reset(); setInfo(null);
-    };
-    clearTimeout(previewTimer);
-    previewTimer = setTimeout(back, 150);
-  }
-  writeHash();
-}
-
-function setMain(name, v) {
-  if (mainSpec(name)?.type === 'rgb') v = quantizeColor(v);
-  scene.main[name] = v;
-  if (/^formula_\d$|^hybrid_fractal_enable$/.test(name)) buildSlotEditor();
-  refreshAll();
-  touch();
-}
-function setSlot(s, name, v) {
-  if (P.fractal[name]?.type === 'rgb') v = quantizeColor(v);
-  scene.fractal[s][name] = v;
-  refreshAll();
-  touch();
-}
-
-function loadScene(next, label) {
-  stopInertia();
-  setScene(next);
-  setActiveSlot(0);
-  buildSlotEditor();
-  refreshAll();
-  sceneDirty = true;
-  engine?.reset();
-  setInfo(null);
-  writeHash();
-  if (label) flash(label);
-}
-
 // ─── panel ──────────────────────────────────────────────────────────────────
 export let slotBox, slotStrip, progressEl, sampleLine, exList, exSearch;
 let resizeCanvas = null, resizePending = false;      // set in boot once the engine runs
@@ -384,7 +337,7 @@ function buildPanel() {
   pbody.append(about);
 }
 
-function buildSlotEditor() {
+export function buildSlotEditor() {
   if (!slotStrip) return;
   const hybrid = !!scene.main.hybrid_fractal_enable;
   if (!hybrid) setActiveSlot(0);
@@ -756,7 +709,7 @@ async function decodeShare(hash) {
 }
 
 let hashTimer = 0;
-function writeHash() {
+export function writeHash() {
   clearTimeout(hashTimer);
   hashTimer = setTimeout(async () => {
     const h = await shareHash();
@@ -1309,15 +1262,6 @@ $('toggle').addEventListener('click', togglePanel);
 
 // ─── status ─────────────────────────────────────────────────────────────────
 // ─── frame loop ─────────────────────────────────────────────────────────────
-// Hand the engine a snapshot, so a compile that finishes late sees the scene it was given.
-export let scenePromise = Promise.resolve();
-export function pushScene() {
-  sceneDirty = false;
-  const onErr = (e) => { setStatus(`error: ${e.message}`); console.error(e); };
-  try { scenePromise = Promise.resolve(engine.setScene(structuredClone(scene))).catch(onErr); } catch (e) { onErr(e); }
-  setInfo(null);
-}
-
 let saveRequested = false;
 function savePng() { if (!engine) return flash('no renderer: nothing to save'); saveRequested = true; }
 

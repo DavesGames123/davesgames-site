@@ -13,7 +13,8 @@ import { canvas, clamp } from './dom.js';
 import { P } from './data.js';
 import { scene, engine } from './state.js';
 import { flash } from './hud.js';
-import { refreshAll, touch, stopInertia, sceneDirty, pushScene, scenePromise } from '../main.js';
+import { touch, sceneDirty, pushScene, scenePromise } from './scene.js';
+import { refreshAll, stopInertia } from '../main.js';
 
 export const V = {
   add: (a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }),
