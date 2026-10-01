@@ -3,110 +3,123 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>Selection // Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    SELECTION  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static frame for the selection trainer. The #cv canvas is the sandbox;
-   main.js draws entities into it and reads pointer input from it. Everything
-   else here is chrome that main.js fills by id: the HUD readouts, the scenario
-   bar, the control bar, and the right sidebar of lesson copy and legends.
+   Static frame for the selection tutorial. The #cv canvas is the sandbox.
+   main.js draws the game sprites into it and reads pointer input from it.
+   The rest of the markup is chrome that main.js fills by id.
 
-   LAYOUT  (# marks an element id)
-     ┌───────────────────────────────────────────────────────────────┐
-     │ topbar  SCENARIO #hud-scn  ENTITIES #hud-ents  SELECTED  MOD    │
-     ├───────────────────────────────────────────────────────────────┤
-     │ #scnBar   scenario cards (built by buildScnBar)                 │
-     ├───────────────────────────────────────────────────────────────┤
-     │ ctrl-bar  MOD toggle · RESET · ZOOM (hidden until enabled)      │
-     ├──────────────────────────────────────┬────────────────────────┤
-     │ canvas-area                          │ #sideR sidebar          │
-     │   #cv  (draw + input)                │   headline + desc       │
-     │   #hint  #sel  #toast overlays       │   how it works          │
-     │                                      │   click / box legends   │
-     └──────────────────────────────────────┴────────────────────────┘
-     #fab + #bd drive the mobile sidebar drawer.
+   LAYOUT  (desktop; # marks an element id)
+     ┌──────────────────────────────────────────────┬──────────────────┐
+     │ #stage                                        │ #lesson (aside)  │
+     │   #tabs     scenario chips                    │   kicker, title  │
+     │   #hint     the task for this lesson          │   description    │
+     │   #cv       draw surface and pointer input    │   how it works   │
+     │   #readout  what is selected now              │   input card     │
+     │   #dock     Add, Box, zoom, reset, Lesson     │   two ladders    │
+     └──────────────────────────────────────────────┴──────────────────┘
+   PHONE (max-width 900px): #lesson is a bottom sheet above #dock. The
+   Lesson button in #dock opens it. #scrim closes it.
 
-   SECTION MAP   (jump with grep -n "<anchor>" index.html)
-     hud readouts ..... id=hud-scn      counts updated each pick
-     scenario bar ..... id=scnBar       filled by buildScnBar()
-     control bar ...... class=ctrl-bar  MOD, RESET, ZOOM buttons
-     canvas ........... id=cv           the sandbox surface
-     overlays ......... class=hint-bar  hint, selection, toast
-     sidebar copy ..... id=scnHead      lesson text per scenario
-     legends .......... id=legendC      click and box priority ladders
+   SECTION MAP  (jump with grep -n "<anchor>" index.html)
+     scenario chips ..... id="tabs"      filled by buildTabs()
+     task card .......... id="hint"      lesson task text
+     canvas ............. id="cv"        draw surface and input
+     readout ............ id="readout"   selection summary
+     toast .............. id="toast"     short messages
+     dock ............... id="dock"      Add, Box, zoom, reset, Lesson
+     lesson sheet ....... id="lesson"    copy, input card, ladders
+     ladders ............ id="ladClick"  click and box priority rows
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="grid-bg"></div>
 <div id="app">
-  <div class="topbar">
-    <span class="sys-name">SELECTION</span>
-    <div class="status-pill">LIVE PRACTICE</div>
-    <div class="tb-readouts">
-      <span>SCENARIO <strong id="hud-scn">01/06</strong></span>
-      <span>ENTITIES <strong id="hud-ents">0</strong></span>
-      <span>SELECTED <strong id="hud-sel">0</strong></span>
-      <span>MOD <strong id="hud-mod">OFF</strong></span>
+  <main id="stage">
+    <canvas id="cv" aria-label="Selection sandbox"></canvas>
+
+    <!-- Scenario chips. buildTabs() adds one button per lesson. -->
+    <nav id="tabs" aria-label="Lessons"></nav>
+
+    <!-- The task for the active lesson. Text changes for touch screens. -->
+    <div id="hint" class="glass" role="status"></div>
+
+    <!-- Live selection summary and short messages. -->
+    <div id="readout" class="glass"><span class="ro-empty">Nothing selected</span></div>
+    <div id="toast" aria-live="polite"></div>
+    <div id="press" aria-hidden="true"></div>
+
+    <!-- Dock. On a desktop it floats at the base of the stage. On a phone it
+         is the fixed bar at the base of the screen. -->
+    <div id="dock" class="glass">
+      <button id="bLesson" class="d-btn d-lesson" type="button" aria-controls="lesson"><span class="ico">&#9776;</span><span class="lbl">Lesson</span></button>
+      <button id="bAdd" class="d-btn" type="button" aria-pressed="false" title="Add to selection (Ctrl or Cmd)"><span class="ico">+</span><span class="lbl">Add</span></button>
+      <button id="bBox" class="d-btn d-touch" type="button" aria-pressed="false" title="One-finger drag draws a box"><span class="ico">&#9633;</span><span class="lbl">Box</span></button>
+      <span class="d-sep"></span>
+      <button id="bOut" class="d-btn" type="button" title="Zoom out"><span class="ico">&minus;</span><span class="lbl">Out</span></button>
+      <span id="zoomRo" class="d-ro">1.0&times;</span>
+      <button id="bIn" class="d-btn" type="button" title="Zoom in"><span class="ico">+</span><span class="lbl">In</span></button>
+      <span class="d-sep"></span>
+      <button id="bReset" class="d-btn d-warn" type="button" title="Reset lesson (R)"><span class="ico">&#8635;</span><span class="lbl">Reset</span></button>
     </div>
-  </div>
+  </main>
 
-  <!-- Scenario picker. Empty here; buildScnBar() fills it with one card each. -->
-  <div class="scn-bar" id="scnBar"></div>
+  <div id="scrim"></div>
 
-  <!-- Control bar. MOD toggles touch modifier mode; RESET reloads the scenario;
-       the ZOOM buttons stay hidden until a scenario sets enableZoom. -->
-  <div class="ctrl-bar">
-    <span class="ctrl-label">MOD</span>
-    <button class="ctrl-btn" id="modBtn" onclick="toggleMod()">⌘ HOLD</button>
-    <div class="ctrl-sep"></div>
-    <button class="ctrl-btn warn" onclick="resetScenario()">↻ RESET</button>
-    <button class="ctrl-btn" id="zoomOut" style="display:none" onclick="adjustZoom(-1)">− ZOOM</button>
-    <button class="ctrl-btn" id="zoomIn" style="display:none" onclick="adjustZoom(1)">+ ZOOM</button>
-    <span class="ctrl-info">DESKTOP: HOLD <strong style="color:var(--text-dim)">⌘ / CTRL</strong> · MOBILE: TAP MOD</span>
-  </div>
+  <!-- Lesson panel. A right column on a desktop, a bottom sheet on a phone. -->
+  <aside id="lesson" aria-label="Lesson">
+    <button id="grip" type="button" aria-label="Close lesson"><span></span></button>
+    <div class="ls-inner">
+      <div class="kicker" id="lsKicker">Lesson 01 / 06</div>
+      <h1 id="lsHead"></h1>
+      <p id="lsDesc"></p>
 
-  <div class="main">
-    <!-- The sandbox. #cv is sized and drawn by main.js; the three overlays show
-         the current hint, the live selection summary, and transient toasts. -->
-    <div class="canvas-area">
-      <canvas id="cv"></canvas>
-      <div class="hint-bar" id="hint" style="--ac:var(--yellow)"></div>
-      <div class="sel-bar" id="sel">Nothing selected</div>
-      <div class="toast" id="toast"></div>
+      <section class="card">
+        <h2>How it works</h2>
+        <ul id="lsNotes" class="notes"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Input</h2>
+        <dl class="input-list" id="inputList">
+          <div class="il-row il-mouse"><dt>Click</dt><dd>Pick one</dd></div>
+          <div class="il-row il-mouse"><dt>Drag</dt><dd>Box select</dd></div>
+          <div class="il-row il-mouse"><dt><kbd>Ctrl</kbd> / <kbd>&#8984;</kbd></dt><dd>Hold to add or remove</dd></div>
+          <div class="il-row il-mouse"><dt>Wheel</dt><dd>Zoom at the cursor</dd></div>
+          <div class="il-row il-mouse"><dt>Right drag</dt><dd>Pan</dd></div>
+          <div class="il-row il-touch"><dt>Tap</dt><dd>Pick one</dd></div>
+          <div class="il-row il-touch"><dt>Hold, then drag</dt><dd>Box select</dd></div>
+          <div class="il-row il-touch"><dt>Drag</dt><dd>Pan (or box, with Box on)</dd></div>
+          <div class="il-row il-touch"><dt>Pinch</dt><dd>Zoom</dd></div>
+          <div class="il-row il-touch"><dt>Add</dt><dd>Turn on to add or remove</dd></div>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>Click priority</h2>
+        <p class="lad-sub">Lowest rank wins when several things sit under the pointer.</p>
+        <ol class="ladder" id="ladClick"></ol>
+      </section>
+
+      <section class="card">
+        <h2>Box priority</h2>
+        <p class="lad-sub">The best type in the box takes the whole selection.</p>
+        <ol class="ladder" id="ladBox"></ol>
+      </section>
+      <p class="credit">Sprites from the Stella Nova game build.</p>
     </div>
-    <!-- Right sidebar: lesson copy plus the two priority ladders. All filled by
-         loadScenario() and buildLegends(). -->
-    <aside class="sidebar-r" id="sideR">
-      <div class="panel">
-        <div class="scn-headline" id="scnHead"></div>
-        <div class="scn-desc" id="scnDesc"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-title">How it works</div>
-        <ul class="notes-list" id="scnNotes"></ul>
-      </div>
-      <div class="panel">
-        <div class="panel-title">Click priority</div>
-        <div id="legendC"></div>
-      </div>
-      <div class="panel" style="border-bottom:none">
-        <div class="panel-title">Box priority</div>
-        <div id="legendB"></div>
-      </div>
-    </aside>
-  </div>
+  </aside>
 </div>
 
-<!-- Mobile drawer: the FAB opens the sidebar over a dimming backdrop. -->
-<button class="fab" id="fab" onclick="toggleDrawer()">Info ≡</button>
-<div class="drawer-backdrop" id="bd" onclick="closeDrawer()"></div>
-
+<script src="../../lib/game-data/catalog.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
