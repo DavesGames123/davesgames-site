@@ -456,6 +456,27 @@ main { position: relative; }
 .shot img { width: 100%; height: 100%; object-fit: cover; transition: transform 1s var(--ease); }
 .shot figcaption { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 12px 9px; font: 500 0.66rem/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink); background: linear-gradient(180deg, transparent, rgba(0, 0, 0, .8)); }
 .shot:hover img { transform: scale(1.08); }
+/* Channel videos: a rail of cards under the media grid (index.html
+   #ytRail). A card plays its video in the player above (main.js
+   initVideo). The current card has a gold edge. */
+.yt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 28px 0 12px; }
+.yt-all { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; font-size: 0.95rem; color: var(--ink); transition: color .25s; }
+.yt-all svg { width: 20px; height: 20px; color: #ff4e45; }
+.yt-all:hover { color: var(--gold); }
+.yt-rail { grid-auto-columns: clamp(240px, 26vw, 300px); }
+.yt { scroll-snap-align: start; display: flex; flex-direction: column; gap: 5px; padding: 0 0 12px; text-align: left; border: 1px solid var(--line2); border-radius: var(--r); background: linear-gradient(180deg, rgba(22, 28, 44, .78), rgba(12, 15, 24, .86)); color: inherit; font: inherit; cursor: pointer; overflow: hidden; transition: border-color .3s, transform .45s var(--ease), box-shadow .4s; }
+.yt-img { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; background: #000; margin-bottom: 7px; }
+.yt-img img { width: 100%; height: 100%; object-fit: cover; filter: brightness(.82); transition: transform 1s var(--ease), filter .4s; }
+.yt-play { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; display: grid; place-items: center; border-radius: 50%; background: rgba(10, 12, 18, .72); border: 1px solid rgba(255, 255, 255, .25); color: var(--ink); transition: transform .35s var(--ease), background .3s, color .3s; }
+.yt-play svg { width: 20px; height: 20px; margin-left: 2px; }
+.yt-kick, .yt-title, .yt-date { padding: 0 14px; }
+.yt-kick { font: 500 0.62rem/1.3 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--blue); }
+.yt-title { font-weight: 600; font-size: 0.95rem; line-height: 1.3; color: var(--ink); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.yt-date { margin-top: auto; padding-top: 4px; font-size: 0.76rem; color: var(--dim); }
+.yt:hover, .yt:focus-visible { border-color: rgba(255, 200, 50, .5); transform: translateY(-4px); box-shadow: 0 20px 50px -24px rgba(255, 170, 40, .6); }
+.yt:hover .yt-img img { transform: scale(1.05); filter: brightness(1); }
+.yt:hover .yt-play, .yt.on .yt-play { background: var(--gold); color: #0a0c12; border-color: transparent; transform: scale(1.08); }
+.yt.on { border-color: var(--gold); }
 
 /* Steam reviews: verbatim quotes in on-brand cards. Grid on desktop, a
    swipe rail on phones. */
@@ -638,6 +659,7 @@ main { position: relative; }
   .sys { padding: 18px; }
   .sys-ico { width: 34px; height: 34px; margin-bottom: 10px; }
   .media-grid { grid-template-columns: 1fr 1fr; }
+  .yt-rail { grid-auto-columns: 78%; }
   .video { grid-column: 1 / -1; grid-row: auto; }
   .rev-grid { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 84%; overflow-x: auto; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; margin: 0 calc(var(--gutter) * -1); padding: 4px var(--gutter) 18px; scroll-padding: 0 var(--gutter); scrollbar-width: none; }
   .rev-grid::-webkit-scrollbar { display: none; }

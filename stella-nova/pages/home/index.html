@@ -250,6 +250,50 @@
       <figure class="shot"><img src="media/game-4.jpg" alt="Interplanetary travel past the sun" loading="lazy" decoding="async"><figcaption>Interplanetary travel</figcaption></figure>
       <figure class="shot"><img src="media/game-6.jpg" alt="Colony management screen" loading="lazy" decoding="async"><figcaption>Colony management</figcaption></figure>
     </div>
+
+    <!-- Channel videos: long-form uploads from youtube.com/@davesgamesio,
+         read from the channel RSS feed on 2026-10-01. The eight identical
+         "Wishlist" shorts are left out. Thumbnails are local copies
+         (media/yt/<id>.jpg, 640x360), so no request goes to YouTube until
+         a viewer presses play. main.js initVideo plays a card in the
+         player above. -->
+    <div class="yt-head">
+      <div><p class="kicker">// From the channel</p><a class="yt-all" href="https://www.youtube.com/@davesgamesio" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-youtube"/></svg>@davesgamesio &middot; all videos <span aria-hidden="true">&rarr;</span></a></div>
+      <div class="rail-ctl">
+        <button class="rail-btn" type="button" data-rail="ytRail" data-dir="-1" aria-label="Scroll videos back">&#8592;</button>
+        <button class="rail-btn" type="button" data-rail="ytRail" data-dir="1" aria-label="Scroll videos forward">&#8594;</button>
+      </div>
+    </div>
+    <div class="rail yt-rail" id="ytRail">
+      <button class="yt" type="button" data-yt="Q3e1KhgtPmU" data-title="i made a very cool space game." aria-label="Play i made a very cool space game.">
+        <span class="yt-img"><img src="media/yt/Q3e1KhgtPmU.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-kick">Stella Nova</span><span class="yt-title">i made a very cool space game.</span><span class="yt-date">13 Jun 2026</span>
+      </button>
+      <button class="yt" type="button" data-yt="y-rNBpgqmXo" data-title="Matt vs. Tic Tac Toe" aria-label="Play Matt vs. Tic Tac Toe">
+        <span class="yt-img"><img src="media/yt/y-rNBpgqmXo.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-kick">Stella Nova, the movie</span><span class="yt-title">Matt vs. Tic Tac Toe</span><span class="yt-date">31 Jul 2026</span>
+      </button>
+      <button class="yt" type="button" data-yt="xuQJkFIJSIA" data-title="Leon&#x27;s Croissant Colony" aria-label="Play Leon&#x27;s Croissant Colony">
+        <span class="yt-img"><img src="media/yt/xuQJkFIJSIA.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-kick">Stella Nova, the movie</span><span class="yt-title">Leon&#x27;s Croissant Colony</span><span class="yt-date">24 Jul 2026</span>
+      </button>
+      <button class="yt" type="button" data-yt="y51rBDg7wao" data-title="Lissy Braves the Storm" aria-label="Play Lissy Braves the Storm">
+        <span class="yt-img"><img src="media/yt/y51rBDg7wao.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-kick">Stella Nova, the movie</span><span class="yt-title">Lissy Braves the Storm</span><span class="yt-date">17 Jul 2026</span>
+      </button>
+      <button class="yt" type="button" data-yt="0biYmQT6fyA" data-title="Spawning Thousands of Resources in Orbit with @FoxxySteve on Twitch!" aria-label="Play Spawning Thousands of Resources in Orbit with @FoxxySteve on Twitch!">
+        <span class="yt-img"><img src="media/yt/0biYmQT6fyA.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-kick">Developer updates</span><span class="yt-title">Spawning Thousands of Resources in Orbit with @FoxxySteve on Twitch!</span><span class="yt-date">10 Jul 2026</span>
+      </button>
+      <button class="yt" type="button" data-yt="NBtotMVcTkw" data-title="Let&#x27;s play Stella Nova with Indie Twitch Streamers!!" aria-label="Play Let&#x27;s play Stella Nova with Indie Twitch Streamers!!">
+        <span class="yt-img"><img src="media/yt/NBtotMVcTkw.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-kick">FragginGamin x davesgames.io</span><span class="yt-title">Let&#x27;s play Stella Nova with Indie Twitch Streamers!!</span><span class="yt-date">3 Jul 2026</span>
+      </button>
+      <button class="yt" type="button" data-yt="4zP0Tovlp6M" data-title="thank you :) from dave" aria-label="Play thank you :) from dave">
+        <span class="yt-img"><img src="media/yt/4zP0Tovlp6M.jpg" alt="" loading="lazy" decoding="async"><span class="yt-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span></span>
+        <span class="yt-kick">The Twitch Stream Megacut</span><span class="yt-title">thank you :) from dave</span><span class="yt-date">29 Jun 2026</span>
+      </button>
+    </div>
   </div>
 
   <!-- Steam reviews: verbatim quotes from the Stella Nova Demo store page,

@@ -51,11 +51,10 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-// The YouTube button target. The site has no channel URL yet, so this is
-// the gameplay trailer. Replace it with the channel URL when there is one.
-// Every [data-youtube] link takes its href from here. Without JS those
-// links fall back to #media, the trailer on this page.
-const YOUTUBE_URL = 'https://www.youtube.com/watch?v=Pn9WTbewFFQ';
+// The YouTube button target: the davesgames.io channel. Every
+// [data-youtube] link takes its href from here. Without JS those links
+// fall back to #media, the trailer and channel videos on this page.
+const YOUTUBE_URL = 'https://www.youtube.com/@davesgamesio';
 $$('a[data-youtube]').forEach(a => { a.href = YOUTUBE_URL; a.target = '_blank'; a.rel = 'noopener'; });
 
 const PAGES = allPages();
@@ -769,16 +768,28 @@ function initDirectory() {
 }
 
 // ── video facade ───────────────────────────────────────────────────────────
+// The player (#videoFacade) shows a local poster until a click, then a
+// YouTube iframe. A channel card (.yt in #ytRail) plays its video in the
+// same player: the iframe swaps to that id, the card is marked current,
+// and the player scrolls into view. Nothing loads from YouTube before the
+// first click.
 function initVideo() {
   const b = $('#videoFacade');
-  b.addEventListener('click', () => {
+  function play(id, title) {
     const f = document.createElement('iframe');
-    f.src = `https://www.youtube.com/embed/${b.dataset.yt}?autoplay=1&rel=0`;
-    f.title = 'Stella Nova gameplay';
+    f.src = `https://www.youtube.com/embed/${id}?autoplay=1&rel=0`;
+    f.title = title;
     f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
     f.allowFullscreen = true;
     b.replaceChildren(f); b.style.cursor = 'default';
-  }, { once: true });
+    $$('.yt').forEach(c => c.classList.toggle('on', c.dataset.yt === id));
+  }
+  b.addEventListener('click', () => { if (!$('iframe', b)) play(b.dataset.yt, 'Stella Nova gameplay'); });
+  $$('.yt').forEach(c => c.addEventListener('click', () => {
+    play(c.dataset.yt, c.dataset.title);
+    const r = b.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) b.scrollIntoView({ block: 'center', behavior: RM.matches ? 'auto' : 'smooth' });
+  }));
 }
 
 // ── bug form ───────────────────────────────────────────────────────────────
