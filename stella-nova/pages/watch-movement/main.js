@@ -31,6 +31,7 @@ const SCENES = {
   verge: () => import('./scenes/verge.js'),
   cylinder: () => import('./scenes/cylinder.js'),
   detent: () => import('./scenes/detent.js'),
+  pinlever: () => import('./scenes/pinlever.js'),
 };
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
