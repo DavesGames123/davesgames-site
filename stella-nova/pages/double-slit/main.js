@@ -22,17 +22,18 @@
 //      x=0             barrierX·NX          0.78·NX        NX−1
 //       │ source region   │ slit barrier      │ detector      │
 //       │  (brush / sine)  │  ┌─┐ ← slit        ║ column        │
-//       │    ● ▶ ▶ ▶ ▶     │  │ │  ═══▶ fringes  ║  detAccum     │
+//       │    ● ▶ ▶ ▶ ▶     │  │ │  ═══▶ fringes  ║  <ψ²> column  │
 //       │                  │  └─┘               ║   → sidebar    │
 //       │                  │  ┌─┐ ← slit        ║ absorber wall  │
 //       │   PML ramp wraps all four edges (quartic σ)  │         │
 //
 //  FRAME PIPELINE
 //  --------------------------------------------------------------------------
-//      loop() ─ step()            advance the three fields one FDTD tick
-//             ├ accumDet()        sum ψ² down the detector column
+//      loop() ─ step() ×P.spf     advance the three fields; planeSource() drives
+//             │                   the left column when P.plane is on
+//             ├ accumI()          move the <ψ²> average of every cell
 //             ├ render()          map fields → RGB pixels on the main canvas
-//             └ renderDetector()  draw the accumulated fringe profile (1/8 rate)
+//             └ renderDetector()  draw the <ψ²> profile at the screen (1/4 rate)
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  --------------------------------------------------------------------------
@@ -46,7 +47,8 @@
 //      pointer map ......... "function gp"            client → grid coordinates
 //      brush ............... "function applyBrush"    paint source / wall / erase
 //      FDTD step ........... "function step"          the leapfrog update
-//      detector ............ "function accumDet"      time-average intensity
+//      plane source ........ "function planeSource"   line source at sourceX()
+//      intensity average ... "function accumI"        <ψ²> per cell, screenX()
 //      field render ........ "function render"        fields → pixels
 //      detector render ..... "function renderDetector"  fringe profile strip
 //      control wiring ...... "function wire"          sliders → P
@@ -92,8 +94,11 @@ let up = [null,null,null];
 let un = [null,null,null];
 let barrier, userWalls, caArr, cbArr;
 let imgData;
-let detAccum = [null,null,null];
-let detCount = 0;
+// Time-averaged intensity <ψ²> per cell and channel (an exponential moving
+// average over about 1.5 periods). The Intensity view and the screen profile
+// read it, so the fringes show without the flicker of the instant ψ².
+let Iavg = [null,null,null];
+const I_RATE = 1 / 96;
 let simTime = 0, stepN = 0;
 let paused = false;
 let fCount = 0, lastFT = performance.now(), fps = 0;
@@ -111,6 +116,8 @@ const P = {
   brushR: 6, srcMode: 'impulse',
   scale: 2,
   dissipation: 0.995,
+  plane: true,   // continuous plane wave from the left edge (on at load)
+  spf: 2,        // FDTD steps per animation frame
 };
 
 // (Re)allocate every buffer to match the current container size and resolution
@@ -131,7 +138,7 @@ function init() {
     u[c]  = new Float32Array(N);
     up[c] = new Float32Array(N);
     un[c] = new Float32Array(N);
-    detAccum[c] = new Float64Array(NY);
+    Iavg[c] = new Float32Array(N);
   }
   barrier = new Uint8Array(N);
   userWalls = new Uint8Array(N);
@@ -145,7 +152,7 @@ function init() {
   const d = imgData.data;
   // Fill the alpha byte of every pixel once so later frames only touch RGB.
   for (let i = 3; i < d.length; i += 4) d[i] = 255;
-  detCount = 0; simTime = 0; stepN = 0;
+  simTime = 0; stepN = 0;
   buildDamping(); buildBarrier(); resizeDetector();
   document.getElementById('og').textContent = `${NX}×${NY}`;
 }
@@ -236,6 +243,19 @@ canvas.addEventListener('touchstart',e=>{e.preventDefault();mDown=true;sineChAmp
 canvas.addEventListener('touchmove',e=>{e.preventDefault();if(!mDown)return;const p=gp(e.touches[0]);if(P.srcMode!=='sine')applyBrush(p.x,p.y);mX=p.x;mY=p.y;},{passive:false});
 canvas.addEventListener('touchend',()=>{mDown=false;});
 
+// Plane-wave source: a soft line source on one column near the left edge.
+// It adds A·sin(ωt) each step, so a plane wave runs right to the barrier
+// and its left half dies in the PML. The amplitude ramps in over two
+// periods (no step shock) and tapers over 48 cells at the top and bottom,
+// so the ends of the line do not send out their own circular waves.
+function sourceX(){return Math.max(2,Math.min(44,Math.floor(NX*P.barrierX)-12));}
+function planeSource(uc,c,omega){
+  const sx=sourceX(),T=2*Math.PI/omega,ramp=Math.min(1,simTime/(2*T));
+  const a=0.12*ramp*Math.sin(omega*simTime);
+  if(!a)return;
+  for(let y=1;y<NY-1;y++){const e=Math.min(1,Math.min(y,NY-1-y)/48);uc[y*NX+sx]+=a*e*e*(3-2*e);}
+}
+
 // Advance all three fields one FDTD tick. Per channel: inject continuous sine
 // forcing if that mode is held, apply the leapfrog stencil across the interior,
 // hard-zero the edges, then rotate the three buffers so next becomes current.
@@ -244,9 +264,10 @@ function step() {
   const nx=NX,ny=NY,alpha2=P.dt*P.dt,lambdas=[P.lambdaR,P.lambdaG,P.lambdaB],diss=P.dissipation;
   for (let c=0;c<3;c++) {
     if(!P.chOn[c]) continue;
-    // omega = 2π/λ sets the temporal frequency of the driven sine source so
-    // that a wave of the chosen wavelength radiates from the brush.
-    const uc=u[c],upc=up[c],unc=un[c],omega=2*Math.PI/lambdas[c];
+    // A wave moves α cells per step, so one period of a wave λ cells long
+    // is λ/α steps: ω = 2πα/λ per step. (ω = 2π/λ gave waves α·λ long.)
+    const uc=u[c],upc=up[c],unc=un[c],omega=2*Math.PI*P.dt/lambdas[c];
+    if(P.plane) planeSource(uc,c,omega);
     if(mDown&&P.srcMode==='sine'){const r=P.brushR,r2=r*r,sv=P.amp*sineChAmp[c]*Math.sin(omega*simTime);for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){const d2=dx*dx+dy*dy;if(d2>r2)continue;const x=mX+dx,y=mY+dy;if(x<0||x>=nx||y<0||y>=ny)continue;const i=y*nx+x;if(!barrier[i]){const falloff=1-Math.sqrt(d2)/r;uc[i]+=sv*0.4*falloff;}}}
     // Interior FDTD: proper lossy medium formulation
     // ψ(n+1) = ca * (2ψ(n) + α²∇²ψ) - cb * ψ(n-1)
@@ -263,10 +284,10 @@ function step() {
   simTime+=1;stepN++;
 }
 
-// Detector accumulation: at the fixed column x ≈ 0.78·NX, add the instantaneous
-// intensity ψ² of every row into a running per-row sum. Time-averaging this sum
-// yields the interference fringe pattern shown in the sidebar.
-function accumDet(){const dx=Math.min(NX-5,Math.floor(NX*0.78));for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=u[c][y*NX+dx];detAccum[c][y]+=v*v;}}detCount++;}
+// Intensity average: move <ψ²> of every cell toward the instant ψ² by I_RATE.
+// The screen profile is this average down the column x ≈ 0.78·NX.
+function screenX(){return Math.min(NX-5,Math.floor(NX*0.78));}
+function accumI(){for(let c=0;c<3;c++){if(!P.chOn[c])continue;const uc=u[c],ia=Iavg[c];for(let i=0;i<N;i++){const v=uc[i];ia[i]+=(v*v-ia[i])*I_RATE;}}}
 
 // Map the fields to canvas pixels in the current display mode. 'amplitude' shows
 // |ψ| per channel; 'intensity' shows ψ² (sharper, brighter peaks); 'phase' uses
@@ -276,7 +297,7 @@ function accumDet(){const dx=Math.min(NX-5,Math.floor(NX*0.78));for(let c=0;c<3;
 function render(){
   const d=imgData.data,g=P.gain,disp=P.disp,rOn=P.chOn[0],gOn=P.chOn[1],bOn=P.chOn[2];
   if(disp==='amplitude'){const ur=u[0],ug=u[1],ub=u[2];for(let i=0;i<N;i++){const p=i*4;let vr=rOn?ur[i]*g:0;if(vr<0)vr=-vr;vr=vr*255|0;if(vr>255)vr=255;let vg=gOn?ug[i]*g:0;if(vg<0)vg=-vg;vg=vg*255|0;if(vg>255)vg=255;let vb=bOn?ub[i]*g:0;if(vb<0)vb=-vb;vb=vb*255|0;if(vb>255)vb=255;d[p]=vr;d[p+1]=vg;d[p+2]=vb;}}
-  else if(disp==='intensity'){const ur=u[0],ug=u[1],ub=u[2];for(let i=0;i<N;i++){const p=i*4;let ir=rOn?ur[i]*g:0;ir=ir*ir*255|0;if(ir>255)ir=255;let ig=gOn?ug[i]*g:0;ig=ig*ig*255|0;if(ig>255)ig=255;let ib=bOn?ub[i]*g:0;ib=ib*ib*255|0;if(ib>255)ib=255;d[p]=ir;d[p+1]=ig;d[p+2]=ib;}}
+  else if(disp==='intensity'){const ir=Iavg[0],ig=Iavg[1],ib=Iavg[2],g2=g*g*2;for(let i=0;i<N;i++){const p=i*4;let r=rOn?ir[i]*g2*255|0:0;if(r>255)r=255;let gg=gOn?ig[i]*g2*255|0:0;if(gg>255)gg=255;let b=bOn?ib[i]*g2*255|0:0;if(b>255)b=255;d[p]=r;d[p+1]=gg;d[p+2]=b;}}
   else if(disp==='phase'){for(let i=0;i<N;i++){const p=i*4;for(let c=0;c<3;c++){if(!P.chOn[c]){d[p+c]=0;continue;}const v=u[c][i],vp=up[c][i];const amp=Math.sqrt(v*v+vp*vp)*g;const phase=Math.atan2(v,vp);const bright=Math.min(1,amp)*(0.5+0.5*Math.cos(phase));d[p+c]=Math.round(bright*255);}}}
   for(let i=0;i<N;i++){if(barrier[i]){const p=i*4;if(userWalls[i]){d[p]=100;d[p+1]=180;d[p+2]=240;}else{d[p]=45;d[p+1]=70;d[p+2]=100;}}}
   ctx.putImageData(imgData,0,0);
@@ -290,9 +311,9 @@ function resizeDetector(){const h=detC.parentElement.getBoundingClientRect().hei
 // one color per channel, back to front so red does not fully hide blue.
 function renderDetector(){
   const w=detC.width,h=detC.height;detCtx.fillStyle='#0e1118';detCtx.fillRect(0,0,w,h);
-  if(!detCount)return;let maxI=0;for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=detAccum[c][y]/detCount;if(v>maxI)maxI=v;}}if(!maxI)return;
+  const sx=screenX();let maxI=0;for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=Iavg[c][y*NX+sx];if(v>maxI)maxI=v;}}if(!maxI)return;
   const colors=['rgba(255,107,107,','rgba(81,207,102,','rgba(51,154,240,'];const bw=w-6;
-  for(let c=2;c>=0;c--){if(!P.chOn[c])continue;for(let py=0;py<h;py++){const gy=Math.floor(py/h*NY);const intensity=(detAccum[c][gy]/detCount)/maxI;detCtx.fillStyle=colors[c]+(0.6+0.4*intensity)+')';detCtx.fillRect(3,py,bw*intensity,1);}}
+  for(let c=2;c>=0;c--){if(!P.chOn[c])continue;for(let py=0;py<h;py++){const gy=Math.floor(py/h*NY);const intensity=Iavg[c][gy*NX+sx]/maxI;detCtx.fillStyle=colors[c]+(0.6+0.4*intensity)+')';detCtx.fillRect(3,py,bw*intensity,1);}}
 }
 
 // Controls wiring: bind one slider to a P key, update its readout on input, and
@@ -317,7 +338,8 @@ wireGroup('[data-slits]','slitMode',buildBarrier);wireGroup('[data-disp]','disp'
 // Transport buttons: pause the stepping, reset all fields and detector to zero,
 // or clear only the user-painted walls.
 document.getElementById('btn-pause').addEventListener('click',function(){paused=!paused;this.textContent=paused?'▶ Play':'⏸ Pause';this.classList.toggle('active',paused);});
-document.getElementById('btn-reset').addEventListener('click',()=>{for(let c=0;c<3;c++){u[c].fill(0);up[c].fill(0);un[c].fill(0);detAccum[c].fill(0);}detCount=0;simTime=0;stepN=0;});
+document.getElementById('btn-reset').addEventListener('click',()=>{for(let c=0;c<3;c++){u[c].fill(0);up[c].fill(0);un[c].fill(0);Iavg[c].fill(0);}simTime=0;stepN=0;});
+document.getElementById('btn-plane').addEventListener('click',function(){P.plane=!P.plane;this.classList.toggle('active',P.plane);});
 document.getElementById('btn-clr').addEventListener('click',()=>{userWalls.fill(0);buildBarrier();});
 
 // The animation loop. Track FPS over 500 ms windows, advance the sim and
@@ -327,8 +349,8 @@ function loop(){
   fCount++;const now=performance.now();
   if(now-lastFT>500){fps=Math.round(fCount/((now-lastFT)/1000));fCount=0;lastFT=now;
     document.getElementById('perf-info').innerHTML=`${fps} fps · ${NX}×${NY} · <strong>${NX*NY*3/1000|0}k</strong> cells · α=${P.dt.toFixed(2)}`;}
-  if(!paused){step();accumDet();}
-  render();if(stepN%8===0)renderDetector();
+  if(!paused)for(let k=0;k<P.spf;k++){step();accumI();}
+  render();if(fCount%4===0)renderDetector();
   document.getElementById('ot').textContent=(simTime*0.01).toFixed(3);
   document.getElementById('os').textContent=stepN;
   requestAnimationFrame(loop);
@@ -336,6 +358,9 @@ function loop(){
 
 // Debounce resize so buffers reallocate once the window settles, not per event.
 window.addEventListener('resize',()=>{clearTimeout(window._rt);window._rt=setTimeout(()=>{init();},200);});
+
+// Test hook for headless checks: the live state, read only by convention.
+window.__ds={get P(){return P},get u(){return u},get Iavg(){return Iavg},get NX(){return NX},get NY(){return NY},get step(){return stepN},screenX:()=>screenX(),sourceX:()=>sourceX()};
 
 // Boot: build the grid, then start the animation loop.
 init();loop();
