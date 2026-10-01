@@ -9,7 +9,8 @@
 
 import { root, picker, exSheet, px } from './dom.js';
 import { closePicker } from './picker.js';
-import { L, queueLayout, closeExamples } from '../main.js';
+import { closeExamples } from './preset-sheet.js';
+import { L, queueLayout } from '../main.js';
 
 // On a phone they fill the visual viewport, so the search field stays above the keyboard.
 // Swipe down on the head, or on the list when it is scrolled to the top, to close.
