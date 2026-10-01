@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Research Tree · Stella Nova</title>
+<meta name="description" content="The Stella Nova research tree: every research node by discipline and tier, with its prerequisites and the items it unlocks.">
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   RESEARCH  ·  interactive tech tree
+  ───────────────────────────────────────────────────────────────────────────
+   The page shows every research node in the game catalog as a card on a
+   pan and zoom board. Rows are discipline lanes. Columns are tier labels.
+   Lines join each prerequisite to the node that needs it. Sprite chips on a
+   card show the resources and modules that the node unlocks.
+
+   LOAD ORDER  (classic scripts, so the page opens from file:// too)
+     1. ../../lib/gpu-guard.js       first script on every page
+     2. ../../lib/game-data/catalog.js   sets window.SN_DATA
+     3. main.js                      layout, board, search, panel
+
+   PAGE FLOW  (# marks an element id)
+     .bar        title, search field, results list, legend
+     #view       the board viewport (pointer pan, pinch and wheel zoom)
+       #world    transformed layer: lane bands, tier heads, #edges, .node
+     #dock       fit, zoom in, zoom out, clear
+     #panel      selected node: path, unlocks, wiki link (sheet on phone)
+
+   The page shows names, tier labels and links only. It shows no costs.
+
+   grep -n targets
+     search bar ........ "id=\"q\""
+     board ............. "id=\"view\""
+     dock .............. "id=\"dock\""
+     panel ............. "id=\"panel\""
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="bar-title">
+    <div class="kicker">Stella Nova · Wiki</div>
+    <h1>Research <em>tree</em></h1>
+  </div>
+  <div class="find">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="q" type="search" placeholder="Find a node or an unlock" autocomplete="off" spellcheck="false" aria-label="Search research" aria-controls="hits">
+    <ul id="hits" class="hits" role="listbox" hidden></ul>
+  </div>
+  <div class="legend" id="legend"></div>
+</header>
+
+<main id="view" aria-label="Research tree board">
+  <div id="world"><svg id="edges" aria-hidden="true"></svg></div>
+  <p class="hint" id="hint">Drag to pan · pinch or wheel to zoom · tap a node</p>
+</main>
+
+<nav id="dock" aria-label="Board controls">
+  <button type="button" data-act="fit" title="Fit the tree"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button type="button" data-act="in" title="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button type="button" data-act="out" title="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+  <button type="button" data-act="clear" title="Clear the selection"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+</nav>
+
+<aside id="panel" aria-live="polite">
+  <button type="button" class="grip" id="grip" aria-label="Expand or collapse the panel"><span></span></button>
+  <div id="panel-body"></div>
+</aside>
+
+<script src="../../lib/game-data/catalog.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
