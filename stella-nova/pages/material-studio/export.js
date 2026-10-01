@@ -65,33 +65,16 @@
 import {
   EXPORT_TARGETS, MAP_SLOTS, MAP_NAMES, DEFAULT_SCALARS, OUTPUT_TYPE, RES_OPTIONS, GRAPH_VERSION,
 } from './contract.js';
-import { makeZip, encodePNG, encodeTGA, encodeEXR, f32ToF16, f16ToF32, crc32, decodePNG, readZip } from './zip.js';
+import { makeZip, encodePNG, encodeTGA, encodeEXR, f32ToF16, crc32, decodePNG, readZip } from './zip.js';
 import { buildGLB, uvSphere, parseGLB } from './glb.js';
 import * as IMP from './import.js';
 
-let C = null;            // main.js ctx
-let S = null;            // store.state
-const UI = {};           // panel elements
-let busy = false;
-let last = null;         // last export summary
+import { C, S, UI, last, bind, setLast, err } from './export/ctx.js';
+import { H2F, H2L8, H2S8, luts, linToSrgb, clamp01 } from './export/half.js';
+import { f, fmtSize } from './export/format.js';
 
-// ------------------------------------------------------------ half LUTs
-let H2F = null, H2L8 = null, H2S8 = null;
-function luts() {
-  if (H2F) return;
-  H2F = new Float32Array(65536); H2L8 = new Uint8Array(65536); H2S8 = new Uint8Array(65536);
-  for (let h = 0; h < 65536; h++) {
-    let v = f16ToF32(h);
-    if (!(v === v)) v = 0;
-    H2F[h] = v;
-    const c = v < 0 ? 0 : v > 1 ? 1 : v;
-    H2L8[h] = Math.round(c * 255);
-    H2S8[h] = Math.round(linToSrgb(c) * 255);
-  }
-}
-/** Linear 0..1 to sRGB 0..1 (IEC 61966-2-1). */
-export function linToSrgb(c) { return c <= 0.0031308 ? c * 12.92 : (1.055 * Math.pow(c, 1 / 2.4)) - 0.055; }
-const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : (v === v ? v : 0));
+export { linToSrgb };
+let busy = false;
 
 // ------------------------------------------------------------ graph access
 function graphJSON() {
@@ -509,7 +492,6 @@ const UNITY_SHADERS = {
   'unity-hdrp': { ref: guid => `{fileID: 4800000, guid: ${guid}, type: 3}`, guid: '6e4ae4064600d784cac1e41a9e6f2e59', name: 'HDRP/Lit' },
   'unity-builtin': { ref: () => '{fileID: 46, guid: 0000000000000000f000000000000000, type: 0}', guid: '', name: 'Standard' },
 };
-const f = v => (Math.round(v * 10000) / 10000).toString();
 
 function unityTexMeta(guid, { srgb, normal, alpha }) {
   return `fileFormatVersion: 2
@@ -1118,7 +1100,7 @@ export async function exportPackage(target, opts = {}) {
   }, progress);
 }
 function finish(target, o, blob, sc, u) {
-  last = { target, name: blob.fileName, size: blob.size, entries: blob.entries, res: o.resolved, at: Date.now() };
+  setLast({ target, name: blob.fileName, size: blob.size, entries: blob.entries, res: o.resolved, at: Date.now() });
   o.onProgress?.('done', 1);
   if (UI.box && !o.onProgress) { setProgress('done', 1); showResult(blob); }
 }
@@ -1212,7 +1194,6 @@ function h(tag, attrs = {}, ...kids) {
   for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) el.append(c.nodeType ? c : document.createTextNode(String(c)));
   return el;
 }
-const fmtSize = n => (n > 1048576 ? (n / 1048576).toFixed(2) + ' MB' : n > 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B');
 function sel(id, options, value, on) {
   const s = h('select', { class: 'io-sel', id });
   for (const op of options) s.add(new Option(op.label ?? op, String(op.value ?? op)));
@@ -1325,7 +1306,6 @@ export function mountExportUI(host, { mode = 'full' } = {}) {
   refresh();
   return box;
 }
-const err = e => { console.error(e); C.store.toast(String(e.message || e), 'error'); };
 
 /** The active target: the panels card that is on (extra mode) or OPTS.target. */
 function activeTarget() {
@@ -1457,7 +1437,7 @@ export async function selfTest() {
 
 /** @param {object} ctx main.js module context */
 export async function init(ctx) {
-  C = ctx; S = ctx.store.state;
+  bind(ctx);
   // panels.js inits after this module, so place the UI once every init ran
   ctx.store.on('boot:done', () => { try { placeUI(); } catch (e) { console.error('[export] UI', e); } });
   ctx.store.on('graph:changed', () => { if (UI.name && !UI.name.value) UI.name.placeholder = graphJSON()?.name || 'Material'; });
