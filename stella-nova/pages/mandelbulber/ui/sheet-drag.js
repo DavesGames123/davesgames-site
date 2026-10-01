@@ -12,7 +12,7 @@
 import { panel, pbody, root, clamp, px } from './dom.js';
 import { touchUI } from './state.js';
 import { L, setSheetDragging, snapH, setSheetY, snapTo, flushResize } from './layout.js';
-import { stopInertia } from '../main.js';
+import { stopInertia } from './pointer.js';
 
 // Sheet drag: from the grab handle, the header and the peek bar (pointer events), and from
 // the panel body when it is scrolled to the top and the finger pulls down (touch events).

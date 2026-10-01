@@ -13,7 +13,7 @@ import { flash } from './hud.js';
 import { refreshAll } from './controls.js';
 import { V, camFromScene, camBasis, camToScene, lookBy } from './camera.js';
 import { L, snapTo } from './layout.js';
-import { stopInertia } from '../main.js';
+import { stopInertia } from './pointer.js';
 
 export let flying = false;
 export const keys = new Set();

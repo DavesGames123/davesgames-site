@@ -14,7 +14,7 @@ import { setStatus, flash } from './hud.js';
 import { refreshAll } from './controls.js';
 import { writeHash } from './io.js';
 import { buildSlotEditor } from './panel.js';
-import { stopInertia } from '../main.js';
+import { stopInertia } from './pointer.js';
 
 export let sceneDirty = true;
 let previewTimer = 0, previewOn = false;
