@@ -555,6 +555,38 @@ $('clearStaff').addEventListener('click',()=>{
   renderTally();
   $('st-log').textContent='0 logged';staffDirty=true;
 });
+// The chord log as text, four chords to a bar like the staff:
+// "| C Em7 Em C | Am F G C |".
+function logText(){
+  const names=chordLog.map(e=>NOTE_NAMES[e.root]+e.q);
+  const bars=[];
+  for(let i=0;i<names.length;i+=4)bars.push(names.slice(i,i+4).join(' '));
+  return bars.length?'| '+bars.join(' | ')+' |':'';
+}
+// Show a short result on a button, then restore its label.
+function flashBtn(b,t){
+  if(!b.dataset.label)b.dataset.label=b.innerHTML;
+  b.innerHTML=t;clearTimeout(b._t);
+  b._t=setTimeout(()=>{b.innerHTML=b.dataset.label;},1400);
+}
+// Copy the log. The Clipboard API comes first. A frame without the
+// clipboard-write permission refuses it, so a hidden textarea and
+// execCommand('copy') are the fallback.
+async function copyLog(){
+  const txt=logText(),b=$('copyStaff');
+  if(!txt){flashBtn(b,'Nothing yet');return;}
+  let ok=false;
+  try{await navigator.clipboard.writeText(txt);ok=true;}catch(_){}
+  if(!ok){
+    const ta=document.createElement('textarea');
+    ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';
+    document.body.appendChild(ta);ta.select();
+    try{ok=document.execCommand('copy');}catch(_){}
+    ta.remove();
+  }
+  flashBtn(b,ok?'✓ Copied':'Copy failed');
+}
+$('copyStaff').addEventListener('click',copyLog);
 /* diatonic step index of pc for staff placement (C=0..B=6) + sharp flag */
 // PC_STEP maps a pitch class to its letter step so sharps share a line with the
 // natural below them; PC_SHARP flags which pitch classes draw a sharp glyph.

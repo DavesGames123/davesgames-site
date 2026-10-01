@@ -120,6 +120,15 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 #status-bar{height:22px;flex-shrink:0;background:rgba(14,17,24,0.94);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;gap:14px;z-index:50;font-size:0.54rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-faint);font-weight:500;overflow:hidden;white-space:nowrap}
 #status-bar .sep{width:1px;height:10px;background:var(--border-b);flex-shrink:0}
 #status-bar b{color:var(--blue)}
+#st-keys{margin-left:auto;background:none;border:none;color:var(--text-dim);font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer;padding:0 2px}
+#st-keys:hover{color:var(--blue)}
+/* keyboard card: a small panel over the bottom right, toggled by ? */
+#keysCard{position:fixed;right:14px;bottom:30px;z-index:200;min-width:240px;padding:12px 16px 10px;background:rgba(14,17,24,0.96);border:1px solid var(--border-b);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.5);font-size:0.62rem;letter-spacing:0.06em;color:var(--text-dim);cursor:pointer}
+#keysCard[hidden]{display:none}
+#keysCard .kc-h{font-size:0.56rem;letter-spacing:0.26em;text-transform:uppercase;color:var(--text-faint);font-weight:700;margin-bottom:8px}
+#keysCard dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px}
+#keysCard dt{color:var(--blue);font-weight:700;text-align:right}
+html.mob #keysCard{display:none}
 
 /* ── mobile: bottom-tab app layout ──
    Driven by html.mob (set in JS from device characteristics), NOT a

@@ -148,7 +148,7 @@
 <!-- BOTTOM: the running staff -->
 <div id="staffZone">
   <div class="zone-lbl"><span class="dot" style="background:#64c864;box-shadow:0 0 8px #64c864"></span>Chord Log · 4-bar staff</div>
-  <div id="staffBtns"><button class="sbtn" id="clearStaff">✕ Clear</button></div>
+  <div id="staffBtns"><button class="sbtn" id="copyStaff" title="Copy the chord log as text (C)">⧉ Copy</button><button class="sbtn" id="clearStaff" title="Clear the log">✕ Clear</button></div>
   <div id="staffScroll"><canvas id="staffCanvas"></canvas></div>
 </div>
 
@@ -159,7 +159,21 @@
   <span id="st-tune">tuning —</span><span class="sep"></span>
   <span id="st-chord">chord —</span><span class="sep"></span>
   <span id="st-log">0 logged</span><span class="sep"></span>
-  <span id="st-fps">-- fps</span>
+  <span id="st-fps">-- fps</span><span class="sep"></span>
+  <button id="st-keys" title="Keyboard shortcuts (?)">? keys</button>
+</div>
+
+<!-- Keyboard shortcut card, toggled by ? (hidden on touch layouts). -->
+<div id="keysCard" hidden>
+  <div class="kc-h">Keys</div>
+  <dl>
+    <dt>Space</dt><dd>start / pause listening</dd>
+    <dt>H</dt><dd>hear the chord on the diagram</dd>
+    <dt>← →</dt><dd>previous / next voicing</dd>
+    <dt>1 – 4</dt><dd>guitar · bass · uke · violin</dd>
+    <dt>C</dt><dd>copy the chord log</dd>
+    <dt>?</dt><dd>show / hide this card</dd>
+  </dl>
 </div>
 
 <!-- Bottom tab bar shown only on narrow screens; switches the visible zone. -->

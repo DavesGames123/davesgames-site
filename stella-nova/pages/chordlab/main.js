@@ -53,6 +53,42 @@ mobTabs.addEventListener('click',e=>{
 });
 setMTab('now');
 
+/* ═══════════ KEYBOARD ═══════════ */
+// Keys for hands that are busy with an instrument. Keys are ignored while
+// typing, and with Cmd, Ctrl or Alt held, so browser shortcuts still work.
+//   Space start / pause   H hear the chord   ← → voicing   1-4 instrument
+//   C copy the chord log   ? the key card
+function toggleKeys(on){
+  const k=$('keysCard');
+  k.hidden=on===undefined?!k.hidden:!on;
+}
+$('st-keys').addEventListener('click',()=>toggleKeys());
+$('keysCard').addEventListener('click',()=>toggleKeys(false));
+function typing(t){return t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.isContentEditable);}
+addEventListener('keydown',e=>{
+  if(e.metaKey||e.ctrlKey||e.altKey||typing(e.target))return;
+  const k=e.key;
+  if(k===' '){
+    // Space on a focused button would also press that button; take it here.
+    e.preventDefault();
+    if(!e.repeat){if(micOn)stopMic();else startMic();}
+  }else if(k==='h'||k==='H')strum();
+  else if(k==='ArrowLeft'||k==='ArrowRight'){
+    if(instrument!=='guitar'&&instrument!=='ukulele')return;
+    const n=voicingsFor(diagChord.root,diagChord.q).length;
+    if(n<2)return;
+    e.preventDefault();
+    voicingIdx=(voicingIdx+(k==='ArrowRight'?1:n-1))%n;
+    diagDirty=true;buildVoicingBtns();
+  }else if(k>='1'&&k<='4'){
+    const b=$('instSeg').children[+k-1];if(b)b.click();
+  }else if(k==='c'||k==='C')copyLog();
+  else if(k==='?')toggleKeys();
+  else if(k==='Escape')toggleKeys(false);
+});
+// A Space keyup on a focused button would click it; the keydown handled it.
+addEventListener('keyup',e=>{if(e.key===' '&&!typing(e.target))e.preventDefault();});
+
 // Start on a friendly default chord and kick off the render loop.
 setDiagramChord(0,'');   // C major as the friendly default
 buildVoicingBtns();
