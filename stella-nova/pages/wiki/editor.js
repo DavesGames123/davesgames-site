@@ -31,7 +31,7 @@
 (function () {
   'use strict';
 
-  // sha256("editor"). Only the hash is in the code.
+  // SHA-256 of the edit password. Only the hash is in the code.
   var EDIT_HASH = '1553cc62ff246044c683a61e203e65541990e7fcd4af9443d22b9557ecc9ac54';
   var UNLOCK_KEY = 'sn-wiki-unlocked';
   var cache = {};          // id -> { draft, published }
