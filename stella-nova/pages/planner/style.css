@@ -242,8 +242,8 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
   .lead, .empty, .cnt, .pc-t b { font-size: 14px; }
   .prob b { font-size: 14px; }
   .prob span, .ins-state, .keys { font-size: 13px; }
-  .fine { font-size: 12.5px; }
-  .hint { font-size: 13px; }
+  .fine { font-size: 14px; }
+  .hint { font-size: 14px; }
   .hint .hl { display: inline-block; padding: 12px 6px; margin: -12px -6px; }
   .grab { height: 30px; margin: -12px 0 2px; }
 }
@@ -272,6 +272,7 @@ svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width:
 /* TOUCH SIZES: hit areas and no focus zoom in iOS Safari. */
 @media (pointer: coarse) {
   input, textarea, select { font-size: 16px !important; }
+  .name input { height: 44px; }
   .ib, .pill { min-width: 44px; height: 44px; }
   .chk { min-height: 44px; margin-bottom: 8px; }
   .chk input { width: 20px; height: 20px; flex: none; }
