@@ -16,6 +16,7 @@ export const CALIBRES = [
   { id: 'detent', name: 'Detent Chronometer', kind: 'Marine chronometer', era: 'Earnshaw, c. 1780' },
   { id: 'pinlever', name: 'Pin-Lever Roskopf', kind: 'Pocket watch', era: 'Roskopf, 1867' },
   { id: 'anchor', name: 'Anchor Wall Clock', kind: 'Wall clock', era: 'c. 1670 – 1900' },
+  { id: 'deadbeat', name: 'Deadbeat Regulator', kind: 'Regulator clock', era: 'Graham, c. 1715' },
 ];
 export const metaById = id => CALIBRES.find(c => c.id === id);
 const cache = new Map();
