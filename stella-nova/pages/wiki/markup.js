@@ -244,7 +244,8 @@
       });
       root.appendChild(ol);
     }
-    // One listener per rendered block: footnote jumps and redaction toggles.
+    // One listener per rendered block: footnote jumps, redaction toggles and
+    // missing link notes.
     root.addEventListener('click', function (ev) {
       var fn = ev.target.closest('[data-fn]');
       if (fn) {
@@ -253,7 +254,11 @@
         return;
       }
       var r = ev.target.closest('.mk-redact');
-      if (r) r.classList.toggle('on');
+      if (r) { r.classList.toggle('on'); return; }
+      // A missing link names its target in a title tooltip. Touch screens
+      // have no hover, so a tap shows the same text inline (style.css).
+      var red = ev.target.closest('.mk-red');
+      if (red) red.classList.toggle('on');
     });
     root.addEventListener('keydown', function (ev) {
       if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.classList && ev.target.classList.contains('mk-redact')) { ev.preventDefault(); ev.target.classList.toggle('on'); }

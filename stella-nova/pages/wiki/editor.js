@@ -15,13 +15,15 @@
 //  [[ wiki link autocomplete, and a live preview from markup.js. Save writes
 //  a local draft through SNWikiStorage. The Header panel edits the SCP style
 //  Classification and Designation pair. While the open editor has changes,
-//  canLeave() is false, and main.js asks before it changes the route.
+//  canLeave() is false, and main.js asks before it changes the route. On
+//  narrow screens a Write / Preview switch shows one pane at a time.
 //
 //  grep -n targets
 //    var EDIT_HASH        stored password hash
 //    function sha256(     crypto.subtle with a JS fallback
 //    function askPassword unlock dialog
 //    function openEditor  section editor
+//    function setPane(    Write / Preview switch for narrow screens
 //    var TOOLS            toolbar actions
 //    function autocomplete wiki link autocomplete
 //    function openHeader  Classification / Designation panel
@@ -247,10 +249,22 @@
       var v = ta.value;
       save(e, function (d) { if (v.trim()) d.sections[key] = v; else delete d.sections[key]; }, 'sec-' + key);
     } }, 'Save draft');
+    // Narrow screens show one pane at a time. The Write / Preview switch is
+    // hidden by style.css when the two panes fit side by side.
+    var panes = h('div', { class: 'ed-panes', 'data-pane': 'write' },
+      h('div', { class: 'ed-write' }, ta, acList),
+      h('div', { class: 'ed-prev' }, h('p', { class: 'ed-lab' }, 'Preview'), prev));
+    var paneW = h('button', { type: 'button', 'aria-pressed': 'true', onclick: function () { setPane('write'); } }, 'Write');
+    var paneP = h('button', { type: 'button', 'aria-pressed': 'false', onclick: function () { setPane('preview'); } }, 'Preview');
+    function setPane(p) {
+      panes.setAttribute('data-pane', p);
+      paneW.setAttribute('aria-pressed', String(p === 'write'));
+      paneP.setAttribute('aria-pressed', String(p === 'preview'));
+      if (p === 'preview') { clearTimeout(t); paint(); acList.hidden = true; }
+    }
     var root = h('div', { class: 'ed' }, bar, imgPop, help,
-      h('div', { class: 'ed-panes' },
-        h('div', { class: 'ed-write' }, ta, acList),
-        h('div', { class: 'ed-prev' }, h('p', { class: 'ed-lab' }, 'Preview'), prev)),
+      h('div', { class: 'seg ed-pane-seg', role: 'group', 'aria-label': 'Editor pane' }, paneW, paneP),
+      panes,
       h('div', { class: 'ed-foot' }, status, h('span', { class: 'ed-gap' }), cancel, saveBtn));
     body.textContent = '';
     body.appendChild(root);
