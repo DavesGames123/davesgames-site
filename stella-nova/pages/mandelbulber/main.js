@@ -35,10 +35,11 @@
 //       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
 
 import { SLOTS, defaultScene, fillDefaults, parseFract, serialiseFract, parseValue, quantizeColor, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
-import { $, stage, canvas, panel, pbody, hud, picker, exSheet, root, el, section, fmt, rgbToHex, hexToRgb, clamp, px, download } from './ui/dom.js';
+import { $, stage, canvas, panel, pbody, picker, exSheet, root, el, section, fmt, rgbToHex, hexToRgb, clamp, px, download } from './ui/dom.js';
 import { P, CAT, EXAMPLES, THUMBS, PTHUMBS, COLLECTIONS, byEnum, fnum, groupName, mainSpec, isNone, loadData } from './ui/data.js';
 import { scene, activeSlot, engine, currentExample, info, setScene, setActiveSlot, setEngine, setCurrentExample, setInfo, formulaAt,
   touchSeen, noteTouch, touchUI, coarseMQ, targetSamples, SAMPLES_DEFAULT, renderScale, RENDER_SCALE_DEFAULT, pixelRatio } from './ui/state.js';
+import { compileStatus, setStatus, flash, msPerSample, setMsPerSample, showHud, fail } from './ui/hud.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -299,7 +300,7 @@ function loadScene(next, label) {
 }
 
 // ─── panel ──────────────────────────────────────────────────────────────────
-let slotBox, slotStrip, progressEl, sampleLine, exList, exSearch;
+export let slotBox, slotStrip, progressEl, sampleLine, exList, exSearch;
 let resizeCanvas = null, resizePending = false;      // set in boot once the engine runs
 
 function buildPanel() {
@@ -1386,7 +1387,7 @@ applyLayout();
 syncViewport();
 
 // No render work while nobody can see it: a sheet drag, a full sheet, a full-screen list.
-function renderPaused() {
+export function renderPaused() {
   if (saveRequested) return false;
   if (sheetDragging) return true;
   if (L.mode === 'sheet' && L.snap === 'full' && !panel.classList.contains('hidden')) return true;
@@ -1411,37 +1412,12 @@ window.addEventListener('blur', () => keys.clear());
 $('toggle').addEventListener('click', togglePanel);
 
 // ─── status ─────────────────────────────────────────────────────────────────
-let compileStatus = '';
-let flashText = '', flashUntil = 0;
-function flash(s) { flashText = s; flashUntil = performance.now() + 2500; showHud(); }
-
-let msPerSample = 0;
-function showHud() {
-  const n = info?.samples ?? 0;
-  // progress inside the running sample, shown when one sample takes long enough to notice
-  const part = info && !info.done && n < targetSamples.value && info.sampleMs > 300 && info.progress > 0
-    ? ` · sample ${n + 1}: ${Math.round(info.progress * 100)}%` : '';
-  $('hudSamples').textContent = engine ? `${n} / ${targetSamples.value} spp${part}` : '';
-  $('hudMs').textContent = engine && msPerSample ? `${msPerSample.toFixed(1)} ms/sample` : '';
-  const st = performance.now() < flashUntil ? flashText : (info?.compiling ? 'compiling…' : compileStatus);
-  $('hudStatus').textContent = st;
-  hud.classList.toggle('err', /error|fail/i.test(st) || !!info?.stale);
-  $('peekText').textContent = engine ? `${n} / ${targetSamples.value} spp${msPerSample ? ` · ${msPerSample.toFixed(0)} ms` : ''}${renderPaused() ? ' · paused' : ''}` : st;
-  if (progressEl) {
-    progressEl.firstChild.style.width = `${Math.min(100, 100 * (n + (part ? info.progress : 0)) / targetSamples.value)}%`;
-    progressEl.classList.toggle('done', n >= targetSamples.value);
-    sampleLine.textContent = engine
-      ? `${n} of ${targetSamples.value} samples${part}${msPerSample ? ` · ${msPerSample.toFixed(1)} ms per sample` : ''}${info?.compiling ? ' · compiling' : ''}`
-      : (compileStatus || 'no renderer');
-  }
-}
-
 // ─── frame loop ─────────────────────────────────────────────────────────────
 // Hand the engine a snapshot, so a compile that finishes late sees the scene it was given.
 let scenePromise = Promise.resolve();
 function pushScene() {
   sceneDirty = false;
-  const onErr = (e) => { compileStatus = `error: ${e.message}`; console.error(e); };
+  const onErr = (e) => { setStatus(`error: ${e.message}`); console.error(e); };
   try { scenePromise = Promise.resolve(engine.setScene(structuredClone(scene))).catch(onErr); } catch (e) { onErr(e); }
   setInfo(null);
 }
@@ -1467,10 +1443,10 @@ function tick(now) {
       const r = engine.frame();
       if (r) setInfo(r);
       const st = engine.stats?.();
-      if (st && Number.isFinite(st.lastSampleMs) && st.lastSampleMs > 0) msPerSample = st.lastSampleMs;
-      else if (lastFrameT && !info?.compiling) msPerSample = msPerSample ? msPerSample * 0.85 + (t0 - lastFrameT) * 0.15 : t0 - lastFrameT;
+      if (st && Number.isFinite(st.lastSampleMs) && st.lastSampleMs > 0) setMsPerSample(st.lastSampleMs);
+      else if (lastFrameT && !info?.compiling) setMsPerSample(msPerSample ? msPerSample * 0.85 + (t0 - lastFrameT) * 0.15 : t0 - lastFrameT);
       lastFrameT = t0;
-    } catch (e) { compileStatus = `error: ${e.message}`; console.error(e); }
+    } catch (e) { setStatus(`error: ${e.message}`); console.error(e); }
     if (saveRequested && (info?.samples ?? 0) > 0) {   // wait for one full sample; the canvas keeps the last presented image
       saveRequested = false;
       const f = formulaAt(0);
@@ -1481,13 +1457,6 @@ function tick(now) {
 }
 
 // ─── boot ───────────────────────────────────────────────────────────────────
-export function fail(msg) {
-  stage.classList.add('nogpu');
-  $('fallback').textContent = msg;
-  compileStatus = msg;
-  showHud();
-}
-
 async function boot() {
   await loadData();
   $('subtitle').textContent = `${CAT.formulas.filter((f) => !isNone(f)).length} formulas · ${EXAMPLES.length} presets`;
@@ -1505,7 +1474,7 @@ async function boot() {
     fail(e?.message?.includes('WebGPU') ? e.message : `The renderer did not start: ${e.message}. This page needs WebGPU (a current Chrome, Edge or Safari).`);
     return;
   }
-  engine.onStatus((s) => { compileStatus = String(s); showHud(); });
+  engine.onStatus((s) => { setStatus(String(s)); showHud(); });
   engine.setMaxSamples?.(targetSamples.value);
   engine.setFrameBudget?.(33);                         // about 30 fps while the user drags
   // Resize only when the pixel size changes, so a layout pass keeps the accumulated image.

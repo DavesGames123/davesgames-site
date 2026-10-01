@@ -9,7 +9,8 @@
 //       function loadJson  function loadData
 
 import { specFor } from '../fract.js';
-import { fail, prepareExamples } from '../main.js';
+import { fail } from './hud.js';
+import { prepareExamples } from '../main.js';
 
 export let P, CAT, EXAMPLES, THUMBS, PTHUMBS = null;
 export let COLLECTIONS = [];             // gen/collections.json: author and licence per collection folder
