@@ -31,15 +31,18 @@
 // ============================================================================
 import * as THREE from 'three';
 import { parse, makeGrid, AA_NAME } from './parse.js';
-import { cartoonGeometry } from './cartoon.js';
-import { gaussianSurface, vdw } from './surface.js';
-import { SCHEMES, residueColors, atomColors, legend, toHex, PLDDT } from './colors.js';
+import { SCHEMES, residueColors, legend, toHex, PLDDT } from './colors.js';
 import { GROUPS, PRESETS, byId } from './presets.js';
 import * as R from './reps.js';
 import { camera, canvas, clearGroup, controls, envRT, matAtom, matCartoon, matLine, matMark, matSurface, mol, over, overlay, post, renderer, scene } from './app/stage.js';
 import { $, COARSE, DPR, HOVER, PHONE_Q, REDUCED, cap, ease, esc } from './app/env.js';
 import { ADDITIVES, S, anchorAtom, atomPos, dirty, isPolymer, resLabel } from './app/state.js';
 import { hideHint, hideLoading, nextFrame, showLoading, toast } from './app/feedback.js';
+import { rebuild, rebuildOverlay } from './app/layers.js';
+import { applyOpacity, paint } from './app/paint.js';
+import { neighbours, pickAt } from './app/pick.js';
+import { addMeasureAtom, setMeasure, syncMeasure } from './app/measure.js';
+import { placeLabels } from './app/labels.js';
 
 const REPS = [
   { id: 'cartoon', label: 'Cartoon', short: 'Cartoon' },
@@ -49,7 +52,6 @@ const REPS = [
   { id: 'spacefill', label: 'Spacefill', short: 'Spheres' },
   { id: 'surface', label: 'Surface', short: 'Surface' },
 ];
-const ATOM_REPS = new Set(['ballstick', 'licorice', 'spacefill']);
 const SHOWS = [
   { id: 'ligands', label: 'Ligands' }, { id: 'ions', label: 'Ions' }, { id: 'waters', label: 'Waters' },
   { id: 'hydrogens', label: 'Hydrogens' }, { id: 'additives', label: 'Additives' },
@@ -59,12 +61,6 @@ const UNIPROT = /^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9
 
 controls.addEventListener('change', dirty);
 controls.addEventListener('start', () => { S.fly = null; hideHint(); });
-
-function srgbToLin(arr) {
-  const out = new Float32Array(arr.length);
-  for (let i = 0; i < arr.length; i++) { const c = arr[i]; out[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }
-  return out;
-}
 
 // symmetric 3x3 eigen-decomposition (Jacobi rotations)
 function eig3(A) {
@@ -272,297 +268,6 @@ function computeFrame() {
   S.wpos = w;
 }
 
-// ── layers ────────────────────────────────────────────────────────────────
-function visibility() {
-  const s = S.s, vis = new Uint8Array(s.residues.length);
-  for (const r of s.residues) {
-    let v = S.chainOn[r.chain];
-    if (r.kind === 'water') v = v && S.show.waters;
-    else if (r.kind === 'ion') v = v && S.show.ions;
-    else if (r.kind === 'ligand') v = v && S.show.ligands && (S.show.additives || !ADDITIVES.has(r.name));
-    vis[r.index] = v ? 1 : 0;
-  }
-  // sticks named by the preset stay visible even if their class is hidden
-  for (const ri of S.sticks) if (S.chainOn[s.residues[ri].chain] && s.residues[ri].kind !== 'water') vis[ri] = 1;
-  return vis;
-}
-function detailFor(n, extra = 0) {
-  let d = n < 3000 ? 3 : n < 12000 ? 2 : n < 40000 ? 1 : 0;
-  if (COARSE) d -= 1;
-  return Math.max(0, Math.min(3, d + extra));
-}
-function ballRadius(rep, a, r) {
-  const single = isPolymer(r) && r.atoms.length === 1;
-  if (rep === 'spacefill') return single ? 2.4 : vdw(a.el);
-  if (rep === 'licorice') return single ? 0.55 : a.el === 'H' ? 0.13 : 0.24;
-  return single ? 0.85 : a.el === 'H' ? 0.18 : 0.24 * vdw(a.el);
-}
-function bondsWithin(set) {
-  const b = S.s.bonds, out = [];
-  for (let k = 0; k < b.length; k += 2) if (set.has(b[k]) && set.has(b[k + 1])) out.push(b[k], b[k + 1]);
-  return out;
-}
-
-function rebuild() {
-  const s = S.s;
-  if (!s) return;
-  clearGroup(mol);
-  const vis = S.vis = visibility();
-  const wpos = S.wpos;
-  const atomOK = i => vis[s.atoms[i].res] && (S.show.hydrogens || s.atoms[i].el !== 'H');
-  S.pick = [];
-  const rep = S.rep;
-  const nRes = s.residues.reduce((k, r) => k + (isPolymer(r) && vis[r.index]), 0);
-  if (ATOM_REPS.has(rep)) {
-    const idx = [];
-    for (let i = 0; i < s.atoms.length; i++) { const r = s.residues[s.atoms[i].res]; if (r.kind !== 'water' && r.kind !== 'ion' && atomOK(i)) idx.push(i); }
-    const rad = i => ballRadius(rep, s.atoms[i], s.residues[s.atoms[i].res]);
-    const L = R.atomLayer(idx, wpos, rad, detailFor(idx.length, rep === 'spacefill' ? 1 : 0), matAtom);
-    mol.add(L);
-    S.pick.push({ idx: L.userData.idx, rad: L.userData.rad });
-    if (rep !== 'spacefill') {
-      const set = new Set(idx);
-      const pairs = bondsWithin(set);
-      const br = rep === 'licorice' ? 0.24 : 0.13;
-      if (pairs.length) mol.add(R.bondLayer(pairs, wpos, br, idx.length < 12000 ? (COARSE ? 8 : 10) : 6, matAtom));
-    }
-  } else {
-    const showRes = ri => vis[ri] && isPolymer(s.residues[ri]);
-    if (rep === 'cartoon') {
-      const sub = nRes < 1500 ? (COARSE ? 6 : 8) : nRes < 4000 ? (COARSE ? 5 : 6) : 4;
-      const ring = nRes < 1500 ? (COARSE ? 10 : 12) : nRes < 4000 ? 10 : 8;
-      const g = cartoonGeometry(s, wpos, { sub, ring, show: showRes });
-      if (g.position.length) mol.add(R.cartoonLayer(g, matCartoon));
-      if (g.rungs.length) {
-        mol.add(R.segmentLayer(g.rungs, 0.42, 8, matAtom));
-        const ends = g.rungs.map(q => ({ from: q.to, to: q.to, res: q.res }));
-        const L = R.atomLayer(ends.map((q, k) => k), new Float32Array(ends.flatMap(q => q.to)), () => 0.42, 1, matAtom);
-        L.paintResidues = lin => { const c = L.instanceColor.array; ends.forEach((q, k) => { c[3 * k] = lin[3 * q.res]; c[3 * k + 1] = lin[3 * q.res + 1]; c[3 * k + 2] = lin[3 * q.res + 2]; }); L.instanceColor.needsUpdate = true; };
-        L.paintAtoms = null;
-        mol.add(L);
-      }
-    } else if (rep === 'trace') {
-      const segs = [], cas = [];
-      for (const sg of s.segments) {
-        if (!showRes(sg.residues[0])) continue;
-        for (let k = 0; k < sg.residues.length; k++) {
-          const r = s.residues[sg.residues[k]];
-          cas.push(r.ca);
-          if (k + 1 < sg.residues.length) {
-            const q = s.residues[sg.residues[k + 1]];
-            const half = [0, 1, 2].map(a => (wpos[3 * r.ca + a] + wpos[3 * q.ca + a]) / 2);
-            segs.push({ from: [wpos[3 * r.ca], wpos[3 * r.ca + 1], wpos[3 * r.ca + 2]], to: half, res: r.index });
-            segs.push({ from: half, to: [wpos[3 * q.ca], wpos[3 * q.ca + 1], wpos[3 * q.ca + 2]], res: q.index });
-          }
-        }
-      }
-      if (segs.length) mol.add(R.segmentLayer(segs, 0.32, 8, matAtom));
-      if (cas.length) {
-        const L = R.atomLayer(cas, wpos, () => 0.5, detailFor(cas.length), matAtom);
-        L.paintResidues = lin => { const c = L.instanceColor.array; cas.forEach((i, k) => { const ri = s.atoms[i].res; c[3 * k] = lin[3 * ri]; c[3 * k + 1] = lin[3 * ri + 1]; c[3 * k + 2] = lin[3 * ri + 2]; }); L.instanceColor.needsUpdate = true; };
-        L.paintAtoms = null;
-        mol.add(L);
-      }
-    } else if (rep === 'surface') {
-      const atoms = [];
-      for (let i = 0; i < s.atoms.length; i++) { const r = s.residues[s.atoms[i].res]; if (isPolymer(r) && vis[r.index] && s.atoms[i].el !== 'H') atoms.push(i); }
-      const key = Array.from(S.chainOn).join('');
-      let g = S.surfCache && S.surfCache.key === key ? S.surfCache.g : null;
-      if (!g && atoms.length) {
-        g = gaussianSurface(wpos, atoms, { radius: a => (s.residues[s.atoms[a].res].atoms.length === 1 ? 2.9 : vdw(s.atoms[a].el)), maxCells: COARSE ? 1.1e6 : 2.6e6 });
-        S.surfCache = { key, g };
-      }
-      if (g) { const L = R.surfaceLayer(g, matSurface); L.userData.surface = true; mol.add(L); }
-      applyOpacity();
-      const rad = new Float32Array(atoms.length);
-      atoms.forEach((i, k) => { rad[k] = (s.residues[s.atoms[i].res].atoms.length === 1 ? 2.9 : vdw(s.atoms[i].el)) + 0.4; });
-      S.pick.push({ idx: atoms, rad });
-    }
-    if (rep !== 'surface') {
-      const cas = [];
-      s.residues.forEach(r => { if (showRes(r.index) && r.ca >= 0) cas.push(r.ca); });
-      S.pick.push({ idx: cas, rad: new Float32Array(cas.length).fill(rep === 'cartoon' ? 1.9 : 1.2) });
-    }
-    // ligands in ball-and-stick
-    const lig = [];
-    for (let i = 0; i < s.atoms.length; i++) { const r = s.residues[s.atoms[i].res]; if (r.kind === 'ligand' && atomOK(i)) lig.push(i); }
-    if (lig.length) {
-      const L = R.atomLayer(lig, wpos, i => (s.atoms[i].el === 'H' ? 0.16 : 0.27 * vdw(s.atoms[i].el)), detailFor(lig.length), matAtom);
-      mol.add(L);
-      S.pick.push({ idx: L.userData.idx, rad: L.userData.rad });
-      const pairs = bondsWithin(new Set(lig));
-      if (pairs.length) mol.add(R.bondLayer(pairs, wpos, 0.15, 10, matAtom));
-    }
-  }
-  // ions and waters
-  const ions = [], waters = [];
-  for (let i = 0; i < s.atoms.length; i++) {
-    const r = s.residues[s.atoms[i].res];
-    if (!vis[r.index]) continue;
-    if (r.kind === 'ion') ions.push(i);
-    else if (r.kind === 'water' && s.atoms[i].el === 'O') waters.push(i);
-  }
-  if (ions.length) {
-    const L = R.atomLayer(ions, wpos, i => (rep === 'spacefill' ? vdw(s.atoms[i].el) : Math.min(1.05, 0.62 * vdw(s.atoms[i].el))), 2, matAtom);
-    mol.add(L); S.pick.push({ idx: L.userData.idx, rad: L.userData.rad });
-  }
-  if (waters.length) {
-    const L = R.atomLayer(waters, wpos, () => (rep === 'spacefill' ? 1.0 : 0.3), 1, matAtom);
-    mol.add(L); S.pick.push({ idx: L.userData.idx, rad: new Float32Array(waters.length).fill(0.6) });
-  }
-  // the bounding sphere of what is drawn
-  const box = new THREE.Box3();
-  const v = new THREE.Vector3();
-  let any = false;
-  for (const r of s.residues) if (vis[r.index] && (isPolymer(r) || nRes === 0)) for (const i of r.atoms) { box.expandByPoint(v.set(wpos[3 * i], wpos[3 * i + 1], wpos[3 * i + 2])); any = true; }
-  if (any) {
-    box.getCenter(S.bound.c);
-    let r2 = 0;
-    for (const r of s.residues) if (vis[r.index] && (isPolymer(r) || nRes === 0)) for (const i of r.atoms) r2 = Math.max(r2, v.set(wpos[3 * i], wpos[3 * i + 1], wpos[3 * i + 2]).distanceToSquared(S.bound.c));
-    S.bound.r = Math.sqrt(r2) + 2;
-  }
-  post.aoRadius = rep === 'spacefill' || rep === 'surface' ? 5.5 : rep === 'cartoon' ? 4.0 : 2.8;
-  rebuildOverlay();
-  paint();
-}
-
-// side chains as sticks: the preset's residues and the selection's 5 Å
-function rebuildOverlay() {
-  const s = S.s;
-  clearGroup(over);
-  S.pickOver = [];
-  if (!s) return;
-  const set = new Set(S.sticks);
-  if (S.sel) { set.add(S.sel.res); for (const ri of S.hood.keys()) set.add(ri); }
-  if (ATOM_REPS.has(S.rep) || !set.size) { rebuildMarks(); return; }
-  const polyRep = S.rep !== 'surface' || S.opacity < 1;
-  const atoms = [];
-  for (const ri of set) {
-    const r = s.residues[ri];
-    if (!S.chainOn[r.chain]) continue;
-    if (r.kind === 'water' && !S.show.waters) continue;
-    if (r.kind === 'ligand' && S.vis[ri]) continue; // drawn already
-    if (r.kind === 'ion') continue;
-    if (isPolymer(r) && r.atoms.length === 1) continue;
-    for (const i of r.atoms) {
-      const a = s.atoms[i];
-      if (a.el === 'H' && !S.show.hydrogens) continue;
-      if (r.kind === 'protein' && polyRep && (a.name === 'N' || a.name === 'C' || a.name === 'O' || a.name === 'OXT')) continue;
-      atoms.push(i);
-    }
-  }
-  if (atoms.length) {
-    const L = R.atomLayer(atoms, S.wpos, i => (s.atoms[i].el === 'H' ? 0.13 : 0.25), detailFor(atoms.length), matAtom);
-    over.add(L);
-    S.pickOver.push({ idx: L.userData.idx, rad: new Float32Array(atoms.length).fill(0.55) });
-    const pairs = bondsWithin(new Set(atoms));
-    if (pairs.length) over.add(R.bondLayer(pairs, S.wpos, 0.21, 10, matAtom));
-  }
-  rebuildMarks();
-}
-
-// ── colour ────────────────────────────────────────────────────────────────
-const GOLD = [1, 0.8, 0.42];
-function paint() {
-  const s = S.s;
-  if (!s) return;
-  const resCol = residueColors(s, S.color);
-  const atomCol = atomColors(s, S.color, resCol, { hetero: true });
-  S.resColSRGB = resCol;
-  const hasSel = !!S.sel;
-  const resF = new Float32Array(resCol), atomF = new Float32Array(atomCol);
-  if (hasSel || S.hoverRes >= 0) {
-    const dim = hasSel ? 0.7 : 1;
-    for (let ri = 0; ri < s.residues.length; ri++) {
-      const sel = hasSel && ri === S.sel.res, hood = S.hood.has(ri), hov = ri === S.hoverRes;
-      let k = 1, g = 0, w = 0;
-      if (sel) g = 0.6; else if (!hood && !S.stickSet.has(ri)) k = dim;
-      if (hov) w = 0.35;
-      const tint = (arr, j) => {
-        for (let c = 0; c < 3; c++) {
-          let v = arr[3 * j + c] * k;
-          v = v + (GOLD[c] - v) * g;
-          v = v + (1 - v) * w;
-          arr[3 * j + c] = v;
-        }
-      };
-      tint(resF, ri);
-      if (k !== 1 || g || w) for (const i of s.residues[ri].atoms) {
-        if (sel && s.atoms[i].el !== 'C') { for (let c = 0; c < 3; c++) atomF[3 * i + c] += (1 - atomF[3 * i + c]) * 0.15; continue; }
-        tint(atomF, i);
-      }
-    }
-  }
-  const resLin = srgbToLin(resF), atomLin = srgbToLin(atomF);
-  // the surface takes the residue colour, except in the per-atom schemes
-  let surfLin = atomLin;
-  if (S.color !== 'element' && S.color !== 'bfactor') {
-    surfLin = new Float32Array(atomLin.length);
-    for (let i = 0; i < s.atoms.length; i++) { const r = s.atoms[i].res; surfLin[3 * i] = resLin[3 * r]; surfLin[3 * i + 1] = resLin[3 * r + 1]; surfLin[3 * i + 2] = resLin[3 * r + 2]; }
-  }
-  for (const g of [mol, over]) for (const L of g.children) {
-    if (L.paintResidues) L.paintResidues(resLin);
-    else if (L.paintAtoms) L.paintAtoms(L.userData.surface ? surfLin : atomLin);
-  }
-  dirty();
-}
-function applyOpacity() {
-  const o = S.opacity;
-  matSurface.transparent = o < 0.999;
-  matSurface.opacity = o;
-  matSurface.depthWrite = o >= 0.999;
-  matSurface.needsUpdate = true;
-  dirty();
-}
-
-// ── picking ───────────────────────────────────────────────────────────────
-const ray = new THREE.Raycaster();
-const ndc = new THREE.Vector2();
-function pickAt(cx, cy, slackPx = COARSE ? 18 : 5) {
-  if (!S.s) return -1;
-  const rect = canvas.getBoundingClientRect();
-  ndc.set(((cx - rect.left) / rect.width) * 2 - 1, -((cy - rect.top) / rect.height) * 2 + 1);
-  ray.setFromCamera(ndc, camera);
-  const o = ray.ray.origin, d = ray.ray.direction, w = S.wpos;
-  const perPx = (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2)) / camera.zoom / rect.height;
-  let best = -1, bestT = Infinity, near = -1, nearPx = Infinity;
-  for (const set of [...S.pickOver, ...S.pick]) {
-    const { idx, rad } = set;
-    for (let k = 0; k < idx.length; k++) {
-      const i = idx[k];
-      const vx = w[3 * i] - o.x, vy = w[3 * i + 1] - o.y, vz = w[3 * i + 2] - o.z;
-      const t = vx * d.x + vy * d.y + vz * d.z;
-      if (t <= 0) continue;
-      const p2 = vx * vx + vy * vy + vz * vz - t * t, r = rad[k];
-      if (p2 < r * r) {
-        const tt = t - Math.sqrt(r * r - p2);
-        if (tt < bestT) { bestT = tt; best = i; }
-      } else if (best < 0) {
-        const px = (Math.sqrt(p2) - r) / (perPx * t);
-        if (px < slackPx && px < nearPx) { nearPx = px; near = i; }
-      }
-    }
-  }
-  return best >= 0 ? best : near;
-}
-
-function neighbours(ri, cut = 5) {
-  const s = S.s, out = new Map();
-  for (const i of s.residues[ri].atoms) {
-    if (s.atoms[i].el === 'H') continue;
-    S.grid.near(s.pos[3 * i], s.pos[3 * i + 1], s.pos[3 * i + 2], cut, (j, d2) => {
-      const rj = s.atoms[j].res;
-      if (rj === ri) return;
-      const r = s.residues[rj];
-      if (!S.chainOn[r.chain]) return;
-      if (r.kind === 'water' && !S.show.waters) return;
-      const d = Math.sqrt(d2);
-      if (!out.has(rj) || out.get(rj) > d) out.set(rj, d);
-    });
-  }
-  return new Map([...out.entries()].sort((a, b) => a[1] - b[1]));
-}
-
 function select(atom, opts = {}) {
   const s = S.s;
   if (!s || atom < 0) { clearSelection(); return; }
@@ -641,113 +346,6 @@ card.addEventListener('click', e => {
   else if (act === 'next') stepResidue(1);
   else if (act === 'focus') focusSelection();
 });
-
-// ── measuring ─────────────────────────────────────────────────────────────
-const MKIND = { 2: 'distance', 3: 'angle', 4: 'dihedral' };
-function measureValue(atoms) {
-  const p = atoms.map(i => new THREE.Vector3(S.s.pos[3 * i], S.s.pos[3 * i + 1], S.s.pos[3 * i + 2]));
-  if (p.length === 2) return p[0].distanceTo(p[1]);
-  if (p.length === 3) return THREE.MathUtils.radToDeg(p[0].clone().sub(p[1]).angleTo(p[2].clone().sub(p[1])));
-  const b1 = p[1].clone().sub(p[0]), b2 = p[2].clone().sub(p[1]), b3 = p[3].clone().sub(p[2]);
-  const n1 = b1.clone().cross(b2), n2 = b2.clone().cross(b3);
-  const y = b2.length() * b1.dot(n2), x = n1.dot(n2);
-  return THREE.MathUtils.radToDeg(Math.atan2(y, x));
-}
-const fmtMeasure = m => (m.atoms.length === 2 ? `${m.value.toFixed(2)} Å` : `${m.value.toFixed(1)}°`);
-function atomTag(i) { const a = S.s.atoms[i], r = S.s.residues[a.res]; return `${r.chainId}:${resLabel(r)} ${a.name}`; }
-function addMeasureAtom(i) {
-  if (i < 0) return;
-  if (S.pending.length && S.pending[S.pending.length - 1] === i) return;
-  S.pending.push(i);
-  if (S.pending.length >= S.measure) {
-    const atoms = S.pending.slice(0, S.measure);
-    S.measures.push({ atoms, value: measureValue(atoms), kind: MKIND[S.measure] });
-    S.pending = [];
-    const m = S.measures[S.measures.length - 1];
-    toast(`${cap(m.kind)} ${fmtMeasure(m)}`);
-  }
-  rebuildMarks(); syncMeasure();
-}
-function rebuildMarks() {
-  clearGroup(overlay);
-  for (const m of S.measures) {
-    const pts = m.atoms.map(atomPos);
-    const g = new THREE.BufferGeometry().setFromPoints(pts);
-    const line = new THREE.Line(g, matLine[m.kind].clone());
-    line.computeLineDistances();
-    line.renderOrder = 10;
-    overlay.add(line);
-  }
-  if (S.pending.length) {
-    const geo = R.sphereGeo(2);
-    for (const i of S.pending) {
-      const mk = new THREE.Mesh(geo, matMark);
-      mk.scale.setScalar(0.5); mk.position.copy(atomPos(i)); mk.renderOrder = 11;
-      mk.userData.sharedGeo = true;
-      overlay.add(mk);
-    }
-  }
-  buildLabels();
-  dirty();
-}
-function syncMeasure() {
-  document.querySelectorAll('#measureModes button').forEach(b => b.classList.toggle('on', +b.dataset.m === S.measure));
-  $('dockMeasure').classList.toggle('on', S.measure > 0);
-  const bar = $('measureBar');
-  if (S.measure) {
-    bar.hidden = false;
-    bar.textContent = `${cap(MKIND[S.measure])}: ${COARSE ? 'tap' : 'click'} ${S.measure} atoms · ${S.pending.length} picked`;
-  } else bar.hidden = true;
-  $('measureList').innerHTML = S.measures.map((m, k) => `<div class="mrow"><b>${fmtMeasure(m)}</b><span>${m.atoms.map(i => esc(atomTag(i))).join(' – ')}</span><button type="button" data-k="${k}" aria-label="Remove">✕</button></div>`).join('') +
-    (S.measures.length ? '<button type="button" class="tog wide" id="mClear">Clear all measurements</button>' : '');
-}
-$('measureList').addEventListener('click', e => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  if (b.id === 'mClear') S.measures = [];
-  else S.measures.splice(+b.dataset.k, 1);
-  rebuildMarks(); syncMeasure();
-});
-function setMeasure(m) {
-  S.measure = m; S.pending = [];
-  rebuildMarks(); syncMeasure();
-  if (m) toast(`${cap(MKIND[m])}: ${COARSE ? 'tap' : 'click'} ${m} atoms in order`);
-}
-
-// HTML labels: measurement values and the selected residue
-const labelsEl = $('labels');
-let labelEls = [];
-function buildLabels() {
-  labelsEl.innerHTML = '';
-  labelEls = [];
-  for (const m of S.measures) {
-    const el = document.createElement('div');
-    el.className = 'ml' + (m.kind === 'angle' ? ' ang' : m.kind === 'dihedral' ? ' dih' : '');
-    el.textContent = fmtMeasure(m);
-    labelsEl.appendChild(el);
-    const pts = m.atoms.map(atomPos);
-    const at = m.atoms.length === 3 ? pts[1] : pts.reduce((a, b) => a.add(b), new THREE.Vector3()).multiplyScalar(1 / pts.length);
-    labelEls.push({ el, at });
-  }
-  if (S.sel) {
-    const el = document.createElement('div');
-    el.className = 'rl';
-    const r = S.s.residues[S.sel.res];
-    el.textContent = `${r.chainId}:${resLabel(r)}`;
-    labelsEl.appendChild(el);
-    labelEls.push({ el, at: atomPos(S.sel.atom) });
-  }
-}
-const _p = new THREE.Vector3();
-function placeLabels() {
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  for (const L of labelEls) {
-    _p.copy(L.at).project(camera);
-    const vis = _p.z < 1 && _p.z > -1;
-    L.el.style.display = vis ? '' : 'none';
-    if (vis) L.el.style.transform = `translate(${((_p.x + 1) / 2 * w).toFixed(1)}px,${((1 - _p.y) / 2 * h).toFixed(1)}px) translate(-50%,${L.el.className === 'rl' ? '-150%' : '-50%'})`;
-  }
-}
 
 // ── sequence strip ────────────────────────────────────────────────────────
 const seq = $('seq');
