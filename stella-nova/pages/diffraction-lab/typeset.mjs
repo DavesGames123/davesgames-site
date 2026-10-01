@@ -41,7 +41,7 @@ const k = c('K', 'k'), kz = c('K', 'k_z'), lam = c('L', String.raw`\lambda`);
 
 const MAIN = {
   helm: String.raw`\nabla^2 ${E} + ${k}^2 ${E} = 0,\qquad ${k} = \frac{2\pi}{${lam}}`,
-  asm: String.raw`${E}(x,y,z) = ${Fi}\Big\{\, ${F}\{\, ${t}\,${E}_0 \}\; e^{\,i ${kz} z} \Big\},\qquad ${kz} = \sqrt{${k}^2 - k_x^2 - k_y^2}`,
+  asm: String.raw`\begin{aligned} ${E}(x,y,z) &= ${Fi}\Big\{\, ${F}\{\, ${t}\,${E}_0 \}\; e^{\,i ${kz} z} \Big\} \\ ${kz} &= \sqrt{${k}^2 - k_x^2 - k_y^2} \end{aligned}`,
   fresnel: String.raw`N_F = \frac{a^2}{${lam}\, z}\qquad \begin{cases} N_F \gg 1 & \text{shadow} \\ N_F \sim 1 & \text{Fresnel} \\ N_F \ll 1 & \text{Fraunhofer} \end{cases}`,
   cie: String.raw`\begin{aligned} (X,Y,Z) &= \int S_{D65}(${lam})\; I(${lam})\; \big(\bar x, \bar y, \bar z\big)(${lam})\; d${lam} \\ (R,G,B) &= \gamma\big(\mathbf{M}\,(X,Y,Z)\big) \end{aligned}`,
 };

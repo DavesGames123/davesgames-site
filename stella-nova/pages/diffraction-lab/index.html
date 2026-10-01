@@ -3,120 +3,135 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Aperture Diffraction // Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    APERTURE DIFFRACTION  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup for the angular-spectrum diffraction engine. main.js builds
-   the output canvas cells inside #canvas-grid, computes the diffracted field,
-   and paints it; equations.js (MathJax SVG, made by typeset.mjs) fills the
-   equation panel. This file lays out the
-   control panel, the equation panel, and the status readout that main.js binds
-   by id. Nothing here computes the field.
+   the canvas cells inside #canvas-grid, computes the diffracted field and
+   paints it. equations.js (MathJax SVG, made by typeset.mjs) fills the
+   equation column. Nothing here computes the field.
 
-   HEAD LOAD ORDER   (order matters)
-     ● fonts        Google Fonts stylesheet
+   LOAD ORDER
+     ● fonts        Space Grotesk, IBM Plex Mono, Instrument Serif (the shell set)
      ● style.css    the page stylesheet
-     ● equations.js at body end, puts the formulas in the equation panel
-     ● main.js      at body end, runs the engine after markup exists
+     ● equations.js at body end, puts the formulas in #eq-panel
+     ● main.js      at body end, runs the engine after the markup exists
 
    LAYOUT   (the leading marker is an element id)
-     ┌──────────────┬──────────────────────────────────────────────────────┐
-     │ #quick-panel │ #canvas-grid                                          │
-     │  element      │   one composite cell, or a 2×2 of composite + R,G,B   │
-     │  parameters   │   each cell has its own z / extent / speed bar         │
-     │  source       │                                                       │
-     │  view / grid  ├──────────────────────────────────────────────────────┤
-     │  custom text  │ #ui  topbar · #eq-panel equations · #status-display   │
-     │  presets      │                                                       │
-     │  export       │                                                       │
-     └──────────────┴──────────────────────────────────────────────────────┘
+     ┌────────────┬──────────────────────────────────────┬──────────────┐
+     │ #panel     │ #stage                                │ #eq-panel    │
+     │  aperture  │  #canvas-grid  pattern, with the      │  equations   │
+     │  presets   │    aperture inset, scale bar, legend  │  (≥1280 px;  │
+     │  light     │  #stage-bar  z · extent · speed ·     │  narrower: a │
+     │  intensity │    transport · status                 │  drawer from │
+     │  more ▸    │                                       │  #eq-toggle) │
+     └────────────┴──────────────────────────────────────┴──────────────┘
+   PHONE (≤768 px, or a landscape phone)
+     #panel is a bottom sheet above #dock (portrait) or a right drawer
+     (landscape). #dock has the one-tap controls: panel, Log / Linear, play.
+     main.js frames the pattern in the part of the stage the sheet leaves.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
-     this page's own topbar. Inline so it runs before the body paints. -->
+<!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS
+     drops the page top bar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<div class="grid-bg"></div>
-<!-- Mobile menu button and its dimmed overlay. -->
-<button id="mob-menu">☰ Settings</button>
-<div id="mob-overlay"></div>
-<!-- Output stage: main.js fills this with the composite and per-channel cells. -->
-<div id="canvas-grid" class="view-1"></div>
 
-<!-- Control panel: every widget main.js binds by id. -->
-<div id="quick-panel">
-  <div class="qp-head"><div class="qp-id"><span class="qp-subshell" id="qp-title">Aperture Diffraction</span><span class="qp-ket" id="qp-summary">Aa Text · D65 · z=200mm</span></div><button class="qp-collapse-btn" id="qp-collapse-btn">◀</button></div>
-  <div class="qp-body">
-    <!-- Aperture or optic choice; main.js fills the option list from EL. -->
-    <div class="qp-section"><div class="qp-sec-lbl">Element</div><select id="element-select" class="qp-select"></select></div>
-    <!-- Per-element parameter sliders, rebuilt on element change. -->
-    <div class="qp-section"><div class="qp-sec-lbl">Parameters</div><div id="params-container"></div></div>
-    <!-- Illumination: single wavelength or full white light (D65). -->
-    <div class="qp-section"><div class="qp-sec-lbl">Source</div>
-      <div class="qp-modes" id="source-modes"><button class="qp-mode" data-source="mono">Mono λ</button><button class="qp-mode active" data-source="white">White D65</button></div>
-      <div id="mono-params" style="display:none;margin-top:4px"><div class="row"><span class="row-lbl">λ</span><input type="range" id="sl-lam" min="380" max="780" value="633" step="1"><span class="val" id="vl-lam">633</span><span class="wl-dot" id="wl-dot"></span></div></div>
-      <div id="white-params" style="margin-top:4px"><div class="row"><span class="row-lbl">Div</span><input type="range" id="sl-div" min="6" max="30" value="15" step="1"><span class="val" id="vl-div">15</span></div></div>
+<header class="topbar"><span class="tb-mark">Stella Nova</span><span class="tb-page">Aperture Diffraction</span></header>
+
+<div id="app">
+  <!-- Control panel: every widget main.js binds by id. -->
+  <aside id="panel" aria-label="Controls">
+    <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+    <div class="p-head">
+      <div><p class="kicker">Wave optics</p><h1>Aperture Diffraction</h1><p class="p-sum" id="qp-summary"></p></div>
+      <button class="icon-btn" id="qp-collapse-btn" aria-label="Collapse controls">‹</button>
     </div>
-    <!-- Intensity scale: log shows every lobe, linear shows true contrast. -->
-    <div class="qp-section"><div class="qp-sec-lbl">Intensity</div>
-      <div class="qp-modes" id="scale-modes"><button class="qp-mode active" data-scale="log">Log</button><button class="qp-mode" data-scale="lin">Linear</button></div>
-      <div class="row" style="margin-top:4px"><span class="row-lbl" id="lb-range">Range</span><input type="range" id="sl-range" min="1" max="6" value="2" step="0.5"><span class="val" id="vl-range">2 dec</span></div>
+    <div class="p-body">
+      <!-- Aperture: element, its parameters, and the named presets. -->
+      <section class="sec">
+        <h2>Aperture</h2>
+        <select id="element-select" class="select" aria-label="Aperture element"></select>
+        <div id="params-container"></div>
+        <div class="preset-grid" id="preset-grid"></div>
+      </section>
+      <!-- Illumination: one wavelength or white daylight (D65). -->
+      <section class="sec">
+        <h2>Light</h2>
+        <div class="seg" id="source-modes"><button class="qp-mode active" data-source="white">White · D65</button><button class="qp-mode" data-source="mono">Single λ</button></div>
+        <div id="mono-params" hidden><div class="row"><span class="row-lbl">Wavelength</span><input type="range" id="sl-lam" min="380" max="780" value="633" step="1"><span class="val"><span id="vl-lam">633</span> nm</span><span class="wl-dot" id="wl-dot"></span></div></div>
+        <div id="white-params"><div class="row"><span class="row-lbl">Wavelengths</span><input type="range" id="sl-div" min="6" max="30" value="15" step="1"><span class="val" id="vl-div">15</span></div></div>
+      </section>
+      <!-- Intensity scale: log shows every lobe, linear shows true contrast. -->
+      <section class="sec">
+        <h2>Intensity</h2>
+        <div class="seg" id="scale-modes"><button class="qp-mode active" data-scale="log">Log</button><button class="qp-mode" data-scale="lin">Linear</button></div>
+        <div class="row"><span class="row-lbl" id="lb-range">Range</span><input type="range" id="sl-range" min="1" max="6" value="2" step="0.5"><span class="val" id="vl-range">2 dec</span></div>
+      </section>
+      <!-- Rarely used: the 2x2 channel view, the FFT grid, export, reset. -->
+      <details class="sec more">
+        <summary><h2>View, grid &amp; export</h2></summary>
+        <div class="sub">Channels</div>
+        <div class="seg" id="view-modes"><button class="qp-mode active" data-view="1">Composite</button><button class="qp-mode" data-view="4">2×2 · R G B</button></div>
+        <div class="sub">FFT grid</div>
+        <div class="seg seg3"><button class="res-btn" data-n="128">128²</button><button class="res-btn active" data-n="256">256²</button><button class="res-btn" data-n="512">512²</button></div>
+        <div id="export-section">
+          <div class="sub">Export</div>
+          <div class="seg seg5" id="ar-btns"><button class="res-btn active" data-ar="1:1">1:1</button><button class="res-btn" data-ar="16:9">16:9</button><button class="res-btn" data-ar="9:16">9:16</button><button class="res-btn" data-ar="4:3">4:3</button><button class="res-btn" data-ar="3:4">3:4</button></div>
+          <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-exw" min="512" max="3840" value="1920" step="1"><span class="val" id="vl-exw">1920×1920</span></div>
+          <div class="pair"><select class="select" id="sel-dir" aria-label="Video z path"><option value="bounce" selected>Bounce 0 → max → 0</option><option value="fwd">Forward 0 → max</option><option value="rev">Reverse max → 0</option></select>
+          <select class="select" id="sel-interp" aria-label="Video easing"><option value="linear" selected>Linear</option><option value="ease-in">Ease in</option><option value="ease-out">Ease out</option><option value="ease-in-out">Ease in-out</option></select></div>
+          <div class="row"><span class="row-lbl">Duration</span><input type="range" id="sl-dur" min="1" max="30" value="5" step="1"><span class="val" id="vl-dur">5s</span></div>
+          <div class="row"><span class="row-lbl">Repeats</span><input type="range" id="sl-rep" min="1" max="10" value="1" step="1"><span class="val" id="vl-rep">1</span></div>
+          <div class="pair"><button class="btn accent" id="btn-export-png">PNG still</button><button class="btn accent" id="btn-export-vid">Video</button></div>
+          <div id="export-status" class="note"></div>
+        </div>
+        <button class="btn" id="btn-reset">Reset to default</button>
+      </details>
     </div>
-    <!-- Composite-only or 2x2 channel split. -->
-    <div class="qp-section"><div class="qp-sec-lbl">View</div>
-      <div class="qp-modes" id="view-modes"><button class="qp-mode" data-view="4">2×2 · RGBC</button><button class="qp-mode active" data-view="1">1×1 · Fast</button></div>
+  </aside>
+
+  <!-- Stage: the pattern cells, then one shared bar for z, extent and speed. -->
+  <main id="stage">
+    <div id="canvas-grid" class="view-1"></div>
+    <button class="chip-btn" id="eq-toggle" aria-expanded="false">∑ Equations</button>
+    <div id="stage-bar">
+      <div class="sb-sliders">
+        <label class="cb-row"><span class="cb-lbl sym">z</span><input type="range" class="cb-slider cb-z" min="0" max="500" value="200" step="1"><span class="cb-val cb-z-v">200 mm</span></label>
+        <label class="cb-row"><span class="cb-lbl">Field</span><input type="range" class="cb-slider cb-ext" min="0.5" max="30" value="5" step="0.1"><span class="cb-val cb-ext-v">5.0 mm</span></label>
+        <label class="cb-row"><span class="cb-lbl">Speed</span><input type="range" class="cb-slider cb-spd" min="0.5" max="5" value="5" step="0.25"><span class="cb-val cb-spd-v">×5</span></label>
+      </div>
+      <div class="cb-transport" aria-label="Sweep z"><button class="cb-btn" data-d="-1" aria-label="Sweep z back">◀</button><button class="cb-btn" data-d="0" aria-label="Stop">❚❚</button><button class="cb-btn" data-d="1" aria-label="Sweep z forward">▶</button></div>
+      <div id="status-display"><div class="status-main" id="st-main"></div><div class="status-sub" id="st-sub"></div></div>
     </div>
-    <!-- FFT grid resolution; higher is sharper but slower. -->
-    <div class="qp-section"><div class="qp-sec-lbl">Grid</div>
-      <div class="res-grid"><button class="res-btn" data-n="128">128²</button><button class="res-btn active" data-n="256">256²</button><button class="res-btn" data-n="512">512²</button></div>
-    </div>
-    <!-- Type text to use as the aperture mask. -->
-    <div class="qp-section"><div class="qp-sec-lbl">Custom Text</div>
-      <input type="text" id="custom-text" class="qp-text-input" value="davesgames.io" placeholder="Type text…">
-      <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-txtsz" min="8" max="100" value="28" step="1"><span class="val" id="vl-txtsz">28</span></div>
-      <button class="qp-action-btn yellow" id="btn-set-text">⟶ Set as Aperture</button>
-    </div>
-    <!-- Named element setups; main.js fills this grid. -->
-    <div class="qp-section"><div class="qp-sec-lbl">Presets</div><div class="preset-grid" id="preset-grid"></div></div>
-    <!-- PNG still and WebM video export controls (hidden in 2x2 view). -->
-    <div class="qp-section" id="export-section"><div class="qp-sec-lbl">Export</div>
-      <div class="res-grid" id="ar-btns" style="grid-template-columns:repeat(5,1fr);margin-bottom:5px"><button class="res-btn active" data-ar="1:1">1:1</button><button class="res-btn" data-ar="16:9">16:9</button><button class="res-btn" data-ar="9:16">9:16</button><button class="res-btn" data-ar="4:3">4:3</button><button class="res-btn" data-ar="3:4">3:4</button></div>
-      <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-exw" min="512" max="3840" value="1920" step="1"><span class="val" id="vl-exw" style="min-width:60px">1920×1920</span></div>
-      <select class="qp-select" id="sel-dir" style="margin-bottom:5px"><option value="bounce" selected>↔ Bounce (0 → max → 0)</option><option value="fwd">→ Forward (0 → max)</option><option value="rev">← Reverse (max → 0)</option></select>
-      <select class="qp-select" id="sel-interp" style="margin-bottom:5px"><option value="linear" selected>Linear</option><option value="ease-in">Ease In (accelerate)</option><option value="ease-out">Ease Out (decelerate)</option><option value="ease-in-out">Ease In-Out (smooth)</option></select>
-      <div class="row"><span class="row-lbl">Dur</span><input type="range" id="sl-dur" min="1" max="30" value="5" step="1"><span class="val" id="vl-dur">5s</span></div>
-      <div class="row"><span class="row-lbl">Reps</span><input type="range" id="sl-rep" min="1" max="10" value="1" step="1"><span class="val" id="vl-rep">1</span></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:2px"><button class="qp-action-btn yellow" id="btn-export-png">⬇ PNG Still</button><button class="qp-action-btn yellow" id="btn-export-vid">⬇ Video</button></div>
-      <div id="export-status" style="font-size:0.46rem;color:var(--text-faint);margin-top:4px;text-align:center"></div>
-    </div>
-    <div class="qp-section"><button class="qp-action-btn red" id="btn-reset">↺ Reset to Default</button></div>
-  </div>
+  </main>
+
+  <!-- Equations: a column on wide screens, a drawer from #eq-toggle otherwise. -->
+  <aside id="eq-panel" aria-label="Equations">
+    <div class="eq-head"><h2>The physics</h2><button class="icon-btn" id="eq-collapse-btn" aria-label="Close equations">×</button></div>
+    <div class="eq-block"><div class="eq-sublabel">Helmholtz wave equation</div><div class="eq-row" id="eq-helm"></div><p class="eq-say">Light is a wave <i class="c-e">E</i> with wave number <i class="c-k">k</i>. Every point of the field obeys this.</p></div>
+    <div class="eq-block"><div class="eq-sublabel">Angular spectrum propagation</div><div class="eq-row" id="eq-asm"></div><p class="eq-say">Split the field after the aperture into plane waves (<i class="c-f">ℱ</i>), move each one by its own phase over the distance z, and add them back.</p></div>
+    <div class="eq-block"><div class="eq-sublabel" id="eq-t-label">Transmittance</div><div class="eq-row" id="eq-trans"></div><p class="eq-say">What the aperture <i class="c-t">t</i> lets through: 1 where it is open, 0 where it is closed, a phase for a lens or a phase grating.</p></div>
+    <div class="eq-block"><div class="eq-sublabel">Fresnel number</div><div class="eq-row" id="eq-fresnel"></div><p class="eq-say">a is the size of the aperture. Now: <b id="eq-nf">–</b></p></div>
+    <div class="eq-block"><div class="eq-sublabel">CIE 1931 → sRGB</div><div class="eq-row" id="eq-cie"></div><p class="eq-say">White light: add the pattern of each wavelength, weighted by daylight and by the colour response of the eye.</p></div>
+  </aside>
 </div>
 
-<!-- Overlay layer: topbar, the equation panel, and the status readout. -->
-<div id="ui">
-  <div class="topbar"><div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Aperture Diffraction</span></div><div class="topbar-r">SYS // <strong>WAVE OPTICS</strong></div></div>
-  <!-- Governing equations, rendered by equations.js; transmittance updates live. -->
-  <section class="eq-panel" id="eq-panel">
-    <button class="eq-collapse" id="eq-collapse-btn">▲</button>
-    <div class="eq-head"><span class="dot"></span><span class="lbl">Governing Equations</span></div>
-    <div class="eq-block"><div class="eq-sublabel">Helmholtz Wave Equation</div><div class="eq-row" id="eq-helm"></div></div>
-    <div class="eq-block"><div class="eq-sublabel">Angular Spectrum Propagation</div><div class="eq-row" id="eq-asm"></div></div>
-    <div class="eq-block"><div class="eq-sublabel" id="eq-t-label">Transmittance · Hexagonal Aperture</div><div class="eq-row" id="eq-trans"></div></div>
-    <div class="eq-block"><div class="eq-sublabel">Fresnel Number</div><div class="eq-row" id="eq-fresnel"></div></div>
-    <div class="eq-block"><div class="eq-sublabel">CIE 1931 → sRGB</div><div class="eq-row" id="eq-cie"></div></div>
-  </section>
-  <!-- Readout: grid size and pitch on top, Fresnel-number regime below. -->
-  <div id="status-display"><div class="status-main" id="st-main"></div><div class="status-sub" id="st-sub"></div></div>
-</div>
+<!-- Phone dock: one-tap controls under the sheet. -->
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div class="seg" id="dockScale"><button class="qp-mode active" data-scale="log">Log</button><button class="qp-mode" data-scale="lin">Linear</button></div>
+  <button id="dockPlay" aria-label="Sweep z">▶</button>
+</nav>
 <!-- Hidden file input for the image aperture. -->
-<input type="file" id="file-input" accept="image/*" style="display:none">
+<input type="file" id="file-input" accept="image/*" hidden>
 
 <script src="equations.js"></script>
 <script src="main.js"></script>

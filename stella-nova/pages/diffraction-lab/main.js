@@ -25,11 +25,15 @@
 //      white  : Σ_λ |E|² · D65(λ) · [x̄,ȳ,z̄] → XYZ, Y tone-mapped → sRGB
 //      tone   : log over S.range decades, or linear × S.gainLin (fieldRGB)
 //
-//  SCREEN LAYOUT   (the leading marker is an element id)
+//  SCREEN LAYOUT   (the leading marker is an element id; see index.html)
 //  --------------------------------------------------------------------------
-//      #quick-panel  element, source, view, grid, presets, export
-//      #canvas-grid  one composite cell, or a 2×2 of composite + R + G + B
-//      #eq-panel     Helmholtz, ASM, transmittance, CIE equations
+//      #panel        aperture + presets, light, intensity, view/grid/export
+//      #canvas-grid  one composite cell, or a 2×2 of composite + R + G + B;
+//                    the composite cell has the aperture inset, scale bar
+//                    and legend (placeOverlays)
+//      #stage-bar    one shared z / field width / speed bar and transport
+//      #eq-panel     equations: a column at ≥1280 px, else a drawer
+//      #dock         phone only: panel, Log / Linear, play
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  --------------------------------------------------------------------------
@@ -37,6 +41,8 @@
 //      propagator .......... "function prop"         the angular spectrum step
 //      CIE + color ......... "function cieX"         color-matching and sRGB
 //      field to colour ..... "function fieldRGB"     tone map, mono and white light
+//      overlays ............ "function placeOverlays" inset, scale bar, legend
+//      phone sheet ......... "function setSheet"     bottom sheet and dock
 //      geometry helpers .... "function inPoly"       point-in-polygon, star
 //      raster helper ....... "function rasterToField"  text/image → mask
 //      elements ............ "const EL="             aperture transmittances
@@ -166,14 +172,14 @@ const EL={
 
 // Fill the element dropdown from EL, defaulting the selection to the text mask.
 /* Populate element select */
-(function(){const sel=document.getElementById('element-select');Object.entries(EL).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.sym+' '+v.name;if(k==='text')o.selected=true;sel.appendChild(o)})})();
+(function(){const sel=document.getElementById('element-select');Object.entries(EL).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.sym+'  '+v.name;if(k==='hex')o.selected=true;sel.appendChild(o)})})();
 
 // The single mutable state. source is 'mono' or 'white'; z is the propagation
 // distance in mm; extent is the physical grid width in mm; N is the grid side;
 // divs is the number of wavelength samples for white light; viewMode 1 or 4
 // selects composite-only or the 2×2 channel split; params holds element sliders.
 // scale is 'log' or 'lin'; range is the log decades, gainLin the linear gain.
-const S={element:'text',source:'white',lambda:633,z:200,extent:5,N:256,divs:15,speed:5,viewMode:1,scale:'log',range:2,gainLin:1,params:{}};
+const S={element:'hex',source:'white',lambda:633,z:200,extent:5,N:256,divs:15,speed:5,viewMode:1,scale:'log',range:2,gainLin:1,params:{}};
 // z-animation state: direction (−1/0/+1) and a dwell countdown at each endpoint.
 let animDir=0,animDwell=0;
 // Paint a range input's filled portion via the --pct custom property.
@@ -187,13 +193,10 @@ const CHANNELS=[{id:'cv-rgb',label:'Composite',cls:''},{id:'cv-r',label:'Red',cl
 const grid=document.getElementById('canvas-grid');
 CHANNELS.forEach((ch,idx)=>{
   const cell=document.createElement('div');cell.className='canvas-cell';cell.id='cell-'+idx;
-  cell.innerHTML=`<div class="cell-label ${ch.cls}">${ch.label}</div><canvas id="${ch.id}"></canvas>
-<div class="cell-bar">
-<div class="cb-row"><span class="cb-lbl">z</span><input type="range" class="cb-slider cb-z" min="0" max="500" value="200" step="1"><span class="cb-val cb-z-v">200 mm</span></div>
-<div class="cb-row"><span class="cb-lbl">ext</span><input type="range" class="cb-slider cb-ext" min="0.5" max="30" value="5" step="0.1"><span class="cb-val cb-ext-v">5.0 mm</span></div>
-<div class="cb-row"><span class="cb-lbl">spd</span><input type="range" class="cb-slider cb-spd" min="0.5" max="5" value="5" step="0.25"><span class="cb-val cb-spd-v">×5</span></div>
-<div class="cb-transport"><button class="cb-btn" data-d="-1">◀ REV</button><button class="cb-btn" data-d="0">⏸ STOP</button><button class="cb-btn" data-d="1">▶ PLAY</button></div>
-</div>`;
+  cell.innerHTML=`<div class="cell-label ${ch.cls}">${ch.label}</div><canvas id="${ch.id}"></canvas>`+(idx?'':`
+<div class="ov ov-ap"><canvas id="ap-cv" width="128" height="128"></canvas><span id="ap-lbl">Aperture</span></div>
+<div class="ov ov-scale"><i id="scale-bar"></i><span id="scale-lbl"></span></div>
+<div class="ov ov-legend"><i id="legend-bar"></i><div class="ticks" id="legend-ticks"></div></div>`);
   grid.appendChild(cell);
 });
 
@@ -201,7 +204,14 @@ CHANNELS.forEach((ch,idx)=>{
 // offscreen ImageData at grid resolution (flipping Y so the image is upright),
 // then scale it, letterboxed and centered, into the visible canvas. ch selects
 // which channels to keep: 'rgb' composite, or 'r'/'g'/'b' isolated.
-function renderCh(canvas,rgb,Nx,Ny,ch){const cell=canvas.parentElement,cw=cell.clientWidth*devicePixelRatio,barH=cell.querySelector('.cell-bar').offsetHeight||50,ch2=(cell.clientHeight-barH)*devicePixelRatio;if(ch2<1)return;canvas.width=cw;canvas.height=ch2;const ctx=canvas.getContext('2d');ctx.fillStyle='#060810';ctx.fillRect(0,0,cw,ch2);const off=document.createElement('canvas');off.width=Nx;off.height=Ny;const oc=off.getContext('2d'),img=oc.createImageData(Nx,Ny),d=img.data;for(let iy=0;iy<Ny;iy++)for(let ix=0;ix<Nx;ix++){const si=(Ny-1-iy)*Nx+ix,di=(iy*Nx+ix)*4,r=rgb[si*3],g=rgb[si*3+1],b=rgb[si*3+2];if(ch==='rgb'){d[di]=r;d[di+1]=g;d[di+2]=b}else if(ch==='r'){d[di]=r;d[di+1]=0;d[di+2]=0}else if(ch==='g'){d[di]=0;d[di+1]=g;d[di+2]=0}else{d[di]=0;d[di+1]=0;d[di+2]=b}d[di+3]=255}oc.putImageData(img,0,0);const sc=Math.min(cw/Nx,ch2/Ny),dw=Nx*sc,dh=Ny*sc;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(off,(cw-dw)/2,(ch2-dh)/2,dw,dh)}
+function renderCh(canvas,rgb,Nx,Ny,ch){const cell=canvas.parentElement,dpr=devicePixelRatio,W=cell.clientWidth,H=cell.clientHeight,clear=clearHeight(cell);if(clear<1||W<1)return;const cw=Math.round(W*dpr),ch2=Math.round(H*dpr);canvas.width=cw;canvas.height=ch2;const ctx=canvas.getContext('2d');ctx.clearRect(0,0,cw,ch2);const off=document.createElement('canvas');off.width=Nx;off.height=Ny;const oc=off.getContext('2d'),img=oc.createImageData(Nx,Ny),d=img.data;for(let iy=0;iy<Ny;iy++)for(let ix=0;ix<Nx;ix++){const si=(Ny-1-iy)*Nx+ix,di=(iy*Nx+ix)*4,r=rgb[si*3],g=rgb[si*3+1],b=rgb[si*3+2];if(ch==='rgb'){d[di]=r;d[di+1]=g;d[di+2]=b}else if(ch==='r'){d[di]=r;d[di+1]=0;d[di+2]=0}else if(ch==='g'){d[di]=0;d[di+1]=g;d[di+2]=0}else{d[di]=0;d[di+1]=0;d[di+2]=b}d[di+3]=255}oc.putImageData(img,0,0);const side=Math.min(W,clear),x0=(W-side)/2,y0=(clear-side)/2;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(off,x0*dpr,y0*dpr,side*dpr,side*dpr);if(ch==='rgb')placeOverlays(cell,x0,y0,side,H)}
+// The height of a cell that the phone sheet (#panel) does not cover. On a
+// desktop the panel is beside the stage, so the whole cell is clear.
+function clearHeight(cell){const r=cell.getBoundingClientRect(),pr=document.getElementById('panel').getBoundingClientRect();if(!phone()||!document.body.classList.contains('sheet-open')||pr.left>r.left+r.width/2)return r.height;return Math.max(0,Math.min(r.height,pr.top-r.top))}
+// Put the aperture inset, the scale bar and the legend on the corners of the
+// drawn pattern (x0, y0, side in CSS px inside the cell of height H). The
+// scale bar has a 1-2-5 length near a quarter of the pattern width.
+function placeOverlays(cell,x0,y0,side,H){const st=cell.style,pad=side<360?8:12;st.setProperty('--fx',x0+pad+'px');st.setProperty('--fy',y0+pad+(S.viewMode===4?18:0)+'px');st.setProperty('--sx',x0+pad+4+'px');st.setProperty('--sy',H-(y0+side)+pad+'px');st.setProperty('--lx',x0+pad+4+'px');st.setProperty('--ly',H-(y0+side)+pad+'px');const mmPerPx=S.extent/side,want=mmPerPx*side*.22,e=Math.pow(10,Math.floor(Math.log10(want))),m=want/e,nice=(m>=5?5:m>=2?2:1)*e;document.getElementById('scale-bar').style.width=nice/mmPerPx+'px';document.getElementById('scale-lbl').textContent=nice>=1?nice+' mm':(nice*1000)+' µm'}
 
 // Read the current element's slider and text values into a plain params object
 // and cache it on S. File-type params (image upload) are handled separately.
@@ -219,19 +229,33 @@ function recompute(){
   // Always paint the composite; paint the isolated R/G/B cells only in 2×2 view.
   renderCh(document.getElementById('cv-rgb'),rgb,Nx,Ny,'rgb');
   if(S.viewMode===4){renderCh(document.getElementById('cv-r'),rgb,Nx,Ny,'r');renderCh(document.getElementById('cv-g'),rgb,Nx,Ny,'g');renderCh(document.getElementById('cv-b'),rgb,Nx,Ny,'b')}
-  document.getElementById('st-main').textContent=`${N}² · dx=${(dx/um).toFixed(1)}µm · z=${S.z.toFixed(0)}mm`;
+  document.getElementById('st-main').textContent=`${N}² grid · dx ${(dx/um).toFixed(1)} µm`;
   // Fresnel number N_F = a²/(λz) classifies the regime: large means geometric
   // shadow, near one is Fresnel (near-field), small is Fraunhofer (far-field).
-  const aC=p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0;if(aC>0&&S.z>0){const l0=(S.source==='mono'?S.lambda:550)*nm,Nf=(aC*mm)**2/(l0*z);document.getElementById('st-sub').textContent=`N_F=${Nf.toFixed(2)} · ${Nf>5?'geometric':Nf>.5?'Fresnel':'Fraunhofer'}`}else document.getElementById('st-sub').textContent='';
-  document.getElementById('qp-title').textContent='Aperture Diffraction';document.getElementById('qp-summary').textContent=el.sym+' '+el.name+' · '+(S.source==='white'?'D65':'λ='+S.lambda+'nm')+' · z='+S.z.toFixed(0)+'mm';
+  const aC=p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0;let nf='';if(aC>0&&S.z>0){const l0=(S.source==='mono'?S.lambda:550)*nm,Nf=(aC*mm)**2/(l0*z);nf=`N_F = ${Nf<.01?Nf.toExponential(1):Nf.toFixed(2)} · ${Nf>5?'shadow':Nf>.5?'Fresnel':'Fraunhofer'}`}document.getElementById('st-sub').textContent=nf;document.getElementById('eq-nf').textContent=nf||'–';
+  drawAperture(el,p,xx,yy,N);drawLegend();
+  document.getElementById('qp-summary').textContent=el.sym+' '+el.name+' · '+(S.source==='white'?'D65':'λ='+S.lambda+'nm')+' · z='+S.z.toFixed(0)+'mm';
   // Show the transmittance formula of the current element (MathJax SVG from
   // equations.js, typeset by typeset.mjs).
   showTrans();
 }
+// Aperture inset: |t| as brightness, and for a phase element the phase as
+// hue, over the same field width as the pattern. Drawn at 128 px.
+function drawAperture(el,p,xx,yy,N){const cv=document.getElementById('ap-cv');if(!cv)return;const t=el.t(xx,yy,(S.source==='mono'?S.lambda:550)*nm,N*N,p),off=document.createElement('canvas');off.width=N;off.height=N;const oc=off.getContext('2d'),img=oc.createImageData(N,N),d=img.data;let phase=false;for(let i=0;i<N*N;i++)if(Math.abs(t.im[i])>1e-6){phase=true;break}for(let iy=0;iy<N;iy++)for(let ix=0;ix<N;ix++){const si=(N-1-iy)*N+ix,di=(iy*N+ix)*4,re=t.re[si],im=t.im[si],a=Math.min(1,Math.hypot(re,im));if(phase&&a>0){const h=(Math.atan2(im,re)/TAU+1)%1,c=hsl(h);d[di]=c[0]*a;d[di+1]=c[1]*a;d[di+2]=c[2]*a}else{const v=a*235+12;d[di]=d[di+1]=d[di+2]=v}d[di+3]=255}oc.putImageData(img,0,0);const c=cv.getContext('2d');c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';c.drawImage(off,0,0,128,128);document.getElementById('ap-lbl').textContent=phase?'Aperture · phase':'Aperture'}
+function hsl(h){const f=n=>{const k=(n+h*12)%12;return 255*(.55-.45*Math.max(-1,Math.min(k-3,9-k,1)))};return[f(0),f(8),f(4)]}
+// Legend: the tone curve as a gradient from 0 to the peak, in the light's
+// colour, with the intensity at each end and the middle.
+function drawLegend(){const bar=document.getElementById('legend-bar');if(!bar)return;const c=S.source==='mono'?lamRGB(S.lambda):[1,1,1],stops=[];for(let i=0;i<=16;i++){let u;if(S.scale==='log')u=Math.pow(10,-S.range*(1-i/16));else u=i/16/S.gainLin;const v=tone(u),col=c.map(x=>Math.round(sGam(v*x)*255));stops.push(`rgb(${col}) ${(i/16*100).toFixed(1)}%`)}bar.style.background=`linear-gradient(90deg,${stops.join(',')})`;const ticks=S.scale==='log'?[`10⁻${sup(S.range)}`,`10⁻${sup(S.range/2)}`,'1']:['0',fmtG(.5/S.gainLin),fmtG(1/S.gainLin)];document.getElementById('legend-ticks').innerHTML=ticks.map(t=>`<span>${t}</span>`).join('')}
+function sup(x){const m='⁰¹²³⁴⁵⁶⁷⁸⁹';const s=(Math.round(x*10)/10).toString();return s.split('').map(ch=>ch==='.'?'·':m[+ch]).join('')}
+function fmtG(v){return v>=.1?(+v.toFixed(2)).toString():v.toExponential(0)}
 // Put the element's transmittance formula into #eq-trans, once per element.
 let _transKey=null;function showTrans(){if(_transKey===S.element||!window.DiffEq)return;_transKey=S.element;document.getElementById('eq-t-label').textContent='Transmittance · '+EL[S.element].name;document.getElementById('eq-trans').innerHTML=DiffEq.trans[S.element]||''}
-// Equation panel collapse: fold the panel and flip the caret.
-document.getElementById('eq-collapse-btn').addEventListener('click',()=>{const p=document.getElementById('eq-panel'),c=p.classList.toggle('collapsed');document.getElementById('eq-collapse-btn').textContent=c?'▼':'▲'});
+// Equation column: beside the stage at 1280 px and wider, else a drawer.
+function setEqOpen(o){document.body.classList.toggle('eq-open',o);document.getElementById('eq-toggle').setAttribute('aria-expanded',o)}
+function eqLayout(){const narrow=innerWidth<1280||phone();document.body.classList.toggle('no-eq',narrow);if(!narrow)setEqOpen(false)}
+document.getElementById('eq-collapse-btn').addEventListener('click',()=>setEqOpen(false));
+document.getElementById('eq-toggle').addEventListener('click',()=>setEqOpen(!document.body.classList.contains('eq-open')));
+eqLayout();
 // Coalesce many rapid changes into one recompute per animation frame.
 let _sc=false;function scheduleRecompute(){if(!_sc){_sc=true;requestAnimationFrame(()=>{_sc=false;recompute()})}}
 
@@ -241,7 +265,7 @@ let _sc=false;function scheduleRecompute(){if(!_sc){_sc=true;requestAnimationFra
 // back and forth between 0 and its max, dwelling briefly at each endpoint.
 /* ═══ SYNC 4 BARS ═══ */
 const allZ=document.querySelectorAll('.cb-z'),allZV=document.querySelectorAll('.cb-z-v'),allSpd=document.querySelectorAll('.cb-spd'),allSpdV=document.querySelectorAll('.cb-spd-v'),allExt=document.querySelectorAll('.cb-ext'),allExtV=document.querySelectorAll('.cb-ext-v'),allBtns=document.querySelectorAll('.cb-btn');
-function syncBars(){allZ.forEach(s=>{s.value=Math.min(+s.max,S.z);sg(s)});allZV.forEach(v=>v.textContent=S.z.toFixed(0)+' mm');allSpd.forEach(s=>{s.value=S.speed;sg(s)});allSpdV.forEach(v=>v.textContent=`×${S.speed}`);allExt.forEach(s=>{s.value=S.extent;sg(s)});allExtV.forEach(v=>v.textContent=S.extent.toFixed(1)+' mm');allBtns.forEach(b=>{const d=+b.dataset.d;b.classList.toggle('on',d!==0&&d===animDir)})}
+function syncBars(){allZ.forEach(s=>{s.value=Math.min(+s.max,S.z);sg(s)});allZV.forEach(v=>v.textContent=S.z.toFixed(0)+' mm');allSpd.forEach(s=>{s.value=S.speed;sg(s)});allSpdV.forEach(v=>v.textContent=`×${S.speed}`);allExt.forEach(s=>{s.value=S.extent;sg(s)});allExtV.forEach(v=>v.textContent=S.extent.toFixed(1)+' mm');allBtns.forEach(b=>{const d=+b.dataset.d;b.classList.toggle('on',d!==0&&d===animDir)});const dp=document.getElementById('dockPlay');dp.classList.toggle('on',!!animDir);dp.textContent=animDir?'❚❚':'▶'}
 allZ.forEach(s=>{sg(s);s.addEventListener('input',function(){S.z=+this.value;syncBars();if(!animDir)scheduleRecompute()})});
 allSpd.forEach(s=>{sg(s);s.addEventListener('input',function(){S.speed=+this.value;syncBars()})});
 allExt.forEach(s=>{sg(s);s.addEventListener('input',function(){S.extent=+this.value;syncBars();scheduleRecompute()})});
@@ -255,7 +279,9 @@ function animLoop(){if(!animDir)return;if(animDwell>0){animDwell--;requestAnimat
 // with a decimal precision inferred from the step. Every widget schedules a
 // recompute on change.
 /* ═══ PARAM UI ═══ */
-function buildParamUI(){const c=document.getElementById('params-container'),el=EL[S.element];c.innerHTML='';el.params.forEach(pd=>{if(pd.type==='text'){const d=document.createElement('div');d.innerHTML=`<input type="text" id="sl-p-${pd.id}" value="${pd.value}" class="qp-text-input" placeholder="${pd.label}">`;c.appendChild(d);d.querySelector('input').addEventListener('input',()=>scheduleRecompute())}else if(pd.type==='file'){const d=document.createElement('div');d.innerHTML=`<button class="qp-file-btn">Choose Image</button>`;c.appendChild(d);d.querySelector('button').addEventListener('click',()=>document.getElementById('file-input').click())}else{const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const row=document.createElement('div');row.className='row';row.innerHTML=`<span class="row-lbl">${pd.label}</span><input type="range" id="sl-p-${pd.id}" min="${pd.min}" max="${pd.max}" value="${pd.value}" step="${pd.step}"><span class="val" id="vl-p-${pd.id}">${pd.value.toFixed(dec)}</span>`;c.appendChild(row);const sl=row.querySelector('input');sg(sl);sl.addEventListener('input',function(){document.getElementById('vl-p-'+pd.id).textContent=(+this.value).toFixed(dec);sg(this);scheduleRecompute()})}});readParams()}
+// Readable names and units for the element parameters (EL keeps short ids).
+const PNAME={radius:['Radius','mm'],width:['Width','mm'],height:['Height','mm'],slit_w:['Slit width','mm'],sep:['Separation','mm'],pts:['Points',''],inner:['Inner ratio',''],size:['Size','mm'],outer:['Outer radius','mm'],arm:['Arm length','mm'],period:['Period','mm'],f:['Focal length','mm'],sz:['Font size','px'],inv:['Invert','']};
+function buildParamUI(){const c=document.getElementById('params-container'),el=EL[S.element];c.innerHTML='';el.params.forEach(pd=>{if(pd.type==='text'){const d=document.createElement('div');d.innerHTML=`<input type="text" id="sl-p-${pd.id}" value="${pd.value}" class="qp-text-input" placeholder="${pd.label}">`;c.appendChild(d);d.querySelector('input').addEventListener('input',()=>scheduleRecompute())}else if(pd.type==='file'){const d=document.createElement('div');d.innerHTML=`<button class="qp-file-btn">Choose Image</button>`;c.appendChild(d);d.querySelector('button').addEventListener('click',()=>document.getElementById('file-input').click())}else{const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const nm_=PNAME[pd.id]||[pd.label,''],row=document.createElement('div');row.className='row';row.innerHTML=`<span class="row-lbl">${nm_[0]}</span><input type="range" id="sl-p-${pd.id}" min="${pd.min}" max="${pd.max}" value="${pd.value}" step="${pd.step}" aria-label="${nm_[0]}"><span class="val"><span id="vl-p-${pd.id}">${pd.value.toFixed(dec)}</span>${nm_[1]?' '+nm_[1]:''}</span>`;c.appendChild(row);const sl=row.querySelector('input');sg(sl);sl.addEventListener('input',function(){document.getElementById('vl-p-'+pd.id).textContent=(+this.value).toFixed(dec);sg(this);scheduleRecompute()})}});readParams()}
 
 // Image upload: draw the chosen file centered on an N×N canvas, then read its
 // luminance (flipping Y) into window._imgMask for the 'image' element's mask.
@@ -265,54 +291,37 @@ document.getElementById('file-input').addEventListener('change',function(){const
 // white sub-panel), grid resolution, view mode, and the wavelength/division
 // sliders with their live swatch. Each writes S and schedules a recompute.
 /* ═══ EVENTS ═══ */
-document.getElementById('element-select').addEventListener('change',function(){S.element=this.value;buildParamUI();scheduleRecompute()});
-document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#source-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.source=b.dataset.source;document.getElementById('mono-params').style.display=S.source==='mono'?'block':'none';document.getElementById('white-params').style.display=S.source==='white'?'block':'none';scheduleRecompute()}));
+document.getElementById('element-select').addEventListener('change',function(){S.element=this.value;document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));buildParamUI();scheduleRecompute()});
+document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#source-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.source=b.dataset.source;syncSource();scheduleRecompute()}));
+// Show the wavelength row or the wavelength-count row for the light source.
+function syncSource(){document.querySelectorAll('#source-modes .qp-mode').forEach(x=>x.classList.toggle('active',x.dataset.source===S.source));document.getElementById('mono-params').hidden=S.source!=='mono';document.getElementById('white-params').hidden=S.source!=='white'}
 document.querySelectorAll('.res-btn[data-n]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.res-btn[data-n]').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.N=+b.dataset.n;window._imgMask=null;scheduleRecompute()}));
-document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#view-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.viewMode=+b.dataset.view;const g=document.getElementById('canvas-grid');g.classList.toggle('view-1',S.viewMode===1);document.getElementById('export-section').style.display=S.viewMode===1?'':'none';scheduleRecompute()}));
-['sl-lam','sl-div'].forEach(id=>{const el=document.getElementById(id);if(!el)return;sg(el);el.addEventListener('input',function(){sg(this);const v=+this.value;if(id==='sl-lam'){S.lambda=v;document.getElementById('vl-lam').textContent=v.toFixed(0);const rgb=lamRGB(v),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs}else{S.divs=v;document.getElementById('vl-div').textContent=v.toFixed(0)}scheduleRecompute()})});
-document.getElementById('sl-txtsz').addEventListener('input',function(){sg(this);document.getElementById('vl-txtsz').textContent=this.value});sg(document.getElementById('sl-txtsz'));
+document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#view-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.viewMode=+b.dataset.view;const g=document.getElementById('canvas-grid');g.classList.toggle('view-1',S.viewMode===1);document.getElementById('export-section').hidden=S.viewMode!==1;scheduleRecompute()}));
+['sl-lam','sl-div'].forEach(id=>{const el=document.getElementById(id);if(!el)return;sg(el);el.addEventListener('input',function(){sg(this);const v=+this.value;if(id==='sl-lam'){S.lambda=v;document.getElementById('vl-lam').textContent=v.toFixed(0);const rgb=lamRGB(v).map(x=>sGam(x)*255|0),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb})`;dot.style.backgroundColor=cs;dot.style.color=cs}else{S.divs=v;document.getElementById('vl-div').textContent=v.toFixed(0)}scheduleRecompute()})});
 // Intensity scale: Log or Linear, and one slider. In log mode the slider is
 // the number of decades shown (1..6); in linear mode it is the gain (×1..×64,
 // on a log2 track). syncScale writes S to the buttons, slider and label.
-function syncScale(){document.querySelectorAll('#scale-modes .qp-mode').forEach(b=>b.classList.toggle('active',b.dataset.scale===S.scale));const sl=document.getElementById('sl-range'),lb=document.getElementById('lb-range'),vl=document.getElementById('vl-range');if(S.scale==='log'){lb.textContent='Range';sl.min=1;sl.max=6;sl.step=.5;sl.value=S.range;vl.textContent=S.range+' dec'}else{lb.textContent='Gain';sl.min=0;sl.max=6;sl.step=.5;sl.value=Math.log2(S.gainLin);vl.textContent='×'+(+S.gainLin.toFixed(1))}sg(sl)}
-document.querySelectorAll('#scale-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{S.scale=b.dataset.scale;syncScale();scheduleRecompute()}));
+function syncScale(){document.querySelectorAll('[data-scale]').forEach(b=>b.classList.toggle('active',b.dataset.scale===S.scale));const sl=document.getElementById('sl-range'),lb=document.getElementById('lb-range'),vl=document.getElementById('vl-range');if(S.scale==='log'){lb.textContent='Range';sl.min=1;sl.max=6;sl.step=.5;sl.value=S.range;vl.textContent=S.range+' dec'}else{lb.textContent='Gain';sl.min=0;sl.max=6;sl.step=.5;sl.value=Math.log2(S.gainLin);vl.textContent='×'+(+S.gainLin.toFixed(1))}sg(sl)}
+document.querySelectorAll('[data-scale]').forEach(b=>b.addEventListener('click',()=>{S.scale=b.dataset.scale;syncScale();scheduleRecompute()}));
 document.getElementById('sl-range').addEventListener('input',function(){if(S.scale==='log')S.range=+this.value;else S.gainLin=Math.pow(2,+this.value);syncScale();scheduleRecompute()});
-// Collapse the control panel and slide the canvas grid over to fill the space.
-document.getElementById('qp-collapse-btn').addEventListener('click',()=>{const p=document.getElementById('quick-panel'),c=p.classList.toggle('collapsed');document.getElementById('qp-collapse-btn').textContent=c?'▶':'◀';document.getElementById('canvas-grid').style.left=c?'44px':'';setTimeout(scheduleRecompute,250)});
-// Mobile drawer: slide the control panel over a dimmed overlay on small screens.
-/* Mobile drawer */
-function toggleMobilePanel(){const p=document.getElementById('quick-panel'),o=document.getElementById('mob-overlay');const isOpen=p.classList.toggle('mob-open');o.classList.toggle('show',isOpen)}
-document.getElementById('mob-menu').addEventListener('click',toggleMobilePanel);
-document.getElementById('mob-overlay').addEventListener('click',toggleMobilePanel);
-window.addEventListener('resize',()=>scheduleRecompute());
+// Collapse the control panel to a narrow strip; the stage takes the room.
+document.getElementById('qp-collapse-btn').addEventListener('click',()=>{document.body.classList.toggle('panel-collapsed');setTimeout(scheduleRecompute,60)});
+// PHONE. The panel is a bottom sheet (portrait) or a right drawer (landscape
+// phone) over #dock. #dockPanel opens it, #sheetGrip toggles half and full
+// height, and a drag down on the grip closes it. The sheet stays open while a
+// control changes, and renderCh frames the pattern above it (clearHeight).
+function phone(){return matchMedia('(max-width:768px),(max-height:500px) and (pointer:coarse)').matches}
+function setSheet(open,full){document.body.classList.toggle('sheet-open',open);document.body.classList.toggle('sheet-full',open&&!!full);document.getElementById('dockPanel').classList.toggle('on',open);document.getElementById('dockPanel').setAttribute('aria-expanded',open);setTimeout(scheduleRecompute,300)}
+document.getElementById('dockPanel').addEventListener('click',()=>setSheet(!document.body.classList.contains('sheet-open')));
+(function(){const g=document.getElementById('sheetGrip');let y0=null;g.addEventListener('pointerdown',e=>{y0=e.clientY;g.setPointerCapture(e.pointerId)});g.addEventListener('pointerup',e=>{if(y0===null)return;const dy=e.clientY-y0;y0=null;if(dy>40)setSheet(false);else if(dy<-40)setSheet(true,true);else setSheet(true,!document.body.classList.contains('sheet-full'))})})();
+document.getElementById('dockPlay').addEventListener('click',()=>{animDir=animDir?0:1;if(animDir)requestAnimationFrame(animLoop);syncBars()});
+window.addEventListener('resize',()=>{eqLayout();scheduleRecompute()});
 
-// Close the mobile drawer after an action on narrow screens.
-function closeMob(){if(window.innerWidth<=700){document.getElementById('quick-panel').classList.remove('mob-open');document.getElementById('mob-overlay').classList.remove('show')}}
-// Custom text button: switch to the text element and push the typed string and
-// size into its params, so the diffracted image spells the user's text.
-/* Custom text button */
-document.getElementById('btn-set-text').addEventListener('click',()=>{
-  const txt=document.getElementById('custom-text').value||'A';
-  const sz=+document.getElementById('sl-txtsz').value||28;
-  S.element='text';document.getElementById('element-select').value='text';
-  buildParamUI();
-  const slT=document.getElementById('sl-p-txt');if(slT)slT.value=txt;
-  const slS=document.getElementById('sl-p-sz');if(slS){slS.value=sz;sg(slS);const vl=document.getElementById('vl-p-sz');if(vl)vl.textContent=sz}
-  scheduleRecompute();closeMob();
-});
 
 // Reset: restore every state field and control to its default, clear any
 // uploaded image, and recompute.
 /* Reset */
-document.getElementById('btn-reset').addEventListener('click',()=>{animDir=0;S.element='text';S.source='white';S.lambda=633;S.z=200;S.extent=5;S.N=256;S.divs=15;S.speed=5;window._imgMask=null;
-  document.getElementById('element-select').value='text';
-  document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.classList.toggle('active',b.dataset.source==='white'));
-  document.getElementById('mono-params').style.display='none';document.getElementById('white-params').style.display='block';
-  const slD=document.getElementById('sl-div');slD.value=15;sg(slD);document.getElementById('vl-div').textContent='15';
-  document.querySelectorAll('.res-btn[data-n]').forEach(b=>b.classList.toggle('active',+b.dataset.n===256));
-  allZ.forEach(s=>s.max=500);
-  document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
-  buildParamUI();syncBars();scheduleRecompute();closeMob()});
+document.getElementById('btn-reset').addEventListener('click',()=>{S.scale='log';S.range=2;S.gainLin=1;S.viewMode=1;window._imgMask=null;document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.classList.toggle('active',b.dataset.view==='1'));document.getElementById('canvas-grid').classList.add('view-1');document.getElementById('export-section').hidden=false;syncScale();applyP(PR[0]);document.querySelectorAll('.preset-btn')[0].classList.add('on')});
 
 // Export: render a still PNG at the current z, or a WebM video that sweeps z
 // over time. Both reuse renderFrame, which runs the same propagation as the live
@@ -496,15 +505,14 @@ const PR=[
 // the parameter UI, push the preset's param values, and recompute.
 function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=pr.lam||633;S.extent=pr.ext;S.z=pr.z;S.N=pr.N||256;S.divs=pr.div||15;S.speed=5;
   document.getElementById('element-select').value=pr.el;allZ.forEach(s=>s.max=Math.max(500,pr.z*3));
-  document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.classList.toggle('active',b.dataset.source===(pr.src||'white')));
-  document.getElementById('mono-params').style.display=S.source==='mono'?'block':'none';document.getElementById('white-params').style.display=S.source==='white'?'block':'none';
+  syncSource();
   const slD=document.getElementById('sl-div');slD.value=S.divs;sg(slD);document.getElementById('vl-div').textContent=S.divs;
   document.querySelectorAll('.res-btn[data-n]').forEach(b=>b.classList.toggle('active',+b.dataset.n===S.N));
   document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('on'));
   buildParamUI();const el=EL[pr.el];el.params.forEach(pd=>{if(pd.type==='file')return;if(pr.p[pd.id]!==undefined){const sl=document.getElementById('sl-p-'+pd.id);if(sl){if(pd.type==='text')sl.value=pr.p[pd.id];else{sl.value=pr.p[pd.id];sg(sl);const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const vl=document.getElementById('vl-p-'+pd.id);if(vl)vl.textContent=pr.p[pd.id].toFixed(dec)}}}});
   syncBars();scheduleRecompute()}
 // Build the preset button grid.
-(function(){const g=document.getElementById('preset-grid');PR.forEach(pr=>{const b=document.createElement('button');b.className='preset-btn';b.textContent=pr.name;b.addEventListener('click',()=>{applyP(pr);b.classList.add('on');closeMob()});g.appendChild(b)})})();
+(function(){const g=document.getElementById('preset-grid');PR.forEach(pr=>{const b=document.createElement('button');b.className='preset-btn';b.textContent=pr.name;b.addEventListener('click',()=>{applyP(pr);b.classList.add('on')});g.appendChild(b)})})();
 
 // Boot: set the wavelength swatch, build the param UI, sync the bars, and render.
-(function(){syncScale();const rgb=lamRGB(S.lambda),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs;buildParamUI();syncBars();scheduleRecompute()})();
+(function(){syncScale();const rgb=lamRGB(S.lambda).map(x=>sGam(x)*255|0),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb})`;dot.style.backgroundColor=cs;dot.style.color=cs;applyP(PR[0]);document.querySelectorAll('.preset-btn')[0].classList.add('on')})();
