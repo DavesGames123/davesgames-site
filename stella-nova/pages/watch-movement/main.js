@@ -118,7 +118,7 @@ async function swapTo(id) {
     try { history.replaceState(null, '', '#' + id); } catch (e) {}
   } finally { S.swapping = false; }
 }
-const fitDistance = cal => cal.plateR * 6.3;
+const fitDistance = cal => cal.plateR * 6.3 * (innerWidth < innerHeight * 0.8 ? 1.3 : 1);
 const explodeCentre = e => S.cur ? e * S.cur.sc.unit * (S.cur.sc.centreK ?? 0.25) : 0;
 const midZ = cal => (cal.zRange[0] + cal.zRange[1]) / 2 * 0.3;
 
@@ -340,28 +340,24 @@ document.querySelectorAll('#views button').forEach(b => b.addEventListener('clic
 function setExplode(x) {
   S.explodeTarget = x;
   $('explode').value = x; $('explodeV').textContent = Math.round(x * 100) + '%';
-  $('dockExplode').classList.toggle('on', x > 0.3);
 }
 $('explode').addEventListener('input', e => setExplode(+e.target.value));
 $('assemble').addEventListener('click', () => setExplode(0));
 $('burst').addEventListener('click', () => setExplode(0.9));
-$('dockExplode').addEventListener('click', () => setExplode(S.explodeTarget > 0.3 ? 0 : 0.85));
 function setRate(r) {
   if (r > 0) S.lastRate = r;
   S.rate = r;
-  document.querySelectorAll('#rates button, #dockRates button').forEach(b => b.classList.toggle('on', +b.dataset.rate === r));
-  $('dockPlay').textContent = r ? '❚❚' : '▶'; $('dockPlay').setAttribute('aria-label', r ? 'Pause' : 'Play');
+  document.querySelectorAll('#rates button').forEach(b => b.classList.toggle('on', +b.dataset.rate === r));
+  $('dockPlay').querySelector('i').textContent = r ? '❚❚' : '▶'; $('dockPlay').querySelector('span').textContent = r ? 'Pause' : 'Play';
+  $('dockPlay').setAttribute('aria-label', r ? 'Pause' : 'Play');
   $('rateNote').textContent = r === 0 ? 'Paused. Winding still works.'
     : r < 1 ? 'Slow motion. Watch the escape wheel lock, unlock, give its impulse and drop.'
     : r === 1 ? 'Real time.'
     : 'Fast. The balance now swings faster than the screen can draw, so it looks still or jumps (aliasing). The wheel train stays exact.';
 }
-document.querySelectorAll('#rates button, #dockRates button').forEach(b => b.addEventListener('click', () => setRate(+b.dataset.rate)));
+document.querySelectorAll('#rates button').forEach(b => b.addEventListener('click', () => setRate(+b.dataset.rate)));
 $('dockPlay').addEventListener('click', () => setRate(S.rate ? 0 : S.lastRate));
-$('dockMove').addEventListener('click', () => {
-  const i = CALIBRES.findIndex(c => c.id === S.cur.cal.id);
-  swapTo(CALIBRES[(i + 1) % CALIBRES.length].id);
-});
+
 function applyToggles() {
   if (!S.cur) return;
   const t = S.cur.sc.toggles || {};
@@ -396,17 +392,22 @@ windBtn.addEventListener('pointercancel', windOff);
 windBtn.addEventListener('lostpointercapture', windOff);
 windBtn.addEventListener('contextmenu', e => e.preventDefault());
 
-// panel, sheet and dock (the wave-membrane pattern)
-const panel = $('panel'), dockPanel = $('dockPanel');
-function setOpen(open) {
+// panel, sheet and dock. On a phone a dock tab opens the sheet with only
+// its group; the same tab, the grip or a drag down closes it.
+const panel = $('panel'), tabs = [...document.querySelectorAll('#dock .tab')];
+let grp = 'movement';
+function setOpen(open, g = grp) {
+  grp = g;
   panel.classList.toggle('open', open);
   if (!open) panel.classList.remove('full');
   document.body.classList.toggle('panel-closed', !open);
   document.body.classList.toggle('sheet-open', open);
-  dockPanel.classList.toggle('on', open); dockPanel.setAttribute('aria-expanded', String(open));
+  panel.querySelectorAll('.grp').forEach(el => el.classList.toggle('on', el.dataset.grp === grp));
+  for (const t of tabs) { const on = open && t.dataset.grp === grp; t.classList.toggle('on', on); t.setAttribute('aria-expanded', String(on)); }
+  if (open && PHONE_Q.matches) panel.scrollTop = 0;
 }
+for (const t of tabs) t.addEventListener('click', () => setOpen(!(panel.classList.contains('open') && grp === t.dataset.grp), t.dataset.grp));
 $('gear').addEventListener('click', () => setOpen(true));
-dockPanel.addEventListener('click', () => setOpen(!panel.classList.contains('open')));
 $('panelClose').addEventListener('click', () => setOpen(false));
 setOpen(!PHONE_Q.matches);
 PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
@@ -423,6 +424,7 @@ grip.addEventListener('pointerup', e => {
 grip.addEventListener('pointercancel', () => { gripY = null; });
 let hintGone = false;
 function hideHint() { if (!hintGone) { hintGone = true; $('hint').classList.add('gone'); } }
+if (COARSE) $('hint').textContent = 'tap a part to name it · drag to orbit · pinch to zoom';
 setTimeout(hideHint, 9000);
 
 // ── framing: shift the view into the area the panel and dock leave clear ───

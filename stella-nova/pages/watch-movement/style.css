@@ -173,7 +173,7 @@ body.panel-closed .pread{left:14px}
 
 /* PHONE. The query matches PHONE_Q in main.js. */
 @media (max-width:768px), (max-height:500px) and (pointer:coarse){
-  :root{--top:calc(46px + env(safe-area-inset-top));--dock-h:calc(64px + env(safe-area-inset-bottom));--panel-w:0px}
+  :root{--top:calc(46px + env(safe-area-inset-top));--dock-h:calc(65px + env(safe-area-inset-bottom));--panel-w:0px}
   html.in-frame{--top:0px}
   .topbar{padding:env(safe-area-inset-top) 14px 0 calc(14px + env(safe-area-inset-left))}
   .brand{font-size:1rem}
@@ -183,19 +183,21 @@ body.panel-closed .pread{left:14px}
   .tip .role{font-size:0.84rem}
   .pread{left:calc(10px + env(safe-area-inset-left));top:10px}
   .phint{max-width:44%}
-    #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));background:rgba(8,9,15,0.96);border-top:1px solid var(--line-b)}
-  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--ink2);color:var(--text);font-size:1.1rem}
-  #dock > button.on{border-color:var(--cream);color:var(--cream)}
-  .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--line-b);border-radius:12px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none}
-  .seg::-webkit-scrollbar{display:none}
-  .seg button{flex:1 0 auto;min-width:54px;padding:0 8px;border:0;border-right:1px solid var(--line);background:var(--ink2);color:var(--dim);font-size:0.74rem}
-  .seg button:last-child{border-right:0}
-  .seg button.on{background:rgba(255,224,170,0.12);color:var(--cream)}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:4px;align-items:stretch;padding:6px calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));background:rgba(8,9,15,0.97);border-top:1px solid var(--line-b)}
+  #dock > button{flex:1 1 0;min-width:0;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1px solid transparent;border-radius:12px;background:transparent;color:var(--dim);transition:color 0.2s,background 0.2s,border-color 0.2s}
+  #dock > button i{font-style:normal;font-size:1.15rem;line-height:1}
+  #dock > button span{font-size:0.62rem;letter-spacing:0.02em}
+  #dock > button.on{color:var(--cream);background:rgba(255,224,170,0.08);border-color:rgba(255,224,170,0.35)}
+  #dockPlay{flex:0 0 58px!important;border-color:var(--line-b)!important;background:var(--ink2)!important;color:var(--text)!important}
 
   /* the panel is a bottom sheet above the dock */
-  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(46vh,500px);height:min(46dvh,500px);border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain}
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:auto;max-height:min(58vh,540px);max-height:min(58dvh,540px);border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain}
   #panel.open{transform:none}
-  #panel.full{height:calc(100vh - var(--dock-h) - var(--top) - 8px);height:calc(100dvh - var(--dock-h) - var(--top) - 8px)}
+  #panel.full{max-height:calc(100vh - var(--dock-h) - var(--top) - 8px);max-height:calc(100dvh - var(--dock-h) - var(--top) - 8px)}
+  #panel .grp{display:none}
+  #panel .grp.on{display:block;animation:grpIn 0.28s cubic-bezier(0.2,0.8,0.2,1)}
+  #panel .grp .sec-label:first-child{margin-top:2px}
+  #movements{grid-template-columns:1fr 1fr}
   #panelClose{display:none}
   #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;margin:0 -16px;background:linear-gradient(180deg,rgba(15,17,27,1) 70%,rgba(15,17,27,0));touch-action:none;cursor:grab}
   #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
@@ -207,11 +209,14 @@ body.panel-closed .pread{left:14px}
 @media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
   :root{--top:0px}
   .topbar{display:none}
-  #dock{right:auto;width:min(460px,58vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #dock{right:auto;width:min(480px,60vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel .grp{display:block}
+  #panel .grp:not(.on){display:none}
   #stage{bottom:0}
   #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(44vw,380px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;transform:translateX(100%)}
   #panel.open{transform:none}
   #sheetGrip{display:none}
   #panelClose{display:block;position:sticky;top:8px;margin:8px 0 0 auto;z-index:2;background:var(--ink2)}
   body.sheet-open }
+@keyframes grpIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){#panel,.phint,#labels .lb,.tip-in,#calInfo{transition:none}.tip-in.swap>*,#leader line,#leader .pulse{animation:none}}
