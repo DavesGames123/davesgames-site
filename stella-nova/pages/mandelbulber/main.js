@@ -35,14 +35,7 @@
 //       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
 
 import { SLOTS, defaultScene, fillDefaults, specFor, parseFract, serialiseFract, parseValue, quantizeColor, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
-
-const $ = (id) => document.getElementById(id);
-const stage = $('stage');
-const canvas = $('gl');
-const panel = $('panel');
-const pbody = $('pbody');
-const hud = $('hud');
-const picker = $('picker');
+import { $, stage, canvas, panel, pbody, hud, picker, exSheet, root, el, section, fmt, rgbToHex, hexToRgb, clamp, px, download } from './ui/dom.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 let P, CAT, EXAMPLES, THUMBS, PTHUMBS = null;
@@ -145,38 +138,6 @@ const CREDIT = {
 };
 
 // ─── small DOM helpers ──────────────────────────────────────────────────────
-function el(tag, attrs = {}, ...kids) {
-  const e = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs)) {
-    if (v === undefined || v === null || v === false) continue;
-    if (k === 'class') e.className = v;
-    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
-    else e.setAttribute(k, v === true ? '' : v);
-  }
-  for (const k of kids) if (k !== null && k !== undefined) e.append(k);
-  return e;
-}
-
-function section(id, title, open, ...kids) {
-  const s = el('section', { class: open ? '' : 'closed', 'data-g': id });
-  const h = el('h2', {}, el('button', { type: 'button', onclick: () => s.classList.toggle('closed') }, title));
-  s.append(h, el('div', { class: 'body' }, ...kids));
-  return s;
-}
-
-function fmt(v) {
-  if (typeof v !== 'number') return String(v);
-  if (!Number.isFinite(v)) return '0';
-  const a = Math.abs(v);
-  if (a !== 0 && (a >= 1e5 || a < 1e-3)) return v.toPrecision(3);
-  return String(+v.toFixed(a >= 100 ? 1 : a >= 10 ? 2 : 4));
-}
-
-const hex2 = (x) => Math.round(Math.min(Math.max(x, 0), 1) * 255).toString(16).padStart(2, '0');
-const rgbToHex = (c) => `#${hex2(c.r)}${hex2(c.g)}${hex2(c.b)}`;
-const hexToRgb = (h) => quantizeColor({ r: parseInt(h.slice(1, 3), 16) / 255, g: parseInt(h.slice(3, 5), 16) / 255, b: parseInt(h.slice(5, 7), 16) / 255 });
-const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
-
 // ─── thumbnails ─────────────────────────────────────────────────────────────
 // Percent sprite offsets, so one sprite serves every thumbnail size. px = null
 // leaves the size to CSS.
@@ -786,14 +747,6 @@ function exportFract() {
   download(new Blob([exportText()], { type: 'text/plain' }), `${base}.fract`);
 }
 
-function download(blob, name) {
-  const a = el('a', { href: URL.createObjectURL(blob), download: name });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-}
-
 $('file').addEventListener('change', async (e) => {
   const f = e.target.files?.[0];
   if (f) loadText(await f.text(), f.name);
@@ -1173,7 +1126,6 @@ pbody.addEventListener('scroll', () => { if (!tipEl.hidden) hideTip(); }, { pass
 // or tablet. In sheet and drawer mode the canvas shrinks to the free area (--cover-b,
 // --cover-r), so the camera target, orbit and Frame center where the user can see them.
 // A snap to another sheet height resizes the canvas once; a drag only stretches it.
-const root = document.documentElement;
 const L = { mode: '', snap: 'peek', y: 0, full: 0, peek: 88, half: 320, drawerW: 340, drag: null, focusSnap: null };
 let sheetDragging = false;
 const safeProbe = el('div', { style: 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;'
@@ -1191,7 +1143,6 @@ function pickMode() {
   return coarseMQ.matches ? 'drawer' : 'float';
 }
 const snapH = (s) => (s === 'full' ? L.full : s === 'half' ? L.half : L.peek);
-const px = (v) => `${Math.round(v)}px`;
 function setSheetY(y, dragging) {
   L.y = y;
   root.style.setProperty('--sheet-y', px(y));
@@ -1347,7 +1298,6 @@ function syncViewport() {
 window.visualViewport?.addEventListener('resize', () => { syncViewport(); queueLayout(); });
 window.visualViewport?.addEventListener('scroll', syncViewport);
 
-const exSheet = $('exSheet');
 function openSheet(s) { syncViewport(); s.style.transform = ''; s.classList.remove('hidden'); }
 function closeSheet(s) {
   if (s.contains(document.activeElement)) document.activeElement.blur();
