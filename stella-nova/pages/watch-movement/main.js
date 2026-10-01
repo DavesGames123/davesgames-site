@@ -28,7 +28,14 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import * as M from './movement.js';
+import * as G from './geom.js';
+import lever from './calibres/lever.js';
+// the lever calibre under the names this scene was written against
+const M = {
+  ...G, CAL: lever.CAL, LAYOUT: lever.L, createState: lever.createState, pose: lever.pose, periods: lever.periods,
+  step: (s, dt, ratchetTurn = 0) => lever.step(s, dt, -ratchetTurn / G.TAU),
+  stonePolys: g => lever.ESC.stonePolys(g), escapeProfile: () => G.escapeProfile(15, lever.CAL.escape.Ra, lever.CAL.escape.Rf),
+};
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
