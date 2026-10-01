@@ -24,7 +24,11 @@
      1. gpu-guard.js       shared GPU release guard, always first
      2. fonts, style.css
      3. catalog.js         sets window.SN_DATA
-     4. main.js            router, tree, portal, category, entry, search
+     4. markup.js          wiki markup to DOM renderer (SNWikiMarkup)
+     5. storage.js         drafts and published docs (SNWikiStorage)
+     6. editor.js          lock, section editor, publish view (SNWikiExt)
+     7. main.js            router, tree, portal, category, entry, search
+     content/index.json    published docs, id -> doc (ships as {})
 
    LAYOUT  (# marks an element id)
      ┌──────────────────────────────────────────────────────────────┐
@@ -93,6 +97,9 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="../../lib/game-data/catalog.js"></script>
+<script src="markup.js"></script>
+<script src="storage.js"></script>
+<script src="editor.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

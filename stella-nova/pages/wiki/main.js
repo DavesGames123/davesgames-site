@@ -488,8 +488,8 @@
       var editBtn = h('button', { class: 'edit-link', type: 'button', onclick: function () { EXT.edit(e, s[0], sec); } }, 'Edit');
       add(sec, h('h2', null, h('span', null, s[1]), h('span', { class: 'edit-wrap' }, '[', editBtn, ']')));
       var bodyEl = h('div', { class: 'sec-body' });
-      fillSection(bodyEl, e, sections[s[0]]);
       add(sec, bodyEl);
+      fillSection(bodyEl, e, sections[s[0]]);
       add(article, sec);
     });
     add(article, seeAlso(e));
@@ -501,7 +501,9 @@
   // Fill one section body: rendered text, or the empty state.
   function fillSection(bodyEl, e, src) {
     bodyEl.textContent = '';
-    if (src && String(src).trim() && EXT.renderBody) { add(bodyEl, EXT.renderBody(src, e)); return; }
+    var has = !!(src && String(src).trim() && EXT.renderBody);
+    if (bodyEl.parentElement) bodyEl.parentElement.classList.toggle('is-empty', !has);
+    if (has) { add(bodyEl, EXT.renderBody(src, e)); return; }
     add(bodyEl, h('p', { class: 'empty-sec' }, 'This section has no text yet. ',
       h('button', { class: 'link-btn', type: 'button', onclick: function () { EXT.edit(e, bodyEl.parentElement.getAttribute('data-key'), bodyEl.parentElement); } }, 'Edit this section')));
   }
