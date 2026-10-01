@@ -29,6 +29,7 @@ const SCENES = {
   tourbillon: () => import('./scenes/tourbillon.js'),
   automatic: () => import('./scenes/automatic.js'),
   verge: () => import('./scenes/verge.js'),
+  cylinder: () => import('./scenes/cylinder.js'),
 };
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
