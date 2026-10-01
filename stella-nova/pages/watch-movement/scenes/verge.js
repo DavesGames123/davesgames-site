@@ -13,9 +13,11 @@
 //    angle, in the same frame.
 //
 //  LAYERS  (explode offset = spread * unit * k)
-//    hands -3.0 · dial -2.2 · motion -1.2 · pillar plate and pillars 0
-//    train 1 · top plate 1.5 · crown wheel, verge, potence, balance 2.3
-//    cock 3.2
+//    hands -2.4 · dial -1.8 · motion -1.0 · pillar plate and pillars 0
+//    train 0.9 (with the crown wheel, verge and potence: they run between
+//    the plates, so they must stay under the top plate as it lifts)
+//    top plate 2.6 · balance 3.3 · cock 4.0
+//  The top plate lifts far, so the whole train stands in the open gap.
 // ============================================================================
 import * as THREE from 'three';
 import * as G from '../geom.js';
@@ -25,7 +27,7 @@ const { TAU, D, pol, add } = G;
 
 export function build(B, cal) {
   const { CAL: c, L } = cal, Z = c.z;
-  for (const [k, v] of Object.entries({ hands: -3.0, dial: -2.2, motion: -1.2, plate: 0, train: 1, top: 1.5, esc: 2.3, cock: 3.2 })) B.layer(k, v);
+  for (const [k, v] of Object.entries({ hands: -2.4, dial: -1.8, motion: -1.0, plate: 0, train: 0.9, top: 2.6, esc: 3.3, cock: 4.0 })) B.layer(k, v);
 
   // PILLAR PLATE and four tulip pillars
   const plate = B.part('plate', 'plate', [0, 0], { label: 'Pillar plate', labelAt: [13, -8] });
@@ -78,7 +80,7 @@ export function build(B, cal) {
 
   // CROWN WHEEL in its wheel frame (x along the arbor)
   const R = c.crown.R, h = c.crown.h;
-  const cw = B.part('escape', 'esc', L.Xw, { label: 'Crown wheel', labelZ: Z.crown + R + 0.5 });
+  const cw = B.part('escape', 'train', L.Xw, { label: 'Crown wheel', labelZ: Z.crown + R + 0.5 });
   cw.root.position.z = Z.crown; cw.root.rotation.z = L.psi;
   const spin = new THREE.Group(); cw.root.add(spin);
   const toFrame = m => { m.geometry.rotateY(Math.PI / 2); return m; };        // xy disc -> yz disc, extrusion -> +x
@@ -100,7 +102,7 @@ export function build(B, cal) {
   for (const m of meshes) { B.add(cw, m); spin.add(m); }
 
   // VERGE: the upright staff with two flags, in the same frame turned by psi
-  const vg = B.part('verge', 'esc', L.V, { label: 'Verge', labelZ: Z.crown + R + 0.8 });
+  const vg = B.part('verge', 'train', L.V, { label: 'Verge', labelZ: Z.crown + R + 0.8 });
   const aU = Math.PI - c.palletOpen / 2, aL = Math.PI + c.palletOpen / 2;
   const flag = (a, z0, z1) => {
     const d = [Math.cos(a), Math.sin(a)], n = [-d[1], d[0]], w = c.palletW / 2, r0 = 0.1, r1 = c.palletLen;
@@ -110,7 +112,7 @@ export function build(B, cal) {
     flag(aU, Z.crown + R - 0.4, Z.crown + R + 0.12), flag(aL, Z.crown - R - 0.12, Z.crown - R + 0.4));
 
   // POTENCE: a bracket from the top plate down to the lower verge pivot
-  const pot = B.part('potence', 'esc', L.V, {});
+  const pot = B.part('potence', 'train', L.V, {});
   // the post stands beside the crown wheel, clear of the view along its arbor
   const side = pol(R + 0.9, L.psi - Math.PI / 2);
   B.add(pot, B.slab(circ(0.4, 20, side), [], Z.crown - R - 0.95, Z.topLo, 'brass', 0.03),
@@ -147,7 +149,7 @@ export function build(B, cal) {
   const ROT = { greatWheel: 'great', fuseeCone: 'fuseeTurn', center: 'center', third: 'third', contrate: 'contrate', cannon: 'center', minuteWheel: 'minute', hourWheel: 'hour', balance: 'balance' };
   let lastW = -1;
   return {
-    unit: 11, focusK: 2.3,
+    unit: 9, focusK: 0.9,
     toggles: { bridges: ['topPlate', 'cock', 'jewelCock', 'screws', 'barrelArbor'], dial: ['dial', 'hourHand', 'minuteHand'] },
     pose(p) {
       for (const id in ROT) B.parts[id].root.rotation.z = p[ROT[id]];
