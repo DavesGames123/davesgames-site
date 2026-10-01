@@ -130,7 +130,7 @@ function drawMag(R){
   for(let x=0;x<m;x++){const bx=pad+x*bw+bw*0.16,bwid=Math.max(1,bw*0.68);
     c.fillStyle='rgba(69,211,255,0.32)';c.fillRect(bx,base-bh,bwid,bh);
     c.fillStyle='rgba(69,211,255,0.85)';c.fillRect(bx,base-bh,bwid,2);}
-  c.fillStyle='rgba(86,100,128,0.9)';c.font="9px 'JetBrains Mono'";c.textAlign='center';
+  c.fillStyle='rgba(86,100,128,0.9)';c.font="9px 'IBM Plex Mono',monospace";c.textAlign='center';
   c.fillText(N0>m?('all '+N0.toLocaleString()+' equal · '+m+' shown'):'all bars equal — magnitude carries no info',w/2,h-6);
   $('mag-r').textContent='all = '+(amp>=0.01?amp.toFixed(3):amp.toExponential(1));
 }
@@ -155,7 +155,7 @@ function drawPhase(R){
   for(let i=0;i<m;i++){const px=pad+i*bw+bw/2,py=Y(th[i]);
     c.strokeStyle='rgba(120,170,230,0.14)';c.beginPath();c.moveTo(px,bot);c.lineTo(px,py);c.stroke();
     c.fillStyle=phaseHue(th[i]);c.beginPath();c.arc(px,py,dotR,0,TAU);c.fill();}
-  c.fillStyle='rgba(86,100,128,0.9)';c.font="9px 'JetBrains Mono'";c.textAlign='center';
+  c.fillStyle='rgba(86,100,128,0.9)';c.font="9px 'IBM Plex Mono',monospace";c.textAlign='center';
   c.fillText('x = 0 … '+(N0-1).toLocaleString()+(m<N0?' · '+m+' sampled':'')+'  (basis index)',w/2,h-6);
   $('phase-r').textContent='span '+(mx-mn-2*pad2).toFixed(2)+' rad';
 }
@@ -196,25 +196,25 @@ function drawOut(R){
       for(let k=0;k<N0;k++){const p=S.sampleCounts[k]/tot,x0=X(k)+slot*0.18,x1=X(k)+slot*0.82,y=Y(p);
         c.moveTo(x0,bot);c.lineTo(x0,y);c.lineTo(x1,y);c.lineTo(x1,bot);}c.stroke();}
   }else{
-    c.fillStyle='rgba(120,170,230,0.55)';c.font="9px 'JetBrains Mono'";c.textAlign='center';
+    c.fillStyle='rgba(120,170,230,0.55)';c.font="9px 'IBM Plex Mono',monospace";c.textAlign='center';
     c.fillText('2\u207F = '+N0.toLocaleString()+' bins — too dense to resolve individually; exact continuous spectrum shown',w/2,bot-8);
   }
   // Reminder that the axis wraps: bin N is the same state as bin 0.
   // periodic-wrap marker
-  c.fillStyle='rgba(120,170,230,0.5)';c.font="8px 'JetBrains Mono'";c.textAlign='right';
+  c.fillStyle='rgba(120,170,230,0.5)';c.font="8px 'IBM Plex Mono',monospace";c.textAlign='right';
   c.fillText('\u21BB k\u2261'+N0.toLocaleString()+' \u2261 0',w-padR-2,top+11);
   // Frequency ticks: full binary ket labels when few bins, else four numbers.
   // axis ticks
   c.fillStyle='rgba(86,100,128,0.92)';c.textAlign='center';
-  if(N0<=KET_CAP){c.font="8px 'JetBrains Mono'";for(let k=0;k<N0;k++)c.fillText(bin(k,S.n),X(k)+slot/2,h-9);}
-  else{c.font="9px 'JetBrains Mono'";for(let t=0;t<=4;t++)c.fillText(fmtK(t/4*N0),padL+(t/4)*plotW,h-9);}
+  if(N0<=KET_CAP){c.font="8px 'IBM Plex Mono',monospace";for(let k=0;k<N0;k++)c.fillText(bin(k,S.n),X(k)+slot/2,h-9);}
+  else{c.font="9px 'IBM Plex Mono',monospace";for(let t=0;t<=4;t++)c.fillText(fmtK(t/4*N0),padL+(t/4)*plotW,h-9);}
   // Label the peak bin and its probability, placed to avoid the right edge.
   // peak callout
   const peak=R.peak,pk=R.peakP,px=X(peak)+slot/2,py=Y(pk),left=peak<N0*0.6;
   const lab=(S.n<=10?ket(peak,S.n):'bin '+peak.toLocaleString())+'  '+(pk*100).toFixed(1)+'%';
-  c.fillStyle='#ffd27a';c.font="600 11px 'JetBrains Mono'";c.textAlign=left?'left':'right';
+  c.fillStyle='#ffd27a';c.font="600 11px 'IBM Plex Mono',monospace";c.textAlign=left?'left':'right';
   c.fillText(lab,left?px+6:px-6,Math.max(top+13,py-6));
-  c.textAlign='left';c.fillStyle='rgba(86,100,128,0.92)';c.font="9px 'JetBrains Mono'";
+  c.textAlign='left';c.fillStyle='rgba(86,100,128,0.92)';c.font="9px 'IBM Plex Mono',monospace";
   c.fillText('basis state '+(N0<=KET_CAP?'|b\u2099\u2026b\u2080\u27E9':'bin k')+'  (frequency)',padL,12);
 }
 

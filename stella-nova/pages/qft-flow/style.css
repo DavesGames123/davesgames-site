@@ -5,9 +5,13 @@
   --ink:#c8d0e0; --bright:#e8ecf4; --dim:#8090b0; --faint:#506080;
   --blue:#96c8ff; --cyan:#45d3ff; --cyan-d:#5a8cc0; --amber:#ffb948; --rose:#ff6b8a; --green:#64c864;
   --grid:rgba(90,130,180,0.10); --glow:rgba(69,211,255,0.45); --scan:rgba(0,0,0,0.06);
+  /* the shell font set (stella-nova/index.html) */
+  --f-sans:'Space Grotesk',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --f-serif:'Instrument Serif','Iowan Old Style',Georgia,serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--ink);font-family:'JetBrains Mono',monospace;height:100%;overflow:hidden}
+html,body{background:var(--bg);color:var(--ink);font-family:var(--f-sans);height:100%;overflow:hidden;-webkit-font-smoothing:antialiased}
 body{line-height:1.5;display:flex;flex-direction:column}
 body::before{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scan) 2px,var(--scan) 4px);mix-blend-mode:multiply}
 body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,0.4))}
@@ -17,7 +21,7 @@ a{color:var(--cyan)}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:0 1.2rem;height:40px;flex-shrink:0;background:rgba(14,17,24,0.94);border-bottom:1px solid var(--border-b);z-index:100}
 .in-frame .topbar{display:none!important}
 .topbar-l{display:flex;align-items:center;gap:1.1rem}
-.sys-name{color:var(--bright);font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.1rem;letter-spacing:0.12em}
+.sys-name{color:var(--bright);font-family:var(--f-sans);font-weight:400;font-size:0.9rem;letter-spacing:0.22em;text-transform:uppercase}
 .sys-status{display:flex;align-items:center;gap:0.4rem;color:var(--green);font-size:0.62rem;letter-spacing:0.14em;text-transform:uppercase}
 .sys-status::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);animation:blink 2.2s ease infinite;flex-shrink:0}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
@@ -37,9 +41,9 @@ a{color:var(--cyan)}
 #viz>*{max-width:940px}
 header{margin:0 0 18px;border-bottom:1px solid var(--border);padding-bottom:16px}
 .kicker{font-size:0.62rem;letter-spacing:0.42em;text-transform:uppercase;color:var(--cyan-d);font-weight:600}
-h1{font-family:'Cormorant Garamond',serif;font-weight:400;font-size:clamp(1.7rem,3.6vw,2.5rem);
-   letter-spacing:0.01em;line-height:1.04;margin:6px 0 8px;color:var(--bright)}
-h1 em{font-style:italic;color:var(--amber)}
+h1{font-family:var(--f-sans);font-weight:400;font-size:clamp(1.6rem,3.2vw,2.3rem);
+   letter-spacing:-0.01em;line-height:1.05;margin:6px 0 8px;color:var(--bright)}
+h1 em{font-family:var(--f-serif);font-style:italic;font-weight:400;color:var(--amber)}
 .sub{color:var(--dim);font-size:0.8rem;max-width:60ch}
 .sub b{color:var(--ink);font-weight:600}
 
@@ -161,3 +165,7 @@ input[type=range].amber::-moz-range-thumb{background:var(--amber)}
   padding:11px 13px;overflow-x:auto;color:var(--ink)}
 .katex{font-size:1.02em!important}
 .katex .mord,.katex .mbin,.katex .mrel,.katex .mopen,.katex .mclose,.katex .mop{color:var(--ink)}
+
+/* Mono for labels, values, buttons and data captions. Prose stays sans. */
+.sys-status,.topbar-r,.kicker,.lbl,.row .name,.stepper,.slider .head,.btns button,.phi-tools button,
+.slider .chips button,.viz-cap,.flow,.formula,.stat,.legend{font-family:var(--f-mono)}
