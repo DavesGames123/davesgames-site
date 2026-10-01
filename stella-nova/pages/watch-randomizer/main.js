@@ -22,7 +22,8 @@ import { createBuild } from '../watch-movement/kit.js';
 import { createStage, ease } from '../watch-movement/stage.js';
 import { createCards, esc } from '../watch-movement/cards.js';
 import * as Gen from './generator.js';
-import { caseDims, buildCase } from './cases.js';
+import { caseDims } from './dims.js';
+import { buildCase } from './cases/index.js';
 
 const SCENES = {
   lever: () => import('../watch-movement/scenes/lever.js'),
@@ -71,7 +72,7 @@ async function roll(seed = Gen.newSeed(), first = false) {
     const dims = caseDims(spec, cal);
     const { palette, opts } = sceneOpts(spec, dims);
     const mod = await SCENES[spec.movement.calibre]();
-    const caseProbe = buildCaseProbe(spec, cal, dims);
+    const caseProbe = buildCaseProbe(spec);
     const B = createBuild({ palette: { ...palette, ...caseProbe } });
     const sc = mod.build(B, cal, opts);
     const kase = buildCase(B, spec, cal, dims);
@@ -99,14 +100,9 @@ async function roll(seed = Gen.newSeed(), first = false) {
   } finally { S.busy = false; }
 }
 // the case's own palette, decided before the build so materials match
-function buildCaseProbe(spec, cal, dims) {
-  const c = spec.case, P = {};
-  if (spec.type === 'pocket' || spec.type === 'wrist') { const m = Gen.METALS[c.metal]; P.polished = { color: m.color, roughness: m.roughness }; P.satin = { color: m.color, roughness: 0.32 }; }
-  if (spec.type === 'wrist') P.leather = { color: Gen.LEATHERS[c.leather] };
-  if (spec.type === 'wall') { P.polished = { color: Gen.METALS[c.metal].color, roughness: 0.16 }; P.wood = { color: Gen.WOODS[c.wood] }; P.paint = { color: Gen.PAINTS[c.paint] }; }
-  if (spec.type === 'alarm') { P.paint = { color: Gen.PAINTS[c.paint] }; P.polished = { color: c.body === 'brass' ? Gen.METALS.brass.color : '#e9ebf0', roughness: 0.1 }; }
-  const hc = { gold: { color: '#f0c46a', roughness: 0.15 } };
-  return { ...P, ...hc };
+function buildCaseProbe(spec) {
+  const T = Gen.TYPES[spec.type];
+  return { ...(T.palette ? T.palette(spec) : {}), gold: { color: '#f0c46a', roughness: 0.15 } };
 }
 const fitDistance = dims => dims.R * 4.2 * (innerWidth < innerHeight * 0.8 ? 1.35 : 1);
 function spinDice() {
@@ -125,6 +121,7 @@ function fillSpec(spec) {
     box.classList.remove('fading');
   }, 200);
 }
+$('types').innerHTML = '<button data-type="" type="button" class="on">Any</button>' + Object.values(Gen.TYPES).map(t => `<button data-type="${t.id}" type="button">${esc(t.name.replace(/ (watch|clock)$/, ''))}</button>`).join('');
 document.querySelectorAll('#types button').forEach(b => b.addEventListener('click', () => {
   S.type = b.dataset.type;
   document.querySelectorAll('#types button').forEach(x => x.classList.toggle('on', x === b));

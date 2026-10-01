@@ -258,6 +258,7 @@ export function createBuild(opts = {}) {
 
   // hands, built pointing to 12 (+y), as lists of [outline, holes]
   B.hand = (style, len, w) => {
+    if (typeof style === 'function') return style(len, w);   // a style defined by the caller
     if (style === 'breguet') {
       const pomme = len * 0.73;
       return [[[[-w * 0.6, -len * 0.18], [w * 0.6, -len * 0.18], [w * 0.5, pomme - 0.9], [-w * 0.5, pomme - 0.9]], []],
