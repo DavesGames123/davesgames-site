@@ -34,78 +34,13 @@
 //    function frame                                       the loop
 // ============================================================================
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { gunzip, decodeGroup } from './decode.js';
 import * as L from './layout.js';
-import { BoneState, boneMaterial, depthMaterial, ghostMaterial, pickMaterial, groupMesh, studioEnvironment } from './render.js';
+import { BoneState, boneMaterial, depthMaterial, ghostMaterial, pickMaterial, groupMesh } from './render.js';
 import { $, PHONE_Q, COARSE, HOVER, REDUCED, DPR, esc, clamp01, easeIO, ease, TYPE_NAME, SIDE_NAME, MODE_NAME, LOAD_ORDER, THEMES } from './app/env.js';
+import { canvas, renderer, scene, envRT, camera, pickCam, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
 
 const T = { start: performance.now(), firstFrame: 0, firstBones: 0, allBones: 0 };
-
-// ── renderer, scene, light ──────────────────────────────────────────────────
-const canvas = $('view');
-let renderer;
-try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-  if (!renderer.capabilities.isWebGL2) throw new Error('WebGL 2 required');
-} catch (e) { $('nogl').hidden = false; $('loading').hidden = true; throw e; }
-renderer.setPixelRatio(DPR());
-renderer.setClearColor(0x000000, 0);
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.shadowMap.autoUpdate = false;
-
-const scene = new THREE.Scene();
-const envRT = studioEnvironment(renderer);
-scene.environment = envRT.texture;
-const camera = new THREE.PerspectiveCamera(30, 1, 0.05, 60);
-const pickCam = new THREE.PerspectiveCamera();
-pickCam.layers.set(1);
-const key = new THREE.DirectionalLight(0xfff0dc, 2.1);
-key.castShadow = true;
-key.shadow.mapSize.set(COARSE ? 1024 : 2048, COARSE ? 1024 : 2048);
-key.shadow.bias = -0.0004;
-key.shadow.normalBias = 0.012;
-scene.add(key, key.target);
-const rim = new THREE.DirectionalLight(0xbcd2ff, 0.55);
-rim.position.set(2.5, 2.2, -3);
-scene.add(rim);
-scene.add(new THREE.HemisphereLight(0xfff4e2, 0x2a2118, 0.25));
-
-// floor: a shadow catcher and a soft pool of light under the specimen
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.5, color: 0x000000 }));
-floor.rotation.x = -Math.PI / 2;
-floor.receiveShadow = true;
-const poolTex = (() => {
-  const c = document.createElement('canvas'); c.width = c.height = 256;
-  const g = c.getContext('2d'), gr = g.createRadialGradient(128, 128, 0, 128, 128, 128);
-  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
-})();
-const pool = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: poolTex, transparent: true, depthWrite: false, opacity: 0.1 }));
-pool.rotation.x = -Math.PI / 2;
-pool.position.y = 0.0005;
-pool.renderOrder = -1;
-scene.add(pool, floor);
-const trays = new THREE.Group();
-scene.add(trays);
-
-const U = {
-  uBone: { value: new THREE.Color(0xe7d9c0) }, uCav: { value: new THREE.Color(0x8a6a4a) },
-  uSel: { value: new THREE.Color(THEMES.dark.sel) }, uHov: { value: new THREE.Color(THEMES.dark.hov) },
-  uGhost: { value: new THREE.Color(THEMES.dark.ghost) }, uGhostA: { value: THEMES.dark.ghostA },
-};
-
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true; controls.dampingFactor = 0.11;
-controls.rotateSpeed = COARSE ? 0.8 : 0.9; controls.zoomSpeed = 1.1; controls.panSpeed = 0.9;
-controls.screenSpacePanning = true;
-controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
-controls.autoRotateSpeed = 0.8;
-controls.minDistance = 0.08; controls.maxDistance = 14;
 
 // ── state ───────────────────────────────────────────────────────────────────
 const S = {
