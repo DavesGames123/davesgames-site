@@ -38,10 +38,11 @@ import { gunzip, decodeGroup } from './decode.js';
 import * as L from './layout.js';
 import { BoneState, boneMaterial, depthMaterial, ghostMaterial, pickMaterial, groupMesh } from './render.js';
 import { $, PHONE_Q, COARSE, HOVER, REDUCED, esc, clamp01, easeIO, ease, TYPE_NAME, SIDE_NAME, MODE_NAME, LOAD_ORDER, THEMES } from './app/env.js';
-import { canvas, renderer, scene, envRT, camera, pickCam, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
+import { canvas, renderer, scene, envRT, camera, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
 import { T, S, dirty, toast, hideHint, regionOf } from './app/state.js';
 import { occ, occlusion, clearRect, fitDist, resize, flyTo, fitView, fitShadow, ensureVisible } from './app/camera.js';
 import { setTraysOn, buildTrays, placeLabels } from './app/tray.js';
+import { pickRT, pickAt } from './app/pick.js';
 
 // ── loading ─────────────────────────────────────────────────────────────────
 async function fetchBuf(url) {
@@ -214,41 +215,6 @@ function toggleRegionExplode(rid) {
   // the shared bones of a pair of regions read better together
   retarget(true, S.amt[k] === 0, false);
   focusRegion(rid);
-}
-
-// ── picking ─────────────────────────────────────────────────────────────────
-const pickRT = new THREE.WebGLRenderTarget(1, 1, { depthBuffer: true });
-let pickBuf = new Uint8Array(4);
-function pickAt(cx, cy, r = COARSE ? 22 : 4) {
-  if (!S.ready || !S.groups.size) return -1;
-  const cr = canvas.getBoundingClientRect();
-  const px = Math.round(cx - cr.left), py = Math.round(cy - cr.top);
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  const size = 2 * r + 1;
-  if (pickRT.width !== size) { pickRT.setSize(size, size); pickBuf = new Uint8Array(size * size * 4); }
-  pickCam.copy(camera);
-  pickCam.layers.set(1);
-  const ox = camera.view ? camera.view.offsetX : 0, oy = camera.view ? camera.view.offsetY : 0;
-  pickCam.setViewOffset(w, h, ox + px - r, oy + py - r, size, size);
-  pickCam.updateProjectionMatrix();
-  scene.overrideMaterial = S.mats.pick;
-  renderer.setRenderTarget(pickRT);
-  renderer.setClearColor(0x000000, 0);
-  renderer.clear();
-  renderer.render(scene, pickCam);
-  renderer.setRenderTarget(null);
-  scene.overrideMaterial = null;
-  renderer.readRenderTargetPixels(pickRT, 0, 0, size, size, pickBuf);
-  let best = -1, bd = Infinity;
-  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
-    const k = (y * size + x) * 4;
-    const id = pickBuf[k] + pickBuf[k + 1] * 256;
-    if (!id) continue;
-    // readRenderTargetPixels rows run bottom up
-    const d = (x - r) ** 2 + (size - 1 - y - r) ** 2;
-    if (d < bd && d <= r * r) { bd = d; best = id - 1; }
-  }
-  return best;
 }
 
 // ── selection, card ─────────────────────────────────────────────────────────
