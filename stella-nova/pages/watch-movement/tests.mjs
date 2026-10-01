@@ -9,12 +9,21 @@
 //    hands ........ a state made at a clock time reads that time
 //    reserve ...... the watch runs its stated reserve, then stops
 //  Then the checks that belong to one calibre (cal.checks).
+//  A calibre may skip a generic check that does not apply to its
+//  mechanism with cal.skip = { name: reason } (for example a detent
+//  escapement moves the wheel on one beat in two).
 // ============================================================================
 import * as G from './geom.js';
-import { CALIBRES } from './calibres/index.js';
+import { CALIBRES as ALL } from './calibres/index.js';
 
-let pass = 0, fail = 0;
-const ok = (cond, name, info = '') => { if (cond) pass++; else fail++; console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${info ? '  ' + info : ''}`); };
+// node tests.mjs                     every registered calibre
+// node tests.mjs calibres/<id>.js    one calibre file (registered or not)
+const only = process.argv[2];
+const CALIBRES = only ? [(await import(new URL(only, import.meta.url))).default] : ALL;
+
+let pass = 0, fail = 0, skipped = 0;
+let SKIP = {};
+const ok0 = (cond, name, info = '') => { if (cond) pass++; else fail++; console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${info ? '  ' + info : ''}`); };
 const near = (a, b, e) => Math.abs(a - b) <= e;
 const { TAU } = G;
 
@@ -27,7 +36,12 @@ export function overlapNear(A, B, centre, r) {
   return B.some(p => G.inPoly(p, A));
 }
 
+function ok(cond, name, info = '') {
+  for (const k in SKIP) if (name.startsWith(k)) { skipped++; console.log(`SKIP  ${name}  (${SKIP[k]})`); return; }
+  ok0(cond, name, info);
+}
 for (const cal of CALIBRES) {
+  SKIP = cal.skip || {};
   console.log(`\n── ${cal.name} (${cal.id}) ──`);
   const X = cal.ESC.tables;
   const thAt = sec => X.start + X.cycle * sec / (2 * cal.beatSeconds);
@@ -102,5 +116,5 @@ for (const cal of CALIBRES) {
   if (cal.checks) for (const [name, fn] of cal.checks) { const [good, info] = fn({ overlapNear }); ok(good, name, info); }
 }
 
-console.log(`\n${pass} passed, ${fail} failed`);
+console.log(`\n${pass} passed, ${fail} failed${skipped ? `, ${skipped} skipped` : ''}`);
 process.exit(fail ? 1 : 0);

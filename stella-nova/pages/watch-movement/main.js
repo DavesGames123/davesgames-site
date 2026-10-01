@@ -51,12 +51,18 @@ stage.onStart = () => { S.close = false; hideHint(); };
 function nowSeconds() { const d = new Date(); return (d.getHours() % 12) * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000; }
 
 // ── movement swap ───────────────────────────────────────────────────────────
+// a calibre not yet in calibres/index.js loads by its id (#<id>), so a new
+// one can be checked here before it is registered
+async function loadCalibre(id) {
+  if (byId(id)) return { cal: byId(id), mod: await SCENES[id]() };
+  const cal = (await import(`./calibres/${id}.js`)).default;
+  return { cal, mod: await import(`./scenes/${id}.js`) };
+}
 async function swapTo(id) {
   if (S.swapping || (S.cur && S.cur.cal.id === id)) return;
   S.swapping = true;
   try {
-    const cal = byId(id);
-    const mod = await SCENES[id]();
+    const { cal, mod } = await loadCalibre(id);
     const B = createBuild();
     const sc = mod.build(B, cal);
     stage.root.add(B.root);
@@ -284,5 +290,5 @@ setRate(1);
 setExplode(0.55);
 const start = (location.hash || '').slice(1);
 stage.place({ az: 36, el: 14, r: 150, target: new THREE.Vector3() });
-swapTo(byId(start) ? start : CALIBRES[0].id);
+swapTo(/^[a-z0-9-]+$/.test(start) ? start : CALIBRES[0].id).catch(() => swapTo(CALIBRES[0].id));
 requestAnimationFrame(frame);
