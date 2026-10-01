@@ -34,6 +34,7 @@ const SCENES = {
   pinlever: () => import('./scenes/pinlever.js'),
   anchor: () => import('./scenes/anchor.js'),
   deadbeat: () => import('./scenes/deadbeat.js'),
+  brocot: () => import('./scenes/brocot.js'),
 };
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
