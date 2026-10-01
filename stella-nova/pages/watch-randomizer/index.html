@@ -10,11 +10,13 @@
   ═══════════════════════════════════════════════════════════════════════════
    TIMEPIECE RANDOMIZER  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. Each roll makes a pocket watch, a wristwatch, a wall
-   clock or a twin-bell alarm clock round one of the four working movements
-   of ../watch-movement, with a random finish, face and case. generator.js
-   turns a seed into the spec (no DOM; tests.mjs runs it); cases.js builds
-   the case; main.js runs the page on ../watch-movement's stage and cards.
+   Static markup only. Each roll makes one of nine timepiece types (pocket
+   watch, wristwatch, wall clock, alarm clock, carriage clock, mantel clock,
+   marine chronometer, skeleton clock, wall regulator) round one of the ten
+   working calibres of ../watch-movement, with a random finish, face and
+   case. generator.js turns a seed into the spec (no DOM; tests.mjs runs
+   it); types/ and cases/ hold one module per type; main.js runs the page
+   on ../watch-movement's stage and cards.
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js
@@ -37,7 +39,7 @@
      grep -n 'const VIEWS'        camera presets
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Roll a random timepiece: a pocket watch, wristwatch, wall clock or twin-bell alarm clock, built round a real working movement with a random finish, dial and case.">
+<meta name="description" content="Roll a random timepiece: a pocket watch, wristwatch, carriage or mantel clock, marine chronometer, skeleton clock, regulator or alarm clock, built round a real working movement with a random finish, dial and case.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
