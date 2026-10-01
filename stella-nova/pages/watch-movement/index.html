@@ -10,11 +10,10 @@
   ═══════════════════════════════════════════════════════════════════════════
    WATCH MOVEMENT  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. A pocket-watch movement in 3D that runs, and comes
-   apart in an exploded view. movement.js holds the calibre: the layout,
-   the tooth profiles, the mesh phase of every gear pair and the escapement
-   tables (no DOM, no THREE; tests.mjs runs it in Node). main.js builds the
-   parts as three.js meshes from those outlines and poses them each frame.
+   Static markup only. Several watch movements in 3D that run and come
+   apart in an exploded view. calibres/*.js hold each mechanism (no DOM,
+   no THREE; tests.mjs runs them in Node). scenes/*.js build each one in
+   three.js with kit.js. main.js runs the stage, the picker and the cards.
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
@@ -23,24 +22,22 @@
 
    LAYOUT  (# marks an element id main.js binds to)
      desktop ... #panel at the left, #view fills the rest. #read is the
-                 clock and the reserve, top left of the view. #card shows
-                 the part under the last tap. #labels holds part labels.
+                 clock, top left of the view. #tipHover follows the mouse
+                 over a part; #tipPin is pinned to a part by a click, with
+                 the #leader line. #labels holds part labels.
      phone ..... (max-width 768px, or a short landscape touch screen)
-                 #dock at the base: panel, explode, play, time rate.
-                 portrait: #panel is a bottom sheet. landscape: a drawer.
-                 main.js shifts the camera view into the clear area.
+                 #dock at the base: panel, explode, play, next movement,
+                 time rate. portrait: #panel is a bottom sheet;
+                 landscape: a drawer. A tap pins a card above the dock.
 
    GREP MAP  (main.js)
-     grep -n 'function buildMovement'  every part, layer by layer
-     grep -n 'function poseScene'      angles and explode offsets per frame
-     grep -n 'function springRibbon'   mainspring and hairspring geometry
-     grep -n 'function dialTexture'    the dial art (canvas)
-     grep -n 'const VIEWS'             camera presets
-     grep -n 'function occlusion'      framing around the panel and dock
-     grep -n 'const INFO'              the text of the part card
+     grep -n 'function swapTo'       build a calibre and cross-fade to it
+     grep -n 'function cardHTML'     the part card
+     grep -n 'function placePinned'  the pinned card and its leader
+     grep -n 'const VIEWS'           camera presets
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="A pocket-watch movement in 3D: every wheel meshes and turns at its true rate, the Swiss lever escapement ticks at 18,000 vph, and the whole calibre comes apart in an exploded view.">
+<meta name="description" content="Watch movements in 3D: a Swiss lever, a tourbillon, an automatic and an 18th-century verge fusee. Every gear meshes and turns at its true rate, and each calibre comes apart in an exploded view.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
@@ -58,14 +55,11 @@
 <main id="stage">
   <canvas id="view"></canvas>
   <div id="labels" aria-hidden="true"></div>
+  <svg id="leader" aria-hidden="true"><line/><circle class="pulse" r="6"/><circle class="dotA" r="3"/></svg>
   <div id="read" class="pread"></div>
-  <div id="hint" class="phint">drag to orbit · pinch or scroll to zoom · tap a part to name it</div>
-  <div id="card" hidden>
-    <button id="cardClose" type="button" aria-label="Close">✕</button>
-    <div id="cardName"></div>
-    <div id="cardSpec"></div>
-    <p id="cardText"></p>
-  </div>
+  <div id="hint" class="phint">hover a part to name it · click to pin its card · drag to orbit</div>
+  <div class="tip" id="tipHover" aria-live="polite"><div class="tip-in"></div></div>
+  <div class="tip pinned" id="tipPin" aria-live="polite"><button id="tipPinClose" type="button" aria-label="Unpin">✕</button><div class="tip-in"></div></div>
 </main>
 <div id="nogl" hidden>WebGL is not available in this browser, so the movement cannot render.</div>
 
@@ -73,19 +67,25 @@
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" type="button" aria-label="Close controls">✕</button>
 
-  <h1>Watch movement</h1>
-  <p class="lede">A spring, five wheels and a balance that swings five times a second. Every gear here meshes and turns at its true rate.</p>
+  <div class="sec-label first">Movement</div>
+  <div id="movements"></div>
+
+  <div id="calInfo">
+    <h1 id="calTitle">Watch movement</h1>
+    <div class="kind" id="calKind"></div>
+    <p class="lede" id="calLede"></p>
+  </div>
 
   <div class="sec-label">View</div>
   <div class="grid2" id="views">
-    <button data-view="caseback" type="button">Caseback</button>
+    <button data-view="front" type="button">Movement side</button>
     <button data-view="dial" type="button">Dial side</button>
     <button data-view="exploded" type="button">Exploded</button>
     <button data-view="escapement" type="button">Escapement</button>
   </div>
 
   <div class="sec-label">Explode</div>
-  <div class="row"><label for="explode">Spread</label><input type="range" id="explode" min="0" max="1" step="0.01" value="0.6"><span class="val" id="explodeV"></span></div>
+  <div class="row"><label for="explode">Spread</label><input type="range" id="explode" min="0" max="1" step="0.01" value="0.55"><span class="val" id="explodeV"></span></div>
   <div class="toggles">
     <button class="tog" id="assemble" type="button">Assemble</button>
     <button class="tog" id="burst" type="button">Explode</button>
@@ -104,32 +104,27 @@
 
   <div class="sec-label">Mainspring</div>
   <div class="reserve"><div class="bar"><i id="resBar"></i></div><span id="resV"></span></div>
-  <button class="tog wide" id="wind" type="button">Hold to wind the crown</button>
+  <button class="tog wide" id="wind" type="button">Hold to wind</button>
 
   <div class="sec-label">Show</div>
-  <div class="grid3">
-    <button class="tog on" id="tDial" type="button">Dial</button>
+  <div class="grid2">
+    <button class="tog on" id="tDial" type="button">Dial &amp; hands</button>
     <button class="tog on" id="tBridges" type="button">Bridges</button>
     <button class="tog on" id="tLabels" type="button">Labels</button>
+    <button class="tog on" id="tOrbit" type="button">Gentle orbit</button>
   </div>
 
   <div class="sec-label">Going train</div>
   <table class="readout" id="train"></table>
-  <p class="note">The product of the ratios from the centre wheel to the fourth wheel is 80/10 × 75/10 = 60: one turn per hour becomes one turn per minute.</p>
+  <p class="note" id="trainNote"></p>
 
   <div class="sec-label">How it works</div>
-  <div class="about">
-    <p><b>Power.</b> A coiled steel mainspring sits in the barrel. The crown winds it through the crown wheel and the ratchet; the click stops it from unwinding back. The spring then turns the barrel, slowly: once in 8 hours.</p>
-    <p><b>The going train.</b> The barrel drives the centre wheel, which carries the minute hand and turns once an hour. Each stage steps up the speed: the third wheel, then the fourth wheel, which carries the small seconds hand and turns once a minute.</p>
-    <p><b>The escapement.</b> Left alone, the train would spin out in seconds. The escape wheel is held by two ruby pallet stones on the lever. Each swing of the balance kicks the lever across: one stone lets a tooth go, the tooth slides over the stone and pushes the lever (the impulse that keeps the balance going), and the other stone catches the next tooth. That is the tick.</p>
-    <p><b>The balance.</b> The balance wheel and its hairspring form an oscillator. This one runs at 2.5 Hz: 5 beats a second, 18,000 an hour. Two beats let one escape tooth go, and the escape wheel turns once in 6 seconds.</p>
-    <p><b>The hands.</b> Under the dial, the cannon pinion on the centre arbor drives the minute wheel, and its pinion drives the hour wheel: 36/12 × 40/10 = 12, so the hour hand turns once in 12 hours.</p>
-    <p class="fine">The calibre is an original design. Its tooth counts and modules follow the class of the Unitas/ETA 6497 pocket-watch calibre (36.6 mm, 18,000 vph). The tooth outlines are cycloidal-style horological profiles, and a test checks every mesh for overlap. The pallet stones and escape teeth come from a collision solve, so the escape wheel turns only as far as the stones allow.</p>
-  </div>
+  <div class="about" id="about"></div>
 </aside>
 
 <nav id="dock" aria-label="Quick controls">
   <button id="dockPanel" type="button" aria-label="Controls" aria-expanded="false">☰</button>
+  <button id="dockMove" type="button" aria-label="Next movement">◎</button>
   <button id="dockExplode" type="button" aria-label="Explode">◇</button>
   <button id="dockPlay" type="button" aria-label="Pause">❚❚</button>
   <div class="seg" id="dockRates">

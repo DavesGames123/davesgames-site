@@ -145,6 +145,13 @@ export default {
   zRange: [-3.6, 6.3], focus: [(E[0] + ESC.P[0]) / 2, (E[1] + ESC.P[1]) / 2, 1.3],
   train: [['barrel', 'Barrel', 80, '—'], ['center', 'Centre', 80, 10], ['third', 'Third', 75, 10], ['fourth', 'Fourth', 80, 10], ['escape', 'Escape', 15, 8]],
   freq: '2.5 Hz · 18,000 vph',
+  about: [
+    ['Power', 'A coiled steel mainspring sits in the barrel. The crown winds it through the crown wheel and the ratchet; the click stops it from unwinding back. The spring then turns the barrel, slowly: once in 8 hours.'],
+    ['The going train', 'The barrel drives the centre wheel, which carries the minute hand and turns once an hour. Each stage steps up the speed: the third wheel, then the fourth wheel, which carries the small seconds hand and turns once a minute.'],
+    ['The escapement', 'The escape wheel is held by two ruby pallet stones on the lever. Each swing of the balance kicks the lever across: one stone lets a tooth go, the tooth slides over the stone and pushes the lever (the impulse), and the other stone catches the next tooth. That is the tick.'],
+    ['The balance', 'The balance and its hairspring swing at 2.5 Hz: 5 beats a second, 18,000 an hour. The balance is free for most of its swing, and touches the lever only near the centre. That freedom (a detached escapement) is why the lever won.'],
+    ['Source', 'An original calibre. Tooth counts and modules follow the Unitas/ETA 6497 class (36.6 mm, 18,000 vph). A test checks every mesh for overlap; the escape wheel turns only as far as the pallet stone outlines allow.'],
+  ],
   meshes: [
     ['barrel / centre pinion', 'barrel', G.wheelProfile(80, 0.19), B, 'center', G.pinionProfile(10, 0.19), C],
     ['centre / third pinion', 'center', G.wheelProfile(80, 0.125), C, 'third', G.pinionProfile(10, 0.125), T],
@@ -153,7 +160,8 @@ export default {
     ['cannon / minute wheel', 'cannon', G.pinionProfile(12, 0.15), C, 'minute', G.wheelProfile(36, 0.15), M],
     ['minute pinion / hour', 'minute', G.pinionProfile(10, 0.144), M, 'hour', G.wheelProfile(40, 0.144), C],
   ],
-  fmtPeriod, beatSeconds: 0.2, reserveHours: [40, 50],
+  fmtPeriod, beatSeconds: 0.2, reserveHours: [40, 50], hoursPerTurn: PER.barrel / 3600,
+  trainNote: 'From the centre wheel to the fourth wheel: 80/10 × 75/10 = 60. One turn per hour becomes one turn per minute.',
   checks: [
     ['keyless: crown wheel and ratchet do not overlap', ({ overlapNear }) => {
       let hits = 0;
