@@ -3,117 +3,80 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Crafting Database // Stella Nova</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>Crafting Chains · Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-   CRAFTING DATABASE  ·  page shell
+   CRAFTING CHAINS  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. It provides the fixed frame; main.js fills the interior
-   at runtime. The tier grid, the SVG link overlay, the constructable cards,
-   the tooltip, and the calculator panel are all injected by script into the
-   empty containers below. This file supplies the hero copy and the hooks
-   (element ids) main.js writes into.
+   Static frame only. main.js reads window.SN_DATA (the shared game catalog)
+   and fills every mount below. The page shows names, tiers, sprites and the
+   links between items. It shows no quantity, time, rate or cost.
 
-   PAGE STRUCTURE  (# marks an element id that main.js targets)
+   LOAD ORDER
+     1. ../../lib/gpu-guard.js          shell GPU release hook (first)
+     2. ../../lib/game-data/catalog.js  sets window.SN_DATA
+     3. main.js                         builds the board, the list and the panel
+
+   LAYOUT  (# marks a mount that main.js fills)
      ┌───────────────────────────────────────────────────────────────────┐
-     │ .hero    copy + #stat-res #stat-rec #stat-mod #stat-sc counters     │
-     ├───────────────────────────────────────────────────────────────────┤
-     │ #searchInput   filter box                                          │
-     ├───────────────────────────────────────────────────────────────────┤
-     │ #tiers   resource card grid  (contains #svgLayer link overlay)     │
-     │ #constrWrap   constructable and module cards                       │
-     │ #tip     floating recipe tooltip                                   │
-     ├───────────────────────────────────────────────────────────────────┤
-     │ #calcPanel / #calcToggle   build calculator (slides up)            │
-     └───────────────────────────────────────────────────────────────────┘
+     │ .hero      kicker, title, legend                                    │
+     │ .bar       #q search · #clear                                       │
+     ├──────────────────────────────────────────┬────────────────────────┤
+     │ #board  tier columns + #wires SVG          │ #panel  focused item   │
+     │ #phone  #tabs tier tabs + #list chain list │ (bottom sheet on phone)│
+     └──────────────────────────────────────────┴────────────────────────┘
 
-   SECTION MAP  (jump with grep -n "<anchor>" index.html)
-     in-frame guard ..... "in-frame"          hide the topbar inside the shell
-     hero counters ...... "id=\"stat-res\""      main.js writes the totals here
-     search box ......... "id=\"searchInput\""
-     grid mount ......... "id=\"tiers\""         cards and #svgLayer injected here
-     construction mount . "id=\"constrWrap\""
-     tooltip mount ...... "id=\"tip\""
-     calculator ......... "id=\"calcPanel\""     panel body is #calcInner
-   ═══════════════════════════════════════════════════════════════════════════
+   GREP TARGETS  (grep -n "<target>" index.html)
+     hero ............... "class=\"hero\""
+     search ............. "id=\"q\""
+     desktop board ...... "id=\"board\""
+     phone tabs/list .... "id=\"phone\""
+     detail panel ....... "id=\"panel\""
+  ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- In-frame guard: mark the root .in-frame inside the shell iframe so the CSS
-     hides this page own topbar. Inline so it runs before paint. -->
-<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<div class="grid-bg"></div>
-<div id="app">
-<div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Crafting DB</span></div>
-  <div class="topbar-r"><span>SYS // <strong>RESOURCES</strong></span></div>
-</div>
-<div class="hero">
-  <div class="hero-text">
-    <div class="hero-sub">SYS // Stella Nova</div>
-    <h1 class="hero-title">Crafting Database</h1>
-    <p class="hero-lead"><span class="nums">52</span> resources, <span class="nums">41</span> recipes, <span class="nums">14</span> station modules, <span class="nums">1</span> orbital constructable. Production chain pulled live from the game source.</p>
-
-    <div class="prod-modules">
-      <div class="pm-head">Four Production Modules</div>
-      <div class="pm-row">
-        <span class="pm-name" style="color:var(--foundry)">Foundry</span>
-        <span class="pm-desc">T0 ore to T1 ingot, <strong>1:1 ratio</strong>. Auto-detects the ore kind on hand, no recipe selection.</span>
-      </div>
-      <div class="pm-row">
-        <span class="pm-name" style="color:var(--assembler)">Assembler</span>
-        <span class="pm-desc">T1 ingots to T2 alloy. Player assigns one recipe per module.</span>
-      </div>
-      <div class="pm-row">
-        <span class="pm-name" style="color:var(--complab)">Comp Lab</span>
-        <span class="pm-desc">T1 and T2 to T3 component. <strong>L1 to L2 to L3</strong> dependency depth, 20 components total.</span>
-      </div>
-      <div class="pm-row">
-        <span class="pm-name" style="color:var(--fuelproc)">Fuel Proc</span>
-        <span class="pm-desc">Carbon Brick + Aluminum Ingot + Rare Earth Ingot to <strong>75 Oxidized Fuel</strong> per 20s batch.</span>
-      </div>
+<main class="wrap">
+  <header class="hero">
+    <div class="kicker">Stella Nova · Production</div>
+    <h1>Crafting <em>chains</em></h1>
+    <p class="lead">Every resource in the station economy, from raw ore to exotic matter, and the station modules it builds. Pick an item to light up what it takes and what it feeds.</p>
+    <div class="legend" aria-hidden="true">
+      <span><i class="lg up"></i>Made from</span>
+      <span><i class="lg down"></i>Feeds into</span>
     </div>
+  </header>
 
-    <div class="hero-facts">
-      <div class="hero-fact"><span class="hf-label">Orbital</span>Only Station Core. Placed as a blueprint, constructor bots haul resources from orbit. <strong>About 50 ore</strong> end to end.</div>
-      <div class="hero-fact"><span class="hf-label">Grid</span>14 station module types built from the station stockpile. Deconstructing returns <strong>25 to 65%</strong> per material line, randomized per resource.</div>
-    </div>
+  <div class="bar">
+    <label class="find">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+      <input id="q" type="search" placeholder="Search items or symbols" autocomplete="off" spellcheck="false" aria-label="Search items">
+      <kbd class="hint-key">/</kbd>
+    </label>
+    <button class="chip-btn" id="clear" type="button" hidden>Clear</button>
+  </div>
 
-    <p class="hero-howto"><strong>Hover</strong> any card to see its recipe and total raw ore cost. <strong>Click</strong> to queue it in the build calculator at the bottom of the page.</p>
+  <div class="stage">
+    <section class="board-wrap" aria-label="Production board">
+      <div class="board" id="board"></div>
+    </section>
+
+    <section class="phone" id="phone" aria-label="Production list">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div class="list" id="list"></div>
+    </section>
+
+    <aside class="panel" id="panel" aria-live="polite"></aside>
   </div>
-  <!-- Counters start at zero; main.js overwrites each from the data on load. -->
-  <div class="hero-stats">
-    <div class="hs-box"><div class="hs-val" id="stat-res">0</div><div class="hs-label">Resources</div></div>
-    <div class="hs-box"><div class="hs-val" id="stat-rec">0</div><div class="hs-label">Recipes</div></div>
-    <div class="hs-box yellow"><div class="hs-val" id="stat-mod">0</div><div class="hs-label">Station Modules</div></div>
-    <div class="hs-box yellow"><div class="hs-val" id="stat-sc">0</div><div class="hs-label">Station Core Ore</div></div>
-  </div>
-</div>
-<!-- Name filter. main.js hides cards whose name does not match on input. -->
-<div class="search-wrap"><input type="text" class="search-input" id="searchInput" placeholder="Search resources..."></div>
-<!-- Tier grid mount. main.js injects the resource cards after #svgLayer, which
-     stays first so the link overlay draws on top of the cards. -->
-<div class="tiers" id="tiers"><svg class="svg-layer" id="svgLayer"></svg></div>
-<!-- Constructable and station-module cards; filled by renderConstruction(). -->
-<div class="constr-wrap" id="constrWrap"></div>
-<!-- Floating recipe tooltip; positioned and filled by showTip(). -->
-<div class="tip" id="tip"></div>
-</div>
-<!-- Build calculator: #calcInner holds the queue and totals; #calcToggle is the
-     always-visible tab that slides the panel open. -->
-<div class="calc-panel" id="calcPanel"><div class="calc-inner" id="calcInner"></div></div>
-<div class="calc-toggle" id="calcToggle" onclick="toggleCalc()">
-  <div class="calc-toggle-l">
-    <span class="calc-toggle-label">&#9874; Crafting Calculator</span>
-    <span class="calc-toggle-count" id="calcCount">Empty. Click any card to add.</span>
-  </div>
-  <span class="calc-toggle-hint" id="calcHint"></span>
-  <span class="arrow">&#9650;</span>
-</div>
-<!-- Database, renderers, and calculator; runs after the markup is parsed. -->
+  <div class="scrim" id="scrim" hidden></div>
+  <p class="foot">Names, tiers and links come from the game catalog. Quantities are not shown.</p>
+</main>
+<script src="../../lib/game-data/catalog.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
