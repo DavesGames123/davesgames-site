@@ -160,24 +160,29 @@
              clear, image upload). -->
         <div class="fld-src">
           <div class="src-canvas-wrap"><canvas id="src-cv"></canvas><span class="panel-title" style="color:rgba(150,200,255,0.8)">SOURCE · paint</span></div>
+          <!-- Three groups. The bar wraps between groups, never inside one. -->
           <div id="paint-bar">
-            <span class="pb-lbl">ink</span>
+            <span class="pb-grp"><span class="pb-lbl">ink</span>
             <div class="sw" data-ink="0" style="background:#000" title="0"></div>
             <div class="sw" data-ink="64" style="background:#404040" title="64"></div>
             <div class="sw" data-ink="128" style="background:#808080" title="128"></div>
             <div class="sw" data-ink="192" style="background:#c0c0c0" title="192"></div>
-            <div class="sw active" data-ink="255" style="background:#fff" title="255"></div>
-            <span class="pb-lbl" style="margin-left:4px">size</span>
-            <button class="pb-btn" id="brush-dn">−</button><span class="val" id="brush-sz" style="color:var(--blue);min-width:14px">1</span><button class="pb-btn" id="brush-up">+</button>
+            <div class="sw active" data-ink="255" style="background:#fff" title="255"></div></span>
+            <span class="pb-grp"><span class="pb-lbl">size</span>
+            <button class="pb-btn" id="brush-dn">−</button><span class="val" id="brush-sz" style="color:var(--blue);min-width:14px;text-align:center">1</span><button class="pb-btn" id="brush-up">+</button></span>
+            <span class="pb-grp">
             <button class="pb-btn" id="paint-fill">▦ fill</button>
             <button class="pb-btn" id="paint-clear">✕ clear</button>
-            <button class="pb-btn" id="paint-upload">⤒ image</button>
+            <button class="pb-btn" id="paint-upload">⤒ image</button></span>
             <input type="file" id="file-in" accept="image/*" style="display:none">
           </div>
         </div>
         <div class="fld-amp">
-          <div class="amp-cell"><canvas id="amp0-cv"></canvas><span class="panel-title" style="color:rgba(105,168,255,0.85)">|0⟩ · cos θ</span><div class="legend" id="field-legend"></div></div>
-          <div class="amp-cell"><canvas id="amp1-cv"></canvas><span class="panel-title" style="color:rgba(255,185,72,0.85)">|1⟩ · sin θ</span><span class="cap" id="field-cap"></span></div>
+          <div class="amp-cell"><canvas id="amp0-cv"></canvas><span class="panel-title" style="color:rgba(105,168,255,0.85)">|0⟩ · cos θ</span></div>
+          <div class="amp-cell"><canvas id="amp1-cv"></canvas><span class="panel-title" style="color:rgba(255,185,72,0.85)">|1⟩ · sin θ</span></div>
+          <!-- The colour key and the gate caption sit under the tiles, so they
+               never cover a tile. -->
+          <div class="amp-foot"><span class="cap" id="field-cap"></span><div class="legend" id="field-legend"></div></div>
         </div>
       </div>
     </div>
@@ -204,6 +209,9 @@
     <div class="module" id="m-recon">
       <div class="mod-head"><span class="mod-title">Reconstruction</span><span class="mod-sub">sample · decode · compare</span><span class="mod-tag" id="recon-tag">idle</span></div>
       <div class="mod-body" id="recon-body"><canvas id="recon-cv"></canvas><span class="cap">original → P(|1⟩) → decode → |error|</span></div>
+      <!-- Sampling footer: two sliders, the label toggle and Sample. Each
+           slider row has its own grid cell, so a value never overlaps the
+           next label. -->
       <div id="recon-foot">
         <div class="rf-sl"><span>shots</span><input type="range" id="shots" min="64" max="20000" value="4000" step="64"><span class="val" id="shots-v">4000</span></div>
         <div class="rf-sl"><span>gap</span><input type="range" id="gap" min="0" max="1.5" value="0.7" step="0.05"><span class="val" id="gap-v">0.70s</span></div>
