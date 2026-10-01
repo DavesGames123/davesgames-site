@@ -4,7 +4,8 @@
 // The FOLDED pane is the same pattern folded by the simulator, one sim step per
 // frame. The panes sit side by side when the stage is wider than tall, and
 // stack when it is taller, as app.rs layout does. The topbar toggle (AUTO,
-// HORIZONTAL, VERTICAL) can force either; localStorage keeps the choice.
+// HORIZONTAL, VERTICAL) can force either; sessionStorage keeps the choice for
+// this tab session only, so a forced layout does not stay after the visit.
 //
 // One structure drives everything. `S.pattern` is what the person edits. Any
 // edit rebuilds `S.planar` (planarize) and `S.mesh` (sim.build), so the folded
@@ -32,10 +33,8 @@
 //   window.__origami -- the test hook the headless check drives
 
 import { Assignment, CreasePattern } from './model.js';
-import { planarize } from './planarize.js';
-import { report as foldReport, reportOk } from './foldability.js';
+import { reportOk } from './foldability.js';
 import { toJson, fromJson } from './foldio.js';
-import * as sim from './sim.js';
 import * as patterns from './patterns.js';
 import { Orbit, snap } from './view.js';
 import * as theme from './theme.js';
@@ -45,111 +44,11 @@ import { initGpu } from './gpu.js';
 import { pointInPoly, pointInTri2, pointSegDist, findIndex } from './app/geom.js';
 import { stage, canvas, pane2dEl, pane3dEl, dpr, applyLayout, measure, geom2d, geom3d, view2d, region3d, phys, paneAt, snapPx, resize } from './app/layout.js';
 import { buildLibrary, toggleLibSource } from './app/libpanel.js';
-import { defaultStatus, setStatus, syncFold, syncUI, syncCheck } from './app/readouts.js';
+import { defaultStatus, setStatus, syncFold, syncUI } from './app/readouts.js';
+import { rebuild, pushUndo, undo, redo, loadPreset, eraseNear, eraseTarget, planarEdgesOf, creaseOfPlanar } from './app/edit.js';
 import { COARSE, th, $, TOOLS, TOOL_KEYS, SPEEDS, S, gpu, setGpu, load, save, isPhone } from './app/state.js';
 
 let last = performance.now();
-
-// ── model plumbing ──────────────────────────────────────────────────────────
-
-// Rebuild the folded mesh from the current pattern. Called after any edit.
-function rebuild() {
-  S.planar = planarize(S.pattern);
-  S.mesh = sim.build(S.planar);
-  S.mesh.setFraction(S.fraction);
-  S.report = foldReport(S.planar);
-  S.hoveredFace = null; S.hoveredCrease = null; S.hoveredEdges = null; S.hoveredVertex = null;
-  syncCheck();
-}
-
-// Record the current pattern before an edit. A new edit clears the redo stack.
-function pushUndo() {
-  S.undo.push(S.pattern.clone());
-  if (S.undo.length > 100) S.undo.shift();
-  S.redo.length = 0;
-}
-
-function undo() {
-  const prev = S.undo.pop();
-  if (!prev) return;
-  S.redo.push(S.pattern);
-  S.pattern = prev;
-  S.fraction = 0; S.auto = false;
-  rebuild(); syncUI();
-}
-
-function redo() {
-  const next = S.redo.pop();
-  if (!next) return;
-  S.undo.push(S.pattern);
-  S.pattern = next;
-  S.fraction = 0; S.auto = false;
-  rebuild(); syncUI();
-}
-
-// Load a preset. A file preset is fetched the first time it is picked, so the
-// call is async. A newer pick wins over a slower older one.
-let loadSeq = 0;
-async function loadPreset(p) {
-  if (!p) return;
-  const seq = ++loadSeq;
-  if (p.file) {
-    setStatus(`Loading ${p.label}...`);
-    try { await patterns.prepare(p); } catch (err) { setStatus(`Could not load ${p.label}: ${err.message}`); return; }
-    if (seq !== loadSeq) return;
-  }
-  pushUndo();
-  S.preset = p;
-  S.pattern = patterns.build(p);
-  // Every loaded pattern starts flat and paused, as in the native app.
-  S.fraction = 0; S.auto = false;
-  rebuild();
-  // The desktop library stays open, so a person can step through presets and
-  // watch each fold. The phone sheet covers the panes, so it closes.
-  if (isPhone()) S.libraryOpen = false;
-  setStatus(`${p.label} · ${S.pattern.edges.length} creases`);
-  syncUI();
-}
-
-// Remove the nearest folding crease to a world point. A boundary stays.
-function eraseNear(w) {
-  const i = eraseTarget(w);
-  if (i === null) return;
-  pushUndo();
-  S.pattern.removeCrease(i);
-  rebuild();
-}
-
-function eraseTarget(w) {
-  let best = null, bestD = 0.04;
-  for (let i = 0; i < S.pattern.edges.length; i++) {
-    if (S.pattern.assignment[i] === Assignment.Border) continue;
-    const [a, b] = S.pattern.segment(i);
-    const d = pointSegDist(w, a, b);
-    if (d < bestD) { bestD = d; best = i; }
-  }
-  return best;
-}
-
-// The planar edges that lie on one pattern crease.
-function planarEdgesOf(crease) {
-  const [a, b] = S.pattern.segment(crease);
-  const out = [];
-  S.planar.edges.forEach((e, i) => {
-    if (pointSegDist(S.planar.vertices[e[0]], a, b) < 1e-4 && pointSegDist(S.planar.vertices[e[1]], a, b) < 1e-4) out.push(i);
-  });
-  return out;
-}
-// The pattern crease that holds one planar edge.
-function creaseOfPlanar(edge) {
-  const [ia, ib] = S.planar.edges[edge];
-  const pa = S.planar.vertices[ia], pb = S.planar.vertices[ib];
-  for (let i = 0; i < S.pattern.edges.length; i++) {
-    const [a, b] = S.pattern.segment(i);
-    if (pointSegDist(pa, a, b) < 1e-4 && pointSegDist(pb, a, b) < 1e-4) return i;
-  }
-  return null;
-}
 
 // ── drawing (app.rs draw_2d, draw_3d) ───────────────────────────────────────
 
@@ -440,7 +339,7 @@ function apply(act, el) {
     case 'fraction': S.auto = false; S.fraction = Math.min(Math.max(Number(el.value), 0), 1); break;
     case 'undo': undo(); break;
     case 'redo': redo(); break;
-    case 'layout': S.layoutMode = arg; save('origami.layout', arg); applyLayout(); break;
+    case 'layout': S.layoutMode = arg; try { sessionStorage.setItem('origami.layout', arg); } catch { /* storage blocked */ } applyLayout(); break;
     case 'panel': S.panelOpen = !S.panelOpen; break;
     case 'fit': resetView('2d'); resetView('3d'); break;
     case 'png': savePng(); break;
@@ -757,7 +656,12 @@ window.__origami = {
 
 // ── boot ────────────────────────────────────────────────────────────────────
 async function boot() {
-  S.layoutMode = ['auto', 'h', 'v'].includes(load('origami.layout', 'auto')) ? load('origami.layout', 'auto') : 'auto';
+  // The layout choice lives for one tab session. An old localStorage value
+  // (kept before this change) forced a stacked layout on wide screens, so it
+  // is deleted. A new visit starts in AUTO.
+  try { localStorage.removeItem('origami.layout'); } catch { /* storage blocked */ }
+  let lay = null; try { lay = sessionStorage.getItem('origami.layout'); } catch { /* storage blocked */ }
+  S.layoutMode = ['auto', 'h', 'v'].includes(lay) ? lay : 'auto';
   const ui = Number(load('origami.ui', 1));
   if (Number.isFinite(ui) && ui !== 1) uiZoom(ui);
   buildLibrary();
