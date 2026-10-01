@@ -20,6 +20,7 @@
      phone sheet .......... "@media (max-width: 900px)"
      touch targets ........ "@media (pointer: coarse)"
      landscape phone ...... "orientation: landscape"
+     landscape scroll path  "touch-action: pan-y"
      reduced motion ....... "prefers-reduced-motion"
    ============================================================================ */
 
@@ -233,4 +234,13 @@ input[type=range]::-moz-range-thumb { width: 22px; height: 22px; border: 0; bord
   #shipCanvas { width: min(100%, 62dvh); }
   .fleet-wrap { height: min(260px, 66dvh); }
   .toast { bottom: calc(14px + env(safe-area-inset-bottom)); }
+}
+/* Any short landscape screen (all phones held sideways, up to 932 px wide):
+   the fleet card fills the left column and the sticky panel fills the right.
+   A vertical drag on the fleet scrolls the page. A sideways drag or a hold
+   still pushes the ships. At the top or bottom of the panel list, a drag
+   goes on to scroll the page. A mouse is not affected.                     */
+@media (orientation: landscape) and (max-height: 520px) {
+  .fleet-wrap { touch-action: pan-y; }
+  .tab-body { overscroll-behavior-y: auto; }
 }
