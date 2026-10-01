@@ -107,7 +107,7 @@ body.pn-scrubbing,body.pn-scrubbing *{cursor:ew-resize!important;user-select:non
 .pn-vec{display:flex;gap:6px}
 .pn-vec label{display:flex;align-items:center;gap:3px;flex:1;min-width:0}
 .pn-vec label span{font-size:var(--fs-xs);color:var(--text-faint)}
-.pn-vec .pn-num{flex:1;width:auto}
+.pn-vec .pn-num{flex:1;width:auto;min-width:0}
 
 .pn-grad{display:flex;flex-direction:column;gap:3px}
 .pn-grad-bar{position:relative;height:18px;border:1px solid var(--border-s);border-radius:var(--r);overflow:hidden;cursor:copy;background:repeating-conic-gradient(#222 0 25%,#333 0 50%) 0 0/10px 10px}

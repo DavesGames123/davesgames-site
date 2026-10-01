@@ -1174,12 +1174,14 @@ function renderLibInfo() {
   const d = lib.cursor && state.registry.get(lib.cursor);
   if (!d) { box.replaceChildren(h('div', { class: 'pn-sub' }, isPhone() ? 'Tap a node for details, then Add.' : 'Drag a node onto the graph, or double-click it.')); return; }
   const ports = (arr) => (arr || []).map(p => h('span', { class: 'pn-pt', title: p.type }, h('i', { class: 'pn-sock', style: { background: PORT_COLORS[p.type] || '#888' } }), p.label || p.id));
-  box.replaceChildren(
+  // Optional rows are null. replaceChildren turns null into the text "null", so filter them.
+  box.replaceChildren(...[
     h('div', { class: 'pn-li-info-h' }, h('b', null, d.label), h('button', { type: 'button', class: 'pn-btn pri', onclick: () => { addNodeAt(d.type); if (isPhone()) M.mobile?.setSheet?.('graph'); } }, icon('plus'), 'Add')),
     h('div', { class: 'pn-type mono' }, d.type),
     d.doc ? h('p', { class: 'pn-doc' }, d.doc) : null,
     (d.inputs || []).length ? h('div', { class: 'pn-pts' }, h('span', { class: 'pn-sub' }, 'in'), ports(d.inputs)) : null,
-    (d.outputs || []).length ? h('div', { class: 'pn-pts' }, h('span', { class: 'pn-sub' }, 'out'), ports(d.outputs)) : null);
+    (d.outputs || []).length ? h('div', { class: 'pn-pts' }, h('span', { class: 'pn-sub' }, 'out'), ports(d.outputs)) : null,
+  ].filter(Boolean));
 }
 function initLibrary() {
   const body = $('lib-body'); if (!body) return;
