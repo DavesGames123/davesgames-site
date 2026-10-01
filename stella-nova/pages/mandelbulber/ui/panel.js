@@ -21,7 +21,8 @@ import { setMain, loadScene } from './scene.js';
 import { camFromScene, camToScene, resetCamera, frameView } from './camera.js';
 import { exportFract, copyLink } from './io.js';
 import { presetTitle, loadExample } from './presets.js';
-import { savePng, openExamples, randomExample, toggleFly, resizeCanvas, openPicker } from '../main.js';
+import { openPicker } from './picker.js';
+import { savePng, openExamples, randomExample, toggleFly, resizeCanvas } from '../main.js';
 
 // Main params shown in the panel. A row is skipped when gen/params.json does
 // not list its name. `c` picks one component of a vector param.

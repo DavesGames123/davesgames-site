@@ -36,17 +36,18 @@
 
 import { defaultScene, parseFract } from './fract.js';
 import { $, canvas, panel, pbody, picker, exSheet, root, el, clamp, px, download } from './ui/dom.js';
-import { P, CAT, EXAMPLES, COLLECTIONS, fnum, groupName, isNone, loadData } from './ui/data.js';
+import { P, CAT, EXAMPLES, COLLECTIONS, isNone, loadData } from './ui/data.js';
 import { scene, activeSlot, engine, currentExample, info, setScene, setEngine, setInfo, formulaAt,
   touchSeen, noteTouch, touchUI, coarseMQ, targetSamples, renderScale, pixelRatio } from './ui/state.js';
 import { compileStatus, setStatus, flash, msPerSample, setMsPerSample, showHud, fail } from './ui/hud.js';
 import { V, camFromScene, camBasis, camToScene, resetCamera, frameView, panBy, orbitBy, lookBy } from './ui/camera.js';
 import { sceneDirty, setMain, setSlot, loadScene, pushScene } from './ui/scene.js';
 import { refreshAll, hideTip, initTip } from './ui/controls.js';
-import { thumb, presetThumb } from './ui/thumbs.js';
+import { presetThumb } from './ui/thumbs.js';
 import { loadText, exportText, initIo, shareHash, decodeShare, readHash } from './ui/io.js';
 import { SOURCES, FAMILIES, presetTitle, exampleScene, loadExample } from './ui/presets.js';
 import { buildPanel, initPeek } from './ui/panel.js';
+import { openPicker, closePicker, choose, initPicker } from './ui/picker.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -58,82 +59,7 @@ import { buildPanel, initPeek } from './ui/panel.js';
 export let resizeCanvas = null, resizePending = false;      // set in boot once the engine runs
 
 // ─── formula picker ─────────────────────────────────────────────────────────
-let pickerSlot = 0;
-let pickerTiles = null;
-
-function buildPicker() {
-  const body = $('pickerBody');
-  pickerTiles = [];
-  const groups = new Map();
-  for (const g of CAT.groups || []) groups.set(typeof g === 'string' ? g : g.name ?? g.id, []);
-  for (const f of CAT.formulas) {
-    if (isNone(f)) continue;
-    const g = groupName(f);
-    if (!groups.has(g)) groups.set(g, []);
-    groups.get(g).push(f);
-  }
-  const none = { id: 'none', name: 'None', enumId: 0 };
-  const mk = (f) => {
-    const t = el('button', { type: 'button', class: 'tile', title: `${f.name} (${f.id})` }, thumb(f, 64), el('span', {}, f.name));
-    t.addEventListener('click', () => choose(f));
-    pickerTiles.push({ t, f, key: `${f.name} ${f.id}`.toLowerCase() });
-    return t;
-  };
-  const blocks = [];
-  blocks.push({ h: el('h3', {}, 'None'), grid: el('div', { class: 'grid' }, mk(none)) });
-  for (const [g, list] of groups) {
-    if (!list.length) continue;
-    list.sort((a, b) => a.name.localeCompare(b.name));
-    blocks.push({ h: el('h3', {}, g, el('small', {}, String(list.length))), grid: el('div', { class: 'grid' }, ...list.map(mk)) });
-  }
-  body.replaceChildren(...blocks.flatMap((b) => [b.h, b.grid]), el('p', { class: 'empty', hidden: true }, 'No formula matches.'));
-  pickerTiles.blocks = blocks;
-}
-
-function filterPicker() {
-  const q = $('pickerSearch').value.trim().toLowerCase();
-  let any = 0;
-  for (const { t, key } of pickerTiles) { const ok = !q || q.split(/\s+/).every((w) => key.includes(w)); t.hidden = !ok; any += ok; }
-  for (const b of pickerTiles.blocks) {
-    const n = [...b.grid.children].filter((c) => !c.hidden).length;
-    b.h.hidden = !n;
-    const small = b.h.querySelector('small');
-    if (small) small.textContent = String(n);
-  }
-  $('pickerBody').querySelector('.empty').hidden = any > 0;
-}
-
-export function openPicker(s) {
-  if (!pickerTiles) buildPicker();
-  pickerSlot = s;
-  const cur = scene.main[`formula_${s + 1}`];
-  for (const { t, f } of pickerTiles) t.classList.toggle('cur', fnum(f) === cur);
-  openSheet(picker);
-  $('pickerSearch').value = '';
-  filterPicker();
-  const c = pickerTiles.find((p) => fnum(p.f) === cur);
-  c?.t.scrollIntoView({ block: 'center' });
-  if (matchMedia('(pointer: fine)').matches) $('pickerSearch').focus();
-}
-function closePicker() { closeSheet(picker); }
-function choose(f) {
-  closePicker();
-  setMain(`formula_${pickerSlot + 1}`, fnum(f));
-  // a new shape in slot 1 can enclose the camera: fit the view, unless an example sets it
-  if (pickerSlot === 0 && currentExample < 0 && !isNone(f)) frameView(true);
-}
-$('pickerSearch').addEventListener('input', filterPicker);
-$('pickerSearch').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {                           // exact name, then name prefix, then first match
-    const q = e.target.value.trim().toLowerCase();
-    const vis = pickerTiles.filter((p) => !p.t.hidden);
-    const t = vis.find((p) => p.f.name.toLowerCase() === q) || vis.find((p) => p.f.name.toLowerCase().startsWith(q)) || vis[0];
-    if (t) choose(t.f);
-  }
-  if (e.key === 'Escape') closePicker();
-});
-$('pickerClose').addEventListener('click', closePicker);
-
+initPicker();
 // ─── gradient editor (mat1_surface_color_gradient) ──────────────────────────
 // ─── presets ────────────────────────────────────────────────────────────────
 // A random preset from the ones the sheet filters show (all presets when the sheet is closed).
@@ -528,8 +454,8 @@ function syncViewport() {
 window.visualViewport?.addEventListener('resize', () => { syncViewport(); queueLayout(); });
 window.visualViewport?.addEventListener('scroll', syncViewport);
 
-function openSheet(s) { syncViewport(); s.style.transform = ''; s.classList.remove('hidden'); }
-function closeSheet(s) {
+export function openSheet(s) { syncViewport(); s.style.transform = ''; s.classList.remove('hidden'); }
+export function closeSheet(s) {
   if (s.contains(document.activeElement)) document.activeElement.blur();
   s.classList.add('hidden'); s.style.transform = '';
 }
