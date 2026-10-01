@@ -34,8 +34,8 @@
 //       function prepareExamples  function presetFamily  function presetThumb  function randomExample
 //       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
 
-import { SLOTS, defaultScene, fillDefaults, parseFract, serialiseFract, parseValue, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
-import { $, stage, canvas, panel, pbody, picker, exSheet, root, el, section, fmt, clamp, px, download } from './ui/dom.js';
+import { SLOTS, defaultScene, fillDefaults, parseFract, serialiseFract, parseValue } from './fract.js';
+import { $, stage, canvas, panel, pbody, picker, exSheet, root, el, section, clamp, px, download } from './ui/dom.js';
 import { P, CAT, EXAMPLES, THUMBS, PTHUMBS, COLLECTIONS, byEnum, fnum, groupName, mainSpec, isNone, loadData } from './ui/data.js';
 import { scene, activeSlot, engine, currentExample, info, setScene, setActiveSlot, setEngine, setCurrentExample, setInfo, formulaAt,
   touchSeen, noteTouch, touchUI, coarseMQ, targetSamples, SAMPLES_DEFAULT, renderScale, RENDER_SCALE_DEFAULT, pixelRatio } from './ui/state.js';
