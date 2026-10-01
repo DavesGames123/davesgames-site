@@ -157,6 +157,27 @@ export const circ = (r, n = 48, c = [0, 0]) => G.circlePoly(r, Math.max(n, sides
 export const hole = (r, n = 32, c = [0, 0]) => G.circlePoly(r, Math.max(n, sidesFor(r)), c).reverse();
 export const bevelFor = m => Math.min(0.025, m * 0.12);
 
+// A bevel step can be smaller than the crease angle (3 segments make 30
+// degree steps). Then toCreasedNormals smooths the flat cap into the bevel,
+// and the rim normals of the cap tilt by up to 17 degrees. The cap is a few
+// long triangles, so the tilt spreads across the plate as diagonal light
+// streaks. flattenCaps gives each cap triangle (face normal on +z or -z)
+// its true normal again. The bevel keeps its smooth normals.
+// The geometry is non-indexed, so each triangle has its own 3 normals.
+function flattenCaps(g) {
+  const p = g.attributes.position.array, n = g.attributes.normal.array;
+  for (let t = 0; t < p.length; t += 9) {
+    const ux = p[t + 3] - p[t], uy = p[t + 4] - p[t + 1], uz = p[t + 5] - p[t + 2];
+    const vx = p[t + 6] - p[t], vy = p[t + 7] - p[t + 1], vz = p[t + 8] - p[t + 2];
+    const fx = uy * vz - uz * vy, fy = uz * vx - ux * vz, fz = ux * vy - uy * vx;
+    const L = Math.hypot(fx, fy, fz);
+    if (!L || Math.abs(fz) < L * 0.9999) continue;
+    const s = Math.sign(fz);
+    for (let k = 0; k < 9; k += 3) { n[t + k] = 0; n[t + k + 1] = 0; n[t + k + 2] = s; }
+  }
+  g.attributes.normal.needsUpdate = true;
+}
+
 // ── the builder ─────────────────────────────────────────────────────────────
 // opts.palette: { materialName: { color, roughness, metalness, ... } }
 // overrides the templates for this build only (the randomizer's finishes)
@@ -211,6 +232,7 @@ export function createBuild(opts = {}) {
     // smooth normals across the many small side faces of a curved outline;
     // corners sharper than 35 degrees stay sharp
     const sm = toCreasedNormals(g, 35 * Math.PI / 180); g.dispose();
+    flattenCaps(sm);
     return mesh(sm, matName);
   };
   B.cyl = (r, z0, z1, matName, seg = 28, r1 = r) => {
