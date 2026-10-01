@@ -651,6 +651,9 @@
     // On a phone, scroll so that the hero flag sits in the free space above the sheet.
     function open() {
       panel.classList.add('sheet-open');
+      // A landscape phone shows the panel as a side column (style.css), not
+      // as a sheet. Then the hero is already in view and no scroll is necessary.
+      if (getComputedStyle(panel).position !== 'fixed') return;
       var r = $('heroWrap').getBoundingClientRect();
       var free = window.innerHeight - panel.getBoundingClientRect().height;
       var dy = r.top + r.height / 2 - free / 2;
