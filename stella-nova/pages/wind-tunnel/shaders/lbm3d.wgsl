@@ -114,7 +114,7 @@ fn hash(a: u32) -> u32 {
   return x;
 }
 fn lat(i: vec3u, c: u32) -> f32 {
-  return f32(hash(i.x * 73856093u ^ i.y * 19349663u ^ i.z * 83492791u ^ c * 2654435761u) & 0xffffu) / 65536.0 - 0.5;
+  return f32(hash((i.x * 73856093u) ^ (i.y * 19349663u) ^ (i.z * 83492791u) ^ (c * 2654435761u)) & 0xffffu) / 65536.0 - 0.5;
 }
 fn vn(p: vec3f, c: u32) -> f32 {
   let i = vec3u(floor(p));
@@ -201,7 +201,8 @@ fn step(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index
     let t = types[i];
     let pos = vec3u(x, y, z);
     if (t >= T_WALL) {
-      if (measure) { textureStore(macroOut, pos, vec4f(0.0)); }
+      // A free-slip wall shows the free stream (see lbm2d.wgsl).
+      if (measure) { textureStore(macroOut, pos, select(vec4f(0.0), vec4f(S.U, 0.0, 0.0, 0.0), t == T_SLIP)); }
     } else if (t == T_EQ) {
       let u = inlet(y, z);
       for (var q = 0u; q < 19u; q++) { fB[q * S.n + i] = feq(q, 1.0, u); }

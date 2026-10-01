@@ -184,7 +184,10 @@ fn step(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index
     let y = i / S.nx;
     let t = types[i];
     if (t >= T_WALL) {
-      if (measure) { textureStore(macroOut, vec2u(x, y), vec4f(0.0, 0.0, 0.0, 1.0)); }
+      // A free-slip wall shows the free stream, so the views draw no false
+      // shear layer along the roof.
+      let m = select(vec4f(0.0, 0.0, 0.0, 1.0), vec4f(S.U, 0.0, 0.0, 0.0), t == T_SLIP);
+      if (measure) { textureStore(macroOut, vec2u(x, y), m); }
     } else if (t == T_EQ) {
       let u = inlet(y);
       for (var q = 0u; q < 9u; q++) { fB[q * S.n + i] = feq(q, 1.0, u); }
