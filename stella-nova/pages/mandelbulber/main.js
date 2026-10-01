@@ -35,10 +35,10 @@
 //       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
 
 import { defaultScene, parseFract } from './fract.js';
-import { $, canvas, panel, pbody, picker, exSheet, root, el, clamp, px, download } from './ui/dom.js';
+import { $, canvas, panel, pbody, picker, exSheet, root, clamp, px, download } from './ui/dom.js';
 import { P, CAT, EXAMPLES, COLLECTIONS, isNone, loadData } from './ui/data.js';
 import { scene, activeSlot, engine, info, setScene, setEngine, setInfo, formulaAt,
-  touchSeen, noteTouch, touchUI, coarseMQ, targetSamples, renderScale, pixelRatio } from './ui/state.js';
+  touchSeen, noteTouch, touchUI, targetSamples, renderScale, pixelRatio } from './ui/state.js';
 import { compileStatus, setStatus, flash, msPerSample, setMsPerSample, showHud, fail } from './ui/hud.js';
 import { V, camFromScene, camBasis, camToScene, resetCamera, frameView, panBy, orbitBy, lookBy } from './ui/camera.js';
 import { sceneDirty, setMain, setSlot, loadScene, pushScene } from './ui/scene.js';
@@ -50,6 +50,8 @@ import { buildPanel, initPeek } from './ui/panel.js';
 import { openPicker, closePicker, choose, initPicker } from './ui/picker.js';
 import { syncViewport, initSheets } from './ui/sheets.js';
 import { randomExample, openExamples, closeExamples, initPresetSheet } from './ui/preset-sheet.js';
+import { L, sheetDragging, setSheetDragging, snapH, setSheetY, applyLayout, initLayout, snapTo, togglePanel,
+  observeCanvas, flushResize } from './ui/layout.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -58,7 +60,6 @@ import { randomExample, openExamples, closeExamples, initPresetSheet } from './u
 // ─── control rows ───────────────────────────────────────────────────────────
 // ─── scene changes ──────────────────────────────────────────────────────────
 // ─── panel ──────────────────────────────────────────────────────────────────
-export let resizeCanvas = null, resizePending = false;      // set in boot once the engine runs
 
 // ─── formula picker ─────────────────────────────────────────────────────────
 initPicker();
@@ -269,79 +270,12 @@ ctxMenu.addEventListener('click', (e) => {
 initTip();
 
 // ─── layout: floating panel, bottom sheet, right drawer ─────────────────────
-// float: fine pointer and a wide window. sheet: portrait phone. drawer: landscape phone
-// or tablet. In sheet and drawer mode the canvas shrinks to the free area (--cover-b,
-// --cover-r), so the camera target, orbit and Frame center where the user can see them.
-// A snap to another sheet height resizes the canvas once; a drag only stretches it.
-export const L = { mode: '', snap: 'peek', y: 0, full: 0, peek: 88, half: 320, drawerW: 340, drag: null, focusSnap: null };
-let sheetDragging = false;
-const safeProbe = el('div', { style: 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;'
-  + 'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)' });
-document.body.append(safeProbe);
-function safeInsets() {
-  const cs = getComputedStyle(safeProbe);
-  return { top: parseFloat(cs.paddingTop) || 0, right: parseFloat(cs.paddingRight) || 0, bottom: parseFloat(cs.paddingBottom) || 0, left: parseFloat(cs.paddingLeft) || 0 };
-}
-
-function pickMode() {
-  const w = innerWidth, h = innerHeight;
-  const phone = w <= 720 || (coarseMQ.matches && Math.min(w, h) < 720);
-  if (phone) return w > h ? 'drawer' : 'sheet';
-  return coarseMQ.matches ? 'drawer' : 'float';
-}
-const snapH = (s) => (s === 'full' ? L.full : s === 'half' ? L.half : L.peek);
-function setSheetY(y, dragging) {
-  L.y = y;
-  root.style.setProperty('--sheet-y', px(y));
-  if (!dragging) root.style.setProperty('--sheet-hidden', px(Math.max(0, y)));
-}
-
-function applyLayout() {
-  const mode = pickMode();
-  if (mode !== L.mode) {
-    document.body.classList.remove('mode-float', 'mode-sheet', 'mode-drawer');
-    document.body.classList.add(`mode-${mode}`);
-    L.mode = mode;
-  }
-  document.body.classList.toggle('touchfly', touchUI());
-  const ins = safeInsets();
-  const hidden = panel.classList.contains('hidden');
-  let coverB = 0, coverR = 0;
-  if (mode === 'sheet') {
-    L.full = Math.round(innerHeight - ins.top - 8);
-    root.style.setProperty('--sheet-full', px(L.full));
-    const pk = $('peek');
-    L.peek = Math.round(pk.offsetTop + pk.offsetHeight + ins.bottom);
-    L.half = Math.round(clamp(innerHeight * 0.5, L.peek + 120, L.full));
-    if (!L.drag) setSheetY(L.full - snapH(L.snap));
-    coverB = hidden ? 0 : Math.min(snapH(L.snap), L.half);
-  } else if (mode === 'drawer') {
-    L.drawerW = Math.round(clamp(innerWidth * 0.42, 280, 360) + ins.right);
-    root.style.setProperty('--drawer-w', px(L.drawerW));
-    coverR = hidden ? 0 : L.drawerW;
-  }
-  root.style.setProperty('--cover-b', px(coverB));
-  root.style.setProperty('--cover-r', px(coverR));
-  syncViewport();
-}
-let layoutQueued = false;
-export function queueLayout() { if (layoutQueued) return; layoutQueued = true; requestAnimationFrame(() => { layoutQueued = false; applyLayout(); }); }
-window.addEventListener('resize', queueLayout);
-window.addEventListener('orientationchange', queueLayout);
-coarseMQ.addEventListener?.('change', queueLayout);
-
-export function snapTo(s) {
-  L.snap = s;
-  panel.classList.remove('hidden');
-  applyLayout();
-}
-function togglePanel() { panel.classList.toggle('hidden'); applyLayout(); }
-
+initLayout();
 // Sheet drag: from the grab handle, the header and the peek bar (pointer events), and from
 // the panel body when it is scrolled to the top and the finger pulls down (touch events).
 function sheetDragBegin(y) {
   L.drag = { y0: y, h0: L.full - L.y, samples: [{ y, t: performance.now() }] };
-  sheetDragging = true;
+  setSheetDragging(true);
   stopInertia();
   panel.classList.add('dragging');
 }
@@ -370,10 +304,10 @@ function sheetDragEnd() {
     if (order.indexOf(s) === order.indexOf(cur)) s = order[clamp(i, 0, 2)];
   }
   L.drag = null;
-  sheetDragging = false;
+  setSheetDragging(false);
   panel.classList.remove('dragging');
   snapTo(s);
-  if (resizePending) { resizePending = false; resizeCanvas?.(); }
+  flushResize();
 }
 const dragZone = (t) => t.closest?.('#grab, #panel > header, #peek');
 let sheetPtr = null;
@@ -523,17 +457,7 @@ async function boot() {
   engine.onStatus((s) => { setStatus(String(s)); showHud(); });
   engine.setMaxSamples?.(targetSamples.value);
   engine.setFrameBudget?.(33);                         // about 30 fps while the user drags
-  // Resize only when the pixel size changes, so a layout pass keeps the accumulated image.
-  // During a sheet drag the canvas only stretches (object-fit); the resize waits for the snap.
-  const resize = () => {
-    if (sheetDragging) { resizePending = true; return; }
-    const w0 = canvas.width, h0 = canvas.height;
-    engine.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), pixelRatio());
-    if (canvas.width !== w0 || canvas.height !== h0) setInfo(null);
-  };
-  resizeCanvas = resize;
-  new ResizeObserver(resize).observe(canvas);
-  resize();
+  observeCanvas();
   requestAnimationFrame(tick);
 }
 

@@ -23,7 +23,8 @@ import { exportFract, copyLink } from './io.js';
 import { presetTitle, loadExample } from './presets.js';
 import { openPicker } from './picker.js';
 import { openExamples, randomExample } from './preset-sheet.js';
-import { savePng, toggleFly, resizeCanvas } from '../main.js';
+import { resizeCanvas } from './layout.js';
+import { savePng, toggleFly } from '../main.js';
 
 // Main params shown in the panel. A row is skipped when gen/params.json does
 // not list its name. `c` picks one component of a vector param.

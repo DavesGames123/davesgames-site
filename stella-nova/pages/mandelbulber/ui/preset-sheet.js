@@ -14,7 +14,7 @@ import { currentExample } from './state.js';
 import { presetThumb } from './thumbs.js';
 import { SOURCES, FAMILIES, presetTitle, loadExample } from './presets.js';
 import { openSheet, closeSheet } from './sheets.js';
-import { L, snapTo } from '../main.js';
+import { L, snapTo } from './layout.js';
 
 // A random preset from the ones the sheet filters show (all presets when the sheet is closed).
 export function randomExample() {
