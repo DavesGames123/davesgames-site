@@ -30,25 +30,16 @@
 //    function buildUI / syncUI / setOpen                       controls
 // ============================================================================
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { parse, makeGrid, AA_NAME } from './parse.js';
 import { cartoonGeometry } from './cartoon.js';
 import { gaussianSurface, vdw } from './surface.js';
 import { SCHEMES, residueColors, atomColors, legend, toHex, PLDDT } from './colors.js';
 import { GROUPS, PRESETS, byId } from './presets.js';
 import * as R from './reps.js';
-import { Post } from './post.js';
-
-const $ = id => document.getElementById(id);
-const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
-const COARSE = matchMedia('(pointer:coarse)').matches;
-const HOVER = matchMedia('(hover:hover) and (pointer:fine)').matches;
-const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const DPR = () => Math.min(window.devicePixelRatio || 1, 2);
-const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-const ease = t => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
-const cap = s => s.charAt(0) + s.slice(1).toLowerCase();
+import { camera, canvas, clearGroup, controls, envRT, matAtom, matCartoon, matLine, matMark, matSurface, mol, over, overlay, post, renderer, scene } from './app/stage.js';
+import { $, COARSE, DPR, HOVER, PHONE_Q, REDUCED, cap, ease, esc } from './app/env.js';
+import { ADDITIVES, S, anchorAtom, atomPos, dirty, isPolymer, resLabel } from './app/state.js';
+import { hideHint, hideLoading, nextFrame, showLoading, toast } from './app/feedback.js';
 
 const REPS = [
   { id: 'cartoon', label: 'Cartoon', short: 'Cartoon' },
@@ -63,93 +54,17 @@ const SHOWS = [
   { id: 'ligands', label: 'Ligands' }, { id: 'ions', label: 'Ions' }, { id: 'waters', label: 'Waters' },
   { id: 'hydrogens', label: 'Hydrogens' }, { id: 'additives', label: 'Additives' },
 ];
-// crystallisation and detergent molecules: hidden unless "Additives" is on
-const ADDITIVES = new Set(['SO4', 'PO4', 'ACT', 'ACY', 'GOL', 'EDO', 'PEG', 'PG4', 'PGE', '1PE', 'P6G', 'BOG', 'HTG', 'HTO', 'DMS',
-  'FMT', 'MPD', 'TRS', 'BME', 'IPA', 'EOH', 'MES', 'EPE', 'CIT', 'NO3', 'IMD', 'LDA', 'C8E', 'OLC', 'BU3', 'MRD', 'PE4', 'SCN', 'AZI', 'NH4', 'UNX', 'UNL']);
 const SS_NAME = { H: 'α-helix', G: '3₁₀-helix', E: 'β-strand', C: 'coil' };
 const UNIPROT = /^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})$/;
 
-// ── renderer, scene, lights ───────────────────────────────────────────────
-const canvas = $('view');
-let renderer;
-try {
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
-  if (!renderer.capabilities.isWebGL2) throw new Error('WebGL 2 required');
-} catch (e) { $('nogl').hidden = false; throw e; }
-renderer.setPixelRatio(DPR());
-renderer.outputColorSpace = THREE.SRGBColorSpace;
-
-const scene = new THREE.Scene();
-const pmrem = new THREE.PMREMGenerator(renderer);
-const envRT = pmrem.fromScene(new RoomEnvironment(renderer), 0.04);
-scene.environment = envRT.texture;
-pmrem.dispose();
-const camera = new THREE.PerspectiveCamera(28, 1, 0.5, 2000);
-scene.add(camera);
-const key = new THREE.DirectionalLight(0xffffff, 2.3);
-key.position.set(-0.55, 0.85, 1.0);
-camera.add(key); camera.add(key.target); key.target.position.set(0, 0, -1);
-const fill = new THREE.DirectionalLight(0xa9c2ff, 0.55);
-fill.position.set(0.9, -0.4, 0.4);
-camera.add(fill); camera.add(fill.target); fill.target.position.set(0, 0, -1);
-scene.add(new THREE.HemisphereLight(0xe2e8ff, 0x1c1e2a, 0.5));
-const mol = new THREE.Group();
-const over = new THREE.Group();
-scene.add(mol, over);
-const overlay = new THREE.Scene();
-const post = new Post(renderer, COARSE);
-
-const matAtom = R.makeMaterial({ roughness: 0.36 });
-const matCartoon = R.makeMaterial({ roughness: 0.48, vertexColors: true, side: THREE.DoubleSide });
-const matSurface = R.makeMaterial({ roughness: 0.55, vertexColors: true, env: 0.4 });
-const matMark = new THREE.MeshBasicMaterial({ color: 0xffd27a, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false });
-const matLine = { distance: new THREE.LineDashedMaterial({ color: 0xffd27a, dashSize: 0.45, gapSize: 0.3, depthTest: false, transparent: true }),
-  angle: new THREE.LineDashedMaterial({ color: 0x9fe3ff, dashSize: 0.45, gapSize: 0.3, depthTest: false, transparent: true }),
-  dihedral: new THREE.LineDashedMaterial({ color: 0xd6b0ff, dashSize: 0.45, gapSize: 0.3, depthTest: false, transparent: true }) };
-
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true; controls.dampingFactor = 0.12;
-controls.rotateSpeed = COARSE ? 0.75 : 0.9; controls.zoomSpeed = 1.1; controls.panSpeed = 0.9;
-controls.screenSpacePanning = true;
-controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN };
-controls.autoRotateSpeed = 1.1;
-
-// ── state ─────────────────────────────────────────────────────────────────
-const S = {
-  s: null, preset: null, token: 0, rep: 'cartoon', color: 'chain',
-  show: { ligands: true, ions: true, waters: false, hydrogens: false, additives: false },
-  opacity: 1, chainOn: null, sticks: [], stickSet: new Set(), sel: null, hood: new Map(), hoverRes: -1,
-  measure: 0, pending: [], measures: [], spin: false, dirty: true, fly: null,
-  wpos: null, bound: { c: new THREE.Vector3(), r: 20 }, grid: null, pick: [], pickOver: [],
-  vis: null, cells: null, surfCache: null, look: { ao: true, outline: true, fog: true }, frames: 0, ready: false,
-};
-const dirty = () => { S.dirty = true; };
 controls.addEventListener('change', dirty);
 controls.addEventListener('start', () => { S.fly = null; hideHint(); });
 
-// ── helpers ───────────────────────────────────────────────────────────────
-const isPolymer = r => r.kind === 'protein' || r.kind === 'nucleic';
-const resLabel = r => (isPolymer(r) && r.kind === 'protein' ? cap(r.name) : r.name) + ' ' + r.seq + (r.icode || '');
-const atomPos = i => new THREE.Vector3(S.wpos[3 * i], S.wpos[3 * i + 1], S.wpos[3 * i + 2]);
-const anchorAtom = r => (r.ca >= 0 ? r.ca : r.atoms[0]);
 function srgbToLin(arr) {
   const out = new Float32Array(arr.length);
   for (let i = 0; i < arr.length; i++) { const c = arr[i]; out[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }
   return out;
 }
-let toastT = 0;
-function toast(msg, err = false) {
-  const t = $('toast');
-  t.textContent = msg; t.classList.toggle('err', err); t.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), err ? 6000 : 3200);
-}
-function showLoading(msg) { $('loadingText').textContent = msg; $('loading').hidden = false; }
-function hideLoading() { $('loading').hidden = true; }
-const nextFrame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
-let hintGone = false;
-function hideHint() { if (!hintGone) { hintGone = true; $('hint').classList.add('gone'); } }
-$('hint').textContent = COARSE ? 'one finger orbits · pinch zooms · two fingers pan · tap a residue' : 'drag to orbit · scroll to zoom · right-drag to pan · click a residue · double-click to focus';
-setTimeout(hideHint, 10000);
 
 // symmetric 3x3 eigen-decomposition (Jacobi rotations)
 function eig3(A) {
@@ -375,9 +290,6 @@ function detailFor(n, extra = 0) {
   let d = n < 3000 ? 3 : n < 12000 ? 2 : n < 40000 ? 1 : 0;
   if (COARSE) d -= 1;
   return Math.max(0, Math.min(3, d + extra));
-}
-function clearGroup(g) {
-  for (const c of [...g.children]) { g.remove(c); R.disposeObject(c); }
 }
 function ballRadius(rep, a, r) {
   const single = isPolymer(r) && r.atoms.length === 1;
