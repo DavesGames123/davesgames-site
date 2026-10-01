@@ -1,9 +1,12 @@
 // ============================================================================
 //  LIQUID METAL TABLE  ·  cells.mjs — the cell list that build.mjs reads
 // ────────────────────────────────────────────────────────────────────────────
-//  Each cell is [name, family, species, knob labels, body]. body(NRM) returns
-//  the WGSL body of fs_<name>. The body reads p, t and k and returns a vec4f.
-//  NRM(call, S) emits a finite-difference normal n for a height call.
+//  Each cell is [name, family, species, knob labels, body, pre?]. body(NRM)
+//  returns the WGSL body of fs_<name>. The body reads p, t and k and returns a
+//  vec4f. NRM(call, S) emits a finite-difference normal n for a height call.
+//  The optional pre string is WGSL (helper functions) that build.mjs emits just
+//  before fs_<name>. The six later families live in cells-<family>.mjs and
+//  join the list at the bottom of this file.
 //
 //  GREP MAP
 //    // ---- chrome .... flowing chrome height fields
@@ -12,8 +15,16 @@
 //    // ---- blobs ..... Blinn metaball fields
 //    // ---- cells ..... Worley tubes, glass, cracks
 //    // ---- glass ..... tiles, slats, fluted glass, thin film
+//    import list ...... the later families, in legend order
 // ============================================================================
-export const CELLS = [
+import { ALLOYS } from './cells-alloys.mjs';
+import { FLUIDS } from './cells-fluids.mjs';
+import { MACHINED } from './cells-machined.mjs';
+import { TEXTILES } from './cells-textiles.mjs';
+import { IRIDESCENT } from './cells-iridescent.mjs';
+import { KINETIC } from './cells-kinetic.mjs';
+
+const BASE = [
   // ---- chrome ------------------------------------------------------------
   ['quicksilver', 'chrome', 'domain-warped fbm read as flowing chrome', ['scale', 'warp', 'flow', ''],
    N => `  let sc = mix(1.4, 3.0, k.x); let amt = mix(1.2, 3.0, k.y); let tt = t * mix(0.5, 1.8, k.z);
@@ -454,3 +465,5 @@ ${N(q => `hSlick(${q}, tt, sc)`, '1.0')}
   let m = smoothstep(1.0, 1.0 - 3.0 * px() / R, rr);
   return present(mix(bgc, c, m));`],
 ];
+
+export const CELLS = [...BASE, ...ALLOYS, ...FLUIDS, ...MACHINED, ...TEXTILES, ...IRIDESCENT, ...KINETIC];

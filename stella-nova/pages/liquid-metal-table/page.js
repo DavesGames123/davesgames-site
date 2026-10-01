@@ -1,7 +1,7 @@
 // ============================================================================
 //  LIQUID METAL TABLE  ·  page.js — the per-page PAGE object (GENERATED)
 // ────────────────────────────────────────────────────────────────────────────
-//  33 metal and glass surfaces; one fragment shader per cell, each reading
+//  73 metal, glass, fabric and film surfaces; one fragment shader per cell, each reading
 //  only a shared uniform buffer (no pointer, no texture). The shared
 //  table-engine drives this object through its ctx. main.js fetches the data
 //  and calls bootTable(PAGE, data); the engine calls PAGE.init and PAGE.draw.

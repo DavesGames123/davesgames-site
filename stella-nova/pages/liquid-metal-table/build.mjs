@@ -27,7 +27,21 @@
 //    fn hWarp .......... domain-warped height    ·  fn silk .... ribbon stack
 //    fn tubeShade ...... tube cross-section      ·  fn orbitField .. metaballs
 //    fn film ........... thin-film interference  ·  fn lightField .. backlight
+//    fn cmf / filmN .... color lobes, film with a free index
+//    fn oxide .......... temper / anodize colors (complement of the film)
+//    fn bragg .......... multilayer (Bragg stack) reflectance
+//    fn grating ........ diffraction grating color (holographic foil)
+//    fn kk ............. Kajiya-Kay strand highlight
+//    fn hexCell ........ hex lattice cell: local offset and id
+//    fn ballN / glowRamp sphere normal, molten emission ramp
+//    per-cell helpers .. emitted just before their fs_* (the pre field in cells-*.mjs)
 //    @fragment fs_* .... the cells
+//
+//  CELL FILES
+//    cells.mjs ......... the first six families and the CELLS export
+//    cells-alloys.mjs .. alloys     ·  cells-fluids.mjs .... fluids
+//    cells-machined.mjs  machined   ·  cells-textiles.mjs .. textiles
+//    cells-iridescent.mjs  iridescent · cells-kinetic.mjs . kinetic
 // ============================================================================
 import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -43,6 +57,12 @@ const FAM = {
   blobs:   'rgba(200,215,230,0.13)',
   cells:   'rgba(235,170,120,0.13)',
   glass:   'rgba(140,220,210,0.13)',
+  alloys:  'rgba(240,200,120,0.14)',
+  fluids:  'rgba(150,200,240,0.13)',
+  machined:'rgba(185,190,200,0.14)',
+  textiles:'rgba(235,150,190,0.13)',
+  iridescent:'rgba(170,240,160,0.13)',
+  kinetic: 'rgba(240,140,120,0.13)',
 };
 
 // ── the WGSL helper library (shared by every cell) ──────────────────────────
@@ -54,8 +74,11 @@ const HELPERS = `// ════════════════════
 //  tone and cream swatches. Domain warping and finite-difference normals
 //  after Quilez; metaballs after Blinn 1982; cellular noise after Worley 1996
 //  with the Quilez exact edge distance; Fresnel after Schlick 1994; thin-film
-//  color from two-beam interference; cosine palette after Quilez. The studio,
-//  ribbon, tube and glass cores are original.
+//  color from two-beam interference; cosine palette after Quilez. Gerstner
+//  (trochoidal) waves after Gerstner 1802 and Tessendorf 2001; strand light
+//  after Kajiya and Kay 1989; multilayer color from the Bragg condition;
+//  foil color from the grating equation; rain rings from a hashed cell grid.
+//  The studio, ribbon, tube, glass and every cell core are original.
 // ═══════════════════════════════════════════════════════════════════════════
 const PI: f32 = 3.141592653589793;
 const TAU: f32 = 6.283185307179586;
@@ -322,18 +345,93 @@ fn blobN(fd: Fld, S: f32) -> vec3f {
 // two-beam interference: film index 1.4, thickness d in nanometres. Seven
 // wavelengths from 400 to 700 nm, each weighted into rgb by rough gaussian
 // color matching lobes, so the colors follow the pastel interference chart.
-fn film(d: f32, ct: f32) -> vec3f {
-    let opd = 2.0 * 1.4 * d * max(ct, 0.2);
+fn cmf(lam: f32) -> vec3f {
+    return vec3f(exp(-pow((lam - 600.0) / 50.0, 2.0)) + 0.3 * exp(-pow((lam - 440.0) / 25.0, 2.0)),
+                 exp(-pow((lam - 545.0) / 45.0, 2.0)),
+                 exp(-pow((lam - 450.0) / 35.0, 2.0)));
+}
+// the same film with a free index nf (oxides on metal run near 2.0 .. 2.6)
+fn filmN(d: f32, ct: f32, nf: f32) -> vec3f {
+    let opd = 2.0 * nf * d * max(ct, 0.2);
     var c = vec3f(0.0); var wsum = vec3f(0.0);
     for (var i: i32 = 0; i < 7; i++) {
         let lam = 400.0 + 50.0 * f32(i);
-        let w = vec3f(exp(-pow((lam - 600.0) / 50.0, 2.0)) + 0.3 * exp(-pow((lam - 440.0) / 25.0, 2.0)),
-                      exp(-pow((lam - 545.0) / 45.0, 2.0)),
-                      exp(-pow((lam - 450.0) / 35.0, 2.0)));
+        let w = cmf(lam);
         c += w * (0.5 - 0.5 * cos(TAU * opd / lam));
         wsum += w;
     }
     return c / wsum * 1.2;
+}
+fn film(d: f32, ct: f32) -> vec3f { return filmN(d, ct, 1.4); }
+// oxide on metal: the film reflects the complement of the two-beam color, so
+// a growing oxide runs bare metal, straw, bronze, purple, blue, pale blue and
+// then a second order; this is the temper and anodize color sequence. The
+// seven-sample lobes make the mid orders too dark, so the hue is kept and the
+// brightness is pulled toward 0.8.
+fn oxide(d: f32, ct: f32, nf: f32) -> vec3f {
+    let o = clamp(vec3f(1.1) - filmN(d, ct, nf) * 0.8, vec3f(0.04), vec3f(1.2));
+    let l = dot(o, vec3f(0.3, 0.5, 0.2));
+    return o / max(l, 0.05) * mix(l, 0.8, 0.6);
+}
+// a Bragg stack of period D (optical nm): reflectance peaks where 2 D cos = m lam.
+// A higher sharp means more layers and a purer color. The peak moves to blue
+// as the surface turns away, so domes go green at the crown, violet at the rim.
+fn bragg(D: f32, ct: f32, sharp: f32) -> vec3f {
+    var c = vec3f(0.0); var wsum = vec3f(0.0);
+    for (var i: i32 = 0; i < 16; i++) {
+        let lam = 400.0 + 20.0 * f32(i);
+        let w = cmf(lam);
+        let x = cos(PI * 2.0 * D * max(ct, 0.15) / lam);
+        c += w * pow(x * x, sharp);
+        wsum += w;
+    }
+    return c / wsum * 2.2;
+}
+// grating equation: a grating of period d (nm) along unit g sends order m of
+// wavelength lam where d * (L + V).g = m lam. hv is L + V. Across the grating
+// the light must still reflect, so the cross term gates the color.
+fn grating(hv: vec3f, g: vec2f, d: f32, tight: f32) -> vec3f {
+    let ut = abs(dot(hv.xy, g));
+    let ub = dot(hv.xy, vec2f(-g.y, g.x));
+    let gate = exp(-ub * ub * tight);
+    var c = vec3f(0.0);
+    for (var m: i32 = 1; m <= 3; m++) {
+        let lam = d * ut / f32(m);
+        c += cmf(lam) * smoothstep(380.0, 420.0, lam) * smoothstep(720.0, 680.0, lam) / f32(m);
+    }
+    return c * gate;
+}
+// Kajiya-Kay: a strand along tg glints where sin(tg, half vector) is near 1
+fn kk(tg: vec3f, l: vec3f, v: vec3f, pw: f32) -> f32 {
+    let th = dot(normalize(tg), normalize(l + v));
+    return pow(sqrt(max(1.0 - th * th, 0.0)), pw);
+}
+// hex lattice of unit spacing: q is the offset from the nearest center
+struct Hex { q: vec2f, id: vec2f };
+fn hexCell(p: vec2f) -> Hex {
+    let s = vec2f(1.0, 1.7320508); let hs = 0.5 * s;
+    let ia = floor(p / s); let a = p - s * ia - hs;
+    let ib = floor((p - hs) / s); let b = p - s * ib - s;
+    var o: Hex;
+    if (dot(a, a) < dot(b, b)) { o.q = a; o.id = ia * 2.0; } else { o.q = b; o.id = ib * 2.0 + 1.0; }
+    return o;
+}
+// sphere normal for an offset q in a disc of radius r (z toward the viewer).
+// Outside the disc it clamps to the rim, so the normal stays unit length: a
+// long normal would blow pow(dot(n, h), 220) up to inf, and mix(x, inf, 0)
+// is NaN, which paints the whole half-plane black.
+fn ballN(q: vec2f, r: f32) -> vec3f {
+    let s0 = q / r;
+    let l = length(s0);
+    let s = select(s0, s0 / max(l, 1e-4), l > 1.0);
+    return vec3f(s, sqrt(max(1.0 - dot(s, s), 0.0)));
+}
+// molten metal emission: dull red, orange, yellow, white as x rises past 1
+fn glowRamp(x: f32) -> vec3f {
+    let r = smoothstep(0.0, 0.4, x);
+    let g = smoothstep(0.2, 0.9, x) * 0.8;
+    let b = smoothstep(0.65, 1.3, x) * 0.75;
+    return vec3f(r, g, b) * (0.3 + 1.7 * x);
 }
 // a drifting field of soft colored lights behind glass
 fn lightField(p: vec2f, t: f32) -> vec3f {
@@ -358,7 +456,7 @@ const NRM = (call, S) => `  let e_ = 0.75 * px() + 0.001;
 import { CELLS } from './cells.mjs';
 
 // ── emit pack.wgsl ───────────────────────────────────────────────────────────
-const frag = ([name, , , , body]) =>
+const frag = ([name, , , , body, pre]) => (pre ? pre.trim() + '\n' : '') +
   `@fragment fn fs_${name}(@builtin(position) fp: vec4f) -> @location(0) vec4f {\n  let p = cuv(fp.xy);\n  let t = u.time + 6.0;\n  let k = u.k;\n${body(NRM)}\n}`;
 const pack = HELPERS + `\n// ── the ${CELLS.length} cells ──────────────────────────────────────────────────────────\n` +
   CELLS.map(frag).join('\n\n') + '\n';
@@ -406,8 +504,9 @@ const indexHtml = `<!DOCTYPE html>
   ────────────────────────────────────────────────────────────────────────────
    Static markup only. main.js loads the data and hands it to the shared
    table-engine, which builds the sidebar and the frame loop and drives page.js.
-   ${CELLS.length} chrome, ribbon, band, blob, cell and glass effects, one fragment
-   shader per cell, all lit by one procedural studio.
+   ${CELLS.length} chrome, ribbon, band, blob, cell, glass, alloy, fluid, machined,
+   textile, iridescent and kinetic effects, one fragment shader per cell, all
+   lit by one procedural studio.
   ════════════════════════════════════════════════════════════════════════════
 -->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -472,7 +571,7 @@ bootTable(PAGE, { spec, pack: SH['shaders/pack.wgsl'] });
 const pageJs = `// ============================================================================
 //  LIQUID METAL TABLE  ·  page.js — the per-page PAGE object (GENERATED)
 // ────────────────────────────────────────────────────────────────────────────
-//  ${CELLS.length} metal and glass surfaces; one fragment shader per cell, each reading
+//  ${CELLS.length} metal, glass, fabric and film surfaces; one fragment shader per cell, each reading
 //  only a shared uniform buffer (no pointer, no texture). The shared
 //  table-engine drives this object through its ctx. main.js fetches the data
 //  and calls bootTable(PAGE, data); the engine calls PAGE.init and PAGE.draw.
