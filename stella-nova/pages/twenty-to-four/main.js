@@ -34,6 +34,7 @@
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  --------------------------------------------------------------------------
 //      state ............... "const SIM="            all live parameters
+//      palette ............. "const PAL="            colours shared with style.css
 //      color ramp .......... "function fieldColorRGB"  magnitude → RGB
 //      field model ......... "function fieldAt"       the dipole E and B
 //      overlays ............ "OVERLAYS"               hover → quantity table
@@ -72,16 +73,22 @@ const SIM={
 // The source (dipole) position in canvas pixels, and the drag offset while it is
 // being moved.
 const SRC={x:0,y:0};
+// One palette for the canvas and the equations (style.css :root has the same
+// values as CSS tokens). E is gold, B is cyan, the displacement current is
+// green, and indigo marks the negative side of a signed heatmap.
+const PAL={e:[255,200,100],b:[94,214,230],disp:[134,227,168],a:[185,164,255],neg:[125,136,255],ev:[242,227,198]};
+const rgbS=c=>c[0]+','+c[1]+','+c[2];
 let dragging=false,dragDX=0,dragDY=0;
 
-// Map a field magnitude to an RGB color along a six-stop ramp (deep blue → cyan
-// → green → orange → white). The magnitude is log-compressed because the field
-// spans many orders between the near zone and the far zone.
+// Map a field magnitude to an RGB colour along the E ramp: deep amber, gold,
+// then warm white where the field is strongest. E is gold in the equations,
+// so the field lines are too. The magnitude is log-compressed because the
+// field spans many orders between the near zone and the far zone.
 function fieldColorRGB(mag,gamma){
   gamma=gamma||1.0;
   const lv=Math.log10(1+mag*9e6)/6.6;
   const lc=Math.pow(Math.max(0,Math.min(1,lv)),1/Math.max(0.1,gamma));
-  const stops=[[0.05,0,0.3],[0,0.2,1],[0,1,0.8],[0.2,1,0],[1,0.5,0],[1,1,1]];
+  const stops=[[0.30,0.15,0.05],[0.62,0.34,0.08],[0.92,0.62,0.22],[1,0.80,0.42],[1,0.90,0.68],[1,0.97,0.90]];
   const sv=lc*5,si=Math.min(Math.floor(sv),4),sf=sv-si;
   return [stops[si][0]+sf*(stops[si+1][0]-stops[si][0]),
           stops[si][1]+sf*(stops[si+1][1]-stops[si][1]),
@@ -131,15 +138,15 @@ function dBz_dx(x,y){return (field(x+hS,y).Bz-field(x-hS,y).Bz)/(2*hS);}
 // arrows ('glyph' means draw B⊥ symbols, null means nothing to draw). ov keys
 // in concepts.js index into this table.
 const OVL={
-  Ex:{lab:'Eₓ — electric field, x-component', fn:(x,y)=>field(x,y).Ex, cvec:(x,y)=>[field(x,y).Ex,0]},
-  Ey:{lab:'E_y — electric field, y-component', fn:(x,y)=>field(x,y).Ey, cvec:(x,y)=>[0,field(x,y).Ey]},
-  Bz:{lab:'B⊥ — magnetic field, out of / into the plane', fn:(x,y)=>field(x,y).Bz, cvec:'glyph'},
-  dExdt:{lab:'∂Eₓ/∂t — displacement current, x', fn:(x,y)=>dEdt(x,y,'Ex'), cvec:(x,y)=>[dEdt(x,y,'Ex'),0]},
-  dEydt:{lab:'∂E_y/∂t — displacement current, y', fn:(x,y)=>dEdt(x,y,'Ey'), cvec:(x,y)=>[0,dEdt(x,y,'Ey')]},
-  curlHx:{lab:'(∇×H)ₓ ∝ ∂_y B⊥', fn:dBz_dy, cvec:(x,y)=>[dBz_dy(x,y),0]},
-  curlHy:{lab:'(∇×H)_y ∝ −∂ₓ B⊥', fn:(x,y)=>-dBz_dx(x,y), cvec:(x,y)=>[0,-dBz_dx(x,y)]},
-  divE:{lab:'∇·E — sources of the field (≈ 0 away from the charge)', fn:(x,y)=>(dExdx(x,y)+dEydy(x,y)), cvec:null},
-  zero:{lab:'≡ 0 for an in-plane dipole — this component vanishes in the slice', fn:null, cvec:null},
+  Ex:{lab:'Eₓ — electric field, x-component', col:'e', fn:(x,y)=>field(x,y).Ex, cvec:(x,y)=>[field(x,y).Ex,0]},
+  Ey:{lab:'E_y — electric field, y-component', col:'e', fn:(x,y)=>field(x,y).Ey, cvec:(x,y)=>[0,field(x,y).Ey]},
+  Bz:{lab:'B⊥ — magnetic field, out of / into the plane', col:'b', fn:(x,y)=>field(x,y).Bz, cvec:'glyph'},
+  dExdt:{lab:'∂Eₓ/∂t — displacement current, x', col:'disp', fn:(x,y)=>dEdt(x,y,'Ex'), cvec:(x,y)=>[dEdt(x,y,'Ex'),0]},
+  dEydt:{lab:'∂E_y/∂t — displacement current, y', col:'disp', fn:(x,y)=>dEdt(x,y,'Ey'), cvec:(x,y)=>[0,dEdt(x,y,'Ey')]},
+  curlHx:{lab:'(∇×H)ₓ ∝ ∂_y B⊥', col:'b', fn:dBz_dy, cvec:(x,y)=>[dBz_dy(x,y),0]},
+  curlHy:{lab:'(∇×H)_y ∝ −∂ₓ B⊥', col:'b', fn:(x,y)=>-dBz_dx(x,y), cvec:(x,y)=>[0,-dBz_dx(x,y)]},
+  divE:{lab:'∇·E — sources of the field (≈ 0 away from the charge)', col:'e', fn:(x,y)=>(dExdx(x,y)+dEydy(x,y)), cvec:null},
+  zero:{lab:'≡ 0 for an in-plane dipole — this component vanishes in the slice', col:'e', fn:null, cvec:null},
 };
 // Spatial derivatives of the E components, summed for the divergence overlay.
 function dExdx(x,y){return (field(x+hS,y).Ex-field(x-hS,y).Ex)/(2*hS);}
@@ -150,10 +157,10 @@ window.__setOverlay=function(kind){
   SIM.overlay=(kind&&OVL[kind])?kind:null;
   const cap=document.getElementById('ovl-caption'),stov=document.getElementById('st-ovl');
   if(!SIM.overlay){cap.classList.remove('show');stov.innerHTML='showing: <b>field lines</b>';return;}
-  const o=OVL[kind];cap.classList.add('show');
+  const o=OVL[kind];cap.classList.add('show');cap.style.setProperty('--cap','rgb('+rgbS(PAL[o.col])+')');
   cap.innerHTML=o.fn
-    ? o.lab+'<span class="ck"><span class="pm pos">▮ positive</span> &nbsp; <span class="pm neg">▮ negative</span> &nbsp; amber arrow = this component</span>'
-    : o.lab+'<span class="ck">nothing to draw — the field has no component here</span>';
+    ? o.lab+'<span class="ck"><span class="pm pos">positive</span><span class="pm neg">negative</span><span>arrows: this component</span></span>'
+    : o.lab+'<span class="ck">nothing to draw: the field has no component here</span>';
   stov.innerHTML='showing: <b>'+kind+'</b>';
 };
 
@@ -161,10 +168,12 @@ window.__setOverlay=function(kind){
 // Offscreen buffer for the heatmap: the scalar field is sampled sparsely onto a
 // small canvas, then upscaled with smoothing for a fast, soft heatmap.
 const hmCanvas=document.createElement('canvas'); const hmCtx=hmCanvas.getContext('2d');
-// Paint the signed scalar fn as a heatmap: amber for positive, blue for
-// negative, with log-compressed alpha so both near and far zones stay visible.
-function drawHeatmap(fn){
-  const step=7;
+// Paint the signed scalar fn as a heatmap: pos for positive, neg for
+// negative (RGB triples from PAL), with log-compressed alpha so both near and
+// far zones stay visible. maxA caps the alpha, so the field lines stay on top.
+function drawHeatmap(fn,pos,neg,maxA){
+  pos=pos||PAL.e;neg=neg||PAL.neg;maxA=maxA||150;
+  const step=6;
   const bw=Math.max(2,Math.ceil(CW/step)), bh=Math.max(2,Math.ceil(CH/step));
   if(hmCanvas.width!==bw||hmCanvas.height!==bh){hmCanvas.width=bw;hmCanvas.height=bh;}
   const img=hmCtx.createImageData(bw,bh), data=img.data;
@@ -175,8 +184,8 @@ function drawHeatmap(fn){
   const bright=Math.min(1.7,Math.sqrt(SIM.amp));
   for(let p=0;p<vals.length;p++){
     const v=vals[p]; let a=Math.log10(1+Math.abs(v)*SCALE)/DEN; a=a*a*bright;
-    if(a>1)a=1; const al=(a*235)|0; const o=p*4;
-    if(v>=0){data[o]=255;data[o+1]=176;data[o+2]=77;} else {data[o]=96;data[o+1]=170;data[o+2]=255;}
+    if(a>1)a=1; const al=(a*maxA)|0; const o=p*4;
+    const c=v>=0?pos:neg; data[o]=c[0];data[o+1]=c[1];data[o+2]=c[2];
     data[o+3]=al;
   }
   hmCtx.putImageData(img,0,0);
@@ -200,9 +209,9 @@ function drawArrowField(vf,rgb,alpha,lenMul){
     const nx=a[2]/m, ny=a[3]/m, t=Math.log10(1+m*K)/DEN;
     const len=(6+t*gs*0.42)*lenMul, al=alpha*(0.32+0.68*t);
     const x=a[0],y=a[1],x0=x-nx*len*0.5,y0=y-ny*len*0.5,x1=x+nx*len*0.5,y1=y+ny*len*0.5;
-    ctx.strokeStyle='rgba('+rgb+','+al+')';ctx.lineWidth=1.3;
+    ctx.strokeStyle='rgba('+rgb+','+al+')';ctx.lineWidth=1.15;ctx.lineCap='round';
     ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
-    const px=-ny*2.6,py=nx*2.6;
+    const px=-ny*2.3,py=nx*2.3;
     ctx.fillStyle='rgba('+rgb+','+al+')';
     ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x1-nx*4.6+px,y1-ny*4.6+py);ctx.lineTo(x1-nx*4.6-px,y1-ny*4.6-py);ctx.closePath();ctx.fill();
   }
@@ -218,19 +227,19 @@ function drawBzGlyphs(){
   for(const p of pts){
     const v=p[2],a=Math.abs(v);if(a<1e-13)continue;
     const t=Math.log10(1+a*K)/DEN, r=2+t*6, al=0.35+0.6*t;
-    ctx.strokeStyle='rgba(255,200,50,'+al+')';ctx.lineWidth=1.4;
+    ctx.strokeStyle='rgba('+rgbS(PAL.b)+','+al+')';ctx.lineWidth=1.4;
     ctx.beginPath();ctx.arc(p[0],p[1],r,0,Math.PI*2);ctx.stroke();
-    if(v>=0){ctx.fillStyle='rgba(255,200,50,'+al+')';ctx.beginPath();ctx.arc(p[0],p[1],Math.max(1,r*0.32),0,Math.PI*2);ctx.fill();}
+    if(v>=0){ctx.fillStyle='rgba('+rgbS(PAL.b)+','+al+')';ctx.beginPath();ctx.arc(p[0],p[1],Math.max(1,r*0.32),0,Math.PI*2);ctx.fill();}
     else{const d=r*0.7;ctx.beginPath();ctx.moveTo(p[0]-d,p[1]-d);ctx.lineTo(p[0]+d,p[1]+d);ctx.moveTo(p[0]+d,p[1]-d);ctx.lineTo(p[0]-d,p[1]+d);ctx.stroke();}
   }
   ctx.restore();
 }
-// Draw the hovered overlay's component vectors (or B⊥ glyphs) in amber over the
-// base E field.
+// Draw the hovered overlay's component vectors (or B⊥ glyphs) in the colour
+// of that quantity over the base E field.
 function renderComponentVectors(kind){
   const o=OVL[kind]; if(!o) return;
   if(o.cvec==='glyph'){drawBzGlyphs();return;}
-  if(typeof o.cvec==='function'){drawArrowField(o.cvec,'255,200,50',0.95,1.0);}
+  if(typeof o.cvec==='function'){drawArrowField(o.cvec,rgbS(PAL[o.col]),0.95,1.0);}
 }
 
 /* ─── stream-function field lines (contours; smooth in time) ─── */
@@ -293,31 +302,43 @@ function marchAll(levels,segs){
 /* ─── render ─── */
 function render(){
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();
-  ctx.fillStyle='#0b0e15';ctx.fillRect(0,0,CW,CH);
-  // Faint reference grid every 46 px.
-  ctx.strokeStyle='rgba(150,200,255,0.022)';ctx.lineWidth=1;
+  ctx.fillStyle='#0a0d14';ctx.fillRect(0,0,CW,CH);
+  // A soft warm light round the charge, then a faint reference grid every 46 px.
+  const R0=Math.hypot(CW,CH)*0.6,bg=ctx.createRadialGradient(SRC.x,SRC.y,0,SRC.x,SRC.y,R0);
+  bg.addColorStop(0,'rgba(255,200,100,0.05)');bg.addColorStop(0.5,'rgba(94,214,230,0.015)');bg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=bg;ctx.fillRect(0,0,CW,CH);
+  ctx.strokeStyle='rgba(160,185,225,0.028)';ctx.lineWidth=1;
   for(let x=0;x<CW;x+=46){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
   for(let y=0;y<CH;y+=46){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(CW,y);ctx.stroke();}
 
   // base field heatmap: overlay quantity when hovering, else the magnetic field
-  if(SIM.overlay && OVL[SIM.overlay].fn) drawHeatmap(OVL[SIM.overlay].fn);
-  else if(SIM.showB && !SIM.overlay) drawHeatmap((x,y)=>field(x,y).Bz);
+  if(SIM.overlay && OVL[SIM.overlay].fn) drawHeatmap(OVL[SIM.overlay].fn,PAL[OVL[SIM.overlay].col],PAL.neg,190);
+  else if(SIM.showB && !SIM.overlay) drawHeatmap((x,y)=>field(x,y).Bz,PAL.b,PAL.neg,105);
 
   if(SIM.showFronts) renderFronts();
   if(SIM.showLines) renderLines();
-  if(SIM.showVectors) drawArrowField((x,y)=>{const f=field(x,y);return [f.Ex,f.Ey];},'205,216,238',0.55,1.0);
+  if(SIM.showVectors) drawArrowField((x,y)=>{const f=field(x,y);return [f.Ex,f.Ey];},rgbS(PAL.ev),SIM.overlay?0.25:0.42,0.9);
   if(SIM.overlay) renderComponentVectors(SIM.overlay);
   renderSource();
 }
 // Dashed concentric circles marking successive wavefronts, spaced one wavelength
 // apart and advancing outward with the phase clock.
 function renderFronts(){
-  const k=kOf();ctx.save();ctx.strokeStyle='rgba(150,200,255,0.13)';ctx.lineWidth=1;ctx.setLineDash([2,6]);
+  const k=kOf();ctx.save();ctx.strokeStyle='rgba(168,185,217,0.2)';ctx.lineWidth=1;ctx.setLineDash([2,6]);
   for(let n=0;n<16;n++){const r=(2*Math.PI*n+SIM.t)/k;if(r<8||r>Math.hypot(CW,CH))continue;
     ctx.beginPath();ctx.arc(SRC.x,SRC.y,r,0,Math.PI*2);ctx.stroke();}
   ctx.restore();
 }
 const GLOW=window.GlowLines?GlowLines.create():null;
+// Contour segments meet end to end. With round caps and additive blending,
+// each joint is drawn twice and shows as a bright bead along the line. trim
+// pulls both ends of a segment in by a part of the half width w/2, so the
+// caps of two neighbours just meet. It writes the result into TR.
+const TR=[0,0,0,0];
+function trim(x0,y0,x1,y1,w){
+  const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy),t=Math.min(w*0.42,L*0.35)/(L||1);
+  TR[0]=x0+dx*t;TR[1]=y0+dy*t;TR[2]=x1-dx*t;TR[3]=y1-dy*t;return TR;
+}
 // Draw the E field lines as contours of the stream function. Each segment is
 // colored by local magnitude and drawn twice: a soft wide glow pass then a thin
 // bright pass. When the energy pulse is on, a traveling sine brightens the lines
@@ -338,8 +359,10 @@ function renderLines(){
       const lv=Math.min(1,Math.log10(1+m*9e6)/6.6);
       const a=Math.min(0.92,0.16+lv*0.95)*pulse*dim;
       if(a<0.02)continue;
-      GLOW.seg(x0,y0,x1,y1,r*a*0.18,g*a*0.18,b*a*0.18,4.5*pulse);
-      GLOW.seg(x0,y0,x1,y1,r*a,g*a,b*a,1.4);
+      const wg=4.5*pulse;trim(x0,y0,x1,y1,wg);
+      GLOW.seg(TR[0],TR[1],TR[2],TR[3],r*a*0.16,g*a*0.16,b*a*0.16,wg);
+      trim(x0,y0,x1,y1,1.4);
+      GLOW.seg(TR[0],TR[1],TR[2],TR[3],r*a,g*a,b*a,1.4);
     }
     GLOW.flush(ctx);
     return;
@@ -355,9 +378,10 @@ function renderLines(){
       const lv=Math.min(1,Math.log10(1+m*9e6)/6.6);
       const a=Math.min(0.92,0.16+lv*0.95)*pulse*dim;
       if(a<0.02)continue;
-      if(pass===0){ctx.strokeStyle='rgba('+((r*a*0.18*255)|0)+','+((g*a*0.18*255)|0)+','+((b*a*0.18*255)|0)+',1)';ctx.lineWidth=4.5*pulse;}
+      if(pass===0){ctx.strokeStyle='rgba('+((r*a*0.16*255)|0)+','+((g*a*0.16*255)|0)+','+((b*a*0.16*255)|0)+',1)';ctx.lineWidth=4.5*pulse;}
       else{ctx.strokeStyle='rgba('+((r*a*255)|0)+','+((g*a*255)|0)+','+((b*a*255)|0)+',1)';ctx.lineWidth=1.4;}
-      ctx.beginPath();ctx.moveTo(x0,y0);ctx.lineTo(x1,y1);ctx.stroke();
+      trim(x0,y0,x1,y1,ctx.lineWidth);
+      ctx.beginPath();ctx.moveTo(TR[0],TR[1]);ctx.lineTo(TR[2],TR[3]);ctx.stroke();
     }
   }
   ctx.restore();
@@ -367,14 +391,14 @@ function renderLines(){
 function renderSource(){
   const [ax,ay]=axisVec();const osc=Math.sin(SIM.t);const off=osc*7;
   const cx=SRC.x,cy=SRC.y;ctx.save();
-  ctx.strokeStyle='rgba(150,200,255,0.25)';ctx.lineWidth=1.5;
+  ctx.strokeStyle='rgba(168,185,217,0.35)';ctx.lineWidth=1.5;ctx.lineCap='round';
   ctx.beginPath();ctx.moveTo(cx-ax*12,cy-ay*12);ctx.lineTo(cx+ax*12,cy+ay*12);ctx.stroke();
   const gx=cx+ax*off,gy=cy+ay*off,mix=(osc+1)*0.5;
-  const cr=(96+(255-96)*mix)|0,cg=(224+(200-224)*mix)|0,cb=(238+(50-238)*mix)|0,c=cr+','+cg+','+cb;
-  const grd=ctx.createRadialGradient(gx,gy,0,gx,gy,16);
-  grd.addColorStop(0,'rgba('+c+',0.95)');grd.addColorStop(0.4,'rgba('+c+',0.4)');grd.addColorStop(1,'rgba('+c+',0)');
-  ctx.fillStyle=grd;ctx.beginPath();ctx.arc(gx,gy,16,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='rgba('+c+',1)';ctx.beginPath();ctx.arc(gx,gy,3.2,0,Math.PI*2);ctx.fill();
+  const cr=(PAL.b[0]+(PAL.e[0]-PAL.b[0])*mix)|0,cg=(PAL.b[1]+(PAL.e[1]-PAL.b[1])*mix)|0,cb=(PAL.b[2]+(PAL.e[2]-PAL.b[2])*mix)|0,c=cr+','+cg+','+cb;
+  const grd=ctx.createRadialGradient(gx,gy,0,gx,gy,22);
+  grd.addColorStop(0,'rgba('+c+',0.95)');grd.addColorStop(0.35,'rgba('+c+',0.35)');grd.addColorStop(1,'rgba('+c+',0)');
+  ctx.fillStyle=grd;ctx.beginPath();ctx.arc(gx,gy,22,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='rgba(255,250,240,1)';ctx.beginPath();ctx.arc(gx,gy,3.2,0,Math.PI*2);ctx.fill();
   ctx.restore();
 }
 
