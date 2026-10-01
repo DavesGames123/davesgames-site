@@ -40,6 +40,7 @@ struct PartU {
   reseed: u32,
   rakeA: vec4f,   // x0, x1, y0, y1
   rakeB: vec4f,   // z0, z1
+  sub: vec4u,     // trail slots written this frame, RK2 substeps per slot
 };
 
 @group(0) @binding(0) var<uniform> CAM: CamU;
@@ -143,14 +144,29 @@ fn advect(@builtin(global_invocation_id) g: vec3u) {
   var pb = parts[2u * i + 1u];
   var pos = pa.xyz;
   var fresh = PU.reseed != 0u || pb.x <= 0.0;
+  // Trail. engine3d.js adds one ring slot each time the free stream has
+  // moved TRAIL_SPACING cells, so a trail is about K x spacing cells long
+  // at any step rate. This frame writes `slots` slots, the last one at
+  // PU.head. With no new slot (slots 1, sub.x 0) the newest point slides.
+  // Each slot takes m RK2 substeps of at most 1.5 cells.
+  let slots = max(PU.sub.x, 1u);
+  let m = max(PU.sub.y, 1u);
   if (!fresh) {
-    let u1 = macroAt(pos).xyz;
-    let u2 = macroAt(pos + u1 * PU.dt * 0.5).xyz;
-    pos += u2 * PU.dt;
-    pa.w += 1.0;
+    let h = PU.dt / f32(slots * m);
     let d = CAM.dims.xyz;
-    let out = any(pos < vec3f(0.5, 1.0, 0.5)) || any(pos > d - vec3f(1.0));
-    if (out || pa.w > pb.x || solidAt(pos)) { fresh = true; }
+    for (var k = 1u; k <= slots && !fresh; k++) {
+      var u2 = vec3f(0.0);
+      for (var j = 0u; j < m; j++) {
+        let u1 = macroAt(pos).xyz;
+        u2 = macroAt(pos + u1 * h * 0.5).xyz;
+        pos += u2 * h;
+        let out = any(pos < vec3f(0.5, 1.0, 0.5)) || any(pos > d - vec3f(1.0));
+        if (out || solidAt(pos)) { fresh = true; break; }
+      }
+      if (!fresh) { trail[i * PU.K + (PU.head + PU.K - slots + k) % PU.K] = vec4f(pos, length(u2)); }
+    }
+    pa.w += 1.0;
+    if (pa.w > pb.x) { fresh = true; }
   }
   if (fresh) {
     pos = spawn(i);
@@ -159,11 +175,11 @@ fn advect(@builtin(global_invocation_id) g: vec3u) {
     pa = vec4f(pos, select(0.0, r * life, PU.reseed != 0u));
     pb = vec4f(life, 0.0, 0.0, 0.0);
     for (var k = 0u; k < PU.K; k++) { trail[i * PU.K + k] = vec4f(pos, 0.0); }
+    trail[i * PU.K + PU.head] = vec4f(pos, length(macroAt(pos).xyz));
   }
   pa = vec4f(pos, pa.w);
   parts[2u * i] = pa;
   parts[2u * i + 1u] = pb;
-  trail[i * PU.K + PU.head] = vec4f(pos, length(macroAt(pos).xyz));
 }
 
 // ------------------------------------------------------------ pressure reference

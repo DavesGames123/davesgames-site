@@ -47,6 +47,7 @@ struct PartU {
   life: f32,      // mean life in frames
   reseed: u32,
   rake: vec4f,    // x0, x1, y0, y1 in cells
+  sub: vec4u,     // trail slots written this frame, RK2 substeps per slot
 };
 
 @group(0) @binding(0) var<uniform> V: ViewU;
@@ -119,14 +120,28 @@ fn advect(@builtin(global_invocation_id) g: vec3u) {
   var pa = parts[i];
   var pos = pa.xy;
   var fresh = PU.reseed != 0u || pa.w <= 0.0;
+  // Trail. engine2d.js adds one ring slot each time the free stream has
+  // moved TRAIL_SPACING cells, so a trail is about K x spacing cells long
+  // at any step rate. This frame writes `slots` slots, the last one at
+  // PU.head. With no new slot (slots 1, sub.x 0) the newest point slides.
+  // Each slot takes m RK2 substeps of at most 1.5 cells.
+  let slots = max(PU.sub.x, 1u);
+  let m = max(PU.sub.y, 1u);
   if (!fresh) {
-    let u1 = macroAt(pos).xy;
-    let mid = pos + u1 * PU.dt * 0.5;
-    let m2 = macroAt(mid);
-    pos += m2.xy * PU.dt;
+    let h = PU.dt / f32(slots * m);
     pa.z += 1.0;
-    let out = pos.x < 0.5 || pos.y < 0.5 || pos.x > V.dims.x - 1.0 || pos.y > V.dims.y - 1.0;
-    if (out || pa.z > pa.w || macroAt(pos).w > 0.75) { fresh = true; }
+    for (var k = 1u; k <= slots && !fresh; k++) {
+      var u2 = vec2f(0.0);
+      for (var j = 0u; j < m; j++) {
+        let u1 = macroAt(pos).xy;
+        u2 = macroAt(pos + u1 * h * 0.5).xy;
+        pos += u2 * h;
+        let out = pos.x < 0.5 || pos.y < 0.5 || pos.x > V.dims.x - 1.0 || pos.y > V.dims.y - 1.0;
+        if (out || macroAt(pos).w > 0.75) { fresh = true; break; }
+      }
+      if (!fresh) { trail[i * PU.K + (PU.head + PU.K - slots + k) % PU.K] = vec4f(pos, length(u2), pa.z); }
+    }
+    if (pa.z > pa.w) { fresh = true; }
   }
   if (fresh) {
     pos = spawn(i);
@@ -136,12 +151,11 @@ fn advect(@builtin(global_invocation_id) g: vec3u) {
     // whole set does not respawn on one frame.
     pa = vec4f(pos, select(0.0, r * life, PU.reseed != 0u), life);
     for (var k = 0u; k < PU.K; k++) { trail[i * PU.K + k] = vec4f(pos, 0.0, 0.0); }
+    trail[i * PU.K + PU.head] = vec4f(pos, length(macroAt(pos).xy), pa.z);
   }
   pa.x = pos.x;
   pa.y = pos.y;
   parts[i] = pa;
-  let sp = length(macroAt(pos).xy);
-  trail[i * PU.K + PU.head] = vec4f(pos, sp, pa.z);
 }
 
 // ------------------------------------------------------------ color ramps

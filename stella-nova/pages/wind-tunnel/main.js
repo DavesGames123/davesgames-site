@@ -13,6 +13,10 @@
 //  At TAU_MIN the grid holds no more; the Smagorinsky model in the solver
 //  takes the rest. "Re (grid)" in the readout is U_LAT L_cells / nu_lat.
 //
+//  STREAKS. A streak is K trail points TRAIL_SPACING cells apart (engines),
+//  so its length does not depend on the step rate: 64 x 3 = 192 cells in
+//  2D, 48 x 2 = 96 cells in 3D.
+//
 //  STEPS. Each frame runs `steps` lattice steps. A governor moves `steps`
 //  so that the GPU time of the whole frame stays near BUDGET_MS. It acts on
 //  the total time, not on a time per step: the render passes cost a fixed
@@ -88,7 +92,7 @@ const G = {
   slicePos: 0.5,
   surface: 0,
   streaks: 'rake',
-  density: 0.4,
+  density: 0.25,  // streaks are long (STREAKS above), so fewer of them
   contrast: 1,
   tier: COARSE ? 0 : 1,
   rate: 1,
@@ -212,10 +216,10 @@ async function makeEngine() {
   try {
     if (G.mode === '2d') {
       const [nx, ny] = dims2d();
-      e = await createEngine2D(device, code, { format, nx, ny, maxParticles: phone ? 8000 : 16000, K: 20 });
+      e = await createEngine2D(device, code, { format, nx, ny, maxParticles: phone ? 8000 : 16000, K: 64 });
     } else {
       const [nx, ny, nz] = TIERS['3d'][G.tier];
-      e = await createEngine3D(device, code, { format, nx, ny, nz, maxParticles: phone ? 6000 : 12000, K: 18 });
+      e = await createEngine3D(device, code, { format, nx, ny, nz, maxParticles: phone ? 6000 : 12000, K: 48 });
     }
   } catch (err) {
     showMsg('The solver did not build: ' + err.message);

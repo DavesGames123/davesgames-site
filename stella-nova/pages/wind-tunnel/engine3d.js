@@ -28,6 +28,7 @@
 //       function mul4  function inv4  setShape(  setFlow(  reset(  frame(  destroy(
 
 const FIX = 1048576;
+const TRAIL_SPACING = 2;   // cells between trail points (see trailStep)
 
 function perspective(fovY, aspect, near, far) {
   const f = 1 / Math.tan(fovY / 2);
@@ -118,7 +119,7 @@ export async function createEngine3D(device, code, opts) {
   const simMBuf = buf(48, U.UNIFORM | U.COPY_DST, 'simMeasure');
   const shapeBuf = buf(160, U.UNIFORM | U.COPY_DST, 'shape');
   const camBuf = buf(224, U.UNIFORM | U.COPY_DST, 'cam');
-  const partUBuf = buf(64, U.UNIFORM | U.COPY_DST, 'partU');
+  const partUBuf = buf(80, U.UNIFORM | U.COPY_DST, 'partU');
   const fA = buf(19 * n * 4, U.STORAGE, 'fA');
   const fB = buf(19 * n * 4, U.STORAGE, 'fB');
   const types = buf(n * 4, U.STORAGE | U.COPY_DST, 'types');
@@ -164,6 +165,21 @@ export async function createEngine3D(device, code, opts) {
   const flow = { U: 0.08, tau: 0.52, noise: 0, ground: 0, beltU: 0 };
   let parity = 0, stepCount = 0, frameNo = 0, head = 0, reseed = 1, disposed = false;
   const stats = { forces: new Float32Array(12), area: new Uint32Array(4), stamp: 0 };
+
+  // Trail slots. A new ring slot opens each time the free stream has moved
+  // TRAIL_SPACING cells, not each frame. Thus a streak is about
+  // K x TRAIL_SPACING cells long at any step rate. Between slots the
+  // newest point slides with its particle. advect integrates the frame in
+  // RK2 substeps of at most 1.5 cells. Returns [new slots, substeps per slot].
+  let trailAcc = 0;
+  function trailStep(steps) {
+    const d = steps * flow.U;
+    trailAcc += d;
+    let adv = Math.floor(trailAcc / TRAIL_SPACING);
+    trailAcc -= adv * TRAIL_SPACING;
+    adv = Math.min(adv, K - 1);
+    return [adv, Math.max(1, Math.ceil(d / Math.max(adv, 1) / 1.5))];
+  }
 
   function writeSim() {
     simF[4] = flow.U; simF[5] = flow.tau; simF[6] = flow.noise; simF[7] = flow.beltU;
@@ -229,6 +245,7 @@ export async function createEngine3D(device, code, opts) {
       device.queue.submit([enc.finish()]);
       parity = 0;
       reseed = 1;
+      trailAcc = 0;
     },
 
     // Returns { vp, ivp } for a camera, so main.js can pick and project.
@@ -266,8 +283,9 @@ export async function createEngine3D(device, code, opts) {
       device.queue.writeBuffer(camBuf, 0, cam);
 
       const count = Math.min(f.particles | 0, maxParticles);
-      head = (head + 1) % K;
-      const pu = new ArrayBuffer(64);
+      const [adv, sub] = trailStep(steps);
+      head = (head + adv) % K;
+      const pu = new ArrayBuffer(80);
       const pf = new Float32Array(pu), pi = new Uint32Array(pu);
       pi.set([count, K, head, (frameNo * 7919) >>> 0], 0);
       pf[4] = steps;
@@ -276,6 +294,7 @@ export async function createEngine3D(device, code, opts) {
       pi[7] = reseed;
       pf.set(f.rakeA || [0, 0, 0, 0], 8);
       pf.set(f.rakeB || [0, 0, 0, 0], 12);
+      pi[16] = adv; pi[17] = sub;
       device.queue.writeBuffer(partUBuf, 0, pu);
 
       // Forces sum over the last two steps. A fluid cell shut in by solids

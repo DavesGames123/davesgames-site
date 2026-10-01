@@ -24,6 +24,7 @@
 //       destroy(  FIX
 
 const FIX = 1048576;
+const TRAIL_SPACING = 3;   // cells between trail points (see trailStep)
 
 export async function createEngine2D(device, code, opts) {
   const { format, nx, ny } = opts;
@@ -70,7 +71,7 @@ export async function createEngine2D(device, code, opts) {
   const simMBuf = buf(48, U.UNIFORM | U.COPY_DST, 'simMeasure');
   const shapeBuf = buf(160, U.UNIFORM | U.COPY_DST, 'shape');
   const viewBuf = buf(64, U.UNIFORM | U.COPY_DST, 'view');
-  const partUBuf = buf(48, U.UNIFORM | U.COPY_DST, 'partU');
+  const partUBuf = buf(64, U.UNIFORM | U.COPY_DST, 'partU');
   const fA = buf(9 * n * 4, U.STORAGE, 'fA');
   const fB = buf(9 * n * 4, U.STORAGE, 'fB');
   const types = buf(n * 4, U.STORAGE | U.COPY_DST, 'types');
@@ -127,6 +128,21 @@ export async function createEngine2D(device, code, opts) {
   let reseed = 1;
   let disposed = false;
   const stats = { forces: new Float32Array(8), area: new Uint32Array(4), stamp: 0 };
+
+  // Trail slots. A new ring slot opens each time the free stream has moved
+  // TRAIL_SPACING cells, not each frame. Thus a streak is about
+  // K x TRAIL_SPACING cells long at any step rate. Between slots the
+  // newest point slides with its particle. advect integrates the frame in
+  // RK2 substeps of at most 1.5 cells. Returns [new slots, substeps per slot].
+  let trailAcc = 0;
+  function trailStep(steps) {
+    const d = steps * flow.U;
+    trailAcc += d;
+    let adv = Math.floor(trailAcc / TRAIL_SPACING);
+    trailAcc -= adv * TRAIL_SPACING;
+    adv = Math.min(adv, K - 1);
+    return [adv, Math.max(1, Math.ceil(d / Math.max(adv, 1) / 1.5))];
+  }
 
   function writeSim() {
     simF[4] = flow.U; simF[5] = flow.tau; simF[6] = flow.noise; simF[7] = flow.beltU;
@@ -194,6 +210,7 @@ export async function createEngine2D(device, code, opts) {
       device.queue.submit([enc.finish()]);
       parity = 0;
       reseed = 1;
+      trailAcc = 0;
     },
 
     // f: { steps, canvas: [w, h], offset: [x, y], cellPx, field, refL,
@@ -212,8 +229,9 @@ export async function createEngine2D(device, code, opts) {
       device.queue.writeBuffer(viewBuf, 0, v);
 
       const count = Math.min(f.particles | 0, maxParticles);
-      head = (head + 1) % K;
-      const pu = new ArrayBuffer(48);
+      const [adv, sub] = trailStep(steps);
+      head = (head + adv) % K;
+      const pu = new ArrayBuffer(64);
       const pf = new Float32Array(pu), pi = new Uint32Array(pu);
       pi.set([count, K, head, (frameNo * 7919) >>> 0], 0);
       pf[4] = Math.max(steps, 0.0);
@@ -221,6 +239,7 @@ export async function createEngine2D(device, code, opts) {
       pf[6] = f.life;
       pi[7] = reseed;
       pf.set(f.rake || [0, 0, 0, 0], 8);
+      pi[12] = adv; pi[13] = sub;
       device.queue.writeBuffer(partUBuf, 0, pu);
 
       // Forces sum over the last two steps. A fluid cell shut in by solids
