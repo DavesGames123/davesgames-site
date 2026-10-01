@@ -62,185 +62,30 @@
 //      ui ............... mountExportUI, placeUI, layout table, progress, topbar, keys
 //      selfTest / init
 // ============================================================================
-import {
-  EXPORT_TARGETS, MAP_SLOTS, MAP_NAMES, DEFAULT_SCALARS, RES_OPTIONS, GRAPH_VERSION,
-} from './contract.js';
+import { EXPORT_TARGETS, DEFAULT_SCALARS, RES_OPTIONS } from './contract.js';
 import { makeZip, encodePNG, crc32, decodePNG, readZip } from './zip.js';
 import { buildGLB, uvSphere, parseGLB } from './glb.js';
 import * as IMP from './import.js';
 
-import { C, S, UI, last, bind, setLast, err } from './export/ctx.js';
+import { C, S, UI, last, bind, err } from './export/ctx.js';
 import { linToSrgb } from './export/half.js';
 import { fmtSize } from './export/format.js';
-import { graphJSON, scalarsNow, sanitize, materialName } from './export/graph-access.js';
-import { readTexture, MapSource } from './export/readback.js';
-import { withMaps } from './export/maps.js';
-import { computeStats, usedFlags } from './export/stats.js';
-import { ch, chLabel, packImage } from './export/pack.js';
-import { PLANS, PLAIN_MAPS, FORMATS, resolvePlan, baseRGB, gray } from './export/plans.js';
+import { graphJSON, scalarsNow, materialName } from './export/graph-access.js';
+import { readTexture } from './export/readback.js';
+import { chLabel } from './export/pack.js';
+import { PLANS, PLAIN_MAPS, FORMATS, resolvePlan } from './export/plans.js';
 import { DEFAULT_OPTS, OPTS, saveOpts } from './export/options.js';
-import { unityGuid, unityTexMeta, matMeta, unityMat } from './export/engines/unity.js';
-import { unrealScript } from './export/engines/unreal.js';
-import { godotTres } from './export/engines/godot.js';
-import { gltfPackage } from './export/engines/gltf.js';
-import { readmeText } from './export/engines/readme.js';
+import { unityGuid } from './export/engines/unity.js';
 import { h, sel, row, chk, download } from './export/ui/dom.js';
 import { setProgress, showResult } from './export/ui/progress.js';
+import { exportPackage, exportMapPNG } from './export/package.js';
+import { projectJSON, saveProject, copyMaterialJSON } from './export/project.js';
 
-export { linToSrgb, scalarsNow, readTexture, PLAIN_MAPS, FORMATS, unityGuid, download };
+export {
+  linToSrgb, scalarsNow, readTexture, PLAIN_MAPS, FORMATS, unityGuid, download,
+  exportPackage, exportMapPNG, projectJSON, saveProject, copyMaterialJSON,
+};
 let busy = false;
-
-// ------------------------------------------------------------ exportPackage
-/**
- * Build an export package.
- * @param {string} target an EXPORT_TARGETS id
- * @param {object} [opts] overrides of the panel options:
- *   {res, name, fmt:'png'|'tga', heightFmt:'png16'|'png8'|'exr', normalBits:8|16,
- *    template, maps:[PLAIN_MAPS keys], includeGraph, readme, fold, displaceMesh,
- *    unityShaderGuid, godotRoot, unrealDest, compress, onProgress(stage, frac)}
- * @returns {Promise<Blob>} zip (or .glb for 'gltf'); blob.fileName and
- *   blob.entries [{name, size}] describe it.
- */
-export async function exportPackage(target, opts = {}) {
-  if (!PLANS[target]) throw new Error('Unknown export target ' + target);
-  if (!C.gpu.ok) throw new Error('Export needs WebGPU');
-  const o = { ...OPTS, ...opts, target };
-  if (opts.format && !opts.fmt) o.fmt = FORMATS.includes(opts.format) ? opts.format : 'png'; // panels.js name
-  if (opts.helpers !== undefined) o.helpers = !!opts.helpers;
-  o.name = sanitize(opts.name || materialName());
-  o.uvScale = +(opts.uvScale ?? S.view.uvScale ?? 1) || 1;
-  o.normalBits = +o.normalBits === 16 ? 16 : 8;
-  const progress = o.onProgress;
-  const res = +o.res || 0;
-  return withMaps(res, async maps => {
-    const src = new MapSource(maps);
-    o.resolved = src.res;
-    const sc = scalarsNow(maps);
-    const st = await computeStats(src, MAP_NAMES, progress);
-    const u = usedFlags(st, sc);
-    u.emissiveScale = u.emissivePeak > 1 ? u.emissivePeak : 1;
-    u.emissiveGain = 1 / u.emissiveScale;
-    const full = PLANS[target](o, null, sc).map(x => x.file);
-    const plan = resolvePlan(target, o, u, sc);
-    const skipped = full.filter(fl => !plan.some(p => p.file === fl));
-    const files = [];
-    const root = target === 'png' || target === 'gltf' ? '' : `${o.name}/`;
-    if (target === 'gltf') {
-      const { glb, images } = await gltfPackage(o, src, sc, u, st, plan, progress);
-      const blob = new Blob([glb], { type: 'model/gltf-binary' });
-      blob.fileName = blob.name = `${o.name}.glb`;
-      blob.entries = [{ name: blob.fileName, size: glb.byteLength }, ...images.map(i => ({ name: '  ' + i.name + '.png', size: i.data.length }))];
-      finish(target, o, blob, sc, u);
-      return blob;
-    }
-    const meta = [];
-    for (let i = 0; i < plan.length; i++) {
-      const img = plan[i];
-      progress?.(`encoding ${img.file}`, 0.32 + (0.55 * (i / plan.length)));
-      const data = await packImage(img, src);
-      const name = `${img.file}.${img.ext}`;
-      files.push({ name: root + name, data });
-      meta.push({ key: img.key, name, bits: img.bits, fmt: img.fmt || img.ext, color: img.color, role: img.role, chans: img.chans });
-    }
-    progress?.('writing helper files', 0.9);
-    if (!o.helpers) { /* helper files off: maps, README and graph only */ }
-    else if (target.startsWith('unity-')) {
-      const texGuid = {};
-      for (const m of meta) {
-        const guid = unityGuid(`${o.name}/${m.name}`);
-        texGuid[m.key] = guid;
-        files.push({ name: `${root}${m.name}.meta`, data: unityTexMeta(guid, { srgb: m.color === 'sRGB', normal: m.key === 'normal', alpha: m.chans.length === 4 && m.key === 'base' }) });
-      }
-      const mg = unityGuid(`${o.name}/${o.name}.mat`);
-      files.push({ name: `${root}${o.name}.mat`, data: unityMat(target, o, sc, u, texGuid, o.unityShaderGuid) });
-      files.push({ name: `${root}${o.name}.mat.meta`, data: matMeta(mg) });
-    } else if (target === 'unreal') {
-      files.push({ name: `${root}import_${o.name}.py`, data: unrealScript(o, sc, u, meta) });
-    } else if (target === 'godot') {
-      files.push({ name: `${root}${o.name}.tres`, data: godotTres(o, sc, u, meta, st) });
-    }
-    if (o.readme) files.push({ name: `${root}README.txt`, data: readmeText(target, o, sc, meta, { emissiveScale: u.emissiveScale, skipped }) });
-    if (o.includeGraph && S.graph) files.push({ name: `${root}${o.name}.studio.json`, data: JSON.stringify(await projectJSON({ embed: true, name: o.name }), null, 1) });
-    progress?.('zipping', 0.95);
-    const blob = await makeZip(files, { compress: o.compress, comment: `Stella Nova PBR Material Studio · ${target}` });
-    blob.fileName = blob.name = `${o.name}_${target}.zip`;
-    blob.entries = await Promise.all(files.map(async x => ({ name: x.name, size: typeof x.data === 'string' ? new TextEncoder().encode(x.data).length : x.data.length })));
-    finish(target, o, blob, sc, u);
-    return blob;
-  }, progress);
-}
-function finish(target, o, blob, sc, u) {
-  setLast({ target, name: blob.fileName, size: blob.size, entries: blob.entries, res: o.resolved, at: Date.now() });
-  o.onProgress?.('done', 1);
-  if (UI.box && !o.onProgress) { setProgress('done', 1); showResult(blob); }
-}
-
-/**
- * Export one baked map slot as a PNG (for the map strip). Linear except the
- * sRGB color slots; normal stays OpenGL.
- * @param {string} slot a MAP_NAMES entry @returns {Promise<Blob>}
- */
-export async function exportMapPNG(slot, { res = 0, bits = 8 } = {}) {
-  return withMaps(res, async maps => {
-    const src = new MapSource(maps);
-    const srgb = !!MAP_SLOTS[slot]?.srgbOnExport;
-    const chans = slot === 'height' ? gray('height', 0) : slot === 'albedo' ? baseRGB(true)
-      : [0, 1, 2, 3].map(c => (srgb && c < 3 ? ch.srgb(slot, c) : ch.s(slot, c)));
-    const png = await packImage({ chans: slot === 'normal' || slot === 'orm' || slot === 'emissive' ? chans.slice(0, 3) : chans, bits: slot === 'height' ? 16 : bits, srgbChunk: srgb }, src);
-    const b = new Blob([png], { type: 'image/png' });
-    b.fileName = `${materialName()}_${slot}.png`;
-    return b;
-  });
-}
-
-// ------------------------------------------------------------ project
-/**
- * The studio project as JSON: graph, settings, view, env and the images the
- * graph uses. embed true writes image assets as data URLs.
- */
-export async function projectJSON({ embed = true, name } = {}) {
-  const graph = graphJSON();
-  const assets = {};
-  if (graph) {
-    for (const n of graph.nodes || []) {
-      for (const [k, v] of Object.entries(n.params || {})) {
-        if (!v || typeof v !== 'object' || typeof v.url !== 'string') continue;
-        if (!/^(blob:|data:)/.test(v.url)) continue;
-        const id = v.asset || IMP.assetIdForUrl(v.url) || ('a' + crc32(new TextEncoder().encode(v.url)).toString(16));
-        if (!assets[id]) {
-          assets[id] = { name: v.name || id, mime: v.mime || '' };
-          if (embed) { try { const { dataURL, mime } = await IMP.assetDataURL(v.url); assets[id].data = dataURL; assets[id].mime = mime; } catch (e) { assets[id].error = String(e.message || e); } }
-        }
-        const { url, bitmap, ...rest } = v;
-        n.params[k] = { ...rest, asset: id };
-      }
-    }
-    if (name) graph.name = name;
-  }
-  return {
-    format: 'stella-material-studio', version: 1, graphVersion: GRAPH_VERSION,
-    saved: new Date().toISOString(), name: name || graph?.name || materialName(),
-    graph, settings: { ...S.settings }, view: { ...S.view }, env: JSON.parse(JSON.stringify(S.env)),
-    scalars: scalarsNow(), assets,
-  };
-}
-/** Download the project as <name>.studio.json. */
-export async function saveProject() {
-  const j = await projectJSON({ embed: true });
-  const blob = new Blob([JSON.stringify(j)], { type: 'application/json' });
-  download(blob, `${sanitize(j.name)}.studio.json`);
-  C.store.toast(`Saved ${sanitize(j.name)}.studio.json (${fmtSize(blob.size)})`, 'ok');
-  return blob;
-}
-/** Copy the material (graph, scalars, settings, no embedded images) to the clipboard. */
-export async function copyMaterialJSON() {
-  const j = await projectJSON({ embed: false });
-  delete j.view; delete j.env;
-  const text = JSON.stringify(j, null, 2);
-  try { await navigator.clipboard.writeText(text); C.store.toast('Material JSON copied', 'ok'); }
-  catch (e) { C.store.toast('Clipboard is blocked: the JSON is in the console', 'warn'); console.log(text); }
-  return text;
-}
 
 // ------------------------------------------------------------ ui
 /**
