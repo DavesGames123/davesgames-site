@@ -16,7 +16,7 @@
 // coordinate of world point p is p / dims.
 //
 // grep: struct CamU  struct PartU  fn advect  fn fsScene  fn march  fn shadow
-//       fn fsSlice  fn vsLine  fn speedRamp  fn divRamp  fn fieldColor
+//       fn fsSlice  fn vsLine  fn speedRamp  fn divRamp  fn fieldColor  fn pref
 
 struct CamU {
   vp: mat4x4f,
@@ -52,6 +52,8 @@ struct PartU {
 @group(0) @binding(7) var<storage, read_write> trail: array<vec4f>;
 @group(0) @binding(8) var<storage, read> partsR: array<vec4f>;
 @group(0) @binding(9) var<storage, read> trailR: array<vec4f>;
+@group(0) @binding(10) var<storage, read_write> prefOut: array<f32>;
+@group(0) @binding(11) var<storage, read> prefR: array<f32>;
 
 fn hashU(a: u32) -> u32 {
   var x = a;
@@ -109,7 +111,7 @@ fn fieldColor(p: vec3f, field: u32) -> vec3f {
                  vec3f(1.0, 0.62, 0.30), vec3f(1.0, 0.95, 0.75));
   }
   if (field == 2u) {
-    return divRamp(m.w / 3.0 / (0.5 * U * U) * CAM.misc2.x);
+    return divRamp((m.w - prefR[0]) / 3.0 / (0.5 * U * U) * CAM.misc2.x);
   }
   return speedRamp(length(m.xyz) / U);
 }
@@ -162,6 +164,33 @@ fn advect(@builtin(global_invocation_id) g: vec3u) {
   parts[2u * i] = pa;
   parts[2u * i + 1u] = pb;
   trail[i * PU.K + PU.head] = vec4f(pos, length(macroAt(pos).xyz));
+}
+
+// ------------------------------------------------------------ pressure reference
+// The solver holds rho = 1 at the inlet cells, and the sponge pulls rho
+// toward 1 along the slip walls and the outlet. Inside the tunnel the
+// static pressure sits higher, because the drag of the body needs a
+// pressure drop along the tunnel. Cp from rho - 1 then showed the whole
+// free stream as positive (a saturated orange field). pref averages
+// rho - 1 over 256 points of the plane x = 6 (upstream, clear of the
+// sponge bands), and the views take Cp = (rho - pref) / 3 / (U^2 / 2).
+// That is the static port of a real tunnel. One workgroup, once a frame.
+var<workgroup> pacc: array<f32, 256>;
+@compute @workgroup_size(256)
+fn pref(@builtin(local_invocation_index) li: u32) {
+  let d = vec3i(CAM.dims.xyz);
+  let sp = 10;
+  let y0 = sp; let y1 = max(d.y - 1 - sp, sp + 1);
+  let z0 = sp; let z1 = max(d.z - 1 - sp, sp + 1);
+  let y = y0 + i32(f32(y1 - y0) * (f32(li % 16u) + 0.5) / 16.0);
+  let z = z0 + i32(f32(z1 - z0) * (f32(li / 16u) + 0.5) / 16.0);
+  pacc[li] = textureLoad(macroTex, vec3i(min(6, d.x - 1), y, z), 0).w;
+  workgroupBarrier();
+  for (var s = 128u; s > 0u; s >>= 1u) {
+    if (li < s) { pacc[li] += pacc[li + s]; }
+    workgroupBarrier();
+  }
+  if (li == 0u) { prefOut[0] = pacc[0] / 256.0; }
 }
 
 // ------------------------------------------------------------ scene
@@ -267,7 +296,7 @@ fn fsScene(i: SOut) -> FOut {
     var base = matColor(hit.y, toLocal(q));
     if (CAM.misc.x > 0.5) {
       let m = macroAt(p + n * 1.5);
-      base = divRamp(m.w / 3.0 / (0.5 * CAM.dims.w * CAM.dims.w) * CAM.misc2.x);
+      base = divRamp((m.w - prefR[0]) / 3.0 / (0.5 * CAM.dims.w * CAM.dims.w) * CAM.misc2.x);
     }
     let dif = max(dot(n, L), 0.0) * shadow(p + n * 0.3, L);
     let fill = max(dot(n, normalize(vec3f(0.6, 0.3, -0.7))), 0.0);

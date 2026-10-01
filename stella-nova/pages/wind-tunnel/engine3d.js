@@ -9,6 +9,7 @@
 //   1 step x f.steps   compute  lattice steps, ping-pong A <-> B; the last
 //                               two measure forces and writes the macro
 //                               texture (ux, uy, uz, rho - 1)
+//   2 pref             compute  free-stream pressure for Cp (one group)
 //   2 advect           compute  streamline particles
 //   3 scene            render   ray-marched floor and object, with depth
 //   4 slice            render   the field plane, blended, depth tested
@@ -103,8 +104,8 @@ export async function createEngine3D(device, code, opts) {
     primitive: { topology: 'triangle-list' },
     depthStencil: { format: depthFmt, ...depth },
   });
-  const [pVox, pMark, pInit, pStep, pArea, pAdv, pScene, pSlice, pLine] = await Promise.all([
-    cp(lbm, 'voxelize'), cp(lbm, 'mark'), cp(lbm, 'initF'), cp(lbm, 'step'), cp(lbm, 'area'), cp(view, 'advect'),
+  const [pVox, pMark, pInit, pStep, pArea, pAdv, pPref, pScene, pSlice, pLine] = await Promise.all([
+    cp(lbm, 'voxelize'), cp(lbm, 'mark'), cp(lbm, 'initF'), cp(lbm, 'step'), cp(lbm, 'area'), cp(view, 'advect'), cp(view, 'pref'),
     rpipe('vsScene', 'fsScene', null, { depthWriteEnabled: true, depthCompare: 'always' }),
     rpipe('vsSlice', 'fsSlice', blend, { depthWriteEnabled: false, depthCompare: 'less' }),
     rpipe('vsLine', 'fsLine', blend, { depthWriteEnabled: false, depthCompare: 'less' }),
@@ -126,6 +127,8 @@ export async function createEngine3D(device, code, opts) {
   const stageBusy = [false, false];
   const parts = buf(maxParticles * 32, U.STORAGE | U.COPY_DST, 'parts');
   const trail = buf(maxParticles * K * 16, U.STORAGE, 'trail');
+  // Free-stream rho - 1 from view3d.wgsl fn pref; the pressure colours use it.
+  const prefBuf = buf(16, U.STORAGE, 'pref');
   const macro = device.createTexture({
     size: [nx, ny, nz], dimension: '3d', format: 'rgba16float', label: 'macro',
     usage: T.STORAGE_BINDING | T.TEXTURE_BINDING,
@@ -149,8 +152,9 @@ export async function createEngine3D(device, code, opts) {
   const gStepM = fPair.map(([a, b]) => bg(pStep, { 0: simMBuf, 2: a, 3: b, 4: types, 5: macroView, 6: forces }));
   const gArea = bg(pArea, { 0: simBuf, 4: types, 6: forces });
   const gAdv = bg(pAdv, { 0: camBuf, 2: macroView, 3: samp, 4: types, 5: partUBuf, 6: parts, 7: trail });
-  const gScene = bg(pScene, { 0: camBuf, 1: shapeBuf, 2: macroView, 3: samp });
-  const gSlice = bg(pSlice, { 0: camBuf, 2: macroView, 3: samp, 4: types });
+  const gPref = bg(pPref, { 0: camBuf, 2: macroView, 10: prefBuf });
+  const gScene = bg(pScene, { 0: camBuf, 1: shapeBuf, 2: macroView, 3: samp, 11: prefBuf });
+  const gSlice = bg(pSlice, { 0: camBuf, 2: macroView, 3: samp, 4: types, 11: prefBuf });
   const gLine = bg(pLine, { 0: camBuf, 5: partUBuf, 8: parts, 9: trail });
 
   // ---------------------------------------------------------------- state
@@ -290,6 +294,12 @@ export async function createEngine3D(device, code, opts) {
         p.end();
         stepCount += steps;
       }
+      {
+        const p = enc.beginComputePass();
+        p.setPipeline(pPref); p.setBindGroup(0, gPref);
+        p.dispatchWorkgroups(1);
+        p.end();
+      }
       if (count > 0) {
         const p = enc.beginComputePass();
         p.setPipeline(pAdv); p.setBindGroup(0, gAdv);
@@ -335,7 +345,7 @@ export async function createEngine3D(device, code, opts) {
 
     destroy() {
       disposed = true;
-      for (const b of [simBuf, simMBuf, shapeBuf, camBuf, partUBuf, fA, fB, types, forces, parts, trail, ...staging]) b.destroy();
+      for (const b of [simBuf, simMBuf, shapeBuf, camBuf, partUBuf, fA, fB, types, forces, parts, trail, prefBuf, ...staging]) b.destroy();
       macro.destroy();
       if (depthTex) depthTex.destroy();
     },

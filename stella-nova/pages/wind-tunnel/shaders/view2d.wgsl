@@ -18,7 +18,7 @@
 // step) times the steps of this frame (P.dt). So the streaks keep pace with
 // the solver at any sim rate.
 //
-// grep: struct ViewU  struct PartU  fn dye  fn advect  fn fsField  fn vsLine
+// grep: struct ViewU  struct PartU  fn dye  fn advect  fn pref  fn fsField  fn vsLine
 //       fn speedRamp  fn divRamp  fn shadeObject
 
 struct ViewU {
@@ -60,6 +60,8 @@ struct PartU {
 @group(0) @binding(8) var<storage, read_write> trail: array<vec4f>;
 @group(0) @binding(9) var<storage, read> partsR: array<vec4f>;
 @group(0) @binding(10) var<storage, read> trailR: array<vec4f>;
+@group(0) @binding(11) var<storage, read_write> prefOut: array<f32>;
+@group(0) @binding(12) var<storage, read> prefR: array<f32>;
 
 fn hashU(a: u32) -> u32 {
   var x = a;
@@ -170,6 +172,28 @@ struct VOut {
   @builtin(position) pos: vec4f,
 };
 
+// Pressure reference: the static port of a real tunnel. The inlet holds
+// rho = 1 and the sponge pulls rho toward 1 at the roof and the outlet,
+// but the static pressure inside the tunnel sits higher (the drag of the
+// body needs a pressure drop along it). Cp from rho - 1 showed the whole
+// free stream as positive. pref averages rho - 1 over 256 points of the
+// column x = 6, clear of the sponge bands; fsField uses rho - pref.
+var<workgroup> pacc: array<f32, 256>;
+@compute @workgroup_size(256)
+fn pref(@builtin(local_invocation_index) li: u32) {
+  let ny = i32(V.dims.y);
+  let sp = 10;
+  let y0 = sp; let y1 = max(ny - 1 - sp, sp + 1);
+  let y = y0 + i32(f32(y1 - y0) * (f32(li) + 0.5) / 256.0);
+  pacc[li] = textureLoad(macroTex, vec2i(min(6, i32(V.dims.x) - 1), y), 0).z;
+  workgroupBarrier();
+  for (var s = 128u; s > 0u; s >>= 1u) {
+    if (li < s) { pacc[li] += pacc[li + s]; }
+    workgroupBarrier();
+  }
+  if (li == 0u) { prefOut[0] = pacc[0] / 256.0; }
+}
+
 @vertex
 fn vsField(@builtin(vertex_index) vi: u32) -> VOut {
   let p = vec2f(f32((vi << 1u) & 2u), f32(vi & 2u));
@@ -228,7 +252,7 @@ fn fsField(@builtin(position) fc: vec4f) -> @location(0) vec4f {
       col = divRamp(w * V.vortScale);
     }
     case 2u: {
-      let cp = m.z / 3.0 / (0.5 * V.U * V.U);
+      let cp = (m.z - prefR[0]) / 3.0 / (0.5 * V.U * V.U);
       col = divRamp(cp * V.presScale);
     }
     case 3u: {

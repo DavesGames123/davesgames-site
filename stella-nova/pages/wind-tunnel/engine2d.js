@@ -10,6 +10,7 @@
 //                               last two measure forces and writes the macro
 //                               texture (ux, uy, rho, solid)
 //   2 dye              compute  smoke advection, only when the smoke field shows
+//   3 pref             compute  free-stream pressure for Cp (one group)
 //   3 advect           compute  streamline particles
 //   4 field + lines    render   into target
 // After the submit, a free staging buffer gets the force sums, and mapAsync
@@ -45,9 +46,9 @@ export async function createEngine2D(device, code, opts) {
     color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
     alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
   };
-  const [pVox, pInit, pStep, pArea, pDye, pAdv, pField, pLine] = await Promise.all([
+  const [pVox, pInit, pStep, pArea, pDye, pAdv, pPref, pField, pLine] = await Promise.all([
     cp(lbm, 'voxelize'), cp(lbm, 'initF'), cp(lbm, 'step'), cp(lbm, 'area'),
-    cp(view, 'dye'), cp(view, 'advect'),
+    cp(view, 'dye'), cp(view, 'advect'), cp(view, 'pref'),
     device.createRenderPipelineAsync({
       layout: 'auto',
       vertex: { module: view, entryPoint: 'vsField' },
@@ -78,6 +79,8 @@ export async function createEngine2D(device, code, opts) {
   const stageBusy = [false, false];
   const parts = buf(maxParticles * 16, U.STORAGE | U.COPY_DST, 'parts');
   const trail = buf(maxParticles * K * 16, U.STORAGE, 'trail');
+  // Free-stream rho - 1 from view2d.wgsl fn pref; the pressure field uses it.
+  const prefBuf = buf(16, U.STORAGE, 'pref');
 
   const tex = (label) => device.createTexture({
     size: [nx, ny], format: 'rgba16float', label,
@@ -106,8 +109,9 @@ export async function createEngine2D(device, code, opts) {
   }));
   const gAdv = bg(pAdv, { 0: viewBuf, 2: macro.createView(), 3: samp, 6: partUBuf, 7: parts, 8: trail });
   const gField = [0, 1].map((i) => bg(pField, {
-    0: viewBuf, 1: shapeBuf, 2: macro.createView(), 3: samp, 4: dye[i].createView(),
+    0: viewBuf, 1: shapeBuf, 2: macro.createView(), 3: samp, 4: dye[i].createView(), 12: prefBuf,
   }));
+  const gPref = bg(pPref, { 0: viewBuf, 2: macro.createView(), 11: prefBuf });
   const gLine = bg(pLine, { 0: viewBuf, 6: partUBuf, 9: parts, 10: trail });
 
   // ---------------------------------------------------------------- state
@@ -242,6 +246,12 @@ export async function createEngine2D(device, code, opts) {
         p.end();
         dyeCur ^= 1;
       }
+      {
+        const p = enc.beginComputePass();
+        p.setPipeline(pPref); p.setBindGroup(0, gPref);
+        p.dispatchWorkgroups(1);
+        p.end();
+      }
       if (count > 0) {
         const p = enc.beginComputePass();
         p.setPipeline(pAdv); p.setBindGroup(0, gAdv);
@@ -283,7 +293,7 @@ export async function createEngine2D(device, code, opts) {
 
     destroy() {
       disposed = true;
-      for (const b of [simBuf, simMBuf, shapeBuf, viewBuf, partUBuf, fA, fB, types, forces, parts, trail, ...staging]) b.destroy();
+      for (const b of [simBuf, simMBuf, shapeBuf, viewBuf, partUBuf, fA, fB, types, forces, parts, trail, prefBuf, ...staging]) b.destroy();
       for (const t of [macro, ...dye]) t.destroy();
     },
   };
