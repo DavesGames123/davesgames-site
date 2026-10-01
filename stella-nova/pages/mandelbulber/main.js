@@ -38,9 +38,9 @@ import { defaultScene, parseFract } from './fract.js';
 import { $, canvas, panel, picker, exSheet, clamp, download } from './ui/dom.js';
 import { P, CAT, EXAMPLES, COLLECTIONS, isNone, loadData } from './ui/data.js';
 import { scene, activeSlot, engine, info, setScene, setEngine, setInfo, formulaAt,
-  touchSeen, noteTouch, touchUI, targetSamples, renderScale, pixelRatio } from './ui/state.js';
+  touchSeen, noteTouch, targetSamples, renderScale, pixelRatio } from './ui/state.js';
 import { compileStatus, setStatus, flash, msPerSample, setMsPerSample, showHud, fail } from './ui/hud.js';
-import { V, camFromScene, camBasis, camToScene, resetCamera, frameView, panBy, orbitBy, lookBy } from './ui/camera.js';
+import { camFromScene, camToScene, resetCamera, frameView, panBy, orbitBy, lookBy } from './ui/camera.js';
 import { sceneDirty, setMain, setSlot, loadScene, pushScene } from './ui/scene.js';
 import { refreshAll, hideTip, initTip } from './ui/controls.js';
 import {  } from './ui/thumbs.js';
@@ -53,6 +53,7 @@ import { randomExample, openExamples, closeExamples, initPresetSheet } from './u
 import { L, sheetDragging, applyLayout, initLayout, snapTo, togglePanel,
   observeCanvas } from './ui/layout.js';
 import { initSheetDrag } from './ui/sheet-drag.js';
+import { flying, keys, fly, toggleFly, flyStep, initFly } from './ui/fly.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -73,23 +74,10 @@ initIo();
 // Mouse: drag orbit, right or Shift drag pan, wheel dolly. Touch: one finger orbit, two
 // fingers pinch (dolly) and drag (pan), double tap Frame, long press menu. A touch orbit
 // keeps turning after release and slows down (inertia); any new input stops it.
-let flying = false;
-const keys = new Set();
 const pointers = new Map();
 let dragCam = null, gest = null, lastTap = null, lpTimer = 0;
 const inertia = { on: false, vx: 0, vy: 0, cam: null };
-const fly = { move: { x: 0, y: 0 }, look: { x: 0, y: 0 } };   // thumbstick values, -1..1
-
-export function toggleFly() {
-  stopInertia();
-  flying = !flying;
-  document.body.classList.toggle('flying', flying);
-  $('flyBtn').classList.toggle('on', flying);
-  $('flyBtn2')?.classList.toggle('on', flying);
-  if (flying && L.mode === 'sheet' && L.snap !== 'peek') snapTo('peek');
-  flash(flying ? (touchUI() ? 'fly mode: left stick moves, right stick looks' : 'fly mode: W A S D move, Q E down / up, drag to look') : 'orbit mode');
-}
-$('flyBtn').addEventListener('click', toggleFly);
+initFly();
 
 const two = () => { const [a, b] = [...pointers.values()]; return { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, d: Math.hypot(a.x - b.x, a.y - b.y) }; };
 
@@ -192,62 +180,6 @@ export function stopInertia() {
   inertia.on = false; inertia.cam = null;
   refreshAll();
 }
-
-// Fly step: keys and thumbsticks. Speed follows the distance estimate when the engine reports one.
-function flyStep(dt) {
-  if (!flying) return;
-  const mag = (v) => Math.hypot(v.x, v.y);
-  const sticks = mag(fly.move) > 0.04 || mag(fly.look) > 0.04;
-  if (!keys.size && !sticks) return;
-  const c = camFromScene();
-  if (mag(fly.look) > 0.04) lookBy(c, fly.look.x * Math.abs(fly.look.x) * 1.8 * dt, fly.look.y * Math.abs(fly.look.y) * 1.4 * dt);
-  const { fwd, right, top } = camBasis(c);
-  let mv = { x: 0, y: 0, z: 0 };
-  if (keys.has('w')) mv = V.add(mv, fwd);
-  if (keys.has('s')) mv = V.sub(mv, fwd);
-  if (keys.has('d')) mv = V.add(mv, right);
-  if (keys.has('a')) mv = V.sub(mv, right);
-  if (keys.has('e')) mv = V.add(mv, top);
-  if (keys.has('q')) mv = V.sub(mv, top);
-  let amount = V.len(mv) ? 1 : 0;
-  if (mag(fly.move) > 0.04) {
-    mv = V.add(mv, V.add(V.mul(fwd, -fly.move.y), V.mul(right, fly.move.x)));
-    amount = Math.max(amount, Math.min(1, mag(fly.move)));
-  }
-  if (V.len(mv)) {
-    const de = Number(engine?.distanceEstimate?.() ?? info?.distance ?? NaN);
-    const scale = Number.isFinite(de) && de > 0 ? de : c.dist;
-    const speed = scale * 0.6 * (keys.has('shift') ? 4 : 1) * amount;
-    c.target = V.add(c.target, V.mul(V.norm(mv), speed * dt));
-  }
-  camToScene(c, true);
-}
-
-// One thumbstick: writes -1..1 into out while a finger holds it.
-function stick(elm, out) {
-  const knob = elm.querySelector('i');
-  let id = null;
-  const update = (e) => {
-    const r = elm.getBoundingClientRect(), R = r.width / 2, m = R * 0.62;
-    let dx = e.clientX - (r.left + R), dy = e.clientY - (r.top + R);
-    const l = Math.hypot(dx, dy);
-    if (l > m) { dx *= m / l; dy *= m / l; }
-    out.x = dx / m; out.y = dy / m;
-    knob.style.setProperty('--kx', `${dx}px`); knob.style.setProperty('--ky', `${dy}px`);
-  };
-  elm.addEventListener('pointerdown', (e) => { e.preventDefault(); stopInertia(); id = e.pointerId; elm.setPointerCapture(id); update(e); });
-  elm.addEventListener('pointermove', (e) => { if (e.pointerId === id) update(e); });
-  const end = (e) => {
-    if (e.pointerId !== id) return;
-    id = null; out.x = 0; out.y = 0;
-    knob.style.setProperty('--kx', '0px'); knob.style.setProperty('--ky', '0px');
-    refreshAll();
-  };
-  elm.addEventListener('pointerup', end);
-  elm.addEventListener('pointercancel', end);
-}
-stick($('stickL'), fly.move);
-stick($('stickR'), fly.look);
 
 // Long-press menu on the canvas.
 const ctxMenu = $('ctx');
