@@ -25,7 +25,6 @@
     ["behaviors", "Behaviors", null],
     ["controls", "Controls", null]] },
   { h: "Crew & Society", p: [
-    ["citizen-dynamics", "Citizen Dynamics", "NEW"],
     ["social-dynamics", "Social Dynamics", "NEW"]] }] },
 { id: "cl-learn", label: "Learn About Physics", groups: [
   { h: "Orbital Mechanics", p: [

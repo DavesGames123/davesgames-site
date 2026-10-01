@@ -114,7 +114,6 @@ const BLURBS = {
   translate: 'Help put Stella Nova in your language.',
   wiki: 'Every item, module and tech, linked.',
   research: 'The tech tree, prerequisite by prerequisite.',
-  'citizen-dynamics': 'Names, portraits and roles of the crew.',
   'social-dynamics': 'The named ideas behind crew social life.',
   guide: 'Every module, room and rule of a station.',
   planner: 'Lay out a station on the real game grid.',
