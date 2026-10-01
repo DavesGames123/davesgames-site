@@ -63,6 +63,11 @@
       <div id="mono-params" style="display:none;margin-top:4px"><div class="row"><span class="row-lbl">λ</span><input type="range" id="sl-lam" min="380" max="780" value="633" step="1"><span class="val" id="vl-lam">633</span><span class="wl-dot" id="wl-dot"></span></div></div>
       <div id="white-params" style="margin-top:4px"><div class="row"><span class="row-lbl">Div</span><input type="range" id="sl-div" min="6" max="30" value="15" step="1"><span class="val" id="vl-div">15</span></div></div>
     </div>
+    <!-- Intensity scale: log shows every lobe, linear shows true contrast. -->
+    <div class="qp-section"><div class="qp-sec-lbl">Intensity</div>
+      <div class="qp-modes" id="scale-modes"><button class="qp-mode active" data-scale="log">Log</button><button class="qp-mode" data-scale="lin">Linear</button></div>
+      <div class="row" style="margin-top:4px"><span class="row-lbl" id="lb-range">Range</span><input type="range" id="sl-range" min="1" max="6" value="2" step="0.5"><span class="val" id="vl-range">2 dec</span></div>
+    </div>
     <!-- Composite-only or 2x2 channel split. -->
     <div class="qp-section"><div class="qp-sec-lbl">View</div>
       <div class="qp-modes" id="view-modes"><button class="qp-mode" data-view="4">2×2 · RGBC</button><button class="qp-mode active" data-view="1">1×1 · Fast</button></div>

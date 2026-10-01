@@ -21,8 +21,9 @@
 //
 //  COLOR PATH
 //  --------------------------------------------------------------------------
-//      mono   : |E|² × wlRGB(λ)                       one wavelength tint
-//      white  : Σ_λ |E|² · D65(λ) · [x̄,ȳ,z̄]  → XYZ → sRGB (sGam gamma)
+//      mono   : tone(|E|²/max) × lamRGB(λ)          true colour of one λ
+//      white  : Σ_λ |E|² · D65(λ) · [x̄,ȳ,z̄] → XYZ, Y tone-mapped → sRGB
+//      tone   : log over S.range decades, or linear × S.gainLin (fieldRGB)
 //
 //  SCREEN LAYOUT   (the leading marker is an element id)
 //  --------------------------------------------------------------------------
@@ -35,6 +36,7 @@
 //      complex + FFT ....... "function fft1d"        radix-2 FFT, 1D and 2D
 //      propagator .......... "function prop"         the angular spectrum step
 //      CIE + color ......... "function cieX"         color-matching and sRGB
+//      field to colour ..... "function fieldRGB"     tone map, mono and white light
 //      geometry helpers .... "function inPoly"       point-in-polygon, star
 //      raster helper ....... "function rasterToField"  text/image → mask
 //      elements ............ "const EL="             aperture transmittances
@@ -96,15 +98,44 @@ const D65=[49.98,52.31,54.65,68.70,82.75,87.12,91.49,92.46,93.43,90.06,86.68,95.
 function d65(l){const t=(l-380)/10,i=Math.max(0,Math.min(39,Math.floor(t)));return D65[i]+(D65[i+1]-D65[i])*(t-i)}
 // sRGB transfer function (gamma): map a linear channel value into display space.
 function sGam(v){return v<=.0031308?12.92*v:1.055*Math.pow(v,1/2.4)-.055}
-// Approximate visible-spectrum RGB tint for a single wavelength l (nm), used by
-// the monochromatic path and the wavelength swatch. Includes an intensity
-// falloff near the violet and red ends where the eye is less sensitive.
-function wlRGB(l){let r=0,g=0,b=0;if(l>=380&&l<440){r=(440-l)/60;b=1}else if(l<490){g=(l-440)/50;b=1}else if(l<510){g=1;b=(510-l)/20}else if(l<580){r=(l-510)/70;g=1}else if(l<645){r=1;g=(645-l)/65}else if(l<=780)r=1;let f=1;if(l<420)f=.3+.7*(l-380)/40;else if(l>700)f=.3+.7*(780-l)/80;return[Math.pow(r*f,.8),Math.pow(g*f,.8),Math.pow(b*f,.8)]}
 // Ray-cast point-in-polygon test, used to rasterize the star aperture.
 function inPoly(px,py,vs){let c=false;for(let i=0,j=vs.length-1;i<vs.length;j=i++){const xi=vs[i][0],yi=vs[i][1],xj=vs[j][0],yj=vs[j][1];if(((yi>py)!==(yj>py))&&(px<(xj-xi)*(py-yi)/(yj-yi)+xi))c=!c}return c}
 // Build the 2n vertices of an n-point star, alternating outer radius R and
 // inner radius r around the circle.
 function starV(n,R,r){const v=[];for(let i=0;i<n*2;i++){const a=i*PI/n-PI/2;v.push([(i%2?r:R)*Math.cos(a),(i%2?r:R)*Math.sin(a)])}return v}
+
+/* ═══ FIELD TO COLOUR ═══ */
+// XYZ to linear sRGB (D65 white), the matrix M of the CIE formula.
+function xyz2rgb(x,y,z){return[3.2406*x-1.5372*y-.4986*z,-.9689*x+1.8758*y+.0415*z,.0557*x-.204*y+1.057*z]}
+// The true colour of one wavelength l (nm): its CIE x̄ȳz̄ to linear sRGB.
+// Most spectral colours are out of gamut, so negative channels clip to 0
+// and the brightest channel scales to 1. Used by the mono path and the λ swatch.
+function lamRGB(l){const c=xyz2rgb(cieX(l),cieY(l),cieZ(l)).map(v=>Math.max(0,v)),m=Math.max(c[0],c[1],c[2],1e-9);return c.map(v=>v/m)}
+// Tone curve: intensity u = I/Imax in 0..1 to display brightness 0..1.
+//   lin  u · gain, clipped at 1 (gain 1..64: lift the side lobes, clip the core)
+//   log  log10(1 + u·10^D) / D over D decades (1..6): every lobe is visible
+// S.scale picks the curve. S.range holds D for log and the gain for lin.
+function tone(u){if(S.scale==='log'){const D=S.range,g=Math.pow(10,D);return Math.log10(1+u*g)/Math.log10(1+g)}return Math.min(1,u*S.gainLin)}
+// Propagate the element mask to z (metres) and return an sRGB byte buffer.
+// mono:  |E|² at one λ, tone-mapped, times the true colour of λ.
+// white: Σ over S.divs wavelengths of |E|² · D65 · x̄ȳz̄ → XYZ. The luminance
+//        Y is tone-mapped and XYZ scales with it, so the hue of each pixel
+//        stays. A pixel brighter than the gamut scales down as a whole, not
+//        per channel, so it keeps its hue and does not turn white.
+// A non-dispersive mask (wlDep false) is built once for all wavelengths.
+function fieldRGB(el,p,xx,yy,Nx,Ny,dx,dy,z){
+  const NN=Nx*Ny,rgb=new Uint8Array(NN*3);
+  if(S.source==='mono'){
+    const lam=S.lambda*nm,tr=el.t(xx,yy,lam,NN,p);let E=cmul(cones(NN),tr);E=prop(E,Nx,Ny,dx,dy,z,lam);const I=cabs2(E);let mx=0;for(let i=0;i<NN;i++)if(I[i]>mx)mx=I[i];if(mx<1e-30)mx=1;
+    const c=lamRGB(S.lambda);for(let i=0;i<NN;i++){const v=tone(I[i]/mx);rgb[i*3]=sGam(v*c[0])*255+.5|0;rgb[i*3+1]=sGam(v*c[1])*255+.5|0;rgb[i*3+2]=sGam(v*c[2])*255+.5|0}
+    return rgb;
+  }
+  const nD=S.divs,dl=(780-380)/nD,X=new Float64Array(NN),Y=new Float64Array(NN),Z=new Float64Array(NN);const tC=el.wlDep?null:el.t(xx,yy,550*nm,NN,p);
+  for(let d=0;d<nD;d++){const ln=380+(d+.5)*dl,lam=ln*nm,Sd=d65(ln)*dl,xw=cieX(ln)*Sd,yw=cieY(ln)*Sd,zw=cieZ(ln)*Sd,tr=tC||el.t(xx,yy,lam,NN,p);let E=cmul(cones(NN),tr);E=prop(E,Nx,Ny,dx,dy,z,lam);const I=cabs2(E);for(let i=0;i<NN;i++){X[i]+=I[i]*xw;Y[i]+=I[i]*yw;Z[i]+=I[i]*zw}}
+  let mY=0;for(let i=0;i<NN;i++)if(Y[i]>mY)mY=Y[i];if(mY<1e-30)mY=1;
+  for(let i=0;i<NN;i++){const y=Y[i];if(y<=0)continue;const k=tone(y/mY)/y;let[r,g,b]=xyz2rgb(X[i]*k,y*k,Z[i]*k);r=Math.max(0,r);g=Math.max(0,g);b=Math.max(0,b);const m=Math.max(r,g,b);if(m>1){r/=m;g/=m;b/=m}rgb[i*3]=sGam(r)*255+.5|0;rgb[i*3+1]=sGam(g)*255+.5|0;rgb[i*3+2]=sGam(b)*255+.5|0}
+  return rgb;
+}
 
 /* ═══ RASTER HELPER (flips Y so text/images appear right-side up) ═══ */
 function rasterToField(imgData,side,N){const t=czeros(N);for(let iy=0;iy<side;iy++)for(let ix=0;ix<side;ix++){const si=iy*side+ix,ci=(side-1-iy)*side+ix;t.re[si]=imgData.data[ci*4]/255}return t}
@@ -141,7 +172,8 @@ const EL={
 // distance in mm; extent is the physical grid width in mm; N is the grid side;
 // divs is the number of wavelength samples for white light; viewMode 1 or 4
 // selects composite-only or the 2×2 channel split; params holds element sliders.
-const S={element:'text',source:'white',lambda:633,z:200,extent:5,N:256,divs:15,speed:5,viewMode:1,params:{}};
+// scale is 'log' or 'lin'; range is the log decades, gainLin the linear gain.
+const S={element:'text',source:'white',lambda:633,z:200,extent:5,N:256,divs:15,speed:5,viewMode:1,scale:'log',range:2,gainLin:1,params:{}};
 // z-animation state: direction (−1/0/+1) and a dwell countdown at each endpoint.
 let animDir=0,animDwell=0;
 // Paint a range input's filled portion via the --pct custom property.
@@ -183,23 +215,7 @@ function recompute(){
   const p=readParams(),el=EL[S.element],N=S.N,Nx=N,Ny=N,ext=S.extent*mm,dx=ext/Nx,dy=ext/Ny,z=S.z*mm;
   const xx=new Float64Array(N*N),yy=new Float64Array(N*N);
   for(let iy=0;iy<Ny;iy++){const y_=dy*(iy-Ny/2);for(let ix=0;ix<Nx;ix++){xx[iy*Nx+ix]=dx*(ix-Nx/2);yy[iy*Nx+ix]=y_}}
-  let rgb;
-  // Monochromatic: one wavelength. Propagate, normalize |E|² to its peak, then
-  // tint by the wavelength's RGB. sqrt of intensity gives a perceptual amplitude.
-  if(S.source==='mono'){
-    const lam=S.lambda*nm,tr=el.t(xx,yy,lam,N*N,p);let E=cmul(cones(N*N),tr);E=prop(E,Nx,Ny,dx,dy,z,lam);const I=cabs2(E);let mx=0;for(let i=0;i<I.length;i++)if(I[i]>mx)mx=I[i];if(mx<1e-30)mx=1;const wl=wlRGB(S.lambda);rgb=new Uint8Array(N*N*3);for(let i=0;i<N*N;i++){const v=Math.sqrt(I[i]/mx);rgb[i*3]=Math.min(255,v*wl[0]*255)|0;rgb[i*3+1]=Math.min(255,v*wl[1]*255)|0;rgb[i*3+2]=Math.min(255,v*wl[2]*255)|0}
-  } else {
-    // White light: sweep divs wavelengths across 380 to 780 nm. Each wavelength
-    // propagates independently; its intensity is weighted by the D65 spectrum and
-    // the CIE color-matching functions and accumulated into XYZ. A non-dispersive
-    // mask is computed once (tC) and reused across wavelengths.
-    const nD=S.divs,dl=(780-380)/nD,X=new Float64Array(N*N),Y=new Float64Array(N*N),Z=new Float64Array(N*N);let tC=null;if(!el.wlDep)tC=el.t(xx,yy,550*nm,N*N,p);
-    for(let d=0;d<nD;d++){const ln=380+(d+.5)*dl,lam=ln*nm,Sd=d65(ln)*dl,xw=cieX(ln)*Sd,yw=cieY(ln)*Sd,zw=cieZ(ln)*Sd,tr=tC||el.t(xx,yy,lam,N*N,p);let E=cmul(cones(N*N),tr);E=prop(E,Nx,Ny,dx,dy,z,lam);const I=cabs2(E);for(let i=0;i<N*N;i++){X[i]+=I[i]*xw;Y[i]+=I[i]*yw;Z[i]+=I[i]*zw}}
-    // Normalize by peak luminance Y, then convert XYZ to linear sRGB and apply
-    // the gamma. Negative channels (out-of-gamut) are clamped to zero.
-    let mY=0;for(let i=0;i<N*N;i++)if(Y[i]>mY)mY=Y[i];if(mY<1e-30)mY=1;const sc=1/mY;rgb=new Uint8Array(N*N*3);
-    for(let i=0;i<N*N;i++){const x=X[i]*sc,y=Y[i]*sc,zv=Z[i]*sc;let r=3.2406*x-1.5372*y-.4986*zv,g=-.9689*x+1.8758*y+.0415*zv,b=.0557*x-.204*y+1.057*zv;r=Math.max(0,r);g=Math.max(0,g);b=Math.max(0,b);rgb[i*3]=Math.min(255,sGam(r)*255)|0;rgb[i*3+1]=Math.min(255,sGam(g)*255)|0;rgb[i*3+2]=Math.min(255,sGam(b)*255)|0}
-  }
+  const rgb=fieldRGB(el,p,xx,yy,Nx,Ny,dx,dy,z);
   // Always paint the composite; paint the isolated R/G/B cells only in 2×2 view.
   renderCh(document.getElementById('cv-rgb'),rgb,Nx,Ny,'rgb');
   if(S.viewMode===4){renderCh(document.getElementById('cv-r'),rgb,Nx,Ny,'r');renderCh(document.getElementById('cv-g'),rgb,Nx,Ny,'g');renderCh(document.getElementById('cv-b'),rgb,Nx,Ny,'b')}
@@ -253,8 +269,14 @@ document.getElementById('element-select').addEventListener('change',function(){S
 document.querySelectorAll('#source-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#source-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.source=b.dataset.source;document.getElementById('mono-params').style.display=S.source==='mono'?'block':'none';document.getElementById('white-params').style.display=S.source==='white'?'block':'none';scheduleRecompute()}));
 document.querySelectorAll('.res-btn[data-n]').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.res-btn[data-n]').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.N=+b.dataset.n;window._imgMask=null;scheduleRecompute()}));
 document.querySelectorAll('#view-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#view-modes .qp-mode').forEach(x=>x.classList.remove('active'));b.classList.add('active');S.viewMode=+b.dataset.view;const g=document.getElementById('canvas-grid');g.classList.toggle('view-1',S.viewMode===1);document.getElementById('export-section').style.display=S.viewMode===1?'':'none';scheduleRecompute()}));
-['sl-lam','sl-div'].forEach(id=>{const el=document.getElementById(id);if(!el)return;sg(el);el.addEventListener('input',function(){sg(this);const v=+this.value;if(id==='sl-lam'){S.lambda=v;document.getElementById('vl-lam').textContent=v.toFixed(0);const rgb=wlRGB(v),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs}else{S.divs=v;document.getElementById('vl-div').textContent=v.toFixed(0)}scheduleRecompute()})});
+['sl-lam','sl-div'].forEach(id=>{const el=document.getElementById(id);if(!el)return;sg(el);el.addEventListener('input',function(){sg(this);const v=+this.value;if(id==='sl-lam'){S.lambda=v;document.getElementById('vl-lam').textContent=v.toFixed(0);const rgb=lamRGB(v),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs}else{S.divs=v;document.getElementById('vl-div').textContent=v.toFixed(0)}scheduleRecompute()})});
 document.getElementById('sl-txtsz').addEventListener('input',function(){sg(this);document.getElementById('vl-txtsz').textContent=this.value});sg(document.getElementById('sl-txtsz'));
+// Intensity scale: Log or Linear, and one slider. In log mode the slider is
+// the number of decades shown (1..6); in linear mode it is the gain (×1..×64,
+// on a log2 track). syncScale writes S to the buttons, slider and label.
+function syncScale(){document.querySelectorAll('#scale-modes .qp-mode').forEach(b=>b.classList.toggle('active',b.dataset.scale===S.scale));const sl=document.getElementById('sl-range'),lb=document.getElementById('lb-range'),vl=document.getElementById('vl-range');if(S.scale==='log'){lb.textContent='Range';sl.min=1;sl.max=6;sl.step=.5;sl.value=S.range;vl.textContent=S.range+' dec'}else{lb.textContent='Gain';sl.min=0;sl.max=6;sl.step=.5;sl.value=Math.log2(S.gainLin);vl.textContent='×'+(+S.gainLin.toFixed(1))}sg(sl)}
+document.querySelectorAll('#scale-modes .qp-mode').forEach(b=>b.addEventListener('click',()=>{S.scale=b.dataset.scale;syncScale();scheduleRecompute()}));
+document.getElementById('sl-range').addEventListener('input',function(){if(S.scale==='log')S.range=+this.value;else S.gainLin=Math.pow(2,+this.value);syncScale();scheduleRecompute()});
 // Collapse the control panel and slide the canvas grid over to fill the space.
 document.getElementById('qp-collapse-btn').addEventListener('click',()=>{const p=document.getElementById('quick-panel'),c=p.classList.toggle('collapsed');document.getElementById('qp-collapse-btn').textContent=c?'▶':'◀';document.getElementById('canvas-grid').style.left=c?'44px':'';setTimeout(scheduleRecompute,250)});
 // Mobile drawer: slide the control panel over a dimmed overlay on small screens.
@@ -321,15 +343,7 @@ function renderFrame(Nx,Ny,exW,exH,z){
   const NN=Nx*Ny;
   const xx=new Float64Array(NN),yy=new Float64Array(NN);
   for(let iy=0;iy<Ny;iy++){const y_=dy*(iy-Ny/2);for(let ix=0;ix<Nx;ix++){xx[iy*Nx+ix]=dx*(ix-Nx/2);yy[iy*Nx+ix]=y_}}
-  let rgb;
-  if(S.source==='mono'){
-    const lam=S.lambda*nm,tr=el.t(xx,yy,lam,NN,p);let E=cmul(cones(NN),tr);E=prop(E,Nx,Ny,dx,dy,z*mm,lam);const I=cabs2(E);let mx=0;for(let i=0;i<I.length;i++)if(I[i]>mx)mx=I[i];if(mx<1e-30)mx=1;const wl=wlRGB(S.lambda);rgb=new Uint8Array(NN*3);for(let i=0;i<NN;i++){const v=Math.sqrt(I[i]/mx);rgb[i*3]=Math.min(255,v*wl[0]*255)|0;rgb[i*3+1]=Math.min(255,v*wl[1]*255)|0;rgb[i*3+2]=Math.min(255,v*wl[2]*255)|0}
-  } else {
-    const nD=S.divs,dl=(780-380)/nD,X=new Float64Array(NN),Y=new Float64Array(NN),Z=new Float64Array(NN);let tC=null;if(!el.wlDep)tC=el.t(xx,yy,550*nm,NN,p);
-    for(let d=0;d<nD;d++){const ln=380+(d+.5)*dl,lam=ln*nm,Sd=d65(ln)*dl,xw=cieX(ln)*Sd,yw=cieY(ln)*Sd,zw=cieZ(ln)*Sd,tr=tC||el.t(xx,yy,lam,NN,p);let E=cmul(cones(NN),tr);E=prop(E,Nx,Ny,dx,dy,z*mm,lam);const I=cabs2(E);for(let i=0;i<NN;i++){X[i]+=I[i]*xw;Y[i]+=I[i]*yw;Z[i]+=I[i]*zw}}
-    let mY=0;for(let i=0;i<NN;i++)if(Y[i]>mY)mY=Y[i];if(mY<1e-30)mY=1;const sc=1/mY;rgb=new Uint8Array(NN*3);
-    for(let i=0;i<NN;i++){const x=X[i]*sc,y=Y[i]*sc,zv=Z[i]*sc;let r=3.2406*x-1.5372*y-.4986*zv,g=-.9689*x+1.8758*y+.0415*zv,b=.0557*x-.204*y+1.057*zv;r=Math.max(0,r);g=Math.max(0,g);b=Math.max(0,b);rgb[i*3]=Math.min(255,sGam(r)*255)|0;rgb[i*3+1]=Math.min(255,sGam(g)*255)|0;rgb[i*3+2]=Math.min(255,sGam(b)*255)|0}
-  }
+  const rgb=fieldRGB(el,p,xx,yy,Nx,Ny,dx,dy,z*mm);
   const simCv=document.createElement('canvas');simCv.width=Nx;simCv.height=Ny;
   const sc2=simCv.getContext('2d'),img=sc2.createImageData(Nx,Ny),d=img.data;
   for(let iy=0;iy<Ny;iy++)for(let ix=0;ix<Nx;ix++){const si=(Ny-1-iy)*Nx+ix,di=(iy*Nx+ix)*4;d[di]=rgb[si*3];d[di+1]=rgb[si*3+1];d[di+2]=rgb[si*3+2];d[di+3]=255}
@@ -493,4 +507,4 @@ function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=
 (function(){const g=document.getElementById('preset-grid');PR.forEach(pr=>{const b=document.createElement('button');b.className='preset-btn';b.textContent=pr.name;b.addEventListener('click',()=>{applyP(pr);b.classList.add('on');closeMob()});g.appendChild(b)})})();
 
 // Boot: set the wavelength swatch, build the param UI, sync the bars, and render.
-(function(){const rgb=wlRGB(S.lambda),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs;buildParamUI();syncBars();scheduleRecompute()})();
+(function(){syncScale();const rgb=lamRGB(S.lambda),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb[0]*255|0},${rgb[1]*255|0},${rgb[2]*255|0})`;dot.style.backgroundColor=cs;dot.style.color=cs;buildParamUI();syncBars();scheduleRecompute()})();
