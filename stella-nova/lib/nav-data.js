@@ -1,0 +1,256 @@
+// ============================================================================
+//  NAV DATA  ·  the one page registry of the Stella Nova shell
+// ----------------------------------------------------------------------------
+//  Every page of the shell is in this file, and only here. Three readers use
+//  it:
+//    index.html (shell)   builds the sidebar, PAGES (key -> path) and LABELS
+//    pages/home/          builds the star chart, sector cards, search, chips
+//    tools/nav-sync.js    writes the home directory and the sector colours,
+//                         and checks that every page directory is registered
+//
+//  Shape: region -> constellation -> group -> page.
+//    region         a heading in the sidebar, a band of sky on the home chart
+//    constellation  a collapsible sidebar section, one star group on the chart
+//    group          a sub-heading (h may be null), one asterism on the chart
+//    page           [key, label, badge, dir]. dir is the folder under pages/.
+//                   When dir is absent, it is the same as key.
+//
+//  Classic script, no ES modules, so the home page also runs on file://.
+//  It sets window.SN_NAV and window.snPages.
+//
+//  To add a page: add one row to a group, then run
+//    node tools/nav-sync.js
+//
+//  grep -n targets
+//    region table ......... "window.SN_NAV ="
+//    one region ........... "{ id: \"science\""
+//    flat page list ....... "function snPages"
+// ============================================================================
+(function (w) {
+'use strict';
+w.SN_NAV = [
+{ id: "stella", label: "Stella Nova", constellations: [
+  { id: "game", label: "The Game", short: "Game", icon: "⌂", color: "#ffc832", color2: "#ff8a3d", groups: [
+    { h: null, p: [
+      ["home", "Overview", null]
+    ] }
+  ] },
+  { id: "wiki", label: "Game Wiki", short: "Wiki", icon: "★", color: "#6db8e0", color2: "#50c8b8", groups: [
+    { h: "Reference", p: [
+      ["wiki", "Wiki", "NEW"],
+      ["research", "Research", "NEW"]
+    ] },
+    { h: "Station Design", p: [
+      ["guide", "Station Guide", null],
+      ["planner", "Station Planner", null],
+      ["crafting", "Crafting", null]
+    ] },
+    { h: "Ship & Identity", p: [
+      ["shipdesigner", "Ship Designer", "NEW", "ship-designer"],
+      ["flagdesigner", "Flag Designer", "NEW", "flag-designer"]
+    ] },
+    { h: "Gameplay", p: [
+      ["selection", "Selection", null],
+      ["behaviors", "Behaviors", null],
+      ["controls", "Controls", null]
+    ] },
+    { h: "Crew & Society", p: [
+      ["social-dynamics", "Social Dynamics", "NEW"]
+    ] }
+  ] },
+  { id: "community", label: "Community & Tools", short: "Community", icon: "☉", color: "#64dcc8", color2: "#64c8f0", groups: [
+    { h: null, p: [
+      ["fortom", "For Tom", null, "for-tom"],
+      ["starward-belt", "Starward Belt", "MAP"]
+    ] },
+    { h: "Help Translate", id: "translate-cycle", p: [
+      ["translate", "Translation Tool", "i18n"]
+    ] },
+    { h: "Studio Tools", p: [
+      ["solar", "Solar Transit Study", "TOOL"],
+      ["matlab", "PBR Material Studio", "TOOL", "material-studio"]
+    ] }
+  ] }
+] },
+{ id: "science", label: "Science", constellations: [
+  { id: "space", label: "Space & Gravity", short: "Space", icon: "☾", color: "#60b0f0", color2: "#ffc864", groups: [
+    { h: "Planets & Orbits", p: [
+      ["hohmann", "Hohmann Transfer", "SIM"],
+      ["leo", "LEO Catalog", "NEW", "leo-catalog"],
+      ["gravity", "Gravity Sim", "SIM"],
+      ["forge", "Planet Forge", null]
+    ] },
+    { h: "Deep Space", p: [
+      ["galaxy", "Galaxy", "SIM"],
+      ["blackhole", "Black Hole", "GPU"],
+      ["wormhole", "Wormhole", "GPU", "ellis-wormhole"]
+    ] }
+  ] },
+  { id: "quantum", label: "Quantum", short: "Quantum", icon: "ψ", color: "#9088e0", color2: "#64b4ff", groups: [
+    { h: "Atoms & Molecules", p: [
+      ["orbital", "Atomic Orbital", "VR", "atomic-orbital-vr"],
+      ["molecular-bond", "Molecular Bond", "SIM"],
+      ["hydrogen-table", "Hydrogen Wave Function", "NEW"]
+    ] },
+    { h: "Quantum Computing", p: [
+      ["qave", "Quantum Algorithm Visualizer", "3D", "quantum-algorithm-visualizer"],
+      ["qft-flow", "Quantum Encoding", "MATH"],
+      ["qft-store", "Quantum Decoding", "DATA"],
+      ["frqi", "Quantum Image Encoding", "IMG", "frqi-quantum-image-lab"]
+    ] }
+  ] },
+  { id: "life", label: "Life Sciences", short: "Life", icon: "✿", color: "#6cd6a8", color2: "#e8d2a8", groups: [
+    { h: "Proteins", p: [
+      ["protein-viewer", "Protein Structure", "3D"],
+      ["protein-folding", "Protein Folding", "SIM"],
+      ["alphafold", "How AlphaFold Works", "ML", "alphafold-explained"]
+    ] },
+    { h: "Anatomy", p: [
+      ["human-skull", "Human Skull", "3D"],
+      ["human-skeleton", "Human Skeleton", "3D"]
+    ] }
+  ] },
+  { id: "fluids", label: "Fluids", short: "Fluids", icon: "≈", color: "#50c0ff", color2: "#64dcc8", groups: [
+    { h: "Flow", p: [
+      ["fluidlab", "Stable Fluids", "GPU"],
+      ["wind-tunnel", "Wind Tunnel", "CFD"],
+      ["tidal-currents", "Tidal Currents", "DATA"]
+    ] },
+    { h: "Navier–Stokes", p: [
+      ["ns-equations", "Navier–Stokes 1D", "MATH"],
+      ["ns-burgers", "Burgers Equation", "SIM"],
+      ["ns-flow2d", "Navier–Stokes 2D", "SIM"],
+      ["ns-flow3d", "Navier–Stokes 3D", "SIM"]
+    ] },
+    { h: "Blowup", p: [
+      ["ns-wave", "Blowup: Wave", "MATH"],
+      ["ns-geometry", "Blowup: Geometry", "SIM"],
+      ["ns-vortex", "Blowup: Vortex", "3D"]
+    ] }
+  ] },
+  { id: "fields", label: "Light & Fields", short: "Fields", icon: "∇", color: "#60e0ee", color2: "#ffb478", groups: [
+    { h: "Electromagnetism", p: [
+      ["magnetlab", "MagnetLab", "NEW"],
+      ["biot-savart", "Biot–Savart Law", "NEW"],
+      ["maxwell", "Maxwell's Equations", "NEW", "maxwells-equations"],
+      ["twenty-to-four", "Twenty to Four", "NEW"],
+      ["smith-chart", "Smith Chart", "NEW"]
+    ] },
+    { h: "Optics", p: [
+      ["diffraction", "Aperture Diffraction", "NEW", "diffraction-lab"],
+      ["double-slit", "Double-Slit Diffraction", "NEW"],
+      ["polarization", "Circular Polarization", "NEW", "circular-polarization"]
+    ] }
+  ] },
+  { id: "patterns", label: "Patterns & Chaos", short: "Patterns", icon: "∞", color: "#9db4ff", color2: "#c490ff", groups: [
+    { h: "Chaos", p: [
+      ["attractorlab", "Strange Attractors", "3D"],
+      ["flowlab", "Vector Fields", "SIM"]
+    ] },
+    { h: "Emergence", p: [
+      ["reaction-diffusion", "Reaction–Diffusion", "GPU"],
+      ["lenia", "Lenia", "GPU"],
+      ["game-of-life", "Game of Life", "SIM"]
+    ] }
+  ] },
+  { id: "sound", label: "Sound & Vibration", short: "Sound", icon: "♪", color: "#ff8ac2", color2: "#ffb478", groups: [
+    { h: "Music", p: [
+      ["chordlab", "ChordLab", "MIC"],
+      ["chordchart", "Chord Chart", "NEW", "chord-chart"],
+      ["harmonywheel", "Harmony Wheel", "NEW", "harmony-wheel"]
+    ] },
+    { h: "Resonance", p: [
+      ["resonance-figure", "Resonance Figure", "NEW"],
+      ["resonance-table", "Resonance Table", "NEW"],
+      ["resonance-3d", "Resonance 3D", "3D"],
+      ["wave-membrane", "Standing Wave Membrane", "SIM"]
+    ] }
+  ] },
+  { id: "machines", label: "Machines", short: "Machines", icon: "◷", color: "#e6c27a", color2: "#f0b27a", groups: [
+    { h: null, p: [
+      ["watch-movement", "Watch Movement", "3D"],
+      ["watch-randomizer", "Timepiece Randomizer", "3D"],
+      ["origami", "Origami Simulator", "SIM"]
+    ] }
+  ] }
+] },
+{ id: "graphics", label: "Graphics", constellations: [
+  { id: "shaders", label: "Shader Tables", short: "Shaders", icon: "✦", color: "#e58bd0", color2: "#b896ff", groups: [
+    { h: "Patterns", p: [
+      ["noise", "Noise Table", "WGSL", "noise-table"],
+      ["fields", "Field Table", "COMPUTE", "field-table"],
+      ["sims", "Simulation Table", "COMPUTE", "simulation-table"],
+      ["dot-field", "Dot Field Table", "WGSL", "dot-field-table"],
+      ["polar", "Polar & Lattice Table", "WGSL", "polar-table"],
+      ["sdf2d", "SDF 2D Table", "WGSL", "sdf2d-table"]
+    ] },
+    { h: "Image", p: [
+      ["color", "Color Table", "WGSL", "color-table"],
+      ["postfx", "Post-Process", "WGSL", "postfx-table"],
+      ["sampling", "Sampling Table", "WGSL", "sampling-table"]
+    ] },
+    { h: "Surfaces", p: [
+      ["lighting", "Lighting Table", "WGSL", "lighting-table"],
+      ["sdf-solids", "SDF Solids Table", "WGSL", "sdf-solids-table"],
+      ["liquid-metal", "Liquid Metal Table", "WGSL", "liquid-metal-table"],
+      ["refraction-table", "Refraction Table", "WGSL"]
+    ] },
+    { h: "Composition", p: [
+      ["bench", "Composition Bench", "NODES", "composition-bench"]
+    ] }
+  ] },
+  { id: "effects", label: "Game Effects", short: "Effects", icon: "✺", color: "#ff9a5c", color2: "#ff5a4a", groups: [
+    { h: "Weapons & Engines", p: [
+      ["explosion", "Explosion", null],
+      ["flare", "Engine Propulsion Effects", null],
+      ["beam", "Beam & Decal Table", "WGSL", "beam-table"]
+    ] },
+    { h: "Fire & Smoke", p: [
+      ["fire", "Fire Table", "WGSL", "fire-table"],
+      ["fire-ev1", "Fire Table (Evolved 1)", "WGSL", "fire-table-evolved-1"],
+      ["smoke", "Smoke Table", "WGSL", "smoke-table"]
+    ] },
+    { h: "Heat & Frost", p: [
+      ["heat-diffraction", "Heat Diffraction", "IMG"],
+      ["heat-metal", "Heat Metal", "WGSL"],
+      ["frost", "Frost Table", "WGSL", "frost-table"]
+    ] }
+  ] },
+  { id: "rendering", label: "Rendering", short: "Render", icon: "◈", color: "#96c8ff", color2: "#ffb478", groups: [
+    { h: "Ray Marching", p: [
+      ["supernova", "Fractal Orb", "SHADER", "fractal-orb"],
+      ["sdf-lab", "SDF Modeller", "TOOL"],
+      ["sphere-tracing", "Sphere Tracing Lab", "LAB"],
+      ["mandelbulber", "Mandelbulber", "WGSL"],
+      ["sdf-clouds", "SDF Clouds", "GPU"]
+    ] },
+    { h: "Light Transport", p: [
+      ["cornell", "Rendering Engine", "PATH"],
+      ["glass-cube", "Refraction", "GPU"],
+      ["platonic", "Platonic Mirrors", "SHADER", "platonic-mirrors"],
+      ["branched-flow", "Branched Flow", "GPU", "cube_branched_flow"]
+    ] },
+    { h: "Volumes", p: [
+      ["orbs", "Presence Orbs", "WGSL", "presence-orbs"],
+      ["thinking-orbs", "Thinking Orbs", "WGSL"],
+      ["voxel", "Voxel Flythrough", "GPU", "voxel-flythrough"]
+    ] },
+    { h: "Generative", p: [
+      ["markov-junior", "MarkovJunior", "RULES"],
+      ["shan-shui", "Shan Shui", "SVG"],
+      ["holocloth", "Holocloth", "CLOTH"]
+    ] }
+  ] }
+] }
+];
+
+// Flatten SN_NAV into one record per page, in nav order.
+function snPages() {
+  const out = [];
+  w.SN_NAV.forEach(r => r.constellations.forEach(c => c.groups.forEach(g => g.p.forEach(([key, label, badge, dir]) => {
+    out.push({ key, label, badge, path: 'pages/' + (dir || key) + '/index.html', region: r, con: c, group: g });
+  }))));
+  return out;
+}
+w.snPages = snPages;
+})(window);

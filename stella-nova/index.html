@@ -61,67 +61,18 @@ body{font-family:var(--f-sans);color:var(--text);-webkit-font-smoothing:antialia
 .nav-item{display:flex;align-items:center;gap:10px;padding:11px 20px 11px 46px;cursor:pointer;border:none;background:transparent;width:100%;text-align:left;position:relative;transition:background 0.15s;font-family:inherit;color:inherit}
 .nav-item::before{content:'';position:absolute;left:30px;top:50%;transform:translateY(-50%);width:5px;height:5px;border-radius:50%;background:var(--text-faint);transition:background 0.15s,box-shadow 0.15s}
 .nav-item:hover{background:rgba(150,200,255,0.04)}.nav-item:hover::before{background:var(--blue-dim)}
-.nav-item.active{background:rgba(255,200,50,0.05)}.nav-item.active::before{background:var(--yellow);box-shadow:0 0 7px var(--yellow)}.nav-item.active .nav-label{color:var(--yellow)}
-.nav-item.hl.active{background:rgba(150,200,255,0.05)}.nav-item.hl.active::before{background:var(--blue);box-shadow:0 0 7px var(--blue)}.nav-item.hl.active .nav-label{color:var(--blue)}.nav-item.hl:hover::before{background:var(--blue-dim)}
-.nav-item.fx.active{background:rgba(255,123,0,0.05)}.nav-item.fx.active::before{background:var(--orange);box-shadow:0 0 7px var(--orange)}.nav-item.fx.active .nav-label{color:var(--orange)}.nav-item.fx:hover::before{background:var(--orange)}
-.nav-item.sn.active{background:rgba(255,136,48,0.06)}.nav-item.sn.active::before{background:#ff8830;box-shadow:0 0 7px #ff8830}.nav-item.sn.active .nav-label{color:#ff8830}.nav-item.sn:hover::before{background:#cc6a20}
-.nav-item.qm.active{background:rgba(100,180,255,0.06)}.nav-item.qm.active::before{background:#64b4ff;box-shadow:0 0 7px #64b4ff}.nav-item.qm.active .nav-label{color:#64b4ff}.nav-item.qm:hover::before{background:#4a8ccc}
-.nav-item.wh.active{background:rgba(100,220,220,0.06)}.nav-item.wh.active::before{background:#64dce0;box-shadow:0 0 7px #64dce0}.nav-item.wh.active .nav-label{color:#64dce0}.nav-item.wh:hover::before{background:#40b0b4}
-.nav-item.bh.active{background:rgba(255,60,40,0.06)}.nav-item.bh.active::before{background:#ff4030;box-shadow:0 0 7px #ff4030}.nav-item.bh.active .nav-label{color:#ff4030}.nav-item.bh:hover::before{background:#cc3020}
-.nav-item.gx.active{background:rgba(255,200,100,0.06)}.nav-item.gx.active::before{background:#ffc864;box-shadow:0 0 7px #ffc864}.nav-item.gx.active .nav-label{color:#ffc864}.nav-item.gx:hover::before{background:#cc9a40}
-.nav-item.cp.active{background:rgba(212,168,71,0.06)}.nav-item.cp.active::before{background:#d4a847;box-shadow:0 0 7px #d4a847}.nav-item.cp.active .nav-label{color:#d4a847}.nav-item.cp:hover::before{background:#a8853a}
-.nav-item.sol.active{background:rgba(245,200,66,0.06)}.nav-item.sol.active::before{background:#f5c842;box-shadow:0 0 7px #f5c842}.nav-item.sol.active .nav-label{color:#f5c842}.nav-item.sol:hover::before{background:#c8a020}
-.nav-item.mat.active{background:rgba(184,150,255,0.06)}.nav-item.mat.active::before{background:#b896ff;box-shadow:0 0 7px #b896ff}.nav-item.mat.active .nav-label{color:#b896ff}.nav-item.mat:hover::before{background:#9070d0}
-.nav-item.ren.active{background:rgba(255,180,120,0.06)}.nav-item.ren.active::before{background:#ffb478;box-shadow:0 0 7px #ffb478}.nav-item.ren.active .nav-label{color:#ffb478}.nav-item.ren:hover::before{background:#cc8a50}
-.nav-item.com.active{background:rgba(100,220,200,0.06)}.nav-item.com.active::before{background:#64dcc8;box-shadow:0 0 7px #64dcc8}.nav-item.com.active .nav-label{color:#64dcc8}.nav-item.com:hover::before{background:#40a090}
-.cluster-head.com-head .cluster-icon{opacity:1;color:#64dcc8}.cluster.open .cluster-head.com-head .cluster-label{color:#64dcc8}
-.nav-item.leo.active{background:rgba(91,159,217,0.08)}.nav-item.leo.active::before{background:#5b9fd9;box-shadow:0 0 7px #5b9fd9}.nav-item.leo.active .nav-label{color:#5b9fd9}.nav-item.leo:hover::before{background:#3d76a8}
-.nav-item.ds.active{background:rgba(255,107,107,0.06)}.nav-item.ds.active::before{background:#ff6b6b;box-shadow:0 0 7px #ff6b6b}.nav-item.ds.active .nav-label{color:#ff6b6b}.nav-item.ds:hover::before{background:#cc5555}
-.nav-item.em.active{background:rgba(96,224,238,0.06)}.nav-item.em.active::before{background:#60e0ee;box-shadow:0 0 7px #60e0ee}.nav-item.em.active .nav-label{color:#60e0ee}.nav-item.em:hover::before{background:#40b0be}
-.nav-item.fl.active{background:rgba(100,200,240,0.06)}.nav-item.fl.active::before{background:#64c8f0;box-shadow:0 0 7px #64c8f0}.nav-item.fl.active .nav-label{color:#64c8f0}.nav-item.fl:hover::before{background:#40a0c0}
-.nav-item.mus.active{background:rgba(255,138,194,0.07)}.nav-item.mus.active::before{background:#ff8ac2;box-shadow:0 0 7px #ff8ac2}.nav-item.mus.active .nav-label{color:#ff8ac2}.nav-item.mus:hover::before{background:#cc6a9a}
-.cluster-head.music-head .cluster-icon{opacity:1;color:#ff8ac2}.cluster.open .cluster-head.music-head .cluster-label{color:#ff8ac2}
-.nav-item.vx.active{background:rgba(91,224,212,0.07)}.nav-item.vx.active::before{background:#5be0d4;box-shadow:0 0 7px #5be0d4}.nav-item.vx.active .nav-label{color:#5be0d4}.nav-item.vx:hover::before{background:#3aa89e}
-.nav-item.pm.active{background:rgba(196,144,255,0.06)}.nav-item.pm.active::before{background:#c490ff;box-shadow:0 0 7px #c490ff}.nav-item.pm.active .nav-label{color:#c490ff}.nav-item.pm:hover::before{background:#9a68d0}
-.nav-item.rf.active{background:rgba(144,208,224,0.06)}.nav-item.rf.active::before{background:#90d0e0;box-shadow:0 0 7px #90d0e0}.nav-item.rf.active .nav-label{color:#90d0e0}.nav-item.rf:hover::before{background:#60a0b0}
-.nav-item.ad.active{background:rgba(200,144,255,0.06)}.nav-item.ad.active::before{background:#c890ff;box-shadow:0 0 7px #c890ff}.nav-item.ad.active .nav-label{color:#c890ff}.nav-item.ad:hover::before{background:#a070d0}
-.nav-item.qav.active{background:rgba(144,136,224,0.08)}.nav-item.qav.active::before{background:#9088e0;box-shadow:0 0 7px #9088e0}.nav-item.qav.active .nav-label{color:#9088e0}.nav-item.qav:hover::before{background:#7068c0}
-.cluster-head.qc-head .cluster-icon{opacity:1;color:#9088e0}.cluster.open .cluster-head.qc-head .cluster-label{color:#9088e0}
-.nav-item.mth.active{background:rgba(157,180,255,0.07)}.nav-item.mth.active::before{background:#9db4ff;box-shadow:0 0 7px #9db4ff}.nav-item.mth.active .nav-label{color:#9db4ff}.nav-item.mth:hover::before{background:#7088cc}
-.cluster-head.math-head .cluster-icon{opacity:1;color:#9db4ff}.cluster.open .cluster-head.math-head .cluster-label{color:#9db4ff}
-.nav-sub.c-math{color:#9db4ff;border-left-color:#9db4ff;background:linear-gradient(90deg,rgba(157,180,255,0.08) 0%,transparent 70%)}
-.nav-sub.c-qcomp{color:#a89cff;border-left-color:#a89cff;background:linear-gradient(90deg,rgba(168,156,255,0.10) 0%,transparent 70%)}
-.cluster-head.learn-head .cluster-icon{opacity:1;color:#7cd4ea;font-family:var(--f-serif);font-style:italic;font-weight:400;font-size:1.15rem}
-.cluster.open .cluster-head.learn-head .cluster-label{color:#7cd4ea}
-.cluster-head.shader-head .cluster-icon{opacity:1;color:#e58bd0}
-.cluster.open .cluster-head.shader-head .cluster-label{color:#e58bd0}
-.cluster-head.sims-head .cluster-icon{opacity:1;color:#ffb464}
-.cluster.open .cluster-head.sims-head .cluster-label{color:#ffb464}
 .nav-sub{padding:14px 20px 5px 46px;font-size:0.7rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6a8ab0;position:relative;border-left:3px solid transparent;margin-left:14px;padding-left:32px}.nav-sub::before{content:'';position:absolute;left:32px;right:20px;bottom:0;height:0;border-bottom:1px solid var(--border)}.nav-sub:first-child{padding-top:6px}
-.nav-sub.c-station{color:#6db8e0;border-left-color:#6db8e0;background:linear-gradient(90deg,rgba(109,184,224,0.08) 0%,transparent 70%)}
-.nav-sub.c-ship{color:#8fa8d0;border-left-color:#8fa8d0;background:linear-gradient(90deg,rgba(143,168,208,0.08) 0%,transparent 70%)}
-.nav-sub.c-ref{color:#96c8ff;border-left-color:#96c8ff;background:linear-gradient(90deg,rgba(150,200,255,0.08) 0%,transparent 70%)}
-.nav-sub.c-society{color:#c8a8f0;border-left-color:#c8a8f0;background:linear-gradient(90deg,rgba(200,168,240,0.08) 0%,transparent 70%)}
-.nav-sub.c-gameplay{color:#50c8b8;border-left-color:#50c8b8;background:linear-gradient(90deg,rgba(80,200,184,0.08) 0%,transparent 70%)}
-.nav-sub.c-orbital{color:#60b0f0;border-left-color:#60b0f0;background:linear-gradient(90deg,rgba(96,176,240,0.08) 0%,transparent 70%)}
-.nav-sub.c-quantum{color:#9088e0;border-left-color:#9088e0;background:linear-gradient(90deg,rgba(144,136,224,0.08) 0%,transparent 70%)}
-.nav-sub.c-bio{color:#6cd6a8;border-left-color:#6cd6a8;background:linear-gradient(90deg,rgba(108,214,168,0.08) 0%,transparent 70%)}
-.nav-sub.c-anat{color:#e8d2a8;border-left-color:#e8d2a8;background:linear-gradient(90deg,rgba(232,210,168,0.08) 0%,transparent 70%)}
-.nav-sub.c-em{color:#50dce8;border-left-color:#50dce8;background:linear-gradient(90deg,rgba(80,220,232,0.08) 0%,transparent 70%)}
-.nav-sub.c-optical{color:#ffb478;border-left-color:#ffb478;background:linear-gradient(90deg,rgba(255,180,120,0.08) 0%,transparent 70%)}
-.nav-sub.c-fluid{color:#50c0ff;border-left-color:#50c0ff;background:linear-gradient(90deg,rgba(80,192,255,0.08) 0%,transparent 70%)}
-.nav-sub.c-proc{color:#64dcc8;border-left-color:#64dcc8;background:linear-gradient(90deg,rgba(100,220,200,0.08) 0%,transparent 70%)}
-.nav-sub.c-image{color:#ff9ec4;border-left-color:#ff9ec4;background:linear-gradient(90deg,rgba(255,158,196,0.08) 0%,transparent 70%)}
-.nav-sub.c-shade{color:#ffd166;border-left-color:#ffd166;background:linear-gradient(90deg,rgba(255,209,102,0.08) 0%,transparent 70%)}
-.nav-sub.c-comp{color:#b896ff;border-left-color:#b896ff;background:linear-gradient(90deg,rgba(184,150,255,0.08) 0%,transparent 70%)}
-.nav-sub.c-vol{color:#96c8ff;border-left-color:#96c8ff;background:linear-gradient(90deg,rgba(150,200,255,0.08) 0%,transparent 70%)}
-.nav-sub.c-fx{color:#e58bd0;border-left-color:#e58bd0;background:linear-gradient(90deg,rgba(229,139,208,0.08) 0%,transparent 70%)}
-.nav-sub.c-data{color:#64c8f0;border-left-color:#64c8f0;background:linear-gradient(90deg,rgba(100,200,240,0.08) 0%,transparent 70%)}
-.nav-sub.c-elem{color:#ff9a5c;border-left-color:#ff9a5c;background:linear-gradient(90deg,rgba(255,154,92,0.08) 0%,transparent 70%)}
-.nav-sub.c-fold{color:#f0b27a;border-left-color:#f0b27a;background:linear-gradient(90deg,rgba(240,178,122,0.08) 0%,transparent 70%)}
-.nav-sub.c-mech{color:#e6c27a;border-left-color:#e6c27a;background:linear-gradient(90deg,rgba(230,194,122,0.08) 0%,transparent 70%)}
-.nav-sub.c-tools{color:#f5c842;border-left-color:#f5c842;background:linear-gradient(90deg,rgba(245,200,66,0.08) 0%,transparent 70%)}
-.nav-sub.c-cloth{color:#d7a6ff;border-left-color:#d7a6ff;background:linear-gradient(90deg,rgba(215,166,255,0.08) 0%,transparent 70%)}
+/* Colour comes from the constellation: buildNav sets --c on each .cluster
+   from its colour in lib/nav-data.js. One rule set serves every section. */
+.cluster{--c:var(--blue)}
+.cluster-icon{opacity:1;color:var(--c)}
+.cluster.open .cluster-label{color:var(--c)}
+.nav-sub{color:var(--c);border-left-color:var(--c)}
+.nav-item:hover::before{background:var(--c)}
+.nav-item.active{background:color-mix(in srgb,var(--c) 7%,transparent)}.nav-item.active::before{background:var(--c);box-shadow:0 0 7px var(--c)}.nav-item.active .nav-label{color:var(--c)}
+.cluster-head.solo .cluster-arrow{visibility:hidden}.cluster-head.solo.active .cluster-label{color:var(--c)}
+.nav-region{margin:20px 22px 6px;font:500 0.62rem/1 var(--f-mono);letter-spacing:0.22em;text-transform:uppercase;color:var(--dim);opacity:.75}
+.nav-region:first-child{margin-top:8px}
 #translate-cycle{transition:opacity 0.4s ease}
 .nav-label{font-size:0.88rem;letter-spacing:0.04em;color:#8aa8c8;transition:color 0.15s}
 .nav-badge{margin-left:auto;font-size:0.55rem;letter-spacing:0.12em;text-transform:uppercase;color:#5a7a98;padding:2px 6px;border:1px solid rgba(150,200,255,0.12);border-radius:2px}
@@ -154,7 +105,7 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
    The sidebar uses the home tokens and fonts: Space Grotesk for labels,
    IBM Plex Mono for small caps labels, Instrument Serif for the tagline.
    Items are rounded rows inset from the edge. The active row has a tinted
-   fill and a lit dot in its accent color (the per-item rules above). */
+   fill and a lit dot in its constellation colour (the --c rules above). */
 #sb-header{padding:26px 22px 20px}
 #sb-nav{padding:10px 0 14px}
 .cluster{border-bottom:none;margin:2px 10px}
@@ -162,7 +113,7 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
 .cluster-head:hover{background:rgba(150,200,255,0.05)}
 .cluster-icon{width:22px;font-size:1rem;opacity:.8}
 .cluster-label{font-size:0.95rem;font-weight:500;letter-spacing:0.01em;text-transform:none;color:#a9bad2}
-.cluster.open .cluster-label{color:var(--ink)}
+.cluster.open .cluster-label{color:var(--c)}
 .cluster.open>.cluster-head{background:rgba(150,200,255,0.04)}
 .cluster-arrow{font-size:0.95rem;color:var(--dim);opacity:.6}
 .cluster-body{padding-left:4px}
@@ -206,173 +157,7 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
       <div id="sb-sub">from ore to <em>empire.</em></div>
       <div id="sb-status">Sim Active</div>
     </div>
-    <div id="sb-nav">
-      <div class="cluster" id="cl-home">
-        <button class="cluster-head" onclick="toggleCluster('cl-home')"><span class="cluster-icon">&#8962;</span><span class="cluster-label">Home</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <button class="nav-item" data-tab="home" onclick="switchTab('home')"><span class="nav-label">Overview</span></button>
-          <div class="nav-sub" id="translate-cycle">Help Translate</div>
-          <button class="nav-item com" data-tab="translate" onclick="switchTab('translate')"><span class="nav-label">Translation Tool</span><span class="nav-badge">i18n</span></button>
-        </div>
-      </div>
-      <div class="cluster" id="cl-crew">
-        <button class="cluster-head" onclick="toggleCluster('cl-crew')"><span class="cluster-icon">&#9733;</span><span class="cluster-label">Interactive Wiki</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <div class="nav-sub c-ref">Reference</div>
-          <button class="nav-item" data-tab="wiki" onclick="switchTab('wiki')"><span class="nav-label">Wiki</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item" data-tab="research" onclick="switchTab('research')"><span class="nav-label">Research</span><span class="nav-badge">NEW</span></button>
-          <div class="nav-sub c-station">Station Design</div>
-          <button class="nav-item" data-tab="guide" onclick="switchTab('guide')"><span class="nav-label">Station Guide</span></button>
-          <button class="nav-item" data-tab="planner" onclick="switchTab('planner')"><span class="nav-label">Station Planner</span></button>
-          <button class="nav-item" data-tab="crafting" onclick="switchTab('crafting')"><span class="nav-label">Crafting</span></button>
-          <div class="nav-sub c-ship">Ship &amp; Identity</div>
-          <button class="nav-item" data-tab="shipdesigner" onclick="switchTab('shipdesigner')"><span class="nav-label">Ship Designer</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item" data-tab="flagdesigner" onclick="switchTab('flagdesigner')"><span class="nav-label">Flag Designer</span><span class="nav-badge">NEW</span></button>
-          <div class="nav-sub c-gameplay">Gameplay</div>
-          <button class="nav-item" data-tab="selection" onclick="switchTab('selection')"><span class="nav-label">Selection</span></button>
-          <button class="nav-item" data-tab="behaviors" onclick="switchTab('behaviors')"><span class="nav-label">Behaviors</span></button>
-          <button class="nav-item" data-tab="controls" onclick="switchTab('controls')"><span class="nav-label">Controls</span></button>
-          <div class="nav-sub c-society">Crew &amp; Society</div>
-          <button class="nav-item" data-tab="social-dynamics" onclick="switchTab('social-dynamics')"><span class="nav-label">Social Dynamics</span><span class="nav-badge">NEW</span></button>
-        </div>
-      </div>
-      <div class="cluster" id="cl-learn">
-        <button class="cluster-head learn-head" onclick="toggleCluster('cl-learn')"><span class="cluster-icon">&#955;</span><span class="cluster-label">Learn About Physics</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <div class="nav-sub c-orbital">Orbital Mechanics</div>
-          <button class="nav-item hl" data-tab="hohmann" onclick="switchTab('hohmann')"><span class="nav-label">Hohmann Transfer</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item leo" data-tab="leo" onclick="switchTab('leo')"><span class="nav-label">LEO Catalog</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item hl" data-tab="gravity" onclick="switchTab('gravity')"><span class="nav-label">Gravity Sim</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item gx" data-tab="galaxy" onclick="switchTab('galaxy')"><span class="nav-label">Galaxy</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item" data-tab="forge" onclick="switchTab('forge')"><span class="nav-label">Planet Forge</span></button>
-          <button class="nav-item bh" data-tab="blackhole" onclick="switchTab('blackhole')"><span class="nav-label">Black Hole</span><span class="nav-badge">GPU</span></button>
-          <button class="nav-item wh" data-tab="wormhole" onclick="switchTab('wormhole')"><span class="nav-label">Wormhole</span><span class="nav-badge">GPU</span></button>
-          <div class="nav-sub c-quantum">Quantum &amp; Atomic</div>
-          <button class="nav-item qm" data-tab="orbital" onclick="switchTab('orbital')"><span class="nav-label">Atomic Orbital</span><span class="nav-badge">VR</span></button>
-          <button class="nav-item qm" data-tab="molecular-bond" onclick="switchTab('molecular-bond')"><span class="nav-label">Molecular Bond</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item qm" data-tab="hydrogen-table" onclick="switchTab('hydrogen-table')"><span class="nav-label">Hydrogen Wave Function</span><span class="nav-badge">NEW</span></button>
-          <div class="nav-sub c-bio">Proteins</div>
-          <button class="nav-item qm" data-tab="protein-viewer" onclick="switchTab('protein-viewer')"><span class="nav-label">Protein Structure</span><span class="nav-badge">3D</span></button>
-          <button class="nav-item qm" data-tab="protein-folding" onclick="switchTab('protein-folding')"><span class="nav-label">Protein Folding</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item qm" data-tab="alphafold" onclick="switchTab('alphafold')"><span class="nav-label">How AlphaFold Works</span><span class="nav-badge">ML</span></button>
-          <div class="nav-sub c-anat">Anatomy</div>
-          <button class="nav-item qm" data-tab="human-skull" onclick="switchTab('human-skull')"><span class="nav-label">Human Skull</span><span class="nav-badge">3D</span></button>
-          <button class="nav-item qm" data-tab="human-skeleton" onclick="switchTab('human-skeleton')"><span class="nav-label">Human Skeleton</span><span class="nav-badge">3D</span></button>
-          <div class="nav-sub c-qcomp">Quantum Computing</div>
-          <button class="nav-item qav" data-tab="qave" onclick="switchTab('qave')"><span class="nav-label">Quantum Algorithm Visualizer</span><span class="nav-badge">3D</span></button>
-          <button class="nav-item qav" data-tab="qft-flow" onclick="switchTab('qft-flow')"><span class="nav-label">Quantum Encoding</span><span class="nav-badge">MATH</span></button>
-          <button class="nav-item qav" data-tab="qft-store" onclick="switchTab('qft-store')"><span class="nav-label">Quantum Decoding</span><span class="nav-badge">DATA</span></button>
-          <button class="nav-item qav" data-tab="frqi" onclick="switchTab('frqi')"><span class="nav-label">Quantum Image Encoding</span><span class="nav-badge">IMG</span></button>
-          <div class="nav-sub c-fluid">Fluid Dynamics</div>
-          <button class="nav-item fl" data-tab="fluidlab" onclick="switchTab('fluidlab')"><span class="nav-label">Stable Fluids</span><span class="nav-badge">GPU</span></button>
-          <button class="nav-item fl" data-tab="wind-tunnel" onclick="switchTab('wind-tunnel')"><span class="nav-label">Wind Tunnel</span><span class="nav-badge">CFD</span></button>
-          <button class="nav-item fl" data-tab="ns-equations" onclick="switchTab('ns-equations')"><span class="nav-label">Navier–Stokes 1D</span><span class="nav-badge">MATH</span></button>
-          <button class="nav-item fl" data-tab="ns-burgers" onclick="switchTab('ns-burgers')"><span class="nav-label">Burgers Equation</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item fl" data-tab="ns-flow2d" onclick="switchTab('ns-flow2d')"><span class="nav-label">Navier–Stokes 2D</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item fl" data-tab="ns-flow3d" onclick="switchTab('ns-flow3d')"><span class="nav-label">Navier–Stokes 3D</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item fl" data-tab="ns-wave" onclick="switchTab('ns-wave')"><span class="nav-label">Blowup: Wave</span><span class="nav-badge">MATH</span></button>
-          <button class="nav-item fl" data-tab="ns-geometry" onclick="switchTab('ns-geometry')"><span class="nav-label">Blowup: Geometry</span><span class="nav-badge">SIM</span></button>
-                    <button class="nav-item fl" data-tab="ns-vortex" onclick="switchTab('ns-vortex')"><span class="nav-label">Blowup: Vortex</span><span class="nav-badge">3D</span></button>
-          <div class="nav-sub c-em">Electromagnetism</div>
-          <button class="nav-item em" data-tab="magnetlab" onclick="switchTab('magnetlab')"><span class="nav-label">MagnetLab</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item em" data-tab="biot-savart" onclick="switchTab('biot-savart')"><span class="nav-label">Biot&#8211;Savart Law</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item em" data-tab="maxwell" onclick="switchTab('maxwell')"><span class="nav-label">Maxwell's Equations</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item em" data-tab="twenty-to-four" onclick="switchTab('twenty-to-four')"><span class="nav-label">Twenty to Four</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item em" data-tab="smith-chart" onclick="switchTab('smith-chart')"><span class="nav-label">Smith Chart</span><span class="nav-badge">NEW</span></button>
-          <div class="nav-sub c-optical">Optical Physics</div>
-          <button class="nav-item ren" data-tab="cornell" onclick="switchTab('cornell')"><span class="nav-label">Rendering Engine</span><span class="nav-badge">PATH</span></button>
-          <button class="nav-item ad" data-tab="diffraction" onclick="switchTab('diffraction')"><span class="nav-label">Aperture Diffraction</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item ds" data-tab="double-slit" onclick="switchTab('double-slit')"><span class="nav-label">Double-Slit Diffraction</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item cp" data-tab="polarization" onclick="switchTab('polarization')"><span class="nav-label">Circular Polarization</span><span class="nav-badge">NEW</span></button>
-          <div class="nav-sub c-math">Differential Equations</div>
-          <button class="nav-item mth" data-tab="attractorlab" onclick="switchTab('attractorlab')"><span class="nav-label">Strange Attractors</span><span class="nav-badge">3D</span></button>
-          <button class="nav-item mth" data-tab="flowlab" onclick="switchTab('flowlab')"><span class="nav-label">Vector Fields</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item mth" data-tab="wave-membrane" onclick="switchTab('wave-membrane')"><span class="nav-label">Standing Wave Membrane</span><span class="nav-badge">SIM</span></button>
-          <button class="nav-item mth" data-tab="reaction-diffusion" onclick="switchTab('reaction-diffusion')"><span class="nav-label">Reaction&#8211;Diffusion</span><span class="nav-badge">GPU</span></button>
-          <button class="nav-item mth" data-tab="lenia" onclick="switchTab('lenia')"><span class="nav-label">Lenia</span><span class="nav-badge">GPU</span></button>
-          <button class="nav-item mth" data-tab="game-of-life" onclick="switchTab('game-of-life')"><span class="nav-label">Game of Life</span><span class="nav-badge">SIM</span></button>
-          <div class="nav-sub c-fold">Folding &amp; Structures</div>
-          <button class="nav-item mth" data-tab="origami" onclick="switchTab('origami')"><span class="nav-label">Origami Simulator</span><span class="nav-badge">SIM</span></button>
-          <div class="nav-sub c-mech">Mechanisms</div>
-          <button class="nav-item mth" data-tab="watch-movement" onclick="switchTab('watch-movement')"><span class="nav-label">Watch Movement</span><span class="nav-badge">3D</span></button>
-          <button class="nav-item mth" data-tab="watch-randomizer" onclick="switchTab('watch-randomizer')"><span class="nav-label">Timepiece Randomizer</span><span class="nav-badge">3D</span></button>
-        </div>
-      </div>
-      <div class="cluster" id="cl-music">
-        <button class="cluster-head music-head" onclick="toggleCluster('cl-music')"><span class="cluster-icon">&#9834;</span><span class="cluster-label">Music Lab</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <button class="nav-item mus" data-tab="chordlab" onclick="switchTab('chordlab')"><span class="nav-label">ChordLab</span><span class="nav-badge">MIC</span></button>
-          <button class="nav-item mus" data-tab="chordchart" onclick="switchTab('chordchart')"><span class="nav-label">Chord Chart</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item mus" data-tab="harmonywheel" onclick="switchTab('harmonywheel')"><span class="nav-label">Harmony Wheel</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item mus" data-tab="resonance-figure" onclick="switchTab('resonance-figure')"><span class="nav-label">Resonance Figure</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item mus" data-tab="resonance-table" onclick="switchTab('resonance-table')"><span class="nav-label">Resonance Table</span><span class="nav-badge">NEW</span></button>
-          <button class="nav-item mus" data-tab="resonance-3d" onclick="switchTab('resonance-3d')"><span class="nav-label">Resonance 3D</span><span class="nav-badge">3D</span></button>
-        </div>
-      </div>
-      <div class="cluster" id="cl-shader">
-        <button class="cluster-head shader-head" onclick="toggleCluster('cl-shader')"><span class="cluster-icon">&#10022;</span><span class="cluster-label">Shader Library</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <div class="nav-sub c-proc">Procedural Fields</div>
-          <button class="nav-item sn" data-tab="noise" onclick="switchTab('noise')"><span class="nav-label">Noise Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="fields" onclick="switchTab('fields')"><span class="nav-label">Field Table</span><span class="nav-badge">COMPUTE</span></button>
-          <button class="nav-item sn" data-tab="sims" onclick="switchTab('sims')"><span class="nav-label">Simulation Table</span><span class="nav-badge">COMPUTE</span></button>
-          <button class="nav-item sn" data-tab="dot-field" onclick="switchTab('dot-field')"><span class="nav-label">Dot Field Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="polar" onclick="switchTab('polar')"><span class="nav-label">Polar &amp; Lattice Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="shan-shui" onclick="switchTab('shan-shui')"><span class="nav-label">Shan Shui</span><span class="nav-badge">SVG</span></button>
-          <div class="nav-sub c-image">Image &amp; Color</div>
-          <button class="nav-item sn" data-tab="color" onclick="switchTab('color')"><span class="nav-label">Color Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="postfx" onclick="switchTab('postfx')"><span class="nav-label">Post-Process</span><span class="nav-badge">WGSL</span></button>
-          <div class="nav-sub c-shade">Shading &amp; Sampling</div>
-          <button class="nav-item sn" data-tab="lighting" onclick="switchTab('lighting')"><span class="nav-label">Lighting Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="sampling" onclick="switchTab('sampling')"><span class="nav-label">Sampling Table</span><span class="nav-badge">WGSL</span></button>
-          <div class="nav-sub c-comp">Composition</div>
-          <button class="nav-item sn" data-tab="bench" onclick="switchTab('bench')"><span class="nav-label">Composition Bench</span><span class="nav-badge">NODES</span></button>
-          <div class="nav-sub c-vol">Volumetric</div>
-          <button class="nav-item sn" data-tab="supernova" onclick="switchTab('supernova')"><span class="nav-label">Fractal Orb</span><span class="nav-badge">SHADER</span></button>
-          <button class="nav-item sn" data-tab="orbs" onclick="switchTab('orbs')"><span class="nav-label">Presence Orbs</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="thinking-orbs" onclick="switchTab('thinking-orbs')"><span class="nav-label">Thinking Orbs</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item vx" data-tab="voxel" onclick="switchTab('voxel')"><span class="nav-label">Voxel Flythrough</span><span class="nav-badge">GPU</span></button>
-          <button class="nav-item sn" data-tab="branched-flow" onclick="switchTab('branched-flow')"><span class="nav-label">Branched Flow</span><span class="nav-badge">GPU</span></button>
-          <div class="nav-sub c-fx">Surfaces &amp; Effects</div>
-          <button class="nav-item pm" data-tab="platonic" onclick="switchTab('platonic')"><span class="nav-label">Platonic Mirrors</span><span class="nav-badge">SHADER</span></button>
-          <button class="nav-item rf" data-tab="glass-cube" onclick="switchTab('glass-cube')"><span class="nav-label">Refraction</span><span class="nav-badge">GPU</span></button>
-          <button class="nav-item sn" data-tab="refraction-table" onclick="switchTab('refraction-table')"><span class="nav-label">Refraction Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="sdf-solids" onclick="switchTab('sdf-solids')"><span class="nav-label">SDF Solids Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="sdf2d" onclick="switchTab('sdf2d')"><span class="nav-label">SDF 2D Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="sdf-lab" onclick="switchTab('sdf-lab')"><span class="nav-label">SDF Modeller</span><span class="nav-badge">TOOL</span></button>
-          <button class="nav-item sn" data-tab="sphere-tracing" onclick="switchTab('sphere-tracing')"><span class="nav-label">Sphere Tracing Lab</span><span class="nav-badge">LAB</span></button>
-          <button class="nav-item sn" data-tab="liquid-metal" onclick="switchTab('liquid-metal')"><span class="nav-label">Liquid Metal Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="sdf-clouds" onclick="switchTab('sdf-clouds')"><span class="nav-label">SDF Clouds</span><span class="nav-badge">GPU</span></button>
-          <button class="nav-item sn" data-tab="markov-junior" onclick="switchTab('markov-junior')"><span class="nav-label">MarkovJunior</span><span class="nav-badge">RULES</span></button>
-          <button class="nav-item sn" data-tab="mandelbulber" onclick="switchTab('mandelbulber')"><span class="nav-label">Mandelbulber</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item fx" data-tab="explosion" onclick="switchTab('explosion')"><span class="nav-label">Explosion</span></button>
-          <button class="nav-item fx" data-tab="flare" onclick="switchTab('flare')"><span class="nav-label">Engine Propulsion Effects</span></button>
-          <button class="nav-item sn" data-tab="beam" onclick="switchTab('beam')"><span class="nav-label">Beam &amp; Decal Table</span><span class="nav-badge">WGSL</span></button>
-          <div class="nav-sub c-elem">Elements</div>
-          <button class="nav-item sn" data-tab="fire" onclick="switchTab('fire')"><span class="nav-label">Fire Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="fire-ev1" onclick="switchTab('fire-ev1')"><span class="nav-label">Fire Table (Evolved 1)</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="smoke" onclick="switchTab('smoke')"><span class="nav-label">Smoke Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="heat-diffraction" onclick="switchTab('heat-diffraction')"><span class="nav-label">Heat Diffraction</span><span class="nav-badge">IMG</span></button>
-          <button class="nav-item sn" data-tab="heat-metal" onclick="switchTab('heat-metal')"><span class="nav-label">Heat Metal</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="frost" onclick="switchTab('frost')"><span class="nav-label">Frost Table</span><span class="nav-badge">WGSL</span></button>
-          <div class="nav-sub c-cloth">Cloth Simulation</div>
-          <button class="nav-item sn" data-tab="holocloth" onclick="switchTab('holocloth')"><span class="nav-label">Holocloth</span><span class="nav-badge">CLOTH</span></button>
-          <div class="nav-sub c-data">Data Visualization</div>
-          <button class="nav-item sn" data-tab="tidal-currents" onclick="switchTab('tidal-currents')"><span class="nav-label">Tidal Currents</span><span class="nav-badge">DATA</span></button>
-        </div>
-      </div>
-      <div class="cluster" id="cl-community">
-        <button class="cluster-head com-head" onclick="toggleCluster('cl-community')"><span class="cluster-icon">&#9737;</span><span class="cluster-label">Community</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <button class="nav-item com" data-tab="fortom" onclick="switchTab('fortom')"><span class="nav-label">For Tom</span></button>
-          <button class="nav-item com" data-tab="starward-belt" onclick="switchTab('starward-belt')"><span class="nav-label">Starward Belt</span><span class="nav-badge">MAP</span></button>
-          <button class="nav-item com" data-tab="translate" onclick="switchTab('translate')"><span class="nav-label">Translation Tool</span><span class="nav-badge">i18n</span></button>
-          <div class="nav-sub c-tools">Studio Tools</div>
-          <button class="nav-item sol" data-tab="solar" onclick="switchTab('solar')"><span class="nav-label">Solar Transit Study</span><span class="nav-badge">TOOL</span></button>
-          <button class="nav-item mat" data-tab="matlab" onclick="switchTab('matlab')"><span class="nav-label">PBR Material Studio</span><span class="nav-badge">TOOL</span></button>
-        </div>
-      </div>
-    </div>
+    <div id="sb-nav"></div>
     <div id="sb-footer">
       <a id="sb-wishlist" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener"><span class="wl-ico">&#9733;</span>Wishlist on Steam</a>
       <div id="sb-clock">00:00:00</div>
@@ -389,9 +174,23 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
     <div id="frame-wrap"></div>
   </div>
 </div>
+<script src="lib/nav-data.js"></script>
 <script>
-const PAGES={'human-skull':'pages/human-skull/index.html','human-skeleton':'pages/human-skeleton/index.html','protein-viewer':'pages/protein-viewer/index.html','protein-folding':'pages/protein-folding/index.html',alphafold:'pages/alphafold-explained/index.html','watch-randomizer':'pages/watch-randomizer/index.html','watch-movement':'pages/watch-movement/index.html','sphere-tracing':'pages/sphere-tracing/index.html','game-of-life':'pages/game-of-life/index.html','sdf-lab':'pages/sdf-lab/index.html',sdf2d:'pages/sdf2d-table/index.html',origami:'pages/origami/index.html',frost:'pages/frost-table/index.html',beam:'pages/beam-table/index.html',holocloth:'pages/holocloth/index.html',polar:'pages/polar-table/index.html','liquid-metal':'pages/liquid-metal-table/index.html','sdf-solids':'pages/sdf-solids-table/index.html','dot-field':'pages/dot-field-table/index.html',orbs:'pages/presence-orbs/index.html',noise:'pages/noise-table/index.html',fields:'pages/field-table/index.html',sims:'pages/simulation-table/index.html','shan-shui':'pages/shan-shui/index.html',color:'pages/color-table/index.html',postfx:'pages/postfx-table/index.html',lighting:'pages/lighting-table/index.html',sampling:'pages/sampling-table/index.html',bench:'pages/composition-bench/index.html',home:'pages/home/index.html',hohmann:'pages/hohmann/index.html',forge:'pages/forge/index.html',wiki:'pages/wiki/index.html',research:'pages/research/index.html','social-dynamics':'pages/social-dynamics/index.html',crafting:'pages/crafting/index.html',planner:'pages/planner/index.html',guide:'pages/guide/index.html',behaviors:'pages/behaviors/index.html',controls:'pages/controls/index.html',gravity:'pages/gravity/index.html',selection:'pages/selection/index.html',explosion:'pages/explosion/index.html',flare:'pages/flare/index.html',solar:'pages/solar/index.html',shipdesigner:'pages/ship-designer/index.html',flagdesigner:'pages/flag-designer/index.html',matlab:'pages/material-studio/index.html',orbital:'pages/atomic-orbital-vr/index.html','molecular-bond':'pages/molecular-bond/index.html','hydrogen-table':'pages/hydrogen-table/index.html',supernova:'pages/fractal-orb/index.html',platonic:'pages/platonic-mirrors/index.html',wormhole:'pages/ellis-wormhole/index.html',blackhole:'pages/blackhole/index.html',galaxy:'pages/galaxy/index.html',polarization:'pages/circular-polarization/index.html',diffraction:'pages/diffraction-lab/index.html','double-slit':'pages/double-slit/index.html',fortom:'pages/for-tom/index.html','starward-belt':'pages/starward-belt/index.html',fire:'pages/fire-table/index.html','fire-ev1':'pages/fire-table-evolved-1/index.html',smoke:'pages/smoke-table/index.html','heat-diffraction':'pages/heat-diffraction/index.html','heat-metal':'pages/heat-metal/index.html',leo:'pages/leo-catalog/index.html',magnetlab:'pages/magnetlab/index.html','biot-savart':'pages/biot-savart/index.html',maxwell:'pages/maxwells-equations/index.html','twenty-to-four':'pages/twenty-to-four/index.html','smith-chart':'pages/smith-chart/index.html',fluidlab:'pages/fluidlab/index.html','wind-tunnel':'pages/wind-tunnel/index.html','ns-equations':'pages/ns-equations/index.html','ns-burgers':'pages/ns-burgers/index.html','ns-flow2d':'pages/ns-flow2d/index.html','ns-flow3d':'pages/ns-flow3d/index.html','ns-wave':'pages/ns-wave/index.html','ns-vortex':'pages/ns-vortex/index.html','ns-geometry':'pages/ns-geometry/index.html',cornell:'pages/cornell/index.html',translate:'pages/translate/index.html',qave:'pages/quantum-algorithm-visualizer/index.html','qft-flow':'pages/qft-flow/index.html','qft-store':'pages/qft-store/index.html','frqi':'pages/frqi-quantum-image-lab/index.html',attractorlab:'pages/attractorlab/index.html',flowlab:'pages/flowlab/index.html','wave-membrane':'pages/wave-membrane/index.html','reaction-diffusion':'pages/reaction-diffusion/index.html',lenia:'pages/lenia/index.html','tidal-currents':'pages/tidal-currents/index.html',voxel:'pages/voxel-flythrough/index.html',chordlab:'pages/chordlab/index.html',chordchart:'pages/chord-chart/index.html',harmonywheel:'pages/harmony-wheel/index.html','resonance-figure':'pages/resonance-figure/index.html','resonance-table':'pages/resonance-table/index.html','resonance-3d':'pages/resonance-3d/index.html','branched-flow':'pages/cube_branched_flow/index.html','glass-cube':'pages/glass-cube/index.html','refraction-table':'pages/refraction-table/index.html','sdf-clouds':'pages/sdf-clouds/index.html','markov-junior':'pages/markov-junior/index.html',mandelbulber:'pages/mandelbulber/index.html','thinking-orbs':'pages/thinking-orbs/index.html'};
-const LABELS={'human-skull':'Human Skull','human-skeleton':'Human Skeleton','protein-viewer':'Protein Structure','protein-folding':'Protein Folding',alphafold:'How AlphaFold Works','watch-randomizer':'Timepiece Randomizer','watch-movement':'Watch Movement','sphere-tracing':'Sphere Tracing Lab','game-of-life':'Game of Life','sdf-lab':'SDF Modeller',sdf2d:'SDF 2D Table',origami:'Origami Simulator',frost:'Frost Table',beam:'Beam & Decal Table',holocloth:'Holocloth',polar:'Polar & Lattice Table','liquid-metal':'Liquid Metal Table','sdf-solids':'SDF Solids Table','dot-field':'Dot Field Table',orbs:'Presence Orbs',noise:'Noise Table',fields:'Field Table',sims:'Simulation Table','shan-shui':'Shan Shui',color:'Color & Tone Table',postfx:'Post-Process Table',lighting:'Lighting Table',sampling:'Sampling Table',bench:'Composition Bench',home:'Overview',hohmann:'Hohmann Transfer',forge:'Planet Forge',wiki:'Wiki',research:'Research','social-dynamics':'Social Dynamics',crafting:'Crafting',planner:'Station Planner',guide:'Station Guide',behaviors:'Behaviors',controls:'Controls',gravity:'Gravity Sim',selection:'Selection',explosion:'Explosion',flare:'Engine Propulsion Effects',solar:'Solar Transit Study',shipdesigner:'Ship Designer',flagdesigner:'Flag Designer',matlab:'PBR Material Studio',orbital:'Atomic Orbital','molecular-bond':'Molecular Bond','hydrogen-table':'Hydrogen Wave Function',supernova:'Fractal Orb',platonic:'Platonic Mirrors',wormhole:'Wormhole',blackhole:'Black Hole',galaxy:'Galaxy',polarization:'Circular Polarization',diffraction:'Aperture Diffraction','double-slit':'Double-Slit Diffraction',fortom:'For Tom','starward-belt':'Starward Belt',fire:'Fire Table','fire-ev1':'Fire Table (Evolved 1)',smoke:'Smoke Table','heat-diffraction':'Heat Diffraction','heat-metal':'Heat Metal',leo:'LEO Catalog',magnetlab:'MagnetLab','biot-savart':'Biot\u2013Savart Law',maxwell:'Maxwell\u2019s Equations','twenty-to-four':'Twenty to Four','smith-chart':'Smith Chart',fluidlab:'Stable Fluids','wind-tunnel':'Wind Tunnel','ns-equations':'Navier–Stokes 1D','ns-burgers':'Burgers Equation','ns-flow2d':'Navier–Stokes 2D','ns-flow3d':'Navier–Stokes 3D','ns-wave':'Blowup: Wave','ns-vortex':'Blowup: Vortex','ns-geometry':'Blowup: Geometry',cornell:'Rendering Engine',translate:'Translation Tool',qave:'Quantum Algorithm Visualizer','qft-flow':'QFT Flow','qft-store':'Spin Storage','frqi':'FRQI Image Lab',attractorlab:'Strange Attractors',flowlab:'Vector Fields','wave-membrane':'Standing Wave Membrane','reaction-diffusion':'Reaction\u2013Diffusion',lenia:'Lenia','tidal-currents':'Tidal Currents',voxel:'Voxel Flythrough',chordlab:'ChordLab',chordchart:'Chord Chart',harmonywheel:'Harmony Wheel','resonance-figure':'Resonance Figure','resonance-table':'Resonance Table','resonance-3d':'Resonance 3D','branched-flow':'Branched Flow','glass-cube':'Refraction','refraction-table':'Refraction Table','sdf-clouds':'SDF Clouds','markov-junior':'MarkovJunior',mandelbulber:'Mandelbulber','thinking-orbs':'Thinking Orbs'};
+/* ── nav ──────────────────────────────────────────────────────────────
+   lib/nav-data.js is the one page registry. buildNav writes the sidebar
+   from it: a heading per region, a collapsible cluster per constellation,
+   a sub-heading per named group. A constellation with one page and no
+   heading is one row (.solo). PAGES and LABELS come from the same data.
+   grep -n targets: "function buildNav", "function openClusterOf" */
+var PAGES={},LABELS={};
+snPages().forEach(function(p){PAGES[p.key]=p.path;LABELS[p.key]=p.label});
+function navEsc(t){return String(t).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function navRow(p){return '<button class="nav-item" data-tab="'+p[0]+'" onclick="switchTab(\''+p[0]+'\')"><span class="nav-label">'+navEsc(p[1])+'</span>'+(p[2]?'<span class="nav-badge">'+navEsc(p[2])+'</span>':'')+'</button>'}
+function buildNav(){var h='';SN_NAV.forEach(function(r){h+='<div class="nav-region">'+navEsc(r.label)+'</div>';r.constellations.forEach(function(c){var st=' style="--c:'+c.color+'"';var icon='<span class="cluster-icon">'+c.icon+'</span><span class="cluster-label">'+navEsc(c.label)+'</span><span class="cluster-arrow">&#8250;</span>';var g0=c.groups[0];if(c.groups.length===1&&!g0.h&&g0.p.length===1){var k=g0.p[0][0];h+='<div class="cluster" id="cl-'+c.id+'"'+st+'><button class="cluster-head solo" data-tab="'+k+'" onclick="switchTab(\''+k+'\')">'+icon+'</button></div>';return}h+='<div class="cluster" id="cl-'+c.id+'"'+st+'><button class="cluster-head" onclick="toggleCluster(\'cl-'+c.id+'\')">'+icon+'</button><div class="cluster-body">';c.groups.forEach(function(g){if(g.h)h+='<div class="nav-sub"'+(g.id?' id="'+g.id+'"':'')+'>'+navEsc(g.h)+'</div>';g.p.forEach(function(p){h+=navRow(p)})});h+='</div></div>'})});document.getElementById('sb-nav').innerHTML=h}
+buildNav();
+// Open the cluster that holds the active page, so a deep link shows where
+// the page sits. Other clusters keep their state.
+function openClusterOf(id){var el=document.querySelector('#sb-nav .nav-item[data-tab="'+id+'"]');var cl=el&&el.closest('.cluster');if(cl)cl.classList.add('open')}
 const XR_PAGES=new Set(['orbital']);
 const MIC_PAGES=new Set(['chordlab']);
 let activeTab=null;
@@ -439,7 +238,7 @@ function parseShellHash(h){h=(h||'').replace(/^#/,'');var i=h.indexOf('/');var i
 function setHistory(hash,mode){if(mode==='none'||location.hash===hash)return;try{history[mode==='push'?'pushState':'replaceState'](null,'',hash)}catch(e){}}
 function currentFrame(){return document.querySelector('#frame-wrap iframe')}
 function tabForPath(path){for(var k in PAGES){if(path.slice(-PAGES[k].length)===PAGES[k])return k}return null}
-function markTab(id){document.querySelectorAll('.nav-item').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(id==='home'?'Stella Nova':(LABELS[id]||id)+' · Stella Nova')}
+function markTab(id){document.querySelectorAll('#sb-nav [data-tab]').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});openClusterOf(id);var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(id==='home'?'Stella Nova':(LABELS[id]||id)+' · Stella Nova')}
 function adoptFrame(iframe){var w;try{w=iframe.contentWindow;if(!w||w.location.href==='about:blank')return}catch(e){return}var id=tabForPath(w.location.pathname);var sub=pageRoute(w.location.hash);if(id&&id!==activeTab){activeTab=id;markTab(id)}if(id){activeSub=sub;setHistory(tabHash(activeTab,sub),'replace')}w.document.addEventListener('click',function(e){if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;var a=e.target&&e.target.closest&&e.target.closest('a[href]');if(!a||(a.target&&a.target!=='_self'))return;var u;try{u=new URL(a.href)}catch(x){return}if(u.origin!==w.location.origin||u.pathname!==w.location.pathname||u.search!==w.location.search||!u.hash||u.hash===w.location.hash)return;e.preventDefault();window.snNav(u.hash);w.location.replace(u.href)});w.addEventListener('hashchange',function(){if(iframe!==currentFrame())return;var s=pageRoute(w.location.hash);if(s===activeSub)return;activeSub=s;setHistory(tabHash(activeTab,s),'replace')})}
 window.snNav=function(sub,mode){sub=pageRoute(sub);if(sub===activeSub)return;activeSub=sub;setHistory(tabHash(activeTab,sub),mode==='replace'?'replace':'push')};
 function mountTab(id){var wrap=document.getElementById('frame-wrap');var iframe=document.createElement('iframe');iframe.src=(PAGES[id]||'home.html')+(id===activeTab&&activeSub?'#'+activeSub:'');iframe.addEventListener('load',function(){adoptFrame(iframe)});var allow='downloads';if(XR_PAGES.has(id))allow='xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';if(MIC_PAGES.has(id))allow='microphone; autoplay; downloads';iframe.setAttribute('allow',allow);wrap.appendChild(iframe)}
