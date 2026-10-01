@@ -26,7 +26,8 @@
 //      The site shell removes this iframe on a nav click. lib/gpu-guard.js
 //      (loaded first in index.html) also destroys devices on release. This
 //      module adds its own pagehide teardown: it runs onTeardown callbacks,
-//      unconfigures canvases, then destroys the device.
+//      unconfigures canvases, then destroys the device. A pageshow from the
+//      back/forward cache after that teardown reloads the page.
 // ============================================================================
 
 /**
@@ -101,6 +102,10 @@ export function initGPU() {
         console.error('[gpu] uncaptured error:', msg);
       });
       window.addEventListener('pagehide', teardown);
+      // pagehide always destroys the device (the shell release needs it).
+      // A back/forward cache restore then shows a page with no device, so
+      // reload it to make a new one.
+      window.addEventListener('pageshow', e => { if (e.persisted && torn) location.reload(); });
     } catch (e) {
       gpu.ok = false; gpu.reason = 'WebGPU device request failed: ' + (e && e.message || e);
       showBanner(gpu.reason);
