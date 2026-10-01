@@ -1,0 +1,44 @@
+/* ============================================================================
+   TIMEPIECE RANDOMIZER  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Loads after ../watch-movement/style.css (the shared shell, cards, phone
+   sheet and dock) and adds only what this page has of its own.
+     grep -n 'ROLL'    the roll buttons, the type chips, the seed line
+     grep -n 'SPEC'    the spec table
+     grep -n 'PHONE'   the floating roll button hides under the dock
+   ========================================================================== */
+
+/* ROLL */
+.roll{width:100%;margin-top:14px;height:46px;border:1px solid var(--cream);border-radius:12px;background:linear-gradient(180deg,rgba(255,224,170,0.16),rgba(255,224,170,0.06));color:var(--cream);font-size:0.86rem;font-weight:600;letter-spacing:0.04em;transition:transform 0.12s,background 0.25s}
+.roll i{font-style:normal;font-size:1.2rem;margin-right:6px;display:inline-block;transition:transform 0.5s cubic-bezier(0.2,0.8,0.2,1)}
+.roll:hover{background:linear-gradient(180deg,rgba(255,224,170,0.24),rgba(255,224,170,0.1))}
+.roll:active{transform:scale(0.98)}
+.roll.spin i,#bigRoll.spin i,#dockRoll.spin i{transform:rotate(360deg)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{flex:1 1 auto;padding:8px 10px;border:1px solid var(--line-b);background:var(--ink2);color:var(--dim);border-radius:20px;font-size:0.72rem}
+.chips button.on{border-color:var(--cream);color:var(--cream);background:rgba(255,224,170,0.07)}
+.seed{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:0.7rem;color:var(--dim)}
+.seed code{flex:1;font:0.72rem var(--mono);color:var(--text);background:var(--ink3);border:1px solid var(--line);border-radius:6px;padding:5px 8px}
+.seed button{border:1px solid var(--line-b);background:var(--ink2);color:var(--dim);border-radius:7px;padding:6px 10px;font-size:0.68rem}
+.seed button.done{color:var(--cream);border-color:var(--cream)}
+#bigRoll{position:absolute;right:16px;bottom:16px;z-index:7;display:flex;align-items:center;gap:8px;height:48px;padding:0 18px 0 14px;border:1px solid var(--cream);border-radius:24px;background:rgba(15,17,27,0.86);color:var(--cream);font-size:0.86rem;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,0.4);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#bigRoll i{font-style:normal;font-size:1.3rem;display:inline-block;transition:transform 0.5s cubic-bezier(0.2,0.8,0.2,1)}
+#bigRoll:hover{background:rgba(40,36,30,0.9)}
+.extras{margin-top:8px}
+.extras button[hidden]{display:none}
+
+/* SPEC */
+.readout.spec td:first-child{width:30%;vertical-align:top;color:var(--dim)}
+.readout.spec td:last-child{font-family:var(--sans);text-align:left;color:var(--text);line-height:1.4}
+.readout.spec tr{animation:rowIn 0.4s cubic-bezier(0.2,0.8,0.2,1) both}
+@keyframes rowIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+.note a{color:var(--cream);text-decoration:none;border-bottom:1px solid rgba(255,224,170,0.3)}
+
+/* PHONE: the dock has its own Roll button */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  #bigRoll{display:none}
+  #dockRoll{color:var(--cream)!important}
+  .chips button{min-height:40px}
+  .seed button{min-height:40px}
+}
+@media(prefers-reduced-motion:reduce){.readout.spec tr{animation:none}.roll i,#bigRoll i{transition:none}}
