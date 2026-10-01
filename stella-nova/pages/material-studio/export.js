@@ -65,138 +65,21 @@
 import {
   EXPORT_TARGETS, MAP_SLOTS, MAP_NAMES, DEFAULT_SCALARS, RES_OPTIONS, GRAPH_VERSION,
 } from './contract.js';
-import { makeZip, encodePNG, encodeTGA, encodeEXR, f32ToF16, crc32, decodePNG, readZip } from './zip.js';
+import { makeZip, encodePNG, crc32, decodePNG, readZip } from './zip.js';
 import { buildGLB, uvSphere, parseGLB } from './glb.js';
 import * as IMP from './import.js';
 
 import { C, S, UI, last, bind, setLast, err } from './export/ctx.js';
-import { H2F, H2L8, H2S8, luts, linToSrgb, clamp01 } from './export/half.js';
+import { H2F, luts, linToSrgb } from './export/half.js';
 import { f, fmtSize } from './export/format.js';
 import { graphJSON, scalarsNow, sanitize, materialName } from './export/graph-access.js';
 import { readTexture, MapSource } from './export/readback.js';
 import { withMaps } from './export/maps.js';
+import { computeStats, usedFlags } from './export/stats.js';
+import { ch, chLabel, packImage } from './export/pack.js';
 
 export { linToSrgb, scalarsNow, readTexture };
 let busy = false;
-
-// ------------------------------------------------------------ stats
-/** Per-channel min/max/mean of every slot. @returns {Promise<Object<string,{min:number[],max:number[],mean:number[]}>>} */
-async function computeStats(src, slots = MAP_NAMES, progress) {
-  luts();
-  const out = {};
-  let k = 0;
-  for (const slot of slots) {
-    progress?.(`reading ${slot}`, 0.05 + (0.25 * (k++ / slots.length)));
-    if (!src.maps[slot]) continue;
-    const a = await src.get(slot);
-    const min = [Infinity, Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity, -Infinity], sum = [0, 0, 0, 0];
-    for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 4; c++) {
-      const v = H2F[a[i + c]];
-      if (v < min[c]) min[c] = v; if (v > max[c]) max[c] = v; sum[c] += v;
-    }
-    const n = a.length / 4;
-    out[slot] = { min, max, mean: sum.map(s => s / n) };
-    src.drop(slot);
-  }
-  return out;
-}
-/** Which optional maps carry data. st null (UI preview) marks all as maybe. */
-function usedFlags(st, sc) {
-  if (!st) return null;
-  const g = (s, c, f) => (st[s] ? st[s][f][c] : (f === 'min' ? 0 : 0));
-  const eps = 1e-3;
-  return {
-    opacity: sc.alphaMode !== 'opaque' || (st.albedo && st.albedo.min[3] < 1 - eps),
-    emissive: !!st.emissive && Math.max(st.emissive.max[0], st.emissive.max[1], st.emissive.max[2]) > eps,
-    emissivePeak: st.emissive ? Math.max(st.emissive.max[0], st.emissive.max[1], st.emissive.max[2], 0) : 0,
-    height: !!st.height && (g('height', 0, 'max') - g('height', 0, 'min')) > eps,
-    clearcoat: !!st.extra && st.extra.max[0] > eps,
-    sheen: !!st.extra && st.extra.max[2] > eps,
-    anisotropy: !!st.extra && Math.max(Math.abs(st.extra.max[3]), Math.abs(st.extra.min[3])) > eps,
-    normal: !!st.normal && ((st.normal.max[0] - st.normal.min[0]) > eps || (st.normal.max[1] - st.normal.min[1]) > eps),
-    ormConst: !!st.orm && [0, 1, 2].every(c => (st.orm.max[c] - st.orm.min[c]) < eps),
-    aoOne: !!st.orm && st.orm.min[0] > 1 - eps,
-    albedoConst: !!st.albedo && [0, 1, 2, 3].every(c => (st.albedo.max[c] - st.albedo.min[c]) < eps),
-  };
-}
-
-// ------------------------------------------------------------ packing
-/** Channel source helpers for plan entries. */
-const ch = {
-  s: (slot, c, label) => ({ slot, c, label: label || `${slot}.${'rgba'[c]}` }),
-  srgb: (slot, c, label) => ({ slot, c, srgb: true, label: label || `${slot}.${'rgba'[c]} sRGB` }),
-  inv: (slot, c, label) => ({ slot, c, inv: true, label: label || `1 - ${slot}.${'rgba'[c]}` }),
-  k: (v, label) => ({ v, label: label || String(v) }),
-};
-const SLOT_CH = { // friendly labels
-  'albedo.0': 'base R', 'albedo.1': 'base G', 'albedo.2': 'base B', 'albedo.3': 'opacity',
-  'normal.0': 'normal X', 'normal.1': 'normal Y', 'normal.2': 'normal Z',
-  'orm.0': 'AO', 'orm.1': 'roughness', 'orm.2': 'metallic', 'height.0': 'height',
-  'emissive.0': 'emissive R', 'emissive.1': 'emissive G', 'emissive.2': 'emissive B',
-  'extra.0': 'clearcoat', 'extra.1': 'clearcoat rough', 'extra.2': 'sheen', 'extra.3': 'anisotropy',
-};
-function chLabel(c) {
-  if (c.v !== undefined) return c.label || String(c.v);
-  const base = SLOT_CH[`${c.slot}.${c.c}`] || `${c.slot}.${'rgba'[c.c]}`;
-  if (c.label && !/^(albedo|normal|orm|height|emissive|extra)\./.test(c.label) && !/^1 - /.test(c.label)) return c.label;
-  return (c.inv ? (c.slot === 'orm' && c.c === 1 ? 'smoothness' : c.slot === 'normal' && c.c === 1 ? 'normal -Y' : `1-${base}`) : base) + (c.srgb ? ' (sRGB)' : '') + (c.gain && c.gain !== 1 ? ` x${c.gain.toFixed(3)}` : '');
-}
-
-/**
- * Pack one plan image into channel data, then encode it.
- * @param {object} img plan entry {file, chans, bits, fmt, srgbChunk}
- * @param {MapSource} src
- * @returns {Promise<Uint8Array>}
- */
-async function packImage(img, src) {
-  luts();
-  const res = src.res, n = res * res, chs = img.chans, k = chs.length;
-  const fmt = img.fmt || img.ext || 'png', bits = fmt === 'exr' ? 'half' : (img.bits || 8);
-  const out = bits === 'half' ? new Uint16Array(n * k) : bits === 16 ? new Uint16Array(n * k) : new Uint8Array(n * k);
-  for (let j = 0; j < k; j++) {
-    const c = chs[j];
-    if (c.v !== undefined) {
-      const val = bits === 'half' ? f32ToF16(c.v) : bits === 16 ? Math.round(clamp01(c.v) * 65535) : Math.round(clamp01(c.v) * 255);
-      for (let i = 0; i < n; i++) out[(i * k) + j] = val;
-      continue;
-    }
-    const a = await src.get(c.slot), sc = c.c;
-    const gain = c.gain ?? 1;
-    if (c.fn) { // custom per-texel function of the whole texel (anisotropy direction)
-      for (let i = 0; i < n; i++) {
-        const v = clamp01(c.fn(H2F[a[i * 4]], H2F[a[(i * 4) + 1]], H2F[a[(i * 4) + 2]], H2F[a[(i * 4) + 3]]));
-        out[(i * k) + j] = bits === 16 ? Math.round(v * 65535) : bits === 'half' ? f32ToF16(v) : Math.round(v * 255);
-      }
-      continue;
-    }
-    if (bits === 8 && !c.inv && gain === 1) {
-      const L = c.srgb ? H2S8 : H2L8;
-      for (let i = 0; i < n; i++) out[(i * k) + j] = L[a[(i * 4) + sc]];
-    } else if (bits === 8) {
-      for (let i = 0; i < n; i++) {
-        let v = clamp01(H2F[a[(i * 4) + sc]] * gain);
-        if (c.inv) v = 1 - v;
-        out[(i * k) + j] = Math.round((c.srgb ? linToSrgb(v) : v) * 255);
-      }
-    } else if (bits === 16) {
-      for (let i = 0; i < n; i++) {
-        let v = clamp01(H2F[a[(i * 4) + sc]] * gain);
-        if (c.inv) v = 1 - v;
-        out[(i * k) + j] = Math.round((c.srgb ? linToSrgb(v) : v) * 65535);
-      }
-    } else { // half: copy bits unless an op applies
-      for (let i = 0; i < n; i++) {
-        const hb = a[(i * 4) + sc];
-        out[(i * k) + j] = (!c.inv && gain === 1) ? hb : f32ToF16(c.inv ? 1 - (H2F[hb] * gain) : H2F[hb] * gain);
-      }
-    }
-  }
-  if (fmt === 'exr') return encodeEXR({ width: res, height: res, channels: k === 2 ? 3 : k, data: k === 2 ? pad3(out, n) : out });
-  if (fmt === 'tga' && bits === 8) return encodeTGA({ width: res, height: res, channels: k, data: k === 2 ? expandGA(out, n) : out });
-  return encodePNG({ width: res, height: res, channels: k, bitDepth: bits === 16 ? 16 : 8, data: out, srgb: !!img.srgbChunk, text: { Software: 'Stella Nova PBR Material Studio' } });
-}
-function pad3(a, n) { const o = new Uint16Array(n * 3); for (let i = 0; i < n; i++) { o[i * 3] = a[i * 2]; o[(i * 3) + 1] = a[(i * 2) + 1]; } return o; }
-function expandGA(a, n) { const o = new Uint8Array(n * 4); for (let i = 0; i < n; i++) { o[i * 4] = o[(i * 4) + 1] = o[(i * 4) + 2] = a[i * 2]; o[(i * 4) + 3] = a[(i * 2) + 1]; } return o; }
 
 // ------------------------------------------------------------ plans
 /**
