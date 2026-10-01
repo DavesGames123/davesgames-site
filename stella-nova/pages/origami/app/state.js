@@ -37,7 +37,8 @@ export const SPEEDS = [0.15, 0.3, 0.6, 1.1];
 
 export const S = {
   tool: 'valley',
-  preset: patterns.Preset.Waterbomb,
+  // The first pattern: the traditional crane (a file preset, fetched at boot).
+  preset: patterns.Preset.Crane,
   pattern: null, planar: null, mesh: null, report: [],
   fraction: 0, auto: true, autoDir: 1, foldSpeed: 0.3,
   orbit: new Orbit(), pan3d: [0, 0],
