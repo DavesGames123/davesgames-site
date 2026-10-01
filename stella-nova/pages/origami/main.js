@@ -37,15 +37,15 @@ import { report as foldReport, reportOk } from './foldability.js';
 import { toJson, fromJson } from './foldio.js';
 import * as sim from './sim.js';
 import * as patterns from './patterns.js';
-import { View2D, Orbit, snap } from './view.js';
+import { Orbit, snap } from './view.js';
 import * as theme from './theme.js';
 import { tri } from './tris.js';
 import { seg } from './lines.js';
 import { initGpu } from './gpu.js';
 import { pointInPoly, pointInTri2, pointSegDist, findIndex } from './app/geom.js';
+import { stage, canvas, pane2dEl, pane3dEl, dpr, applyLayout, measure, geom2d, geom3d, view2d, region3d, phys, paneAt, snapPx, resize } from './app/layout.js';
 import { COARSE, th, $, TOOLS, TOOL_KEYS, SPEEDS, S, gpu, setGpu, load, save, isPhone } from './app/state.js';
 
-let dpr = 1;
 let last = performance.now();
 let lastPct = -1;
 
@@ -149,61 +149,6 @@ function creaseOfPlanar(edge) {
   }
   return null;
 }
-
-// ── layout and regions ──────────────────────────────────────────────────────
-const stage = $('stage');
-const canvas = $('gl');
-const pane2dEl = $('pane2d'), pane3dEl = $('pane3d');
-
-// The layout by aspect ratio (app.rs layout), or the forced mode.
-function applyLayout() {
-  const r = stage.getBoundingClientRect();
-  const horiz = S.layoutMode === 'h' || (S.layoutMode === 'auto' && r.width >= r.height);
-  stage.classList.toggle('horiz', horiz);
-  stage.classList.toggle('vert', !horiz);
-}
-
-// Pane geometry in physical pixels: the scissor rect, and the fit region that
-// leaves room for the label at the top and the bar at the base.
-function paneGeom(el, labelEl, barEl) {
-  const c = canvas.getBoundingClientRect();
-  const r = el.getBoundingClientRect();
-  const rect = [(r.left - c.left) * dpr, (r.top - c.top) * dpr, (r.right - c.left) * dpr, (r.bottom - c.top) * dpr];
-  let top = r.top, bottom = r.bottom;
-  const lb = labelEl.getBoundingClientRect();
-  if (lb.height) top = Math.max(top, lb.bottom);
-  if (barEl) {
-    const bb = barEl.getBoundingClientRect();
-    if (bb.height && getComputedStyle(barEl).display !== 'none') bottom = Math.min(bottom, bb.top);
-  }
-  if (bottom - top < 60) { top = r.top; bottom = r.bottom; }
-  const fit = [(r.left - c.left) * dpr, (top - c.top) * dpr, (r.right - c.left) * dpr, (bottom - c.top) * dpr];
-  return { rect, fit };
-}
-
-let geom2d = null, geom3d = null;
-function measure() {
-  geom2d = paneGeom(pane2dEl, $('label2d'), $('editBar'));
-  geom3d = paneGeom(pane3dEl, $('label3d'), $('foldBar'));
-}
-
-function view2d() {
-  return View2D.fit(geom2d.fit, 14 * dpr, S.zoom2d, [S.pan2d[0] * dpr, S.pan2d[1] * dpr]);
-}
-function region3d() {
-  const f = geom3d.fit;
-  return [f[0] + S.pan3d[0] * dpr, f[1] + S.pan3d[1] * dpr, f[2] + S.pan3d[0] * dpr, f[3] + S.pan3d[1] * dpr];
-}
-const inRect = (r, p) => p[0] >= r[0] && p[0] <= r[2] && p[1] >= r[1] && p[1] <= r[3];
-const phys = (p) => [p[0] * dpr, p[1] * dpr];
-function paneAt(cssP) {
-  if (!geom2d) return null;
-  const p = phys(cssP);
-  if (inRect(geom2d.rect, p)) return '2d';
-  if (inRect(geom3d.rect, p)) return '3d';
-  return null;
-}
-const snapPx = () => (COARSE ? 16 : 8) * dpr;
 
 // ── drawing (app.rs draw_2d, draw_3d) ───────────────────────────────────────
 
@@ -450,12 +395,6 @@ let statusText = '';
 function setStatus(t) { if (t !== statusText) { statusText = t; $('stMain').textContent = t; } }
 
 // ── frame (app.rs frame) ────────────────────────────────────────────────────
-function resize() {
-  const r = stage.getBoundingClientRect();
-  dpr = Math.min(window.devicePixelRatio || 1, COARSE ? 2 : 3);
-  if (gpu) gpu.resize(r.width * dpr, r.height * dpr);
-}
-
 function render() {
   measure();
   const p2 = draw2d(), p3 = draw3d();
