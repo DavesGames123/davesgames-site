@@ -71,9 +71,7 @@ body{font-family:var(--f-sans);color:var(--text);-webkit-font-smoothing:antialia
 .nav-item.gx.active{background:rgba(255,200,100,0.06)}.nav-item.gx.active::before{background:#ffc864;box-shadow:0 0 7px #ffc864}.nav-item.gx.active .nav-label{color:#ffc864}.nav-item.gx:hover::before{background:#cc9a40}
 .nav-item.cp.active{background:rgba(212,168,71,0.06)}.nav-item.cp.active::before{background:#d4a847;box-shadow:0 0 7px #d4a847}.nav-item.cp.active .nav-label{color:#d4a847}.nav-item.cp:hover::before{background:#a8853a}
 .nav-item.sol.active{background:rgba(245,200,66,0.06)}.nav-item.sol.active::before{background:#f5c842;box-shadow:0 0 7px #f5c842}.nav-item.sol.active .nav-label{color:#f5c842}.nav-item.sol:hover::before{background:#c8a020}
-.cluster-head.sol-head .cluster-icon{opacity:1;color:#f5c842}.cluster.open .cluster-head.sol-head .cluster-label{color:#f5c842}
 .nav-item.mat.active{background:rgba(184,150,255,0.06)}.nav-item.mat.active::before{background:#b896ff;box-shadow:0 0 7px #b896ff}.nav-item.mat.active .nav-label{color:#b896ff}.nav-item.mat:hover::before{background:#9070d0}
-.cluster-head.mat-head .cluster-icon{opacity:1;color:#b896ff}.cluster.open .cluster-head.mat-head .cluster-label{color:#b896ff}
 .nav-item.ren.active{background:rgba(255,180,120,0.06)}.nav-item.ren.active::before{background:#ffb478;box-shadow:0 0 7px #ffb478}.nav-item.ren.active .nav-label{color:#ffb478}.nav-item.ren:hover::before{background:#cc8a50}
 .nav-item.com.active{background:rgba(100,220,200,0.06)}.nav-item.com.active::before{background:#64dcc8;box-shadow:0 0 7px #64dcc8}.nav-item.com.active .nav-label{color:#64dcc8}.nav-item.com:hover::before{background:#40a090}
 .cluster-head.com-head .cluster-icon{opacity:1;color:#64dcc8}.cluster.open .cluster-head.com-head .cluster-label{color:#64dcc8}
@@ -121,6 +119,7 @@ body{font-family:var(--f-sans);color:var(--text);-webkit-font-smoothing:antialia
 .nav-sub.c-elem{color:#ff9a5c;border-left-color:#ff9a5c;background:linear-gradient(90deg,rgba(255,154,92,0.08) 0%,transparent 70%)}
 .nav-sub.c-fold{color:#f0b27a;border-left-color:#f0b27a;background:linear-gradient(90deg,rgba(240,178,122,0.08) 0%,transparent 70%)}
 .nav-sub.c-mech{color:#e6c27a;border-left-color:#e6c27a;background:linear-gradient(90deg,rgba(230,194,122,0.08) 0%,transparent 70%)}
+.nav-sub.c-tools{color:#f5c842;border-left-color:#f5c842;background:linear-gradient(90deg,rgba(245,200,66,0.08) 0%,transparent 70%)}
 .nav-sub.c-cloth{color:#d7a6ff;border-left-color:#d7a6ff;background:linear-gradient(90deg,rgba(215,166,255,0.08) 0%,transparent 70%)}
 #translate-cycle{transition:opacity 0.4s ease}
 .nav-label{font-size:0.88rem;letter-spacing:0.04em;color:#8aa8c8;transition:color 0.15s}
@@ -351,24 +350,15 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
           <button class="nav-item sn" data-tab="tidal-currents" onclick="switchTab('tidal-currents')"><span class="nav-label">Tidal Currents</span><span class="nav-badge">DATA</span></button>
         </div>
       </div>
-      <div class="cluster" id="cl-solar">
-        <button class="cluster-head sol-head" onclick="toggleCluster('cl-solar')"><span class="cluster-icon">&#9728;</span><span class="cluster-label">Light Study</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <button class="nav-item sol" data-tab="solar" onclick="switchTab('solar')"><span class="nav-label">Solar Transit Study</span><span class="nav-badge">TOOL</span></button>
-        </div>
-      </div>
-      <div class="cluster" id="cl-matlab">
-        <button class="cluster-head mat-head" onclick="toggleCluster('cl-matlab')"><span class="cluster-icon">&#9670;</span><span class="cluster-label">Material Lab</span><span class="cluster-arrow">&#8250;</span></button>
-        <div class="cluster-body">
-          <button class="nav-item mat" data-tab="matlab" onclick="switchTab('matlab')"><span class="nav-label">PBR Material Studio</span><span class="nav-badge">TOOL</span></button>
-        </div>
-      </div>
       <div class="cluster" id="cl-community">
         <button class="cluster-head com-head" onclick="toggleCluster('cl-community')"><span class="cluster-icon">&#9737;</span><span class="cluster-label">Community</span><span class="cluster-arrow">&#8250;</span></button>
         <div class="cluster-body">
           <button class="nav-item com" data-tab="fortom" onclick="switchTab('fortom')"><span class="nav-label">For Tom</span></button>
           <button class="nav-item com" data-tab="starward-belt" onclick="switchTab('starward-belt')"><span class="nav-label">Starward Belt</span><span class="nav-badge">MAP</span></button>
           <button class="nav-item com" data-tab="translate" onclick="switchTab('translate')"><span class="nav-label">Translation Tool</span><span class="nav-badge">i18n</span></button>
+          <div class="nav-sub c-tools">Studio Tools</div>
+          <button class="nav-item sol" data-tab="solar" onclick="switchTab('solar')"><span class="nav-label">Solar Transit Study</span><span class="nav-badge">TOOL</span></button>
+          <button class="nav-item mat" data-tab="matlab" onclick="switchTab('matlab')"><span class="nav-label">PBR Material Studio</span><span class="nav-badge">TOOL</span></button>
         </div>
       </div>
     </div>
