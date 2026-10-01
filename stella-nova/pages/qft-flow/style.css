@@ -111,6 +111,12 @@ input[type=range].amber::-moz-range-thumb{background:var(--amber)}
 /* canvases */
 .viz{display:block;width:100%;border-radius:8px;background:
   linear-gradient(180deg, rgba(8,12,20,0.7), rgba(6,9,15,0.9))}
+/* The canvas boxes need a CSS height. fit() sizes the backing store from
+   clientWidth and clientHeight. With only the height attribute, the box kept
+   the default 300 x 150 aspect, so the output plot was a square up to 900 px
+   high and sat below the fold. */
+#cv-mag,#cv-phase{height:130px}
+#cv-out{height:clamp(220px,38vh,360px)}
 .viz-cap{display:flex;justify-content:space-between;align-items:baseline;margin:0 0 7px}
 .viz-cap .t{font-size:0.68rem;color:var(--ink);font-weight:600}
 .viz-cap .t span{color:var(--faint);font-weight:400;font-size:0.6rem;margin-left:7px}

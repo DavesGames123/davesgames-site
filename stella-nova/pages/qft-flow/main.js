@@ -314,6 +314,9 @@ $('resample').onclick=()=>{if(S.shotsIdx>0){S.sampleCounts=null;render();}};
 
 // Repaint on resize so the canvases track their CSS box.
 window.addEventListener('resize',()=>render());
+// Repaint once the web fonts load. A canvas that draws text before its font
+// loads uses the default serif font and keeps it until the next repaint.
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>render());
 // First paint: 8 qubits, flat phases.
 setN(8);applyRamp(0);
 // Typeset the KaTeX math blocks once, if auto-render loaded.
