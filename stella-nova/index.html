@@ -191,7 +191,8 @@ buildNav();
 // Open the cluster that holds the active page, so a deep link shows where
 // the page sits. Other clusters keep their state.
 function openClusterOf(id){var el=document.querySelector('#sb-nav .nav-item[data-tab="'+id+'"]');var cl=el&&el.closest('.cluster');if(cl)cl.classList.add('open')}
-const XR_PAGES=new Set(['orbital']);
+// XR_PAGES: keys whose iframe gets allow="xr-spatial-tracking" (SN_XR in lib/nav-data.js).
+const XR_PAGES=new Set(window.SN_XR||['orbital']);
 const MIC_PAGES=new Set(['chordlab']);
 let activeTab=null;
 // PAGE SWAP. Each page runs in one iframe and can hold a WebGPU device or a

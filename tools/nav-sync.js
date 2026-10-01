@@ -14,6 +14,7 @@
 //    - no key is registered twice
 //    - each registered page has pages/<dir>/index.html
 //    - each folder in pages/ is registered, or is in UNLISTED
+//    - each SN_XR key is a registered page
 //
 //  Usage (from the repo root):
 //    node tools/nav-sync.js           write the blocks, then check
@@ -120,6 +121,7 @@ function checkRegistry() {
     seen.add(p.key);
     if (!fs.existsSync(path.join(SN, p.path))) errs.push(`no file for ${p.key}: ${p.path}`);
   });
+  for (const k of ctx.SN_XR || []) if (!seen.has(k)) errs.push(`SN_XR key is not a registered page: ${k}`);
   const dirs = new Set(PAGES.map(p => p.path.split('/')[1]));
   fs.readdirSync(path.join(SN, 'pages'), { withFileTypes: true })
     .filter(d => d.isDirectory() && !dirs.has(d.name) && !UNLISTED[d.name])
