@@ -62,39 +62,21 @@ import * as C from './contract.js';
 import { buildMesh, parseOBJ, edgeIndices, MESH_LABELS } from './mesh.js';
 import { createOrbitCamera, lookAt, ortho, m4mul } from './camera.js';
 import { loadShaders } from '../../lib/shaders.js';
+import {
+  VIEWPORT_DEBUG_VIEWS, DEBUG_LABELS, TONEMAP_LABELS, VIEW_DEFAULTS, HDR, DEPTH, FRAME_FLOATS, MAT_FLOATS,
+  store, state, gpu, device, envMod, canvas, wrap, hud, gctx, cam, bind,
+  R, clamp, warnOnce, hexToLinear, norm3, idOf,
+} from './viewport/state.js';
+export { VIEWPORT_DEBUG_VIEWS, DEBUG_LABELS, TONEMAP_LABELS, VIEW_DEFAULTS } from './viewport/state.js';
 
 // ------------------------------------------------------------ constants
-/** Contract DEBUG_VIEWS plus 'ndotl'. The index is the shader debug id. */
-export const VIEWPORT_DEBUG_VIEWS = Object.freeze([...C.DEBUG_VIEWS, 'ndotl']);
-export const DEBUG_LABELS = Object.freeze({
-  lit: 'Lit', albedo: 'Base Color', opacity: 'Opacity', normal: 'Normal (map)', worldNormal: 'Normal (world)',
-  ao: 'AO', roughness: 'Roughness', metallic: 'Metallic', height: 'Height', emissive: 'Emissive',
-  clearcoat: 'Clearcoat', sheen: 'Sheen', anisotropy: 'Anisotropy', uv: 'UV Checker',
-  diffuseOnly: 'Diffuse Only', specularOnly: 'Specular Only', ndotl: 'N dot L',
-});
-export const TONEMAP_LABELS = Object.freeze({
-  aces: 'ACES', agx: 'AgX', khronosNeutral: 'Khronos Neutral', reinhard: 'Reinhard', filmic: 'Filmic', linear: 'None (clamp)',
-});
-/** View keys that the viewport adds to state.view when they are missing. */
-export const VIEW_DEFAULTS = Object.freeze({
-  fov: 35, ground: true, grid: false, shadows: true, shadowStrength: 0.85,
-  aa: 'msaa',             // 'msaa' | 'fxaa' | 'both' | 'off'
-  compare: 'off',         // 'off' | 'prev' (A = previous bake) | 'pinned' (A = pinned snapshot)
-  compareSplit: 0.5,
-  uvOffset: [0, 0], parallaxScale: 1, pomSteps: 32,
-  normalStrength: 1, flipGreen: false, anisoRotation: 0, sheenRoughness: 0.5, specOcclusion: 1,
-});
 const RAW_VIEWS = new Set(VIEWPORT_DEBUG_VIEWS.filter(v => !['lit', 'diffuseOnly', 'specularOnly'].includes(v)));
 // Raw views that show map data, not a color: the post pass writes them with
 // no sRGB encode and no dither, so roughness 0.5 shows as 128, as in the PNG.
 const DATA_VIEWS = new Set(['opacity', 'normal', 'worldNormal', 'ao', 'roughness', 'metallic', 'height', 'clearcoat', 'anisotropy', 'ndotl']);
-const HDR = 'rgba16float';
-const DEPTH = 'depth24plus';
 const SHADOW_RES = 2048;
 const LUT_RES = 128;
 const SNAP_MAX = 1024;
-const FRAME_FLOATS = 144;     // 576 bytes, see struct Frame
-const MAT_FLOATS = 20;        // 80 bytes, see struct Material
 const VB_STRIDE = 48;
 const SUBDIV_OPTIONS = [32, 64, 96, 128, 192, 256, 384, 512];
 const PREF_KEY = 'material-studio.viewport';
@@ -116,48 +98,22 @@ const PREMUL = {
   alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' },
 };
 
-// ------------------------------------------------------------ module state
-let store = null, state = null, gpu = null, device = null, envMod = null;
-let canvas = null, wrap = null, hud = null, gctx = null, cam = null;
-/** Runtime GPU objects and caches. */
-const R = {
-  SH: null, samp: {}, layout: {}, pipes: new Map(), modules: new Map(),
-  lut: null, shadow: null, dummy2d: null, dummyCube: null,
-  frameBuf: null, frameData: new Float32Array(FRAME_FLOATS), postBuf: null,
-  frameBG: null, frameBGKey: '', shadowFrameBG: null, env: null,
-  mesh: null, meshKey: '', custom: null, edgesFor: null,
-  cur: null, def: null, test: null, A: null, lastCopy: null, matVersion: 0,
-  targets: null, shadowSig: '', key: null,
-  raf: 0, needs: false, last: 0, frameMs: 0, fps: 0, fpsT: 0, fpsN: 0,
-  baking: false, envPoll: 0, warned: new Set(), disposed: false,
-};
-
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const warnOnce = (k, msg) => { if (!R.warned.has(k)) { R.warned.add(k); console.warn('[viewport]', msg); } };
-
-function hexToLinear(hex) {
-  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
-  const n = m ? parseInt(m[1], 16) : 0xffffff;
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); });
-}
-const norm3 = v => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
-
 // ------------------------------------------------------------ init
 /** @param {object} ctx main.js module context */
 export async function init(ctx) {
-  store = ctx.store; state = store.state; gpu = ctx.gpu; envMod = ctx.modules.env || null;
+  bind({ store: ctx.store, state: ctx.store.state, gpu: ctx.gpu, envMod: ctx.modules.env || null });
   for (const [k, v] of Object.entries(VIEW_DEFAULTS)) if (state.view[k] === undefined) state.view[k] = Array.isArray(v) ? [...v] : v;
   const prefs = readPrefs();
   if (prefs.view) for (const k of PREF_VIEW_KEYS) if (prefs.view[k] !== undefined) state.view[k] = prefs.view[k];
   if (!C.MESHES.includes(state.view.mesh)) state.view.mesh = 'sphere';
   if (!VIEWPORT_DEBUG_VIEWS.includes(state.view.debug)) state.view.debug = 'lit';
 
-  canvas = ctx.$('vp'); wrap = canvas.parentElement; hud = ctx.$('vp-hud');
+  bind({ canvas: ctx.$('vp') }); bind({ wrap: canvas.parentElement, hud: ctx.$('vp-hud') });
   buildHud();
   ctx.register('viewport', api);
 
   if (!gpu.ok || !gpu.device) { hud.classList.add('vp-nogpu'); return; }
-  device = gpu.device;
+  bind({ device: gpu.device });
   R.SH = await loadShaders(import.meta.url, [
     'shaders/viewport-common.wgsl', 'shaders/pbr.wgsl', 'shaders/viewport-bg.wgsl',
     'shaders/viewport-post.wgsl', 'shaders/viewport-lut.wgsl',
@@ -167,10 +123,10 @@ export async function init(ctx) {
   R.def = defaultSet();
   R.cur = R.def;
 
-  cam = createOrbitCamera(canvas, {
+  bind({ cam: createOrbitCamera(canvas, {
     onEnvRotate: d => { let r = (Number(state.env.rotation) || 0) + d; r = ((r + 180) % 360 + 360) % 360 - 180; store.setEnv({ rotation: Math.round(r * 10) / 10 }); },
     getRadius: () => (R.mesh && R.mesh.radius) || 1,
-  });
+  }) });
   cam.fov = clamp(+state.view.fov || 35, 10, 100);
   cam.update(0, Math.max(1, wrap.clientWidth) / Math.max(1, wrap.clientHeight));
   // keep the saved angles, refit the distance to this viewport's aspect
@@ -179,7 +135,7 @@ export async function init(ctx) {
   cam.autoRotate = !!state.view.autoRotate;
   cam.onChange(() => { requestRender(); savePrefsSoon(); });
 
-  gctx = gpu.configureCanvas(canvas);
+  bind({ gctx: gpu.configureCanvas(canvas) });
   resize();
   new ResizeObserver(() => { resize(); requestRender(); }).observe(wrap);
 
@@ -398,8 +354,6 @@ function ensureFrameBG(e) {
   });
   R.frameBGKey = id;
 }
-const idMap = new WeakMap(); let idNext = 1;
-function idOf(o) { if (!o) return 0; if (!idMap.has(o)) idMap.set(o, idNext++); return idMap.get(o); }
 
 // ------------------------------------------------------------ pipelines
 function sceneModule(e, which) {
