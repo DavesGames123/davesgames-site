@@ -47,7 +47,9 @@
     wallMode: 'line', space: false
   };
   var cv = $('cv'), stage = $('stage');
-  var phone = function () { return window.matchMedia('(max-width: 760px)').matches; };
+  // COMPACT_Q: keep this query the same as the COMPACT block in style.css.
+  var COMPACT_Q = '(max-width: 760px), (pointer: coarse) and (max-height: 500px), (pointer: coarse) and (max-width: 900px) and (orientation: portrait)';
+  var phone = function () { return window.matchMedia(COMPACT_Q).matches; };
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   function thumb(t, cls) {
