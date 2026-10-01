@@ -42,6 +42,7 @@ import * as theme from './theme.js';
 import { tri } from './tris.js';
 import { seg } from './lines.js';
 import { initGpu } from './gpu.js';
+import { pointInPoly, pointInTri2, pointSegDist, findIndex } from './app/geom.js';
 import { COARSE, th, $, TOOLS, TOOL_KEYS, SPEEDS, S, gpu, setGpu, load, save, isPhone } from './app/state.js';
 
 let dpr = 1;
@@ -127,29 +128,6 @@ function eraseTarget(w) {
     if (d < bestD) { bestD = d; best = i; }
   }
   return best;
-}
-
-// ── geometry helpers (app.rs point_in_poly, point_in_tri2, point_seg_dist) ──
-function pointInPoly(p, poly) {
-  const n = poly.length;
-  if (n < 3) return false;
-  let inside = false;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const a = poly[i], b = poly[j];
-    if ((a[1] > p[1]) !== (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0]) inside = !inside;
-  }
-  return inside;
-}
-function pointInTri2(p, a, b, c) {
-  const cr = (u, v, w) => (v[0] - u[0]) * (w[1] - u[1]) - (v[1] - u[1]) * (w[0] - u[0]);
-  const d1 = cr(p, a, b), d2 = cr(p, b, c), d3 = cr(p, c, a);
-  return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
-}
-function pointSegDist(p, a, b) {
-  const abx = b[0] - a[0], aby = b[1] - a[1];
-  const l2 = Math.max(abx * abx + aby * aby, 1e-12);
-  const t = Math.min(Math.max(((p[0] - a[0]) * abx + (p[1] - a[1]) * aby) / l2, 0), 1);
-  return Math.hypot(a[0] + abx * t - p[0], a[1] + aby * t - p[1]);
 }
 
 // The planar edges that lie on one pattern crease.
@@ -446,7 +424,6 @@ function updateHover() {
   }
   statusHover();
 }
-function findIndex(list, fn) { for (let i = 0; i < list.length; i++) if (fn(list[i])) return i; return null; }
 
 const KIND_NAME = { M: 'mountain', V: 'valley', B: 'border', F: 'aux', U: 'unassigned' };
 function statusHover() {
