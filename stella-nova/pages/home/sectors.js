@@ -136,6 +136,8 @@ const BLURBS = {
   'protein-viewer': 'Real protein structures in 3D, 37 presets.',
   'protein-folding': 'Watch a chain fold into its native shape.',
   alphafold: 'How AlphaFold turns a sequence into a structure.',
+  'human-skull': 'A human skull in 51 parts, pulled apart.',
+  'human-skeleton': 'Explode a skeleton and inspect all 200 bones.',
   fluidlab: 'Jos Stam stable fluids on the GPU.',
   'ns-flow3d': 'Navier-Stokes in a 3D box.',
   magnetlab: 'Drag magnets and see the field lines.',
