@@ -586,7 +586,10 @@ function unityMat(target, o, sc, u, texGuid, shaderGuid) {
   const addC = (k, r, g, b, a = 1) => colors.push(`    - ${k}: {r: ${f(r)}, g: ${f(g)}, b: ${f(b)}, a: ${f(a)}}`);
   const mode = sc.alphaMode, es = sc.emissiveStrength * (u?.emissiveScale ?? 1);
   const emissive = !!texGuid.emissive;
-  const parallax = Math.min(0.08, Math.max(0.005, sc.displacementScale));
+  // The studio moves a vertex by (h - 0.5) * 2 * displacementScale (pbr.wgsl
+  // displace), so the total relief from h = 0 to h = 1 is 2 * displacementScale.
+  const relief = 2 * sc.displacementScale;
+  const parallax = Math.min(0.08, Math.max(0.005, relief));
   let queue = -1, tags = 'Opaque';
   if (target === 'unity-urp') {
     addT('_BaseMap', 'base'); addT('_MainTex', 'base');
@@ -616,9 +619,10 @@ function unityMat(target, o, sc, u, texGuid, shaderGuid) {
     addF('_Metallic', 1); addF('_Smoothness', 1); addF('_MetallicRemapMin', 0); addF('_MetallicRemapMax', 1);
     addF('_SmoothnessRemapMin', 0); addF('_SmoothnessRemapMax', 1); addF('_AORemapMin', 0); addF('_AORemapMax', 1);
     addF('_NormalScale', 1); addF('_NormalMapSpace', 0); addF('_MaterialID', 1);
-    addF('_HeightAmplitude', sc.displacementScale); addF('_HeightCenter', 0.5); addF('_HeightMapParametrization', 0);
-    addF('_HeightMin', -sc.displacementScale * 50); addF('_HeightMax', sc.displacementScale * 50);
-    addF('_HeightPoMAmplitude', Math.max(0.1, sc.displacementScale * 100)); addF('_DisplacementMode', texGuid.height ? 2 : 0);
+    // HDRP MinMax height: _HeightMin/_HeightMax in cm, _HeightAmplitude in m.
+    addF('_HeightAmplitude', relief); addF('_HeightCenter', 0.5); addF('_HeightMapParametrization', 0);
+    addF('_HeightMin', -sc.displacementScale * 100); addF('_HeightMax', sc.displacementScale * 100);
+    addF('_HeightPoMAmplitude', Math.max(0.1, relief * 100)); addF('_DisplacementMode', texGuid.height ? 2 : 0);
     addF('_PPDMinSamples', 5); addF('_PPDMaxSamples', 15);
     addF('_CoatMask', texGuid.clearcoat ? 1 : 0);
     addF('_SurfaceType', mode === 'blend' ? 1 : 0); addF('_AlphaCutoffEnable', mode === 'mask' ? 1 : 0); addF('_AlphaCutoff', sc.alphaCutoff);
@@ -711,7 +715,7 @@ MATERIAL_NAME = ${pyStr('M_' + o.name)}
 DEST = ${pyStr(o.unrealDest.replace(/\{name\}/g, o.name))}
 UV_TILING = ${f(o.uvScale)}
 EMISSIVE_STRENGTH = ${f(sc.emissiveStrength * (u?.emissiveScale ?? 1))}
-HEIGHT_RATIO = ${f(Math.min(0.1, sc.displacementScale))}
+HEIGHT_RATIO = ${f(Math.min(0.1, 2 * sc.displacementScale))}
 USE_PARALLAX = ${files.some(x => x.key === 'height') ? 'True' : 'False'}
 BLEND_MODE = ${pyStr(blend)}
 OPACITY_CLIP = ${f(sc.alphaCutoff)}
@@ -878,7 +882,7 @@ function godotTres(o, sc, u, files, st) {
   }
   if (id.normal) props.push('normal_enabled = true', 'normal_scale = 1.0', `normal_texture = ${E('normal')}`);
   if (id.emissive) props.push('emission_enabled = true', 'emission = Color(1, 1, 1, 1)', `emission_energy_multiplier = ${f(sc.emissiveStrength * (u?.emissiveScale ?? 1))}`, `emission_texture = ${E('emissive')}`);
-  if (id.height) props.push('heightmap_enabled = true', `heightmap_scale = ${f(Math.min(16, sc.displacementScale * 100))}`, 'heightmap_deep_parallax = true', `heightmap_texture = ${E('height')}`);
+  if (id.height) props.push('heightmap_enabled = true', `heightmap_scale = ${f(Math.min(16, sc.displacementScale * 200))}`, 'heightmap_deep_parallax = true', `heightmap_texture = ${E('height')}`);
   if (id.clearcoat) props.push('clearcoat_enabled = true', 'clearcoat = 1.0', 'clearcoat_roughness = 1.0', `clearcoat_texture = ${E('clearcoat')}`);
   if (u?.anisotropy && st?.extra) props.push('anisotropy_enabled = true', `anisotropy = ${f(st.extra.mean[3])}`);
   if (u?.sheen && st?.extra) props.push('rim_enabled = true', `rim = ${f(st.extra.mean[2])}`, 'rim_tint = 0.5');
@@ -911,7 +915,7 @@ async function previewMesh(o, src, sc) {
       const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
       const t = (xx, yy) => H2F[h[((((yy % r) + r) % r) * r * 4) + ((((xx % r) + r) % r) * 4)]];
       const v = ((t(x0, y0) * (1 - fx)) + (t(x0 + 1, y0) * fx)) * (1 - fy) + ((t(x0, y0 + 1) * (1 - fx)) + (t(x0 + 1, y0 + 1) * fx)) * fy;
-      const d = (v - 0.5) * sc.displacementScale;
+      const d = (v - 0.5) * 2 * sc.displacementScale;   // as pbr.wgsl displace
       P[i * 3] += N[i * 3] * d; P[(i * 3) + 1] += N[(i * 3) + 1] * d; P[(i * 3) + 2] += N[(i * 3) + 2] * d;
     }
   }
