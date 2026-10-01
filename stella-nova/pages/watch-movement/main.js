@@ -18,7 +18,7 @@
 //    function setOpen ........... the panel; on a phone one group per tab
 // ============================================================================
 import * as THREE from 'three';
-import { CALIBRES, byId } from './calibres/index.js';
+import { CALIBRES, metaById, loadCalibre as loadModule } from './calibres/index.js';
 import { createBuild } from './kit.js';
 import { createStage, ease } from './stage.js';
 import { createCards, esc } from './cards.js';
@@ -54,9 +54,8 @@ function nowSeconds() { const d = new Date(); return (d.getHours() % 12) * 3600 
 // a calibre not yet in calibres/index.js loads by its id (#<id>), so a new
 // one can be checked here before it is registered
 async function loadCalibre(id) {
-  if (byId(id)) return { cal: byId(id), mod: await SCENES[id]() };
-  const cal = (await import(`./calibres/${id}.js`)).default;
-  return { cal, mod: await import(`./scenes/${id}.js`) };
+  const [cal, mod] = await Promise.all([loadModule(id), SCENES[id] ? SCENES[id]() : import(`./scenes/${id}.js`)]);
+  return { cal, mod };
 }
 async function swapTo(id) {
   if (S.swapping || (S.cur && S.cur.cal.id === id)) return;
@@ -76,6 +75,7 @@ async function swapTo(id) {
     applyToggles();
     cards.reset();
     fillPanel(cal);
+    stage.setShadowExtent(Math.max(18, cal.plateR));
     stage.fitTo(fitDistance(cal), new THREE.Vector3(0, 0, midZ(cal) + explodeCentre(S.explodeTarget)));
     document.querySelectorAll('.mv').forEach(b => b.classList.toggle('on', b.dataset.id === id));
     try { history.replaceState(null, '', '#' + id); } catch (e) {}

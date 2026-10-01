@@ -14,12 +14,18 @@
 //  escapement moves the wheel on one beat in two).
 // ============================================================================
 import * as G from './geom.js';
-import { CALIBRES as ALL } from './calibres/index.js';
+import { CALIBRES as META, loadAll } from './calibres/index.js';
 
 // node tests.mjs                     every registered calibre
 // node tests.mjs calibres/<id>.js    one calibre file (registered or not)
 const only = process.argv[2];
-const CALIBRES = only ? [(await import(new URL(only, import.meta.url))).default] : ALL;
+const CALIBRES = only ? [(await import(new URL(only, import.meta.url))).default] : await loadAll();
+// the lazy registry's picker entries must match the modules they name
+if (!only) for (const [i, m] of META.entries()) {
+  const c = CALIBRES[i], same = c.id === m.id && c.name === m.name && c.kind === m.kind && c.era === m.era;
+  console.log(`${same ? 'PASS' : 'FAIL'}  registry entry ${m.id} matches its module`);
+  if (!same) process.exitCode = 1;
+}
 
 let pass = 0, fail = 0, skipped = 0;
 let SKIP = {};

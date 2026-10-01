@@ -17,7 +17,7 @@
 //    function frame ........... step, pose, fades, stage, cards
 // ============================================================================
 import * as THREE from 'three';
-import { byId } from '../watch-movement/calibres/index.js';
+import { loadCalibre } from '../watch-movement/calibres/index.js';
 import { createBuild } from '../watch-movement/kit.js';
 import { createStage, ease } from '../watch-movement/stage.js';
 import { createCards, esc } from '../watch-movement/cards.js';
@@ -68,7 +68,7 @@ async function roll(seed = Gen.newSeed(), first = false) {
   try {
     const prev = S.cur && S.cur.spec;
     const spec = Gen.makeSpec(seed, { type: S.type || undefined, keep: prev ? S.keep : {}, prev });
-    const cal = byId(spec.movement.calibre);
+    const cal = await loadCalibre(spec.movement.calibre);
     const dims = caseDims(spec, cal);
     const { palette, opts } = sceneOpts(spec, dims);
     const mod = await SCENES[spec.movement.calibre]();
