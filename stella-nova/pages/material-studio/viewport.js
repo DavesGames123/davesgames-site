@@ -42,53 +42,59 @@
 //  VIEW STATE  (store state.view; VIEW_DEFAULTS adds the keys the contract
 //      does not list. The HUD and any panel change them with store.setView.)
 //
-//  SECTIONS  (grep -n the banner to jump)
-//      constants ........ VIEWPORT_DEBUG_VIEWS, VIEW_DEFAULTS, formats
-//      init ............. module entry, shader load, static resources
-//      static resources . samplers, layouts, LUT, dummies, shadow map
-//      environment ...... envState, envChunk (generated WGSL)
-//      pipelines ........ pbrPipeline, bgPipeline, groundPipeline, postPipeline
-//      material sets .... makeMatSet, setMaps, defaultSet, makeTestSet, snapshot
-//      mesh ............. ensureMesh, uploadMesh, loadOBJFile
-//      lights ........... lightsState, key light and shadow matrix
-//      targets .......... makeTargets (HDR, MSAA, depth, LDR)
-//      render ........... renderScene, requestRender, tick
-//      offscreen ........ renderOffscreen, screenshot, readback
-//      hud .............. buildHud, syncHud, compare divider, OBJ drop
-//      prefs ............ localStorage restore and save (per viewer)
-//      api / selfTest ... __studio.viewport
+//  This file is the entry that main.js loads. It keeps init(), the store
+//  subscriptions, dispose, resize and the view change handler, and it
+//  re-exports the public API. The work is in viewport/, one concern per
+//  file. Each file opens with a header and its grep targets.
+//
+//  MODULES  (viewport/<name>.js)
+//      state ......... constants, context bindings (bind), R, math helpers
+//      resources ..... samplers, layouts, BRDF LUT, shadow map, shaderModule
+//      environment ... envState, envChunk (generated WGSL), frame bind group
+//      pipelines ..... pbr, shadow, bg / ground, post, blit pipelines
+//      textures ...... map textures, half-float upload
+//      test-maps ..... makeTestMaps
+//      material ...... material sets, setMaps, snapshot, pinA, useTestMaps
+//      preview-mesh .. ensureMesh, uploadMesh, wireframe edges, loadOBJFile
+//      lights ........ lightsState, key light, shadowMatrix
+//      targets ....... makeTargets (HDR, MSAA, depth, LDR), aaMode
+//      uniforms ...... writeFrame (struct Frame), writeMaterial
+//      render ........ requestRender, tick, renderScene
+//      offscreen ..... renderOffscreen, readback, screenshot
+//      hud ........... buildHud, syncHud, compare divider, OBJ drop, stats
+//      prefs ......... localStorage restore and save (per viewer)
+//      selftest ...... __studio.viewport.selfTest
+//      api ........... __studio.viewport, setMesh, setDebugView
+//
+//  GREP TARGETS (this file)
+//      init .......... bindings, prefs, shaders, camera, store subscriptions
+//      dispose ....... release the loop, the env poll, sets and targets
+//      resize ........ canvas size from #viewport-wrap and the pixel ratio
+//      onView ........ view:changed: camera, compare sets, HUD, prefs
 // ============================================================================
 import * as C from './contract.js';
-import { buildMesh, parseOBJ, edgeIndices, MESH_LABELS } from './mesh.js';
-import { createOrbitCamera, lookAt, ortho, m4mul } from './camera.js';
+import { createOrbitCamera } from './camera.js';
 import { loadShaders } from '../../lib/shaders.js';
 import {
-  VIEWPORT_DEBUG_VIEWS, DEBUG_LABELS, TONEMAP_LABELS, VIEW_DEFAULTS, HDR, DEPTH, FRAME_FLOATS, MAT_FLOATS,
-  store, state, gpu, device, envMod, canvas, wrap, hud, gctx, cam, bind,
-  R, clamp, warnOnce, hexToLinear, norm3, idOf,
+  VIEWPORT_DEBUG_VIEWS, VIEW_DEFAULTS,
+  store, state, gpu, canvas, wrap, hud, cam, bind, R, clamp,
 } from './viewport/state.js';
-export { VIEWPORT_DEBUG_VIEWS, DEBUG_LABELS, TONEMAP_LABELS, VIEW_DEFAULTS } from './viewport/state.js';
-import { renderOffscreen, screenshot, screenshotDataURL } from './viewport/offscreen.js';
-export { renderOffscreen, screenshot, screenshotDataURL } from './viewport/offscreen.js';
-import { requestRender, renderScene } from './viewport/render.js';
-export { requestRender } from './viewport/render.js';
-import { ensureMesh, ensureEdges, loadOBJFile } from './viewport/preview-mesh.js';
-export { loadOBJFile } from './viewport/preview-mesh.js';
-import { makeMatSet, destroySet, defaultSet, snapshot, setMaps, pinA, useTestMaps } from './viewport/material.js';
-export { setMaps, pinA, useTestMaps } from './viewport/material.js';
+import { createStatic, buildLut } from './viewport/resources.js';
+import { safeEnvBindings } from './viewport/environment.js';
+import { defaultSet, setMaps, snapshot, destroySet } from './viewport/material.js';
+import { destroyTargets } from './viewport/targets.js';
+import { requestRender } from './viewport/render.js';
 import { buildHud, syncHud, placeDivider, updateStats } from './viewport/hud.js';
-import { writeFrame, writeMaterial } from './viewport/uniforms.js';
-import { pbrPipeline, shadowPipeline, bgPipeline, postPipeline, blitPipeline } from './viewport/pipelines.js';
 import { PREF_VIEW_KEYS, readPrefs, savePrefsSoon } from './viewport/prefs.js';
-import { makeTargets, destroyTargets, aaMode } from './viewport/targets.js';
-import { lightsState, shadowMatrix } from './viewport/lights.js';
-import { mapTexture, writeHalf } from './viewport/textures.js';
-import { makeTestMaps } from './viewport/test-maps.js';
-export { makeTestMaps } from './viewport/test-maps.js';
-import { safeEnvBindings, envState, envChunk, frameLayout, ensureFrameBG } from './viewport/environment.js';
-import { createStatic, shaderModule, buildLut } from './viewport/resources.js';
+import { api } from './viewport/api.js';
 
-// ------------------------------------------------------------ constants
+export { VIEWPORT_DEBUG_VIEWS, DEBUG_LABELS, TONEMAP_LABELS, VIEW_DEFAULTS } from './viewport/state.js';
+export { makeTestMaps } from './viewport/test-maps.js';
+export { setMaps, pinA, useTestMaps } from './viewport/material.js';
+export { loadOBJFile } from './viewport/preview-mesh.js';
+export { requestRender } from './viewport/render.js';
+export { renderOffscreen, screenshot, screenshotDataURL } from './viewport/offscreen.js';
+export { setMesh, setDebugView, api } from './viewport/api.js';
 
 // ------------------------------------------------------------ init
 /** @param {object} ctx main.js module context */
@@ -160,12 +166,7 @@ function dispose() {
   destroyTargets(R.targets);
 }
 
-// ------------------------------------------------------------ static resources
-// ------------------------------------------------------------ environment
-// ------------------------------------------------------------ pipelines
-// ------------------------------------------------------------ material sets
-// ------------------------------------------------------------ mesh
-// ------------------------------------------------------------ targets
+// ------------------------------------------------------------ resize, view changes
 function resize() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const r = wrap.getBoundingClientRect();
@@ -174,9 +175,6 @@ function resize() {
   placeDivider();
 }
 
-// ------------------------------------------------------------ render
-// ------------------------------------------------------------ offscreen
-// ------------------------------------------------------------ hud
 function onView(v) {
   if (!cam) { syncHud(); return; }
   if (v.mesh === 'custom' && !R.custom) { state.view.mesh = 'sphere'; }
@@ -189,54 +187,3 @@ function onView(v) {
   savePrefsSoon();
   requestRender();
 }
-
-// ------------------------------------------------------------ api / selfTest
-/** @param {string} name one of contract MESHES, or 'custom' after loadOBJFile */
-export function setMesh(name) {
-  if (name !== 'custom' && !C.MESHES.includes(name)) throw new Error('unknown mesh ' + name);
-  store.setView({ mesh: name });
-}
-/** @param {string} name one of VIEWPORT_DEBUG_VIEWS */
-export function setDebugView(name) {
-  if (!VIEWPORT_DEBUG_VIEWS.includes(name)) throw new Error('unknown debug view ' + name);
-  store.setView({ debug: name });
-}
-
-/** Render every debug view offscreen with the test maps and check for GPU
- *  validation errors and blank output. */
-async function selfTest() {
-  if (!device) return { ok: false, reason: gpu ? gpu.reason : 'no gpu' };
-  if (!R.test) { const m = makeTestMaps(256); R.test = makeMatSet(m, m.scalars, true, 256, 'test'); }
-  const views = {};
-  let ok = true;
-  for (const dv of VIEWPORT_DEBUG_VIEWS) {
-    device.pushErrorScope('validation');
-    let img = null, err = null;
-    try { img = await renderOffscreen({ width: 64, height: 64, debug: dv, set: R.test }); } catch (e) { err = e.message; }
-    const ge = await device.popErrorScope();
-    if (ge) err = ge.message;
-    let center = null, mean = 0;
-    if (img) {
-      const i = (32 * 64 + 32) * 4;
-      center = [img.data[i], img.data[i + 1], img.data[i + 2]];
-      for (let k = 0; k < img.data.length; k += 4) mean += img.data[k] + img.data[k + 1] + img.data[k + 2];
-      mean /= (img.data.length / 4) * 3;
-    }
-    if (err) ok = false;
-    views[dv] = err ? { error: err } : { center, mean: +mean.toFixed(1) };
-  }
-  const meshes = {};
-  for (const m of C.MESHES) { const d = buildMesh(m, { subdiv: 32 }); meshes[m] = d.indices.length / 3; }
-  return { ok, env: R.env ? R.env.key : 'none', mesh: R.mesh && R.mesh.name, triangles: R.mesh && R.mesh.triangles, views, meshes };
-}
-
-/** __studio.viewport */
-export const api = {
-  setMesh, setDebugView, setMaps, screenshot, screenshotDataURL, renderOffscreen, requestRender,
-  useTestMaps, makeTestMaps, pinA, loadOBJFile,
-  frame: () => cam && cam.frame(),
-  get camera() { return cam; },
-  get envKey() { return R.env && R.env.key; },
-  stats: () => ({ fps: R.fps, frameMs: R.frameMs, looping: !!R.raf, mesh: R.mesh && { name: R.mesh.name, vertices: R.mesh.vertices, triangles: R.mesh.triangles }, maps: R.cur && R.cur.label, env: R.env && R.env.key, pipelines: R.pipes.size }),
-  selfTest,
-};
