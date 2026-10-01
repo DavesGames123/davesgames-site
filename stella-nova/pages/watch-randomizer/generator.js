@@ -58,6 +58,7 @@ export function newSeed() {
 
 import { TYPE_LIST } from './types/index.js';
 import * as CAT from './catalog.js';
+import { HAND_NAMES } from './hands.js';
 export { FINISH, METALS, PAINTS, WOODS, LEATHERS } from './palettes.js';
 export { DIAL_BASES, NUMERALS, TRACKS, HAND_STYLES } from './catalog.js';
 
@@ -112,7 +113,7 @@ function secondsFor(type, calibre) {
 function faceSpec(R, type, calibre) {
   const era = CAT.eraOf(type, calibre), base = CAT.pickBase(R, era);
   return {
-    base, numerals: CAT.pickNumerals(R, era, !!TYPES[type].clock), track: CAT.pickTrack(R, era),
+    base, numerals: CAT.pickNumerals(R, era, !!TYPES[type].clock, base), track: CAT.pickTrack(R, era),
     seconds: secondsFor(type, calibre), brand: makerName(R), city: R.pick(CITIES),
     handStyle: CAT.pickHands(R, era), ...CAT.pickColours(R, base),
   };
@@ -142,8 +143,9 @@ export function describe(spec) {
   rows.push(['Maker', `${f.brand}, ${f.city}`]);
   rows.push(['Movement', `${CALIBRE_NAMES[m.calibre]}${TYPES[spec.type].clock && !['anchor', 'deadbeat', 'brocot'].includes(m.calibre) ? ' (clock platform)' : ''}`]);
   rows.push(['Finish', `${cap(m.plate)} bridges, ${m.wheels} wheels, ${m.screws} screws, ${m.jewels} jewels`]);
-  rows.push(['Dial', `${f.base.replace('-', ' ')}, ${f.numerals} numerals, ${f.track === 'none' ? 'no track' : f.track + ' track'}`]);
-  rows.push(['Hands', `${f.handStyle}, ${f.handColor}; seconds ${f.seconds}`]);
+  const nm = (map, k) => map[k] || k.replace('-', ' ');
+  rows.push(['Dial', `${nm(CAT.BASE_NAMES, f.base)}, ${nm(CAT.NUMERAL_NAMES, f.numerals)} numerals, ${f.track === 'none' ? 'no track' : nm(CAT.TRACK_NAMES, f.track) + ' track'}`]);
+  rows.push(['Hands', `${HAND_NAMES[f.handStyle] || f.handStyle}, ${f.handColor}; seconds ${f.seconds}`]);
   rows.push(...TYPES[spec.type].describe(spec));
   return rows;
 }

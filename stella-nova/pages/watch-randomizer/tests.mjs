@@ -29,7 +29,7 @@ for (let i = 0; i < N; i++) {
 }
 ok(Object.keys(seen.type).length === 4, 'every type turns up', J(seen.type));
 ok(Object.keys(seen.calibre).length === 4, 'every calibre turns up', J(seen.calibre));
-ok(Object.keys(seen.base).length === Gen.DIAL_BASES.length, 'every dial base turns up', Object.keys(seen.base).length + ' bases');
+ok(Gen.DIAL_BASES.every(b => seen.base[b]), 'every dial base turns up', Object.keys(seen.base).length + ' of ' + Gen.DIAL_BASES.length + ' bases');
 ok(bad.length === 0, 'each calibre only in a type that allows it', bad.slice(0, 5).join(', '));
 ok(secBad.length === 0, 'the seconds display matches the calibre', secBad.slice(0, 5).join(', '));
 ok(Gen.makeSpec('x', { type: 'alarm' }).type === 'alarm', 'a fixed type is kept');
