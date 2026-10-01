@@ -30,6 +30,7 @@
 //    function boneMaterial ............ the shader injection
 // ============================================================================
 import * as THREE from 'three';
+import { fetchBuf } from './fetch-buf.js';
 
 const BONE_GLSL = /* glsl */`
 uniform float uAsm, uHL, uGhost, uEnamel, uCrown, uHalfY, uSeed, uBump, uSSSk;
@@ -145,23 +146,6 @@ function decodePart(buf, p) {
   g.computeBoundingSphere();
   g.computeBoundingBox();
   return g;
-}
-
-// fetch with progress; onProgress(0..1)
-async function fetchBuf(url, onProgress) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${url}: ${res.status}`);
-  const total = +res.headers.get('content-length') || 0;
-  if (!res.body || !total) return res.arrayBuffer();
-  const reader = res.body.getReader(), out = new Uint8Array(total);
-  let got = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    out.set(value, got); got += value.length;
-    onProgress(got / total);
-  }
-  return out.buffer;
 }
 
 export async function loadSkull(base, onProgress = () => {}) {
