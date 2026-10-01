@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>PBR Material Studio // Stella Nova</title>
+<!--
+  ════════════════════════════════════════════════════════════════════════════
+   PBR MATERIAL STUDIO  ·  page shell
+  ────────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js requests the shared WebGPU device (gpu.js),
+   then imports each module and calls its init(ctx). A node graph bakes PBR
+   maps in texture space, the 3D viewport shows them under HDRI light, and the
+   export panel packs them for Unity, Unreal, Godot and glTF. The modules fill
+   the regions below; this file only gives them stable ids.
+
+   LAYOUT  (# marks an element id)
+     ┌──────────────────────────────────────────────────────────────────────┐
+     │ #topbar: title · file · undo/redo · resolution · bake status          │
+     ├──────────┬───────────────────┬─┬───────────────────────┬─────────────┤
+     │#lib-panel│ #viewport-wrap    │║│ #graph-wrap           │ #side       │
+     │ node     │  canvas#vp        │║│  node graph (editor)  │  tabs:      │
+     │ library  │  #vp-hud          │║│                       │  #inspector │
+     │          │                   │║│                       │  #env-panel │
+     │          ├───────────────────┴─┴───────────────────────┤  #export-   │
+     │          │ #maps-strip: one thumbnail per baked map    │   panel     │
+     └──────────┴─────────────────────────────────────────────┴─────────────┘
+     ║ = #split (drag to resize the viewport against the graph)
+
+   PHONE  (max-width 768px)
+     The viewport sits on top. #dock at the bottom opens #sheet, and the panel
+     named by body[data-sheet] shows inside the sheet area. mobile.js owns it.
+
+   HEAD LOAD ORDER  (order matters)
+     1. gpu-guard.js  frees GPU work on a page swap (must run first)
+     2. fonts         IBM Plex Sans + IBM Plex Mono (Google Fonts)
+     3. style.css     page stylesheet; it @imports styles/*.css
+     4. main.js       type=module; boots the GPU and the modules
+  ════════════════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-side="inspector">
+<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
+
+<header id="topbar">
+  <div class="tb-title"><span class="tb-mark"></span><b>PBR Material Studio</b><span class="tb-sub">node materials</span></div>
+  <div class="tb-group" id="tb-file" aria-label="File"></div>
+  <div class="tb-group" id="tb-edit" aria-label="Edit">
+    <button type="button" class="tb-btn" id="btn-undo" title="Undo (Ctrl+Z)" disabled>Undo</button>
+    <button type="button" class="tb-btn" id="btn-redo" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
+  </div>
+  <div class="tb-group" id="tb-bake" aria-label="Bake">
+    <label class="tb-lbl" for="res-select">Res</label>
+    <select id="res-select" class="tb-sel" aria-label="Bake resolution"></select>
+    <span id="bake-status" class="tb-status">idle</span>
+  </div>
+  <div class="tb-spacer"></div>
+  <div class="tb-group" id="tb-right"></div>
+</header>
+
+<main id="app">
+  <aside id="lib-panel" class="panel" aria-label="Node library">
+    <div class="panel-head">Library</div>
+    <div class="panel-body" id="lib-body"></div>
+  </aside>
+
+  <section id="center">
+    <div id="work">
+      <div id="viewport-wrap" aria-label="3D viewport">
+        <canvas id="vp"></canvas>
+        <div id="vp-hud"></div>
+      </div>
+      <div id="split" role="separator" aria-orientation="vertical" aria-label="Resize the viewport" tabindex="0"></div>
+      <div id="graph-wrap" aria-label="Node graph"></div>
+    </div>
+    <div id="maps-strip" aria-label="Baked maps"></div>
+  </section>
+
+  <aside id="side" class="panel" aria-label="Properties">
+    <nav id="side-tabs" role="tablist">
+      <button type="button" role="tab" data-tab="inspector" class="on">Inspector</button>
+      <button type="button" role="tab" data-tab="env">Environment</button>
+      <button type="button" role="tab" data-tab="export">Export</button>
+    </nav>
+    <div id="inspector" class="side-pane" data-pane="inspector" role="tabpanel"></div>
+    <div id="env-panel" class="side-pane" data-pane="env" role="tabpanel"></div>
+    <div id="export-panel" class="side-pane" data-pane="export" role="tabpanel"></div>
+  </aside>
+</main>
+
+<div id="sheet" aria-hidden="true">
+  <button type="button" class="sheet-grip" id="sheet-grip" aria-label="Close the sheet"><span></span></button>
+  <div id="sheet-title"></div>
+</div>
+<nav id="dock" aria-label="Studio dock">
+  <button type="button" data-sheet="graph">Graph</button>
+  <button type="button" data-sheet="lib">Nodes</button>
+  <button type="button" data-sheet="inspector">Inspect</button>
+  <button type="button" data-sheet="env">Light</button>
+  <button type="button" data-sheet="export">Export</button>
+  <button type="button" data-sheet="maps">Maps</button>
+</nav>
+
+<div id="nogpu" hidden><b>WebGPU is not available.</b> <span class="why"></span> The graph editor, presets and file import still work; the bake, viewport and export need WebGPU.</div>
+<div id="toast" aria-live="polite"></div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

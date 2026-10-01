@@ -1,0 +1,137 @@
+/* ============================================================================
+   MATERIAL STUDIO  ·  style.css — page stylesheet (tokens, layout, chrome)
+   ────────────────────────────────────────────────────────────────────────────
+   One deviation from pages/README.md: this file @imports one partial per
+   module owner (styles/*.css), so the agents that own a module own its CSS.
+   This file holds the tokens, the desktop grid, the topbar, the side tabs,
+   the splitter, the toast, the no-GPU banner and the phone skeleton.
+
+   CONTENTS  (grep -n the banner to jump)
+     tokens ......... :root custom properties (colors from Stella Nova)
+     base ........... reset, fonts, form controls
+     topbar ......... #topbar
+     layout ......... #app grid, #center, #work, #split, #maps-strip
+     side ........... #side, #side-tabs, .side-pane
+     panel .......... .panel, .panel-head, .panel-body (shared panel chrome)
+     toast/nogpu .... #toast, #nogpu
+     phone .......... @media (max-width:768px): dock + sheet skeleton
+   ============================================================================ */
+@import url("styles/editor.css");
+@import url("styles/viewport.css");
+@import url("styles/panels.css");
+@import url("styles/io.css");
+@import url("styles/mobile.css");
+
+/* ── tokens ─────────────────────────────────────────────────────────────── */
+:root{
+  --bg:#0e1118; --bg2:#121620; --bg3:#171c28; --surface:#1c2230; --surface2:#243040;
+  --border:rgba(150,200,255,0.07); --border-b:rgba(150,200,255,0.16); --border-s:rgba(150,200,255,0.28);
+  --blue:#96c8ff; --blue-dim:#5a8cc0; --blue-faint:rgba(150,200,255,0.06);
+  --yellow:#ffc832; --yellow-dim:#b8901e; --yellow-faint:rgba(255,200,50,0.08);
+  --green:#64c864; --red:#ff6a6a; --orange:#ff9a4a; --violet:#b090ff;
+  --text:#c8d0e0; --text-dim:#8090b0; --text-faint:#506080; --text-bright:#e8ecf4;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,monospace;
+  --fs:12px; --fs-s:11px; --fs-xs:10px;
+  --top:34px; --lib-w:208px; --side-w:300px; --strip-h:96px; --vp-w:42%;
+  --r:3px; --gap:6px;
+  color-scheme:dark;
+}
+
+/* ── base ───────────────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
+body{font-family:var(--sans);font-size:var(--fs);line-height:1.35;color:var(--text);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible{outline:1px solid var(--yellow);outline-offset:-1px}
+code,kbd,.mono{font-family:var(--mono)}
+body.splitting{cursor:col-resize;user-select:none}
+body.splitting iframe,body.splitting canvas{pointer-events:none}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--surface2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}
+
+/* ── topbar ─────────────────────────────────────────────────────────────── */
+#topbar{position:fixed;top:0;left:0;right:0;height:var(--top);z-index:300;display:flex;align-items:center;gap:10px;padding:0 10px;background:rgba(12,15,22,0.97);border-bottom:1px solid var(--border-b)}
+.tb-title{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+.tb-title b{font-weight:600;color:var(--text-bright);letter-spacing:0.02em}
+.tb-mark{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green);align-self:center}
+.no-gpu .tb-mark{background:var(--red);box-shadow:0 0 6px var(--red)}
+.tb-sub{font-size:var(--fs-xs);color:var(--text-faint);text-transform:uppercase;letter-spacing:0.12em}
+.tb-group{display:flex;align-items:center;gap:4px;padding-left:10px;border-left:1px solid var(--border)}
+.tb-group:empty{display:none}
+.tb-spacer{flex:1}
+.tb-btn,.tb-sel{height:24px;padding:0 8px;background:var(--bg2);border:1px solid var(--border-b);border-radius:var(--r);color:var(--text);font-size:var(--fs-s)}
+.tb-btn:hover:not(:disabled){border-color:var(--border-s);background:var(--blue-faint)}
+.tb-btn:disabled{opacity:0.4;cursor:default}
+.tb-btn.on{border-color:var(--yellow-dim);color:var(--yellow);background:var(--yellow-faint)}
+.tb-lbl{font-size:var(--fs-xs);color:var(--text-dim);text-transform:uppercase;letter-spacing:0.1em}
+.tb-status{font-family:var(--mono);font-size:var(--fs-xs);color:var(--text-dim);min-width:110px;font-variant-numeric:tabular-nums}
+.tb-status[data-kind=busy]{color:var(--yellow)}.tb-status[data-kind=ok]{color:var(--green)}.tb-status[data-kind=error]{color:var(--red)}
+
+/* ── layout ─────────────────────────────────────────────────────────────── */
+#app{position:fixed;top:var(--top);left:0;right:0;bottom:0;display:grid;grid-template-columns:var(--lib-w) minmax(0,1fr) var(--side-w);min-height:0}
+#center{display:grid;grid-template-rows:minmax(0,1fr) var(--strip-h);min-width:0;min-height:0;border-left:1px solid var(--border-b);border-right:1px solid var(--border-b)}
+#work{display:grid;grid-template-columns:var(--vp-w) 5px minmax(0,1fr);min-height:0;min-width:0}
+#viewport-wrap{position:relative;min-width:0;min-height:0;overflow:hidden;background:#07090d}
+#vp{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#vp-hud{position:absolute;inset:0;pointer-events:none}
+#vp-hud > *{pointer-events:auto}
+#split{background:var(--bg2);border-left:1px solid var(--border-b);border-right:1px solid var(--border-b);cursor:col-resize;touch-action:none}
+#split:hover,body.splitting #split{background:var(--blue-dim)}
+#graph-wrap{position:relative;min-width:0;min-height:0;overflow:hidden;background:var(--bg)}
+#maps-strip{display:flex;gap:6px;align-items:stretch;padding:6px;overflow-x:auto;overflow-y:hidden;background:var(--bg2);border-top:1px solid var(--border-b)}
+
+/* ── side ───────────────────────────────────────────────────────────────── */
+#side{display:flex;flex-direction:column;min-height:0;background:var(--bg2)}
+#side-tabs{display:flex;flex:0 0 auto;border-bottom:1px solid var(--border-b)}
+#side-tabs button{flex:1;height:28px;background:transparent;border:0;border-bottom:2px solid transparent;color:var(--text-dim);font-size:var(--fs-s);letter-spacing:0.04em}
+#side-tabs button:hover{color:var(--text)}
+#side-tabs button.on{color:var(--text-bright);border-bottom-color:var(--yellow)}
+.side-pane{flex:1;min-height:0;overflow:auto;display:none}
+body[data-side=inspector] #inspector,body[data-side=env] #env-panel,body[data-side=export] #export-panel{display:block}
+
+/* ── panel ──────────────────────────────────────────────────────────────── */
+.panel{min-height:0;overflow:hidden;background:var(--bg2)}
+#lib-panel{display:flex;flex-direction:column}
+.panel-head{flex:0 0 auto;height:28px;display:flex;align-items:center;padding:0 10px;font-size:var(--fs-xs);font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--blue-dim);border-bottom:1px solid var(--border)}
+.panel-body{flex:1;min-height:0;overflow:auto}
+
+/* ── toast / nogpu ──────────────────────────────────────────────────────── */
+#toast{position:fixed;right:12px;bottom:12px;z-index:900;display:flex;flex-direction:column;gap:6px;align-items:flex-end;pointer-events:none;max-width:min(420px,calc(100vw - 24px))}
+.toast{pointer-events:auto;padding:7px 11px;background:rgba(18,22,32,0.97);border:1px solid var(--border-s);border-left:3px solid var(--blue-dim);border-radius:var(--r);font-size:var(--fs-s);color:var(--text-bright);box-shadow:0 6px 24px rgba(0,0,0,0.5);transition:opacity 0.3s,transform 0.3s}
+.toast.ok{border-left-color:var(--green)}.toast.warn{border-left-color:var(--orange)}.toast.error{border-left-color:var(--red)}
+.toast.out{opacity:0;transform:translateY(6px)}
+#nogpu{position:fixed;top:calc(var(--top) + 8px);left:50%;transform:translateX(-50%);z-index:800;max-width:min(640px,calc(100vw - 32px));padding:8px 12px;background:rgba(40,16,18,0.96);border:1px solid rgba(255,106,106,0.5);border-radius:var(--r);font-size:var(--fs-s);color:var(--text-bright)}
+#nogpu[hidden]{display:none}
+
+/* sheet and dock exist only on phones */
+#sheet,#dock{display:none}
+
+/* ── phone: viewport on top, dock + bottom sheet ────────────────────────── */
+@media (max-width:768px){
+  :root{--dock-h:calc(52px + env(safe-area-inset-bottom));--sheet-h:min(58vh,calc(100% - 180px));--sheet-h:min(58dvh,calc(100dvh - 180px))}
+  .tb-sub,.tb-lbl{display:none}
+  #topbar{gap:6px;padding:0 8px;overflow-x:auto;scrollbar-width:none}#topbar::-webkit-scrollbar{display:none}
+  #app{display:block;bottom:var(--dock-h)}
+  #center{display:block;height:100%;border:0}
+  #work{display:block;height:100%}
+  #viewport-wrap{position:absolute;inset:0}
+  #split{display:none}
+  /* every sheet panel is fixed in the sheet area and hidden until chosen */
+  #graph-wrap,#lib-panel,#side,#maps-strip{position:fixed;left:0;right:0;bottom:var(--dock-h);height:var(--sheet-h);z-index:250;display:none;border-top:1px solid var(--border-b)}
+  #maps-strip{height:auto;max-height:var(--sheet-h)}
+  body[data-sheet=graph] #graph-wrap,body[data-sheet=lib] #lib-panel,body[data-sheet=maps] #maps-strip{display:flex}
+  body[data-sheet=graph] #graph-wrap{display:block}
+  body[data-sheet=inspector] #side,body[data-sheet=env] #side,body[data-sheet=export] #side{display:flex}
+  #side-tabs{display:none}
+  #sheet{display:block;position:fixed;left:0;right:0;bottom:calc(var(--dock-h) + var(--sheet-h));height:26px;z-index:251;background:var(--bg2);border-top:1px solid var(--border-b);border-radius:12px 12px 0 0}
+  body:not([data-sheet]) #sheet,body[data-sheet=""] #sheet{display:none}
+  .sheet-grip{display:flex;justify-content:center;align-items:center;width:100%;height:26px;background:transparent;border:0}
+  .sheet-grip span{width:42px;height:4px;border-radius:2px;background:var(--text-faint)}
+  #sheet-title{display:none}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--dock-h);z-index:260;gap:4px;align-items:center;padding:4px calc(6px + env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));background:rgba(9,12,20,0.98);border-top:1px solid var(--border-b)}
+  #dock button{flex:1;height:42px;min-width:0;border:1px solid var(--border-b);border-radius:8px;background:var(--bg2);color:var(--text);font-size:var(--fs-s)}
+  #dock button.on{border-color:var(--yellow-dim);color:var(--yellow)}
+  #toast{bottom:calc(var(--dock-h) + 8px)}
+  input,select,textarea{font-size:16px} /* 16px stops iOS zoom on focus */
+}
