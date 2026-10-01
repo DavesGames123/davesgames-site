@@ -7,5 +7,6 @@ import pocket from './pocket.js';
 import wrist from './wrist.js';
 import wall from './wall.js';
 import alarm from './alarm.js';
+import carriage from './carriage.js';
 
-export const TYPE_LIST = [pocket, wrist, wall, alarm];
+export const TYPE_LIST = [pocket, wrist, wall, alarm, carriage];

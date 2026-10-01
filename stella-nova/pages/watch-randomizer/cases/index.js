@@ -8,8 +8,12 @@ import * as pocket from './pocket.js';
 import * as wrist from './wrist.js';
 import * as wall from './wall.js';
 import * as alarm from './alarm.js';
+import * as carriage from './carriage.js';
 
-export const BUILDERS = { pocket: pocket.build, wrist: wrist.build, wall: wall.build, alarm: alarm.build };
+export const BUILDERS = {
+  pocket: pocket.build, wrist: wrist.build, wall: wall.build, alarm: alarm.build,
+  carriage: carriage.build,
+};
 
 // the case for a spec: zF is the dial face plane, zB the back of the
 // movement (a clock with a hidden rotor sits a little shallower)
