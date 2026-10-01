@@ -34,8 +34,8 @@
 //       function prepareExamples  function presetFamily  function presetThumb  function randomExample
 //       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
 
-import { SLOTS, defaultScene, fillDefaults, parseFract, serialiseFract, parseValue } from './fract.js';
-import { $, stage, canvas, panel, pbody, picker, exSheet, root, el, section, clamp, px, download } from './ui/dom.js';
+import { SLOTS, defaultScene, fillDefaults, parseFract, parseValue } from './fract.js';
+import { $, canvas, panel, pbody, picker, exSheet, root, el, section, clamp, px, download } from './ui/dom.js';
 import { P, CAT, EXAMPLES, COLLECTIONS, byEnum, fnum, groupName, mainSpec, isNone, loadData } from './ui/data.js';
 import { scene, activeSlot, engine, currentExample, info, setScene, setActiveSlot, setEngine, setCurrentExample, setInfo, formulaAt,
   touchSeen, noteTouch, touchUI, coarseMQ, targetSamples, SAMPLES_DEFAULT, renderScale, RENDER_SCALE_DEFAULT, pixelRatio } from './ui/state.js';
@@ -45,6 +45,7 @@ import { sceneDirty, setMain, setSlot, loadScene, pushScene } from './ui/scene.j
 import { ctl, refreshAll, mainBind, slotBind, kindOf, hideTip, initTip } from './ui/controls.js';
 import { gradientEditor } from './ui/gradient.js';
 import { thumb, presetThumb } from './ui/thumbs.js';
+import { loadText, exportText, exportFract, initIo, shareHash, decodeShare, readHash, copyLink } from './ui/io.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -455,7 +456,7 @@ function loadExample(i) {
   markExample();
   loadScene(exampleScene(e), `${e.src === 'o' ? 'site original' : 'example'}: ${e.name}${e.author ? ` · by ${e.author} (${e.licence})` : ''}`);
 }
-function markExample() { exList?.querySelectorAll('.ex').forEach((b) => b.classList.toggle('cur', Number(b.dataset.i) === currentExample)); }
+export function markExample() { exList?.querySelectorAll('.ex').forEach((b) => b.classList.toggle('cur', Number(b.dataset.i) === currentExample)); }
 function filterExamples() {
   const words = exSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const shown = new Set();
@@ -468,76 +469,7 @@ function filterExamples() {
 }
 
 // ─── import / export / share ────────────────────────────────────────────────
-function loadText(text, name = 'file') {
-  const { scene: sc, meta } = parseFract(text, P);
-  setCurrentExample(-1);
-  markExample();
-  loadScene(sc, `${name}: loaded${meta.skipped.length ? `, ${meta.skipped.length} params not supported` : ''}`);
-  if (meta.skipped.length) console.info('[mandelbulber] params not supported:', meta.skipped.join(' '));
-  return meta;
-}
-
-function exportText() { return serialiseFract(scene, P); }
-
-function exportFract() {
-  const f = formulaAt(0);
-  const base = currentExample >= 0 ? EXAMPLES[currentExample].name : (isNone(f) ? 'scene' : f.id);
-  download(new Blob([exportText()], { type: 'text/plain' }), `${base}.fract`);
-}
-
-$('file').addEventListener('change', async (e) => {
-  const f = e.target.files?.[0];
-  if (f) loadText(await f.text(), f.name);
-  e.target.value = '';
-});
-let dragDepth = 0;
-window.addEventListener('dragenter', (e) => { if (e.dataTransfer?.types?.includes('Files')) { dragDepth++; stage.classList.add('dropping'); } });
-window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; stage.classList.remove('dropping'); } });
-window.addEventListener('dragover', (e) => e.preventDefault());
-window.addEventListener('drop', async (e) => {
-  e.preventDefault();
-  dragDepth = 0;
-  stage.classList.remove('dropping');
-  const f = e.dataTransfer?.files?.[0];
-  if (f) loadText(await f.text(), f.name);
-});
-
-// Share: the .fract diff text, deflated, base64url, in #s=
-const b64url = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
-const unb64url = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
-async function pipe(bytes, stream) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer()); }
-
-async function shareHash(sc = scene) {
-  const body = (x) => serialiseFract(x, P).split('\n').filter((l) => l && !l.startsWith('#')).join('\n');
-  const text = body(sc);
-  if (text === body(defaultScene(P))) return '';
-  return `s=${b64url(await pipe(new TextEncoder().encode(text), new CompressionStream('deflate-raw')))}`;
-}
-async function decodeShare(hash) {
-  const m = String(hash).match(/(?:^|[#&])s=([A-Za-z0-9_-]+)/);
-  if (!m) return null;
-  const text = new TextDecoder().decode(await pipe(unb64url(m[1]), new DecompressionStream('deflate-raw')));
-  return parseFract(`# version 2.33\n${text}`, P).scene;
-}
-
-let hashTimer = 0;
-export function writeHash() {
-  clearTimeout(hashTimer);
-  hashTimer = setTimeout(async () => {
-    const h = await shareHash();
-    history.replaceState(null, '', h ? `#${h}` : location.pathname + location.search);
-  }, 400);
-}
-async function readHash() {
-  try { return await decodeShare(location.hash); } catch (e) { console.warn('[mandelbulber] bad share link', e); return null; }
-}
-async function copyLink() {
-  clearTimeout(hashTimer);
-  const h = await shareHash();
-  history.replaceState(null, '', h ? `#${h}` : location.pathname + location.search);
-  try { await navigator.clipboard.writeText(location.href); flash('link copied'); } catch { flash('copy the link from the address bar'); }
-}
-
+initIo();
 // ─── camera (upstream cCameraTarget) ────────────────────────────────────────
 // ─── camera input ───────────────────────────────────────────────────────────
 // Mouse: drag orbit, right or Shift drag pan, wheel dolly. Touch: one finger orbit, two
