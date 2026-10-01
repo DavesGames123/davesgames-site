@@ -228,7 +228,9 @@ fn fs_main(v: VOut, @builtin(front_facing) front: bool) -> @location(0) vec4f {
   let tl = length(t0);
   var T = select(normalize(cross(vec3f(0.0, 1.0, 0.0), ng) + vec3f(1e-4, 0.0, 0.0)), t0 / max(tl, 1e-6), tl > 1e-6);
   T = normalize(T - (ng * dot(ng, T)));
-  let B = cross(ng, T) * select(-1.0, 1.0, v.tangent.w >= 0.0);
+  // cross(-N, -T) = cross(N, T): on a back face, negate B too, so the whole
+  // tangent frame reverses (the glTF double-sided rule).
+  let B = (cross(ng, T) * select(-1.0, 1.0, v.tangent.w >= 0.0)) * select(-1.0, 1.0, front);
 
   let V = normalize(F.camPos.xyz - v.world);
   var uv = v.uv;
