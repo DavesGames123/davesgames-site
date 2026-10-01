@@ -254,7 +254,7 @@
   // ── router ───────────────────────────────────────────────────────────────
   var route = { name: 'home' };
   function parseRoute(hash) {
-    var p = (hash || '').replace(/^#\/?/, '');
+    var p = (hash || '').replace(/^#\/?/, '').replace(/%2F/gi, '/');  // accept encoded ids
     if (!p) return { name: 'home' };
     var parts = p.split('/');
     var dec = function (s) { try { return decodeURIComponent(s); } catch (e) { return s; } };

@@ -129,7 +129,7 @@
     if (e.category === 'modules') return 'Station module' + (e.group ? ' · ' + e.group : '');
     return (e.tier || 'Resource') + (e.group ? ' · ' + e.group : '');
   }
-  function wikiHref(id) { return '../wiki/index.html#' + id; }
+  function wikiHref(id) { return '../wiki/index.html#/e/' + id; }
 
   // ── desktop board ────────────────────────────────────────────────────────
   function renderBoard() {

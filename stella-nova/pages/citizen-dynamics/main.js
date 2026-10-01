@@ -27,7 +27,7 @@
   'use strict';
 
   var CFG = {
-    WIKI: '../wiki/index.html#',     // wiki entry link prefix, then the entry id
+    WIKI: '../wiki/index.html#/e/',  // wiki entry link prefix, then the entry id
     ROOT: '../../'                   // sprite paths are relative to stella-nova/
   };
   var D = window.SN_DATA;
