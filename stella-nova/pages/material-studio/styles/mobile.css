@@ -1,5 +1,187 @@
 /* ============================================================================
    MATERIAL STUDIO  ·  styles/mobile.css — owned by the PANELS agent
    ────────────────────────────────────────────────────────────────────────────
-   Partial, imported by ../style.css. Use the :root tokens from style.css.
+   Partial, imported by ../style.css. Uses the :root tokens from style.css.
+   style.css holds the phone skeleton for (max-width:768px). This file adds:
+
+     TOUCH ......... (pointer:coarse) or narrow: 44px targets, 11px+ text
+     PHONE ......... sheet sizes, the sheet bar, viewport occlusion, dock badges
+     PHONE-COARSE .. the same skeleton for a short touch screen wider than 768px
+                     (a landscape phone), which the style.css query misses
+     LANDSCAPE ..... dock rail on the left, panels as a right drawer
+     TABLET ........ coarse 769-1199px: library drawer, side kept, dock tabs
+
+   The queries match PHONE_Q, LAND_Q and TABLET_Q in mobile.js. mobile.js
+   also sets body[data-layout|data-orient|data-sheet|data-sheet-size].
+
+   SPECIFICITY. style.css loads this partial with @import, so its own rules
+   come later in the cascade and win a tie. Every selector here therefore
+   starts with "html " (and :root becomes :root:root) to win by one level.
    ============================================================================ */
+
+/* ── TOUCH ──────────────────────────────────────────────────────────────── */
+@media (pointer:coarse),(max-width:768px){
+  :root:root{--fs:13px;--fs-s:12px;--fs-xs:11px;--top:44px}
+  html .tb-btn,html .tb-sel{height:36px;min-width:44px;font-size:var(--fs-s)}
+  html .tb-name{height:36px;width:130px}
+  html #side-tabs button{height:44px}
+  html .panel-head{height:36px}
+  html .pn-ib{width:40px;height:44px}
+  html .pn-ico{width:16px;height:16px}
+  html .pn-btn{height:44px;padding:0 12px}
+  html .pn-mini{height:36px;padding:0 10px}
+  html .pn-sec-h{height:44px;padding:0 12px}
+  html .pn-prm{min-height:44px;grid-template-columns:minmax(72px,30%) minmax(0,1fr) auto;padding:2px 4px 2px 12px}
+  html .pn-acts{min-width:0}
+  html .pn-rst{display:none}
+  html .pn-prm.mod .pn-rst,html .pn-prm.mixed .pn-rst{display:inline-flex}
+  html .pn-exp{opacity:0.6}
+  html .pn-bar{height:32px}
+  html .pn-num{height:32px;width:64px;flex-basis:64px}
+  html .pn-swatch{height:32px;flex-basis:44px;width:44px}
+  html .pn-hex{height:32px;width:78px;flex-basis:78px}
+  html .pn-sel{height:36px}
+  html .pn-seg-b,html .pn-seg.sm .pn-seg-b{height:36px}
+  html .pn-seg.wrap .pn-seg-b{height:40px}
+  html .pn-tog{width:52px;height:32px;flex-basis:52px!important;border-radius:16px}
+  html .pn-tog::after{content:'';position:absolute;inset:-7px -4px}
+  html .pn-tog span{width:24px;height:24px;top:3px;left:3px}
+  html .pn-tog.on span{left:23px}
+  html .pn-grad-bar{height:32px}
+  html .pn-grad-lane{height:24px}
+  html .pn-grad-stop{width:20px;height:24px;margin-left:-10px}
+  html .pn-img{min-height:56px}
+  html .pn-search{height:40px}
+  html .pn-li{height:44px;padding-right:8px}
+  html .pn-star{width:36px;height:44px;opacity:1}
+  html .pn-lg-h{height:40px}
+  html .pn-port{min-height:36px}
+  html .pn-port-src{height:30px}
+  html .pn-chip{height:36px}
+  html .pn-name,html .pn-name.sm{height:36px}
+  html .pn-preset{min-height:72px}
+  html .env-p{min-height:56px}
+  html .lt-h{height:44px}
+  html .ex-card{min-height:52px;padding:8px 10px}
+  html .pn-menu button{height:44px}
+  html .keys-r{padding:5px 0}
+  html .pk-hue{height:22px}html .pk-hdot{height:26px}
+  html .pk-prev{height:32px}
+  html .mt-l,html .mt-stat{font-size:var(--fs-xs)}
+  html #res-select{min-width:64px}
+}
+
+/* ── PHONE (style.css skeleton + additions) ─────────────────────────────── */
+/* #dock buttons: label + badge */
+html .dk-l{pointer-events:none}
+html .dk-badge{display:none;position:absolute;top:3px;right:5px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:var(--yellow);color:#111;font-size:10px;font-style:normal;line-height:16px;text-align:center;pointer-events:none}
+html .dk-badge.on{display:block}
+html .dk-badge.err{background:var(--red);min-width:10px;height:10px;padding:0}
+html .sheet-btn{display:none}
+
+@media (max-width:768px),(max-height:500px) and (pointer:coarse){
+  :root:root{--dock-h:calc(56px + env(safe-area-inset-bottom));--bar-h:40px;
+        --sheet-half:min(52vh,calc(100vh - 220px));--sheet-half:min(52dvh,calc(100dvh - 220px));
+        --sheet-full:calc(100vh - var(--top) - var(--dock-h) - var(--bar-h) - 6px);--sheet-full:calc(100dvh - var(--top) - var(--dock-h) - var(--bar-h) - 6px);
+        --sheet-h:var(--sheet-px,var(--sheet-half))}
+  html body[data-sheet-size=full]{--sheet-h:var(--sheet-px,var(--sheet-full))}
+  html .tb-title .tb-sub,html .tb-title b{display:none}
+  html #tb-bake .tb-spark{display:none}
+  html #dock{display:flex}
+  html #dock button{position:relative;height:46px;min-width:44px;font-size:var(--fs-s);padding:0 2px}
+  /* the sheet bar: grip in the middle,title on the left,size + close on the right */
+  html #sheet{height:var(--bar-h);display:flex;align-items:center;padding:0 4px 0 12px;box-shadow:0 -8px 24px rgba(0,0,0,0.35)}
+  html #sheet .sheet-grip{position:absolute;left:50%;top:0;width:120px;height:var(--bar-h);margin-left:-60px;touch-action:none;cursor:grab}
+  html #sheet-title{display:block;flex:1;font-size:var(--fs-s);font-weight:600;color:var(--text-bright);letter-spacing:0.04em;pointer-events:none}
+  html .sheet-btn{display:inline-flex;align-items:center;justify-content:center;position:relative;z-index:1;min-width:44px;height:36px;padding:0 10px;margin-left:4px;background:var(--bg3);border:1px solid var(--border-b);border-radius:8px;color:var(--text);font-size:var(--fs-s)}
+  /* every sheet panel sits under the bar */
+  html #graph-wrap,html #lib-panel,html #side,html #maps-strip{bottom:var(--dock-h);height:var(--sheet-h);transition:height 0.22s cubic-bezier(0.4,0,0.2,1)}
+  html body.sheet-drag #graph-wrap,html body.sheet-drag #lib-panel,html body.sheet-drag #side,html body.sheet-drag #maps-strip,html body.sheet-drag #sheet{transition:none}
+  html #sheet{bottom:calc(var(--dock-h) + var(--sheet-h));transition:bottom 0.22s cubic-bezier(0.4,0,0.2,1)}
+  html #side{flex-direction:column}
+  html #side .side-pane{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+  html #lib-panel .panel-head{display:none}
+  /* the maps sheet: a wrapping grid of larger tiles */
+  html #maps-strip.pn-strip{height:var(--sheet-h);max-height:none;flex-wrap:wrap;align-content:flex-start;overflow-y:auto;gap:6px;padding:8px}
+  html #maps-strip .mt{height:auto;width:calc((100% - 12px) / 3)}
+  /* occlusion: the viewport keeps the area above a half sheet */
+  html #viewport-wrap{transition:bottom 0.22s cubic-bezier(0.4,0,0.2,1)}
+  html body[data-sheet]:not([data-sheet=""]):not([data-sheet-size=full]) #viewport-wrap{bottom:calc(var(--sheet-h) + var(--bar-h))}
+  html body.sheet-drag #viewport-wrap{transition:none}
+  html #vp-hud{font-size:var(--fs-s)}
+  html .pn-lib-info{max-height:38%}
+  html .pn-picker{left:50%!important;transform:translateX(-50%);top:auto!important;bottom:calc(var(--dock-h) + 8px);width:min(300px,calc(100vw - 24px))}
+  html .pk-sv,html .pk-hue{width:100%}
+  html .pn-menu{left:8px!important;right:8px;min-width:0}
+}
+
+/* ── PHONE-COARSE: a touch screen shorter than 500px but wider than 768px ─ */
+@media (min-width:769px) and (max-height:500px) and (pointer:coarse){
+  html .tb-sub,html .tb-lbl{display:none}
+  html #topbar{gap:6px;padding:0 8px;overflow-x:auto;scrollbar-width:none}
+  html #topbar::-webkit-scrollbar{display:none}
+  html #app{display:block;bottom:var(--dock-h)}
+  html #center{display:block;height:100%;border:0}
+  html #work{display:block;height:100%}
+  html #viewport-wrap{position:absolute;inset:0}
+  html #split{display:none}
+  html #graph-wrap,html #lib-panel,html #side,html #maps-strip{position:fixed;left:0;right:0;z-index:250;display:none;border-top:1px solid var(--border-b)}
+  html body[data-sheet=lib] #lib-panel,html body[data-sheet=maps] #maps-strip{display:flex}
+  html body[data-sheet=graph] #graph-wrap{display:block}
+  html body[data-sheet=inspector] #side,html body[data-sheet=env] #side,html body[data-sheet=export] #side{display:flex}
+  html #side-tabs{display:none}
+  html #sheet{position:fixed;left:0;right:0;z-index:251;background:var(--bg2);border-top:1px solid var(--border-b);border-radius:12px 12px 0 0}
+  html body:not([data-sheet]) #sheet,html body[data-sheet=""] #sheet{display:none}
+  html .sheet-grip{display:flex;justify-content:center;align-items:center;background:transparent;border:0}
+  html .sheet-grip span{width:42px;height:4px;border-radius:2px;background:var(--text-faint)}
+  html #dock{position:fixed;left:0;right:0;bottom:0;height:var(--dock-h);z-index:260;gap:4px;align-items:center;padding:4px calc(6px + env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));background:rgba(9,12,20,0.98);border-top:1px solid var(--border-b)}
+  html #dock button{flex:1;border:1px solid var(--border-b);border-radius:8px;background:var(--bg2);color:var(--text)}
+  html #dock button.on{border-color:var(--yellow-dim);color:var(--yellow)}
+  html #toast{bottom:calc(var(--dock-h) + 8px)}
+  html input,html select,html textarea{font-size:16px}
+}
+
+/* ── LANDSCAPE phone: dock rail on the left,panels in a right drawer ───── */
+@media (orientation:landscape) and (max-height:500px) and (pointer:coarse),(orientation:landscape) and (max-height:500px) and (max-width:768px){
+  :root:root{--top:38px;--rail-w:calc(64px + env(safe-area-inset-left));--drawer-w:min(46vw,400px);--dock-h:0px;--bar-h:44px}
+  html body[data-sheet=graph]{--drawer-w:min(64vw,620px)}
+  html #topbar{left:var(--rail-w)}
+  html #app{left:var(--rail-w);bottom:0}
+  html #dock{top:0;bottom:0;left:0;right:auto;width:var(--rail-w);height:auto;flex-direction:column;justify-content:center;gap:6px;padding:calc(6px + env(safe-area-inset-top)) 6px calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));border-top:0;border-right:1px solid var(--border-b)}
+  html #dock button{flex:0 0 46px;width:100%;height:46px;font-size:var(--fs-xs)}
+  html #sheet,html body[data-sheet] #sheet{top:var(--top);bottom:auto;left:auto;right:0;width:var(--drawer-w);height:var(--bar-h);border-radius:0;border-top:0;border-left:1px solid var(--border-b);border-bottom:1px solid var(--border);box-shadow:none;transition:none}
+  html #sheet .sheet-grip{display:none}
+  html #sheet-size{display:none}
+  html #graph-wrap,html #lib-panel,html #side,html #maps-strip{top:calc(var(--top) + var(--bar-h));bottom:0;left:auto;right:0;width:var(--drawer-w);height:auto!important;border-top:0;border-left:1px solid var(--border-b);padding-right:env(safe-area-inset-right);transition:none}
+  html #maps-strip.pn-strip{height:auto}
+  html #maps-strip .mt{width:calc((100% - 6px) / 2)}
+  /* occlusion: the viewport keeps the area left of the drawer */
+  html body[data-sheet]:not([data-sheet=""]) #viewport-wrap,html body[data-sheet]:not([data-sheet=""]):not([data-sheet-size=full]) #viewport-wrap{bottom:0;right:var(--drawer-w)}
+  html #toast{bottom:8px;right:calc(var(--drawer-w) + 8px)}
+  html .pn-picker{left:auto!important;right:8px;transform:none;bottom:8px}
+}
+
+/* ── TABLET: coarse pointer,769-1199px wide ─────────────────────────────── */
+@media (pointer:coarse) and (min-width:769px) and (max-width:1199px) and (min-height:501px){
+  :root:root{--side-w:330px;--dock-h:calc(58px + env(safe-area-inset-bottom));--strip-h:104px}
+  html #app{grid-template-columns:minmax(0,1fr) var(--side-w);bottom:var(--dock-h)}
+  html #lib-panel{position:fixed;top:var(--top);bottom:var(--dock-h);left:0;width:320px;z-index:240;display:none;border-right:1px solid var(--border-b);box-shadow:12px 0 40px rgba(0,0,0,0.5)}
+  html body[data-sheet=lib] #lib-panel{display:flex}
+  html #center{border-left:0}
+  html #side-tabs{display:none}
+  html #dock{display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--dock-h);z-index:260;gap:8px;align-items:center;justify-content:center;padding:6px 12px calc(6px + env(safe-area-inset-bottom));background:rgba(9,12,20,0.98);border-top:1px solid var(--border-b)}
+  html #dock button{position:relative;flex:0 1 120px;height:46px;border:1px solid var(--border-b);border-radius:10px;background:var(--bg2);color:var(--text);font-size:var(--fs-s)}
+  html #dock button.on{border-color:var(--yellow-dim);color:var(--yellow)}
+  /* Graph: maximize the graph over the viewport. Maps: a taller strip. */
+  html body[data-sheet=graph] #work{grid-template-columns:0 0 minmax(0,1fr)}
+  html body[data-sheet=graph] #viewport-wrap,html body[data-sheet=graph] #split{visibility:hidden}
+  html body[data-sheet=maps]{--strip-h:200px}
+  html #toast{bottom:calc(var(--dock-h) + 8px)}
+}
+@media (pointer:coarse) and (min-width:769px) and (max-width:1199px) and (min-height:501px) and (orientation:portrait){
+  html #work{grid-template-columns:none;grid-template-rows:44% 0 minmax(0,1fr)}
+  html #split{display:none}
+  html #viewport-wrap{grid-row:1;grid-column:1;border-bottom:1px solid var(--border-b)}
+  html #graph-wrap{grid-row:3;grid-column:1}
+  html body[data-sheet=graph] #work{grid-template-columns:none;grid-template-rows:0 0 minmax(0,1fr)}
+}
