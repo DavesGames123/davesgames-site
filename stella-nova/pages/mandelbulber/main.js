@@ -37,14 +37,10 @@
 import { SLOTS, defaultScene, fillDefaults, parseFract, serialiseFract, parseValue, quantizeColor, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
 import { $, stage, canvas, panel, pbody, hud, picker, exSheet, root, el, section, fmt, rgbToHex, hexToRgb, clamp, px, download } from './ui/dom.js';
 import { P, CAT, EXAMPLES, THUMBS, PTHUMBS, COLLECTIONS, byEnum, fnum, groupName, mainSpec, isNone, loadData } from './ui/data.js';
+import { scene, activeSlot, engine, currentExample, info, setScene, setActiveSlot, setEngine, setCurrentExample, setInfo, formulaAt,
+  touchSeen, noteTouch, touchUI, coarseMQ, targetSamples, SAMPLES_DEFAULT, renderScale, RENDER_SCALE_DEFAULT, pixelRatio } from './ui/state.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
-let scene;
-let activeSlot = 0;
-let engine = null;
-let currentExample = -1;
-
-const formulaAt = (s) => byEnum.get(scene.main[`formula_${s + 1}`]) || null;
 // ─── panel specs ────────────────────────────────────────────────────────────
 // Main params shown in the panel. A row is skipped when gen/params.json does
 // not list its name. `c` picks one component of a vector param.
@@ -256,8 +252,6 @@ const kindOf = (type) => ({ double: 'double', int: 'int', bool: 'bool', vect3: '
 // ─── scene changes ──────────────────────────────────────────────────────────
 let sceneDirty = true;
 let previewTimer = 0, previewOn = false;
-let info = null;
-
 // Each change shows a fast preview. Full quality comes back 150 ms after the last change, but
 // only once the preview of that change is on screen (a slow band can hold it up), so a single
 // click on a control still shows its effect at once.
@@ -269,7 +263,7 @@ function touch() {
     const t0 = performance.now();
     const back = () => {
       if ((engine.stats?.().presents ?? 1) === shown && performance.now() - t0 < 3000) { previewTimer = setTimeout(back, 50); return; }
-      previewOn = false; engine.setPreview(false); engine.reset(); info = null;
+      previewOn = false; engine.setPreview(false); engine.reset(); setInfo(null);
     };
     clearTimeout(previewTimer);
     previewTimer = setTimeout(back, 150);
@@ -293,28 +287,19 @@ function setSlot(s, name, v) {
 
 function loadScene(next, label) {
   stopInertia();
-  scene = next;
-  activeSlot = 0;
+  setScene(next);
+  setActiveSlot(0);
   buildSlotEditor();
   refreshAll();
   sceneDirty = true;
   engine?.reset();
-  info = null;
+  setInfo(null);
   writeHash();
   if (label) flash(label);
 }
 
 // ─── panel ──────────────────────────────────────────────────────────────────
 let slotBox, slotStrip, progressEl, sampleLine, exList, exSearch;
-const coarseMQ = matchMedia('(pointer: coarse)');
-let touchSeen = false;                                // a touch pointer was used at least once
-const touchUI = () => coarseMQ.matches || touchSeen;
-const targetSamples = { value: coarseMQ.matches ? 32 : 64 };
-const SAMPLES_DEFAULT = targetSamples.value;
-// Pixel ratio of the render: the device ratio, capped at 2 (1.5 on touch screens by default).
-const renderScale = { value: coarseMQ.matches ? 1.5 : 2 };
-const RENDER_SCALE_DEFAULT = renderScale.value;
-const pixelRatio = () => Math.max(0.25, Math.min(window.devicePixelRatio || 1, 2, renderScale.value));
 let resizeCanvas = null, resizePending = false;      // set in boot once the engine runs
 
 function buildPanel() {
@@ -331,7 +316,7 @@ function buildPanel() {
       el('button', { type: 'button', onclick: exportFract, title: 'Download the scene as a .fract file' }, 'Export .fract'),
       el('button', { type: 'button', onclick: () => $('file').click(), title: 'Load a .fract file (or drop one on the page)' }, 'Import'),
       el('button', { type: 'button', onclick: copyLink, title: 'Copy a link that holds the scene' }, 'Copy link'),
-      el('button', { type: 'button', onclick: () => { currentExample = -1; markExample(); loadScene(defaultScene(P), 'scene reset'); } }, 'Reset'))));
+      el('button', { type: 'button', onclick: () => { setCurrentExample(-1); markExample(); loadScene(defaultScene(P), 'scene reset'); } }, 'Reset'))));
 
   // Presets: upstream examples, upstream collections, site originals
   exSearch = el('input', { class: 'exsearch', type: 'search', placeholder: `Search ${EXAMPLES.length} presets`, 'aria-label': 'Search presets' });
@@ -400,7 +385,7 @@ function buildPanel() {
 function buildSlotEditor() {
   if (!slotStrip) return;
   const hybrid = !!scene.main.hybrid_fractal_enable;
-  if (!hybrid) activeSlot = 0;
+  if (!hybrid) setActiveSlot(0);
   slotStrip.replaceChildren(...[...Array(SLOTS)].map((_, s) => {
     const f = formulaAt(s);
     const b = el('button', { type: 'button', class: `slot${s === activeSlot ? ' active' : ''}${!hybrid && s > 0 ? ' off' : ''}`,
@@ -408,7 +393,7 @@ function buildSlotEditor() {
     thumb(f, null), el('b', {}, String(s + 1)));
     b.addEventListener('click', () => {
       if (!hybrid && s > 0) setMain('hybrid_fractal_enable', true);
-      activeSlot = s; buildSlotEditor();
+      setActiveSlot(s); buildSlotEditor();
     });
     return b;
   }));
@@ -699,7 +684,7 @@ function exampleScene(e) {
 function loadExample(i) {
   const e = EXAMPLES[i];
   if (!e) return;
-  currentExample = i;
+  setCurrentExample(i);
   markExample();
   loadScene(exampleScene(e), `${e.src === 'o' ? 'site original' : 'example'}: ${e.name}${e.author ? ` · by ${e.author} (${e.licence})` : ''}`);
 }
@@ -718,7 +703,7 @@ function filterExamples() {
 // ─── import / export / share ────────────────────────────────────────────────
 function loadText(text, name = 'file') {
   const { scene: sc, meta } = parseFract(text, P);
-  currentExample = -1;
+  setCurrentExample(-1);
   markExample();
   loadScene(sc, `${name}: loaded${meta.skipped.length ? `, ${meta.skipped.length} params not supported` : ''}`);
   if (meta.skipped.length) console.info('[mandelbulber] params not supported:', meta.skipped.join(' '));
@@ -917,7 +902,7 @@ function lookBy(c, dx, dy) {                           // turn around the eye, n
 const two = () => { const [a, b] = [...pointers.values()]; return { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, d: Math.hypot(a.x - b.x, a.y - b.y) }; };
 
 window.addEventListener('pointerdown', (e) => {
-  if (e.pointerType === 'touch' && !touchSeen) { touchSeen = true; applyLayout(); }
+  if (e.pointerType === 'touch' && !touchSeen) { noteTouch(); applyLayout(); }
   if (!e.target.closest?.('#ctx')) hideCtx();
   if (!e.target.closest?.('#tip, .ctl .k')) hideTip();
 }, true);
@@ -1458,7 +1443,7 @@ function pushScene() {
   sceneDirty = false;
   const onErr = (e) => { compileStatus = `error: ${e.message}`; console.error(e); };
   try { scenePromise = Promise.resolve(engine.setScene(structuredClone(scene))).catch(onErr); } catch (e) { onErr(e); }
-  info = null;
+  setInfo(null);
 }
 
 let saveRequested = false;
@@ -1480,7 +1465,7 @@ function tick(now) {
     try {
       const t0 = performance.now();
       const r = engine.frame();
-      if (r) info = r;
+      if (r) setInfo(r);
       const st = engine.stats?.();
       if (st && Number.isFinite(st.lastSampleMs) && st.lastSampleMs > 0) msPerSample = st.lastSampleMs;
       else if (lastFrameT && !info?.compiling) msPerSample = msPerSample ? msPerSample * 0.85 + (t0 - lastFrameT) * 0.15 : t0 - lastFrameT;
@@ -1507,14 +1492,14 @@ async function boot() {
   await loadData();
   $('subtitle').textContent = `${CAT.formulas.filter((f) => !isNone(f)).length} formulas · ${EXAMPLES.length} presets`;
 
-  scene = (await readHash()) || defaultScene(P);
+  setScene((await readHash()) || defaultScene(P));
   buildPanel();
   applyLayout();
   showHud();
 
   try {
     const { createEngine } = await import('./engine.js');
-    engine = await createEngine(canvas);
+    setEngine(await createEngine(canvas));
   } catch (e) {
     console.error(e);
     fail(e?.message?.includes('WebGPU') ? e.message : `The renderer did not start: ${e.message}. This page needs WebGPU (a current Chrome, Edge or Safari).`);
@@ -1529,7 +1514,7 @@ async function boot() {
     if (sheetDragging) { resizePending = true; return; }
     const w0 = canvas.width, h0 = canvas.height;
     engine.resize(Math.max(1, canvas.clientWidth), Math.max(1, canvas.clientHeight), pixelRatio());
-    if (canvas.width !== w0 || canvas.height !== h0) info = null;
+    if (canvas.width !== w0 || canvas.height !== h0) setInfo(null);
   };
   resizeCanvas = resize;
   new ResizeObserver(resize).observe(canvas);
