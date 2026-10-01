@@ -119,7 +119,7 @@
   var SPRITE_COUNT = ENTRIES.reduce(function (n, e) { return n + e.sprites.length; }, 0);
   var LINK_COUNT = ENTRIES.reduce(function (n, e) { return n + KINDS.reduce(function (m, k) { return m + e.links[k[0]].length; }, 0); }, 0);
 
-  // Some categories repeat one name (portraits). Add the slug tail so that
+  // A category can repeat one name. Add the slug tail so that
   // the tree and the lists can tell the rows apart.
   var DUPES = {};
   CATS.forEach(function (c) {
