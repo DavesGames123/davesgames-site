@@ -62,10 +62,11 @@
     planets: ['planets/terran', 'planets/lush', 'planets/desert', 'planets/volcanic', 'planets/toxic', 'planets/exotic', 'planets/barren'],
     ores: DATA.entries.filter(function (e) { return e.category === 'resources' && e.tier === 'Ores' && e.sprites.length; }).map(function (e) { return e.id; }),
     livery: ['ship-livery/hull', 'ship-livery/cockpit', 'ship-livery/accents'],
-    // Station layout, row by row. Each cell is one module sprite.
+    // Station layout, row by row. Each cell is one module sprite. Use only
+    // ids that the catalog keeps. A missing id draws a plain square.
     station: [
       ['modules/hopper', 'modules/foundry', 'modules/assembler'],
-      ['modules/docking', 'modules/structure-core', 'modules/crew-quarters'],
+      ['modules/docking', 'modules/structure-core', 'modules/fuel-processor'],
       ['modules/hydroponics-bed', 'modules/research-bench', 'modules/thruster']
     ]
   };
@@ -90,6 +91,9 @@
 
   // ── lessons ────────────────────────────────────────────────────────────
   // Each lesson has chip and panel copy, a task for mouse and one for touch,
+  // and touch copy (nameTouch, headTouch, descTouch, notesTouch) where the
+  // mouse copy says click or names a key. The touch copy uses only the
+  // touch input below: tap, hold then drag, the Box and Add toggles, pinch.
   // and a setup() that fills ents. setup() runs in world units where the
   // visible area is the box (0,0)-(W,H) at zoom 1.
   var LESSONS = [
@@ -98,6 +102,9 @@
       head: 'Click &amp; <em>Box</em>',
       desc: 'Click one entity to select it. Drag a rectangle to select many at once.',
       notes: ['Left-click any entity to select it.', 'Click and drag in empty space to draw a box.', 'Click empty space to clear.'],
+      nameTouch: 'Tap & Box', headTouch: 'Tap &amp; <em>Box</em>',
+      descTouch: 'Tap one entity to select it. Hold, then drag a rectangle to select many at once.',
+      notesTouch: ['Tap any entity to select it.', 'Hold until the ring fills, then drag to draw a box. With <strong>Box</strong> on in the dock, a plain drag draws one.', 'Tap empty space to clear.'],
       hint: 'Click any ship, then <strong>drag a box</strong> around several asteroids.',
       hintTouch: 'Tap a ship. Then <strong>hold and drag</strong> a box around some asteroids.',
       setup: function () {
@@ -109,6 +116,7 @@
       id: 'priority', name: 'Priority', accent: '#7ee08a',
       head: 'Overlap <em>Priority</em>',
       desc: 'When entities sit on top of each other, the system picks the one you probably meant.',
+      notesTouch: ['A ship on a planet: a tap gets the <code>ship</code>.', 'You rarely want the bigger background object.', 'The same applies to ships on stations and asteroids on planets.'],
       notes: ['A ship on a planet: clicking gets the <code>ship</code>.', 'You rarely want the bigger background object.', 'The same applies to ships on stations and asteroids on planets.'],
       hint: 'Each ship sits <strong>on top of</strong> a planet. Click one: <strong>the ship wins</strong>.',
       hintTouch: 'Each ship sits <strong>on top of</strong> a planet. Tap one: <strong>the ship wins</strong>.',
@@ -128,6 +136,9 @@
       id: 'clickbox', name: 'Click vs Box', accent: '#ffa860',
       head: 'Click <em>vs</em> Box',
       desc: 'Clicking and box-dragging use different priorities. Clicking favours small useful things. Boxing favours the big important ones.',
+      nameTouch: 'Tap vs Box', headTouch: 'Tap <em>vs</em> Box',
+      descTouch: 'Taps and boxes use different priorities. A tap favours small useful things. A box favours the big important ones.',
+      notesTouch: ['Tap in a busy area: you get a <code>ship</code>.', 'Box over the same area: you get the <code>planet</code> instead.', 'A box over a system should take the planets, not every ship that orbits them.'],
       notes: ['Click in a busy area: you get a <code>ship</code>.', 'Box over the same area: you get the <code>planet</code> instead.', 'A box over a system should take the planets, not every ship that orbits them.'],
       hint: '<strong>Click a ship</strong> in the ring, then <strong>box-drag</strong> over the planet. The result differs.',
       hintTouch: '<strong>Tap a ship</strong> in the ring, then <strong>hold and drag</strong> over the planet. The result differs.',
@@ -150,6 +161,9 @@
       id: 'modifier', name: 'Modifier', accent: '#ffc832',
       head: 'Hold <em>Modifier</em>',
       desc: 'Hold Cmd or Ctrl while you click to add to your selection. Click an entity that is already selected to remove only that one.',
+      nameTouch: 'Add', headTouch: 'The <em>Add</em> toggle',
+      descTouch: 'Turn on Add in the dock to add to your selection. With Add on, tap an entity that is already selected to remove only that one.',
+      notesTouch: ['Turn on <strong>Add</strong> in the dock, then tap: adds to the selection.', 'With <strong>Add</strong> on, tap a selected entity: removes it.', 'With a keyboard, <code>Cmd</code> or <code>Ctrl</code> does the same as <strong>Add</strong>.'],
       notes: ['Hold <code>Cmd</code> or <code>Ctrl</code> and click: adds to the selection.', 'Click a selected entity with the modifier: removes it.', 'Touch: turn on <strong>Add</strong> in the dock. It acts as a held modifier.'],
       hint: 'Click a ship, then <code>Ctrl</code>/<code>Cmd</code>-click more. Then modifier-click a selected one to remove it.',
       hintTouch: 'Tap a ship. Turn on <strong>Add</strong> and tap more. Tap a selected one to remove it.',
@@ -159,6 +173,8 @@
       id: 'lock', name: 'Category Lock', accent: '#c8a0ff',
       head: 'Category <em>Lock</em>',
       desc: 'You can never mix types in one selection. A new category replaces the old one, even with the modifier held.',
+      descTouch: 'You can never mix types in one selection. A new category replaces the old one, even with Add on.',
+      notesTouch: ['A selection is always one category.', 'Tap a different type: the previous selection drops out.', 'With <strong>Add</strong> on, tap empty space: nothing changes (safe).'],
       notes: ['A selection is always one category.', 'Click a different type: the previous selection drops out.', 'Modifier-click on empty space: nothing changes (safe).'],
       hint: 'Select some ships, then click an asteroid. <strong>The ships are released.</strong>',
       hintTouch: 'Select some ships, then tap an asteroid. <strong>The ships are released.</strong>',
@@ -168,6 +184,7 @@
       id: 'modules', name: 'Zoom & Modules', accent: '#6fe0e8',
       head: 'Zoom &amp; <em>Modules</em>',
       desc: 'Zoom in past the threshold and a station splits into its modules. Each module then takes clicks of its own.',
+      descTouch: 'Zoom in past the threshold and a station splits into its modules. Each module then takes taps of its own.',
       notes: ['Low zoom: the station is one entity.', 'High zoom: each module is its own entity.', 'The threshold has hysteresis, so there is no flicker at the edge.'],
       hint: 'Zoom in with the wheel or <code>+</code>. The station splits into modules. Click a module.',
       hintTouch: 'Pinch or tap <strong>+</strong> to zoom in. The station splits into modules. Tap a module.',
@@ -303,7 +320,7 @@
         var m = make('module', cx + (ci - 1) * CELL, cy + (ri - 1) * CELL);
         var en = BYID[id];
         m.name = en ? en.name : 'Module';
-        m.img = en && en.sprites[0];
+        m.img = en && en.sprites && en.sprites[0];
         m.r = CELL * 0.5;
         ents.push(m);
       });
@@ -338,9 +355,9 @@
     L.setup();
     document.documentElement.style.setProperty('--ac', L.accent);
     $('lsKicker').textContent = 'Lesson ' + pad(i + 1) + ' / ' + pad(LESSONS.length);
-    $('lsHead').innerHTML = L.head;
-    $('lsDesc').textContent = L.desc;
-    $('lsNotes').innerHTML = L.notes.map(function (n) { return '<li>' + n + '</li>'; }).join('');
+    $('lsHead').innerHTML = (TOUCH && L.headTouch) || L.head;
+    $('lsDesc').textContent = (TOUCH && L.descTouch) || L.desc;
+    $('lsNotes').innerHTML = ((TOUCH && L.notesTouch) || L.notes).map(function (n) { return '<li>' + n + '</li>'; }).join('');
     document.querySelectorAll('.tab').forEach(function (b, k) { b.classList.toggle('on', k === i); b.setAttribute('aria-selected', k === i ? 'true' : 'false'); });
     var on = document.querySelector('.tab.on');
     if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -843,7 +860,7 @@
     if (type === 'planet') drawPlanet(x, e, N / 2, N / 2, 12);
     else if (type === 'star') drawStar(x, e, N / 2, N / 2, 8);
     else if (type === 'station') {
-      SPRITES.station.forEach(function (row, ri) { row.forEach(function (id, ci) { var en = BYID[id]; if (en) drawSprite(x, IMG[en.sprites[0]], N / 2 + (ci - 1) * 9, N / 2 + (ri - 1) * 9, 8.6, 0); }); });
+      SPRITES.station.forEach(function (row, ri) { row.forEach(function (id, ci) { var sp = spritesOf(id); if (sp[0]) drawSprite(x, IMG[sp[0]], N / 2 + (ci - 1) * 9, N / 2 + (ri - 1) * 9, 8.6, 0); }); });
     } else if (type === 'module') drawSprite(x, IMG[e.img], N / 2, N / 2, 24, 0);
     else if (type === 'asteroid') drawSprite(x, IMG[e.img], N / 2, N / 2, 24, 0.4);
     else drawSprite(x, SHIP[type], N / 2, N / 2, 30, 0);
@@ -869,6 +886,11 @@
         ol.appendChild(li);
       });
     });
+    if (TOUCH) {
+      var card = $('ladClick').closest('.card');
+      card.querySelector('h2').textContent = 'Tap priority';
+      card.querySelector('.lad-sub').textContent = 'Lowest rank wins when several things sit under your finger.';
+    }
   }
   function highlightLadders(type) {
     document.querySelectorAll('.ladder li').forEach(function (li) { li.classList.toggle('hot', li.dataset.type === type); });
@@ -881,7 +903,7 @@
       var b = document.createElement('button');
       b.type = 'button'; b.className = 'tab'; b.setAttribute('role', 'tab');
       b.style.setProperty('--tc', L.accent);
-      b.innerHTML = '<span class="n">' + pad(i + 1) + '</span><span class="t">' + esc(L.name) + '</span>';
+      b.innerHTML = '<span class="n">' + pad(i + 1) + '</span><span class="t">' + esc((TOUCH && L.nameTouch) || L.name) + '</span>';
       b.addEventListener('click', function () { loadLesson(i); });
       nav.appendChild(b);
     });
