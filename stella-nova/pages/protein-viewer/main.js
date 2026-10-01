@@ -29,6 +29,7 @@
 //    panel.js     panel and phone sheet
 //    ui.js        panel controls, dock, keys
 //    loop.js      render loop, teardown
+//    xr.js        VR and AR view (lib/xr-view.js); index.html loads it
 //
 //  GREP MAP
 //    window.__pv                           debug and headless hooks

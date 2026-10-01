@@ -41,6 +41,7 @@ function visibility() {
 function detailFor(n, extra = 0) {
   let d = n < 3000 ? 3 : n < 12000 ? 2 : n < 40000 ? 1 : 0;
   if (COARSE) d -= 1;
+  if (S.xr) d -= 1;   // a headset draws two views: one step less detail
   return Math.max(0, Math.min(3, d + extra));
 }
 function ballRadius(rep, a, r) {

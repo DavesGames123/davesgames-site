@@ -45,6 +45,10 @@ export function frame(now) {
   if (controls.update(dt)) S.dirty = true;
   if (S.spin) S.dirty = true;
   hoverTick();
+  // In a VR or AR session, lib/xr-view.js draws the scene for both eyes.
+  // post.js draws to the screen with a full-screen pass, which a stereo
+  // view can not use, and the near and far planes here are in Å.
+  if (S.xr) { S.dirty = false; return; }
   if (!S.dirty) return;
   S.dirty = false;
   if (!resize()) return;

@@ -26,6 +26,9 @@
      1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
      2. fonts (Inter, STIX Two Text), style.css
      3. importmap for three r160, then main.js as a module
+     4. app/xr.js, a module: the VR and AR view (lib/xr-view.js). Its buttons
+        (#bVR, #bAR) and their section (#xrSec) stay hidden until a
+        structure is loaded and the device has WebXR
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────────────────────────────────────────────┐
@@ -155,6 +158,14 @@
     <button type="button" class="tog on" data-look="fog">Depth fog</button>
   </div>
 
+  <div id="xrSec" hidden>
+    <div class="sec-label">Headset</div>
+    <div class="grid2">
+      <button type="button" id="bVR" hidden>View in VR</button>
+      <button type="button" id="bAR" hidden>View in AR</button>
+    </div>
+  </div>
+
   <div class="sec-label">Structure</div>
   <table class="readout" id="info"></table>
 
@@ -178,5 +189,6 @@
 } }
 </script>
 <script type="module" src="main.js"></script>
+<script type="module" src="app/xr.js"></script>
 </body>
 </html>
