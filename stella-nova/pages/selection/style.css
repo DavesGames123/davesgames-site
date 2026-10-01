@@ -135,24 +135,27 @@ code{font:500 0.82em var(--f-mono);color:var(--blue);background:rgba(150,200,255
 @media (max-width:900px){
   :root{--dock-h:calc(68px + env(safe-area-inset-bottom))}
   #tabs{top:calc(10px + env(safe-area-inset-top));left:10px;right:10px}
-  .tab{height:40px;padding:0 13px 0 6px}
-  .tab .t{font-size:0.84rem}
-  #hint{top:calc(60px + env(safe-area-inset-top));font-size:0.84rem;padding:8px 12px;max-width:calc(100% - 20px);width:max-content}
+  #tabs{-webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent);padding-right:28px}
+  .tab{height:44px;padding:0 13px 0 7px}
+  .tab .t{font-size:0.875rem}
+  #hint{top:calc(64px + env(safe-area-inset-top));font-size:0.875rem;padding:8px 12px;max-width:calc(100% - 20px);width:max-content}
   #hint .hk{display:none}
   #toast{top:auto;bottom:calc(var(--dock-h) + 64px)}
-  #readout{left:10px;bottom:calc(var(--dock-h) + 10px);font-size:0.82rem;min-height:40px}
+  #readout{left:10px;bottom:calc(var(--dock-h) + 10px);font-size:0.875rem;min-height:40px;max-width:calc(100% - 20px)}
   #dock{left:0;right:0;bottom:0;transform:none;border-radius:18px 18px 0 0;border-left:0;border-right:0;border-bottom:0;padding:8px 10px calc(8px + env(safe-area-inset-bottom));justify-content:space-between;gap:4px;height:var(--dock-h)}
   .d-lesson{display:flex}
-  .d-btn{flex-direction:column;justify-content:center;gap:2px;height:52px;min-width:46px;padding:0 6px;border-radius:12px}
-  .d-btn .lbl{font-size:0.56rem;letter-spacing:0.08em}
+  .d-btn{flex-direction:column;justify-content:center;gap:2px;height:52px;min-width:48px;padding:0 4px;border-radius:12px}
+  .d-btn .lbl{font-size:0.66rem;letter-spacing:0.04em}
   .d-sep{display:none}
   .d-ro{display:none}
   #lesson{position:fixed;left:0;right:0;bottom:var(--dock-h);width:auto;max-height:72dvh;z-index:20;border-left:0;border-top:1px solid var(--line2);border-radius:18px 18px 0 0;box-shadow:0 -14px 40px rgba(0,0,0,0.6);transform:translateY(calc(100% + var(--dock-h)));visibility:hidden;transition:transform .3s cubic-bezier(.2,.8,.2,1),visibility 0s linear .3s}
   body.sheet-open #lesson{transform:none;visibility:visible;transition:transform .3s cubic-bezier(.2,.8,.2,1),visibility 0s}
-  #grip{display:block;position:sticky;top:0;z-index:2;width:100%;height:30px;border:0;background:var(--bg2);cursor:pointer}
+  #grip{display:block;position:sticky;top:0;z-index:2;width:100%;height:44px;border:0;background:var(--bg2);cursor:pointer}
   #grip span{display:block;width:44px;height:5px;border-radius:3px;background:var(--faint);margin:0 auto}
   .ls-inner{padding:4px 18px 24px}
   #lsHead{font-size:1.8rem}
+  .il-row{font-size:0.875rem}
+  .lad-sub{font-size:0.875rem}
   #scrim{display:block;position:fixed;inset:0;z-index:15;background:rgba(0,0,0,0.45);opacity:0;pointer-events:none;transition:opacity .25s}
   body.sheet-open #scrim{opacity:1;pointer-events:auto}
 }
