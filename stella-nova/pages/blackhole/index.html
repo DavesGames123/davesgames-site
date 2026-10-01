@@ -17,7 +17,8 @@
    HEAD LOAD ORDER
      1. KaTeX css + js   typeset the metric and field equations (deferred)
      2. style.css        the page stylesheet
-     3. main.js          classic script at end of body; runs after markup
+     3. render-scale.js  ../../lib; sizes the canvas by pixel budget and fps
+     4. main.js          classic script at end of body; runs after markup
 
    REVEAL GATE
      The control bars ship with display:none. dismissWarn() in main.js shows
@@ -42,7 +43,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- Render surface. main.js creates the GL context on this canvas and sizes it below native resolution. -->
+<!-- Render surface. main.js creates the GL context on this canvas; lib/render-scale.js sizes it below native resolution. -->
 <canvas id="c"></canvas>
 
 <!-- GPU-load warning gate. Continue calls dismissWarn(), which reveals the control bars. -->
@@ -115,6 +116,7 @@
 </div>
 
 <!-- Classic script at end of body: the WebGL host runs after the markup exists. -->
+<script src="../../lib/render-scale.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

@@ -24,6 +24,8 @@
 //      camYaw / camPitch / camRadius ─▶ (cx, cy, cz) position
 //      fwd = -normalize(pos) ; right = fwd x up ; up = right x fwd
 //      the basis is written to u_camFwd / u_camRight / u_camUp
+//      u_focalLen = FOCAL_PER_H x canvas height, so the field of view does
+//      not change when render-scale changes the canvas size
 //
 //  UNITS
 //      Everything is in SI meters. RS is the Schwarzschild radius of a
@@ -43,7 +45,7 @@
 //      pointer input ........ "let dragging"          mouse, touch, wheel
 //      keyboard ............. "keydown"               arrow-key orbit
 //      toggles .............. "function setBtn"       geodesic, RK4, disc, bg
-//      resize ............... "function resize"       render-scale by device
+//      resize ............... "RenderScale.create"    pixel budget + fps control
 //      frame loop ........... "function frame"        camera basis + uniforms
 //      equations ............ "function renderEqs"    KaTeX metric + EFE
 // ============================================================================
@@ -90,7 +92,10 @@ const U={};
 const CC=2.99792458e8,GR=6.67430e-11,RS=2.0*GR*4.3e6*1.989e30/(CC*CC);
 // Orbit-camera state: yaw, pitch, and distance out from the hole in meters.
 let camYaw=0,camPitch=0.15,camRadius=32*RS;
-const FOCAL=700;
+// Focal length in canvas heights: 1.0 gives a vertical half-angle of 26.6
+// degrees at any render size. It was a fixed 700 px, so a 4K canvas
+// (1536x864) saw a much wider view than a 1080p one (768x432).
+const FOCAL_PER_H=1.0;
 // Integrator toggles, mirrored to the u_useGeodesic / u_useRK4 / u_showDisc uniforms.
 // RK4 is the default: its step grows with r in the shader, so it is about 5x
 // faster than fixed-step Euler and closer to the true path.
@@ -130,7 +135,7 @@ var qualitySteps=[512,2048,4096];
 var qualityLabels=['btnQLow','btnQMed','btnQHigh'];
 var currentQuality=1;
 window.setQuality=function(q){
-  currentQuality=q;maxSteps=qualitySteps[q];
+  currentQuality=q;maxSteps=qualitySteps[q];renderScale.reset();
   qualityLabels.forEach(function(id,i){
     var el=document.getElementById(id);
     el.classList.toggle('on',i===q);el.classList.toggle('off',false);
@@ -203,8 +208,8 @@ document.getElementById('zoomSlider').addEventListener('input',function(){
 
 // Toggle buttons: flip a boolean and its on/off CSS class. Each drives one uniform.
 function setBtn(id,on){var el=document.getElementById(id);el.classList.toggle('on',on);el.classList.toggle('off',!on);}
-window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',useGeodesic);};
-window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);};
+window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',useGeodesic);renderScale.reset();};
+window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);renderScale.reset();};
 window.toggleDisc=function(){showDisc=!showDisc;setBtn('btnDisc',showDisc);};
 // Background selector: set bgMode and highlight the active icon (0..4).
 window.setBg=function(m){
@@ -225,24 +230,18 @@ window.toggleEqPanel=function(){
 
 // Size the render target below native resolution: the per-pixel geodesic march is
 // expensive, so the canvas renders at a fraction of the window (lower on mobile)
-// and CSS scales it up. This is the main performance lever.
-function resize(){
-  var dpr=Math.min(window.devicePixelRatio||1,2);
-  var isMobile=window.innerWidth<600;
-  var scale=isMobile?0.25:0.4;
-  canvas.width=Math.floor(window.innerWidth*dpr*scale);
-  canvas.height=Math.floor(window.innerHeight*dpr*scale);
-  gl.viewport(0,0,canvas.width,canvas.height);
-  document.getElementById('res').textContent=canvas.width+'×'+canvas.height;
-}
-window.addEventListener('resize',resize);resize();
+// and CSS scales it up. lib/render-scale.js also caps the pixel count and lowers
+// it while the frame rate is low. This is the main performance lever.
+var renderScale=RenderScale.create({canvas:canvas,gl:gl,label:document.getElementById('res'),
+  fracDesktop:0.4,fracMobile:0.25,mobileWidth:600});
+window.addEventListener('resize',renderScale.resize);renderScale.resize();
 
 // The per-frame loop: advance auto-spin, rebuild the camera basis from the orbit
 // angles, scale the step parameters by zoom, push everything to uniforms, and
 // issue one draw call. A twice-per-second sampler updates the FPS readout.
 var frames=0,lastT=performance.now();
 function frame(){
-  var now=performance.now();frames++;
+  var now=performance.now();frames++;renderScale.tick(now);
   if(now-lastT>500){document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';frames=0;lastT=now;}
 
   if(autoSpin) camYaw-=SPIN_SPEED;
@@ -267,7 +266,7 @@ function frame(){
   gl.uniform2f(U.u_res,canvas.width,canvas.height);
   gl.uniform3f(U.u_camPos,cx,cy,cz);gl.uniform3f(U.u_camFwd,fwd[0],fwd[1],fwd[2]);
   gl.uniform3f(U.u_camRight,right[0],right[1],right[2]);gl.uniform3f(U.u_camUp,up[0],up[1],up[2]);
-  gl.uniform1f(U.u_focalLen,FOCAL);gl.uniform1f(U.u_rs,RS);
+  gl.uniform1f(U.u_focalLen,FOCAL_PER_H*canvas.height);gl.uniform1f(U.u_rs,RS);
   gl.uniform1f(U.u_discInner,3.0*RS);gl.uniform1f(U.u_discOuter,5.1*RS);
   gl.uniform1f(U.u_geodesicDl,dl);gl.uniform1f(U.u_maxSteps,steps);gl.uniform1f(U.u_escapeR,escR);
   gl.uniform1f(U.u_useGeodesic,useGeodesic?1:0);gl.uniform1f(U.u_useRK4,useRK4?1:0);
