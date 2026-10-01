@@ -68,7 +68,7 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
   function src(p) { return '../../' + p; }
-  function isNarrow() { return window.matchMedia('(max-width: 760px)').matches; }
+  function isNarrow() { return window.matchMedia('(max-width: 760px), (max-width: 1279px) and (max-height: 500px)').matches; }
   function isSheet() { return window.matchMedia('(max-width: 1279px)').matches; }
 
   // ── graph ────────────────────────────────────────────────────────────────
