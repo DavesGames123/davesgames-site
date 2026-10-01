@@ -1,0 +1,1 @@
+Correction to the body: the new headers and import lines in the 15 section files total 248 lines, not 15 x 15. Measured with awk on the last 'import' line of each file. The other line counts are correct (sections 1404 lines, nodes/core.js 85 lines).
