@@ -98,13 +98,14 @@ function render(){
   // Mirror the register controls and capacity numbers.
   $('n-val').textContent=S.n;$('b-val').textContent=S.bits;$('ampmode').classList.toggle('on',S.amp);
   const cap=capBytes(),used=STATE.storedBytes;
-  $('capnum').textContent=used+' / '+cap+' bytes  ·  '+numSlots()+'×'+S.bits+' = '+(numSlots()*S.bits)+' bits';
+  $('capnum').textContent=used+' / '+cap+' bytes used';
   $('capfill').style.width=Math.min(100,cap?used/cap*100:0)+'%';
-  // Contrast the simulator's 2nB bits with the Holevo n-bit hardware ceiling.
-  $('holevo').innerHTML='simulator: '+(numSlots()*S.bits)+' bits · real hardware (Holevo): only <b>'+S.n+'</b> bits retrievable';
+  // Register readout, then the Holevo n-bit ceiling of a real device.
+  $('r-dials').textContent=numSlots();$('r-bits').textContent=numSlots()*S.bits;$('r-bytes').textContent=cap;
+  $('holevo').innerHTML='real hardware (Holevo): <b>'+S.n+'</b> bits retrievable';
   // Bar turns rose when the payload overflowed, green when it fit.
   $('capfill').style.background=STATE.truncated?'var(--rose)':'var(--green)';
-  $('reg-note').innerHTML=`<b>${numSlots()}</b> angle dials × <b>${S.bits}</b> bits = <b>${numSlots()*S.bits}</b> bits (${cap} bytes). `+(S.amp?'Each qubit carries a θ and a φ.':'Phase only — one φ per qubit.');
+  $('reg-note').textContent=(S.amp?'Each qubit carries a θ and a φ dial.':'Phase only: one φ dial per qubit.')+' Dials × B = bits.';
   $('slots-tag').textContent=numSlots()+' dials';
   buildDials();
   // Decode and compare: exact means the stored angles round-trip the payload.
@@ -123,7 +124,9 @@ function buildDials(){const host=$('dials');host.innerHTML='';
   for(let j=0;j<S.n;j++){const th=STATE.th[j],ph=STATE.ph[j];
     // Needle tip: radius from θ, angle from φ (offset so 0 points up).
     const r=13*Math.sin(th), ex=17+r*Math.cos(ph-Math.PI/2), ey=17+r*Math.sin(ph-Math.PI/2);
-    const d=document.createElement('div');d.className='dial';
+    // Tooltip: the stored angles in degrees.
+    const tip=`q${j}  θ ${(th*180/Math.PI).toFixed(1)}°  φ ${(ph*180/Math.PI).toFixed(1)}°`;
+    const d=document.createElement('div');d.className='dial';d.title=tip;
     d.innerHTML=`<svg viewBox="0 0 34 34">
       <circle cx="17" cy="17" r="13" fill="none" stroke="rgba(150,200,255,0.16)" stroke-width="1.2"/>
       <ellipse cx="17" cy="17" rx="13" ry="${(13*Math.cos(th)).toFixed(1)}" fill="none" stroke="rgba(150,200,255,0.10)" stroke-width="1"/>

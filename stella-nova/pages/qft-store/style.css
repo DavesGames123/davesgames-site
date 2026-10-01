@@ -85,9 +85,9 @@ input[type=range].amber::-moz-range-thumb{background:var(--amber)}
 
 canvas.viz{width:100%;height:170px;display:block;border-radius:9px;background:rgba(7,10,17,0.55);border:1px solid var(--border)}
 
-.dial{display:flex;flex-direction:column;align-items:center;gap:2px;width:46px}
-.dial svg{width:34px;height:34px}
-.dial .dj{font-size:0.52rem;color:var(--faint)}
+.dial{display:flex;flex-direction:column;align-items:center;gap:3px;width:52px}
+.dial svg{width:44px;height:44px}
+.dial .dj{font-family:var(--f-mono);font-size:0.62rem;color:var(--dim)}
 
 .explain{font-size:0.78rem;color:var(--dim);line-height:1.7} .explain b{color:var(--ink)} .explain em{color:var(--amber);font-style:normal}
 
@@ -103,7 +103,7 @@ canvas.viz{width:100%;height:170px;display:block;border-radius:9px;background:rg
 #payload:focus{border-color:var(--cyan-d)}
 .cap{margin-top:10px} .capbar{height:6px;background:rgba(7,10,17,0.8);border:1px solid var(--border);border-radius:4px;overflow:hidden}
 #capfill{height:100%;background:var(--green);transition:width .2s,background .2s}
-.capnum{font-family:var(--f-mono);font-size:0.6rem;color:var(--faint);margin-top:5px;font-variant-numeric:tabular-nums}
+.capnum{font-family:var(--f-mono);font-size:0.64rem;color:var(--dim);margin-top:5px;font-variant-numeric:tabular-nums}
 #dials{display:flex;flex-wrap:wrap;gap:9px}
 .rt{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
 .rtlab{font-family:var(--f-mono);font-size:0.58rem;letter-spacing:0.1em;text-transform:uppercase;color:var(--faint);padding-top:3px;flex-shrink:0}
@@ -111,3 +111,17 @@ canvas.viz{width:100%;height:170px;display:block;border-radius:9px;background:rg
 .badge{font-size:0.68rem;padding:8px 11px;border-radius:7px;font-weight:600}
 .badge.ok{color:var(--green);background:rgba(100,200,100,0.1);border:1px solid rgba(100,200,100,0.3)}
 .badge.warn{color:var(--rose);background:rgba(255,107,138,0.1);border:1px solid rgba(255,107,138,0.3)}
+
+/* register readout (dials, bits, bytes) and the Holevo line */
+.readout{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:4px}
+.readout>div{background:rgba(7,10,17,0.6);border:1px solid var(--border);border-radius:8px;padding:7px 9px}
+.readout .k{display:block;font-family:var(--f-mono);font-size:0.56rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--faint)}
+.readout .v{font-family:var(--f-mono);font-size:0.95rem;font-weight:600;color:var(--bright);font-variant-numeric:tabular-nums}
+.holevo{margin-top:10px;font-family:var(--f-mono);font-size:0.64rem;color:var(--amber)}
+.holevo b{color:var(--amber)}
+/* folded explanation */
+details.more>summary{cursor:pointer;list-style:none;margin-bottom:0}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::after{content:'\203A';margin-left:auto;color:var(--dim);transition:transform .2s}
+details.more[open]>summary{margin-bottom:11px}
+details.more[open]>summary::after{transform:rotate(90deg)}
