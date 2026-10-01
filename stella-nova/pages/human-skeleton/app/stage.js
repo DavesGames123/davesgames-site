@@ -45,7 +45,7 @@ key.shadow.mapSize.set(COARSE ? 1024 : 2048, COARSE ? 1024 : 2048);
 key.shadow.bias = -0.0004;
 key.shadow.normalBias = 0.012;
 scene.add(key, key.target);
-export const rim = new THREE.DirectionalLight(0xbcd2ff, 0.55);
+const rim = new THREE.DirectionalLight(0xbcd2ff, 0.55);
 rim.position.set(2.5, 2.2, -3);
 scene.add(rim);
 scene.add(new THREE.HemisphereLight(0xfff4e2, 0x2a2118, 0.25));
