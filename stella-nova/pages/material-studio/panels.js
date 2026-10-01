@@ -1,9 +1,1894 @@
 // ============================================================================
-//  MATERIAL STUDIO  ·  panels.js — inspector, environment, export, map strip   [STUB]
+//  MATERIAL STUDIO  ·  panels.js — inspector, library, maps strip, light,
+//                                   export, topbar and the shortcut sheet
 // ────────────────────────────────────────────────────────────────────────────
-//  Owner: PANELS agent. Fills #inspector, #env-panel, #export-panel,
-//  #maps-strip and the topbar groups #tb-file and #tb-right.
+//  Owner: PANELS agent. This module fills the static regions of index.html
+//  that belong to no other module:
+//      #inspector ....... params of the selected nodes, or Material settings
+//      #lib-body ........ the node library: search, favorites, recent, tree
+//      #maps-strip ...... one live thumbnail per baked map channel
+//      #env-panel ....... HDRI presets, rotation, intensity, lights, view
+//      #export-panel .... target cards and options; calls export.js
+//      #tb-file / #tb-right  project name, File menu, bake meter, Export, ?
+//
+//  DATA FLOW
+//      read:   state.graph, state.registry, state.selection, state.maps,
+//              state.env, state.view, state.settings, state.compiled
+//      write:  node params through the graph module (setParam if it exists,
+//              else node.params), then emit graph:changed {reason:'param'}
+//              and store.checkpoint(label, {merge}) once per frame.
+//              One drag gesture is one merge key, so it is one undo step.
+//      events: graph:select / graph:changed -> inspector
+//              bake:done -> maps strip, bake meter, material stats
+//              env:changed / view:changed -> env panel, strip solo marker
+//
+//  SECTIONS  (grep -n the banner to jump)
+//      util ............. h(), icons, numbers, colors, localStorage
+//      graph access ..... getNode, defOf, commitParam, addNodeAt, loadGraph
+//      widgets .......... wSlider wColor (picker) wEnum wBool wVec2
+//                         wGradient wCurve wImage wText, makeWidget
+//      param rows ....... paramRow (reset + expose buttons)
+//      inspector ........ renderInspector, nodeView, materialView
+//      library .......... buildLibrary, renderLibrary, fuzzy, drag
+//      maps strip ....... TILES, thumbnail pipeline, renderTiles, lightbox
+//      env panel ........ renderEnv, light editor, view controls
+//      export panel ..... renderExport, runExport
+//      topbar ........... file menu, project name, bake meter
+//      shortcuts ........ SHORTCUTS, overlay, key handler
+//      init / api ....... init(ctx), __studio.panels, selfTest
+//
+//  CONTRACT ADDITIONS  (fields this module adds; see the report)
+//      GraphNode.exposed  string[] of param ids shown on the Material view
+//      light.az / light.el  degrees, kept beside light.dir for the editor;
+//                           dir is the unit vector from the surface to the light
+//      optional hooks it calls when they exist:
+//        graph.getNode / graph.setParam / graph.addNode / graph.removeNode
+//        editor.addNodeAt(type, clientX, clientY) | editor.screenToGraph(x, y)
+//        editor.shortcuts [{keys, label}] (listed in the ? overlay)
+//        env.ENV_PRESETS | env.PRESETS [{id,label,thumb?}], env.setPreset, env.loadHDR
+//        export.exportPackage(target, opts), export.FORMATS
+//        import.importMaps(files), import.imageToPBR(file)
+//        bench.importBenchGraph(json), mobile.setSheet(name)
+//      optional event it reads: 'bake:progress' {done, total}
 // ============================================================================
+import {
+  OUTPUT_TYPE, MATERIAL_PARAMS, PORT_COLORS, NODE_CATEGORIES, RES_OPTIONS,
+  EXPORT_TARGETS, MESHES, DEBUG_VIEWS, TONEMAPPERS, validateGraph, emptyGraph,
+} from './contract.js';
 
-/** @param {object} ctx main.js module context */
-export async function init(ctx) {}
+let ctx = null, store = null, state = null, M = {}, $ = id => document.getElementById(id);
+
+// ------------------------------------------------------------ util
+const LS = 'material-studio.';
+function lsGet(k, d) { try { const v = localStorage.getItem(LS + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+function lsSet(k, v) { try { localStorage.setItem(LS + k, JSON.stringify(v)); } catch (e) { /* private mode */ } }
+
+const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+const clone = v => (v == null || typeof v !== 'object') ? v : JSON.parse(JSON.stringify(v));
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const decimals = step => (!(step > 0) || step >= 1) ? 0 : Math.min(5, Math.ceil(-Math.log10(step) - 1e-9));
+function fmt(v, step) {
+  if (!Number.isFinite(v)) return String(v);
+  const d = decimals(step);
+  return d === 0 ? String(Math.round(v)) : v.toFixed(d);
+}
+/** Parse a typed number. Simple arithmetic is allowed: "0.5*2", "1/3". */
+function evalNum(s) {
+  s = String(s).trim().replace(/,/g, '.');
+  if (/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return parseFloat(s);
+  if (!/^[\d\s.+\-*/()e]+$/i.test(s)) return NaN;
+  try { const v = Function('"use strict";return (' + s + ')')(); return typeof v === 'number' ? v : NaN; } catch (e) { return NaN; }
+}
+
+/** setPointerCapture that tolerates a pointer the browser no longer tracks. */
+function capture(el, e) { try { el.setPointerCapture(e.pointerId); } catch (er) { /* synthetic or ended pointer */ } }
+
+/** Element builder. props: class, style (object), dataset, on<event>, else attribute or property. */
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  if (props) for (const [k, v] of Object.entries(props)) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k === 'dataset') Object.assign(el.dataset, v);
+    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    else if (k === 'value' || k === 'checked' || k === 'disabled' || k === 'selected') el[k] = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat(Infinity)) if (c != null && c !== false) el.append(c.nodeType ? c : String(c));
+  return el;
+}
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+const ICONS = {
+  reset: 'M3.5 8a4.5 4.5 0 1 0 1.4-3.3M3.5 2.5v2.6h2.6',
+  pin: 'M5.5 2.5h5M6.5 2.5v3.5L4.5 8.5h7L9.5 6V2.5M8 8.5v5',
+  star: 'M8 2.2l1.75 3.6 3.95.55-2.85 2.8.7 3.95L8 11.2l-3.55 1.9.7-3.95-2.85-2.8 3.95-.55z',
+  trash: 'M3.5 4.5h9M6.5 4.5V3h3v1.5M5 4.5l.6 8.5h4.8l.6-8.5',
+  copy: 'M5.5 5.5h7v7h-7zM3.5 10.5v-7h7',
+  plus: 'M8 3v10M3 8h10',
+  close: 'M4 4l8 8M12 4l-8 8',
+  chev: 'M6 4l4 4-4 4',
+  dice: 'M3 3h10v10H3zM6 6h.01M10 10h.01M10 6h.01M6 10h.01M8 8h.01',
+  search: 'M7 3a4 4 0 1 1 0 8 4 4 0 0 1 0-8zM10 10l3.5 3.5',
+  down: 'M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10',
+  file: 'M4 2.5h5l3 3v8H4zM9 2.5v3h3',
+  sun: 'M8 5.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4',
+  bulb: 'M8 2a4 4 0 0 1 2.4 7.2V11H5.6V9.2A4 4 0 0 1 8 2zM6 13h4',
+  eye: 'M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8zM8 6.3a1.7 1.7 0 1 1 0 3.4 1.7 1.7 0 0 1 0-3.4z',
+  drop: 'M8 2s4 4.4 4 7.2A4 4 0 0 1 4 9.2C4 6.4 8 2 8 2z',
+  key: 'M2.5 4.5h11v7h-11zM4.5 6.5h1M7.5 6.5h1M10.5 6.5h1M5 9.5h6',
+  link: 'M6.5 9.5l3-3M5.5 7.5l-1.3 1.3a2.1 2.1 0 0 0 3 3l1.3-1.3M10.5 8.5l1.3-1.3a2.1 2.1 0 0 0-3-3L7.5 5.5',
+};
+function icon(name, cls) {
+  const s = document.createElementNS(SVGNS, 'svg');
+  s.setAttribute('viewBox', '0 0 16 16'); s.setAttribute('aria-hidden', 'true');
+  s.setAttribute('class', 'pn-ico' + (cls ? ' ' + cls : ''));
+  const p = document.createElementNS(SVGNS, 'path');
+  p.setAttribute('d', ICONS[name] || ''); s.appendChild(p);
+  return s;
+}
+const ibtn = (name, title, onclick, cls) => h('button', { type: 'button', class: 'pn-ib' + (cls ? ' ' + cls : ''), title, 'aria-label': title, onclick }, icon(name));
+
+// sRGB hex <-> linear / hsv
+function hexToRgb(hex) {
+  let s = String(hex || '').trim().replace(/^#/, '');
+  if (s.length === 3) s = s.split('').map(c => c + c).join('');
+  if (!/^[0-9a-f]{6}/i.test(s)) return [0, 0, 0];
+  const n = parseInt(s.slice(0, 6), 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
+const rgbToHex = c => '#' + c.slice(0, 3).map(x => Math.round(clamp(x, 0, 1) * 255).toString(16).padStart(2, '0')).join('');
+const toLin = x => x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
+const toSrgb = x => x <= 0.0031308 ? x * 12.92 : 1.055 * Math.pow(x, 1 / 2.4) - 0.055;
+function rgbToHsv([r, g, b]) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  let hh = 0;
+  if (d > 0) {
+    if (mx === r) hh = ((g - b) / d) % 6; else if (mx === g) hh = (b - r) / d + 2; else hh = (r - g) / d + 4;
+    hh /= 6; if (hh < 0) hh += 1;
+  }
+  return [hh, mx > 0 ? d / mx : 0, mx];
+}
+function hsvToRgb([hh, s, v]) {
+  const i = Math.floor(hh * 6) % 6, f = hh * 6 - Math.floor(hh * 6);
+  const p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s);
+  return [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i];
+}
+/** A color param value is an sRGB hex string (contract). An array is taken as linear rgb. */
+const colorToHex = v => Array.isArray(v) ? rgbToHex(v.map(x => toSrgb(clamp(x, 0, 1)))) : (typeof v === 'string' ? v : '#808080');
+const hexLike = (hex, like) => Array.isArray(like) ? hexToRgb(hex).map(toLin) : hex;
+
+function download(blob, name) {
+  const a = h('a', { href: URL.createObjectURL(blob), download: name });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function pickFiles(accept, multiple) {
+  return new Promise(res => {
+    const inp = h('input', { type: 'file', accept, style: { display: 'none' } });
+    if (multiple) inp.multiple = true;
+    inp.addEventListener('change', () => { res([...inp.files]); inp.remove(); });
+    document.body.appendChild(inp); inp.click();
+  });
+}
+const slug = s => String(s || 'material').trim().replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '') || 'material';
+const typing = t => t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+const isPhone = () => document.body.dataset.layout === 'phone' || matchMedia('(max-width:768px)').matches;
+
+// ------------------------------------------------------------ graph access
+/** graph.js stateful actions (one undo step each), when graph.js has them. */
+const GA = () => M.graph?.actions || null;
+const graph = () => state.graph;
+const nodesOf = () => (graph() && graph().nodes) || [];
+const linksOf = () => (graph() && graph().links) || [];
+function getNode(id) {
+  const g = graph(); if (!g || id == null) return null;
+  if (typeof M.graph?.getNode === 'function') { try { const n = M.graph.getNode(g, id); if (n) return n; } catch (e) { /* fall back */ } }
+  return (g.nodes || []).find(n => n.id === id) || null;
+}
+const defOf = n => n && state.registry.get(n.type);
+const outputNode = () => getNode(graph()?.output) || nodesOf().find(n => n.type === OUTPUT_TYPE) || null;
+const nodeLabel = n => (n && (n.label || defOf(n)?.label || n.type)) || '?';
+const paramVal = (n, p) => { const v = n.params ? n.params[p.id] : undefined; return v === undefined ? clone(p.default) : v; };
+const UNIFORM_KINDS = new Set(['slider', 'int', 'color', 'vec2', 'bool']);
+const catColor = cat => {
+  const map = { Output: '#ffc832', Input: '#96c8ff', Generator: '#64c864', Noise: '#7ad0c0', Pattern: '#5ab0a0', Math: '#a0a8b8', Vector: '#96c8ff', Color: '#ffc832', Adjust: '#ff9a4a', Blend: '#e08ad0', Filter: '#b090ff', 'Height & Normal': '#b090ff', Transform: '#7ad0c0', Utility: '#8090b0', Bench: '#ff8a5c' };
+  return map[cat] || '#8090b0';
+};
+
+/** Coalesced edit: one graph:changed per frame, one undo step per gesture. */
+let selfEmit = 0, pending = null, flushRaf = 0;
+function queueEdit(ids, paramOnly, label, merge, final) {
+  if (!pending) pending = { ids: new Set(), paramOnly: true, label, merge };
+  ids.forEach(i => pending.ids.add(i));
+  pending.paramOnly = pending.paramOnly && paramOnly;
+  pending.label = label; pending.merge = merge;
+  if (final) flushEdit(); else if (!flushRaf) flushRaf = requestAnimationFrame(flushEdit);
+}
+function flushEdit() {
+  if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0; }
+  const p = pending; pending = null; if (!p) return;
+  selfEmit++;
+  try { store.emit('graph:changed', { reason: 'param', nodeIds: [...p.ids], paramOnly: p.paramOnly }); }
+  finally { selfEmit--; }
+  store.checkpoint(p.label, p.merge ? { merge: p.merge } : {});
+}
+function writeParam(n, pid, v) {
+  if (typeof M.graph?.setParam === 'function') { try { M.graph.setParam(graph(), n.id, pid, clone(v)); return; } catch (e) { /* fall back */ } }
+  n.params = n.params || {}; n.params[pid] = clone(v);
+}
+/** Write param p of every node in `nodes` and queue the edit. */
+function commitParam(nodes, p, v, final, session) {
+  for (const n of nodes) writeParam(n, p.id, v);
+  const ids = nodes.map(n => n.id);
+  const paramOnly = p.uniform !== false && UNIFORM_KINDS.has(p.kind);
+  queueEdit(ids, paramOnly, `${p.label || p.id}`, `p:${ids.join(',')}:${p.id}:${session}`, final);
+}
+function editDone(label, ids = [], reason = 'edit') {
+  selfEmit++;
+  try { store.emit('graph:changed', { reason, nodeIds: ids }); } finally { selfEmit--; }
+  store.checkpoint(label);
+}
+
+let cascade = 0;
+/** Add a node from the library. With clientX/Y it goes under the pointer. */
+function addNodeAt(type, clientX, clientY) {
+  const def = state.registry.get(type); if (!def || !graph()) return null;
+  const ed = window.__studio?.editor || M.editor?.api || {};
+  if (typeof ed.addNodeAt === 'function') {
+    const r = ed.addNodeAt(type, clientX, clientY);
+    pushRecent(type);
+    return r;
+  }
+  // editor.js api: toGraph(canvasX, canvasY) -> [gx, gy]; addFromDef(type, gx, gy) -> id
+  if (typeof ed.addFromDef === 'function' && typeof ed.toGraph === 'function') {
+    const cv = $('graph-wrap')?.querySelector('canvas') || $('graph-wrap');
+    const r = cv.getBoundingClientRect();
+    let off = 0;
+    if (clientX == null) { clientX = r.left + r.width / 2; clientY = r.top + r.height / 2; off = (cascade++ % 6) * 24; }
+    const [gx, gy] = ed.toGraph(clientX - r.left, clientY - r.top);
+    const id = ed.addFromDef(type, Math.round(gx - 80 + off), Math.round(gy - 20 + off));
+    if (id) { pushRecent(type); store.select([id]); }
+    return id;
+  }
+  let x, y;
+  const s2g = ed.screenToGraph || window.__studio?.editor?.screenToGraph;
+  if (clientX == null) { const r = $('graph-wrap').getBoundingClientRect(); clientX = r.left + r.width / 2; clientY = r.top + r.height / 2; }
+  if (typeof s2g === 'function') { try { ({ x, y } = s2g(clientX, clientY)); } catch (e) { x = undefined; } }
+  if (!Number.isFinite(x)) {
+    const out = outputNode();
+    const k = nodesOf().length;
+    x = (out ? out.x : 600) - 260 - (k % 4) * 30; y = (out ? out.y : 120) + (k % 8) * 40;
+  }
+  if (typeof M.graph?.addNode !== 'function') { store.toast('The graph module cannot add nodes', 'error'); return null; }
+  const node = M.graph.addNode(graph(), type, Math.round(x), Math.round(y), {});
+  pushRecent(type);
+  editDone('Add ' + def.label, [node.id]);
+  store.select([node.id]);
+  return node;
+}
+
+/** Replace the live graph with contract Graph JSON. One undo step. */
+function loadGraph(json, label = 'Load graph', { keepRes = false } = {}) {
+  const v = validateGraph(json, state.registry);
+  if (!v.ok) {
+    const structural = v.errors.filter(e => !/^unknown node type/.test(e));
+    if (structural.length) { store.toast('Graph not loaded: ' + structural.slice(0, 3).join('; '), 'error'); return false; }
+    store.toast(`${v.errors.length} unknown node type(s): ${v.errors.slice(0, 2).join('; ')}`, 'warn', 6000);
+  }
+  const j = clone(json);
+  j.settings = { ...state.settings, ...(j.settings || {}) };
+  if (keepRes) j.settings.res = state.settings.res;
+  if (typeof GA()?.load === 'function') { GA().load(j, { resetHistory: false, label }); return true; }
+  state.graph = typeof M.graph?.deserialize === 'function' ? M.graph.deserialize(j) : j;
+  state.settings.tiling = j.settings.tiling ?? 1;
+  state.settings.seed = j.settings.seed ?? 0;
+  store.select([]);
+  if (!keepRes && j.settings.res && j.settings.res !== state.settings.res) store.setRes(j.settings.res);
+  store.emit('graph:changed', { reason: 'load' });
+  store.checkpoint(label);
+  return true;
+}
+function serializeGraph() {
+  const g = graph(); if (!g) return emptyGraph();
+  const j = typeof M.graph?.serialize === 'function' ? M.graph.serialize(g) : clone(g);
+  return typeof j === 'string' ? JSON.parse(j) : j;
+}
+
+// ------------------------------------------------------------ widgets
+// Each widget is makeX(p, value, onChange) -> {el, set(v)}. onChange(v, final):
+// final is false while a drag runs and true when the gesture ends.
+
+/** Horizontal drag on `el` changes a number. Returns nothing; calls cb(dxPx, ev, phase). */
+function scrub(el, cb) {
+  el.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    if (document.activeElement === el) return; // typing mode
+    e.preventDefault();
+    let x0 = e.clientX, moved = false;
+    capture(el, e);
+    const mv = ev => {
+      const dx = ev.clientX - x0;
+      if (!moved && Math.abs(dx) < 3) return;
+      if (!moved) { moved = true; document.body.classList.add('pn-scrubbing'); }
+      x0 = ev.clientX; cb(dx, ev, 'move');
+    };
+    const up = ev => {
+      el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+      document.body.classList.remove('pn-scrubbing');
+      if (moved) cb(0, ev, 'end');
+      else if (el.tagName === 'INPUT') { el.focus(); el.select(); }
+    };
+    el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  });
+}
+
+function numField(value, { step = 0.01, min = -Infinity, max = Infinity, sens, int = false } = {}, onChange) {
+  let v = Number(value) || 0;
+  const inp = h('input', { class: 'pn-num', type: 'text', inputmode: 'decimal', spellcheck: 'false', autocomplete: 'off' });
+  const q = x => { x = int ? Math.round(x) : Math.round(x / step) * step; return +x.toFixed(decimals(step) + 2); };
+  const show = () => { if (document.activeElement !== inp) inp.value = fmt(v, int ? 1 : step); };
+  const setV = (x, final) => { x = clamp(q(x), min, max); if (x === v && !final) return; v = x; show(); onChange(v, final); };
+  const s = sens || (int ? 0.15 : step * 2);
+  let acc = 0;
+  scrub(inp, (dx, ev, phase) => {
+    if (phase === 'end') { onChange(v, true); acc = 0; return; }
+    const k = ev.shiftKey ? 0.1 : (ev.altKey || ev.ctrlKey) ? 10 : 1;
+    if (int) { acc += dx * s * k; const st = Math.trunc(acc); if (st) { acc -= st; setV(v + st, false); } }
+    else setV(v + dx * s * k, false);
+  });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { inp.blur(); }
+    else if (e.key === 'Escape') { inp.value = fmt(v, step); inp.blur(); }
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const k = (e.shiftKey ? 10 : 1) * (e.altKey ? 0.1 : 1) * (int ? 1 : step) * (e.key === 'ArrowUp' ? 1 : -1);
+      setV(v + k, true); inp.value = fmt(v, step); inp.select();
+    }
+  });
+  const commit = () => {
+    const x = evalNum(inp.value);
+    if (Number.isFinite(x)) { if (x !== v) setV(x, true); } else show();
+  };
+  inp.addEventListener('change', commit);
+  inp.addEventListener('blur', commit);
+  show();
+  return { el: inp, set: x => { v = Number(x) || 0; show(); }, get: () => v };
+}
+
+function wSlider(p, value, onChange) {
+  const int = p.kind === 'int';
+  const min = p.min ?? 0, max = p.max ?? (int ? 16 : 1);
+  const step = p.step ?? (int ? 1 : Math.max(1e-4, (max - min) / 1000));
+  let v = Number(value); if (!Number.isFinite(v)) v = Number(p.default) || 0;
+  const fill = h('div', { class: 'pn-bar-fill' });
+  const tick = h('div', { class: 'pn-bar-def' });
+  const bar = h('div', { class: 'pn-bar', role: 'slider', tabindex: '0', 'aria-label': p.label, 'aria-valuemin': min, 'aria-valuemax': max }, fill, tick);
+  const num = numField(v, { step, int, sens: (max - min) / 300 }, (x, final) => { v = x; show(); onChange(v, final); });
+  const show = () => {
+    const t = clamp((v - min) / (max - min || 1), 0, 1);
+    fill.style.width = (t * 100).toFixed(2) + '%';
+    bar.setAttribute('aria-valuenow', v);
+    bar.classList.toggle('over', v < min || v > max);
+  };
+  const dt = clamp(((Number(p.default) || 0) - min) / (max - min || 1), 0, 1);
+  tick.style.left = (dt * 100).toFixed(2) + '%';
+  const q = x => { x = int ? Math.round(x) : Math.round(x / step) * step; return +x.toFixed(decimals(step) + 2); };
+  const setV = (x, final) => { x = q(x); if (x === v && !final) return; v = x; show(); num.set(v); onChange(v, final); };
+  bar.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    e.preventDefault(); bar.focus({ preventScroll: true });
+    capture(bar, e);
+    const r = bar.getBoundingClientRect();
+    const fine = e.shiftKey;
+    const v0 = v, x0 = e.clientX;
+    const at = ev => fine
+      ? clamp(v0 + ((ev.clientX - x0) / r.width) * (max - min) * 0.1, min, max)
+      : min + clamp((ev.clientX - r.left) / r.width, 0, 1) * (max - min);
+    setV(at(e), false);
+    const mv = ev => setV(at(ev), false);
+    const up = () => { bar.removeEventListener('pointermove', mv); bar.removeEventListener('pointerup', up); bar.removeEventListener('pointercancel', up); onChange(v, true); };
+    bar.addEventListener('pointermove', mv); bar.addEventListener('pointerup', up); bar.addEventListener('pointercancel', up);
+  });
+  bar.addEventListener('keydown', e => {
+    const k = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1, PageDown: -10, PageUp: 10 }[e.key];
+    if (k) { e.preventDefault(); setV(clamp(v + k * step * (e.shiftKey ? 10 : 1), min, max), true); }
+    else if (e.key === 'Home') { e.preventDefault(); setV(min, true); }
+    else if (e.key === 'End') { e.preventDefault(); setV(max, true); }
+  });
+  show();
+  const el = h('div', { class: 'pn-slider' }, bar, num.el);
+  return { el, set: x => { v = Number(x) || 0; show(); num.set(v); } };
+}
+
+// -- color picker popover (one instance) --
+let picker = null;
+function getPicker() {
+  if (picker) return picker;
+  const sv = h('canvas', { class: 'pk-sv', width: 220, height: 140 });
+  const hue = h('canvas', { class: 'pk-hue', width: 220, height: 12 });
+  const svDot = h('div', { class: 'pk-dot' }), hueDot = h('div', { class: 'pk-hdot' });
+  const hex = h('input', { class: 'pn-hex', type: 'text', spellcheck: 'false', maxlength: '7', 'aria-label': 'Hex' });
+  const prev = h('div', { class: 'pk-prev' }), prevOld = h('div', { class: 'pk-prev old', title: 'Original color (click to restore)' });
+  const fields = {};
+  const mk = (k, mx) => { const f = numField(0, { step: 1, int: true, min: 0, max: mx, sens: mx / 200 }, (x, final) => fromField(k, x, final)); fields[k] = f; return h('label', { class: 'pk-f' }, h('span', null, k.toUpperCase()), f.el); };
+  const recent = h('div', { class: 'pk-recent' });
+  const eye = window.EyeDropper ? ibtn('drop', 'Pick a color from the screen', async () => {
+    try { const r = await new window.EyeDropper().open(); setHex(r.sRGBHex, true); } catch (e) { /* cancelled */ }
+  }) : null;
+  const el = h('div', { class: 'pn-picker', role: 'dialog', 'aria-label': 'Color picker', hidden: true },
+    h('div', { class: 'pk-svwrap' }, sv, svDot),
+    h('div', { class: 'pk-huewrap' }, hue, hueDot),
+    h('div', { class: 'pk-row' }, prevOld, prev, hex, eye),
+    h('div', { class: 'pk-grid' }, mk('r', 255), mk('g', 255), mk('b', 255), mk('h', 360), mk('s', 100), mk('v', 100)),
+    recent);
+  document.body.appendChild(el);
+  const P = picker = { el, hsv: [0, 0, 0.5], cb: null, orig: '#808080', anchor: null };
+  const drawHue = () => {
+    const c = hue.getContext('2d'), g = c.createLinearGradient(0, 0, hue.width, 0);
+    for (let i = 0; i <= 6; i++) g.addColorStop(i / 6, rgbToHex(hsvToRgb([i / 6 % 1, 1, 1])));
+    c.fillStyle = g; c.fillRect(0, 0, hue.width, hue.height);
+  };
+  const drawSV = () => {
+    const c = sv.getContext('2d'), w = sv.width, hh = sv.height;
+    c.fillStyle = rgbToHex(hsvToRgb([P.hsv[0], 1, 1])); c.fillRect(0, 0, w, hh);
+    const g1 = c.createLinearGradient(0, 0, w, 0); g1.addColorStop(0, '#fff'); g1.addColorStop(1, 'rgba(255,255,255,0)');
+    c.fillStyle = g1; c.fillRect(0, 0, w, hh);
+    const g2 = c.createLinearGradient(0, 0, 0, hh); g2.addColorStop(0, 'rgba(0,0,0,0)'); g2.addColorStop(1, '#000');
+    c.fillStyle = g2; c.fillRect(0, 0, w, hh);
+  };
+  drawHue();
+  const sync = (skip) => {
+    const rgb = hsvToRgb(P.hsv), hx = rgbToHex(rgb);
+    drawSV();
+    svDot.style.left = (P.hsv[1] * 100) + '%'; svDot.style.top = ((1 - P.hsv[2]) * 100) + '%';
+    hueDot.style.left = (P.hsv[0] * 100) + '%';
+    prev.style.background = hx;
+    if (skip !== 'hex' && document.activeElement !== hex) hex.value = hx;
+    if (skip !== 'rgb') { fields.r.set(Math.round(rgb[0] * 255)); fields.g.set(Math.round(rgb[1] * 255)); fields.b.set(Math.round(rgb[2] * 255)); }
+    if (skip !== 'hsv') { fields.h.set(Math.round(P.hsv[0] * 360)); fields.s.set(Math.round(P.hsv[1] * 100)); fields.v.set(Math.round(P.hsv[2] * 100)); }
+    return hx;
+  };
+  const emitC = (final, skip) => { const hx = sync(skip); P.cb && P.cb(hx, final); if (final) pushRecentColor(hx); };
+  const setHex = (hx, final) => { const rgb = hexToRgb(hx); const hsv = rgbToHsv(rgb); if (hsv[1] === 0 || hsv[2] === 0) hsv[0] = P.hsv[0]; P.hsv = hsv; emitC(final, 'hex'); };
+  P.setHex = setHex;
+  function fromField(k, x, final) {
+    if ('rgb'.includes(k)) {
+      const rgb = hsvToRgb(P.hsv); rgb['rgb'.indexOf(k)] = x / 255;
+      const hsv = rgbToHsv(rgb); if (hsv[1] === 0) hsv[0] = P.hsv[0]; P.hsv = hsv; emitC(final, 'rgb');
+    } else { P.hsv['hsv'.indexOf(k)] = k === 'h' ? (x % 360) / 360 : x / 100; emitC(final, 'hsv'); }
+  }
+  const drag = (cv, fn) => cv.addEventListener('pointerdown', e => {
+    e.preventDefault(); capture(cv, e);
+    const r = cv.getBoundingClientRect();
+    const at = ev => fn(clamp((ev.clientX - r.left) / r.width, 0, 1), clamp((ev.clientY - r.top) / r.height, 0, 1));
+    at(e); emitC(false);
+    const mv = ev => { at(ev); emitC(false); };
+    const up = () => { cv.removeEventListener('pointermove', mv); cv.removeEventListener('pointerup', up); cv.removeEventListener('pointercancel', up); emitC(true); };
+    cv.addEventListener('pointermove', mv); cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  });
+  drag(sv, (x, y) => { P.hsv[1] = x; P.hsv[2] = 1 - y; });
+  drag(hue, x => { P.hsv[0] = Math.min(x, 0.9999); });
+  hex.addEventListener('keydown', e => { if (e.key === 'Enter') hex.blur(); });
+  hex.addEventListener('blur', () => { if (/^#?[0-9a-f]{6}$/i.test(hex.value.trim())) setHex('#' + hex.value.trim().replace('#', ''), true); else hex.value = rgbToHex(hsvToRgb(P.hsv)); });
+  prevOld.addEventListener('click', () => setHex(P.orig, true));
+  const renderRecent = () => recent.replaceChildren(...lsGet('recentColors', []).map(c => h('button', { type: 'button', class: 'pk-sw', style: { background: c }, title: c, onclick: () => setHex(c, true) })));
+  P.renderRecent = renderRecent;
+  P.sync = sync;
+  document.addEventListener('pointerdown', e => { if (!el.hidden && !el.contains(e.target) && e.target !== P.anchor && !P.anchor?.contains(e.target)) closePicker(); }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !el.hidden) { closePicker(); e.stopPropagation(); } }, true);
+  return P;
+}
+function pushRecentColor(hx) {
+  const r = lsGet('recentColors', []).filter(c => c !== hx); r.unshift(hx); lsSet('recentColors', r.slice(0, 16));
+  picker?.renderRecent();
+}
+function openPicker(anchor, hx, cb) {
+  const P = getPicker();
+  P.cb = null; P.anchor = anchor; P.orig = hx;
+  P.el.querySelector('.pk-prev.old').style.background = hx;
+  const hsv = rgbToHsv(hexToRgb(hx)); P.hsv = hsv; P.sync(); P.renderRecent();
+  P.cb = cb;
+  P.el.hidden = false;
+  const r = anchor.getBoundingClientRect(), pw = P.el.offsetWidth, ph = P.el.offsetHeight;
+  let x = r.left - pw - 8, y = r.top - 20;
+  if (x < 8) x = Math.min(window.innerWidth - pw - 8, r.left);
+  if (x !== r.left - pw - 8) y = r.bottom + 6;
+  y = clamp(y, 8, window.innerHeight - ph - 8);
+  P.el.style.left = Math.max(8, x) + 'px'; P.el.style.top = y + 'px';
+}
+function closePicker() { if (picker) { picker.el.hidden = true; picker.cb = null; picker.anchor = null; } }
+
+function wColor(p, value, onChange) {
+  const like = value ?? p.default;
+  let hx = colorToHex(value ?? p.default);
+  const sw = h('button', { type: 'button', class: 'pn-swatch', title: 'Open the color picker', 'aria-label': (p.label || 'Color') + ' color' });
+  const txt = h('input', { class: 'pn-hex', type: 'text', spellcheck: 'false', maxlength: '7', 'aria-label': 'Hex' });
+  const lin = h('span', { class: 'pn-lin', title: 'Linear RGB value the graph uses' });
+  const show = () => {
+    sw.style.background = hx;
+    if (document.activeElement !== txt) txt.value = hx;
+    lin.textContent = hexToRgb(hx).map(c => toLin(c).toFixed(2)).join(' ');
+  };
+  const setHx = (x, final) => { hx = x; show(); onChange(hexLike(hx, like), final); };
+  sw.addEventListener('click', () => openPicker(sw, hx, (x, final) => setHx(x, final)));
+  txt.addEventListener('keydown', e => { if (e.key === 'Enter') txt.blur(); });
+  txt.addEventListener('blur', () => {
+    const s = txt.value.trim().replace('#', '');
+    if (/^[0-9a-f]{6}$/i.test(s) || /^[0-9a-f]{3}$/i.test(s)) setHx(rgbToHex(hexToRgb(s)), true); else show();
+  });
+  show();
+  return { el: h('div', { class: 'pn-color' }, sw, txt, lin), set: v => { hx = colorToHex(v); show(); } };
+}
+
+function enumOptions(p) { return (p.options || []).map(o => typeof o === 'object' ? { value: String(o.value), label: o.label ?? String(o.value) } : { value: String(o), label: String(o) }); }
+function wEnum(p, value, onChange) {
+  const opts = enumOptions(p);
+  let v = String(value ?? p.default);
+  const short = opts.length <= 4 && opts.every(o => o.label.length <= 9);
+  if (short) {
+    const btns = opts.map(o => h('button', { type: 'button', class: 'pn-seg-b', dataset: { v: o.value }, onclick: () => { v = o.value; show(); onChange(v, true); } }, o.label));
+    const show = () => btns.forEach(b => b.classList.toggle('on', b.dataset.v === v));
+    show();
+    return { el: h('div', { class: 'pn-seg', role: 'radiogroup', 'aria-label': p.label }, btns), set: x => { v = String(x); show(); } };
+  }
+  const sel = h('select', { class: 'pn-sel', 'aria-label': p.label }, opts.map(o => h('option', { value: o.value }, o.label)));
+  sel.value = v;
+  sel.addEventListener('change', () => { v = sel.value; onChange(v, true); });
+  return { el: sel, set: x => { v = String(x); sel.value = v; } };
+}
+
+function wBool(p, value, onChange) {
+  let v = !!value;
+  const b = h('button', { type: 'button', class: 'pn-tog', role: 'switch', 'aria-label': p.label }, h('span'));
+  const show = () => { b.classList.toggle('on', v); b.setAttribute('aria-checked', v); };
+  b.addEventListener('click', () => { v = !v; show(); onChange(v, true); });
+  show();
+  return { el: b, set: x => { v = !!x; show(); } };
+}
+
+function wVec2(p, value, onChange) {
+  let v = Array.isArray(value) ? [...value] : [0, 0];
+  const step = p.step ?? 0.01;
+  const mk = i => numField(v[i], { step, min: p.min ?? -Infinity, max: p.max ?? Infinity }, (x, final) => { v[i] = x; onChange([...v], final); });
+  const fx = mk(0), fy = mk(1);
+  return {
+    el: h('div', { class: 'pn-vec' }, h('label', null, h('span', null, 'X'), fx.el), h('label', null, h('span', null, 'Y'), fy.el)),
+    set: x => { v = Array.isArray(x) ? [...x] : [0, 0]; fx.set(v[0]); fy.set(v[1]); },
+  };
+}
+
+/** Gradient value: [{t, color}] sorted by t; color is an sRGB hex (or linear array). */
+function wGradient(p, value, onChange) {
+  let stops = normStops(value ?? p.default);
+  let selIdx = 0;
+  const like = (Array.isArray(value) && value[0]) ? value[0].color : '#000000';
+  const cv = h('canvas', { class: 'pn-grad-cv', width: 256, height: 1 });
+  const bar = h('div', { class: 'pn-grad-bar', title: 'Click to add a stop' }, cv);
+  const lane = h('div', { class: 'pn-grad-lane' });
+  const posF = numField(0, { step: 0.001, min: 0, max: 1 }, (x, final) => { if (stops[selIdx]) { stops[selIdx].t = x; resort(); emit(final); } });
+  const colW = wColor({ label: 'Stop' }, '#000000', (c, final) => { if (stops[selIdx]) { stops[selIdx].color = colorToHex(c); draw(); emit(final); } });
+  const del = ibtn('trash', 'Delete the stop', () => { if (stops.length > 2) { stops.splice(selIdx, 1); selIdx = Math.max(0, selIdx - 1); draw(); emit(true); } });
+  const tools = h('div', { class: 'pn-grad-tools' },
+    h('button', { type: 'button', class: 'pn-mini', onclick: () => { stops = stops.map(s => ({ ...s, t: 1 - s.t })).reverse(); selIdx = stops.length - 1 - selIdx; draw(); emit(true); } }, 'Reverse'),
+    h('button', { type: 'button', class: 'pn-mini', onclick: () => { stops.forEach((s, i) => { s.t = stops.length > 1 ? i / (stops.length - 1) : 0; }); draw(); emit(true); } }, 'Distribute'));
+  const edit = h('div', { class: 'pn-grad-edit' }, h('span', { class: 'pn-sub' }, 'Stop'), colW.el, h('span', { class: 'pn-sub' }, 'at'), posF.el, del);
+  function emit(final) { onChange(stops.map(s => ({ t: +s.t.toFixed(4), color: hexLike(s.color, like) })), final); }
+  function resort() { const cur = stops[selIdx]; stops.sort((a, b) => a.t - b.t); selIdx = stops.indexOf(cur); draw(); }
+  function sampleAt(t) {
+    if (t <= stops[0].t) return hexToRgb(stops[0].color).map(toLin);
+    for (let i = 1; i < stops.length; i++) if (t <= stops[i].t) {
+      const a = stops[i - 1], b = stops[i], k = (t - a.t) / Math.max(1e-6, b.t - a.t);
+      const ca = hexToRgb(a.color).map(toLin), cb = hexToRgb(b.color).map(toLin);
+      return ca.map((x, j) => x + (cb[j] - x) * k);
+    }
+    return hexToRgb(stops[stops.length - 1].color).map(toLin);
+  }
+  function draw() {
+    const c = cv.getContext('2d'), img = c.createImageData(256, 1);
+    for (let x = 0; x < 256; x++) { const rgb = sampleAt(x / 255); for (let j = 0; j < 3; j++) img.data[x * 4 + j] = Math.round(toSrgb(clamp(rgb[j], 0, 1)) * 255); img.data[x * 4 + 3] = 255; }
+    c.putImageData(img, 0, 0);
+    lane.replaceChildren(...stops.map((s, i) => {
+      const k = h('div', { class: 'pn-grad-stop' + (i === selIdx ? ' on' : ''), style: { left: (s.t * 100) + '%', background: s.color }, tabindex: '0', title: `${s.color} at ${s.t.toFixed(3)} (drag down to delete)` });
+      k.addEventListener('pointerdown', e => dragStop(e, i, k));
+      k.addEventListener('keydown', e => {
+        if (e.key === 'Delete' || e.key === 'Backspace') { if (stops.length > 2) { stops.splice(i, 1); selIdx = 0; draw(); emit(true); } }
+        else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { s.t = clamp(s.t + (e.key === 'ArrowLeft' ? -0.01 : 0.01), 0, 1); selIdx = i; resort(); emit(true); }
+      });
+      return k;
+    }));
+    const s = stops[selIdx];
+    if (s) { posF.set(s.t); colW.set(s.color); }
+  }
+  function dragStop(e, i, k) {
+    e.preventDefault(); e.stopPropagation(); selIdx = i; draw();
+    const knob = lane.children[i]; capture(knob, e);
+    const r = lane.getBoundingClientRect(), y0 = e.clientY; let gone = false, moved = false;
+    const mv = ev => {
+      moved = true;
+      const s = stops[selIdx]; if (!s) return;
+      gone = stops.length > 2 && ev.clientY - y0 > 28;
+      knob.classList.toggle('gone', gone);
+      s.t = clamp((ev.clientX - r.left) / r.width, 0, 1);
+      knob.style.left = (s.t * 100) + '%';
+      const cur = s; stops.sort((a, b) => a.t - b.t); selIdx = stops.indexOf(cur);
+      const c = cv.getContext('2d'); void c; drawBarOnly(); posF.set(s.t);
+      emit(false);
+    };
+    const up = () => {
+      knob.removeEventListener('pointermove', mv); knob.removeEventListener('pointerup', up); knob.removeEventListener('pointercancel', up);
+      if (gone) { stops.splice(selIdx, 1); selIdx = 0; }
+      draw(); if (moved) emit(true);
+    };
+    knob.addEventListener('pointermove', mv); knob.addEventListener('pointerup', up); knob.addEventListener('pointercancel', up);
+  }
+  function drawBarOnly() {
+    const c = cv.getContext('2d'), img = c.createImageData(256, 1);
+    for (let x = 0; x < 256; x++) { const rgb = sampleAt(x / 255); for (let j = 0; j < 3; j++) img.data[x * 4 + j] = Math.round(toSrgb(clamp(rgb[j], 0, 1)) * 255); img.data[x * 4 + 3] = 255; }
+    c.putImageData(img, 0, 0);
+  }
+  bar.addEventListener('pointerdown', e => {
+    const r = bar.getBoundingClientRect(), t = clamp((e.clientX - r.left) / r.width, 0, 1);
+    const rgb = sampleAt(t).map(x => toSrgb(clamp(x, 0, 1)));
+    stops.push({ t, color: rgbToHex(rgb) }); stops.sort((a, b) => a.t - b.t);
+    selIdx = stops.findIndex(s => s.t === t); draw(); emit(true);
+  });
+  draw();
+  return { el: h('div', { class: 'pn-grad' }, bar, lane, edit, tools), set: v => { stops = normStops(v); selIdx = Math.min(selIdx, stops.length - 1); draw(); } };
+}
+function normStops(v) {
+  const a = Array.isArray(v) && v.length ? v : [{ t: 0, color: '#000000' }, { t: 1, color: '#ffffff' }];
+  const s = a.map(x => Array.isArray(x) ? { t: +x[0] || 0, color: colorToHex(x.slice(1)) } : { t: +x.t || 0, color: colorToHex(x.color) });
+  if (s.length === 1) s.push({ t: 1, color: s[0].color });
+  return s.sort((p, q) => p.t - q.t);
+}
+
+/** Monotone cubic (Fritsch-Carlson) through sorted points; used for the curve preview. */
+function monotone(pts) {
+  const n = pts.length; const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  if (n < 2) return () => ys[0] ?? 0;
+  const d = [], m = new Array(n).fill(0);
+  for (let i = 0; i < n - 1; i++) d.push((ys[i + 1] - ys[i]) / Math.max(1e-6, xs[i + 1] - xs[i]));
+  m[0] = d[0]; m[n - 1] = d[n - 2];
+  for (let i = 1; i < n - 1; i++) m[i] = d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2;
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = 0; m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], s = a * a + b * b;
+    if (s > 9) { const t = 3 / Math.sqrt(s); m[i] = t * a * d[i]; m[i + 1] = t * b * d[i]; }
+  }
+  return x => {
+    if (x <= xs[0]) return ys[0]; if (x >= xs[n - 1]) return ys[n - 1];
+    let i = 0; while (i < n - 2 && x > xs[i + 1]) i++;
+    const hh = xs[i + 1] - xs[i], t = (x - xs[i]) / hh, t2 = t * t, t3 = t2 * t;
+    return (2 * t3 - 3 * t2 + 1) * ys[i] + (t3 - 2 * t2 + t) * hh * m[i] + (-2 * t3 + 3 * t2) * ys[i + 1] + (t3 - t2) * hh * m[i + 1];
+  };
+}
+const CURVE_PRESETS = {
+  Linear: [[0, 0], [1, 1]], Invert: [[0, 1], [1, 0]], 'Ease': [[0, 0], [0.5, 0.2], [1, 1]],
+  'S': [[0, 0], [0.25, 0.08], [0.75, 0.92], [1, 1]], 'Lift': [[0, 0.2], [1, 1]], 'Bump': [[0, 0], [0.5, 1], [1, 0]],
+};
+function wCurve(p, value, onChange) {
+  let pts = normPts(value ?? p.default);
+  let sel = -1;
+  const W = 240, H = 130;
+  const cv = h('canvas', { class: 'pn-curve-cv', width: W * 2, height: H * 2, tabindex: '0', 'aria-label': (p.label || 'Curve') + ' curve editor' });
+  const coords = h('span', { class: 'pn-sub pn-curve-xy' });
+  const presets = h('div', { class: 'pn-grad-tools' }, Object.entries(CURVE_PRESETS).map(([k, v]) => h('button', { type: 'button', class: 'pn-mini', onclick: () => { pts = clone(v); sel = -1; draw(); emit(true); } }, k)), coords);
+  function emit(final) { onChange(pts.map(q => [+q[0].toFixed(4), +q[1].toFixed(4)]), final); }
+  const toPx = q => [6 + q[0] * (W * 2 - 12), (H * 2 - 6) - q[1] * (H * 2 - 12)];
+  const fromPx = (x, y) => [clamp((x - 6) / (W * 2 - 12), 0, 1), clamp(((H * 2 - 6) - y) / (H * 2 - 12), 0, 1)];
+  function draw() {
+    const c = cv.getContext('2d');
+    c.clearRect(0, 0, cv.width, cv.height);
+    c.fillStyle = '#0b0e15'; c.fillRect(0, 0, cv.width, cv.height);
+    c.strokeStyle = 'rgba(150,200,255,0.08)'; c.lineWidth = 1;
+    for (let i = 1; i < 4; i++) { const [x] = toPx([i / 4, 0]), [, y] = toPx([0, i / 4]); c.beginPath(); c.moveTo(x, 0); c.lineTo(x, cv.height); c.moveTo(0, y); c.lineTo(cv.width, y); c.stroke(); }
+    c.strokeStyle = 'rgba(150,200,255,0.18)'; c.beginPath(); c.moveTo(...toPx([0, 0])); c.lineTo(...toPx([1, 1])); c.stroke();
+    const f = monotone(pts);
+    c.strokeStyle = '#ffc832'; c.lineWidth = 2.5; c.beginPath();
+    for (let i = 0; i <= 120; i++) { const x = i / 120, q = toPx([x, clamp(f(x), 0, 1)]); i ? c.lineTo(...q) : c.moveTo(...q); }
+    c.stroke();
+    pts.forEach((q, i) => { const [x, y] = toPx(q); c.fillStyle = i === sel ? '#ffc832' : '#0b0e15'; c.strokeStyle = '#ffc832'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, 7, 0, Math.PI * 2); c.fill(); c.stroke(); });
+    coords.textContent = sel >= 0 && pts[sel] ? `${pts[sel][0].toFixed(3)}, ${pts[sel][1].toFixed(3)}` : `${pts.length} points`;
+  }
+  const evPx = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * (cv.width / r.width), (e.clientY - r.top) * (cv.height / r.height)]; };
+  const hit = (x, y) => { const tol = matchMedia('(pointer:coarse)').matches ? 30 : 16; let best = -1, bd = tol * tol; pts.forEach((q, i) => { const [px, py] = toPx(q); const d = (px - x) ** 2 + (py - y) ** 2; if (d < bd) { bd = d; best = i; } }); return best; };
+  cv.addEventListener('pointerdown', e => {
+    e.preventDefault(); cv.focus({ preventScroll: true });
+    const [x, y] = evPx(e);
+    let i = hit(x, y);
+    if (i < 0) { const q = fromPx(x, y); pts.push(q); pts.sort((a, b) => a[0] - b[0]); i = pts.indexOf(q); }
+    sel = i; draw();
+    capture(cv, e);
+    let gone = false, moved = false;
+    const mv = ev => {
+      moved = true;
+      const [mx, my] = evPx(ev); const q = fromPx(mx, my);
+      const lo = sel > 0 ? pts[sel - 1][0] + 0.001 : 0, hi = sel < pts.length - 1 ? pts[sel + 1][0] - 0.001 : 1;
+      pts[sel] = [clamp(q[0], lo, hi), q[1]];
+      gone = pts.length > 2 && (my < -30 || my > cv.height + 30 || mx < -30 || mx > cv.width + 30);
+      draw(); emit(false);
+    };
+    const up = () => {
+      cv.removeEventListener('pointermove', mv); cv.removeEventListener('pointerup', up); cv.removeEventListener('pointercancel', up);
+      if (gone) { pts.splice(sel, 1); sel = -1; }
+      draw(); emit(true); void moved;
+    };
+    cv.addEventListener('pointermove', mv); cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  });
+  cv.addEventListener('dblclick', e => { const [x, y] = evPx(e); const i = hit(x, y); if (i >= 0 && pts.length > 2) { pts.splice(i, 1); sel = -1; draw(); emit(true); } });
+  cv.addEventListener('keydown', e => {
+    if (sel < 0) return;
+    if ((e.key === 'Delete' || e.key === 'Backspace') && pts.length > 2) { pts.splice(sel, 1); sel = -1; draw(); emit(true); e.preventDefault(); return; }
+    const d = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] }[e.key];
+    if (d) { e.preventDefault(); const k = e.shiftKey ? 0.05 : 0.01; pts[sel] = [clamp(pts[sel][0] + d[0] * k, 0, 1), clamp(pts[sel][1] + d[1] * k, 0, 1)]; pts.sort((a, b) => a[0] - b[0]); draw(); emit(true); }
+  });
+  draw();
+  return { el: h('div', { class: 'pn-curve' }, cv, presets), set: v => { pts = normPts(v); sel = -1; draw(); } };
+}
+function normPts(v) {
+  const a = Array.isArray(v) && v.length >= 2 ? v : [[0, 0], [1, 1]];
+  return a.map(q => Array.isArray(q) ? [+q[0] || 0, +q[1] || 0] : [+q.x || 0, +q.y || 0]).sort((p, q) => p[0] - q[0]);
+}
+
+function wImage(p, value, onChange) {
+  let v = value || null;
+  const thumb = h('img', { class: 'pn-img-th', alt: '' });
+  const name = h('span', { class: 'pn-img-name' });
+  const clear = ibtn('close', 'Remove the image', e => { e.stopPropagation(); v = null; show(); onChange(null, true); });
+  const zone = h('div', { class: 'pn-img', tabindex: '0', role: 'button', title: 'Click or drop an image file' }, thumb, h('div', { class: 'pn-img-meta' }, name, h('span', { class: 'pn-sub' }, 'PNG, JPG, WebP: drop or click')), clear);
+  const show = () => {
+    const url = v && (v.url || v.dataURL);
+    zone.classList.toggle('has', !!url);
+    if (url) thumb.src = url; else thumb.removeAttribute('src');
+    name.textContent = v ? (v.name || 'image') : 'No image';
+    clear.hidden = !v;
+  };
+  const take = file => {
+    if (!file || !/^image\//.test(file.type)) { store.toast('That file is not an image', 'warn'); return; }
+    if (file.size > 24e6) store.toast('Large image: the graph JSON stores it inline as a data URL', 'warn');
+    const fr = new FileReader();
+    fr.onload = () => { v = { name: file.name, url: fr.result }; show(); onChange(v, true); };
+    fr.readAsDataURL(file);
+  };
+  zone.addEventListener('click', async () => { const [f] = await pickFiles('image/*'); take(f); });
+  zone.addEventListener('keydown', async e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const [f] = await pickFiles('image/*'); take(f); } });
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('over'); take(e.dataTransfer.files[0]); });
+  show();
+  return { el: zone, set: x => { v = x || null; show(); } };
+}
+
+function wText(p, value, onChange) {
+  let v = String(value ?? p.default ?? '');
+  const ta = h('textarea', { class: 'pn-text', spellcheck: 'false', rows: String(Math.min(14, Math.max(3, v.split('\n').length + 1))), 'aria-label': p.label });
+  ta.value = v;
+  const commit = () => { if (ta.value !== v) { v = ta.value; onChange(v, true); } };
+  ta.addEventListener('blur', commit);
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commit(); }
+    else if (e.key === 'Tab') { e.preventDefault(); const s = ta.selectionStart; ta.setRangeText('  ', s, ta.selectionEnd, 'end'); }
+  });
+  return { el: h('div', { class: 'pn-textw' }, ta, h('span', { class: 'pn-sub' }, 'Ctrl+Enter or blur to apply')), set: x => { v = String(x ?? ''); if (document.activeElement !== ta) ta.value = v; } };
+}
+
+const WIDGETS = { slider: wSlider, int: wSlider, color: wColor, enum: wEnum, bool: wBool, vec2: wVec2, gradient: wGradient, curve: wCurve, image: wImage, text: wText };
+const WIDE = new Set(['gradient', 'curve', 'image', 'text']);
+function makeWidget(p, value, onChange) {
+  const fn = WIDGETS[p.kind] || (typeof p.default === 'number' ? wSlider : wText);
+  return fn(p, value, onChange);
+}
+
+// ------------------------------------------------------------ param rows
+let sessionSeq = 1;
+/**
+ * One labelled param control. nodes: GraphNodes the edit writes to (same type).
+ * opts.prefix: label prefix (exposed list); opts.noExpose hides the pin button.
+ */
+function paramRow(nodes, p, opts = {}) {
+  const n0 = nodes[0];
+  let session = 0;
+  const val = paramVal(n0, p);
+  const mixed = nodes.some(n => !same(paramVal(n, p), val));
+  const row = h('div', { class: 'pn-prm' + (WIDE.has(p.kind) ? ' wide' : '') + (mixed ? ' mixed' : ''), dataset: { pid: p.id } });
+  const isDef = v => same(v, p.default);
+  const w = makeWidget(p, val, (v, final) => {
+    if (!session) session = sessionSeq++;
+    commitParam(nodes, p, v, final, session);
+    row.classList.toggle('mod', !isDef(v)); row.classList.remove('mixed');
+    if (final) session = 0;
+  });
+  const lbl = h('label', { class: 'pn-lbl', title: (p.doc ? p.doc + '\n' : '') + `${p.id} · ${p.kind}${p.min != null ? ` · ${p.min}..${p.max}` : ''}` }, (opts.prefix ? h('span', { class: 'pn-pre' }, opts.prefix) : null), p.label || p.id);
+  const rst = ibtn('reset', 'Reset to default', () => {
+    const d = clone(p.default);
+    commitParam(nodes, p, d, true, sessionSeq++);
+    w.set(d); row.classList.remove('mod', 'mixed');
+  }, 'pn-rst');
+  const exposed = !opts.noExpose && nodes.length === 1 && (n0.exposed || []).includes(p.id);
+  const exp = opts.noExpose ? null : ibtn('pin', 'Expose on the Material panel', () => toggleExpose(nodes, p.id), 'pn-exp' + (exposed ? ' on' : ''));
+  if (opts.goto) lbl.append(ibtn('link', 'Select the node', () => store.select([n0.id]), 'pn-goto'));
+  row.append(lbl, h('div', { class: 'pn-ctl' }, w.el), h('div', { class: 'pn-acts' }, rst, exp));
+  row.classList.toggle('mod', !mixed && !isDef(val));
+  row._w = w; row._p = p; row._nodes = nodes;
+  return row;
+}
+function toggleExpose(nodes, pid) {
+  const flip = n => {
+    const e = new Set(n.exposed || []);
+    if (e.has(pid)) e.delete(pid); else e.add(pid);
+    if (e.size) n.exposed = [...e]; else delete n.exposed;
+  };
+  if (GA()?.edit) { GA().edit('Expose ' + pid, () => { nodes.forEach(flip); return true; }, { kind: 'layout', nodeIds: nodes.map(n => n.id) }); renderInspector(true); return; }
+  for (const n of nodes) {
+    const e = new Set(n.exposed || []);
+    if (e.has(pid)) e.delete(pid); else e.add(pid);
+    n.exposed = [...e];
+    if (!n.exposed.length) delete n.exposed;
+  }
+  editDone('Expose ' + pid, nodes.map(n => n.id), 'param');
+  renderInspector(true);
+}
+
+/** Collapsible section with a remembered state. */
+function section(key, title, body, { open = true, extra } = {}) {
+  const st = lsGet('sec', {});
+  const isOpen = st[key] ?? open;
+  const head = h('button', { type: 'button', class: 'pn-sec-h', 'aria-expanded': String(isOpen) }, icon('chev', 'pn-chev'), h('span', null, title), extra || null);
+  const el = h('section', { class: 'pn-sec' + (isOpen ? ' open' : ''), dataset: { sec: key } }, head, h('div', { class: 'pn-sec-b' }, body));
+  head.addEventListener('click', e => {
+    if (e.target.closest('.pn-sec-x')) return;
+    const o = !el.classList.contains('open'); el.classList.toggle('open', o); head.setAttribute('aria-expanded', o);
+    const s = lsGet('sec', {}); s[key] = o; lsSet('sec', s);
+  });
+  return el;
+}
+const kv = (k, v, cls) => h('div', { class: 'pn-kv' + (cls ? ' ' + cls : '') }, h('span', null, k), h('b', null, v));
+
+// ------------------------------------------------------------ inspector
+let insKey = '';
+let insRows = [];
+function renderInspector(keepScroll) {
+  const root = $('inspector'); if (!root) return;
+  closePicker();
+  const sel = (state.selection || []).map(getNode).filter(Boolean);
+  const key = sel.map(n => n.id).join(',');
+  const scroll = root.scrollTop;
+  insRows = [];
+  root.replaceChildren(sel.length ? nodeView(sel) : materialView());
+  root.scrollTop = (keepScroll || key === insKey) ? scroll : 0;
+  insKey = key;
+}
+/** Update the shown values in place (an edit from elsewhere, same selection). */
+function refreshInspector() {
+  for (const r of insRows) {
+    if (!r.isConnected || !r._w) continue;
+    if (r.contains(document.activeElement) && document.activeElement !== document.body) continue;
+    r._w.set(paramVal(r._nodes[0], r._p));
+    r.classList.toggle('mod', !same(paramVal(r._nodes[0], r._p), r._p.default));
+  }
+}
+
+function nodeView(nodes) {
+  const n = nodes[0], def = defOf(n);
+  const frag = document.createDocumentFragment();
+  const allSame = nodes.every(m => m.type === n.type);
+  if (nodes.length > 1) {
+    frag.append(h('div', { class: 'pn-head' },
+      h('div', { class: 'pn-head-t' }, h('b', null, `${nodes.length} nodes`), h('span', { class: 'pn-sub' }, allSame ? `all ${def?.label || n.type}: edits apply to each` : 'mixed types: pick one')),
+      h('div', { class: 'pn-chips' }, nodes.map(m => h('button', { type: 'button', class: 'pn-chip', style: { '--c': catColor(defOf(m)?.category) }, onclick: () => store.select([m.id]) }, nodeLabel(m)))),
+      h('div', { class: 'pn-head-a' },
+        h('button', { type: 'button', class: 'pn-btn', onclick: () => deleteNodes(nodes) }, icon('trash'), 'Delete'),
+        h('button', { type: 'button', class: 'pn-btn', onclick: () => duplicateNodes(nodes) }, icon('copy'), 'Duplicate'))));
+    if (!allSame || !def) return frag;
+  }
+  if (!def) {
+    frag.append(h('div', { class: 'pn-empty warn' }, `Unknown node type "${n.type}". The registry has no definition for it, so it cannot bake. Delete it or load the module that defines it.`));
+    frag.append(h('div', { class: 'pn-head-a' }, h('button', { type: 'button', class: 'pn-btn', onclick: () => deleteNodes(nodes) }, icon('trash'), 'Delete')));
+    return frag;
+  }
+  const isOut = n.type === OUTPUT_TYPE;
+  if (nodes.length === 1) {
+    const name = h('input', { class: 'pn-name', type: 'text', value: n.label || def.label, spellcheck: 'false', 'aria-label': 'Node name', placeholder: def.label });
+    name.addEventListener('keydown', e => { if (e.key === 'Enter') name.blur(); if (e.key === 'Escape') { name.value = n.label || def.label; name.blur(); } });
+    name.addEventListener('change', () => {
+      const t = name.value.trim();
+      if (GA()?.rename) { GA().rename(n.id, (!t || t === def.label) ? null : t); return; }
+      if (!t || t === def.label) delete n.label; else n.label = t;
+      editDone('Rename node', [n.id], 'param');
+    });
+    frag.append(h('div', { class: 'pn-head' },
+      h('div', { class: 'pn-head-r' }, h('i', { class: 'pn-dot', style: { background: catColor(def.category) } }), name,
+        h('span', { class: 'pn-badge' + (def.source === 'bench' ? ' bench' : '') }, def.source || 'core')),
+      h('div', { class: 'pn-type mono' }, def.type, h('span', { class: 'pn-sub' }, ` · ${def.category}${def.pass ? ' · pass' : ' · fused'} · ${n.id}`)),
+      def.doc ? h('p', { class: 'pn-doc' }, def.doc) : null,
+      isOut ? null : h('div', { class: 'pn-head-a' },
+        h('button', { type: 'button', class: 'pn-btn', title: 'Duplicate (keeps params)', onclick: () => duplicateNodes(nodes) }, icon('copy'), 'Duplicate'),
+        h('button', { type: 'button', class: 'pn-btn', title: 'Reset every param to its default', onclick: () => resetAll(nodes, def) }, icon('reset'), 'Reset all'),
+        h('button', { type: 'button', class: 'pn-btn danger', title: 'Delete the node', onclick: () => deleteNodes(nodes) }, icon('trash'), 'Delete'))));
+  }
+  const params = (def.params || []);
+  if (params.length) {
+    const rows = params.map(p => { const r = paramRow(nodes, p, { noExpose: nodes.length > 1 }); insRows.push(r); return r; });
+    const modded = params.filter(p => !same(paramVal(n, p), p.default)).length;
+    frag.append(section('params', isOut ? 'Material scalars' : 'Parameters', rows, { extra: h('span', { class: 'pn-count' }, `${modded}/${params.length} set`) }));
+  } else frag.append(h('div', { class: 'pn-empty' }, 'This node has no parameters.'));
+  if (nodes.length === 1) {
+    const ins = (def.inputs || []).map(inp => {
+      const l = linksOf().find(k => k.to[0] === n.id && k.to[1] === inp.id);
+      const src = l && getNode(l.from[0]);
+      const dflt = inp.default ?? (inp.type === 'float' ? 0 : null);
+      return h('div', { class: 'pn-port' },
+        h('i', { class: 'pn-sock', style: { background: PORT_COLORS[inp.type] || '#888' }, title: inp.type }),
+        h('span', { class: 'pn-port-l' }, inp.label || inp.id),
+        src ? h('button', { type: 'button', class: 'pn-port-src', title: 'Select the source node', onclick: () => store.select([src.id]) }, `${nodeLabel(src)}.${l.from[1]}`)
+          : h('span', { class: 'pn-port-d mono' }, dflt == null ? '—' : Array.isArray(dflt) ? dflt.map(x => +(+x).toFixed(3)).join(', ') : String(dflt)));
+    });
+    if (ins.length) frag.append(section('inputs', 'Inputs', ins, { open: true, extra: h('span', { class: 'pn-count' }, `${linksOf().filter(k => k.to[0] === n.id).length}/${ins.length} linked`) }));
+    const outs = (def.outputs || []).map(o => {
+      const cnt = linksOf().filter(k => k.from[0] === n.id && k.from[1] === o.id);
+      return h('div', { class: 'pn-port' },
+        h('i', { class: 'pn-sock', style: { background: PORT_COLORS[o.type] || '#888' }, title: o.type }),
+        h('span', { class: 'pn-port-l' }, o.label || o.id), h('span', { class: 'pn-port-d mono' }, o.type),
+        h('span', { class: 'pn-port-n' }, cnt.length ? cnt.map(k => nodeLabel(getNode(k.to[0])) + '.' + k.to[1]).join(', ') : 'unused'));
+    });
+    if (outs.length) frag.append(section('outputs', 'Outputs', outs, { open: false }));
+    const err = (state.compiled?.errors || []).filter(e => e.nodeId === n.id);
+    if (err.length) frag.append(h('div', { class: 'pn-empty warn' }, err.map(e => h('div', null, e.message))));
+  }
+  return frag;
+}
+
+function deleteNodes(nodes) {
+  if (GA()?.remove) { GA().remove(nodes.map(n => n.id).filter(id => id !== graph().output)); store.select([]); return; }
+  if (typeof M.graph?.removeNode !== 'function') return;
+  const ids = nodes.map(n => n.id).filter(id => id !== graph().output);
+  ids.forEach(id => M.graph.removeNode(graph(), id));
+  store.select([]);
+  editDone(`Delete ${ids.length} node${ids.length === 1 ? '' : 's'}`, ids);
+}
+function duplicateNodes(nodes) {
+  if (GA()?.duplicate) {
+    const r = GA().duplicate(nodes.filter(n => n.type !== OUTPUT_TYPE).map(n => n.id), 40, 40);
+    const ids = Array.isArray(r) ? r : (r && r.nodeIds) || [];
+    if (ids.length) store.select(ids.map(x => typeof x === 'string' ? x : x.id));
+    return;
+  }
+  if (typeof M.graph?.addNode !== 'function') return;
+  const made = nodes.filter(n => n.type !== OUTPUT_TYPE).map(n => {
+    const m = M.graph.addNode(graph(), n.type, n.x + 40, n.y + 40, clone(n.params || {}));
+    if (n.label) m.label = n.label + ' copy';
+    if (n.exposed) m.exposed = [...n.exposed];
+    return m;
+  });
+  editDone('Duplicate', made.map(m => m.id));
+  store.select(made.map(m => m.id));
+}
+function resetAll(nodes, def) {
+  for (const n of nodes) for (const p of def.params || []) writeParam(n, p.id, clone(p.default));
+  editDone('Reset params', nodes.map(n => n.id), 'param');
+  renderInspector(true);
+}
+
+function setGraphSetting(key, v, final, session) {
+  const g = graph(); if (!g) return;
+  g.settings = g.settings || { ...state.settings };
+  g.settings[key] = v; state.settings[key] = v;
+  queueEdit([], false, key, `s:${key}:${session}`, final);
+}
+
+function materialView() {
+  const frag = document.createDocumentFragment();
+  const g = graph(); const out = outputNode();
+  // name + stats
+  const name = h('input', { class: 'pn-name', type: 'text', value: g?.name || '', placeholder: 'Untitled material', spellcheck: 'false', 'aria-label': 'Material name' });
+  name.addEventListener('keydown', e => { if (e.key === 'Enter') name.blur(); });
+  name.addEventListener('change', () => setName(name.value));
+  frag.append(h('div', { class: 'pn-head' },
+    h('div', { class: 'pn-head-r' }, h('i', { class: 'pn-dot', style: { background: 'var(--yellow)' } }), name),
+    h('div', { class: 'pn-type' }, 'Material settings', h('span', { class: 'pn-sub' }, ' · select a node to edit its params')),
+    h('div', { class: 'pn-stats', id: 'pn-stats' }, statsLine())));
+  // bake settings
+  let ses = 0;
+  const resSel = h('select', { class: 'pn-sel', 'aria-label': 'Bake resolution' }, RES_OPTIONS.map(r => h('option', { value: String(r) }, `${r} × ${r}`)));
+  resSel.value = String(state.settings.res);
+  resSel.addEventListener('change', () => { store.setRes(+resSel.value); if (g?.settings) g.settings.res = +resSel.value; });
+  const til = wSlider({ id: 'tiling', label: 'Tiling', kind: 'int', min: 1, max: 16, step: 1, default: 1 }, g?.settings?.tiling ?? state.settings.tiling ?? 1, (v, f) => { if (!ses) ses = sessionSeq++; setGraphSetting('tiling', v, f, ses); if (f) ses = 0; });
+  const seed = numField(g?.settings?.seed ?? state.settings.seed ?? 0, { step: 1, int: true, min: 0, max: 99999, sens: 0.3 }, (v, f) => { if (!ses) ses = sessionSeq++; setGraphSetting('seed', v, f, ses); if (f) ses = 0; });
+  const dice = ibtn('dice', 'Random seed', () => { const v = Math.floor(Math.random() * 10000); seed.set(v); setGraphSetting('seed', v, true, sessionSeq++); });
+  const row = (label, el, title) => h('div', { class: 'pn-prm' }, h('label', { class: 'pn-lbl', title: title || '' }, label), h('div', { class: 'pn-ctl' }, el), h('div', { class: 'pn-acts' }));
+  frag.append(section('bake', 'Bake', [
+    row('Resolution', resSel, 'Texels per side of every baked map'),
+    row('Tiling', til.el, 'How many times the pattern repeats across the UV square'),
+    row('Seed', h('div', { class: 'pn-inline' }, seed.el, dice), 'Global random seed; each node adds its own offset'),
+  ]));
+  // scalars from the Material Output node
+  if (out) {
+    const odef = defOf(out);
+    const ps = (odef && odef.params && odef.params.length) ? odef.params : MATERIAL_PARAMS;
+    frag.append(section('scalars', 'Surface', ps.map(p => { const r = paramRow([out], p); insRows.push(r); return r; })));
+  }
+  // exposed params
+  const exp = [];
+  for (const n of nodesOf()) for (const pid of n.exposed || []) {
+    const p = (defOf(n)?.params || []).find(q => q.id === pid);
+    if (p) { const r = paramRow([n], p, { prefix: nodeLabel(n) + ' · ', goto: true }); insRows.push(r); exp.push(r); }
+  }
+  frag.append(section('exposed', 'Exposed parameters', exp.length ? exp : h('div', { class: 'pn-empty' }, 'Pin a node param with ', icon('pin'), ' to put it here. Exposed params save with the graph, so a material can have one compact set of controls.'), { extra: h('span', { class: 'pn-count' }, String(exp.length)) }));
+  // starter materials
+  const presets = M.presets?.MATERIAL_PRESETS || [];
+  if (presets.length) {
+    frag.append(section('presets', 'Starter materials', h('div', { class: 'pn-presets' }, presets.map(pr => h('button', {
+      type: 'button', class: 'pn-preset', title: pr.description || pr.label,
+      onclick: () => loadPreset(pr),
+    }, h('i', { class: 'pn-ball', style: { background: ballCss(pr.swatch) } }), h('span', null, pr.label))))));
+  }
+  // compile errors
+  const errs = state.compiled?.errors || [];
+  if (errs.length) frag.append(section('errors', 'Compile errors', errs.map(e => h('button', { type: 'button', class: 'pn-err', onclick: () => e.nodeId && store.select([e.nodeId]) }, e.nodeId ? h('b', null, e.nodeId + ': ') : null, e.message)), { extra: h('span', { class: 'pn-count bad' }, String(errs.length)) }));
+  return frag;
+}
+function statsLine() {
+  const ns = nodesOf(), bench = ns.filter(n => defOf(n)?.source === 'bench').length;
+  const c = state.compiled, m = state.maps;
+  return [
+    kv('nodes', String(ns.length)), kv('links', String(linksOf().length)), bench ? kv('bench', String(bench)) : null,
+    c && c.passes ? kv('passes', String(c.passes.length)) : null,
+    m ? kv('bake', `${m.res}² ${m.ms != null ? '· ' + m.ms.toFixed(0) + ' ms' : ''}`) : kv('bake', '—'),
+  ];
+}
+function ballCss(sw) {
+  const c = Array.isArray(sw) ? sw : [sw || '#888888'];
+  const a = c[0], b = c[1] || c[0];
+  return `radial-gradient(circle at 34% 30%, rgba(255,255,255,0.75) 0, rgba(255,255,255,0) 22%), radial-gradient(circle at 40% 38%, ${a} 0, ${b} 62%, #05070b 100%)`;
+}
+function loadPreset(pr) {
+  const gj = typeof pr.build === 'function' ? pr.build() : pr.graph;
+  if (loadGraph(gj, 'Starter: ' + pr.label, { keepRes: true })) store.toast(`Loaded "${pr.label}"`, 'ok');
+}
+function setName(v) {
+  const g = graph(); if (!g) return;
+  v = String(v || '').trim();
+  const tb = $('pn-projname'); if (tb && document.activeElement !== tb) tb.value = v;
+  if (GA()?.edit) { GA().edit('Rename material', gg => { if (v) gg.name = v; else delete gg.name; return true; }, { kind: 'layout' }); return; }
+  if (v) g.name = v; else delete g.name;
+  editDone('Rename material', [], 'param');
+}
+
+// ------------------------------------------------------------ library
+const lib = { entries: [], q: '', cursor: null, src: 'all', open: lsGet('libOpen', { Favorites: true, Recent: true, 'c:Input': true, 'c:Generator': true, 'c:Noise': true, 'c:Pattern': true }), fav: new Set(lsGet('fav', [])), recent: lsGet('recent', []) };
+function pushRecent(type) {
+  lib.recent = [type, ...lib.recent.filter(t => t !== type)].slice(0, 12);
+  lsSet('recent', lib.recent);
+  if (!lib.q) renderLibrary();
+}
+function benchGroup(def) {
+  const seg = def.type.split('.');
+  return def.benchLibLabel || def.libLabel || def.lib || seg[1] || 'bench';
+}
+function buildLibrary() {
+  lib.entries = [];
+  for (const def of state.registry.values()) {
+    if (def.type === OUTPUT_TYPE) continue;
+    const bench = def.source === 'bench' || def.type.startsWith('bench.');
+    const cat = bench ? 'Bench' : (def.category || 'Utility');
+    const hay = [def.label, def.type, cat, ...(def.tags || []), bench ? benchGroup(def) : ''].join(' ').toLowerCase();
+    lib.entries.push({ def, cat, group: bench ? benchGroup(def) : null, bench, hay, doc: String(def.doc || '').toLowerCase(), label: String(def.label || def.type).toLowerCase() });
+  }
+  const order = c => { const i = NODE_CATEGORIES.indexOf(c); return i < 0 ? 99 : i; };
+  lib.entries.sort((a, b) => order(a.cat) - order(b.cat) || (a.group || '').localeCompare(b.group || '') || a.def.label.localeCompare(b.def.label));
+}
+/** Subsequence score: higher is better, -1 is no match. Word starts and runs score more. */
+function fuzzy(q, s) {
+  if (!q) return 0;
+  let i = 0, score = 0, run = 0, last = -2;
+  for (let j = 0; j < s.length && i < q.length; j++) {
+    if (s[j] === q[i]) {
+      const start = j === 0 || /[\s._\-&]/.test(s[j - 1]);
+      run = last === j - 1 ? run + 1 : 0;
+      score += 1 + run * 2 + (start ? 3 : 0);
+      last = j; i++;
+    }
+  }
+  if (i < q.length) return -1;
+  return score - (s.length * 0.01);
+}
+function scoreEntry(e, toks) {
+  let total = 0;
+  for (const t of toks) {
+    const inLabel = e.label.includes(t) ? 12 + (e.label.startsWith(t) ? 10 : 0) : -1;
+    const f = fuzzy(t, e.label);
+    const hy = e.hay.includes(t) ? 6 : -1;
+    const dc = e.doc.includes(t) ? 2 : -1;
+    const best = Math.max(inLabel, f, hy, dc);
+    if (best < 0) return -1;
+    total += best;
+  }
+  return total + (lib.fav.has(e.def.type) ? 3 : 0) - (e.bench ? 1 : 0);
+}
+function libRow(e, hint) {
+  const d = e.def;
+  const outT = (d.outputs && d.outputs[0] && d.outputs[0].type) || 'float';
+  const fav = lib.fav.has(d.type);
+  return h('div', { class: 'pn-li' + (lib.cursor === d.type ? ' cur' : ''), dataset: { type: d.type }, role: 'option', title: d.doc || d.label },
+    h('button', { type: 'button', class: 'pn-star' + (fav ? ' on' : ''), 'aria-label': fav ? 'Remove from favorites' : 'Add to favorites', dataset: { star: d.type } }, icon('star')),
+    h('i', { class: 'pn-sock', style: { background: PORT_COLORS[outT] || '#888' } }),
+    h('span', { class: 'pn-li-l' }, d.label),
+    hint ? h('span', { class: 'pn-li-h' }, hint) : (d.pass ? h('span', { class: 'pn-li-h' }, 'pass') : null));
+}
+function libGroup(key, title, count, rows, depth = 0) {
+  const open = lib.q ? true : !!lib.open[key];
+  const head = h('button', { type: 'button', class: 'pn-lg-h' + (depth ? ' sub' : ''), dataset: { group: key }, 'aria-expanded': String(open) },
+    icon('chev', 'pn-chev'), h('span', null, title), h('span', { class: 'pn-count' }, String(count)));
+  const body = h('div', { class: 'pn-lg-b' });
+  if (open) body.append(...(typeof rows === 'function' ? rows() : rows));
+  return h('div', { class: 'pn-lg' + (open ? ' open' : '') + (depth ? ' sub' : '') }, head, body);
+}
+function renderLibrary() {
+  const list = lib.listEl; if (!list) return;
+  const src = lib.src;
+  const pool = lib.entries.filter(e => src === 'all' || (src === 'bench' ? e.bench : !e.bench));
+  const q = lib.q.trim().toLowerCase();
+  const out = [];
+  if (q) {
+    const toks = q.split(/\s+/).filter(Boolean);
+    const hits = [];
+    for (const e of pool) { const s = scoreEntry(e, toks); if (s >= 0) hits.push([s, e]); }
+    hits.sort((a, b) => b[0] - a[0]);
+    lib.flat = hits.slice(0, 250).map(x => x[1]);
+    if (!lib.flat.length) out.push(h('div', { class: 'pn-empty' }, `No node matches "${lib.q}".`));
+    out.push(...lib.flat.map(e => libRow(e, e.bench ? `bench · ${e.group}` : e.cat)));
+    lib.countEl.textContent = `${hits.length} match${hits.length === 1 ? '' : 'es'}`;
+  } else {
+    lib.flat = [];
+    const byType = new Map(pool.map(e => [e.def.type, e]));
+    const favs = [...lib.fav].map(t => byType.get(t)).filter(Boolean);
+    const rec = lib.recent.map(t => byType.get(t)).filter(Boolean);
+    if (favs.length) { out.push(libGroup('Favorites', 'Favorites', favs.length, () => favs.map(e => libRow(e, e.bench ? e.group : e.cat)))); if (lib.open.Favorites) lib.flat.push(...favs); }
+    if (rec.length) { out.push(libGroup('Recent', 'Recent', rec.length, () => rec.map(e => libRow(e, e.bench ? e.group : e.cat)))); if (lib.open.Recent) lib.flat.push(...rec); }
+    const cats = new Map();
+    for (const e of pool) { if (!cats.has(e.cat)) cats.set(e.cat, []); cats.get(e.cat).push(e); }
+    for (const [cat, es] of cats) {
+      if (cat !== 'Bench') {
+        out.push(libGroup('c:' + cat, cat, es.length, () => es.map(e => libRow(e))));
+        if (lib.open['c:' + cat]) lib.flat.push(...es);
+      } else {
+        const groups = new Map();
+        for (const e of es) { if (!groups.has(e.group)) groups.set(e.group, []); groups.get(e.group).push(e); }
+        out.push(libGroup('c:Bench', 'Composition Bench', es.length, () => [...groups].map(([gname, ge]) => {
+          if (lib.open['c:Bench'] && lib.open['b:' + gname]) lib.flat.push(...ge);
+          return libGroup('b:' + gname, gname, ge.length, () => ge.map(e => libRow(e)), 1);
+        })));
+      }
+    }
+    lib.countEl.textContent = `${pool.length} nodes`;
+  }
+  const top = list.scrollTop;
+  list.replaceChildren(...out);
+  list.scrollTop = top;
+  renderLibInfo();
+}
+function renderLibInfo() {
+  const box = lib.infoEl; if (!box) return;
+  const d = lib.cursor && state.registry.get(lib.cursor);
+  if (!d) { box.replaceChildren(h('div', { class: 'pn-sub' }, isPhone() ? 'Tap a node for details, then Add.' : 'Drag a node onto the graph, or double-click it.')); return; }
+  const ports = (arr) => (arr || []).map(p => h('span', { class: 'pn-pt', title: p.type }, h('i', { class: 'pn-sock', style: { background: PORT_COLORS[p.type] || '#888' } }), p.label || p.id));
+  box.replaceChildren(
+    h('div', { class: 'pn-li-info-h' }, h('b', null, d.label), h('button', { type: 'button', class: 'pn-btn pri', onclick: () => { addNodeAt(d.type); if (isPhone()) M.mobile?.setSheet?.('graph'); } }, icon('plus'), 'Add')),
+    h('div', { class: 'pn-type mono' }, d.type),
+    d.doc ? h('p', { class: 'pn-doc' }, d.doc) : null,
+    (d.inputs || []).length ? h('div', { class: 'pn-pts' }, h('span', { class: 'pn-sub' }, 'in'), ports(d.inputs)) : null,
+    (d.outputs || []).length ? h('div', { class: 'pn-pts' }, h('span', { class: 'pn-sub' }, 'out'), ports(d.outputs)) : null);
+}
+function initLibrary() {
+  const body = $('lib-body'); if (!body) return;
+  const search = h('input', { class: 'pn-search', type: 'search', placeholder: 'Search nodes  ( / )', spellcheck: 'false', autocomplete: 'off', 'aria-label': 'Search nodes' });
+  const srcSel = h('div', { class: 'pn-seg sm' }, [['all', 'All'], ['core', 'Core'], ['bench', 'Bench']].map(([s, l]) => h('button', { type: 'button', class: 'pn-seg-b' + (s === 'all' ? ' on' : ''), dataset: { v: s } }, l)));
+  const count = h('span', { class: 'pn-count' });
+  const list = h('div', { class: 'pn-lib-list', role: 'listbox', 'aria-label': 'Node library' });
+  const info = h('div', { class: 'pn-lib-info' });
+  lib.listEl = list; lib.infoEl = info; lib.countEl = count; lib.searchEl = search;
+  // editor.js also has a #lib-body library. Its buildLibrary() rebuilds only
+  // when .ge-lib-q is missing, so this hidden sentinel keeps it from replacing
+  // this library when the registry size changes (it writes into the sentinel).
+  const sentinel = h('div', { class: 'pn-lib-sentinel', hidden: true, 'aria-hidden': 'true' }, h('input', { class: 'ge-lib-q', type: 'hidden' }), h('span', { class: 'ge-lib-n' }), h('div', { class: 'ge-lib-tree' }));
+  body.replaceChildren(sentinel, h('div', { class: 'pn-lib-top' }, h('div', { class: 'pn-search-w' }, icon('search'), search), h('div', { class: 'pn-lib-f' }, srcSel, count)), list, info);
+  body.classList.add('pn-lib');
+  let t = 0;
+  search.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { lib.q = search.value; lib.cursor = null; renderLibrary(); if (lib.flat[0] && lib.q) { lib.cursor = lib.flat[0].def.type; markCursor(); } }, 60); });
+  search.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); moveCursor(e.key === 'ArrowDown' ? 1 : -1); }
+    else if (e.key === 'Enter' && lib.cursor) { e.preventDefault(); addNodeAt(lib.cursor); }
+    else if (e.key === 'Escape') { search.value = ''; lib.q = ''; renderLibrary(); search.blur(); }
+  });
+  srcSel.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; lib.src = b.dataset.v; srcSel.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); renderLibrary(); });
+  list.addEventListener('click', e => {
+    const st = e.target.closest('[data-star]');
+    if (st) { const ty = st.dataset.star; if (lib.fav.has(ty)) lib.fav.delete(ty); else lib.fav.add(ty); lsSet('fav', [...lib.fav]); renderLibrary(); return; }
+    const g = e.target.closest('[data-group]');
+    if (g) { const k = g.dataset.group; lib.open[k] = !lib.open[k]; lsSet('libOpen', lib.open); renderLibrary(); return; }
+    const r = e.target.closest('.pn-li');
+    if (r) { lib.cursor = r.dataset.type; markCursor(); renderLibInfo(); }
+  });
+  list.addEventListener('dblclick', e => { const r = e.target.closest('.pn-li'); if (r && !e.target.closest('[data-star]')) addNodeAt(r.dataset.type); });
+  list.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); moveCursor(e.key === 'ArrowDown' ? 1 : -1); }
+    else if (e.key === 'Enter' && lib.cursor) addNodeAt(lib.cursor);
+  });
+  list.tabIndex = 0;
+  // pointer drag to the graph (mouse, pen and touch)
+  list.addEventListener('pointerdown', e => {
+    const r = e.target.closest('.pn-li'); if (!r || e.target.closest('[data-star]') || e.button !== 0) return;
+    const type = r.dataset.type, x0 = e.clientX, y0 = e.clientY;
+    let ghost = null;
+    const touch = e.pointerType === 'touch';
+    const mv = ev => {
+      if (!ghost) {
+        const dx = ev.clientX - x0, dy = ev.clientY - y0;
+        if (Math.hypot(dx, dy) < 8) return;
+        if (touch && Math.abs(dy) > Math.abs(dx)) { cleanup(); return; } // vertical swipe scrolls the list
+        ghost = h('div', { class: 'pn-ghost' }, state.registry.get(type)?.label || type);
+        document.body.appendChild(ghost);
+        try { capture(list, ev); } catch (er) { /* ok */ }
+        document.body.classList.add('pn-dragging');
+      }
+      ghost.style.transform = `translate(${ev.clientX + 12}px, ${ev.clientY + 8}px)`;
+      const over = document.elementFromPoint(ev.clientX, ev.clientY);
+      $('graph-wrap')?.classList.toggle('pn-drop', !!over && !!over.closest('#graph-wrap'));
+    };
+    const up = ev => {
+      if (ghost) {
+        const over = document.elementFromPoint(ev.clientX, ev.clientY);
+        if (over && over.closest('#graph-wrap')) addNodeAt(type, ev.clientX, ev.clientY);
+      }
+      cleanup();
+    };
+    const cleanup = () => {
+      ghost?.remove(); ghost = null; document.body.classList.remove('pn-dragging'); $('graph-wrap')?.classList.remove('pn-drop');
+      window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', cleanup);
+    };
+    window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', cleanup);
+  });
+  buildLibrary(); renderLibrary();
+}
+function markCursor() {
+  lib.listEl.querySelectorAll('.pn-li.cur').forEach(x => x.classList.remove('cur'));
+  const el = lib.cursor && lib.listEl.querySelector(`.pn-li[data-type="${CSS.escape(lib.cursor)}"]`);
+  if (el) { el.classList.add('cur'); el.scrollIntoView({ block: 'nearest' }); }
+}
+function moveCursor(d) {
+  const flat = lib.flat.length ? lib.flat : [];
+  if (!flat.length) return;
+  let i = flat.findIndex(e => e.def.type === lib.cursor);
+  i = clamp(i + d, 0, flat.length - 1);
+  lib.cursor = flat[i].def.type; markCursor(); renderLibInfo();
+}
+
+// ------------------------------------------------------------ maps strip
+// One tile per map channel. `view` is the viewport debug view the tile solos.
+const TILES = [
+  { id: 'albedo', label: 'Base Color', slot: 'albedo', mode: 0, view: 'albedo' },
+  { id: 'opacity', label: 'Opacity', slot: 'albedo', mode: 2, mask: [0, 0, 0, 1], view: 'opacity' },
+  { id: 'normal', label: 'Normal', slot: 'normal', mode: 1, view: 'normal' },
+  { id: 'ao', label: 'AO', slot: 'orm', mode: 2, mask: [1, 0, 0, 0], view: 'ao' },
+  { id: 'roughness', label: 'Roughness', slot: 'orm', mode: 2, mask: [0, 1, 0, 0], view: 'roughness' },
+  { id: 'metallic', label: 'Metallic', slot: 'orm', mode: 2, mask: [0, 0, 1, 0], view: 'metallic' },
+  { id: 'height', label: 'Height', slot: 'height', mode: 2, mask: [1, 0, 0, 0], view: 'height' },
+  { id: 'emissive', label: 'Emissive', slot: 'emissive', mode: 3, view: 'emissive' },
+  { id: 'clearcoat', label: 'Clearcoat', slot: 'extra', mode: 2, mask: [1, 0, 0, 0], view: 'clearcoat' },
+  { id: 'ccRough', label: 'Coat Rough', slot: 'extra', mode: 2, mask: [0, 1, 0, 0], view: null },
+  { id: 'sheen', label: 'Sheen', slot: 'extra', mode: 2, mask: [0, 0, 1, 0], view: 'sheen' },
+  { id: 'anisotropy', label: 'Anisotropy', slot: 'extra', mode: 2, mask: [0, 0, 0, 1], view: 'anisotropy' },
+];
+const THUMB = 128;
+const thumbs = { pipe: null, samp: null, ubufs: [], tiles: new Map(), busy: false, again: false, n: 0, err: null };
+async function initThumbPipeline() {
+  const g = ctx.gpu; if (!g.ok) return;
+  let code;
+  try { code = await (await fetch(new URL('./shaders/panels-thumb.wgsl', import.meta.url))).text(); }
+  catch (e) { thumbs.err = 'shader fetch failed'; return; }
+  const d = g.device;
+  const mod = d.createShaderModule({ code, label: 'panels-thumb' });
+  thumbs.pipe = await d.createRenderPipelineAsync({
+    label: 'panels-thumb', layout: 'auto',
+    vertex: { module: mod, entryPoint: 'vs' },
+    fragment: { module: mod, entryPoint: 'fs', targets: [{ format: 'rgba8unorm' }] },
+    primitive: { topology: 'triangle-list' },
+  });
+  thumbs.samp = d.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat', addressModeV: 'repeat' });
+}
+/** Uniform for one tile: mask vec4f, mode u32, gain f32, footprint f32, pad. */
+function tileUniform(t, size, res, gain) {
+  const d = ctx.gpu.device;
+  const buf = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  const ab = new ArrayBuffer(32), f = new Float32Array(ab), u = new Uint32Array(ab);
+  f.set(t.mask || [1, 1, 1, 1], 0); u[4] = t.mode; f[5] = gain; f[6] = 1 / size; f[7] = res / size;
+  d.queue.writeBuffer(buf, 0, ab);
+  return buf;
+}
+/**
+ * Render the given tiles of `maps` to rgba8 images. All GPU work is submitted
+ * before the first await, so the bake may recycle the maps afterwards.
+ * @returns {Promise<ImageData[]>|null}
+ */
+function renderTiles(maps, list, size) {
+  const d = ctx.gpu.device; if (!thumbs.pipe || !maps) return null;
+  const W = size * list.length, bpr = Math.ceil((W * 4) / 256) * 256;
+  const tgt = d.createTexture({ size: [W, size], format: 'rgba8unorm', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+  const rb = d.createBuffer({ size: bpr * size, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  const gain = maps.scalars?.emissiveStrength ?? state.scalars?.emissiveStrength ?? 1;
+  const ubs = [];
+  const enc = d.createCommandEncoder({ label: 'panels-thumbs' });
+  const pass = enc.beginRenderPass({ colorAttachments: [{ view: tgt.createView(), loadOp: 'clear', storeOp: 'store', clearValue: { r: 0.05, g: 0.06, b: 0.08, a: 1 } }] });
+  pass.setPipeline(thumbs.pipe);
+  list.forEach((t, i) => {
+    const tex = maps[t.slot]; if (!tex) return;
+    const ub = tileUniform(t, size, maps.res || tex.width || 1024, gain); ubs.push(ub);
+    const bg = d.createBindGroup({ layout: thumbs.pipe.getBindGroupLayout(0), entries: [
+      { binding: 0, resource: tex.createView() }, { binding: 1, resource: thumbs.samp }, { binding: 2, resource: { buffer: ub } }] });
+    pass.setViewport(i * size, 0, size, size, 0, 1);
+    pass.setBindGroup(0, bg); pass.draw(3);
+  });
+  pass.end();
+  enc.copyTextureToBuffer({ texture: tgt }, { buffer: rb, bytesPerRow: bpr }, [W, size]);
+  d.queue.submit([enc.finish()]);
+  return rb.mapAsync(GPUMapMode.READ).then(() => {
+    const src = new Uint8Array(rb.getMappedRange());
+    const imgs = list.map((t, i) => {
+      const img = new ImageData(size, size);
+      for (let y = 0; y < size; y++) img.data.set(src.subarray(y * bpr + i * size * 4, y * bpr + (i + 1) * size * 4), y * size * 4);
+      return img;
+    });
+    rb.unmap(); rb.destroy(); tgt.destroy(); ubs.forEach(b => b.destroy());
+    return imgs;
+  }, e => { rb.destroy(); tgt.destroy(); ubs.forEach(b => b.destroy()); throw e; });
+}
+function initStrip() {
+  const strip = $('maps-strip'); if (!strip) return;
+  strip.classList.add('pn-strip');
+  strip.replaceChildren(...TILES.map(t => {
+    const cv = h('canvas', { width: THUMB, height: THUMB, class: 'mt-cv' });
+    const stat = h('span', { class: 'mt-stat' }, '—');
+    const el = h('button', { type: 'button', class: 'mt', dataset: { tile: t.id }, title: `${t.label}${t.view ? ': click to solo in the viewport' : ''}. Double-click to enlarge.` },
+      cv, h('span', { class: 'mt-l' }, t.label), stat);
+    el.addEventListener('click', () => {
+      if (!t.view) return;
+      store.setView({ debug: state.view.debug === t.view ? 'lit' : t.view });
+    });
+    el.addEventListener('dblclick', () => openLightbox(t));
+    thumbs.tiles.set(t.id, { el, cv, stat, t });
+    return el;
+  }));
+  markSolo();
+}
+function markSolo() { for (const { el, t } of thumbs.tiles.values()) el.classList.toggle('on', !!t.view && state.view.debug === t.view); }
+async function updateStrip() {
+  if (!thumbs.pipe || !state.maps) return;
+  if (thumbs.busy) { thumbs.again = true; return; }
+  thumbs.busy = true;
+  try {
+    const p = renderTiles(state.maps, TILES, THUMB);
+    if (!p) return;
+    const imgs = await p;
+    imgs.forEach((img, i) => {
+      const tl = thumbs.tiles.get(TILES[i].id); if (!tl) return;
+      tl.cv.getContext('2d').putImageData(img, 0, 0);
+      tl.stat.textContent = tileStat(img, TILES[i]);
+      tl.el.classList.toggle('flat', /^flat/.test(tl.stat.textContent));
+    });
+    thumbs.n++;
+  } catch (e) { console.warn('[panels] thumbnails', e); thumbs.err = String(e.message || e); }
+  finally {
+    thumbs.busy = false;
+    if (thumbs.again) { thumbs.again = false; updateStrip(); }
+  }
+}
+/** Min/max of a gray tile (display value), or 'flat x' when constant. */
+function tileStat(img, t) {
+  const d = img.data; let mn = 255, mx = 0;
+  const step = 4 * 7;
+  for (let i = 0; i < d.length; i += step) { const v = t.mode === 2 ? d[i] : Math.max(d[i], d[i + 1], d[i + 2]); if (v < mn) mn = v; if (v > mx) mx = v; }
+  if (mx - mn <= 1) return t.mode === 2 ? `flat ${(mn / 255).toFixed(2)}` : `flat ${rgbToHex([d[0] / 255, d[1] / 255, d[2] / 255])}`;
+  return t.mode === 2 ? `${(mn / 255).toFixed(2)}–${(mx / 255).toFixed(2)}` : '';
+}
+async function openLightbox(t) {
+  if (!state.maps || !thumbs.pipe) return;
+  const S = 512;
+  const cv = h('canvas', { width: S, height: S, class: 'lb-cv' });
+  const read = h('span', { class: 'mono pn-sub' }, 'hover to read texels');
+  const sel = h('select', { class: 'pn-sel', 'aria-label': 'Channel' }, TILES.map(x => h('option', { value: x.id }, x.label)));
+  sel.value = t.id;
+  const close = () => box.remove();
+  const box = h('div', { class: 'pn-modal', role: 'dialog', 'aria-label': 'Map preview', onclick: e => { if (e.target === box) close(); } },
+    h('div', { class: 'pn-modal-c lb' },
+      h('div', { class: 'pn-modal-h' }, h('b', null, 'Map preview'), sel, h('span', { class: 'pn-sub' }, `${state.maps.res}² source`), ibtn('close', 'Close', close)),
+      cv, read));
+  document.body.appendChild(box);
+  const draw = async id => {
+    const tile = TILES.find(x => x.id === id);
+    const p = renderTiles(state.maps, [tile], S); if (!p) return;
+    const [img] = await p; cv.getContext('2d').putImageData(img, 0, 0); cv._img = img;
+  };
+  sel.addEventListener('change', () => draw(sel.value));
+  cv.addEventListener('pointermove', e => {
+    const r = cv.getBoundingClientRect(), x = Math.floor((e.clientX - r.left) / r.width * S), y = Math.floor((e.clientY - r.top) / r.height * S);
+    const img = cv._img; if (!img || x < 0 || y < 0 || x >= S || y >= S) return;
+    const i = (y * S + x) * 4;
+    read.textContent = `uv ${(x / S).toFixed(3)}, ${(y / S).toFixed(3)}  ·  ${[0, 1, 2].map(k => (img.data[i + k] / 255).toFixed(3)).join('  ')}  (display)`;
+  });
+  box.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  box.tabIndex = -1; box.focus();
+  await draw(t.id);
+}
+
+// ------------------------------------------------------------ env panel
+const FALLBACK_ENVS = [
+  { id: 'studio', label: 'Studio', c: ['#d8dde6', '#3a3f4a'] },
+];
+function envPresets() {
+  const e = M.env || {};
+  let list = e.ENV_PRESETS || e.PRESETS || (typeof e.listPresets === 'function' ? e.listPresets() : null);
+  if (list && !Array.isArray(list)) list = Object.entries(list).map(([id, v]) => ({ id, ...(typeof v === 'object' ? v : { label: String(v) }) }));
+  return (list && list.length ? list : FALLBACK_ENVS).map(p => typeof p === 'string' ? { id: p, label: p } : p);
+}
+function envThumb(p) {
+  const el = h('i', { class: 'pe-th' });
+  const fill = src => { if (src) { el.style.backgroundImage = `url("${src}")`; el.classList.add('img'); } };
+  if (p.thumb) fill(p.thumb);
+  else if (typeof M.env?.presetThumbnail === 'function') {
+    Promise.resolve().then(() => M.env.presetThumbnail(p.id)).then(r => {
+      if (!r) return;
+      if (typeof r === 'string') fill(r);
+      else if (r instanceof HTMLCanvasElement) fill(r.toDataURL());
+    }).catch(() => {});
+  }
+  const c = p.colors || p.c || hashColors(p.id);
+  el.style.background = `linear-gradient(180deg, ${c[0]} 0%, ${c[0]} 42%, ${c[1] || c[0]} 58%, ${c[2] || '#0b0d12'} 100%)`;
+  return el;
+}
+function hashColors(id) {
+  let x = 0; for (const ch of String(id)) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
+  const hu = x % 360;
+  return [`hsl(${hu} 40% 72%)`, `hsl(${(hu + 30) % 360} 25% 32%)`, `hsl(${(hu + 50) % 360} 20% 10%)`];
+}
+function setEnvPreset(id) {
+  if (typeof M.env?.setPreset === 'function') {
+    Promise.resolve(M.env.setPreset(id)).catch(e => store.toast('Environment failed: ' + (e.message || e), 'error'));
+    if (state.env.preset !== id) store.setEnv({ preset: id });
+  } else store.setEnv({ preset: id });
+}
+let envSelf = 0;
+/** Env and view edits from this panel do not re-render it (the widget already shows the value). */
+const setEnvSelf = patch => { envSelf++; try { store.setEnv(patch); } finally { envSelf--; } };
+const setViewSelf = patch => { envSelf++; try { store.setView(patch); } finally { envSelf--; } };
+function envRow(label, w, title) { return h('div', { class: 'pn-prm' }, h('label', { class: 'pn-lbl', title: title || '' }, label), h('div', { class: 'pn-ctl' }, w.el || w), h('div', { class: 'pn-acts' })); }
+function envSlider(key, label, min, max, step, scale = 1, title) {
+  return envRow(label, wSlider({ id: key, label, kind: 'slider', min, max, step, default: min }, state.env[key] * scale, v => setEnvSelf({ [key]: v / scale })), title);
+}
+function viewSlider(key, label, min, max, step, title) {
+  return envRow(label, wSlider({ id: key, label, kind: 'slider', min, max, step, default: min }, state.view[key], v => setViewSelf({ [key]: v })), title);
+}
+function renderEnv() {
+  const root = $('env-panel'); if (!root) return;
+  closePicker();
+  const scroll = root.scrollTop;
+  const env = state.env;
+  const frag = document.createDocumentFragment();
+  // env.js owns the environment controls (probe, presets, Poly Haven, lights)
+  // through mountPanel(el). This panel then adds only the View section.
+  if (typeof M.env?.mountPanel === 'function' && !envFallback) {
+    if (!envHost || !root.contains(envHost)) {
+      envHost = h('div', { class: 'pe-env' }); viewHost = h('div', { class: 'pe-view' });
+      root.replaceChildren(envHost, viewHost);
+      try { M.env.mountPanel(envHost); } catch (e) { console.warn('[panels] env.mountPanel', e); envFallback = true; return renderEnv(); }
+    }
+    viewHost.replaceChildren(viewSection());
+    root.scrollTop = scroll;
+    return;
+  }
+  // presets
+  const grid = h('div', { class: 'pe-grid' }, envPresets().map(p => h('button', {
+    type: 'button', class: 'pe-p' + (env.preset === p.id ? ' on' : ''), title: p.description || p.label || p.id, onclick: () => setEnvPreset(p.id),
+  }, envThumb(p), h('span', null, p.label || p.id))));
+  const hdr = h('button', { type: 'button', class: 'pn-btn', onclick: async () => {
+    const [f] = await pickFiles('.hdr,.rgbe,image/vnd.radiance');
+    if (!f) return;
+    if (typeof M.env?.loadHDR !== 'function') { store.toast('HDR loading is not available yet', 'warn'); return; }
+    try { await M.env.loadHDR(f); store.toast(`Loaded ${f.name}`, 'ok'); } catch (e) { store.toast('HDR failed: ' + (e.message || e), 'error'); }
+  } }, icon('file'), 'Load .hdr…');
+  frag.append(section('env-presets', 'Environment', [grid, h('div', { class: 'pn-head-a' }, hdr, h('span', { class: 'pn-sub' }, env.preset && !envPresets().some(p => p.id === env.preset) ? `custom: ${env.preset}` : ''))]));
+  frag.append(section('env-light', 'Lighting', [
+    envSlider('rotation', 'Rotation', 0, 360, 1, 1, 'HDRI rotation around the up axis, degrees'),
+    envSlider('intensity', 'Intensity', 0, 4, 0.01, 1, 'Multiplier on the image-based light'),
+    envRow('Background', wEnum({ id: 'background', label: 'Background', kind: 'enum', options: [{ value: 'hdri', label: 'HDRI' }, { value: 'blur', label: 'Blur' }, { value: 'color', label: 'Color' }] }, env.background, v => { store.setEnv({ background: v }); renderEnv(); })),
+    env.background === 'blur' ? envSlider('blur', 'Blur', 0, 1, 0.01) : null,
+    env.background === 'color' ? envRow('Color', wColor({ id: 'bgColor', label: 'Background' }, env.bgColor, v => setEnvSelf({ bgColor: v }))) : null,
+  ]));
+  // lights
+  const lights = env.lights || [];
+  const lrows = lights.map((L, i) => lightRow(L, i));
+  const add = type => {
+    const L = type === 'dir' ? { type: 'dir', color: '#fff4e0', intensity: 2, az: 45, el: 35, on: true } : { type: 'point', color: '#ffffff', intensity: 4, pos: [1.5, 1.5, 1.5], on: true };
+    if (L.type === 'dir') L.dir = azElToDir(L.az, L.el);
+    store.setEnv({ lights: [...lights, L] }); renderEnv();
+  };
+  frag.append(section('env-lights', 'Analytic lights', [
+    lrows.length ? lrows : h('div', { class: 'pn-empty' }, 'No analytic lights. The HDRI lights the material alone.'),
+    h('div', { class: 'pn-head-a' },
+      h('button', { type: 'button', class: 'pn-btn', onclick: () => add('dir') }, icon('sun'), 'Directional'),
+      h('button', { type: 'button', class: 'pn-btn', onclick: () => add('point') }, icon('bulb'), 'Point')),
+  ], { extra: h('span', { class: 'pn-count' }, String(lights.length)) }));
+  frag.append(viewSection());
+  root.replaceChildren(frag);
+  root.scrollTop = scroll;
+}
+let envHost = null, viewHost = null, envFallback = false;
+/** Viewport controls: mesh, debug view, tonemapper, exposure, toggles. */
+function viewSection() {
+  const view = state.view;
+  const meshGrid = h('div', { class: 'pn-seg wrap' }, MESHES.map(m => h('button', { type: 'button', class: 'pn-seg-b' + (view.mesh === m ? ' on' : ''), onclick: () => { store.setView({ mesh: m }); renderEnv(); } }, MESH_LABEL[m] || m)));
+  const dbg = wEnum({ id: 'debug', label: 'Debug view', kind: 'enum', options: DEBUG_VIEWS.map(v => ({ value: v, label: VIEW_LABEL[v] || v })) }, view.debug, v => setViewSelf({ debug: v }));
+  const tm = wEnum({ id: 'tonemap', label: 'Tonemapper', kind: 'enum', options: TONEMAPPERS.map(v => ({ value: v, label: TM_LABEL[v] || v })) }, view.tonemap, v => setViewSelf({ tonemap: v }));
+  const tog = (key, label, title) => envRow(label, wBool({ label }, view[key], v => setViewSelf({ [key]: v })), title);
+  return section('env-view', 'View', [
+    h('div', { class: 'pn-prm wide' }, h('label', { class: 'pn-lbl' }, 'Mesh'), h('div', { class: 'pn-ctl' }, meshGrid)),
+    envRow('Debug view', dbg), envRow('Tonemapper', tm),
+    viewSlider('exposure', 'Exposure (EV)', -6, 6, 0.05),
+    viewSlider('uvScale', 'UV scale', 0.25, 8, 0.05, 'Repeat the baked maps on the mesh'),
+    tog('parallax', 'Parallax', 'Parallax occlusion from the height map'),
+    tog('displacement', 'Displacement', 'Move vertices by the height map'),
+    view.displacement ? envRow('Subdivision', wSlider({ id: 'subdiv', label: 'Subdivision', kind: 'int', min: 16, max: 512, step: 16, default: 128 }, view.subdiv, v => setViewSelf({ subdiv: v }))) : null,
+    tog('wireframe', 'Wireframe'), tog('autoRotate', 'Auto rotate'),
+  ]);
+}
+const MESH_LABEL = { sphere: 'Sphere', cube: 'Cube', roundedCube: 'Rounded', plane: 'Plane', cylinder: 'Cylinder', torus: 'Torus', shaderBall: 'Shader ball' };
+const VIEW_LABEL = { lit: 'Lit', albedo: 'Base color', opacity: 'Opacity', normal: 'Normal (tangent)', worldNormal: 'Normal (world)', ao: 'AO', roughness: 'Roughness', metallic: 'Metallic', height: 'Height', emissive: 'Emissive', clearcoat: 'Clearcoat', sheen: 'Sheen', anisotropy: 'Anisotropy', uv: 'UV', diffuseOnly: 'Diffuse only', specularOnly: 'Specular only' };
+const TM_LABEL = { aces: 'ACES', agx: 'AgX', khronosNeutral: 'Khronos PBR Neutral', reinhard: 'Reinhard', filmic: 'Filmic', linear: 'Linear (clip)' };
+function azElToDir(az, el) {
+  const a = az * Math.PI / 180, e = el * Math.PI / 180;
+  return [+(Math.cos(e) * Math.sin(a)).toFixed(4), +Math.sin(e).toFixed(4), +(Math.cos(e) * Math.cos(a)).toFixed(4)];
+}
+function dirToAzEl(d) {
+  const [x, y, z] = d || [0, 1, 0]; const l = Math.hypot(x, y, z) || 1;
+  return [((Math.atan2(x, z) * 180 / Math.PI) + 360) % 360, Math.asin(clamp(y / l, -1, 1)) * 180 / Math.PI];
+}
+function lightRow(L, i) {
+  const upd = (patch, rerender) => {
+    const lights = state.env.lights.map((x, j) => j === i ? { ...x, ...patch } : x);
+    const n = lights[i];
+    if (n.type === 'dir' && ('az' in patch || 'el' in patch)) n.dir = azElToDir(n.az ?? 0, n.el ?? 45);
+    setEnvSelf({ lights });
+    if (rerender) renderEnv();
+  };
+  if (L.type === 'dir' && (L.az == null || L.el == null)) { const [a, e] = dirToAzEl(L.dir); L.az = Math.round(a); L.el = Math.round(e); }
+  const on = L.on !== false;
+  const head = h('div', { class: 'lt-h' },
+    wBool({ label: 'Light on' }, on, v => upd({ on: v })).el,
+    h('b', null, `${L.type === 'dir' ? 'Directional' : 'Point'} ${i + 1}`),
+    h('span', { class: 'pn-sp' }),
+    ibtn('copy', 'Duplicate the light', () => { store.setEnv({ lights: [...state.env.lights, clone(L)] }); renderEnv(); }),
+    ibtn('trash', 'Remove the light', () => { store.setEnv({ lights: state.env.lights.filter((_, j) => j !== i) }); renderEnv(); }));
+  const rows = [
+    envRow('Color', wColor({ label: 'Light' }, L.color || '#ffffff', v => upd({ color: v }))),
+    envRow('Intensity', wSlider({ label: 'Intensity', kind: 'slider', min: 0, max: 20, step: 0.05, default: 1 }, L.intensity ?? 1, v => upd({ intensity: v }))),
+  ];
+  if (L.type === 'dir') {
+    rows.push(envRow('Azimuth', wSlider({ label: 'Azimuth', kind: 'slider', min: 0, max: 360, step: 1, default: 0 }, L.az, v => upd({ az: v }))));
+    rows.push(envRow('Elevation', wSlider({ label: 'Elevation', kind: 'slider', min: -90, max: 90, step: 1, default: 45 }, L.el, v => upd({ el: v }))));
+  } else {
+    const pos = L.pos || [1, 1, 1];
+    ['X', 'Y', 'Z'].forEach((ax, k) => rows.push(envRow('Pos ' + ax, wSlider({ label: ax, kind: 'slider', min: -5, max: 5, step: 0.01, default: 0 }, pos[k], v => { const p = [...(state.env.lights[i].pos || pos)]; p[k] = v; upd({ pos: p }); }))));
+    rows.push(envRow('Range', wSlider({ label: 'Range', kind: 'slider', min: 0, max: 20, step: 0.1, default: 0 }, L.range ?? 0, v => upd({ range: v }), 'Zero: inverse-square falloff with no cutoff')));
+  }
+  return h('div', { class: 'lt' + (on ? '' : ' off') }, head, rows);
+}
+
+// ------------------------------------------------------------ export panel
+const exp = { target: lsGet('exportTarget', 'unity-urp'), opts: lsGet('exportOpts', { res: 'bake', format: 'png', includeGraph: true, helpers: true, name: '' }), busy: false, last: null };
+const TARGET_NOTES = {
+  'unity-urp': 'Lit shader. Albedo (sRGB), Normal (OpenGL), MetallicSmoothness, Occlusion, Height, Emission. Helper: an editor script that builds the .mat.',
+  'unity-hdrp': 'Lit shader. BaseColor, Normal, MaskMap (metal, AO, detail, smooth), Height, Emissive. Helper: an editor script.',
+  'unity-builtin': 'Standard shader. Albedo, Normal, MetallicGloss, Occlusion, Height, Emission.',
+  'unreal': 'BaseColor (sRGB), Normal (DirectX, green flipped), ORM (linear, no sRGB), Height, Emissive. Helper: a Python import script.',
+  'godot': 'StandardMaterial3D. Albedo, Normal (OpenGL), ORM, Height, Emission, and a .tres material.',
+  'gltf': 'One .glb: a UV sphere with the material: baseColor, metallicRoughness, normal, occlusion, emissive; KHR extensions for clearcoat, sheen, anisotropy, IOR and transmission.',
+  'png': 'Every map as a 16-bit or 8-bit PNG with the channel layout of the baked maps.',
+};
+function renderExport() {
+  const root = $('export-panel'); if (!root) return;
+  // export.js builds its own panel here (class io-host). Then this is only the fallback.
+  if (exp.foreign == null) exp.foreign = root.childElementCount > 0 && !root.querySelector('.ex-cards');
+  if (exp.foreign) return;
+  const o = exp.opts, frag = document.createDocumentFragment();
+  const cards = h('div', { class: 'ex-cards', role: 'radiogroup', 'aria-label': 'Export target' }, EXPORT_TARGETS.map(t => h('button', {
+    type: 'button', role: 'radio', class: 'ex-card' + (exp.target === t.id ? ' on' : ''), 'aria-checked': String(exp.target === t.id),
+    onclick: () => { exp.target = t.id; lsSet('exportTarget', t.id); renderExport(); },
+  }, h('b', null, t.label), h('span', { class: 'ex-tag' + (t.normalY === '-Y' ? ' dx' : '') }, t.normalY === '-Y' ? 'normal DX −Y' : 'normal GL +Y'), h('span', { class: 'ex-pack' }, t.packing))));
+  frag.append(section('ex-target', 'Target', [cards, h('p', { class: 'pn-doc' }, TARGET_NOTES[exp.target] || '')]));
+  const setO = (k, v) => { exp.opts = { ...exp.opts, [k]: v }; lsSet('exportOpts', exp.opts); };
+  const name = h('input', { class: 'pn-name sm', type: 'text', value: o.name || graph()?.name || '', placeholder: slug(graph()?.name || 'material'), spellcheck: 'false', 'aria-label': 'Export name' });
+  name.addEventListener('change', () => setO('name', name.value.trim()));
+  const resOpts = [{ value: 'bake', label: `Bake (${state.settings.res})` }, ...RES_OPTIONS.map(r => ({ value: String(r), label: String(r) }))];
+  const formats = M.export?.FORMATS || ['png'];
+  frag.append(section('ex-opts', 'Options', [
+    envRow('Name', name),
+    envRow('Resolution', wEnum({ label: 'Resolution', kind: 'enum', options: resOpts }, String(o.res || 'bake'), v => setO('res', v)), 'A size other than the bake size re-bakes the graph at export time'),
+    formats.length > 1 ? envRow('Format', wEnum({ label: 'Format', kind: 'enum', options: formats }, o.format || formats[0], v => setO('format', v))) : null,
+    envRow('Graph JSON', wBool({ label: 'Include graph JSON' }, o.includeGraph !== false, v => setO('includeGraph', v)), 'Put the .material.json graph in the package'),
+    envRow('Import helper', wBool({ label: 'Include import helper' }, o.helpers !== false, v => setO('helpers', v)), 'Engine script or material file that wires the maps'),
+  ]));
+  const go = h('button', { type: 'button', class: 'pn-btn pri big', disabled: exp.busy || !ctx.gpu.ok, onclick: runExport }, icon('down'), exp.busy ? 'Exporting…' : `Export ${EXPORT_TARGETS.find(t => t.id === exp.target)?.label || ''}`);
+  const status = h('div', { class: 'ex-status', id: 'pn-ex-status' }, exp.last ? exp.last : (ctx.gpu.ok ? (state.maps ? `Maps ready: ${state.maps.res}²` : 'No bake yet: export waits for one') : 'WebGPU is not available, so export cannot read the maps'));
+  frag.append(h('div', { class: 'ex-go' }, go, status));
+  root.replaceChildren(frag);
+}
+async function runExport() {
+  if (exp.busy) return;
+  if (typeof M.export?.exportPackage !== 'function') { store.toast('Export module missing', 'error'); return; }
+  const t = EXPORT_TARGETS.find(x => x.id === exp.target);
+  const o = exp.opts;
+  const name = slug(o.name || graph()?.name || 'material');
+  const opts = { name, includeGraph: o.includeGraph !== false, helpers: o.helpers !== false, format: o.format || 'png' };
+  if (o.res && o.res !== 'bake') opts.res = +o.res;
+  exp.busy = true; exp.last = null; renderExport();
+  const t0 = performance.now();
+  try {
+    const blob = await M.export.exportPackage(exp.target, opts);
+    if (!(blob instanceof Blob)) throw new Error('exportPackage returned no Blob');
+    const ext = blob.name ? '' : (/gltf-binary|octet-stream/.test(blob.type) && exp.target === 'gltf' ? '.glb' : (/zip/.test(blob.type) || exp.target !== 'gltf' ? '.zip' : '.glb'));
+    const file = blob.name || `${name}_${exp.target}${ext}`;
+    download(blob, file);
+    exp.last = `${file} · ${(blob.size / 1024).toFixed(0)} KB · ${(performance.now() - t0).toFixed(0)} ms`;
+    store.toast(`Exported ${t.label}: ${file}`, 'ok');
+  } catch (e) {
+    console.error('[panels] export', e);
+    exp.last = 'Export failed: ' + (e.message || e);
+    store.toast(exp.last, 'error');
+  } finally { exp.busy = false; renderExport(); }
+}
+
+// ------------------------------------------------------------ topbar
+const meter = { t0: 0, hist: lsGet('bakeHist', []) };
+function initTopbar() {
+  const file = $('tb-file'), right = $('tb-right');
+  // project name + File menu
+  const nm = h('input', { id: 'pn-projname', class: 'tb-name', type: 'text', spellcheck: 'false', placeholder: 'Untitled material', 'aria-label': 'Project name', value: graph()?.name || '' });
+  nm.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'Escape') nm.blur(); });
+  nm.addEventListener('change', () => { setName(nm.value); if (!state.selection.length) renderInspector(true); });
+  const fileBtn = h('button', { type: 'button', class: 'tb-btn', 'aria-haspopup': 'menu', title: 'File' }, 'File ▾');
+  fileBtn.addEventListener('click', e => { e.stopPropagation(); toggleMenu(fileBtn, fileMenuItems()); });
+  file?.prepend(nm, fileBtn);
+  // bake meter + export + help
+  const bar = h('i', { class: 'tb-prog' }, h('i'));
+  const spark = h('canvas', { class: 'tb-spark', width: 120, height: 36, title: 'Bake time, last 24 bakes' });
+  meter.bar = bar; meter.spark = spark;
+  $('bake-status')?.after(bar, spark);
+  // export.js puts Open / Save / Import / Export buttons in #tb-file; add an
+  // Export button here only when it did not.
+  const ioBar = !!file?.querySelector('.io-tb');
+  const exportBtn = ioBar ? null : h('button', { type: 'button', class: 'tb-btn tb-pri', title: 'Export (Ctrl+E)', onclick: openExport }, icon('down'), 'Export');
+  const helpBtn = h('button', { type: 'button', class: 'tb-btn', title: 'Keyboard shortcuts (?)', 'aria-label': 'Keyboard shortcuts', onclick: toggleShortcuts }, '?');
+  right?.append(...[exportBtn, helpBtn].filter(Boolean));
+  drawSpark();
+  // undo/redo labels
+  store.on('history:changed', ({ label, canUndo, canRedo }) => {
+    const u = $('btn-undo'), r = $('btn-redo');
+    if (u) u.title = canUndo ? `Undo ${label || ''} (Ctrl+Z)` : 'Nothing to undo';
+    if (r) r.title = canRedo ? 'Redo (Ctrl+Shift+Z)' : 'Nothing to redo';
+  });
+}
+function openExport() {
+  if (isPhone() && M.mobile?.setSheet) M.mobile.setSheet('export');
+  else { document.querySelector('#side-tabs button[data-tab="export"]')?.click(); }
+}
+function fileMenuItems() {
+  const presets = M.presets?.MATERIAL_PRESETS || [];
+  const io = window.__studio?.io || {};
+  const imp = M.import || {};
+  const items = [
+    { label: 'New material', kbd: '', run: () => loadGraph(emptyGraph(), 'New material', { keepRes: true }) },
+    { label: typeof imp.pickFiles === 'function' ? 'Open project, graph, maps or zip…' : 'Open graph JSON…', kbd: 'Ctrl+O', run: () => typeof imp.pickFiles === 'function' ? imp.pickFiles() : openGraphFile() },
+    typeof io.saveProject === 'function' ? { label: 'Save project (.studio.json)', kbd: 'Ctrl+S', run: () => io.saveProject().catch(e => store.toast(String(e.message || e), 'error')) } : null,
+    { label: 'Save graph JSON', kbd: typeof io.saveProject === 'function' ? '' : 'Ctrl+S', run: saveGraphFile },
+    { label: 'Copy graph JSON', run: async () => { try { await navigator.clipboard.writeText(JSON.stringify(serializeGraph(), null, 1)); store.toast('Graph JSON copied', 'ok'); } catch (e) { store.toast('Clipboard is blocked', 'warn'); } } },
+    { label: 'Paste graph JSON', run: async () => { try { const t = await navigator.clipboard.readText(); openGraphText(t, 'clipboard'); } catch (e) { store.toast('Clipboard is blocked', 'warn'); } } },
+    { sep: true },
+    { label: 'Import maps / images…', disabled: typeof M.import?.importMaps !== 'function', run: async () => {
+      const files = await pickFiles('image/*', true); if (!files.length) return;
+      try { const r = await M.import.importMaps(files); store.toast(`Imported ${r.added.length} map(s)${r.skipped.length ? `, skipped ${r.skipped.length}` : ''}`, r.added.length ? 'ok' : 'warn'); } catch (e) { store.toast('Import failed: ' + (e.message || e), 'error'); }
+    } },
+    { label: 'Import Composition Bench graph…', disabled: typeof M.bench?.importBenchGraph !== 'function', run: async () => {
+      const [f] = await pickFiles('.json,application/json'); if (!f) return;
+      try { const g = M.bench.importBenchGraph(JSON.parse(await f.text())); loadGraph(g, 'Import bench graph', { keepRes: true }); } catch (e) { store.toast('Bench import failed: ' + (e.message || e), 'error'); }
+    } },
+    { label: 'Open in Composition Bench', disabled: typeof M.bench?.openInBench !== 'function', run: () => {
+      try { M.bench.openInBench(serializeGraph()); } catch (e) { store.toast('Bench hand-off failed: ' + (e.message || e), 'error'); }
+    } },
+    { label: 'Image to PBR (server)…', disabled: typeof (imp.imageToPBR || io.imageToPBR) !== 'function', run: async () => {
+      const [f] = await pickFiles('image/*'); if (!f) return;
+      try { await (imp.imageToPBR || io.imageToPBR)(f); } catch (e) { store.toast('Image to PBR failed: ' + (e.message || e), 'error'); }
+    } },
+    { sep: true },
+    { label: 'Export…', kbd: 'Ctrl+E', run: openExport },
+  ];
+  if (presets.length) {
+    items.push({ sep: true }, { head: 'Starter materials' });
+    for (const pr of presets) items.push({ label: pr.label, ball: pr.swatch, run: () => loadPreset(pr) });
+  }
+  return items.filter(Boolean);
+}
+let menuEl = null;
+function toggleMenu(anchor, items) {
+  if (menuEl) { const was = menuEl._anchor === anchor; closeMenu(); if (was) return; }
+  menuEl = h('div', { class: 'pn-menu', role: 'menu' }, items.map(it => it.sep ? h('hr') : it.head ? h('div', { class: 'pn-menu-h' }, it.head)
+    : h('button', { type: 'button', role: 'menuitem', disabled: !!it.disabled, onclick: () => { closeMenu(); it.run(); } },
+      it.ball ? h('i', { class: 'pn-ball sm', style: { background: ballCss(it.ball) } }) : null, h('span', null, it.label), it.kbd ? h('kbd', null, it.kbd) : null)));
+  menuEl._anchor = anchor;
+  document.body.appendChild(menuEl);
+  const r = anchor.getBoundingClientRect();
+  menuEl.style.left = clamp(r.left, 6, window.innerWidth - menuEl.offsetWidth - 6) + 'px';
+  menuEl.style.top = (r.bottom + 4) + 'px';
+  menuEl.style.maxHeight = (window.innerHeight - r.bottom - 16) + 'px';
+  menuEl.querySelector('button:not(:disabled)')?.focus();
+}
+function closeMenu() { menuEl?.remove(); menuEl = null; }
+document.addEventListener('pointerdown', e => { if (menuEl && !menuEl.contains(e.target) && !menuEl._anchor.contains(e.target)) closeMenu(); });
+async function openGraphFile() {
+  const [f] = await pickFiles('.json,application/json'); if (!f) return;
+  openGraphText(await f.text(), f.name);
+}
+function openGraphText(text, src) {
+  let j; try { j = JSON.parse(text); } catch (e) { store.toast(`${src} is not JSON`, 'error'); return; }
+  if (j && j.version === 1 && Array.isArray(j.nodes) && j.output) { if (loadGraph(j, 'Open ' + src)) store.toast(`Opened ${src}`, 'ok'); return; }
+  if (typeof M.bench?.importBenchGraph === 'function') {
+    try { const g = M.bench.importBenchGraph(j); if (loadGraph(g, 'Import bench graph', { keepRes: true })) store.toast(`Imported Composition Bench graph from ${src}`, 'ok'); return; }
+    catch (e) { store.toast(`${src}: not a material graph, and the bench import failed: ${e.message}`, 'error'); return; }
+  }
+  store.toast(`${src} is not a material graph (version 1)`, 'error');
+}
+function saveGraphFile() {
+  const j = serializeGraph();
+  const blob = new Blob([JSON.stringify(j, null, 1)], { type: 'application/json' });
+  download(blob, `${slug(j.name || 'material')}.material.json`);
+}
+function meterStart() {
+  meter.t0 = performance.now();
+  meter.bar?.classList.add('busy'); meter.bar?.classList.remove('err');
+  if (meter.bar) meter.bar.firstChild.style.width = '0%';
+}
+function meterDone(maps) {
+  const ms = maps && maps.ms != null ? maps.ms : performance.now() - meter.t0;
+  meter.bar?.classList.remove('busy');
+  if (meter.bar) meter.bar.firstChild.style.width = '100%';
+  meter.hist.push(+ms.toFixed(1)); meter.hist = meter.hist.slice(-24); lsSet('bakeHist', meter.hist);
+  const st = $('bake-status');
+  if (st) {
+    const a = meter.hist, avg = a.reduce((x, y) => x + y, 0) / a.length;
+    st.title = `last ${ms.toFixed(1)} ms · avg ${avg.toFixed(1)} · min ${Math.min(...a).toFixed(1)} · max ${Math.max(...a).toFixed(1)} (${a.length} bakes)`;
+  }
+  drawSpark();
+}
+function drawSpark() {
+  const cv = meter.spark; if (!cv) return;
+  const c = cv.getContext('2d'), a = meter.hist, W = cv.width, H = cv.height;
+  c.clearRect(0, 0, W, H);
+  if (!a.length) return;
+  const mx = Math.max(16, ...a);
+  const bw = W / 24;
+  a.forEach((v, i) => {
+    const hh = Math.max(2, (v / mx) * (H - 2));
+    c.fillStyle = v > 250 ? '#ff9a4a' : v > 60 ? '#ffc832' : '#64c864';
+    c.globalAlpha = i === a.length - 1 ? 1 : 0.55;
+    c.fillRect(W - (a.length - i) * bw + 1, H - hh, bw - 2, hh);
+  });
+  c.globalAlpha = 1;
+}
+
+// ------------------------------------------------------------ shortcuts
+const SHORTCUTS = [
+  ['General', [['?', 'Show or hide this sheet'], ['Ctrl+Z', 'Undo'], ['Ctrl+Shift+Z / Ctrl+Y', 'Redo'], ['Ctrl+S', 'Save graph JSON'], ['Ctrl+O', 'Open graph JSON'], ['Ctrl+E', 'Export panel'], ['Esc', 'Close a menu, picker or sheet']]],
+  ['Library', [['/', 'Search nodes'], ['↑ ↓', 'Move in the list'], ['Enter', 'Add the node'], ['Double-click', 'Add the node'], ['Drag', 'Drop the node on the graph']]],
+  ['Viewport', [['Alt+1 … Alt+9', 'Solo a map in the viewport'], ['Alt+0', 'Lit view'], ['Click a map tile', 'Solo it; click again for lit'], ['Double-click a map', 'Enlarge it with a texel readout']]],
+  ['Params', [['Drag a number', 'Scrub (Shift fine, Alt coarse)'], ['↑ ↓ in a number', 'Step (Shift ×10)'], ['Type 0.5*2', 'Simple arithmetic'], ['Shift+drag a bar', 'Fine adjust'], ['Gradient: drag a stop down', 'Delete the stop'], ['Curve: double-click', 'Delete a point']]],
+];
+let helpEl = null;
+function toggleShortcuts() {
+  if (helpEl) { helpEl.remove(); helpEl = null; return; }
+  const groups = [...SHORTCUTS];
+  const ed = M.editor?.shortcuts || window.__studio?.editor?.shortcuts;
+  if (Array.isArray(ed) && ed.length) groups.splice(1, 0, ['Graph editor', ed.map(s => Array.isArray(s) ? s : [s.keys, s.label])]);
+  helpEl = h('div', { class: 'pn-modal', role: 'dialog', 'aria-label': 'Keyboard shortcuts', onclick: e => { if (e.target === helpEl) toggleShortcuts(); } },
+    h('div', { class: 'pn-modal-c keys' },
+      h('div', { class: 'pn-modal-h' }, icon('key'), h('b', null, 'Keyboard shortcuts'), h('span', { class: 'pn-sp' }), ibtn('close', 'Close', toggleShortcuts)),
+      h('div', { class: 'keys-g' }, groups.map(([t, list]) => h('div', { class: 'keys-c' }, h('h4', null, t), list.map(([k, d]) => h('div', { class: 'keys-r' }, h('kbd', null, k), h('span', null, d))))))));
+  document.body.appendChild(helpEl);
+}
+function onKey(e) {
+  if (e.defaultPrevented) return;
+  const mod = e.ctrlKey || e.metaKey;
+  const k = e.key;
+  if (k === 'Escape') { if (helpEl) { toggleShortcuts(); return; } if (menuEl) { closeMenu(); return; } }
+  if (mod && !e.altKey && !window.__studio?.io) { // export.js owns these keys when it is loaded
+    const kk = k.toLowerCase();
+    if (kk === 's') { e.preventDefault(); saveGraphFile(); return; }
+    if (kk === 'o') { e.preventDefault(); openGraphFile(); return; }
+    if (kk === 'e') { e.preventDefault(); openExport(); return; }
+  }
+  if (typing(e.target)) return;
+  if (k === '?' || (k === '/' && e.shiftKey)) { e.preventDefault(); toggleShortcuts(); return; }
+  if (k === '/' && !mod) { e.preventDefault(); if (isPhone()) M.mobile?.setSheet?.('lib'); lib.searchEl?.focus(); lib.searchEl?.select(); return; }
+  if (e.altKey && !mod && /^Digit\d$/.test(e.code)) {
+    const d = +e.code.slice(5);
+    const views = TILES.filter(t => t.view);
+    e.preventDefault();
+    if (d === 0) store.setView({ debug: 'lit' });
+    else if (views[d - 1]) store.setView({ debug: views[d - 1].view });
+  }
+}
+
+// ------------------------------------------------------------ init / api
+export const api = {
+  renderInspector, renderLibrary, renderEnv, renderExport, updateStrip, addNodeAt, loadGraph,
+  toggleShortcuts, openExport,
+  get thumbs() { return { ready: !!thumbs.pipe, rendered: thumbs.n, err: thumbs.err }; },
+  async selfTest() {
+    const r = {
+      inspector: !!$('inspector')?.children.length,
+      libEntries: lib.entries.length,
+      libRows: lib.listEl ? lib.listEl.querySelectorAll('.pn-li').length : 0,
+      tiles: thumbs.tiles.size, thumbPipe: !!thumbs.pipe, thumbsRendered: thumbs.n, thumbErr: thumbs.err,
+      envPresets: envPresets().length,
+      exportTargets: document.querySelectorAll('#export-panel .ex-card').length,
+    };
+    // widget round trip, detached from the document
+    const got = [];
+    const s = wSlider({ id: 't', label: 't', kind: 'slider', min: 0, max: 1, step: 0.01, default: 0.5 }, 0.5, v => got.push(v));
+    s.set(0.25);
+    const g = wGradient({ id: 'g', label: 'g', kind: 'gradient', default: [{ t: 0, color: '#000000' }, { t: 1, color: '#ffffff' }] }, null, v => got.push(v));
+    void g;
+    r.widgets = Object.keys(WIDGETS).every(k => { try { return !!makeWidget({ id: 'x', label: 'x', kind: k, default: k === 'color' ? '#808080' : k === 'vec2' ? [0, 0] : k === 'bool' ? false : k === 'enum' ? 'a' : 0, options: ['a', 'b'] }, undefined, () => {}).el; } catch (e) { return false; } });
+    r.fuzzy = fuzzy('prln', 'perlin noise') > 0 && fuzzy('zz', 'perlin') < 0;
+    r.ok = r.inspector && r.tiles === TILES.length && r.widgets && r.fuzzy && r.libEntries > 0;
+    return r;
+  },
+};
+
+/** @param {object} c main.js module context */
+export async function init(c) {
+  ctx = c; store = c.store; state = c.store.state; M = c.modules; $ = c.$;
+  initTopbar();
+  initLibrary();
+  initStrip();
+  renderInspector(); renderEnv(); renderExport();
+  try { await initThumbPipeline(); } catch (e) { thumbs.err = String(e.message || e); console.warn('[panels] thumbnail pipeline', e); }
+
+  store.on('graph:select', () => renderInspector());
+  store.on('graph:changed', ev => {
+    const r = ev && ev.reason;
+    if (r === 'boot' || r === 'load') { buildLibrary(); renderLibrary(); const nm = $('pn-projname'); if (nm) nm.value = graph()?.name || ''; }
+    if (r === 'undo' || r === 'redo') { const nm = $('pn-projname'); if (nm) nm.value = graph()?.name || ''; }
+    if (selfEmit) { const st = $('pn-stats'); if (st) st.replaceChildren(...statsLine()); return; }
+    const alive = (state.selection || []).filter(id => getNode(id));
+    if (alive.length !== (state.selection || []).length) { store.select(alive); return; }
+    if (r === 'param' && insRows.length) refreshInspector(); else renderInspector(true);
+  });
+  store.on('bake:start', meterStart);
+  store.on('bake:progress', ({ done, total } = {}) => { if (meter.bar && total) meter.bar.firstChild.style.width = (100 * done / total).toFixed(0) + '%'; });
+  store.on('bake:done', maps => {
+    meterDone(maps);
+    updateStrip();
+    const st = $('pn-stats'); if (st) st.replaceChildren(...statsLine());
+    const es = $('pn-ex-status'); if (es && !exp.busy && !exp.last) es.textContent = `Maps ready: ${maps.res}²`;
+  });
+  store.on('bake:error', () => { meter.bar?.classList.remove('busy'); meter.bar?.classList.add('err'); });
+  store.on('view:changed', () => { markSolo(); if (!envSelf && !envDragging()) renderEnvSoft(); });
+  store.on('env:changed', () => { if (!envSelf && !envDragging()) renderEnvSoft(); });
+  store.on('res:changed', ({ res }) => { const g = graph(); if (g?.settings) g.settings.res = res; if (!state.selection.length) renderInspector(true); renderExport(); });
+  store.on('boot:done', () => { buildLibrary(); renderLibrary(); renderInspector(true); renderExport(); renderEnv(); });
+  window.addEventListener('keydown', onKey);
+  ctx.register('panels', api);
+}
+let envSoftRaf = 0;
+function renderEnvSoft() { if (envSoftRaf) return; envSoftRaf = requestAnimationFrame(() => { envSoftRaf = 0; renderEnv(); }); }
+const envDragging = () => document.body.classList.contains('pn-scrubbing') || !!document.querySelector('#env-panel .pn-bar:active');
