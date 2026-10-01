@@ -10,10 +10,11 @@ import * as wall from './wall.js';
 import * as alarm from './alarm.js';
 import * as carriage from './carriage.js';
 import * as mantel from './mantel.js';
+import * as chronometer from './chronometer.js';
 
 export const BUILDERS = {
   pocket: pocket.build, wrist: wrist.build, wall: wall.build, alarm: alarm.build,
-  carriage: carriage.build, mantel: mantel.build,
+  carriage: carriage.build, mantel: mantel.build, chronometer: chronometer.build,
 };
 
 // the case for a spec: zF is the dial face plane, zB the back of the

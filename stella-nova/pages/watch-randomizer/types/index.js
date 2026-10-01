@@ -9,5 +9,6 @@ import wall from './wall.js';
 import alarm from './alarm.js';
 import carriage from './carriage.js';
 import mantel from './mantel.js';
+import chronometer from './chronometer.js';
 
-export const TYPE_LIST = [pocket, wrist, wall, alarm, carriage, mantel];
+export const TYPE_LIST = [pocket, wrist, wall, alarm, carriage, mantel, chronometer];
