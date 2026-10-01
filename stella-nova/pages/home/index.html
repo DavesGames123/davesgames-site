@@ -2,306 +2,555 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>STELLA NOVA // From Ore to Empire</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Stella Nova · Observatory</title>
+<meta name="description" content="Stella Nova, a space-colony builder by Dave, with its interactive wiki, physics simulations and a live WebGPU shader library.">
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-   HOME  ·  Stella Nova landing page
+   HOME  ·  Observatory
   ───────────────────────────────────────────────────────────────────────────
-   The marketing front page. Two full-screen canvases sit behind the content:
-   #sim (the background N-body gravity toy) and #heroRadar (the hero solar
-   system). main.js drives both, plus the gallery carousel and the bug form.
-   This file is the markup and copy; main.js binds to the ids called out below.
+   The front page of the shell. A space hero sits on one Canvas 2D sky
+   (#sky). Below it, the site shows as a star chart: one constellation per
+   sector, one star per page. Phones get sector cards with thumbnail rails.
 
-   LOAD ORDER
-     1. style.css   page stylesheet
-     2. main.js      classic script at end of body; runs the canvases and forms
+   LOAD ORDER  (classic deferred scripts, so the page runs on file:// too)
+     1. style.css       page stylesheet
+     2. thumbs/list.js  keys that have a thumbs/<key>.jpg
+     3. nav-data.js     shell nav, cluster by cluster
+     4. sectors.js      sector table, blurbs, featured keys
+     5. sky-data.js     real sky objects for the hero background
+     6. main.js         sky, chart, rails, routing, directory filter, form
+     All five scripts share one object: window.Observatory.
 
-   PAGE FLOW  (top to bottom; # marks an element id)
-     ┌─────────────────────────────────────────────────────────────────┐
-     │ topbar (Bodies/FPS/clock)          botbar (sim controls)          │
-     │ #sim   full-screen gravity sim canvas, behind everything          │
-     ├─────────────────────────────────────────────────────────────────┤
-     │ .hero  #heroRadar canvas + hero-panel: title, blurb, social links │
-     │ lore section  ─  the story hook                                    │
-     │ .gallery #media  ─  video + #nvViewer image carousel              │
-     │ #features  ─  the systems manifest cards                          │
-     │ community section  ─  r/RimWorld quotes                           │
-     │ split sections  ─  crew / resources / station / industry          │
-     │ #download  ─  demo download cards                                 │
-     │ #report  ─  #bugForm bug report                                    │
-     │ end-transmission call to action                                   │
-     └─────────────────────────────────────────────────────────────────┘
+   PAGE FLOW  (# marks an element id)
+     #top        hero: title, statement, CTAs, inline search, four portals,
+                 social buttons (Steam, itch.io, Discord, YouTube, Instagram,
+                 LinkedIn)
+     .dock       sticky bar: sector chips, inline search, Steam
+     #featured   "brightest stars" thumbnail rail
+     #chart      star chart + inspector (desktop, tablet)
+     #sectors    sector cards with rails (phone; JS fills it)
+     #features   the game: systems cards (old anchor, kept)
+     #media      gameplay video facade + screenshots (old anchor, kept)
+     #download   demo cards (old anchor, kept)
+     #report     bug form (old anchor, kept)
+     #directory  every shell page as a real anchor, filtered in place
+     #reviews    Steam review cards (inside #features)
+     .foot       social buttons, Help translate, the r/RimWorld post link
 
-   Sections tagged .rv fade in on scroll (see the IntersectionObserver in
-   main.js). Many .xlink buttons call parent.switchTab to drive the site shell.
+   SEARCH
+     [data-find] blocks are inline: a field and a results list under it.
+     No overlay, no scrim, no blur. "/" focuses a field. Esc closes.
+
+   ROUTING
+     Page links are <a href="/stella-nova/#key" target="_top" data-key>.
+     main.js turns a click into parent.switchTab(key) inside the shell.
+     On file:// outside the shell, main.js points them at
+     https://davesgames.io/stella-nova/#key.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Cpath fill=%22%23ffc832%22 d=%22M8 0l1.8 6.2L16 8l-6.2 1.8L8 16l-1.8-6.2L0 8l6.2-1.8z%22/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="grid-bg"></div>
-<div class="corner-data tl">SYS.REF <span>0x7A2F</span><br>GRID <span>50U</span></div>
-<div class="corner-data br">SIGNAL <span>NOMINAL</span><br>AUTH <span>VERIFIED</span></div>
+<a class="skip" href="#directory">Skip to all pages</a>
 
-<div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Sim Active</span></div>
-  <div class="topbar-r"><span>Bodies: <strong id="bodyCount">0</strong></span><span>FPS: <strong id="fpsRead">60</strong></span><span id="clockRead">00:00:00</span></div>
-</div>
-<!-- Bottom bar: controls for the background gravity sim; the buttons call the
-     global functions main.js exposes on window. -->
-<div class="botbar">
-  <div class="bot-group">
-    <button class="bot-btn" onclick="resetSim()">Reset</button>
-    <button class="bot-btn" onclick="addCluster(60)">+Cluster</button>
-    <button class="bot-btn" id="treeBtn" onclick="toggleTree()">Quadtree</button>
-    <button class="bot-btn" id="trailBtn" onclick="toggleTrails()">Trails</button>
-    <button class="bot-btn" id="pauseBtn" onclick="togglePause()">Pause</button>
+<!-- Brand icons. One <symbol> per brand, used by the social buttons. -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-steam" viewBox="0 0 24 24"><path fill="currentColor" d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658a3.38 3.38 0 0 1 2.1-.584l2.861-4.142V8.91a4.53 4.53 0 0 1 4.524-4.524 4.53 4.53 0 0 1 0 9.052h-.105l-4.076 2.911c0 .052.004.105.004.159a3.39 3.39 0 0 1-6.721.669L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61a2.54 2.54 0 0 0 4.568-.085 2.54 2.54 0 0 0-1.368-3.23 2.5 2.5 0 0 0-1.81-.049l1.524.63a1.87 1.87 0 0 1-1.441 3.345zm8.398-8.742a3.02 3.02 0 1 0-6.033 0 3.02 3.02 0 0 0 6.033 0zm-5.275-.01a2.265 2.265 0 1 1 4.53 0 2.265 2.265 0 0 1-4.53 0z"/></symbol>
+  <symbol id="i-discord" viewBox="0 0 127.14 96.36"><path fill="currentColor" d="M107.7 8.07A105.15 105.15 0 0 0 81.47 0a72.06 72.06 0 0 0-3.36 6.83 97.68 97.68 0 0 0-29.11 0A72.37 72.37 0 0 0 45.64 0a105.89 105.89 0 0 0-26.25 8.09C2.79 32.65-1.71 56.6.54 80.21a105.73 105.73 0 0 0 32.17 16.15 77.7 77.7 0 0 0 6.89-11.11 68.42 68.42 0 0 1-10.85-5.18c.91-.66 1.8-1.34 2.66-2a75.57 75.57 0 0 0 64.32 0c.87.71 1.76 1.39 2.66 2a68.68 68.68 0 0 1-10.87 5.19 77 77 0 0 0 6.89 11.1 105.25 105.25 0 0 0 32.19-16.14c2.64-27.38-4.51-51.11-18.9-72.15zM42.45 65.69C36.18 65.69 31 60 31 53s5-12.74 11.43-12.74S54 46 53.89 53s-5.05 12.69-11.44 12.69zm42.24 0C78.41 65.69 73.25 60 73.25 53s5-12.74 11.44-12.74S96.23 46 96.12 53s-5.04 12.69-11.43 12.69z"/></symbol>
+  <symbol id="i-itch" viewBox="0 0 24 24"><path fill="currentColor" d="M3.13 1.338C2.08 1.96.02 4.328 0 4.95v1.03c0 1.303 1.22 2.45 2.325 2.45 1.33 0 2.436-1.102 2.436-2.41 0 1.308 1.07 2.41 2.4 2.41 1.328 0 2.362-1.102 2.362-2.41 0 1.308 1.137 2.41 2.466 2.41h.024c1.33 0 2.466-1.102 2.466-2.41 0 1.308 1.034 2.41 2.363 2.41 1.33 0 2.4-1.102 2.4-2.41 0 1.308 1.106 2.41 2.435 2.41C22.78 8.43 24 7.282 24 5.98V4.95c-.02-.62-2.082-2.99-3.13-3.612-3.253-.114-5.508-.134-8.87-.133-3.362 0-7.945.053-8.87.133zm6.376 6.477a2.74 2.74 0 0 1-.468.602c-.5.49-1.19.795-1.947.795a2.786 2.786 0 0 1-1.95-.795c-.182-.178-.32-.37-.446-.59-.127.222-.303.412-.486.59a2.788 2.788 0 0 1-1.95.795c-.092 0-.187-.025-.264-.052-.107 1.113-.152 2.176-.168 2.95v.005l-.006 1.167c.02 2.334-.23 7.564 1.03 8.85 1.952.454 5.545.662 9.15.663 3.605 0 7.198-.21 9.15-.664 1.26-1.284 1.01-6.514 1.03-8.848l-.006-1.167v-.004c-.016-.775-.06-1.838-.168-2.95-.077.026-.172.052-.263.052a2.788 2.788 0 0 1-1.95-.795c-.184-.178-.36-.368-.486-.59-.127.222-.265.412-.447.59a2.786 2.786 0 0 1-1.95.795c-.76 0-1.446-.303-1.948-.795a2.74 2.74 0 0 1-.468-.602 2.738 2.738 0 0 1-.463.602 2.787 2.787 0 0 1-1.95.795h-.16a2.787 2.787 0 0 1-1.95-.795 2.738 2.738 0 0 1-.464-.602zm-2.004 2.59v.002c.795.002 1.5 0 2.373.953.687-.072 1.406-.108 2.125-.107.72 0 1.438.035 2.125.107.873-.953 1.578-.951 2.372-.953.375 0 1.876 0 2.92 2.934l1.123 4.028c.832 2.995-.266 3.068-1.636 3.07-2.03-.075-3.156-1.55-3.156-3.025-1.124.184-2.436.276-3.748.277-1.312 0-2.624-.093-3.748-.277 0 1.475-1.125 2.95-3.156 3.026-1.37-.004-2.468-.077-1.636-3.072l1.122-4.027c1.045-2.934 2.546-2.934 2.92-2.934zM12 12.714c-.002.002-2.14 1.965-2.523 2.663l1.4-.056v1.22c0 .056.56.033 1.123.007.562.026 1.124.05 1.124-.008v-1.22l1.4.057C14.138 14.68 12 12.714 12 12.714z"/></symbol>
+  <symbol id="i-youtube" viewBox="0 0 24 24"><path fill="currentColor" d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.6 15.6V8.4l6.2 3.6-6.2 3.6z"/></symbol>
+  <symbol id="i-instagram" viewBox="0 0 24 24"><rect x="2.5" y="2.5" width="19" height="19" rx="5.5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.6" cy="6.4" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-linkedin" viewBox="0 0 24 24"><path fill="currentColor" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></symbol>
+  <symbol id="i-thumb" viewBox="0 0 24 24"><path fill="currentColor" d="M2 21h3.5V9H2v12zm20-11a2 2 0 0 0-2-2h-6.3l.95-4.57.03-.32a1.5 1.5 0 0 0-.44-1.06L13.17 1 6.59 7.59A1.98 1.98 0 0 0 6 9v10a2 2 0 0 0 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+</svg>
+
+<!-- ═════ HERO ═════ -->
+<header class="hero" id="top">
+  <div class="hero-bg" aria-hidden="true">
+    <canvas id="sky"></canvas>
+    <div class="hero-veil"></div>
   </div>
-  <div class="bot-group"><div class="bot-read">Click + Drag to Launch</div></div>
-</div>
 
-<!-- Background gravity sim canvas; main.js sizes and animates it. -->
-<canvas id="sim" style="position:fixed;inset:0;z-index:1"></canvas>
+  <div class="hero-inner">
+    <p class="eyebrow"><span class="pulse"></span>davesgames.io <span class="sep">/</span> observatory online</p>
+    <!-- The glow is a gradient layer behind the glyphs. The glyphs carry no
+         filter, so the text stays sharp in Safari. -->
+    <h1 class="title" aria-label="Stella Nova"><span class="title-glow" aria-hidden="true"></span><span class="t-row" aria-hidden="true"><span>S</span><span>T</span><span>E</span><span>L</span><span>L</span><span>A</span></span><span class="t-row" aria-hidden="true"><span>N</span><span>O</span><span>V</span><span>A</span></span></h1>
+    <p class="tagline">from ore to <em>empire.</em></p>
+    <p class="statement">A space-colony builder by one developer, its interactive wiki, and an open observatory of physics simulations and live WebGPU shaders &mdash; all playable in your browser.</p>
+    <div class="cta-row">
+      <a class="btn btn-gold" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener">
+        <svg aria-hidden="true"><use href="#i-steam"/></svg>
+        <span><b>Play the free demo</b><small>Wishlist on Steam</small></span>
+      </a>
+      <a class="btn btn-glass" href="https://discord.gg/SkJDmnRmdJ" target="_blank" rel="noopener">
+        <svg class="ic-discord" aria-hidden="true"><use href="#i-discord"/></svg>
+        <span><b>Join the Discord</b><small>Shape the game</small></span>
+      </a>
+    </div>
 
-<div class="content">
+    <!-- Inline search: a field and a results list under it. No overlay. -->
+    <div class="find find-hero" data-find>
+      <label class="find-field">
+        <svg aria-hidden="true"><use href="#i-search"/></svg>
+        <input type="search" placeholder="Search pages: black hole, chord, fire, orbit" aria-label="Search every page" autocomplete="off" spellcheck="false" enterkeyhint="go" role="combobox" aria-expanded="false" aria-autocomplete="list">
+        <kbd aria-hidden="true">/</kbd>
+      </label>
+      <div class="find-list" role="listbox" hidden></div>
+    </div>
 
-  <!-- Hero: the radar canvas behind the title panel and social links. -->
-  <div class="hero">
-    <canvas id="heroRadar"></canvas>
-    <div class="hero-inner">
-      <div class="hero-panel panel">
-        <div class="p-head"><span>// Incoming Transmission</span><span class="tag">PKT.0x7A2F</span></div>
-        <div class="p-body">
-          <div class="h-barcode">STELLANOVA-2026</div>
-          <h1 class="h-title">Stella Nova</h1>
-          <div class="h-sub">from ore to <em>empire.</em></div>
-          <p class="h-desc">
-            After the Great Cataclysm, rebuild your civilization in this space colony management simulator.
-            Dilate time according to real-world physics, play with gravity, and spread your civilization across the solar system.
-          </p>
+    <nav class="portals" aria-label="Main destinations">
+      <a class="portal" data-sector="game" href="#features">
+        <span class="portal-img"><img src="media/game-3.jpg" alt="" decoding="async"></span>
+        <span class="portal-txt"><span class="portal-kicker">&#8962; The game</span><span class="portal-title">Play Stella Nova</span><span class="portal-line">Colony sim &middot; free demo</span></span>
+        <span class="portal-arrow" aria-hidden="true">&rarr;</span>
+      </a>
+      <a class="portal" data-sector="wiki" href="/stella-nova/#shipdesigner" target="_top" data-key="shipdesigner">
+        <span class="portal-img"><img src="thumbs/shipdesigner.jpg" alt="" decoding="async"></span>
+        <span class="portal-txt"><span class="portal-kicker">&#9733; Wiki</span><span class="portal-title">Interactive Wiki</span><span class="portal-line">Ships &middot; planner &middot; crafting</span></span>
+        <span class="portal-arrow" aria-hidden="true">&rarr;</span>
+      </a>
+      <a class="portal" data-sector="physics" href="/stella-nova/#orbital" target="_top" data-key="orbital">
+        <span class="portal-img"><img src="thumbs/orbital.jpg" alt="" decoding="async"></span>
+        <span class="portal-txt"><span class="portal-kicker">&lambda; Physics</span><span class="portal-title">Learn Physics</span><span class="portal-line">Atomic orbitals &middot; 37 simulations</span></span>
+        <span class="portal-arrow" aria-hidden="true">&rarr;</span>
+      </a>
+      <a class="portal" data-sector="shader" href="/stella-nova/#sdf-solids" target="_top" data-key="sdf-solids">
+        <span class="portal-img"><img src="thumbs/sdf-solids.jpg" alt="" decoding="async"></span>
+        <span class="portal-txt"><span class="portal-kicker">&#10022; Shaders</span><span class="portal-title">Shader Library</span><span class="portal-line">WebGPU &middot; WGSL tables</span></span>
+        <span class="portal-arrow" aria-hidden="true">&rarr;</span>
+      </a>
+    </nav>
 
-          <div class="h-actions">
-            <a href="https://store.steampowered.com/app/4474070/Stella_Nova/" class="h-social-link h-social-gold" target="_blank" rel="noopener">
-              <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="var(--yellow)" d="M11.979 0C5.678 0 .511 4.86.022 11.037l6.432 2.658c.545-.371 1.203-.59 1.912-.59.063 0 .125.004.188.006l2.861-4.142V8.91c0-2.495 2.028-4.524 4.524-4.524 2.494 0 4.524 2.031 4.524 4.527s-2.03 4.525-4.524 4.525h-.105l-4.076 2.911c0 .052.004.105.004.159 0 1.875-1.515 3.396-3.39 3.396-1.635 0-3.016-1.173-3.331-2.727L.436 15.27C1.862 20.307 6.486 24 11.979 24c6.627 0 11.999-5.373 11.999-12S18.605 0 11.979 0zM7.54 18.21l-1.473-.61c.262.543.714.985 1.298 1.233 1.267.539 2.735-.05 3.27-1.318.26-.61.254-1.278-.012-1.887-.268-.61-.747-1.085-1.356-1.343-.609-.252-1.243-.254-1.81-.049l1.524.63c.935.398 1.376 1.482.975 2.419-.399.937-1.48 1.376-2.416.926zm8.398-8.742c0-1.663-1.354-3.015-3.016-3.015-1.665 0-3.017 1.352-3.017 3.015 0 1.665 1.352 3.017 3.017 3.017 1.663 0 3.016-1.352 3.016-3.017zm-5.275-.01c0-1.252 1.013-2.264 2.264-2.264 1.251 0 2.265 1.012 2.265 2.264s-1.014 2.261-2.265 2.261c-1.251 0-2.264-1.009-2.264-2.261z"/></svg>
-              <div class="h-social-text"><span class="h-social-name">Play the Demo on Steam</span><span class="h-social-sub">Demo available now</span></div>
-              <span class="h-social-badge">Play Free</span>
-            </a>
-            <a href="https://discord.gg/SkJDmnRmdJ" class="h-social-link h-social-primary" target="_blank" rel="noopener">
-              <svg width="24" height="24" viewBox="0 0 127.14 96.36" xmlns="http://www.w3.org/2000/svg"><path fill="#5865F2" d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z"/></svg>
-              <div class="h-social-text"><span class="h-social-name">Join the Discord</span><span class="h-social-sub">Follow updates, give feedback, help shape the game</span></div>
-              <span class="h-social-badge">Join now</span>
-            </a>
-            <a href="https://davesgames.itch.io/stella-nova" class="h-social-link" target="_blank" rel="noopener">
-              <svg width="24" height="24" viewBox="0 0 262.728 235.284" xmlns="http://www.w3.org/2000/svg"><path fill="#fa5c5c" d="M31.987 1.567C21.403 8.803 0 33.957 0 44.468v13.578c0 19.207 14.229 33.48 31.308 33.48 18.272 0 33.14-14.608 33.14-32.88 0 18.272 12.818 32.88 31.09 32.88 18.27 0 30.467-14.608 30.467-32.88 0 18.272 14.84 32.88 33.112 32.88h.366c18.272 0 33.112-14.608 33.112-32.88 0 18.272 12.198 32.88 30.468 32.88 18.272 0 31.09-14.608 31.09-32.88 0 18.272 14.868 32.88 33.14 32.88 17.08 0 31.308-14.273 31.308-33.48V44.468c0-10.51-21.403-35.665-31.987-42.9C230.126-.502 213.632-.18 206.758 0c-22.398.585-33.903 11.89-37.91 14.55-8.166-5.27-19.18-14.55-37.547-14.55-18.365 0-29.38 9.28-37.546 14.55C89.748 11.89 78.243.585 55.845 0 48.97-.18 32.477-.502 31.987 1.567z"/></svg>
-              <div class="h-social-text"><span class="h-social-name">Download on itch.io</span><span class="h-social-sub">Play the demo now</span></div>
-            </a>
-            <a href="https://www.instagram.com/stella.nova.game" class="h-social-link h-social-insta" target="_blank" rel="noopener">
-              <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#E1306C" d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
-              <div class="h-social-text"><span class="h-social-name">Follow on Instagram</span><span class="h-social-sub">Dev updates &amp; behind the scenes</span></div>
-              <span class="h-social-badge" style="background:#E1306C">Follow</span>
-            </a>
-            <a href="https://linkedin.com/in/david-kubala" class="h-social-link" target="_blank" rel="noopener" style="border-color:rgba(10,102,194,0.5);background:rgba(10,102,194,0.08)">
-              <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path fill="#0A66C2" d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-              <div class="h-social-text"><span class="h-social-name" style="color:#0A66C2">Connect on LinkedIn</span><span class="h-social-sub">Dave Kubala &mdash; Solo Developer</span></div>
-              <span class="h-social-badge" style="background:#0A66C2">Connect</span>
-            </a>
+    <ul class="socials socials-hero" aria-label="Stella Nova elsewhere">
+      <li><a class="soc" style="--brand:#66c0f4" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-steam"/></svg><span>Steam</span></a></li>
+      <li><a class="soc" style="--brand:#fa5c5c" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-itch"/></svg><span>itch.io</span></a></li>
+      <li><a class="soc" style="--brand:#8b95ff" href="https://discord.gg/SkJDmnRmdJ" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-discord"/></svg><span>Discord</span></a></li>
+      <li><a class="soc" style="--brand:#ff4e45" href="#media" data-youtube><svg aria-hidden="true"><use href="#i-youtube"/></svg><span>YouTube</span></a></li>
+      <li><a class="soc" style="--brand:#e4588f" href="https://www.instagram.com/stella.nova.game" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-instagram"/></svg><span>Instagram</span></a></li>
+      <li><a class="soc" style="--brand:#3d9be9" href="https://linkedin.com/in/david-kubala" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-linkedin"/></svg><span>LinkedIn</span></a></li>
+    </ul>
+  </div>
+  <a class="scroll-cue" href="#featured" aria-label="Scroll to the featured pages"><span></span></a>
+</header>
+
+<!-- ═════ DOCK: sticky sector bar ═════ -->
+<nav class="dock" id="dock" aria-label="Sectors">
+  <a class="dock-mark" href="#top" aria-label="Back to top"><span class="mark-star"></span><span class="mark-txt">Stella Nova</span></a>
+  <div class="dock-chips" id="dockChips">
+    <a class="chip" data-sector="game" href="#features">Game</a>
+    <a class="chip" data-sector="wiki" href="#chart" data-goto="wiki">Wiki</a>
+    <a class="chip" data-sector="physics" href="#chart" data-goto="physics">Physics</a>
+    <a class="chip" data-sector="shader" href="#chart" data-goto="shader">Shaders</a>
+    <a class="chip" data-sector="music" href="#chart" data-goto="music">Music</a>
+    <a class="chip" data-sector="labs" href="#chart" data-goto="labs">Labs</a>
+    <a class="chip" data-sector="community" href="#chart" data-goto="community">Community</a>
+    <a class="chip chip-all" href="#directory">All pages</a>
+  </div>
+  <div class="find find-dock" data-find>
+    <label class="find-field">
+      <svg aria-hidden="true"><use href="#i-search"/></svg>
+      <input type="search" placeholder="Search pages" aria-label="Search every page" autocomplete="off" spellcheck="false" enterkeyhint="go" role="combobox" aria-expanded="false" aria-autocomplete="list">
+      <kbd aria-hidden="true">/</kbd>
+    </label>
+    <div class="find-list" role="listbox" hidden></div>
+  </div>
+  <a class="dock-steam" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener">Wishlist</a>
+</nav>
+
+<main>
+
+<!-- ═════ FEATURED RAIL ═════ -->
+<section class="band" id="featured" aria-labelledby="featured-h">
+  <div class="band-head">
+    <div><p class="kicker">// Brightest stars</p><h2 id="featured-h">Start with <em>these</em></h2></div>
+    <div class="rail-ctl" aria-hidden="false">
+      <button class="rail-btn" type="button" data-rail="featuredRail" data-dir="-1" aria-label="Scroll back">&#8592;</button>
+      <button class="rail-btn" type="button" data-rail="featuredRail" data-dir="1" aria-label="Scroll forward">&#8594;</button>
+    </div>
+  </div>
+  <div class="rail rail-xl" id="featuredRail"></div>
+</section>
+
+<!-- ═════ STAR CHART ═════ -->
+<section class="band" id="chart" aria-labelledby="chart-h">
+  <div class="band-head">
+    <div><p class="kicker">// Star chart &middot; <span class="page-count">85</span> pages in seven constellations</p><h2 id="chart-h">The whole site, <em>mapped</em></h2></div>
+    <p class="band-note">Hover a constellation to light it. Every star is a page.</p>
+  </div>
+  <div class="chart-wrap">
+    <div class="chart" id="chartMap">
+      <svg class="chart-svg" id="chartSvg" viewBox="0 0 1000 620" preserveAspectRatio="xMidYMid meet" aria-hidden="true"></svg>
+      <div class="chart-stars" id="chartStars"></div>
+      <div class="chart-tip" id="chartTip" hidden></div>
+    </div>
+    <aside class="inspector" id="inspector" aria-live="polite"></aside>
+  </div>
+</section>
+
+<!-- ═════ SECTOR CARDS (phone) ═════ -->
+<section class="band" id="sectors" aria-label="Sectors"></section>
+
+<!-- ═════ THE GAME ═════ -->
+<section class="band game" id="features" aria-labelledby="features-h">
+  <div class="game-head">
+    <p class="kicker">// The game &middot; demo available now</p>
+    <h2 id="features-h">What you'll <em>command</em></h2>
+    <p class="lore">The solar system used to be sprawling with life, but no one saw the Great Cataclysm coming. All systems went dark. Everything and everyone fell apart. <strong>Everyone but you.</strong> Rebuild the once-vibrant solar system into a new civilization, and reclaim what was lost.</p>
+  </div>
+  <ol class="loop" aria-label="The core loop">
+    <li><b>Mine</b><span>10 ores &middot; real rarity curves</span></li>
+    <li><b>Smelt</b><span>Ore &rarr; ingot &rarr; alloy &rarr; component</span></li>
+    <li><b>Build</b><span>Grid stations, module by module</span></li>
+    <li><b>Govern</b><span>Citizens with friendships and grudges</span></li>
+  </ol>
+  <div class="systems">
+    <article class="sys"><span class="sys-ico">&#9201;</span><h3>Time-dilating astrophysics</h3><p>Thousands of bodies on real n-body orbits. Dilate and compress the flow of time at will.</p><div class="sys-links"><a href="/stella-nova/#gravity" target="_top" data-key="gravity">Gravity Sim</a><a href="/stella-nova/#hohmann" target="_top" data-key="hohmann">Hohmann Transfer</a></div></article>
+    <article class="sys"><span class="sys-ico">&#9638;</span><h3>Modular stations</h3><p>Place modules on a crossword-puzzle grid that grows in every direction. Enclose cells to make 64-unit storage bays.</p><div class="sys-links"><a href="/stella-nova/#planner" target="_top" data-key="planner">Station Planner</a><a href="/stella-nova/#guide" target="_top" data-key="guide">Station Guide</a><a href="/stella-nova/#controls" target="_top" data-key="controls">Controls</a></div></article>
+    <article class="sys"><span class="sys-ico">&#9775;</span><h3>A crew with opinions</h3><p>Citizens mine, haul, build and harvest on their own. They get tired, socialize, and pick who they work with.</p><div class="sys-links"><a href="/stella-nova/#behaviors" target="_top" data-key="behaviors">Behavior System</a><a href="/stella-nova/#selection" target="_top" data-key="selection">Selection UI</a></div></article>
+    <article class="sys"><span class="sys-ico">&#9881;</span><h3>4-tier crafting</h3><p>Smelt ore to ingots, forge steel, press alloys into reactor cores. 40+ recipes, citizen-operated foundries.</p><div class="sys-links"><a href="/stella-nova/#crafting" target="_top" data-key="crafting">Crafting Tree</a><a href="/stella-nova/#forge" target="_top" data-key="forge">Planet Forge</a></div></article>
+    <article class="sys"><span class="sys-ico">&#9733;</span><h3>Emergent stories</h3><p>A local AI narrator reads your colony and drives events. 27 quest types across 4 tiers.</p><div class="sys-links"><a href="/stella-nova/#explosion" target="_top" data-key="explosion">Explosion FX</a><a href="/stella-nova/#blackhole" target="_top" data-key="blackhole">Black Hole</a></div></article>
+    <article class="sys"><span class="sys-ico">&#9790;</span><h3>Interplanetary travel</h3><p>Make fuel, plan transfers on real orbital mechanics, and spread across the solar system.</p><div class="sys-links"><a href="/stella-nova/#shipdesigner" target="_top" data-key="shipdesigner">Ship Designer</a><a href="/stella-nova/#galaxy" target="_top" data-key="galaxy">Galaxy</a><a href="/stella-nova/#flare" target="_top" data-key="flare">Engine FX</a></div></article>
+  </div>
+
+  <div class="media" id="media">
+    <div class="media-head"><p class="kicker">// Gameplay feed</p><h3>See it in action</h3></div>
+    <div class="media-grid">
+      <button class="video" type="button" id="videoFacade" data-yt="Pn9WTbewFFQ" aria-label="Play the Stella Nova gameplay video">
+        <img src="media/game-2.jpg" alt="Stella Nova gameplay: thousands of orbiting bodies" loading="lazy" decoding="async">
+        <span class="play"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor"/></svg></span>
+        <span class="video-cap">Gameplay trailer &middot; YouTube</span>
+      </button>
+      <figure class="shot"><img src="media/game-1.jpg" alt="Station construction" loading="lazy" decoding="async"><figcaption>Station construction</figcaption></figure>
+      <figure class="shot"><img src="media/game-5.jpg" alt="Citizen AI at work in the station" loading="lazy" decoding="async"><figcaption>Citizen AI</figcaption></figure>
+      <figure class="shot"><img src="media/game-4.jpg" alt="Interplanetary travel past the sun" loading="lazy" decoding="async"><figcaption>Interplanetary travel</figcaption></figure>
+      <figure class="shot"><img src="media/game-6.jpg" alt="Colony management screen" loading="lazy" decoding="async"><figcaption>Colony management</figcaption></figure>
+    </div>
+  </div>
+
+  <!-- Steam reviews: verbatim quotes from the Stella Nova Demo store page,
+       captured 2026-09-30. Only positive reviews, cut at sentence ends. -->
+  <div class="reviews" id="reviews">
+    <div class="rev-head">
+      <div>
+        <p class="kicker">// Player signal &middot; Steam</p>
+        <h3>What players <em>say</em></h3>
+        <p class="rev-sum"><span class="rev-rating">Positive</span><span class="rev-count">13 Steam reviews</span><span class="rev-src">Stella Nova Demo</span></p>
+      </div>
+      <a class="btn btn-glass rev-all" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-steam"/></svg><span><b>Read all reviews on Steam</b><small>store.steampowered.com</small></span></a>
+    </div>
+    <div class="rev-grid">
+      <figure class="rev rev-lead">
+        <blockquote><p>The game is VERY impressive. Complexity of Dwarf Fortress, but not as punishing. I also like the sense of time flow in the game, as it can actually take years for you to fling your ship from one planet to another.</p><p>&hellip; If you like a complex game that emulates the feel of Dwarf Fortress mixed with automation elements and space, you'd probably really enjoy this game a lot!</p></blockquote>
+        <figcaption><span class="rev-av" aria-hidden="true">F</span><span class="rev-who"><b>Fraggin</b><small>2.9 hrs on record</small></span><span class="rev-rec"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-thumb"/></svg>Recommended</span></figcaption>
+      </figure>
+      <figure class="rev">
+        <blockquote><p>Stella Nova lends itself to being a really stylish, really fun, and overall great game to play. You feel like you are sitting in the chair of a mission control center which I really love and the custom CRT monitor styled visuals really drive this home.</p></blockquote>
+        <figcaption><span class="rev-av" aria-hidden="true">T</span><span class="rev-who"><b>TPlays</b><small>7.3 hrs on record</small></span><span class="rev-rec"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-thumb"/></svg>Recommended</span></figcaption>
+      </figure>
+      <figure class="rev">
+        <blockquote><p>very polished and interesting setting for a demo, the UI is GORGEOUS and the N-body simulation of everything is awesome.</p></blockquote>
+        <figcaption><span class="rev-av" aria-hidden="true">3</span><span class="rev-who"><b>321nick</b><small>0.7 hrs on record</small></span><span class="rev-rec"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-thumb"/></svg>Recommended</span></figcaption>
+      </figure>
+      <figure class="rev">
+        <blockquote><p>I feel like the foundation is good on this game, the developer actually cares/listen in the forums and there is plenty of room for experimentation</p><p>&hellip; If you are a fan of strategy + automation, try it out!</p></blockquote>
+        <figcaption><span class="rev-av" aria-hidden="true">S</span><span class="rev-who"><b>Snared</b><small>20.1 hrs on record</small></span><span class="rev-rec"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-thumb"/></svg>Recommended</span></figcaption>
+      </figure>
+      <figure class="rev">
+        <blockquote><p>Really cool game, very beautiful and wittily put together!</p></blockquote>
+        <figcaption><span class="rev-av" aria-hidden="true">J</span><span class="rev-who"><b>Jam</b><small>2 hrs on record</small></span><span class="rev-rec"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-thumb"/></svg>Recommended</span></figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ DOWNLOAD ═════ -->
+<section class="band" id="download" aria-labelledby="download-h">
+  <div class="dl">
+    <div class="dl-copy">
+      <p class="kicker">// Demo available</p>
+      <h2 id="download-h">Download the <em>demo</em></h2>
+      <p>Station building, factories, resource and crew management, interplanetary travel and a full tutorial. Built from scratch in Rust on a custom wgpu engine.</p>
+      <div class="dl-links">
+        <a class="btn btn-gold" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener"><span><b>Steam demo</b><small>Wishlist too</small></span></a>
+        <a class="btn btn-glass" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener"><svg viewBox="0 0 262.73 235.28" aria-hidden="true"><path fill="#fa5c5c" d="M31.99 1.57C21.4 8.8 0 33.96 0 44.47v13.58c0 19.2 14.23 33.48 31.31 33.48 18.27 0 33.14-14.61 33.14-32.88 0 18.27 12.82 32.88 31.09 32.88s30.47-14.61 30.47-32.88c0 18.27 14.84 32.88 33.11 32.88h.37c18.27 0 33.11-14.61 33.11-32.88 0 18.27 12.2 32.88 30.47 32.88s31.09-14.61 31.09-32.88c0 18.27 14.87 32.88 33.14 32.88 17.08 0 31.31-14.27 31.31-33.48V44.47c0-10.51-21.4-35.67-31.99-42.9C230.13-.5 213.63-.18 206.76 0c-22.4.59-33.9 11.89-37.91 14.55C160.68 9.28 149.67 0 131.3 0s-29.38 9.28-37.55 14.55C89.75 11.89 78.24.59 55.85 0 48.97-.18 32.48-.5 31.99 1.57z"/></svg><span><b>itch.io</b><small>Direct download</small></span></a>
+      </div>
+    </div>
+    <div class="dl-cards">
+      <a class="dl-card" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener"><span class="os">WIN</span><b>Windows</b><small>Windows 10/11 64-bit &middot; Vulkan 1.1</small></a>
+      <a class="dl-card" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener"><span class="os">MAC</span><b>macOS</b><small>macOS 11+ &middot; Intel and Apple Silicon</small><em>Not codesigned, because Apple charges $99/yr for the privilege. Right-click &rarr; Open to bypass Gatekeeper.</em></a>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ REPORT A BUG ═════ -->
+<section class="band" id="report" aria-labelledby="report-h">
+  <div class="report">
+    <div class="report-copy">
+      <p class="kicker">// Diagnostics</p>
+      <h2 id="report-h">Report a <em>bug</em></h2>
+      <p>Found something broken? Reports go straight to the dev. You can also post on the <a href="https://discord.gg/SkJDmnRmdJ" target="_blank" rel="noopener">Discord</a>.</p>
+    </div>
+    <div class="report-box">
+      <p class="bug-ok" id="bugSuccess" hidden>&#10003; Report transmitted. Thank you, Commander.</p>
+      <form class="bug-form" id="bugForm" novalidate>
+        <div class="row2"><label>Your name <i>optional</i><input type="text" name="name" placeholder="Anonymous commander" autocomplete="name"></label><label>Contact <i>optional</i><input type="text" name="contact" placeholder="Discord handle or email"></label></div>
+        <div class="row2"><label>Category<select name="category"><option value="gameplay">Gameplay</option><option value="ui">UI / UX</option><option value="graphics">Graphics / Rendering</option><option value="performance">Performance</option><option value="crash">Crash / Freeze</option><option value="audio">Audio</option><option value="tutorial">Tutorial</option><option value="other">Other</option></select></label><label>Severity<select name="severity"><option value="low">Low &mdash; cosmetic</option><option value="medium" selected>Medium &mdash; annoying</option><option value="high">High &mdash; blocks progress</option><option value="critical">Critical &mdash; crash/data loss</option></select></label></div>
+        <label>Summary<input type="text" name="summary" placeholder="Brief description of the issue" required></label>
+        <label>Steps to reproduce<textarea name="steps" rows="3" placeholder="1. Open the station builder&#10;2. Place a foundry module&#10;3. ..."></textarea></label>
+        <label>Expected vs actual<textarea name="expected" rows="2" placeholder="Expected: the foundry processes ore&#10;Actual: nothing happens"></textarea></label>
+        <label>System info <i>optional</i><input type="text" name="system" placeholder="for example Windows 11, RTX 3070, 16 GB RAM"></label>
+        <div class="bug-foot"><button type="submit" class="btn btn-blue" id="bugSubmitBtn"><span><b>Transmit report</b></span></button><p class="bug-err" id="bugErr" role="alert"></p></div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ DIRECTORY: every shell page ═════ -->
+<section class="band" id="directory" aria-labelledby="directory-h">
+  <div class="band-head">
+    <div><p class="kicker">// Catalogue</p><h2 id="directory-h">Every <em>page</em></h2></div>
+    <label class="dir-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><input type="search" id="dirFilter" placeholder="Filter pages" aria-label="Filter pages" autocomplete="off"></label>
+  </div>
+  <div class="dir" id="dirList">
+<!-- DIRECTORY:BEGIN -->
+      <div class="dir-col">
+        <details class="dir-group" data-sector="game" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Home</span><span class="dir-count">2</span></summary>
+          <div class="dir-body">
+            <ul>
+              <li><a href="/stella-nova/#home" target="_top" data-key="home">Overview</a></li>
+            </ul>
+            <h4 class="dir-h">Help Translate</h4>
+            <ul>
+              <li><a href="/stella-nova/#translate" target="_top" data-key="translate">Translation Tool<span class="badge">i18n</span></a></li>
+            </ul>
           </div>
-
-          <a href="#media" class="h-ghost" style="display:inline-block;margin-top:0.8rem">See Gameplay &darr;</a>
-
-          <div class="h-nav">
-            <div class="h-nav-label">// Systems Manual</div>
-            <div class="h-nav-grid">
-              <a class="h-nav-link" href="#features">Features</a>
-              <a class="h-nav-link" href="#media">Screenshots &amp; Video</a>
-              <a class="h-nav-link" href="#download">Download Demo</a>
-              <a class="h-nav-link" href="#report">Report a Bug</a>
-              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a>
-              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a>
-              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('gravity')">Gravity Sim</a>
-              <a class="h-nav-link" onclick="parent.switchTab&&parent.switchTab('hohmann')">Hohmann Transfer</a>
-            </div>
+        </details>
+        <details class="dir-group" data-sector="wiki" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Interactive Wiki</span><span class="dir-count">8</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Station Design</h4>
+            <ul>
+              <li><a href="/stella-nova/#guide" target="_top" data-key="guide">Station Guide</a></li>
+              <li><a href="/stella-nova/#planner" target="_top" data-key="planner">Station Planner</a></li>
+              <li><a href="/stella-nova/#crafting" target="_top" data-key="crafting">Crafting</a></li>
+            </ul>
+            <h4 class="dir-h">Ship &amp; Identity</h4>
+            <ul>
+              <li><a href="/stella-nova/#shipdesigner" target="_top" data-key="shipdesigner">Ship Designer<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#flagdesigner" target="_top" data-key="flagdesigner">Flag Designer<span class="badge">NEW</span></a></li>
+            </ul>
+            <h4 class="dir-h">Gameplay</h4>
+            <ul>
+              <li><a href="/stella-nova/#selection" target="_top" data-key="selection">Selection</a></li>
+              <li><a href="/stella-nova/#behaviors" target="_top" data-key="behaviors">Behaviors</a></li>
+              <li><a href="/stella-nova/#controls" target="_top" data-key="controls">Controls</a></li>
+            </ul>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="sig-bar rv">
-    <div class="sig-cell"><div class="sig-val">Mine</div><div class="sig-label">10 Ores &middot; Real Rarity Curves</div></div>
-    <div class="sig-cell"><div class="sig-val">Smelt</div><div class="sig-label">Ore &rarr; Ingot &rarr; Alloy &rarr; Component</div></div>
-    <div class="sig-cell"><div class="sig-val">Build</div><div class="sig-label">Grid Stations &middot; Module by Module</div></div>
-    <div class="sig-cell"><div class="sig-val">Govern</div><div class="sig-label">Citizens with Relationships &amp; Grudges</div></div>
-  </div>
-
-  <!-- Lore section: the post-cataclysm story hook plus demo cross-links. -->
-  <section>
-    <div class="sec-inner rv">
-      <div class="lore-text">
-        The solar system used to be sprawling with interstellar life, but the Great Cataclysm could never have been anticipated. All systems went dark. Entire civilizations were lost.
-        Everything and everyone has fallen apart.<br><br>
-        <strong>Everyone but you.</strong><br><br>
-        It is now your mission to rebuild the once vibrant solar system into a new civilization, and reclaim what was lost.
-      </div>
-      <div class="xlinks" style="justify-content:center;margin-top:2rem">
-        <a class="xlink" onclick="parent.switchTab&&parent.switchTab('gravity')">Gravity Sim</a>
-        <a class="xlink" onclick="parent.switchTab&&parent.switchTab('galaxy')">Galaxy</a>
-        <a class="xlink" onclick="parent.switchTab&&parent.switchTab('blackhole')">Black Hole</a>
-        <a class="xlink" onclick="parent.switchTab&&parent.switchTab('forge')">Planet Forge</a>
-        <a class="xlink" onclick="parent.switchTab&&parent.switchTab('flare')">Engine FX</a>
-        <a class="xlink" onclick="parent.switchTab&&parent.switchTab('explosion')">Explosion FX</a>
-      </div>
-    </div>
-  </section>
-
-  <!-- Gallery: an embedded video plus the image carousel. -->
-  <div class="gallery rv" id="media">
-    <div class="gallery-inner">
-      <div class="g-header">
-        <div><div class="g-tag">// Gameplay Feed</div><h2>See It In Action</h2></div>
-        <div class="g-header-right">In-engine captures</div>
-      </div>
-      <div class="media-video">
-        <iframe src="https://www.youtube.com/embed/Pn9WTbewFFQ" title="Stella Nova Gameplay" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-      </div>
-      <!-- Image carousel: main.js slides #nvTrack, builds #nvPips, drives Auto. -->
-      <div class="nv" id="nvViewer">
-        <div class="nv-head"><span class="nv-sys">SYS // Visual Feed</span><span class="nv-spacer"></span><span class="nv-file" id="nvFile">IMG 01/06</span><span class="nv-status">LIVE</span></div>
-        <div class="nv-viewport" id="nvViewport">
-          <div class="nv-track" id="nvTrack">
-            <div class="nv-slide"><img src="../../media/1.jpg" alt="Station Construction" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Station Construction</span><span class="nv-slide-idx">01</span></div></div>
-            <div class="nv-slide"><img src="../../media/2.jpg" alt="N-Body Orbits" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">N-Body Orbits</span><span class="nv-slide-idx">02</span></div></div>
-            <div class="nv-slide"><img src="../../media/3.jpg" alt="Citizen AI" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Citizen AI</span><span class="nv-slide-idx">03</span></div></div>
-            <div class="nv-slide"><img src="../../media/4.jpg" alt="Resource Crafting" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Resource Crafting</span><span class="nv-slide-idx">04</span></div></div>
-            <div class="nv-slide"><img src="../../media/5.jpg" alt="Interplanetary Travel" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Interplanetary Travel</span><span class="nv-slide-idx">05</span></div></div>
-            <div class="nv-slide"><img src="../../media/6.jpg" alt="Nav Map" loading="lazy"><div class="nv-slide-label"><span class="nv-slide-name">Nav Map</span><span class="nv-slide-idx">06</span></div></div>
+        </details>
+        <details class="dir-group" data-sector="music" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Music Lab</span><span class="dir-count">6</span></summary>
+          <div class="dir-body">
+            <ul>
+              <li><a href="/stella-nova/#chordlab" target="_top" data-key="chordlab">ChordLab<span class="badge">MIC</span></a></li>
+              <li><a href="/stella-nova/#chordchart" target="_top" data-key="chordchart">Chord Chart<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#harmonywheel" target="_top" data-key="harmonywheel">Harmony Wheel<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#resonance-figure" target="_top" data-key="resonance-figure">Resonance Figure<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#resonance-table" target="_top" data-key="resonance-table">Resonance Table<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#resonance-3d" target="_top" data-key="resonance-3d">Resonance 3D<span class="badge">3D</span></a></li>
+            </ul>
           </div>
-        </div>
-        <div class="nv-controls">
-          <button class="nv-btn" onclick="nvNav(-1)" aria-label="Previous">&#8249;</button>
-          <button class="nv-btn" onclick="nvNav(1)" aria-label="Next">&#8250;</button>
-          <div class="nv-pips" id="nvPips"></div>
-          <button class="nv-auto" id="nvAutoBtn" onclick="nvToggleAuto()">Auto</button>
-        </div>
+        </details>
+        <details class="dir-group" data-sector="labs" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Light Study</span><span class="dir-count">1</span></summary>
+          <div class="dir-body">
+            <ul>
+              <li><a href="/stella-nova/#solar" target="_top" data-key="solar">Solar Transit Study<span class="badge">TOOL</span></a></li>
+            </ul>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="labs" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Material Lab</span><span class="dir-count">1</span></summary>
+          <div class="dir-body">
+            <ul>
+              <li><a href="/stella-nova/#matlab" target="_top" data-key="matlab">PBR Material Studio<span class="badge">TOOL</span></a></li>
+            </ul>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="community" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Community</span><span class="dir-count">3</span></summary>
+          <div class="dir-body">
+            <ul>
+              <li><a href="/stella-nova/#fortom" target="_top" data-key="fortom">For Tom</a></li>
+              <li><a href="/stella-nova/#starward-belt" target="_top" data-key="starward-belt">Starward Belt<span class="badge">MAP</span></a></li>
+              <li><a href="/stella-nova/#translate" target="_top" data-key="translate">Translation Terminal<span class="badge">i18n</span></a></li>
+            </ul>
+          </div>
+        </details>
       </div>
-    </div>
+      <div class="dir-col">
+        <details class="dir-group" data-sector="physics" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Learn About Physics</span><span class="dir-count">37</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Orbital Mechanics</h4>
+            <ul>
+              <li><a href="/stella-nova/#hohmann" target="_top" data-key="hohmann">Hohmann Transfer<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#leo" target="_top" data-key="leo">LEO Catalog<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#gravity" target="_top" data-key="gravity">Gravity Sim<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#galaxy" target="_top" data-key="galaxy">Galaxy<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#forge" target="_top" data-key="forge">Planet Forge</a></li>
+              <li><a href="/stella-nova/#blackhole" target="_top" data-key="blackhole">Black Hole<span class="badge">GPU</span></a></li>
+              <li><a href="/stella-nova/#wormhole" target="_top" data-key="wormhole">Wormhole<span class="badge">GPU</span></a></li>
+            </ul>
+            <h4 class="dir-h">Quantum &amp; Atomic</h4>
+            <ul>
+              <li><a href="/stella-nova/#orbital" target="_top" data-key="orbital">Atomic Orbital<span class="badge">VR</span></a></li>
+              <li><a href="/stella-nova/#molecular-bond" target="_top" data-key="molecular-bond">Molecular Bond<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#hydrogen-table" target="_top" data-key="hydrogen-table">Hydrogen Wave Function<span class="badge">NEW</span></a></li>
+            </ul>
+            <h4 class="dir-h">Quantum Computing</h4>
+            <ul>
+              <li><a href="/stella-nova/#qave" target="_top" data-key="qave">Quantum Algorithm Visualizer<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#qft-flow" target="_top" data-key="qft-flow">Quantum Encoding<span class="badge">MATH</span></a></li>
+              <li><a href="/stella-nova/#qft-store" target="_top" data-key="qft-store">Quantum Decoding<span class="badge">DATA</span></a></li>
+              <li><a href="/stella-nova/#frqi" target="_top" data-key="frqi">Quantum Image Encoding<span class="badge">IMG</span></a></li>
+            </ul>
+            <h4 class="dir-h">Fluid Dynamics</h4>
+            <ul>
+              <li><a href="/stella-nova/#fluidlab" target="_top" data-key="fluidlab">Stable Fluids<span class="badge">GPU</span></a></li>
+              <li><a href="/stella-nova/#ns-equations" target="_top" data-key="ns-equations">Navier–Stokes 1D<span class="badge">MATH</span></a></li>
+              <li><a href="/stella-nova/#ns-burgers" target="_top" data-key="ns-burgers">Burgers Equation<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#ns-flow2d" target="_top" data-key="ns-flow2d">Navier–Stokes 2D<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#ns-flow3d" target="_top" data-key="ns-flow3d">Navier–Stokes 3D<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#ns-wave" target="_top" data-key="ns-wave">Blowup: Wave<span class="badge">MATH</span></a></li>
+              <li><a href="/stella-nova/#ns-geometry" target="_top" data-key="ns-geometry">Blowup: Geometry<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#ns-vortex" target="_top" data-key="ns-vortex">Blowup: Vortex<span class="badge">3D</span></a></li>
+            </ul>
+            <h4 class="dir-h">Electromagnetism</h4>
+            <ul>
+              <li><a href="/stella-nova/#magnetlab" target="_top" data-key="magnetlab">MagnetLab<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#biot-savart" target="_top" data-key="biot-savart">Biot–Savart Law<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#maxwell" target="_top" data-key="maxwell">Maxwell&#x27;s Equations<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#twenty-to-four" target="_top" data-key="twenty-to-four">Twenty to Four<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#smith-chart" target="_top" data-key="smith-chart">Smith Chart<span class="badge">NEW</span></a></li>
+            </ul>
+            <h4 class="dir-h">Optical Physics</h4>
+            <ul>
+              <li><a href="/stella-nova/#cornell" target="_top" data-key="cornell">Rendering Engine<span class="badge">PATH</span></a></li>
+              <li><a href="/stella-nova/#diffraction" target="_top" data-key="diffraction">Aperture Diffraction<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#double-slit" target="_top" data-key="double-slit">Double-Slit Diffraction<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#polarization" target="_top" data-key="polarization">Circular Polarization<span class="badge">NEW</span></a></li>
+            </ul>
+            <h4 class="dir-h">Differential Equations</h4>
+            <ul>
+              <li><a href="/stella-nova/#attractorlab" target="_top" data-key="attractorlab">Strange Attractors<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#flowlab" target="_top" data-key="flowlab">Vector Fields<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#wave-membrane" target="_top" data-key="wave-membrane">Standing Wave Membrane<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#reaction-diffusion" target="_top" data-key="reaction-diffusion">Reaction–Diffusion<span class="badge">GPU</span></a></li>
+              <li><a href="/stella-nova/#lenia" target="_top" data-key="lenia">Lenia<span class="badge">GPU</span></a></li>
+            </ul>
+            <h4 class="dir-h">Folding &amp; Structures</h4>
+            <ul>
+              <li><a href="/stella-nova/#origami" target="_top" data-key="origami">Origami Simulator<span class="badge">SIM</span></a></li>
+            </ul>
+          </div>
+        </details>
+      </div>
+      <div class="dir-col">
+        <details class="dir-group" data-sector="shader" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Shader Library</span><span class="dir-count">30</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Procedural Fields</h4>
+            <ul>
+              <li><a href="/stella-nova/#noise" target="_top" data-key="noise">Noise Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#fields" target="_top" data-key="fields">Field Table<span class="badge">COMPUTE</span></a></li>
+              <li><a href="/stella-nova/#sims" target="_top" data-key="sims">Simulation Table<span class="badge">COMPUTE</span></a></li>
+              <li><a href="/stella-nova/#dot-field" target="_top" data-key="dot-field">Dot Field Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#polar" target="_top" data-key="polar">Polar &amp; Lattice Table<span class="badge">WGSL</span></a></li>
+            </ul>
+            <h4 class="dir-h">Image &amp; Color</h4>
+            <ul>
+              <li><a href="/stella-nova/#color" target="_top" data-key="color">Color Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#postfx" target="_top" data-key="postfx">Post-Process<span class="badge">WGSL</span></a></li>
+            </ul>
+            <h4 class="dir-h">Shading &amp; Sampling</h4>
+            <ul>
+              <li><a href="/stella-nova/#lighting" target="_top" data-key="lighting">Lighting Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#sampling" target="_top" data-key="sampling">Sampling Table<span class="badge">WGSL</span></a></li>
+            </ul>
+            <h4 class="dir-h">Composition</h4>
+            <ul>
+              <li><a href="/stella-nova/#bench" target="_top" data-key="bench">Composition Bench<span class="badge">NODES</span></a></li>
+            </ul>
+            <h4 class="dir-h">Volumetric</h4>
+            <ul>
+              <li><a href="/stella-nova/#supernova" target="_top" data-key="supernova">Fractal Orb<span class="badge">SHADER</span></a></li>
+              <li><a href="/stella-nova/#orbs" target="_top" data-key="orbs">Presence Orbs<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#voxel" target="_top" data-key="voxel">Voxel Flythrough<span class="badge">GPU</span></a></li>
+              <li><a href="/stella-nova/#branched-flow" target="_top" data-key="branched-flow">Branched Flow<span class="badge">GPU</span></a></li>
+            </ul>
+            <h4 class="dir-h">Surfaces &amp; Effects</h4>
+            <ul>
+              <li><a href="/stella-nova/#platonic" target="_top" data-key="platonic">Platonic Mirrors<span class="badge">SHADER</span></a></li>
+              <li><a href="/stella-nova/#glass-cube" target="_top" data-key="glass-cube">Refraction<span class="badge">GPU</span></a></li>
+              <li><a href="/stella-nova/#sdf-solids" target="_top" data-key="sdf-solids">SDF Solids Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#sdf2d" target="_top" data-key="sdf2d">SDF 2D Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#sdf-lab" target="_top" data-key="sdf-lab">Sphere Tracing Lab<span class="badge">LAB</span></a></li>
+              <li><a href="/stella-nova/#liquid-metal" target="_top" data-key="liquid-metal">Liquid Metal Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#explosion" target="_top" data-key="explosion">Explosion</a></li>
+              <li><a href="/stella-nova/#flare" target="_top" data-key="flare">Engine Propulsion Effects</a></li>
+              <li><a href="/stella-nova/#beam" target="_top" data-key="beam">Beam &amp; Decal Table<span class="badge">WGSL</span></a></li>
+            </ul>
+            <h4 class="dir-h">Elements</h4>
+            <ul>
+              <li><a href="/stella-nova/#fire" target="_top" data-key="fire">Fire Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#fire-ev1" target="_top" data-key="fire-ev1">Fire Table (Evolved 1)<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#smoke" target="_top" data-key="smoke">Smoke Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#heat-diffraction" target="_top" data-key="heat-diffraction">Heat Diffraction<span class="badge">IMG</span></a></li>
+              <li><a href="/stella-nova/#heat-metal" target="_top" data-key="heat-metal">Heat Metal<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#frost" target="_top" data-key="frost">Frost Table<span class="badge">WGSL</span></a></li>
+            </ul>
+            <h4 class="dir-h">Data Visualization</h4>
+            <ul>
+              <li><a href="/stella-nova/#tidal-currents" target="_top" data-key="tidal-currents">Tidal Currents<span class="badge">DATA</span></a></li>
+            </ul>
+          </div>
+        </details>
+      </div>
+<!-- DIRECTORY:END -->
   </div>
+  <p class="dir-empty" id="dirEmpty" hidden>No page matches. Try another word.</p>
+</section>
 
-  <!-- Features: the systems manifest, one card per major game system. -->
-  <section id="features">
-    <div class="sec-inner rv">
-      <div style="text-align:center;margin-bottom:1rem">
-        <div class="g-tag">// Systems Manifest</div>
-        <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(1.6rem,3vw,2.4rem);color:var(--text-bright)">What You'll <em style="font-style:italic;color:var(--yellow)">Command</em></h2>
-      </div>
-      <div class="features-grid">
-        <div class="feature-card"><div class="feature-icon">&#9201;</div><div class="feature-title">Time-Dilating Astrophysics</div><div class="feature-desc">A living universe with thousands of dynamic objects adhering to real n-body orbital physics. Dilate and compress the flow of time at will.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('gravity')">Gravity Sim</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('hohmann')">Hohmann Transfer</a></div></div>
-        <div class="feature-card"><div class="feature-icon">&#9878;</div><div class="feature-title">Modular Station Construction</div><div class="feature-desc">Place modules on a crossword-puzzle grid that expands in every direction. Crew quarters, docking bays, foundries &mdash; design your station however you want.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a></div></div>
-        <div class="feature-card"><div class="feature-icon">&#9775;</div><div class="feature-title">Colony Management</div><div class="feature-desc">Your citizens form friendships, hold grudges, and run the foundries while you're not looking. Assign them to mine, collect, construct, or harvest.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Behavior System</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('selection')">Selection UI</a></div></div>
-        <div class="feature-card"><div class="feature-icon">&#9878;</div><div class="feature-title">4-Tier Crafting Chain</div><div class="feature-desc">Smelt iron ore into ingots. Combine ingots with carbon to forge steel. Press steel and titanium alloy into reactor cores. 40+ recipes, citizen-operated.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a></div></div>
-        <div class="feature-card"><div class="feature-icon">&#9733;</div><div class="feature-title">Emergent Storytelling</div><div class="feature-desc">A narrator creates events based on the status of your colony to drive the story forward. 27 quest types across 4 tiers of complexity.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a></div></div>
-        <div class="feature-card"><div class="feature-icon">&#9706;</div><div class="feature-title">Interplanetary Travel</div><div class="feature-desc">Work with real orbital mechanics to fly interplanetary distances. Manufacture fuel, plan Hohmann transfers, and expand across the solar system.</div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('hohmann')">Hohmann Transfer</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('shipdesigner')">Ship Designer</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('galaxy')">Galaxy Sim</a></div></div>
-      </div>
-    </div>
-  </section>
+</main>
 
-  <section>
-    <div class="sec-inner rv">
-      <div style="text-align:center;margin-bottom:0.5rem">
-        <!-- Community section: r/RimWorld reception stats and pull quotes. -->
-        <div class="g-tag">// Community Signal</div>
-        <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(1.2rem,2.5vw,1.8rem);color:var(--text-bright)">From <em style="font-style:italic;color:var(--yellow)">r/RimWorld</em></h2>
-        <p style="font-size:0.68rem;color:var(--text);margin-top:0.6rem;line-height:1.8">Posted to a 340K-member community notoriously protective of off-topic content. The mod team approved the post.</p>
-      </div>
-      <div class="community-bar">
-        <div class="community-stat"><div class="community-stat-val">2,200</div><div class="community-stat-label">Upvotes</div></div>
-        <div class="community-stat"><div class="community-stat-val">247K</div><div class="community-stat-label">Views in 10 Days</div></div>
-        <div class="community-stat"><div class="community-stat-val">177</div><div class="community-stat-label">Comments</div></div>
-      </div>
-      <div class="community-quotes">
-        <div class="cq"><div class="cq-text" style="padding-left:1rem">Mans just finished the tutorial and went straight to making mods. Looks dope OP!</div><div class="cq-attr">r/RimWorld &middot; 220 upvotes</div></div>
-        <div class="cq"><div class="cq-text" style="padding-left:1rem">I'm scared for my life, it looks crazy, in a good way. Can see it being addicting as hell</div><div class="cq-attr">r/RimWorld</div></div>
-        <div class="cq"><div class="cq-text" style="padding-left:1rem">"Developer: Dave" "Publisher: also Dave" &mdash; hell yeah dave</div><div class="cq-attr">r/RimWorld &middot; 128 upvotes</div></div>
-        <div class="cq"><div class="cq-text" style="padding-left:1rem">We support you guys, and when one of you has a project like this [...] some things are still allowed, are bigger than memes.</div><div class="cq-attr"><a href="https://www.reddit.com/r/RimWorld/comments/1surnpy/very_grateful_to_the_mod_team_for_allowing_me/" target="_blank" rel="noopener">r/RimWorld moderator</a> &middot; stickied comment</div></div>
-      </div>
-    </div>
-  </section>
+<!-- ═════ FOOTER ═════ -->
+<footer class="foot">
+  <p class="foot-msg">Every empire starts with <em>a single module.</em></p>
+  <ul class="socials" aria-label="Stella Nova elsewhere">
+    <li><a class="soc" style="--brand:#66c0f4" href="https://store.steampowered.com/app/4474070/Stella_Nova/" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-steam"/></svg><span>Steam</span></a></li>
+    <li><a class="soc" style="--brand:#fa5c5c" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-itch"/></svg><span>itch.io</span></a></li>
+    <li><a class="soc" style="--brand:#8b95ff" href="https://discord.gg/SkJDmnRmdJ" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-discord"/></svg><span>Discord</span></a></li>
+    <li><a class="soc" style="--brand:#ff4e45" href="#media" data-youtube><svg aria-hidden="true"><use href="#i-youtube"/></svg><span>YouTube</span></a></li>
+    <li><a class="soc" style="--brand:#e4588f" href="https://www.instagram.com/stella.nova.game" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-instagram"/></svg><span>Instagram</span></a></li>
+    <li><a class="soc" style="--brand:#3d9be9" href="https://linkedin.com/in/david-kubala" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-linkedin"/></svg><span>LinkedIn &middot; Dave Kubala</span></a></li>
+    <li><a class="soc" style="--brand:#64dcc8" href="/stella-nova/#translate" target="_top" data-key="translate"><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" d="M3 5h9M7.5 3v2M5 5c.8 3 3 5.5 6 7M10 5c-.8 3.4-3 6.4-6.5 8.5M13 21l4-10 4 10M14.4 17.5h5.2"/></svg><span>Help translate</span></a></li>
+  </ul>
+  <p class="foot-fine"><a class="foot-link" href="https://www.reddit.com/r/RimWorld/comments/1surnpy/very_grateful_to_the_mod_team_for_allowing_me/" target="_blank" rel="noopener">The launch post on r/RimWorld &#8599;</a><br>Built from scratch in Rust &middot; custom wgpu engine &middot; n-body physics &middot; local AI narrator &middot; solo developer.<br>AI disclosure: AI coding tools were used during development. All visual assets, music, writing and narrative content are human-made.</p>
+</footer>
 
-  <section>
-    <!-- Split feature sections: crew, resources, station, industry. -->
-    <div class="sec-inner">
-      <div class="split rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Crew</span><span class="sw-tag">Command</span></div><div class="sw-body"><h2>Command your <em>crews</em></h2><p>Assign citizens to mine, collect, construct, or harvest. They'll find the nearest asteroid, dock at the right station, and figure out the route themselves. But they also get tired, take breaks to socialize, and form opinions about who they want to work with &mdash; and who they don't.</p><div class="tag-strip"><span>12 Work States</span><span>Relationships</span><span>Autonomous AI</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Behavior System</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('selection')">Selection UI</a></div></div></div></div></div>
-      <div class="split reverse rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Resources</span><span class="sw-tag">Extraction</span></div><div class="sw-body"><h2>Gather <em>everything</em></h2><p>Ten raw ores &mdash; iron, copper, titanium, uranium, rare earth &mdash; scattered across asteroids with real spawn rarities. Your miners drill the rock. Crawlers haul the chunks to a space elevator. The elevator lifts them to orbit. Nothing spawns in your inventory &mdash; you earn it.</p><div class="tag-strip"><span>10 Ore Types</span><span>Space Elevators</span><span>Fog of War</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('forge')">Planet Forge</a></div></div></div></div></div>
-      <div class="split rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Station</span><span class="sw-tag">Construction</span></div><div class="sw-body"><h2>Design your <em>station</em></h2><p>Place modules on a crossword-puzzle grid that expands in every direction. Enclose empty cells to create storage bays that hold 64 units each. Foundries sit between bays as directional membranes &mdash; ore goes in one side, alloy comes out the other.</p><div class="tag-strip"><span>Grid Construction</span><span>Enclosed Storage</span><span>10+ Presets</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('controls')">Controls</a></div></div></div></div></div>
-      <div class="split reverse rv"><div class="split-panel"><div class="sys-window"><div class="sw-head"><span class="sw-sys">SYS // Industry</span><span class="sw-tag">Production</span></div><div class="sw-body"><h2>Manufacture <em>at scale</em></h2><p>Four production tiers, 40+ recipes, and your citizens operate the foundries &mdash; hauling fuel, feeding inputs, collecting outputs. Set a foundry to run indefinitely and it will, as long as someone keeps it fed.</p><div class="tag-strip"><span>4-Tier Crafting</span><span>40+ Recipes</span><span>Citizen-Operated</span></div><div class="xlinks"><a class="xlink" onclick="parent.switchTab&&parent.switchTab('crafting')">Crafting Tree</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('behaviors')">Citizen Behaviors</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('planner')">Station Planner</a></div></div></div></div></div>
-    </div>
-  </section>
 
-  <div class="tech-strip rv"><span>Built from scratch in</span><span class="tech-tag">Rust</span><span class="tech-sep">&middot;</span><span class="tech-tag">Custom wgpu Engine</span><span class="tech-sep">&middot;</span><span class="tech-tag">N-Body Physics</span><span class="tech-sep">&middot;</span><span class="tech-tag">Local AI Narrator</span><span class="tech-sep">&middot;</span><span class="tech-tag">Solo Developer</span></div>
-
-  <!-- Download: demo download cards for Windows and macOS. -->
-  <section id="download">
-    <div class="sec-inner rv">
-      <div style="text-align:center;margin-bottom:0.5rem">
-        <div class="g-tag">// Demo Available</div>
-        <h2 style="font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(1.6rem,3vw,2.4rem);color:var(--text-bright)">Download the <em style="font-style:italic;color:var(--yellow)">Demo</em></h2>
-        <p style="font-size:0.75rem;color:var(--text);margin-top:0.8rem;max-width:500px;margin-left:auto;margin-right:auto;line-height:1.8">Try Stella Nova before Early Access. Space station building, factory mechanics, resource &amp; crew management, interplanetary travel, and a detailed tutorial.</p>
-      </div>
-      <div class="download-grid" style="max-width:600px;margin:2rem auto 0">
-        <a class="dl-card" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener"><div class="dl-card-icon" style="font-size:0.9rem;letter-spacing:0.1em;color:var(--blue)">WIN</div><div class="dl-card-title">Windows</div><div class="dl-card-sub">Windows 10/11 64-bit<br>Vulkan 1.1 required</div></a>
-        <a class="dl-card" href="https://davesgames.itch.io/stella-nova" target="_blank" rel="noopener"><div class="dl-card-icon" style="font-size:0.9rem;letter-spacing:0.1em;color:var(--blue)">MAC</div><div class="dl-card-title">macOS</div><div class="dl-card-sub">macOS 11+ (Intel &amp; Apple Silicon)</div><div class="dl-card-note">Not codesigned because Apple charges $99/yr for the privilege. You can still play &mdash; right-click &rarr; Open to bypass Gatekeeper.</div></a>
-      </div>
-      <div class="xlinks" style="justify-content:center;margin-top:1.5rem"><a class="xlink" href="#report">Report a Bug</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('controls')">Controls</a><a class="xlink" onclick="parent.switchTab&&parent.switchTab('guide')">Station Guide</a></div>
-    </div>
-  </section>
-
-  <!-- Report: the bug form. submitBug() POSTs it; #bugSuccess replaces it. -->
-  <section id="report">
-    <div class="bug-section rv">
-      <div class="sys-window full-width">
-        <div class="sw-head"><span class="sw-sys">SYS // Diagnostics</span><span class="sw-tag">Bug Report</span></div>
-        <div class="sw-body">
-          <h2 style="font-size:1.6rem">Report a <em>bug</em></h2>
-          <p>Found something broken? Help make Stella Nova better. Reports go straight to the dev.</p>
-          <div class="bug-success" id="bugSuccess">&#10003; Report transmitted. Thank you, Commander.</div>
-          <form class="bug-form" id="bugForm" onsubmit="submitBug(event)">
-            <div class="bug-row"><div><label class="bug-label">Your name (optional)</label><input class="bug-input" type="text" name="name" placeholder="Anonymous commander"></div><div><label class="bug-label">Contact (optional)</label><input class="bug-input" type="text" name="contact" placeholder="Discord handle or email"></div></div>
-            <div class="bug-row"><div><label class="bug-label">Category</label><select class="bug-select" name="category"><option value="gameplay">Gameplay</option><option value="ui">UI / UX</option><option value="graphics">Graphics / Rendering</option><option value="performance">Performance</option><option value="crash">Crash / Freeze</option><option value="audio">Audio</option><option value="tutorial">Tutorial</option><option value="other">Other</option></select></div><div><label class="bug-label">Severity</label><select class="bug-select" name="severity"><option value="low">Low &mdash; cosmetic</option><option value="medium" selected>Medium &mdash; annoying</option><option value="high">High &mdash; blocks progress</option><option value="critical">Critical &mdash; crash/data loss</option></select></div></div>
-            <div><label class="bug-label">Summary</label><input class="bug-input" type="text" name="summary" placeholder="Brief description of the issue" required></div>
-            <div><label class="bug-label">Steps to reproduce</label><textarea class="bug-textarea" name="steps" placeholder="1. Open the station builder&#10;2. Place a foundry module&#10;3. ..."></textarea></div>
-            <div><label class="bug-label">Expected vs Actual behavior</label><textarea class="bug-textarea" name="expected" placeholder="Expected: The foundry should process ore&#10;Actual: Nothing happens when ore arrives" style="min-height:80px"></textarea></div>
-            <div><label class="bug-label">System info (optional)</label><input class="bug-input" type="text" name="system" placeholder="e.g. Windows 11, RTX 3070, 16GB RAM"></div>
-            <button type="submit" class="bug-submit" id="bugSubmitBtn">Transmit Report</button>
-          </form>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <div class="tech-strip rv" style="font-size:0.52rem;padding:0.8rem 2rem;opacity:0.7"><span>AI Disclosure:</span><span style="color:var(--text-dim)">AI coding tools used during development. All visual assets, music, writing, and narrative content are human-made.</span></div>
-
-  <!-- End transmission: the closing call to action. -->
-  <div class="tx-section">
-    <div class="tx-panel panel rv">
-      <div class="p-head"><span>// End Transmission</span><span class="tag">SIG.VERIFIED</span></div>
-      <div class="p-body">
-        <div class="tx-pre">Signal Origin &middot; Active Development &middot; Solo Dev</div>
-        <div class="tx-msg">Every empire starts with<br><strong>a single module.</strong></div>
-        <a href="https://davesgames.itch.io/stella-nova" class="tx-cta" target="_blank" rel="noopener">Download the Demo</a><br>
-        <a href="https://store.steampowered.com/app/4474070/Stella_Nova/" class="h-ghost" target="_blank" rel="noopener" style="font-size:0.62rem">wishlist on Steam &rarr;</a>
-        <span style="display:inline-block;margin:0 0.6rem;color:var(--text-faint);font-size:0.52rem">or</span>
-        <a href="https://discord.gg/SkJDmnRmdJ" class="h-ghost" target="_blank" rel="noopener" style="font-size:0.62rem">join the Discord &rarr;</a>
-        <div class="tx-sig" style="margin-top:1rem">STELLA NOVA // Demo Available Now</div>
-        <div class="tx-barcode">STELLANOVA-EOT-2026</div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- Runs the canvases, the carousel, the bug form, and the scroll reveals. -->
-<script src="main.js"></script>
+<script defer src="thumbs/list.js"></script>
+<script defer src="nav-data.js"></script>
+<script defer src="sectors.js"></script>
+<script defer src="sky-data.js"></script>
+<script defer src="main.js"></script>
 </body>
 </html>

@@ -1,184 +1,824 @@
 // ============================================================================
-//  HOME  ·  the Stella Nova landing page behavior
+//  HOME · Observatory  —  page script (classic script, no ES modules)
 // ----------------------------------------------------------------------------
-//  Four independent pieces drive the page:
-//    1. a bug-report form that POSTs to a form email endpoint
-//    2. an image carousel for the gameplay gallery
-//    3. a full-screen background N-body gravity simulation
-//    4. a hero "radar" that sweeps a stylized solar system
-//  plus a reveal-on-scroll observer for the content sections.
+//  Builds the rails, the star chart and the phone sector cards from
+//  sectors.js, and runs the hero sky on one Canvas 2D context.
 //
-//  BACKGROUND SIM  (Barnes-Hut N-body, canvas #sim)
-//  ---------------------------------------------------------------------------
-//  Naive gravity is O(n^2). This builds a quadtree each frame and treats a
-//  distant cluster as one mass at its center, giving O(n log n).
+//  Classic scripts let the page run from file:// (a Finder double-click).
+//  Browsers block ES modules there. Load order, all with defer:
+//    thumbs/list.js -> nav-data.js -> sectors.js -> main.js
+//  They share one namespace object: window.Observatory.
 //
-//      root square over all bodies          per body, walk the tree:
-//      ┌───────┬───────┐                       if a node is far enough
-//      │   ·   │  · ·   │                       (node.w / dist < THETA)
-//      │       ├───┬───┤   subdivide only         use its center of mass
-//      ├───────┤ · │   │   where bodies land    else recurse into children
-//      │  ·  · │───┼───┤                        leaf holds one body
-//      └───────┴───┴───┘
-//      buildTree ─▶ calcForce ─▶ integrate (vel, pos) ─▶ renderSim
+//  Search is inline (initFind): a field in the hero and one in the dock,
+//  each with a results list under it. There is no overlay, scrim or blur.
+//  The user removed the old full-screen palette because it blurred the page.
+//  The directory filter (#dirFilter) also filters in place.
 //
-//  HERO RADAR  (canvas #heroRadar)
-//  ---------------------------------------------------------------------------
-//  A fake solar system in polar coordinates: planets on circular orbits, a
-//  sweeping radar line, and a ping that flares each planet as the line passes.
-//      x = cx + cos(phase + omega*t) * dist * scale     (y with sin)
-//      orbit period scales as T^1 for angular speed; dist as T^(2/3) (Kepler)
+//  grep -n targets
+//    routing .............. "function routeClick"
+//    page href / file:// .. "function pageHref"
+//    thumbnails / art ..... "function media"
+//    page card ............ "function cardHTML"
+//    hero sky ............. "function startSky"
+//    featured rail ........ "function buildFeatured"
+//    star chart ........... "function buildChart"
+//    inspector ............ "function renderInspector"
+//    phone sectors ........ "function buildSectors"
+//    dock ................. "function initDock"
+//    inline search ........ "function initFind"
+//    social links ......... "YOUTUBE_URL"
+//    directory filter ..... "function initDirectory"
+//    video facade ......... "function initVideo"
+//    bug form ............. "function initBugForm"
+//    reveal on scroll ..... "function initReveal"
+//    portal spotlight ..... "function initSpot"
 //
-//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
-//  ---------------------------------------------------------------------------
-//      bug form ............. "function submitBug"   POST the report
-//      carousel ............. "var cur=0"            gallery slider IIFE
-//      canvas helpers ....... "function initCanvas"  get + size a canvas
-//      sim state ............ "const simCV"          bodies + toggles + constants
-//      Body ................. "class Body"           one gravitating mass
-//      quadtree ............. "class QTNode"         Barnes-Hut tree node
-//      build tree ........... "function buildTree"   enclose bodies, insert all
-//      spawn ................ "function spawnBody"   add bodies and clusters
-//      step ................. "function stepSim"     one physics tick
-//      render sim ........... "function renderSim"   draw bodies, trails, tree
-//      radar data ........... "const heroCV"         planets, moons, asteroids
-//      draw radar ........... "function drawRadar"   the hero solar system
-//      resize ............... "function resize"      match canvases to window
-//      sim toggles .......... "function toggleTree"  quadtree/trails/pause
-//      drag to launch ....... "simCV.c.addEventListener"  fling a new body
-//      loop ................. "function loop"        the per-frame driver
-//      reveal on scroll ..... "const obs"            fade sections in
+//  GPU budget: one Canvas 2D sky in the hero. It stops when the hero leaves
+//  the view or the tab hides, and it frees its backing store on pagehide.
+//  Everything else is DOM, CSS and SVG.
 // ============================================================================
-// Submit the bug report: build the form data, add subject and form-service
-// flags, POST it, and swap the form for a success note (or re-enable on failure).
-function submitBug(e) {
+(function (O) {
+'use strict';
+const { SECTORS, LAYOUT, GAME_STARS, BLURBS, THUMBS, FEATURED, allPages } = O;
+
+document.documentElement.classList.add('js');
+const RM = matchMedia('(prefers-reduced-motion: reduce)');
+const HOVER = matchMedia('(hover: hover) and (pointer: fine)');
+const PHONE = matchMedia('(max-width: 759px)');
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// The YouTube button target. The site has no channel URL yet, so this is
+// the gameplay trailer. Replace it with the channel URL when there is one.
+// Every [data-youtube] link takes its href from here. Without JS those
+// links fall back to #media, the trailer on this page.
+const YOUTUBE_URL = 'https://www.youtube.com/watch?v=Pn9WTbewFFQ';
+$$('a[data-youtube]').forEach(a => { a.href = YOUTUBE_URL; a.target = '_blank'; a.rel = 'noopener'; });
+
+const PAGES = allPages();
+const SECTOR = Object.fromEntries(SECTORS.map(s => [s.id, s]));
+const UNIQUE = [...new Map(PAGES.map(p => [p.key, p])).values()];
+$$('.page-count').forEach(el => { el.textContent = UNIQUE.length; });
+$$('.find-hero input').forEach(el => { el.placeholder = PHONE.matches ? `Search ${UNIQUE.length} pages` : `Search ${UNIQUE.length} pages: black hole, chord, fire, orbit`; });
+
+// ── routing ────────────────────────────────────────────────────────────────
+// A page link is <a href="/stella-nova/#key" target="_top" data-key>. Inside
+// the shell, ask the shell to swap the tab. Outside it, let the link go.
+// Modifier clicks keep the browser default, so "open in new tab" works.
+function inShell() {
+  try { return window.parent !== window && typeof window.parent.switchTab === 'function'; } catch (e) { return false; }
+}
+// On file:// a root-relative href points at the disk root. Outside the
+// shell on file://, page links go to the live site. On http(s) they stay
+// relative, so the preview server and the live site both work.
+const LIVE = 'https://davesgames.io';
+const OFFLINE = location.protocol === 'file:' && !inShell();
+function pageHref(key) { return (OFFLINE ? LIVE : '') + '/stella-nova/#' + key; }
+if (OFFLINE) $$('a[data-key]').forEach(a => { a.href = pageHref(a.dataset.key); });
+function routeClick(e) {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest('a[data-key]');
+  if (!a || !inShell()) return;
   e.preventDefault();
-  const form = document.getElementById('bugForm');
-  const data = new FormData(form);
-  const btn = document.getElementById('bugSubmitBtn');
-  btn.disabled = true;
-  btn.textContent = 'Transmitting...';
-  const severity = data.get('severity') || 'medium';
-  const summary = data.get('summary') || 'Bug Report';
-  data.append('_subject', '[Stella Nova Bug] [' + severity.toUpperCase() + '] ' + summary);
-  data.append('_captcha', 'false');
-  data.append('_template', 'box');
-  fetch('https://formsubmit.co/ajax/dave@davesgames.io', {method:'POST',body:data})
-  .then(r => r.json())
-  .then(res => {if(res.success){document.getElementById('bugSuccess').classList.add('show');form.style.display='none'}else{btn.disabled=false;btn.textContent='Transmit Report';alert('Transmission failed. Try again or report on Discord.')}})
-  .catch(() => {btn.disabled=false;btn.textContent='Transmit Report';alert('Transmission failed. Try again or report on Discord.')});
+  window.parent.switchTab(a.dataset.key);
+}
+document.addEventListener('click', routeClick);
+
+// ── thumbnails and generated art ──────────────────────────────────────────
+// Return the visual for one page: its thumbnail, or a typographic plate
+// in the sector color when no thumbnail exists.
+function initials(label) {
+  const w = label.replace(/[()&:]/g, ' ').split(/[\s–-]+/).filter(Boolean);
+  return (w.length > 1 ? w[0][0] + w[1][0] : w[0].slice(0, 2)).toUpperCase();
+}
+function hash(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
+function media(p, img) {
+  const src = img || (THUMBS.has(p.key) ? `thumbs/${p.key}.jpg` : null);
+  if (src) return `<img src="${src}" alt="" loading="lazy" decoding="async">`;
+  const h = hash(p.key || p.label);
+  return `<span class="art" style="--ax:${20 + h % 60}%;--ay:${15 + (h >> 8) % 50}%"><b>${esc(initials(p.label))}</b><i>${esc(p.badge || p.group || '')}</i></span>`;
+}
+// The link attributes for a page record or an in-page/external star.
+function linkAttrs(p) {
+  if (p.href) return p.ext ? `href="${p.href}" target="_blank" rel="noopener"` : `href="${p.href}"`;
+  return `href="${pageHref(p.key)}" target="_top" data-key="${p.key}"`;
 }
 
-// Gallery carousel: a self-contained slider over the .nv-slide track. cur is the
-// index; render() slides the track and syncs the pips and counter; auto-advance
-// runs on a timer that resets on manual navigation.
-(function(){
-  var cur=0,autoTimer=null;var track=document.getElementById('nvTrack');var slides=track?track.children:[];var total=slides.length;var fileEl=document.getElementById('nvFile');var pipsEl=document.getElementById('nvPips');var autoBtn=document.getElementById('nvAutoBtn');var viewer=document.getElementById('nvViewer');
-  // Zero-pad a slide number for the "01/06" readout.
-  function pad(n){return n<10?'0'+n:''+n}
-  // Move the track to the current slide and update the counter and active pip.
-  function render(){if(!track)return;track.style.transform='translateX(-'+(cur*100)+'%)';if(fileEl)fileEl.textContent='IMG '+pad(cur+1)+'/'+pad(total);var pips=pipsEl?pipsEl.children:[];for(var i=0;i<pips.length;i++){pips[i].className='nv-pip'+(i===cur?' active':'')}}
-  // Build one pip per slide, each jumping to its index.
-  if(pipsEl){for(var i=0;i<total;i++){var p=document.createElement('button');p.className='nv-pip'+(i===0?' active':'');p.setAttribute('aria-label','Slide '+(i+1));(function(idx){p.onclick=function(){cur=idx;render();resetAuto()}})(i);pipsEl.appendChild(p)}}
-  // Prev/next navigation, wrapping around the ends.
-  window.nvNav=function(dir){cur=(cur+dir+total)%total;render();resetAuto()};
-  // Toggle auto-advance on a 3.5s interval.
-  window.nvToggleAuto=function(){if(autoTimer){clearInterval(autoTimer);autoTimer=null}else{autoTimer=setInterval(function(){cur=(cur+1)%total;render()},3500)}if(autoBtn)autoBtn.className='nv-auto'+(autoTimer?' on':'')};
-  // Restart the auto timer after a manual move so it does not fire immediately.
-  function resetAuto(){if(!autoTimer)return;clearInterval(autoTimer);autoTimer=setInterval(function(){cur=(cur+1)%total;render()},3500)}
-  // Left/right arrow keys navigate when the viewer has focus.
-  if(viewer){viewer.setAttribute('tabindex','0');viewer.addEventListener('keydown',function(e){if(e.key==='ArrowLeft'){window.nvNav(-1);e.preventDefault()}if(e.key==='ArrowRight'){window.nvNav(1);e.preventDefault()}})}
-  render();
+// ── page card ──────────────────────────────────────────────────────────────
+function cardHTML(p, i = 0, inSector = false) {
+  const s = p.sector;
+  const line = BLURBS[p.key] || p.sub || p.group;
+  return `<a class="card" data-sector="${s.id}" ${linkAttrs(p)} style="--i:${i}">
+    <span class="card-img">${media(p, p.img)}${p.badge ? `<span class="card-badge">${esc(p.badge)}</span>` : ''}</span>
+    <span class="card-body"><span class="card-sec">${inSector ? esc(p.group) : esc(s.short) + (p.group && p.group !== s.name ? ' · ' + esc(p.group) : '')}</span>
+    <span class="card-title">${esc(p.label)}</span><span class="card-line">${esc(line)}</span></span></a>`;
+}
+
+// Fill the static portal images from the thumbnail set.
+$$('img[data-thumb]').forEach(img => {
+  const k = img.dataset.thumb;
+  if (THUMBS.has(k)) img.src = `thumbs/${k}.jpg`;
+  else { const p = UNIQUE.find(x => x.key === k); img.insertAdjacentHTML('afterend', media(p)); img.remove(); }
+});
+$$('.title .t-row > span').forEach((el, i) => el.style.setProperty('--i', i));
+// When the last letter lands, drop the intro animation so no transform or
+// layer stays on the glyphs (Safari kept them soft). The timeout covers an
+// interrupted or skipped animation.
+(() => {
+  const title = $('.title'), last = $$('.title .t-row > span').pop();
+  if (!title || !last) return;
+  const done = () => title.classList.add('intro-done');
+  last.addEventListener('animationend', done, { once: true });
+  setTimeout(done, 2600);
 })();
+$$('.portal').forEach((el, i) => el.style.setProperty('--i', i));
 
-// Device pixel ratio (capped at 2) and two-pi, shared by both canvases.
-const dpr=Math.min(devicePixelRatio||1,2),TAU=Math.PI*2;
-// Fetch a canvas and its 2D context as a small pair, or null if absent.
-function initCanvas(id){const c=document.getElementById(id);if(!c)return null;return{c,ctx:c.getContext('2d')}}
-// Size a canvas to w by h CSS pixels at device resolution, scaling the context.
-function sizeCanvas(cv,w,h){cv.c.width=w*dpr;cv.c.height=h*dpr;cv.c.style.width=w+'px';cv.c.style.height=h+'px';cv.ctx.setTransform(dpr,0,0,dpr,0,0)}
-// Background gravity sim state: the body list and the three view toggles.
-const simCV=initCanvas('sim');let W,H,bodies=[],showTree=false,showTrails=false,paused=false;
-// Sim tuning: gravity strength, Barnes-Hut opening angle, force softening (to
-// avoid singularities at tiny distances), timestep, and trail length.
-const G=800,THETA=0.5,SOFTENING=4,DT=0.016,MAX_TRAIL=40;
-// One gravitating body: position, velocity, acceleration, mass. Radius grows as
-// the cube root of mass; colour steps by mass so heavy bodies read brighter.
-class Body{constructor(x,y,vx,vy,m){this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.ax=0;this.ay=0;this.mass=m;this.radius=Math.pow(m,0.33)*0.8;this.trail=[];const t=Math.min(m/500,1);this.color=t>0.8?'#96c8ff':t>0.4?'#7090b0':t>0.15?'#4a6080':'#2a3850'}}
-// Barnes-Hut quadtree node over a square region. It stores the total mass and
-// center of mass of everything inside, so a far cluster can be treated as one
-// point. insert() adds a body and subdivides on collision; calcForce()
-// accumulates gravity on a body, recursing only into nodes that are too close.
-class QTNode{constructor(x,y,w,h){this.x=x;this.y=y;this.w=w;this.h=h;this.mass=0;this.cx=0;this.cy=0;this.body=null;this.children=null;this.count=0}insert(b){if(b.x<this.x||b.x>this.x+this.w||b.y<this.y||b.y>this.y+this.h)return;if(this.count===0){this.body=b;this.mass=b.mass;this.cx=b.x;this.cy=b.y;this.count=1;return}if(!this.children){this.subdivide();const o=this.body;this.body=null;for(const c of this.children)c.insert(o)}for(const c of this.children)c.insert(b);const tm=this.mass+b.mass;this.cx=(this.cx*this.mass+b.x*b.mass)/tm;this.cy=(this.cy*this.mass+b.y*b.mass)/tm;this.mass=tm;this.count++}subdivide(){const hw=this.w/2,hh=this.h/2;this.children=[new QTNode(this.x,this.y,hw,hh),new QTNode(this.x+hw,this.y,hw,hh),new QTNode(this.x,this.y+hh,hw,hh),new QTNode(this.x+hw,this.y+hh,hw,hh)]}calcForce(b){if(this.count===0)return;if(this.count===1&&this.body===b)return;const dx=this.cx-b.x,dy=this.cy-b.y,dSq=dx*dx+dy*dy+SOFTENING*SOFTENING,d=Math.sqrt(dSq);if(this.count===1||this.w/d<THETA){const F=G*this.mass/dSq;b.ax+=F*dx/d;b.ay+=F*dy/d;return}if(this.children)for(const c of this.children)c.calcForce(b)}}
-// Build the quadtree for the current frame: find the bounding box of all
-// bodies, make a square root node that covers it, and insert every body.
-function buildTree(){let minX=1e9,maxX=-1e9,minY=1e9,maxY=-1e9;for(const b of bodies){if(b.x<minX)minX=b.x;if(b.x>maxX)maxX=b.x;if(b.y<minY)minY=b.y;if(b.y>maxY)maxY=b.y}const s=Math.max(maxX-minX,maxY-minY)+20;const r=new QTNode(minX-10,minY-10,s,s);for(const b of bodies)r.insert(b);return r}
-// Recursively stroke the quadtree cells, for the Quadtree debug overlay.
-function drawTree(n,ctx){if(!n||n.count===0)return;ctx.strokeStyle='rgba(150,200,255,0.04)';ctx.lineWidth=0.5;ctx.strokeRect(n.x,n.y,n.w,n.h);if(n.children)for(const c of n.children)drawTree(c,ctx)}
-// Add one body with an optional velocity and mass (random mass by default).
-function spawnBody(x,y,vx,vy,m){bodies.push(new Body(x,y,vx||0,vy||0,m||(5+Math.random()*60)))}
-// Add a cluster: a heavy central mass plus n light bodies on near-circular
-// orbits, each given the orbital speed sqrt(G*M/d) for its distance.
-function addCluster(n){const cx=W*0.15+Math.random()*W*0.7,cy=H*0.15+Math.random()*H*0.7,r=80+Math.random()*100;spawnBody(cx,cy,0,0,300+Math.random()*400);for(let i=0;i<n;i++){const a=Math.random()*TAU,d=20+Math.random()*r,x=cx+Math.cos(a)*d,y=cy+Math.sin(a)*d;const sp=Math.sqrt(G*400/d)*(0.6+Math.random()*0.4);spawnBody(x,y,-Math.sin(a)*sp,Math.cos(a)*sp,3+Math.random()*30)}}
-// Clear and reseed the sim with two clusters.
-function resetSim(){bodies=[];addCluster(100);setTimeout(()=>addCluster(80),100)}
-// The tree from the last step, kept so the overlay can draw it.
-let lastTree=null;
-// One physics tick: cull far-flung bodies, rebuild the tree, sum forces, then
-// integrate velocity and position, nudge stragglers back, and record trails.
-function stepSim(){if(paused)return;bodies=bodies.filter(b=>b.x>-1500&&b.x<W+1500&&b.y>-1500&&b.y<H+1500);if(bodies.length<2)return;lastTree=buildTree();for(const b of bodies){b.ax=0;b.ay=0}for(const b of bodies)lastTree.calcForce(b);for(const b of bodies){b.vx+=b.ax*DT;b.vy+=b.ay*DT;b.x+=b.vx*DT;b.y+=b.vy*DT;if(b.x<-200)b.vx+=2;if(b.x>W+200)b.vx-=2;if(b.y<-200)b.vy+=2;if(b.y>H+200)b.vy-=2;if(showTrails){b.trail.push({x:b.x,y:b.y});if(b.trail.length>MAX_TRAIL)b.trail.shift()}else if(b.trail.length)b.trail=[]}}
-// Draw the sim: optional quadtree overlay, optional motion trails, each body as
-// a glow plus a core disc, and the drag-to-launch aiming line.
-function renderSim(){const ctx=simCV.ctx;ctx.clearRect(0,0,W,H);if(showTree&&lastTree)drawTree(lastTree,ctx);if(showTrails)for(const b of bodies){if(b.trail.length<2)continue;ctx.beginPath();ctx.moveTo(b.trail[0].x,b.trail[0].y);for(let i=1;i<b.trail.length;i++)ctx.lineTo(b.trail[i].x,b.trail[i].y);ctx.strokeStyle=b.color+'18';ctx.lineWidth=b.radius*0.5;ctx.stroke()}for(const b of bodies){const gr=ctx.createRadialGradient(b.x,b.y,0,b.x,b.y,b.radius*5);gr.addColorStop(0,b.color+'10');gr.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(b.x,b.y,b.radius*5,0,TAU);ctx.fillStyle=gr;ctx.fill();ctx.beginPath();ctx.arc(b.x,b.y,b.radius,0,TAU);ctx.fillStyle=b.color;ctx.fill()}if(dragging&&dragStart&&dragCurrent){ctx.beginPath();ctx.moveTo(dragStart.x,dragStart.y);ctx.lineTo(dragCurrent.x,dragCurrent.y);ctx.strokeStyle='rgba(255,200,80,0.4)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(dragStart.x,dragStart.y,4,0,TAU);ctx.fillStyle='rgba(255,200,80,0.6)';ctx.fill()}}
+// ── hero sky ───────────────────────────────────────────────────────────────
+// The hero background is a quiet sky of real objects (sky-data.js):
+//   canvas #sky   nebula, faint field stars, the bright stars by RA/Dec,
+//                 M31 and Sgr A*. Painted once per resize, no frame loop.
+//   svg .orrery   the orbits of Mercury to Jupiter, thin 1 px rings, centred
+//                 low in the hero so the rings pass behind the portals and
+//                 not through the title or the statement.
+//   .sky-layer    one small anchor per object: planets, Moon, satellites,
+//                 bright stars and the deep-sky objects. Hover, focus or a
+//                 first tap shows its label. Linked objects open their page.
+// Motion: planets move on Kepler periods (one Earth year = 240 s, so inner
+// planets run faster), the Moon circles Earth, and the satellites cross the
+// sky at a rate set by their mean motion. The loop moves DOM transforms only
+// at about 30 fps. It stops when the hero is off screen or the tab hides,
+// and on pagehide it frees the canvas backing store.
+function startSky() {
+  const cv = $('#sky'), hero = $('.hero'), bg = $('.hero-bg');
+  const SKY = O.SKY;
+  if (!cv || !cv.getContext || !SKY) return;
+  const ctx = cv.getContext('2d', { alpha: false });
+  const NS = 'http://www.w3.org/2000/svg';
+  const YEAR = 240;               // seconds for one Earth orbit
+  const RA0 = 23;                 // RA (h) at the left edge
+  const rand = mulberry(7);
+  let W = 0, H = 0, dpr = 1, raf = 0, running = false, visible = true, last = 0;
+  const t0 = performance.now() - 37000;
 
-// Hero radar canvas and its scene data.
-const heroCV=initCanvas('heroRadar');
-// Base orbital period in seconds; each planet's period is BASE_T * its T.
-const BASE_T=16;
-// The planets: relative period T, colour, radius, and moons. dist and omega are
-// filled below from T; sizes are fractions of the canvas scale.
-const planets=[{T:1,color:'#ffc832',r:0.02,moons:[{d:0.028,T:0.18,r:0.007}]},{T:2,color:'#ff8844',r:0.028,moons:[{d:0.03,T:0.22,r:0.006},{d:0.05,T:0.4,r:0.008}]},{T:4,color:'#ff5050',r:0.034,moons:[{d:0.035,T:0.3,r:0.006}]},{T:8,color:'#96c8ff',r:0.024,moons:[{d:0.03,T:0.24,r:0.006}]}];
-// Kepler-flavoured setup: orbit distance scales as T^(2/3), angular speed omega
-// as 1/T. Gives the outer planets slower, wider orbits.
-planets.forEach(p=>{p.dist=0.27*Math.pow(p.T,2/3);p.omega=TAU/(BASE_T*p.T)});
-// Hand-set starting angles so the planets do not all line up at t=0.
-planets[0].phase=0;planets[1].phase=Math.PI*0.55;planets[2].phase=Math.PI*1.2;planets[3].phase=Math.PI*0.1;
-// Moons get a random starting angle and their own angular speed.
-planets.forEach(p=>p.moons.forEach(m=>{m.phase=Math.random()*TAU;m.omega=TAU/(BASE_T*m.T)}));
-// An asteroid belt between planets 1 and 2, each rock on its own Kepler orbit.
-const asteroids=[];const bi=planets[1].dist+0.02,bo=planets[2].dist-0.02;
-for(let i=0;i<40;i++){const d=bi+Math.random()*(bo-bi);asteroids.push({dist:d,omega:TAU/(BASE_T*Math.pow(d/0.27,1.5)),phase:Math.random()*TAU,r:0.003+Math.random()*0.003})}
-// Radar sweep angular speed: one full turn every 4 seconds.
-const sweepSpeed=TAU/4;
-// Draw the hero radar for time t: grid rings and spokes, the sweep line, orbit
-// paths, asteroids, the sun, then each planet (with a ping when the sweep passes)
-// and its moons. All positions are polar about the canvas center.
-function drawRadar(ctx,W,H,t){const cx=W/2,cy=H/2,sc=Math.min(W,H)/2.4,sa=sweepSpeed*t;ctx.fillStyle='rgba(14,17,24,0.95)';ctx.fillRect(0,0,W,H);const maxR=planets[3].dist*sc*1.25;for(let i=1;i<=5;i++){const r=(i/5)*maxR;ctx.beginPath();ctx.arc(cx,cy,r,0,TAU);ctx.strokeStyle='rgba(150,200,255,0.025)';ctx.lineWidth=0.5;ctx.stroke()}for(let i=0;i<12;i++){const a=(i/12)*TAU;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(a)*maxR,cy+Math.sin(a)*maxR);ctx.strokeStyle='rgba(150,200,255,0.012)';ctx.lineWidth=0.3;ctx.stroke()}ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(cx+Math.cos(sa)*maxR*1.2,cy+Math.sin(sa)*maxR*1.2);ctx.strokeStyle='rgba(150,200,255,0.2)';ctx.lineWidth=1;ctx.stroke();planets.forEach(p=>{const R=p.dist*sc;ctx.beginPath();ctx.setLineDash([1.5,5]);ctx.arc(cx,cy,R,0,TAU);ctx.strokeStyle='rgba(150,200,255,0.025)';ctx.lineWidth=0.4;ctx.stroke();ctx.setLineDash([])});asteroids.forEach(a=>{const ang=a.phase+a.omega*t;ctx.beginPath();ctx.arc(cx+Math.cos(ang)*a.dist*sc,cy+Math.sin(ang)*a.dist*sc,a.r*sc,0,TAU);ctx.fillStyle='rgba(150,200,255,0.05)';ctx.fill()});ctx.beginPath();ctx.arc(cx,cy,0.02*sc,0,TAU);ctx.fillStyle='rgba(255,200,80,0.2)';ctx.fill();planets.forEach(p=>{const a=p.phase+p.omega*t,px=cx+Math.cos(a)*p.dist*sc,py=cy+Math.sin(a)*p.dist*sc;let sd=(sa-a)%TAU;if(sd<0)sd+=TAU;const ping=sd<1.5?1-sd/1.5:0;if(ping>0){const pr=p.r*sc*(3+(1-ping)*5);ctx.beginPath();ctx.arc(px,py,pr,0,TAU);ctx.strokeStyle=`rgba(150,200,255,${ping*0.12})`;ctx.lineWidth=0.8;ctx.stroke()}const gl=ctx.createRadialGradient(px,py,0,px,py,p.r*sc*3);gl.addColorStop(0,p.color+'18');gl.addColorStop(1,'transparent');ctx.beginPath();ctx.arc(px,py,p.r*sc*3,0,TAU);ctx.fillStyle=gl;ctx.fill();ctx.beginPath();ctx.arc(px,py,p.r*sc,0,TAU);ctx.fillStyle=p.color;ctx.globalAlpha=0.5+ping*0.5;ctx.fill();ctx.globalAlpha=1;p.moons.forEach(m=>{const ma=m.phase+m.omega*t;ctx.beginPath();ctx.arc(px+Math.cos(ma)*m.d*sc,py+Math.sin(ma)*m.d*sc,m.r*sc,0,TAU);ctx.fillStyle='rgba(150,200,255,0.12)';ctx.fill()})})}
+  // Orbit rings (SVG) and the object layer (DOM).
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('class', 'orrery');
+  bg.appendChild(svg);
+  const layer = document.createElement('div');
+  layer.className = 'sky-layer';
+  bg.appendChild(layer);
 
-// Keep both full-screen canvases matched to the window.
-function resize(){W=innerWidth;H=innerHeight;sizeCanvas(simCV,W,H);sizeCanvas(heroCV,W,H)}
-resize();addEventListener('resize',resize);
-// The three sim view toggles, each reflecting state on its button.
-function toggleTree(){showTree=!showTree;document.getElementById('treeBtn').classList.toggle('active',showTree)}
-function toggleTrails(){showTrails=!showTrails;document.getElementById('trailBtn').classList.toggle('active',showTrails)}
-function togglePause(){paused=!paused;const b=document.getElementById('pauseBtn');b.classList.toggle('active',paused);b.textContent=paused?'Resume':'Pause'}
-// Expose the sim controls to the inline onclick handlers in the markup.
-window.resetSim=resetSim;window.addCluster=addCluster;window.toggleTree=toggleTree;window.toggleTrails=toggleTrails;window.togglePause=togglePause;
-// Drag to launch: press sets the origin, release flings a new body with a
-// velocity proportional to the drag vector (a slingshot).
-let dragging=false,dragStart=null,dragCurrent=null;
-simCV.c.addEventListener('mousedown',e=>{dragging=true;dragStart={x:e.clientX,y:e.clientY};dragCurrent={x:e.clientX,y:e.clientY}});
-addEventListener('mousemove',e=>{if(dragging)dragCurrent={x:e.clientX,y:e.clientY}});
-addEventListener('mouseup',e=>{if(dragging&&dragStart){spawnBody(dragStart.x,dragStart.y,(dragStart.x-e.clientX)*3,(dragStart.y-e.clientY)*3,10+Math.random()*80);dragging=false;dragStart=null;dragCurrent=null}});
-// Frame counter, FPS timer, and the radar clock.
-let fc=0,lastFT=performance.now(),time=0;
-// Seed the initial two clusters.
-addCluster(100);setTimeout(()=>addCluster(80),100);
-// The per-frame driver: step and draw the sim and the radar, then update the
-// topbar readouts (FPS once a second, body count and wall clock every frame).
-function loop(){time+=1/60;stepSim();renderSim();drawRadar(heroCV.ctx,W,H,time);fc++;const now=performance.now();if(now-lastFT>=1000){document.getElementById('fpsRead').textContent=fc;fc=0;lastFT=now}document.getElementById('bodyCount').textContent=bodies.length;document.getElementById('clockRead').textContent=new Date().toTimeString().slice(0,8);requestAnimationFrame(loop)}
-requestAnimationFrame(loop);
-// Reveal-on-scroll: add the .vis class to each .rv section as it scrolls into
-// view, so the CSS can fade and slide it in.
-const obs=new IntersectionObserver(e=>{e.forEach(el=>{if(el.isIntersecting)el.target.classList.add('vis')})},{threshold:0.08});
-document.querySelectorAll('.rv').forEach(el=>obs.observe(el));
+  // One object element. A page key makes it a real link.
+  function obj(label, key, cls, size, color) {
+    const el = document.createElement(key ? 'a' : 'span');
+    el.className = 'sky-obj ' + cls;
+    const page = key && (UNIQUE.find(p => p.key === key) || {}).label;
+    el.dataset.label = page ? `${label}  →  ${page}` : label;
+    el.setAttribute('aria-label', page ? `${label}, open ${page}` : label);
+    if (key) { el.href = pageHref(key); el.target = '_top'; el.dataset.key = key; }
+    else { el.tabIndex = 0; el.setAttribute('role', 'img'); }
+    el.style.setProperty('--s', size + 'px');
+    if (color) el.style.setProperty('--col', color);
+    layer.appendChild(el);
+    return el;
+  }
+  // B-V color index to a star color (blue-white to orange-red).
+  function bvColor(bv) {
+    const k = Math.max(0, Math.min(1, (bv + 0.2) / 2.0));
+    const r = Math.round(170 + 85 * Math.min(1, k * 1.8)), g = Math.round(200 + 30 * (1 - Math.abs(k - 0.35) * 2)), b = Math.round(255 - 150 * k);
+    return `rgb(${r},${Math.max(140, Math.min(235, g))},${Math.max(100, b)})`;
+  }
+  // Equirectangular sky, RA left to right from RA0, Dec +55 to -35 over the
+  // upper half of the hero, so the objects sit in the open space.
+  const proj = (ra, dec) => [(((RA0 - ra) / 24) % 1 + 1) % 1, 0.04 + (55 - dec) / 90 * 0.46];
+
+  const stars = SKY.stars.map(([n, ra, dec, mag, bv]) => ({ n, p: proj(ra, dec), mag, col: bvColor(bv),
+    el: obj(`${n} · mag ${mag.toFixed(2)}`, null, 'star-real', 3 + Math.max(0, 1.4 - mag * 0.7), bvColor(bv)) }));
+  const deep = SKY.deep.map(([n, ra, dec, kind, key]) => ({ n, kind, p: proj(ra, dec), el: obj(n, key, 'deep ' + kind, 5) }));
+  const sun = obj(SKY.sun[0], SKY.sun[1], 'sun', 6);
+  const planets = SKY.planets.map(([n, a, P, r, key]) => ({ n, a, P, ph: rand() * 6.283, el: obj(n, key, 'planet', r * 2) }));
+  const earth = planets.find(p => p.n === 'Earth');
+  const moon = { P: SKY.moon[1], rr: SKY.moon[2], el: obj(SKY.moon[0], SKY.moon[3], 'moon', 3) };
+  const sats = SKY.sats.map(([n, inc, raan, ma, mm]) => ({ n, inc, raan, ma, mm,
+    el: obj(`${n} · ${inc.toFixed(1)}° · ${mm.toFixed(2)} rev/day`, 'leo', 'sat', 2.5) }));
+
+  let geo = null;
+  function layout() {
+    const r = hero.getBoundingClientRect();
+    W = r.width; H = r.height;
+    const phone = W < 760;
+    const R = Math.min(W * (phone ? 0.62 : 0.46), 640);
+    geo = { cx: W / 2, cy: H * (phone ? 0.56 : 0.70), R, sq: phone ? 0.40 : 0.26 };
+    // Orbit radii follow sqrt(a), so the inner planets stay readable.
+    planets.forEach(p => { p.rx = R * Math.sqrt(p.a / 5.203); p.ry = p.rx * geo.sq; });
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.innerHTML = planets.map(p => `<ellipse cx="${geo.cx.toFixed(1)}" cy="${geo.cy.toFixed(1)}" rx="${p.rx.toFixed(1)}" ry="${p.ry.toFixed(1)}"/>`).join('');
+    place(sun, geo.cx, geo.cy);
+    // A fixed object that falls behind the title or the statement is drawn
+    // faint and gets no hit area, so no dot sits inside a letter.
+    const hr = hero.getBoundingClientRect();
+    const boxes = $$('.eyebrow, .title .t-row, .tagline, .statement').map(e => e.getBoundingClientRect())
+      .map(b => [b.left - hr.left - 10, b.top - hr.top - 8, b.right - hr.left + 10, b.bottom - hr.top + 8]);
+    const covered = (x, y) => boxes.some(b => x > b[0] && x < b[2] && y > b[1] && y < b[3]);
+    [...stars, ...deep].forEach(o => {
+      const x = o.p[0] * W, y = o.p[1] * H;
+      o.covered = covered(x, y); o.el.hidden = o.covered;
+      place(o.el, x, y);
+    });
+  }
+  function place(el, x, y) { el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`; el._x = x; el._y = y; }
+
+  // Labels: one element per shown object, in a top layer above the hero
+  // content. Each label tries above, below, right and left of its object,
+  // kept inside the hero, and takes the first spot that covers no button,
+  // link or field. A moving object carries its label with it.
+  const tips = document.createElement('div');
+  tips.className = 'sky-tips';
+  hero.appendChild(tips);
+  const shown = new Map();
+  function obstacles() {
+    const hr = hero.getBoundingClientRect();
+    return $$('.hero-inner a, .hero-inner button, .hero-inner input, .hero-inner .find-field, .scroll-cue', hero)
+      .map(e => e.getBoundingClientRect()).filter(b => b.width && b.height)
+      .map(b => [b.left - hr.left - 4, b.top - hr.top - 4, b.right - hr.left + 4, b.bottom - hr.top + 4]);
+  }
+  function placeTip(el, tip, obs) {
+    const w = tip.offsetWidth, h = tip.offsetHeight, x = el._x, y = el._y, g = 14;
+    const clamp = (a, lo, hi) => Math.max(lo, Math.min(hi, a));
+    const spots = [[x - w / 2, y - g - h], [x - w / 2, y + g], [x + g, y - h / 2], [x - g - w, y - h / 2],
+      [x + g, y - g - h], [x - g - w, y - g - h], [x + g, y + g], [x - g - w, y + g]]
+      .map(([a, b]) => [clamp(a, 8, W - 8 - w), clamp(b, 8, H - 8 - h)]);
+    const free = ([a, b]) => !obs.some(o => a < o[2] && a + w > o[0] && b < o[3] && b + h > o[1]);
+    let best = spots.find(free);
+    if (!best) {
+      // Slide up from the object until the label clears every obstacle.
+      for (let dy = g; dy < H && !best; dy += 8) for (const c of [[x - w / 2, y - dy - h], [x - w / 2, y + dy]]) { const k = [clamp(c[0], 8, W - 8 - w), clamp(c[1], 8, H - 8 - h)]; if (!best && free(k)) best = k; }
+    }
+    best = best || spots[0];
+    tip.style.transform = `translate(${best[0].toFixed(1)}px, ${best[1].toFixed(1)}px)`;
+    obs.push([best[0] - 3, best[1] - 3, best[0] + w + 3, best[1] + h + 3]);  // later labels avoid this one
+  }
+  function refreshTips() {
+    const want = new Set($$('.sky-obj', layer).filter(e => !e.hidden && (e.matches(':hover') || e === document.activeElement || e.classList.contains('show'))));
+    for (const [el, tip] of shown) if (!want.has(el)) { tip.remove(); shown.delete(el); }
+    if (!want.size) return;
+    const obs = obstacles();
+    for (const el of want) {
+      let tip = shown.get(el);
+      if (!tip) { tip = document.createElement('span'); tip.className = 'sky-tip'; tip.textContent = el.dataset.label; tip.setAttribute('aria-hidden', 'true'); tips.appendChild(tip); shown.set(el, tip); }
+      placeTip(el, tip, obs);
+    }
+  }
+  layer.addEventListener('pointerover', refreshTips);
+  layer.addEventListener('pointerout', () => requestAnimationFrame(refreshTips));
+  layer.addEventListener('focusin', refreshTips);
+  layer.addEventListener('focusout', () => requestAnimationFrame(refreshTips));
+  new MutationObserver(refreshTips).observe(layer, { subtree: true, attributes: true, attributeFilter: ['class'] });
+
+  // Canvas: nebula, field stars, real stars and deep-sky objects. Static.
+  function paint() {
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    cv.width = Math.max(1, Math.round(W * dpr)); cv.height = Math.max(1, Math.round(H * dpr));
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#07090f'; ctx.fillRect(0, 0, W, H);
+    const rr = mulberry(11);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const [x, y, rad, col, a] of [[0.18, 0.30, 0.55, '70,110,200', 0.20], [0.82, 0.24, 0.50, '120,80,190', 0.17], [0.60, 0.72, 0.60, '229,139,208', 0.07], [0.30, 0.80, 0.45, '60,170,200', 0.09]]) {
+      for (let k = 0; k < 5; k++) {
+        const cx = (x + (rr() - 0.5) * 0.16) * W, cy = (y + (rr() - 0.5) * 0.16) * H;
+        const rad2 = rad * Math.max(W, H) * (0.4 + rr() * 0.4);
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad2);
+        g.addColorStop(0, `rgba(${col},${a * (0.5 + rr() * 0.5)})`); g.addColorStop(1, `rgba(${col},0)`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // Field stars: faint, small, no glow.
+    const n = Math.min(420, Math.round(W * H / 3600));
+    for (let i = 0; i < n; i++) {
+      const a = 0.12 + rr() * 0.45, s = rr() < 0.9 ? 0.8 : 1.3;
+      ctx.fillStyle = `rgba(225,235,255,${a.toFixed(2)})`;
+      ctx.fillRect(rr() * W, rr() * H, s, s);
+    }
+    // Bright stars: a dot sized by magnitude, colored by B-V.
+    for (const s of stars) {
+      const x = s.p[0] * W, y = s.p[1] * H, r = Math.max(0.9, 2.1 - s.mag * 0.45);
+      if (s.covered) continue;
+      ctx.globalAlpha = 0.85; ctx.fillStyle = s.col;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, 6.283); ctx.fill();
+      ctx.globalAlpha = 0.12; ctx.beginPath(); ctx.arc(x, y, r * 3.2, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // M31: a small tilted ellipse. Sgr A*: a thin ring round a dark core.
+    for (const d of deep) {
+      const x = d.p[0] * W, y = d.p[1] * H;
+      if (d.covered) continue;
+      if (d.kind === 'galaxy') {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, 16);
+        g.addColorStop(0, 'rgba(255,236,200,.55)'); g.addColorStop(0.35, 'rgba(220,200,255,.16)'); g.addColorStop(1, 'rgba(200,190,255,0)');
+        ctx.save(); ctx.translate(x, y); ctx.rotate(-0.6); ctx.scale(1, 0.32); ctx.translate(-x, -y);
+        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, 16, 0, 6.283); ctx.fill(); ctx.restore();
+      } else {
+        ctx.strokeStyle = 'rgba(255,190,90,.55)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.ellipse(x, y, 5, 2, 0, 0, 6.283); ctx.stroke();
+        ctx.fillStyle = '#05060a'; ctx.beginPath(); ctx.arc(x, y, 2, 0, 6.283); ctx.fill();
+      }
+    }
+  }
+
+  // Moving objects at time t (s).
+  function step(t) {
+    const { cx, cy } = geo;
+    for (const p of planets) {
+      const th = p.ph + 6.2832 * t / (p.P * YEAR);
+      p.x = cx + p.rx * Math.cos(th); p.y = cy + p.ry * Math.sin(th);
+      place(p.el, p.x, p.y);
+    }
+    const mt = 6.2832 * t / (moon.P * YEAR * 3);   // Moon slowed 3x to stay calm
+    place(moon.el, earth.x + moon.rr * Math.cos(mt), earth.y + moon.rr * 0.5 * Math.sin(mt));
+    // Satellites cross a low band of the hero, under the content. The track phase comes
+    // from the mean anomaly and RAAN, the wave height from the inclination,
+    // and the speed from the mean motion (one crossing per ~3 minutes).
+    for (const s of sats) {
+      const u = ((s.ma / 360 + t * s.mm / 15.5 / 180) % 1 + 1) % 1;
+      const x = -20 + u * (W + 40);
+      const y = H * (0.86 + 0.08 * (s.raan / 360)) + H * 0.025 * (s.inc / 98) * Math.sin(u * 6.2832 + s.raan * 0.0175);
+      place(s.el, x, y);
+    }
+    if (shown.size) refreshTips();
+  }
+
+  function frame(now) {
+    raf = 0; if (!running) return;
+    if (now - last > 33) { last = now; step((now - t0) / 1000); }
+    raf = requestAnimationFrame(frame);
+  }
+  function setRun() {
+    const want = visible && !document.hidden && !RM.matches;
+    if (want && !running) { running = true; raf = requestAnimationFrame(frame); }
+    else if (!want && running) { running = false; if (raf) cancelAnimationFrame(raf); raf = 0; }
+  }
+  function build() { layout(); paint(); step((performance.now() - t0) / 1000); }
+
+  // Touch: the first tap on an object shows its label; a second tap opens it.
+  layer.addEventListener('click', e => {
+    const el = e.target.closest('.sky-obj');
+    if (!el) return;
+    if (!el.classList.contains('show') && !HOVER.matches) {
+      e.preventDefault();
+      $$('.sky-obj.show', layer).forEach(x => x.classList.remove('show'));
+      el.classList.add('show');
+    }
+  });
+  document.addEventListener('pointerdown', e => { if (!e.target.closest('.sky-obj')) $$('.sky-obj.show', layer).forEach(x => x.classList.remove('show')); });
+
+  build();
+  // Web fonts change the text boxes, so lay out again once they load.
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(build);
+  let rt = 0;
+  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(build, 150); });
+  new IntersectionObserver(es => { visible = es[0].isIntersecting; setRun(); }, { threshold: 0 }).observe(hero);
+  document.addEventListener('visibilitychange', setRun);
+  RM.addEventListener?.('change', setRun);
+  addEventListener('pagehide', () => { running = false; if (raf) cancelAnimationFrame(raf); raf = 0; cv.width = cv.height = 0; });
+  addEventListener('pageshow', e => { if (e.persisted) { build(); setRun(); } });
+  setRun();
+}
+
+function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ── featured rail ──────────────────────────────────────────────────────────
+function buildFeatured() {
+  const rail = $('#featuredRail');
+  rail.innerHTML = FEATURED.map(k => UNIQUE.find(p => p.key === k)).filter(Boolean).map((p, i) => cardHTML(p, i)).join('');
+}
+function initRails() {
+  $$('[data-rail]').forEach(b => b.addEventListener('click', () => {
+    const r = document.getElementById(b.dataset.rail);
+    r.scrollBy({ left: Number(b.dataset.dir) * r.clientWidth * 0.8, behavior: RM.matches ? 'auto' : 'smooth' });
+  }));
+}
+
+// ── sector page lists ──────────────────────────────────────────────────────
+// For each sector: its groups in NAV order, each a list of star records.
+function sectorGroups(sec) {
+  const groups = [];
+  const seen = new Set();
+  for (const p of PAGES) {
+    if (p.sector !== sec) continue;
+    let g = groups.find(x => x.name === p.group && x.cluster === p.cluster);
+    if (!g) { g = { name: p.group, cluster: p.cluster, pages: [] }; groups.push(g); }
+    if (!seen.has(p.key)) { g.pages.push(p); seen.add(p.key); }
+  }
+  if (sec.id === 'game') {
+    const extra = GAME_STARS.map(s => ({ ...s, key: null, badge: s.ext ? 'LINK' : null, group: 'Stella Nova', sector: sec }));
+    groups[0].pages = [...extra.slice(0, 4), ...groups[0].pages, ...extra.slice(4)];
+  }
+  return groups;
+}
+const GAME_IMG = { '#features': 'media/game-3.jpg', '#media': 'media/game-2.jpg', '#download': 'media/game-1.jpg', '#report': 'media/game-5.jpg', home: 'media/game-6.jpg' };
+function withImg(p) { const img = GAME_IMG[p.href || p.key]; return img ? { ...p, img } : p; }
+
+// ── star chart ─────────────────────────────────────────────────────────────
+let chartState = null;
+function buildChart() {
+  const svg = $('#chartSvg'), starsEl = $('#chartStars'), map = $('#chartMap');
+  const NS = 'http://www.w3.org/2000/svg';
+  const rand = mulberry(42);
+  let svgHTML = '';
+  // Sky grid: meridians, parallels, an ecliptic and edge ticks.
+  let grid = '<g class="grid">';
+  for (let i = 1; i < 6; i++) { const x = i * 1000 / 6; grid += `<path d="M${x} 0 Q ${x + (x - 500) * 0.18} 310 ${x} 620"/>`; }
+  for (let j = 1; j < 4; j++) { const y = j * 620 / 4; grid += `<path d="M0 ${y} Q 500 ${y + (y - 310) * 0.25} 1000 ${y}"/>`; }
+  grid += '<path class="ecl" d="M0 420 C 250 300, 520 520, 1000 250"/>';
+  for (let i = 0; i < 6; i++) grid += `<text x="${i * 1000 / 6 + 6}" y="14">${String(i * 4).padStart(2, '0')}h</text>`;
+  for (let j = 1; j < 4; j++) grid += `<text x="6" y="${j * 155 - 5}">${['+60', '+30', '0', '-30'][j]}°</text>`;
+  grid += '</g>';
+  // Faint background stars.
+  let bg = '<g>';
+  for (let i = 0; i < 220; i++) bg += `<circle class="bg-star" cx="${(rand() * 1000).toFixed(1)}" cy="${(rand() * 620).toFixed(1)}" r="${(0.3 + rand() * 0.9).toFixed(2)}" opacity="${(0.15 + rand() * 0.5).toFixed(2)}"/>`;
+  bg += '</g>';
+  svgHTML += grid + bg;
+
+  const allStars = [];
+  let labelsHTML = '', starsHTML = '';
+  SECTORS.forEach((sec, si) => {
+    const groups = sectorGroups(sec);
+    const anchors = LAYOUT[sec.id];
+    const r = mulberry(100 + si * 17);
+    const placed = [];
+    let edges = [];
+    groups.forEach((g, gi) => {
+      const [cx, cy, rad] = anchors[gi] || anchors[anchors.length - 1];
+      const pts = [];
+      g.pages.forEach((p, pi) => {
+        let best = null;
+        if (g.pages.length === 1) best = [cx, cy];
+        else {
+          let bd = -1;
+          for (let k = 0; k < 40; k++) {
+            const a = r() * Math.PI * 2, d = Math.sqrt(r()) * rad;
+            const x = cx + Math.cos(a) * d, y = cy + Math.sin(a) * d * 0.78;
+            let md = 1e9; for (const q of pts) md = Math.min(md, Math.hypot(q[0] - x, q[1] - y));
+            if (pts.length === 0) md = 1e9 - d;
+            if (md > bd) { bd = md; best = [x, y]; }
+          }
+        }
+        pts.push(best);
+        const s = { p, x: best[0], y: best[1], g: gi, sec };
+        placed.push(s);
+      });
+      // Prim minimum spanning tree inside the group.
+      const idx = placed.map((s, i) => i).filter(i => placed[i].g === gi);
+      const inT = new Set([idx[0]]);
+      while (inT.size < idx.length) {
+        let bd = 1e9, e = null;
+        for (const a of inT) for (const b of idx) if (!inT.has(b)) {
+          const d = Math.hypot(placed[a].x - placed[b].x, placed[a].y - placed[b].y);
+          if (d < bd) { bd = d; e = [a, b]; }
+        }
+        edges.push(e); inT.add(e[1]);
+      }
+      // Join the group to the nearest star of an earlier group.
+      if (gi > 0) {
+        let bd = 1e9, e = null;
+        for (const a of idx) placed.forEach((s, b) => { if (s.g < gi) { const d = Math.hypot(placed[a].x - s.x, placed[a].y - s.y); if (d < bd) { bd = d; e = [b, a]; } } });
+        if (e) edges.push(e);
+      }
+      if (g.name && sec.id !== 'game' && sec.id !== 'labs' && sec.id !== 'music' && sec.id !== 'community') {
+        sec._grp = (sec._grp || '') + `<text class="grp" x="${cx}" y="${cy - rad * 0.78 - 10}" text-anchor="middle">${esc(g.name)}</text>`;
+      }
+    });
+    // Lines: one line per edge (for the draw-in).
+    let lines = '';
+    edges.forEach(([a, b], k) => {
+      const A = placed[a], B = placed[b];
+      const len = Math.hypot(A.x - B.x, A.y - B.y).toFixed(1);
+      lines += `<line class="ln" x1="${A.x.toFixed(1)}" y1="${A.y.toFixed(1)}" x2="${B.x.toFixed(1)}" y2="${B.y.toFixed(1)}" style="--len:${len};--d:${si * 180 + k * 40}"/>`;
+    });
+    // Clean diagram: thin even lines and group names. No glow path, no halo.
+    svgHTML += `<g class="con" data-sector="${sec.id}">${lines}${sec._grp || ''}</g>`;
+    // Stars as real anchors.
+    placed.forEach((s, k) => {
+      const p = s.p;
+      const big = p.key === sec.lead || FEATURED.includes(p.key);
+      const size = big ? 9 : THUMBS.has(p.key) ? 7 : 5;
+      const tw = rand() < 0.35 ? ` data-tw style="--x:${s.x.toFixed(1)};--y:${s.y.toFixed(1)};--s:${size}px;--tw:${(3 + rand() * 4).toFixed(1)}s;--twd:${(-rand() * 5).toFixed(1)}s"` : ` style="--x:${s.x.toFixed(1)};--y:${s.y.toFixed(1)};--s:${size}px"`;
+      starsHTML += `<a class="star${p.ext ? ' ext' : ''}" data-sector="${sec.id}" data-i="${allStars.length}" ${linkAttrs(p)} aria-label="${esc(p.label)}, ${esc(sec.name)}"${tw}><i></i></a>`;
+      allStars.push(s);
+    });
+    labelsHTML += `<button class="c-label" type="button" data-sector="${sec.id}" style="--x:${sec.label[0]};--y:${sec.label[1]}"><span class="g">${sec.glyph}</span>${esc(sec.short)}<small>${placed.length}</small></button>`;
+  });
+  svg.innerHTML = svgHTML;
+  starsEl.innerHTML = starsHTML + labelsHTML;
+
+  const tip = $('#chartTip');
+  const state = { active: null, pinned: false, touched: false, tour: 0 };
+  chartState = state;
+  function setActive(id, opts = {}) {
+    if (opts.user) { state.touched = true; stopTour(); }
+    if (state.active !== id) {
+      state.active = id;
+      $$('.con', svg).forEach(g => g.classList.toggle('on', g.dataset.sector === id));
+      $$('.star', starsEl).forEach(a => a.classList.toggle('on', a.dataset.sector === id));
+      $$('.c-label', starsEl).forEach(b => b.classList.toggle('on', b.dataset.sector === id));
+      $$('.chip[data-goto]').forEach(c => c.classList.toggle('on', c.dataset.goto === id));
+      renderInspector(SECTOR[id]);
+    }
+    map.classList.toggle('has-active', !!opts.dim);
+  }
+  state.setActive = setActive;
+  // Pointer: the nearest star within reach picks the sector.
+  map.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse') return;
+    const r = map.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width * 1000, y = (e.clientY - r.top) / r.height * 620;
+    let bd = 1e9, best = null;
+    for (const s of allStars) { const d = Math.hypot(s.x - x, s.y - y); if (d < bd) { bd = d; best = s; } }
+    if (best && bd < 80) setActive(best.sec.id, { user: true, dim: true });
+    else map.classList.remove('has-active');
+  });
+  map.addEventListener('pointerleave', () => map.classList.remove('has-active'));
+  // Star tooltip with a thumbnail preview.
+  function showTip(a) {
+    const s = allStars[Number(a.dataset.i)];
+    const p = withImg(s.p);
+    tip.dataset.sector = s.sec.id;
+    tip.innerHTML = `<div class="tip-img">${media(p, p.img)}</div><div class="tip-body"><b>${esc(p.label)}</b><span>${esc(s.sec.short)} · ${esc(p.badge || p.group || '')}</span></div>`;
+    tip.hidden = false;
+    const W = map.clientWidth, H = map.clientHeight;
+    const px = s.x / 1000 * W, py = s.y / 620 * H;
+    const tw = 210, th = tip.offsetHeight || 190;
+    let left = px + 18, top = py - th / 2;
+    if (left + tw > W - 8) left = px - tw - 18;
+    top = Math.max(8, Math.min(H - th - 8, top));
+    tip.style.left = left + 'px'; tip.style.top = top + 'px';
+  }
+  starsEl.addEventListener('pointerover', e => { const a = e.target.closest('.star'); if (a && e.pointerType === 'mouse') showTip(a); });
+  starsEl.addEventListener('pointerout', e => { if (e.target.closest('.star')) tip.hidden = true; });
+  starsEl.addEventListener('focusin', e => {
+    const a = e.target.closest('.star'); const b = e.target.closest('.c-label');
+    if (a) { showTip(a); setActive(a.dataset.sector, { user: true, dim: true }); }
+    if (b) setActive(b.dataset.sector, { user: true, dim: true });
+  });
+  starsEl.addEventListener('focusout', () => { tip.hidden = true; });
+  starsEl.addEventListener('click', e => { const b = e.target.closest('.c-label'); if (b) setActive(b.dataset.sector, { user: true, dim: true }); });
+  // Auto tour: light one constellation after another until the user acts.
+  const order = SECTORS.map(s => s.id);
+  function stopTour() { clearInterval(state.tour); state.tour = 0; }
+  function startTour() {
+    if (state.touched || RM.matches || state.tour) return;
+    state.tour = setInterval(() => {
+      if (document.hidden) return;
+      const i = (order.indexOf(state.active) + 1) % order.length;
+      setActive(order[i], { dim: true });
+    }, 4200);
+  }
+  setActive('game');
+  new IntersectionObserver(es => {
+    es.forEach(en => {
+      if (en.isIntersecting) { map.classList.add('drawn'); startTour(); }
+      else stopTour();
+    });
+  }, { threshold: 0.35 }).observe(map);
+}
+
+// ── inspector ──────────────────────────────────────────────────────────────
+function renderInspector(sec) {
+  const ins = $('#inspector');
+  ins.dataset.sector = sec.id;
+  const groups = sectorGroups(sec);
+  const pages = groups.flatMap(g => g.pages);
+  const lead = pages.find(p => p.key === sec.lead || p.href === '#' + sec.lead) || pages[0];
+  const withThumb = pages.filter(p => p !== lead && (THUMBS.has(p.key) || GAME_IMG[p.href || p.key]));
+  const rest = pages.filter(p => p !== lead && !withThumb.includes(p));
+  const minis = [lead, ...withThumb, ...rest].slice(0, 4).map(withImg);
+  const n = pages.filter(p => p.key).length;
+  ins.innerHTML = `<div class="ins-in">
+    <div class="ins-head"><span class="ins-g">${sec.glyph}</span><div><h3>${esc(sec.name)}</h3><small>${n} page${n === 1 ? '' : 's'}${groups.length > 1 ? ' · ' + groups.length + ' asterisms' : ''}</small></div></div>
+    <p class="ins-blurb">${esc(sec.blurb)}</p>
+    <div class="ins-grid">${minis.map((p, i) => `<a class="mini" ${linkAttrs(p)} style="--i:${i}"><span class="card-img">${media(p, p.img)}</span><span class="mini-t">${esc(p.label)}</span></a>`).join('')}</div>
+    <div class="ins-list">${pages.map(p => `<a class="pill${p.ext ? ' ext' : ''}" ${linkAttrs(p)}>${esc(p.label)}</a>`).join('')}</div>
+    <a class="ins-cta" ${linkAttrs(lead)}><span>Open ${esc(lead.label)}</span><span aria-hidden="true">→</span></a>
+  </div>`;
+}
+
+// ── phone sector cards ─────────────────────────────────────────────────────
+function buildSectors() {
+  const host = $('#sectors');
+  host.innerHTML = `<div class="band-head"><div><p class="kicker">// Star chart &middot; ${UNIQUE.length} pages</p><h2>Pick a <em>heading</em></h2></div></div>` +
+    SECTORS.map(sec => {
+      const pages = sectorGroups(sec).flatMap(g => g.pages).map(withImg);
+      const n = pages.filter(p => p.key).length;
+      return `<article class="sector" id="sec-${sec.id}" data-sector="${sec.id}">
+        <div class="sector-head"><span class="ins-g">${sec.glyph}</span><div><h3>${esc(sec.name)}</h3><small>${sec.id === 'game' ? pages.length + ' destinations' : n + ' page' + (n === 1 ? '' : 's')} · swipe →</small></div></div>
+        <p class="sector-blurb">${esc(sec.blurb)}</p>
+        <div class="rail">${pages.map((p, i) => cardHTML(p, i, true)).join('')}</div>
+      </article>`;
+    }).join('');
+}
+
+// ── dock ───────────────────────────────────────────────────────────────────
+function initDock() {
+  $$('.chip[data-goto]').forEach(c => c.addEventListener('click', e => {
+    e.preventDefault();
+    const id = c.dataset.goto;
+    const target = PHONE.matches ? $('#sec-' + id) : $('#chart');
+    if (!PHONE.matches && chartState) chartState.setActive(id, { user: true, dim: false });
+    target.scrollIntoView({ behavior: RM.matches ? 'auto' : 'smooth', block: 'start' });
+    c.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+  }));
+  // Scroll spy: the game chip lights over the game bands.
+  const game = $('.chip[data-sector="game"]');
+  const all = $('.chip-all');
+  const io = new IntersectionObserver(es => es.forEach(en => {
+    if (en.target.id === 'features' || en.target.id === 'download' || en.target.id === 'report') game.classList.toggle('on', en.isIntersecting);
+    if (en.target.id === 'directory') all.classList.toggle('on', en.isIntersecting);
+  }), { rootMargin: '-40% 0px -50% 0px' });
+  ['features', 'download', 'report', 'directory'].forEach(id => io.observe(document.getElementById(id)));
+}
+
+// ── inline search ──────────────────────────────────────────────────────────
+// Each [data-find] block is a field with a results list under it. Typing
+// ranks pages by label, group, sector and blurb. Arrow keys move, Enter
+// opens, Esc or a click outside closes. "/" focuses the nearest field.
+// No overlay and no scrim: the rest of the page stays sharp and usable.
+const FIND_ITEMS = (() => {
+  const items = [];
+  SECTORS.forEach(sec => sectorGroups(sec).forEach(g => g.pages.forEach(p => {
+    if (p.key && items.some(x => x.key === p.key)) return;
+    const it = withImg(p);
+    it.hay = [p.label, p.group, p.cluster, p.badge, sec.name, BLURBS[p.key], p.sub, p.key].filter(Boolean).join(' ').toLowerCase();
+    items.push(it);
+  })));
+  return items;
+})();
+const reEsc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function hl(text, terms) {
+  let out = esc(text);
+  for (const t of terms) if (t) out = out.replace(new RegExp('(' + reEsc(esc(t)) + ')', 'ig'), '<mark>$1</mark>');
+  return out;
+}
+function findResults(q) {
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return { terms, res: FEATURED.slice(0, 6).map(k => FIND_ITEMS.find(x => x.key === k)).filter(Boolean), total: 0 };
+  const res = FIND_ITEMS.filter(it => terms.every(t => it.hay.includes(t)))
+    .map(it => { const l = it.label.toLowerCase(); return { it, sc: l.startsWith(terms[0]) ? 0 : l.includes(terms[0]) ? 1 : 2 }; })
+    .sort((a, b) => a.sc - b.sc).map(x => x.it);
+  return { terms, res: res.slice(0, 8), total: res.length };
+}
+function initFind(root) {
+  const input = $('input', root), list = $('.find-list', root);
+  let sel = -1;
+  const items = () => $$('.find-item', list);
+  function mark(n) {
+    const els = items(); if (!els.length) return;
+    els[sel]?.classList.remove('sel');
+    sel = (n + els.length) % els.length;
+    els[sel].classList.add('sel');
+    els[sel].scrollIntoView({ block: 'nearest' });
+  }
+  function render() {
+    const q = input.value.trim();
+    const { terms, res, total } = findResults(q);
+    sel = -1;
+    let html = q ? '' : '<p class="find-h">Popular</p>';
+    if (!res.length) html += `<p class="find-empty">No page matches "${esc(q)}". Try orbit, fluid, shader or chord.</p>`;
+    html += res.map((it, i) => `<a class="find-item" role="option" data-sector="${it.sector.id}" data-n="${i}" ${linkAttrs(it)}>
+      <span class="fi-img">${media(it, it.img)}</span>
+      <span class="fi-t"><b>${hl(it.label, terms)}</b><small>${esc(it.sector.short)} · ${hl(BLURBS[it.key] || it.sub || it.group || '', terms)}</small></span>
+      ${it.badge ? `<span class="badge">${esc(it.badge)}</span>` : ''}<span class="fi-go" aria-hidden="true">→</span></a>`).join('');
+    if (q && total > res.length) html += `<a class="find-more" href="#directory" data-find-all>See all ${total} matches in the directory <span aria-hidden="true">→</span></a>`;
+    list.innerHTML = html;
+    open();
+  }
+  function open() { list.hidden = false; input.setAttribute('aria-expanded', 'true'); }
+  function close() { list.hidden = true; input.setAttribute('aria-expanded', 'false'); sel = -1; }
+  input.addEventListener('focus', render);
+  input.addEventListener('input', render);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) render(); mark(sel + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); mark(sel - 1); }
+    else if (e.key === 'Enter') { const a = items()[sel < 0 ? 0 : sel]; if (a) { e.preventDefault(); a.click(); close(); } }
+    else if (e.key === 'Escape') { if (input.value && list.hidden) input.value = ''; close(); input.blur(); }
+  });
+  list.addEventListener('pointermove', e => {
+    const a = e.target.closest('.find-item'); if (!a) return;
+    const n = Number(a.dataset.n); if (n !== sel) { items()[sel]?.classList.remove('sel'); sel = n; a.classList.add('sel'); }
+  });
+  list.addEventListener('click', e => {
+    const all = e.target.closest('[data-find-all]');
+    if (all) { const f = $('#dirFilter'); f.value = input.value; f.dispatchEvent(new Event('input')); }
+    if (e.target.closest('a')) close();
+  });
+  document.addEventListener('pointerdown', e => { if (!root.contains(e.target)) close(); });
+  root.addEventListener('focusout', e => { if (!root.contains(e.relatedTarget)) setTimeout(() => { if (!root.contains(document.activeElement)) close(); }, 0); });
+}
+// "/" focuses a search field: the hero field while the hero is in view,
+// else the dock field. It never fires while the user types in a field.
+function initFindKey() {
+  const hero = $('.find-hero input'), dock = $('.find-dock input'), heroEl = $('.hero');
+  document.addEventListener('keydown', e => {
+    if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable) return;
+    e.preventDefault();
+    const r = heroEl.getBoundingClientRect();
+    const target = r.bottom > innerHeight * 0.45 && getComputedStyle(hero).display !== 'none' ? hero : dock;
+    target.focus({ preventScroll: target === dock });
+  });
+}
+
+// ── directory filter ───────────────────────────────────────────────────────
+function initDirectory() {
+  const input = $('#dirFilter'), groups = $$('.dir-group'), empty = $('#dirEmpty');
+  if (PHONE.matches) groups.forEach(g => { g.open = false; });
+  input.addEventListener('input', () => {
+    const q = input.value.trim().toLowerCase();
+    let any = false;
+    groups.forEach(g => {
+      let n = 0;
+      $$('li', g).forEach(li => {
+        const h = li.closest('ul').previousElementSibling;
+        const text = (li.textContent + ' ' + (h && h.classList.contains('dir-h') ? h.textContent : '') + ' ' + $('.dir-name', g).textContent).toLowerCase();
+        const ok = !q || text.includes(q); li.hidden = !ok; if (ok) n++;
+      });
+      $$('.dir-h', g).forEach(h => { h.hidden = !!q && !$$('li:not([hidden])', h.nextElementSibling).length; });
+      g.hidden = n === 0; if (q && n) g.open = true; if (n) any = true;
+    });
+    empty.hidden = any;
+  });
+}
+
+// ── video facade ───────────────────────────────────────────────────────────
+function initVideo() {
+  const b = $('#videoFacade');
+  b.addEventListener('click', () => {
+    const f = document.createElement('iframe');
+    f.src = `https://www.youtube.com/embed/${b.dataset.yt}?autoplay=1&rel=0`;
+    f.title = 'Stella Nova gameplay';
+    f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+    f.allowFullscreen = true;
+    b.replaceChildren(f); b.style.cursor = 'default';
+  }, { once: true });
+}
+
+// ── bug form ───────────────────────────────────────────────────────────────
+// Same endpoint and fields as the old home: formsubmit.co, AJAX mode.
+function initBugForm() {
+  const form = $('#bugForm'), btn = $('#bugSubmitBtn'), err = $('#bugErr'), ok = $('#bugSuccess');
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const data = new FormData(form);
+    if (!String(data.get('summary') || '').trim()) { err.textContent = 'Add a short summary first.'; form.summary.focus(); return; }
+    err.textContent = ''; btn.disabled = true; $('b', btn).textContent = 'Transmitting…';
+    const sev = data.get('severity') || 'medium';
+    data.append('_subject', `[Stella Nova Bug] [${String(sev).toUpperCase()}] ${data.get('summary')}`);
+    data.append('_captcha', 'false'); data.append('_template', 'box');
+    fetch('https://formsubmit.co/ajax/dave@davesgames.io', { method: 'POST', body: data })
+      .then(r => r.json())
+      .then(res => { if (res.success) { ok.hidden = false; form.hidden = true; } else throw new Error('fail'); })
+      .catch(() => { btn.disabled = false; $('b', btn).textContent = 'Transmit report'; err.textContent = 'Transmission failed. Try again, or report it on the Discord.'; });
+  });
+}
+
+// ── reveal on scroll ───────────────────────────────────────────────────────
+function initReveal() {
+  const sel = '.band-head, #featuredRail .card, .inspector, .sector, .game-head, .loop, .sys, .media-head, .media-grid > *, .rev-head, .rev, .dl, .report, .dir-group, .foot > *';
+  const els = $$(sel);
+  const groups = new Map();
+  els.forEach(el => {
+    el.classList.add('rv');
+    const k = el.parentElement; const n = groups.get(k) || 0; groups.set(k, n + 1);
+    if (!el.style.getPropertyValue('--i')) el.style.setProperty('--i', Math.min(n, 8));
+  });
+  const io = new IntersectionObserver(es => es.forEach(en => { if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); } }), { rootMargin: '0px 0px -8% 0px' });
+  els.forEach(el => io.observe(el));
+}
+
+// ── portal spotlight ───────────────────────────────────────────────────────
+// A soft light follows the pointer across a portal. No 3D tilt: Safari
+// clipped the portal image under the old preserve-3d transform.
+function initSpot() {
+  if (!HOVER.matches || RM.matches) return;
+  $$('.portal').forEach(el => el.addEventListener('pointermove', e => {
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100).toFixed(1) + '%');
+    el.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100).toFixed(1) + '%');
+  }));
+}
+
+buildFeatured();
+buildChart();
+buildSectors();
+initRails();
+initDock();
+$$('[data-find]').forEach(initFind);
+initFindKey();
+initDirectory();
+initVideo();
+initBugForm();
+initReveal();
+initSpot();
+startSky();
+})(window.Observatory = window.Observatory || {});
