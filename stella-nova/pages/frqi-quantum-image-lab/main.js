@@ -180,7 +180,7 @@ function drawField(){
   if(sg){srcGeom=sg;const gl=sg.cell>5?1:0;
     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const v=Math.round(img[r*cols+c]);sctx.fillStyle=`rgb(${v},${v},${v})`;sctx.fillRect(sg.x0+c*sg.cell,sg.y0+r*sg.cell,sg.cell-gl,sg.cell-gl);}
     sctx.strokeStyle='rgba(150,200,255,0.14)';sctx.lineWidth=1;sctx.strokeRect(sg.x0,sg.y0,sg.pw,sg.ph);
-    if(spinLabels&&sg.cell>=15){sctx.textAlign='center';sctx.textBaseline='middle';const fs=Math.max(8,Math.floor(sg.cell*0.4));sctx.font=`600 ${fs}px JetBrains Mono`;
+    if(spinLabels&&sg.cell>=15){sctx.textAlign='center';sctx.textBaseline='middle';const fs=Math.max(8,Math.floor(sg.cell*0.4));sctx.font=`600 ${fs}px IBM Plex Mono`;
       for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const i=r*cols+c,p=p1Of(i),tx=sg.x0+c*sg.cell+sg.cell/2,ty=sg.y0+r*sg.cell+sg.cell/2;
         sctx.lineWidth=Math.max(2.2,sg.cell*0.12);sctx.strokeStyle='rgba(0,0,0,0.8)';sctx.strokeText(Math.round(p*100),tx,ty);sctx.fillStyle=rgb(warmRamp(p));sctx.fillText(Math.round(p*100),tx,ty);}
       sctx.textBaseline='alphabetic';}}
@@ -314,7 +314,7 @@ function simulate(){
 }
 // Build a camera-facing text sprite (used for the basis-index axis labels).
 function makeLabelSprite(txt){const c=document.createElement('canvas');c.width=128;c.height=32;const x=c.getContext('2d');
-  x.fillStyle='#7a8aa6';x.font='600 16px JetBrains Mono';x.textAlign='center';x.textBaseline='middle';x.fillText(txt,64,16);
+  x.fillStyle='#7a8aa6';x.font='600 16px IBM Plex Mono';x.textAlign='center';x.textBaseline='middle';x.fillText(txt,64,16);
   const tx=new THREE.CanvasTexture(c);tx.minFilter=THREE.LinearFilter;return new THREE.Sprite(new THREE.SpriteMaterial({map:tx,transparent:true,depthWrite:false}));}
 // Dispose and remove every child of the stack group, freeing GPU resources.
 function clearGrp(){if(!grp)return;for(let i=grp.children.length-1;i>=0;i--){const o=grp.children[i];o.traverse&&o.traverse(c=>{c.geometry&&c.geometry.dispose&&c.geometry.dispose();c.material&&(Array.isArray(c.material)?c.material:[c.material]).forEach(m=>m.dispose());});grp.remove(o);}
@@ -429,7 +429,7 @@ const _ray=new THREE.Raycaster(),_ndc=new THREE.Vector2();
 let pickPlane=null,pickHi=null,diagGuide=null,hoverRC=null,_downXY=null;
 const DIAG_CAP=600;
 const initTip=document.createElement('div');initTip.id='init-tip';
-initTip.style.cssText='position:fixed;z-index:600;pointer-events:none;display:none;background:rgba(9,12,20,0.97);border:1px solid rgba(150,200,255,0.35);border-radius:7px;padding:7px 10px;font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#cdd6e6;box-shadow:0 6px 22px rgba(0,0,0,0.55);max-width:220px;line-height:1.4';
+initTip.style.cssText='position:fixed;z-index:600;pointer-events:none;display:none;background:rgba(9,12,20,0.97);border:1px solid rgba(150,200,255,0.35);border-radius:7px;padding:7px 10px;font-family:IBM Plex Mono,monospace;font-size:0.68rem;color:#cdd6e6;box-shadow:0 6px 22px rgba(0,0,0,0.55);max-width:220px;line-height:1.4';
 document.body.appendChild(initTip);
 // Lazily create the invisible pick plane, the hover highlight box, and the
 // diagonal guide markers that show which cells are valid start states.
@@ -518,17 +518,17 @@ function drawScore(){
       gateGlyph(scx,x,laneY(nPos),'RY','#ffb948',active,laneH);}
   }
   // beat numbers
-  scx.font='500 8px JetBrains Mono';scx.textBaseline='top';
+  scx.font='500 8px IBM Plex Mono';scx.textBaseline='top';
   for(let s=0;s<totalLayers;s++){scx.fillStyle=(s===stackStage)?'rgba(255,200,80,0.95)':'rgba(110,125,150,0.6)';scx.fillText('L'+s,colX(s),padB+4);}
   // gutter (qubit labels, pinned)
   scoreGut.width=Math.round(SGUT*dpr);scoreGut.height=Math.round(Hc*dpr);scoreGut.style.width=SGUT+'px';scoreGut.style.height=Hc+'px';sgx.setTransform(dpr,0,0,dpr,0,0);sgx.clearRect(0,0,SGUT,Hc);
   const grd=sgx.createLinearGradient(0,0,SGUT,0);grd.addColorStop(0,'rgba(8,12,20,0.98)');grd.addColorStop(0.7,'rgba(8,12,20,0.94)');grd.addColorStop(1,'rgba(8,12,20,0)');sgx.fillStyle=grd;sgx.fillRect(0,0,SGUT,Hc);
-  sgx.textAlign='left';sgx.textBaseline='middle';sgx.font='600 9px JetBrains Mono';
+  sgx.textAlign='left';sgx.textBaseline='middle';sgx.font='600 9px IBM Plex Mono';
   for(let q=0;q<n;q++){sgx.fillStyle=q<nPos?'#8fa0bd':'#ffb948';sgx.fillText(q<nPos?('q'+q):('c'),4,laneY(q));}
 }
 // Draw one boxed gate glyph, brighter when it is the active step.
 function gateGlyph(ctx,x,y,label,color,active,laneH){const s=Math.min(20,laneH*0.74);ctx.fillStyle='rgba(8,12,20,0.96)';ctx.strokeStyle=color;ctx.lineWidth=active?2:1.3;
-  ctx.fillRect(x-s*0.7,y-s/2,s*1.4,s);ctx.strokeRect(x-s*0.7,y-s/2,s*1.4,s);ctx.fillStyle=active?color:'#cdd6e6';ctx.font='700 10px JetBrains Mono';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,x,y+0.5);}
+  ctx.fillRect(x-s*0.7,y-s/2,s*1.4,s);ctx.strokeRect(x-s*0.7,y-s/2,s*1.4,s);ctx.fillStyle=active?color:'#cdd6e6';ctx.font='700 10px IBM Plex Mono';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(label,x,y+0.5);}
 let scoreScrub=false;
 // Map a pointer x to a step and jump the playhead there.
 function scoreScrubTo(clientX){const rect=scoreCv.getBoundingClientRect(),x=clientX-rect.left,x0=SGUT+8;let s=Math.floor((x-x0)/SCOL);s=Math.max(0,Math.min(totalLayers-1,s));stopPlay();stopSampling();setStage(s);}
@@ -616,7 +616,7 @@ function drawCircuit(){
   else if(hl>k){const a=hl-(k+1);if(a>=0&&a<shown.length)hlx=circXH+colW*(1+a);else if(hl>=1+k+pixels.length)hlx=circXH+colW*(1+shown.length);}
   if(hlx>=0){cctx.fillStyle='rgba(255,200,80,0.12)';cctx.fillRect(hlx-colW/2,top-9,colW,rowsC*rowH+4);
     cctx.strokeStyle='rgba(255,200,80,0.8)';cctx.lineWidth=1.5;cctx.beginPath();cctx.moveTo(hlx,top-10);cctx.lineTo(hlx,top+(rowsC-1)*rowH+10);cctx.stroke();}
-  cctx.strokeStyle='rgba(150,200,255,0.2)';cctx.lineWidth=1;cctx.font='9px JetBrains Mono';
+  cctx.strokeStyle='rgba(150,200,255,0.2)';cctx.lineWidth=1;cctx.font='9px IBM Plex Mono';
   for(let r=0;r<rowsC;r++){const y=yOf(r);cctx.beginPath();cctx.moveTo(left,y);cctx.lineTo(W-20,y);cctx.stroke();
     cctx.fillStyle=r<k?'rgba(128,144,176,0.95)':'rgba(255,185,72,0.95)';cctx.textAlign='right';cctx.fillText(r<k?('q'+r):('q'+k+' c'),left-8,y+3);}
   for(let r=0;r<k;r++)gbox(circXH,yOf(r),'H','#45d3ff',rowH);
@@ -633,12 +633,12 @@ function drawCircuit(){
   for(let r=0;r<rowsC;r++)gbox(cx,yOf(r),'M','#64c864',rowH);
   let cap=`H×${k} · ${pixels.length} controlled-RY · same circuit the stack steps through`;
   if(pixels.length>shown.length)cap+=`  —  first ${shown.length} of ${pixels.length} shown`;
-  cctx.fillStyle='rgba(80,96,128,0.9)';cctx.font='9px JetBrains Mono';cctx.textAlign='left';cctx.fillText(cap,left,H-9);
+  cctx.fillStyle='rgba(80,96,128,0.9)';cctx.font='9px IBM Plex Mono';cctx.textAlign='left';cctx.fillText(cap,left,H-9);
 }
 // Draw one labelled gate box on the circuit, with an optional sub-label.
 function gbox(x,y,label,color,rowH,sub){const s=Math.min(22,rowH-7);cctx.fillStyle='rgba(10,13,20,0.95)';cctx.strokeStyle=color;cctx.lineWidth=1.4;cctx.fillRect(x-s/2,y-s/2,s,s);cctx.strokeRect(x-s/2,y-s/2,s,s);
-  cctx.fillStyle=color;cctx.font='600 10px JetBrains Mono';cctx.textAlign='center';cctx.textBaseline='middle';cctx.fillText(label,x,y);cctx.textBaseline='alphabetic';
-  if(sub){cctx.fillStyle='rgba(255,185,72,0.8)';cctx.font='7px JetBrains Mono';cctx.fillText(sub,x,y+s/2+8);}}
+  cctx.fillStyle=color;cctx.font='600 10px IBM Plex Mono';cctx.textAlign='center';cctx.textBaseline='middle';cctx.fillText(label,x,y);cctx.textBaseline='alphabetic';
+  if(sub){cctx.fillStyle='rgba(255,185,72,0.8)';cctx.font='7px IBM Plex Mono';cctx.fillText(sub,x,y+s/2+8);}}
 // Map a click x on the circuit to the nearest gate, then to the matching slab.
 function circuitScrub(clientX){
   const rect=ccv.getBoundingClientRect(),x=clientX-rect.left;
@@ -663,7 +663,7 @@ let ryEd=null,editPix=-1;
 // Create the editor DOM once and wire its slider to retune the current pixel.
 function buildRyEd(){
   ryEd=document.createElement('div');ryEd.id='ry-editor';
-  ryEd.style.cssText='position:fixed;z-index:500;display:none;width:206px;background:rgba(9,12,20,0.98);border:1px solid var(--border-b);border-radius:9px;padding:11px 12px;backdrop-filter:blur(9px);box-shadow:0 8px 30px rgba(0,0,0,0.6);font-family:JetBrains Mono,monospace;user-select:none';
+  ryEd.style.cssText='position:fixed;z-index:500;display:none;width:206px;background:rgba(9,12,20,0.98);border:1px solid var(--border-b);border-radius:9px;padding:11px 12px;backdrop-filter:blur(9px);box-shadow:0 8px 30px rgba(0,0,0,0.6);font-family:IBM Plex Mono,monospace;user-select:none';
   ryEd.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span id="ry-title" style="font-size:0.62rem;letter-spacing:0.1em;color:#ffb948;font-weight:600"></span><span id="ry-x" style="cursor:pointer;color:#7d8aa0;padding:0 2px">✕</span></div>'
     +'<div style="font-size:0.66rem;color:#cdd6e6;margin-bottom:8px">RY <span id="ry-ang">0</span> rad <span style="color:#5a8cc0">·</span> intensity <span id="ry-int" style="color:#96c8ff">0</span></div>'
     +'<input type="range" id="ry-sl" min="0" max="3.14159" step="0.01" style="width:100%;accent-color:#ffb948;margin-bottom:6px">'
@@ -711,7 +711,7 @@ function drawRecon(){
   let mae=0,maxE=0;if(rec){for(let i=0;i<N();i++){const e=Math.abs(img[i]-rec[i]);mae+=e;if(e>maxE)maxE=e;}mae/=N();}
   const gl=cell>5?1:0;
   for(let p=0;p<panels;p++){const px=x0+p*(pw+gap);
-    rctx.fillStyle='rgba(90,140,192,0.85)';rctx.font='9px JetBrains Mono';rctx.textAlign='center';rctx.textBaseline='alphabetic';rctx.fillText(titles[p],px+pw/2,y0-8);
+    rctx.fillStyle='rgba(90,140,192,0.85)';rctx.font='9px IBM Plex Mono';rctx.textAlign='center';rctx.textBaseline='alphabetic';rctx.fillText(titles[p],px+pw/2,y0-8);
     for(let r=0;r<rows;r++)for(let c=0;c<cols;c++){const i=r*cols+c,x=px+c*cell,y=y0+r*cell;let v=0;
       if(p===0)v=Math.round(img[i]);
       else if(p===1)v=rec?Math.round(rec[i]):-1;
@@ -719,14 +719,14 @@ function drawRecon(){
       rctx.fillStyle=v<0?'rgba(20,26,38,0.6)':`rgb(${v},${v},${v})`;rctx.fillRect(x,y,cell-gl,cell-gl);
       if(p===1&&rec&&measured.per&&showShotLabels&&cell>=14){       // per-pixel shot count — light gray fill + dark halo reads on white AND black cells
         const s=String(measured.per[i]),tx=x+(cell-gl)/2,ty=y+(cell-gl)/2;
-        rctx.font='600 '+Math.max(7,Math.round(cell*0.30))+'px JetBrains Mono';rctx.textAlign='center';rctx.textBaseline='middle';
+        rctx.font='600 '+Math.max(7,Math.round(cell*0.30))+'px IBM Plex Mono';rctx.textAlign='center';rctx.textBaseline='middle';
         rctx.lineWidth=Math.max(2,cell*0.11);rctx.lineJoin='round';rctx.strokeStyle='rgba(6,9,15,0.92)';rctx.strokeText(s,tx,ty);
         rctx.fillStyle='rgba(214,221,234,0.96)';rctx.fillText(s,tx,ty);
       }}
     rctx.strokeStyle='rgba(150,200,255,0.12)';rctx.lineWidth=1;rctx.strokeRect(px,y0,pw,ph);}
   rctx.textAlign='center';rctx.textBaseline='alphabetic';
-  if(rec){rctx.fillStyle='rgba(255,185,72,0.95)';rctx.font='600 11px JetBrains Mono';rctx.fillText(`MAE ${mae.toFixed(2)} · ${decodeMode==='frqi'?'arcsin√P₁':'linear P₁'}`,W/2,y0+ph+18);}
-  else{rctx.fillStyle='rgba(128,144,176,0.8)';rctx.font='10px JetBrains Mono';rctx.fillText('⚲ Sample to reconstruct →',W/2,y0+ph+18);}
+  if(rec){rctx.fillStyle='rgba(255,185,72,0.95)';rctx.font='600 11px IBM Plex Mono';rctx.fillText(`MAE ${mae.toFixed(2)} · ${decodeMode==='frqi'?'arcsin√P₁':'linear P₁'}`,W/2,y0+ph+18);}
+  else{rctx.fillStyle='rgba(128,144,176,0.8)';rctx.font='10px IBM Plex Mono';rctx.fillText('⚲ Sample to reconstruct →',W/2,y0+ph+18);}
 }
 
 /* ===== ORCHESTRATION ===== */
