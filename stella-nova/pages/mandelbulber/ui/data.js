@@ -10,7 +10,7 @@
 
 import { specFor } from '../fract.js';
 import { fail } from './hud.js';
-import { prepareExamples } from '../main.js';
+import { prepareExamples } from './presets.js';
 
 export let P, CAT, EXAMPLES, THUMBS, PTHUMBS = null;
 export let COLLECTIONS = [];             // gen/collections.json: author and licence per collection folder
