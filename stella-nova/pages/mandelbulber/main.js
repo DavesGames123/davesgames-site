@@ -1,13 +1,14 @@
-// main.js — Mandelbulber page: panel, formula slots, camera input, frame loop.
+// main.js — Mandelbulber page: the entry point. It connects the ui/ modules, boots the page
+// and sets the test hooks.
 //
 // Part of a port of Mandelbulber2 (Mandelbulber Team, github.com/buddhi1980/
 // mandelbulber2, GPL-3.0, see COPYING). The camera math follows upstream
 // cCameraTarget (src/camera_target.cpp); the slot and render param names are
 // the upstream ones, so the scene object stays in upstream units (contract C5).
 //
-// The GPU work lives in engine.js (contract C6). This file keeps one scene
-// object, builds the panel from gen/catalog.json and gen/params.json, and calls
-// engine.frame() once per animation frame until the target sample count.
+// The GPU work lives in engine.js (contract C6). The page keeps one scene object
+// (ui/state.js), builds the panel from gen/catalog.json and gen/params.json, and
+// calls engine.frame() once per animation frame until the target sample count.
 //
 //   drag        orbit around the target       wheel        dolly
 //   right drag  pan (or Shift + drag)         F            fly mode on / off
@@ -24,15 +25,32 @@
 // The URL hash holds the scene diff against the defaults as deflated .fract
 // text (#s=...), so a link reopens the same scene.
 //
-// grep: function boot  function buildPanel  function buildSlotEditor  function openPicker  function ctl
-//       function gradientEditor  function loadScene  function exportFract  function writeHash  function readHash
-//       function camFromScene  function camToScene  function frameView  function pushScene  function tick
-//       function savePng  const MAIN_UI  const SLOT_COMMON  const CREDIT
-//       function applyLayout  function pickMode  function snapTo  function sheetDrag  function syncViewport
-//       function openExamples  function openCtx  function showTip  function stick  function inertiaStep
-//       function renderPaused  const pixelRatio  const renderScale
-//       function prepareExamples  function presetFamily  function presetThumb  function randomExample
-//       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
+// Modules (each file opens with its own grep list):
+//   ui/dom.js           page element refs, el, section, fmt, color text, download
+//   ui/data.js          the gen/ catalogs (P, CAT, EXAMPLES, ...) and loadData
+//   ui/state.js         scene, engine, info, active slot, current preset, render settings
+//   ui/hud.js           HUD, peek line, progress, flash, fail
+//   ui/scene.js         setMain, setSlot, loadScene, the preview and pushScene
+//   ui/camera.js        upstream camera math, resetCamera, frameView
+//   ui/controls.js      control rows (ctl), bindings, refreshAll, the label tip
+//   ui/gradient.js      the surface gradient editor
+//   ui/thumbs.js        formula and preset thumbnail tiles
+//   ui/io.js            .fract import and export, drag and drop, the #s= share link
+//   ui/presets.js       the preset catalog (families, groups, search) and loadExample
+//   ui/panel.js         the panel sections, the slot editor, the peek bar
+//   ui/picker.js        the formula picker sheet
+//   ui/sheets.js        open, close and swipe-to-close of the full-screen sheets
+//   ui/preset-sheet.js  the preset browser sheet and Random
+//   ui/layout.js        float, sheet and drawer modes, snap heights, canvas resize
+//   ui/sheet-drag.js    the drag gestures of the bottom sheet
+//   ui/fly.js           fly mode, held keys, thumbsticks, flyStep
+//   ui/pointer.js       canvas mouse and touch gestures, inertia, long-press menu
+//   ui/keys.js          keyboard shortcuts and the Panel button
+//   ui/loop.js          tick, renderPaused, savePng
+//
+// The init* calls below register the listeners in the order of the single-file page.
+//
+// grep: function boot  window.__mb
 
 import { defaultScene, parseFract } from './fract.js';
 import { $, canvas } from './ui/dom.js';
@@ -42,57 +60,33 @@ import { compileStatus, setStatus, showHud, fail } from './ui/hud.js';
 import { camFromScene, camToScene, frameView } from './ui/camera.js';
 import { setMain, setSlot, loadScene } from './ui/scene.js';
 import { initTip } from './ui/controls.js';
-import {  } from './ui/thumbs.js';
 import { loadText, exportText, initIo, shareHash, decodeShare, readHash } from './ui/io.js';
 import { exampleScene, loadExample } from './ui/presets.js';
 import { buildPanel, initPeek } from './ui/panel.js';
 import { openPicker, choose, initPicker } from './ui/picker.js';
 import { syncViewport, initSheets } from './ui/sheets.js';
 import { randomExample, openExamples, closeExamples, initPresetSheet } from './ui/preset-sheet.js';
-import { L, applyLayout, initLayout, snapTo, togglePanel,
-  observeCanvas } from './ui/layout.js';
+import { L, applyLayout, initLayout, snapTo, togglePanel, observeCanvas } from './ui/layout.js';
 import { initSheetDrag } from './ui/sheet-drag.js';
 import { fly, toggleFly, initFly } from './ui/fly.js';
 import { inertia, initPointer } from './ui/pointer.js';
 import { initKeys } from './ui/keys.js';
 import { tick } from './ui/loop.js';
 
-// ─── data ───────────────────────────────────────────────────────────────────
-// ─── panel specs ────────────────────────────────────────────────────────────
-// ─── small DOM helpers ──────────────────────────────────────────────────────
-// ─── thumbnails ─────────────────────────────────────────────────────────────
-// ─── control rows ───────────────────────────────────────────────────────────
-// ─── scene changes ──────────────────────────────────────────────────────────
-// ─── panel ──────────────────────────────────────────────────────────────────
-
-// ─── formula picker ─────────────────────────────────────────────────────────
 initPicker();
-// ─── gradient editor (mat1_surface_color_gradient) ──────────────────────────
-// ─── presets ────────────────────────────────────────────────────────────────
-// ─── import / export / share ────────────────────────────────────────────────
 initIo();
-// ─── camera (upstream cCameraTarget) ────────────────────────────────────────
-// ─── camera input ───────────────────────────────────────────────────────────
 initFly();
-
 initPointer();
 initTip();
-
-// ─── layout: floating panel, bottom sheet, right drawer ─────────────────────
 initLayout();
 initSheetDrag();
-// ─── full-screen sheets: formula picker and examples ────────────────────────
 initSheets();
 initPresetSheet();
 initPeek();
 applyLayout();
 syncViewport();
-
-// ─── keys ───────────────────────────────────────────────────────────────────
 initKeys();
-// ─── status ─────────────────────────────────────────────────────────────────
-// ─── frame loop ─────────────────────────────────────────────────────────────
-// ─── boot ───────────────────────────────────────────────────────────────────
+
 async function boot() {
   await loadData();
   $('subtitle').textContent = `${CAT.formulas.filter((f) => !isNone(f)).length} formulas · ${EXAMPLES.length} presets`;
