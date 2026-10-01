@@ -1,77 +1,99 @@
 // patterns.js -- preset crease patterns: generated bases and real classic models.
 //
-// Port of origami src/patterns.rs. Four presets come from a rule (blank,
-// single fold, waterbomb, blintz, and the Miura-ori). The rest load from the FOLD
-// files in patterns/, taken from permissively licensed sources:
-//   origamicp by Nihat Garibli (MIT): pleat, miura, miura_large, vertex4,
-//     vertex6, vertex8.
-//   flat-folder by Jason S. Ku (MIT), traditional models from the ORIPA data
-//     set: birdbase, birdbase2, boat, crane, house, kabuto, pig, pinwheel,
+// Port of origami src/patterns.rs, grown into a library. The first twenty
+// presets are the native app's, with the same ids. Five come from a rule
+// (blank, single fold, waterbomb, blintz, and the Miura-ori). The rest of the
+// twenty load from FOLD files taken from two MIT sources:
+//   origamicp by Nihat Garibli: pleat, miura_large, vertex4, vertex6, vertex8.
+//   flat-folder by Jason S. Ku, traditional models from the ORIPA data set:
+//     birdbase, birdbase2, boat, crane, house, kabuto, pig, pinwheel,
 //     sailboat, yakko.
+// library.js appends every other preset: more files from those two sources
+// and from Ghassaei's Origami Simulator, and the classics in generators.js.
 // See CREDITS.txt. A loaded file is normalized into a 0.9-wide box on the
 // origin, so every preset fills the sheet the same way.
 //
-// The Rust build embeds the files with include_str. Here preloadFolds fetches
-// them once at boot (or reads them from disk in tests.mjs). After that, build
-// is synchronous, as in the native app.
+// The Rust build embeds the files with include_str. Here the page fetches a
+// file when a person first picks its preset (prepare), and tests.mjs reads
+// every file from disk (preloadFolds). After that, build is synchronous, as in
+// the native app.
 //
 // grep map:
-//   Preset            -- the menu ids, with a label each
-//   bases / tessellations / models -- the library groups
-//   preloadFolds      -- read every FOLD file into the cache
+//   Preset            -- the native twenty: menu ids, with a label each
+//   ALL / GROUPS      -- every preset, and the library sections in order
+//   setReader / prepare / preloadFolds -- read FOLD files into the cache
 //   build             -- a preset to a crease pattern
 //   fromFoldText      -- parse a FOLD text and normalize it
-//   miuraOri / waterbomb / singleFold / blintz -- the generated ones
+//   miuraOri / waterbomb / singleFold / blintz -- the native generated ones
 
 import { Assignment, CreasePattern } from './model.js';
 import { fromJson } from './foldio.js';
+import { GENERATORS } from './generators.js';
+import { LIBRARY, GROUPS as SECTIONS, SOURCES } from './library.js';
 
 const f32 = Math.fround;
 
 // Every preset, in menu order. The label is the text on the library chip.
+// The native twenty, in menu order. The label is the text on the library tile.
+// `group` is the library section, `src` a key of SOURCES, `path` the upstream
+// file at the commit SOURCES names, and `author` the designer as it is stated.
+const OCP = 'origamicp', FF = 'flatfolder', GEN = 'gen';
+const TRAD = 'traditional', NONE = 'no designer stated', ORIPA = 'Traditional (ORIPA Data Set)';
 export const Preset = Object.freeze({
-  BlankSquare: { id: 'blank', label: 'BLANK' },
-  SingleFold: { id: 'single', label: 'SINGLE FOLD' },
-  Waterbomb: { id: 'waterbomb', label: 'WATERBOMB' },
-  Blintz: { id: 'blintz', label: 'BLINTZ' },
-  Vertex4: { id: 'vertex4', label: '4-STAR', file: 'vertex4.fold' },
-  Vertex6: { id: 'vertex6', label: '6-STAR', file: 'vertex6.fold' },
-  Vertex8: { id: 'vertex8', label: '8-STAR', file: 'vertex8.fold' },
-  BirdBase: { id: 'birdbase', label: 'BIRD BASE', file: 'birdbase.fold' },
-  Pleat: { id: 'pleat', label: 'PLEAT', file: 'pleat.fold' },
-  MiuraOri: { id: 'miura', label: 'MIURA-ORI' },
-  MiuraLarge: { id: 'miura-xl', label: 'MIURA XL', file: 'miura_large.fold' },
-  Pinwheel: { id: 'pinwheel', label: 'PINWHEEL', file: 'pinwheel.fold' },
-  Sailboat: { id: 'sailboat', label: 'SAILBOAT', file: 'sailboat.fold' },
-  Boat: { id: 'boat', label: 'BOAT', file: 'boat.fold' },
-  Kabuto: { id: 'kabuto', label: 'KABUTO', file: 'kabuto.fold' },
-  House: { id: 'house', label: 'HOUSE', file: 'house.fold' },
-  Yakko: { id: 'yakko', label: 'YAKKO', file: 'yakko.fold' },
-  Pig: { id: 'pig', label: 'PIG', file: 'pig.fold' },
-  Crane: { id: 'crane', label: 'CRANE', file: 'crane.fold' },
-  BirdBase9: { id: 'birdbase9', label: '9-BIRD BASE', file: 'birdbase2.fold' },
+  BlankSquare: { id: 'blank', label: 'BLANK', group: 'bases', src: GEN, author: NONE },
+  SingleFold: { id: 'single', label: 'SINGLE FOLD', group: 'bases', src: GEN, author: TRAD },
+  Waterbomb: { id: 'waterbomb', label: 'WATERBOMB', group: 'bases', src: GEN, author: TRAD },
+  Blintz: { id: 'blintz', label: 'BLINTZ', group: 'bases', src: GEN, author: TRAD },
+  Vertex4: { id: 'vertex4', label: '4-STAR', file: 'vertex4.fold', group: 'bases', src: OCP, path: 'data/designs/d02_vertex4.fold', author: NONE },
+  Vertex6: { id: 'vertex6', label: '6-STAR', file: 'vertex6.fold', group: 'bases', src: OCP, path: 'data/designs/d03_vertex6.fold', author: NONE },
+  Vertex8: { id: 'vertex8', label: '8-STAR', file: 'vertex8.fold', group: 'bases', src: OCP, path: 'data/designs/d04_vertex8.fold', author: NONE },
+  BirdBase: { id: 'birdbase', label: 'BIRD BASE', file: 'birdbase.fold', group: 'bases', src: FF, path: 'examples/instagram/082_traditionaloripa_4_Birdbase.fold', author: ORIPA,
+    note: 'also in Origami Simulator as assets/Bases/birdBase.svg' },
+  Pleat: { id: 'pleat', label: 'PLEAT', file: 'pleat.fold', group: 'folds', src: OCP, path: 'data/designs/d01_pleat.fold', author: NONE },
+  MiuraOri: { id: 'miura', label: 'MIURA-ORI', group: 'tess', src: GEN, author: 'after Koryo Miura (Miura-ori)' },
+  MiuraLarge: { id: 'miura-xl', label: 'MIURA XL', file: 'miura_large.fold', group: 'tess', src: OCP, path: 'data/designs/d06_miura_large.fold', author: NONE,
+    note: 'the Miura-ori fold is due to Koryo Miura' },
+  Pinwheel: { id: 'pinwheel', label: 'PINWHEEL', file: 'pinwheel.fold', group: 'models', src: FF, path: 'examples/instagram/102_traditionaloripa_Pinwheel.fold', author: ORIPA,
+    note: 'also in flat-folder as original/pinwheel.opx, and in Origami Simulator as assets/Bases/pinwheelBase.svg' },
+  Sailboat: { id: 'sailboat', label: 'SAILBOAT', file: 'sailboat.fold', group: 'models', src: FF, path: 'examples/instagram/001_traditional_Sailboat.fold', author: 'Traditional' },
+  Boat: { id: 'boat', label: 'BOAT', file: 'boat.fold', group: 'models', src: FF, path: 'examples/instagram/067_traditionaloripa_damashi_bune.fold', author: ORIPA },
+  Kabuto: { id: 'kabuto', label: 'KABUTO', file: 'kabuto.fold', group: 'models', src: FF, path: 'examples/instagram/002_traditional_Kabuto.fold', author: 'Traditional' },
+  House: { id: 'house', label: 'HOUSE', file: 'house.fold', group: 'models', src: FF, path: 'examples/instagram/052_traditionaloripa_House.fold', author: ORIPA },
+  Yakko: { id: 'yakko', label: 'YAKKO', file: 'yakko.fold', group: 'models', src: FF, path: 'examples/instagram/038_traditionaloripa_Yakko.fold', author: ORIPA },
+  Pig: { id: 'pig', label: 'PIG', file: 'pig.fold', group: 'models', src: FF, path: 'examples/instagram/045_traditionaloripa_Pig.fold', author: ORIPA },
+  Crane: { id: 'crane', label: 'CRANE', file: 'crane.fold', group: 'models', src: FF, path: 'examples/instagram/004_traditional_Crane.fold', author: 'Traditional',
+    note: 'also in Origami Simulator as traditionalCrane.svg and flat_crane.svg' },
+  BirdBase9: { id: 'birdbase9', label: '9-BIRD BASE', file: 'birdbase2.fold', group: 'models', src: FF, path: 'examples/instagram/089_traditionaloripa_9_Birdbase.fold', author: ORIPA },
 });
 
-export const ALL = Object.values(Preset);
+export const NATIVE = Object.values(Preset);
+export const ALL = [...NATIVE, ...LIBRARY];
+export { SOURCES };
 
-export const bases = [Preset.BlankSquare, Preset.SingleFold, Preset.Waterbomb, Preset.Blintz,
-  Preset.Vertex4, Preset.Vertex6, Preset.Vertex8, Preset.BirdBase];
-export const tessellations = [Preset.Pleat, Preset.MiuraOri, Preset.MiuraLarge, Preset.Pinwheel];
-export const models = [Preset.Sailboat, Preset.Boat, Preset.Kabuto, Preset.House,
-  Preset.Yakko, Preset.Pig, Preset.Crane, Preset.BirdBase9];
+// The library sections in order, each with its presets in menu order.
+export const GROUPS = SECTIONS.map((g) => ({ ...g, list: ALL.filter((p) => p.group === g.id) }));
 
 export function byId(id) { return ALL.find((p) => p.id === id) || null; }
 
-// FOLD text per file name, filled by preloadFolds.
+// FOLD text per file name, filled by prepare or preloadFolds.
 const foldText = new Map();
+let reader = null;
 
-// Read every FOLD file the presets use. `readText(name)` returns a promise of
-// the file text. The file miura.fold is read too, though the MIURA-ORI preset is
-// generated, as in the Rust source.
-export async function preloadFolds(readText) {
-  const names = new Set(ALL.filter((p) => p.file).map((p) => p.file));
-  names.add('miura.fold');
-  await Promise.all([...names].map(async (n) => { foldText.set(n, await readText(n)); }));
+// Set how prepare reads a file: `readText(name)` returns a promise of its text.
+export function setReader(readText) { reader = readText; }
+
+// Read the FOLD file a preset needs, once. Generated presets need none.
+export async function prepare(p) {
+  if (!p || !p.file || foldText.has(p.file)) return;
+  if (!reader) throw new Error('patterns.setReader was not called');
+  foldText.set(p.file, await reader(p.file));
+}
+
+// Read the FOLD files of `list` (every preset by default). The native app also
+// reads miura.fold for its generated MIURA-ORI; here MIURA 4x4 uses it.
+export async function preloadFolds(readText, list = ALL) {
+  setReader(readText);
+  await Promise.all(list.map(prepare));
 }
 
 // Build the crease pattern for a preset.
@@ -83,6 +105,7 @@ export function build(p) {
     case Preset.Blintz: return blintz();
     case Preset.MiuraOri: return miuraOri(6, 4);
     default: {
+      if (p.gen) return GENERATORS[p.gen[0]](...p.gen[1]);
       const text = foldText.get(p.file);
       if (text === undefined) throw new Error(`the FOLD file ${p.file} was not preloaded`);
       return fromFoldText(text);

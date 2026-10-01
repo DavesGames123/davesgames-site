@@ -24,6 +24,7 @@ import * as theme from './theme.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 await patterns.preloadFolds((n) => readFile(join(here, 'patterns', n), 'utf8'));
+const THUMBS = JSON.parse(await readFile(join(here, 'thumbs.json'), 'utf8'));
 
 let pass = 0, fail = 0;
 function test(name, fn) {
@@ -256,7 +257,7 @@ test('theme::a_mountain_is_warmer_than_a_valley', () => {
 // ── patterns ────────────────────────────────────────────────────────────────
 const P = patterns.Preset;
 test('patterns::every_preset_loads_and_planarizes', () => {
-  assert(patterns.ALL.length === 20, `${patterns.ALL.length} presets`);
+  assert(patterns.NATIVE.length === 20, `${patterns.NATIVE.length} native presets`);
   for (const p of patterns.ALL) {
     const cp = patterns.build(p);
     if (p === P.BlankSquare) continue;
@@ -281,9 +282,44 @@ test('patterns::the_classic_models_stay_finite_part_folded', () => {
   }
 });
 test('patterns::the_library_groups_cover_every_preset_once', () => {
-  const all = [...patterns.bases, ...patterns.tessellations, ...patterns.models];
-  assert(all.length === 20 && new Set(all).size === 20);
+  const all = patterns.GROUPS.flatMap((g) => g.list);
+  const n = patterns.ALL.length;
+  assert(all.length === n && new Set(all).size === n, `${all.length} in groups, ${n} presets`);
+  assert(new Set(patterns.ALL.map((p) => p.id)).size === n, 'two presets share an id');
 });
+test('patterns::the_native_ids_are_kept', () => {
+  const ids = 'blank single waterbomb blintz vertex4 vertex6 vertex8 birdbase pleat miura miura-xl pinwheel ' +
+    'sailboat boat kabuto house yakko pig crane birdbase9';
+  assert(patterns.NATIVE.map((p) => p.id).join(' ') === ids);
+});
+test('patterns::every_preset_has_a_source_and_a_thumbnail', () => {
+  for (const p of patterns.ALL) {
+    assert(patterns.SOURCES[p.src], `${p.id} has no source`);
+    assert(p.gen || !p.file || p.path, `${p.id} has a file and no upstream path`);
+    const t = THUMBS[p.id];
+    assert(t && (t.m || t.v || t.b), `${p.id} has no thumbnail`);
+  }
+});
+
+// One test per preset: it loads, planarizes, builds a fold mesh, stays finite
+// part folded (fraction 0.5, 250 steps, as the classic-model test), and stays
+// under the node cap that keeps the library interactive on a phone.
+const NODE_CAP = 450;
+for (const p of patterns.ALL) {
+  test(`preset::${p.id} loads, planarizes and stays finite at 0.5`, () => {
+    const cp = patterns.build(p);
+    const planar = planarize(cp);
+    if (p !== P.BlankSquare) assert(planar.faces.length > 0, 'planarized to no faces');
+    for (const v of cp.vertices) assert(Math.abs(v[0]) <= 0.55 && Math.abs(v[1]) <= 0.55, `vertex ${v} left the sheet`);
+    const m = sim.build(planar);
+    assert(m.nodeCount <= NODE_CAP, `${m.nodeCount} nodes, over the cap of ${NODE_CAP}`);
+    assert(p === P.BlankSquare || m.creases.some((c) => c.isFold), 'no crease folds');
+    m.setFraction(0.5);
+    for (let i = 0; i < 250; i++) m.step();
+    assert(m.nodes.every(Number.isFinite), 'went non-finite');
+    for (let i = 0; i < m.nodeCount; i++) assert(Math.hypot(...m.node(i)) < 8, `node ${i} flew off`);
+  });
+}
 
 // ── PARITY: compare against a Rust node dump, if one is passed ──────────────
 const dump = process.argv[2];

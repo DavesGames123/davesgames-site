@@ -17,10 +17,14 @@
      Folding simulation: ported from Origami Simulator by Amanda Ghassaei
        (MIT, (c) 2018 Amanda Ghassaei). Ghassaei, Demaine, Gershenfeld,
        "Fast, Interactive Origami Simulation using GPU Computation", 7OSME 2018.
-     Patterns: origamicp by Nihat Garibli (MIT): pleat, miura, miura_large,
-       vertex4, vertex6, vertex8. flat-folder by Jason S. Ku (MIT),
-       traditional models from the ORIPA data set: birdbase, birdbase2, boat,
-       crane, house, kabuto, pig, pinwheel, sailboat, yakko.
+     Patterns (92 presets; CREDITS.txt lists each file, path and designer):
+       origamicp by Nihat Garibli (MIT), every example design.
+       flat-folder by Jason S. Ku (MIT): the traditional models, and Ku's own
+         designs under the MIT license of his repo.
+       Origami Simulator by Amanda Ghassaei (MIT): the examples that name no
+         designer, converted from SVG by tools/svg2fold.mjs.
+       generators.js (this page): Yoshimura, Kresling, Resch, waterbomb,
+         square twist, pleats, flasher, circular pleat, hypar, Miura.
 
    MODULES  (plain ES modules, no build step; Rust source in brackets)
      main.js         the app: state, layout, input, frame loop    [app.rs, main.rs]
@@ -31,7 +35,11 @@
      sim.js          the bar-and-hinge fold simulator             [sim/mod.rs]
      solver.js       dihedral angle and gradient                  [sim/solver.rs]
      triangulate.js  ear clipping                                 [sim/triangulate.rs]
-     patterns.js     the 20 presets; FOLD files in patterns/      [patterns.rs]
+     patterns.js     the presets; FOLD files in patterns/         [patterns.rs]
+     library.js      the preset catalogue: source, path, credit   (web only)
+     generators.js   the classic tessellations, from a rule       (web only)
+     thumbs.json     library thumbnails, baked by tools/build-library.mjs
+     tools/          svg2fold.mjs (SVG or ORIPA to FOLD), build-library.mjs
      view.js         View2D, Orbit, snap                          [view.rs]
      theme.js        palettes and pastels                         [theme.rs]
      gpu.js tris.js lines.js, shaders/*.wgsl   WebGPU passes      [gpu.rs tris.rs lines.rs]
@@ -42,7 +50,7 @@
      #stage    .horiz: #pane2d | #pane3d side by side
                .vert:  #pane2d over #pane3d
                #gl     one WebGPU canvas under both panes, scissored per pane
-     #library  the preset library dialog, grouped Bases / Tessellations / Models
+     #library  the preset library panel: filter, source chips, sections of tiles
      #panel    desktop: a drawer on the right. phone: the bottom sheet
                (portrait) or right drawer (landscape) with every control.
      #status   hover readout on the left, credits on the right
@@ -54,6 +62,7 @@
      grep -n 'function draw3d'      the folded pane     [app.rs draw_3d]
      grep -n 'function onKey'       every shortcut      [main.rs window_event]
      grep -n 'function apply'       every control       [app.rs apply]
+     grep -n 'function buildLibrary' the library tiles, filter, thumbnails
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="Draw an origami crease pattern and watch it fold. A web port of a Rust origami editor with a bar-and-hinge folding simulator after Amanda Ghassaei's Origami Simulator.">
@@ -108,12 +117,13 @@
   <div id="nogpu" hidden><div><b>WebGPU is not available.</b><p id="nogpuMsg"></p></div></div>
 </main>
 
-<div id="library" hidden>
-  <div class="scrim" data-act="library-close"></div>
-  <div class="lib-panel" role="dialog" aria-label="Pattern library">
-    <div class="lib-title">PATTERN LIBRARY <button class="x" data-act="library-close" aria-label="Close">✕</button></div>
-    <div class="lib-groups" data-lib></div>
+<div id="library" role="dialog" aria-label="Pattern library" hidden>
+  <div class="lib-head">
+    <div class="lib-title">PATTERN LIBRARY <span class="count" id="libCount"></span><button class="x" data-act="library-close" aria-label="Close">✕</button></div>
+    <input type="search" id="libFilter" class="lib-filter" autocomplete="off" spellcheck="false" aria-label="Filter patterns">
+    <div class="lib-src" id="libSrc" role="group" aria-label="Source"></div>
   </div>
+  <div class="lib-body" id="libBody"></div>
 </div>
 
 <aside id="panel" aria-label="Controls">
@@ -145,7 +155,9 @@
   </div>
 
   <div class="sec-label phone-only">PATTERN LIBRARY</div>
-  <div class="lib-groups phone-only" data-lib></div>
+  <div class="grid3 phone-only">
+    <button class="chip lib-open" data-act="library">OPEN THE LIBRARY</button>
+  </div>
 
   <div class="sec-label">LAYOUT</div>
   <div class="grid3">
@@ -186,13 +198,13 @@
   <div class="about">
     <p>Drag in the diagram to draw a crease. The ends snap to vertices and to the grid. The folded pane folds the same pattern with a bar-and-hinge model: axial springs hold the edges, crease springs drive each fold to its target, and face springs hold each triangle's shape.</p>
     <p>A vertex ringed in amber fails a local flat-foldability check (Maekawa, Kawasaki, or Big-Little-Big). The checks are necessary, not sufficient. Complex models such as the crane fold most of the way, then pass through themselves, because the simulator has no layer order.</p>
-    <p class="credits"><b>Credits.</b> Folding simulation ported from <a href="https://github.com/amandaghassaei/OrigamiSimulator" target="_blank" rel="noopener">Origami Simulator</a> by Amanda Ghassaei (MIT, © 2018 Amanda Ghassaei; Ghassaei, Demaine, Gershenfeld, 7OSME 2018). Patterns: <a href="https://github.com/nihatgaribli/origamicp" target="_blank" rel="noopener">origamicp</a> by Nihat Garibli (MIT) and <a href="https://github.com/origamimagiro/flat-folder" target="_blank" rel="noopener">flat-folder</a> by Jason S. Ku (MIT), traditional models from the ORIPA data set. License texts: <a href="CREDITS.txt" target="_blank">CREDITS.txt</a>.</p>
+    <p class="credits"><b>Credits.</b> Folding simulation ported from <a href="https://github.com/amandaghassaei/OrigamiSimulator" target="_blank" rel="noopener">Origami Simulator</a> by Amanda Ghassaei (MIT, © 2018 Amanda Ghassaei; Ghassaei, Demaine, Gershenfeld, 7OSME 2018). Patterns: <a href="https://github.com/nihatgaribli/origamicp" target="_blank" rel="noopener">origamicp</a> by Nihat Garibli (MIT), <a href="https://github.com/origamimagiro/flat-folder" target="_blank" rel="noopener">flat-folder</a> by Jason S. Ku (MIT: traditional models, and Ku's own designs), and the examples of <a href="https://github.com/amandaghassaei/OrigamiSimulator" target="_blank" rel="noopener">Origami Simulator</a> (MIT) that name no designer. The tessellations marked GENERATED are drawn by this page. Each pattern's source, path and designer, and every license text: <a href="CREDITS.txt" target="_blank">CREDITS.txt</a>.</p>
   </div>
 </aside>
 
 <footer id="status">
   <span id="stMain">Drag in the diagram to draw a crease.</span>
-  <span class="right">Simulation after <a href="https://github.com/amandaghassaei/OrigamiSimulator" target="_blank" rel="noopener">Origami Simulator</a> (A. Ghassaei, MIT) · patterns: origamicp (N. Garibli), flat-folder (J. S. Ku), MIT · <a href="CREDITS.txt" target="_blank">credits</a></span>
+  <span class="right">Simulation after <a href="https://github.com/amandaghassaei/OrigamiSimulator" target="_blank" rel="noopener">Origami Simulator</a> (A. Ghassaei, MIT) · patterns: origamicp (N. Garibli), flat-folder (J. S. Ku), Origami Simulator (A. Ghassaei), MIT · <a href="CREDITS.txt" target="_blank">credits</a></span>
 </footer>
 
 <nav id="dock" aria-label="Quick controls">

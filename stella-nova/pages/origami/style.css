@@ -8,7 +8,7 @@
    interface zoom), so every control scales together.
      grep -n 'STAGE'      the two panes, horizontal and vertical
      grep -n 'BARS'       the in-pane tool and fold bars
-     grep -n 'LIBRARY'    the preset dialog
+     grep -n 'LIBRARY'    the preset panel: filter, source chips, tiles
      grep -n 'PANEL'      the drawer (desktop) and sheet (phone)
      grep -n 'TOUCH'      44px targets on a coarse pointer
      grep -n 'PHONE'      dock, sheet, stacked panes
@@ -101,18 +101,55 @@ html.in-frame .brand,html.in-frame .sys{display:none}
 .scrub{flex:1 1 auto;min-width:6rem;width:16rem;accent-color:var(--accent)}
 .bar .big{font-family:var(--mono);font-size:1.05rem;color:var(--ink);min-width:3.2rem;text-align:right;font-variant-numeric:tabular-nums}
 
-/* LIBRARY. A scrim and a centred panel, three chips per row. */
-#library{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center}
-#library .scrim{position:absolute;inset:0;background:rgba(10,12,18,0.62);backdrop-filter:blur(2px)}
-.lib-panel{
-  position:relative;width:min(34rem,calc(100vw - 2rem));max-height:calc(100vh - 2rem);overflow-y:auto;
-  background:var(--panel);border:1px solid var(--edge);border-radius:1.1rem;padding:1.1rem 1.3rem 1.2rem;box-shadow:0 1rem 3rem rgba(0,0,0,0.55)
+/* LIBRARY. A panel over the diagram pane, with no scrim: the folded pane
+   stays in view, so a person can step through presets and watch each fold.
+   A sticky head holds the title, the filter and the source chips. Each tile
+   is a crease-pattern thumbnail (thumbs.json), its name and a source tag. */
+#library{
+  position:fixed;z-index:60;top:calc(var(--top-h) + var(--pad) + 0.3rem);left:calc(var(--pad) + 0.3rem);bottom:calc(var(--status-h) + var(--pad) + 0.3rem);
+  width:min(31rem,calc(50vw - 1rem));display:flex;flex-direction:column;
+  background:var(--panel);border:1px solid var(--edge);border-radius:1rem;box-shadow:0 1rem 2.6rem rgba(0,0,0,0.5);overflow:hidden
 }
-.lib-title{font-family:var(--mono);font-size:0.9rem;letter-spacing:0.24em;color:var(--ink);display:flex;align-items:center;margin-bottom:0.6rem}
-.lib-title .x{margin-left:auto;width:2rem;height:2rem;border:1px solid var(--edge);border-radius:0.5rem;background:var(--btn);color:var(--dim)}
-.lib-cat{font-family:var(--mono);font-size:0.58rem;letter-spacing:0.22em;color:var(--dim);margin:0.8rem 0 0.4rem}
-.lib-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.4rem}
-.lib-grid .chip{width:100%;height:2rem}
+#stage.vert ~ #library{width:min(31rem,calc(100vw - 1.2rem))}
+.lib-head{flex:0 0 auto;padding:0.8rem 0.9rem 0.6rem;border-bottom:1px solid var(--line)}
+.lib-title{font-family:var(--mono);font-size:0.78rem;letter-spacing:0.22em;color:var(--ink);display:flex;align-items:center;gap:0.6rem;margin-bottom:0.55rem}
+.lib-title .count{font-size:0.62rem;letter-spacing:0.08em;color:var(--dim)}
+.lib-title .x{margin-left:auto;width:1.9rem;height:1.9rem;border:1px solid var(--edge);border-radius:0.5rem;background:var(--btn);color:var(--dim)}
+.lib-title .x:hover{color:var(--ink);background:var(--btn-h)}
+.lib-filter{
+  width:100%;height:2rem;padding:0 0.7rem;border:1px solid var(--edge);border-radius:0.55rem;background:var(--field);color:var(--ink);
+  font:inherit;font-size:0.78rem;outline:none
+}
+.lib-filter::placeholder{color:var(--dim)}
+.lib-filter:focus{border-color:var(--accent)}
+.lib-src{display:flex;flex-wrap:wrap;gap:0.3rem;margin-top:0.5rem}
+.src-chip{height:1.5rem;padding:0 0.55rem;border:1px solid var(--edge);border-radius:999px;background:transparent;color:var(--dim);font-size:0.56rem;letter-spacing:0.1em}
+.src-chip:hover{color:var(--ink);border-color:var(--dim)}
+.src-chip.on{background:var(--accent);border-color:var(--accent);color:var(--panel)}
+.lib-body{flex:1 1 auto;overflow-y:auto;padding:0.2rem 0.9rem 1rem;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--edge) transparent}
+.lib-cat{font-family:var(--mono);font-size:0.58rem;letter-spacing:0.22em;color:var(--dim);margin:0.9rem 0 0.45rem;display:flex;gap:0.5rem}
+.lib-cat .n{color:var(--edge)}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(5.4rem,1fr));gap:0.4rem}
+.lib-tile{
+  display:flex;flex-direction:column;align-items:stretch;gap:0.25rem;min-width:0;padding:0.4rem 0.4rem 0.35rem;
+  border:1px solid transparent;border-radius:0.6rem;background:var(--btn);color:var(--dim);text-align:left
+}
+.lib-tile:hover{background:var(--btn-h);color:var(--ink)}
+.lib-tile.on{border-color:var(--accent);color:var(--ink)}
+.lib-tile:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.lib-tile svg{width:100%;aspect-ratio:1;display:block;border-radius:0.35rem;background:var(--field)}
+.lib-tile svg path{fill:none;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.lib-tile svg .m{stroke:#e0614a;stroke-width:1.1}
+.lib-tile svg .v{stroke:#6a9bd8;stroke-width:1.1}
+.lib-tile svg .b{stroke:#c9bca0;stroke-width:1.2}
+.lib-tile svg .f{stroke:#8a8070;stroke-width:0.7;opacity:0.55}
+.lib-tile .nm{font-family:var(--mono);font-size:0.6rem;letter-spacing:0.06em;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-tile .tag{font-family:var(--mono);font-size:0.48rem;letter-spacing:0.12em;color:var(--dim);opacity:0.75}
+.lib-tile .tag[data-src="gen"]{color:var(--good)}
+.lib-tile .tag[data-src="origamisim"]{color:#c9a0d8}
+.lib-tile .tag[data-src="flatfolder"]{color:#d8c08a}
+.lib-tile .tag[data-src="origamicp"]{color:#8ac8d8}
+.lib-none{color:var(--dim);font-size:0.75rem;margin-top:1rem}
 
 /* PANEL. Desktop: a drawer from the right, under the topbar. */
 #panel{
@@ -153,8 +190,11 @@ html.in-frame .brand,html.in-frame .sys{display:none}
   .chip,.tool{height:44px;font-size:0.72rem}
   .tb-btn,.seg{height:40px}
   #panelClose{width:44px;height:44px}
-  .lib-grid .chip{height:46px}
   .lib-title .x{width:44px;height:44px}
+  .lib-filter{height:44px;font-size:16px}
+  .src-chip{height:44px;padding:0 0.9rem;font-size:0.62rem}
+  .lib-tile{min-height:44px}
+  .lib-tile .nm{font-size:0.66rem}
   .scrub{height:44px}
 }
 
@@ -177,7 +217,19 @@ html.in-frame .brand,html.in-frame .sys{display:none}
   .grid3.phone-only{display:grid}
   .row.phone-only{display:flex}
   .desk-only{display:none}
-  .lib-groups.phone-only .lib-cat:first-child{margin-top:0}
+  .grid3.phone-only .lib-open{grid-column:1 / -1}
+
+  /* The library is a bottom sheet above the dock, as the panel is. */
+  #library,#stage.vert ~ #library{
+    top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(72vh,640px);height:min(72dvh,640px);
+    border:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;box-shadow:0 -0.6rem 2rem rgba(0,0,0,0.5)
+  }
+  .lib-head{padding:0.7rem calc(14px + env(safe-area-inset-right)) 0.5rem calc(14px + env(safe-area-inset-left))}
+  .lib-body{padding:0.1rem calc(14px + env(safe-area-inset-right)) 1.2rem calc(14px + env(safe-area-inset-left))}
+  .lib-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
+  .lib-src{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin-right:calc(-14px - env(safe-area-inset-right))}
+  .lib-src::-webkit-scrollbar{display:none}
+  .src-chip{flex:0 0 auto}
 
   #status{bottom:var(--dock-h);padding:0 calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));font-size:0.68rem}
   #status .right{display:none}
@@ -229,4 +281,7 @@ html.in-frame .brand,html.in-frame .sys{display:none}
   #panel.open{transform:translateX(0)}
   #sheetGrip{display:none}
   #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;z-index:2}
+  #library,#stage.vert ~ #library{
+    top:0;bottom:0;left:auto;right:0;width:min(58vw,460px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0
+  }
 }

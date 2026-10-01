@@ -3,7 +3,8 @@ Origami Simulator (web port) -- credits and licenses
 
 This page is a web port of the origami desktop app (Rust, wgpu, winit). It
 carries third-party work under the MIT license. The license text of each source
-follows, as each repository requires.
+follows once at the end, as each repository requires. tools/build-library.mjs
+writes this file from library.js and patterns.js.
 
 1. Folding simulation
    Ported from Origami Simulator by Amanda Ghassaei.
@@ -13,24 +14,188 @@ follows, as each repository requires.
    Used in: sim.js, solver.js (the bar-and-hinge model, its constants, and the
    per-step passes, by way of the Rust port in src/sim/).
 
-2. Crease patterns from origamicp by Nihat Garibli.
-   https://github.com/nihatgaribli/origamicp
-   Files: patterns/pleat.fold, patterns/miura.fold, patterns/miura_large.fold,
-          patterns/vertex4.fold, patterns/vertex6.fold, patterns/vertex8.fold
+2. Pattern sources
+   origamicp by Nihat Garibli, MIT. https://github.com/nihatgaribli/origamicp
+     commit 58076815964d12b4df46a1c77a893ec51e308aa8
+   flat-folder by Jason S. Ku, MIT. https://github.com/origamimagiro/flat-folder
+     commit d50004815fb738d009e5b87b2307fbaefa717ef0
+   Origami Simulator by Amanda Ghassaei, MIT. https://github.com/amandaghassaei/OrigamiSimulator
+     commit 7855983a613c879c171b2b1557f8cd102d2640cf
+   generated: original code in generators.js and patterns.js (this page).
+   A .fold upstream file is an unchanged copy. An .svg or .opx upstream file
+   was converted to a planar FOLD file by tools/svg2fold.mjs. On load, every
+   pattern is fit into the centred unit square (patterns.js fromFoldText).
 
-3. Crease patterns from flat-folder by Jason S. Ku. Traditional models from
-   the ORIPA data set (the FOLD file_author field names the source).
-   https://github.com/origamimagiro/flat-folder
-   Files: patterns/birdbase.fold, patterns/birdbase2.fold, patterns/boat.fold,
-          patterns/crane.fold, patterns/house.fold, patterns/kabuto.fold,
-          patterns/pig.fold, patterns/pinwheel.fold, patterns/sailboat.fold,
-          patterns/yakko.fold
+3. Every preset
+   id | label | source | upstream path (or generator) | designer as stated | licence
 
-On load, every pattern is normalized into the centred unit square (see
-patterns.js fromFoldText). The files themselves are unchanged copies.
+   BASES
+   blank | BLANK | generated | patterns.js (native rule) | no designer stated | same as the page
+   single | SINGLE FOLD | generated | patterns.js (native rule) | traditional | same as the page
+   waterbomb | WATERBOMB | generated | patterns.js (native rule) | traditional | same as the page
+   blintz | BLINTZ | generated | patterns.js (native rule) | traditional | same as the page
+   vertex4 | 4-STAR | origamicp | data/designs/d02_vertex4.fold -> patterns/vertex4.fold | no designer stated | MIT
+   vertex6 | 6-STAR | origamicp | data/designs/d03_vertex6.fold -> patterns/vertex6.fold | no designer stated | MIT
+   vertex8 | 8-STAR | origamicp | data/designs/d04_vertex8.fold -> patterns/vertex8.fold | no designer stated | MIT
+   birdbase | BIRD BASE | flat-folder | examples/instagram/082_traditionaloripa_4_Birdbase.fold -> patterns/birdbase.fold | Traditional (ORIPA Data Set) | MIT
+       note: also in Origami Simulator as assets/Bases/birdBase.svg
+   os-square-base | SQUARE BASE | Origami Simulator | assets/Bases/squareBase.svg -> patterns/os_square_base.fold | traditional | MIT
+   os-frog-base | FROG BASE | Origami Simulator | assets/Bases/frogBase.svg -> patterns/os_frog_base.fold | traditional | MIT
+   os-boat-base | BOAT BASE | Origami Simulator | assets/Bases/boatBase.svg -> patterns/os_boat_base.fold | traditional | MIT
+   os-open-sink | OPEN SINK BASE | Origami Simulator | assets/Bases/openSinkBase.svg -> patterns/os_open_sink.fold | traditional | MIT
+   os-simple-vertex | SIMPLE VERTEX | Origami Simulator | assets/SimpleFolds/simpleVertex.svg -> patterns/os_simple_vertex.fold | no designer stated | MIT
+
+   FOLDS AND PLEATS
+   pleat | PLEAT | origamicp | data/designs/d01_pleat.fold -> patterns/pleat.fold | no designer stated | MIT
+   os-map-fold | MAP FOLD | Origami Simulator | assets/SimpleFolds/mapfold.svg -> patterns/os_map_fold.fold | traditional | MIT
+   os-brochure | BROCHURE FOLD | Origami Simulator | assets/SimpleFolds/brochurefold.svg -> patterns/os_brochure.fold | traditional | MIT
+   os-russian-tri | RUSSIAN TRIANGLE | Origami Simulator | assets/SimpleFolds/russianTriangle.svg -> patterns/os_russian_tri.fold | traditional | MIT
+   accordion | ACCORDION 16 | generated | generators.js accordion(16) | traditional | same as the page
+   diag-pleats | DIAGONAL PLEATS | generated | generators.js diagonalPleats(12) | traditional | same as the page
+   graded-pleats | GRADED PLEATS | generated | generators.js gradedPleats(14, 0.84) | traditional | same as the page
+   fan-pleat | FAN PLEAT | generated | generators.js fanPleat(14) | traditional | same as the page
+   os-curved-pleat | CURVED PLEAT | Origami Simulator | assets/Bistable/curvedPleatSimple.svg -> patterns/os_curved_pleat.fold | no designer stated | MIT
+       note: a bistable pleat; the curve is a chain of flat facets
+
+   TESSELLATIONS
+   miura | MIURA-ORI | generated | patterns.js (native rule) | after Koryo Miura (Miura-ori) | same as the page
+   miura-xl | MIURA XL | origamicp | data/designs/d06_miura_large.fold -> patterns/miura_large.fold | no designer stated | MIT
+       note: the Miura-ori fold is due to Koryo Miura
+   miura-s | MIURA 4x4 | origamicp | data/designs/d05_miura_small.fold -> patterns/miura.fold | no designer stated | MIT
+       note: the Miura-ori fold is due to Koryo Miura
+   miura-sharp | MIURA SHARP | generated | generators.js miuraSheared(8, 6, 0.6) | after Koryo Miura (Miura-ori) | same as the page
+   yoshimura | YOSHIMURA | generated | generators.js yoshimura(6, 4) | after Yoshimura Yoshimaru (diamond pattern) | same as the page
+   kresling | KRESLING | generated | generators.js kresling(6, 4, 0.5) | after Biruta Kresling | same as the page
+   resch | RESCH TRIANGLES | generated | generators.js resch(4) | after Ron Resch (triangle pattern) | same as the page
+   waterbomb-tess | WATERBOMB 8 | generated | generators.js waterbombTess(8) | traditional | same as the page
+   os-waterbomb-tess | WATERBOMB TESS | Origami Simulator | assets/Tessellations/waterbomb.svg -> patterns/os_waterbomb_tess.fold | no designer stated | MIT
+   ff-grid-4x4 | 4x4 GRID | flat-folder | examples/original/grid_assigned.opx -> patterns/ff_grid_4x4.fold | no designer stated | MIT
+   ku-checker-4x4 | 4x4 CHECKERBOARD | flat-folder | examples/instagram/084_ku_4x4_Checkerboard.fold -> patterns/ff_checker_4x4.fold | Jason KU | MIT
+   ku-pixel-8x8 | 8x8 PIXEL GRID | flat-folder | examples/instagram/027_ku_8x8_Flippable_Pixel_Grid.fold -> patterns/ff_pixel_8x8.fold | Jason KU | MIT
+       note: also in flat-folder as original/flip34.svg
+   ku-stripes-1 | 4 STRIPES 1 | flat-folder | examples/instagram/091_ku_4_Stripes_1.fold -> patterns/ff_stripes_1.fold | Jason KU | MIT
+   ku-stripes-2 | 4 STRIPES 2 | flat-folder | examples/instagram/092_ku_4_Stripes_2.fold -> patterns/ff_stripes_2.fold | Jason KU | MIT
+   ku-stripes-3 | 4 STRIPES 3 | flat-folder | examples/instagram/093_ku_4_Stripes_3.fold -> patterns/ff_stripes_3.fold | Jason KU | MIT
+   ku-stripes-4 | 4 STRIPES 4 | flat-folder | examples/instagram/094_ku_4_Stripes_4.fold -> patterns/ff_stripes_4.fold | Jason KU | MIT
+   ku-stripes-13 | 13 STRIPES | flat-folder | examples/instagram/358_ku_13_Stripes.fold -> patterns/ff_stripes_13.fold | Jason KU | MIT
+   ku-pleats-exp | EXPONENTIAL PLEATS | flat-folder | examples/instagram/164_ku_Pleats_Exponential.fold -> patterns/ff_pleats_exp.fold | Jason KU | MIT
+   ku-monotile-1 | MONOTILE 1 | flat-folder | examples/instagram/294_ku_Aperiodic_Monotile_1.fold -> patterns/ff_monotile_1.fold | Jason KU | MIT
+   ku-monotile-2 | MONOTILE 2 | flat-folder | examples/instagram/296_ku_Aperiodic_Monotile_2.fold -> patterns/ff_monotile_2.fold | Jason KU | MIT
+   os-polygami-cross | POLYGAMI CROSS | Origami Simulator | assets/Polygami/polygamiCross.svg -> patterns/os_polygami_cross.fold | no designer stated | MIT
+       note: generated by the Polygami app (Shahul Alam, Lauren Huang, Mahi Shafiullah)
+
+   TWISTS AND SADDLES
+   square-twist | SQUARE TWIST | generated | generators.js squareTwist(0.3, 26.565) | traditional | same as the page
+   os-twist-angles | TWIST ANGLES | Origami Simulator | assets/Origami/squaretwistManyAngles.svg -> patterns/os_twist_angles.fold | no designer stated | MIT
+       note: square twists at several angles, after the bistability paper the source cites
+   ku-bad-twist | BAD TWIST | flat-folder | examples/unsatisfiable/001_ku_Bad_Twist.fold -> patterns/ff_bad_twist.fold | Jason KU | MIT
+       note: a square twist with no valid layer order
+   os-hypar | HYPAR | Origami Simulator | assets/Origami/hypar.svg -> patterns/os_hypar.fold | traditional | MIT
+       note: triangulation after "(Non)existence of Pleated Folds" (Demaine et al.)
+   os-hypar-6 | HYPAR 6-POINT | Origami Simulator | assets/Origami/6ptHypar-anti.svg -> patterns/os_hypar_6.fold | traditional | MIT
+   hex-hypar | HEX HYPAR | generated | generators.js polygonHypar(6, 8) | traditional | same as the page
+   circular-pleat | CIRCULAR PLEAT | generated | generators.js circularPleat(8, 24) | traditional | same as the page
+       note: a polygon form of the circular pleat; the round original is too large to run here
+   spiral-flasher | SPIRAL FLASHER | generated | generators.js spiralFlasher(4, 5, 0.55, 14) | no designer stated | same as the page
+       note: a simple flasher: rings that grow and turn round a hub
+   ku-thirds-pinwheel | THIRDS PINWHEEL | flat-folder | examples/instagram/006_ku_Thirds_Pinwheel.fold -> patterns/ff_thirds_pinwheel.fold | Jason KU | MIT
+   ku-pinwheel-pockets | PINWHEEL POCKETS | flat-folder | examples/instagram/007_ku_Pinwheel_Pockets.fold -> patterns/ff_pinwheel_pockets.fold | Jason KU | MIT
+   ku-colour-pinwheel | COLOUR PINWHEEL | flat-folder | examples/instagram/058_ku_Color-change_Pinwheel_1.fold -> patterns/ff_colour_pinwheel.fold | Jason KU | MIT
+       note: also in flat-folder as original/pinwheel_colorchange1.svg and _2.svg
+   ku-quad-overlap | QUAD OVERLAP | flat-folder | examples/instagram/043_ku_Quad_Overlap.fold -> patterns/ff_quad_overlap.fold | Jason KU | MIT
+   ku-iso-half | ISO-AREA HALF | flat-folder | examples/instagram/015_ku_Iso-Area_Half_Square.fold -> patterns/ff_iso_half.fold | Jason KU | MIT
+   ku-star-1 | ISO-AREA STAR 1 | flat-folder | examples/instagram/151_ku_Iso-Area_Throwing_Star_1.fold -> patterns/ff_star_1.fold | Jason KU | MIT
+   ku-star-2 | ISO-AREA STAR 2 | flat-folder | examples/instagram/152_ku_Iso-Area_Throwing_Star_2.fold -> patterns/ff_star_2.fold | Jason KU | MIT
+   ku-star-3 | ISO-AREA STAR 3 | flat-folder | examples/instagram/153_ku_Iso-Area_Throwing_Star_3.fold -> patterns/ff_star_3.fold | Jason KU | MIT
+
+   TRADITIONAL MODELS
+   pinwheel | PINWHEEL | flat-folder | examples/instagram/102_traditionaloripa_Pinwheel.fold -> patterns/pinwheel.fold | Traditional (ORIPA Data Set) | MIT
+       note: also in flat-folder as original/pinwheel.opx, and in Origami Simulator as assets/Bases/pinwheelBase.svg
+   sailboat | SAILBOAT | flat-folder | examples/instagram/001_traditional_Sailboat.fold -> patterns/sailboat.fold | Traditional | MIT
+   boat | BOAT | flat-folder | examples/instagram/067_traditionaloripa_damashi_bune.fold -> patterns/boat.fold | Traditional (ORIPA Data Set) | MIT
+   kabuto | KABUTO | flat-folder | examples/instagram/002_traditional_Kabuto.fold -> patterns/kabuto.fold | Traditional | MIT
+   house | HOUSE | flat-folder | examples/instagram/052_traditionaloripa_House.fold -> patterns/house.fold | Traditional (ORIPA Data Set) | MIT
+   yakko | YAKKO | flat-folder | examples/instagram/038_traditionaloripa_Yakko.fold -> patterns/yakko.fold | Traditional (ORIPA Data Set) | MIT
+   pig | PIG | flat-folder | examples/instagram/045_traditionaloripa_Pig.fold -> patterns/pig.fold | Traditional (ORIPA Data Set) | MIT
+   crane | CRANE | flat-folder | examples/instagram/004_traditional_Crane.fold -> patterns/crane.fold | Traditional | MIT
+       note: also in Origami Simulator as traditionalCrane.svg and flat_crane.svg
+   birdbase9 | 9-BIRD BASE | flat-folder | examples/instagram/089_traditionaloripa_9_Birdbase.fold -> patterns/birdbase2.fold | Traditional (ORIPA Data Set) | MIT
+   os-flapping-bird | FLAPPING BIRD | Origami Simulator | assets/Origami/flappingBird.svg -> patterns/os_flapping_bird.fold | traditional | MIT
+       note: also in flat-folder as original/flappingbird.svg
+   os-airplane | PAPER AIRPLANE | Origami Simulator | assets/Origami/airplane.svg -> patterns/os_airplane.fold | traditional | MIT
+       note: the source says: conventional paper airplane, pattern entered by Scott Pakin
+   ff-tiger-1 | TIGER PIECE 1 | flat-folder | examples/original/tiger_piece1.opx -> patterns/ff_tiger_1.fold | no designer stated | MIT
+   ff-tiger-2 | TIGER PIECE 2 | flat-folder | examples/original/tiger_piece2.opx -> patterns/ff_tiger_2.fold | no designer stated | MIT
+
+   MODELS BY JASON KU
+   ku-triangle-bird | TRIANGLE BIRD | flat-folder | examples/instagram/003_ku_Triangle_Bird.fold -> patterns/ff_triangle_bird.fold | Jason KU | MIT
+       note: also original/triangle_bird.svg
+   ku-kitten | KITTEN | flat-folder | examples/instagram/005_ku_Kitten.fold -> patterns/ff_kitten.fold | Jason KU | MIT
+   ku-robot | ROBOT | flat-folder | examples/instagram/008_ku_Robot.fold -> patterns/ff_robot.fold | Jason KU | MIT
+       note: also original/robot.svg
+   ku-bull | BULL | flat-folder | examples/instagram/011_ku_Bull.fold -> patterns/ff_bull.fold | Jason KU | MIT
+   ku-hj-girl | HJ GIRL | flat-folder | examples/instagram/014_ku_HJ_Girl.fold -> patterns/ff_hj_girl.fold | Jason KU | MIT
+   ku-atarbus | STAR ATARBUS | flat-folder | examples/instagram/060_ku_1-Piece_Star_Atarbus.fold -> patterns/ff_atarbus.fold | Jason KU | MIT
+   ku-jerboa | PYGMY JERBOA | flat-folder | examples/instagram/070_ku_Pygmy_Jerboa.fold -> patterns/ff_jerboa.fold | Jason KU | MIT
+       note: also original/jerboa.svg
+   ku-turkey | TURKEY 2.1 | flat-folder | examples/instagram/101_ku_Turkey_2-1.fold -> patterns/ff_turkey.fold | Jason KU | MIT
+       note: an earlier form is original/turkey2015.opx
+   ku-xmas-tree | CHRISTMAS TREE | flat-folder | examples/instagram/131_ku_Christmas_Tree.fold -> patterns/ff_xmas_tree.fold | Jason KU | MIT
+   ku-butterfly | BUTTERFLY | flat-folder | examples/instagram/142_ku_Butterfly.fold -> patterns/ff_butterfly.fold | Jason KU | MIT
+   ku-angel | ANGEL | flat-folder | examples/instagram/263_ku_Angel.fold -> patterns/ff_angel.fold | Jason KU | MIT
+       note: also original/angel.svg
+   ku-hj-rex | HJ REX | flat-folder | examples/instagram/270_ku_HJ_Rex.fold -> patterns/ff_hj_rex.fold | Jason KU | MIT
+   ku-crab-base | CRAB BASE | flat-folder | examples/instagram/278_ku_Crab_(base).fold -> patterns/ff_crab_base.fold | Jason KU | MIT
+   ku-clover | FOUR LEAF CLOVER | flat-folder | examples/instagram/287_ku_Four_Leaf_Clover.fold -> patterns/ff_clover.fold | Jason KU | MIT
+   ku-hj-dragon | HJ DRAGON | flat-folder | examples/instagram/311_ku_HJ_Dragon.fold -> patterns/ff_hj_dragon.fold | Jason KU | MIT
+   ku-f16 | F16 | flat-folder | examples/instagram/330_ku_F16.fold -> patterns/ff_f16.fold | Jason KU | MIT
+   ku-rabbit | RABBIT | flat-folder | examples/instagram/337_ku_Rabbit.fold -> patterns/ff_rabbit.fold | Jason KU | MIT
+   ku-lizard | LIZARD | flat-folder | examples/instagram/344_ku_Lizard.fold -> patterns/ff_lizard.fold | Jason KU | MIT
+   ku-three-dragon | THREE HEADED DRAGON | flat-folder | examples/instagram/351_ku_Three_Headed_Dragon.fold -> patterns/ff_three_dragon.fold | Jason KU | MIT
+   ku-nazgul | NAZGUL | flat-folder | examples/instagram/365_ku_Nazgul_v8.1.fold -> patterns/ff_nazgul.fold | Jason KU | MIT
+
+4. Excluded upstream patterns
+   A pattern credited to a named designer ships only when its source states
+   a license or the designer's permission for it. Jason Ku's own designs
+   ship under the MIT license of his flat-folder repository.
+   - flat-folder: examples/grids/*.fold (375 files) [Daniel BROWN]: licence: named designer, no licence or permission stated
+   - flat-folder: examples/instagram/* (288 files) by 48 named designers other than Jason Ku (Kota IMAI, Kei MORISUE, Satoshi KAMIYA, Hideo KOMATSU, Xiao CHEN, Alessandro BEBER, Robert LANG, Brian CHAN, and others; see instagram_data.csv) [named designers]: licence: no licence or permission stated
+   - flat-folder: examples/instagram/* "(ORIPA Data Set)" (16 files) by Masashi TANAKA, Yohsuke FURUTA, Hideo KOMATSU, Tomohiro TACHI, Jun MITANI, Koryo MIURA [named designers]: licence: no licence or permission stated
+   - flat-folder: examples/instagram/301-319 (8 files) [Akitaya et al., Box Pleating is Hard]: licence: named authors, no licence or permission stated
+   - flat-folder: examples/unsatisfiable/002, 004-012 [named designers]: licence: no licence or permission stated
+   - Origami Simulator: assets/Origami/randlettflappingbird.svg [Samuel Randlett]: licence
+   - Origami Simulator: assets/Origami/langCardinal.svg, langOrchid.svg, langKnlDragon.svg [Robert Lang]: licence
+   - Origami Simulator: assets/Origami/MoosersTrainRigid-Gardner.svg [Emmanuel Mooser, William Gardner]: licence
+   - Origami Simulator: assets/Tessellations/miura-ori.svg, miura_sharpangle.svg [Koryo Miura]: licence; the Miura-ori is also generated and in origamicp
+   - Origami Simulator: assets/Tessellations/whirlpool.svg [Tomoko Fuse, Sara Adams]: licence
+   - Origami Simulator: assets/Tessellations/FTpoly7.svg [Chris K. Palmer, William Gardner]: licence
+   - Origami Simulator: assets/Tessellations/HexTriFlatFoldableTess.svg [Kendrick Feller]: licence
+   - Origami Simulator: assets/Tessellations/huffman*.svg (5 files), assets/Curved/huffmanTower.svg [David Huffman]: licence
+   - Origami Simulator: assets/Tessellations/lang*.svg (5 files) [Robert Lang]: licence
+   - Origami Simulator: assets/Tessellations/reschTriTessellation.svg, reschBarbell.svg [Ron Resch]: licence; the Resch triangle pattern is generated instead
+   - Origami Simulator: assets/Curved/* by Jun Mitani (8), Ekaterina Lukasheva (3), Kendrick Feller (1), Sam Calisch (1) [named designers]: licence
+   - Origami Simulator: assets/Kirigami/miyamotoTower.svg, auxetic_triangle.svg, triPerfTess.svg [Yoshinobu Miyamoto, Garrett Milliron, Johann Kreuter]: licence
+   - Origami Simulator: assets/Popup/geometricPopup.svg, castlePopup.svg, housePopup.svg [Ullagami, Elod Beregszaszi]: licence
+   - Origami Simulator: assets/Pleating/*.fold (6 files) [Goran Konjevod]: licence
+   - Origami Simulator: assets/Kirigami/honeycombKiri.svg, assets/Popup/popupSimple.svg [no designer stated]: cut lines: the page has no cut kind
+   - Origami Simulator: assets/Curved/CircularPleat-antiFacet.svg [no designer stated]: size: 1600 nodes, and the sim goes non-finite part folded
+   - Origami Simulator: assets/Squaremaze/cross.svg, helloworld.svg, origamisimulator.svg [Maze Folder output (E. Demaine, M. Demaine, J. Ku)]: size: 484 to 5000+ nodes
+   - flat-folder: examples/instagram/036_ku_Checkerboard_26x26.fold, unsatisfiable/003_ku_Chessboard_26x26_(old).fold [Jason KU]: size: 839 nodes
+   - flat-folder: examples/instagram/077_ku_Lobster_1-8b.fold [Jason KU]: size: 720 nodes
+   - flat-folder: examples/instagram/050_ku_Ryu_Zin_Jr.fold (also original/ryuzin_jr.fold) [Jason KU]: size: 523 nodes
+   - flat-folder: examples/instagram/279_ku_Crab_(shaped).fold [Jason KU]: size: 1396 nodes
+   - flat-folder: examples/instagram/009_ku_Unassigned_Triangle_Pleat.fold, 012_ku_4x4_Grid_Unassigned.fold, original/grid_unassigned.svg, original/triangle_pleats_*.svg [Jason KU]: unassigned: no mountain or valley, so nothing folds
+   - flat-folder: original/crane.svg, kabuto.fold, sailboat.svg, pinwheel.opx [traditional]: duplicate of the instagram/ copies already shipped
+   - flat-folder: original/flappingbird.svg [traditional]: duplicate of Origami Simulator flappingBird.svg
+   - flat-folder: original/angel.svg, chess4x4.svg, chess26.svg, flip34.svg, iso_area_half.svg, jerboa.svg, pinwheel_colorchange1.svg, pinwheel_colorchange2.svg (its mirror), quad_overlap.svg, robot.svg, stripes4.svg, triangle_bird.svg, turkey2015.opx [Jason KU (by the instagram/ copy)]: duplicate of the instagram/ copy
+   - Origami Simulator: assets/Origami/traditionalCrane.svg, flat_crane.svg [traditional]: duplicate of the flat-folder crane
+   - Origami Simulator: assets/Bases/birdBase.svg, pinwheelBase.svg, waterbombBase.svg [traditional]: duplicate of BIRD BASE, PINWHEEL, WATERBOMB
+   - Origami Simulator: assets/Origami/singlesquaretwist.svg [no designer stated]: duplicate of the generated SQUARE TWIST
+   - origamicp: code/origamicp/generate/random_cp.py [Nihat Garibli]: random patterns, not examples
+   - Origami Simulator: assets/Tessellations/test.svg, Curved/curvedcrease2.svg, Curved/shell6.svg, Polygami/polygami.svg, needsCollisions/*, PolygonUnfolding/*, doc/* [various]: not in the source example menu
 
 -----------------------------------------------------------------------------
-MIT License
+MIT License (Origami Simulator)
 
 Copyright (c) 2018 Amanda Ghassaei
 
@@ -53,7 +218,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 -----------------------------------------------------------------------------
-MIT License
+MIT License (origamicp)
 
 Copyright (c) 2026 Nihat Garibli
 
@@ -76,7 +241,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 -----------------------------------------------------------------------------
-MIT License
+MIT License (flat-folder)
 
 Copyright (c) 2022 Jason S. Ku (origamimagiro)
 

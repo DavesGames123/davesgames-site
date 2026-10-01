@@ -127,14 +127,27 @@ function redo() {
   rebuild(); syncUI();
 }
 
-function loadPreset(p) {
+// Load a preset. A file preset is fetched the first time it is picked, so the
+// call is async. A newer pick wins over a slower older one.
+let loadSeq = 0;
+async function loadPreset(p) {
+  if (!p) return;
+  const seq = ++loadSeq;
+  if (p.file) {
+    setStatus(`Loading ${p.label}...`);
+    try { await patterns.prepare(p); } catch (err) { setStatus(`Could not load ${p.label}: ${err.message}`); return; }
+    if (seq !== loadSeq) return;
+  }
   pushUndo();
   S.preset = p;
   S.pattern = patterns.build(p);
   // Every loaded pattern starts flat and paused, as in the native app.
   S.fraction = 0; S.auto = false;
   rebuild();
-  S.libraryOpen = false;
+  // The desktop library stays open, so a person can step through presets and
+  // watch each fold. The phone sheet covers the panes, so it closes.
+  if (isPhone()) S.libraryOpen = false;
+  setStatus(`${p.label} · ${S.pattern.edges.length} creases`);
   syncUI();
 }
 
@@ -562,8 +575,14 @@ function syncUI() {
   for (const m of ['auto', 'h', 'v']) on(`[data-act="layout:${m}"]`, S.layoutMode === m);
   document.querySelectorAll('[data-act="undo"]').forEach((el) => { el.disabled = S.undo.length === 0; });
   document.querySelectorAll('[data-act="redo"]').forEach((el) => { el.disabled = S.redo.length === 0; });
-  for (const p of patterns.ALL) on(`[data-act="preset:${p.id}"]`, S.preset === p);
+  const cur = S.preset ? 'preset:' + S.preset.id : '';
+  document.querySelectorAll('[data-act^="preset:"]').forEach((el) => {
+    const v = el.dataset.act === cur;
+    el.classList.toggle('on', v);
+    if (v) el.setAttribute('aria-current', 'true'); else el.removeAttribute('aria-current');
+  });
   $('library').hidden = !S.libraryOpen;
+  if (S.libraryOpen) fillThumbs();
   $('panel').classList.toggle('open', S.panelOpen);
   document.querySelectorAll('[data-act="panel"]').forEach((el) => el.setAttribute('aria-expanded', String(S.panelOpen)));
   on('#dockPanel', S.panelOpen);
@@ -602,6 +621,7 @@ function apply(act, el) {
     case 'library': S.libraryOpen = !S.libraryOpen; if (S.libraryOpen && isPhone()) S.panelOpen = false; break;
     case 'library-close': S.libraryOpen = false; break;
     case 'preset': { const p = patterns.byId(arg); if (p) loadPreset(p); if (isPhone()) S.panelOpen = false; break; }
+    case 'libsrc': libSource = libSource === arg ? '' : arg; filterLibrary(); return;
     case 'play': S.auto = !S.auto; break;
     case 'flat': S.auto = false; S.fraction = 0; S.mesh.resetFlat(); break;
     case 'speed': {
@@ -675,6 +695,8 @@ function cssPoint(e) {
 
 function onDown(e) {
   if (!gpu) return;
+  // The library has no scrim. A press on the canvas closes it and does no more.
+  if (S.libraryOpen) { S.libraryOpen = false; syncUI(); return; }
   const p = cssPoint(e);
   const pane = paneAt(p);
   if (!pane) return;
@@ -849,11 +871,70 @@ async function importFold(file) {
 function fileMsg(t) { $('fileMsg').textContent = t; setStatus(t); }
 
 // ── the preset library (app.rs draw_library) ────────────────────────────────
+// One panel, no scrim. A filter field and source chips sit over the sections.
+// Each tile carries a diagram thumbnail drawn from thumbs.json, which
+// tools/build-library.mjs bakes from the crease patterns themselves, so the
+// library never fetches the pattern files to draw itself.
+let libSource = '';
+let thumbs = null, thumbsLoading = false;
+
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
 function buildLibrary() {
-  const groups = [['BASES', patterns.bases], ['TESSELLATIONS', patterns.tessellations], ['MODELS', patterns.models]];
-  const html = groups.map(([name, list]) => `<div class="lib-cat">${name}</div><div class="lib-grid">` +
-    list.map((p) => `<button class="chip" data-act="preset:${p.id}">${p.label}</button>`).join('') + '</div>').join('');
-  document.querySelectorAll('[data-lib]').forEach((el) => { el.innerHTML = html; });
+  const srcs = Object.entries(patterns.SOURCES).filter(([k]) => patterns.ALL.some((p) => p.src === k));
+  const chips = srcs.map(([k, s]) => `<button class="src-chip" data-act="libsrc:${k}" data-src="${k}">${esc(s.chip)}</button>`).join('');
+  const groups = patterns.GROUPS.map((g) => `<section class="lib-sec" data-sec="${g.id}"><div class="lib-cat">${esc(g.name)}<span class="n">${g.list.length}</span></div><div class="lib-grid">` +
+    g.list.map((p) => {
+      const s = patterns.SOURCES[p.src];
+      const q = [p.label, g.name, p.author || '', s.name, s.chip, p.note || ''].join(' ').toLowerCase();
+      const title = `${p.label} · ${s.name}${p.author ? ' · ' + p.author : ''}`;
+      return `<button class="lib-tile" data-act="preset:${p.id}" data-id="${p.id}" data-src="${p.src}" data-q="${esc(q)}" title="${esc(title)}">` +
+        `<svg viewBox="0 0 100 100" aria-hidden="true"></svg><span class="nm">${esc(p.label)}</span><span class="tag" data-src="${p.src}">${esc(s.chip)}</span></button>`;
+    }).join('') + '</div></section>').join('');
+  $('libBody').innerHTML = groups + '<p class="lib-none" hidden>No pattern matches.</p>';
+  $('libSrc').innerHTML = chips;
+  $('libFilter').placeholder = `Filter ${patterns.ALL.length} patterns`;
+  $('libFilter').addEventListener('input', filterLibrary);
+  $('libFilter').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); if (e.target.value) { e.target.value = ''; filterLibrary(); } else { S.libraryOpen = false; syncUI(); } }
+    if (e.key === 'Enter') { const t = document.querySelector('#libBody .lib-tile:not([hidden])'); if (t) t.click(); }
+  });
+  filterLibrary();
+}
+
+// Show the tiles whose text holds every word of the filter, from the chosen
+// source. A section with no tile left is hidden.
+function filterLibrary() {
+  const words = $('libFilter').value.toLowerCase().split(/\s+/).filter(Boolean);
+  let shown = 0;
+  document.querySelectorAll('#libBody .lib-sec').forEach((sec) => {
+    let n = 0;
+    sec.querySelectorAll('.lib-tile').forEach((t) => {
+      const ok = (!libSource || t.dataset.src === libSource) && words.every((w) => t.dataset.q.includes(w));
+      t.hidden = !ok;
+      if (ok) n++;
+    });
+    sec.hidden = n === 0;
+    sec.querySelector('.n').textContent = n;
+    shown += n;
+  });
+  document.querySelector('#libBody .lib-none').hidden = shown > 0;
+  document.querySelectorAll('.src-chip').forEach((c) => c.classList.toggle('on', c.dataset.src === libSource));
+  $('libCount').textContent = shown === patterns.ALL.length ? `${shown}` : `${shown} / ${patterns.ALL.length}`;
+}
+
+// Draw every tile thumbnail, once, the first time the library opens.
+function fillThumbs() {
+  if (thumbs || thumbsLoading) return;
+  thumbsLoading = true;
+  fetch(new URL('thumbs.json', import.meta.url)).then((r) => r.json()).then((t) => {
+    thumbs = t;
+    document.querySelectorAll('.lib-tile').forEach((el) => {
+      const d = thumbs[el.dataset.id];
+      if (!d) return;
+      el.querySelector('svg').innerHTML = ['f', 'b', 'v', 'm'].filter((k) => d[k]).map((k) => `<path class="${k}" d="${d[k]}"/>`).join('');
+    });
+  }).catch((err) => { thumbsLoading = false; console.warn('[origami] thumbnails:', err.message); });
 }
 
 // ── the phone sheet grip (as in wave-membrane) ──────────────────────────────
@@ -906,7 +987,8 @@ function wire() {
 // ── the test hook (the headless check drives the page through this) ─────────
 window.__origami = {
   presets: () => patterns.ALL.map((p) => p.id),
-  loadPreset: (id) => { loadPreset(patterns.byId(id)); },
+  // Returns a promise: a file preset is fetched on first use.
+  loadPreset: (id) => loadPreset(patterns.byId(id)),
   // Fold to `fraction` and run `steps` sim steps now, then hold.
   foldTo: (fraction, steps) => {
     S.auto = false; S.fraction = fraction; S.mesh.setFraction(fraction);
@@ -946,7 +1028,8 @@ async function boot() {
 
   const base = new URL('.', import.meta.url);
   const text = (p) => fetch(new URL(p, base)).then((r) => { if (!r.ok) throw new Error(`${p}: HTTP ${r.status}`); return r.text(); });
-  await patterns.preloadFolds((n) => text('patterns/' + n));
+  patterns.setReader((n) => text('patterns/' + n));
+  await patterns.prepare(S.preset);
   S.pattern = patterns.build(S.preset);
   rebuild();
   syncUI();
