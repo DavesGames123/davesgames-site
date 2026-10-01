@@ -1,5 +1,78 @@
 /* ============================================================================
    MATERIAL STUDIO  ·  styles/viewport.css — owned by the VIEWPORT agent
    ────────────────────────────────────────────────────────────────────────────
-   Partial, imported by ../style.css. Use the :root tokens from style.css.
+   Partial, imported by ../style.css. Uses the :root tokens from style.css.
+   viewport.js fills #vp-hud with these parts:
+     .vp-bar ....... top-left toolbar: mesh, view, tonemap, EV, buttons
+     .vp-more ...... the settings panel under the bar ("View" button)
+     .vp-ab ........ A / B labels in compare mode (--split = divider x)
+     .vp-divider ... draggable compare split line
+     .vp-stats ..... bottom-left status line (no pointer events)
+     .vp-drop ...... .obj drop overlay
+     .vp-nogpu-msg . shown when #vp-hud has .vp-nogpu
    ============================================================================ */
+
+#vp:focus{outline:none}
+#vp:focus-visible{outline:1px solid var(--yellow-dim);outline-offset:-1px}
+
+#vp-hud .vp-bar{position:absolute;top:6px;left:6px;right:6px;display:flex;flex-wrap:wrap;gap:3px;align-items:center;pointer-events:none}
+#vp-hud .vp-bar > *{pointer-events:auto}
+#vp-hud select,#vp-hud button{height:22px;padding:0 6px;background:rgba(14,17,24,0.86);border:1px solid var(--border-b);border-radius:var(--r);color:var(--text);font:inherit;font-size:var(--fs-xs);line-height:20px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+#vp-hud select{max-width:128px;padding-right:2px}
+#vp-hud button{cursor:pointer;letter-spacing:0.02em}
+#vp-hud button:hover,#vp-hud select:hover{border-color:var(--border-s);color:var(--text-bright)}
+#vp-hud button.on{border-color:var(--yellow-dim);color:var(--yellow);background:rgba(40,32,8,0.88)}
+
+#vp-hud .vp-ev{display:flex;align-items:center;gap:4px;height:22px;padding:0 6px;background:rgba(14,17,24,0.86);border:1px solid var(--border-b);border-radius:var(--r);font-size:var(--fs-xs);color:var(--text-dim)}
+#vp-hud .vp-ev input{width:78px}
+#vp-hud output{font-family:var(--mono);font-size:var(--fs-xs);color:var(--text-bright);min-width:34px;text-align:right;font-variant-numeric:tabular-nums}
+
+#vp-hud input[type=range]{-webkit-appearance:none;appearance:none;height:14px;background:transparent;margin:0;min-width:0}
+#vp-hud input[type=range]::-webkit-slider-runnable-track{height:3px;background:var(--surface2);border-radius:2px}
+#vp-hud input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;margin-top:-3.5px;border-radius:50%;background:var(--blue);border:0}
+#vp-hud input[type=range]::-moz-range-track{height:3px;background:var(--surface2);border-radius:2px}
+#vp-hud input[type=range]::-moz-range-thumb{width:10px;height:10px;border-radius:50%;background:var(--blue);border:0}
+
+#vp-hud .vp-more{position:absolute;top:34px;left:6px;width:262px;max-height:calc(100% - 64px);overflow-y:auto;padding:6px 8px 8px;display:grid;grid-template-columns:1fr;gap:3px;background:rgba(12,15,22,0.95);border:1px solid var(--border-s);border-radius:var(--r);box-shadow:0 8px 28px rgba(0,0,0,0.55);font-size:var(--fs-xs);z-index:5}
+#vp-hud .vp-more[hidden]{display:none}
+#vp-hud .vp-more label{display:grid;grid-template-columns:78px minmax(0,1fr) 36px;align-items:center;gap:6px;color:var(--text-dim);min-height:20px}
+#vp-hud .vp-more label select{grid-column:2 / 4;max-width:none;width:100%}
+#vp-hud .vp-more label.vp-chk{display:flex;gap:6px;color:var(--text)}
+#vp-hud .vp-more label.vp-chk input{margin:0;accent-color:var(--yellow)}
+#vp-hud .vp-sec{margin-top:5px;padding-bottom:2px;border-bottom:1px solid var(--border);font-size:9.5px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--blue-dim)}
+#vp-hud .vp-sec:first-child{margin-top:0}
+#vp-hud .vp-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:2px}
+#vp-hud .vp-help{margin-top:4px;color:var(--text-faint);line-height:1.4}
+
+#vp-hud .vp-stats{position:absolute;left:8px;bottom:6px;font-family:var(--mono);font-size:var(--fs-xs);color:var(--text-dim);text-shadow:0 1px 2px #000;pointer-events:none;white-space:nowrap;overflow:hidden;max-width:calc(100% - 16px)}
+
+#vp-hud .vp-divider{position:absolute;top:0;bottom:0;width:14px;margin-left:-7px;cursor:col-resize;touch-action:none;background:transparent}
+#vp-hud .vp-divider::after{content:"";position:absolute;top:50%;left:3px;width:8px;height:28px;margin-top:-14px;border-radius:4px;background:var(--yellow);box-shadow:0 0 0 1px rgba(0,0,0,0.5)}
+#vp-hud .vp-divider[hidden],#vp-hud .vp-ab[hidden]{display:none}
+#vp-hud .vp-ab{position:absolute;left:0;right:0;bottom:24px;height:18px;pointer-events:none}
+#vp-hud .vp-ab span{position:absolute;bottom:0;padding:1px 6px;font-size:var(--fs-xs);font-family:var(--mono);color:var(--text-bright);background:rgba(14,17,24,0.8);border:1px solid var(--border-b);border-radius:var(--r)}
+#vp-hud .vp-a{right:calc(100% - var(--split, 50%) + 10px)}
+#vp-hud .vp-b{left:calc(var(--split, 50%) + 10px)}
+
+#vp-hud .vp-drop{position:absolute;inset:8px;display:flex;align-items:center;justify-content:center;border:2px dashed var(--yellow-dim);border-radius:6px;background:rgba(40,32,8,0.35);color:var(--yellow);font-size:var(--fs);pointer-events:none}
+#vp-hud .vp-drop[hidden]{display:none}
+
+#vp-hud .vp-nogpu-msg{display:none;position:absolute;inset:auto 8px 8px 8px;color:var(--text-dim);font-size:var(--fs-s);pointer-events:none}
+#vp-hud.vp-nogpu .vp-nogpu-msg{display:block}
+#vp-hud.vp-nogpu .vp-bar,#vp-hud.vp-nogpu .vp-stats{display:none}
+
+/* phone: bigger hit areas, fewer bar items, the panel spans the width */
+@media (max-width:768px){
+  #vp-hud .vp-bar{top:calc(6px + env(safe-area-inset-top));gap:4px}
+  #vp-hud select,#vp-hud button{height:32px;line-height:30px;padding:0 8px;font-size:var(--fs-s)}
+  #vp-hud .vp-ev{height:32px}
+  #vp-hud .vp-ev input{width:64px}
+  #vp-hud .vp-hide-s{display:none}
+  #vp-hud select{max-width:112px}
+  #vp-hud .vp-more{top:44px;left:6px;right:6px;width:auto;max-height:calc(100% - 80px)}
+  #vp-hud .vp-more label{min-height:30px;grid-template-columns:90px minmax(0,1fr) 40px}
+  #vp-hud input[type=range]{height:24px}
+  #vp-hud input[type=range]::-webkit-slider-thumb{width:18px;height:18px;margin-top:-7.5px}
+  #vp-hud .vp-divider{width:32px;margin-left:-16px}
+  #vp-hud .vp-divider::after{left:11px;height:40px;margin-top:-20px}
+}
