@@ -20,7 +20,8 @@ import { REDUCED } from './env.js';
 import { S, dirty } from './state.js';
 import { clearRect, fitView, fitShadow } from './camera.js';
 import { setTraysOn, buildTrays } from './tray.js';
-import { exitIsolate, focusRegion, syncUI } from '../main.js';
+import { syncUI } from '../main.js';
+import { exitIsolate, focusRegion } from './inspect.js';
 
 function aspect() { const c = clearRect(); return Math.max(0.5, Math.min(2.6, (c.x1 - c.x0) / Math.max(1, c.y1 - c.y0))); }
 function perBoneAmt() {

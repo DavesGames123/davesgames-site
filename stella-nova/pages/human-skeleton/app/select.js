@@ -17,8 +17,9 @@ import * as THREE from 'three';
 import { camera } from './stage.js';
 import { S, dirty } from './state.js';
 import { ensureVisible } from './camera.js';
-import { isolate, focusBone, syncList } from '../main.js';
+import { syncList } from '../main.js';
 import { showCard, hideCard } from './card.js';
+import { isolate, focusBone } from './inspect.js';
 
 export function boneCentre(i, out = new THREE.Vector3()) {
   const b = S.bones[i];

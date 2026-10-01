@@ -15,7 +15,7 @@
 import { $, COARSE, esc, TYPE_NAME, SIDE_NAME } from './env.js';
 import { S, dirty, regionOf } from './state.js';
 import { select, clearSelection, step } from './select.js';
-import { isolate, exitIsolate, focusBone, focusRegion } from '../main.js';
+import { isolate, exitIsolate, focusBone, focusRegion } from './inspect.js';
 
 export const card = $('card');
 function cardNumber(b) {
