@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>How AlphaFold Works — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ALPHAFOLD EXPLAINED  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup and the text. The page explains how AlphaFold 2 turns one
+   amino-acid sequence into 3D coordinates, then how AlphaFold 3 changes it.
+   Each section is a set of cards. Each card has a live diagram and short
+   text with the real tensor shapes. One protein runs through all panels:
+   human SUMO1 (UniProt P63165, 101 residues), the AlphaFold DB model.
+
+   WHAT IS REAL
+     real .......... the model coordinates, pLDDT, PAE (AlphaFold DB, CC-BY),
+                     the frames, torsions, FAPE and distances made from them
+     synthetic ..... the MSA (data.js, see build-data.mjs), the structure-
+                     module path between the origin and the final model, the
+                     recycling maps and the AF3 noise path. Each is labelled
+                     "illustrative" on the page.
+
+   HEAD LOAD ORDER
+     1. gpu-guard   ../../lib/gpu-guard.js (the page makes no GPU context)
+     2. fonts       Inter, STIX Two Text, IBM Plex Mono (Google Fonts)
+     3. style.css
+   Scripts at end of body:
+     equations.js   classic script. Fills each [data-eq] with MathJax SVG.
+                    typeset.mjs makes it (run by hand).
+     main.js        module. Imports data.js, msa.js, geom.js, view3d.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────┬─────────────────────────────────────────────────────────┐
+     │ #mini    │ hero: title, key numbers, #pipe (the whole pipeline)     │
+     │ sticky   ├─────────────────────────────────────────────────────────┤
+     │ pipeline │ #s1 input    #msaCv  #cmapCv  #msaDepth                  │
+     │ minimap  │ #s2 embed    #tensorSvg  #cropRange  #pairInitCv         │
+     │ 01 … 08  │ #s3 evoformer #evoSvg #opDetail  #triCv  #triGeo         │
+     │ #miniBar │ #s4 structure #smCv  #smLayer  #ipaCv  #ipaStrip #ramaCv │
+     │          │ #s5 recycle   #recCv #recRange  #fapeCv  loss table      │
+     │          │ #s6 outputs   #outCv #plddtCv   #paeCv                   │
+     │          │ #s7 AF3       #difCv #difRange  #difSched                │
+     │          │ #s8 limits    cards, #limMsaCv                           │
+     │          │ references                                               │
+     └──────────┴─────────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 860px)
+     #mini      a sticky bar at the top: prev, the current step, next, and
+                a row of eight step chips that scrolls inside the bar.
+     cards      one column. Matrix canvases stay square at full width.
+                Every diagram works by tap: a tap on a cell or a column
+                shows what a hover shows on a desktop.
+
+   GREP MAP  (main.js)
+     grep -n 'function initMini'     the minimap and the step buttons
+     grep -n 'function initPipe'     the hero pipeline diagram
+     grep -n 'function initMsa'      MSA, conservation, couplings, contacts
+     grep -n 'function initEmbed'    tensor blocks, crop memory, pair init
+     grep -n 'function initEvo'      Evoformer block diagram, op detail
+     grep -n 'function initTri'      triangle explorer and bound sweep
+     grep -n 'function initStruct'   structure module 3D, layer scrub
+     grep -n 'function initIpa'      IPA invariance demo
+     grep -n 'function initRama'     Ramachandran plot
+     grep -n 'function initRecycle'  recycling maps
+     grep -n 'function initFape'     FAPE lab
+     grep -n 'function initOutputs'  pLDDT, PAE, output 3D
+     grep -n 'function initDiffusion' AF3 denoising
+     grep -n 'function loop'         the one rAF loop, visible cards only
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="How AlphaFold 2 predicts a protein structure, step by step: MSA, Evoformer, triangle updates, invariant point attention, FAPE, pLDDT and PAE, then AlphaFold 3 diffusion. Interactive diagrams on a real AlphaFold DB model.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;BIO.STRUCTURE</div>
+  <div class="pagetitle">How AlphaFold Works</div>
+</div>
+
+<nav id="mini" aria-label="Pipeline steps">
+  <div class="mini-head">
+    <button id="miniPrev" class="mini-step" aria-label="Previous step">‹</button>
+    <div class="mini-now"><span id="miniNum">00</span><span id="miniNow">Overview</span></div>
+    <button id="miniNext" class="mini-step" aria-label="Next step">›</button>
+  </div>
+  <ol class="mini-list">
+    <li><a class="mini-link" href="#s1" data-target="s1"><b>01</b><span>Sequence → MSA</span><i>jackhmmer · HHblits</i></a></li>
+    <li><a class="mini-link" href="#s2" data-target="s2"><b>02</b><span>Embedding</span><i>m · z tensors</i></a></li>
+    <li><a class="mini-link" href="#s3" data-target="s3"><b>03</b><span>Evoformer ×48</span><i>triangles</i></a></li>
+    <li><a class="mini-link" href="#s4" data-target="s4"><b>04</b><span>Structure ×8</span><i>frames · IPA</i></a></li>
+    <li><a class="mini-link" href="#s5" data-target="s5"><b>05</b><span>Recycle · loss</span><i>×3 · FAPE</i></a></li>
+    <li><a class="mini-link" href="#s6" data-target="s6"><b>06</b><span>Outputs</span><i>pLDDT · PAE</i></a></li>
+    <li><a class="mini-link" href="#s7" data-target="s7"><b>07</b><span>AlphaFold 3</span><i>diffusion</i></a></li>
+    <li><a class="mini-link" href="#s8" data-target="s8"><b>08</b><span>Limits</span><i>what it can't</i></a></li>
+  </ol>
+  <div class="mini-bar"><span id="miniBar"></span></div>
+</nav>
+
+<main id="doc">
+
+<!-- ───────────────────────────────────────────────────────────── HERO -->
+<header class="hero" id="s0">
+  <p class="kicker">Machine learning · structural biology</p>
+  <h1>How AlphaFold works</h1>
+  <p class="lede">AlphaFold does not fold a protein. It reads a sequence and its evolutionary relatives, builds a learned picture of which residues sit near which, and writes down one set of 3D coordinates. No physics runs, no time passes, no pathway exists. The word <em>fold</em> in the name describes the answer, not the process.</p>
+  <div class="stats">
+    <div><b>48</b><span>Evoformer blocks</span></div>
+    <div><b>8</b><span>structure layers<br>(shared weights)</span></div>
+    <div><b>3</b><span>recycles<br>at inference</span></div>
+    <div><b>256</b><span>c<sub>m</sub> MSA channels</span></div>
+    <div><b>128</b><span>c<sub>z</sub> pair channels</span></div>
+    <div><b>384</b><span>c<sub>s</sub> single channels</span></div>
+  </div>
+  <div class="pipe-wrap"><svg id="pipe" role="img" aria-label="AlphaFold 2 pipeline overview"></svg></div>
+  <p class="note">Running example: <b>human SUMO1</b> (UniProt P63165, 101 residues). Structure, pLDDT and PAE are the real AlphaFold DB model <span class="mono">AF-P63165-F1-model_v6</span>. Tap or click any stage to jump.</p>
+</header>
+
+<!-- ───────────────────────────────────────────────────────────── 01 -->
+<section class="sec" id="s1" data-step="01" data-name="Sequence → MSA">
+  <div class="sec-head"><span class="num">01</span><div><h2>Input: a sequence, and its relatives</h2><p>The only required input is 101 letters. Everything else is searched for.</p></div></div>
+
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>Multiple sequence alignment</h3><span class="tag synth">synthetic MSA · illustrative</span></div>
+      <canvas id="msaCv" class="fig msa-fig" aria-label="MSA with conservation and co-variation arcs"></canvas>
+      <div class="ctrl-row">
+        <span class="ctrl-lab">MSA depth</span>
+        <div class="seg fill" id="msaDepth" role="group" aria-label="MSA depth"></div>
+      </div>
+      <p class="readout" id="msaStats"></p>
+      <p class="cap">Rows are homologous sequences, columns are aligned positions, row 0 is the query. The bar on top is conservation (1 − entropy). <b>Tap a column</b>: arcs join it to the columns whose letters change <em>together</em> with it — green arcs land on a real contact in the structure, red arcs do not.</p>
+    </article>
+
+    <article class="card span-4">
+      <div class="card-top"><h3>Co-variation → contact</h3></div>
+      <canvas id="cmapCv" class="fig sq" aria-label="Contact map: true contacts and coupling scores"></canvas>
+      <div class="legend"><span><i class="sw" style="background:#5d6a86"></i>true contact, Cβ &lt; 8 Å (upper)</span><span><i class="sw" style="background:#3ddc97"></i>top coupling, hit (lower)</span><span><i class="sw" style="background:#ff5d6c"></i>top coupling, miss</span></div>
+      <p class="cap">If residue 34 is buried against residue 87, a mutation that enlarges one is tolerated only when the other shrinks. Over evolution the two columns drift <em>together</em>. Score every column pair for that dependence (here: mutual information with APC correction) and the top pairs trace the contact map. Cut the MSA depth and the signal drowns in noise.</p>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-top"><h3>Genetic search</h3><span class="tag">CPU · minutes to hours</span></div>
+      <div class="flow">
+        <div class="fl q">query<br><span class="mono">101 aa</span></div>
+        <div class="fl-col">
+          <div class="fl t"><b>jackhmmer</b> → UniRef90</div>
+          <div class="fl t"><b>jackhmmer</b> → MGnify clusters</div>
+          <div class="fl t"><b>HHblits</b> → BFD + Uniclust30</div>
+          <div class="fl t tpl"><b>HHsearch</b> → PDB70 <span class="mono">templates</span></div>
+        </div>
+        <div class="fl-col">
+          <div class="fl m">MSA<br><span class="mono">N<sub>seq</sub> × N<sub>res</sub></span></div>
+          <div class="fl m tpl">≤ 4 templates<br><span class="mono">coords + aligned</span></div>
+        </div>
+      </div>
+      <p class="cap">At inference the MSA is clustered: <b>512</b> cluster centres go to the main MSA stack, up to <b>5120</b> further rows go to a lighter "extra MSA" stack. Templates are known structures of similar proteins. They help, but AlphaFold 2 is accurate without them for most targets with a deep MSA.</p>
+    </article>
+
+    <article class="card span-6">
+      <div class="card-top"><h3>What the network actually receives</h3></div>
+      <table class="dims">
+        <tr><th>feature</th><th>shape</th><th>content</th></tr>
+        <tr><td>msa_feat</td><td class="mono">N<sub>clust</sub> × N<sub>res</sub> × 49</td><td>one-hot residue + gap + mask (23), deletion flags and values, cluster profile (23)</td></tr>
+        <tr><td>extra_msa</td><td class="mono">N<sub>extra</sub> × N<sub>res</sub> × 25</td><td>the unclustered rows, one-hot + deletions</td></tr>
+        <tr><td>target_feat</td><td class="mono">N<sub>res</sub> × aa</td><td>query residue type, one-hot</td></tr>
+        <tr><td>residue_index</td><td class="mono">N<sub>res</sub></td><td>position in the chain (for relative position)</td></tr>
+        <tr><td>template_*</td><td class="mono">N<sub>templ</sub> × N<sub>res</sub> × …</td><td>template atom positions, distogram, torsions</td></tr>
+      </table>
+      <p class="cap">No coordinates of the target, no force field, no energy. The sequence and the alignment carry the information; the weights carry everything learned from ~170 000 PDB structures (plus self-distillation on predicted structures).</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 02 -->
+<section class="sec" id="s2" data-step="02" data-name="Embedding">
+  <div class="sec-head"><span class="num">02</span><div><h2>Embedding: two tensors</h2><p>AlphaFold thinks in two representations at once: an MSA representation and a pair representation.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>The working tensors</h3><span class="tag">float, per crop</span></div>
+      <svg id="tensorSvg" class="fig tensors" role="img" aria-label="MSA, extra MSA and pair tensors as blocks"></svg>
+      <div class="ctrl-row">
+        <label class="ctrl-lab" for="cropRange">N<sub>res</sub></label>
+        <input type="range" id="cropRange" min="64" max="2048" step="1" value="384">
+        <output id="cropOut" class="mono">384</output>
+      </div>
+      <div id="memBars" class="mem"></div>
+      <p class="cap">Sizes for one copy in fp32. The pair tensor grows as N², triangle attention logits as N³. That is why training used crops of <b>256</b> residues (then <b>384</b> in fine-tuning), and why long proteins need chunking and a big GPU.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Pair initialisation</h3><span class="tag">one channel shown</span></div>
+      <canvas id="pairInitCv" class="fig wide3" aria-label="Outer sum and relative position build the initial pair representation"></canvas>
+      <div class="eq" data-eq="embed"></div>
+      <div class="eq" data-eq="msaembed"></div>
+      <p class="cap">z<sub>ij</sub> starts as "what is i" + "what is j" + "how far apart in sequence" (clipped to ±32, one-hot over 65 bins). The left panel uses a hydropathy value as a stand-in for one learned channel. Nothing about 3D distance is in z yet.</p>
+    </article>
+    <article class="card span-12 recycle-in">
+      <div class="card-top"><h3>Recycled inputs</h3></div>
+      <div class="eq" data-eq="recycle"></div>
+      <p class="cap">On cycles after the first, the previous first MSA row, the previous pair tensor and the previous predicted pseudo-Cβ distances (one-hot over 15 distance bins) are added back in. The same weights run again. See <a href="#s5">05</a>.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 03 -->
+<section class="sec" id="s3" data-step="03" data-name="Evoformer ×48">
+  <div class="sec-head"><span class="num">03</span><div><h2>Evoformer: 48 blocks, two tracks</h2><p>Each block updates the MSA track and the pair track, and lets them talk. 48 blocks, separate weights.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>One Evoformer block</h3><span class="tag">tap an operation</span></div>
+      <svg id="evoSvg" class="fig evo" role="img" aria-label="Evoformer block diagram"></svg>
+      <p class="cap">Teal: MSA track <span class="mono">m ∈ ℝ<sup>N<sub>seq</sub>×N<sub>res</sub>×256</sup></span>. Amber: pair track <span class="mono">z ∈ ℝ<sup>N<sub>res</sub>×N<sub>res</sub>×128</sup></span>. Two bridges: the pair track biases MSA row attention; the outer product mean writes MSA statistics into the pair track. Every operation is residual (x ← x + f(x)).</p>
+    </article>
+    <article class="card span-5 op-card">
+      <div class="card-top"><h3 id="opTitle">—</h3><span class="tag" id="opTrack">—</span></div>
+      <div class="eq" id="opEq"></div>
+      <dl class="opdims" id="opDims"></dl>
+      <p class="cap" id="opText"></p>
+    </article>
+
+    <article class="card span-12 tri-card">
+      <div class="card-top"><h3>The triangle update: the key idea</h3><span class="tag">tap a cell · drag across the matrix</span></div>
+      <div class="tri-layout">
+        <div class="tri-left">
+          <canvas id="triCv" class="fig sq" aria-label="Pair matrix with the cells that update the chosen pair"></canvas>
+          <div class="seg" id="triModes" role="group" aria-label="Triangle operation"></div>
+        </div>
+        <div class="tri-right">
+          <canvas id="triGeo" class="fig tri-geo" aria-label="Triangle i, j, k with real distances and the bound on d_ij"></canvas>
+          <div class="ctrl-row"><button id="triPlay" class="btn">▶ sweep k</button><span class="readout" id="triRead"></span></div>
+          <div class="eq" id="triEq"></div>
+          <div class="eq" data-eq="triineq"></div>
+          <p class="cap">Treat z<sub>ij</sub> as a belief about the edge i–j. Edges i–k and j–k for a third residue k constrain it: three distances must form a triangle. The bar shows the bound that the true distances of every k already seen put on d<sub>ij</sub>; it shrinks onto the true value as k sweeps. AlphaFold does not compute this bound. The triangle operations give each edge exactly the wiring — <em>all</em> k at once — to learn consistency of this kind, and 48 blocks repeat it.</p>
+        </div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 04 -->
+<section class="sec" id="s4" data-step="04" data-name="Structure ×8">
+  <div class="sec-head"><span class="num">04</span><div><h2>Structure module: a gas of rigid frames</h2><p>Each residue is a rigid body — a rotation and a translation. All start at the origin.</p></div></div>
+  <div class="grid">
+    <article class="card span-8">
+      <div class="card-top"><h3>From the "black hole" to a fold</h3><span class="tag synth">real final frames · illustrative path</span></div>
+      <canvas id="smCv" class="fig view3d" aria-label="Residue frames moving from the origin to the folded structure"></canvas>
+      <div class="ctrl-row">
+        <button id="smPlay" class="btn">▶ play</button>
+        <label class="ctrl-lab" for="smLayer">layer</label>
+        <input type="range" id="smLayer" min="0" max="8" step="0.01" value="8">
+        <output id="smOut" class="mono">8</output>
+      </div>
+      <div class="seg" id="smToggles" role="group" aria-label="What to draw"></div>
+      <p class="cap">Layer 0: every frame is the identity at the origin. Each of the 8 layers (one set of shared weights) runs IPA, then predicts a small rotation and shift per residue and composes it onto the frame. After layer 8, predicted torsion angles place the side-chain atoms. Final frames are the real model's (from N, Cα, C); the in-between layers are drawn as a smooth path for illustration — the real network's intermediate states are not in the DB file.</p>
+    </article>
+    <article class="card span-4">
+      <div class="card-top"><h3>Frames</h3></div>
+      <div class="eq" data-eq="frame"></div>
+      <div class="eq" data-eq="bbupdate"></div>
+      <p class="cap">The frame of residue i has its origin on Cα, x-axis toward C, and N in the x–y plane. The update is a quaternion with first component fixed to 1 (so it starts near no rotation) plus a translation, both read from the single representation s<sub>i</sub> (N<sub>res</sub> × 384).</p>
+      <div class="eq" data-eq="single"></div>
+      <div class="eq" data-eq="torsion"></div>
+      <p class="cap">7 torsions per residue, each predicted as an unnormalised 2D vector (sin, cos) so no angle wraps. Torsions build 8 rigid groups per residue from idealised geometry, and so all heavy atoms.</p>
+    </article>
+
+    <article class="card span-7">
+      <div class="card-top"><h3>Invariant Point Attention</h3><span class="tag">move the whole protein</span></div>
+      <div class="ipa-layout">
+        <canvas id="ipaCv" class="fig view3d small" aria-label="The protein under a global rotation"></canvas>
+        <div class="ipa-side">
+          <canvas id="ipaStrip" class="fig strip" aria-label="Attention weights of one residue, IPA and naive"></canvas>
+          <div class="ctrl-row"><label class="ctrl-lab" for="ipaRot">rotate + move all</label><input type="range" id="ipaRot" min="0" max="360" step="1" value="0"><output id="ipaOut" class="mono">0°</output></div>
+          <p class="readout" id="ipaRead"></p>
+        </div>
+      </div>
+      <div class="eq" data-eq="ipa"></div>
+      <div class="eq" data-eq="ipainv"></div>
+      <p class="cap">Each residue proposes query and key <em>points</em> in its own local frame (4 query points, 8 value points per head, 12 heads). The point term compares them in global space. A global move T<sub>g</sub> moves both points by the same rigid motion, and distances do not change — so the logits and the update do not depend on where the protein sits or how it is turned. The strip computes both terms live for residue <span id="ipaRes">50</span>: the IPA row stays fixed while you turn the protein; a naive score on raw global coordinates does not.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>Backbone torsions of the model</h3><span class="tag">computed from coordinates</span></div>
+      <canvas id="ramaCv" class="fig sq" aria-label="Ramachandran plot of the model coloured by pLDDT"></canvas>
+      <p class="readout" id="ramaRead"></p>
+      <p class="cap">φ and ψ for every residue, read off the predicted backbone and coloured by pLDDT. Confident residues fall in the helix and strand basins; the floppy N-terminal tail scatters. Tap a dot.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 05 -->
+<section class="sec" id="s5" data-step="05" data-name="Recycle · loss">
+  <div class="sec-head"><span class="num">05</span><div><h2>Recycling and training losses</h2><p>The whole network runs again on its own output — then a loss in frame space tells it how wrong it was.</p></div></div>
+  <div class="grid">
+    <article class="card span-5">
+      <div class="card-top"><h3>Recycling</h3><span class="tag synth">illustrative maps</span></div>
+      <canvas id="recCv" class="fig sq" aria-label="Predicted distance map sharpening over recycles"></canvas>
+      <div class="ctrl-row"><label class="ctrl-lab" for="recRange">cycle</label><input type="range" id="recRange" min="0" max="3" step="0.01" value="0"><output id="recOut" class="mono">0</output></div>
+      <p class="cap">Inference does 1 + 3 passes through the same weights. In training the number of cycles is sampled (1–4) and the gradient flows only through the last, so the net learns to improve <em>any</em> earlier guess. The map here is the model's real Cβ distance matrix blurred less with each cycle — a picture of the idea, not of real intermediates.</p>
+    </article>
+    <article class="card span-7">
+      <div class="card-top"><h3>FAPE: frame aligned point error</h3><span class="tag">computed live</span></div>
+      <div class="fape-layout">
+        <canvas id="fapeCv" class="fig view3d small" aria-label="True structure and a perturbed copy"></canvas>
+        <div class="fape-side">
+          <div class="seg col" id="fapeModes" role="group" aria-label="Perturbation"></div>
+          <div class="ctrl-row"><label class="ctrl-lab" for="fapeBend">bend at 72</label><input type="range" id="fapeBend" min="0" max="90" step="1" value="30"><output id="fapeOut" class="mono">30°</output></div>
+          <dl class="fape-read" id="fapeRead"></dl>
+        </div>
+      </div>
+      <div class="eq" data-eq="fape"></div>
+      <p class="cap">For every frame i, express every atom j in that frame, in both prediction and truth, and compare. A rigid move of the whole prediction costs nothing. A <b>mirror image</b> has an identical distance matrix (dRMSD = 0) but its frames are reflected, so FAPE punishes it: FAPE sees chirality, distance losses do not. Each error is clamped at 10 Å so one wrong domain cannot dominate.</p>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>The loss, term by term</h3></div>
+      <div class="eq" data-eq="loss"></div>
+      <table class="dims loss">
+        <tr><th>term</th><th>weight</th><th>supervises</th><th>head</th></tr>
+        <tr><td>FAPE (final, all atoms)</td><td class="mono">0.5</td><td>final structure in every frame</td><td>structure module</td></tr>
+        <tr><td>aux (every layer, backbone)</td><td class="mono">0.5</td><td>backbone FAPE + torsions at each of 8 layers</td><td>structure module</td></tr>
+        <tr><td>distogram</td><td class="mono">0.3</td><td>Cβ distance, 64 bins over 2–22 Å</td><td>pair → linear</td></tr>
+        <tr><td>masked MSA</td><td class="mono">2.0</td><td>recover 15% masked MSA letters (BERT-style)</td><td>MSA → linear</td></tr>
+        <tr><td>pLDDT (conf)</td><td class="mono">0.01</td><td>per-residue lDDT-Cα of its own prediction</td><td>single → MLP</td></tr>
+        <tr><td>violation (fine-tune)</td><td class="mono">1.0</td><td>bond lengths, angles, steric clashes</td><td>structure</td></tr>
+        <tr><td>exp. resolved (fine-tune)</td><td class="mono">0.01</td><td>was each atom seen in the experiment</td><td>single</td></tr>
+        <tr><td>PAE / pTM (fine-tune)</td><td class="mono">0.1</td><td>error of j in frame i, 64 bins</td><td>pair → linear</td></tr>
+      </table>
+      <p class="cap">Confidence heads learn to predict the network's own error. They do not feed back into the structure.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 06 -->
+<section class="sec" id="s6" data-step="06" data-name="Outputs">
+  <div class="sec-head"><span class="num">06</span><div><h2>Outputs: one structure, two kinds of doubt</h2><p>Real AlphaFold DB data for SUMO1. Mean pLDDT <b id="meanPl">78.3</b>.</p></div></div>
+  <div class="grid">
+    <article class="card span-6">
+      <div class="card-top"><h3>Predicted structure</h3><span class="tag">AF-P63165-F1 v6</span></div>
+      <canvas id="outCv" class="fig view3d" aria-label="SUMO1 model coloured by pLDDT"></canvas>
+      <div class="seg" id="outColor" role="group" aria-label="Colouring"></div>
+      <div class="legend plddt-legend"><span><i class="sw" style="background:#0053d6"></i>&gt; 90 very high</span><span><i class="sw" style="background:#65cbf3"></i>70–90 confident</span><span><i class="sw" style="background:#ffdb13"></i>50–70 low</span><span><i class="sw" style="background:#ff7d45"></i>&lt; 50 very low</span></div>
+    </article>
+    <article class="card span-6">
+      <div class="card-top"><h3>Predicted aligned error</h3><span class="tag">tap a cell</span></div>
+      <canvas id="paeCv" class="fig sq" aria-label="PAE matrix"></canvas>
+      <p class="readout" id="paeRead">Tap or hover the map: residue i is the frame aligned on, j is the residue scored.</p>
+    </article>
+    <article class="card span-12">
+      <div class="card-top"><h3>pLDDT per residue</h3><span class="tag">tap a bar</span></div>
+      <canvas id="plddtCv" class="fig bars" aria-label="Per-residue pLDDT"></canvas>
+      <p class="readout" id="plRead"></p>
+    </article>
+    <article class="card span-6 means">
+      <div class="card-top"><h3>pLDDT means</h3></div>
+      <div class="eq" data-eq="plddt"></div>
+      <ul>
+        <li>The network's <b>own estimate</b> of how well the local environment of each Cα (within 15 Å) would match the true structure (lDDT-Cα, 0–100).</li>
+        <li>Local. A domain can be &gt; 90 everywhere and still sit at the wrong angle to its neighbour — ask PAE.</li>
+        <li>Very low pLDDT often marks intrinsic disorder (here the first ~19 residues), drawn as an extended ribbon.</li>
+      </ul>
+      <h4>pLDDT does not mean</h4>
+      <ul class="not">
+        <li>Not flexibility or B-factor, though they correlate.</li>
+        <li>Not a folding order, rate or pathway. Nothing folds; there is no time axis.</li>
+        <li>Not stability or ΔG. A destabilising mutation can keep a high pLDDT.</li>
+      </ul>
+    </article>
+    <article class="card span-6 means">
+      <div class="card-top"><h3>PAE means</h3></div>
+      <div class="eq" data-eq="pae"></div>
+      <ul>
+        <li>Expected position error of residue j, in Å, after the predicted and true structures are aligned on the frame of residue i.</li>
+        <li>Not symmetric: aligning on i and scoring j differs from the reverse.</li>
+        <li>Low-error blocks are rigid units; here the whole core (≈ 20–92) is one block, the tails float.</li>
+      </ul>
+      <h4>PAE does not mean</h4>
+      <ul class="not">
+        <li>Not a contact map, and not a measure of motion: high PAE between two domains says "unsure of the placement", not "they move".</li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 07 -->
+<section class="sec" id="s7" data-step="07" data-name="AlphaFold 3">
+  <div class="sec-head"><span class="num">07</span><div><h2>AlphaFold 3: pairs, then diffusion</h2><p>Same pair-centric trunk idea; a generative head over raw atom coordinates instead of frames.</p></div></div>
+  <div class="grid">
+    <article class="card span-7">
+      <div class="card-top"><h3>Denoising atom coordinates</h3><span class="tag synth">illustrative denoiser</span></div>
+      <canvas id="difCv" class="fig view3d" aria-label="Atoms denoised from noise to the structure"></canvas>
+      <div class="ctrl-row">
+        <button id="difPlay" class="btn">▶ sample</button>
+        <label class="ctrl-lab" for="difRange">step</label>
+        <input type="range" id="difRange" min="0" max="200" step="1" value="200">
+        <output id="difOut" class="mono">200</output>
+      </div>
+      <canvas id="difSched" class="fig sched" aria-label="Noise level per step"></canvas>
+      <p class="cap">All 809 heavy atoms of the model start as Gaussian noise. Each step the denoiser D<sub>θ</sub>, conditioned on the trunk's single and pair tensors, predicts clean coordinates; the sampler moves part of the way there and lowers the noise. 200 steps at inference. Here the "denoiser" is the known answer — the real one is a learned network.</p>
+    </article>
+    <article class="card span-5">
+      <div class="card-top"><h3>What changed</h3></div>
+      <table class="dims cmp">
+        <tr><th></th><th>AlphaFold 2</th><th>AlphaFold 3</th></tr>
+        <tr><td>trunk</td><td>Evoformer ×48 (MSA + pair)</td><td>MSA module ×4, then Pairformer ×48 (single + pair)</td></tr>
+        <tr><td>MSA</td><td>full track every block</td><td>small early module; MSA is not carried through the trunk</td></tr>
+        <tr><td>head</td><td>structure module: frames, IPA, torsions</td><td>diffusion module on raw atom coordinates</td></tr>
+        <tr><td>symmetry</td><td>built in (IPA, FAPE)</td><td>learned, with random rotation/translation augmentation</td></tr>
+        <tr><td>molecules</td><td>protein</td><td>protein, DNA, RNA, ligands, ions, modified residues</td></tr>
+        <tr><td>tokens</td><td>residues</td><td>residues / nucleotides; one token per atom for ligands</td></tr>
+        <tr><td>output</td><td>one structure per model</td><td>samples from a distribution</td></tr>
+      </table>
+      <div class="eq" data-eq="diffuse"></div>
+      <p class="cap">A generative head can hallucinate: in disordered regions it may invent tidy-looking helices. AF3 was trained on AF2 predictions (cross-distillation), where disorder appears as extended ribbons, to suppress this.</p>
+    </article>
+  </div>
+</section>
+
+<!-- ───────────────────────────────────────────────────────────── 08 -->
+<section class="sec" id="s8" data-step="08" data-name="Limits">
+  <div class="sec-head"><span class="num">08</span><div><h2>Limits: what it does not do</h2><p>An accurate static structure predictor is not a simulator of proteins.</p></div></div>
+  <div class="grid limits">
+    <article class="card span-4">
+      <h3>It does not simulate folding</h3>
+      <p>No forces, no solvent, no time steps, no pathway, no kinetics, no chaperones. The output is one set of coordinates; the order in which a real chain folds is not in it. For folding physics see molecular dynamics — a separate field.</p>
+    </article>
+    <article class="card span-4">
+      <h3>Point mutations barely register</h3>
+      <canvas id="limMsaCv" class="fig lim" aria-label="One mutated letter in the query against an unchanged MSA"></canvas>
+      <p><b>Rhodopsin P23H</b> misfolds in cells and causes retinitis pigmentosa. AlphaFold has no folding-energy term, and the MSA behind the query does not change, so its P23H prediction looks like the wild-type fold. Studies of AF2 on missense variants (for example Buel &amp; Walters 2022) find it largely insensitive to destabilising single mutations. Use stability predictors or experiment.</p>
+    </article>
+    <article class="card span-4">
+      <h3>MSA depth sets the ceiling</h3>
+      <canvas id="limDepthCv" class="fig lim" aria-label="Contact precision of the MSA coupling score against MSA depth"></canvas>
+      <p>Accuracy falls steeply when the alignment is shallow (in the AF2 paper, below a median of about 30 effective sequences per residue). Orphan proteins, fast-evolving viral proteins and many designed proteins have few relatives. The curve above is the coupling score of <a href="#s1">01</a> on the synthetic MSA, subsampled: the same cliff, in miniature.</p>
+    </article>
+    <article class="card span-4">
+      <h3>Disorder is not a structure</h3>
+      <p>About a third of human proteins contain long disordered regions. AlphaFold draws them as low-pLDDT ribbons — the SUMO1 tail in <a href="#s6">06</a> is one. The ribbon's shape is not a prediction; only its low confidence is information.</p>
+    </article>
+    <article class="card span-4">
+      <h3>One state, not an ensemble</h3>
+      <p>Proteins that switch folds (RfaH's C-terminal domain flips from a helical hairpin to a β-barrel) or move between conformations get one answer, usually the state best represented in the PDB. Sub-sampling the MSA can sometimes expose a second state; it is a trick, not a feature.</p>
+    </article>
+    <article class="card span-4">
+      <h3>AF2: protein only</h3>
+      <p>No ligands, metals, cofactors, glycans, post-translational modifications or nucleic acids; pH and binding partners do not exist for it. A holo pocket may appear because holo structures dominate the training data — not because the ligand was modelled. AF3 adds many of these, with its own failure modes.</p>
+    </article>
+  </div>
+</section>
+
+<footer class="refs">
+  <h2>References</h2>
+  <ol>
+    <li>Jumper J. <i>et al.</i> Highly accurate protein structure prediction with AlphaFold. <i>Nature</i> 596, 583–589 (2021), and its Supplementary Information. <a href="https://doi.org/10.1038/s41586-021-03819-2">doi:10.1038/s41586-021-03819-2</a></li>
+    <li>Abramson J. <i>et al.</i> Accurate structure prediction of biomolecular interactions with AlphaFold 3. <i>Nature</i> 630, 493–500 (2024). <a href="https://doi.org/10.1038/s41586-024-07487-w">doi:10.1038/s41586-024-07487-w</a></li>
+    <li>Varadi M. <i>et al.</i> AlphaFold Protein Structure Database. <i>Nucleic Acids Res.</i> 50, D439–D444 (2022). <a href="https://doi.org/10.1093/nar/gkab1061">doi:10.1093/nar/gkab1061</a>. Model <a href="https://alphafold.ebi.ac.uk/entry/P63165">AF-P63165-F1</a>, CC-BY 4.0.</li>
+    <li>Buel G. R. &amp; Walters K. J. Can AlphaFold2 predict the impact of missense mutations on structure? <i>Nat. Struct. Mol. Biol.</i> 29, 1–2 (2022). <a href="https://doi.org/10.1038/s41594-021-00714-2">doi:10.1038/s41594-021-00714-2</a></li>
+    <li>Dunn S. D., Wahl L. M. &amp; Gloor G. B. Mutual information without the influence of phylogeny or entropy dramatically improves residue contact prediction. <i>Bioinformatics</i> 24, 333–340 (2008). <a href="https://doi.org/10.1093/bioinformatics/btm604">doi:10.1093/bioinformatics/btm604</a></li>
+  </ol>
+  <p class="note">All diagrams are drawn by this page from the data above; no figure or code from DeepMind is reproduced. Synthetic and illustrative panels are tagged as such.</p>
+</footer>
+</main>
+
+<script src="equations.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
