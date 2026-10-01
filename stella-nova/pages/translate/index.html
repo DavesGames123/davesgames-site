@@ -3,69 +3,78 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Translation Terminal // Stella Nova</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>Translation Tool · Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-   TRANSLATION TERMINAL  ·  page shell
+   TRANSLATION TOOL  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. main.js renders the entire tool into #content: the
-   language flags, category tabs, filters, progress bar, and the editable
-   translation rows. This file declares only the frame and the export bar that
-   main.js binds to by id and by the inline onclick handlers.
+   Static frame only. main.js fills every mount below. strings/en.js holds
+   the English source strings and the language list. strings/<code>.js holds
+   the strings that the game ships for one language. main.js loads that file
+   only when the translator picks the language.
 
    LOAD ORDER
-     1. in-frame guard   adds .in-frame when embedded in the site shell iframe
-     2. style.css        page stylesheet
-     3. main.js          classic script at end of body; builds everything
+     1. ../../lib/gpu-guard.js   shell GPU release hook (first)
+     2. strings/en.js            SN_TR.keys, SN_TR.en, SN_TR.langs
+     3. main.js                  state, rows, filters, storage, TOML, submit
 
-   LAYOUT  (# marks an element id that main.js writes into)
-     ┌─────────────────────────────────────────────────────────────────┐
-     │ topbar: Stella Nova · Translation Terminal                        │
-     ├─────────────────────────────────────────────────────────────────┤
-     │ #content  (all built by main.js)                                  │
-     │   flag bar  ─ pick a language                                     │
-     │   category tabs ─ UX / Title / Tutorial / Narrative               │
-     │   controls ─ section select · empty/done filter · search          │
-     │   progress bar                                                    │
-     │   #rows  ─ key · English source · translation input · SUBMIT      │
-     ├─────────────────────────────────────────────────────────────────┤
-     │ #xb export bar (hidden until a language is chosen)                │
-     │   CLEAR · IMPORT · EXPORT TOML          #xi language summary       │
-     └─────────────────────────────────────────────────────────────────┘
+   LAYOUT  (# marks a mount that main.js fills)
+     ┌───────────────────────────────────────────────────────────────────┐
+     │ .hero      kicker, title, lead                                      │
+     │ #langs     language cards (compact chip row once a language is on)  │
+     │ #work      #tools tabs, section, status, search · #prog · #rows     │
+     │ #dock      language summary · Import · Export TOML · Clear          │
+     └───────────────────────────────────────────────────────────────────┘
+
+   GREP TARGETS  (grep -n "<target>" index.html)
+     hero ............... "class=\"hero\""
+     language picker .... "id=\"langs\""
+     workspace .......... "id=\"work\""
+     export dock ........ "id=\"dock\""
+     file input ......... "id=\"fi\""
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- In-frame guard: when embedded in the site shell iframe, tag <html> so the
-     CSS hides this page's own topbar. Inline so it runs before first paint. -->
-<script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<div class="grid-bg"></div>
-<div id="app">
-<div class="topbar">
-<div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Translation Terminal</span></div>
-<div class="topbar-r">SYS // <strong>LOCALIZATION v2</strong></div>
+<main class="wrap">
+  <header class="hero">
+    <div class="kicker">Stella Nova · Community</div>
+    <h1>Translation <em>Tool</em></h1>
+    <p class="lead">Help translate Stella Nova. Pick a language, fix or fill any line, and send it to Dave. Your work stays in this browser until you clear it.</p>
+  </header>
+
+  <section class="langs" id="langs" aria-label="Languages"></section>
+
+  <section class="work" id="work" hidden>
+    <div class="tools" id="tools"></div>
+    <div class="prog" id="prog"></div>
+    <div class="rows" id="rows"></div>
+  </section>
+
+  <section class="intro" id="intro">
+    <div class="tip"><b>Pick a language</b><span>Each card shows how much of the game already ships in that language, and how many lines you changed.</span></div>
+    <div class="tip"><b>Fix or fill</b><span>The game text shows above each field. Type a better line, or keep the shipped one.</span></div>
+    <div class="tip"><b>Send it</b><span>Submit one line to Dave, or export your edits as a TOML file.</span></div>
+    <div class="tip keys"><b>Keyboard</b><span><kbd>Enter</kbd> save and next · <kbd>Shift</kbd>+<kbd>Enter</kbd> new line · <kbd>Alt</kbd>+<kbd>&uarr;</kbd>/<kbd>&darr;</kbd> move · <kbd>Ctrl</kbd>+<kbd>Enter</kbd> submit · <kbd>Esc</kbd> undo · <kbd>/</kbd> search</span></div>
+  </section>
+</main>
+
+<div class="dock" id="dock" hidden>
+  <div class="dock-info" id="dockInfo"></div>
+  <div class="dock-acts">
+    <button class="btn ghost" type="button" id="btnImport">Import</button>
+    <button class="btn gold" type="button" id="btnExport">Export TOML</button>
+    <button class="btn danger" type="button" id="btnClear">Clear</button>
+  </div>
 </div>
-<!-- main.js renders the flags, tabs, filters, progress and rows here. -->
-<div id="content"></div>
-</div>
-<!-- Transient status message; main.js shows and hides it. -->
-<div class="toast" id="toast"></div>
-<!-- Export bar: revealed by main.js once a language is selected. The buttons
-     call the global functions main.js defines. -->
-<div class="xb" id="xb" style="display:none">
-<div class="xi" id="xi"></div>
-<div class="xa">
-<button class="eb dng" onclick="clearAll()">CLEAR</button>
-<button class="eb sec" onclick="importToml()">IMPORT</button>
-<button class="eb" onclick="exportToml()">EXPORT TOML</button>
-</div>
-</div>
-<!-- Hidden file picker for TOML import; importToml() clicks it. -->
-<input type="file" id="fi" accept=".toml" style="display:none">
-<!-- Builds the whole tool and loads any saved translations from localStorage. -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fi" accept=".toml,text/plain" hidden>
+<script src="strings/en.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
