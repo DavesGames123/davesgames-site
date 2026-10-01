@@ -316,10 +316,10 @@ const VIEWS = {
 };
 const sph = new THREE.Spherical();
 function setView(name) {
-  const v = VIEWS[name], cal = S.cur.cal;
+  const cal = S.cur.cal, v = { ...VIEWS[name], ...((cal.views || {})[name] || {}) };
   const s0 = new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target));
   const t1 = v.close ? new THREE.Vector3(...cal.focus) : new THREE.Vector3(0, 0, midZ(cal));
-  const r1 = v.close ? cal.plateR * 1.5 : fitDistance(cal) * (v.explode > 0.5 ? 1.15 : 1);
+  const r1 = v.close ? cal.plateR * (v.distK ?? 1.5) : fitDistance(cal) * (v.explode > 0.5 ? 1.15 : 1);
   t1.z += v.close ? v.explode * S.cur.sc.unit * (S.cur.sc.focusK ?? 1) : explodeCentre(v.explode);
   let th = v.az * D; while (th - s0.theta > Math.PI) th -= TAU; while (s0.theta - th > Math.PI) th += TAU;
   S.fly = { t: 0, s0, s1: new THREE.Spherical(r1, (90 - v.el) * D, th), t0: controls.target.clone(), t1 };
