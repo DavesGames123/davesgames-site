@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Wiki // Stella Nova</title>
+<meta name="description" content="The Stella Nova wiki: every resource, module, research topic, citizen trait and deep-sky landmark in the game, with sprites and cross links.">
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   WIKI  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static frame for the Stella Nova wiki. main.js reads window.SN_DATA from
+   the shared catalog and draws each route into #view. The hash holds the
+   route, so the browser back and forward buttons work in the page.
+
+   ROUTES
+     #/                    portal home
+     #/c/<category>        category table or grid
+     #/e/<category>/<slug> entry article
+     #/search/<q>          search results
+
+   LOAD ORDER  (classic scripts, so the page opens from file:// too)
+     1. gpu-guard.js       shared GPU release guard, always first
+     2. fonts, style.css
+     3. catalog.js         sets window.SN_DATA
+     4. main.js            router, tree, portal, category, entry, search
+
+   LAYOUT  (# marks an element id)
+     ┌──────────────────────────────────────────────────────────────┐
+     │ .top    #menuBtn · brand · #q search · #suggest · #lockBtn    │
+     ├──────────────┬───────────────────────────────────────────────┤
+     │ #side        │ #view   the active route                      │
+     │  #treeQ      │                                               │
+     │  #tree       │                                               │
+     └──────────────┴───────────────────────────────────────────────┘
+     On phones #side is a drawer. #scrim closes it. #toast shows notes.
+
+   SECTION MAP   (jump with grep -n "<anchor>" index.html)
+     top bar ...... class="top"
+     search ....... id="q"
+     side tree .... id="side"
+     view ......... id="view"
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Cpath fill=%22%236db8e0%22 d=%22M8 0l1.8 6.2L16 8l-6.2 1.8L8 16l-1.8-6.2L0 8l6.2-1.8z%22/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#view" id="skipLink">Skip to article</a>
+
+<header class="top">
+  <button class="ibtn" id="menuBtn" type="button" aria-label="Open the contents tree" aria-controls="side" aria-expanded="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+  </button>
+  <a class="brand" href="#/" aria-label="Wiki home">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0l1.8 6.2L16 8l-6.2 1.8L8 16l-1.8-6.2L0 8l6.2-1.8z"/></svg>
+    <span>Stella Nova <em>Wiki</em></span>
+  </a>
+  <form class="search" id="searchForm" role="search" autocomplete="off">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.6" fill="none"/><path d="M16 16l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+    <input id="q" type="search" placeholder="Search the wiki" aria-label="Search the wiki" aria-autocomplete="list" aria-controls="suggest" spellcheck="false">
+    <kbd class="search-kbd">/</kbd>
+    <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+  </form>
+  <button class="ibtn lock" id="lockBtn" type="button" aria-label="Editor lock" title="Editor lock">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.6" fill="none"/><path id="lockShackle" d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+  </button>
+</header>
+
+<div class="layout">
+  <aside class="side" id="side" aria-label="Contents">
+    <div class="side-head">
+      <span class="kicker">Contents</span>
+      <button class="ibtn side-close" id="sideClose" type="button" aria-label="Close the contents tree">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <input class="tree-q" id="treeQ" type="search" placeholder="Filter the tree" aria-label="Filter the tree" spellcheck="false">
+    <div class="tree-tools">
+      <button type="button" id="treeOpen">Expand all</button>
+      <button type="button" id="treeShut">Collapse all</button>
+    </div>
+    <nav class="tree" id="tree"></nav>
+  </aside>
+  <div class="scrim" id="scrim" hidden></div>
+  <main class="view" id="view" tabindex="-1"></main>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="../../lib/game-data/catalog.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
