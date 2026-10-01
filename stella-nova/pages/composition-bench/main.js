@@ -18,6 +18,7 @@
 //      examples ................... EXAMPLES (preset graphs)
 //      GPU ........................ gpuOf / compileNode / bindOf / fillU / stepSim / frame
 //      self test .................. __bench.selfTest(key): compile every node
+//      hand-off ................... takeHandoff: a graph from Material Studio (#import)
 //
 //  DATA
 //      libs/index.json ............ catalog: groups, libraries, cells (no WGSL)
@@ -490,6 +491,19 @@ async function selfTest(key) {
   return out;
 }
 
-await preset('classic');
+// ------------------------------------------------------------ hand-off from Material Studio
+// Material Studio "Open in Composition Bench" writes a bench graph JSON (with
+// an optional palette) to localStorage and opens this page with #import.
+// Read it once, clear the key, and load it in place of the first example.
+const HANDOFF_KEY = 'composition-bench.import';
+function takeHandoff() {
+  if (location.hash !== '#import') return null;
+  try { const t = localStorage.getItem(HANDOFF_KEY); localStorage.removeItem(HANDOFF_KEY); return t ? JSON.parse(t) : null; } catch (e) { return null; }
+}
+const handoff = takeHandoff();
+if (handoff && Array.isArray(handoff.nodes) && Array.isArray(handoff.links)) {
+  for (const id of ['ink', 'tone', 'cream']) { const h = handoff.palette && handoff.palette[id]; if (/^#[0-9a-f]{6}$/i.test(h || '')) { G[id] = hexToRgb(h); $('sw-' + id).value = h; } }
+  try { await loadGraph(handoff); $('exnote').textContent = 'graph from Material Studio'; } catch (e) { status('could not load the Material Studio graph: ' + e.message); await preset('classic'); }
+} else await preset('classic');
 window.__bench = { moduleFor, packSrc, preset, graph: () => ({ nodes, links }), addNode, link, rebuildAll, LIBS, GENERIC, INDEX, EXAMPLES, cellOf, ensureLib, selfTest, templateCode, fit, alive: () => alive, view: () => view };
 requestAnimationFrame(frame);
