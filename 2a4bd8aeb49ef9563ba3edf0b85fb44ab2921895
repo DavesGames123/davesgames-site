@@ -3,3 +3,5 @@ Correction: the validation line in this body is wrong. The check run for this co
   -> Cd 1.409, Cl rms 0.102, St 0.168, 492 MLUPS, no NaN
 The 1.517 figure came from a 60000-step run (b70eb9a). The run length differs, so the
 two values do not compare; this commit does not change the force path.
+
+Same-length comparison, run after the note: check2d.js cylinder 100 2 60000 -> Cd 1.517, Cl rms 0.269, St 0.179, identical to b70eb9a. The force path is unchanged.
