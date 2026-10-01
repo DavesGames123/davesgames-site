@@ -156,6 +156,9 @@ body.idle #stage { cursor: none; }
 /* credit block */
 .c-line { font-size: max(8px, calc(var(--u) * 11)); line-height: 1.75; color: var(--ink3); white-space: nowrap; }
 .c-line.first { color: var(--ink2); }
+.c-more { display: block; margin: 0; padding: 0; border: 0; background: none; letter-spacing: inherit; text-transform: inherit; color: var(--ink2); cursor: pointer; pointer-events: auto; text-align: inherit; text-decoration: underline; text-decoration-color: rgba(255, 255, 255, 0.25); text-underline-offset: 3px; transition: color 0.2s, text-decoration-color 0.2s; }
+.c-more:hover, .c-more:focus-visible { color: #fff; text-decoration-color: rgba(255, 255, 255, 0.7); }
+.blk.a-right .c-more { margin-left: auto; }
 
 /* locator block */
 .blk.locator { width: var(--loc, 120px); height: var(--loc, 120px); }
@@ -309,6 +312,12 @@ body.idle #controls:hover, body.idle #controls:focus-within { opacity: 1; }
 #caption h2 small { display: block; margin-top: 3px; font-weight: 300; font-size: 15px; color: var(--ink2); }
 #caption p { margin: 0 0 10px; font-family: var(--serif); font-size: 14.5px; line-height: 1.55; color: #deded9; }
 #caption p.data { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.12); font-family: var(--mono); font-size: 10px; line-height: 1.7; letter-spacing: 0.06em; color: var(--ink3); }
+#caption .credits { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, 0.12); }
+#caption .credits h3 { margin: 0 0 6px; font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink2); }
+#caption .credits ul { margin: 0; padding: 0; list-style: none; }
+#caption .credits li { margin: 0 0 7px; font-family: var(--mono); font-size: 10px; line-height: 1.6; color: var(--ink3); }
+#caption .credits a { color: var(--ink2); text-underline-offset: 2px; }
+#caption .credits a:hover { color: #fff; }
 
 #atlas {
   position: fixed;

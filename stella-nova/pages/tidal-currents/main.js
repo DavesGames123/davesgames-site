@@ -134,6 +134,40 @@ function stamp(h) {
 const modelShort = (m) => (m?.modelShort || m?.model || '').toUpperCase();
 const agencyOf = (m) => m?.agency || 'NOAA';   // NOAA, or the Marine Institute for Dublin
 
+// SOURCES. Who made each dataset and under what terms. The corner credit and
+// the About panel both read this, so the two cannot disagree.
+//   NOAA OFS models and gauges: U.S. Government work, public domain.
+//   Marine Institute NEATL: CC BY 4.0 (dataset license attribute on
+//   erddap.marine.ie, IMI_NEATL), which requires attribution and a note of
+//   changes. Natural Earth: public domain.
+const LINK = (href, text) => `<a href="${href}" target="_blank" rel="noopener">${esc(text)}</a>`;
+function sourceOf(m) {
+  if (agencyOf(m) === 'Marine Institute') {
+    return {
+      short: '© Irish Marine Institute · CC BY 4.0',
+      html: `Currents and temperature: ${esc(m.modelLong || 'Marine Institute Northeast Atlantic Model')} (NEATL), `
+        + `© Irish Marine Institute, from the ${LINK('https://erddap.marine.ie/erddap/griddap/IMI_NEATL.html', 'Marine Institute ERDDAP')}, `
+        + `licensed ${LINK('https://creativecommons.org/licenses/by/4.0/', 'CC BY 4.0')}. `
+        + 'Changes: hourly surface currents and temperature resampled to an image grid for this map.',
+    };
+  }
+  return {
+    short: 'NOAA NOS CO-OPS · public domain',
+    html: `Currents and temperature: ${esc(m.modelLong || `NOAA ${modelShort(m)}`)}, `
+      + `${LINK('https://tidesandcurrents.noaa.gov/models.html', 'NOAA National Ocean Service, CO-OPS')}. `
+      + 'U.S. Government work, public domain. Hourly nowcast surface currents resampled to an image grid for this map.',
+  };
+}
+function creditsHTML(m) {
+  const items = [`<li>${sourceOf(m).html}</li>`];
+  if (m.id === 'new-york-harbor') {
+    items.push(`<li>Water temperature: ${LINK('https://tidesandcurrents.noaa.gov/stationhome.html?id=8518750', 'NOAA CO-OPS station 8518750, The Battery, NY')} (the NYOFS model carries no temperature). Public domain.</li>`);
+  }
+  items.push(`<li>Land and lakes on the map and the locator globe: ${LINK('https://www.naturalearthdata.com/', 'Natural Earth')} 1:50m, simplified. Public domain.</li>`);
+  items.push('<li>Visualization, particle engine and design: Dave, for Stella Nova.</li>');
+  return `<section id="capCredits" class="credits"><h3>Credits</h3><ul>${items.join('')}</ul></section>`;
+}
+
 // A phone is a coarse pointer with a short side under 600 CSS px.
 const coarse = matchMedia('(pointer: coarse)');
 function device() {
@@ -197,7 +231,12 @@ function buildOverlay() {
   // data credit
   const b = el('div', 'blk credit');
   b.appendChild(el('div', 'c-line mono first', esc(`${agencyOf(meta)} ${modelShort(meta)} model`)));
+  b.appendChild(el('div', 'c-line mono', esc(sourceOf(meta).short)));
   b.appendChild(el('div', 'c-line mono', esc(meta.dates ?? '')));
+  const more = el('button', 'c-line mono c-more', 'Sources &amp; credits ›');
+  more.type = 'button';
+  more.addEventListener('click', () => { setCaption(true); $('capCredits')?.scrollIntoView({ block: 'nearest' }); });
+  b.appendChild(more);
 
   // locator globe: one canvas for the page, so it can turn between locations
   if (!locatorBlock) {
@@ -521,6 +560,7 @@ function captionHTML() {
   paras.push('<p>Color shows the water temperature at the surface. Brightness shows the speed of the current.</p>');
   const model = meta.modelLong || `${agencyOf(meta)} ${modelShort(meta)}`;
   paras.push(`<p class="data">Data: ${esc(model)} (${esc(modelShort(meta))}, model), ${esc(titleCase(meta.dates ?? ''))}. Hourly surface currents and temperature.</p>`);
+  paras.push(creditsHTML(meta));
   return paras.join('');
 }
 
