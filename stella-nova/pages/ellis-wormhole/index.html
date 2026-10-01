@@ -18,7 +18,8 @@
    HEAD LOAD ORDER
      1. KaTeX css + js (CDN, deferred)  renders the metric equations
      2. style.css                        page stylesheet
-     3. main.js (end of body)            fetches shaders, drives the frame loop
+     3. render-scale.js (../../lib)       sizes the canvas by pixel budget and fps
+     4. main.js (end of body)            fetches shaders, drives the frame loop
 
    LAYOUT  (# marks an element id)
      ┌─────────────────────────────────────────────────────────────────┐
@@ -40,7 +41,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- The ray-traced view; main.js sizes it below native resolution for speed. -->
+<!-- The ray-traced view; lib/render-scale.js sizes it below native resolution for speed. -->
 <canvas id="c"></canvas>
 <!-- Side minimap: a rotating cross-section of the throat with the camera dot. -->
 <canvas id="minimap" width="280" height="480" style="display:none"></canvas>
@@ -105,6 +106,7 @@
   <button class="toggle-btn mob-hide" id="btnQHigh" onclick="setQuality(2)">Hi</button>
 </div>
 
+<script src="../../lib/render-scale.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

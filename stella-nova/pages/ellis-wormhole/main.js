@@ -23,6 +23,8 @@
 //      orbit  orbYaw / orbPitch place the camera on a sphere of radius |camL|.
 //      look   lookYaw / lookPitch rotate the view direction in place.
 //      descent  auto fly-through: advances camL, easing near the throat.
+//      focal  u_focalLen = FOCAL_PER_H x canvas height, so the view angle
+//             does not change when render-scale changes the canvas size.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  ----------------------------------------------------------------------------
@@ -34,7 +36,7 @@
 //      descent .............. "toggleDescend"      auto fly-through the throat
 //      input ................ "addEventListener('mousedown'" drag / touch / wheel
 //      sliders .............. "getElementById('zoomSlider')" K / L / range wiring
-//      resize ............... "function resize"    render at a fraction of DPR
+//      resize ............... "RenderScale.create" pixel budget + fps control
 //      minimap .............. "function drawMinimap" throat cross-section canvas
 //      frame loop ........... "function frame"     camera basis + uniforms + draw
 //      equations ............ "function renderEqs" KaTeX metric / throat / T
@@ -78,7 +80,10 @@ let orbYaw=0,orbPitch=0.15;
 let lookYaw=0,lookPitch=0;
 // Signed axial distance; its sign selects the universe. Focal length is fixed.
 let camL=20;
-const FOCAL=700;
+// Focal length in canvas heights: 1.0 gives a vertical half-angle of 26.6
+// degrees at any render size. It was a fixed 700 px, so a 4K canvas
+// (1536x864) saw a much wider view than a 1080p one (768x432).
+const FOCAL_PER_H=1.0;
 // Feature switches, each mirrored to a shader uniform and a button state.
 let useGeodesic=true,useRK4=false,showDisc=false,showGlow=true,bgMode=0;
 // Integrator budget: base step, max steps, and escape-radius multiplier.
@@ -100,7 +105,7 @@ window.toggleSpin=function(){spinEnabled=!spinEnabled;setBtn('btnSpin',spinEnabl
   if(spinEnabled)autoSpin=true;else{autoSpin=false;if(spinTimer){clearTimeout(spinTimer);spinTimer=null;}}};
 // Quality presets pick the integrator step budget.
 var qualitySteps=[512,2048,4096],qualityLabels=['btnQLow','btnQMed','btnQHigh'];
-window.setQuality=function(q){maxSteps=qualitySteps[q];qualityLabels.forEach(function(id,i){document.getElementById(id).classList.toggle('on',i===q);});};
+window.setQuality=function(q){maxSteps=qualitySteps[q];renderScale.reset();qualityLabels.forEach(function(id,i){document.getElementById(id).classList.toggle('on',i===q);});};
 
 // Dismiss the GPU-load gate and reveal the interface; on mobile the equations
 // start collapsed and the minimap stays hidden.
@@ -123,8 +128,8 @@ window.dismissWarn=function(){
 // Set a button's on/off classes to match a boolean.
 function setBtn(id,on){var el=document.getElementById(id);if(!el)return;el.classList.toggle('on',on);el.classList.toggle('off',!on);}
 // Feature toggles: each flips a state flag the frame loop pushes to the shader.
-window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',useGeodesic);};
-window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);};
+window.toggleGeodesic=function(){useGeodesic=!useGeodesic;setBtn('btnGeodesic',useGeodesic);renderScale.reset();};
+window.toggleRK4=function(){useRK4=!useRK4;setBtn('btnRK4',useRK4);renderScale.reset();};
 window.toggleDisc=function(){showDisc=!showDisc;setBtn('btnDisc',showDisc);};
 window.toggleGlow=function(){showGlow=!showGlow;setBtn('btnGlow',showGlow);};
 window.setBg=function(m){bgMode=m;['bgStars','bgGrid','bgUV','bgNeb','bgRings'].forEach(function(id,i){var el=document.getElementById(id);if(el){el.classList.toggle('on',i===m);}});};
@@ -215,10 +220,11 @@ document.getElementById('lengthSlider').addEventListener('input',function(){thro
 
 // Render at a fraction of device resolution (quarter on mobile) since the
 // per-pixel geodesic trace is expensive; the canvas is then CSS-scaled up.
-function resize(){var dpr=Math.min(window.devicePixelRatio||1,2),mob=window.innerWidth<768,sc=mob?0.25:0.4;
-  canvas.width=Math.floor(window.innerWidth*dpr*sc);canvas.height=Math.floor(window.innerHeight*dpr*sc);
-  gl.viewport(0,0,canvas.width,canvas.height);document.getElementById('res').textContent=canvas.width+'×'+canvas.height;}
-window.addEventListener('resize',resize);resize();
+// lib/render-scale.js also caps the pixel count and lowers it while the
+// frame rate is low.
+var renderScale=RenderScale.create({canvas:canvas,gl:gl,label:document.getElementById('res'),
+  fracDesktop:0.4,fracMobile:0.25,mobileWidth:768});
+window.addEventListener('resize',renderScale.resize);renderScale.resize();
 
 // Minimap: draw the wormhole's embedding surface (the classic funnel) as a 2D
 // wireframe on a side canvas, sampling the same r(l) profile the shader uses,
@@ -275,7 +281,7 @@ function drawMinimap(){
 // uniforms, draw the fullscreen quad, and refresh the minimap.
 var frames=0,lastT=performance.now();
 function frame(){
-  var now=performance.now();frames++;
+  var now=performance.now();frames++;renderScale.tick(now);
   if(now-lastT>500){document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';frames=0;lastT=now;}
   if(autoSpin)orbYaw-=SPIN_SPEED;
   updateDescent();
@@ -322,7 +328,7 @@ function frame(){
   gl.uniform2f(U.u_res,canvas.width,canvas.height);
   gl.uniform3f(U.u_camPos,cx,cy,cz);
   gl.uniform3f(U.u_camFwd,fwd[0],fwd[1],fwd[2]);gl.uniform3f(U.u_camRight,right[0],right[1],right[2]);gl.uniform3f(U.u_camUp,up[0],up[1],up[2]);
-  gl.uniform1f(U.u_focalLen,FOCAL);gl.uniform1f(U.u_throatK,throatK);gl.uniform1f(U.u_throatA,throatA);
+  gl.uniform1f(U.u_focalLen,FOCAL_PER_H*canvas.height);gl.uniform1f(U.u_throatK,throatK);gl.uniform1f(U.u_throatA,throatA);
   gl.uniform1f(U.u_discInner,throatK*1.05);gl.uniform1f(U.u_discOuter,throatK*4.0);
   gl.uniform1f(U.u_dl,dl);gl.uniform1f(U.u_maxSteps,steps);gl.uniform1f(U.u_escapeR,escR);
   gl.uniform1f(U.u_useGeodesic,useGeodesic?1:0);gl.uniform1f(U.u_useRK4,useRK4?1:0);
