@@ -12,9 +12,9 @@
 //    function refreshVisibility                      S.vis and the flags
 // ============================================================================
 import { S, dirty } from './state.js';
-import { syncRead } from '../main.js';
 import { retarget } from './layouts.js';
 import { clearSelection } from './select.js';
+import { syncRead } from './controls.js';
 
 function shownByToggles(b) {
   if (b.type === 'tooth' && !S.show.teeth) return false;

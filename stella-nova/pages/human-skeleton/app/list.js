@@ -20,8 +20,8 @@ import { S, regionOf } from './state.js';
 import { refreshVisibility } from './visibility.js';
 import { toggleRegionExplode } from './layouts.js';
 import { select } from './select.js';
-import { setShow, syncUI } from '../main.js';
 import { panel, setOpen } from './panel.js';
+import { setShow, syncUI } from './controls.js';
 
 export const list = $('list');
 export let rowEls = new Map();
