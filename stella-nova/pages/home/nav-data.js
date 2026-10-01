@@ -40,6 +40,10 @@
     ["orbital", "Atomic Orbital", "VR"],
     ["molecular-bond", "Molecular Bond", "SIM"],
     ["hydrogen-table", "Hydrogen Wave Function", "NEW"]] },
+  { h: "Proteins", p: [
+    ["protein-viewer", "Protein Structure", "3D"],
+    ["protein-folding", "Protein Folding", "SIM"],
+    ["alphafold", "How AlphaFold Works", "ML"]] },
   { h: "Quantum Computing", p: [
     ["qave", "Quantum Algorithm Visualizer", "3D"],
     ["qft-flow", "Quantum Encoding", "MATH"],
