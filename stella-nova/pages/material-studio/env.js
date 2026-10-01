@@ -526,6 +526,9 @@ function ensureSource(id) {
     throw new Error('unknown environment ' + id);
   };
   const promise = run().catch(e => {
+    // The shell destroyed the device (page swap): a readback in flight aborts.
+    // That is not an error, and a fallback load would only abort again.
+    if (e?.name === 'AbortError' || gpu.lost || gpu.reason === 'torn down') return null;
     console.error('[env]', e);
     toast('Environment: ' + e.message, 'error');
     // Fall back to the last good source, so state.env.preset never lies.
