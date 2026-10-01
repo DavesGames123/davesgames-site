@@ -15,12 +15,14 @@
 //    const VIEWS .............. camera presets
 //    function ringBell ........ the alarm sound (WebAudio, on a user tap)
 //    function frame ........... step, pose, fades, stage, cards
+//    const xr = wireXR ........ the headset view (../watch-movement/xr.js)
 // ============================================================================
 import * as THREE from 'three';
 import { loadCalibre } from '../watch-movement/calibres/index.js';
 import { createBuild } from '../watch-movement/kit.js';
 import { createStage, ease } from '../watch-movement/stage.js';
 import { createCards, esc } from '../watch-movement/cards.js';
+import { wireXR } from '../watch-movement/xr.js';
 import * as Gen from './generator.js';
 import { caseDims } from './dims.js';
 import { buildCase } from './cases/index.js';
@@ -321,8 +323,18 @@ function frame(now) {
 }
 window.addEventListener('pagehide', () => { running = false; cancelAnimationFrame(raf); stage.dispose(); try { actx && actx.close(); } catch (e) {} });
 
+// ── headset ─────────────────────────────────────────────────────────────────
+// VR and AR through ../watch-movement/xr.js. Roll makes a new piece in the
+// headset and places it again once it has settled (its size can change).
+const xr = wireXR({
+  stage, cards, $, title: 'Timepiece randomizer',
+  get: () => S.cur && { ...S.cur, PARTS: S.cur.PARTS },
+  getExplode: () => S.explodeTarget, setExplode, getRate: () => S.rate, setRate,
+  actions: [{ label: 'Roll a new piece', run: () => { roll(); xr.replace(); } }],
+});
+
 // debug and headless checks
-window.__rand = { S, stage, cards, roll, setView, setExplode, Gen };
+window.__rand = { S, stage, cards, xr, roll, setView, setExplode, Gen };
 
 // ── boot ────────────────────────────────────────────────────────────────────
 setRate(1);
