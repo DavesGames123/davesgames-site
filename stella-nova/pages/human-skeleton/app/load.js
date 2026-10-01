@@ -20,7 +20,8 @@ import { $, COARSE, LOAD_ORDER } from './env.js';
 import { scene, U } from './stage.js';
 import { T, S, dirty, toast } from './state.js';
 import { fitView } from './camera.js';
-import { refreshVisibility, buildList, syncRead, syncUI } from '../main.js';
+import { buildList, syncRead, syncUI } from '../main.js';
+import { refreshVisibility } from './visibility.js';
 
 async function fetchBuf(url) {
   const r = await fetch(url);

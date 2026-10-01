@@ -42,27 +42,7 @@ import { occ, occlusion, clearRect, fitDist, resize, flyTo, fitView, fitShadow, 
 import { setTraysOn, buildTrays, placeLabels } from './app/tray.js';
 import { pickRT, pickAt } from './app/pick.js';
 import { loadAll, ensureCartilage } from './app/load.js';
-
-// ── visibility, flags ───────────────────────────────────────────────────────
-function shownByToggles(b) {
-  if (b.type === 'tooth' && !S.show.teeth) return false;
-  if (b.type === 'cartilage' && !S.show.cartilage) return false;
-  return !S.hiddenRegion.has(b.region);
-}
-export function refreshVisibility(relayout = true) {
-  let changed = false;
-  for (const b of S.bones) {
-    const v = S.loaded[b.i] && shownByToggles(b) ? 1 : 0;
-    if (v !== S.vis[b.i]) { S.vis[b.i] = v; changed = true; }
-    const flag = !v ? 1 : S.iso >= 0 && b.i !== S.iso ? 2 : 0;
-    S.state.setK(2, b.i, 3, flag);
-  }
-  S.state.dirty();
-  if (S.sel >= 0 && !S.vis[S.sel]) clearSelection();
-  if (changed && relayout) retarget(true);
-  syncRead();
-  dirty();
-}
+import { refreshVisibility } from './app/visibility.js';
 
 // ── layouts ─────────────────────────────────────────────────────────────────
 function aspect() { const c = clearRect(); return Math.max(0.5, Math.min(2.6, (c.x1 - c.x0) / Math.max(1, c.y1 - c.y0))); }
@@ -88,7 +68,7 @@ function target() {
 }
 function exploded() { return S.mode === 'catalogue' || S.amt.some(x => x > 0); }
 // start a transition from the bones as they are now to the new target
-function retarget(stagger, reverse = false, fit = true) {
+export function retarget(stagger, reverse = false, fit = true) {
   const t = target();
   S.from.off.set(S.cur.off); S.from.q.set(S.cur.q);
   S.to.off.set(t.off); S.to.q.set(t.q);
@@ -168,7 +148,7 @@ function select(i, opts = {}) {
   else requestAnimationFrame(() => ensureVisible(i));
   dirty();
 }
-function clearSelection() {
+export function clearSelection() {
   if (S.sel >= 0) setHi(S.sel, 0, 0);
   S.sel = -1;
   hideCard();
