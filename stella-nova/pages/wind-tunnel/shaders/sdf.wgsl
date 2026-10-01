@@ -17,12 +17,14 @@
 // Material ids (view2d.wgsl and view3d.wgsl color them):
 //     0 hide (cow coat)   1 dark (hoof, tyre, tuft)   2 glass   3 horn
 //     4 pink (muzzle, udder)   5 paint   6 chrome   7 trailer grey   8 metal
+//     9 cow leg (coat)
+// Ids 1, 6 and 9 are porous in the 2D views (see projSolid).
 //
 // Shape kinds (shapes.js KIND):
 //     0 cow  1 car  2 truck  3 airfoil  4 cylinder  5 sphere  6 box  7 plate
 //
 // grep: struct ShapeU  fn P(  fn sdCow  fn sdCar  fn sdTruck  fn sdAirfoil
-//       fn shapeLocal  fn objDist  fn projSolid
+//       fn shapeLocal  fn objDist  fn projSolid  fn matColor
 
 struct ShapeU {
   inv0: vec4f,        // world -> local rotation, row 0 (w unused)
@@ -146,7 +148,6 @@ fn sdCow(p: vec3f) -> vec2f {
   let lr = g * 0.095;
   let legF = sdTaper(q, vec3f(-bl * 0.31, yc - g * 0.05, lz), vec3f(-bl * 0.33, 0.06, lz), lr * 1.25, lr * 0.8);
   let legH = sdTaper(q, vec3f(bl * 0.31, yc, lz), vec3f(bl * 0.36, 0.06, lz), lr * 1.4, lr * 0.8);
-  d = smin(d, min(legF, legH), 0.04);
 
   // Neck and head. The poll (top of the head) swings down with the head drop.
   let nb = vec3f(-bl * 0.40, yc + g * 0.18, 0.0);
@@ -158,7 +159,12 @@ fn sdCow(p: vec3f) -> vec2f {
   d = smin(d, sdTaper(p, poll, muz, 0.075 * hs, 0.058 * hs), 0.03);
   let qe = vec3f(p.x, p.y, abs(p.z));
   d = min(d, sdEllipsoid(qe - (poll + vec3f(0.015, -0.005, 0.08) * hs), vec3f(0.028, 0.014, 0.05) * hs));
-  var r = vec2f(d, 0.0);
+  // The legs join the torso smoothly. They keep their own id, because the
+  // 2D views treat legs as porous (see projSolid).
+  let dLeg = min(legF, legH);
+  let legNear = dLeg < d;
+  d = smin(d, dLeg, 0.04);
+  var r = vec2f(d, select(0.0, 9.0, legNear));
 
   // Muzzle and udder.
   r = opU(r, vec2f(sdEllipsoid(p - (muz + vec3f(hd, 0.0) * 0.015 * hs), vec3f(0.055, 0.05, 0.058) * hs), 4.0));
@@ -394,17 +400,74 @@ fn objDist(w: vec3f) -> vec3f {
 
 // 2D silhouette test. Sweeps the hidden axis through the object by sphere
 // tracing, so thin parts (legs, posts) are not stepped over. Returns the copy
-// index of the first solid hit, or -1 for fluid.
+// index of a solid hit, 100 + copy if only porous parts lie on the sweep, or
+// -1 for fluid. Porous parts (legs, hooves, tyres, hubs) stand apart in the
+// hidden axis. In a silhouette they would close the gap under a car or a
+// cow and trap fluid there, so the 2D solver lets the flow pass them.
+fn porous(id: f32) -> bool {
+  let m = u32(id + 0.5);
+  return m == 1u || m == 6u || m == 9u;
+}
+
 fn projSolid(xy: vec2f) -> i32 {
   var s = SH.sweepC - SH.extent;
   let s1 = SH.sweepC + SH.extent;
-  for (var i = 0; i < 160; i++) {
+  var ghost = -1;
+  for (var i = 0; i < 240; i++) {
     var w = vec3f(xy, s);
     if (SH.proj == 2u) { w = vec3f(xy.x, s, xy.y); }
     let o = objDist(w);
-    if (o.x < 0.0) { return i32(o.z); }
-    s += max(o.x * 0.8, 0.35);
+    if (o.x < 0.0) {
+      if (!porous(o.y)) { return i32(o.z); }
+      ghost = 100 + i32(o.z);
+      s += 0.5;
+    } else {
+      s += max(o.x * 0.8, 0.35);
+    }
     if (s > s1) { break; }
   }
-  return -1;
+  return ghost;
+}
+
+// ------------------------------------------------------------ materials
+// Color of material id at local point pl. The views call it; the solver
+// does not. The coat patches come from value noise in the local frame, so
+// they move with the cow when it turns.
+
+fn hash3(p: vec3f) -> f32 {
+  let q = fract(p * 0.3183099 + vec3f(0.1, 0.2, 0.3)) * 17.0;
+  return fract(q.x * q.y * q.z * (q.x + q.y + q.z));
+}
+
+fn vnoise(p: vec3f) -> f32 {
+  let i = floor(p);
+  let f = fract(p);
+  let u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mix(hash3(i), hash3(i + vec3f(1.0, 0.0, 0.0)), u.x),
+                 mix(hash3(i + vec3f(0.0, 1.0, 0.0)), hash3(i + vec3f(1.0, 1.0, 0.0)), u.x), u.y),
+             mix(mix(hash3(i + vec3f(0.0, 0.0, 1.0)), hash3(i + vec3f(1.0, 0.0, 1.0)), u.x),
+                 mix(hash3(i + vec3f(0.0, 1.0, 1.0)), hash3(i + vec3f(1.0, 1.0, 1.0)), u.x), u.y), u.z);
+}
+
+fn matColor(id: f32, pl: vec3f) -> vec3f {
+  var m = u32(id + 0.5);
+  if (m == 9u) { m = 0u; }
+  switch (m) {
+    case 0u: {
+      let n = vnoise(pl * 6.0 + vec3f(3.1, 0.0, 1.7)) * 0.65 + vnoise(pl * 13.0) * 0.35;
+      return select(vec3f(0.93, 0.91, 0.86), vec3f(0.07, 0.065, 0.07), n > 0.56);
+    }
+    case 1u: { return vec3f(0.07, 0.07, 0.08); }
+    case 2u: { return vec3f(0.09, 0.13, 0.19); }
+    case 3u: { return vec3f(0.86, 0.80, 0.64); }
+    case 4u: { return vec3f(0.92, 0.62, 0.62); }
+    case 5u: {
+      if (SH.kind == 1u) { return vec3f(0.78, 0.10, 0.09); }
+      if (SH.kind == 2u) { return vec3f(0.12, 0.30, 0.66); }
+      return vec3f(0.74, 0.77, 0.82);
+    }
+    case 6u: { return vec3f(0.78, 0.79, 0.82); }
+    case 7u: { return vec3f(0.86, 0.87, 0.88); }
+    default: { return vec3f(0.70, 0.72, 0.76); }
+  }
 }
