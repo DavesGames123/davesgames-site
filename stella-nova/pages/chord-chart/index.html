@@ -3,83 +3,92 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Chord Chart // Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    CHORD CHART  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. main.js fills the empty containers below with buttons
-   and chord cards, and draws each card onto its own canvas. This file only
-   declares the containers and the chrome that main.js binds to by id.
+   Static markup only. main.js fills the empty containers with the root
+   chips, the chord cards and the detail panel. Each chord diagram is an SVG
+   string from diagrams.js.
 
-   LOAD ORDER
-     1. in-frame guard   adds .in-frame when embedded in the site shell iframe
-     2. mobile-switch.js classic script; sets the .mob layout flag early
+   LOAD ORDER  (classic scripts, so the page also runs on file://)
+     1. in-frame guard   adds .in-frame when the site shell embeds the page
+     2. mobile-switch.js sets the .mob phone-layout flag early
      3. style.css        page stylesheet
-     4. main.js          classic script at end of body; builds the UI
+     4. theory.js        chord theory, spelling, parser, voicings (no DOM)
+     5. diagrams.js      chord diagrams as SVG strings (no DOM)
+     6. main.js          builds the UI, the detail panel and the strum synth
 
    LAYOUT  (# marks an element id that main.js writes into)
-     ┌─────────────────────────────────────────────────────────────────┐
-     │ topbar: Stella Nova · Chord Chart                                 │
-     ├─────────────────────────────────────────────────────────────────┤
-     │ #rootStrip   ● ● ● ● ● ● ● ● ● ● ● ●   twelve root buttons        │
-     ├─────────────────────────────────────────────────────────────────┤
-     │ #bigRoot  C          #instSeg  Guitar Bass Uke Violin             │
-     ├─────────────────────────────────────────────────────────────────┤
-     │ The Essentials      #gridBasic   major · minor · 7                │
-     │ More Flavors        #gridMore    maj7 m7 sus2 sus4 dim            │
-     ├─────────────────────────────────────────────────────────────────┤
-     │ #status-bar   root · instrument · hint                            │
-     └─────────────────────────────────────────────────────────────────┘
+     ┌───────────────────────────────────────────────┬───────────────────┐
+     │ #rootStrip   C D♭ D E♭ E F F♯ G A♭ A B♭ B      │                   │
+     │ #bigRoot  #instSeg  #qualSeg  #find            │  #detail          │
+     │ #tuning                                        │  (side panel;     │
+     │ #gridLbl                                       │   a bottom sheet  │
+     │ #grid   one card per chord quality             │   on phones)      │
+     └───────────────────────────────────────────────┴───────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- In-frame guard: when embedded in the site shell iframe, tag <html> so the
-     CSS hides this page's own topbar. Inline so it runs before first paint. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<!-- Sets the .mob phone-layout flag before the page renders. -->
 <script src="mobile-switch.js"></script>
 
 <div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Chord Chart · ♪</span></div>
-  <div class="topbar-r">SYS // <strong>CHORD REFERENCE</strong></div>
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Chord Chart</span></div>
+  <div class="topbar-r">chord reference</div>
 </div>
 
-<!-- Root picker: main.js appends the twelve pitch-class buttons here. -->
-<div id="rootStrip"></div>
+<div id="app">
+  <main id="chart">
+    <!-- Root picker: main.js adds the twelve pitch-class chips. -->
+    <nav id="rootStrip" aria-label="Root note"></nav>
 
-<!-- Header: large current-root display plus the instrument switch. -->
-<div id="chartHead">
-  <div id="bigRoot">C</div>
-  <!-- data-i is the instrument key main.js reads on click. -->
-  <div class="seg" id="instSeg">
-    <button data-i="guitar" class="on">Guitar</button>
-    <button data-i="bass">Bass</button>
-    <button data-i="ukulele">Uke</button>
-    <button data-i="violin">Violin</button>
-  </div>
+    <div id="toolbar">
+      <div id="bigRoot" aria-live="polite">C</div>
+      <!-- data-i is the instrument key main.js reads. -->
+      <div class="seg" id="instSeg" role="group" aria-label="Instrument">
+        <button data-i="guitar" class="on">Guitar</button>
+        <button data-i="bass">Bass</button>
+        <button data-i="ukulele">Uke</button>
+        <button data-i="violin">Violin</button>
+      </div>
+      <!-- data-f is a key of ChordTheory.QUAL_GROUPS. -->
+      <div class="seg" id="qualSeg" role="group" aria-label="Chord qualities">
+        <button data-f="all" class="on">All</button>
+        <button data-f="triads">Triads</button>
+        <button data-f="sevenths">7ths</button>
+      </div>
+      <form id="find" role="search" autocomplete="off">
+        <input id="findIn" type="search" placeholder="Find a chord: F#m7, Bbmaj7" aria-label="Find a chord by name" spellcheck="false" enterkeyhint="go">
+        <span id="findMsg" aria-live="polite"></span>
+      </form>
+    </div>
+    <div id="tuning"></div>
+
+    <div id="chartBody">
+      <h2 class="gsec-lbl"><span id="gridLbl"></span><span class="gs-note">major, minor and 7 first · tap a card for every voicing</span></h2>
+      <div class="grid" id="grid"></div>
+      <p id="keys">← → root · / find · Enter open · Esc close · Space play</p>
+    </div>
+  </main>
+
+  <!-- Detail of the selected chord: notes, intervals, every voicing. -->
+  <aside id="detail" aria-label="Chord detail" hidden>
+    <div class="grip" aria-hidden="true"></div>
+    <button id="dClose" class="icon-b" aria-label="Close the chord detail">×</button>
+    <div id="dBody"></div>
+  </aside>
 </div>
 
-<!-- Card grids: main.js fills gridBasic and gridMore with one chord card each. -->
-<div id="chartBody">
-  <div class="gsec-lbl">The Essentials<span class="gs-note">start here — major · minor · 7</span></div>
-  <div id="gridBasic"></div>
-  <div class="gsec-lbl">More Flavors<span class="gs-note">color &amp; tension</span></div>
-  <div id="gridMore"></div>
-</div>
-
-<!-- Status bar: main.js keeps st-root and st-inst in sync with the selection. -->
-<div id="status-bar">
-  <span>root <b id="st-root">C</b></span><span class="sep"></span>
-  <span id="st-inst">guitar</span><span class="sep"></span>
-  <span>8 qualities · tap ♪ to hear</span>
-</div>
-
-<!-- Builds the UI and draws the cards; runs after the markup is parsed. -->
+<script src="theory.js"></script>
+<script src="diagrams.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
