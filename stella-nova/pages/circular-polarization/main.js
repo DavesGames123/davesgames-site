@@ -46,6 +46,7 @@
 //      readouts ............. "function updateReadouts"
 //      controls ............. "Controls"
 //      animation loop ....... "function animate"
+//      headset (VR / AR) .... "XR: the wave in a headset"
 // ============================================================================
 import { EQ } from './equations.js';
 import { polState, jonesText } from './polar.js';
@@ -500,7 +501,58 @@ rebuild();
 updateReadouts();
 frameFor(params.dist, true);
 animate();
-window.__polar = { params, polState, jonesText, setDelta, rays: () => rays.length, single: () => !!single };
+// ─── XR: the wave in a headset (lib/xr-view.js) ───────────────────────────
+// VR and AR place the field on a table. xrBounds() gives a box whose height
+// is the longest side of the field, so tableHeight sets that longest side:
+// one ray is a wave 1 m long, a ring or a sphere is 1 m across. The polar
+// grid is the page floor, and the headset has its own, so the grid hides in
+// XR. A mode change in the headset places the field again at its new size.
+// After exit, a mode change also frames the desktop camera for the new mode.
+const { attachXR } = await import('../../lib/xr-view.js');
+const XR_SIDE = 1.0;
+const XR_PAD = 2.6;
+function xrBounds() {
+  const b = new THREE.Box3(new THREE.Vector3(-XR_PAD, -XR_PAD, -XR_PAD), new THREE.Vector3(XR_PAD, XR_PAD, XR_PAD));
+  if (params.dist === 'single') {
+    const end = SINGLE_DIR.clone().multiplyScalar(R_MAX);
+    b.expandByPoint(end.clone().addScalar(-XR_PAD)).expandByPoint(end.clone().addScalar(XR_PAD));
+  } else {
+    const r = R_MAX + XR_PAD, h = params.dist === 'sphere' ? r : XR_PAD;
+    b.expandByPoint(new THREE.Vector3(-r, -h, -r)).expandByPoint(new THREE.Vector3(r, h, r));
+  }
+  const side = Math.max(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z);
+  b.max.y = b.min.y + side;
+  return b;
+}
+const XR_MODES = ['single', 'ring', 'sphere'];
+const XR_MODE_NAME = { single: 'One ray', ring: 'Ring', sphere: 'Sphere' };
+const XR_SNAPS = [90, 45, 0, -90];
+const XR_SNAP_NAME = { 90: '90° R', 45: '45°', 0: '0° linear', '-90': '−90° L' };
+let xrModeAtEnter = null;
+const xr = attachXR({
+  renderer, scene, camera, controls,
+  bounds: xrBounds, tableHeight: XR_SIDE,
+  vrButton: $('bVR'), arButton: $('bAR'),
+  title: 'Circular polarization',
+  hideInXR: [grid],
+  actions: [
+    { label: () => 'Rays: ' + XR_MODE_NAME[params.dist],
+      run: () => {
+        const next = XR_MODES[(XR_MODES.indexOf(params.dist) + 1) % XR_MODES.length];
+        document.querySelector(`.mode-btn[data-mode="${next}"]`).click();
+        xr.reset();
+      } },
+    { label: () => 'Phase δ: ' + (XR_SNAP_NAME[params.delta] || params.delta + '°'),
+      run: () => setDelta(XR_SNAPS[(XR_SNAPS.indexOf(params.delta) + 1) % XR_SNAPS.length]) },
+    { label: () => params.showB ? 'B field: on' : 'B field: off', on: () => params.showB, run: () => $('showB').click() },
+    { label: () => params.playing ? 'Pause' : 'Play', run: () => $('play').click() },
+  ],
+  onEnter() { xrModeAtEnter = params.dist; },
+  onExit() { if (params.dist !== xrModeAtEnter) { tween = null; frameFor(params.dist, true); } },
+  onSupport(s) { $('xrSec').hidden = !(s.vr || s.ar); },
+});
+
+window.__polar = { params, polState, jonesText, setDelta, rays: () => rays.length, single: () => !!single, xr, scene, camera, renderer, controls };
 
 } catch (err) {
   showErr(err.message || String(err));

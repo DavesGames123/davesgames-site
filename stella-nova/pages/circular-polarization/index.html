@@ -143,6 +143,16 @@
         <button class="play" id="play" type="button" aria-pressed="true">Pause</button>
       </div>
     </section>
+
+    <!-- Headset: main.js shows this section only when WebXR offers VR or AR
+         (lib/xr-view.js). Without WebXR it stays hidden. -->
+    <section class="p-sec" id="xrSec" hidden>
+      <h2>Headset</h2>
+      <div class="xr-row">
+        <button class="xr-btn" id="bVR" type="button" hidden>View in VR</button>
+        <button class="xr-btn" id="bAR" type="button" hidden>View in AR</button>
+      </div>
+    </section>
   </aside>
 </main>
 

@@ -121,6 +121,12 @@ input[type="range"]:focus-visible{box-shadow:0 0 0 3px rgba(212,168,71,0.25)}
 .tog input:focus-visible + .sw{box-shadow:0 0 0 3px rgba(212,168,71,0.25)}
 .play{margin-left:auto;min-height:30px;padding:0 14px;border:1px solid var(--line2);border-radius:999px;background:none;cursor:pointer;font:500 0.7rem/1 var(--f-mono);letter-spacing:0.1em;text-transform:uppercase;color:var(--dim)}
 .play:hover{color:var(--ink);border-color:rgba(212,168,71,0.5)}
+/* Headset buttons (lib/xr-view.js shows them when WebXR is there). */
+.xr-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.xr-btn{min-height:34px;padding:0 12px;border:1px solid var(--line2);border-radius:999px;background:none;cursor:pointer;font:500 0.7rem/1 var(--f-mono);letter-spacing:0.08em;text-transform:uppercase;color:var(--dim)}
+.xr-btn:hover{color:var(--ink);border-color:rgba(212,168,71,0.5)}
+.xr-btn[hidden],#xrSec[hidden]{display:none}
+.xr-btn:disabled{opacity:.5;cursor:default}
 
 /* ═══ NARROW LANDSCAPE: a slimmer panel ═══ */
 @media (max-width:1100px){:root{--panel-w:330px}#panel{padding:22px 18px 26px}#panel h1{font-size:1.8rem}}
@@ -146,6 +152,7 @@ input[type="range"]:focus-visible{box-shadow:0 0 0 3px rgba(212,168,71,0.25)}
   .snaps button{min-height:44px;padding:0 14px;font-size:0.72rem}
   .tog{min-height:44px}
   .play{min-height:44px}
+  .xr-btn{min-height:44px}
   input[type="range"]{height:6px;margin:12px 0}
   input[type="range"]::-webkit-slider-thumb{width:26px;height:26px}
   input[type="range"]::-moz-range-thumb{width:26px;height:26px}
