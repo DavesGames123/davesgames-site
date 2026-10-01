@@ -1,0 +1,15 @@
+This commit also holds an unrelated change from a parallel session: the
+origami layout choice moves from localStorage to sessionStorage (main.js
+"case 'layout'" and the boot lines that delete the old origami.layout
+key). That change was made in the worktree while this split was in
+progress, and the split staged the whole worktree main.js.
+
+Why: a VERTICAL choice saved in localStorage stayed forever and stacked
+the panes on a wide screen. Now a forced layout lasts one tab session,
+and a new visit starts in AUTO (side by side when wider than tall).
+
+Validation (headless Chrome over CDP, HEAD tree plus that change):
+  localStorage origami.layout = 'v', reload at 1920x1200: layout
+  "horiz", old key null. At 390x844: layout "vert".
+  apply('layout:v') then reload: layout "vert", session "v".
+  console errors/warnings: none. node tests.mjs: 132 passed, 0 failed.
