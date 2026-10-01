@@ -1,0 +1,19 @@
+{
+  "exports": "BENCH_BASE BENCH_HANDOFF_KEY BENCH_NON_TILEABLE BENCH_NON_TILEABLE_CELLS BENCH_PAGE BENCH_PERIODIC LIB_TRAITS benchDef catalog exportBenchGraph fallbackWGSL importBenchGraph init loadBenchNodes openInBench parseStruct prepareBenchPass renderBenchNode runBenchPass selfTest selfTestAll trimBench uniformCtor withDefaults",
+  "defCount": 1125,
+  "defs": "62ab1099c72b40a5",
+  "passKeys": "inputsAsTextures,external,wgsl,run,prepare,load",
+  "statics": "4633c29091e4f8b5",
+  "benchDef": true,
+  "fallback": "f702efe05824265b",
+  "fallbackThrows": 550,
+  "withDefaults": "7ae167ff6b153b65",
+  "parseStruct": "[{\"name\":\"a\",\"type\":\"f32\"},{\"name\":\"b\",\"type\":\"vec2f\"},{\"name\":\"c\",\"type\":\"array<vec4f, 2>\"}]",
+  "uniformCtor": "Q(0.0, vec2f(f32(9), f32(9)), vec3f(2.0, 2.5, 3.0), vec4f(4.0, 4.5, 5.0, 5.5), array<vec4f, 2>(vec4f(6.0, 6.5, 7.0, 7.5), vec4f(8.0, 8.5, 9.0, 9.5)))",
+  "import": "15b77474dd14cc97",
+  "export": "28eb22877b03ad3c",
+  "graphErrors": "not a Composition Bench graph (needs nodes[] and links[]) | not a Composition Bench graph (needs nodes[] and links[]) | not a Composition Bench graph (needs nodes[] and links[]) | no graph | the graph has no Composition Bench nodes",
+  "handoff": "72417568e57f7853",
+  "runner": "f5829b5cb88b80c3",
+  "runnerLines": 517
+}
