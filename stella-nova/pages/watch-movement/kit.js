@@ -26,6 +26,8 @@
 // ============================================================================
 import * as THREE from 'three';
 import * as G from './geom.js';
+import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
+import { applyFinish } from './wear.js';
 const { TAU, D, pol } = G;
 const COARSE = matchMedia('(pointer:coarse)').matches;
 
@@ -87,38 +89,54 @@ function finishTextures() {
   return TEX;
 }
 
+// physical: MeshPhysicalMaterial; finish: the shader decoration (wear.js).
+// Gilt parts are lacquered (a clearcoat over the metal); satin steel is
+// brushed, so its highlight stretches across the brushing (anisotropy).
+const LACQUER = { physical: true, clearcoat: 0.55, clearcoatRoughness: 0.14 };
 const MAT_DEF = {
-  gilt: () => ({ color: 0xe8be72, metalness: 1, roughness: 0.32, roughnessMap: TEX.grain }),
-  giltPlate: () => ({ color: 0xe2b766, metalness: 1, roughness: 0.4, roughnessMap: TEX.perlage }),
-  giltBridge: () => ({ color: 0xe6bc6c, metalness: 1, roughness: 0.36, roughnessMap: TEX.geneva }),
-  brass: () => ({ color: 0xd9a95a, metalness: 1, roughness: 0.36 }),
-  rhodium: () => ({ color: 0xc4c9d2, metalness: 1, roughness: 0.38, roughnessMap: TEX.geneva }),
-  plate: () => ({ color: 0xaab0bb, metalness: 1, roughness: 0.48, roughnessMap: TEX.perlage }),
-  steel: () => ({ color: 0xe9ebf0, metalness: 1, roughness: 0.14 }),
-  satin: () => ({ color: 0xd6d9e0, metalness: 1, roughness: 0.3, roughnessMap: TEX.grain }),
-  blued: () => ({ color: 0x2a4fc8, metalness: 1, roughness: 0.26 }),
-  glucydur: () => ({ color: 0xf2a878, metalness: 1, roughness: 0.24 }),
-  gold: () => ({ color: 0xf3c86a, metalness: 1, roughness: 0.18, roughnessMap: TEX.grain }),
-  darkRotor: () => ({ color: 0x5b5f6a, metalness: 1, roughness: 0.3, roughnessMap: TEX.geneva }),
+  gilt: () => ({ ...LACQUER, color: 0xe8be72, metalness: 1, roughness: 0.3, finish: 'circular' }),
+  giltPlate: () => ({ ...LACQUER, color: 0xe2b766, metalness: 1, roughness: 0.36, finish: 'perlage' }),
+  giltBridge: () => ({ ...LACQUER, color: 0xe6bc6c, metalness: 1, roughness: 0.32, finish: 'geneva' }),
+  brass: () => ({ ...LACQUER, color: 0xd9a95a, metalness: 1, roughness: 0.3, clearcoat: 0.35 }),
+  rhodium: () => ({ physical: true, color: 0xc9ced7, metalness: 1, roughness: 0.3, finish: 'geneva' }),
+  plate: () => ({ physical: true, color: 0xb4bac4, metalness: 1, roughness: 0.4, finish: 'perlage' }),
+  steel: () => ({ physical: true, color: 0xe9ebf0, metalness: 1, roughness: 0.12 }),
+  satin: () => ({ physical: true, color: 0xd6d9e0, metalness: 1, roughness: 0.3, anisotropy: 0.55, finish: 'brushed' }),
+  blued: () => ({ physical: true, color: 0x2a4fc8, metalness: 1, roughness: 0.22, clearcoat: 0.3, clearcoatRoughness: 0.1 }),
+  glucydur: () => ({ physical: true, color: 0xf2a878, metalness: 1, roughness: 0.24, finish: 'circular' }),
+  gold: () => ({ physical: true, color: 0xf3c86a, metalness: 1, roughness: 0.14 }),
+  darkRotor: () => ({ physical: true, color: 0x5b5f6a, metalness: 1, roughness: 0.3, finish: 'geneva' }),
   spring: () => ({ color: 0xb8c6e0, metalness: 1, roughness: 0.28, side: THREE.DoubleSide }),
   hair: () => ({ color: 0xdfe6f4, metalness: 1, roughness: 0.2, side: THREE.DoubleSide }),
   chain: () => ({ color: 0x8a90a0, metalness: 1, roughness: 0.35, roughnessMap: TEX.links, side: THREE.DoubleSide }),
-  ruby: () => ({ physical: true, color: 0xb3102c, metalness: 0, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.04, ior: 1.76, specularIntensity: 1, emissive: 0x3a0008 }),
+  ruby: () => ({ physical: true, color: 0xb3102c, metalness: 0, roughness: 0.05, clearcoat: 1, clearcoatRoughness: 0.03, ior: 1.76, specularIntensity: 1, emissive: 0x3a0008 }),
   slot: () => ({ color: 0x06070c, roughness: 0.7 }),
   // case and clock materials
-  polished: () => ({ color: 0xe9ebf0, metalness: 1, roughness: 0.08 }),
-  glass: () => ({ physical: true, color: 0xffffff, metalness: 0, roughness: 0.02, transmission: 1, thickness: 0.6, ior: 1.5, transparent: true, opacity: 1, specularIntensity: 1, envMapIntensity: 1.2 }),
-  wood: () => ({ color: 0x8a5a33, metalness: 0, roughness: 0.55, roughnessMap: TEX.wood, map: TEX.wood }),
-  leather: () => ({ color: 0x5a3a24, metalness: 0, roughness: 0.75, roughnessMap: TEX.leather }),
+  polished: () => ({ physical: true, color: 0xe9ebf0, metalness: 1, roughness: 0.07 }),
+  glass: () => ({ physical: true, color: 0xffffff, metalness: 0, roughness: 0.015, transmission: 1, thickness: 0.6, ior: 1.6, transparent: true, opacity: 1, specularIntensity: 1, envMapIntensity: 1.25 }),
+  wood: () => ({ physical: true, color: 0x8a5a33, metalness: 0, roughness: 0.5, roughnessMap: TEX.wood, map: TEX.wood, clearcoat: 0.6, clearcoatRoughness: 0.2 }),
+  leather: () => ({ physical: true, color: 0x5a3a24, metalness: 0, roughness: 0.62, sheen: 0.4, sheenRoughness: 0.6, sheenColor: 0x806050, finish: 'leather' }),
   paint: () => ({ physical: true, color: 0xb02a2a, metalness: 0.2, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1 }),
   lume: () => ({ color: 0xe8f0d0, roughness: 0.6, emissive: 0x3a4a20 }),
-  black: () => ({ color: 0x15161a, metalness: 0.6, roughness: 0.35 }),
+  black: () => ({ physical: true, color: 0x15161a, metalness: 0.6, roughness: 0.3, clearcoat: 0.5, clearcoatRoughness: 0.15 }),
+  mesh: () => ({ physical: true, color: 0xd6d9e0, metalness: 1, roughness: 0.28, finish: 'weave' }),
+  thread: () => ({ physical: true, color: 0xe6dcc6, metalness: 0, roughness: 0.8, sheen: 0.6, sheenRoughness: 0.5, sheenColor: 0xffffff }),
 };
-function makeMat(name, extra) {
+// how much a material shows wear when a build asks for it ([scratches,
+// prints]); movement parts sit behind glass and show little
+const WEAR = {
+  polished: [0.85, 0.9], satin: [0.7, 0.6], gold: [0.6, 0.8], brass: [0.5, 0.6], steel: [0.35, 0.5], black: [0.7, 0.8], paint: [0.6, 0.6],
+  wood: [0.5, 0.3], leather: [0.25, 0.2], glass: [0.45, 1.0], mesh: [0.4, 0.5], blued: [0.2, 0.2],
+  rhodium: [0.1, 0.08], plate: [0.08, 0.05], gilt: [0.08, 0.04], giltPlate: [0.08, 0], giltBridge: [0.1, 0.05], glucydur: [0.1, 0],
+};
+let seedN = 0;
+function makeMat(name, extra, wear = 0) {
   const def = { ...MAT_DEF[name](), ...(extra || {}) };
-  if (def.color !== undefined && typeof def.color === 'string') def.color = new THREE.Color(def.color);
-  const physical = def.physical; delete def.physical;
-  return physical ? new THREE.MeshPhysicalMaterial(def) : new THREE.MeshStandardMaterial(def);
+  for (const k of ['color', 'sheenColor', 'emissive']) if (typeof def[k] === 'string') def[k] = new THREE.Color(def[k]);
+  const physical = def.physical, finish = def.finish; delete def.physical; delete def.finish;
+  const m = physical ? new THREE.MeshPhysicalMaterial(def) : new THREE.MeshStandardMaterial(def);
+  const w = WEAR[name] || [0, 0];
+  return applyFinish(m, { finish, wear: w[0] * wear, prints: w[1] * wear, seed: (seedN++ % 97) * 0.173 });
 }
 
 const v2 = p => new THREE.Vector2(p[0], p[1]);
@@ -127,8 +145,10 @@ export function shapeOf(outline, holes = []) {
   for (const h of holes) s.holes.push(new THREE.Path(h.map(v2)));
   return s;
 }
-export const circ = (r, n = 48, c = [0, 0]) => G.circlePoly(r, n, c);
-export const hole = (r, n = 32, c = [0, 0]) => G.circlePoly(r, n, c).reverse();
+// a circle with at least enough sides for its size (no visible facets)
+const sidesFor = r => Math.max(48, Math.min(360, Math.round(r * 18)));
+export const circ = (r, n = 48, c = [0, 0]) => G.circlePoly(r, Math.max(n, sidesFor(r)), c);
+export const hole = (r, n = 32, c = [0, 0]) => G.circlePoly(r, Math.max(n, sidesFor(r)), c).reverse();
 export const bevelFor = m => Math.min(0.025, m * 0.12);
 
 // ── the builder ─────────────────────────────────────────────────────────────
@@ -154,7 +174,7 @@ export function createBuild(opts = {}) {
     return p;
   };
   B.matFor = (p, name) => {
-    if (!p.mats[name]) { const m = makeMat(name, palette[name]); m.userData.baseEmissive = m.emissive ? m.emissive.clone() : null; p.mats[name] = m; }
+    if (!p.mats[name]) { const m = makeMat(name, palette[name], opts.wear || 0); m.userData.baseEmissive = m.emissive ? m.emissive.clone() : null; p.mats[name] = m; }
     return p.mats[name];
   };
   B.add = (p, ...ms) => {
@@ -179,13 +199,16 @@ export function createBuild(opts = {}) {
   B.slab = (outline, holes, z0, z1, matName, bev = 0.025) => {
     const b = Math.min(bev, (z1 - z0) * 0.3);
     const g = new THREE.ExtrudeGeometry(shapeOf(outline, holes || []), {
-      depth: Math.max(0.005, z1 - z0 - 2 * b), bevelEnabled: b > 0, bevelThickness: b, bevelSize: b, bevelOffset: -b, bevelSegments: 1, curveSegments: 6,
+      depth: Math.max(0.005, z1 - z0 - 2 * b), bevelEnabled: b > 0, bevelThickness: b, bevelSize: b, bevelOffset: -b, bevelSegments: b > 0.04 ? 3 : 2, curveSegments: 6,
     });
     g.translate(0, 0, z0 + b);
-    return mesh(g, matName);
+    // smooth normals across the many small side faces of a curved outline;
+    // corners sharper than 35 degrees stay sharp
+    const sm = toCreasedNormals(g, 35 * Math.PI / 180); g.dispose();
+    return mesh(sm, matName);
   };
   B.cyl = (r, z0, z1, matName, seg = 28, r1 = r) => {
-    const g = new THREE.CylinderGeometry(r1, r, z1 - z0, seg);
+    const g = new THREE.CylinderGeometry(r1, r, z1 - z0, Math.max(seg, Math.min(96, Math.round(r * 24))));
     g.rotateX(Math.PI / 2); g.translate(0, 0, (z0 + z1) / 2);
     return mesh(g, matName);
   };

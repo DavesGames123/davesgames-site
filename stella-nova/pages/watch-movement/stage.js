@@ -2,7 +2,8 @@
 //  WATCH MOVEMENT  ·  stage.js — renderer, light, camera, orbit, framing
 // ────────────────────────────────────────────────────────────────────────────
 //  createStage() sets up what every timepiece page shares: a WebGL renderer
-//  on a transparent canvas, a studio environment, a key light with shadows,
+//  on a transparent canvas, a studio environment for reflections
+//  (studioScene; o.room uses three's RoomEnvironment instead), a key light with shadows,
 //  an upright Y-up camera on OrbitControls, the gentle orbit, camera flights
 //  on spherical arcs, a distance fit after a model swap, and framing that
 //  shifts the view into the part the panel and the dock leave clear.
@@ -21,6 +22,30 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 export const ease = t => t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
 const D = Math.PI / 180, TAU = Math.PI * 2;
 
+// A photographer's studio for reflections: a dark room, a large key
+// softbox above the front, two tall strips at the sides, a cool rim panel
+// behind and a warm floor bounce. Polished metal mirrors these shapes, so
+// its highlights read as long, soft-edged bands instead of a grey room.
+function studioScene() {
+  const sc = new THREE.Scene();
+  const room = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), new THREE.MeshBasicMaterial({ side: THREE.BackSide, vertexColors: true }));
+  const pos = room.geometry.attributes.position, col = [];
+  for (let i = 0; i < pos.count; i++) { const y = pos.getY(i) / 50, k = 0.035 + 0.05 * Math.max(0, y) + 0.02 * Math.max(0, -y); col.push(k, k * 1.02, k * 1.08); }
+  room.geometry.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  sc.add(room);
+  const panel = (w, h, c, I, x, y, z) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(I), side: THREE.DoubleSide }));
+    m.position.set(x, y, z); m.lookAt(0, 0, 0); sc.add(m);
+  };
+  panel(34, 22, 0xfff3e2, 5.0, 6, 28, 26);      // key softbox, above the front
+  panel(5, 46, 0xffffff, 3.6, -36, 4, 10);      // strip, left
+  panel(5, 46, 0xfff8f0, 2.6, 36, 0, 6);        // strip, right
+  panel(30, 8, 0xbcd0ff, 4.0, 0, 10, -40);      // rim, behind
+  panel(60, 30, 0x8a6a48, 0.5, 0, -40, 0);      // floor bounce
+  panel(16, 16, 0xffffff, 2.5, -20, 30, -18);   // a small top-back kicker
+  return sc;
+}
+
 // o: { canvas, panel, coarse, reduced, onNoGL }
 export function createStage(o) {
   const { canvas, panel } = o;
@@ -31,13 +56,13 @@ export function createStage(o) {
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.92;
+  renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
   const scene = new THREE.Scene();
   const pmrem = new THREE.PMREMGenerator(renderer);
-  scene.environment = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+  scene.environment = pmrem.fromScene(o.room ? new RoomEnvironment(renderer) : studioScene(), 0.02).texture;
   const root = new THREE.Group();
   scene.add(root);
 
