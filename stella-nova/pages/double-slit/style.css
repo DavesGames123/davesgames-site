@@ -64,8 +64,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .eq-sublabel{font-size:0.55rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint);font-weight:600;margin-bottom:2px}
 .eq-row{overflow-x:auto;overflow-y:hidden}
 .eq-row::-webkit-scrollbar{height:0}
-.eq-panel .katex{color:var(--text-bright)!important;font-size:1.45rem!important;line-height:1.55!important}
-.eq-panel .katex-display{margin:0.1em 0!important}
+.eq-row{color:var(--text-bright);font-size:15px;line-height:1.4}
+.eq-row svg{max-width:100%;height:auto}
 .eq-panel.collapsed .eq-blocks{display:none}
 .eq-panel.collapsed{padding:8px 14px}
 .eq-panel.collapsed .eq-collapse{transform:rotate(180deg)}
@@ -140,13 +140,13 @@ input[type="range"]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;b
   .fab{display:block}
   .drawer-bg{display:block}
   .eq-panel{right:8px;left:8px;max-width:none;padding:10px 14px 12px}
-  .eq-panel .katex{font-size:1.2rem!important}
+  .eq-row{font-size:13px}
   .eq-sublabel{font-size:0.48rem}
   .topbar{height:38px;padding:0 0.9rem}
   .sys-name{font-size:0.9rem}
 }
 @media(max-width:420px){
   .eq-panel .eq-blocks{gap:4px}
-  .eq-panel .katex{font-size:1.0rem!important}
+  .eq-row{font-size:12px}
   .topbar-r{display:none}
 }

@@ -356,6 +356,9 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
+// Equation panel collapse toggle: fold the panel and flip the caret.
+document.getElementById('eq-collapse-btn').addEventListener('click',function(){const c=document.getElementById('eq-panel').classList.toggle('collapsed');this.textContent=c?'▼':'▲';this.title=c?'Expand':'Collapse';});
+
 // Debounce resize so buffers reallocate once the window settles, not per event.
 window.addEventListener('resize',()=>{clearTimeout(window._rt);window._rt=setTimeout(()=>{init();},200);});
 
