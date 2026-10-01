@@ -413,6 +413,9 @@
     // the open sheet. Then each colour change shows at once.
     function open() {
       panel.classList.add('sheet-open');
+      // A landscape phone shows the panel as a side column (style.css), not
+      // as a sheet. Then the hero is already in view and no scroll is necessary.
+      if (getComputedStyle(panel).position !== 'fixed') return;
       var r = $('shipCanvas').getBoundingClientRect();
       var free = window.innerHeight - panel.getBoundingClientRect().height;
       var dy = r.top + r.height / 2 - free / 2;
