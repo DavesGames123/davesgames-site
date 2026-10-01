@@ -75,6 +75,9 @@ function makeStudio(theme) {
 }
 
 // ── the floor: shadow catcher with a pool of light ─────────────────────────
+// vFloor is the floor point in scene units (mm). The mesh moves only in y, so
+// the local xz is the scene xz. World xz would be metres in a VR or AR
+// session (xr.js scales the scene), and the pool would fill the whole plane.
 function makeFloor() {
   const g = new THREE.PlaneGeometry(4000, 4000);
   g.rotateX(-Math.PI / 2);
@@ -87,7 +90,7 @@ function makeFloor() {
   m.onBeforeCompile = s => {
     Object.assign(s.uniforms, U);
     s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vFloor;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvFloor = (modelMatrix * vec4(transformed, 1.0)).xz;');
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvFloor = transformed.xz;');
     s.fragmentShader = s.fragmentShader.replace('#include <common>', `#include <common>
 varying vec2 vFloor; uniform vec3 uPool; uniform float uPoolA; uniform vec3 uShade; uniform float uShadeA; uniform vec2 uR; uniform vec2 uC;`)
       .replace('gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );', `

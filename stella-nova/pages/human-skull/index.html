@@ -23,6 +23,9 @@
      2. fonts (STIX Two Text, Inter), style.css
      3. the theme, before first paint (localStorage, else dark)
      4. importmap for three r160, then main.js as a module
+     5. xr.js, a module: the VR and AR view (lib/xr-view.js). Its buttons
+        (#bVR, #bAR) and their section (#xrSec) stay hidden until the
+        device has WebXR and the parts are loaded.
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────────────────────────────────────────────┐
@@ -128,6 +131,13 @@
       <button class="tog" id="tTheme" type="button">Light theme</button>
       <button class="tog" id="tFront" type="button">Face on</button>
     </div>
+    <div id="xrSec" hidden>
+      <div class="sec-label">Headset</div>
+      <div class="grid2">
+        <button class="tog" id="bVR" type="button" hidden>View in VR</button>
+        <button class="tog" id="bAR" type="button" hidden>View in AR</button>
+      </div>
+    </div>
   </section>
 
   <section class="grp" data-grp="parts">
@@ -163,5 +173,6 @@
 } }
 </script>
 <script type="module" src="main.js"></script>
+<script type="module" src="xr.js"></script>
 </body>
 </html>
