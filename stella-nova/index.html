@@ -309,8 +309,8 @@ let activeTab=null;
 // because removing an iframe leaves its GPU memory to the garbage collector.
 // Safari then ran out of GPU memory and the tab did not recover.
 // The swap now does three things:
-//   releaseFrame  destroys each WebGPU device, unconfigures each WebGPU
-//                 canvas and loses each WebGL context in the old page
+//   releaseFrame  destroys each WebGPU device (or unconfigures the canvas
+//                 when no device is exposed) and loses each WebGL context
 //   doSwap        loads about:blank into the old iframe so the document
 //                 unloads now, then removes the iframe and mounts the new page
 //   pendingTab    clicks during a swap only change the target tab, so a
