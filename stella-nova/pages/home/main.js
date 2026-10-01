@@ -503,7 +503,7 @@ function buildChart() {
         for (const a of idx) placed.forEach((s, b) => { if (s.g < gi) { const d = Math.hypot(placed[a].x - s.x, placed[a].y - s.y); if (d < bd) { bd = d; e = [b, a]; } } });
         if (e) edges.push(e);
       }
-      if (g.name && sec.id !== 'game' && sec.id !== 'labs' && sec.id !== 'music' && sec.id !== 'community') {
+      if (g.name && sec.id !== 'game' && sec.id !== 'music' && sec.id !== 'community') {
         sec._grp = (sec._grp || '') + `<text class="grp" x="${cx}" y="${cy - rad * 0.78 - 10}" text-anchor="middle">${esc(g.name)}</text>`;
       }
     });

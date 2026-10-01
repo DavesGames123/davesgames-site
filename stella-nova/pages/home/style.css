@@ -43,7 +43,6 @@
 [data-sector="physics"]   { --c: #7cd4ea; --c2: #9088e0; }
 [data-sector="shader"]    { --c: #e58bd0; --c2: #b896ff; }
 [data-sector="music"]     { --c: #ff8ac2; --c2: #ffb478; }
-[data-sector="labs"]      { --c: #b896ff; --c2: #f5c842; }
 [data-sector="community"] { --c: #64dcc8; --c2: #64c8f0; }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }

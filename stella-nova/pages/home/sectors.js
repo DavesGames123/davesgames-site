@@ -72,14 +72,9 @@ const SECTORS = [
     blurb: 'Hear the maths. A live chord detector, harmony wheels and resonance figures that turn vibrating plates into sound you can see.',
     lead: 'chordlab',
     label: [250, 470] },
-  { id: 'labs', name: 'Light & Material Labs', short: 'Labs', glyph: '☀', color: '#b896ff',
-    clusters: ['cl-solar', 'cl-matlab'],
-    blurb: 'Two studio tools: track the sun across any site and season, and author physically based materials with a live preview.',
-    lead: 'solar',
-    label: [440, 40] },
   { id: 'community', name: 'Community', short: 'Community', glyph: '☉', color: '#64dcc8',
     clusters: ['cl-community'],
-    blurb: 'Pages made with and for the people around the game: a tribute, a player-made map of the belt, and the translation tool.',
+    blurb: 'Pages made with and for the people around the game: a tribute, a player-made map of the belt, the translation tool, and two studio tools for sunlight and materials.',
     lead: 'starward-belt',
     label: [880, 600] },
 ];
@@ -97,8 +92,8 @@ const LAYOUT = {
   shader: [[420, 470, 50], [500, 560, 26], [590, 420, 28], [640, 555, 12],
            [690, 470, 40], [785, 540, 58], [895, 440, 44], [530, 505, 12]],
   music: [[255, 535, 58]],
-  labs: [[420, 95, 26], [490, 120, 14]],
-  community: [[950, 575, 26]],
+  // Community (no heading), Studio Tools.
+  community: [[950, 575, 26], [440, 95, 26]],
 };
 
 // The game constellation also points into this page and to the stores.

@@ -135,15 +135,12 @@
     ["holocloth", "Holocloth", "CLOTH"]] },
   { h: "Data Visualization", p: [
     ["tidal-currents", "Tidal Currents", "DATA"]] }] },
-{ id: "cl-solar", label: "Light Study", groups: [
-  { h: null, p: [
-    ["solar", "Solar Transit Study", "TOOL"]] }] },
-{ id: "cl-matlab", label: "Material Lab", groups: [
-  { h: null, p: [
-    ["matlab", "PBR Material Studio", "TOOL"]] }] },
 { id: "cl-community", label: "Community", groups: [
   { h: null, p: [
     ["fortom", "For Tom", null],
     ["starward-belt", "Starward Belt", "MAP"],
-    ["translate", "Translation Tool", "i18n"]] }] }
+    ["translate", "Translation Tool", "i18n"]] },
+  { h: "Studio Tools", p: [
+    ["solar", "Solar Transit Study", "TOOL"],
+    ["matlab", "PBR Material Studio", "TOOL"]] }] }
 ];
