@@ -34,16 +34,17 @@
 
 import { reportOk } from './foldability.js';
 import * as patterns from './patterns.js';
-import { Orbit, snap } from './view.js';
+import { snap } from './view.js';
 import { initGpu } from './gpu.js';
 import { stage, canvas, dpr, applyLayout, measure, geom2d, geom3d, view2d, phys, paneAt, snapPx, resize } from './app/layout.js';
-import { buildLibrary, toggleLibSource } from './app/libpanel.js';
+import { buildLibrary } from './app/libpanel.js';
 import { defaultStatus, setStatus, syncFold, syncUI } from './app/readouts.js';
-import { rebuild, pushUndo, undo, redo, loadPreset, eraseNear } from './app/edit.js';
+import { rebuild, pushUndo, loadPreset, eraseNear } from './app/edit.js';
 import { render } from './app/draw.js';
 import { updateHover } from './app/hover.js';
-import { savePng, exportFold, importFold } from './app/files.js';
-import { $, TOOLS, TOOL_KEYS, SPEEDS, S, gpu, setGpu, load, save, isPhone } from './app/state.js';
+import { importFold } from './app/files.js';
+import { apply, resetView, uiZoom, onKey } from './app/controls.js';
+import { $, TOOLS, S, gpu, setGpu, load } from './app/state.js';
 
 let last = performance.now();
 
@@ -70,76 +71,6 @@ function frame(now) {
   render();
   syncFold();
   requestAnimationFrame(frame);
-}
-
-// ── the control dispatcher (app.rs apply) ───────────────────────────────────
-function apply(act, el) {
-  const [verb, arg] = act.split(':');
-  switch (verb) {
-    case 'tool': S.tool = arg; break;
-    case 'grid': S.showGrid = !S.showGrid; break;
-    case 'library': S.libraryOpen = !S.libraryOpen; if (S.libraryOpen && isPhone()) S.panelOpen = false; break;
-    case 'library-close': S.libraryOpen = false; break;
-    case 'preset': { const p = patterns.byId(arg); if (p) loadPreset(p); if (isPhone()) S.panelOpen = false; break; }
-    case 'libsrc': toggleLibSource(arg); return;
-    case 'play': S.auto = !S.auto; break;
-    case 'flat': S.auto = false; S.fraction = 0; S.mesh.resetFlat(); break;
-    case 'speed': {
-      const i = SPEEDS.findIndex((s) => Math.abs(s - S.foldSpeed) < 1e-3);
-      S.foldSpeed = SPEEDS[((i < 0 ? 1 : i) + 1) % SPEEDS.length];
-      S.auto = true;
-      break;
-    }
-    case 'fraction': S.auto = false; S.fraction = Math.min(Math.max(Number(el.value), 0), 1); break;
-    case 'undo': undo(); break;
-    case 'redo': redo(); break;
-    case 'layout': S.layoutMode = arg; try { sessionStorage.setItem('origami.layout', arg); } catch { /* storage blocked */ } applyLayout(); break;
-    case 'panel': S.panelOpen = !S.panelOpen; break;
-    case 'fit': resetView('2d'); resetView('3d'); break;
-    case 'png': savePng(); break;
-    case 'fold-export': exportFold(); break;
-    case 'fold-import': $('foldFile').click(); break;
-    default: return;
-  }
-  syncUI();
-}
-
-function resetView(pane) {
-  if (pane === '2d') { S.zoom2d = 1; S.pan2d = [0, 0]; }
-  else { S.orbit = new Orbit(); S.pan3d = [0, 0]; }
-}
-
-
-// ── interface zoom (main.rs: Command plus, minus, zero) ─────────────────────
-function uiZoom(f) {
-  S.ui = f === 0 ? 1 : Math.min(Math.max(S.ui * f, 0.7), 2.0);
-  document.documentElement.style.fontSize = (16 * S.ui).toFixed(2) + 'px';
-  save('origami.ui', S.ui);
-  requestAnimationFrame(applyLayout);
-}
-
-// ── keyboard (main.rs window_event, plus web keys) ──────────────────────────
-function onKey(e) {
-  const mod = e.metaKey || e.ctrlKey;
-  const k = e.key;
-  if (e.target && e.target.tagName === 'INPUT' && e.target.type !== 'range') return;
-  if (mod) {
-    if (k === '+' || k === '=') { e.preventDefault(); uiZoom(1.12); }
-    else if (k === '-' || k === '_') { e.preventDefault(); uiZoom(1 / 1.12); }
-    else if (k === '0') { e.preventDefault(); uiZoom(0); }
-    else if (k.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); }
-    else if (k.toLowerCase() === 'y' && e.ctrlKey) { e.preventDefault(); redo(); }
-    return;
-  }
-  if (e.altKey) return;
-  const lk = k.toLowerCase();
-  if (lk === 's') { e.preventDefault(); savePng(); return; }
-  if (TOOL_KEYS[lk]) { apply('tool:' + TOOL_KEYS[lk]); return; }
-  if (k === ' ') { e.preventDefault(); apply('play'); return; }
-  if (lk === 'f') { apply('flat'); return; }
-  if (lk === 'g') { apply('grid'); return; }
-  if (lk === 'l') { apply('library'); return; }
-  if (k === 'Escape') { S.libraryOpen = false; S.panelOpen = false; syncUI(); }
 }
 
 // ── pointer input (app.rs on_press, on_release, on_move, on_scroll) ─────────
