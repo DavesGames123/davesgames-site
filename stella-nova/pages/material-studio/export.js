@@ -62,222 +62,30 @@
 //      ui ............... mountExportUI, placeUI, layout table, progress, topbar, keys
 //      selfTest / init
 // ============================================================================
-import { EXPORT_TARGETS, DEFAULT_SCALARS, RES_OPTIONS } from './contract.js';
+import { EXPORT_TARGETS, DEFAULT_SCALARS } from './contract.js';
 import { makeZip, encodePNG, crc32, decodePNG, readZip } from './zip.js';
 import { buildGLB, uvSphere, parseGLB } from './glb.js';
 import * as IMP from './import.js';
 
-import { C, S, UI, last, bind, err } from './export/ctx.js';
+import { S, UI, last, bind } from './export/ctx.js';
 import { linToSrgb } from './export/half.js';
-import { fmtSize } from './export/format.js';
-import { graphJSON, scalarsNow, materialName } from './export/graph-access.js';
+import { graphJSON, scalarsNow } from './export/graph-access.js';
 import { readTexture } from './export/readback.js';
-import { chLabel } from './export/pack.js';
 import { PLANS, PLAIN_MAPS, FORMATS, resolvePlan } from './export/plans.js';
-import { DEFAULT_OPTS, OPTS, saveOpts } from './export/options.js';
+import { OPTS, saveOpts } from './export/options.js';
 import { unityGuid } from './export/engines/unity.js';
-import { h, sel, row, chk, download } from './export/ui/dom.js';
-import { setProgress, showResult } from './export/ui/progress.js';
+import { download } from './export/ui/dom.js';
 import { exportPackage, exportMapPNG } from './export/package.js';
 import { projectJSON, saveProject, copyMaterialJSON } from './export/project.js';
+import { mountExportUI, refresh, refreshTable } from './export/ui/panel.js';
+import { runExport } from './export/ui/run.js';
+import { placeUI } from './export/ui/place.js';
+import { bindKeys } from './export/ui/keys.js';
 
 export {
   linToSrgb, scalarsNow, readTexture, PLAIN_MAPS, FORMATS, unityGuid, download,
-  exportPackage, exportMapPNG, projectJSON, saveProject, copyMaterialJSON,
+  exportPackage, exportMapPNG, projectJSON, saveProject, copyMaterialJSON, mountExportUI,
 };
-let busy = false;
-
-// ------------------------------------------------------------ ui
-/**
- * Build the export UI into `host`.
- *   full mode: target cards, options, details, channel layout, run, project, import.
- *   extra mode (panels.js already owns the target cards, options and the Export
- *   button): details, channel layout, last export, project and import only.
- *   The target then follows the panels card that is on.
- */
-export function mountExportUI(host, { mode = 'full' } = {}) {
-  const box = h('div', { class: 'io' + (mode === 'extra' ? ' io-extra' : '') });
-  UI.mode = mode;
-  // target cards (full mode)
-  if (mode === 'full') {
-    const targets = h('div', { class: 'io-targets', role: 'radiogroup', 'aria-label': 'Export target' });
-    for (const t of EXPORT_TARGETS) {
-      const b = h('button', { type: 'button', class: 'io-target', 'data-target': t.id, role: 'radio', title: t.packing },
-        h('b', {}, t.label), h('span', {}, t.normalY === '-Y' ? 'DX normal' : 'GL normal'));
-      b.addEventListener('click', () => { OPTS.target = t.id; saveOpts(); refresh(); });
-      targets.append(b);
-    }
-    UI.targets = targets;
-    UI.packing = h('div', { class: 'io-pack' });
-    box.append(h('section', { class: 'io-sec' }, h('h4', {}, 'Target'), targets, UI.packing));
-  }
-  // options
-  UI.name = h('input', { class: 'io-in', type: 'text', placeholder: 'Material', spellcheck: 'false', maxlength: '64' });
-  UI.name.addEventListener('input', () => refreshTable());
-  const resOpts = [{ value: 0, label: 'Preview res' }, ...RES_OPTIONS.map(r => ({ value: r, label: `${r} px` }))];
-  UI.res = sel('io-res', resOpts, OPTS.res, v => { OPTS.res = +v; saveOpts(); });
-  UI.fmt = sel('io-fmt', FORMATS.map(v => ({ value: v, label: v === 'tga' ? 'TGA (RLE)' : 'PNG' })), OPTS.fmt, v => { OPTS.fmt = v; saveOpts(); refreshTable(); });
-  UI.hfmt = sel('io-hfmt', [{ value: 'png16', label: 'PNG 16-bit' }, { value: 'png8', label: 'PNG 8-bit' }, { value: 'exr', label: 'EXR half' }], OPTS.heightFmt, v => { OPTS.heightFmt = v; saveOpts(); refreshTable(); });
-  UI.nbits = sel('io-nbits', [{ value: 8, label: '8-bit' }, { value: 16, label: '16-bit' }], OPTS.normalBits, v => { OPTS.normalBits = +v; saveOpts(); refreshTable(); });
-  const optRows = mode === 'full'
-    ? h('div', { class: 'io-grid' }, row('Name', UI.name), row('Res', UI.res), row('Format', UI.fmt), row('Height', UI.hfmt), row('Normal', UI.nbits))
-    : h('div', { class: 'io-grid' }, row('Height', UI.hfmt), row('Normal', UI.nbits));
-  // target-specific
-  const txt = (key, fallback) => {
-    const el = h('input', { class: 'io-in mono', type: 'text', spellcheck: 'false' });
-    el.value = OPTS[key]; el.addEventListener('change', () => { OPTS[key] = el.value.trim() || fallback; el.value = OPTS[key]; saveOpts(); refreshTable(); });
-    return el;
-  };
-  UI.tUnity = txt('unityShaderGuid', ''); UI.tUnity.placeholder = 'blank = the default Lit GUID';
-  UI.tGodot = txt('godotRoot', DEFAULT_OPTS.godotRoot);
-  UI.tUnreal = txt('unrealDest', DEFAULT_OPTS.unrealDest);
-  UI.tTemplate = txt('template', DEFAULT_OPTS.template);
-  UI.tTemplate.addEventListener('input', () => { OPTS.template = UI.tTemplate.value || DEFAULT_OPTS.template; refreshTable(); });
-  UI.mapsBox = h('div', { class: 'io-maps' });
-  for (const [k, m] of Object.entries(PLAIN_MAPS)) {
-    UI.mapsBox.append(chk(m.label, OPTS.maps.includes(k), on => {
-      OPTS.maps = Object.keys(PLAIN_MAPS).filter(x => (x === k ? on : OPTS.maps.includes(x)));
-      saveOpts(); refreshTable();
-    }));
-  }
-  UI.specific = {
-    unity: h('div', { class: 'io-spec', 'data-for': 'unity' }, row('Shader', UI.tUnity, 'GUID; only when your pipeline differs')),
-    unreal: h('div', { class: 'io-spec', 'data-for': 'unreal' }, row('Dest', UI.tUnreal, 'content folder; {name} expands')),
-    godot: h('div', { class: 'io-spec', 'data-for': 'godot' }, row('Path', UI.tGodot, 'res:// folder of the textures')),
-    gltf: h('div', { class: 'io-spec', 'data-for': 'gltf' },
-      chk('Fold constant maps into factors', OPTS.fold, v => { OPTS.fold = v; saveOpts(); }),
-      chk('Bake height into the mesh', OPTS.displaceMesh, v => { OPTS.displaceMesh = v; saveOpts(); })),
-    png: h('div', { class: 'io-spec', 'data-for': 'png' }, row('Names', UI.tTemplate, '{name} {map} {res}'), UI.mapsBox),
-  };
-  const flags = mode === 'full' ? h('div', { class: 'io-flags' },
-    chk('Project graph', OPTS.includeGraph, v => { OPTS.includeGraph = v; saveOpts(); }),
-    chk('Helper files', OPTS.helpers, v => { OPTS.helpers = v; saveOpts(); }),
-    chk('README', OPTS.readme, v => { OPTS.readme = v; saveOpts(); }),
-    chk('Deflate', OPTS.compress !== 'store', v => { OPTS.compress = v ? 'auto' : 'store'; saveOpts(); }))
-    : h('div', { class: 'io-flags' },
-      chk('README', OPTS.readme, v => { OPTS.readme = v; saveOpts(); }),
-      chk('Deflate', OPTS.compress !== 'store', v => { OPTS.compress = v ? 'auto' : 'store'; saveOpts(); }));
-  box.append(h('section', { class: 'io-sec' }, h('h4', {}, mode === 'full' ? 'Options' : 'Package details'), optRows, ...Object.values(UI.specific), flags));
-  UI.table = h('table', { class: 'io-table' });
-  UI.tableHead = h('h4', {}, 'Channel layout');
-  box.append(h('section', { class: 'io-sec' }, UI.tableHead, h('div', { class: 'io-tablewrap' }, UI.table)));
-  // run (full) or the result list only (extra)
-  UI.bar = h('div', { class: 'io-bar' }, h('i'));
-  UI.stage = h('div', { class: 'io-stage mono' });
-  UI.result = h('div', { class: 'io-result' });
-  if (mode === 'full') {
-    UI.go = h('button', { type: 'button', class: 'io-go' }, 'Export');
-    UI.go.addEventListener('click', () => runExport());
-    box.append(h('section', { class: 'io-sec io-run' }, UI.go, UI.bar, UI.stage, UI.result));
-  } else box.append(h('section', { class: 'io-sec io-run' }, UI.bar, UI.stage, UI.result));
-  // project
-  box.append(h('section', { class: 'io-sec' }, h('h4', {}, 'Project'), h('div', { class: 'io-btns' },
-    h('button', { type: 'button', class: 'io-btn', title: 'Graph, settings, view, light and the imported images (Ctrl+S)', onclick: () => saveProject().catch(err) }, 'Save project'),
-    h('button', { type: 'button', class: 'io-btn', onclick: () => IMP.pickFiles('.json,application/json,.zip') }, 'Open project'),
-    h('button', { type: 'button', class: 'io-btn', onclick: () => copyMaterialJSON().catch(err) }, 'Copy JSON'),
-    h('button', { type: 'button', class: 'io-btn', title: 'Every baked map as PNG in one zip', onclick: () => runExport('png') }, 'All maps .zip'))));
-  const impSec = h('section', { class: 'io-sec', id: 'io-import' });
-  box.append(impSec);
-  IMP.mountImportUI?.(impSec);
-  UI.box = box;
-  host.append(box);
-  refresh();
-  return box;
-}
-
-/** The active target: the panels card that is on (extra mode) or OPTS.target. */
-function activeTarget() {
-  if (UI.mode === 'extra') {
-    const cards = [...document.querySelectorAll('#export-panel .ex-card')];
-    const i = cards.findIndex(c => c.classList.contains('on'));
-    if (i >= 0 && EXPORT_TARGETS[i]) return EXPORT_TARGETS[i].id;
-  }
-  return OPTS.target;
-}
-
-function refresh() {
-  if (!UI.box) return;
-  const target = activeTarget();
-  if (UI.targets) for (const b of UI.targets.children) { const on = b.dataset.target === target; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); }
-  const t = EXPORT_TARGETS.find(x => x.id === target);
-  if (UI.packing) UI.packing.textContent = t ? `${t.packing} · normal ${t.normalY}` : '';
-  const fam = target.startsWith('unity') ? 'unity' : target;
-  for (const [k, el] of Object.entries(UI.specific)) el.hidden = k !== fam;
-  UI.fmt.disabled = target === 'gltf';
-  UI.hfmt.disabled = target === 'gltf';
-  if (UI.go) UI.go.textContent = target === 'gltf' ? 'Export .glb' : `Export ${t ? t.label : ''} .zip`;
-  if (!UI.name.value) UI.name.placeholder = graphJSON()?.name || 'Material';
-  refreshTable();
-}
-function refreshTable() {
-  if (!UI.table) return;
-  const target = activeTarget();
-  const o = { ...OPTS, name: materialName(), uvScale: S.view.uvScale || 1, normalBits: +OPTS.normalBits };
-  const plan = resolvePlan(target, o, null, scalarsNow());
-  const t = UI.table;
-  UI.tableHead.textContent = `Channel layout · ${EXPORT_TARGETS.find(x => x.id === target)?.label || target}`;
-  t.textContent = '';
-  t.append(h('tr', {}, h('th', {}, 'File'), h('th', {}, 'R'), h('th', {}, 'G'), h('th', {}, 'B'), h('th', {}, 'A'), h('th', {}, 'Bits')));
-  for (const img of plan) {
-    const cells = [0, 1, 2, 3].map(i => {
-      const c = img.chans.length === 1 ? (i < 3 ? img.chans[0] : null) : img.chans[i];
-      return h('td', { class: c ? (c.inv ? 'inv' : c.v !== undefined ? 'k' : '') : 'none' }, c ? chLabel(c).replace(' (sRGB)', '') : '—');
-    });
-    t.append(h('tr', { title: img.role },
-      h('td', { class: 'f' }, `${img.file}.${img.ext}`, img.optional || img.fold ? h('em', {}, img.fold ? ' if varied' : ' if used') : null, h('small', {}, img.role)),
-      ...cells, h('td', { class: 'b' }, img.fmt === 'exr' ? 'half' : `${img.bits}${img.color === 'sRGB' ? ' sRGB' : ''}`)));
-  }
-}
-
-/** Export with the panel options and download the result. */
-async function runExport(target = activeTarget()) {
-  if (busy) return;
-  busy = true;
-  document.body.classList.add('io-busy');
-  if (UI.go) UI.go.disabled = true;
-  const t0 = performance.now();
-  try {
-    const blob = await exportPackage(target, { onProgress: setProgress });
-    download(blob, blob.fileName);
-    const ms = performance.now() - t0;
-    C.store.toast(`Exported ${blob.fileName} · ${fmtSize(blob.size)} · ${(ms / 1000).toFixed(1)} s`, 'ok');
-    showResult(blob, ms);
-  } catch (e) { err(e); setProgress('failed: ' + (e.message || e), 0); }
-  finally { busy = false; document.body.classList.remove('io-busy'); if (UI.go) UI.go.disabled = false; }
-}
-
-function topbar() {
-  const tb = C.$('tb-file');
-  if (!tb) return;
-  tb.append(h('span', { class: 'io-tb' },
-    h('button', { type: 'button', class: 'tb-btn', title: 'Open a project, graph, maps or a zip (Ctrl+O)', onclick: () => IMP.pickFiles() }, 'Open'),
-    h('button', { type: 'button', class: 'tb-btn', title: 'Save the project as .studio.json (Ctrl+S)', onclick: () => saveProject().catch(err) }, 'Save'),
-    h('button', { type: 'button', class: 'tb-btn', title: 'Import texture maps as image nodes', onclick: () => IMP.pickFiles('image/*,.zip,.tga') }, 'Import'),
-    h('button', { type: 'button', class: 'tb-btn', title: 'Export with the Export tab options (Ctrl+E)', onclick: () => { showExportTab(); runExport(); } }, 'Export')));
-}
-function showExportTab() { C.$('side-tabs')?.querySelector('button[data-tab="export"]')?.click(); }
-
-/**
- * Put the UI in place after every module ran init. panels.js may own
- * #export-panel (target cards) and #tb-file (File menu). Then this module
- * adds only the extra block, and a MutationObserver puts it back each time
- * panels re-renders the pane with replaceChildren.
- */
-function placeUI() {
-  const host = C.$('export-panel');
-  if (!host || UI.box) return;
-  const panelsOwns = !!host.querySelector('.ex-cards') || typeof C.modules.panels?.api?.renderExport === 'function';
-  host.classList.add('io-host');
-  mountExportUI(host, { mode: panelsOwns ? 'extra' : 'full' });
-  if (panelsOwns) {
-    new MutationObserver(() => {
-      if (!host.contains(UI.box)) host.append(UI.box);
-      refresh();
-    }).observe(host, { childList: true });
-  }
-  const tb = C.$('tb-file');
-  if (tb && !tb.children.length) topbar();
-}
 
 // ------------------------------------------------------------ selfTest / init
 /** Quick checks that need no bake: codecs, zip, glb, GUIDs, plans. */
@@ -309,16 +117,7 @@ export async function init(ctx) {
   ctx.store.on('boot:done', () => { try { placeUI(); } catch (e) { console.error('[export] UI', e); } });
   ctx.store.on('graph:changed', () => { if (UI.name && !UI.name.value) UI.name.placeholder = graphJSON()?.name || 'Material'; });
   ctx.store.on('view:changed', () => refreshTable());
-  // Capture phase on window: Ctrl+S saves the full project (graph plus the
-  // embedded images) and Ctrl+O opens any file kind. Both are supersets of the
-  // panels.js graph-JSON shortcuts, which skip a defaultPrevented event.
-  window.addEventListener('keydown', e => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented) return;
-    const k = e.key.toLowerCase();
-    if (k === 's') { e.preventDefault(); saveProject().catch(err); }
-    else if (k === 'o') { e.preventDefault(); IMP.pickFiles(); }
-    else if (k === 'e' && UI.mode === 'full') { e.preventDefault(); showExportTab(); }
-  }, true);
+  bindKeys();
   ctx.register('io', {
     exportPackage, exportMapPNG, download, saveProject, copyMaterialJSON, projectJSON, scalarsNow,
     readTexture, runExport, unityGuid, PLAIN_MAPS, FORMATS, mountExportUI,
