@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Protein Folding — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PROTEIN FOLDING  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A folding simulator that you can watch and change.
+   Two models:
+     Go model .... one bead per residue (C-alpha). Only the contacts of the
+                   real PDB structure attract, so the native fold is the
+                   energy minimum. Langevin dynamics in Web Workers, one
+                   worker per replica (model.js, worker.js).
+     HP lattice .. H and P beads on a square or cubic lattice, pull-move
+                   Monte Carlo with replica exchange or annealing
+                   (lattice.js), the "why folding is hard" benchmarks.
+   Live plots: Q, RMSD, Rg, energy, contact map, F(Q), F(Q, Rg), Q vs T.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts (Inter, STIX Two Text), style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Protein Folding          #learnBtn #gear   │
+     ├───────────┬──────────────────────────────────────┬───────────────┤
+     │ #panel    │ #stage  #view (three.js canvas)      │ #plots        │
+     │  preset   │   #read   name, Q, RMSD, T, steps    │  Q(t)         │
+     │  temp     │   #legend colour key                 │  RMSD · Rg    │
+     │  pull     │   #hint   drag, pinch                │  energy       │
+     │  run      │                                      │  contact map  │
+     │  view     │                                      │  F(Q) F(Q,Rg) │
+     │  presets  │                                      │  Q vs T       │
+     │           │                                      │               │
+     ├───────────┴──────────────────────────────────────┴───────────────┤
+     │ #learn  explainer drawer (equations from equations.js)           │
+     └──────────────────────────────────────────────────────────────────┘
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     #dock    at the base: controls, play, reset, quench / fold / melt.
+     #plots   portrait: a swipe strip of cards above the dock, with
+              #plotDots; landscape: a column at the left edge.
+     #panel   portrait: a bottom sheet (the strip hides under it);
+              landscape: a drawer at the right edge.
+     main.js measures every overlay and frames the chains in the clear
+     area with camera.setViewOffset and camera.zoom.
+
+   GREP MAP  (main.js)
+     grep -n 'function loadPreset'   build workers and views for a preset
+     grep -n 'function onFrame'      a worker frame into series and histograms
+     grep -n 'function drawPlots'    every card, each frame it is on screen
+     grep -n 'function frameCamera'  occlusion, view offset, zoom
+     grep -n 'function setTemp'      temperature, ramp, melt and quench
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Watch a protein fold. A structure-based Go model of 27 real proteins from the PDB, plus the HP lattice model, with live Q, RMSD, contact maps and free-energy landscapes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Protein Folding</div>
+  <button id="learnBtn" class="topbtn" type="button">How it works</button>
+  <button id="gear" class="topbtn" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="read" class="pread" aria-live="off"></div>
+  <div id="legend" class="legend"></div>
+  <div id="hint" class="phint">drag to orbit · pinch or scroll to zoom</div>
+  <button id="learnFab" type="button" aria-label="How it works">?</button>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the chains cannot be drawn. The plots still run.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <label class="psel"><span>Preset</span><select id="presetSel" aria-label="Preset"></select></label>
+  <div id="presetInfo">
+    <div class="kind" id="pKind"></div>
+    <h1 id="pName">Protein folding</h1>
+    <div class="meta" id="pMeta"></div>
+    <p class="lede" id="pNote"></p>
+  </div>
+
+  <div class="go-only">
+    <div class="sec-label">Temperature</div>
+    <div class="row"><label for="temp">T / T<sub>m</sub></label><input type="range" id="temp" min="0.4" max="1.6" step="0.01" value="0.8"><span class="val" id="tempV"></span></div>
+    <div class="grid4" id="tempBtns">
+      <button data-t="quench" type="button">Quench</button>
+      <button data-t="fold" type="button">Fold</button>
+      <button data-t="melt" type="button">Melt</button>
+      <button data-t="ramp" type="button" id="rampBtn">Ramp</button>
+    </div>
+    <p class="note" id="tempNote"></p>
+
+    <div class="sec-label">Dynamics</div>
+    <div class="row"><label for="gamma">Friction γ</label><input type="range" id="gamma" min="-2" max="1" step="0.01" value="-0.3"><span class="val" id="gammaV"></span></div>
+    <div class="row"><label for="speed">Speed</label><input type="range" id="speed" min="0" max="100" step="1" value="50"><span class="val" id="speedV"></span></div>
+    <div class="seg-row"><span class="seg-lbl">Replicas</span><div class="segc" id="reps">
+      <button data-r="1" type="button">1</button><button data-r="2" type="button">2</button><button data-r="4" type="button">4</button><button data-r="6" type="button">6</button><button data-r="8" type="button">8</button>
+    </div></div>
+
+    <div class="sec-label">Pull the termini</div>
+    <div class="row"><label for="pull">Force</label><input type="range" id="pull" min="0" max="8" step="0.05" value="0"><span class="val" id="pullV"></span></div>
+    <p class="note" id="pullNote">A constant force on the two ends, along the line between them. Start from native and raise it to unfold the protein, as in an AFM experiment. Here titin I27 and ubiquitin unfold at about 3 to 4 ε/Å.</p>
+  </div>
+
+  <div class="hp-only">
+    <div class="sec-label">Lattice</div>
+    <div class="grid2" id="dims"><button data-d="2" type="button">Square (2D)</button><button data-d="3" type="button">Cubic (3D)</button></div>
+    <div class="sec-label">Search</div>
+    <div class="grid3" id="hpModes">
+      <button data-m="remc" type="button">Replica exchange</button>
+      <button data-m="anneal" type="button">Annealing</button>
+      <button data-m="fixed" type="button">Fixed T</button>
+    </div>
+    <div class="row"><label for="hpLo">T low</label><input type="range" id="hpLo" min="0.1" max="1" step="0.01" value="0.25"><span class="val" id="hpLoV"></span></div>
+    <div class="row"><label for="hpHi">T high</label><input type="range" id="hpHi" min="0.5" max="3" step="0.05" value="1.6"><span class="val" id="hpHiV"></span></div>
+    <div class="seg-row"><span class="seg-lbl">Replicas</span><div class="segc" id="hpReps">
+      <button data-r="1" type="button">1</button><button data-r="4" type="button">4</button><button data-r="8" type="button">8</button><button data-r="12" type="button">12</button>
+    </div></div>
+    <div class="row"><label for="hpSpeed">Speed</label><input type="range" id="hpSpeed" min="0" max="100" step="1" value="60"><span class="val" id="hpSpeedV"></span></div>
+    <p class="note" id="hpNote"></p>
+  </div>
+
+  <div class="sec-label">Run</div>
+  <div class="grid3">
+    <button id="runBtn" type="button" class="on">❚❚ Pause</button>
+    <button id="stepBtn" type="button">Step</button>
+    <button id="resetBtn" type="button">Restart</button>
+  </div>
+  <div class="grid3 go-only" id="starts">
+    <button data-start="extended" type="button">Extended</button>
+    <button data-start="coil" type="button">Random coil</button>
+    <button data-start="native" type="button">Native</button>
+  </div>
+  <p class="note go-only">Restart puts every replica back in the chosen start shape.</p>
+
+
+  <div class="sec-label">View</div>
+  <div class="grid3 go-only" id="colours">
+    <button data-c="ss" type="button">Secondary</button>
+    <button data-c="hyd" type="button">Hydrophobic</button>
+    <button data-c="con" type="button">Contacts</button>
+  </div>
+  <div class="grid3 view-toggles">
+    <button class="tog go-only" id="tGhost" type="button">Native ghost</button>
+    <button class="tog go-only" id="tLines" type="button">Contact lines</button>
+    <button class="tog" id="tOrbit" type="button">Slow orbit</button>
+  </div>
+
+  <div class="sec-label">Presets</div>
+  <div id="presets"></div>
+
+  <div class="sec-label">About this page</div>
+  <div class="about">
+    <p>A coarse model with honest limits. It starts from known structures in the PDB and shows <b>how</b> a chain can reach them. It does not predict a structure from a sequence.</p>
+    <button class="tog wide" id="learnBtn2" type="button">How it works: Go model, funnel, Levinthal, HP</button>
+  </div>
+</aside>
+
+<section id="plots" aria-label="Live plots"></section>
+<div id="plotDots" aria-hidden="true"></div>
+
+<aside id="learn" aria-label="How it works" hidden>
+  <div class="learn-in">
+    <button id="learnClose" type="button" aria-label="Close">✕</button>
+    <h2>How it works</h2>
+    <p class="lede">Each bead is the C-alpha atom of one residue. The chain moves by Langevin dynamics: the force from the energy V, a friction, and random kicks whose size the temperature sets.</p>
+    <div class="eq" id="eq-langevin"></div>
+
+    <h3>The Go model</h3>
+    <p>Bonds, angles and dihedrals keep the local shape of the native chain. Pairs that touch in the PDB structure attract. Every other pair only repels. So the native fold is the lowest energy by construction: the landscape is a <b>funnel</b> with almost no traps.</p>
+    <div class="eq" id="eq-go"></div>
+
+    <h3>What it cannot do</h3>
+    <ul>
+      <li>No sequence beyond the contact map. Chignolin and CLN025, or WW and FiP35, are almost the same model.</li>
+      <li>No non-native attraction, so no misfolded traps (CheY), no aggregation, no P23H rhodopsin.</li>
+      <li>No water, no side chains, no hydrogen bonds, no membrane, no chaperones.</li>
+      <li>Energy and time units are not calibrated: T is in ε/k<sub>B</sub>, time in τ.</li>
+    </ul>
+    <p>What it gets right, roughly: the order in which parts of a fold form, and that topology sets much of the folding rate. AlphaFold predicts a structure; it does not simulate the path to it. Folding a protein from physics alone, atom by atom, still needs special supercomputers and works only for small, fast folders.</p>
+
+    <h3>Q and the free energy</h3>
+    <p>Q is the fraction of native contacts that are formed. A histogram of Q at one temperature gives the free energy F(Q). Near T<sub>m</sub> a two-state protein shows two wells, unfolded and native, with a barrier between them.</p>
+    <div class="eq" id="eq-q"></div>
+
+    <h3>Levinthal's paradox</h3>
+    <p>If each residue had three shapes and the chain tried them at random, a 100-residue protein would need far longer than the age of the universe. Real proteins fold in microseconds to seconds. The way out is the funnel: each native contact that forms lowers the energy, so the search is biased downhill.</p>
+    <div class="eq" id="eq-levinthal"></div>
+
+    <h3>The HP lattice model</h3>
+    <p>Two letters, H (hydrophobic) and P (polar), on a grid. Each H-H contact that is not a bond lowers the energy by one. Finding the lowest energy is NP-hard in 2D and 3D. The benchmarks show the best energy known from decades of search methods; watch the long ones stall.</p>
+    <div class="eq" id="eq-hp"></div>
+
+    <h3>Pulling</h3>
+    <p>A constant force F on the two ends, along the line between them. If ε is about 1 kcal/mol, 1 ε/Å is about 69 pN. That mapping is an assumption, not a calibration.</p>
+    <p class="fine">Native structures: RCSB PDB (CC0). The model, integrator and plots on this page are written for it; no code comes from OpenMM, GROMACS or SMOG.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" type="button" aria-label="Controls" aria-expanded="false">☰</button>
+  <button id="dockPlay" type="button" aria-label="Pause">❚❚</button>
+  <button id="dockReset" type="button" aria-label="Restart">↺</button>
+  <div class="seg" id="dockSeg"></div>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
