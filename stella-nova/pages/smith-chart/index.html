@@ -24,6 +24,8 @@
               match.js      L-network, stub and lambda/4 matching
               sweep.js      series RLC, parallel RLC and Touchstone loads,
                             the trace on the chart and the |S11| plot
+              tools.js      Q and spec circles, markers, copy results, and
+                            the state in the URL hash
               equations.js  the formulas as static MathJax SVG
 
    LAYOUT  (# marks an element id main.js binds to)
@@ -38,6 +40,8 @@
      │  match     │                                                       │
      │  line      │                                                       │
      │  chart     │                                                       │
+     │  markers   │                                                       │
+     │  share     │                                                       │
      │  formulas  │                                                       │
      ├────────────┴─────────────────────────────────────────────────────┤
      │ #status  Z · |gamma| · VSWR · RL                                   │
@@ -71,6 +75,7 @@
 <canvas id="chart"></canvas>
 <div id="tip"></div>
 <div id="hint">drag on the chart to move the load</div>
+<div id="toast" role="status" aria-live="polite"></div>
 <button id="gear" aria-label="Controls">☰</button>
 
 <div id="panel" class="open">
@@ -212,6 +217,30 @@
       <button id="circleBtn" class="on">VSWR circle</button>
       <button id="rimBtn" class="on">rim scales</button>
     </div>
+    <div class="fields">
+      <label class="fld"><span>Q circle</span><input id="fQ" spellcheck="false" autocomplete="off"></label>
+      <label class="fld"><span>spec VSWR</span><input id="fSpec" spellcheck="false" autocomplete="off"></label>
+    </div>
+    <p class="note">0 turns a circle off. The spec circle shows the VSWR limit, for example 2.</p>
+  </details>
+
+  <details class="sec" id="secMarks" open>
+    <summary>Markers</summary>
+    <div class="tabs two">
+      <button id="markPin">pin load (P)</button>
+      <button id="markClear" disabled>clear all</button>
+    </div>
+    <ol id="markList" class="marks"></ol>
+    <p class="note">Shift + click on the chart pins the point under the pointer.</p>
+  </details>
+
+  <details class="sec" id="secShare" open>
+    <summary>Share</summary>
+    <div class="tabs two">
+      <button id="copyBtn">copy results</button>
+      <button id="linkBtn">copy link</button>
+    </div>
+    <p class="note">The link holds the whole setup except a loaded file.</p>
   </details>
 
   <details class="sec" id="secEq">
@@ -234,6 +263,7 @@
       <p>The Smith chart is the plane of the reflection coefficient Γ. The center is Γ = 0, a matched load. The rim is |Γ| = 1, where all the power reflects. The left end is a short circuit. The right end is an open circuit.</p>
       <p>The <span class="cz">cyan</span> circles are constant resistance r. The arcs are constant reactance x. The upper half is inductive, and the lower half is capacitive. The <span class="cy">pink</span> grid is the admittance y = 1/z at the same point.</p>
       <p>A length of lossless line does not change |Γ|. It only turns the point about the center. Half a wavelength is one full turn, so a λ/4 line changes z to 1/z.</p>
+      <p>Keys (outside a field): <b>G</b> grid, <b>M</b> match method, <b>P</b> pin a marker, <b>W</b> walk the line. In a field: <b>↑ ↓</b> change the value, <b>Shift</b> for a larger step, <b>Enter</b> to tidy it.</p>
     </div>
   </details>
 </div>
@@ -257,6 +287,7 @@
 <script src="main.js"></script>
 <script src="match.js"></script>
 <script src="sweep.js"></script>
+<script src="tools.js"></script>
 <script src="equations.js"></script>
 </body>
 </html>
