@@ -114,6 +114,7 @@ const GAME_STARS = [
 // Short lines for the pages that appear on cards. Others show their group.
 const BLURBS = {
   'watch-movement': 'A pocket watch that runs, then comes apart.',
+  'watch-randomizer': 'Roll a pocket watch, wristwatch, wall clock or alarm clock.',
   home: 'This page: the overview and the chart.',
   translate: 'Help put Stella Nova in your language.',
   wiki: 'Every item, module and tech, linked.',

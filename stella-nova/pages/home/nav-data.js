@@ -74,7 +74,8 @@
   { h: "Folding & Structures", p: [
     ["origami", "Origami Simulator", "SIM"]] },
   { h: "Mechanisms", p: [
-    ["watch-movement", "Watch Movement", "3D"]] }] },
+    ["watch-movement", "Watch Movement", "3D"],
+    ["watch-randomizer", "Timepiece Randomizer", "3D"]] }] },
 { id: "cl-music", label: "Music Lab", groups: [
   { h: null, p: [
     ["chordlab", "ChordLab", "MIC"],
