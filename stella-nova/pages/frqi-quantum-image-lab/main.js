@@ -52,6 +52,7 @@
 //      reconstruction ....... "function drawRecon"   original/recon/error
 //      orchestration ........ "function renderAll"   repaint everything
 //      controls ............. "function setPos"      register + control bindings
+//      phone dock ........... "PHONE DOCK"           sheet toggle, play, sample
 //      init ................. "buildCmapButtons"     first paint
 // ============================================================================
 import * as THREE from 'three';
@@ -786,6 +787,16 @@ document.getElementById('st-last').addEventListener('click',()=>{stopPlay();stop
 document.getElementById('st-prev').addEventListener('click',()=>stepStack(-1));
 document.getElementById('st-next').addEventListener('click',()=>stepStack(1));
 document.getElementById('st-play').addEventListener('click',playStack);
+
+/* ===== PHONE DOCK ===== */
+// The dock shows on phones only (style.css). Controls opens or closes the
+// panel sheet. Play and Sample press the stack and reconstruction buttons,
+// and Sample closes the sheet, so the run is in view.
+const dockPanel=document.getElementById('dock-panel'),panelEl=document.getElementById('panel');
+function setSheet(open){panelEl.classList.toggle('open',open);dockPanel.classList.toggle('on',open);dockPanel.setAttribute('aria-expanded',String(open));}
+dockPanel.addEventListener('click',()=>setSheet(!panelEl.classList.contains('open')));
+document.getElementById('dock-play').addEventListener('click',()=>document.getElementById('st-play').click());
+document.getElementById('dock-sample').addEventListener('click',()=>{setSheet(false);document.getElementById('run-shots').click();document.getElementById('m-recon').scrollIntoView({behavior:'smooth',block:'start'});});
 
 // Build the colour-map picker: one gradient-swatch button per map in CMAPS.
 function buildCmapButtons(){const grid=document.getElementById('cmap-grid');grid.innerHTML='';

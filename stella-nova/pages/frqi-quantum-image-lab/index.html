@@ -49,6 +49,8 @@
      │  readout │   │               │  Circuit      │                   │
      │          │   └───────────────┴───────────────┘                   │
      └──────────┴──────────────────────────────────────────────────────┘
+   PHONE: the modules stack and scroll. #panel is a bottom sheet above
+   #dock in portrait and a right drawer in landscape.
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -69,8 +71,6 @@
 </div>
 
 <div id="main">
-  <!-- Hamburger that toggles the side panel open on narrow screens. -->
-  <div id="menu-tog" onclick="document.getElementById('panel').classList.toggle('open')">≡</div>
   <!-- Side control panel; every control id below is bound in main.js. -->
   <div id="panel"><div class="p-body">
 
@@ -111,9 +111,13 @@
         <button class="btn" data-mode="real">Re ρ</button>
       </div>
       <div class="cmap-grid" id="cmap-grid" style="margin-top:6px"></div>
-      <button class="btn" id="spin-toggle" style="width:100%;margin-top:6px">Spin&nbsp;% labels: OFF</button>
-      <div class="slider-row"><span class="sl-lbl">Heat ≥</span><input type="range" id="thresh" min="0" max="0.5" value="0" step="0.005"><span class="val" id="thresh-v">0.00</span></div>
-      <div class="note">Colour curve matches the Quantum Algorithm Visualizer.</div>
+      <!-- Less used: spin labels and the heat cut. Closed at load. -->
+      <details class="p-more">
+        <summary>Labels and heat cut</summary>
+        <button class="btn" id="spin-toggle" style="width:100%;margin-top:6px">Spin&nbsp;% labels: OFF</button>
+        <div class="slider-row"><span class="sl-lbl">Heat ≥</span><input type="range" id="thresh" min="0" max="0.5" value="0" step="0.005"><span class="val" id="thresh-v">0.00</span></div>
+        <div class="note">Colour curve matches the Quantum Algorithm Visualizer.</div>
+      </details>
     </div>
 
     <!-- Quantum ops: data-xform applies a gate on the encoded state (color X,
@@ -141,11 +145,12 @@
 
     <!-- Live register readout (updateReadout) and the FRQI state equation
          (renderEquation, via KaTeX). -->
-    <div class="p-section" style="border-bottom:none">
-      <div class="p-sec-lbl">State Register</div>
+    <!-- A readout only (no controls), so it is closed at load. -->
+    <details class="p-section p-fold" style="border-bottom:none">
+      <summary class="p-sec-lbl">State Register</summary>
       <div class="readout" id="readout"></div>
       <div id="eq-main"></div>
-    </div>
+    </details>
 
   </div></div>
 
@@ -227,6 +232,15 @@
       <div class="mod-body" id="circuit-body"><canvas id="circuit-cv"></canvas></div>
     </div>
   </div>
+</div>
+<!-- Phone dock (820 px and less, or a short landscape touch screen): the
+     panel toggle and the two run buttons. main.js binds them in
+     "PHONE DOCK". The panel is then a bottom sheet (portrait) or a right
+     drawer (landscape), so the modules stay in view. -->
+<div id="dock">
+  <button id="dock-panel" aria-expanded="false">☰ Controls</button>
+  <button id="dock-play">▶ Play</button>
+  <button id="dock-sample">⚲ Sample</button>
 </div>
 <!-- Floating pixel/cell tooltip, positioned by main.js on hover. -->
 <div id="cell-tip"></div>
