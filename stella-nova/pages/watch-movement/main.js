@@ -16,12 +16,14 @@
 //    function frame ............. step, pose, explode, fades, stage, cards
 //    const VIEWS / function setView  camera presets
 //    function setOpen ........... the panel; on a phone one group per tab
+//    const xr = wireXR .......... the headset view (xr.js, lib/xr-view.js)
 // ============================================================================
 import * as THREE from 'three';
 import { CALIBRES, metaById, loadCalibre as loadModule } from './calibres/index.js';
 import { createBuild } from './kit.js';
 import { createStage, ease } from './stage.js';
 import { createCards, esc } from './cards.js';
+import { wireXR } from './xr.js';
 import * as G from './geom.js';
 
 const SCENES = {
@@ -286,8 +288,21 @@ function frame(now) {
 
 window.addEventListener('pagehide', () => { running = false; cancelAnimationFrame(raf); stage.dispose(); });
 
+// ── headset ─────────────────────────────────────────────────────────────────
+// VR and AR through xr.js. Next movement swaps the calibre in the headset and
+// places the new one again once it has settled.
+const xr = wireXR({
+  stage, cards, $, title: 'Watch movement',
+  get: () => S.cur && { ...S.cur, PARTS: S.cur.cal.PARTS },
+  getExplode: () => S.explodeTarget, setExplode, getRate: () => S.rate, setRate,
+  actions: [{ label: 'Next movement', run: () => {
+    const i = CALIBRES.findIndex(c => c.id === (S.cur && S.cur.cal.id));
+    swapTo(CALIBRES[(i + 1) % CALIBRES.length].id); xr.replace();
+  } }],
+});
+
 // debug and headless checks
-window.__watch = { S, stage, cards, swapTo, setView, setRate, setExplode, setPin: h => cards.setPin(h), pinById: id => cards.pinById(id), pick: (x, y) => cards.pick(x, y), camera: stage.camera, controls: stage.controls, CALIBRES };
+window.__watch = { S, stage, cards, xr, swapTo, setView, setRate, setExplode, setPin: h => cards.setPin(h), pinById: id => cards.pinById(id), pick: (x, y) => cards.pick(x, y), camera: stage.camera, controls: stage.controls, CALIBRES };
 
 // ── boot ────────────────────────────────────────────────────────────────────
 buildPicker();
