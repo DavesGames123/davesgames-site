@@ -100,6 +100,18 @@ app.touch = () => {
   FL.scheduleAutosave(app);
   app.emit('doc');
 };
+// The world sphere that holds every visible shape, for the shader early outs
+// (struct U scene). [0, 0, 0, -1] when there is none: a plane primitive has
+// no bound (a plane under a hidden group also turns the tests off, which is
+// only slower), and an empty scene needs no test.
+function sceneSphere(doc) {
+  if (Object.values(doc.nodes).some(n => n.kind === 'prim' && n.type === 'plane' && !n.hidden)) return [0, 0, 0, -1];
+  const b = D.docBounds(doc);
+  if (!b || !b.lo.every(Number.isFinite) || !b.hi.every(Number.isFinite)) return [0, 0, 0, -1];
+  const c = [0, 1, 2].map(j => (b.lo[j] + b.hi[j]) / 2);
+  const r = Math.hypot(b.hi[0] - c[0], b.hi[1] - c[1], b.hi[2] - c[2]);
+  return [c[0], c[1], c[2], r * 1.01 + 0.02];
+}
 function writeGPU() {
   if (!app.R || !app.gpuL) return;
   const L = app.gpuL;
@@ -108,6 +120,7 @@ function writeGPU() {
   const live = { ...L, order: L.order.filter(id => app.doc.nodes[id] && !app.doc.nodes[id].hidden) };
   packParams(app.doc, live, app.gpuP);
   app.stepK = 1 / lipschitz(app.doc);
+  app.sceneSphere = sceneSphere(app.doc);
   app.R.writeParams(app.gpuP.subarray(0, L.size * 4));
 }
 
@@ -312,6 +325,7 @@ function packPane(r, cw, ch, scale, now) {
   u.set([app.stepK || 1, tmax, app.disp.ghost ? 1 : 0, 0], 32);
   const S = app.slice, A = SLICE_AX[S.axis];
   u.set([...A.n, S.off], 36); u.set([...A.u, S.cu], 40); u.set([...A.v, S.cv], 44); u.set([S.ext, 0, 0, 0], 48);
+  u.set(app.sceneSphere || [0, 0, 0, -1], 52);
   return u;
 }
 

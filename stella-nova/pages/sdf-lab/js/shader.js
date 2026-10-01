@@ -22,6 +22,7 @@
 //    struct U ............. the per-pane uniform block (render.js packPane)
 //    fn cover / fn gridPlane   pixel-width lines and one plane of grid
 //    fn calcNormal / calcAO / softShadow / env   shading terms (Quilez)
+//    fn sceneBnd / shadowClear   early outs from the scene bounding sphere
 //    fn shade ............. clay, lit, normals
 //    fn fieldCol .......... the signed field as colour (BANDS and SLICE)
 //    fn fs_view ........... the 3D panes        fn fs_slice ... the SLICE pane
@@ -45,6 +46,7 @@ struct U {
   su: vec4f,
   sv: vec4f,
   sx: vec4f,
+  scene: vec4f,
 };
 @group(0) @binding(0) var<uniform> u: U;
 
@@ -146,6 +148,29 @@ fn softShadow(ro: vec3f, rd: vec3f, tmax: f32, k: f32) -> f32 {
   }
   res = clamp(res, 0.0, 1.0);
   return res * res * (3.0 - 2.0 * res);
+}
+// THE SCENE BOUNDING SPHERE. u.scene holds a world sphere (centre, radius)
+// that holds every visible shape; radius < 0 means none (a plane primitive
+// has no bound). sceneBnd is a lower bound of the distance to the scene.
+fn sceneBnd(p: vec3f) -> f32 {
+  if (u.scene.w < 0.0) { return -1e9; }
+  return length(p - u.scene.xyz) - u.scene.w;
+}
+// True when a shadow ray from o along unit d cannot be shaded: the cone
+// round the ray, of half-angle atan(1 / k2), misses the sphere for all t >= 0.
+// Then every sample keeps k h / t >= 1 and softShadow returns 1. The test
+// uses k2 = 2 k (twice the cone of the k it guards) as a margin for the
+// improved penumbra term, which can sit below k h / t.
+fn shadowClear(o: vec3f, d: vec3f, k: f32) -> bool {
+  if (u.scene.w < 0.0) { return false; }
+  let k2 = 2.0 * k;
+  let w = o - u.scene.xyz;
+  let b = dot(d, w);
+  let q = sqrt(max(dot(w, w) - b * b, 0.0));
+  let s = q / sqrt(k2 * k2 - 1.0);
+  var f = length(w) - u.scene.w;
+  if (s - b > 0.0) { f = q * sqrt(k2 * k2 - 1.0) / k2 - u.scene.w + b / k2; }
+  return f > 0.0;
 }
 // A studio: a soft grey dome, a dark floor and one big softbox over the key.
 fn env(r: vec3f) -> vec3f {
@@ -279,9 +304,14 @@ fn fieldCol(d: f32, w: f32) -> vec3f {
           col = toSrgb(fieldCol(mapD(pp), g.w) * 0.85);
         } else if (mode == 1 && kk == 0 && !ortho) {
           // the ground takes a soft shadow and a contact shade in LIT
+          // Most ground pixels see the key light past the scene. The bound
+          // tests skip the 48-step shadow march and the contact sample there.
           let pp = ro + rd * g.t;
-          let sh = softShadow(pp + vec3f(0.0, 0.003, 0.0), KEY, 20.0, 8.0);
-          let ao = clamp(0.35 + 0.65 * mapD(pp) / 0.6, 0.0, 1.0);
+          let po = pp + vec3f(0.0, 0.003, 0.0);
+          var sh = 1.0;
+          if (!shadowClear(po, KEY, 8.0)) { sh = softShadow(po, KEY, 20.0, 8.0); }
+          var ao = 1.0;
+          if (sceneBnd(pp) < 1.2) { ao = clamp(0.35 + 0.65 * mapD(pp) / 0.6, 0.0, 1.0); }
           let fall = exp(-0.012 * g.t);
           col = mix(col, col * 0.35, (1.0 - sh * ao) * fall);
         }

@@ -23,7 +23,7 @@
 import { genWGSL } from './codegen.js';
 import { FRAME, PROBE } from './shader.js';
 
-export const UNIFORM_FLOATS = 13 * 4;
+export const UNIFORM_FLOATS = 14 * 4;
 
 export async function createRenderer(onLost) {
   if (!navigator.gpu) throw new Error('no-webgpu');
