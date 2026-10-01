@@ -81,82 +81,76 @@
    "order": 12
   },
   {
-   "id": "portraits",
-   "label": "Portraits",
-   "group": "Citizens",
-   "order": 13
-  },
-  {
    "id": "relationship-tiers",
    "label": "Relationship tiers",
    "group": "Social",
-   "order": 14
+   "order": 13
   },
   {
    "id": "rumor-topics",
    "label": "Rumor topics",
    "group": "Social",
-   "order": 15
+   "order": 14
   },
   {
    "id": "gossip-channels",
    "label": "Gossip channels",
    "group": "Social",
-   "order": 16
+   "order": 15
   },
   {
    "id": "gossip-events",
    "label": "Gossip events",
    "group": "Social",
-   "order": 17
+   "order": 16
   },
   {
    "id": "social-pulses",
    "label": "Social pulses",
    "group": "Social",
-   "order": 18
+   "order": 17
   },
   {
    "id": "incidents",
    "label": "Incidents",
    "group": "Social",
-   "order": 19
+   "order": 18
   },
   {
    "id": "incident-categories",
    "label": "Incident categories",
    "group": "Social",
-   "order": 20
+   "order": 19
   },
   {
    "id": "emotions",
    "label": "Emotion dimensions",
    "group": "Mind",
-   "order": 21
+   "order": 20
   },
   {
    "id": "relationship-dimensions",
    "label": "Relationship dimensions",
    "group": "Mind",
-   "order": 22
+   "order": 21
   },
   {
    "id": "flag-emblems",
    "label": "Flag emblems",
    "group": "Identity",
-   "order": 23
+   "order": 22
   },
   {
    "id": "flag-patterns",
    "label": "Flag patterns",
    "group": "Identity",
-   "order": 24
+   "order": 23
   },
   {
    "id": "ship-livery",
    "label": "Ship livery layers",
    "group": "Identity",
-   "order": 25
+   "order": 24
   }
  ],
  "entries": [
@@ -483,10 +477,7 @@
      "modules/fuel-processor",
      "modules/assembler",
      "modules/component-lab",
-     "modules/docking-port",
-     "modules/research-bench",
-     "modules/bookshelf",
-     "modules/toolrack"
+     "modules/research-bench"
     ],
     "unlockedBy": [],
     "unlocks": [],
@@ -560,14 +551,9 @@
      "resources/oxidized-fuel",
      "resources/incendiary",
      "resources/flak",
-     "modules/crew-quarters",
-     "modules/recreation",
      "modules/foundry",
      "modules/component-lab",
-     "modules/docking-port",
      "modules/hydroponics-bed",
-     "modules/armchair",
-     "modules/planter-box",
      "modules/hydroponics-plot",
      "modules/hydroponics-garden",
      "modules/hydroponics-farm"
@@ -817,16 +803,12 @@
      "resources/cargo-container",
      "resources/fabricator-unit",
      "resources/munitions",
-     "modules/crew-quarters",
-     "modules/medical",
-     "modules/recreation",
      "modules/fuel-processor",
      "modules/component-lab",
      "modules/hopper",
      "modules/research-lab",
      "modules/flag-mast",
-     "modules/banner",
-     "modules/toolrack"
+     "modules/banner"
     ],
     "unlockedBy": [
      "research/metallurgy"
@@ -856,8 +838,7 @@
      "resources/carbon-brick"
     ],
     "usedIn": [
-     "resources/hydraulic-actuator",
-     "modules/toolrack"
+     "resources/hydraulic-actuator"
     ],
     "unlockedBy": [
      "research/bronze"
@@ -897,13 +878,11 @@
      "resources/docking-clamp",
      "resources/fabricator-unit",
      "resources/antenna-dish",
-     "modules/shield",
      "modules/hopper",
      "modules/research-lab",
      "modules/flag-mast",
      "modules/banner",
-     "modules/containment-wall",
-     "modules/aquarium"
+     "modules/containment-wall"
     ],
     "unlockedBy": [
      "research/cu-wire"
@@ -936,8 +915,6 @@
      "resources/pressure-vessel",
      "modules/thruster",
      "modules/antimatter-drive",
-     "modules/bookshelf",
-     "modules/aquarium",
      "modules/gun-turret"
     ],
     "unlockedBy": [
@@ -970,8 +947,7 @@
     "usedIn": [
      "resources/solar-cell",
      "resources/antenna-dish",
-     "modules/banner",
-     "modules/armchair"
+     "modules/banner"
     ],
     "unlockedBy": [
      "research/al-wire"
@@ -1008,14 +984,8 @@
      "resources/solar-cell",
      "resources/life-support-unit",
      "resources/antenna-dish",
-     "modules/crew-quarters",
-     "modules/medical",
-     "modules/recreation",
      "modules/research-lab",
      "modules/hydroponics-bed",
-     "modules/bookshelf",
-     "modules/planter-box",
-     "modules/aquarium",
      "modules/hydroponics-plot",
      "modules/hydroponics-garden",
      "modules/hydroponics-farm"
@@ -1081,9 +1051,7 @@
      "resources/silicon-wafer"
     ],
     "usedIn": [
-     "resources/cargo-container",
-     "modules/armchair",
-     "modules/aquarium"
+     "resources/cargo-container"
     ],
     "unlockedBy": [
      "research/composite"
@@ -1117,10 +1085,8 @@
      "resources/thruster-assembly",
      "resources/shield-emitter",
      "resources/degenerate-alloy",
-     "modules/shield",
      "modules/thruster",
      "modules/containment-wall",
-     "modules/antimatter-forge",
      "modules/gun-turret"
     ],
     "unlockedBy": [
@@ -1153,8 +1119,7 @@
     "usedIn": [
      "resources/pressure-vessel",
      "resources/degenerate-alloy",
-     "modules/containment-wall",
-     "modules/antimatter-forge"
+     "modules/containment-wall"
     ],
     "unlockedBy": [
      "research/rein-alloy"
@@ -1188,10 +1153,7 @@
      "resources/sensor-array",
      "resources/comm-module",
      "resources/power-regulator",
-     "modules/medical",
-     "modules/shield",
-     "modules/research-lab",
-     "modules/antimatter-forge"
+     "modules/research-lab"
     ],
     "unlockedBy": [
      "research/pcb"
@@ -1441,7 +1403,6 @@
      "resources/reactor-core",
      "resources/positron-plasma",
      "modules/containment-wall",
-     "modules/antimatter-forge",
      "modules/antimatter-drive",
      "modules/gun-turret"
     ],
@@ -1475,7 +1436,6 @@
     ],
     "usedIn": [
      "resources/antihydrogen",
-     "modules/antimatter-forge",
      "modules/antimatter-drive",
      "modules/gun-turret"
     ],
@@ -1665,9 +1625,7 @@
      "resources/carbon-fiber",
      "resources/glass"
     ],
-    "usedIn": [
-     "modules/medical"
-    ],
+    "usedIn": [],
     "unlockedBy": [
      "research/lsu"
     ],
@@ -1727,9 +1685,7 @@
     ],
     "usedIn": [
      "resources/antihydrogen",
-     "modules/shield",
-     "modules/containment-wall",
-     "modules/antimatter-forge"
+     "modules/containment-wall"
     ],
     "unlockedBy": [
      "research/shield-em"
@@ -2155,7 +2111,6 @@
     "media/sprites/modules/structure-core--4.webp"
    ],
    "fields": {
-    "Status": "Not in build palette",
     "Symbol": "◉"
    },
    "links": {
@@ -2198,7 +2153,6 @@
     "media/sprites/modules/structure-orange--4.webp"
    ],
    "fields": {
-    "Status": "Not in build palette",
     "Symbol": "▣"
    },
    "links": {
@@ -2243,7 +2197,6 @@
     "media/sprites/modules/structure-white--4.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Structure",
     "Symbol": "▢"
    },
@@ -2275,50 +2228,6 @@
    }
   },
   {
-   "id": "modules/crew-quarters",
-   "slug": "crew-quarters",
-   "category": "modules",
-   "name": "Crew Quarters",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/modules/crew-quarters.webp",
-   "sprites": [
-    "media/sprites/modules/crew-quarters.webp"
-   ],
-   "fields": {
-    "Status": "Not in build palette",
-    "Symbol": "🏠"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/steel",
-     "resources/glass",
-     "resources/aluminum-ingot"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": true,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
    "id": "modules/docking",
    "slug": "docking",
    "category": "modules",
@@ -2330,7 +2239,6 @@
     "media/sprites/modules/docking.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Habitat",
     "Symbol": "🚀"
    },
@@ -2363,172 +2271,6 @@
    }
   },
   {
-   "id": "modules/greenhouse",
-   "slug": "greenhouse",
-   "category": "modules",
-   "name": "Greenhouse",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Legacy",
-    "Symbol": "▢"
-   },
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": false,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
-   "id": "modules/medical",
-   "slug": "medical",
-   "category": "modules",
-   "name": "Medical Bay",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Not in build palette",
-    "Symbol": "🏥"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/steel",
-     "resources/glass",
-     "resources/circuit-board",
-     "resources/life-support-unit"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": true,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
-   "id": "modules/recreation",
-   "slug": "recreation",
-   "category": "modules",
-   "name": "Recreation",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Not in build palette",
-    "Symbol": "🎮"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/steel",
-     "resources/glass",
-     "resources/aluminum-ingot"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": true,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
-   "id": "modules/shield",
-   "slug": "shield",
-   "category": "modules",
-   "name": "Shield Generator",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Not in build palette",
-    "Symbol": "🛡"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/titanium-alloy",
-     "resources/shield-emitter",
-     "resources/circuit-board",
-     "resources/copper-wire"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": false,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
    "id": "modules/foundry",
    "slug": "foundry",
    "category": "modules",
@@ -2540,7 +2282,6 @@
     "media/sprites/modules/foundry.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Production",
     "Symbol": "⚒",
     "Input": "Raw Ores",
@@ -2598,7 +2339,6 @@
     "media/sprites/modules/fuel-processor.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Production",
     "Symbol": "⛽",
     "Input": "Carbon + Minerals",
@@ -2658,7 +2398,6 @@
     "media/sprites/modules/assembler.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Production",
     "Symbol": "⚙",
     "Input": "Ingots",
@@ -2717,7 +2456,6 @@
     "media/sprites/modules/component-lab.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Production",
     "Symbol": "🔬",
     "Input": "Ingots + Alloys",
@@ -2777,7 +2515,6 @@
     "media/sprites/modules/thruster.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Utility",
     "Symbol": "🔥",
     "Input": "Oxidized Fuel",
@@ -2857,7 +2594,6 @@
     "media/sprites/modules/hopper.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Utility",
     "Symbol": "⇄",
     "Input": "Storage Region",
@@ -2892,47 +2628,6 @@
    }
   },
   {
-   "id": "modules/docking-port",
-   "slug": "docking-port",
-   "category": "modules",
-   "name": "Docking Port",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Not in build palette",
-    "Symbol": "⚓"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/iron-ingot",
-     "resources/aluminum-ingot"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": true,
-    "interior": false,
-    "exterior": true,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
    "id": "modules/research-lab",
    "slug": "research-lab",
    "category": "modules",
@@ -2942,7 +2637,6 @@
    "sprite": null,
    "sprites": [],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Research",
     "Symbol": "⚛",
     "Input": "Basic Research",
@@ -3068,7 +2762,6 @@
    "sprite": null,
    "sprites": [],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Decorations",
     "Symbol": "⚑"
    },
@@ -3115,7 +2808,6 @@
     "media/sprites/modules/research-bench--4.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Research",
     "Symbol": "⊙",
     "Input": "(Passive)",
@@ -3215,7 +2907,6 @@
    "sprite": null,
    "sprites": [],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Decorations",
     "Symbol": "⚐"
    },
@@ -3258,7 +2949,6 @@
    "sprite": null,
    "sprites": [],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Antimatter",
     "Symbol": "◫"
    },
@@ -3297,65 +2987,6 @@
    }
   },
   {
-   "id": "modules/antimatter-forge",
-   "slug": "antimatter-forge",
-   "category": "modules",
-   "name": "Antimatter Forge",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Reserved",
-    "Symbol": "☢",
-    "Input": "Ingots + Components",
-    "Output": "Antimatter"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/titanium-alloy",
-     "resources/reinforced-alloy",
-     "resources/circuit-board",
-     "resources/power-regulator",
-     "resources/shield-emitter",
-     "resources/reactor-core"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ],
-     [
-      1,
-      0
-     ],
-     [
-      0,
-      1
-     ],
-     [
-      1,
-      1
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": false,
-    "exterior": false,
-    "directional": true,
-    "flag": false
-   }
-  },
-  {
    "id": "modules/antimatter-drive",
    "slug": "antimatter-drive",
    "category": "modules",
@@ -3365,7 +2996,6 @@
    "sprite": null,
    "sprites": [],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Antimatter",
     "Symbol": "★",
     "Input": "Antihydrogen",
@@ -3449,7 +3079,6 @@
     "media/sprites/modules/hydroponics-bed.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Habitat",
     "Symbol": "🌿"
    },
@@ -3494,216 +3123,6 @@
    }
   },
   {
-   "id": "modules/bookshelf",
-   "slug": "bookshelf",
-   "category": "modules",
-   "name": "Bookshelf",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Removed",
-    "Symbol": "📚"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/iron-ingot",
-     "resources/structural-steel",
-     "resources/glass"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": false,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
-   "id": "modules/toolrack",
-   "slug": "toolrack",
-   "category": "modules",
-   "name": "Toolrack",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Removed",
-    "Symbol": "🔧"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/iron-ingot",
-     "resources/steel",
-     "resources/bronze"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": false,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
-   "id": "modules/armchair",
-   "slug": "armchair",
-   "category": "modules",
-   "name": "Armchair",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Removed",
-    "Symbol": "💺"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/aluminum-ingot",
-     "resources/aluminum-wire",
-     "resources/composite-plate"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": false,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
-   "id": "modules/planter-box",
-   "slug": "planter-box",
-   "category": "modules",
-   "name": "Planter Box",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Removed",
-    "Symbol": "🌷"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/aluminum-ingot",
-     "resources/glass"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": false,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
-   "id": "modules/aquarium",
-   "slug": "aquarium",
-   "category": "modules",
-   "name": "Aquarium",
-   "tier": null,
-   "group": null,
-   "sprite": null,
-   "sprites": [],
-   "fields": {
-    "Status": "Removed",
-    "Symbol": "🐠"
-   },
-   "links": {
-    "madeFrom": [
-     "resources/glass",
-     "resources/structural-steel",
-     "resources/copper-wire",
-     "resources/composite-plate"
-    ],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   },
-   "placement": {
-    "footprint": [
-     [
-      0,
-      0
-     ]
-    ],
-    "structural": false,
-    "furniture": false,
-    "turret": false,
-    "thruster": false,
-    "docking": false,
-    "interior": false,
-    "exterior": false,
-    "directional": false,
-    "flag": false
-   }
-  },
-  {
    "id": "modules/hydroponics-plot",
    "slug": "hydroponics-plot",
    "category": "modules",
@@ -3715,7 +3134,6 @@
     "media/sprites/modules/hydroponics-plot.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Habitat",
     "Symbol": "🌿"
    },
@@ -3791,7 +3209,6 @@
     "media/sprites/modules/hydroponics-garden.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Habitat",
     "Symbol": "🌿"
    },
@@ -3895,7 +3312,6 @@
     "media/sprites/modules/hydroponics-farm.webp"
    ],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Habitat",
     "Symbol": "🌿"
    },
@@ -4033,7 +3449,6 @@
    "sprite": null,
    "sprites": [],
    "fields": {
-    "Status": "Buildable",
     "Palette section": "Utility",
     "Symbol": "🔫"
    },
@@ -9208,486 +8623,6 @@
    "fields": {
     "Symbol": "🤖"
    },
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-01",
-   "slug": "portrait-01",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-01.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-01.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-02",
-   "slug": "portrait-02",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-02.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-02.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-03",
-   "slug": "portrait-03",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-03.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-03.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-04",
-   "slug": "portrait-04",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-04.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-04.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-05",
-   "slug": "portrait-05",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-05.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-05.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-06",
-   "slug": "portrait-06",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-06.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-06.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-07",
-   "slug": "portrait-07",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-07.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-07.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-08",
-   "slug": "portrait-08",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-08.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-08.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-09",
-   "slug": "portrait-09",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-09.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-09.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-10",
-   "slug": "portrait-10",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-10.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-10.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-11",
-   "slug": "portrait-11",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-11.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-11.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-12",
-   "slug": "portrait-12",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-12.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-12.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-13",
-   "slug": "portrait-13",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-13.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-13.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-14",
-   "slug": "portrait-14",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-14.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-14.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-15",
-   "slug": "portrait-15",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-15.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-15.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-16",
-   "slug": "portrait-16",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-16.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-16.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-17",
-   "slug": "portrait-17",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-17.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-17.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-18",
-   "slug": "portrait-18",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-18.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-18.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-19",
-   "slug": "portrait-19",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-19.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-19.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-20",
-   "slug": "portrait-20",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-20.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-20.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-21",
-   "slug": "portrait-21",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-21.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-21.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-22",
-   "slug": "portrait-22",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-22.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-22.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-23",
-   "slug": "portrait-23",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-23.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-23.webp"
-   ],
-   "fields": {},
-   "links": {
-    "madeFrom": [],
-    "usedIn": [],
-    "unlockedBy": [],
-    "unlocks": [],
-    "related": []
-   }
-  },
-  {
-   "id": "portraits/portrait-24",
-   "slug": "portrait-24",
-   "category": "portraits",
-   "name": "Citizen portrait",
-   "tier": null,
-   "group": null,
-   "sprite": "media/sprites/portraits/portrait-24.webp",
-   "sprites": [
-    "media/sprites/portraits/portrait-24.webp"
-   ],
-   "fields": {},
    "links": {
     "madeFrom": [],
     "usedIn": [],
