@@ -39,12 +39,12 @@ a{color:var(--cyan)}
   scrollbar-width:thin;scrollbar-color:var(--cyan-d) transparent}
 #viz::-webkit-scrollbar{width:7px}#viz::-webkit-scrollbar-thumb{background:var(--cyan-d);border-radius:4px}
 #viz>*{max-width:940px}
-header{margin:0 0 18px;border-bottom:1px solid var(--border);padding-bottom:16px}
+header{margin:0 0 14px;padding-bottom:12px;border-bottom:1px solid var(--border)}
 .kicker{font-size:0.62rem;letter-spacing:0.42em;text-transform:uppercase;color:var(--cyan-d);font-weight:600}
 h1{font-family:var(--f-sans);font-weight:400;font-size:clamp(1.6rem,3.2vw,2.3rem);
    letter-spacing:-0.01em;line-height:1.05;margin:6px 0 8px;color:var(--bright)}
 h1 em{font-family:var(--f-serif);font-style:italic;font-weight:400;color:var(--amber)}
-.sub{color:var(--dim);font-size:0.8rem;max-width:60ch}
+.sub{color:var(--dim);font-size:0.86rem;max-width:72ch;line-height:1.5}
 .sub b{color:var(--ink);font-weight:600}
 
 @media(max-width:760px){
@@ -109,7 +109,7 @@ input[type=range].amber::-moz-range-thumb{background:var(--amber)}
 .btns button:hover{color:var(--ink);border-color:var(--cyan-d);background:rgba(63,224,255,0.07)}
 .btns button.amber:hover{border-color:var(--amber);background:rgba(255,182,72,0.07)}
 
-.note{font-size:0.62rem;color:var(--faint);line-height:1.55;margin-top:11px;border-top:1px dashed var(--border);padding-top:10px}
+.note{font-size:0.74rem;color:var(--dim);opacity:.85;line-height:1.55;margin-top:10px;border-top:1px dashed var(--border);padding-top:9px}
 .note b{color:var(--dim)}
 
 /* canvases */
@@ -169,3 +169,18 @@ input[type=range].amber::-moz-range-thumb{background:var(--amber)}
 /* Mono for labels, values, buttons and data captions. Prose stays sans. */
 .sys-status,.topbar-r,.kicker,.lbl,.row .name,.stepper,.slider .head,.btns button,.phi-tools button,
 .slider .chips button,.viz-cap,.flow,.formula,.stat,.legend{font-family:var(--f-mono)}
+
+/* Panel layout. Presets sit above the alpha slider. The shots slider and
+   the resample button share one row. Each phase row is a compact block. */
+.btns.presets{margin:0 0 12px}
+.slider-row{display:flex;align-items:center;gap:8px}
+.slider-row input[type=range]{flex:1}
+button.mini{flex:none;width:30px;height:30px;border:1px solid var(--border-b);border-radius:7px;background:transparent;
+  color:var(--cyan);font-size:0.95rem;cursor:pointer;transition:background .12s,border-color .12s}
+button.mini:hover{background:rgba(63,224,255,0.1);border-color:var(--cyan-d)}
+#phi-sliders .slider{margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+#phi-sliders .slider:last-child{border-bottom:0;margin-bottom:0}
+.slider .head .val small{color:var(--faint);font-weight:400;margin-left:6px}
+.slider .chips button{min-height:22px;font-size:0.66rem}
+.lbl,.stat .sl,.slider .head .w,.viz-cap .t span,.viz-cap .r,.legend,.eq .cap{font-size:max(0.62rem,10px)}
+.btns.presets button{min-width:0;padding:8px 4px;letter-spacing:0.02em;white-space:nowrap}

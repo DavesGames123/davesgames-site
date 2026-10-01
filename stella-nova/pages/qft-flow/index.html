@@ -36,9 +36,9 @@
      ┌────────────────┬─────────────────────────────────────────────────┐
      │ #panel         │ #viz                                             │
      │  Register (n)  │  ① input signal  #cv-mag  #cv-phase              │
-     │  φⱼ sliders    │  ② output        #cv-out  (+ stats)              │
-     │  Linear ramp α │  what you're watching (prose)                    │
-     │  Measurement   │  the math (KaTeX)                                │
+     │  Linear ramp α │  ② output        #cv-out  (+ stats)              │
+     │  Measurement   │  what you're watching (prose)                    │
+     │  φⱼ sliders    │  the math (KaTeX)                                │
      └────────────────┴─────────────────────────────────────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
@@ -63,48 +63,57 @@
        filled by buildPhiSliders(); alpha drives the linear ramp; shots controls
        measurement sampling. -->
   <div id="panel">
+    <!-- Card order: the register size, then the one-tap ramp presets, then
+         measurement, then the per-qubit phases. The per-qubit list is the
+         longest, so it goes last and the presets stay above the fold. -->
     <!-- Register card: qubit count n, and the derived bin count 2ⁿ. -->
     <div class="card">
       <div class="lbl">Register <span class="tag">2ⁿ amplitudes</span></div>
       <div class="row">
         <span class="name">qubits&nbsp;<b style="color:var(--ink)">n</b></span>
         <div class="stepper">
-          <button id="n-minus">−</button>
+          <button id="n-minus" aria-label="Fewer qubits">−</button>
           <span class="v" id="n-val">4 <small id="dim-val">· 16 bins</small></span>
-          <button id="n-plus">+</button>
+          <button id="n-plus" aria-label="More qubits">+</button>
         </div>
       </div>
-      <div class="lbl" style="margin-top:6px">Phase rotations <span class="tag">Rz(φⱼ) per qubit</span></div>
-      <div id="phi-sliders"></div>
     </div>
 
     <!-- Linear ramp card: α sets a 1:2:4:8 phase ramp (a pure tone). Presets
          jump to flat, a clean tone, a detuned tone, and random phases. -->
     <div class="card">
       <div class="lbl">Linear ramp <span class="tag">φⱼ = α·2ʲ</span></div>
-      <div class="slider">
-        <div class="head"><span class="k">slope <b>α</b></span><span class="val" id="alpha-val">0.00</span></div>
-        <input type="range" class="amber" id="alpha" min="0" max="6.2832" step="0.001" value="0">
-      </div>
-      <div class="btns">
+      <div class="btns presets">
         <button class="amber" data-preset="flat">Flat</button>
         <button class="amber" data-preset="ramp">Clean tone</button>
         <button class="amber" data-preset="detune">Detune</button>
         <button class="amber" data-preset="random">Random</button>
       </div>
-      <div class="note">A perfect <b>1:2:4:8</b> ramp is a pure tone → one bin. Drag α to slide that tone across the spectrum; nudge a single φⱼ off the ramp to watch energy <b>leak</b> into neighbours.</div>
+      <div class="slider">
+        <div class="head"><span class="k">slope <b>α</b></span><span class="val" id="alpha-val">0.00</span></div>
+        <input type="range" class="amber" id="alpha" min="0" max="6.2832" step="0.001" value="0" aria-label="Ramp slope alpha">
+      </div>
+      <div class="note">A perfect <b>1:2:4:8</b> ramp is a pure tone, so one bin lights. Drag α to slide the tone across the spectrum. Nudge one φⱼ off the ramp to see energy <b>leak</b> into the neighbours.</div>
     </div>
 
     <!-- Measurement card: shots slider indexes SHOT_TABLE; at exact you see the
          true state, adding shots samples it. Resample redraws one run. -->
     <div class="card">
       <div class="lbl">Measurement <span class="tag">finite shots</span></div>
-      <div class="slider">
+      <div class="slider with-btn">
         <div class="head"><span class="k">shots <b>S</b></span><span class="val" id="shots-val">exact</span></div>
-        <input type="range" id="shots" min="0" max="20" step="1" value="0">
+        <div class="slider-row">
+          <input type="range" id="shots" min="0" max="20" step="1" value="0" aria-label="Shots">
+          <button id="resample" class="mini" title="Draw a new measurement run" aria-label="Resample">↻</button>
+        </div>
       </div>
-      <div class="btns"><button id="resample">↻ Resample</button></div>
-      <div class="note">At <b>S = exact</b> you see the true state. Add shots to sample it — the rose histogram is one measurement run, wobbling around the curve by <b>√</b>shot noise.</div>
+      <div class="note">At <b>S = exact</b> you see the true state. Add shots to sample it. The rose histogram is one measurement run. It wobbles around the curve by <b>√</b>shot noise.</div>
+    </div>
+
+    <!-- Phase rotations card: one row per qubit, filled by buildPhiSliders(). -->
+    <div class="card">
+      <div class="lbl">Phase rotations <span class="tag">Rz(φⱼ) per qubit</span></div>
+      <div id="phi-sliders"></div>
     </div>
   </div>
 
@@ -114,7 +123,7 @@
     <header>
       <div class="kicker">Quantum Fourier Transform · input → output</div>
       <h1>Four knobs, <em>one spectrum</em></h1>
-      <p class="sub">Turn <b>n</b> single-qubit phase rotations and watch the whole pipeline: the flat-magnitude signal they encode, the <b>smooth continuous spectrum</b> an ideal machine holds, and the <b>discrete probability histogram</b> you'd actually measure. The bars are samples of the curve.</p>
+      <p class="sub">Turn <b>n</b> qubit phase rotations. The input encodes them as phase only. The output shows the <b>smooth spectrum</b> an ideal machine holds and the <b>bins</b> you measure.</p>
     </header>
     <!-- Stage ①: the encoded input. #cv-mag shows the flat magnitude (all bars
          equal, so magnitude carries no information); #cv-phase shows θ(x). -->

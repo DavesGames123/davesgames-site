@@ -276,7 +276,11 @@ function buildPhiSliders(){
 // Editing a single φ breaks the ramp, so reset the α control to zero.
 function clearAlpha(){$('alpha').value=0;$('alpha-val').textContent='0.00';}
 // Push S.phi back out to every slider readout, slider position, and active chip.
-function syncPhiLabels(){for(let j=0;j<S.n;j++){const v=$('pv'+j);if(v)v.textContent=fmtPi(S.phi[j])+'  '+S.phi[j].toFixed(2);
+// The readout shows a π fraction with its radian value in small type, or
+// only the radian value when the phase is not near a common fraction.
+function phiReadout(v){const f=fmtPi(v),r=v.toFixed(2);if(f==='0')return '0';
+  return f===r?r+'<small>rad</small>':f+'<small>'+r+'</small>';}
+function syncPhiLabels(){for(let j=0;j<S.n;j++){const v=$('pv'+j);if(v)v.innerHTML=phiReadout(S.phi[j]);
   const sl=$('ph'+j);if(sl&&document.activeElement!==sl)sl.value=S.phi[j];
   const ch=$('ch'+j);if(ch){const cur=S.phi[j];ch.querySelectorAll('button').forEach(b=>b.classList.toggle('on',Math.abs(parseFloat(b.dataset.v)-cur)<0.02));}}}
 // Resize the register: clamp n to 1..20, preserve existing phases, rebuild the
