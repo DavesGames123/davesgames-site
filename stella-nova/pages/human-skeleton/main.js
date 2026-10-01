@@ -1,5 +1,5 @@
 // ============================================================================
-//  HUMAN SKELETON  ·  main.js — state, loading, UI, picking, camera, loop
+//  HUMAN SKELETON  ·  main.js — entry: module tree, debug object, boot
 // ────────────────────────────────────────────────────────────────────────────
 //  The manifest arrives first: it builds the list, the camera frame and the
 //  bone state texture. The eight body groups then load at the same time
@@ -22,16 +22,33 @@
 //  FRAME    occlusion() measures the panel and the card;
 //           camera.setViewOffset centres the view in the clear part.
 //
+//  MODULE TREE (app/, one concern per file; each file has its own map)
+//    env.js         constants, device queries, helpers, THEMES
+//    stage.js       renderer, scene, lights, floor, pool, trays, controls
+//    state.js       S, dirty, T, toast, hideHint, regionOf
+//    load.js        loadAll / addGroup / ensureCartilage
+//    visibility.js  refreshVisibility: S.vis and the bone flags
+//    layouts.js     setMode / explode / reconstruct / retarget
+//    tray.js        buildTrays / placeLabels
+//    pick.js        pickAt
+//    select.js      select / clearSelection / step / boneCentre
+//    card.js        showCard / hideCard and the card buttons
+//    inspect.js     isolate / exitIsolate / focusBone / focusRegion
+//    list.js        buildList / syncList / setRegionHidden, search
+//    pointer.js     tap, double tap, hover, drag out
+//    camera.js      occlusion / resize / flyTo / fitView / fitShadow
+//    panel.js       setOpen, the phone sheet, the dock list button
+//    controls.js    setTheme / setShow / syncUI / syncRead / buildUI
+//    loop.js        frame, and the pagehide teardown
+//
+//  ORDER    env.js and stage.js evaluate first. If WebGL 2 is missing,
+//           stage.js throws and no other module runs. The other modules
+//           call each other only inside functions, so the import cycles
+//           do not read a binding before it is set.
+//
 //  GREP MAP
-//    function loadAll / addGroup / ensureCartilage        loading
-//    function setMode / explode / reconstruct / target    layouts
-//    function pickAt / onTap / select / showCard          picking
-//    function isolate / step / focusRegion / focusBone    inspection
-//    function buildList / syncList / setRegionHidden      the bone list
-//    function occlusion / resize / flyTo / fitView        camera
-//    function setTheme / buildUI / syncUI / setOpen       controls
-//    function placeLabels / buildTrays                    the tray
-//    function frame                                       the loop
+//    window.__hs                                     debug and headless checks
+//    // ── boot                                     start the page
 // ============================================================================
 import { $ } from './app/env.js';
 import { canvas, camera, controls } from './app/stage.js';
