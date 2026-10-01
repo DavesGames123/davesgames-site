@@ -119,33 +119,90 @@ const MAX_LOG=64;
 /* ═══════════ MIC ═══════════ */
 // Short id lookup used everywhere below.
 const $=id=>document.getElementById(id);
+// micStream/micSrc: the live input, kept so listening can pause and resume.
+// wakeLock: the screen wake lock held while listening (a phone on a music
+// stand must not go dark mid-song).
+let micStream=null,micSrc=null,wakeLock=null,micBusy=false;
+// Say what failed and what to do next, by the getUserMedia error name.
+function micErrorText(e){
+  const n=(e&&e.name)||'';
+  if(n==='NoMediaDevices')return 'This browser cannot open a microphone on this page. Open the page over https in a current browser.';
+  if(n==='NotAllowedError'||n==='SecurityError')return 'Microphone access is blocked. Allow the microphone for this site (Safari: Settings for This Website › Microphone), then press Start again.';
+  if(n==='NotFoundError'||n==='OverconstrainedError')return 'No microphone found. Connect one or pick an input in your sound settings, then press Start again.';
+  if(n==='NotReadableError'||n==='AbortError')return 'Another app is using the microphone. Close that app, then press Start again.';
+  return 'The microphone did not start ('+(n||(e&&e.message)||'unknown error')+'). Press Start to try again.';
+}
+// Hold the screen awake while listening. It can fail (no API, a frame without
+// permission, low battery); then the screen may sleep as before.
+async function keepAwake(on){
+  try{
+    if(on&&!wakeLock&&navigator.wakeLock){
+      wakeLock=await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release',()=>{wakeLock=null;});
+    }else if(!on&&wakeLock){const w=wakeLock;wakeLock=null;await w.release();}
+  }catch(_){wakeLock=null;}
+}
+// The browser drops the lock when the tab hides; take it again on return.
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&micOn)keepAwake(true);});
 // Open the mic and wire the analyser. getUserMedia disables echo cancel and
 // noise suppression (they eat harmonic content) but keeps auto gain so quiet
-// and loud instruments both reach a usable level.
+// and loud instruments both reach a usable level. The AudioContext and the
+// analyser are made once and kept, so pause and resume reuse them.
 async function startMic(){
+  if(micOn||micBusy)return;
+  micBusy=true;
+  $('micErr').style.display='none';
   try{
-    AC=new (window.AudioContext||window.webkitAudioContext)();
-    const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}});
-    const src=AC.createMediaStreamSource(stream);
-    analyser=AC.createAnalyser();
-    analyser.fftSize=16384;              // 2.9 Hz/bin — resolves semitones at low E
-    analyser.smoothingTimeConstant=0.5;
-    src.connect(analyser);
-    // Allocate the spectrum buffer and record bin width so every consumer maps
-    // frequency to bin index the same way.
-    freqData=new Float32Array(analyser.frequencyBinCount);
-    binHz=AC.sampleRate/analyser.fftSize;
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia)throw {name:'NoMediaDevices'};
+    if(!AC)AC=new (window.AudioContext||window.webkitAudioContext)();
+    if(AC.state==='suspended')await AC.resume();
+    micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:true}});
+    micSrc=AC.createMediaStreamSource(micStream);
+    if(!analyser){
+      analyser=AC.createAnalyser();
+      analyser.fftSize=16384;              // 2.9 Hz/bin — resolves semitones at low E
+      analyser.smoothingTimeConstant=0.5;
+      // Allocate the spectrum buffer and record bin width so every consumer maps
+      // frequency to bin index the same way.
+      freqData=new Float32Array(analyser.frequencyBinCount);
+      binHz=AC.sampleRate/analyser.fftSize;
+    }
+    micSrc.connect(analyser);
+    // An unplugged or revoked input ends its track: pause and say why.
+    micStream.getAudioTracks().forEach(t=>t.addEventListener('ended',()=>{
+      if(micOn)stopMic('The microphone stopped. Was it unplugged? Press Start to listen again.');
+    }));
     micOn=true;
     $('micGate').classList.add('hidden');
+    $('micToggle').hidden=false;
     $('st-mic').innerHTML='mic <b>live</b>';
+    keepAwake(true);
   }catch(e){
+    if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
     const el=$('micErr');
     el.style.display='block';
-    el.textContent='Microphone unavailable — check browser permissions and try again. ('+(e.name||e.message)+')';
-  }
+    el.textContent=micErrorText(e);
+  }finally{micBusy=false;}
+}
+// Pause: release the input (the browser's mic light goes off), keep the last
+// chord on screen as held, and show the gate again with a resume button.
+function stopMic(msg){
+  if(!micOn)return;
+  micOn=false;
+  if(micSrc){try{micSrc.disconnect();}catch(_){}micSrc=null;}
+  if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
+  keepAwake(false);
+  if(curChord)holdChord(true);
+  $('micBtn').innerHTML='🎤&nbsp; Resume Listening';
+  $('micHint').innerHTML='Paused. The last chord stays on screen.<br>Press the button or Space to listen again.';
+  $('micGate').classList.remove('hidden');
+  $('micToggle').hidden=true;
+  $('st-mic').textContent='mic paused';
+  if(msg){const el=$('micErr');el.style.display='block';el.textContent=msg;}
 }
 // The Start Listening button is the required user gesture that unlocks audio.
 $('micBtn').addEventListener('click',startMic);
+$('micToggle').addEventListener('click',()=>stopMic());
 
 /* ════════════════════════════════════════════════════════════
    DETECTION CORE — benchmarked offline against 585 synthesized

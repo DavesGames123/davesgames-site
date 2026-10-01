@@ -61,6 +61,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 #micBtn:hover{transform:scale(1.05);box-shadow:0 0 48px rgba(150,200,255,0.55)}
 @keyframes breathe{0%,100%{box-shadow:0 0 26px rgba(150,200,255,0.3)}50%{box-shadow:0 0 46px rgba(255,200,50,0.45)}}
 #micHint{font-size:0.66rem;letter-spacing:0.14em;color:var(--text-dim);text-transform:uppercase;text-align:center;line-height:1.9;padding:0 20px}
+#micToggle{position:absolute;top:7px;right:12px;z-index:5}
+#micToggle[hidden]{display:none}
 #micErr{font-size:0.68rem;color:#ff8080;max-width:320px;text-align:center;line-height:1.8;display:none;padding:0 16px}
 
 /* middle — DIAGRAM */
