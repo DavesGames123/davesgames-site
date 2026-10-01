@@ -86,6 +86,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .nav-sub.c-vol{color:#96c8ff;border-left-color:#96c8ff;background:linear-gradient(90deg,rgba(150,200,255,0.08) 0%,transparent 70%)}
 .nav-sub.c-fx{color:#e58bd0;border-left-color:#e58bd0;background:linear-gradient(90deg,rgba(229,139,208,0.08) 0%,transparent 70%)}
 .nav-sub.c-data{color:#64c8f0;border-left-color:#64c8f0;background:linear-gradient(90deg,rgba(100,200,240,0.08) 0%,transparent 70%)}
+.nav-sub.c-elem{color:#ff9a5c;border-left-color:#ff9a5c;background:linear-gradient(90deg,rgba(255,154,92,0.08) 0%,transparent 70%)}
 .nav-sub.c-fold{color:#f0b27a;border-left-color:#f0b27a;background:linear-gradient(90deg,rgba(240,178,122,0.08) 0%,transparent 70%)}
 .nav-sub.c-cloth{color:#d7a6ff;border-left-color:#d7a6ff;background:linear-gradient(90deg,rgba(215,166,255,0.08) 0%,transparent 70%)}
 #translate-cycle{transition:opacity 0.4s ease}
@@ -253,6 +254,13 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
           <button class="nav-item fx" data-tab="explosion" onclick="switchTab('explosion')"><span class="nav-label">Explosion</span></button>
           <button class="nav-item fx" data-tab="flare" onclick="switchTab('flare')"><span class="nav-label">Engine Propulsion Effects</span></button>
           <button class="nav-item sn" data-tab="beam" onclick="switchTab('beam')"><span class="nav-label">Beam &amp; Decal Table</span><span class="nav-badge">WGSL</span></button>
+          <div class="nav-sub c-elem">Elements</div>
+          <button class="nav-item sn" data-tab="fire" onclick="switchTab('fire')"><span class="nav-label">Fire Table</span><span class="nav-badge">WGSL</span></button>
+          <button class="nav-item sn" data-tab="fire-ev1" onclick="switchTab('fire-ev1')"><span class="nav-label">Fire Table (Evolved 1)</span><span class="nav-badge">WGSL</span></button>
+          <button class="nav-item sn" data-tab="smoke" onclick="switchTab('smoke')"><span class="nav-label">Smoke Table</span><span class="nav-badge">WGSL</span></button>
+          <button class="nav-item sn" data-tab="heat-diffraction" onclick="switchTab('heat-diffraction')"><span class="nav-label">Heat Diffraction</span><span class="nav-badge">IMG</span></button>
+          <button class="nav-item sn" data-tab="heat-metal" onclick="switchTab('heat-metal')"><span class="nav-label">Heat Metal</span><span class="nav-badge">WGSL</span></button>
+          <button class="nav-item sn" data-tab="frost" onclick="switchTab('frost')"><span class="nav-label">Frost Table</span><span class="nav-badge">WGSL</span></button>
           <div class="nav-sub c-cloth">Cloth Simulation</div>
           <button class="nav-item sn" data-tab="holocloth" onclick="switchTab('holocloth')"><span class="nav-label">Holocloth</span><span class="nav-badge">CLOTH</span></button>
           <div class="nav-sub c-data">Data Visualization</div>
@@ -276,12 +284,6 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
         <div class="cluster-body">
           <button class="nav-item com" data-tab="fortom" onclick="switchTab('fortom')"><span class="nav-label">For Tom</span></button>
           <button class="nav-item com" data-tab="starward-belt" onclick="switchTab('starward-belt')"><span class="nav-label">Starward Belt</span><span class="nav-badge">MAP</span></button>
-          <button class="nav-item sn" data-tab="fire" onclick="switchTab('fire')"><span class="nav-label">Fire Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="fire-ev1" onclick="switchTab('fire-ev1')"><span class="nav-label">Fire Table (Evolved 1)</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="smoke" onclick="switchTab('smoke')"><span class="nav-label">Smoke Table</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="heat-diffraction" onclick="switchTab('heat-diffraction')"><span class="nav-label">Heat Diffraction</span><span class="nav-badge">IMG</span></button>
-          <button class="nav-item sn" data-tab="heat-metal" onclick="switchTab('heat-metal')"><span class="nav-label">Heat Metal</span><span class="nav-badge">WGSL</span></button>
-          <button class="nav-item sn" data-tab="frost" onclick="switchTab('frost')"><span class="nav-label">Frost Table</span><span class="nav-badge">WGSL</span></button>
           <button class="nav-item com" data-tab="translate" onclick="switchTab('translate')"><span class="nav-label">Translation Terminal</span><span class="nav-badge">i18n</span></button>
         </div>
       </div>
