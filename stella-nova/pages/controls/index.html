@@ -24,12 +24,15 @@
      │ #sec-opts  #invertScroll  the one stored setting              │
      │ #sec-tips  tip cards                                          │
      └───────────────────────────────────────────────────────────────┘
-   PHONE (max-width 760px): the keyboard is compact and the arrow cluster
-   moves under it. The action list is one column.
+   TABLET (max-width 1100px): the arrow cluster moves under the keyboard.
+   PHONE: when the keys would be under 30px, #kbWrap shows #keyGrid, a grid
+   of the bound keys only, in place of #board and #arrows. The action list
+   is one column (max-width 760px).
 
    SECTION MAP  (jump with grep -n "<anchor>" index.html)
      search and filter .. id="bar"          sticky tool bar
      keyboard slot ...... id="board"        main.js renders keys here
+     phone key grid ..... id="keyGrid"      bound keys only, as tiles
      key readout ........ id="readout"      bindings of the active key
      action list ........ id="list"         filled by buildList()
      mouse .............. id="sec-mouse"    diagram and rows
@@ -66,6 +69,7 @@
     <div id="kbWrap">
       <div id="board" aria-label="Keyboard"></div>
       <div id="arrows" aria-label="Arrow keys"></div>
+      <div id="keyGrid" aria-label="Bound keys"></div>
     </div>
     <div id="readout" aria-live="polite"></div>
   </div>

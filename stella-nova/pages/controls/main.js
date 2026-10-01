@@ -11,6 +11,7 @@
 //      SN_DATA.controls ─▶ index()      ─▶ BYKEY: base key -> [binding]
 //                                           MODS:  modifier -> [binding]
 //      BYKEY ───────────▶ buildBoard()  ─▶ #board, #arrows (bound keys lit)
+//                                           #keyGrid (bound keys only, phone)
 //      controls ────────▶ buildList()   ─▶ #list (one card per group)
 //      key hover / tap / real key press ─▶ showKey() ─▶ #readout
 //      #q search + group chips ─▶ applyFilter() ─▶ list rows and key match
@@ -25,7 +26,8 @@
 //      chord parse ........ "function parseChord"
 //      key index .......... "function index"
 //      keyboard ........... "function buildBoard"
-//      key size ........... "function fitBoard"
+//      key size ........... "function fitBoard"    also sets .compact
+//      phone key grid ..... "function buildGrid"
 //      readout ............ "function showKey"
 //      action list ........ "function buildList"
 //      filter ............. "function applyFilter"
@@ -142,6 +144,7 @@
         host.appendChild(r);
       });
     });
+    buildGrid();
     var wrap = $('kbWrap');
     // Hover previews a key. A click or tap pins it until the next pick.
     wrap.addEventListener('pointerover', function (e) {
@@ -154,14 +157,42 @@
       if (!k || !bindingsOf(k.dataset.k).length) return;
       if (STATE.pinned && STATE.key === k.dataset.k) { STATE.pinned = false; showKey(null); return; }
       STATE.pinned = true; showKey(k.dataset.k);
+      if (k.closest('#keyGrid')) revealReadout();
     });
     wrap.addEventListener('keydown', function (e) {
       if ((e.key === 'Enter' || e.key === ' ') && e.target.classList.contains('key')) { e.preventDefault(); e.stopPropagation(); e.target.click(); }
     });
   }
 
-  // Size the keys so the board fits its card. On a phone the arrow cluster
-  // sits under the board, so only the board width counts.
+  // Phone key grid. When the full board does not fit at a readable size,
+  // the card shows only the bound keys as large tiles, in board order. Each
+  // key id occurs once (the board has two Shift, Ctrl and Cmd caps). A tile
+  // is a keyNode, so the click, hot and match rules are the same as on the
+  // board.
+  function buildGrid() {
+    var host = $('keyGrid'), seen = {};
+    LAYOUT.concat(ARROWS).forEach(function (row) {
+      row.forEach(function (def) {
+        var id = def[0];
+        if (id === null || seen[id] || !bindingsOf(id).length) return;
+        seen[id] = 1;
+        var k = keyNode(def);
+        if ((def[2] || id).length > 4) k.classList.add('wide');
+        host.appendChild(k);
+      });
+    });
+  }
+  // On the key grid, the readout is under the tiles. After a tap, scroll it
+  // into view when it is below the window.
+  function revealReadout() {
+    var ro = $('readout'), r = ro.getBoundingClientRect();
+    if (r.top > window.innerHeight - 80) ro.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  // Size the keys so the board fits its card. When the arrow cluster sits
+  // under the board, only the board width counts. Below COMPACT_KW the card
+  // switches to the key grid.
+  var COMPACT_KW = 30;
   function fitBoard() {
     var wrap = $('kbWrap'), card = wrap.parentNode;
     var cs = getComputedStyle(card);
@@ -171,6 +202,7 @@
     if (getComputedStyle(card).gridTemplateColumns.split(' ').length > 1) avail -= 300 + parseFloat(cs.columnGap || 24);
     var units = stacked ? BOARD_UNITS : BOARD_UNITS + ARROW_UNITS;
     var kw = Math.max(18, Math.min(52, Math.floor((avail - 4) / units)));
+    card.classList.toggle('compact', kw < COMPACT_KW);
     document.documentElement.style.setProperty('--kw', kw + 'px');
     document.documentElement.style.setProperty('--kg', Math.max(2, Math.round(kw * 0.1)) + 'px');
   }
@@ -244,6 +276,7 @@
     var first = c.chords && c.chords[0] ? parseChord(c.chords[0]).key : null;
     if (first && document.querySelector('.key[data-k="' + cssEsc(first) + '"]')) {
       STATE.pinned = true; showKey(first);
+      if ($('kbWrap').parentNode.classList.contains('compact')) { $('readout').scrollIntoView({ block: 'start' }); return; }
       var kb = $('sec-keys').getBoundingClientRect();
       if (kb.bottom < 80 || kb.top > window.innerHeight) $('sec-keys').scrollIntoView({ block: 'start' });
     }
@@ -273,6 +306,7 @@
     var on = !!q || g !== 'all';
     $('board').classList.toggle('filtering', on);
     $('arrows').classList.toggle('filtering', on);
+    $('keyGrid').classList.toggle('filtering', on);
     document.querySelectorAll('.key[data-k]').forEach(function (k) { k.classList.toggle('match', !!keys[k.dataset.k]); });
     $('keyNote').textContent = on ? Object.keys(keys).length + ' keys match' : Object.keys(BYKEY).filter(function (k) { return !/click$/.test(k); }).length + ' bound keys';
   }
