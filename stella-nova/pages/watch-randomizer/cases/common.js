@@ -10,7 +10,8 @@ import * as G from '../../watch-movement/geom.js';
 import { circ } from '../../watch-movement/kit.js';
 const { TAU } = G;
 
-export const DIAL_R = { lever: 18.6, tourbillon: 18.6, automatic: 12.9, verge: 18.9 };
+// the clocks' plateR is their camera fit radius, not the dial: list them all
+export const DIAL_R = { lever: 18.6, tourbillon: 18.6, automatic: 12.9, verge: 18.9, cylinder: 18.9, pinlever: 19.8, detent: 20.3, anchor: 43, brocot: 45, deadbeat: 145 };
 export const dialRadius = cal => cal.dialR ?? DIAL_R[cal.id] ?? cal.plateR + 0.3;
 
 // a lathe solid round z from a closed (r, z) profile

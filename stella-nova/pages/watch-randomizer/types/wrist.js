@@ -15,7 +15,7 @@ import { METALS, PAINTS, WOODS, LEATHERS } from '../palettes.js';
 
 export default {
   id: 'wrist', name: 'Wristwatch', weight: 3.5, clock: false,
-  calibres: [['automatic', 7], ['lever', 1.5], ['tourbillon', 1.5]],
+  calibres: [['automatic', 7], ['lever', 1.5], ['tourbillon', 1.5], ['pinlever', 0.8]],
   caseSpec: (R, calibre) => ({
     metal: R.weighted([['steel', 5], ['yellow gold', 2], ['rose gold', 1.5], ['gunmetal', 1.2], ['silver', 1]]),
     shape: calibre === 'automatic' ? R.weighted([['round', 6], ['cushion', 2], ['tonneau', 1.2], ['square', 1.2]]) : R.weighted([['round', 3], ['cushion', 1]]),

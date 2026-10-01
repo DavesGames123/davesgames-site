@@ -25,12 +25,8 @@ import * as Gen from './generator.js';
 import { caseDims } from './dims.js';
 import { buildCase } from './cases/index.js';
 
-const SCENES = {
-  lever: () => import('../watch-movement/scenes/lever.js'),
-  tourbillon: () => import('../watch-movement/scenes/tourbillon.js'),
-  automatic: () => import('../watch-movement/scenes/automatic.js'),
-  verge: () => import('../watch-movement/scenes/verge.js'),
-};
+// every calibre's scene is ../watch-movement/scenes/<id>.js
+const loadScene = id => import(`../watch-movement/scenes/${id}.js`);
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
 const COARSE = matchMedia('(pointer:coarse)').matches;
@@ -71,7 +67,7 @@ async function roll(seed = Gen.newSeed(), first = false) {
     const cal = await loadCalibre(spec.movement.calibre);
     const dims = caseDims(spec, cal);
     const { palette, opts } = sceneOpts(spec, dims);
-    const mod = await SCENES[spec.movement.calibre]();
+    const mod = await loadScene(spec.movement.calibre);
     const caseProbe = buildCaseProbe(spec);
     const B = createBuild({ palette: { ...palette, ...caseProbe }, wear: 1 });   // a used piece: scratches and prints
     const sc = mod.build(B, cal, opts);

@@ -15,7 +15,7 @@ import { METALS, PAINTS, WOODS, LEATHERS } from '../palettes.js';
 
 export default {
   id: 'pocket', name: 'Pocket watch', weight: 3, clock: false,
-  calibres: [['lever', 5], ['tourbillon', 2], ['verge', 3]],
+  calibres: [['lever', 5], ['tourbillon', 2], ['verge', 3], ['cylinder', 2.5], ['pinlever', 1.5]],
   caseSpec: (R, calibre) => ({
     metal: R.weighted([['yellow gold', 4], ['silver', 3], ['rose gold', 1.5], ['gunmetal', 1], ['nickel', 1]]),
     style: calibre === 'verge' ? R.weighted([['open face', 7], ['hunter', 3]]) : R.weighted([['open face', 6], ['hunter', 4]]),

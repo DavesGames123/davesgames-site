@@ -2,7 +2,7 @@
 //  TIMEPIECE RANDOMIZER  ·  tests.mjs — node tests.mjs
 // ────────────────────────────────────────────────────────────────────────────
 //  Checks generator.js without a browser: the same seed gives the same
-//  piece; every type and calibre turns up; each calibre only goes in a type
+//  piece; every registered type and every fitting calibre turns up; each calibre only goes in a type
 //  that allows it; the seconds display matches the calibre; locks keep
 //  their section; maker names never print a real watch or clock house.
 // ============================================================================
@@ -17,18 +17,21 @@ ok(J(Gen.makeSpec('abc123')) !== J(Gen.makeSpec('abc124')), 'a different seed gi
 
 const N = 4000, seen = { type: {}, calibre: {}, base: {}, hands: {} };
 let bad = [], secBad = [];
-const SECONDS = { verge: 'none', tourbillon: 'aperture', automatic: 'centre' };
+// the seconds display each calibre should get: CALIBRE_INFO, with small
+// seconds dropped in a clock
+const wantSeconds = (type, c) => { const v = (Gen.CALIBRE_INFO[c] || {}).seconds || 'none'; return Gen.TYPES[type].clock && v === 'small' ? 'none' : v; };
 for (let i = 0; i < N; i++) {
   const s = Gen.makeSpec('s' + i);
   seen.type[s.type] = (seen.type[s.type] || 0) + 1;
   seen.calibre[s.movement.calibre] = (seen.calibre[s.movement.calibre] || 0) + 1;
   seen.base[s.face.base] = 1; seen.hands[s.face.handStyle] = 1;
   if (!Gen.TYPES[s.type].calibres.some(([c]) => c === s.movement.calibre)) bad.push(`${s.type}/${s.movement.calibre}`);
-  const want = SECONDS[s.movement.calibre] || (s.type === 'wall' || s.type === 'alarm' ? 'none' : 'small');
+  const want = wantSeconds(s.type, s.movement.calibre);
   if (s.face.seconds !== want) secBad.push(`${s.type}/${s.movement.calibre}/${s.face.seconds}`);
 }
-ok(Object.keys(seen.type).length === 4, 'every type turns up', J(seen.type));
-ok(Object.keys(seen.calibre).length === 4, 'every calibre turns up', J(seen.calibre));
+const NT = Object.keys(Gen.TYPES).length, NC = new Set(Object.values(Gen.TYPES).flatMap(t => t.calibres.map(c => c[0])).filter(c => Gen.CALIBRE_INFO[c])).size;
+ok(Object.keys(seen.type).length === NT, `every type turns up (${NT})`, J(seen.type));
+ok(Object.keys(seen.calibre).length === NC, `every fitting calibre turns up (${NC})`, J(seen.calibre));
 ok(Gen.DIAL_BASES.every(b => seen.base[b]), 'every dial base turns up', Object.keys(seen.base).length + ' of ' + Gen.DIAL_BASES.length + ' bases');
 ok(bad.length === 0, 'each calibre only in a type that allows it', bad.slice(0, 5).join(', '));
 ok(secBad.length === 0, 'the seconds display matches the calibre', secBad.slice(0, 5).join(', '));

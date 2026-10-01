@@ -13,12 +13,15 @@ import { HAND_W, forClock, minuteFor, HAND_MAT, SEC_MAT, handStyle } from './han
 import { dialPainter } from './dials.js';
 
 const ROTOR_PARTS = ['rotor', 'rotorHub', 'autoBridge', 'reduction', 'rev1Wheel', 'rev2Wheel', 'rev1Pin', 'rev2Pin', 'aScrews'];
-const HAND_L = { lever: [9.6, 14.6], tourbillon: [9.6, 14.6], verge: [10, 15], automatic: [6.4, 10.2] };
+const HAND_L = { lever: [9.6, 14.6], tourbillon: [9.6, 14.6], verge: [10, 15], automatic: [6.4, 10.2], cylinder: [9.8, 14.8], pinlever: [10, 15.2], detent: [11, 16.5] };
 
 export function caseDims(spec, cal) {
   const f = spec.face, calId = spec.movement.calibre, T = TYPES[spec.type], clock = !!T.clock;
   const own = dialRadius(cal);
-  const { dialR, R } = T.dims(spec, own);
+  const { dialR, R } = T.dims(spec, own, cal);
+  // a calibre with its own face (a regulator layout, a visible escapement)
+  // keeps its dial and hands; the case frames them and paints nothing
+  if ((CALIBRE_INFO[calId] || {}).ownFace) return { clock, dialR: own, R, hands: undefined, hide: [], noDial: false, ownFace: true, paint: null };
   const hide = cal.stemPart === false || calId === 'verge' ? [] : ['stem'];
   if (clock && calId === 'automatic') hide.push(...ROTOR_PARTS);
   const hs = clock ? forClock(f.handStyle) : f.handStyle, ms = minuteFor(hs);

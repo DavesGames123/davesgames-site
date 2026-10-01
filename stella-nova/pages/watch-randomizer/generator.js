@@ -69,6 +69,13 @@ export const CALIBRE_INFO = {
   tourbillon: { name: 'Tourbillon', seconds: 'aperture', line: 'TOURBILLON', aperture: cal => [-cal.L.O[1], cal.CAL.cageR + 0.15] },
   automatic: { name: 'Automatic', seconds: 'centre', line: 'AUTOMATIC' },
   verge: { name: 'Verge fusee', seconds: 'none' },
+  cylinder: { name: 'Cylinder', seconds: 'small', line: 'CYLINDRE', sub: cal => [-cal.L.F[1], 3.6] },
+  pinlever: { name: 'Roskopf pin-lever', seconds: 'none', line: 'SYSTÈME ROSKOPF' },
+  detent: { name: 'Detent chronometer', seconds: 'small', line: 'CHRONOMETER', sub: cal => [-cal.L.F[1], 4.6] },
+  anchor: { name: 'Anchor and pendulum', seconds: 'none', pendulum: true },
+  // a regulator dial and a visible escapement keep the calibre's own face
+  deadbeat: { name: 'Graham deadbeat regulator', seconds: 'own', ownFace: true, pendulum: true },
+  brocot: { name: 'Brocot visible escapement', seconds: 'own', ownFace: true, pendulum: true },
 };
 export const CALIBRE_NAMES = new Proxy({}, { get: (_, k) => (CALIBRE_INFO[k] || {}).name || String(k) });
 const fits = type => TYPES[type].calibres.filter(([c]) => CALIBRE_INFO[c]);
@@ -141,11 +148,15 @@ export function describe(spec) {
   const m = spec.movement, f = spec.face, rows = [];
   rows.push(['Type', TYPES[spec.type].name]);
   rows.push(['Maker', `${f.brand}, ${f.city}`]);
-  rows.push(['Movement', `${CALIBRE_NAMES[m.calibre]}${TYPES[spec.type].clock && !['anchor', 'deadbeat', 'brocot'].includes(m.calibre) ? ' (clock platform)' : ''}`]);
+  const info = CALIBRE_INFO[m.calibre] || {};
+  rows.push(['Movement', `${CALIBRE_NAMES[m.calibre]}${TYPES[spec.type].clock && !info.pendulum && m.calibre !== 'detent' ? ' (clock platform)' : ''}`]);
   rows.push(['Finish', `${cap(m.plate)} bridges, ${m.wheels} wheels, ${m.screws} screws, ${m.jewels} jewels`]);
-  const nm = (map, k) => map[k] || k.replace('-', ' ');
-  rows.push(['Dial', `${nm(CAT.BASE_NAMES, f.base)}, ${nm(CAT.NUMERAL_NAMES, f.numerals)} numerals, ${f.track === 'none' ? 'no track' : nm(CAT.TRACK_NAMES, f.track) + ' track'}`]);
-  rows.push(['Hands', `${HAND_NAMES[f.handStyle] || f.handStyle}, ${f.handColor}; seconds ${f.seconds}`]);
+  if (info.ownFace) rows.push(['Dial', `the calibre's own (${m.calibre === 'deadbeat' ? 'regulator layout' : 'visible escapement'})`]);
+  else {
+    const nm = (map, k) => map[k] || k.replace('-', ' ');
+    rows.push(['Dial', `${nm(CAT.BASE_NAMES, f.base)}, ${nm(CAT.NUMERAL_NAMES, f.numerals)} numerals, ${f.track === 'none' ? 'no track' : nm(CAT.TRACK_NAMES, f.track) + ' track'}`]);
+    rows.push(['Hands', `${HAND_NAMES[f.handStyle] || f.handStyle}, ${f.handColor}; seconds ${f.seconds}`]);
+  }
   rows.push(...TYPES[spec.type].describe(spec));
   return rows;
 }
