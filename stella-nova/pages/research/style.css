@@ -19,6 +19,8 @@
      dock ................. "#dock"
      panel ................ "#panel"
      phone ................ "@media (max-width: 760px)"
+     short landscape ...... "@media (max-height: 520px) and (min-width: 761px)"
+     touch sizes .......... "@media (pointer: coarse)"
    ============================================================================ */
 
 :root {
@@ -49,6 +51,8 @@ em { font-family: var(--f-serif); font-style: italic; font-weight: 400; color: v
 
 /* ── top bar ─────────────────────────────────────────────────────────────── */
 .bar { position: fixed; inset: 0 0 auto 0; z-index: 20; height: var(--bar-h); display: flex; align-items: center; gap: 24px; padding: 0 22px; background: linear-gradient(180deg, rgba(10, 12, 18, .96), rgba(10, 12, 18, .82)); border-bottom: 1px solid var(--line); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.bar-title { flex: none; }
+.bar-title .kicker, .bar h1 { white-space: nowrap; }
 .bar h1 { font: 300 1.65rem/1.05 var(--f-sans); color: var(--ink); letter-spacing: -0.01em; }
 .find { position: relative; flex: 0 1 360px; min-width: 0; }
 .find svg { position: absolute; left: 13px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); fill: none; stroke: var(--dim); stroke-width: 2; pointer-events: none; }
@@ -100,11 +104,11 @@ em { font-family: var(--f-serif); font-style: italic; font-weight: 400; color: v
 .node .n-name { font: 500 0.88rem/1.2 var(--f-sans); color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .node .n-chips { display: flex; gap: 5px; align-items: center; min-height: 26px; }
 .node .n-more { font: 400 0.66rem/1 var(--f-mono); color: var(--dim); }
-.node .n-lead { font: 400 0.64rem/1 var(--f-mono); color: var(--faint); letter-spacing: .06em; text-transform: uppercase; }
+.node .n-lead { font: 400 0.68rem/1 var(--f-mono); color: var(--faint); letter-spacing: .06em; text-transform: uppercase; }
 
 .chip { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); overflow: hidden; }
 .chip img { width: 22px; height: 22px; object-fit: contain; }
-.chip b { font: 600 0.6rem/1 var(--f-mono); color: var(--dim); letter-spacing: 0; }
+.chip b { font: 600 0.68rem/1 var(--f-mono); color: var(--dim); letter-spacing: 0; }
 .chip.mod { border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
 
 .has-sel .node { opacity: .22; }
@@ -167,9 +171,38 @@ em { font-family: var(--f-serif); font-style: italic; font-weight: 400; color: v
   #panel { left: 0; right: 0; top: auto; bottom: 0; width: auto; max-height: 46vh; max-height: 46dvh; border-radius: 20px 20px 0 0; border-bottom: 0; padding: 4px 18px calc(20px + env(safe-area-inset-bottom)); transform: translateY(105%); }
   #panel.open { transform: none; }
   #panel.full { max-height: calc(100dvh - var(--bar-h) - 20px); }
-  .grip { display: flex; justify-content: center; width: 100%; height: 26px; align-items: center; border: 0; background: none; cursor: pointer; }
+  .grip { display: flex; justify-content: center; width: 100%; height: 44px; align-items: center; border: 0; background: none; cursor: pointer; }
   .grip span { width: 46px; height: 5px; border-radius: 3px; background: var(--dim); opacity: .6; }
   .p-name { font-size: 1.35rem; margin: 6px 0 8px; }
+}
+/* A phone held sideways: the wide layout with a short bar and a narrow panel,
+   so the board keeps most of the screen. */
+@media (max-height: 520px) and (min-width: 761px) {
+  :root { --bar-h: 58px; }
+  .bar { gap: 16px; padding: 0 16px 0 calc(16px + env(safe-area-inset-left)); }
+  .bar-title .kicker { display: none; }
+  .bar h1 { font-size: 1.3rem; }
+  .find input { height: 40px; }
+  .legend { flex-wrap: nowrap; gap: 5px; }
+  .legend span { padding: 4px 8px; }
+  #panel { width: 290px; top: calc(var(--bar-h) + 10px); right: calc(12px + env(safe-area-inset-right)); max-height: calc(100% - var(--bar-h) - 22px); padding: 14px 16px 16px; }
+  .p-name { font-size: 1.25rem; margin: 6px 0 8px; }
+  .p-key { margin-top: 10px; gap: 6px; }
+  #dock { left: calc(12px + env(safe-area-inset-left)); bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .hint { left: calc((100% - 302px) / 2); }
+}
+/* Touch: inputs at 16px so iOS Safari does not zoom on focus, and every
+   control the finger hits is at least 44px tall. */
+@media (pointer: coarse) {
+  .find input { font-size: 16px; }
+  .hits li button { min-height: 44px; }
+  .p-btn { min-height: 44px; }
+  .p-pill { min-height: 36px; }
+  #dock button { width: 48px; height: 48px; }
+}
+/* Touch on a wide screen: the dock buttons grow, so the hint moves above the dock. */
+@media (pointer: coarse) and (min-width: 761px) {
+  .hint { bottom: calc(92px + env(safe-area-inset-bottom)); }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
