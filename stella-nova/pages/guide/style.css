@@ -13,6 +13,8 @@
      production line ...... ".chain"
      tiers ................ ".tiers" / ".tn" / ".tier-detail"
      phone ................ "@media (max-width: 760px)"
+     touch sizes .......... "@media (hover: none)"
+     pinned tier detail ... "PINNED DETAIL"
    ============================================================================ */
 :root {
   --bg: #0a0c12; --bg2: #0e1119; --bg3: #131826;
@@ -44,10 +46,13 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round
 .brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; font-weight: 500; color: var(--ink); }
 .brand .mark { color: var(--gold); font-size: 12px; filter: drop-shadow(0 0 6px rgba(255, 200, 50, .6)); }
 .brand em { font-size: 19px; }
-.chaps { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 6px 2px; justify-content: center; mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 12px), transparent); }
+.chaps { flex: 1; min-width: 0; display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; padding: 6px 2px; mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 12px), transparent); }
 .chaps::-webkit-scrollbar { display: none; }
+/* Auto margins centre the links but keep the first link reachable when the row overflows. */
+.chaps a:first-child { margin-left: auto; }
+.chaps a:last-child { margin-right: auto; }
 .chaps a { flex: none; display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px; border-radius: 999px; font-size: 13px; color: var(--dim); border: 1px solid transparent; transition: color .2s, border-color .2s, background .2s; }
-.chaps a b { font: 500 10px/1 var(--f-mono); color: var(--faint); }
+.chaps a b { font: 500 11px/1 var(--f-mono); color: var(--faint); }
 .chaps a:hover { color: var(--ink); }
 .chaps a.on { color: var(--ink); border-color: var(--line2); background: rgba(150, 200, 255, .06); }
 .chaps a.on b { color: var(--gold); }
@@ -97,7 +102,7 @@ h2 { font-weight: 400; font-size: clamp(30px, 3.6vw, 44px); line-height: 1.05; l
 .pk { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px 8px; border-radius: 12px; border: 1px solid var(--line); background: rgba(19, 24, 38, .6); transition: border-color .2s, background .2s; }
 .pk img { width: 36px; height: 36px; object-fit: contain; }
 .pk span { font-size: 12.5px; color: var(--ink); line-height: 1.2; text-align: center; }
-.pk em { font: 400 10px/1 var(--f-mono); color: var(--dim); }
+.pk em { font: 400 10.5px/1 var(--f-mono); color: var(--dim); }
 .pk:hover { border-color: var(--line2); }
 .pk.on { border-color: rgba(255, 200, 50, .6); background: linear-gradient(180deg, rgba(255, 200, 50, .1), rgba(19, 24, 38, .7)); }
 .pk.on em { color: var(--gold); }
@@ -115,7 +120,7 @@ h2 { font-weight: 400; font-size: clamp(30px, 3.6vw, 44px); line-height: 1.05; l
 .wk:hover { border-color: rgba(150, 200, 255, .5); color: var(--ink); }
 .wk img, .wk i { width: 24px; height: 24px; border-radius: 50%; object-fit: contain; background: rgba(150, 200, 255, .08); display: grid; place-items: center; font-style: normal; font-size: 11px; color: var(--blue); flex: none; }
 .pair { display: inline-flex; align-items: center; gap: 6px; }
-.via { font: 400 10px/1 var(--f-mono); color: var(--faint); }
+.via { font: 400 10.5px/1 var(--f-mono); color: var(--faint); }
 #jobChips { gap: 8px 14px; }
 
 /* ---- production line ---- */
@@ -139,7 +144,7 @@ h2 { font-weight: 400; font-size: clamp(30px, 3.6vw, 44px); line-height: 1.05; l
 .tiers { display: grid; grid-template-columns: 1fr 1fr 1fr 1.7fr 1fr; gap: 18px; position: relative; z-index: 1; }
 .tier-lines { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 0; overflow: visible; }
 .tier-lines path { fill: none; stroke-width: 1.4; }
-.tcol h4 { font: 500 10px/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.tcol h4 { font: 500 11px/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--dim); padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
 .tlist { display: flex; flex-direction: column; gap: 4px; }
 .tcol.wide .tlist { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px; }
 .tn { display: flex; align-items: center; gap: 7px; padding: 4px 8px 4px 4px; border-radius: 9px; border: 1px solid transparent; text-align: left; font-size: 12px; color: var(--text); background: rgba(19, 24, 38, .7); transition: opacity .2s, border-color .2s, background .2s; min-width: 0; }
@@ -157,7 +162,7 @@ h2 { font-weight: 400; font-size: clamp(30px, 3.6vw, 44px); line-height: 1.05; l
 .td-h h4 { font-size: 18px; font-weight: 500; color: var(--ink); margin: 4px 0; }
 .td-h .more { font-size: 12.5px; color: var(--blue); }
 .td-h .x { position: absolute; right: -4px; top: -4px; width: 32px; height: 32px; border-radius: 8px; font-size: 20px; color: var(--dim); }
-.tier-detail h5 { font: 500 10px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 14px 0 8px; }
+.tier-detail h5 { font: 500 11px/1 var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--dim); margin: 14px 0 8px; }
 .fine { font-size: 13px; color: var(--dim); }
 .gold { color: var(--gold); font-weight: 500; }
 .green { color: var(--green); font-weight: 500; }
@@ -170,7 +175,13 @@ h2 { font-weight: 400; font-size: clamp(30px, 3.6vw, 44px); line-height: 1.05; l
 /* ---- responsive ---- */
 @media (max-width: 1080px) {
   .tier-fig { grid-template-columns: 1fr; }
-  .tier-detail { position: static; }
+  /* Narrow tree columns: wrap long names to two lines, do not cut them. */
+  .tn span { white-space: normal; line-height: 1.15; overflow-wrap: break-word; }
+  .tcol.wide .tlist { grid-template-columns: 1fr; }
+  /* PINNED DETAIL: the detail sits under the whole tree here. It sticks to
+     the bottom of the screen while the tree is in view, so a tap on a
+     resource shows its detail without a scroll. */
+  .tier-detail { position: sticky; top: auto; bottom: 0; z-index: 2; max-height: min(42vh, 360px); max-height: min(42dvh, 360px); overflow-y: auto; overscroll-behavior: contain; background: #0c0f18; border-color: var(--line2); box-shadow: 0 -18px 40px -18px rgba(0, 0, 0, .9); padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 900px) {
   .hero, .ch { grid-template-columns: 1fr; }
@@ -192,13 +203,15 @@ h2 { font-weight: 400; font-size: clamp(30px, 3.6vw, 44px); line-height: 1.05; l
   .fig { padding: 10px; border-radius: 16px; }
   .pk { padding: 8px 4px 6px; }
   .pk img { width: 30px; height: 30px; }
-  .pk span { font-size: 11px; }
+  .pk span { font-size: 11.5px; }
   .pk em { display: none; }
   .pal-ores { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -10px 10px; padding: 0 10px; }
   .pal-ores::-webkit-scrollbar { display: none; }
   .ore { flex: none; }
   .fig-bar { flex-wrap: wrap; }
-  .fig-status { flex-basis: 100%; }
+  .fig-status { flex-basis: 100%; font-size: 14px; }
+  .fig figcaption { font-size: 13px; }
+  .fine { font-size: 14px; }
   .tiers { grid-template-columns: 1fr; gap: 14px; }
   .tlist, .tcol.wide .tlist { display: flex; flex-direction: row; flex-wrap: wrap; gap: 5px; }
   .tn { padding: 3px 9px 3px 3px; }
@@ -207,7 +220,15 @@ h2 { font-weight: 400; font-size: clamp(30px, 3.6vw, 44px); line-height: 1.05; l
   .stage-card { flex: 1 1 calc(50% - 10px); padding: 12px; }
 }
 @media (hover: none) {
-  .btn.sm, .ore, .job, .wk { min-height: 40px; }
+  .btn.sm { min-height: 44px; }
+  .ore, .job, .wk { min-height: 40px; }
   .tn { min-height: 36px; }
+  .brand, .chaps a { min-height: 44px; }
+  .cta { height: 44px; }
+  .td-h .x { width: 44px; height: 44px; right: -10px; top: -10px; }
+}
+/* Landscape phone: the pinned detail takes less of the short screen. */
+@media (max-height: 500px) and (max-width: 1080px) {
+  .tier-detail { max-height: 46vh; max-height: 46dvh; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }

@@ -36,7 +36,7 @@
         if (!e.isIntersecting) return;
         Object.keys(links).forEach(function (k) { links[k].classList.toggle('on', k === e.target.id); });
         var a = links[e.target.id];
-        if (a && a.scrollIntoView) { var p = a.parentNode; p.scrollTo({ left: a.offsetLeft - p.clientWidth / 2 + a.clientWidth / 2, behavior: 'smooth' }); }
+        if (a && a.scrollIntoView) { var p = a.parentNode; p.scrollTo({ left: a.offsetLeft - p.offsetLeft - p.clientWidth / 2 + a.clientWidth / 2, behavior: 'smooth' }); }
       });
     }, { rootMargin: '-45% 0px -50% 0px' });
     document.querySelectorAll('.ch').forEach(function (s) { io.observe(s); });

@@ -89,7 +89,11 @@
   }
   Board.prototype.resize = function () {
     var w = this.cv.parentNode.clientWidth, dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.cell = Math.max(14, Math.floor(w / this.cols));
+    var fit = Math.floor(w / this.cols);
+    // Short screens (a landscape phone): keep the board and its status bar
+    // on one screen, so a tap and its result are visible together.
+    if (window.innerHeight < 600) fit = Math.min(fit, Math.floor(Math.max(160, window.innerHeight - 190) / this.rows));
+    this.cell = Math.max(14, fit);
     this.W = this.cell * this.cols; this.H = this.cell * this.rows;
     this.cv.width = this.W * dpr; this.cv.height = this.H * dpr;
     this.cv.style.width = this.W + 'px'; this.cv.style.height = this.H + 'px';
