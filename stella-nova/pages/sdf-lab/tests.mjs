@@ -13,6 +13,7 @@
 //    mc ......... a closed sphere mesh with the right volume; examples closed
 //    json ....... save and load round trip, rejection of bad files
 //    gizmo / viewcube / panes ... the Forge invariants
+//    culling .... every b+5 bound stays at or below its node field
 // ============================================================================
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -22,7 +23,7 @@ import * as D from './js/doc.js';
 import * as M from './js/math.js';
 import { History, applyRecord } from './js/history.js';
 import * as C from './js/codegen.js';
-import { compileField } from './js/field.js';
+import { compileField, H } from './js/field.js';
 import { FRAME, PROBE } from './js/shader.js';
 import { EXAMPLES } from './js/examples.js';
 import * as MC from './js/mc.js';
@@ -302,6 +303,54 @@ section('gizmo / viewcube / panes');
   S4.layout = 'single'; S4.layout = 'quad';
   ok(JSON.stringify(S4.slots[3].cam) === cam, 'a slot keeps its camera across layouts');
   ok(PN.gates(S4.slots[0]).join() === '1,0,0' && PN.gates(S4.slots[1]).join() === '0,1,0', 'axis panes grid their own plane only');
+}
+
+section('culling bounds');
+{
+  // The renderer skips a child when rho * (|q - c| - r) of its b+5 sphere
+  // proves the child cannot change a union or a subtract. That is exact
+  // only while the bound stays at or below the node's own field. A stress
+  // scene adds non-uniform scale, rotation, a twist, a smooth union and a
+  // subtract to the examples.
+  const stress = () => {
+    const doc = D.newDoc();
+    const g = D.makeGroup(doc, 'union', true, { p: { k: 0.4 } }); doc.nodes[g.id] = g; doc.roots.push(g.id);
+    for (let i = 0; i < 12; i++) {
+      const n = D.makePrim(doc, i % 2 ? 'box' : 'ellipsoid', { name: 'S' + i, pos: [Math.cos(i) * 2, 0.5 + (i % 3) * 0.6, Math.sin(i) * 2], rot: [i * 20, i * 7, 0], scl: [1 + (i % 3) * 0.6, 0.5 + (i % 2), 1], p: i % 2 ? { w: 0.8, h: 0.6, d: 0.5 } : { rx: 0.5, ry: 0.3, rz: 0.4 } });
+      doc.nodes[n.id] = n; g.children.push(n.id);
+    }
+    D.addMod(doc, g.id, 'twist'); g.mods[0].p = { k: 0.4 };
+    const c = D.makePrim(doc, 'sphere', { name: 'Cut', pos: [0, 1, 0], p: { r: 0.9 } }); doc.nodes[c.id] = c;
+    const s = D.makeGroup(doc, 'subtract', false, { p: { k: 0.2 } }); doc.nodes[s.id] = s;
+    doc.roots.splice(doc.roots.indexOf(g.id), 1, s.id); s.children.push(g.id, c.id);
+    return doc;
+  };
+  const docs = { ...Object.fromEntries(Object.entries(EXAMPLES).map(([k, e]) => [k, e.build()])), stress: stress() };
+  let seed = 3; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (const [name, doc] of Object.entries(docs)) {
+    const F = compileField(doc), L = F.L, P = F.P;
+    const fns = new Function('P', 'H', F.src.replace('return { mapD, mapM, ghostD };', 'return { ' + L.order.map(id => 'd_' + L.ord[id]).join(', ') + ' };'))(P, H);
+    let worst = 0, where = '', bounded = 0;
+    for (const id of L.order) {
+      const o = L.base[id] * 4, c = [P[o + 20], P[o + 21], P[o + 22]], r = P[o + 23], rho = P[o + 30];
+      if (r < 0) continue;
+      bounded++;
+      for (let i = 0; i < 4000; i++) {
+        const q = c.map(v => v + (rnd() * 2 - 1) * r * 2.5);
+        const e = Math.hypot(q[0] - c[0], q[1] - c[1], q[2] - c[2]) - r;
+        if (e < 0) continue;
+        const over = rho * e - fns['d_' + L.ord[id]](q);
+        if (over > worst) { worst = over; where = doc.nodes[id].name; }
+      }
+    }
+    ok(bounded > 0 && worst <= 1e-5, `${name}: every b+5 bound <= its node field`, `${bounded} bounded nodes, worst excess ${worst.toExponential(2)} ${where}`);
+  }
+  // the renderer module culls, the exports do not
+  const doc = EXAMPLES.flange.build(), L = C.buildLayout(doc);
+  ok(/if \(bnd\(q0, P\[\d+\], P\[\d+\]\.z\) < /.test(C.genWGSL(doc, L)), 'the renderer mapD tests bounds before a child');
+  ok(!/bnd\(/.test(C.genWGSLBaked(doc, L, C.packParams(doc, L)).split('fn d_')[1] || ''), 'the baked WGSL export has no culling');
+  const docP = D.newDoc(); const pl = D.makePrim(docP, 'plane', { name: 'Floor', p: { s: 10 } }); docP.nodes[pl.id] = pl; docP.roots.push(pl.id);
+  ok(C.nodeBound(docP, pl.id) === null, 'a plane has no bound');
 }
 
 console.log('\nnaga runs:'); console.log(nagaRuns.join('\n'));

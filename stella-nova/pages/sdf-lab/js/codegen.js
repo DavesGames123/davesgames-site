@@ -18,9 +18,9 @@
 //    b+2  row 1              ├ world-to-local: q = L (p - position)
 //    b+3  row 2              ┘
 //    b+4  shape params (prim) or (k, 0, 0, 0) (group)
-//    b+5  reserved
+//    b+5  bound sphere in the parent frame: centre xyz, radius (< 0: none)
 //    b+6  colour rgb, roughness
-//    b+7  metal, ord (the pick id), 0, 0
+//    b+7  metal, ord (the pick id), rho of the b+5 bound, 0
 //    b+8+j   modifier j params
 //
 //  MODIFIER ORDER. The stack is listed bottom first, like Max: modifier 0
@@ -35,6 +35,8 @@
 //    buildLayout ........ ids to slots, pick ords, ranges, the structure sig
 //    packParams ......... the document into a Float32Array (matches the table)
 //    lipschitz .......... the step factor that keeps warps safe
+//    nodeBound .......... the b+5 bound sphere of a node
+//    CULLING ............ the renderer skips a child its bound proves idle
 //    emit ............... the tree walk (dialects: WGSL, GLSL, JS)
 //    WGSL_LIB / GLSL_LIB  the shape, modifier and operator library
 //    genWGSL / genGLSL / genJS   the three outputs
@@ -78,17 +80,57 @@ export function packParams(doc, L, out) {
       const si = s[i] || 1e-6;
       P[o + 4 + i * 4] = R[i * 3] / si; P[o + 5 + i * 4] = R[i * 3 + 1] / si; P[o + 6 + i * 4] = R[i * 3 + 2] / si; P[o + 7 + i * 4] = 0;
     }
+    const bs = nodeBound(doc, id) || [0, 0, 0, -1, 1];
+    P[o + 20] = bs[0]; P[o + 21] = bs[1]; P[o + 22] = bs[2]; P[o + 23] = bs[3];
     const pv = n.kind === 'group' ? [n.p.k, 0, 0, 0] : D.PRIMS[n.type].params.map(r => n.p[r[0]]);
-    for (let i = 0; i < 8; i++) P[o + 16 + i] = pv[i] ?? 0;
+    for (let i = 0; i < 4; i++) P[o + 16 + i] = pv[i] ?? 0;   // b+4 only: no shape has more than 4
     const mat = n.mat || D.MAT_DEFAULT();
     P[o + 24] = mat.color[0]; P[o + 25] = mat.color[1]; P[o + 26] = mat.color[2]; P[o + 27] = mat.rough;
-    P[o + 28] = mat.metal; P[o + 29] = L.ord[id]; P[o + 30] = 0; P[o + 31] = 0;
+    P[o + 28] = mat.metal; P[o + 29] = L.ord[id]; P[o + 30] = bs[4]; P[o + 31] = 0;
     n.mods.forEach((m, j) => {
       const q = o + (NODE_SLOTS + j) * 4, vals = D.MODS[m.type].params.map(r => m.p[r[0]]);
       for (let i = 0; i < 4; i++) P[q + i] = vals[i] ?? 0;
     });
   }
   return P;
+}
+
+// The b+5 bound of a node: [cx, cy, cz, r, rho] in the parent frame.
+// The sphere holds the eight corners of D.localBounds through the node's
+// own transform, so its distance is a lower bound of the TRUE distance.
+// The node's FIELD can sit below the true distance: a non-uniform scale
+// multiplies it by the smallest factor, and the ellipsoid formula is an
+// estimate. rho (<= 1) is the smallest such ratio in the subtree, so
+// rho * (|q - c| - r) stays below the field. A smooth union can dip k / 4
+// below its children; that slack, through each scale on the way up, is
+// added to r. null when the node has no bound: a visible plane primitive is
+// infinite, and an empty group holds nothing to bound.
+export function nodeBound(doc, id) {
+  const n = doc.nodes[id];
+  const infinite = i => { const m = doc.nodes[i]; return !!m && !m.hidden && (m.kind === 'prim' ? m.type === 'plane' : m.children.some(infinite)); };
+  if (!n || infinite(id)) return null;
+  const lb = D.localBounds(doc, id);
+  if (!lb) return null;
+  const b = D.transformBounds(lb, D.localMatrix(n));
+  if (![...b.lo, ...b.hi].every(Number.isFinite)) return null;
+  const { rho, slack } = fieldRatio(doc, id);
+  const c = [0, 1, 2].map(j => (b.lo[j] + b.hi[j]) / 2);
+  const r = Math.hypot(b.hi[0] - c[0], b.hi[1] - c[1], b.hi[2] - c[2]) * 1.001 + 1e-4;
+  return [c[0], c[1], c[2], r + slack / rho, rho];
+}
+// rho and slack of a subtree (see nodeBound), in the node's parent frame.
+function fieldRatio(doc, id) {
+  const n = doc.nodes[id];
+  const s = n.scl.map(Math.abs), lo = Math.min(...s), hi = Math.max(...s);
+  let rho = hi > 0 ? lo / hi : 0, slack = 0;
+  if (n.kind === 'prim' && n.type === 'ellipsoid') { const r = [n.p.rx, n.p.ry, n.p.rz].map(Math.abs); rho *= Math.min(...r) / Math.max(...r); }
+  if (n.kind === 'group') {
+    let rc = 1, sc = 0;
+    for (const c of n.children) { const m = doc.nodes[c]; if (!m || m.hidden) continue; const f = fieldRatio(doc, c); rc = Math.min(rc, f.rho); sc = Math.max(sc, f.slack); }
+    rho *= rc;
+    slack = sc + (n.smooth && n.op === 'union' ? Math.abs(n.p.k) * 0.25 : 0);
+  }
+  return { rho: Math.max(rho, 1e-3), slack: slack * hi };
 }
 
 // The largest gradient a warp can add. Sphere tracing steps by d / L, so the
@@ -176,7 +218,9 @@ function emitNode(doc, L, X, id, mode) {
       for (const c of kids.slice(1)) {
         const call = `${pre}${L.ord[c]}(q0)`;
         const fn = mode === 'd' ? (n.smooth ? `sm${op}` : `op${op}`) : (n.smooth ? `ms${op}` : `mo${op}`);
-        s += `  ${v} = ${fn}(${v}, ${call}${n.smooth ? ', ' + k : ''});\n`;
+        const line = `${v} = ${fn}(${v}, ${call}${n.smooth ? ', ' + k : ''});`;
+        const cut = cullTest(X, mode, op, `q0`, L.base[c], v, n.smooth ? k : null);
+        s += cut ? `  if (${cut}) { ${line} }\n` : `  ${line}\n`;
       }
     }
   }
@@ -192,6 +236,27 @@ function emitNode(doc, L, X, id, mode) {
   return mode === 'd' ? X.fnD(pre + L.ord[id], s) : X.fnM(pre + L.ord[id], s);
 }
 
+// CULLING (the renderer's mapD only: the WGSL dialect, mode 'd'). Before a
+// child of a union or a subtract runs, bnd() measures its b+5 sphere: a
+// lower bound of the child's distance. The child cannot change the result
+//   union      min(d, c) = d                when c >= d
+//   smooth U   smU(d, c, k) = d             when c >= d + k   (h = 1)
+//   subtract   max(d, -c) = d               when c >= -d
+//   smooth S   smS(d, c, k) = d             when c >= k - d   (h = 0)
+// so the call is skipped when the bound already passes that line. Where a
+// child's own field is below its true distance (a non-uniform scale, a
+// warp), the skip can only return a larger value that is still a lower
+// bound of the scene, so sphere tracing stays safe and the surface stays.
+// Intersect needs an upper bound and is not culled. The baked exports and
+// the JS field keep the plain code.
+function cullTest(X, mode, op, q, cb, v, k) {
+  if (X.name !== 'wgsl' || mode !== 'd') return null;
+  const b = `bnd(${q}, P[${cb + 5}], P[${cb + 7}].z)`;
+  if (op === 'U') return k ? `${b} < ${v} + ${k}` : `${b} < ${v}`;
+  if (op === 'S') return k ? `${b} < ${k} - ${v}` : `${b} < -${v}`;
+  return null;
+}
+
 function emitAll(doc, L, X, withM) {
   let out = '';
   // children before parents: emit in reverse depth-first order (WGSL and GLSL
@@ -202,7 +267,10 @@ function emitAll(doc, L, X, withM) {
   const roots = doc.roots.filter(r => L.ord[r] !== undefined);
   // the root: a hard union of the top-level nodes
   let body = X.varF('d', X.big);
-  for (const r of roots) body += `  d = min(d, d_${L.ord[r]}(p));\n`;
+  for (const r of roots) {
+    const cut = cullTest(X, 'd', 'U', 'p', L.base[r], 'd', null);
+    body += cut ? `  if (${cut}) { d = min(d, d_${L.ord[r]}(p)); }\n` : `  d = min(d, d_${L.ord[r]}(p));\n`;
+  }
   body += '  return d;\n';
   out += X.fnD('mapD', body);
   if (withM) {
@@ -340,6 +408,12 @@ fn vnoise(p: vec3f) -> f32 {
 fn dRound(d: f32, p: vec3f, a: vec4f) -> f32 { return d - a.x; }
 fn dOnion(d: f32, p: vec3f, a: vec4f) -> f32 { return abs(d) - a.x; }
 fn dDisplace(d: f32, p: vec3f, a: vec4f) -> f32 { return d + a.x * vnoise(p * a.y); }
+// a lower bound of a node's field from its b+5 sphere and rho (b+7.z);
+// -1e9 (never skip) when there is no sphere or the point is inside it
+fn bnd(p: vec3f, s: vec4f, rho: f32) -> f32 {
+  let e = length(p - s.xyz) - s.w;
+  return select(rho * e, -1e9, s.w < 0.0 || e < 0.0);
+}
 fn opU(a: f32, b: f32) -> f32 { return min(a, b); }
 fn opS(a: f32, b: f32) -> f32 { return max(a, -b); }
 fn opI(a: f32, b: f32) -> f32 { return max(a, b); }
