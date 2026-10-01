@@ -130,5 +130,13 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .f-film{--fam:rgba(210,140,255,0.15);--fam-bg:rgba(210,140,255,0.06)}
 .f-interior{--fam:rgba(110,150,255,0.15);--fam-bg:rgba(110,150,255,0.06)}
 .f-emissive{--fam:rgba(255,110,170,0.15);--fam-bg:rgba(255,110,170,0.06)}
+.f-primitives{--fam:rgba(255,205,120,0.15);--fam-bg:rgba(255,205,120,0.06)}
+.f-operators{--fam:rgba(120,235,200,0.14);--fam-bg:rgba(120,235,200,0.06)}
+.f-materials{--fam:rgba(200,170,130,0.15);--fam-bg:rgba(200,170,130,0.06)}
+.f-lathe{--fam:rgba(240,235,225,0.13);--fam-bg:rgba(240,235,225,0.06)}
+.f-mechanisms{--fam:rgba(170,190,210,0.15);--fam-bg:rgba(170,190,210,0.06)}
+.f-fractals{--fam:rgba(255,130,110,0.15);--fam-bg:rgba(255,130,110,0.06)}
+.f-organic{--fam:rgba(140,220,120,0.15);--fam-bg:rgba(140,220,120,0.06)}
+.f-scenes{--fam:rgba(120,200,255,0.15);--fam-bg:rgba(120,200,255,0.06)}
 .side-head .big{color:#a9bcff}
 .legend span{text-transform:capitalize}

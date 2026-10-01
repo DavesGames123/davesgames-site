@@ -1,7 +1,7 @@
 // ============================================================================
 //  SDF SOLIDS TABLE  ·  page.js — the per-page PAGE object (GENERATED)
 // ────────────────────────────────────────────────────────────────────────────
-//  24 sphere-traced solids; one fragment shader per cell, each reading only
+//  78 sphere-traced solids; one fragment shader per cell, each reading only
 //  a shared uniform buffer (no texture, no pointer). The shared table-engine
 //  drives this object through its ctx. main.js fetches the data and calls
 //  bootTable(PAGE, data); the engine calls PAGE.init and PAGE.draw from there.
