@@ -3,7 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>STELLA NOVA</title>
+<title>Stella Nova</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/stella-nova/icons/favicon-32.png">
+<link rel="apple-touch-icon" href="/stella-nova/icons/apple-touch-icon.png">
+<link rel="manifest" href="/stella-nova/site.webmanifest">
+<meta name="theme-color" content="#0a162c">
+<meta name="description" content="Stella Nova, a space colony builder by Dave, with its interactive wiki and an open lab of physics simulations and live WebGPU shaders you can play in your browser.">
+<link rel="canonical" href="https://davesgames.io/stella-nova/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Stella Nova">
+<meta property="og:title" content="Stella Nova">
+<meta property="og:description" content="Stella Nova, a space colony builder by Dave, with its interactive wiki and an open lab of physics simulations and live WebGPU shaders you can play in your browser.">
+<meta property="og:url" content="https://davesgames.io/stella-nova/">
+<meta property="og:image" content="https://davesgames.io/stella-nova/icons/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Stella Nova logo with the line: a space colony builder, its wiki, and an open lab of physics sims and live WebGPU shaders.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Stella Nova">
+<meta name="twitter:description" content="Stella Nova, a space colony builder by Dave, with its interactive wiki and an open lab of physics simulations and live WebGPU shaders you can play in your browser.">
+<meta name="twitter:image" content="https://davesgames.io/stella-nova/icons/og-image.jpg">
+
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a0c11;--bg2:#0e1118;--sidebar:#0c0f16;--border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.16);--blue:#96c8ff;--blue-dim:#4a7aaa;--yellow:#ffc832;--orange:#ff7b00;--green:#64c864;--red:#ff5050;--text:#c0cfe0;--text-dim:#5a7090;--text-faint:#2a3850;--sidebar-w:290px;--topbar-h:56px}
@@ -326,7 +347,7 @@ var pendingTab=null,swapBusy=false,SWAP_SETTLE_MS=150,SWAP_UNLOAD_MS=300;
 function releaseFrame(f){try{var d=f.contentDocument;if(!d)return;d.querySelectorAll('canvas').forEach(function(c){try{var g=c.getContext('webgpu');if(g){try{var cfg=g.getConfiguration&&g.getConfiguration();if(cfg&&cfg.device){cfg.device.destroy();return}}catch(e){}try{g.unconfigure()}catch(e){}return}var gl=c.getContext('webgl2')||c.getContext('webgl');if(gl){var x=gl.getExtension('WEBGL_lose_context');if(x)x.loseContext()}}catch(e){}})}catch(e){}}
 function mountTab(id){var wrap=document.getElementById('frame-wrap');var iframe=document.createElement('iframe');iframe.src=PAGES[id]||'home.html';var allow='downloads';if(XR_PAGES.has(id))allow='xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';if(MIC_PAGES.has(id))allow='microphone; autoplay; downloads';iframe.setAttribute('allow',allow);wrap.appendChild(iframe)}
 function doSwap(){swapBusy=true;var wrap=document.getElementById('frame-wrap');var olds=Array.prototype.slice.call(wrap.querySelectorAll('iframe'));var done=false;var go=function(){if(done)return;done=true;wrap.innerHTML='';var id=pendingTab;pendingTab=null;mountTab(id);setTimeout(function(){swapBusy=false;if(pendingTab!==null)doSwap()},SWAP_SETTLE_MS)};if(!olds.length){go();return}var left=olds.length;olds.forEach(function(f){f.style.visibility='hidden';releaseFrame(f);f.addEventListener('load',function(){if(--left===0)go()},{once:true});try{f.src='about:blank'}catch(e){if(--left===0)go()}});setTimeout(go,SWAP_UNLOAD_MS)}
-function switchTab(id){if(!PAGES[id])id='home';document.querySelectorAll('.nav-item').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(LABELS[id]||'Stella Nova')+'· Stella Nova';activeTab=id;closeSidebar();if(location.hash!=='#'+id){try{history.replaceState(null,'','#'+id)}catch(e){}}pendingTab=id;if(!swapBusy)doSwap()}
+function switchTab(id){if(!PAGES[id])id='home';document.querySelectorAll('.nav-item').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(id==='home'?'Stella Nova':(LABELS[id]||id)+' · Stella Nova');activeTab=id;closeSidebar();if(location.hash!=='#'+id){try{history.replaceState(null,'','#'+id)}catch(e){}}pendingTab=id;if(!swapBusy)doSwap()}
 window.switchTab=switchTab;
 function routeFromHash(){switchTab((location.hash||'').replace(/^#/,'')||'home')}
 window.addEventListener('hashchange',routeFromHash);routeFromHash();

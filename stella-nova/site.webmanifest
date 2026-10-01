@@ -1,0 +1,13 @@
+{
+  "name": "Stella Nova",
+  "short_name": "Stella Nova",
+  "description": "A space colony builder, its interactive wiki, and an open lab of physics simulations and live WebGPU shaders.",
+  "start_url": "/stella-nova/",
+  "display": "standalone",
+  "background_color": "#0a0c12",
+  "theme_color": "#0a162c",
+  "icons": [
+    { "src": "/stella-nova/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/stella-nova/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
