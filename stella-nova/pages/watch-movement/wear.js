@@ -33,42 +33,37 @@ float ffbm(vec2 p) { float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { s += 
 // a groove pattern of period P along x, faded where P is under ~2 pixels
 float fgroove(float x, float P) { float w = fwidth(x) / P; return sin(x * 6.2831853 / P) * (1.0 - smoothstep(0.25, 0.6, w)); }
 
-// one random scratch per cell of size s: returns the groove depth (0..1)
-float fscratch(vec2 uv, float s, float density, float width) {
-  vec2 c = floor(uv / s);
-  float best = 0.0;
-  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-    vec2 cc = c + vec2(i, j), r = fh2(cc * 1.37 + 3.1);
-    if (r.x > density) continue;
-    vec2 o = (cc + fh2(cc + 9.7)) * s;
-    float a = r.y * 6.2831853, L = s * (0.5 + 1.4 * fh1(cc + 4.2));
-    vec2 d = vec2(cos(a), sin(a)), q = uv - o;
-    float t = clamp(dot(q, d), -L, L), dist = length(q - d * t);
-    float taper = 1.0 - pow(abs(t) / L, 2.0);
-    float pw = max(width, fwidth(uv.x) * 0.7);
-    best = max(best, taper * (1.0 - smoothstep(0.0, pw, dist)) * (0.35 + 0.65 * fh1(cc + 2.0)) * (width / pw));
-  }
-  return best;
+// Scratches: one cell lookup per grid, not a 3x3 search. A scratch stays
+// inside its own cell (half length <= 0.48 S, centre jittered by what is
+// left), so only the cell that holds the point can touch it. Two grids, the
+// second offset by half a cell, hide the cell edges. fw is fwidth(uv.x),
+// taken outside any branch.
+float fscratch1(vec2 uv, float S, float density, float width, float fw, vec2 off) {
+  vec2 c = floor((uv + off) / S), r = fh2(c * 1.37 + 3.1 + off);
+  float L = S * (0.22 + 0.26 * fh1(c + 4.2 + off));
+  vec2 o = (c + 0.5) * S - off + (fh2(c + 9.7 + off) - 0.5) * (S - 2.0 * L);
+  float a = r.y * 6.2831853; vec2 d = vec2(cos(a), sin(a)), q = uv - o;
+  float t = clamp(dot(q, d), -L, L), dist = length(q - d * t);
+  float taper = 1.0 - pow(abs(t) / L, 2.0), pw = max(width, fw * 0.7);
+  return step(r.x, density) * taper * (1.0 - smoothstep(0.0, pw, dist)) * (0.35 + 0.65 * fh1(c + 2.0 + off)) * (width / pw);
 }
-// fingerprints: sparse oval prints with ridges, broken up by noise
+float fscratch(vec2 uv, float s, float density, float width, float fw) {
+  float S = 2.0 * s, p = min(1.0, 1.6 * density);
+  return max(fscratch1(uv, S, p, width, fw, vec2(0.0)), fscratch1(uv, S, p, width, fw, vec2(s)));
+}
+// fingerprints: sparse oval prints with ridges, one per 16 mm cell at
+// most, kept inside the cell (radius 5.6, centre in the middle 30 %)
 float fprint(vec2 uv) {
-  float s = 16.0; vec2 c = floor(uv / s);
-  float best = 0.0;
-  for (int j = -1; j <= 1; j++) for (int i = -1; i <= 1; i++) {
-    vec2 cc = c + vec2(i, j);
-    if (fh1(cc + 11.0) > 0.45) continue;
-    vec2 o = (cc + 0.2 + 0.6 * fh2(cc + 5.0)) * s, q = uv - o;
-    float a = fh1(cc + 1.3) * 6.2831853, ca = cos(a), sa = sin(a);
-    q = vec2(ca * q.x + sa * q.y, -sa * q.x + ca * q.y) / vec2(4.2, 5.6);
-    float d = length(q);
-    if (d > 1.0) continue;
-    float ridge = 0.5 + 0.5 * fgroove(d * 5.0 + 0.25 * fnoise(uv * 1.3), 0.45);      // ridges 0.45 mm apart
-    // a soft oval, thinned by noise on the scale of the print itself: a
-    // finer noise breaks a print into speckle at clock distances
-    float m = (1.0 - smoothstep(0.35, 1.0, d)) * smoothstep(0.1, 0.8, fnoise(uv * 0.22 + cc * 3.1));
-    best = max(best, m * (0.45 + 0.55 * ridge));
-  }
-  return best;
+  float s = 16.0; vec2 cc = floor(uv / s);
+  vec2 o = (cc + 0.35 + 0.3 * fh2(cc + 5.0)) * s, q = uv - o;
+  float a = fh1(cc + 1.3) * 6.2831853, ca = cos(a), sa = sin(a);
+  q = vec2(ca * q.x + sa * q.y, -sa * q.x + ca * q.y) / vec2(4.2, 5.6);
+  float d = length(q);
+  float ridge = 0.5 + 0.5 * fgroove(d * 5.0 + 0.25 * fnoise(uv * 1.3), 0.45);      // ridges 0.45 mm apart
+  // a soft oval, thinned by noise on the scale of the print itself: a
+  // finer noise breaks a print into speckle at clock distances
+  float m = (1.0 - smoothstep(0.35, 1.0, d)) * smoothstep(0.1, 0.8, fnoise(uv * 0.22 + cc * 3.1));
+  return step(fh1(cc + 11.0), 0.45) * m * (0.45 + 0.55 * ridge);
 }
 // the finishes: x = height (mm), y = roughness change
 vec2 ffinish(vec2 uv, vec3 p) {
@@ -126,8 +121,9 @@ vec2 ffinish(vec2 uv, vec3 p) {
 }
 vec2 fwear(vec2 uv) {
   vec2 r = vec2(0.0);
+  float fw = fwidth(uv.x);
   if (uWear > 0.0) {
-    float s1 = fscratch(uv, 2.2, 0.55 * uWear, 0.006), s2 = fscratch(uv * 1.0 + 31.0, 7.5, 0.35 * uWear, 0.012), s3 = fscratch(uv * 1.0 + 77.0, 0.9, 0.5 * uWear, 0.003);
+    float s1 = fscratch(uv, 2.2, 0.55 * uWear, 0.006, fw), s2 = fscratch(uv + 31.0, 7.5, 0.35 * uWear, 0.012, fw), s3 = fscratch(uv + 77.0, 0.9, 0.5 * uWear, 0.003, fw);
     float s = max(max(s1, s2 * 1.2), s3 * 0.7);
     r.x -= 0.004 * s; r.y += 0.22 * s * uWear;
   }
