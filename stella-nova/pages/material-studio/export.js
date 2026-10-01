@@ -16,9 +16,9 @@
 //  DATA FLOW
 //      state.maps (rgba16float GPUTextures, linear)            contract.js
 //        └─ withMaps(res)  same res: use state.maps; other res: bake.bakeAt(res)
-//           if the bake module has it, else swap the preview res and wait for
-//           bake:done, then restore it
-//        └─ MapSource.get(slot)  __studio.bake.readback(slot) or own
+//           or bake.bakeOnce(res) if the bake module has one, else swap the
+//           preview res and wait for bake:done, then restore it
+//        └─ MapSource.get(slot)  __studio.bake.readback(slot, {maps}) or own
 //           copyTextureToBuffer ─▶ Uint16Array of half bits, res*res*4
 //        └─ computeStats  min/max/mean per channel ─▶ "used" flags, constant
 //           folding, emissive peak normalization
@@ -163,7 +163,8 @@ class MapSource {
     const bake = window.__studio?.bake;
     if (bake && typeof bake.readback === 'function') {
       try {
-        let r = await bake.readback(slot, this.maps);
+        // bake.readback(name, {maps, format}): half bits of THIS map set, linear (no sRGB).
+        let r = await bake.readback(slot, { maps: this.maps, format: 'half', srgb: false });
         if (r && r.data) r = r.data;
         if (r instanceof Uint16Array && r.length === n) data = r;
         else if (r instanceof Float32Array && r.length === n) { data = new Uint16Array(n); for (let i = 0; i < n; i++) data[i] = f32ToF16(r[i]); }
@@ -208,6 +209,13 @@ async function withMaps(res, fn, progress) {
     progress?.(`baking ${res}²`, 0.02);
     const m = await bake.bakeAt(res);
     try { return await fn(m); } finally { try { m.release?.(); } catch (e) {} }
+  }
+  // bake.bakeOnce(res) makes a private map set: no bake:done, no preview flicker.
+  if (bake && typeof bake.bakeOnce === 'function') {
+    progress?.(`baking ${res}²`, 0.02);
+    const m = await bake.bakeOnce(res);
+    m.res = m.res || res;
+    try { return await fn(m); } finally { try { m.destroy?.(); } catch (e) {} }
   }
   const prev = S.settings.res;
   progress?.(`baking ${res}² (preview res swaps for the export)`, 0.02);
