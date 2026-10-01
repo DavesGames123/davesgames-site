@@ -84,8 +84,10 @@ import { unrealScript } from './export/engines/unreal.js';
 import { godotTres } from './export/engines/godot.js';
 import { gltfPackage } from './export/engines/gltf.js';
 import { readmeText } from './export/engines/readme.js';
+import { h, sel, row, chk, download } from './export/ui/dom.js';
+import { setProgress, showResult } from './export/ui/progress.js';
 
-export { linToSrgb, scalarsNow, readTexture, PLAIN_MAPS, FORMATS, unityGuid };
+export { linToSrgb, scalarsNow, readTexture, PLAIN_MAPS, FORMATS, unityGuid, download };
 let busy = false;
 
 // ------------------------------------------------------------ exportPackage
@@ -173,15 +175,6 @@ function finish(target, o, blob, sc, u) {
   if (UI.box && !o.onProgress) { setProgress('done', 1); showResult(blob); }
 }
 
-/** Save a Blob as a download. */
-export function download(blob, name) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = name || blob.fileName || 'download';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
-}
-
 /**
  * Export one baked map slot as a PNG (for the map strip). Linear except the
  * sRGB color slots; normal stays OpenGL.
@@ -250,34 +243,6 @@ export async function copyMaterialJSON() {
 }
 
 // ------------------------------------------------------------ ui
-function h(tag, attrs = {}, ...kids) {
-  const el = document.createElement(tag);
-  for (const [k, v] of Object.entries(attrs || {})) {
-    if (v === undefined || v === null || v === false) continue;
-    if (k === 'class') el.className = v;
-    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
-    else if (k === 'html') el.innerHTML = v;
-    else el.setAttribute(k, v === true ? '' : v);
-  }
-  for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) el.append(c.nodeType ? c : document.createTextNode(String(c)));
-  return el;
-}
-function sel(id, options, value, on) {
-  const s = h('select', { class: 'io-sel', id });
-  for (const op of options) s.add(new Option(op.label ?? op, String(op.value ?? op)));
-  s.value = String(value);
-  s.addEventListener('change', () => on(s.value));
-  return s;
-}
-function row(label, ctl, hint) {
-  return h('label', { class: 'io-row' }, h('span', { class: 'io-k' }, label), ctl, hint ? h('span', { class: 'io-hint' }, hint) : null);
-}
-function chk(label, value, on) {
-  const c = h('input', { type: 'checkbox' }); c.checked = !!value;
-  c.addEventListener('change', () => on(c.checked));
-  return h('label', { class: 'io-chk' }, c, h('span', {}, label));
-}
-
 /**
  * Build the export UI into `host`.
  *   full mode: target cards, options, details, channel layout, run, project, import.
@@ -419,17 +384,6 @@ function refreshTable() {
   }
 }
 
-function setProgress(stage, frac) {
-  if (!UI.bar) return;
-  UI.bar.firstChild.style.width = Math.round(Math.max(0, Math.min(1, frac)) * 100) + '%';
-  UI.stage.textContent = stage;
-}
-function showResult(blob, ms) {
-  if (!UI.result) return;
-  UI.result.textContent = '';
-  UI.result.append(h('div', { class: 'io-res-head' }, h('b', {}, blob.fileName), ` ${fmtSize(blob.size)} · ${last.res}²${ms ? ` · ${(ms / 1000).toFixed(1)} s` : ''}`),
-    h('ul', {}, blob.entries.map(e => h('li', {}, h('span', {}, e.name), h('i', {}, fmtSize(e.size))))));
-}
 /** Export with the panel options and download the result. */
 async function runExport(target = activeTarget()) {
   if (busy) return;
