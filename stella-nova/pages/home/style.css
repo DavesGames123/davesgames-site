@@ -100,7 +100,7 @@ h3 { font: 500 1.15rem/1.25 var(--f-sans); color: var(--ink); }
 /* Orbits and real sky objects (main.js startSky). Thin, even strokes, one
    accent (gold for the Sun), no glow on any label. */
 .orrery { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; opacity: 0; animation: fadeIn 2.4s .4s var(--ease) forwards; }
-.orrery ellipse { fill: none; stroke: rgba(150, 200, 255, .13); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.orrery circle { fill: none; stroke: rgba(150, 200, 255, .13); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .sky-layer { position: absolute; inset: 0; opacity: 0; animation: fadeIn 2.4s .6s var(--ease) forwards; }
 .sky-obj { position: absolute; left: -23px; top: -23px; width: 46px; height: 46px; display: grid; place-items: center; pointer-events: auto; border-radius: 50%; cursor: default; -webkit-tap-highlight-color: transparent; }
 a.sky-obj { cursor: pointer; }

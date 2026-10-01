@@ -138,9 +138,10 @@ $$('.portal').forEach((el, i) => el.style.setProperty('--i', i));
 // The hero background is a quiet sky of real objects (sky-data.js):
 //   canvas #sky   nebula, faint field stars, the bright stars by RA/Dec,
 //                 M31 and Sgr A*. Painted once per resize, no frame loop.
-//   svg .orrery   the orbits of Mercury to Jupiter, thin 1 px rings, centred
-//                 low in the hero so the rings pass behind the portals and
-//                 not through the title or the statement.
+//   svg .orrery   the orbits of Mercury to Jupiter, seen top-down: thin 1 px
+//                 circles centred on the title block, so the planets orbit
+//                 the words. The rings and planets sit under the veil and
+//                 behind all hero content.
 //   .sky-layer    one small anchor per object: planets, Moon, satellites,
 //                 bright stars and the deep-sky objects. Hover, focus or a
 //                 first tap shows its label. Linked objects open their page.
@@ -164,10 +165,11 @@ function startSky() {
   // Orbit rings (SVG) and the object layer (DOM).
   const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('class', 'orrery');
-  bg.appendChild(svg);
+  const veil = $('.hero-veil', bg);
+  bg.insertBefore(svg, veil);
   const layer = document.createElement('div');
   layer.className = 'sky-layer';
-  bg.appendChild(layer);
+  bg.insertBefore(layer, veil);
 
   // One object element. A page key makes it a real link.
   function obj(label, key, cls, size, color) {
@@ -208,16 +210,26 @@ function startSky() {
     const r = hero.getBoundingClientRect();
     W = r.width; H = r.height;
     const phone = W < 760;
-    const R = Math.min(W * (phone ? 0.62 : 0.46), 640);
-    geo = { cx: W / 2, cy: H * (phone ? 0.56 : 0.70), R, sq: phone ? 0.40 : 0.26 };
+    // Top-down view: every orbit is a circle round the Sun, and the Sun sits
+    // in the gap between STELLA and NOVA. On one line that is the word gap;
+    // when the rows stack (phones) it is the space between the rows.
+    const hr = hero.getBoundingClientRect();
+    const [r1, r2] = $$('.title .t-row', hero).map(e => e.getBoundingClientRect());
+    let cx = W / 2, cy = H * 0.3;
+    if (r1 && r2) {
+      const oneLine = r2.top < r1.bottom - 4;
+      cx = oneLine ? (r1.right + r2.left) / 2 - hr.left : W / 2;
+      cy = (oneLine ? (r1.top + r1.bottom) / 2 : (r1.bottom + r2.top) / 2) - hr.top;
+    }
+    const R = phone ? W * 0.7 : Math.min(W * 0.46, H * 0.62, 640);
+    geo = { cx, cy, R };
     // Orbit radii follow sqrt(a), so the inner planets stay readable.
-    planets.forEach(p => { p.rx = R * Math.sqrt(p.a / 5.203); p.ry = p.rx * geo.sq; });
+    planets.forEach(p => { p.rr = R * Math.sqrt(p.a / 5.203); });
     svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-    svg.innerHTML = planets.map(p => `<ellipse cx="${geo.cx.toFixed(1)}" cy="${geo.cy.toFixed(1)}" rx="${p.rx.toFixed(1)}" ry="${p.ry.toFixed(1)}"/>`).join('');
+    svg.innerHTML = planets.map(p => `<circle cx="${geo.cx.toFixed(1)}" cy="${geo.cy.toFixed(1)}" r="${p.rr.toFixed(1)}"/>`).join('');
     place(sun, geo.cx, geo.cy);
     // A fixed object that falls behind the title or the statement is drawn
     // faint and gets no hit area, so no dot sits inside a letter.
-    const hr = hero.getBoundingClientRect();
     const boxes = $$('.eyebrow, .title .t-row, .tagline, .statement').map(e => e.getBoundingClientRect())
       .map(b => [b.left - hr.left - 10, b.top - hr.top - 8, b.right - hr.left + 10, b.bottom - hr.top + 8]);
     const covered = (x, y) => boxes.some(b => x > b[0] && x < b[2] && y > b[1] && y < b[3]);
@@ -332,11 +344,11 @@ function startSky() {
     const { cx, cy } = geo;
     for (const p of planets) {
       const th = p.ph + 6.2832 * t / (p.P * YEAR);
-      p.x = cx + p.rx * Math.cos(th); p.y = cy + p.ry * Math.sin(th);
+      p.x = cx + p.rr * Math.cos(th); p.y = cy + p.rr * Math.sin(th);
       place(p.el, p.x, p.y);
     }
     const mt = 6.2832 * t / (moon.P * YEAR * 3);   // Moon slowed 3x to stay calm
-    place(moon.el, earth.x + moon.rr * Math.cos(mt), earth.y + moon.rr * 0.5 * Math.sin(mt));
+    place(moon.el, earth.x + moon.rr * Math.cos(mt), earth.y + moon.rr * Math.sin(mt));
     // Satellites cross a low band of the hero, under the content. The track phase comes
     // from the mean anomaly and RAAN, the wave height from the inclination,
     // and the speed from the mean motion (one crossing per ~3 minutes).
