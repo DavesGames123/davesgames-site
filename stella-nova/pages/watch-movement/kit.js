@@ -261,7 +261,21 @@ export function createBuild() {
     cv.width = cv.height = N;
     const g = cv.getContext('2d'), s = N / (2 * R);
     g.translate(N / 2, N / 2); g.scale(s, s);
-    paint(g, R);
+    // The painters work in mm, so a dial font is about 1 unit tall. At that
+    // size some browsers (Chrome on Android) round each glyph advance to a
+    // whole unit and the letters spread apart ("STELLA N OVA"). This proxy
+    // sets every font TEXT_K times larger and draws the text scaled down by
+    // TEXT_K, so the layout runs at a normal size.
+    const TEXT_K = 64;
+    const tg = new Proxy(g, {
+      get(t, k) {
+        if (k === 'fillText') return (str, x, y) => { t.save(); t.translate(x, y); t.scale(1 / TEXT_K, 1 / TEXT_K); t.fillText(str, 0, 0); t.restore(); };
+        const v = t[k];
+        return typeof v === 'function' ? v.bind(t) : v;
+      },
+      set(t, k, v) { t[k] = k === 'font' ? String(v).replace(/([\d.]+)px/, (m, n) => `${+n * TEXT_K}px`) : v; return true; },
+    });
+    paint(tg, R);
     const t = new THREE.CanvasTexture(cv);
     t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
     t.repeat.set(1 / (2 * R), 1 / (2 * R)); t.offset.set(0.5, 0.5);
