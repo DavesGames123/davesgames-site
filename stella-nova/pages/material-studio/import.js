@@ -3,7 +3,8 @@
 // ────────────────────────────────────────────────────────────────────────────
 //  Owner: IO agent. Turns dropped or picked files into graph edits:
 //    .studio.json / graph JSON ..... loadProject (bench graph JSON goes to
-//                                     __studio.bench.importBenchGraph when present)
+//                                     __studio.bench.loadBenchGraph, which installs it)
+//    .hdr .rgbe .................... loadEnvFile: __studio.env.loadHDR (lighting)
 //    .zip .......................... readZip (zip.js), then each entry below
 //    .png .jpg .webp .tga .gif .bmp  importMaps: one Image node per map, wired
 //                                     to the Material Output by its role
@@ -500,10 +501,19 @@ export async function loadProject(json) {
   if (j && j.format === 'stella-material-studio') { graph = j.graph; kind = 'project'; }
   else if (j && j.version === 1 && Array.isArray(j.nodes) && Array.isArray(j.links) && j.nodes.some(n => n.type === OUTPUT_TYPE)) graph = j;
   else {
-    const bench = window.__studio?.bench, mod = C.modules.bench;
-    const fn = bench?.importBenchGraph || mod?.importBenchGraph;
-    if (typeof fn === 'function') {
-      const r = await fn(j);
+    // A Composition Bench graph. loadBenchGraph fetches the libraries,
+    // installs the graph and adds an undo checkpoint (it shows its own toast).
+    // importBenchGraph only converts, so its result goes through graph.load.
+    const bench = window.__studio?.bench || C.modules.bench;
+    if (bench && typeof bench.loadBenchGraph === 'function') {
+      const r = await bench.loadBenchGraph(j);
+      return { ok: true, kind: 'bench', warnings: [], result: r };
+    }
+    if (bench && typeof bench.importBenchGraph === 'function') {
+      const r = await bench.importBenchGraph(j);
+      const G = C.modules.graph || window.__studio?.graph;
+      if (!G || typeof G.load !== 'function') throw new Error('The graph module is not ready');
+      G.load(r, { resetHistory: false, label: 'Import bench graph' });
       C.store.toast('Composition Bench graph imported', 'ok');
       return { ok: true, kind: 'bench', warnings: [], result: r };
     }
@@ -539,6 +549,15 @@ export async function loadProject(json) {
 
 // ------------------------------------------------------------ importFiles
 const IMAGE_EXT = /\.(png|jpe?g|webp|tga|gif|bmp|exr|tiff?)$/i;
+const HDR_EXT = /\.(hdr|rgbe)$/i;
+/** Send a Radiance .hdr file to the environment module (lighting, not a map). */
+async function loadEnvFile(f) {
+  const env = window.__studio?.env || C.modules.env;
+  if (!env || typeof env.loadHDR !== 'function') throw new Error('the environment module is not ready');
+  const r = await env.loadHDR(f);
+  if (r !== null) C.store.toast(`Environment: ${f.name}`, 'ok');
+  return r;
+}
 /**
  * Import any mix of files: the first JSON loads as a project; zips expand;
  * images go to importMaps.
@@ -558,6 +577,7 @@ export async function importFiles(list) {
         images.push(...imgs.map(e => ({ name: e.name.split('/').pop(), data: e.data })));
         continue;
       }
+      if (HDR_EXT.test(f.name) || f.type === 'image/vnd.radiance') { await loadEnvFile(f); continue; }
       if (IMAGE_EXT.test(f.name) || /^image\//.test(f.type)) images.push(f);
       else C.store.toast(`${f.name}: unknown file type`, 'warn');
     } catch (e) { console.error('[import]', e); C.store.toast(`${f.name}: ${e.message || e}`, 'error'); }
@@ -568,7 +588,7 @@ export async function importFiles(list) {
 
 let picker = null;
 /** Open the file picker. @param {string} [accept] */
-export function pickFiles(accept = '.json,.zip,image/*,.tga', handler = importFiles) {
+export function pickFiles(accept = '.json,.zip,image/*,.tga,.hdr', handler = importFiles) {
   if (!picker) {
     picker = document.createElement('input');
     picker.type = 'file'; picker.multiple = true; picker.hidden = true;
@@ -583,7 +603,7 @@ function dragAndDrop() {
   let depth = 0;
   const overlay = document.createElement('div');
   overlay.id = 'io-drop';
-  overlay.innerHTML = '<div><b>Drop to import</b><span>maps (png, jpg, tga, webp) · zip of maps · .studio.json project · graph JSON</span></div>';
+  overlay.innerHTML = '<div><b>Drop to import</b><span>maps (png, jpg, tga, webp) · zip of maps · .studio.json project · graph JSON · .hdr environment</span></div>';
   document.body.append(overlay);
   const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
   window.addEventListener('dragenter', e => { if (!hasFiles(e)) return; depth++; document.body.classList.add('io-drop'); });
