@@ -147,7 +147,7 @@ function drawWave(){const cv=$('cv-wave'),dpr=Math.min(devicePixelRatio||1,2),w=
   c.beginPath();c.moveTo(padL,bot);for(let i=0;i<=M;i++)c.lineTo(X(i),Y(P[i]));c.lineTo(w-padR,bot);c.closePath();
   const grad=c.createLinearGradient(0,top,0,bot);grad.addColorStop(0,'rgba(168,156,255,0.30)');grad.addColorStop(1,'rgba(168,156,255,0.02)');c.fillStyle=grad;c.fill();
   c.strokeStyle='rgba(168,156,255,0.9)';c.lineWidth=1.4;c.beginPath();for(let i=0;i<=M;i++){const x=X(i),y=Y(P[i]);i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();
-  c.fillStyle='rgba(86,100,128,0.9)';c.font="9px 'JetBrains Mono'";c.textAlign='left';c.fillText('frequency k/N',padL,h-5);
+  c.fillStyle='rgba(86,100,128,0.9)';c.font="9px 'IBM Plex Mono', monospace";c.textAlign='left';c.fillText('frequency k/N',padL,h-5);
 }
 
 /* ── controls ── */
