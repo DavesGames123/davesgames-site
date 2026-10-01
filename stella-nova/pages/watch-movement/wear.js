@@ -63,7 +63,9 @@ float fprint(vec2 uv) {
     float d = length(q);
     if (d > 1.0) continue;
     float ridge = 0.5 + 0.5 * fgroove(d * 5.0 + 0.25 * fnoise(uv * 1.3), 0.45);      // ridges 0.45 mm apart
-    float m = (1.0 - smoothstep(0.55, 1.0, d)) * smoothstep(0.25, 0.75, fnoise(uv * 0.9 + cc));
+    // a soft oval, thinned by noise on the scale of the print itself: a
+    // finer noise breaks a print into speckle at clock distances
+    float m = (1.0 - smoothstep(0.35, 1.0, d)) * smoothstep(0.1, 0.8, fnoise(uv * 0.22 + cc * 3.1));
     best = max(best, m * (0.45 + 0.55 * ridge));
   }
   return best;
@@ -131,7 +133,7 @@ vec2 fwear(vec2 uv) {
   }
   if (uPrints > 0.0) {
     float f = fprint(uv), sm = smoothstep(0.55, 0.85, ffbm(uv * 0.08 + 3.0));
-    r.y += uPrints * (0.3 * f + 0.1 * sm);
+    r.y += uPrints * (0.2 * f + 0.1 * sm);
     r.x += uPrints * 0.0006 * f;
   }
   return r;
