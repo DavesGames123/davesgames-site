@@ -1,16 +1,1473 @@
 // ============================================================================
-//  MATERIAL STUDIO  ·  export.js — engine packages   [STUB]
+//  MATERIAL STUDIO  ·  export.js — engine packages, project files, export UI
 // ────────────────────────────────────────────────────────────────────────────
-//  Owner: IO agent. Reads state.maps back from the GPU, packs channels per
-//  target (contract EXPORT_TARGETS), and writes a zip with zip.js / glb.js.
+//  Owner: IO agent. Reads the baked MaterialMaps back from the GPU, packs the
+//  channels the way each engine wants them, encodes the images and writes a
+//  zip (or a .glb for glTF). It also saves the studio project.
+//
+//  UI PLACEMENT  (placeUI runs on boot:done, after panels.js init)
+//      panels.js owns #export-panel: this module appends an .io-extra block
+//      (package details, channel layout, last export, project, import) and a
+//      MutationObserver puts it back after each panels re-render. Without
+//      panels.js it mounts the full panel and the Open/Save/Import/Export
+//      buttons in #tb-file. Ctrl+S (project with images) and Ctrl+O (any file)
+//      are captured on window before the panels.js graph-JSON shortcuts.
+//
+//  DATA FLOW
+//      state.maps (rgba16float GPUTextures, linear)            contract.js
+//        └─ withMaps(res)  same res: use state.maps; other res: bake.bakeAt(res)
+//           if the bake module has it, else swap the preview res and wait for
+//           bake:done, then restore it
+//        └─ MapSource.get(slot)  __studio.bake.readback(slot) or own
+//           copyTextureToBuffer ─▶ Uint16Array of half bits, res*res*4
+//        └─ computeStats  min/max/mean per channel ─▶ "used" flags, constant
+//           folding, emissive peak normalization
+//        └─ plan(target)  file list: per file the channel sources and ops
+//           (srgb, invert, DirectX green flip, gain), bit depth, format
+//        └─ packImage ─▶ encodePNG / encodeTGA / encodeEXR (zip.js)
+//        └─ text files  Unity .mat + .meta, Unreal import .py, Godot .tres,
+//           README.txt, project .studio.json
+//        └─ makeZip (zip.js) or buildGLB (glb.js) ─▶ Blob ─▶ download
+//
+//  CHANNEL PACKING  (all normals leave the bake as OpenGL +Y, n*0.5+0.5)
+//      Unity URP      _BaseMap rgba | _MetallicGlossMap R metal A smooth |
+//                     _BumpMap +Y | _OcclusionMap | _ParallaxMap | _EmissionMap
+//                     | _ClearCoatMap R mask G smooth (Complex Lit)
+//      Unity HDRP     _BaseColorMap | _MaskMap R metal G ao B detail A smooth |
+//                     _NormalMap +Y | _HeightMap | _EmissiveColorMap | _CoatMaskMap
+//      Unity Built-in _MainTex | _MetallicGlossMap R metal A smooth | _BumpMap
+//                     | _OcclusionMap | _ParallaxMap | _EmissionMap
+//      Unreal         BC (A opacity) | N  -Y (green flipped) | ORM | H | E | CC
+//      Godot 4        albedo | normal +Y | orm | height | emission | clearcoat
+//      glTF 2.0       baseColor | ORM shared by occlusion + metallicRoughness |
+//                     normal | emissive | KHR clearcoat, sheen, anisotropy,
+//                     ior, transmission, emissive_strength, texture_transform
+//      PNG            one file per chosen map, naming template
+//
+//  SECTIONS  (grep -n the banner to jump)
+//      half LUTs ........ half bits -> float / 8-bit linear / 8-bit sRGB
+//      graph access ..... graphJSON, outputParams, scalarsNow, materialName
+//      readback ......... readTexture, MapSource
+//      maps at res ...... withMaps, waitBake
+//      stats ............ computeStats, usedFlags
+//      packing .......... packImage, ch() channel spec helpers
+//      plans ............ PLANS: one planner per EXPORT_TARGETS id
+//      unity yaml ....... unityGuid, unityMat, unityTexMeta
+//      unreal py ........ unrealScript
+//      godot tres ....... godotTres
+//      gltf ............. gltfPackage
+//      readme ........... readmeText
+//      exportPackage .... the public entry
+//      project .......... projectJSON, saveProject, copyMaterialJSON
+//      ui ............... mountExportUI, placeUI, layout table, progress, topbar, keys
+//      selfTest / init
 // ============================================================================
+import {
+  EXPORT_TARGETS, MAP_SLOTS, MAP_NAMES, DEFAULT_SCALARS, OUTPUT_TYPE, RES_OPTIONS, GRAPH_VERSION,
+} from './contract.js';
+import { makeZip, encodePNG, encodeTGA, encodeEXR, f32ToF16, f16ToF32, crc32, decodePNG, readZip } from './zip.js';
+import { buildGLB, uvSphere, parseGLB } from './glb.js';
+import * as IMP from './import.js';
+
+let C = null;            // main.js ctx
+let S = null;            // store.state
+const UI = {};           // panel elements
+let busy = false;
+let last = null;         // last export summary
+
+// ------------------------------------------------------------ half LUTs
+let H2F = null, H2L8 = null, H2S8 = null;
+function luts() {
+  if (H2F) return;
+  H2F = new Float32Array(65536); H2L8 = new Uint8Array(65536); H2S8 = new Uint8Array(65536);
+  for (let h = 0; h < 65536; h++) {
+    let v = f16ToF32(h);
+    if (!(v === v)) v = 0;
+    H2F[h] = v;
+    const c = v < 0 ? 0 : v > 1 ? 1 : v;
+    H2L8[h] = Math.round(c * 255);
+    H2S8[h] = Math.round(linToSrgb(c) * 255);
+  }
+}
+/** Linear 0..1 to sRGB 0..1 (IEC 61966-2-1). */
+export function linToSrgb(c) { return c <= 0.0031308 ? c * 12.92 : (1.055 * Math.pow(c, 1 / 2.4)) - 0.055; }
+const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : (v === v ? v : 0));
+
+// ------------------------------------------------------------ graph access
+function graphJSON() {
+  const g = S.graph;
+  if (!g) return null;
+  const ser = C?.modules?.graph?.serialize;
+  try { return ser ? ser(g) : JSON.parse(JSON.stringify(g)); } catch (e) { return JSON.parse(JSON.stringify(g)); }
+}
+function outputParams(gj = graphJSON()) {
+  if (!gj) return {};
+  const n = (gj.nodes || []).find(x => x.id === gj.output) || (gj.nodes || []).find(x => x.type === OUTPUT_TYPE);
+  return (n && n.params) || {};
+}
+/** The material scalars: contract defaults < state.scalars < bake result < Output node params. */
+export function scalarsNow(maps = S.maps) {
+  const s = { ...DEFAULT_SCALARS, ...(S.scalars || {}), ...((maps && maps.scalars) || {}) };
+  const p = outputParams();
+  for (const k of Object.keys(DEFAULT_SCALARS)) if (p[k] !== undefined) s[k] = p[k];
+  return s;
+}
+const sanitize = s => (String(s || '').trim().replace(/[^A-Za-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '') || 'Material');
+function materialName() { return sanitize(UI.name?.value || graphJSON()?.name || 'Material'); }
+
+// ------------------------------------------------------------ readback
+/**
+ * Read a GPU texture back as half-float bits (4 per texel). Accepts
+ * rgba16float (copied as is), rgba32float and rgba8unorm (converted).
+ * @param {GPUTexture} tex @returns {Promise<Uint16Array>}
+ */
+export async function readTexture(tex) {
+  const d = C.gpu.device;
+  if (!d) throw new Error('No GPU device');
+  const w = tex.width, h = tex.height, fmt = tex.format || 'rgba16float';
+  const bpt = fmt === 'rgba32float' ? 16 : fmt === 'rgba16float' ? 8 : 4;
+  const bpr = Math.ceil((w * bpt) / 256) * 256;
+  const buf = d.createBuffer({ size: bpr * h, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+  const enc = d.createCommandEncoder();
+  enc.copyTextureToBuffer({ texture: tex }, { buffer: buf, bytesPerRow: bpr, rowsPerImage: h }, [w, h, 1]);
+  d.queue.submit([enc.finish()]);
+  await buf.mapAsync(GPUMapMode.READ);
+  const src = new Uint8Array(buf.getMappedRange());
+  const out = new Uint16Array(w * h * 4);
+  if (bpt === 8) {
+    const o8 = new Uint8Array(out.buffer);
+    for (let y = 0; y < h; y++) o8.set(src.subarray(y * bpr, (y * bpr) + (w * 8)), y * w * 8);
+  } else if (bpt === 16) {
+    for (let y = 0; y < h; y++) {
+      const row = new Float32Array(src.buffer, src.byteOffset + (y * bpr), w * 4);
+      for (let i = 0; i < w * 4; i++) out[(y * w * 4) + i] = f32ToF16(row[i]);
+    }
+  } else {
+    const bgra = /^bgra/.test(fmt);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) for (let c = 0; c < 4; c++) {
+      const sc = bgra && c < 3 ? 2 - c : c;
+      out[(((y * w) + x) * 4) + c] = f32ToF16(src[(y * bpr) + (x * 4) + sc] / 255);
+    }
+  }
+  buf.unmap(); buf.destroy();
+  return out;
+}
+
+/** Lazy per-slot readback cache for one MaterialMaps set. */
+class MapSource {
+  constructor(maps) { this.maps = maps; this.res = maps.res || maps.albedo?.width; this.cache = new Map(); this.keep = this.res <= 2048; }
+  async get(slot) {
+    if (this.cache.has(slot)) return this.cache.get(slot);
+    const n = this.res * this.res * 4;
+    let data = null;
+    const bake = window.__studio?.bake;
+    if (bake && typeof bake.readback === 'function') {
+      try {
+        let r = await bake.readback(slot, this.maps);
+        if (r && r.data) r = r.data;
+        if (r instanceof Uint16Array && r.length === n) data = r;
+        else if (r instanceof Float32Array && r.length === n) { data = new Uint16Array(n); for (let i = 0; i < n; i++) data[i] = f32ToF16(r[i]); }
+      } catch (e) { console.warn('[export] bake.readback failed, the export reads the texture itself', e); }
+    }
+    if (!data) {
+      const tex = this.maps[slot];
+      if (!tex) throw new Error(`The bake result has no ${slot} map`);
+      data = await readTexture(tex);
+    }
+    this.cache.set(slot, data);
+    return data;
+  }
+  drop(slot) { if (!this.keep) this.cache.delete(slot); }
+}
+
+// ------------------------------------------------------------ maps at res
+function waitBake(ms = 120000) {
+  return new Promise((res, rej) => {
+    const offs = [];
+    const done = f => v => { offs.forEach(o => o()); clearTimeout(t); f(v); };
+    offs.push(C.store.on('bake:done', done(res)));
+    offs.push(C.store.on('bake:error', done(e => rej(new Error('Bake failed: ' + (e && e.message))))));
+    const t = setTimeout(() => { offs.forEach(o => o()); rej(new Error(`No bake:done in ${ms / 1000} s`)); }, ms);
+  });
+}
 
 /**
- * @param {string} target  an EXPORT_TARGETS id
- * @param {{res?:number, name?:string, format?:'png'|'tga', includeGraph?:boolean}} [opts]
- * @returns {Promise<Blob>} the zip (or .glb for 'gltf')
+ * Run fn(maps) with MaterialMaps at `res`. The same res as the preview uses
+ * state.maps. Another res calls __studio.bake.bakeAt(res) when the bake module
+ * has it; otherwise it changes the preview resolution, waits for bake:done,
+ * and puts the old resolution back after fn.
  */
-export async function exportPackage(target, opts = {}) { throw new Error('exportPackage is not implemented yet'); }
+async function withMaps(res, fn, progress) {
+  const cur = S.maps;
+  if (!res || (cur && cur.res === res)) {
+    if (!cur) throw new Error('Nothing is baked yet. Wait for the bake, then export.');
+    return fn(cur);
+  }
+  const bake = window.__studio?.bake;
+  if (bake && typeof bake.bakeAt === 'function') {
+    progress?.(`baking ${res}²`, 0.02);
+    const m = await bake.bakeAt(res);
+    try { return await fn(m); } finally { try { m.release?.(); } catch (e) {} }
+  }
+  const prev = S.settings.res;
+  progress?.(`baking ${res}² (preview res swaps for the export)`, 0.02);
+  const wait = waitBake();
+  C.store.setRes(res);
+  const m = await wait;
+  try { return await fn(m); }
+  finally { if (S.settings.res !== prev) C.store.setRes(prev); }
+}
+
+// ------------------------------------------------------------ stats
+/** Per-channel min/max/mean of every slot. @returns {Promise<Object<string,{min:number[],max:number[],mean:number[]}>>} */
+async function computeStats(src, slots = MAP_NAMES, progress) {
+  luts();
+  const out = {};
+  let k = 0;
+  for (const slot of slots) {
+    progress?.(`reading ${slot}`, 0.05 + (0.25 * (k++ / slots.length)));
+    if (!src.maps[slot]) continue;
+    const a = await src.get(slot);
+    const min = [Infinity, Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity, -Infinity], sum = [0, 0, 0, 0];
+    for (let i = 0; i < a.length; i += 4) for (let c = 0; c < 4; c++) {
+      const v = H2F[a[i + c]];
+      if (v < min[c]) min[c] = v; if (v > max[c]) max[c] = v; sum[c] += v;
+    }
+    const n = a.length / 4;
+    out[slot] = { min, max, mean: sum.map(s => s / n) };
+    src.drop(slot);
+  }
+  return out;
+}
+/** Which optional maps carry data. st null (UI preview) marks all as maybe. */
+function usedFlags(st, sc) {
+  if (!st) return null;
+  const g = (s, c, f) => (st[s] ? st[s][f][c] : (f === 'min' ? 0 : 0));
+  const eps = 1e-3;
+  return {
+    opacity: sc.alphaMode !== 'opaque' || (st.albedo && st.albedo.min[3] < 1 - eps),
+    emissive: !!st.emissive && Math.max(st.emissive.max[0], st.emissive.max[1], st.emissive.max[2]) > eps,
+    emissivePeak: st.emissive ? Math.max(st.emissive.max[0], st.emissive.max[1], st.emissive.max[2], 0) : 0,
+    height: !!st.height && (g('height', 0, 'max') - g('height', 0, 'min')) > eps,
+    clearcoat: !!st.extra && st.extra.max[0] > eps,
+    sheen: !!st.extra && st.extra.max[2] > eps,
+    anisotropy: !!st.extra && Math.max(Math.abs(st.extra.max[3]), Math.abs(st.extra.min[3])) > eps,
+    normal: !!st.normal && ((st.normal.max[0] - st.normal.min[0]) > eps || (st.normal.max[1] - st.normal.min[1]) > eps),
+    ormConst: !!st.orm && [0, 1, 2].every(c => (st.orm.max[c] - st.orm.min[c]) < eps),
+    aoOne: !!st.orm && st.orm.min[0] > 1 - eps,
+    albedoConst: !!st.albedo && [0, 1, 2, 3].every(c => (st.albedo.max[c] - st.albedo.min[c]) < eps),
+  };
+}
+
+// ------------------------------------------------------------ packing
+/** Channel source helpers for plan entries. */
+const ch = {
+  s: (slot, c, label) => ({ slot, c, label: label || `${slot}.${'rgba'[c]}` }),
+  srgb: (slot, c, label) => ({ slot, c, srgb: true, label: label || `${slot}.${'rgba'[c]} sRGB` }),
+  inv: (slot, c, label) => ({ slot, c, inv: true, label: label || `1 - ${slot}.${'rgba'[c]}` }),
+  k: (v, label) => ({ v, label: label || String(v) }),
+};
+const SLOT_CH = { // friendly labels
+  'albedo.0': 'base R', 'albedo.1': 'base G', 'albedo.2': 'base B', 'albedo.3': 'opacity',
+  'normal.0': 'normal X', 'normal.1': 'normal Y', 'normal.2': 'normal Z',
+  'orm.0': 'AO', 'orm.1': 'roughness', 'orm.2': 'metallic', 'height.0': 'height',
+  'emissive.0': 'emissive R', 'emissive.1': 'emissive G', 'emissive.2': 'emissive B',
+  'extra.0': 'clearcoat', 'extra.1': 'clearcoat rough', 'extra.2': 'sheen', 'extra.3': 'anisotropy',
+};
+function chLabel(c) {
+  if (c.v !== undefined) return c.label || String(c.v);
+  const base = SLOT_CH[`${c.slot}.${c.c}`] || `${c.slot}.${'rgba'[c.c]}`;
+  if (c.label && !/^(albedo|normal|orm|height|emissive|extra)\./.test(c.label) && !/^1 - /.test(c.label)) return c.label;
+  return (c.inv ? (c.slot === 'orm' && c.c === 1 ? 'smoothness' : c.slot === 'normal' && c.c === 1 ? 'normal -Y' : `1-${base}`) : base) + (c.srgb ? ' (sRGB)' : '') + (c.gain && c.gain !== 1 ? ` x${c.gain.toFixed(3)}` : '');
+}
+
+/**
+ * Pack one plan image into channel data, then encode it.
+ * @param {object} img plan entry {file, chans, bits, fmt, srgbChunk}
+ * @param {MapSource} src
+ * @returns {Promise<Uint8Array>}
+ */
+async function packImage(img, src) {
+  luts();
+  const res = src.res, n = res * res, chs = img.chans, k = chs.length;
+  const fmt = img.fmt || img.ext || 'png', bits = fmt === 'exr' ? 'half' : (img.bits || 8);
+  const out = bits === 'half' ? new Uint16Array(n * k) : bits === 16 ? new Uint16Array(n * k) : new Uint8Array(n * k);
+  for (let j = 0; j < k; j++) {
+    const c = chs[j];
+    if (c.v !== undefined) {
+      const val = bits === 'half' ? f32ToF16(c.v) : bits === 16 ? Math.round(clamp01(c.v) * 65535) : Math.round(clamp01(c.v) * 255);
+      for (let i = 0; i < n; i++) out[(i * k) + j] = val;
+      continue;
+    }
+    const a = await src.get(c.slot), sc = c.c;
+    const gain = c.gain ?? 1;
+    if (c.fn) { // custom per-texel function of the whole texel (anisotropy direction)
+      for (let i = 0; i < n; i++) {
+        const v = clamp01(c.fn(H2F[a[i * 4]], H2F[a[(i * 4) + 1]], H2F[a[(i * 4) + 2]], H2F[a[(i * 4) + 3]]));
+        out[(i * k) + j] = bits === 16 ? Math.round(v * 65535) : bits === 'half' ? f32ToF16(v) : Math.round(v * 255);
+      }
+      continue;
+    }
+    if (bits === 8 && !c.inv && gain === 1) {
+      const L = c.srgb ? H2S8 : H2L8;
+      for (let i = 0; i < n; i++) out[(i * k) + j] = L[a[(i * 4) + sc]];
+    } else if (bits === 8) {
+      for (let i = 0; i < n; i++) {
+        let v = clamp01(H2F[a[(i * 4) + sc]] * gain);
+        if (c.inv) v = 1 - v;
+        out[(i * k) + j] = Math.round((c.srgb ? linToSrgb(v) : v) * 255);
+      }
+    } else if (bits === 16) {
+      for (let i = 0; i < n; i++) {
+        let v = clamp01(H2F[a[(i * 4) + sc]] * gain);
+        if (c.inv) v = 1 - v;
+        out[(i * k) + j] = Math.round((c.srgb ? linToSrgb(v) : v) * 65535);
+      }
+    } else { // half: copy bits unless an op applies
+      for (let i = 0; i < n; i++) {
+        const hb = a[(i * 4) + sc];
+        out[(i * k) + j] = (!c.inv && gain === 1) ? hb : f32ToF16(c.inv ? 1 - (H2F[hb] * gain) : H2F[hb] * gain);
+      }
+    }
+  }
+  if (fmt === 'exr') return encodeEXR({ width: res, height: res, channels: k === 2 ? 3 : k, data: k === 2 ? pad3(out, n) : out });
+  if (fmt === 'tga' && bits === 8) return encodeTGA({ width: res, height: res, channels: k, data: k === 2 ? expandGA(out, n) : out });
+  return encodePNG({ width: res, height: res, channels: k, bitDepth: bits === 16 ? 16 : 8, data: out, srgb: !!img.srgbChunk, text: { Software: 'Stella Nova PBR Material Studio' } });
+}
+function pad3(a, n) { const o = new Uint16Array(n * 3); for (let i = 0; i < n; i++) { o[i * 3] = a[i * 2]; o[(i * 3) + 1] = a[(i * 2) + 1]; } return o; }
+function expandGA(a, n) { const o = new Uint8Array(n * 4); for (let i = 0; i < n; i++) { o[i * 4] = o[(i * 4) + 1] = o[(i * 4) + 2] = a[i * 2]; o[(i * 4) + 3] = a[(i * 2) + 1]; } return o; }
+
+// ------------------------------------------------------------ plans
+/**
+ * A plan lists the image files of a target. Each entry:
+ *   {key, file, chans:[channel spec], bits:8|16, fmt:'png'|'tga'|'exr',
+ *    srgbChunk, color:'sRGB'|'linear', role, optional?:flag name, why}
+ * `u` is usedFlags (null in the UI preview: optional entries show as "if used").
+ */
+function texExt(o, img) {
+  if (img.fmt === 'exr') return 'exr';
+  if (img.bits === 16) return 'png';
+  return o.fmt === 'tga' ? 'tga' : 'png';
+}
+function baseRGB(alpha) {
+  return alpha ? [ch.srgb('albedo', 0), ch.srgb('albedo', 1), ch.srgb('albedo', 2), ch.s('albedo', 3)]
+    : [ch.srgb('albedo', 0), ch.srgb('albedo', 1), ch.srgb('albedo', 2)];
+}
+const normalGL = () => [ch.s('normal', 0), ch.s('normal', 1), ch.s('normal', 2)];
+const normalDX = () => [ch.s('normal', 0), ch.inv('normal', 1), ch.s('normal', 2)];
+const gray = (slot, c, label) => [ch.s(slot, c, label)];
+function emissiveRGB(gain) {
+  return [0, 1, 2].map(c => ({ ...ch.srgb('emissive', c), gain }));
+}
+function heightImg(o, file, role) {
+  const fmt = o.heightFmt === 'exr' ? 'exr' : 'png', bits = o.heightFmt === 'png8' ? 8 : 16;
+  return { key: 'height', file, chans: gray('height', 0), bits, fmt, color: 'linear', role, optional: 'height' };
+}
+
+const PLANS = {
+  'unity-urp': (o, u, sc) => {
+    const n = o.name, alpha = !u || u.opacity;
+    return [
+      { key: 'base', file: `${n}_BaseMap`, chans: baseRGB(alpha), srgbChunk: true, color: 'sRGB', role: '_BaseMap' },
+      { key: 'mask', file: `${n}_MetallicSmoothness`, chans: [ch.s('orm', 2), ch.s('orm', 2), ch.s('orm', 2), ch.inv('orm', 1)], color: 'linear', role: '_MetallicGlossMap' },
+      { key: 'normal', file: `${n}_Normal`, chans: o.normalBits === 16 ? normalGL() : normalGL(), bits: o.normalBits, color: 'linear', role: '_BumpMap (Normal map)' },
+      { key: 'ao', file: `${n}_Occlusion`, chans: gray('orm', 0), color: 'linear', role: '_OcclusionMap' },
+      heightImg(o, `${n}_Height`, '_ParallaxMap'),
+      { key: 'emissive', file: `${n}_Emission`, chans: emissiveRGB(u?.emissiveGain ?? 1), srgbChunk: true, color: 'sRGB', role: '_EmissionMap', optional: 'emissive' },
+      { key: 'clearcoat', file: `${n}_ClearCoat`, chans: [ch.s('extra', 0), ch.inv('extra', 1, 'clearcoat smoothness'), ch.k(0), ch.k(1)], color: 'linear', role: '_ClearCoatMap (Complex Lit)', optional: 'clearcoat' },
+    ];
+  },
+  'unity-hdrp': (o, u) => {
+    const n = o.name, alpha = !u || u.opacity;
+    return [
+      { key: 'base', file: `${n}_BaseColor`, chans: baseRGB(alpha), srgbChunk: true, color: 'sRGB', role: '_BaseColorMap' },
+      { key: 'mask', file: `${n}_MaskMap`, chans: [ch.s('orm', 2), ch.s('orm', 0), ch.k(1, 'detail mask = 1'), ch.inv('orm', 1)], color: 'linear', role: '_MaskMap' },
+      { key: 'normal', file: `${n}_Normal`, chans: normalGL(), bits: o.normalBits, color: 'linear', role: '_NormalMap (Normal map)' },
+      heightImg(o, `${n}_Height`, '_HeightMap'),
+      { key: 'emissive', file: `${n}_Emissive`, chans: emissiveRGB(u?.emissiveGain ?? 1), srgbChunk: true, color: 'sRGB', role: '_EmissiveColorMap', optional: 'emissive' },
+      { key: 'clearcoat', file: `${n}_CoatMask`, chans: gray('extra', 0, 'clearcoat'), color: 'linear', role: '_CoatMaskMap', optional: 'clearcoat' },
+    ];
+  },
+  'unity-builtin': (o, u) => {
+    const n = o.name, alpha = !u || u.opacity;
+    return [
+      { key: 'base', file: `${n}_Albedo`, chans: baseRGB(alpha), srgbChunk: true, color: 'sRGB', role: '_MainTex' },
+      { key: 'mask', file: `${n}_MetallicGloss`, chans: [ch.s('orm', 2), ch.s('orm', 2), ch.s('orm', 2), ch.inv('orm', 1)], color: 'linear', role: '_MetallicGlossMap' },
+      { key: 'normal', file: `${n}_Normal`, chans: normalGL(), bits: o.normalBits, color: 'linear', role: '_BumpMap (Normal map)' },
+      { key: 'ao', file: `${n}_Occlusion`, chans: gray('orm', 0), color: 'linear', role: '_OcclusionMap' },
+      heightImg(o, `${n}_Height`, '_ParallaxMap'),
+      { key: 'emissive', file: `${n}_Emission`, chans: emissiveRGB(u?.emissiveGain ?? 1), srgbChunk: true, color: 'sRGB', role: '_EmissionMap', optional: 'emissive' },
+    ];
+  },
+  unreal: (o, u) => {
+    const n = o.name, alpha = !u || u.opacity;
+    return [
+      { key: 'base', file: `T_${n}_BC`, chans: baseRGB(alpha), srgbChunk: true, color: 'sRGB', role: 'BaseColor (+ Opacity in A)' },
+      { key: 'normal', file: `T_${n}_N`, chans: normalDX(), bits: o.normalBits, color: 'linear', role: 'Normal (DirectX, green flipped)' },
+      { key: 'orm', file: `T_${n}_ORM`, chans: [ch.s('orm', 0), ch.s('orm', 1), ch.s('orm', 2)], color: 'linear', role: 'ORM (Masks)' },
+      heightImg(o, `T_${n}_H`, 'Height (BumpOffset)'),
+      { key: 'emissive', file: `T_${n}_E`, chans: emissiveRGB(u?.emissiveGain ?? 1), srgbChunk: true, color: 'sRGB', role: 'Emissive', optional: 'emissive' },
+      { key: 'clearcoat', file: `T_${n}_CC`, chans: [ch.s('extra', 0), ch.s('extra', 1), ch.k(0)], color: 'linear', role: 'ClearCoat R, ClearCoatRoughness G', optional: 'clearcoat' },
+    ];
+  },
+  godot: (o, u) => {
+    const n = o.name, alpha = !u || u.opacity;
+    return [
+      { key: 'base', file: `${n}_albedo`, chans: baseRGB(alpha), srgbChunk: true, color: 'sRGB', role: 'albedo_texture' },
+      { key: 'normal', file: `${n}_normal`, chans: normalGL(), bits: o.normalBits, color: 'linear', role: 'normal_texture' },
+      { key: 'orm', file: `${n}_orm`, chans: [ch.s('orm', 0), ch.s('orm', 1), ch.s('orm', 2)], color: 'linear', role: 'ao / roughness / metallic channels' },
+      heightImg(o, `${n}_height`, 'heightmap_texture'),
+      { key: 'emissive', file: `${n}_emission`, chans: emissiveRGB(u?.emissiveGain ?? 1), srgbChunk: true, color: 'sRGB', role: 'emission_texture', optional: 'emissive' },
+      { key: 'clearcoat', file: `${n}_clearcoat`, chans: [ch.s('extra', 0), ch.s('extra', 1), ch.k(0)], color: 'linear', role: 'clearcoat_texture (R amount, G roughness)', optional: 'clearcoat' },
+    ];
+  },
+  gltf: (o, u) => {
+    const alpha = !u || u.opacity;
+    return [
+      { key: 'base', file: 'baseColor', chans: baseRGB(alpha), srgbChunk: true, color: 'sRGB', role: 'baseColorTexture', fold: 'albedoConst' },
+      { key: 'orm', file: 'occlusionRoughnessMetallic', chans: [ch.s('orm', 0), ch.s('orm', 1), ch.s('orm', 2)], color: 'linear', role: 'occlusionTexture R + metallicRoughnessTexture G B', fold: 'ormConst' },
+      { key: 'normal', file: 'normal', chans: normalGL(), color: 'linear', role: 'normalTexture', optional: 'normal' },
+      { key: 'emissive', file: 'emissive', chans: emissiveRGB(u?.emissiveGain ?? 1), srgbChunk: true, color: 'sRGB', role: 'emissiveTexture', optional: 'emissive' },
+      { key: 'clearcoat', file: 'clearcoat', chans: [ch.s('extra', 0), ch.s('extra', 1), ch.k(0)], color: 'linear', role: 'KHR_materials_clearcoat R + roughness G', optional: 'clearcoat' },
+      { key: 'sheen', file: 'sheenColor', chans: [0, 1, 2].map(() => ch.srgb('extra', 2, 'sheen')), srgbChunk: true, color: 'sRGB', role: 'KHR_materials_sheen sheenColorTexture', optional: 'sheen' },
+      { key: 'aniso', file: 'anisotropy', chans: [
+        { slot: 'extra', c: 3, fn: (r, g, b, a) => (a < 0 ? 0.5 : 1), label: 'direction X' },
+        { slot: 'extra', c: 3, fn: (r, g, b, a) => (a < 0 ? 1 : 0.5), label: 'direction Y' },
+        { slot: 'extra', c: 3, fn: (r, g, b, a) => Math.abs(a), label: '|anisotropy|' }], color: 'linear', role: 'KHR_materials_anisotropy', optional: 'anisotropy' },
+    ];
+  },
+  png: (o, u) => {
+    const n = o.name, out = [];
+    const T = (map) => o.template.replace(/\{name\}/g, n).replace(/\{map\}/g, map).replace(/\{res\}/g, String(o.res || '')).replace(/\{target\}/g, 'png');
+    for (const key of o.maps) {
+      const m = PLAIN_MAPS[key];
+      if (!m) continue;
+      const e = { ...m.spec(o, u), key, file: T(key) };
+      out.push(e);
+    }
+    return out;
+  },
+};
+
+/** Maps the PNG target can write. spec(o,u) returns the plan fields. */
+export const PLAIN_MAPS = {
+  basecolor:          { label: 'Base color (sRGB)', spec: () => ({ chans: baseRGB(false), srgbChunk: true, color: 'sRGB', role: 'base color' }) },
+  basecolor_alpha:    { label: 'Base color + alpha', spec: () => ({ chans: baseRGB(true), srgbChunk: true, color: 'sRGB', role: 'base color, opacity in A' }) },
+  opacity:            { label: 'Opacity', spec: () => ({ chans: gray('albedo', 3), color: 'linear', role: 'opacity', optional: 'opacity' }) },
+  normal:             { label: 'Normal (OpenGL +Y)', spec: o => ({ chans: normalGL(), bits: o.normalBits, color: 'linear', role: 'tangent normal +Y' }) },
+  normal_dx:          { label: 'Normal (DirectX -Y)', spec: o => ({ chans: normalDX(), bits: o.normalBits, color: 'linear', role: 'tangent normal -Y' }) },
+  ao:                 { label: 'Ambient occlusion', spec: () => ({ chans: gray('orm', 0), color: 'linear', role: 'AO' }) },
+  roughness:          { label: 'Roughness', spec: () => ({ chans: gray('orm', 1), color: 'linear', role: 'roughness' }) },
+  smoothness:         { label: 'Smoothness (1-rough)', spec: () => ({ chans: [ch.inv('orm', 1)], color: 'linear', role: 'smoothness' }) },
+  metallic:           { label: 'Metallic', spec: () => ({ chans: gray('orm', 2), color: 'linear', role: 'metallic' }) },
+  orm:                { label: 'ORM (AO, rough, metal)', spec: () => ({ chans: [ch.s('orm', 0), ch.s('orm', 1), ch.s('orm', 2)], color: 'linear', role: 'packed ORM' }) },
+  height:             { label: 'Height', spec: o => ({ ...heightImg(o, '', 'height'), optional: undefined }) },
+  emissive:           { label: 'Emissive (sRGB)', spec: (o, u) => ({ chans: emissiveRGB(u?.emissiveGain ?? 1), srgbChunk: true, color: 'sRGB', role: 'emissive', optional: 'emissive' }) },
+  clearcoat:          { label: 'Clearcoat', spec: () => ({ chans: gray('extra', 0), color: 'linear', role: 'clearcoat', optional: 'clearcoat' }) },
+  clearcoat_roughness:{ label: 'Clearcoat roughness', spec: () => ({ chans: gray('extra', 1), color: 'linear', role: 'clearcoat roughness', optional: 'clearcoat' }) },
+  sheen:              { label: 'Sheen', spec: () => ({ chans: gray('extra', 2), color: 'linear', role: 'sheen', optional: 'sheen' }) },
+  anisotropy:         { label: 'Anisotropy', spec: () => ({ chans: gray('extra', 3), color: 'linear', role: 'anisotropy', optional: 'anisotropy' }) },
+};
+/** 8-bit texture formats (panels.js reads this list). */
+export const FORMATS = ['png', 'tga'];
+const DEFAULT_PLAIN = ['basecolor', 'normal', 'ao', 'roughness', 'metallic', 'height', 'emissive', 'opacity'];
+
+/** Resolve a plan for a target: drop unused optional maps (and folded ones for glTF). */
+function resolvePlan(target, o, u, sc) {
+  const plan = PLANS[target](o, u, sc);
+  return plan.filter(img => {
+    if (!u) return true;
+    if (img.optional && !u[img.optional]) return false;
+    if (img.fold && o.fold && u[img.fold]) return false;
+    return true;
+  }).map(img => ({ ...img, bits: img.bits || 8, ext: texExt(o, img) }));
+}
+
+// ------------------------------------------------------------ unity yaml
+/** Deterministic 32-hex Unity GUID from a string (FNV-1a, four lanes). */
+export function unityGuid(s) {
+  let out = '';
+  for (let lane = 0; lane < 4; lane++) {
+    let h = (0x811c9dc5 ^ (lane * 0x9e3779b9)) >>> 0;
+    const t = `${lane}:${s}`;
+    for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    h ^= h >>> 13; h = Math.imul(h, 0x5bd1e995) >>> 0; h ^= h >>> 15;
+    out += (h >>> 0).toString(16).padStart(8, '0');
+  }
+  return out;
+}
+const UNITY_SHADERS = {
+  'unity-urp': { ref: guid => `{fileID: 4800000, guid: ${guid}, type: 3}`, guid: '933532a4fcc9baf4fa0491de14d08ed7', name: 'Universal Render Pipeline/Lit' },
+  'unity-hdrp': { ref: guid => `{fileID: 4800000, guid: ${guid}, type: 3}`, guid: '6e4ae4064600d784cac1e41a9e6f2e59', name: 'HDRP/Lit' },
+  'unity-builtin': { ref: () => '{fileID: 46, guid: 0000000000000000f000000000000000, type: 0}', guid: '', name: 'Standard' },
+};
+const f = v => (Math.round(v * 10000) / 10000).toString();
+
+function unityTexMeta(guid, { srgb, normal, alpha }) {
+  return `fileFormatVersion: 2
+guid: ${guid}
+TextureImporter:
+  internalIDToNameTable: []
+  externalObjects: {}
+  serializedVersion: 12
+  mipmaps:
+    mipMapMode: 0
+    enableMipMap: 1
+    sRGBTexture: ${srgb ? 1 : 0}
+    linearTexture: 0
+    fadeOut: 0
+    borderMipMap: 0
+    mipMapsPreserveCoverage: 0
+    alphaTestReferenceValue: 0.5
+    mipMapFadeDistanceStart: 1
+    mipMapFadeDistanceEnd: 3
+  bumpmap:
+    convertToNormalMap: 0
+    externalNormalMap: 0
+    heightScale: 0.25
+    normalMapFilter: 0
+    flipGreenChannel: 0
+  isReadable: 0
+  streamingMipmaps: 1
+  streamingMipmapsPriority: 0
+  grayScaleToAlpha: 0
+  generateCubemap: 6
+  cubemapConvolution: 0
+  seamlessCubemap: 0
+  textureFormat: 1
+  maxTextureSize: 8192
+  textureSettings:
+    serializedVersion: 2
+    filterMode: 1
+    aniso: 4
+    mipBias: 0
+    wrapU: 0
+    wrapV: 0
+    wrapW: 0
+  nPOTScale: 1
+  lightmap: 0
+  compressionQuality: 50
+  alphaUsage: ${alpha ? 1 : 0}
+  alphaIsTransparency: 0
+  textureType: ${normal ? 1 : 0}
+  textureShape: 1
+  singleChannelComponent: 0
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+`;
+}
+const matMeta = guid => `fileFormatVersion: 2
+guid: ${guid}
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData:
+  assetBundleName:
+  assetBundleVariant:
+`;
+
+/** Build the Unity .mat YAML. texGuid: role -> guid. */
+function unityMat(target, o, sc, u, texGuid, shaderGuid) {
+  const sh = UNITY_SHADERS[target];
+  const name = o.name;
+  const T = id => texGuid[id] ? `{fileID: 2800000, guid: ${texGuid[id]}, type: 3}` : '{fileID: 0}';
+  const tex = [], floats = [], colors = [], kw = [];
+  const addT = (prop, id) => tex.push(`    - ${prop}:\n        m_Texture: ${T(id)}\n        m_Scale: {x: ${f(o.uvScale)}, y: ${f(o.uvScale)}}\n        m_Offset: {x: 0, y: 0}`);
+  const addF = (k, v) => floats.push(`    - ${k}: ${f(+v)}`);
+  const addC = (k, r, g, b, a = 1) => colors.push(`    - ${k}: {r: ${f(r)}, g: ${f(g)}, b: ${f(b)}, a: ${f(a)}}`);
+  const mode = sc.alphaMode, es = sc.emissiveStrength * (u?.emissiveScale ?? 1);
+  const emissive = !!texGuid.emissive;
+  const parallax = Math.min(0.08, Math.max(0.005, sc.displacementScale));
+  let queue = -1, tags = 'Opaque';
+  if (target === 'unity-urp') {
+    addT('_BaseMap', 'base'); addT('_MainTex', 'base');
+    addT('_MetallicGlossMap', 'mask'); addT('_BumpMap', 'normal'); addT('_OcclusionMap', 'ao');
+    addT('_ParallaxMap', 'height'); addT('_EmissionMap', 'emissive'); addT('_ClearCoatMap', 'clearcoat');
+    addT('_SpecGlossMap', null); addT('_DetailAlbedoMap', null); addT('_DetailNormalMap', null); addT('_DetailMask', null);
+    addF('_WorkflowMode', 1); addF('_Metallic', 1); addF('_Smoothness', 1); addF('_Glossiness', 1); addF('_GlossMapScale', 1);
+    addF('_SmoothnessTextureChannel', 0); addF('_BumpScale', 1); addF('_OcclusionStrength', 1);
+    addF('_Parallax', texGuid.height ? parallax : 0.005);
+    addF('_Surface', mode === 'blend' ? 1 : 0); addF('_Blend', 0); addF('_AlphaClip', mode === 'mask' ? 1 : 0);
+    addF('_Cutoff', sc.alphaCutoff); addF('_Cull', sc.doubleSided ? 0 : 2);
+    addF('_SrcBlend', mode === 'blend' ? 5 : 1); addF('_DstBlend', mode === 'blend' ? 10 : 0);
+    addF('_SrcBlendAlpha', 1); addF('_DstBlendAlpha', mode === 'blend' ? 10 : 0); addF('_ZWrite', mode === 'blend' ? 0 : 1);
+    addF('_ReceiveShadows', 1); addF('_SpecularHighlights', 1); addF('_EnvironmentReflections', 1); addF('_QueueOffset', 0);
+    addF('_ClearCoat', texGuid.clearcoat ? 1 : 0); addF('_ClearCoatMask', 1); addF('_ClearCoatSmoothness', 1);
+    addC('_BaseColor', 1, 1, 1, 1); addC('_Color', 1, 1, 1, 1);
+    addC('_EmissionColor', emissive ? es : 0, emissive ? es : 0, emissive ? es : 0, 1); addC('_SpecColor', 0.2, 0.2, 0.2, 1);
+    kw.push('_METALLICSPECGLOSSMAP', '_NORMALMAP', '_OCCLUSIONMAP');
+    if (texGuid.height) kw.push('_PARALLAXMAP');
+    if (emissive) kw.push('_EMISSION');
+    if (texGuid.clearcoat) kw.push('_CLEARCOAT', '_CLEARCOATMAP');
+    if (mode === 'mask') { kw.push('_ALPHATEST_ON'); queue = 2450; tags = 'TransparentCutout'; }
+    if (mode === 'blend') { kw.push('_SURFACE_TYPE_TRANSPARENT'); queue = 3000; tags = 'Transparent'; }
+  } else if (target === 'unity-hdrp') {
+    addT('_BaseColorMap', 'base'); addT('_MainTex', 'base'); addT('_MaskMap', 'mask'); addT('_NormalMap', 'normal');
+    addT('_HeightMap', 'height'); addT('_EmissiveColorMap', 'emissive'); addT('_CoatMaskMap', 'clearcoat');
+    addF('_Metallic', 1); addF('_Smoothness', 1); addF('_MetallicRemapMin', 0); addF('_MetallicRemapMax', 1);
+    addF('_SmoothnessRemapMin', 0); addF('_SmoothnessRemapMax', 1); addF('_AORemapMin', 0); addF('_AORemapMax', 1);
+    addF('_NormalScale', 1); addF('_NormalMapSpace', 0); addF('_MaterialID', 1);
+    addF('_HeightAmplitude', sc.displacementScale); addF('_HeightCenter', 0.5); addF('_HeightMapParametrization', 0);
+    addF('_HeightMin', -sc.displacementScale * 50); addF('_HeightMax', sc.displacementScale * 50);
+    addF('_HeightPoMAmplitude', Math.max(0.1, sc.displacementScale * 100)); addF('_DisplacementMode', texGuid.height ? 2 : 0);
+    addF('_PPDMinSamples', 5); addF('_PPDMaxSamples', 15);
+    addF('_CoatMask', texGuid.clearcoat ? 1 : 0);
+    addF('_SurfaceType', mode === 'blend' ? 1 : 0); addF('_AlphaCutoffEnable', mode === 'mask' ? 1 : 0); addF('_AlphaCutoff', sc.alphaCutoff);
+    addF('_DoubleSidedEnable', sc.doubleSided ? 1 : 0); addF('_CullMode', sc.doubleSided ? 0 : 2);
+    addF('_UseEmissiveIntensity', 0); addF('_EmissiveIntensity', 1); addF('_EmissiveExposureWeight', 1);
+    addF('_ZWrite', mode === 'blend' ? 0 : 1);
+    addC('_BaseColor', 1, 1, 1, 1); addC('_Color', 1, 1, 1, 1);
+    addC('_EmissiveColor', emissive ? es : 0, emissive ? es : 0, emissive ? es : 0, 1); addC('_EmissiveColorLDR', 1, 1, 1, 1);
+    kw.push('_MASKMAP', '_NORMALMAP', '_NORMALMAP_TANGENT_SPACE');
+    if (texGuid.height) kw.push('_HEIGHTMAP', '_PIXEL_DISPLACEMENT');
+    if (emissive) kw.push('_EMISSIVE_COLOR_MAP');
+    if (texGuid.clearcoat) kw.push('_MATERIAL_FEATURE_CLEAR_COAT');
+    if (mode === 'mask') { kw.push('_ALPHATEST_ON'); queue = 2475; tags = 'TransparentCutout'; }
+    if (mode === 'blend') { kw.push('_SURFACE_TYPE_TRANSPARENT', '_BLENDMODE_ALPHA'); queue = 3000; tags = 'Transparent'; }
+    if (sc.doubleSided) kw.push('_DOUBLESIDED_ON');
+  } else {
+    addT('_MainTex', 'base'); addT('_MetallicGlossMap', 'mask'); addT('_BumpMap', 'normal'); addT('_OcclusionMap', 'ao');
+    addT('_ParallaxMap', 'height'); addT('_EmissionMap', 'emissive'); addT('_DetailAlbedoMap', null); addT('_DetailNormalMap', null); addT('_DetailMask', null);
+    const m = mode === 'mask' ? 1 : mode === 'blend' ? 3 : 0;
+    addF('_Mode', m); addF('_Cutoff', sc.alphaCutoff); addF('_Glossiness', 0.5); addF('_GlossMapScale', 1); addF('_SmoothnessTextureChannel', 0);
+    addF('_Metallic', 0); addF('_BumpScale', 1); addF('_OcclusionStrength', 1); addF('_Parallax', texGuid.height ? parallax : 0.02);
+    addF('_SrcBlend', m === 3 ? 1 : 1); addF('_DstBlend', m === 3 ? 10 : 0); addF('_ZWrite', m === 3 ? 0 : 1);
+    addF('_UVSec', 0); addF('_SpecularHighlights', 1); addF('_GlossyReflections', 1);
+    addC('_Color', 1, 1, 1, 1); addC('_EmissionColor', emissive ? es : 0, emissive ? es : 0, emissive ? es : 0, 1);
+    kw.push('_METALLICGLOSSMAP', '_NORMALMAP');
+    if (texGuid.height) kw.push('_PARALLAXMAP');
+    if (emissive) kw.push('_EMISSION');
+    if (m === 1) { kw.push('_ALPHATEST_ON'); queue = 2450; tags = 'TransparentCutout'; }
+    if (m === 3) { kw.push('_ALPHAPREMULTIPLY_ON'); queue = 3000; tags = 'Transparent'; }
+  }
+  const head = `%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+# Generated by Stella Nova PBR Material Studio.
+# Shader: ${sh.name}${sh.guid ? ` (GUID ${shaderGuid || sh.guid}).
+# If the material shows as pink or "missing shader", select it and set the
+# shader to ${sh.name} by hand. The texture slots stay assigned.` : '.'}
+--- !u!21 &2100000
+Material:
+  serializedVersion: ${target === 'unity-builtin' ? 6 : 8}
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_Name: ${name}
+  m_Shader: ${sh.ref(shaderGuid || sh.guid)}
+`;
+  const kwBlock = target === 'unity-builtin'
+    ? `  m_ShaderKeywords: ${kw.join(' ')}\n`
+    : `  m_Parent: {fileID: 0}\n  m_ModifiedSerializedProperties: 0\n  m_ValidKeywords:\n${kw.map(k => `  - ${k}`).join('\n')}\n  m_InvalidKeywords: []\n`;
+  return head + kwBlock + `  m_LightmapFlags: ${emissive ? 2 : 4}
+  m_EnableInstancingVariants: 0
+  m_DoubleSidedGI: ${sc.doubleSided ? 1 : 0}
+  m_CustomRenderQueue: ${queue}
+  stringTagMap:
+    RenderType: ${tags}
+  disabledShaderPasses: []
+  m_SavedProperties:
+    serializedVersion: 3
+    m_TexEnvs:
+${tex.join('\n')}
+    m_Ints: []
+    m_Floats:
+${floats.join('\n')}
+    m_Colors:
+${colors.join('\n')}
+  m_BuildTextureStacks: []
+`;
+}
+
+// ------------------------------------------------------------ unreal py
+function pyStr(s) { return JSON.stringify(String(s)); }
+function unrealScript(o, sc, u, files) {
+  const tex = files.map(fi => {
+    const comp = fi.key === 'normal' ? 'TC_NORMALMAP' : fi.key === 'height' ? (fi.bits === 16 ? 'TC_GRAYSCALE' : 'TC_GRAYSCALE') : (fi.key === 'orm' || fi.key === 'clearcoat') ? 'TC_MASKS' : 'TC_DEFAULT';
+    return `    ${pyStr(fi.key)}: (${pyStr(fi.name)}, ${fi.color === 'sRGB' ? 'True' : 'False'}, ${pyStr(comp)}),`;
+  }).join('\n');
+  const blend = sc.alphaMode === 'mask' ? 'BLEND_MASKED' : sc.alphaMode === 'blend' ? 'BLEND_TRANSLUCENT' : 'BLEND_OPAQUE';
+  return `# -*- coding: utf-8 -*-
+# Unreal Editor import script, generated by Stella Nova PBR Material Studio.
+#
+# Use: Unreal Editor > Tools > Execute Python Script... and pick this file.
+# The Python Editor Script Plugin must be on (Edit > Plugins > Python).
+# The script imports the textures next to it with the correct compression
+# and sRGB settings, then builds M_${o.name} with every map connected.
+# Edit DEST to change the content folder. Run it again to update in place.
+import os
+import unreal
+
+MATERIAL_NAME = ${pyStr('M_' + o.name)}
+DEST = ${pyStr(o.unrealDest.replace(/\{name\}/g, o.name))}
+UV_TILING = ${f(o.uvScale)}
+EMISSIVE_STRENGTH = ${f(sc.emissiveStrength * (u?.emissiveScale ?? 1))}
+HEIGHT_RATIO = ${f(Math.min(0.1, sc.displacementScale))}
+USE_PARALLAX = ${files.some(x => x.key === 'height') ? 'True' : 'False'}
+BLEND_MODE = ${pyStr(blend)}
+OPACITY_CLIP = ${f(sc.alphaCutoff)}
+TWO_SIDED = ${sc.doubleSided ? 'True' : 'False'}
+USE_OPACITY = ${u?.opacity || sc.alphaMode !== 'opaque' ? 'True' : 'False'}
+
+# key: (file name, sRGB, compression setting)
+TEXTURES = {
+${tex}
+}
+
+try:
+    HERE = os.path.dirname(os.path.abspath(__file__))
+except NameError:
+    HERE = os.getcwd()
+
+asset_tools = unreal.AssetToolsHelpers.get_asset_tools()
+mel = unreal.MaterialEditingLibrary
+eal = unreal.EditorAssetLibrary
+
+
+def import_texture(key):
+    fname, srgb, comp = TEXTURES[key]
+    path = os.path.join(HERE, fname)
+    if not os.path.isfile(path):
+        unreal.log_warning("missing texture %s" % path)
+        return None
+    task = unreal.AssetImportTask()
+    task.set_editor_property("filename", path)
+    task.set_editor_property("destination_path", DEST)
+    task.set_editor_property("destination_name", os.path.splitext(fname)[0])
+    task.set_editor_property("automated", True)
+    task.set_editor_property("replace_existing", True)
+    task.set_editor_property("save", False)
+    asset_tools.import_asset_tasks([task])
+    tex = unreal.load_asset(DEST + "/" + os.path.splitext(fname)[0])
+    if tex is None:
+        unreal.log_error("import failed: %s" % path)
+        return None
+    tex.set_editor_property("srgb", srgb)
+    tex.set_editor_property("compression_settings", getattr(unreal.TextureCompressionSettings, comp))
+    if comp == "TC_NORMALMAP":
+        # the file is already DirectX (green flipped); do not flip again
+        tex.set_editor_property("flip_green_channel", False)
+    eal.save_loaded_asset(tex)
+    return tex
+
+
+def sampler_type(key):
+    if key == "normal":
+        return unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL
+    if key in ("orm", "clearcoat"):
+        return unreal.MaterialSamplerType.SAMPLERTYPE_MASKS
+    if key == "height":
+        return unreal.MaterialSamplerType.SAMPLERTYPE_LINEAR_GRAYSCALE
+    return unreal.MaterialSamplerType.SAMPLERTYPE_COLOR
+
+
+def main():
+    textures = {k: import_texture(k) for k in TEXTURES}
+    path = DEST + "/" + MATERIAL_NAME
+    if eal.does_asset_exist(path):
+        mat = unreal.load_asset(path)
+        mel.delete_all_material_expressions(mat)
+    else:
+        mat = asset_tools.create_asset(MATERIAL_NAME, DEST, unreal.Material, unreal.MaterialFactoryNew())
+
+    mat.set_editor_property("blend_mode", getattr(unreal.BlendMode, BLEND_MODE))
+    mat.set_editor_property("two_sided", TWO_SIDED)
+    if BLEND_MODE == "BLEND_MASKED":
+        mat.set_editor_property("opacity_mask_clip_value", OPACITY_CLIP)
+    if textures.get("clearcoat"):
+        mat.set_editor_property("shading_model", unreal.MaterialShadingModel.MSM_CLEAR_COAT)
+
+    coord = mel.create_material_expression(mat, unreal.MaterialExpressionTextureCoordinate, -1400, 0)
+    coord.set_editor_property("u_tiling", UV_TILING)
+    coord.set_editor_property("v_tiling", UV_TILING)
+    uv = coord
+
+    if USE_PARALLAX and textures.get("height"):
+        hs = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, -1150, 500)
+        hs.set_editor_property("parameter_name", "Height")
+        hs.set_editor_property("texture", textures["height"])
+        hs.set_editor_property("sampler_type", sampler_type("height"))
+        mel.connect_material_expressions(coord, "", hs, "UVs")
+        ratio = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -1150, 700)
+        ratio.set_editor_property("parameter_name", "HeightRatio")
+        ratio.set_editor_property("default_value", HEIGHT_RATIO)
+        bump = mel.create_material_expression(mat, unreal.MaterialExpressionBumpOffset, -900, 400)
+        mel.connect_material_expressions(coord, "", bump, "Coordinate")
+        mel.connect_material_expressions(hs, "R", bump, "Height")
+        mel.connect_material_expressions(ratio, "", bump, "HeightRatioInput")
+        uv = bump
+
+    def sample(key, name, x, y):
+        tex = textures.get(key)
+        if tex is None:
+            return None
+        e = mel.create_material_expression(mat, unreal.MaterialExpressionTextureSampleParameter2D, x, y)
+        e.set_editor_property("parameter_name", name)
+        e.set_editor_property("texture", tex)
+        e.set_editor_property("sampler_type", sampler_type(key))
+        mel.connect_material_expressions(uv, "", e, "UVs")
+        return e
+
+    MP = unreal.MaterialProperty
+    bc = sample("base", "BaseColor", -600, -300)
+    if bc:
+        mel.connect_material_property(bc, "RGB", MP.MP_BASE_COLOR)
+        if USE_OPACITY and BLEND_MODE == "BLEND_MASKED":
+            mel.connect_material_property(bc, "A", MP.MP_OPACITY_MASK)
+        elif USE_OPACITY and BLEND_MODE == "BLEND_TRANSLUCENT":
+            mel.connect_material_property(bc, "A", MP.MP_OPACITY)
+    orm = sample("orm", "ORM", -600, 0)
+    if orm:
+        mel.connect_material_property(orm, "R", MP.MP_AMBIENT_OCCLUSION)
+        mel.connect_material_property(orm, "G", MP.MP_ROUGHNESS)
+        mel.connect_material_property(orm, "B", MP.MP_METALLIC)
+    nrm = sample("normal", "Normal", -600, 300)
+    if nrm:
+        mel.connect_material_property(nrm, "RGB", MP.MP_NORMAL)
+    em = sample("emissive", "Emissive", -600, 600)
+    if em:
+        k = mel.create_material_expression(mat, unreal.MaterialExpressionScalarParameter, -600, 800)
+        k.set_editor_property("parameter_name", "EmissiveStrength")
+        k.set_editor_property("default_value", EMISSIVE_STRENGTH)
+        mul = mel.create_material_expression(mat, unreal.MaterialExpressionMultiply, -300, 650)
+        mel.connect_material_expressions(em, "RGB", mul, "A")
+        mel.connect_material_expressions(k, "", mul, "B")
+        mel.connect_material_property(mul, "", MP.MP_EMISSIVE_COLOR)
+    cc = sample("clearcoat", "ClearCoat", -600, 900)
+    if cc:
+        mel.connect_material_property(cc, "R", MP.MP_CUSTOM_DATA0)
+        mel.connect_material_property(cc, "G", MP.MP_CUSTOM_DATA1)
+
+    mel.layout_material_expressions(mat)
+    mel.recompile_material(mat)
+    eal.save_asset(path)
+    unreal.log("Stella Nova material imported: %s" % path)
+
+
+main()
+`;
+}
+
+// ------------------------------------------------------------ godot tres
+function godotTres(o, sc, u, files, st) {
+  const res = [], props = [];
+  const id = {};
+  files.forEach((fi, i) => {
+    id[fi.key] = `${i + 1}_${fi.key}`;
+    res.push(`[ext_resource type="Texture2D" path="${o.godotRoot.replace(/\{name\}/g, o.name).replace(/\/+$/, '')}/${fi.name}" id="${id[fi.key]}"]`);
+  });
+  const E = k => `ExtResource("${id[k]}")`;
+  props.push(`resource_name = "${o.name}"`);
+  if (sc.alphaMode === 'blend') props.push('transparency = 1');
+  if (sc.alphaMode === 'mask') props.push('transparency = 2', `alpha_scissor_threshold = ${f(sc.alphaCutoff)}`);
+  if (sc.doubleSided) props.push('cull_mode = 2');
+  if (id.base) props.push(`albedo_texture = ${E('base')}`);
+  if (id.orm) {
+    props.push('metallic = 1.0', 'metallic_specular = 0.5', `metallic_texture = ${E('orm')}`, 'metallic_texture_channel = 2',
+      'roughness = 1.0', `roughness_texture = ${E('orm')}`, 'roughness_texture_channel = 1',
+      'ao_enabled = true', `ao_texture = ${E('orm')}`, 'ao_texture_channel = 0');
+  }
+  if (id.normal) props.push('normal_enabled = true', 'normal_scale = 1.0', `normal_texture = ${E('normal')}`);
+  if (id.emissive) props.push('emission_enabled = true', 'emission = Color(1, 1, 1, 1)', `emission_energy_multiplier = ${f(sc.emissiveStrength * (u?.emissiveScale ?? 1))}`, `emission_texture = ${E('emissive')}`);
+  if (id.height) props.push('heightmap_enabled = true', `heightmap_scale = ${f(Math.min(16, sc.displacementScale * 100))}`, 'heightmap_deep_parallax = true', `heightmap_texture = ${E('height')}`);
+  if (id.clearcoat) props.push('clearcoat_enabled = true', 'clearcoat = 1.0', 'clearcoat_roughness = 1.0', `clearcoat_texture = ${E('clearcoat')}`);
+  if (u?.anisotropy && st?.extra) props.push('anisotropy_enabled = true', `anisotropy = ${f(st.extra.mean[3])}`);
+  if (u?.sheen && st?.extra) props.push('rim_enabled = true', `rim = ${f(st.extra.mean[2])}`, 'rim_tint = 0.5');
+  if (sc.transmission > 0) props.push('refraction_enabled = true', `refraction_scale = ${f(sc.transmission * 0.05)}`);
+  if (o.uvScale !== 1) props.push(`uv1_scale = Vector3(${f(o.uvScale)}, ${f(o.uvScale)}, 1)`);
+  return `[gd_resource type="StandardMaterial3D" load_steps=${files.length + 1} format=3]\n\n${res.join('\n')}\n\n[resource]\n${props.join('\n')}\n`;
+}
+
+// ------------------------------------------------------------ gltf
+async function previewMesh(o, src, sc) {
+  let mesh = null;
+  try {
+    const vp = window.__studio?.viewport;
+    if (vp && typeof vp.meshData === 'function') mesh = await vp.meshData();
+    if (!mesh) {
+      const M = await import('./mesh.js');
+      mesh = M.buildMesh(o.mesh || S.view.mesh || 'sphere', { subdiv: Math.min(S.view.subdiv || 96, 128) });
+    }
+  } catch (e) { mesh = null; }
+  if (!mesh || !mesh.positions || !mesh.positions.length) mesh = uvSphere(96);
+  // tangents are rebuilt by glb.js with the glTF handedness rule, so the
+  // viewport tangent convention does not leak into the file
+  mesh = { positions: Float32Array.from(mesh.positions), normals: mesh.normals && Float32Array.from(mesh.normals), uvs: mesh.uvs, indices: mesh.indices };
+  if (o.displaceMesh && mesh.normals && mesh.uvs) {
+    luts();
+    const h = await src.get('height'), r = src.res, P = mesh.positions, N = mesh.normals, U = mesh.uvs;
+    for (let i = 0; i < P.length / 3; i++) {
+      let x = (((U[i * 2] * o.uvScale) % 1) + 1) % 1, y = (((U[(i * 2) + 1] * o.uvScale) % 1) + 1) % 1;
+      x = (x * r) - 0.5; y = (y * r) - 0.5;
+      const x0 = Math.floor(x), y0 = Math.floor(y), fx = x - x0, fy = y - y0;
+      const t = (xx, yy) => H2F[h[((((yy % r) + r) % r) * r * 4) + ((((xx % r) + r) % r) * 4)]];
+      const v = ((t(x0, y0) * (1 - fx)) + (t(x0 + 1, y0) * fx)) * (1 - fy) + ((t(x0, y0 + 1) * (1 - fx)) + (t(x0 + 1, y0 + 1) * fx)) * fy;
+      const d = (v - 0.5) * sc.displacementScale;
+      P[i * 3] += N[i * 3] * d; P[(i * 3) + 1] += N[(i * 3) + 1] * d; P[(i * 3) + 2] += N[(i * 3) + 2] * d;
+    }
+  }
+  return mesh;
+}
+
+async function gltfPackage(o, src, sc, u, st, plan, progress) {
+  const images = [], index = {};
+  for (let i = 0; i < plan.length; i++) {
+    const img = plan[i];
+    progress?.(`encoding ${img.file}`, 0.35 + (0.5 * (i / plan.length)));
+    const data = await packImage({ ...img, fmt: 'png' }, src);
+    index[img.key] = images.length;
+    images.push({ name: img.file, mime: 'image/png', data });
+  }
+  const tt = o.uvScale !== 1 ? { extensions: { KHR_texture_transform: { scale: [o.uvScale, o.uvScale] } } } : {};
+  const T = (key, extra = {}) => ({ index: index[key], ...extra, ...JSON.parse(JSON.stringify(tt)) });
+  const mean = (s, c) => (st[s] ? st[s].mean[c] : 0);
+  const mat = { name: o.name, pbrMetallicRoughness: {} };
+  const pbr = mat.pbrMetallicRoughness;
+  const lin = c => c; // factors are linear in glTF
+  if (index.base !== undefined) { pbr.baseColorTexture = T('base'); pbr.baseColorFactor = [1, 1, 1, 1]; }
+  else pbr.baseColorFactor = [lin(mean('albedo', 0)), lin(mean('albedo', 1)), lin(mean('albedo', 2)), u.opacity ? mean('albedo', 3) : 1];
+  if (index.orm !== undefined) {
+    pbr.metallicRoughnessTexture = T('orm'); pbr.metallicFactor = 1; pbr.roughnessFactor = 1;
+    if (!u.aoOne) mat.occlusionTexture = T('orm', { strength: 1 });
+  } else { pbr.metallicFactor = mean('orm', 2); pbr.roughnessFactor = mean('orm', 1); }
+  if (index.normal !== undefined) mat.normalTexture = T('normal', { scale: 1 });
+  if (index.emissive !== undefined) {
+    mat.emissiveTexture = T('emissive'); mat.emissiveFactor = [1, 1, 1];
+    const es = sc.emissiveStrength * (u.emissiveScale ?? 1);
+    if (es !== 1) mat.extensions = { ...mat.extensions, KHR_materials_emissive_strength: { emissiveStrength: es } };
+  }
+  if (sc.alphaMode !== 'opaque') { mat.alphaMode = sc.alphaMode === 'mask' ? 'MASK' : 'BLEND'; if (sc.alphaMode === 'mask') mat.alphaCutoff = sc.alphaCutoff; }
+  if (sc.doubleSided) mat.doubleSided = true;
+  const ext = mat.extensions || {};
+  if (index.clearcoat !== undefined) ext.KHR_materials_clearcoat = { clearcoatFactor: 1, clearcoatTexture: T('clearcoat'), clearcoatRoughnessFactor: 1, clearcoatRoughnessTexture: T('clearcoat') };
+  if (index.sheen !== undefined) ext.KHR_materials_sheen = { sheenColorFactor: [1, 1, 1], sheenColorTexture: T('sheen'), sheenRoughnessFactor: 0.5 };
+  if (index.aniso !== undefined) ext.KHR_materials_anisotropy = { anisotropyStrength: 1, anisotropyRotation: 0, anisotropyTexture: T('aniso') };
+  if (Math.abs(sc.ior - 1.5) > 1e-4) ext.KHR_materials_ior = { ior: sc.ior };
+  if (sc.transmission > 0) ext.KHR_materials_transmission = { transmissionFactor: sc.transmission };
+  if (Object.keys(ext).length) mat.extensions = ext;
+  progress?.('building mesh', 0.88);
+  const mesh = await previewMesh(o, src, sc);
+  const glb = buildGLB({ mesh, images, material: mat, name: o.name, extras: { studio: { scalars: sc, uvScale: o.uvScale, res: src.res } } });
+  return { glb, images, material: mat };
+}
+
+// ------------------------------------------------------------ readme
+function readmeText(target, o, sc, files, notes) {
+  const t = EXPORT_TARGETS.find(x => x.id === target);
+  const rows = files.filter(x => x.chans).map(fi => {
+    const chans = fi.chans.map((c, i) => `${(fi.chans.length === 1 ? 'L' : 'RGBA'[i])}=${chLabel(c)}`).join('  ');
+    return `  ${fi.name.padEnd(34)} ${String(fi.bits === 16 ? '16-bit' : fi.fmt === 'exr' ? 'half' : '8-bit').padEnd(7)} ${fi.color.padEnd(7)} ${fi.role}\n      ${chans}`;
+  }).join('\n');
+  const steps = {
+    'unity-urp': [
+      'Copy the folder into Assets/. The .meta files set the import options:',
+      '  base and emission maps are sRGB; every other map has sRGB off;',
+      '  the normal map has Texture Type = Normal map.',
+      `Open ${o.name}.mat. It uses Universal Render Pipeline/Lit.`,
+      'If you see a pink material, set the shader to Universal Render Pipeline/Lit.',
+      'Clearcoat: switch the shader to Universal Render Pipeline/Complex Lit;',
+      '  _ClearCoatMap (R mask, G smoothness) is already assigned.',
+      'If Unity rejects a .meta file, delete it and set the options above by hand.',
+    ],
+    'unity-hdrp': [
+      'Copy the folder into Assets/. The .meta files set sRGB off for the mask,',
+      '  normal, height and coat maps and Texture Type = Normal map for the normal.',
+      `Select ${o.name}.mat once so that HDRP validates its keywords.`,
+      'MaskMap: R metallic, G ambient occlusion, B detail mask (1), A smoothness.',
+      'Height uses pixel displacement; set Displacement Mode to None to turn it off.',
+    ],
+    'unity-builtin': [
+      'Copy the folder into Assets/. The .meta files set the import options.',
+      'The material uses the Standard shader (metallic setup).',
+      'Smoothness Source = Metallic Alpha. Standard has no double-sided option.',
+    ],
+    unreal: [
+      'Put this folder anywhere on disk. In the Unreal Editor, use',
+      `  Tools > Execute Python Script... and pick import_${o.name}.py.`,
+      `It imports the textures into ${o.unrealDest.replace(/\{name\}/g, o.name)} and builds M_${o.name}.`,
+      'The normal map is DirectX (green flipped). Do not tick Flip Green Channel.',
+      'Manual import: ORM and CC = Masks, sRGB off; N = Normalmap; H = Grayscale.',
+    ],
+    godot: [
+      `Copy the folder to ${o.godotRoot.replace(/\{name\}/g, o.name)} in the Godot project`,
+      '  (or edit the paths at the top of the .tres file).',
+      'Godot detects the normal map when the material uses it, and reimports it.',
+      'Sheen becomes rim light, and anisotropy is a single value: Godot has no',
+      '  sheen and no anisotropy map in StandardMaterial3D.',
+    ],
+    gltf: ['Drop the .glb into any glTF 2.0 viewer, Blender, three.js or Babylon.js.'],
+    png: ['One PNG per map. Color maps are sRGB; data maps are linear.', 'Normal maps are OpenGL (+Y) unless the name says _dx.'],
+  }[target] || [];
+  return `${o.name} — ${t ? t.label : target} export
+Stella Nova PBR Material Studio · ${new Date().toISOString().slice(0, 19).replace('T', ' ')} UTC
+Resolution ${o.resolved}x${o.resolved} · UV tiling ${o.uvScale}
+
+FILES
+${rows}
+
+HOW TO IMPORT
+${steps.map(s => '  ' + s).join('\n')}
+
+MATERIAL SCALARS
+  IOR ${sc.ior} · transmission ${sc.transmission} · displacement ${sc.displacementScale}
+  emissive strength ${sc.emissiveStrength}${notes.emissiveScale && notes.emissiveScale !== 1 ? ` (x${notes.emissiveScale.toFixed(3)}: the emissive map peak was above 1, so the map is divided by the peak and the strength carries it)` : ''}
+  alpha ${sc.alphaMode}${sc.alphaMode === 'mask' ? ` (cutoff ${sc.alphaCutoff})` : ''} · double sided ${sc.doubleSided ? 'yes' : 'no'}
+${notes.skipped && notes.skipped.length ? `\nNOT WRITTEN (no data in the bake)\n  ${notes.skipped.join(', ')}\n` : ''}`;
+}
+
+// ------------------------------------------------------------ exportPackage
+const OPT_KEY = 'material-studio.export';
+const DEFAULT_OPTS = {
+  target: 'unity-urp', res: 0, fmt: 'png', heightFmt: 'png16', normalBits: 8, template: '{name}_{map}',
+  maps: DEFAULT_PLAIN, includeGraph: true, helpers: true, readme: true, fold: true, displaceMesh: false,
+  unityShaderGuid: '', godotRoot: 'res://materials/{name}', unrealDest: '/Game/Materials/{name}', compress: 'auto',
+};
+let OPTS = { ...DEFAULT_OPTS };
+try { Object.assign(OPTS, JSON.parse(localStorage.getItem(OPT_KEY) || '{}')); } catch (e) {}
+function saveOpts() { try { localStorage.setItem(OPT_KEY, JSON.stringify(OPTS)); } catch (e) {} }
+
+/**
+ * Build an export package.
+ * @param {string} target an EXPORT_TARGETS id
+ * @param {object} [opts] overrides of the panel options:
+ *   {res, name, fmt:'png'|'tga', heightFmt:'png16'|'png8'|'exr', normalBits:8|16,
+ *    template, maps:[PLAIN_MAPS keys], includeGraph, readme, fold, displaceMesh,
+ *    unityShaderGuid, godotRoot, unrealDest, compress, onProgress(stage, frac)}
+ * @returns {Promise<Blob>} zip (or .glb for 'gltf'); blob.fileName and
+ *   blob.entries [{name, size}] describe it.
+ */
+export async function exportPackage(target, opts = {}) {
+  if (!PLANS[target]) throw new Error('Unknown export target ' + target);
+  if (!C.gpu.ok) throw new Error('Export needs WebGPU');
+  const o = { ...OPTS, ...opts, target };
+  if (opts.format && !opts.fmt) o.fmt = FORMATS.includes(opts.format) ? opts.format : 'png'; // panels.js name
+  if (opts.helpers !== undefined) o.helpers = !!opts.helpers;
+  o.name = sanitize(opts.name || materialName());
+  o.uvScale = +(opts.uvScale ?? S.view.uvScale ?? 1) || 1;
+  o.normalBits = +o.normalBits === 16 ? 16 : 8;
+  const progress = o.onProgress;
+  const res = +o.res || 0;
+  return withMaps(res, async maps => {
+    const src = new MapSource(maps);
+    o.resolved = src.res;
+    const sc = scalarsNow(maps);
+    const st = await computeStats(src, MAP_NAMES, progress);
+    const u = usedFlags(st, sc);
+    u.emissiveScale = u.emissivePeak > 1 ? u.emissivePeak : 1;
+    u.emissiveGain = 1 / u.emissiveScale;
+    const full = PLANS[target](o, null, sc).map(x => x.file);
+    const plan = resolvePlan(target, o, u, sc);
+    const skipped = full.filter(fl => !plan.some(p => p.file === fl));
+    const files = [];
+    const root = target === 'png' || target === 'gltf' ? '' : `${o.name}/`;
+    if (target === 'gltf') {
+      const { glb, images } = await gltfPackage(o, src, sc, u, st, plan, progress);
+      const blob = new Blob([glb], { type: 'model/gltf-binary' });
+      blob.fileName = blob.name = `${o.name}.glb`;
+      blob.entries = [{ name: blob.fileName, size: glb.byteLength }, ...images.map(i => ({ name: '  ' + i.name + '.png', size: i.data.length }))];
+      finish(target, o, blob, sc, u);
+      return blob;
+    }
+    const meta = [];
+    for (let i = 0; i < plan.length; i++) {
+      const img = plan[i];
+      progress?.(`encoding ${img.file}`, 0.32 + (0.55 * (i / plan.length)));
+      const data = await packImage(img, src);
+      const name = `${img.file}.${img.ext}`;
+      files.push({ name: root + name, data });
+      meta.push({ key: img.key, name, bits: img.bits, fmt: img.fmt || img.ext, color: img.color, role: img.role, chans: img.chans });
+    }
+    progress?.('writing helper files', 0.9);
+    if (!o.helpers) { /* helper files off: maps, README and graph only */ }
+    else if (target.startsWith('unity-')) {
+      const texGuid = {};
+      for (const m of meta) {
+        const guid = unityGuid(`${o.name}/${m.name}`);
+        texGuid[m.key] = guid;
+        files.push({ name: `${root}${m.name}.meta`, data: unityTexMeta(guid, { srgb: m.color === 'sRGB', normal: m.key === 'normal', alpha: m.chans.length === 4 && m.key === 'base' }) });
+      }
+      const mg = unityGuid(`${o.name}/${o.name}.mat`);
+      files.push({ name: `${root}${o.name}.mat`, data: unityMat(target, o, sc, u, texGuid, o.unityShaderGuid) });
+      files.push({ name: `${root}${o.name}.mat.meta`, data: matMeta(mg) });
+    } else if (target === 'unreal') {
+      files.push({ name: `${root}import_${o.name}.py`, data: unrealScript(o, sc, u, meta) });
+    } else if (target === 'godot') {
+      files.push({ name: `${root}${o.name}.tres`, data: godotTres(o, sc, u, meta, st) });
+    }
+    if (o.readme) files.push({ name: `${root}README.txt`, data: readmeText(target, o, sc, meta, { emissiveScale: u.emissiveScale, skipped }) });
+    if (o.includeGraph && S.graph) files.push({ name: `${root}${o.name}.studio.json`, data: JSON.stringify(await projectJSON({ embed: true, name: o.name }), null, 1) });
+    progress?.('zipping', 0.95);
+    const blob = await makeZip(files, { compress: o.compress, comment: `Stella Nova PBR Material Studio · ${target}` });
+    blob.fileName = blob.name = `${o.name}_${target}.zip`;
+    blob.entries = await Promise.all(files.map(async x => ({ name: x.name, size: typeof x.data === 'string' ? new TextEncoder().encode(x.data).length : x.data.length })));
+    finish(target, o, blob, sc, u);
+    return blob;
+  }, progress);
+}
+function finish(target, o, blob, sc, u) {
+  last = { target, name: blob.fileName, size: blob.size, entries: blob.entries, res: o.resolved, at: Date.now() };
+  o.onProgress?.('done', 1);
+  if (UI.box && !o.onProgress) { setProgress('done', 1); showResult(blob); }
+}
+
+/** Save a Blob as a download. */
+export function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name || blob.fileName || 'download';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
+/**
+ * Export one baked map slot as a PNG (for the map strip). Linear except the
+ * sRGB color slots; normal stays OpenGL.
+ * @param {string} slot a MAP_NAMES entry @returns {Promise<Blob>}
+ */
+export async function exportMapPNG(slot, { res = 0, bits = 8 } = {}) {
+  return withMaps(res, async maps => {
+    const src = new MapSource(maps);
+    const srgb = !!MAP_SLOTS[slot]?.srgbOnExport;
+    const chans = slot === 'height' ? gray('height', 0) : slot === 'albedo' ? baseRGB(true)
+      : [0, 1, 2, 3].map(c => (srgb && c < 3 ? ch.srgb(slot, c) : ch.s(slot, c)));
+    const png = await packImage({ chans: slot === 'normal' || slot === 'orm' || slot === 'emissive' ? chans.slice(0, 3) : chans, bits: slot === 'height' ? 16 : bits, srgbChunk: srgb }, src);
+    const b = new Blob([png], { type: 'image/png' });
+    b.fileName = `${materialName()}_${slot}.png`;
+    return b;
+  });
+}
+
+// ------------------------------------------------------------ project
+/**
+ * The studio project as JSON: graph, settings, view, env and the images the
+ * graph uses. embed true writes image assets as data URLs.
+ */
+export async function projectJSON({ embed = true, name } = {}) {
+  const graph = graphJSON();
+  const assets = {};
+  if (graph) {
+    for (const n of graph.nodes || []) {
+      for (const [k, v] of Object.entries(n.params || {})) {
+        if (!v || typeof v !== 'object' || typeof v.url !== 'string') continue;
+        if (!/^(blob:|data:)/.test(v.url)) continue;
+        const id = v.asset || IMP.assetIdForUrl(v.url) || ('a' + crc32(new TextEncoder().encode(v.url)).toString(16));
+        if (!assets[id]) {
+          assets[id] = { name: v.name || id, mime: v.mime || '' };
+          if (embed) { try { const { dataURL, mime } = await IMP.assetDataURL(v.url); assets[id].data = dataURL; assets[id].mime = mime; } catch (e) { assets[id].error = String(e.message || e); } }
+        }
+        const { url, bitmap, ...rest } = v;
+        n.params[k] = { ...rest, asset: id };
+      }
+    }
+    if (name) graph.name = name;
+  }
+  return {
+    format: 'stella-material-studio', version: 1, graphVersion: GRAPH_VERSION,
+    saved: new Date().toISOString(), name: name || graph?.name || materialName(),
+    graph, settings: { ...S.settings }, view: { ...S.view }, env: JSON.parse(JSON.stringify(S.env)),
+    scalars: scalarsNow(), assets,
+  };
+}
+/** Download the project as <name>.studio.json. */
+export async function saveProject() {
+  const j = await projectJSON({ embed: true });
+  const blob = new Blob([JSON.stringify(j)], { type: 'application/json' });
+  download(blob, `${sanitize(j.name)}.studio.json`);
+  C.store.toast(`Saved ${sanitize(j.name)}.studio.json (${fmtSize(blob.size)})`, 'ok');
+  return blob;
+}
+/** Copy the material (graph, scalars, settings, no embedded images) to the clipboard. */
+export async function copyMaterialJSON() {
+  const j = await projectJSON({ embed: false });
+  delete j.view; delete j.env;
+  const text = JSON.stringify(j, null, 2);
+  try { await navigator.clipboard.writeText(text); C.store.toast('Material JSON copied', 'ok'); }
+  catch (e) { C.store.toast('Clipboard is blocked: the JSON is in the console', 'warn'); console.log(text); }
+  return text;
+}
+
+// ------------------------------------------------------------ ui
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === undefined || v === null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'html') el.innerHTML = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of kids.flat()) if (c !== null && c !== undefined && c !== false) el.append(c.nodeType ? c : document.createTextNode(String(c)));
+  return el;
+}
+const fmtSize = n => (n > 1048576 ? (n / 1048576).toFixed(2) + ' MB' : n > 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B');
+function sel(id, options, value, on) {
+  const s = h('select', { class: 'io-sel', id });
+  for (const op of options) s.add(new Option(op.label ?? op, String(op.value ?? op)));
+  s.value = String(value);
+  s.addEventListener('change', () => on(s.value));
+  return s;
+}
+function row(label, ctl, hint) {
+  return h('label', { class: 'io-row' }, h('span', { class: 'io-k' }, label), ctl, hint ? h('span', { class: 'io-hint' }, hint) : null);
+}
+function chk(label, value, on) {
+  const c = h('input', { type: 'checkbox' }); c.checked = !!value;
+  c.addEventListener('change', () => on(c.checked));
+  return h('label', { class: 'io-chk' }, c, h('span', {}, label));
+}
+
+/**
+ * Build the export UI into `host`.
+ *   full mode: target cards, options, details, channel layout, run, project, import.
+ *   extra mode (panels.js already owns the target cards, options and the Export
+ *   button): details, channel layout, last export, project and import only.
+ *   The target then follows the panels card that is on.
+ */
+export function mountExportUI(host, { mode = 'full' } = {}) {
+  const box = h('div', { class: 'io' + (mode === 'extra' ? ' io-extra' : '') });
+  UI.mode = mode;
+  // target cards (full mode)
+  if (mode === 'full') {
+    const targets = h('div', { class: 'io-targets', role: 'radiogroup', 'aria-label': 'Export target' });
+    for (const t of EXPORT_TARGETS) {
+      const b = h('button', { type: 'button', class: 'io-target', 'data-target': t.id, role: 'radio', title: t.packing },
+        h('b', {}, t.label), h('span', {}, t.normalY === '-Y' ? 'DX normal' : 'GL normal'));
+      b.addEventListener('click', () => { OPTS.target = t.id; saveOpts(); refresh(); });
+      targets.append(b);
+    }
+    UI.targets = targets;
+    UI.packing = h('div', { class: 'io-pack' });
+    box.append(h('section', { class: 'io-sec' }, h('h4', {}, 'Target'), targets, UI.packing));
+  }
+  // options
+  UI.name = h('input', { class: 'io-in', type: 'text', placeholder: 'Material', spellcheck: 'false', maxlength: '64' });
+  UI.name.addEventListener('input', () => refreshTable());
+  const resOpts = [{ value: 0, label: 'Preview res' }, ...RES_OPTIONS.map(r => ({ value: r, label: `${r} px` }))];
+  UI.res = sel('io-res', resOpts, OPTS.res, v => { OPTS.res = +v; saveOpts(); });
+  UI.fmt = sel('io-fmt', FORMATS.map(v => ({ value: v, label: v === 'tga' ? 'TGA (RLE)' : 'PNG' })), OPTS.fmt, v => { OPTS.fmt = v; saveOpts(); refreshTable(); });
+  UI.hfmt = sel('io-hfmt', [{ value: 'png16', label: 'PNG 16-bit' }, { value: 'png8', label: 'PNG 8-bit' }, { value: 'exr', label: 'EXR half' }], OPTS.heightFmt, v => { OPTS.heightFmt = v; saveOpts(); refreshTable(); });
+  UI.nbits = sel('io-nbits', [{ value: 8, label: '8-bit' }, { value: 16, label: '16-bit' }], OPTS.normalBits, v => { OPTS.normalBits = +v; saveOpts(); refreshTable(); });
+  const optRows = mode === 'full'
+    ? h('div', { class: 'io-grid' }, row('Name', UI.name), row('Res', UI.res), row('Format', UI.fmt), row('Height', UI.hfmt), row('Normal', UI.nbits))
+    : h('div', { class: 'io-grid' }, row('Height', UI.hfmt), row('Normal', UI.nbits));
+  // target-specific
+  const txt = (key, fallback) => {
+    const el = h('input', { class: 'io-in mono', type: 'text', spellcheck: 'false' });
+    el.value = OPTS[key]; el.addEventListener('change', () => { OPTS[key] = el.value.trim() || fallback; el.value = OPTS[key]; saveOpts(); refreshTable(); });
+    return el;
+  };
+  UI.tUnity = txt('unityShaderGuid', ''); UI.tUnity.placeholder = 'blank = the default Lit GUID';
+  UI.tGodot = txt('godotRoot', DEFAULT_OPTS.godotRoot);
+  UI.tUnreal = txt('unrealDest', DEFAULT_OPTS.unrealDest);
+  UI.tTemplate = txt('template', DEFAULT_OPTS.template);
+  UI.tTemplate.addEventListener('input', () => { OPTS.template = UI.tTemplate.value || DEFAULT_OPTS.template; refreshTable(); });
+  UI.mapsBox = h('div', { class: 'io-maps' });
+  for (const [k, m] of Object.entries(PLAIN_MAPS)) {
+    UI.mapsBox.append(chk(m.label, OPTS.maps.includes(k), on => {
+      OPTS.maps = Object.keys(PLAIN_MAPS).filter(x => (x === k ? on : OPTS.maps.includes(x)));
+      saveOpts(); refreshTable();
+    }));
+  }
+  UI.specific = {
+    unity: h('div', { class: 'io-spec', 'data-for': 'unity' }, row('Shader', UI.tUnity, 'GUID; only when your pipeline differs')),
+    unreal: h('div', { class: 'io-spec', 'data-for': 'unreal' }, row('Dest', UI.tUnreal, 'content folder; {name} expands')),
+    godot: h('div', { class: 'io-spec', 'data-for': 'godot' }, row('Path', UI.tGodot, 'res:// folder of the textures')),
+    gltf: h('div', { class: 'io-spec', 'data-for': 'gltf' },
+      chk('Fold constant maps into factors', OPTS.fold, v => { OPTS.fold = v; saveOpts(); }),
+      chk('Bake height into the mesh', OPTS.displaceMesh, v => { OPTS.displaceMesh = v; saveOpts(); })),
+    png: h('div', { class: 'io-spec', 'data-for': 'png' }, row('Names', UI.tTemplate, '{name} {map} {res}'), UI.mapsBox),
+  };
+  const flags = mode === 'full' ? h('div', { class: 'io-flags' },
+    chk('Project graph', OPTS.includeGraph, v => { OPTS.includeGraph = v; saveOpts(); }),
+    chk('Helper files', OPTS.helpers, v => { OPTS.helpers = v; saveOpts(); }),
+    chk('README', OPTS.readme, v => { OPTS.readme = v; saveOpts(); }),
+    chk('Deflate', OPTS.compress !== 'store', v => { OPTS.compress = v ? 'auto' : 'store'; saveOpts(); }))
+    : h('div', { class: 'io-flags' },
+      chk('README', OPTS.readme, v => { OPTS.readme = v; saveOpts(); }),
+      chk('Deflate', OPTS.compress !== 'store', v => { OPTS.compress = v ? 'auto' : 'store'; saveOpts(); }));
+  box.append(h('section', { class: 'io-sec' }, h('h4', {}, mode === 'full' ? 'Options' : 'Package details'), optRows, ...Object.values(UI.specific), flags));
+  UI.table = h('table', { class: 'io-table' });
+  UI.tableHead = h('h4', {}, 'Channel layout');
+  box.append(h('section', { class: 'io-sec' }, UI.tableHead, h('div', { class: 'io-tablewrap' }, UI.table)));
+  // run (full) or the result list only (extra)
+  UI.bar = h('div', { class: 'io-bar' }, h('i'));
+  UI.stage = h('div', { class: 'io-stage mono' });
+  UI.result = h('div', { class: 'io-result' });
+  if (mode === 'full') {
+    UI.go = h('button', { type: 'button', class: 'io-go' }, 'Export');
+    UI.go.addEventListener('click', () => runExport());
+    box.append(h('section', { class: 'io-sec io-run' }, UI.go, UI.bar, UI.stage, UI.result));
+  } else box.append(h('section', { class: 'io-sec io-run' }, UI.bar, UI.stage, UI.result));
+  // project
+  box.append(h('section', { class: 'io-sec' }, h('h4', {}, 'Project'), h('div', { class: 'io-btns' },
+    h('button', { type: 'button', class: 'io-btn', title: 'Graph, settings, view, light and the imported images (Ctrl+S)', onclick: () => saveProject().catch(err) }, 'Save project'),
+    h('button', { type: 'button', class: 'io-btn', onclick: () => IMP.pickFiles('.json,application/json,.zip') }, 'Open project'),
+    h('button', { type: 'button', class: 'io-btn', onclick: () => copyMaterialJSON().catch(err) }, 'Copy JSON'),
+    h('button', { type: 'button', class: 'io-btn', title: 'Every baked map as PNG in one zip', onclick: () => runExport('png') }, 'All maps .zip'))));
+  const impSec = h('section', { class: 'io-sec', id: 'io-import' });
+  box.append(impSec);
+  IMP.mountImportUI?.(impSec);
+  UI.box = box;
+  host.append(box);
+  refresh();
+  return box;
+}
+const err = e => { console.error(e); C.store.toast(String(e.message || e), 'error'); };
+
+/** The active target: the panels card that is on (extra mode) or OPTS.target. */
+function activeTarget() {
+  if (UI.mode === 'extra') {
+    const cards = [...document.querySelectorAll('#export-panel .ex-card')];
+    const i = cards.findIndex(c => c.classList.contains('on'));
+    if (i >= 0 && EXPORT_TARGETS[i]) return EXPORT_TARGETS[i].id;
+  }
+  return OPTS.target;
+}
+
+function refresh() {
+  if (!UI.box) return;
+  const target = activeTarget();
+  if (UI.targets) for (const b of UI.targets.children) { const on = b.dataset.target === target; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); }
+  const t = EXPORT_TARGETS.find(x => x.id === target);
+  if (UI.packing) UI.packing.textContent = t ? `${t.packing} · normal ${t.normalY}` : '';
+  const fam = target.startsWith('unity') ? 'unity' : target;
+  for (const [k, el] of Object.entries(UI.specific)) el.hidden = k !== fam;
+  UI.fmt.disabled = target === 'gltf';
+  UI.hfmt.disabled = target === 'gltf';
+  if (UI.go) UI.go.textContent = target === 'gltf' ? 'Export .glb' : `Export ${t ? t.label : ''} .zip`;
+  if (!UI.name.value) UI.name.placeholder = graphJSON()?.name || 'Material';
+  refreshTable();
+}
+function refreshTable() {
+  if (!UI.table) return;
+  const target = activeTarget();
+  const o = { ...OPTS, name: materialName(), uvScale: S.view.uvScale || 1, normalBits: +OPTS.normalBits };
+  const plan = resolvePlan(target, o, null, scalarsNow());
+  const t = UI.table;
+  UI.tableHead.textContent = `Channel layout · ${EXPORT_TARGETS.find(x => x.id === target)?.label || target}`;
+  t.textContent = '';
+  t.append(h('tr', {}, h('th', {}, 'File'), h('th', {}, 'R'), h('th', {}, 'G'), h('th', {}, 'B'), h('th', {}, 'A'), h('th', {}, 'Bits')));
+  for (const img of plan) {
+    const cells = [0, 1, 2, 3].map(i => {
+      const c = img.chans.length === 1 ? (i < 3 ? img.chans[0] : null) : img.chans[i];
+      return h('td', { class: c ? (c.inv ? 'inv' : c.v !== undefined ? 'k' : '') : 'none' }, c ? chLabel(c).replace(' (sRGB)', '') : '—');
+    });
+    t.append(h('tr', { title: img.role },
+      h('td', { class: 'f' }, `${img.file}.${img.ext}`, img.optional || img.fold ? h('em', {}, img.fold ? ' if varied' : ' if used') : null, h('small', {}, img.role)),
+      ...cells, h('td', { class: 'b' }, img.fmt === 'exr' ? 'half' : `${img.bits}${img.color === 'sRGB' ? ' sRGB' : ''}`)));
+  }
+}
+
+function setProgress(stage, frac) {
+  if (!UI.bar) return;
+  UI.bar.firstChild.style.width = Math.round(Math.max(0, Math.min(1, frac)) * 100) + '%';
+  UI.stage.textContent = stage;
+}
+function showResult(blob, ms) {
+  if (!UI.result) return;
+  UI.result.textContent = '';
+  UI.result.append(h('div', { class: 'io-res-head' }, h('b', {}, blob.fileName), ` ${fmtSize(blob.size)} · ${last.res}²${ms ? ` · ${(ms / 1000).toFixed(1)} s` : ''}`),
+    h('ul', {}, blob.entries.map(e => h('li', {}, h('span', {}, e.name), h('i', {}, fmtSize(e.size))))));
+}
+/** Export with the panel options and download the result. */
+async function runExport(target = activeTarget()) {
+  if (busy) return;
+  busy = true;
+  document.body.classList.add('io-busy');
+  if (UI.go) UI.go.disabled = true;
+  const t0 = performance.now();
+  try {
+    const blob = await exportPackage(target, { onProgress: setProgress });
+    download(blob, blob.fileName);
+    const ms = performance.now() - t0;
+    C.store.toast(`Exported ${blob.fileName} · ${fmtSize(blob.size)} · ${(ms / 1000).toFixed(1)} s`, 'ok');
+    showResult(blob, ms);
+  } catch (e) { err(e); setProgress('failed: ' + (e.message || e), 0); }
+  finally { busy = false; document.body.classList.remove('io-busy'); if (UI.go) UI.go.disabled = false; }
+}
+
+function topbar() {
+  const tb = C.$('tb-file');
+  if (!tb) return;
+  tb.append(h('span', { class: 'io-tb' },
+    h('button', { type: 'button', class: 'tb-btn', title: 'Open a project, graph, maps or a zip (Ctrl+O)', onclick: () => IMP.pickFiles() }, 'Open'),
+    h('button', { type: 'button', class: 'tb-btn', title: 'Save the project as .studio.json (Ctrl+S)', onclick: () => saveProject().catch(err) }, 'Save'),
+    h('button', { type: 'button', class: 'tb-btn', title: 'Import texture maps as image nodes', onclick: () => IMP.pickFiles('image/*,.zip,.tga') }, 'Import'),
+    h('button', { type: 'button', class: 'tb-btn', title: 'Export with the Export tab options (Ctrl+E)', onclick: () => { showExportTab(); runExport(); } }, 'Export')));
+}
+function showExportTab() { C.$('side-tabs')?.querySelector('button[data-tab="export"]')?.click(); }
+
+/**
+ * Put the UI in place after every module ran init. panels.js may own
+ * #export-panel (target cards) and #tb-file (File menu). Then this module
+ * adds only the extra block, and a MutationObserver puts it back each time
+ * panels re-renders the pane with replaceChildren.
+ */
+function placeUI() {
+  const host = C.$('export-panel');
+  if (!host || UI.box) return;
+  const panelsOwns = !!host.querySelector('.ex-cards') || typeof C.modules.panels?.api?.renderExport === 'function';
+  host.classList.add('io-host');
+  mountExportUI(host, { mode: panelsOwns ? 'extra' : 'full' });
+  if (panelsOwns) {
+    new MutationObserver(() => {
+      if (!host.contains(UI.box)) host.append(UI.box);
+      refresh();
+    }).observe(host, { childList: true });
+  }
+  const tb = C.$('tb-file');
+  if (tb && !tb.children.length) topbar();
+}
+
+// ------------------------------------------------------------ selfTest / init
+/** Quick checks that need no bake: codecs, zip, glb, GUIDs, plans. */
+export async function selfTest() {
+  const out = { ok: true, checks: {} };
+  const ok = (k, v) => { out.checks[k] = v; if (!v) out.ok = false; };
+  ok('crc32', crc32(new TextEncoder().encode('123456789')) === 0xcbf43926);
+  const px = new Uint8Array([0, 0, 0, 0, 255, 128, 7, 3, 1, 2, 3, 255, 9, 9, 9, 9]);
+  const png = await encodePNG({ width: 2, height: 2, channels: 4, data: px });
+  const back = await decodePNG(png);
+  ok('png8 alpha 0 keeps rgb', back.data.every((v, i) => v === px[i]));
+  const zipped = await makeZip([{ name: 'a.txt', data: 'x'.repeat(500) }, { name: 'b.png', data: png }]);
+  const entries = await readZip(zipped);
+  ok('zip roundtrip', entries.length === 2 && entries[0].data.length === 500);
+  const glb = buildGLB({ mesh: uvSphere(8), images: [{ data: png }], material: { name: 't', pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } });
+  const pg = parseGLB(glb);
+  ok('glb parse', pg.json.asset.version === '2.0' && pg.json.images.length === 1);
+  ok('unity guid', /^[0-9a-f]{32}$/.test(unityGuid('x')) && unityGuid('x') === unityGuid('x'));
+  ok('plans', EXPORT_TARGETS.every(t => PLANS[t.id] && resolvePlan(t.id, { ...OPTS, name: 'T', uvScale: 1 }, null, DEFAULT_SCALARS).length > 0));
+  out.maps = !!S.maps;
+  out.last = last && { target: last.target, name: last.name, size: last.size };
+  return out;
+}
 
 /** @param {object} ctx main.js module context */
-export async function init(ctx) {}
+export async function init(ctx) {
+  C = ctx; S = ctx.store.state;
+  // panels.js inits after this module, so place the UI once every init ran
+  ctx.store.on('boot:done', () => { try { placeUI(); } catch (e) { console.error('[export] UI', e); } });
+  ctx.store.on('graph:changed', () => { if (UI.name && !UI.name.value) UI.name.placeholder = graphJSON()?.name || 'Material'; });
+  ctx.store.on('view:changed', () => refreshTable());
+  // Capture phase on window: Ctrl+S saves the full project (graph plus the
+  // embedded images) and Ctrl+O opens any file kind. Both are supersets of the
+  // panels.js graph-JSON shortcuts, which skip a defaultPrevented event.
+  window.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented) return;
+    const k = e.key.toLowerCase();
+    if (k === 's') { e.preventDefault(); saveProject().catch(err); }
+    else if (k === 'o') { e.preventDefault(); IMP.pickFiles(); }
+    else if (k === 'e' && UI.mode === 'full') { e.preventDefault(); showExportTab(); }
+  }, true);
+  ctx.register('io', {
+    exportPackage, exportMapPNG, download, saveProject, copyMaterialJSON, projectJSON, scalarsNow,
+    readTexture, runExport, unityGuid, PLAIN_MAPS, FORMATS, mountExportUI,
+    options: () => ({ ...OPTS }), setOptions: p => { Object.assign(OPTS, p); saveOpts(); refresh(); },
+    get last() { return last; },
+    importFiles: IMP.importFiles, importMaps: IMP.importMaps, loadProject: IMP.loadProject,
+    roleFromName: IMP.roleFromName, detectNormalConvention: IMP.detectNormalConvention,
+    serverStatus: IMP.serverStatus, imageToPBR: IMP.imageToPBR,
+    async selfTest() { const a = await selfTest(); const b = await IMP.selfTest(); return { ok: a.ok && b.ok, export: a, import: b }; },
+  });
+}
