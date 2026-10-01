@@ -44,29 +44,9 @@
 // ============================================================================
 import { OUTPUT_TYPE, MATERIAL_INPUTS, MATERIAL_PARAMS } from '../contract.js';
 
+import { fP, cP, v2P, v3P, nP, tP, UVIN, IN_C, O, S, I, E, B, K, V, SEED, ix, sd, lp, def, pass, defs } from './core/build.js';
+
 // ------------------------------------------------------------ helpers
-const fP = (id, label, d = 0) => ({ id, label, type: 'float', default: d });
-const cP = (id, label, d = [0.5, 0.5, 0.5]) => ({ id, label, type: 'color', default: d });
-const v2P = (id, label, d = [0, 0]) => ({ id, label, type: 'vec2', default: d });
-const v3P = (id, label, d = [0, 0, 0]) => ({ id, label, type: 'vec3', default: d });
-const nP = (id, label) => ({ id, label, type: 'normal', default: [0, 0, 1] });
-const tP = (id, label) => ({ id, label, type: 'texture', default: [0, 0, 0, 1] });
-const UVIN = { id: 'uv', label: 'UV', type: 'vec2', default: 'uv' };
-const O = (id, label, type, swizzle) => (swizzle ? { id, label, type, swizzle } : { id, label, type });
-
-const S = (id, label, min, max, d, step) => ({ id, label, kind: 'slider', min, max, step: step ?? (max - min > 20 ? 1 : 0.001), default: d });
-const I = (id, label, min, max, d) => ({ id, label, kind: 'int', min, max, step: 1, default: d });
-const E = (id, label, options, d) => ({ id, label, kind: 'enum', options, default: d ?? options[0] });
-const B = (id, label, d = false) => ({ id, label, kind: 'bool', default: d });
-const K = (id, label, d) => ({ id, label, kind: 'color', default: d });
-const V = (id, label, d, min = -1, max = 1) => ({ id, label, kind: 'vec2', min, max, step: 0.001, default: d });
-const SEED = I('seed', 'Seed', 0, 9999, 0);
-
-const ix = (c, id, list) => Math.max(0, list.indexOf(c.values[id]));
-const sd = c => `(${c.seed} + ${c.params.seed})`;
-/** Linked input or the param that stands in for it. */
-const lp = (c, inp, par) => (c.linked && c.linked[inp] ? c.inputs[inp] : c.params[par]);
-
 /** Emit the period lets for a noise node and return the vec2i name. */
 function per(c) {
   const u = c.uid, p = c.params;
@@ -74,17 +54,6 @@ function per(c) {
   c.let(`let ${u}_per = vec2i(${u}_sx, select(max(i32(round(${p.scaleY})), 1), ${u}_sx, ${p.scaleY} < 0.5));`);
   return `${u}_per`;
 }
-
-const NODES_ = [];
-function def(type, label, category, inputs, outputs, params, body, doc, extra = {}) {
-  const d = { type, label, category, inputs, outputs, params, doc, ...extra };
-  if (typeof body === 'function') d.expr = body;
-  else if (body && body.wgsl) d.pass = { inputsAsTextures: true, ...body };
-  else if (body && body.expand) d.expand = body.expand;
-  NODES_.push(d);
-  return d;
-}
-const pass = wgsl => ({ wgsl });
 
 // ------------------------------------------------------------ output
 def(OUTPUT_TYPE, 'Material Output', 'Output',
@@ -510,7 +479,6 @@ def('pattern.splatter', 'Splatter', 'Pattern', [cP('pattern', 'Pattern', [1, 1, 
   'Many stamps per cell at random positions and angles.', { tags: ['scatter', 'pebbles', 'leaves'] });
 
 // ------------------------------------------------------------ filter
-const IN_C = cP('in', 'Input', [0.5, 0.5, 0.5]);
 const AXES = ['x', 'y'];
 def('filter.gaussian1d', 'Blur 1D', 'Filter', [IN_C], [O('out', 'Output', 'color')],
   [E('axis', 'Axis', AXES), S('radius', 'Radius', 0, 0.25, 0.01, 0.0005)],
@@ -1251,7 +1219,7 @@ def('material.layer', 'Material Layer Mix', 'Output',
   }, 'Blend two full materials (color, roughness, metallic, normal, height) by a mask.', { tags: ['layer', 'blend', 'mix'] });
 
 /** @type {import('../contract.js').NodeDef[]} */
-export const NODES = NODES_;
+export const NODES = defs;
 
 /** Category -> count, for the self test and the library header. */
 export function catalogSummary() {
