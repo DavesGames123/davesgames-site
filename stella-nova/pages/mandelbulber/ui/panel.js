@@ -25,7 +25,7 @@ import { openPicker } from './picker.js';
 import { openExamples, randomExample } from './preset-sheet.js';
 import { resizeCanvas } from './layout.js';
 import { toggleFly } from './fly.js';
-import { savePng } from '../main.js';
+import { savePng } from './loop.js';
 
 // Main params shown in the panel. A row is skipped when gen/params.json does
 // not list its name. `c` picks one component of a vector param.

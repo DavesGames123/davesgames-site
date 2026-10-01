@@ -11,7 +11,7 @@
 import { $, stage, hud } from './dom.js';
 import { engine, info, targetSamples } from './state.js';
 import { progressEl, sampleLine } from './panel.js';
-import { renderPaused } from '../main.js';
+import { renderPaused } from './loop.js';
 
 export let compileStatus = '';
 let flashText = '', flashUntil = 0;

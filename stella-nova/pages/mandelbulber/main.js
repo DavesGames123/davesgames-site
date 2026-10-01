@@ -35,12 +35,12 @@
 //       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
 
 import { defaultScene, parseFract } from './fract.js';
-import { $, canvas, panel, picker, exSheet, download } from './ui/dom.js';
+import { $, canvas } from './ui/dom.js';
 import { P, CAT, EXAMPLES, COLLECTIONS, isNone, loadData } from './ui/data.js';
-import { scene, activeSlot, engine, info, setScene, setEngine, setInfo, formulaAt, targetSamples, renderScale, pixelRatio } from './ui/state.js';
-import { compileStatus, setStatus, flash, msPerSample, setMsPerSample, showHud, fail } from './ui/hud.js';
+import { scene, activeSlot, engine, info, setScene, setEngine, targetSamples, renderScale, pixelRatio } from './ui/state.js';
+import { compileStatus, setStatus, showHud, fail } from './ui/hud.js';
 import { camFromScene, camToScene, frameView } from './ui/camera.js';
-import { sceneDirty, setMain, setSlot, loadScene, pushScene } from './ui/scene.js';
+import { setMain, setSlot, loadScene } from './ui/scene.js';
 import { initTip } from './ui/controls.js';
 import {  } from './ui/thumbs.js';
 import { loadText, exportText, initIo, shareHash, decodeShare, readHash } from './ui/io.js';
@@ -49,12 +49,13 @@ import { buildPanel, initPeek } from './ui/panel.js';
 import { openPicker, choose, initPicker } from './ui/picker.js';
 import { syncViewport, initSheets } from './ui/sheets.js';
 import { randomExample, openExamples, closeExamples, initPresetSheet } from './ui/preset-sheet.js';
-import { L, sheetDragging, applyLayout, initLayout, snapTo, togglePanel,
+import { L, applyLayout, initLayout, snapTo, togglePanel,
   observeCanvas } from './ui/layout.js';
 import { initSheetDrag } from './ui/sheet-drag.js';
-import { fly, toggleFly, flyStep, initFly } from './ui/fly.js';
-import { inertia, inertiaStep, initPointer } from './ui/pointer.js';
+import { fly, toggleFly, initFly } from './ui/fly.js';
+import { inertia, initPointer } from './ui/pointer.js';
 import { initKeys } from './ui/keys.js';
+import { tick } from './ui/loop.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -87,52 +88,10 @@ initPeek();
 applyLayout();
 syncViewport();
 
-// No render work while nobody can see it: a sheet drag, a full sheet, a full-screen list.
-export function renderPaused() {
-  if (saveRequested) return false;
-  if (sheetDragging) return true;
-  if (L.mode === 'sheet' && L.snap === 'full' && !panel.classList.contains('hidden')) return true;
-  return L.mode !== 'float' && (!picker.classList.contains('hidden') || !exSheet.classList.contains('hidden'));
-}
-
 // ─── keys ───────────────────────────────────────────────────────────────────
 initKeys();
 // ─── status ─────────────────────────────────────────────────────────────────
 // ─── frame loop ─────────────────────────────────────────────────────────────
-let saveRequested = false;
-export function savePng() { if (!engine) return flash('no renderer: nothing to save'); saveRequested = true; }
-
-let lastT = performance.now(), lastFrameT = 0, hudT = 0;
-function tick(now) {
-  requestAnimationFrame(tick);
-  const dt = Math.min((now - lastT) / 1000, 0.1);
-  lastT = now;
-  if (document.hidden || !engine) return;
-  flyStep(dt);
-  inertiaStep(dt);
-  if (now - hudT > 150) { hudT = now; showHud(); }
-  if (renderPaused()) { lastFrameT = 0; return; }
-  if (sceneDirty) pushScene();
-  const want = !info || info.compiling || (info.samples < targetSamples.value && !info.done);
-  if (want || saveRequested) {
-    try {
-      const t0 = performance.now();
-      const r = engine.frame();
-      if (r) setInfo(r);
-      const st = engine.stats?.();
-      if (st && Number.isFinite(st.lastSampleMs) && st.lastSampleMs > 0) setMsPerSample(st.lastSampleMs);
-      else if (lastFrameT && !info?.compiling) setMsPerSample(msPerSample ? msPerSample * 0.85 + (t0 - lastFrameT) * 0.15 : t0 - lastFrameT);
-      lastFrameT = t0;
-    } catch (e) { setStatus(`error: ${e.message}`); console.error(e); }
-    if (saveRequested && (info?.samples ?? 0) > 0) {   // wait for one full sample; the canvas keeps the last presented image
-      saveRequested = false;
-      const f = formulaAt(0);
-      const name = `mandelbulber-${isNone(f) ? 'scene' : f.id}-${info?.samples ?? 0}spp.png`;
-      canvas.toBlob((b) => (b ? (download(b, name), flash(`saved ${name}`)) : flash('save failed')), 'image/png');
-    }
-  } else lastFrameT = 0;
-}
-
 // ─── boot ───────────────────────────────────────────────────────────────────
 async function boot() {
   await loadData();
