@@ -3,180 +3,136 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>Ship Designer // Stella Nova</title>
 <!--
-  ═══════════════════════════════════════════════════════════════════════════
+  ===========================================================================
    SHIP DESIGNER  ·  page shell
-  ───────────────────────────────────────────────────────────────────────────
-   Static frame for the livery painter. main.js owns three canvases here: the
-   #previewCanvas sprite, the two HSV pickers per colour, and the #simCanvas
-   asteroid field. The colour fields and preset grid all feed the two colours
-   the compositor tints the ship with.
+  ---------------------------------------------------------------------------
+   The livery painter. main.js loads the three ship-livery layers (hull,
+   cockpit, accents) and their tint masks from media/sprites/ship-livery/.
+   It paints the layers with three colours and shows the result in the hero
+   card and in a fleet of ships that fly on a 2D canvas.
 
-   LAYOUT  (# marks an element id)
-     ┌───────────────────────────────────────────────────────────────┐
-     │ hero copy                                                      │
-     ├───────────────────────────────────────────────────────────────┤
-     │ #liveryPresets  swatch pairs (built by initPresets)            │
-     ├──────────────────────────────┬────────────────────────────────┤
-     │ designer-panel               │ sim-panel                      │
-     │  #previewCanvas  the sprite  │  #simCanvas  live field         │
-     │  hull colour  cpick + HSV    │  zoom / pause / ship-size       │
-     │  accent colour  cpick + HSV  │                                 │
-     │  composite layer legend      │                                 │
-     └──────────────────────────────┴────────────────────────────────┘
+   LAYOUT
+     desktop (> 900 px)  .stage (hero card, fleet card)  |  #panel (tabs)
+     phone   (<= 900 px) .stage in one column; #panel is a bottom sheet with
+                         a grip. A tap on a tab opens the sheet.
 
    SECTION MAP   (jump with grep -n "<anchor>" index.html)
-     preset grid ...... id=liveryPresets  filled by initPresets()
-     preview .......... id=previewCanvas  composited sprite
-     hull picker ...... id=cpickBody      hex/rgb/native + HSV
-     accent picker .... id=cpickAccent    hex/rgb/native + HSV
-     hsv canvases ..... id=bodySvCanvas   SV square and hue strip
-     layer legend ..... class=layer-info  the composite stack, top to bottom
-     simulation ....... id=simCanvas      asteroid field preview
-     sim controls ..... class=sim-controls  zoom, pause, ship size
-  ═══════════════════════════════════════════════════════════════════════════
+     header actions ..... id="btnPng"        PNG export, copy link
+     hero preview ....... id="shipCanvas"    the painted ship, 512 x 512
+     fleet canvas ....... id="fleetCanvas"   the flying fleet
+     fleet head ......... id="fleetMode"     wander / formation, pause
+     control panel ...... id="panel"         tabs, grip on phones
+     livery presets ..... id="presetGrid"    filled by buildPresets()
+     paint tab .......... id="channels"      hull / trim / accent picker
+     trim pattern ....... id="trimSeg"       where the trim colour goes
+     fleet tab .......... id="shipCount"     count, size, speed, trails
+  ===========================================================================
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="grid-bg"></div>
-<div id="app">
-<div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Ship Designer</span></div>
-  <div class="topbar-r"><span>SYS // <strong>LIVERY</strong></span></div>
-</div>
-<div class="hero">
-  <div class="hero-sub">Ship Systems // Livery Designer</div>
-  <div class="hero-title">Paint Your <em>Wings</em>: with assets by Nisha Sposato</div>
-  <div class="hero-body">
-    Every ship in Stella Nova is built from <strong>layered composites</strong> &mdash; a greyscale hull,
-    accent plating, and a reinforced cockpit canopy. Choose your <strong>hull color</strong> and <strong>accent trim</strong>
-    to create a unique livery. The simulation below shows your design in action across an asteroid field.
+
+<header class="top">
+  <div class="brand">
+    <div class="kicker">Stella Nova · Shipyard</div>
+    <h1>Ship <em>Designer</em></h1>
   </div>
-</div>
-
-<!-- Preset gallery. #liveryPresets is empty; initPresets() fills it with one
-     swatch pair per livery, each applying its two colours on click. -->
-<div class="livery-gallery">
-  <div class="panel">
-    <div class="panel-head">
-      <span class="panel-badge" style="color:var(--yellow)">Liveries</span>
-      <span class="panel-title">Choose Your Livery</span>
-      <span style="font-size:0.34rem;color:var(--text-faint);margin-left:auto;letter-spacing:0.1em;text-transform:uppercase">Click to apply</span>
-    </div>
-    <div class="panel-body">
-      <div class="livery-grid" id="liveryPresets"></div>
-    </div>
+  <div class="actions">
+    <button class="btn ghost" id="btnLink" type="button" aria-label="Copy a link to this livery">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>Copy link</span>
+    </button>
+    <button class="btn gold" id="btnPng" type="button" aria-label="Download the painted ship as PNG">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Export PNG</span>
+    </button>
   </div>
-</div>
+</header>
 
-<div class="main-layout">
-  <div class="designer-panel">
-    <div class="panel">
-      <div class="panel-head">
-        <span class="panel-badge" style="color:var(--yellow)">Preview</span>
-        <span class="panel-title">Ship Preview</span>
-      </div>
-      <div class="panel-body">
-        <!-- The composited sprite; compositeShip() draws here at 512x512. -->
-        <div class="preview-wrap"><canvas id="previewCanvas" width="512" height="512"></canvas></div>
-
-        <!-- Hull colour controls: swatch + native picker, hex and RGB fields,
-             and the HSV square/hue strip. All are kept in sync by setBody(). -->
-        <div class="color-section">
-          <div class="color-label">Hull Color</div>
-          <div class="cpick" id="cpickBody">
-            <div class="cpick-swatch">
-              <div class="cpick-swatch-bg" id="bodySwatchBg"></div>
-              <input type="color" id="bodyNativePicker" value="#1a6b3a">
-            </div>
-            <div class="cpick-fields">
-              <div class="cpick-hex-row">
-                <span class="cpick-hex-label">HEX</span>
-                <input type="text" class="cpick-hex-input" id="bodyHexInput" value="#1A6B3A" maxlength="7" spellcheck="false">
-              </div>
-              <div class="cpick-rgb-row">
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="bodyR" min="0" max="255" value="26"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="bodyG" min="0" max="255" value="107"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="bodyB" min="0" max="255" value="58"></div>
-              </div>
-            </div>
-          </div>
-          <div class="hsv-wrap">
-            <div class="hsv-sv-wrap" id="bodySvWrap"><canvas id="bodySvCanvas"></canvas><div class="hsv-sv-cursor" id="bodySvCursor"></div></div>
-            <div class="hsv-hue-wrap" id="bodyHueWrap"><canvas id="bodyHueCanvas"></canvas><div class="hsv-hue-cursor" id="bodyHueCursor"></div></div>
-          </div>
+<main class="layout">
+  <section class="stage">
+    <!-- Hero preview. paint() draws the full-size ship here. -->
+    <div class="card hero" id="hero">
+      <div class="hero-glow" id="heroGlow"></div>
+      <canvas id="shipCanvas" width="512" height="512" aria-label="Painted ship preview"></canvas>
+      <div class="hero-meta">
+        <div>
+          <div class="label">Livery</div>
+          <div class="livery-name" id="liveryName">Custom</div>
         </div>
+        <div class="hero-chips" id="heroChips"></div>
+      </div>
+      <div class="credit">Ship art by Nisha Sposato</div>
+    </div>
 
-        <!-- Accent colour controls: identical layout, kept in sync by setAccent(). -->
-        <div class="color-section">
-          <div class="color-label">Accent Trim</div>
-          <div class="cpick" id="cpickAccent">
-            <div class="cpick-swatch">
-              <div class="cpick-swatch-bg" id="accentSwatchBg"></div>
-              <input type="color" id="accentNativePicker" value="#b8901e">
-            </div>
-            <div class="cpick-fields">
-              <div class="cpick-hex-row">
-                <span class="cpick-hex-label">HEX</span>
-                <input type="text" class="cpick-hex-input" id="accentHexInput" value="#B8901E" maxlength="7" spellcheck="false">
-              </div>
-              <div class="cpick-rgb-row">
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="accentR" min="0" max="255" value="184"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="accentG" min="0" max="255" value="144"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="accentB" min="0" max="255" value="30"></div>
-              </div>
-            </div>
-          </div>
-          <div class="hsv-wrap">
-            <div class="hsv-sv-wrap" id="accentSvWrap"><canvas id="accentSvCanvas"></canvas><div class="hsv-sv-cursor" id="accentSvCursor"></div></div>
-            <div class="hsv-hue-wrap" id="accentHueWrap"><canvas id="accentHueCanvas"></canvas><div class="hsv-hue-cursor" id="accentHueCursor"></div></div>
-          </div>
+    <!-- Fleet. fleet.frame() draws the ships here while the card is on screen. -->
+    <div class="card fleet">
+      <div class="card-head">
+        <h2>Fleet</h2>
+        <div class="seg" id="fleetMode" role="group" aria-label="Flight mode">
+          <button type="button" data-mode="wander" class="on">Wander</button>
+          <button type="button" data-mode="formation">Formation</button>
         </div>
+        <button class="chip-btn" id="btnPause" type="button" aria-pressed="false">Pause</button>
+      </div>
+      <div class="fleet-wrap" id="fleetWrap"><canvas id="fleetCanvas" aria-label="Fleet flying with this livery"></canvas></div>
+    </div>
+  </section>
 
+  <aside class="panel" id="panel" aria-label="Livery controls">
+    <div class="grip" id="grip" role="button" tabindex="0" aria-label="Open or close the controls"><span></span></div>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="liveries" class="on">Liveries</button>
+      <button type="button" role="tab" data-tab="paint">Paint</button>
+      <button type="button" role="tab" data-tab="fleet">Fleet</button>
+    </nav>
 
-        <!-- Static legend of the composite stack, listed top layer first; it
-             mirrors the layer order compositeShip() draws in main.js. -->
-        <div class="layer-info">
-          <div class="color-label" style="margin-bottom:4px">Composite Layers</div>
-          <div class="layer-row"><span class="layer-dot" style="background:var(--yellow)"></span><span class="layer-name">Accent Spot Color</span><span class="layer-mode">Overlay</span></div>
-          <div class="layer-row"><span class="layer-dot" style="background:#aaa"></span><span class="layer-name">Accents (Greyscale)</span><span class="layer-mode">Normal</span></div>
-          <div class="layer-row"><span class="layer-dot" style="background:var(--blue)"></span><span class="layer-name">Cockpit / Greys</span><span class="layer-mode">Normal &bull; Locked</span></div>
-          <div class="layer-row"><span class="layer-dot" style="background:var(--green)"></span><span class="layer-name">Body Spot Color</span><span class="layer-mode">Overlay</span></div>
-          <div class="layer-row"><span class="layer-dot" style="background:#888"></span><span class="layer-name">Base Ship (Greyscale)</span><span class="layer-mode">Normal</span></div>
+    <div class="tab-body" data-body="liveries">
+      <div class="preset-grid" id="presetGrid"></div>
+    </div>
+
+    <div class="tab-body" data-body="paint" hidden>
+      <div class="channels" id="channels" role="radiogroup" aria-label="Colour to edit">
+        <button type="button" data-ch="hull" class="on"><i></i><span>Hull</span></button>
+        <button type="button" data-ch="trim"><i></i><span>Trim</span></button>
+        <button type="button" data-ch="accent"><i></i><span>Accent</span></button>
+      </div>
+      <div class="picker" id="picker">
+        <div class="sv" id="sv"><i class="knob"></i></div>
+        <div class="hue" id="hue"><i class="knob"></i></div>
+        <div class="hexrow">
+          <span class="swatch" id="curSwatch"></span>
+          <label class="hex"><span>HEX</span><input id="hexInput" type="text" maxlength="7" spellcheck="false" autocomplete="off" inputmode="text"></label>
         </div>
+        <div class="quick" id="quick"></div>
+      </div>
+      <div class="field-label">Trim pattern</div>
+      <div class="seg wrap" id="trimSeg" role="group" aria-label="Trim pattern"></div>
+      <div class="row-btns">
+        <button class="chip-btn" id="btnSwap" type="button">Swap hull and accent</button>
+        <button class="chip-btn" id="btnRandom" type="button">Random</button>
       </div>
     </div>
-  </div>
 
-  <!-- Simulation panel. #simCanvas is drawn by the render loop; the controls
-       below drive zoom, pause, and the ship-size scale. -->
-  <div class="sim-panel">
-    <div class="panel">
-      <div class="panel-head">
-        <span class="panel-badge" style="color:var(--blue)">Live</span>
-        <span class="panel-title">Asteroid Field Simulation</span>
-      </div>
-      <div class="panel-body" style="padding:0">
-        <div class="sim-canvas-wrap" id="simWrap"><canvas id="simCanvas"></canvas></div>
-      </div>
+    <div class="tab-body" data-body="fleet" hidden>
+      <label class="slider"><span>Ships <b id="shipCountVal">24</b></span><input type="range" id="shipCount" min="4" max="40" step="1" value="24"></label>
+      <label class="slider"><span>Ship size <b id="shipSizeVal">44 px</b></span><input type="range" id="shipSize" min="24" max="80" step="2" value="44"></label>
+      <label class="slider"><span>Speed <b id="shipSpeedVal">1.0x</b></span><input type="range" id="shipSpeed" min="0.2" max="2" step="0.1" value="1"></label>
+      <label class="toggle"><input type="checkbox" id="trails" checked><span>Engine glow</span></label>
+      <p class="hint">Drag on the fleet to push the ships. The fleet stops when it is off screen.</p>
     </div>
-    <div class="sim-controls">
-      <span class="zoom-label">Zoom:</span>
-      <button class="sim-btn" onclick="simZoom(0.8)">&#8722;</button>
-      <button class="sim-btn" onclick="simZoom(1.25)">+</button>
-      <button class="sim-btn" onclick="simZoom('reset')">Reset</button>
-      <button class="sim-btn" id="pauseBtn" onclick="togglePause()">Pause</button>
-      <div class="ship-slider-wrap"><span class="ship-slider-label">Ship Size:</span><input type="range" class="ship-slider" id="shipSizeSlider" min="1" max="8" step="0.25" value="3"><span class="ship-slider-val" id="shipSizeVal">1.5x</span></div>
-      <span class="sim-info">50 ships &bull; scroll to zoom</span>
-    </div>
-  </div>
-</div>
-</div>
+  </aside>
+</main>
 
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="../../lib/game-data/catalog.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
