@@ -13,6 +13,7 @@ export const CALIBRES = [
   { id: 'automatic', name: 'Automatic', kind: 'Wristwatch', era: 'c. 1950 – today' },
   { id: 'verge', name: 'Verge Fusee', kind: 'Pocket watch', era: 'London, c. 1780' },
   { id: 'cylinder', name: 'Cylinder', kind: 'Pocket watch', era: 'Lépine, c. 1850' },
+  { id: 'detent', name: 'Detent Chronometer', kind: 'Marine chronometer', era: 'Earnshaw, c. 1780' },
 ];
 export const metaById = id => CALIBRES.find(c => c.id === id);
 const cache = new Map();
