@@ -548,7 +548,7 @@ const staffC=$('staffCanvas'),staffX=staffC.getContext('2d');
 let staffDirty=true;
 // Clear button: reset the log, tally, and dominant votes, then repaint empty.
 $('clearStaff').addEventListener('click',()=>{
-  chordLog.length=0;
+  chordLog.length=0;pendingLog=false;
   for(const k in tally)delete tally[k];
   for(const k in domScores)delete domScores[k];
   domKey=null;renderDominant();

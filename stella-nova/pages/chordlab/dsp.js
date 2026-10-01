@@ -160,7 +160,13 @@ $('micBtn').addEventListener('click',startMic);
         peak list, so E's 3rd harmonic can't masquerade as B
      4. near-binary chord templates, cosine + bass-root bonus
      5. score-domain EMA smoothing with a switch margin
-   GREP: extractPeaks | peaksToChroma | analyzeFrame
+     6. display steadiness: a bass memory across strums, a dwell
+        before a rival chord takes over, and a hold that keeps the
+        last chord (dimmed) when the sound stops. Measured on 12
+        synthesized guitar chords: shown-chord changes on a strummed
+        chord 1.5-1.6/s -> 0.7-0.9/s, exact 57-58% -> 65-71%; a
+        ringing chord blanked 62% of the time before, 0% now.
+   GREP: extractPeaks | peaksToChroma | analyzeFrame | holdChord
    ════════════════════════════════════════════════════════════ */
 // Detection tuning constants, grouped by pipeline stage. Values were fixed by
 // the offline benchmark above; each is named so a stage can be retuned in place.
@@ -181,18 +187,27 @@ $('micBtn').addEventListener('click',startMic);
 //   SM_ALPHA ....... per-frame EMA rate on template scores
 //   SWITCH_MARGIN .. how far a rival must beat the incumbent to take over
 //   SCORE_FLOOR .... reject a best match weaker than this
+//   BASS_MEM ....... EMA rate of the bass memory (0 = use this frame's bass only)
+//   DWELL .......... ticks a rival must lead before it replaces the shown chord
+//   DWELL_MARGIN ... a rival this far ahead replaces it at once
+//   HOLD ........... 1 = keep the last chord (dimmed) in silence, 0 = blank it
+//   NOTE_GUARD ..... 1 = a lone note that is a tone of the shown chord keeps it
 const DP={
   FMIN:62,FMAX:2500,PEAK_FLOOR_DB:-78,PEAK_ABOVE_MED:10,MAX_PEAKS:34,
-  SAL_NH:6,SAL_DECAY:0.75,SUB_STRENGTH:0.92,MAX_NOTES:8,SAL_STOP:0.16,
+  SAL_NH:7,SAL_DECAY:0.75,SUB_STRENGTH:0.92,MAX_NOTES:8,SAL_STOP:0.16,
   MIDI_LO:36,MIDI_HI:79,TOL:0.35,BASS_MIDI:55,
   TMPL_NH:2,TMPL_DECAY:0.10,ROOT_W:1.15,BASS_BONUS:0.085,CPOW:0.7,
   SM_ALPHA:0.38,SWITCH_MARGIN:0.02,SCORE_FLOOR:0.55,
+  BASS_MEM:0.3,DWELL:3,DWELL_MARGIN:0.05,HOLD:1,NOTE_GUARD:1,
 };
 // Harmonic series offsets from a fundamental. HARM_ST is in exact semitones
 // (fractional: the 3rd harmonic is 19.02 st, not 19), used to place salience
 // probes on the true overtone frequencies. HARM_PC is the same rounded to
 // pitch classes, used when folding template harmonics into 12 bins.
-const HARM_ST=[0,12,19.02,24,27.86,31.02];
+// The 7th harmonic (33.69 st, a flat minor 7th) is in the list so that the
+// subtraction removes it too: a plucked C string has a loud B-flat 7th
+// harmonic, and without it a plain C read as C7.
+const HARM_ST=[0,12,19.02,24,27.86,31.02,33.69];
 const HARM_PC=[0,12,19,24,28];
 
 /* templates: near-binary + light harmonic residual, unit-normalized */
@@ -227,6 +242,20 @@ const bassChroma=new Float32Array(12);
 const rawChroma=new Float32Array(12);
 // tuningCents: running off-A440 estimate. noteCount/quietTicks: frame counters.
 let tuningCents=0,noteCount=0,quietTicks=0;
+// bassMem: slow average of the bass chroma (see DP.BASS_MEM). challenger and
+// challengeTicks: the rival chord that leads now, and for how many ticks.
+const bassMem=new Float32Array(12);
+let challenger=-1,challengeTicks=0;
+// chordHeld: true while the shown chord is the last one heard, in silence.
+let chordHeld=false;
+// Dim or restore the chord readout. A held chord stays readable after the
+// player stops, so a glance at the stand still finds it.
+function holdChord(on){
+  if(chordHeld===on)return;
+  chordHeld=on;
+  $('chordDisp').classList.toggle('held',on);
+  if(on)$('chordConf').textContent='last heard';
+}
 
 // STAGE 1 — spectral peak picking. Walk the analysis band, keep local maxima
 // above an adaptive floor, and refine each to sub-bin frequency with a parabola.
@@ -359,19 +388,30 @@ const GATE=0.045;
 // STAGE 4/5 — run the pipeline, score templates, and commit a smoothed chord.
 // Called at ~16 Hz from the main loop (every 0.06 s), not every render frame.
 function analyzeFrame(){
+  // Log a chord change that the 380 ms log limit held back (see setChord).
+  if(pendingLog&&curChord&&curChord.q!=='·note'&&performance.now()-lastLogT>380)logChord(curChord);
   extractPeaks();
   // Silence: bleed smoothed scores toward zero and drop the chord after a beat.
   if(level<GATE||!detPeaks.length){
     quietTicks++;
     for(let i=0;i<smScores.length;i++)smScores[i]*=0.8;
     for(const k in domScores)domScores[k]*=0.992;
-    if(quietTicks>4&&curChord)setChord(null);
+    if(quietTicks>4&&curChord){if(DP.HOLD)holdChord(true);else setChord(null);}
     return;
   }
   quietTicks=0;
   for(const k in domScores)domScores[k]*=0.988;   // ~4 s memory at 16 Hz
   tuningCents+= (estimateTuning()-tuningCents)*0.15;   // slow EMA — a guitar's tuning doesn't jump
   peaksToChroma();
+  // Bass memory: an up-strum or a decayed bass string leaves the bass register
+  // empty for a moment. A slow average keeps the bass-root bonus on the root
+  // between strums. With BASS_MEM 0 it is this frame's bass chroma.
+  let bmx=0;for(let i=0;i<12;i++)if(bassChroma[i]>bmx)bmx=bassChroma[i];
+  for(let i=0;i<12;i++){
+    if(DP.BASS_MEM<=0)bassMem[i]=bassChroma[i];
+    else if(bmx>0)bassMem[i]+=(bassChroma[i]-bassMem[i])*DP.BASS_MEM;
+    else bassMem[i]*=0.97;
+  }
   // display chroma follows the cleaned profile
   for(let i=0;i<12;i++)chroma[i]+=(rawChroma[i]-chroma[i])*0.4;
   // cosine vs templates + bass bonus
@@ -383,7 +423,7 @@ function analyzeFrame(){
   for(let t=0;t<detTemplates.length;t++){
     const tm=detTemplates[t];
     let s=0;for(let i=0;i<12;i++)s+=(rawChroma[i]/n)*tm.v[i];
-    s+=DP.BASS_BONUS*bassChroma[tm.root];
+    s+=DP.BASS_BONUS*bassMem[tm.root];
     detScores[t]=s;
     smScores[t]+=(s-smScores[t])*DP.SM_ALPHA;
   }
@@ -393,6 +433,9 @@ function analyzeFrame(){
   let live=0,domPc=0;
   for(let i=0;i<12;i++)if(rawChroma[i]>0.3){live++;domPc=i;}
   if(noteCount<=1&&live<=1){
+    // A lone note that is a tone of the shown chord is that chord dying away
+    // (or a melody note over it), so the chord stays.
+    if(DP.NOTE_GUARD&&curChord&&QUALS[curChord.q]&&QUALS[curChord.q].iv.some(iv=>(curChord.root+iv)%12===domPc))return;
     setChord({root:domPc,q:'·note',score:rawChroma[domPc]});
     return;
   }
@@ -404,13 +447,21 @@ function analyzeFrame(){
   if(bestS<DP.SCORE_FLOOR)return;
   // Hysteresis: the incumbent chord holds unless a rival beats it by the switch
   // margin. This stops flicker between near-tied qualities of the same root.
+  // Dwell: a rival that beats the incumbent must also lead for DWELL ticks in
+  // a row, unless it leads by DWELL_MARGIN. Near-ties then do not flicker.
   const curI=curChord&&curChord.q!=='·note'?tmplIdx[curChord.root+'|'+curChord.q]:-1;
-  if(curI<0||bestI===curI||bestS>smScores[curI]+DP.SWITCH_MARGIN){
+  let take=curI<0||bestI===curI;
+  if(!take&&bestS>smScores[curI]+DP.SWITCH_MARGIN){
+    if(bestI===challenger)challengeTicks++;else{challenger=bestI;challengeTicks=1;}
+    take=challengeTicks>=DP.DWELL||bestS>smScores[curI]+DP.DWELL_MARGIN;
+  }else if(!take)challenger=-1;
+  if(take){
+    challenger=-1;
     if(!curChord||curChord.root!==bt.root||curChord.q!==bt.q)
       setChord({root:bt.root,q:bt.q,score:bestS});
-    else curChord.score=bestS;
+    else{curChord.score=bestS;holdChord(false);}
   }else{
-    curChord.score=smScores[curI];
+    curChord.score=smScores[curI];holdChord(false);
   }
   // Feed the passage-level vote so the dominant banner can name the winner.
   if(curChord&&curChord.q!=='·note')
@@ -458,6 +509,7 @@ function renderDominant(){
 // staff and tally, and drive the fretboard diagram. A null argument clears it.
 function setChord(c){
   curChord=c;
+  holdChord(false);
   const rEl=$('chordRoot'),qEl=$('chordQual'),cEl=$('chordConf');
   if(!c){
     rEl.textContent='···';rEl.style.color='var(--text-faint)';rEl.style.textShadow='none';
@@ -473,20 +525,25 @@ function setChord(c){
   qEl.textContent=isNote?'single note':(QUALS[c.q]?QUALS[c.q].full:c.q);
   qEl.style.color=pcColor(c.root,52);
   $('st-chord').innerHTML='chord <b>'+NOTE_NAMES[c.root]+c.q.replace('·note','')+'</b>';
-  // log real chords to the staff (rate-limited)
-  // Rate-limit to one entry per 380 ms so a held chord logs once, not per frame.
-  const now=performance.now();
-  if(!isNote && now-lastLogT>380){
-    lastLogT=now;
-    chordLog.push({root:c.root,q:c.q});
-    if(chordLog.length>MAX_LOG)chordLog.shift();
-    $('st-log').textContent=chordLog.length+' logged';
-    staffDirty=true;
-    bumpTally(c.root,c.q);
-    setDiagramChord(c.root,c.q);
-  } else if(isNote){
-    setDiagramChord(c.root,'');
-  }
+  // The diagram always shows the chord on screen. The staff log is
+  // rate-limited to one entry per 380 ms: a change inside that window waits
+  // (pendingLog), and analyzeFrame logs it if it is still the chord after
+  // the window. A passing chord is then not logged, but the chord that holds is.
+  if(isNote){setDiagramChord(c.root,'');return;}
+  setDiagramChord(c.root,c.q);
+  if(performance.now()-lastLogT>380)logChord(c);
+  else pendingLog=true;
+}
+// Add a chord to the staff log and the tally.
+let pendingLog=false;
+function logChord(c){
+  pendingLog=false;
+  lastLogT=performance.now();
+  chordLog.push({root:c.root,q:c.q});
+  if(chordLog.length>MAX_LOG)chordLog.shift();
+  $('st-log').textContent=chordLog.length+' logged';
+  staffDirty=true;
+  bumpTally(c.root,c.q);
 }
 
 /* ═══════════ SESSION TALLY — which chords live in this span ═══════════ */

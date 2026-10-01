@@ -50,6 +50,9 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 #chordRoot{font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400;font-size:clamp(3.4rem,11vh,6.4rem);line-height:0.9;color:var(--text-bright);transition:color .25s,text-shadow .25s;text-shadow:0 0 34px rgba(150,200,255,0.25)}
 #chordQual{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:clamp(1.2rem,3.4vh,2rem);color:var(--text-dim);margin-top:2px;transition:color .25s}
 #chordConf{font-size:0.62rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--text-faint);margin-top:10px;font-variant-numeric:tabular-nums}
+/* held: the last chord heard, kept readable in silence but dimmed */
+#chordDisp.held #chordRoot,#chordDisp.held #chordQual{opacity:0.5}
+#chordDisp #chordRoot,#chordDisp #chordQual{transition:color .25s,text-shadow .25s,opacity .4s}
 
 /* mic start overlay */
 #micGate{position:absolute;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;background:rgba(10,13,20,0.82);backdrop-filter:blur(6px)}

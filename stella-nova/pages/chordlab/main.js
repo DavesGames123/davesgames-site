@@ -16,7 +16,7 @@ function loop(t){
     // Chord detection at ~16 Hz; update the match-confidence readout.
     anTick+=dt;
     if(anTick>0.06){anTick=0;analyzeFrame();
-      if(curChord&&curChord.score)$('chordConf').textContent=Math.round(curChord.score*100)+' % match';}
+      if(curChord&&curChord.score&&!chordHeld)$('chordConf').textContent=Math.round(curChord.score*100)+' % match';}
     // Tuner at ~11 Hz.
     tunTick+=dt;
     if(tunTick>0.09){tunTick=0;updateTuner();}
