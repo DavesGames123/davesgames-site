@@ -24,8 +24,10 @@
      .bar        title, search field, results list, legend
      #view       the board viewport (pointer pan, pinch and wheel zoom)
        #world    transformed layer: lane bands, tier heads, #edges, .node
-     #dock       fit, zoom in, zoom out, clear
+     #dock       fit, zoom in, zoom out, clear, key (shows a closed key)
      #panel      selected node: path, unlocks, wiki link (sheet on phone)
+                 with no selection: the key, which a close button hides
+                 for the session (sessionStorage "research.keyHidden")
 
    The page shows names, tier labels and links only. It shows no costs.
 
@@ -57,7 +59,7 @@
 
 <main id="view" aria-label="Research tree board">
   <div id="world"><svg id="edges" aria-hidden="true"></svg></div>
-  <p class="hint" id="hint">Drag to pan · pinch or wheel to zoom · tap a node</p>
+  <p class="hint" id="hint">Drag to pan · pinch<span class="h-wheel"> or wheel</span> to zoom · tap a node</p>
 </main>
 
 <nav id="dock" aria-label="Board controls">
@@ -65,6 +67,7 @@
   <button type="button" data-act="in" title="Zoom in"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
   <button type="button" data-act="out" title="Zoom out"><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
   <button type="button" data-act="clear" title="Clear the selection"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  <button type="button" data-act="key" title="Show how to read the tree" aria-label="Show how to read the tree" hidden><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.1"/></svg></button>
 </nav>
 
 <aside id="panel" aria-live="polite">

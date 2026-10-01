@@ -31,6 +31,7 @@
 //    pointer input ...... "function bindPointer"
 //    selection .......... "function select"
 //    panel .............. "function renderPanel"
+//    key close/reopen ... "function setKeyHidden"
 //    search ............. "function runSearch"
 //    boot ............... "function boot"
 // ============================================================================
@@ -408,6 +409,21 @@
       .sort(function (a, b) { return (a.t - b.t) || (a.y - b.y); })
       .map(function (m) { return m.id; });
   }
+  // The key (the panel with no selection) can be closed. The choice holds for
+  // the session. The dock key button shows the key again.
+  var KEY_STORE = 'research.keyHidden';
+  function keyHidden() { try { return sessionStorage.getItem(KEY_STORE) === '1'; } catch (e) { return false; } }
+  function setKeyHidden(on) {
+    try { if (on) sessionStorage.setItem(KEY_STORE, '1'); else sessionStorage.removeItem(KEY_STORE); } catch (e) { /* storage blocked: the choice lasts until reload */ }
+    keyHiddenNow = on;
+    syncKey();
+  }
+  var keyHiddenNow = false;
+  function syncKey() {
+    var hide = keyHiddenNow && panel.classList.contains('empty');
+    panel.classList.toggle('key-hidden', hide);
+    document.querySelector('#dock [data-act="key"]').hidden = !hide;
+  }
   function renderPanel(n, anc, desc) {
     if (!n) {
       panel.classList.add('empty');
@@ -415,6 +431,7 @@
       document.body.classList.remove('sheet-open');
       panel.style.removeProperty('--c');
       panelBody.innerHTML =
+        '<button type="button" class="p-close" data-act="hide-key" aria-label="Close the key" title="Close the key"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17"/></svg></button>' +
         '<div class="p-kicker"><i style="background:var(--gold)"></i>How to read the tree</div>' +
         '<h2 class="p-name">Every research node</h2>' +
         '<p class="p-intro">Rows are <b>disciplines</b>, columns are <b>tiers</b>. Small chips on a card are the items it unlocks. Select a node to trace its path.</p>' +
@@ -423,6 +440,7 @@
         '<div><s style="--k:var(--blue)"></s>Research it leads to</div>' +
         '<div><s class="dash" style="--k:rgba(150,200,255,.5)"></s>Link across disciplines</div>' +
         '</div>';
+      syncKey();
       return;
     }
     panel.classList.remove('empty');
@@ -440,6 +458,7 @@
       '<div class="p-actions"><a class="p-btn gold" href="' + esc(CFG.WIKI + n.id) + '">Open in wiki</a>' +
       '<button type="button" class="p-btn" data-act="clear">Clear</button></div>';
     panel.scrollTop = 0;
+    syncKey();
     syncSheet();
   }
   function syncSheet() {
@@ -521,11 +540,13 @@
       else if (b.dataset.act === 'in') zoomAt(r.w / 2, r.h / 2, 1.3);
       else if (b.dataset.act === 'out') zoomAt(r.w / 2, r.h / 2, 1 / 1.3);
       else if (b.dataset.act === 'clear') { select(null); qInput.value = ''; runSearch(); }
+      else if (b.dataset.act === 'key') setKeyHidden(false);
     });
     panel.addEventListener('click', function (e) {
       var go = e.target.closest('[data-go]');
       if (go) { select(nodeById[go.dataset.go], true); return; }
       if (e.target.closest('[data-act="clear"]')) select(null);
+      else if (e.target.closest('[data-act="hide-key"]')) setKeyHidden(true);
     });
     document.getElementById('grip').addEventListener('click', function () {
       panel.classList.toggle('full');
@@ -565,6 +586,7 @@
     });
 
     var h = decodeURIComponent((location.hash || '').replace(/^#/, ''));
+    keyHiddenNow = keyHidden();
     select(null);
     home();
     window.__research = { select: function (id) { select(nodeById[id] || null, true); }, view: function () { return T; } };

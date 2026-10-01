@@ -16,6 +16,7 @@
      node card ............ ".node"
      sprite chips ......... ".chip"
      node states .......... ".node.sel"
+     key close button ..... ".p-close" / ".key-hidden"
      dock ................. "#dock"
      panel ................ "#panel"
      phone ................ "@media (max-width: 760px)"
@@ -128,6 +129,11 @@ em { font-family: var(--f-serif); font-style: italic; font-weight: 400; color: v
 /* ── panel ───────────────────────────────────────────────────────────────── */
 #panel { position: fixed; right: 22px; top: calc(var(--bar-h) + 18px); z-index: 16; width: 340px; max-height: calc(100% - var(--bar-h) - 40px); overflow-y: auto; overscroll-behavior: contain; border-radius: var(--r); border: 1px solid var(--line2); background: rgba(14, 18, 28, .9); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .9); padding: 20px 20px 22px; transition: transform .35s var(--ease), opacity .3s; }
 #panel.empty { opacity: .94; }
+#panel.empty.key-hidden { display: none; }
+.p-close { position: absolute; top: 8px; right: 8px; width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid transparent; border-radius: 11px; background: none; cursor: pointer; transition: border-color .2s, background .2s; }
+.p-close:hover { border-color: var(--line2); background: rgba(150, 200, 255, .07); }
+.p-close svg { width: 16px; height: 16px; fill: none; stroke: var(--dim); stroke-width: 2; stroke-linecap: round; }
+.p-close + .p-kicker { padding-right: 40px; min-height: 24px; }
 .grip { display: none; }
 .p-kicker { display: flex; align-items: center; gap: 8px; font: 500 0.66rem/1 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--c, var(--blue)); }
 .p-kicker i { width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
@@ -164,7 +170,8 @@ em { font-family: var(--f-serif); font-style: italic; font-weight: 400; color: v
   .legend { margin-left: auto; gap: 5px; }
   .legend span { padding: 4px 8px; font-size: 0.6rem; gap: 5px; }
   .legend span b { display: none; }
-  .hint { bottom: calc(86px + env(safe-area-inset-bottom)); }
+  .hint { left: 16px; right: 16px; transform: none; bottom: calc(86px + env(safe-area-inset-bottom)); text-align: center; white-space: normal; line-height: 1.4; }
+  .p-close, #dock [data-act="key"] { display: none; }
   #dock { left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom)); transition: bottom .35s var(--ease); }
   #dock button { width: 48px; height: 48px; }
   body.sheet-open #dock { bottom: calc(var(--sheet-h, 46vh) + 10px); }
@@ -194,7 +201,8 @@ em { font-family: var(--f-serif); font-style: italic; font-weight: 400; color: v
 /* Touch: inputs at 16px so iOS Safari does not zoom on focus, and every
    control the finger hits is at least 44px tall. */
 @media (pointer: coarse) {
-  .find input { font-size: 16px; }
+  .h-wheel { display: none; }
+  .find input { font-size: 16px; height: 44px; }
   .hits li button { min-height: 44px; }
   .p-btn { min-height: 44px; }
   .p-pill { min-height: 36px; }
