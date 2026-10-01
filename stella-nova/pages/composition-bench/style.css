@@ -168,5 +168,66 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 #edstatus.err{color:rgba(255,140,140,0.95)}
 #packview{display:none;flex:1;margin:0;padding:14px 16px;overflow:auto;font:11.5px/1.6 'JetBrains Mono',monospace;white-space:pre}
 #codepane.pack #editor,#codepane.pack #edstatus{display:none}#codepane.pack #packview{display:block}
-#hint{position:absolute;left:224px;bottom:10px;right:140px;z-index:50;font-size:0.56rem;color:var(--text-faint);letter-spacing:0.08em;line-height:1.7;pointer-events:none}
+#hint{position:absolute;left:224px;bottom:10px;right:280px;z-index:50;font-size:0.56rem;color:var(--text-faint);letter-spacing:0.08em;line-height:1.7;pointer-events:none}
 #fps{position:absolute;right:14px;bottom:10px;z-index:50}
+
+/* ── catalog: search, results, grouped picker ─────────────────────────────── */
+#tools .search{margin-bottom:6px;font-size:0.64rem}
+#tools .results{max-height:300px;overflow-y:auto;border:1px solid var(--border);margin-bottom:4px;scrollbar-width:thin;scrollbar-color:var(--surface2) transparent}
+#tools .rcount{font-size:0.52rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint);padding:5px 6px;border-bottom:1px solid var(--border)}
+#tools .res{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:transparent;border:0;border-bottom:1px solid var(--border);padding:6px;cursor:pointer;color:var(--text)}
+#tools .res b{font-weight:500;font-size:0.62rem;letter-spacing:0.06em;color:var(--text-bright)}
+#tools .res span{font-size:0.52rem;color:var(--text-faint);letter-spacing:0.08em}
+#tools .res:hover,#tools .res.hit{background:var(--blue-faint)}#tools .res.hit b{color:var(--yellow)}
+#tools .mini{margin-top:2px}
+#tools .lbl .now{color:var(--green);letter-spacing:0.04em;text-transform:none}
+#tools .chip.solid{background:rgba(9,12,20,0.94)}
+#tools .sel optgroup{color:var(--blue-dim);font-style:normal}
+/* node header color by catalog group */
+.nd.grp-proceduralfields{--fam:rgba(150,200,255,0.7);--fam-bg:rgba(150,200,255,0.08)}
+.nd.grp-imagecolor{--fam:rgba(200,160,255,0.7);--fam-bg:rgba(200,160,255,0.08)}
+.nd.grp-shadingsampling{--fam:rgba(255,160,120,0.7);--fam-bg:rgba(255,160,120,0.08)}
+.nd.grp-surfaceseffects{--fam:rgba(120,230,200,0.7);--fam-bg:rgba(120,230,200,0.08)}
+.nd.grp-elements{--fam:rgba(255,140,80,0.75);--fam-bg:rgba(255,140,80,0.08)}
+.nd.grp-volumetric{--fam:rgba(255,120,160,0.7);--fam-bg:rgba(255,120,160,0.08)}
+.nd.kind-field{--fam:rgba(120,230,200,0.7);--fam-bg:rgba(120,230,200,0.08)}
+#world{touch-action:none}
+#dock,.sheet-grip{display:none}
+
+/* ── phone: the toolbar is a bottom sheet above a dock ────────────────────── */
+@media (max-width:768px){
+  :root{--dock-h:calc(58px + env(safe-area-inset-bottom))}
+  #stage{bottom:var(--dock-h)}
+  #hint{display:none}
+  .topbar{padding:0 14px}.topbar-r{display:none}.sys-name{font-size:1rem;letter-spacing:0.08em}.topbar-l{gap:0.8rem}
+  #codepane .sheet-head .lbl{flex-basis:100%}
+  #fps{right:10px;bottom:8px;left:10px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;height:var(--dock-h);z-index:260;gap:8px;align-items:center;justify-content:center;padding:6px calc(10px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));background:rgba(9,12,20,0.97);border-top:1px solid var(--border-b)}
+  #dock button{flex:0 0 46px;height:44px;border:1px solid var(--border-b);background:var(--bg2);color:var(--text);font-size:1rem;cursor:pointer;border-radius:10px}
+  #dock #dock-nodes{flex:1 1 auto;max-width:150px;font-size:0.7rem;letter-spacing:0.14em;text-transform:uppercase}
+  #dock button.on{border-color:var(--yellow-dim);color:var(--yellow)}
+  #tools{position:fixed;left:0;right:0;top:auto;bottom:var(--dock-h);width:auto;max-height:min(72vh,calc(100% - var(--dock-h) - 40px));max-height:min(72dvh,calc(100dvh - var(--dock-h) - 40px));z-index:250;padding:0 10px 12px;gap:8px;background:rgba(9,12,20,0.98);border-top:1px solid var(--border-b);border-radius:16px 16px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,0.55);transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.28s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain}
+  body.sheet-open #tools{transform:none}
+  .sheet-grip{display:flex;justify-content:center;align-items:center;position:sticky;top:0;z-index:2;height:28px;flex:0 0 28px;background:rgba(9,12,20,0.98);border:0;cursor:pointer}
+  .sheet-grip span{width:46px;height:5px;border-radius:3px;background:var(--text-faint)}
+  #tools .grp{padding:10px}
+  #tools .chip{padding:11px 10px;font-size:0.64rem}
+  #tools .libs{grid-template-columns:repeat(3,1fr)}
+  #tools .libs .chip{padding:11px 4px}
+  #tools .sel{font-size:16px;padding:8px}   /* 16px stops iOS zoom on focus */
+  #tools .search{font-size:16px}
+  #tools .results{max-height:38vh}
+  #tools .res{padding:10px 8px}#tools .res b{font-size:0.72rem}#tools .res span{font-size:0.6rem}
+  #codepane{width:100%;bottom:0;z-index:240}
+  #codepane .panel-btn{padding:10px 12px}
+  #editor{font-size:13px}
+  .nogpu{left:20px}
+}
+/* coarse pointers: bigger socket targets, the visible dot stays small */
+@media (pointer:coarse){
+  .dot{position:relative}
+  .dot::after{content:'';position:absolute;inset:-12px;border-radius:50%}
+  .nd-h{padding:9px 8px}
+  .nd-h .x,.nd-h .ed{padding:4px 8px;font-size:0.72rem}
+  .nd-w input[type=range]{height:22px}
+}
