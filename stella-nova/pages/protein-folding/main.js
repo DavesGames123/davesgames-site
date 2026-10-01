@@ -26,6 +26,7 @@
 //    function setTemp .......... temperature, ramp, melt and quench
 //    function colours .......... residue colours for each colour mode
 //    function buildPanel ....... the control bindings
+//    initXR .................... VR and AR view (xr.js, lib/xr-view.js)
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -36,6 +37,7 @@ import { ChainView, LatticeView, COL, LAT } from './render.js';
 import { Card, SERIES, drawSeries, drawCurve, drawHeat, drawContactMap, drawPairMap, fmtSteps } from './plots.js';
 import { mountEquations } from './equations.js';
 import { createHost } from './sim-host.js';
+import { initXR } from './xr.js';
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -717,7 +719,7 @@ addEventListener('pagehide', () => {
 PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
 
 // debug and headless checks
-window.__fold = { S, get P() { return P; }, loadPreset, setTemp, startRamp, setRunning, restart, cards: () => cards, camera, pivot, controls };
+window.__fold = { S, get P() { return P; }, loadPreset, setTemp, startRamp, setRunning, restart, cards: () => cards, camera, pivot, controls, scene };
 
 // ── boot ─────────────────────────────────────────────────────────────────────
 buildPanel();
@@ -729,3 +731,15 @@ const startId = (location.hash || '').slice(1);
 loadPreset(presetById(startId) ? startId : 'villin');
 setRunning(true);
 requestAnimationFrame(frame);
+
+// VR and AR: the replica grid as the model. Its box is the cells round the
+// replica centres, in scene units (Å).
+if (renderer) window.__fold.xr = initXR({
+  renderer, scene, camera, controls, S, $, setRunning, restart, loadPreset, PRESETS,
+  cell: () => grid.cell,
+  bounds: () => {
+    const b = new THREE.Box3();
+    for (const v of S.views) b.expandByPoint(v.group.position);
+    return b.isEmpty() ? new THREE.Box3(new THREE.Vector3(-20, -20, -20), new THREE.Vector3(20, 20, 20)) : b.expandByScalar(grid.cell / 2);
+  },
+});

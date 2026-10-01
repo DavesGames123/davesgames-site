@@ -24,7 +24,9 @@
    HEAD LOAD ORDER
      1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
      2. fonts (Inter, STIX Two Text), style.css
-     3. importmap for three r160, then main.js as a module
+     3. importmap for three r160, then main.js as a module (main.js loads
+        xr.js, the VR and AR view; #bVR and #bAR in #xrSec stay hidden
+        without WebXR)
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────────────────────────────────────────────┐
@@ -148,6 +150,14 @@
     <button data-start="native" type="button">Native</button>
   </div>
   <p class="note go-only">Restart puts every replica back in the chosen start shape.</p>
+
+  <div id="xrSec" hidden>
+    <div class="sec-label">Headset</div>
+    <div class="grid2">
+      <button id="bVR" type="button" hidden>View in VR</button>
+      <button id="bAR" type="button" hidden>View in AR</button>
+    </div>
+  </div>
 
 
   <div class="sec-label">View</div>
