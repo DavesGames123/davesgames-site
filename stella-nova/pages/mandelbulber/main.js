@@ -41,19 +41,20 @@ import { scene, activeSlot, engine, info, setScene, setEngine, setInfo, formulaA
 import { compileStatus, setStatus, flash, msPerSample, setMsPerSample, showHud, fail } from './ui/hud.js';
 import { camFromScene, camToScene, frameView } from './ui/camera.js';
 import { sceneDirty, setMain, setSlot, loadScene, pushScene } from './ui/scene.js';
-import { refreshAll, initTip } from './ui/controls.js';
+import { initTip } from './ui/controls.js';
 import {  } from './ui/thumbs.js';
 import { loadText, exportText, initIo, shareHash, decodeShare, readHash } from './ui/io.js';
 import { exampleScene, loadExample } from './ui/presets.js';
 import { buildPanel, initPeek } from './ui/panel.js';
-import { openPicker, closePicker, choose, initPicker } from './ui/picker.js';
+import { openPicker, choose, initPicker } from './ui/picker.js';
 import { syncViewport, initSheets } from './ui/sheets.js';
 import { randomExample, openExamples, closeExamples, initPresetSheet } from './ui/preset-sheet.js';
 import { L, sheetDragging, applyLayout, initLayout, snapTo, togglePanel,
   observeCanvas } from './ui/layout.js';
 import { initSheetDrag } from './ui/sheet-drag.js';
-import { flying, keys, fly, toggleFly, flyStep, initFly } from './ui/fly.js';
+import { fly, toggleFly, flyStep, initFly } from './ui/fly.js';
 import { inertia, inertiaStep, initPointer } from './ui/pointer.js';
+import { initKeys } from './ui/keys.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -95,22 +96,7 @@ export function renderPaused() {
 }
 
 // ─── keys ───────────────────────────────────────────────────────────────────
-window.addEventListener('keydown', (e) => {
-  const t = e.target;
-  if (e.key === 'Escape' && !picker.classList.contains('hidden')) { closePicker(); return; }
-  if (e.key === 'Escape' && !exSheet.classList.contains('hidden')) { closeExamples(); return; }
-  if (t instanceof HTMLInputElement || t instanceof HTMLSelectElement || t instanceof HTMLTextAreaElement || e.metaKey || e.ctrlKey || e.altKey) return;
-  const k = e.key.toLowerCase();
-  if (flying && 'wasdqe'.includes(k) && k.length === 1) { keys.add(k); e.preventDefault(); return; }
-  if (k === 'shift') { keys.add('shift'); return; }
-  if (k === 'p') togglePanel();
-  else if (k === 'f') toggleFly();
-  else if (k === 'v') frameView(false);
-});
-window.addEventListener('keyup', (e) => { keys.delete(e.key.toLowerCase()); if (!keys.size) refreshAll(); });
-window.addEventListener('blur', () => keys.clear());
-$('toggle').addEventListener('click', togglePanel);
-
+initKeys();
 // ─── status ─────────────────────────────────────────────────────────────────
 // ─── frame loop ─────────────────────────────────────────────────────────────
 let saveRequested = false;
