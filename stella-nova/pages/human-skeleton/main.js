@@ -39,30 +39,7 @@ import * as L from './layout.js';
 import { BoneState, boneMaterial, depthMaterial, ghostMaterial, pickMaterial, groupMesh } from './render.js';
 import { $, PHONE_Q, COARSE, HOVER, REDUCED, DPR, esc, clamp01, easeIO, ease, TYPE_NAME, SIDE_NAME, MODE_NAME, LOAD_ORDER, THEMES } from './app/env.js';
 import { canvas, renderer, scene, envRT, camera, pickCam, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
-
-const T = { start: performance.now(), firstFrame: 0, firstBones: 0, allBones: 0 };
-
-// ── state ───────────────────────────────────────────────────────────────────
-const S = {
-  M: null, P: null, n: 0, bones: [], regions: [], regionIx: null, state: null,
-  mode: 'radial', lastMode: 'radial', amount: 1, amt: null, sort: 'region',
-  cur: null, from: null, to: null, delay: null, tr: null, traysOn: false, cat: null,
-  drag: null, dOff: null, dVel: null, springing: new Set(),
-  appear: null, loaded: null, vis: null, hiddenRegion: new Set(), show: { teeth: true, cartilage: false, spin: false },
-  sel: -1, hov: -1, iso: -1, isoBack: null, fly: null, dirty: true, frames: 0, groups: new Map(), mats: null,
-  labelsOn: false, theme: document.documentElement.dataset.theme === 'light' ? 'light' : 'dark', ready: false,
-};
-const dirty = () => { S.dirty = true; };
-controls.addEventListener('change', dirty);
-controls.addEventListener('start', () => { S.fly = null; hideHint(); });
-
-let toastT = 0;
-function toast(msg) {
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600);
-}
-let hintGone = false;
-function hideHint() { if (!hintGone) { hintGone = true; $('hint').classList.add('gone'); } }
+import { T, S, dirty, toast, hideHint, regionOf } from './app/state.js';
 
 // ── loading ─────────────────────────────────────────────────────────────────
 async function fetchBuf(url) {
@@ -385,7 +362,6 @@ function clearSelection() {
   syncList(false);
   dirty();
 }
-function regionOf(b) { return S.regions[S.regionIx.get(b.region)]; }
 function cardNumber(b) {
   const counted = S.bones.filter(x => x.counted);
   const k = counted.indexOf(b);
