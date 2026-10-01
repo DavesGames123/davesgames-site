@@ -1,0 +1,8 @@
+Correction to the commit body: the wake lock DOES work in the site shell.
+The body says the shell iframe does not allow screen-wake-lock. That is wrong. A same-origin
+frame gets screen-wake-lock and clipboard-write by default (allowlist 'self'), so the shell
+needs no allow change. The first test read the lexical 'wakeLock' through window and got
+undefined. The later check, in the shell with the unchanged allow list:
+  allow 'microphone; autoplay; downloads'
+  after startMic(): micOn true, wakeLock true, type 'screen'
+  after stopMic():  micOn false, wakeLock false
