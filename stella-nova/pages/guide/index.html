@@ -3,114 +3,193 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Stations // Stella Nova</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>Station Guide // Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-   STATIONS  ·  page shell
+   STATION GUIDE  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. main.js draws every lesson into #cv and fills the
-   panels, cards, and overlays by id; this file just lays them out. The
-   scenario cards (#scnBar) and control buttons call main.js functions
-   inline (loadScenario, resetScenario, toggleAuto, rotateFoundry).
+   One long illustrated walkthrough of station building. Each chapter has a
+   text column and one figure. chapters.js makes the figures; main.js wires
+   the chapter nav and the wiki chips (elements with data-wiki).
 
-   LOAD ORDER
-     1. fonts      Google Fonts stylesheet (absolute)
-     2. style.css  the page stylesheet
-     3. main.js    classic script at end of body; runs after the markup
-                   parses, so getElementById calls resolve
+   LOAD ORDER (classic scripts, so the page opens from file://)
+     1. gpu-guard.js           shared GPU release hook (always first)
+     2. game-data/catalog.js   sets window.SN_DATA
+     3. board.js               grid board, sprites, planner rules, frame loop
+     4. chapters.js            the hero and the six lesson figures
+     5. main.js                nav, wiki chips, boot
 
-   LAYOUT  (# marks an element id)
-     ┌──────────────────────────────────────────────────────────────┐
-     │ topbar     name · LIVE PRACTICE · HUD readouts                │
-     ├──────────────────────────────────────────────────────────────┤
-     │ #scnBar    scenario cards (built by main.js)                  │
-     ├──────────────────────────────────────────────────────────────┤
-     │ ctrl-bar   RESET · AUTO-BUILD · ROTATE OUTPUT                 │
-     ├───────────────────────────────────┬──────────────────────────┤
-     │ #canvasArea                        │ #sideR                   │
-     │   #cv the lesson canvas            │   headline + description │
-     │   #hint #sel #toast overlays       │   How it works notes     │
-     │   #palette #taskBox controls       │   #refPanel reference    │
-     └───────────────────────────────────┴──────────────────────────┘
-     #fab + #bd  float the right panel in as a drawer on narrow screens
+   SECTION MAP   (jump with grep -n "<anchor>" index.html)
+     top nav ........... class="top"
+     hero .............. class="hero"
+     1 placement ....... id="placement"
+     2 enclosure ....... id="enclosure"
+     3 decompression ... id="decompression"
+     4 production ...... id="production"
+     5 crew ............ id="crew"
+     6 tiers ........... id="tiers"
+     closing ........... class="outro"
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<!-- Decorative background lattice, painted by CSS. -->
-<div class="grid-bg"></div>
-<div id="app">
-  <!-- Top bar: system name, status pill, and the three HUD readouts that
-       main.js updates (scenario counter, module count, enclosed count). -->
-  <div class="topbar">
-    <span class="sys-name">STATIONS</span>
-    <div class="status-pill">LIVE PRACTICE</div>
-    <div class="tb-readouts">
-      <span>SCENARIO <strong id="hud-scn">01/06</strong></span>
-      <span>MODULES <strong id="hud-mods">0</strong></span>
-      <span>ENCLOSED <strong id="hud-enc">0</strong></span>
+<nav class="top" aria-label="Chapters">
+  <a class="brand" href="#top"><span class="mark">◆</span>Station <em>Guide</em></a>
+  <div class="chaps" id="chaps">
+    <a href="#placement" data-c="placement"><b>01</b>Placement</a>
+    <a href="#enclosure" data-c="enclosure"><b>02</b>Enclosure</a>
+    <a href="#decompression" data-c="decompression"><b>03</b>Decompression</a>
+    <a href="#production" data-c="production"><b>04</b>Production</a>
+    <a href="#crew" data-c="crew"><b>05</b>Crew</a>
+    <a href="#tiers" data-c="tiers"><b>06</b>Tiers</a>
+  </div>
+  <a class="cta" href="../planner/index.html">Open the planner</a>
+</nav>
+
+<main id="top">
+  <header class="hero">
+    <div class="hero-text">
+      <div class="kick">Stella Nova · field manual</div>
+      <h1>Build a station that <em>holds together.</em></h1>
+      <p class="lead">Six short lessons on the grid, from the first wall to the resource tree. Every figure uses the game's own module and resource art. Tap them to try each rule.</p>
+      <div class="hero-act"><a class="btn pri" href="#placement">Start the walkthrough</a><a class="btn" href="../planner/index.html">Station Planner</a></div>
     </div>
-  </div>
+    <figure class="hero-art"><div class="cvbox"><canvas></canvas></div></figure>
+  </header>
 
-  <!-- Scenario card row; buildScnBar() fills it with one card per lesson. -->
-  <div class="scn-bar" id="scnBar"></div>
-
-  <!-- Control bar: RESET reloads the lesson; AUTO-BUILD and ROTATE OUTPUT
-       show only in the scenarios that use them (main.js toggles display). -->
-  <div class="ctrl-bar">
-    <span class="ctrl-label">CTRL</span>
-    <button class="ctrl-btn warn" onclick="resetScenario()">↻ RESET</button>
-    <button class="ctrl-btn" id="autoBtn" onclick="toggleAuto()">▶ AUTO-BUILD</button>
-    <button class="ctrl-btn" id="rotBtn" style="display:none" onclick="rotateFoundry()">⤿ ROTATE OUTPUT</button>
-    <span class="ctrl-info">CLICK CELLS TO PLACE · CLICK MODULES TO REMOVE</span>
-  </div>
-
-  <!-- Main split: the lesson canvas on the left, the reference panel on the
-       right. -->
-  <div class="main">
-    <!-- Canvas area: the render target plus floating overlays. hint is the
-         instruction line, sel the selection readout, toast the transient
-         message, palette the module picker, taskBox the crew toggles. The
-         palette and taskBox start hidden and main.js shows them per lesson. -->
-    <div class="canvas-area" id="canvasArea">
-      <canvas id="cv"></canvas>
-      <div class="hint-bar" id="hint" style="--ac:var(--yellow)"></div>
-      <div class="sel-bar" id="sel">—</div>
-      <div class="toast" id="toast"></div>
-      <div class="palette" id="palette" style="display:none"></div>
-      <div class="tasks" id="taskBox" style="display:none"></div>
+  <!-- 1 · Placement -->
+  <section class="ch" id="placement">
+    <div class="ch-text">
+      <div class="num">01</div>
+      <h2>Grid <em>placement</em></h2>
+      <p class="lead">Build outward from the core. A new module must touch the station, and each module obeys the placement tags it carries.</p>
+      <ul class="notes">
+        <li><b>Connected.</b> A new module touches the hull on one side.</li>
+        <li><b>Exterior.</b> Living quarters, thrusters and turrets need one side on open space.</li>
+        <li><b>Furniture.</b> Hydroponics stand on enclosed floor.</li>
+        <li><b>Facing.</b> Production modules have an output side. Rotate to choose it.</li>
+      </ul>
+      <div class="wks" data-wiki="modules/structure-white modules/docking modules/hydroponics-bed modules/foundry"></div>
     </div>
-    <!-- Right panel: headline, description, How-it-works notes, and the
-         per-lesson reference block. main.js fills every field by id. -->
-    <aside class="sidebar-r" id="sideR">
-      <div class="panel">
-        <div class="scn-headline" id="scnHead"></div>
-        <div class="scn-desc" id="scnDesc"></div>
-      </div>
-      <div class="panel">
-        <div class="panel-title">How it works</div>
-        <ul class="notes-list" id="scnNotes"></ul>
-      </div>
-      <div class="panel" id="refPanel" style="border-bottom:none">
-        <div class="panel-title" id="refTitle">Reference</div>
-        <div id="refBody"></div>
-      </div>
-    </aside>
-  </div>
-</div>
+    <figure class="fig" id="fig-placement">
+      <div class="fig-pal pal-mods"></div>
+      <div class="cvbox"><canvas></canvas></div>
+      <div class="fig-bar"><div class="fig-status"></div><button class="btn sm" data-a="rot">Rotate</button><button class="btn sm" data-a="reset">Reset</button></div>
+    </figure>
+  </section>
 
-<!-- Mobile drawer: the FAB opens the right panel and the backdrop closes it. -->
-<button class="fab" id="fab" onclick="toggleDrawer()">Info ≡</button>
-<div class="drawer-backdrop" id="bd" onclick="closeDrawer()"></div>
+  <!-- 2 · Enclosure -->
+  <section class="ch" id="enclosure">
+    <div class="ch-text">
+      <div class="num">02</div>
+      <h2>Enclosed <em>rooms</em></h2>
+      <p class="lead">Empty cells that built modules fully surround become enclosed. Enclosed cells are your storage and your floor.</p>
+      <ul class="notes">
+        <li>Close the wall gaps to seal the room.</li>
+        <li>Enclosed cells glow and start to hold resources.</li>
+        <li>Side-connected enclosed cells form one region. Production modules pull from it and push to it.</li>
+      </ul>
+      <div class="wks" data-wiki="modules/structure-white modules/hopper"></div>
+    </div>
+    <figure class="fig" id="fig-enclosure">
+      <div class="cvbox"><canvas></canvas></div>
+      <div class="fig-bar"><div class="fig-status"></div><button class="btn sm" data-a="reset">Reset</button></div>
+    </figure>
+  </section>
 
-<!-- main.js runs last so every element above already exists. -->
-<script src="data.js"></script>
-<script src="content.js"></script>
-<script src="ui.js"></script>
-<script src="render.js"></script>
+  <!-- 3 · Decompression -->
+  <section class="ch" id="decompression">
+    <div class="ch-text">
+      <div class="num">03</div>
+      <h2><em>Decompression</em></h2>
+      <p class="lead">Break a wall that seals a room, and everything stored inside ejects into space.</p>
+      <ul class="notes">
+        <li>Tap any wall to remove it.</li>
+        <li>If the room opens, the stored resources fly out through the breach.</li>
+        <li>Plan demolition: clear the inside before you take down outer walls.</li>
+        <li>Citizens with the Collect job gather floating items back.</li>
+      </ul>
+      <div class="wks" data-wiki="jobs/collect skills/logistics"></div>
+    </div>
+    <figure class="fig" id="fig-decompress">
+      <div class="cvbox"><canvas></canvas></div>
+      <div class="fig-bar"><div class="fig-status"></div><button class="btn sm" data-a="reset">Reset</button></div>
+    </figure>
+  </section>
+
+  <!-- 4 · Production -->
+  <section class="ch" id="production">
+    <div class="ch-text">
+      <div class="num">04</div>
+      <h2>Foundry <em>flow</em></h2>
+      <p class="lead">A foundry sits in the wall between two enclosed regions. Its facing side is the output, and the other sides feed it. A citizen with the Smelt job works it, and the foundry takes its recipe from the ore it gets.</p>
+      <ul class="notes">
+        <li>The gold arrow marks the output side.</li>
+        <li>Pick an ore and tap the input room to stock it.</li>
+        <li>Rotate the foundry to swap the input and output rooms.</li>
+      </ul>
+      <div class="wks" data-wiki="modules/foundry jobs/metallurgy skills/metallurgy"></div>
+    </div>
+    <figure class="fig" id="fig-foundry">
+      <div class="fig-pal pal-ores"></div>
+      <div class="cvbox"><canvas></canvas></div>
+      <div class="fig-bar"><div class="fig-status"></div><button class="btn sm" data-a="rot">Rotate</button><button class="btn sm" data-a="reset">Reset</button></div>
+    </figure>
+    <div class="chain-wrap">
+      <h3>The production line</h3>
+      <div class="chain" id="chain"></div>
+    </div>
+  </section>
+
+  <!-- 5 · Crew -->
+  <section class="ch" id="crew">
+    <div class="ch-text">
+      <div class="num">05</div>
+      <h2>Crew <em>jobs</em></h2>
+      <p class="lead">Toggle which jobs a citizen will do. Citizens choose among their enabled jobs by skill and by what the station needs.</p>
+      <ul class="notes">
+        <li>The ring colour shows each citizen's present job.</li>
+        <li>With every job off, a citizen idles.</li>
+        <li>Mining needs asteroids. Building needs planned modules.</li>
+      </ul>
+      <div class="wks" id="jobChips"></div>
+    </div>
+    <figure class="fig" id="fig-crew">
+      <div class="fig-pal pal-jobs"></div>
+      <div class="cvbox"><canvas></canvas></div>
+      <div class="fig-bar"><div class="fig-status"></div></div>
+      <figcaption>An illustration. The game's own task choice weighs more than this figure shows.</figcaption>
+    </figure>
+  </section>
+
+  <!-- 6 · Tiers -->
+  <section class="ch wide" id="tiers">
+    <div class="ch-text">
+      <div class="num">06</div>
+      <h2>Resource <em>tiers</em></h2>
+      <p class="lead">Mined ore climbs through the tiers into components. Select any resource to trace what it is made from and what it feeds.</p>
+    </div>
+    <figure class="fig tier-fig" id="fig-tiers">
+      <div class="tier-wrap"><div class="tiers"></div><svg class="tier-lines" aria-hidden="true"></svg></div>
+      <div class="tier-detail"></div>
+    </figure>
+  </section>
+
+  <section class="outro">
+    <h2>Now lay out <em>your own.</em></h2>
+    <p class="lead">The Station Planner uses the same modules, footprints and placement tags on an open grid.</p>
+    <div class="hero-act"><a class="btn pri" href="../planner/index.html">Open the Station Planner</a><a class="btn" href="../wiki/index.html">Browse the wiki</a></div>
+  </section>
+</main>
+
+<script src="../../lib/game-data/catalog.js"></script>
+<script src="board.js"></script>
+<script src="chapters.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

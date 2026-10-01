@@ -1,130 +1,60 @@
-/* ════════════════════════════════════════════════════════════════════
-   MAIN LOOP
-   ──────────────────────────────────────────────────────────────────── */
-// The per-frame update: resize, lay down the phosphor fade and grid, then
-// draw the active scenario. Tiers is its own path; every other scenario
-// shares the grid draw order. Ends by scheduling the next frame.
-function render(){
-  resize();
-  state.t++;
+// ============================================================================
+//  STATION GUIDE  ·  main.js — chapter nav, wiki chips, boot
+// ----------------------------------------------------------------------------
+//  This classic script runs last. It starts each figure from chapters.js,
+//  fills every element with a data-wiki list of catalog ids with linked
+//  chips, and marks the chapter on screen in the top nav.
+//
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//      wiki chips ......... "function fillChips"
+//      chapter nav ........ "function watchChapters"
+//      boot ............... "function boot"
+// ============================================================================
+(function () {
+  function $(s) { return document.querySelector(s); }
 
-  // Semi-transparent fill each frame leaves fading trails behind moving art.
-  // Phosphor trail
-  ctx.fillStyle = 'rgba(7,10,16,0.32)';
-  ctx.fillRect(0,0,W,H);
-
-  drawSpaceGrid();
-
-  const s = SCENARIOS[state.scnIdx];
-
-  // Tiers draws the dependency graph; all others draw the grid world.
-  if(s.id==='tiers'){
-    drawTiers();
-  } else {
-    // Grid scenarios
-    drawEnclosedCells();
-    drawResources();
-
-    if(s.id==='foundry'){
-      updateFoundryWorker();
-    }
-
-    // Modules
-    for(const m of state.modules) drawModule(m);
-
-    // Foundry worker citizen (drawn on top of modules so the glow stacks)
-    if(s.id==='foundry') drawFoundryWorker();
-
-    // Crew scenario extras
-    if(s.id==='crew'){
-      drawAsteroids();
-      updateCrew();
-      drawCrew();
-    }
-
-    // Auto-build for placement / enclosure
-    // With auto-build on, advance one blueprint per frame; finishing one
-    // may seal new enclosure and, in the enclosure lesson, fill it.
-    if(state.autoBuild && (s.id==='placement' || s.id==='enclosure')){
-      // Advance one planned module's progress
-      const planned = state.modules.find(m=>m.built===false);
-      if(planned){
-        planned.delivered = (planned.delivered||0) + 6;
-        if(planned.delivered >= planned.need){
-          planned.built = true;
-          state.enclosed = computeEnclosed();
-          if(s.id==='enclosure'){
-            // Maybe new cells got enclosed - resource fill
-            const labels = ['Fe','Cu','Al','C'];
-            const cols   = ['#d08050','#d8a050','#c8c8d8','#8a8a8a'];
-            for(const k of state.enclosed){
-              if(!state.resources[k]){
-                const idx = Math.floor(Math.random()*labels.length);
-                state.resources[k] = [{label:labels[idx], color:cols[idx], count:10+Math.floor(Math.random()*40)}];
-              }
-            }
-          }
-        }
-      }
-    }
-
-    drawParticles();
-    drawHoverPlacement();
+  // ---- wiki chips ---------------------------------------------------------------
+  function fillChips() {
+    document.querySelectorAll('[data-wiki]').forEach(function (el) {
+      el.innerHTML = el.dataset.wiki.split(/\s+/).map(GD.get).filter(Boolean).map(function (e) { return GD.chip(e); }).join('');
+    });
+    // Jobs and their skills, paired by the catalog related links.
+    var jobs = GD.D.entries.filter(function (e) { return e.category === 'jobs'; });
+    $('#jobChips').innerHTML = jobs.map(function (j) {
+      var sk = (j.links.related || []).filter(function (id) { return id.indexOf('skills/') === 0; }).map(GD.get)[0];
+      return '<span class="pair">' + GD.chip(j) + (sk ? '<span class="via">skill</span>' + GD.chip(sk) : '') + '</span>';
+    }).join('');
   }
 
-  updateHud();
-  requestAnimationFrame(render);
-}
+  // ---- chapter nav --------------------------------------------------------------
+  function watchChapters() {
+    var links = {};
+    document.querySelectorAll('#chaps a').forEach(function (a) { links[a.dataset.c] = a; });
+    if (!window.IntersectionObserver) return;
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        Object.keys(links).forEach(function (k) { links[k].classList.toggle('on', k === e.target.id); });
+        var a = links[e.target.id];
+        if (a && a.scrollIntoView) { var p = a.parentNode; p.scrollTo({ left: a.offsetLeft - p.clientWidth / 2 + a.clientWidth / 2, behavior: 'smooth' }); }
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    document.querySelectorAll('.ch').forEach(function (s) { io.observe(s); });
+  }
 
-/* ════════════════════════════════════════════════════════════════════
-   SCENARIO BAR
-   ──────────────────────────────────────────────────────────────────── */
-// Build the top row of scenario cards, each wired to loadScenario(i).
-function buildScnBar(){
-  const bar = document.getElementById('scnBar');
-  bar.innerHTML = SCENARIOS.map((s,i)=>(
-    '<button class="scn-card" data-idx="'+i+'" style="--ac:'+s.accent+'" onclick="loadScenario('+i+')">'+
-      '<span class="scn-ico">'+s.icon+'</span>'+
-      '<span class="scn-meta">'+
-        '<span class="scn-num">'+String(i+1).padStart(2,'0')+'</span>'+
-        '<span class="scn-name">'+s.name+'</span>'+
-      '</span>'+
-    '</button>'
-  )).join('');
-}
-
-/* ════════════════════════════════════════════════════════════════════
-   MOBILE DRAWER
-   ──────────────────────────────────────────────────────────────────── */
-// On narrow screens the FAB slides the right panel in as a drawer over a
-// backdrop; the three elements toggle together.
-function toggleDrawer(){
-  const panel = document.getElementById('sideR');
-  const fab = document.getElementById('fab');
-  const bd = document.getElementById('bd');
-  const willOpen = !panel.classList.contains('open');
-  panel.classList.toggle('open', willOpen);
-  fab.classList.toggle('open', willOpen);
-  bd.classList.toggle('show', willOpen);
-}
-// Close the drawer (backdrop tap).
-function closeDrawer(){
-  document.getElementById('sideR').classList.remove('open');
-  document.getElementById('fab').classList.remove('open');
-  document.getElementById('bd').classList.remove('show');
-}
-
-/* ════════════════════════════════════════════════════════════════════
-   BOOT
-   ──────────────────────────────────────────────────────────────────── */
-// Build the card bar, size the canvas, keep it sized on resize, load the
-// first scenario, and start the render loop.
-buildScnBar();
-resize();
-window.addEventListener('resize', resize);
-loadScenario(0);
-render();
-
-// When embedded in the site shell iframe, add .in-frame so the CSS hides
-// this page's own chrome. A cross-origin access throw also means embedded.
-try{ if(window.self!==window.top) document.body.classList.add('in-frame'); }catch(e){ document.body.classList.add('in-frame'); }
+  // ---- boot ----------------------------------------------------------------------
+  function boot() {
+    if (window.self !== window.top) document.body.classList.add('in-frame');
+    CH.hero($('.hero-art'));
+    CH.placement($('#fig-placement'));
+    CH.enclosure($('#fig-enclosure'));
+    CH.decompress($('#fig-decompress'));
+    CH.foundry($('#fig-foundry'));
+    CH.chain($('#chain'));
+    CH.crew($('#fig-crew'));
+    CH.tiers($('#fig-tiers'));
+    fillChips();
+    watchChapters();
+  }
+  boot();
+})();
