@@ -21,6 +21,7 @@
               Instrument Serif), style.css
      <body>   rf.js         global RF (complex math, no DOM)
               main.js       global SC: state, chart, panel, loop
+              match.js      L-network, stub and lambda/4 matching
               equations.js  the formulas as static MathJax SVG
 
    LAYOUT  (# marks an element id main.js binds to)
@@ -31,6 +32,7 @@
      │  system    │  #tip     the cursor readout under the pointer        │
      │  load      │                                                       │
      │  readout   │                                                       │
+     │  match     │                                                       │
      │  line      │                                                       │
      │  chart     │                                                       │
      │  formulas  │                                                       │
@@ -49,7 +51,7 @@
      the chart in the part of the canvas that stays clear.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="A Smith chart for daily RF work: loads in ohms, VSWR or S11 dB, live readouts, line rotation and a hover cursor.">
+<meta name="description" content="A Smith chart for daily RF work: loads in ohms, VSWR or S11 dB, live readouts, line rotation and a hover cursor, and L-network, stub and quarter-wave matching with part values.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -129,6 +131,22 @@
     </table>
   </details>
 
+  <details class="sec" id="secMatch" open>
+    <summary>Match to Z0</summary>
+    <div class="tabs" id="matchTabs">
+      <button data-method="off" class="on">off</button>
+      <button data-method="lnet">L-network</button>
+      <button data-method="stub">stub</button>
+      <button data-method="qw">λ/4</button>
+    </div>
+    <div class="tabs two off" id="stubKind">
+      <button data-stub="short" class="on">short stub</button>
+      <button data-stub="open">open stub</button>
+    </div>
+    <div id="matchSols" class="sols"></div>
+    <p class="note" id="matchNote"></p>
+  </details>
+
   <details class="sec" id="secLine" open>
     <summary>Line</summary>
     <div class="fields">
@@ -166,6 +184,11 @@
     <div class="eq" id="eq-loss"></div>
     <div class="eq" id="eq-zin"></div>
     <div class="eq" id="eq-beta"></div>
+    <div class="eq" id="eq-lnetS"></div>
+    <div class="eq" id="eq-lnetP"></div>
+    <div class="eq" id="eq-partsS"></div>
+    <div class="eq" id="eq-partsP"></div>
+    <div class="eq" id="eq-qw"></div>
   </details>
 
   <details class="sec" id="secAbout">
@@ -195,6 +218,7 @@
 
 <script src="rf.js"></script>
 <script src="main.js"></script>
+<script src="match.js"></script>
 <script src="equations.js"></script>
 </body>
 </html>

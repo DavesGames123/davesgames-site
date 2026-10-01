@@ -395,6 +395,9 @@
 
   // ------------------------------------------------------------------- loop
   function frame(t) {
+    // The next frame is asked for first, so an error in a hook does not stop
+    // the loop.
+    requestAnimationFrame(frame);
     const dt = Math.min(0.1, (t - (lastT || t)) / 1000); lastT = t;
     if (S.walking) {
       S.len = (S.len + dt * WALK_RATE) % 0.5;
@@ -414,7 +417,6 @@
       refresh(M);
       dirty = false;
     }
-    requestAnimationFrame(frame);
   }
 
   // ---------------------------------------------------------------- readout

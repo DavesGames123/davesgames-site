@@ -246,3 +246,27 @@ input[type=range]{width:100%;accent-color:var(--z);margin:10px 0 8px;height:18px
   #sheetGrip{display:none}
   #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;width:44px;height:44px;z-index:3;background:var(--bg2)}
 }
+
+/* MATCH. Solution cards (match.js). Each card is a button; the selected one
+   is drawn on the chart. .schem is the L-network schematic. */
+.sols{display:grid;gap:6px}
+.sol{
+  display:flex;gap:10px;align-items:flex-start;width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;
+  background:var(--bg2);color:var(--text);text-align:left;cursor:pointer;transition:border-color .15s,background .15s;
+}
+.sol:hover{border-color:var(--line-b)}
+.sol.on{border-color:var(--match);background:rgba(126,224,160,0.06)}
+.sol-n{flex:none;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--faint);color:var(--ink);font:500 0.7rem/1 var(--f-mono)}
+.sol.on .sol-n{background:var(--match);color:#06120a}
+.sol-body{flex:1;min-width:0}
+.sol-t{font:400 0.74rem/1.5 var(--f-mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.sol-t .arr{color:var(--dim);margin:0 5px}
+.sol-t .dim,.sol-s{color:var(--dim)}
+.sol-s{font-size:0.68rem;line-height:1.45;margin-top:2px}
+.schem{display:block;width:100%;max-width:168px;height:auto;margin-top:4px;color:var(--match)}
+.schem text{fill:var(--dim);font:400 9px var(--f-mono)}
+@media (pointer:coarse), (max-width:768px){
+  .sol{padding:11px 12px}
+  .sol-t{font-size:0.8rem}
+  .sol-s{font-size:0.74rem}
+}
