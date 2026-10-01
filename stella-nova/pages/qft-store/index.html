@@ -67,8 +67,10 @@
     </div>
 
     <!-- Register card: n qubits (stepper), bits per angle B (slider), and the
-         amplitude-axis toggle that adds a θ dial per qubit. -->
-    <div class="card">
+         amplitude-axis toggle that adds a θ dial per qubit. On phones this
+         card is a dock fixed to the bottom of the screen (style.css, max
+         760px), so the dials and the round trip stay in view. -->
+    <div class="card reg" id="reg">
       <div class="lbl">Register <span class="tag">storage medium</span></div>
       <div class="row">
         <span class="name">qubits&nbsp;<b style="color:var(--ink)">n</b></span>

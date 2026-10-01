@@ -91,11 +91,45 @@ canvas.viz{width:100%;height:170px;display:block;border-radius:9px;background:rg
 
 .explain{font-size:0.78rem;color:var(--dim);line-height:1.7} .explain b{color:var(--ink)} .explain em{color:var(--amber);font-style:normal}
 
+/* Phones: one scroll column, and the register card as a bottom dock.
+   #panel and #viz give their children to #main (display:contents), so
+   the order is header, payload, ① dials, ② round trip, ③ waveform, notes.
+   The dock keeps n, B and the θ switch in reach while the dials and the
+   decoded text stay in view. main.js sets --dock-h from the dock height. */
 @media(max-width:760px){
   html,body{overflow:auto}
-  #main{flex-direction:column;min-height:0}
-  #panel{width:auto;border-right:none;border-bottom:1px solid var(--border-b);overflow:visible}
-  #viz{overflow:visible}
+  #main{flex:none;flex-direction:column;gap:14px;min-height:0;padding:14px 14px calc(var(--dock-h,200px) + 18px)}
+  #panel,#viz{display:contents}
+  #viz>*{max-width:none}
+  header{order:0;margin:0;padding-bottom:12px}
+  #panel .card:not(.reg){order:1;border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:14px 15px}
+  #viz>.card{order:2}
+  .card + .card{margin-top:0}
+  .topbar-r{display:none}
+  #panel #reg{position:fixed;left:0;right:0;bottom:0;z-index:60;margin:0;border:none;border-top:1px solid var(--border-b);border-radius:14px 14px 0 0;
+    background:rgba(10,13,20,0.97);padding:10px 14px calc(10px + env(safe-area-inset-bottom));
+    display:grid;grid-template-columns:auto 1fr;align-items:center;column-gap:14px;row-gap:6px;box-shadow:0 -10px 30px rgba(0,0,0,0.45)}
+  #reg>.lbl,#reg>.note,#reg>.holevo{display:none}
+  #reg>.row,#reg>.slider,#reg>.toggle-row{margin:0}
+  #reg>.slider{grid-column:2}
+  #reg>.toggle-row{grid-column:1 / -1}
+  #reg>.readout{grid-column:1 / -1;margin:0}
+  #reg>.readout>div{display:flex;align-items:baseline;justify-content:space-between;padding:5px 9px}
+  #reg>.readout .v{font-size:0.82rem}
+  .stepper .v{min-width:44px}
+}
+/* touch: 44 px targets and 11 px minimum text */
+@media(pointer:coarse){
+  .stepper button{width:44px;height:44px}
+  .sw{width:46px;height:26px;border-radius:14px}
+  .sw::after{width:20px;height:20px;top:2px;left:2px}
+  .sw.on::after{left:22px}
+  .sw::before{content:"";position:absolute;inset:-9px -6px}
+  input[type=range]{height:6px}
+  input[type=range]::-webkit-slider-thumb{width:24px;height:24px}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px}
+  .toggle-row{min-height:44px;font-size:0.75rem}
+  .lbl .tag,.capnum,.dial .dj,.readout .k,.rtlab,.slider .head{font-size:11px}
 }
 
 #payload{width:100%;background:rgba(7,10,17,0.7);border:1px solid var(--border-b);border-radius:8px;color:var(--ink);

@@ -164,5 +164,8 @@ $('n-minus').onclick=()=>{S.n=Math.max(1,S.n-1);render();};
 $('n-plus').onclick=()=>{S.n=Math.min(20,S.n+1);render();};
 // The waveform is size-dependent, so redraw it on resize.
 window.addEventListener('resize',drawWave);
+// Phone dock: keep the page padding equal to the dock height (--dock-h),
+// so the last card can scroll clear of the dock.
+if(window.ResizeObserver)new ResizeObserver(()=>{const r=$('reg');document.documentElement.style.setProperty('--dock-h',(getComputedStyle(r).position==='fixed'?r.offsetHeight:0)+'px');}).observe($('reg'));
 // First paint.
 render();
