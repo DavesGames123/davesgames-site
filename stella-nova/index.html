@@ -25,19 +25,24 @@
 <meta name="twitter:description" content="Stella Nova, a space colony builder by Dave, with its interactive wiki and an open lab of physics simulations and live WebGPU shaders you can play in your browser.">
 <meta name="twitter:image" content="https://davesgames.io/stella-nova/icons/og-image.jpg">
 
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0a0c11;--bg2:#0e1118;--sidebar:#0c0f16;--border:rgba(150,200,255,0.07);--border-b:rgba(150,200,255,0.16);--blue:#96c8ff;--blue-dim:#4a7aaa;--yellow:#ffc832;--orange:#ff7b00;--green:#64c864;--red:#ff5050;--text:#c0cfe0;--text-dim:#5a7090;--text-faint:#2a3850;--sidebar-w:290px;--topbar-h:56px}
+:root{--bg:#0a0c12;--bg2:#0d1018;--sidebar:#0b0e15;--border:rgba(150,200,255,0.09);--border-b:rgba(150,200,255,0.18);--ink:#eef3fb;--dim:#7f91ad;--f-sans:'Space Grotesk',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;--f-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;--f-serif:'Instrument Serif','Iowan Old Style',Georgia,serif;--ease:cubic-bezier(.2,.7,.2,1);--blue:#96c8ff;--blue-dim:#4a7aaa;--yellow:#ffc832;--orange:#ff7b00;--green:#64c864;--red:#ff5050;--text:#c0cfe0;--text-dim:#5a7090;--text-faint:#2a3850;--sidebar-w:290px;--topbar-h:56px}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
-body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoothing:antialiased}
+body{font-family:var(--f-sans);color:var(--text);-webkit-font-smoothing:antialiased}
 #shell{display:flex;width:100%;height:100%}
 #sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);height:100%;background:var(--sidebar);border-right:1px solid var(--border-b);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;z-index:200;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1),width 0.28s cubic-bezier(0.4,0,0.2,1),min-width 0.28s cubic-bezier(0.4,0,0.2,1),opacity 0.28s ease}
 @media(max-width:768px){#sidebar{position:fixed;top:0;left:0;bottom:0;transform:translateX(-100%);box-shadow:4px 0 32px rgba(0,0,0,0.6)}#sidebar.open{transform:translateX(0)}#overlay{display:none;position:fixed;inset:0;z-index:190;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px)}#overlay.show{display:block}}
 #sb-header{padding:24px 22px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
-#sb-wordmark{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:1.8rem;letter-spacing:0.2em;text-transform:uppercase;color:#e8eef8;line-height:1}
-#sb-sub{font-size:0.7rem;letter-spacing:0.18em;color:var(--text-dim);margin-top:6px;text-transform:uppercase}
-#sb-status{margin-top:14px;font-size:0.6rem;letter-spacing:0.14em;color:var(--green);text-transform:uppercase}
+#sb-wordmark{font-family:var(--f-sans);font-weight:300;font-size:1.7rem;letter-spacing:0.2em;text-transform:uppercase;line-height:1;display:flex;flex-wrap:wrap;column-gap:.38em}
+#sb-wordmark span{background:linear-gradient(180deg,#fff 10%,#c9dcf5 55%,#7f9cc6 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+#sb-wordmark span+span{background-image:linear-gradient(180deg,#fff6d6 5%,#ffd65c 50%,#ff9c3a 100%)}
+#sb-sub{font-family:var(--f-serif);font-style:italic;font-size:1.12rem;color:var(--dim);margin-top:8px}
+#sb-sub em{color:var(--yellow);font-size:1.05em}
+#sb-status{display:inline-flex;align-items:center;margin-top:14px;padding:6px 12px;border:1px solid var(--border-b);border-radius:999px;background:rgba(12,16,26,.78);font:500 0.6rem/1 var(--f-mono);letter-spacing:0.16em;color:var(--dim);text-transform:uppercase}
 #sb-status::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--green);margin-right:7px;vertical-align:middle;box-shadow:0 0 6px var(--green)}
 #sb-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:10px 0;scrollbar-width:thin;scrollbar-color:var(--text-faint) transparent}
 #sb-nav::-webkit-scrollbar{width:4px}#sb-nav::-webkit-scrollbar-thumb{background:var(--text-faint);border-radius:2px}
@@ -85,7 +90,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 .cluster-head.math-head .cluster-icon{opacity:1;color:#9db4ff}.cluster.open .cluster-head.math-head .cluster-label{color:#9db4ff}
 .nav-sub.c-math{color:#9db4ff;border-left-color:#9db4ff;background:linear-gradient(90deg,rgba(157,180,255,0.08) 0%,transparent 70%)}
 .nav-sub.c-qcomp{color:#a89cff;border-left-color:#a89cff;background:linear-gradient(90deg,rgba(168,156,255,0.10) 0%,transparent 70%)}
-.cluster-head.learn-head .cluster-icon{opacity:1;color:#7cd4ea;font-family:'Cormorant Garamond',serif;font-style:italic;font-weight:400}
+.cluster-head.learn-head .cluster-icon{opacity:1;color:#7cd4ea;font-family:var(--f-serif);font-style:italic;font-weight:400;font-size:1.15rem}
 .cluster.open .cluster-head.learn-head .cluster-label{color:#7cd4ea}
 .cluster-head.shader-head .cluster-icon{opacity:1;color:#e58bd0}
 .cluster.open .cluster-head.shader-head .cluster-label{color:#e58bd0}
@@ -135,11 +140,46 @@ body{font-family:'JetBrains Mono',monospace;color:var(--text);-webkit-font-smoot
 body.sb-collapsed #collapse-btn{transform:rotate(180deg)}
 body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;pointer-events:none}
 @media(max-width:768px){#collapse-btn{display:none}}
-#topbar-title{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:0.95rem;letter-spacing:0.35em;color:var(--text-dim)}
+#topbar-title{font-family:var(--f-sans);font-weight:400;font-size:0.8rem;letter-spacing:0.32em;text-transform:uppercase;color:var(--dim)}
 #topbar-active{margin-left:auto;font-size:0.75rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint)}
 #frame-wrap{flex:1;overflow:hidden}
 #frame-wrap iframe{width:100%;height:100%;border:none;display:block;background:var(--bg)}
-body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,0.05) 4px)}
+/* ── homepage design language (pages/home/style.css) ─────────────────────
+   The sidebar uses the home tokens and fonts: Space Grotesk for labels,
+   IBM Plex Mono for small caps labels, Instrument Serif for the tagline.
+   Items are rounded rows inset from the edge. The active row has a tinted
+   fill and a lit dot in its accent color (the per-item rules above). */
+#sb-header{padding:26px 22px 20px}
+#sb-nav{padding:10px 0 14px}
+.cluster{border-bottom:none;margin:2px 10px}
+.cluster-head{gap:12px;padding:11px 12px;border-radius:12px;transition:background .2s}
+.cluster-head:hover{background:rgba(150,200,255,0.05)}
+.cluster-icon{width:22px;font-size:1rem;opacity:.8}
+.cluster-label{font-size:0.95rem;font-weight:500;letter-spacing:0.01em;text-transform:none;color:#a9bad2}
+.cluster.open .cluster-label{color:var(--ink)}
+.cluster.open>.cluster-head{background:rgba(150,200,255,0.04)}
+.cluster-arrow{font-size:0.95rem;color:var(--dim);opacity:.6}
+.cluster-body{padding-left:4px}
+.cluster.open .cluster-body{padding-bottom:6px}
+.nav-sub{margin:0 0 0 14px;padding:14px 12px 6px 18px;font:500 0.6rem/1.2 var(--f-mono);letter-spacing:0.16em;border-left-width:2px;border-radius:0 6px 6px 0;background:none!important}
+.nav-sub::before{display:none}
+.nav-item{gap:10px;margin:1px 0;padding:9px 12px 9px 34px;border-radius:10px}
+.nav-item::before{left:18px;width:5px;height:5px}
+.nav-item:hover{background:rgba(150,200,255,0.05)}
+.nav-label{font-size:0.9rem;letter-spacing:0;color:#9fb1c9}
+.nav-item:hover .nav-label{color:var(--ink)}
+.nav-badge{font:500 0.55rem/1 var(--f-mono);letter-spacing:.1em;padding:4px 7px;border-radius:999px;border-color:var(--border-b);color:var(--dim)}
+#sb-footer{display:flex;flex-direction:column;gap:10px;padding:16px 16px 18px}
+#sb-wishlist{margin:0;min-height:48px;padding:10px 16px;border:1px solid transparent;border-radius:999px;background:linear-gradient(135deg,#ffd65c,#ffb31a 55%,#ff8a3d);color:#1a1204;font:600 0.86rem/1 var(--f-sans);letter-spacing:.02em;text-transform:none;box-shadow:0 8px 30px -10px rgba(255,190,40,.55),inset 0 1px 0 rgba(255,255,255,.5);animation:none}
+#sb-wishlist:hover{background:linear-gradient(135deg,#ffe07a,#ffbe33 55%,#ff9a52);border-color:transparent;box-shadow:0 12px 36px -10px rgba(255,190,40,.75),inset 0 1px 0 rgba(255,255,255,.5);transform:translateY(-1px)}
+#sb-wishlist .wl-ico,#sb-wishlist:hover .wl-ico{color:#1a1204}
+#sb-linkedin{display:flex;align-items:center;justify-content:center;gap:8px;margin:0;min-height:42px;padding:0 14px;border:1px solid var(--border-b);border-radius:999px;background:rgba(14,18,28,.82);color:var(--text);font:500 0.82rem/1 var(--f-sans);letter-spacing:0;text-transform:none;transition:border-color .3s,color .3s,box-shadow .3s}
+#sb-linkedin::before{content:'in';display:grid;place-items:center;width:18px;height:18px;border-radius:4px;background:#3d9be9;color:#fff;font:700 0.68rem/1 var(--f-sans)}
+#sb-linkedin:hover{background:rgba(14,18,28,.82);border-color:rgba(61,155,233,.7);color:var(--ink);box-shadow:0 10px 28px -12px #3d9be9}
+#sb-clock{order:3;font:500 0.66rem/1 var(--f-mono);letter-spacing:0.2em;color:var(--text-faint)}
+#topbar{background:rgba(11,14,21,.96)}
+#collapse-btn{border-radius:999px;padding:6px 12px;color:var(--dim)}
+#topbar-active{font:500 0.66rem/1 var(--f-mono);letter-spacing:0.16em;color:var(--dim)}
 </style>
 </head>
 <body>
@@ -148,8 +188,8 @@ body::after{content:'';position:fixed;inset:0;z-index:9999;pointer-events:none;b
 <div id="shell">
   <nav id="sidebar">
     <div id="sb-header">
-      <div id="sb-wordmark">Stella Nova</div>
-      <div id="sb-sub">From Ore to Empire</div>
+      <div id="sb-wordmark"><span>Stella</span><span>Nova</span></div>
+      <div id="sb-sub">from ore to <em>empire.</em></div>
       <div id="sb-status">Sim Active</div>
     </div>
     <div id="sb-nav">
