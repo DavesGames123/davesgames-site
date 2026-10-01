@@ -29,20 +29,25 @@
 //    function occlusion / resize / flyTo / resetView / frame   camera
 //    function buildUI / syncUI / setOpen                       controls
 // ============================================================================
-import * as THREE from 'three';
-import { parse, makeGrid, AA_NAME } from './parse.js';
-import { SCHEMES, residueColors, legend, toHex, PLDDT } from './colors.js';
+import { parse, makeGrid } from './parse.js';
+import { SCHEMES, residueColors, legend, toHex } from './colors.js';
 import { GROUPS, PRESETS, byId } from './presets.js';
 import * as R from './reps.js';
 import { camera, canvas, clearGroup, controls, envRT, matAtom, matCartoon, matLine, matMark, matSurface, mol, over, overlay, post, renderer, scene } from './app/stage.js';
-import { $, COARSE, DPR, HOVER, PHONE_Q, REDUCED, cap, ease, esc } from './app/env.js';
-import { ADDITIVES, S, anchorAtom, atomPos, dirty, isPolymer, resLabel } from './app/state.js';
-import { hideHint, hideLoading, nextFrame, showLoading, toast } from './app/feedback.js';
+import { $, PHONE_Q, REDUCED, cap, ease, esc } from './app/env.js';
+import { S, anchorAtom, dirty, isPolymer } from './app/state.js';
+import { hideLoading, nextFrame, showLoading, toast } from './app/feedback.js';
 import { rebuild, rebuildOverlay } from './app/layers.js';
 import { applyOpacity, paint } from './app/paint.js';
 import { neighbours, pickAt } from './app/pick.js';
+import { clearSelection, select, stepResidue } from './app/select.js';
+import { hideCard, showCard } from './app/card.js';
 import { addMeasureAtom, setMeasure, syncMeasure } from './app/measure.js';
 import { placeLabels } from './app/labels.js';
+import { buildStrip, stripColors } from './app/strip.js';
+import { hoverTick } from './app/pointer.js';
+import { focusResidues, focusSelection, occ, occlusion, resetView, resize } from './app/camera.js';
+import { panel, setOpen } from './app/panel.js';
 
 const REPS = [
   { id: 'cartoon', label: 'Cartoon', short: 'Cartoon' },
@@ -56,11 +61,7 @@ const SHOWS = [
   { id: 'ligands', label: 'Ligands' }, { id: 'ions', label: 'Ions' }, { id: 'waters', label: 'Waters' },
   { id: 'hydrogens', label: 'Hydrogens' }, { id: 'additives', label: 'Additives' },
 ];
-const SS_NAME = { H: 'α-helix', G: '3₁₀-helix', E: 'β-strand', C: 'coil' };
 const UNIPROT = /^([OPQ][0-9][A-Z0-9]{3}[0-9]|[A-NR-Z][0-9]([A-Z][A-Z0-9]{2}[0-9]){1,2})$/;
-
-controls.addEventListener('change', dirty);
-controls.addEventListener('start', () => { S.fly = null; hideHint(); });
 
 // symmetric 3x3 eigen-decomposition (Jacobi rotations)
 function eig3(A) {
@@ -268,341 +269,6 @@ function computeFrame() {
   S.wpos = w;
 }
 
-function select(atom, opts = {}) {
-  const s = S.s;
-  if (!s || atom < 0) { clearSelection(); return; }
-  const ri = s.atoms[atom].res;
-  S.sel = { atom, res: ri };
-  S.hood = neighbours(ri);
-  rebuildOverlay();
-  paint();
-  showCard();
-  stripMark(opts.scroll !== false);
-  if (opts.fly) focusResidues([ri], 10);
-  else if (opts.ensure !== false) setTimeout(() => ensureVisible(ri), 60);
-}
-function clearSelection() {
-  if (!S.sel) return;
-  S.sel = null; S.hood = new Map();
-  rebuildOverlay(); paint(); hideCard(); stripMark(false);
-}
-function stepResidue(dir) {
-  if (!S.sel) return;
-  const s = S.s, r = s.residues[S.sel.res];
-  const list = s.chains[r.chain].residues;
-  let k = list.indexOf(r.index);
-  for (k += dir; k >= 0 && k < list.length; k += dir) {
-    const q = s.residues[list[k]];
-    if (q.kind !== 'water') { select(anchorAtom(q), { fly: false }); return; }
-  }
-}
-
-// ── the card ──────────────────────────────────────────────────────────────
-const card = $('card');
-function showCard() {
-  const s = S.s, sel = S.sel;
-  if (!s || !sel) return hideCard();
-  const a = s.atoms[sel.atom], r = s.residues[sel.res];
-  const full = AA_NAME[r.name] || (r.kind === 'ligand' ? 'Ligand' : r.kind === 'ion' ? 'Ion' : r.kind === 'nucleic' ? 'Nucleotide' : r.name);
-  const col = S.resColSRGB ? toHex([S.resColSRGB[3 * r.index], S.resColSRGB[3 * r.index + 1], S.resColSRGB[3 * r.index + 2]]) : '#ffd27a';
-  const kind = r.kind === 'protein' ? 'protein' : r.kind;
-  const ssTxt = r.kind === 'protein' ? SS_NAME[r.ss] || 'coil' : '';
-  const bLabel = s.meta.af ? 'pLDDT' : 'B-factor';
-  const bVal = s.meta.af ? `${a.b.toFixed(1)} · ${PLDDT.find(p => a.b > p.min || p.min < 0).label.split(' (')[0].toLowerCase()}` : `${a.b.toFixed(1)} Å²`;
-  const nb = [...S.hood.entries()];
-  const shown = nb.slice(0, PHONE_Q.matches ? 24 : 18);
-  const chip = ([rj, d]) => {
-    const q = s.residues[rj];
-    const c = S.resColSRGB ? toHex([S.resColSRGB[3 * rj], S.resColSRGB[3 * rj + 1], S.resColSRGB[3 * rj + 2]]) : '#888';
-    const ch = q.chain !== r.chain ? `${esc(q.chainId)}:` : '';
-    return `<button type="button" data-r="${rj}"><i style="background:${c}"></i>${ch}${esc(resLabel(q))} <span style="color:var(--dim)">${d.toFixed(1)}</span></button>`;
-  };
-  card.innerHTML = `
-    <div class="c-head"><div class="ttl">
-      <div class="eyebrow" style="--gc:${col}"><i></i>Chain ${esc(r.chainId)} · ${esc(kind)}${ssTxt ? ' · ' + ssTxt : ''}</div>
-      <div class="c-name">${esc(resLabel(r))}<small>${esc(full)}</small></div>
-    </div><button class="c-x" type="button" data-act="close" aria-label="Clear selection">✕</button></div>
-    <div class="specs">
-      <span class="k">Atom</span><span class="v">${esc(a.name)} · ${esc(a.el)}</span>
-      <span class="k">${bLabel}</span><span class="v">${bVal}</span>
-      <span class="k">Occupancy</span><span class="v">${a.occ.toFixed(2)}</span>
-      <span class="k">Atoms</span><span class="v">${r.atoms.length}</span>
-    </div>
-    <div class="c-sub">Within 5 Å · ${nb.length} residue${nb.length === 1 ? '' : 's'}</div>
-    <div class="nb">${shown.map(chip).join('')}${nb.length > shown.length ? `<span class="more">+${nb.length - shown.length} more</span>` : ''}${nb.length ? '' : '<span class="more">none</span>'}</div>
-    <div class="c-acts"><button type="button" data-act="prev" aria-label="Previous residue">‹</button><button type="button" data-act="focus">Focus</button><button type="button" data-act="next" aria-label="Next residue">›</button></div>`;
-  card.hidden = false;
-  document.body.classList.add('has-card');
-  dirty();
-}
-function hideCard() { card.hidden = true; document.body.classList.remove('has-card'); dirty(); }
-card.addEventListener('click', e => {
-  const b = e.target.closest('button');
-  if (!b) return;
-  if (b.dataset.r !== undefined) { select(anchorAtom(S.s.residues[+b.dataset.r]), { fly: true }); return; }
-  const act = b.dataset.act;
-  if (act === 'close') clearSelection();
-  else if (act === 'prev') stepResidue(-1);
-  else if (act === 'next') stepResidue(1);
-  else if (act === 'focus') focusSelection();
-});
-
-// ── sequence strip ────────────────────────────────────────────────────────
-const seq = $('seq');
-function buildStrip() {
-  const s = S.s;
-  let html = '';
-  s.chains.forEach((ch, ci) => {
-    const pol = ch.residues.filter(i => isPolymer(s.residues[i]));
-    if (!pol.length) return;
-    html += `<div class="chn" data-c="${ci}"><span class="chl">${esc(ch.id)}</span>`;
-    let last = null;
-    for (const ri of pol) {
-      const r = s.residues[ri];
-      const ssc = r.ss === 'H' || r.ss === 'G' ? ' h' : r.ss === 'E' ? ' e' : '';
-      const n = r.seq % 10 === 0 || last === null ? ` data-n="${r.seq}"` : '';
-      html += `<span class="aa${ssc}" data-r="${ri}"${n}>${r.code || 'X'}</span>`;
-      last = r;
-    }
-    html += '</div>';
-  });
-  const het = s.residues.filter(r => r.kind === 'ligand' && !ADDITIVES.has(r.name));
-  if (het.length) {
-    html += '<div class="chn het"><span class="chl">Het</span>';
-    const seen = new Set();
-    for (const r of het) {
-      const k = r.name + r.chainId;
-      if (seen.has(k) || seen.size >= 40) continue;
-      seen.add(k);
-      html += `<span class="aa lig" data-r="${r.index}" style="width:auto;padding:0 4px">${esc(r.name)}</span>`;
-    }
-    html += '</div>';
-  }
-  seq.innerHTML = html;
-  S.cells = new Map();
-  seq.querySelectorAll('.aa').forEach(el => S.cells.set(+el.dataset.r, el));
-  stripColors();
-  seq.scrollLeft = 0;
-}
-function stripColors() {
-  const s = S.s;
-  const col = residueColors(s, S.color);
-  for (const [ri, el] of S.cells) {
-    el.style.setProperty('--c', toHex([col[3 * ri], col[3 * ri + 1], col[3 * ri + 2]]));
-    el.classList.toggle('off', !S.chainOn[s.residues[ri].chain]);
-  }
-}
-let markedCells = [];
-function stripMark(scroll) {
-  for (const el of markedCells) el.classList.remove('sel', 'hood');
-  markedCells = [];
-  if (!S.sel) return;
-  const el = S.cells.get(S.sel.res);
-  if (el) { el.classList.add('sel'); markedCells.push(el); }
-  for (const ri of S.hood.keys()) { const c = S.cells.get(ri); if (c) { c.classList.add('hood'); markedCells.push(c); } }
-  if (el && scroll) {
-    const sr = seq.getBoundingClientRect(), er = el.getBoundingClientRect();
-    if (er.left < sr.left + 40 || er.right > sr.right - 20) seq.scrollTo({ left: seq.scrollLeft + (er.left - sr.left) - sr.width / 2, behavior: REDUCED ? 'auto' : 'smooth' });
-  }
-}
-let seqDown = null;
-seq.addEventListener('pointerdown', e => { seqDown = { x: e.clientX, y: e.clientY, sl: seq.scrollLeft }; });
-seq.addEventListener('pointerup', e => {
-  if (!seqDown) return;
-  const moved = Math.abs(e.clientX - seqDown.x) + Math.abs(seq.scrollLeft - seqDown.sl);
-  seqDown = null;
-  if (moved > 8) return;
-  const el = e.target.closest('.aa');
-  if (!el) return;
-  const r = S.s.residues[+el.dataset.r];
-  if (S.measure) { addMeasureAtom(anchorAtom(r)); return; }
-  select(anchorAtom(r), { fly: true, scroll: false });
-});
-seq.addEventListener('pointercancel', () => { seqDown = null; });
-seq.addEventListener('wheel', e => {
-  if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) { seq.scrollLeft += e.deltaY; e.preventDefault(); }
-}, { passive: false });
-if (HOVER) {
-  seq.addEventListener('pointerover', e => {
-    const el = e.target.closest('.aa');
-    const ri = el ? +el.dataset.r : -1;
-    if (ri !== S.hoverRes) { S.hoverRes = ri; paint(); }
-  });
-  seq.addEventListener('pointerleave', () => { if (S.hoverRes >= 0) { S.hoverRes = -1; paint(); } });
-}
-
-// ── canvas pointer: tap, double tap, hover ────────────────────────────────
-const tip = $('tip');
-const downs = new Map();
-let multi = false, lastTap = { t: 0, res: -1 };
-canvas.addEventListener('pointerdown', e => {
-  downs.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() });
-  if (downs.size > 1) multi = true;
-});
-const endPointer = e => {
-  const d = downs.get(e.pointerId);
-  downs.delete(e.pointerId);
-  if (!d) return;
-  const wasMulti = multi;
-  if (!downs.size) multi = false;
-  if (e.type === 'pointercancel' || wasMulti) return;
-  if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > (COARSE ? 10 : 6) || performance.now() - d.t > 600) return;
-  onTap(e.clientX, e.clientY);
-};
-canvas.addEventListener('pointerup', endPointer);
-canvas.addEventListener('pointercancel', endPointer);
-function onTap(x, y) {
-  const i = pickAt(x, y);
-  if (S.measure) { if (i >= 0) addMeasureAtom(i); return; }
-  const now = performance.now();
-  if (i >= 0) {
-    const ri = S.s.atoms[i].res;
-    if (now - lastTap.t < 350 && lastTap.res === ri) { focusSelection(); lastTap = { t: 0, res: -1 }; return; }
-    lastTap = { t: now, res: ri };
-    select(i);
-  } else {
-    lastTap = { t: 0, res: -1 };
-    clearSelection();
-  }
-}
-let mouse = null;
-if (HOVER) {
-  canvas.addEventListener('pointermove', e => { if (e.pointerType === 'mouse') { mouse = { x: e.clientX, y: e.clientY, buttons: e.buttons }; } });
-  canvas.addEventListener('pointerleave', () => { mouse = null; setHover(-1); });
-}
-function setHover(atom, x, y) {
-  if (atom < 0) { tip.classList.remove('show'); if (S.hoverRes >= 0) { S.hoverRes = -1; paint(); markHoverCell(); } return; }
-  const s = S.s, a = s.atoms[atom], r = s.residues[a.res];
-  tip.innerHTML = `${esc(r.chainId)}:${esc(resLabel(r))} <i>· ${esc(a.name)}${s.meta.af ? ' · pLDDT ' + a.b.toFixed(0) : ''}</i>`;
-  const cr = canvas.getBoundingClientRect();
-  tip.style.transform = `translate(${x - cr.left + 14}px,${y - cr.top + 14}px)`;
-  tip.classList.add('show');
-  if (r.index !== S.hoverRes) { S.hoverRes = r.index; paint(); markHoverCell(); }
-}
-let hovCell = null;
-function markHoverCell() {
-  if (hovCell) hovCell.classList.remove('hov');
-  hovCell = S.hoverRes >= 0 ? S.cells.get(S.hoverRes) : null;
-  if (hovCell) hovCell.classList.add('hov');
-}
-
-// ── camera ────────────────────────────────────────────────────────────────
-const occ = { l: 0, r: 0, t: 0, b: 0 };
-function occlusion() {
-  const o = { l: 0, r: 0, t: 0, b: 0 };
-  const cr = canvas.getBoundingClientRect(), w = cr.width, h = cr.height;
-  const consider = el => {
-    if (!el || el.hidden) return;
-    const q = el.getBoundingClientRect();
-    const x0 = Math.max(cr.left, q.left), x1 = Math.min(cr.right, q.right), y0 = Math.max(cr.top, q.top), y1 = Math.min(cr.bottom, q.bottom);
-    if (x1 - x0 < 1 || y1 - y0 < 1) return;
-    const fw = (x1 - x0) / w, fh = (y1 - y0) / h;
-    if (fw >= fh) { if (y0 + y1 > cr.top * 2 + h) o.b = Math.max(o.b, cr.bottom - y0); else o.t = Math.max(o.t, y1 - cr.top); }
-    else { if (x0 + x1 < cr.left * 2 + w) o.l = Math.max(o.l, x1 - cr.left); else o.r = Math.max(o.r, cr.right - x0); }
-  };
-  if (panel.classList.contains('open')) consider(panel);
-  consider($('seqWrap'));
-  if (PHONE_Q.matches) consider(card);
-  return o;
-}
-function clearRect() {
-  const w = canvas.clientWidth, h = canvas.clientHeight, o = occlusion();
-  return { x0: o.l, x1: w - o.r, y0: o.t, y1: h - o.b, w, h, o };
-}
-function fitDist(radius) {
-  const c = clearRect();
-  const frac = Math.max(0.25, Math.min((c.x1 - c.x0) / c.h, (c.y1 - c.y0) / c.h));
-  return (radius / (Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * frac)) * 1.04;
-}
-function resize() {
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (!w || !h) return false;
-  const dpr = DPR();
-  if (renderer.getPixelRatio() !== dpr) renderer.setPixelRatio(dpr);
-  const sz = renderer.getSize(new THREE.Vector2());
-  if (sz.x !== w || sz.y !== h) renderer.setSize(w, h, false);
-  post.setSize(w, h, dpr);
-  camera.aspect = w / h;
-  camera.setViewOffset(w, h, (occ.l - occ.r) / -2, (occ.t - occ.b) / -2, w, h);
-  camera.updateProjectionMatrix();
-  return true;
-}
-function flyTo(target, dist, dur = 0.9) {
-  S.fly = { t: 0, dur: REDUCED ? 0.01 : dur, t0: controls.target.clone(), t1: target.clone(), d0: camera.position.distanceTo(controls.target), d1: dist };
-  dirty();
-}
-function resetView(instant) {
-  S.fly = null;
-  const d = fitDist(S.bound.r);
-  controls.target.copy(S.bound.c);
-  camera.up.set(0, 1, 0);
-  camera.position.set(S.bound.c.x, S.bound.c.y, S.bound.c.z + d);
-  camera.lookAt(controls.target);
-  controls.maxDistance = Math.max(80, S.bound.r * 10);
-  controls.minDistance = 2;
-  if (!instant) { const t = S.bound.c.clone(); camera.position.z += d * 0.25; flyTo(t, d, 0.6); }
-  controls.update();
-  dirty();
-}
-function focusResidues(list, pad = 8) {
-  const s = S.s, c = new THREE.Vector3();
-  let n = 0;
-  for (const ri of list) for (const i of s.residues[ri].atoms) { c.add(atomPos(i)); n++; }
-  if (!n) return;
-  c.multiplyScalar(1 / n);
-  let r = 0;
-  for (const ri of list) for (const i of s.residues[ri].atoms) r = Math.max(r, atomPos(i).distanceTo(c));
-  flyTo(c, fitDist(Math.min(r + pad, S.bound.r)));
-}
-function focusSelection() {
-  if (!S.sel) { resetView(false); return; }
-  focusResidues([S.sel.res, ...[...S.hood.keys()].slice(0, 30)], 3);
-}
-// pan to a picked residue that sits under the card, the strip or the panel
-function ensureVisible(ri) {
-  const s = S.s;
-  if (!s || !S.sel) return;
-  const p = atomPos(anchorAtom(s.residues[ri])).project(camera);
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  const x = (p.x + 1) / 2 * w, y = (1 - p.y) / 2 * h;
-  const cr = canvas.getBoundingClientRect();
-  const blocked = [card, $('seqWrap'), panel.classList.contains('open') ? panel : null].some(el => {
-    if (!el || el.hidden) return false;
-    const q = el.getBoundingClientRect();
-    return x + cr.left > q.left - 16 && x + cr.left < q.right + 16 && y + cr.top > q.top - 16 && y + cr.top < q.bottom + 16;
-  });
-  if (blocked || x < 8 || x > w - 8 || y < 8 || y > h - 8) flyTo(atomPos(anchorAtom(s.residues[ri])), camera.position.distanceTo(controls.target), 0.7);
-}
-
-// ── panel, sheet, dock ────────────────────────────────────────────────────
-const panel = $('panel'), dockPanel = $('dockPanel');
-function setOpen(open) {
-  panel.classList.toggle('open', open);
-  if (!open) panel.classList.remove('full');
-  document.body.classList.toggle('panel-closed', !open);
-  document.body.classList.toggle('sheet-open', open);
-  dockPanel.classList.toggle('on', open);
-  dockPanel.setAttribute('aria-expanded', String(open));
-  dirty();
-}
-$('gear').addEventListener('click', () => setOpen(true));
-dockPanel.addEventListener('click', () => setOpen(!panel.classList.contains('open')));
-$('panelClose').addEventListener('click', () => setOpen(false));
-setOpen(!PHONE_Q.matches);
-PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
-const grip = $('sheetGrip');
-let gripY = null;
-grip.addEventListener('pointerdown', e => { gripY = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) { /* old browsers */ } });
-grip.addEventListener('pointerup', e => {
-  if (gripY === null) return;
-  const dy = e.clientY - gripY; gripY = null;
-  if (Math.abs(dy) < 8) panel.classList.toggle('full');
-  else if (dy < -40) panel.classList.add('full');
-  else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setOpen(false); }
-  dirty();
-});
-grip.addEventListener('pointercancel', () => { gripY = null; });
-
 function markPreset(id) {
   document.querySelectorAll('.pc').forEach(b => b.classList.toggle('on', b.dataset.id === id));
 }
@@ -807,12 +473,7 @@ function frame(now) {
   controls.autoRotate = S.spin && !S.fly;
   if (controls.update(dt)) S.dirty = true;
   if (S.spin) S.dirty = true;
-  // hover pick, once a frame, when the mouse is still
-  if (mouse && !mouse.buttons && S.s && !S.measure) {
-    const m = mouse; mouse = null;
-    const i = pickAt(m.x, m.y, 4);
-    setHover(i, m.x, m.y);
-  }
+  hoverTick();
   if (!S.dirty) return;
   S.dirty = false;
   if (!resize()) return;
