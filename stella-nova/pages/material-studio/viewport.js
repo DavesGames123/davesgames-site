@@ -85,6 +85,9 @@ export const VIEW_DEFAULTS = Object.freeze({
   normalStrength: 1, flipGreen: false, anisoRotation: 0, sheenRoughness: 0.5, specOcclusion: 1,
 });
 const RAW_VIEWS = new Set(VIEWPORT_DEBUG_VIEWS.filter(v => !['lit', 'diffuseOnly', 'specularOnly'].includes(v)));
+// Raw views that show map data, not a color: the post pass writes them with
+// no sRGB encode and no dither, so roughness 0.5 shows as 128, as in the PNG.
+const DATA_VIEWS = new Set(['opacity', 'normal', 'worldNormal', 'ao', 'roughness', 'metallic', 'height', 'clearcoat', 'anisotropy', 'ndotl']);
 const HDR = 'rgba16float';
 const DEPTH = 'depth24plus';
 const SHADOW_RES = 2048;
@@ -875,7 +878,7 @@ function writeFrame(T, e, L, mesh, o) {
     for (let i = 0; i < 9; i++) f.set([s[i * stride], s[i * stride + 1], s[i * stride + 2], 0], 108 + i * 4);
   }
   device.queue.writeBuffer(R.frameBuf, 0, f);
-  return { groundOn, shadowM, raw };
+  return { groundOn, shadowM, raw, data: DATA_VIEWS.has(debug) };
 }
 
 function activeScalars() { return (R.cur && R.cur.scalars) || state.scalars || C.DEFAULT_SCALARS; }
@@ -960,7 +963,7 @@ function renderScene(T, outView, o) {
   const v = state.view;
   const tm = Math.max(0, C.TONEMAPPERS.indexOf(v.tonemap));
   device.queue.writeBuffer(R.postBuf, 0, new Float32Array([
-    Math.pow(2, +v.exposure || 0), tm, fr.raw ? 1 : 0, 1,
+    Math.pow(2, +v.exposure || 0), tm, fr.data ? 2 : fr.raw ? 1 : 0, fr.data ? 0 : 1,
     A ? split / T.w : -1, 0.75, 1 / T.w, 1 / T.h,
   ]));
   const post = (view, entry, bg) => {

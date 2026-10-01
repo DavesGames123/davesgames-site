@@ -21,7 +21,7 @@
 // ============================================================================
 
 struct Post {
-  a: vec4f,   // x exposure multiplier, y tonemap id, z raw (debug view: no tonemap), w dither
+  a: vec4f,   // x exposure multiplier, y tonemap id, z 0 lit, 1 raw (no tonemap), 2 data (no tonemap, no sRGB), w dither
   b: vec4f,   // x compare divider x in 0..1 (< 0 = none), y fxaa subpixel, z 1/width, w 1/height
 }
 
@@ -134,8 +134,9 @@ fn fs_tonemap(v: FsOut) -> @location(0) vec4f {
       default: { c = clamp(c, vec3f(0.0), vec3f(1.0)); }
     }
   }
-  var o = srgb_encode(c);
-  o += vec3f(ign(v.clip.xy) * P.a.w / 255.0);
+  // A data view (P.a.z = 2) shows the stored map values with no sRGB encode.
+  var o = select(srgb_encode(c), clamp(c, vec3f(0.0), vec3f(1.0)), P.a.z > 1.5);
+  o += vec3f((ign(v.clip.xy) * P.a.w) / 255.0);
   if (P.b.x >= 0.0) {
     let dx = abs(v.clip.x - (P.b.x / P.b.z));
     if (dx < 1.0) { o = vec3f(1.0, 0.78, 0.2); }
