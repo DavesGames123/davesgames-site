@@ -1,0 +1,232 @@
+/* ============================================================================
+   ORIGAMI SIMULATOR  ·  stylesheet
+   ----------------------------------------------------------------------------
+   Dark only. The ground is the site's near-black (#0a0c12). The control tokens
+   are the native app's dark palette (theme.rs dark) moved onto that ground.
+   Fonts are the system UI face and the system monospace face.
+   Sizes are in rem: Cmd/Ctrl + and - change the root size (the native
+   interface zoom), so every control scales together.
+     grep -n 'STAGE'      the two panes, horizontal and vertical
+     grep -n 'BARS'       the in-pane tool and fold bars
+     grep -n 'LIBRARY'    the preset dialog
+     grep -n 'PANEL'      the drawer (desktop) and sheet (phone)
+     grep -n 'TOUCH'      44px targets on a coarse pointer
+     grep -n 'PHONE'      dock, sheet, stacked panes
+     grep -n 'LANDSCAPE'  the short landscape phone
+   ========================================================================== */
+:root{
+  --ground:#0a0c12; --panel:#12151d; --field:#080a0f; --btn:#191d27; --btn-h:#232836;
+  --edge:#2a3040; --line:rgba(201,188,160,0.10); --line-b:rgba(224,138,92,0.26);
+  --ink:#ece4d4; --dim:#9a8f7c; --accent:#e08a5c; --bad:#ffc857; --good:#7fd69a;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace;
+  --sans:system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  --top-h:2.9rem; --status-h:1.9rem; --panel-w:21rem; --pad:0.45rem;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--ground);overscroll-behavior:none}
+body{font-family:var(--sans);color:var(--ink);-webkit-font-smoothing:antialiased;font-size:0.8rem}
+button{font-family:var(--mono);touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+a{color:var(--accent)}
+[hidden]{display:none!important}
+
+.topbar{
+  position:fixed;top:0;left:0;right:0;height:var(--top-h);z-index:30;display:flex;align-items:center;gap:1rem;padding:0 1rem;
+  background:linear-gradient(180deg,rgba(10,12,18,0.98),rgba(10,12,18,0.9));border-bottom:1px solid var(--line);
+}
+.brand{font-family:var(--sans);font-weight:600;font-size:0.95rem;letter-spacing:0.22em;color:#e8eef8;display:flex;align-items:center;gap:0.55rem;white-space:nowrap}
+.brand .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 9px var(--accent)}
+.sys{font-family:var(--mono);font-size:0.62rem;letter-spacing:0.2em;color:var(--dim);white-space:nowrap}
+.pagetitle{font-family:var(--mono);font-size:0.72rem;letter-spacing:0.16em;color:var(--accent);text-transform:uppercase;white-space:nowrap}
+.tb-right{margin-left:auto;display:flex;align-items:center;gap:0.5rem}
+.tb-btn{white-space:nowrap;height:1.9rem;padding:0 0.7rem;border:1px solid var(--edge);background:var(--btn);color:var(--ink);border-radius:0.5rem;font-size:0.66rem;letter-spacing:0.1em}
+.tb-btn:hover{background:var(--btn-h)}
+.tb-btn:disabled{opacity:0.4;cursor:default}
+.seg{display:flex;border:1px solid var(--edge);border-radius:0.5rem;overflow:hidden;height:1.9rem}
+.seg button{border:0;border-right:1px solid var(--edge);background:var(--btn);color:var(--dim);font-size:0.62rem;letter-spacing:0.1em;padding:0 0.65rem}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:var(--btn-h);color:var(--ink)}
+.seg button.on{background:var(--accent);color:var(--panel)}
+html.in-frame .brand,html.in-frame .sys{display:none}
+@media (max-width:1180px){.sys{display:none}}
+@media (max-width:1000px){.pagetitle{display:none} .seg button,.tb-btn{padding:0 0.5rem}}
+
+/* STAGE. The canvas sits under both panes. The panes are transparent frames
+   with their labels and bars; main.js reads their rects as the GPU regions. */
+#stage{
+  position:fixed;left:0;right:0;top:var(--top-h);bottom:var(--status-h);
+  display:grid;gap:var(--pad);padding:var(--pad);
+}
+#stage.horiz{grid-template-columns:1fr 1fr;grid-template-rows:1fr}
+#stage.vert{grid-template-columns:1fr;grid-template-rows:1fr 1fr}
+#gl{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+.pane{position:relative;border:1px solid var(--edge);border-radius:0.9rem;pointer-events:none;min-width:0;min-height:0}
+.pane > *{pointer-events:auto}
+.pane-label{
+  position:absolute;top:0.55rem;left:0.6rem;display:flex;align-items:baseline;gap:0.55rem;
+  padding:0.3rem 0.6rem;border-radius:0.45rem;background:rgba(18,21,29,0.85);
+  font-family:var(--mono);font-size:0.7rem;letter-spacing:0.2em;color:var(--dim);pointer-events:none;max-width:calc(100% - 1.2rem);white-space:nowrap;overflow:hidden
+}
+.pane-label b{color:var(--ink);font-weight:600}
+.pane-label .sub{font-size:0.6rem;letter-spacing:0.12em;opacity:0.8}
+.pane-label .pct{color:var(--ink);letter-spacing:0.08em}
+.pane-label .check{font-size:0.6rem;letter-spacing:0.08em}
+.pane-label .check.ok{color:var(--good)}
+.pane-label .check.bad{color:var(--bad)}
+#nogpu{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:2rem;z-index:5;background:var(--ground)}
+#nogpu > div{max-width:28rem;border:1px solid var(--line-b);border-radius:0.8rem;padding:1.2rem 1.4rem;background:var(--panel);line-height:1.6}
+#nogpu p{color:var(--dim);margin-top:0.4rem}
+
+/* BARS. One floating bar at the base of each pane, as in the native app. */
+.bar{
+  position:absolute;left:50%;bottom:0.6rem;transform:translateX(-50%);max-width:calc(100% - 1rem);
+  display:flex;align-items:center;gap:0.35rem;padding:0.45rem 0.6rem;
+  background:var(--panel);border:1px solid var(--edge);border-radius:0.9rem;box-shadow:0 0.3rem 1.2rem rgba(0,0,0,0.45);
+  overflow-x:auto;scrollbar-width:none
+}
+.bar::-webkit-scrollbar{display:none}
+.bar .sect{font-family:var(--mono);font-size:0.58rem;letter-spacing:0.2em;color:var(--dim);padding:0 0.35rem 0 0.15rem}
+.bar .gap{flex:0 0 0.4rem}
+.chip,.tool{
+  flex:0 0 auto;height:1.75rem;padding:0 0.7rem;border:0;border-radius:0.5rem;
+  font-size:0.64rem;letter-spacing:0.08em;background:var(--btn);color:var(--dim);white-space:nowrap
+}
+.chip:hover{background:var(--btn-h);color:var(--ink)}
+.chip.on{background:var(--accent);color:var(--panel)}
+.chip:disabled{opacity:0.4;cursor:default}
+/* A tool chip carries its crease colour (app.rs chip_tool): a faint tint at
+   rest, solid when picked. */
+.tool{color:var(--tc);background:color-mix(in srgb,var(--btn) 86%,var(--tc))}
+.tool:hover{background:color-mix(in srgb,var(--btn) 72%,var(--tc))}
+.tool.on{background:var(--tc);color:var(--panel)}
+.scrub{flex:1 1 auto;min-width:6rem;width:16rem;accent-color:var(--accent)}
+.bar .big{font-family:var(--mono);font-size:1.05rem;color:var(--ink);min-width:3.2rem;text-align:right;font-variant-numeric:tabular-nums}
+
+/* LIBRARY. A scrim and a centred panel, three chips per row. */
+#library{position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center}
+#library .scrim{position:absolute;inset:0;background:rgba(10,12,18,0.62);backdrop-filter:blur(2px)}
+.lib-panel{
+  position:relative;width:min(34rem,calc(100vw - 2rem));max-height:calc(100vh - 2rem);overflow-y:auto;
+  background:var(--panel);border:1px solid var(--edge);border-radius:1.1rem;padding:1.1rem 1.3rem 1.2rem;box-shadow:0 1rem 3rem rgba(0,0,0,0.55)
+}
+.lib-title{font-family:var(--mono);font-size:0.9rem;letter-spacing:0.24em;color:var(--ink);display:flex;align-items:center;margin-bottom:0.6rem}
+.lib-title .x{margin-left:auto;width:2rem;height:2rem;border:1px solid var(--edge);border-radius:0.5rem;background:var(--btn);color:var(--dim)}
+.lib-cat{font-family:var(--mono);font-size:0.58rem;letter-spacing:0.22em;color:var(--dim);margin:0.8rem 0 0.4rem}
+.lib-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:0.4rem}
+.lib-grid .chip{width:100%;height:2rem}
+
+/* PANEL. Desktop: a drawer from the right, under the topbar. */
+#panel{
+  position:fixed;top:var(--top-h);right:0;bottom:var(--status-h);width:var(--panel-w);z-index:40;
+  background:linear-gradient(180deg,rgba(18,21,29,0.98),rgba(10,12,18,0.99));border-left:1px solid var(--edge);
+  padding:1rem 1.1rem 1.4rem;overflow-y:auto;overflow-x:hidden;transform:translateX(100%);transition:transform 0.24s cubic-bezier(0.4,0,0.2,1)
+}
+#panel.open{transform:translateX(0)}
+#panelClose{position:absolute;top:0.7rem;right:0.7rem;width:1.9rem;height:1.9rem;border:1px solid var(--edge);border-radius:0.5rem;background:var(--btn);color:var(--dim)}
+.sec-label{font-family:var(--mono);font-size:0.6rem;letter-spacing:0.2em;color:var(--dim);margin:1.1rem 0 0.55rem}
+.sec-label:first-of-type{margin-top:0.2rem}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:0.4rem}
+.grid3 > button{width:100%;min-width:0;padding:0 0.3rem;overflow:hidden;text-overflow:ellipsis;font-size:0.6rem}
+.row{display:flex;align-items:center;gap:0.6rem}
+.row .val{font-family:var(--mono);min-width:3rem;text-align:right}
+.hint{font-size:0.72rem;line-height:1.55;color:var(--dim);margin-top:0.4rem}
+.hint b{color:var(--ink);font-weight:600}
+.hint .ok{color:var(--good)} .hint .bad{color:var(--bad)}
+.keys{width:100%;border-collapse:collapse;font-size:0.7rem}
+.keys td{padding:0.25rem 0;border-bottom:1px solid var(--line);color:var(--dim)}
+.keys td:first-child{font-family:var(--mono);color:var(--ink);white-space:nowrap;padding-right:0.8rem}
+.about p{font-size:0.74rem;line-height:1.6;color:var(--dim);margin:0 0 0.6rem}
+.about .credits{color:#b9b0a0}
+.phone-only{display:none}
+#sheetGrip{display:none}
+
+#status{
+  position:fixed;left:0;right:0;bottom:0;height:var(--status-h);z-index:25;display:flex;gap:1rem;align-items:center;padding:0 1rem;
+  font-size:0.68rem;color:var(--ink);background:rgba(10,12,18,0.96);border-top:1px solid var(--line);white-space:nowrap;overflow:hidden
+}
+#status #stMain{font-family:var(--mono);color:var(--accent);overflow:hidden;text-overflow:ellipsis;min-width:0}
+#status .right{margin-left:auto;color:var(--dim);overflow:hidden;text-overflow:ellipsis;min-width:0}
+#status a{color:var(--dim)}
+#dock{display:none}
+
+/* TOUCH. Any coarse pointer: every target is 44px or more. */
+@media (pointer:coarse){
+  .chip,.tool{height:44px;font-size:0.72rem}
+  .tb-btn,.seg{height:40px}
+  #panelClose{width:44px;height:44px}
+  .lib-grid .chip{height:46px}
+  .lib-title .x{width:44px;height:44px}
+  .scrub{height:44px}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--top-h:calc(2.7rem + env(safe-area-inset-top));--dock-h:calc(64px + env(safe-area-inset-bottom));--status-h:1.7rem;--pad:0.35rem}
+  .topbar{padding:env(safe-area-inset-top) calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left))}
+  .brand{font-size:0.82rem;letter-spacing:0.16em}
+  .sys,.tb-right{display:none}
+  .pagetitle{margin-left:auto;font-size:0.66rem}
+  #stage{bottom:calc(var(--dock-h) + var(--status-h))}
+  #editBar{display:none}
+  .wide-only,.bar .sect{display:none}
+  .bar{bottom:0.4rem;padding:0.3rem 0.45rem;width:calc(100% - 0.8rem)}
+  .bar .big{font-size:0.9rem;min-width:2.8rem}
+  .scrub{width:auto}
+  .pane-label{top:0.35rem;left:0.4rem;font-size:0.66rem}
+  .pane-label .sub{display:none}
+  .phone-only{display:block}
+  .grid3.phone-only{display:grid}
+  .row.phone-only{display:flex}
+  .desk-only{display:none}
+  .lib-groups.phone-only .lib-cat:first-child{margin-top:0}
+
+  #status{bottom:var(--dock-h);padding:0 calc(12px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));font-size:0.68rem}
+  #status .right{display:none}
+
+  #dock{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;height:var(--dock-h);
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(10,12,18,0.97);border-top:1px solid var(--line-b)
+  }
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--edge);border-radius:12px;background:var(--btn);color:var(--ink);font-size:1.05rem}
+  #dock > button.dock-lib{font-size:0.7rem;letter-spacing:0.06em}
+  #dock > button.on{border-color:var(--accent);color:var(--accent)}
+  #dock .seg{flex:1;height:48px;min-width:0;border-radius:12px}
+  #dock .seg button{flex:1;min-width:0;padding:0;font-size:0.7rem;border-radius:0;height:auto}
+  #dock .seg button.on{background:var(--tc);color:var(--panel)}
+
+  /* The panel is a bottom sheet above the dock. */
+  #panel{
+    top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(56vh,560px);height:min(56dvh,560px);
+    border-left:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;
+    padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch
+  }
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  #panelClose{display:none}
+  #sheetGrip{
+    display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -16px 0.3rem;
+    background:linear-gradient(180deg,rgba(18,21,29,1) 65%,rgba(18,21,29,0));touch-action:none;cursor:grab
+  }
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .sec-label{font-size:0.68rem;margin:1.2rem 0 0.6rem}
+  .hint,.about p{font-size:0.8rem}
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right edge, the dock a tab at
+   the lower left, and the topbar is hidden. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  :root{--top-h:0px}
+  .topbar{display:none}
+  #status{display:none}
+  #stage{top:env(safe-area-inset-top);bottom:var(--dock-h);left:env(safe-area-inset-left);right:env(safe-area-inset-right)}
+  #dock{right:auto;width:min(440px,60vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #panel,#panel.full{
+    top:0;bottom:0;left:auto;right:0;width:min(48vw,380px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;
+    padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;transform:translateX(100%)
+  }
+  #panel.open{transform:translateX(0)}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:10px;margin:10px 0 0 auto;z-index:2}
+}

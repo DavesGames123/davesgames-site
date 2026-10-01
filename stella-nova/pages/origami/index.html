@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Origami Simulator — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   ORIGAMI SIMULATOR  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   A web port of the origami desktop app (Rust, wgpu, winit). Draw a crease
+   pattern in the DIAGRAM pane. The FOLDED pane folds the same pattern live
+   with a CPU port of Amanda Ghassaei's Origami Simulator.
+
+   CREDITS (see CREDITS.txt)
+     Folding simulation: ported from Origami Simulator by Amanda Ghassaei
+       (MIT, (c) 2018 Amanda Ghassaei). Ghassaei, Demaine, Gershenfeld,
+       "Fast, Interactive Origami Simulation using GPU Computation", 7OSME 2018.
+     Patterns: origamicp by Nihat Garibli (MIT): pleat, miura, miura_large,
+       vertex4, vertex6, vertex8. flat-folder by Jason S. Ku (MIT),
+       traditional models from the ORIPA data set: birdbase, birdbase2, boat,
+       crane, house, kabuto, pig, pinwheel, sailboat, yakko.
+
+   MODULES  (plain ES modules, no build step; Rust source in brackets)
+     main.js         the app: state, layout, input, frame loop    [app.rs, main.rs]
+     model.js        the crease-pattern graph                     [model/mod.rs]
+     planarize.js    split crossings, trace faces                 [model/planarize.rs]
+     foldability.js  Maekawa, Kawasaki, Big-Little-Big            [model/foldability.rs]
+     foldio.js       FOLD JSON read and write                     [model/fold_io.rs]
+     sim.js          the bar-and-hinge fold simulator             [sim/mod.rs]
+     solver.js       dihedral angle and gradient                  [sim/solver.rs]
+     triangulate.js  ear clipping                                 [sim/triangulate.rs]
+     patterns.js     the 20 presets; FOLD files in patterns/      [patterns.rs]
+     view.js         View2D, Orbit, snap                          [view.rs]
+     theme.js        palettes and pastels                         [theme.rs]
+     gpu.js tris.js lines.js, shaders/*.wgsl   WebGPU passes      [gpu.rs tris.rs lines.rs]
+     tests.mjs       the Rust unit tests, ported: node tests.mjs
+
+   LAYOUT  (# marks an element id main.js binds to)
+     .topbar   brand, title, #layoutSeg (AUTO / H / V), #menuBtn
+     #stage    .horiz: #pane2d | #pane3d side by side
+               .vert:  #pane2d over #pane3d
+               #gl     one WebGPU canvas under both panes, scissored per pane
+     #library  the preset library dialog, grouped Bases / Tessellations / Models
+     #panel    desktop: a drawer on the right. phone: the bottom sheet
+               (portrait) or right drawer (landscape) with every control.
+     #status   hover readout on the left, credits on the right
+     #dock     phone only: panel button, tool segment, play
+
+   GREP MAP  (main.js)
+     grep -n 'function frame'       the frame loop      [app.rs frame]
+     grep -n 'function draw2d'      the diagram pane    [app.rs draw_2d]
+     grep -n 'function draw3d'      the folded pane     [app.rs draw_3d]
+     grep -n 'function onKey'       every shortcut      [main.rs window_event]
+     grep -n 'function apply'       every control       [app.rs apply]
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Draw an origami crease pattern and watch it fold. A web port of a Rust origami editor with a bar-and-hinge folding simulator after Amanda Ghassaei's Origami Simulator.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<header class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="sys">SYS&nbsp;//&nbsp;ORIGAMI.SIM</div>
+  <div class="pagetitle">Origami Simulator</div>
+  <div class="tb-right">
+    <div class="seg" id="layoutSeg" role="group" aria-label="Layout">
+      <button data-act="layout:auto" title="Layout by window shape">AUTO</button>
+      <button data-act="layout:h" title="Side by side">HORIZONTAL</button>
+      <button data-act="layout:v" title="Diagram over fold">VERTICAL</button>
+    </div>
+    <button class="tb-btn" data-act="undo" title="Undo (Cmd/Ctrl+Z)">UNDO</button>
+    <button class="tb-btn" data-act="redo" title="Redo (Shift+Cmd/Ctrl+Z)">REDO</button>
+    <button class="tb-btn" id="menuBtn" data-act="panel" title="Files, shortcuts and credits" aria-expanded="false">☰ MORE</button>
+  </div>
+</header>
+
+<main id="stage" class="horiz">
+  <canvas id="gl"></canvas>
+  <section class="pane" id="pane2d" aria-label="Diagram: the crease pattern">
+    <div class="pane-label" id="label2d"><b>DIAGRAM</b><span class="sub">crease pattern</span><span class="check" id="checkBadge"></span></div>
+    <div class="bar" id="editBar">
+      <span class="sect">DRAW</span>
+      <button class="tool" data-act="tool:mountain" style="--tc:#e0614a">MOUNTAIN</button>
+      <button class="tool" data-act="tool:valley" style="--tc:#6a9bd8">VALLEY</button>
+      <button class="tool" data-act="tool:border" style="--tc:#c9bca0">BORDER</button>
+      <button class="tool" data-act="tool:aux" style="--tc:#8a8070">AUX</button>
+      <button class="tool" data-act="tool:erase" style="--tc:#9a8f7c">ERASE</button>
+      <span class="gap"></span>
+      <button class="chip" data-act="grid">GRID</button>
+      <button class="chip" data-act="library">LIBRARY</button>
+    </div>
+  </section>
+  <section class="pane" id="pane3d" aria-label="Folded: the live fold">
+    <div class="pane-label" id="label3d"><b>FOLDED</b><span class="sub">live fold</span><span class="pct" data-out="pct">0%</span></div>
+    <div class="bar" id="foldBar">
+      <span class="sect">FOLD</span>
+      <button class="chip" data-act="play">PLAY</button>
+      <button class="chip wide-only" data-act="flat">FLAT</button>
+      <input type="range" class="scrub" data-act="fraction" min="0" max="1" step="0.001" value="0" aria-label="Fold fraction">
+      <button class="chip wide-only" data-act="speed">1.0x</button>
+      <span class="big" data-out="pct">0%</span>
+    </div>
+  </section>
+  <div id="nogpu" hidden><div><b>WebGPU is not available.</b><p id="nogpuMsg"></p></div></div>
+</main>
+
+<div id="library" hidden>
+  <div class="scrim" data-act="library-close"></div>
+  <div class="lib-panel" role="dialog" aria-label="Pattern library">
+    <div class="lib-title">PATTERN LIBRARY <button class="x" data-act="library-close" aria-label="Close">✕</button></div>
+    <div class="lib-groups" data-lib></div>
+  </div>
+</div>
+
+<aside id="panel" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" data-act="panel" aria-label="Close controls">✕</button>
+
+  <div class="sec-label phone-only">DRAW</div>
+  <div class="grid3 phone-only">
+    <button class="tool" data-act="tool:mountain" style="--tc:#e0614a">MOUNTAIN</button>
+    <button class="tool" data-act="tool:valley" style="--tc:#6a9bd8">VALLEY</button>
+    <button class="tool" data-act="tool:border" style="--tc:#c9bca0">BORDER</button>
+    <button class="tool" data-act="tool:aux" style="--tc:#8a8070">AUX</button>
+    <button class="tool" data-act="tool:erase" style="--tc:#9a8f7c">ERASE</button>
+    <button class="chip" data-act="grid">GRID</button>
+    <button class="chip" data-act="undo">UNDO</button>
+    <button class="chip" data-act="redo">REDO</button>
+    <button class="chip" data-act="fit">FIT VIEWS</button>
+  </div>
+
+  <div class="sec-label phone-only">FOLD</div>
+  <div class="row phone-only">
+    <input type="range" class="scrub" data-act="fraction" min="0" max="1" step="0.001" value="0" aria-label="Fold fraction">
+    <span class="val" data-out="pct">0%</span>
+  </div>
+  <div class="grid3 phone-only">
+    <button class="chip" data-act="play">PLAY</button>
+    <button class="chip" data-act="flat">FLAT</button>
+    <button class="chip" data-act="speed">1.0x</button>
+  </div>
+
+  <div class="sec-label phone-only">PATTERN LIBRARY</div>
+  <div class="lib-groups phone-only" data-lib></div>
+
+  <div class="sec-label">LAYOUT</div>
+  <div class="grid3">
+    <button class="chip" data-act="layout:auto">AUTO</button>
+    <button class="chip" data-act="layout:h">HORIZONTAL</button>
+    <button class="chip" data-act="layout:v">VERTICAL</button>
+  </div>
+
+  <div class="sec-label">FILES</div>
+  <div class="grid3">
+    <button class="chip" data-act="fold-import">IMPORT FOLD</button>
+    <button class="chip" data-act="fold-export">EXPORT FOLD</button>
+    <button class="chip" data-act="png">SAVE PNG</button>
+  </div>
+  <input type="file" id="foldFile" accept=".fold,.json,application/json" hidden>
+  <div class="hint" id="fileMsg"></div>
+
+  <div class="sec-label">FLAT-FOLDABILITY</div>
+  <div class="hint" id="checkText"></div>
+
+  <div class="sec-label desk-only">SHORTCUTS</div>
+  <table class="keys desk-only">
+    <tr><td>Cmd/Ctrl Z</td><td>undo</td></tr>
+    <tr><td>Shift Cmd/Ctrl Z</td><td>redo</td></tr>
+    <tr><td>Cmd/Ctrl + − 0</td><td>interface zoom, reset</td></tr>
+    <tr><td>S</td><td>save the view as PNG</td></tr>
+    <tr><td>M V B A E</td><td>mountain, valley, border, aux, erase</td></tr>
+    <tr><td>Space</td><td>play or pause the fold</td></tr>
+    <tr><td>F</td><td>back to flat</td></tr>
+    <tr><td>G / L</td><td>grid, pattern library</td></tr>
+    <tr><td>Esc</td><td>close the library or panel</td></tr>
+    <tr><td>wheel</td><td>zoom the pane under the pointer</td></tr>
+    <tr><td>right drag</td><td>pan the pane (2D and 3D)</td></tr>
+    <tr><td>double click</td><td>reset that pane's view</td></tr>
+  </table>
+
+  <div class="sec-label">ABOUT</div>
+  <div class="about">
+    <p>Drag in the diagram to draw a crease. The ends snap to vertices and to the grid. The folded pane folds the same pattern with a bar-and-hinge model: axial springs hold the edges, crease springs drive each fold to its target, and face springs hold each triangle's shape.</p>
+    <p>A vertex ringed in amber fails a local flat-foldability check (Maekawa, Kawasaki, or Big-Little-Big). The checks are necessary, not sufficient. Complex models such as the crane fold most of the way, then pass through themselves, because the simulator has no layer order.</p>
+    <p class="credits"><b>Credits.</b> Folding simulation ported from <a href="https://github.com/amandaghassaei/OrigamiSimulator" target="_blank" rel="noopener">Origami Simulator</a> by Amanda Ghassaei (MIT, © 2018 Amanda Ghassaei; Ghassaei, Demaine, Gershenfeld, 7OSME 2018). Patterns: <a href="https://github.com/nihatgaribli/origamicp" target="_blank" rel="noopener">origamicp</a> by Nihat Garibli (MIT) and <a href="https://github.com/origamimagiro/flat-folder" target="_blank" rel="noopener">flat-folder</a> by Jason S. Ku (MIT), traditional models from the ORIPA data set. License texts: <a href="CREDITS.txt" target="_blank">CREDITS.txt</a>.</p>
+  </div>
+</aside>
+
+<footer id="status">
+  <span id="stMain">Drag in the diagram to draw a crease.</span>
+  <span class="right">Simulation after <a href="https://github.com/amandaghassaei/OrigamiSimulator" target="_blank" rel="noopener">Origami Simulator</a> (A. Ghassaei, MIT) · patterns: origamicp (N. Garibli), flat-folder (J. S. Ku), MIT · <a href="CREDITS.txt" target="_blank">credits</a></span>
+</footer>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" data-act="panel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div class="seg">
+    <button class="tool" data-act="tool:mountain" style="--tc:#e0614a">MTN</button>
+    <button class="tool" data-act="tool:valley" style="--tc:#6a9bd8">VAL</button>
+    <button class="tool" data-act="tool:erase" style="--tc:#9a8f7c">ERASE</button>
+  </div>
+  <button class="dock-lib" data-act="library" aria-label="Pattern library">LIB</button>
+  <button id="dockPlay" data-act="play" aria-label="Play">▶</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

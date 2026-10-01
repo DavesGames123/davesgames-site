@@ -1,0 +1,99 @@
+Origami Simulator (web port) -- credits and licenses
+=====================================================
+
+This page is a web port of the origami desktop app (Rust, wgpu, winit). It
+carries third-party work under the MIT license. The license text of each source
+follows, as each repository requires.
+
+1. Folding simulation
+   Ported from Origami Simulator by Amanda Ghassaei.
+   https://github.com/amandaghassaei/OrigamiSimulator
+   Paper: A. Ghassaei, E. D. Demaine, N. Gershenfeld, "Fast, Interactive
+   Origami Simulation using GPU Computation", Origami 7 (7OSME), 2018.
+   Used in: sim.js, solver.js (the bar-and-hinge model, its constants, and the
+   per-step passes, by way of the Rust port in src/sim/).
+
+2. Crease patterns from origamicp by Nihat Garibli.
+   https://github.com/nihatgaribli/origamicp
+   Files: patterns/pleat.fold, patterns/miura.fold, patterns/miura_large.fold,
+          patterns/vertex4.fold, patterns/vertex6.fold, patterns/vertex8.fold
+
+3. Crease patterns from flat-folder by Jason S. Ku. Traditional models from
+   the ORIPA data set (the FOLD file_author field names the source).
+   https://github.com/origamimagiro/flat-folder
+   Files: patterns/birdbase.fold, patterns/birdbase2.fold, patterns/boat.fold,
+          patterns/crane.fold, patterns/house.fold, patterns/kabuto.fold,
+          patterns/pig.fold, patterns/pinwheel.fold, patterns/sailboat.fold,
+          patterns/yakko.fold
+
+On load, every pattern is normalized into the centred unit square (see
+patterns.js fromFoldText). The files themselves are unchanged copies.
+
+-----------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2018 Amanda Ghassaei
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-----------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2026 Nihat Garibli
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-----------------------------------------------------------------------------
+MIT License
+
+Copyright (c) 2022 Jason S. Ku (origamimagiro)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
