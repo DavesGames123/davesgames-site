@@ -304,7 +304,22 @@ const LABELS={frost:'Frost Table',beam:'Beam & Decal Table',holocloth:'Holocloth
 const XR_PAGES=new Set(['orbital']);
 const MIC_PAGES=new Set(['chordlab']);
 let activeTab=null;
-function switchTab(id){if(!PAGES[id])id='home';document.querySelectorAll('.nav-item').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});var wrap=document.getElementById('frame-wrap');wrap.innerHTML='';var iframe=document.createElement('iframe');iframe.src=PAGES[id]||'home.html';var allow='downloads';if(XR_PAGES.has(id))allow='xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';if(MIC_PAGES.has(id))allow='microphone; autoplay; downloads';iframe.setAttribute('allow',allow);wrap.appendChild(iframe);var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(LABELS[id]||'Stella Nova')+'\u00b7 Stella Nova';activeTab=id;closeSidebar();if(location.hash!=='#'+id){try{history.replaceState(null,'','#'+id)}catch(e){}}}
+// PAGE SWAP. Each page runs in one iframe and can hold a WebGPU device or a
+// WebGL context. A fast series of clicks used to stack many live GPU pages,
+// because removing an iframe leaves its GPU memory to the garbage collector.
+// Safari then ran out of GPU memory and the tab did not recover.
+// The swap now does three things:
+//   releaseFrame  destroys each WebGPU device, unconfigures each WebGPU
+//                 canvas and loses each WebGL context in the old page
+//   doSwap        loads about:blank into the old iframe so the document
+//                 unloads now, then removes the iframe and mounts the new page
+//   pendingTab    clicks during a swap only change the target tab, so a
+//                 click series mounts one page, not one page per click
+var pendingTab=null,swapBusy=false,SWAP_SETTLE_MS=150,SWAP_UNLOAD_MS=300;
+function releaseFrame(f){try{var d=f.contentDocument;if(!d)return;d.querySelectorAll('canvas').forEach(function(c){try{var g=c.getContext('webgpu');if(g){try{var cfg=g.getConfiguration&&g.getConfiguration();if(cfg&&cfg.device){cfg.device.destroy();return}}catch(e){}try{g.unconfigure()}catch(e){}return}var gl=c.getContext('webgl2')||c.getContext('webgl');if(gl){var x=gl.getExtension('WEBGL_lose_context');if(x)x.loseContext()}}catch(e){}})}catch(e){}}
+function mountTab(id){var wrap=document.getElementById('frame-wrap');var iframe=document.createElement('iframe');iframe.src=PAGES[id]||'home.html';var allow='downloads';if(XR_PAGES.has(id))allow='xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';if(MIC_PAGES.has(id))allow='microphone; autoplay; downloads';iframe.setAttribute('allow',allow);wrap.appendChild(iframe)}
+function doSwap(){swapBusy=true;var wrap=document.getElementById('frame-wrap');var olds=Array.prototype.slice.call(wrap.querySelectorAll('iframe'));var done=false;var go=function(){if(done)return;done=true;wrap.innerHTML='';var id=pendingTab;pendingTab=null;mountTab(id);setTimeout(function(){swapBusy=false;if(pendingTab!==null)doSwap()},SWAP_SETTLE_MS)};if(!olds.length){go();return}var left=olds.length;olds.forEach(function(f){f.style.visibility='hidden';releaseFrame(f);f.addEventListener('load',function(){if(--left===0)go()},{once:true});try{f.src='about:blank'}catch(e){if(--left===0)go()}});setTimeout(go,SWAP_UNLOAD_MS)}
+function switchTab(id){if(!PAGES[id])id='home';document.querySelectorAll('.nav-item').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(LABELS[id]||'Stella Nova')+'· Stella Nova';activeTab=id;closeSidebar();if(location.hash!=='#'+id){try{history.replaceState(null,'','#'+id)}catch(e){}}pendingTab=id;if(!swapBusy)doSwap()}
 window.switchTab=switchTab;
 function routeFromHash(){switchTab((location.hash||'').replace(/^#/,'')||'home')}
 window.addEventListener('hashchange',routeFromHash);routeFromHash();
