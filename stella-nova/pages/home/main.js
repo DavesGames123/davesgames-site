@@ -6,7 +6,8 @@
 //
 //  Classic scripts let the page run from file:// (a Finder double-click).
 //  Browsers block ES modules there. Load order, all with defer:
-//    thumbs/list.js -> nav-data.js -> sectors.js -> main.js
+//    thumbs/list.js -> nav-data.js -> sectors.js -> sky-data.js ->
+//    commit-data.js -> main.js
 //  They share one namespace object: window.Observatory.
 //
 //  Search is inline (initFind): a field in the hero and one in the dock,
@@ -20,6 +21,7 @@
 //    thumbnails / art ..... "function media"
 //    page card ............ "function cardHTML"
 //    hero sky ............. "function startSky"
+//    commit heatmap ....... "function buildCommits"
 //    featured rail ........ "function buildFeatured"
 //    star chart ........... "function buildChart"
 //    inspector ............ "function renderInspector"
@@ -820,6 +822,116 @@ function initSpot() {
   }));
 }
 
+// ── commit heatmap ─────────────────────────────────────────────────────────
+// One year of daily commit counts to the private game repository, drawn as a
+// calendar under the hero social row. commit-data.js holds only a start date
+// and one count per day (tools/commit-counts.py writes it), so the page shows
+// no hash, message or file. Columns are weeks (Sunday on top). Color is the
+// plasma ramp on a log scale, from step 0.18 so the faintest day still clears
+// the dark surface. A day with no commits is a faint empty cell. Hover or tap
+// shows the date and the count. The grid builds again on resize, and on a
+// phone it scrolls sideways inside its card, open at the latest week.
+const PLASMA = ['#0d0887', '#46039f', '#7201a8', '#9c179e', '#bd3786', '#d8576b', '#ed7953', '#fb9f3a', '#fdca26', '#f0f921'];
+function plasma(t) {
+  const x = Math.max(0, Math.min(1, t)) * (PLASMA.length - 1), i = Math.min(PLASMA.length - 2, Math.floor(x)), f = x - i;
+  const a = parseInt(PLASMA[i].slice(1), 16), b = parseInt(PLASMA[i + 1].slice(1), 16);
+  const ch = s => Math.round(((a >> s) & 255) * (1 - f) + ((b >> s) & 255) * f);
+  return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+}
+function buildCommits() {
+  const D = O.COMMITS, box = $('#commits');
+  if (!box) return;
+  if (!D || !D.days || !D.days.length) { box.hidden = true; return; }
+  const days = D.days, n = days.length, cols = Math.ceil(n / 7);
+  const t0 = Date.parse(D.start + 'T00:00:00Z');
+  const dayAt = i => new Date(t0 + i * 864e5);
+  const fmt = (d, o) => d.toLocaleDateString('en-GB', Object.assign({ timeZone: 'UTC' }, o));
+  const max = Math.max(...days), lmax = Math.log1p(max);
+  const color = c => c ? plasma(0.18 + 0.82 * Math.log1p(c) / lmax) : null;
+  const num = v => v.toLocaleString('en-US');
+
+  // Stats: total, active days, peak day, longest streak, busiest month.
+  const total = days.reduce((a, b) => a + b, 0), active = days.filter(Boolean).length;
+  const peak = days.indexOf(max);
+  let streak = 0, run = 0;
+  for (const c of days) { run = c ? run + 1 : 0; streak = Math.max(streak, run); }
+  const months = new Map();
+  days.forEach((c, i) => { const k = dayAt(i).toISOString().slice(0, 7); months.set(k, (months.get(k) || 0) + c); });
+  const [bm, bmc] = [...months].reduce((a, b) => b[1] > a[1] ? b : a);
+  const monthName = k => fmt(new Date(k + '-01T00:00:00Z'), { month: 'long', year: 'numeric' });
+  $('[data-c="total"]', box).textContent = num(total);
+  $('[data-c="range"]', box).textContent = `${fmt(dayAt(0), { day: 'numeric', month: 'short', year: 'numeric' })} to ${fmt(dayAt(n - 1), { day: 'numeric', month: 'short', year: 'numeric' })}`;
+  $('[data-c="stats"]', box).innerHTML = [
+    ['Active days', `${active} <small>of ${n}</small>`],
+    ['Peak day', `${max} <small>${fmt(dayAt(peak), { day: 'numeric', month: 'short' })}</small>`],
+    ['Longest streak', `${streak} <small>days</small>`],
+    ['Busiest month', `${num(bmc)} <small>${fmt(new Date(bm + '-01T00:00:00Z'), { month: 'short' })}</small>`],
+  ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+  $('[data-c="lo"]', box).textContent = '1';
+  $('[data-c="hi"]', box).textContent = max;
+  $('.commits-ramp', box).style.background = `linear-gradient(90deg, ${[0, .25, .5, .75, 1].map(t => plasma(0.18 + 0.82 * t)).join(',')})`;
+  // Table view for screen readers: monthly totals.
+  $('[data-c="table"]', box).innerHTML = '<caption>Commits per month</caption><tr><th scope="col">Month</th><th scope="col">Commits</th></tr>' +
+    [...months].map(([k, c]) => `<tr><th scope="row">${monthName(k)}</th><td>${c}</td></tr>`).join('');
+
+  const scroll = $('.commits-scroll', box), tip = $('.commits-tip', box);
+  const LX = 30, TY = 18, GAP = 3;
+  let cell = 14, svg = null;
+  function draw() {
+    const w = scroll.clientWidth;
+    cell = Math.max(11, Math.min(20, Math.floor((w - LX) / cols) - GAP));
+    const step = cell + GAP, W = LX + cols * step - GAP, H = TY + 7 * step - GAP;
+    let html = `<svg class="commits-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${num(total)} commits over ${n} days, ${active} active days, peak ${max} in one day">`;
+    // Month labels over the first week that holds the 1st of the month.
+    let lastM = -1;
+    for (let c = 0; c < cols; c++) {
+      const d = dayAt(c * 7 + 6 < n ? c * 7 + 6 : n - 1), m = d.getUTCMonth();
+      if (m !== lastM && d.getUTCDate() <= 7) { html += `<text class="cm-m" x="${LX + c * step}" y="11">${fmt(d, { month: 'short' })}</text>`; lastM = m; }
+      else if (lastM === -1) lastM = m;
+    }
+    [[1, 'Mon'], [3, 'Wed'], [5, 'Fri']].forEach(([r, t]) => { html += `<text class="cm-d" x="0" y="${TY + r * step + cell * 0.72}">${t}</text>`; });
+    for (let i = 0; i < n; i++) {
+      const c = Math.floor(i / 7), r = i % 7, col = color(days[i]);
+      html += `<rect x="${LX + c * step}" y="${TY + r * step}" width="${cell}" height="${cell}" rx="${Math.min(4, cell / 4)}"${col ? ` fill="${col}" class="on"` : ' class="off"'} style="--d:${c}"/>`;
+    }
+    scroll.innerHTML = html + '</svg>';
+    svg = scroll.firstChild;
+    scroll.scrollLeft = scroll.scrollWidth;
+  }
+  // Hit test by grid position, so the gaps between cells also answer.
+  function at(e) {
+    const r = svg.getBoundingClientRect(), step = cell + GAP;
+    const c = Math.floor((e.clientX - r.left - LX + GAP / 2) / step), rr = Math.floor((e.clientY - r.top - TY + GAP / 2) / step);
+    const i = c * 7 + rr;
+    return c >= 0 && c < cols && rr >= 0 && rr < 7 && i < n ? i : -1;
+  }
+  let cur = -1;
+  function show(i) {
+    if (i === cur) return;
+    cur = i;
+    $$('rect.hot', svg).forEach(x => x.classList.remove('hot'));
+    if (i < 0) { tip.hidden = true; return; }
+    const rect = svg.querySelectorAll('rect')[i];
+    rect.classList.add('hot');
+    const c = days[i];
+    tip.innerHTML = `<b>${c ? num(c) : 'No'} commit${c === 1 ? '' : 's'}</b><span>${fmt(dayAt(i), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>`;
+    tip.hidden = false;
+    const br = box.getBoundingClientRect(), rr = rect.getBoundingClientRect();
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    const x = Math.max(8, Math.min(br.width - tw - 8, rr.left - br.left + rr.width / 2 - tw / 2));
+    const y = rr.top - br.top - th - 8;
+    tip.style.transform = `translate(${x.toFixed(1)}px, ${(y < 4 ? rr.bottom - br.top + 8 : y).toFixed(1)}px)`;
+  }
+  scroll.addEventListener('pointermove', e => { if (svg && e.pointerType === 'mouse') show(at(e)); });
+  scroll.addEventListener('pointerleave', e => { if (e.pointerType === 'mouse') show(-1); });
+  scroll.addEventListener('click', e => { if (svg) { const i = at(e); show(i === cur ? -1 : i); } });
+  scroll.addEventListener('scroll', () => show(-1), { passive: true });
+  draw();
+  let rt = 0, lw = scroll.clientWidth;
+  addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (scroll.clientWidth !== lw) { lw = scroll.clientWidth; cur = -1; tip.hidden = true; draw(); } }, 150); });
+}
+
+buildCommits();
 buildFeatured();
 buildChart();
 buildSectors();

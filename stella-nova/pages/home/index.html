@@ -137,6 +137,23 @@
       <li><a class="soc" style="--brand:#e4588f" href="https://www.instagram.com/stella.nova.game" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-instagram"/></svg><span>Instagram</span></a></li>
       <li><a class="soc" style="--brand:#3d9be9" href="https://linkedin.com/in/david-kubala" target="_blank" rel="noopener"><svg aria-hidden="true"><use href="#i-linkedin"/></svg><span>LinkedIn</span></a></li>
     </ul>
+
+    <section class="commits" id="commits" aria-labelledby="commitsH">
+      <div class="commits-head">
+        <div>
+          <p class="commits-kicker">Year one &middot; <span data-c="range"></span></p>
+          <h2 class="commits-total" id="commitsH"><b data-c="total"></b> commits to Stella Nova</h2>
+        </div>
+        <dl class="commits-stats" data-c="stats"></dl>
+      </div>
+      <div class="commits-scroll"></div>
+      <div class="commits-foot">
+        <span>Daily commits to the private game repository. Counts only.</span>
+        <span class="commits-legend" aria-hidden="true"><i class="commits-zero"></i>0 <span data-c="lo"></span><i class="commits-ramp"></i><span data-c="hi"></span></span>
+      </div>
+      <div class="commits-tip" role="status" hidden></div>
+      <table class="sr-only" data-c="table"></table>
+    </section>
   </div>
   <a class="scroll-cue" href="#featured" aria-label="Scroll to the featured pages"><span></span></a>
 </header>
@@ -552,6 +569,7 @@
 <script defer src="nav-data.js"></script>
 <script defer src="sectors.js"></script>
 <script defer src="sky-data.js"></script>
+<script defer src="commit-data.js"></script>
 <script defer src="main.js"></script>
 </body>
 </html>
