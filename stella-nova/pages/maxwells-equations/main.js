@@ -45,8 +45,10 @@
 //
 //  FRAME PIPELINE
 //  --------------------------------------------------------------------------
-//      loop(t) ─ render(dt) ─ clear + grid ─▶ renderGauss / renderMonopoles /
+//      loop(t) ─ render(dt) ─ clear + dots ─▶ renderGauss / renderMonopoles /
 //                                             renderFaraday / renderAmpere
+//      Field lines are traced once per scene change (gaussCache, dipCache,
+//      ampCache) and drawn each frame with dashes that flow along the field.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  --------------------------------------------------------------------------
@@ -61,8 +63,8 @@
 //      per-law init ........ "function initEq"      seed a scene on entry
 //      physics ............. "function eField"      field formulas
 //      actions ............. "function addCharge"   add/clear scene objects
-//      arrow ............... "function arrow"       one field arrow
-//      render dispatch ..... "function render"      clear, grid, dispatch
+//      draw helpers ........ "DRAW HELPERS"        traceLine, flowLine, body
+//      render dispatch ..... "function render"      clear, dots, dispatch
 //      Gauss draw .......... "function renderGauss" law 0
 //      monopoles draw ...... "function renderMonopoles"  law 1
 //      Faraday draw ........ "function renderFaraday"    law 2
@@ -316,12 +318,14 @@ function totalB_dip(px,py){
   return dipField(px,py,STATE.dipX,STATE.dipY,mx,my,STATE.dipStr);
 }
 // Magnetic field of a straight wire (Biot–Savart): magnitude μ₀I/2πr, tangent to
-// circles around the wire. The returned (−dy, dx)/r direction is that tangent.
+// circles around the wire. The canvas y axis points down, so for a current
+// out of the page (I > 0) the right-hand rule gives (dy, −dx)/r: counter-
+// clockwise on the screen.
 function wireB(px,py,wx,wy,I){
   const dx=px-wx,dy=py-wy,r2=dx*dx+dy*dy;
   if(r2<25)return[0,0];
   const r=Math.sqrt(r2),B=I*5/(r*6.2832); // 5x boost for visibility
-  return[-dy/r*B,dx/r*B];
+  return[dy/r*B,-dx/r*B];
 }
 // Superpose the field of every wire.
 function totalB_amp(px,py){
@@ -354,45 +358,119 @@ function addAmpWire(dir){
   STATE.ampWires.push({x,y:WIRE_Y,I:dir*2});
 }
 
-// Draw one field arrow at pixel (x,y) along unit vector (nx,ny), len pixels
-// long. rgb is the core color. glow > 0 adds a wide faint stroke under it.
-/* ═══ ARROW ═══ */
-function arrow(x,y,nx,ny,len,rgb,alpha,glow){
-  const ex=x+nx*len,ey=y+ny*len;
-  if(glow>0){
-    ctx.strokeStyle=`rgba(${rgb},${alpha*glow})`;ctx.lineWidth=3*T;
-    ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(ex,ey);ctx.stroke();
+/* ═══ DRAW HELPERS ═══ */
+// The scene clock for the flow animation, in seconds.
+let flowT=0;
+// The visible area in units, with a margin. Field lines stop outside it.
+function viewBox(m=40){const[l,t]=toUnits(0,0),[r,b]=toUnits(CW,CH);return{l:l-m,t:t-m,r:r+m,b:b+m};}
+// A cache key for anything that depends on the scene fit.
+const fitKey=()=>`${CW}|${CH}|${FX.toFixed(1)}|${FY.toFixed(1)}|${K.toFixed(4)}`;
+
+// Integrate one field line from (x,y) in units with midpoint (RK2) steps
+// along the unit field, in direction dir (+1 along, -1 against). The step
+// grows with the distance from the origin of the scene, so far loops stay
+// cheap. stop(x,y) ends the line (for example at a sink). Returns points
+// in units.
+function traceLine(field,x,y,dir,stop,box,maxSteps=900){
+  const pts=[[x,y]];
+  for(let i=0;i<maxSteps;i++){
+    const h=Math.max(1.6,Math.hypot(x,y)*0.025)*dir;
+    let[fx,fy]=field(x,y);let m=Math.hypot(fx,fy);if(m<1e-9)break;
+    const mx=x+fx/m*h*0.5,my=y+fy/m*h*0.5;
+    [fx,fy]=field(mx,my);m=Math.hypot(fx,fy);if(m<1e-9)break;
+    x+=fx/m*h;y+=fy/m*h;pts.push([x,y]);
+    if(stop&&stop(x,y))break;
+    if(x<box.l||x>box.r||y<box.t||y>box.b)break;
   }
-  ctx.strokeStyle=`rgba(${rgb},${alpha})`;ctx.lineWidth=1.5*T;
-  ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(ex,ey);ctx.stroke();
-  const h=4*T,s=2.5*T;
-  if(len>h){
-    ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-nx*h-ny*s,ey-ny*h+nx*s);ctx.lineTo(ex-nx*h+ny*s,ey-ny*h-nx*s);ctx.closePath();
-    ctx.fillStyle=`rgba(${rgb},${alpha})`;ctx.fill();
-  }
+  return pts;
 }
-// Visit an arrow grid that covers the canvas. step is in units. The grid is
-// on the scene origin, so it does not move when the window changes shape.
-// fn gets the pixel point and the matching unit point.
-function eachGridPoint(step,fn){
-  const sp=step*K;
-  const x0=((FX-sp/2)%sp+sp)%sp,y0=((FY-sp/2)%sp+sp)%sp;
-  for(let x=x0;x<CW;x+=sp)for(let y=y0;y<CH;y+=sp)fn(x,y,(x-FX)/K,(y-FY)/K);
+// Stroke a line of unit points as a smooth path (quadratic midpoints).
+function pathUnits(pts){
+  ctx.beginPath();
+  if(pts.length<2)return;
+  ctx.moveTo(px(pts[0][0]),py(pts[0][1]));
+  for(let i=1;i<pts.length-1;i++){
+    const xm=(pts[i][0]+pts[i+1][0])/2,ym=(pts[i][1]+pts[i+1][1])/2;
+    ctx.quadraticCurveTo(px(pts[i][0]),py(pts[i][1]),px(xm),py(ym));
+  }
+  const L=pts[pts.length-1];ctx.lineTo(px(L[0]),py(L[1]));
+}
+// A field line: a faint base line and bright dashes that flow along it at
+// speed (px/s). The dashes show the direction of the field.
+function flowLine(pts,rgb,alpha,speed=40){
+  if(pts.length<2)return;
+  pathUnits(pts);
+  ctx.setLineDash([]);
+  ctx.strokeStyle=`rgba(${rgb},${0.22*alpha})`;ctx.lineWidth=1.1*T;ctx.stroke();
+  ctx.setLineDash([7*T,15*T]);ctx.lineDashOffset=-flowT*speed;
+  ctx.strokeStyle=`rgba(${rgb},${0.9*alpha})`;ctx.lineWidth=1.7*T;ctx.stroke();
+  ctx.setLineDash([]);ctx.lineDashOffset=0;
+}
+// A small filled arrowhead at pixel (x,y), pointing along (nx,ny).
+function head(x,y,nx,ny,s,fill){
+  ctx.beginPath();ctx.moveTo(x+nx*s,y+ny*s);ctx.lineTo(x-nx*s*0.6-ny*s*0.62,y-ny*s*0.6+nx*s*0.62);
+  ctx.lineTo(x-nx*s*0.6+ny*s*0.62,y-ny*s*0.6-nx*s*0.62);ctx.closePath();ctx.fillStyle=fill;ctx.fill();
+}
+// A glowing body (charge, wire, pole): a soft halo, a shaded sphere and a
+// thin rim. r is in pixels.
+function body(x,y,r,rgb){
+  const halo=ctx.createRadialGradient(x,y,r*0.6,x,y,r*3);
+  halo.addColorStop(0,`rgba(${rgb},0.28)`);halo.addColorStop(1,`rgba(${rgb},0)`);
+  ctx.fillStyle=halo;ctx.beginPath();ctx.arc(x,y,r*3,0,Math.PI*2);ctx.fill();
+  const g=ctx.createRadialGradient(x-r*0.35,y-r*0.4,r*0.1,x,y,r);
+  g.addColorStop(0,'rgba(255,255,255,0.95)');g.addColorStop(0.35,`rgba(${rgb},1)`);g.addColorStop(1,`rgba(${rgb},0.75)`);
+  ctx.fillStyle=g;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.35)';ctx.lineWidth=1;ctx.stroke();
+}
+// The sign on a body, drawn as strokes (no font): '+', '-', 'out' (a dot)
+// or 'in' (a cross).
+function sign(x,y,r,kind,rgb='10,12,18'){
+  ctx.strokeStyle=`rgba(${rgb},0.9)`;ctx.fillStyle=`rgba(${rgb},0.9)`;ctx.lineWidth=Math.max(1.6,r*0.16);ctx.lineCap='round';
+  const a=r*0.45;ctx.beginPath();
+  if(kind==='+'||kind==='-'){ctx.moveTo(x-a,y);ctx.lineTo(x+a,y);}
+  if(kind==='+'){ctx.moveTo(x,y-a);ctx.lineTo(x,y+a);}
+  if(kind==='in'){const b=a*0.8;ctx.moveTo(x-b,y-b);ctx.lineTo(x+b,y+b);ctx.moveTo(x+b,y-b);ctx.lineTo(x-b,y+b);}
+  ctx.stroke();
+  if(kind==='out'){ctx.beginPath();ctx.arc(x,y,r*0.22,0,Math.PI*2);ctx.fill();}
+  ctx.lineCap='butt';
+}
+// An out-of-page (dot) or into-page (cross) glyph for a field, r in px.
+function perpGlyph(x,y,r,out,rgb,alpha){
+  ctx.strokeStyle=`rgba(${rgb},${alpha})`;ctx.fillStyle=`rgba(${rgb},${alpha})`;ctx.lineWidth=Math.max(1,r*0.14);
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();
+  if(out){ctx.beginPath();ctx.arc(x,y,r*0.3,0,Math.PI*2);ctx.fill();}
+  else{const b=r*0.55;ctx.beginPath();ctx.moveTo(x-b,y-b);ctx.lineTo(x+b,y+b);ctx.moveTo(x+b,y-b);ctx.lineTo(x-b,y+b);ctx.stroke();}
+}
+// A dashed closed curve (surface or loop) in rgb.
+function dashedRing(x,y,r,rgb,alpha){
+  ctx.setLineDash([5*T,6*T]);ctx.strokeStyle=`rgba(${rgb},${alpha})`;ctx.lineWidth=1.3*T;
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
+}
+// A small caps label at pixel (x,y).
+function label(t,x,y,rgb='238,243,251',alpha=0.5,align='center'){
+  ctx.font=font(10.5);ctx.textAlign=align;ctx.textBaseline='alphabetic';
+  ctx.fillStyle=`rgba(${rgb},${alpha})`;
+  if('letterSpacing' in ctx)ctx.letterSpacing='2px';
+  ctx.fillText(t,x,y);
+  if('letterSpacing' in ctx)ctx.letterSpacing='0px';
 }
 
-// Per-frame draw: clear, paint the background grid, then dispatch to the active
-// equation's own renderer.
+// Per-frame draw: clear, paint the background dots, then dispatch to the
+// active law's own renderer.
 /* ═══ RENDER ═══ */
 function render(dt){
+  flowT+=dt;
   ctx.save();ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,canvas.width,canvas.height);ctx.restore();
   ctx.fillStyle='#0a0c12';ctx.fillRect(0,0,CW,CH);
-  // Grid, 50 units apart, on the scene origin.
-  const g=50*K;
-  ctx.strokeStyle='rgba(150,200,255,0.03)';ctx.lineWidth=1;
-  ctx.beginPath();
-  for(let x=FX%g;x<CW;x+=g){ctx.moveTo(x,0);ctx.lineTo(x,CH);}
-  for(let y=FY%g;y<CH;y+=g){ctx.moveTo(0,y);ctx.lineTo(CW,y);}
-  ctx.stroke();
+  // A faint glow of the law colour at the scene centre.
+  const lc=activeEq===1||activeEq===3?RGB.B:RGB.E;
+  const gl=ctx.createRadialGradient(FX,FY,0,FX,FY,Math.max(CW,CH)*0.55);
+  gl.addColorStop(0,`rgba(${lc},0.045)`);gl.addColorStop(1,`rgba(${lc},0)`);
+  ctx.fillStyle=gl;ctx.fillRect(0,0,CW,CH);
+  // Dot grid, 40 units apart, on the scene origin.
+  const g=40*K;
+  ctx.fillStyle='rgba(150,200,255,0.10)';
+  for(let x=((FX%g)+g)%g;x<CW;x+=g)for(let y=((FY%g)+g)%g;y<CH;y+=g)ctx.fillRect(x-0.6,y-0.6,1.2,1.2);
 
   switch(activeEq){
     case 0:renderGauss(dt);break;
@@ -402,307 +480,318 @@ function render(dt){
   }
 }
 
-// Tab 0. Draw the E field as an arrow grid, the charges, the draggable Gaussian
-// surface, and the flux arrows on it. Sum the enclosed charge and show that the
-// net flux is zero exactly when the enclosed charge is zero.
+// Law 0. E field lines from each positive charge to the negative charges
+// (or out of view), with dashes that flow along E. Lines from a negative
+// charge are traced back only where they do not start on a positive charge,
+// so each line is drawn once. The Gaussian surface is a dashed ring; ticks
+// on it show the sign of E·n̂. The enclosed charge goes to the readout.
 /* ── EQ 0: GAUSS'S LAW ── */
-function renderGauss(dt){
-  ctx.save();ctx.globalCompositeOperation='lighter';
-  // E field arrows
-  eachGridPoint(28,(x,y,ux,uy)=>{
-    const[Ex,Ey]=totalE(ux,uy);
-    const Em=Math.sqrt(Ex*Ex+Ey*Ey);if(Em<0.01)return;
-    const lv=Math.min(1,Math.log10(1+Em*1.5)/1.5);
-    const len=Math.max(3,lv*16)*K;
-    arrow(x,y,Ex/Em,Ey/Em,len,RGB.E,Math.max(0.08,lv*0.6),0.25);
-  });
-  ctx.restore();
-
-  // Charges
-  const gx=px(STATE.gaussX),gy=py(STATE.gaussY),gR=STATE.gaussR*K;
+let gaussCache={key:'',lines:[]};
+const QR=12;   // the charge radius in units; field lines stop inside it
+function gaussLines(){
+  const key=fitKey()+JSON.stringify(STATE.charges);
+  if(gaussCache.key===key)return gaussCache.lines;
+  const box=viewBox(),lines=[],N=16;
+  const near=(x,y,q)=>STATE.charges.some(c=>c.q===q&&(x-c.x)**2+(y-c.y)**2<QR*QR);
   for(const c of STATE.charges){
-    ctx.beginPath();ctx.arc(px(c.x),py(c.y),Math.max(12,14*K),0,Math.PI*2);
-    ctx.fillStyle=c.q>0?`rgba(${RGB.Q},0.9)`:`rgba(${RGB.Qn},0.9)`;ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5*T;ctx.stroke();
-    ctx.font=font(16);ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle='#fff';ctx.fillText(c.q>0?'+':'−',px(c.x),py(c.y));
+    for(let i=0;i<N;i++){
+      const a=(i+0.5)/N*Math.PI*2,x=c.x+Math.cos(a)*QR,y=c.y+Math.sin(a)*QR;
+      if(c.q>0)lines.push(traceLine(totalE,x,y,1,(u,v)=>near(u,v,-1),box));
+      else{
+        const p=traceLine(totalE,x,y,-1,(u,v)=>near(u,v,1),box);
+        const L=p[p.length-1];
+        if(!near(L[0],L[1],1))lines.push(p.reverse());
+      }
+    }
   }
-
-  // Gaussian surface
-  ctx.strokeStyle='rgba(238,243,251,0.45)';ctx.lineWidth=1.5*T;ctx.setLineDash([6*T,5*T]);
-  ctx.beginPath();ctx.arc(gx,gy,gR,0,Math.PI*2);ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.font=font(11);ctx.textAlign='center';ctx.textBaseline='alphabetic';
-  ctx.fillStyle='rgba(238,243,251,0.55)';ctx.fillText('GAUSSIAN SURFACE',gx,gy-gR-10*T);
-
-  // Compute enclosed charge
+  gaussCache={key,lines};
+  return lines;
+}
+function renderGauss(dt){
+  const gx=px(STATE.gaussX),gy=py(STATE.gaussY),gR=STATE.gaussR*K;
   let Qenc=0;
   for(const c of STATE.charges){
     const dx=c.x-STATE.gaussX,dy=c.y-STATE.gaussY;
-    if(dx*dx+dy*dy<STATE.gaussR*STATE.gaussR) Qenc+=c.q;
+    if(dx*dx+dy*dy<STATE.gaussR*STATE.gaussR)Qenc+=c.q;
   }
-  // Flux arrows on surface
-  const nArrows=24;
-  ctx.lineWidth=2*T;
-  for(let i=0;i<nArrows;i++){
-    const a=i/nArrows*Math.PI*2;
-    const nr=Math.cos(a),nt=Math.sin(a);
-    const[Ex,Ey]=totalE(STATE.gaussX+nr*STATE.gaussR,STATE.gaussY+nt*STATE.gaussR);
-    const flux=Ex*nr+Ey*nt; // E·n̂
-    const len=Math.min(20,Math.abs(flux)*3)*K;
-    const dir=flux>0?1:-1;
-    const sx=gx+nr*gR,sy=gy+nt*gR;
-    ctx.strokeStyle=flux>0?`rgba(${RGB.Q},0.7)`:`rgba(${RGB.Qn},0.7)`;
-    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+nr*len*dir,sy+nt*len*dir);ctx.stroke();
-  }
+  // A faint tint inside the surface in the colour of the enclosed charge.
+  if(Qenc!==0){ctx.fillStyle=`rgba(${Qenc>0?RGB.Q:RGB.Qn},0.05)`;ctx.beginPath();ctx.arc(gx,gy,gR,0,Math.PI*2);ctx.fill();}
 
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  for(const l of gaussLines())flowLine(l,RGB.E,0.8,38);
+  ctx.restore();
+
+  // The surface, and a tick per 15 degrees for the sign of E·n̂.
+  dashedRing(gx,gy,gR,RGB.ink,0.5);
+  for(let i=0;i<24;i++){
+    const a=i/24*Math.PI*2,nr=Math.cos(a),nt=Math.sin(a);
+    const[Ex,Ey]=totalE(STATE.gaussX+nr*STATE.gaussR,STATE.gaussY+nt*STATE.gaussR);
+    const f=Ex*nr+Ey*nt;if(Math.abs(f)<0.02)continue;
+    const len=Math.min(14,4+Math.abs(f)*4)*T,d=f>0?1:-1;
+    const sx=gx+nr*gR,sy=gy+nt*gR,ex=sx+nr*len*d,ey=sy+nt*len*d;
+    ctx.strokeStyle=`rgba(${RGB.ink},0.55)`;ctx.lineWidth=1.2*T;
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+    head(ex,ey,nr*d,nt*d,3.2*T,`rgba(${RGB.ink},0.65)`);
+  }
+  label('GAUSSIAN SURFACE',gx,gy-gR-12*T);
+
+  for(const c of STATE.charges){
+    const x=px(c.x),y=py(c.y),r=Math.max(10,QR*K);
+    body(x,y,r,c.q>0?RGB.Q:RGB.Qn);sign(x,y,r,c.q>0?'+':'-');
+  }
   setReadout(`<span class="r"><i>Q</i><sub>enc</sub> = <b>${sgn(Qenc)}</b> q</span>`+
     `<span class="r">${STATE.charges.length} charge${STATE.charges.length===1?'':'s'} in the scene</span>`+
     `<span class="note">${Qenc===0?'Net flux through the surface: zero':'Net flux '+(Qenc>0?'outward':'inward')+', Φ = Q<sub>enc</sub>/ε₀'}</span>`);
 }
 
-// Tab 1. Draw the dipole B field as arrows, the bar-magnet glyph, and a closed
-// surface annotated to show its net magnetic flux is always zero: field lines
-// close on themselves, so every line entering the surface also leaves it.
+// Law 1. Field lines of the dipole, traced from its north face round to its
+// south face, then closed through the bar. Each line is a closed loop. The
+// readout counts how often the closed lines cross the surface outward and
+// inward; for a closed loop the two counts are equal.
 /* ── EQ 1: NO MONOPOLES ── */
+let dipCache={key:'',lines:[],out:0,inn:0};
+const DIP_SR=125;   // the closed surface radius in units
+function dipoleLines(){
+  const key=fitKey()+[STATE.dipX,STATE.dipY,STATE.dipAngle].map(v=>v.toFixed(3)).join(',');
+  if(dipCache.key===key)return dipCache;
+  const mx=Math.cos(STATE.dipAngle),my=Math.sin(STATE.dipAngle),box=viewBox(400);
+  const lines=[],r0=40;
+  // Seeds on a circle just outside the bar, on the north side, from 18 to
+  // 62 degrees off the axis, on both sides of it. A dipole line reaches
+  // r0/sin²θ, so these loops span from the bar to the edge of the view.
+  for(const side of[1,-1])for(const deg of[18,24,30,37,44,52,62]){
+    const th=deg*Math.PI/180*side;
+    const ax=mx*Math.cos(th)-my*Math.sin(th),ay=mx*Math.sin(th)+my*Math.cos(th);
+    const x=STATE.dipX+ax*r0,y=STATE.dipY+ay*r0;
+    const p=traceLine(totalB_dip,x,y,1,(u,v)=>(u-STATE.dipX)**2+(v-STATE.dipY)**2<r0*r0*0.8,box,2400);
+    // Close the loop through the bar: from the south end back to the seed.
+    const L=p[p.length-1];
+    if((L[0]-STATE.dipX)**2+(L[1]-STATE.dipY)**2<r0*r0)p.push([STATE.dipX-mx*8,STATE.dipY-my*8],[STATE.dipX+mx*8,STATE.dipY+my*8],[x,y]);
+    lines.push(p);
+  }
+  // Count the crossings of the closed surface by the closed lines.
+  let out=0,inn=0;
+  for(const p of lines){
+    for(let i=1;i<p.length;i++){
+      const a=Math.hypot(p[i-1][0]-STATE.dipX,p[i-1][1]-STATE.dipY)<DIP_SR,b=Math.hypot(p[i][0]-STATE.dipX,p[i][1]-STATE.dipY)<DIP_SR;
+      if(a&&!b)out++;else if(!a&&b)inn++;
+    }
+  }
+  dipCache={key,lines,out,inn};
+  return dipCache;
+}
 function renderMonopoles(dt){
+  const D=dipoleLines(),dx=px(STATE.dipX),dy=py(STATE.dipY);
   ctx.save();ctx.globalCompositeOperation='lighter';
-  eachGridPoint(24,(x,y,ux,uy)=>{
-    const[Bx,By]=totalB_dip(ux,uy);
-    const Bm=Math.sqrt(Bx*Bx+By*By);if(Bm<0.001)return;
-    const lv=Math.min(1,Math.log10(1+Bm*3)/1.6);
-    const len=Math.max(3,lv*14)*K;
-    arrow(x,y,Bx/Bm,By/Bm,len,RGB.B,Math.max(0.08,lv*0.6),0.25);
-  });
+  for(const l of D.lines)flowLine(l,RGB.B,0.8,36);
   ctx.restore();
+  dashedRing(dx,dy,DIP_SR*K,RGB.ink,0.45);
+  label('CLOSED SURFACE',dx,dy-DIP_SR*K-12*T);
 
-  // Dipole magnet visual, 70 by 28 units.
-  const dx=px(STATE.dipX),dy=py(STATE.dipY);
+  // The bar magnet, 70 by 24 units: north half coral, south half periwinkle.
   ctx.save();ctx.translate(dx,dy);ctx.rotate(STATE.dipAngle);ctx.scale(K,K);
-  ctx.fillStyle=`rgba(${RGB.Q},0.85)`;ctx.fillRect(0,-14,35,28);
-  ctx.fillStyle=`rgba(${RGB.Qn},0.85)`;ctx.fillRect(-35,-14,35,28);
-  ctx.strokeStyle='rgba(150,200,255,0.35)';ctx.lineWidth=1.2;ctx.strokeRect(-35,-14,70,28);
-  ctx.font='bold 15px "IBM Plex Mono", monospace';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle='#fff';ctx.fillText('N',17,1);ctx.fillText('S',-17,1);
+  const shade=(x0,x1,rgb)=>{const g=ctx.createLinearGradient(0,-12,0,12);g.addColorStop(0,`rgba(${rgb},1)`);g.addColorStop(1,`rgba(${rgb},0.65)`);ctx.fillStyle=g;ctx.fillRect(x0,-12,x1-x0,24);};
+  ctx.shadowColor='rgba(0,0,0,0.6)';ctx.shadowBlur=14;
+  ctx.beginPath();ctx.roundRect?ctx.roundRect(-35,-12,70,24,5):ctx.rect(-35,-12,70,24);ctx.save();ctx.clip();
+  ctx.shadowBlur=0;shade(0,35,RGB.Q);shade(-35,0,RGB.Qn);ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,0.35)';ctx.lineWidth=1/K;ctx.stroke();
+  ctx.shadowBlur=0;
+  ctx.font='600 13px "Space Grotesk", sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(10,12,18,0.85)';ctx.fillText('N',17.5,0.5);ctx.fillText('S',-17.5,0.5);
   ctx.restore();
 
-  // Show any closed surface has zero net flux
-  const sr=125*K;
-  ctx.strokeStyle='rgba(238,243,251,0.4)';ctx.lineWidth=1.5*T;ctx.setLineDash([6*T,5*T]);
-  ctx.beginPath();ctx.arc(dx,dy,sr,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
-  setReadout(`<span class="r"><i>Φ</i><sub>B</sub> = <b>0</b></span><span class="note">Every line that leaves the surface comes back in</span>`);
+  setReadout(`<span class="r">lines out <b>${D.out}</b> &nbsp; lines in <b>${D.inn}</b></span>`+
+    `<span class="r"><i>Φ</i><sub>B</sub> = <b>0</b></span><span class="note">Every line that leaves the surface comes back in</span>`);
 }
 
-// Tab 2. A circular region carries an oscillating B (drawn as into/out-of-plane
-// glyphs). Its time derivative induces a circulating E outside the region; the
-// induced magnitude tracks |dB/dt| and the circulation sense follows Lenz's law,
-// opposing the change.
+// Law 2. A disc of uniform B that oscillates, shown as out-of-page dots or
+// into-page crosses. Its change induces E on circles round the centre:
+// E = (r/2)|∂B/∂t| inside the disc and (R²/2r)|∂B/∂t| outside it. The
+// dashes flow at a speed set by E. By Lenz's law, E turns clockwise on the
+// screen while the out-of-page flux grows.
 /* ── EQ 2: FARADAY'S LAW ── */
 function renderFaraday(dt){
-  // Advance the drive clock, then read off B, its rate, the induced E magnitude,
-  // and the Lenz-law circulation direction.
   STATE.faradayTime+=dt*STATE.faradayRate;
   const cx=FX,cy=FY,Ru=STATE.faradayR,R=Ru*K;
-  const Bval=Math.sin(STATE.faradayTime*2); // oscillating B
-  const dBdt=Math.cos(STATE.faradayTime*2)*STATE.faradayRate*2; // rate of change
-  const Eind=Math.abs(dBdt)*0.5; // induced E magnitude ∝ |dB/dt|
-  const Edir=dBdt>0?-1:1; // Lenz's law: opposes change
+  const Bval=Math.sin(STATE.faradayTime*2);
+  const dBdt=Math.cos(STATE.faradayTime*2)*STATE.faradayRate*2;
+  const Eind=Math.abs(dBdt)*0.5;
+  const s=dBdt>0?1:-1;   // +1: clockwise on the screen
 
-  // B region (filled circle)
-  const bAlpha=Math.abs(Bval)*0.3;
-  ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);
-  ctx.fillStyle=`rgba(${RGB.B},${bAlpha*0.6})`;
-  ctx.fill();
-  ctx.strokeStyle='rgba(150,200,255,0.3)';ctx.lineWidth=T;ctx.stroke();
-
-  // B glyphs inside (into/out of screen), 25 units apart.
-  const bStep=25;
-  ctx.font=`bold ${Math.max(10,Math.round(13*K))}px "IBM Plex Mono", monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillStyle=`rgba(${RGB.B},${0.15+Math.abs(Bval)*0.6})`;
-  const n=Math.floor(Ru/bStep);
+  // The B region: a soft disc, and glyphs whose size and alpha follow |B|.
+  const disc=ctx.createRadialGradient(cx,cy,0,cx,cy,R);
+  disc.addColorStop(0,`rgba(${RGB.B},${0.04+Math.abs(Bval)*0.14})`);disc.addColorStop(1,`rgba(${RGB.B},${0.02+Math.abs(Bval)*0.06})`);
+  ctx.fillStyle=disc;ctx.beginPath();ctx.arc(cx,cy,R,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle=`rgba(${RGB.B},0.35)`;ctx.lineWidth=1*T;ctx.stroke();
+  const step=24,n=Math.floor(Ru/step);
   for(let i=-n;i<=n;i++)for(let j=-n;j<=n;j++){
-    if((i*i+j*j)*bStep*bStep>Ru*Ru)continue;
-    ctx.fillText(Bval>0?'⊙':'⊗',cx+i*bStep*K,cy+j*bStep*K);
+    if((i*i+j*j)*step*step>(Ru-8)*(Ru-8))continue;
+    perpGlyph(cx+i*step*K,cy+j*step*K,(3+3.5*Math.abs(Bval))*Math.min(K,1.6),Bval>=0,RGB.B,0.25+Math.abs(Bval)*0.6);
   }
 
-  // Induced E field (circulating arrows outside B region)
-  if(Eind>0.05){
+  // Induced E on circles inside and outside the disc.
+  if(Eind>0.01){
+    const radii=[];for(let k=1;k<=2;k++)radii.push(Ru*k/3);
+    for(let r=Ru+22;r<Ru+170;r+=34)radii.push(r);
+    const Emax=Ru/2*Math.abs(dBdt);
     ctx.save();ctx.globalCompositeOperation='lighter';
-    const nE=24;
-    for(let i=0;i<nE;i++){
-      const a=i/nE*Math.PI*2;
-      for(let rr=Ru+20;rr<Ru+110;rr+=30){
-        const x=cx+Math.cos(a)*rr*K,y=cy+Math.sin(a)*rr*K;
-        const ux=-Math.sin(a)*Edir,uy=Math.cos(a)*Edir;
-        // A minimum shaft of 6 units, so a weak field still shows its direction.
-        const len=(6+Math.min(12,Eind*12))*K;
-        const alpha=Math.min(0.75,0.15+Eind*0.55)*(1-(rr-Ru)/130);
-        if(alpha<0.02)continue;
-        arrow(x,y,ux,uy,len,RGB.E,alpha,0);
+    for(const r of radii){
+      const E=(r<Ru?r/2:Ru*Ru/(2*r))*Math.abs(dBdt),a=Math.min(1,0.25+0.75*E/Math.max(Emax,1e-6));
+      const pts=[];for(let k=0;k<=96;k++){const t=k/96*Math.PI*2*s;pts.push([Math.cos(t)*r,Math.sin(t)*r]);}
+      flowLine(pts,RGB.E,a,10+E*60);
+      // Four arrowheads show the sense when the flow is slow.
+      for(let q=0;q<4;q++){
+        const t=q*Math.PI/2+Math.PI/4,x=cx+Math.cos(t)*r*K,y=cy+Math.sin(t)*r*K;
+        head(x,y,-Math.sin(t)*s,Math.cos(t)*s,3.6*T,`rgba(${RGB.E},${0.85*a})`);
       }
     }
     ctx.restore();
   }
-
   setReadout(`<span class="r"><i>B</i> = <b>${sgn(Bval,2)}</b> ${Bval>=0?'out of the page':'into the page'}</span>`+
-    `<span class="r"><i>∂B/∂t</i> = <b>${sgn(dBdt,2)}</b> &nbsp; |<i>E</i>| = <b>${Eind.toFixed(2)}</b></span>`+
-    `<span class="note">${Math.abs(dBdt)<0.1?'B does not change, so no E is induced':'E circulates '+(Edir>0?'counterclockwise':'clockwise')+', against the change'}</span>`);
+    `<span class="r"><i>∂B/∂t</i> = <b>${sgn(dBdt,2)}</b> &nbsp; |<i>E</i>| at the rim = <b>${Eind.toFixed(2)}</b></span>`+
+    `<span class="note">${Math.abs(dBdt)<0.1?'B does not change, so no E is induced':'E turns '+(s>0?'clockwise':'counterclockwise')+', against the change of flux'}</span>`);
 }
 
-// Tab 3. Two halves of the same law. Part 1: wire currents produce a circulating
-// B (the μ₀J term), shown with an arrow grid, streaming tracers that follow the
-// field, and an Amperian loop. Part 2: a charging capacitor whose changing E in
-// the gap acts as a displacement current (the ε₀∂E/∂t term), circulating B even
-// though no charge crosses the gap.
-/* ── EQ 3: AMPERE-MAXWELL with tracers + displacement current ── */
+// Law 3. Two halves of the same law. Part 1: wire currents (out of or into
+// the page) make B on closed curves round them. The B lines are level
+// curves of A = Σ -I ln r (marching squares), and tracers flow along B.
+// An Amperian loop round the first wire shows the circulation. Part 2: a
+// charging capacitor. Its changing E in the gap is the displacement
+// current ε₀∂E/∂t, and B turns round the gap on a ring seen at a tilt:
+// out of the page on one side, into it on the other.
+/* ── EQ 3: AMPERE-MAXWELL ── */
+let ampCache={key:'',segs:[]};
+function ampereContours(){
+  const key=fitKey()+JSON.stringify(STATE.ampWires.map(w=>[w.x,w.y,w.I]));
+  if(ampCache.key===key)return ampCache.segs;
+  const cell=8,nx=Math.ceil(CW/cell)+1,ny=Math.ceil(CH/cell)+1,A=new Float32Array(nx*ny);
+  let Imax=0;for(const w of STATE.ampWires)Imax=Math.max(Imax,Math.abs(w.I));
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){
+    const[u,v]=toUnits(i*cell,j*cell);let a=0;
+    for(const w of STATE.ampWires)a-=w.I*Math.log(Math.max(4,Math.hypot(u-w.x,v-w.y)));
+    A[j*nx+i]=a;
+  }
+  // Levels every dA. For one wire the curves are circles whose radii grow
+  // in a fixed ratio, dense near the wire and sparse far away.
+  const dA=0.42*Imax,segs=[];
+  if(dA>0){
+    let lo=Infinity,hi=-Infinity;for(const a of A){if(a<lo)lo=a;if(a>hi)hi=a;}
+    for(let lv=Math.ceil(lo/dA)*dA;lv<hi;lv+=dA){
+      for(let j=0;j<ny-1;j++)for(let i=0;i<nx-1;i++){
+        const a=A[j*nx+i]-lv,b=A[j*nx+i+1]-lv,c=A[(j+1)*nx+i+1]-lv,d=A[(j+1)*nx+i]-lv;
+        const e=[];const X=i*cell,Y=j*cell;
+        if((a>0)!==(b>0))e.push([X+cell*a/(a-b),Y]);
+        if((b>0)!==(c>0))e.push([X+cell,Y+cell*b/(b-c)]);
+        if((c>0)!==(d>0))e.push([X+cell*(1-c/(c-d)),Y+cell]);
+        if((d>0)!==(a>0))e.push([X,Y+cell*(1-d/(d-a))]);
+        if(e.length>=2)segs.push(e[0][0],e[0][1],e[1][0],e[1][1]);
+        if(e.length===4)segs.push(e[2][0],e[2][1],e[3][0],e[3][1]);
+      }
+    }
+  }
+  ampCache={key,segs};
+  return segs;
+}
 function renderAmpere(dt){
   STATE.ampTime=(STATE.ampTime||0)+dt;
-  const lh=Math.max(15,15*K);
 
-  // ── PART 1: Wire currents → circulating B (μ₀J term) ──
+  // ── PART 1: wire currents → B on closed curves (μ₀J term) ──
   if(STATE.ampWires.length>0){
-    ctx.save();ctx.globalCompositeOperation='lighter';
-    // Dense field arrows
-    eachGridPoint(24,(x,y,ux,uy)=>{
-      const[Bx,By]=totalB_amp(ux,uy);
-      const Bm=Math.sqrt(Bx*Bx+By*By);if(Bm<0.0005)return;
-      const lv=Math.min(1,Math.log10(1+Bm*30)/1.6);
-      const len=Math.max(3,lv*16)*K;
-      arrow(x,y,Bx/Bm,By/Bm,len,RGB.B,Math.max(0.08,Math.min(0.6,lv*0.7)),0.3);
-    });
+    const segs=ampereContours();
+    ctx.strokeStyle=`rgba(${RGB.B},0.2)`;ctx.lineWidth=1*T;ctx.beginPath();
+    for(let i=0;i<segs.length;i+=4){ctx.moveTo(segs[i],segs[i+1]);ctx.lineTo(segs[i+2],segs[i+3]);}
+    ctx.stroke();
 
-    // Streaming tracers around each wire, in units.
+    // Tracers: short comets that flow along B.
     if(!STATE.ampTracers)STATE.ampTracers=[];
     for(const w of STATE.ampWires){
-      if(Math.random()<0.3){
-        const a=Math.random()*Math.PI*2,r=20+Math.random()*90;
+      if(Math.random()<0.45){
+        const a=Math.random()*Math.PI*2,r=18+Math.random()*110;
         STATE.ampTracers.push({x:w.x+Math.cos(a)*r,y:w.y+Math.sin(a)*r,trail:[],age:0,maxAge:2+Math.random()*2});
       }
     }
-    const speed=100;
-    const [uL,uT]=toUnits(-10,-10),[uR,uB]=toUnits(CW+10,CH+10);
+    const speed=90,[uL,uT]=toUnits(-10,-10),[uR,uB]=toUnits(CW+10,CH+10);
+    ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
     for(let i=STATE.ampTracers.length-1;i>=0;i--){
       const tr=STATE.ampTracers[i];tr.age+=dt;
-      const[Bx,By]=totalB_amp(tr.x,tr.y);
-      const Bm=Math.sqrt(Bx*Bx+By*By);
-      if(Bm>1e-6){tr.x+=(Bx/Bm)*speed*dt;tr.y+=(By/Bm)*speed*dt;}
-      tr.trail.unshift([tr.x,tr.y]);
-      if(tr.trail.length>20)tr.trail.pop();
+      const[Bx,By]=totalB_amp(tr.x,tr.y),Bm=Math.hypot(Bx,By);
+      if(Bm>1e-6){tr.x+=Bx/Bm*speed*dt;tr.y+=By/Bm*speed*dt;}
+      tr.trail.unshift([tr.x,tr.y]);if(tr.trail.length>16)tr.trail.pop();
       if(tr.age>tr.maxAge||tr.x<uL||tr.x>uR||tr.y<uT||tr.y>uB){STATE.ampTracers.splice(i,1);continue;}
-      // Draw trail
       const tl=tr.trail.length;if(tl<2)continue;
-      const ageA=tr.age<0.1?tr.age/0.1:tr.age>tr.maxAge*0.7?(tr.maxAge-tr.age)/(tr.maxAge*0.3):1;
-      for(let s=0;s<tl-1;s++){
-        const a0=(1-s/20)*ageA;if(a0<0.02)continue;
-        ctx.strokeStyle=`rgba(${RGB.B},${a0*0.5})`;ctx.lineWidth=Math.max(0.5,2*a0)*T;
-        ctx.beginPath();ctx.moveTo(px(tr.trail[s][0]),py(tr.trail[s][1]));ctx.lineTo(px(tr.trail[s+1][0]),py(tr.trail[s+1][1]));ctx.stroke();
+      const ageA=tr.age<0.25?tr.age/0.25:tr.age>tr.maxAge*0.7?(tr.maxAge-tr.age)/(tr.maxAge*0.3):1;
+      for(let k=0;k<tl-1;k++){
+        const a0=(1-k/tl)*ageA;if(a0<0.03)continue;
+        ctx.strokeStyle=`rgba(${RGB.B},${a0*0.75})`;ctx.lineWidth=Math.max(0.6,2.2*a0)*T;
+        ctx.beginPath();ctx.moveTo(px(tr.trail[k][0]),py(tr.trail[k][1]));ctx.lineTo(px(tr.trail[k+1][0]),py(tr.trail[k+1][1]));ctx.stroke();
       }
     }
-    if(STATE.ampTracers.length>400)STATE.ampTracers.splice(0,STATE.ampTracers.length-400);
+    if(STATE.ampTracers.length>500)STATE.ampTracers.splice(0,STATE.ampTracers.length-500);
     ctx.restore();
 
-    // Amperian loop around first wire
-    const w0=STATE.ampWires[0],wx=px(w0.x),wy=py(w0.y);
-    const loopR=62*K;
-    ctx.strokeStyle=`rgba(${RGB.J},0.5)`;ctx.lineWidth=1.5*T;ctx.setLineDash([6*T,5*T]);
-    ctx.beginPath();ctx.arc(wx,wy,loopR,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
-    // ∮B·dl arrows on loop
-    const nLoop=16,cw=w0.I>0?1:-1,al=8*K,ah=3*K,aw=2.5*K;
-    ctx.fillStyle=`rgba(${RGB.J},0.75)`;ctx.strokeStyle=`rgba(${RGB.J},0.75)`;ctx.lineWidth=2*T;
-    for(let i=0;i<nLoop;i++){
-      const a=i/nLoop*Math.PI*2+STATE.ampTime*0.5;
-      const lx=wx+Math.cos(a)*loopR,ly=wy+Math.sin(a)*loopR;
-      const ux=-Math.sin(a)*cw,uy=Math.cos(a)*cw;
-      ctx.beginPath();ctx.moveTo(lx,ly);ctx.lineTo(lx+ux*al,ly+uy*al);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(lx+ux*al,ly+uy*al);ctx.lineTo(lx+ux*(al-ah)-uy*aw,ly+uy*(al-ah)+ux*aw);ctx.lineTo(lx+ux*(al-ah)+uy*aw,ly+uy*(al-ah)-ux*aw);ctx.closePath();
-      ctx.fill();
+    // The Amperian loop round the first wire, with its sense: by the right
+    // hand rule, counterclockwise on the screen for a current out of it.
+    const w0=STATE.ampWires[0],wx=px(w0.x),wy=py(w0.y),loopR=62*K,s=w0.I>0?1:-1;
+    dashedRing(wx,wy,loopR,RGB.J,0.55);
+    for(let i=0;i<8;i++){
+      const a=i/8*Math.PI*2+STATE.ampTime*0.35*s*-1;
+      head(wx+Math.cos(a)*loopR,wy+Math.sin(a)*loopR,Math.sin(a)*s,-Math.cos(a)*s,4*T,`rgba(${RGB.J},0.8)`);
     }
-
+    label('AMPERIAN LOOP',wx,wy-loopR-12*T,RGB.J,0.6);
   }
 
-  // ── PART 2: Displacement current (ε₀ ∂E/∂t term) ──
-  // Show a capacitor charging: E grows between plates, B circulates around gap.
-  // The capacitor sits below the wire row, in units.
-  const cx=px(0),capY=py(105),capGap=46*K,plateW=100*K,plateH=9*K;
-  const capCharge=Math.sin(STATE.ampTime*1.5)*0.8; // oscillating charge
-  const dEdt=Math.cos(STATE.ampTime*1.5)*1.5*0.8; // rate of change
+  // ── PART 2: displacement current (ε₀ ∂E/∂t term) ──
+  const cx=px(0),capY=py(105),capGap=46*K,plateW=110*K,plateH=7*K;
+  const capCharge=Math.sin(STATE.ampTime*1.5)*0.8;
+  const dEdt=Math.cos(STATE.ampTime*1.5)*1.5*0.8;
+  const top=capCharge>=0?RGB.Q:RGB.Qn,bot=capCharge>=0?RGB.Qn:RGB.Q;
+  // The B ring round the gap: an ellipse seen from a little above. s>0: E
+  // points down and grows, so B is out of the page on the right side.
+  const s=dEdt>0?1:-1,ra=plateW*0.72,rb=ra*0.24,bA=Math.min(1,Math.abs(dEdt)/1.2);
+  const ring=(from,to,alpha)=>{
+    const pts=[];for(let k=0;k<=48;k++){const t=from+(to-from)*k/48;pts.push([(cx+Math.cos(t)*ra-FX)/K,(capY+Math.sin(t)*rb-FY)/K]);}
+    if(s<0)pts.reverse();
+    flowLine(pts,RGB.B,alpha,12+30*Math.abs(dEdt));
+  };
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  if(bA>0.08)ring(Math.PI,Math.PI*2,0.45*bA);   // the back half, behind the gap
+  ctx.restore();
 
-  // Plates
-  ctx.fillStyle='rgba(180,180,200,0.6)';
-  ctx.fillRect(cx-plateW/2,capY-capGap/2-plateH,plateW,plateH);
-  ctx.fillRect(cx-plateW/2,capY+capGap/2,plateW,plateH);
-
-  // E field between plates (vertical arrows)
+  // Plates, with the charge sign in their colour.
+  const plate=(y,rgb)=>{const g=ctx.createLinearGradient(0,y,0,y+plateH);g.addColorStop(0,'rgba(220,228,240,0.85)');g.addColorStop(1,'rgba(120,132,150,0.85)');
+    ctx.fillStyle=g;ctx.beginPath();ctx.roundRect?ctx.roundRect(cx-plateW/2,y,plateW,plateH,2):ctx.rect(cx-plateW/2,y,plateW,plateH);ctx.fill();
+    if(Math.abs(capCharge)>0.08){ctx.fillStyle=`rgba(${rgb},${0.25+Math.abs(capCharge)*0.7})`;ctx.fillRect(cx-plateW/2+2,y+(rgb===top?plateH-2:0),plateW-4,2);}};
+  plate(capY-capGap/2-plateH,top);plate(capY+capGap/2,bot);
+  // E in the gap: five lines from the + plate to the − plate.
   if(Math.abs(capCharge)>0.05){
-    const nE=5,dir=capCharge>0?1:-1;
-    const eAlpha=Math.abs(capCharge)*0.7;
-    const hh=4*K,hw=3*K;
-    ctx.strokeStyle=`rgba(${RGB.E},${eAlpha})`;ctx.fillStyle=`rgba(${RGB.E},${eAlpha})`;ctx.lineWidth=2*T;
-    for(let i=0;i<nE;i++){
-      const ex=cx-plateW/3+i*(plateW*2/3)/(nE-1);
-      ctx.beginPath();ctx.moveTo(ex,capY-capGap/2+2*K);ctx.lineTo(ex,capY+capGap/2-2*K);ctx.stroke();
-      const tip=capY+dir*(capGap/2-2*K),ay2=tip-dir*hh;
-      ctx.beginPath();ctx.moveTo(ex,tip);ctx.lineTo(ex-hw,ay2);ctx.lineTo(ex+hw,ay2);ctx.closePath();ctx.fill();
-    }
-    ctx.font=font(13);ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText('E',cx+plateW/2+16*K,capY);
-  }
-
-  // Displacement current B circulation (when ∂E/∂t ≠ 0)
-  if(Math.abs(dEdt)>0.1){
+    const dir=capCharge>0?1:-1,eA=Math.min(1,Math.abs(capCharge)*1.2);
     ctx.save();ctx.globalCompositeOperation='lighter';
-    const bAlpha=Math.min(0.7,Math.abs(dEdt)*0.45);
-    const bDir=dEdt>0?1:-1;
-    const bR=capGap*0.9;
-    const nB=14;
-    ctx.strokeStyle=`rgba(${RGB.B},${bAlpha})`;ctx.fillStyle=`rgba(${RGB.B},${bAlpha})`;ctx.lineWidth=2*T;
-    for(let i=0;i<nB;i++){
-      const a=i/nB*Math.PI*2;
-      const bx=cx+Math.cos(a)*bR,by=capY+Math.sin(a)*bR;
-      const ux=-Math.sin(a)*bDir*7*K,uy=Math.cos(a)*bDir*7*K;
-      ctx.beginPath();ctx.moveTo(bx,by);ctx.lineTo(bx+ux,by+uy);ctx.stroke();
-      ctx.beginPath();ctx.moveTo(bx+ux,by+uy);
-      ctx.lineTo(bx+ux*0.6-uy*0.3,by+uy*0.6+ux*0.3);
-      ctx.lineTo(bx+ux*0.6+uy*0.3,by+uy*0.6-ux*0.3);ctx.closePath();ctx.fill();
+    for(let i=0;i<5;i++){
+      const ex=(cx-plateW/3+i*(plateW*2/3)/4-FX)/K,y0=(capY-capGap/2+2*K-FY)/K,y1=(capY+capGap/2-2*K-FY)/K;
+      flowLine(dir>0?[[ex,y0],[ex,y1]]:[[ex,y1],[ex,y0]],RGB.E,eA,26);
     }
     ctx.restore();
   }
-
-  // Label
-  ctx.font=font(11);ctx.textAlign='center';ctx.textBaseline='alphabetic';
-  ctx.fillStyle='rgba(238,243,251,0.5)';
-  ctx.fillText('CAPACITOR',cx,capY-capGap/2-plateH-lh*0.6);
-
-  // Charge labels on plates
-  if(Math.abs(capCharge)>0.1){
-    ctx.font=`bold ${Math.max(11,Math.round(12*K))}px "IBM Plex Mono", monospace`;ctx.textBaseline='middle';
-    ctx.fillStyle=capCharge>0?`rgba(${RGB.Q},0.9)`:`rgba(${RGB.Qn},0.9)`;
-    ctx.fillText(capCharge>0?'+ + + +':'− − − −',cx,capY-capGap/2-plateH/2);
-    ctx.fillStyle=capCharge>0?`rgba(${RGB.Qn},0.9)`:`rgba(${RGB.Q},0.9)`;
-    ctx.fillText(capCharge>0?'− − − −':'+ + + +',cx,capY+capGap/2+plateH/2);
+  ctx.save();ctx.globalCompositeOperation='lighter';
+  if(bA>0.08){
+    ring(0,Math.PI,0.95*bA);   // the front half, in front of the gap
+    perpGlyph(cx+ra,capY,5*T,s>0,RGB.B,0.9*bA);perpGlyph(cx-ra,capY,5*T,s<0,RGB.B,0.9*bA);
   }
+  ctx.restore();
+  label('CAPACITOR',cx,capY-capGap/2-plateH-12*T);
 
-  // Wires (draw on top)
-  const wr=Math.max(14,16*K),m=wr*0.42;
+  // Wires on top: a gold body with the direction of I.
   for(const w of STATE.ampWires){
-    const x=px(w.x),y=py(w.y);
-    ctx.beginPath();ctx.arc(x,y,wr,0,Math.PI*2);
-    ctx.fillStyle='rgba(20,25,40,0.95)';ctx.fill();
-    ctx.strokeStyle=`rgba(${RGB.J},0.7)`;ctx.lineWidth=2*T;ctx.stroke();
-    ctx.fillStyle=COL.J;
-    if(w.I>0){ctx.beginPath();ctx.arc(x,y,wr*0.36,0,Math.PI*2);ctx.fill();}
-    else{ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=2.5*T;ctx.beginPath();ctx.moveTo(x-m,y-m);ctx.lineTo(x+m,y+m);ctx.moveTo(x+m,y-m);ctx.lineTo(x-m,y+m);ctx.stroke();}
-    ctx.font=font(13);ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillStyle='rgba(255,255,255,0.8)';
-    ctx.fillText((w.I>0?'+':'')+w.I.toFixed(0)+'A',x,y-wr-lh*0.45);
-    // Direction label
-    ctx.font=font(11,'normal');ctx.fillStyle='rgba(255,255,255,0.55)';ctx.textBaseline='top';
-    ctx.fillText(w.I>0?'out ⊙':'into ⊗',x,y+wr+lh*0.3);
+    const x=px(w.x),y=py(w.y),r=Math.max(10,12*K);
+    body(x,y,r,RGB.J);sign(x,y,r,w.I>0?'out':'in');
+    ctx.font=font(11);ctx.textAlign='center';ctx.textBaseline='top';ctx.fillStyle=`rgba(${RGB.J},0.8)`;
+    ctx.fillText(`${Math.abs(w.I)} A ${w.I>0?'out':'in'}`,x,y+r+8*T);
   }
 
   const Ienc=STATE.ampWires.length?STATE.ampWires[0].I:0;
   setReadout((STATE.ampWires.length?`<span class="r">loop: <i>I</i><sub>enc</sub> = <b>${sgn(Ienc)}</b> A</span>`:'')+
     `<span class="r">gap: <i>∂E/∂t</i> = <b>${sgn(dEdt,2)}</b></span>`+
-    `<span class="note">${Math.abs(dEdt)>0.1?'No charge crosses the gap, but B still circulates':'E is not changing, so the gap makes no B'}</span>`);
+    `<span class="note">${Math.abs(dEdt)>0.1?'No charge crosses the gap, but B still turns round it':'E is not changing, so the gap makes no B'}</span>`);
 }
 
 // Pointer dragging. onDown picks the nearest draggable object for the active tab
