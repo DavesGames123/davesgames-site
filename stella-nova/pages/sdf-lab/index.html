@@ -4,137 +4,108 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Sphere Tracing Lab — Stella Nova · davesgames.io</title>
+<title>SDF Forge — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
-   SPHERE TRACING LAB  ·  page shell
+   SDF FORGE  ·  page shell  (nav key: sdf-lab)
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. main.js builds the scene editor, runs WebGPU and draws
-   the overlays. One signed distance field drives two views:
-     #view    the 3D view, sphere traced in shaders/lab.wgsl (fs_view)
-     #slice   the field on a plane through the scene (fs_slice), with the
-              march of one probe ray drawn over it as circles and points
-   scene.js holds the scene model and a CPU copy of the field, so the probe
-   ray, its 3D path and the step averages come from the same math.
-   equations.js is static MathJax SVG (typeset.mjs writes it); no math
-   library loads at run time.
+   A signed distance field modeller with the interface of Forge, the 3ds Max
+   style modeller in Warp. The document is a tree of SDF nodes: primitives,
+   boolean groups and per-node modifier stacks. codegen compiles it to WGSL;
+   a parameter edit writes a buffer and the shader stays, a structure edit
+   rebuilds the shader. The sphere tracing lab lives on as the SLICE pane.
 
-   LAYOUT  (# marks an element id main.js binds to)
-     desktop ... #panel at the left, #panes fills the rest. #panes puts the
-                 two views side by side when it is wider than tall, else
-                 stacks them (main.js sets .side or .stack).
+   Static markup only. main.js builds the panels and runs WebGPU.
+
+   LAYOUT  (# marks an element id the modules bind to)
+     #viewport   the panes; each .pane holds a WebGPU canvas, an overlay
+                 canvas and a label (view and shading menus)
+     #bar        OBJECTS, SELECTION on the left; CREATE, MODIFY, VIEW, SCENE
+                 and undo / redo on the right (Forge's top bar)
+     #leftCol    the OBJECTS and SELECTION panels (they follow the scene)
+     #rightCol   the CREATE, MODIFY, VIEW and SCENE panels (tools)
+     #status     GRID readout, tool chips Q W E R, WORLD / LOCAL, SNAP, hint
      phone ..... (max-width 768px, or a short landscape touch screen)
-                 #dock at the base: panel button, view modes, relax toggle.
-                 portrait: #panel is a bottom sheet; #panes shrinks above it.
-                 landscape: #panel is a drawer at the right edge.
+                 #dock at the base: panels, pane switcher, tools, undo.
+                 portrait: the panels move into #sheet, a bottom sheet;
+                 landscape: #sheet is a drawer at the right edge.
 
-   GREP MAP  (main.js)
-     grep -n 'function packUniforms'  the uniform block for lab.wgsl
-     grep -n 'function drawSliceOverlay'  the sphere-tracing diagram
-     grep -n 'function draw3dOverlay'     the probe path and the plane handle
-     grep -n 'function layout'        pane geometry and row or column
-     grep -n 'function buildEditor'   the primitive editor
-     grep -n 'function stats'         average steps, plain and relaxed
+   MODULES  (js/, each with its own grep map)
+     math.js      vectors, matrices, Euler      doc.js       the document
+     history.js   undo and redo                 codegen.js   WGSL, GLSL, JS
+     field.js     the CPU field, probe march    shader.js    the fixed WGSL
+     render.js    WebGPU                        camera.js    cameras
+     panes.js     the viewport layout           gizmo.js     move rotate scale
+     viewcube.js  the view cube                 overlay.js   2D overlays
+     ui.js        the panels                    input.js     pointer, keys, create
+     files.js     save, load, export            examples.js  example scenes
+     mc.js        marching cubes                mc-worker.js the OBJ worker
+     main.js      the app state and the frame loop
+     equations.js static MathJax SVG (typeset.mjs writes it)
+
+   Credits: distance functions and the smooth minimum after Inigo Quilez;
+   sphere tracing after Hart 1996; over-relaxed tracing after Keinert et al.
+   2014; marching cubes after Lorensen and Cline 1987. All code original.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="Sphere tracing, taught live: edit a signed distance field, watch one ray march on a slice of it as touching circles, and compare plain and over-relaxed tracing.">
+<meta name="description" content="SDF Forge: model with signed distance fields in a 3ds Max style editor. Primitives, smooth booleans, modifier stacks, quad view, gizmos, WGSL and GLSL export, OBJ by marching cubes, and the sphere tracing slice view.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
-<div class="topbar">
-  <div class="brand"><span class="dot"></span>Stella Nova</div>
-  <div class="pagetitle">Sphere Tracing Lab</div>
-  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+<main id="viewport" aria-label="Viewports"></main>
+
+<header id="bar">
+  <div class="bar-l">
+    <button type="button" class="tab" data-panel="objects">OBJECTS</button>
+    <button type="button" class="tab" data-panel="selection">SELECTION</button>
+  </div>
+  <div class="bar-r">
+    <button type="button" class="ico" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+    <button type="button" class="ico" id="redoBtn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+    <button type="button" class="tab" data-panel="create">CREATE</button>
+    <button type="button" class="tab" data-panel="modify">MODIFY</button>
+    <button type="button" class="tab" data-panel="view">VIEW</button>
+    <button type="button" class="tab" data-panel="scene">SCENE</button>
+  </div>
+</header>
+
+<div id="leftCol" class="col"></div>
+<div id="rightCol" class="col"></div>
+
+<div id="status">
+  <span id="gridTag" class="tag">GRID 1.000</span>
+  <span class="seg" id="tools">
+    <button type="button" data-tool="select" title="Select (Q)">Q<span>SELECT</span></button>
+    <button type="button" data-tool="move" title="Move (W)">W<span>MOVE</span></button>
+    <button type="button" data-tool="rotate" title="Rotate (E)">E<span>ROTATE</span></button>
+    <button type="button" data-tool="scale" title="Scale (R)">R<span>SCALE</span></button>
+  </span>
+  <button type="button" id="coordBtn" class="chip" title="Gizmo axes">WORLD</button>
+  <button type="button" id="snapBtn" class="chip" title="Snap (S)">SNAP</button>
+  <span id="hint"></span>
 </div>
 
-<main id="panes" class="side">
-  <section class="pane" id="pane3d" aria-label="3D view">
-    <canvas id="view"></canvas><canvas id="viewOv" class="ov"></canvas>
-    <div class="plabel"><b>3D</b> <span id="modeLbl">shaded</span></div>
-    <div class="pread" id="read3d"></div>
-    <div class="phint" id="hint3d">drag to orbit · pinch or scroll to zoom · drag ◆ to move the plane</div>
-  </section>
-  <section class="pane" id="paneSlice" aria-label="Slice view">
-    <canvas id="slice"></canvas><canvas id="sliceOv" class="ov"></canvas>
-    <div class="plabel"><b>Slice</b> <span id="sliceLbl">z = 0.00</span></div>
-    <div class="pread" id="readSlice"></div>
-    <div class="phint" id="hintSlice">drag ● to move the ray · drag anywhere else to aim it</div>
-  </section>
-</main>
-<div id="nogpu" hidden>WebGPU is not available in this browser, so the lab cannot render. Chrome, Edge, and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
-
-<aside id="panel" class="open" aria-label="Controls">
-  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
-  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
-
-  <h1>Sphere tracing</h1>
-  <p class="lede">A signed distance field d(p) says how far p is from the nearest surface. A ray can step that far and never pass through anything.</p>
-
-  <div class="sec-label">Presets</div>
-  <div class="grid2" id="presets"></div>
-  <p class="note" id="presetNote"></p>
-
-  <div class="sec-label">3D view</div>
-  <div class="grid3" id="modes"></div>
-
-  <div class="sec-label">Tracer</div>
-  <div class="toggles">
-    <button type="button" id="relaxBtn" class="tog">Over-relaxation · off</button>
-  </div>
-  <div class="row"><label for="omega">ω relax</label><input type="range" id="omega" min="1" max="1.95" step="0.05" value="1.3"><span class="val" id="omegaV"></span></div>
-  <div class="row"><label for="stepScale">step × s</label><input type="range" id="stepScale" min="0.2" max="1.2" step="0.05" value="1"><span class="val" id="stepScaleV"></span></div>
-  <div class="row"><label for="maxSteps">max steps</label><input type="range" id="maxSteps" min="16" max="256" step="8" value="128"><span class="val" id="maxStepsV"></span></div>
-
-  <div class="sec-label">Scene</div>
-  <div class="chips" id="chips"></div>
-  <div id="editor"></div>
-
-  <div class="sec-label">Space folds</div>
-  <div class="row"><label for="twist">twist</label><input type="range" id="twist" min="0" max="3" step="0.05" value="0"><span class="val" id="twistV"></span></div>
-  <div class="row"><label for="rep">repeat</label><input type="range" id="rep" min="0" max="3" step="1" value="0"><span class="val" id="repV"></span></div>
-  <div class="row"><label for="period">period</label><input type="range" id="period" min="0.8" max="3" step="0.05" value="1.6"><span class="val" id="periodV"></span></div>
-
-  <div class="sec-label">Slice plane</div>
-  <div class="seg3" id="axes"><button type="button" data-axis="xy">XY · front</button><button type="button" data-axis="xz">XZ · top</button><button type="button" data-axis="yz">YZ · side</button></div>
-  <div class="row"><label for="offset">offset</label><input type="range" id="offset" min="-2" max="2" step="0.01" value="0"><span class="val" id="offsetV"></span></div>
-  <div class="row"><label for="extent">extent</label><input type="range" id="extent" min="1.2" max="5" step="0.1" value="2.6"><span class="val" id="extentV"></span></div>
-  <div class="toggles"><button type="button" id="planeBtn" class="tog on">Plane in 3D · on</button></div>
-
-  <div class="sec-label">Probe ray</div>
-  <table class="readout">
-    <tr><td>steps</td><td id="rdSteps"></td></tr>
-    <tr><td>result</td><td id="rdHit"></td></tr>
-    <tr><td>relax fails</td><td id="rdFails"></td></tr>
-    <tr><td>overshoots (d &lt; 0)</td><td id="rdOver"></td></tr>
-  </table>
-
-  <div class="sec-label">How it works</div>
-  <div class="about">
-    <p><b>The step.</b> At the ray point, d is the radius of a sphere that holds no surface. So the ray can move by d and stay safe (Hart 1996).</p>
-    <div class="eq" id="eq-step"></div>
-    <p>On the slice, each circle is that sphere cut by the plane. A circle touches the contour where the nearest surface point lies in the plane. Move the plane off the ray, and the touch points leave the slice.</p>
-    <p><b>Bounds.</b> Booleans, smooth unions and folds of space often give a field that is only a lower bound of the distance. That is still safe, but the steps get short. A warp such as a twist can make |∇d| larger than 1. Then a full step can pass through the surface. Divide the step by the Lipschitz constant L to fix it.</p>
-    <div class="eq" id="eq-bound"></div>
-    <p><b>Over-relaxation.</b> Keinert et al. 2014 step by ω d with ω &gt; 1. If the new sphere does not overlap the old one, the big step may have skipped a surface, so the tracer goes back and uses ω = 1. Open the compare view to see the step counts side by side. Relaxation pays off when d is less than the true distance: after a bound operator, or with a step scale below 1. On an exact field the plain step is already the best step, so ω &gt; 1 only adds failed steps.</p>
-    <div class="eq" id="eq-relax"></div>
-    <p><b>Smooth union.</b> A polynomial blend of two fields adds a fillet of width k (Quilez).</p>
-    <div class="eq" id="eq-smin"></div>
-    <p><b>Soft shadows.</b> March from the surface toward the light. The smallest ratio of d to the distance so far measures how close the ray came to a blocker, which gives the penumbra (Quilez).</p>
-    <div class="eq" id="eq-shadow"></div>
-  </div>
-</aside>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="nogpu" hidden>WebGPU is not available in this browser, so SDF Forge cannot render. Chrome, Edge and Safari 26 have it on by default; Firefox has it behind <code>dom.webgpu.enabled</code>.</div>
 
 <nav id="dock" aria-label="Quick controls">
-  <button id="dockPanel" type="button" aria-label="Controls" aria-expanded="false">☰</button>
-  <div id="dockModes" class="seg"></div>
-  <button id="dockRelax" type="button" aria-label="Over-relaxation" aria-pressed="false">ω</button>
+  <button type="button" id="dockSheet" aria-label="Panels" aria-expanded="false">&#9776;</button>
+  <div class="seg" id="dockPanes"></div>
+  <button type="button" id="dockUndo" class="ico" aria-label="Undo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
 </nav>
+<aside id="sheet" aria-label="Panels">
+  <div id="sheetGrip" role="button" aria-label="Resize panels"><span></span></div>
+  <div id="sheetTabs"></div>
+  <button type="button" id="sheetClose" aria-label="Close panels">&#x2715;</button>
+  <div id="sheetBody"></div>
+</aside>
 
-<script type="module" src="main.js"></script>
+<input type="file" id="fileIn" accept=".json,application/json" hidden>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
