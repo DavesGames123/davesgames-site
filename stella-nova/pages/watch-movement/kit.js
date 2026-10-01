@@ -113,7 +113,10 @@ const MAT_DEF = {
   slot: () => ({ color: 0x06070c, roughness: 0.7 }),
   // case and clock materials
   polished: () => ({ physical: true, color: 0xe9ebf0, metalness: 1, roughness: 0.07 }),
-  glass: () => ({ physical: true, color: 0xffffff, metalness: 0, roughness: 0.015, transmission: 1, thickness: 0.6, ior: 1.6, transparent: true, opacity: 1, specularIntensity: 1, envMapIntensity: 1.25 }),
+  // glass: no transmission (that draws the whole scene a second time each
+  // frame). Black, so it adds only its reflections; opacity is how much it
+  // dims what is behind it (see makeMat)
+  glass: () => ({ physical: true, glass: 0.06, color: 0x000000, metalness: 0, roughness: 0.015, ior: 1.6, specularIntensity: 1, envMapIntensity: 1.25 }),
   wood: () => ({ physical: true, color: 0x8a5a33, metalness: 0, roughness: 0.5, roughnessMap: TEX.wood, map: TEX.wood, clearcoat: 0.6, clearcoatRoughness: 0.2 }),
   leather: () => ({ physical: true, color: 0x5a3a24, metalness: 0, roughness: 0.62, sheen: 0.4, sheenRoughness: 0.6, sheenColor: 0x806050, finish: 'leather' }),
   paint: () => ({ physical: true, color: 0xb02a2a, metalness: 0.2, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1 }),
@@ -133,8 +136,11 @@ let seedN = 0;
 function makeMat(name, extra, wear = 0) {
   const def = { ...MAT_DEF[name](), ...(extra || {}) };
   for (const k of ['color', 'sheenColor', 'emissive']) if (typeof def[k] === 'string') def[k] = new THREE.Color(def[k]);
-  const physical = def.physical, finish = def.finish; delete def.physical; delete def.finish;
+  const physical = def.physical, finish = def.finish, glass = def.glass; delete def.physical; delete def.finish; delete def.glass;
   const m = physical ? new THREE.MeshPhysicalMaterial(def) : new THREE.MeshStandardMaterial(def);
+  // glass blends as premultiplied: its reflections add in full, and the
+  // scene behind it dims by the opacity
+  if (glass) Object.assign(m, { transparent: true, opacity: glass, depthWrite: false, blending: THREE.CustomBlending, blendSrc: THREE.OneFactor, blendDst: THREE.OneMinusSrcAlphaFactor, userData: { glass } });
   const w = WEAR[name] || [0, 0];
   return applyFinish(m, { finish, wear: w[0] * wear, prints: w[1] * wear, seed: (seedN++ % 97) * 0.173 });
 }
@@ -184,7 +190,7 @@ export function createBuild(opts = {}) {
         if (o.userData.matName) o.material = B.matFor(p, o.userData.matName);
         if (o.userData.dialMat) { p.mats.__dial = o.userData.dialMat; o.userData.dialMat.userData.baseEmissive = o.userData.dialMat.emissive.clone(); }
         o.userData.part = p.info;
-        o.castShadow = o.userData.noShadow ? false : true; o.receiveShadow = true;
+        o.castShadow = !o.userData.noShadow && !o.material?.userData.glass; o.receiveShadow = true;
         pickables.push(o);
       });
       p.root.add(m);
@@ -388,6 +394,9 @@ export function createBuild(opts = {}) {
     root.traverse(o => {
       if (!o.isMesh) return;
       const m = o.material;
+      // glass is always blended and casts no shadow; while fading, normal
+      // blending lets its reflections fade with the rest
+      if (m.userData.glass) { m.opacity = m.userData.glass * a; m.blending = fade ? THREE.NormalBlending : THREE.CustomBlending; return; }
       if (m.transparent !== fade) { m.transparent = fade; m.depthWrite = !fade || a > 0.5; m.needsUpdate = true; }
       m.opacity = a;
       o.castShadow = !fade && !o.userData.noShadow;
