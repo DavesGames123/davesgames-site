@@ -11,7 +11,7 @@
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. main.js (a classic, non-module script) draws the three
    canvases and wires every control by id. This file lays out the left control
-   panel and the right visualization column, and hosts the KaTeX math blocks.
+   panel and the right visualization column, and hosts the math blocks (MathJax SVG from equations.js).
 
    THE PIPELINE THE PAGE VISUALIZES
      n phase rotations φⱼ                       encode a flat-magnitude state
@@ -29,7 +29,8 @@
      1. preconnect   warm the font host connections
      2. fonts        Google Fonts: Space Grotesk, IBM Plex Mono, Instrument
                      Serif (the shell set, see --f-sans / --f-mono / --f-serif)
-     3. katex        KaTeX CSS, JS, then auto-render (renders $…$ at init)
+     3. equations.js MathJax SVG for every formula, written by typeset.mjs.
+                     main.js puts each one into its [data-eq] element.
      4. style.css    the page stylesheet
 
    PHONE  (max-width 768px, or a short landscape touch screen)
@@ -44,16 +45,13 @@
      │  Register (n)  │  ① input signal  #cv-mag  #cv-phase              │
      │  Linear ramp α │  ② output        #cv-out  (+ stats)              │
      │  Measurement   │  what you're watching (prose)                    │
-     │  φⱼ sliders    │  the math (KaTeX)                                │
+     │  φⱼ sliders    │  the math (MathJax SVG)                                │
      └────────────────┴─────────────────────────────────────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -149,7 +147,7 @@
         </div>
       </div>
       <div class="flow" style="margin-top:14px"><span>flat magnitude · phase ramp</span><span class="arr">▼</span><span style="color:var(--cyan-d)">QFT</span></div>
-      <div class="formula">$P(k)=\bigl|\tfrac{1}{N}\sum_{x} e^{i\theta(x)}\,e^{-2\pi i kx/N}\bigr|^2$&nbsp;&nbsp;<span style="color:var(--faint)">— power spectrum of a constant-modulus sequence</span></div>
+      <div class="formula"><span class="tex" data-eq="flow"></span>&nbsp;&nbsp;<span style="color:var(--faint)">— power spectrum of a constant-modulus sequence</span></div>
     </div>
 
     <!-- Stage ②: the output spectrum. #cv-out overlays the smooth continuous
@@ -185,23 +183,23 @@
       </div>
     </div>
 
-    <!-- The formal math, rendered by KaTeX auto-render: input state, QFT
+    <!-- The formal math, MathJax SVG from equations.js: input state, QFT
          amplitude, measured probability, clean-tone condition, leak law, and
          periodicity. -->
     <div class="card">
       <div class="lbl">The math <span class="tag">QFT, formally</span></div>
       <div class="eq"><div class="cap"><b>Input state</b> — flat magnitude, phase set by your n rotations</div>
-        <div class="math">$$|\psi_{\text{in}}\rangle=\frac{1}{\sqrt{N}}\sum_{x=0}^{N-1} e^{\,i\theta(x)}\,|x\rangle,\qquad \theta(x)=\sum_{j=0}^{n-1}\varphi_j\,x_j,\quad N=2^{\,n}$$</div></div>
-      <div class="eq"><div class="cap"><b>QFT amplitude</b> on basis state $|k\rangle$</div>
-        <div class="math">$$V[k]=\langle k|\,\mathrm{QFT}\,|\psi_{\text{in}}\rangle=\frac{1}{N}\sum_{x=0}^{N-1} e^{\,i\theta(x)}\,e^{-2\pi i\,kx/N}$$</div></div>
-      <div class="eq"><div class="cap"><b>Measured probability</b> and its smooth continuation $|V(\kappa)|^2$</div>
-        <div class="math">$$P(k)=\bigl|V[k]\bigr|^2,\qquad \kappa\in[0,N)\ \text{continuous}$$</div></div>
+        <div class="math"><span class="tex disp" data-eq="in"></span></div></div>
+      <div class="eq"><div class="cap"><b>QFT amplitude</b> on basis state <span class="tex" data-eq="ket-k"></span></div>
+        <div class="math"><span class="tex disp" data-eq="amp"></span></div></div>
+      <div class="eq"><div class="cap"><b>Measured probability</b> and its smooth continuation <span class="tex" data-eq="vk2"></span></div>
+        <div class="math"><span class="tex disp" data-eq="prob"></span></div></div>
       <div class="eq"><div class="cap"><b>Clean-tone condition</b> — a 1:2:4:8 ramp is a single frequency</div>
-        <div class="math">$$\varphi_j=\alpha\,2^{\,j}\;\Rightarrow\;\theta(x)=\alpha x\;\Rightarrow\;\text{peak at }k=\frac{\alpha N}{2\pi}$$</div></div>
-      <div class="eq"><div class="cap"><b>Leak law</b> — cost of detuning qubit $j$ by $\delta_j$</div>
-        <div class="math">$$P_{\text{peak}}=\prod_{j=0}^{n-1}\cos^2\!\Bigl(\tfrac{\delta_j}{2}\Bigr)$$</div></div>
+        <div class="math"><span class="tex disp" data-eq="ramp"></span></div></div>
+      <div class="eq"><div class="cap"><b>Leak law</b> — cost of detuning qubit <span class="tex" data-eq="j"></span> by <span class="tex" data-eq="dj"></span></div>
+        <div class="math"><span class="tex disp" data-eq="leak"></span></div></div>
       <div class="eq"><div class="cap"><b>Periodicity</b> — why the curve rises again on the right</div>
-        <div class="math">$$V[k+N]=V[k]\quad\Longleftrightarrow\quad |k\rangle\ \text{and}\ |k+N\rangle\ \text{label the same bin}$$</div></div>
+        <div class="math"><span class="tex disp" data-eq="wrap"></span></div></div>
     </div>
   </div>
 </div>
@@ -219,6 +217,7 @@
 </nav>
 
 <!-- Classic (non-module) script; runs after the markup it binds to is parsed. -->
+<script src="equations.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

@@ -158,8 +158,15 @@ input[type=range].amber::-moz-range-thumb{background:var(--amber)}
 .eq .cap b{color:var(--ink)}
 .eq .math{background:rgba(8,12,20,0.55);border:1px solid var(--border);border-radius:7px;
   padding:11px 13px;overflow-x:auto;color:var(--ink)}
-.katex{font-size:1.02em!important}
-.katex .mord,.katex .mbin,.katex .mrel,.katex .mopen,.katex .mclose,.katex .mop{color:var(--ink)}
+/* Formulas: static MathJax SVG from equations.js. The glyphs use
+   currentColor, and the ex sizes follow font-size. A block formula scales
+   down to the card width on a narrow screen. */
+.tex{color:var(--ink)}
+.tex svg{vertical-align:middle}
+.tex.disp{display:block;text-align:center;font-size:1.05rem}
+.tex.disp svg{display:inline-block;max-width:100%;height:auto}
+.formula .tex{font-size:0.95rem}
+.eq .cap .tex{font-size:0.85rem}
 
 /* Mono for labels, values, buttons and data captions. Prose stays sans. */
 .sys-status,.topbar-r,.kicker,.lbl,.row .name,.stepper,.slider .head,.btns button,.phi-tools button,

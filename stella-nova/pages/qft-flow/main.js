@@ -40,6 +40,7 @@
 //      linear ramp .......... "function applyRamp"  φⱼ = α·2ʲ pure tone
 //      presets .............. "data-preset"         flat / ramp / detune / random
 //      init ................. "setN(8)"             first paint
+//      formulas ............. "function fillEquations" MathJax SVG into [data-eq]
 // ============================================================================
 
 // $ is the id lookup shorthand; TAU is one turn; S is the single mutable state:
@@ -344,6 +345,9 @@ window.addEventListener('resize',()=>render());
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>render());
 // First paint: 8 qubits, flat phases.
 setN(8);applyRamp(0);
-// Typeset the KaTeX math blocks once, if auto-render loaded.
-if(window.renderMathInElement)renderMathInElement(document.body,{delimiters:[
-  {left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+// Put each pre-typeset MathJax SVG (equations.js, window.QFT_EQ) into the
+// element with the same data-eq key. A missing key leaves the element empty
+// and logs a warning, so a stale equations.js shows in the console.
+(function fillEquations(){const E=window.QFT_EQ||{};
+  document.querySelectorAll('[data-eq]').forEach(el=>{const v=E[el.dataset.eq];
+    if(v)el.innerHTML=v;else console.warn('qft-flow: no formula for data-eq='+el.dataset.eq);});})();
