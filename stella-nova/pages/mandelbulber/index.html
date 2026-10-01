@@ -12,8 +12,9 @@
    A WebGPU (WGSL) port of the Mandelbulber2 ray-marching engine and its
    formula library (Mandelbulber Team, github.com/buddhi1980/mandelbulber2,
    GPL-3.0; see COPYING). Up to nine hybrid formula slots, a parameter panel
-   made from the upstream formula forms, the upstream example scenes, and
-   .fract import and export.
+   made from the upstream formula forms, presets (the upstream examples, the
+   CC-BY upstream collections and the site originals), and .fract import and
+   export.
 
    LAYOUT  (# marks an element id)
      ┌──────────────────────────────────────────────────────────────────┐
@@ -46,6 +47,9 @@
        struct.wgsl aux.wgsl helpers.wgsl layout.json   by tools/translate.mjs
        formulas/<name>.wgsl + formulas/index.json      by tools/translate.mjs
        params.json catalog.json examples.json thumbs.* by tools/catalog.mjs
+       collections.json CREDITS-examples.md             by tools/catalog.mjs
+       originals.json                                   by tools/originals.mjs
+       preset-thumbs.jpg preset-thumbs.json             by tools/preset-thumbs.mjs
      tools/      generators (Node) and tools/overrides/ hand-fixed formulas
      COPYING     GPL-3.0 license text
 
@@ -55,7 +59,7 @@
      ported file are GPL-3.0 as well; the panel has an About / credits entry.
 
    grep: #gl  #panel  #pbody  #picker  #pickerSearch  #hud  #file  #drop  #flyBtn
-         #grab  #peek  #exSheet  #exSearch  #ctx  #sticks  #tip
+         #grab  #peek  #exSheet  #exSearch  #exRandom  #exChips  #ctx  #sticks  #tip
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -76,7 +80,7 @@
   <header><h1>Mandelbulber</h1><small id="subtitle">formulas · path traced</small><small id="peekText" class="peektext"></small></header>
   <div class="peek" id="peek">
     <button type="button" id="peekFormula">Formula</button>
-    <button type="button" id="peekExamples">Examples</button>
+    <button type="button" id="peekExamples">Presets</button>
     <button type="button" id="peekFrame">Frame</button>
     <button type="button" id="peekSave" class="primary">Save PNG</button>
   </div>
@@ -89,11 +93,13 @@
   </div>
   <div class="pbody" id="pickerBody"></div>
 </div>
-<div class="picker hidden" id="exSheet" role="dialog" aria-label="Choose an example">
+<div class="picker hidden" id="exSheet" role="dialog" aria-label="Choose a preset">
   <div class="phead">
-    <input type="search" id="exSearch" placeholder="Search examples" aria-label="Search examples" autocomplete="off">
+    <input type="search" id="exSearch" placeholder="Search presets: name, formula, author, family" aria-label="Search presets" autocomplete="off">
+    <button type="button" id="exRandom" title="Load a random preset from the ones shown">Random</button>
     <button type="button" id="exClose" title="Close (Esc)">Close</button>
   </div>
+  <div class="exchips" id="exChips"></div>
   <div class="pbody" id="exBody"></div>
 </div>
 <div class="ctx" id="ctx" role="menu" hidden>

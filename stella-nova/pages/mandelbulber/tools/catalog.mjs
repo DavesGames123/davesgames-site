@@ -8,14 +8,17 @@
 //   params.json    every param: type, default, min/max, sFractal / sParamRender path, derived fields
 //   catalog.json   one entry per formula: ids, DE metadata, group, panel params from the .ui form
 //   examples.json  the example scenes, only the params each file sets
+//   collections.json  the example collections whose licence allows commercial use, by folder
+//   CREDITS-examples.md  author and licence of each collection, and the excluded folders
 //   thumbs.jpg     all formula thumbnails as one 64 px sprite grid
 //   thumbs.json    sprite index: { cols, size, count, index: { <file stem>: i } }
 //
-// Usage:  node tools/catalog.mjs <UP> [outDir]      (outDir defaults to gen/ next to tools/)
+// Usage:  node tools/catalog.mjs <UP> [outDir] [--no-collections]   (outDir defaults to gen/)
 //         import { buildCatalog } from './catalog.mjs'; await buildCatalog(UP, outDir)
 //
 // grep: buildCatalog buildParams parseCppBlock execInit evalExpr mapFieldPaths buildDerived
 //       templateFrom parseXml parseUi parseCsv buildFormulaList buildExamples buildThumbs
+//       buildCollections parseCollectionDir LICENCE_OK MISSING_FEATURES writeCredits
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -971,16 +974,10 @@ function buildThumbs(UP, outDir) {
 
 // ---------------------------------------------------------------- examples
 
-function buildExamples(UP, P, { collections = false } = {}) {
+function buildExamples(UP, P) {
   const dir = path.join(UP, 'deploy/share/mandelbulber2/examples');
-  const files = [];
-  const walk = (d, rel) => {
-    for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
-      if (e.isDirectory()) { if (collections) walk(path.join(d, e.name), path.join(rel, e.name)); }
-      else if (e.name.endsWith('.fract')) files.push(path.join(rel, e.name));
-    }
-  };
-  walk(dir, '');
+  const files = fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
+    .filter(e => !e.isDirectory() && e.name.endsWith('.fract')).map(e => e.name);
   const examples = [], unknown = new Map();
   for (const f of files) {
     const r = fractToScene(read(path.join(dir, f)), P, { fill: false });
@@ -990,7 +987,113 @@ function buildExamples(UP, P, { collections = false } = {}) {
     for (const u of r.unknown) unknown.set(u.name, (unknown.get(u.name) || 0) + 1);
     examples.push(ex);
   }
-  return { examples, unknown, dirs: fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name) };
+  return { examples, unknown };
+}
+
+// ---------------------------------------------------------------- example collections
+
+// Each collection folder upstream names its author and licence, for example
+// "Graeme McLaren  collection - license Creative Commons  (CC-BY 4.0)". No folder has a licence
+// file, so the folder name is the licence statement. The site may be commercial, so only a
+// licence with no NC (non-commercial) and no ND (no derivatives) term is used.
+const LICENCE_OK = (lic) => /^CC-BY(-SA)? \d/.test(lic) && !/-(NC|ND)\b/.test(lic);
+const LICENCE_URL = (lic) => {
+  const m = lic.match(/^CC-([A-Z-]+) ([\d.]+)$/);
+  return m ? `https://creativecommons.org/licenses/${m[1].toLowerCase()}/${m[2]}/` : null;
+};
+
+export function parseCollectionDir(name) {
+  const lic = (name.match(/\(\s*(CC-[A-Z-]+\s+[\d.]+)\s*\)/) || [])[1]?.replace(/\s+/g, ' ') ?? null;
+  const head = name.replace(/\s*-?\s*license\b.*$/i, '').trim();
+  const [who, ...rest] = head.split(/\s+-\s+|\s+collection\b/i).map(t => t.trim()).filter(Boolean);
+  return { author: who || head, subject: rest.join(' ').replace(/-$/, '').trim() || null, licence: lic };
+}
+
+// Scene features the WebGPU port does not render (see the "Not ported" notes in shaders/).
+// A collection scene that turns one on would look wrong, so it is left out.
+const MISSING_FEATURES = [
+  [/^boolean_operators$/, 'boolean operators (objects tree)'],
+  [/^primitive_\w+_enabled$/, 'primitive objects'],
+  [/^mat\d+_use_\w*texture$|^mat\d+_texture_fractalize$/, 'textures'],
+  [/^fake_lights_enabled$/, 'fake lights'],
+  [/^clouds_enable$/, 'clouds'],
+  [/^stereo_enabled$/, 'stereo'],
+];
+
+function missingFeature(main) {
+  for (const [k, v] of Object.entries(main)) {
+    if (v !== true) continue;
+    for (const [re, why] of MISSING_FEATURES) if (re.test(k)) return why;
+  }
+  return null;
+}
+
+// drop: { "<folder>/<file>": reason } from tools/collections-drop.json (render check failures).
+function buildCollections(UP, P, drop = {}) {
+  const dir = path.join(UP, 'deploy/share/mandelbulber2/examples');
+  const collections = [], examples = [];
+  const dirs = fs.readdirSync(dir, { withFileTypes: true }).filter(e => e.isDirectory()).map(e => e.name)
+    .sort((a, b) => a.localeCompare(b));
+  for (const d of dirs) {
+    const info = parseCollectionDir(d);
+    const files = fs.readdirSync(path.join(dir, d)).filter(f => f.endsWith('.fract')).sort((a, b) => a.localeCompare(b));
+    const c = { dir: d, ...info, licenceUrl: info.licence ? LICENCE_URL(info.licence) : null,
+      files: files.length, included: 0, dropped: {} };
+    c.allowed = !!info.licence && LICENCE_OK(info.licence);
+    collections.push(c);
+    if (!c.allowed) continue;
+    const ci = collections.length - 1;
+    for (const f of files) {
+      const rel = `${d}/${f}`;
+      const r = fractToScene(read(path.join(dir, d, f)), P, { fill: false });
+      const why = drop[rel] ? `render check: ${drop[rel]}` : missingFeature(r.scene.main);
+      if (why) { const k = why.replace(/:.*$/, ''); c.dropped[k] = (c.dropped[k] || 0) + 1; (c.droppedFiles ||= []).push(`${f}: ${why}`); continue; }
+      const ex = { file: rel, title: path.basename(f, '.fract').replace(/[_]+/g, ' ').trim(), collection: ci,
+        version: r.version, main: r.scene.main, fractal: r.scene.fractal };
+      if (r.description) ex.description = r.description;
+      examples.push(ex);
+      c.included++;
+    }
+  }
+  return { collections, examples };
+}
+
+function writeCredits(outDir, collections) {
+  const ok = collections.filter(c => c.allowed), no = collections.filter(c => !c.allowed);
+  const lines = [
+    '# Example collection credits',
+    '',
+    'gen/collections.json holds scenes from the example collection folders of Mandelbulber2',
+    '(github.com/buddhi1980/mandelbulber2, commit 600da8d,',
+    '`mandelbulber2/deploy/share/mandelbulber2/examples/<folder>/`). Each folder name states the',
+    'author and the licence. The page shows the author and the licence on every scene from a',
+    'collection. tools/catalog.mjs migrates each file to the current settings, as for the main',
+    'examples. It changes no value of the scene.',
+    '',
+    '## Included',
+    '',
+    '| Collection | Author | Licence | Files | Included |',
+    '| --- | --- | --- | --- | --- |',
+    ...ok.map(c => `| ${c.dir} | ${c.author} | [${c.licence}](${c.licenceUrl}) | ${c.files} | ${c.included} |`),
+    '',
+    'A scene is left out when it turns on a feature that the WebGPU port does not render, or when',
+    'it failed the headless render check (tools/collections-drop.json):',
+    '',
+    ...ok.filter(c => c.droppedFiles?.length).flatMap(c => [`- ${c.author}:`, ...c.droppedFiles.map(f => `  - ${f}`)]),
+    '',
+    '## Excluded',
+    '',
+    'These folders carry a non-commercial licence, so the site does not ship them:',
+    '',
+    ...no.map(c => `- ${c.dir} (${c.files} files): ${c.licence ?? 'no licence'}, not free for commercial use`),
+    '',
+    '## Site originals',
+    '',
+    'gen/originals.json holds scenes made for this site (tools/originals.mjs). They use the',
+    'Mandelbulber formulas and the same GPL-3.0 terms as the page.',
+    '',
+  ];
+  fs.writeFileSync(path.join(outDir, 'CREDITS-examples.md'), lines.join('\n'));
 }
 
 // ---------------------------------------------------------------- host-only fields
@@ -1097,9 +1200,18 @@ export async function buildCatalog(UP, outDir, opts = {}) {
   const catalog = { formulas, groups: groups.map(g => ({ name: g.name, section: g.section, count: g.ids.length })) };
   sizes['catalog.json'] = writeJson('catalog.json', catalog);
 
-  // Examples.
-  const ex = buildExamples(UP, P, { collections: !!opts.collections });
+  // Examples. The main folder goes to examples.json, the collection folders to collections.json.
+  const ex = buildExamples(UP, P);
   sizes['examples.json'] = writeJson('examples.json', { examples: ex.examples });
+  let col = null;
+  if (opts.collections !== false) {
+    const dropFile = path.join(path.dirname(fileURLToPath(import.meta.url)), 'collections-drop.json');
+    const drop = fs.existsSync(dropFile) ? JSON.parse(read(dropFile)) : {};
+    col = buildCollections(UP, P, drop);
+    const strip = ({ allowed, droppedFiles, ...c }) => ({ ...c, allowed });
+    sizes['collections.json'] = writeJson('collections.json', { collections: col.collections.map(strip), examples: col.examples });
+    writeCredits(outDir, col.collections);
+  }
 
   // Validation report.
   const csvFiles = new Set(formulas.map(f => f.file));
@@ -1132,7 +1244,8 @@ export async function buildCatalog(UP, outDir, opts = {}) {
     uiParamsMissing: Object.fromEntries(missParams),
     uiParamKindMismatch: [],
     widgetSurvey: Object.fromEntries([...survey.entries()].sort((a, b) => b[1] - a[1])),
-    examples: { files: ex.examples.length, skippedCollectionDirs: opts.collections ? [] : ex.dirs, unknownParams: Object.fromEntries([...ex.unknown.entries()].sort((a, b) => b[1] - a[1])) },
+    examples: { files: ex.examples.length, unknownParams: Object.fromEntries([...ex.unknown.entries()].sort((a, b) => b[1] - a[1])) },
+    collections: col ? col.collections.map(c => ({ dir: c.dir, author: c.author, licence: c.licence, allowed: c.allowed, files: c.files, included: c.included, dropped: c.dropped })) : 'skipped',
     sizes,
   };
   const kindMap = { double: ['double'], int: ['int'], bool: ['bool'], vect3: ['vect3'], vect4: ['vect4'], list: ['int'] };
@@ -1148,10 +1261,10 @@ export async function buildCatalog(UP, outDir, opts = {}) {
 // CLI.
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
   const UP = process.argv[2];
-  if (!UP) { console.error('usage: node tools/catalog.mjs <UP> [outDir] [--collections]'); process.exit(2); }
+  if (!UP) { console.error('usage: node tools/catalog.mjs <UP> [outDir] [--no-collections]'); process.exit(2); }
   const here = path.dirname(fileURLToPath(import.meta.url));
   const outArg = process.argv[3] && !process.argv[3].startsWith('--') ? process.argv[3] : null;
   const outDir = outArg ? path.resolve(outArg === 'gen' ? path.join(here, '..', 'gen') : outArg) : path.join(here, '..', 'gen');
-  const stats = await buildCatalog(UP, outDir, { collections: process.argv.includes('--collections') });
+  const stats = await buildCatalog(UP, outDir, { collections: !process.argv.includes('--no-collections') });
   console.log(JSON.stringify(stats, null, 1));
 }

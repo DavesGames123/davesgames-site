@@ -31,6 +31,8 @@
 //       function applyLayout  function pickMode  function snapTo  function sheetDrag  function syncViewport
 //       function openExamples  function openCtx  function showTip  function stick  function inertiaStep
 //       function renderPaused  const pixelRatio  const renderScale
+//       function prepareExamples  function presetFamily  function presetThumb  function randomExample
+//       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
 
 import { SLOTS, defaultScene, fillDefaults, specFor, parseFract, serialiseFract, parseValue, quantizeColor, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
 
@@ -43,7 +45,8 @@ const hud = $('hud');
 const picker = $('picker');
 
 // ─── data ───────────────────────────────────────────────────────────────────
-let P, CAT, EXAMPLES, THUMBS;
+let P, CAT, EXAMPLES, THUMBS, PTHUMBS = null;
+let COLLECTIONS = [];             // gen/collections.json: author and licence per collection folder
 let byEnum = new Map();           // formula number as stored in .fract -> catalog entry
 let scene;
 let activeSlot = 0;
@@ -382,18 +385,21 @@ function buildPanel() {
       el('button', { type: 'button', onclick: copyLink, title: 'Copy a link that holds the scene' }, 'Copy link'),
       el('button', { type: 'button', onclick: () => { currentExample = -1; markExample(); loadScene(defaultScene(P), 'scene reset'); } }, 'Reset'))));
 
-  // Examples
-  exSearch = el('input', { class: 'exsearch', type: 'search', placeholder: `Search ${EXAMPLES.length} examples`, 'aria-label': 'Search examples' });
+  // Presets: upstream examples, upstream collections, site originals
+  exSearch = el('input', { class: 'exsearch', type: 'search', placeholder: `Search ${EXAMPLES.length} presets`, 'aria-label': 'Search presets' });
   exList = el('div', { class: 'exlist' });
   exSearch.addEventListener('input', filterExamples);
+  let lastGroup = null;
   EXAMPLES.forEach((e, i) => {
-    const f = byEnum.get(e._formula) || null;
-    const b = el('button', { type: 'button', class: 'ex', title: e.name, 'data-i': i }, thumb(f, 32), el('span', {}, e.name));
+    if (e.group !== lastGroup) { lastGroup = e.group; exList.append(el('h3', { 'data-g': e.group }, e.group)); }
+    const b = el('button', { type: 'button', class: 'ex', title: presetTitle(e), 'data-i': i }, presetThumb(e, 32), el('span', {}, e.name));
     b.addEventListener('click', () => loadExample(i));
     exList.append(b);
   });
-  const browse = el('div', { class: 'buttons exbrowse' }, el('button', { type: 'button', onclick: openExamples }, `Browse ${EXAMPLES.length} examples`));
-  pbody.append(section('examples', 'Examples', false, browse, exSearch, exList));
+  const browse = el('div', { class: 'buttons exbrowse' },
+    el('button', { type: 'button', onclick: openExamples }, `Browse ${EXAMPLES.length} presets`),
+    el('button', { type: 'button', onclick: randomExample, title: 'Load a random preset' }, 'Random'));
+  pbody.append(section('examples', 'Presets', false, browse, exSearch, exList));
 
   // Formula slots
   slotStrip = el('div', { class: 'slots' });
@@ -429,6 +435,10 @@ function buildPanel() {
   const about = section('about', 'About / credits', false);
   about.querySelector('.body').innerHTML = `
     <p class="spec credit">${CREDIT.html}</p>
+    <p class="spec"><b>Presets.</b> The upstream examples come with Mandelbulber. The upstream collections are by
+    ${COLLECTIONS.filter((c) => c.allowed).map((c) => `${c.author} (<a href="${c.licenceUrl}" target="_blank" rel="noopener">${c.licence}</a>)`).join(', ') || 'none loaded'};
+    the scenes are migrated to the current settings and not changed. The site originals are made for this page.
+    See <a href="${new URL('gen/CREDITS-examples.md', import.meta.url).href}" target="_blank" rel="noopener">CREDITS-examples.md</a>.</p>
     <p class="spec">This page is a WebGPU port of that program. The formulas are translated from the upstream OpenCL
     kernels to WGSL in 32-bit floats, so deep zooms lose precision earlier than upstream's 64-bit mode.
     The license text is in <a href="${new URL('COPYING', import.meta.url).href}" target="_blank" rel="noopener">COPYING</a>.</p>
@@ -638,10 +648,88 @@ function gradientEditor(name) {
   return box;
 }
 
-// ─── examples ───────────────────────────────────────────────────────────────
-function prepareExamples(raw) {
-  const list = Array.isArray(raw) ? raw : raw.examples || [];
-  return list.map((e) => ({ ...e, name: e.name || e.title || e.file || 'example', _formula: e.formula_1 ?? e.main?.formula_1 ?? e.params?.main?.formula_1 ?? P.main.formula_1?.default }));
+// ─── presets ────────────────────────────────────────────────────────────────
+// Three sources, in this order: the upstream examples (gen/examples.json), the upstream
+// collections whose licence allows commercial use (gen/collections.json, one group per author,
+// with the author and the licence shown), and the site originals (gen/originals.json).
+// Each preset gets a key ("e:<file>", "c:<folder>/<file>", "o:<id>") for its thumbnail in
+// gen/preset-thumbs.jpg, and a formula family for the filter chips.
+const SOURCES = [['all', 'All'], ['e', 'Upstream examples'], ['c', 'Upstream collections'], ['o', 'Site originals']];
+const FAMILIES = ['Bulbs', 'Boxes', 'IFS & kaleidoscopic', '4D & quaternion', 'Kleinian', 'dIFS', 'Hybrids', 'Other'];
+
+// Family from the formulas in use. Two or more formulas, or a formula with a transform, is a hybrid.
+function presetFamily(e) {
+  const m = e.main || {};
+  const hybrid = !!m.hybrid_fractal_enable;
+  const used = [];
+  for (let k = 1; k <= SLOTS; k++) {
+    const n = m[`formula_${k}`] ?? (k === 1 ? P.main.formula_1?.default : 0);
+    if (!n || (k > 1 && !hybrid)) continue;
+    const f = byEnum.get(n);
+    if (f && !used.includes(f)) used.push(f);
+  }
+  const shapes = used.filter((f) => groupName(f) !== 'Transforms');
+  if (shapes.length > 1 || (shapes.length && used.length > shapes.length)) return 'Hybrids';
+  const f = shapes[0] || used[0];
+  if (!f) return 'Other';
+  const id = `${f.file} ${f.name}`.toLowerCase(), g = groupName(f).toLowerCase();
+  if (g.includes('kleinian') || id.includes('kleinian')) return 'Kleinian';
+  if (g.includes('difs') || /^difs/.test(f.file)) return 'dIFS';
+  if (/4d|quaternion|quat\b|hypercomplex|aexion|bristorbrot|hopf/.test(id)) return '4D & quaternion';
+  if (/box|surf|kali|mandalay|pseudo|tglad/.test(id)) return 'Boxes';
+  if (/menger|sierpinski|ifs|octahedron|icosa|dodeca|tetra|vicsek|koch|spheretree|knot|polyhedr|fold_cut|kaleid|platonic|prism|cross/.test(id)) return 'IFS & kaleidoscopic';
+  if (/bulb|bar|riemann|cup|torus|benesi|msltoe|xenodreamie|lkmitch|makin|quadrat|kosalos|lambda|power|mandel|julia/.test(id)) return 'Bulbs';
+  return 'Other';
+}
+
+function prepareExamples(raw, col, orig) {
+  const list = (r) => (Array.isArray(r) ? r : r?.examples || r?.presets || []);
+  COLLECTIONS = col?.collections || [];
+  const out = [];
+  const add = (e, src, extra) => {
+    const name = e.name || e.title || e.file || e.id || 'preset';
+    const x = { ...e, ...extra, src, name, _formula: e.formula_1 ?? e.main?.formula_1 ?? P.main.formula_1?.default };
+    x.family = presetFamily(x);
+    x.key = src === 'o' ? `o:${e.id}` : `${src}:${e.file}`;
+    const f = byEnum.get(x._formula);
+    x.search = `${name} ${f?.name || ''} ${f?.file || ''} ${x.family} ${x.group} ${x.author || ''}`.toLowerCase();
+    out.push(x);
+  };
+  for (const e of list(raw)) add(e, 'e', { group: 'Upstream examples' });
+  for (const e of list(col)) {
+    const c = COLLECTIONS[e.collection];
+    if (!c) continue;
+    add(e, 'c', { group: `${c.author}${c.subject ? ` (${c.subject})` : ''} · ${c.licence}`, author: c.author, licence: c.licence, licenceUrl: c.licenceUrl });
+  }
+  for (const e of list(orig)) add(e, 'o', { group: 'Site originals' });
+  return out;
+}
+
+function presetTitle(e) {
+  const f = byEnum.get(e._formula);
+  return `${e.name}${f ? ` · ${f.name}` : ''} · ${e.family}${e.author ? ` · by ${e.author}, ${e.licence}` : e.src === 'o' ? ' · site original' : ''}`;
+}
+
+// The rendered thumbnail of the preset, or the formula icon when the sprite has none.
+function presetThumb(e, px = 64) {
+  const i = PTHUMBS?.index?.[e.key];
+  if (i === undefined) return thumb(byEnum.get(e._formula) || null, px);
+  const { cols, rows, url } = PTHUMBS;
+  const c = i % cols, r = Math.floor(i / cols);
+  const size = px ? `width:${px}px;height:${px}px;` : '';
+  return el('div', { class: 'thumb shot', style: `${size}background-image:url(${url});background-size:${cols * 100}% ${rows * 100}%;` +
+    `background-position:${cols > 1 ? (c / (cols - 1)) * 100 : 0}% ${rows > 1 ? (r / (rows - 1)) * 100 : 0}%` });
+}
+
+// A random preset from the ones the sheet filters show (all presets when the sheet is closed).
+function randomExample() {
+  const open = !exSheet.classList.contains('hidden') && exTiles;
+  const pool = open ? exTiles.filter((x) => !x.t.hidden).map((x) => x.i) : EXAMPLES.map((_, i) => i);
+  if (!pool.length) return;
+  let i = pool[Math.floor(Math.random() * pool.length)];
+  if (i === currentExample && pool.length > 1) i = pool[(pool.indexOf(i) + 1) % pool.length];
+  if (open) { closeExamples(); if (L.mode === 'sheet' && L.snap === 'full') snapTo('half'); }
+  loadExample(i);
 }
 
 function exampleScene(e) {
@@ -666,16 +754,18 @@ function loadExample(i) {
   if (!e) return;
   currentExample = i;
   markExample();
-  loadScene(exampleScene(e), `example: ${e.name}`);
+  loadScene(exampleScene(e), `${e.src === 'o' ? 'site original' : 'example'}: ${e.name}${e.author ? ` · by ${e.author} (${e.licence})` : ''}`);
 }
 function markExample() { exList?.querySelectorAll('.ex').forEach((b) => b.classList.toggle('cur', Number(b.dataset.i) === currentExample)); }
 function filterExamples() {
-  const q = exSearch.value.trim().toLowerCase();
+  const words = exSearch.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = new Set();
   exList.querySelectorAll('.ex').forEach((b) => {
     const e = EXAMPLES[Number(b.dataset.i)];
-    const f = byEnum.get(e._formula);
-    b.hidden = !!q && !`${e.name} ${f?.name || ''}`.toLowerCase().includes(q);
+    b.hidden = !words.every((w) => e.search.includes(w));
+    if (!b.hidden) shown.add(e.group);
   });
+  exList.querySelectorAll('h3').forEach((h) => { h.hidden = !shown.has(h.dataset.g); });
 }
 
 // ─── import / export / share ────────────────────────────────────────────────
@@ -1291,24 +1381,61 @@ function swipeToClose(s, close) {
 swipeToClose(picker, closePicker);
 swipeToClose(exSheet, () => closeExamples());
 
-let exTiles = null;
+// The sheet: source and family chips over a grid with one heading per source group
+// (per collection author, with the licence). Search, chips and Random work together.
+let exTiles = null, exGroups = [];
+const exFilter = { src: 'all', family: 'all' };
 function buildExamples() {
-  exTiles = EXAMPLES.map((e, i) => {
-    const f = byEnum.get(e._formula) || null;
-    const t = el('button', { type: 'button', class: 'tile', title: e.name, 'data-i': i }, thumb(f, 64), el('span', {}, e.name));
+  exTiles = [];
+  exGroups = [];
+  const body = [];
+  let g = null;
+  EXAMPLES.forEach((e, i) => {
+    if (!g || g.name !== e.group) {
+      const c = e.src === 'c' ? COLLECTIONS[e.collection] : null;
+      const head = el('h3', {}, c ? `${c.author} collection` : e.group,
+        c?.subject ? el('small', {}, c.subject) : '',
+        c ? el('a', { class: 'lic', href: c.licenceUrl, target: '_blank', rel: 'noopener', title: `${c.licence}: credit ${c.author}` }, c.licence) : '',
+        el('small', { class: 'n' }, ''));
+      g = { name: e.group, head, grid: el('div', { class: 'grid' }), tiles: [] };
+      exGroups.push(g);
+      body.push(head, g.grid);
+    }
+    const t = el('button', { type: 'button', class: 'tile', title: presetTitle(e), 'data-i': i }, presetThumb(e, 64), el('span', {}, e.name));
     t.addEventListener('click', () => {
       closeExamples();
       loadExample(i);
       if (L.mode === 'sheet' && L.snap === 'full') snapTo('half');
     });
-    return { t, i, key: `${e.name} ${f?.name || ''}`.toLowerCase() };
+    const x = { t, i, e, key: e.search };
+    g.grid.append(t);
+    g.tiles.push(x);
+    exTiles.push(x);
   });
-  $('exBody').replaceChildren(el('div', { class: 'grid' }, ...exTiles.map((x) => x.t)), el('p', { class: 'empty', hidden: true }, 'No example matches.'));
+  const chip = (kind, val, label) => el('button', { type: 'button', class: 'chip', 'data-k': kind, 'data-v': val,
+    onclick: () => { exFilter[kind] = val; filterExSheet(); $('exBody').scrollTop = 0; } }, label);
+  const fams = FAMILIES.filter((f) => EXAMPLES.some((e) => e.family === f));
+  $('exChips').replaceChildren(
+    el('div', { class: 'chips' }, ...SOURCES.map(([v, l]) => chip('src', v, l)), el('span', { class: 'count', id: 'exCount' })),
+    el('div', { class: 'chips' }, chip('family', 'all', 'Any family'), ...fams.map((f) => chip('family', f, f))));
+  $('exBody').replaceChildren(...body, el('p', { class: 'empty', hidden: true }, 'No preset matches.'));
 }
 function filterExSheet() {
-  const q = $('exSearch').value.trim().toLowerCase();
+  const words = $('exSearch').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
   let any = 0;
-  for (const x of exTiles) { const ok = !q || q.split(/\s+/).every((w) => x.key.includes(w)); x.t.hidden = !ok; any += ok; }
+  for (const g of exGroups) {
+    let n = 0;
+    for (const x of g.tiles) {
+      const ok = (exFilter.src === 'all' || x.e.src === exFilter.src) && (exFilter.family === 'all' || x.e.family === exFilter.family)
+        && words.every((w) => x.key.includes(w));
+      x.t.hidden = !ok; n += ok;
+    }
+    g.head.hidden = g.grid.hidden = n === 0;
+    g.head.querySelector('.n').textContent = `${n}`;
+    any += n;
+  }
+  $('exChips').querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', exFilter[c.dataset.k] === c.dataset.v));
+  $('exCount').textContent = `${any} of ${EXAMPLES.length}`;
   $('exBody').querySelector('.empty').hidden = any > 0;
 }
 function openExamples() {
@@ -1327,6 +1454,7 @@ $('exSearch').addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeExamples();
 });
 $('exClose').addEventListener('click', closeExamples);
+$('exRandom').addEventListener('click', randomExample);
 
 $('peekFormula').addEventListener('click', () => openPicker(activeSlot));
 $('peekExamples').addEventListener('click', openExamples);
@@ -1440,9 +1568,12 @@ function fail(msg) {
 }
 
 async function boot() {
-  let raw;
+  let raw, colRaw, origRaw;
   try {
     [P, CAT, raw, THUMBS] = await Promise.all(['params.json', 'catalog.json', 'examples.json', 'thumbs.json'].map(loadJson));
+    // The extra presets and their thumbnails are optional: the page works with the upstream examples only.
+    [colRaw, origRaw, PTHUMBS] = await Promise.all(['collections.json', 'originals.json', 'preset-thumbs.json']
+      .map((n) => loadJson(n).catch((e) => { console.warn(`[mandelbulber] ${e.message}`); return null; })));
   } catch (e) {
     fail(`The page data did not load: ${e.message}`);
     throw e;
@@ -1453,8 +1584,11 @@ async function boot() {
   THUMBS = { cols, rows: Math.ceil((THUMBS.height ?? Math.ceil(count / cols) * size) / size),
     url: new URL(`gen/${THUMBS.file ?? 'thumbs.jpg'}`, import.meta.url).href };
   byEnum = new Map(CAT.formulas.map((f) => [fnum(f), f]));
-  EXAMPLES = prepareExamples(raw);
-  $('subtitle').textContent = `${CAT.formulas.filter((f) => !isNone(f)).length} formulas · ${EXAMPLES.length} examples`;
+  if (PTHUMBS) {
+    PTHUMBS = { ...PTHUMBS, rows: Math.ceil(PTHUMBS.count / PTHUMBS.cols), url: new URL(`gen/${PTHUMBS.file ?? 'preset-thumbs.jpg'}`, import.meta.url).href };
+  }
+  EXAMPLES = prepareExamples(raw, colRaw, origRaw);
+  $('subtitle').textContent = `${CAT.formulas.filter((f) => !isNone(f)).length} formulas · ${EXAMPLES.length} presets`;
 
   scene = (await readHash()) || defaultScene(P);
   buildPanel();
@@ -1489,7 +1623,9 @@ async function boot() {
 // Test hooks for the headless check.
 window.__mb = {
   get scene() { return scene; }, get P() { return P; }, get catalog() { return CAT; }, get info() { return info; },
-  get examples() { return EXAMPLES; }, get activeSlot() { return activeSlot; },
+  get examples() { return EXAMPLES; }, get collections() { return COLLECTIONS; }, randomExample,
+  loadPreset: (key) => loadExample(EXAMPLES.findIndex((e) => e.key === key)), get activeSlot() { return activeSlot; }, get status() { return compileStatus; },
+  loadPartial: (part, label) => loadScene(exampleScene(part), label),
   defaultScene: () => defaultScene(P), parseFract: (t) => parseFract(t, P), exportText, loadText, loadExample,
   shareHash, decodeShare, setMain, setSlot, openPicker, choose, targetSamples, toggleFly, camFromScene, camToScene,
   frameView, get engine() { return engine; },

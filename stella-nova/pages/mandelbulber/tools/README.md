@@ -28,7 +28,9 @@ on the PATH is a different program.
 | --- | --- |
 | `translate.mjs` | the OpenCL C to WGSL translator (library, no CLI) |
 | `gen.mjs` | `gen/struct.wgsl`, `gen/aux.wgsl`, `gen/helpers.wgsl`, `gen/layout.json`, `gen/formulas/*.wgsl`, `gen/formulas/index.json`; then calls `catalog.mjs` |
-| `catalog.mjs` | `gen/catalog.json`, `gen/params.json`, `gen/examples.json`, thumbnails |
+| `catalog.mjs` | `gen/catalog.json`, `gen/params.json`, `gen/examples.json`, `gen/collections.json`, `gen/CREDITS-examples.md`, formula thumbnails |
+| `originals.mjs` | `gen/originals.json`, the site original presets |
+| `preset-thumbs.mjs` | `gen/preset-thumbs.jpg`, `gen/preset-thumbs.json`, a render check report |
 
 - `struct.wgsl`: `struct Fractal` from `sFractalCl` in `opencl/fractal_cl.h`,
   all nested structs, and the enum constants. The field names and the nesting
@@ -102,3 +104,37 @@ environment. The emitter does these conversions:
 Unsupported constructs (for example a pointer to one of several storage
 arrays, or `sizeof`) stop the translation with `translate: <reason>`. Those
 formulas need an override.
+
+## Presets
+
+The page browser shows three preset sources, in this order:
+
+1. `gen/examples.json`: the upstream main example folder (153 files).
+2. `gen/collections.json`: the upstream example collection folders. Each folder
+   name states the author and the licence, and no folder has a licence file.
+   `catalog.mjs` uses a folder only when its licence has no NC or ND term
+   (`LICENCE_OK`), because the site may be commercial. It leaves out a scene
+   that turns on a feature the port does not render (`MISSING_FEATURES`), or
+   that is in `tools/collections-drop.json` (a failed render check). The page
+   shows the author and the licence on each collection group.
+   `gen/CREDITS-examples.md` lists the authors, the licences, the left-out
+   scenes and the excluded folders. `--no-collections` skips the step.
+3. `gen/originals.json`: the site originals from `tools/originals.mjs`. Run
+   `node tools/originals.mjs` after a change. An unknown param name stops it.
+
+`preset-thumbs.mjs` renders every preset in headless Chrome and packs one
+thumbnail per preset into `gen/preset-thumbs.jpg`. It needs a static server
+for the site and Chrome with WebGPU and a CDP port:
+
+    python3 -m http.server 47444 --bind 127.0.0.1        # from the site root
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new \
+      --enable-unsafe-webgpu --use-angle=metal --remote-debugging-port=9444 \
+      --user-data-dir=<scratch dir>
+    node tools/preset-thumbs.mjs --url http://127.0.0.1:47444/stella-nova/pages/mandelbulber/index.html
+
+The thumbnails and the checks stay in `--cache` (default
+`$TMPDIR/mandelbulber-thumbs`), so a second run renders only changed presets.
+The report marks a preset as failed for a compile error, a console error, a
+timeout, a black frame or a flat frame. Put a failed collection scene in
+`tools/collections-drop.json` and run `catalog.mjs` again.
+

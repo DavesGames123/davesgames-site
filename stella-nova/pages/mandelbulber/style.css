@@ -226,8 +226,18 @@ body:not(.mode-float) .picker .grid { grid-template-columns: repeat(auto-fill, m
 body:not(.mode-float) .picker .tile { padding: 6px 3px 7px; min-height: 44px; }
 body:not(.mode-float) .picker .tile .thumb { width: 100% !important; height: auto !important; aspect-ratio: 1; max-width: 96px; }
 body:not(.mode-float) .exlist, body:not(.mode-float) .exsearch { display: none; }
-.exbrowse { display: none; }
-body:not(.mode-float) .exbrowse { display: block; width: 100%; }
+.exbrowse { display: flex; gap: 6px; width: 100%; }
+.exbrowse button:first-child { flex: 1; }
+.exlist h3 { grid-column: 1 / -1; margin: 6px 0 0; }
+.exchips { padding: 6px 10px 2px; border-bottom: 1px solid rgba(143, 211, 255, .12); display: grid; gap: 5px; }
+.exchips .chips { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; align-items: center; }
+.exchips .chip { flex: none; font: inherit; font-size: 11px; color: var(--frost-dim); background: var(--fill); border: 1px solid rgba(143, 211, 255, .18);
+  border-radius: 999px; padding: 3px 10px; cursor: pointer; white-space: nowrap; }
+.exchips .chip.on { color: var(--frost); border-color: var(--lamp); }
+.exchips .count { flex: none; margin-left: auto; font-size: 10.5px; color: var(--frost-dim); padding-left: 6px; }
+.picker h3 a.lic { margin-left: 6px; font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--frost-dim); }
+.picker h3 small.n { float: right; }
+.thumb.shot { background-color: #000; }
 
 /* long-press menu on the canvas */
 .ctx { position: fixed; z-index: 11; display: flex; flex-direction: column; min-width: 168px; padding: 6px; gap: 4px;
@@ -305,6 +315,7 @@ body.flying.touchfly .sticks { display: block; }
   .picker .phead { padding: 8px 10px; }
   .picker .phead input { font-size: 16px; min-height: 44px; }
   .picker .phead button { min-height: 44px; min-width: 68px; font-size: 14px; }
+  .exchips .chip { min-height: 36px; font-size: 13px; padding: 4px 12px; }
   .picker .tile span { font-size: 12px; }
   .picker h3 { font-size: 11px; }
 }
@@ -314,3 +325,7 @@ body.flying.touchfly .sticks { display: block; }
 [hidden] { display: none !important; }
 /* the engine could not compile the current scene: the image is the previous one */
 #gl.stale { filter: grayscale(.8) brightness(.6); }
+
+/* presets sheet: wider on a desktop, chips wrap there (a mouse has no sideways scroll) */
+body.mode-float #exSheet { width: min(640px, calc(100vw - 24px)); }
+body.mode-float .exchips .chips { flex-wrap: wrap; }
