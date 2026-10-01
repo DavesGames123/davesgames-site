@@ -1,0 +1,37 @@
+Human Skeleton mesh data (data/*.bin.gz, data/manifest.json)
+=============================================================
+
+Licence: Creative Commons Attribution-ShareAlike 4.0 International
+         https://creativecommons.org/licenses/by-sa/4.0/
+
+The meshes in this folder are a derived work. build-data.py made them from
+these sources:
+
+  Z-Anatomy, the libre 3D atlas of anatomy
+    Gauthier Kervyn (design, 3D, anatomy), Marcin Zielinski (add-on)
+    https://github.com/Z-Anatomy/Models-of-human-anatomy  (Startup.blend)
+    Licence: CC BY-SA 4.0
+
+  BodyParts3D, (c) The Database Center for Life Science (DBCLS)
+    https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
+    Licence: CC BY 4.0 (the current DBCLS licence page). Z-Anatomy cites the
+    earlier release under CC BY-SA 2.1 Japan. Z-Anatomy made its bone
+    meshes from BodyParts3D. The FMA ids in manifest.json come from the
+    BodyParts3D table isa_parts_list_e.txt.
+
+Changes made by build-data.py: the bones were selected and merged (the
+manubrium, body and xiphoid process into one sternum), moved into a y-up
+frame in metres, decimated, given new normals and a cavity term, quantized
+and packed. The articulation lists come from mesh proximity plus a short
+curated list. The names, Latin names and facts are written for this page.
+
+Not included: the six auditory ossicles. Z-Anatomy credits a CC BY-NC-SA
+ear model from the University of Dundee (after the McGill "3D Ear"), and
+that model contains the malleus, incus and stapes. The non-commercial
+term is not compatible with this folder, so build-data.py leaves the
+ossicles out unless it is given --ossicles.
+
+You can share and adapt these files under CC BY-SA 4.0. Give credit to
+Z-Anatomy and to BodyParts3D (DBCLS), and share your changes under the
+same licence. The page code (index.html, main.js and the other .js and
+.css files) is not covered by this note.
