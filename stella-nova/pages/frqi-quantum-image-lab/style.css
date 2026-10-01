@@ -66,8 +66,8 @@ input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;bac
 .note{font-size:0.7rem;color:var(--text-faint);line-height:1.55;margin-top:7px;letter-spacing:0.01em}
 .note b{color:var(--cyan)}
 #eq-main{margin-top:4px;padding:9px 8px;background:rgba(150,200,255,0.04);border:1px solid var(--border);border-radius:5px;overflow-x:auto;text-align:center}
-#eq-main .katex{color:var(--text-bright);font-size:0.9em}
-.eq-fallback{font-family:var(--f-serif);font-style:italic;color:var(--text)}
+#eq-main{color:var(--text-bright);font-size:0.8rem}
+#eq-main svg{max-width:100%;height:auto;display:block;margin:0 auto}
 #grid{flex:1;display:grid;grid-template-columns:1.25fr 1fr;grid-template-rows:1.05fr 0.95fr;gap:1px;background:var(--border-b);min-width:0;min-height:0}
 .module{background:#0a0d14;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative;overflow:hidden}
 .mod-head{flex-shrink:0;display:flex;align-items:center;gap:9px;padding:5px 13px;background:linear-gradient(180deg,rgba(13,19,33,0.98),rgba(9,12,20,0.96));border-bottom:1px solid var(--border-b);z-index:4}

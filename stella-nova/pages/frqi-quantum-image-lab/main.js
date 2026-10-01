@@ -56,6 +56,7 @@
 //      init ................. "buildCmapButtons"     first paint
 // ============================================================================
 import * as THREE from 'three';
+import { EQ_STATE } from './equation.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
@@ -809,10 +810,9 @@ function buildCmapButtons(){const grid=document.getElementById('cmap-grid');grid
     grid.appendChild(btn);});}
 // Sample an arbitrary colour map at v (used to paint the swatch previews).
 const rampSample=(H,v)=>{v=clamp01(v);const s=v*(H.length-1),i=Math.min(Math.floor(s),H.length-2),t=s-i;return lerp3(H[i],H[i+1],t);};
-// Render the FRQI state equation with KaTeX, falling back to plain text.
-function renderEquation(){const el=document.getElementById('eq-main');
-  if(window.katex){try{katex.render(String.raw`|\varphi\rangle=\frac{1}{\sqrt{N}}\sum_{i=0}^{N-1}\bigl(\cos\theta_i|0\rangle+\sin\theta_i|1\rangle\bigr)\otimes|i\rangle`,el,{throwOnError:false,displayMode:true});return;}catch(e){}}
-  el.innerHTML='<span class="eq-fallback">|φ⟩ = (1/√N) Σ (cos θᵢ|0⟩ + sin θᵢ|1⟩) ⊗ |i⟩</span>';}
+// Show the FRQI state equation: static MathJax SVG from equation.js
+// (typeset.mjs writes it). No math library loads at run time.
+function renderEquation(){document.getElementById('eq-main').innerHTML=EQ_STATE;}
 
 // Redraw the affected module whenever its body resizes.
 const ro=new ResizeObserver(entries=>{for(const e of entries){const id=e.target.id;

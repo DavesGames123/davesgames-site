@@ -32,11 +32,11 @@
    HEAD LOAD ORDER  (order matters)
      1. fonts        Google Fonts: Space Grotesk, IBM Plex Mono and
                      Instrument Serif, the same set as the shell
-     2. katex        KaTeX CSS then JS, for the state equation
-     3. importmap    maps the bare specifier "three" to the CDN; MUST stay
+     2. importmap    maps the bare specifier "three" to the CDN; MUST stay
                      inline (an import map cannot be an external file)
-     4. style.css    the page stylesheet
-     5. main.js      type=module
+     3. style.css    the page stylesheet
+     4. main.js      type=module. It imports equation.js, the state
+                     equation as MathJax SVG (written by typeset.mjs)
 
    LAYOUT  (# marks an element id)
      ┌──────────┬──────────────────────────────────────────────────────┐
@@ -54,8 +54,6 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
 </script>
@@ -144,7 +142,7 @@
     </div>
 
     <!-- Live register readout (updateReadout) and the FRQI state equation
-         (renderEquation, via KaTeX). -->
+         (renderEquation, static SVG from equation.js). -->
     <!-- A readout only (no controls), so it is closed at load. -->
     <details class="p-section p-fold" style="border-bottom:none">
       <summary class="p-sec-lbl">State Register</summary>
