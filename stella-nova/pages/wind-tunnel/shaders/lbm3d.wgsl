@@ -7,6 +7,9 @@
 //
 // Cell types (buffer `types`, written by voxelize):
 //   0 fluid   1 inlet (equilibrium at the inlet velocity)   2 outlet
+//   3 interior fluid: all 18 neighbours are fluid (mark sets it after
+//     voxelize). step pulls these cells by a plain index offset, with no
+//     neighbour type reads and no clamps. Most cells are of this type.
 //   4 fixed ground wall   5 moving ground belt   6 free-slip wall
 //   8 + k solid, copy k
 //
@@ -32,7 +35,7 @@
 // forces[12 + k] gets the frontal cells of copy k from area().
 //
 // grep: struct SimU  fn feq  fn inlet  fn boundaryType  fn voxelize  fn initF
-//       fn step  fn area  fn sponge  fn dirOf
+//       fn mark  fn step  fn collide  fn area  fn sponge  fn dirOf
 
 // Sponge. The free-slip walls reflect sound fully, so a pressure wave from
 // the start or from vortex shedding rings between roof and floor (the 2D car
@@ -65,6 +68,7 @@ const FIX = 1048576.0;
 const T_FLUID = 0u;
 const T_EQ = 1u;
 const T_OUT = 2u;
+const T_FAST = 3u;   // fluid with 18 fluid neighbours (set by mark)
 const T_WALL = 4u;
 const T_BELT = 5u;
 const T_SLIP = 6u;
@@ -185,6 +189,28 @@ fn initF(@builtin(global_invocation_id) g: vec3u) {
   }
 }
 
+// Interior fluid. A fluid cell (type 0) away from the domain faces whose 18
+// neighbours are all fluid becomes T_FAST. A neighbour that this pass sets
+// to 3 at the same time is still fluid, so the result does not depend on
+// the order.
+@compute @workgroup_size(128)
+fn mark(@builtin(global_invocation_id) g: vec3u) {
+  let i = g.x;
+  if (i >= S.n) { return; }
+  if (types[i] != T_FLUID) { return; }
+  let x = i32(i % S.nx);
+  let y = i32((i / S.nx) % S.ny);
+  let z = i32(i / (S.nx * S.ny));
+  let mx = i32(S.nx) - 1; let my = i32(S.ny) - 1; let mz = i32(S.nz) - 1;
+  if (x < 1 || y < 1 || z < 1 || x >= mx || y >= my || z >= mz) { return; }
+  for (var q = 1u; q < 19u; q++) {
+    let c = C[q];
+    let t = types[idx(u32(x + c.x), u32(y + c.y), u32(z + c.z))];
+    if (t != T_FLUID && t != T_FAST) { return; }
+  }
+  types[i] = T_FAST;
+}
+
 var<workgroup> wf: array<atomic<i32>, 12>;
 
 @compute @workgroup_size(128)
@@ -213,6 +239,13 @@ fn step(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index
       var copy = 0u;
       var hit = false;
       let maxc = vec3i(i32(S.nx) - 1, i32(S.ny) - 1, i32(S.nz) - 1);
+      if (t == T_FAST) {
+        let sx = 1; let sy = i32(S.nx); let sz = i32(S.nx * S.ny);
+        for (var q = 0u; q < 19u; q++) {
+          let c = C[q];
+          f[q] = fA[q * S.n + u32(i32(i) - (c.x * sx + c.y * sy + c.z * sz))];
+        }
+      } else {
       for (var q = 0u; q < 19u; q++) {
         let c = C[q];
         var sp = vec3i(pos) - c;
@@ -248,6 +281,7 @@ fn step(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index
           f[q] = fA[q * S.n + s];
         }
       }
+      }
 
       var rho = 0.0;
       var u = vec3f(0.0);
@@ -261,10 +295,17 @@ fn step(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index
       let spd = length(u);
       if (spd > 0.35) { u *= 0.35 / spd; }
 
+      // feq once per direction: the stress and the collision both use it.
+      var e: array<f32, 19>;
+      let usq = 1.5 * dot(u, u);
+      for (var q = 0u; q < 19u; q++) {
+        let cu = dot(vec3f(C[q]), u);
+        e[q] = wq(q) * rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - usq);
+      }
       var pxx = 0.0; var pyy = 0.0; var pzz = 0.0;
       var pxy = 0.0; var pxz = 0.0; var pyz = 0.0;
       for (var q = 0u; q < 19u; q++) {
-        let ne = f[q] - feq(q, rho, u);
+        let ne = f[q] - e[q];
         let c = vec3f(C[q]);
         pxx += c.x * c.x * ne; pyy += c.y * c.y * ne; pzz += c.z * c.z * ne;
         pxy += c.x * c.y * ne; pxz += c.x * c.z * ne; pyz += c.y * c.z * ne;
@@ -274,10 +315,10 @@ fn step(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index
       let om = 1.0 / tau;
 
       let sg = sponge(x, y, z);
+      // feq(q, 1, u) - feq(q, rho, u) = (1 - rho) feq(q, 1, u) = e (1 - rho) / rho
+      let dk = sg * (1.0 - rho) / rho;
       for (var q = 0u; q < 19u; q++) {
-        let e = feq(q, rho, u);
-        let damp = sg * (feq(q, 1.0, u) - e);
-        fB[q * S.n + i] = select(f[q] + om * (e - f[q]) + damp, e, bad);
+        fB[q * S.n + i] = select(f[q] + om * (e[q] - f[q]) + dk * e[q], e[q], bad);
       }
       if (measure) {
         textureStore(macroOut, pos, vec4f(u, rho - 1.0));

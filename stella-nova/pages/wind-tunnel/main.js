@@ -14,8 +14,11 @@
 //  takes the rest. "Re (grid)" in the readout is U_LAT L_cells / nu_lat.
 //
 //  STEPS. Each frame runs `steps` lattice steps. A governor moves `steps`
-//  so that the GPU time of a frame stays near BUDGET_MS. The rate slider
-//  scales it down. Particles move the distance the fluid moves in those
+//  so that the GPU time of the whole frame stays near BUDGET_MS. It acts on
+//  the total time, not on a time per step: the render passes cost a fixed
+//  2 to 4 ms, and a per-step figure that included them stopped the 3D
+//  tunnel at 4 to 5 steps of a possible 10 or more. The rate slider scales
+//  it down. Particles move the distance the fluid moves in those
 //  steps, so the streaks keep pace with the flow at any rate.
 //
 //  FRAMING. The panel, the dock, the card and the bars cover parts of the
@@ -47,7 +50,9 @@ const COARSE = window.matchMedia('(pointer:coarse)').matches;
 const U_LAT = 0.08;
 const TAU_MIN = 0.505;
 const BUDGET_MS = COARSE ? 11 : 13;
-const MAX_STEPS = 48;
+// Step cap per mode. A 2D step costs about 0.05 ms at the default grid, a
+// 3D step about 0.7 ms (Apple M4 Pro), so the 2D cap is much higher.
+const MAX_STEPS = { '2d': 240, '3d': 64 };
 const RHO = { air: 1.2, water: 1000, oil: 910, honey: 1420 };
 const FIELDS = ['Speed', 'Vorticity', 'Pressure', 'Smoke', 'Plain'];
 // Grid tiers. 2D: columns (rows follow the canvas aspect). 3D: nx, ny, nz.
@@ -396,11 +401,10 @@ function frame(t) {
       const ms = performance.now() - t0;
       gpuMs += (ms - gpuMs) * 0.2;
       gpuPending = false;
-      const per = gpuMs / Math.max(1, n);
-      const ideal = Math.floor(BUDGET_MS / Math.max(per, 0.02));
-      if (ideal > steps) steps = Math.min(MAX_STEPS, steps + Math.max(1, Math.round(steps * 0.08)));
+      const cap = MAX_STEPS[G.mode];
+      if (gpuMs < BUDGET_MS * 0.85) steps = Math.min(cap, steps + Math.max(1, Math.round(steps * 0.1)));
       else if (gpuMs > BUDGET_MS * 1.3) steps = Math.max(1, Math.floor(steps * 0.85));
-      else if (ideal < steps) steps = Math.max(1, steps - 1);
+      else if (gpuMs > BUDGET_MS * 1.05) steps = Math.max(1, steps - 1);
     });
   }
   readForces();

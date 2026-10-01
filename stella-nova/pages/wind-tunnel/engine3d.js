@@ -103,8 +103,8 @@ export async function createEngine3D(device, code, opts) {
     primitive: { topology: 'triangle-list' },
     depthStencil: { format: depthFmt, ...depth },
   });
-  const [pVox, pInit, pStep, pArea, pAdv, pScene, pSlice, pLine] = await Promise.all([
-    cp(lbm, 'voxelize'), cp(lbm, 'initF'), cp(lbm, 'step'), cp(lbm, 'area'), cp(view, 'advect'),
+  const [pVox, pMark, pInit, pStep, pArea, pAdv, pScene, pSlice, pLine] = await Promise.all([
+    cp(lbm, 'voxelize'), cp(lbm, 'mark'), cp(lbm, 'initF'), cp(lbm, 'step'), cp(lbm, 'area'), cp(view, 'advect'),
     rpipe('vsScene', 'fsScene', null, { depthWriteEnabled: true, depthCompare: 'always' }),
     rpipe('vsSlice', 'fsSlice', blend, { depthWriteEnabled: false, depthCompare: 'less' }),
     rpipe('vsLine', 'fsLine', blend, { depthWriteEnabled: false, depthCompare: 'less' }),
@@ -143,6 +143,7 @@ export async function createEngine3D(device, code, opts) {
   });
   const fPair = [[fA, fB], [fB, fA]];
   const gVox = bg(pVox, { 0: simBuf, 1: shapeBuf, 2: fA, 3: fB, 4: types });
+  const gMark = bg(pMark, { 0: simBuf, 4: types });
   const gInit = bg(pInit, { 0: simBuf, 2: fA, 3: fB, 4: types });
   const gStep = fPair.map(([a, b]) => bg(pStep, { 0: simBuf, 2: a, 3: b, 4: types, 5: macroView, 6: forces }));
   const gStepM = fPair.map(([a, b]) => bg(pStep, { 0: simMBuf, 2: a, 3: b, 4: types, 5: macroView, 6: forces }));
@@ -173,6 +174,11 @@ export async function createEngine3D(device, code, opts) {
     p.setPipeline(pVox); p.setBindGroup(0, gVox);
     p.dispatchWorkgroups(Math.ceil(n / 128));
     p.end();
+    // Interior fluid cells get the fast pull (lbm3d.wgsl fn mark).
+    const mk = enc.beginComputePass();
+    mk.setPipeline(pMark); mk.setBindGroup(0, gMark);
+    mk.dispatchWorkgroups(Math.ceil(n / 128));
+    mk.end();
     enc.clearBuffer(forces, 48, 16);
     const a = enc.beginComputePass();
     a.setPipeline(pArea); a.setBindGroup(0, gArea);
