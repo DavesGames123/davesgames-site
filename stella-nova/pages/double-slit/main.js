@@ -15,7 +15,7 @@
 //      ψ(n+1) = ca·(2ψ(n) + α²∇²ψ(n)) − cb·ψ(n−1)
 //      α = c·dt/dx   Courant number; the scheme is stable only while α ≤ 1/√2
 //      ca = 1/(1+σΔt/2) ,  cb = (1−σΔt/2)/(1+σΔt/2)     from conductivity σ
-//    A single global dissipation factor multiplies each new sample on top.
+//    The retention per step (P.dissipation) adds a uniform σ (buildDamping).
 //
 //  DOMAIN LAYOUT   (grid NX×NY, x increases to the right)
 //  --------------------------------------------------------------------------
@@ -115,7 +115,7 @@ const P = {
   disp: 'amplitude',
   brushR: 6, srcMode: 'impulse',
   scale: 2,
-  dissipation: 0.995,
+  dissipation: 1.000,   // retention per step (1 = lossless away from the PML)
   plane: true,   // continuous plane wave from the left edge (on at load)
   spf: 2,        // FDTD steps per animation frame
 };
@@ -166,6 +166,12 @@ function buildDamping() {
   const sigMax = 2.0; // σΔt/2 at boundary edge (strong absorption)
   const absorbStart = Math.floor(NX * 0.78);
   const absorbLen = Math.max(1, NX - absorbStart);
+  // The retention r per step is a uniform σ: the amplitude per step is
+  // √cb = r when σΔt/2 = (1 − r²)/(1 + r²). This loss changes the phase
+  // speed only to second order. (Multiplying the whole update by r made the
+  // amplitude per step √r and shifted the wavelength to first order: at
+  // r = 0.995, a 30-cell wave ran 40.6 cells long.)
+  const r2 = P.dissipation * P.dissipation, sig0 = (1 - r2) / (1 + r2);
   for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
     const i = y * NX + x;
     const dL = x, dR = NX-1-x, dT = y, dB = NY-1-y;
@@ -178,6 +184,7 @@ function buildDamping() {
       const t = (x - absorbStart) / absorbLen;
       sig = Math.max(sig, sigMax * t * t * t);
     }
+    sig += sig0;
     caArr[i] = 1.0 / (1.0 + sig);
     cbArr[i] = (1.0 - sig) / (1.0 + sig);
   }
@@ -261,7 +268,7 @@ function planeSource(uc,c,omega){
 // hard-zero the edges, then rotate the three buffers so next becomes current.
 // alpha2 is α² (the squared Courant number) reused for every cell.
 function step() {
-  const nx=NX,ny=NY,alpha2=P.dt*P.dt,lambdas=[P.lambdaR,P.lambdaG,P.lambdaB],diss=P.dissipation;
+  const nx=NX,ny=NY,alpha2=P.dt*P.dt,lambdas=[P.lambdaR,P.lambdaG,P.lambdaB];
   for (let c=0;c<3;c++) {
     if(!P.chOn[c]) continue;
     // A wave moves α cells per step, so one period of a wave λ cells long
@@ -269,10 +276,9 @@ function step() {
     const uc=u[c],upc=up[c],unc=un[c],omega=2*Math.PI*P.dt/lambdas[c];
     if(P.plane) planeSource(uc,c,omega);
     if(mDown&&P.srcMode==='sine'){const r=P.brushR,r2=r*r,sv=P.amp*sineChAmp[c]*Math.sin(omega*simTime);for(let dy=-r;dy<=r;dy++) for(let dx=-r;dx<=r;dx++){const d2=dx*dx+dy*dy;if(d2>r2)continue;const x=mX+dx,y=mY+dy;if(x<0||x>=nx||y<0||y>=ny)continue;const i=y*nx+x;if(!barrier[i]){const falloff=1-Math.sqrt(d2)/r;uc[i]+=sv*0.4*falloff;}}}
-    // Interior FDTD: proper lossy medium formulation
+    // Interior FDTD: lossy medium formulation (the retention is in ca/cb)
     // ψ(n+1) = ca * (2ψ(n) + α²∇²ψ) - cb * ψ(n-1)
-    // Global dissipation applied multiplicatively on top
-    for(let y=1;y<ny-1;y++){const yo=y*nx;for(let x=1;x<nx-1;x++){const i=yo+x;if(barrier[i]){unc[i]=0;continue;}const lap=uc[i-1]+uc[i+1]+uc[i-nx]+uc[i+nx]-4*uc[i];unc[i]=diss*(caArr[i]*(2*uc[i]+alpha2*lap)-cbArr[i]*upc[i]);}}
+    for(let y=1;y<ny-1;y++){const yo=y*nx;for(let x=1;x<nx-1;x++){const i=yo+x;if(barrier[i]){unc[i]=0;continue;}const lap=uc[i-1]+uc[i+1]+uc[i-nx]+uc[i+nx]-4*uc[i];unc[i]=caArr[i]*(2*uc[i]+alpha2*lap)-cbArr[i]*upc[i];}}
     // Hard zero all edge cells
     for(let x=0;x<nx;x++){unc[x]=0;unc[(ny-1)*nx+x]=0;}
     for(let y=0;y<ny;y++){unc[y*nx]=0;unc[y*nx+nx-1]=0;}
@@ -322,7 +328,7 @@ function renderDetector(){
 function wire(slId,valId,key,parse,fmt){const sl=document.getElementById(slId);const vl=document.getElementById(valId);sl.addEventListener('input',()=>{P[key]=parse(sl.value);vl.textContent=fmt?fmt(P[key]):P[key];if(['slitW','slitSep','barrierX','slitMode'].includes(key))buildBarrier();if(key==='pml')buildDamping();});}
 wire('sl-lr','val-lr','lambdaR',Number);wire('sl-lg','val-lg','lambdaG',Number);wire('sl-lb','val-lb','lambdaB',Number);
 wire('sl-sw','val-sw','slitW',Number);wire('sl-ss','val-ss','slitSep',Number);wire('sl-bx','val-bx','barrierX',Number,v=>v.toFixed(2));
-wire('sl-dt','val-dt','dt',Number,v=>v.toFixed(2));wire('sl-gain','val-gain','gain',Number,v=>v.toFixed(1));wire('sl-br','val-br','brushR',Number);wire('sl-diss','val-diss','dissipation',Number,v=>v.toFixed(3));
+wire('sl-dt','val-dt','dt',Number,v=>v.toFixed(2));wire('sl-gain','val-gain','gain',Number,v=>v.toFixed(1));wire('sl-br','val-br','brushR',Number);wire('sl-diss','val-diss','dissipation',Number,v=>v.toFixed(3));document.getElementById('sl-diss').addEventListener('input',()=>buildDamping());
 // Resolution changes the grid density, so it must fully reinitialize buffers.
 document.getElementById('sl-scale').addEventListener('input',function(){P.scale=Number(this.value);document.getElementById('val-scale').textContent=P.scale;init();});
 
