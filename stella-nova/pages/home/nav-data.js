@@ -103,7 +103,7 @@
     ["refraction-table", "Refraction Table", "WGSL"],
     ["sdf-solids", "SDF Solids Table", "WGSL"],
     ["sdf2d", "SDF 2D Table", "WGSL"],
-    ["sdf-lab", "Sphere Tracing Lab", "LAB"],
+    ["sdf-lab", "SDF Modeller", "TOOL"],
     ["liquid-metal", "Liquid Metal Table", "WGSL"],
     ["sdf-clouds", "SDF Clouds", "GPU"],
     ["markov-junior", "MarkovJunior", "RULES"],

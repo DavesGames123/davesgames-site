@@ -157,7 +157,7 @@ const BLURBS = {
   voxel: 'Fly through an endless voxel world.',
   'sdf-solids': '78 signed-distance solids, glass to gold.',
   'liquid-metal': 'Chrome blobs that melt and merge.',
-  'sdf-lab': 'Step through sphere tracing ray by ray.',
+  'sdf-lab': 'Model with distance fields, Forge style.',
   explosion: 'The game’s explosion effects.',
   flare: 'Engine plumes and thruster flares.',
   'tidal-currents': 'Real tidal current data, animated.',
