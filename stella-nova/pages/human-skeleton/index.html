@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>Human Skeleton — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   HUMAN SKELETON  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. The adult skeleton bone by bone: 200 of the 206
+   bones as separate meshes (the six ossicles are left out for licence
+   reasons, see data/LICENSE.txt), plus teeth and costal cartilage as
+   options. It comes apart three ways and every bone has a card.
+     build-data.py  Z-Anatomy blend to data/*.bin.gz + data/manifest.json
+     decode.js      the binary format (no DOM, no THREE)
+     layout.js      radial, regional and tray layouts (no DOM, no THREE)
+     render.js      bone state texture, materials, picking, studio light
+     main.js        state, loading, UI, picking, camera, loop
+     tests.mjs      node tests.mjs
+     data/          meshes, CC BY-SA 4.0 (data/LICENSE.txt)
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts (Inter, STIX Two Text), style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Human Skeleton             (hidden in frame) │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │ #read  count, mode                 #card  the bone:   │
+     │  explode   │                                     names, region,    │
+     │  focus     │        #view  the WebGL canvas      type, joints,     │
+     │  show      │        #labels  tray labels         fact, isolate,    │
+     │  bones     │        #tip  hover name (mouse)     previous / next   │
+     │   search   │                                                       │
+     │   regions  │ #loading  the body groups as they arrive   #themeBtn  │
+     │  source    │                                                       │
+     └────────────┴─────────────────────────────────────────────────────┘
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     #dock      at the base: Bones, Explode / Reconstruct, Mode, Theme, Fit.
+     #panel     portrait: a bottom sheet over the dock.
+                landscape: a drawer at the right edge.
+     #card      a strip at the top of the stage (portrait), or at the
+                right edge (landscape).
+     main.js measures the panel and the card, and frames the skeleton in
+     the clear part with camera.setViewOffset.
+
+   GREP MAP  (main.js)
+     grep -n 'function loadAll'     manifest, then the groups by priority
+     grep -n 'function setMode'     assembled, radial, regional, tray
+     grep -n 'function pickAt'      GPU pick in a window round the tap
+     grep -n 'function select'      highlight, card, keep it in view
+     grep -n 'function isolate'     ghost the rest, fly to the bone
+     grep -n 'function buildList'   the searchable bone list
+     grep -n 'function occlusion'   framing round the panel and card
+     grep -n 'function frame'       the loop: transition, spring, render
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="The human skeleton bone by bone: 200 anatomical meshes that come apart radially, by region or onto a museum tray, with a card for every bone.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>
+if(window!==window.top)document.documentElement.classList.add('in-frame');
+try{var t=localStorage.getItem('hs-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}
+</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Human Skeleton</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view" aria-label="3D human skeleton"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint"></div>
+  <div id="tip" aria-hidden="true"></div>
+  <div id="loading"><span class="spin"></span><span id="loadingText">Loading the skeleton</span><span id="loadBar"><i></i></span></div>
+  <section id="card" aria-live="polite" hidden></section>
+  <button id="themeBtn" type="button" aria-label="Switch theme"><span>◐</span></button>
+</main>
+<div id="nogl" hidden>WebGL 2 is not available in this browser, so the skeleton cannot render.</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <div id="intro">
+    <div class="kicker">Osteology · Specimen 001</div>
+    <h1>Human Skeleton</h1>
+    <p class="lede">An adult male skeleton, bone by bone. Take it apart, pick any piece and turn it in your hand.</p>
+  </div>
+
+  <div class="sec-label first">Explode</div>
+  <div class="seg" id="modes" role="radiogroup" aria-label="Explode mode">
+    <button type="button" data-mode="assembled" role="radio">Assembled</button>
+    <button type="button" data-mode="radial" role="radio">Radial</button>
+    <button type="button" data-mode="regional" role="radio">Regions</button>
+    <button type="button" data-mode="catalogue" role="radio">Tray</button>
+  </div>
+  <div class="row" id="amountRow"><label for="amount">Amount</label><input type="range" id="amount" min="0" max="1" step="0.01" value="1"><span class="val" id="amountV">100%</span></div>
+  <div class="grid2" id="sortRow" hidden>
+    <button type="button" data-sort="region" class="on">Tray by region</button>
+    <button type="button" data-sort="size">Tray by length</button>
+  </div>
+  <button type="button" id="bReconstruct" class="tog wide">Reconstruct</button>
+
+  <div class="sec-label">Focus</div>
+  <div class="chips" id="focus">
+    <button type="button" data-focus="all">Whole</button>
+    <button type="button" data-focus="skull">Skull</button>
+    <button type="button" data-focus="spine">Spine</button>
+    <button type="button" data-focus="thorax">Thorax</button>
+    <button type="button" data-focus="hand-r">Hand R</button>
+    <button type="button" data-focus="hand-l">Hand L</button>
+    <button type="button" data-focus="foot-r">Foot R</button>
+    <button type="button" data-focus="foot-l">Foot L</button>
+  </div>
+
+  <div class="sec-label">Show</div>
+  <div class="grid3" id="shows">
+    <button type="button" class="tog on" data-show="teeth">Teeth</button>
+    <button type="button" class="tog" data-show="cartilage">Cartilage</button>
+    <button type="button" class="tog" data-show="spin">Turntable</button>
+  </div>
+
+  <div class="sec-label" id="bonesLabel">Bones</div>
+  <div class="search"><input id="search" type="search" placeholder="Search bones, English or Latin" aria-label="Search bones" autocomplete="off" spellcheck="false"></div>
+  <div id="list" role="list"></div>
+
+  <div class="sec-label">Source</div>
+  <p class="note fine" id="credit">Meshes: <a href="https://github.com/Z-Anatomy/Models-of-human-anatomy" target="_blank" rel="noopener">Z-Anatomy</a> (CC BY-SA 4.0), made from <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html" target="_blank" rel="noopener">BodyParts3D</a>, © The Database Center for Life Science (CC BY 4.0). Decimated and repacked for this page; the derived meshes are CC BY-SA 4.0 (<a href="data/LICENSE.txt" target="_blank">LICENSE</a>). FMA ids from BodyParts3D. The six ossicles are left out: their only open mesh traces to a non-commercial licence.</p>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockList" type="button" aria-label="Bones list and controls" aria-expanded="false"><b>☰</b><span>Bones</span></button>
+  <button id="dockExplode" type="button" aria-label="Explode"><small>View</small><span id="dockExplodeV">Explode</span></button>
+  <button id="dockMode" type="button" aria-label="Next explode mode"><small>Mode</small><span id="dockModeV">Radial</span></button>
+  <button id="dockTheme" type="button" aria-label="Switch theme">◐</button>
+  <button id="dockFit" type="button" aria-label="Reset view">⟲</button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
