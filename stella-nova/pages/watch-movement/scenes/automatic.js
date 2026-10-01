@@ -1,7 +1,7 @@
 // ============================================================================
 //  WATCH MOVEMENT  ·  scenes/automatic.js — the self-winding wristwatch in 3D
 // ────────────────────────────────────────────────────────────────────────────
-//  build(B, cal) adds the parts of calibres/automatic.js and returns pose().
+//  build(B, cal, opts) adds the parts of calibres/automatic.js and returns pose().
 //  The rotor's heavy side points along its local +x; its part turns by
 //  p.rotor, which the calibre swings like a pendulum toward the wrist's
 //  "down" (-y in this upright view, so it hangs the way gravity would).
@@ -16,7 +16,7 @@ import { circ, hole } from '../kit.js';
 import { wheelArbor, barrelParts, leverParts, escapeWheel, balanceParts, motionWorks, handParts, paintBaton } from './shared.js';
 const { TAU, D, pol, add } = G;
 
-export function build(B, cal) {
+export function build(B, cal, opts = {}) {
   const { CAL: c, L, ESC } = cal, Z = c.z;
   for (const [k, v] of Object.entries({ hands: -3.0, dial: -2.2, motion: -1.2, plate: 0, train: 1, balance: 1.8, bridges: 2.6, auto: 3.6, rotor: 4.7 })) B.layer(k, v);
 
@@ -112,20 +112,24 @@ export function build(B, cal) {
 
   // MOTION WORKS, DIAL, HANDS
   motionWorks(B, { C: L.C, M: L.M, cannon: c.cannon, minute: c.minute, hour: c.hour, z: Z, dialLo: Z.dialLo, plateLo: -c.plateT, s: 0.7 });
-  const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
-  const dialHoles = [hole(0.7, 24)];
-  B.add(dial, B.slab(circ(12.9, 160), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.04),
-    B.dialFace(12.9, Z.dialLo, dialHoles, paintBaton({ line: 'AUTOMATIC', line2: '28 800 A/h  ·  25 JEWELS' })));
-  const hands = handParts(B, { C: L.C, dialLo: Z.dialLo, hour: ['dauphine', 6.4, 0.55], minute: ['dauphine', 10.2, 0.45], mat: 'steel', hubR: 0.6,
-    second: { at: L.C, len: 11.2, z: Z.dialLo - 0.85, w: 0.16, hub: 0.32, mat: 'gold' } });
+  if (!opts.noDial) {
+    const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
+    const dialHoles = [hole(0.7, 24)];
+    B.add(dial, B.slab(circ(12.9, 160), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.04),
+      B.dialFace(12.9, Z.dialLo, dialHoles, opts.dialPaint || paintBaton({ line: 'AUTOMATIC', line2: '28 800 A/h  ·  25 JEWELS' })));
+  }
+  const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['dauphine', 6.4, 0.55], minute: ['dauphine', 10.2, 0.45], mat: 'steel', hubR: 0.6,
+    second: { at: L.C, len: 11.2, z: Z.dialLo - 0.85, w: 0.16, hub: 0.32, mat: 'gold' } }, ...(opts.hands || {}) });
 
   const ROT = { barrel: 'barrel', barrelCover: 'barrel', barrelArbor: 'ratchet', center: 'center', third: 'third', fourth: 'fourth', secp: 'secp', escape: 'escape', pallet: 'fork', balance: 'balance', ratchet: 'ratchet', reduction: 'red', rev1Wheel: 'rev1', rev2Wheel: 'rev2', rev1Pin: 'revP1', rev2Pin: 'revP2', rotor: 'rotor', rotorHub: 'rotor', cannon: 'center', minuteWheel: 'minute', hourWheel: 'hour' };
+  for (const id of opts.hide || []) B.hidePart(id);
+
   return {
     unit: 6.5,
     toggles: { bridges: ['barrelBridge', 'trainBridge', 'cock', 'ratchet', 'jewelsBridges', 'screws', 'autoBridge', 'reduction', 'rev1Wheel', 'rev2Wheel', 'rev1Pin', 'rev2Pin', 'rotorHub', 'rotor', 'aScrews'], dial: ['dial', 'hourHand', 'minuteHand', 'secondHand'] },
     pose(p) {
       for (const id in ROT) B.parts[id].root.rotation.z = p[ROT[id]];
-      hands.hour.root.rotation.z = p.hands.hour; hands.minute.root.rotation.z = p.hands.minute; hands.second.root.rotation.z = p.hands.second;
+      hands.hour.root.rotation.z = p.hands.hour; hands.minute.root.rotation.z = p.hands.minute; if (hands.second) hands.second.root.rotation.z = p.hands.second;
       barrel.update(Math.max(0, Math.min(1, p.reserve / c.reserveTurns)), p.ratchet, p.barrel);
       bal.update(p.balance);
     },

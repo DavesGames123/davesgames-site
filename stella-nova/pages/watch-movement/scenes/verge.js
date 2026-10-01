@@ -1,7 +1,7 @@
 // ============================================================================
 //  WATCH MOVEMENT  ·  scenes/verge.js — the English verge fusee in 3D
 // ────────────────────────────────────────────────────────────────────────────
-//  build(B, cal) adds the parts of calibres/verge.js and returns pose().
+//  build(B, cal, opts) adds the parts of calibres/verge.js and returns pose().
 //
 //  THE WHEEL FRAME
 //    The crown wheel and the verge are built in a frame whose x axis is the
@@ -25,7 +25,7 @@ import { circ, hole } from '../kit.js';
 import { wheelArbor, balanceParts, motionWorks, handParts, paintEnglish } from './shared.js';
 const { TAU, D, pol, add } = G;
 
-export function build(B, cal) {
+export function build(B, cal, opts = {}) {
   const { CAL: c, L } = cal, Z = c.z;
   for (const [k, v] of Object.entries({ hands: -2.4, dial: -1.8, motion: -1.0, plate: 0, train: 0.9, top: 2.6, esc: 3.3, cock: 4.0 })) B.layer(k, v);
 
@@ -140,14 +140,18 @@ export function build(B, cal) {
 
   // MOTION WORKS, DIAL, HANDS (beetle and poker, no seconds)
   motionWorks(B, { C: L.C, M: L.M, cannon: c.cannon, minute: c.minute, hour: c.hour, z: Z, dialLo: Z.dialLo, plateLo: -c.plateT, s: 1 });
-  const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
-  const dialHoles = [hole(1.0, 24)];
-  B.add(dial, B.slab(circ(18.9, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.55, 18.9, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
-    B.dialFace(18.9, Z.dialLo, dialHoles, paintEnglish({ brand: 'Stella Nova', line: 'London' })));
-  const hands = handParts(B, { C: L.C, dialLo: Z.dialLo, hour: ['beetle', 10.0, 0.4], minute: ['poker', 15.0, 0.3], mat: 'blued', hubR: 1.0 });
+  if (!opts.noDial) {
+    const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
+    const dialHoles = [hole(1.0, 24)];
+    B.add(dial, B.slab(circ(18.9, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.55, 18.9, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
+      B.dialFace(18.9, Z.dialLo, dialHoles, opts.dialPaint || paintEnglish({ brand: 'Stella Nova', line: 'London' })));
+  }
+  const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['beetle', 10.0, 0.4], minute: ['poker', 15.0, 0.3], mat: 'blued', hubR: 1.0 }, ...(opts.hands || {}) });
 
   const ROT = { greatWheel: 'great', fuseeCone: 'fuseeTurn', center: 'center', third: 'third', contrate: 'contrate', cannon: 'center', minuteWheel: 'minute', hourWheel: 'hour', balance: 'balance' };
   let lastW = -1;
+  for (const id of opts.hide || []) B.hidePart(id);
+
   return {
     unit: 9, focusK: 0.9,
     toggles: { bridges: ['topPlate', 'cock', 'jewelCock', 'screws', 'barrelArbor'], dial: ['dial', 'hourHand', 'minuteHand'] },

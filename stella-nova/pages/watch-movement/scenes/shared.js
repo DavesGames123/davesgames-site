@@ -163,8 +163,10 @@ export function handParts(B, o) {
   };
   const out = { hour: mk('hourHand', o.C, o.dialLo - 0.35, o.hour, o.hubR ?? 1.0), minute: mk('minuteHand', o.C, o.dialLo - 0.6, o.minute, (o.hubR ?? 1.0) * 0.72) };
   if (o.second) {
+    if (o.secondStyle) o = { ...o, second: { ...o.second, ...o.secondStyle } };
     const p = B.part('secondHand', 'hands', o.second.at, {});
     const L = o.second.len, w = o.second.w ?? 0.18;
+    if (o.second.lollipop) B.add(p, B.slab(circ(w * 2.6, 24, [0, L * 0.78]), [], o.second.z, o.second.z + 0.08, o.second.mat || o.mat || 'blued', 0));
     B.add(p, B.slab([[-w / 2, -L * 0.3], [w / 2, -L * 0.3], [w * 0.28, L], [-w * 0.28, L]], [], o.second.z, o.second.z + 0.08, o.second.mat || o.mat || 'blued', 0),
       B.cyl(o.second.hub ?? 0.36, o.second.z - 0.04, o.second.z + 0.12, o.second.mat || o.mat || 'blued'));
     out.second = p;
@@ -277,5 +279,75 @@ export function paintEnglish(o) {
     for (let i = 0; i < 12; i++) { g.save(); g.rotate(i / 12 * TAU); g.translate(0, -R * 0.62); g.scale(0.92, 1.18); g.fillText(RN[i], 0, 0); g.restore(); }
     g.font = `italic ${R * 0.06}px ${SERIF}`; g.fillText(o.brand || 'Stella Nova', 0, R * 0.3);
     g.font = `italic ${R * 0.045}px ${SERIF}`; g.fillStyle = '#5a5560'; g.fillText(o.line || 'London', 0, R * 0.38);
+  };
+}
+
+// ── the general dial painter (the randomizer) ─────────────────────────────
+// spec: { base, numerals, track, sub: [cy, r] | null, aperture: [cy, r] | null,
+//         brand, line, accent }
+//   base ...... enamel, cream, black, slate, sunray-blue, sunray-green,
+//               salmon, silver-guilloche
+//   numerals .. roman, arabic, breguet, baton, dots, none
+//   track ..... railway, dots, minutes, none
+const BASES = {
+  enamel: ['#fbf8f0', '#ece5d6', '#1d1b22'], cream: ['#f6ead0', '#e2d0a8', '#2a2016'], black: ['#1e2026', '#0b0c10', '#e8e2d2'],
+  slate: ['#4a5260', '#2c323c', '#eef0f4'], 'sunray-blue': ['#2f4a86', '#13213f', '#eef0f6'], 'sunray-green': ['#2f5c48', '#14281f', '#eef2ea'],
+  salmon: ['#f1c2a6', '#d99b7a', '#2b1a14'], 'silver-guilloche': ['#e8eaee', '#bfc4cc', '#1d2026'],
+};
+export function paintDial(spec) {
+  return (g, R) => {
+    const [a, b, ink] = BASES[spec.base] || BASES.enamel, accent = spec.accent || '#b0402e';
+    const bg = g.createRadialGradient(-R * 0.16, -R * 0.27, 1, 0, 0, R);
+    bg.addColorStop(0, a); bg.addColorStop(1, b);
+    g.fillStyle = bg; g.beginPath(); g.arc(0, 0, R, 0, TAU); g.fill();
+    if (spec.base.startsWith('sunray')) for (let i = 0; i < 360; i++) {
+      const t = i / 360 * TAU;
+      g.strokeStyle = `rgba(255,255,255,${0.02 + 0.035 * Math.abs(Math.sin(t * 2))})`; g.lineWidth = R * 0.0016;
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.sin(t) * R, -Math.cos(t) * R); g.stroke();
+    }
+    if (spec.base === 'silver-guilloche') {        // barleycorn: waves round the centre
+      g.strokeStyle = 'rgba(80,88,100,0.16)'; g.lineWidth = R * 0.002;
+      for (let k = 1; k < 60; k++) {
+        const r0 = R * 0.62 * k / 60;
+        g.beginPath();
+        for (let i = 0; i <= 240; i++) { const t = i / 240 * TAU, r = r0 + R * 0.006 * Math.sin(t * 36 + k); g.lineTo(Math.sin(t) * r, -Math.cos(t) * r); }
+        g.stroke();
+      }
+    }
+    g.strokeStyle = ink; g.fillStyle = ink;
+    const tr = spec.track;
+    if (tr === 'railway') track(g, R * 0.885, R * 0.94, ink);
+    else if (tr === 'minutes') for (let i = 0; i < 60; i++) {
+      const t = i / 60 * TAU, ca = Math.sin(t), sa = -Math.cos(t), r0 = i % 5 ? R * 0.9 : R * 0.86;
+      g.lineWidth = R * (i % 5 ? 0.004 : 0.009); g.beginPath(); g.moveTo(ca * r0, sa * r0); g.lineTo(ca * R * 0.94, sa * R * 0.94); g.stroke();
+    } else if (tr === 'dots') for (let i = 0; i < 60; i++) {
+      const t = i / 60 * TAU; g.beginPath(); g.arc(Math.sin(t) * R * 0.915, -Math.cos(t) * R * 0.915, R * (i % 5 ? 0.006 : 0.014), 0, TAU); g.fill();
+    }
+    const skip = i => (i === 6 && (spec.sub || spec.aperture));
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    const RN = ['XII', 'I', 'II', 'III', 'IIII', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI'];
+    const n = spec.numerals;
+    for (let i = 0; i < 12; i++) {
+      if (skip(i)) continue;
+      const t = i / 12 * TAU;
+      if (n === 'roman') { g.font = `500 ${R * 0.13}px ${SERIF}`; g.save(); g.rotate(t); g.translate(0, -R * 0.75); g.scale(0.94, 1.2); g.fillText(RN[i], 0, 0); g.restore(); }
+      else if (n === 'arabic' || n === 'breguet') {
+        g.font = n === 'breguet' ? `italic ${R * 0.15}px ${SERIF}` : `600 ${R * 0.14}px ${SANS}`;
+        g.fillText(String(i || 12), Math.sin(t) * R * 0.74, -Math.cos(t) * R * 0.74);
+      } else if (n === 'baton') {
+        g.save(); g.rotate(t);
+        const w = R * (i % 3 ? 0.028 : 0.042), h = R * (i % 3 ? 0.12 : 0.16);
+        const grd = g.createLinearGradient(-w, 0, w, 0); grd.addColorStop(0, '#9aa0ad'); grd.addColorStop(0.5, '#ffffff'); grd.addColorStop(1, '#8a909d');
+        g.fillStyle = spec.base === 'enamel' || spec.base === 'cream' || spec.base === 'salmon' || spec.base === 'silver-guilloche' ? ink : grd;
+        g.fillRect(-w / 2, -R * 0.86, w, h); g.restore(); g.fillStyle = ink;
+      } else if (n === 'dots') { g.beginPath(); g.arc(Math.sin(t) * R * 0.8, -Math.cos(t) * R * 0.8, R * (i % 3 ? 0.03 : 0.045), 0, TAU); g.fill(); }
+    }
+    if (spec.sub) subSeconds(g, spec.sub[0], spec.sub[1], ink);
+    if (spec.aperture) { g.strokeStyle = '#b08a3e'; g.lineWidth = R * 0.02; g.beginPath(); g.arc(0, spec.aperture[0], spec.aperture[1] + R * 0.01, 0, TAU); g.stroke(); }
+    if (spec.brand) {
+      g.fillStyle = ink; g.font = `600 ${R * 0.068}px ${spec.serifBrand ? SERIF : SANS}`;
+      g.fillText(spec.brand, 0, -R * 0.34);
+    }
+    if (spec.line) { g.font = `500 ${R * 0.042}px ${SANS}`; g.fillStyle = accent; g.fillText(spec.line, 0, spec.sub || spec.aperture ? -R * 0.25 : R * 0.33); }
   };
 }

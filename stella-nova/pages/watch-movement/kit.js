@@ -72,7 +72,18 @@ function finishTextures() {
     const gap = x > 0.47 && x < 0.53 ? 0.6 : 0;
     return plate ? 0.25 + rivet + gap : 0.9;
   }, 1);
-  TEX = { geneva, perlage, grain, links };
+  // wood: rings across u, light figure along v (a 40 mm tile)
+  const wood = canvasTex(256, (u, v) => {
+    const r = u * 22 + 0.6 * Math.sin(v * 6.3 + Math.sin(u * 9) * 1.5) + 0.25 * Math.sin(v * 31);
+    return 0.5 + 0.28 * Math.sin(r * Math.PI * 2) * Math.sin(r * 1.7) + 0.06 * Math.sin(v * 80 + u * 13);
+  }, 1 / 40);
+  // leather: a fine pebble (roughness), 6 mm tile
+  const leather = canvasTex(128, (u, v) => {
+    let n = 0;
+    for (const [f, a] of [[9, 0.5], [17, 0.3], [33, 0.2]]) n += a * Math.sin(u * f * 6.3 + Math.sin(v * f * 4.1) * 2) * Math.sin(v * f * 6.3 + Math.cos(u * f * 3.7) * 2);
+    return 0.62 + 0.22 * n;
+  }, 1 / 6);
+  TEX = { geneva, perlage, grain, links, wood, leather };
   return TEX;
 }
 
@@ -94,9 +105,18 @@ const MAT_DEF = {
   chain: () => ({ color: 0x8a90a0, metalness: 1, roughness: 0.35, roughnessMap: TEX.links, side: THREE.DoubleSide }),
   ruby: () => ({ physical: true, color: 0xb3102c, metalness: 0, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.04, ior: 1.76, specularIntensity: 1, emissive: 0x3a0008 }),
   slot: () => ({ color: 0x06070c, roughness: 0.7 }),
+  // case and clock materials
+  polished: () => ({ color: 0xe9ebf0, metalness: 1, roughness: 0.08 }),
+  glass: () => ({ physical: true, color: 0xffffff, metalness: 0, roughness: 0.02, transmission: 1, thickness: 0.6, ior: 1.5, transparent: true, opacity: 1, specularIntensity: 1, envMapIntensity: 1.2 }),
+  wood: () => ({ color: 0x8a5a33, metalness: 0, roughness: 0.55, roughnessMap: TEX.wood, map: TEX.wood }),
+  leather: () => ({ color: 0x5a3a24, metalness: 0, roughness: 0.75, roughnessMap: TEX.leather }),
+  paint: () => ({ physical: true, color: 0xb02a2a, metalness: 0.2, roughness: 0.35, clearcoat: 1, clearcoatRoughness: 0.1 }),
+  lume: () => ({ color: 0xe8f0d0, roughness: 0.6, emissive: 0x3a4a20 }),
+  black: () => ({ color: 0x15161a, metalness: 0.6, roughness: 0.35 }),
 };
 function makeMat(name, extra) {
   const def = { ...MAT_DEF[name](), ...(extra || {}) };
+  if (def.color !== undefined && typeof def.color === 'string') def.color = new THREE.Color(def.color);
   const physical = def.physical; delete def.physical;
   return physical ? new THREE.MeshPhysicalMaterial(def) : new THREE.MeshStandardMaterial(def);
 }
@@ -112,8 +132,11 @@ export const hole = (r, n = 32, c = [0, 0]) => G.circlePoly(r, n, c).reverse();
 export const bevelFor = m => Math.min(0.025, m * 0.12);
 
 // ── the builder ─────────────────────────────────────────────────────────────
-export function createBuild() {
+// opts.palette: { materialName: { color, roughness, metalness, ... } }
+// overrides the templates for this build only (the randomizer's finishes)
+export function createBuild(opts = {}) {
   finishTextures();
+  const palette = opts.palette || {};
   const root = new THREE.Group();
   const layers = {}, layerK = {}, parts = {}, pickables = [], owned = [];
   const B = { root, layers, parts, pickables, alpha: 1 };
@@ -131,7 +154,7 @@ export function createBuild() {
     return p;
   };
   B.matFor = (p, name) => {
-    if (!p.mats[name]) { const m = makeMat(name); m.userData.baseEmissive = m.emissive ? m.emissive.clone() : null; p.mats[name] = m; }
+    if (!p.mats[name]) { const m = makeMat(name, palette[name]); m.userData.baseEmissive = m.emissive ? m.emissive.clone() : null; p.mats[name] = m; }
     return p.mats[name];
   };
   B.add = (p, ...ms) => {
@@ -251,6 +274,24 @@ export function createBuild() {
         [body.reverse(), [hole(0.5, 20, [-0.62, b + 0.1]), hole(0.5, 20, [0.62, b + 0.1]), hole(0.32, 16, [0, b - 0.55])]],
         [[[-0.35, b + 1.1], [0.35, b + 1.1], [0, len]], []]];
     }
+    if (style === 'leaf') {                       // a slim leaf, widest at 60%
+      const out = [];
+      for (let i = 0; i <= 24; i++) { const t = i / 24, y = -len * 0.12 + t * len * 1.12; out.push([w * 1.1 * Math.sin(Math.PI * Math.pow(t, 0.9)), y]); }
+      for (let i = 24; i >= 0; i--) { const t = i / 24, y = -len * 0.12 + t * len * 1.12; out.push([-w * 1.1 * Math.sin(Math.PI * Math.pow(t, 0.9)), y]); }
+      return [[out, []]];
+    }
+    if (style === 'spade') {                      // a bar with a teardrop spade near the tip
+      const b = len * 0.7, sp = [];
+      for (let i = 0; i <= 20; i++) { const a = Math.PI + Math.PI * i / 20; sp.push([Math.cos(a) * w * 2.2, b + Math.sin(a) * w * 1.8]); }
+      sp.push([0, b + w * 5.2]);
+      return [[[[-w / 2, -len * 0.15], [w / 2, -len * 0.15], [w / 2, b], [-w / 2, b]], []], [sp, []], [[[-w * 0.3, b + w * 5], [w * 0.3, b + w * 5], [0, len]], []]];
+    }
+    if (style === 'sword') return [[[[-w * 0.7, -len * 0.14], [w * 0.7, -len * 0.14], [w * 0.9, len * 0.82], [0, len], [-w * 0.9, len * 0.82]], []]];
+    if (style === 'cathedral') {                  // a pierced, gothic window near the tip
+      const b = len * 0.55;
+      return [[[[-w * 0.5, -len * 0.15], [w * 0.5, -len * 0.15], [w * 0.4, b], [-w * 0.4, b]], []],
+        [[[-w * 2.2, b], [w * 2.2, b], [w * 1.6, len * 0.85], [0, len], [-w * 1.6, len * 0.85]], [hole(w * 0.7, 16, [-w * 0.85, b + len * 0.12]), hole(w * 0.7, 16, [w * 0.85, b + len * 0.12]), hole(w * 0.6, 16, [0, len * 0.8])]]];
+    }
     if (style === 'poker') return [[[[-0.24, -len * 0.12], [0.24, -len * 0.12], [0.12, len], [-0.12, len]], []]];
     return [];
   };
@@ -289,6 +330,14 @@ export function createBuild() {
     m.material = m.userData.dialMat;
     m.userData.noShadow = true;
     return m;
+  };
+
+  // drop a part from view and from picking (it stays in parts for poses)
+  B.hidePart = id => {
+    const q = parts[id]; if (!q) return;
+    q.holder.visible = false; q.removed = true;
+    const gone = new Set(); q.holder.traverse(o => gone.add(o));
+    for (let i = pickables.length - 1; i >= 0; i--) if (gone.has(pickables[i])) pickables.splice(i, 1);
   };
 
   // ── per-frame and lifetime ───────────────────────────────────────────────

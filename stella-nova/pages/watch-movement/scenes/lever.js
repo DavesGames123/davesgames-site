@@ -1,7 +1,7 @@
 // ============================================================================
 //  WATCH MOVEMENT  ·  scenes/lever.js — the Swiss lever pocket watch in 3D
 // ────────────────────────────────────────────────────────────────────────────
-//  build(B, cal) adds every part of calibres/lever.js to the builder and
+//  build(B, cal, opts) adds every part of calibres/lever.js to the builder and
 //  returns pose(p), which sets each part from the pose of the running watch.
 //
 //  LAYERS  (explode offset = spread * unit * k)
@@ -17,7 +17,7 @@ import { wheelArbor, barrelParts, leverParts, escapeWheel, balanceParts, motionW
 const { TAU, D, pol } = G;
 const local = (p, o) => [p[0] - o[0], p[1] - o[1]];
 
-export function build(B, cal) {
+export function build(B, cal, opts = {}) {
   const { CAL: c, L, ESC } = cal, Z = c.z;
   for (const [k, v] of Object.entries({ hands: -3.2, dial: -2.3, motion: -1.3, plate: 0, train: 1, balance: 1.9, bridges: 2.8, cock: 3.7 })) B.layer(k, v);
 
@@ -108,19 +108,23 @@ export function build(B, cal) {
 
   // MOTION WORKS, DIAL, HANDS
   motionWorks(B, { C: L.C, M: L.M, cannon: c.cannon, minute: c.minute, hour: c.hour, z: Z, dialLo: Z.dialLo, plateLo: -c.plateT, s: 1 });
-  const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
-  const dialHoles = [hole(1.0, 24), hole(0.45, 16, L.F)];
-  B.add(dial, B.slab(circ(18.6, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.25, 18.6, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
-    B.dialFace(18.6, Z.dialLo, dialHoles, paintRoman({ sub: [10.25, 3.95], line: 'LEVER  ·  18 000 A/h' })));
-  const hands = handParts(B, { C: L.C, dialLo: Z.dialLo, hour: ['breguet', 9.6, 0.42], minute: ['breguet', 14.6, 0.32], second: { at: L.F, len: 3.7, z: Z.dialLo - 0.3 } });
+  if (!opts.noDial) {
+    const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
+    const dialHoles = [hole(1.0, 24), hole(0.45, 16, L.F)];
+    B.add(dial, B.slab(circ(18.6, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.25, 18.6, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
+      B.dialFace(18.6, Z.dialLo, dialHoles, opts.dialPaint || paintRoman({ sub: [10.25, 3.95], line: 'LEVER  ·  18 000 A/h' })));
+  }
+  const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['breguet', 9.6, 0.42], minute: ['breguet', 14.6, 0.32], second: { at: L.F, len: 3.7, z: Z.dialLo - 0.3 } }, ...(opts.hands || {}) });
 
   const ROT = { barrel: 'barrel', barrelCover: 'barrel', barrelArbor: 'ratchet', center: 'center', third: 'third', fourth: 'fourth', escape: 'escape', pallet: 'fork', balance: 'balance', ratchet: 'ratchet', crownWheel: 'crown', cannon: 'center', minuteWheel: 'minute', hourWheel: 'hour' };
   let lastR = null, rock = 0;
+  for (const id of opts.hide || []) B.hidePart(id);
+
   return {
     unit: 9, toggles: { bridges: ['barrelBridge', 'trainBridge', 'palletCock', 'screws', 'ratchet', 'crownWheel', 'click', 'clickSpring', 'jewelsBB', 'jewelsTB', 'cock', 'cockScrew', 'jewelsCock'], dial: ['dial', 'hourHand', 'minuteHand', 'secondHand'] },
     pose(p) {
       for (const id in ROT) B.parts[id].root.rotation.z = p[ROT[id]];
-      hands.hour.root.rotation.z = p.hands.hour; hands.minute.root.rotation.z = p.hands.minute; hands.second.root.rotation.z = p.hands.second;
+      hands.hour.root.rotation.z = p.hands.hour; hands.minute.root.rotation.z = p.hands.minute; if (hands.second) hands.second.root.rotation.z = p.hands.second;
       spin.rotation.y = p.stem;
       if (lastR !== null && p.ratchet !== lastR) rock = 1;
       lastR = p.ratchet;

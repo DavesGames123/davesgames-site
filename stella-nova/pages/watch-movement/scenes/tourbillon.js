@@ -1,7 +1,7 @@
 // ============================================================================
 //  WATCH MOVEMENT  ·  scenes/tourbillon.js — the one-minute tourbillon in 3D
 // ────────────────────────────────────────────────────────────────────────────
-//  build(B, cal) adds the parts of calibres/tourbillon.js and returns pose().
+//  build(B, cal, opts) adds the parts of calibres/tourbillon.js and returns pose().
 //  The cage is one part at O that turns by p.cage. Inside it, a group with
 //  scale.x = -1 holds the escape wheel, the lever and the balance in the
 //  canonical frame of the escapement tables (see the MIRROR note in the
@@ -19,7 +19,7 @@ import { wheelArbor, barrelParts, leverParts, escapeWheel, balanceParts, motionW
 const { TAU, D, pol, add } = G;
 const local = (p, o) => [p[0] - o[0], p[1] - o[1]];
 
-export function build(B, cal) {
+export function build(B, cal, opts = {}) {
   const { CAL: c, L, ESC } = cal, Z = c.z, O = L.O;
   for (const [k, v] of Object.entries({ hands: -3.2, dial: -2.3, motion: -1.3, lower: -0.7, plate: 0, train: 1, cage: 2.0, bridges: 2.9, tbridge: 3.9 })) B.layer(k, v);
 
@@ -120,20 +120,24 @@ export function build(B, cal) {
 
   // MOTION WORKS, DIAL WITH APERTURE, HANDS
   motionWorks(B, { C: L.C, M: L.M, cannon: c.cannon, minute: c.minute, hour: c.hour, z: Z, dialLo: Z.dialLo, plateLo: -c.plateT, s: 1 });
-  const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
-  const dialHoles = [hole(1.0, 24), hole(c.cageR + 0.15, 96, O)];
-  B.add(dial, B.slab(circ(18.6, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.25, 18.6, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
-    B.ring(c.cageR + 0.15, c.cageR + 0.55, Z.dialLo - 0.08, Z.dialHi, 'gilt', O),
-    B.dialFace(18.6, Z.dialLo, dialHoles, paintRoman({ aperture: [-O[1], c.cageR + 0.15], line: 'TOURBILLON  ·  18 000 A/h' })));
-  const hands = handParts(B, { C: L.C, dialLo: Z.dialLo, hour: ['breguet', 9.6, 0.42], minute: ['breguet', 14.6, 0.32], second: { at: O, len: 5.6, z: Z.dialLo - 0.3, w: 0.22 } });
+  if (!opts.noDial) {
+    const dial = B.part('dial', 'dial', [0, 0], { label: 'Dial', labelZ: Z.dialLo });
+    const dialHoles = [hole(1.0, 24), hole(c.cageR + 0.15, 96, O)];
+    B.add(dial, B.slab(circ(18.6, 180), dialHoles, Z.dialLo + 0.01, Z.dialHi, 'brass', 0.05), B.ring(18.25, 18.6, Z.dialLo - 0.02, Z.dialHi, 'gilt'),
+      B.ring(c.cageR + 0.15, c.cageR + 0.55, Z.dialLo - 0.08, Z.dialHi, 'gilt', O),
+      B.dialFace(18.6, Z.dialLo, dialHoles, opts.dialPaint || paintRoman({ aperture: [-O[1], c.cageR + 0.15], line: 'TOURBILLON  ·  18 000 A/h' })));
+  }
+  const hands = handParts(B, { ...{ C: L.C, dialLo: Z.dialLo, hour: ['breguet', 9.6, 0.42], minute: ['breguet', 14.6, 0.32], second: { at: O, len: 5.6, z: Z.dialLo - 0.3, w: 0.22 } }, ...(opts.hands || {}) });
 
   const ROT = { barrel: 'barrel', barrelCover: 'barrel', barrelArbor: 'ratchet', center: 'center', third: 'third', cage: 'cage', escape: 'escape', pallet: 'fork', balance: 'balance', ratchet: 'ratchet', crownWheel: 'crown', cannon: 'center', minuteWheel: 'minute', hourWheel: 'hour' };
+  for (const id of opts.hide || []) B.hidePart(id);
+
   return {
     unit: 9, focusK: 2.0,
     toggles: { bridges: ['barrelBridge', 'screws', 'ratchet', 'crownWheel', 'click', 'jewelsBB', 'tbridge', 'tScrews', 'jewelsTB'], dial: ['dial', 'hourHand', 'minuteHand', 'secondHand'] },
     pose(p) {
       for (const id in ROT) B.parts[id].root.rotation.z = p[ROT[id]];
-      hands.hour.root.rotation.z = p.hands.hour; hands.minute.root.rotation.z = p.hands.minute; hands.second.root.rotation.z = p.hands.second;
+      hands.hour.root.rotation.z = p.hands.hour; hands.minute.root.rotation.z = p.hands.minute; if (hands.second) hands.second.root.rotation.z = p.hands.second;
       spin.rotation.y = p.stem;
       barrel.update(Math.max(0, Math.min(1, p.reserve / c.reserveTurns)), p.ratchet, p.barrel);
       bal.update(p.balance);
