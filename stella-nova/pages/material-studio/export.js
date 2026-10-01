@@ -44,34 +44,48 @@
 //                     ior, transmission, emissive_strength, texture_transform
 //      PNG            one file per chosen map, naming template
 //
-//  SECTIONS  (grep -n the banner to jump)
-//      half LUTs ........ half bits -> float / 8-bit linear / 8-bit sRGB
-//      graph access ..... graphJSON, outputParams, scalarsNow, materialName
+//  This file is the entry that main.js loads. It keeps the module exports
+//  and init(). The work is in export/, one concern per file. Each file
+//  opens with a header and its grep targets.
+//
+//  MODULES  (export/<name>.js)
+//      ctx .............. C, S, UI, last; bind, setLast, err
+//      half ............. half bits -> float / 8-bit linear / 8-bit sRGB
+//      format ........... f (number text), fmtSize
+//      graph-access ..... graphJSON, outputParams, scalarsNow, materialName
 //      readback ......... readTexture, MapSource
-//      maps at res ...... withMaps, waitBake
+//      maps ............. withMaps, waitBake
 //      stats ............ computeStats, usedFlags
-//      packing .......... packImage, ch() channel spec helpers
-//      plans ............ PLANS: one planner per EXPORT_TARGETS id
-//      unity yaml ....... unityGuid, unityMat, unityTexMeta
-//      unreal py ........ unrealScript
-//      godot tres ....... godotTres
-//      gltf ............. gltfPackage
-//      readme ........... readmeText
-//      exportPackage .... the public entry
+//      pack ............. packImage, ch() channel spec helpers, chLabel
+//      plans ............ PLANS: one planner per EXPORT_TARGETS id; PLAIN_MAPS
+//      options .......... OPTS, DEFAULT_OPTS, saveOpts (localStorage)
+//      engines/unity .... unityGuid, unityMat, unityTexMeta, matMeta
+//      engines/unreal ... unrealScript
+//      engines/godot .... godotTres
+//      engines/gltf ..... gltfPackage, previewMesh
+//      engines/readme ... readmeText
+//      package .......... exportPackage (the public entry), exportMapPNG
 //      project .......... projectJSON, saveProject, copyMaterialJSON
-//      ui ............... mountExportUI, placeUI, layout table, progress, topbar, keys
-//      selfTest / init
+//      ui/dom ........... h, sel, row, chk, download
+//      ui/progress ...... setProgress, showResult
+//      ui/run ........... activeTarget, runExport
+//      ui/panel ......... mountExportUI, refresh, refreshTable (layout table)
+//      ui/place ......... placeUI, topbar, showExportTab
+//      ui/keys .......... bindKeys
+//      selftest ......... selfTest
+//      export.test.mjs .. golden node test (run: node export/export.test.mjs)
+//
+//  GREP TARGETS (this file)
+//      export { ... } ... the public names, the same as before the split
+//      init ............. bind, store subscriptions, bindKeys,
+//                         ctx.register('io', ...)
 // ============================================================================
-import { EXPORT_TARGETS, DEFAULT_SCALARS } from './contract.js';
-import { makeZip, encodePNG, crc32, decodePNG, readZip } from './zip.js';
-import { buildGLB, uvSphere, parseGLB } from './glb.js';
 import * as IMP from './import.js';
-
-import { S, UI, last, bind } from './export/ctx.js';
+import { UI, last, bind } from './export/ctx.js';
 import { linToSrgb } from './export/half.js';
 import { graphJSON, scalarsNow } from './export/graph-access.js';
 import { readTexture } from './export/readback.js';
-import { PLANS, PLAIN_MAPS, FORMATS, resolvePlan } from './export/plans.js';
+import { PLAIN_MAPS, FORMATS } from './export/plans.js';
 import { OPTS, saveOpts } from './export/options.js';
 import { unityGuid } from './export/engines/unity.js';
 import { download } from './export/ui/dom.js';
@@ -81,35 +95,14 @@ import { mountExportUI, refresh, refreshTable } from './export/ui/panel.js';
 import { runExport } from './export/ui/run.js';
 import { placeUI } from './export/ui/place.js';
 import { bindKeys } from './export/ui/keys.js';
+import { selfTest } from './export/selftest.js';
 
 export {
   linToSrgb, scalarsNow, readTexture, PLAIN_MAPS, FORMATS, unityGuid, download,
-  exportPackage, exportMapPNG, projectJSON, saveProject, copyMaterialJSON, mountExportUI,
+  exportPackage, exportMapPNG, projectJSON, saveProject, copyMaterialJSON, mountExportUI, selfTest,
 };
 
-// ------------------------------------------------------------ selfTest / init
-/** Quick checks that need no bake: codecs, zip, glb, GUIDs, plans. */
-export async function selfTest() {
-  const out = { ok: true, checks: {} };
-  const ok = (k, v) => { out.checks[k] = v; if (!v) out.ok = false; };
-  ok('crc32', crc32(new TextEncoder().encode('123456789')) === 0xcbf43926);
-  const px = new Uint8Array([0, 0, 0, 0, 255, 128, 7, 3, 1, 2, 3, 255, 9, 9, 9, 9]);
-  const png = await encodePNG({ width: 2, height: 2, channels: 4, data: px });
-  const back = await decodePNG(png);
-  ok('png8 alpha 0 keeps rgb', back.data.every((v, i) => v === px[i]));
-  const zipped = await makeZip([{ name: 'a.txt', data: 'x'.repeat(500) }, { name: 'b.png', data: png }]);
-  const entries = await readZip(zipped);
-  ok('zip roundtrip', entries.length === 2 && entries[0].data.length === 500);
-  const glb = buildGLB({ mesh: uvSphere(8), images: [{ data: png }], material: { name: 't', pbrMetallicRoughness: { baseColorTexture: { index: 0 } } } });
-  const pg = parseGLB(glb);
-  ok('glb parse', pg.json.asset.version === '2.0' && pg.json.images.length === 1);
-  ok('unity guid', /^[0-9a-f]{32}$/.test(unityGuid('x')) && unityGuid('x') === unityGuid('x'));
-  ok('plans', EXPORT_TARGETS.every(t => PLANS[t.id] && resolvePlan(t.id, { ...OPTS, name: 'T', uvScale: 1 }, null, DEFAULT_SCALARS).length > 0));
-  out.maps = !!S.maps;
-  out.last = last && { target: last.target, name: last.name, size: last.size };
-  return out;
-}
-
+// ------------------------------------------------------------ init
 /** @param {object} ctx main.js module context */
 export async function init(ctx) {
   bind(ctx);
