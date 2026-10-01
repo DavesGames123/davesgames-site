@@ -7,10 +7,10 @@
 //  state (nodes, links, view, device) and call each other both ways.
 //
 //  SECTIONS  (grep the banner to jump)
-//      library catalog ............ loadIndex / ensureLib / ensureLibs
+//      library catalog ............ LIBS / ensureLib / ensureLibs (from lib/bench-wgsl.js)
 //      WGSL syntax highlighting ... highlight
 //      node model ................. addNode / link / topo / templateCode
-//      WGSL assembly .............. moduleFor / packSrc
+//      WGSL assembly .............. packSrc (moduleFor comes from lib/bench-wgsl.js)
 //      canvas ..................... pan/zoom/pinch, buildNodeEl, drawWires
 //      editor pane ................ openEditor / showEditor / apply / revert
 //      toolbar .................... picker, search, add, examples, graph i/o
@@ -25,33 +25,26 @@
 //      tools/build-libs.mjs ....... writes libs/ from the shader-table pages
 //      generic.json ............... the generic node kinds (transform, blend, ...)
 //      shaders/{head,genu,vs,blit}.wgsl  the WGSL headers assembled into each pass
+//
+//  SHARED CODE
+//      ../../lib/bench-wgsl.js .... the DOM-free part: catalog fetch, the lazy
+//                                   library cache, WGSL assembly (templateCode,
+//                                   entryOf, moduleFor), the uniform packing
+//                                   (fillUniform) and the bind group layouts.
+//                                   Material Studio uses the same module.
 // ============================================================================
-import { loadShaders } from '../../lib/shaders.js';
+import { loadBenchCatalog, BENCH_TEX, BENCH_UBYTES, BENCH_STATES, BENCH_BGL_ENTRIES, BENCH_CBGL_ENTRIES, BENCH_PBGL_ENTRIES, hexToRgb } from '../../lib/bench-wgsl.js';
 const $ = id => document.getElementById(id);
-const [INDEX, GENERIC] = await Promise.all([
-  fetch(new URL('libs/index.json', import.meta.url)).then(r => r.json()),
-  fetch(new URL('generic.json', import.meta.url)).then(r => r.json()),
-]);
-const SH = await loadShaders(import.meta.url, ['shaders/head.wgsl', 'shaders/genu.wgsl', 'shaders/vs.wgsl', 'shaders/blit.wgsl']);
-const HEAD = SH['shaders/head.wgsl'], GEN_UNIFORM = SH['shaders/genu.wgsl'], VS = SH['shaders/vs.wgsl'], BLIT = SH['shaders/blit.wgsl'];
-const TEX = 512, UBYTES = 256;
-const hexToRgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16) / 255);
+const CAT = await loadBenchCatalog(new URL('./', import.meta.url));
+const { INDEX, GENERIC, BLIT, ensureLib, ensureLibs, cellOf, templateCode, entryOf, moduleFor } = CAT;
+const TEX = BENCH_TEX, UBYTES = BENCH_UBYTES;
 const G = { ink: hexToRgb('#0e1118'), tone: hexToRgb('#5a8cc0'), cream: hexToRgb('#e8ecf4'), paused: false, tempo: 1 };
 
 // ------------------------------------------------------------ library catalog
-// LIBS holds the catalog metadata at boot. ensureLib merges in the WGSL
-// (uniform, core, entries, adapter, fams, fill) the first time a library is used.
-const LIBS = INDEX.libs;
-for (const L of Object.values(LIBS)) for (const e of L.extras) e.fn = new Function('return (' + e.map + ')')();
-const loading = {};
-function ensureLib(key) {
-  const L = LIBS[key]; if (!L) return Promise.reject(new Error('no library ' + key));
-  if (L.loaded) return Promise.resolve(L);
-  return loading[key] || (loading[key] = fetch(new URL('libs/' + L.file, import.meta.url)).then(r => { if (!r.ok) throw new Error(L.file + ' ' + r.status); return r.json(); }).then(code => {
-    Object.assign(L, code); if (L.fill) L.fillFn = new Function('return ' + L.fill)(); L.loaded = true; return L;
-  }).catch(e => { delete loading[key]; throw e; }));
-}
-const ensureLibs = keys => Promise.all([...new Set(keys)].filter(k => LIBS[k]).map(ensureLib));
+// LIBS holds the catalog metadata at boot. ensureLib (lib/bench-wgsl.js) merges
+// in the WGSL (uniform, core, entries, adapter, fams, fill) the first time a
+// library is used.
+const LIBS = CAT.LIBS;
 
 // ------------------------------------------------------------ WGSL syntax highlighting
 const KW = new Set('fn let var const struct return if else for while loop break continue continuing switch case default discard true false override alias enable requires const_assert'.split(' '));
@@ -73,17 +66,11 @@ function highlight(src) {
   });
   return out;
 }
-const STATES = ['idle', 'listening', 'thinking', 'responding', 'success', 'error'];
+const STATES = BENCH_STATES;
 
 // ------------------------------------------------------------ node model
-const cellOf = n => LIBS[n.kind] ? LIBS[n.kind].cells.find(c => c.name === n.fn) : null;
 const def = n => LIBS[n.kind] || GENERIC[n.kind];
 const title = n => n.fn ? n.fn.replace(/_/g, ' ') : (n.op || def(n).label.toLowerCase());
-function templateCode(n) {
-  if (LIBS[n.kind]) { const L = LIBS[n.kind]; const e = L.entries[n.fn] ?? L.entries['*'] ?? ''; return (e + L.adapter.replace(/__NAME__/g, n.fn)).trim() + '\n'; }
-  const Gk = GENERIC[n.kind]; return (Gk.ops ? Gk.code.replace('__OP__', Gk.ops[n.op]) : Gk.code).trim() + '\n';
-}
-const entryOf = n => LIBS[n.kind] ? LIBS[n.kind].entry.replace(/__NAME__/g, n.fn) : 'fs_main';
 let nodes = [], links = [], nextId = 1, selected = null;
 const byId = id => nodes.find(n => n.id === id);
 // A library node needs its library loaded (ensureLib) before addNode runs.
@@ -106,24 +93,17 @@ function topo() { const order = [], seen = new Set(); const visit = n => { if (s
 const inputOf = (n, name) => { const l = links.find(x => x.to === n.id && x.input === name); return l ? byId(l.from) : null; };
 
 // ------------------------------------------------------------ WGSL assembly
-function moduleFor(n, code = n.code) {
-  if (LIBS[n.kind]) {
-    const L = LIBS[n.kind];
-    if (L.sim) return L.core + '\n' + code;
-    const core = L.orb ? L.fams[cellOf(n).family].core : L.core;
-    return L.uniform + HEAD + VS + core + '\n' + code;
-  }
-  return GEN_UNIFORM + HEAD + VS + '\n' + code;
-}
+// moduleFor (lib/bench-wgsl.js) assembles one pass. packSrc prints the whole
+// graph as one readable listing, each library core once.
 function packSrc() {
   const order = topo(); const lines = [`// composition bench pack · ${nodes.length} passes, ${links.length} wires`, '// each pass renders a 512² rgba16float texture; in0/in1 are the wired upstream textures, b.has0/has1 say which are wired', '// bindings: 0 uniform (the library struct), 1 in0, 2 sampler, 3 in1, 4 BenchB', ''];
   lines.push('// ── pass order and wiring');
   for (const n of order) { const ins = def(n).inputs.map(([nm]) => { const s = inputOf(n, nm); return `${nm} ← ${s ? 'pass ' + s.id : '—'}`; }).join(', '); lines.push(`//   pass ${n.id}: ${n.kind}${n.fn ? ' · ' + n.fn : ''}${n.op ? ' · ' + n.op : ''}  [${ins}]  knobs ${JSON.stringify(n.k.map(v => +v.toFixed(3)))}${n.xk.length ? ' extras ' + JSON.stringify(n.xk.map(v => +v.toFixed(3))) : ''}`); }
-  lines.push('', HEAD.trim(), '');
+  lines.push('', CAT.HEAD.trim(), '');
   const cores = new Set();
   for (const n of order) {
-    const L = LIBS[n.kind]; const key = L ? (L.orb ? 'orb:' + cellOf(n).family : n.kind) : 'generic';
-    if (!cores.has(key)) { cores.add(key); lines.push(`// ══ ${key} library core ══`, L ? (L.sim ? L.core : (L.uniform + (L.orb ? L.fams[cellOf(n).family].core : L.core))) : GEN_UNIFORM, ''); }
+    const key = CAT.coreKeyOf(n);
+    if (!cores.has(key)) { cores.add(key); lines.push(`// ══ ${key} library core ══`, CAT.coreSrcOf(n), ''); }
   }
   for (const n of order) lines.push(`// ══ pass ${n.id} · ${n.kind}${n.fn ? ' · ' + n.fn : ''}${n.op ? ' · ' + n.op : ''} · entry ${entryOf(n)} ══`, n.code, '');
   return lines.join('\n');
@@ -388,11 +368,11 @@ else {
   window.addEventListener('pagehide', () => { alive = false; for (const n of nodes) freeGpu(n); try { device.destroy(); } catch (e) {} });
   device.lost.then(info => { alive = false; window.__benchLost = info.reason || 'lost'; });
   format = navigator.gpu.getPreferredCanvasFormat();
-  bgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }, { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: {} }, { binding: 3, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 4, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }] });
+  bgl = device.createBindGroupLayout({ entries: BENCH_BGL_ENTRIES() });
   layout = device.createPipelineLayout({ bindGroupLayouts: [bgl] });
-  cbgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } }, { binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float' } }, { binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { format: 'rgba32float', access: 'write-only' } }] });
+  cbgl = device.createBindGroupLayout({ entries: BENCH_CBGL_ENTRIES() });
   clayout = device.createPipelineLayout({ bindGroupLayouts: [cbgl] });
-  pbgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }, { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'unfilterable-float' } }] });
+  pbgl = device.createBindGroupLayout({ entries: BENCH_PBGL_ENTRIES() });
   playout = device.createPipelineLayout({ bindGroupLayouts: [pbgl] });
   sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'mirror-repeat', addressModeV: 'mirror-repeat' });
   dummy = device.createTexture({ size: [1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT }); dummyView = dummy.createView();
@@ -442,26 +422,10 @@ function bindOf(n) {
   device.queue.writeBuffer(g.bbuf, 0, new Float32Array([has(0), has(1), D.view, 0]));
   return g.bind;
 }
-// The bench uniform: floats 0..15 are size, time, pixelScale and the swatches,
-// as in every table. L.kAt places the knobs, L.extras the sliders (slot i, -1
-// for a value only the fill reads), L.fixed constants, L.fillFn the rest.
-function fillU(n, d) {
-  d.fill(0); const L = LIBS[n.kind];
-  if (L && L.orb) {
-    d[0] = TEX; d[1] = TEX; d[2] = 0; d[3] = 0; d.set([G.ink[0], G.ink[1], G.ink[2], 1], 4); d.set([G.tone[0], G.tone[1], G.tone[2], 1], 8); d.set([G.cream[0], G.cream[1], G.cream[2], 1], 12);
-    d[16] = 0; d[17] = 0; d[18] = T; d[19] = 1; d[21] = 1; d[22] = 1; d.set(n.k, 25); d[29] = 0; d[30] = n.state || 0; d[31] = Math.max(T - (n.stateAt || 0), 0);
-    for (let j = 0; j < L.extras.length; j++) d[L.extras[j].i] = L.extras[j].fn(n.xk[j]);
-    const lv = d[32], ac = d[33]; d.set([T * 0.6, T * 0.6, T * 0.6, T * 0.6, T * 0.6, T * lv, T * ac], 34); return;
-  }
-  d[0] = TEX; d[1] = TEX; d[2] = T; d[3] = 1; d.set([G.ink[0], G.ink[1], G.ink[2], 1], 4); d.set([G.tone[0], G.tone[1], G.tone[2], 1], 8); d.set([G.cream[0], G.cream[1], G.cream[2], 1], 12);
-  if (!L || L.sim) { d.set(n.k, 16); return; }
-  d.set(n.k, L.kAt ?? 20);
-  for (const [i, v] of Object.entries(L.fixed)) d[+i] = v;
-  const x = {};
-  for (let j = 0; j < L.extras.length; j++) { const e = L.extras[j]; const v = e.fn(n.xk[j]); x[e.name] = v; if (e.i >= 0) d[e.i] = v; }
-  if (L.samp) { d[16] = Math.round(32 + 480 * n.k[0] * n.k[0]); d[17] = (1.2 + 3.0 * n.k[1]) * TEX / 174; }
-  if (L.fillFn) L.fillFn(d, { k: n.k, x, cell: cellOf(n), T, TEX, G });
-}
+// The bench uniform (lib/bench-wgsl.js fillUniform): floats 0..15 are size,
+// time, pixelScale and the swatches, as in every table. L.kAt places the
+// knobs, L.extras the sliders, L.fixed constants, L.fillFn the rest.
+const fillU = (n, d) => CAT.fillUniform(n, d, { T, TEX, G });
 function stepSim(enc, n, dt) {
   const g = n.gpu, s = g.sim, c = cellOf(n); if (!s || !g.pipeline || !g.present) return;
   const doStep = reset => { const d = s.udata; d.fill(0); d[0] = s.N; d[1] = s.N; d[2] = T; d[3] = 1; d.set(n.k, 16); d[20] = s.frame; d[21] = s.seed; d[22] = 1 / 60; d[23] = reset ? 1 : 0;
