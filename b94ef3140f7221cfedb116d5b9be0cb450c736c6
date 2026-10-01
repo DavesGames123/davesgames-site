@@ -1,0 +1,1 @@
+Correction to the body: in the additive state the module was written and imported by main.js (a bare import), and the old code was still in main.js. The body says "not yet wired", which is not correct.
