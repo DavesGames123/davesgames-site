@@ -19,7 +19,8 @@ import { fitDist, flyTo, fitView } from './camera.js';
 import { refreshVisibility } from './visibility.js';
 import { boneCentre, setHi } from './select.js';
 import { showCard } from './card.js';
-import { syncList, syncRead } from '../main.js';
+import { syncRead } from '../main.js';
+import { syncList } from './list.js';
 
 export function isolate(i) {
   if (i < 0) return;

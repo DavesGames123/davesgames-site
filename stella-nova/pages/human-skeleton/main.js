@@ -37,7 +37,7 @@ import * as THREE from 'three';
 import * as L from './layout.js';
 import { $, PHONE_Q, COARSE, HOVER, REDUCED, esc, clamp01, easeIO, ease, SIDE_NAME, MODE_NAME, THEMES } from './app/env.js';
 import { canvas, renderer, scene, envRT, camera, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
-import { T, S, dirty, toast, hideHint, regionOf } from './app/state.js';
+import { T, S, dirty, toast, hideHint } from './app/state.js';
 import { occ, occlusion, resize, fitView, fitShadow } from './app/camera.js';
 import { placeLabels } from './app/tray.js';
 import { pickRT, pickAt } from './app/pick.js';
@@ -46,88 +46,7 @@ import { refreshVisibility } from './app/visibility.js';
 import { exploded, retarget, setMode, explode, reconstruct, setAmount, toggleRegionExplode } from './app/layouts.js';
 import { boneCentre, setHi, select, clearSelection, step } from './app/select.js';
 import { isolate, exitIsolate, focusBone, focusRegion } from './app/inspect.js';
-
-// ── the bone list ───────────────────────────────────────────────────────────
-const list = $('list');
-let rowEls = new Map();
-export function buildList() {
-  list.innerHTML = '';
-  rowEls = new Map();
-  for (const r of S.regions) {
-    const bones = S.bones.filter(b => b.region === r.id);
-    if (!bones.length) continue;
-    const g = document.createElement('div');
-    g.className = 'rg'; g.dataset.r = r.id;
-    const soft = r.id === 'teeth' || r.id === 'cartilage';
-    g.innerHTML = `<div class="rg-h"><button type="button" class="rg-t" aria-expanded="false">${esc(r.label)} <span class="n">${bones.length}</span><span class="car">›</span></button>` +
-      (soft ? '' : `<button type="button" class="rg-b" data-x="explode" aria-label="Explode ${esc(r.label)}">Explode</button>`) +
-      `<button type="button" class="rg-b" data-x="hide" aria-label="Hide ${esc(r.label)}">Hide</button></div><div class="rg-rows" role="list"></div>`;
-    const rows = g.querySelector('.rg-rows');
-    for (const b of bones) {
-      const el = document.createElement('button');
-      el.type = 'button'; el.className = 'br'; el.dataset.i = b.i; el.setAttribute('role', 'listitem');
-      el.innerHTML = `<span>${esc(b.name)}</span><i>${esc(b.latin)}</i>`;
-      rows.appendChild(el); rowEls.set(b.i, el);
-    }
-    list.appendChild(g);
-  }
-}
-list.addEventListener('click', e => {
-  const row = e.target.closest('.br');
-  if (row) {
-    const i = +row.dataset.i;
-    const b = S.bones[i];
-    if (!S.vis[i]) {
-      if (b.type === 'tooth') setShow('teeth', true);
-      else if (b.type === 'cartilage') setShow('cartilage', true);
-      else setRegionHidden(b.region, false);
-    }
-    select(i, { fly: S.iso < 0, scroll: false });
-    if (PHONE_Q.matches && !matchMedia('(orientation:landscape)').matches) setOpen(false);
-    return;
-  }
-  const g = e.target.closest('.rg');
-  if (!g) return;
-  const rid = g.dataset.r;
-  const bx = e.target.closest('.rg-b');
-  if (bx && bx.dataset.x === 'hide') { setRegionHidden(rid, !S.hiddenRegion.has(rid)); return; }
-  if (bx && bx.dataset.x === 'explode') { toggleRegionExplode(rid); return; }
-  if (e.target.closest('.rg-t')) {
-    g.classList.toggle('open');
-    g.querySelector('.rg-t').setAttribute('aria-expanded', String(g.classList.contains('open')));
-  }
-});
-function setRegionHidden(rid, hide) {
-  if (rid === 'teeth') { setShow('teeth', !hide); return; }
-  if (rid === 'cartilage') { setShow('cartilage', !hide); return; }
-  if (hide) S.hiddenRegion.add(rid); else S.hiddenRegion.delete(rid);
-  refreshVisibility(true);
-  syncUI();
-}
-export function syncList(scroll) {
-  for (const el of list.querySelectorAll('.br.sel')) el.classList.remove('sel');
-  if (S.sel < 0) return;
-  const el = rowEls.get(S.sel);
-  if (!el) return;
-  el.classList.add('sel');
-  const g = el.closest('.rg');
-  if (!g.classList.contains('open')) g.classList.add('open');
-  if (scroll && panel.classList.contains('open')) el.scrollIntoView({ block: 'nearest' });
-}
-$('search').addEventListener('input', e => {
-  const q = e.target.value.trim().toLowerCase();
-  list.classList.toggle('filtering', !!q);
-  for (const g of list.querySelectorAll('.rg')) {
-    let any = false;
-    for (const el of g.querySelectorAll('.br')) {
-      const b = S.bones[+el.dataset.i];
-      const hit = !q || (b.name + ' ' + b.latin + ' ' + regionOf(b).label + ' ' + SIDE_NAME[b.side]).toLowerCase().includes(q);
-      el.classList.toggle('miss', !hit);
-      any = any || hit;
-    }
-    g.classList.toggle('empty', !any);
-  }
-});
+import { list, rowEls, setRegionHidden } from './app/list.js';
 
 // ── canvas pointer: tap, double tap, hover, drag out ────────────────────────
 // Registered before OrbitControls reads the event: a press on the picked
@@ -227,7 +146,7 @@ function moveTip(x, y) {
 // ── panel, sheet, dock, theme ───────────────────────────────────────────────
 export const panel = $('panel');
 const dockList = $('dockList');
-function setOpen(open) {
+export function setOpen(open) {
   panel.classList.toggle('open', open);
   if (!open) panel.classList.remove('full');
   document.body.classList.toggle('panel-closed', !open);
@@ -275,7 +194,7 @@ function setTheme(t) {
   }
   dirty();
 }
-function setShow(k, v) {
+export function setShow(k, v) {
   S.show[k] = v;
   if (k === 'spin') { controls.autoRotate = v; }
   else if (k === 'cartilage' && v) ensureCartilage().then(() => refreshVisibility(true));
