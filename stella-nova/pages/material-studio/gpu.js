@@ -32,12 +32,15 @@
 /**
  * @type {{ok:boolean, reason:string, adapter:GPUAdapter|null, device:GPUDevice|null,
  *          format:GPUTextureFormat|null, features:{float32Filterable:boolean, timestampQuery:boolean},
- *          limits:Object<string,number>, adapterInfo:Object, lost:boolean}}
+ *          limits:Object<string,number>, adapterInfo:Object, lost:boolean,
+ *          errors:{count:number, last:string[]}}}
  */
 export const gpu = {
   ok: false, reason: 'not started', adapter: null, device: null, format: null,
   features: { float32Filterable: false, timestampQuery: false },
   limits: {}, adapterInfo: {}, lost: false,
+  // Count and the last 20 messages of uncaptured GPU errors. selfTest reads them.
+  errors: { count: 0, last: [] },
 };
 
 const lostFns = new Set();
@@ -92,7 +95,10 @@ export function initGPU() {
         for (const fn of lostFns) { try { fn(info); } catch (e) { console.error(e); } }
       });
       device.addEventListener?.('uncapturederror', ev => {
-        console.error('[gpu] uncaptured error:', ev.error && ev.error.message);
+        const msg = String(ev.error && ev.error.message || ev.error);
+        gpu.errors.count++; gpu.errors.last.push(msg.slice(0, 500));
+        if (gpu.errors.last.length > 20) gpu.errors.last.shift();
+        console.error('[gpu] uncaptured error:', msg);
       });
       window.addEventListener('pagehide', teardown);
     } catch (e) {

@@ -12,7 +12,7 @@
 //      chrome .......... toast, side tabs, splitter, undo/redo, res, status
 //      modules ......... MODULES (init order) and loadModule
 //      registry ........ buildRegistry / registerNodes
-//      debug hook ...... window.__studio and selfTest
+//      debug hook ...... window.__studio, selfTest, selfTestOk, selfTestNote
 //      boot ............ the top-level await sequence
 //
 //  MODULE CONTRACT
@@ -188,16 +188,59 @@ const studio = {
   version: 1,
   store, state, gpu, contract, modules, failed,
   get registry() { return state.registry; },
-  /** Run every registered module selfTest. Returns {name: result | {error}}. */
-  async selfTest() {
-    const out = { gpu: { ok: gpu.ok, reason: gpu.reason }, failed: [...failed], registry: state.registry.size };
+  /**
+   * Run the selfTest of each registered module, one at a time, and summarize.
+   * @param {{only?:string[], skip?:string[]}} [opts]
+   * @returns {Promise<{ok:boolean, ms:number, gpu:object, failed:string[], registry:number,
+   *   gpuErrors:number, summary:Object<string,{ok:boolean, ms:number, note:string}>,
+   *   results:Object<string,object>}>}  The result is also kept on __studio.lastSelfTest.
+   */
+  async selfTest(opts = {}) {
+    const t0 = performance.now();
+    const err0 = gpu.errors ? gpu.errors.count : 0;
+    const out = {
+      ok: true, ms: 0, gpu: { ok: gpu.ok, reason: gpu.reason }, failed: [...failed],
+      registry: state.registry.size, gpuErrors: 0, summary: {}, results: {},
+    };
     for (const [k, api] of Object.entries(studio)) {
       if (!api || typeof api !== 'object' || typeof api.selfTest !== 'function' || k === 'store') continue;
-      try { out[k] = await api.selfTest(); } catch (e) { out[k] = { error: String(e && e.message || e) }; }
+      if (opts.only && !opts.only.includes(k)) continue;
+      if (opts.skip && opts.skip.includes(k)) continue;
+      const t = performance.now();
+      let r;
+      try { r = await api.selfTest(); } catch (e) { r = { error: String(e && e.message || e) }; }
+      out.results[k] = r;
+      out.summary[k] = { ok: selfTestOk(r), ms: Math.round(performance.now() - t), note: selfTestNote(r) };
+      if (!out.summary[k].ok) out.ok = false;
     }
+    out.gpuErrors = (gpu.errors ? gpu.errors.count : 0) - err0;
+    if (failed.length || !gpu.ok || out.gpuErrors) out.ok = false;
+    out.ms = Math.round(performance.now() - t0);
+    studio.lastSelfTest = out;
     return out;
   },
 };
+/** A module result passes when ok is true, or (without ok) when it has no error and no failures. */
+function selfTestOk(r) {
+  if (!r || typeof r !== 'object') return !!r;
+  if (r.error) return false;
+  if (typeof r.ok === 'boolean') return r.ok;
+  if (typeof r.failed === 'number') return r.failed === 0;
+  if (Array.isArray(r.failures)) return r.failures.length === 0;
+  return true;
+}
+/** One short line for the summary: the error, or the first counters of the result. */
+function selfTestNote(r) {
+  if (!r || typeof r !== 'object') return String(r);
+  if (r.error) return r.error;
+  const bits = [];
+  for (const [k, v] of Object.entries(r)) {
+    if (k === 'ok') continue;
+    if (typeof v === 'number' || typeof v === 'string' || typeof v === 'boolean') bits.push(`${k} ${v}`);
+    if (bits.length >= 5) break;
+  }
+  return bits.join(', ');
+}
 window.__studio = studio;
 function register(name, api) {
   if (['version', 'store', 'state', 'gpu', 'contract', 'modules', 'failed', 'registry', 'selfTest'].includes(name)) throw new Error('reserved __studio name ' + name);
