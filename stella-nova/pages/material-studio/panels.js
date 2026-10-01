@@ -1868,7 +1868,7 @@ export async function init(c) {
     const r = ev && ev.reason;
     if (r === 'boot' || r === 'load') { buildLibrary(); renderLibrary(); const nm = $('pn-projname'); if (nm) nm.value = graph()?.name || ''; }
     if (r === 'undo' || r === 'redo') { const nm = $('pn-projname'); if (nm) nm.value = graph()?.name || ''; }
-    if (selfEmit) { const st = $('pn-stats'); if (st) st.replaceChildren(...statsLine()); return; }
+    if (selfEmit) { const st = $('pn-stats'); if (st) st.replaceChildren(...statsLine().filter(Boolean)); return; }
     const alive = (state.selection || []).filter(id => getNode(id));
     if (alive.length !== (state.selection || []).length) { store.select(alive); return; }
     if (r === 'param' && insRows.length) refreshInspector(); else renderInspector(true);
@@ -1878,7 +1878,7 @@ export async function init(c) {
   store.on('bake:done', maps => {
     meterDone(maps);
     updateStrip();
-    const st = $('pn-stats'); if (st) st.replaceChildren(...statsLine());
+    const st = $('pn-stats'); if (st) st.replaceChildren(...statsLine().filter(Boolean));
     const es = $('pn-ex-status'); if (es && !exp.busy && !exp.last) es.textContent = `Maps ready: ${maps.res}²`;
   });
   store.on('bake:error', () => { meter.bar?.classList.remove('busy'); meter.bar?.classList.add('err'); });
