@@ -63,7 +63,7 @@
 //      selfTest / init
 // ============================================================================
 import {
-  EXPORT_TARGETS, MAP_SLOTS, MAP_NAMES, DEFAULT_SCALARS, OUTPUT_TYPE, RES_OPTIONS, GRAPH_VERSION,
+  EXPORT_TARGETS, MAP_SLOTS, MAP_NAMES, DEFAULT_SCALARS, RES_OPTIONS, GRAPH_VERSION,
 } from './contract.js';
 import { makeZip, encodePNG, encodeTGA, encodeEXR, f32ToF16, crc32, decodePNG, readZip } from './zip.js';
 import { buildGLB, uvSphere, parseGLB } from './glb.js';
@@ -72,31 +72,10 @@ import * as IMP from './import.js';
 import { C, S, UI, last, bind, setLast, err } from './export/ctx.js';
 import { H2F, H2L8, H2S8, luts, linToSrgb, clamp01 } from './export/half.js';
 import { f, fmtSize } from './export/format.js';
+import { graphJSON, scalarsNow, sanitize, materialName } from './export/graph-access.js';
 
-export { linToSrgb };
+export { linToSrgb, scalarsNow };
 let busy = false;
-
-// ------------------------------------------------------------ graph access
-function graphJSON() {
-  const g = S.graph;
-  if (!g) return null;
-  const ser = C?.modules?.graph?.serialize;
-  try { return ser ? ser(g) : JSON.parse(JSON.stringify(g)); } catch (e) { return JSON.parse(JSON.stringify(g)); }
-}
-function outputParams(gj = graphJSON()) {
-  if (!gj) return {};
-  const n = (gj.nodes || []).find(x => x.id === gj.output) || (gj.nodes || []).find(x => x.type === OUTPUT_TYPE);
-  return (n && n.params) || {};
-}
-/** The material scalars: contract defaults < state.scalars < bake result < Output node params. */
-export function scalarsNow(maps = S.maps) {
-  const s = { ...DEFAULT_SCALARS, ...(S.scalars || {}), ...((maps && maps.scalars) || {}) };
-  const p = outputParams();
-  for (const k of Object.keys(DEFAULT_SCALARS)) if (p[k] !== undefined) s[k] = p[k];
-  return s;
-}
-const sanitize = s => (String(s || '').trim().replace(/[^A-Za-z0-9_\-]+/g, '_').replace(/^_+|_+$/g, '') || 'Material');
-function materialName() { return sanitize(UI.name?.value || graphJSON()?.name || 'Material'); }
 
 // ------------------------------------------------------------ readback
 /**
