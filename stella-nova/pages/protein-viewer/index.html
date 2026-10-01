@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Protein Structure — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   PROTEIN VIEWER  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A molecular structure viewer: 37 presets from the
+   PDB and AlphaFold DB (vendored in data/, so they load offline), plus
+   any PDB or mmCIF file by ID, by upload or by paste.
+     parse.js    PDB and mmCIF text to one model (no DOM, no THREE)
+     ss.js       secondary structure from backbone H-bonds or CA geometry
+     colors.js   the eight colour schemes and their legends
+     cartoon.js  spline ribbon geometry      surface.js  Gaussian surface
+     presets.js  the presets and the view each one opens with
+     reps.js     three.js instanced meshes   post.js  AO, outlines, fog
+     main.js     state, UI, picking, sequence strip, measure, camera
+     tests.mjs   node tests.mjs              vendor.py  rebuilds data/
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts (Inter, STIX Two Text), style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Protein Structure          (hidden in frame) │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │ #read  title, method      #card  the picked residue   │
+     │  presets   │                                  neighbours, focus    │
+     │  load      │        #view  the WebGL canvas                        │
+     │  style     │        #labels  measurement values                    │
+     │  colour    │        #tip  hover name (fine pointers only)          │
+     │  measure   │ #legend                                               │
+     │  camera    ├─────────────────────────────────────────────────────┤
+     │  about     │ #seq  the sequence strip, scrolls sideways            │
+     └────────────┴─────────────────────────────────────────────────────┘
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     #dock      at the base: presets, style, colour, measure, fit.
+     #panel     portrait: a bottom sheet over the dock, presets first.
+                landscape: a drawer at the right edge.
+     #card      a strip at the top of the stage.
+     main.js measures the panel, the strip and the card, and frames the
+     molecule in the clear part with camera.setViewOffset.
+
+   GREP MAP  (main.js)
+     grep -n 'function loadPreset'    fetch, gunzip, parse, apply the view
+     grep -n 'function rebuild'       build the layers for the rep
+     grep -n 'function paint'         colours and highlight into the layers
+     grep -n 'function pickAt'        ray against the pickable atoms
+     grep -n 'function select'        selection, 5 A neighbourhood, card
+     grep -n 'function addMeasureAtom' distance, angle, dihedral
+     grep -n 'function buildStrip'    the sequence strip
+     grep -n 'function occlusion'     framing round the panel and strip
+     grep -n 'function fetchId'       RCSB and AlphaFold DB downloads
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A protein structure observatory: cartoon, surface and atom views of 37 landmark structures from the PDB and AlphaFold DB, with picking, a sequence strip, measurement and eight colour schemes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Protein Structure</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view" aria-label="3D molecular structure"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint"></div>
+  <div id="tip" aria-hidden="true"></div>
+  <div id="legend"></div>
+  <div id="loading" hidden><span class="spin"></span><span id="loadingText">Loading</span></div>
+  <section id="card" aria-live="polite" hidden></section>
+  <div id="measureBar" hidden></div>
+  <div id="seqWrap"><div id="seq" role="listbox" aria-label="Sequence"></div></div>
+  <div id="drop" hidden>Drop a PDB or mmCIF file</div>
+</main>
+<div id="nogl" hidden>WebGL 2 is not available in this browser, so the structure cannot render.</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <div id="intro">
+    <h1 id="pTitle">Protein Structure</h1>
+    <div class="kind" id="pKind"></div>
+    <p class="lede" id="pWhy"></p>
+  </div>
+
+  <div class="sec-label first">Presets</div>
+  <div id="presets"></div>
+
+  <div class="sec-label">Load a structure</div>
+  <form id="fetchForm" class="fetch" autocomplete="off">
+    <input id="fetchId" type="text" inputmode="text" autocapitalize="characters" spellcheck="false" placeholder="PDB ID or UniProt (1U19, P04637)" aria-label="PDB ID or UniProt accession">
+    <button type="submit" id="fetchBtn">Fetch</button>
+  </form>
+  <p class="note" id="fetchNote">A 4-character ID loads from RCSB (files.rcsb.org); a UniProt accession loads the AlphaFold DB model.</p>
+  <div class="grid2">
+    <button type="button" id="openFile">Open file…</button>
+    <button type="button" id="pasteToggle">Paste text…</button>
+  </div>
+  <input type="file" id="fileIn" accept=".pdb,.ent,.cif,.mmcif,.gz,.txt" hidden>
+  <div id="pasteBox" hidden>
+    <textarea id="pasteText" rows="5" spellcheck="false" placeholder="Paste PDB or mmCIF text"></textarea>
+    <button type="button" id="pasteLoad" class="tog wide">Load pasted text</button>
+  </div>
+
+  <div class="sec-label">Representation</div>
+  <div class="grid3" id="reps"></div>
+  <div class="row" id="opRow"><label for="opacity">Surface</label><input type="range" id="opacity" min="0.2" max="1" step="0.05" value="1"><span class="val" id="opacityV">100%</span></div>
+  <div class="grid3 toggles3" id="shows"></div>
+
+  <div class="sec-label">Colour</div>
+  <div class="grid2" id="colors"></div>
+  <div id="legendPanel"></div>
+
+  <div class="sec-label">Chains</div>
+  <div id="chains" class="chips"></div>
+
+  <div class="sec-label">Measure</div>
+  <div class="grid4" id="measureModes">
+    <button type="button" data-m="0">Off</button>
+    <button type="button" data-m="2">Distance</button>
+    <button type="button" data-m="3">Angle</button>
+    <button type="button" data-m="4">Dihedral</button>
+  </div>
+  <p class="note" id="measureNote">Pick atoms in order. In the cartoon and surface views a tap picks the Cα; the side chains drawn as sticks are pickable too.</p>
+  <div id="measureList"></div>
+
+  <div class="sec-label">Camera</div>
+  <div class="grid2">
+    <button type="button" id="bFocus">Focus selection</button>
+    <button type="button" id="bReset">Reset view</button>
+    <button type="button" class="tog" id="bSpin">Auto-rotate</button>
+    <button type="button" id="bClear">Clear selection</button>
+  </div>
+  <div class="grid3 toggles3" id="looks">
+    <button type="button" class="tog on" data-look="ao">Occlusion</button>
+    <button type="button" class="tog on" data-look="outline">Outlines</button>
+    <button type="button" class="tog on" data-look="fog">Depth fog</button>
+  </div>
+
+  <div class="sec-label">Structure</div>
+  <table class="readout" id="info"></table>
+
+  <div class="sec-label">About this preset</div>
+  <div class="about" id="about"></div>
+  <p class="note fine">Coordinates: RCSB PDB (CC0) and AlphaFold DB (CC BY 4.0). Rendering and geometry are written for this page.</p>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" type="button" aria-label="Presets and controls" aria-expanded="false"><b>☰</b><span>Presets</span></button>
+  <button id="dockRep" type="button" aria-label="Next representation"><small>Style</small><span id="dockRepV">Cartoon</span></button>
+  <button id="dockColor" type="button" aria-label="Next colour scheme"><small>Colour</small><span id="dockColorV">Chain</span></button>
+  <button id="dockMeasure" type="button" aria-label="Measure distance">⌖</button>
+  <button id="dockFit" type="button" aria-label="Reset view">⟲</button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
