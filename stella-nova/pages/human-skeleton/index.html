@@ -26,6 +26,8 @@
      1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
      2. fonts (Inter, STIX Two Text), style.css
      3. importmap for three r160, then main.js as a module
+     4. app/xr.js, a module: the VR and AR view (lib/xr-view.js). Its buttons
+        (#bVR, #bAR) and their section (#xrSec) stay hidden without WebXR
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────────────────────────────────────────────┐
@@ -134,6 +136,14 @@ try{var t=localStorage.getItem('hs-theme');if(t==='light'||t==='dark')document.d
     <button type="button" class="tog" data-show="spin">Turntable</button>
   </div>
 
+  <div id="xrSec" hidden>
+    <div class="sec-label">Headset</div>
+    <div class="grid2" id="xrRow">
+      <button type="button" id="bVR" hidden>View in VR</button>
+      <button type="button" id="bAR" hidden>View in AR</button>
+    </div>
+  </div>
+
   <div class="sec-label" id="bonesLabel">Bones</div>
   <div class="search"><input id="search" type="search" placeholder="Search bones, English or Latin" aria-label="Search bones" autocomplete="off" spellcheck="false"></div>
   <div id="list" role="list"></div>
@@ -157,5 +167,6 @@ try{var t=localStorage.getItem('hs-theme');if(t==='light'||t==='dark')document.d
 } }
 </script>
 <script type="module" src="main.js"></script>
+<script type="module" src="app/xr.js"></script>
 </body>
 </html>
