@@ -22,13 +22,14 @@
 //
 //  SECTIONS  (grep -n the name to jump)
 //      catalog .............. BENCH_BASE / catalog() / LIB_TRAITS / BENCH_NON_TILEABLE
+//                             BENCH_NON_TILEABLE_CELLS
 //      param builders ....... P / sharedParams / paramsFor / portsFor
 //      NodeDef builders ..... cellDef / genericDef / loadBenchNodes
 //      values ............... withDefaults / nodeOf / paletteOf
 //      WGSL: cell module .... hookInputs / cellSource
 //      WGSL: frame pass ..... FRAME_WGSL / frameUniform
 //      WGSL: fallback ....... parseStruct / uniformCtor / fallbackWGSL
-//      GPU runner ........... BenchRunner (pipelines, pools, run, sims)
+//      GPU runner ........... BenchRunner (pipelines, pools, run, sims, trim, flush), trimBench
 //      pass entry points .... runBenchPass / prepareBenchPass / renderBenchNode
 //      graph import ......... importBenchGraph
 //      graph export ......... exportBenchGraph / openInBench
@@ -65,6 +66,10 @@
 //      Tiling: see LIB_TRAITS and the 'tile' param (none, seamless, mirror,
 //      repeat). BENCH_NON_TILEABLE names the libraries whose cells draw one
 //      centered subject, where 'seamless' blends ghosts instead of a texture.
+//      BENCH_NON_TILEABLE_CELLS names single cells of tiling libraries that
+//      still have an edge seam: their default tile mode is 'none'.
+//      Graph tiling: a cell with no linked input repeats job.tiling times
+//      (frameUniform xf.w = tiling / res, fract in fs_frame).
 // ============================================================================
 import {
   loadBenchCatalog, BENCH_STATES, BENCH_PALETTE, BENCH_UBYTES,
@@ -119,6 +124,16 @@ export const LIB_TRAITS = Object.freeze({
 });
 /** Libraries whose cells draw one centered subject: they do not tile. */
 export const BENCH_NON_TILEABLE = Object.freeze(Object.keys(LIB_TRAITS).filter(k => LIB_TRAITS[k].centered));
+/**
+ * Cells in a tiling library that still draw a framed subject or a
+ * non-periodic field, so 'seamless' or 'repeat' leaves a hard seam at the
+ * texture edge. Their default tile mode is 'none'. Found by an edge test:
+ * the wrap-edge texel difference was 5x to 40x the neighbor difference.
+ */
+export const BENCH_NON_TILEABLE_CELLS = Object.freeze(new Set([
+  'heat_metal.rolled', 'frost.chill_drain', 'frost.sweat_wet', 'frost.hoar_dust',
+  'frost.decal_vs_crust', 'frost.inner_surface', 'frost.lod_levels', 'sim.sand',
+]));
 /** Libraries that are periodic by construction (wrapped simulation grids). */
 export const BENCH_PERIODIC = Object.freeze(Object.keys(LIB_TRAITS).filter(k => LIB_TRAITS[k].periodic));
 
@@ -175,7 +190,7 @@ function paramsFor(L, key, cell) {
   ps.push(SHARED.time, SHARED.ink, SHARED.tone, SHARED.cream);
   if (L.inputs.some(i => i[1] === 'coord')) ps.push(SHARED.coordSpace, SHARED.coordScale);
   if (L.out === 'coord') ps.push(SHARED.outSpace);
-  ps.push(tileParam[T.tile], SHARED.edge, SHARED.zoom, SHARED.rotate, SHARED.offset);
+  ps.push(tileParam[BENCH_NON_TILEABLE_CELLS.has(`${key}.${cell.name}`) ? 'none' : T.tile], SHARED.edge, SHARED.zoom, SHARED.rotate, SHARED.offset);
   if (L.out !== 'coord') ps.push(decodeParam[T.decode], SHARED.value, SHARED.matte);
   if (!L.sim) ps.push(SHARED.quality, SHARED.code);
   return ps;
@@ -379,16 +394,17 @@ fn bfr_src(q: vec2f) -> vec4f { return textureSampleLevel(bfr_tex, bfr_smp, q, 0
     return vec4f(p[i], 0.0, 1.0);
 }
 @fragment fn fs_frame(@builtin(position) fp: vec4f) -> @location(0) vec4f {
-    return bfr_finish(bfr_tiled(fp.xy * bfu.xf.w));
+    return bfr_finish(bfr_tiled(fract(fp.xy * bfu.xf.w)));
 }
 `;
-/** FrameU floats for a def and values at output size res. */
-function frameUniform(def, v, res) {
+/** FrameU floats for a def and values at output size res. tiling repeats
+ *  the cell across the output (xf.w = tiling / res, then fract in fs_frame). */
+function frameUniform(def, v, res, tiling = 1) {
   const z = Math.max(+v.zoom || 1, 1e-3), a = (+v.rotate || 0) * Math.PI / 180, off = v.offset || [0, 0];
   const out = def.bench.out === 'coord';
   const ink = hexToRgb(v.ink || BENCH_PALETTE.ink);
   return new Float32Array([
-    1 / z, Math.cos(a), Math.sin(a), 1 / res,
+    1 / z, Math.cos(a), Math.sin(a), tiling / res,
     +off[0] || 0, +off[1] || 0, Math.min(0.5, Math.max(0.0001, +v.edge || 0.18)), Math.max(0, TILE_MODES.indexOf(v.tile)),
     out ? 0 : (v.decode === 'srgb' ? 1 : 0), Math.max(0, VALUE_MODES.indexOf(v.value)), v.matte === 'keep' ? 0 : 1, out ? (v.outSpace === 'bench' ? 2 : 1) : 0,
     ink[0], ink[1], ink[2], 1,
@@ -538,6 +554,8 @@ class BenchRunner {
     this.udata = new Float32Array(BENCH_UBYTES / 4);
     this.pipes = new Map();      // key -> Promise<pipeline | {compute, present}>
     this.pool = new Map();       // key -> GPUTexture
+    this.stale = [];             // pooled textures to destroy when no run is busy
+    this.busy = 0;               // run() calls in flight
     this.framePipe = null;
     this.stats = { runs: 0, compiles: 0, ms: 0 };
   }
@@ -548,8 +566,21 @@ class BenchRunner {
     for (const b of [this.ubuf, this.bbuf, this.fbuf, this.simP, ...this.simU]) try { b.destroy(); } catch (e) {}
     try { this.dummy.destroy(); } catch (e) {}
   }
+  /** Destroy the stale textures, but only when no run can still bind them. */
+  flush() {
+    if (this.busy) return;
+    for (const t of this.stale.splice(0)) try { t.destroy(); } catch (e) {}
+  }
+  /** Release all pooled textures (after an export, or a res change). */
+  trim() {
+    for (const t of this.pool.values()) this.stale.push(t);
+    this.pool.clear();
+    this.flush();
+  }
   tex(key, w, h, format = 'rgba16float', usage = TEX_USE()) {
     const k = `${key}:${w}x${h}:${format}`;
+    // One texture per pool key: a new size makes the old size stale.
+    for (const [pk, pt] of this.pool) if (pk !== k && pk.startsWith(key + ':')) { this.pool.delete(pk); this.stale.push(pt); }
     let t = this.pool.get(k);
     if (!t) { t = this.device.createTexture({ label: 'bench ' + k, size: [w, h], format, usage }); this.pool.set(k, t); }
     return t;
@@ -609,6 +640,10 @@ class BenchRunner {
   }
   /** Render one node into job.target. See PASS PROTOCOL in the header. */
   async run(def, job) {
+    this.busy++;
+    try { return await this.runInner(def, job); } finally { this.busy--; this.flush(); }
+  }
+  async runInner(def, job) {
     const t0 = performance.now();
     const d = this.device, B = def.bench;
     await catalog(); if (B.lib) await CAT.ensureLib(B.lib);
@@ -649,7 +684,11 @@ class BenchRunner {
     }
     // frame pass
     const fp = await this.frame();
-    d.queue.writeBuffer(this.fbuf, 0, frameUniform(def, v, res));
+    // A generator (no linked input) repeats with the graph tiling. A cell that
+    // reads an input keeps the texel uv, because its input is already tiled.
+    const linked = Object.values(job.inputs || {}).some(Boolean);
+    const tiling = linked ? 1 : Math.max(1, Math.round(+job.tiling || 1));
+    d.queue.writeBuffer(this.fbuf, 0, frameUniform(def, v, res, tiling));
     const fbind = d.createBindGroup({ layout: this.fbgl, entries: [
       { binding: 0, resource: { buffer: this.fbuf } }, { binding: 1, resource: cellView }, { binding: 2, resource: this.smp[samplerKey] }] });
     const enc = d.createCommandEncoder({ label: def.type + ' frame' });
@@ -702,6 +741,10 @@ function runnerFor(device) {
   if (!r || r.dead) { r = new BenchRunner(device); runners.set(device, r); }
   return r;
 }
+
+/** Release the pooled cell textures of the runner of a device (bake.js calls
+ *  it after an export bake at another res). */
+export function trimBench(device) { const r = device && runners.get(device); if (r) r.trim(); }
 
 // ------------------------------------------------------------ pass entry points
 /** def.pass.run: render a bench node into job.target. Resolves {ms}. */
@@ -1019,7 +1062,7 @@ export async function init(ctx) {
   };
   const api = {
     catalog: () => CAT, defs: () => [...DEFS.values()], def: benchDef,
-    LIB_TRAITS, BENCH_NON_TILEABLE, BENCH_PERIODIC,
+    LIB_TRAITS, BENCH_NON_TILEABLE, BENCH_NON_TILEABLE_CELLS, BENCH_PERIODIC,
     run: (type, job) => runBenchPass(typeof type === 'string' ? benchDef(type) : type, job),
     render: (type, opts) => renderBenchNode(gpu.device, type, opts),
     prepare: (type, values) => prepareBenchPass(benchDef(type), gpu.device, values),
@@ -1035,6 +1078,8 @@ export async function init(ctx) {
         return g;
       });
     },
+    /** Release the pooled cell textures (bake.js calls it after an export bake). */
+    trim: () => trimBench(gpu.device),
     stats: () => { const r = gpu.device && runners.get(gpu.device); return r ? { ...r.stats, pipelines: r.pipes.size, pooled: r.pool.size } : null; },
     selfTest: o => selfTest({ device: gpu.device, ...(o || {}) }),
     selfTestAll: o => selfTestAll({ device: gpu.device, ...(o || {}) }),

@@ -277,7 +277,7 @@ async function runPasses(compiled, res, ctx, opts = {}) {
         inputs[inId] = t && t.kind === 'pass' ? results.get(t.pass) || null : null;
       }
       try {
-        await def.pass.run({ device, target, res: size, values: { ...spec.values }, inputs, seed: header[1] + spec.seed, time });
+        await def.pass.run({ device, target, res: size, values: { ...spec.values }, inputs, seed: header[1] + spec.seed, time, tiling: header[2] });
         ran++;
       } catch (e) {
         errors.push({ nodeId: spec.nodeId, message: 'run failed: ' + (e && e.message || e) });
@@ -464,7 +464,8 @@ async function bakeLive(preview) {
   } else if (!compiled.output) {
     store.emit('bake:error', { message: 'no Material Output node' });
   }
-  if (!preview && !pending) renderThumbs(compiled, my).catch(e => console.warn('[bake] thumbs', e));
+  // A readback that the page teardown aborts is not an error: stay quiet.
+  if (!preview && !pending) renderThumbs(compiled, my).catch(e => { if (e?.name === 'AbortError' || gpuMod?.lost || gpuMod?.reason === 'torn down') return; console.warn('[bake] thumbs', e); });
 }
 
 // ------------------------------------------------------------ thumbnails
@@ -636,7 +637,13 @@ export async function bakeOnce(res, opts = {}) {
   maps.ms = performance.now() - t0;
   maps.errors = [...compiled.errors, ...out.errors];
   maps.readback = (name, o = {}) => readback(name, { ...o, maps });
-  maps.destroy = () => { for (const e of ctx.cache.values()) for (const t of e.texs) t.destroy(); ctx.cache.clear(); };
+  maps.destroy = () => {
+    for (const e of ctx.cache.values()) for (const t of e.texs) t.destroy();
+    ctx.cache.clear();
+    // An export at another res leaves bench cell textures of that size in
+    // the bench pool: release them (the live bake makes its own again).
+    if (res !== (stats.lastRes || state.settings.res)) { try { modules?.bench?.trimBench?.(device); } catch (e) {} }
+  };
   return maps;
 }
 

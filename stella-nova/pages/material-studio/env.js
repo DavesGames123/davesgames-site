@@ -1150,7 +1150,8 @@ export function mountPanel(el) {
     if (state.env.lights.length !== lastLights) { lastLights = state.env.lights.length; rebuildLights(); }
     if (version !== lastVersion) { lastVersion = version; if (!current.id || current.kind !== 'procedural') renderGrid(); }
   });
-  renderGrid().catch(err => console.error('[env] thumbs', err));
+  // A readback that the page teardown aborts is not an error: stay quiet.
+  renderGrid().catch(err => { if (err?.name === 'AbortError' || gpu.lost || gpu.reason === 'torn down') return; console.error('[env] thumbs', err); });
   drawProbe();
   return panelEl;
 }
