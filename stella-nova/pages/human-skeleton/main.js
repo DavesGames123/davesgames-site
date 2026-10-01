@@ -33,115 +33,20 @@
 //    function placeLabels / buildTrays                    the tray
 //    function frame                                       the loop
 // ============================================================================
-import * as THREE from 'three';
 import * as L from './layout.js';
-import { $, PHONE_Q, COARSE, HOVER, REDUCED, esc, clamp01, easeIO, ease, SIDE_NAME, MODE_NAME, THEMES } from './app/env.js';
+import { $, PHONE_Q, COARSE, REDUCED, esc, clamp01, easeIO, ease, MODE_NAME, THEMES } from './app/env.js';
 import { canvas, renderer, scene, envRT, camera, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
-import { T, S, dirty, toast, hideHint } from './app/state.js';
+import { T, S, dirty, toast } from './app/state.js';
 import { occ, occlusion, resize, fitView, fitShadow } from './app/camera.js';
 import { placeLabels } from './app/tray.js';
 import { pickRT, pickAt } from './app/pick.js';
 import { loadAll, ensureCartilage } from './app/load.js';
 import { refreshVisibility } from './app/visibility.js';
 import { exploded, retarget, setMode, explode, reconstruct, setAmount, toggleRegionExplode } from './app/layouts.js';
-import { boneCentre, setHi, select, clearSelection, step } from './app/select.js';
+import { boneCentre, select, clearSelection, step } from './app/select.js';
 import { isolate, exitIsolate, focusBone, focusRegion } from './app/inspect.js';
 import { list, rowEls, setRegionHidden } from './app/list.js';
-
-// ── canvas pointer: tap, double tap, hover, drag out ────────────────────────
-// Registered before OrbitControls reads the event: a press on the picked
-// bone drags that bone and the orbit does not start.
-const tip = $('tip');
-const downs = new Map();
-let multi = false, lastTap = { t: 0, i: -1 }, mouse = null;
-const ray = new THREE.Raycaster(), plane = new THREE.Plane(), hitV = new THREE.Vector3();
-function ndc(x, y) {
-  const cr = canvas.getBoundingClientRect();
-  return new THREE.Vector2(((x - cr.left) / cr.width) * 2 - 1, -((y - cr.top) / cr.height) * 2 + 1);
-}
-function planeHit(x, y, out) { ray.setFromCamera(ndc(x, y), camera); return ray.ray.intersectPlane(plane, out); }
-canvas.addEventListener('pointerdown', e => {
-  downs.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() });
-  if (downs.size > 1) { multi = true; return; }
-  if (S.sel < 0 || e.button > 0) return;
-  const i = pickAt(e.clientX, e.clientY, COARSE ? 12 : 3);
-  if (i !== S.sel) return;
-  const c = boneCentre(i);
-  plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()).negate(), c);
-  const h = planeHit(e.clientX, e.clientY, new THREE.Vector3());
-  if (!h) return;
-  S.drag = { i, id: e.pointerId, start: h, base: new THREE.Vector3(S.dOff[i * 3], S.dOff[i * 3 + 1], S.dOff[i * 3 + 2]), moved: false };
-  S.springing.delete(i);
-  try { canvas.setPointerCapture(e.pointerId); } catch (x) { /* old browsers */ }
-  e.stopImmediatePropagation();
-}, true);
-canvas.addEventListener('pointermove', e => {
-  if (S.drag && e.pointerId === S.drag.id) {
-    if (downs.size > 1) return;
-    if (!planeHit(e.clientX, e.clientY, hitV)) return;
-    const d = hitV.sub(S.drag.start).add(S.drag.base);
-    S.dOff[S.drag.i * 3] = d.x; S.dOff[S.drag.i * 3 + 1] = d.y; S.dOff[S.drag.i * 3 + 2] = d.z;
-    const dn = downs.get(e.pointerId);
-    if (dn && Math.hypot(e.clientX - dn.x, e.clientY - dn.y) > (COARSE ? 10 : 5)) { S.drag.moved = true; hideHint(); }
-    dirty();
-    e.stopImmediatePropagation();
-    return;
-  }
-  if (HOVER && e.pointerType === 'mouse') mouse = { x: e.clientX, y: e.clientY, b: e.buttons };
-}, true);
-const endPointer = e => {
-  const d = downs.get(e.pointerId);
-  downs.delete(e.pointerId);
-  const drag = S.drag && e.pointerId === S.drag.id ? S.drag : null;
-  if (drag) {
-    S.drag = null;
-    S.springing.add(drag.i);
-    dVelZero(drag.i);
-    e.stopImmediatePropagation();
-    if (drag.moved) return;
-  }
-  if (!d) return;
-  const wasMulti = multi;
-  if (!downs.size) multi = false;
-  if (e.type === 'pointercancel' || wasMulti) return;
-  if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > (COARSE ? 10 : 6) || performance.now() - d.t > 600) return;
-  onTap(e.clientX, e.clientY);
-};
-function dVelZero(i) { S.dVel[i * 3] = S.dVel[i * 3 + 1] = S.dVel[i * 3 + 2] = 0; }
-canvas.addEventListener('pointerup', endPointer, true);
-canvas.addEventListener('pointercancel', endPointer, true);
-canvas.addEventListener('pointerleave', () => { mouse = null; setHover(-1); });
-function onTap(x, y) {
-  const i = pickAt(x, y);
-  const now = performance.now();
-  if (i >= 0) {
-    hideHint();
-    if (now - lastTap.t < 380 && lastTap.i === i) { focusBone(i); lastTap = { t: 0, i: -1 }; return; }
-    lastTap = { t: now, i };
-    if (S.iso >= 0 && i !== S.iso) return;
-    select(i, { scroll: true });
-  } else {
-    lastTap = { t: 0, i: -1 };
-    if (S.iso < 0) clearSelection();
-  }
-}
-export function setHover(i, x, y) {
-  if (i === S.hov) { if (i >= 0) moveTip(x, y); return; }
-  if (S.hov >= 0) setHi(S.hov, 1, 0);
-  S.hov = i;
-  if (i < 0) { tip.classList.remove('show'); canvas.style.cursor = ''; dirty(); return; }
-  setHi(i, 1, 1);
-  const b = S.bones[i];
-  tip.innerHTML = `${esc(b.name)}${b.side ? ' · ' + SIDE_NAME[b.side] : ''} <i>${esc(b.latin)}</i>`;
-  moveTip(x, y);
-  tip.classList.add('show');
-  canvas.style.cursor = i === S.sel ? 'grab' : 'pointer';
-  dirty();
-}
-function moveTip(x, y) {
-  const cr = canvas.getBoundingClientRect();
-  tip.style.transform = `translate(${x - cr.left + 14}px,${y - cr.top + 16}px)`;
-}
+import { dVelZero, hoverPick } from './app/pointer.js';
 
 // ── panel, sheet, dock, theme ───────────────────────────────────────────────
 export const panel = $('panel');
@@ -343,10 +248,7 @@ function frame(now) {
   if (controls.update(dt)) S.dirty = true;
   if (S.show.spin) S.dirty = true;
   // hover pick, once a frame, while the mouse is still
-  if (mouse && !mouse.b && !S.drag && S.groups.size) {
-    const m = mouse; mouse = null;
-    setHover(pickAt(m.x, m.y, 3), m.x, m.y);
-  }
+  hoverPick();
   if (!S.dirty) return;
   S.dirty = false;
   if (!resize()) return;
