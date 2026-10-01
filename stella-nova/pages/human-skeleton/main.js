@@ -38,42 +38,16 @@ import * as L from './layout.js';
 import { $, PHONE_Q, COARSE, HOVER, REDUCED, esc, clamp01, easeIO, ease, TYPE_NAME, SIDE_NAME, MODE_NAME, THEMES } from './app/env.js';
 import { canvas, renderer, scene, envRT, camera, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
 import { T, S, dirty, toast, hideHint, regionOf } from './app/state.js';
-import { occ, occlusion, fitDist, resize, flyTo, fitView, fitShadow, ensureVisible } from './app/camera.js';
+import { occ, occlusion, fitDist, resize, flyTo, fitView, fitShadow } from './app/camera.js';
 import { placeLabels } from './app/tray.js';
 import { pickRT, pickAt } from './app/pick.js';
 import { loadAll, ensureCartilage } from './app/load.js';
 import { refreshVisibility } from './app/visibility.js';
 import { exploded, retarget, setMode, explode, reconstruct, setAmount, toggleRegionExplode } from './app/layouts.js';
+import { boneCentre, setHi, select, clearSelection, step } from './app/select.js';
 
-// ── selection, card ─────────────────────────────────────────────────────────
+// ── the card ────────────────────────────────────────────────────────────────
 export const card = $('card');
-export function boneCentre(i, out = new THREE.Vector3()) {
-  const b = S.bones[i];
-  out.set(b.c[0] + S.cur.off[i * 3] + S.dOff[i * 3], b.c[1] + S.cur.off[i * 3 + 1] + S.dOff[i * 3 + 1], b.c[2] + S.cur.off[i * 3 + 2] + S.dOff[i * 3 + 2]);
-  // on the tray the bone turns about c, and its box centre is c + lay.c
-  if (S.mode === 'catalogue' && S.cat && !S.tr) out.add(new THREE.Vector3(...b.lay.c));
-  return out;
-}
-function setHi(i, k, v) { if (i >= 0) { S.state.setK(3, i, k, v); S.state.dirty(); } }
-function select(i, opts = {}) {
-  if (i < 0 || i >= S.n) return;
-  if (S.sel >= 0 && S.sel !== i) setHi(S.sel, 0, 0);
-  S.sel = i;
-  setHi(i, 0, 1);
-  showCard();
-  syncList(opts.scroll !== false);
-  if (S.iso >= 0 && S.iso !== i) isolate(i);
-  else if (opts.fly) focusBone(i);
-  else requestAnimationFrame(() => ensureVisible(i));
-  dirty();
-}
-export function clearSelection() {
-  if (S.sel >= 0) setHi(S.sel, 0, 0);
-  S.sel = -1;
-  hideCard();
-  syncList(false);
-  dirty();
-}
 function cardNumber(b) {
   const counted = S.bones.filter(x => x.counted);
   const k = counted.indexOf(b);
@@ -85,7 +59,7 @@ function zoomLabel(b) {
   if (b.region === 'skull' || b.region === 'teeth' || b.region === 'hyoid') return 'Zoom to skull';
   return 'Focus';
 }
-function showCard() {
+export function showCard() {
   const b = S.bones[S.sel];
   if (!b) return;
   const reg = regionOf(b);
@@ -117,7 +91,7 @@ function showCard() {
   document.body.classList.add('has-card');
   card.scrollTop = 0;
 }
-function hideCard() { card.hidden = true; document.body.classList.remove('has-card'); dirty(); }
+export function hideCard() { card.hidden = true; document.body.classList.remove('has-card'); dirty(); }
 card.addEventListener('click', e => {
   const x = e.target.closest('button');
   if (!x) return;
@@ -134,20 +108,8 @@ card.addEventListener('click', e => {
     else focusBone(S.sel);
   }
 });
-function step(dir) {
-  const list = S.bones.filter(b => S.vis[b.i]).map(b => b.i);
-  if (!list.length) return;
-  const k = list.indexOf(S.sel);
-  const j = list[(k < 0 ? 0 : k + dir + list.length) % list.length];
-  select(j, { fly: S.iso < 0 && !onScreen(j) });
-}
-function onScreen(i) {
-  const p = boneCentre(i).project(camera);
-  return Math.abs(p.x) < 0.9 && Math.abs(p.y) < 0.9 && p.z < 1;
-}
-
 // ── isolate, focus ──────────────────────────────────────────────────────────
-function isolate(i) {
+export function isolate(i) {
   if (i < 0) return;
   if (S.iso < 0) S.isoBack = { t: controls.target.clone(), p: camera.position.clone() };
   S.iso = i;
@@ -169,7 +131,7 @@ export function exitIsolate(back) {
   if (S.sel >= 0) { setHi(S.sel, 0, 1); showCard(); }
   syncRead();
 }
-function focusBone(i) {
+export function focusBone(i) {
   const b = S.bones[i];
   flyTo(boneCentre(i), fitDist(Math.max(b.r * 2.2, 0.06)), 0.9);
 }
@@ -239,7 +201,7 @@ function setRegionHidden(rid, hide) {
   refreshVisibility(true);
   syncUI();
 }
-function syncList(scroll) {
+export function syncList(scroll) {
   for (const el of list.querySelectorAll('.br.sel')) el.classList.remove('sel');
   if (S.sel < 0) return;
   const el = rowEls.get(S.sel);

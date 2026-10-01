@@ -19,7 +19,8 @@ import * as L from '../layout.js';
 import { REDUCED, DPR } from './env.js';
 import { canvas, renderer, camera, key, pool, controls } from './stage.js';
 import { S, dirty } from './state.js';
-import { card, boneCentre, setHover, panel } from '../main.js';
+import { card, setHover, panel } from '../main.js';
+import { boneCentre } from './select.js';
 
 export const occ = { l: 0, r: 0, t: 0, b: 0 };
 export function occlusion() {
