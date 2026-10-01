@@ -52,25 +52,26 @@
 //      optional event it reads: 'bake:progress' {done, total}
 // ============================================================================
 import {
-  OUTPUT_TYPE, MATERIAL_PARAMS, PORT_COLORS, NODE_CATEGORIES, RES_OPTIONS,
-  EXPORT_TARGETS, MESHES, DEBUG_VIEWS, TONEMAPPERS, emptyGraph,
+  OUTPUT_TYPE, PORT_COLORS, NODE_CATEGORIES, RES_OPTIONS, EXPORT_TARGETS,
+  MESHES, DEBUG_VIEWS, TONEMAPPERS, emptyGraph,
 } from './contract.js';
 import { ctx, store, state, M, $, bind } from './panels/ctx.js';
-import { lsGet, lsSet, clamp, clone, same, slug } from './panels/util.js';
+import { lsGet, lsSet, clamp, clone, slug } from './panels/util.js';
 import { rgbToHex } from './panels/color.js';
 import { capture, h, icon, ibtn, download, pickFiles, typing, isPhone } from './panels/dom.js';
 import {
-  GA, graph, nodesOf, linksOf, getNode, defOf, outputNode, nodeLabel, paramVal,
-  catColor, selfEmit, queueEdit, writeParam, commitParam, editDone, loadGraph,
+  graph, nodesOf, getNode, outputNode, selfEmit, editDone, loadGraph,
   serializeGraph,
 } from './panels/graph-access.js';
-import { numField } from './panels/widgets/number.js';
 import { wSlider } from './panels/widgets/slider.js';
 import { closePicker } from './panels/widgets/picker.js';
 import { wColor } from './panels/widgets/color.js';
 import { wEnum, wBool } from './panels/widgets/basic.js';
 import { wGradient } from './panels/widgets/gradient.js';
-import { WIDGETS, WIDE, makeWidget } from './panels/widgets/index.js';
+import { WIDGETS, makeWidget } from './panels/widgets/index.js';
+import { section, envRow } from './panels/rows.js';
+import { insRows, renderInspector, refreshInspector } from './panels/inspector.js';
+import { statsLine, ballCss, loadPreset, setName } from './panels/material-view.js';
 
 // ------------------------------------------------------------ graph access
 let cascade = 0;
@@ -109,281 +110,6 @@ function addNodeAt(type, clientX, clientY) {
   editDone('Add ' + def.label, [node.id]);
   store.select([node.id]);
   return node;
-}
-
-// ------------------------------------------------------------ param rows
-let sessionSeq = 1;
-/**
- * One labelled param control. nodes: GraphNodes the edit writes to (same type).
- * opts.prefix: label prefix (exposed list); opts.noExpose hides the pin button.
- */
-function paramRow(nodes, p, opts = {}) {
-  const n0 = nodes[0];
-  let session = 0;
-  const val = paramVal(n0, p);
-  const mixed = nodes.some(n => !same(paramVal(n, p), val));
-  const row = h('div', { class: 'pn-prm' + (WIDE.has(p.kind) ? ' wide' : '') + (mixed ? ' mixed' : ''), dataset: { pid: p.id } });
-  const isDef = v => same(v, p.default);
-  const w = makeWidget(p, val, (v, final) => {
-    if (!session) session = sessionSeq++;
-    commitParam(nodes, p, v, final, session);
-    row.classList.toggle('mod', !isDef(v)); row.classList.remove('mixed');
-    if (final) session = 0;
-  });
-  const lbl = h('label', { class: 'pn-lbl', title: (p.doc ? p.doc + '\n' : '') + `${p.id} · ${p.kind}${p.min != null ? ` · ${p.min}..${p.max}` : ''}` }, (opts.prefix ? h('span', { class: 'pn-pre' }, opts.prefix) : null), p.label || p.id);
-  const rst = ibtn('reset', 'Reset to default', () => {
-    const d = clone(p.default);
-    commitParam(nodes, p, d, true, sessionSeq++);
-    w.set(d); row.classList.remove('mod', 'mixed');
-  }, 'pn-rst');
-  const exposed = !opts.noExpose && nodes.length === 1 && (n0.exposed || []).includes(p.id);
-  const exp = opts.noExpose ? null : ibtn('pin', 'Expose on the Material panel', () => toggleExpose(nodes, p.id), 'pn-exp' + (exposed ? ' on' : ''));
-  if (opts.goto) lbl.append(ibtn('link', 'Select the node', () => store.select([n0.id]), 'pn-goto'));
-  row.append(lbl, h('div', { class: 'pn-ctl' }, w.el), h('div', { class: 'pn-acts' }, rst, exp));
-  row.classList.toggle('mod', !mixed && !isDef(val));
-  row._w = w; row._p = p; row._nodes = nodes;
-  return row;
-}
-function toggleExpose(nodes, pid) {
-  const flip = n => {
-    const e = new Set(n.exposed || []);
-    if (e.has(pid)) e.delete(pid); else e.add(pid);
-    if (e.size) n.exposed = [...e]; else delete n.exposed;
-  };
-  if (GA()?.edit) { GA().edit('Expose ' + pid, () => { nodes.forEach(flip); return true; }, { kind: 'layout', nodeIds: nodes.map(n => n.id) }); renderInspector(true); return; }
-  for (const n of nodes) {
-    const e = new Set(n.exposed || []);
-    if (e.has(pid)) e.delete(pid); else e.add(pid);
-    n.exposed = [...e];
-    if (!n.exposed.length) delete n.exposed;
-  }
-  editDone('Expose ' + pid, nodes.map(n => n.id), 'param');
-  renderInspector(true);
-}
-
-/** Collapsible section with a remembered state. */
-function section(key, title, body, { open = true, extra } = {}) {
-  const st = lsGet('sec', {});
-  const isOpen = st[key] ?? open;
-  const head = h('button', { type: 'button', class: 'pn-sec-h', 'aria-expanded': String(isOpen) }, icon('chev', 'pn-chev'), h('span', null, title), extra || null);
-  const el = h('section', { class: 'pn-sec' + (isOpen ? ' open' : ''), dataset: { sec: key } }, head, h('div', { class: 'pn-sec-b' }, body));
-  head.addEventListener('click', e => {
-    if (e.target.closest('.pn-sec-x')) return;
-    const o = !el.classList.contains('open'); el.classList.toggle('open', o); head.setAttribute('aria-expanded', o);
-    const s = lsGet('sec', {}); s[key] = o; lsSet('sec', s);
-  });
-  return el;
-}
-const kv = (k, v, cls) => h('div', { class: 'pn-kv' + (cls ? ' ' + cls : '') }, h('span', null, k), h('b', null, v));
-
-// ------------------------------------------------------------ inspector
-let insKey = '';
-let insRows = [];
-function renderInspector(keepScroll) {
-  const root = $('inspector'); if (!root) return;
-  closePicker();
-  const sel = (state.selection || []).map(getNode).filter(Boolean);
-  const key = sel.map(n => n.id).join(',');
-  const scroll = root.scrollTop;
-  insRows = [];
-  root.replaceChildren(sel.length ? nodeView(sel) : materialView());
-  root.scrollTop = (keepScroll || key === insKey) ? scroll : 0;
-  insKey = key;
-}
-/** Update the shown values in place (an edit from elsewhere, same selection). */
-function refreshInspector() {
-  for (const r of insRows) {
-    if (!r.isConnected || !r._w) continue;
-    if (r.contains(document.activeElement) && document.activeElement !== document.body) continue;
-    r._w.set(paramVal(r._nodes[0], r._p));
-    r.classList.toggle('mod', !same(paramVal(r._nodes[0], r._p), r._p.default));
-  }
-}
-
-function nodeView(nodes) {
-  const n = nodes[0], def = defOf(n);
-  const frag = document.createDocumentFragment();
-  const allSame = nodes.every(m => m.type === n.type);
-  if (nodes.length > 1) {
-    frag.append(h('div', { class: 'pn-head' },
-      h('div', { class: 'pn-head-t' }, h('b', null, `${nodes.length} nodes`), h('span', { class: 'pn-sub' }, allSame ? `all ${def?.label || n.type}: edits apply to each` : 'mixed types: pick one')),
-      h('div', { class: 'pn-chips' }, nodes.map(m => h('button', { type: 'button', class: 'pn-chip', style: { '--c': catColor(defOf(m)?.category) }, onclick: () => store.select([m.id]) }, nodeLabel(m)))),
-      h('div', { class: 'pn-head-a' },
-        h('button', { type: 'button', class: 'pn-btn', onclick: () => deleteNodes(nodes) }, icon('trash'), 'Delete'),
-        h('button', { type: 'button', class: 'pn-btn', onclick: () => duplicateNodes(nodes) }, icon('copy'), 'Duplicate'))));
-    if (!allSame || !def) return frag;
-  }
-  if (!def) {
-    frag.append(h('div', { class: 'pn-empty warn' }, `Unknown node type "${n.type}". The registry has no definition for it, so it cannot bake. Delete it or load the module that defines it.`));
-    frag.append(h('div', { class: 'pn-head-a' }, h('button', { type: 'button', class: 'pn-btn', onclick: () => deleteNodes(nodes) }, icon('trash'), 'Delete')));
-    return frag;
-  }
-  const isOut = n.type === OUTPUT_TYPE;
-  if (nodes.length === 1) {
-    const name = h('input', { class: 'pn-name', type: 'text', value: n.label || def.label, spellcheck: 'false', 'aria-label': 'Node name', placeholder: def.label });
-    name.addEventListener('keydown', e => { if (e.key === 'Enter') name.blur(); if (e.key === 'Escape') { name.value = n.label || def.label; name.blur(); } });
-    name.addEventListener('change', () => {
-      const t = name.value.trim();
-      if (GA()?.rename) { GA().rename(n.id, (!t || t === def.label) ? null : t); return; }
-      if (!t || t === def.label) delete n.label; else n.label = t;
-      editDone('Rename node', [n.id], 'param');
-    });
-    frag.append(h('div', { class: 'pn-head' },
-      h('div', { class: 'pn-head-r' }, h('i', { class: 'pn-dot', style: { background: catColor(def.category) } }), name,
-        h('span', { class: 'pn-badge' + (def.source === 'bench' ? ' bench' : '') }, def.source || 'core')),
-      h('div', { class: 'pn-type mono' }, def.type, h('span', { class: 'pn-sub' }, ` · ${def.category}${def.pass ? ' · pass' : ' · fused'} · ${n.id}`)),
-      def.doc ? h('p', { class: 'pn-doc' }, def.doc) : null,
-      isOut ? null : h('div', { class: 'pn-head-a' },
-        h('button', { type: 'button', class: 'pn-btn', title: 'Duplicate (keeps params)', onclick: () => duplicateNodes(nodes) }, icon('copy'), 'Duplicate'),
-        h('button', { type: 'button', class: 'pn-btn', title: 'Reset every param to its default', onclick: () => resetAll(nodes, def) }, icon('reset'), 'Reset all'),
-        h('button', { type: 'button', class: 'pn-btn danger', title: 'Delete the node', onclick: () => deleteNodes(nodes) }, icon('trash'), 'Delete'))));
-  }
-  const params = (def.params || []);
-  if (params.length) {
-    const rows = params.map(p => { const r = paramRow(nodes, p, { noExpose: nodes.length > 1 }); insRows.push(r); return r; });
-    const modded = params.filter(p => !same(paramVal(n, p), p.default)).length;
-    frag.append(section('params', isOut ? 'Material scalars' : 'Parameters', rows, { extra: h('span', { class: 'pn-count' }, `${modded}/${params.length} set`) }));
-  } else frag.append(h('div', { class: 'pn-empty' }, 'This node has no parameters.'));
-  if (nodes.length === 1) {
-    const ins = (def.inputs || []).map(inp => {
-      const l = linksOf().find(k => k.to[0] === n.id && k.to[1] === inp.id);
-      const src = l && getNode(l.from[0]);
-      const dflt = inp.default ?? (inp.type === 'float' ? 0 : null);
-      return h('div', { class: 'pn-port' },
-        h('i', { class: 'pn-sock', style: { background: PORT_COLORS[inp.type] || '#888' }, title: inp.type }),
-        h('span', { class: 'pn-port-l' }, inp.label || inp.id),
-        src ? h('button', { type: 'button', class: 'pn-port-src', title: 'Select the source node', onclick: () => store.select([src.id]) }, `${nodeLabel(src)}.${l.from[1]}`)
-          : h('span', { class: 'pn-port-d mono' }, dflt == null ? '—' : Array.isArray(dflt) ? dflt.map(x => +(+x).toFixed(3)).join(', ') : String(dflt)));
-    });
-    if (ins.length) frag.append(section('inputs', 'Inputs', ins, { open: true, extra: h('span', { class: 'pn-count' }, `${linksOf().filter(k => k.to[0] === n.id).length}/${ins.length} linked`) }));
-    const outs = (def.outputs || []).map(o => {
-      const cnt = linksOf().filter(k => k.from[0] === n.id && k.from[1] === o.id);
-      return h('div', { class: 'pn-port' },
-        h('i', { class: 'pn-sock', style: { background: PORT_COLORS[o.type] || '#888' }, title: o.type }),
-        h('span', { class: 'pn-port-l' }, o.label || o.id), h('span', { class: 'pn-port-d mono' }, o.type),
-        h('span', { class: 'pn-port-n' }, cnt.length ? cnt.map(k => nodeLabel(getNode(k.to[0])) + '.' + k.to[1]).join(', ') : 'unused'));
-    });
-    if (outs.length) frag.append(section('outputs', 'Outputs', outs, { open: false }));
-    const err = (state.compiled?.errors || []).filter(e => e.nodeId === n.id);
-    if (err.length) frag.append(h('div', { class: 'pn-empty warn' }, err.map(e => h('div', null, e.message))));
-  }
-  return frag;
-}
-
-function deleteNodes(nodes) {
-  if (GA()?.remove) { GA().remove(nodes.map(n => n.id).filter(id => id !== graph().output)); store.select([]); return; }
-  if (typeof M.graph?.removeNode !== 'function') return;
-  const ids = nodes.map(n => n.id).filter(id => id !== graph().output);
-  ids.forEach(id => M.graph.removeNode(graph(), id));
-  store.select([]);
-  editDone(`Delete ${ids.length} node${ids.length === 1 ? '' : 's'}`, ids);
-}
-function duplicateNodes(nodes) {
-  if (GA()?.duplicate) {
-    const r = GA().duplicate(nodes.filter(n => n.type !== OUTPUT_TYPE).map(n => n.id), 40, 40);
-    const ids = Array.isArray(r) ? r : (r && r.nodeIds) || [];
-    if (ids.length) store.select(ids.map(x => typeof x === 'string' ? x : x.id));
-    return;
-  }
-  if (typeof M.graph?.addNode !== 'function') return;
-  const made = nodes.filter(n => n.type !== OUTPUT_TYPE).map(n => {
-    const m = M.graph.addNode(graph(), n.type, n.x + 40, n.y + 40, clone(n.params || {}));
-    if (n.label) m.label = n.label + ' copy';
-    if (n.exposed) m.exposed = [...n.exposed];
-    return m;
-  });
-  editDone('Duplicate', made.map(m => m.id));
-  store.select(made.map(m => m.id));
-}
-function resetAll(nodes, def) {
-  for (const n of nodes) for (const p of def.params || []) writeParam(n, p.id, clone(p.default));
-  editDone('Reset params', nodes.map(n => n.id), 'param');
-  renderInspector(true);
-}
-
-function setGraphSetting(key, v, final, session) {
-  const g = graph(); if (!g) return;
-  g.settings = g.settings || { ...state.settings };
-  g.settings[key] = v; state.settings[key] = v;
-  queueEdit([], false, key, `s:${key}:${session}`, final);
-}
-
-function materialView() {
-  const frag = document.createDocumentFragment();
-  const g = graph(); const out = outputNode();
-  // name + stats
-  const name = h('input', { class: 'pn-name', type: 'text', value: g?.name || '', placeholder: 'Untitled material', spellcheck: 'false', 'aria-label': 'Material name' });
-  name.addEventListener('keydown', e => { if (e.key === 'Enter') name.blur(); });
-  name.addEventListener('change', () => setName(name.value));
-  frag.append(h('div', { class: 'pn-head' },
-    h('div', { class: 'pn-head-r' }, h('i', { class: 'pn-dot', style: { background: 'var(--yellow)' } }), name),
-    h('div', { class: 'pn-type' }, 'Material settings', h('span', { class: 'pn-sub' }, ' · select a node to edit its params')),
-    h('div', { class: 'pn-stats', id: 'pn-stats' }, statsLine())));
-  // bake settings
-  let ses = 0;
-  const resSel = h('select', { class: 'pn-sel', 'aria-label': 'Bake resolution' }, RES_OPTIONS.map(r => h('option', { value: String(r) }, `${r} × ${r}`)));
-  resSel.value = String(state.settings.res);
-  resSel.addEventListener('change', () => { store.setRes(+resSel.value); if (g?.settings) g.settings.res = +resSel.value; });
-  const til = wSlider({ id: 'tiling', label: 'Tiling', kind: 'int', min: 1, max: 16, step: 1, default: 1 }, g?.settings?.tiling ?? state.settings.tiling ?? 1, (v, f) => { if (!ses) ses = sessionSeq++; setGraphSetting('tiling', v, f, ses); if (f) ses = 0; });
-  const seed = numField(g?.settings?.seed ?? state.settings.seed ?? 0, { step: 1, int: true, min: 0, max: 99999, sens: 0.3 }, (v, f) => { if (!ses) ses = sessionSeq++; setGraphSetting('seed', v, f, ses); if (f) ses = 0; });
-  const dice = ibtn('dice', 'Random seed', () => { const v = Math.floor(Math.random() * 10000); seed.set(v); setGraphSetting('seed', v, true, sessionSeq++); });
-  const row = (label, el, title) => h('div', { class: 'pn-prm' }, h('label', { class: 'pn-lbl', title: title || '' }, label), h('div', { class: 'pn-ctl' }, el), h('div', { class: 'pn-acts' }));
-  frag.append(section('bake', 'Bake', [
-    row('Resolution', resSel, 'Texels per side of every baked map'),
-    row('Tiling', til.el, 'How many times the pattern repeats across the UV square'),
-    row('Seed', h('div', { class: 'pn-inline' }, seed.el, dice), 'Global random seed; each node adds its own offset'),
-  ]));
-  // scalars from the Material Output node
-  if (out) {
-    const odef = defOf(out);
-    const ps = (odef && odef.params && odef.params.length) ? odef.params : MATERIAL_PARAMS;
-    frag.append(section('scalars', 'Surface', ps.map(p => { const r = paramRow([out], p); insRows.push(r); return r; })));
-  }
-  // exposed params
-  const exp = [];
-  for (const n of nodesOf()) for (const pid of n.exposed || []) {
-    const p = (defOf(n)?.params || []).find(q => q.id === pid);
-    if (p) { const r = paramRow([n], p, { prefix: nodeLabel(n) + ' · ', goto: true }); insRows.push(r); exp.push(r); }
-  }
-  frag.append(section('exposed', 'Exposed parameters', exp.length ? exp : h('div', { class: 'pn-empty' }, 'Pin a node param with ', icon('pin'), ' to put it here. Exposed params save with the graph, so a material can have one compact set of controls.'), { extra: h('span', { class: 'pn-count' }, String(exp.length)) }));
-  // starter materials
-  const presets = M.presets?.MATERIAL_PRESETS || [];
-  if (presets.length) {
-    frag.append(section('presets', 'Starter materials', h('div', { class: 'pn-presets' }, presets.map(pr => h('button', {
-      type: 'button', class: 'pn-preset', title: pr.description || pr.label,
-      onclick: () => loadPreset(pr),
-    }, h('i', { class: 'pn-ball', style: { background: ballCss(pr.swatch) } }), h('span', null, pr.label))))));
-  }
-  // compile errors
-  const errs = state.compiled?.errors || [];
-  if (errs.length) frag.append(section('errors', 'Compile errors', errs.map(e => h('button', { type: 'button', class: 'pn-err', onclick: () => e.nodeId && store.select([e.nodeId]) }, e.nodeId ? h('b', null, e.nodeId + ': ') : null, e.message)), { extra: h('span', { class: 'pn-count bad' }, String(errs.length)) }));
-  return frag;
-}
-function statsLine() {
-  const ns = nodesOf(), bench = ns.filter(n => defOf(n)?.source === 'bench').length;
-  const c = state.compiled, m = state.maps;
-  return [
-    kv('nodes', String(ns.length)), kv('links', String(linksOf().length)), bench ? kv('bench', String(bench)) : null,
-    c && c.passes ? kv('passes', String(c.passes.length)) : null,
-    m ? kv('bake', `${m.res}² ${m.ms != null ? '· ' + m.ms.toFixed(0) + ' ms' : ''}`) : kv('bake', '—'),
-  ];
-}
-function ballCss(sw) {
-  const c = Array.isArray(sw) ? sw : [sw || '#888888'];
-  const a = c[0], b = c[1] || c[0];
-  return `radial-gradient(circle at 34% 30%, rgba(255,255,255,0.75) 0, rgba(255,255,255,0) 22%), radial-gradient(circle at 40% 38%, ${a} 0, ${b} 62%, #05070b 100%)`;
-}
-function loadPreset(pr) {
-  const gj = typeof pr.build === 'function' ? pr.build() : pr.graph;
-  if (loadGraph(gj, 'Starter: ' + pr.label, { keepRes: true })) store.toast(`Loaded "${pr.label}"`, 'ok');
-}
-function setName(v) {
-  const g = graph(); if (!g) return;
-  v = String(v || '').trim();
-  const tb = $('pn-projname'); if (tb && document.activeElement !== tb) tb.value = v;
-  if (GA()?.edit) { GA().edit('Rename material', gg => { if (v) gg.name = v; else delete gg.name; return true; }, { kind: 'layout' }); return; }
-  if (v) g.name = v; else delete g.name;
-  editDone('Rename material', [], 'param');
 }
 
 // ------------------------------------------------------------ library
@@ -794,7 +520,6 @@ let envSelf = 0;
 /** Env and view edits from this panel do not re-render it (the widget already shows the value). */
 const setEnvSelf = patch => { envSelf++; try { store.setEnv(patch); } finally { envSelf--; } };
 const setViewSelf = patch => { envSelf++; try { store.setView(patch); } finally { envSelf--; } };
-function envRow(label, w, title) { return h('div', { class: 'pn-prm' }, h('label', { class: 'pn-lbl', title: title || '' }, label), h('div', { class: 'pn-ctl' }, w.el || w), h('div', { class: 'pn-acts' })); }
 function envSlider(key, label, min, max, step, scale = 1, title) {
   return envRow(label, wSlider({ id: key, label, kind: 'slider', min, max, step, default: min }, state.env[key] * scale, v => setEnvSelf({ [key]: v / scale })), title);
 }
