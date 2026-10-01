@@ -19,6 +19,8 @@
      export dock .......... ".dock"
      toast ................ ".toast"
      breakpoints .......... "@media"
+     landscape phone ...... "short landscape"
+     touch sizes .......... "pointer: coarse"
    ============================================================================ */
 
 :root {
@@ -37,9 +39,9 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { background: var(--bg); color-scheme: dark; -webkit-text-size-adjust: 100%; }
-body { font: 400 15px/1.55 var(--f-sans); color: var(--text); background: var(--bg); overflow-x: hidden; -webkit-font-smoothing: antialiased; min-height: 100vh;
+body { font: 400 15px/1.55 var(--f-sans); color: var(--text); background: var(--bg); overflow-x: hidden; -webkit-font-smoothing: antialiased; min-height: 100vh; min-height: 100dvh;
   background-image: radial-gradient(70% 45% at 85% -10%, rgba(150, 200, 255, .08), transparent 60%), radial-gradient(50% 35% at 0% 5%, rgba(255, 200, 50, .05), transparent 60%); }
-body.has-dock { padding-bottom: 88px; }
+body.has-dock { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: 0; -webkit-tap-highlight-color: transparent; }
 button:disabled { cursor: default; opacity: .4; }
@@ -66,7 +68,7 @@ kbd { font: 500 0.66rem/1 var(--f-mono); padding: 3px 6px; border: 1px solid var
 .l-txt { grid-area: txt; min-width: 0; display: flex; flex-direction: column; }
 .l-name { font-weight: 600; color: var(--ink); font-size: 0.98rem; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .l-sub { font-size: 0.74rem; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.l-code { grid-area: code; font: 500 0.62rem/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.l-code { grid-area: code; font: 500 0.68rem/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; }
 .l-bar { grid-area: bar; height: 4px; border-radius: 4px; background: rgba(150, 200, 255, .08); overflow: hidden; }
 .l-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #5d8fd0, var(--blue)); }
 .l-stat { grid-area: stat; font: 500 0.66rem/1 var(--f-mono); color: var(--dim); letter-spacing: .04em; }
@@ -96,13 +98,13 @@ kbd { font: 500 0.66rem/1 var(--f-mono); padding: 3px 6px; border: 1px solid var
 .cats { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .cats::-webkit-scrollbar { display: none; }
 .cat { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line2); background: var(--glass); color: var(--text); font-weight: 500; font-size: 0.88rem; transition: border-color .2s, background .2s; }
-.cat .ct { font: 500 0.64rem/1 var(--f-mono); color: var(--dim); }
+.cat .ct { font: 500 0.68rem/1 var(--f-mono); color: var(--dim); }
 .cat:hover { border-color: rgba(150, 200, 255, .45); }
 .cat.on { color: #1a1204; background: linear-gradient(135deg, #ffd65c, #ffb31a 55%, #ff8a3d); border-color: transparent; }
 .cat.on .ct { color: rgba(26, 18, 4, .7); }
 .filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .sel { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 4px 0 12px; border-radius: 10px; border: 1px solid var(--line2); background: var(--bg2); }
-.sel span { font: 500 0.6rem/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.sel span { font: 500 0.68rem/1 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
 .sel select { background: transparent; border: 0; outline: 0; color: var(--ink); font-size: 0.84rem; max-width: 220px; padding: 6px 4px; }
 .sel select option { background: var(--bg2); }
 .seg { display: inline-flex; padding: 3px; border-radius: 10px; border: 1px solid var(--line2); background: var(--bg2); }
@@ -111,7 +113,7 @@ kbd { font: 500 0.66rem/1 var(--f-mono); padding: 3px 6px; border: 1px solid var
 .find { flex: 1; min-width: 200px; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line2); background: var(--bg2); }
 .find:focus-within { border-color: rgba(150, 200, 255, .5); }
 .find svg { width: 16px; height: 16px; fill: none; stroke: var(--dim); stroke-width: 2; stroke-linecap: round; flex: none; }
-.find input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; font-size: 16px; color: var(--ink); }
+.find input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; height: 100%; font-size: 16px; color: var(--ink); }
 .find input::placeholder { color: var(--dim); }
 
 /* ── progress ─────────────────────────────────────────────────────────── */
@@ -142,14 +144,14 @@ kbd { font: 500 0.66rem/1 var(--f-mono); padding: 3px 6px; border: 1px solid var
 .st-mine .dot { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
 .st-changed .dot { background: var(--orange); box-shadow: 0 0 8px var(--orange); }
 .key { min-width: 0; font: 400 0.68rem/1.3 var(--f-mono); color: var(--dim); overflow-wrap: anywhere; }
-.badge { flex: none; font: 500 0.56rem/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--line2); color: var(--blue); }
+.badge { flex: none; font: 500 0.66rem/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--line2); color: var(--blue); }
 .badge.chg { color: var(--orange); border-color: rgba(255, 123, 0, .45); }
 .src { margin: 7px 0 0; color: var(--ink); font-size: 0.96rem; line-height: 1.5; overflow-wrap: anywhere; }
 .ph { font-family: var(--f-mono); font-size: 0.86em; color: var(--blue); background: rgba(150, 200, 255, .1); border-radius: 4px; padding: 0 3px; }
 .mk { font-family: var(--f-mono); font-size: 0.86em; color: var(--gold); background: rgba(255, 200, 50, .08); border-radius: 4px; padding: 0 3px; }
 .nl { color: var(--faint); font-size: 0.8em; margin-left: 2px; }
 .game { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: rgba(150, 200, 255, .05); border: 1px solid var(--line); }
-.g-lab { flex: none; font: 500 0.56rem/1.9 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--blue); }
+.g-lab { flex: none; font: 500 0.66rem/1.65 var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--blue); }
 .g-txt { flex: 1; min-width: 0; color: var(--text); font-size: 0.9rem; overflow-wrap: anywhere; }
 .ti { display: block; width: 100%; margin-top: 8px; min-height: 42px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line2); background: rgba(8, 10, 16, .7); color: var(--ink); font-size: 16px; line-height: 1.45; resize: none; outline: 0; overflow: hidden; transition: border-color .2s, box-shadow .2s; }
 .ti::placeholder { color: var(--faint); }
@@ -172,7 +174,7 @@ kbd { font: 500 0.66rem/1 var(--f-mono); padding: 3px 6px; border: 1px solid var
 .dock-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; font-size: 0.86rem; color: var(--ink); line-height: 1.25; }
 .dock-info .flag { font-size: 1.4rem; }
 .dock-info small { color: var(--dim); font: 500 0.66rem/1.3 var(--f-mono); }
-.dock-info .mode { font: 500 0.6rem/1 var(--f-mono); color: var(--gold); letter-spacing: .06em; text-transform: uppercase; }
+.dock-info .mode { font: 500 0.68rem/1 var(--f-mono); color: var(--gold); letter-spacing: .06em; text-transform: uppercase; }
 .dock-acts { display: flex; gap: 6px; flex: none; }
 .btn { height: 42px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line2); font-weight: 500; font-size: 0.86rem; transition: transform .25s var(--ease), box-shadow .3s, border-color .2s; }
 .btn:hover { transform: translateY(-1px); }
@@ -199,16 +201,47 @@ kbd { font: 500 0.66rem/1 var(--f-mono); padding: 3px 6px; border: 1px solid var
   .find { flex: 1 1 100%; }
   .find kbd { display: none; }
   .row { padding: 11px 11px 9px; }
+  .ti { min-height: 68px; } /* two lines, so the placeholder is not cut */
   .game { flex-direction: column; gap: 4px; }
   .game .mini { align-self: flex-end; }
   .dock { left: 0; right: 0; transform: none; width: auto; bottom: 0; border-radius: 16px 16px 0 0; border-bottom: 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); gap: 8px; }
   .dock-info small { display: none; }
   .dock-info .mode { display: none; }
   .btn { height: 40px; padding: 0 12px; font-size: 0.8rem; }
-  .toast { bottom: 84px; }
+  .toast { bottom: calc(84px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 380px) {
   .dock-info b { display: none; }
+}
+
+/* ── short landscape screens ──────────────────────────────────────────── */
+/* A phone on its side has little height. The toolbar stops sticking and
+   the dock becomes a flat bottom bar, so the rows keep most of the screen. */
+@media (max-height: 500px) and (max-width: 1279px) {
+  .hero { padding: 16px 0 12px; }
+  .hero h1 { font-size: 2rem; margin: 6px 0 6px; }
+  .lead { font-size: 0.9rem; max-width: none; }
+  .tools { position: static; }
+  .dock { left: 0; right: 0; transform: none; width: auto; bottom: 0; border-radius: 16px 16px 0 0; border-bottom: 0; padding: 8px max(12px, env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .dock-info small { display: none; }
+  body.has-dock { padding-bottom: calc(70px + env(safe-area-inset-bottom)); }
+  .toast { bottom: calc(76px + env(safe-area-inset-bottom)); }
+}
+
+/* ── touch ────────────────────────────────────────────────────────────── */
+/* Primary controls get a 44px hit area. Row buttons stay dense at 40px.
+   Form fields use 16px text, so iOS Safari does not zoom on focus. */
+@media (pointer: coarse) {
+  .cat, .sel, .find, .btn { height: 44px; }
+  .seg button { height: 38px; min-width: 44px; }
+  .sel select { font-size: 16px; height: 100%; }
+  .mini, .game .mini { height: 40px; padding: 0 14px; }
+  .r-foot { min-height: 40px; }
+  .langs.compact .lang { min-height: 44px; }
+  .more { height: 48px; }
+  /* The card title attribute is a hover tooltip. On touch the full
+     English name and mode wrap in the card instead. */
+  .l-sub { white-space: normal; overflow: visible; }
 }
 
 @media (prefers-reduced-motion: reduce) {
