@@ -222,7 +222,7 @@ a.sky-obj { cursor: pointer; }
 .socials-hero .soc:hover::after, .socials-hero .soc:focus-visible::after { background: linear-gradient(160deg, var(--brand, var(--blue)), color-mix(in srgb, var(--brand, var(--blue)) 35%, transparent)); }
 .socials-hero .soc:hover svg, .socials-hero .soc:focus-visible svg { transform: scale(1.08); filter: brightness(1.15); }
 .socials-hero .soc:focus-visible { outline: none; }
-.socials-hero .soc[title="Steam"] svg { width: 60%; height: 60%; }
+.socials-hero .soc[title="Steam"] svg { width: 66%; height: 66%; }
 .socials-hero .soc span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .soc { position: relative; display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 16px 0 13px; border-radius: 999px; border: 1px solid var(--line2); background: rgba(14, 18, 28, .82); font-size: 0.86rem; font-weight: 500; color: var(--text); overflow: hidden; isolation: isolate; transition: border-color .3s, color .3s, transform .35s var(--ease), box-shadow .35s; }
 .soc svg { width: 18px; height: 18px; flex: none; color: var(--brand, var(--blue)); transition: transform .45s var(--ease); }
