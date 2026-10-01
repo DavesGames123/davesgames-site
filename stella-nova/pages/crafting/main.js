@@ -77,7 +77,7 @@
     COLS.forEach(function (col, ci) {
       var rows = D.entries.filter(function (e) {
         if (col.modules) {
-          return e.category === 'modules' && e.fields && e.fields.Status === 'Buildable' && e.links.madeFrom.length;
+          return e.category === 'modules' && e.links.madeFrom.length;  // the catalog lists only buildable modules
         }
         return e.category === 'resources' && col.tiers.indexOf(e.tier) >= 0;
       });
