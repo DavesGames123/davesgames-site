@@ -11,7 +11,7 @@ import { SLOTS, fillDefaults, parseFract, parseValue } from '../fract.js';
 import { P, EXAMPLES, COLLECTIONS, byEnum, groupName, mainSpec } from './data.js';
 import { setCurrentExample } from './state.js';
 import { loadScene } from './scene.js';
-import { markExample } from '../main.js';
+import { markExample } from './panel.js';
 
 // Three sources, in this order: the upstream examples (gen/examples.json), the upstream
 // collections whose licence allows commercial use (gen/collections.json, one group per author,

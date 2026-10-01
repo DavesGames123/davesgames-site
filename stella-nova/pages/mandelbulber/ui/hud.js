@@ -10,7 +10,8 @@
 
 import { $, stage, hud } from './dom.js';
 import { engine, info, targetSamples } from './state.js';
-import { progressEl, sampleLine, renderPaused } from '../main.js';
+import { progressEl, sampleLine } from './panel.js';
+import { renderPaused } from '../main.js';
 
 export let compileStatus = '';
 let flashText = '', flashUntil = 0;

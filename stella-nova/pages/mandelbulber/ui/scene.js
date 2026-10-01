@@ -13,7 +13,8 @@ import { scene, engine, setScene, setActiveSlot, setInfo } from './state.js';
 import { setStatus, flash } from './hud.js';
 import { refreshAll } from './controls.js';
 import { writeHash } from './io.js';
-import { buildSlotEditor, stopInertia } from '../main.js';
+import { buildSlotEditor } from './panel.js';
+import { stopInertia } from '../main.js';
 
 export let sceneDirty = true;
 let previewTimer = 0, previewOn = false;

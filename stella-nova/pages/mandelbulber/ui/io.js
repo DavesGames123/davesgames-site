@@ -14,7 +14,7 @@ import { P, EXAMPLES, isNone } from './data.js';
 import { scene, currentExample, setCurrentExample, formulaAt } from './state.js';
 import { flash } from './hud.js';
 import { loadScene } from './scene.js';
-import { markExample } from '../main.js';
+import { markExample } from './panel.js';
 
 export function loadText(text, name = 'file') {
   const { scene: sc, meta } = parseFract(text, P);
