@@ -36,7 +36,7 @@
 
 import { SLOTS, defaultScene, fillDefaults, parseFract, serialiseFract, parseValue } from './fract.js';
 import { $, stage, canvas, panel, pbody, picker, exSheet, root, el, section, clamp, px, download } from './ui/dom.js';
-import { P, CAT, EXAMPLES, THUMBS, PTHUMBS, COLLECTIONS, byEnum, fnum, groupName, mainSpec, isNone, loadData } from './ui/data.js';
+import { P, CAT, EXAMPLES, COLLECTIONS, byEnum, fnum, groupName, mainSpec, isNone, loadData } from './ui/data.js';
 import { scene, activeSlot, engine, currentExample, info, setScene, setActiveSlot, setEngine, setCurrentExample, setInfo, formulaAt,
   touchSeen, noteTouch, touchUI, coarseMQ, targetSamples, SAMPLES_DEFAULT, renderScale, RENDER_SCALE_DEFAULT, pixelRatio } from './ui/state.js';
 import { compileStatus, setStatus, flash, msPerSample, setMsPerSample, showHud, fail } from './ui/hud.js';
@@ -44,6 +44,7 @@ import { V, camFromScene, camBasis, camToScene, resetCamera, frameView, panBy, o
 import { sceneDirty, setMain, setSlot, loadScene, pushScene } from './ui/scene.js';
 import { ctl, refreshAll, mainBind, slotBind, kindOf, hideTip, initTip } from './ui/controls.js';
 import { gradientEditor } from './ui/gradient.js';
+import { thumb, presetThumb } from './ui/thumbs.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -127,17 +128,6 @@ const CREDIT = {
 
 // ─── small DOM helpers ──────────────────────────────────────────────────────
 // ─── thumbnails ─────────────────────────────────────────────────────────────
-// Percent sprite offsets, so one sprite serves every thumbnail size. px = null
-// leaves the size to CSS.
-function thumb(f, px = 64) {
-  const size = px ? `width:${px}px;height:${px}px;` : '';
-  if (isNone(f) || !THUMBS || f.thumb === undefined || f.thumb === null || f.thumb < 0) return el('div', { class: 'thumb none', style: size }, '∅');
-  const { cols, rows } = THUMBS;
-  const c = f.thumb % cols, r = Math.floor(f.thumb / cols);
-  return el('div', { class: 'thumb', style: `${size}background-image:url(${THUMBS.url});background-size:${cols * 100}% ${rows * 100}%;` +
-    `background-position:${cols > 1 ? (c / (cols - 1)) * 100 : 0}% ${rows > 1 ? (r / (rows - 1)) * 100 : 0}%` });
-}
-
 // ─── control rows ───────────────────────────────────────────────────────────
 // ─── scene changes ──────────────────────────────────────────────────────────
 // ─── panel ──────────────────────────────────────────────────────────────────
@@ -428,17 +418,6 @@ export function prepareExamples(raw, col, orig) {
 function presetTitle(e) {
   const f = byEnum.get(e._formula);
   return `${e.name}${f ? ` · ${f.name}` : ''} · ${e.family}${e.author ? ` · by ${e.author}, ${e.licence}` : e.src === 'o' ? ' · site original' : ''}`;
-}
-
-// The rendered thumbnail of the preset, or the formula icon when the sprite has none.
-function presetThumb(e, px = 64) {
-  const i = PTHUMBS?.index?.[e.key];
-  if (i === undefined) return thumb(byEnum.get(e._formula) || null, px);
-  const { cols, rows, url } = PTHUMBS;
-  const c = i % cols, r = Math.floor(i / cols);
-  const size = px ? `width:${px}px;height:${px}px;` : '';
-  return el('div', { class: 'thumb shot', style: `${size}background-image:url(${url});background-size:${cols * 100}% ${rows * 100}%;` +
-    `background-position:${cols > 1 ? (c / (cols - 1)) * 100 : 0}% ${rows > 1 ? (r / (rows - 1)) * 100 : 0}%` });
 }
 
 // A random preset from the ones the sheet filters show (all presets when the sheet is closed).
