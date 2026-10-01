@@ -1,0 +1,89 @@
+/* ============================================================================
+   MATERIAL STUDIO  ·  env/panel.css — the environment panel (#env-panel)
+   ────────────────────────────────────────────────────────────────────────────
+   Owner: ENVIRONMENT agent. env.js mountPanel() adds this sheet with a
+   <link id="env-css">. It uses the :root tokens of ../style.css only.
+   Every selector starts with .env- so it does not touch other panels.
+
+   CONTENTS  (grep -n the selector to jump)
+     .env-ui ........... the panel root
+     .env-probe ........ 3-sphere preview canvas and the source line
+     .env-grid ......... preset tiles with thumbnails (busy bar on load)
+     .env-row .......... label / range / number rows, color rows
+     .env-seg .......... segmented buttons (background mode)
+     .env-light ........ analytic light cards and the sphere picker
+     phone ............. @media (max-width:768px): larger touch targets
+   ============================================================================ */
+.env-ui{display:flex;flex-direction:column;gap:2px;padding:0 0 12px;font-size:var(--fs-s)}
+.env-ui section{padding:6px 8px 8px;border-bottom:1px solid var(--border)}
+.env-ui h4{display:flex;align-items:center;gap:6px;margin:0 0 5px;font-size:var(--fs-xs);font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-dim)}
+#env-panel.env-drop{outline:1px dashed var(--yellow);outline-offset:-3px;background:var(--yellow-faint)}
+
+.env-probe-wrap{position:relative;padding:8px 8px 4px}
+.env-probe{display:block;width:100%;aspect-ratio:2.6/1;border:1px solid var(--border-b);border-radius:var(--r);background:#07090d;cursor:grab;touch-action:none}
+.env-probe:active{cursor:grabbing}
+.env-src{margin-top:3px;font-size:var(--fs-xs);color:var(--text-faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.env-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:4px}
+.env-group{grid-column:1/-1;margin-top:4px;font-size:var(--fs-xs);color:var(--text-faint);letter-spacing:0.08em;text-transform:uppercase}
+.env-group:first-child{margin-top:0}
+.env-tile{position:relative;display:flex;flex-direction:column;gap:2px;padding:2px;background:var(--bg2);border:1px solid var(--border-b);border-radius:var(--r);text-align:left;overflow:hidden}
+.env-tile img,.env-tile .env-noimg{display:block;width:100%;aspect-ratio:2/1;object-fit:cover;border-radius:2px;background:var(--bg3)}
+.env-tile span{padding:0 2px;font-size:var(--fs-xs);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.env-tile:hover{border-color:var(--border-s);background:var(--blue-faint)}
+.env-tile.on{border-color:var(--yellow-dim);box-shadow:inset 0 0 0 1px var(--yellow-dim)}
+.env-tile.on span{color:var(--yellow)}
+.env-tile.remote img{opacity:0.72}
+.env-tile.remote::after{content:"CC0";position:absolute;top:4px;right:4px;padding:0 3px;font:500 9px/13px var(--mono);color:var(--text-dim);background:rgba(7,9,13,0.75);border-radius:2px}
+.env-tile.busy::before{content:"";position:absolute;left:0;bottom:0;height:2px;width:var(--p,0%);background:var(--yellow);transition:width .15s}
+.env-tile.busy img{animation:env-pulse 0.9s ease-in-out infinite alternate}
+@keyframes env-pulse{from{opacity:0.35}to{opacity:0.85}}
+
+.env-row{display:grid;grid-template-columns:62px minmax(0,1fr) 52px;align-items:center;gap:6px;min-height:22px}
+.env-row[hidden]{display:none}
+.env-row label{color:var(--text-dim);font-size:var(--fs-xs);white-space:nowrap}
+.env-row input[type=range]{width:100%;height:16px;accent-color:var(--blue)}
+.env-num{width:100%;height:20px;padding:0 4px;background:var(--bg2);border:1px solid var(--border-b);border-radius:var(--r);font:var(--fs-xs) var(--mono);text-align:right}
+.env-row-c{grid-template-columns:62px 1fr}
+.env-row input[type=color]{width:44px;height:20px;padding:0 2px;background:var(--bg2);border:1px solid var(--border-b);border-radius:var(--r)}
+.env-actions{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.env-ui button:not(.env-tile):not(.env-x){height:22px;padding:0 8px;background:var(--bg2);border:1px solid var(--border-b);border-radius:var(--r);font-size:var(--fs-xs)}
+.env-ui button:not(.env-tile):hover:not(:disabled){border-color:var(--border-s);background:var(--blue-faint)}
+.env-ui button:disabled{opacity:0.4;cursor:default}
+.env-hint{font-size:var(--fs-xs);color:var(--text-faint);align-self:center}
+.env-count{font-weight:400;letter-spacing:0;color:var(--text-faint)}
+
+.env-seg{display:flex;grid-column:2/4}
+.env-seg button{flex:1;border-radius:0 !important}
+.env-seg button:first-child{border-radius:var(--r) 0 0 var(--r) !important}
+.env-seg button:last-child{border-radius:0 var(--r) var(--r) 0 !important}
+.env-seg button.on{color:var(--yellow);border-color:var(--yellow-dim) !important;background:var(--yellow-faint) !important}
+
+.env-lights{display:flex;flex-direction:column;gap:5px}
+.env-light{padding:4px;background:var(--bg2);border:1px solid var(--border-b);border-radius:var(--r)}
+.env-light.off{opacity:0.55}
+.env-light-head{display:flex;align-items:center;gap:5px;margin-bottom:4px}
+.env-light-head b{font:500 var(--fs-xs) var(--mono);color:var(--text-dim)}
+.env-light-head select{flex:1;min-width:0;height:20px;background:var(--bg3);border:1px solid var(--border-b);border-radius:var(--r);font-size:var(--fs-xs)}
+.env-light-head input[type=color]{width:30px;height:20px;padding:0 1px;background:var(--bg3);border:1px solid var(--border-b);border-radius:var(--r)}
+.env-x{width:20px;height:20px;padding:0;background:none;border:1px solid transparent;border-radius:var(--r);color:var(--text-dim);font-size:14px;line-height:1}
+.env-x:hover{color:var(--red);border-color:var(--border-b)}
+.env-light-body{display:grid;grid-template-columns:68px minmax(0,1fr);gap:6px;align-items:center}
+.env-pick{width:68px;height:68px;cursor:crosshair;touch-action:none}
+.env-light-rows{display:flex;flex-direction:column;gap:2px;min-width:0}
+.env-light-rows .env-row{grid-template-columns:50px minmax(0,1fr) 46px}
+.env-azel{font:var(--fs-xs) var(--mono);color:var(--text-faint)}
+
+/* ── phone ─────────────────────────────────────────────────────────────── */
+@media (max-width:768px){
+  .env-grid{grid-template-columns:repeat(auto-fill,minmax(96px,1fr))}
+  .env-tile{min-height:44px}
+  .env-row{min-height:36px;grid-template-columns:70px minmax(0,1fr) 58px}
+  .env-row input[type=range]{height:28px}
+  .env-num,.env-row input[type=color]{height:30px}
+  .env-ui button:not(.env-tile):not(.env-x){height:36px;padding:0 12px}
+  .env-x{width:36px;height:36px}
+  .env-light-head select,.env-light-head input[type=color]{height:32px}
+  .env-pick{width:88px;height:88px}
+  .env-light-body{grid-template-columns:88px minmax(0,1fr)}
+}
