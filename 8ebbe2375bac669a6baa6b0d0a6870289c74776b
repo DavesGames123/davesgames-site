@@ -1,0 +1,1 @@
+Correction to the validation line in this commit body: the node SVG check printed 'svgs 674 bad 0', not 544. 674 is every voicing of guitar and ukulele plus one tone map per chord for bass and violin, over 12 roots x 8 qualities. The body number was written before the run.
