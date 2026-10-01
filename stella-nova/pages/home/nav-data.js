@@ -66,7 +66,9 @@
     ["reaction-diffusion", "Reaction–Diffusion", "GPU"],
     ["lenia", "Lenia", "GPU"]] },
   { h: "Folding & Structures", p: [
-    ["origami", "Origami Simulator", "SIM"]] }] },
+    ["origami", "Origami Simulator", "SIM"]] },
+  { h: "Mechanisms", p: [
+    ["watch-movement", "Watch Movement", "3D"]] }] },
 { id: "cl-music", label: "Music Lab", groups: [
   { h: null, p: [
     ["chordlab", "ChordLab", "MIC"],

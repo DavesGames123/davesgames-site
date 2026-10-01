@@ -112,6 +112,7 @@ const GAME_STARS = [
 
 // Short lines for the pages that appear on cards. Others show their group.
 const BLURBS = {
+  'watch-movement': 'A pocket watch that runs, then comes apart.',
   home: 'This page: the overview and the chart.',
   translate: 'Help put Stella Nova in your language.',
   guide: 'Every module, room and rule of a station.',
