@@ -40,6 +40,7 @@ import { P, CAT, EXAMPLES, THUMBS, PTHUMBS, COLLECTIONS, byEnum, fnum, groupName
 import { scene, activeSlot, engine, currentExample, info, setScene, setActiveSlot, setEngine, setCurrentExample, setInfo, formulaAt,
   touchSeen, noteTouch, touchUI, coarseMQ, targetSamples, SAMPLES_DEFAULT, renderScale, RENDER_SCALE_DEFAULT, pixelRatio } from './ui/state.js';
 import { compileStatus, setStatus, flash, msPerSample, setMsPerSample, showHud, fail } from './ui/hud.js';
+import { V, camFromScene, camBasis, camToScene, resetCamera, frameView, panBy, orbitBy, lookBy } from './ui/camera.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -234,7 +235,7 @@ function scrub(input, get, setv, spec) {
   input.addEventListener('click', (e) => { if (moved) e.preventDefault(); });
 }
 
-const refreshAll = () => refreshers.forEach((r) => r());
+export const refreshAll = () => refreshers.forEach((r) => r());
 
 // Bind a main param (optionally one vector component).
 function mainBind(name, c) {
@@ -251,12 +252,12 @@ function slotBind(s, name) {
 const kindOf = (type) => ({ double: 'double', int: 'int', bool: 'bool', vect3: 'vect3', vect4: 'vect4', rgb: 'rgb', string: 'string' }[type] || 'double');
 
 // ─── scene changes ──────────────────────────────────────────────────────────
-let sceneDirty = true;
+export let sceneDirty = true;
 let previewTimer = 0, previewOn = false;
 // Each change shows a fast preview. Full quality comes back 150 ms after the last change, but
 // only once the preview of that change is on screen (a slow band can hold it up), so a single
 // click on a control still shows its effect at once.
-function touch() {
+export function touch() {
   sceneDirty = true;
   if (engine) {
     if (!previewOn) { engine.setPreview(true); previewOn = true; }
@@ -773,94 +774,6 @@ async function copyLink() {
 }
 
 // ─── camera (upstream cCameraTarget) ────────────────────────────────────────
-const V = {
-  add: (a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }),
-  sub: (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z }),
-  mul: (a, k) => ({ x: a.x * k, y: a.y * k, z: a.z * k }),
-  dot: (a, b) => a.x * b.x + a.y * b.y + a.z * b.z,
-  cross: (a, b) => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }),
-  len: (a) => Math.hypot(a.x, a.y, a.z),
-  norm: (a) => { const l = Math.hypot(a.x, a.y, a.z) || 1; return { x: a.x / l, y: a.y / l, z: a.z / l }; },
-  rot: (v, ax, ang) => {                             // CVector3::RotateAroundVectorByAngle
-    const c = Math.cos(ang), s = Math.sin(ang);
-    return V.add(V.add(V.mul(v, c), V.mul(V.cross(ax, v), s)), V.mul(ax, V.dot(ax, v) * (1 - c)));
-  },
-};
-const AX = { x: { x: 1, y: 0, z: 0 }, y: { x: 0, y: 1, z: 0 }, z: { x: 0, y: 0, z: 1 } };
-const DEG = Math.PI / 180;
-
-// Camera state from camera / target / camera_top (SetCameraTargetTop).
-function camFromScene() {
-  const m = scene.main;
-  const cam = m.camera, tgt = m.target;
-  let fwd = V.sub(tgt, cam);
-  const dist = V.len(fwd) || m.camera_distance_to_target || 1;
-  fwd = V.len(fwd) > 0 ? V.norm(fwd) : { x: 0, y: 1, z: 0 };
-  const yaw = Math.atan2(fwd.y, fwd.x) - Math.PI / 2;
-  const pitch = Math.atan2(fwd.z, Math.hypot(fwd.x, fwd.y));
-  let t = V.norm(m.camera_top || AX.z);
-  t = V.rot(t, AX.z, -yaw);
-  t = V.rot(t, AX.x, -pitch);
-  const roll = -Math.atan2(t.z, t.x) + Math.PI / 2;
-  return { target: { ...tgt }, yaw, pitch, roll, dist };
-}
-
-function camBasis(c) {
-  const fwd = { x: -Math.sin(c.yaw) * Math.cos(c.pitch), y: Math.cos(c.yaw) * Math.cos(c.pitch), z: Math.sin(c.pitch) };
-  let top = V.rot(AX.z, AX.y, c.roll);
-  top = V.rot(top, AX.x, c.pitch);
-  top = V.rot(top, AX.z, c.yaw);
-  return { fwd, top, right: V.cross(fwd, top) };
-}
-
-const wrapDeg = (a) => { a = ((a + 180) % 360 + 360) % 360 - 180; return +a.toPrecision(12); };
-function camToScene(c, quiet) {
-  const { fwd, top } = camBasis(c);
-  const m = scene.main;
-  m.target = c.target;
-  m.camera = V.sub(c.target, V.mul(fwd, c.dist));
-  m.camera_top = top;
-  m.camera_rotation = { x: wrapDeg(c.yaw / DEG), y: wrapDeg(c.pitch / DEG), z: wrapDeg(c.roll / DEG) };
-  m.camera_distance_to_target = c.dist;
-  if (!quiet) refreshAll();
-  touch();
-}
-
-function resetCamera() {
-  stopInertia();
-  for (const k of ['camera', 'target', 'camera_top', 'camera_rotation', 'camera_distance_to_target']) {
-    if (P.main[k]) scene.main[k] = structuredClone(P.main[k].default);
-  }
-  refreshAll();
-  touch();
-}
-
-// Frame: the engine probes the surface extent (a center and a radius); the camera keeps its
-// view direction and moves back until a sphere of that radius fits the narrower image axis.
-let framing = 0;
-async function frameView(auto) {
-  if (!engine?.frameView) return;
-  stopInertia();
-  const job = ++framing;
-  if (sceneDirty) pushScene();
-  await scenePromise;
-  if (job !== framing) return;
-  let r = null;
-  try { r = await engine.frameView(); } catch (e) { console.error('[mandelbulber] frame', e); }
-  if (job !== framing || !r) return;
-  if (r.unbounded) return flash('frame: this shape fills space, the camera stays');
-  if (r.empty) return flash('frame: no surface found near the target');
-  const c = camFromScene();
-  const deg = scene.main.fov ?? 53.13;
-  const aspect = Math.max(canvas.clientWidth, 1) / Math.max(canvas.clientHeight, 1);
-  const half = (scene.main.perspective_type ?? 0) === 0
-    ? Math.atan(Math.tan(deg * DEG / 2) * Math.min(1, aspect)) : deg * DEG / 2 * Math.min(1, aspect);
-  c.target = r.center;
-  c.dist = r.radius / Math.sin(Math.max(half, 1 * DEG)) * 1.08;
-  camToScene(c);
-  flash(auto ? 'view framed to the new shape' : 'view framed');
-}
-
 // ─── camera input ───────────────────────────────────────────────────────────
 // Mouse: drag orbit, right or Shift drag pan, wheel dolly. Touch: one finger orbit, two
 // fingers pinch (dolly) and drag (pan), double tap Frame, long press menu. A touch orbit
@@ -883,23 +796,6 @@ function toggleFly() {
 }
 $('flyBtn').addEventListener('click', toggleFly);
 
-// world units per CSS pixel at the target distance
-const panScale = (c) => c.dist * 2 * Math.tan((scene.main.fov ?? 53) * DEG / 2) / Math.max(canvas.clientHeight, 1);
-function panBy(c, dx, dy) {
-  const { right, top } = camBasis(c);
-  const k = panScale(c);
-  c.target = V.add(c.target, V.add(V.mul(right, -dx * k), V.mul(top, dy * k)));
-}
-function orbitBy(c, dx, dy) {
-  c.yaw -= dx * 0.006;
-  c.pitch = clamp(c.pitch + dy * 0.006, -89.9 * DEG, 89.9 * DEG);
-}
-function lookBy(c, dx, dy) {                           // turn around the eye, not the target
-  const eye = V.sub(c.target, V.mul(camBasis(c).fwd, c.dist));
-  c.yaw -= dx;
-  c.pitch = clamp(c.pitch - dy, -89.9 * DEG, 89.9 * DEG);
-  c.target = V.add(eye, V.mul(camBasis(c).fwd, c.dist));
-}
 const two = () => { const [a, b] = [...pointers.values()]; return { mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, d: Math.hypot(a.x - b.x, a.y - b.y) }; };
 
 window.addEventListener('pointerdown', (e) => {
@@ -996,7 +892,7 @@ function inertiaStep(dt) {
   camToScene(inertia.cam, true);
   if (Math.hypot(inertia.vx, inertia.vy) < 0.02) stopInertia();
 }
-function stopInertia() {
+export function stopInertia() {
   if (!inertia.on) return;
   inertia.on = false; inertia.cam = null;
   refreshAll();
@@ -1414,8 +1310,8 @@ $('toggle').addEventListener('click', togglePanel);
 // ─── status ─────────────────────────────────────────────────────────────────
 // ─── frame loop ─────────────────────────────────────────────────────────────
 // Hand the engine a snapshot, so a compile that finishes late sees the scene it was given.
-let scenePromise = Promise.resolve();
-function pushScene() {
+export let scenePromise = Promise.resolve();
+export function pushScene() {
   sceneDirty = false;
   const onErr = (e) => { setStatus(`error: ${e.message}`); console.error(e); };
   try { scenePromise = Promise.resolve(engine.setScene(structuredClone(scene))).catch(onErr); } catch (e) { onErr(e); }
