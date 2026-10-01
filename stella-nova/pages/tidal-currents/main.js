@@ -40,6 +40,9 @@ const IDLE_MS = 2500;
 const DESIGN_AREA = 720 * 1280;     // the v1 design grid: one portrait poster
 const TEXT_SCALE = 0.78;            // v2: the text is about 22 % smaller than v1
 const STORE_KEY = 'tidal-currents.location';
+// The location of a fresh visit. A #hash in the URL wins, then the last
+// location of this tab session (sessionStorage).
+const DEFAULT_ID = 'sf-bay';
 
 // Used when data/index.json is not there yet.
 const DEFAULT_LOCS = [
@@ -118,8 +121,11 @@ const lastHour = () => Math.max(1, (meta?.hours ?? 169) - 1);
 const titleCase = (s) => s.toLowerCase().replace(/(^|[\s.-])([a-z])/g, (m, a, b) => a + b.toUpperCase());
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
-function storeGet() { try { return localStorage.getItem(STORE_KEY); } catch { return null; } }
-function storeSet(v) { try { localStorage.setItem(STORE_KEY, v); } catch { /* private mode */ } }
+// The last location lasts for the tab session only, so a new visit opens on
+// DEFAULT_ID. Old visits kept it in localStorage, and that key is removed.
+function storeGet() { try { return sessionStorage.getItem(STORE_KEY); } catch { return null; } }
+function storeSet(v) { try { sessionStorage.setItem(STORE_KEY, v); } catch { /* private mode */ } }
+try { localStorage.removeItem(STORE_KEY); } catch { /* private mode */ }
 
 function localDate(h) {
   const m = /^(\d+)-(\d+)-(\d+)T(\d+):(\d+)/.exec(meta?.startLocal ?? '2026-09-21T00:00');
@@ -887,8 +893,9 @@ async function start() {
     }
   } catch { /* keep DEFAULT_LOCS */ }
 
-  const want = location.hash.slice(1) || storeGet();
-  locIndex = Math.max(0, locs.findIndex((l) => l.id === want));
+  const want = location.hash.slice(1) || storeGet() || DEFAULT_ID;
+  const at = (id) => locs.findIndex((l) => l.id === id);
+  locIndex = at(want) >= 0 ? at(want) : Math.max(0, at(DEFAULT_ID));
   syncControls();
 
   try {
