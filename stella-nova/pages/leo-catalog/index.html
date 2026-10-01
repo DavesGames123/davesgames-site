@@ -35,10 +35,13 @@
      │ load       │         city / station / sat labels) │                │
      │ filters    │                                      │                │
      │ overlays   │                                      │                │
+     │ headset    │                                      │                │
      ├────────────┴───────────────────────────────────┴────────────────┤
      │ #timepanel: clock · time slider · transport · rate slider        │
      └─────────────────────────────────────────────────────────────────┘
    #splash covers everything for ~1.5 s; #acq sits top-centre after that.
+   #xr-panel (headset: #bVR, #bAR) stays hidden unless xr.js finds WebXR
+   VR or AR support after the catalog loads.
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -230,6 +233,18 @@
         <input type="checkbox" checked>
         <span class="label">SAT LABELS (LOD)</span>
       </label>
+    </div>
+  </div>
+  <!-- Headset: xr.js shows this section only when WebXR offers VR or AR. -->
+  <div class="panel corners" id="xr-panel" hidden>
+    <span class="ctl"></span><span class="ctr"></span>
+    <h2 class="cyan">headset <span class="dot"></span></h2>
+    <div class="panel-body">
+      <div class="quick-tags">
+        <button type="button" class="qtag" id="bVR" hidden>VIEW IN VR</button>
+        <button type="button" class="qtag" id="bAR" hidden>VIEW IN AR</button>
+      </div>
+      <div class="cat-desc">a table-top globe; the headset panel switches to room size</div>
     </div>
   </div>
 </aside>

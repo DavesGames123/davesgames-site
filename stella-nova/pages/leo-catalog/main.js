@@ -63,10 +63,12 @@
 //      time control ......... "// TIME CONTROL"    scrub + rate sliders
 //      boot ................. "function boot"      load groups, then reveal
 //      main loop ............ "function animate"   the per-frame update
+//      xr ................... "function startXR"   VR/AR via xr.js + lib/xr-view.js
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { loadShaders } from '../../lib/shaders.js';
+import { wireXR } from './xr.js';
 
 // Shader source lives in real .glsl files under shaders/. Fetch it all before
 // building any material, so init runs in the original synchronous order.
@@ -445,7 +447,9 @@ earthRoot.add(fallbackShell);
     color: 0xfff5d8, size: 0.015, sizeAttenuation: true,
     transparent: true, opacity: 0.5, depthWrite: false,
   });
-  scene.add(new THREE.Points(g, m));
+  const stars = new THREE.Points(g, m);
+  stars.name = 'stars';   // xr.js hides it in AR
+  scene.add(stars);
 }
 
 // ── Helpers ──
@@ -638,6 +642,8 @@ const _tmp = new THREE.Vector3();
 let lastPropTime = 0;
 const PROP_HZ = IS_MOBILE ? 12 : 20;
 const PROP_DT = 1000 / PROP_HZ;
+// The propagation interval in use. xr.js lowers it in a headset session.
+let propDt = PROP_DT;
 
 // Propagate every object to SIM.time and write its scene position, size, and
 // alpha into the attribute buffers. Filtered objects are parked at HIDE; storms
@@ -2391,6 +2397,43 @@ async function boot() {
   await loadWeather();
   splash(`ready :: ${sats.length.toLocaleString()} obj`, 'ok');
   finishAcquisition();
+  startXR();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// XR  (xr.js wires lib/xr-view.js; this gives it the page state)
+// ═══════════════════════════════════════════════════════════════════
+// Attach VR and AR once the catalog is loaded. The headset section
+// (#xr-panel) stays hidden unless the device supports a session.
+function startXR() {
+  const cbOf = sel => document.querySelector(sel + ' input[type=checkbox]');
+  // silent: change the layer only, not the checkbox (a session-only change)
+  const setOverlay = (k, on, silent) => {
+    const cb = cbOf(`.filter-row[data-overlay="${k}"]`);
+    if (!silent && cb) { if (cb.checked !== on) cb.click(); return; }
+    OVERLAY[k] = on;
+    if (k === 'cities' && !on) for (const c of cityElements) c.el.classList.remove('visible');
+    if (k === 'satlabels' && !on) for (const sl of satLabelPool) { sl.el.classList.remove('visible'); sl.assignedIdx = -1; }
+  };
+  try {
+    const xr = wireXR({
+      renderer, scene, camera, controls,
+      stars: scene.getObjectByName('stars'),
+      satPoints: () => satPoints, sats: () => sats,
+      SIM, OVERLAY, FILTER,
+      el: { play: btnPlay, now: btnNow },
+      setFilter: (cat, on) => { const cb = cbOf(`.filter-row[data-cat="${cat}"]`); if (cb && cb.checked !== on) cb.click(); },
+      setOverlay,
+      applySpeed: x => applyRate(rateSpeedToFrac(x)),
+      fmtRate,
+      setPropHz: hz => { propDt = hz > 0 ? 1000 / hz : PROP_DT; },
+      getSel: () => ({ idx: selectedIdx, locked: chipLocked }),
+      setSel: v => { selectedIdx = v.idx; chipLocked = v.locked; },
+      refreshTrail: () => maybeRebuildTrail(),
+    });
+    // test hook (headless checks drive the session through it)
+    window.__leoXR = { xr, SIM, scene, camera, controls, renderer, sats: () => sats, satPoints: () => satPoints };
+  } catch (e) { console.warn('xr: not available', e); }
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2419,7 +2462,7 @@ function animate(now) {
   updatePings(now / 1000);
   stepIntroCamera(now);
   controls.update();
-  if (sats.length > 0 && now - lastPropTime >= PROP_DT) {
+  if (sats.length > 0 && now - lastPropTime >= propDt) {
     propagateAll();
     lastPropTime = now;
     maybeRebuildTrail();
