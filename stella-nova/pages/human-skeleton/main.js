@@ -34,7 +34,7 @@
 //    function frame                                       the loop
 // ============================================================================
 import * as L from './layout.js';
-import { $, PHONE_Q, COARSE, REDUCED, esc, clamp01, easeIO, ease, MODE_NAME, THEMES } from './app/env.js';
+import { $, COARSE, REDUCED, esc, clamp01, easeIO, ease, MODE_NAME, THEMES } from './app/env.js';
 import { canvas, renderer, scene, envRT, camera, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
 import { T, S, dirty, toast } from './app/state.js';
 import { occ, occlusion, resize, fitView, fitShadow } from './app/camera.js';
@@ -45,46 +45,11 @@ import { refreshVisibility } from './app/visibility.js';
 import { exploded, retarget, setMode, explode, reconstruct, setAmount, toggleRegionExplode } from './app/layouts.js';
 import { boneCentre, select, clearSelection, step } from './app/select.js';
 import { isolate, exitIsolate, focusBone, focusRegion } from './app/inspect.js';
-import { list, rowEls, setRegionHidden } from './app/list.js';
+import { list, setRegionHidden } from './app/list.js';
 import { dVelZero, hoverPick } from './app/pointer.js';
+import { setOpen } from './app/panel.js';
 
-// ── panel, sheet, dock, theme ───────────────────────────────────────────────
-export const panel = $('panel');
-const dockList = $('dockList');
-export function setOpen(open) {
-  panel.classList.toggle('open', open);
-  if (!open) panel.classList.remove('full');
-  document.body.classList.toggle('panel-closed', !open);
-  document.body.classList.toggle('sheet-open', open);
-  dockList.classList.toggle('on', open);
-  dockList.setAttribute('aria-expanded', String(open));
-  dirty();
-}
-$('gear').addEventListener('click', () => setOpen(true));
-$('panelClose').addEventListener('click', () => setOpen(false));
-dockList.addEventListener('click', () => {
-  const open = !panel.classList.contains('open');
-  setOpen(open);
-  if (open) requestAnimationFrame(() => {
-    const el = S.sel >= 0 ? rowEls.get(S.sel) : $('bonesLabel');
-    if (el) el.scrollIntoView({ block: S.sel >= 0 ? 'center' : 'start' });
-  });
-});
-setOpen(!PHONE_Q.matches);
-PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
-const grip = $('sheetGrip');
-let gripY = null;
-grip.addEventListener('pointerdown', e => { gripY = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) { /* old browsers */ } });
-grip.addEventListener('pointerup', e => {
-  if (gripY === null) return;
-  const dy = e.clientY - gripY; gripY = null;
-  if (Math.abs(dy) < 8) panel.classList.toggle('full');
-  else if (dy < -40) panel.classList.add('full');
-  else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setOpen(false); }
-  dirty();
-});
-grip.addEventListener('pointercancel', () => { gripY = null; });
-
+// ── controls ─────────────────────────────────────────────────────────────────
 function setTheme(t) {
   S.theme = t;
   document.documentElement.dataset.theme = t;
