@@ -76,6 +76,7 @@ async function roll(seed = Gen.newSeed(), first = false) {
     const state = cal.createState(nowSeconds(), 0.85);
     state.still = !(S.wrist && spec.type === 'wrist');
     const next = { spec, cal, B, sc, kase, dims, state, alpha: 0, t0: performance.now(), per: cal.periods(), PARTS: { ...cal.PARTS, ...kase.PARTS } };
+    next.spread = spreadFor(next);
     B.setAlpha(0.001);
     if (S.cur) S.leaving.push({ ...S.cur, t0: performance.now(), e0: S.explode });
     S.cur = next;
@@ -101,6 +102,35 @@ function buildCaseProbe(spec) {
   return { ...(T.palette ? T.palette(spec) : {}), gold: { color: '#f0c46a', roughness: 0.15 } };
 }
 const fitDistance = dims => dims.R * 4.2 * (innerWidth < innerHeight * 0.8 ? 1.35 : 1);
+// The movement scenes space their layers for the watch-movement page.
+// Here the whole piece, case included, comes apart, so the layers move
+// further along the axis at the same slider value: at least SPREAD times,
+// and enough that the full explode adds SPAN_R half-widths of depth. The
+// half-width is half the smaller side of the closed piece, so a tall
+// regulator with a long pendulum does not get a huge spread. A big
+// drum or box case (alarm, wall, mantel) needs the second term, or the
+// movement stays behind the case body.
+const SPREAD = 2.6, SPAN_R = 3;
+const explodeAt = (q, e) => q.B.applyExplode(e, q.sc.unit * (q.spread || SPREAD));
+const box = new THREE.Box3(), sphere = new THREE.Sphere(), size = new THREE.Vector3();
+// the axial depth that the full explode adds at a spread factor of 1
+function spreadFor(q) {
+  const depth = e => { q.B.applyExplode(e, q.sc.unit); return box.setFromObject(q.B.root).getSize(size).z; };
+  const added = -depth(0) + depth(1);
+  q.B.applyExplode(0, q.sc.unit);
+  box.setFromObject(q.B.root).getSize(size);
+  const half = Math.min(size.x, size.y) / 2;
+  return added > 0 ? Math.max(SPREAD, SPAN_R * half / added) : SPREAD;
+}
+// Camera distance that keeps the piece in view at explode e. It measures
+// the bounds at e, then puts the current explode back.
+function explodedDistance(q, e) {
+  explodeAt(q, e);
+  box.setFromObject(q.B.root).getBoundingSphere(sphere);
+  explodeAt(q, S.explode);
+  // 30 degree vertical fov: a sphere of radius s fills the view at s / sin(15)
+  return sphere.radius / Math.sin(15 * Math.PI / 180) * 1.08 * (innerWidth < innerHeight * 0.8 ? 1.35 : 1);
+}
 function spinDice() {
   for (const el of [$('roll'), $('bigRoll'), $('dockRoll')]) { el.classList.remove('spin'); void el.offsetWidth; el.classList.add('spin'); }
 }
@@ -143,7 +173,7 @@ const VIEWS = {
 };
 function setView(name) {
   const v = VIEWS[name], dims = S.cur.dims;
-  stage.flyTo({ az: v.az, el: v.el, r: fitDistance(dims) * (v.explode ? 1.35 : 1), target: new THREE.Vector3(0, 0, 0) });
+  stage.flyTo({ az: v.az, el: v.el, r: v.explode ? Math.max(fitDistance(dims) * 1.35, explodedDistance(S.cur, v.explode)) : fitDistance(dims), target: new THREE.Vector3(0, 0, 0) });
   setExplode(v.explode);
   if (name === 'back' && S.cur.kase.has.back) setBack(true);
   document.querySelectorAll('#views button').forEach(b => b.classList.toggle('on', b.dataset.view === name));
@@ -269,14 +299,14 @@ function frame(now) {
   S.explode += (S.explodeTarget - S.explode) * Math.min(1, dt * 3.2);
   cur.sc.pose(p, dt);
   cur.kase.pose(p, S, dt, now);
-  cur.B.applyExplode(S.explode, cur.sc.unit);
+  explodeAt(cur, S.explode);
   const age = (now - cur.t0) / 1000;
   const a = REDUCED ? 1 : ease((age - 0.15) / 0.9);
   if (a !== cur.alpha) { cur.alpha = a; cur.B.setAlpha(Math.max(0.001, a)); }
   cur.B.root.scale.setScalar(1 + 0.05 * (1 - ease(age / 1.1)));
   for (const old of S.leaving) {
     const t = (now - old.t0) / 700, k = ease(t);
-    old.B.applyExplode(old.e0 + (1.6 - old.e0) * k, old.sc.unit);
+    explodeAt(old, old.e0 + (1.6 - old.e0) * k);
     old.B.setAlpha(Math.max(0.001, 1 - k));
     old.B.root.scale.setScalar(1 - 0.08 * k);
     if (t >= 1) old.dead = true;
