@@ -56,6 +56,51 @@ them to fetched files forces that init to run async, and a render queued before
 init then runs with no linked program and throws. The `<script>` block is still
 a separated, named location, so the page stays a 1:1 copy.
 
+The shell route `matlab` ("PBR Material Studio") now loads `material-studio`.
+`material-lab` stays on disk with no nav route. Its Python server API is the
+optional "Image to PBR (server)" import of the studio.
+
+## Page notes: material-studio
+
+`material-studio` is a WebGPU node graph for PBR materials. The graph bakes
+texture maps, a 3D viewport shows them under HDRI light, and the export
+packs them for Unity, Unreal, Godot, glTF and PNG. It is an ES module page
+with no build step, and it has two named deviations from the pad.
+
+- **Stylesheet partials.** `style.css` holds the page tokens and the layout,
+  then `@import`s one partial per module from `styles/` (`editor.css`,
+  `viewport.css`, `panels.css`, `io.css`, `mobile.css`). One owner edits each
+  partial. A partial that overrides `style.css` starts its selectors with
+  `html ` so that it wins at equal specificity.
+- **Many module files.** `main.js` boots the page. It imports each module
+  below with its own try/catch and calls `init(ctx)` in order. A module that
+  fails shows a toast, and the page continues.
+
+Module map (`grep -n` the name in `main.js` MODULES for the init order):
+
+    contract.js      port types, Graph JSON, MaterialMaps, events, export targets
+    store.js         the app state, the event bus, undo and redo
+    gpu.js           the shared GPUDevice, canvas setup, pagehide teardown
+    main.js          boot, page chrome, window.__studio and __studio.selfTest()
+    nodes/core.js    175 core NodeDefs (noise, patterns, filters, math, output)
+    nodes/bench.js   the Composition Bench cells as pass nodes, bench graph import
+    graph.js         the pure graph model and the undoable graph actions
+    editor.js        the canvas node editor in #graph-wrap
+    compile.js       graph -> fused WGSL passes
+    bake.js          runs the passes, caches them, makes the maps and thumbnails
+    env.js           HDRI presets, .hdr load, IBL precompute, analytic lights
+    viewport.js      the PBR viewport; mesh.js meshes, camera.js orbit camera
+    export.js        engine packages; zip.js, glb.js writers; import.js map import
+    panels.js        inspector, library, map strip, topbar; presets.js materials
+    mobile.js        phone sheet, landscape drawer, tablet layout
+    shaders/         bake-*, viewport-*, env-*, pbr.wgsl, panels-thumb.wgsl
+
+The shared bench catalog is `../../lib/bench-wgsl.js`. Composition Bench
+uses the same file, so a change there must pass the bench self-test for each
+library. For a headless check, load `material-studio/index.html` and call
+`await __studio.selfTest()`. The result has `ok` and one summary row for each
+module.
+
 ## To add a page
 
 1. Make `pages/<name>/` with `index.html`, `style.css`, and `main.js`.
