@@ -34,30 +34,17 @@
 //       function prepareExamples  function presetFamily  function presetThumb  function randomExample
 //       function buildExamples  function filterExSheet  const SOURCES  const FAMILIES
 
-import { SLOTS, defaultScene, fillDefaults, specFor, parseFract, serialiseFract, parseValue, quantizeColor, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
+import { SLOTS, defaultScene, fillDefaults, parseFract, serialiseFract, parseValue, quantizeColor, parseGradient, serialiseGradient, GRADIENT_MAX } from './fract.js';
 import { $, stage, canvas, panel, pbody, hud, picker, exSheet, root, el, section, fmt, rgbToHex, hexToRgb, clamp, px, download } from './ui/dom.js';
+import { P, CAT, EXAMPLES, THUMBS, PTHUMBS, COLLECTIONS, byEnum, fnum, groupName, mainSpec, isNone, loadData } from './ui/data.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
-let P, CAT, EXAMPLES, THUMBS, PTHUMBS = null;
-let COLLECTIONS = [];             // gen/collections.json: author and licence per collection folder
-let byEnum = new Map();           // formula number as stored in .fract -> catalog entry
 let scene;
 let activeSlot = 0;
 let engine = null;
 let currentExample = -1;
 
-const fnum = (f) => f.enumId ?? f.enum ?? f.id;
-const groupName = (f) => (typeof f.group === 'number' ? CAT.groups?.[f.group]?.name : f.group) ?? 'Formulas';
-const mainSpec = (name) => specFor(P, 'main', name);
 const formulaAt = (s) => byEnum.get(scene.main[`formula_${s + 1}`]) || null;
-const isNone = (f) => !f || f.id === 'none' || fnum(f) === 0;
-
-async function loadJson(name) {
-  const r = await fetch(new URL(`gen/${name}`, import.meta.url));
-  if (!r.ok) throw new Error(`gen/${name}: HTTP ${r.status}`);
-  return r.json();
-}
-
 // ─── panel specs ────────────────────────────────────────────────────────────
 // Main params shown in the panel. A row is skipped when gen/params.json does
 // not list its name. `c` picks one component of a vector param.
@@ -643,9 +630,8 @@ function presetFamily(e) {
   return 'Other';
 }
 
-function prepareExamples(raw, col, orig) {
+export function prepareExamples(raw, col, orig) {
   const list = (r) => (Array.isArray(r) ? r : r?.examples || r?.presets || []);
-  COLLECTIONS = col?.collections || [];
   const out = [];
   const add = (e, src, extra) => {
     const name = e.name || e.title || e.file || e.id || 'preset';
@@ -1510,7 +1496,7 @@ function tick(now) {
 }
 
 // ─── boot ───────────────────────────────────────────────────────────────────
-function fail(msg) {
+export function fail(msg) {
   stage.classList.add('nogpu');
   $('fallback').textContent = msg;
   compileStatus = msg;
@@ -1518,26 +1504,7 @@ function fail(msg) {
 }
 
 async function boot() {
-  let raw, colRaw, origRaw;
-  try {
-    [P, CAT, raw, THUMBS] = await Promise.all(['params.json', 'catalog.json', 'examples.json', 'thumbs.json'].map(loadJson));
-    // The extra presets and their thumbnails are optional: the page works with the upstream examples only.
-    [colRaw, origRaw, PTHUMBS] = await Promise.all(['collections.json', 'originals.json', 'preset-thumbs.json']
-      .map((n) => loadJson(n).catch((e) => { console.warn(`[mandelbulber] ${e.message}`); return null; })));
-  } catch (e) {
-    fail(`The page data did not load: ${e.message}`);
-    throw e;
-  }
-  const size = THUMBS.size ?? THUMBS.tile ?? 64;
-  const cols = THUMBS.cols ?? THUMBS.columns ?? Math.floor((THUMBS.width ?? 64 * 16) / size);
-  const count = THUMBS.count ?? CAT.formulas.length;
-  THUMBS = { cols, rows: Math.ceil((THUMBS.height ?? Math.ceil(count / cols) * size) / size),
-    url: new URL(`gen/${THUMBS.file ?? 'thumbs.jpg'}`, import.meta.url).href };
-  byEnum = new Map(CAT.formulas.map((f) => [fnum(f), f]));
-  if (PTHUMBS) {
-    PTHUMBS = { ...PTHUMBS, rows: Math.ceil(PTHUMBS.count / PTHUMBS.cols), url: new URL(`gen/${PTHUMBS.file ?? 'preset-thumbs.jpg'}`, import.meta.url).href };
-  }
-  EXAMPLES = prepareExamples(raw, colRaw, origRaw);
+  await loadData();
   $('subtitle').textContent = `${CAT.formulas.filter((f) => !isNone(f)).length} formulas · ${EXAMPLES.length} presets`;
 
   scene = (await readHash()) || defaultScene(P);
