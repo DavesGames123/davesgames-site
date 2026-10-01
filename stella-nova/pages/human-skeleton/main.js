@@ -34,85 +34,14 @@
 //    function frame                                       the loop
 // ============================================================================
 import * as THREE from 'three';
-import { gunzip, decodeGroup } from './decode.js';
 import * as L from './layout.js';
-import { BoneState, boneMaterial, depthMaterial, ghostMaterial, pickMaterial, groupMesh } from './render.js';
-import { $, PHONE_Q, COARSE, HOVER, REDUCED, esc, clamp01, easeIO, ease, TYPE_NAME, SIDE_NAME, MODE_NAME, LOAD_ORDER, THEMES } from './app/env.js';
+import { $, PHONE_Q, COARSE, HOVER, REDUCED, esc, clamp01, easeIO, ease, TYPE_NAME, SIDE_NAME, MODE_NAME, THEMES } from './app/env.js';
 import { canvas, renderer, scene, envRT, camera, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
 import { T, S, dirty, toast, hideHint, regionOf } from './app/state.js';
 import { occ, occlusion, clearRect, fitDist, resize, flyTo, fitView, fitShadow, ensureVisible } from './app/camera.js';
 import { setTraysOn, buildTrays, placeLabels } from './app/tray.js';
 import { pickRT, pickAt } from './app/pick.js';
-
-// ── loading ─────────────────────────────────────────────────────────────────
-async function fetchBuf(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
-  return gunzip(await r.arrayBuffer());
-}
-async function loadAll() {
-  const r = await fetch('data/manifest.json');
-  const M = await r.json();
-  S.M = M; S.P = L.prep(M); S.n = M.bones.length; S.bones = M.bones; S.regions = M.regions;
-  S.regionIx = new Map(M.regions.map((x, k) => [x.id, k]));
-  S.amt = new Float32Array(M.regions.length);
-  const n = S.n;
-  S.cur = { off: new Float32Array(n * 3), q: new Float32Array(n * 4) };
-  S.from = { off: new Float32Array(n * 3), q: new Float32Array(n * 4) };
-  S.to = { off: new Float32Array(n * 3), q: new Float32Array(n * 4) };
-  for (const o of [S.cur, S.from, S.to]) for (let i = 0; i < n; i++) o.q[i * 4 + 3] = 1;
-  S.delay = new Float32Array(n); S.dOff = new Float32Array(n * 3); S.dVel = new Float32Array(n * 3);
-  S.appear = new Float32Array(n); S.loaded = new Uint8Array(n); S.vis = new Uint8Array(n);
-  S.state = new BoneState(n);
-  for (const b of S.bones) S.state.set(2, b.i, b.c[0], b.c[1], b.c[2], 1);
-  S.state.dirty();
-  S.mats = {
-    bone: boneMaterial(S.state, U, { physical: !COARSE }), depth: depthMaterial(S.state),
-    ghost: ghostMaterial(S.state, U), pick: pickMaterial(S.state), receive: !COARSE,
-  };
-  buildList(); syncUI();
-  fitView(true);
-  S.ready = true;
-  const groups = LOAD_ORDER.filter(g => M.files.some(f => f.id === g));
-  let done = 0;
-  const bar = $('loadBar').firstElementChild;
-  const queue = groups.slice();
-  const worker = async () => {
-    while (queue.length) {
-      const g = queue.shift();
-      const f = M.files.find(x => x.id === g);
-      const buf = await fetchBuf(f.url);
-      addGroup(g, buf);
-      done++;
-      bar.style.width = `${(100 * done / groups.length).toFixed(0)}%`;
-      $('loadingText').textContent = `Loading ${done} / ${groups.length}`;
-    }
-  };
-  await Promise.all([worker(), worker()]);
-  T.allBones = performance.now();
-  $('loading').classList.add('done');
-  syncRead();
-}
-function addGroup(g, buf) {
-  const bones = S.bones.filter(b => b.file === g);
-  const dec = decodeGroup(buf, bones);
-  const gm = groupMesh(dec, S.mats);
-  scene.add(gm.mesh, gm.ghost);
-  gm.ghost.visible = S.iso >= 0;
-  S.groups.set(g, gm);
-  const now = performance.now();
-  for (const b of bones) { S.loaded[b.i] = 1; b.appearAt = now + (b.i % 17) * 18; }
-  refreshVisibility(false);
-  dirty();
-}
-let cartilagePromise = null;
-function ensureCartilage() {
-  if (!cartilagePromise) {
-    const f = S.M.files.find(x => x.id === 'cartilage');
-    cartilagePromise = fetchBuf(f.url).then(buf => addGroup('cartilage', buf)).catch(e => { toast('Cartilage failed to load'); console.warn(e); });
-  }
-  return cartilagePromise;
-}
+import { loadAll, ensureCartilage } from './app/load.js';
 
 // ── visibility, flags ───────────────────────────────────────────────────────
 function shownByToggles(b) {
@@ -120,7 +49,7 @@ function shownByToggles(b) {
   if (b.type === 'cartilage' && !S.show.cartilage) return false;
   return !S.hiddenRegion.has(b.region);
 }
-function refreshVisibility(relayout = true) {
+export function refreshVisibility(relayout = true) {
   let changed = false;
   for (const b of S.bones) {
     const v = S.loaded[b.i] && shownByToggles(b) ? 1 : 0;
@@ -357,7 +286,7 @@ function focusRegion(rid) {
 // ── the bone list ───────────────────────────────────────────────────────────
 const list = $('list');
 let rowEls = new Map();
-function buildList() {
+export function buildList() {
   list.innerHTML = '';
   rowEls = new Map();
   for (const r of S.regions) {
@@ -589,7 +518,7 @@ function setShow(k, v) {
   else refreshVisibility(true);
   syncUI();
 }
-function syncRead() {
+export function syncRead() {
   if (!S.M) return;
   const bones = S.bones.filter(b => S.vis[b.i] && b.counted).length;
   const extra = [];
@@ -600,7 +529,7 @@ function syncRead() {
   const mode = S.iso >= 0 ? 'Isolated' : !exploded() ? 'Assembled' : S.mode === 'catalogue' ? `On the tray, by ${S.sort === 'size' ? 'length' : 'region'}` : `${MODE_NAME[S.mode]} explode`;
   $('read').innerHTML = `<span class="meta">${esc(mode)}</span><b>${bones} bones</b>${extra.join(' · ')}`;
 }
-function syncUI() {
+export function syncUI() {
   if (!S.amt) return;
   const ex = exploded();
   const modeNow = S.mode === 'catalogue' ? 'catalogue' : ex ? S.mode : 'assembled';
