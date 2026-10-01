@@ -32,16 +32,16 @@
 //   savePng / exportFold / importFold -- the file actions
 //   window.__origami -- the test hook the headless check drives
 
-import { reportOk } from './foldability.js';
 import * as patterns from './patterns.js';
 import { initGpu } from './gpu.js';
-import { stage, canvas, dpr, applyLayout, measure, geom2d, geom3d, view2d, resize } from './app/layout.js';
+import { canvas, applyLayout, resize } from './app/layout.js';
 import { buildLibrary } from './app/libpanel.js';
 import { defaultStatus, setStatus, syncFold, syncUI } from './app/readouts.js';
-import { rebuild, loadPreset } from './app/edit.js';
+import { rebuild } from './app/edit.js';
 import { render } from './app/draw.js';
-import { apply, uiZoom } from './app/controls.js';
+import { uiZoom } from './app/controls.js';
 import { wire } from './app/input.js';
+import { installHook } from './app/hook.js';
 import { $, S, gpu, setGpu, load } from './app/state.js';
 
 let last = performance.now();
@@ -71,37 +71,7 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-// ── the test hook (the headless check drives the page through this) ─────────
-window.__origami = {
-  presets: () => patterns.ALL.map((p) => p.id),
-  // Returns a promise: a file preset is fetched on first use.
-  loadPreset: (id) => loadPreset(patterns.byId(id)),
-  // Fold to `fraction` and run `steps` sim steps now, then hold.
-  foldTo: (fraction, steps) => {
-    S.auto = false; S.fraction = fraction; S.mesh.setFraction(fraction);
-    for (let i = 0; i < steps; i++) S.mesh.step();
-    S.mesh.recenter(); syncUI();
-  },
-  freeze: (on) => { S.frozen = !!on; },
-  // Replace the live node positions (a native dump), then recenter.
-  setNodes: (nodes) => {
-    nodes.forEach((n, i) => { S.mesh.nodes[3 * i] = n[0]; S.mesh.nodes[3 * i + 1] = n[1]; S.mesh.nodes[3 * i + 2] = n[2]; });
-    S.mesh.recenter();
-  },
-  nodes: () => Array.from({ length: S.mesh.nodeCount }, (_, i) => S.mesh.node(i)),
-  state: () => ({
-    preset: S.preset && S.preset.id, tool: S.tool, fraction: S.fraction, auto: S.auto,
-    creases: S.pattern.edges.length, vertices: S.pattern.vertices.length, faces: S.planar.faces.length,
-    undo: S.undo.length, redo: S.redo.length, layout: stage.className, gpu: !!gpu,
-    srgbView: gpu ? !gpu.encode : null, report: S.report.length, bad: S.report.filter((r) => !reportOk(r)).length,
-    hoveredFace: S.hoveredFace, hoveredCrease: S.hoveredCrease,
-    finite: S.mesh.nodes.every(Number.isFinite),
-  }),
-  pane: (name) => { measure(); const g = name === '2d' ? geom2d : geom3d; return { rect: g.rect.map((x) => x / dpr), fit: g.fit.map((x) => x / dpr) }; },
-  // World point of the diagram to a CSS point relative to the canvas.
-  worldToCss: (x, y) => { measure(); const p = view2d().toPx([x, y]); return [p[0] / dpr, p[1] / dpr]; },
-  apply: (act) => apply(act),
-};
+installHook();
 
 // ── boot ────────────────────────────────────────────────────────────────────
 async function boot() {
