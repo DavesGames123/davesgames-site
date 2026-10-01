@@ -1,26 +1,42 @@
 // ============================================================================
-//  WATCH MOVEMENT  ·  wear.js — procedural finishes and wear in the shader
+//  WATCH MOVEMENT  ·  wear.js — finishes in the shader, wear from photos
 // ────────────────────────────────────────────────────────────────────────────
 //  applyFinish(material, o) patches a MeshStandardMaterial or
 //  MeshPhysicalMaterial so its fragment shader builds, in the object's own
 //  millimetres (no UVs needed):
 //    o.finish  perlage | geneva | circular | sunray | brushed | leather |
 //              weave | none      the watchmaker's decoration of the part
-//    o.wear    0..1   fine scratches at two scales
-//    o.prints  0..1   fingerprints (oval ridged prints) and soft smudges
+//    o.wear    0..1   scratches, from a photographic scratch map at two scales
+//    o.prints  0..1   fingerprints and smudges, from photographic maps
 //    o.depth   scale of the bump (1 = the default relief)
 //  Each pattern gives a height h (mm, for a bump: the normal tilts with its
 //  screen-space slope) and a roughness change. Fine detail fades out where
 //  it is smaller than a pixel, so it never shimmers. The plane of the
 //  pattern follows the part's main axis (the largest normal component).
 //
+//  WEAR MAPS  (textures/, CC0 photographs from ambientCG, see README.md)
+//    wear-prints.jpg, wear-scratches.jpg, wear-smudges.jpg: one grey
+//    channel each, black = clean. Every patched material gets the same
+//    uniform objects (WEAR_TEX). They hold a 1 x 1 black texture until the
+//    photos load, so the first frames draw clean metal, and the marks show
+//    in every part at once when the load completes. A part rotates and
+//    shifts the maps by its seed, so neighbouring parts do not repeat.
+//    The marks also raise the clearcoat roughness, so prints on a
+//    lacquered plate sit on the lacquer. The textures live as long as the
+//    GL context; lib/gpu-guard.js frees the context on a page swap.
+//
 //  GREP MAP
 //    const GLSL ................ hashes, noise, the finishes, the wear
+//    const WEAR_FILES .......... the photo for each wear uniform
+//    function loadWearTextures . the one async load
 //    function applyFinish ...... the material patch
 // ============================================================================
 
+import * as THREE from 'three';
+
 const GLSL = /* glsl */`
 uniform float uWear, uPrints, uDepth, uSeed;
+uniform sampler2D uPrintTex, uScratchTex, uSmudgeTex;
 varying vec3 vFinP;
 varying vec3 vFinN;
 float fh1(vec2 p) { p = fract(p * vec2(123.34, 456.21) + uSeed); p += dot(p, p + 45.32); return fract(p.x * p.y); }
@@ -29,42 +45,9 @@ float fnoise(vec2 p) {
   vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
   return mix(mix(fh1(i), fh1(i + vec2(1, 0)), u.x), mix(fh1(i + vec2(0, 1)), fh1(i + vec2(1, 1)), u.x), u.y);
 }
-float ffbm(vec2 p) { float s = 0.0, a = 0.5; for (int i = 0; i < 4; i++) { s += a * fnoise(p); p = p * 2.03 + 7.1; a *= 0.5; } return s; }
 // a groove pattern of period P along x, faded where P is under ~2 pixels
 float fgroove(float x, float P) { float w = fwidth(x) / P; return sin(x * 6.2831853 / P) * (1.0 - smoothstep(0.25, 0.6, w)); }
 
-// Scratches: one cell lookup per grid, not a 3x3 search. A scratch stays
-// inside its own cell (half length <= 0.48 S, centre jittered by what is
-// left), so only the cell that holds the point can touch it. Two grids, the
-// second offset by half a cell, hide the cell edges. fw is fwidth(uv.x),
-// taken outside any branch.
-float fscratch1(vec2 uv, float S, float density, float width, float fw, vec2 off) {
-  vec2 c = floor((uv + off) / S), r = fh2(c * 1.37 + 3.1 + off);
-  float L = S * (0.22 + 0.26 * fh1(c + 4.2 + off));
-  vec2 o = (c + 0.5) * S - off + (fh2(c + 9.7 + off) - 0.5) * (S - 2.0 * L);
-  float a = r.y * 6.2831853; vec2 d = vec2(cos(a), sin(a)), q = uv - o;
-  float t = clamp(dot(q, d), -L, L), dist = length(q - d * t);
-  float taper = 1.0 - pow(abs(t) / L, 2.0), pw = max(width, fw * 0.7);
-  return step(r.x, density) * taper * (1.0 - smoothstep(0.0, pw, dist)) * (0.35 + 0.65 * fh1(c + 2.0 + off)) * (width / pw);
-}
-float fscratch(vec2 uv, float s, float density, float width, float fw) {
-  float S = 2.0 * s, p = min(1.0, 1.6 * density);
-  return max(fscratch1(uv, S, p, width, fw, vec2(0.0)), fscratch1(uv, S, p, width, fw, vec2(s)));
-}
-// fingerprints: sparse oval prints with ridges, one per 16 mm cell at
-// most, kept inside the cell (radius 5.6, centre in the middle 30 %)
-float fprint(vec2 uv) {
-  float s = 16.0; vec2 cc = floor(uv / s);
-  vec2 o = (cc + 0.35 + 0.3 * fh2(cc + 5.0)) * s, q = uv - o;
-  float a = fh1(cc + 1.3) * 6.2831853, ca = cos(a), sa = sin(a);
-  q = vec2(ca * q.x + sa * q.y, -sa * q.x + ca * q.y) / vec2(4.2, 5.6);
-  float d = length(q);
-  float ridge = 0.5 + 0.5 * fgroove(d * 5.0 + 0.25 * fnoise(uv * 1.3), 0.45);      // ridges 0.45 mm apart
-  // a soft oval, thinned by noise on the scale of the print itself: a
-  // finer noise breaks a print into speckle at clock distances
-  float m = (1.0 - smoothstep(0.35, 1.0, d)) * smoothstep(0.1, 0.8, fnoise(uv * 0.22 + cc * 3.1));
-  return step(fh1(cc + 11.0), 0.45) * m * (0.45 + 0.55 * ridge);
-}
 // the finishes: x = height (mm), y = roughness change
 vec2 ffinish(vec2 uv, vec3 p) {
   vec2 r = vec2(0.0);
@@ -119,17 +102,27 @@ vec2 ffinish(vec2 uv, vec3 p) {
 #endif
   return r;
 }
+// A wear map in the part's plane: tile mm per repeat, turned and shifted
+// by the part's seed and a per-map constant k.
+vec2 fwuv(vec2 uv, float tile, float k) {
+  float a = fract(uSeed * 7.31 + k) * 6.2831853, c = cos(a), s = sin(a);
+  return mat2(c, s, -s, c) * uv / tile + vec2(fract(uSeed * 3.7 + k * 1.3), fract(uSeed * 5.1 + k * 2.9));
+}
+vec2 finW = vec2(0.0);   // the wear part of fAll, for the clearcoat
 vec2 fwear(vec2 uv) {
   vec2 r = vec2(0.0);
-  float fw = fwidth(uv.x);
   if (uWear > 0.0) {
-    float s1 = fscratch(uv, 2.2, 0.55 * uWear, 0.006, fw), s2 = fscratch(uv + 31.0, 7.5, 0.35 * uWear, 0.012, fw), s3 = fscratch(uv + 77.0, 0.9, 0.5 * uWear, 0.003, fw);
-    float s = max(max(s1, s2 * 1.2), s3 * 0.7);
-    r.x -= 0.004 * s; r.y += 0.22 * s * uWear;
+    // one scratch photo at two scales: a 30 mm tile and a finer 11 mm tile
+    float s1 = texture2D(uScratchTex, fwuv(uv, 30.0, 0.11)).r;
+    float s2 = texture2D(uScratchTex, fwuv(uv, 11.0, 0.53)).r;
+    float s = smoothstep(0.04, 0.5, max(s1, 0.7 * s2) * (0.4 + 0.6 * uWear));
+    r.x -= 0.004 * s; r.y += 0.32 * s * uWear;
   }
   if (uPrints > 0.0) {
-    float f = fprint(uv), sm = smoothstep(0.55, 0.85, ffbm(uv * 0.08 + 3.0));
-    r.y += uPrints * (0.2 * f + 0.1 * sm);
+    // fingerprints about 12 mm across (a 110 mm tile), smudges on 70 mm
+    float f = texture2D(uPrintTex, fwuv(uv, 110.0, 0.29)).r;
+    float sm = texture2D(uSmudgeTex, fwuv(uv, 70.0, 0.71)).r;
+    r.y += uPrints * (0.45 * f + 0.15 * sm);
     r.x += uPrints * 0.0006 * f;
   }
   return r;
@@ -147,9 +140,29 @@ vec3 fPerturb(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDir) {
 vec2 fAll() {
   vec3 n = abs(vFinN), p = vFinP;
   vec2 uv = n.z >= n.x && n.z >= n.y ? p.xy : n.y >= n.x ? p.xz : p.yz;
-  return ffinish(uv, p) + fwear(uv);
+  finW = fwear(uv);
+  return ffinish(uv, p) + finW;
 }
 `;
+
+// the wear photos, shared by every material (see WEAR MAPS above)
+const WEAR_FILES = { uPrintTex: 'wear-prints.jpg', uScratchTex: 'wear-scratches.jpg', uSmudgeTex: 'wear-smudges.jpg' };
+const WEAR_TEX = {};
+for (const k in WEAR_FILES) {
+  const t = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1); t.needsUpdate = true;
+  WEAR_TEX[k] = { value: t };
+}
+let wearLoad = null;
+function loadWearTextures() {
+  if (wearLoad) return wearLoad;
+  const L = new THREE.TextureLoader();
+  wearLoad = Promise.all(Object.entries(WEAR_FILES).map(([k, f]) => L.loadAsync(new URL('./textures/' + f, import.meta.url).href).then(t => {
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.NoColorSpace; t.anisotropy = 8;
+    WEAR_TEX[k].value = t;
+  }))).catch(e => console.warn('wear textures did not load', e));
+  return wearLoad;
+}
+export const wearTexturesReady = () => loadWearTextures();
 
 const FIN = { none: 0, perlage: 1, geneva: 2, circular: 3, sunray: 4, brushed: 5, leather: 6, weave: 7 };
 
@@ -158,14 +171,16 @@ export function applyFinish(m, o = {}) {
   if (!fin && !wear && !prints) return m;
   const key = `fin${fin}w${wear > 0 ? 1 : 0}p${prints > 0 ? 1 : 0}`;
   m.customProgramCacheKey = () => key;
-  m.userData.finishUniforms = { uWear: { value: wear }, uPrints: { value: prints }, uDepth: { value: o.depth ?? 1 }, uSeed: { value: o.seed ?? 0.37 } };
+  if (wear || prints) loadWearTextures();
+  m.userData.finishUniforms = { uWear: { value: wear }, uPrints: { value: prints }, uDepth: { value: o.depth ?? 1 }, uSeed: { value: o.seed ?? 0.37 }, ...WEAR_TEX };
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, m.userData.finishUniforms);
     sh.vertexShader = 'varying vec3 vFinP;\nvarying vec3 vFinN;\n' + sh.vertexShader
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n  vFinP = position;\n  vFinN = normal;');
     sh.fragmentShader = `#define FINISH ${fin}\n` + GLSL + sh.fragmentShader
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  vec2 finHR = fAll();\n  roughnessFactor = clamp(roughnessFactor + finHR.y, 0.02, 1.0);')
-      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  normal = fPerturb(-vViewPosition, normal, vec2(dFdx(finHR.x), dFdy(finHR.x)) * 1.0 * uDepth, faceDirection);');
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  normal = fPerturb(-vViewPosition, normal, vec2(dFdx(finHR.x), dFdy(finHR.x)) * 1.0 * uDepth, faceDirection);')
+      .replace('#include <lights_physical_fragment>', '#include <lights_physical_fragment>\n#ifdef USE_CLEARCOAT\n  material.clearcoatRoughness = clamp(material.clearcoatRoughness + finW.y, 0.0525, 1.0);\n#endif');
   };
   return m;
 }
