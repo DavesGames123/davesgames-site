@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Game of Life — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   GAME OF LIFE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js runs Conway's Game of Life, and the other
+   Life-like B/S rules, on a large torus with WebGPU compute (engine-gpu.js),
+   or on a small world on the CPU when WebGPU is missing (engine-cpu.js).
+   learn.js fills the explainer panel (#learn) with live diagrams.
+
+   FILES
+     life.js        the rule, the CPU reference, RLE and transforms (no DOM)
+     patterns.js    the pattern library, grouped by class
+     life.wgsl      step, step_stats and count compute entry points
+     paint.wgsl     writes a list of cells (brush, erase, stamp)
+     render.wgsl    draws the world into #gl
+     engine-gpu.js  the WebGPU engine
+     engine-cpu.js  the Canvas 2D fallback engine, same API
+     main.js        view, tools, controls, the frame loop
+     learn.js       rule cards, the worked step, the class animations
+     tests.mjs      CPU pattern checks and the GPU parity check
+     parity.html    the page that tests.mjs drives for the GPU parity check
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Game of Life                               │
+     ├────────────┬───────────────────────────────────────┬─────────────┤
+     │ #panel     │  #gl   the world                       │ #learn      │
+     │  run       │  #ov   stamp preview and brush cell    │  rules      │
+     │  readout   │                                        │  one step   │
+     │  rule      │                                        │  patterns   │
+     │  world     │                                        │  history    │
+     │  tool      │                                        │  why        │
+     │  library   │                              #learnBtn │             │
+     ├────────────┴───────────────────────────────────────┴─────────────┤
+     │ #status  rule · generation · population · births · deaths · spark │
+     └──────────────────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock      fixed at the base: settings, play, step, tool, pattern, learn.
+     #panel     portrait: a bottom sheet above the dock. #sheetGrip toggles
+                half and full height, and a drag down closes the sheet.
+                landscape: a drawer on the right edge.
+     #learn     a tall sheet (portrait) or a right drawer (landscape).
+     One finger uses the tool. Two fingers pinch to zoom and drag to pan.
+
+   GREP MAP  (main.js)
+     grep -n 'function boot'          engine choice and first world
+     grep -n 'function frame'         the frame loop and the speed control
+     grep -n 'function bindPointer'   draw, stamp, pan, pinch, wheel
+     grep -n 'function stampCells'    the selected pattern after rotate and flip
+     grep -n 'function buildLibrary'  the grouped pattern list
+     grep -n 'function setRule'       the rule picker and the custom field
+     grep -n 'function bindKeys'      keyboard shortcuts
+     grep -n 'function occlusion'     the overlay margins that frame the view
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="Conway's Game of Life on the GPU. Draw cells, stamp gliders, guns and spaceships from a library, try other Life-like rules, and learn how four simple rules make patterns that move, oscillate and compute.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Game of Life</div>
+</div>
+
+<canvas id="gl"></canvas>
+<canvas id="ov" aria-hidden="true"></canvas>
+<div id="toast" role="status" aria-live="polite"></div>
+<button id="gear" aria-label="Show controls">☰</button>
+<button id="learnBtn" aria-label="How Life works" aria-expanded="false"><span class="i">i</span><span class="t">How it works</span></button>
+
+<div id="cpuNote" hidden>
+  <b>No WebGPU in this browser.</b> The world runs on the CPU, so it is small (256 × 256) and slower. Chrome, Edge and Safari 26 run the full GPU world.
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════ controls -->
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">Run</div>
+  <div class="modes">
+    <button id="playBtn" class="grow">❚❚ Pause</button>
+    <button id="stepBtn" title="One generation (N)">Step</button>
+    <button id="clearBtn" title="Clear (C)">Clear</button>
+  </div>
+  <div class="row"><label for="speed">Speed</label><input type="range" id="speed" min="0" max="14" step="1" value="6"><span class="val" id="speedV"></span></div>
+
+  <div class="readout">
+    <div class="rd"><span>Generation</span><b id="rdGen">0</b></div>
+    <div class="rd"><span>Population</span><b id="rdPop">0</b></div>
+    <div class="rd born"><span>Births</span><b id="rdBirths">0</b></div>
+    <div class="rd died"><span>Deaths</span><b id="rdDeaths">0</b></div>
+  </div>
+  <canvas id="spark" class="spark" aria-label="Population over time"></canvas>
+  <div class="spark-key"><span id="sparkLo"></span><span>population over time</span><span id="rdRate"></span></div>
+
+  <div class="sec-label">Rule</div>
+  <div class="rule-now"><span class="bs" id="ruleStr">B3/S23</span><span id="ruleName">Life</span></div>
+  <div class="chips" id="rules"></div>
+  <div class="row"><label for="ruleIn">Custom</label><input id="ruleIn" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="B36/S23" aria-label="Custom rule in B/S form"><button id="ruleGo" class="small">Set</button></div>
+  <div class="hint" id="ruleNote"></div>
+
+  <div class="sec-label">World</div>
+  <div class="modes">
+    <button id="randomBtn" class="grow" title="Random fill (R)">Random fill</button>
+    <button id="wrapBtn" class="on" title="Edges join, the world is a torus">Wrap · on</button>
+  </div>
+  <div class="row"><label for="density">Density</label><input type="range" id="density" min="0.02" max="0.8" step="0.01" value="0.3"><span class="val" id="densityV"></span></div>
+  <div class="row"><label for="sizeSel">Size</label><select id="sizeSel">
+    <option value="256">256 × 256</option>
+    <option value="512">512 × 512</option>
+    <option value="1024">1024 × 1024</option>
+    <option value="2048">2048 × 2048</option>
+  </select></div>
+
+  <div class="sec-label">Tool</div>
+  <div class="presets" id="tools">
+    <button data-tool="draw" class="on" title="Draw and erase (1)">✎ Draw</button>
+    <button data-tool="stamp" title="Stamp a pattern (2)">◫ Stamp</button>
+    <button data-tool="pan" title="Pan the view (3)">✥ Pan</button>
+  </div>
+  <div class="hint" id="toolHint"></div>
+
+  <div class="pat-card" id="patCard">
+    <canvas id="patThumb" width="64" height="64"></canvas>
+    <div class="pat-meta">
+      <div class="pat-name" id="patName">Glider</div>
+      <div class="pat-sub" id="patSub"></div>
+    </div>
+  </div>
+  <div class="modes">
+    <button id="rotBtn" title="Rotate a quarter turn (Q)">⟳ Rotate</button>
+    <button id="flipBtn" title="Mirror (F)">⇋ Flip</button>
+    <button id="loadBtn" title="Clear the world and place this pattern in the center">Load alone</button>
+  </div>
+
+  <div class="sec-label" id="libLabel">Pattern library</div>
+  <div id="library"></div>
+
+  <div class="sec-label">View</div>
+  <div class="presets">
+    <button id="ageBtn" class="on" title="Colour cells by age">Age colours</button>
+    <button id="trailBtn" class="on" title="Show where cells died">Trails</button>
+    <button id="gridBtn" class="on" title="Grid lines when zoomed in (G)">Grid</button>
+  </div>
+  <div class="modes"><button id="fitBtn" title="Show the whole world (0)">Fit world</button><button id="zoomInBtn" title="Zoom in (+)">＋</button><button id="zoomOutBtn" title="Zoom out (−)">－</button></div>
+  <div class="age-key" id="ageKey"><span><i style="--c:#ffd66e"></i>newborn</span><span><i style="--c:#b8f07a"></i>young</span><span><i style="--c:#45d1b0"></i>older</span><span><i style="--c:#4a87e8"></i>still</span><span><i style="--c:#7a3049"></i>died</span></div>
+
+  <div class="sec-label desk-only">Keys</div>
+  <table class="keys desk-only">
+    <tr><td>Space</td><td>play / pause</td></tr>
+    <tr><td>N  →</td><td>one generation</td></tr>
+    <tr><td>C  R</td><td>clear / random fill</td></tr>
+    <tr><td>1 2 3</td><td>draw / stamp / pan</td></tr>
+    <tr><td>Q  F</td><td>rotate / flip the stamp</td></tr>
+    <tr><td>G  0</td><td>grid / fit world</td></tr>
+    <tr><td>Wheel</td><td>zoom · right drag or Shift drag to pan</td></tr>
+  </table>
+</aside>
+
+<!-- ═════════════════════════════════════════════════════════════ explainer -->
+<aside id="learn" aria-label="How the Game of Life works" hidden>
+  <div class="ln-head">
+    <div class="ln-kicker">Learn</div>
+    <button id="learnClose" aria-label="Close">✕</button>
+  </div>
+  <h1>Conway's Game of Life</h1>
+  <p class="lede">A grid of square cells, each one alive or dead. At each tick of the clock, every cell counts its live neighbours and follows four rules. Nobody plays it: you set the first pattern, and the rules do the rest.</p>
+
+  <nav class="ln-toc">
+    <a href="#ln-rules">Rules</a><a href="#ln-step">One step</a><a href="#ln-classes">Patterns</a><a href="#ln-history">History</a><a href="#ln-why">Why it matters</a>
+  </nav>
+
+  <section id="ln-rules">
+    <h2>The four rules</h2>
+    <div class="moore">
+      <div id="mooreFig"></div>
+      <p>Each cell has eight neighbours: the cells that touch it on a side or a corner. This is the <b>Moore neighbourhood</b>. All cells change at the same time, from the counts of the generation before.</p>
+    </div>
+    <div class="rule-cards" id="ruleCards"></div>
+    <p class="bsline">Short form: <span class="bs">B3/S23</span>. A dead cell is <b>B</b>orn with exactly 3 live neighbours. A live cell <b>S</b>urvives with 2 or 3. Every other cell is dead in the next generation.</p>
+  </section>
+
+  <section id="ln-step">
+    <h2>One step, cell by cell</h2>
+    <p>Each number is the count of live neighbours. Apply the rules to every cell at once to get the next generation.</p>
+    <div class="ws-tabs" id="wsTabs">
+      <button data-ws="blinker" class="on">Blinker</button><button data-ws="glider">Glider</button>
+    </div>
+    <div class="ws" id="worked"></div>
+    <div class="ws-ctrl">
+      <button id="wsPrev" aria-label="Previous generation">◀</button>
+      <span id="wsGen">Generation 0</span>
+      <button id="wsNext" aria-label="Next generation">▶</button>
+    </div>
+    <p class="ws-say" id="wsSay"></p>
+    <div class="ws-key"><span class="k-live">alive, survives</span><span class="k-die">alive, dies</span><span class="k-born">dead, is born</span></div>
+  </section>
+
+  <section id="ln-classes">
+    <h2>Kinds of pattern</h2>
+    <p>Most random starts end as a scatter of small stable shapes. People sort the shapes by what they do over time.</p>
+    <div class="cls-grid" id="clsGrid"></div>
+    <div class="cls eden">
+      <h3>Garden of Eden</h3>
+      <p>A pattern that no pattern can make: it has no parent, so it can only appear as a start. The Garden of Eden theorem of Edward Moore and John Myhill (1962–63) showed that such patterns exist. In 1971 Roger Banks and others at MIT found the first explicit one for Life.</p>
+    </div>
+  </section>
+
+  <section id="ln-history">
+    <h2>History</h2>
+    <ol class="timeline">
+      <li><b>1970</b> John Conway, at the University of Cambridge, tries many rules on a Go board and chooses B3/S23. It is hard to predict: some patterns die, some settle, and some seem to grow.</li>
+      <li><b>1970</b> Martin Gardner describes the game in his <i>Mathematical Games</i> column in <i>Scientific American</i> (October 1970). Readers everywhere start to run it by hand and on early computers.</li>
+      <li><b>1970</b> Richard Guy finds the glider. Conway offers a $50 prize for a pattern whose population grows without limit.</li>
+      <li><b>1970</b> Bill Gosper and his group at MIT win the prize with the glider gun. It fires a glider every 30 generations, forever.</li>
+      <li><b>1982</b> Elwyn Berlekamp, Conway and Guy show in <i>Winning Ways</i> how streams of gliders can build a computer.</li>
+      <li><b>2000</b> Paul Rendell builds a working Turing machine in Life.</li>
+      <li><b>2010</b> Andrew Wade's <i>Gemini</i>, the first spaceship that copies itself.</li>
+      <li><b>2016</b> The copperhead, the first c/10 spaceship, found by a searcher called zdr.</li>
+    </ol>
+  </section>
+
+  <section id="ln-why">
+    <h2>Why it matters</h2>
+    <h3>Emergence</h3>
+    <p>No rule mentions gliders, guns or oscillators. Each cell only counts its neighbours. Still, structures appear that move, interact and last, and we describe them with words the rules never use. Life is a small, exact example of complex behaviour that comes from simple local rules.</p>
+    <h3>Life can compute</h3>
+    <p>A stream of gliders can carry bits: a glider is 1, a gap is 0. Aim a gun across an input stream so that gliders that meet destroy each other. The gun gliders that get through are then the NOT of the input. From there, AND and OR gates, memory and a clock (a gun) follow. So Life is <b>Turing complete</b>: it can run any program, given enough space. One result follows from this: no algorithm can decide, for every start, whether the pattern will die out.</p>
+    <h3>A family of automata</h3>
+    <p>A <b>cellular automaton</b> is a grid of cells, a set of states and a local rule. John von Neumann designed one in the 1940s with 29 states that can copy itself. Stephen Wolfram studied the 256 <b>elementary</b> automata: one row of cells, two states, three neighbours. One of them, Rule 110, is also Turing complete (Matthew Cook, published 2004).</p>
+    <p>Life is one of the 2<sup>18</sup> = 262,144 <b>Life-like</b> rules: two states, the Moore neighbourhood, and any set of birth counts and survival counts. Try HighLife, Seeds, Day &amp; Night or Maze in the rule picker. They behave very differently.</p>
+    <h3>From Life to Lenia</h3>
+    <p>Let each cell hold a number from 0 to 1 instead of on or off, let it look at a smooth ring of neighbours, and let time move in small steps. The result is <a id="leniaLink" href="/stella-nova/#lenia" target="_top">Lenia</a>, a continuous cousin of Life. Its creatures glide and turn like small animals.</p>
+  </section>
+  <p class="ln-foot">The simulator, the pattern encodings and the diagrams on this page are original code. The patterns are the classic public Life patterns, each checked by a test.</p>
+</aside>
+
+<div id="status">
+  <span class="st-rule" id="stRule">B3/S23</span>
+  <span id="stGen">gen 0</span>
+  <span id="stPop">pop 0</span>
+  <span class="st-bd" id="stBD"></span>
+  <canvas id="sparkS" class="spark" aria-hidden="true"></canvas>
+  <span class="right" id="stRate"></span>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+  <button id="dockStep" aria-label="One generation">⏭</button>
+  <button id="dockTool" class="tool" aria-label="Tool: draw"><span class="ic">✎</span><span class="lb">Draw</span></button>
+  <button id="dockPattern" class="name" aria-label="Pattern library"><span id="dockPatName">Glider</span></button>
+  <button id="dockLearn" aria-label="How it works" aria-expanded="false">i</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>

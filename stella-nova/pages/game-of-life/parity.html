@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Game of Life GPU parity</title>
+<!--
+  Test page for tests.mjs --gpu. It is not in the site nav.
+  window.parity({rule, W, H, wrap, gens, density, seed}) runs the soup on the
+  GPU engine and on life.js in this page, and returns the count of cell words
+  that differ, and the population, births and deaths of the last generation
+  from both.
+-->
+</head>
+<body>
+<script type="module">
+import { createGpuEngine } from './engine-gpu.js';
+import * as L from './life.js';
+const eng = await createGpuEngine(null);
+window.parity = async ({ rule, W, H, wrap, gens, density, seed }) => {
+  const r = L.parseRule(rule);
+  eng.setWorld(W, H); eng.setRule(r.birth, r.survive); eng.setWrap(wrap);
+  const start = L.randomWorld(W, H, density, seed);
+  eng.write(start);
+  // Batches of odd sizes, so the buffer swap is checked on both parities.
+  // The last generation runs alone, after any readback is done, so its
+  // stats always come back.
+  let left = gens - 1, k = 1;
+  while (left > 0) { const n = Math.min(left, k); eng.step(n); left -= n; k = k * 2 + 1; await new Promise(q => setTimeout(q, 0)); }
+  await eng.read();
+  await new Promise(q => setTimeout(q, 50));
+  const got = new Promise(res => { eng.onStats = s => { if (s.gen === gens) res(s); }; });
+  eng.step(1);
+  const gpuStats = await Promise.race([got, new Promise(q => setTimeout(() => q(null), 2000))]);
+  const gpu = await eng.read();
+  let a = start, prev = null;
+  for (let g = 0; g < gens; g++) { prev = a; a = L.stepDense(a, W, H, r.birth, r.survive, wrap); }
+  let mismatch = 0, pop = 0;
+  for (let i = 0; i < W * H; i++) { if (gpu[i] !== a[i]) mismatch++; if (a[i] & 0xff) pop++; }
+  const cpuStats = L.diffStats(prev, a);
+  const statsOk = !!gpuStats && (gpuStats.pop === cpuStats.pop && gpuStats.births === cpuStats.births && gpuStats.deaths === cpuStats.deaths);
+  return { mismatch, cells: W * H, pop, gpuStats, cpuStats, statsOk };
+};
+</script>
+</body>
+</html>
