@@ -10,6 +10,9 @@
   { h: "Help Translate", p: [
     ["translate", "Translation Tool", "i18n"]] }] },
 { id: "cl-crew", label: "Interactive Wiki", groups: [
+  { h: "Reference", p: [
+    ["wiki", "Wiki", "NEW"],
+    ["research", "Research", "NEW"]] },
   { h: "Station Design", p: [
     ["guide", "Station Guide", null],
     ["planner", "Station Planner", null],
@@ -20,7 +23,10 @@
   { h: "Gameplay", p: [
     ["selection", "Selection", null],
     ["behaviors", "Behaviors", null],
-    ["controls", "Controls", null]] }] },
+    ["controls", "Controls", null]] },
+  { h: "Crew & Society", p: [
+    ["citizen-dynamics", "Citizen Dynamics", "NEW"],
+    ["social-dynamics", "Social Dynamics", "NEW"]] }] },
 { id: "cl-learn", label: "Learn About Physics", groups: [
   { h: "Orbital Mechanics", p: [
     ["hohmann", "Hohmann Transfer", "SIM"],
@@ -134,5 +140,5 @@
   { h: null, p: [
     ["fortom", "For Tom", null],
     ["starward-belt", "Starward Belt", "MAP"],
-    ["translate", "Translation Terminal", "i18n"]] }] }
+    ["translate", "Translation Tool", "i18n"]] }] }
 ];
