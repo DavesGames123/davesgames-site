@@ -20,17 +20,26 @@
 // crease hover, the foldability marks, FOLD import and export, a snap preview,
 // tool and transport keys, touch gestures, and the layout toggle.
 //
-// grep map:
-//   S              -- all state: pattern, planar, mesh, fold, views, flags
-//   rebuild        -- pattern -> planarized -> fold mesh -> foldability report
-//   frame          -- step the sim, draw both panes, update the readouts
-//   draw2d / draw3d -- the two panes' fills and lines   [app.rs draw_2d, draw_3d]
-//   updateHover    -- face, crease, vertex under the pointer
-//   onDown / onMove / onUp / onWheel -- pointer input, mouse and touch
-//   apply          -- every control action             [app.rs apply]
-//   onKey          -- every keyboard shortcut          [main.rs window_event]
-//   savePng / exportFold / importFold -- the file actions
-//   window.__origami -- the test hook the headless check drives
+// main.js is the shell: it boots the page and runs the frame loop. Each other
+// concern has one module in app/, and each module header has its own grep map.
+//
+// grep map (this file):
+//   frame       -- step the sim, draw both panes, update the readouts  [app.rs frame]
+//   boot        -- restore the layout and zoom, wire, build the first pattern, start the GPU
+//
+// module map (app/):
+//   state.js    -- S (all state), TOOLS, SPEEDS, the palette, gpu / setGpu, load / save
+//   geom.js     -- pointInPoly, pointInTri2, pointSegDist: the pure hit tests
+//   layout.js   -- applyLayout, measure, view2d, region3d, paneAt, dpr, resize
+//   libpanel.js -- buildLibrary, filterLibrary, fillThumbs  [app.rs draw_library]
+//   readouts.js -- setStatus, syncFold, syncUI, syncCheck
+//   edit.js     -- rebuild, pushUndo / undo / redo, loadPreset, eraseNear
+//   draw.js     -- draw2d / draw3d, render                  [app.rs draw_2d, draw_3d]
+//   hover.js    -- updateHover                              [app.rs update_hover]
+//   files.js    -- savePng, exportFold, importFold
+//   controls.js -- apply, resetView, uiZoom, onKey          [app.rs apply, main.rs window_event]
+//   input.js    -- onDown / onMove / onUp / onWheel, wireSheet, wire
+//   hook.js     -- installHook: window.__origami, the test hook the headless check drives
 
 import * as patterns from './patterns.js';
 import { initGpu } from './gpu.js';
