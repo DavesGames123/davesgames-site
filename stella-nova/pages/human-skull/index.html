@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>Human Skull — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   HUMAN SKULL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. An adult human skull in 51 parts (23 bones, 28
+   teeth) from BodyParts3D, in an exploded view that you can sort four
+   ways and put back together. build-data.mjs makes data/skull.{bin,json}
+   offline; skull.js loads it and holds the bone shader; arrange.js gives
+   the layouts and the spring motion; stage.js the renderer, the studio
+   light, the floor and the camera; tray.js the catalogue tray; main.js
+   the state, the controls, the picking and the cards.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts (STIX Two Text, Inter), style.css
+     3. the theme, before first paint (localStorage, else dark)
+     4. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Human Skull                     #gear       │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │ #plate  the museum label     #hint                  │
+     │  adjust    │                                                     │
+     │  parts     │          #view   the skull (canvas, transparent)    │
+     │  info      │          #labels region titles, part labels         │
+     │            │          #card   the picked part, with #leader      │
+     │            │      ┌ #bar ─────────────────────────────────────┐  │
+     │            │      │ Anatomy Symmetry Region Catalogue │ ⟲  ◐ │  │
+     │            │      └───────────────────────────────────────────┘  │
+     └────────────┴─────────────────────────────────────────────────────┘
+     #backdrop (two gradient layers, one per theme), #vignette and #grain
+     sit under and over the canvas; CSS does them, not a post pass.
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock    at the base: Parts, Adjust, Rebuild, Theme, Info. Rebuild
+              and Theme act at once; the others open #panel with only that
+              .grp: a bottom sheet in portrait, a right drawer in landscape.
+     #bar     the four arrangements, one tap each, just above the dock
+              (beside it in landscape).
+     #card    a full-width card above the bar. main.js frames the skull in
+              the clear part of the canvas (stage.js, setViewOffset).
+
+   GREP MAP  (main.js)
+     grep -n 'function setArrangement'  pick a layout and fly the camera
+     grep -n 'function setExplode'      the spread and Reconstruct
+     grep -n 'function select'          pick, card, isolate
+     grep -n 'function onTap'           tap rules: pick, isolate, clear
+     grep -n 'function beginDrag'       drag a part out; it springs back
+     grep -n 'function frame'           the loop
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="An adult human skull in 51 parts: every cranial and facial bone, the hyoid, and 28 teeth, in an exploded view you can sort by anatomy, symmetry, region or size, and put back together.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script>
+  (function () {
+    var t = 'dark';
+    try { var s = localStorage.getItem('sn-skull-theme'); if (s === 'light' || s === 'dark') t = s; } catch (e) {}
+    document.documentElement.setAttribute('data-theme', t);
+    if (window !== window.top) document.documentElement.classList.add('in-frame');
+  })();
+</script>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Human Skull</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <div id="backdrop" aria-hidden="true"><i class="bd-dark"></i><i class="bd-light"></i></div>
+  <canvas id="view" aria-label="A human skull in 3D. Drag to turn it, tap a part to name it."></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <svg id="leader" aria-hidden="true"><line/><circle class="pulse" r="7"/><circle class="dotA" r="3"/></svg>
+  <header id="plate">
+    <div class="acc">Specimen <span id="plateArr">· Anatomy</span></div>
+    <h1>Human skull</h1>
+    <div class="lat">Cranium humanum</div>
+    <div class="count"><b>51</b> parts · 23 bones · 28 teeth</div>
+  </header>
+  <div id="hint" class="phint">hover a part to name it · click to pick · click again to isolate · drag a part out</div>
+  <div class="tip" id="tipHover" aria-hidden="true"><div class="tip-in"></div></div>
+  <section class="card" id="card" aria-live="polite" aria-label="Selected part"><div class="card-in"></div></section>
+  <div id="loading"><div class="ld-t">Laying out the specimens</div><div class="ld-bar"><i id="ldBar"></i></div></div>
+  <div id="credit">Meshes: <a href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html" target="_blank" rel="noopener">BodyParts3D</a>, © DBCLS, CC BY 4.0</div>
+  <div id="vignette" aria-hidden="true"></div>
+  <div id="grain" aria-hidden="true"></div>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the skull cannot render.</div>
+
+<nav id="bar" aria-label="Arrange">
+  <span class="bar-l">Arrange by</span>
+  <div class="seg" id="arrs" role="radiogroup">
+    <button type="button" role="radio" data-arr="anatomy">Anatomy</button>
+    <button type="button" role="radio" data-arr="symmetry">Symmetry</button>
+    <button type="button" role="radio" data-arr="region">Region</button>
+    <button type="button" role="radio" data-arr="tray">Catalogue</button>
+  </div>
+  <button type="button" class="bar-b" id="rebuild">Reconstruct</button>
+  <button type="button" class="bar-b icon" id="theme" aria-label="Switch theme"><span class="th-i"></span></button>
+</nav>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="adjust">
+    <div class="sec-label first">Arrangement</div>
+    <div class="arrlist" id="arrList"></div>
+    <div class="sec-label">Spread</div>
+    <div class="row"><label for="explode">Explode</label><input type="range" id="explode" min="0" max="1" step="0.01" value="1"><span class="val" id="explodeV">100%</span></div>
+    <div class="grid2">
+      <button class="tog" id="tOrbit" type="button">Slow orbit</button>
+      <button class="tog" id="tLabels" type="button">Labels</button>
+      <button class="tog" id="tTheme" type="button">Light theme</button>
+      <button class="tog" id="tFront" type="button">Face on</button>
+    </div>
+  </section>
+
+  <section class="grp" data-grp="parts">
+    <div class="sec-label">Parts</div>
+    <div class="search"><input id="q" type="search" placeholder="Search 51 parts, English or Latin" autocomplete="off" spellcheck="false" aria-label="Search parts"></div>
+    <div id="list" role="list"></div>
+  </section>
+
+  <section class="grp" data-grp="info">
+    <div class="sec-label">About</div>
+    <div class="about">
+      <p>The skull of one adult man, as it is drawn in <b>BodyParts3D</b>, the open 3D anatomy of the Database Center for Life Science in Japan. Each bone and each tooth is its own model, from CT data.</p>
+      <p><b>Anatomy</b> opens the skull along the lines that its parts take. <b>Symmetry</b> puts each left and right pair face to face across the midline. <b>Region</b> sorts the parts into the cranium, the face, the teeth and the hyoid. <b>Catalogue</b> lays every part flat on a tray, largest first.</p>
+      <p>Pick a part to read its card. Pick it again to see it alone. Drag a part out of place and let go: it springs back.</p>
+      <p class="fine">No ossicles: the source has no ear bones. The two inferior nasal conchae count as bones; the upper conchae belong to the ethmoid. The third molars are not in the model.</p>
+      <p class="fine">Data: BodyParts3D, © The Database Center for Life Science, CC BY 4.0 (the 2011 files say CC BY-SA 2.1 JP). The meshes here are cut down, smoothed and baked with light, and are shared under CC BY-SA 4.0. See <a href="data/LICENSE.txt" target="_blank">data/LICENSE.txt</a>.</p>
+    </div>
+  </section>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="parts" type="button"><i>☰</i><span>Parts</span></button>
+  <button class="tab" data-grp="adjust" type="button"><i>◈</i><span>Adjust</span></button>
+  <button id="dockRebuild" type="button"><i>⟲</i><span>Rebuild</span></button>
+  <button id="dockTheme" type="button"><i>◐</i><span>Theme</span></button>
+  <button class="tab" data-grp="info" type="button"><i>ℹ</i><span>Info</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

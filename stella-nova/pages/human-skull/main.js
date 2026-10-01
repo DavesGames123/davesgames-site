@@ -1,0 +1,633 @@
+// ============================================================================
+//  HUMAN SKULL  ·  main.js — state, controls, picking, cards, the loop
+// ────────────────────────────────────────────────────────────────────────────
+//  Boot: stage.js makes the renderer and the studio; skull.js loads the 51
+//  parts; the parts fly in, assemble, then open in the Anatomy layout.
+//
+//  STATE (S)
+//    arr     the layout: anatomy | symmetry | region | tray (arrange.js)
+//    e       the spread, 0 (assembled) .. 1 (full layout)
+//    sel     the picked part (card), or -1
+//    iso     the isolated part (the rest are ghosts), or -1
+//    hover   the part under the mouse, or -1
+//
+//  TAP RULES (onTap)
+//    a part ........... pick it and show its card
+//    the picked part .. isolate it (again: show all)
+//    empty space ...... leave isolation, else drop the pick
+//  Hold a part (about 0.3 s), then drag: the part follows the pointer and
+//  springs back on release. A plain drag turns the camera.
+//
+//  GREP MAP
+//    function setArrangement ... pick a layout and fly the camera
+//    function setExplode ....... the spread, the slider and Reconstruct
+//    function select ........... the picked part and its card
+//    function isolate .......... ghost the rest, frame the part
+//    function pickAt ........... raycast, with a wider ring on touch
+//    function onTap ............ the tap rules above
+//    function beginDrag ........ hold-and-drag a part
+//    function cardHTML ......... the museum label card
+//    function placeCard ........ card position and its leader line
+//    function setOpen .......... panel, sheet and dock
+//    function frame ............ the loop
+// ============================================================================
+import * as THREE from 'three';
+import { createStage, KEY_DIR } from './stage.js';
+import { loadSkull, disposeSkull } from './skull.js';
+import { layoutFor, createMotion, REGIONS, TRAY_Y } from './arrange.js';
+import { createTray, shortName } from './tray.js';
+
+const $ = id => document.getElementById(id);
+const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+const COARSE = matchMedia('(pointer:coarse)').matches;
+const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+
+const GROUPS = {
+  cranial: { label: 'Cranial bone', short: 'Cranial' },
+  facial: { label: 'Facial bone', short: 'Facial' },
+  dentition: { label: 'Tooth', short: 'Dentition' },
+  hyoid: { label: 'Throat bone', short: 'Hyoid' },
+};
+const ARR = {
+  anatomy: { label: 'Anatomy', blurb: 'Each part moves out along the line it takes in the head. The teeth leave their sockets and fan out from the arch.', view: { az: 34, el: 9 } },
+  symmetry: { label: 'Symmetry', blurb: 'The midline bones stand in a column. Each left and right pair faces its twin across the midline.', view: { az: 0, el: 3 } },
+  region: { label: 'Region', blurb: 'Four groups: the cranium round the brain, the bones of the face, the teeth, and the hyoid.', view: { az: 16, el: 8 } },
+  tray: { label: 'Catalogue', blurb: 'Every part laid flat on a specimen tray, largest first, with its catalogue number.', view: { az: 0, el: 56 } },
+};
+const Q0 = new THREE.Quaternion();
+
+// ── stage ───────────────────────────────────────────────────────────────────
+const panel = $('panel'), canvas = $('view');
+const stage = createStage({
+  canvas, coarse: COARSE, reduced: REDUCED,
+  onNoGL: () => { $('nogl').hidden = false; $('loading').hidden = true; },
+  occluders: () => {
+    const list = [$('bar'), $('dock')];
+    if (panel.classList.contains('open')) list.push(panel);
+    if (PHONE_Q.matches) { list.push($('plate')); if ($('card').classList.contains('show')) list.push($('card')); }
+    return list;
+  },
+});
+const camera = stage.camera;
+
+let theme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+const S = {
+  arr: 'anatomy', e: 1, layout: null, sel: -1, iso: -1, hover: -1, labels: false, ready: false,
+  floorY: -140, aspectWide: null, introTimer: 0, selPoint: null,
+};
+let parts = [], motion = null, tray = null, man = null;
+
+// ── layouts ─────────────────────────────────────────────────────────────────
+function clearAspect() {
+  const ob = stage.occlusion(), w = canvas.clientWidth - ob.l - ob.r, h = canvas.clientHeight - ob.t - ob.b;
+  return Math.max(0.3, w / Math.max(1, h));
+}
+function computeLayout(name) {
+  const a = clearAspect();
+  S.aspectWide = a >= 1.05;
+  S.layout = layoutFor(name, parts, a);
+  if (name === 'tray') tray.setLayout(S.layout);
+  return S.layout;
+}
+function targetsAt(e) {
+  return parts.map((p, i) => {
+    const f = S.layout.out[i];
+    return { pos: p.home.clone().lerp(f.pos, e), quat: new THREE.Quaternion().slerpQuaternions(Q0, f.quat, Math.min(1, e * 1.25)) };
+  });
+}
+function viewFor(name) { return ARR[name].view; }
+function fitFor(targets, view, margin) {
+  const list = targets.map((t, i) => ({ c: t.pos, r: parts[i].size * 0.4 }));
+  if (S.arr === 'tray' && S.e > 0.5 && S.layout.size) {
+    const [W, D] = S.layout.size;
+    for (const [x, z] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) list.push({ c: new THREE.Vector3(x * W / 2, TRAY_Y, z * D / 2), r: 4 });
+  }
+  return stage.fitSpheres(list, view.az, view.el, margin);
+}
+function flyToLayout(dur, keepAngle) {
+  const T = targetsAt(S.e);
+  const v = keepAngle ? stage.view() : viewFor(S.arr);
+  const f = fitFor(T, { az: v.az, el: v.el }, S.e < 0.05 ? 1.25 : 1.06);
+  stage.flyTo(f, dur);
+}
+
+function setArrangement(name, { fly = true } = {}) {
+  if (!ARR[name]) return;
+  clearTimeout(S.introTimer);
+  const changed = name !== S.arr;
+  S.arr = name;
+  computeLayout(name);
+  if (S.e < 0.05) setExplodeUI(1);
+  if (S.iso >= 0) isolate(-1, { fly: false });
+  motion.go(targetsAt(S.e), performance.now() / 1000, { order: 'out', stagger: changed ? 0.6 : 0.3 });
+  tray.show(name === 'tray');
+  if (fly) flyToLayout(1.5);
+  document.querySelectorAll('#arrs button').forEach(b => { const on = b.dataset.arr === name; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+  document.querySelectorAll('#arrList button').forEach(b => b.classList.toggle('on', b.dataset.arr === name));
+  $('plateArr').textContent = '· ' + ARR[name].label;
+  try { history.replaceState(null, '', '#' + name); } catch (e) {}
+}
+
+// ── explode ─────────────────────────────────────────────────────────────────
+function setExplodeUI(e) {
+  S.e = e;
+  $('explode').value = e; $('explodeV').textContent = Math.round(e * 100) + '%';
+  const open = e > 0.02;
+  $('rebuild').textContent = open ? 'Reconstruct' : 'Explode';
+  $('dockRebuild').querySelector('span').textContent = open ? 'Rebuild' : 'Explode';
+  $('dockRebuild').querySelector('i').textContent = open ? '⟲' : '✳';
+}
+// animate: a staggered move with a camera flight (Reconstruct, Explode);
+// otherwise the springs follow the slider directly
+function setExplode(e, { animate = false } = {}) {
+  clearTimeout(S.introTimer);
+  const closing = e < S.e;
+  setExplodeUI(e);
+  if (animate) {
+    if (S.iso >= 0) isolate(-1, { fly: false });
+    motion.go(targetsAt(e), performance.now() / 1000, { order: closing ? 'in' : 'out', stagger: closing ? 0.5 : 0.55, dur: 1.15 });
+    flyToLayout(1.4, S.arr !== 'tray');
+  } else motion.snap(targetsAt(e));
+  tray.show(S.arr === 'tray' && e > 0.5);
+}
+$('explode').addEventListener('input', ev => setExplode(+ev.target.value));
+$('explode').addEventListener('change', () => flyToLayout(1.0, true));
+const rebuild = () => setExplode(S.e > 0.02 ? 0 : 1, { animate: true });
+$('rebuild').addEventListener('click', rebuild);
+$('dockRebuild').addEventListener('click', rebuild);
+
+// ── theme ───────────────────────────────────────────────────────────────────
+function setTheme(t) {
+  theme = t;
+  document.documentElement.setAttribute('data-theme', t);
+  try { localStorage.setItem('sn-skull-theme', t); } catch (e) {}
+  stage.setTheme(t);
+  if (tray) tray.setTheme(t);
+  for (const p of parts) p.U.uHLc.value.set(t === 'dark' ? 0xffc777 : 0xd9822b);
+  $('tTheme').classList.toggle('on', t === 'light');
+  $('theme').setAttribute('aria-label', t === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme');
+}
+const flipTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
+$('theme').addEventListener('click', flipTheme);
+$('dockTheme').addEventListener('click', flipTheme);
+$('tTheme').addEventListener('click', flipTheme);
+
+// ── toggles ─────────────────────────────────────────────────────────────────
+$('tOrbit').addEventListener('click', () => { stage.orbit = !stage.orbit; $('tOrbit').classList.toggle('on', stage.orbit); });
+$('tLabels').addEventListener('click', () => { S.labels = !S.labels; $('tLabels').classList.toggle('on', S.labels); });
+$('tFront').addEventListener('click', () => {
+  const f = fitFor(targetsAt(S.e), { az: 0, el: S.arr === 'tray' ? 56 : 3 }, 1.06);
+  stage.flyTo(f, 1.2);
+});
+
+// ── selection, isolation, the card ─────────────────────────────────────────
+const card = $('card'), cardIn = card.querySelector('.card-in'), leader = $('leader');
+function cardHTML(i) {
+  const m = parts[i].m, G = GROUPS[m.group];
+  const side = m.side === 'mid' ? 'Midline' : m.side[0].toUpperCase() + m.side.slice(1);
+  const pair = m.pair ? parts.find(q => q.m.key === m.pair) : null;
+  const rows = [['Side', esc(side)]];
+  if (m.fdi) rows.push(['FDI number', esc(m.fdi)]);
+  rows.push(['FMA', esc(m.fma.replace('FMA', ''))], ['BodyParts3D', esc(m.bp3d)]);
+  if (pair) rows.push(['Mirror pair', `<button type="button" class="lnk" data-go="${pair.i}">${esc(pair.m.name)}</button>`]);
+  const iso = S.iso === i;
+  return `<div class="c-top"><span class="eyebrow" data-g="${m.group}"><i></i>${esc(G.label)}</span><span class="no">No. ${String(i + 1).padStart(2, '0')}<em> / ${parts.length}</em></span></div>
+    <div class="c-name">${esc(m.name)}</div>
+    <div class="c-lat">${esc(m.latin)}</div>
+    <p class="c-fact">${esc(m.fact)}</p>
+    <dl class="c-specs">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+    <div class="c-act"><button type="button" class="c-btn" data-act="iso">${iso ? 'Show all' : 'Isolate'}</button><button type="button" class="c-btn ghost" data-act="close">Close</button></div>`;
+}
+cardIn.addEventListener('click', ev => {
+  const b = ev.target.closest('button'); if (!b) return;
+  if (b.dataset.go) select(+b.dataset.go);
+  else if (b.dataset.act === 'iso') isolate(S.iso === S.sel ? -1 : S.sel);
+  else if (b.dataset.act === 'close') { isolate(-1); select(-1); }
+});
+function refreshCard() { if (S.sel >= 0) cardIn.innerHTML = cardHTML(S.sel); }
+function select(i, point) {
+  if (i === S.sel && i >= 0) return;
+  S.sel = i;
+  if (i < 0) {
+    card.classList.remove('show'); leader.classList.remove('show');
+    stage.hold = false;
+  } else {
+    const mesh = parts[i].mesh;
+    S.selPoint = point ? mesh.worldToLocal(point.clone()) : new THREE.Vector3();
+    cardIn.innerHTML = cardHTML(i);
+    cardIn.classList.remove('swap'); void cardIn.offsetWidth; cardIn.classList.add('swap');
+    card.classList.add('show'); card._placed = false;
+    leader.classList.remove('show'); void leader.getBoundingClientRect(); leader.classList.add('show');
+    stage.hold = true;
+    hideHover();
+  }
+  document.querySelectorAll('#list .it').forEach(b => b.classList.toggle('on', +b.dataset.i === i));
+}
+function isolate(i, { fly = true } = {}) {
+  S.iso = i;
+  if (i >= 0) {
+    if (S.sel !== i) select(i);
+    const p = parts[i], v = stage.view(), b = new THREE.Box3().setFromObject(p.mesh);
+    if (fly) stage.flyTo(stage.fitBox(b, v.az, v.el, 2.1), 1.1);
+  } else if (fly) flyToLayout(1.1, true);
+  refreshCard();
+}
+
+// ── picking ─────────────────────────────────────────────────────────────────
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function castAt(cx, cy) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set((cx - r.left) / r.width * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const meshes = [];
+  for (const p of parts) if (p.U.uGhost.value < 0.5) meshes.push(p.mesh);
+  const h = ray.intersectObjects(meshes, false)[0];
+  return h ? { i: h.object.userData.part, point: h.point.clone() } : null;
+}
+// forgiving: on touch, a miss tries two rings round the tap point
+function pickAt(cx, cy, forgiving) {
+  const h = castAt(cx, cy);
+  if (h || !forgiving) return h;
+  for (const rad of [14, 26]) for (let k = 0; k < 8; k++) {
+    const a = k / 8 * Math.PI * 2 + (rad > 20 ? Math.PI / 8 : 0);
+    const q = castAt(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
+    if (q) return q;
+  }
+  return null;
+}
+function onTap(x, y, type) {
+  const hit = pickAt(x, y, type !== 'mouse');
+  if (hit) {
+    if (hit.i === S.sel) isolate(S.iso === hit.i ? -1 : hit.i);
+    else { if (S.iso >= 0) isolate(-1, { fly: false }); select(hit.i, hit.point); }
+  } else if (S.iso >= 0) isolate(-1);
+  else select(-1);
+}
+
+// ── pointer: tap, hold-and-drag, hover ─────────────────────────────────────
+let down = null, drag = null, lpTimer = 0, hoverAt = null;
+const pointers = new Set();
+const plane = new THREE.Plane(), hitV = new THREE.Vector3();
+function beginDrag(hit) {
+  const p = parts[hit.i];
+  drag = { i: hit.i, off: hit.point.clone().sub(p.mesh.position) };
+  stage.controls.enabled = false;
+  plane.setFromNormalAndCoplanarPoint(camera.getWorldDirection(new THREE.Vector3()), hit.point);
+  motion.M[hit.i].drag = p.mesh.position.clone();
+  S.hover = hit.i;
+  canvas.style.cursor = 'grabbing';
+  try { if (navigator.vibrate && COARSE) navigator.vibrate(8); } catch (e) {}
+}
+function moveDrag(x, y) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set((x - r.left) / r.width * 2 - 1, -((y - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  if (ray.ray.intersectPlane(plane, hitV)) motion.M[drag.i].drag.copy(hitV).sub(drag.off);
+}
+function endDrag() {
+  if (!drag) return;
+  motion.M[drag.i].drag = null;
+  drag = null;
+  stage.controls.enabled = true;
+  canvas.style.cursor = '';
+}
+canvas.addEventListener('pointerdown', ev => {
+  pointers.add(ev.pointerId);
+  hideHint();
+  clearTimeout(lpTimer);
+  if (pointers.size > 1 || !S.ready) { down = null; return; }
+  down = { x: ev.clientX, y: ev.clientY, t: performance.now(), type: ev.pointerType, moved: false };
+  const hit = castAt(ev.clientX, ev.clientY);
+  if (hit) {
+    const d0 = down;
+    lpTimer = setTimeout(() => { if (down === d0 && !d0.moved && pointers.size === 1) { d0.dragged = true; beginDrag(hit); } }, ev.pointerType === 'mouse' ? 260 : 330);
+  }
+}, { capture: true });
+canvas.addEventListener('pointermove', ev => {
+  if (ev.pointerType === 'mouse') hoverAt = [ev.clientX, ev.clientY];
+  if (down && Math.hypot(ev.clientX - down.x, ev.clientY - down.y) > 7) { down.moved = true; if (!drag) clearTimeout(lpTimer); }
+  if (drag) moveDrag(ev.clientX, ev.clientY);
+});
+function pointerEnd(ev) {
+  pointers.delete(ev.pointerId);
+  clearTimeout(lpTimer);
+  const d = down; down = null;
+  if (drag) { endDrag(); return; }
+  if (!d || ev.type === 'pointercancel') return;
+  if (!d.moved && performance.now() - d.t < 600) onTap(ev.clientX, ev.clientY, d.type);
+}
+canvas.addEventListener('pointerup', pointerEnd);
+canvas.addEventListener('pointercancel', pointerEnd);
+canvas.addEventListener('pointerleave', ev => { if (ev.pointerType === 'mouse') { hoverAt = null; S.hover = -1; hideHover(); } });
+canvas.addEventListener('contextmenu', ev => ev.preventDefault());
+addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape' || ev.target.tagName === 'INPUT') return;
+  if (S.iso >= 0) isolate(-1); else select(-1);
+});
+
+// hover card (mouse only)
+const tipHover = $('tipHover'), hov = { x: 0, y: 0, tx: 0, ty: 0, i: -1 };
+function hideHover() { tipHover.classList.remove('show'); hov.i = -1; }
+function showHover(i) {
+  if (hov.i === i) return;
+  hov.i = i;
+  const m = parts[i].m;
+  tipHover.querySelector('.tip-in').innerHTML = `<span class="eyebrow" data-g="${m.group}"><i></i>${esc(GROUPS[m.group].label)}</span><div class="t-name">${esc(m.name)}</div><div class="t-lat">${esc(m.latin)}</div>`;
+  tipHover.classList.add('show');
+}
+let hoverTick = 0;
+function updateHover() {
+  if (!hoverAt || drag || stage.dragging || !S.ready || COARSE) return;
+  if (++hoverTick % 2) return;
+  const h = castAt(hoverAt[0], hoverAt[1]);
+  S.hover = h ? h.i : -1;
+  canvas.style.cursor = h ? 'pointer' : '';
+  if (h && h.i !== S.sel) showHover(h.i); else hideHover();
+}
+
+// ── hint ────────────────────────────────────────────────────────────────────
+let hintGone = false;
+function hideHint() { if (!hintGone) { hintGone = true; $('hint').classList.add('gone'); } }
+if (COARSE) $('hint').textContent = 'tap a part to name it · tap again to isolate · hold a part to drag it';
+else $('hint').textContent = 'hover a part to name it · click to pick, again to isolate · hold a part and drag it out';
+setTimeout(hideHint, 12000);
+
+// ── panel, sheet, dock ──────────────────────────────────────────────────────
+const tabs = [...document.querySelectorAll('#dock .tab')];
+let grp = 'parts';
+function setOpen(open, g = grp) {
+  grp = g;
+  panel.classList.toggle('open', open);
+  if (!open) panel.classList.remove('full');
+  document.body.classList.toggle('panel-closed', !open);
+  panel.querySelectorAll('.grp').forEach(el => el.classList.toggle('on', el.dataset.grp === grp));
+  for (const t of tabs) { const on = open && t.dataset.grp === grp; t.classList.toggle('on', on); t.setAttribute('aria-expanded', String(on)); }
+  if (open && PHONE_Q.matches) panel.scrollTop = 0;
+}
+for (const t of tabs) t.addEventListener('click', () => setOpen(!(panel.classList.contains('open') && grp === t.dataset.grp), t.dataset.grp));
+$('gear').addEventListener('click', () => setOpen(true));
+$('panelClose').addEventListener('click', () => setOpen(false));
+setOpen(!PHONE_Q.matches);
+PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
+const grip = $('sheetGrip');
+let gripY = null;
+grip.addEventListener('pointerdown', e => { gripY = e.clientY; try { grip.setPointerCapture(e.pointerId); } catch (x) {} });
+grip.addEventListener('pointerup', e => {
+  if (gripY === null) return;
+  const dy = e.clientY - gripY; gripY = null;
+  if (Math.abs(dy) < 8) panel.classList.toggle('full');
+  else if (dy < -40) panel.classList.add('full');
+  else if (dy > 40) { if (panel.classList.contains('full')) panel.classList.remove('full'); else setOpen(false); }
+});
+grip.addEventListener('pointercancel', () => { gripY = null; });
+
+// arrangement buttons: the bar, and the list in the Adjust group
+$('arrList').innerHTML = Object.entries(ARR).map(([k, a]) => `<button type="button" data-arr="${k}"><b>${a.label}</b><span>${a.blurb}</span></button>`).join('');
+document.querySelectorAll('#arrs button, #arrList button').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.arr === S.arr && S.e > 0.02) { flyToLayout(1.2); return; }
+  setArrangement(b.dataset.arr);
+}));
+
+// ── the parts list ──────────────────────────────────────────────────────────
+function buildList() {
+  $('list').innerHTML = REGIONS.map(R => {
+    const ps = parts.filter(p => p.m.group === R.group);
+    return `<div class="lg" data-g="${R.group}"><div class="lg-h"><i></i>${GROUPS[R.group].short}<span>${ps.length}</span></div>` +
+      ps.map(p => `<button type="button" class="it" role="listitem" data-i="${p.i}" data-s="${esc((p.m.name + ' ' + p.m.latin + ' ' + (p.m.fdi || '') + ' ' + shortName(p.m)).toLowerCase())}"><span class="n">${String(p.i + 1).padStart(2, '0')}</span><span class="nm">${esc(p.m.name)}<i>${esc(p.m.latin)}</i></span></button>`).join('') + '</div>';
+  }).join('') + '<p class="none" hidden>No part matches.</p>';
+  $('list').querySelectorAll('.it').forEach(b => b.addEventListener('click', () => {
+    const i = +b.dataset.i;
+    if (S.sel === i) isolate(S.iso === i ? -1 : i);
+    else { if (S.iso >= 0) isolate(-1, { fly: false }); select(i); }
+    if (PHONE_Q.matches) setOpen(false);
+  }));
+}
+$('q').addEventListener('input', () => {
+  const q = $('q').value.trim().toLowerCase();
+  let any = false;
+  $('list').querySelectorAll('.lg').forEach(g => {
+    let n = 0;
+    g.querySelectorAll('.it').forEach(b => { const on = !q || b.dataset.s.includes(q); b.hidden = !on; if (on) n++; });
+    g.hidden = !n; if (n) any = true;
+  });
+  $('list').querySelector('.none').hidden = any;
+});
+
+// ── labels: region titles, part names ──────────────────────────────────────
+const labelBox = $('labels');
+let regionEls = [], partEls = [];
+function buildLabels() {
+  labelBox.innerHTML = '';
+  regionEls = REGIONS.map(R => {
+    const el = document.createElement('div'); el.className = 'rl'; el.dataset.g = R.group;
+    labelBox.appendChild(el); return el;
+  });
+  partEls = parts.map(p => {
+    if (p.m.group === 'dentition') return null;
+    const el = document.createElement('div'); el.className = 'pl'; el.textContent = shortName(p.m);
+    labelBox.appendChild(el); return el;
+  });
+}
+const pv = new THREE.Vector3();
+function project(v, w, h) { pv.copy(v).project(camera); return pv.z > 1 ? null : [(pv.x + 1) / 2 * w, (1 - pv.y) / 2 * h]; }
+function placeLabels(w, h) {
+  const rOn = S.arr === 'region' && S.layout.labels ? smooth(0.6, 0.95, S.e) : 0;
+  regionEls.forEach((el, k) => {
+    const L = S.layout.labels && S.layout.labels[k];
+    const xy = rOn && L ? project(L.at, w, h) : null;
+    if (!xy) { el.style.opacity = 0; return; }
+    if (!el._t) { el._t = 1; el.innerHTML = `<i></i>${L.label}<span>${L.n} ${L.unit}</span>`; }
+    el.style.opacity = rOn;
+    el.style.transform = `translate(${xy[0].toFixed(1)}px,${xy[1].toFixed(1)}px) translate(-50%,-100%)`;
+  });
+  const pOn = S.labels && S.arr !== 'tray' && S.iso < 0 ? smooth(0.25, 0.6, S.e) : 0;
+  partEls.forEach((el, i) => {
+    if (!el) return;
+    if (!pOn) { el.style.opacity = 0; return; }
+    const p = parts[i];
+    const xy = project(pv.copy(p.mesh.position).add({ x: 0, y: p.m.ext[1] * 0.5 + 3, z: 0 }), w, h);
+    if (!xy) { el.style.opacity = 0; return; }
+    el.style.opacity = pOn * (i === S.sel ? 0 : 1);
+    el.style.transform = `translate(${xy[0].toFixed(1)}px,${xy[1].toFixed(1)}px) translate(-50%,-100%)`;
+  });
+}
+
+// ── card placement ──────────────────────────────────────────────────────────
+const anchorV = new THREE.Vector3();
+function placeCard(w, h) {
+  if (S.sel < 0) return;
+  anchorV.copy(S.selPoint); parts[S.sel].mesh.localToWorld(anchorV);
+  const xy = project(anchorV, w, h) || [w / 2, h / 2];
+  const [ax, ay] = xy, cw = card.offsetWidth, ch = card.offsetHeight;
+  let tx, ty;
+  if (PHONE_Q.matches) { tx = 0; ty = 0; }
+  else {
+    const left = panel.classList.contains('open') ? panel.getBoundingClientRect().right - canvas.getBoundingClientRect().left : 0;
+    const right = ax + 56 + cw < w - 16;
+    tx = right ? ax + 56 : Math.max(left + 16, ax - 56 - cw);
+    ty = Math.min(h - ch - 90, Math.max(16, ay - ch * 0.4));
+  }
+  if (!PHONE_Q.matches) {
+    if (!card._placed) { card._x = tx; card._y = ty; card._placed = true; }
+    card._x += (tx - card._x) * 0.14; card._y += (ty - card._y) * 0.14;
+    card.style.transform = `translate(${card._x.toFixed(1)}px,${card._y.toFixed(1)}px)`;
+  } else card.style.transform = '';
+  const cr = card.getBoundingClientRect(), vr = canvas.getBoundingClientRect();
+  const cx0 = cr.left - vr.left, cy0 = cr.top - vr.top;
+  const nx = Math.max(cx0, Math.min(ax, cx0 + cr.width)), ny = Math.max(cy0, Math.min(ay, cy0 + cr.height));
+  const line = leader.querySelector('line');
+  line.setAttribute('x1', ax.toFixed(1)); line.setAttribute('y1', ay.toFixed(1));
+  line.setAttribute('x2', nx.toFixed(1)); line.setAttribute('y2', ny.toFixed(1));
+  for (const c of leader.querySelectorAll('circle')) { c.setAttribute('cx', ax.toFixed(1)); c.setAttribute('cy', ay.toFixed(1)); }
+}
+function placeHover(w, h) {
+  if (hov.i < 0 || !hoverAt) return;
+  const r = canvas.getBoundingClientRect(), cw = tipHover.offsetWidth, ch = tipHover.offsetHeight;
+  let tx = hoverAt[0] - r.left + 20, ty = hoverAt[1] - r.top + 16;
+  if (tx + cw > w - 8) tx = hoverAt[0] - r.left - 20 - cw;
+  if (ty + ch > h - 8) ty = h - 8 - ch;
+  hov.x += (tx - hov.x) * 0.35; hov.y += (ty - hov.y) * 0.35;
+  if (!tipHover._seen) { hov.x = tx; hov.y = ty; tipHover._seen = true; }
+  tipHover.style.transform = `translate(${hov.x.toFixed(1)}px,${hov.y.toFixed(1)}px)`;
+}
+
+// ── floor and shadow box ────────────────────────────────────────────────────
+const fBox = new THREE.Box3(), fV = new THREE.Vector3();
+let floorTick = 0;
+function updateFloor(dt) {
+  if (floorTick++ % 6 === 0) {
+    fBox.makeEmpty();
+    let minY = Infinity;
+    parts.forEach((p, i) => {
+      const r = p.size * 0.42;
+      for (const v of [p.mesh.position, motion.M[i].to]) {
+        fBox.expandByPoint(fV.copy(v).addScalar(-r)); fBox.expandByPoint(fV.copy(v).addScalar(r));
+        minY = Math.min(minY, v.y - p.m.ext[1] * 0.55);
+      }
+    });
+    S.floorWant = S.arr === 'tray' && S.e > 0.5 ? TRAY_Y - 14 : minY - 16;
+    S.fBox = fBox.clone();
+  }
+  S.floorY += ((S.floorWant ?? S.floorY) - S.floorY) * Math.min(1, dt * 2.5);
+  stage.setFloor(S.floorY, S.fBox || fBox);
+}
+
+// ── the loop ────────────────────────────────────────────────────────────────
+const KEYV = new THREE.Vector3(), camDir = new THREE.Vector3();
+let last = performance.now(), raf = 0, running = true, layoutCheck = 0;
+function frame(nowMs) {
+  if (!running) return;
+  raf = requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (nowMs - last) / 1000); last = nowMs;
+  const now = nowMs / 1000;
+  if (!S.ready) { stage.frame(dt); return; }
+
+  // a tall or wide clear area changes the region and tray layouts
+  if (++layoutCheck % 30 === 0 && (S.arr === 'region' || S.arr === 'tray')) {
+    const wide = clearAspect() >= 1.05;
+    if (wide !== S.aspectWide) { computeLayout(S.arr); motion.go(targetsAt(S.e), now, { order: null, dur: 0.9 }); flyToLayout(1.0); }
+  }
+  camDir.copy(camera.position).sub(stage.controls.target).normalize();
+  const float = REDUCED || S.arr === 'tray' ? 0 : smooth(0.1, 0.6, S.e) * (S.iso >= 0 ? 0.3 : 1);
+  motion.step(now, dt, { float, camDir });
+
+  KEYV.copy(KEY_DIR).transformDirection(camera.matrixWorldInverse);
+  const k = Math.min(1, dt * 7);
+  // the whole-skull AO holds only while the part and its neighbours are home
+  let dSum = 0;
+  for (const p of parts) { p.dHome = p.mesh.position.distanceTo(p.home); dSum += p.dHome; }
+  const together = 1 - smooth(2, 18, dSum / parts.length);
+  for (const p of parts) {
+    const U = p.U, i = p.i;
+    U.uAsm.value = (1 - smooth(3, 26, p.dHome)) * together;
+    const pairHot = S.hover >= 0 && parts[S.hover].m.key === p.m.pair && S.arr === 'symmetry';
+    const hl = i === S.sel ? 0.55 + 0.18 * Math.sin(now * 3.4) : i === S.hover ? 0.5 : pairHot ? 0.28 : 0;
+    U.uHL.value += (hl - U.uHL.value) * k;
+    const g = S.iso >= 0 && i !== S.iso ? 1 : 0;
+    U.uGhost.value += (g - U.uGhost.value) * Math.min(1, dt * 5);
+    if (Math.abs(U.uGhost.value - g) < 0.004) U.uGhost.value = g;
+    const tr = U.uGhost.value > 0.004;
+    if (p.mat.transparent !== tr) { p.mat.transparent = tr; p.mat.depthWrite = !tr; p.mat.needsUpdate = true; }
+    p.mesh.castShadow = U.uGhost.value < 0.6;
+    p.mesh.renderOrder = tr ? 1 : 0;
+    p.mat.envMapIntensity = stage.envIntensity;
+  }
+  tray.frame(dt);
+  updateFloor(dt);
+  updateHover();
+  stage.frame(dt);
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  placeLabels(w, h); placeCard(w, h); placeHover(w, h);
+}
+
+// ── boot ────────────────────────────────────────────────────────────────────
+async function boot() {
+  setTheme(theme);
+  stage.place({ az: 30, el: 10, r: 1400, target: new THREE.Vector3() });
+  requestAnimationFrame(frame);
+  let data;
+  try {
+    data = await loadSkull('data/', f => { $('ldBar').style.width = (f * 100).toFixed(1) + '%'; });
+  } catch (e) {
+    $('loading').querySelector('.ld-t').textContent = 'The skull data did not load.';
+    console.warn(e);
+    return;
+  }
+  man = data.man; parts = data.parts;
+  for (const p of parts) { stage.root.add(p.mesh); p.U.uKey.value = KEYV; }
+  setTheme(theme);
+  motion = createMotion(parts, { reduced: REDUCED });
+  tray = createTray({ coarse: COARSE, parts });
+  tray.setTheme(theme);
+  stage.scene.add(tray.group);
+  if (document.fonts) document.fonts.ready.then(() => tray.redraw());
+  buildList(); buildLabels();
+  $('tOrbit').classList.toggle('on', stage.orbit);
+
+  const start = (location.hash || '').slice(1);
+  const arr = ARR[start] ? start : 'anatomy';
+  S.arr = arr;
+  computeLayout(arr);
+  document.querySelectorAll('#arrs button').forEach(b => { const on = b.dataset.arr === arr; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+  document.querySelectorAll('#arrList button').forEach(b => b.classList.toggle('on', b.dataset.arr === arr));
+  $('plateArr').textContent = '· ' + ARR[arr].label;
+  const now = performance.now() / 1000;
+  if (REDUCED) {
+    setExplodeUI(1);
+    motion.snap(targetsAt(1));
+    stage.place(fitFor(targetsAt(1), viewFor(arr), 1.06));
+    tray.show(arr === 'tray');
+  } else {
+    // intro: scattered parts gather into the skull, then it opens
+    setExplodeUI(0);
+    motion.snap(targetsAt(2.4));
+    motion.go(targetsAt(0), now, { order: 'in', stagger: 0.9, dur: 1.5 });
+    const v = viewFor('anatomy');
+    stage.place({ ...fitFor(targetsAt(0), { az: v.az - 50, el: v.el + 8 }, 1.9) });
+    stage.flyTo(fitFor(targetsAt(0), v, 1.3), 2.2);
+    S.introTimer = setTimeout(() => { setExplode(1, { animate: true }); tray.show(arr === 'tray'); if (arr !== 'anatomy') flyToLayout(1.4); }, 2700);
+  }
+  S.ready = true;
+  $('loading').classList.add('gone');
+}
+
+window.addEventListener('pagehide', () => {
+  running = false; cancelAnimationFrame(raf);
+  try { disposeSkull(parts); if (tray) tray.dispose(); } catch (e) {}
+  stage.dispose();
+});
+
+// debug and headless checks
+window.__skull = {
+  S, stage, get parts() { return parts; }, get man() { return man; }, setArrangement, setExplode, select, isolate, setTheme, pickAt, onTap, setOpen,
+  settled: () => {
+    if (!motion) return false;
+    const t = performance.now() / 1000;
+    return motion.M.every((m, i) => t > m.t0 + m.dur && parts[i].settle < 0.3) && !stage.fly;
+  },
+  selectKey: k => { const p = parts.find(q => q.m.key === k); if (p) select(p.i); },
+  project: k => { const p = parts.find(q => q.m.key === k); const r = canvas.getBoundingClientRect(); const xy = project(p.mesh.position, canvas.clientWidth, canvas.clientHeight); return xy && [xy[0] + r.left, xy[1] + r.top]; },
+};
+boot();
