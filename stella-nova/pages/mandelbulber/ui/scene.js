@@ -11,7 +11,8 @@ import { quantizeColor } from '../fract.js';
 import { P, mainSpec } from './data.js';
 import { scene, engine, setScene, setActiveSlot, setInfo } from './state.js';
 import { setStatus, flash } from './hud.js';
-import { buildSlotEditor, refreshAll, writeHash, stopInertia } from '../main.js';
+import { refreshAll } from './controls.js';
+import { buildSlotEditor, writeHash, stopInertia } from '../main.js';
 
 export let sceneDirty = true;
 let previewTimer = 0, previewOn = false;

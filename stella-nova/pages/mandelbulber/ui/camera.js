@@ -14,7 +14,8 @@ import { P } from './data.js';
 import { scene, engine } from './state.js';
 import { flash } from './hud.js';
 import { touch, sceneDirty, pushScene, scenePromise } from './scene.js';
-import { refreshAll, stopInertia } from '../main.js';
+import { refreshAll } from './controls.js';
+import { stopInertia } from '../main.js';
 
 export const V = {
   add: (a, b) => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z }),
