@@ -89,9 +89,9 @@ fn divRamp(t: f32) -> vec3f {
   return rampN(t * 0.5 + 0.5, vec3f(0.55, 0.80, 1.0), vec3f(0.12, 0.36, 0.78), vec3f(0.035, 0.04, 0.07),
                vec3f(0.82, 0.30, 0.14), vec3f(1.0, 0.86, 0.55));
 }
-// Streak color: cool blue at rest, cyan, white at U, amber above it.
+// Streak color: deep blue at rest, cyan at U, white and amber above it.
 fn streakRamp(t: f32) -> vec3f {
-  return rampN(t / 1.4, vec3f(0.16, 0.30, 0.85), vec3f(0.20, 0.62, 0.95), vec3f(0.55, 0.92, 0.95),
+  return rampN(t / 1.9, vec3f(0.16, 0.30, 0.85), vec3f(0.20, 0.62, 0.95), vec3f(0.55, 0.92, 0.95),
                vec3f(0.98, 0.97, 0.90), vec3f(1.0, 0.62, 0.22));
 }
 
@@ -272,7 +272,7 @@ fn fsScene(i: SOut) -> FOut {
     let dif = max(dot(n, L), 0.0) * shadow(p + n * 0.3, L);
     let fill = max(dot(n, normalize(vec3f(0.6, 0.3, -0.7))), 0.0);
     let hv = normalize(L - rd);
-    let shiny = select(0.15, 0.6, hit.y > 1.5 && hit.y < 2.5 || hit.y > 4.5 && hit.y < 6.5);
+    let shiny = select(0.15, 0.6, (hit.y > 1.5 && hit.y < 2.5) || (hit.y > 4.5 && hit.y < 6.5));
     let spec = pow(max(dot(n, hv), 0.0), 48.0) * shiny;
     let rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
     var c = base * (0.18 + 0.85 * dif + 0.22 * fill) + vec3f(spec) + vec3f(0.12, 0.2, 0.3) * rim * 0.5;

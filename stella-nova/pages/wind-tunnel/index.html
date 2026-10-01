@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Wind Tunnel — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   WIND TUNNEL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. main.js makes the WebGPU device, runs one engine at a
+   time (engine2d.js or engine3d.js) into #gl, and binds the controls below.
+   shapes.js is the object catalog; main.js builds the shape sliders from it
+   into #shapeParams and #placeParams.
+
+   LOAD ORDER
+     1. gpu-guard.js  first, so the shell can release the device on a swap
+     2. Inter          Google Fonts stylesheet
+     3. style.css
+     4. main.js        type=module; imports shapes.js and the two engines,
+                       and fetches the WGSL in shaders/
+
+   LAYOUT  (# marks an element id main.js binds to)
+     ┌──────────────────────────────────────────────────────────────────┐
+     │ topbar: Stella Nova · Wind Tunnel                                 │
+     ├────────────┬─────────────────────────────────────────────────────┤
+     │ #panel     │  #gl       the tunnel; drag, pinch, scroll            │
+     │  mode      │  #card     Cd, Cl, Re, force, and the Cd trace        │
+     │  object    │  #legend   colorbar of the field                      │
+     │  shape     │  #hint     gesture hint                               │
+     │  placement │  #msg      WebGPU or device errors                    │
+     │  flow      │                                                       │
+     │  view      │                                                       │
+     │  sim       │                                                       │
+     │  readout   │                                                       │
+     ├────────────┴─────────────────────────────────────────────────────┤
+     │ #status  mode · grid · steps per frame · MLUPS                    │
+     └──────────────────────────────────────────────────────────────────┘
+
+   PHONE LAYOUT  (max-width 768px, or a short landscape touch screen)
+     #dock     fixed at the base: #dockPanel opens the panel, #dockMode is
+               2D / 3D, #dockField cycles the field, #dockPlay pauses.
+     #panel    portrait: a bottom sheet above the dock. #sheetGrip toggles
+               half and full height; a drag down closes it.
+               landscape: a drawer on the right edge.
+     #card     a slim strip under the topbar.
+     main.js measures the panel, the dock and the bars each frame, and
+     frames the tunnel in the part of the canvas that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function boot'        device, limits, tiers
+     grep -n 'function makeEngine'  engine build for a mode and a tier
+     grep -n 'function applyShape'  packShape -> engine.setShape
+     grep -n 'function applyFlow'   speed, fluid, Re -> tau
+     grep -n 'function frame'       the render loop and the step governor
+     grep -n 'function occlusion'   the overlay margins that frame the view
+     grep -n 'function buildUI'     the panel construction
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A wind tunnel in the browser. Put a cow, a car, a truck or a wing in a 2D or 3D lattice Boltzmann flow, change its shape, and watch the streamlines, the wake and the drag.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
+  <div class="pagetitle">Wind Tunnel</div>
+</div>
+
+<canvas id="gl"></canvas>
+<div id="hint">drag to orbit · pinch or scroll to zoom · double-tap to reset</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<section id="card" aria-live="polite">
+  <div class="cd-row">
+    <div class="kv"><span class="k">C<sub>d</sub></span><span class="v" id="cdV">—</span></div>
+    <div class="kv"><span class="k">C<sub>l</sub></span><span class="v" id="clV">—</span></div>
+    <div class="kv"><span class="k">Re</span><span class="v" id="reV">—</span></div>
+    <div class="kv wide"><span class="k" id="forceK">Drag</span><span class="v" id="forceV">—</span></div>
+  </div>
+  <canvas id="trace" width="240" height="44" aria-label="Drag coefficient over time"></canvas>
+</section>
+
+<div id="legend">
+  <div class="lg-title" id="lgTitle">speed / U</div>
+  <canvas id="lgBar" width="180" height="10"></canvas>
+  <div class="lg-ticks"><span id="lgLo">0</span><span id="lgMid"></span><span id="lgHi">1.5</span></div>
+</div>
+
+<div id="msg" hidden></div>
+
+<div id="panel">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label">Mode</div>
+  <div class="seg2" id="modeSeg">
+    <button data-v="2d">2D</button>
+    <button data-v="3d">3D</button>
+  </div>
+
+  <div class="sec-label">Object</div>
+  <div class="grid4" id="shapeGrid"></div>
+  <div class="presets" id="presetRow"></div>
+
+  <div class="sec-label">Shape</div>
+  <div id="shapeParams"></div>
+
+  <div class="sec-label">Placement</div>
+  <div id="placeParams"></div>
+
+  <div class="sec-label">Flow</div>
+  <div class="seg2" id="fluidSeg"></div>
+  <div class="row"><label for="speed">Speed</label><input type="range" id="speed" min="0" max="1" step="0.001"><span class="val" id="speedV"></span></div>
+  <div class="row"><label for="turb">Turbulence</label><input type="range" id="turb" min="0" max="5" step="0.1" value="0.5"><span class="val" id="turbV"></span></div>
+  <div class="mini-label">Ground</div>
+  <div class="seg2" id="groundSeg">
+    <button data-v="none">None</button>
+    <button data-v="fixed">Fixed</button>
+    <button data-v="belt">Moving belt</button>
+  </div>
+  <div class="hint" id="reHint"></div>
+
+  <div class="sec-label">View</div>
+  <div class="seg2 wrap" id="fieldSeg">
+    <button data-v="0">Speed</button>
+    <button data-v="1">Vorticity</button>
+    <button data-v="2">Pressure</button>
+    <button data-v="3" class="only2d">Smoke</button>
+    <button data-v="4">Plain</button>
+  </div>
+  <div class="mini-label only2d">2D section</div>
+  <div class="seg2 only2d" id="viewSeg">
+    <button data-v="side">Side</button>
+    <button data-v="top">Top</button>
+  </div>
+  <div class="mini-label only3d">Field plane</div>
+  <div class="seg2 only3d" id="sliceSeg">
+    <button data-v="2">Centre</button>
+    <button data-v="1">Floor</button>
+    <button data-v="0">Wake</button>
+    <button data-v="3">Off</button>
+  </div>
+  <div class="row only3d"><label for="slicePos">Plane at</label><input type="range" id="slicePos" min="0" max="1" step="0.005" value="0.5"><span class="val" id="slicePosV"></span></div>
+  <div class="mini-label only3d">Surface</div>
+  <div class="seg2 only3d" id="surfSeg">
+    <button data-v="0">Material</button>
+    <button data-v="1">Pressure</button>
+  </div>
+  <div class="mini-label">Streamlines</div>
+  <div class="seg2" id="streakSeg">
+    <button data-v="off">Off</button>
+    <button data-v="field">Everywhere</button>
+    <button data-v="rake">Rake</button>
+  </div>
+  <div class="row"><label for="density">Density</label><input type="range" id="density" min="0.05" max="1" step="0.01" value="0.5"><span class="val" id="densityV"></span></div>
+  <div class="row"><label for="contrast">Contrast</label><input type="range" id="contrast" min="0.25" max="4" step="0.01" value="1"><span class="val" id="contrastV"></span></div>
+
+  <div class="sec-label">Simulation</div>
+  <div class="mini-label">Grid</div>
+  <div class="seg2" id="tierSeg">
+    <button data-v="0">Coarse</button>
+    <button data-v="1">Medium</button>
+    <button data-v="2">Fine</button>
+  </div>
+  <div class="row"><label for="rate">Sim rate</label><input type="range" id="rate" min="0.1" max="1" step="0.01" value="1"><span class="val" id="rateV"></span></div>
+  <div class="seg2">
+    <button id="pauseBtn">Pause</button>
+    <button id="resetBtn">Reset flow</button>
+  </div>
+
+  <div class="sec-label">Readout</div>
+  <table class="readout">
+    <tr><td>C<sub>d</sub> (mean)</td><td id="rdCd"></td></tr>
+    <tr><td>C<sub>l</sub> (mean)</td><td id="rdCl"></td></tr>
+    <tr><td>per copy C<sub>d</sub></td><td id="rdCopies"></td></tr>
+    <tr><td>Re (real)</td><td id="rdRe"></td></tr>
+    <tr><td>Re (grid)</td><td id="rdReG"></td></tr>
+    <tr><td>frontal area</td><td id="rdArea"></td></tr>
+    <tr><td>real length</td><td id="rdLen"></td></tr>
+    <tr><td>grid</td><td id="rdGrid"></td></tr>
+    <tr><td>steps / frame</td><td id="rdSteps"></td></tr>
+    <tr><td>lattice steps</td><td id="rdT"></td></tr>
+  </table>
+
+  <div class="sec-label">About</div>
+  <div class="about">
+    <p>The tunnel solves the flow with the lattice Boltzmann method. Each cell holds the density of particles that move to its neighbours (9 directions in 2D, 19 in 3D). On each step they move, then collide toward an equilibrium. Density and velocity come out as sums of those numbers. The result follows the Navier–Stokes equations at low Mach number.</p>
+    <p>A real cow at 60 km/h has a Reynolds number of millions. A grid this coarse cannot hold the small eddies of that flow, so an eddy-viscosity model (Smagorinsky) takes their effect. The large wake, the separation and the shedding are the resolved part. "Re (grid)" is the Reynolds number that the grid itself resolves.</p>
+    <p>The drag and lift come from the momentum that the flow gives to the object on each step. Treat them as trends: a rounder nose, a lower roof or a boat tail lowers the drag here as in a real tunnel, but the numbers are not those of a real car or cow.</p>
+    <p>In 2D the object is its side (or top) silhouette. Legs and wheels let the flow through in 2D, because in 3D the air goes between them.</p>
+  </div>
+</div>
+
+<div id="status">
+  <span id="stMain"></span>
+  <span class="right" id="stRight"></span>
+</div>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
+  <div id="dockMode" class="seg">
+    <button data-v="2d">2D</button>
+    <button data-v="3d">3D</button>
+  </div>
+  <button id="dockShape" class="txt" aria-label="Next object">Cow</button>
+  <button id="dockField" class="txt" aria-label="Next field">Speed</button>
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
