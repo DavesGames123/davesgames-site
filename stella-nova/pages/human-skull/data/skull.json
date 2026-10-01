@@ -1,0 +1,1922 @@
+{
+ "version": 1,
+ "title": "Human skull",
+ "units": "mm",
+ "axes": "x = left of the subject, y = up, z = front",
+ "source": {
+  "name": "BodyParts3D, (c) The Database Center for Life Science",
+  "url": "https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html",
+  "licence": "CC BY 4.0 (database licence since 2025-02-27); the 2011 OBJ headers state CC BY-SA 2.1 JP. These derived meshes are shared under CC BY-SA 4.0.",
+  "files": [
+   "partof_BP3D_4.0_obj_99.zip",
+   "isa_BP3D_4.0_obj_99.zip"
+  ]
+ },
+ "center": [
+  -0.666,
+  1528.952,
+  86.416
+ ],
+ "bounds": {
+  "min": [
+   -75.523,
+   -107.322,
+   -104.417
+  ],
+  "max": [
+   75.523,
+   107.322,
+   104.417
+  ]
+ },
+ "bytes": 1703968,
+ "parts": [
+  {
+   "key": "frontal",
+   "name": "Frontal bone",
+   "latin": "Os frontale",
+   "group": "cranial",
+   "side": "mid",
+   "pair": null,
+   "fma": "FMA52734",
+   "bp3d": "FJ3200",
+   "fdi": null,
+   "fact": "Forms the forehead and the roofs of both orbits; it starts as two halves that usually fuse by age two.",
+   "v": 6002,
+   "t": 12000,
+   "off": {
+    "pos": 0,
+    "nrm": 36012,
+    "ao": 60020,
+    "idx": 72024
+   },
+   "min": [
+    -62.647,
+    -54.552,
+    -35.373
+   ],
+   "ext": [
+    125.295,
+    109.105,
+    70.746
+   ],
+   "center": [
+    0.011,
+    46.45,
+    55.596
+   ],
+   "area": 41947,
+   "crown": 0
+  },
+  {
+   "key": "parietal-r",
+   "name": "Right parietal bone",
+   "latin": "Os parietale dextrum",
+   "group": "cranial",
+   "side": "right",
+   "pair": "parietal-l",
+   "fma": "FMA52788",
+   "bp3d": "FJ3380",
+   "fdi": null,
+   "fact": "A curved square plate that makes most of the side and roof of the cranial vault.",
+   "v": 5502,
+   "t": 11000,
+   "off": {
+    "pos": 144024,
+    "nrm": 177036,
+    "ao": 199044,
+    "idx": 210048
+   },
+   "min": [
+    -40.595,
+    -59.201,
+    -71.366
+   ],
+   "ext": [
+    81.191,
+    118.402,
+    142.732
+   ],
+   "center": [
+    -34.927,
+    48.107,
+    -29.896
+   ],
+   "area": 38680,
+   "crown": 0
+  },
+  {
+   "key": "parietal-l",
+   "name": "Left parietal bone",
+   "latin": "Os parietale sinistrum",
+   "group": "cranial",
+   "side": "left",
+   "pair": "parietal-r",
+   "fma": "FMA52789",
+   "bp3d": "FJ3274",
+   "fdi": null,
+   "fact": "Meets its twin at the sagittal suture, along the top of the head.",
+   "v": 5502,
+   "t": 11000,
+   "off": {
+    "pos": 276048,
+    "nrm": 309060,
+    "ao": 331068,
+    "idx": 342072
+   },
+   "min": [
+    -41.362,
+    -59.239,
+    -73.316
+   ],
+   "ext": [
+    82.724,
+    118.479,
+    146.632
+   ],
+   "center": [
+    34.16,
+    48.083,
+    -28.062
+   ],
+   "area": 39388,
+   "crown": 0
+  },
+  {
+   "key": "temporal-r",
+   "name": "Right temporal bone",
+   "latin": "Os temporale dextrum",
+   "group": "cranial",
+   "side": "right",
+   "pair": "temporal-l",
+   "fma": "FMA52738",
+   "bp3d": "FJ3386",
+   "fdi": null,
+   "fact": "Holds the organs of hearing and balance inside its dense petrous part.",
+   "v": 2466,
+   "t": 4928,
+   "off": {
+    "pos": 408072,
+    "nrm": 422868,
+    "ao": 432732,
+    "idx": 437664
+   },
+   "min": [
+    -30.647,
+    -37.98,
+    -49.362
+   ],
+   "ext": [
+    61.294,
+    75.96,
+    98.723
+   ],
+   "center": [
+    -42.676,
+    -15.402,
+    -2.042
+   ],
+   "area": 14143,
+   "crown": 0
+  },
+  {
+   "key": "temporal-l",
+   "name": "Left temporal bone",
+   "latin": "Os temporale sinistrum",
+   "group": "cranial",
+   "side": "left",
+   "pair": "temporal-r",
+   "fma": "FMA52739",
+   "bp3d": "FJ3281",
+   "fdi": null,
+   "fact": "Carries the socket of the jaw joint and the mastoid process behind the ear.",
+   "v": 2470,
+   "t": 4936,
+   "off": {
+    "pos": 467232,
+    "nrm": 482052,
+    "ao": 491932,
+    "idx": 496872
+   },
+   "min": [
+    -30.481,
+    -37.99,
+    -49.248
+   ],
+   "ext": [
+    60.961,
+    75.98,
+    98.497
+   ],
+   "center": [
+    42.771,
+    -15.482,
+    -2.097
+   ],
+   "area": 14075,
+   "crown": 0
+  },
+  {
+   "key": "occipital",
+   "name": "Occipital bone",
+   "latin": "Os occipitale",
+   "group": "cranial",
+   "side": "mid",
+   "pair": null,
+   "fma": "FMA52735",
+   "bp3d": "FJ3309",
+   "fdi": null,
+   "fact": "The spinal cord passes through its foramen magnum; its condyles rest on the atlas.",
+   "v": 5500,
+   "t": 11000,
+   "off": {
+    "pos": 526488,
+    "nrm": 559488,
+    "ao": 581488,
+    "idx": 592488
+   },
+   "min": [
+    -61.343,
+    -53.361,
+    -59.48
+   ],
+   "ext": [
+    122.685,
+    106.723,
+    118.96
+   ],
+   "center": [
+    0.048,
+    2.179,
+    -44.937
+   ],
+   "area": 35632,
+   "crown": 0
+  },
+  {
+   "key": "sphenoid",
+   "name": "Sphenoid bone",
+   "latin": "Os sphenoidale",
+   "group": "cranial",
+   "side": "mid",
+   "pair": null,
+   "fma": "FMA52736",
+   "bp3d": "FJ3394",
+   "fdi": null,
+   "fact": "The keystone of the cranial base, shaped like a moth; it touches every other cranial bone.",
+   "v": 3988,
+   "t": 8000,
+   "off": {
+    "pos": 658488,
+    "nrm": 682416,
+    "ao": 698368,
+    "idx": 706344
+   },
+   "min": [
+    -55.676,
+    -34.775,
+    -27.303
+   ],
+   "ext": [
+    111.353,
+    69.55,
+    54.606
+   ],
+   "center": [
+    0.023,
+    -15.267,
+    31.3
+   ],
+   "area": 18870,
+   "crown": 0
+  },
+  {
+   "key": "ethmoid",
+   "name": "Ethmoid bone",
+   "latin": "Os ethmoidale",
+   "group": "cranial",
+   "side": "mid",
+   "pair": null,
+   "fma": "FMA52740",
+   "bp3d": "FJ3199",
+   "fdi": null,
+   "fact": "A light, sieve-like bone between the orbits; smell nerves pass through its cribriform plate.",
+   "v": 4504,
+   "t": 9000,
+   "off": {
+    "pos": 754344,
+    "nrm": 781368,
+    "ao": 799384,
+    "idx": 808392
+   },
+   "min": [
+    -20.879,
+    -17.532,
+    -23.711
+   ],
+   "ext": [
+    41.758,
+    35.065,
+    47.422
+   ],
+   "center": [
+    -0.001,
+    -14.142,
+    57.1
+   ],
+   "area": 8209,
+   "crown": 0
+  },
+  {
+   "key": "mandible",
+   "name": "Mandible",
+   "latin": "Mandibula",
+   "group": "facial",
+   "side": "mid",
+   "pair": null,
+   "fma": "FMA52748",
+   "bp3d": "FJ3289",
+   "fdi": null,
+   "fact": "The only movable bone of the skull, and the largest and strongest bone of the face.",
+   "v": 2790,
+   "t": 5576,
+   "off": {
+    "pos": 862392,
+    "nrm": 879132,
+    "ao": 890292,
+    "idx": 895872
+   },
+   "min": [
+    -53.2,
+    -42.235,
+    -41.989
+   ],
+   "ext": [
+    106.4,
+    84.47,
+    83.978
+   ],
+   "center": [
+    0.02,
+    -65.087,
+    45.427
+   ],
+   "area": 16171,
+   "crown": 0
+  },
+  {
+   "key": "maxilla-r",
+   "name": "Right maxilla",
+   "latin": "Maxilla dextra",
+   "group": "facial",
+   "side": "right",
+   "pair": "maxilla-l",
+   "fma": "FMA53649",
+   "bp3d": "FJ3375",
+   "fdi": null,
+   "fact": "Holds the upper teeth and the largest of the paranasal sinuses.",
+   "v": 2656,
+   "t": 5324,
+   "off": {
+    "pos": 929328,
+    "nrm": 945264,
+    "ao": 955888,
+    "idx": 961200
+   },
+   "min": [
+    -23.68,
+    -34.68,
+    -27.328
+   ],
+   "ext": [
+    47.36,
+    69.36,
+    54.655
+   ],
+   "center": [
+    -23.265,
+    -30.282,
+    70.285
+   ],
+   "area": 10020,
+   "crown": 0
+  },
+  {
+   "key": "maxilla-l",
+   "name": "Left maxilla",
+   "latin": "Maxilla sinistra",
+   "group": "facial",
+   "side": "left",
+   "pair": "maxilla-r",
+   "fma": "FMA53650",
+   "bp3d": "FJ3269",
+   "fdi": null,
+   "fact": "The two maxillae fuse at the midline to form most of the hard palate.",
+   "v": 2587,
+   "t": 5198,
+   "off": {
+    "pos": 993144,
+    "nrm": 1008668,
+    "ao": 1019016,
+    "idx": 1024192
+   },
+   "min": [
+    -24.432,
+    -34.65,
+    -28.033
+   ],
+   "ext": [
+    48.863,
+    69.3,
+    56.066
+   ],
+   "center": [
+    22.03,
+    -30.312,
+    68.431
+   ],
+   "area": 10271,
+   "crown": 0
+  },
+  {
+   "key": "zygomatic-r",
+   "name": "Right zygomatic bone",
+   "latin": "Os zygomaticum dextrum",
+   "group": "facial",
+   "side": "right",
+   "pair": "zygomatic-l",
+   "fma": "FMA52892",
+   "bp3d": "FJ3392",
+   "fdi": null,
+   "fact": "The cheekbone; it makes the prominence of the cheek and part of the orbit wall.",
+   "v": 780,
+   "t": 1556,
+   "off": {
+    "pos": 1055380,
+    "nrm": 1060060,
+    "ao": 1063180,
+    "idx": 1064740
+   },
+   "min": [
+    -15.672,
+    -28,
+    -19.84
+   ],
+   "ext": [
+    31.343,
+    56,
+    39.679
+   ],
+   "center": [
+    -48.24,
+    -20.312,
+    55.198
+   ],
+   "area": 3239,
+   "crown": 0
+  },
+  {
+   "key": "zygomatic-l",
+   "name": "Left zygomatic bone",
+   "latin": "Os zygomaticum sinistrum",
+   "group": "facial",
+   "side": "left",
+   "pair": "zygomatic-r",
+   "fma": "FMA52893",
+   "bp3d": "FJ3287",
+   "fdi": null,
+   "fact": "Joins the temporal bone to form the zygomatic arch.",
+   "v": 719,
+   "t": 1434,
+   "off": {
+    "pos": 1074076,
+    "nrm": 1078392,
+    "ao": 1081268,
+    "idx": 1082708
+   },
+   "min": [
+    -15.676,
+    -28.06,
+    -19.844
+   ],
+   "ext": [
+    31.351,
+    56.12,
+    39.689
+   ],
+   "center": [
+    48.235,
+    -20.272,
+    55.171
+   ],
+   "area": 3181,
+   "crown": 0
+  },
+  {
+   "key": "nasal-r",
+   "name": "Right nasal bone",
+   "latin": "Os nasale dextrum",
+   "group": "facial",
+   "side": "right",
+   "pair": "nasal-l",
+   "fma": "FMA53647",
+   "bp3d": "FJ3378",
+   "fdi": null,
+   "fact": "A small oblong plate that forms the bridge of the nose with its twin.",
+   "v": 210,
+   "t": 416,
+   "off": {
+    "pos": 1091312,
+    "nrm": 1092572,
+    "ao": 1093412,
+    "idx": 1093832
+   },
+   "min": [
+    -4.204,
+    -16.01,
+    -10.624
+   ],
+   "ext": [
+    8.407,
+    32.02,
+    21.248
+   ],
+   "center": [
+    -4.279,
+    -11.772,
+    93.793
+   ],
+   "area": 689,
+   "crown": 0
+  },
+  {
+   "key": "nasal-l",
+   "name": "Left nasal bone",
+   "latin": "Os nasale sinistrum",
+   "group": "facial",
+   "side": "left",
+   "pair": "nasal-r",
+   "fma": "FMA53648",
+   "bp3d": "FJ3272",
+   "fdi": null,
+   "fact": "Below it, cartilage, not bone, gives the nose its shape.",
+   "v": 221,
+   "t": 438,
+   "off": {
+    "pos": 1096328,
+    "nrm": 1097656,
+    "ao": 1098540,
+    "idx": 1098984
+   },
+   "min": [
+    -4.861,
+    -15.82,
+    -10.089
+   ],
+   "ext": [
+    9.722,
+    31.64,
+    20.177
+   ],
+   "center": [
+    3.005,
+    -11.282,
+    92.963
+   ],
+   "area": 748,
+   "crown": 0
+  },
+  {
+   "key": "lacrimal-r",
+   "name": "Right lacrimal bone",
+   "latin": "Os lacrimale dextrum",
+   "group": "facial",
+   "side": "right",
+   "pair": "lacrimal-l",
+   "fma": "FMA53645",
+   "bp3d": "FJ3371",
+   "fdi": null,
+   "fact": "The smallest and most fragile bone of the face; the tear duct runs along it.",
+   "v": 353,
+   "t": 702,
+   "off": {
+    "pos": 1101612,
+    "nrm": 1103732,
+    "ao": 1105144,
+    "idx": 1105852
+   },
+   "min": [
+    -5.278,
+    -12.735,
+    -7.281
+   ],
+   "ext": [
+    10.555,
+    25.47,
+    14.563
+   ],
+   "center": [
+    -12.098,
+    -14.337,
+    71.813
+   ],
+   "area": 817,
+   "crown": 0
+  },
+  {
+   "key": "lacrimal-l",
+   "name": "Left lacrimal bone",
+   "latin": "Os lacrimale sinistrum",
+   "group": "facial",
+   "side": "left",
+   "pair": "lacrimal-r",
+   "fma": "FMA53646",
+   "bp3d": "FJ3265",
+   "fdi": null,
+   "fact": "About the size of a fingernail, in the inner wall of the orbit.",
+   "v": 322,
+   "t": 640,
+   "off": {
+    "pos": 1110064,
+    "nrm": 1111996,
+    "ao": 1113284,
+    "idx": 1113928
+   },
+   "min": [
+    -5.306,
+    -14.505,
+    -6.984
+   ],
+   "ext": [
+    10.612,
+    29.01,
+    13.968
+   ],
+   "center": [
+    13.291,
+    -16.577,
+    71.332
+   ],
+   "area": 818,
+   "crown": 0
+  },
+  {
+   "key": "palatine-r",
+   "name": "Right palatine bone",
+   "latin": "Os palatinum dextrum",
+   "group": "facial",
+   "side": "right",
+   "pair": "palatine-l",
+   "fma": "FMA53655",
+   "bp3d": "FJ3379",
+   "fdi": null,
+   "fact": "An L-shaped bone that closes the back of the hard palate.",
+   "v": 870,
+   "t": 1736,
+   "off": {
+    "pos": 1117768,
+    "nrm": 1122988,
+    "ao": 1126468,
+    "idx": 1128208
+   },
+   "min": [
+    -14.479,
+    -21.445,
+    -23.297
+   ],
+   "ext": [
+    28.958,
+    42.89,
+    46.594
+   ],
+   "center": [
+    -13.666,
+    -37.057,
+    40.194
+   ],
+   "area": 3091,
+   "crown": 0
+  },
+  {
+   "key": "palatine-l",
+   "name": "Left palatine bone",
+   "latin": "Os palatinum sinistrum",
+   "group": "facial",
+   "side": "left",
+   "pair": "palatine-r",
+   "fma": "FMA53656",
+   "bp3d": "FJ3273",
+   "fdi": null,
+   "fact": "It reaches from the roof of the mouth up to the floor of the orbit.",
+   "v": 902,
+   "t": 1800,
+   "off": {
+    "pos": 1138624,
+    "nrm": 1144036,
+    "ao": 1147644,
+    "idx": 1149448
+   },
+   "min": [
+    -14.501,
+    -21.637,
+    -23.333
+   ],
+   "ext": [
+    29.002,
+    43.273,
+    46.665
+   ],
+   "center": [
+    13.624,
+    -37.156,
+    40.213
+   ],
+   "area": 3115,
+   "crown": 0
+  },
+  {
+   "key": "concha-r",
+   "name": "Right inferior nasal concha",
+   "latin": "Concha nasalis inferior dextra",
+   "group": "facial",
+   "side": "right",
+   "pair": "concha-l",
+   "fma": "FMA54737",
+   "bp3d": "FJ3369",
+   "fdi": null,
+   "fact": "A scroll of bone in the nasal cavity that warms and moistens the air you breathe.",
+   "v": 346,
+   "t": 700,
+   "off": {
+    "pos": 1160248,
+    "nrm": 1162324,
+    "ao": 1163708,
+    "idx": 1164400
+   },
+   "min": [
+    -4.922,
+    -9.98,
+    -18.183
+   ],
+   "ext": [
+    9.844,
+    19.96,
+    36.366
+   ],
+   "center": [
+    -10.944,
+    -40.452,
+    61.728
+   ],
+   "area": 1091,
+   "crown": 0
+  },
+  {
+   "key": "concha-l",
+   "name": "Left inferior nasal concha",
+   "latin": "Concha nasalis inferior sinistra",
+   "group": "facial",
+   "side": "left",
+   "pair": "concha-r",
+   "fma": "FMA54738",
+   "bp3d": "FJ3263",
+   "fdi": null,
+   "fact": "Unlike the upper conchae, it is a separate bone, not part of the ethmoid.",
+   "v": 352,
+   "t": 700,
+   "off": {
+    "pos": 1168600,
+    "nrm": 1170712,
+    "ao": 1172120,
+    "idx": 1172824
+   },
+   "min": [
+    -5.674,
+    -7.695,
+    -17.766
+   ],
+   "ext": [
+    11.349,
+    15.39,
+    35.532
+   ],
+   "center": [
+    10.932,
+    -38.597,
+    65.301
+   ],
+   "area": 1033,
+   "crown": 0
+  },
+  {
+   "key": "vomer",
+   "name": "Vomer",
+   "latin": "Vomer",
+   "group": "facial",
+   "side": "mid",
+   "pair": null,
+   "fma": "FMA9710",
+   "bp3d": "FJ3395",
+   "fdi": null,
+   "fact": "A thin plough-shaped plate that forms the back and lower part of the nasal septum.",
+   "v": 1502,
+   "t": 3000,
+   "off": {
+    "pos": 1177024,
+    "nrm": 1186036,
+    "ao": 1192044,
+    "idx": 1195048
+   },
+   "min": [
+    -5.461,
+    -21.791,
+    -27.563
+   ],
+   "ext": [
+    10.923,
+    43.583,
+    55.127
+   ],
+   "center": [
+    0.018,
+    -32.596,
+    51.874
+   ],
+   "area": 2775,
+   "crown": 0
+  },
+  {
+   "key": "hyoid",
+   "name": "Hyoid bone",
+   "latin": "Os hyoideum",
+   "group": "hyoid",
+   "side": "mid",
+   "pair": null,
+   "fma": "FMA52749",
+   "bp3d": "FJ3201",
+   "fdi": null,
+   "fact": "The only bone in the body that does not touch another bone; it anchors the tongue.",
+   "v": 552,
+   "t": 1100,
+   "off": {
+    "pos": 1213048,
+    "nrm": 1216360,
+    "ao": 1218568,
+    "idx": 1219672
+   },
+   "min": [
+    -18.903,
+    -9.245,
+    -17.299
+   ],
+   "ext": [
+    37.807,
+    18.49,
+    34.599
+   ],
+   "center": [
+    0.045,
+    -97.337,
+    25.307
+   ],
+   "area": 1418,
+   "crown": 0
+  },
+  {
+   "key": "tooth-11",
+   "name": "Right upper central incisor",
+   "latin": "Dens incisivus medialis superior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-21",
+   "fma": "FMA55681",
+   "bp3d": "FJ1279",
+   "fdi": "11",
+   "fact": "The widest incisor; its flat blade cuts food like a chisel.",
+   "v": 646,
+   "t": 1288,
+   "off": {
+    "pos": 1226272,
+    "nrm": 1230148,
+    "ao": 1232732,
+    "idx": 1234024
+   },
+   "min": [
+    -4.435,
+    -13.195,
+    -6.435
+   ],
+   "ext": [
+    8.871,
+    26.39,
+    12.871
+   ],
+   "center": [
+    -4.578,
+    -63.387,
+    90.481
+   ],
+   "area": 507,
+   "crown": -1
+  },
+  {
+   "key": "tooth-12",
+   "name": "Right upper lateral incisor",
+   "latin": "Dens incisivus lateralis superior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-22",
+   "fma": "FMA55680",
+   "bp3d": "FJ1280",
+   "fdi": "12",
+   "fact": "Smaller than its neighbour, and the tooth most often missing from birth.",
+   "v": 686,
+   "t": 1368,
+   "off": {
+    "pos": 1241752,
+    "nrm": 1245868,
+    "ao": 1248612,
+    "idx": 1249984
+   },
+   "min": [
+    -4.787,
+    -14.46,
+    -5.658
+   ],
+   "ext": [
+    9.574,
+    28.92,
+    11.316
+   ],
+   "center": [
+    -11.422,
+    -62.822,
+    88.176
+   ],
+   "area": 523,
+   "crown": -1
+  },
+  {
+   "key": "tooth-13",
+   "name": "Right upper canine",
+   "latin": "Dens caninus superior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-23",
+   "fma": "FMA55798",
+   "bp3d": "FJ1281",
+   "fdi": "13",
+   "fact": "The longest tooth in the mouth, with a root that can reach 17 mm.",
+   "v": 698,
+   "t": 1392,
+   "off": {
+    "pos": 1258192,
+    "nrm": 1262380,
+    "ao": 1265172,
+    "idx": 1266568
+   },
+   "min": [
+    -4.629,
+    -15.69,
+    -4.659
+   ],
+   "ext": [
+    9.258,
+    31.38,
+    9.319
+   ],
+   "center": [
+    -17.459,
+    -60.132,
+    84.856
+   ],
+   "area": 542,
+   "crown": -1
+  },
+  {
+   "key": "tooth-14",
+   "name": "Right upper first premolar",
+   "latin": "Dens premolaris primus superior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-24",
+   "fma": "FMA55689",
+   "bp3d": "FJ1277",
+   "fdi": "14",
+   "fact": "Usually has two roots, one to the cheek and one to the palate.",
+   "v": 807,
+   "t": 1610,
+   "off": {
+    "pos": 1274920,
+    "nrm": 1279764,
+    "ao": 1282992,
+    "idx": 1284608
+   },
+   "min": [
+    -4.756,
+    -14.22,
+    -4.018
+   ],
+   "ext": [
+    9.513,
+    28.44,
+    8.037
+   ],
+   "center": [
+    -20.529,
+    -59.992,
+    77.1
+   ],
+   "area": 631,
+   "crown": -1
+  },
+  {
+   "key": "tooth-15",
+   "name": "Right upper second premolar",
+   "latin": "Dens premolaris secundus superior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-25",
+   "fma": "FMA55688",
+   "bp3d": "FJ1278",
+   "fdi": "15",
+   "fact": "Its two cusps are close to equal in height.",
+   "v": 735,
+   "t": 1466,
+   "off": {
+    "pos": 1294268,
+    "nrm": 1298680,
+    "ao": 1301620,
+    "idx": 1303092
+   },
+   "min": [
+    -4.647,
+    -12.975,
+    -3.789
+   ],
+   "ext": [
+    9.293,
+    25.95,
+    7.578
+   ],
+   "center": [
+    -23.628,
+    -60.137,
+    70.958
+   ],
+   "area": 588,
+   "crown": -1
+  },
+  {
+   "key": "tooth-16",
+   "name": "Right upper first molar",
+   "latin": "Dens molaris primus superior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-26",
+   "fma": "FMA55698",
+   "bp3d": "FJ1276",
+   "fdi": "16",
+   "fact": "The largest upper tooth, with three roots and four cusps.",
+   "v": 1080,
+   "t": 2156,
+   "off": {
+    "pos": 1311888,
+    "nrm": 1318368,
+    "ao": 1322688,
+    "idx": 1324848
+   },
+   "min": [
+    -5.78,
+    -12.275,
+    -5.749
+   ],
+   "ext": [
+    11.561,
+    24.55,
+    11.499
+   ],
+   "center": [
+    -24.743,
+    -58.807,
+    61.998
+   ],
+   "area": 859,
+   "crown": -1
+  },
+  {
+   "key": "tooth-17",
+   "name": "Right upper second molar",
+   "latin": "Dens molaris secundus superior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-27",
+   "fma": "FMA55697",
+   "bp3d": "FJ1275",
+   "fdi": "17",
+   "fact": "Erupts at about age twelve, so it is called the twelve-year molar.",
+   "v": 929,
+   "t": 1850,
+   "off": {
+    "pos": 1337784,
+    "nrm": 1343360,
+    "ao": 1347076,
+    "idx": 1348936
+   },
+   "min": [
+    -5.955,
+    -11.335,
+    -4.901
+   ],
+   "ext": [
+    11.91,
+    22.67,
+    9.801
+   ],
+   "center": [
+    -24.24,
+    -56.147,
+    53.322
+   ],
+   "area": 738,
+   "crown": -1
+  },
+  {
+   "key": "tooth-21",
+   "name": "Left upper central incisor",
+   "latin": "Dens incisivus medialis superior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-11",
+   "fma": "FMA55682",
+   "bp3d": "FJ1265",
+   "fdi": "21",
+   "fact": "The widest incisor; its flat blade cuts food like a chisel.",
+   "v": 646,
+   "t": 1288,
+   "off": {
+    "pos": 1360036,
+    "nrm": 1363912,
+    "ao": 1366496,
+    "idx": 1367788
+   },
+   "min": [
+    -4.426,
+    -13.215,
+    -6.439
+   ],
+   "ext": [
+    8.851,
+    26.43,
+    12.879
+   ],
+   "center": [
+    4.607,
+    -63.377,
+    90.493
+   ],
+   "area": 507,
+   "crown": -1
+  },
+  {
+   "key": "tooth-22",
+   "name": "Left upper lateral incisor",
+   "latin": "Dens incisivus lateralis superior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-12",
+   "fma": "FMA55683",
+   "bp3d": "FJ1266",
+   "fdi": "22",
+   "fact": "Smaller than its neighbour, and the tooth most often missing from birth.",
+   "v": 691,
+   "t": 1378,
+   "off": {
+    "pos": 1375516,
+    "nrm": 1379664,
+    "ao": 1382428,
+    "idx": 1383812
+   },
+   "min": [
+    -4.805,
+    -14.465,
+    -5.837
+   ],
+   "ext": [
+    9.611,
+    28.93,
+    11.674
+   ],
+   "center": [
+    11.459,
+    -62.817,
+    88.358
+   ],
+   "area": 527,
+   "crown": -1
+  },
+  {
+   "key": "tooth-23",
+   "name": "Left upper canine",
+   "latin": "Dens caninus superior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-13",
+   "fma": "FMA55799",
+   "bp3d": "FJ1267",
+   "fdi": "23",
+   "fact": "The longest tooth in the mouth, with a root that can reach 17 mm.",
+   "v": 698,
+   "t": 1392,
+   "off": {
+    "pos": 1392080,
+    "nrm": 1396268,
+    "ao": 1399060,
+    "idx": 1400456
+   },
+   "min": [
+    -4.623,
+    -15.69,
+    -4.653
+   ],
+   "ext": [
+    9.246,
+    31.38,
+    9.305
+   ],
+   "center": [
+    17.493,
+    -60.122,
+    84.862
+   ],
+   "area": 542,
+   "crown": -1
+  },
+  {
+   "key": "tooth-24",
+   "name": "Left upper first premolar",
+   "latin": "Dens premolaris primus superior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-14",
+   "fma": "FMA55690",
+   "bp3d": "FJ1262",
+   "fdi": "24",
+   "fact": "Usually has two roots, one to the cheek and one to the palate.",
+   "v": 807,
+   "t": 1610,
+   "off": {
+    "pos": 1408808,
+    "nrm": 1413652,
+    "ao": 1416880,
+    "idx": 1418496
+   },
+   "min": [
+    -4.736,
+    -14.225,
+    -4.012
+   ],
+   "ext": [
+    9.471,
+    28.45,
+    8.024
+   ],
+   "center": [
+    20.563,
+    -60.007,
+    77.086
+   ],
+   "area": 632,
+   "crown": -1
+  },
+  {
+   "key": "tooth-25",
+   "name": "Left upper second premolar",
+   "latin": "Dens premolaris secundus superior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-15",
+   "fma": "FMA55691",
+   "bp3d": "FJ1264",
+   "fdi": "25",
+   "fact": "Its two cusps are close to equal in height.",
+   "v": 735,
+   "t": 1466,
+   "off": {
+    "pos": 1428156,
+    "nrm": 1432568,
+    "ao": 1435508,
+    "idx": 1436980
+   },
+   "min": [
+    -4.649,
+    -12.97,
+    -3.788
+   ],
+   "ext": [
+    9.298,
+    25.94,
+    7.576
+   ],
+   "center": [
+    23.643,
+    -60.132,
+    70.964
+   ],
+   "area": 588,
+   "crown": -1
+  },
+  {
+   "key": "tooth-26",
+   "name": "Left upper first molar",
+   "latin": "Dens molaris primus superior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-16",
+   "fma": "FMA55699",
+   "bp3d": "FJ1261",
+   "fdi": "26",
+   "fact": "The largest upper tooth, with three roots and four cusps.",
+   "v": 1080,
+   "t": 2156,
+   "off": {
+    "pos": 1445776,
+    "nrm": 1452256,
+    "ao": 1456576,
+    "idx": 1458736
+   },
+   "min": [
+    -5.787,
+    -12.285,
+    -5.77
+   ],
+   "ext": [
+    11.575,
+    24.57,
+    11.539
+   ],
+   "center": [
+    24.765,
+    -58.797,
+    61.999
+   ],
+   "area": 860,
+   "crown": -1
+  },
+  {
+   "key": "tooth-27",
+   "name": "Left upper second molar",
+   "latin": "Dens molaris secundus superior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-17",
+   "fma": "FMA55700",
+   "bp3d": "FJ1263",
+   "fdi": "27",
+   "fact": "Erupts at about age twelve, so it is called the twelve-year molar.",
+   "v": 928,
+   "t": 1848,
+   "off": {
+    "pos": 1471672,
+    "nrm": 1477240,
+    "ao": 1480952,
+    "idx": 1482808
+   },
+   "min": [
+    -5.927,
+    -11.33,
+    -4.929
+   ],
+   "ext": [
+    11.854,
+    22.66,
+    9.859
+   ],
+   "center": [
+    24.264,
+    -56.152,
+    53.325
+   ],
+   "area": 738,
+   "crown": -1
+  },
+  {
+   "key": "tooth-31",
+   "name": "Left lower central incisor",
+   "latin": "Dens incisivus medialis inferior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-41",
+   "fma": "FMA57143",
+   "bp3d": "FJ1258",
+   "fdi": "31",
+   "fact": "The smallest permanent tooth, and often the first to erupt, at about six.",
+   "v": 461,
+   "t": 918,
+   "off": {
+    "pos": 1493896,
+    "nrm": 1496664,
+    "ao": 1498508,
+    "idx": 1499432
+   },
+   "min": [
+    -2.941,
+    -12.735,
+    -9.111
+   ],
+   "ext": [
+    5.883,
+    25.47,
+    18.221
+   ],
+   "center": [
+    3.116,
+    -88.137,
+    82.964
+   ],
+   "area": 393,
+   "crown": 1
+  },
+  {
+   "key": "tooth-32",
+   "name": "Left lower lateral incisor",
+   "latin": "Dens incisivus lateralis inferior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-42",
+   "fma": "FMA57141",
+   "bp3d": "FJ1259",
+   "fdi": "32",
+   "fact": "Slightly wider than the central incisor next to it.",
+   "v": 482,
+   "t": 960,
+   "off": {
+    "pos": 1504940,
+    "nrm": 1507832,
+    "ao": 1509760,
+    "idx": 1510724
+   },
+   "min": [
+    -3.93,
+    -12.57,
+    -8.413
+   ],
+   "ext": [
+    7.859,
+    25.14,
+    16.827
+   ],
+   "center": [
+    8.123,
+    -88.002,
+    82.974
+   ],
+   "area": 401,
+   "crown": 1
+  },
+  {
+   "key": "tooth-33",
+   "name": "Left lower canine",
+   "latin": "Dens caninus inferior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-43",
+   "fma": "FMA55687",
+   "bp3d": "FJ1260",
+   "fdi": "33",
+   "fact": "Its single root is the longest in the lower jaw.",
+   "v": 592,
+   "t": 1180,
+   "off": {
+    "pos": 1516484,
+    "nrm": 1520036,
+    "ao": 1522404,
+    "idx": 1523588
+   },
+   "min": [
+    -4.308,
+    -13.415,
+    -7.798
+   ],
+   "ext": [
+    8.615,
+    26.83,
+    15.596
+   ],
+   "center": [
+    12.663,
+    -88.387,
+    79.642
+   ],
+   "area": 485,
+   "crown": 1
+  },
+  {
+   "key": "tooth-34",
+   "name": "Left lower first premolar",
+   "latin": "Dens premolaris primus inferior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-44",
+   "fma": "FMA55693",
+   "bp3d": "FJ1255",
+   "fdi": "34",
+   "fact": "Has a large cheek cusp and a very small tongue cusp.",
+   "v": 590,
+   "t": 1176,
+   "off": {
+    "pos": 1530668,
+    "nrm": 1534208,
+    "ao": 1536568,
+    "idx": 1537748
+   },
+   "min": [
+    -3.955,
+    -11.245,
+    -7.061
+   ],
+   "ext": [
+    7.911,
+    22.49,
+    14.123
+   ],
+   "center": [
+    17.209,
+    -85.627,
+    74.023
+   ],
+   "area": 490,
+   "crown": 1
+  },
+  {
+   "key": "tooth-35",
+   "name": "Left lower second premolar",
+   "latin": "Dens premolaris secundus inferior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-45",
+   "fma": "FMA55692",
+   "bp3d": "FJ1257",
+   "fdi": "35",
+   "fact": "Often has three cusps, which makes it look like a small molar.",
+   "v": 563,
+   "t": 1122,
+   "off": {
+    "pos": 1544804,
+    "nrm": 1548184,
+    "ao": 1550436,
+    "idx": 1551564
+   },
+   "min": [
+    -4.059,
+    -11.69,
+    -6.649
+   ],
+   "ext": [
+    8.118,
+    23.38,
+    13.298
+   ],
+   "center": [
+    20.304,
+    -84.802,
+    67.591
+   ],
+   "area": 460,
+   "crown": 1
+  },
+  {
+   "key": "tooth-36",
+   "name": "Left lower first molar",
+   "latin": "Dens molaris primus inferior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-46",
+   "fma": "FMA55704",
+   "bp3d": "FJ1254",
+   "fdi": "36",
+   "fact": "Usually the first permanent tooth to erupt, at about age six.",
+   "v": 883,
+   "t": 1762,
+   "off": {
+    "pos": 1558296,
+    "nrm": 1563596,
+    "ao": 1567128,
+    "idx": 1568896
+   },
+   "min": [
+    -6.167,
+    -9.85,
+    -7.553
+   ],
+   "ext": [
+    12.334,
+    19.7,
+    15.106
+   ],
+   "center": [
+    23.254,
+    -79.992,
+    60.109
+   ],
+   "area": 713,
+   "crown": 1
+  },
+  {
+   "key": "tooth-37",
+   "name": "Left lower second molar",
+   "latin": "Dens molaris secundus inferior sinister",
+   "group": "dentition",
+   "side": "left",
+   "pair": "tooth-47",
+   "fma": "FMA55703",
+   "bp3d": "FJ1256",
+   "fdi": "37",
+   "fact": "Has four cusps in a cross pattern and two roots.",
+   "v": 810,
+   "t": 1616,
+   "off": {
+    "pos": 1579468,
+    "nrm": 1584328,
+    "ao": 1587568,
+    "idx": 1589188
+   },
+   "min": [
+    -6.049,
+    -9.35,
+    -8.251
+   ],
+   "ext": [
+    12.099,
+    18.7,
+    16.501
+   ],
+   "center": [
+    26.775,
+    -75.132,
+    48.175
+   ],
+   "area": 656,
+   "crown": 1
+  },
+  {
+   "key": "tooth-41",
+   "name": "Right lower central incisor",
+   "latin": "Dens incisivus medialis inferior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-31",
+   "fma": "FMA57142",
+   "bp3d": "FJ1272",
+   "fdi": "41",
+   "fact": "The smallest permanent tooth, and often the first to erupt, at about six.",
+   "v": 462,
+   "t": 920,
+   "off": {
+    "pos": 1598884,
+    "nrm": 1601656,
+    "ao": 1603504,
+    "idx": 1604428
+   },
+   "min": [
+    -2.937,
+    -12.73,
+    -9.118
+   ],
+   "ext": [
+    5.874,
+    25.46,
+    18.236
+   ],
+   "center": [
+    -3.099,
+    -88.122,
+    82.963
+   ],
+   "area": 394,
+   "crown": 1
+  },
+  {
+   "key": "tooth-42",
+   "name": "Right lower lateral incisor",
+   "latin": "Dens incisivus lateralis inferior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-32",
+   "fma": "FMA57140",
+   "bp3d": "FJ1273",
+   "fdi": "42",
+   "fact": "Slightly wider than the central incisor next to it.",
+   "v": 481,
+   "t": 958,
+   "off": {
+    "pos": 1609948,
+    "nrm": 1612836,
+    "ao": 1614760,
+    "idx": 1615724
+   },
+   "min": [
+    -3.924,
+    -12.57,
+    -8.431
+   ],
+   "ext": [
+    7.849,
+    25.14,
+    16.862
+   ],
+   "center": [
+    -8.103,
+    -88.002,
+    82.985
+   ],
+   "area": 402,
+   "crown": 1
+  },
+  {
+   "key": "tooth-43",
+   "name": "Right lower canine",
+   "latin": "Dens caninus inferior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-33",
+   "fma": "FMA55686",
+   "bp3d": "FJ1274",
+   "fdi": "43",
+   "fact": "Its single root is the longest in the lower jaw.",
+   "v": 591,
+   "t": 1178,
+   "off": {
+    "pos": 1621472,
+    "nrm": 1625020,
+    "ao": 1627384,
+    "idx": 1628568
+   },
+   "min": [
+    -4.312,
+    -13.415,
+    -7.8
+   ],
+   "ext": [
+    8.625,
+    26.83,
+    15.6
+   ],
+   "center": [
+    -12.642,
+    -88.387,
+    79.641
+   ],
+   "area": 486,
+   "crown": 1
+  },
+  {
+   "key": "tooth-44",
+   "name": "Right lower first premolar",
+   "latin": "Dens premolaris primus inferior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-34",
+   "fma": "FMA55694",
+   "bp3d": "FJ1269",
+   "fdi": "44",
+   "fact": "Has a large cheek cusp and a very small tongue cusp.",
+   "v": 592,
+   "t": 1180,
+   "off": {
+    "pos": 1635636,
+    "nrm": 1639188,
+    "ao": 1641556,
+    "idx": 1642740
+   },
+   "min": [
+    -3.973,
+    -11.26,
+    -7.073
+   ],
+   "ext": [
+    7.946,
+    22.52,
+    14.147
+   ],
+   "center": [
+    -17.142,
+    -85.622,
+    74.034
+   ],
+   "area": 490,
+   "crown": 1
+  },
+  {
+   "key": "tooth-45",
+   "name": "Right lower second premolar",
+   "latin": "Dens premolaris secundus inferior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-35",
+   "fma": "FMA55695",
+   "bp3d": "FJ1271",
+   "fdi": "45",
+   "fact": "Often has three cusps, which makes it look like a small molar.",
+   "v": 564,
+   "t": 1124,
+   "off": {
+    "pos": 1649820,
+    "nrm": 1653204,
+    "ao": 1655460,
+    "idx": 1656588
+   },
+   "min": [
+    -4.057,
+    -11.68,
+    -6.663
+   ],
+   "ext": [
+    8.114,
+    23.36,
+    13.325
+   ],
+   "center": [
+    -20.282,
+    -84.812,
+    67.573
+   ],
+   "area": 460,
+   "crown": 1
+  },
+  {
+   "key": "tooth-46",
+   "name": "Right lower first molar",
+   "latin": "Dens molaris primus inferior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-36",
+   "fma": "FMA55705",
+   "bp3d": "FJ1268",
+   "fdi": "46",
+   "fact": "Usually the first permanent tooth to erupt, at about age six.",
+   "v": 883,
+   "t": 1762,
+   "off": {
+    "pos": 1663332,
+    "nrm": 1668632,
+    "ao": 1672164,
+    "idx": 1673932
+   },
+   "min": [
+    -6.158,
+    -9.86,
+    -7.555
+   ],
+   "ext": [
+    12.316,
+    19.72,
+    15.111
+   ],
+   "center": [
+    -23.23,
+    -79.982,
+    60.105
+   ],
+   "area": 713,
+   "crown": 1
+  },
+  {
+   "key": "tooth-47",
+   "name": "Right lower second molar",
+   "latin": "Dens molaris secundus inferior dexter",
+   "group": "dentition",
+   "side": "right",
+   "pair": "tooth-37",
+   "fma": "FMA55706",
+   "bp3d": "FJ1270",
+   "fdi": "47",
+   "fact": "Has four cusps in a cross pattern and two roots.",
+   "v": 812,
+   "t": 1620,
+   "off": {
+    "pos": 1684504,
+    "nrm": 1689376,
+    "ao": 1692624,
+    "idx": 1694248
+   },
+   "min": [
+    -6.036,
+    -9.34,
+    -8.261
+   ],
+   "ext": [
+    12.072,
+    18.68,
+    16.522
+   ],
+   "center": [
+    -26.745,
+    -75.122,
+    48.186
+   ],
+   "area": 656,
+   "crown": 1
+  }
+ ]
+}

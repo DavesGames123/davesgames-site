@@ -1,0 +1,31 @@
+HUMAN SKULL DATA  ·  data/skull.bin, data/skull.json
+=====================================================
+
+Source
+  BodyParts3D, (c) The Database Center for Life Science (DBCLS), Japan.
+  https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
+  Files used: partof_BP3D_4.0_obj_99.zip (bones) and
+              isa_BP3D_4.0_obj_99.zip (teeth), BodyParts3D 4.0.
+
+Source licence
+  The database licence page (last updated 2025-02-27) states:
+  "BodyParts3D, (c) The Database Center for Life Science licensed under
+  CC Attribution 4.0 International."
+  https://dbarchive.biosciencedbc.jp/en/bodyparts3d/lic.html
+  The headers of the 2011 OBJ files state the earlier licence,
+  CC Attribution-Share Alike 2.1 Japan.
+
+Licence of these files
+  The meshes in this folder are adapted material: selected, re-oriented,
+  welded, decimated with quadric edge collapse, given new smooth normals,
+  baked with ambient occlusion, and quantized (see ../build-data.mjs).
+  To honour both source licences, these derived files are shared under
+  Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0):
+  https://creativecommons.org/licenses/by-sa/4.0/
+  Attribute as: "Human skull meshes adapted from BodyParts3D,
+  (c) The Database Center for Life Science, CC BY 4.0 / CC BY-SA 2.1 JP;
+  adaptation by davesgames.io, CC BY-SA 4.0."
+
+  The names in English and Latin and the one-line facts in skull.json are
+  original text for this page. FMA ids come from the Foundational Model of
+  Anatomy, as listed by BodyParts3D.
