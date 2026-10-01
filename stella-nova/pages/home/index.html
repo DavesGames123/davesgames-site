@@ -17,7 +17,7 @@
    LOAD ORDER  (classic deferred scripts, so the page runs on file:// too)
      1. style.css       page stylesheet
      2. thumbs/list.js  keys that have a thumbs/<key>.jpg
-     3. nav-data.js     shell nav, cluster by cluster
+     3. nav-data.js     ../../lib/nav-data.js, the page registry (SN_NAV)
      4. sectors.js      sector table, blurbs, featured keys
      5. sky-data.js     real sky objects for the hero background
      6. main.js         sky, chart, rails, routing, directory filter, form
@@ -146,17 +146,17 @@
       </a>
       <a class="portal" data-sector="wiki" href="/stella-nova/#shipdesigner" target="_top" data-key="shipdesigner">
         <span class="portal-img"><img src="thumbs/shipdesigner.jpg" alt="" decoding="async"></span>
-        <span class="portal-txt"><span class="portal-kicker">&#9733; Wiki</span><span class="portal-title">Interactive Wiki</span><span class="portal-line">Ships &middot; planner &middot; crafting</span></span>
+        <span class="portal-txt"><span class="portal-kicker">&#9733; Wiki</span><span class="portal-title">Game Wiki</span><span class="portal-line">Ships &middot; planner &middot; crafting</span></span>
         <span class="portal-arrow" aria-hidden="true">&rarr;</span>
       </a>
-      <a class="portal" data-sector="physics" href="/stella-nova/#orbital" target="_top" data-key="orbital">
+      <a class="portal" data-sector="quantum" href="/stella-nova/#orbital" target="_top" data-key="orbital">
         <span class="portal-img"><img src="thumbs/orbital.jpg" alt="" decoding="async"></span>
-        <span class="portal-txt"><span class="portal-kicker">&lambda; Physics</span><span class="portal-title">Learn Physics</span><span class="portal-line">Atomic orbitals &middot; 37 simulations</span></span>
+        <span class="portal-txt"><span class="portal-kicker">&psi; Science</span><span class="portal-title">Science Lab</span><span class="portal-line">Space &middot; quantum &middot; fluids &middot; fields</span></span>
         <span class="portal-arrow" aria-hidden="true">&rarr;</span>
       </a>
-      <a class="portal" data-sector="shader" href="/stella-nova/#sdf-solids" target="_top" data-key="sdf-solids">
+      <a class="portal" data-sector="shaders" href="/stella-nova/#sdf-solids" target="_top" data-key="sdf-solids">
         <span class="portal-img"><img src="thumbs/sdf-solids.jpg" alt="" decoding="async"></span>
-        <span class="portal-txt"><span class="portal-kicker">&#10022; Shaders</span><span class="portal-title">Shader Library</span><span class="portal-line">WebGPU &middot; WGSL tables</span></span>
+        <span class="portal-txt"><span class="portal-kicker">&#10022; Graphics</span><span class="portal-title">Shaders &amp; Rendering</span><span class="portal-line">WGSL tables &middot; effects &middot; ray marching</span></span>
         <span class="portal-arrow" aria-hidden="true">&rarr;</span>
       </a>
     </nav>
@@ -168,12 +168,22 @@
 <nav class="dock" id="dock" aria-label="Sectors">
   <a class="dock-mark" href="#top" aria-label="Back to top"><span class="mark-star"></span><span class="mark-txt">Stella Nova</span></a>
   <div class="dock-chips" id="dockChips">
+<!-- CHIPS:BEGIN -->
     <a class="chip" data-sector="game" href="#features">Game</a>
     <a class="chip" data-sector="wiki" href="#chart" data-goto="wiki">Wiki</a>
-    <a class="chip" data-sector="physics" href="#chart" data-goto="physics">Physics</a>
-    <a class="chip" data-sector="shader" href="#chart" data-goto="shader">Shaders</a>
-    <a class="chip" data-sector="music" href="#chart" data-goto="music">Music</a>
     <a class="chip" data-sector="community" href="#chart" data-goto="community">Community</a>
+    <a class="chip" data-sector="space" href="#chart" data-goto="space">Space</a>
+    <a class="chip" data-sector="quantum" href="#chart" data-goto="quantum">Quantum</a>
+    <a class="chip" data-sector="life" href="#chart" data-goto="life">Life</a>
+    <a class="chip" data-sector="fluids" href="#chart" data-goto="fluids">Fluids</a>
+    <a class="chip" data-sector="fields" href="#chart" data-goto="fields">Fields</a>
+    <a class="chip" data-sector="patterns" href="#chart" data-goto="patterns">Patterns</a>
+    <a class="chip" data-sector="sound" href="#chart" data-goto="sound">Sound</a>
+    <a class="chip" data-sector="machines" href="#chart" data-goto="machines">Machines</a>
+    <a class="chip" data-sector="shaders" href="#chart" data-goto="shaders">Shaders</a>
+    <a class="chip" data-sector="effects" href="#chart" data-goto="effects">Effects</a>
+    <a class="chip" data-sector="rendering" href="#chart" data-goto="rendering">Render</a>
+<!-- CHIPS:END -->
     <a class="chip chip-all" href="#directory">All pages</a>
   </div>
   <div class="find find-dock" data-find>
@@ -204,7 +214,7 @@
 <!-- ═════ STAR CHART ═════ -->
 <section class="band" id="chart" aria-labelledby="chart-h">
   <div class="band-head">
-    <div><p class="kicker">// Star chart &middot; <span class="page-count">85</span> pages in seven constellations</p><h2 id="chart-h">The whole site, <em>mapped</em></h2></div>
+    <div><p class="kicker">// Star chart &middot; <span class="page-count">98</span> pages in <span class="con-count">14</span> constellations</p><h2 id="chart-h">The whole site, <em>mapped</em></h2></div>
     <p class="band-note">Hover a constellation to light it. Every star is a page.</p>
   </div>
   <div class="chart-wrap">
@@ -387,22 +397,24 @@
   </div>
   <div class="dir" id="dirList">
 <!-- DIRECTORY:BEGIN -->
-      <div class="dir-col">
+      <div class="dir-col" data-region="stella">
+        <p class="dir-region">Stella Nova</p>
         <details class="dir-group" data-sector="game" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Home</span><span class="dir-count">2</span></summary>
+          <summary><span class="dir-dot"></span><span class="dir-name">The Game</span><span class="dir-count">1</span></summary>
           <div class="dir-body">
             <ul>
               <li><a href="/stella-nova/#home" target="_top" data-key="home">Overview</a></li>
             </ul>
-            <h4 class="dir-h">Help Translate</h4>
-            <ul>
-              <li><a href="/stella-nova/#translate" target="_top" data-key="translate">Translation Tool<span class="badge">i18n</span></a></li>
-            </ul>
           </div>
         </details>
         <details class="dir-group" data-sector="wiki" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Interactive Wiki</span><span class="dir-count">8</span></summary>
+          <summary><span class="dir-dot"></span><span class="dir-name">Game Wiki</span><span class="dir-count">11</span></summary>
           <div class="dir-body">
+            <h4 class="dir-h">Reference</h4>
+            <ul>
+              <li><a href="/stella-nova/#wiki" target="_top" data-key="wiki">Wiki<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#research" target="_top" data-key="research">Research<span class="badge">NEW</span></a></li>
+            </ul>
             <h4 class="dir-h">Station Design</h4>
             <ul>
               <li><a href="/stella-nova/#guide" target="_top" data-key="guide">Station Guide</a></li>
@@ -420,27 +432,21 @@
               <li><a href="/stella-nova/#behaviors" target="_top" data-key="behaviors">Behaviors</a></li>
               <li><a href="/stella-nova/#controls" target="_top" data-key="controls">Controls</a></li>
             </ul>
-          </div>
-        </details>
-        <details class="dir-group" data-sector="music" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Music Lab</span><span class="dir-count">6</span></summary>
-          <div class="dir-body">
+            <h4 class="dir-h">Crew &amp; Society</h4>
             <ul>
-              <li><a href="/stella-nova/#chordlab" target="_top" data-key="chordlab">ChordLab<span class="badge">MIC</span></a></li>
-              <li><a href="/stella-nova/#chordchart" target="_top" data-key="chordchart">Chord Chart<span class="badge">NEW</span></a></li>
-              <li><a href="/stella-nova/#harmonywheel" target="_top" data-key="harmonywheel">Harmony Wheel<span class="badge">NEW</span></a></li>
-              <li><a href="/stella-nova/#resonance-figure" target="_top" data-key="resonance-figure">Resonance Figure<span class="badge">NEW</span></a></li>
-              <li><a href="/stella-nova/#resonance-table" target="_top" data-key="resonance-table">Resonance Table<span class="badge">NEW</span></a></li>
-              <li><a href="/stella-nova/#resonance-3d" target="_top" data-key="resonance-3d">Resonance 3D<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#social-dynamics" target="_top" data-key="social-dynamics">Social Dynamics<span class="badge">NEW</span></a></li>
             </ul>
           </div>
         </details>
         <details class="dir-group" data-sector="community" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Community</span><span class="dir-count">5</span></summary>
+          <summary><span class="dir-dot"></span><span class="dir-name">Community &amp; Tools</span><span class="dir-count">5</span></summary>
           <div class="dir-body">
             <ul>
               <li><a href="/stella-nova/#fortom" target="_top" data-key="fortom">For Tom</a></li>
               <li><a href="/stella-nova/#starward-belt" target="_top" data-key="starward-belt">Starward Belt<span class="badge">MAP</span></a></li>
+            </ul>
+            <h4 class="dir-h">Help Translate</h4>
+            <ul>
               <li><a href="/stella-nova/#translate" target="_top" data-key="translate">Translation Tool<span class="badge">i18n</span></a></li>
             </ul>
             <h4 class="dir-h">Studio Tools</h4>
@@ -451,21 +457,30 @@
           </div>
         </details>
       </div>
-      <div class="dir-col">
-        <details class="dir-group" data-sector="physics" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Learn About Physics</span><span class="dir-count">37</span></summary>
+      <div class="dir-col" data-region="science">
+        <p class="dir-region">Science</p>
+        <details class="dir-group" data-sector="space" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Space &amp; Gravity</span><span class="dir-count">7</span></summary>
           <div class="dir-body">
-            <h4 class="dir-h">Orbital Mechanics</h4>
+            <h4 class="dir-h">Planets &amp; Orbits</h4>
             <ul>
               <li><a href="/stella-nova/#hohmann" target="_top" data-key="hohmann">Hohmann Transfer<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#leo" target="_top" data-key="leo">LEO Catalog<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#gravity" target="_top" data-key="gravity">Gravity Sim<span class="badge">SIM</span></a></li>
-              <li><a href="/stella-nova/#galaxy" target="_top" data-key="galaxy">Galaxy<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#forge" target="_top" data-key="forge">Planet Forge</a></li>
+            </ul>
+            <h4 class="dir-h">Deep Space</h4>
+            <ul>
+              <li><a href="/stella-nova/#galaxy" target="_top" data-key="galaxy">Galaxy<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#blackhole" target="_top" data-key="blackhole">Black Hole<span class="badge">GPU</span></a></li>
               <li><a href="/stella-nova/#wormhole" target="_top" data-key="wormhole">Wormhole<span class="badge">GPU</span></a></li>
             </ul>
-            <h4 class="dir-h">Quantum &amp; Atomic</h4>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="quantum" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Quantum</span><span class="dir-count">7</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Atoms &amp; Molecules</h4>
             <ul>
               <li><a href="/stella-nova/#orbital" target="_top" data-key="orbital">Atomic Orbital<span class="badge">VR</span></a></li>
               <li><a href="/stella-nova/#molecular-bond" target="_top" data-key="molecular-bond">Molecular Bond<span class="badge">SIM</span></a></li>
@@ -478,104 +493,187 @@
               <li><a href="/stella-nova/#qft-store" target="_top" data-key="qft-store">Quantum Decoding<span class="badge">DATA</span></a></li>
               <li><a href="/stella-nova/#frqi" target="_top" data-key="frqi">Quantum Image Encoding<span class="badge">IMG</span></a></li>
             </ul>
-            <h4 class="dir-h">Fluid Dynamics</h4>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="life" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Life Sciences</span><span class="dir-count">5</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Proteins</h4>
+            <ul>
+              <li><a href="/stella-nova/#protein-viewer" target="_top" data-key="protein-viewer">Protein Structure<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#protein-folding" target="_top" data-key="protein-folding">Protein Folding<span class="badge">SIM</span></a></li>
+              <li><a href="/stella-nova/#alphafold" target="_top" data-key="alphafold">How AlphaFold Works<span class="badge">ML</span></a></li>
+            </ul>
+            <h4 class="dir-h">Anatomy</h4>
+            <ul>
+              <li><a href="/stella-nova/#human-skull" target="_top" data-key="human-skull">Human Skull<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#human-skeleton" target="_top" data-key="human-skeleton">Human Skeleton<span class="badge">3D</span></a></li>
+            </ul>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="fluids" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Fluids</span><span class="dir-count">10</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Flow</h4>
             <ul>
               <li><a href="/stella-nova/#fluidlab" target="_top" data-key="fluidlab">Stable Fluids<span class="badge">GPU</span></a></li>
+              <li><a href="/stella-nova/#wind-tunnel" target="_top" data-key="wind-tunnel">Wind Tunnel<span class="badge">CFD</span></a></li>
+              <li><a href="/stella-nova/#tidal-currents" target="_top" data-key="tidal-currents">Tidal Currents<span class="badge">DATA</span></a></li>
+            </ul>
+            <h4 class="dir-h">Navier–Stokes</h4>
+            <ul>
               <li><a href="/stella-nova/#ns-equations" target="_top" data-key="ns-equations">Navier–Stokes 1D<span class="badge">MATH</span></a></li>
               <li><a href="/stella-nova/#ns-burgers" target="_top" data-key="ns-burgers">Burgers Equation<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#ns-flow2d" target="_top" data-key="ns-flow2d">Navier–Stokes 2D<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#ns-flow3d" target="_top" data-key="ns-flow3d">Navier–Stokes 3D<span class="badge">SIM</span></a></li>
+            </ul>
+            <h4 class="dir-h">Blowup</h4>
+            <ul>
               <li><a href="/stella-nova/#ns-wave" target="_top" data-key="ns-wave">Blowup: Wave<span class="badge">MATH</span></a></li>
               <li><a href="/stella-nova/#ns-geometry" target="_top" data-key="ns-geometry">Blowup: Geometry<span class="badge">SIM</span></a></li>
               <li><a href="/stella-nova/#ns-vortex" target="_top" data-key="ns-vortex">Blowup: Vortex<span class="badge">3D</span></a></li>
             </ul>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="fields" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Light &amp; Fields</span><span class="dir-count">8</span></summary>
+          <div class="dir-body">
             <h4 class="dir-h">Electromagnetism</h4>
             <ul>
               <li><a href="/stella-nova/#magnetlab" target="_top" data-key="magnetlab">MagnetLab<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#biot-savart" target="_top" data-key="biot-savart">Biot–Savart Law<span class="badge">NEW</span></a></li>
-              <li><a href="/stella-nova/#maxwell" target="_top" data-key="maxwell">Maxwell&#x27;s Equations<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#maxwell" target="_top" data-key="maxwell">Maxwell's Equations<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#twenty-to-four" target="_top" data-key="twenty-to-four">Twenty to Four<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#smith-chart" target="_top" data-key="smith-chart">Smith Chart<span class="badge">NEW</span></a></li>
             </ul>
-            <h4 class="dir-h">Optical Physics</h4>
+            <h4 class="dir-h">Optics</h4>
             <ul>
-              <li><a href="/stella-nova/#cornell" target="_top" data-key="cornell">Rendering Engine<span class="badge">PATH</span></a></li>
               <li><a href="/stella-nova/#diffraction" target="_top" data-key="diffraction">Aperture Diffraction<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#double-slit" target="_top" data-key="double-slit">Double-Slit Diffraction<span class="badge">NEW</span></a></li>
               <li><a href="/stella-nova/#polarization" target="_top" data-key="polarization">Circular Polarization<span class="badge">NEW</span></a></li>
             </ul>
-            <h4 class="dir-h">Differential Equations</h4>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="patterns" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Patterns &amp; Chaos</span><span class="dir-count">5</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Chaos</h4>
             <ul>
               <li><a href="/stella-nova/#attractorlab" target="_top" data-key="attractorlab">Strange Attractors<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#flowlab" target="_top" data-key="flowlab">Vector Fields<span class="badge">SIM</span></a></li>
-              <li><a href="/stella-nova/#wave-membrane" target="_top" data-key="wave-membrane">Standing Wave Membrane<span class="badge">SIM</span></a></li>
+            </ul>
+            <h4 class="dir-h">Emergence</h4>
+            <ul>
               <li><a href="/stella-nova/#reaction-diffusion" target="_top" data-key="reaction-diffusion">Reaction–Diffusion<span class="badge">GPU</span></a></li>
               <li><a href="/stella-nova/#lenia" target="_top" data-key="lenia">Lenia<span class="badge">GPU</span></a></li>
+              <li><a href="/stella-nova/#game-of-life" target="_top" data-key="game-of-life">Game of Life<span class="badge">SIM</span></a></li>
             </ul>
-            <h4 class="dir-h">Folding &amp; Structures</h4>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="sound" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Sound &amp; Vibration</span><span class="dir-count">7</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Music</h4>
             <ul>
+              <li><a href="/stella-nova/#chordlab" target="_top" data-key="chordlab">ChordLab<span class="badge">MIC</span></a></li>
+              <li><a href="/stella-nova/#chordchart" target="_top" data-key="chordchart">Chord Chart<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#harmonywheel" target="_top" data-key="harmonywheel">Harmony Wheel<span class="badge">NEW</span></a></li>
+            </ul>
+            <h4 class="dir-h">Resonance</h4>
+            <ul>
+              <li><a href="/stella-nova/#resonance-figure" target="_top" data-key="resonance-figure">Resonance Figure<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#resonance-table" target="_top" data-key="resonance-table">Resonance Table<span class="badge">NEW</span></a></li>
+              <li><a href="/stella-nova/#resonance-3d" target="_top" data-key="resonance-3d">Resonance 3D<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#wave-membrane" target="_top" data-key="wave-membrane">Standing Wave Membrane<span class="badge">SIM</span></a></li>
+            </ul>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="machines" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Machines</span><span class="dir-count">3</span></summary>
+          <div class="dir-body">
+            <ul>
+              <li><a href="/stella-nova/#watch-movement" target="_top" data-key="watch-movement">Watch Movement<span class="badge">3D</span></a></li>
+              <li><a href="/stella-nova/#watch-randomizer" target="_top" data-key="watch-randomizer">Timepiece Randomizer<span class="badge">3D</span></a></li>
               <li><a href="/stella-nova/#origami" target="_top" data-key="origami">Origami Simulator<span class="badge">SIM</span></a></li>
             </ul>
           </div>
         </details>
       </div>
-      <div class="dir-col">
-        <details class="dir-group" data-sector="shader" open>
-          <summary><span class="dir-dot"></span><span class="dir-name">Shader Library</span><span class="dir-count">30</span></summary>
+      <div class="dir-col" data-region="graphics">
+        <p class="dir-region">Graphics</p>
+        <details class="dir-group" data-sector="shaders" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Shader Tables</span><span class="dir-count">13</span></summary>
           <div class="dir-body">
-            <h4 class="dir-h">Procedural Fields</h4>
+            <h4 class="dir-h">Patterns</h4>
             <ul>
               <li><a href="/stella-nova/#noise" target="_top" data-key="noise">Noise Table<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#fields" target="_top" data-key="fields">Field Table<span class="badge">COMPUTE</span></a></li>
               <li><a href="/stella-nova/#sims" target="_top" data-key="sims">Simulation Table<span class="badge">COMPUTE</span></a></li>
               <li><a href="/stella-nova/#dot-field" target="_top" data-key="dot-field">Dot Field Table<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#polar" target="_top" data-key="polar">Polar &amp; Lattice Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#sdf2d" target="_top" data-key="sdf2d">SDF 2D Table<span class="badge">WGSL</span></a></li>
             </ul>
-            <h4 class="dir-h">Image &amp; Color</h4>
+            <h4 class="dir-h">Image</h4>
             <ul>
               <li><a href="/stella-nova/#color" target="_top" data-key="color">Color Table<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#postfx" target="_top" data-key="postfx">Post-Process<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#sampling" target="_top" data-key="sampling">Sampling Table<span class="badge">WGSL</span></a></li>
             </ul>
-            <h4 class="dir-h">Shading &amp; Sampling</h4>
+            <h4 class="dir-h">Surfaces</h4>
             <ul>
               <li><a href="/stella-nova/#lighting" target="_top" data-key="lighting">Lighting Table<span class="badge">WGSL</span></a></li>
-              <li><a href="/stella-nova/#sampling" target="_top" data-key="sampling">Sampling Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#sdf-solids" target="_top" data-key="sdf-solids">SDF Solids Table<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#liquid-metal" target="_top" data-key="liquid-metal">Liquid Metal Table<span class="badge">WGSL</span></a></li>
             </ul>
             <h4 class="dir-h">Composition</h4>
             <ul>
               <li><a href="/stella-nova/#bench" target="_top" data-key="bench">Composition Bench<span class="badge">NODES</span></a></li>
             </ul>
-            <h4 class="dir-h">Volumetric</h4>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="effects" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Game Effects</span><span class="dir-count">9</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Weapons &amp; Engines</h4>
             <ul>
-              <li><a href="/stella-nova/#supernova" target="_top" data-key="supernova">Fractal Orb<span class="badge">SHADER</span></a></li>
-              <li><a href="/stella-nova/#orbs" target="_top" data-key="orbs">Presence Orbs<span class="badge">WGSL</span></a></li>
-              <li><a href="/stella-nova/#voxel" target="_top" data-key="voxel">Voxel Flythrough<span class="badge">GPU</span></a></li>
-              <li><a href="/stella-nova/#branched-flow" target="_top" data-key="branched-flow">Branched Flow<span class="badge">GPU</span></a></li>
-            </ul>
-            <h4 class="dir-h">Surfaces &amp; Effects</h4>
-            <ul>
-              <li><a href="/stella-nova/#platonic" target="_top" data-key="platonic">Platonic Mirrors<span class="badge">SHADER</span></a></li>
-              <li><a href="/stella-nova/#glass-cube" target="_top" data-key="glass-cube">Refraction<span class="badge">GPU</span></a></li>
-              <li><a href="/stella-nova/#sdf-solids" target="_top" data-key="sdf-solids">SDF Solids Table<span class="badge">WGSL</span></a></li>
-              <li><a href="/stella-nova/#sdf2d" target="_top" data-key="sdf2d">SDF 2D Table<span class="badge">WGSL</span></a></li>
-              <li><a href="/stella-nova/#sdf-lab" target="_top" data-key="sdf-lab">SDF Modeller<span class="badge">TOOL</span></a></li>
-              <li><a href="/stella-nova/#liquid-metal" target="_top" data-key="liquid-metal">Liquid Metal Table<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#explosion" target="_top" data-key="explosion">Explosion</a></li>
               <li><a href="/stella-nova/#flare" target="_top" data-key="flare">Engine Propulsion Effects</a></li>
               <li><a href="/stella-nova/#beam" target="_top" data-key="beam">Beam &amp; Decal Table<span class="badge">WGSL</span></a></li>
             </ul>
-            <h4 class="dir-h">Elements</h4>
+            <h4 class="dir-h">Fire &amp; Smoke</h4>
             <ul>
               <li><a href="/stella-nova/#fire" target="_top" data-key="fire">Fire Table<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#fire-ev1" target="_top" data-key="fire-ev1">Fire Table (Evolved 1)<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#smoke" target="_top" data-key="smoke">Smoke Table<span class="badge">WGSL</span></a></li>
+            </ul>
+            <h4 class="dir-h">Heat &amp; Frost</h4>
+            <ul>
               <li><a href="/stella-nova/#heat-diffraction" target="_top" data-key="heat-diffraction">Heat Diffraction<span class="badge">IMG</span></a></li>
               <li><a href="/stella-nova/#heat-metal" target="_top" data-key="heat-metal">Heat Metal<span class="badge">WGSL</span></a></li>
               <li><a href="/stella-nova/#frost" target="_top" data-key="frost">Frost Table<span class="badge">WGSL</span></a></li>
             </ul>
-            <h4 class="dir-h">Data Visualization</h4>
+          </div>
+        </details>
+        <details class="dir-group" data-sector="rendering" open>
+          <summary><span class="dir-dot"></span><span class="dir-name">Rendering</span><span class="dir-count">9</span></summary>
+          <div class="dir-body">
+            <h4 class="dir-h">Ray Marching</h4>
             <ul>
-              <li><a href="/stella-nova/#tidal-currents" target="_top" data-key="tidal-currents">Tidal Currents<span class="badge">DATA</span></a></li>
+              <li><a href="/stella-nova/#supernova" target="_top" data-key="supernova">Fractal Orb<span class="badge">SHADER</span></a></li>
+              <li><a href="/stella-nova/#sdf-lab" target="_top" data-key="sdf-lab">SDF Modeller<span class="badge">TOOL</span></a></li>
+              <li><a href="/stella-nova/#sphere-tracing" target="_top" data-key="sphere-tracing">Sphere Tracing Lab<span class="badge">LAB</span></a></li>
+            </ul>
+            <h4 class="dir-h">Light Transport</h4>
+            <ul>
+              <li><a href="/stella-nova/#cornell" target="_top" data-key="cornell">Rendering Engine<span class="badge">PATH</span></a></li>
+              <li><a href="/stella-nova/#glass-cube" target="_top" data-key="glass-cube">Refraction<span class="badge">GPU</span></a></li>
+              <li><a href="/stella-nova/#platonic" target="_top" data-key="platonic">Platonic Mirrors<span class="badge">SHADER</span></a></li>
+              <li><a href="/stella-nova/#branched-flow" target="_top" data-key="branched-flow">Branched Flow<span class="badge">GPU</span></a></li>
+            </ul>
+            <h4 class="dir-h">Volumes</h4>
+            <ul>
+              <li><a href="/stella-nova/#orbs" target="_top" data-key="orbs">Presence Orbs<span class="badge">WGSL</span></a></li>
+              <li><a href="/stella-nova/#voxel" target="_top" data-key="voxel">Voxel Flythrough<span class="badge">GPU</span></a></li>
             </ul>
           </div>
         </details>
@@ -604,7 +702,7 @@
 
 
 <script defer src="thumbs/list.js"></script>
-<script defer src="nav-data.js"></script>
+<script defer src="../../lib/nav-data.js"></script>
 <script defer src="sectors.js"></script>
 <script defer src="sky-data.js"></script>
 <script defer src="commit-data.js"></script>

@@ -6,7 +6,7 @@
 //
 //  Classic scripts let the page run from file:// (a Finder double-click).
 //  Browsers block ES modules there. Load order, all with defer:
-//    thumbs/list.js -> nav-data.js -> sectors.js -> sky-data.js ->
+//    thumbs/list.js -> ../../lib/nav-data.js -> sectors.js -> sky-data.js ->
 //    commit-data.js -> main.js
 //  They share one namespace object: window.Observatory.
 //
@@ -41,7 +41,7 @@
 // ============================================================================
 (function (O) {
 'use strict';
-const { SECTORS, LAYOUT, GAME_STARS, BLURBS, THUMBS, FEATURED, allPages } = O;
+const { SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, THUMBS, FEATURED, allPages } = O;
 
 document.documentElement.classList.add('js');
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
@@ -61,6 +61,7 @@ const PAGES = allPages();
 const SECTOR = Object.fromEntries(SECTORS.map(s => [s.id, s]));
 const UNIQUE = [...new Map(PAGES.map(p => [p.key, p])).values()];
 $$('.page-count').forEach(el => { el.textContent = UNIQUE.length; });
+$$('.con-count').forEach(el => { el.textContent = SECTORS.length; });
 $$('.find-hero input').forEach(el => { el.placeholder = PHONE.matches ? `Search ${UNIQUE.length} pages` : `Search ${UNIQUE.length} pages: black hole, chord, fire, orbit`; });
 
 // ── routing ────────────────────────────────────────────────────────────────
@@ -456,7 +457,14 @@ function buildChart() {
   let bg = '<g>';
   for (let i = 0; i < 220; i++) bg += `<circle class="bg-star" cx="${(rand() * 1000).toFixed(1)}" cy="${(rand() * 620).toFixed(1)}" r="${(0.3 + rand() * 0.9).toFixed(2)}" opacity="${(0.15 + rand() * 0.5).toFixed(2)}"/>`;
   bg += '</g>';
-  svgHTML += grid + bg;
+  // Region bands: the region name and the edge of its band (SN_NAV regions).
+  let bands = '<g class="regions">';
+  REGION_BANDS.forEach(b => {
+    bands += `<text class="rgn" x="${b.at[0]}" y="${b.at[1]}">${esc(b.name)}</text>`;
+    if (b.edge) bands += `<path class="rgn-edge" d="${b.edge}"/>`;
+  });
+  bands += '</g>';
+  svgHTML += grid + bg + bands;
 
   const allStars = [];
   let labelsHTML = '', starsHTML = '';
@@ -503,9 +511,6 @@ function buildChart() {
         for (const a of idx) placed.forEach((s, b) => { if (s.g < gi) { const d = Math.hypot(placed[a].x - s.x, placed[a].y - s.y); if (d < bd) { bd = d; e = [b, a]; } } });
         if (e) edges.push(e);
       }
-      if (g.name && sec.id !== 'game' && sec.id !== 'music' && sec.id !== 'community') {
-        sec._grp = (sec._grp || '') + `<text class="grp" x="${cx}" y="${cy - rad * 0.78 - 10}" text-anchor="middle">${esc(g.name)}</text>`;
-      }
     });
     // Lines: one line per edge (for the draw-in).
     let lines = '';
@@ -514,8 +519,9 @@ function buildChart() {
       const len = Math.hypot(A.x - B.x, A.y - B.y).toFixed(1);
       lines += `<line class="ln" x1="${A.x.toFixed(1)}" y1="${A.y.toFixed(1)}" x2="${B.x.toFixed(1)}" y2="${B.y.toFixed(1)}" style="--len:${len};--d:${si * 180 + k * 40}"/>`;
     });
-    // Clean diagram: thin even lines and group names. No glow path, no halo.
-    svgHTML += `<g class="con" data-sector="${sec.id}">${lines}${sec._grp || ''}</g>`;
+    // Clean diagram: thin even lines. No group names (the constellations are
+    // small, and the inspector lists the pages), no glow path, no halo.
+    svgHTML += `<g class="con" data-sector="${sec.id}">${lines}</g>`;
     // Stars as real anchors.
     placed.forEach((s, k) => {
       const p = s.p;
@@ -763,6 +769,8 @@ function initDirectory() {
       $$('.dir-h', g).forEach(h => { h.hidden = !!q && !$$('li:not([hidden])', h.nextElementSibling).length; });
       g.hidden = n === 0; if (q && n) g.open = true; if (n) any = true;
     });
+    // A region heading hides when its column has no shown group.
+    $$('.dir-region').forEach(h => { h.hidden = !$$('.dir-group:not([hidden])', h.parentElement).length; });
     empty.hidden = any;
   });
 }

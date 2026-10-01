@@ -1,17 +1,23 @@
 // ============================================================================
-//  SECTORS  ·  the seven constellations of the home star chart
+//  SECTORS  ·  the constellations of the home star chart
 // ----------------------------------------------------------------------------
-//  NAV (nav-data.js) is the shell sidebar. This file maps its clusters to
-//  seven sectors and adds what the chart needs: a color, a glyph, a blurb,
-//  featured keys, and a layout box in chart units (1000 x 620).
+//  lib/nav-data.js (SN_NAV) is the page registry: 3 regions, each with its
+//  constellations. Each constellation is one sector here. This file adds
+//  what the chart needs: a blurb, a lead page, a centre in chart units
+//  (1000 x 620), featured keys, and the anchors that it calculates from the
+//  centre (LAYOUT).
 //
 //  Classic script, no ES modules, so the page also runs on file://.
-//  Load order: thumbs/list.js, nav-data.js, sectors.js, main.js (all defer).
-//  It reads O.NAV and O.THUMB_KEYS and adds its exports to O
-//  (O = window.Observatory).
+//  Load order: thumbs/list.js, ../../lib/nav-data.js, sectors.js, main.js
+//  (all defer). It reads window.SN_NAV and O.THUMB_KEYS and adds its
+//  exports to O (O = window.Observatory). tools/nav-sync.js also loads this
+//  file, to read EXCLUDED.
 //
 //  grep -n targets
+//    sector text .......... "const SECTOR_TEXT"
+//    region bands ......... "const REGION_BANDS"
 //    sector table ......... "const SECTORS"
+//    anchor layout ........ "function layoutFor"
 //    page blurbs .......... "const BLURBS"
 //    thumbnail keys ....... "const THUMBS"
 //    featured rail ........ "const FEATURED"
@@ -21,12 +27,12 @@
 // ============================================================================
 (function (O) {
 'use strict';
-const NAV = O.NAV;
+const NAV = window.SN_NAV;
 const THUMB_KEYS = O.THUMB_KEYS || [];
 
 // Pages the home never points at. They stay in the shell sidebar, so they
 // are still reachable there. Reason: each one is a port of code we did not
-// write.
+// write. tools/nav-sync.js also keeps them out of the home directory.
 const EXCLUDED = new Set([
   'mandelbulber',      // port of Mandelbulber2
   'shan-shui',         // port of shan-shui-inf
@@ -44,57 +50,54 @@ const DIRECTORY_ONLY = new Set(['qave', 'origami']);
 // Keys that have a thumbnail in thumbs/<key>.jpg. Others get generated art.
 const THUMBS = new Set(THUMB_KEYS);
 
-// One sector per constellation. clusters lists the NAV cluster ids it owns.
-// box is the layout area in chart units; sub gives one anchor per NAV group.
-const SECTORS = [
-  { id: 'game', name: 'The Game', short: 'Game', glyph: '⌂', color: '#ffc832',
-    clusters: ['cl-home'],
-    blurb: 'Stella Nova is a space-colony sim. Mine ore, smelt alloys, grow a grid station and govern a crew across a solar system that runs on real n-body physics.',
-    lead: 'features',
-    label: [200, 52] },
-  { id: 'wiki', name: 'Interactive Wiki', short: 'Wiki', glyph: '★', color: '#6db8e0',
-    clusters: ['cl-crew'],
-    blurb: 'The player handbook, live. Look up every item, module and tech in the wiki, plan a station on the real grid, trace every crafting chain, design ships and flags, and meet your crew.',
-    lead: 'wiki',
-    label: [120, 318] },
-  { id: 'physics', name: 'Learn About Physics', short: 'Physics', glyph: 'λ', color: '#7cd4ea',
-    clusters: ['cl-learn'],
-    blurb: 'Interactive simulations you can grab: orbital transfers, black holes, quantum orbitals and circuits, fluids, electromagnetism, optics and chaos.',
-    lead: 'hohmann',
-    label: [690, 34] },
-  { id: 'shader', name: 'Shader Library', short: 'Shaders', glyph: '✦', color: '#e58bd0',
-    clusters: ['cl-shader'],
-    blurb: 'Live WebGPU and WGSL shader tables: fields, noises, SDF solids, volumetrics, fire, smoke and frost, each with its source one click away.',
-    lead: 'sdf-solids',
-    label: [560, 392] },
-  { id: 'music', name: 'Music Lab', short: 'Music', glyph: '♪', color: '#ff8ac2',
-    clusters: ['cl-music'],
-    blurb: 'Hear the maths. A live chord detector, harmony wheels and resonance figures that turn vibrating plates into sound you can see.',
-    lead: 'chordlab',
-    label: [250, 470] },
-  { id: 'community', name: 'Community', short: 'Community', glyph: '☉', color: '#64dcc8',
-    clusters: ['cl-community'],
-    blurb: 'Pages made with and for the people around the game: a tribute, a player-made map of the belt, the translation tool, and two studio tools for sunlight and materials.',
-    lead: 'starward-belt',
-    label: [880, 600] },
+// Chart text per constellation id. at is the centre [x, y] in chart units.
+// lead is the page the inspector opens first. The game sector's lead is an
+// in-page anchor (#features).
+const SECTOR_TEXT = {
+  game: { at: [125, 120], lead: 'features',
+    blurb: 'Stella Nova is a space-colony sim. Mine ore, smelt alloys, grow a grid station and govern a crew across a solar system that runs on real n-body physics.' },
+  wiki: { at: [125, 335], lead: 'wiki',
+    blurb: 'The player handbook, live. Look up every item, module and tech, plan a station on the real grid, trace every crafting chain, design ships and flags, and meet your crew.' },
+  community: { at: [125, 530], lead: 'starward-belt',
+    blurb: 'Pages made with and for the people around the game: a tribute, a player-made map of the belt, the translation tool, and two studio tools for sunlight and materials.' },
+  space: { at: [345, 105], lead: 'hohmann',
+    blurb: 'Orbits you can plan and planets you can fling: transfer burns, real satellites, an n-body sandbox, a galaxy, a black hole and a wormhole.' },
+  quantum: { at: [530, 95], lead: 'orbital',
+    blurb: 'Atoms and qubits: hydrogen orbitals in 3D, two atoms that share an electron, and quantum circuits that encode and decode data and images.' },
+  life: { at: [705, 100], lead: 'protein-viewer',
+    blurb: 'Real protein structures, a chain that folds, how AlphaFold predicts a structure, and a human skull and skeleton you can pull apart.' },
+  fluids: { at: [885, 120], lead: 'fluidlab',
+    blurb: 'Stable fluids, a wind tunnel, real tidal currents, and the Navier-Stokes equations from 1D to the open blowup question.' },
+  fields: { at: [370, 265], lead: 'magnetlab',
+    blurb: 'Magnets, currents and Maxwell’s equations, then light itself: aperture diffraction, the double slit and circular polarization.' },
+  patterns: { at: [555, 255], lead: 'attractorlab',
+    blurb: 'Simple rules, rich results: strange attractors, vector fields, reaction-diffusion, Lenia and the Game of Life.' },
+  sound: { at: [735, 270], lead: 'chordlab',
+    blurb: 'Hear the maths. A live chord detector, harmony wheels, and resonance figures and drums that turn vibration into shapes you can see.' },
+  machines: { at: [905, 290], lead: 'watch-movement',
+    blurb: 'Mechanisms that move: a pocket-watch movement that comes apart, and a timepiece generator.' },
+  shaders: { at: [395, 495], lead: 'sdf-solids',
+    blurb: 'Live WebGPU shader tables in WGSL: noises, fields, colour, lighting, sampling and signed-distance solids, each with its source one click away.' },
+  effects: { at: [625, 490], lead: 'fire',
+    blurb: 'The visual effects of the game: explosions, engine plumes, beams, fire, smoke, heat haze and frost.' },
+  rendering: { at: [855, 495], lead: 'supernova',
+    blurb: 'Rendering techniques you can steer: ray marching, sphere tracing, a path tracer, glass and mirrors, volumes and a voxel world.' },
+};
+
+// Region bands on the chart: a faint name and the edge of the band.
+const REGION_BANDS = [
+  { id: 'stella', name: 'Stella Nova', at: [22, 606], edge: 'M250 30 L250 600' },
+  { id: 'science', name: 'Science', at: [272, 352], edge: 'M265 368 Q 620 348 985 368' },
+  { id: 'graphics', name: 'Graphics', at: [272, 394], edge: null },
 ];
 
-// Layout: one anchor [x, y, radius] per NAV group, in sector order.
-// The game sector also carries the in-page stars (see GAME_STARS).
-const LAYOUT = {
-  game: [[200, 140, 62], [300, 220, 26]],
-  // Reference, Station Design, Ship & Identity, Gameplay, Crew & Society.
-  wiki: [[215, 395, 26], [95, 380, 44], [190, 330, 30], [150, 470, 44], [60, 515, 28]],
-  physics: [[560, 150, 62], [690, 100, 34], [815, 95, 40], [920, 205, 60],
-            [790, 225, 48], [660, 245, 40], [855, 330, 50], [560, 270, 12]],
-  // Procedural, Image, Shading, Composition, Volumetric, Surfaces,
-  // Elements, Data Visualization (Cloth has no shown page).
-  shader: [[420, 470, 50], [500, 560, 26], [590, 420, 28], [640, 555, 12],
-           [690, 470, 40], [785, 540, 58], [895, 440, 44], [530, 505, 12]],
-  music: [[255, 535, 58]],
-  // Community (no heading), Studio Tools.
-  community: [[950, 575, 26], [440, 95, 26]],
-};
+// One sector per constellation, in nav order.
+const SECTORS = [];
+NAV.forEach(r => r.constellations.forEach(c => {
+  const t = SECTOR_TEXT[c.id] || { at: [500, 310], lead: c.groups[0].p[0][0], blurb: '' };
+  SECTORS.push({ id: c.id, name: c.label, short: c.short, glyph: c.icon, color: c.color,
+    region: r.id, regionName: r.label, blurb: t.blurb, lead: t.lead, at: t.at, label: t.at });
+}));
 
 // The game constellation also points into this page and to the stores.
 const GAME_STARS = [
@@ -206,17 +209,58 @@ const FEATURED = ['orbital', 'hydrogen-table', 'blackhole', 'galaxy', 'sdf-solid
   'liquid-metal', 'wave-membrane', 'polar', 'frost', 'magnetlab', 'tidal-currents', 'sdf-lab', 'leo',
   'attractorlab', 'reaction-diffusion'];
 
-// Flatten NAV into page records with their sector, group and badge.
+// Flatten SN_NAV into page records with their sector, group and badge.
 function allPages() {
-  const bySector = {};
-  SECTORS.forEach(s => s.clusters.forEach(c => { bySector[c] = s; }));
+  const bySector = Object.fromEntries(SECTORS.map(s => [s.id, s]));
   const out = [];
-  NAV.forEach(cl => cl.groups.forEach(g => g.p.forEach(([key, label, badge]) => {
-    if (EXCLUDED.has(key) || DIRECTORY_ONLY.has(key)) return;
-    out.push({ key, label, badge, group: g.h || cl.label, cluster: cl.label, sector: bySector[cl.id] });
-  })));
+  window.snPages().forEach(p => {
+    if (EXCLUDED.has(p.key) || DIRECTORY_ONLY.has(p.key)) return;
+    out.push({ key: p.key, label: p.label, badge: p.badge, group: p.group.h || p.con.label, cluster: p.con.label, sector: bySector[p.con.id] });
+  });
   return out;
 }
 
-Object.assign(O, { EXCLUDED, DIRECTORY_ONLY, THUMBS, SECTORS, LAYOUT, GAME_STARS, BLURBS, FEATURED, allPages });
+// Anchors [x, y, radius] for the groups the chart shows. A sector with one
+// group sits on its centre. More groups sit on a ring around the centre.
+// The radius grows with the star count, so a big group gets more room.
+// The label goes above the top of the constellation.
+function layoutFor(sec, counts) {
+  const [cx, cy] = sec.at;
+  const rad = n => n <= 1 ? 0 : 12 + 10 * Math.sqrt(n);
+  if (counts.length === 1) {
+    sec.label = [cx, cy - rad(counts[0]) * 0.78 - 22];
+    return [[cx, cy, rad(counts[0])]];
+  }
+  const total = counts.reduce((a, b) => a + b, 0);
+  const ring = 18 + 8 * Math.sqrt(total);
+  const out = counts.map((n, i) => {
+    // Two groups go on a diagonal, so a sector does not read as one long row.
+    const a0 = counts.length === 2 ? -Math.PI / 4 : -Math.PI / 2 + Math.PI / counts.length;
+    const a = a0 + i * 2 * Math.PI / counts.length;
+    return [cx + Math.cos(a) * ring * 1.25, cy + Math.sin(a) * ring * 0.8, rad(n)];
+  });
+  const top = Math.min(...out.map(([, y, r]) => y - r * 0.78));
+  sec.label = [cx, top - 22];
+  return out;
+}
+
+// LAYOUT: anchors per sector, from the groups that have a shown page.
+// The game sector also carries the in-page stars (GAME_STARS) in group 0.
+const LAYOUT = {};
+{
+  const pages = allPages();
+  SECTORS.forEach(sec => {
+    const counts = [];
+    const seen = new Map();
+    pages.filter(p => p.sector === sec).forEach(p => {
+      const k = p.cluster + '\u0000' + p.group;
+      if (!seen.has(k)) { seen.set(k, counts.length); counts.push(0); }
+      counts[seen.get(k)]++;
+    });
+    if (sec.id === 'game' && counts.length) counts[0] += GAME_STARS.length;
+    LAYOUT[sec.id] = counts.length ? layoutFor(sec, counts) : [[sec.at[0], sec.at[1], 0]];
+  });
+}
+
+Object.assign(O, { EXCLUDED, DIRECTORY_ONLY, THUMBS, SECTORS, REGION_BANDS, LAYOUT, GAME_STARS, BLURBS, FEATURED, allPages });
 })(window.Observatory = window.Observatory || {});

@@ -38,12 +38,22 @@
   --dock-h: 58px;
   --c: var(--blue);
 }
-[data-sector="game"]      { --c: #ffc832; --c2: #ff8a3d; }
-[data-sector="wiki"]      { --c: #6db8e0; --c2: #50c8b8; }
-[data-sector="physics"]   { --c: #7cd4ea; --c2: #9088e0; }
-[data-sector="shader"]    { --c: #e58bd0; --c2: #b896ff; }
-[data-sector="music"]     { --c: #ff8ac2; --c2: #ffb478; }
-[data-sector="community"] { --c: #64dcc8; --c2: #64c8f0; }
+/* SECTOR-COLOURS:BEGIN  written by tools/nav-sync.js from lib/nav-data.js */
+[data-sector="game"]       { --c: #ffc832; --c2: #ff8a3d; }
+[data-sector="wiki"]       { --c: #6db8e0; --c2: #50c8b8; }
+[data-sector="community"]  { --c: #64dcc8; --c2: #64c8f0; }
+[data-sector="space"]      { --c: #60b0f0; --c2: #ffc864; }
+[data-sector="quantum"]    { --c: #9088e0; --c2: #64b4ff; }
+[data-sector="life"]       { --c: #6cd6a8; --c2: #e8d2a8; }
+[data-sector="fluids"]     { --c: #50c0ff; --c2: #64dcc8; }
+[data-sector="fields"]     { --c: #60e0ee; --c2: #ffb478; }
+[data-sector="patterns"]   { --c: #9db4ff; --c2: #c490ff; }
+[data-sector="sound"]      { --c: #ff8ac2; --c2: #ffb478; }
+[data-sector="machines"]   { --c: #e6c27a; --c2: #f0b27a; }
+[data-sector="shaders"]    { --c: #e58bd0; --c2: #b896ff; }
+[data-sector="effects"]    { --c: #ff9a5c; --c2: #ff5a4a; }
+[data-sector="rendering"]  { --c: #96c8ff; --c2: #ffb478; }
+/* SECTOR-COLOURS:END */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { background: var(--bg); color-scheme: dark; scroll-behavior: smooth; scroll-padding-top: calc(var(--dock-h) + 12px); -webkit-text-size-adjust: 100%; }
@@ -350,14 +360,14 @@ main { position: relative; }
 .chart-svg .grid .ecl { stroke: rgba(150, 200, 255, .12); stroke-dasharray: 2 5; }
 .chart-svg .grid text { font: 500 9px var(--f-mono); fill: rgba(150, 200, 255, .22); letter-spacing: .1em; }
 .chart-svg .bg-star { fill: #cfe0ff; }
+.chart-svg .rgn { font: 500 10px var(--f-mono); letter-spacing: .32em; text-transform: uppercase; fill: rgba(150, 200, 255, .34); }
+.chart-svg .rgn-edge { fill: none; stroke: rgba(150, 200, 255, .1); stroke-width: 1; stroke-dasharray: 1 6; vector-effect: non-scaling-stroke; }
 .chart-svg .con { transition: opacity .5s; }
 .chart-svg .con .ln { fill: none; stroke: var(--c); stroke-width: 1; vector-effect: non-scaling-stroke; stroke-linecap: round; opacity: .32; stroke-dasharray: var(--len) var(--len); stroke-dashoffset: var(--len); transition: opacity .5s, stroke-width .5s; }
 .chart.drawn .chart-svg .con .ln { stroke-dashoffset: 0; transition: stroke-dashoffset 2.4s var(--ease), opacity .5s, stroke-width .5s; transition-delay: calc(var(--d, 0) * 1ms), 0s, 0s; }
-.chart-svg .con .grp { font: 500 8.5px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; fill: var(--c); opacity: 0; transition: opacity .5s; }
 .chart.has-active .chart-svg .con { opacity: .3; }
 .chart.has-active .chart-svg .con.on { opacity: 1; }
 .chart-svg .con.on .ln { opacity: .9; stroke-width: 1.25; }
-.chart-svg .con.on .grp { opacity: .75; }
 
 .chart-stars { position: absolute; inset: 0; }
 .star { position: absolute; left: calc(var(--x) * 0.1%); top: calc(var(--y) * 0.16129%); width: 26px; height: 26px; translate: -50% -50%; display: grid; place-items: center; border-radius: 50%; z-index: 2; transition: opacity .45s, scale .35s var(--ease); }
@@ -567,6 +577,8 @@ main { position: relative; }
    then the Shader Library. */
 .dir { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; align-items: start; }
 .dir-col { display: grid; gap: 14px; }
+.dir-region { font: 500 0.7rem/1 var(--f-mono); letter-spacing: .22em; text-transform: uppercase; color: var(--dim); padding: 4px 4px 0; }
+.dir-region[hidden] { display: none; }
 .dir-group { border-radius: 16px; border: 1px solid var(--line); background: var(--bg2); overflow: hidden; transition: border-color .3s; }
 .dir-group:hover { border-color: color-mix(in srgb, var(--c) 35%, transparent); }
 .dir-group summary { list-style: none; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 16px; cursor: pointer; border-bottom: 1px solid var(--line); }
