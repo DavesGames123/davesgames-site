@@ -22,7 +22,7 @@
 //    struct U ............. the per-pane uniform block (render.js packPane)
 //    fn cover / fn gridPlane   pixel-width lines and one plane of grid
 //    fn calcNormal / calcAO / softShadow / env   shading terms (Quilez)
-//    fn sceneBnd / shadowClear   early outs from the scene bounding sphere
+//    fn sceneBnd / shadowClear / sceneSpan   early outs from the scene sphere
 //    fn shade ............. clay, lit, normals
 //    fn fieldCol .......... the signed field as colour (BANDS and SLICE)
 //    fn fs_view ........... the 3D panes        fn fs_slice ... the SLICE pane
@@ -172,6 +172,18 @@ fn shadowClear(o: vec3f, d: vec3f, k: f32) -> bool {
   if (s - b > 0.0) { f = q * sqrt(k2 * k2 - 1.0) / k2 - u.scene.w + b / k2; }
   return f > 0.0;
 }
+// The part [t0, t1] of a ray (unit d) inside the scene sphere grown by m.
+// x > y means the ray misses it, and the march has nothing to find.
+fn sceneSpan(o: vec3f, d: vec3f, m: f32) -> vec2f {
+  if (u.scene.w < 0.0) { return vec2f(0.0, 1e9); }
+  let w = o - u.scene.xyz;
+  let r = u.scene.w + m;
+  let b = dot(d, w);
+  let h = b * b - (dot(w, w) - r * r);
+  if (h < 0.0) { return vec2f(1.0, 0.0); }
+  let s = sqrt(h);
+  return vec2f(max(-b - s, 0.0), -b + s);
+}
 // A studio: a soft grey dome, a dark floor and one big softbox over the key.
 fn env(r: vec3f) -> vec3f {
   var c = mix(vec3f(0.05, 0.05, 0.056), vec3f(0.62, 0.64, 0.7), smoothstep(-0.25, 0.8, r.y));
@@ -257,18 +269,23 @@ fn fieldCol(d: f32, w: f32) -> vec3f {
   // background: Forge's flat dark ground with a slight fall-off
   var col = mix(vec3f(0.098, 0.098, 0.108), vec3f(0.118, 0.118, 0.13), clamp(0.5 + 0.5 * ny, 0.0, 1.0));
 
-  // the march
+  // the march, only where the scene sphere can be hit: a ray that misses
+  // the sphere skips the loop, and a ray stops where it leaves the sphere.
+  // A ray that hits still starts at 0, so its steps and its hit point are
+  // the same as before. The margin covers the hit test (eps grows with t)
+  // and a field that sits below the true distance (rho, a step factor < 1).
   let maxSteps = i32(u.fwd.w);
   let k = u.mrch.x;
+  let span = sceneSpan(ro, rd, 4.0 * (pixW * u.mrch.y + pixO) + 0.05);
   var t = 0.0; var hit = false; var steps = 0;
+  let tEnd = select(-1.0, min(u.mrch.y, span.y), span.x <= span.y);
   for (var i = 0; i < 512; i++) {
-    if (i >= maxSteps) { break; }
+    if (i >= maxSteps || t > tEnd) { break; }
     let h = mapD(ro + rd * t);
     steps = i + 1;
     let eps = max(2e-4, 0.6 * (pixW * t + pixO));
     if (h < eps) { hit = true; break; }
     t += h * k;
-    if (t > u.mrch.y) { break; }
   }
   let tHit = select(1e9, t, hit);
   var surf = vec3f(0.0);
