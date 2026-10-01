@@ -212,16 +212,20 @@ function startSky() {
     const r = hero.getBoundingClientRect();
     W = r.width; H = r.height;
     const phone = W < 760;
-    // Top-down view: every orbit is a circle round the Sun, and the Sun sits
-    // in the gap between STELLA and NOVA. On one line that is the word gap;
-    // when the rows stack (phones) it is the space between the rows.
+    // Top-down view: every orbit is a circle round the Sun. The Sun is on
+    // the centre line of the page, so the rings stay centred on the hero.
+    // The word gap is not on that line (STELLA is wider than NOVA), so the
+    // Sun sits in open space: under the title, above the tagline. The title
+    // line box ends below the letters (line-height 0.92 with descent), so its
+    // bottom edge is the middle of the visible gap. When the rows stack
+    // (phones), the Sun sits between the rows.
     const hr = hero.getBoundingClientRect();
     const [r1, r2] = $$('.title .t-row', hero).map(e => e.getBoundingClientRect());
-    let cx = W / 2, cy = H * 0.3;
+    const cx = W / 2;
+    let cy = H * 0.3;
     if (r1 && r2) {
       const oneLine = r2.top < r1.bottom - 4;
-      cx = oneLine ? (r1.right + r2.left) / 2 - hr.left : W / 2;
-      cy = (oneLine ? (r1.top + r1.bottom) / 2 : (r1.bottom + r2.top) / 2) - hr.top;
+      cy = (oneLine ? Math.max(r1.bottom, r2.bottom) : (r1.bottom + r2.top) / 2) - hr.top;
     }
     const R = phone ? W * 0.7 : Math.min(W * 0.46, H * 0.62, 640);
     geo = { cx, cy, R };
