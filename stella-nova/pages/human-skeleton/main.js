@@ -33,119 +33,19 @@
 //    function placeLabels / buildTrays                    the tray
 //    function frame                                       the loop
 // ============================================================================
-import * as L from './layout.js';
-import { $, REDUCED, clamp01, easeIO, ease } from './app/env.js';
-import { canvas, renderer, scene, envRT, camera, key, floor, poolTex, pool, trays, controls } from './app/stage.js';
+import { $ } from './app/env.js';
+import { canvas, camera, controls } from './app/stage.js';
 import { T, S, toast } from './app/state.js';
-import { occ, occlusion, resize, fitView, fitShadow } from './app/camera.js';
-import { placeLabels } from './app/tray.js';
-import { pickRT, pickAt } from './app/pick.js';
+import { fitView } from './app/camera.js';
+import { pickAt } from './app/pick.js';
 import { loadAll } from './app/load.js';
 import { setMode, explode, reconstruct, setAmount, toggleRegionExplode } from './app/layouts.js';
 import { boneCentre, select, clearSelection, step } from './app/select.js';
 import { isolate, exitIsolate, focusBone, focusRegion } from './app/inspect.js';
 import { setRegionHidden } from './app/list.js';
-import { dVelZero, hoverPick } from './app/pointer.js';
 import { setOpen } from './app/panel.js';
 import { setTheme, setShow, buildUI } from './app/controls.js';
-
-// ── loop ────────────────────────────────────────────────────────────────────
-let last = performance.now(), raf = 0, running = true;
-const _q = new Float32Array(4);
-function frame(now) {
-  if (!running) return;
-  raf = requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (now - last) / 1000); last = now;
-  let upload = false;
-  // framing eases toward the clear area
-  const o = occlusion();
-  for (const k in occ) {
-    const d = o[k] - occ[k];
-    if (Math.abs(d) > 0.5) { occ[k] += d * Math.min(1, dt * 9); S.dirty = true; } else if (d) { occ[k] = o[k]; S.dirty = true; }
-  }
-  if (S.fly) {
-    const f = S.fly;
-    f.t = Math.min(1, f.t + dt / f.dur);
-    const k = easeIO(f.t);
-    controls.target.lerpVectors(f.t0, f.t1, k);
-    const u = f.u1 ? f.u0.clone().lerp(f.u1, k).normalize() : camera.position.clone().sub(controls.target).normalize();
-    camera.position.copy(controls.target).addScaledVector(u, f.r0 + (f.r1 - f.r0) * k);
-    if (f.t >= 1) S.fly = null;
-    S.dirty = true;
-  }
-  if (S.ready) {
-    // explode transition
-    if (S.tr) {
-      const tr = S.tr;
-      tr.t += dt;
-      for (let i = 0; i < S.n; i++) {
-        const k = easeIO(clamp01((tr.t - S.delay[i]) / tr.dur));
-        for (let a = 0; a < 3; a++) S.cur.off[i * 3 + a] = S.from.off[i * 3 + a] + (S.to.off[i * 3 + a] - S.from.off[i * 3 + a]) * k;
-        L.slerp(S.from.q, i * 4, S.to.q, i * 4, k, S.cur.q, i * 4);
-      }
-      for (const m of trays.children) m.material.opacity = (S.traysOn ? ease(clamp01(tr.t / Math.max(0.3, tr.end * 0.6))) : 1 - ease(clamp01(tr.t / 0.35))) * (m.isLineSegments ? 0.55 : 1);
-      if (tr.t >= tr.end) { S.tr = null; if (!S.traysOn) for (const m of trays.children) m.visible = false; fitShadow(); }
-      else for (const m of trays.children) m.visible = true;
-      upload = true;
-    }
-    // drag springs
-    for (const i of S.springing) {
-      let e = 0;
-      for (let a = 0; a < 3; a++) {
-        const k = i * 3 + a;
-        S.dVel[k] += (-70 * S.dOff[k] - 9 * S.dVel[k]) * dt;
-        S.dOff[k] += S.dVel[k] * dt;
-        e += Math.abs(S.dOff[k]) + Math.abs(S.dVel[k]) * 0.05;
-      }
-      if (e < 1e-5) { S.dOff.fill(0, i * 3, i * 3 + 3); dVelZero(i); S.springing.delete(i); }
-      upload = true;
-    }
-    if (S.drag) upload = true;
-    // dissolve in as groups arrive
-    for (const b of S.bones) {
-      if (!S.loaded[b.i] || S.appear[b.i] >= 1) continue;
-      S.appear[b.i] = REDUCED ? 1 : clamp01((now - b.appearAt) / 650);
-      upload = true;
-    }
-    if (upload) {
-      for (let i = 0; i < S.n; i++) {
-        S.state.set(0, i, S.cur.off[i * 3] + S.dOff[i * 3], S.cur.off[i * 3 + 1] + S.dOff[i * 3 + 1], S.cur.off[i * 3 + 2] + S.dOff[i * 3 + 2], S.appear[i]);
-        _q.set(S.cur.q.subarray(i * 4, i * 4 + 4));
-        S.state.set(1, i, _q[0], _q[1], _q[2], _q[3]);
-      }
-      S.state.dirty();
-      S.dirty = true;
-    }
-  }
-  controls.autoRotate = S.show.spin && !S.fly && !S.drag;
-  if (controls.update(dt)) S.dirty = true;
-  if (S.show.spin) S.dirty = true;
-  // hover pick, once a frame, while the mouse is still
-  hoverPick();
-  if (!S.dirty) return;
-  S.dirty = false;
-  if (!resize()) return;
-  renderer.shadowMap.needsUpdate = true;
-  renderer.render(scene, camera);
-  placeLabels();
-  S.frames++;
-  if (!T.firstFrame) T.firstFrame = performance.now();
-  if (!T.firstBones && S.groups.size) T.firstBones = performance.now();
-}
-
-window.addEventListener('pagehide', () => {
-  running = false; cancelAnimationFrame(raf);
-  try {
-    for (const g of S.groups.values()) g.geo.dispose();
-    if (S.mats) for (const k of ['bone', 'depth', 'ghost', 'pick']) S.mats[k].dispose();
-    if (S.state) S.state.dispose();
-    for (const c of trays.children) { c.geometry.dispose(); c.material.dispose(); }
-    floor.geometry.dispose(); floor.material.dispose(); pool.geometry.dispose(); pool.material.dispose(); poolTex.dispose();
-    pickRT.dispose(); envRT.dispose(); key.shadow.map && key.shadow.map.dispose();
-    controls.dispose(); renderer.dispose();
-    if (!renderer.getContext().isContextLost()) renderer.forceContextLoss();
-  } catch (e) { /* the page is going */ }
-});
+import { frame } from './app/loop.js';
 
 // debug and headless checks
 window.__hs = {
