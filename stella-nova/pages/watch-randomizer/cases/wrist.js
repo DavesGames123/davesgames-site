@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import * as G from '../../watch-movement/geom.js';
 import { circ, hole } from '../../watch-movement/kit.js';
 import { lathe, cap, bezelOutline, dialRadius } from './common.js';
+import { addStraps } from './straps.js';
 import { METALS, PAINTS, WOODS, LEATHERS } from '../palettes.js';
 const { TAU, D, pol } = G;
 
@@ -71,43 +72,16 @@ export function build(B, spec, cal, dims, zF, zB) {
   B.add(back, g2);
   // straps: from the lugs up and round the wrist (+z)
   const strap = B.part('strap', 'strap', [0, 0], { label: c.strap === 'leather' ? 'Strap' : c.strap === 'bracelet' ? 'Bracelet' : 'Mesh strap', labelAt: [0, yTop + 18], labelZ: zM + 8 });
-  const Rw = 25, zc = zM + 0.4;
-  for (const sy of [1, -1]) {
-    const pts = [new THREE.Vector3(0, sy * (yTop + 1.5), zc)];
-    for (let i = 0; i <= 16; i++) { const ph = i / 16 * 1.75; pts.push(new THREE.Vector3(0, sy * (yTop + 4.6 + Rw * Math.sin(ph)), zc + Rw - Rw * Math.cos(ph))); }
-    const curve = new THREE.CatmullRomCurve3(pts);
-    if (c.strap === 'bracelet') {
-      const n = Math.floor(curve.getLength() / 4.2);
-      for (let i = 0; i < n; i++) {
-        const t = (i + 0.5) / n, p = curve.getPointAt(t), tg = curve.getTangentAt(t);
-        const box = new THREE.BoxGeometry(W - (i % 2) * 0.2, 3.9, 2.4);
-        const m = B.mesh(box, i % 2 ? 'satin' : 'polished');
-        m.position.copy(p); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tg);
-        B.add(strap, m);
-      }
-    } else {
-      const th = c.strap === 'mesh' ? 1.6 : 3.0, w = W - 0.4, sh = new THREE.Shape();
-      const r = Math.min(th / 2 - 0.05, 0.9);
-      sh.moveTo(-th / 2 + r, -w / 2); sh.lineTo(th / 2 - r, -w / 2); sh.quadraticCurveTo(th / 2, -w / 2, th / 2, -w / 2 + r); sh.lineTo(th / 2, w / 2 - r);
-      sh.quadraticCurveTo(th / 2, w / 2, th / 2 - r, w / 2); sh.lineTo(-th / 2 + r, w / 2); sh.quadraticCurveTo(-th / 2, w / 2, -th / 2, w / 2 - r); sh.lineTo(-th / 2, -w / 2 + r); sh.quadraticCurveTo(-th / 2, -w / 2, -th / 2 + r, -w / 2);
-      const g = new THREE.ExtrudeGeometry(sh, { steps: 60, bevelEnabled: false, extrudePath: curve });
-      B.add(strap, B.mesh(g, c.strap === 'leather' ? 'leather' : 'satin'));
-    }
-    if (sy === 1 && c.strap === 'leather') {          // the buckle at the end of the top strap
-      const p = curve.getPointAt(1), tg = curve.getTangentAt(1);
-      const bk = new THREE.TorusGeometry(W * 0.36, 0.55, 8, 40); bk.scale(1.15, 0.6, 1);
-      const m = B.mesh(bk, 'polished'); m.position.copy(p); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), tg);
-      B.add(strap, m);
-    }
-  }
+  addStraps(B, strap, { kind: c.strap, W, yTop, zc: zM + 0.4 });
   const m = METALS[c.metal];
   const PARTS = {
     case: { name: 'Case', group: 'Case', role: 'The middle of the case with its four lugs, which hold the strap on spring bars.', specs: [['Metal', c.metal], ['Shape', c.shape], ['Size', `${(Ro * 2).toFixed(1)} mm`], ['Lug width', `${W.toFixed(0)} mm`]] },
     bezel: { name: c.bezel === 'diver' ? 'Diver\'s bezel' : 'Bezel', group: 'Case', role: c.bezel === 'diver' ? 'A one-way rotating ring: a diver sets the triangle at the minute hand to time a dive.' : 'The ring that holds the crystal over the dial.', specs: [['Style', c.bezel], ['Crystal', 'flat sapphire']] },
     crown: { name: 'Crown', group: 'Case', role: 'At 3 o\'clock. It winds the mainspring by hand and, pulled out, sets the hands.', specs: [['Style', c.crown]] },
     caseback: { name: 'Display back', group: 'Case', role: 'A sapphire window over the movement and its rotor.', specs: [] },
-    strap: c.strap === 'leather' ? { name: 'Leather strap', group: 'Strap', role: 'Two straps on spring bars between the lugs, with a pin buckle.', specs: [['Leather', c.leather], ['Width', `${W.toFixed(0)} mm`]] }
-      : { name: c.strap === 'bracelet' ? 'Bracelet' : 'Mesh strap', group: 'Strap', role: c.strap === 'bracelet' ? 'Solid links in alternating polished and brushed metal.' : 'A woven metal mesh, soft and light on the wrist.', specs: [['Metal', c.metal], ['Width', `${W.toFixed(0)} mm`]] },
+    strap: c.strap === 'leather' ? { name: 'Leather strap', group: 'Strap', role: 'Two padded halves on spring bars, tapering to the tang buckle, stitched along both edges, with two keepers.', specs: [['Leather', c.leather], ['Width', `${W.toFixed(0)} to ${(W * 0.82).toFixed(0)} mm`], ['Thickness', '3.1 to 2.4 mm']] }
+      : c.strap === 'bracelet' ? { name: 'Bracelet', group: 'Strap', role: 'Three rows of solid links: a polished centre row between brushed outer rows, closed by a folding clasp.', specs: [['Metal', c.metal], ['Width', `${W.toFixed(0)} mm`], ['Links', '5.2 mm']] }
+      : { name: 'Mesh strap', group: 'Strap', role: 'A Milanese mesh of fine interlaced wires, soft on the wrist, with a sliding clasp.', specs: [['Metal', c.metal], ['Width', `${W.toFixed(0)} mm`]] },
   };
   PARTS.crystal = PARTS.bezel;
   return {

@@ -25,6 +25,6 @@ export default {
     crown: R.pick(['onion', 'fluted']),
   }),
   describe: (spec) => { const c = spec.case; return [['Case', `${c.metal} ${c.shape}, ${c.bezel} bezel, ${c.crown} crown`], ['Strap', c.strap === 'leather' ? `${c.leather} leather` : c.strap === 'bracelet' ? `${c.metal} bracelet` : `${c.metal} mesh`]]; },
-  palette: (spec) => { const m = METALS[spec.case.metal]; return { polished: { color: m.color, roughness: m.roughness }, satin: { color: m.color, roughness: 0.32 }, leather: { color: LEATHERS[spec.case.leather] } }; },
+  palette: (spec) => { const m = METALS[spec.case.metal]; return { polished: { color: m.color, roughness: m.roughness }, satin: { color: m.color, roughness: 0.32 }, mesh: { color: m.color }, leather: { color: LEATHERS[spec.case.leather] }, thread: { color: spec.case.leather === 'tan' || spec.case.leather === 'brown' ? '#efe2c4' : '#d8d2c4' } }; },
   dims: (spec, dialR) => ({ dialR, R: dialR + 18 }),
 };

@@ -73,7 +73,7 @@ async function roll(seed = Gen.newSeed(), first = false) {
     const { palette, opts } = sceneOpts(spec, dims);
     const mod = await SCENES[spec.movement.calibre]();
     const caseProbe = buildCaseProbe(spec);
-    const B = createBuild({ palette: { ...palette, ...caseProbe } });
+    const B = createBuild({ palette: { ...palette, ...caseProbe }, wear: 1 });   // a used piece: scratches and prints
     const sc = mod.build(B, cal, opts);
     const kase = buildCase(B, spec, cal, dims);
     stage.root.add(B.root);
