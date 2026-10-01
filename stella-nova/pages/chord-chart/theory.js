@@ -207,7 +207,8 @@ function ukeVoicings(rootPc, q) {
   for (const v of found) {
     const k = v.frets.join(',');
     if (seen.has(k)) continue; seen.add(k);
-    out.push({ name: v.base === 0 ? 'Open' : 'Fret ' + v.base, frets: v.frets, pos: v.base, dropped5: v.dropped5 });
+    // A shape that rings an open string is an open chord (0003 is open C).
+    out.push({ name: v.frets.includes(0) ? 'Open' : 'Fret ' + v.base, frets: v.frets, pos: v.base, dropped5: v.dropped5 });
     if (out.length >= 3) break;
   }
   if (!out.length) out.push({ name: '—', frets: [-1, -1, -1, -1], pos: 0 });
