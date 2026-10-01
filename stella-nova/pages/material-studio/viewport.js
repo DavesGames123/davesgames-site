@@ -68,21 +68,23 @@ import {
   R, clamp, warnOnce, hexToLinear, norm3, idOf,
 } from './viewport/state.js';
 export { VIEWPORT_DEBUG_VIEWS, DEBUG_LABELS, TONEMAP_LABELS, VIEW_DEFAULTS } from './viewport/state.js';
+import { PREF_VIEW_KEYS, readPrefs, savePrefsSoon } from './viewport/prefs.js';
+import { makeTargets, destroyTargets, aaMode } from './viewport/targets.js';
+import { lightsState, shadowMatrix } from './viewport/lights.js';
+import { mapTexture, writeHalf } from './viewport/textures.js';
+import { makeTestMaps } from './viewport/test-maps.js';
+export { makeTestMaps } from './viewport/test-maps.js';
+import { safeEnvBindings, envState, envChunk, frameLayout, ensureFrameBG } from './viewport/environment.js';
+import { createStatic, shaderModule, buildLut } from './viewport/resources.js';
 
 // ------------------------------------------------------------ constants
 const RAW_VIEWS = new Set(VIEWPORT_DEBUG_VIEWS.filter(v => !['lit', 'diffuseOnly', 'specularOnly'].includes(v)));
 // Raw views that show map data, not a color: the post pass writes them with
 // no sRGB encode and no dither, so roughness 0.5 shows as 128, as in the PNG.
 const DATA_VIEWS = new Set(['opacity', 'normal', 'worldNormal', 'ao', 'roughness', 'metallic', 'height', 'clearcoat', 'anisotropy', 'ndotl']);
-const SHADOW_RES = 2048;
-const LUT_RES = 128;
 const SNAP_MAX = 1024;
 const VB_STRIDE = 48;
 const SUBDIV_OPTIONS = [32, 64, 96, 128, 192, 256, 384, 512];
-const PREF_KEY = 'material-studio.viewport';
-const PREF_VIEW_KEYS = ['mesh', 'debug', 'tonemap', 'exposure', 'fov', 'background', 'aa', 'ground', 'grid', 'shadows', 'shadowStrength',
-  'uvScale', 'uvOffset', 'parallax', 'parallaxScale', 'pomSteps', 'displacement', 'subdiv', 'normalStrength', 'flipGreen',
-  'anisoRotation', 'sheenRoughness', 'specOcclusion', 'autoRotate', 'wireframe'];
 
 const VB_LAYOUT = {
   arrayStride: VB_STRIDE,
@@ -169,192 +171,7 @@ function dispose() {
 }
 
 // ------------------------------------------------------------ static resources
-function createStatic() {
-  const d = device;
-  R.samp.map = d.createSampler({ addressModeU: 'repeat', addressModeV: 'repeat', magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear', maxAnisotropy: 8 });
-  R.samp.env = d.createSampler({ addressModeU: 'repeat', addressModeV: 'clamp-to-edge', magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
-  R.samp.clamp = d.createSampler({ magFilter: 'linear', minFilter: 'linear' });
-  R.samp.shadow = d.createSampler({ compare: 'less', magFilter: 'linear', minFilter: 'linear' });
-
-  const VF = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, FR = GPUShaderStage.FRAGMENT;
-  const tex = (binding, vis = VF) => ({ binding, visibility: vis, texture: { sampleType: 'float', viewDimension: '2d' } });
-  R.layout.mat = d.createBindGroupLayout({
-    label: 'vp-material',
-    entries: [
-      { binding: 0, visibility: VF, buffer: { type: 'uniform' } },
-      tex(1), tex(2), tex(3), tex(4), tex(5), tex(6),
-      { binding: 7, visibility: VF, sampler: { type: 'filtering' } },
-    ],
-  });
-  R.layout.frameOnly = d.createBindGroupLayout({ label: 'vp-frame-only', entries: [{ binding: 0, visibility: VF, buffer: { type: 'uniform' } }] });
-  R.layout.post = d.createBindGroupLayout({
-    label: 'vp-post',
-    entries: [tex(0, FR), { binding: 1, visibility: FR, sampler: { type: 'filtering' } }, { binding: 2, visibility: FR, buffer: { type: 'uniform' } }],
-  });
-  R.layout.blit = d.createBindGroupLayout({ label: 'vp-blit', entries: [tex(0, FR), { binding: 1, visibility: FR, sampler: { type: 'filtering' } }] });
-
-  R.frameBuf = d.createBuffer({ label: 'vp-frame', size: FRAME_FLOATS * 4, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  R.postBuf = d.createBuffer({ label: 'vp-post', size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-  R.shadowFrameBG = d.createBindGroup({ layout: R.layout.frameOnly, entries: [{ binding: 0, resource: { buffer: R.frameBuf } }] });
-
-  R.dummy2d = d.createTexture({ label: 'vp-dummy2d', size: [1, 1, 1], format: HDR, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-  R.dummyCube = d.createTexture({ label: 'vp-dummycube', size: [1, 1, 6], format: HDR, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-  R.shadow = d.createTexture({ label: 'vp-shadow', size: [SHADOW_RES, SHADOW_RES, 1], format: 'depth32float', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-  R.shadowView = R.shadow.createView();
-  R.lut = d.createTexture({ label: 'vp-brdf-lut', size: [LUT_RES, LUT_RES, 1], format: HDR, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-  R.lutView = R.lut.createView();
-}
-
-function shaderModule(label, code) {
-  if (R.modules.has(code)) return R.modules.get(code);
-  const m = device.createShaderModule({ label, code });
-  m.getCompilationInfo?.().then(info => {
-    for (const msg of info.messages) if (msg.type === 'error') console.error(`[viewport] WGSL ${label} ${msg.lineNum}:${msg.linePos} ${msg.message}`);
-  }).catch(() => {});
-  R.modules.set(code, m);
-  return m;
-}
-
-function buildLut() {
-  const m = shaderModule('vp-lut', R.SH['shaders/viewport-lut.wgsl']);
-  const p = device.createRenderPipeline({
-    label: 'vp-lut', layout: 'auto',
-    vertex: { module: m, entryPoint: 'vs_full' },
-    fragment: { module: m, entryPoint: 'fs_lut', targets: [{ format: HDR }] },
-  });
-  const enc = device.createCommandEncoder();
-  const pass = enc.beginRenderPass({ colorAttachments: [{ view: R.lutView, loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }] });
-  pass.setPipeline(p); pass.draw(3); pass.end();
-  device.queue.submit([enc.finish()]);
-}
-
 // ------------------------------------------------------------ environment
-function safeEnvBindings() {
-  try { return envMod && typeof envMod.getEnvBindings === 'function' ? envMod.getEnvBindings() : null; }
-  catch (e) { warnOnce('envthrow', 'getEnvBindings threw: ' + e.message); return null; }
-}
-function usableTex(t, name) {
-  if (!t || typeof t.createView !== 'function') return false;
-  if (/32float$/.test(t.format || '') && !gpu.features.float32Filterable) { warnOnce('f32' + name, `${name} is ${t.format} and float32-filterable is missing; ignored`); return false; }
-  return true;
-}
-const dimOf = (t, hint) => hint ? (hint === 'cube' ? 'cube' : '2d') : (t.depthOrArrayLayers === 6 ? 'cube' : '2d');
-
-/** Read env.js and return the frame environment description. */
-function envState() {
-  const b = safeEnvBindings();
-  const e = { b, kind: 'proc', radDim: '2d', irrMode: 'proc', rad: null, irr: null, mips: 8, sh: null, sun: null, lib: '' };
-  if (b && b.specTex && typeof envMod.envWGSL === 'function' && typeof envMod.envBindGroupEntries === 'function') {
-    try { e.lib = envMod.envWGSL({ group: 0, binding: 8 }); } catch (err) { warnOnce('envwgsl', 'envWGSL failed: ' + err.message); }
-  }
-  if (e.lib) {
-    e.kind = 'lib'; e.rad = b.specTex; e.irrMode = 'lib';
-    e.mips = Math.max(1, b.mipCount || b.specTex.mipLevelCount || 1);
-  } else if (b && usableTex(b.radiance, 'radiance')) {
-    e.kind = 'tex';
-    e.rad = b.radiance;
-    e.radDim = dimOf(b.radiance, b.radianceDim || (b.kind === 'cube' ? 'cube' : null));
-    e.mips = Math.max(1, b.mipCount || b.radiance.mipLevelCount || 1);
-    if (b.irradiance && usableTex(b.irradiance, 'irradiance')) { e.irr = b.irradiance; e.irrMode = dimOf(b.irradiance, b.irradianceDim) === 'cube' ? 'cube' : '2d'; }
-    else if (b.sh && b.sh.length >= 27) { e.irrMode = 'sh'; e.sh = b.sh; }
-    else e.irrMode = 'rad';
-    if (Array.isArray(b.sunDir) && b.sunDir.length === 3) e.sun = norm3(b.sunDir);
-  }
-  e.key = `${e.kind}|${e.radDim}|${e.irrMode}`;
-  return e;
-}
-
-/** Generated WGSL for the env bindings 1 and 2 and the two sampling functions. */
-function envChunk(e) {
-  if (e.kind === 'lib') {
-    return `
-// ---- generated by viewport.js envChunk (lib): env.js envWGSL at bindings 8..13
-${e.lib}
-@group(0) @binding(1) var tRad: texture_2d<f32>;
-@group(0) @binding(2) var tIrr: texture_2d<f32>;
-fn env_radiance(dir: vec3f, lod: f32) -> vec3f {
-  return envSpecular(dir, lod / max(F.env.z - 1.0, 1.0));
-}
-fn env_irradiance(n: vec3f) -> vec3f {
-  return envIrradiance(n);
-}
-fn env_background(d: vec3f) -> vec3f {
-  return envBackground(d);
-}
-`;
-  }
-  const radT = e.radDim === 'cube' ? 'texture_cube<f32>' : 'texture_2d<f32>';
-  const irrT = e.irrMode === 'cube' ? 'texture_cube<f32>' : 'texture_2d<f32>';
-  const co = dim => (dim === 'cube' ? 'd' : 'env_uv(d)');
-  let irr;
-  if (e.kind === 'proc') irr = 'return sky_proc(n, 1.0) * F.env.y;';
-  else if (e.irrMode === 'cube' || e.irrMode === '2d') irr = `let d = env_rot(n);\n  return textureSampleLevel(tIrr, sEnv, ${co(e.irrMode)}, 0.0).rgb * F.env.y;`;
-  else if (e.irrMode === 'sh') irr = 'return sh_eval(env_rot(n)) * F.env.y;';
-  else irr = `let d = env_rot(n);\n  return textureSampleLevel(tRad, sEnv, ${co(e.radDim)}, max(F.env.z - 1.0, 0.0)).rgb * F.env.y;`;
-  const rad = e.kind === 'proc'
-    ? 'return sky_proc(env_rot(dir), lod / max(F.env.z - 1.0, 1.0)) * F.env.y;'
-    : `let d = env_rot(dir);\n  return textureSampleLevel(tRad, sEnv, ${co(e.radDim)}, lod).rgb * F.env.y;`;
-  return `
-// ---- generated by viewport.js envChunk (${e.key})
-@group(0) @binding(1) var tRad: ${radT};
-@group(0) @binding(2) var tIrr: ${irrT};
-fn env_radiance(dir: vec3f, lod: f32) -> vec3f {
-  ${rad}
-}
-fn env_irradiance(n: vec3f) -> vec3f {
-  ${irr}
-}
-fn env_background(d: vec3f) -> vec3f {
-  return env_radiance(d, F.bgB.x);
-}
-`;
-}
-
-function frameLayout(e) {
-  const k = 'frame|' + e.key;
-  if (R.layout[k]) return R.layout[k];
-  const VF = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
-  R.layout[k] = device.createBindGroupLayout({
-    label: 'vp-' + k,
-    entries: [
-      { binding: 0, visibility: VF, buffer: { type: 'uniform' } },
-      { binding: 1, visibility: VF, texture: { sampleType: 'float', viewDimension: e.radDim === 'cube' && e.kind === 'tex' ? 'cube' : '2d' } },
-      { binding: 2, visibility: VF, texture: { sampleType: 'float', viewDimension: e.irrMode === 'cube' ? 'cube' : '2d' } },
-      { binding: 3, visibility: VF, sampler: { type: 'filtering' } },
-      { binding: 4, visibility: VF, texture: { sampleType: 'float', viewDimension: '2d' } },
-      { binding: 5, visibility: VF, texture: { sampleType: 'depth', viewDimension: '2d' } },
-      { binding: 6, visibility: VF, sampler: { type: 'comparison' } },
-      { binding: 7, visibility: VF, sampler: { type: 'filtering' } },
-      ...(e.kind === 'lib' ? envMod.envBindGroupLayoutEntries(8, VF) : []),
-    ],
-  });
-  return R.layout[k];
-}
-
-/** (Re)build the frame bind group when the env textures change. */
-function ensureFrameBG(e) {
-  const id = `${e.key}|${idOf(e.rad)}|${idOf(e.irr)}`;
-  if (R.frameBG && R.frameBGKey === id) return;
-  const radView = e.kind === 'tex' ? e.rad.createView({ dimension: e.radDim === 'cube' ? 'cube' : '2d' }) : R.dummy2d.createView();
-  const irrView = (e.irrMode === 'cube' || e.irrMode === '2d') ? e.irr.createView({ dimension: e.irrMode === 'cube' ? 'cube' : '2d' }) : R.dummy2d.createView();
-  R.frameBG = device.createBindGroup({
-    label: 'vp-frame-bg',
-    layout: frameLayout(e),
-    entries: [
-      { binding: 0, resource: { buffer: R.frameBuf } },
-      { binding: 1, resource: radView },
-      { binding: 2, resource: irrView },
-      { binding: 3, resource: R.samp.env },
-      { binding: 4, resource: R.lutView },
-      { binding: 5, resource: R.shadowView },
-      { binding: 6, resource: R.samp.shadow },
-      { binding: 7, resource: R.samp.clamp },
-      ...(e.kind === 'lib' ? envMod.envBindGroupEntries(8) : []),
-    ],
-  });
-  R.frameBGKey = id;
-}
-
 // ------------------------------------------------------------ pipelines
 function sceneModule(e, which) {
   const body = which === 'pbr' ? R.SH['shaders/pbr.wgsl'] : R.SH['shaders/viewport-bg.wgsl'];
@@ -471,35 +288,6 @@ function destroySet(s) {
   try { s.ubuf.destroy(); } catch (e) {}
 }
 
-function mapTexture(label, res, usage = 0) {
-  return device.createTexture({
-    label, size: [res, res, 1], format: HDR,
-    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.COPY_SRC | GPUTextureUsage.RENDER_ATTACHMENT | usage,
-  });
-}
-
-// float -> half float bits
-const f32b = new Float32Array(1), u32b = new Uint32Array(f32b.buffer);
-function toHalf(v) {
-  f32b[0] = v; const x = u32b[0];
-  const sign = (x >>> 16) & 0x8000;
-  const e = ((x >>> 23) & 0xff) - 112;
-  const m = x & 0x7fffff;
-  if (e <= 0) return sign;
-  if (e >= 31) return sign | 0x7c00;
-  return sign | (e << 10) | (m >>> 13);
-}
-function writeHalf(tex, res, fn) {
-  const data = new Uint16Array(res * res * 4);
-  const px = [0, 0, 0, 0];
-  for (let y = 0; y < res; y++) for (let x = 0; x < res; x++) {
-    fn((x + 0.5) / res, (y + 0.5) / res, px, x, y);
-    const o = (y * res + x) * 4;
-    data[o] = toHalf(px[0]); data[o + 1] = toHalf(px[1]); data[o + 2] = toHalf(px[2]); data[o + 3] = toHalf(px[3]);
-  }
-  device.queue.writeTexture({ texture: tex }, data, { bytesPerRow: res * 8, rowsPerImage: res }, [res, res, 1]);
-}
-
 /** Flat defaults for slots before the first bake (contract MATERIAL_INPUTS defaults). */
 function defaultSet() {
   const v = {
@@ -512,60 +300,6 @@ function defaultSet() {
     writeHalf(tex[k], 4, (u, w, px) => { px[0] = v[k][0]; px[1] = v[k][1]; px[2] = v[k][2]; px[3] = v[k][3]; });
   }
   return makeMatSet(tex, C.DEFAULT_SCALARS, true, 4, 'default');
-}
-
-/**
- * Synthetic maps for tests and for a quick look before the bake works:
- * a checker base color, studs with bevels in height, a +Y normal map made
- * from that height, metal studs, emissive stripes, clearcoat on the left half,
- * sheen on the bottom quarter, anisotropy on the studs, an opacity corner.
- */
-export function makeTestMaps(res = 512) {
-  const H = new Float32Array(res * res);
-  const studH = (u, v) => {
-    const cx = (u * 4) % 1 - 0.5, cy = (v * 4) % 1 - 0.5;
-    const d = Math.hypot(cx, cy);
-    const stud = 1 - smooth(0.24, 0.33, d);
-    const groove = Math.exp(-Math.pow(((u + v) * 6) % 1 - 0.5, 2) / 0.002) * 0.12;
-    return { h: 0.5 + 0.32 * stud - groove * (1 - stud), stud, cx, cy };
-  };
-  for (let y = 0; y < res; y++) for (let x = 0; x < res; x++) H[y * res + x] = studH((x + 0.5) / res, (y + 0.5) / res).h;
-  const h = (x, y) => H[((y + res) % res) * res + ((x + res) % res)];
-  const tex = {};
-  for (const k of C.MAP_NAMES) tex[k] = mapTexture('vp-test-' + k, res);
-  writeHalf(tex.height, res, (u, v, px, x, y) => { const s = h(x, y); px[0] = px[1] = px[2] = s; px[3] = 1; });
-  const k = res / 24;
-  writeHalf(tex.normal, res, (u, v, px, x, y) => {
-    const du = (h(x + 1, y) - h(x - 1, y)) * 0.5, dv = (h(x, y + 1) - h(x, y - 1)) * 0.5;
-    // OpenGL +Y: green follows image-up, which is -v
-    const n = norm3([-du * k, dv * k, 1]);
-    px[0] = n[0] * 0.5 + 0.5; px[1] = n[1] * 0.5 + 0.5; px[2] = n[2] * 0.5 + 0.5; px[3] = 1;
-  });
-  writeHalf(tex.albedo, res, (u, v, px) => {
-    const s = studH(u, v);
-    const ch = ((Math.floor(u * 8) + Math.floor(v * 8)) & 1) === 1;
-    const c = s.stud > 0.5 ? [0.95, 0.72, 0.32] : ch ? [0.62, 0.18, 0.06] : [0.32, 0.36, 0.42];
-    px[0] = c[0]; px[1] = c[1]; px[2] = c[2];
-    px[3] = (u > 0.75 && v < 0.25) ? 0.25 + 0.75 * ((v * 4) % 1) : 1;
-  });
-  writeHalf(tex.orm, res, (u, v, px, x, y) => {
-    const s = studH(u, v);
-    const lap = (h(x + 2, y) + h(x - 2, y) + h(x, y + 2) + h(x, y - 2)) * 0.25 - h(x, y);
-    px[0] = clamp(1 - Math.max(0, lap) * 18, 0.2, 1);
-    px[1] = s.stud > 0.5 ? 0.22 : (((Math.floor(u * 8) + Math.floor(v * 8)) & 1) ? 0.45 : 0.75);
-    px[2] = s.stud > 0.5 ? 1 : 0;
-    px[3] = 1;
-  });
-  writeHalf(tex.emissive, res, (u, v, px) => {
-    const band = Math.abs(((v * 8) % 1) - 0.5) < 0.02 && u < 0.25 ? 1 : 0;
-    px[0] = 0.2 * band; px[1] = 1.4 * band; px[2] = 2.0 * band; px[3] = 1;
-  });
-  writeHalf(tex.extra, res, (u, v, px) => {
-    const s = studH(u, v);
-    px[0] = u < 0.5 ? 1 : 0; px[1] = 0.06; px[2] = v > 0.75 ? 0.8 : 0; px[3] = s.stud > 0.5 ? 0.7 : 0;
-  });
-  return { ...tex, res, scalars: { ...C.DEFAULT_SCALARS, displacementScale: 0.04 } };
-  function smooth(a, b, x) { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); }
 }
 
 /**
@@ -683,72 +417,7 @@ export async function loadOBJFile(file) {
   }
 }
 
-// ------------------------------------------------------------ lights
-function lightsState(e) {
-  const out = [];
-  let key = null, keyIdx = -1;
-  const rot = ((Number(state.env.rotation) || 0) * Math.PI) / 180;
-  for (const L of (state.env.lights || [])) {
-    if (out.length >= 4) break;
-    if (!L || L.on === false || L.enabled === false) continue;
-    const type = L.type === 'point' ? 2 : 1;
-    const c = hexToLinear(L.color || '#ffffff');
-    const I = Number.isFinite(+L.intensity) ? +L.intensity : 1;
-    let v;
-    if (type === 1) {
-      if (Array.isArray(L.dir)) v = norm3(L.dir);
-      else {
-        const az = ((+L.azimuth || 0) * Math.PI) / 180, el = ((L.elevation ?? 45) * Math.PI) / 180;
-        v = [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
-      }
-      if (keyIdx < 0) { key = v; keyIdx = out.length; }
-    } else {
-      const d = Array.isArray(L.dir) && L.dir.length >= 3 ? norm3(L.dir.map(Number)) : norm3([0.4, 0.7, 0.6]);
-      v = Array.isArray(L.pos) ? L.pos.slice(0, 3).map(Number) : d.map(x => x * (+L.dist || 3));
-    }
-    // w: 1 dir, 2 + range point (range 0 = pure inverse square)
-    out.push({ type: type === 2 ? 2 + Math.max(0, +L.range || 0) : 1, v, color: c.map(x => x * Math.max(0, I)) });
-  }
-  if (!key) {
-    if (e.sun) key = e.sun;
-    else if (e.kind === 'proc') key = norm3([0.55, 0.62, 0.56]);
-    else key = norm3([0.25, 1, 0.2]);
-    if (e.sun || e.kind === 'proc') { // the studio key and a sun turn with the environment
-      const c = Math.cos(rot), s = Math.sin(rot);
-      key = [c * key[0] - s * key[2], key[1], s * key[0] + c * key[2]];
-    }
-  }
-  return { lights: out, key, keyIdx };
-}
-
-function shadowMatrix(key, radius, groundY) {
-  const up = Math.abs(key[1]) > 0.95 ? [0, 0, 1] : [0, 1, 0];
-  const r = radius * 1.25 + 0.2;
-  const eye = [key[0] * 8, key[1] * 8, key[2] * 8];
-  const view = lookAt(eye, [0, 0, 0], up);
-  // tighten the box so the ground near the mesh is inside it too
-  const proj = ortho(-r * 1.6, r * 1.6, -r * 1.6, r * 1.6, 8 - r * 2.5, 8 + r * 2.5 + Math.max(0, -groundY));
-  return m4mul(proj, view);
-}
-
 // ------------------------------------------------------------ targets
-function makeTargets(w, h, samples, fxaa, finalFormat = gpu.format) {
-  const d = device;
-  const T = { w, h, samples, fxaa };
-  T.hdr = d.createTexture({ label: 'vp-hdr', size: [w, h, 1], format: HDR, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-  T.msaa = samples > 1 ? d.createTexture({ label: 'vp-msaa', size: [w, h, 1], format: HDR, sampleCount: samples, usage: GPUTextureUsage.RENDER_ATTACHMENT }) : null;
-  T.depth = d.createTexture({ label: 'vp-depth', size: [w, h, 1], format: DEPTH, sampleCount: samples, usage: GPUTextureUsage.RENDER_ATTACHMENT });
-  T.ldr = fxaa ? d.createTexture({ label: 'vp-ldr', size: [w, h, 1], format: finalFormat, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING }) : null;
-  T.hdrView = T.hdr.createView(); T.msaaView = T.msaa && T.msaa.createView(); T.depthView = T.depth.createView(); T.ldrView = T.ldr && T.ldr.createView();
-  T.tonemapBG = d.createBindGroup({ layout: R.layout.post, entries: [{ binding: 0, resource: T.hdrView }, { binding: 1, resource: R.samp.clamp }, { binding: 2, resource: { buffer: R.postBuf } }] });
-  T.fxaaBG = fxaa ? d.createBindGroup({ layout: R.layout.post, entries: [{ binding: 0, resource: T.ldrView }, { binding: 1, resource: R.samp.clamp }, { binding: 2, resource: { buffer: R.postBuf } }] }) : null;
-  T.finalFormat = finalFormat;
-  return T;
-}
-function destroyTargets(T) { if (!T) return; for (const k of ['hdr', 'msaa', 'depth', 'ldr']) try { T[k] && T[k].destroy(); } catch (e) {} }
-
-function aaMode() { const a = state.view.aa; return { samples: a === 'msaa' || a === 'both' ? 4 : 1, fxaa: a === 'fxaa' || a === 'both' }; }
-
 function resize() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const r = wrap.getBoundingClientRect();
@@ -1216,23 +885,6 @@ function onView(v) {
   syncHud();
   savePrefsSoon();
   requestRender();
-}
-
-// ------------------------------------------------------------ prefs
-function readPrefs() {
-  try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}; } catch (e) { return {}; }
-}
-let prefTimer = 0;
-function savePrefsSoon() {
-  clearTimeout(prefTimer);
-  prefTimer = setTimeout(() => {
-    try {
-      const view = {};
-      for (const k of PREF_VIEW_KEYS) if (state.view[k] !== undefined) view[k] = state.view[k];
-      if (view.mesh === 'custom') view.mesh = 'sphere';
-      localStorage.setItem(PREF_KEY, JSON.stringify({ view, camera: cam ? cam.getState() : null }));
-    } catch (e) {}
-  }, 400);
 }
 
 // ------------------------------------------------------------ api / selfTest
