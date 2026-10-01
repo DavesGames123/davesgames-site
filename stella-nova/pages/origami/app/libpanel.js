@@ -13,7 +13,7 @@
 
 import * as patterns from '../patterns.js';
 import { S, $ } from './state.js';
-import { syncUI } from '../main.js';
+import { syncUI } from './readouts.js';
 
 let libSource = '';
 let thumbs = null, thumbsLoading = false;

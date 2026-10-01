@@ -44,11 +44,11 @@ import { seg } from './lines.js';
 import { initGpu } from './gpu.js';
 import { pointInPoly, pointInTri2, pointSegDist, findIndex } from './app/geom.js';
 import { stage, canvas, pane2dEl, pane3dEl, dpr, applyLayout, measure, geom2d, geom3d, view2d, region3d, phys, paneAt, snapPx, resize } from './app/layout.js';
-import { buildLibrary, toggleLibSource, fillThumbs } from './app/libpanel.js';
+import { buildLibrary, toggleLibSource } from './app/libpanel.js';
+import { defaultStatus, setStatus, syncFold, syncUI, syncCheck } from './app/readouts.js';
 import { COARSE, th, $, TOOLS, TOOL_KEYS, SPEEDS, S, gpu, setGpu, load, save, isPhone } from './app/state.js';
 
 let last = performance.now();
-let lastPct = -1;
 
 // ── model plumbing ──────────────────────────────────────────────────────────
 
@@ -388,13 +388,6 @@ function statusHover() {
   if (S.hoveredFace !== null) parts.push(`face ${S.hoveredFace}`);
   setStatus(parts.length ? parts.join('   ') : defaultStatus());
 }
-function defaultStatus() {
-  return COARSE ? 'One finger draws in the diagram and orbits the fold. Two fingers zoom and pan.'
-    : 'Drag in the diagram to draw a crease. Drag the fold to orbit. Wheel zooms, right drag pans.';
-}
-let statusText = '';
-function setStatus(t) { if (t !== statusText) { statusText = t; $('stMain').textContent = t; } }
-
 // ── frame (app.rs frame) ────────────────────────────────────────────────────
 function render() {
   measure();
@@ -424,67 +417,6 @@ function frame(now) {
   render();
   syncFold();
   requestAnimationFrame(frame);
-}
-
-// ── the readouts and control state ──────────────────────────────────────────
-function syncFold() {
-  const pct = Math.round(S.fraction * 100);
-  if (pct !== lastPct) {
-    lastPct = pct;
-    document.querySelectorAll('[data-out="pct"]').forEach((el) => { el.textContent = pct + '%'; });
-  }
-  if (!S.dragFraction) document.querySelectorAll('input[data-act="fraction"]').forEach((el) => { el.value = S.fraction; });
-}
-
-export function syncUI() {
-  const on = (sel, v) => document.querySelectorAll(sel).forEach((el) => el.classList.toggle('on', v));
-  for (const t of Object.keys(TOOLS)) on(`[data-act="tool:${t}"]`, S.tool === t);
-  on('[data-act="grid"]', S.showGrid);
-  on('[data-act="library"]', S.libraryOpen);
-  on('[data-act="play"]', S.auto);
-  document.querySelectorAll('[data-act="play"]').forEach((el) => {
-    if (el.id === 'dockPlay') { el.textContent = S.auto ? '❚❚' : '▶'; el.setAttribute('aria-label', S.auto ? 'Pause' : 'Play'); }
-    else el.textContent = S.auto ? 'PAUSE' : 'PLAY';
-  });
-  document.querySelectorAll('[data-act="speed"]').forEach((el) => { el.textContent = (S.foldSpeed / 0.3).toFixed(1) + 'x'; });
-  for (const m of ['auto', 'h', 'v']) on(`[data-act="layout:${m}"]`, S.layoutMode === m);
-  document.querySelectorAll('[data-act="undo"]').forEach((el) => { el.disabled = S.undo.length === 0; });
-  document.querySelectorAll('[data-act="redo"]').forEach((el) => { el.disabled = S.redo.length === 0; });
-  const cur = S.preset ? 'preset:' + S.preset.id : '';
-  document.querySelectorAll('[data-act^="preset:"]').forEach((el) => {
-    const v = el.dataset.act === cur;
-    el.classList.toggle('on', v);
-    if (v) el.setAttribute('aria-current', 'true'); else el.removeAttribute('aria-current');
-  });
-  $('library').hidden = !S.libraryOpen;
-  if (S.libraryOpen) fillThumbs();
-  $('panel').classList.toggle('open', S.panelOpen);
-  document.querySelectorAll('[data-act="panel"]').forEach((el) => el.setAttribute('aria-expanded', String(S.panelOpen)));
-  on('#dockPanel', S.panelOpen);
-}
-
-function syncCheck() {
-  const badge = $('checkBadge'), text = $('checkText');
-  const n = S.report.length;
-  const bad = S.report.filter((r) => !reportOk(r));
-  if (n === 0) {
-    badge.className = 'check'; badge.textContent = 'no interior vertices';
-    text.innerHTML = 'No interior fold vertex to check yet.';
-  } else if (bad.length === 0) {
-    badge.className = 'check ok'; badge.textContent = `✓ flat-foldable (local, ${n})`;
-    text.innerHTML = `<span class="ok">${n === 1 ? 'The one interior vertex passes' : `All ${n} interior vertices pass`}</span> Maekawa, Kawasaki and Big-Little-Big. These checks are local: they are necessary, not sufficient.`;
-  } else {
-    badge.className = 'check bad'; badge.textContent = `✕ ${bad.length} of ${n} vertices fail`;
-    const rows = bad.slice(0, 8).map((r) => {
-      const why = [];
-      if (!r.kawasakiOk) why.push(`Kawasaki ${r.kawasakiResidual.toFixed(1)}°`);
-      if (r.maekawa !== null && !r.maekawaOk) why.push(`Maekawa ${r.maekawa}`);
-      if (r.blbOk === false) why.push('Big-Little-Big');
-      return `vertex ${r.vertex}: ${why.join(', ')}`;
-    });
-    text.innerHTML = `<span class="bad">${bad.length} of ${n} interior vertices fail.</span> Amber rings mark them.<br>` +
-      rows.join('<br>') + (bad.length > 8 ? '<br>and more' : '');
-  }
 }
 
 // ── the control dispatcher (app.rs apply) ───────────────────────────────────
