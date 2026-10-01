@@ -66,6 +66,8 @@ export function createStage(o) {
     Object.assign(key.shadow.camera, { left: -2 * R, right: 2 * R, top: 2 * R, bottom: -2 * R, near: 5 * s, far: 280 * s });
     key.shadow.camera.updateProjectionMatrix();
     controls.minDistance = R * 0.6; controls.maxDistance = R * 22;
+    // depth precision follows the near plane: a 300 mm clock needs a farther one
+    camera.near = Math.max(0.5, R * 0.04); camera.far = R * 300; camera.updateProjectionMatrix();
   };
   st.setShadowExtent(18);
 

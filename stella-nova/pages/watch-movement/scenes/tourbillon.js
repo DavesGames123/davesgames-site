@@ -56,7 +56,7 @@ export function build(B, cal, opts = {}) {
   B.add(cage, B.slab(G.capsule([0, 0], eA, 0.85), [], Z.cageHi, Z.cageHi + 0.15, 'steel', 0.02), B.slab(circ(1.05, 32), [hole(0.4, 16)], Z.cageHi, Z.cageHi + 0.18, 'steel', 0.03));
   // cage pinion under the cage and the lower cage arbor
   B.add(cage, B.slab(G.pinionProfile(10, 0.12), [], Z.third - 0.17, Z.third + 0.17, 'steel', 0.01), B.cyl(0.32, Z.lowHi, Z.cageLo, 'steel', 20), B.cyl(0.32, Z.cageHi, Z.tbLo, 'steel', 20));
-  const cJ = B.part('jewelsCage', 'cage', O, { info: 'jewel', parent: cage });
+  const cJ = B.part('jewelsCage', 'cage', [0, 0], { info: 'jewel', parent: cage });   // in the cage frame
   B.add(cJ, B.jewel([0, 0], Z.cageHi + 0.2, 0.42), B.jewel(eA, Z.cageHi + 0.2, 0.42));
   escapeWheel(B, ESC, { z: Z.escape, pinion: { N: c.escape.p, m: L.mFixed, z: Z.fixed }, arbor: [Z.cageLo, Z.fixed + 0.2], parent: inCage, label: 'Escape wheel' });
   leverParts(B, ESC, { z: Z.fork, arbor: [Z.cageLo, Z.cageHi], parent: inCage });
