@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Social Dynamics · Stella Nova</title>
+<meta name="description" content="The named parts of Stella Nova's social system: relationship tiers, rumor topics, gossip channels and events, social pulses and incidents.">
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SOCIAL DYNAMICS  ·  named concept explorer
+  ───────────────────────────────────────────────────────────────────────────
+   The page lists the NAMED parts of the social system from the game
+   catalog. Each item is a link to its wiki entry. The page does not say how
+   the game computes anything. The .notes slots stay empty.
+
+   LOAD ORDER  (classic scripts, so the page opens from file:// too)
+     1. ../../lib/gpu-guard.js           first script on every page
+     2. ../../lib/game-data/catalog.js   sets window.SN_DATA
+     3. main.js                          fills every [data-fill] block
+
+   PAGE FLOW  (# marks an element id)
+     .hero        title and lede
+     .tabs        sticky section chips, scroll spy
+     #tiers       relationship tiers as a ladder, plus the special tier
+     #rumors      rumor topics in two columns
+     #channels    gossip channels as three cards
+     #events      gossip event kinds
+     #pulses      social pulse kinds on a ring
+     #incidents   incident kinds by category
+
+   grep -n targets
+     section chips ..... "class=\"tabs\""
+     ladder ............ "id=\"tiers\""
+     ring .............. "id=\"pulses\""
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+
+<header class="hero">
+  <div class="kicker">Stella Nova · Wiki</div>
+  <h1>Social <em>dynamics</em></h1>
+  <p class="lede">The named parts of station social life. Every name opens its wiki entry.</p>
+</header>
+
+<nav class="tabs" aria-label="Sections">
+  <div class="tabs-in">
+    <a href="#tiers" data-tab="tiers">Relationship tiers</a>
+    <a href="#rumors" data-tab="rumors">Rumor topics</a>
+    <a href="#channels" data-tab="channels">Gossip channels</a>
+    <a href="#events" data-tab="events">Gossip events</a>
+    <a href="#pulses" data-tab="pulses">Social pulses</a>
+    <a href="#incidents" data-tab="incidents">Incidents</a>
+  </div>
+</nav>
+
+<main>
+  <section id="tiers" class="sec">
+    <div class="sec-head"><div class="kicker">Relationship tiers</div><h2>The <em>ladder</em></h2></div>
+    <div class="ladder-wrap">
+      <ol class="ladder" data-fill="ladder" aria-label="Relationship tiers"></ol>
+      <div class="special" data-fill="special"></div>
+    </div>
+    <div class="notes" data-notes="relationship-tiers"></div>
+  </section>
+
+  <section id="rumors" class="sec">
+    <div class="sec-head"><div class="kicker">Rumor topics</div><h2>What people <em>talk about</em></h2></div>
+    <div class="split" data-fill="rumors"></div>
+    <div class="notes" data-notes="rumor-topics"></div>
+  </section>
+
+  <section id="channels" class="sec">
+    <div class="sec-head"><div class="kicker">Gossip channels</div><h2>How word <em>travels</em></h2></div>
+    <div class="cards three" data-fill="channels"></div>
+    <div class="notes" data-notes="gossip-channels"></div>
+  </section>
+
+  <section id="events" class="sec">
+    <div class="sec-head"><div class="kicker">Gossip events</div><h2>Event <em>kinds</em></h2></div>
+    <div class="cards six" data-fill="events"></div>
+    <div class="notes" data-notes="gossip-events"></div>
+  </section>
+
+  <section id="pulses" class="sec">
+    <div class="sec-head"><div class="kicker">Social pulses</div><h2>Pulse <em>kinds</em></h2></div>
+    <div class="ring" data-fill="pulses"></div>
+    <div class="notes" data-notes="social-pulses"></div>
+  </section>
+
+  <section id="incidents" class="sec">
+    <div class="sec-head"><div class="kicker">Incidents</div><h2>Incident <em>kinds</em></h2></div>
+    <div class="cards two" data-fill="incidents"></div>
+    <div class="notes" data-notes="incidents"></div>
+  </section>
+</main>
+
+<footer class="foot">Names come from the Stella Nova game catalog.</footer>
+
+<script src="../../lib/game-data/catalog.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
