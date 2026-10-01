@@ -413,8 +413,11 @@ function setAxis(el){SIM.axisDeg=+el.value;document.getElementById('vl-axis').te
 function setDensity(el){SIM.density=+el.value;document.getElementById('vl-density').textContent=SIM.density;sg(el);}
 function setCoef(key,el){SIM[key]=+el.value;const m={amp:'vl-amp',cNear:'vl-near',cRad:'vl-rad'};document.getElementById(m[key]).textContent=(+el.value).toFixed(2);sg(el);}
 function tog(key,btn){SIM[key]=!SIM[key];btn.classList.toggle('on',SIM[key]);}
-function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'▶ Play':'❚❚ Pause';b.classList.toggle('active',SIM.playing);}
-function setSpeed(s){SIM.speed=s;}
+// The play button shows the action it will take: pause while playing.
+function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'❚❚':'▶';b.classList.toggle('on',SIM.playing);}
+function setSpeed(s){SIM.speed=s;document.getElementById('sp-slow').classList.toggle('on',s<1);document.getElementById('sp-1').classList.toggle('on',s>=1);}
+// The tune card (a bottom sheet on phones). open omitted = toggle.
+function tuneOpen(open){const t=document.getElementById('tune'),b=document.getElementById('tune-btn');const o=open===undefined?!t.classList.contains('open'):!!open;t.classList.toggle('open',o);b.classList.toggle('on',o);}
 
 // Pointer handling: drag the source when the press lands near it. ptr maps a
 // mouse or touch event to canvas pixels; the handlers store the grab offset so
@@ -456,5 +459,5 @@ function loop(time){
 }
 // Boot: paint every slider's initial fill, then size the canvas and start the
 // loop after a short delay so the layout has settled.
-document.querySelectorAll('#rail input[type=range]').forEach(sg);
+document.querySelectorAll('#tune input[type=range]').forEach(sg);
 setTimeout(()=>{resize();requestAnimationFrame(loop);},60);

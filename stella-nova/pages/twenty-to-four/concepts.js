@@ -1,167 +1,95 @@
 // ============================================================================
-//  TWENTY TO FOUR  ·  equation panel builder
+//  TWENTY TO FOUR  ·  equation column builder
 // ----------------------------------------------------------------------------
-//  Builds the scrollable panel that shows how Maxwell's original 20 scalar
-//  equations collapse into Heaviside's 4 vector equations. Each concept renders
-//  its scalar component lines on the left, an arrow, and the folded vector form
-//  plus a plain-language note on the right. Hovering a scalar line lights it and
-//  drives the canvas overlay through window.__setOverlay (defined in main.js).
-//  Self-invoking; bails out quietly if KaTeX did not load.
+//  Builds the equation column from window.T24 (equations.js, MathJax SVG
+//  made by typeset.mjs). Each concept block shows its name and a plain line,
+//  Maxwell's scalar lines (numbered 01 to 20), and the folded Heaviside
+//  vector form with a note. The 20 / 4 switch folds the scalar lines away,
+//  and the tick strip shows the twenty lines gather into four groups.
 //
-//  PANEL STRUCTURE   (per concept block)
+//  A scalar line drives the canvas overlay through window.__setOverlay
+//  (main.js): a mouse lights it while it hovers, a tap pins it until the
+//  next tap. Self-invoking; it does nothing if equations.js did not load.
+//
+//  BLOCK STRUCTURE   (per concept)
 //  --------------------------------------------------------------------------
-//      ┌ concept-head  role badge + name                                    ┐
-//      │ mw-col   scalar lines (hoverable, each carries an overlay key ov)  │
-//      │   →      arrow                                                     │
-//      │ hv-col   folded vector equation + note                            │
-//      └───────────────────────────────────────────────────────────────────┘
+//      section.concept[data-role]  --cc = the concept colour
+//        header      numeral, name, tag, plain line
+//        .fold       Maxwell source tag + ol.lines (one li per scalar line)
+//        .result     "Heaviside 1884" kick, the vector form, the note
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" concepts.js)
 //  --------------------------------------------------------------------------
-//      palette ............. "const E="            per-symbol tint constants
-//      concept data ........ "const concepts"      the 20 → 4 collapse table
-//      block build ......... "concepts.forEach"    render each concept block
-//      summary ............. "// summary"          the four surviving equations
-//      inline katex ........ "renderInlineKatex"   render \( \) inside notes
-//      hover wiring ........ "pointerenter"        line hover → canvas overlay
+//      colours ............. "const CC"            concept colour tokens
+//      block build ......... "function block"      one concept block
+//      tick strip .......... "function ticks"      20 ticks, grouped
+//      the four ............ "function four"       the summary grid
+//      20 / 4 switch ....... "window.eqView"       fold the scalar lines
+//      hover and tap ....... "function light"      line -> canvas overlay
 // ============================================================================
 (function(){
-  // Skip everything if KaTeX is unavailable, so the page still runs.
-  if(!window.katex) return;
-  // Per-symbol tint constants, matched to the field colors on the canvas.
-  const E='#ffc832',B='#60e0ee',A='#c890ff',J='#ffb84d',op='#96c8ff',rho='#ff9050',mu='#7fd6a0',phi='#c890ff';
-  // KaTeX options, a short render helper, and a raw-string tag alias.
-  const ro={throwOnError:false,displayMode:false};
-  const R=(tex,el)=>el&&katex.render(tex,el,ro);
-  const S=String.raw;
-
-  // The concept table drives the whole panel. Each entry names a concept, its
-  // role (CORE survives, SET ASIDE and REDUNDANT do not), the scalar component
-  // lines (each with an ov overlay key read on the canvas), the folded Heaviside
-  // vector form (heav) or a text explanation (heavText), and a note.
-  // concepts: destination-grouped — how the 20 collapse into the 4 (+ what falls away)
-  const concepts=[
-    {color:E, role:'CORE', name:'Gauss · electric', grp:'G · free charge   ·   E · elasticity',
-     lines:[
-       {tex:S`\partial_x \textcolor{${E}}{D_x}+\partial_y \textcolor{${E}}{D_y}+\partial_z \textcolor{${E}}{D_z}=\textcolor{${rho}}{\rho}`, ov:'divE'},
-       {tex:S`\textcolor{${E}}{D_x}=\varepsilon \textcolor{${E}}{E_x}`, ov:'Ex'},
-       {tex:S`\textcolor{${E}}{D_y}=\varepsilon \textcolor{${E}}{E_y}`, ov:'Ey'},
-       {tex:S`\textcolor{${E}}{D_z}=\varepsilon \textcolor{${E}}{E_z}`, ov:'zero'},
-     ],
-     heav:S`\textcolor{${op}}{\nabla}\cdot\textcolor{${E}}{\vec{E}}=\dfrac{\textcolor{${rho}}{\rho}}{\varepsilon_0}`,
-     note:S`Substitute <b>D = εE</b>, and the three separate \(\partial_i D_i\) terms fold into one <b>divergence</b>.`},
-
-    {color:B, role:'CORE', name:'Gauss · magnetic', grp:'B · field from the vector potential',
-     lines:[
-       {tex:S`\textcolor{${B}}{B_x}=\partial_y \textcolor{${A}}{A_z}-\partial_z \textcolor{${A}}{A_y}`, ov:'zero'},
-       {tex:S`\textcolor{${B}}{B_y}=\partial_z \textcolor{${A}}{A_x}-\partial_x \textcolor{${A}}{A_z}`, ov:'zero'},
-       {tex:S`\textcolor{${B}}{B_z}=\partial_x \textcolor{${A}}{A_y}-\partial_y \textcolor{${A}}{A_x}`, ov:'Bz'},
-     ],
-     heav:S`\textcolor{${op}}{\nabla}\cdot\textcolor{${B}}{\vec{B}}=0`,
-     note:S`Because <b>B = ∇×A</b>, the identity \(\nabla\!\cdot\!(\nabla\times\vec A)=0\) makes this <b>true for free</b> — no measured law required.`},
-
-    {color:'#ffb84d', role:'CORE', name:'Faraday · induction', grp:'D · electromotive force',
-     lines:[
-       {tex:S`\textcolor{${E}}{E_x}=\mu(v_y \textcolor{${B}}{H_z}-v_z \textcolor{${B}}{H_y})-\partial_t \textcolor{${A}}{A_x}-\partial_x \textcolor{${phi}}{\varphi}`, ov:'Ex'},
-       {tex:S`\textcolor{${E}}{E_y}=\mu(v_z \textcolor{${B}}{H_x}-v_x \textcolor{${B}}{H_z})-\partial_t \textcolor{${A}}{A_y}-\partial_y \textcolor{${phi}}{\varphi}`, ov:'Ey'},
-       {tex:S`\textcolor{${E}}{E_z}=\mu(v_x \textcolor{${B}}{H_y}-v_y \textcolor{${B}}{H_x})-\partial_t \textcolor{${A}}{A_z}-\partial_z \textcolor{${phi}}{\varphi}`, ov:'zero'},
-     ],
-     heav:S`\textcolor{${op}}{\nabla}\times\textcolor{${E}}{\vec{E}}=-\dfrac{\partial\textcolor{${B}}{\vec{B}}}{\partial t}`,
-     note:S`Drop the motional term and take the <b>curl</b>: \(\nabla\times(-\partial_t\vec A)=-\partial_t(\nabla\times\vec A)=-\partial_t\vec B\).`},
-
-    {color:'#64c864', role:'CORE', name:'Ampère · Maxwell', grp:'C · circuital law   ·   A · total current',
-     lines:[
-       {tex:S`\partial_y \textcolor{${B}}{H_z}-\partial_z \textcolor{${B}}{H_y}=\textcolor{${J}}{J'_x}`, ov:'curlHx'},
-       {tex:S`\partial_z \textcolor{${B}}{H_x}-\partial_x \textcolor{${B}}{H_z}=\textcolor{${J}}{J'_y}`, ov:'curlHy'},
-       {tex:S`\partial_x \textcolor{${B}}{H_y}-\partial_y \textcolor{${B}}{H_x}=\textcolor{${J}}{J'_z}`, ov:'zero'},
-       {tex:S`\textcolor{${J}}{J'_x}=\textcolor{${J}}{J_x}+\partial_t \textcolor{${E}}{D_x}`, ov:'dExdt'},
-       {tex:S`\textcolor{${J}}{J'_y}=\textcolor{${J}}{J_y}+\partial_t \textcolor{${E}}{D_y}`, ov:'dEydt'},
-       {tex:S`\textcolor{${J}}{J'_z}=\textcolor{${J}}{J_z}+\partial_t \textcolor{${E}}{D_z}`, ov:'zero'},
-     ],
-     heav:S`\textcolor{${op}}{\nabla}\times\textcolor{${B}}{\vec{B}}=\mu_0\textcolor{${J}}{\vec{J}}+\textcolor{${mu}}{\mu_0\varepsilon_0\dfrac{\partial\textcolor{${E}}{\vec{E}}}{\partial t}}`,
-     note:S`The curl of H is the <b>total</b> current. Its \(\partial D/\partial t\) half is Maxwell's <b>displacement current</b> — the term that lets the loops on the canvas detach and fly off as light.`},
-
-    {color:'#7a8aa0', role:'SET ASIDE', name:'Constitutive', grp:"F · Ohm's law   ·   E · elasticity",
-     lines:[
-       {tex:S`\textcolor{${J}}{J_x}=\sigma \textcolor{${E}}{E_x}`, ov:'Ex'},
-       {tex:S`\textcolor{${J}}{J_y}=\sigma \textcolor{${E}}{E_y}`, ov:'Ey'},
-       {tex:S`\textcolor{${J}}{J_z}=\sigma \textcolor{${E}}{E_z}`, ov:'zero'},
-     ],
-     heavText:S`\(\vec J=\sigma\vec E,\;\; \vec D=\varepsilon\vec E\) — material relations. They describe the <b>medium</b>, not the field, so they sit outside the famous four.`,
-     note:''},
-
-    {color:'#7a8aa0', role:'REDUNDANT', name:'Continuity', grp:'H · conservation of charge',
-     lines:[
-       {tex:S`\partial_x \textcolor{${J}}{J_x}+\partial_y \textcolor{${J}}{J_y}+\partial_z \textcolor{${J}}{J_z}+\partial_t \textcolor{${rho}}{\rho}=0`, ov:'zero'},
-     ],
-     heavText:S`Not an independent law — it <b>follows automatically</b> from \(\nabla\!\cdot\!(\nabla\times\vec B)=0\) applied to Ampère–Maxwell.`,
-     note:''},
-  ];
-
-  // Build one block per concept: the head, the scalar line column (each line
-  // tagged with its concept and overlay key), the arrow, and the Heaviside
-  // column with its equation, optional text, and note.
+  const T=window.T24; if(!T) return;
   const scroll=document.getElementById('eq-scroll');
-  concepts.forEach((c,ci)=>{
-    const block=document.createElement('div');block.className='concept';block.style.setProperty('--cc',c.color);
-    const dim=c.role!=='CORE'?' dim':'';
-    block.innerHTML=
-      `<div class="concept-head"><span class="badge${dim}">${c.role}</span><span class="cname">${c.name}</span></div>`;
-    const body=document.createElement('div');body.className='concept-body';
-    // Maxwell column
-    const mw=document.createElement('div');mw.className='mw-col';
-    mw.innerHTML=`<div class="mw-grp">${c.grp}</div>`;
-    c.lines.forEach((ln,li)=>{
-      const row=document.createElement('div');row.className='mw-line';row.dataset.ov=ln.ov;row.dataset.ci=ci;
-      const span=document.createElement('span');R(ln.tex,span);row.appendChild(span);
-      mw.appendChild(row);
-    });
-    body.appendChild(mw);
-    // arrow
-    const arr=document.createElement('div');arr.className='arrow-col';arr.textContent='→';body.appendChild(arr);
-    // Heaviside column
-    const hv=document.createElement('div');hv.className='hv-col';
-    if(c.heav){const eq=document.createElement('div');eq.className='hv-eq';R(c.heav,eq);hv.appendChild(eq);}
-    if(c.heavText){const t=document.createElement('div');t.className='hv-text';t.innerHTML=c.heavText;hv.appendChild(t);renderInlineKatex(t);}
-    if(c.note){const n=document.createElement('div');n.className='hv-note';n.innerHTML=c.note;hv.appendChild(n);renderInlineKatex(n);}
-    body.appendChild(hv);
-    block.appendChild(body);
-    scroll.appendChild(block);
-  });
+  // Concept colour per block, as CSS tokens (style.css :root).
+  const CC={gaussE:'var(--e)',gaussB:'var(--b)',faraday:'var(--a)',ampere:'var(--disp)',const:'var(--dim)',contin:'var(--dim)'};
+  const pad=n=>String(n).padStart(2,'0');
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-  // Append the summary: the four vector equations that remain after the collapse.
-  // summary
-  const sm=document.createElement('div');sm.className='summary';
-  sm.innerHTML=`<h3>The four that remain</h3>`;
-  [S`\textcolor{${op}}{\nabla}\cdot\textcolor{${E}}{\vec E}=\rho/\varepsilon_0`,
-   S`\textcolor{${op}}{\nabla}\cdot\textcolor{${B}}{\vec B}=0`,
-   S`\textcolor{${op}}{\nabla}\times\textcolor{${E}}{\vec E}=-\partial_t\textcolor{${B}}{\vec B}`,
-   S`\textcolor{${op}}{\nabla}\times\textcolor{${B}}{\vec B}=\mu_0\vec J+\mu_0\varepsilon_0\,\partial_t\textcolor{${E}}{\vec E}`
-  ].forEach(t=>{const d=document.createElement('div');d.className='seq';R(t,d);sm.appendChild(d);});
-  scroll.appendChild(sm);
-
-  // Replace every \( ... \) span inside a note's HTML with rendered KaTeX, so
-  // inline math appears within the prose.
-  // render \( \) inline katex inside note/text html
-  function renderInlineKatex(el){
-    el.innerHTML=el.innerHTML.replace(/\\\((.+?)\\\)/g,(m,tex)=>{
-      try{return katex.renderToString(tex,{throwOnError:false,displayMode:false});}catch(e){return m;}
-    });
+  // One concept block: the head, the foldable scalar lines, the result.
+  function block(c){
+    const s=document.createElement('section');
+    s.className='concept';s.dataset.role=c.role;s.dataset.key=c.key;s.style.setProperty('--cc',CC[c.key]||'var(--dim)');
+    const badge=c.numeral?`<span class="num">${c.numeral}</span>`:`<span class="num num-tag">${esc(c.tag)}</span>`;
+    s.innerHTML=
+      `<header class="c-head">${badge}<div><h3>${esc(c.name)}${c.numeral?` <span class="tag">${esc(c.tag)}</span>`:''}</h3><p class="plain">${esc(c.plain)}</p></div></header>`+
+      `<div class="fold"><div class="fold-in"><div class="src">Maxwell 1865 · ${esc(c.src)}</div><ol class="lines">`+
+      c.lines.map(l=>`<li data-ov="${l.ov}" tabindex="0"><span class="ln">${pad(l.n)}</span><span class="m">${l.svg}</span></li>`).join('')+
+      `</ol></div></div>`+
+      `<div class="result"><span class="kick">${c.role==='core'?'Heaviside 1884':c.role==='aside'?'In vector form':'Not an independent law'}</span>`+
+      `<div class="heav">${c.heav}</div><p class="note">${c.note}</p></div>`;
+    return s;
   }
+  // The tick strip: one tick per scalar line, coloured by its concept. In the
+  // 4 view the ticks of each core block close up, and the rest fade.
+  function ticks(){
+    const el=document.getElementById('ticks'); if(!el) return;
+    el.innerHTML=T.concepts.map(c=>`<span class="tg" data-role="${c.role}" style="--cc:${CC[c.key]}">`+
+      c.lines.map(()=>'<i></i>').join('')+'</span>').join('');
+  }
+  // The four that remain, as a 2 x 2 grid.
+  function four(){
+    const f=document.createElement('section');f.className='four';
+    f.innerHTML='<h2>The four that remain</h2><div class="four-grid">'+
+      T.four.map((q,i)=>`<div class="q" style="--cc:${CC[T.concepts[i].key]}"><span class="num">${q.numeral}</span><span class="qn">${esc(q.name)}</span><div class="qm">${q.svg}</div></div>`).join('')+
+      '</div><p class="foot">Light needs only these four: a changing E makes a curling B, a changing B makes a curling E, and the pair carries itself away at c.</p>';
+    return f;
+  }
+  T.concepts.forEach(c=>scroll.appendChild(block(c)));
+  scroll.appendChild(four());
+  ticks();
 
-  // Wire each scalar line: on hover, light the line and its block and ask the
-  // canvas to show that overlay; on leave, clear both.
-  // hover → drive canvas overlay (functions defined in sim script via window)
-  scroll.querySelectorAll('.mw-line').forEach(row=>{
-    row.addEventListener('pointerenter',()=>{
-      row.classList.add('lit');
-      const block=row.closest('.concept'); if(block) block.classList.add('hot');
-      window.__setOverlay && window.__setOverlay(row.dataset.ov);
-    });
-    row.addEventListener('pointerleave',()=>{
-      row.classList.remove('lit');
-      const block=row.closest('.concept'); if(block) block.classList.remove('hot');
-      window.__setOverlay && window.__setOverlay(null);
-    });
+  // The 20 / 4 switch: fold the scalar lines away (CSS animates .fold).
+  window.eqView=function(n){
+    const p=document.getElementById('eqpanel');
+    p.classList.toggle('collapsed',n===4);
+    document.getElementById('vw-20').classList.toggle('on',n!==4);
+    document.getElementById('vw-4').classList.toggle('on',n===4);
+    if(n===4) light(null);
+  };
+
+  // Hover and tap. light(row) marks one line and its block and sets the canvas
+  // overlay; light(null) clears both. A tap pins a line until the next tap.
+  let pinned=null;
+  function light(row){
+    scroll.querySelectorAll('.lines li.lit').forEach(r=>r.classList.remove('lit'));
+    scroll.querySelectorAll('.concept.hot').forEach(b=>b.classList.remove('hot'));
+    if(row){row.classList.add('lit');row.closest('.concept').classList.add('hot');}
+    window.__setOverlay&&window.__setOverlay(row?row.dataset.ov:null);
+  }
+  scroll.querySelectorAll('.lines li').forEach(row=>{
+    row.addEventListener('pointerenter',e=>{if(e.pointerType==='mouse'&&!pinned)light(row);});
+    row.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'&&!pinned)light(null);});
+    row.addEventListener('click',()=>{pinned=pinned===row?null:row;light(pinned);});
+    row.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();row.click();}});
   });
 })();

@@ -3,132 +3,128 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Twenty to Four // Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    TWENTY TO FOUR  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup for the Maxwell to Heaviside page. main.js runs the radiating
-   dipole field in #sim-canvas; concepts.js builds the equation panel inside
-   #eq-scroll and, on hover, drives the canvas overlay through
-   window.__setOverlay. This file lays out the left control rail, the center
-   stage, the right equation panel, and the status bar. Nothing here computes
-   the field.
+   dipole field in #sim-canvas. concepts.js builds the equation column inside
+   #eq-scroll from window.T24 (equations.js, MathJax SVG made by typeset.mjs)
+   and, on hover or tap, drives the canvas overlay through
+   window.__setOverlay. Nothing here computes the field.
 
-   HEAD LOAD ORDER   (order matters)
-     ● fonts        Google Fonts stylesheet
-     ● KaTeX        CSS then JS, so concepts.js can render on load
-     ● style.css    the page stylesheet
-     ● concepts.js  at body end, builds the equation panel and hover wiring
-     ● main.js      at body end, runs the field sim and defines __setOverlay
+   LOAD ORDER   (order matters)
+     ● fonts         Space Grotesk, IBM Plex Mono, Instrument Serif
+     ● style.css     the page stylesheet and the symbol colour tokens
+     ● equations.js  window.T24, the typeset equations
+     ● concepts.js   builds the equation column and the hover wiring
+     ● main.js       runs the field sim and defines __setOverlay
 
    LAYOUT   (the leading marker is an element id)
-     ┌────────────────────────────────────────────────────────────────────┐
-     │ topbar  Stella Nova · Twenty to Four                                 │
-     ├──────────────┬───────────────────────────────┬─────────────────────┤
-     │ #rail        │ #stage                        │ #eqpanel            │
-     │  source       │   #sim-canvas  dipole field    │  Maxwell → Heaviside │
-     │  field view   │   #ovl-caption overlay label   │  #eq-scroll         │
-     │  coefficients │                                │   20 → 4 blocks      │
-     │  time         │                                │                     │
-     ├──────────────┴───────────────────────────────┴─────────────────────┤
-     │ #status-bar  λ · c · φ · overlay · fps                               │
-     └────────────────────────────────────────────────────────────────────┘
+     ┌──────────────────────────────────────────┬─────────────────────────┐
+     │ #stage                                   │ #eqpanel                │
+     │  #legend        colour key (top left)    │  title, lede, 20/4      │
+     │  #readout       λ · c · φ · fps          │  switch, tick strip     │
+     │  #sim-canvas    the dipole field         │  #eq-scroll             │
+     │  #ovl-caption   the hovered quantity     │   six concept blocks    │
+     │  #tune          slider card / sheet      │   the four that remain  │
+     │  #dock          play, speed, layers      │                         │
+     └──────────────────────────────────────────┴─────────────────────────┘
+   Phones (portrait): the stage sits on top and the column scrolls under
+   it. #tune is then a bottom sheet over the column, so the field stays in
+   view while a slider moves.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
      this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<!-- Mobile button: toggle the control rail open on narrow screens. -->
-<button id="mob-btn" onclick="document.getElementById('rail').classList.toggle('open')">☰</button>
 
-<div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Twenty to Four</span></div>
-  <div class="topbar-r">SYS // <strong>ELECTRODYNAMICS</strong></div>
-</div>
+<header class="topbar">
+  <span class="brand">Stella Nova</span><span class="crumb">Twenty to Four</span>
+</header>
 
 <div id="main">
-  <!-- LEFT RAIL -->
-  <div id="rail">
-    <!-- Source controls: dipole frequency, wavelength, and axis orientation. -->
-    <div class="r-sec">
-      <div class="r-lbl">Source</div>
-      <div class="hint" style="margin-bottom:9px">Drag the glowing charge anywhere on the field.</div>
-      <div class="r-row"><span class="r-row-lbl">Freq</span><input type="range" id="sl-freq" min="0.3" max="3" value="1" step="0.05" oninput="setFreq(this)"><span class="val" id="vl-freq">1.0</span></div>
-      <div class="r-row"><span class="r-row-lbl">Wavelen</span><input type="range" id="sl-lambda" min="70" max="260" value="140" step="5" oninput="setLambda(this)"><span class="val" id="vl-lambda">140</span></div>
-      <div class="r-row"><span class="r-row-lbl">Axis°</span><input type="range" id="sl-axis" min="0" max="180" value="90" step="1" oninput="setAxis(this)"><span class="val" id="vl-axis">90</span></div>
-    </div>
-    <!-- Layer toggles and the field-line density slider. -->
-    <div class="r-sec">
-      <div class="r-lbl">Field view</div>
-      <button class="tog on" id="tog-vectors" onclick="tog('showVectors',this)">↗ E-field vectors</button>
-      <button class="tog on" id="tog-lines" onclick="tog('showLines',this)">⥲ Field lines</button>
-      <button class="tog on" id="tog-flow" onclick="tog('showFlow',this)">→ Energy pulse</button>
-      <button class="tog on" id="tog-bfield" onclick="tog('showB',this)">⊙ Magnetic field</button>
-      <button class="tog" id="tog-fronts" onclick="tog('showFronts',this)">◜ Wavefronts</button>
-      <div class="r-row" style="margin-top:8px"><span class="r-row-lbl">Loops</span><input type="range" id="sl-density" min="20" max="100" value="42" step="2" oninput="setDensity(this)"><span class="val" id="vl-density">42</span></div>
-    </div>
-    <!-- Live field coefficients: overall strength and the two falloff-term weights. -->
-    <div class="r-sec">
-      <div class="r-lbl">Coefficients</div>
-      <div class="hint" style="margin-bottom:9px">Tune the field live — overall strength and the weight of each falloff term.</div>
-      <div class="r-row"><span class="r-row-lbl">Strength</span><input type="range" id="sl-amp" min="0.2" max="4" value="1" step="0.05" oninput="setCoef('amp',this)"><span class="val" id="vl-amp">1.0</span></div>
-      <div class="r-row"><span class="r-row-lbl">Near 1/r³</span><input type="range" id="sl-near" min="0" max="3" value="1" step="0.05" oninput="setCoef('cNear',this)"><span class="val" id="vl-near">1.0</span></div>
-      <div class="r-row"><span class="r-row-lbl">Radiate 1/r</span><input type="range" id="sl-rad" min="0" max="3" value="1" step="0.05" oninput="setCoef('cRad',this)"><span class="val" id="vl-rad">1.0</span></div>
-    </div>
-    <!-- Time transport: play/pause and speed. -->
-    <div class="r-sec">
-      <div class="r-lbl">Time</div>
-      <div class="btns"><button class="btn active" id="btn-play" onclick="togglePlay()">▶ Play</button><button class="btn" onclick="setSpeed(0.25)">◑ Slow</button><button class="btn" onclick="setSpeed(1)">1×</button></div>
-    </div>
-    <div class="r-sec">
-      <div class="r-lbl">Read it</div>
-      <div class="hint">Hover any equation on the right and the canvas shows the exact <b>field quantity</b> that equation governs — its magnitude and sign across space.</div>
-    </div>
-  </div>
-  <!-- Dimmed backdrop that closes the mobile rail on tap. -->
-  <div class="mob-overlay" onclick="document.getElementById('rail').classList.remove('open')"></div>
-
-  <!-- Center stage: the field canvas plus its tip and overlay caption. -->
-  <!-- CENTER STAGE -->
-  <div id="stage">
+  <!-- STAGE: the field canvas with its legend, readout, caption, dock and tune card. -->
+  <section id="stage" aria-label="Radiating dipole field">
     <canvas id="sim-canvas"></canvas>
-    <div id="stage-tip">oscillating charge · radiating light · 2D + time</div>
-    <div id="ovl-caption"></div>
-  </div>
 
-  <!-- Equation panel: concepts.js fills #eq-scroll with the 20 to 4 collapse. -->
-  <!-- RIGHT EQUATION PANEL -->
-  <div id="eqpanel">
-    <div class="eq-top">
-      <h2><span class="y1">Maxwell 1865</span> <span class="ar">→</span> <span class="y2">Heaviside 1884</span></h2>
-      <p>The same physics, two hands. On the left, Maxwell's original components — every one hoverable to light up the field it controls. On the right, the single vector equation Heaviside's calculus folds them into.</p>
-      <div class="colhdr"><span>20 scalar equations</span><span></span><span class="c2">4 vector equations</span></div>
+    <div id="legend" aria-label="Colour key">
+      <div class="lg-h">An oscillating charge, radiating</div>
+      <div class="lg-row"><i class="sw sw-e"></i><span><b class="t-e">E</b> field lines</span></div>
+      <div class="lg-row"><i class="sw sw-bp"></i><span><b class="t-b">B</b> out of the page</span></div>
+      <div class="lg-row"><i class="sw sw-bn"></i><span><b class="t-b">B</b> into the page</span></div>
+      <div class="lg-tip">Drag the glowing charge.</div>
     </div>
-    <div class="eq-scroll" id="eq-scroll"></div>
-  </div>
+
+    <div id="readout">
+      <span>λ <b id="st-lambda">140</b> px</span>
+      <span>c <b id="st-c">—</b></span>
+      <span>φ <b id="st-phase">0.00</b></span>
+      <span id="st-fps">-- fps</span>
+      <span id="st-ovl" hidden>showing: <b>field lines</b></span>
+    </div>
+
+    <div id="ovl-caption" aria-live="polite"></div>
+
+    <!-- Tune card: every slider. A floating card on desktop, a bottom sheet on phones. -->
+    <div id="tune" aria-label="Field controls">
+      <div class="tune-h"><span>Tune the field</span><button class="x" onclick="tuneOpen(false)" aria-label="Close">×</button></div>
+      <div class="t-grp">Source</div>
+      <label class="r-row"><span class="r-row-lbl">Frequency</span><input type="range" id="sl-freq" min="0.3" max="3" value="1" step="0.05" oninput="setFreq(this)"><span class="val" id="vl-freq">1.00</span></label>
+      <label class="r-row"><span class="r-row-lbl">Wavelength</span><input type="range" id="sl-lambda" min="70" max="260" value="140" step="5" oninput="setLambda(this)"><span class="val" id="vl-lambda">140</span></label>
+      <label class="r-row"><span class="r-row-lbl">Axis °</span><input type="range" id="sl-axis" min="0" max="180" value="90" step="1" oninput="setAxis(this)"><span class="val" id="vl-axis">90</span></label>
+      <div class="t-grp">Field</div>
+      <label class="r-row"><span class="r-row-lbl">Field lines</span><input type="range" id="sl-density" min="20" max="100" value="42" step="2" oninput="setDensity(this)"><span class="val" id="vl-density">42</span></label>
+      <label class="r-row"><span class="r-row-lbl">Strength</span><input type="range" id="sl-amp" min="0.2" max="4" value="1" step="0.05" oninput="setCoef('amp',this)"><span class="val" id="vl-amp">1.00</span></label>
+      <label class="r-row"><span class="r-row-lbl">Near 1/r³</span><input type="range" id="sl-near" min="0" max="3" value="1" step="0.05" oninput="setCoef('cNear',this)"><span class="val" id="vl-near">1.00</span></label>
+      <label class="r-row"><span class="r-row-lbl">Radiation 1/r</span><input type="range" id="sl-rad" min="0" max="3" value="1" step="0.05" oninput="setCoef('cRad',this)"><span class="val" id="vl-rad">1.00</span></label>
+      <p class="t-hint">Near sets the bound field close to the charge. Radiation sets the part that leaves as light.</p>
+    </div>
+
+    <!-- Dock: time, layers, and the tune toggle. -->
+    <nav id="dock" aria-label="Playback and layers">
+      <button class="dk on" id="btn-play" onclick="togglePlay()" aria-label="Play or pause">❚❚</button>
+      <div class="seg"><button class="dk" id="sp-slow" onclick="setSpeed(0.25)">¼×</button><button class="dk on" id="sp-1" onclick="setSpeed(1)">1×</button></div>
+      <span class="dk-sep"></span>
+      <button class="dk chip on" id="tog-lines" onclick="tog('showLines',this)"><i class="dot d-e"></i>Lines</button>
+      <button class="dk chip on" id="tog-vectors" onclick="tog('showVectors',this)"><i class="dot d-ev"></i>Vectors</button>
+      <button class="dk chip on" id="tog-bfield" onclick="tog('showB',this)"><i class="dot d-b"></i>B field</button>
+      <button class="dk chip on" id="tog-flow" onclick="tog('showFlow',this)"><i class="dot d-p"></i>Pulse</button>
+      <button class="dk chip" id="tog-fronts" onclick="tog('showFronts',this)"><i class="dot d-f"></i>Fronts</button>
+      <span class="dk-sep"></span>
+      <button class="dk" id="tune-btn" onclick="tuneOpen()">Tune</button>
+    </nav>
+  </section>
+
+  <!-- EQUATION COLUMN: concepts.js fills #eq-scroll from window.T24. -->
+  <article id="eqpanel">
+    <div class="eq-scroll" id="eq-scroll">
+      <header class="eq-head">
+        <p class="kicker"><span class="y1">Maxwell 1865</span><span class="ar">→</span><span class="y2">Heaviside 1884</span></p>
+        <h1>Twenty <em>to</em> Four</h1>
+        <p class="lede">Maxwell wrote electromagnetism as twenty equations, one component at a time. Heaviside’s vector calculus folds them into four. Hover or tap any line, and the field lights up the exact quantity that line governs.</p>
+        <div class="collapse-bar">
+          <div class="seg seg-big" role="tablist" aria-label="Show the scalar or the vector form">
+            <button class="on" id="vw-20" role="tab" onclick="eqView(20)"><b>20</b> scalar</button>
+            <button id="vw-4" role="tab" onclick="eqView(4)"><b>4</b> vector</button>
+          </div>
+          <div class="ticks" id="ticks" aria-hidden="true"></div>
+        </div>
+      </header>
+    </div>
+  </article>
 </div>
 
-<!-- Status bar: wavelength, wave speed, phase, active overlay, and FPS. -->
-<div id="status-bar">
-  <span>λ <b id="st-lambda">140</b>px</span><span class="sep"></span>
-  <span>c <b id="st-c">—</b></span><span class="sep"></span>
-  <span>φ <b id="st-phase">0.00</b></span><span class="sep"></span>
-  <span id="st-ovl">showing: <b>field lines</b></span><span class="sep"></span>
-  <span id="st-fps">-- fps</span>
-</div>
-
-<!-- ════════ EQUATION PANEL (build + hover) ════════ -->
+<script src="equations.js"></script>
 <script src="concepts.js"></script>
-
-<!-- ════════ FIELD SIMULATION ════════ -->
 <script src="../../lib/glow-lines.js"></script>
 <script src="main.js"></script>
 </body>
