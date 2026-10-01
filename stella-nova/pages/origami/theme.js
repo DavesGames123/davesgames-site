@@ -79,16 +79,19 @@ export function site() {
   };
 }
 
-// A soft pastel per face, cycled by face index (app.rs face_pastel).
+// A muted paper tint per face, cycled by face index (app.rs face_pastel).
+// The native app uses light pastels. The web page is dark, so the tints are
+// deep, muted tones: light pastels were too bright on the dark ground. The
+// names stay PASTELS and facePastel, because the shader and main.js use them.
 export const PASTELS = [
-  [0xF2, 0xC7, 0xC0], // rose
-  [0xF6, 0xDA, 0xBA], // peach
-  [0xF2, 0xE7, 0xB4], // butter
-  [0xCF, 0xE2, 0xC4], // sage
-  [0xC4, 0xDA, 0xEC], // sky
-  [0xDA, 0xCE, 0xEA], // lilac
-  [0xE8, 0xD8, 0xC0], // sand
-  [0xF0, 0xCC, 0xD8], // blush
+  [0x8A, 0x5A, 0x55], // rose
+  [0x8C, 0x6A, 0x4E], // peach
+  [0x85, 0x7A, 0x4C], // butter
+  [0x5E, 0x75, 0x56], // sage
+  [0x54, 0x6E, 0x86], // sky
+  [0x6E, 0x60, 0x86], // lilac
+  [0x7D, 0x6B, 0x55], // sand
+  [0x84, 0x5A, 0x6A], // blush
 ];
 const PASTELS_LIN = PASTELS.map(lin);
 export function facePastel(face) { return PASTELS_LIN[face % PASTELS_LIN.length]; }
