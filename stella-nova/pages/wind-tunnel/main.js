@@ -90,6 +90,9 @@ const G = {
   paused: false,
 };
 for (const k of Object.keys(SHAPES)) { G.params[k] = defaults(k); G.common[k] = commonDefaults(k); }
+// The page opens on the spherical cow. The Holstein preset gives the
+// plain cow back.
+Object.assign(G.params.cow, SHAPES.cow.presets['Spherical cow']);
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
