@@ -75,6 +75,11 @@ NUMBER_WORDS = re.compile(
 PLACEHOLDER = re.compile(r'\{[^}]*\}')
 DROP_KEY = [
     re.compile(r'^minigame\.doom\.'),
+    # Unreleased ecology content (src/ecology, debug-only in the game).
+    re.compile(r'^timestep\.creature\.'),
+    re.compile(r'^timestep\.entity\.creature$'),
+    re.compile(r'^minigame\.siphonophore\.'),
+    re.compile(r'(^|\.)(ecology|flora|fauna|plankton|shoal|zooids?)(\.|$)'),
     re.compile(r'^module\.[^.]+\.desc$'),
     re.compile(r'^constructable\.[^.]+\.desc$'),
     re.compile(r'^research\.tech\.[^.]+\.effect$'),
