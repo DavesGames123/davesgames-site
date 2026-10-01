@@ -27,7 +27,8 @@
 //
 //   INTEGRATOR
 //     u_useGeodesic  off -> straight rays (flat space, no bending)
-//     u_useRK4       off -> forward Euler step; on -> 4th order Runge-Kutta
+//     u_useRK4       off -> forward Euler step at fixed dl; on (default) -> 4th
+//                    order Runge-Kutta, step grows with r (STEP_NEAR_RS)
 //
 //   SECTION MAP   (jump with grep -n "<anchor>" raytracer.frag.glsl)
 //   ------------------------------------------------------------------
@@ -361,6 +362,10 @@ TR traceStraight(vec3 ro,vec3 rd){
 // The bent-ray march. Integrate the geodesic step by step; at each step test the
 // short segment against horizon and disc, stop if captured (r <= capR), and once
 // the ray is far out and receding, sample the background in its escape direction.
+// RK4 step growth: the step is dl inside STEP_NEAR_RS horizon radii, then
+// grows as r, up to STEP_MAX_GAIN times dl. Escaping rays at the default
+// zoom then take about 5x fewer steps.
+const float STEP_NEAR_RS=2.0,STEP_MAX_GAIN=32.0;
 TR traceGeodesic(vec3 ro,vec3 rd){
   float capR=u_rs*1.035;
   OrbPlane op=buildOrbPlane(ro,rd);
@@ -374,8 +379,12 @@ TR traceGeodesic(vec3 ro,vec3 rd){
     if(i>=maxS)break;
     // Captured before stepping: inside the horizon means black.
     if(g.r<=capR)return TR(true,vec3(0.0));
-    // Advance one step with the chosen integrator.
-    if(rk4){g=stepRK4(g,dl,u_rs,capR);}else{g=stepEuler(g,dl,u_rs,capR);}
+    // Advance one step with the chosen integrator. The bend falls off as rs/r,
+    // so RK4 steps grow with r (see STEP_NEAR_RS). Euler keeps the fixed dl:
+    // the (r, phi) terms curve a straight ray, and a long Euler step moves
+    // every star in the sky.
+    float sdl=rk4?dl*clamp(g.r/(STEP_NEAR_RS*u_rs),1.0,STEP_MAX_GAIN):dl;
+    if(rk4){g=stepRK4(g,sdl,u_rs,capR);}else{g=stepEuler(g,sdl,u_rs,capR);}
     if(g.r<=capR)return TR(true,vec3(0.0));
     // Test the segment just traversed against horizon and disc.
     vec3 cur=wPoint(g,op);

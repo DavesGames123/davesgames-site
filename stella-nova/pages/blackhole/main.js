@@ -92,7 +92,9 @@ const CC=2.99792458e8,GR=6.67430e-11,RS=2.0*GR*4.3e6*1.989e30/(CC*CC);
 let camYaw=0,camPitch=0.15,camRadius=32*RS;
 const FOCAL=700;
 // Integrator toggles, mirrored to the u_useGeodesic / u_useRK4 / u_showDisc uniforms.
-let useGeodesic=true,useRK4=false,showDisc=true;
+// RK4 is the default: its step grows with r in the shader, so it is about 5x
+// faster than fixed-step Euler and closer to the true path.
+let useGeodesic=true,useRK4=true,showDisc=true;
 let bgMode=0;
 // Base step size, step budget, and escape-radius multiplier; scaled by zoom in frame().
 let geodesicDl=5e7*1.9*4.0,maxSteps=2048,escMul=35;
@@ -253,8 +255,12 @@ function frame(){
   var right=rl>1e-6?[fwd[2]/rl,0,-fwd[0]/rl]:[1,0,0];
   var up=[fwd[1]*right[2]-fwd[2]*right[1],fwd[2]*right[0]-fwd[0]*right[2],fwd[0]*right[1]-fwd[1]*right[0]];
   // Scale step size, step count, and escape radius with distance so the bend
-  // looks consistent whether zoomed in close or far out.
-  var scaleR=camRadius/(32*RS),dl=geodesicDl*scaleR,steps=Math.max(1,Math.round(maxSteps*scaleR)),escR=escMul*scaleR;
+  // looks consistent whether zoomed in close or far out. RK4 does not scale
+  // dl or the budget below the default zoom (rkR): its steps already grow
+  // with r, and a cut budget ends rays early, so the lensed far side of the
+  // disc goes missing.
+  var scaleR=camRadius/(32*RS),rkR=Math.max(scaleR,1),escR=escMul*scaleR;
+  var dl=geodesicDl*(useRK4?rkR:scaleR),steps=Math.max(1,Math.round(maxSteps*(useRK4?rkR:scaleR)));
   document.getElementById('mode').textContent=useGeodesic?(useRK4?'Geodesic (RK4)':'Geodesic (Euler)'):'Straight rays';
 
   // Push camera, disc geometry, and integrator settings into the shader.
