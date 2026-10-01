@@ -82,6 +82,7 @@ for (const cal of CALIBRES) {
   // reserve
   {
     const s = cal.createState(0, 1.0);
+    s.still = true;                       // a self-winder lies at rest
     let hours = 0;
     while (hours < 120) { for (let i = 0; i < 60; i++) cal.step(s, 60); hours++; if (s.stopped) break; }
     const [lo, hi] = cal.reserveHours;

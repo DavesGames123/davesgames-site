@@ -78,8 +78,11 @@ export function look(tab, u) {
 // tangent to the wheel (Ra / cos(span)); the balance is in line beyond it.
 export function leverEscapement(o) {
   const { E, psi, N, Ra, Rf, span, forkLen, jewelR, bank } = o;
-  const stoneW = o.stoneW ?? 0.30 * Ra / 2.3, stoneL = o.stoneL ?? 1.05 * Ra / 2.3;
-  const depthUp = o.depthUp ?? -0.12 * Ra / 2.3, depthDown = o.depthDown ?? 0.18 * Ra / 2.3;
+  // stones scale with the tooth pitch (Ra / N), from the 15-tooth, 2.3 mm
+  // wheel they were tuned on; a finer wheel needs narrower stones
+  const k = (Ra / N) / (2.3 / 15);
+  const stoneW = o.stoneW ?? 0.30 * k, stoneL = o.stoneL ?? 1.05 * k;
+  const depthUp = o.depthUp ?? -0.12 * k, depthDown = o.depthDown ?? 0.18 * k;
   const P = add(E, pol(Ra / Math.cos(span), psi));
   const Bal = add(P, pol(forkLen + jewelR, psi));
   const wheel = G.escapeProfile(N, Ra, Rf);

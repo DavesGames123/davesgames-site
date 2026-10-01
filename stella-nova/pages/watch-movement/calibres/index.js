@@ -6,6 +6,7 @@
 // ============================================================================
 import lever from './lever.js';
 import tourbillon from './tourbillon.js';
+import automatic from './automatic.js';
 
-export const CALIBRES = [lever, tourbillon];
+export const CALIBRES = [lever, tourbillon, automatic];
 export const byId = id => CALIBRES.find(c => c.id === id);

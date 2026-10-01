@@ -84,7 +84,7 @@ scene.add(rim, new THREE.HemisphereLight(0xc8d4ff, 0x2a1e10, 0.35));
 const S = {
   cur: null, leaving: [], rate: 1, lastRate: 1, explode: 1.4, explodeTarget: 0.55, winding: false,
   showDial: true, showBridges: true, showLabels: !PHONE_Q.matches,
-  orbit: !REDUCED, orbitAmt: 0, idle: 99, dragging: false,
+  orbit: !REDUCED, wrist: true, orbitAmt: 0, idle: 99, dragging: false,
   hover: null, pin: null, fly: null, fit: null, swapping: false,
 };
 function nowSeconds() { const d = new Date(); return (d.getHours() % 12) * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000; }
@@ -101,6 +101,8 @@ async function swapTo(id) {
     stage.add(B.root);
     const next = { cal, B, sc, state: cal.createState(nowSeconds(), 0.85), alpha: 0, t0: performance.now(), per: cal.periods() };
     B.setAlpha(0.001);
+    next.state.still = !S.wrist;
+    $('tWrist').hidden = !cal.wristToggle;
     if (S.cur) S.leaving.push({ ...S.cur, t0: performance.now(), e0: S.explode });
     S.cur = next;
     S.explode = Math.max(S.explode, 1.25);
@@ -377,6 +379,13 @@ $('tDial').addEventListener('click', () => setShow('dial', !S.showDial));
 $('tBridges').addEventListener('click', () => setShow('bridges', !S.showBridges));
 $('tLabels').addEventListener('click', () => setShow('labels', !S.showLabels));
 $('tOrbit').addEventListener('click', () => setShow('orbit', !S.orbit));
+// self-winders: on the wrist the rotor swings and winds; on a table it rests
+$('tWrist').addEventListener('click', () => {
+  S.wrist = !S.wrist;
+  if (S.cur) S.cur.state.still = !S.wrist;
+  $('tWrist').classList.toggle('on', S.wrist);
+  $('tWrist').textContent = S.wrist ? 'Wrist motion: on' : 'Wrist motion: off (on a table)';
+});
 
 const windBtn = $('wind');
 const windOn = e => { e.preventDefault(); S.winding = true; windBtn.classList.add('on'); try { windBtn.setPointerCapture(e.pointerId); } catch (x) {} };
