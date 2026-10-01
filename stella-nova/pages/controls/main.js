@@ -132,6 +132,8 @@
       k.tabIndex = 0;
       k.setAttribute('role', 'button');
       k.setAttribute('aria-label', id + ': ' + list.map(function (b) { return b.c.label; }).join(', '));
+      // Touch hit area: style.css grows this span past the cap into the gap.
+      k.appendChild(el('span', 'hit'));
     }
     return k;
   }

@@ -20,6 +20,7 @@
      tablet ............... "@media (max-width:1100px)"
      phone ................ "@media (max-width:760px)"
      touch input .......... "@media (hover:none)"
+     key hit area ......... ".key .hit"
    ============================================================================ */
 :root{
   --bg:#0a0c12; --bg2:#0e1119; --bg3:#131826;
@@ -214,5 +215,14 @@ kbd{display:inline-flex;align-items:center;justify-content:center;min-width:24px
 @media (hover:none),(pointer:coarse){
   .search input{font-size:16px}
   .gchip{height:44px;padding:0 15px}
+}
+/* Key hit area. A tablet board can fit only 40-43px caps. The .hit span of a
+   bound key grows the touch target to 44px, but never past half the gap, so
+   that it does not take taps from the next key. */
+.key .hit{display:none}
+@media (hover:none),(pointer:coarse){
+  /* --hx is the grow on each side. The span sits in the padding box, so
+     each side also takes back the cap border (1px, 2px at the bottom). */
+  .key .hit{--hx:max(calc(var(--kg) / -2),min(0px,calc((var(--kw) - 44px) / 2)));display:block;position:absolute;top:calc(var(--hx) - 1px);left:calc(var(--hx) - 1px);right:calc(var(--hx) - 1px);bottom:calc(var(--hx) - 2px);border-radius:inherit}
 }
 @media (prefers-reduced-motion:reduce){ html{scroll-behavior:auto} *{transition:none!important} }
