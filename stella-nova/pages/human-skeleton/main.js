@@ -38,29 +38,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { gunzip, decodeGroup } from './decode.js';
 import * as L from './layout.js';
 import { BoneState, boneMaterial, depthMaterial, ghostMaterial, pickMaterial, groupMesh, studioEnvironment } from './render.js';
+import { $, PHONE_Q, COARSE, HOVER, REDUCED, DPR, esc, clamp01, easeIO, ease, TYPE_NAME, SIDE_NAME, MODE_NAME, LOAD_ORDER, THEMES } from './app/env.js';
 
-const $ = id => document.getElementById(id);
-const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
-const COARSE = matchMedia('(pointer:coarse)').matches;
-const HOVER = matchMedia('(hover:hover) and (pointer:fine)').matches;
-const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const DPR = () => Math.min(window.devicePixelRatio || 1, 2);
-const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
-const clamp01 = t => (t <= 0 ? 0 : t >= 1 ? 1 : t);
-const easeIO = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-const ease = t => t * t * (3 - 2 * t);
 const T = { start: performance.now(), firstFrame: 0, firstBones: 0, allBones: 0 };
-
-const TYPE_NAME = { long: 'Long bone', short: 'Short bone', flat: 'Flat bone', irregular: 'Irregular bone', sesamoid: 'Sesamoid bone', tooth: 'Tooth', cartilage: 'Cartilage' };
-const SIDE_NAME = { L: 'Left', R: 'Right', '': 'Midline' };
-const MODE_NAME = { assembled: 'Assembled', radial: 'Radial', regional: 'Regions', catalogue: 'Tray' };
-// smallest and most central first; two downloads at a time, so the first
-// group does not share the bandwidth with all the others
-const LOAD_ORDER = ['pelvis', 'spine', 'thorax', 'head', 'lower-l', 'lower-r', 'upper-l', 'upper-r'];
-const THEMES = {
-  dark: { sel: 0xf0b862, hov: 0xc9b48f, ghost: 0xd8c8ad, ghostA: 0.42, shadow: 0.5, pool: 0xc8a676, poolA: 0.11, tray: 0x1f1b17, trayLine: 0x6b5638, exposure: 1.0, label: 'Gallery' },
-  light: { sel: 0xa8361f, hov: 0x8f6b3d, ghost: 0x5a4a36, ghostA: 0.36, shadow: 0.26, pool: 0xffffff, poolA: 0.55, tray: 0xe2d9c9, trayLine: 0xa08868, exposure: 0.92, label: 'Archive' },
-};
 
 // ── renderer, scene, light ──────────────────────────────────────────────────
 const canvas = $('view');
