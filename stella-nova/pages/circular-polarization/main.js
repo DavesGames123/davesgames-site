@@ -1,472 +1,506 @@
 // ============================================================================
-//  CIRCULAR POLARIZATION  ·  outgoing circularly polarized EM radiation
+//  CIRCULAR POLARIZATION  ·  outgoing polarized EM radiation
 // ----------------------------------------------------------------------------
-//  A vertical dipole-like source radiates outward. Each ray direction carries a
-//  helix: the E field (amber) and the B field (cyan) spiral around the ray as it
-//  leaves the source. Every helix point is  r·dir + c1·e1 + c2·e2, where (e1,e2)
-//  is a frame perpendicular to the ray and (c1,c2) rotate with the wave phase
-//  φ = k·r − ω·t. E uses (cos, sin); B uses (−sin, cos), a 90° lead — so B stays
-//  perpendicular to E, matching B = (1/c)·(û_r × E). Amplitude falls as 1/r.
+//  A small source radiates outward. Each ray carries the transverse field of
+//  an outgoing wave. On a ray with direction û_r and a transverse frame
+//  (ê1, ê2), with ê1 × ê2 = û_r:
 //
-//  POLARIZATION GEOMETRY   (one ray; the transverse plane rotates along r)
-//  ----------------------------------------------------------------------------
-//         e2 ▲                              E = cos φ · e1 + sin φ · e2
-//            │   ● E tip                    B = −sin φ · e1 + cos φ · e2  (⟂ E)
-//            │  ╱                           φ = k·r − ω·t   (outgoing wave)
-//     source ●───────▶ dir (propagation)   amplitude ∝ 1/max(r, 1.6)
-//            │  ╲
-//            │   ● B tip
-//         e1 ┘        the (e1,e2) frame is perpendicular to dir at every r
+//      φ  = k·r − ω·t                               (outgoing phase)
+//      E  = (E0/r) [ cos φ · ê1 + cos(φ − δ) · ê2 ]
+//      B  = (1/c) û_r × E  =  (E0/r) [ −cos(φ − δ) · ê1 + cos φ · ê2 ] / c
 //
-//  DATA FLOW
-//  ----------------------------------------------------------------------------
-//      mode button ─▶ rebuild() ─▶ Helix[] (E + B per direction)
-//      slider input ─▶ params ────▶ (k, ω, amp) read each frame
-//      animate(): t += dt ─▶ every Helix.update(t, k, ω) rewrites its vertices
+//  δ = ±90° gives circular polarization, δ = 0 or 180° linear, others
+//  elliptical. The amplitude floor max(r, 1.6) stops a spike at the source.
 //
-//  DIRECTION SETS (chosen by the mode buttons)
-//      single ... one slanted ray            "if (dist === 'single')"
-//      ring ..... N rays on the equator      "equatorialRing"
-//      sphere ... N rays over a full sphere   "fibonacciSphere"
+//  HANDEDNESS  (at a fixed point, as time runs, φ goes down)
+//      The rate of turn of E in the (ê1, ê2) plane has the sign of −sin δ
+//      per unit time, so sin δ > 0 turns clockwise as seen by the receiver
+//      (ê1 right, ê2 up, û_r toward the viewer). The optics convention calls
+//      that right-circular; the IEEE convention calls it left-hand (LHCP).
+//      The Jones vector of E is (1, e^(−iδ)) / √2.
+//
+//  WHAT THE SCENE SHOWS
+//      every mode .. E helix (amber), B helix (cyan), field vectors (ribs
+//                    from the ray to the field tip); the field fades in near
+//                    the source and out at the far end
+//      one ray ..... the two components as flat waves on faint planes
+//                    through the ray (ê1 coral, ê2 blue), the ray axis, and
+//                    an observer plane at R_OBS where the E tip draws its
+//                    ellipse, with the live E and B arrows
+//      ring/sphere . N rays on the equator or over a Fibonacci sphere
+//  The #ellipse canvas draws the same observer plane flat, as the receiver
+//  sees it. The readouts (Jones vector, state, turn, χ) come from δ.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
-//  ----------------------------------------------------------------------------
-//      error overlay ........ "function showErr"     on-screen error catcher
-//      slider fill .......... "function paintSlider" range track progress
-//      three import ......... "await import('three')" dynamic module load
-//      equations ............ "Render equations"     KaTeX field equations
-//      scene setup .......... "Scene setup"          camera, renderer, controls
-//      source ............... "Source: vertical"     axis + colored spheres
-//      Helix class .......... "class Helix"          one E or B spiral
-//      direction sets ....... "function fibonacciSphere" ray distributions
-//      rebuild .............. "function rebuild"     recreate all helices
-//      parameters ........... "const params ="       live control state
-//      control bindings ..... "numHelices').addEvent" wire inputs to params
-//      animation loop ....... "function animate"     per-frame update
+//      error overlay ........ "function showErr"
+//      colours .............. "const COL"
+//      polarization maths ... polar.js (polState, jonesText)
+//      scene setup .......... "Scene setup"
+//      source ............... "Source"
+//      Ray class ............ "class Ray"
+//      one-ray extras ....... "class Single"
+//      direction sets ....... "function fibonacciSphere"
+//      rebuild .............. "function rebuild"
+//      camera framing ....... "function frameFor"
+//      ellipse inset ........ "function drawEllipse"
+//      readouts ............. "function updateReadouts"
+//      controls ............. "Controls"
+//      animation loop ....... "function animate"
 // ============================================================================
+import { EQ } from './equations.js';
+import { polState, jonesText } from './polar.js';
 
-// Fixed on-page error overlay: any thrown error or rejected promise is shown in
-// the corner instead of failing silently, so a broken CDN import is visible.
+// Any thrown error or rejected promise shows on the page, so a broken CDN
+// import is visible instead of a blank canvas.
 const errEl = document.getElementById('err');
-function showErr(msg){errEl.style.display='block';errEl.textContent='ERROR: '+msg;console.error(msg)}
-// Catch both synchronous errors and unhandled promise rejections.
-window.addEventListener('error', e => showErr((e.message||'unknown')+' @ '+(e.filename||'?')+':'+(e.lineno||'?')));
-window.addEventListener('unhandledrejection', e => showErr('Promise: '+(e.reason?.message||e.reason)));
-
-// Paint a range input's filled portion: set the --pct custom property the CSS
-// gradient reads, so the track shows progress up to the thumb.
-// Update slider gradient fill
-function paintSlider(el){const min=+el.min,max=+el.max,val=+el.value;el.style.setProperty('--pct',((val-min)/(max-min)*100)+'%')}
-document.querySelectorAll('input[type=range]').forEach(s=>{paintSlider(s);s.addEventListener('input',()=>paintSlider(s))});
-
-// Everything below runs inside one try/catch so a load failure surfaces in the
-// overlay rather than leaving a blank canvas.
-try {
-
-// three is loaded with dynamic import() (not a static top-level import) so the
-// try/catch above can report a CDN failure. The import map resolves the bare
-// specifier "three" to the pinned CDN build.
-const THREE = await import('three');
-const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
-
-// ─── Render equations ──────────────────────────────────────────────────────
-// Color coding by role:
-//   E vector         → amber (matches helix)
-//   B vector         → cyan  (matches helix)
-//   cos·û_z term     → red    (first orthogonal component — "vertical" oscillation)
-//   sin·û_x term     → blue   (second orthogonal component — "horizontal" oscillation)
-//   û_r              → white  (propagation direction)
-//   1/r              → gold   (page accent, the amplitude falloff)
-const C_E    = '#ffb84d';
-const C_B    = '#60e0ee';
-const C_UZ   = '#ff7878';
-const C_UX   = '#8aa8ff';
-const C_UR   = '#e8ecf4';
-const C_FALL = '#d4a847';
-// Render the two field equations with KaTeX, colouring each symbol to match its
-// counterpart in the 3D scene. Skipped silently if the KaTeX CDN did not load.
-if (window.katex) {
-  katex.render(
-    String.raw`\textcolor{${C_E}}{\vec{E}} \;\propto\; \textcolor{${C_FALL}}{\tfrac{1}{r}}\left[\textcolor{${C_UZ}}{\cos(kr-\omega t)\,\hat{u}_z} \;+\; \textcolor{${C_UX}}{\sin(kr-\omega t)\,\hat{u}_x}\right]`,
-    document.getElementById('eq1'),
-    { throwOnError:false, displayMode:true }
-  );
-  katex.render(
-    String.raw`\textcolor{${C_B}}{\vec{B}} \;=\; \tfrac{1}{c}\,\bigl(\textcolor{${C_UR}}{\hat{u}_r} \times \textcolor{${C_E}}{\vec{E}}\bigr)`,
-    document.getElementById('eq2'),
-    { throwOnError:false, displayMode:true }
-  );
-}
-
-// Standard three.js stack: scene, a perspective camera set back and above the
-// origin, a WebGL renderer on the existing #scene canvas, and OrbitControls for
-// drag-to-orbit and scroll-to-zoom.
-// ─── Scene setup ───────────────────────────────────────────────────────────
-const canvas = document.getElementById('scene');
-const scene  = new THREE.Scene();
-
-const camera = new THREE.PerspectiveCamera(42, window.innerWidth/window.innerHeight, 0.1, 500);
-camera.position.set(24, 14, 28);
-
-const renderer = new THREE.WebGLRenderer({ canvas, antialias:true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setClearColor(0x0e1118, 1);
-
-const controls = new OrbitControls(camera, canvas);
-controls.enableDamping = true;
-controls.dampingFactor = 0.06;
-controls.minDistance = 4;
-controls.maxDistance = 90;
-
-// Idle auto-rotate: while the user is not dragging, idleTimer counts up in the
-// animation loop; after a few idle seconds the camera begins a slow spin. A
-// value of -1 marks "actively dragging" and suspends the count.
-let idleTimer = 0;
-controls.addEventListener('start', () => { idleTimer = -1; controls.autoRotate = false; });
-controls.addEventListener('end',   () => { idleTimer = 0; });
-
-// The radiating source: a thin vertical rod with three coloured spheres (a
-// stylised oscillating dipole) plus a small bright core at the origin. Grouped
-// so it can be treated as one object.
-// ─── Source: vertical axis with three colored spheres ─────────────────────
-const sourceGroup = new THREE.Group();
-scene.add(sourceGroup);
-
-// The rod: a faint dim cylinder standing on the y axis.
-sourceGroup.add(new THREE.Mesh(
-  new THREE.CylinderGeometry(0.035, 0.035, 5.6, 8),
-  new THREE.MeshBasicMaterial({ color:0x4a4538, transparent:true, opacity:0.55 })
-));
-
-// Three charge markers along the rod; kept in sourceSpheres so the loop can
-// pulse their scale in time with ω.
-const sphereSpec = [
-  { y: 2.0, color:0xff5566 },
-  { y: 0.0, color:0xc36bff },
-  { y:-2.0, color:0x5b9eff },
-];
-const sourceSpheres = sphereSpec.map(({y,color}) => {
-  const m = new THREE.Mesh(
-    new THREE.SphereGeometry(0.48, 28, 28),
-    new THREE.MeshBasicMaterial({ color })
-  );
-  m.position.y = y;
-  sourceGroup.add(m);
-  return m;
-});
-
-// The bright core at the origin where all rays originate.
-sourceGroup.add(new THREE.Mesh(
-  new THREE.SphereGeometry(0.22, 20, 20),
-  new THREE.MeshBasicMaterial({ color:0xffe9a8 })
-));
-
-// Geometry budget per helix. HELIX_POINTS is the smooth spiral resolution;
-// LOBE_RIBS is the coarser set of transverse E·B vectors drawn from the axis to
-// the field tip when "Field Lobes" is on. R_MIN/R_MAX bound the radial extent.
-// ─── Helix & FieldLobes ────────────────────────────────────────────────────
-const HELIX_POINTS = 220;
-const LOBE_RIBS = 64;  // perpendicular vectors per helix
-const R_MIN = 0.55;
-const R_MAX = 22.0;
-
-const E_COLOR = 0xffb84d;
-const B_COLOR = 0x60e0ee;
-
-// One spiral along a single ray. It owns two line meshes: the continuous helix
-// curve and the optional field lobes. An E helix and a B helix share a direction
-// but differ by the isMagnetic flag, which swaps cos/sin so B leads E by 90°.
-class Helix {
-  constructor(direction, color, isMagnetic = false) {
-    this.dir = direction.clone().normalize();
-    this.isMagnetic = isMagnetic;
-
-    // Build an orthonormal transverse frame (e1, e2) around dir. The reference
-    // vector avoids the pole: near a vertical ray, cross with x instead of y so
-    // the cross product does not collapse to zero.
-    const ref = Math.abs(this.dir.y) > 0.95
-      ? new THREE.Vector3(1, 0, 0)
-      : new THREE.Vector3(0, 1, 0);
-    this.e1 = new THREE.Vector3().crossVectors(ref, this.dir).normalize();
-    this.e2 = new THREE.Vector3().crossVectors(this.dir, this.e1).normalize();
-
-    // The spiral itself: a dynamic position buffer rewritten every frame, drawn
-    // additively so overlapping helices read as light.
-    // Continuous helix curve
-    const geom = new THREE.BufferGeometry();
-    this.positions = new Float32Array(HELIX_POINTS * 3);
-    const attr = new THREE.BufferAttribute(this.positions, 3);
-    attr.setUsage(THREE.DynamicDrawUsage);
-    geom.setAttribute('position', attr);
-    const mat = new THREE.LineBasicMaterial({
-      color, transparent:true,
-      opacity: isMagnetic ? 0.65 : 0.88,
-      blending: THREE.AdditiveBlending, depthWrite:false,
-    });
-    this.line = new THREE.Line(geom, mat);
-    this.line.frustumCulled = false;
-    scene.add(this.line);
-
-    // Field lobes: perpendicular line segments from propagation axis → field tip
-    const lobeGeom = new THREE.BufferGeometry();
-    this.lobePositions = new Float32Array(LOBE_RIBS * 2 * 3); // 2 verts per rib
-    const lobeAttr = new THREE.BufferAttribute(this.lobePositions, 3);
-    lobeAttr.setUsage(THREE.DynamicDrawUsage);
-    lobeGeom.setAttribute('position', lobeAttr);
-    const lobeMat = new THREE.LineBasicMaterial({
-      color, transparent:true,
-      opacity: isMagnetic ? 0.35 : 0.5,
-      blending: THREE.AdditiveBlending, depthWrite:false,
-    });
-    this.lobes = new THREE.LineSegments(lobeGeom, lobeMat);
-    this.lobes.frustumCulled = false;
-    this.lobes.visible = false;
-    scene.add(this.lobes);
-  }
-
-  // Rewrite the vertex positions for the current time. Each point is the axis
-  // point r·dir plus a transverse offset c1·e1 + c2·e2 that rotates with the
-  // wave phase φ = k·r − ω·t. amp/max(r,1.6) is the 1/r amplitude falloff, with
-  // the 1.6 floor preventing a spike near the source.
-  update(t, k, omega, amp, lobesOn) {
-    const pos = this.positions;
-    const dx=this.dir.x, dy=this.dir.y, dz=this.dir.z;
-    const a1x=this.e1.x, a1y=this.e1.y, a1z=this.e1.z;
-    const a2x=this.e2.x, a2y=this.e2.y, a2z=this.e2.z;
-    const isB = this.isMagnetic;
-
-    // March out along the ray, placing one spiral point per step.
-    // Helix curve
-    for (let i = 0; i < HELIX_POINTS; i++) {
-      const r = R_MIN + (R_MAX - R_MIN) * (i / (HELIX_POINTS - 1));
-      const phase = k * r - omega * t;
-      const ampR = amp / Math.max(r, 1.6);
-
-      // B uses (−sin, cos): a quarter-turn ahead of E's (cos, sin), which keeps
-      // B perpendicular to E as required by B = (1/c)(û_r × E).
-      let c1, c2;
-      if (isB) { c1 = -Math.sin(phase) * ampR; c2 =  Math.cos(phase) * ampR; }
-      else     { c1 =  Math.cos(phase) * ampR; c2 =  Math.sin(phase) * ampR; }
-
-      pos[i*3]   = r*dx + c1*a1x + c2*a2x;
-      pos[i*3+1] = r*dy + c1*a1y + c2*a2y;
-      pos[i*3+2] = r*dz + c1*a1z + c2*a2z;
-    }
-    this.line.geometry.attributes.position.needsUpdate = true;
-
-    // Field lobes: a rib per sample joins the propagation axis to the field tip,
-    // so the transverse E (or B) vector is drawn explicitly. Skipped when off.
-    // Lobes (only if visible)
-    if (lobesOn) {
-      const lp = this.lobePositions;
-      for (let i = 0; i < LOBE_RIBS; i++) {
-        const r = R_MIN + (R_MAX - R_MIN) * (i / (LOBE_RIBS - 1));
-        const phase = k * r - omega * t;
-        const ampR = amp / Math.max(r, 1.6);
-
-        let c1, c2;
-        if (isB) { c1 = -Math.sin(phase) * ampR; c2 =  Math.cos(phase) * ampR; }
-        else     { c1 =  Math.cos(phase) * ampR; c2 =  Math.sin(phase) * ampR; }
-
-        // Each rib is two vertices: the axis point, then the field tip. base
-        // strides by 6 floats (2 verts × 3 components) per rib.
-        const ax = r*dx, ay = r*dy, az = r*dz;
-        const base = i * 6;
-        lp[base    ] = ax;                          // axis point
-        lp[base + 1] = ay;
-        lp[base + 2] = az;
-        lp[base + 3] = ax + c1*a1x + c2*a2x;        // field tip
-        lp[base + 4] = ay + c1*a1y + c2*a2y;
-        lp[base + 5] = az + c1*a1z + c2*a2z;
-      }
-      this.lobes.geometry.attributes.position.needsUpdate = true;
-    }
-  }
-
-  // Show or hide the spiral (and its lobes, gated on the global lobe toggle).
-  setVisible(v){ this.line.visible = v; this.lobes.visible = v && params.showLobes; }
-  // Toggle only the lobes, but never show them while the spiral itself is hidden.
-  setLobesVisible(v){ this.lobes.visible = v && this.line.visible; }
-
-  // Free GPU buffers and remove both meshes; called before every rebuild.
-  dispose(){
-    this.line.geometry.dispose();
-    this.line.material.dispose();
-    scene.remove(this.line);
-    this.lobes.geometry.dispose();
-    this.lobes.material.dispose();
-    scene.remove(this.lobes);
-  }
-}
-
-// Ray directions spread evenly over a sphere using the Fibonacci lattice: the
-// golden-angle spiral gives near-uniform coverage for any N without clustering.
-function fibonacciSphere(N){
-  const points = [];
-  const phi = Math.PI * (Math.sqrt(5) - 1);
-  for (let i = 0; i < N; i++) {
-    const y = N === 1 ? 0 : 1 - (i / (N - 1)) * 2;
-    const r = Math.sqrt(Math.max(0, 1 - y*y));
-    const theta = phi * i;
-    points.push(new THREE.Vector3(Math.cos(theta)*r, y, Math.sin(theta)*r));
-  }
-  return points;
-}
-
-// Ray directions spaced evenly around the horizontal (xz) equator.
-function equatorialRing(N){
-  const points = [];
-  for (let i = 0; i < N; i++) {
-    const theta = (i / N) * Math.PI * 2;
-    points.push(new THREE.Vector3(Math.cos(theta), 0, Math.sin(theta)));
-  }
-  return points;
-}
-
-// Parallel arrays: one E helix and one B helix per ray direction.
-let helicesE = [];
-let helicesB = [];
-
-// Tear down all helices and recreate the set for a given count and distribution.
-// Called on mode change and on the helix-count slider (except in single mode).
-function rebuild(n, dist) {
-  helicesE.forEach(h => h.dispose());
-  helicesB.forEach(h => h.dispose());
-  helicesE = []; helicesB = [];
-
-  // Pick the direction set for the current mode.
-  let dirs;
-  if (dist === 'single') {
-    dirs = [new THREE.Vector3(1.0, 0.18, 0.55).normalize()];
-  } else if (dist === 'ring') {
-    dirs = equatorialRing(n);
-  } else {
-    dirs = fibonacciSphere(n);
-  }
-
-  // Build the E (amber) and B (cyan) helix pair for every direction.
-  dirs.forEach(d => {
-    helicesE.push(new Helix(d, E_COLOR, false));
-    helicesB.push(new Helix(d, B_COLOR, true));
-  });
-
-  // Apply the current visibility toggles, then seed vertices at t=0.
-  helicesB.forEach(h => h.setVisible(params.showB));
-  helicesE.forEach(h => h.setLobesVisible(params.showLobes));
-  helicesB.forEach(h => h.setLobesVisible(params.showLobes));
-
-  for (let i = 0; i < helicesE.length; i++) {
-    helicesE[i].update(0, params.k, params.omega, params.amp, params.showLobes);
-    helicesB[i].update(0, params.k, params.omega, params.amp, params.showLobes);
-  }
-}
-
-// The single mutable control state. n = helix count, k = wavenumber, omega =
-// angular frequency, dist = distribution mode, amp = base helix amplitude.
-// ─── Parameters & UI ───────────────────────────────────────────────────────
-const params = {
-  n: 36, k: 2.0, omega: 1.0,
-  dist: 'ring', showB: true, showLobes: false, amp: 4.2,
-};
+function showErr(msg) { errEl.style.display = 'block'; errEl.textContent = 'ERROR: ' + msg; console.error(msg); }
+window.addEventListener('error', e => showErr((e.message || 'unknown') + ' @ ' + (e.filename || '?') + ':' + (e.lineno || '?')));
+window.addEventListener('unhandledrejection', e => showErr('Promise: ' + (e.reason?.message || e.reason)));
 
 const $ = id => document.getElementById(id);
 
-// Helix count: rebuild the set (single mode ignores count and stays at one ray).
-$('numHelices').addEventListener('input', e => {
-  params.n = +e.target.value;
-  $('vNum').textContent = params.n;
-  if (params.dist !== 'single') rebuild(params.n, params.dist);
-});
-// Wavenumber and frequency feed the phase directly; no rebuild needed since the
-// loop reads params every frame.
-$('k').addEventListener('input', e => {
-  params.k = +e.target.value;
-  $('vK').textContent = params.k.toFixed(1);
-});
-$('omega').addEventListener('input', e => {
-  params.omega = +e.target.value;
-  $('vW').textContent = params.omega.toFixed(2);
-});
-// Toggle the B-field helices on or off.
-$('showB').addEventListener('change', e => {
-  params.showB = e.target.checked;
-  helicesB.forEach(h => h.setVisible(params.showB));
-});
-// Toggle the transverse E·B field lobes on both families.
-$('showLobes').addEventListener('change', e => {
-  params.showLobes = e.target.checked;
-  helicesE.forEach(h => h.setLobesVisible(params.showLobes));
-  helicesB.forEach(h => h.setLobesVisible(params.showLobes));
+// Range fill: the CSS gradient reads --pct.
+function paintSlider(el) { el.style.setProperty('--pct', ((+el.value - +el.min) / (+el.max - +el.min) * 100) + '%'); }
+document.querySelectorAll('input[type=range]').forEach(s => { paintSlider(s); s.addEventListener('input', () => paintSlider(s)); });
+
+// The formulas: static MathJax SVG from equations.js (typeset.mjs).
+$('eqE').innerHTML = EQ.E;
+$('eqB').innerHTML = EQ.B;
+$('eqJ').innerHTML = EQ.J;
+
+// Scene colours. The same hex values are in style.css and typeset.mjs.
+const COL = { E: 0xffb84d, B: 0x60e0ee, e1: 0xff8a78, e2: 0x8aa8ff, axis: 0x8a96ad, source: 0xffe9a8 };
+const CSS = { E: '#ffb84d', B: '#60e0ee', e1: '#ff8a78', e2: '#8aa8ff', dim: '#3a4a64' };
+
+try {
+
+const THREE = await import('three');
+const { OrbitControls } = await import('three/addons/controls/OrbitControls.js');
+
+// ─── Scene setup ───────────────────────────────────────────────────────────
+// The renderer fills #stage, not the window: the panel sits beside it.
+const stage = $('stage');
+const canvas = $('scene');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 500);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 0);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.dampingFactor = 0.07;
+controls.minDistance = 4;
+controls.maxDistance = 110;
+
+// Idle auto-rotate: after a few seconds with no drag, a slow spin starts.
+let idleTimer = 0;
+controls.addEventListener('start', () => { idleTimer = -1; controls.autoRotate = false; tween = null; });
+controls.addEventListener('end', () => { idleTimer = 0; });
+
+// A faint polar grid under the scene gives depth without competing.
+const grid = new THREE.PolarGridHelper(24, 12, 6, 96, 0x3a4a64, 0x222c3c);
+grid.position.y = -7.5;
+grid.material.transparent = true;
+grid.material.opacity = 0.35;
+grid.material.depthWrite = false;
+scene.add(grid);
+
+// ─── Source ────────────────────────────────────────────────────────────────
+// A small rod with a bright core: the radiating source. The three beads
+// breathe with ω. The colours stay neutral, so they do not read as field.
+const sourceGroup = new THREE.Group();
+scene.add(sourceGroup);
+sourceGroup.add(new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 4.4, 8),
+  new THREE.MeshBasicMaterial({ color: 0x4a5368, transparent: true, opacity: 0.7 })));
+const beads = [1.6, 0, -1.6].map(y => {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(y === 0 ? 0.3 : 0.2, 24, 24),
+    new THREE.MeshBasicMaterial({ color: y === 0 ? COL.source : 0xb9b09a }));
+  m.position.y = y; sourceGroup.add(m); return m;
 });
 
-// Mode buttons switch the direction distribution and disable the count slider
-// in single mode (one ray has no count to vary).
-document.querySelectorAll('.mode-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const mode = btn.dataset.mode;
-    if (mode === params.dist) return;
-    params.dist = mode;
-    document.querySelectorAll('.mode-btn').forEach(b =>
-      b.classList.toggle('active', b.dataset.mode === mode));
-    const isSingle = (mode === 'single');
-    $('numHelices').disabled = isSingle;
-    $('numHelices').style.opacity = isSingle ? 0.35 : 1;
-    rebuild(params.n, mode);
-  });
+// ─── Ray geometry ──────────────────────────────────────────────────────────
+const HELIX_POINTS = 260;
+const RIBS = 56;
+const R_MIN = 0.55, R_MAX = 22.0;
+const R_OBS = 15.0;          // the observer plane on the single ray
+// Ring and sphere show E itself, with the 1/r fall. One ray shows r·E (the
+// far-field pattern), so the helix and the observer ellipse keep their size.
+let rScaled = true;
+const R_E_SIZE = 1.9;
+const ampAt = (amp, r) => rScaled ? R_E_SIZE : amp / Math.max(r, 1.6);
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+// brightness along the ray: fade in near the source, fade out at the end
+const fade = (r, fadeIn) => smooth(R_MIN, R_MIN + fadeIn, r) * (1 - smooth(R_MAX - 6, R_MAX, r));
+
+// A transverse frame for a ray: ê1 = ref × û_r, ê2 = û_r × ê1, so ê1 × ê2 = û_r.
+function frame(dir) {
+  const ref = Math.abs(dir.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+  const e1 = new THREE.Vector3().crossVectors(ref, dir).normalize();
+  const e2 = new THREE.Vector3().crossVectors(dir, e1).normalize();
+  return { e1, e2 };
+}
+
+// A line whose vertices move each frame and whose colour is fixed per vertex
+// (base colour times the fade). Additive blending, so crossings read as light.
+function dynLine(n, color, weights, opacity, segments = false) {
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+  const c = new THREE.Color(color);
+  for (let i = 0; i < n; i++) { const w = weights(i); col[i * 3] = c.r * w; col[i * 3 + 1] = c.g * w; col[i * 3 + 2] = c.b * w; }
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const m = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+  const line = segments ? new THREE.LineSegments(g, m) : new THREE.Line(g, m);
+  line.frustumCulled = false;
+  scene.add(line);
+  return line;
+}
+function disposeObj(o) { scene.remove(o); o.geometry?.dispose(); o.material?.dispose(); }
+
+// ─── class Ray: the E and B helices and their field vectors on one ray ────
+class Ray {
+  constructor(dir, single, opacity) {
+    this.dir = dir.clone().normalize();
+    Object.assign(this, frame(this.dir));
+    const fadeIn = single ? 0.9 : 3.6;
+    const rH = i => R_MIN + (R_MAX - R_MIN) * i / (HELIX_POINTS - 1);
+    const rR = i => R_MIN + (R_MAX - R_MIN) * Math.floor(i / 2) / (RIBS - 1);
+    this.eLine = dynLine(HELIX_POINTS, COL.E, i => fade(rH(i), fadeIn), opacity);
+    this.bLine = dynLine(HELIX_POINTS, COL.B, i => fade(rH(i), fadeIn) * 0.8, opacity * 0.85);
+    // rib i: vertex 2i on the ray (dim), vertex 2i+1 at the field tip
+    this.eRibs = dynLine(RIBS * 2, COL.E, i => fade(rR(i), fadeIn) * (i % 2 ? 0.75 : 0.25), opacity * 0.7, true);
+    this.bRibs = dynLine(RIBS * 2, COL.B, i => fade(rR(i), fadeIn) * (i % 2 ? 0.45 : 0.12), opacity * 0.4, true);
+  }
+  // Rewrite the vertices for time t. E = c1 ê1 + c2 ê2; B = −c2 ê1 + c1 ê2.
+  update(t, p) {
+    const { dir: d, e1: a, e2: b } = this;
+    const dl = p.delta * Math.PI / 180;
+    const ep = this.eLine.geometry.attributes.position.array, bp = this.bLine.geometry.attributes.position.array;
+    for (let i = 0; i < HELIX_POINTS; i++) {
+      const r = R_MIN + (R_MAX - R_MIN) * i / (HELIX_POINTS - 1);
+      const ph = p.k * r - p.omega * t, A = ampAt(p.amp, r);
+      const c1 = A * Math.cos(ph), c2 = A * Math.cos(ph - dl);
+      const j = i * 3;
+      ep[j] = r * d.x + c1 * a.x + c2 * b.x; ep[j + 1] = r * d.y + c1 * a.y + c2 * b.y; ep[j + 2] = r * d.z + c1 * a.z + c2 * b.z;
+      bp[j] = r * d.x - c2 * a.x + c1 * b.x; bp[j + 1] = r * d.y - c2 * a.y + c1 * b.y; bp[j + 2] = r * d.z - c2 * a.z + c1 * b.z;
+    }
+    this.eLine.geometry.attributes.position.needsUpdate = true;
+    this.bLine.geometry.attributes.position.needsUpdate = true;
+    if (!p.showLobes) return;
+    const er = this.eRibs.geometry.attributes.position.array, br = this.bRibs.geometry.attributes.position.array;
+    for (let i = 0; i < RIBS; i++) {
+      const r = R_MIN + (R_MAX - R_MIN) * i / (RIBS - 1);
+      const ph = p.k * r - p.omega * t, A = ampAt(p.amp, r);
+      const c1 = A * Math.cos(ph), c2 = A * Math.cos(ph - dl);
+      const x = r * d.x, y = r * d.y, z = r * d.z, j = i * 6;
+      er[j] = br[j] = x; er[j + 1] = br[j + 1] = y; er[j + 2] = br[j + 2] = z;
+      er[j + 3] = x + c1 * a.x + c2 * b.x; er[j + 4] = y + c1 * a.y + c2 * b.y; er[j + 5] = z + c1 * a.z + c2 * b.z;
+      br[j + 3] = x - c2 * a.x + c1 * b.x; br[j + 4] = y - c2 * a.y + c1 * b.y; br[j + 5] = z - c2 * a.z + c1 * b.z;
+    }
+    this.eRibs.geometry.attributes.position.needsUpdate = true;
+    this.bRibs.geometry.attributes.position.needsUpdate = true;
+  }
+  setVisible(p) {
+    this.bLine.visible = p.showB;
+    this.eRibs.visible = p.showLobes;
+    this.bRibs.visible = p.showLobes && p.showB;
+  }
+  dispose() { [this.eLine, this.bLine, this.eRibs, this.bRibs].forEach(disposeObj); }
+}
+
+// ─── class Single: the extras of the one-ray view ─────────────────────────
+// The two components as flat waves on faint planes through the ray, the ray
+// axis, and the observer plane at R_OBS with the E tip ellipse and arrows.
+class Single {
+  constructor(ray, p) {
+    this.ray = ray;
+    const { dir: d, e1, e2 } = ray;
+    const Amax = ampAt(p.amp, 1.6) * 1.05;
+    this.objs = [];
+    const keep = o => { this.objs.push(o); scene.add(o); return o; };
+    // component planes: r in [R_MIN, R_MAX], offset in [−Amax, Amax] along ê
+    const plane = (e, color) => {
+      const g = new THREE.BufferGeometry();
+      const P = (r, s) => [r * d.x + s * e.x, r * d.y + s * e.y, r * d.z + s * e.z];
+      g.setAttribute('position', new THREE.Float32BufferAttribute([...P(R_MIN, -Amax), ...P(R_MAX, -Amax), ...P(R_MAX, Amax), ...P(R_MIN, Amax)], 3));
+      g.setIndex([0, 1, 2, 0, 2, 3]);
+      return keep(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.028, side: THREE.DoubleSide, depthWrite: false })));
+    };
+    this.planes = [plane(e1, COL.e1), plane(e2, COL.e2)];
+    const rH = i => R_MIN + (R_MAX - R_MIN) * i / (HELIX_POINTS - 1);
+    this.comp1 = dynLine(HELIX_POINTS, COL.e1, i => fade(rH(i), 0.9), 0.95); this.objs.push(this.comp1);
+    this.comp2 = dynLine(HELIX_POINTS, COL.e2, i => fade(rH(i), 0.9), 0.95); this.objs.push(this.comp2);
+    // the ray axis
+    const ag = new THREE.BufferGeometry().setFromPoints([d.clone().multiplyScalar(R_MIN), d.clone().multiplyScalar(R_MAX + 1.5)]);
+    this.axis = keep(new THREE.Line(ag, new THREE.LineDashedMaterial({ color: COL.axis, dashSize: 0.35, gapSize: 0.3, transparent: true, opacity: 0.45 })));
+    this.axis.computeLineDistances();
+    // observer plane: a faint disc and a ring at R_OBS, normal along û_r
+    const o = d.clone().multiplyScalar(R_OBS);
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), d);
+    const Aobs = ampAt(p.amp, R_OBS);
+    this.disc = keep(new THREE.Mesh(new THREE.CircleGeometry(Aobs * 1.45, 64),
+      new THREE.MeshBasicMaterial({ color: 0x96c8ff, transparent: true, opacity: 0.05, side: THREE.DoubleSide, depthWrite: false })));
+    this.disc.position.copy(o); this.disc.quaternion.copy(q);
+    this.rim = keep(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(
+      Array.from({ length: 96 }, (_, i) => new THREE.Vector3(Math.cos(i / 96 * Math.PI * 2), Math.sin(i / 96 * Math.PI * 2), 0).multiplyScalar(Aobs * 1.45))),
+      new THREE.LineBasicMaterial({ color: 0x96c8ff, transparent: true, opacity: 0.18 })));
+    this.rim.position.copy(o); this.rim.quaternion.copy(q);
+    // the ellipse that the E tip draws at R_OBS
+    this.trace = keep(new THREE.LineLoop(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(128 * 3), 3)),
+      new THREE.LineBasicMaterial({ color: COL.E, transparent: true, opacity: 0.55 })));
+    this.trace.frustumCulled = false;
+    this.eArrow = new THREE.ArrowHelper(e1, o, 1, COL.E, 0.5, 0.32); this.eArrow.frustumCulled = false; keep(this.eArrow);
+    this.bArrow = new THREE.ArrowHelper(e2, o, 1, COL.B, 0.42, 0.26); keep(this.bArrow);
+    this.origin = o; this.lastDelta = null;
+  }
+  update(t, p) {
+    const { dir: d, e1: a, e2: b } = this.ray;
+    const dl = p.delta * Math.PI / 180;
+    const c1p = this.comp1.geometry.attributes.position.array, c2p = this.comp2.geometry.attributes.position.array;
+    for (let i = 0; i < HELIX_POINTS; i++) {
+      const r = R_MIN + (R_MAX - R_MIN) * i / (HELIX_POINTS - 1);
+      const ph = p.k * r - p.omega * t, A = ampAt(p.amp, r);
+      const c1 = A * Math.cos(ph), c2 = A * Math.cos(ph - dl), j = i * 3;
+      c1p[j] = r * d.x + c1 * a.x; c1p[j + 1] = r * d.y + c1 * a.y; c1p[j + 2] = r * d.z + c1 * a.z;
+      c2p[j] = r * d.x + c2 * b.x; c2p[j + 1] = r * d.y + c2 * b.y; c2p[j + 2] = r * d.z + c2 * b.z;
+    }
+    this.comp1.geometry.attributes.position.needsUpdate = true;
+    this.comp2.geometry.attributes.position.needsUpdate = true;
+    const A = ampAt(p.amp, R_OBS), o = this.origin;
+    if (this.lastDelta !== p.delta) {
+      const tp = this.trace.geometry.attributes.position.array;
+      for (let i = 0; i < 128; i++) {
+        const s = i / 128 * Math.PI * 2, c1 = A * Math.cos(s), c2 = A * Math.cos(s - dl);
+        tp[i * 3] = o.x + c1 * a.x + c2 * b.x; tp[i * 3 + 1] = o.y + c1 * a.y + c2 * b.y; tp[i * 3 + 2] = o.z + c1 * a.z + c2 * b.z;
+      }
+      this.trace.geometry.attributes.position.needsUpdate = true;
+      this.lastDelta = p.delta;
+    }
+    const ph = p.k * R_OBS - p.omega * t;
+    const c1 = A * Math.cos(ph), c2 = A * Math.cos(ph - dl);
+    const E = a.clone().multiplyScalar(c1).addScaledVector(b, c2);
+    const B = a.clone().multiplyScalar(-c2).addScaledVector(b, c1);
+    const arrow = (h, v) => { const L = v.length(); h.visible = L > 0.05; if (h.visible) { h.setDirection(v.divideScalar(L)); h.setLength(L, Math.min(0.5, L * 0.4), Math.min(0.32, L * 0.25)); } };
+    arrow(this.eArrow, E);
+    arrow(this.bArrow, B);
+    if (!p.showB) this.bArrow.visible = false;
+  }
+  setVisible(p) {
+    [this.comp1, this.comp2, ...this.planes].forEach(o => { o.visible = p.showComp; });
+  }
+  dispose() {
+    this.objs.forEach(o => {
+      scene.remove(o);
+      if (o.isArrowHelper) { o.line.geometry.dispose(); o.line.material.dispose(); o.cone.geometry.dispose(); o.cone.material.dispose(); }
+      else { o.geometry?.dispose(); o.material?.dispose(); }
+    });
+  }
+}
+
+// Ray directions spread over a sphere with the Fibonacci lattice.
+function fibonacciSphere(N) {
+  const out = [], g = Math.PI * (Math.sqrt(5) - 1);
+  for (let i = 0; i < N; i++) {
+    const y = N === 1 ? 0 : 1 - (i / (N - 1)) * 2, r = Math.sqrt(Math.max(0, 1 - y * y));
+    out.push(new THREE.Vector3(Math.cos(g * i) * r, y, Math.sin(g * i) * r));
+  }
+  return out;
+}
+// Ray directions spaced evenly around the horizontal equator.
+function equatorialRing(N) {
+  return Array.from({ length: N }, (_, i) => { const a = i / N * Math.PI * 2; return new THREE.Vector3(Math.cos(a), 0, Math.sin(a)); });
+}
+
+// ─── state ─────────────────────────────────────────────────────────────────
+// delta in degrees; amp is E0 in scene units.
+const params = { n: 24, k: 1.6, omega: 1.0, delta: 90, dist: 'single', showB: true, showLobes: true, showComp: true, amp: 4.0, playing: true };
+const SINGLE_DIR = new THREE.Vector3(1.0, 0.16, 0.5).normalize();
+let rays = [], single = null;
+
+// Tear down and rebuild the rays for the current mode and count. Many rays
+// share the light, so each gets a lower opacity and the sum does not clip.
+function rebuild() {
+  rays.forEach(r => r.dispose()); rays = [];
+  if (single) { single.dispose(); single = null; }
+  const one = params.dist === 'single';
+  rScaled = one;
+  const dirs = one ? [SINGLE_DIR] : params.dist === 'ring' ? equatorialRing(params.n) : fibonacciSphere(params.n);
+  const opacity = one ? 1 : Math.min(0.9, 3.2 / Math.sqrt(dirs.length));
+  rays = dirs.map(d => new Ray(d, one, opacity));
+  if (one) single = new Single(rays[0], params);
+  applyVisibility();
+  update(t);
+}
+function applyVisibility() {
+  rays.forEach(r => r.setVisible(params));
+  single?.setVisible(params);
+  const one = params.dist === 'single';
+  $('cellNum').hidden = one;
+  $('togComp').hidden = !one;
+  $('rNote').hidden = !one;
+  document.querySelector('.lg-b').hidden = !params.showB;
+  document.querySelectorAll('.lg-comp').forEach(li => { li.hidden = !(one && params.showComp); });
+}
+
+// ─── function frameFor: a camera pose per mode, eased in ─────────────────
+let tween = null;
+function frameFor(mode, instant = false) {
+  const asp = Math.max(0.45, camera.aspect), far = asp < 1 ? 1 / Math.pow(asp, 0.75) : 1;
+  let target, pos;
+  if (mode === 'single') {
+    target = SINGLE_DIR.clone().multiplyScalar(10.5);
+    const side = new THREE.Vector3(-SINGLE_DIR.z, 0, SINGLE_DIR.x).normalize();
+    pos = target.clone().addScaledVector(side, 31 * far).addScaledVector(SINGLE_DIR, -7 * far).add(new THREE.Vector3(0, 10 * far, 0));
+  } else {
+    target = new THREE.Vector3(0, 0, 0);
+    pos = new THREE.Vector3(26, 15, 30).multiplyScalar(far * (mode === 'sphere' ? 1.05 : 1));
+  }
+  if (instant) { controls.target.copy(target); camera.position.copy(pos); controls.update(); return; }
+  tween = { t: 0, p0: camera.position.clone(), t0: controls.target.clone(), p1: pos, t1: target };
+}
+
+// ─── function drawEllipse: the observer plane, flat, as the receiver sees it
+// ê1 points right and ê2 up, so û_r points out of the screen at the viewer.
+const ell = $('ellipse'), ctx = ell.getContext('2d');
+function drawEllipse(t) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), W = ell.clientWidth || 132;
+  if (ell.width !== Math.round(W * dpr)) { ell.width = ell.height = Math.round(W * dpr); }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, W);
+  const cx = W / 2, cy = W / 2, R = W * 0.36, dl = params.delta * Math.PI / 180;
+  // axes in the component colours
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,138,120,0.35)'; ctx.beginPath(); ctx.moveTo(cx - R * 1.25, cy); ctx.lineTo(cx + R * 1.25, cy); ctx.stroke();
+  ctx.strokeStyle = 'rgba(138,168,255,0.35)'; ctx.beginPath(); ctx.moveTo(cx, cy - R * 1.25); ctx.lineTo(cx, cy + R * 1.25); ctx.stroke();
+  ctx.font = '500 10px "IBM Plex Mono", monospace';
+  ctx.fillStyle = CSS.e1; ctx.fillText('ê₁', cx + R * 1.12, cy - 5);
+  ctx.fillStyle = CSS.e2; ctx.fillText('ê₂', cx + 5, cy - R * 1.12 + 4);
+  // the traced ellipse
+  ctx.strokeStyle = 'rgba(255,184,77,0.5)'; ctx.lineWidth = 1.4; ctx.beginPath();
+  for (let i = 0; i <= 96; i++) { const s = i / 96 * Math.PI * 2; const x = cx + R * Math.cos(s), y = cy - R * Math.cos(s - dl); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.stroke();
+  // the turn direction: a small arrowhead on the ellipse, pointing forward in time
+  const st = polState(params.delta);
+  if (st.turn !== 0) {
+    const s0 = 0.9, s1 = s0 - 0.12;            // time forward = phase down
+    const x0 = cx + R * Math.cos(s0), y0 = cy - R * Math.cos(s0 - dl);
+    const x1 = cx + R * Math.cos(s1), y1 = cy - R * Math.cos(s1 - dl);
+    const a = Math.atan2(y1 - y0, x1 - x0);
+    ctx.fillStyle = 'rgba(255,184,77,0.85)'; ctx.beginPath();
+    ctx.moveTo(x1, y1); ctx.lineTo(x1 - 7 * Math.cos(a - 0.45), y1 - 7 * Math.sin(a - 0.45)); ctx.lineTo(x1 - 7 * Math.cos(a + 0.45), y1 - 7 * Math.sin(a + 0.45)); ctx.fill();
+  }
+  // the live field at R_OBS: components on the axes, then E and B
+  const ph = params.k * R_OBS - params.omega * t;
+  const c1 = Math.cos(ph), c2 = Math.cos(ph - dl);
+  const ex = cx + R * c1, ey = cy - R * c2;
+  ctx.setLineDash([2, 3]); ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,138,120,0.6)'; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex, cy); ctx.stroke();
+  ctx.strokeStyle = 'rgba(138,168,255,0.6)'; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(cx, ey); ctx.stroke();
+  ctx.setLineDash([]);
+  const vec = (x, y, col, w) => {
+    const a = Math.atan2(y - cy, x - cx), L = Math.hypot(x - cx, y - cy);
+    if (L < 2) return;
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x - 5 * Math.cos(a), y - 5 * Math.sin(a)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 8 * Math.cos(a - 0.4), y - 8 * Math.sin(a - 0.4)); ctx.lineTo(x - 8 * Math.cos(a + 0.4), y - 8 * Math.sin(a + 0.4)); ctx.fill();
+  };
+  if (params.showB) vec(cx - R * c2 * 0.75, cy - R * c1 * 0.75, 'rgba(96,224,238,0.8)', 1.4);
+  vec(ex, ey, CSS.E, 2);
+  ctx.fillStyle = CSS.e1; ctx.beginPath(); ctx.arc(ex, cy, 2.6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = CSS.e2; ctx.beginPath(); ctx.arc(cx, ey, 2.6, 0, Math.PI * 2); ctx.fill();
+}
+
+// ─── function updateReadouts: Jones vector, state, turn, χ ───────────────
+function updateReadouts() {
+  const st = polState(params.delta);
+  $('vD').textContent = params.delta + '°';
+  $('rJones').textContent = jonesText(params.delta);
+  $('rState').textContent = st.kind + (st.psi != null && st.kind !== 'circular' ? ` · ψ ${st.psi > 0 ? '+' : '−'}45°` : '');
+  $('rHand').textContent = st.turn > 0 ? 'clockwise' : st.turn < 0 ? 'counter-clockwise' : 'does not turn';
+  $('rChi').textContent = (st.chi < -0.05 ? '−' : '') + Math.abs(st.chi).toFixed(1) + '°';
+  $('rHandNote').textContent = st.turn > 0
+    ? 'As seen by the receiver, looking back at the source: right-handed in the optics convention, left-hand (LHCP) in the IEEE convention.'
+    : st.turn < 0
+      ? 'As seen by the receiver, looking back at the source: left-handed in the optics convention, right-hand (RHCP) in the IEEE convention.'
+      : 'E stays on one line, at 45° between ê₁ and ê₂. Its length goes up and down, but it does not turn.';
+  document.querySelectorAll('.snaps button').forEach(b => b.classList.toggle('on', +b.dataset.delta === params.delta));
+}
+
+// ─── Controls ──────────────────────────────────────────────────────────────
+function setDelta(v) {
+  params.delta = Math.round(v);
+  $('delta').value = params.delta; paintSlider($('delta'));
+  updateReadouts();
+}
+$('delta').addEventListener('input', e => setDelta(+e.target.value));
+document.querySelectorAll('.snaps button').forEach(b => b.addEventListener('click', () => setDelta(+b.dataset.delta)));
+$('numHelices').addEventListener('input', e => { params.n = +e.target.value; $('vNum').textContent = params.n; if (params.dist !== 'single') rebuild(); });
+$('k').addEventListener('input', e => { params.k = +e.target.value; $('vK').textContent = params.k.toFixed(1); });
+$('omega').addEventListener('input', e => { params.omega = +e.target.value; $('vW').textContent = params.omega.toFixed(2); });
+$('showB').addEventListener('change', e => { params.showB = e.target.checked; applyVisibility(); });
+$('showLobes').addEventListener('change', e => { params.showLobes = e.target.checked; applyVisibility(); update(t); });
+$('showComp').addEventListener('change', e => { params.showComp = e.target.checked; applyVisibility(); });
+$('play').addEventListener('click', () => {
+  params.playing = !params.playing;
+  $('play').textContent = params.playing ? 'Pause' : 'Play';
+  $('play').setAttribute('aria-pressed', String(params.playing));
 });
+document.querySelectorAll('.mode-btn').forEach(btn => btn.addEventListener('click', () => {
+  const mode = btn.dataset.mode;
+  if (mode === params.dist) return;
+  params.dist = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => { const on = b.dataset.mode === mode; b.classList.toggle('active', on); b.setAttribute('aria-checked', String(on)); });
+  rebuild();
+  frameFor(mode);
+}));
 
-// First build.
-rebuild(params.n, params.dist);
+// ─── size: the renderer follows #stage ────────────────────────────────────
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+resize();
 
-// The per-frame loop. It advances wave time by clamped real seconds, kicks in
-// idle auto-rotate, rewrites every visible helix, pulses the source spheres, and
-// renders.
-// ─── Animation loop ────────────────────────────────────────────────────────
+// ─── function animate ──────────────────────────────────────────────────────
 const clock = new THREE.Clock();
 let t = 0;
-
+function update(time) {
+  for (const r of rays) r.update(time, params);
+  single?.update(time, params);
+}
 function animate() {
   requestAnimationFrame(animate);
-
-  // Clamp dt so a background tab that resumes does not jump the wave forward.
   const dt = Math.min(clock.getDelta(), 0.05);
-  t += dt;
-
-  // After four idle seconds, start the slow camera spin.
+  if (params.playing) t += dt;
   if (idleTimer >= 0) {
     idleTimer += dt;
-    if (idleTimer > 4 && !controls.autoRotate) {
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.35;
-    }
+    if (idleTimer > 5 && !controls.autoRotate && !tween) { controls.autoRotate = true; controls.autoRotateSpeed = 0.3; }
   }
-
-  // Refresh every E helix; refresh B helices only while they are shown.
-  const lobesOn = params.showLobes;
-  for (let i = 0; i < helicesE.length; i++) {
-    helicesE[i].update(t, params.k, params.omega, params.amp, lobesOn);
-    if (params.showB) helicesB[i].update(t, params.k, params.omega, params.amp, lobesOn);
+  if (tween) {
+    tween.t = Math.min(1, tween.t + dt / 0.9);
+    const e = 1 - Math.pow(1 - tween.t, 3);
+    camera.position.lerpVectors(tween.p0, tween.p1, e);
+    controls.target.lerpVectors(tween.t0, tween.t1, e);
+    if (tween.t >= 1) tween = null;
   }
-
-  // Breathe the source spheres in time with ω, each slightly phase-offset.
+  update(t);
   const pulse = 1 + 0.06 * Math.sin(params.omega * t * 2);
-  sourceSpheres.forEach((s, i) => {
-    s.scale.setScalar(pulse + 0.04 * Math.sin(params.omega * t * 2 + i * 1.8));
-  });
-
+  beads.forEach((s, i) => s.scale.setScalar(pulse + 0.04 * Math.sin(params.omega * t * 2 + i * 1.8)));
+  drawEllipse(t);
   controls.update();
   renderer.render(scene, camera);
 }
-animate();
 
-// Keep the camera aspect and renderer size matched to the window.
-window.addEventListener('resize', () => {
-  const w = window.innerWidth, h = window.innerHeight;
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
-});
+rebuild();
+updateReadouts();
+frameFor(params.dist, true);
+animate();
+window.__polar = { params, polState, jonesText, setDelta, rays: () => rays.length, single: () => !!single };
 
 } catch (err) {
   showErr(err.message || String(err));

@@ -3,41 +3,39 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Circular Polarization // Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    CIRCULAR POLARIZATION  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. main.js draws everything on the #scene canvas: a
-   radiating source wrapped in E and B helices. This file lays out the overlay
-   that main.js binds to by id (equation panel, mode buttons, sliders).
+   Static markup only. main.js draws the wave on #scene (three.js) and the
+   polarization ellipse on #ellipse (Canvas 2D). It binds to the ids below.
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts        Google Fonts stylesheet (absolute)
-     2. katex        KaTeX CSS then JS, for the two field equations
+     1. gpu-guard    lib/gpu-guard.js, so the shell can release the GL context
+     2. fonts        Space Grotesk, IBM Plex Mono, Instrument Serif (as the
+                     shell)
      3. in-frame     tiny inline guard, runs before markup renders
-     4. importmap    maps the bare specifier "three" to the CDN; MUST stay
-                     inline (an import map cannot be an external file)
+     4. importmap    maps "three" to the CDN; MUST stay inline
      5. style.css    the page stylesheet
-     6. main.js      type=module; dynamically import()s three, then builds scene
+     6. main.js      type=module; equations.js has the formulas as MathJax SVG
 
    LAYOUT  (# marks an element id)
-     ┌─────────────────────────────────────────────────────────────────┐
-     │ topbar: "Stella Nova · Circular Polarization"                     │
-     ├──────────────┬────────────────────────────────────┬─────────────┤
-     │ .eq-panel    │                                     │ .modes      │
-     │  #eq1 #eq2   │        #scene  (canvas)             │  single     │
-     │  E and B     │        helices around source        │  ring       │
-     │  equations   │                                     │  sphere     │
-     ├──────────────┴────────────────────────────────────┴─────────────┤
-     │ .ctrl: Helices · k · ω · B-field · Field Lobes                    │
-     └──────────────────────────────────────────────────────────────────┘
+     desktop and landscape     phone portrait
+     ┌────────────────┬──────┐ ┌──────────────┐
+     │ #stage         │#panel│ │ #stage       │
+     │  #scene        │ head │ │  #scene      │
+     │  .legend       │ eqs  │ ├──────────────┤
+     │  .hint         │ pol. │ │ #panel       │
+     │                │ ctrl │ │ (scrolls)    │
+     └────────────────┴──────┘ └──────────────┘
+   The panel never covers the scene. main.js sizes the renderer to #stage.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
      this page's own topbar. Kept inline so it runs before the body renders. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
@@ -53,97 +51,101 @@
 </head>
 <body>
 
-<!-- Decorative grid backdrop, then the WebGL target main.js renders into. -->
-<div class="grid-bg"></div>
-<canvas id="scene"></canvas>
+<header class="topbar">
+  <span class="sys-name">Stella Nova</span>
+  <span class="sys-page">Circular Polarization</span>
+</header>
 
-<div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Circular Polarization</span></div>
-  <div class="topbar-r">SYS // <strong>ELECTROMAGNETISM</strong></div>
-</div>
-
-<!-- Error overlay; main.js unhides this and fills it when something throws. -->
-<div class="err" id="err"></div>
-
-<div id="ui">
-  <!-- Field equations, rendered into #eq1 and #eq2 by KaTeX in main.js. -->
-  <section class="eq-panel">
-    <div class="eq-head">
-      <span class="dot"></span>
-      <span class="lbl">Field Equations</span>
-    </div>
-    <div class="eq-row" id="eq1"></div>
-    <div class="eq-row" id="eq2"></div>
+<main class="app">
+  <section id="stage" aria-label="3D view of the wave">
+    <canvas id="scene"></canvas>
+    <!-- What each colour in the scene is. -->
+    <ul class="legend" aria-label="Legend">
+      <li><i style="--c:var(--e)"></i><b>E</b> electric field</li>
+      <li class="lg-b"><i style="--c:var(--b)"></i><b>B</b> magnetic field</li>
+      <li class="lg-comp"><i style="--c:var(--e1)"></i><b>E·ê₁</b> component</li>
+      <li class="lg-comp"><i style="--c:var(--e2)"></i><b>E·ê₂</b> component</li>
+    </ul>
+    <div class="hint"><span>drag</span> orbit · <span>scroll</span> zoom · <span>right-drag</span> pan</div>
+    <div class="err" id="err"></div>
   </section>
 
-  <!-- Distribution mode buttons; data-mode is read by the mode-btn handler to
-       switch between one ray, an equatorial ring, and a full sphere. -->
-  <aside class="modes">
-    <button class="mode-btn" data-mode="single" type="button" aria-label="Single helix">
-      <span class="tip">Single</span>
-      <svg viewBox="0 0 24 24"><path d="M2.5 12 Q 5 5.5, 7.5 12 T 12.5 12 T 17.5 12 T 22.5 12"/><line x1="2.5" y1="12" x2="22.5" y2="12" stroke-dasharray="1.5,2" opacity="0.35"/></svg>
-    </button>
-    <button class="mode-btn active" data-mode="ring" type="button" aria-label="Radial ring">
-      <span class="tip">Radial</span>
-      <svg viewBox="0 0 24 24">
-        <ellipse cx="12" cy="12" rx="9" ry="3.2"/>
-        <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
-        <circle cx="21" cy="12" r="1.2" fill="currentColor" stroke="none"/>
-        <circle cx="3" cy="12" r="1.2" fill="currentColor" stroke="none"/>
-        <circle cx="17.5" cy="13.6" r="1.2" fill="currentColor" stroke="none"/>
-        <circle cx="6.5" cy="13.6" r="1.2" fill="currentColor" stroke="none"/>
-        <circle cx="17.5" cy="10.4" r="1.2" fill="currentColor" stroke="none"/>
-        <circle cx="6.5" cy="10.4" r="1.2" fill="currentColor" stroke="none"/>
-      </svg>
-    </button>
-    <button class="mode-btn" data-mode="sphere" type="button" aria-label="Full sphere">
-      <span class="tip">Spherical</span>
-      <svg viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="9"/>
-        <ellipse cx="12" cy="12" rx="9" ry="3.5"/>
-        <ellipse cx="12" cy="12" rx="3.5" ry="9"/>
-      </svg>
-    </button>
+  <aside id="panel">
+    <div class="p-head">
+      <p class="kicker">Light &amp; Fields · Optics</p>
+      <h1>Circular polarization</h1>
+      <p class="lede">The electric field turns as the wave moves. Its tip draws a helix along the ray, and at one point in space it draws a circle in time.</p>
+    </div>
+
+    <!-- Field equations: MathJax SVG from equations.js, filled by main.js. -->
+    <section class="p-sec">
+      <h2>Field</h2>
+      <div class="eq" id="eqE"></div>
+      <p class="eq-note">Two components at right angles, out of phase by <em>δ</em>. Amplitude falls as 1/<em>r</em>.<span id="rNote"> The one-ray view draws <em>r</em>·<em>E</em>, so the helix keeps its size.</span></p>
+      <div class="eq" id="eqB"></div>
+      <p class="eq-note"><em>B</em> is at right angles to <em>E</em> and to the ray, and in phase with it.</p>
+    </section>
+
+    <!-- Polarization state: the ellipse that E draws at the observer plane. -->
+    <section class="p-sec pol">
+      <h2>At the observer</h2>
+      <div class="pol-row">
+        <canvas id="ellipse" width="168" height="168" aria-label="Polarization ellipse"></canvas>
+        <div class="pol-read">
+          <div class="eq eq-j" id="eqJ"></div>
+          <dl>
+            <dt>Jones</dt><dd id="rJones">(1, −i)/√2</dd>
+            <dt>State</dt><dd id="rState">circular</dd>
+            <dt>Turns</dt><dd id="rHand">clockwise</dd>
+            <dt>Ellipticity χ</dt><dd id="rChi">45.0°</dd>
+          </dl>
+        </div>
+      </div>
+      <p class="eq-note" id="rHandNote">As seen by the receiver, looking back at the source.</p>
+    </section>
+
+    <section class="p-sec ctrl">
+      <h2>Controls</h2>
+      <!-- Distribution: data-mode is read in main.js. -->
+      <div class="seg" role="radiogroup" aria-label="Rays">
+        <button class="mode-btn active" data-mode="single" type="button" role="radio" aria-checked="true">One ray</button>
+        <button class="mode-btn" data-mode="ring" type="button" role="radio" aria-checked="false">Ring</button>
+        <button class="mode-btn" data-mode="sphere" type="button" role="radio" aria-checked="false">Sphere</button>
+      </div>
+
+      <div class="ctrl-cell">
+        <div class="ctrl-row"><label for="delta">Phase <em>δ</em></label><span class="ctrl-val" id="vD">90°</span></div>
+        <input type="range" id="delta" min="-180" max="180" step="1" value="90">
+        <div class="snaps">
+          <button type="button" data-delta="-90">−90° L</button>
+          <button type="button" data-delta="0">0° linear</button>
+          <button type="button" data-delta="45">45°</button>
+          <button type="button" data-delta="90">90° R</button>
+        </div>
+      </div>
+      <div class="ctrl-cell">
+        <div class="ctrl-row"><label for="k">Wavenumber <em>k</em></label><span class="ctrl-val" id="vK">1.6</span></div>
+        <input type="range" id="k" min="0.4" max="5" step="0.1" value="1.6">
+      </div>
+      <div class="ctrl-cell">
+        <div class="ctrl-row"><label for="omega">Frequency <em>ω</em></label><span class="ctrl-val" id="vW">1.00</span></div>
+        <input type="range" id="omega" min="0" max="4" step="0.05" value="1.0">
+      </div>
+      <div class="ctrl-cell" id="cellNum">
+        <div class="ctrl-row"><label for="numHelices">Rays</label><span class="ctrl-val" id="vNum">24</span></div>
+        <input type="range" id="numHelices" min="1" max="800" value="24">
+      </div>
+
+      <div class="togs">
+        <label class="tog"><input type="checkbox" id="showB" checked><span class="sw"></span><span>B field</span></label>
+        <label class="tog"><input type="checkbox" id="showLobes" checked><span class="sw"></span><span>Field vectors</span></label>
+        <label class="tog" id="togComp"><input type="checkbox" id="showComp" checked><span class="sw"></span><span>Components</span></label>
+        <button class="play" id="play" type="button" aria-pressed="true">Pause</button>
+      </div>
+    </section>
   </aside>
-
-  <!-- Control cells; each input id is bound in main.js and writes into params.
-       vNum / vK / vW are the live numeric readouts. -->
-  <section class="ctrl">
-    <div class="ctrl-cell">
-      <div class="ctrl-row"><span class="ctrl-lbl">Helices</span><span class="ctrl-val" id="vNum">36</span></div>
-      <input type="range" id="numHelices" min="1" max="800" value="36">
-    </div>
-    <div class="ctrl-cell">
-      <div class="ctrl-row"><span class="ctrl-lbl">Wavenumber <em>k</em></span><span class="ctrl-val" id="vK">2.0</span></div>
-      <input type="range" id="k" min="0.4" max="5" step="0.1" value="2.0">
-    </div>
-    <div class="ctrl-cell">
-      <div class="ctrl-row"><span class="ctrl-lbl">Frequency <em>ω</em></span><span class="ctrl-val" id="vW">1.00</span></div>
-      <input type="range" id="omega" min="0" max="4" step="0.05" value="1.0">
-    </div>
-    <div class="ctrl-cell">
-      <div class="ctrl-row"><span class="ctrl-lbl">Magnetic Field</span></div>
-      <label class="tog">
-        <input type="checkbox" id="showB" checked>
-        <span class="sw"></span>
-        <span class="tog-lbl">B-field</span>
-      </label>
-    </div>
-    <div class="ctrl-cell">
-      <div class="ctrl-row"><span class="ctrl-lbl">Field Lobes</span></div>
-      <label class="tog tog-lobes">
-        <input type="checkbox" id="showLobes">
-        <span class="sw"></span>
-        <span class="tog-lbl">E · B</span>
-      </label>
-    </div>
-  </section>
-
-  <div class="hint"><span>drag</span> rotate · <span>scroll</span> zoom · <span>right-drag</span> pan</div>
-  <div class="credits">davesgames.io</div>
-</div>
+</main>
 
 <script type="module" src="main.js"></script>
-
 </body>
 </html>
