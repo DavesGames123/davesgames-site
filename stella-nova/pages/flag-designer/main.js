@@ -1,801 +1,873 @@
 // ============================================================================
-//  COLONY FLAG DESIGNER  ·  canvas flag composer with a cloth wave preview
+//  FLAG DESIGNER  ·  colony flag composer with a cloth view
 // ----------------------------------------------------------------------------
-//  Classic script. A flag is four choices: a pattern (background design), a
-//  shape (the outline it is clipped to), an optional emblem, and three colors
-//  (primary, secondary, and a symbol color for the emblem). All drawing is 2D
-//  canvas. The same renderFlag() paints the big preview, every catalog and
-//  preset thumbnail, and the texture fed into the waving-cloth simulation.
+//  A classic script. A flag is a pattern, a shape, an optional emblem and four
+//  colours: c1, c2, c3 for the field and ce for the emblem. All drawing is new
+//  2D canvas code on this page. The pattern and emblem NAMES come from
+//  window.SN_DATA (lib/game-data/catalog.js). Glyph emblems draw the catalog
+//  glyph as text and change it into a one-colour silhouette. Vector emblems
+//  draw with the paths in VECTORS. Catalog emblems that have no drawing here
+//  do not show.
 //
-//  FLAG RENDER PIPELINE  (renderFlag)
-//  ----------------------------------------------------------------------------
-//      pattern.draw(c1,c2) ─▶ offscreen canvas
-//      emblem.draw(c3)     ─▶ same offscreen (centered)
-//                                     │
-//      shape.path(W,H) ─▶ clip ───────┤
-//                                     ▼
-//                         drawImage offscreen ─▶ visible canvas ─▶ outline
+//  RENDER PATH
+//      state -> renderFlat(canvas, W, H, state)
+//          pattern.draw(field, c1, c2, c3) -> emblem silhouette (ce)
+//          -> clip to shape.path -> target canvas
+//      renderFlat feeds the hero texture, every thumbnail and the PNG export.
 //
-//  COLOR MODEL  (three identical pickers: primary, secondary, tertiary)
-//  ----------------------------------------------------------------------------
-//      native <input type=color> ┐
-//      hex text field            ├─▶ setX(hex) ─▶ state + every field + swatch
-//      R/G/B number fields       │              └─▶ syncHsvFromHex ─▶ SV/hue canvas
-//      HSV square + hue strip ───┘
-//      any change ─▶ colorChanged() ─▶ repaint preview, catalog, presets
+//  CLOTH VIEW  (cloth.frame)
+//      The texture is cut into vertical slices. Each slice is drawn with an
+//      affine transform from a travelling wave, then shaded from the wave
+//      slope. The loop stops when the hero is off screen, when the tab is
+//      hidden, in the flat view, or on Pause.
 //
-//  CLOTH SIMULATION  (Verlet grid, waveLoop)
-//  ----------------------------------------------------------------------------
-//      points (41×26) ─▶ integrate (velocity + gravity + wind)
-//                     ─▶ solve distance constraints ×5 (pinned left edge)
-//                     ─▶ draw as textured quads sampling the flag pixels
-//
-//  SECTION MAP  (jump with grep -n "<anchor>" main.js)
-//    color math ........... "function hexToRgb"      hex/rgb/hsv conversions
-//    live state ........... "var primaryColor"       current selection
-//    shapes ............... "var SHAPES"             outline polygons
-//    emblems .............. "var EMBLEMS"            centered symbol drawers
-//    patterns ............. "var PATTERNS"           30 background designs
-//    presets .............. "var PRESETS"            named ready-made banners
-//    core render .......... "function renderFlag"    pattern + emblem + clip
-//    catalog build ........ "function buildShapes"   populate the pickers
-//    color pickers ........ "function setPrimary"    push a color everywhere
-//    hsv pickers .......... "var hsvState"           square/hue canvas logic
-//    cloth sim ............ "function initCloth"     verlet grid setup
-//    cloth step ........... "function updateCloth"   integrate and constrain
-//    cloth draw ........... "function renderWave"    texture the mesh
-//    boot ................. "function init"          wire everything and start
+//  SECTION MAP   (jump with grep -n "<anchor>" main.js)
+//      patterns ........... "var PATTERNS"
+//      shapes ............. "var SHAPES"
+//      vector emblems ..... "var VECTORS"
+//      catalog read ....... "function readCatalog"
+//      presets ............ "var PRESETS"
+//      state .............. "var state"
+//      colour maths ....... "function hexToRgb"
+//      emblem masks ....... "function emblemMask"
+//      flat render ........ "function renderFlat"
+//      paint and sync ..... "function paint"
+//      URL hash ........... "function readHash"
+//      thumbnails ......... "function buildPatterns"
+//      emblem picker ...... "function buildEmblems"
+//      colour picker ...... "function buildPicker"
+//      bottom sheet ....... "function buildSheet"
+//      PNG export ......... "function exportPng"
+//      cloth view ......... "var cloth"
+//      boot ............... "function boot"
 // ============================================================================
 
-// ── COLOR UTILITIES ──
-// Conversions between the three color representations the pickers share: hex
-// string, RGB bytes, and HSV floats in 0..1. clamp() bounds an RGB channel.
-function hexToRgb(h){h=h.replace('#','');if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];return{r:parseInt(h.substring(0,2),16),g:parseInt(h.substring(2,4),16),b:parseInt(h.substring(4,6),16)};}
-function rgbToHex(r,g,b){return'#'+((1<<24)+(r<<16)+(g<<8)+b).toString(16).slice(1).toUpperCase();}
-function clamp(v){return Math.max(0,Math.min(255,Math.round(v)));}
-// RGB bytes to HSV: hue from which channel is the max, saturation from the
-// max-to-min spread, value from the max. Hue is returned as a 0..1 fraction.
-function rgbToHsv(r,g,b){r/=255;g/=255;b/=255;var mx=Math.max(r,g,b),mn=Math.min(r,g,b),d=mx-mn,h=0,s=mx===0?0:d/mx,v=mx;if(d!==0){if(mx===r)h=((g-b)/d+(g<b?6:0))/6;else if(mx===g)h=((b-r)/d+2)/6;else h=((r-g)/d+4)/6;}return{h:h,s:s,v:v};}
-// HSV to RGB: pick one of six hue sextants and interpolate. Inverse of rgbToHsv.
-function hsvToRgb(h,s,v){var i=Math.floor(h*6),f=h*6-i,p=v*(1-s),q=v*(1-f*s),t=v*(1-(1-f)*s);var r,g,b;switch(i%6){case 0:r=v;g=t;b=p;break;case 1:r=q;g=v;b=p;break;case 2:r=p;g=v;b=t;break;case 3:r=p;g=q;b=v;break;case 4:r=t;g=p;b=v;break;case 5:r=v;g=p;b=q;break;}return{r:Math.round(r*255),g:Math.round(g*255),b:Math.round(b*255)};}
+(function () {
+  'use strict';
 
-// ── STATE ──
-// The current selection. Every control writes here and every renderer reads it.
-var primaryColor = '#6B1D1D';
-var secondaryColor = '#C0C8D0';
-var tertiaryColor = '#E8D060';
-var currentPattern = 'cross';
-var currentShape = 'rectangle';
-var currentEmblem = 'star5';
+  function $(id) { return document.getElementById(id); }
 
-// ── FLAG SHAPES ──
-// Outline definitions. Each path(W,H) returns a polygon in canvas coordinates;
-// renderFlag clips the drawn flag to it. The mini SVG in the shape picker reuses
-// the same path at thumbnail size.
-var SHAPES = [
-  {id:'rectangle', name:'Standard', path:function(W,H){return[[0,0],[W,0],[W,H],[0,H]];}},
-  {id:'pennant', name:'Pennant', path:function(W,H){return[[0,0],[W,H*0.5],[0,H]];}},
-  {id:'swallowtail', name:'Swallowtail', path:function(W,H){return[[0,0],[W,0],[W,H],[0,H],[W*0.2,H*0.5]];}},
-  {id:'guidon', name:'Guidon', path:function(W,H){return[[0,0],[W*0.7,0],[W,H*0.5],[W*0.7,H],[0,H]];}},
-  {id:'burgee', name:'Burgee', path:function(W,H){return[[0,0],[W,H*0.5],[0,H]];}},
-  {id:'shield', name:'Shield', path:function(W,H){return[[0,0],[W,0],[W,H*0.6],[W*0.5,H],[0,H*0.6]];}},
-];
-
-// ── EMBLEMS ──
-// Centered symbols. Each draw(ctx,cx,cy,r,c) paints one emblem of radius r in
-// color c at (cx,cy). 'none' draws nothing. The crescent uses a destination-out
-// pass to subtract an offset disc, carving the moon shape.
-var EMBLEMS = [
-  {id:'none', label:'None', draw:function(){}},
-  {id:'star5', label:'Star', draw:function(ctx,cx,cy,r,c){drawStar(ctx,cx,cy,r,5,c);}},
-  {id:'star6', label:'Hex Star', draw:function(ctx,cx,cy,r,c){drawStar(ctx,cx,cy,r,6,c);}},
-  {id:'star8', label:'8-Star', draw:function(ctx,cx,cy,r,c){drawStar(ctx,cx,cy,r,8,c);}},
-  {id:'circle', label:'Circle', draw:function(ctx,cx,cy,r,c){ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle=c;ctx.fill();}},
-  {id:'ring', label:'Ring', draw:function(ctx,cx,cy,r,c){ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.lineWidth=r*0.22;ctx.strokeStyle=c;ctx.stroke();}},
-  {id:'diamond', label:'Diamond', draw:function(ctx,cx,cy,r,c){ctx.beginPath();ctx.moveTo(cx,cy-r);ctx.lineTo(cx+r*0.65,cy);ctx.lineTo(cx,cy+r);ctx.lineTo(cx-r*0.65,cy);ctx.closePath();ctx.fillStyle=c;ctx.fill();}},
-  {id:'crescent', label:'Crescent', draw:function(ctx,cx,cy,r,c){ctx.beginPath();ctx.arc(cx,cy,r,0,Math.PI*2);ctx.fillStyle=c;ctx.fill();ctx.globalCompositeOperation='destination-out';ctx.beginPath();ctx.arc(cx+r*0.35,cy,r*0.8,0,Math.PI*2);ctx.fill();ctx.globalCompositeOperation='source-over';}},
-  {id:'cross', label:'Cross', draw:function(ctx,cx,cy,r,c){var w=r*0.32;ctx.fillStyle=c;ctx.fillRect(cx-w,cy-r,w*2,r*2);ctx.fillRect(cx-r,cy-w,r*2,w*2);}},
-  {id:'anchor', label:'Anchor', draw:function(ctx,cx,cy,r,c){ctx.strokeStyle=c;ctx.lineWidth=r*0.18;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(cx,cy-r*0.8);ctx.lineTo(cx,cy+r*0.7);ctx.stroke();ctx.beginPath();ctx.arc(cx,cy+r*0.15,r*0.55,Math.PI*0.15,Math.PI*0.85);ctx.stroke();ctx.beginPath();ctx.moveTo(cx-r*0.35,cy-r*0.8);ctx.lineTo(cx+r*0.35,cy-r*0.8);ctx.stroke();ctx.beginPath();ctx.arc(cx,cy-r*0.55,r*0.25,0,Math.PI*2);ctx.stroke();}},
-];
-
-// Draw a filled star with pts points. It steps 2×pts vertices around the center,
-// alternating the outer radius r and an inner radius (0.45r) to make the notches.
-function drawStar(ctx,cx,cy,r,pts,c){
-  ctx.beginPath();
-  for(var i=0;i<pts*2;i++){var a=(i*Math.PI/pts)-Math.PI/2;var rr=i%2===0?r:r*0.45;ctx.lineTo(cx+Math.cos(a)*rr,cy+Math.sin(a)*rr);}
-  ctx.closePath();ctx.fillStyle=c;ctx.fill();
-}
-
-// ── PATTERN DEFINITIONS ──
-// The 30 background designs. Each draw(ctx,W,H,c1,c2) fills the full flag field
-// using the primary and secondary colors; the emblem and shape clip are applied
-// later by renderFlag. Order here sets the catalog grid order.
-var PATTERNS = [
-  {id:'solid', name:'Solid', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);}},
-  {id:'bicolor_h', name:'Bicolor H', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H/2);ctx.fillStyle=c2;ctx.fillRect(0,H/2,W,H/2);}},
-  {id:'bicolor_v', name:'Bicolor V', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W/2,H);ctx.fillStyle=c2;ctx.fillRect(W/2,0,W/2,H);}},
-  {id:'triband_h', name:'Triband H', draw:function(ctx,W,H,c1,c2){var h=H/3;ctx.fillStyle=c1;ctx.fillRect(0,0,W,h);ctx.fillStyle=c2;ctx.fillRect(0,h,W,h);ctx.fillStyle=c1;ctx.fillRect(0,h*2,W,h);}},
-  {id:'triband_v', name:'Triband V', draw:function(ctx,W,H,c1,c2){var w=W/3;ctx.fillStyle=c1;ctx.fillRect(0,0,w,H);ctx.fillStyle=c2;ctx.fillRect(w,0,w,H);ctx.fillStyle=c1;ctx.fillRect(w*2,0,w,H);}},
-  {id:'cross', name:'Cross', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);var t=Math.min(W,H)*0.18;ctx.fillStyle=c2;ctx.fillRect(0,(H-t)/2,W,t);ctx.fillRect((W-t)/2,0,t,H);}},
-  {id:'saltire', name:'Saltire', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.strokeStyle=c2;ctx.lineWidth=Math.min(W,H)*0.16;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W,H);ctx.moveTo(W,0);ctx.lineTo(0,H);ctx.stroke();}},
-  {id:'chevron', name:'Chevron', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c2;ctx.fillRect(0,0,W,H);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W*0.4,H/2);ctx.lineTo(0,H);ctx.closePath();ctx.fillStyle=c1;ctx.fill();}},
-  {id:'diagonal_l', name:'Diagonal ╲', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W,0);ctx.lineTo(W,H);ctx.closePath();ctx.fillStyle=c2;ctx.fill();}},
-  {id:'diagonal_r', name:'Diagonal ╱', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W,H);ctx.lineTo(0,H);ctx.closePath();ctx.fillStyle=c2;ctx.fill();}},
-  {id:'quarters', name:'Quarters', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W/2,H/2);ctx.fillRect(W/2,H/2,W/2,H/2);ctx.fillStyle=c2;ctx.fillRect(W/2,0,W/2,H/2);ctx.fillRect(0,H/2,W/2,H/2);}},
-  {id:'canton', name:'Canton', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c2;ctx.fillRect(0,0,W,H);ctx.fillStyle=c1;ctx.fillRect(0,0,W*0.42,H*0.55);}},
-  {id:'stripe_bot', name:'Base Stripe', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.fillStyle=c2;ctx.fillRect(0,H*0.72,W,H*0.28);}},
-  {id:'border_flag', name:'Border', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c2;ctx.fillRect(0,0,W,H);var m=Math.min(W,H)*0.14;ctx.fillStyle=c1;ctx.fillRect(m,m,W-m*2,H-m*2);}},
-  {id:'circle_center', name:'Disc', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.beginPath();ctx.arc(W/2,H/2,Math.min(W,H)*0.28,0,Math.PI*2);ctx.fillStyle=c2;ctx.fill();}},
-  {id:'ring_center', name:'Ring', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);var r=Math.min(W,H)*0.28;ctx.beginPath();ctx.arc(W/2,H/2,r,0,Math.PI*2);ctx.lineWidth=r*0.22;ctx.strokeStyle=c2;ctx.stroke();}},
-  {id:'diamond_center', name:'Diamond', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.beginPath();ctx.moveTo(W/2,H*0.12);ctx.lineTo(W*0.78,H/2);ctx.lineTo(W/2,H*0.88);ctx.lineTo(W*0.22,H/2);ctx.closePath();ctx.fillStyle=c2;ctx.fill();}},
-  {id:'sunburst', name:'Sunburst', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);var cx=W/2,cy=H/2,n=16;ctx.fillStyle=c2;for(var i=0;i<n;i+=2){ctx.beginPath();ctx.moveTo(cx,cy);var a1=(i/n)*Math.PI*2-Math.PI/2,a2=((i+1)/n)*Math.PI*2-Math.PI/2;var r=Math.max(W,H);ctx.arc(cx,cy,r,a1,a2);ctx.closePath();ctx.fill();}}},
-  {id:'bend', name:'Bend', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.strokeStyle=c2;ctx.lineWidth=Math.min(W,H)*0.24;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W,H);ctx.stroke();}},
-  {id:'pale', name:'Pale', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);var w=W*0.28;ctx.fillStyle=c2;ctx.fillRect((W-w)/2,0,w,H);}},
-  {id:'fess', name:'Fess', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);var h=H*0.3;ctx.fillStyle=c2;ctx.fillRect(0,(H-h)/2,W,h);}},
-  {id:'pall', name:'Pall', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.strokeStyle=c2;ctx.lineWidth=Math.min(W,H)*0.16;ctx.lineCap='square';ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W*0.4,H/2);ctx.lineTo(0,H);ctx.moveTo(W*0.4,H/2);ctx.lineTo(W,H/2);ctx.stroke();}},
-  {id:'gyronny', name:'Gyronny', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);var cx=W/2,cy=H/2;ctx.fillStyle=c2;for(var i=0;i<4;i++){ctx.beginPath();ctx.moveTo(cx,cy);var a1=(i*2/8)*Math.PI*2-Math.PI/2;var a2=((i*2+1)/8)*Math.PI*2-Math.PI/2;var r=Math.max(W,H);ctx.arc(cx,cy,r,a1,a2);ctx.closePath();ctx.fill();}}},
-  {id:'per_bend', name:'Per Bend', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W,H);ctx.lineTo(W,0);ctx.closePath();ctx.fillStyle=c2;ctx.fill();}},
-  {id:'chief', name:'Chief', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.fillStyle=c2;ctx.fillRect(0,0,W,H*0.35);}},
-  {id:'five_stripes', name:'5 Stripes', draw:function(ctx,W,H,c1,c2){var h=H/5;for(var i=0;i<5;i++){ctx.fillStyle=i%2===0?c1:c2;ctx.fillRect(0,h*i,W,h);}}},
-  {id:'vert_stripes', name:'V-Stripes', draw:function(ctx,W,H,c1,c2){var w=W/5;for(var i=0;i<5;i++){ctx.fillStyle=i%2===0?c1:c2;ctx.fillRect(w*i,0,w,H);}}},
-  {id:'check', name:'Checkers', draw:function(ctx,W,H,c1,c2){var n=4,cw=W/n,ch=H/3;for(var r=0;r<3;r++)for(var c=0;c<n;c++){ctx.fillStyle=(r+c)%2===0?c1:c2;ctx.fillRect(cw*c,ch*r,cw,ch);}}},
-  {id:'arrow', name:'Arrow', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c1;ctx.fillRect(0,0,W,H);ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(W*0.5,H/2);ctx.lineTo(0,H);ctx.lineTo(W*0.18,H/2);ctx.closePath();ctx.fillStyle=c2;ctx.fill();}},
-  {id:'serrated', name:'Serrated', draw:function(ctx,W,H,c1,c2){ctx.fillStyle=c2;ctx.fillRect(0,0,W,H);ctx.beginPath();ctx.moveTo(0,0);var n=6;for(var i=0;i<n;i++){ctx.lineTo(W*0.45,H*(i+0.5)/n);ctx.lineTo(0,H*(i+1)/n);}ctx.closePath();ctx.fillStyle=c1;ctx.fill();}},
-];
-
-// ── PRESET BANNERS: [name, c1, c2, c3_symbol, pattern, shape, emblem] ──
-// Ready-made banners. Each row is a complete selection; clicking one applies all
-// seven fields at once. The positional tuple order is documented on this line.
-var PRESETS = [
-  ['Viper','#6B1D1D','#C0C8D0','#E8D060','cross','rectangle','star5'],
-  ['Terran','#18244A','#C0C8D0','#D4443B','canton','rectangle','star5'],
-  ['Martian','#8B0000','#D2691E','#FFD700','chevron','rectangle','none'],
-  ['Void Corp','#0a0a14','#8866ff','#00e8ff','saltire','rectangle','ring'],
-  ['Solaris','#CC4400','#FF9900','#FFFFFF','sunburst','rectangle','circle'],
-  ['Frostheim','#d0e8f0','#2080c0','#FFFFFF','triband_h','swallowtail','star6'],
-  ['Jade Fed','#005544','#50c878','#FFD700','diagonal_l','rectangle','diamond'],
-  ['Crimson','#8a1a1a','#e8e0d0','#FFFFFF','cross','shield','none'],
-  ['Nebula','#3020a0','#00e8ff','#ff40ff','per_bend','guidon','star5'],
-  ['Iron','#404850','#c0c0c0','#E0A030','fess','rectangle','cross'],
-  ['Nova','#1a0033','#ff40ff','#FFFFFF','gyronny','rectangle','star8'],
-  ['Auroran','#004466','#66ffcc','#FFD700','pall','pennant','none'],
-  ['Scorched','#330000','#ff3300','#FF9900','arrow','guidon','none'],
-  ['Polar','#1a2a4a','#e0e8f0','#C0C8D0','canton','rectangle','star5'],
-  ['Amber','#8b4513','#daa520','#FFFFFF','triband_v','rectangle','circle'],
-  ['Emerald','#003300','#00cc66','#FFD700','five_stripes','rectangle','crescent'],
-  ['Titanium','#1a1a2e','#e94560','#FFFFFF','bend','swallowtail','none'],
-  ['Monarch','#4a0060','#ffd700','#FFFFFF','border_flag','shield','diamond'],
-  ['Tempest','#003355','#88ccee','#FFD700','vert_stripes','rectangle','none'],
-  ['Sentinel','#222222','#888890','#ffcc00','chief','rectangle','anchor'],
-];
-
-// ── RENDER FLAG ──
-// The one renderer for every flag on the page. It paints the pattern and emblem
-// onto an offscreen canvas, then clips that image to the chosen shape on the
-// target canvas and strokes the outline. Drawing to an offscreen first lets the
-// clip apply to the whole composed design at once. preview thins the outline for
-// thumbnails. Sizing the canvas here (W/H) also clears any previous contents.
-function renderFlag(canvas, W, H, c1, c2, c3, patternId, shapeId, emblemId, preview) {
-  canvas.width = W; canvas.height = H;
-  var ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, W, H);
-
-  // Find pattern
-  var pat = PATTERNS.find(function(p){return p.id===patternId;}) || PATTERNS[0];
-
-  // Offscreen pattern render
-  var offscreen = document.createElement('canvas');
-  offscreen.width = W; offscreen.height = H;
-  var ox = offscreen.getContext('2d');
-  pat.draw(ox, W, H, c1, c2);
-
-  // Draw emblem using tertiary (symbol) color
-  if (emblemId && emblemId !== 'none') {
-    var emb = EMBLEMS.find(function(e){return e.id===emblemId;});
-    if (emb) {
-      var er = Math.min(W, H) * 0.2;
-      ox.save();
-      emb.draw(ox, W/2, H/2, er, c3);
-      ox.restore();
+  // ── PATTERNS ──
+  // draw(x, W, H, c1, c2, c3) fills the full field. 'game' patterns use the
+  // catalog slug and name. 'more' patterns are site extras with site names.
+  function rect(x, c, a, b, w, h) { x.fillStyle = c; x.fillRect(a, b, w, h); }
+  function poly(x, c, pts) {
+    x.fillStyle = c; x.beginPath();
+    pts.forEach(function (p, i) { if (i) x.lineTo(p[0], p[1]); else x.moveTo(p[0], p[1]); });
+    x.closePath(); x.fill();
+  }
+  function bars(x, W, H, cols, vertical) {
+    var n = cols.length;
+    for (var i = 0; i < n; i++) {
+      if (vertical) rect(x, cols[i], Math.floor(W * i / n), 0, Math.ceil(W / n) + 1, H);
+      else rect(x, cols[i], 0, Math.floor(H * i / n), W, Math.ceil(H / n) + 1);
     }
   }
+  var PATTERNS = {
+    'plain': function (x, W, H, a) { rect(x, a, 0, 0, W, H); },
+    'horizontal-halves': function (x, W, H, a, b) { bars(x, W, H, [a, b], false); },
+    'vertical-halves': function (x, W, H, a, b) { bars(x, W, H, [a, b], true); },
+    'horizontal-tricolour': function (x, W, H, a, b, c) { bars(x, W, H, [a, b, c], false); },
+    'vertical-tricolour': function (x, W, H, a, b, c) { bars(x, W, H, [a, b, c], true); },
+    'nordic-cross': function (x, W, H, a, b, c) {
+      rect(x, a, 0, 0, W, H);
+      var cx = W * 0.36, t = H * 0.24, t2 = H * 0.11;
+      rect(x, b, cx - t / 2, 0, t, H); rect(x, b, 0, H / 2 - t / 2, W, t);
+      rect(x, c, cx - t2 / 2, 0, t2, H); rect(x, c, 0, H / 2 - t2 / 2, W, t2);
+    },
+    'hoist-triangle': function (x, W, H, a, b) { rect(x, b, 0, 0, W, H); poly(x, a, [[0, 0], [W * 0.46, H / 2], [0, H]]); },
+    'descending-diagonal': function (x, W, H, a, b) {
+      rect(x, a, 0, 0, W, H);
+      x.save(); x.strokeStyle = b; x.lineWidth = H * 0.26; x.beginPath(); x.moveTo(-W * 0.1, -H * 0.1); x.lineTo(W * 1.1, H * 1.1); x.stroke(); x.restore();
+    },
+    'quartered': function (x, W, H, a, b) {
+      rect(x, a, 0, 0, W / 2, H / 2); rect(x, a, W / 2, H / 2, W / 2, H / 2);
+      rect(x, b, W / 2, 0, W / 2, H / 2); rect(x, b, 0, H / 2, W / 2, H / 2);
+    },
+    'five-horizontal-bars': function (x, W, H, a, b) { bars(x, W, H, [a, b, a, b, a], false); },
+    'five-vertical-bars': function (x, W, H, a, b) { bars(x, W, H, [a, b, a, b, a], true); },
+    'saltire': function (x, W, H, a, b) {
+      rect(x, a, 0, 0, W, H);
+      x.save(); x.strokeStyle = b; x.lineWidth = H * 0.18; x.beginPath();
+      x.moveTo(0, 0); x.lineTo(W, H); x.moveTo(W, 0); x.lineTo(0, H); x.stroke(); x.restore();
+    },
+    'canton': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); rect(x, b, 0, 0, W * 0.44, H * 0.54); },
+    'fess': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); rect(x, b, 0, H / 3, W, H / 3); },
+    'hoist-band': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); rect(x, b, 0, 0, W * 0.27, H); },
+    'upper-left-triangle-over-a-secondary-field': function (x, W, H, a, b) { rect(x, b, 0, 0, W, H); poly(x, a, [[0, 0], [W, 0], [0, H]]); },
 
-  // Apply shape clip
-  var shape = SHAPES.find(function(s){return s.id===shapeId;}) || SHAPES[0];
-  var pts = shape.path(W, H);
-  ctx.save();
-  ctx.beginPath();
-  pts.forEach(function(p, i) { i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]); });
-  ctx.closePath();
-  ctx.clip();
-  ctx.drawImage(offscreen, 0, 0);
-  ctx.restore();
+    // Site extras.
+    'cross': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); var t = H * 0.2; rect(x, b, W / 2 - t / 2, 0, t, H); rect(x, b, 0, H / 2 - t / 2, W, t); },
+    'per-bend': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); poly(x, b, [[0, 0], [W, 0], [W, H]]); },
+    'pale': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); rect(x, b, W * 0.36, 0, W * 0.28, H); },
+    'chief': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); rect(x, b, 0, 0, W, H * 0.33); },
+    'base-stripe': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); rect(x, b, 0, H * 0.72, W, H * 0.28); },
+    'border': function (x, W, H, a, b) { rect(x, b, 0, 0, W, H); var m = H * 0.13; rect(x, a, m, m, W - 2 * m, H - 2 * m); },
+    'disc': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); x.fillStyle = b; x.beginPath(); x.arc(W / 2, H / 2, H * 0.3, 0, Math.PI * 2); x.fill(); },
+    'ring': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); x.strokeStyle = b; x.lineWidth = H * 0.07; x.beginPath(); x.arc(W / 2, H / 2, H * 0.3, 0, Math.PI * 2); x.stroke(); },
+    'lozenge': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); poly(x, b, [[W / 2, H * 0.08], [W * 0.92, H / 2], [W / 2, H * 0.92], [W * 0.08, H / 2]]); },
+    'sunburst': function (x, W, H, a, b) {
+      rect(x, a, 0, 0, W, H); x.fillStyle = b;
+      var n = 18, R = W;
+      for (var i = 0; i < n; i += 2) {
+        var a1 = i / n * Math.PI * 2, a2 = (i + 1) / n * Math.PI * 2;
+        x.beginPath(); x.moveTo(W / 2, H / 2); x.arc(W / 2, H / 2, R, a1, a2); x.closePath(); x.fill();
+      }
+    },
+    'gyronny': function (x, W, H, a, b) {
+      rect(x, a, 0, 0, W, H); x.fillStyle = b;
+      for (var i = 0; i < 8; i += 2) {
+        var a1 = i / 8 * Math.PI * 2, a2 = (i + 1) / 8 * Math.PI * 2;
+        x.beginPath(); x.moveTo(W / 2, H / 2); x.arc(W / 2, H / 2, W, a1, a2); x.closePath(); x.fill();
+      }
+    },
+    'pall': function (x, W, H, a, b) {
+      rect(x, a, 0, 0, W, H);
+      x.save(); x.strokeStyle = b; x.lineWidth = H * 0.16; x.lineJoin = 'miter'; x.beginPath();
+      x.moveTo(-2, -2); x.lineTo(W * 0.42, H / 2); x.lineTo(-2, H + 2); x.moveTo(W * 0.42, H / 2); x.lineTo(W + 2, H / 2); x.stroke(); x.restore();
+    },
+    'chevron': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); poly(x, b, [[0, H * 0.62], [W / 2, H * 0.2], [W, H * 0.62], [W, H * 0.92], [W / 2, H * 0.5], [0, H * 0.92]]); },
+    'checkers': function (x, W, H, a, b) { for (var r = 0; r < 4; r++) for (var c = 0; c < 6; c++) rect(x, (r + c) % 2 ? b : a, W * c / 6, H * r / 4, W / 6 + 1, H / 4 + 1); },
+    'arrow': function (x, W, H, a, b) { rect(x, a, 0, 0, W, H); poly(x, b, [[0, 0], [W * 0.52, H / 2], [0, H], [W * 0.2, H / 2]]); },
+    'serrated': function (x, W, H, a, b) {
+      rect(x, b, 0, 0, W, H);
+      var pts = [[0, 0]], n = 5;
+      for (var i = 0; i < n; i++) { pts.push([W * 0.4, H * (i + 0.5) / n]); pts.push([W * 0.3, H * (i + 1) / n]); }
+      pts.push([0, H]); poly(x, a, pts);
+    },
+    'stripes-thirteen': function (x, W, H, a, b) { var c = []; for (var i = 0; i < 9; i++) c.push(i % 2 ? b : a); bars(x, W, H, c, false); }
+  };
+  var GAME_PATTERN_ORDER = ['plain', 'horizontal-halves', 'vertical-halves', 'horizontal-tricolour', 'vertical-tricolour',
+    'nordic-cross', 'hoist-triangle', 'descending-diagonal', 'quartered', 'five-horizontal-bars', 'five-vertical-bars',
+    'saltire', 'canton', 'fess', 'hoist-band', 'upper-left-triangle-over-a-secondary-field'];
+  var MORE_PATTERNS = [['cross', 'Cross'], ['per-bend', 'Per bend'], ['pale', 'Pale'], ['chief', 'Chief'],
+    ['base-stripe', 'Base stripe'], ['border', 'Border'], ['disc', 'Disc'], ['ring', 'Ring'], ['lozenge', 'Lozenge'],
+    ['sunburst', 'Sunburst'], ['gyronny', 'Gyronny'], ['pall', 'Pall'], ['chevron', 'Chevron'], ['checkers', 'Checkers'],
+    ['arrow', 'Arrow'], ['serrated', 'Serrated'], ['stripes-thirteen', 'Nine stripes']];
 
-  // Draw shape outline
-  ctx.beginPath();
-  pts.forEach(function(p, i) { i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]); });
-  ctx.closePath();
-  ctx.strokeStyle = 'rgba(200,220,255,0.25)';
-  ctx.lineWidth = preview ? 1 : 2;
-  ctx.stroke();
-}
+  // ── SHAPES ──
+  var SHAPES = [
+    { id: 'standard', name: 'Standard', path: function (W, H) { return [[0, 0], [W, 0], [W, H], [0, H]]; } },
+    { id: 'swallowtail', name: 'Swallowtail', path: function (W, H) { return [[0, 0], [W, 0], [W * 0.76, H / 2], [W, H], [0, H]]; } },
+    { id: 'guidon', name: 'Guidon', path: function (W, H) { return [[0, 0], [W * 0.72, 0], [W, H / 2], [W * 0.72, H], [0, H]]; } },
+    { id: 'pennant', name: 'Pennant', path: function (W, H) { return [[0, 0], [W, H / 2], [0, H]]; } },
+    { id: 'burgee', name: 'Burgee', path: function (W, H) { return [[0, 0], [W, H * 0.2], [W * 0.6, H / 2], [W, H * 0.8], [0, H]]; } },
+    { id: 'shield', name: 'Shield', path: function (W, H) { return [[0, 0], [W, 0], [W, H * 0.6], [W / 2, H], [0, H * 0.6]]; } }
+  ];
+  function shapeById(id) { for (var i = 0; i < SHAPES.length; i++) if (SHAPES[i].id === id) return SHAPES[i]; return SHAPES[0]; }
 
-// Repaint the large preview from the current selection.
-function renderPreview() {
-  var c = document.getElementById('previewCanvas');
-  renderFlag(c, 480, 320, primaryColor, secondaryColor, tertiaryColor, currentPattern, currentShape, currentEmblem, false);
-}
-
-// ── BUILD UI ──
-// Populate the shape strip. Each button shows a mini SVG of the shape path and,
-// on click, sets currentShape and repaints the preview, catalog, and presets.
-function buildShapes() {
-  var g = document.getElementById('shapeStrip');
-  SHAPES.forEach(function(s) {
-    var btn = document.createElement('div');
-    btn.className = 'shape-btn' + (s.id === currentShape ? ' active' : '');
-    btn.dataset.id = s.id;
-    // Mini SVG shape preview
-    var pts = s.path(40, 24);
-    var d = pts.map(function(p,i){return (i===0?'M':'L')+p[0]+','+p[1];}).join(' ')+'Z';
-    btn.innerHTML = '<svg viewBox="0 0 40 24"><path d="'+d+'" fill="var(--text-faint)" stroke="var(--text-dim)" stroke-width="0.8"/></svg><span>'+s.name+'</span>';
-    btn.onclick = function() {
-      currentShape = s.id;
-      document.querySelectorAll('.shape-btn').forEach(function(b){b.classList.remove('active');});
-      btn.classList.add('active');
-      renderPreview(); renderAllPatternCards(); renderAllPresets(); updatePresetActive();
-    };
-    g.appendChild(btn);
-  });
-}
-
-// Populate the emblem grid. Each button renders its emblem into a 32px canvas
-// (an X for 'none'); clicking sets currentEmblem and repaints.
-function buildEmblems() {
-  var g = document.getElementById('emblemGrid');
-  EMBLEMS.forEach(function(emb) {
-    var btn = document.createElement('div');
-    btn.className = 'emblem-btn' + (emb.id === currentEmblem ? ' active' : '');
-    btn.dataset.id = emb.id;
-    btn.title = emb.label;
-    // Render mini emblem
-    var mc = document.createElement('canvas'); mc.width = 32; mc.height = 32;
-    var mx = mc.getContext('2d');
-    if (emb.id === 'none') {
-      mx.strokeStyle = '#6878a0'; mx.lineWidth = 1.5;
-      mx.beginPath(); mx.moveTo(6,6); mx.lineTo(26,26); mx.moveTo(26,6); mx.lineTo(6,26); mx.stroke();
-    } else {
-      emb.draw(mx, 16, 16, 10, '#96c8ff');
+  // ── VECTOR EMBLEMS ──
+  // Each draws white in a unit box from -1 to 1. Keys are catalog slugs.
+  function star(x, n, r0, r1) {
+    x.beginPath();
+    for (var i = 0; i < n * 2; i++) {
+      var a = i * Math.PI / n - Math.PI / 2, r = i % 2 ? r1 : r0;
+      x.lineTo(Math.cos(a) * r, Math.sin(a) * r);
     }
-    btn.appendChild(mc);
-    btn.onclick = function() {
-      currentEmblem = emb.id;
-      document.querySelectorAll('.emblem-btn').forEach(function(b){b.classList.remove('active');});
-      btn.classList.add('active');
-      renderPreview(); renderAllPatternCards(); renderAllPresets(); updatePresetActive();
-    };
-    g.appendChild(btn);
-  });
-}
-
-// Populate the pattern catalog. Each card holds a canvas and a name; clicking
-// sets currentPattern. The thumbnails are painted separately so they can be
-// repainted when colors, shape, or emblem change without rebuilding the cards.
-function buildPatternGrid() {
-  var g = document.getElementById('patternGrid');
-  PATTERNS.forEach(function(pat) {
-    var card = document.createElement('div');
-    card.className = 'pattern-card' + (pat.id === currentPattern ? ' active' : '');
-    card.dataset.id = pat.id;
-    var c = document.createElement('canvas');
-    card.appendChild(c);
-    card.innerHTML += '<span>' + pat.name + '</span>';
-    card.onclick = function() {
-      currentPattern = pat.id;
-      document.querySelectorAll('.pattern-card').forEach(function(cc){cc.classList.remove('active');});
-      card.classList.add('active');
-      renderPreview(); renderAllPresets(); updatePresetActive();
-    };
-    g.appendChild(card);
-  });
-  renderAllPatternCards();
-}
-
-// Repaint every catalog thumbnail with the current colors, shape, and emblem so
-// each card previews how that pattern would look in the active selection.
-function renderAllPatternCards() {
-  document.querySelectorAll('.pattern-card').forEach(function(card) {
-    var c = card.querySelector('canvas');
-    renderFlag(c, 165, 110, primaryColor, secondaryColor, tertiaryColor, card.dataset.id, currentShape, currentEmblem, true);
-  });
-}
-
-// Populate the preset gallery. Clicking a preset loads all seven fields into
-// state, pushes the colors through the pickers, syncs the active markers on the
-// shape, pattern, and emblem controls, then repaints.
-function buildPresets() {
-  var g = document.getElementById('presetGrid');
-  PRESETS.forEach(function(p, i) {
-    var item = document.createElement('div');
-    item.className = 'preset-item';
-    item.dataset.idx = i;
-    var c = document.createElement('canvas');
-    item.appendChild(c);
-    item.innerHTML += '<span>' + p[0] + '</span>';
-    item.onclick = function() {
-      primaryColor = p[1]; secondaryColor = p[2]; tertiaryColor = p[3];
-      currentPattern = p[4]; currentShape = p[5]; currentEmblem = p[6];
-      setPrimary(primaryColor); setSecondary(secondaryColor); setTertiary(tertiaryColor);
-      // Update shape UI
-      document.querySelectorAll('.shape-btn').forEach(function(b){b.classList.toggle('active',b.dataset.id===currentShape);});
-      // Update pattern UI
-      document.querySelectorAll('.pattern-card').forEach(function(b){b.classList.toggle('active',b.dataset.id===currentPattern);});
-      // Update emblem UI
-      document.querySelectorAll('.emblem-btn').forEach(function(b){b.classList.toggle('active',b.dataset.id===currentEmblem);});
-      renderPreview(); renderAllPatternCards(); updatePresetActive();
-    };
-    g.appendChild(item);
-  });
-  renderAllPresets();
-}
-
-// Repaint every preset thumbnail from its own fixed tuple (not the current
-// selection), so the gallery always shows each banner as designed.
-function renderAllPresets() {
-  document.querySelectorAll('.preset-item').forEach(function(item) {
-    var c = item.querySelector('canvas');
-    var p = PRESETS[+item.dataset.idx];
-    renderFlag(c, 132, 88, p[1], p[2], p[3], p[4], p[5], p[6], true);
-  });
-}
-
-// Highlight a preset only when the current selection matches it exactly across
-// all three colors, pattern, shape, and emblem; otherwise none is active.
-function updatePresetActive() {
-  document.querySelectorAll('.preset-item').forEach(function(item) {
-    var p = PRESETS[+item.dataset.idx];
-    var match = primaryColor.toUpperCase() === p[1].toUpperCase()
-      && secondaryColor.toUpperCase() === p[2].toUpperCase()
-      && tertiaryColor.toUpperCase() === p[3].toUpperCase()
-      && currentPattern === p[4] && currentShape === p[5] && currentEmblem === p[6];
-    item.classList.toggle('active', match);
-  });
-}
-
-// ── COLOR PICKER WIRING ──
-// setPrimary/setSecondary/setTertiary are the single write path for each color.
-// Given a hex, each updates state, the native picker, the hex field, the R/G/B
-// fields, the swatch, and the HSV canvases, so all representations stay in sync
-// no matter which control changed. They do not repaint the flag; colorChanged()
-// does, called by the event handlers after setX.
-function setPrimary(hex) {
-  primaryColor = hex;
-  var rgb = hexToRgb(hex);
-  document.getElementById('primaryNativePicker').value = hex;
-  document.getElementById('primaryHex').value = hex.toUpperCase();
-  document.getElementById('primaryR').value = rgb.r;
-  document.getElementById('primaryG').value = rgb.g;
-  document.getElementById('primaryB').value = rgb.b;
-  document.getElementById('primarySwatchBg').style.background = hex;
-  syncHsvFromHex('primary', hex);
-}
-function setSecondary(hex) {
-  secondaryColor = hex;
-  var rgb = hexToRgb(hex);
-  document.getElementById('secondaryNativePicker').value = hex;
-  document.getElementById('secondaryHex').value = hex.toUpperCase();
-  document.getElementById('secondaryR').value = rgb.r;
-  document.getElementById('secondaryG').value = rgb.g;
-  document.getElementById('secondaryB').value = rgb.b;
-  document.getElementById('secondarySwatchBg').style.background = hex;
-  syncHsvFromHex('secondary', hex);
-}
-function setTertiary(hex) {
-  tertiaryColor = hex;
-  var rgb = hexToRgb(hex);
-  document.getElementById('tertiaryNativePicker').value = hex;
-  document.getElementById('tertiaryHex').value = hex.toUpperCase();
-  document.getElementById('tertiaryR').value = rgb.r;
-  document.getElementById('tertiaryG').value = rgb.g;
-  document.getElementById('tertiaryB').value = rgb.b;
-  document.getElementById('tertiarySwatchBg').style.background = hex;
-  syncHsvFromHex('tertiary', hex);
-}
-
-// Repaint everything that depends on the colors after a change.
-function colorChanged() { renderPreview(); renderAllPatternCards(); renderAllPresets(); updatePresetActive(); }
-
-// Native OS color pickers: apply the picked value straight through.
-document.getElementById('primaryNativePicker').addEventListener('input', function() { setPrimary(this.value); colorChanged(); });
-document.getElementById('secondaryNativePicker').addEventListener('input', function() { setSecondary(this.value); colorChanged(); });
-document.getElementById('tertiaryNativePicker').addEventListener('input', function() { setTertiary(this.value); colorChanged(); });
-
-// Hex text fields: accept with or without a leading #, and apply only when the
-// value is a valid six-digit hex so a half-typed entry does not repaint.
-document.getElementById('primaryHex').addEventListener('change', function() {
-  var v = this.value.trim(); if (v[0] !== '#') v = '#' + v;
-  if (/^#[0-9a-fA-F]{6}$/.test(v)) { setPrimary(v); colorChanged(); }
-});
-document.getElementById('secondaryHex').addEventListener('change', function() {
-  var v = this.value.trim(); if (v[0] !== '#') v = '#' + v;
-  if (/^#[0-9a-fA-F]{6}$/.test(v)) { setSecondary(v); colorChanged(); }
-});
-document.getElementById('tertiaryHex').addEventListener('change', function() {
-  var v = this.value.trim(); if (v[0] !== '#') v = '#' + v;
-  if (/^#[0-9a-fA-F]{6}$/.test(v)) { setTertiary(v); colorChanged(); }
-});
-
-// R/G/B number fields: read all three, clamp to 0..255, and rebuild the hex.
-['primaryR','primaryG','primaryB'].forEach(function(id) {
-  document.getElementById(id).addEventListener('input', function() {
-    var r = clamp(+document.getElementById('primaryR').value), g = clamp(+document.getElementById('primaryG').value), b = clamp(+document.getElementById('primaryB').value);
-    setPrimary(rgbToHex(r,g,b)); colorChanged();
-  });
-});
-['secondaryR','secondaryG','secondaryB'].forEach(function(id) {
-  document.getElementById(id).addEventListener('input', function() {
-    var r = clamp(+document.getElementById('secondaryR').value), g = clamp(+document.getElementById('secondaryG').value), b = clamp(+document.getElementById('secondaryB').value);
-    setSecondary(rgbToHex(r,g,b)); colorChanged();
-  });
-});
-['tertiaryR','tertiaryG','tertiaryB'].forEach(function(id) {
-  document.getElementById(id).addEventListener('input', function() {
-    var r = clamp(+document.getElementById('tertiaryR').value), g = clamp(+document.getElementById('tertiaryG').value), b = clamp(+document.getElementById('tertiaryB').value);
-    setTertiary(rgbToHex(r,g,b)); colorChanged();
-  });
-});
-
-// ── HSV PICKER LOGIC ──
-// Per-color HSV position, kept alongside the hex so the square and hue cursors
-// have somewhere to live even when the hex loses hue (pure black/white/gray).
-var hsvState = { primary: {h:0,s:0,v:0}, secondary: {h:0,s:0,v:0}, tertiary: {h:0,s:0,v:0} };
-
-// Paint the saturation/value square for a hue: fill the hue, overlay a
-// white-to-transparent gradient left to right (saturation) and a
-// transparent-to-black gradient top to bottom (value). Sized in device pixels.
-function renderSvCanvas(canvasId, hue) {
-  var c = document.getElementById(canvasId);
-  var rect = c.parentElement.getBoundingClientRect();
-  var W = Math.floor(rect.width * devicePixelRatio), H = Math.floor(rect.height * devicePixelRatio);
-  if (W < 1 || H < 1) return;
-  c.width = W; c.height = H;
-  var ctx = c.getContext('2d');
-  var rgb = hsvToRgb(hue, 1, 1);
-  ctx.fillStyle = 'rgb('+rgb.r+','+rgb.g+','+rgb.b+')';
-  ctx.fillRect(0, 0, W, H);
-  var gW = ctx.createLinearGradient(0, 0, W, 0);
-  gW.addColorStop(0, 'rgba(255,255,255,1)'); gW.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = gW; ctx.fillRect(0, 0, W, H);
-  var gB = ctx.createLinearGradient(0, 0, 0, H);
-  gB.addColorStop(0, 'rgba(0,0,0,0)'); gB.addColorStop(1, 'rgba(0,0,0,1)');
-  ctx.fillStyle = gB; ctx.fillRect(0, 0, W, H);
-}
-
-// Paint the vertical hue strip: a gradient through the six hue stops top to bottom.
-function renderHueCanvas(canvasId) {
-  var c = document.getElementById(canvasId);
-  var rect = c.parentElement.getBoundingClientRect();
-  var W = Math.floor(rect.width * devicePixelRatio), H = Math.floor(rect.height * devicePixelRatio);
-  if (W < 1 || H < 1) return;
-  c.width = W; c.height = H;
-  var ctx = c.getContext('2d');
-  var grad = ctx.createLinearGradient(0, 0, 0, H);
-  for (var i = 0; i <= 6; i++) { var rgb = hsvToRgb(i/6, 1, 1); grad.addColorStop(Math.min(i/6, 1), 'rgb('+rgb.r+','+rgb.g+','+rgb.b+')'); }
-  ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
-}
-
-// Position the square and hue cursors from the stored HSV: saturation across,
-// inverted value down, hue down the strip.
-function updateSvCursor(which) { var st = hsvState[which]; var cur = document.getElementById(which + 'SvCursor'); cur.style.left = (st.s*100)+'%'; cur.style.top = ((1-st.v)*100)+'%'; }
-function updateHueCursor(which) { var st = hsvState[which]; document.getElementById(which + 'HueCursor').style.top = (st.h*100)+'%'; }
-
-// Sync the HSV state and cursors to a hex value. When the color is (near) gray
-// its hue is undefined, so the previous hue is kept to stop the cursor jumping
-// to red as the user drags value or saturation toward an edge.
-function syncHsvFromHex(which, hex) {
-  var rgb = hexToRgb(hex), hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
-  if (hsv.s < 0.01 && hsvState[which].h !== undefined) hsv.h = hsvState[which].h;
-  if (hsv.v < 0.01 && hsvState[which].h !== undefined) hsv.h = hsvState[which].h;
-  hsvState[which] = hsv;
-  renderSvCanvas(which + 'SvCanvas', hsv.h);
-  updateSvCursor(which); updateHueCursor(which);
-}
-
-// Wire pointer dragging for one color picker. handleSv maps a point in the
-// square to saturation/value; handleHue maps a point in the strip to hue and
-// repaints the square. Both convert back to hex through setFn and repaint. Mouse
-// and touch share the handlers; window-level move/up listeners keep a drag alive
-// when the pointer leaves the control.
-function setupHsvInteraction(which, setFn) {
-  var svWrap = document.getElementById(which + 'SvWrap');
-  var hueWrap = document.getElementById(which + 'HueWrap');
-  var draggingSv = false, draggingHue = false;
-
-  function handleSv(e) {
-    var rect = svWrap.getBoundingClientRect();
-    var x = (e.clientX !== undefined ? e.clientX : e.touches[0].clientX) - rect.left;
-    var y = (e.clientY !== undefined ? e.clientY : e.touches[0].clientY) - rect.top;
-    hsvState[which].s = Math.max(0, Math.min(1, x / rect.width));
-    hsvState[which].v = Math.max(0, Math.min(1, 1 - y / rect.height));
-    updateSvCursor(which);
-    var rgb = hsvToRgb(hsvState[which].h, hsvState[which].s, hsvState[which].v);
-    setFn(rgbToHex(rgb.r, rgb.g, rgb.b)); colorChanged();
+    x.closePath(); x.fill();
   }
-  function handleHue(e) {
-    var rect = hueWrap.getBoundingClientRect();
-    var y = (e.clientY !== undefined ? e.clientY : e.touches[0].clientY) - rect.top;
-    hsvState[which].h = Math.max(0, Math.min(1, y / rect.height));
-    updateHueCursor(which);
-    renderSvCanvas(which + 'SvCanvas', hsvState[which].h);
-    var rgb = hsvToRgb(hsvState[which].h, hsvState[which].s, hsvState[which].v);
-    setFn(rgbToHex(rgb.r, rgb.g, rgb.b)); colorChanged();
-  }
-  svWrap.addEventListener('mousedown', function(e) { e.preventDefault(); draggingSv = true; handleSv(e); });
-  hueWrap.addEventListener('mousedown', function(e) { e.preventDefault(); draggingHue = true; handleHue(e); });
-  window.addEventListener('mousemove', function(e) { if (draggingSv) handleSv(e); if (draggingHue) handleHue(e); });
-  window.addEventListener('mouseup', function() { draggingSv = false; draggingHue = false; });
-  svWrap.addEventListener('touchstart', function(e) { e.preventDefault(); draggingSv = true; handleSv(e); }, {passive:false});
-  hueWrap.addEventListener('touchstart', function(e) { e.preventDefault(); draggingHue = true; handleHue(e); }, {passive:false});
-  window.addEventListener('touchmove', function(e) { if (draggingSv) handleSv(e); if (draggingHue) handleHue(e); }, {passive:false});
-  window.addEventListener('touchend', function() { draggingSv = false; draggingHue = false; });
-}
+  function disc(x, cx, cy, r) { x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); }
+  function cut(x, f) { x.save(); x.globalCompositeOperation = 'destination-out'; f(); x.restore(); }
+  var VECTORS = {
+    'star': function (x) { star(x, 5, 1, 0.42); },
+    'moon': function (x) { disc(x, 0, 0, 0.92); cut(x, function () { disc(x, 0.4, -0.18, 0.78); }); },
+    'heart-vector': function (x) {
+      x.beginPath(); x.moveTo(0, 0.9);
+      x.bezierCurveTo(-0.4, 0.55, -1, 0.15, -0.96, -0.32);
+      x.bezierCurveTo(-0.92, -0.9, -0.2, -1, 0, -0.5);
+      x.bezierCurveTo(0.2, -1, 0.92, -0.9, 0.96, -0.32);
+      x.bezierCurveTo(1, 0.15, 0.4, 0.55, 0, 0.9); x.fill();
+    },
+    'chevron': function (x) {
+      x.beginPath(); x.moveTo(-0.95, 0.1); x.lineTo(0, -0.75); x.lineTo(0.95, 0.1); x.lineTo(0.95, 0.55); x.lineTo(0, -0.3); x.lineTo(-0.95, 0.55); x.closePath(); x.fill();
+      x.beginPath(); x.moveTo(-0.95, 0.6); x.lineTo(0, -0.18); x.lineTo(0.95, 0.6); x.lineTo(0.95, 0.95); x.lineTo(0, 0.2); x.lineTo(-0.95, 0.95); x.closePath(); x.fill();
+    },
+    'shield': function (x) {
+      x.beginPath(); x.moveTo(-0.8, -0.9); x.lineTo(0.8, -0.9); x.lineTo(0.8, 0);
+      x.quadraticCurveTo(0.75, 0.65, 0, 0.98); x.quadraticCurveTo(-0.75, 0.65, -0.8, 0); x.closePath(); x.fill();
+      cut(x, function () { x.fillRect(-0.08, -0.75, 0.16, 1.45); x.fillRect(-0.62, -0.32, 1.24, 0.16); });
+    },
+    'sparkle': function (x) {
+      x.beginPath(); x.moveTo(0, -1);
+      x.quadraticCurveTo(0.12, -0.12, 1, 0); x.quadraticCurveTo(0.12, 0.12, 0, 1);
+      x.quadraticCurveTo(-0.12, 0.12, -1, 0); x.quadraticCurveTo(-0.12, -0.12, 0, -1); x.fill();
+    },
+    'ringed-planet': function (x) {
+      x.save(); x.rotate(-0.38);
+      x.lineWidth = 0.13; x.strokeStyle = '#fff';
+      x.beginPath(); x.ellipse(0, 0, 0.98, 0.3, 0, 0, Math.PI * 2); x.stroke();
+      cut(x, function () { x.beginPath(); x.ellipse(0, 0, 0.62, 0.62, 0, Math.PI, Math.PI * 2); x.fill(); });
+      x.restore();
+      disc(x, 0, 0, 0.5);
+      cut(x, function () { x.save(); x.rotate(-0.38); x.lineWidth = 0.1; x.beginPath(); x.ellipse(0, 0, 0.98, 0.42, 0, 0.15, Math.PI - 0.15); x.stroke(); x.restore(); });
+      x.save(); x.rotate(-0.38); x.lineWidth = 0.13; x.strokeStyle = '#fff'; x.beginPath(); x.ellipse(0, 0, 0.98, 0.3, 0, 0.2, Math.PI - 0.2); x.stroke(); x.restore();
+    },
+    'sun-vector': function (x) {
+      disc(x, 0, 0, 0.46);
+      for (var i = 0; i < 12; i++) {
+        var a = i / 12 * Math.PI * 2, s = 0.13;
+        x.beginPath(); x.moveTo(Math.cos(a - s) * 0.58, Math.sin(a - s) * 0.58);
+        x.lineTo(Math.cos(a) * 0.98, Math.sin(a) * 0.98); x.lineTo(Math.cos(a + s) * 0.58, Math.sin(a + s) * 0.58); x.closePath(); x.fill();
+      }
+    },
+    'comet': function (x) {
+      disc(x, 0.48, -0.48, 0.34);
+      x.beginPath(); x.moveTo(0.26, -0.74); x.lineTo(-0.95, 0.75); x.lineTo(0.74, -0.26); x.closePath(); x.fill();
+      x.lineWidth = 0.08; x.strokeStyle = '#fff'; x.lineCap = 'round';
+      x.beginPath(); x.moveTo(0.1, -0.2); x.lineTo(-0.55, 0.95); x.moveTo(0.2, -0.1); x.lineTo(-0.95, 0.55); x.stroke();
+    },
+    'crown': function (x) {
+      x.beginPath(); x.moveTo(-0.9, 0.55); x.lineTo(-0.95, -0.45); x.lineTo(-0.45, 0.05); x.lineTo(0, -0.7);
+      x.lineTo(0.45, 0.05); x.lineTo(0.95, -0.45); x.lineTo(0.9, 0.55); x.closePath(); x.fill();
+      x.fillRect(-0.9, 0.65, 1.8, 0.22);
+      disc(x, -0.95, -0.55, 0.12); disc(x, 0, -0.82, 0.13); disc(x, 0.95, -0.55, 0.12);
+    },
+    'flame': function (x) {
+      x.beginPath(); x.moveTo(0, -1);
+      x.bezierCurveTo(0.2, -0.5, 0.8, -0.2, 0.7, 0.35); x.bezierCurveTo(0.62, 0.8, 0.3, 0.98, 0, 0.98);
+      x.bezierCurveTo(-0.3, 0.98, -0.66, 0.8, -0.7, 0.35); x.bezierCurveTo(-0.72, 0, -0.45, -0.25, -0.3, -0.5);
+      x.bezierCurveTo(-0.25, -0.2, -0.1, -0.1, -0.05, -0.12); x.bezierCurveTo(0.05, -0.45, -0.1, -0.7, 0, -1); x.fill();
+      cut(x, function () {
+        x.beginPath(); x.moveTo(0, -0.1); x.bezierCurveTo(0.2, 0.15, 0.36, 0.4, 0.3, 0.6);
+        x.bezierCurveTo(0.24, 0.8, -0.24, 0.8, -0.3, 0.6); x.bezierCurveTo(-0.34, 0.4, -0.1, 0.25, 0, -0.1); x.fill();
+      });
+    },
+    'leaf': function (x) {
+      x.save(); x.rotate(Math.PI / 4);
+      x.beginPath(); x.moveTo(0, -1); x.quadraticCurveTo(0.75, 0, 0, 1); x.quadraticCurveTo(-0.75, 0, 0, -1); x.fill();
+      cut(x, function () { x.lineWidth = 0.07; x.beginPath(); x.moveTo(0, -0.75); x.lineTo(0, 0.85); x.stroke(); });
+      x.restore();
+    },
+    'gear-vector': function (x) {
+      x.beginPath();
+      var n = 9;
+      for (var i = 0; i < n; i++) {
+        var a = i / n * Math.PI * 2, w = Math.PI / n * 0.5;
+        x.lineTo(Math.cos(a - w * 1.25) * 0.72, Math.sin(a - w * 1.25) * 0.72);
+        x.lineTo(Math.cos(a - w * 0.8) * 0.98, Math.sin(a - w * 0.8) * 0.98);
+        x.lineTo(Math.cos(a + w * 0.8) * 0.98, Math.sin(a + w * 0.8) * 0.98);
+        x.lineTo(Math.cos(a + w * 1.25) * 0.72, Math.sin(a + w * 1.25) * 0.72);
+      }
+      x.closePath(); x.fill();
+      cut(x, function () { disc(x, 0, 0, 0.32); });
+    }
+  };
+  var VECTOR_FALLBACK_NAMES = { 'star': 'Star', 'moon': 'Moon', 'heart-vector': 'Heart', 'chevron': 'Chevron', 'shield': 'Shield',
+    'sparkle': 'Sparkle', 'ringed-planet': 'Ringed Planet', 'sun-vector': 'Sun', 'comet': 'Comet', 'crown': 'Crown',
+    'flame': 'Flame', 'leaf': 'Leaf', 'gear-vector': 'Gear' };
+  var GLYPH_FONT = '"Apple Symbols","Segoe UI Symbol","Noto Sans Symbols 2","Noto Sans Symbols","DejaVu Sans",sans-serif';
 
-// ── FLAG WAVE SIMULATION ──
-// A Verlet cloth: a grid of points whose motion is stored as current and
-// previous position (no explicit velocity). windStrength comes from the slider,
-// wavePaused freezes the step. The grid is CLOTH_W×CLOTH_H cells, so there are
-// (CLOTH_W+1)×(CLOTH_H+1) points.
-var waveCanvas = document.getElementById('waveCanvas');
-var waveCtx = waveCanvas.getContext('2d');
-var waveWrap = document.getElementById('waveWrap');
-var waveW, waveH;
-var wavePaused = false;
-var windStrength = 0.5;
-
-var CLOTH_W = 40, CLOTH_H = 25;
-var clothPoints = [];
-var clothRestLen;
-
-// Build the point grid. Each point stores its live position (x,y), a rest anchor
-// (ox,oy), its previous position (px,py) for Verlet integration, a pinned flag
-// (the left column is nailed to the pole), and its u,v texture coordinate.
-function initCloth() {
-  clothPoints = [];
-  var spacing = 8;
-  clothRestLen = spacing;
-  for (var y = 0; y <= CLOTH_H; y++) {
-    for (var x = 0; x <= CLOTH_W; x++) {
-      clothPoints.push({
-        x: x * spacing + 80, y: y * spacing + 40,
-        ox: x * spacing + 80, oy: y * spacing + 40,
-        px: x * spacing + 80, py: y * spacing + 40,
-        pinned: x === 0,
-        u: x / CLOTH_W, v: y / CLOTH_H
+  // ── CATALOG READ ──
+  // patterns: [{id, name, game}] ; emblems: [{id, name, group, glyph|null}]
+  var catalog = { patterns: [], emblems: [] };
+  function readCatalog() {
+    var data = window.SN_DATA, names = {}, emb = [];
+    if (data && data.entries) {
+      data.entries.forEach(function (e) {
+        if (e.category === 'flag-patterns') names[e.slug] = e.name;
+        if (e.category === 'flag-emblems') {
+          if (e.group === 'Glyph' && e.fields && e.fields.Glyph) emb.push({ id: e.slug, name: e.name, group: 'Glyph', glyph: e.fields.Glyph });
+          else if (VECTORS[e.slug]) emb.push({ id: e.slug, name: e.name, group: e.group || 'Vector', glyph: null });
+        }
       });
     }
+    if (!emb.length) Object.keys(VECTORS).forEach(function (k) { emb.push({ id: k, name: VECTOR_FALLBACK_NAMES[k], group: 'Vector', glyph: null }); });
+    GAME_PATTERN_ORDER.forEach(function (slug) {
+      catalog.patterns.push({ id: slug, name: names[slug] || slug.replace(/-/g, ' ').replace(/^./, function (c) { return c.toUpperCase(); }), game: true });
+    });
+    MORE_PATTERNS.forEach(function (p) { catalog.patterns.push({ id: p[0], name: p[1], game: false }); });
+    catalog.emblems = emb;
   }
-}
+  function patternById(id) { for (var i = 0; i < catalog.patterns.length; i++) if (catalog.patterns[i].id === id) return catalog.patterns[i]; return null; }
+  function emblemById(id) { for (var i = 0; i < catalog.emblems.length; i++) if (catalog.emblems[i].id === id) return catalog.emblems[i]; return null; }
 
-// Flatten a grid (x,y) into the clothPoints array index (row stride CLOTH_W+1).
-function getClothIdx(x, y) { return y * (CLOTH_W + 1) + x; }
+  // ── PRESETS ──
+  // Site banners: [name, c1, c2, c3, ce, pattern, shape, emblem].
+  var PRESETS = [
+    ['Viper', '#6b1d1d', '#c0c8d0', '#c0c8d0', '#e8d060', 'cross', 'standard', 'star'],
+    ['Terran', '#c0c8d0', '#18244a', '#18244a', '#e8ecf4', 'canton', 'standard', 'star'],
+    ['Martian', '#8b0000', '#d2691e', '#ffd700', '#ffd700', 'chevron', 'standard', 'none'],
+    ['Void Corp', '#0a0a14', '#8866ff', '#8866ff', '#00e8ff', 'saltire', 'standard', 'open-circle'],
+    ['Solaris', '#cc4400', '#ff9900', '#ff9900', '#ffffff', 'sunburst', 'standard', 'sun-vector'],
+    ['Frostheim', '#2080c0', '#d0e8f0', '#ffffff', '#ffffff', 'nordic-cross', 'swallowtail', 'none'],
+    ['Jade Fed', '#005544', '#50c878', '#50c878', '#ffd700', 'per-bend', 'standard', 'filled-diamond'],
+    ['Crimson', '#8a1a1a', '#e8e0d0', '#e8e0d0', '#ffffff', 'cross', 'shield', 'none'],
+    ['Nebula', '#3020a0', '#00e8ff', '#00e8ff', '#ff40ff', 'upper-left-triangle-over-a-secondary-field', 'guidon', 'sparkle'],
+    ['Iron', '#404850', '#c0c0c0', '#c0c0c0', '#e0a030', 'fess', 'standard', 'gear-vector'],
+    ['Nova', '#1a0033', '#ff40ff', '#ff40ff', '#ffffff', 'gyronny', 'standard', 'eight-pointed-star'],
+    ['Auroran', '#004466', '#66ffcc', '#66ffcc', '#ffd700', 'pall', 'pennant', 'none'],
+    ['Scorched', '#330000', '#ff3300', '#ff3300', '#ff9900', 'arrow', 'guidon', 'flame'],
+    ['Polar', '#e0e8f0', '#1a2a4a', '#1a2a4a', '#e0e8f0', 'canton', 'standard', 'filled-star'],
+    ['Amber', '#8b4513', '#daa520', '#8b4513', '#8b4513', 'vertical-tricolour', 'standard', 'filled-circle'],
+    ['Emerald', '#003300', '#00cc66', '#00cc66', '#ffd700', 'five-horizontal-bars', 'standard', 'moon'],
+    ['Titanium', '#1a1a2e', '#e94560', '#e94560', '#ffffff', 'descending-diagonal', 'swallowtail', 'none'],
+    ['Monarch', '#4a0060', '#ffd700', '#ffd700', '#ffd700', 'border', 'shield', 'crown'],
+    ['Tempest', '#003355', '#88ccee', '#88ccee', '#ffd700', 'five-vertical-bars', 'standard', 'lightning'],
+    ['Sentinel', '#222222', '#888890', '#888890', '#ffcc00', 'chief', 'standard', 'anchor'],
+    ['Harbour', '#f2f4f8', '#1f3f8f', '#d23a3a', '#1f3f8f', 'horizontal-tricolour', 'burgee', 'none'],
+    ['Outpost', '#2a2f3a', '#ffc832', '#2a2f3a', '#ffc832', 'hoist-band', 'standard', 'ringed-planet']
+  ];
 
-// Advance the cloth one step. Each free point moves by its Verlet velocity
-// (current minus previous, scaled by damping) plus gravity and a time-varying
-// wind push, then the previous position is stored. After integration the
-// distance constraints are relaxed several times to hold neighbors near rest
-// length; more iterations make the cloth stiffer. Pinned points never move.
-function updateCloth(dt) {
-  if (wavePaused) return;
-  var gravity = 0.15;
-  var damping = 0.985;
-  var wind = windStrength;
-  var t = performance.now() * 0.001;
+  var QUICK = ['#f2f4f8', '#9aa3b2', '#2a2f3a', '#0c0e14', '#d23a3a', '#ff8a2a', '#ffc832', '#7bd13b',
+               '#1fa37a', '#2bc4e0', '#2f6fe0', '#6a4ae0', '#c04ad8', '#ff5aa5', '#8b5a2b', '#c9b48a'];
 
-  for (var i = 0; i < clothPoints.length; i++) {
-    var p = clothPoints[i];
-    if (p.pinned) continue;
-    var vx = (p.x - p.px) * damping;
-    var vy = (p.y - p.py) * damping;
-    // Wind
-    var wx = (Math.sin(t * 2.5 + p.v * 4 + p.u * 2) * 0.8 + 0.5) * wind * 1.8;
-    var wy = Math.sin(t * 3.1 + p.u * 6) * wind * 0.3;
-    p.px = p.x; p.py = p.y;
-    p.x += vx + wx; p.y += vy + gravity + wy;
+  // ── STATE ──
+  var state = { c1: '#6b1d1d', c2: '#c0c8d0', c3: '#c0c8d0', ce: '#e8d060', pattern: 'cross', shape: 'standard',
+                emblem: 'star', size: 50, pos: 'center', channel: 'c1' };
+
+  // ── COLOUR MATHS ──
+  function hexToRgb(h) { var n = parseInt(String(h).replace('#', ''), 16); return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
+  function rgbToHex(r, g, b) { return '#' + ((1 << 24) + (Math.round(r) << 16) + (Math.round(g) << 8) + Math.round(b)).toString(16).slice(1); }
+  function normHex(v) {
+    v = String(v || '').trim().replace(/^#/, '');
+    if (/^[0-9a-f]{3}$/i.test(v)) v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
+    return /^[0-9a-f]{6}$/i.test(v) ? '#' + v.toLowerCase() : null;
+  }
+  function toHsv(hex) {
+    var c = hexToRgb(hex), r = c.r / 255, g = c.g / 255, b = c.b / 255;
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, h = 0;
+    if (d) { if (mx === r) h = ((g - b) / d) % 6; else if (mx === g) h = (b - r) / d + 2; else h = (r - g) / d + 4; h *= 60; if (h < 0) h += 360; }
+    return { h: h, s: mx ? d / mx : 0, v: mx };
+  }
+  function fromHsv(h, s, v) {
+    var f = function (n) { var k = (n + h / 60) % 6; return v - v * s * Math.max(0, Math.min(k, 4 - k, 1)); };
+    return rgbToHex(f(5) * 255, f(3) * 255, f(1) * 255);
   }
 
-  // Constraint solving
-  for (var iter = 0; iter < 5; iter++) {
-    for (var y = 0; y <= CLOTH_H; y++) {
-      for (var x = 0; x <= CLOTH_W; x++) {
-        var idx = getClothIdx(x, y);
-        // Right neighbor
-        if (x < CLOTH_W) solveConstraint(idx, getClothIdx(x+1, y));
-        // Bottom neighbor
-        if (y < CLOTH_H) solveConstraint(idx, getClothIdx(x, y+1));
-      }
+  // ── EMBLEM MASKS ──
+  // A white silhouette of one emblem in a px x px canvas, cached by id and size.
+  function makeCanvas(w, h) { var c = document.createElement('canvas'); c.width = w; c.height = h || w; return c; }
+  var maskCache = {}, maskKeys = [];
+  function emblemMask(em, px) {
+    px = Math.max(8, Math.round(px));
+    var key = em.id + '|' + px;
+    if (maskCache[key]) return maskCache[key];
+    var c = makeCanvas(px), x = c.getContext('2d');
+    if (em.glyph) {
+      var g = em.glyph + '︎';
+      x.font = px + 'px ' + GLYPH_FONT;
+      var m = x.measureText(g);
+      var bw = (m.actualBoundingBoxLeft || 0) + (m.actualBoundingBoxRight || px * 0.8);
+      var bh = (m.actualBoundingBoxAscent || px * 0.8) + (m.actualBoundingBoxDescent || 0);
+      var k = Math.min(px * 0.94 / Math.max(1, bw), px * 0.94 / Math.max(1, bh));
+      var fs = px * k;
+      x.font = fs + 'px ' + GLYPH_FONT;
+      m = x.measureText(g);
+      var L = m.actualBoundingBoxLeft || 0, R = m.actualBoundingBoxRight || fs * 0.8;
+      var A = m.actualBoundingBoxAscent || fs * 0.8, D = m.actualBoundingBoxDescent || 0;
+      x.fillStyle = '#fff';
+      x.fillText(g, px / 2 + (L - R) / 2, px / 2 + (A - D) / 2);
+      // A colour emoji can replace the glyph; this pass keeps only its outline.
+      x.globalCompositeOperation = 'source-in';
+      x.fillRect(0, 0, px, px);
+    } else if (VECTORS[em.id]) {
+      x.translate(px / 2, px / 2); x.scale(px / 2 * 0.96, px / 2 * 0.96);
+      x.fillStyle = '#fff'; x.strokeStyle = '#fff';
+      VECTORS[em.id](x);
     }
+    maskCache[key] = c; maskKeys.push(key);
+    if (maskKeys.length > 160) delete maskCache[maskKeys.shift()];
+    return c;
   }
-}
-
-// Relax one distance constraint between two points: measure the gap, and push
-// each half of the error back toward the rest length. A pinned point holds, so
-// its neighbor takes the whole correction, anchoring that edge to the pole.
-function solveConstraint(i1, i2) {
-  var p1 = clothPoints[i1], p2 = clothPoints[i2];
-  var dx = p2.x - p1.x, dy = p2.y - p1.y;
-  var dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < 0.001) return;
-  var diff = (dist - clothRestLen) / dist * 0.5;
-  var ox = dx * diff, oy = dy * diff;
-  if (!p1.pinned) { p1.x += ox; p1.y += oy; }
-  if (!p2.pinned) { p2.x -= ox; p2.y -= oy; }
-}
-
-// Draw one frame of the waving flag: a starfield backdrop, the pole, and the
-// cloth mesh drawn as textured quads. It renders the current flag once to an
-// offscreen canvas, then for each grid cell samples that flag pixel, shades it
-// by a cheap normal approximation (how stretched the cell is horizontally), and
-// fills the quad. Cached fields (_stars, _flagCanvas) are built once and reused.
-function renderWave() {
-  waveCtx.fillStyle = '#050810';
-  waveCtx.fillRect(0, 0, waveW, waveH);
-
-  // Draw stars
-  if (!renderWave._stars) {
-    renderWave._stars = [];
-    for (var i = 0; i < 100; i++) renderWave._stars.push({x:Math.random(), y:Math.random(), s:0.5+Math.random()*1.5, b:0.2+Math.random()*0.5});
+  function drawEmblem(x, em, cx, cy, box, colour) {
+    var px = Math.round(box);
+    var m = emblemMask(em, px);
+    var t = makeCanvas(px), tx = t.getContext('2d');
+    tx.drawImage(m, 0, 0);
+    tx.globalCompositeOperation = 'source-in';
+    tx.fillStyle = colour; tx.fillRect(0, 0, px, px);
+    x.drawImage(t, cx - px / 2, cy - px / 2);
   }
-  renderWave._stars.forEach(function(s) {
-    waveCtx.fillStyle = 'rgba(200,220,255,' + s.b * 0.4 + ')';
-    waveCtx.fillRect(s.x * waveW, s.y * waveH, s.s, s.s);
-  });
 
-  // Render flag texture into the cloth mesh
-  // First render current flag to offscreen
-  if (!renderWave._flagCanvas) { renderWave._flagCanvas = document.createElement('canvas'); }
-  var fc = renderWave._flagCanvas;
-  // Always render the wave texture rectangular; the mesh itself provides the
-  // waving silhouette, so the selected shape clip is ignored here.
-  renderFlag(fc, 400, 250, primaryColor, secondaryColor, tertiaryColor, currentPattern, 'rectangle', currentEmblem, true);
-
-  // Scale cloth to canvas
-  var scaleX = waveW / (CLOTH_W * 8 + 160);
-  var scaleY = waveH / (CLOTH_H * 8 + 100);
-  var scale = Math.min(scaleX, scaleY) * 0.85;
-
-  waveCtx.save();
-  waveCtx.translate(waveW * 0.12, waveH * 0.15);
-  waveCtx.scale(scale, scale);
-
-  // Draw pole
-  waveCtx.strokeStyle = 'rgba(150,160,180,0.6)';
-  waveCtx.lineWidth = 4 / scale;
-  var poleX = clothPoints[0].x;
-  waveCtx.beginPath();
-  waveCtx.moveTo(poleX, clothPoints[0].y - 20);
-  waveCtx.lineTo(poleX, clothPoints[getClothIdx(0, CLOTH_H)].y + 20);
-  waveCtx.stroke();
-  // Pole cap
-  waveCtx.fillStyle = '#c0c8d0';
-  waveCtx.beginPath();
-  waveCtx.arc(poleX, clothPoints[0].y - 22, 4 / scale, 0, Math.PI * 2);
-  waveCtx.fill();
-
-  // Draw cloth as textured triangles
-  for (var cy = 0; cy < CLOTH_H; cy++) {
-    for (var cx = 0; cx < CLOTH_W; cx++) {
-      var i00 = getClothIdx(cx, cy);
-      var i10 = getClothIdx(cx+1, cy);
-      var i01 = getClothIdx(cx, cy+1);
-      var i11 = getClothIdx(cx+1, cy+1);
-      var p00 = clothPoints[i00], p10 = clothPoints[i10], p01 = clothPoints[i01], p11 = clothPoints[i11];
-
-      // Sample flag color at this grid cell
-      var u = cx / CLOTH_W, v = cy / CLOTH_H;
-      var px = Math.floor(u * (fc.width - 1)), py = Math.floor(v * (fc.height - 1));
-      var fctx = fc.getContext('2d');
-      var pixel = fctx.getImageData(px, py, 1, 1).data;
-
-      // Simple shading based on surface normal approximation
-      var nx = (p10.x - p00.x);
-      var shade = 0.6 + 0.4 * Math.max(0, Math.min(1, nx / clothRestLen));
-
-      var r = Math.round(pixel[0] * shade);
-      var g = Math.round(pixel[1] * shade);
-      var b = Math.round(pixel[2] * shade);
-
-      waveCtx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
-      waveCtx.beginPath();
-      waveCtx.moveTo(p00.x, p00.y);
-      waveCtx.lineTo(p10.x, p10.y);
-      waveCtx.lineTo(p11.x, p11.y);
-      waveCtx.lineTo(p01.x, p01.y);
-      waveCtx.closePath();
-      waveCtx.fill();
+  // ── FLAT RENDER ──
+  // Draw a flag set into canvas at W x H. Outside the shape stays transparent.
+  function renderFlat(canvas, W, H, st, outline) {
+    canvas.width = W; canvas.height = H;
+    var x = canvas.getContext('2d');
+    var field = makeCanvas(W, H), f = field.getContext('2d');
+    (PATTERNS[st.pattern] || PATTERNS.plain)(f, W, H, st.c1, st.c2, st.c3);
+    var em = st.emblem !== 'none' ? emblemById(st.emblem) : null;
+    if (em) {
+      var box = H * st.size / 100, cx = W / 2, cy = H / 2;
+      if (st.pos === 'hoist') { cx = Math.max(box / 2 + H * 0.08, W * 0.25); }
+      if (st.pos === 'canton') { box = Math.min(box * 0.7, H * 0.44); cx = W * 0.22; cy = H * 0.27; }
+      if (st.shape === 'pennant' || st.shape === 'burgee') { if (st.pos === 'center') cx = W * 0.3; }
+      drawEmblem(f, em, cx, cy, box, st.ce);
     }
+    var pts = shapeById(st.shape).path(W, H);
+    x.save(); x.beginPath();
+    pts.forEach(function (p, i) { if (i) x.lineTo(p[0], p[1]); else x.moveTo(p[0], p[1]); });
+    x.closePath(); x.clip(); x.drawImage(field, 0, 0); x.restore();
+    if (outline) {
+      x.beginPath(); pts.forEach(function (p, i) { if (i) x.lineTo(p[0], p[1]); else x.moveTo(p[0], p[1]); });
+      x.closePath(); x.strokeStyle = 'rgba(200,220,255,0.22)'; x.lineWidth = 1; x.stroke();
+    }
+    return canvas;
   }
 
-  waveCtx.restore();
+  // ── PAINT AND SYNC ──
+  var paintQueued = false;
+  function schedulePaint() {
+    if (paintQueued) return;
+    paintQueued = true;
+    requestAnimationFrame(function () { paintQueued = false; paint(); });
+  }
+  function paint() {
+    cloth.setTexture();
+    renderPatternThumbs();
+    syncUi();
+    writeHash();
+  }
+  function presetMatch() {
+    for (var i = 0; i < PRESETS.length; i++) {
+      var p = PRESETS[i];
+      if (p[1] === state.c1 && p[2] === state.c2 && p[3] === state.c3 && p[4] === state.ce && p[5] === state.pattern && p[6] === state.shape && p[7] === state.emblem) return p[0];
+    }
+    return null;
+  }
+  function syncUi() {
+    var name = presetMatch();
+    $('flagName').textContent = name || 'Custom';
+    var pat = patternById(state.pattern), em = emblemById(state.emblem);
+    $('flagSub').textContent = [pat ? pat.name : state.pattern, em ? em.name : 'No emblem', shapeById(state.shape).name].join(' · ');
+    document.querySelectorAll('#presetGrid .thumb').forEach(function (el) { el.classList.toggle('on', el.dataset.name === name); });
+    document.querySelectorAll('[data-pattern]').forEach(function (el) { el.classList.toggle('on', el.dataset.pattern === state.pattern); });
+    document.querySelectorAll('#emblemGrid button').forEach(function (el) { el.classList.toggle('on', el.dataset.emblem === state.emblem); });
+    document.querySelectorAll('#shapeGrid button').forEach(function (el) { el.classList.toggle('on', el.dataset.shape === state.shape); });
+    document.querySelectorAll('#emblemPos button').forEach(function (el) { el.classList.toggle('on', el.dataset.pos === state.pos); });
+    document.querySelectorAll('#channels button').forEach(function (b) {
+      b.querySelector('i').style.background = state[b.dataset.ch];
+      b.classList.toggle('on', b.dataset.ch === state.channel);
+      b.setAttribute('aria-checked', b.dataset.ch === state.channel ? 'true' : 'false');
+    });
+    $('emblemSize').value = state.size; $('emblemSizeVal').textContent = state.size + '%';
+    picker.show(state[state.channel]);
+  }
+  function setState(patch) { for (var k in patch) state[k] = patch[k]; schedulePaint(); }
 
-  // Border
-  waveCtx.strokeStyle = 'rgba(150,200,255,0.06)';
-  waveCtx.lineWidth = 1;
-  waveCtx.strokeRect(6, 6, waveW - 12, waveH - 12);
-}
+  // ── URL HASH ──
+  // Format: #p=<pattern>&s=<shape>&e=<emblem>&c=c1,c2,c3,ce&z=<size>&at=<place>
+  function readHash() {
+    var h = (location.hash || '').replace(/^#/, '');
+    if (!h) return;
+    h.split('&').forEach(function (kv) {
+      var i = kv.indexOf('='), k = kv.slice(0, i), v = decodeURIComponent(kv.slice(i + 1));
+      if (k === 'p' && PATTERNS[v]) state.pattern = v;
+      if (k === 's' && SHAPES.some(function (s) { return s.id === v; })) state.shape = v;
+      if (k === 'e' && (v === 'none' || emblemById(v))) state.emblem = v;
+      if (k === 'z' && +v >= 20 && +v <= 80) state.size = Math.round(+v);
+      if (k === 'at' && /^(center|hoist|canton)$/.test(v)) state.pos = v;
+      if (k === 'c') v.split(',').forEach(function (c, j) { var n = normHex(c); if (n) state[['c1', 'c2', 'c3', 'ce'][j]] = n; });
+    });
+  }
+  function hashString() {
+    return 'p=' + state.pattern + '&s=' + state.shape + '&e=' + state.emblem +
+      '&c=' + [state.c1, state.c2, state.c3, state.ce].map(function (c) { return c.slice(1); }).join(',') +
+      '&z=' + state.size + '&at=' + state.pos;
+  }
+  var hashTimer = 0;
+  function writeHash() {
+    clearTimeout(hashTimer);
+    hashTimer = setTimeout(function () { try { history.replaceState(null, '', '#' + hashString()); } catch (e) { /* ignore */ } }, 250);
+  }
 
-// Match the wave canvas backing store to its box in device pixels.
-function resizeWave() {
-  var rect = waveWrap.getBoundingClientRect();
-  waveW = Math.floor(rect.width * devicePixelRatio);
-  waveH = Math.floor(rect.height * devicePixelRatio);
-  waveCanvas.width = waveW;
-  waveCanvas.height = waveH;
-}
+  var toastTimer = 0;
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
 
-// Animation loop. It clamps the frame delta (so a background tab does not lurch
-// the sim), runs three smaller physics substeps per frame for stability, draws,
-// and reschedules.
-var waveLastTime = 0;
-function waveLoop(t) {
-  var dt = Math.min((t - waveLastTime) / 1000, 0.033);
-  waveLastTime = t;
-  for (var i = 0; i < 3; i++) updateCloth(dt / 3);
-  renderWave();
-  requestAnimationFrame(waveLoop);
-}
+  // ── THUMBNAILS ──
+  function thumbButton(label) {
+    var b = document.createElement('button'); b.type = 'button'; b.className = 'thumb';
+    var c = makeCanvas(150, 100), s = document.createElement('span');
+    s.textContent = label; b.appendChild(c); b.appendChild(s);
+    return b;
+  }
+  function buildPresets() {
+    var grid = $('presetGrid');
+    PRESETS.forEach(function (p) {
+      var b = thumbButton(p[0]); b.dataset.name = p[0];
+      renderFlat(b.querySelector('canvas'), 150, 100, { c1: p[1], c2: p[2], c3: p[3], ce: p[4], pattern: p[5], shape: p[6], emblem: p[7], size: 50, pos: 'center' }, true);
+      b.addEventListener('click', function () {
+        setState({ c1: p[1], c2: p[2], c3: p[3], ce: p[4], pattern: p[5], shape: p[6], emblem: p[7], size: 50, pos: 'center' });
+      });
+      grid.appendChild(b);
+    });
+  }
+  function buildPatterns() {
+    catalog.patterns.forEach(function (p) {
+      var b = thumbButton(p.name); b.dataset.pattern = p.id;
+      b.addEventListener('click', function () { setState({ pattern: p.id }); });
+      (p.game ? $('patternGrid') : $('patternGridMore')).appendChild(b);
+    });
+  }
+  // Pattern thumbnails use the live colours and shape, without the emblem.
+  function renderPatternThumbs() {
+    document.querySelectorAll('[data-pattern]').forEach(function (b) {
+      var st = { c1: state.c1, c2: state.c2, c3: state.c3, ce: state.ce, pattern: b.dataset.pattern, shape: state.shape, emblem: 'none', size: 50, pos: 'center' };
+      renderFlat(b.querySelector('canvas'), 150, 100, st, true);
+    });
+  }
+  function buildShapes() {
+    var grid = $('shapeGrid');
+    SHAPES.forEach(function (s) {
+      var b = document.createElement('button'); b.type = 'button'; b.dataset.shape = s.id;
+      var d = s.path(72, 48).map(function (p, i) { return (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1); }).join(' ') + 'Z';
+      b.innerHTML = '<svg viewBox="-2 -2 76 52" aria-hidden="true"><path d="' + d + '" fill="rgba(150,200,255,.18)" stroke="rgba(150,200,255,.6)" stroke-width="1.2"/></svg><span></span>';
+      b.querySelector('span').textContent = s.name;
+      b.addEventListener('click', function () { setState({ shape: s.id }); });
+      grid.appendChild(b);
+    });
+  }
 
-// Pause button: freeze or resume the sim and update the button label and state.
-function toggleWavePause() {
-  wavePaused = !wavePaused;
-  var btn = document.getElementById('wavePauseBtn');
-  btn.classList.toggle('active', wavePaused);
-  btn.textContent = wavePaused ? 'Resume' : 'Pause';
-}
+  // ── EMBLEM PICKER ──
+  // A search field and a group filter over the drawable catalog emblems.
+  function buildEmblems() {
+    var grid = $('emblemGrid'), groups = ['All'], filter = 'All';
+    catalog.emblems.forEach(function (e) { if (groups.indexOf(e.group) < 0) groups.push(e.group); });
+    var segEl = $('emblemGroups');
+    groups.forEach(function (g) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = g; b.dataset.group = g;
+      if (g === filter) b.className = 'on';
+      b.addEventListener('click', function () {
+        filter = g;
+        segEl.querySelectorAll('button').forEach(function (o) { o.classList.toggle('on', o === b); });
+        apply();
+      });
+      segEl.appendChild(b);
+    });
+    var none = document.createElement('button'); none.type = 'button'; none.dataset.emblem = 'none';
+    none.innerHTML = '<span class="none">None</span>'; none.title = 'No emblem';
+    none.addEventListener('click', function () { setState({ emblem: 'none' }); });
+    grid.appendChild(none);
+    catalog.emblems.forEach(function (e) {
+      var b = document.createElement('button'); b.type = 'button'; b.dataset.emblem = e.id; b.dataset.group = e.group;
+      b.title = e.name; b.setAttribute('aria-label', e.name);
+      var c = makeCanvas(64), x = c.getContext('2d');
+      drawEmblem(x, e, 32, 32, 60, '#cfe2ff');
+      b.appendChild(c);
+      b.addEventListener('click', function () { setState({ emblem: e.id }); });
+      grid.appendChild(b);
+    });
+    var empty = document.createElement('div'); empty.className = 'empty'; empty.textContent = 'No emblem has that name.'; empty.hidden = true;
+    grid.parentNode.insertBefore(empty, grid.nextSibling);
+    function apply() {
+      var q = $('emblemSearch').value.trim().toLowerCase(), shown = 0;
+      grid.querySelectorAll('button').forEach(function (b) {
+        if (b.dataset.emblem === 'none') { b.hidden = !!q; return; }
+        var ok = (filter === 'All' || b.dataset.group === filter) && (!q || b.title.toLowerCase().indexOf(q) >= 0);
+        b.hidden = !ok; if (ok) shown++;
+      });
+      empty.hidden = shown > 0;
+    }
+    $('emblemSearch').addEventListener('input', apply);
+    $('emblemSize').addEventListener('input', function () { setState({ size: +this.value }); });
+    document.querySelectorAll('#emblemPos button').forEach(function (b) {
+      b.addEventListener('click', function () { setState({ pos: b.dataset.pos }); });
+    });
+  }
 
-// Wind slider drives windStrength as a 0..1 fraction of the 0..100 range.
-document.getElementById('windSlider').addEventListener('input', function() {
-  windStrength = this.value / 100;
-});
+  // ── COLOUR PICKER ──
+  // One SV square and one hue bar edit the selected channel, with pointer capture.
+  var picker = { show: function () {} };
+  function buildPicker() {
+    var sv = $('sv'), hue = $('hue'), hexIn = $('hexInput');
+    var svKnob = sv.querySelector('.knob'), hueKnob = hue.querySelector('.knob');
+    var hsv = toHsv(state[state.channel]);
+    function render(hex) {
+      sv.style.setProperty('--hue', Math.round(hsv.h));
+      svKnob.style.left = (hsv.s * 100) + '%'; svKnob.style.top = ((1 - hsv.v) * 100) + '%'; svKnob.style.background = hex;
+      hueKnob.style.left = (hsv.h / 360 * 100) + '%'; hueKnob.style.background = 'hsl(' + Math.round(hsv.h) + ',100%,50%)';
+      $('curSwatch').style.background = hex;
+      if (document.activeElement !== hexIn) hexIn.value = hex.toUpperCase();
+    }
+    picker.show = function (hex) {
+      var next = toHsv(hex);
+      if (next.s < 0.005 || next.v < 0.005) next.h = hsv.h;
+      if (next.v < 0.005) next.s = hsv.s;
+      if (fromHsv(hsv.h, hsv.s, hsv.v) !== hex) hsv = next;
+      render(hex);
+    };
+    function commit() { var p = {}; p[state.channel] = fromHsv(hsv.h, hsv.s, hsv.v); setState(p); }
+    function drag(el, onMove) {
+      el.addEventListener('pointerdown', function (e) {
+        e.preventDefault(); el.setPointerCapture(e.pointerId); onMove(e);
+        function up() { el.removeEventListener('pointermove', onMove); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up); }
+        el.addEventListener('pointermove', onMove); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+      });
+    }
+    drag(sv, function (e) {
+      var r = sv.getBoundingClientRect();
+      hsv.s = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+      hsv.v = Math.max(0, Math.min(1, 1 - (e.clientY - r.top) / r.height));
+      commit();
+    });
+    drag(hue, function (e) {
+      var r = hue.getBoundingClientRect();
+      hsv.h = Math.max(0, Math.min(359.9, (e.clientX - r.left) / r.width * 360));
+      commit();
+    });
+    hexIn.addEventListener('change', function () {
+      var c = normHex(hexIn.value), p = {};
+      if (c) { hsv = toHsv(c); p[state.channel] = c; setState(p); } else hexIn.value = state[state.channel].toUpperCase();
+    });
+    hexIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') hexIn.blur(); });
+    QUICK.forEach(function (c) {
+      var b = document.createElement('button'); b.type = 'button'; b.style.background = c; b.setAttribute('aria-label', 'Colour ' + c);
+      b.addEventListener('click', function () { var p = {}; hsv = toHsv(c); p[state.channel] = c; setState(p); });
+      $('quick').appendChild(b);
+    });
+    document.querySelectorAll('#channels button').forEach(function (b) {
+      b.setAttribute('role', 'radio');
+      b.addEventListener('click', function () { state.channel = b.dataset.ch; hsv = toHsv(state[state.channel]); syncUi(); });
+    });
+    $('btnSwap').addEventListener('click', function () { var a = state.c1; state.c1 = state.c2; state.c2 = a; hsv = toHsv(state[state.channel]); schedulePaint(); });
+    $('btnRandom').addEventListener('click', function () {
+      var h = Math.random() * 360;
+      var all = catalog.patterns, ems = catalog.emblems;
+      setState({
+        c1: fromHsv(h, 0.5 + Math.random() * 0.5, 0.25 + Math.random() * 0.5),
+        c2: fromHsv((h + 150 + Math.random() * 60) % 360, Math.random() * 0.6, 0.75 + Math.random() * 0.25),
+        c3: fromHsv((h + 40) % 360, 0.6 + Math.random() * 0.4, 0.5 + Math.random() * 0.5),
+        ce: Math.random() < 0.5 ? '#f2f4f8' : fromHsv((h + 60) % 360, 0.7, 1),
+        pattern: all[Math.floor(Math.random() * all.length)].id,
+        emblem: Math.random() < 0.3 ? 'none' : ems[Math.floor(Math.random() * ems.length)].id
+      });
+      hsv = toHsv(state[state.channel]);
+    });
+  }
 
-// ── INIT ──
-// Boot: paint the hue strips, wire the three HSV pickers, seed the color state,
-// build the shape/emblem/pattern/preset controls, draw the preview, then start
-// the cloth simulation loop.
-function init() {
-  renderHueCanvas('primaryHueCanvas');
-  renderHueCanvas('secondaryHueCanvas');
-  renderHueCanvas('tertiaryHueCanvas');
-  setupHsvInteraction('primary', setPrimary);
-  setupHsvInteraction('secondary', setSecondary);
-  setupHsvInteraction('tertiary', setTertiary);
+  // ── TABS AND BOTTOM SHEET ──
+  function buildSheet() {
+    var panel = $('panel'), grip = $('grip');
+    var phone = window.matchMedia('(max-width: 900px)');
+    function setTab(id) {
+      document.querySelectorAll('.tabs button').forEach(function (b) {
+        b.classList.toggle('on', b.dataset.tab === id); b.setAttribute('aria-selected', b.dataset.tab === id ? 'true' : 'false');
+      });
+      document.querySelectorAll('.tab-body').forEach(function (el) { el.hidden = el.dataset.body !== id; });
+    }
+    // On a phone, scroll so that the hero flag sits in the free space above the sheet.
+    function open() {
+      panel.classList.add('sheet-open');
+      var r = $('heroWrap').getBoundingClientRect();
+      var free = window.innerHeight - panel.getBoundingClientRect().height;
+      var dy = r.top + r.height / 2 - free / 2;
+      if (Math.abs(dy) > 8) window.scrollBy({ top: dy, behavior: 'smooth' });
+    }
+    document.querySelectorAll('.tabs button').forEach(function (b) {
+      b.addEventListener('click', function () { setTab(b.dataset.tab); if (phone.matches && !panel.classList.contains('sheet-open')) open(); });
+    });
+    function toggle() { if (panel.classList.contains('sheet-open')) panel.classList.remove('sheet-open'); else open(); }
+    grip.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+    var startY = 0, startOpen = false, moved = false, h = 0;
+    grip.addEventListener('pointerdown', function (e) {
+      if (!phone.matches) return;
+      grip.setPointerCapture(e.pointerId);
+      startY = e.clientY; startOpen = panel.classList.contains('sheet-open'); moved = false;
+      h = panel.getBoundingClientRect().height; panel.classList.add('dragging');
+    });
+    grip.addEventListener('pointermove', function (e) {
+      if (!panel.classList.contains('dragging')) return;
+      var dy = e.clientY - startY; if (Math.abs(dy) > 4) moved = true;
+      var closed = h - 108;
+      panel.style.transform = 'translateY(' + Math.max(0, Math.min(closed, (startOpen ? 0 : closed) + dy)) + 'px)';
+    });
+    function end(e) {
+      if (!panel.classList.contains('dragging')) return;
+      panel.classList.remove('dragging'); panel.style.transform = '';
+      var dy = e.clientY - startY;
+      if (!moved) toggle();
+      else if (startOpen && dy > 60) panel.classList.remove('sheet-open');
+      else if (!startOpen && dy < -60) open();
+    }
+    grip.addEventListener('pointerup', end); grip.addEventListener('pointercancel', end);
+  }
 
-  setPrimary(primaryColor);
-  setSecondary(secondaryColor);
-  setTertiary(tertiaryColor);
+  // ── PNG EXPORT AND LINK ──
+  function exportPng() {
+    var c = renderFlat(makeCanvas(1200, 800), 1200, 800, state, false);
+    var name = 'stella-nova-flag-' + (presetMatch() || 'custom').toLowerCase().replace(/\s+/g, '-') + '.png';
+    try {
+      c.toBlob(function (blob) {
+        if (!blob) { toast('Export failed in this browser'); return; }
+        var url = URL.createObjectURL(blob), a = document.createElement('a');
+        a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+        toast('Saved ' + name);
+      }, 'image/png');
+    } catch (err) { toast('Export failed: ' + err.message); }
+  }
+  function copyLink() {
+    var url = location.href.split('#')[0] + '#' + hashString();
+    function fallback() {
+      var t = document.createElement('textarea'); t.value = url; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+      document.body.appendChild(t); t.select();
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      t.remove(); toast(ok ? 'Link copied' : 'Copy failed: ' + url);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(function () { toast('Link copied'); }, fallback);
+    else fallback();
+  }
 
-  buildShapes();
-  buildEmblems();
-  buildPatternGrid();
-  buildPresets();
-  renderPreview();
-  updatePresetActive();
+  // ── CLOTH VIEW ──
+  // The flag hangs from a pole at the hoist. A travelling wave moves along the
+  // fly; its amplitude grows from zero at the pole. Each of N slices of the
+  // texture is drawn with one affine transform, then shaded by the wave slope
+  // on a separate layer, so that the shade touches only the cloth.
+  var cloth = {
+    canvas: null, ctx: null, layer: null, lctx: null, bg: null, tex: null,
+    w: 0, h: 0, dpr: 1, t: 0, last: 0, wind: 0.55, view: 'wave',
+    paused: false, visible: true, onScreen: true, running: false,
+    TW: 600, TH: 400, N: 96
+  };
+  cloth.setTexture = function () {
+    cloth.tex = renderFlat(cloth.tex || makeCanvas(cloth.TW, cloth.TH), cloth.TW, cloth.TH, state, false);
+    if (!cloth.running) clothDraw();
+  };
+  function clothInit() {
+    cloth.canvas = $('flagCanvas'); cloth.ctx = cloth.canvas.getContext('2d');
+    cloth.layer = makeCanvas(2); cloth.lctx = cloth.layer.getContext('2d');
+    clothResize();
+    if (window.ResizeObserver) new ResizeObserver(function () { clothResize(); clothKick(); }).observe($('heroWrap'));
+    else window.addEventListener('resize', function () { clothResize(); clothKick(); });
+    if (window.IntersectionObserver) new IntersectionObserver(function (es) { cloth.onScreen = es[0].isIntersecting; clothKick(); }, { threshold: 0.01 }).observe($('heroWrap'));
+    document.addEventListener('visibilitychange', function () { cloth.visible = !document.hidden; clothKick(); });
+    $('wind').addEventListener('input', function () { cloth.wind = +this.value; if (!cloth.running) clothDraw(); });
+    $('btnPause').addEventListener('click', function () {
+      cloth.paused = !cloth.paused;
+      this.setAttribute('aria-pressed', cloth.paused ? 'true' : 'false');
+      this.textContent = cloth.paused ? 'Play' : 'Pause';
+      clothKick();
+    });
+    document.querySelectorAll('#viewSeg button').forEach(function (b) {
+      b.addEventListener('click', function () {
+        cloth.view = b.dataset.view;
+        document.querySelectorAll('#viewSeg button').forEach(function (o) { o.classList.toggle('on', o === b); });
+        $('wind').disabled = cloth.view === 'flat'; $('btnPause').disabled = cloth.view === 'flat';
+        clothKick(); clothDraw();
+      });
+    });
+  }
+  function clothResize() {
+    var r = $('heroWrap').getBoundingClientRect();
+    cloth.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cloth.w = Math.max(1, r.width); cloth.h = Math.max(1, r.height);
+    var W = Math.round(cloth.w * cloth.dpr), H = Math.round(cloth.h * cloth.dpr);
+    cloth.canvas.width = W; cloth.canvas.height = H; cloth.layer.width = W; cloth.layer.height = H;
+    var bg = makeCanvas(W, H), x = bg.getContext('2d');
+    var g = x.createRadialGradient(W * 0.55, H * 0.4, 0, W * 0.55, H * 0.4, Math.max(W, H) * 0.8);
+    g.addColorStop(0, '#111a2c'); g.addColorStop(1, '#05070d');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    var n = Math.round(cloth.w * cloth.h / 2400);
+    for (var i = 0; i < n; i++) {
+      x.fillStyle = 'rgba(210,225,255,' + (0.12 + Math.random() * 0.5).toFixed(2) + ')';
+      var s = (Math.random() < 0.1 ? 1.6 : 0.9) * cloth.dpr;
+      x.fillRect(Math.random() * W, Math.random() * H, s, s);
+    }
+    cloth.bg = bg;
+    clothDraw();
+  }
+  // Flag rectangle on screen, in device pixels.
+  function clothRect() {
+    var d = cloth.dpr, W = cloth.w, H = cloth.h;
+    // Keep the top band free for the banner name; on a phone it is taller.
+    var narrow = W < 600, topBand = narrow ? 104 : Math.max(H * 0.2, 90);
+    var fw = Math.min(W * (narrow ? 0.74 : 0.66), (H - topBand - H * 0.12) * 1.5), fh = fw / 1.5;
+    var x0 = (W - fw) / 2 + W * 0.02, y0 = Math.max(topBand, (H - fh) / 2 - H * 0.04);
+    return { x: x0 * d, y: y0 * d, w: fw * d, h: fh * d };
+  }
+  function clothDraw() {
+    var x = cloth.ctx; if (!x || !cloth.bg) return;
+    var R = clothRect(), d = cloth.dpr, W = cloth.canvas.width, H = cloth.canvas.height;
+    x.setTransform(1, 0, 0, 1, 0, 0);
+    x.drawImage(cloth.bg, 0, 0);
+    if (!cloth.tex) return;
+    if (cloth.view === 'flat') {
+      x.save(); x.shadowColor = 'rgba(0,0,0,.55)'; x.shadowBlur = 30 * d; x.shadowOffsetY = 12 * d;
+      x.drawImage(cloth.tex, R.x, R.y, R.w, R.h); x.restore();
+      return;
+    }
+    // Pole.
+    var px = R.x - 5 * d, top = R.y - 18 * d;
+    var pg = x.createLinearGradient(px - 4 * d, 0, px + 4 * d, 0);
+    pg.addColorStop(0, '#5d6678'); pg.addColorStop(0.45, '#d7dde8'); pg.addColorStop(1, '#4a5263');
+    x.fillStyle = pg; x.fillRect(px - 3 * d, top, 6 * d, H - top);
+    var L = cloth.lctx, N = cloth.N, tw = cloth.TW, th = cloth.TH, t = cloth.t, wind = cloth.wind;
+    L.setTransform(1, 0, 0, 1, 0, 0); L.clearRect(0, 0, W, H);
+    var amp = R.h * (0.03 + 0.08 * wind), k = 1.6 + wind * 0.8, w = 2.2 + wind * 4.2;
+    var droop = (1 - wind) * R.h * 0.42;
+    var xs = [], ys = [], hs = [], sl = [];
+    for (var i = 0; i <= N; i++) {
+      var u = i / N, env = Math.pow(u, 0.85);
+      var ph = (k * u - t * w / (Math.PI * 2)) * Math.PI * 2;
+      var wave = Math.sin(ph) + 0.35 * Math.sin(ph * 2.1 + 1.3);
+      var dw = Math.cos(ph) + 0.35 * 2.1 * Math.cos(ph * 2.1 + 1.3);
+      xs.push(R.x + R.w * u * (1 - 0.07 * wind) - R.w * 0.03 * env * Math.abs(Math.sin(ph)));
+      ys.push(R.y + amp * env * wave + droop * u * u);
+      hs.push(R.h * (1 - 0.07 * env * (1 + Math.cos(ph)) * (0.4 + wind) * 0.5) - droop * u * u * 0.35);
+      sl.push(dw * env);
+    }
+    var sw = tw / N;
+    for (i = 0; i < N; i++) {
+      var dx = xs[i + 1] - xs[i];
+      L.setTransform(dx / sw, (ys[i + 1] - ys[i]) / sw, 0, hs[i] / th, xs[i] - (dx / sw) * (i * sw), ys[i] - ((ys[i + 1] - ys[i]) / sw) * (i * sw));
+      L.drawImage(cloth.tex, i * sw, 0, sw, th, i * sw, 0, sw + 2, th);
+    }
+    // Shade with one smooth horizontal gradient: dark where the slope faces
+    // away from the light, bright where it faces it.
+    L.setTransform(1, 0, 0, 1, 0, 0);
+    L.globalCompositeOperation = 'source-atop';
+    var span = xs[N] - xs[0] || 1, sg = L.createLinearGradient(xs[0], 0, xs[N], 0);
+    for (i = 0; i <= N; i += 2) {
+      var s = sl[i] * (0.18 + 0.2 * wind), at = Math.max(0, Math.min(1, (xs[i] - xs[0]) / span));
+      sg.addColorStop(at, s > 0 ? 'rgba(0,0,0,' + Math.min(0.45, s).toFixed(3) + ')' : 'rgba(255,255,255,' + Math.min(0.22, -s * 0.6).toFixed(3) + ')');
+    }
+    L.fillStyle = sg; L.fillRect(0, 0, W, H);
+    L.globalCompositeOperation = 'source-over';
+    L.setTransform(1, 0, 0, 1, 0, 0);
+    x.save(); x.shadowColor = 'rgba(0,0,0,.45)'; x.shadowBlur = 24 * d; x.shadowOffsetY = 10 * d;
+    x.drawImage(cloth.layer, 0, 0); x.restore();
+    // Finial.
+    var fg = x.createRadialGradient(px - 2 * d, top - 3 * d, 0, px, top, 8 * d);
+    fg.addColorStop(0, '#fff6d0'); fg.addColorStop(0.5, '#ffc832'); fg.addColorStop(1, '#8a6410');
+    x.fillStyle = fg; x.beginPath(); x.arc(px, top, 7 * d, 0, Math.PI * 2); x.fill();
+  }
+  function clothKick() {
+    var want = cloth.view === 'wave' && !cloth.paused && cloth.visible && cloth.onScreen;
+    if (!want) { cloth.running = false; clothDraw(); return; }
+    if (cloth.running) return;
+    cloth.running = true; cloth.last = 0;
+    requestAnimationFrame(clothFrame);
+  }
+  function clothFrame(now) {
+    if (!cloth.running) return;
+    if (cloth.view !== 'wave' || cloth.paused || !cloth.visible || !cloth.onScreen) { cloth.running = false; return; }
+    var dt = cloth.last ? Math.min(0.05, (now - cloth.last) / 1000) : 0.016;
+    cloth.last = now; cloth.t += dt;
+    clothDraw();
+    requestAnimationFrame(clothFrame);
+  }
 
-  resizeWave();
-  initCloth();
-  requestAnimationFrame(waveLoop);
-}
-
-// On resize, refit the wave canvas and repaint each picker canvas, since the
-// HSV canvases are sized from their box in device pixels.
-window.addEventListener('resize', function() {
-  resizeWave();
-  ['primary','secondary','tertiary'].forEach(function(which) {
-    renderHueCanvas(which + 'HueCanvas');
-    renderSvCanvas(which + 'SvCanvas', hsvState[which].h);
-    updateSvCursor(which);
-    updateHueCursor(which);
-  });
-});
-
-// Start the app.
-init();
+  // ── BOOT ──
+  function boot() {
+    readCatalog();
+    readHash();
+    buildPicker();
+    buildSheet();
+    buildPresets();
+    buildPatterns();
+    buildShapes();
+    buildEmblems();
+    clothInit();
+    $('btnPng').addEventListener('click', exportPng);
+    $('btnLink').addEventListener('click', copyLink);
+    window.addEventListener('hashchange', function () { readHash(); schedulePaint(); });
+    paint();
+    clothKick();
+    // Glyph metrics change when the web fonts arrive; rebuild the masks then.
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { maskCache = {}; maskKeys = []; schedulePaint(); });
+  }
+  boot();
+})();

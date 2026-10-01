@@ -3,214 +3,149 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Colony Flag Designer // Stella Nova</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>Flag Designer // Stella Nova</title>
 <!--
-  ═══════════════════════════════════════════════════════════════════════════
-   COLONY FLAG DESIGNER  ·  page shell
-  ───────────────────────────────────────────────────────────────────────────
-   Static frame for the flag composer; main.js fills the interior and drives the
-   canvases. The shape strip, preset gallery, emblem grid, and pattern catalog
-   are all injected by script into the empty containers here. Three canvas-based
-   color pickers and two output canvases (the preview and the waving cloth) are
-   wired by id.
+  ===========================================================================
+   FLAG DESIGNER  ·  page shell
+  ---------------------------------------------------------------------------
+   The colony flag composer. A flag is a pattern, a shape, an optional emblem
+   and four colours (three field colours and one emblem colour). main.js
+   draws all of it with 2D canvas code. The pattern and emblem names come
+   from window.SN_DATA (lib/game-data/catalog.js). The hero card shows the
+   flag on a pole as a cloth that moves in the wind, or flat.
 
-   LAYOUT  (# marks an element id)
-     ┌──────────┬──────────────────────────────────────────────────────────┐
-     │ #shape   │ .hero  copy                                               │
-     │  Strip   ├──────────────────────────────────────────────────────────┤
-     │  (shape  │ #presetGrid   ready-made banners                          │
-     │  picker) ├───────────────────────────┬──────────────────────────────┤
-     │          │ .designer-panel           │ .catalog-panel               │
-     │          │  #previewCanvas           │  #patternGrid  (30 designs)   │
-     │          │  Primary  color-section   │  #waveCanvas   (cloth sim)    │
-     │          │  Secondary color-section  │  wind slider + pause          │
-     │          │  Symbol   color-section   │                              │
-     │          │  #emblemGrid              │                              │
-     └──────────┴───────────────────────────┴──────────────────────────────┘
+   LAYOUT
+     desktop (> 900 px)  .stage (hero card)  |  #panel (five tabs)
+     phone   (<= 900 px) .stage in one column; #panel is a bottom sheet with
+                         a grip. A tap on a tab opens the sheet.
 
-   COLOR SECTION  (repeated three times: primary, secondary, tertiary/symbol)
-     .cpick     swatch + native picker, hex field, R/G/B fields
-     .hsv-wrap  saturation/value square canvas + hue strip canvas + cursors
-     Every id is prefixed by the color name, so main.js addresses each set with
-     one code path keyed on that prefix.
-
-   SECTION MAP  (jump with grep -n "<anchor>" index.html)
-     shape picker mount . "id=\"shapeStrip\""
-     preset mount ....... "id=\"presetGrid\""
-     preview canvas ..... "id=\"previewCanvas\""
-     color pickers ...... "class=\"color-section\""   primary, secondary, symbol
-     emblem mount ....... "id=\"emblemGrid\""
-     pattern mount ...... "id=\"patternGrid\""
-     wave canvas ........ "id=\"waveCanvas\""
-     wave controls ...... "id=\"windSlider\""          wind slider and pause button
-   ═══════════════════════════════════════════════════════════════════════════
+   SECTION MAP   (jump with grep -n "<anchor>" index.html)
+     header actions ..... id="btnPng"        PNG export, copy link
+     hero cloth ......... id="flagCanvas"    wave or flat view
+     view controls ...... id="viewSeg"       wave / flat, wind, pause
+     control panel ...... id="panel"         tabs, grip on phones
+     presets ............ id="presetGrid"    filled by buildPresets()
+     patterns ........... id="patternGrid"   filled by buildPatterns()
+     emblems ............ id="emblemGrid"    search, group filter, size
+     colours ............ id="channels"      field / second / third / emblem
+     shapes ............. id="shapeGrid"     flag outline
+  ===========================================================================
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="grid-bg"></div>
-<div id="app">
 
-<div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Colony Systems</span></div>
-  <div class="topbar-r"><span>SYS // <strong>FLAG DESIGNER</strong></span></div>
-</div>
-
-<!-- Shape picker. buildShapes() appends one button per SHAPES entry after this
-     label, each showing a mini SVG of the shape outline. -->
-<!-- Shape Strip (left sidebar) -->
-<div class="shape-strip" id="shapeStrip">
-  <span class="shape-strip-label">Shape</span>
-</div>
-
-<div class="page-body">
-<div class="hero">
-  <div class="hero-sub">Colony Systems // Flag Designer</div>
-  <div class="hero-title">Raise Your <em>Banner</em></div>
-  <div class="hero-body">
-    Every colony needs a <strong>flag</strong> &mdash; a symbol of identity among the stars. Choose from
-    <strong>30 heraldic patterns</strong>, six distinct <strong>shapes</strong>, and optional <strong>emblems</strong>
-    with a dedicated <strong>symbol color</strong> to forge a banner for your settlements, stations, and fleets.
+<header class="top">
+  <div class="brand">
+    <div class="kicker">Stella Nova · Colony</div>
+    <h1>Flag <em>Designer</em></h1>
   </div>
-</div>
-
-<div class="preset-gallery">
-  <div class="panel">
-    <div class="panel-head">
-      <span class="panel-badge" style="color:var(--yellow)">Presets</span>
-      <span class="panel-title">Colony Banners</span>
-      <span class="panel-sub">Click to apply</span>
-    </div>
-    <!-- buildPresets() fills this with a thumbnail per preset banner. -->
-    <div class="panel-body">
-      <div class="preset-grid" id="presetGrid"></div>
-    </div>
+  <div class="actions">
+    <button class="btn ghost" id="btnLink" type="button" aria-label="Copy a link to this flag">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span>Copy link</span>
+    </button>
+    <button class="btn gold" id="btnPng" type="button" aria-label="Download the flag as PNG">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>Export PNG</span>
+    </button>
   </div>
-</div>
+</header>
 
-<div class="main-layout">
-  <div class="designer-panel">
-    <div class="panel">
-      <div class="panel-head">
-        <span class="panel-badge" style="color:var(--yellow)">Preview</span>
-        <span class="panel-title">Flag Preview</span>
-      </div>
-      <div class="panel-body">
-        <!-- Large live preview; repainted by renderPreview() on any change. -->
-        <div class="preview-wrap"><canvas id="previewCanvas"></canvas></div>
-
-        <!-- Primary color picker. The four inputs (native picker, hex, R/G/B) and
-             the HSV square and hue strip below all read and write the same color;
-             main.js keeps them in sync through setPrimary(). The secondary and
-             symbol sections repeat this exact structure with their own id prefix. -->
-        <div class="color-section">
-          <div class="color-label">Primary Color</div>
-          <div class="cpick">
-            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="primarySwatchBg"></div><input type="color" id="primaryNativePicker" value="#6B1D1D"></div>
-            <div class="cpick-fields">
-              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="primaryHex" value="#6B1D1D" maxlength="7" spellcheck="false"></div>
-              <div class="cpick-rgb-row">
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="primaryR" min="0" max="255" value="107"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="primaryG" min="0" max="255" value="29"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="primaryB" min="0" max="255" value="29"></div>
-              </div>
-            </div>
-          </div>
-          <div class="hsv-wrap">
-            <div class="hsv-sv-wrap" id="primarySvWrap"><canvas id="primarySvCanvas"></canvas><div class="hsv-sv-cursor" id="primarySvCursor"></div></div>
-            <div class="hsv-hue-wrap" id="primaryHueWrap"><canvas id="primaryHueCanvas"></canvas><div class="hsv-hue-cursor" id="primaryHueCursor"></div></div>
-          </div>
-        </div>
-
-        <!-- Secondary color: same picker structure, secondary* ids. -->
-        <div class="color-section">
-          <div class="color-label">Secondary Color</div>
-          <div class="cpick">
-            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="secondarySwatchBg"></div><input type="color" id="secondaryNativePicker" value="#C0C8D0"></div>
-            <div class="cpick-fields">
-              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="secondaryHex" value="#C0C8D0" maxlength="7" spellcheck="false"></div>
-              <div class="cpick-rgb-row">
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="secondaryR" min="0" max="255" value="192"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="secondaryG" min="0" max="255" value="200"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="secondaryB" min="0" max="255" value="208"></div>
-              </div>
-            </div>
-          </div>
-          <div class="hsv-wrap">
-            <div class="hsv-sv-wrap" id="secondarySvWrap"><canvas id="secondarySvCanvas"></canvas><div class="hsv-sv-cursor" id="secondarySvCursor"></div></div>
-            <div class="hsv-hue-wrap" id="secondaryHueWrap"><canvas id="secondaryHueCanvas"></canvas><div class="hsv-hue-cursor" id="secondaryHueCursor"></div></div>
-          </div>
-        </div>
-
-        <!-- Symbol color: the tertiary picker; this color paints the emblem. -->
-        <div class="color-section">
-          <div class="color-label">Symbol Color</div>
-          <div class="cpick">
-            <div class="cpick-swatch"><div class="cpick-swatch-bg" id="tertiarySwatchBg"></div><input type="color" id="tertiaryNativePicker" value="#E8D060"></div>
-            <div class="cpick-fields">
-              <div class="cpick-hex-row"><span class="cpick-hex-label">HEX</span><input type="text" class="cpick-hex-input" id="tertiaryHex" value="#E8D060" maxlength="7" spellcheck="false"></div>
-              <div class="cpick-rgb-row">
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label r-label">R</span><input type="number" class="cpick-rgb-input" id="tertiaryR" min="0" max="255" value="232"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label g-label">G</span><input type="number" class="cpick-rgb-input" id="tertiaryG" min="0" max="255" value="208"></div>
-                <div class="cpick-rgb-field"><span class="cpick-rgb-label b-label">B</span><input type="number" class="cpick-rgb-input" id="tertiaryB" min="0" max="255" value="96"></div>
-              </div>
-            </div>
-          </div>
-          <div class="hsv-wrap">
-            <div class="hsv-sv-wrap" id="tertiarySvWrap"><canvas id="tertiarySvCanvas"></canvas><div class="hsv-sv-cursor" id="tertiarySvCursor"></div></div>
-            <div class="hsv-hue-wrap" id="tertiaryHueWrap"><canvas id="tertiaryHueCanvas"></canvas><div class="hsv-hue-cursor" id="tertiaryHueCursor"></div></div>
-          </div>
-        </div>
-
-        <!-- Emblem picker. buildEmblems() fills this with a mini canvas per
-             emblem; the selected one is drawn centered in the symbol color. -->
-        <div class="emblem-section">
-          <div class="color-label">Emblem Overlay</div>
-          <div class="emblem-grid" id="emblemGrid"></div>
+<main class="layout">
+  <section class="stage">
+    <!-- Hero. cloth.frame() draws the flag on its pole here. -->
+    <div class="card hero">
+      <div class="hero-wrap" id="heroWrap"><canvas id="flagCanvas" aria-label="Flag preview"></canvas></div>
+      <div class="hero-meta">
+        <div>
+          <div class="label">Banner</div>
+          <div class="flag-name" id="flagName">Custom</div>
+          <div class="flag-sub" id="flagSub"></div>
         </div>
       </div>
+      <div class="hero-bar">
+        <div class="seg" id="viewSeg" role="group" aria-label="View">
+          <button type="button" data-view="wave" class="on">Wave</button>
+          <button type="button" data-view="flat">Flat</button>
+        </div>
+        <label class="wind"><span>Wind</span><input type="range" id="wind" min="0" max="1" step="0.05" value="0.55" aria-label="Wind strength"></label>
+        <button class="chip-btn" id="btnPause" type="button" aria-pressed="false">Pause</button>
+      </div>
     </div>
-  </div>
+  </section>
 
-  <div class="catalog-panel">
-    <div class="panel">
-      <div class="panel-head">
-        <span class="panel-badge" style="color:var(--blue)">Catalog</span>
-        <span class="panel-title">Pattern Designs</span>
-        <span class="panel-sub" id="patternCount">30 patterns</span>
+  <aside class="panel" id="panel" aria-label="Flag controls">
+    <div class="grip" id="grip" role="button" tabindex="0" aria-label="Open or close the controls"><span></span></div>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="presets" class="on">Presets</button>
+      <button type="button" role="tab" data-tab="pattern">Pattern</button>
+      <button type="button" role="tab" data-tab="emblem">Emblem</button>
+      <button type="button" role="tab" data-tab="colour">Colour</button>
+      <button type="button" role="tab" data-tab="shape">Shape</button>
+    </nav>
+
+    <div class="tab-body" data-body="presets">
+      <div class="thumb-grid" id="presetGrid"></div>
+    </div>
+
+    <div class="tab-body" data-body="pattern" hidden>
+      <div class="field-label">Stella Nova patterns</div>
+      <div class="thumb-grid" id="patternGrid"></div>
+      <div class="field-label">More patterns</div>
+      <div class="thumb-grid" id="patternGridMore"></div>
+    </div>
+
+    <div class="tab-body" data-body="emblem" hidden>
+      <div class="emblem-tools">
+        <input type="search" id="emblemSearch" placeholder="Find an emblem" autocomplete="off" aria-label="Find an emblem">
+        <div class="seg" id="emblemGroups" role="group" aria-label="Emblem group"></div>
       </div>
-      <!-- Pattern catalog. buildPatternGrid() fills this with a card per design;
-           each thumbnail previews the pattern in the current colors and shape. -->
-      <div class="panel-body">
-        <div class="pattern-grid" id="patternGrid"></div>
+      <div class="emblem-grid" id="emblemGrid"></div>
+      <label class="slider"><span>Emblem size <b id="emblemSizeVal">50%</b></span><input type="range" id="emblemSize" min="20" max="80" step="1" value="50"></label>
+      <div class="field-label">Emblem place</div>
+      <div class="seg wrap" id="emblemPos" role="group" aria-label="Emblem place">
+        <button type="button" data-pos="center" class="on">Centre</button>
+        <button type="button" data-pos="hoist">Hoist</button>
+        <button type="button" data-pos="canton">Canton</button>
       </div>
     </div>
 
-    <div class="panel">
-      <div class="panel-head">
-        <span class="panel-badge" style="color:var(--blue)">Live</span>
-        <span class="panel-title">Flag Wave Simulation</span>
+    <div class="tab-body" data-body="colour" hidden>
+      <div class="channels four" id="channels" role="radiogroup" aria-label="Colour to edit">
+        <button type="button" data-ch="c1" class="on"><i></i><span>Field</span></button>
+        <button type="button" data-ch="c2"><i></i><span>Second</span></button>
+        <button type="button" data-ch="c3"><i></i><span>Third</span></button>
+        <button type="button" data-ch="ce"><i></i><span>Emblem</span></button>
       </div>
-      <!-- Waving-cloth preview. main.js runs a Verlet cloth sim here and textures
-           the mesh with the current flag; the pole pins the left edge. -->
-      <div class="panel-body" style="padding:0">
-        <div class="wave-wrap" id="waveWrap"><canvas id="waveCanvas"></canvas></div>
+      <div class="picker" id="picker">
+        <div class="sv" id="sv"><i class="knob"></i></div>
+        <div class="hue" id="hue"><i class="knob"></i></div>
+        <div class="hexrow">
+          <span class="swatch" id="curSwatch"></span>
+          <label class="hex"><span>HEX</span><input id="hexInput" type="text" maxlength="7" spellcheck="false" autocomplete="off"></label>
+        </div>
+        <div class="quick" id="quick"></div>
+      </div>
+      <div class="row-btns">
+        <button class="chip-btn" id="btnSwap" type="button">Swap field and second</button>
+        <button class="chip-btn" id="btnRandom" type="button">Random</button>
       </div>
     </div>
-    <!-- Wind strength slider and pause toggle for the cloth sim. -->
-    <div class="wave-controls">
-      <div class="wave-slider-wrap"><span class="wave-slider-label">Wind:</span><input type="range" class="wave-slider" id="windSlider" min="0" max="100" value="50"></div>
-      <button class="wave-btn" id="wavePauseBtn" onclick="toggleWavePause()">Pause</button>
-      <span class="wave-info">cloth simulation &bull; 40&times;25 grid</span>
-    </div>
-  </div>
-</div>
-</div><!-- .page-body -->
-</div>
 
-<!-- Flag composer and cloth simulation; runs after the markup is parsed. -->
+    <div class="tab-body" data-body="shape" hidden>
+      <div class="shape-grid" id="shapeGrid"></div>
+    </div>
+  </aside>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="../../lib/game-data/catalog.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
