@@ -22,6 +22,8 @@
      <body>   rf.js         global RF (complex math, no DOM)
               main.js       global SC: state, chart, panel, loop
               match.js      L-network, stub and lambda/4 matching
+              sweep.js      series RLC, parallel RLC and Touchstone loads,
+                            the trace on the chart and the |S11| plot
               equations.js  the formulas as static MathJax SVG
 
    LAYOUT  (# marks an element id main.js binds to)
@@ -32,6 +34,7 @@
      │  system    │  #tip     the cursor readout under the pointer        │
      │  load      │                                                       │
      │  readout   │                                                       │
+     │  sweep     │  (only for a load model)                              │
      │  match     │                                                       │
      │  line      │                                                       │
      │  chart     │                                                       │
@@ -51,7 +54,7 @@
      the chart in the part of the canvas that stays clear.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<meta name="description" content="A Smith chart for daily RF work: loads in ohms, VSWR or S11 dB, live readouts, line rotation and a hover cursor, and L-network, stub and quarter-wave matching with part values.">
+<meta name="description" content="A Smith chart for daily RF work: loads in ohms, VSWR or S11 dB, live readouts, line rotation and a hover cursor, L-network, stub and quarter-wave matching with part values, and sweeps of RLC models or Touchstone files.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -96,6 +99,11 @@
       <button data-mode="vswr">VSWR ∠</button>
       <button data-mode="s11">S11 dB ∠</button>
     </div>
+    <div class="tabs three" id="modelTabs">
+      <button data-mode="series">series RLC</button>
+      <button data-mode="parallel">parallel RLC</button>
+      <button data-mode="file">.s1p file</button>
+    </div>
     <div class="fields" id="pointFields">
       <label class="fld"><span id="pfA">R</span><input id="fA" spellcheck="false" autocomplete="off"><em id="pfAu">Ω</em></label>
       <label class="fld"><span id="pfB">X</span><input id="fB" spellcheck="false" autocomplete="off"><em id="pfBu">Ω</em></label>
@@ -107,6 +115,25 @@
       <button data-r="0.5" data-x="0">Z0/2</button>
       <button data-r="1.2" data-x="-1.6">1.2 − j1.6</button>
       <button data-r="0.4" data-x="0.8">0.4 + j0.8</button>
+    </div>
+    <div class="fields off" data-model-box="series">
+      <label class="fld"><span>R</span><input id="fsR" spellcheck="false" autocomplete="off"><em>Ω</em></label>
+      <label class="fld"><span>L</span><input id="fsL" spellcheck="false" autocomplete="off"><em>H</em></label>
+      <label class="fld"><span>C</span><input id="fsC" spellcheck="false" autocomplete="off"><em>F</em></label>
+    </div>
+    <div class="fields off" data-model-box="parallel">
+      <label class="fld"><span>R</span><input id="fpR" spellcheck="false" autocomplete="off"><em>Ω</em></label>
+      <label class="fld"><span>L</span><input id="fpL" spellcheck="false" autocomplete="off"><em>H</em></label>
+      <label class="fld"><span>C</span><input id="fpC" spellcheck="false" autocomplete="off"><em>F</em></label>
+    </div>
+    <div class="off" data-model-box="file">
+      <div class="tabs three">
+        <label class="filebtn">open file<input type="file" id="fileInput" accept=".s1p,.s2p,.snp,.txt,text/plain"></label>
+        <button id="pasteBtn">read paste</button>
+        <button id="exampleBtn">example</button>
+      </div>
+      <textarea id="pasteBox" spellcheck="false" placeholder="Paste Touchstone text here, or drop a .s1p file on the page.&#10;# GHz S MA R 50&#10;2.40 0.31 -42.0"></textarea>
+      <p class="note" id="fileInfo">Open, paste or drop a .s1p or .s2p file. Only S11 is used.</p>
     </div>
     <p class="note" id="loadNote">Keys: ↑ ↓ change a field, Shift for a larger step. Units: p n u m k M G.</p>
   </details>
@@ -129,6 +156,16 @@
       <tr class="zin"><td>Z<sub>in</sub> after line</td><td id="rdZin"></td></tr>
       <tr class="zin"><td>Γ<sub>in</sub></td><td id="rdGin"></td></tr>
     </table>
+  </details>
+
+  <details class="sec off" id="secSweep" open>
+    <summary>Sweep</summary>
+    <div class="fields">
+      <label class="fld"><span>start</span><input id="fFa" spellcheck="false" autocomplete="off"><em>Hz</em></label>
+      <label class="fld"><span>stop</span><input id="fFb" spellcheck="false" autocomplete="off"><em>Hz</em></label>
+    </div>
+    <canvas id="sweepPlot" aria-label="|S11| in dB against frequency. Click to set f."></canvas>
+    <p class="note" id="sweepInfo"></p>
   </details>
 
   <details class="sec" id="secMatch" open>
@@ -219,6 +256,7 @@
 <script src="rf.js"></script>
 <script src="main.js"></script>
 <script src="match.js"></script>
+<script src="sweep.js"></script>
 <script src="equations.js"></script>
 </body>
 </html>

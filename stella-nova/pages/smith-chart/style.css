@@ -270,3 +270,26 @@ input[type=range]{width:100%;accent-color:var(--z);margin:10px 0 8px;height:18px
   .sol-t{font-size:0.8rem}
   .sol-s{font-size:0.74rem}
 }
+
+/* SWEEP. Load model fields, the Touchstone file box, and the |S11| plot
+   (sweep.js). A model box with three fields puts C on its own row. */
+[data-model-box] + [data-model-box]{margin-top:0}
+.fields[data-model-box] .fld:nth-child(3){grid-column:1 / -1}
+.filebtn{
+  position:relative;display:grid;place-items:center;min-height:32px;padding:6px 4px;border:1px solid var(--line);background:var(--bg2);
+  color:var(--dim);border-radius:8px;cursor:pointer;font:500 0.7rem/1.15 var(--f-sans);text-align:center;
+}
+.filebtn:hover{border-color:var(--line-b);color:var(--ink)}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer}
+#pasteBox{
+  width:100%;height:76px;resize:vertical;padding:8px 10px;border:1px solid var(--line-b);border-radius:9px;background:var(--bg2);
+  color:var(--ink);font:400 0.68rem/1.45 var(--f-mono);outline:none;
+}
+#pasteBox:focus{border-color:var(--z)}
+.note.bad{color:var(--bad)}
+#sweepPlot{display:block;width:100%;height:150px;margin-top:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg2);cursor:crosshair;touch-action:none}
+@media (pointer:coarse), (max-width:768px){
+  .filebtn{min-height:44px;font-size:0.78rem;border-radius:11px}
+  #pasteBox{font-size:16px;height:90px}
+  #sweepPlot{height:170px}
+}

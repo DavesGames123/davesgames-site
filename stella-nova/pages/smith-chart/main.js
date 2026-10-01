@@ -597,7 +597,7 @@
   }
   SC.setPointForm = setPointForm;
   SC.setLoadMode = mode => {
-    for (const b of $('loadTabs').querySelectorAll('[data-mode]')) b.classList.toggle('on', b.dataset.mode === mode);
+    for (const b of document.querySelectorAll('#secLoad [data-mode]')) b.classList.toggle('on', b.dataset.mode === mode);
     const point = POINT_MODES.has(mode);
     $('pointFields').classList.toggle('off', !point);
     $('presets').classList.toggle('off', mode !== 'z');
