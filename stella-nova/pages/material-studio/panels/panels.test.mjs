@@ -6,6 +6,9 @@
 //  the single-file panels.js before the split into panels/. A change here is
 //  a change of behaviour. monotone rows sample the curve at fixed x values.
 //  tileStat rows use a 16x16 test tile: "flat2" is constant, "ramp" is not.
+//  Nine exports have no importer other than this test: normStops, normPts,
+//  monotone, enumOptions, benchGroup, hashColors, azElToDir, dirToAzEl and
+//  tileStat. Keep those exports, or the test does not load.
 //
 //  RUN
 //      node stella-nova/pages/material-studio/panels/panels.test.mjs
