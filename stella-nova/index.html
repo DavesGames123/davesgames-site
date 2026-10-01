@@ -408,12 +408,44 @@ let activeTab=null;
 //                 click series mounts one page, not one page per click
 var pendingTab=null,swapBusy=false,SWAP_SETTLE_MS=250,SWAP_UNLOAD_MS=300;
 function releaseFrame(f){try{var w=f.contentWindow;if(w&&w.__snRelease)w.__snRelease()}catch(e){}try{var d=f.contentDocument;if(!d)return;d.querySelectorAll('canvas').forEach(function(c){try{var g=c.getContext('webgpu');if(g){try{var cfg=g.getConfiguration&&g.getConfiguration();if(cfg&&cfg.device){cfg.device.destroy();return}}catch(e){}try{g.unconfigure()}catch(e){}return}var gl=c.getContext('webgl2')||c.getContext('webgl');if(gl){var x=gl.getExtension('WEBGL_lose_context');if(x)x.loseContext()}}catch(e){}})}catch(e){}}
-function mountTab(id){var wrap=document.getElementById('frame-wrap');var iframe=document.createElement('iframe');iframe.src=PAGES[id]||'home.html';var allow='downloads';if(XR_PAGES.has(id))allow='xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';if(MIC_PAGES.has(id))allow='microphone; autoplay; downloads';iframe.setAttribute('allow',allow);wrap.appendChild(iframe)}
-function doSwap(){swapBusy=true;var wrap=document.getElementById('frame-wrap');var olds=Array.prototype.slice.call(wrap.querySelectorAll('iframe'));var done=false;var go=function(){if(done)return;done=true;wrap.innerHTML='';var id=pendingTab;pendingTab=null;mountTab(id);setTimeout(function(){swapBusy=false;if(pendingTab!==null)doSwap()},SWAP_SETTLE_MS)};if(!olds.length){go();return}var left=olds.length;olds.forEach(function(f){f.style.visibility='hidden';releaseFrame(f);f.addEventListener('load',function(){if(--left===0)go()},{once:true});try{f.src='about:blank'}catch(e){if(--left===0)go()}});setTimeout(go,SWAP_UNLOAD_MS)}
-function switchTab(id){if(!PAGES[id])id='home';document.querySelectorAll('.nav-item').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(id==='home'?'Stella Nova':(LABELS[id]||id)+' · Stella Nova');activeTab=id;closeSidebar();if(location.hash!=='#'+id){try{history.replaceState(null,'','#'+id)}catch(e){}}pendingTab=id;if(!swapBusy)doSwap()}
+/* ── history ──────────────────────────────────────────────────────────
+   The shell owns the browser history. The URL is #<tab> or #<tab>/<route>,
+   where <route> is the page's own hash without '#', for example
+   #wiki/e/resources/iron-ingot. Rules:
+     - A tab switch from the UI pushes one entry (switchTab mode 'push').
+     - Back and Forward (popstate, hashchange) route with mode 'none'. When
+       only <route> changes on the same tab, the page gets the new hash by
+       location.replace, so no page reload and no extra entry.
+     - A page that calls window.snNav(route) pushes one entry for an inner
+       route change (the wiki does this). Such a page must not push its own
+       entries while it is in the shell.
+     - A click on a same-page hash link inside the frame (for example a wiki
+       entry link) is taken over: the shell pushes the entry and moves the
+       frame with location.replace. Entries that a frame pushes itself die
+       when the frame is swapped out, and Back then does nothing visible.
+     - Any other page hash change is copied into the URL with replaceState.
+     - A link that loads another registered page inside the frame (for
+       example crafting -> ../wiki/...) is adopted: the frame already added a
+       history entry, so the shell only updates the tab and the URL.
+     - An old frame goes to about:blank with location.replace, which adds no
+       entry. src='about:blank' added an entry that Back then landed on.
+   grep -n targets: "function routeFromHash", "window.snNav", "function adoptFrame" */
+var activeSub='';
+function pageRoute(h){return String(h||'').replace(/^#/,'').replace(/^\//,'')}
+function tabHash(id,sub){return '#'+id+(sub?'/'+sub:'')}
+function parseShellHash(h){h=(h||'').replace(/^#/,'');var i=h.indexOf('/');var id=i<0?h:h.slice(0,i);var sub=i<0?'':h.slice(i+1);try{id=decodeURIComponent(id)}catch(e){}return{id:id||'home',sub:sub}}
+function setHistory(hash,mode){if(mode==='none'||location.hash===hash)return;try{history[mode==='push'?'pushState':'replaceState'](null,'',hash)}catch(e){}}
+function currentFrame(){return document.querySelector('#frame-wrap iframe')}
+function tabForPath(path){for(var k in PAGES){if(path.slice(-PAGES[k].length)===PAGES[k])return k}return null}
+function markTab(id){document.querySelectorAll('.nav-item').forEach(function(el){el.classList.toggle('active',el.dataset.tab===id)});var ta=document.getElementById('topbar-active');if(ta)ta.textContent=LABELS[id]||id;document.title=(id==='home'?'Stella Nova':(LABELS[id]||id)+' · Stella Nova')}
+function adoptFrame(iframe){var w;try{w=iframe.contentWindow;if(!w||w.location.href==='about:blank')return}catch(e){return}var id=tabForPath(w.location.pathname);var sub=pageRoute(w.location.hash);if(id&&id!==activeTab){activeTab=id;markTab(id)}if(id){activeSub=sub;setHistory(tabHash(activeTab,sub),'replace')}w.document.addEventListener('click',function(e){if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;var a=e.target&&e.target.closest&&e.target.closest('a[href]');if(!a||(a.target&&a.target!=='_self'))return;var u;try{u=new URL(a.href)}catch(x){return}if(u.origin!==w.location.origin||u.pathname!==w.location.pathname||u.search!==w.location.search||!u.hash||u.hash===w.location.hash)return;e.preventDefault();window.snNav(u.hash);w.location.replace(u.href)});w.addEventListener('hashchange',function(){if(iframe!==currentFrame())return;var s=pageRoute(w.location.hash);if(s===activeSub)return;activeSub=s;setHistory(tabHash(activeTab,s),'replace')})}
+window.snNav=function(sub){sub=pageRoute(sub);if(sub===activeSub)return;activeSub=sub;setHistory(tabHash(activeTab,sub),'push')};
+function mountTab(id){var wrap=document.getElementById('frame-wrap');var iframe=document.createElement('iframe');iframe.src=(PAGES[id]||'home.html')+(id===activeTab&&activeSub?'#'+activeSub:'');iframe.addEventListener('load',function(){adoptFrame(iframe)});var allow='downloads';if(XR_PAGES.has(id))allow='xr-spatial-tracking; accelerometer; gyroscope; magnetometer; downloads';if(MIC_PAGES.has(id))allow='microphone; autoplay; downloads';iframe.setAttribute('allow',allow);wrap.appendChild(iframe)}
+function doSwap(){swapBusy=true;var wrap=document.getElementById('frame-wrap');var olds=Array.prototype.slice.call(wrap.querySelectorAll('iframe'));var done=false;var go=function(){if(done)return;done=true;wrap.innerHTML='';var id=pendingTab;pendingTab=null;mountTab(id);setTimeout(function(){swapBusy=false;if(pendingTab!==null)doSwap()},SWAP_SETTLE_MS)};if(!olds.length){go();return}var left=olds.length;olds.forEach(function(f){f.style.visibility='hidden';releaseFrame(f);f.addEventListener('load',function(){if(--left===0)go()},{once:true});try{f.contentWindow.location.replace('about:blank')}catch(e){try{f.src='about:blank'}catch(e2){if(--left===0)go()}}});setTimeout(go,SWAP_UNLOAD_MS)}
+function switchTab(id,sub,mode){if(!PAGES[id])id='home';sub=sub||'';markTab(id);activeTab=id;activeSub=sub;closeSidebar();setHistory(tabHash(id,sub),mode||'push');pendingTab=id;if(!swapBusy)doSwap()}
 window.switchTab=switchTab;
-function routeFromHash(){switchTab((location.hash||'').replace(/^#/,'')||'home')}
-window.addEventListener('hashchange',routeFromHash);routeFromHash();
+function routeFromHash(){var r=parseShellHash(location.hash);if(!PAGES[r.id])r={id:'home',sub:''};var f=currentFrame();if(r.id===activeTab&&f&&!swapBusy&&pendingTab===null){if(r.sub===activeSub)return;activeSub=r.sub;try{var w=f.contentWindow;w.location.replace(w.location.href.split('#')[0]+'#'+r.sub)}catch(e){switchTab(r.id,r.sub,'none')}return}switchTab(r.id,r.sub,activeTab===null?'replace':'none')}
+window.addEventListener('popstate',routeFromHash);window.addEventListener('hashchange',routeFromHash);routeFromHash();
 function toggleCluster(id){var cl=document.getElementById(id);if(cl)cl.classList.toggle('open')}
 function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('overlay').classList.add('show')}
 function closeSidebar(){if(window.innerWidth<=768){document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('show')}}
