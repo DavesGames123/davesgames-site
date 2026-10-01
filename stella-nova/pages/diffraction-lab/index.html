@@ -11,15 +11,15 @@
   ───────────────────────────────────────────────────────────────────────────
    Static markup for the angular-spectrum diffraction engine. main.js builds
    the output canvas cells inside #canvas-grid, computes the diffracted field,
-   and paints it; equations.js fills the KaTeX panel. This file lays out the
+   and paints it; equations.js (MathJax SVG, made by typeset.mjs) fills the
+   equation panel. This file lays out the
    control panel, the equation panel, and the status readout that main.js binds
    by id. Nothing here computes the field.
 
    HEAD LOAD ORDER   (order matters)
      ● fonts        Google Fonts stylesheet
-     ● KaTeX        CSS then JS, so equations.js can render on load
      ● style.css    the page stylesheet
-     ● equations.js at body end, renders the equation panel and exports _C/_ko
+     ● equations.js at body end, puts the formulas in the equation panel
      ● main.js      at body end, runs the engine after markup exists
 
    LAYOUT   (the leading marker is an element id)
@@ -36,8 +36,6 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -106,6 +104,7 @@
     <div class="eq-block"><div class="eq-sublabel">Helmholtz Wave Equation</div><div class="eq-row" id="eq-helm"></div></div>
     <div class="eq-block"><div class="eq-sublabel">Angular Spectrum Propagation</div><div class="eq-row" id="eq-asm"></div></div>
     <div class="eq-block"><div class="eq-sublabel" id="eq-t-label">Transmittance · Hexagonal Aperture</div><div class="eq-row" id="eq-trans"></div></div>
+    <div class="eq-block"><div class="eq-sublabel">Fresnel Number</div><div class="eq-row" id="eq-fresnel"></div></div>
     <div class="eq-block"><div class="eq-sublabel">CIE 1931 → sRGB</div><div class="eq-row" id="eq-cie"></div></div>
   </section>
   <!-- Readout: grid size and pitch on top, Fresnel-number regime below. -->
