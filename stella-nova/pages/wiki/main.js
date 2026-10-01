@@ -272,6 +272,8 @@
     if (!EXT.canLeave()) {
       if (!window.confirm('This section has unsaved changes. Leave and discard them?')) {
         history.replaceState(null, '', curHash || '#/');
+        var back = shellNav();
+        if (back) back(curHash || '#/', 'replace');  // put the shell URL back too
         return;
       }
       EXT.discard();
@@ -279,6 +281,29 @@
     curHash = location.hash;
     render();
   });
+  // In the shell (stella-nova/index.html) the shell owns the browser
+  // history. A route change from script goes through parent.snNav, which
+  // pushes one shell entry, and the frame hash changes with replaceState,
+  // which adds no frame entry. A frame entry would die when the shell swaps
+  // the frame out, and Back would then do nothing. Outside the shell, a plain
+  // hash change does both jobs.
+  function shellNav() {
+    try { return window.parent !== window && typeof window.parent.snNav === 'function' ? window.parent.snNav : null; }
+    catch (e) { return null; }
+  }
+  function navigate(hash) {
+    if (hash === location.hash) return;
+    var nav = shellNav();
+    if (!nav) { location.hash = hash; return; }
+    if (!EXT.canLeave()) {
+      if (!window.confirm('This section has unsaved changes. Leave and discard them?')) return;
+      EXT.discard();
+    }
+    history.replaceState(null, '', hash);
+    curHash = location.hash;
+    nav(hash);
+    render();
+  }
   window.addEventListener('beforeunload', function (ev) {
     if (!EXT.canLeave()) { ev.preventDefault(); ev.returnValue = ''; }
   });
@@ -340,7 +365,7 @@
   }
   function randomEntry() {
     var e = ENTRIES[Math.floor(Math.random() * ENTRIES.length)];
-    location.hash = href(e);
+    navigate(href(e));
   }
 
   // ── category ─────────────────────────────────────────────────────────────
@@ -773,8 +798,8 @@
       else if (ev.key === 'Enter' && sel >= 0) { ev.preventDefault(); if (sel < items.length) go(items[sel]); else submit(); }
     });
     q.addEventListener('blur', function () { setTimeout(close, 120); });
-    function go(e) { close(); q.blur(); location.hash = href(e); }
-    function submit() { var v = q.value.trim(); close(); q.blur(); if (v) location.hash = '#/search/' + encodeURIComponent(v); }
+    function go(e) { close(); q.blur(); navigate(href(e)); }
+    function submit() { var v = q.value.trim(); close(); q.blur(); if (v) navigate('#/search/' + encodeURIComponent(v)); }
     form.addEventListener('submit', function (ev) {
       ev.preventDefault();
       if (sel >= 0 && sel < items.length) go(items[sel]); else submit();
