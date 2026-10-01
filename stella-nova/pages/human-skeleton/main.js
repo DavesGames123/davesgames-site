@@ -37,9 +37,10 @@ import * as THREE from 'three';
 import { gunzip, decodeGroup } from './decode.js';
 import * as L from './layout.js';
 import { BoneState, boneMaterial, depthMaterial, ghostMaterial, pickMaterial, groupMesh } from './render.js';
-import { $, PHONE_Q, COARSE, HOVER, REDUCED, DPR, esc, clamp01, easeIO, ease, TYPE_NAME, SIDE_NAME, MODE_NAME, LOAD_ORDER, THEMES } from './app/env.js';
+import { $, PHONE_Q, COARSE, HOVER, REDUCED, esc, clamp01, easeIO, ease, TYPE_NAME, SIDE_NAME, MODE_NAME, LOAD_ORDER, THEMES } from './app/env.js';
 import { canvas, renderer, scene, envRT, camera, pickCam, key, floor, poolTex, pool, trays, U, controls } from './app/stage.js';
 import { T, S, dirty, toast, hideHint, regionOf } from './app/state.js';
+import { occ, occlusion, clearRect, fitDist, resize, flyTo, fitView, fitShadow, ensureVisible } from './app/camera.js';
 
 // ── loading ─────────────────────────────────────────────────────────────────
 async function fetchBuf(url) {
@@ -334,8 +335,8 @@ function pickAt(cx, cy, r = COARSE ? 22 : 4) {
 }
 
 // ── selection, card ─────────────────────────────────────────────────────────
-const card = $('card');
-function boneCentre(i, out = new THREE.Vector3()) {
+export const card = $('card');
+export function boneCentre(i, out = new THREE.Vector3()) {
   const b = S.bones[i];
   out.set(b.c[0] + S.cur.off[i * 3] + S.dOff[i * 3], b.c[1] + S.cur.off[i * 3 + 1] + S.dOff[i * 3 + 1], b.c[2] + S.cur.off[i * 3 + 2] + S.dOff[i * 3 + 2]);
   // on the tray the bone turns about c, and its box centre is c + lay.c
@@ -629,7 +630,7 @@ function onTap(x, y) {
     if (S.iso < 0) clearSelection();
   }
 }
-function setHover(i, x, y) {
+export function setHover(i, x, y) {
   if (i === S.hov) { if (i >= 0) moveTip(x, y); return; }
   if (S.hov >= 0) setHi(S.hov, 1, 0);
   S.hov = i;
@@ -647,114 +648,8 @@ function moveTip(x, y) {
   tip.style.transform = `translate(${x - cr.left + 14}px,${y - cr.top + 16}px)`;
 }
 
-// ── camera ──────────────────────────────────────────────────────────────────
-const occ = { l: 0, r: 0, t: 0, b: 0 };
-const panel = $('panel');
-function occlusion() {
-  const o = { l: 0, r: 0, t: 0, b: 0 };
-  const cr = canvas.getBoundingClientRect(), w = cr.width, h = cr.height;
-  const consider = el => {
-    if (!el || el.hidden) return;
-    const q = el.getBoundingClientRect();
-    if (getComputedStyle(el).display === 'none') return;
-    const x0 = Math.max(cr.left, q.left), x1 = Math.min(cr.right, q.right), y0 = Math.max(cr.top, q.top), y1 = Math.min(cr.bottom, q.bottom);
-    if (x1 - x0 < 1 || y1 - y0 < 1) return;
-    const fw = (x1 - x0) / w, fh = (y1 - y0) / h;
-    if (fw >= fh) { if (y0 + y1 > cr.top * 2 + h) o.b = Math.max(o.b, cr.bottom - y0); else o.t = Math.max(o.t, y1 - cr.top); }
-    else { if (x0 + x1 < cr.left * 2 + w) o.l = Math.max(o.l, x1 - cr.left); else o.r = Math.max(o.r, cr.right - x0); }
-  };
-  if (panel.classList.contains('open')) consider(panel);
-  consider(card);
-  return o;
-}
-function clearRect() {
-  const w = canvas.clientWidth || 1, h = canvas.clientHeight || 1, o = occlusion();
-  return { x0: o.l, x1: w - o.r, y0: o.t, y1: h - o.b, w, h, o };
-}
-function fitDist(radius) {
-  const c = clearRect();
-  const fy = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-  const frac = Math.max(0.2, Math.min((c.x1 - c.x0) / c.h, (c.y1 - c.y0) / c.h));
-  return (radius / (fy * frac)) * 1.06;
-}
-function resize() {
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (!w || !h) return false;
-  const dpr = DPR();
-  if (renderer.getPixelRatio() !== dpr) renderer.setPixelRatio(dpr);
-  const sz = renderer.getSize(new THREE.Vector2());
-  if (sz.x !== w || sz.y !== h) renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.setViewOffset(w, h, (occ.l - occ.r) / -2, (occ.t - occ.b) / -2, w, h);
-  camera.updateProjectionMatrix();
-  return true;
-}
-function flyTo(tgt, dist, dur = 0.9, dir = null) {
-  if (S.hov >= 0) setHover(-1);
-  const d0 = camera.position.clone().sub(controls.target);
-  S.fly = { t: 0, dur: REDUCED ? 0.01 : dur, t0: controls.target.clone(), t1: tgt.clone(), r0: d0.length(), r1: dist, u0: d0.normalize(), u1: dir ? dir.clone().normalize() : null };
-  dirty();
-}
-const FRONT = new THREE.Vector3(0.32, 0.1, 1).normalize();
-const ABOVE = new THREE.Vector3(0, 1.25, 0.95).normalize();
-// distance that fits a box seen along `dir` into the clear part of the view
-function fitBox(lo, hi, dir) {
-  const c = clearRect();
-  const fy = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2);
-  const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize(), up = dir.clone().cross(right).normalize();
-  const mid = new THREE.Vector3((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2);
-  let hw = 0, hh = 0, hd = 0;
-  const p = new THREE.Vector3();
-  for (let k = 0; k < 8; k++) {
-    p.set(k & 1 ? hi[0] : lo[0], k & 2 ? hi[1] : lo[1], k & 4 ? hi[2] : lo[2]).sub(mid);
-    hw = Math.max(hw, Math.abs(p.dot(right))); hh = Math.max(hh, Math.abs(p.dot(up))); hd = Math.max(hd, p.dot(dir));
-  }
-  const fh = Math.max(0.15, (c.y1 - c.y0) / c.h), fw = Math.max(0.15, (c.x1 - c.x0) / c.h);
-  return { c: mid, d: Math.max(hh / (fy * fh), hw / (fy * fw)) * 1.07 + hd };
-}
-function fitView(instant, off = S.to ? S.to.off : null) {
-  if (!S.P) return;
-  const vis = S.vis.some(Boolean) ? S.vis : new Uint8Array(S.n).fill(1);
-  const cat = S.mode === 'catalogue';
-  const bd = L.bounds(S.P, off || new Float32Array(S.n * 3), vis, null, !cat);
-  const dir = cat ? ABOVE : FRONT;
-  const fb = fitBox(bd.lo, bd.hi, dir);
-  const c = fb.c, d = fb.d;
-  if (instant) {
-    controls.target.copy(c);
-    camera.position.copy(c).addScaledVector(dir, d);
-    camera.lookAt(c); controls.update(); S.fly = null;
-  } else flyTo(c, d, 1.0, dir);
-  pool.scale.setScalar(Math.max(2.2, bd.r * 3.2));
-  pool.position.x = c.x; pool.position.z = c.z;
-  dirty();
-}
-function fitShadow() {
-  const vis = S.vis.some(Boolean) ? S.vis : new Uint8Array(S.n).fill(1);
-  const a = L.bounds(S.P, S.to.off, vis), b = L.bounds(S.P, S.cur.off, vis);
-  const c = new THREE.Vector3((a.c[0] + b.c[0]) / 2, (a.c[1] + b.c[1]) / 2, (a.c[2] + b.c[2]) / 2);
-  const r = Math.max(a.r, b.r) + new THREE.Vector3(...a.c).distanceTo(new THREE.Vector3(...b.c)) / 2 + 0.05;
-  key.target.position.copy(c);
-  key.position.copy(c).add(new THREE.Vector3(-0.42, 0.85, 0.5).normalize().multiplyScalar(r * 3));
-  const sc = key.shadow.camera;
-  sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = r * 0.5; sc.far = r * 5.5;
-  sc.updateProjectionMatrix();
-  key.updateMatrixWorld(); key.target.updateMatrixWorld();
-}
-function ensureVisible(i) {
-  const p = boneCentre(i).project(camera);
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  const x = (p.x + 1) / 2 * w, y = (1 - p.y) / 2 * h;
-  const cr = canvas.getBoundingClientRect();
-  const blocked = [card, panel.classList.contains('open') ? panel : null].some(el => {
-    if (!el || el.hidden) return false;
-    const q = el.getBoundingClientRect();
-    return x + cr.left > q.left - 12 && x + cr.left < q.right + 12 && y + cr.top > q.top - 12 && y + cr.top < q.bottom + 12;
-  });
-  if (blocked || x < 8 || x > w - 8 || y < 8 || y > h - 8) flyTo(boneCentre(i), camera.position.distanceTo(controls.target), 0.7);
-}
-
 // ── panel, sheet, dock, theme ───────────────────────────────────────────────
+export const panel = $('panel');
 const dockList = $('dockList');
 function setOpen(open) {
   panel.classList.toggle('open', open);
