@@ -14,7 +14,7 @@ import { scene, currentExample } from './state.js';
 import { thumb } from './thumbs.js';
 import { setMain } from './scene.js';
 import { frameView } from './camera.js';
-import { openSheet, closeSheet } from '../main.js';
+import { openSheet, closeSheet } from './sheets.js';
 
 let pickerSlot = 0;
 let pickerTiles = null;

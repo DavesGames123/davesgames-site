@@ -48,6 +48,7 @@ import { loadText, exportText, initIo, shareHash, decodeShare, readHash } from '
 import { SOURCES, FAMILIES, presetTitle, exampleScene, loadExample } from './ui/presets.js';
 import { buildPanel, initPeek } from './ui/panel.js';
 import { openPicker, closePicker, choose, initPicker } from './ui/picker.js';
+import { syncViewport, openSheet, closeSheet, initSheets } from './ui/sheets.js';
 
 // ─── data ───────────────────────────────────────────────────────────────────
 // ─── panel specs ────────────────────────────────────────────────────────────
@@ -282,7 +283,7 @@ initTip();
 // or tablet. In sheet and drawer mode the canvas shrinks to the free area (--cover-b,
 // --cover-r), so the camera target, orbit and Frame center where the user can see them.
 // A snap to another sheet height resizes the canvas once; a drag only stretches it.
-const L = { mode: '', snap: 'peek', y: 0, full: 0, peek: 88, half: 320, drawerW: 340, drag: null, focusSnap: null };
+export const L = { mode: '', snap: 'peek', y: 0, full: 0, peek: 88, half: 320, drawerW: 340, drag: null, focusSnap: null };
 let sheetDragging = false;
 const safeProbe = el('div', { style: 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;'
   + 'padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)' });
@@ -334,7 +335,7 @@ function applyLayout() {
   syncViewport();
 }
 let layoutQueued = false;
-function queueLayout() { if (layoutQueued) return; layoutQueued = true; requestAnimationFrame(() => { layoutQueued = false; applyLayout(); }); }
+export function queueLayout() { if (layoutQueued) return; layoutQueued = true; requestAnimationFrame(() => { layoutQueued = false; applyLayout(); }); }
 window.addEventListener('resize', queueLayout);
 window.addEventListener('orientationchange', queueLayout);
 coarseMQ.addEventListener?.('change', queueLayout);
@@ -444,49 +445,7 @@ panel.addEventListener('focusout', () => {
 });
 
 // ─── full-screen sheets: formula picker and examples ────────────────────────
-// On a phone they fill the visual viewport, so the search field stays above the keyboard.
-// Swipe down on the head, or on the list when it is scrolled to the top, to close.
-function syncViewport() {
-  const vv = window.visualViewport;
-  root.style.setProperty('--vv-top', px(vv ? vv.offsetTop : 0));
-  root.style.setProperty('--vv-h', px(vv ? vv.height : innerHeight));
-}
-window.visualViewport?.addEventListener('resize', () => { syncViewport(); queueLayout(); });
-window.visualViewport?.addEventListener('scroll', syncViewport);
-
-export function openSheet(s) { syncViewport(); s.style.transform = ''; s.classList.remove('hidden'); }
-export function closeSheet(s) {
-  if (s.contains(document.activeElement)) document.activeElement.blur();
-  s.classList.add('hidden'); s.style.transform = '';
-}
-function swipeToClose(s, close) {
-  const body = s.querySelector('.pbody');
-  let t = null;
-  s.addEventListener('touchstart', (e) => {
-    if (L.mode === 'float' || e.touches.length !== 1) { t = null; return; }
-    t = { y0: e.touches[0].clientY, t0: performance.now(), ok: !!e.target.closest('.phead') || body.scrollTop <= 0, on: false, dy: 0 };
-  }, { passive: true });
-  s.addEventListener('touchmove', (e) => {
-    if (!t?.ok) return;
-    const dy = e.touches[0].clientY - t.y0;
-    if (!t.on) { if (dy > 10 && (body.scrollTop <= 0 || e.target.closest('.phead'))) { t.on = true; s.classList.add('dragging'); } else return; }
-    e.preventDefault();
-    t.dy = Math.max(0, dy);
-    s.style.transform = `translateY(${t.dy}px)`;
-  }, { passive: false });
-  const end = () => {
-    if (!t?.on) { t = null; return; }
-    s.classList.remove('dragging');
-    const v = t.dy / Math.max(performance.now() - t.t0, 1);
-    if (t.dy > 110 || v > 0.6) close(); else s.style.transform = '';
-    t = null;
-  };
-  s.addEventListener('touchend', end);
-  s.addEventListener('touchcancel', end);
-}
-swipeToClose(picker, closePicker);
-swipeToClose(exSheet, () => closeExamples());
-
+initSheets();
 // The sheet: source and family chips over a grid with one heading per source group
 // (per collection author, with the licence). Search, chips and Random work together.
 let exTiles = null, exGroups = [];
@@ -553,7 +512,7 @@ export function openExamples() {
   exTiles.find((x) => x.i === currentExample)?.t.scrollIntoView({ block: 'center' });
   if (matchMedia('(pointer: fine)').matches) $('exSearch').focus();
 }
-function closeExamples() { closeSheet(exSheet); }
+export function closeExamples() { closeSheet(exSheet); }
 $('exSearch').addEventListener('input', filterExSheet);
 $('exSearch').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { const x = exTiles.find((y) => !y.t.hidden); if (x) x.t.click(); }
