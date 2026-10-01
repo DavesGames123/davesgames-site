@@ -35,10 +35,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:var(--f-sans);color:var(--text);-webkit-font-smoothing:antialiased}
 #shell{display:flex;width:100%;height:100%}
 #sidebar{width:var(--sidebar-w);min-width:var(--sidebar-w);height:100%;background:var(--sidebar);border-right:1px solid var(--border-b);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0;z-index:200;transition:transform 0.28s cubic-bezier(0.4,0,0.2,1),width 0.28s cubic-bezier(0.4,0,0.2,1),min-width 0.28s cubic-bezier(0.4,0,0.2,1),opacity 0.28s ease}
-@media(max-width:768px){#sidebar{position:fixed;top:0;left:0;bottom:0;transform:translateX(-100%);box-shadow:4px 0 32px rgba(0,0,0,0.6)}#sidebar.open{transform:translateX(0)}#overlay{display:none;position:fixed;inset:0;z-index:190;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px)}#overlay.show{display:block}}
+@media (max-width:768px),(max-height:500px) and (pointer:coarse){#sidebar{position:fixed;top:0;left:0;bottom:0;transform:translateX(-100%);box-shadow:4px 0 32px rgba(0,0,0,0.6)}#sidebar.open{transform:translateX(0)}#overlay{display:none;position:fixed;inset:0;z-index:190;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px)}#overlay.show{display:block}}
 #sb-header{padding:24px 22px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
 #sb-wordmark{font-family:var(--f-sans);font-weight:300;font-size:1.7rem;letter-spacing:0.2em;text-transform:uppercase;line-height:1;display:flex;flex-wrap:wrap;column-gap:.38em}
-#sb-wordmark{text-decoration:none;width:max-content;max-width:100%;border-radius:6px;transition:filter .25s}
+#sb-wordmark{text-decoration:none;width:max-content;max-width:100%;border-radius:6px;transition:filter .25s;padding:9px 0;margin:-9px 0}
 #sb-wordmark:hover{filter:brightness(1.18) drop-shadow(0 0 10px rgba(255,200,80,.25))}
 #sb-wordmark:focus-visible{outline:1px solid var(--yellow);outline-offset:6px}
 #sb-wordmark span{background:linear-gradient(180deg,#fff 10%,#c9dcf5 55%,#7f9cc6 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -139,12 +139,12 @@ body{font-family:var(--f-sans);color:var(--text);-webkit-font-smoothing:antialia
 #content{flex:1;display:flex;flex-direction:column;overflow:hidden}
 #topbar{height:var(--topbar-h);min-height:var(--topbar-h);background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 22px;gap:16px}
 #menu-btn{display:none;background:none;border:none;color:var(--text-dim);font-size:1.4rem;cursor:pointer;padding:4px 8px;font-family:inherit}
-@media(max-width:768px){#menu-btn{display:block}}
+@media (max-width:768px),(max-height:500px) and (pointer:coarse){#menu-btn{display:block}}
 #collapse-btn{background:none;border:1px solid var(--border-b);color:var(--text-dim);font-size:0.95rem;cursor:pointer;padding:5px 11px;font-family:inherit;border-radius:3px;line-height:1;transition:background .15s,color .15s,transform .28s}
 #collapse-btn:hover{background:rgba(150,200,255,0.06);color:var(--blue)}
 body.sb-collapsed #collapse-btn{transform:rotate(180deg)}
 body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;pointer-events:none}
-@media(max-width:768px){#collapse-btn{display:none}}
+@media (max-width:768px),(max-height:500px) and (pointer:coarse){#collapse-btn{display:none}}
 #topbar-title{font-family:var(--f-sans);font-weight:400;font-size:0.8rem;letter-spacing:0.32em;text-transform:uppercase;color:var(--dim)}
 #topbar-active{margin-left:auto;font-size:0.75rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-faint)}
 #frame-wrap{flex:1;overflow:hidden}
@@ -185,6 +185,14 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
 #topbar{background:rgba(11,14,21,.96)}
 #collapse-btn{border-radius:999px;padding:6px 12px;color:var(--dim);min-width:40px;min-height:40px}
 #topbar-active{font:500 0.66rem/1 var(--f-mono);letter-spacing:0.16em;color:var(--dim)}
+/* Phones and landscape phones use the drawer (the same query as drawerMode()
+   in closeSidebar). The menu button gets a 44 px target. The top bar keeps one
+   line: the page title takes the free width and ends with an ellipsis, and
+   the spaced wordmark hides below 520 px, because the sidebar shows it. */
+#menu-btn{min-width:44px;min-height:44px;padding:0 10px;margin-left:-8px;border-radius:12px;color:var(--dim)}
+#topbar-title,#topbar-active{white-space:nowrap}
+#topbar-active{min-width:0;overflow:hidden;text-overflow:ellipsis}
+@media (max-width:520px){#topbar-title{display:none}#topbar{gap:8px;padding:0 14px}}
 </style>
 </head>
 <body>
@@ -438,7 +446,8 @@ function routeFromHash(){var r=parseShellHash(location.hash);if(!PAGES[r.id])r={
 window.addEventListener('popstate',routeFromHash);window.addEventListener('hashchange',routeFromHash);routeFromHash();
 function toggleCluster(id){var cl=document.getElementById(id);if(cl)cl.classList.toggle('open')}
 function openSidebar(){document.getElementById('sidebar').classList.add('open');document.getElementById('overlay').classList.add('show')}
-function closeSidebar(){if(window.innerWidth<=768){document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('show')}}
+function drawerMode(){return matchMedia('(max-width:768px),(max-height:500px) and (pointer:coarse)').matches}
+function closeSidebar(){if(drawerMode()){document.getElementById('sidebar').classList.remove('open');document.getElementById('overlay').classList.remove('show')}}
 function toggleSidebar(){var c=document.body.classList.toggle('sb-collapsed');try{localStorage.setItem('sn-sb-collapsed',c?'1':'0')}catch(e){}}
 window.toggleSidebar=toggleSidebar;
 setInterval(function(){var el=document.getElementById('sb-clock');if(el)el.textContent=new Date().toTimeString().slice(0,8)},1000);
