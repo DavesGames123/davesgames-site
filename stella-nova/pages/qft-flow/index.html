@@ -32,6 +32,12 @@
      3. katex        KaTeX CSS, JS, then auto-render (renders $…$ at init)
      4. style.css    the page stylesheet
 
+   PHONE  (max-width 768px, or a short landscape touch screen)
+     The plots fill the page, output first. #dock at the base holds the
+     controls button and the four presets. #panel is a bottom sheet above
+     the dock (portrait) or a drawer on the right edge (landscape).
+     grep -n 'PHONE' style.css, grep -n 'function setSheet' main.js
+
    LAYOUT  (# marks an element id)
      ┌────────────────┬─────────────────────────────────────────────────┐
      │ #panel         │ #viz                                             │
@@ -63,6 +69,9 @@
        filled by buildPhiSliders(); alpha drives the linear ramp; shots controls
        measurement sampling. -->
   <div id="panel">
+    <!-- Phone only: the grip of the bottom sheet. A tap switches half and full
+         height. A drag down closes the sheet. -->
+    <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
     <!-- Card order: the register size, then the one-tap ramp presets, then
          measurement, then the per-qubit phases. The per-qubit list is the
          longest, so it goes last and the presets stay above the fold. -->
@@ -196,6 +205,18 @@
     </div>
   </div>
 </div>
+
+<!-- Phone only: the dock. #dockPanel opens the control sheet. The four
+     preset buttons are one tap and use the same data-preset wiring. -->
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" aria-label="Controls" aria-expanded="false">&#9776;</button>
+  <div class="seg">
+    <button data-preset="flat">Flat</button>
+    <button data-preset="ramp">Tone</button>
+    <button data-preset="detune">Detune</button>
+    <button data-preset="random">Random</button>
+  </div>
+</nav>
 
 <!-- Classic (non-module) script; runs after the markup it binds to is parsed. -->
 <script src="main.js"></script>

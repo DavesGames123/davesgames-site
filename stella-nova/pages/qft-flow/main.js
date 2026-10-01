@@ -316,6 +316,27 @@ $('shots').addEventListener('input',e=>{S.shotsIdx=+e.target.value;
 // Resample: draw a new measurement run at the current shot count.
 $('resample').onclick=()=>{if(S.shotsIdx>0){S.sampleCounts=null;render();}};
 
+/* ── phone sheet ── */
+// On a phone the panel is a bottom sheet above the dock (see PHONE in
+// style.css). setSheet opens or closes it. On open, the output plot scrolls
+// to the top of the clear area, so a control change shows at once. The grip
+// switches half and full height on a tap, and a drag down closes the sheet.
+const PHONE_Q=matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
+function setSheet(open){const p=$('panel'),b=$('dockPanel');
+  p.classList.toggle('open',open);if(!open)p.classList.remove('full');
+  document.body.classList.toggle('sheet-open',open);
+  b.classList.toggle('on',open);b.setAttribute('aria-expanded',String(open));
+  if(open)requestAnimationFrame(()=>{const v=$('viz'),o=$('cv-out').closest('.card');v.scrollTo({top:Math.max(0,o.offsetTop-10),behavior:'smooth'});});
+  render();}
+$('dockPanel').addEventListener('click',()=>setSheet(!$('panel').classList.contains('open')));
+{const g=$('sheetGrip');let y0=null;
+  g.addEventListener('pointerdown',e=>{y0=e.clientY;g.setPointerCapture(e.pointerId);});
+  g.addEventListener('pointerup',e=>{if(y0==null)return;const dy=e.clientY-y0;y0=null;const p=$('panel');
+    if(Math.abs(dy)<8)p.classList.toggle('full');
+    else if(dy<-40)p.classList.add('full');
+    else if(dy>40){if(p.classList.contains('full'))p.classList.remove('full');else setSheet(false);}});}
+PHONE_Q.addEventListener('change',()=>{if(!PHONE_Q.matches)setSheet(false);});
+
 // Repaint on resize so the canvases track their CSS box.
 window.addEventListener('resize',()=>render());
 // Repaint once the web fonts load. A canvas that draws text before its font

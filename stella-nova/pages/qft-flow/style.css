@@ -47,12 +47,7 @@ h1 em{font-family:var(--f-serif);font-style:italic;font-weight:400;color:var(--a
 .sub{color:var(--dim);font-size:0.86rem;max-width:72ch;line-height:1.5}
 .sub b{color:var(--ink);font-weight:600}
 
-@media(max-width:760px){
-  html,body{overflow:auto}
-  #main{flex-direction:column;min-height:0}
-  #panel{width:auto;border-right:none;border-bottom:1px solid var(--border-b);overflow:visible}
-  #viz{overflow:visible}
-}
+#dock,#sheetGrip{display:none}
 
 .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 17px;
   backdrop-filter:blur(7px);box-shadow:0 10px 40px rgba(0,0,0,0.35)}
@@ -184,3 +179,93 @@ button.mini:hover{background:rgba(63,224,255,0.1);border-color:var(--cyan-d)}
 .slider .chips button{min-height:22px;font-size:0.66rem}
 .lbl,.stat .sl,.slider .head .w,.viz-cap .t span,.viz-cap .r,.legend,.eq .cap{font-size:max(0.62rem,10px)}
 .btns.presets button{min-width:0;padding:8px 4px;letter-spacing:0.02em;white-space:nowrap}
+
+/* TOUCH. Any touch screen or narrow window: targets are 44 px or more and
+   text is 11 px or more. The layout does not change here. */
+@media (pointer:coarse), (max-width:768px){
+  .stepper button{width:44px;height:44px;font-size:1.2rem}
+  .btns button,.btns.presets button{min-height:44px;font-size:0.72rem}
+  button.mini{width:44px;height:44px}
+  .slider .chips button{min-height:36px;font-size:0.72rem}
+  .lbl,.stat .sl,.slider .head,.slider .head .w,.viz-cap .t span,.viz-cap .r,.legend,.eq .cap,.note,.row .name{font-size:max(0.72rem,11px)}
+  .stepper .v small{font-size:max(0.72rem,11px)}
+  .slider .head .w sup{font-size:max(0.92em,11px)}
+  .slider .head .val small{font-size:max(0.8em,11px)}
+  /* A 44 px hit area with a thin track drawn by the track pseudo element. */
+  input[type=range]{height:44px;background:transparent}
+  input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--cyan-d),rgba(120,170,230,0.18))}
+  input[type=range].amber::-webkit-slider-runnable-track{background:linear-gradient(90deg,#a06410,rgba(255,182,72,0.18))}
+  input[type=range]::-webkit-slider-thumb{width:24px;height:24px;margin-top:-9px}
+  input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--cyan-d),rgba(120,170,230,0.18))}
+  input[type=range].amber::-moz-range-track{background:linear-gradient(90deg,#a06410,rgba(255,182,72,0.18))}
+  input[type=range]::-moz-range-thumb{width:20px;height:20px}
+  input[type=range].amber{background:transparent}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. The plots fill the page and
+   the output card comes first. The panel is a bottom sheet above the dock. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--dock-h:calc(64px + env(safe-area-inset-bottom));--sheet-h:min(46vh,460px)}
+  @supports (height:1dvh){:root{--sheet-h:min(46dvh,460px)}}
+  .sys-status,.topbar-r{display:none}
+  #main{display:block;position:relative}
+  #viz{position:absolute;inset:0;overflow-y:auto;padding:14px 14px calc(var(--dock-h) + 16px);display:flex;flex-direction:column}
+  body.sheet-open #viz{padding-bottom:calc(var(--dock-h) + var(--sheet-h) + 16px)}
+  #viz>*{max-width:none;width:100%}
+  #viz>.card + .card{margin-top:14px}
+  #viz>.card:nth-of-type(2){order:1}
+  #viz>.card:nth-of-type(1){order:2}
+  #viz>.card:nth-of-type(3){order:3}
+  #viz>.card:nth-of-type(4){order:4}
+  #viz .card{padding:12px}
+  header{order:0}
+  h1{font-size:1.5rem}
+  .sub{font-size:0.82rem}
+  #cv-out{height:200px}
+  /* Card labels and plot captions wrap as whole phrases on a narrow screen. */
+  .lbl{flex-wrap:wrap;gap:2px 9px}
+  .lbl::after{display:none}
+  .viz-cap{flex-wrap:wrap;gap:2px 10px}
+  #cv-mag,#cv-phase{height:110px}
+
+  #dock{
+    display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;gap:8px;align-items:center;
+    padding:8px calc(10px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(10px + env(safe-area-inset-left));
+    background:rgba(10,13,20,0.95);border-top:1px solid var(--border-b);backdrop-filter:blur(8px);
+  }
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--border-b);border-radius:12px;background:var(--bg2);color:var(--ink);font-size:1.1rem;cursor:pointer}
+  #dock > button.on{border-color:var(--amber);color:var(--amber)}
+  .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--border-b);border-radius:12px;overflow:hidden}
+  .seg button{flex:1;min-width:0;border:0;border-right:1px solid var(--border);background:var(--bg2);color:var(--dim);
+    font-family:var(--f-mono);font-size:0.72rem;letter-spacing:0.02em;cursor:pointer}
+  .seg button:last-child{border-right:0}
+  .seg button:active{background:rgba(255,185,72,0.14);color:var(--amber)}
+
+  #panel{
+    position:fixed;left:0;right:0;bottom:var(--dock-h);z-index:40;width:auto;height:var(--sheet-h);
+    border-right:0;border-top:1px solid var(--border-b);border-radius:18px 18px 0 0;background:rgba(10,13,20,0.97);
+    padding:0 calc(16px + env(safe-area-inset-right)) 20px calc(16px + env(safe-area-inset-left));
+    transform:translateY(calc(100% + var(--dock-h)));transition:transform .3s cubic-bezier(.4,0,.2,1),height .3s cubic-bezier(.4,0,.2,1);
+    overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  }
+  #panel.open{transform:translateY(0)}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  #sheetGrip{
+    display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:44px;margin:0 -16px;
+    background:linear-gradient(180deg,rgba(10,13,20,1) 65%,rgba(10,13,20,0));touch-action:none;cursor:grab;
+  }
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+}
+
+/* LANDSCAPE phone. The panel is a drawer on the right edge, and the plots
+   keep the left part of the screen clear. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  :root{--sheet-h:0px}
+  .topbar{display:none}
+  #dock{right:auto;width:min(440px,56vw);border-right:1px solid var(--border-b);border-radius:0 16px 0 0}
+  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;border-top:0;border-left:1px solid var(--border-b);
+    border-radius:0;transform:translateX(100%)}
+  #panel.open{transform:translateX(0)}
+  body.sheet-open #viz{right:min(46vw,380px)}
+  #sheetGrip{display:none}
+}
