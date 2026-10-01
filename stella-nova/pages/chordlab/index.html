@@ -138,6 +138,8 @@
     <div id="centsBar"><div id="centsNeedle"></div></div>
     <div id="centsLbl"><span>♭ −50</span><span>in tune</span><span>+50 ♯</span></div>
     <div id="tuneTargetLbl">target auto · tap a string to lock</div>
+    <!-- Reference pitch: A4 for the tuner, the string tones and the strum. -->
+    <div id="refRow"><button class="sbtn" id="a4Dn" aria-label="Lower the reference pitch">−</button><span id="a4Val">A4 440 Hz</span><button class="sbtn" id="a4Up" aria-label="Raise the reference pitch">+</button></div>
     <!-- Waterfall spectrogram with string reference lines and tuning ladder. -->
     <canvas id="specCanvas"></canvas>
     <!-- Buttons to sound each open string and lock the tuning target. -->
@@ -172,6 +174,7 @@
     <dt>← →</dt><dd>previous / next voicing</dd>
     <dt>1 – 4</dt><dd>guitar · bass · uke · violin</dd>
     <dt>C</dt><dd>copy the chord log</dd>
+    <dt>[ ]</dt><dd>reference pitch A4 −1 / +1 Hz</dd>
     <dt>?</dt><dd>show / hide this card</dd>
   </dl>
 </div>

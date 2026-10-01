@@ -105,6 +105,10 @@ body::after{content:'';position:fixed;inset:0;z-index:9998;pointer-events:none;b
 .strBtn.pinned{background:rgba(150,200,255,0.12);box-shadow:0 0 14px rgba(150,200,255,0.3);border-width:2px;transform:translateY(-1px)}
 #tuneTargetLbl{font-size:0.54rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-faint);text-align:center;flex-shrink:0;font-weight:600}
 #tuneTargetLbl b{font-weight:700}
+#refRow{display:flex;align-items:center;justify-content:center;gap:8px;flex-shrink:0}
+#refRow .sbtn{padding:3px 10px;font-size:0.7rem}
+#a4Val{font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--text-faint);font-weight:600;font-variant-numeric:tabular-nums;min-width:88px;text-align:center}
+#a4Val.off{color:var(--yellow)}
 
 /* bottom — STAFF */
 #staffZone{flex-shrink:0;border-top:1px solid var(--border-b);background:rgba(9,12,20,0.7);position:relative;padding:26px 12px 8px}

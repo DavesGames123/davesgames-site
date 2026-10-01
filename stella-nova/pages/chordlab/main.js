@@ -57,7 +57,7 @@ setMTab('now');
 // Keys for hands that are busy with an instrument. Keys are ignored while
 // typing, and with Cmd, Ctrl or Alt held, so browser shortcuts still work.
 //   Space start / pause   H hear the chord   ← → voicing   1-4 instrument
-//   C copy the chord log   ? the key card
+//   C copy the chord log   [ ] reference pitch A4   ? the key card
 function toggleKeys(on){
   const k=$('keysCard');
   k.hidden=on===undefined?!k.hidden:!on;
@@ -83,6 +83,7 @@ addEventListener('keydown',e=>{
   }else if(k>='1'&&k<='4'){
     const b=$('instSeg').children[+k-1];if(b)b.click();
   }else if(k==='c'||k==='C')copyLog();
+  else if(k==='['||k===']')setA4(A4+(k===']'?1:-1));
   else if(k==='?')toggleKeys();
   else if(k==='Escape')toggleKeys(false);
 });

@@ -982,7 +982,7 @@ function updateTuner(){
     return;
   }
   // Convert Hz to MIDI, find the nearest note, and the cents error from it.
-  const midi=69+12*Math.log2(p/440), nearest=Math.round(midi);
+  const midi=69+12*Math.log2(p/A4), nearest=Math.round(midi);
   const cents=Math.round((midi-nearest)*100);
   const pc=((nearest%12)+12)%12, oct=Math.floor(nearest/12)-1;
   lastPitch=p;lastPitchPc=pc;
@@ -1046,6 +1046,26 @@ GTR_STRINGS.forEach((s,i)=>{
 });
 syncStrBtns();
 
+/* reference pitch A4 */
+// A4 sets the tuner's note grid, the string targets and tones, and the strum
+// synth. Orchestras often tune to 442, baroque groups to 415. Chord detection
+// does not use it: estimateTuning follows the instrument by itself. The
+// value is kept per browser (localStorage).
+let A4=440;
+try{const v=+localStorage.getItem('chordlab.a4');if(v>=415&&v<=466)A4=v;}catch(_){}
+GTR_STRINGS.forEach(s=>{s.f440=s.f;});
+function setA4(v){
+  A4=Math.max(415,Math.min(466,Math.round(v)));
+  GTR_STRINGS.forEach(s=>{s.f=s.f440*A4/440;});
+  try{localStorage.setItem('chordlab.a4',String(A4));}catch(_){}
+  $('a4Val').textContent='A4 '+A4+' Hz';
+  $('a4Val').classList.toggle('off',A4!==440);
+  strBtns.forEach((b,i)=>{b.querySelector('small').textContent=GTR_STRINGS[i].f.toFixed(0)+' Hz';});
+}
+$('a4Dn').addEventListener('click',()=>setA4(A4-1));
+$('a4Up').addEventListener('click',()=>setA4(A4+1));
+setA4(A4);
+
 /* ═══════════ STRUM SYNTH ═══════════ */
 // Audibly preview the shown chord. Collect the MIDI pitches for the current
 // instrument and voicing, then play them staggered so it sounds like a strum.
@@ -1074,7 +1094,7 @@ function strum(){
   const t0=AC.currentTime+0.03;
   const master=AC.createGain();master.gain.value=0.5;master.connect(AC.destination);
   midis.forEach((mn,i)=>{
-    const f=440*Math.pow(2,(mn-69)/12);
+    const f=A4*Math.pow(2,(mn-69)/12);
     const t=t0+i*stag;
     // Triangle fundamental plus a faint detuned octave sine for a warmer timbre.
     const o1=AC.createOscillator(),o2=AC.createOscillator(),g=AC.createGain(),g2=AC.createGain();
