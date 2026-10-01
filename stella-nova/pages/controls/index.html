@@ -3,181 +3,131 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>Controls // Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    CONTROLS  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup for the controls reference. A left nav (#sidebar) scrolls the
-   right column (#content) through three sections. main.js fills #kbGrid with
-   the keyboard, wires hover and legend filtering, and drives the scroll spy.
-   Nothing here is painted by script except the keyboard grid.
+   Reference for the player-visible bindings. main.js reads the bindings
+   from window.SN_DATA.controls (lib/game-data/catalog.js) and builds the
+   keyboard, the key readout, and the grouped action list from them. The
+   mouse section, the option and the tips are static.
 
-   LAYOUT  (# marks an element id, the rest are class hooks)
-     ┌────────────┬──────────────────────────────────────────────┐
-     │ #sidebar   │ #content (scrolls)                            │
-     │  nav btns  │   page hero                                   │
-     │  keyboard  │   #sec-keyboard  #kbGrid + #hoverBar + legend │
-     │  options   │   #sec-options   invert-scroll toggle         │
-     │  tips      │   #sec-tips      worth-knowing list           │
-     └────────────┴──────────────────────────────────────────────┘
+   LAYOUT  (# marks an element id; the page scrolls as one document)
+     ┌───────────────────────────────────────────────────────────────┐
+     │ .hero      title, intro                                       │
+     │ #bar       sticky: #q search, #chips group filter             │
+     │ #sec-keys  #board keyboard, #arrows cluster, #readout         │
+     │ #sec-list  #list   one card per group, one row per binding    │
+     │ #sec-mouse mouse diagram, mouse and trackpad rows             │
+     │ #sec-opts  #invertScroll  the one stored setting              │
+     │ #sec-tips  tip cards                                          │
+     └───────────────────────────────────────────────────────────────┘
+   PHONE (max-width 760px): the keyboard is compact and the arrow cluster
+   moves under it. The action list is one column.
 
-   SECTION MAP   (jump with grep -n "<anchor>" index.html)
-     nav buttons ...... nav-btn         call goTo() in main.js
-     keyboard slot .... id=kbGrid       main.js renders keys here
-     hover readout .... id=hoverBar     binding text on key hover
-     legend ........... kb-legend       click to filter by category
-     mouse diagram .... mouse-svg-wrap  inline SVG of the mouse
-     options .......... id=invertScroll the one persisted setting
-     tips ............. tips-list       static advice cards
+   SECTION MAP  (jump with grep -n "<anchor>" index.html)
+     search and filter .. id="bar"          sticky tool bar
+     keyboard slot ...... id="board"        main.js renders keys here
+     key readout ........ id="readout"      bindings of the active key
+     action list ........ id="list"         filled by buildList()
+     mouse .............. id="sec-mouse"    diagram and rows
+     option ............. id="invertScroll" stored as stnv_invert_scroll
+     tips ............... id="sec-tips"     static advice cards
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&family=Libre+Barcode+128+Text&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="grid-bg"></div>
-<div id="app"><div id="shell">
-<!-- Left nav. Each button carries data-sec; goTo() scrolls #content to the
-     matching #sec-* block and the scroll spy toggles .active back. -->
-<nav id="sidebar">
-  <div class="side-head">Controls<span class="tag">GUIDE</span></div>
-  <div class="side-section">
-    <button class="nav-btn active" data-sec="keyboard" onclick="goTo(this,'keyboard')"><span class="nav-icon">⌨</span>Keyboard &amp; Mouse<span class="nav-color" style="background:var(--blue)"></span></button>
-    <button class="nav-btn" data-sec="options" onclick="goTo(this,'options')"><span class="nav-icon">⚙</span>Options<span class="nav-color" style="background:var(--yellow)"></span></button>
-    <button class="nav-btn" data-sec="tips" onclick="goTo(this,'tips')"><span class="nav-icon">★</span>Tips<span class="nav-color" style="background:var(--green)"></span></button>
-  </div>
-  <div class="side-barcode">CTRL-MANUAL</div>
-</nav>
+<div id="page">
 
-<div id="content">
+<header class="hero">
+  <div class="kicker">Player's manual</div>
+  <h1>Controls &amp; <em>Input</em></h1>
+  <p>Same bindings as the in-game Controls panel. Hover or tap a key to see what it does, or press it on your own keyboard.</p>
+</header>
 
-<div class="page-hero">
-  <div class="ph-num">Player's Manual // 003</div>
-  <h1 class="ph-title">Controls &amp; <em>Input</em></h1>
-  <p class="ph-sub">Same layout as the in-game settings panel. Hover any colored key to see what it does.</p>
-  <div class="ph-line"></div>
+<!-- Sticky tool bar. The search matches action names, key names and groups.
+     The chips filter by group. Both act on the keyboard and the list. -->
+<div id="bar">
+  <label class="search"><span class="sr">Search bindings</span>
+    <input id="q" type="search" placeholder="Search actions or keys" autocomplete="off" spellcheck="false">
+  </label>
+  <div id="chips" role="toolbar" aria-label="Filter by group"></div>
 </div>
 
-<!-- Keyboard section. #kbGrid is empty markup; main.js builds the keys into it.
-     The hover bar, legend, and note below sit under the generated grid. -->
-<div class="sec" id="sec-keyboard">
-  <div class="sec-hdr-line">
-    <span class="sec-hdr-tag">INPUT</span>
-    <span class="sec-hdr-sep">//</span>
-    <span class="sec-hdr-label">Keyboard &amp; Mouse</span>
-  </div>
-
-  <div class="kb-mouse-wrap">
-    <div class="kb-section">
-      <div class="kb-wrap"><div class="kb-grid" id="kbGrid"></div></div>
-
-      <div class="hover-bar" id="hoverBar">
-        <span class="hb-default">Hover a colored key to see what it does</span>
-      </div>
-
-      <!-- Legend doubles as a category filter; each item calls filterKeys(). -->
-      <div class="kb-legend">
-        <div class="leg-item" style="--lc:var(--c-game)" onclick="filterKeys(this,'game')"><div class="leg-dot"></div>Game</div>
-        <div class="leg-item" style="--lc:var(--c-system)" onclick="filterKeys(this,'system')"><div class="leg-dot"></div>System</div>
-        <div class="leg-item" style="--lc:var(--c-modifier)" onclick="filterKeys(this,'modifier')"><div class="leg-dot"></div>Modifier</div>
-        <div class="leg-item" style="--lc:var(--text-faint)" onclick="filterKeys(this,'none')"><div class="leg-dot" style="background:transparent"></div>Unbound</div>
-      </div>
-
-      <div class="kb-note">
-        <strong>Heads-up:</strong> The in-game menu labels <kbd>Shift</kbd> as multi-select, but the active bindings are <kbd>Ctrl</kbd> (Windows/Linux) or <kbd>⌘</kbd> (Mac). Either works.
-      </div>
+<section class="sec" id="sec-keys">
+  <div class="sec-head"><span class="kicker">Keyboard</span><span class="sec-note" id="keyNote"></span></div>
+  <div class="kb-card">
+    <div id="kbWrap">
+      <div id="board" aria-label="Keyboard"></div>
+      <div id="arrows" aria-label="Arrow keys"></div>
     </div>
+    <div id="readout" aria-live="polite"></div>
+  </div>
+  <p class="kb-note"><strong>Heads-up:</strong> The in-game menu labels <kbd>Shift</kbd> as multi-select, but the active bindings are <kbd>Ctrl</kbd> (Windows/Linux) or <kbd>&#8984;</kbd> (Mac). Either works.</p>
+</section>
 
-    <!-- Mouse reference. A hand-drawn SVG plus a static list of button roles;
-         colours match the keyboard categories. -->
-    <div class="mouse-section">
-      <div class="mouse-svg-wrap">
-        <svg width="120" height="170" viewBox="0 0 100 140" fill="none">
-          <rect x="14" y="20" width="72" height="100" rx="36" fill="#1a2032" stroke="rgba(150,200,255,0.28)" stroke-width="1.5"/>
-          <path d="M14 60 L50 60 L50 20 Q50 20 32 20 Q14 20 14 50 Z" fill="rgba(150,200,255,0.14)" stroke="#96c8ff" stroke-width="1.6"/>
-          <path d="M50 60 L86 60 L86 50 Q86 20 68 20 Q50 20 50 20 Z" fill="rgba(255,200,50,0.12)" stroke="#ffc832" stroke-width="1.6"/>
-          <line x1="50" y1="20" x2="50" y2="60" stroke="rgba(150,200,255,0.28)" stroke-width="1"/>
-          <rect x="46" y="42" width="8" height="14" rx="4" fill="rgba(120,216,120,0.22)" stroke="#7ad87a" stroke-width="1.6"/>
-          <text x="50" y="135" text-anchor="middle" fill="#7682a0" font-family="JetBrains Mono" font-size="6" letter-spacing="2.5" font-weight="600">MOUSE</text>
-        </svg>
-      </div>
-      <div class="mouse-labels">
-        <div class="mlbl" style="--mc:var(--c-game)"><span class="mlbl-k">L</span><span class="mlbl-v">Select</span></div>
-        <div class="mlbl" style="--mc:var(--c-system)"><span class="mlbl-k">R</span><span class="mlbl-v">Context</span></div>
-        <div class="mlbl" style="--mc:var(--text-dim)"><span class="mlbl-k">Mid</span><span class="mlbl-v">Reset cam</span></div>
-        <div class="mlbl" style="--mc:var(--green)"><span class="mlbl-k">Scroll</span><span class="mlbl-v">Zoom</span></div>
-        <div class="mlbl" style="--mc:var(--c-game)"><span class="mlbl-k">Drag</span><span class="mlbl-v">Box select</span></div>
-      </div>
+<section class="sec" id="sec-list">
+  <div class="sec-head"><span class="kicker">All actions</span><span class="sec-note" id="listNote"></span></div>
+  <div id="list"></div>
+  <p id="empty" class="empty" hidden>No binding matches.</p>
+</section>
+
+<!-- Mouse reference. The two pointer bindings come from the catalog; the
+     rest of the rows are the human-written mouse notes. -->
+<section class="sec" id="sec-mouse">
+  <div class="sec-head"><span class="kicker">Mouse &amp; trackpad</span></div>
+  <div class="mouse-card">
+    <svg class="mouse" viewBox="0 0 100 140" fill="none" aria-hidden="true">
+      <rect x="14" y="14" width="72" height="112" rx="36" fill="#121826" stroke="rgba(150,200,255,0.28)" stroke-width="1.5"/>
+      <path d="M14 58 L50 58 L50 14 Q32 14 23 24 Q14 34 14 50 Z" fill="rgba(150,200,255,0.14)" stroke="#96c8ff" stroke-width="1.6"/>
+      <path d="M50 58 L86 58 L86 50 Q86 34 77 24 Q68 14 50 14 Z" fill="rgba(255,200,50,0.12)" stroke="#ffc832" stroke-width="1.6"/>
+      <rect x="46" y="28" width="8" height="18" rx="4" fill="rgba(126,224,138,0.2)" stroke="#7ee08a" stroke-width="1.6"/>
+    </svg>
+    <div class="m-rows" id="mouseRows">
+      <!-- main.js puts the catalog Pointer rows first. -->
+      <div class="m-row" style="--mc:#9aa3bd"><span class="m-k">Middle</span><span class="m-v">Reset cam</span><span class="m-t">Trackpad: needs a mapped gesture</span></div>
+      <div class="m-row" style="--mc:#7ee08a"><span class="m-k">Scroll</span><span class="m-v">Zoom</span><span class="m-t">Trackpad: two-finger scroll</span></div>
+      <div class="m-row" style="--mc:#96c8ff"><span class="m-k">Drag</span><span class="m-v">Box select</span><span class="m-t">Trackpad: click and drag</span></div>
     </div>
   </div>
+</section>
+
+<!-- Options. One setting, stored in localStorage under stnv_invert_scroll.
+     The Selection page reads the same key for its wheel zoom. -->
+<section class="sec" id="sec-opts">
+  <div class="sec-head"><span class="kicker">Options</span></div>
+  <label class="opt">
+    <input type="checkbox" id="invertScroll" role="switch">
+    <span class="sw" aria-hidden="true"></span>
+    <span class="opt-text"><span class="opt-label">Invert scroll direction</span><span class="opt-hint">Reverses zoom direction. Match this to your OS scroll preference.</span></span>
+  </label>
+</section>
+
+<!-- Tips. Static advice cards, each with its own accent. -->
+<section class="sec" id="sec-tips">
+  <div class="sec-head"><span class="kicker">Worth knowing</span></div>
+  <div class="tips">
+    <div class="tip" style="--tc:#96c8ff"><span class="ti">&#9099;</span><p><strong>ESC peels one layer.</strong> Selection &rarr; journal &rarr; station mgmt &rarr; pause.</p></div>
+    <div class="tip" style="--tc:#7ee08a"><span class="ti">&#8853;</span><p><strong>Zoom follows the cursor.</strong> Point at something far away, scroll, fly to it.</p></div>
+    <div class="tip" style="--tc:#ffc832"><span class="ti">&#9638;</span><p><strong>Close zoom = pick modules.</strong> Zoom out and the whole station selects.</p></div>
+    <div class="tip" style="--tc:#64dcc8"><span class="ti">+</span><p><strong>Add to selection</strong> with <kbd>Ctrl</kbd>/<kbd>&#8984;</kbd> + click or drag.</p></div>
+    <div class="tip" style="--tc:#ff9a50"><span class="ti">&#9645;</span><p><strong>Drag picks smart.</strong> Ships beat stations beat planets beat asteroids.</p></div>
+    <div class="tip" style="--tc:#ff8a80"><span class="ti">&#9681;</span><p><strong>Right-click is contextual.</strong> Module info, cancel build, or pan (drag).</p></div>
+    <div class="tip" style="--tc:#96c8ff"><span class="ti">&#8635;</span><p><strong><kbd>R</kbd> cycles stations</strong> and opens station management.</p></div>
+    <div class="tip" style="--tc:#7ee08a"><span class="ti">&#9655;</span><p><strong>Free-flight piloting:</strong> <kbd>W</kbd> thrust, <kbd>&larr;</kbd>/<kbd>&rarr;</kbd> rotate.</p></div>
+  </div>
+</section>
+
+<div class="end"></div>
 </div>
 
-<!-- Options section. Only one setting; main.js persists it to localStorage. -->
-<div class="sec" id="sec-options">
-  <div class="sec-hdr-line">
-    <span class="sec-hdr-tag">SYS.OPT</span>
-    <span class="sec-hdr-sep">//</span>
-    <span class="sec-hdr-label">Options</span>
-  </div>
-
-  <div class="opt-row">
-    <label class="opt-toggle">
-      <input type="checkbox" id="invertScroll">
-      <span class="opt-label">Invert scroll direction</span>
-    </label>
-    <p class="opt-hint">Reverses zoom direction. Match this to your OS scroll preference.</p>
-  </div>
-</div>
-
-<!-- Tips section. Purely static advice cards, each coloured by its own tc var. -->
-<div class="sec" id="sec-tips">
-  <div class="sec-hdr-line">
-    <span class="sec-hdr-tag">TIPS</span>
-    <span class="sec-hdr-sep">//</span>
-    <span class="sec-hdr-label">Worth Knowing</span>
-  </div>
-
-  <div class="tips-list">
-    <div class="tip-item" style="--tc:var(--blue)">
-      <span class="ti-ico">⎋</span>
-      <div class="ti-body"><strong>ESC peels one layer.</strong> Selection → journal → station mgmt → pause.</div>
-    </div>
-    <div class="tip-item" style="--tc:var(--green)">
-      <span class="ti-ico">⊕</span>
-      <div class="ti-body"><strong>Zoom follows the cursor.</strong> Point at something far away, scroll, fly to it.</div>
-    </div>
-    <div class="tip-item" style="--tc:var(--c-system)">
-      <span class="ti-ico">▦</span>
-      <div class="ti-body"><strong>Close zoom = pick modules.</strong> Zoom out and the whole station selects.</div>
-    </div>
-    <div class="tip-item" style="--tc:var(--cyan)">
-      <span class="ti-ico">+</span>
-      <div class="ti-body"><strong>Add to selection</strong> with <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + click or drag.</div>
-    </div>
-    <div class="tip-item" style="--tc:var(--orange)">
-      <span class="ti-ico">▭</span>
-      <div class="ti-body"><strong>Drag picks smart.</strong> Ships beat stations beat planets beat asteroids.</div>
-    </div>
-    <div class="tip-item" style="--tc:var(--red)">
-      <span class="ti-ico">◑</span>
-      <div class="ti-body"><strong>Right-click is contextual.</strong> Module info, cancel build, or pan (drag).</div>
-    </div>
-    <div class="tip-item" style="--tc:var(--blue)">
-      <span class="ti-ico">↻</span>
-      <div class="ti-body"><strong><kbd>R</kbd> cycles stations</strong> and opens station management.</div>
-    </div>
-    <div class="tip-item" style="--tc:var(--green)">
-      <span class="ti-ico">▷</span>
-      <div class="ti-body"><strong>Free-flight piloting:</strong> <kbd>W</kbd> thrust, <kbd>←</kbd>/<kbd>→</kbd> rotate.</div>
-    </div>
-  </div>
-</div>
-
-<div style="height:3rem"></div>
-</div></div></div>
-
+<script src="../../lib/game-data/catalog.js"></script>
 <script src="main.js"></script>
 </body>
 </html>
