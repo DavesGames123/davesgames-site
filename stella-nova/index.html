@@ -38,6 +38,9 @@ body{font-family:var(--f-sans);color:var(--text);-webkit-font-smoothing:antialia
 @media(max-width:768px){#sidebar{position:fixed;top:0;left:0;bottom:0;transform:translateX(-100%);box-shadow:4px 0 32px rgba(0,0,0,0.6)}#sidebar.open{transform:translateX(0)}#overlay{display:none;position:fixed;inset:0;z-index:190;background:rgba(0,0,0,0.55);backdrop-filter:blur(2px)}#overlay.show{display:block}}
 #sb-header{padding:24px 22px 18px;border-bottom:1px solid var(--border);flex-shrink:0}
 #sb-wordmark{font-family:var(--f-sans);font-weight:300;font-size:1.7rem;letter-spacing:0.2em;text-transform:uppercase;line-height:1;display:flex;flex-wrap:wrap;column-gap:.38em}
+#sb-wordmark{text-decoration:none;width:max-content;max-width:100%;border-radius:6px;transition:filter .25s}
+#sb-wordmark:hover{filter:brightness(1.18) drop-shadow(0 0 10px rgba(255,200,80,.25))}
+#sb-wordmark:focus-visible{outline:1px solid var(--yellow);outline-offset:6px}
 #sb-wordmark span{background:linear-gradient(180deg,#fff 10%,#c9dcf5 55%,#7f9cc6 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
 #sb-wordmark span+span{background-image:linear-gradient(180deg,#fff6d6 5%,#ffd65c 50%,#ff9c3a 100%)}
 #sb-sub{font-family:var(--f-serif);font-style:italic;font-size:1.12rem;color:var(--dim);margin-top:8px}
@@ -191,7 +194,7 @@ body.sb-collapsed #sidebar{min-width:0;width:0;border-right:none;opacity:0;point
 <div id="shell">
   <nav id="sidebar">
     <div id="sb-header">
-      <div id="sb-wordmark"><span>Stella</span><span>Nova</span></div>
+      <a id="sb-wordmark" href="#home" aria-label="Stella Nova, go to the homepage" onclick="if(!(event.metaKey||event.ctrlKey||event.shiftKey||event.button)){event.preventDefault();switchTab('home')}"><span>Stella</span><span>Nova</span></a>
       <div id="sb-sub">from ore to <em>empire.</em></div>
       <div id="sb-status">Sim Active</div>
     </div>
