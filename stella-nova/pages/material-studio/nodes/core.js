@@ -502,11 +502,11 @@ const SCATTER_P = (count, perCell, offset, size, sizeRand, rotRand) => [
 const SCATTER_OUT = [O('out', 'Pattern', 'color', 'rgb'), O('id', 'Stamp Random', 'float', 'a')];
 
 def('pattern.tileSampler', 'Tile Sampler', 'Pattern', [cP('pattern', 'Pattern', [1, 1, 1])], SCATTER_OUT,
-  SCATTER_P(8, 1, 0.1, 0.9, 0.2, 0.1), pass(scatterWgsl),
+  SCATTER_P(8, 1, 0.1, 0.9, 0.2, 0.1), { wgsl: scatterWgsl, tiled: true },
   'One stamp per grid cell with random offset, rotation, scale and value. Stamp = the input or a built-in shape.', { tags: ['scatter', 'stamp'] });
 
 def('pattern.splatter', 'Splatter', 'Pattern', [cP('pattern', 'Pattern', [1, 1, 1])], SCATTER_OUT,
-  SCATTER_P(5, 4, 1, 0.5, 0.6, 1), pass(scatterWgsl),
+  SCATTER_P(5, 4, 1, 0.5, 0.6, 1), { wgsl: scatterWgsl, tiled: true },
   'Many stamps per cell at random positions and angles.', { tags: ['scatter', 'pebbles', 'leaves'] });
 
 // ------------------------------------------------------------ filter

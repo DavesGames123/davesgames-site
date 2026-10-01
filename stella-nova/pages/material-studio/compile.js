@@ -34,6 +34,12 @@
 //      color, vec2), plus gradient stops and curve points. A param edit thus
 //      changes only uniform bytes: the WGSL, its hash and the pipeline stay.
 //
+//  TILING
+//      Expression nodes read uv = uv0 * tiling. A pass node gets
+//      pass_main(uv0), or pass_main(fract(uv)) when pass.tiled is set (a
+//      generator, for example the scatter nodes). Bake sends the tiling to
+//      pass.run nodes (bench cells) as job.tiling.
+//
 //  ERRORS
 //      compile errors and WGSL compile messages map to node ids. Each pass
 //      keeps a lineMap [{line, nodeId}], and lineToNode(spec, line) resolves
@@ -601,7 +607,7 @@ class Compiler {
     try { code = def.pass.wgsl(ctx); } catch (e) { this.err(id, 'pass.wgsl failed: ' + e.message); code = 'fn pass_main(uv: vec2f) -> vec4f { return vec4f(1.0, 0.0, 1.0, 1.0); }'; }
     if (def.functions) scope.typeFns.set(node.type, def.functions);
     scope.nodeIds.add(id);
-    const spec = this.finishPass(scope, { kind: 'node', nodeId: id, label: `${id} ${node.type}`, passCode: String(code), targets: ['inter'], size: def.pass.size || 0 });
+    const spec = this.finishPass(scope, { kind: 'node', nodeId: id, label: `${id} ${node.type}`, passCode: String(code), targets: ['inter'], size: def.pass.size || 0, tiled: !!def.pass.tiled });
     this.passOf.set(id, spec);
     return spec;
   }
@@ -695,7 +701,9 @@ class Compiler {
     const nOut = o.kind === 'node' ? 1 : o.outs.length;
     push(`struct MsOut {\n${Array.from({ length: nOut }, (_, i) => `  @location(${i}) c${i}: vec4f,`).join('\n')}\n}`);
     push('@fragment\nfn ms_fs(@builtin(position) fp: vec4f) -> MsOut {\n  let uv0 = (fp.xy - ms_u.o.xy) / ms_u.o.z;\n  let uv = uv0 * ms_u.h.z;\n  var mo: MsOut;');
-    if (o.kind === 'node') push('  mo.c0 = pass_main(uv0);', o.nodeId);
+    // A generator pass (pass.tiled) repeats with the graph tiling; a filter
+    // pass reads its input textures at the texel uv0.
+    if (o.kind === 'node') push(o.tiled ? '  mo.c0 = pass_main(fract(uv));' : '  mo.c0 = pass_main(uv0);', o.nodeId);
     else {
       for (const b of scope.body) push(b.lines.join('\n'), b.nodeId);
       o.outs.forEach((e, i) => push(`  mo.c${i} = ${e};`, o.nodeId));

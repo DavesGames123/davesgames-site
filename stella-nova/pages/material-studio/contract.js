@@ -191,7 +191,9 @@ export const PARAM_KINDS = Object.freeze(['slider', 'int', 'color', 'enum', 'boo
  * @property {ParamDef[]} params
  * @property {(ctx:ExprCtx)=>Object<string,string>} [expr]  outputId -> WGSL expr
  * @property {string} [functions] WGSL helper source, emitted once per node type
- * @property {{wgsl:(ctx:PassCtx)=>string, inputsAsTextures:true, size?:number}} [pass]
+ * @property {{wgsl:(ctx:PassCtx)=>string, inputsAsTextures:true, size?:number, tiled?:boolean}} [pass]
+ *   tiled: the pass is a generator, so pass_main gets fract(uv * tiling), not
+ *   the raw texel uv0 that filter passes (blur, height to normal) need.
  * @property {string} doc        one-line help
  * @property {string[]} [tags]   extra search words
  * @property {string} [source]   'core' | 'bench' | 'custom'
