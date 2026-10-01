@@ -3,198 +3,178 @@
 <head>
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Double-Slit Diffraction // Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    DOUBLE-SLIT DIFFRACTION  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup for the FDTD wave sim. main.js paints the field into
-   #waveCanvas and the fringe profile into #detectorCanvas; equations.js fills
-   the equation panel. This file lays out the canvas, the readout
-   overlay, the detector strip, and the control sidebar that main.js binds by
-   id. equations.js (made by typeset.mjs) fills each data-eq slot with a
-   MathJax SVG formula. Nothing here computes the wave.
+   #waveCanvas, the labels into #fxCanvas and the screen profile into
+   #profileCanvas. equations.js (made by typeset.mjs) fills each data-eq
+   slot with a MathJax SVG formula. Nothing here computes the wave.
 
    HEAD LOAD ORDER   (order matters)
-     ● fonts        Google Fonts stylesheet
+     ● fonts        Space Grotesk, IBM Plex Mono, Instrument Serif (the shell set)
      ● style.css    the page stylesheet
-     ● equations.js at body end, renders the equation panel
-     ● main.js      at body end, runs the sim after markup exists
+     ● equations.js at body end, fills the data-eq slots
+     ● main.js      at body end, runs the sim after the markup exists
 
-   LAYOUT   (the leading marker is an element id)
-     ┌─────────────────────────────────────────────────────────────────┐
-     │ topbar  Stella Nova · FDTD Wave Sim              #perf-info       │
-     ├──────────────────────────────────────────────┬──────────────────┤
-     │ #sim                                          │ #controls        │
-     │   #waveCanvas   the 2D field                  │  RGB channels    │
-     │   #overlay      t / steps / grid readout      │  barrier / slits │
-     │   #det-wrap     #detectorCanvas fringe strip  │  simulation      │
-     │   #eq-panel     governing equations           │  display         │
-     │   #fab          mobile drawer button          │  interaction     │
-     └──────────────────────────────────────────────┴──────────────────┘
+   LAYOUT   (# marks an element id)
+     ┌────────────────────────────────────────────────┬────────┬───────────┐
+     │ #field   #waveCanvas  the 2D field             │#profile│ #panel     │
+     │          #fxCanvas    source, slits, screen,   │ screen │  #dock     │
+     │                       scale bar                │ <ψ²>   │  light     │
+     │          #readout     t, step, grid, fps       │ axes   │  slits     │
+     │                                                │        │  view      │
+     │                                                │        │  draw      │
+     │                                                │        │  solver    │
+     │                                                │        │  equations │
+     └────────────────────────────────────────────────┴────────┴───────────┘
+   Phones (portrait): the field and the profile on top, the panel below,
+   so the field stays in view while a control moves. Landscape phones:
+   the panel is a right column. No drawer covers the field.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
      this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<div class="grid-bg"></div>
 
 <div id="app">
-  <div class="topbar">
-    <div class="topbar-l">
-      <span class="sys-name">Stella Nova</span>
-      <span class="sys-status">FDTD Wave Sim</span>
-    </div>
-    <div class="topbar-r" id="perf-info">SYS // <strong>OPTICS</strong></div>
-  </div>
+  <header class="topbar">
+    <span class="sys-name">Stella Nova</span>
+    <span class="sys-page">Double-slit diffraction</span>
+  </header>
 
   <div id="main">
-    <!-- Simulation stage: the field canvas plus its floating overlays. -->
-    <div id="sim">
-      <canvas id="waveCanvas"></canvas>
-
-      <!-- Live readout: simulation time, step count, and grid dimensions. -->
-      <div id="overlay">
-        <div>t = <span class="v" id="ot">0.000</span> fs</div>
-        <div>steps = <span class="v" id="os">0</span></div>
-        <div>grid = <span class="v" id="og">—</span></div>
-      </div>
-
-      <!-- Detector strip: the accumulated interference intensity profile. -->
-      <div id="det-wrap">
-        <div class="lbl">Intensity</div>
-        <canvas id="detectorCanvas" width="44"></canvas>
-      </div>
-
-      <!-- EQUATION PANEL — floating, collapsible -->
-      <section class="eq-panel" id="eq-panel">
-        <div class="eq-head">
-          <span class="dot"></span>
-          <span class="lbl">Governing Equations</span>
-          <button class="eq-collapse" id="eq-collapse-btn" title="Collapse">▲</button>
+    <!-- Field and screen profile, side by side, the same height. -->
+    <div id="stage">
+      <div id="field">
+        <canvas id="waveCanvas"></canvas>
+        <canvas id="fxCanvas" aria-hidden="true"></canvas>
+        <div id="readout" aria-live="off">
+          <span>t <b id="ot">0.0</b> fs</span><span>step <b id="os">0</b></span><span id="og">—</span><span id="ofps">—</span>
         </div>
-        <div class="eq-blocks">
-          <div class="eq-block">
-            <div class="eq-sublabel">Wave equation, lossy medium</div>
-            <div class="eq-row" data-eq="wave"></div>
-          </div>
-          <div class="eq-block">
-            <div class="eq-sublabel">FDTD leapfrog step</div>
-            <div class="eq-row" data-eq="step"></div>
-            <div class="eq-row" data-eq="coef"></div>
-          </div>
-          <div class="eq-block">
-            <div class="eq-sublabel">Stability</div>
-            <div class="eq-row" data-eq="courant"></div>
-          </div>
-          <div class="eq-block">
-            <div class="eq-sublabel">Bright fringes · far field</div>
-            <div class="eq-row" data-eq="bright"></div>
-            <div class="eq-row" data-eq="far"></div>
-          </div>
+      </div>
+      <div id="profile">
+        <div class="prof-h">Screen <i>⟨ψ²⟩</i></div>
+        <canvas id="profileCanvas"></canvas>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <div class="panel-head">
+        <h1>Double-slit <em>diffraction</em></h1>
+        <p>A plane wave meets a barrier. Each slit sends out its own wave, and where the two waves arrive in step the screen is bright.</p>
+      </div>
+
+      <!-- Dock: the controls a visitor uses most, first on a phone. -->
+      <div id="dock">
+        <div class="seg" role="group" aria-label="Slits">
+          <button data-slits="single">1</button>
+          <button class="on" data-slits="double">2</button>
+          <button data-slits="triple">3</button>
+          <button data-slits="none">None</button>
+        </div>
+        <div class="seg" role="group" aria-label="View">
+          <button class="on" data-disp="amplitude">Wave</button>
+          <button data-disp="intensity">Intensity</button>
+          <button data-disp="phase">Phase</button>
+        </div>
+        <div class="transport">
+          <button class="icon" id="btn-pause" title="Pause (space)">Pause</button>
+          <button class="icon" id="btn-reset" title="Reset the field">Reset</button>
+        </div>
+      </div>
+
+      <section class="sec">
+        <h2>Light</h2>
+        <div class="chan" data-ch="0">
+          <button class="swatch on" id="tog-r" aria-pressed="true" title="Channel 1 on or off"></button>
+          <label for="sl-lr">λ<sub>1</sub></label>
+          <input type="range" id="sl-lr" min="380" max="750" value="650" step="1">
+          <output id="val-lr">650 nm</output>
+        </div>
+        <div class="chan" data-ch="1">
+          <button class="swatch on" id="tog-g" aria-pressed="true" title="Channel 2 on or off"></button>
+          <label for="sl-lg">λ<sub>2</sub></label>
+          <input type="range" id="sl-lg" min="380" max="750" value="532" step="1">
+          <output id="val-lg">532 nm</output>
+        </div>
+        <div class="chan" data-ch="2">
+          <button class="swatch on" id="tog-b" aria-pressed="true" title="Channel 3 on or off"></button>
+          <label for="sl-lb">λ<sub>3</sub></label>
+          <input type="range" id="sl-lb" min="380" max="750" value="450" step="1">
+          <output id="val-lb">450 nm</output>
+        </div>
+        <div class="row-btns">
+          <button class="chip" id="preset-rgb">Three colours</button>
+          <button class="chip" id="preset-mono">One colour</button>
+          <button class="chip on" id="btn-plane" aria-pressed="true">Plane wave</button>
         </div>
       </section>
 
-      <!-- Mobile drawer trigger and its dimmed backdrop. -->
-      <button class="fab" id="fab" onclick="toggleDrawer()">Controls ≡</button>
-      <div class="drawer-bg" id="drawer-bg" onclick="closeDrawer()"></div>
-    </div>
-
-    <!-- Control sidebar: every widget main.js binds by id. -->
-    <div id="controls">
-      <!-- Per-channel wavelengths and on/off toggles. -->
-      <div class="sec">
-        <div class="sec-lbl">RGB Channels</div>
-        <div class="channel-row"><div class="dot" style="background:#ff6b6b"></div><label style="color:#ff6b6b">Red λ</label><span class="vd" id="val-lr" style="color:#ff6b6b">44</span></div>
-        <input type="range" id="sl-lr" min="30" max="80" value="44" step="1">
-        <div class="channel-row"><div class="dot" style="background:#51cf66"></div><label style="color:#51cf66">Green λ</label><span class="vd" id="val-lg" style="color:#51cf66">32</span></div>
-        <input type="range" id="sl-lg" min="16" max="60" value="32" step="1">
-        <div class="channel-row"><div class="dot" style="background:#339af0"></div><label style="color:#339af0">Blue λ</label><span class="vd" id="val-lb" style="color:#339af0">22</span></div>
-        <input type="range" id="sl-lb" min="10" max="44" value="22" step="1">
-        <div class="br" style="margin-top:4px">
-          <button class="btn r active" id="tog-r">R</button>
-          <button class="btn g active" id="tog-g">G</button>
-          <button class="btn b active" id="tog-b">B</button>
-          <button class="btn active" id="tog-all">All</button>
-        </div>
-      </div>
-
-      <!-- Slit geometry: width, separation, barrier position, and slit count. -->
-      <div class="sec">
-        <div class="sec-lbl">Barrier / Slits</div>
-        <div class="row"><label>Slit width</label><span class="vd" id="val-sw">15</span></div>
-        <input type="range" id="sl-sw" min="2" max="120" value="15" step="1">
-        <div class="row"><label>Separation</label><span class="vd" id="val-ss">111</span></div>
+      <section class="sec">
+        <h2>Slits</h2>
+        <div class="ctl"><label for="sl-sw">Slit width <i>a</i></label><output id="val-sw">0.35 µm</output></div>
+        <input type="range" id="sl-sw" min="2" max="120" value="20" step="1">
+        <div class="ctl"><label for="sl-ss">Separation <i>d</i></label><output id="val-ss">1.97 µm</output></div>
         <input type="range" id="sl-ss" min="4" max="300" value="111" step="1">
-        <div class="row"><label>Position</label><span class="vd" id="val-bx">0.30</span></div>
-        <input type="range" id="sl-bx" min="0.05" max="0.90" value="0.30" step="0.01">
-        <div class="br">
-          <button class="btn active" data-slits="double">Double</button>
-          <button class="btn" data-slits="single">Single</button>
-          <button class="btn" data-slits="none">None</button>
-          <button class="btn" data-slits="triple">Triple</button>
+        <div class="ctl"><label for="sl-bx">Barrier position</label><output id="val-bx">30 %</output></div>
+        <input type="range" id="sl-bx" min="0.10" max="0.70" value="0.30" step="0.01">
+      </section>
+
+      <section class="sec">
+        <h2>View</h2>
+        <div class="ctl"><label for="sl-exp">Exposure</label><output id="val-exp">0.0 EV</output></div>
+        <input type="range" id="sl-exp" min="-3" max="3" value="0" step="0.1">
+      </section>
+
+      <section class="sec">
+        <h2>Draw on the field</h2>
+        <div class="seg wide" role="group" aria-label="Brush">
+          <button class="on" data-src="impulse">Pulse</button>
+          <button data-src="sine">Source</button>
+          <button data-src="wall">Wall</button>
+          <button data-src="erase">Erase</button>
         </div>
-      </div>
-
-      <!-- Solver knobs: timestep (Courant α), dissipation, gain, resolution. -->
-      <div class="sec">
-        <div class="sec-lbl">Simulation</div>
-        <div class="row"><label>Δt</label><span class="vd" id="val-dt">0.50</span></div>
-        <input type="range" id="sl-dt" min="0.10" max="0.70" value="0.50" step="0.05">
-        <div class="row"><label>Retention</label><span class="vd" id="val-diss">1.000</span></div>
-        <input type="range" id="sl-diss" min="0.990" max="1.000" value="1.000" step="0.001">
-        <div class="row"><label>Gain</label><span class="vd" id="val-gain">1.0</span></div>
-        <input type="range" id="sl-gain" min="0.3" max="100.0" value="1.0" step="0.1">
-        <div class="row"><label>Resolution</label><span class="vd" id="val-scale">2</span></div>
-        <input type="range" id="sl-scale" min="1" max="4" value="2" step="1">
-      </div>
-
-      <!-- Field display mode: amplitude, intensity, or phase. -->
-      <div class="sec">
-        <div class="sec-lbl">Display</div>
-        <div class="br">
-          <button class="btn active" data-disp="amplitude">Amplitude</button>
-          <button class="btn" data-disp="intensity">Intensity</button>
-          <button class="btn" data-disp="phase">Phase</button>
-        </div>
-      </div>
-
-      <!-- Brush size and source mode: sine, impulse, wall, or erase. -->
-      <div class="sec">
-        <div class="sec-lbl">Interaction</div>
-        <div class="row"><label>Brush</label><span class="vd" id="val-br">6</span></div>
+        <div class="ctl"><label for="sl-br">Brush size</label><output id="val-br">6</output></div>
         <input type="range" id="sl-br" min="1" max="30" value="6" step="1">
-        <div class="br">
-          <button class="btn active" id="btn-plane">Plane wave</button>
-        </div>
-        <div class="br">
-          <button class="btn" data-src="sine">Sine</button>
-          <button class="btn active" data-src="impulse">Impulse</button>
-          <button class="btn" data-src="wall">Wall</button>
-          <button class="btn" data-src="erase">Erase</button>
-        </div>
-      </div>
+        <div class="row-btns"><button class="chip" id="btn-clr">Clear walls</button></div>
+      </section>
 
-      <!-- Transport: pause, reset the fields, clear painted walls. -->
-      <div class="sec">
-        <div class="br">
-          <button class="btn" id="btn-pause">⏸ Pause</button>
-          <button class="btn" id="btn-reset">⟲ Reset</button>
-          <button class="btn" id="btn-clr">✕ Walls</button>
-        </div>
-      </div>
-    </div>
+      <details class="sec" id="solver">
+        <summary><h2>Solver</h2></summary>
+        <div class="ctl"><label for="sl-dt">Courant number α</label><output id="val-dt">0.50</output></div>
+        <input type="range" id="sl-dt" min="0.10" max="0.70" value="0.50" step="0.05">
+        <div class="ctl"><label for="sl-diss">Retention per step</label><output id="val-diss">1.000</output></div>
+        <input type="range" id="sl-diss" min="0.990" max="1.000" value="1.000" step="0.001">
+        <div class="ctl"><label for="sl-scale">Cell size</label><output id="val-scale">2 px</output></div>
+        <input type="range" id="sl-scale" min="1" max="4" value="2" step="1">
+        <div class="ctl"><label for="sl-spf">Steps per frame</label><output id="val-spf">2</output></div>
+        <input type="range" id="sl-spf" min="1" max="6" value="2" step="1">
+      </details>
+
+      <details class="sec eqs" id="eqs" open>
+        <summary><h2>Equations</h2></summary>
+        <div class="eq"><div class="eq-l">Wave equation, lossy medium</div><div class="eq-row" data-eq="wave"></div></div>
+        <div class="eq"><div class="eq-l">FDTD leapfrog step</div><div class="eq-row" data-eq="step"></div><div class="eq-row" data-eq="coef"></div></div>
+        <div class="eq"><div class="eq-l">Stability</div><div class="eq-row" data-eq="courant"></div></div>
+        <div class="eq"><div class="eq-l">Bright fringes · far field</div><div class="eq-row" data-eq="bright"></div><div class="eq-row" data-eq="far"></div></div>
+        <p class="note">1 cell = 17.7 nm. The marks on the screen give the exact bright-fringe rows, r₂ − r₁ = mλ, for each colour.</p>
+      </details>
+    </aside>
   </div>
 </div>
 
 <!-- MathJax SVG equations (generated by typeset.mjs) -->
 <script src="equations.js"></script>
-
 <script src="main.js"></script>
 </body>
 </html>

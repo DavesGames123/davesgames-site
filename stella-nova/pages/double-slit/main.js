@@ -1,12 +1,11 @@
 // ============================================================================
 //  DOUBLE-SLIT DIFFRACTION  ·  2D FDTD scalar-wave interference sim
 // ----------------------------------------------------------------------------
-//  Three independent scalar wave fields (one per RGB channel) march forward in
-//  time on a 2D grid with a finite-difference time-domain (FDTD) leapfrog
-//  scheme. A barrier carrying one to three slits sits in the field. Waves that
-//  pass through the slits diffract, overlap, and interfere on the far side. A
-//  detector column near the right edge sums time-averaged intensity into the
-//  familiar interference fringes.
+//  Three independent scalar wave fields (one per colour channel) march
+//  forward in time on a 2D grid with a finite-difference time-domain (FDTD)
+//  leapfrog scheme. A plane wave from the left meets a barrier with one to
+//  three slits. The waves from the slits overlap and interfere. The screen
+//  column near the right edge shows the time-averaged intensity <ψ²>.
 //
 //  WAVE EQUATION   (per channel, lossy medium)
 //  --------------------------------------------------------------------------
@@ -17,77 +16,88 @@
 //      ca = 1/(1+σΔt/2) ,  cb = (1−σΔt/2)/(1+σΔt/2)     from conductivity σ
 //    The retention per step (P.dissipation) adds a uniform σ (buildDamping).
 //
+//  UNITS
+//  --------------------------------------------------------------------------
+//    1 cell = CELL_NM = 17.7 nm (532 nm is 30 cells). The light sliders
+//    are in nm, the slit sliders in cells shown as µm. One step is
+//    α·CELL_NM/c, about 0.03 fs at α = 0.5.
+//
 //  DOMAIN LAYOUT   (grid NX×NY, x increases to the right)
 //  --------------------------------------------------------------------------
-//      x=0             barrierX·NX          0.78·NX        NX−1
-//       │ source region   │ slit barrier      │ detector      │
-//       │  (brush / sine)  │  ┌─┐ ← slit        ║ column        │
-//       │    ● ▶ ▶ ▶ ▶     │  │ │  ═══▶ fringes  ║  <ψ²> column  │
-//       │                  │  └─┘               ║   → sidebar    │
-//       │                  │  ┌─┐ ← slit        ║ absorber wall  │
-//       │   PML ramp wraps all four edges (quartic σ)  │         │
+//      x=0   sourceX      barrierX·NX         screenX = 0.78·NX     NX−1
+//       │ PML  │ plane     │ slit barrier        ║ screen column     │
+//       │      │ wave ▶ ▶  │  ┌─┐ ═══▶ fringes   ║  <ψ²> profile     │
+//       │      │           │  └─┘                ║ absorber ramp     │
+//       │   PML ramp wraps all four edges (quartic σ)                │
 //
 //  FRAME PIPELINE
 //  --------------------------------------------------------------------------
 //      loop() ─ step() ×P.spf     advance the three fields; planeSource() drives
 //             │                   the left column when P.plane is on
 //             ├ accumI()          move the <ψ²> average of every cell
-//             ├ render()          map fields → RGB pixels on the main canvas
-//             └ renderDetector()  draw the <ψ²> profile at the screen (1/4 rate)
+//             ├ autoRef()         exposure reference from the diffraction zone
+//             ├ render()          fields → spectral RGB through a tone curve
+//             └ drawProfile()     the screen <ψ²> with axes and fringe marks
+//      drawFx() redraws the source, slit and screen marks and the scale bar
+//      when the geometry or the size changes.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  --------------------------------------------------------------------------
-//      mobile drawer ....... "Mobile drawer"          control panel show/hide
-//      canvases ............ "const canvas"           main + detector contexts
+//      units ............... "const CELL_NM"          nm and µm per cell
+//      spectral colour ..... "function specRGB"       wavelength → RGB
 //      field buffers ....... "let NX"                 triple buffer per channel
 //      parameters .......... "const P ="              every tunable parameter
 //      grid init ........... "function init"          allocate buffers to size
 //      PML damping ......... "function buildDamping"  absorbing-boundary coeffs
 //      barrier ............. "function buildBarrier"  slit geometry into a mask
-//      pointer map ......... "function gp"            client → grid coordinates
 //      brush ............... "function applyBrush"    paint source / wall / erase
-//      FDTD step ........... "function step"          the leapfrog update
 //      plane source ........ "function planeSource"   line source at sourceX()
+//      FDTD step ........... "function step"          the leapfrog update
 //      intensity average ... "function accumI"        <ψ²> per cell, screenX()
+//      exposure ............ "function autoRef"       robust reference levels
 //      field render ........ "function render"        fields → pixels
-//      detector render ..... "function renderDetector"  fringe profile strip
-//      control wiring ...... "function wire"          sliders → P
-//      button groups ....... "function wireGroup"     segmented buttons → P
+//      overlay marks ....... "function drawFx"        labels, scale bar
+//      fringe rows ......... "function fringeRows"    exact r₂ − r₁ = mλ rows
+//      screen profile ...... "function drawProfile"   <ψ²> plot with axes
+//      control wiring ...... "function bindRange"     sliders → P
 //      main loop ........... "function loop"          requestAnimationFrame driver
 // ============================================================================
 
-// Mobile drawer: slide the control panel in and out on narrow screens. The FAB
-// button and the dimmed backdrop track the same open state.
-// Mobile drawer
-function toggleDrawer(){
-  const c=document.getElementById('controls'),f=document.getElementById('fab'),b=document.getElementById('drawer-bg');
-  const open=!c.classList.contains('open');
-  c.classList.toggle('open',open);f.classList.toggle('open',open);b.classList.toggle('show',open);
-}
-function closeDrawer(){
-  document.getElementById('controls').classList.remove('open');
-  document.getElementById('fab').classList.remove('open');
-  document.getElementById('drawer-bg').classList.remove('show');
-}
+// ── units and colour ────────────────────────────────────────────────────────
+const CELL_NM = 532 / 30;                 // nm per grid cell
+const C_FS_PER_STEP = a => a * CELL_NM * 1e-9 / 2.998e8 * 1e15;
+const um = cells => (cells * CELL_NM / 1000);
 
-// ============================================================
-//  FDTD 2D SCALAR WAVE — THREE INDEPENDENT RGB CHANNELS
-//  ψ(n+1) = damping * dissipation * (2ψ(n) - ψ(n-1) + α²·∇²ψ(n))
-//  α = c·dt/dx  (Courant number, stability requires α ≤ 1/√2)
-//  Mur 1st-order ABC at edges + PML damping ramp
-// ============================================================
+// Wavelength (nm) to linear RGB in 0..1, after Bruton's piecewise fit, with
+// the fall-off of eye response at the ends of the visible band. The channel
+// colour of each wave is the colour of its wavelength.
+function specRGB(nm) {
+  let r = 0, g = 0, b = 0;
+  if (nm < 440) { r = (440 - nm) / 60; b = 1; }
+  else if (nm < 490) { g = (nm - 440) / 50; b = 1; }
+  else if (nm < 510) { g = 1; b = (510 - nm) / 20; }
+  else if (nm < 580) { r = (nm - 510) / 70; g = 1; }
+  else if (nm < 645) { r = 1; g = (645 - nm) / 65; }
+  else { r = 1; }
+  const f = nm < 420 ? 0.35 + 0.65 * (nm - 380) / 40 : nm > 700 ? 0.35 + 0.65 * (750 - nm) / 50 : 1;
+  return [r * f, g * f, b * f].map(v => Math.pow(Math.max(0, v), 0.8));
+}
+const cssRGB = c => `rgb(${c.map(v => Math.round(v * 255)).join(',')})`;
 
-// Main field canvas plus the narrow detector canvas at the right edge. Both use
-// plain 2D contexts; the field is drawn through a raw ImageData pixel buffer.
+// ── canvases ────────────────────────────────────────────────────────────────
+// The field is drawn at grid size and scaled by the browser (smooth). The
+// overlay and the profile are drawn at device pixels.
 const canvas = document.getElementById('waveCanvas');
 const ctx = canvas.getContext('2d');
-const detC = document.getElementById('detectorCanvas');
-const detCtx = detC.getContext('2d');
+const fxC = document.getElementById('fxCanvas');
+const fx = fxC.getContext('2d');
+const profC = document.getElementById('profileCanvas');
+const pctx = profC.getContext('2d');
+const $ = id => document.getElementById(id);
 
 // Grid dimensions and the per-channel field buffers. Each channel keeps three
-// time slices (u = now, up = previous, un = next) for the leapfrog update, plus
-// a per-row intensity accumulator for the detector. barrier/userWalls are masks;
-// caArr/cbArr are the precomputed lossy-medium coefficients.
+// time slices (u = now, up = previous, un = next) for the leapfrog update.
+// barrier/userWalls are masks; caArr/cbArr are the lossy-medium coefficients.
 let NX, NY, N;
 let u = [null,null,null];
 let up = [null,null,null];
@@ -101,16 +111,17 @@ let Iavg = [null,null,null];
 const I_RATE = 1 / 96;
 let simTime = 0, stepN = 0;
 let paused = false;
-let fCount = 0, lastFT = performance.now(), fps = 0;
+let fCount = 0, lastFT = performance.now(), fps = 0, frameN = 0;
 
-// Every tunable parameter in one object the UI writes into. lambda* are the
-// per-channel wavelengths in grid cells (shorter = bluer, more fringes). dt is
-// the Courant number α. dissipation is the global per-step energy retention.
-// slitSep and slitW are in grid cells; barrierX is a fraction of the width.
+// Every tunable parameter in one object the UI writes into. lamNm are the
+// channel wavelengths in nm; lambdaR/G/B are the same in cells (step() reads
+// them). dt is the Courant number α. slitSep and slitW are in grid cells;
+// barrierX is a fraction of the width. expo is the exposure in stops.
 const P = {
-  lambdaR: 44, lambdaG: 32, lambdaB: 22,
+  lamNm: [650, 532, 450],
+  lambdaR: 650 / CELL_NM, lambdaG: 532 / CELL_NM, lambdaB: 450 / CELL_NM,
   chOn: [true, true, true],
-  slitW: 15, slitSep: 111, barrierX: 0.30, slitMode: 'double',
+  slitW: 20, slitSep: 111, barrierX: 0.30, slitMode: 'double',
   dt: 0.50, amp: 1.0, pml: 30, gain: 1.0,
   disp: 'amplitude',
   brushR: 6, srcMode: 'impulse',
@@ -118,17 +129,18 @@ const P = {
   dissipation: 1.000,   // retention per step (1 = lossless away from the PML)
   plane: true,   // continuous plane wave from the left edge (on at load)
   spf: 2,        // FDTD steps per animation frame
+  expo: 0,       // exposure in stops around the auto reference
 };
+let COL = P.lamNm.map(specRGB);
 
-// (Re)allocate every buffer to match the current container size and resolution
-// scale. The grid resolution is the CSS size divided by P.scale, so a larger
-// scale means fewer, coarser cells and a faster step. Called at start and on
-// resize or resolution change.
+// (Re)allocate every buffer to match the field size and the cell size. The
+// grid resolution is the CSS size divided by P.scale. Called at start, on a
+// size change and on a cell-size change.
 let displayW, displayH;
 function init() {
   const r = canvas.parentElement.getBoundingClientRect();
-  displayW = Math.floor(r.width);
-  displayH = Math.floor(r.height);
+  displayW = Math.max(40, Math.floor(r.width));
+  displayH = Math.max(40, Math.floor(r.height));
   NX = Math.floor(displayW / P.scale);
   NY = Math.floor(displayH / P.scale);
   canvas.width = NX;
@@ -142,19 +154,15 @@ function init() {
   }
   barrier = new Uint8Array(N);
   userWalls = new Uint8Array(N);
-  // Proper lossy medium: two coefficient arrays derived from conductivity σ
-  // ∂²ψ/∂t² + σ·∂ψ/∂t = c²∇²ψ
-  // Discretized: ψ(n+1) = ca*(2ψ(n) + α²∇²ψ) - cb*ψ(n-1)
-  // where ca = 1/(1+σΔt/2),  cb = (1-σΔt/2)/(1+σΔt/2)
-  caArr = new Float32Array(N); // coefficient for current term
-  cbArr = new Float32Array(N); // coefficient for previous term
+  caArr = new Float32Array(N);
+  cbArr = new Float32Array(N);
   imgData = ctx.createImageData(NX, NY);
   const d = imgData.data;
   // Fill the alpha byte of every pixel once so later frames only touch RGB.
   for (let i = 3; i < d.length; i += 4) d[i] = 255;
-  simTime = 0; stepN = 0;
-  buildDamping(); buildBarrier(); resizeDetector();
-  document.getElementById('og').textContent = `${NX}×${NY}`;
+  simTime = 0; stepN = 0; refA = [[0,0],[0,0],[0,0]]; refI = [[0,0],[0,0],[0,0]];
+  buildDamping(); buildBarrier(); sizeOverlays();
+  $('og').textContent = `${NX}×${NY}`;
 }
 
 function buildDamping() {
@@ -295,81 +303,219 @@ function step() {
 function screenX(){return Math.min(NX-5,Math.floor(NX*0.78));}
 function accumI(){for(let c=0;c<3;c++){if(!P.chOn[c])continue;const uc=u[c],ia=Iavg[c];for(let i=0;i<N;i++){const v=uc[i];ia[i]+=(v*v-ia[i])*I_RATE;}}}
 
-// Map the fields to canvas pixels in the current display mode. 'amplitude' shows
-// |ψ| per channel; 'intensity' shows ψ² (sharper, brighter peaks); 'phase' uses
-// ψ and its previous slice to recover amplitude and phase, tinting by cos(phase).
-// After the field, barrier cells are overpainted: user walls light blue, slit
-// walls dark blue-gray.
+// ── exposure ────────────────────────────────────────────────────────────────
+// Each channel has its own reference levels in two zones: the incident zone
+// (left of the barrier) and the diffraction zone (barrier to the right
+// edge). The incident wave is far stronger than the light past the slits,
+// so one shared level would burn the left side white or hide the fringes.
+// A strided sample gives the 99th percentile of |ψ| and of <ψ²> per zone.
+// The values are smoothed, and the diffraction level never drops below 4 %
+// of the incident level, so an empty zone does not blow up noise.
+let refA = [[0,0],[0,0],[0,0]], refI = [[0,0],[0,0],[0,0]];   // [channel][zone]
+const SMP = 30000, sA = [0,1,2].map(() => new Float32Array(SMP)), sI = [0,1,2].map(() => new Float32Array(SMP));
+function pct(a, n, q) { const s = a.subarray(0, n).sort(); return s[Math.min(n - 1, Math.floor(n * q))] || 0; }
+function zoneRef(x0, x1, y0, y1, st) {
+  const out = [];
+  for (let c = 0; c < 3; c++) {
+    let n = 0; const ua = u[c], ia = Iavg[c];
+    for (let y = y0; y < y1; y += st) for (let x = x0; x < x1 && n < SMP; x += st) { const i = y * NX + x, v = ua[i]; sA[c][n] = v < 0 ? -v : v; sI[c][n++] = ia[i]; }
+    out.push(n ? [pct(sA[c], n, 0.99), pct(sI[c], n, 0.99)] : [0, 0]);
+  }
+  return out;
+}
+const ease = (r, v) => r ? r + (v - r) * 0.25 : v;
+function autoRef() {
+  const bx = Math.floor(NX * P.barrierX), sx = sourceX();
+  // A narrow field leaves a thin incident zone; then sample all of it.
+  const ix0 = sx + 3, ix1 = Math.max(ix0 + 2, bx - 3);
+  const inc = zoneRef(ix0, ix1, 40, NY - 40, 3), dif = zoneRef(bx + 6, NX - 4, 2, NY - 2, 4);
+  for (let c = 0; c < 3; c++) {
+    const ai = Math.max(inc[c][0], 1e-5), ii = Math.max(inc[c][1], 1e-10);
+    refA[c][0] = ease(refA[c][0], ai); refI[c][0] = ease(refI[c][0], ii);
+    refA[c][1] = ease(refA[c][1], Math.max(dif[c][0], 0.04 * ai)); refI[c][1] = ease(refI[c][1], Math.max(dif[c][1], 0.0016 * ii));
+  }
+}
+
+// Tone curve 1 − e^(−k·v) as a lookup over v in [0, 8): soft shoulder, no
+// hard clip. k = 1.4 · 2^expo.
+const TONE = new Float32Array(1024);
+function buildTone() { const k = 1.4 * Math.pow(2, P.expo); for (let i = 0; i < 1024; i++) TONE[i] = 1 - Math.exp(-k * i / 128); }
+buildTone();
+
+// ── field render ────────────────────────────────────────────────────────────
+// Map the fields to canvas pixels. Each channel gives a level t in 0..1 from
+// the tone curve, against the reference of its zone (incident or diffracted),
+// and the pixel is Σ t·colour(λ) on a dark ground.
+//   Wave       |ψ| / refA[c][zone]
+//   Intensity  <ψ²> / refI[c][zone]
+//   Phase      amplitude from ψ and its previous slice, times (1 + cos φ)/2
+// Barrier cells are drawn last: slit walls in slate, painted walls in blue.
 function render(){
-  const d=imgData.data,g=P.gain,disp=P.disp,rOn=P.chOn[0],gOn=P.chOn[1],bOn=P.chOn[2];
-  if(disp==='amplitude'){const ur=u[0],ug=u[1],ub=u[2];for(let i=0;i<N;i++){const p=i*4;let vr=rOn?ur[i]*g:0;if(vr<0)vr=-vr;vr=vr*255|0;if(vr>255)vr=255;let vg=gOn?ug[i]*g:0;if(vg<0)vg=-vg;vg=vg*255|0;if(vg>255)vg=255;let vb=bOn?ub[i]*g:0;if(vb<0)vb=-vb;vb=vb*255|0;if(vb>255)vb=255;d[p]=vr;d[p+1]=vg;d[p+2]=vb;}}
-  else if(disp==='intensity'){const ir=Iavg[0],ig=Iavg[1],ib=Iavg[2],g2=g*g*2;for(let i=0;i<N;i++){const p=i*4;let r=rOn?ir[i]*g2*255|0:0;if(r>255)r=255;let gg=gOn?ig[i]*g2*255|0:0;if(gg>255)gg=255;let b=bOn?ib[i]*g2*255|0:0;if(b>255)b=255;d[p]=r;d[p+1]=gg;d[p+2]=b;}}
-  else if(disp==='phase'){for(let i=0;i<N;i++){const p=i*4;for(let c=0;c<3;c++){if(!P.chOn[c]){d[p+c]=0;continue;}const v=u[c][i],vp=up[c][i];const amp=Math.sqrt(v*v+vp*vp)*g;const phase=Math.atan2(v,vp);const bright=Math.min(1,amp)*(0.5+0.5*Math.cos(phase));d[p+c]=Math.round(bright*255);}}}
-  for(let i=0;i<N;i++){if(barrier[i]){const p=i*4;if(userWalls[i]){d[p]=100;d[p+1]=180;d[p+2]=240;}else{d[p]=45;d[p+1]=70;d[p+2]=100;}}}
+  const d=imgData.data,disp=P.disp,on=P.chOn,bx=Math.floor(NX*P.barrierX)+3;
+  const c0=COL[0],c1=COL[1],c2=COL[2],ref=disp==='intensity'?refI:refA;
+  const k=[0,1].map(z=>[0,1,2].map(c=>128/(ref[c][z]||1)));
+  const tone=v=>{v=v|0;return TONE[v>1023?1023:v];};
+  for(let y=0;y<NY;y++){const row=y*NX;for(let x=0;x<NX;x++){
+    const i=row+x,kz=k[x<bx?0:1];let t0=0,t1=0,t2=0;
+    if(disp==='amplitude'){
+      if(on[0])t0=tone(Math.abs(u[0][i])*kz[0]);
+      if(on[1])t1=tone(Math.abs(u[1][i])*kz[1]);
+      if(on[2])t2=tone(Math.abs(u[2][i])*kz[2]);
+    }else if(disp==='intensity'){
+      if(on[0])t0=tone(Iavg[0][i]*kz[0]);
+      if(on[1])t1=tone(Iavg[1][i]*kz[1]);
+      if(on[2])t2=tone(Iavg[2][i]*kz[2]);
+    }else{
+      for(let c=0;c<3;c++){if(!on[c])continue;const v=u[c][i],vp=up[c][i];const t=tone(Math.sqrt(v*v+vp*vp)*kz[c])*(0.5+0.5*Math.cos(Math.atan2(v,vp)));if(c===0)t0=t;else if(c===1)t1=t;else t2=t;}
+    }
+    const p=i*4;
+    const r=5+250*(t0*c0[0]+t1*c1[0]+t2*c2[0]);
+    const g=7+248*(t0*c0[1]+t1*c1[1]+t2*c2[1]);
+    const b=11+244*(t0*c0[2]+t1*c1[2]+t2*c2[2]);
+    d[p]=r>255?255:r;d[p+1]=g>255?255:g;d[p+2]=b>255?255:b;
+  }}
+  for(let i=0;i<N;i++){if(barrier[i]){const p=i*4;if(userWalls[i]){d[p]=110;d[p+1]=160;d[p+2]=220;}else{d[p]=128;d[p+1]=142;d[p+2]=168;}}}
   ctx.putImageData(imgData,0,0);
 }
 
-// Match the detector strip height to its container.
-function resizeDetector(){const h=detC.parentElement.getBoundingClientRect().height-20;detC.height=Math.max(80,h);}
-
-// Draw the accumulated fringe profile. Normalize each row's time-averaged
-// intensity to the running maximum, then draw a horizontal bar per pixel row,
-// one color per channel, back to front so red does not fully hide blue.
-function renderDetector(){
-  const w=detC.width,h=detC.height;detCtx.fillStyle='#0e1118';detCtx.fillRect(0,0,w,h);
-  const sx=screenX();let maxI=0;for(let c=0;c<3;c++){if(!P.chOn[c])continue;for(let y=0;y<NY;y++){const v=Iavg[c][y*NX+sx];if(v>maxI)maxI=v;}}if(!maxI)return;
-  const colors=['rgba(255,107,107,','rgba(81,207,102,','rgba(51,154,240,'];const bw=w-6;
-  for(let c=2;c>=0;c--){if(!P.chOn[c])continue;for(let py=0;py<h;py++){const gy=Math.floor(py/h*NY);const intensity=Iavg[c][gy*NX+sx]/maxI;detCtx.fillStyle=colors[c]+(0.6+0.4*intensity)+')';detCtx.fillRect(3,py,bw*intensity,1);}}
+// ── overlays ────────────────────────────────────────────────────────────────
+// Size the overlay and profile canvases to device pixels. Called from init().
+let DPR = 1;
+function sizeOverlays(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  const fr=fxC.getBoundingClientRect();fxC.width=Math.round(fr.width*DPR);fxC.height=Math.round(fr.height*DPR);
+  const pr=profC.getBoundingClientRect();profC.width=Math.max(1,Math.round(pr.width*DPR));profC.height=Math.max(1,Math.round(pr.height*DPR));
+  drawFx();
+}
+// Source, slit and screen marks, and a 1 µm scale bar. Redrawn when the
+// geometry or the size changes, not every frame.
+function drawFx(){
+  const W=fxC.width,H=fxC.height,s=W/NX;fx.clearRect(0,0,W,H);
+  fx.font=`500 ${10*DPR}px "IBM Plex Mono", ui-monospace, monospace`;fx.textBaseline='top';
+  const mark=(x,label,dash,alpha)=>{fx.strokeStyle=`rgba(200,220,245,${alpha})`;fx.lineWidth=DPR;fx.setLineDash(dash.map(v=>v*DPR));fx.beginPath();fx.moveTo(x,0);fx.lineTo(x,H);fx.stroke();fx.setLineDash([]);fx.fillStyle='rgba(200,220,245,0.62)';fx.fillText(label,x+6*DPR,10*DPR);};
+  const slitPx=(Math.floor(NX*P.barrierX)+4)*s;
+  if(P.plane){const x=(sourceX()+0.5)*s;mark(x,slitPx-x>70*DPR?'SOURCE':'',[2,5],0.22);}
+  if(P.slitMode!=='none'){fx.fillStyle='rgba(200,220,245,0.62)';fx.fillText('SLITS',slitPx+6*DPR,10*DPR);}
+  mark((screenX()+0.5)*s,'SCREEN',[6,5],0.45);
+  // scale bar, bottom right
+  const L=1000/CELL_NM*s,x1=W-14*DPR,x0=x1-L,y=H-16*DPR;
+  fx.strokeStyle='rgba(230,240,252,0.75)';fx.lineWidth=1.5*DPR;fx.beginPath();fx.moveTo(x0,y-4*DPR);fx.lineTo(x0,y);fx.lineTo(x1,y);fx.lineTo(x1,y-4*DPR);fx.stroke();
+  fx.fillStyle='rgba(230,240,252,0.8)';fx.textAlign='center';fx.fillText('1 µm',(x0+x1)/2,y-16*DPR);fx.textAlign='left';
 }
 
-// Controls wiring: bind one slider to a P key, update its readout on input, and
-// rebuild the barrier or damping when a geometry or PML parameter changes.
-// Controls wiring
-function wire(slId,valId,key,parse,fmt){const sl=document.getElementById(slId);const vl=document.getElementById(valId);sl.addEventListener('input',()=>{P[key]=parse(sl.value);vl.textContent=fmt?fmt(P[key]):P[key];if(['slitW','slitSep','barrierX','slitMode'].includes(key))buildBarrier();if(key==='pml')buildDamping();});}
-wire('sl-lr','val-lr','lambdaR',Number);wire('sl-lg','val-lg','lambdaG',Number);wire('sl-lb','val-lb','lambdaB',Number);
-wire('sl-sw','val-sw','slitW',Number);wire('sl-ss','val-ss','slitSep',Number);wire('sl-bx','val-bx','barrierX',Number,v=>v.toFixed(2));
-wire('sl-dt','val-dt','dt',Number,v=>v.toFixed(2));wire('sl-gain','val-gain','gain',Number,v=>v.toFixed(1));wire('sl-br','val-br','brushR',Number);wire('sl-diss','val-diss','dissipation',Number,v=>v.toFixed(3));document.getElementById('sl-diss').addEventListener('input',()=>buildDamping());
-// Resolution changes the grid density, so it must fully reinitialize buffers.
-document.getElementById('sl-scale').addEventListener('input',function(){P.scale=Number(this.value);document.getElementById('val-scale').textContent=P.scale;init();});
+// Rows (in cells) of the bright fringes on the screen for one channel, from
+// the exact path difference r₂ − r₁ = mλ of the slit centres. A triple slit
+// has its principal maxima at the same rows as a pair of spacing d. Single
+// slit and no slit give none.
+function fringeRows(lam){
+  if(P.slitMode!=='double'&&P.slitMode!=='triple')return [];
+  const cy=Math.floor(NY/2),h=P.slitMode==='double'?Math.floor(P.slitSep/2):P.slitSep/2;
+  const xb=Math.floor(NX*P.barrierX)+1.5,L=screenX()-xb;if(L<=0)return [];
+  const f=y=>Math.hypot(L,y-(cy-h))-Math.hypot(L,y-(cy+h));
+  const out=[{m:0,y:cy}];
+  for(let m=1;m<12;m++){const t=m*lam;if(f(NY-1)<t)break;let lo=cy,hi=NY-1;for(let k=0;k<40;k++){const mid=(lo+hi)/2;if(f(mid)<t)lo=mid;else hi=mid;}const y=(lo+hi)/2;out.push({m,y},{m:-m,y:2*cy-y});}
+  return out.filter(r=>r.y>=0&&r.y<NY);
+}
 
-// Per-channel enable toggles, plus an "All" button that flips every channel.
-['r','g','b'].forEach((ch,ci)=>{document.getElementById('tog-'+ch).addEventListener('click',function(){P.chOn[ci]=!P.chOn[ci];this.classList.toggle('active',P.chOn[ci]);});});
-document.getElementById('tog-all').addEventListener('click',function(){const allOn=P.chOn.every(v=>v);P.chOn=[!allOn,!allOn,!allOn];['r','g','b'].forEach((ch,ci)=>{document.getElementById('tog-'+ch).classList.toggle('active',P.chOn[ci]);});this.classList.toggle('active',P.chOn[0]);});
+// The screen profile: <ψ²> down the screen column per channel, each channel
+// scaled to its own peak (so the fringe rows of a weak colour still read),
+// drawn as filled curves (additive) on a y axis in µm from
+// the centre line. Marks on the left edge give the bright-fringe rows.
+function drawProfile(){
+  const W=profC.width,H=profC.height,sx=screenX();
+  pctx.clearRect(0,0,W,H);
+  const padL=30*DPR,padR=8*DPR,pw=W-padL-padR,yOf=gy=>(gy+0.5)/NY*H;
+  // axes: y ticks every 0.5, 1 or 2 µm
+  const cy=Math.floor(NY/2),spanUm=um(NY/2),stepUm=spanUm>6?2:spanUm>2.5?1:0.5;
+  pctx.font=`500 ${9.5*DPR}px "IBM Plex Mono", ui-monospace, monospace`;pctx.textBaseline='middle';pctx.textAlign='right';
+  for(let v=-Math.floor(spanUm/stepUm)*stepUm;v<=spanUm;v+=stepUm){
+    const y=yOf(cy+v*1000/CELL_NM);if(y<8*DPR||y>H-8*DPR)continue;
+    pctx.fillStyle=v===0?'rgba(150,200,255,0.16)':'rgba(150,200,255,0.07)';pctx.fillRect(padL,y,pw,DPR);
+    pctx.fillStyle='rgba(170,190,215,0.6)';pctx.fillText((v>0?'+':'')+(Math.abs(v)<1e-9?'0':v.toFixed(stepUm<1?1:0)),padL-5*DPR,y);
+  }
+  pctx.textAlign='left';pctx.fillStyle='rgba(170,190,215,0.6)';pctx.fillText('µm',4*DPR,H-10*DPR);
+  {
+    pctx.globalCompositeOperation='lighter';
+    for(let c=0;c<3;c++){if(!P.chOn[c])continue;const col=COL[c],ia=Iavg[c];
+      let maxI=0;for(let y=0;y<NY;y++){const v=ia[y*NX+sx];if(v>maxI)maxI=v;}if(!(maxI>0))continue;
+      pctx.beginPath();pctx.moveTo(padL,0);
+      for(let py=0;py<=H;py+=DPR){const gy=Math.min(NY-1,Math.floor(py/H*NY));pctx.lineTo(padL+pw*ia[gy*NX+sx]/maxI,py);}
+      pctx.lineTo(padL,H);pctx.closePath();
+      pctx.fillStyle=`rgba(${col.map(v=>Math.round(v*255)).join(',')},0.16)`;pctx.fill();
+      pctx.beginPath();for(let py=0;py<=H;py+=DPR){const gy=Math.min(NY-1,Math.floor(py/H*NY));const x=padL+pw*ia[gy*NX+sx]/maxI;if(py===0)pctx.moveTo(x,py);else pctx.lineTo(x,py);}
+      pctx.strokeStyle=cssRGB(col);pctx.lineWidth=1.25*DPR;pctx.stroke();}
+    pctx.globalCompositeOperation='source-over';
+  }
+  // fringe marks: one short tick per channel; m labels for the first channel on
+  let first=-1;
+  for(let c=0;c<3;c++){if(!P.chOn[c])continue;if(first<0)first=c;
+    for(const r of fringeRows(P.lamNm[c]/CELL_NM)){const y=yOf(r.y);pctx.fillStyle=cssRGB(COL[c]);pctx.fillRect(padL-1*DPR+c*3*DPR,y-0.5*DPR,3*DPR,DPR*1.5);
+      if(c===first&&W>110*DPR&&Math.abs(r.m)<=3&&y>16*DPR&&y<H-34*DPR){pctx.fillStyle='rgba(230,240,252,0.7)';pctx.textAlign='left';pctx.fillText('m='+r.m,W-padR-34*DPR,y);}}}
+}
 
-// Segmented button groups (slit mode, display mode, source mode): clicking one
-// makes it the sole active button and writes its data attribute into P.
-function wireGroup(sel,key,cb){document.querySelectorAll(sel).forEach(btn=>{btn.addEventListener('click',()=>{document.querySelectorAll(sel).forEach(b=>b.classList.remove('active'));btn.classList.add('active');const dk=Object.keys(btn.dataset)[0];P[key]=btn.dataset[dk];if(cb)cb();});});}
-wireGroup('[data-slits]','slitMode',buildBarrier);wireGroup('[data-disp]','disp');wireGroup('[data-src]','srcMode');
+// ── controls ────────────────────────────────────────────────────────────────
+// Each range slider shows its fill through --fill. bindRange binds one slider
+// to a setter and a readout format, and runs once to set the start state.
+function setFill(sl){sl.style.setProperty('--fill',((sl.value-sl.min)/(sl.max-sl.min)*100)+'%');}
+function bindRange(id,outId,set,fmt){const sl=$(id),o=$(outId);const run=()=>{const v=Number(sl.value);set(v);o.textContent=fmt(v);setFill(sl);};sl.addEventListener('input',run);run();}
+const LAM_KEYS=['lambdaR','lambdaG','lambdaB'];
+function setLam(c,nm){P.lamNm[c]=nm;P[LAM_KEYS[c]]=nm/CELL_NM;COL[c]=specRGB(nm);const row=document.querySelector(`.chan[data-ch="${c}"]`);row.style.setProperty('--sw',cssRGB(COL[c]));}
+[['sl-lr','val-lr'],['sl-lg','val-lg'],['sl-lb','val-lb']].forEach(([s,o],c)=>bindRange(s,o,v=>setLam(c,v),v=>v+' nm'));
+const geom=()=>{buildBarrier();drawFx();};
+bindRange('sl-sw','val-sw',v=>{P.slitW=v;if(NX)geom();},v=>um(v).toFixed(2)+' µm');
+bindRange('sl-ss','val-ss',v=>{P.slitSep=v;if(NX)geom();},v=>um(v).toFixed(2)+' µm');
+bindRange('sl-bx','val-bx',v=>{P.barrierX=v;if(NX)geom();},v=>Math.round(v*100)+' %');
+bindRange('sl-exp','val-exp',v=>{P.expo=v;buildTone();},v=>(v>0?'+':'')+v.toFixed(1)+' EV');
+bindRange('sl-br','val-br',v=>{P.brushR=v;},v=>String(v));
+bindRange('sl-dt','val-dt',v=>{P.dt=v;},v=>v.toFixed(2));
+bindRange('sl-diss','val-diss',v=>{P.dissipation=v;if(NX)buildDamping();},v=>v.toFixed(3));
+bindRange('sl-spf','val-spf',v=>{P.spf=v;},v=>String(v));
+bindRange('sl-scale','val-scale',v=>{if(P.scale!==v){P.scale=v;if(NX)init();}},v=>v+' px');
 
-// Transport buttons: pause the stepping, reset all fields and detector to zero,
-// or clear only the user-painted walls.
-document.getElementById('btn-pause').addEventListener('click',function(){paused=!paused;this.textContent=paused?'▶ Play':'⏸ Pause';this.classList.toggle('active',paused);});
-document.getElementById('btn-reset').addEventListener('click',()=>{for(let c=0;c<3;c++){u[c].fill(0);up[c].fill(0);un[c].fill(0);Iavg[c].fill(0);}simTime=0;stepN=0;});
-document.getElementById('btn-plane').addEventListener('click',function(){P.plane=!P.plane;this.classList.toggle('active',P.plane);});
-document.getElementById('btn-clr').addEventListener('click',()=>{userWalls.fill(0);buildBarrier();});
+// Channel swatches: each one turns its wave on or off.
+function setChan(c,on){P.chOn[c]=on;const b=$(['tog-r','tog-g','tog-b'][c]);b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);document.querySelector(`.chan[data-ch="${c}"]`).classList.toggle('off',!on);if(!on){u[c].fill(0);up[c].fill(0);un[c].fill(0);Iavg[c].fill(0);}}
+['tog-r','tog-g','tog-b'].forEach((id,c)=>$(id).addEventListener('click',()=>setChan(c,!P.chOn[c])));
+function setSlider(id,v){const sl=$(id);sl.value=v;sl.dispatchEvent(new Event('input'));}
+$('preset-rgb').addEventListener('click',()=>{setSlider('sl-lr',650);setSlider('sl-lg',532);setSlider('sl-lb',450);[0,1,2].forEach(c=>setChan(c,true));});
+$('preset-mono').addEventListener('click',()=>{setSlider('sl-lg',532);setChan(0,false);setChan(1,true);setChan(2,false);});
+$('btn-plane').addEventListener('click',function(){P.plane=!P.plane;this.classList.toggle('on',P.plane);this.setAttribute('aria-pressed',P.plane);drawFx();});
 
-// The animation loop. Track FPS over 500 ms windows, advance the sim and
-// detector unless paused, render the field every frame, refresh the fringe strip
-// every eighth step, update the readouts, and reschedule.
+// Segmented groups (slit mode, view, brush): one button on at a time.
+function wireGroup(sel,key,cb){document.querySelectorAll(sel).forEach(btn=>btn.addEventListener('click',()=>{document.querySelectorAll(sel).forEach(b=>b.classList.remove('on'));btn.classList.add('on');P[key]=btn.dataset[Object.keys(btn.dataset)[0]];if(cb)cb();}));}
+wireGroup('[data-slits]','slitMode',geom);wireGroup('[data-disp]','disp');wireGroup('[data-src]','srcMode');
+
+// Transport: pause (also the space key), reset the fields, clear the walls.
+function setPaused(p){paused=p;const b=$('btn-pause');b.textContent=p?'Play':'Pause';b.classList.toggle('on',p);}
+$('btn-pause').addEventListener('click',()=>setPaused(!paused));
+window.addEventListener('keydown',e=>{if(e.code==='Space'&&!e.target.closest('input,button')){e.preventDefault();setPaused(!paused);}});
+$('btn-reset').addEventListener('click',()=>{for(let c=0;c<3;c++){u[c].fill(0);up[c].fill(0);un[c].fill(0);Iavg[c].fill(0);}simTime=0;stepN=0;refA=[[0,0],[0,0],[0,0]];refI=[[0,0],[0,0],[0,0]];});
+$('btn-clr').addEventListener('click',()=>{userWalls.fill(0);buildBarrier();});
+
+// The equations start folded on a phone, where the field needs the room.
+if(matchMedia('(max-width:760px) and (orientation:portrait)').matches)$('eqs').open=false;
+
+// ── main loop ───────────────────────────────────────────────────────────────
+// Advance the sim (P.spf steps) unless paused, refresh the exposure every 6
+// frames, render the field each frame and the profile every 3rd frame.
 function loop(){
-  fCount++;const now=performance.now();
-  if(now-lastFT>500){fps=Math.round(fCount/((now-lastFT)/1000));fCount=0;lastFT=now;
-    document.getElementById('perf-info').innerHTML=`${fps} fps · ${NX}×${NY} · <strong>${NX*NY*3/1000|0}k</strong> cells · α=${P.dt.toFixed(2)}`;}
+  fCount++;frameN++;const now=performance.now();
+  if(now-lastFT>500){fps=Math.round(fCount/((now-lastFT)/1000));fCount=0;lastFT=now;$('ofps').textContent=fps+' fps';}
   if(!paused)for(let k=0;k<P.spf;k++){step();accumI();}
-  render();if(fCount%4===0)renderDetector();
-  document.getElementById('ot').textContent=(simTime*0.01).toFixed(3);
-  document.getElementById('os').textContent=stepN;
+  if(frameN%6===1)autoRef();
+  render();if(frameN%3===0)drawProfile();
+  $('ot').textContent=(simTime*C_FS_PER_STEP(P.dt)).toFixed(1);
+  $('os').textContent=stepN;
   requestAnimationFrame(loop);
 }
 
-// Equation panel collapse toggle: fold the panel and flip the caret.
-document.getElementById('eq-collapse-btn').addEventListener('click',function(){const c=document.getElementById('eq-panel').classList.toggle('collapsed');this.textContent=c?'▼':'▲';this.title=c?'Expand':'Collapse';});
-
-// Debounce resize so buffers reallocate once the window settles, not per event.
-window.addEventListener('resize',()=>{clearTimeout(window._rt);window._rt=setTimeout(()=>{init();},200);});
+// Re-grid when the field changes size (window resize, phone rotation).
+// A change of under 2 cells keeps the running field.
+new ResizeObserver(()=>{clearTimeout(window._rt);window._rt=setTimeout(()=>{const r=canvas.parentElement.getBoundingClientRect();if(Math.abs(Math.floor(r.width/P.scale)-NX)>1||Math.abs(Math.floor(r.height/P.scale)-NY)>1)init();else sizeOverlays();},150);}).observe($('field'));
 
 // Test hook for headless checks: the live state, read only by convention.
-window.__ds={get P(){return P},get u(){return u},get Iavg(){return Iavg},get NX(){return NX},get NY(){return NY},get step(){return stepN},screenX:()=>screenX(),sourceX:()=>sourceX()};
+window.__ds={get P(){return P},get u(){return u},get Iavg(){return Iavg},get NX(){return NX},get NY(){return NY},get step(){return stepN},get refA(){return refA},get refI(){return refI},screenX:()=>screenX(),sourceX:()=>sourceX(),fringeRows:l=>fringeRows(l)};
 
-// Boot: build the grid, then start the animation loop.
+// Boot: a narrow field (a phone) uses 1 px cells, so the 40-cell PML and
+// the absorber do not take most of the grid. Then build the grid and start.
+if($('field').getBoundingClientRect().width<600)setSlider('sl-scale',1);
 init();loop();
