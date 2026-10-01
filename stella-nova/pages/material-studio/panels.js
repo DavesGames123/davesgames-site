@@ -53,71 +53,21 @@
 // ============================================================================
 import {
   OUTPUT_TYPE, MATERIAL_PARAMS, PORT_COLORS, NODE_CATEGORIES, RES_OPTIONS,
-  EXPORT_TARGETS, MESHES, DEBUG_VIEWS, TONEMAPPERS, validateGraph, emptyGraph,
+  EXPORT_TARGETS, MESHES, DEBUG_VIEWS, TONEMAPPERS, emptyGraph,
 } from './contract.js';
+import { ctx, store, state, M, $, bind } from './panels/ctx.js';
 import { lsGet, lsSet, clamp, clone, same, decimals, fmt, evalNum, slug } from './panels/util.js';
 import {
   hexToRgb, rgbToHex, toLin, toSrgb, rgbToHsv, hsvToRgb, colorToHex, hexLike,
 } from './panels/color.js';
 import { capture, h, icon, ibtn, download, pickFiles, typing, isPhone } from './panels/dom.js';
-
-let ctx = null, store = null, state = null, M = {}, $ = id => document.getElementById(id);
+import {
+  GA, graph, nodesOf, linksOf, getNode, defOf, outputNode, nodeLabel, paramVal,
+  catColor, selfEmit, queueEdit, writeParam, commitParam, editDone, loadGraph,
+  serializeGraph,
+} from './panels/graph-access.js';
 
 // ------------------------------------------------------------ graph access
-/** graph.js stateful actions (one undo step each), when graph.js has them. */
-const GA = () => M.graph?.actions || null;
-const graph = () => state.graph;
-const nodesOf = () => (graph() && graph().nodes) || [];
-const linksOf = () => (graph() && graph().links) || [];
-function getNode(id) {
-  const g = graph(); if (!g || id == null) return null;
-  if (typeof M.graph?.getNode === 'function') { try { const n = M.graph.getNode(g, id); if (n) return n; } catch (e) { /* fall back */ } }
-  return (g.nodes || []).find(n => n.id === id) || null;
-}
-const defOf = n => n && state.registry.get(n.type);
-const outputNode = () => getNode(graph()?.output) || nodesOf().find(n => n.type === OUTPUT_TYPE) || null;
-const nodeLabel = n => (n && (n.label || defOf(n)?.label || n.type)) || '?';
-const paramVal = (n, p) => { const v = n.params ? n.params[p.id] : undefined; return v === undefined ? clone(p.default) : v; };
-const UNIFORM_KINDS = new Set(['slider', 'int', 'color', 'vec2', 'bool']);
-const catColor = cat => {
-  const map = { Output: '#ffc832', Input: '#96c8ff', Generator: '#64c864', Noise: '#7ad0c0', Pattern: '#5ab0a0', Math: '#a0a8b8', Vector: '#96c8ff', Color: '#ffc832', Adjust: '#ff9a4a', Blend: '#e08ad0', Filter: '#b090ff', 'Height & Normal': '#b090ff', Transform: '#7ad0c0', Utility: '#8090b0', Bench: '#ff8a5c' };
-  return map[cat] || '#8090b0';
-};
-
-/** Coalesced edit: one graph:changed per frame, one undo step per gesture. */
-let selfEmit = 0, pending = null, flushRaf = 0;
-function queueEdit(ids, paramOnly, label, merge, final) {
-  if (!pending) pending = { ids: new Set(), paramOnly: true, label, merge };
-  ids.forEach(i => pending.ids.add(i));
-  pending.paramOnly = pending.paramOnly && paramOnly;
-  pending.label = label; pending.merge = merge;
-  if (final) flushEdit(); else if (!flushRaf) flushRaf = requestAnimationFrame(flushEdit);
-}
-function flushEdit() {
-  if (flushRaf) { cancelAnimationFrame(flushRaf); flushRaf = 0; }
-  const p = pending; pending = null; if (!p) return;
-  selfEmit++;
-  try { store.emit('graph:changed', { reason: 'param', nodeIds: [...p.ids], paramOnly: p.paramOnly }); }
-  finally { selfEmit--; }
-  store.checkpoint(p.label, p.merge ? { merge: p.merge } : {});
-}
-function writeParam(n, pid, v) {
-  if (typeof M.graph?.setParam === 'function') { try { M.graph.setParam(graph(), n.id, pid, clone(v)); return; } catch (e) { /* fall back */ } }
-  n.params = n.params || {}; n.params[pid] = clone(v);
-}
-/** Write param p of every node in `nodes` and queue the edit. */
-function commitParam(nodes, p, v, final, session) {
-  for (const n of nodes) writeParam(n, p.id, v);
-  const ids = nodes.map(n => n.id);
-  const paramOnly = p.uniform !== false && UNIFORM_KINDS.has(p.kind);
-  queueEdit(ids, paramOnly, `${p.label || p.id}`, `p:${ids.join(',')}:${p.id}:${session}`, final);
-}
-function editDone(label, ids = [], reason = 'edit') {
-  selfEmit++;
-  try { store.emit('graph:changed', { reason, nodeIds: ids }); } finally { selfEmit--; }
-  store.checkpoint(label);
-}
-
 let cascade = 0;
 /** Add a node from the library. With clientX/Y it goes under the pointer. */
 function addNodeAt(type, clientX, clientY) {
@@ -154,33 +104,6 @@ function addNodeAt(type, clientX, clientY) {
   editDone('Add ' + def.label, [node.id]);
   store.select([node.id]);
   return node;
-}
-
-/** Replace the live graph with contract Graph JSON. One undo step. */
-function loadGraph(json, label = 'Load graph', { keepRes = false } = {}) {
-  const v = validateGraph(json, state.registry);
-  if (!v.ok) {
-    const structural = v.errors.filter(e => !/^unknown node type/.test(e));
-    if (structural.length) { store.toast('Graph not loaded: ' + structural.slice(0, 3).join('; '), 'error'); return false; }
-    store.toast(`${v.errors.length} unknown node type(s): ${v.errors.slice(0, 2).join('; ')}`, 'warn', 6000);
-  }
-  const j = clone(json);
-  j.settings = { ...state.settings, ...(j.settings || {}) };
-  if (keepRes) j.settings.res = state.settings.res;
-  if (typeof GA()?.load === 'function') { GA().load(j, { resetHistory: false, label }); return true; }
-  state.graph = typeof M.graph?.deserialize === 'function' ? M.graph.deserialize(j) : j;
-  state.settings.tiling = j.settings.tiling ?? 1;
-  state.settings.seed = j.settings.seed ?? 0;
-  store.select([]);
-  if (!keepRes && j.settings.res && j.settings.res !== state.settings.res) store.setRes(j.settings.res);
-  store.emit('graph:changed', { reason: 'load' });
-  store.checkpoint(label);
-  return true;
-}
-function serializeGraph() {
-  const g = graph(); if (!g) return emptyGraph();
-  const j = typeof M.graph?.serialize === 'function' ? M.graph.serialize(g) : clone(g);
-  return typeof j === 'string' ? JSON.parse(j) : j;
 }
 
 // ------------------------------------------------------------ widgets
@@ -1745,7 +1668,7 @@ export const api = {
 
 /** @param {object} c main.js module context */
 export async function init(c) {
-  ctx = c; store = c.store; state = c.store.state; M = c.modules; $ = c.$;
+  bind(c);
   initTopbar();
   initLibrary();
   initStrip();
