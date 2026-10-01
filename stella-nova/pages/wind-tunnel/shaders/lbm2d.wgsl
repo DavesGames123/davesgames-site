@@ -19,13 +19,25 @@
 // with c = (cx, -1) left the cell (x - cx, y) with c = (cx, +1). The outlet copies the populations of the cell
 // upstream for the directions that would come from outside the grid.
 //
+// The force sums -2 (f - w_q) c_q, not -2 f c_q. The w_q part is the
+// reference pressure rho0 / 3. It cancels on a closed body, but not on a
+// body that stands on the floor: the hoof soles are not wetted, so it
+// gave the cow a false downforce (lift coefficient -5.4).
+//
 // Forces. On a measure step, each bounce-back link from fluid into copy k adds
 // -2 f c_q to the force on copy k (momentum exchange). The sum goes through
 // workgroup atomics, then one global atomic per workgroup, in fixed point
 // (FIX). The measure step also writes the macro texture: (ux, uy, rho - 1, solid), solid 1, porous 0.5.
 // rho - 1 keeps the pressure exact in half floats; rho itself would step by 1/1024.
 //
-// grep: struct SimU  fn feq  fn voxelize  fn initF  fn step  fn area
+// grep: struct SimU  fn feq  fn voxelize  fn initF  fn step  fn area  fn sponge
+
+// Sponge. The free-slip walls reflect sound fully, so a pressure wave from
+// the start or from vortex shedding rings between roof and floor (the 2D car
+// lift oscillated with the 1000-step period of that standing wave). In a band
+// SPONGE cells wide along the slip walls and the outlet, collision also pulls
+// the density toward 1 at the local velocity. That damps the sound and
+// leaves the flow.
 
 struct SimU {
   nx: u32, ny: u32, nz: u32, n: u32,
@@ -67,6 +79,14 @@ var<private> MY: array<u32, 9> = array<u32, 9>(0u, 1u, 4u, 3u, 2u, 8u, 7u, 6u, 5
 fn feq(q: u32, rho: f32, u: vec2f) -> f32 {
   let cu = f32(CX[q]) * u.x + f32(CY[q]) * u.y;
   return W[q] * rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - 1.5 * dot(u, u));
+}
+
+const SPONGE = 16.0;
+fn ramp(d: f32) -> f32 { let t = clamp(1.0 - d / SPONGE, 0.0, 1.0); return t * t; }
+fn sponge(x: u32, y: u32) -> f32 {
+  var r = max(ramp(f32(S.ny - 1u - y)), ramp(f32(S.nx - 1u - x)));
+  if (S.ground == 0u) { r = max(r, ramp(f32(y))); }
+  return 0.15 * r;
 }
 
 fn hash(a: u32) -> u32 {
@@ -189,7 +209,7 @@ fn step(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index
           if (st == T_BELT) { v += 6.0 * W[q] * f32(CX[q]) * S.beltU; }
           f[q] = v;
           if (st >= T_SOLID) {
-            fx -= 2.0 * a * vec2f(f32(CX[q]), f32(CY[q]));
+            fx -= 2.0 * (a - W[q]) * vec2f(f32(CX[q]), f32(CY[q]));
             copy = st - T_SOLID;
             hit = true;
           }
@@ -221,9 +241,11 @@ fn step(@builtin(global_invocation_id) g: vec3u, @builtin(local_invocation_index
       let tau = 0.5 * (S.tau + sqrt(S.tau * S.tau + 0.76421222 * sqrt(Q) / rho));
       let om = 1.0 / tau;
 
+      let sg = sponge(x, y);
       for (var q = 0u; q < 9u; q++) {
         let e = feq(q, rho, u);
-        fB[q * S.n + i] = select(f[q] + om * (e - f[q]), e, bad);
+        let damp = sg * (feq(q, 1.0, u) - e);
+        fB[q * S.n + i] = select(f[q] + om * (e - f[q]) + damp, e, bad);
       }
       if (measure) {
         textureStore(macroOut, vec2u(x, y), vec4f(u, rho - 1.0, select(0.0, 0.5, t == T_GHOST)));

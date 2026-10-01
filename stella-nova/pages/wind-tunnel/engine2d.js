@@ -7,7 +7,7 @@
 //
 // One frame(target, f) call, one submit:
 //   1 step x f.steps   compute  D2Q9 lattice steps, ping-pong A <-> B; the
-//                               last one measures forces and writes the macro
+//                               last two measure forces and writes the macro
 //                               texture (ux, uy, rho, solid)
 //   2 dye              compute  smoke advection, only when the smoke field shows
 //   3 advect           compute  streamline particles
@@ -219,12 +219,16 @@ export async function createEngine2D(device, code, opts) {
       pf.set(f.rake || [0, 0, 0, 0], 8);
       device.queue.writeBuffer(partUBuf, 0, pu);
 
+      // Forces sum over the last two steps. A fluid cell shut in by solids
+      // (a sliver in a wheel arch) bounces its momentum back each step, so a
+      // force read on one step parity aliases that into a false mean.
+      const measured = Math.min(steps, 2);
       const enc = device.createCommandEncoder();
       if (steps > 0) {
         const p = enc.beginComputePass();
         p.setPipeline(pStep);
         for (let k = 0; k < steps; k++) {
-          p.setBindGroup(0, k === steps - 1 ? gStepM[parity] : gStep[parity]);
+          p.setBindGroup(0, k >= steps - measured ? gStepM[parity] : gStep[parity]);
           p.dispatchWorkgroups(Math.ceil(n / 128));
           parity ^= 1;
         }
@@ -263,11 +267,12 @@ export async function createEngine2D(device, code, opts) {
       if (si >= 0) {
         stageBusy[si] = true;
         const sb = staging[si];
+        const div = measured;
         sb.mapAsync(GPUMapMode.READ).then(() => {
           const i32 = new Int32Array(sb.getMappedRange().slice(0));
           sb.unmap();
           stageBusy[si] = false;
-          for (let k = 0; k < 8; k++) stats.forces[k] = i32[k] / FIX;
+          for (let k = 0; k < 8; k++) stats.forces[k] = i32[k] / FIX / div;
           for (let k = 0; k < 4; k++) stats.area[k] = i32[8 + k];
           stats.stamp++;
         }).catch(() => { stageBusy[si] = false; });
