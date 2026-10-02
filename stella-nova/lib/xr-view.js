@@ -28,6 +28,9 @@
 //             0.02 .. 100 m) in each XR frame and puts the page values back
 //             on exit. A page change of near / far during the session is
 //             kept as the value to put back.
+//  THREE      the lib uses the page's three.js. A page with an importmap
+//             entry for 'three' needs nothing. A page that loads three as a
+//             global script (for example r128) passes opts.THREE.
 //  THE LOOP   loop 'raf' (default): while a session runs, a headset may not
 //             call window.requestAnimationFrame. The lib wraps rAF at attach.
 //             Each page request goes to the real rAF and also waits for the
@@ -56,7 +59,7 @@
 //      onRay: (ray, kind) => kind === 'hover' ? 'name' : false,
 //      update: (dt) => { pageState.dirty = true; } });
 //    More options: lifeY, sizeLabels, distance (metres, { life, table } or
-//    (size, extentMetres) => metres), near, far.
+//    (size, extentMetres) => metres), near, far, THREE.
 //    window.__xrView is the last api made (for tests and the console).
 //
 //  GREP MAP
@@ -71,7 +74,10 @@
 //    function tick ....................... one XR frame
 //    async function enter / function cleanup   session start and end
 // ============================================================================
-import * as THREE0 from 'three';
+// The page's three.js, from its importmap. A page with no importmap entry
+// (three as a global script) passes opts.THREE instead.
+let THREE0 = null;
+try { THREE0 = await import('three'); } catch (e) { /* no importmap entry: use opts.THREE */ }
 
 // Yaw (turn about +Y) of a pose matrix. Yaw 0 looks down -Z; the forward
 // direction of yaw a is (-sin a, 0, -cos a).
@@ -116,13 +122,18 @@ function makePanel(THREE, title, rows) {
   cv.width = W; cv.height = TOP + rows.length * RH + 16;
   const g = cv.getContext('2d');
   const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
+  if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace; else tex.encoding = THREE.sRGBEncoding;   // r152+ / older
   const wm = 0.32, hm = wm * cv.height / W;
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(wm, hm),
     new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, toneMapped: false }));
   mesh.renderOrder = 1000;
   const font = (() => { try { return getComputedStyle(document.body).fontFamily || 'sans-serif'; } catch (e) { return 'sans-serif'; } })();
   let status = '', hover = -1;
+  // a long row label (for example a renamed size) gets a smaller font, not a cut
+  function fitText(t, weight, px, x, y, maxW) {
+    do { g.font = `${weight} ${px}px ${font}`; } while (g.measureText(t).width > maxW && --px > 16);
+    g.fillText(t, x, y);
+  }
   function draw() {
     g.clearRect(0, 0, W, cv.height);
     g.fillStyle = 'rgba(12,15,22,0.9)';
@@ -135,8 +146,8 @@ function makePanel(THREE, title, rows) {
       const y = TOP + i * RH, on = r.on && r.on();
       g.fillStyle = i === hover ? 'rgba(255,200,120,0.22)' : on ? 'rgba(255,200,120,0.12)' : 'rgba(150,200,255,0.06)';
       g.beginPath(); g.roundRect(20, y + 6, W - 40, RH - 12, 14); g.fill();
-      g.fillStyle = on ? '#ffd58a' : '#e6ecf5'; g.font = `500 26px ${font}`;
-      g.fillText(typeof r.label === 'function' ? r.label() : r.label, 40, y + RH / 2);
+      g.fillStyle = on ? '#ffd58a' : '#e6ecf5';
+      fitText(typeof r.label === 'function' ? r.label() : r.label, 500, 26, 40, y + RH / 2, W - 80);
     });
     tex.needsUpdate = true;
   }
@@ -162,7 +173,8 @@ function makePanel(THREE, title, rows) {
 
 // ── attachXR ────────────────────────────────────────────────────────────────
 export function attachXR(o) {
-  const THREE = THREE0;
+  const THREE = o.THREE || THREE0;
+  if (!THREE) throw new Error('xr-view: no three.js; pass opts.THREE');
   const Y = new THREE.Vector3(0, 1, 0);
   const tmpV = new THREE.Vector3(), tmpV2 = new THREE.Vector3();
   const { renderer, scene, camera } = o;
