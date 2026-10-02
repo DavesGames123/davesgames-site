@@ -65,6 +65,7 @@
 //      UI .................. "function selectSystem" panel + controls wiring
 //      pan / zoom .......... "pan / zoom"            pointer, wheel, pinch
 //      loop ................ "function loop"         rAF update + draw + status
+//      screensaver ......... "window.snSaver"        shell saver hook
 // ============================================================================
 "use strict";
 
@@ -958,3 +959,17 @@ setTimeout(()=>{
   drawToneCurve(); selectSystem("pendulum");
   started=true; last=performance.now(); rafId=requestAnimationFrame(loop);
 },40);
+
+// Screensaver hook for the shell (lib/screensaver.js). enter() waits for the boot
+// selectSystem, hides the GUI, makes #canvas-wrap fill the window (the observer
+// then calls resize() and respawns the tracers), and shows one system chosen by
+// opts.seed with no axes, arrows or inset. calm 1 halves the tracer speed. The
+// system does not change inside one dwell, so there is no respawn cut.
+window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));
+  while(!started)await new Promise(r=>setTimeout(r,50));
+  const st=document.createElement("style");st.textContent="html.saver #panel,html.saver #mob-btn,html.saver .mob-overlay,html.saver #eq-panel,html.saver #msim-panel,html.saver #status-bar,html.saver .topbar{display:none!important}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver #sim-canvas{cursor:none}";
+  document.head.appendChild(st);document.documentElement.classList.add("saver");
+  const keys=["vdp","duffing","lotka","pendulum","cjou","cinv","cz3","csin"].filter(k=>SYS[k]);
+  cfg.sim=false;cfg.axes=false;cfg.arr=false;cfg.dom=false;cfg.playing=true;cfg.spd=14*(1-0.5*calm);cfg.trl=Math.max(cfg.trl,48);
+  selectSystem(keys[(opts.seed>>>0)%keys.length]);resize();spawnTracers();
+  return{canvas,warmupMs:2500};}};
