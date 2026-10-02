@@ -812,29 +812,54 @@ window.snSaver={enter(opts){
   const label=opts&&opts.labels!==false&&typeof opts.label==='function'?opts.label:null;
   const NAME={selena:'Selena (moon)',desert:'Desert world',terra:'Terra',water:'Water world',ice:'Ice world',gas_giant:'Gas giant',ice_giant:'Ice giant'};
   const SPEC={
-    selena:t=>({eq:'h = 0.7 R₈(p′) + 0.14 F₆(p) + 0.3',lines:['R₈ ridged: f 3.5 · l 2 · g 0.48 on p′ = warp(p, 1.8, 0.06)','F₆ fBm: f 12 · l 2.3 · g 0.4 · specular 0.03 + 0.02h']}),
-    desert:t=>({eq:'h = 0.4 B + 0.42 D + 0.05 F₅(p) + 0.18',lines:['B = ½F₇(p′) + ½ (f 2) · D = 0.35 |F₅(p′)| dunes (f 7)','p′ = warp(p, 1.5, 0.1) · fine grain F₅ f 18 · specular 0.03']}),
-    terra:t=>({eq:'h = 0.42 (F₆(p′) + 0.12 F₅(p)) + 0.5,   sea = 0.56 + 0.015 t',lines:['F₆ continents: f 1.6 · l 2.05 · g 0.44 on p′ = warp(p, 1.2, 0.18)',
+    selena:t=>({tex:'h = 0.7\\,R_8(p^{\\prime}) + 0.14\\,F_6(p) + 0.3',eq:'h = 0.7 R₈(p′) + 0.14 F₆(p) + 0.3',lines:['R₈ ridged: f 3.5 · l 2 · g 0.48 on p′ = warp(p, 1.8, 0.06)','F₆ fBm: f 12 · l 2.3 · g 0.4 · specular 0.03 + 0.02h']}),
+    desert:t=>({tex:'h = 0.4\\,B + 0.42\\,D + 0.05\\,F_5(p) + 0.18',eq:'h = 0.4 B + 0.42 D + 0.05 F₅(p) + 0.18',lines:['B = ½F₇(p′) + ½ (f 2) · D = 0.35 |F₅(p′)| dunes (f 7)','p′ = warp(p, 1.5, 0.1) · fine grain F₅ f 18 · specular 0.03']}),
+    terra:t=>({tex:'h = 0.42\\bigl(F_6(p^{\\prime}) + 0.12\\,F_5(p)\\bigr) + 0.5, \\quad h_{\\text{sea}} = 0.56 + 0.015\\,t',eq:'h = 0.42 (F₆(p′) + 0.12 F₅(p)) + 0.5,   sea = 0.56 + 0.015 t',lines:['F₆ continents: f 1.6 · l 2.05 · g 0.44 on p′ = warp(p, 1.2, 0.18)',
       'sea level '+(0.56+t*0.015).toFixed(3)+' · ocean specular 0.9 · biomes by |lat| · snow above 72 % land height','city lights (emissive) on land near coasts']}),
-    water:t=>({eq:'h = 0.3 F₅(p′) + 0.5,   sea = 0.72',lines:['F₅: f 1.5 · l 2 · g 0.45 on p′ = warp(p, 1, 0.2)','ocean specular 0.92 · sandy shoals above sea level']}),
-    ice:t=>({eq:'h = 0.5 (½F₆(p) + ½) + 0.5 (1 − R₆(p)) + 0.05 F₅(p)',lines:['F₆ plains f 2 · R₆ cracks f 5, l 2.3, g 0.46 · fine F₅ f 16','specular 0.3 + 0.4h']}),
-    gas_giant:t=>({eq:'h = ½ sin(N π y) + ½ + turb·edge + streak + storm',lines:['N = 14 + ⌊4 n3(0.1, 0.2, 0.3)⌋'+(nBand('gas_giant')?' = '+nBand('gas_giant'):'')+' bands · turbulence F₅ only at band edges','storm spots where F₄ > 0.55']}),
-    ice_giant:t=>({eq:'h = 0.3 sin(N π y) + 0.5 + 0.25 F₆(p′) + turb·edge',lines:['N = 8 + ⌊3 n3(0.5, 0.6, 0.7)⌋'+(nBand('ice_giant')?' = '+nBand('ice_giant'):'')+' bands · p′ = 3 domain warps','cloud wisps F₄ · specular 0.06 + 0.08 wisp']}),
+    water:t=>({tex:'h = 0.3\\,F_5(p^{\\prime}) + 0.5, \\quad h_{\\text{sea}} = 0.72',eq:'h = 0.3 F₅(p′) + 0.5,   sea = 0.72',lines:['F₅: f 1.5 · l 2 · g 0.45 on p′ = warp(p, 1, 0.2)','ocean specular 0.92 · sandy shoals above sea level']}),
+    ice:t=>({tex:'h = 0.5\\bigl(\\tfrac12 F_6(p) + \\tfrac12\\bigr) + 0.5\\bigl(1 - R_6(p)\\bigr) + 0.05\\,F_5(p)',eq:'h = 0.5 (½F₆(p) + ½) + 0.5 (1 − R₆(p)) + 0.05 F₅(p)',lines:['F₆ plains f 2 · R₆ cracks f 5, l 2.3, g 0.46 · fine F₅ f 16','specular 0.3 + 0.4h']}),
+    gas_giant:t=>({tex:'h = \\tfrac12\\sin(N\\pi y) + \\tfrac12 + \\text{turb}\\cdot\\text{edge} + \\text{streak} + \\text{storm}',eq:'h = ½ sin(N π y) + ½ + turb·edge + streak + storm',lines:['N = 14 + ⌊4 n3(0.1, 0.2, 0.3)⌋'+(nBand('gas_giant')?' = '+nBand('gas_giant'):'')+' bands · turbulence F₅ only at band edges','storm spots where F₄ > 0.55']}),
+    ice_giant:t=>({tex:'h = 0.3\\sin(N\\pi y) + 0.5 + 0.25\\,F_6(p^{\\prime}) + \\text{turb}\\cdot\\text{edge}',eq:'h = 0.3 sin(N π y) + 0.5 + 0.25 F₆(p′) + turb·edge',lines:['N = 8 + ⌊3 n3(0.5, 0.6, 0.7)⌋'+(nBand('ice_giant')?' = '+nBand('ice_giant'):'')+' bands · p′ = 3 domain warps','cloud wisps F₄ · specular 0.06 + 0.08 wisp']}),
   };
   let done=false;
   function nBand(type){
     if(!done)return 0;
     return type==='gas_giant'?14+Math.floor(n3(0.1,0.2,0.3)*4):8+Math.floor(n3(0.5,0.6,0.7)*3);
   }
+  // The page has no TeX or math colour classes of its own, so the plate TeX
+  // has no rules. eq stays as the plain fallback. The anchor is planetAnchor.
   function plate(){
     if(!label)return;
     const type=document.getElementById('sel-type').value,t=parseInt(document.getElementById('sel-temp').value);
     const seed=parseInt(document.getElementById('inp-seed').value)||0,res=parseInt(document.getElementById('sel-res').value);
-    const sp=SPEC[type](t);
-    label({title:NAME[type]+' · seed #'+seed,
-      sub:TNAMES[t]+' (t = '+t+') · '+res+' × '+res/2+' maps · '+(done?'done':'generating'),
-      lines:sp.lines.concat(['p on the unit sphere: φ = 2πu, θ = πv · 3D simplex n3, seeded permutation']),
-      eq:[sp.eq,'Fₒ(p) = Σₖ gᵏ n3(f lᵏ p)   (fBm)','Rₒ(p) = Σₖ gᵏ wₖ (1 − |n3|)²   (ridged)']});
+    const sp=SPEC[type](t),params=[{sym:'t',name:'temperature',value:TNAMES[t]+' ('+t+')'},
+      {sym:'s',name:'seed',value:'#'+seed},{sym:'W \\times H',name:'maps',value:res+' × '+res/2}];
+    if(type==='terra')params.push({sym:'h_{\\text{sea}}',name:'sea level',value:(0.56+t*0.015).toFixed(3)});
+    if(type==='water')params.push({sym:'h_{\\text{sea}}',name:'sea level',value:'0.720'});
+    if((type==='gas_giant'||type==='ice_giant')&&nBand(type))params.push({sym:'N',name:'bands',value:String(nBand(type))});
+    label({title:NAME[type]+', seed #'+seed,
+      sub:(done?'Height field, done':'Height field, generating'),
+      params,
+      lines:[sp.lines[0]],
+      tex:[sp.tex,'F_o(p) = \\sum_k g^k\\,n_3\\!\\left(f\\,l^k p\\right) \\quad\\text{(fBm)}',
+        'R_o(p) = \\sum_k g^k\\,w_k\\,\\bigl(1 - |n_3|\\bigr)^2 \\quad\\text{(ridged)}'],
+      eq:[sp.eq,'Fₒ(p) = Σₖ gᵏ n3(f lᵏ p)   (fBm)','Rₒ(p) = Σₖ gᵏ wₖ (1 − |n3|)²   (ridged)'],
+      anchor:planetAnchor});
+  }
+  // The planet on screen, for the shell's label plate. The sphere has radius
+  // 1 at the origin. The page camera (with the view offset of fitCam)
+  // projects the centre to canvas px. The silhouette radius is
+  // fpx tan(asin(1 / d)), with fpx = (h / 2) / tan(fov / 2) and d the camera
+  // distance, plus 3 percent for the atmosphere rim. The key point is the
+  // centre.
+  const _pc=new THREE.Vector3();
+  function planetAnchor(){
+    const b=ren.domElement.getBoundingClientRect(),d=cam.position.length();
+    if(d<=1.01)return null;
+    _pc.set(0,0,0).project(cam);
+    const x=b.left+(_pc.x+1)/2*b.width,y=b.top+(1-_pc.y)/2*b.height;
+    const fpx=(b.height/2)/Math.tan(cam.fov*Math.PI/360),r=1.03*fpx*Math.tan(Math.asin(1/d));
+    return {x,y,r,pts:[{x,y}]};
   }
   const next=()=>{
     if(busy)return;busy=true;
