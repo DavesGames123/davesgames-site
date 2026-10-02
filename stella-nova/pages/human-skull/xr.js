@@ -13,19 +13,15 @@
 //             loop renders every frame, so update() needs no dirty flag.
 //  BASE       the base of the model box is the page floor (S.floorY), so the
 //             shadow floor lands on the real floor or table. In VR at life
-//             size the base is LIFT_MM lower, so the skull floats at the
-//             height of a standing head. In AR at life size the skull sits
-//             on the surface the viewer picks. The lib keeps the old base
-//             point on a size change, so in VR update() puts the model in
-//             front of the viewer again (api.reset) when the size changes.
+//             size the lib puts that base LIFT_M above the floor (lifeY), so
+//             the skull floats at the height of a standing head. In AR at
+//             life size the skull sits on the surface the viewer picks. The
+//             lib places the model again on a size change.
 //  SHADOW     the key light's shadow camera has its box in world units. The
 //             lib scales the scene, so update() scales that box by the scene
 //             scale each frame, and onExit() puts the page values back.
-//  CLIP       three takes the session depthNear / depthFar from the page
-//             camera each frame. The page camera clips at 10 .. 20000 mm,
-//             and in a session those numbers are metres, so nothing nearer
-//             than 10 m would show. onEnter() sets 0.02 .. 100 m, and
-//             onExit() puts the page values back.
+//  CLIP       the page camera clips at 10 .. 20000 mm. The lib holds the
+//             session near and far planes in metres (lib CLIP).
 //  BUTTONS    #xrSec shows when the device has VR or AR and the parts are
 //             loaded (S.ready).
 //
@@ -39,7 +35,7 @@
 //                 the XR camera.
 //
 //  GREP MAP
-//    const LIFT_MM .................. life-size head height in VR
+//    const LIFT_M ................... life-size head height in VR
 //    function bounds ................ model box for placement
 //    function pickRay ............... ray to part
 //    function scaleShadow ........... shadow box at the scene scale
@@ -52,10 +48,10 @@ const K = window.__skull;
 const { S, stage } = K;
 const $ = id => document.getElementById(id);
 
-const LIFT_MM = 1450;   // floor to the base of the skull at life size in VR (mm)
+const LIFT_M = 1.45;   // floor to the base of the model box at life size in VR (m)
 const ORDER = ['anatomy', 'symmetry', 'region', 'tray'];
 const LABEL = { anatomy: 'Anatomy', symmetry: 'Symmetry', region: 'Region', tray: 'Catalogue' };
-let names = true, support = { vr: false, ar: false }, api = null, lastSize = null, clip = null;
+let names = true, support = { vr: false, ar: false };
 
 // The box of the shown parts, in mm, from the page floor up.
 const box = new THREE.Box3(), v = new THREE.Vector3();
@@ -69,7 +65,6 @@ function bounds() {
   }
   if (box.isEmpty()) box.set(new THREE.Vector3(-90, -110, -100), new THREE.Vector3(90, 110, 100));
   box.min.y = Math.min(box.min.y, S.floorY);
-  if (api && api.size === 'life' && api.kind === 'vr') box.min.y -= LIFT_MM;
   return box.clone();
 }
 
@@ -105,7 +100,7 @@ function showSection() { $('xrSec').hidden = !((support.vr || support.ar) && S.r
 
 export const xr = attachXR({
   renderer: stage.renderer, scene: stage.scene, camera: stage.camera, controls: stage.controls,
-  bounds, unit: 0.001, tableHeight: 0.35,
+  bounds, unit: 0.001, lifeY: LIFT_M, tableHeight: 0.35,
   vrButton: $('bVR'), arButton: $('bAR'),
   title: 'Human skull',
   actions: [
@@ -122,24 +117,11 @@ export const xr = attachXR({
     else K.select(i);
     return true;
   },
-  update() {
-    scaleShadow();
-    // the lift depends on the size, so a size change in VR needs a new base
-    if (api.size !== lastSize) { if (api.kind === 'vr' && lastSize) api.reset(); lastSize = api.size; }
-  },
-  onEnter() {
-    lastSize = null;
-    const c = stage.camera; clip = [c.near, c.far];
-    c.near = 0.02; c.far = 100; c.updateProjectionMatrix();
-  },
-  onExit() {
-    restoreShadow();
-    if (clip) { const c = stage.camera; [c.near, c.far] = clip; c.updateProjectionMatrix(); clip = null; }
-  },
+  update() { scaleShadow(); },
+  onExit() { restoreShadow(); },
   onSupport(s) { support = s; showSection(); },
 });
 
-api = xr;
 
 // The parts load after the module runs: show the buttons once they are in.
 if (!S.ready) {
