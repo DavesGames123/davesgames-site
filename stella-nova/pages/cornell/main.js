@@ -53,6 +53,7 @@
 //      3D text .............. "function genTextSDF"   rasterize string to SDF
 //      scene CRUD ........... "function newObj"       add/delete/select objects
 //      UI builders .......... "function buildModify"  Create + Modify panels
+//      screensaver .......... "window.snSaver"        converged stations behind fades
 //      bootstrap ............ "APP.init"              fetch shaders, then start
 // ============================================================================
 "use strict";
@@ -385,7 +386,7 @@ function makeGPU(cv){
     for(var s=0;s<nsamp;s++){ gl.bindFramebuffer(gl.FRAMEBUFFER,fbo[1-ping]); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tex[ping]);
       gl.uniform1i(U(pT,'uAccum'),0); uniforms(); gl.drawArrays(gl.TRIANGLES,0,3); ping=1-ping; spp++; }
     gl.bindFramebuffer(gl.FRAMEBUFFER,null); gl.viewport(0,0,W,H); gl.useProgram(pD);
-    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tex[ping]); gl.uniform1i(U(pD,'uAccum'),0); gl.uniform2f(U(pD,'uRes'),W,H); gl.drawArrays(gl.TRIANGLES,0,3); }
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D,tex[ping]); gl.uniform1i(U(pD,'uAccum'),0); gl.uniform2f(U(pD,'uRes'),W,H); gl.uniform1f(U(pD,'uFade'),FADE); gl.drawArrays(gl.TRIANGLES,0,3); }
   // Read back the frame and report if it is essentially black; the loop uses
   // this to fall back to the CPU on devices where the GPU path renders nothing.
   function isBlank(){ try{ var px=new Uint8Array(W*H*4); gl.readPixels(0,0,W,H,gl.RGBA,gl.UNSIGNED_BYTE,px); var mx=0; for(var i=0;i<px.length;i+=4){ if(px[i]>mx)mx=px[i]; if(px[i+1]>mx)mx=px[i+1]; if(px[i+2]>mx)mx=px[i+2]; } return mx<8; }catch(e){ return false; } }
@@ -426,6 +427,8 @@ function objWorld(s,p){ var m=s.m,c=s.c; return [c[0]+m[0]*p[0]+m[1]*p[1]+m[2]*p
 /* ---------- controller ---------- */
 // The GPU backend instance, created in init (null when unavailable).
 var gpu=null;
+// The display fade to black, 0..1. Only the screensaver hook changes it.
+var FADE=0;
 // The editor: one big module that owns the three canvases (gl/cpu/wire), the
 // current mode and backend, the selection, and all input. It draws the wireframe
 // and gizmos itself, drives the CPU/GPU tracers, and builds the side panels.
@@ -542,7 +545,8 @@ var APP=(function(){
   // resize debounces layout changes before reapplying.
   function renderDims(base){ var asp=WW/WH,w,h; if(asp>=1){ h=base; w=Math.round(base*asp); } else { w=base; h=Math.round(base/asp); }
     var cap=Math.round(base*2.0); if(w>cap){ w=cap; h=Math.round(w/asp); } if(h>cap){ h=cap; w=Math.round(h*asp); } return [Math.max(8,w),Math.max(8,h)]; }
-  function applyRes(){ var sm=Math.min(WW,WH)<360; var dc=renderDims(sm?104:150), dg=renderDims(sm?300:440); if(cpu) cpu.setRes(dc[0],dc[1]); if(gpu) gpu.setRes(dg[0],dg[1]); }
+  var resBase=0; // the screensaver sets a GPU base that matches the window
+  function applyRes(){ var sm=Math.min(WW,WH)<360; var dc=renderDims(sm?104:150), dg=renderDims(resBase||(sm?300:440)); if(cpu) cpu.setRes(dc[0],dc[1]); if(gpu) gpu.setRes(dg[0],dg[1]); }
   var resizeTO=null;
   function resize(){ var w=document.getElementById('canvas-wrap'); WW=w.clientWidth||400; WH=w.clientHeight||400; dpr=Math.min(window.devicePixelRatio||1,2);
     wcv.width=WW*dpr; wcv.height=WH*dpr; wcv.style.width=WW+'px'; wcv.style.height=WH+'px';
@@ -559,7 +563,7 @@ var APP=(function(){
       if(mode==='wire'){ drawScene(true); }
       else if(mode==='shaded'){ drawShaded(); }
       else { var a=active();
-        if(backend==='gpu'&&gpu){ if(a.samples()<4000) a.step(2); if(!checked&&a.samples()>=10){ checked=true; if(a.isBlank()){ gpuAvail=false; backend='cpu'; paintBackend(); showCanvas(); resetRender(); note('<b>GPU blank on this device</b> — using CPU.'); } } }
+        if(backend==='gpu'&&gpu){ if(a.samples()<4000) a.step(2); if(!checked&&a.samples()>=10&&FADE===0){ checked=true; if(a.isBlank()){ gpuAvail=false; backend='cpu'; paintBackend(); showCanvas(); resetRender(); note('<b>GPU blank on this device</b> — using CPU.'); } } }
         else { if(a.samples()<400) a.step(); }
         drawScene(false);
       }
@@ -781,6 +785,38 @@ var APP=(function(){
     note(gpuAvail?'Path-traced render. Drag to orbit \u00b7 scroll / pinch to zoom. Add objects from the Create tab.':'GPU unavailable \u2014 Render uses CPU. Drag to orbit. Add objects from the Create tab.');
     raf=requestAnimationFrame(loop);
   }
+
+  // Screensaver hook for the shell (lib/screensaver.js). enter() hides the GUI,
+  // the overlays and the wire canvas, sets the GPU trace to the window size,
+  // and shows a list of camera stations with lighting presets. A station holds
+  // seconds/3 (at least 10 s) and converges; the change between stations is
+  // behind a fade to black in the display pass (FADE), so the noisy restart
+  // stays dark. calm (1 = slowest) makes the fades longer; opts.seed sets the
+  // order. No exit(): the shell reloads the page on stop.
+  window.snSaver={enter:function(o){ o=o||{};
+    var calm=Math.max(0,Math.min(1,o.calm!=null?o.calm:0.7)), sd=(o.seed>>>0)||1;
+    function rnd(){ sd=(sd+0x6D2B79F5)>>>0; var t=sd; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; }
+    var st=document.createElement('style');
+    st.textContent='.topbar,#panel,#status-bar,#mob-btn,#err,#wire{display:none!important}body::before,body::after{display:none!important}#canvas-wrap canvas{cursor:none}';
+    document.head.appendChild(st);
+    var ST=[{az:90,el:14,R:2.45,p:'brand'},{az:85,el:9,R:2.2,p:'classic'},{az:95,el:12,R:2.3,p:'brand'},{az:90,el:4,R:2.4,p:'classic'},{az:93,el:7,R:1.95,p:'brand'},{az:87,el:12,R:2.3,p:'dim'}];
+    for(var i=ST.length-1;i>0;i--){ var j=Math.floor(rnd()*(i+1)), q=ST[i]; ST[i]=ST[j]; ST[j]=q; }
+    var hold=Math.max(10,(o.seconds||60)/3)*1000, fadeS=0.9+0.8*calm, n=0, phase='in', since=0, last=0;
+    function station(){ var s=ST[n++%ST.length]; CAM.az=s.az; CAM.el=s.el; CAM.R=s.R; CAM.fov=52; CAM.tx=0; CAM.ty=-0.10; CAM.tz=0; preset(s.p); resetRender(); }
+    function tick(t){ var dt=Math.min(0.05,(t-(last||t))/1000); last=t; if(!since) since=t;
+      if(phase==='show'&&t-since>hold) phase='out';
+      else if(phase==='out'){ FADE=Math.min(1,FADE+dt/fadeS); if(FADE>=1){ station(); phase='dark'; since=t; } }
+      else if(phase==='dark'){ if(t-since>600) phase='in'; }
+      else if(phase==='in'){ FADE=Math.max(0,FADE-dt/fadeS); if(FADE<=0){ phase='show'; since=t; } }
+      // a converged trace no longer steps, so present the fade here
+      if(phase!=='show'&&usingGpu()&&gpu.samples()>=4000) gpu.step(0);
+      requestAnimationFrame(tick); }
+    return new Promise(function(res){ (function wait(){ if(!cpu){ setTimeout(wait,100); return; }
+      if(mode!=='render') setMode('render');
+      resize(); resBase=Math.min(1200,Math.round(Math.min(WW,WH)*dpr)); applyRes();
+      FADE=1; station(); phase='dark'; requestAnimationFrame(function(t){ since=t; requestAnimationFrame(tick); });
+      res({canvas:usingGpu()?glCv:cpuCv, warmupMs:2500}); })(); }); }};
+
   return { init:init, setMode:setMode, setBackend:setBackend, setGizmo:setGizmo, resetView:resetView, preset:preset, tab:tab };
 })();
 
