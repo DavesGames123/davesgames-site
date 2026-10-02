@@ -1,8 +1,10 @@
 // ============================================================================
 //  PROTEIN FOLDING  ·  plots.js — live instrument cards (canvas 2D)
 // ----------------------------------------------------------------------------
-//  Each card is a title, a live value and one canvas. A card has one y axis
-//  only. Replica traces use a fixed categorical order (slot k = replica k),
+//  Each card is a title, a live value, an optional one-line note (opt.sub)
+//  and one canvas. A card has one y axis only. The axes carry titles
+//  (o.xtitle, o.ytitle), and drawCurve and drawHeat can write short state
+//  labels on the plot (o.notes: [{ x, y, text }] in data units). Replica traces use a fixed categorical order (slot k = replica k),
 //  and the legend is the replica chips in the card head. A pointer on a
 //  time-series card (mouse hover, or touch drag) shows a crosshair and the
 //  value of each trace at that x.
@@ -13,6 +15,7 @@
 //  grep: export const SERIES  export class Card  function axes
 //        export function drawSeries  export function drawCurve
 //        export function drawHeat  export function drawContactMap  export function drawPairMap
+//        function notes  function resAxes
 // ============================================================================
 
 // Dark-surface categorical slots (validated: dataviz validate_palette, dark).
@@ -25,7 +28,7 @@ export class Card {
     this.el = document.createElement('section');
     this.el.className = 'card' + (opt.cls ? ' ' + opt.cls : '');
     this.el.dataset.k = key;
-    this.el.innerHTML = `<div class="card-h"><span class="ct">${title}</span><span class="cv"></span></div><canvas></canvas><div class="card-f"></div>`;
+    this.el.innerHTML = `<div class="card-h"><span class="ct">${title}</span><span class="cv"></span></div>${opt.sub ? `<div class="cs">${opt.sub}</div>` : ''}<canvas></canvas><div class="card-f"></div>`;
     host.appendChild(this.el);
     this.cv = this.el.querySelector('canvas');
     this.val = this.el.querySelector('.cv');
@@ -66,7 +69,7 @@ const fmtNum = v => Math.abs(v) < 1e-9 ? '0' : Math.abs(v) >= 100 ? v.toFixed(0)
 
 // Axes and grid; returns a mapping { X, Y, l, r, t, b }.
 function axes(g, w, h, x0, x1, y0, y1, o = {}) {
-  const l = o.left ?? 34, r = w - 8, t = 8, b = h - (o.xlabel === false ? 8 : 18);
+  const l = (o.left ?? 34) + (o.ytitle ? 12 : 0), r = w - 8, t = 8, b = h - (o.xlabel === false ? 8 : 18) - (o.xtitle ? 12 : 0);
   const X = v => l + (v - x0) / (x1 - x0 || 1) * (r - l);
   const Y = v => b - (v - y0) / (y1 - y0 || 1) * (b - t);
   g.lineWidth = 1;
@@ -88,7 +91,27 @@ function axes(g, w, h, x0, x1, y0, y1, o = {}) {
     g.textBaseline = 'middle';
   }
   g.strokeStyle = INK.axis; g.beginPath(); g.moveTo(l + 0.5, t); g.lineTo(l + 0.5, b + 0.5); g.lineTo(r, b + 0.5); g.stroke();
+  // axis titles: x under the tick labels, y turned along the left edge
+  g.fillStyle = INK.dim;
+  if (o.xtitle) { g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText(o.xtitle, (l + r) / 2, h - 1); g.textBaseline = 'middle'; }
+  if (o.ytitle) { g.save(); g.translate(7, (t + b) / 2); g.rotate(-Math.PI / 2); g.textAlign = 'center'; g.fillText(o.ytitle, 0, 0); g.restore(); }
   return { X, Y, l, r, t, b };
+}
+
+// Short state labels on a plot, in data units. Each sits above its point
+// and stays inside the plot box.
+function notes(g, A, list, y1) {
+  if (!list) return;
+  g.font = '600 10.5px Inter, system-ui, sans-serif'; g.textBaseline = 'bottom';
+  for (const n of list) {
+    if (n.x === undefined || n.y === undefined || !isFinite(n.y)) continue;
+    const tw = g.measureText(n.text).width;
+    const x = Math.max(A.l + tw / 2 + 2, Math.min(A.r - tw / 2 - 2, A.X(n.x)));
+    const y = Math.max(A.t + 12, A.Y(Math.min(y1 ?? Infinity, n.y)) - (n.dy ?? 6));
+    g.fillStyle = 'rgba(8,9,15,0.75)'; g.fillRect(x - tw / 2 - 2, y - 12, tw + 4, 13);
+    g.fillStyle = n.color || INK.text; g.textAlign = 'center'; g.fillText(n.text, x, y);
+  }
+  g.font = FONT; g.textBaseline = 'middle';
 }
 
 // Time series for several traces. traces: [{ xs, ys, n, color }] with
@@ -177,6 +200,7 @@ export function drawCurve(card, pts, o = {}) {
     const x = Math.round(A.X(o.marker)) + 0.5;
     g.strokeStyle = 'rgba(255,255,255,0.55)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, A.t); g.lineTo(x, A.b); g.stroke(); g.setLineDash([]);
   }
+  notes(g, A, o.notes, o.y1);
 }
 
 // Sequential single-hue ramp, dark to light (for a dark surface).
@@ -203,6 +227,18 @@ export function drawHeat(card, grid, nx, ny, o) {
     g.strokeStyle = '#fff'; g.lineWidth = 1.5;
     g.beginPath(); g.arc(A.X(o.point[0]), A.Y(o.point[1]), 4, 0, 7); g.stroke();
   }
+  notes(g, A, o.notes);
+}
+
+// Residue axes of an N x N map: "residue j, 1 to N" under the map and
+// "residue i" along its left edge.
+function resAxes(g, ox, oy, s, N) {
+  g.save(); g.fillStyle = INK.dim; g.font = FONT;
+  g.textBaseline = 'top'; g.textAlign = 'left'; g.fillText('1', ox, oy + s + 3);
+  g.textAlign = 'right'; g.fillText(String(N), ox + s, oy + s + 3);
+  g.textAlign = 'center'; g.fillText('residue j', ox + s / 2, oy + s + 3);
+  g.translate(ox - 9, oy + s / 2); g.rotate(-Math.PI / 2); g.textBaseline = 'middle'; g.fillText('residue i', 0, 0);
+  g.restore();
 }
 
 // Contact map, N x N. Upper triangle: native contacts, shaded by how often
@@ -211,8 +247,9 @@ export function drawHeat(card, grid, nx, ny, o) {
 export function drawContactMap(card, N, ci, cj, avg, x, o = {}) {
   const c = card.begin(); if (!c) return;
   const { g, w, h } = c;
-  const s = Math.min(w - 16, h - 8), ox = Math.round((w - s) / 2), oy = 4, px = s / N;
+  const s = Math.min(w - 28, h - 20), ox = Math.round((w - s) / 2) + 6, oy = 4, px = s / N;
   g.fillStyle = 'rgba(8,9,15,0.9)'; g.fillRect(ox, oy, s, s);
+  resAxes(g, ox, oy, s, N);
   if (x) {
     for (let i = 0; i < N; i++) for (let j = 0; j < i - 2; j++) {
       const d = Math.hypot(x[3 * i] - x[3 * j], x[3 * i + 1] - x[3 * j + 1], x[3 * i + 2] - x[3 * j + 2]);
@@ -242,8 +279,9 @@ export function drawContactMap(card, N, ci, cj, avg, x, o = {}) {
 export function drawPairMap(card, seq, upper, lower, o = {}) {
   const c = card.begin(); if (!c) return;
   const { g, w, h } = c;
-  const N = seq.length, s = Math.min(w - 20, h - 12), ox = Math.round((w - s) / 2) + 3, oy = 7, px = s / N;
+  const N = seq.length, s = Math.min(w - 30, h - 24), ox = Math.round((w - s) / 2) + 7, oy = 7, px = s / N;
   g.fillStyle = 'rgba(8,9,15,0.9)'; g.fillRect(ox, oy, s, s);
+  resAxes(g, ox, oy, s, N);
   for (let i = 0; i < N; i++) if (seq[i] === 'H') {
     g.fillStyle = '#e9a23b'; g.fillRect(ox + i * px, oy - 4, Math.max(1, px - 0.5), 3); g.fillRect(ox - 4, oy + i * px, 3, Math.max(1, px - 0.5));
   }

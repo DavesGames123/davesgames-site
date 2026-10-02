@@ -25,6 +25,8 @@
 //    function frameCamera ...... occlusion, view offset, zoom, grid layout
 //    function setTemp .......... temperature, ramp, melt and quench
 //    function colours .......... residue colours for each colour mode
+//    function tags ............. N, C, helix and strand tags over the chains
+//    function fqStates ......... unfolded, native and barrier labels on F(Q)
 //    function buildPanel ....... the control bindings
 //    initXR .................... VR and AR view (xr.js, lib/xr-view.js)
 //    window.snSaver ............ screensaver hook (lib/screensaver.js)
@@ -329,11 +331,14 @@ function legend() {
   let h = '';
   if (S.kind === 'hp') h = chip(COL.H, 'H hydrophobic') + chip(COL.P, 'P polar') + `<span><i style="background:#${COL.H.getHexString()};border-radius:2px;height:4px;width:14px"></i>H–H contact</span>`;
   else {
-    if (S.colour === 'ss') h = chip(COL.helix, 'helix') + chip(COL.strand, 'strand') + chip(COL.coil, 'coil');
+    if (S.colour === 'ss') h = chip(COL.helix, 'helix (α)') + chip(COL.strand, 'strand (β)') + chip(COL.coil, 'coil');
     else if (S.colour === 'hyd') h = `<span>polar${bar(COL.pol, COL.mid)}${bar(COL.mid, COL.hyd).replace('bar"', 'bar" ')}hydrophobic</span>`;
     else h = `<span>native contacts formed: none${bar(COL.off, COL.on)}all</span>`;
     if (S.ghost) h += chip(COL.ghost, 'native ghost');
+    if (S.lines) h += `<span><i class="ln" style="background:#${COL.contact.getHexString()}"></i>formed native contact</span>`;
   }
+  // the residue tags drawn by tags()
+  h += `<span><b class="tk">N</b><b class="tk">C</b>chain ends</span>`;
   el.innerHTML = h;
 }
 
@@ -341,18 +346,18 @@ function legend() {
 let cards = {};
 function buildCards() {
   const host = $('plots'); host.innerHTML = ''; cards = {};
-  const add = (k, t, cls) => (cards[k] = new Card(host, k, t, { cls }));
+  const add = (k, t, cls, sub) => (cards[k] = new Card(host, k, t, { cls, sub }));
   if (S.kind === 'go') {
     add('q', 'Native contacts Q', 'tall');
     add('rmsd', 'RMSD to native · Å', 'half');
     add('rg', 'Radius of gyration · Å', 'half');
     add('cmap', 'Contact map', 'half sq');
-    add('fqrg', 'F(Q, Rg) / kT', 'half sq');
-    add('fq', 'Free energy F(Q) / kT', '');
-    add('e', 'Energy · ε', '');
+    add('fqrg', 'F(Q, Rg) / kT', 'half sq', 'Light: low free energy. Ring: replica 1 now.');
+    add('fq', 'Free energy F(Q) / kT', '', 'F = −ln P(Q) at this T. A low well is a likely state.');
+    add('e', 'Energy · ε', '', 'V = bonds + angles + dihedrals + native contacts + repulsion');
     add('melt', '⟨Q⟩ vs T / Tm', '');
   } else {
-    add('hpE', 'E per replica, cold to hot', 'tall');
+    add('hpE', 'E per replica, cold to hot', 'tall', 'E = −(number of H–H contacts)');
     add('hpBest', 'Best energy found', '');
     add('hpMap', 'H–H contacts', 'half sq');
     add('hpHist', 'E histogram', 'half sq');
@@ -372,15 +377,35 @@ $('plots').addEventListener('scroll', updateDots, { passive: true });
 const traces = (key, pick) => S.sims.map((s, k) => ({ xs: s.series.xs, ys: s.series.v[key], n: s.series.n, color: SERIES[k % 8], alpha: pick === undefined || pick === k ? 0.95 : 0.4 }));
 function chips(vals, fmt) { return vals.map((v, k) => `<i style="background:${SERIES[k % 8]}"></i>${fmt(v)}`).join(''); }
 
+// State labels for F(Q). The unfolded basin is Q < 0.3 and the native
+// basin is Q > 0.7; their names sit at the top of the plot over each basin.
+// The barrier is the highest point of the 3-bin smoothed F at 0.3 to 0.7,
+// labelled only when it is at least 1 kT over both basin minima. Fixed
+// basins, not a well search: a noisy curve gave false wells.
+function fqStates(pts) {
+  const ok = pts.filter(p => p.y !== null && isFinite(p.y));
+  const out = [{ x: 0.13, y: 7, text: 'unfolded', dy: 0, color: '#c9cbd8' }, { x: 0.87, y: 7, text: 'native', dy: 0, color: '#c9cbd8' }];
+  if (ok.length < 6) return out;
+  const y = ok.map((p, k) => (p.y + (ok[k - 1] ?? p).y + (ok[k + 1] ?? p).y) / 3);
+  let u = Infinity, n = Infinity, b = -1;
+  ok.forEach((p, k) => {
+    if (p.x < 0.3) u = Math.min(u, y[k]);
+    else if (p.x > 0.7) n = Math.min(n, y[k]);
+    else if (b < 0 || y[k] > y[b]) b = k;
+  });
+  if (b >= 0 && isFinite(u) && isFinite(n) && y[b] >= Math.max(u, n) + 1) out.push({ x: ok[b].x, y: ok[b].y, text: 'barrier' });
+  return out;
+}
+
 function drawPlots() {
   const slow = S.frameNo % 4 === 0;
   if (S.kind === 'go' && P) {
     const fr = S.sims.map(s => s.frame?.obs).filter(Boolean);
     const c = cards;
-    if (c.q.visible()) { drawSeries(c.q, traces('q'), { y0: 0, y1: 1, refs: [{ y: 0.8, label: 'folded' }], yticks: 4, vfmt: v => v.toFixed(2) }); c.q.val.innerHTML = chips(fr.map(o => o.Q), v => v.toFixed(2)); }
-    if (c.rmsd.visible()) { drawSeries(c.rmsd, traces('rmsd'), { y0: 0, vfmt: v => v.toFixed(1), left: 28, xticks: 2 }); c.rmsd.val.textContent = fr[0] ? fr[0].rmsd.toFixed(1) : ''; }
-    if (c.rg.visible()) { drawSeries(c.rg, traces('rg'), { refs: [{ y: P.rgNat, label: 'native' }], vfmt: v => v.toFixed(1), left: 28, xticks: 2 }); c.rg.val.textContent = fr[0] ? fr[0].Rg.toFixed(1) : ''; }
-    if (c.e.visible()) { drawSeries(c.e, traces('e'), { vfmt: v => v.toFixed(0), yticks: 3 }); c.e.val.textContent = fr[0] ? fr[0].E.toFixed(1) : ''; }
+    if (c.q.visible()) { drawSeries(c.q, traces('q'), { y0: 0, y1: 1, refs: [{ y: 0.8, label: 'folded' }], yticks: 4, vfmt: v => v.toFixed(2), xtitle: 'MD steps', ytitle: 'Q' }); c.q.val.innerHTML = chips(fr.map(o => o.Q), v => v.toFixed(2)); }
+    if (c.rmsd.visible()) { drawSeries(c.rmsd, traces('rmsd'), { y0: 0, vfmt: v => v.toFixed(1), left: 28, xticks: 2, xtitle: 'MD steps', ytitle: 'RMSD (Å)' }); c.rmsd.val.textContent = fr[0] ? fr[0].rmsd.toFixed(1) : ''; }
+    if (c.rg.visible()) { drawSeries(c.rg, traces('rg'), { refs: [{ y: P.rgNat, label: 'native' }], vfmt: v => v.toFixed(1), left: 28, xticks: 2, xtitle: 'MD steps', ytitle: 'Rg (Å)' }); c.rg.val.textContent = fr[0] ? fr[0].Rg.toFixed(1) : ''; }
+    if (c.e.visible()) { drawSeries(c.e, traces('e'), { vfmt: v => v.toFixed(0), yticks: 3, xtitle: 'MD steps', ytitle: 'V (ε)' }); c.e.val.textContent = fr[0] ? fr[0].E.toFixed(1) : ''; }
     if (slow && c.cmap.visible()) {
       const k0 = 0, x = S.sims[k0]?.frame?.x;
       drawContactMap(c.cmap, P.N, P.ci, P.cj, P.avg, x);
@@ -394,7 +419,7 @@ function drawPlots() {
       for (let i = 0; i < P.nq; i++) if (H.fq[i] > 0) fmin = Math.min(fmin, -Math.log(H.fq[i] / tot));
       for (let i = 0; i < P.nq; i++) pts.push({ x: i / (P.nq - 1), y: H.fq[i] > 0 ? -Math.log(H.fq[i] / tot) - fmin : null });
       const curQ = S.sims[0]?.frame?.obs.Q;
-      drawCurve(c.fq, tot > 40 ? pts : [], { x0: 0, x1: 1, y0: 0, y1: 7, xfmt: v => v.toFixed(1), xticks: 5, yticks: 3, color: '#ffd68c', fill: 'rgba(255,214,140,0.10)', marker: curQ, empty: S.ramp ? 'paused while the ramp runs' : 'collecting at this T…', yfmt: v => v.toFixed(0) });
+      drawCurve(c.fq, tot > 40 ? pts : [], { x0: 0, x1: 1, y0: 0, y1: 7, xfmt: v => v.toFixed(1), xticks: 5, yticks: 3, color: '#ffd68c', fill: 'rgba(255,214,140,0.10)', marker: curQ, empty: S.ramp ? 'paused while the ramp runs' : 'collecting at this T…', yfmt: v => v.toFixed(0), xtitle: 'Q, fraction of native contacts', ytitle: 'F / kT', notes: fqStates(pts) });
       c.fq.val.textContent = S.ramp ? 'ramp' : `T ${(H.T / P.tm).toFixed(2)} Tm · ${tot.toLocaleString()} samples`;
       const ng = P.ngq * NG, g = new Float64Array(ng).fill(NaN); let gmin = Infinity;
       const gt = H.fqr.reduce((a, b) => a + b, 0);
@@ -402,13 +427,13 @@ function drawPlots() {
       for (let i = 0; i < ng; i++) g[i] -= gmin;
       const o0 = S.sims[0]?.frame?.obs;
       const hq = 0.5 / (P.ngq - 1);   // bin centres sit on k / (bins - 1)
-      drawHeat(c.fqrg, gt > 40 ? g : new Float64Array(ng).fill(NaN), P.ngq, NG, { x0: -hq, x1: 1 + hq, y0: H.rgLo, y1: H.rgHi, fmax: 7, xfmt: v => v.toFixed(1), xticks: 2, yticks: 3, left: 26, point: o0 ? [o0.Q, clamp(o0.Rg, H.rgLo, H.rgHi)] : null });
+      drawHeat(c.fqrg, gt > 40 ? g : new Float64Array(ng).fill(NaN), P.ngq, NG, { x0: -hq, x1: 1 + hq, y0: H.rgLo, y1: H.rgHi, fmax: 7, xfmt: v => v.toFixed(1), xticks: 2, yticks: 3, left: 26, point: o0 ? [o0.Q, clamp(o0.Rg, H.rgLo, H.rgHi)] : null, xtitle: 'Q', ytitle: 'Rg (Å)', notes: [{ x: 0.92, y: clamp(P.rgNat, H.rgLo, H.rgHi), text: 'native', color: '#ffd68c' }] });
       c.fqrg.val.textContent = 'Q × Rg';
     }
     if (slow && c.melt.visible()) {
       const m = P.melt, pts = [];
       for (let i = 0; i < m.n; i++) if (m.cnt[i] > 5) pts.push({ x: m.lo + (i + 0.5) / m.n * (m.hi - m.lo), y: m.sum[i] / m.cnt[i] });
-      drawCurve(c.melt, pts, { x0: m.lo, x1: m.hi, y0: 0, y1: 1, xfmt: v => v.toFixed(1), xticks: 6, yticks: 2, dots: true, color: '#86b6ef', marker: S.tFrac, band: [0.95, 1.05], empty: 'use Ramp, or visit several T', yfmt: v => v.toFixed(1) });
+      drawCurve(c.melt, pts, { x0: m.lo, x1: m.hi, y0: 0, y1: 1, xfmt: v => v.toFixed(1), xticks: 6, yticks: 2, dots: true, color: '#86b6ef', marker: S.tFrac, band: [0.95, 1.05], empty: 'use Ramp, or visit several T', yfmt: v => v.toFixed(1), xtitle: 'T / Tm', ytitle: '⟨Q⟩', notes: pts.length ? [{ x: m.lo + 0.12 * (m.hi - m.lo), y: 0.98, text: 'folded', dy: 0 }, { x: m.hi - 0.12 * (m.hi - m.lo), y: 0.2, text: 'unfolded', dy: 0 }, { x: 1, y: 0.62, text: 'Tm', dy: 0, color: '#ffd68c' }] : null });
       c.melt.val.textContent = `Tm ≈ ${P.tm.toFixed(2)} ε/kB`;
     }
   } else if (S.kind === 'hp' && S.hp?.frame) {
@@ -416,11 +441,11 @@ function drawPlots() {
     const refs = [{ y: hp.pr.best, label: S.hpDim === 2 ? `best known ${hp.pr.best}` : `2D best ${hp.pr.best}` }];
     if (c.hpE.visible()) {
       const tr = hp.series.slice(0, Math.min(R, 8)).map((s, k) => ({ xs: s.xs, ys: s.v.e, n: s.n, color: SERIES[k % 8], alpha: 0.8 }));
-      drawSeries(c.hpE, tr, { y1: 0.5, refs, vfmt: v => v.toFixed(0) });
+      drawSeries(c.hpE, tr, { y1: 0.5, refs, vfmt: v => v.toFixed(0), xtitle: 'Monte Carlo moves', ytitle: 'E' });
       c.hpE.val.innerHTML = chips(f.T.slice(0, 8), v => 'T ' + v.toFixed(2));
     }
     if (c.hpBest.visible()) {
-      drawSeries(c.hpBest, [{ xs: hp.best.xs, ys: hp.best.v.e, n: hp.best.n, color: '#ffd68c' }], { y1: 0.5, refs, vfmt: v => v.toFixed(0) });
+      drawSeries(c.hpBest, [{ xs: hp.best.xs, ys: hp.best.v.e, n: hp.best.n, color: '#ffd68c' }], { y1: 0.5, refs, vfmt: v => v.toFixed(0), xtitle: 'Monte Carlo moves', ytitle: 'E' });
       c.hpBest.val.textContent = `${f.bestE} at ${fmtSteps(f.bestAt)} moves`;
     }
     if (slow && c.hpMap.visible()) {
@@ -435,7 +460,7 @@ function drawPlots() {
         for (let e = lo; e <= 0; e++) { xs.push(e); ys.push((m.get(e) || 0) / Math.max(1, tot)); }
         return { xs: Float64Array.from(xs), ys: Float32Array.from(ys), n: xs.length, color: SERIES[k % 8], alpha: 0.85 };
       });
-      drawSeries(c.hpHist, tr, { y0: 0, xfmt: v => v.toFixed(0), vfmt: v => (v * 100).toFixed(0) + '%', yfmt: v => (v * 100).toFixed(0) + '%', xticks: 4, left: 32, xunit: ' E' });
+      drawSeries(c.hpHist, tr, { y0: 0, xfmt: v => v.toFixed(0), vfmt: v => (v * 100).toFixed(0) + '%', yfmt: v => (v * 100).toFixed(0) + '%', xticks: 4, left: 32, xunit: ' E', xtitle: 'E, energy', ytitle: 'share' });
       c.hpHist.val.textContent = S.hpMode === 'remc' ? `swap ${(f.swap * 100).toFixed(0)}%` : '';
     }
   }
@@ -471,6 +496,56 @@ function readout() {
     el.innerHTML = `<b>${esc(pr.name)}</b> <span class="lo">· ${S.hpDim === 2 ? 'square' : 'cubic'} lattice · ${S.hpMode === 'remc' ? 'replica exchange' : S.hpMode === 'anneal' ? 'annealing' : 'fixed T'}</span><br>` +
       (f ? `<span class="lo">${grid.cols > 1 ? 'left' : 'top'}: coldest now</span> E ${f.E[0]} <span class="lo">· ${grid.cols > 1 ? 'right' : 'bottom'}: best found</span> <span class="hi">E ${f.bestE}</span> ${S.hpDim === 2 ? (f.bestE <= pr.best ? '<span class="ok">= best known</span>' : `<span class="lo">(best known ${pr.best})</span>`) : '<span class="lo">(cubic: no reference)</span>'}<br><span class="lo">moves</span> ${fmtSteps(f.moves)} <span class="lo">·</span> ${fmtSteps(f.sps * S.hp.N * f.E.length)}<span class="lo">/s</span>` : '');
   }
+}
+
+// ── residue tags ─────────────────────────────────────────────────────────────
+// HTML labels over the canvas: N and C on each chain (on the first chain
+// only when more than four replicas share the view), the helix and strand
+// names (α1, β1 …, from the PDB secondary structure in proteins.js) on the
+// first chain, and in HP mode a caption over each chain. tags() runs after
+// each render and projects the bead positions with the render camera.
+const tagHost = $('tags'), tagPool = [], tv = new THREE.Vector3();
+function ssElements(ss) {
+  const out = []; let nh = 0, ne = 0;
+  for (let i = 0; i < ss.length;) {
+    let j = i; while (j < ss.length && ss[j] === ss[i]) j++;
+    if (ss[i] === 'H' && j - i >= 4) out.push({ i: (i + j - 1) >> 1, text: 'α' + (++nh), cls: 'h' });
+    else if (ss[i] === 'E' && j - i >= 2) out.push({ i: (i + j - 1) >> 1, text: 'β' + (++ne), cls: 'e' });
+    i = j;
+  }
+  return out;
+}
+function tags() {
+  if (!tagHost || !renderer) return;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  let n = 0;
+  const put = (x, y, text, cls) => {
+    if (x < 0 || x > w || y < 0 || y > h) return;
+    let el = tagPool[n];
+    if (!el) { el = document.createElement('span'); tagHost.appendChild(el); tagPool.push(el); }
+    el.textContent = text; el.className = 'tag ' + cls; el.hidden = false;
+    el.style.transform = `translate(${x.toFixed(1)}px,${y.toFixed(1)}px) translate(-50%,-100%)`;
+    n++;
+  };
+  const label = (v, i, text, cls) => {
+    if (!v.x || i < 0 || 3 * i + 2 >= v.x.length) return;
+    tv.set(v.x[3 * i], v.x[3 * i + 1], v.x[3 * i + 2]).applyMatrix4(v.group.matrixWorld).project(camera);
+    if (tv.z < 1) put((tv.x + 1) / 2 * w, (1 - tv.y) / 2 * h - 7, text, cls);
+  };
+  if (S.kind === 'go' && P) {
+    const many = S.views.length > 4;
+    S.views.forEach((v, k) => { if (!many || k === 0) { label(v, 0, 'N', 'end'); label(v, v.N - 1, 'C', 'end'); } });
+    if (P.ssTags === undefined) P.ssTags = ssElements(P.prot.ss || '');
+    if (S.views[0]) for (const e of P.ssTags) label(S.views[0], e.i, e.text, e.cls);
+  } else if (S.kind === 'hp') {
+    const R = (S.hp?.radius || 20) * 1.02;
+    S.views.forEach((v, k) => {
+      label(v, 0, 'N', 'end'); label(v, v.N - 1, 'C', 'end');
+      tv.copy(v.group.position).setY(v.group.position.y + R).project(camera);
+      if (tv.z < 1) put((tv.x + 1) / 2 * w, (1 - tv.y) / 2 * h, k === 0 ? 'coldest replica now' : 'best fold found', 'cap');
+    });
+  }
+  for (let k = n; k < tagPool.length; k++) tagPool[k].hidden = true;
 }
 
 // ── camera framing ───────────────────────────────────────────────────────────
@@ -564,6 +639,7 @@ function frame(now) {
   }
   frameCamera();
   if (renderer) renderer.render(scene, camera);
+  tags();
   if (S.frameNo % 2 === 0) drawPlots();
   if (S.frameNo % 6 === 0) readout();
 }

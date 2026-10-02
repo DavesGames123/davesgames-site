@@ -8,7 +8,9 @@
 //  and faint. LatticeView draws an HP chain: H and P beads, bonds, and the
 //  H-H contacts as bright rods.
 //
-//  Colours are per residue and come from main.js (colour modes).
+//  Colours are per residue and come from main.js (colour modes). Each view
+//  keeps its last positions in .x, so main.js can put N, C and helix and
+//  strand tags on the screen.
 //
 //  grep: class TubeGeo  class ChainView  class LatticeView  export const COL
 // ============================================================================
@@ -133,6 +135,7 @@ export class ChainView {
     this.m4 = new THREE.Matrix4(); this.c = new THREE.Color();
   }
   set(x, formed) {
+    this.x = x;   // kept for the residue tags in main.js (function tags)
     this.tube.update(x);
     const m = this.m4, r = this.beadR;
     if (r > 0) for (let i = 0; i < this.N; i++) { m.makeScale(r, r, r).setPosition(x[3 * i], x[3 * i + 1], x[3 * i + 2]); this.beads.setMatrixAt(i, m); }
@@ -194,6 +197,9 @@ export class LatticeView {
       this.q.setFromUnitVectors(this.z, this.v.normalize());
       m.compose(a, this.q, new THREE.Vector3(r, r, len)); inst.setMatrixAt(k, m);
     };
+    // centred positions in A, kept for the residue tags in main.js
+    if (!this.x || this.x.length !== 3 * N) this.x = new Float32Array(3 * N);
+    for (let i = 0; i < N; i++) for (let k = 0; k < 3; k++) this.x[3 * i + k] = P(i, k);
     for (let i = 0; i < N - 1; i++) rod(this.bonds, i, i, i + 1, 0.42);
     let n = 0;
     for (let i = 0; i < N; i++) {

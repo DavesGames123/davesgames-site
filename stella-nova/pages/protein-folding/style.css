@@ -47,6 +47,16 @@ html.in-frame .topbar{display:none}
 .pread .hi{color:var(--cream)} .pread .lo{color:var(--dim)} .pread .ok{color:#7fd6a8}
 .legend{position:absolute;left:calc(var(--panel-w) + 14px);bottom:14px;display:flex;flex-wrap:wrap;gap:6px 12px;font-size:0.78rem;color:var(--dim);pointer-events:none;background:rgba(8,9,15,0.6);padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
 .legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px;vertical-align:-1px}
+.legend .ln{width:14px;height:3px;border-radius:2px;vertical-align:2px}
+.legend .tk{display:inline-block;font:600 0.7rem var(--sans);color:#fff;border:1px solid rgba(255,255,255,0.35);border-radius:4px;padding:0 4px;margin-right:3px}
+/* residue tags over the chains (main.js function tags) */
+.tags{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.tags .tag{position:absolute;left:0;top:0;font:600 11px/1.3 var(--sans);padding:1px 5px;border-radius:5px;background:rgba(8,9,15,0.74);white-space:nowrap;will-change:transform}
+.tags .tag.end{color:#fff;border:1px solid rgba(255,255,255,0.35)}
+.tags .tag.h{color:#e45f84} .tags .tag.e{color:#e8b44a}
+.tags .tag.cap{color:var(--dim);font-weight:500;background:none}
+/* the one-line note under a card title (plots.js Card opt.sub) */
+.cs{font-size:0.7rem;line-height:1.3;color:var(--dim);margin:1px 0 3px}
 .legend .bar{display:inline-block;width:70px;height:8px;border-radius:4px;vertical-align:0;margin:0 5px}
 .phint{position:absolute;bottom:14px;right:calc(var(--plots-w) + 14px);font-size:0.78rem;color:var(--dim);pointer-events:none;transition:opacity 0.8s}
 .phint.gone{opacity:0}
