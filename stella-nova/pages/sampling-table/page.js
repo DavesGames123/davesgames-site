@@ -27,6 +27,14 @@ export const PAGE = {
     pass.setPipeline(t.pipeline); pass.setBindGroup(0, this.bind(surf)); pass.draw(3); pass.end();
   },
   source(t) { return this.ctx.fnSource('sample_' + t.s.name); },
+  // The saver plate (table-engine saverLabel): the live point count n that
+  // draw() writes to u.count, and the prefix m that shown() in the pack draws.
+  saverLabel(t, info) {
+    const n = Math.round(32 + 480 * t.knobs[0] * t.knobs[0]) * this.ctx.G.count;
+    const m = Math.round(n * (0.7 + 0.3 * Math.cos(t.phase * 0.45)));
+    info.lines.push(`n = ${Math.floor(n)} points · m = ${m} drawn`);
+    return info;
+  },
 };
 
 
