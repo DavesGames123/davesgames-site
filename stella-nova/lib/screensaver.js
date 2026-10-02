@@ -633,7 +633,10 @@ function placePlate(snap, dt = 0) {
         - (Math.max(0, a.x - a.hw - (x + pw), x - (a.x + a.hw)) === 0 && Math.max(0, a.y - a.hh - (y + ph), y - (a.y + a.hh)) === 0 ? Math.min(a.hw, a.hh) : 0)
         : d - a.r;
       let score = (sep < 8 ? 1e6 + (8 - sep) * 100 : 0) + (dp < 24 ? 2e6 + (24 - dp) * 1000 : 0) + Math.hypot(x - x0, y - y0) * 2 - Math.min(d, 400) * 0.2 - Math.min(dp, 300) * 0.5;
-      if (k === plate.side) score -= 60;   // keep the side unless another is clearly better
+      // Keep the side unless another is clearly better. A phone has only two
+      // docks (top, base) and a subject near mid-screen scores them almost
+      // the same, so it needs a wider band, or the plate flips between them.
+      if (k === plate.side) score -= phone ? 160 : 60;
       if (!best || score < best.score) best = { k, x, y, score };
     }
     side = best.k; tx = best.x; ty = best.y;
