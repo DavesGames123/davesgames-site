@@ -352,6 +352,51 @@ requestAnimationFrame(frame);
 // step holds seconds/5 (at least 7 s). calm (1 = slowest) slows the orbit.
 // The alarm never rings and the URL hash does not change while it plays.
 // The seeds come from opts.seed. No exit(): the shell reloads the page.
+// ── saver plate anchor ──────────────────────────────────────────────────────
+// The shell's label plate (lib/screensaver.js, "label plate") points at the
+// subject of each tour step. plateAnchor(objs, keys) projects with the page
+// camera (Vector3.project) to page CSS px of the canvas rect:
+//   x, y  the projected centre of the world box of the visible meshes
+//   r     the largest distance from (x, y) to a projected corner of the
+//         local box of a mesh, clamped to the canvas: the circle holds
+//         every mesh of the subject that is on screen
+//   pts   the projected key points (world Vector3) that are on screen
+// It returns null when the subject is not on screen, or while the canvas
+// fades out for a swap (style opacity 0).
+const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
+function plateAnchor(objs, keys = []) {
+  const cv = $('view'), rc = cv.getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height || cv.style.opacity === '0') return null;
+  const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
+  const ms = [];
+  PA.box.makeEmpty();
+  for (const ob of objs) if (ob) ob.traverseVisible(m => {
+    if (!m.isMesh || (m.material && m.material.opacity === 0)) return;
+    let b;
+    if (m.isInstancedMesh) { if (!m.boundingBox) m.computeBoundingBox(); b = m.boundingBox; }
+    else { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b = m.geometry.boundingBox; }
+    if (!b || b.isEmpty()) return;
+    ms.push([m, b]); PA.mb.copy(b).applyMatrix4(m.matrixWorld); PA.box.union(PA.mb);
+  });
+  if (PA.box.isEmpty()) return null;
+  const C = px(PA.box.getCenter(PA.c));
+  if (!C) return null;
+  let r = 0;
+  for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
+    PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
+    // A corner off the canvas counts at the canvas edge: in a close view
+    // the circle holds the part of the subject that is on screen.
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(Math.max(rc.left, Math.min(rc.right, q.x)) - C.x, Math.max(rc.top, Math.min(rc.bottom, q.y)) - C.y));
+  }
+  if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
+  const pts = [];
+  for (const k of keys) { const q = k && px(k); if (q && q.x >= rc.left && q.x <= rc.right && q.y >= rc.top && q.y <= rc.bottom) pts.push(q); }
+  return { x: C.x, y: C.y, r, pts };
+}
+// The world centre of the box of an object: a key point for a part whose
+// origin is not at its middle.
+const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Vector3());
+
 let saverOn = false;
 window.snSaver = {
   enter(o = {}) {
@@ -377,19 +422,37 @@ window.snSaver = {
     setRate(1);
     const hold = Math.max(7, (o.seconds || 60) / 5) * 1000;
     let n = 0, viewName = 'dial side', seedNow = '';
+    const P = (sym, name, value, cls) => ({ sym, name, value, cls });
+    // The piece on screen, for the plate anchor (plateAnchor): every
+    // visible part but the strap, which runs far past the case. Key points
+    // are part origins: the dial centre and the oscillator.
+    const anchorNow = () => {
+      if (!S.cur || S.busy) return null;
+      const B = S.cur.B, ps = Object.values(B.parts).filter(q => q.holder.visible && q.id !== 'strap');
+      const org = id => B.parts[id] && B.parts[id].holder.visible ? B.parts[id].root.localToWorld(new THREE.Vector3()) : null;
+      return plateAnchor(ps.map(q => q.holder), ['dial', 'balance', 'showPendulum', 'pendulum', 'escape'].map(org).filter(Boolean));
+    };
     // The plate: the piece rolled (Gen.describe, the same rows as the Spec
     // panel) and the beat of its calibre. Live amplitude once a second.
     const plate = () => {
       if (!o.label || !S.cur || S.busy) return;
       const { spec, cal, state } = S.cur, c = cal.CAL;
+      const rows = Gen.describe(spec).filter(r => r[0] !== 'Type');
       o.label({
         title: spec.face.brand,
-        sub: `${Gen.TYPES[spec.type].name} · seed ${seedNow} · ${viewName}`,
-        lines: [
-          ...Gen.describe(spec).filter(r => r[0] !== 'Type').map(([k, v]) => `${k}: ${v}`),
-          `Beat: ${cal.freq}` + (state.stopped ? ' · stopped' : ` · amplitude ${(state.amp / D).toFixed(0)}°`),
+        sub: `${Gen.TYPES[spec.type].name}, seed ${seedNow}, ${viewName}`,
+        params: [
+          P('f', 'oscillator frequency', `${c.fBal} Hz`, 'm3'),
+          P('A', 'amplitude', state.stopped ? 'stopped' : `${(state.amp / D).toFixed(0)}°`, 'm2'),
+          P('N_b', 'beat rate', cal.freq, 'm4'),
         ],
+        // two rows of the Spec panel, as plain notes
+        lines: rows.slice(0, 2).map(([k, v]) => `${k}: ${v}`),
+        tex: [String.raw`\theta(t) = A\,\sin(2\pi f\,t)`, String.raw`N_b = 2\cdot 3600\,f = ${(2 * 3600 * c.fBal).toLocaleString('en').replace(/,/g, '{,}')}\ \text{beats/h}`],
+        // Plate fields: θ m1, A m2, f m3, N_b m4 in params and TeX.
+        rules: [['\\theta', 'm1'], ['A', 'm2'], ['f', 'm3'], ['N_b', 'm4']],
         eq: [`θ(t) = A · sin(2π f t),  f = ${c.fBal} Hz`, `beats/h = 2 · 3600 · f = ${(2 * 3600 * c.fBal).toLocaleString()}`],
+        anchor: anchorNow,
       });
     };
     setInterval(plate, 1000);
