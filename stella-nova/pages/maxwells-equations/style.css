@@ -1,16 +1,18 @@
 /* ============================================================================
    MAXWELL'S EQUATIONS  ·  stylesheet
    ----------------------------------------------------------------------------
-   The shell design language: Space Grotesk for UI, IBM Plex Mono for small
-   caps labels and numbers, Instrument Serif for titles and the plain line
-   of each law. The panel is at the left. The canvas fills the rest. The
+   Type comes from lib/sci.css, which loads after this file: Inter for the
+   UI and the plain line of each law, STIX Two Text for titles and the law
+   numerals, the system mono for numbers only. Labels are sentence case
+   with no letter-spacing. The panel is at the left. The canvas fills the rest. The
    law card sits at the top left of the canvas, with no box, on a soft fade.
    The legend and the readout sit at the base of the canvas.
 
-   Field colours are tokens (--E, --B, --Q, --Qn, --J). main.js COL and
-   typeset.mjs C use the same values, so a term in an equation has the
-   colour of its field on the canvas. --c is the colour of the active law:
-   E amber for laws I and III, B cyan for laws II and IV.
+   Field colours are tokens (--E, --B, --Q, --Qn, --J). E, B, Q and J are
+   the lib/sci.css math colors --m2, --m1, --m4 and --m5, the classes that
+   typeset.mjs puts on the symbols. main.js COL uses the same values, so a
+   term in an equation has the colour of its field on the canvas. --c is
+   the colour of the active law: E for laws I and III, B for II and IV.
 
    PHONE (max-width 768px, or a short landscape touch screen). A dock at the
    base holds the panel button and the four law buttons. In portrait the
@@ -30,11 +32,11 @@
   --bg:#0a0c12;--bg2:#0d1018;--bg3:#121725;
   --line:rgba(150,200,255,0.09);--line2:rgba(150,200,255,0.18);
   --ink:#eef3fb;--text:#c3d0e2;--dim:#7f91ad;--faint:#4a5a78;
-  --E:#ffa552;--B:#4fd6ea;--Q:#ff6f61;--Qn:#8c9cff;--J:#ffd166;
+  --E:#ff9a62;--B:#62c4ff;--Q:#e889dc;--Qn:#8c9cff;--J:#ffd666;
   --c:var(--E);
-  --f-sans:'Space Grotesk',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
-  --f-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
-  --f-serif:'Instrument Serif','Iowan Old Style',Georgia,serif;
+  --f-sans:var(--sci-sans);
+  --f-mono:var(--sci-mono);
+  --f-serif:var(--sci-serif);
   --ease:cubic-bezier(.2,.7,.2,1);
   --panel-w:clamp(320px,22vw,420px);--dock-h:0px;
 }
@@ -48,8 +50,8 @@ body[data-eq="1"],body[data-eq="3"]{--c:var(--B)}
 
 .topbar{display:flex;align-items:baseline;gap:14px;padding:0 1.4rem;height:52px;align-items:center;flex-shrink:0;background:rgba(11,14,21,.96);border-bottom:1px solid var(--line);z-index:100}
 .in-frame .topbar{display:none!important}
-.sys-name{font:300 1rem/1 var(--f-sans);letter-spacing:.24em;text-transform:uppercase;color:var(--ink);white-space:nowrap}
-.sys-page{font:500 .68rem/1 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.sys-name{font:500 .85rem/1 var(--f-sans);color:var(--dim);white-space:nowrap}
+.sys-page{font:400 1.1rem/1 var(--f-serif);color:var(--ink);white-space:nowrap;margin-left:auto}
 
 #main{display:flex;flex:1;min-height:0;z-index:1}
 
@@ -57,24 +59,23 @@ body[data-eq="1"],body[data-eq="3"]{--c:var(--B)}
 #panel{width:var(--panel-w);flex-shrink:0;background:var(--bg2);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;user-select:none;z-index:10}
 .p-body{flex:1;overflow-y:auto;overflow-x:hidden;scrollbar-width:thin;scrollbar-color:var(--faint) transparent;overscroll-behavior:contain;padding-bottom:12px}
 .p-head{padding:26px 24px 18px}
-.kicker{font:500 .66rem/1 var(--f-mono);letter-spacing:.22em;text-transform:uppercase;color:var(--dim)}
-.p-head h1{font:400 2.1rem/1.05 var(--f-serif);color:var(--ink);margin-top:10px;letter-spacing:.005em}
-.lede{font:italic 400 1.02rem/1.4 var(--f-serif);color:var(--dim);margin-top:8px}
+.kicker{font:500 .78rem/1 var(--f-sans);color:var(--dim)}
+.p-head h1{font:400 1.8rem/1.1 var(--f-serif);color:var(--ink);margin-top:8px}
+.lede{font:400 .86rem/1.5 var(--f-sans);color:var(--dim);margin-top:8px}
 .p-section{padding:18px 24px 6px}
-.p-sec-lbl{font:500 .66rem/1 var(--f-mono);letter-spacing:.22em;text-transform:uppercase;color:var(--dim);margin-bottom:12px;display:flex;align-items:center;gap:10px}
-.p-sec-lbl::after{content:'';flex:1;height:1px;background:var(--line)}
+.p-sec-lbl{font:600 .82rem/1 var(--f-sans);color:var(--ink);margin-bottom:12px;padding-top:14px;border-top:1px solid var(--line)}
 
 /* LAWS. One button per law: numeral, name, the differential form. The
    active law gets a bar and a tint in its field colour (--lc). */
 .laws{display:flex;flex-direction:column;gap:6px;padding:0 14px 6px}
 .law{position:relative;display:grid;grid-template-columns:2.1rem 1fr;grid-template-rows:auto auto;column-gap:6px;row-gap:2px;align-items:center;width:100%;padding:11px 12px 10px;border:1px solid transparent;border-radius:12px;background:transparent;text-align:left;cursor:pointer;transition:background .2s,border-color .2s}
 .law:hover{background:rgba(150,200,255,.04)}
-.law .num{grid-row:1/3;font:italic 400 1.5rem/1 var(--f-serif);color:var(--faint);text-align:center;transition:color .2s}
+.law .num{grid-row:1/3;font:400 1.3rem/1 var(--f-serif);color:var(--faint);text-align:center;transition:color .2s}
 .law .name{font:500 .92rem/1.2 var(--f-sans);color:var(--text)}
 .law .form{color:var(--dim);font-size:.82rem;line-height:1;min-height:1.5em;overflow:hidden;opacity:.75;transition:opacity .2s}
 .law .form svg{display:block;max-width:100%;height:auto}
 .law.active{background:color-mix(in srgb,var(--lc) 7%,transparent);border-color:color-mix(in srgb,var(--lc) 28%,transparent)}
-.law.active::before{content:'';position:absolute;left:-1px;top:12px;bottom:12px;width:2px;border-radius:2px;background:var(--lc);box-shadow:0 0 10px var(--lc)}
+.law.active::before{content:'';position:absolute;left:-1px;top:12px;bottom:12px;width:2px;border-radius:2px;background:var(--lc)}
 .law.active .num{color:var(--lc)}
 .law.active .name{color:var(--ink)}
 .law.active .form{color:var(--text);opacity:1}
@@ -84,12 +85,14 @@ body[data-eq="1"],body[data-eq="3"]{--c:var(--B)}
 .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .tog-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--line2);border-radius:10px;background:rgba(150,200,255,.03);color:var(--text);font:500 .84rem/1.2 var(--f-sans);cursor:pointer;transition:background .2s,border-color .2s,color .2s}
 .tog-btn:hover{border-color:color-mix(in srgb,var(--c) 50%,transparent);background:color-mix(in srgb,var(--c) 8%,transparent);color:var(--ink)}
-.tog-btn .sw{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--sw);box-shadow:0 0 8px var(--sw)}
+.tog-btn .sw{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--sw)}
+.sym{display:inline-block;line-height:0;vertical-align:middle;font-size:1rem}
+.sym svg{overflow:visible}
 .tog-btn.quiet{border-color:transparent;background:transparent;color:var(--dim)}
 .tog-btn.quiet:hover{color:var(--ink);border-color:var(--line2);background:rgba(150,200,255,.03)}
 .mag-row{display:grid;grid-template-columns:4.4rem 1fr 3.2rem;align-items:center;gap:10px;min-height:36px}
 .mag-row-lbl{font:500 .82rem/1 var(--f-sans);color:var(--dim)}
-.mag-row .val{text-align:right;font:500 .8rem/1 var(--f-mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.mag-row .val{text-align:right;font:400 .8rem/1 var(--f-mono);color:var(--ink);font-variant-numeric:tabular-nums}
 /* The range track carries the fill. --pct comes from sg() in main.js. */
 .mag-row input[type=range]{min-width:0;-webkit-appearance:none;appearance:none;height:24px;background:transparent;outline:none;cursor:pointer;touch-action:pan-y}
 .mag-row input[type=range]::-webkit-slider-runnable-track{height:3px;border-radius:2px;background:linear-gradient(to right,var(--c) 0%,var(--c) var(--pct,50%),rgba(150,200,255,.14) var(--pct,50%))}
@@ -108,30 +111,30 @@ body[data-eq="1"],body[data-eq="3"]{--c:var(--B)}
 /* CARD. main.js reads its height to find the free area below it. No box:
    a soft fade from the canvas colour keeps the field lines behind it calm. */
 .card{position:absolute;top:0;left:0;right:0;padding:26px 34px 22px;z-index:50;pointer-events:none;
-  background:linear-gradient(180deg,rgba(10,12,18,.94) 0%,rgba(10,12,18,.86) 70%,rgba(10,12,18,0) 100%)}
-.card-kicker{display:flex;align-items:center;gap:12px;font:500 .7rem/1 var(--f-mono);letter-spacing:.22em;text-transform:uppercase;color:var(--c)}
-.card-num{font:italic 400 1.35rem/1 var(--f-serif);letter-spacing:0;text-transform:none}
+  background:rgba(10,12,18,.9);border-bottom:1px solid var(--line)}
+.card-kicker{display:flex;align-items:center;gap:12px;font:500 .9rem/1 var(--f-sans);color:var(--ink)}
+.card-num{font:400 1.2rem/1 var(--f-serif);color:var(--c)}
 .card-eq{color:var(--ink);font-size:2.35rem;line-height:1;margin-top:10px}
 .card-eq svg{display:block;max-width:100%;height:auto}
 .card-int{display:flex;align-items:center;gap:14px;margin-top:8px;color:var(--text);font-size:1.02rem}
 .card-int svg{display:block;max-width:100%;height:auto}
-.card-int-lbl{font:500 .62rem/1 var(--f-mono);letter-spacing:.18em;text-transform:uppercase;color:var(--faint);white-space:nowrap;flex-shrink:0}
-.card-line{font:italic 400 1.2rem/1.35 var(--f-serif);color:var(--text);margin-top:12px;max-width:40rem}
+.card-int-lbl{font:400 .76rem/1 var(--f-sans);color:var(--dim);white-space:nowrap;flex-shrink:0}
+.card-line{font:400 .95rem/1.45 var(--f-sans);color:var(--text);margin-top:12px;max-width:40rem}
 
 /* LEGEND and readout, at the base of the canvas, on a fade that keeps
    the field lines behind them calm. */
 #canvas-wrap::after{content:'';position:absolute;left:0;right:0;bottom:0;height:110px;z-index:30;pointer-events:none;background:linear-gradient(0deg,rgba(10,12,18,.92),rgba(10,12,18,0))}
 .legend{position:absolute;left:28px;bottom:22px;z-index:40;list-style:none;display:flex;flex-wrap:wrap;gap:6px 16px;pointer-events:none;max-width:calc(50% - 28px)}
 .legend li{display:flex;align-items:center;gap:8px;font:500 .74rem/1 var(--f-sans);color:var(--dim)}
-.legend .sw{width:16px;height:2px;border-radius:1px;background:var(--sw);box-shadow:0 0 6px var(--sw)}
+.legend .sw{width:16px;height:2px;border-radius:1px;background:var(--sw)}
 .legend .sw.dot{width:9px;height:9px;border-radius:50%}
 .legend .sw.dash{height:0;border-top:1.5px dashed var(--sw);box-shadow:none;background:none}
 .readout{position:absolute;right:28px;bottom:20px;z-index:40;pointer-events:none;text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end}
-.readout .r{font:500 .82rem/1 var(--f-mono);color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.readout .r{font:400 .82rem/1 var(--f-mono);color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
 .readout .r b{font-weight:500;color:var(--ink)}
-.readout .r i{font:italic 400 1.1em/1 var(--f-serif)}
+.readout .r i{font:italic 400 1.15em/1 var(--f-serif)}
 .readout .r sub{font-size:.72em}
-.readout .note{font:italic 400 1.02rem/1.2 var(--f-serif);color:var(--c)}
+.readout .note{font:400 .86rem/1.3 var(--f-sans);color:var(--text)}
 
 #dock,#sheetGrip{display:none}
 
@@ -171,7 +174,7 @@ body[data-eq="1"],body[data-eq="3"]{--c:var(--B)}
 @media (max-width:768px), (max-height:500px) and (pointer:coarse){
   :root{--dock-h:calc(64px + env(safe-area-inset-bottom))}
   .topbar{height:calc(48px + env(safe-area-inset-top));padding:env(safe-area-inset-top) 16px 0 calc(16px + env(safe-area-inset-left))}
-  .sys-name{font-size:.86rem}
+  .sys-name{font-size:.8rem}
 
   #dock{
     display:flex;flex-shrink:0;height:var(--dock-h);z-index:320;gap:8px;align-items:flex-start;
@@ -184,7 +187,7 @@ body[data-eq="1"],body[data-eq="3"]{--c:var(--B)}
   .seg{flex:1;display:flex;height:48px;min-width:0;border:1px solid var(--line2);border-radius:12px;overflow:hidden}
   .seg button{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:5px;border:0;border-right:1px solid var(--line);background:var(--bg2);color:var(--dim);cursor:pointer}
   .seg button:last-child{border-right:0}
-  .seg .n{font:italic 400 1.25rem/1 var(--f-serif)}
+  .seg .n{font:400 1.15rem/1 var(--f-serif)}
   .seg .s{font:400 .8rem/1 var(--f-sans);opacity:.8}
   .seg button.on{color:var(--lc);background:color-mix(in srgb,var(--lc) 10%,var(--bg2));box-shadow:inset 0 -2px 0 var(--lc)}
 
@@ -209,7 +212,7 @@ body[data-eq="1"],body[data-eq="3"]{--c:var(--B)}
   .card-eq{font-size:1.65rem;margin-top:8px}
   .card-int{font-size:.86rem;gap:10px;margin-top:6px}
   .card-int-lbl{display:none}
-  .card-line{font-size:1rem;margin-top:8px}
+  .card-line{font-size:.86rem;margin-top:8px}
   .legend{left:14px;bottom:12px;gap:6px 12px;max-width:calc(100% - 28px)}
   .legend li{font-size:.72rem}
   .readout{right:14px;top:auto;bottom:40px}

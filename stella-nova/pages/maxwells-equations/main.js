@@ -16,11 +16,12 @@
 //
 //  COLOUR
 //  --------------------------------------------------------------------------
-//      COL holds one colour per field: E amber, B cyan, + charge coral,
-//      − charge periwinkle, current gold. style.css (--E, --B, ...) and
-//      typeset.mjs use the same values, so a term in an equation has the
-//      colour of its field on the canvas. A law takes the colour of the
-//      field on its left side (LAWS[i].c).
+//      COL holds one colour per field: E orange, B blue, + charge pink,
+//      − charge periwinkle, current yellow. E, B, charge and current are
+//      the lib/sci.css math colors (--m2, --m1, --m4, --m5). style.css
+//      (--E, --B, ...) and the \class names in typeset.mjs match, so a term
+//      in an equation has the colour of its field on the canvas. A law
+//      takes the colour of the field on its left side (LAWS[i].c).
 //
 //  EQUATIONS
 //  --------------------------------------------------------------------------
@@ -82,9 +83,13 @@ const ctx=canvas.getContext('2d');
 let CW=100,CH=100,activeEq=0;
 
 // Field colours as hex (for CSS and the legend) and as "r,g,b" (for canvas
-// rgba strings). style.css --E, --B, --Q, --Qn, --J and typeset.mjs C match.
-const COL={E:'#ffa552',B:'#4fd6ea',Q:'#ff6f61',Qn:'#8c9cff',J:'#ffd166',ink:'#eef3fb'};
-const RGB={E:'255,165,82',B:'79,214,234',Q:'255,111,97',Qn:'140,156,255',J:'255,209,102',ink:'238,243,251',dim:'127,145,173'};
+// rgba strings). E = .m2, B = .m1, Q = .m4 and J = .m5 of lib/sci.css.
+// style.css --E, --B, --Q, --Qn, --J and the typeset.mjs classes match.
+const COL={E:'#ff9a62',B:'#62c4ff',Q:'#e889dc',Qn:'#8c9cff',J:'#ffd666',ink:'#eef3fb'};
+const RGB={E:'255,154,98',B:'98,196,255',Q:'232,137,220',Qn:'140,156,255',J:'255,214,102',ink:'238,243,251',dim:'127,145,173'};
+const MONO='ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+// An inline MathJax symbol for a control label (window.MAXWELL_SYM).
+const sym=k=>`<span class="sym">${(window.MAXWELL_SYM||{})[k]||k}</span>`;
 // One record per law: numeral, name, the field colour of its left side,
 // the plain line under the formulas, and the About text in the panel.
 const LAWS=[
@@ -126,7 +131,7 @@ function fitScene(){
 }
 // Canvas font for a label of base size b px. The size follows K, but it is
 // never less than b and never more than 2.4 b.
-function font(b,w='500'){return`${w} ${Math.round(Math.min(b*2,Math.max(b,b*K)))}px "IBM Plex Mono", ui-monospace, monospace`;}
+function font(b,w='500'){return`${w} ${Math.round(Math.min(b*2,Math.max(b,b*K)))}px ${MONO}`;}
 
 // All scene state, grouped by equation, in scene units. Gauss holds the charge
 // list and the Gaussian surface; monopoles hold the dipole pose; Faraday holds
@@ -203,8 +208,8 @@ function buildControls(){
     case 0:
       area.innerHTML=`
         <div class="btn-row">
-          <button class="tog-btn" onclick="addCharge(1)"><span class="sw" style="--sw:${COL.Q}"></span>Add +q</button>
-          <button class="tog-btn" onclick="addCharge(-1)"><span class="sw" style="--sw:${COL.Qn}"></span>Add −q</button>
+          <button class="tog-btn" onclick="addCharge(1)"><span class="sw" style="--sw:${COL.Q}"></span><span>Add +${sym('q')}</span></button>
+          <button class="tog-btn" onclick="addCharge(-1)"><span class="sw" style="--sw:${COL.Qn}"></span><span>Add −${sym('q')}</span></button>
         </div>
         <div class="mag-row"><span class="mag-row-lbl">Surface</span>
           <input type="range" min="30" max="180" value="${STATE.gaussR}" step="5" aria-label="Surface radius" oninput="STATE.gaussR=+this.value;this.nextElementSibling.textContent=this.value;sg(this)">
@@ -225,7 +230,7 @@ function buildControls(){
     // Faraday: set how fast B oscillates and the field region radius.
     case 2:
       area.innerHTML=`
-        <div class="mag-row"><span class="mag-row-lbl">Rate</span>
+        <div class="mag-row"><span class="mag-row-lbl">${sym('dBdt')}</span>
           <input type="range" min="-3" max="3" value="${STATE.faradayRate}" step="0.1" aria-label="Rate" oninput="STATE.faradayRate=+this.value;this.nextElementSibling.textContent=(+this.value).toFixed(1);sg(this)">
           <span class="val">${STATE.faradayRate.toFixed(1)}</span></div>
         <div class="mag-row"><span class="mag-row-lbl">Radius</span>
@@ -237,8 +242,8 @@ function buildControls(){
     case 3:
       area.innerHTML=`
         <div class="btn-row">
-          <button class="tog-btn" onclick="addAmpWire(1)"><span class="sw" style="--sw:${COL.J}"></span>Wire, I out ⊙</button>
-          <button class="tog-btn" onclick="addAmpWire(-1)"><span class="sw" style="--sw:${COL.J}"></span>Wire, I in ⊗</button>
+          <button class="tog-btn" onclick="addAmpWire(1)"><span class="sw" style="--sw:${COL.J}"></span><span>Wire, ${sym('I')} out ⊙</span></button>
+          <button class="tog-btn" onclick="addAmpWire(-1)"><span class="sw" style="--sw:${COL.J}"></span><span>Wire, ${sym('I')} in ⊗</span></button>
         </div>
         <button class="tog-btn quiet" onclick="STATE.ampWires=[];STATE.ampTracers=[]">Clear the wires</button>
         <p class="hint">Drag a wire left or right. The capacitor below has no current in its gap, but its changing E still makes B.</p>`;
@@ -447,13 +452,11 @@ function dashedRing(x,y,r,rgb,alpha){
   ctx.setLineDash([5*T,6*T]);ctx.strokeStyle=`rgba(${rgb},${alpha})`;ctx.lineWidth=1.3*T;
   ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
 }
-// A small caps label at pixel (x,y).
+// A small sentence-case label at pixel (x,y), in the UI sans.
 function label(t,x,y,rgb='238,243,251',alpha=0.5,align='center'){
-  ctx.font=font(10.5);ctx.textAlign=align;ctx.textBaseline='alphabetic';
+  ctx.font=font(11.5).replace(MONO,'Inter, system-ui, sans-serif');ctx.textAlign=align;ctx.textBaseline='alphabetic';
   ctx.fillStyle=`rgba(${rgb},${alpha})`;
-  if('letterSpacing' in ctx)ctx.letterSpacing='2px';
   ctx.fillText(t,x,y);
-  if('letterSpacing' in ctx)ctx.letterSpacing='0px';
 }
 
 // Per-frame draw: clear, paint the background dots, then dispatch to the
@@ -534,13 +537,13 @@ function renderGauss(dt){
     ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
     head(ex,ey,nr*d,nt*d,3.2*T,`rgba(${RGB.ink},0.65)`);
   }
-  label('GAUSSIAN SURFACE',gx,gy-gR-12*T);
+  label('Gaussian surface',gx,gy-gR-12*T);
 
   for(const c of STATE.charges){
     const x=px(c.x),y=py(c.y),r=Math.max(10,QR*K);
     body(x,y,r,c.q>0?RGB.Q:RGB.Qn);sign(x,y,r,c.q>0?'+':'-');
   }
-  setReadout(`<span class="r"><i>Q</i><sub>enc</sub> = <b>${sgn(Qenc)}</b> q</span>`+
+  setReadout(`<span class="r"><i class="m4">Q</i><sub>enc</sub> = <b>${sgn(Qenc)}</b> q</span>`+
     `<span class="r">${STATE.charges.length} charge${STATE.charges.length===1?'':'s'} in the scene</span>`+
     `<span class="note">${Qenc===0?'Net flux through the surface: zero':'Net flux '+(Qenc>0?'outward':'inward')+', Φ = Q<sub>enc</sub>/ε₀'}</span>`);
 }
@@ -587,7 +590,7 @@ function renderMonopoles(dt){
   for(const l of D.lines)flowLine(l,RGB.B,0.8,36);
   ctx.restore();
   dashedRing(dx,dy,DIP_SR*K,RGB.ink,0.45);
-  label('CLOSED SURFACE',dx,dy-DIP_SR*K-12*T);
+  label('Closed surface',dx,dy-DIP_SR*K-12*T);
 
   // The bar magnet, 70 by 24 units: north half coral, south half periwinkle.
   ctx.save();ctx.translate(dx,dy);ctx.rotate(STATE.dipAngle);ctx.scale(K,K);
@@ -597,7 +600,7 @@ function renderMonopoles(dt){
   ctx.shadowBlur=0;shade(0,35,RGB.Q);shade(-35,0,RGB.Qn);ctx.restore();
   ctx.strokeStyle='rgba(255,255,255,0.35)';ctx.lineWidth=1/K;ctx.stroke();
   ctx.shadowBlur=0;
-  ctx.font='600 13px "Space Grotesk", sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='600 13px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(10,12,18,0.85)';ctx.fillText('N',17.5,0.5);ctx.fillText('S',-17.5,0.5);
   ctx.restore();
 
@@ -648,8 +651,8 @@ function renderFaraday(dt){
     }
     ctx.restore();
   }
-  setReadout(`<span class="r"><i>B</i> = <b>${sgn(Bval,2)}</b> ${Bval>=0?'out of the page':'into the page'}</span>`+
-    `<span class="r"><i>∂B/∂t</i> = <b>${sgn(dBdt,2)}</b> &nbsp; |<i>E</i>| at the rim = <b>${Eind.toFixed(2)}</b></span>`+
+  setReadout(`<span class="r"><i class="m1">B</i> = <b>${sgn(Bval,2)}</b> ${Bval>=0?'out of the page':'into the page'}</span>`+
+    `<span class="r">∂<i class="m1">B</i>/∂<i>t</i> = <b>${sgn(dBdt,2)}</b> &nbsp; |<i class="m2">E</i>| at the rim = <b>${Eind.toFixed(2)}</b></span>`+
     `<span class="note">${Math.abs(dBdt)<0.1?'B does not change, so no E is induced':'E turns '+(s>0?'clockwise':'counterclockwise')+', against the change of flux'}</span>`);
 }
 
@@ -738,7 +741,7 @@ function renderAmpere(dt){
       const a=i/8*Math.PI*2+STATE.ampTime*0.35*s*-1;
       head(wx+Math.cos(a)*loopR,wy+Math.sin(a)*loopR,Math.sin(a)*s,-Math.cos(a)*s,4*T,`rgba(${RGB.J},0.8)`);
     }
-    label('AMPERIAN LOOP',wx,wy-loopR-12*T,RGB.J,0.6);
+    label('Amperian loop',wx,wy-loopR-12*T,RGB.J,0.6);
   }
 
   // ── PART 2: displacement current (ε₀ ∂E/∂t term) ──
@@ -779,7 +782,7 @@ function renderAmpere(dt){
     perpGlyph(cx+ra,capY,5*T,s>0,RGB.B,0.9*bA);perpGlyph(cx-ra,capY,5*T,s<0,RGB.B,0.9*bA);
   }
   ctx.restore();
-  label('CAPACITOR',cx,capY-capGap/2-plateH-12*T);
+  label('Capacitor',cx,capY-capGap/2-plateH-12*T);
 
   // Wires on top: a gold body with the direction of I.
   for(const w of STATE.ampWires){
@@ -790,8 +793,8 @@ function renderAmpere(dt){
   }
 
   const Ienc=STATE.ampWires.length?STATE.ampWires[0].I:0;
-  setReadout((STATE.ampWires.length?`<span class="r">loop: <i>I</i><sub>enc</sub> = <b>${sgn(Ienc)}</b> A</span>`:'')+
-    `<span class="r">gap: <i>∂E/∂t</i> = <b>${sgn(dEdt,2)}</b></span>`+
+  setReadout((STATE.ampWires.length?`<span class="r">loop: <i class="m5">I</i><sub>enc</sub> = <b>${sgn(Ienc)}</b> A</span>`:'')+
+    `<span class="r">gap: ∂<i class="m2">E</i>/∂<i>t</i> = <b>${sgn(dEdt,2)}</b></span>`+
     `<span class="note">${Math.abs(dEdt)>0.1?'No charge crosses the gap, but B still turns round it':'E is not changing, so the gap makes no B'}</span>`);
 }
 
@@ -920,7 +923,10 @@ window.snSaver={async enter(opts){
   document.head.appendChild(st);document.documentElement.classList.add('saver');
   // The differential form of each law as an image, from the MathJax SVG.
   const eqImg=(window.MAXWELL_EQ||[]).map(e=>{
-    const svg=e.d.replace(/currentColor/g,COL.ink).replace(/ (role|style|aria-label|focusable)="[^"]*"/g,'');
+    // An SVG image does not see the page CSS, so the .m1 to .m6 fills go
+    // into the SVG as a style element.
+    const fills=[1,2,3,4,5,6].map(i=>`.m${i}{fill:${getComputedStyle(document.documentElement).getPropertyValue('--m'+i).trim()||COL.ink}}`).join('');
+    const svg=e.d.replace(/currentColor/g,COL.ink).replace(/ (role|style|aria-label|focusable)="[^"]*"/g,'').replace(/(<svg[^>]*>)/,`$1<style>${fills}</style>`);
     const m=/viewBox="([^"]*)"/.exec(svg),vb=m?m[1].split(/\s+/).map(Number):[0,0,4,1];
     const img=new Image();img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
     return{img,vb};
@@ -952,15 +958,13 @@ window.snSaver={async enter(opts){
   // The law name and form at the card position, and the plain line at the base.
   function drawCaption(){
     const l=LAWS[activeEq],e=eqImg[activeEq],x=34,em=parseFloat(getComputedStyle(document.documentElement).fontSize)||16;
-    if('letterSpacing' in ctx)ctx.letterSpacing='0.2em';
     ctx.textAlign='left';ctx.textBaseline='top';
-    ctx.font=`500 ${Math.round(0.7*em)}px "IBM Plex Mono", ui-monospace, monospace`;ctx.fillStyle=l.c;
-    ctx.fillText(`${l.num}   ${l.name.toUpperCase()}`,x,26);
-    if('letterSpacing' in ctx)ctx.letterSpacing='0px';
+    ctx.font=`500 ${Math.round(0.8*em)}px Inter, system-ui, sans-serif`;ctx.fillStyle=l.c;
+    ctx.fillText(`${l.num}   ${l.name}`,x,26);
     // MathJax units are 1/1000 em at the card font size, on a shared baseline.
     if(e&&e.img.complete&&e.img.naturalWidth){const k=2.35*em/1000,y0=26+0.7*em+12+1.15*2.35*em;ctx.drawImage(e.img,x,y0+e.vb[1]*k,e.vb[2]*k,e.vb[3]*k);}
     ctx.textBaseline='alphabetic';
-    ctx.font=`italic 400 ${Math.round(1.15*em)}px "Instrument Serif", Georgia, serif`;ctx.fillStyle=`rgba(${RGB.ink},0.72)`;
+    ctx.font=`400 ${Math.round(1.0*em)}px "STIX Two Text", "Times New Roman", serif`;ctx.fillStyle=`rgba(${RGB.ink},0.72)`;
     ctx.fillText(l.line,x,CH-26);
   }
   return{canvas,warmupMs:1500};
