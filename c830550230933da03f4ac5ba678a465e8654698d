@@ -1,0 +1,1 @@
+Correction to the validation lines of this commit: identify reports refs/lantern.jpg as 424x800, not 408x768 (the body was written before the final crop). The other two sizes are right: kettle 600x800, chair 640x780.
