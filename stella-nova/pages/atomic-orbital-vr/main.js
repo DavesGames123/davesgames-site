@@ -34,10 +34,12 @@
 //  draws from opts.seed. A URL that names an orbital (#n=4&l=2&m=1, see
 //  readQNHash in ui.js) wins over the random draw.
 //
-//  SCREENSAVER  window.snSaver (end of file), for lib/screensaver.js
+//  SCREENSAVER  window.snSaver (end of file), for lib/screensaver.js. The
+//  hook sends saverPlate() to opts.label: n, l, m, the subshell, the explicit
+//  radial factor R_nl, E_n, the node counts and the Biot-Savart sum.
 //
 //  grep -n targets: "const LOOKS" | "function pickLook" | "function mulberry"
-//                   "window.snSaver" | "hashchange"
+//                   "window.snSaver" | "hashchange" | "function saverPlate"
 
 // ============================================================================
 import * as THREE from 'three';
@@ -171,6 +173,57 @@ window.addEventListener('hashchange',()=>{
   applyQN(q[0],q[1],q[2]); S.dirty=true;
 });
 
+// Screensaver plate (opts.label) for the orbital on screen. The facts come
+// from physics.js: radialR uses ρ = 2r/n and the generalized Laguerre
+// polynomial L_k^(2l+1)(ρ), k = n-l-1. particleColor uses the phase
+// m·φ - t/(2n²), so E_n = -1/(2n²) hartree = -13.6 eV/n². The angle θ is
+// from the vertical (y) axis of the scene.
+const SUB_LETTERS=['s','p','d','f','g','h'];
+const SUP={'0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹','-':'⁻'};
+const SUBS={'0':'₀','1':'₁','2':'₂','3':'₃','4':'₄','5':'₅','6':'₆','7':'₇','8':'₈','9':'₉'};
+const sup=v=>String(v).split('').map(c=>SUP[c]||c).join('');
+const sub=v=>String(v).split('').map(c=>SUBS[c]||c).join('');
+function fact(k){let r=1;for(let i=2;i<=k;i++)r*=i;return r;}
+function binom(a,b){return b<0||b>a?0:fact(a)/(fact(b)*fact(a-b));}
+// k!·L_k^α(ρ) = Σ_i (-1)^i C(k+α, k-i) (k!/i!) ρ^i, all integer terms.
+function laguerreText(k,alpha){
+  if(k===0) return '1';
+  const terms=[];
+  for(let i=0;i<=k;i++){
+    const c=binom(k+alpha,k-i)*fact(k)/fact(i);
+    const pw=i===0?'':(i===1?'ρ':'ρ'+sup(i));
+    const mag=(c===1&&i>0)?pw:c+pw;
+    terms.push((i%2?' − ':(terms.length?' + ':''))+mag);
+  }
+  const body=terms.join('');
+  return k===1?'('+body+')':'('+body+')/'+fact(k);
+}
+function saverPlate(){
+  const{n,l,m}=S, am=Math.abs(m), k=n-l-1, ms=(m>0?'+':'')+m;
+  const name=n+(SUB_LETTERS[l]||'?');
+  const rhoPart=(l===0?'':(l===1?'ρ':'ρ'+sup(l)))+'e^(−ρ/2)';
+  const lag=k===0?'':' · '+laguerreText(k,2*l+1);
+  const E=-13.6057/(n*n);
+  const mode=['|ψ|²','Re ψ','Im ψ','phase arg ψ'][S.colorMode]||'|ψ|²';
+  return {
+    title:'Hydrogen '+name+' orbital, m = '+ms,
+    sub:'color: '+mode,
+    lines:[
+      '|'+n+', '+l+', '+ms+'⟩ · n = '+n+' (shell) · ℓ = '+l+' ('+(SUB_LETTERS[l]||'?')+') · m = '+ms,
+      'E'+sub(n)+' = −13.6 eV / '+n+'² = '+E.toFixed(2).replace('-','−')+' eV',
+      'Nodes: '+k+' radial (n−ℓ−1), '+l+' angular (ℓ)',
+      'Current: v_φ = ħm / (mₑ r sin θ), so B streams around the axis',
+    ],
+    eq:[
+      'ψ'+sub(n)+sub(l)+(m<0?'₋':'')+sub(am)+' = R'+sub(n)+sub(l)+'(r) · Y'+sub(l)+(m<0?'₋':'')+sub(am)+'(θ,φ) · e^(−iE'+sub(n)+'t/ħ)',
+      'R'+sub(n)+sub(l)+'(r) ∝ '+rhoPart+lag,
+      'ρ = 2r / '+n+'a₀ (a₀ = Bohr radius)',
+      'Y'+sub(l)+(m<0?'₋':'')+sub(am)+' ∝ P'+sub(l)+sup(am)+'(cos θ) e^('+(m<0?'−':'')+'i'+(am===1?'':am)+'φ)',
+      'B(r) = μ₀/4π Σᵢ Jᵢ × (r − rᵢ) / |r − rᵢ|³',
+    ],
+  };
+}
+
 // Screensaver hook for the shell (lib/screensaver.js). It hides the GUI, draws
 // one look from opts.seed, and turns on a slow camera orbit. opts.calm
 // (1 = slowest) scales the orbit, flow and tracer speeds. The shell reloads
@@ -189,6 +242,8 @@ window.snSaver={
     controls.autoRotate=true;
     controls.autoRotateSpeed=0.15+0.6*(1-calm);
     renderer.setClearColor(0x0e1118,1);
+    // One orbital plays for the whole visit, so one plate is enough.
+    if(o&&typeof o.label==='function') o.label(saverPlate());
     return {canvas:document.getElementById('c'),warmupMs:2500};
   }
 };
