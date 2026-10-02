@@ -4,7 +4,7 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Wormhole // Stella Nova</title>
+<title>Wormhole · Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    ELLIS WORMHOLE  ·  page shell
@@ -12,14 +12,17 @@
    Static markup only. main.js renders the geodesic ray tracer into
    <canvas id="c"> and draws the throat cross-section into <canvas id="minimap">.
    Everything else here is overlay: a GPU-load gate, the HUD, the A/B traverse
-   bar, the KaTeX equation panel, and the control row. main.js binds all of it
+   bar, the equation panel, and the control row. main.js binds all of it
    by id and by the global on* handlers it defines on window.
 
    HEAD LOAD ORDER
-     1. KaTeX css + js (CDN, deferred)  renders the metric equations
-     2. style.css                        page stylesheet
+     1. style.css                        page stylesheet
+     2. sci.css (../../lib)               shared science type (STIX Two Text,
+                                          Inter) and math colors .m1 to .m6
      3. render-scale.js (../../lib)       sizes the canvas by pixel budget and fps
-     4. main.js (end of body)            fetches shaders, drives the frame loop
+     4. main.js (end of body)            fetches shaders, drives the frame loop.
+                                          renderEqs() imports lib/sci-math.js and
+                                          typesets the [data-tex] boxes.
 
    LAYOUT  (# marks an element id)
      ┌─────────────────────────────────────────────────────────────────┐
@@ -28,17 +31,16 @@
      │                                                                   │
      │  #eqPanel  metric tensor / throat / stress-energy                 │
      │  #traverseBar   B ◀──── #zoomSlider ────▶ A   #playBtn            │
-     │  #ctrlWrap   Geodesic RK4 Disc Glow Spin · bg modes · K L · Q     │
+     │  #ctrlWrap   Geodesic RK4 Disc Glow Spin · bg modes · k a · Q     │
      └─────────────────────────────────────────────────────────────────┘
 
    CONTROL MODEL
      u_camL sign = which universe holds the camera (A: l>0, B: l<0).
-     K = throat radius, L = flat-throat half-width; both feed the shader.
+     k = throat radius, a = flat-throat half-width; both feed the shader.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- The ray-traced view; lib/render-scale.js sizes it below native resolution for speed. -->
@@ -49,12 +51,12 @@
 <!-- GPU-load gate: shown first; Continue calls dismissWarn(), which reveals the
      controls, traverse bar, equations, and (on desktop) the minimap. -->
 <div class="gpu-warn" id="gpuWarn">
-  <h2>GPU Intensive</h2>
+  <h2>GPU intensive</h2>
   <p>Per-pixel geodesic ray tracing through an Ellis wormhole metric. Drag to look around, scroll or pinch to fly through.</p>
   <button class="dismiss" onclick="dismissWarn()">Continue</button>
 </div>
 
-<div class="hud"><h1>Wormhole</h1><div class="sub" id="hudSub">Ellis Metric · Universe A</div></div>
+<div class="hud"><h1>Wormhole</h1><div class="sub" id="hudSub">Ellis metric · Universe A</div></div>
 <div class="stats"><div id="fps"></div><div id="res"></div><div id="mode"></div></div>
 
 <div class="traverse-bar" id="traverseBar" style="display:none">
@@ -64,16 +66,17 @@
   </div>
   <span class="trav-label trav-a">A</span>
   <button class="trav-play" id="playBtn" onclick="toggleDescend()">&#x25B6;</button>
-  <span class="trav-pos" id="zoomVal">20</span>
+  <span class="trav-sym sci-sym" data-sym="\ell" title="Proper distance from the throat">&#8467;</span>
+  <span class="trav-pos m1" id="zoomVal" title="Proper distance from the throat">20</span>
 </div>
 <div class="hint" id="hint">drag to look · scroll to fly through · arrows to orbit</div>
 
 <div class="eq-panel" id="eqPanel" style="display:none" onclick="if(this.classList.contains('collapsed'))toggleEqPanel()">
   <button class="eq-toggle" id="eqToggleBtn" onclick="event.stopPropagation();toggleEqPanel()" aria-label="Toggle equations">−</button>
   <div class="eq-content">
-    <div class="eq-group"><div class="eq-title">Wormhole Metric Tensor</div><div class="eq-row" id="eq1"></div></div>
-    <div class="eq-group"><div class="eq-title">Throat Geometry</div><div class="eq-row" id="eq2"></div></div>
-    <div class="eq-group"><div class="eq-title">Exotic Matter · Stress-Energy</div><div class="eq-row" id="eq3"></div></div>
+    <div class="eq-group"><div class="eq-title">Wormhole metric tensor</div><div class="eq-row sci-eq" id="eq1" data-tex="g_{\mu\nu} = \begin{pmatrix} -1 &amp; 0 &amp; 0 &amp; 0 \\ 0 &amp; 1 &amp; 0 &amp; 0 \\ 0 &amp; 0 &amp; r^{2} &amp; 0 \\ 0 &amp; 0 &amp; 0 &amp; r^{2}\!\sin^2\!\theta \end{pmatrix}"></div></div>
+    <div class="eq-group"><div class="eq-title">Throat geometry</div><div class="eq-row sci-eq" id="eq2" data-tex="r(\ell) = \sqrt{k^{2} + \bigl[\max(0,\;|\ell| - a)\bigr]^{2}}"></div></div>
+    <div class="eq-group"><div class="eq-title">Exotic matter: stress-energy</div><div class="eq-row sci-eq" id="eq3" data-tex="T^{\mu}{}_{\nu} = \frac{k^{2}}{8\pi\,r^{4}} \begin{pmatrix} -1 &amp; 0 &amp; 0 &amp; 0 \\ 0 &amp; +1 &amp; 0 &amp; 0 \\ 0 &amp; 0 &amp; 0 &amp; 0 \\ 0 &amp; 0 &amp; 0 &amp; 0 \end{pmatrix}"></div></div>
   </div>
   <span class="eq-collapsed-label">Equations</span>
 </div>
@@ -85,21 +88,21 @@
   <div class="ctrl-sep"></div>
   <button class="toggle-btn off mob-hide" id="btnDisc" onclick="toggleDisc()">Disc</button>
   <button class="toggle-btn on" id="btnGlow" onclick="toggleGlow()">Glow</button>
-  <button class="toggle-btn on" id="btnSpin" onclick="toggleSpin()">⟳</button>
+  <button class="toggle-btn on" id="btnSpin" onclick="toggleSpin()">Spin</button>
   <div class="ctrl-sep"></div>
-  <button class="toggle-btn on" id="bgStars" onclick="setBg(0)">★</button>
+  <button class="toggle-btn on" id="bgStars" onclick="setBg(0)">Stars</button>
   <button class="toggle-btn" id="bgGrid" onclick="setBg(1)">Grid</button>
   <button class="toggle-btn" id="bgUV" onclick="setBg(2)">UV</button>
   <button class="toggle-btn" id="bgNeb" onclick="setBg(3)">Neb</button>
   <button class="toggle-btn" id="bgRings" onclick="setBg(4)">Ring</button>
   <div class="ctrl-sep"></div>
-  <span class="ctrl-label">K</span>
+  <span class="ctrl-group"><span class="ctrl-label" title="Throat radius k"><span class="sci-sym m3" data-sym="k">k</span></span>
   <input type="range" id="throatSlider" min="0.2" max="4.0" value="1.5" step="0.1">
-  <span class="ctrl-val" id="throatVal">1.5</span>
+  <span class="ctrl-val" id="throatVal">1.5</span></span>
   <div class="ctrl-sep"></div>
-  <span class="ctrl-label">L</span>
+  <span class="ctrl-group"><span class="ctrl-label" title="Flat-throat half-width a"><span class="sci-sym m4" data-sym="a">a</span></span>
   <input type="range" id="lengthSlider" min="0.0" max="5.0" value="0.5" step="0.1">
-  <span class="ctrl-val" id="lengthVal">0.5</span>
+  <span class="ctrl-val" id="lengthVal">0.5</span></span>
   <div class="ctrl-sep"></div>
   <button class="toggle-btn mob-hide" id="btnQLow" onclick="setQuality(0)">Lo</button>
   <button class="toggle-btn on mob-hide" id="btnQMed" onclick="setQuality(1)">Med</button>

@@ -39,7 +39,7 @@
 //      resize ............... "RenderScale.create" pixel budget + fps control
 //      minimap .............. "function drawMinimap" throat cross-section canvas
 //      frame loop ........... "function frame"     camera basis + uniforms + draw
-//      equations ............ "function renderEqs" KaTeX metric / throat / T
+//      equations ............ "function renderEqs" MathJax metric / throat / T
 //      screensaver .......... "window.snSaver"     hook for lib/screensaver.js
 // ============================================================================
 (async () => {
@@ -324,7 +324,7 @@ function frame(){
   var escR=escMul*Math.max(scaleR,1.0);
   var universe=camL>=0?'Universe A':'Universe B';
   document.getElementById('mode').textContent=(useGeodesic?(useRK4?'RK4':'Euler'):'Straight')+' · '+universe;
-  document.getElementById('hudSub').textContent='Ellis Metric · '+universe;
+  document.getElementById('hudSub').textContent='Ellis metric · '+universe;
   if(saverLabel&&universe!==saverUniverse){saverUniverse=universe;showSaverLabel();}
 
   // Push all camera and wormhole state into the shader, then draw one quad.
@@ -347,35 +347,18 @@ function frame(){
 if(window.self!==window.top)document.body.classList.add('in-frame');
 frame();
 
-// Render the three metric equations with KaTeX once it has loaded (deferred
-// script); retry until it is available. Colours key symbols to the controls.
+// The [data-tex] boxes in index.html hold the three equations. lib/sci-math.js
+// typesets them as MathJax SVG. Each quantity has one math color class
+// (lib/sci.css), the same on the control that sets it:
+//   \ell proper distance -> m1 (traverse bar value), r areal radius -> m2,
+//   k throat radius -> m3 (K slider), a flat half-width -> m4 (L slider),
+//   g_{\mu\nu} metric -> m5, T^{\mu}{}_{\nu} stress-energy -> m6.
+var EQ_RULES=[['\\ell','m1'],['r','m2'],['k','m3'],['a','m4'],['g_{\\mu\\nu}','m5'],['T^{\\mu}{}_{\\nu}','m6']];
 function renderEqs(){
-  if(typeof katex==='undefined'){setTimeout(renderEqs,100);return;}
-  var L='#64dce0',K='#ff9860',A='#c896ff',R='#96c8ff',T='#ff6080',G='#90e090';
-  katex.render(
-    '\\textcolor{'+R+'}{g_{\\mu\\nu}} = \\begin{pmatrix}'
-    +' \\textcolor{'+T+'}{-1} & 0 & 0 & 0 \\\\'
-    +' 0 & 1 & 0 & 0 \\\\'
-    +' 0 & 0 & \\textcolor{'+K+'}{r}^{\\,2} & 0 \\\\'
-    +' 0 & 0 & 0 & \\textcolor{'+K+'}{r}^{\\,2}\\!\\sin^2\\!\\theta'
-    +' \\end{pmatrix}',
-    document.getElementById('eq1'),{throwOnError:false}
-  );
-  katex.render(
-    '\\textcolor{'+K+'}{r}(\\textcolor{'+L+'}{\\ell})'
-    +' = \\sqrt{\\textcolor{'+K+'}{k}^{\\,2} + \\bigl[\\max\\!(0,\\;|\\textcolor{'+L+'}{\\ell}| - \\textcolor{'+A+'}{a})\\bigr]^{2}}',
-    document.getElementById('eq2'),{throwOnError:false}
-  );
-  katex.render(
-    '\\textcolor{'+T+'}{T^{\\mu}{}_{\\nu}} = \\frac{\\textcolor{'+K+'}{k}^{\\,2}}{8\\pi\\,\\textcolor{'+K+'}{r}^{\\,4}}'
-    +' \\begin{pmatrix}'
-    +' \\textcolor{'+T+'}{-1} & 0 & 0 & 0 \\\\'
-    +' 0 & \\textcolor{'+G+'}{+1} & 0 & 0 \\\\'
-    +' 0 & 0 & 0 & 0 \\\\'
-    +' 0 & 0 & 0 & 0'
-    +' \\end{pmatrix}',
-    document.getElementById('eq3'),{throwOnError:false}
-  );
+  import(new URL('../../lib/sci-math.js',document.baseURI).href).then(function(m){
+    m.typesetAll(document.getElementById('eqPanel'),EQ_RULES);
+    document.querySelectorAll('[data-sym]').forEach(function(el){m.typeset(el,el.dataset.sym,{display:false,rules:EQ_RULES});});
+  });
 }
 renderEqs();
 
