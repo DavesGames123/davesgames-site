@@ -53,6 +53,7 @@
 //      main loop ............ "main loop"          view dispatch + error trap
 //      headset .............. "headset (VR / AR)"  lib/xr-view.js on vortex, flow3d
 //      screensaver .......... "window.snSaver"     shell saver hook, ns-vortex only
+//      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d, flow3d, wave
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -716,9 +717,10 @@ function bgWaterfall(x0,y0,w,h,T,tb){ plotBox(x0,y0,w,h); const img=new ImageDat
 // Render the Burgers view: step the solver at fixed dt while playing, then lay out
 // the profile, the space–time map, and the slope-vs-inviscid-law plot (with a
 // narrow single-column fallback), and fill the readout.
+// Advance in fixed h sub-steps up to tEnd, recording history and waterfall rows.
+function bgAdvance(dt){ if(BG.playing){ let adv=dt*BG.spd*0.45; const h=0.002; while(adv>0&&BG.t<BG.tEnd){ BG.step(h); adv-=h; if(BG.t-BG.hist[BG.hist.length-1].t>0.01) BG.record(); bgSnap(); } if(BG.t>=BG.tEnd){ BG.playing=false; $('b-play').textContent='play'; } } }
 function drawBurgers(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRect(0,0,W,H);
-  // Advance in fixed h sub-steps up to tEnd, recording history and waterfall rows.
-  if(BG.playing){ let adv=dt*BG.spd*0.45; const h=0.002; while(adv>0&&BG.t<BG.tEnd){ BG.step(h); adv-=h; if(BG.t-BG.hist[BG.hist.length-1].t>0.01) BG.record(); bgSnap(); } if(BG.t>=BG.tEnd){ BG.playing=false; $('b-play').textContent='play'; } }
+  bgAdvance(dt);
   BT.sync(); const fr=BT.current(); const U=fr.u, T=fr.t; const tb=1/Math.max(BG.q0,1e-9);
   const hProf=R`$\partial_t u+u\,\partial_x u=\nu\,\partial_{xx}u$ &nbsp; with $\nu=$`+BG.nu.toFixed(4)+R`, $t=$`+T.toFixed(2)+R`. &nbsp; Each point of the profile moves to the right at its own height $u$ (small arrows): crests overtake troughs, so the front between them steepens. Viscosity pulls the front back toward a smooth ramp. The red mark is the steepest point.`;
   const hWF=R`Space–time: colour is $u(x,t)$, time runs upward. With $\nu=0$, $u$ is constant along the white characteristics $x=\xi+u_0(\xi)\,t$, so the colour bands would follow them exactly and collide at $t_b=1/\max(-u_0')=$`+tb.toFixed(2)+R`. With $\nu>0$ the bands merge into one sharp line instead — the viscous shock — and nothing diverges.`;
@@ -901,6 +903,7 @@ function loop(now){
 // active view's draw function, and sync the scrubber.
 function loopBody(now){
   const dt=Math.min(0.05,(now-last)/1000); last=now;
+  if(SV){ SV.draw(dt); return; }
   if(!loopErr){ $('status').textContent = ({wave:WV.playing,vortex:VX.playing,burgers:BG.playing,flow2d:F2.playing,flow3d:F3.playing}[VIEW]??true) ? 'running' : 'paused'; $('status').classList.toggle('paused', $('status').textContent==='paused'); }
   if(VIEW==='equations') drawEquations(false);
   else if(VIEW==='burgers') drawBurgers(dt);
@@ -988,4 +991,52 @@ if (FIXED === 'vortex') window.snSaver = { enter(opts) {
   vxSeek(0); VX.playing = true; resize();
   const hold = () => { if (VX.u >= cap) VX.playing = false; requestAnimationFrame(hold); }; hold();
   return { canvas: c3d, warmupMs: 1500 };
+} };
+
+/* ───────── screensaver autopilots ───────── */
+// Shell screensaver hooks (lib/screensaver.js) for the other pinned views.
+// enter() hides the topbar, both panels, the scrubber and the KaTeX labels,
+// makes #stage fill the window and calls resize(). Then loopBody calls
+// SV.draw(dt) in place of the view's own draw function. Each view shows a
+// cycle of states, about three in one dwell. A fade to the background colour
+// in the canvas hides each reset, so the recording gets no hard cut. opts.seed
+// picks the first state and every random parameter.
+let SV = null;
+// Seeded generator (mulberry32) for every saver choice.
+function svRng(seed){ let a=(seed>>>0)||1; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; }; }
+// Run f with Math.random replaced by rng (the random initial fields use Math.random).
+function svSeeded(rng,f){ const r=Math.random; Math.random=rng; try{ f(); } finally{ Math.random=r; } }
+// State clock: fade in, show for hold s, fade out, call next(), fade in again.
+// The returned function takes dt and gives the visibility k in 0..1.
+function svClock(hold,fade,next){ let ph='in', t=0, k=0; return dt=>{ t+=dt;
+  if(ph==='in'){ k=Math.min(1,t/fade); if(k>=1){ ph='show'; t=0; } }
+  else if(ph==='show'){ if(t>=hold){ ph='out'; t=0; } }
+  else { k=Math.max(0,1-t/fade); if(k<=0){ next(); ph='in'; t=0; } }
+  return k; }; }
+// Make the 2D stage opaque (background under the drawing) and darken it by 1 - k.
+function svFinish(k){ const W=stage.clientWidth, H=stage.clientHeight; ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.globalCompositeOperation='destination-over'; ctx.fillStyle=COL.bg; ctx.fillRect(0,0,W,H); ctx.globalCompositeOperation='source-over';
+  if(k<1){ ctx.fillStyle=`rgba(10,8,16,${(1-k).toFixed(3)})`; ctx.fillRect(0,0,W,H); } ctx.restore(); }
+// One autopilot per view: (calm, show s per state, fade s, rng) -> { draw(dt) }.
+const SV_VIEWS = {
+  // Burgers: one run from t = 0 to tEnd per state, over most of the show time,
+  // then the final shock holds. Each state takes the next initial profile and
+  // a new viscosity. Full width: the profile above, the space-time map below.
+  burgers(calm, show, fade, rng){
+    const ics=['sine','bump','random']; let i=Math.floor(rng()*3);
+    const next=()=>{ i=(i+1)%3; BG.ic=ics[i]; BG.nu=Math.pow(10,-2.1+0.7*rng()); bgReset(); BG.spd=BG.tEnd/(0.45*show*(0.6+0.3*calm)); };
+    i=(i+2)%3; next(); const clock=svClock(show,fade,next);
+    return { draw(dt){ frameNo++; const k=clock(dt); const W=stage.clientWidth, H=stage.clientHeight; ctx.clearRect(0,0,W,H); bgAdvance(dt);
+      BT.sync(); const fr=BT.current(), tb=1/Math.max(BG.q0,1e-9), m=Math.round(Math.max(16,Math.min(W,H)*0.05)), ph=(H-3*m)*0.4;
+      bgProfile(m,m,W-2*m,ph,fr.u,fr.t,tb); bgWaterfall(m,2*m+ph,W-2*m,H-3*m-ph,fr.t,tb); svFinish(k); } };
+  },
+};
+if (SV_VIEWS[FIXED]) window.snSaver = { enter(opts) {
+  const calm = Math.max(0, Math.min(1, +opts.calm || 0)), secs = Math.max(20, +opts.seconds || 60), fade = 1.6;
+  const st = document.createElement('style');
+  st.textContent = 'html.saver .topbar,html.saver #qp,html.saver #mp,html.saver #stage-scrub,html.saver #stage-overlay,html.saver #stage-caption,html.saver .grid-bg{display:none!important}html.saver #stage{top:0!important;left:0!important;right:0!important;bottom:0!important;transition:none}html.saver #stage canvas{cursor:none}';
+  document.head.appendChild(st); document.documentElement.classList.add('saver'); document.body.classList.add('qp-collapsed', 'mp-collapsed');
+  SCRUB[FIXED] = null; resize();
+  SV = SV_VIEWS[FIXED](calm, Math.max(6, secs / 3 - 2 * fade), fade, svRng(opts.seed || 1));
+  return { canvas: FIXED === 'flow3d' ? c3d : c2d, warmupMs: 2000 };
 } };
