@@ -19,6 +19,7 @@
 //    response chart ... "function refreshCurve"
 //    mode names ....... "function modeName"
 //    labels ........... "function labels"
+//    equations ........ "function setEq"      MathJax SVG, CP_RULES colors
 //    layout ........... "function clearRect"
 //    loop ............. "function frame"
 //    controls ......... "function buildUI"
@@ -27,6 +28,15 @@
 import { makeSim } from './sim.js';
 import { createRenderer } from './render.js';
 import { makeCurve } from './curve.js';
+import { typeset, typesetAll } from '../../lib/sci-math.js';
+
+// Math colors (lib/sci.css): displacement w m1, flexural rigidity D, D_x,
+// D_y m2, twist rigidity H m3, density rho m4, thickness h m5, angular
+// frequency omega, omega_n and the drive frequency f m6. phi, F, zeta, E,
+// nu and g keep the default color. The slider symbols ([data-tex] in
+// #panel) use the same rules.
+const CP_RULES = [['f', 'm6'], ['w', 'm1'], ['D_x', 'm2'], ['D_y', 'm2'], ['D', 'm2'], ['H', 'm3'], ['\\rho', 'm4'], ['h', 'm5'], ['\\omega_n', 'm6'], ['\\omega', 'm6']];
+typesetAll(document.getElementById('panel'), CP_RULES).catch(err => console.error('[math]', err));
 
 const CP = window.CPlates;
 const $ = id => document.getElementById(id);
@@ -238,17 +248,35 @@ function modeName(m) {
 // ---------------------------------------------------------------- labels
 const fmtHz = f => f >= 1000 ? (f / 1000).toFixed(2) + ' kHz' : f.toFixed(f < 100 ? 1 : 0) + ' Hz';
 let lastLabel = 0, lastSaverLabel = '';
+// plain: Unicode lines for the saver plate. Otherwise TeX for #eqPlate and
+// #eqD (MathJax SVG through setEq).
 function eqText(plain) {
   const c = CP.stiffness(st.material, st.t / 1000), m = CP.MATERIALS[st.material];
   const t = st.t.toFixed(1) + ' mm';
   if (c.iso) {
     return plain ? ['D ∇⁴w = ρh ω² w', `D = Eh³/12(1−ν²) = ${c.Dref.toFixed(2)} N·m`, `${m.name} ${t}: E ${m.E} GPa, ρ ${m.rho} kg/m³, ν ${m.nu}`]
-      : { plate: 'D ∇⁴w = ρh ω² w', d: `D = Eh³ ⁄ 12(1 − ν²) = ${c.Dref.toFixed(2)} N·m · ${m.name} ${t}` };
+      : { plate: String.raw`D\,\nabla^4 w=\rho h\,\omega^2 w`,
+        d: String.raw`D=\frac{E h^3}{12(1-\nu^2)}=${c.Dref.toFixed(2)}\ \text{N·m}`, note: `${m.name} ${t}` };
   }
   const H = c.D12 + 2 * c.D66;
   return plain ? ['Dₓ wₓₓₓₓ + 2H wₓₓᵧᵧ + D_y wᵧᵧᵧᵧ = ρh ω² w', `D_y ${c.DL.toFixed(2)}, Dₓ ${c.DR.toFixed(2)}, H ${H.toFixed(2)} N·m`, `${m.name} ${t}, grain along the body`]
-    : { plate: 'D<sub>x</sub> ∂⁴<sub>x</sub>w + 2H ∂²<sub>x</sub>∂²<sub>y</sub>w + D<sub>y</sub> ∂⁴<sub>y</sub>w = ρh ω² w',
-      d: `D<sub>y</sub> ${c.DL.toFixed(2)} · D<sub>x</sub> ${c.DR.toFixed(2)} · H ${H.toFixed(2)} N·m · ${m.name} ${t}${st.arch && !c.iso ? ', arched' : ''}` };
+    : { plate: String.raw`D_x\,\partial_x^4 w+2H\,\partial_x^2\partial_y^2 w+D_y\,\partial_y^4 w=\rho h\,\omega^2 w`,
+      d: String.raw`D_y=${c.DL.toFixed(2)},\ D_x=${c.DR.toFixed(2)},\ H=${H.toFixed(2)}\ \text{N·m}`,
+      note: `${m.name} ${t}${st.arch && !c.iso ? ', arched' : ''}` };
+}
+// The driven response and the lift condition do not change: typeset once.
+let eqStatic = null;
+function staticEqs() {
+  return eqStatic || (eqStatic = Promise.all([
+    setEq('eqResp', String.raw`w(\mathbf{x})=\sum_n \frac{\varphi_n(\mathbf{x})\,\varphi_n(\mathbf{x}_d)\,F}{\omega_n^2-\omega^2+2i\zeta\,\omega_n\,\omega}`),
+    setEq('eqLift', String.raw`\omega^2\,|w|>g`, false)]));
+}
+// Typeset tex into #id only when it changed (labels() runs every 120 ms).
+// Resolves when the box is up to date.
+function setEq(id, tex, display = true) {
+  const el = $(id);
+  if (el.dataset.tex === tex) return Promise.resolve();
+  return typeset(el, tex, { display, rules: CP_RULES });
 }
 function labels(force) {
   if (!cur) return;
@@ -273,8 +301,10 @@ function labels(force) {
   $('dModeT').textContent = (nm.on ? name.title : $('cMode').textContent) + ' · ' + fmtHz(st.f);
   $('freqV').textContent = fmtHz(st.f);
   const E = eqText(false);
-  $('eqPlate').innerHTML = E.plate; $('eqD').innerHTML = E.d;
-  $('eqPhone').innerHTML = $('eq').innerHTML;
+  $('eqNote').textContent = E.note;
+  // The phone sheet shows a copy of #eq, made after the boxes are typeset.
+  if ($('eqPlate').dataset.tex !== E.plate || $('eqD').dataset.tex !== E.d)
+    Promise.all([staticEqs(), setEq('eqPlate', E.plate), setEq('eqD', E.d)]).then(() => { $('eqPhone').innerHTML = $('eq').innerHTML; });
   if (saver && saver.label) {
     const sub = nm.on ? `${name.title}${name.tag ? ' · ' + name.tag : ''} · ${fmtHz(cur.sim.freq[nm.m])}` : `sweeping · ${fmtHz(st.f)}`;
     const key = S.name + sub;

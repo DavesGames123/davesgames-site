@@ -19,7 +19,7 @@
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
-     2. fonts, style.css
+     2. style.css, then lib/sci.css (fonts, math colors .m1 to .m6)
    Scripts at end of body:
      plates.js   classic: outlines, holes, braces, materials (self.CPlates)
      main.js     module: imports sim.js, render.js, curve.js; starts the
@@ -46,17 +46,15 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="A Chladni plate: drive a square, a disc, a guitar top or a violin plate, and watch sand gather on the nodal lines of each resonance. Real Kirchhoff plate modes, luthier tap-tone modes 1, 2 and 5.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>Stella Nova</div>
-  <div class="pagetitle">Chladni Plate</div>
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Chladni plate</div>
   <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
 </div>
 
@@ -70,11 +68,12 @@
   </section>
   <section id="eq">
     <div class="eq-h">Kirchhoff plate</div>
-    <div class="eq-r" id="eqPlate"></div>
-    <div class="eq-s" id="eqD"></div>
+    <div class="eq-r sci-eq" id="eqPlate"></div>
+    <div class="eq-r sci-eq eq-d" id="eqD"></div>
+    <div class="eq-s" id="eqNote"></div>
     <div class="eq-h">Driven response</div>
-    <div class="eq-r" id="eqResp">w(<b>x</b>) = Σ<sub>n</sub> φ<sub>n</sub>(<b>x</b>) φ<sub>n</sub>(<b>x</b><sub>d</sub>) F ⁄ (ω<sub>n</sub>² − ω² + 2iζω<sub>n</sub>ω)</div>
-    <div class="eq-s">sand lifts where ω²|w| &gt; g</div>
+    <div class="eq-r sci-eq" id="eqResp"></div>
+    <div class="eq-s">Sand lifts where <span class="sci-sym" id="eqLift"></span></div>
   </section>
   <section id="resp">
     <div class="r-head"><span>Frequency response</span><span class="r-dim">peak acceleration on the plate · drag to tune</span></div>
@@ -103,23 +102,23 @@
   <p class="note" id="shapeNote"></p>
 
   <div class="sec-label">Drive</div>
-  <div class="row"><label for="freq">Frequency</label><input type="range" id="freq" min="0" max="1000" step="1" value="300"><span class="val" id="freqV"></span></div>
+  <div class="row"><label for="freq"><span class="sci-sym" data-tex="f" data-inline></span> <span class="w">drive frequency</span></label><input type="range" id="freq" min="0" max="1000" step="1" value="300"><span class="val" id="freqV"></span></div>
   <div class="grid3">
-    <button id="prev" type="button">◀ Mode</button>
+    <button id="prev" type="button">Previous</button>
     <button id="sweep" type="button" class="tog">Sweep</button>
-    <button id="next" type="button">Mode ▶</button>
+    <button id="next" type="button">Next</button>
   </div>
-  <div class="row"><label for="damp">Damping</label><input type="range" id="damp" min="0" max="1000" step="1" value="420"><span class="val" id="dampV"></span></div>
-  <div class="row"><label for="drive">Drive</label><input type="range" id="drive" min="0" max="1000" step="1" value="500"><span class="val" id="driveV"></span></div>
+  <div class="row"><label for="damp"><span class="sci-sym" data-tex="\zeta" data-inline></span> <span class="w">damping</span></label><input type="range" id="damp" min="0" max="1000" step="1" value="420"><span class="val" id="dampV"></span></div>
+  <div class="row"><label for="drive"><span class="sci-sym" data-tex="F" data-inline></span> <span class="w">drive force</span></label><input type="range" id="drive" min="0" max="1000" step="1" value="500"><span class="val" id="driveV"></span></div>
   <p class="note">Tap the plate to move the drive point. A mode with a node at the drive point does not ring.</p>
 
   <div class="sec-label">Material</div>
   <div class="grid3" id="mats"></div>
-  <div class="row"><label for="thick">Thickness</label><input type="range" id="thick" min="5" max="60" step="1" value="15"><span class="val" id="thickV"></span></div>
+  <div class="row"><label for="thick"><span class="sci-sym" data-tex="h" data-inline></span> <span class="w">thickness</span></label><input type="range" id="thick" min="5" max="60" step="1" value="15"><span class="val" id="thickV"></span></div>
   <p class="note" id="matNote"></p>
 
   <div class="sec-label">Sand and view</div>
-  <div class="row"><label for="sand">Sand</label><input type="range" id="sand" min="10" max="200" step="5" value="70"><span class="val" id="sandV"></span></div>
+  <div class="row"><label for="sand">Sand grains</label><input type="range" id="sand" min="10" max="200" step="5" value="70"><span class="val" id="sandV"></span></div>
   <div class="grid3">
     <button id="reset" type="button">Reset sand</button>
     <button id="motion" type="button" class="tog">Motion</button>
