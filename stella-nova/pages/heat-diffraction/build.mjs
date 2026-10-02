@@ -446,11 +446,35 @@ const frag = ([name, , , , body]) =>
 const pack = HELPERS + '\n// ── the 60 heat operators ────────────────────────────────────────────────────\n' +
   CELLS.map(frag).join('\n\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// E is the Energy generator (0…1.6). warp samples the photo at uv + d.
+// hazeD: h = smoothstep(0, 1, y),
+//   dₓ = h·(0.6 sin(9sy + 3t) + 0.4 sin(15sy − 2t) + 0.7 fbm(4s·uv − 1.6t)),
+//   d_y = h·0.3 fbm(4s·uv + (3, 0) − 1.6t)
+const HAZE = ['haze(s): dₓ = h(0.6 sin(9sy + 3t) + 0.4 sin(15sy − 2t) + 0.7 fbm),  h = smoothstep(0, 1, y)', 'd_y = 0.3·h·fbm,  fbm at (4s·x, 4s·y − 1.6t)'];
+const WARP = 'color = photo(uv + d)';
+const CHROMA = 'R, G, B = photo(uv + d(1 − c)), photo(uv + d), photo(uv + d(1 + c))';
+const SAVER_EQ = {
+  hot_column: ['d = haze(1.2)·(0.02…0.08)·E·m,  m = e^(−(x − ½)²/w),  w = 0.02…0.1', ...HAZE, WARP],
+  twin_columns: ['m = e^(−(x − ½ − g)²/0.02) + e^(−(x − ½ + g)²/0.02),  g = 0.15…0.3', 'd = haze(1.3)·(0.02…0.07)·E·m', ...HAZE, WARP],
+  candle_heat: ['d = haze(1.6)·(0.02…0.08)·E·m,  m = e^(−(x − ½)²/w),  w = 0.006…0.03', ...HAZE, WARP],
+  chimney_heat: ['m = e^(−(x − ½)²/w),  w = (0.02…0.08)·(0.4 + y)  (widens)', 'd = haze(1.1)·(0.02…0.07)·E·m', ...HAZE, WARP],
+  plume_chroma: ['d = 0.04·haze(1.2)·E·m,  m = e^(−(x − ½)²/w),  w = 0.02…0.08', ...HAZE, CHROMA + ',  c = 0.1…0.5'],
+  plume_lean: ['m = e^(−(x − cₓ)²/w),  cₓ = ½ + (0…0.25)·y  (lean)', 'd = 0.04·haze(1.2)·E·m', ...HAZE, WARP],
+  hot_core: ['v = uv − c,  bloom = e^(−|v|²/b),  b = 0.05…0.2', 'd = −v·bloom·(0.1…0.4)·E  (a magnifying lens)', 'color = photo(uv + d) + (0.1, 0.04, 0)·0.3·bloom·E'],
+  core_chroma: ['v = uv − (½, ½),  bloom = e^(−|v|²/b),  b = 0.05…0.25', 'd = −0.2·v·bloom·E', CHROMA + ',  c = 0.1…0.6'],
+  core_blur: ['m = smoothstep(r₀, 0.6, |uv − ½|),  r₀ = 0.1…0.4', 'blur radius = (1…6)·m·E/512,  8 golden-angle taps', 'color = mix(photo(uv), blur, m)'],
+  twin_cores: ['vᵢ = uv − (½ ∓ g, ½),  g = 0.15…0.3', 'd = −0.15·E·Σ vᵢ·e^(−|vᵢ|²/0.05)', WARP],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
   uniform_bytes: 96,
-  cells: CELLS.map(([name, family, species, knobs]) => ({ name, family, species, knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'fs_' + name })),
+  cells: CELLS.map(([name, family, species, knobs]) => ({ name, family, species, knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'fs_' + name, ...(SAVER_EQ[name] ? { eq: SAVER_EQ[name] } : {}) })),
   gens: [
     { id: 'energy', title: 'Energy · heat level', fn: 'flat', period: 10, amp: 0.35, bias: 0.55, phase: 0,
       map: 'y => 1.6 * y', unit: "v => (v * 100).toFixed(0) + '%'" },
@@ -562,6 +586,7 @@ const pageJs = `// =============================================================
 //  SCREENSAVER: saver(t, opts) runs each time the table-engine saver puts a
 //  cell on (behind its fade). It picks the next photo from SAVER_PHOTOS in
 //  an order from opts.seed, through the same select() as a thumbnail click.
+//  saverLabel(t, info) adds the photo under the heat to the saver plate.
 // ============================================================================
 const SAVER_PHOTOS = ['astronaut', 'chelsea', 'coffee', 'camera', 'coins', 'moon', 'rocket', 'hubble_deep_field', 'motorcycle_left', 'horse'];
 export const PAGE = {
@@ -592,8 +617,10 @@ export const PAGE = {
     const ids = SAVER_PHOTOS.filter(id => this.photos[id]); if (!ids.length) return;
     this.saverN = (this.saverN ?? (opts.seed >>> 0)) + 1;
     const id = ids[this.saverN % ids.length], btns = this.ctx.$('thumbs').querySelectorAll('button');
+    this.saverPhoto = id;
     this.select(id, btns[Object.keys(this.photos).indexOf(id)]);
   },
+  saverLabel(t, info) { if (this.saverPhoto) info.lines.push('scene  ' + this.saverPhoto.replace(/_/g, ' ')); return info; },
   select(id, btn) {
     this.ctx.$('thumbs').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
     const img = this.photos[id]; if (!img) return;

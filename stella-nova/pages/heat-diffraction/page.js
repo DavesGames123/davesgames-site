@@ -10,6 +10,7 @@
 //  SCREENSAVER: saver(t, opts) runs each time the table-engine saver puts a
 //  cell on (behind its fade). It picks the next photo from SAVER_PHOTOS in
 //  an order from opts.seed, through the same select() as a thumbnail click.
+//  saverLabel(t, info) adds the photo under the heat to the saver plate.
 // ============================================================================
 const SAVER_PHOTOS = ['astronaut', 'chelsea', 'coffee', 'camera', 'coins', 'moon', 'rocket', 'hubble_deep_field', 'motorcycle_left', 'horse'];
 export const PAGE = {
@@ -40,8 +41,10 @@ export const PAGE = {
     const ids = SAVER_PHOTOS.filter(id => this.photos[id]); if (!ids.length) return;
     this.saverN = (this.saverN ?? (opts.seed >>> 0)) + 1;
     const id = ids[this.saverN % ids.length], btns = this.ctx.$('thumbs').querySelectorAll('button');
+    this.saverPhoto = id;
     this.select(id, btns[Object.keys(this.photos).indexOf(id)]);
   },
+  saverLabel(t, info) { if (this.saverPhoto) info.lines.push('scene  ' + this.saverPhoto.replace(/_/g, ' ')); return info; },
   select(id, btn) {
     this.ctx.$('thumbs').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
     const img = this.photos[id]; if (!img) return;
