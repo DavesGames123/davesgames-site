@@ -294,8 +294,12 @@
       g.fillStyle = 'rgb(' + (_c[0] * 255 | 0) + ',' + (_c[1] * 255 | 0) + ',' + (_c[2] * 255 | 0) + ')';
       g.fillRect(x, 0, 1, H);
     }
-    document.getElementById('lgTitle').textContent =
-      G.color === 'accmag' ? '|∂²u/∂t²| = |c²∇²u|' : G.color === 'accsgn' ? '∂²u/∂t²  (signed)' : 'height u';
+    // A word in plain text, then the quantity as MathJax SVG (equations.js).
+    const lg = G.color === 'accmag' ? ['Acceleration ', String.raw`\left|\partial^2 u/\partial t^2\right|`]
+      : G.color === 'accsgn' ? ['Signed acceleration ', String.raw`\partial^2 u/\partial t^2`] : ['Height ', 'u'];
+    const lgEl = document.getElementById('lgTitle'), sym = document.createElement('span');
+    sym.className = 'sci-sym'; lgEl.replaceChildren(lg[0], sym);
+    if (window.WM_MATH) WM_MATH.typeset(sym, lg[1]); else sym.textContent = lg[1];
   }
   const num = v => (Math.abs(v) >= 1000 || (Math.abs(v) < 0.01 && v !== 0)) ? v.toExponential(2) : v.toPrecision(3);
   function refreshLegendScale() {
@@ -488,7 +492,7 @@
     const m2Btn = document.getElementById('mode2Btn');
     m2Btn.addEventListener('click', () => {
       G.two = !G.two;
-      m2Btn.textContent = G.two ? '− REMOVE SECOND MODE' : '+ ADD SECOND MODE';
+      m2Btn.textContent = G.two ? 'Remove second mode' : 'Add second mode';
       m2Btn.classList.toggle('on', G.two);
       document.getElementById('mode2Box').classList.toggle('off', !G.two);
       applyModes();
@@ -503,7 +507,7 @@
     const dockPlay = document.getElementById('dockPlay');
     const setPaused = p => {
       G.paused = p;
-      pauseBtn.textContent = p ? '▶ PLAY' : '❚❚ PAUSE'; pauseBtn.classList.toggle('on', p);
+      pauseBtn.textContent = p ? 'Play' : 'Pause'; pauseBtn.classList.toggle('on', p);
       dockPlay.textContent = p ? '▶' : '❚❚'; dockPlay.classList.toggle('on', p);
       dockPlay.setAttribute('aria-label', p ? 'Play' : 'Pause');
     };
@@ -527,7 +531,7 @@
     const nodalBtn = document.getElementById('nodalBtn');
     nodalBtn.addEventListener('click', () => {
       G.nodal = !G.nodal;
-      nodalBtn.textContent = G.nodal ? 'NODAL LINES · ON' : 'NODAL LINES · OFF';
+      nodalBtn.textContent = G.nodal ? 'Nodal lines on' : 'Nodal lines off';
       nodalBtn.classList.toggle('on', G.nodal);
       if (nodal) nodal.visible = G.nodal;
     });
