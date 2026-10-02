@@ -498,24 +498,52 @@ function frame(t){requestAnimationFrame(frame);var dt=Math.min((t-lastT)/1000,.0
 var A0=0.529177,HA=27.2114;
 function saverPlate(k){var P=PRESETS[k];if(!P||!AD.length)return null;
   var dot=P.desc.indexOf('. '),title=dot>0?P.desc.slice(0,dot):P.desc,rest=dot>0?P.desc.slice(dot+2):'';
-  var atoms=AD.map(function(a){return EL[a.el].s+' '+ORBS[a.ot].name+' (Z_eff '+EL[a.el].z.toFixed(2)+', '+(a.ph>0?'+':'−')+')'});
+  var atoms=AD.map(function(a){return EL[a.el].s+' '+ORBS[a.ot].name+(a.ph>0?' (+)':' (−)')});
   var R=Infinity;for(var i=0;i<AD.length;i++)for(var j=i+1;j<AD.length;j++)R=Math.min(R,Math.hypot(AD[j].x-AD[i].x,AD[j].y-AD[i].y,AD[j].z-AD[i].z));
-  var E=totalEnergy(),a=AD[0],b=AD[1],za=EL[a.el].z,zb=EL[b.el].z,pp=a.ph*b.ph;
+  var E=totalEnergy(),a=AD[0],b=AD[1],za=EL[a.el].z,zb=EL[b.el].z,pp=a.ph*b.ph,neg=function(v,d){return v.toFixed(d).replace('-','−')};
   var grp=[];atoms.forEach(function(t){var g=grp[grp.length-1];if(g&&g.t===t)g.n++;else grp.push({t:t,n:1})});
-  var lines=[grp.map(function(g){return(g.n>1?g.n+' × ':'')+g.t}).join(' + '),(AD.length>2?'nearest R = ':'R = ')+R.toFixed(2)+' a₀ ('+(R*A0).toFixed(2)+' Å)',
-    'E = '+E.toFixed(3).replace('-','−')+' Ha ('+(E*HA).toFixed(2).replace('-','−')+' eV)'+(AD.length>2?', sum over '+AD.length*(AD.length-1)/2+' pairs':'')];
+  // Parameters: the symbol (TeX), a short name and the live value. The
+  // classes match the equation colours of this page (R m1, Z m2, ψ m3, S m4,
+  // E m5, J/K m6).
+  var params=[{sym:'R',name:AD.length>2?'nearest bond length':'bond length',value:R.toFixed(2)+' a₀ · '+(R*A0).toFixed(2)+' Å',cls:'m1'},
+    {sym:'E',name:'energy'+(AD.length>2?', '+AD.length*(AD.length-1)/2+' pairs':''),value:neg(E,3)+' Ha · '+neg(E*HA,2)+' eV',cls:'m5'}];
+  var tex=['\\psi = \\sum_i c_i\\,\\varphi_i(r - R_i), \\quad c_i = \\pm 1','\\varphi_i(r) = Z_{\\text{eff}}^{3/2}\\,\\varphi_{n\\ell}(Z_{\\text{eff}}\\,r)'];
   var eq=['ψ = Σᵢ cᵢ φᵢ(r − Rᵢ),  cᵢ = ±1','φᵢ(r) = Z_eff^(3/2) φₙₗ(Z_eff r)'];
+  var pm=pp>=0?'+':'-';
   if(a.ot===0&&b.ot===0&&za<1.05&&zb<1.05){
-    lines.push('S(R) = '+overlapS(R).toFixed(3)+' (1s overlap)');
+    params.push({sym:'S',name:'1s overlap',value:overlapS(R).toFixed(3),cls:'m4'});
+    tex.push('E_{'+(pp>=0?'+':'-')+'} = -\\tfrac12 + \\frac{1}{R} + \\frac{J '+pm+' K}{1 '+pm+' S}','S(R) = e^{-R}\\left(1 + R + \\tfrac{R^2}{3}\\right)');
     eq.push('E'+(pp>=0?'₊':'₋')+' = −½ + 1/R + (J '+(pp>=0?'+':'−')+' K)/(1 '+(pp>=0?'+':'−')+' S)','S(R) = e^(−R)(1 + R + R²/3)');
   }else{
     var zAvg=(za+zb)/2,nA=ORBS[a.ot].n,nB=ORBS[b.ot].n,nE=Math.max(nA,nB);
     var Re=0.9+0.85*(nA+nB)/Math.sqrt(zAvg),De=0.11*Math.pow(zAvg,1.2)/Math.pow(nE,0.4);
-    if(pp<0)eq.push('E(R) = De e^(−(R − Re))  (antibonding)');else eq.push('E(R) = De (e^(−(R − Re)) − 1)² − De  (Morse)');
-    eq.push('Re = 0.9 + 0.85 (nA + nB)/√Z̄ = '+Re.toFixed(2)+' a₀','De = 0.11 Z̄^1.2 / n^0.4 = '+De.toFixed(3)+' Ha');
+    params.push({sym:'R_e',name:'equilibrium length',value:Re.toFixed(2)+' a₀',cls:'m1'},{sym:'D_e',name:'well depth',value:De.toFixed(3)+' Ha',cls:'m5'});
+    if(pp<0){tex.push('E(R) = D_e\\,e^{-(R - R_e)} \\quad\\text{(antibonding)}');eq.push('E(R) = De e^(−(R − Re))  (antibonding)');}
+    else{tex.push('E(R) = D_e\\left(e^{-(R - R_e)} - 1\\right)^2 - D_e \\quad\\text{(Morse)}');eq.push('E(R) = De (e^(−(R − Re)) − 1)² − De  (Morse)');}
+    tex.push('R_e = 0.9 + 0.85\\,\\frac{n_A + n_B}{\\sqrt{\\bar Z}}, \\qquad D_e = \\frac{0.11\\,\\bar Z^{1.2}}{n^{0.4}}');
+    eq.push('Re = 0.9 + 0.85 (nA + nB)/√Z̄','De = 0.11 Z̄^1.2 / n^0.4');
   }
+  var lines=[grp.map(function(g){return(g.n>1?g.n+' × ':'')+g.t}).join(' + ')];
   if(rest)lines.push(rest);
-  return{title:title,sub:'LCAO molecular orbital · '+AD.length+' atoms',lines:lines,eq:eq}}
+  return{title:title,sub:'LCAO molecular orbital · '+AD.length+' atoms',params:params,lines:lines,tex:tex,eq:eq,
+    rules:[['\\psi','m3'],['\\varphi','m3'],['Z','m2'],['R','m1'],['S','m4'],['E','m5'],['D_e','m5'],['J','m6'],['K','m6']],
+    anchor:moleculeAnchor}}
+// The molecule on screen, for the shell's label plate. The renderer scales
+// atom positions by sc = SCALE/nMax, and proj3D (the overlay projection)
+// gives window px. The anchor is the projected centroid, and the radius of
+// the smallest circle round it that holds every projected nucleus plus the
+// bright core of its cloud (0.6 n²/Z a₀, scaled the same way). pts are the
+// projected nuclei: the leader points at the nearest one. Page CSS px.
+function moleculeAnchor(){
+  if(!AD.length||!cam)return null;
+  var sc=SCALE/getNMax(),cx=0,cy=0,cz=0,i;
+  for(i=0;i<AD.length;i++){cx+=AD[i].x;cy+=AD[i].y;cz+=AD[i].z}
+  cx=cx/AD.length*sc;cy=cy/AD.length*sc;cz=cz/AD.length*sc;
+  var C=proj3D(cx,cy,cz);if(!C)return null;
+  var r=0,pts=[];for(i=0;i<AD.length;i++){var x=AD[i].x*sc,y=AD[i].y*sc,z=AD[i].z*sc,q=proj3D(x,y,z);if(!q)continue;pts.push(q);
+    var n=ORBS[AD[i].ot].n,e=0.6*n*n/EL[AD[i].el].z*sc,u=proj3D(x,y+e,z),pe=u?Math.hypot(u.x-q.x,u.y-q.y):0;
+    r=Math.max(r,Math.hypot(q.x-C.x,q.y-C.y)+pe)}
+  return{x:C.x,y:C.y,r:r,pts:pts}}
 saverImpl=function(opts){
   var calm=Math.max(0,Math.min(1,opts&&opts.calm!=null?+opts.calm:0.7)),secs=Math.max(20,+(opts&&opts.seconds)||60);
   var s=((opts&&opts.seed)|0)||3;
