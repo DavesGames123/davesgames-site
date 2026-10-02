@@ -49,7 +49,7 @@
 //      screensaver hook ..... "window.snSaver" (stub), "saverEnter((" (hook)
 //      headset (VR / AR) .... "XR: the wave in a headset"
 // ============================================================================
-import { EQ } from './equations.js';
+import { EQ, SYM } from './equations.js';
 import { polState, jonesText } from './polar.js';
 
 // Any thrown error or rejected promise shows on the page, so a broken CDN
@@ -78,10 +78,14 @@ document.querySelectorAll('input[type=range]').forEach(s => { paintSlider(s); s.
 $('eqE').innerHTML = EQ.E;
 $('eqB').innerHTML = EQ.B;
 $('eqJ').innerHTML = EQ.J;
+// Label symbols: each [data-sym] element gets its MathJax SVG from SYM.
+document.querySelectorAll('[data-sym]').forEach(el => { const s = SYM[el.dataset.sym]; if (s) el.innerHTML = s; });
 
-// Scene colours. The same hex values are in style.css and typeset.mjs.
-const COL = { E: 0xffb84d, B: 0x60e0ee, e1: 0xff8a78, e2: 0x8aa8ff, axis: 0x8a96ad, source: 0xffe9a8 };
-const CSS = { E: '#ffb84d', B: '#60e0ee', e1: '#ff8a78', e2: '#8aa8ff', dim: '#3a4a64' };
+// Scene colours. They are the lib/sci.css math colors of the same symbols
+// (E --m2, B --m1, ê1 --m4, ê2 --m6). style.css uses the same values, and
+// typeset.mjs puts the same .mN classes on the formula symbols.
+const COL = { E: 0xff9a62, B: 0x62c4ff, e1: 0xe889dc, e2: 0xa8a4ff, axis: 0x8a96ad, source: 0xffe9a8 };
+const CSS = { E: '#ff9a62', B: '#62c4ff', e1: '#e889dc', e2: '#a8a4ff', dim: '#3a4a64' };
 
 try {
 
@@ -382,13 +386,13 @@ function drawEllipse(t) {
   const cx = W / 2, cy = W / 2, R = W * 0.36, dl = params.delta * Math.PI / 180;
   // axes in the component colours
   ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255,138,120,0.35)'; ctx.beginPath(); ctx.moveTo(cx - R * 1.25, cy); ctx.lineTo(cx + R * 1.25, cy); ctx.stroke();
-  ctx.strokeStyle = 'rgba(138,168,255,0.35)'; ctx.beginPath(); ctx.moveTo(cx, cy - R * 1.25); ctx.lineTo(cx, cy + R * 1.25); ctx.stroke();
-  ctx.font = '500 10px "IBM Plex Mono", monospace';
+  ctx.strokeStyle = 'rgba(232,137,220,0.35)'; ctx.beginPath(); ctx.moveTo(cx - R * 1.25, cy); ctx.lineTo(cx + R * 1.25, cy); ctx.stroke();
+  ctx.strokeStyle = 'rgba(168,164,255,0.35)'; ctx.beginPath(); ctx.moveTo(cx, cy - R * 1.25); ctx.lineTo(cx, cy + R * 1.25); ctx.stroke();
+  ctx.font = 'italic 400 12px "STIX Two Text", "Times New Roman", serif';
   ctx.fillStyle = CSS.e1; ctx.fillText('ê₁', cx + R * 1.12, cy - 5);
   ctx.fillStyle = CSS.e2; ctx.fillText('ê₂', cx + 5, cy - R * 1.12 + 4);
   // the traced ellipse
-  ctx.strokeStyle = 'rgba(255,184,77,0.5)'; ctx.lineWidth = 1.4; ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,154,98,0.5)'; ctx.lineWidth = 1.4; ctx.beginPath();
   for (let i = 0; i <= 96; i++) { const s = i / 96 * Math.PI * 2; const x = cx + R * Math.cos(s), y = cy - R * Math.cos(s - dl); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
   ctx.stroke();
   // the turn direction: a small arrowhead on the ellipse, pointing forward in time
@@ -398,7 +402,7 @@ function drawEllipse(t) {
     const x0 = cx + R * Math.cos(s0), y0 = cy - R * Math.cos(s0 - dl);
     const x1 = cx + R * Math.cos(s1), y1 = cy - R * Math.cos(s1 - dl);
     const a = Math.atan2(y1 - y0, x1 - x0);
-    ctx.fillStyle = 'rgba(255,184,77,0.85)'; ctx.beginPath();
+    ctx.fillStyle = 'rgba(255,154,98,0.85)'; ctx.beginPath();
     ctx.moveTo(x1, y1); ctx.lineTo(x1 - 7 * Math.cos(a - 0.45), y1 - 7 * Math.sin(a - 0.45)); ctx.lineTo(x1 - 7 * Math.cos(a + 0.45), y1 - 7 * Math.sin(a + 0.45)); ctx.fill();
   }
   // the live field at R_OBS: components on the axes, then E and B
@@ -406,8 +410,8 @@ function drawEllipse(t) {
   const c1 = Math.cos(ph), c2 = Math.cos(ph - dl);
   const ex = cx + R * c1, ey = cy - R * c2;
   ctx.setLineDash([2, 3]); ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255,138,120,0.6)'; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex, cy); ctx.stroke();
-  ctx.strokeStyle = 'rgba(138,168,255,0.6)'; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(cx, ey); ctx.stroke();
+  ctx.strokeStyle = 'rgba(232,137,220,0.6)'; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex, cy); ctx.stroke();
+  ctx.strokeStyle = 'rgba(168,164,255,0.6)'; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(cx, ey); ctx.stroke();
   ctx.setLineDash([]);
   const vec = (x, y, col, w) => {
     const a = Math.atan2(y - cy, x - cx), L = Math.hypot(x - cx, y - cy);
@@ -416,7 +420,7 @@ function drawEllipse(t) {
     ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(x - 5 * Math.cos(a), y - 5 * Math.sin(a)); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 8 * Math.cos(a - 0.4), y - 8 * Math.sin(a - 0.4)); ctx.lineTo(x - 8 * Math.cos(a + 0.4), y - 8 * Math.sin(a + 0.4)); ctx.fill();
   };
-  if (params.showB) vec(cx - R * c2 * 0.75, cy - R * c1 * 0.75, 'rgba(96,224,238,0.8)', 1.4);
+  if (params.showB) vec(cx - R * c2 * 0.75, cy - R * c1 * 0.75, 'rgba(98,196,255,0.8)', 1.4);
   vec(ex, ey, CSS.E, 2);
   ctx.fillStyle = CSS.e1; ctx.beginPath(); ctx.arc(ex, cy, 2.6, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = CSS.e2; ctx.beginPath(); ctx.arc(cx, ey, 2.6, 0, Math.PI * 2); ctx.fill();

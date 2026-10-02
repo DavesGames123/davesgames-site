@@ -4,7 +4,7 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Circular Polarization // Stella Nova</title>
+<title>Circular polarization — Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    CIRCULAR POLARIZATION  ·  page shell
@@ -14,12 +14,13 @@
 
    HEAD LOAD ORDER  (order matters)
      1. gpu-guard    lib/gpu-guard.js, so the shell can release the GL context
-     2. fonts        Space Grotesk, IBM Plex Mono, Instrument Serif (as the
-                     shell)
-     3. in-frame     tiny inline guard, runs before markup renders
-     4. importmap    maps "three" to the CDN; MUST stay inline
-     5. style.css    the page stylesheet
-     6. main.js      type=module; equations.js has the formulas as MathJax SVG
+     2. in-frame     tiny inline guard, runs before markup renders
+     3. importmap    maps "three" to the CDN; MUST stay inline
+     4. style.css    the page stylesheet
+     5. lib/sci.css  shared science type (STIX Two Text, Inter, the system
+                     mono) and the math colors .m1 to .m6; it loads the fonts
+     6. main.js      type=module; equations.js has the formulas and the label
+                     symbols as MathJax SVG
 
    LAYOUT  (# marks an element id)
      desktop and landscape     phone portrait
@@ -35,7 +36,6 @@
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
      this page's own topbar. Kept inline so it runs before the body renders. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
@@ -48,12 +48,13 @@
 }
 </script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 
 <header class="topbar">
   <span class="sys-name">Stella Nova</span>
-  <span class="sys-page">Circular Polarization</span>
+  <span class="sys-page">Circular polarization</span>
 </header>
 
 <main class="app">
@@ -61,18 +62,18 @@
     <canvas id="scene"></canvas>
     <!-- What each colour in the scene is. -->
     <ul class="legend" aria-label="Legend">
-      <li><i style="--c:var(--e)"></i><b>E</b> electric field</li>
-      <li class="lg-b"><i style="--c:var(--b)"></i><b>B</b> magnetic field</li>
-      <li class="lg-comp"><i style="--c:var(--e1)"></i><b>E·ê₁</b> component</li>
-      <li class="lg-comp"><i style="--c:var(--e2)"></i><b>E·ê₂</b> component</li>
+      <li><i style="--c:var(--e)"></i><b class="sym" data-sym="E">E</b> electric field</li>
+      <li class="lg-b"><i style="--c:var(--b)"></i><b class="sym" data-sym="B">B</b> magnetic field</li>
+      <li class="lg-comp"><i style="--c:var(--e1)"></i><b class="sym" data-sym="E1">E·ê₁</b> component</li>
+      <li class="lg-comp"><i style="--c:var(--e2)"></i><b class="sym" data-sym="E2">E·ê₂</b> component</li>
     </ul>
-    <div class="hint"><span>drag</span> orbit · <span>scroll</span> zoom · <span>right-drag</span> pan</div>
+    <div class="hint"><span>Drag</span> to orbit · <span>scroll</span> to zoom · <span>right-drag</span> to pan</div>
     <div class="err" id="err"></div>
   </section>
 
   <aside id="panel">
     <div class="p-head">
-      <p class="kicker">Light &amp; Fields · Optics</p>
+      <p class="kicker">Light &amp; fields · Optics</p>
       <h1>Circular polarization</h1>
       <p class="lede">The electric field turns as the wave moves. Its tip draws a helix along the ray, and at one point in space it draws a circle in time.</p>
     </div>
@@ -81,9 +82,9 @@
     <section class="p-sec">
       <h2>Field</h2>
       <div class="eq" id="eqE"></div>
-      <p class="eq-note">Two components at right angles, out of phase by <em>δ</em>. Amplitude falls as 1/<em>r</em>.<span id="rNote"> The one-ray view draws <em>r</em>·<em>E</em>, so the helix keeps its size.</span></p>
+      <p class="eq-note">Two components at right angles, out of phase by <span class="sym" data-sym="delta">δ</span>. Amplitude falls as 1/<em>r</em>.<span id="rNote"> The one-ray view draws <em>r</em>·<em>E</em>, so the helix keeps its size.</span></p>
       <div class="eq" id="eqB"></div>
-      <p class="eq-note"><em>B</em> is at right angles to <em>E</em> and to the ray, and in phase with it.</p>
+      <p class="eq-note"><span class="sym" data-sym="B">B</span> is at right angles to <span class="sym" data-sym="E">E</span> and to the ray, and in phase with it.</p>
     </section>
 
     <!-- Polarization state: the ellipse that E draws at the observer plane. -->
@@ -97,7 +98,7 @@
             <dt>Jones</dt><dd id="rJones">(1, −i)/√2</dd>
             <dt>State</dt><dd id="rState">circular</dd>
             <dt>Turns</dt><dd id="rHand">clockwise</dd>
-            <dt>Ellipticity χ</dt><dd id="rChi">45.0°</dd>
+            <dt>Ellipticity <span class="sym" data-sym="chi">χ</span></dt><dd id="rChi">45.0°</dd>
           </dl>
         </div>
       </div>
@@ -114,7 +115,7 @@
       </div>
 
       <div class="ctrl-cell">
-        <div class="ctrl-row"><label for="delta">Phase <em>δ</em></label><span class="ctrl-val" id="vD">90°</span></div>
+        <div class="ctrl-row"><label for="delta"><span class="sym" data-sym="delta">δ</span> <span class="d">Phase</span></label><span class="ctrl-val" id="vD">90°</span></div>
         <input type="range" id="delta" min="-180" max="180" step="1" value="90">
         <div class="snaps">
           <button type="button" data-delta="-90">−90° L</button>
@@ -124,11 +125,11 @@
         </div>
       </div>
       <div class="ctrl-cell">
-        <div class="ctrl-row"><label for="k">Wavenumber <em>k</em></label><span class="ctrl-val" id="vK">1.6</span></div>
+        <div class="ctrl-row"><label for="k"><span class="sym" data-sym="k">k</span> <span class="d">Wavenumber</span></label><span class="ctrl-val" id="vK">1.6</span></div>
         <input type="range" id="k" min="0.4" max="5" step="0.1" value="1.6">
       </div>
       <div class="ctrl-cell">
-        <div class="ctrl-row"><label for="omega">Frequency <em>ω</em></label><span class="ctrl-val" id="vW">1.00</span></div>
+        <div class="ctrl-row"><label for="omega"><span class="sym" data-sym="omega">ω</span> <span class="d">Frequency</span></label><span class="ctrl-val" id="vW">1.00</span></div>
         <input type="range" id="omega" min="0" max="4" step="0.05" value="1.0">
       </div>
       <div class="ctrl-cell" id="cellNum">

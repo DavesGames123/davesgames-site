@@ -1,10 +1,12 @@
 /* ============================================================================
    CIRCULAR POLARIZATION  ·  style.css
    ----------------------------------------------------------------------------
-   Tokens follow the shell (stella-nova/index.html): Space Grotesk for text,
-   IBM Plex Mono for small caps and numbers, Instrument Serif for the title.
-   The scene colours (--e, --b, --e1, --e2) are the same hex values as COL in
-   main.js and C in typeset.mjs.
+   Type comes from lib/sci.css, which loads after this file: Inter for the
+   UI, STIX Two Text for the title and for the italic <em> symbols, the
+   system mono for numbers only. Labels are sentence case with no
+   letter-spacing. The scene colours (--e, --b, --e1, --e2) are the
+   lib/sci.css math colors --m2, --m1, --m4 and --m6. COL in main.js uses
+   the same values, and typeset.mjs puts the same classes on the symbols.
 
    grep -n targets
      tokens ............... ":root"
@@ -23,23 +25,23 @@
   --line:rgba(150,200,255,0.09); --line2:rgba(150,200,255,0.18);
   --ink:#eef3fb; --text:#c0cfe0; --dim:#7f91ad; --faint:#3a4a64;
   --gold:#d4a847;
-  --e:#ffb84d; --b:#60e0ee; --e1:#ff8a78; --e2:#8aa8ff;
-  --f-sans:'Space Grotesk',ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif;
-  --f-mono:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
-  --f-serif:'Instrument Serif','Iowan Old Style',Georgia,serif;
+  --e:#ff9a62; --b:#62c4ff; --e1:#e889dc; --e2:#a8a4ff;
+  --f-sans:var(--sci-sans); --f-mono:var(--sci-mono); --f-serif:var(--sci-serif);
   --panel-w:380px; --top-h:44px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg)}
 body{font-family:var(--f-sans);color:var(--text);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
 button{font:inherit;color:inherit}
-em{font-family:var(--f-serif);font-style:italic;font-size:1.08em;letter-spacing:0}
+em{font-family:var(--f-serif);font-style:italic;font-size:1.08em}
+.sym{display:inline-block;line-height:0;vertical-align:middle;font-size:1rem}
+.sym svg{overflow:visible}
 
 /* ═══ TOPBAR (standalone only) ═══ */
 .topbar{flex:none;height:var(--top-h);display:flex;align-items:center;gap:16px;padding:0 20px;border-bottom:1px solid var(--line);background:var(--bg2)}
 .in-frame .topbar{display:none}
-.sys-name{font:300 0.95rem/1 var(--f-sans);letter-spacing:0.2em;text-transform:uppercase;color:var(--ink)}
-.sys-page{font:500 0.66rem/1 var(--f-mono);letter-spacing:0.16em;text-transform:uppercase;color:var(--gold)}
+.sys-name{font:500 0.85rem/1 var(--f-sans);color:var(--dim)}
+.sys-page{font:400 1.1rem/1 var(--f-serif);color:var(--ink);margin-left:auto}
 
 /* ═══ TWO PANES: the scene and the panel side by side ═══ */
 .app{flex:1;min-height:0;display:flex}
@@ -52,11 +54,11 @@ canvas#scene{display:block;width:100%;height:100%;touch-action:none}
   border:1px solid var(--line);border-radius:12px;background:rgba(10,12,18,0.72);
   backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);pointer-events:none}
 .legend li{display:flex;align-items:center;gap:9px;font-size:0.8rem;color:var(--dim)}
-.legend li b{font:500 0.78rem/1 var(--f-mono);color:var(--ink);min-width:3.6em}
-.legend i{width:18px;height:2px;border-radius:1px;background:var(--c);box-shadow:0 0 6px var(--c)}
+.legend li b{font-weight:400;color:var(--ink);min-width:2.8em}
+.legend i{width:18px;height:2px;border-radius:1px;background:var(--c)}
 .legend li[hidden]{display:none}
 
-.hint{position:absolute;left:18px;bottom:14px;font:500 0.62rem/1 var(--f-mono);letter-spacing:0.14em;text-transform:uppercase;color:var(--faint);pointer-events:none}
+.hint{position:absolute;left:18px;bottom:14px;font:400 0.74rem/1 var(--f-sans);color:var(--faint);pointer-events:none}
 .hint span{color:var(--dim)}
 
 .err{position:absolute;top:14px;left:14px;z-index:10;background:rgba(60,10,10,0.92);color:#ffb0b0;border:1px solid #803030;
@@ -66,18 +68,19 @@ canvas#scene{display:block;width:100%;height:100%;touch-action:none}
 #panel{flex:none;width:var(--panel-w);overflow-y:auto;overflow-x:hidden;border-left:1px solid var(--line);background:var(--panel);
   padding:26px 24px 30px;scrollbar-width:thin;scrollbar-color:var(--faint) transparent}
 .p-head{margin-bottom:22px}
-.kicker{font:500 0.64rem/1 var(--f-mono);letter-spacing:0.18em;text-transform:uppercase;color:var(--gold);margin-bottom:12px}
-#panel h1{font:400 2.1rem/1.05 var(--f-serif);color:var(--ink);letter-spacing:-0.005em;margin-bottom:10px}
+.kicker{font:500 0.78rem/1 var(--f-sans);color:var(--dim);margin-bottom:10px}
+#panel h1{font:400 1.8rem/1.1 var(--f-serif);color:var(--ink);margin-bottom:10px}
 .lede{font-size:0.92rem;line-height:1.55;color:var(--text)}
 .p-sec{padding:18px 0 4px;border-top:1px solid var(--line)}
-.p-sec h2{font:500 0.64rem/1 var(--f-mono);letter-spacing:0.18em;text-transform:uppercase;color:var(--dim);margin-bottom:14px}
+.p-sec h2{font:600 0.82rem/1 var(--f-sans);color:var(--ink);margin-bottom:14px}
 
 /* ═══ EQUATIONS (MathJax SVG; ex units scale with font-size) ═══ */
 .eq{color:var(--ink);font-size:15px;overflow-x:auto;overflow-y:hidden;padding:2px 0;scrollbar-width:none}
 .eq::-webkit-scrollbar{display:none}
-.eq svg{display:block;max-width:100%;height:auto}
+.eq svg{display:block;max-width:none;height:auto}
 .eq-note{font-size:0.8rem;line-height:1.5;color:var(--dim);margin:6px 0 16px}
 .eq-note em{color:var(--text)}
+.eq-note .sym,.pol-read dt .sym{font-size:.86rem}
 
 /* ═══ POLARIZATION READOUT ═══ */
 .pol-row{display:flex;gap:16px;align-items:center}
@@ -85,8 +88,8 @@ canvas#scene{display:block;width:100%;height:100%;touch-action:none}
 .pol-read{min-width:0;flex:1}
 .eq-j{font-size:13px;margin-bottom:8px}
 .pol-read dl{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;align-items:baseline}
-.pol-read dt{font:500 0.6rem/1.2 var(--f-mono);letter-spacing:0.12em;text-transform:uppercase;color:var(--dim)}
-.pol-read dd{font:500 0.8rem/1.2 var(--f-mono);color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pol-read dt{font:400 0.76rem/1.2 var(--f-sans);color:var(--dim)}
+.pol-read dd{font:400 0.8rem/1.2 var(--f-mono);color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
 
 /* ═══ CONTROLS ═══ */
 .ctrl{display:grid;gap:16px}
@@ -97,16 +100,17 @@ canvas#scene{display:block;width:100%;height:100%;touch-action:none}
 .mode-btn.active{background:rgba(212,168,71,0.16);color:var(--ink);box-shadow:inset 0 0 0 1px rgba(212,168,71,0.45)}
 .ctrl-cell{display:flex;flex-direction:column;gap:6px}
 .ctrl-cell[hidden]{display:none}
-.ctrl-row{display:flex;justify-content:space-between;align-items:baseline}
-.ctrl-row label{font-size:0.86rem;color:var(--text)}
-.ctrl-val{font:500 0.82rem/1 var(--f-mono);color:var(--gold);font-variant-numeric:tabular-nums}
+.ctrl-row{display:flex;justify-content:space-between;align-items:center;min-height:22px}
+.ctrl-row label{display:flex;align-items:center;gap:6px;font-size:0.82rem;color:var(--text)}
+.ctrl-row label .d{font-size:0.78rem;color:var(--dim)}
+.ctrl-val{font:400 0.8rem/1 var(--f-mono);color:var(--ink);font-variant-numeric:tabular-nums}
 .snaps{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
-.snaps button{min-height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:none;cursor:pointer;font:500 0.68rem/1 var(--f-mono);color:var(--dim);transition:border-color .2s,color .2s}
+.snaps button{min-height:28px;padding:0 10px;border:1px solid var(--line);border-radius:999px;background:none;cursor:pointer;font:400 0.76rem/1 var(--f-sans);color:var(--dim);transition:border-color .2s,color .2s}
 .snaps button:hover,.snaps button.on{border-color:rgba(212,168,71,0.5);color:var(--ink)}
 
 input[type="range"]{-webkit-appearance:none;appearance:none;width:100%;height:4px;border-radius:2px;outline:none;cursor:pointer;margin:6px 0;
   background:linear-gradient(to right,var(--gold) 0%,var(--gold) var(--pct,50%),rgba(150,200,255,0.14) var(--pct,50%))}
-input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--bg);border:2px solid var(--gold);box-shadow:0 0 8px rgba(212,168,71,0.45)}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--bg);border:2px solid var(--gold)}
 input[type="range"]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--bg);border:2px solid var(--gold)}
 input[type="range"]:focus-visible{box-shadow:0 0 0 3px rgba(212,168,71,0.25)}
 
@@ -120,11 +124,11 @@ input[type="range"]:focus-visible{box-shadow:0 0 0 3px rgba(212,168,71,0.25)}
 .tog input:checked + .sw::after{transform:translateX(14px);background:var(--gold)}
 .tog input:checked ~ span:last-child{color:var(--ink)}
 .tog input:focus-visible + .sw{box-shadow:0 0 0 3px rgba(212,168,71,0.25)}
-.play{margin-left:auto;min-height:30px;padding:0 14px;border:1px solid var(--line2);border-radius:999px;background:none;cursor:pointer;font:500 0.7rem/1 var(--f-mono);letter-spacing:0.1em;text-transform:uppercase;color:var(--dim)}
+.play{margin-left:auto;min-height:30px;padding:0 14px;border:1px solid var(--line2);border-radius:999px;background:none;cursor:pointer;font:500 0.8rem/1 var(--f-sans);color:var(--dim)}
 .play:hover{color:var(--ink);border-color:rgba(212,168,71,0.5)}
 /* Headset buttons (lib/xr-view.js shows them when WebXR is there). */
 .xr-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.xr-btn{min-height:34px;padding:0 12px;border:1px solid var(--line2);border-radius:999px;background:none;cursor:pointer;font:500 0.7rem/1 var(--f-mono);letter-spacing:0.08em;text-transform:uppercase;color:var(--dim)}
+.xr-btn{min-height:34px;padding:0 12px;border:1px solid var(--line2);border-radius:999px;background:none;cursor:pointer;font:500 0.8rem/1 var(--f-sans);color:var(--dim)}
 .xr-btn:hover{color:var(--ink);border-color:rgba(212,168,71,0.5)}
 .xr-btn[hidden],#xrSec[hidden]{display:none}
 .xr-btn:disabled{opacity:.5;cursor:default}
