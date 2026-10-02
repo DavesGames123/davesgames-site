@@ -29,14 +29,16 @@ export function curveFor(sy, yTop, zc, Rw = 25, sweep = 1.75) {
   for (let i = 1; i <= 18; i++) { const ph = i / 18 * sweep; pts.push(new THREE.Vector3(0, sy * (yTop + 4.0 + Rw * Math.sin(ph)), zc + Rw - Rw * Math.cos(ph))); }
   return new THREE.CatmullRomCurve3(pts, false, 'centripetal');
 }
-// the frame at t: tangent T, width axis A, and the face normal N. N points
-// to the same side of the band on both halves. (A, T, N) is right-handed on
-// both halves: A = sy X, so A x T = N. The lower half runs down (T to -y),
-// so its width axis is -x. A frame built on +x for both halves is a mirror
-// on the lower half and turns its band inside out.
+// the frame at t: tangent T, width axis A, and N, the band's outer normal
+// (away from the wrist). The wrist is at +z, so N is -z at the lugs. The
+// stitches, the padded dome and the tail holes go on the +N face.
+// (A, T, N) is right-handed on both halves: A = -sy X, so A x T = N. The
+// halves run in opposite y directions, so their width axes are opposite.
+// One width axis for both halves is a mirror on one half and turns its
+// band inside out.
 function frame(curve, t, sy) {
   const T = curve.getTangentAt(t).normalize();
-  const A = X.clone().multiplyScalar(sy);
+  const A = X.clone().multiplyScalar(-sy);
   const N = new THREE.Vector3().crossVectors(A, T).normalize();
   return { P: curve.getPointAt(t), T, N, A };
 }
