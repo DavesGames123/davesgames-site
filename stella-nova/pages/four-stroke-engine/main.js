@@ -317,6 +317,44 @@ setView('three');
 requestAnimationFrame(frame);
 
 // ── screensaver ─────────────────────────────────────────────────────────────
+// ── saver plate anchor ──────────────────────────────────────────────────────
+// The shell's label plate (lib/screensaver.js, "label plate") points at the
+// subject of each tour step. plateAnchor(objs, keys) projects with the page
+// camera (Vector3.project) to page CSS px of the canvas rect:
+//   x, y  the projected centre of the world box of the visible meshes
+//   r     the largest distance from (x, y) to a projected corner of the
+//         local box of a mesh: the circle holds every mesh of the subject
+//   pts   the projected key points (world Vector3) that are on screen
+// It returns null when the subject is not on screen.
+const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
+function plateAnchor(objs, keys = []) {
+  const rc = $('view').getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height) return null;
+  const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
+  const ms = [];
+  PA.box.makeEmpty();
+  for (const ob of objs) if (ob) ob.traverseVisible(m => {
+    if (!m.isMesh || (m.material && m.material.opacity === 0)) return;
+    let b;
+    if (m.isInstancedMesh) { if (!m.boundingBox) m.computeBoundingBox(); b = m.boundingBox; }
+    else { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b = m.geometry.boundingBox; }
+    if (!b || b.isEmpty()) return;
+    ms.push([m, b]); PA.mb.copy(b).applyMatrix4(m.matrixWorld); PA.box.union(PA.mb);
+  });
+  if (PA.box.isEmpty()) return null;
+  const C = px(PA.box.getCenter(PA.c));
+  if (!C) return null;
+  let r = 0;
+  for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
+    PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(q.x - C.x, q.y - C.y));
+  }
+  if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
+  const pts = [];
+  for (const k of keys) { const q = k && px(k); if (q && q.x >= rc.left && q.x <= rc.right && q.y >= rc.top && q.y <= rc.bottom) pts.push(q); }
+  return { x: C.x, y: C.y, r, pts };
+}
+
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, paints the
 // stage gradient into the scene, lowers the pixel-ratio cap, and starts a
 // calm tour: each step sets a view, an explode and a speed, and names its
@@ -347,16 +385,57 @@ window.snSaver = {
     const rpm = Math.round(20 - 12 * calm);          // 11.6 rpm at calm 0.7: one cycle in about 10 s
     const st0 = E.cycleStats;
     const eqX = 'x(θ) = r cos θ + √(l² − r² sin² θ)';
+    // Plate fields: params and TeX share one colour map (RULES): θ crank
+    // angle m1, r and S m2, l and B m3, ε and V_d m4, x and p m5, ω, φ and W
+    // m6. The plain eq lists stay as the fallback.
+    const RULES = [['\\theta', 'm1'], ['r', 'm2'], ['S', 'm2'], ['l', 'm3'], ['B', 'm3'], ['\\varepsilon', 'm4'], ['V_d', 'm4'], ['x', 'm5'], ['p', 'm5'], ['\\omega', 'm6'], ['\\varphi', 'm6'], ['W', 'm6'], ['\\beta', 'm1']];
+    const TX = String.raw`x(\theta) = r\cos\theta + \sqrt{l^2 - r^2\sin^2\theta}`;
+    const TPSI = String.raw`\psi_k = \theta - \varphi_k \pmod{720^\circ}`;
+    const thNow = () => ((S.th % 720) + 720) % 720;
+    const P = (sym, name, value, cls) => ({ sym, name, value, cls });
+    const pTh = () => P('\\theta', 'crank angle', `${thNow().toFixed(0)}° of 720°`, 'm1');
+    const pX = () => P('x_1', 'piston 1 above the crank', `${E.pistonX(E.crankOf(1, S.th)).toFixed(1)} mm`, 'm5');
+    // Subjects: parts by kind, and key points in world space.
+    const parts = re => Object.values(S.cur.B.parts).filter(q => re.test(q.kind || '')).map(q => q.root);
+    const crowns = () => E.CYLS.map(k => S.cur.sc.pistons[k].holder.localToWorld(new THREE.Vector3(0, GEO.compH, 0)));
+    const crankC = () => S.cur.B.parts.crank.holder.localToWorld(new THREE.Vector3(0, 0, 0));
+    const ALL = /^(?!gas)/, CORE = /^(piston|rod|crank|flywheel|damper)$/;
+    const whole = () => plateAnchor(parts(ALL), [...crowns(), crankC()]);
     const STEPS = [
-      { view: 'three', label: T => ({ title: 'Four-stroke engine', sub: `Inline four · ${T.name}`, lines: ['Intake, compression, power, exhaust: two crank turns per cycle.', 'Firing order 1-3-4-2: one power stroke every 180° of crank.'], eq: [eqX, `r = ${GEO.r} mm · l = ${GEO.l} mm`] }) },
-      { view: 'exploded', label: T => ({ title: 'Exploded view', sub: T.name, lines: ['Head, valve train and cam cover lift off; the crank and oil pan drop.', 'Pistons and rods come forward out of their bores.'], eq: [`displacement = 4 · (π/4) B² S = ${GEO.displacement.toFixed(0)} cc`] }) },
-      { view: 'valves', label: T => T.id === 'dohc'
-        ? { title: 'Valve train', sub: 'Two camshafts, bucket tappets', lines: ['Each cam turns once for every two crank turns.', 'The flat bucket rides on the lobe: lift = h(β) − R_b.'], eq: ['cam angle = θ / 2', 'h(β) = max_α r(α) cos(α − β)'] }
-        : { title: 'Valve train', sub: 'One camshaft, rocker arms', lines: ['The lobe lifts the pad end of the rocker; the far end opens the valve.', 'Both valves of a cylinder come from one shaft at half crank speed.'], eq: ['cam angle = θ / 2', `lift = a_out sin δ / cos ${GEO.incline}°`] } },
-      { view: 'section', label: () => ({ title: 'Otto cycle', sub: 'Section through the bores', lines: ['Blue: fresh charge · violet: compression · orange: the burn · grey: exhaust.', `Peak pressure ${st0.pMax.toFixed(0)} bar at ${st0.pMaxAt.toFixed(0)}° after TDC.`], eq: [`η = 1 − 1 / ε^(γ−1) = ${(st0.otto * 100).toFixed(0)} %  (ε = ${GEO.cr})`, `W = ∮ p dV = ${st0.W.toFixed(0)} J per cylinder`] }) },
-      { view: 'end', label: () => ({ title: 'Timing drive', sub: 'Crank to camshaft', lines: ['The chain keeps the valves in step with the pistons.', 'Crank sprocket 18 teeth, cam sprocket 36 teeth.'], eq: ['ω_cam = ω_crank · 18 / 36 = ω_crank / 2'] }) },
-      { view: 'three', label: () => ({ title: 'Firing order 1-3-4-2', sub: 'Cylinder phase', lines: ['Throws 1 and 4 point up while 2 and 3 point down.', 'Each cylinder runs the same cycle, shifted.'], eq: ['ψ_k = θ − φ_k (mod 720°)', 'φ = 0°, 180°, 360°, 540° for 1, 3, 4, 2'] }) },
+      { view: 'three', label: T => ({ title: 'Four-stroke engine', sub: `Inline four, ${T.name}`,
+        params: [pTh(), pX(), P('r', 'crank radius', `${GEO.r} mm`, 'm2'), P('l', 'rod length', `${GEO.l} mm`, 'm3')],
+        lines: ['Intake, compression, power, exhaust: two crank turns per cycle.', 'Firing order 1-3-4-2: one power stroke every 180° of crank.'],
+        tex: [TX, TPSI], eq: [eqX, `r = ${GEO.r} mm · l = ${GEO.l} mm`], anchor: whole }) },
+      { view: 'exploded', label: T => ({ title: 'Exploded view', sub: T.name,
+        params: [P('B', 'bore', `${GEO.bore} mm`, 'm3'), P('S', 'stroke, 2r', `${GEO.stroke} mm`, 'm2'), P('V_d', 'displacement', `${GEO.displacement.toFixed(0)} cc`, 'm4')],
+        lines: ['Head, valve train and cam cover lift off; the crank and oil pan drop.', 'Pistons and rods come forward out of their bores.'],
+        tex: [String.raw`V_d = 4\cdot\frac{\pi}{4}\,B^2 S`, TX], eq: [`displacement = 4 · (π/4) B² S = ${GEO.displacement.toFixed(0)} cc`], anchor: whole }) },
+      { view: 'valves', label: T => {
+        const an = () => plateAnchor(parts(/^(cam|camIn|camEx|valveIn|valveEx|spring|bucket|rocker|rockerShaft)$/), S.cur.sc.cams.filter(q => q.kind !== 'camSprocket').map(q => q.holder.localToWorld(new THREE.Vector3(0, 0, 0))));
+        const pp = [pTh(), P('\\beta', 'cam angle, θ/2', `${(thNow() / 2).toFixed(0)}°`, 'm1')];
+        return T.id === 'dohc'
+          ? { title: 'Valve train', sub: 'Two camshafts, bucket tappets', params: pp, lines: ['Each cam turns once for every two crank turns.', 'The flat bucket rides on the lobe: lift = h(β) − R_b.'],
+              tex: [String.raw`\beta = \frac{\theta}{2}`, String.raw`h(\beta) = \max_\alpha\, \rho(\alpha)\cos(\alpha - \beta)`], eq: ['cam angle = θ / 2', 'h(β) = max_α r(α) cos(α − β)'], anchor: an }
+          : { title: 'Valve train', sub: 'One camshaft, rocker arms', params: pp, lines: ['The lobe lifts the pad end of the rocker; the far end opens the valve.', 'Both valves of a cylinder come from one shaft at half crank speed.'],
+              tex: [String.raw`\beta = \frac{\theta}{2}`, String.raw`L = \frac{a_{\text{out}}\sin\delta}{\cos ${GEO.incline}^\circ}`], eq: ['cam angle = θ / 2', `lift = a_out sin δ / cos ${GEO.incline}°`], anchor: an };
+      } },
+      { view: 'section', label: () => ({ title: 'Otto cycle', sub: 'Section through the bores',
+        params: [P('\\varepsilon', 'compression ratio', String(GEO.cr), 'm4'), P('p_{\\max}', `peak pressure, ${st0.pMaxAt.toFixed(0)}° after TDC`, `${st0.pMax.toFixed(0)} bar`, 'm5'), P('W', 'work per cylinder', `${st0.W.toFixed(0)} J`, 'm6'), P('\\eta', 'Otto efficiency', `${(st0.otto * 100).toFixed(0)} %`, '')],
+        lines: ['Blue: fresh charge · violet: compression · orange: the burn · grey: exhaust.'],
+        tex: [String.raw`\eta = 1 - \frac{1}{\varepsilon^{\gamma - 1}}`, String.raw`W = \oint p\,dV`], eq: [`η = 1 − 1 / ε^(γ−1) = ${(st0.otto * 100).toFixed(0)} %  (ε = ${GEO.cr})`, `W = ∮ p dV = ${st0.W.toFixed(0)} J per cylinder`],
+        anchor: () => plateAnchor(parts(/^(piston|rod)$/), crowns()) }) },
+      { view: 'end', label: () => ({ title: 'Timing drive', sub: 'Crank to camshaft',
+        params: [P('N_k', 'crank sprocket teeth', '18', ''), P('N_c', 'cam sprocket teeth', '36', ''), P('\\omega_c', 'cam speed', `${(rpm / 2).toFixed(1)} rpm`, 'm6')],
+        lines: ['The chain keeps the valves in step with the pistons.'],
+        tex: [String.raw`\omega_{\text{cam}} = \omega_{\text{crank}}\,\frac{N_k}{N_c} = \frac{\omega_{\text{crank}}}{2}`], eq: ['ω_cam = ω_crank · 18 / 36 = ω_crank / 2'],
+        anchor: () => plateAnchor(parts(/^(chain|crankSprocket|camSprocket|guides)$/), [S.cur.B.parts.crankSprocket.holder.localToWorld(new THREE.Vector3()), ...S.cur.sc.cams.filter(q => q.kind === 'camSprocket').map(q => q.holder.localToWorld(new THREE.Vector3()))]) }) },
+      { view: 'three', label: () => ({ title: 'Firing order 1-3-4-2', sub: 'Cylinder phase',
+        params: [pTh(), P('\\varphi_k', 'phase of cylinders 1, 3, 4, 2', '0°, 180°, 360°, 540°', 'm6')],
+        lines: ['Throws 1 and 4 point up while 2 and 3 point down.', 'Each cylinder runs the same cycle, shifted.'],
+        tex: [TPSI, TX], eq: ['ψ_k = θ − φ_k (mod 720°)', 'φ = 0°, 180°, 360°, 540° for 1, 3, 4, 2'],
+        anchor: () => plateAnchor(parts(CORE), [...crowns(), crankC()]) }) },
     ];
+    STEPS.forEach(s => { const f = s.label; s.label = T => Object.assign(f(T), { rules: RULES }); });
     const hold = Math.max(8, (o.seconds || 60) / 4) * 1000;
     let n = Math.floor(rnd() * STEPS.length), laps = 0;
     function step() {
@@ -365,10 +444,14 @@ window.snSaver = {
       setShow('castings', true); setShow('section', true); setShow('gas', true);
       setRpm(rpm);
       setView(s.view);
-      label(s.label(S.cur.T));
+      cur = s; label(s.label(S.cur.T));
       n++;
       setTimeout(step, hold);
     }
+    // Refresh the live values (θ, x) on the plate every second. The shell
+    // swaps the text with no fade when the title stays the same.
+    let cur = null;
+    setInterval(() => { if (cur && S.cur) label(cur.label(S.cur.T)); }, 1000);
     if (rnd() < 0.5) swapTo('sohc');
     step();
     return { canvas: $('view'), warmupMs: 1500 };
