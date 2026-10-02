@@ -48,7 +48,7 @@ const S = {
   engine: null, W: 1024, H: 1024,
   rule: L.parseRule('B3/S23'), ruleName: 'Life', wrap: true,
   running: true, speedIdx: 6, density: 0.3, seed: (Date.now() & 0xffff) || 1,
-  gen: 0, carry: 0, maxPerFrame: 160,
+  gen: 0, carry: 0, maxPerFrame: 160, saverGps: 0,
   stats: { pop: 0, births: 0, deaths: 0 }, hist: [],
   view: { cx: 512, cy: 512, cell: 3 }, occ: { l: 0, r: 0, t: 0, b: 0 },
   tool: 'draw', pat: 'glider', rot: 0, flip: false,
@@ -165,7 +165,7 @@ function frame(now) {
   raf = requestAnimationFrame(frame);
   const dt = Math.min((now - last) / 1000, 0.1); last = now;
   if (S.running && S.engine && !S.engine.lost) {
-    S.carry += dt * SPEEDS[S.speedIdx];
+    S.carry += dt * (S.saverGps || SPEEDS[S.speedIdx]);
     let n = Math.floor(S.carry);
     if (n > S.maxPerFrame) { n = S.maxPerFrame; S.carry = 0; } else S.carry -= n;
     if (n > 0) { S.engine.step(n); S.gen += n; rateGens += n; S.dirty = true; }
@@ -728,9 +728,36 @@ async function boot() {
 // Shell screensaver hook (lib/screensaver.js). enter() waits for boot, hides
 // every panel (occlusion() then sees no overlay, so the view centres on the
 // window), and turns the grid off with age colour and trails on. opts.seed
-// seeds a fresh full-frame soup at 3 or 4 px cells. calm above 0.5 runs
-// 6 gens/s, else 10/s, so period-2 blinkers do not strobe. A soup lives far
-// longer than one dwell, so nothing changes inside one dwell.
+// seeds a fresh full-frame soup at 3 or 4 px cells.
+// RATE. S.saverGps overrides the speed slider: 12 gens/s at calm 1, 20 at
+// calm 0.55 to 0.85 (the default 0.7), 30 below. Each rate divides 60 and
+// 120, so a step lands on every Nth display frame and does not judder. The
+// trails soften period-2 blinkers, so 20 gens/s does not strobe.
+// STALL. A sampler every 500 ms keeps (gen, pop). When the population range
+// over the last 400 generations is under 1.5 % of the population, the soup
+// is ash: the canvas fades out, a new seed fills the world, and it fades in.
+// The plate shows the rule, the live generation and the population.
+const SAVER_FADE_MS = 900;
+let saverTimer = 0;
+function saverGps(calm) { return calm >= 0.85 ? 12 : calm >= 0.55 ? 20 : 30; }
+function saverPlate(label) {
+  if (!label) return;
+  const st = S.stats;
+  label({
+    title: "Conway's Game of Life",
+    sub: 'rule B3/S23 · ' + S.W + ' × ' + S.H + ' torus · ' + S.saverGps + ' gen/s',
+    lines: ['generation ' + fmt(S.gen), 'population ' + fmt(st.pop), 'births +' + fmt(st.births) + '  deaths −' + fmt(st.deaths)],
+    eq: ['B3: dead cell, n = 3  →  born', 'S23: live cell, n ∈ {2, 3}  →  survives', 'n = live cells of the 8 neighbours'],
+  });
+}
+function saverReseed(cv) {
+  cv.style.transition = 'opacity ' + SAVER_FADE_MS + 'ms ease'; cv.style.opacity = '0';
+  setTimeout(() => {
+    if (torn) return;
+    randomFill(); S.view.cx = S.W / 2; S.view.cy = S.H / 2; clampView();
+    cv.style.opacity = '1';
+  }, SAVER_FADE_MS + 60);
+}
 window.snSaver = {
   async enter(opts) {
     while (!window.__life) await new Promise(r => setTimeout(r, 50));
@@ -739,13 +766,34 @@ window.snSaver = {
     document.head.appendChild(st); document.documentElement.classList.add('saver');
     setPanel(false); setLearn(false); S.hover = null; S.occ = occlusion();
     S.grid = false; S.age = true; S.trails = true;
-    S.speedIdx = calm > 0.5 ? 3 : 4;
+    S.saverGps = saverGps(calm);
+    if (S.engine && S.engine.kind === 'cpu') S.saverGps = Math.min(S.saverGps, 15);
     S.seed = (opts.seed >>> 0) || 1; randomFill();
     S.view.cell = clamp(3 + (S.seed & 1), minCell(), MAX_CELL); S.view.cx = S.W / 2; S.view.cy = S.H / 2;
     clampView(); setRunning(true);
     resize();
-    return { canvas: $('gl'), warmupMs: 1500 };
+    const label = opts.labels === false ? null : opts.label, cv = $('gl');
+    let samples = [], fading = 0;
+    clearInterval(saverTimer);
+    saverTimer = setInterval(() => {
+      if (torn) { clearInterval(saverTimer); return; }
+      saverPlate(label);
+      if (performance.now() < fading) return;
+      if (S.gen < 40) { samples = []; return; }
+      samples.push([S.gen, S.stats.pop]);
+      while (samples.length > 2 && S.gen - samples[1][0] >= 400) samples.shift();
+      if (S.gen - samples[0][0] < 400) return;
+      let lo = Infinity, hi = -Infinity;
+      for (const [, p] of samples) { lo = Math.min(lo, p); hi = Math.max(hi, p); }
+      if (hi - lo <= Math.max(8, 0.015 * hi)) {
+        samples = []; fading = performance.now() + 2 * SAVER_FADE_MS + 500;
+        saverReseed(cv);
+      }
+    }, 500);
+    saverPlate(label);
+    return { canvas: cv, warmupMs: 1500 };
   },
+  exit() { clearInterval(saverTimer); saverTimer = 0; S.saverGps = 0; },
 };
 
 boot();
