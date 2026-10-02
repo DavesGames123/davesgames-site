@@ -75,6 +75,7 @@
 //      resize .............. "function resize"      canvas sizing and DPR
 //      loop ................ "function loop"        per-frame driver
 //      screensaver ......... "window.snSaver"      shell saver hook
+//      saver plate ......... "function saverPlate"  opts.label: law, RO values, TeX, anchor
 // ============================================================================
 // The drawing canvas and its 2D context. CW/CH are the CSS size; activeEq is the
 // index of the currently shown equation (0 to 3).
@@ -189,6 +190,8 @@ function renderCard(){
 // The readout at the base of the canvas. Only a changed string touches the
 // DOM, so a frame that shows the same numbers costs nothing.
 let readoutHTML='';
+// RO: the live numbers of the readout, for the saver plate.
+const RO={Qenc:0,out:0,inn:0,Bval:0,dBdt:0,Eind:0,Ienc:0,dEdt:0};
 function setReadout(html){
   if(html===readoutHTML)return;
   readoutHTML=html;document.getElementById('readout').innerHTML=html;
@@ -543,6 +546,7 @@ function renderGauss(dt){
     const x=px(c.x),y=py(c.y),r=Math.max(10,QR*K);
     body(x,y,r,c.q>0?RGB.Q:RGB.Qn);sign(x,y,r,c.q>0?'+':'-');
   }
+  RO.Qenc=Qenc;
   setReadout(`<span class="r"><i class="m4">Q</i><sub>enc</sub> = <b>${sgn(Qenc)}</b> q</span>`+
     `<span class="r">${STATE.charges.length} charge${STATE.charges.length===1?'':'s'} in the scene</span>`+
     `<span class="note">${Qenc===0?'Net flux through the surface: zero':'Net flux '+(Qenc>0?'outward':'inward')+', Φ = Q<sub>enc</sub>/ε₀'}</span>`);
@@ -604,6 +608,7 @@ function renderMonopoles(dt){
   ctx.fillStyle='rgba(10,12,18,0.85)';ctx.fillText('N',17.5,0.5);ctx.fillText('S',-17.5,0.5);
   ctx.restore();
 
+  RO.out=D.out;RO.inn=D.inn;
   setReadout(`<span class="r">lines out <b>${D.out}</b> &nbsp; lines in <b>${D.inn}</b></span>`+
     `<span class="r"><i>Φ</i><sub>B</sub> = <b>0</b></span><span class="note">Every line that leaves the surface comes back in</span>`);
 }
@@ -651,6 +656,7 @@ function renderFaraday(dt){
     }
     ctx.restore();
   }
+  RO.Bval=Bval;RO.dBdt=dBdt;RO.Eind=Eind;
   setReadout(`<span class="r"><i class="m1">B</i> = <b>${sgn(Bval,2)}</b> ${Bval>=0?'out of the page':'into the page'}</span>`+
     `<span class="r">∂<i class="m1">B</i>/∂<i>t</i> = <b>${sgn(dBdt,2)}</b> &nbsp; |<i class="m2">E</i>| at the rim = <b>${Eind.toFixed(2)}</b></span>`+
     `<span class="note">${Math.abs(dBdt)<0.1?'B does not change, so no E is induced':'E turns '+(s>0?'clockwise':'counterclockwise')+', against the change of flux'}</span>`);
@@ -793,6 +799,7 @@ function renderAmpere(dt){
   }
 
   const Ienc=STATE.ampWires.length?STATE.ampWires[0].I:0;
+  RO.Ienc=Ienc;RO.dEdt=dEdt;
   setReadout((STATE.ampWires.length?`<span class="r">loop: <i class="m5">I</i><sub>enc</sub> = <b>${sgn(Ienc)}</b> A</span>`:'')+
     `<span class="r">gap: ∂<i class="m2">E</i>/∂<i>t</i> = <b>${sgn(dEdt,2)}</b></span>`+
     `<span class="note">${Math.abs(dEdt)>0.1?'No charge crosses the gap, but B still turns round it':'E is not changing, so the gap makes no B'}</span>`);
@@ -934,6 +941,10 @@ window.snSaver={async enter(opts){
   STATE.charges=[{x:-55,y:0,q:1},{x:55,y:0,q:-1}];STATE.ampWires=[{x:0,y:WIRE_Y,I:2}];
   STATE.faradayRate=1;STATE.gaussR=70;
   let law=(opts.seed>>>0)%4,clock=0,tLaw=0,phi=0;
+  // With the shell plate on, the plate names the law, so the canvas caption
+  // is off. Without it (labels off, or a recording), the caption stays.
+  const plateOn=opts.labels!==false&&typeof opts.label==='function';
+  if(plateOn){let last='';const send=()=>{const L=saverPlate(),j=JSON.stringify(L);if(j!==last){last=j;opts.label(L);}};setTimeout(send,200);setInterval(send,1000);}
   switchEq(law);
   const base=render;
   render=function(dt){
@@ -950,7 +961,7 @@ window.snSaver={async enter(opts){
       STATE.dipX=30*Math.sin(clock*0.07);
     }
     base(dt*sp);
-    drawCaption();
+    if(!plateOn)drawCaption();
     // Fade out before a switch and in after it.
     const f=Math.max(0,1-tLaw/FADE,1-(hold-tLaw)/FADE);
     if(f>0){ctx.fillStyle=`rgba(10,12,18,${Math.min(1,f)})`;ctx.fillRect(0,0,CW,CH);}
@@ -969,3 +980,40 @@ window.snSaver={async enter(opts){
   }
   return{canvas,warmupMs:1500};
 }};
+// The saver plate (opts.label) for the active law: the law name, its plain
+// line, the live readout numbers (RO), the differential and integral forms
+// (the TeX of typeset.mjs) and the class map K of typeset.mjs (E m2, B m1,
+// rho and Q m4, J and I m5). The anchor is the scene object of the law in
+// page px, through px() and py():
+//   0 Gauss      the surface and the charges; key points the charges
+//   1 monopoles  the dipole and its closed surface (DIP_SR)
+//   2 Faraday    the flux disc of radius faradayR
+//   3 Ampère     the wire (0, WIRE_Y) and the capacitor gap (0, 105)
+const SV_TEX=[
+  [String.raw`\nabla\cdot\mathbf{E}=\frac{\rho}{\varepsilon_0}`,String.raw`\oint_{S}\mathbf{E}\cdot d\mathbf{A}=\frac{Q_{\text{enc}}}{\varepsilon_0}`],
+  [String.raw`\nabla\cdot\mathbf{B}=0`,String.raw`\oint_{S}\mathbf{B}\cdot d\mathbf{A}=0`],
+  [String.raw`\nabla\times\mathbf{E}=-\frac{\partial\mathbf{B}}{\partial t}`,String.raw`\oint_{C}\mathbf{E}\cdot d\boldsymbol{\ell}=-\frac{d\Phi_B}{dt}`],
+  [String.raw`\nabla\times\mathbf{B}=\mu_0\mathbf{J}+\mu_0\varepsilon_0\frac{\partial\mathbf{E}}{\partial t}`,String.raw`\oint_{C}\mathbf{B}\cdot d\boldsymbol{\ell}=\mu_0 I_{\text{enc}}+\mu_0\varepsilon_0\frac{d\Phi_E}{dt}`],
+];
+const SV_RULES=[['\\mathbf{E}','m2'],['\\Phi_E','m2'],['\\mathbf{B}','m1'],['\\Phi_B','m1'],['\\rho','m4'],['Q_{\\text{enc}}','m4'],['\\mathbf{J}','m5'],['I_{\\text{enc}}','m5']];
+function saverParams(){
+  const f=(v,d)=>sgn(v,d)||'0';
+  switch(activeEq){
+    case 0:return[{sym:'Q_{\\text{enc}}',name:'charge inside',value:f(RO.Qenc,0)+' q',cls:'m4'},{sym:'N',name:'charges',value:String(STATE.charges.length)},{sym:'R',name:'surface radius',value:STATE.gaussR+' units'}];
+    case 1:return[{sym:'\\Phi_B',name:'net flux',value:'0',cls:'m1'},{sym:'N',name:'lines out, in',value:RO.out+', '+RO.inn},{sym:'\\theta',name:'dipole angle',value:Math.round(((STATE.dipAngle*180/Math.PI)%360+360)%360)+'°'}];
+    case 2:return[{sym:'\\mathbf{B}',name:RO.Bval>=0?'out of the page':'into the page',value:f(RO.Bval,2),cls:'m1'},{sym:'\\partial\\mathbf{B}/\\partial t',name:'rate of change',value:f(RO.dBdt,2),cls:'m1'},{sym:'\\mathbf{E}',name:'|E| at the rim',value:RO.Eind.toFixed(2),cls:'m2'}];
+    default:return[{sym:'I_{\\text{enc}}',name:'wire current',value:f(RO.Ienc,0)+' A',cls:'m5'},{sym:'\\partial\\mathbf{E}/\\partial t',name:'in the gap',value:f(RO.dEdt,2),cls:'m2'}];
+  }
+}
+function saverAnchor(){
+  const b=canvas.getBoundingClientRect(),P=(u,v)=>({x:b.left+px(u),y:b.top+py(v)});
+  if(activeEq===0){const c=P(STATE.gaussX,STATE.gaussY);let r=STATE.gaussR*K;const pts=STATE.charges.map(q=>{const p=P(q.x,q.y);r=Math.max(r,Math.hypot(p.x-c.x,p.y-c.y)+Math.max(10,QR*K));return p;});return{x:c.x,y:c.y,r,pts:pts.length?pts.slice(0,8):[c]};}
+  if(activeEq===1){const c=P(STATE.dipX,STATE.dipY),a=STATE.dipAngle,h=17.5;return{x:c.x,y:c.y,r:DIP_SR*K,pts:[P(STATE.dipX+Math.cos(a)*h,STATE.dipY+Math.sin(a)*h),P(STATE.dipX-Math.cos(a)*h,STATE.dipY-Math.sin(a)*h)]};}
+  if(activeEq===2){const c=P(0,0);return{x:c.x,y:c.y,r:STATE.faradayR*K,pts:[c]};}
+  const c=P(0,17);return{x:c.x,y:c.y,r:130*K,pts:[P(0,WIRE_Y),P(0,105)]};
+}
+function saverPlate(){
+  const l=LAWS[activeEq];
+  return{title:l.num+' · '+l.name,sub:l.line,params:saverParams(),tex:SV_TEX[activeEq],rules:SV_RULES,
+    eq:[['∇·E = ρ/ε₀','∇·B = 0','∇×E = −∂B/∂t','∇×B = μ₀J + μ₀ε₀ ∂E/∂t'][activeEq]],anchor:saverAnchor};
+}
