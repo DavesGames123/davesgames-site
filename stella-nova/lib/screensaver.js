@@ -237,7 +237,8 @@ function buildMenu() {
       list += `<div class="con" style="--c:${c.color}"><div class="con-h" data-con="${esc(name)}">${esc(name)}</div>`;
       c.pages.forEach(p => {
         const t = tiers[p.tier] || {};
-        const badge = sec.id === 'ready' ? (p.hook ? '' : '<b class="tier t1" title="Good as it is">AS IS</b>') : `<b class="tier t${p.tier}" title="${esc(t.name || 'Not rated')}: ${esc(t.text || '')}">${esc(t.name || '?')}</b>`;
+        const off = sec.id === 'ready' && !CAT.pages[p.key].default;
+        const badge = sec.id === 'ready' ? (off ? '<b class="tier t0" title="Not in the default list; tick it to add it">EXTRA</b>' : p.hook ? '' : '<b class="tier t1" title="Good as it is">AS IS</b>') : `<b class="tier t${p.tier}" title="${esc(t.name || 'Not rated')}: ${esc(t.text || '')}">${esc(t.name || '?')}</b>`;
         list += `<label class="pg" title="${esc(p.note)}"><input type="checkbox" value="${p.key}" data-region="${p.region}"${sec.id === 'no' ? ' disabled' : ''}><span>${esc(p.label)}</span>${badge}</label>`;
       });
       list += '</div>';
@@ -319,8 +320,8 @@ function buildMenu() {
       boxes().forEach(b => {
         const p = pages[b.value];
         if (b.disabled) { b.checked = false; return; }
-        b.checked = v === 'none' ? false : v === 'ready' ? p.state === 'ready' : v === 'everything' ? p.state !== 'no'
-          : v.startsWith('region:') ? p.state === 'ready' && p.region === v.slice(7) : def.has(p.key);
+        b.checked = v === 'none' ? false : v === 'ready' ? def.has(p.key) : v === 'everything' ? p.state !== 'no'
+          : v.startsWith('region:') ? def.has(p.key) && p.region === v.slice(7) : def.has(p.key);
       });
       sync();
     }
