@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Differential — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   DIFFERENTIAL  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A car's rear axle in 3D: spiral bevel ring and
+   pinion, the carrier and its gears, half-shafts and wheels, in a housing
+   cut open. Three units: open, clutch-type limited slip, and a helical
+   Torsen. It drives straight, turns, meets ice and sits on a lift, and the
+   analysis shows the wheel speeds and the torque split. diff.js holds the
+   gear chain and the torque rules (no DOM, no THREE; tests.mjs runs it).
+   gears.js makes the teeth, scene.js the parts (kit.js), analysis.js the
+   plots, main.js runs the page.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts, style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (unit, view, drive, show), #anaPanel at
+                 the right (the analysis), #view fills the rest. #read is
+                 the speed readout, top left of the view.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: five tabs (Unit, View, Drive, Show,
+                 Analysis) and play. A tab opens #panel with only its .grp
+                 as a bottom sheet (portrait) or a drawer (landscape).
+                 main.js moves the analysis group into #panel on a phone.
+
+   GREP MAP  (main.js)
+     grep -n 'function swapTo'      build a unit and cross-fade to it
+     grep -n 'function redrive'     the scenario's speeds and torque
+     grep -n 'const VIEWS'          camera presets
+     grep -n 'function frame'       the loop
+     grep -n 'window.snSaver'       the screensaver tour
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A car differential in 3D: spiral bevel ring and pinion, spider and side gears, a clutch-type limited slip and a helical Torsen. Watch the wheels turn at different speeds in a corner, see where the torque goes on ice, and take it apart.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Differential</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <svg id="leader" aria-hidden="true"><line/><circle class="pulse" r="6"/><circle class="dotA" r="3"/></svg>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint">hover a part to name it · click to pin its card · drag to orbit</div>
+  <button id="anaOpen" type="button" hidden>∑ Speeds and torque</button>
+  <div class="tip" id="tipHover" aria-live="polite"><div class="tip-in"></div></div>
+  <div class="tip pinned" id="tipPin" aria-live="polite"><button id="tipPinClose" type="button" aria-label="Unpin">✕</button><div class="tip-in"></div></div>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the differential cannot render.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="diff">
+    <div class="sec-label first">Unit</div>
+    <div id="variants" class="three"></div>
+    <div id="engInfo">
+      <h1 id="engTitle">Differential</h1>
+      <div class="kind" id="engKind"></div>
+      <p class="lede" id="engLede"></p>
+    </div>
+    <div class="sec-label">Parts</div>
+    <div id="partList"></div>
+  </section>
+
+  <section class="grp" data-grp="view">
+    <div class="sec-label">View</div>
+    <div class="grid2" id="views">
+      <button data-view="three" type="button">Whole axle</button>
+      <button data-view="gears" type="button">Gear set</button>
+      <button data-view="ring" type="button">Ring &amp; pinion</button>
+      <button data-view="inside" type="button">Inside the case</button>
+      <button data-view="top" type="button">From above</button>
+      <button data-view="exploded" type="button">Exploded</button>
+    </div>
+    <div class="sec-label">Explode</div>
+    <div class="row"><label for="explode">Spread</label><input type="range" id="explode" min="0" max="1" step="0.01" value="0"><span class="val" id="explodeV"></span></div>
+    <div class="toggles">
+      <button class="tog" id="assemble" type="button">Assemble</button>
+      <button class="tog" id="burst" type="button">Explode</button>
+    </div>
+  </section>
+
+  <section class="grp" data-grp="drive">
+    <div class="sec-label">Situation</div>
+    <div class="grid2" id="scens">
+      <button data-scen="straight" type="button">Straight</button>
+      <button data-scen="corner" type="button">Corner</button>
+      <button data-scen="ice" type="button">One wheel on ice</button>
+      <button data-scen="lift" type="button">On a lift</button>
+    </div>
+    <p class="note" id="scenNote"></p>
+    <div id="cornerBox">
+      <div class="row"><label for="radius">Radius</label><input type="range" id="radius" min="4" max="40" step="1" value="8"><span class="val" id="radiusV"></span></div>
+      <div class="toggles"><button class="tog" id="dirL" type="button">↰ Left turn</button><button class="tog" id="dirR" type="button">Right turn ↱</button></div>
+    </div>
+    <div class="sec-label">Run</div>
+    <div class="grid3" id="rates">
+      <button data-rpm="0" type="button">❚❚ Pause</button>
+      <button data-rpm="6" type="button">6 rpm</button>
+      <button data-rpm="15" type="button">15 rpm</button>
+      <button data-rpm="30" type="button">30 rpm</button>
+      <button data-rpm="60" type="button">60 rpm</button>
+      <button data-rpm="120" type="button">120 rpm</button>
+    </div>
+    <div class="row"><label for="rpm" id="rpmLab">Carrier</label><input type="range" id="rpm" min="0" max="120" step="1" value="30"><span class="val" id="rpmV"></span></div>
+    <div class="row" id="tinRow"><label for="tin">T<sub>pinion</sub></label><input type="range" id="tin" min="0" max="400" step="5" value="250"><span class="val" id="tinV"></span></div>
+    <p class="note">Speed in rpm of the carrier (of the turned wheel on the lift). Torque in N·m into the pinion; the ring gear multiplies it by 41/11.</p>
+  </section>
+
+  <section class="grp" data-grp="show">
+    <div class="sec-label">Show</div>
+    <div class="grid2">
+      <button class="tog on" id="tHousing" type="button">Housing</button>
+      <button class="tog on" id="tSection" type="button">Cutaway</button>
+      <button class="tog on" id="tLabels" type="button">Labels</button>
+      <button class="tog on" id="tOrbit" type="button">Gentle orbit</button>
+    </div>
+    <p class="note">The cutaway removes the top half of the housing and of the carrier case. Labels show when the parts spread apart.</p>
+  </section>
+
+  <section class="grp ana" data-grp="ana" id="anaSec">
+    <div class="sec-label first">Now</div>
+    <div id="now" class="proc"></div>
+    <div class="sec-label">From above</div>
+    <canvas id="top" class="plot top"></canvas>
+    <div class="sec-label">Wheel speeds · last 12 s</div>
+    <canvas id="spd" class="plot spd"></canvas>
+    <div class="legend"><span class="ll"><i></i>left ω<sub>L</sub></span><span class="lr"><i></i>right ω<sub>R</sub></span><span class="lc"><i></i>carrier ω<sub>C</sub></span></div>
+    <div class="sec-label">Torque split</div>
+    <div id="split" class="split"></div>
+    <div id="splitLab" class="barlab"></div>
+    <div class="sec-label">Numbers</div>
+    <table class="readout" id="nums"></table>
+    <div class="sec-label">Relations</div>
+    <div id="eqs" class="eqs"></div>
+    <div class="sec-label">How it works</div>
+    <div class="about" id="about"></div>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Speeds and torque">
+  <button id="anaClose" type="button" aria-label="Close the analysis">✕</button>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="diff" type="button"><i>◎</i><span>Unit</span></button>
+  <button class="tab" data-grp="view" type="button"><i>◈</i><span>View</span></button>
+  <button class="tab" data-grp="drive" type="button"><i>◷</i><span>Drive</span></button>
+  <button class="tab" data-grp="show" type="button"><i>◐</i><span>Show</span></button>
+  <button class="tab" data-grp="ana" type="button"><i>∑</i><span>Analysis</span></button>
+  <button id="dockPlay" type="button" aria-label="Pause"><i>❚❚</i><span>Pause</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
