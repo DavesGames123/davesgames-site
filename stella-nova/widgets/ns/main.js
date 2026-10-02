@@ -51,6 +51,7 @@
 //      flow2d ............... "─── Flow 2D"        vorticity field + plots
 //      flow3d ............... "Flow 3D:"           advected tracers + plots
 //      main loop ............ "main loop"          view dispatch + error trap
+//      headset .............. "headset (VR / AR)"  lib/xr-view.js on vortex, flow3d
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -75,6 +76,8 @@ const COL = { bg:'#0a0810', blue:'#f6a03f', blueDim:'#a85f14', yellow:'#fcf1a4',
 const TOG = { arrows:true, phaseplane:true, series:true, trails:true, spin:true, chars:true, inviscid:true, fixed:true };
 // The active view. setView() overwrites it; the loop dispatches on it.
 let VIEW = 'wave';
+// Per-eye tracer resolution while a headset presents (see "headset (VR / AR)"), else null.
+let XR_RES = null;
 // Number formatters: fmt keeps a fixed decimal count but drops to scientific for
 // tiny non-zero values; fmtE picks scientific for very large or very small.
 const fmt = (x,d=3) => Math.abs(x) < 1e-3 && x !== 0 ? x.toExponential(2) : x.toFixed(d);
@@ -209,7 +212,7 @@ class TracerBundle{
   // Rebuild the geometry from a list of trails (each an array of [x,y,z,stretch]
   // points). Adjacent trails are joined by a black segment that is invisible under
   // additive blending, so one geometry can hold them all.
-  set(trails,visible){ this.lines.forEach(l=>l.visible=visible); if(!visible) return; const W=stage.clientWidth,H=stage.clientHeight; for(const m of this.mats) m.resolution.set(W,H);
+  set(trails,visible){ this.lines.forEach(l=>l.visible=visible); if(!visible) return; const W=XR_RES?XR_RES[0]:stage.clientWidth,H=XR_RES?XR_RES[1]:stage.clientHeight; for(const m of this.mats) m.resolution.set(W,H);
     let n=0; for(const t of trails) if(t.length>=2) n+=t.length+2; if(n<2){ this.lines.forEach(l=>l.visible=false); return; }
     // colour by stretching rate, normalised to the 95th percentile of all trail points this frame
     const samp=[]; let q=0; for(const t of trails) for(const p of t){ if((q++&7)===0) samp.push(Math.max(0,p[3])); } samp.sort((a,b)=>a-b); const p95=Math.max(1e-9,samp[Math.floor(samp.length*0.95)]||1); this.p95=p95;
@@ -581,7 +584,7 @@ function vxSeek(u){ VX.u=0; for(let i=0;i<VX.N;i++) VX.th[i]=VX.th0[i]; VX.trail
 function drawVortex(dtFrame){ ctx.clearRect(0,0,stage.clientWidth,stage.clientHeight);
   if(VX.playing){ vxStep(dtFrame*VX.spd*0.12); if(VX.u>=0.985){ VX.playing=false; $('x-play').textContent='play'; } $('r-xt').value=VX.u; $('v-xt').textContent=VX.u.toFixed(3); }
   VX.bundle.set(VX.trailHist,TOG.trails);
-  const rr=VX.renderer; rr.setScissorTest(false); rr.clear(); const Hv=stageH(); rr.setViewport(0,SCRUB_H,stage.clientWidth,Hv); rr.setScissor(0,SCRUB_H,stage.clientWidth,Hv); rr.setScissorTest(true); VX.camera.aspect=stage.clientWidth/Hv; VX.camera.updateProjectionMatrix();
+  const rr=VX.renderer; rr.setScissorTest(false); rr.clear(); const Hv=stageH(); if(!rr.xr.isPresenting){ rr.setViewport(0,SCRUB_H,stage.clientWidth,Hv); rr.setScissor(0,SCRUB_H,stage.clientWidth,Hv); rr.setScissorTest(true); } VX.camera.aspect=stage.clientWidth/Hv; VX.camera.updateProjectionMatrix();
   VX.controls.autoRotate=TOG.spin; VX.controls.update(); rr.render(VX.scene,VX.camera); rr.setScissorTest(false);
   const ell=VX.ell||1;
   $('x-ro').innerHTML=[['<i>T</i><sub>*</sub> − <i>t</i>',fmtE(1-VX.u)],['core length ℓ',fmtE(ell)],['sup|<i>u</i>| ∼ ℓ<sup>−1</sup>',fmtE(1/ell)],['vorticity ∼ ℓ<sup>−2</sup>',fmtE(1/(ell*ell))],['energy ∼ ℓ',fmtE(ell)],['enstrophy ∼ ℓ<sup>−1</sup>',fmtE(1/ell)],['∫ enstrophy dt (γ=½)',fmtE(2*(1-Math.sqrt(1-VX.u)))]]
@@ -857,7 +860,7 @@ function drawFlow3D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRec
   const ex=[]; if(F3.ic==='abc') for(let t=0;t<=tmax;t+=tmax/50) ex.push([t,s.E0*Math.exp(-2*s.nu*t)]);
   const P1=(x,y,w,h)=>logPlot(x,y,w,h,[{pts:s.hist.map(h=>[h.t,h.E]),col:COL.blue,width:1.6,label:'energy'},{pts:s.hist.map(h=>[h.t,h.Z]),col:COL.yellow,width:1.6,label:'enstrophy'},{pts:s.hist.map(h=>[h.t,h.m]),col:'rgba(243,238,238,0.7)',label:'max|ω|'},...(ex.length?[{pts:ex,col:COL.red,dash:[4,3],label:'ABC exact'}]:[])],tmax,Math.log10(Math.min(s.E0,s.Z0)*0.05),Math.log10(Math.max(s.m0,s.Z0)*4),{cursor:fr.t});
   const P2=(x,y,w,h)=>logPlot(x,y,w,h,[{pts:s.hist.map(h=>[h.t,h.bkm]),col:COL.green,width:1.8,label:'BKM integral'},{pts:s.hist.map(h=>[h.t,2*s.nu*h.Z]),col:COL.yellow,label:'2νZ = −dE/dt'}],tmax,-2.5,Math.log10(Math.max(1,s.bkm)*3)+0.3,{cursor:fr.t});
-  const r=VX.renderer; r.setScissorTest(false); r.clear(); const Hv=stageH(); r.setViewport(0,SCRUB_H,stage.clientWidth,Hv); r.setScissor(0,SCRUB_H,stage.clientWidth,Hv); r.setScissorTest(true); F3.camera.aspect=stage.clientWidth/Hv; F3.camera.updateProjectionMatrix();
+  const r=VX.renderer; r.setScissorTest(false); r.clear(); const Hv=stageH(); if(!r.xr.isPresenting){ r.setViewport(0,SCRUB_H,stage.clientWidth,Hv); r.setScissor(0,SCRUB_H,stage.clientWidth,Hv); r.setScissorTest(true); } F3.camera.aspect=stage.clientWidth/Hv; F3.camera.updateProjectionMatrix();
   F3.controls.autoRotate=TOG.spin; F3.controls.update(); r.render(F3.scene,F3.camera); r.setScissorTest(false);
   ovBegin(); ovEnd();
   // diagnostics live in the mathematics panel
@@ -908,3 +911,60 @@ function loopBody(now){
   scrubSync();
 }
 requestAnimationFrame(loop);
+
+/* ───────── headset (VR / AR) ───────── */
+// A page pinned to one of the two 3D views (ns-vortex, ns-flow3d) gets View in
+// VR and View in AR buttons through lib/xr-view.js. The buttons are made here,
+// in the view's own control section, so the six page HTML files stay the same.
+// They stay hidden until WebXR reports support.
+//   size      the model is a 0.5 m tabletop: the vortex ring (radius 4) or the
+//             periodic box (side 2·F3SCALE) fills a 9-unit box
+//   points    a headset eye has more pixels than the stage, so the particle
+//             size goes from 1.7 to 2.6 px in a session and back on exit
+//   tracers   XR_RES gives the fat lines the per-eye size (divided by 1.5, so
+//             a 1.4 px tracer is a little wider than one eye pixel)
+//   draw      drawVortex and drawFlow3D skip the stage viewport and scissor
+//             while three presents, because each eye has its own viewport
+//   panel     pause / play, reset, tracers on or off, and for flow3d the
+//             initial velocity and the grid
+//   grid      a 32³ flow3d step takes 34-41 ms on a desktop CPU (about 21
+//             fps), which a headset can not show without judder. A session
+//             therefore runs flow3d on the 16³ grid (5 ms a step, 60 fps) and
+//             goes back to the earlier grid on exit. A grid change restarts
+//             the flow. The panel can choose 32³ again; then exit keeps it.
+if (FIXED === 'vortex' || FIXED === 'flow3d') import('../../lib/xr-view.js').then(({ attachXR }) => {
+  const V = FIXED === 'vortex' ? VX : F3, sec = $('sec-' + FIXED);
+  const ids = FIXED === 'vortex' ? { play: 'x-play', reset: 'x-reset' } : { play: 'g-play', reset: 'g-reset' };
+  const lbl = document.createElement('div'); lbl.className = 'sec-lbl'; lbl.textContent = 'headset';
+  const row = document.createElement('div'); row.className = 'btnrow';
+  row.innerHTML = '<button class="btn" id="b-vr" type="button" hidden>view in VR</button><button class="btn" id="b-ar" type="button" hidden>view in AR</button>';
+  lbl.style.display = row.style.display = 'none';
+  const first = sec.querySelector('.btnrow'); first.after(lbl, row);
+  const trailRow = sec.querySelector('.tog-row[data-tog="trails"]');
+  const IC = ['column', 'taylor-green', 'abc'], IC_NAME = { column: 'vortex column', 'taylor-green': 'Taylor–Green', abc: 'ABC' };
+  const actions = [
+    { label: () => (FIXED === 'vortex' ? VX.playing : F3.playing) ? 'Pause' : 'Play', run: () => $(ids.play).click() },
+    { label: 'Reset', run: () => $(ids.reset).click() },
+    { label: () => TOG.trails ? 'Tracers: on' : 'Tracers: off', on: () => TOG.trails, run: () => trailRow && trailRow.click() },
+  ];
+  const setGrid = n => { const b = sec.querySelector(`[data-gn="${n}"]`); if (b) b.click(); };
+  let gridBefore = null;
+  if (FIXED === 'flow3d') actions.push(
+    { label: () => 'Initial: ' + IC_NAME[F3.ic],
+      run: () => { const b = sec.querySelector(`[data-gic="${IC[(IC.indexOf(F3.ic) + 1) % IC.length]}"]`); if (b) b.click(); } },
+    { label: () => 'Grid: ' + F3.n + '³', run: () => { gridBefore = null; setGrid(F3.n === 16 ? 32 : 16); } });
+  const half = FIXED === 'vortex' ? 4.5 : F3SCALE;
+  const xr = attachXR({
+    renderer: VX.renderer, scene: V.scene, camera: V.camera, controls: V.controls,
+    bounds: () => new THREE.Box3(new THREE.Vector3(-half, -half, -half), new THREE.Vector3(half, half, half)),
+    tableHeight: 0.5,
+    vrButton: $('b-vr'), arButton: $('b-ar'), vrLabel: 'view in VR', arLabel: 'view in AR',
+    title: FIXED === 'vortex' ? 'Blowup: vortex' : 'Navier–Stokes 3D',
+    actions,
+    update() { const rt = VX.renderer.getRenderTarget(); XR_RES = rt ? [rt.width / 2 / 1.5, rt.height / 1.5] : null; },
+    onEnter() { V.points.material.size = 2.6; if (FIXED === 'flow3d' && F3.n !== 16) { gridBefore = F3.n; setGrid(16); } },
+    onExit() { V.points.material.size = 1.7; XR_RES = null; if (gridBefore && F3.n === 16) setGrid(gridBefore); gridBefore = null; queueResize(); },
+    onSupport(s) { lbl.style.display = row.style.display = (s.vr || s.ar) ? '' : 'none'; },
+  });
+  window.__nsXR = { xr, V, VX, F3, TOG, FIXED };
+}).catch(e => console.warn('ns: xr-view did not load', e));
