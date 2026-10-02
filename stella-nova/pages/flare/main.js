@@ -286,20 +286,44 @@ window.snSaver = {
     // The plate: the particle sum of shaders/flare.frag.glsl with the live
     // params of this column. One fixed title, so the drifting hue φ and the
     // sway refresh in place once a second.
+    // The plate TeX: the particle sum of shaders/flare.frag.glsl (the
+    // Unicode eq list is the fallback). Colours: C m1, N m2, I m3, phi m4,
+    // f and psi m5.
+    var FLARE_TEX = [String.raw`C = \sum_{i<N} \frac{\mathrm{hue}_i\,B_i}{10^4\,|a_i|},\qquad \mathrm{colour} = \tanh(\mathrm{bg} + C^2)`,
+      String.raw`B_i = I\,e^{A \sin(i + i\psi)},\quad \psi = f\,t + 0.25\,y`,
+      String.raw`\mathrm{hue}_i = \cos\big(\sin i\,(1, 2, 3) + \varphi\big) + 1`,
+      String.raw`p \leftarrow p + \big(0.02\,L,\ 0.015\,S \cos(i(11 + i) + 2\psi)\big)`];
+    var FLARE_RULES = [['C', 'm1'], ['N', 'm2'], ['I', 'm3'], ['\\varphi', 'm4'], ['f', 'm5'], ['\\psi', 'm5']];
     var label = opts && typeof opts.label === 'function' ? opts.label : null;
     function plate() {
       if (!label) return;
       var f2 = function (v) { return Number(v).toFixed(2); };
-      label({ title: 'Flare study · ' + LABELS[i], sub: 'particle streak summed in one fragment pass',
+      label({ title: 'Flare study · ' + LABELS[i], sub: 'Particle streak summed in one fragment pass',
+        params: [{ sym: 'N', name: 'particles', value: String(Math.round(p.particleCount)), cls: 'm2' },
+          { sym: 'I', name: 'intensity', value: f2(p.intensity), cls: 'm3' },
+          { sym: '\\varphi', name: 'hue (drifts)', value: f2(p.colorShift) + ' rad', cls: 'm4' },
+          { sym: 'f', name: 'flicker rate', value: f2(p.flickerSpeed), cls: 'm5' },
+          { sym: 'L, S, w', name: 'trail length, spread, width', value: f2(p.trailLength) + ', ' + f2(p.trailSpread) + ', ' + f2(p.trailWidth) }],
+        lines: ['Origin (' + f2(p.posX) + ', ' + f2(p.posY) + ') of the frame, nebula noise k = ' + f2(p.noiseStrength)],
+        tex: FLARE_TEX, rules: FLARE_RULES,
         eq: ['C = Σᵢ hueᵢ·Bᵢ / (10⁴·|aᵢ|),  i < N',
           'hueᵢ = cos(sin i·(1, 2, 3) + φ) + 1',
           'Bᵢ = I·exp(A·sin(i + i·ψ)),  ψ = f·t + 0.25·y',
           'aᵢ = max(p, p / (w, 40·k·nebula))',
           'p ← p + (0.02·L, 0.015·S·cos(i(11 + i) + 2ψ))',
           'colour = tanh(bg + C²)'],
-        lines: ['N = ' + Math.round(p.particleCount) + ' particles · I = ' + f2(p.intensity) + ' · hue φ = ' + f2(p.colorShift) + ' rad (drifts)',
-          'flicker f = ' + f2(p.flickerSpeed) + ' · A = ' + f2(p.flickerAmt) + ' · trail L = ' + f2(p.trailLength) + ', S = ' + f2(p.trailSpread) + ', w = ' + f2(p.trailWidth),
-          'nebula noise k = ' + f2(p.noiseStrength) + ' · origin (' + f2(p.posX) + ', ' + f2(p.posY) + ') of the frame'] });
+        anchor: flareAnchor });
+    }
+    // The flare on screen, for the shell's label plate. flare.frag puts the
+    // origin (the hot head) at (posX, posY) of the canvas (y down in CSS).
+    // Below the head, a_i divides y by the nebula noise (up to 40 k), so
+    // the plume hangs straight down. Its length is not closed-form: about
+    // 0.04 N H, at most 0.45 H, matches the screenshots (N 6 and 10). pts:
+    // the head and the middle of the plume. Page CSS px.
+    function flareAnchor() {
+      var rc = instances[i].canvas.getBoundingClientRect(), H = rc.height;
+      var hx = rc.left + p.posX * rc.width, hy = rc.top + p.posY * H, len = Math.min(0.45, 0.04 * p.particleCount) * H;
+      return { x: hx, y: hy + len / 2, r: len / 2 + 0.03 * H, pts: [{ x: hx, y: hy }, { x: hx, y: hy + len / 2 }] };
     }
     plate();
     clearInterval(this.plateTimer);
