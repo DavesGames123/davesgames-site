@@ -3,6 +3,7 @@
 // RT.rebuild/RT.loadPreset, runs each init in order, then starts the loop.
 //   grep -n "function rebuild" main.js   grep -n "function loop" main.js
 //   grep -n "window.snSaver" main.js   (screensaver hook for lib/screensaver.js)
+//   grep -n "function saverPlate" main.js   (its label plate: algorithm, size, gate)
 import { VS, RT, controls, composer, currentStageFor, stageDuration, stageFrame, totalStackTime } from './core.js';
 import { buildTrace } from './quantum.js';
 import { presetGates, PRESET_N, densityToCell } from './presets.js';
@@ -86,6 +87,57 @@ resize();clampQ();loadPreset('qft');requestAnimationFrame(loop);
 // (1 = slowest) scales the playhead and the auto-orbit. No exit(): the shell
 // reloads the page on stop.
 const SAVER_PRESETS=['qft','ghz','grover','scramble','iqft'];
+// The plate for opts.label (the shell draws it at the lower right). ALGO holds
+// the name and the equation of each saver preset, as presetGates builds it.
+// The live lines come from RT.trace: the step that stageFrame shows, its gate,
+// its qubits, and the largest population of the state after that step.
+const ALGO={
+  qft:{name:'Quantum Fourier transform',sub:'H and RZ prepare a phase pattern, then QFT',
+    eq:['QFT|x⟩ = (1/√2ⁿ) Σₖ e^(2πi·xk/2ⁿ) |k⟩',
+        'built from H, CP(π/2ᵈ) and the final SWAPs',
+        'CP(λ): RZ(λ/2)ᶜ, CX, RZ(−λ/2)ᵗ, CX, RZ(λ/2)ᵗ in time order']},
+  iqft:{name:'Inverse quantum Fourier transform',sub:'H on every qubit, then QFT†',
+    eq:['QFT†|k⟩ = (1/√2ⁿ) Σₓ e^(−2πi·xk/2ⁿ) |x⟩',
+        'Hⁿ|0…0⟩ = QFT|0…0⟩, so QFT† returns |0…0⟩',
+        'CP(−π/2ᵈ) phases, then the final SWAPs']},
+  ghz:{name:'GHZ state',sub:'H on q0, then a CX fan-out, then measure',
+    eq:['|GHZ⟩ = (|0…0⟩ + |1…1⟩) / √2',
+        'CX|c,t⟩ = |c, t ⊕ c⟩',
+        'ρ: 4 nonzero cells, 2 populations and 2 coherences']},
+  grover:{name:'Grover search, 3 qubits',sub:'oracle marks |111⟩, then one diffusion step',
+    eq:['Oracle: CCZ = I − 2|111⟩⟨111| (H · CCX · H)',
+        'Diffusion: H³X³ · CCZ · X³H³ = I − 2|s⟩⟨s|',
+        'P(|111⟩) = sin²3θ = 25/32, sin θ = 1/√8']},
+  scramble:{name:'Scrambler circuit',sub:'H, RZ phases, a CX ring, H, a CZ chain',
+    eq:['|ψ⟩ = Π CZ · Hⁿ · CX ring · Π RZ(φ_q) · Hⁿ |0…0⟩',
+        'RZ(φ) = diag(e^(−iφ/2), e^(iφ/2))',
+        'CZ = diag(1, 1, 1, −1)']},
+};
+const GATE_EQ={h:'H = (1/√2)[[1, 1], [1, −1]]',x:'X = [[0, 1], [1, 0]]',cx:'CX|c,t⟩ = |c, t ⊕ c⟩',
+  cz:'CZ = diag(1, 1, 1, −1)',ccx:'CCX|a,b,t⟩ = |a, b, t ⊕ ab⟩',swap:'SWAP|a,b⟩ = |b,a⟩',
+  rz:'RZ(φ) = diag(e^(−iφ/2), e^(iφ/2))',ry:'RY(φ) = [[cos φ/2, −sin φ/2], [sin φ/2, cos φ/2]]',
+  measure:'P(b) = |⟨b|ψ⟩|², then |ψ⟩ → |b⟩'};
+function gateText(st){
+  if(!st)return 'start state |'+RT.initBasis.toString(2).padStart(VS.numQubits,'0')+'⟩';
+  const nm=st.name.toUpperCase(),c=st.controls||[],t=st.targets||[];
+  if(st.kind==='measurement')return 'MEASURE q'+t.join(',q')+(st.selectedOutcome!=null?' → |'+st.selectedOutcome+'⟩':'');
+  let s=nm+(st.params&&st.params.length?'('+st.params[0].toFixed(3).replace('-','−')+')':'');
+  if(c.length)s+=' control q'+c.join(',q')+' → target q'+t.join(',q');else s+=' on q'+t.join(',q');
+  return s;
+}
+function saverPlate(){
+  const a=ALGO[VS.preset]||{name:VS.preset,sub:'',eq:[]},n=VS.numQubits,tr=RT.trace;
+  const stage=tr?currentStageFor(VS.stageTime):0,st=tr&&stage>0?tr.steps[stage-1]:null;
+  const lines=[n+' qubits · '+VS.gates.length+' gates · ρ = '+RT.DIM+' × '+RT.DIM+' per layer',
+    'Gate '+stage+' of '+VS.gates.length+': '+gateText(st)];
+  const ps=RT.layerStates[stage];
+  if(ps){let bi=0,bp=-1;for(let i=0;i<ps.re.length;i++){const p=ps.re[i]*ps.re[i]+ps.im[i]*ps.im[i];if(p>bp){bp=p;bi=i;}}
+    lines.push('Largest population: |'+bi.toString(2).padStart(n,'0')+'⟩, P = '+bp.toFixed(3));}
+  const eq=a.eq.slice();
+  if(st&&GATE_EQ[st.name])eq.push(GATE_EQ[st.name]);
+  eq.push('ρ = |ψ⟩⟨ψ|, one layer for each gate');
+  return {title:a.name,sub:a.sub,lines,eq};
+}
 window.snSaver={
   enter(o){
     const calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
@@ -99,6 +151,10 @@ window.snSaver={
     VS.playing=true;VS.speed=2-1.4*calm;
     controls.autoRotate=true;controls.autoRotateSpeed=0.55*(1-0.5*calm);
     resize();
+    // Plate: at most one call each second, and only when the text changes.
+    if(o&&typeof o.label==='function'){let lastPlate='';
+      const tick=()=>{const p=saverPlate(),j=JSON.stringify(p);if(j!==lastPlate){lastPlate=j;o.label(p);}};
+      tick();setInterval(tick,1000);}
     return {canvas:document.getElementById('gl'),warmupMs:1500};
   }
 };
