@@ -38,6 +38,7 @@
 //      noise texture ........ "function makeNoiseTex"  LCG-filled 256x256 RGBA
 //      WebGPU init .......... "navigator.gpu"        device, pipeline, bind group
 //      frame loop ........... "function frame"       per-frame update + draw
+//      screensaver hook ..... "window.snSaver"       calm autopilot for the shell
 // ============================================================================
 
 // On-screen debug log: any error or WGSL compile message is appended here so
@@ -128,6 +129,7 @@ var lastTs=0, frames=0, fpsTime=0;
 var mouseX=200, dragging=false, dragSX=0, mxS=0;
 var scrubbing=false;
 var FDT=1/60;
+var saverGain=1; // brightness gain; the screensaver fades it at each loop wrap
 document.getElementById('seedLabel').textContent=seed.toFixed(1);
 
 // ═══════════════════════════════════════════════════════════
@@ -511,7 +513,7 @@ function makeNoiseTex(){var S=256,data=new Uint8Array(S*S*4),s=48271;for(var i=0
     // zoom, density_scale, quality, brightness, seed, scale) and upload them.
     var ud=new Float32Array(12);
     ud[0]=cv.width;ud[1]=cv.height;ud[2]=Math.max(0,currentTime);ud[3]=mouseX;
-    ud[4]=zoom;ud[5]=curDensity;ud[6]=quality;ud[7]=curBright;ud[8]=seed;ud[9]=curScale;
+    ud[4]=zoom;ud[5]=curDensity;ud[6]=quality;ud[7]=curBright*saverGain;ud[8]=seed;ud[9]=curScale;
     device.queue.writeBuffer(uniformBuf,0,ud);
 
     // Record and submit one render pass: clear, draw the triangle, present.
@@ -523,3 +525,40 @@ function makeNoiseTex(){var S=256,data=new Uint8Array(S*S*4),s=48271;for(var i=0
   }catch(e){dbg('FRAME:'+e.message+'\n'+e.stack);}}
   requestAnimationFrame(frame);
 }catch(e){dbg('INIT:'+e.message+'\n'+e.stack);}})();
+
+// ═══════════════════════════════════════════════════════════
+// Screensaver hook (stella-nova/lib/screensaver.js)
+// ═══════════════════════════════════════════════════════════
+// The shell calls enter() in screensaver mode. It hides the player chrome,
+// fills the window with the viewport, pulls the camera back, slows the
+// playback, dims the fireball and orbits the view.
+// The gain fades to black before the loop wrap and back in after it, and each
+// new loop gets a new seed, so the wrap is not a hard cut.
+window.snSaver={
+  raf:0,
+  enter:function(opts){
+    var calm=Math.max(0,Math.min(1,opts&&opts.calm!=null?opts.calm:0.7));
+    var st=document.createElement('style');
+    st.textContent='body{padding:0;overflow:hidden}.player{width:100vw}'+
+      '.viewport{aspect-ratio:auto;height:100vh;border:0;cursor:none}'+
+      '.controls,.dope-sheet,.vp-chrome,#dbg{display:none!important}';
+    document.head.appendChild(st);
+    speed=0.15+0.35*(1-calm);
+    seed=((opts&&opts.seed)||0)%1000;
+    playing=true;currentTime=0;zoom=0;
+    var peak=1-0.35*calm; // a dimmer fireball at high calm
+    var spin=0.03+0.07*(1-calm), last=0, prev=currentTime, self=this;
+    function step(ts){
+      var dt=last?Math.min(0.1,(ts-last)/1000):0;last=ts;
+      mouseX+=dt*spin/(0.008*Math.PI); // shader yaw is mouseX*0.008*pi rad
+      if(currentTime<prev)seed=(seed*7.31+13)%1000;
+      prev=currentTime;
+      var u=currentTime/duration;
+      saverGain=peak*Math.max(0,Math.min(1,u/0.06,(1-u)/0.08));
+      self.raf=requestAnimationFrame(step);
+    }
+    this.raf=requestAnimationFrame(step);
+    return {canvas:cv,warmupMs:500};
+  },
+  exit:function(){cancelAnimationFrame(this.raf);speed=1;saverGain=1;}
+};
