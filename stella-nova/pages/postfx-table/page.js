@@ -69,6 +69,12 @@ export const PAGE = {
     else if (kind === '2d') { SRC2D[id](this.wctx, 512); this.pending = () => this.copyWork(); }
     else if (kind === 'noise') this.pending = () => this.renderNoise(id, this.tex.createView(), 512);
   },
+  // screensaver (lib/table-engine.js saverEnter): a sample photo from the seed
+  saver(t, opts) {
+    const ids = ['astronaut', 'chelsea', 'coffee', 'rocket', 'hubble_deep_field', 'motorcycle_left', 'coins'].filter(id => this.photos[id]);
+    const id = ids[((opts.seed >>> 0) >>> 5) % ids.length];
+    this.select(id, 'photo', this.ctx.$('thumbs').children[Object.keys(this.photos).indexOf(id)]);
+  },
   loadImage(file) {
     const img = new Image(); img.onload = () => { const s = Math.max(512 / img.width, 512 / img.height); const w = img.width * s, h = img.height * s;
       this.wctx.fillStyle = '#000'; this.wctx.fillRect(0, 0, 512, 512); this.wctx.drawImage(img, (512 - w) / 2, (512 - h) / 2, w, h);
