@@ -56,7 +56,10 @@
 //      loop ................. "function loop"        the frame driver
 //      hidden page .......... "visibilitychange"     stop / restart loop
 //      init ................. "INIT"                first magnet + start
-//      screensaver .......... "SCREENSAVER"         window.snSaver hook
+//      screensaver .......... "SCREENSAVER"         window.snSaver scene tour
+//      saver scenes ......... "const SAVER_SCENES"  configurations + labels
+//      iron filings ......... "function renderFilings"  saver-only layer
+//      tracer colour mode ... "uMode"               |B|, direction or silver
 // ============================================================================
 
 /* ════════════════════════════════════════════════════════════
@@ -76,6 +79,9 @@ let CW = 100, CH = 100;
 const SIM = {
   playing:true, showTracers:true, showArrows:true, showHeatmap:false,
   tracerCount:2500, tracerSpeed:1.5, tracerTrail:40,
+  // Screensaver-only layers: trMode is the tracer colour mode (see TR_FS),
+  // showFilings draws the iron-filings layer (renderFilings).
+  trMode:0, showFilings:false,
   dt:1/60, damping:0.97, angDamping:0.85, selectedId:-1,
 };
 
@@ -538,6 +544,7 @@ function render(){
   for(let y=gy0;y<vb.y1;y+=gs){ctx.beginPath();ctx.moveTo(vb.x0,y);ctx.lineTo(vb.x1,y);ctx.stroke();}
 
   if(SIM.showHeatmap) renderHeatmap();
+  if(SIM.showFilings) renderFilings();
   if(SIM.showArrows) renderArrows();
   if(SIM.showTracers) renderTracers();
   renderMagnets();
@@ -620,6 +627,7 @@ const TR_VS=`
 attribute vec2 aCorner; attribute vec4 aP; attribute vec4 aA; attribute vec4 aB; attribute vec4 aN;
 uniform vec2 uRes; uniform vec2 uCam; uniform float uZoom; uniform float uDpr;
 varying float vDist; varying float vAlong; varying float vGlow; varying float vCore; varying float vFade; varying float vLc;
+varying vec2 vDir;
 vec2 toScreen(vec2 w){ return (w-0.5*uRes+uCam)*uZoom+0.5*uRes; }
 vec2 dirOf(vec2 a,vec2 b,vec2 fb){ vec2 d=b-a; float l=length(d); return l>1e-5?d/l:fb; }
 // Miter offset at a joint: the bisector of the two segment normals, scaled so
@@ -630,7 +638,7 @@ vec2 miter(vec2 n,vec2 dOther,bool has){
   return m/max(dot(m,n),0.5);
 }
 void main(){
-  vDist=0.0; vAlong=0.0; vGlow=0.0; vCore=0.0; vFade=0.0; vLc=0.0;
+  vDist=0.0; vAlong=0.0; vGlow=0.0; vCore=0.0; vFade=0.0; vLc=0.0; vDir=vec2(1.0,0.0);
   if(aA.w<0.0||aB.w<0.0){ gl_Position=vec4(2.0,2.0,2.0,1.0); return; }
   vec2 sA=toScreen(aA.xy), sB=toScreen(aB.xy);
   vec2 d=sB-sA; float L=length(d);
@@ -649,17 +657,28 @@ void main(){
   float along=mix(-cap,L,aCorner.x);
   vec2 s=sA+dir*along+j*(aCorner.y*halfExt/uDpr);
   gl_Position=vec4(s.x/uRes.x*2.0-1.0,1.0-s.y/uRes.y*2.0,0.0,1.0);
-  vDist=aCorner.y*halfExt; vAlong=along*uDpr; vGlow=glow; vCore=core; vFade=f; vLc=mix(lcA,aB.z,aCorner.x);
+  vDist=aCorner.y*halfExt; vAlong=along*uDpr; vGlow=glow; vCore=core; vFade=f; vLc=mix(lcA,aB.z,aCorner.x); vDir=dir;
 }`;
 const TR_FS=`
 precision mediump float;
 varying float vDist; varying float vAlong; varying float vGlow; varying float vCore; varying float vFade; varying float vLc;
+varying vec2 vDir;
+// uMode: 0 = |B| ramp (the page default), 1 = hue from the direction of B,
+// 2 = silver, brightness from |B|. Only the screensaver sets 1 or 2.
+uniform float uMode;
 ${glslRamp()}
 float cov(float w,float d){ float we=max(w,1.0); return clamp(0.5*we+0.5-d,0.0,1.0)*(w/we); }
 void main(){
   float dx=max(0.0,-vAlong);          // > 0 only inside the head cap
   float d=sqrt(dx*dx+vDist*vDist);
-  vec3 c=ramp(vLc)*(vFade*(0.12*cov(vGlow,d)+0.55*cov(vCore,d)));
+  vec3 col=ramp(vLc);
+  if(uMode>0.5&&uMode<1.5){
+    float h=atan(vDir.y,vDir.x)/6.2831853+0.5;
+    col=clamp(abs(fract(h+vec3(0.0,2.0/3.0,1.0/3.0))*6.0-3.0)-1.0,0.0,1.0)*(0.35+0.75*vLc);
+  } else if(uMode>1.5){
+    col=vec3(0.80,0.86,0.96)*(0.25+0.9*vLc);
+  }
+  vec3 c=col*(vFade*(0.12*cov(vGlow,d)+0.55*cov(vCore,d)));
   gl_FragColor=vec4(c,max(c.r,max(c.g,c.b)));
 }`;
 
@@ -685,7 +704,8 @@ function initTracerGL(){
     glLoc={corner:gl.getAttribLocation(p,'aCorner'),P:gl.getAttribLocation(p,'aP'),A:gl.getAttribLocation(p,'aA'),
       B:gl.getAttribLocation(p,'aB'),N:gl.getAttribLocation(p,'aN'),
       res:gl.getUniformLocation(p,'uRes'),cam:gl.getUniformLocation(p,'uCam'),
-      zoom:gl.getUniformLocation(p,'uZoom'),dpr:gl.getUniformLocation(p,'uDpr')};
+      zoom:gl.getUniformLocation(p,'uZoom'),dpr:gl.getUniformLocation(p,'uDpr'),
+      mode:gl.getUniformLocation(p,'uMode')};
     // Static quad corners: x = 0 at A and 1 at B, y = -1 or +1 across the line.
     const cb=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,cb);
     gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([0,-1,1,-1,0,1,1,1]),gl.STATIC_DRAW);
@@ -742,6 +762,7 @@ function renderTracersGL(){
   for(let k=0;k<4;k++){ gl.enableVertexAttribArray(at[k]); gl.vertexAttribPointer(at[k],4,gl.FLOAT,false,16,16*k); glInst.div(at[k],1); }
   gl.uniform2f(glLoc.res,CW,CH); gl.uniform2f(glLoc.cam,CAM.x,CAM.y);
   gl.uniform1f(glLoc.zoom,CAM.zoom); gl.uniform1f(glLoc.dpr,glCanvas.width/CW);
+  gl.uniform1f(glLoc.mode,SIM.trMode);
   glInst.draw(gl.TRIANGLE_STRIP,0,4,slots-1);
   return true;
 }
@@ -1217,6 +1238,7 @@ function loop(time){
   const dt=Math.max(0,Math.min((time-lastTime)/1000,0.05));lastTime=time;
   fpsCounter++;fpsTime+=dt;
   if(fpsTime>=0.5){stFps.textContent=Math.round(fpsCounter/fpsTime)+' fps';fpsCounter=0;fpsTime=0;}
+  if(saverOn) saverStep(dt);
   if(SIM.playing) integrateMagnets();
   refreshFrameCache();
   if(SIM.playing) updateTracers(dt);
@@ -1226,6 +1248,7 @@ function loop(time){
   }
   stZoom.textContent=CAM.zoom.toFixed(1)+'×';
   render();
+  if(saverOn) saverOverlay();
 }
 
 // Stop the loop while the page is hidden. The browser already stops rAF in a
@@ -1254,12 +1277,199 @@ setTimeout(()=>{
   if(!document.hidden) rafId=requestAnimationFrame(loop);
 },50);
 
+
 /* ═══ SCREENSAVER ═══ */
 // Hook for the shell screensaver (lib/screensaver.js). enter() hides the panel,
 // status bar, equation card and overlays, so #canvas-wrap fills the window and
-// resize() sizes the canvas to it. It then builds a two-magnet scene chosen by
-// opts.seed. Both magnets stay fixed and turn slowly, so the field rotates with
-// no collisions. opts.calm (1 = slowest) scales the spin and the tracer speed.
+// resize() sizes the canvas to it. The saver then plays a tour of magnet
+// configurations (SAVER_SCENES) in a seeded order. Each scene builds its own
+// fixed magnets, moves them in saverStep() on smooth paths, and picks a view:
+// field lines coloured by |B|, by the direction of B, silver lines, a heat map
+// under the lines, or an iron-filings layer. A scene change fades through
+// black (saverOverlay). Each scene sends opts.label its field equation and its
+// live parameters. opts.calm (1 = slowest) scales every rate.
+//
+//   grep -n targets: "const SAVER_SCENES", "function saverStep",
+//   "function saverScene", "function renderFilings", "window.snSaver"
+let saverOn=false;
+const SV={opts:null,order:[],k:0,t:0,dwell:20,slow:1,scene:null,st:null,fade:1,cx:0,cy:0,R:200};
+const FADE_S=1.4;
+const deg=a=>Math.round(a*180/Math.PI);
+const fx=(v,n=2)=>(+v).toFixed(n);
+// An angular rate as the viewer sees it: scene time runs at SV.slow.
+const om=w=>fx(w*SV.slow,3);
+
+// Small builders. A saver magnet is fixed, so the collision code does not move
+// it, and saverStep() owns its position and angle.
+function svMag(type,x,y,angle,strength){
+  const m=createMagnet(type,x,y); m.angle=angle; m.fixed=true;
+  if(strength!=null) m.strength=strength; return m;
+}
+// One dipole of a ring or an array: a 'dipole' body with its moment along angle.
+const svDip=(x,y,a,s)=>svMag('dipole',x,y,a,s??1.4);
+
+// View presets. trMode is the tracer colour mode in TR_FS.
+const VIEWS={
+  mag:   {name:'field lines, colour = |B| (log scale)',     tr:true, mode:0, heat:false, fil:false},
+  dir:   {name:'field lines, hue = direction of B',          tr:true, mode:1, heat:false, fil:false},
+  silver:{name:'field lines, brightness = |B|',              tr:true, mode:2, heat:false, fil:false},
+  heat:  {name:'heat map of |B| under the field lines',      tr:true, mode:2, heat:true,  fil:false},
+  filings:{name:'iron filings: each one turns until τ = m × B = 0', tr:false, mode:0, heat:false, fil:true},
+};
+const DIPOLE_EQ='B(r) = (μ₀/4π)·[3(m·r̂)r̂ − m] / r³';
+const SUM_EQ='B = Σᵢ (μ₀/4π)·[3(mᵢ·r̂ᵢ)r̂ᵢ − mᵢ] / rᵢ³';
+
+// The scenes. build(st) puts the magnets in `magnets` and fills st. step(st,t)
+// moves them; t is the scene time in seconds, already scaled by calm. label(st)
+// gives the plate. views lists the views a scene can take (seeded choice).
+const SAVER_SCENES=[
+  { id:'dipole', views:['mag','filings','dir'],
+    build(st){ st.w=0.22; magnets=[svMag('bar',SV.cx,SV.cy,0,1.2)]; },
+    step(st,t){ magnets[0].angle=st.w*t; },
+    label:st=>({title:'A single bar magnet', sub:'magnetic dipole',
+      eq:[DIPOLE_EQ,'|B| ∝ 1/r³ far from the magnet'],
+      lines:['axis angle '+((deg(magnets[0].angle)%360+360)%360)+'°, turning at ω = '+om(st.w)+' rad/s']}) },
+
+  { id:'attract', views:['mag','filings','silver'],
+    build(st){ st.d0=SV.R*0.55; st.a=SV.R*0.18; st.w=0.35; st.rot=0.05;
+      magnets=[svMag('bar',0,0,0,1.2),svMag('bar',0,0,0,1.2)]; },
+    step(st,t){ const d=st.d0+st.a*Math.sin(st.w*t), a=st.rot*t, c=Math.cos(a), s=Math.sin(a);
+      st.d=d; magnets[0].x=SV.cx-c*d/2; magnets[0].y=SV.cy-s*d/2; magnets[1].x=SV.cx+c*d/2; magnets[1].y=SV.cy+s*d/2;
+      magnets[0].angle=a; magnets[1].angle=a; },
+    label:st=>({title:'Two magnets, N facing S', sub:'attracting pair',
+      eq:['F = 3μ₀ m₁m₂ / (2π d⁴)   (coaxial dipoles)','U = −m·B,  F = ∇(m·B)'],
+      lines:['the field lines run across the gap','gap d breathes '+Math.round(st.d0-st.a)+'–'+Math.round(st.d0+st.a)+' px at ω = '+om(st.w)+' rad/s']}) },
+
+  { id:'repel', views:['mag','dir','filings'],
+    build(st){ st.d0=SV.R*0.6; st.a=SV.R*0.18; st.w=0.3; st.rot=-0.05;
+      magnets=[svMag('bar',0,0,0,1.2),svMag('bar',0,0,Math.PI,1.2)]; },
+    step(st,t){ const d=st.d0+st.a*Math.sin(st.w*t), a=st.rot*t, c=Math.cos(a), s=Math.sin(a);
+      magnets[0].x=SV.cx-c*d/2; magnets[0].y=SV.cy-s*d/2; magnets[1].x=SV.cx+c*d/2; magnets[1].y=SV.cy+s*d/2;
+      magnets[0].angle=a; magnets[1].angle=a+Math.PI; },
+    label:st=>({title:'Two magnets, N facing N', sub:'repelling pair',
+      eq:['F = 3μ₀ m₁m₂ / (2π d⁴), pushing apart','B = 0 at the null point between the poles'],
+      lines:['the lines turn away from the gap','gap d breathes '+Math.round(st.d0-st.a)+'–'+Math.round(st.d0+st.a)+' px at ω = '+om(st.w)+' rad/s']}) },
+
+  { id:'quad', views:['mag','dir','heat'],
+    build(st){ st.r=SV.R*0.55; st.w=0.07; magnets=[0,1,2,3].map(()=>svMag('bar',0,0,0,1.3)); },
+    step(st,t){ for(let i=0;i<4;i++){ const p=Math.PI/4+i*Math.PI/2+st.w*t, m=magnets[i];
+      m.x=SV.cx+Math.cos(p)*st.r; m.y=SV.cy+Math.sin(p)*st.r; m.angle=p+(i%2?Math.PI:0); } },
+    label:st=>({title:'Quadrupole lens', sub:'four magnets, poles N S N S',
+      eq:['Bx = G·y,   By = G·x','|B| = G·r   (zero on the axis)'],
+      lines:['bore radius '+Math.round(st.r)+' px','the lens turns at ω = '+om(st.w)+' rad/s','used to focus beams in accelerators']}) },
+
+  { id:'halbach-ring', views:['mag','dir','heat','silver'],
+    build(st){ const ks=[2,2,3,-2]; st.k=ks[SV.pick(ks.length)]; st.n=12; st.r=SV.R*0.62; st.w=0.05;
+      magnets=[]; for(let i=0;i<st.n;i++) magnets.push(svDip(0,0,0,1.6)); },
+    step(st,t){ const sp=st.w*t; for(let i=0;i<st.n;i++){ const th=i/st.n*2*Math.PI, m=magnets[i];
+      m.x=SV.cx+Math.cos(th+sp)*st.r; m.y=SV.cy+Math.sin(th+sp)*st.r; m.angle=st.k*th+sp; } },
+    label:st=>({title:'Halbach cylinder, k = '+st.k, sub:st.n+' dipoles on a ring',
+      eq:['m̂(θ) = (cos kθ, sin kθ)','B in the bore ∝ r^(k−2)'],
+      lines:[st.k===2?'k = 2: near-uniform field in the bore, weak outside'
+            :st.k===3?'k = 3: quadrupole in the bore, B = 0 at the centre'
+            :'k = −2: the flux goes outside, the bore is near zero',
+        'ring radius '+Math.round(st.r)+' px, turning at ω = '+om(st.w)+' rad/s']}) },
+
+  { id:'halbach-line', views:['mag','silver','filings'],
+    build(st){ st.n=12; st.gap=Math.min(46,CW*0.9/st.n); st.w=0.09;
+      magnets=[]; for(let i=0;i<st.n;i++) magnets.push(svDip(0,0,0,1.6)); },
+    step(st,t){ const a=0.25*Math.sin(st.w*t), c=Math.cos(a), s=Math.sin(a);
+      for(let i=0;i<st.n;i++){ const u=(i-(st.n-1)/2)*st.gap, m=magnets[i];
+        m.x=SV.cx+c*u; m.y=SV.cy+s*u; m.angle=a+i*Math.PI/2; } },
+    label:st=>({title:'Linear Halbach array', sub:st.n+' dipoles, each turned 90°',
+      eq:['m̂(x) = (cos kx, sin kx),  k = 2π/λ','B ∝ e^(−k|y|) on the strong face'],
+      lines:['strong face below the array, weak face above','λ = '+Math.round(st.gap*4)+' px, rocking ±14°']}) },
+
+  { id:'orbit', views:['mag','dir','silver'],
+    build(st){ st.R=SV.R*0.62; st.w=0.25; magnets=[svMag('solenoid',SV.cx,SV.cy,0,1.4),svMag('buzzer',0,0,0,1.2)]; },
+    step(st,t){ const p=st.w*t, m=magnets[1]; m.x=SV.cx+Math.cos(p)*st.R; m.y=SV.cy+Math.sin(p)*st.R; m.angle=p+Math.PI/2;
+      magnets[0].angle=0.15*Math.sin(0.11*t); },
+    label:st=>({title:'A magnet orbiting a coil', sub:'solenoid + disc magnet',
+      eq:['B = μ₀ n I   (inside a long solenoid)','x = R cos ωt,  y = R sin ωt'],
+      lines:['R = '+Math.round(st.R)+' px, ω = '+om(st.w)+' rad/s, period '+fx(2*Math.PI/(st.w*SV.slow),1)+' s','the disc moment stays along the orbit']}) },
+
+  { id:'lattice', views:['dir','mag','filings'],
+    build(st){ st.nx=CW>CH?5:3; st.ny=CW>CH?3:5; st.sp=Math.min(CW/(st.nx+0.6),CH/(st.ny+0.6)); st.w=[];
+      magnets=[]; for(let j=0;j<st.ny;j++)for(let i=0;i<st.nx;i++){
+        magnets.push(svDip(0,0,0,1.5)); st.w.push(((i+j)%2?-1:1)*(0.12+0.05*((i*3+j)%4))); } },
+    step(st,t){ let q=0; for(let j=0;j<st.ny;j++)for(let i=0;i<st.nx;i++){ const m=magnets[q];
+      m.x=SV.cx+(i-(st.nx-1)/2)*st.sp; m.y=SV.cy+(j-(st.ny-1)/2)*st.sp; m.angle=st.w[q]*t+(i+j)*0.7; q++; } },
+    label:st=>({title:'Lattice of turning dipoles', sub:st.nx+' × '+st.ny+' grid, neighbours counter-rotate',
+      eq:[SUM_EQ,'θᵢ(t) = θᵢ₀ + ωᵢ t'],
+      lines:['ωᵢ from '+om(Math.min(...st.w.map(Math.abs)))+' to '+om(Math.max(...st.w.map(Math.abs)))+' rad/s','spacing '+Math.round(st.sp)+' px']}) },
+
+  { id:'horseshoe', views:['filings','mag','heat'],
+    build(st){ st.w=0.12; st.d=Math.max(95,SV.R*0.28); magnets=[svMag('horseshoe',SV.cx,SV.cy,0,1.4),svMag('bar',0,0,0,0.9)]; },
+    step(st,t){ const a=0.5*Math.sin(st.w*t), hs=magnets[0], b=magnets[1];
+      hs.angle=a; b.x=SV.cx+Math.sin(a)*st.d; b.y=SV.cy-Math.cos(a)*st.d;
+      b.angle=a+Math.PI/2+0.6*Math.sin(st.w*1.7*t); },
+    label:st=>({title:'Horseshoe and a free bar', sub:'flux crosses the gap',
+      eq:[SUM_EQ,'∇·B = 0: each line from N comes back to S'],
+      lines:['the bar '+Math.round(st.d)+' px above the gap turns ±34°','the horseshoe rocks ±29°']}) },
+];
+
+// Seeded random 0..1 (mulberry32), so a seed gives the same tour.
+function svRand(seed){ let a=seed>>>0; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^t>>>15,t|1);
+  t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; }; }
+
+// Start scene number k of the tour: new magnets, a seeded view, fresh tracers,
+// filings seeds and the plate.
+function saverScene(k){
+  SV.k=k; SV.t=0;
+  const sc=SAVER_SCENES[SV.order[k%SV.order.length]];
+  SV.cx=CW*(CW>CH*1.2?0.44:0.5); SV.cy=CH*0.5; SV.R=Math.min(CW,CH)*0.5;
+  const st={}; SV.scene=sc; SV.st=st; sc.build(st);
+  for(const m of magnets){ m.spin=0; m.vx=m.vy=m.va=0; }
+  sc.step(st,0);
+  const v=VIEWS[sc.views[SV.pick(sc.views.length)]]; st.view=v;
+  SIM.showTracers=v.tr; SIM.trMode=v.mode; SIM.showHeatmap=v.heat; SIM.showFilings=v.fil; SIM.showArrows=false;
+  SIM.tracerCount=v.tr?tracerBudget():0;
+  CAM.x=0; CAM.y=0; CAM.zoom=1;
+  spawnTracers(); seedFilings();
+  const L=sc.label(st); L.lines=(L.lines||[]).concat(['view: '+v.name]);
+  if(SV.opts && SV.opts.label) SV.opts.label(L);
+}
+
+// Per frame, before integrateMagnets(): move the scene, and fade through
+// black around a scene change. SV.fade is the black cover, 0..1.
+function saverStep(dt){
+  SV.t+=dt;
+  if(SV.st) SV.scene.step(SV.st,SV.t*SV.slow);
+  const left=SV.dwell-SV.t;
+  if(left<=0){ saverScene(SV.k+1); SV.fade=1; return; }
+  SV.fade=Math.max(0,Math.min(1,Math.max(1-SV.t/FADE_S,1-left/FADE_S)));
+}
+function saverOverlay(){
+  if(SV.fade<=0.002) return;
+  ctx.fillStyle='rgba(14,17,24,'+SV.fade.toFixed(3)+')'; ctx.fillRect(0,0,CW,CH);
+}
+
+// Iron filings: short silver dashes on a jittered grid, each laid along B̂.
+// Brightness follows |B| in four buckets, so a frame strokes four paths.
+let filX=new Float32Array(0), filY=new Float32Array(0), filN=0;
+function seedFilings(){
+  if(!SIM.showFilings){ filN=0; return; }
+  const g=Math.max(8,Math.sqrt(CW*CH/11000)), nx=Math.ceil(CW/g), ny=Math.ceil(CH/g);
+  filN=nx*ny; filX=new Float32Array(filN); filY=new Float32Array(filN);
+  let q=0; for(let j=0;j<ny;j++)for(let i=0;i<nx;i++){ filX[q]=(i+Math.random())*g; filY[q]=(j+Math.random())*g; q++; }
+}
+const _filP=[null,null,null,null];
+function renderFilings(){
+  for(let b=0;b<4;b++) _filP[b]=new Path2D();
+  const h=Math.max(3,Math.sqrt(CW*CH/11000)*0.42);
+  for(let q=0;q<filN;q++){
+    const x=filX[q], y=filY[q];
+    if(isInsideMagnet(x,y)) continue;
+    fieldAt(x,y); const B=Math.hypot(FBx,FBy); if(B<1e-9) continue;
+    const lv=fieldLevel(B); if(lv<0.02) continue;
+    const ux=FBx/B*h, uy=FBy/B*h, p=_filP[Math.min(3,(lv*4)|0)];
+    p.moveTo(x-ux,y-uy); p.lineTo(x+ux,y+uy);
+  }
+  ctx.save(); ctx.lineCap='round'; ctx.lineWidth=1.3;
+  for(let b=0;b<4;b++){ ctx.strokeStyle='rgba(205,215,235,'+(0.22+0.22*b)+')'; ctx.stroke(_filP[b]); }
+  ctx.restore();
+}
+
 window.snSaver={
   enter(opts){
     const calm=Math.min(1,Math.max(0,opts.calm??0.7));
@@ -1270,21 +1480,19 @@ window.snSaver={
     const ready=()=>started?Promise.resolve():new Promise(r=>setTimeout(()=>r(ready()),60));
     return ready().then(()=>{
       resize();
-      CAM.x=0; CAM.y=0; CAM.zoom=1;
-      const pairs=[['bar','horseshoe'],['quadrupole','ring'],['halbach','dipole'],['solenoid','buzzer'],['bar','quadrupole']];
-      const pair=pairs[(opts.seed>>>0)%pairs.length];
-      const slow=1-0.7*calm;
-      magnets=pair.map((type,i)=>{
-        const m=createMagnet(type,CW*(i?0.64:0.36),CH*(i?0.56:0.44));
-        m.spin=(i?-0.18:0.26)*slow;
-        return m;
-      });
+      const rnd=svRand(opts.seed||1);
+      SV.opts=opts; SV.pick=n=>Math.floor(rnd()*n)%n;
+      SV.order=SAVER_SCENES.map((_,i)=>i);
+      for(let i=SV.order.length-1;i>0;i--){ const j=SV.pick(i+1); [SV.order[i],SV.order[j]]=[SV.order[j],SV.order[i]]; }
+      SV.slow=1-0.7*calm;
+      SV.dwell=Math.max(14,Math.min(30,(opts.seconds||60)/3));
       SIM.selectedId=-1; SIM.playing=true;
-      SIM.showTracers=true; SIM.showArrows=false; SIM.showHeatmap=false;
-      SIM.tracerSpeed=0.6+0.6*slow; SIM.tracerTrail=60;
-      SIM.tracerCount=tracerBudget();
-      rebuildMagnetList(); spawnTracers();
+      SIM.tracerSpeed=0.6+0.6*SV.slow; SIM.tracerTrail=60;
+      saverOn=true;
+      saverScene(0); SV.fade=0;
+      rebuildMagnetList();
       return { canvas, warmupMs:1500 };
     });
-  }
+  },
+  exit(){ saverOn=false; if(SV.opts&&SV.opts.label) SV.opts.label(null); }
 };
