@@ -24,6 +24,10 @@ import { lathe, tubeWall, rod, circlePath, slabXY, outlineShape, merge } from '.
 import { toothOutline, planetAngle, MODELS, TAU } from './gears.js';
 
 const PITCH_COL = { sun: 0xffd27a, planet: 0x9fd0ff, ring: 0xff9f80 };
+// A pin end stands this far (mm) out from its carrier plate. The pin and
+// the plate hole have the same radius: an end 0.1 mm inside the hole made
+// the pin end and the hole bevel fight in the depth buffer.
+const PIN_OUT = 0.4;
 
 // carrier plate outline: a hub, an arm to each pin and a round boss on each
 // pin. The outline is star-shaped about the axis, so it is sampled by angle.
@@ -67,7 +71,7 @@ function ringGear(B, p, S, z0, z1) {
   B.mesh(p, tubeWall(S.rrR + 1, S.rrO, z0, z1, 160, 0.8), 'ring');
   // two fine turned grooves on the outside of the rim
   const gz = (z1 - z0) * 0.22;
-  B.mesh(p, merge([tubeWall(S.rrO - 0.35, S.rrO + 0.02, z0 + gz - 0.4, z0 + gz + 0.4, 160, 0.1), tubeWall(S.rrO - 0.35, S.rrO + 0.02, z1 - gz - 0.4, z1 - gz + 0.4, 160, 0.1)]), 'dark', { pick: false });
+  B.mesh(p, merge([tubeWall(S.rrO - 0.35, S.rrO + 0.02, z0 + gz - 0.4, z0 + gz + 0.4, 160, 0.1), tubeWall(S.rrO - 0.35, S.rrO + 0.02, z1 - gz - 0.4, z1 - gz + 0.4, 160, 0.1)]), 'groove', { pick: false });
   B.pitchCircle(p, S.rr, z1 + 0.15, PITCH_COL.ring);
 }
 // a brake band: lining and steel strap round the drum, open at the bottom,
@@ -113,8 +117,9 @@ const KINDS = {
   planet(B, p, L) {
     const S = L.sets[p.L.set], e = p.L.env[0];
     B.mesh(p, gear(S.Zp, S.m, e.z0, e.z1, S.bore), 'planet');
-    // a needle cage in the bore, seen at each face
-    B.mesh(p, merge([tubeWall(S.pr, S.bore + 0.9, e.z0 - 0.05, e.z0 + 1.2, 48, 0.2), tubeWall(S.pr, S.bore + 0.9, e.z1 - 1.2, e.z1 + 0.05, 48, 0.2)]), 'brass', { pick: false });
+    // a needle cage in the bore, seen at each face. It stands 0.25 mm out
+    // from the gear face and clear of the pin, so no two faces touch
+    B.mesh(p, merge([tubeWall(S.pr + 0.08, S.bore + 0.9, e.z0 - 0.25, e.z0 + 1.2, 48, 0.2), tubeWall(S.pr + 0.08, S.bore + 0.9, e.z1 - 1.2, e.z1 + 0.25, 48, 0.2)]), 'brass', { pick: false });
     B.pitchCircle(p, S.rp, e.z1 + 0.15, PITCH_COL.planet);
     p.labelAt = [0, 0, e.z1];
   },
@@ -125,7 +130,7 @@ const KINDS = {
   },
   pins(B, p, L) {
     const S = L.sets[0], G = L.g;
-    B.mesh(p, merge(S.psi.map(ps => { const g = rod(S.pr, -G.zp1 + 0.1, G.zp1 - 0.1, 24, 0.4); g.translate(S.a * Math.cos(ps), S.a * Math.sin(ps), 0); return g; })), 'pin');
+    B.mesh(p, merge(S.psi.map(ps => { const g = rod(S.pr, -G.zp1 - PIN_OUT, G.zp1 + PIN_OUT, 24, 0.4); g.translate(S.a * Math.cos(ps), S.a * Math.sin(ps), 0); return g; })), 'pin');
   },
   plateBack(B, p, L) {
     const S = L.sets[0], G = L.g;
@@ -141,7 +146,6 @@ const KINDS = {
     B.mesh(p, rod(G.sh * 1.7, G.zp1 - 0.5, G.zp1 + 8, 64, 1), 'carrier');
     B.mesh(p, rod(G.sh + 1, G.zp1 + 7, G.zp1 + G.Lout - 7.5), 'shaft');
     flange(B, p, G.flangeR, G.zp1 + G.Lout - 8, G.zp1 + G.Lout, 1);
-    // pin ends: a ring of rivet heads on the outer face, flush with the plate
     p.labelAt = [0, S.a * 0.55, G.zp1];
   },
   inWeb(B, p, L) {
@@ -160,7 +164,7 @@ const KINDS = {
     const sh = spiderShape(S, Math.max(G.sh * 1.9, S.rsR * 0.62), Math.max(S.pr + 1.5, 0.62 * S.bo));
     sh.holes.push(...pinHoles(S, S.pr));
     B.mesh(p, slabXY(sh, z0, G.t, 0.6), 'carrier');
-    B.mesh(p, merge(S.psi.map(ps => { const g = rod(S.pr, z0 + 0.1, -G.Gap + 1 + G.t - 0.1, 24, 0.4); g.translate(S.a * Math.cos(ps), S.a * Math.sin(ps), 0); return g; })), 'pin');
+    B.mesh(p, merge(S.psi.map(ps => { const g = rod(S.pr, z0 - PIN_OUT, -G.Gap + 1 + G.t + PIN_OUT, 24, 0.4); g.translate(S.a * Math.cos(ps), S.a * Math.sin(ps), 0); return g; })), 'pin');
     p.labelAt = [0, S.a * 0.5, z0];
   },
   outDrum(B, p, L) {
@@ -185,7 +189,7 @@ const KINDS = {
     const plate = new THREE.Shape(); plate.absarc(0, 0, G.rC2, 0, TAU, false); plate.holes.push(circlePath(G.sh + 1.5));
     B.mesh(p, slabXY(plate, G.zC2, G.t, 0.6, 160), 'carrier');
     B.mesh(p, tubeWall(G.rC2 - 4, G.rC2, G.zC2b - 0.3, G.zC2b + G.Ld, 160, 0.5), 'drum');
-    B.mesh(p, merge(S.psi.map(ps => { const g = rod(S.pr, G.Gap - 1 - G.t + 0.1, G.zC2 + 0.5, 24, 0.4); g.translate(S.a * Math.cos(ps), S.a * Math.sin(ps), 0); return g; })), 'pin');
+    B.mesh(p, merge(S.psi.map(ps => { const g = rod(S.pr, G.Gap - 1 - G.t - PIN_OUT, G.zC2 + 0.5, 24, 0.4); g.translate(S.a * Math.cos(ps), S.a * Math.sin(ps), 0); return g; })), 'pin');
     p.labelAt = [0, G.rC2, G.zC2b + G.Ld / 2];
   },
   sunDrum(B, p, L) {

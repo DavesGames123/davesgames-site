@@ -370,7 +370,10 @@ function frame(now) {
   const wT = S.rpm / 60 * TAU;
   S.wNow += (wT - S.wNow) * Math.min(1, dt * (saverOn ? 0.9 : 2.2));
   if (Math.abs(S.wNow) < 1e-4 && !wT) S.wNow = 0;
-  for (const m of model.free) S.f[m] = (S.f[m] + S.sp1[m] * S.wNow * dt) % (TAU * 6000);
+  // no wrap: a wrap of one free angle by whole turns moves the derived
+  // angles (rear carrier, planets) by part of a turn, so the parts jumped.
+  // A double keeps sub-micro-radian steps for years of run time.
+  for (const m of model.free) S.f[m] += S.sp1[m] * S.wNow * dt;
   const ang = poseAngles(L.id, ks, S.f);
   S.ang = ang;
   const rpmNow = S.wNow / TAU * 60, sp = {};

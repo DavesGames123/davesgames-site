@@ -41,10 +41,13 @@ function textures() {
   const turned = canvasTex(256, (g, n) => {
     for (let y = 0; y < n; y++) { const v = 150 + 50 * Math.sin(y * 1.7) * Math.sin(y * 0.13) + (rnd() - 0.5) * 30; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, n, 1); }
   }, [1, 8]);
-  // ground flank: fine streaks across the face of a gear
+  // ground flank: fine streaks across the face of a gear. The extruded
+  // gears have their UVs in millimetres, so the mipmaps show this map as
+  // its mean value. The mean is near 1, so the roughness of the material
+  // stays near its stated value (a mean of 0.5 made the gears a dark mirror).
   const ground = canvasTex(256, (g, n) => {
-    g.fillStyle = 'rgb(120,120,120)'; g.fillRect(0, 0, n, n);
-    for (let i = 0; i < 900; i++) { const v = 90 + rnd() * 90; g.fillStyle = `rgba(${v},${v},${v},0.5)`; g.fillRect(rnd() * n, rnd() * n, 1 + rnd() * 30, 1); }
+    g.fillStyle = 'rgb(232,232,232)'; g.fillRect(0, 0, n, n);
+    for (let i = 0; i < 900; i++) { const v = 190 + rnd() * 65; g.fillStyle = `rgba(${v},${v},${v},0.5)`; g.fillRect(rnd() * n, rnd() * n, 1 + rnd() * 30, 1); }
   }, [3, 3]);
   // friction lining: dark speckle
   const lining = canvasTex(128, (g, n) => {
@@ -70,6 +73,9 @@ const MAT_DEF = {
   band: () => ({ color: 0x4a4f5a, metalness: 0.7, roughness: 0.45 }),
   lining: () => ({ color: 0xffffff, map: TEX.lining, metalness: 0, roughness: 0.9 }),
   dark: () => ({ color: 0x15171c, metalness: 0.4, roughness: 0.5 }),
+  // the turned grooves on a ring rim: 0.02 mm out from the rim, so a
+  // polygon offset keeps them in front of the rim at all distances
+  groove: () => ({ color: 0x15171c, metalness: 0.4, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 }),
 };
 function makeMat(name) {
   const def = { ...MAT_DEF[name]() };
