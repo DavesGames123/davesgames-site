@@ -63,9 +63,11 @@ function textures() {
     g.strokeStyle = '#fff'; g.lineWidth = 3.2;
     for (let i = 0; i <= n; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, n); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(n, i); g.stroke(); }
   }, [10, 6]);
-  // turned finish: fine rings for the roughness of lathe parts
+  // turned finish: fine rings for the roughness of lathe parts. The map
+  // multiplies the stated roughness, so its mean stays near 0.9: a mean
+  // near 0.6 made the turned and alu parts a dark mirror of the studio
   const turned = canvasTex(256, (g, n) => {
-    for (let y = 0; y < n; y++) { const v = 150 + 50 * Math.sin(y * 1.7) * Math.sin(y * 0.13) + (rnd() - 0.5) * 30; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, n, 1); }
+    for (let y = 0; y < n; y++) { const v = 228 + 24 * Math.sin(y * 1.7) * Math.sin(y * 0.13) + (rnd() - 0.5) * 22; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, n, 1); }
   }, [1, 8]);
   TEX = { wood, gauze, turned };
   return TEX;
@@ -75,9 +77,12 @@ function textures() {
 const MAT_DEF = {
   steel: () => ({ color: 0xdfe3ea, metalness: 1, roughness: 0.16 }),
   turned: () => ({ color: 0xd9dde5, metalness: 1, roughness: 0.3, roughnessMap: TEX.turned }),
-  satin: () => ({ color: 0xc4c9d2, metalness: 1, roughness: 0.36 }),
+  // satin and brass: flat faces (crank webs, the rim, the plate) mirror the
+  // large key softbox. A darker, rougher satin and no clear coat on the brass
+  // keep those faces from a flat white.
+  satin: () => ({ color: 0xaab0ba, metalness: 1, roughness: 0.44 }),
   alu: () => ({ color: 0xc9ced8, metalness: 1, roughness: 0.42, roughnessMap: TEX.turned }),
-  brass: () => ({ physical: true, color: 0xd6a85a, metalness: 1, roughness: 0.26, clearcoat: 0.3 }),
+  brass: () => ({ color: 0xc99a4e, metalness: 1, roughness: 0.32 }),
   bronze: () => ({ color: 0xb98a52, metalness: 1, roughness: 0.32 }),
   copper: () => ({ color: 0xd08a5e, metalness: 1, roughness: 0.3 }),
   hot: () => ({ color: 0xc0a48a, metalness: 1, roughness: 0.34, roughnessMap: TEX.turned, emissive: 0x000000 }),

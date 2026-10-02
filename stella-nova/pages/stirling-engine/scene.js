@@ -27,6 +27,10 @@ import * as THREE from 'three';
 import { lathe, tubeWall, rod, rrect, circlePath, slabXZ, slabYZ, slabXY, pipePath, hollowPipe, discWeb, alongX, merge } from './kit.js';
 
 const TAU = Math.PI * 2;
+// Shells that stack or nest are cut by the section plane. A shared face
+// between two shells shows the hatch of one and the lit face of the other at
+// the same depth, and the two z-fight. GAP keeps such faces 0.25 mm apart.
+const GAP = 0.25;
 
 // the crankshaft: shaft runs on x, disc webs and pins. A web or pin in
 // group 'disp' turns with the displacer throw (the phase angle).
@@ -64,8 +68,9 @@ function flywheel(B, p, f) {
   const hub = alongX(tubeWall(5, 11, -9, 9, 48));
   const spokes = [];
   for (let i = 0; i < 6; i++) {
-    const a = i / 6 * TAU, c = new THREE.CylinderGeometry(2.4, 3.6, R - 18, 16);
-    c.translate(0, (R - 18) / 2 + 10.5, 0); c.rotateX(a); spokes.push(c);
+    const a = i / 6 * TAU, c = new THREE.CylinderGeometry(2.4, 3.6, R - 16, 16);
+    // each spoke runs 1 mm into the rim, so no gap shows at the rim
+    c.translate(0, (R - 16) / 2 + 10.5, 0); c.rotateX(a); spokes.push(c);
   }
   B.mesh(p, rim, 'brass');
   B.mesh(p, merge([hub, ...spokes]), 'red');
@@ -197,21 +202,24 @@ export function build(B, E) {
 
   const tubeY0 = beta ? pw.cylY0 : d.floor;
   const tube = P(beta ? 'cylinder' : 'dCyl', { label: beta ? 'Cylinder' : 'Displacer cylinder', labelAt: [cx + wall, beta ? (tubeY0 + co.y0) / 2 : 160, 0], explode: [0, stackUp.tube, 0], st: 0.25, cut: true });
-  B.mesh(tube, tubeWall(bore, wall, tubeY0, d.head, 128), 'satin');
-  if (beta) B.mesh(tube, tubeWall(bore, 31, tubeY0, tubeY0 + 4, 96), 'satin');
-  else B.mesh(tube, tubeWall(bore, 30, d.floor, d.floor + 3.5, 96), 'satin');
-  // ports in the wall where the pipes join (bosses)
-  const portY = beta ? g.portY : 114;
+  // the tube and its foot flange are one turned profile. The tube stops a
+  // GAP short of the plate below and of the hot cap above.
   {
-    const boss = alongX(tubeWall(2.6, 5, -1, 3.5, 24)); boss.translate(-wall - 2.4, portY, 0);
+    const y0 = tubeY0 + GAP, fR = beta ? 31 : 30, fH = beta ? 4 : 3.5;
+    B.mesh(tube, lathe([[[fR, y0]], [[fR, y0 + fH]], [[wall, y0 + fH]], [[wall, d.head - GAP]], [[bore, d.head - GAP]], [[bore, y0]]], 128), 'satin');
+  }
+  // ports in the wall where the pipes join (bosses)
+  const portY = beta ? g.portY : 114, portR = g.pipes.cold.rOut + GAP;
+  {
+    const boss = alongX(tubeWall(portR, 5, -1, 3.5, 24)); boss.translate(-wall - 2.4, portY, 0);
     const bosses = [boss];
-    if (!beta) { const b2 = alongX(tubeWall(2.6, 5, -3.5, 1, 24)); b2.translate(wall + 2.4, portY, 0); bosses.push(b2); }
+    if (!beta) { const b2 = alongX(tubeWall(portR, 5, -3.5, 1, 24)); b2.translate(wall + 2.4, portY, 0); bosses.push(b2); }
     B.mesh(tube, merge(bosses), 'satin');
   }
 
   const cool = P('cooler', { label: 'Cooler', labelAt: [cx - co.R, (co.y0 + co.y1) / 2, 0], explode: [0, stackUp.cooler, beta ? 0 : 0], st: 0.2, cut: true });
   {
-    const parts = [tubeWall(wall, wall + 2.4, co.y0, co.y1, 128)];
+    const parts = [tubeWall(wall + GAP, wall + 2.4, co.y0, co.y1, 128)];
     const n = co.fins, step = (co.y1 - co.y0 - 2) / (n - 1);
     for (let i = 0; i < n; i++) parts.push(tubeWall(wall + 2.3, co.R, co.y0 + i * step, co.y0 + i * step + 2, 128));
     B.mesh(cool, merge(parts), 'alu');
@@ -219,14 +227,14 @@ export function build(B, E) {
   const hot = P('hotcap', { label: 'Hot cap', labelAt: [cx + hc.R, d.head + 3, 0], explode: [0, stackUp.hot, 0], st: 0.32, cut: true });
   {
     const top = d.head + hc.top;
-    B.mesh(hot, lathe([[[hc.R, hc.y0], [hc.R, top - 2]], [[hc.R - 2, top], [0, top]], [[0, d.head]], [[wall, d.head], [wall, hc.y0]]], 128), 'hot');
-    const portW = tubeWall(2.6, 5, top - 0.5, top + 3, 24); portW.translate(g.pipes.hot.pts[0][0] - cx, 0, 0);
+    B.mesh(hot, lathe([[[hc.R, hc.y0], [hc.R, top - 2]], [[hc.R - 2, top], [0, top]], [[0, d.head]], [[wall + GAP, d.head], [wall + GAP, hc.y0]]], 128), 'hot');
+    const portW = tubeWall(g.pipes.hot.rOut + GAP, 5, top - 0.5, top + 3, 24); portW.translate(g.pipes.hot.pts[0][0] - cx, 0, 0);
     B.mesh(hot, portW, 'hot');
     hot.root.position.x = cx;
   }
   const heat = P('heater', { label: 'Heater band', labelAt: [cx - ht.R1, (ht.y0 + ht.y1) / 2, 0], explode: [0, stackUp.heater, 0], st: 0.3, cut: true });
   {
-    B.mesh(heat, tubeWall(ht.R0, ht.R1, ht.y0 + 2, ht.y1 - 2, 128), 'ceramic');
+    B.mesh(heat, tubeWall(ht.R0, ht.R1, ht.y0 + 2 + GAP, ht.y1 - 2 - GAP, 128), 'ceramic');
     B.mesh(heat, merge([tubeWall(ht.R0, ht.R1 + 0.8, ht.y0, ht.y0 + 2, 128), tubeWall(ht.R0, ht.R1 + 0.8, ht.y1 - 2, ht.y1, 128)]), 'steel');
     // a terminal block at the back
     const tb = new THREE.BoxGeometry(10, 12, 6); tb.translate(0, (ht.y0 + ht.y1) / 2, -ht.R1 - 2.6);
@@ -239,8 +247,10 @@ export function build(B, E) {
   // regenerator: canister and the stacked screens inside
   const regen = P('regen', { label: 'Regenerator', labelAt: [rg.x - rg.rOut, (rg.y0 + rg.y1) / 2 + 10, 0], explode: [-34, beta ? 150 : 128, 0], st: 0.25, cut: true });
   {
-    const parts = [tubeWall(rg.rIn, rg.rOut, rg.y0 + rg.cap, rg.y1 - rg.cap, 64), tubeWall(2.6, rg.rOut + 1, rg.y0, rg.y0 + rg.cap, 64), tubeWall(2.6, rg.rOut + 1, rg.y1 - rg.cap, rg.y1, 64)];
-    const g2 = merge(parts); g2.translate(rg.x, 0, 0);
+    // the canister and its two end caps are one turned profile
+    const rc = rg.rOut + 1, h = g.pipes.hot.rOut + GAP, c0 = rg.y0 + rg.cap, c1 = rg.y1 - rg.cap;
+    const g2 = lathe([[[rc, rg.y0]], [[rc, c0]], [[rg.rOut, c0]], [[rg.rOut, c1]], [[rc, c1]], [[rc, rg.y1]], [[h, rg.y1]], [[h, c1]], [[rg.rIn, c1]], [[rg.rIn, c0]], [[h, c0]], [[h, rg.y0]]], 64);
+    g2.translate(rg.x, 0, 0);
     B.mesh(regen, g2, 'satin');
   }
   const matrix = P('matrix', { label: null, labelAt: [rg.x, (rg.y0 + rg.y1) / 2, 0], explode: [-34 - 32, beta ? 40 : 30, 0], st: 0.3, cut: true });
@@ -266,20 +276,23 @@ export function build(B, E) {
     const s = rrect(68, 78, 6, cx, -(-42 + 36) / 2);
     s.holes.push(circlePath(d.rodR + 0.15, cx, 0));
     B.mesh(cp, slabXZ(s, d.floor - 10, 10, 1), 'enamel');
-    const gl = tubeWall(d.rodR + 0.15, 7, 84, d.floor - 10, 32); gl.translate(cx, 0, 0);
-    const nut = tubeWall(d.rodR + 0.15, 8.5, 84, 88, 6); nut.translate(cx, 0, 0);
+    const gl = tubeWall(d.rodR + 0.15, 7, 84, d.floor - 10 - GAP, 32); gl.translate(cx, 0, 0);
+    // a hex nut: the flats of its hole, not the corners, clear the rod
+    const nut = tubeWall((d.rodR + 0.15) / Math.cos(Math.PI / 6), 8.5, 84, 88, 6); nut.translate(cx, 0, 0);
     B.mesh(cp, merge([gl, nut]), 'brass');
 
     const px = pw.x, pb = pw.bore, pwall = pb + 3;
     const pc = P('pCyl', { label: 'Power cylinder', labelAt: [px + 26, (pw.cylY0 + pw.head) / 2, 0], explode: [0, 46, 0], st: 0.25, cut: true });
-    const parts = [tubeWall(pb, pwall, pw.cylY0, pw.head, 96), tubeWall(pb, 26, pw.cylY0, pw.cylY0 + 6, 96)];
+    const parts = [lathe([[[26, pw.cylY0]], [[26, pw.cylY0 + 6]], [[pwall, pw.cylY0 + 6]], [[pwall, pw.head - GAP]], [[pb, pw.head - GAP]], [[pb, pw.cylY0]]], 96)];
     for (let i = 0; i < 4; i++) { const y = pw.cylY0 + 16 + i * 9; parts.push(tubeWall(pwall - 0.1, 25, y, y + 2, 96)); }
     const gp = merge(parts); gp.translate(px, 0, 0);
     B.mesh(pc, gp, 'alu');
-    const br = slabXZ(rrect(30, 26, 3, px, 29), pw.cylY0, 6, 0.8);
+    // the bracket stands a GAP inside the foot flange top and bottom faces
+    const br = slabXZ(rrect(30, 26, 3, px, 29), pw.cylY0 + GAP, 6 - 2 * GAP, 0.8);
     B.mesh(pc, br, 'enamel');
     const ph = P('pHead', { label: 'Power head', labelAt: [px + 22, pw.head + 5, 0], explode: [0, 92, 0], st: 0.3, cut: true });
-    const hg = lathe([[[22, pw.head], [22, pw.head + 9]], [[21, pw.head + 10], [2.6, pw.head + 10]], [[2.6, pw.head]]], 96); hg.translate(px, 0, 0);
+    const hr = g.pipes.transfer.rOut + GAP;
+    const hg = lathe([[[22, pw.head], [22, pw.head + 9]], [[21, pw.head + 10], [hr, pw.head + 10]], [[hr, pw.head]]], 96); hg.translate(px, 0, 0);
     B.mesh(ph, hg, 'satin');
     const bolts = [];
     for (let i = 0; i < 6; i++) { const a = (i + 0.5) / 6 * TAU, b = rod(1.9, pw.head + 10, pw.head + 12.4, 6); b.translate(px + 18.5 * Math.cos(a), 0, 18.5 * Math.sin(a)); bolts.push(b); }
