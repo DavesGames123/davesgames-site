@@ -66,7 +66,11 @@
   function resize() {
     const w = canvas.clientWidth, h = canvas.clientHeight, a = w / h;
     renderer.setSize(w, h, false);
-    persp.aspect = a; persp.updateProjectionMatrix();
+    persp.aspect = a;
+    // In saver mode on a wide screen, the view window moves right, so the knot
+    // sits left of centre and the shell label plate (lower right) is clear.
+    if (SAVER.on && a > 1.2) persp.setViewOffset(w, h, w * 0.12, 0, w, h); else persp.clearViewOffset();
+    persp.updateProjectionMatrix();
     ortho.left = -ORTHO_H * a; ortho.right = ORTHO_H * a; ortho.top = ORTHO_H; ortho.bottom = -ORTHO_H;
     ortho.updateProjectionMatrix();
   }
@@ -259,6 +263,7 @@
     ephX = (G.phaseX + G.pRateX * el) * TAU;
     ephY = (G.phaseY + G.pRateY * el) * TAU;
     ephZ = (G.phaseZ + G.pRateZ * el) * TAU;
+    if (SAVER.on) saverStep(dt, el);
     if (animating()) buildCurve();      // rebuild the morphing knot each frame
 
     view.theta += G.spin * 0.0025;
@@ -398,23 +403,100 @@
 
   // ------------------------------------------------------------ screensaver
   // lib/screensaver.js has the protocol. The CSS under html.sn-saver hides the
-  // panel, gear, hint and status; #gl is already full-window. The seed picks
-  // the knot. The camera spins and the Y phase drifts slowly, so the knot
-  // morphs with no hard cut. calm 1 is the slowest. The triad stays off.
+  // panel, gear, hint and status; #gl is already full-window. enter() plays a
+  // seeded tour of SAVER_TOUR. Each figure holds for a dwell. One phase drifts
+  // slowly, so the knot morphs, and the camera spins. A figure change fades
+  // the tube out and in (tube, head and arrow opacity). Each figure sends
+  // opts.label the three oscillator equations, the ratio a:b:c, the phases
+  // and what the curve is. calm 1 is the slowest. The triad stays off.
+  const SAVER = { on: false, opts: null, order: [], k: 0, t: 0, dwell: 18, slow: 1, st: null };
+  // [a, b, c, drifting axis (0 x, 1 y, 2 z, -1 none), start phase in turns,
+  //  base drift rate in turns/s, detune ε]
+  const SAVER_TOUR = [
+    [3, 2, 4, 1, 0.25, 0.010, 0], [1, 2, 3, 0, 0.0, 0.012, 0], [2, 3, 5, 2, 0.1, 0.008, 0],
+    [3, 4, 5, 1, 0.2, 0.008, 0], [2, 5, 3, 0, 0.15, 0.009, 0], [1, 1, 2, 2, 0.0, 0.012, 0],
+    [3, 5, 4, 1, 0.3, 0.007, 0], [2, 3, 4, -1, 0.25, 0, 0.02], [3, 2, 5, 0, 0.1, 0.009, 0],
+  ];
+  const SAVER_FADE = 1.2;
+  function saverRand(seed) {
+    let a = seed >>> 0;
+    return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+  const gcd = (p, q) => q ? gcd(q, p % q) : p;
+  const turns = v => (((v % 1) + 1) % 1).toFixed(2) + 'τ';
+  function saverOpacity(f) {
+    tubeMat.opacity = f; head.material.opacity = f;
+    [arrowV, arrowN, arrowB].forEach(a => { a.line.material.transparent = true; a.cone.material.transparent = true;
+      a.line.material.opacity = f; a.cone.material.opacity = f; });
+  }
+  function saverFigure(k, el) {
+    SAVER.k = k; SAVER.t = 0;
+    const [a, b, c, ax, d0, rate, eps] = SAVER_TOUR[SAVER.order[k % SAVER.order.length]];
+    const r = rate * SAVER.slow;
+    SAVER.st = { a, b, c, ax, d0, r, eps };
+    G.A = a; G.B = b; G.C = c; G.detuneCoarse = eps; G.detuneFine = 0;
+    // Fixed phases: δx = 0, δy = 0.25τ, δz = 0. The drifting axis starts at d0
+    // now: its live phase is phase + rate * el (see frame()).
+    G.phaseX = 0; G.phaseY = 0.25; G.phaseZ = 0; G.pRateX = G.pRateY = G.pRateZ = 0;
+    const PK = ['phaseX', 'phaseY', 'phaseZ'], RK = ['pRateX', 'pRateY', 'pRateZ'];
+    if (ax >= 0) { G[RK[ax]] = r; G[PK[ax]] = d0 - r * el; }
+    // frame() set the live phases before this call; set them again from the new
+    // G, so buildCurve() does not use the phases of the last figure.
+    ephX = (G.phaseX + G.pRateX * el) * TAU; ephY = (G.phaseY + G.pRateY * el) * TAU; ephZ = (G.phaseZ + G.pRateZ * el) * TAU;
+    syncSteppers(); markPreset(); buildCurve(); refreshStatus(); tt = 0;
+    const ph = [0, 0.25, 0]; if (ax >= 0) ph[ax] = d0;
+    const AX = ['x', 'y', 'z'], d1 = d0 + r * SAVER.dwell;
+    const coprime = gcd(a, b) === 1 && gcd(b, c) === 1 && gcd(a, c) === 1;
+    // Each line: the general form, then the live values (δ at the figure start).
+    const live = (n, d) => 'sin(' + n + 'ωt' + (d ? ' + ' + turns(d) : '') + ')';
+    const eq = [
+      'x = A sin(' + (eps ? '(a + ε)' : 'a') + 'ωt + δx) = ' + live(eps ? '(' + a + ' + ' + eps + ')' : a, ph[0]),
+      'y = B sin(bωt + δy) = ' + live(b, ph[1]),
+      'z = C sin(cωt + δz) = ' + live(c, ph[2]),
+    ];
+    const lines = ['a : b : c = ' + a + ' : ' + b + ' : ' + c + ', A = B = C = 1'];
+    if (eps) lines.push('ε = +' + eps + ': the loop closes only after 1/ε = ' + Math.round(1 / eps) + ' periods, so the path fills a shell');
+    else lines.push('δ' + AX[ax] + ' drifts ' + turns(d0) + ' → ' + turns(d1) + ' (τ = 2π) over this figure');
+    lines.push(eps ? 'a detuned 3D Lissajous curve'
+      : coprime ? 'pairwise coprime: a Lissajous knot, one closed loop with no self-crossing for most phases'
+      : 'closed 3D Lissajous curve; ' + a + ', ' + b + ', ' + c + ' are not pairwise coprime, so it can cross itself');
+    lines.push('arrows: velocity, normal, binormal · triad ' + a + '·f₀ ' + b + '·f₀ ' + c + '·f₀ (sound off)');
+    if (SAVER.opts && SAVER.opts.label) SAVER.opts.label({
+      title: '3D Lissajous ' + (eps || !coprime ? 'curve' : 'knot') + ' · ' + a + ' : ' + b + ' : ' + c,
+      sub: 'three perpendicular oscillators · ' + (eps ? 'drifting shell' : 'closed loop'),
+      eq, lines,
+    });
+  }
+  function saverStep(dt, el) {
+    SAVER.t += dt;
+    if (SAVER.t >= SAVER.dwell) saverFigure(SAVER.k + 1, el);
+    const left = SAVER.dwell - SAVER.t;
+    // The detuned shell has many strands that add up, so it shows at 0.6.
+    const top = SAVER.st && SAVER.st.eps ? 0.6 : 1;
+    saverOpacity(top * Math.max(0, Math.min(1, SAVER.t / SAVER_FADE, left / SAVER_FADE)));
+  }
   window.snSaver = {
     enter(o) {
-      const calm = o && o.calm != null ? o.calm : 0.7, seed = (o && o.seed) >>> 0;
+      o = o || {};
+      const calm = o.calm != null ? Math.min(1, Math.max(0, o.calm)) : 0.7;
       document.documentElement.classList.add('sn-saver');
       if (G.playing) stopTones();
       renderer.setClearColor(0x040308, 1);     // opaque, so a recording has no alpha
-      const b = document.querySelectorAll('#presets button');
-      if (b.length) b[seed % b.length].click();
+      const rnd = saverRand(o.seed || 1);
+      SAVER.order = SAVER_TOUR.map((_, i) => i);
+      for (let i = SAVER.order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [SAVER.order[i], SAVER.order[j]] = [SAVER.order[j], SAVER.order[i]]; }
+      SAVER.slow = 1 - 0.7 * calm;
+      SAVER.dwell = Math.max(12, Math.min(24, (o.seconds || 60) / 4));
+      SAVER.opts = o; SAVER.on = true;
       G.spin = 0.15 + 0.25 * (1 - calm);
-      G.pRateY = 0.008 + 0.012 * (1 - calm);
       view.R = 6; view.snapUp = false;          // a margin round the knot
       resize();
+      saverFigure(0, (performance.now() - startT) / 1000);
+      SAVER.t = SAVER_FADE;                      // the shell fades the first figure in
       return { canvas, warmupMs: 500 };
     },
+    exit() { SAVER.on = false; saverOpacity(1); resize(); },
   };
 
   // ------------------------------------------------------------------- boot
