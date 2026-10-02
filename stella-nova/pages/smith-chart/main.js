@@ -698,6 +698,9 @@
       let gi = (opts.seed >>> 0) % 3, t = 0, tg = 0, last = 0;
       const ph = ((opts.seed >>> 0) % 997) / 997 * TAU;
       setGrid(grids[gi]);
+      saverLabel = opts.labels !== false && typeof opts.label === 'function' ? opts.label : null;
+      clearInterval(saverTimer);
+      if (saverLabel) saverTimer = setInterval(saverPlate, 1000);
       SC.hooks.top.push((c, M) => {
         c.save(); c.globalCompositeOperation = 'destination-over'; c.fillStyle = '#06080c'; c.fillRect(0, 0, W, H); c.restore();
         c.font = `500 13px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
@@ -712,7 +715,7 @@
         requestAnimationFrame(drive);
         const dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
         t += dt * sp; tg += dt;
-        if (tg > hold) { tg = 0; gi = (gi + 1) % 3; setGrid(grids[gi]); }
+        if (tg > hold) { tg = 0; gi = (gi + 1) % 3; setGrid(grids[gi]); saverPlate(); }
         // The load: |gamma| from 0.2 to 0.75, the angle turns slowly.
         const r = 0.47 + 0.27 * Math.sin(t * 0.21 + ph), a = ph + t * 0.09 + 0.6 * Math.sin(t * 0.13);
         const Z = RF.scale(gammaToZ(cx(r * Math.cos(a), r * Math.sin(a))), S.z0);
@@ -720,9 +723,38 @@
         S.len = 0.25 * (1 - Math.cos(t * 0.17));
         dirty = true;
       })(0);
+      saverPlate();
       return { canvas, warmupMs: 1500 };
     },
+    exit() { saverLabel = null; clearInterval(saverTimer); saverTimer = 0; },
   };
+  // The plate (opts.label) names the grid and shows the load point that
+  // model() gives: Z0, ZL, z = ZL/Z0, gamma with its angle, VSWR and return
+  // loss (rf.js), then the line length and Zin, gamma_in toward the
+  // generator. The equations are the ones that zToGamma(), RF.vswr() and
+  // towardGen() compute. The autopilot sets S.R, S.X and S.len each frame.
+  let saverLabel = null, saverTimer = 0;
+  function saverPlate() {
+    if (!saverLabel) return;
+    const M = model(), gname = { z: 'Z grid', zy: 'Z + Y grid', y: 'Y grid' }[S.grid] || 'Z grid';
+    const lines = ['Z₀ = ' + fmtN(S.z0) + ' Ω · f = ' + fmtEng(S.f, 'Hz', 4)];
+    if (M.ok) {
+      const m = abs(M.g), gd = v => deg(arg(v)).toFixed(1) + '°', rl = RF.returnLossDb(m);
+      lines.push('Z_L = ' + fmtC(M.Z, 'Ω') + ' · z = ' + fmtC(M.z));
+      lines.push('Γ = ' + m.toFixed(3) + ' ∠ ' + gd(M.g) + ' · VSWR = ' + fmtVswr(m) + ' · return loss ' + (isFinite(rl) ? rl.toFixed(1) + ' dB' : '∞'));
+      lines.push('ℓ = ' + M.len.toFixed(3) + ' λ toward the generator · Γ_in ∠ ' + gd(M.gin));
+      lines.push('Z_in = ' + fmtC(M.Zin, 'Ω'));
+    }
+    saverLabel({
+      title: 'Smith chart · ' + gname,
+      sub: 'lossless line · the load moves on a slow loop in the Γ plane',
+      lines,
+      eq: ['Γ = (Z − Z₀)/(Z + Z₀) = (z − 1)/(z + 1)',
+        'VSWR = (1 + |Γ|)/(1 − |Γ|),   RL = −20 log₁₀|Γ|',
+        'Γ_in = Γ e^(−j4πℓ/λ)',
+        'Z_in = Z₀ (1 + Γ_in)/(1 − Γ_in)'],
+    });
+  }
 
   // ------------------------------------------------------------------- boot
   window.addEventListener('resize', resize);
