@@ -11,14 +11,17 @@
   ───────────────────────────────────────────────────────────────────────────
    Static markup for the angular-spectrum diffraction engine. main.js builds
    the canvas cells inside #canvas-grid, computes the diffracted field and
-   paints it. equations.js (MathJax SVG, made by typeset.mjs) fills the
-   equation column. Nothing here computes the field.
+   paints it. equations.js (an ES module) typesets the formulas in the
+   equation column and the parameter symbols as color-coded MathJax SVG,
+   through lib/sci-math.js. Nothing here computes the field.
 
    LOAD ORDER
-     ● fonts        Space Grotesk, IBM Plex Mono, Instrument Serif (the shell set)
      ● style.css    the page stylesheet
-     ● equations.js at body end, puts the formulas in #eq-panel
+     ● sci.css      shared science type (STIX Two Text, Inter, system mono)
+                    and the math colors .m1 to .m6. It loads the fonts.
+     ● asm.js       at body end, the cached angular spectrum engine
      ● main.js      at body end, runs the engine after the markup exists
+     ● equations.js module, runs after main.js. It sends 'diffeq-ready'.
 
    LAYOUT   (the leading marker is an element id)
      ┌────────────┬──────────────────────────────────────┬──────────────┐
@@ -36,22 +39,23 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS
      drops the page top bar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 
-<header class="topbar"><span class="tb-mark">Stella Nova</span><span class="tb-page">Aperture Diffraction</span></header>
+<header class="topbar"><span class="tb-mark">Stella Nova</span><span class="tb-page">Aperture diffraction</span></header>
 
 <div id="app">
   <!-- Control panel: every widget main.js binds by id. -->
   <aside id="panel" aria-label="Controls">
     <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
     <div class="p-head">
-      <div><p class="kicker">Wave optics</p><h1>Aperture Diffraction</h1><p class="p-sum" id="qp-summary"></p></div>
+      <div><p class="kicker">Wave optics</p><h1>Aperture diffraction</h1><p class="p-sum" id="qp-summary"></p></div>
       <button class="icon-btn" id="qp-collapse-btn" aria-label="Collapse controls">‹</button>
     </div>
     <div class="p-body">
@@ -66,7 +70,7 @@
       <section class="sec">
         <h2>Light</h2>
         <div class="seg" id="source-modes"><button class="qp-mode active" data-source="white">White · D65</button><button class="qp-mode" data-source="mono">Single λ</button></div>
-        <div id="mono-params" hidden><div class="row"><span class="row-lbl">Wavelength</span><input type="range" id="sl-lam" min="380" max="780" value="633" step="1"><span class="val"><span id="vl-lam">633</span> nm</span><span class="wl-dot" id="wl-dot"></span></div></div>
+        <div id="mono-params" hidden><div class="row"><span class="row-lbl"><span class="sci-sym" data-sym="\lambda"></span><small>wavelength</small></span><input type="range" id="sl-lam" min="380" max="780" value="633" step="1"><span class="val"><span id="vl-lam">633</span> nm</span><span class="wl-dot" id="wl-dot"></span></div></div>
         <div id="white-params"><div class="row"><span class="row-lbl">Wavelengths</span><input type="range" id="sl-div" min="6" max="30" value="15" step="1"><span class="val" id="vl-div">15</span></div></div>
       </section>
       <!-- Intensity scale: log shows every lobe, linear shows true contrast. -->
@@ -77,7 +81,7 @@
       </section>
       <!-- Rarely used: the 2x2 channel view, the FFT grid, export, reset. -->
       <details class="sec more">
-        <summary><h2>View, grid &amp; export</h2></summary>
+        <summary><h2>View, grid and export</h2></summary>
         <div class="sub">Channels</div>
         <div class="seg" id="view-modes"><button class="qp-mode active" data-view="1">Composite</button><button class="qp-mode" data-view="4">2×2 · R G B</button></div>
         <div class="sub">FFT grid</div>
@@ -101,10 +105,10 @@
   <!-- Stage: the pattern cells, then one shared bar for z, extent and speed. -->
   <main id="stage">
     <div id="canvas-grid" class="view-1"></div>
-    <button class="chip-btn" id="eq-toggle" aria-expanded="false">∑ Equations</button>
+    <button class="chip-btn" id="eq-toggle" aria-expanded="false">Equations</button>
     <div id="stage-bar">
       <div class="sb-sliders">
-        <label class="cb-row"><span class="cb-lbl sym">z</span><input type="range" class="cb-slider cb-z" min="0" max="500" value="200" step="1"><span class="cb-val cb-z-v">200 mm</span></label>
+        <label class="cb-row"><span class="cb-lbl"><span class="sci-sym" data-sym="z"></span></span><input type="range" class="cb-slider cb-z" min="0" max="500" value="200" step="1"><span class="cb-val cb-z-v">200 mm</span></label>
         <label class="cb-row"><span class="cb-lbl">Field</span><input type="range" class="cb-slider cb-ext" min="0.5" max="30" value="5" step="0.1"><span class="cb-val cb-ext-v">5.0 mm</span></label>
         <label class="cb-row"><span class="cb-lbl">Speed</span><input type="range" class="cb-slider cb-spd" min="0.5" max="5" value="5" step="0.25"><span class="cb-val cb-spd-v">×5</span></label>
       </div>
@@ -116,11 +120,11 @@
   <!-- Equations: a column on wide screens, a drawer from #eq-toggle otherwise. -->
   <aside id="eq-panel" aria-label="Equations">
     <div class="eq-head"><h2>The physics</h2><button class="icon-btn" id="eq-collapse-btn" aria-label="Close equations">×</button></div>
-    <div class="eq-block"><div class="eq-sublabel">Helmholtz wave equation</div><div class="eq-row" id="eq-helm"></div><p class="eq-say">Light is a wave <i class="c-e">E</i> with wave number <i class="c-k">k</i>. Every point of the field obeys this.</p></div>
-    <div class="eq-block"><div class="eq-sublabel">Angular spectrum propagation</div><div class="eq-row" id="eq-asm"></div><p class="eq-say">Split the field after the aperture into plane waves (<i class="c-f">ℱ</i>), move each one by its own phase over the distance z, and add them back.</p></div>
-    <div class="eq-block"><div class="eq-sublabel" id="eq-t-label">Transmittance</div><div class="eq-row" id="eq-trans"></div><p class="eq-say">What the aperture <i class="c-t">t</i> lets through: 1 where it is open, 0 where it is closed, a phase for a lens or a phase grating.</p></div>
-    <div class="eq-block"><div class="eq-sublabel">Fresnel number</div><div class="eq-row" id="eq-fresnel"></div><p class="eq-say">a is the size of the aperture. Now: <b id="eq-nf">–</b></p></div>
-    <div class="eq-block"><div class="eq-sublabel">CIE 1931 → sRGB</div><div class="eq-row" id="eq-cie"></div><p class="eq-say">White light: add the pattern of each wavelength, weighted by daylight and by the colour response of the eye.</p></div>
+    <div class="eq-block"><div class="eq-sublabel">Helmholtz wave equation</div><div class="eq-row sci-eq" id="eq-helm"></div><p class="eq-say">Light is a wave <span class="sci-sym" data-sym="E"></span> with wave number <span class="sci-sym" data-sym="k"></span>. Every point of the field obeys this.</p></div>
+    <div class="eq-block"><div class="eq-sublabel">Angular spectrum propagation</div><div class="eq-row sci-eq" id="eq-asm"></div><p class="eq-say">Split the field after the aperture into plane waves (<span class="sci-sym" data-sym="\mathcal{F}"></span>), move each one by its own phase over the distance <span class="sci-sym" data-sym="z"></span>, and add them back.</p></div>
+    <div class="eq-block"><div class="eq-sublabel" id="eq-t-label">Transmittance</div><div class="eq-row sci-eq" id="eq-trans"></div><p class="eq-say">What the aperture <span class="sci-sym" data-sym="t"></span> lets through: 1 where it is open, 0 where it is closed, a phase for a lens or a phase grating.</p></div>
+    <div class="eq-block"><div class="eq-sublabel">Fresnel number</div><div class="eq-row sci-eq" id="eq-fresnel"></div><p class="eq-say"><span class="sci-sym" data-sym="a"></span> is the size of the aperture. Now: <b id="eq-nf">–</b></p></div>
+    <div class="eq-block"><div class="eq-sublabel">CIE 1931 to sRGB</div><div class="eq-row sci-eq" id="eq-cie"></div><p class="eq-say">White light: add the pattern of each wavelength, weighted by daylight and by the colour response of the eye.</p></div>
   </aside>
 </div>
 
@@ -133,8 +137,8 @@
 <!-- Hidden file input for the image aperture. -->
 <input type="file" id="file-input" accept="image/*" hidden>
 
-<script src="equations.js"></script>
 <script src="asm.js"></script>
 <script src="main.js"></script>
+<script type="module" src="equations.js"></script>
 </body>
 </html>

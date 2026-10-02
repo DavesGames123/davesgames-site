@@ -210,29 +210,29 @@ function rasterToField(imgData,side,N){const t=czeros(N);for(let iy=0;iy<side;iy
 // returns the complex transmittance mask over the sampled grid, params drive its
 // sliders, wlDep marks masks that depend on wavelength (lens, zone plate, phase
 // grating) so the white-light path cannot cache one mask across wavelengths, and
-// its formula is DiffEq.trans[key] in equations.js. Amplitude apertures
+// its formula is TRANS[key] in equations.js. Amplitude apertures
 // set only the real part; phase optics write a unit-magnitude complex phase.
 /* ═══ ELEMENTS ═══ */
 const EL={
-  hex:{name:'Hexagonal',sym:'⬡',wlDep:false,params:[{id:'radius',label:'R',min:.01,max:5,value:.7,step:.01}],t(xx,yy,l,N,p){const R=p.radius*mm,s3=Math.sqrt(3),t=czeros(N);for(let i=0;i<N;i++){const ax=Math.abs(xx[i]),ay=Math.abs(yy[i]);t.re[i]=(ax+ay/s3<=R&&ay<=R*s3/2)?1:0}return t}},
-  circular:{name:'Circle',sym:'⊙',wlDep:false,params:[{id:'radius',label:'R',min:.01,max:5,value:.5,step:.01}],t(xx,yy,l,N,p){const a=p.radius*mm,t=czeros(N);for(let i=0;i<N;i++)t.re[i]=(xx[i]*xx[i]+yy[i]*yy[i]<a*a)?1:0;return t}},
-  rect:{name:'Rect Slit',sym:'▬',wlDep:false,params:[{id:'width',label:'W',min:.01,max:5,value:.1,step:.01},{id:'height',label:'H',min:.01,max:10,value:3,step:.1}],t(xx,yy,l,N,p){const w=p.width*mm/2,h=p.height*mm/2,t=czeros(N);for(let i=0;i<N;i++)t.re[i]=(Math.abs(xx[i])<w&&Math.abs(yy[i])<h)?1:0;return t}},
-  double:{name:'Double Slit',sym:'‖',wlDep:false,params:[{id:'slit_w',label:'W',min:.005,max:1,value:.04,step:.005},{id:'sep',label:'Sep',min:.02,max:5,value:.3,step:.01},{id:'height',label:'H',min:.1,max:10,value:3,step:.1}],t(xx,yy,l,N,p){const w=p.slit_w*mm/2,d=p.sep*mm/2,h=p.height*mm/2,t=czeros(N);for(let i=0;i<N;i++){const x=xx[i],y=yy[i];t.re[i]=((Math.abs(x-d)<w||Math.abs(x+d)<w)&&Math.abs(y)<h)?1:0}return t}},
-  star:{name:'Star',sym:'★',wlDep:false,params:[{id:'pts',label:'Pts',min:3,max:12,value:5,step:1},{id:'radius',label:'R',min:.05,max:5,value:.6,step:.01},{id:'inner',label:'Inn',min:.1,max:.9,value:.38,step:.01}],t(xx,yy,l,N,p){const R=p.radius*mm,rI=R*p.inner,vs=starV(p.pts,R,rI),t=czeros(N);for(let i=0;i<N;i++)t.re[i]=inPoly(xx[i],yy[i],vs)?1:0;return t}},
-  heart:{name:'Heart',sym:'♥',wlDep:false,params:[{id:'size',label:'Size',min:.05,max:5,value:.5,step:.01}],t(xx,yy,l,N,p){const s=p.size*mm,t=czeros(N);for(let i=0;i<N;i++){const xn=xx[i]/s,yn=-yy[i]/s+.35,r2=xn*xn+yn*yn-1;t.re[i]=(r2*r2*r2-xn*xn*yn*yn*yn<=0)?1:0}return t}},
-  ring:{name:'Ring',sym:'◯',wlDep:false,params:[{id:'outer',label:'Out',min:.05,max:5,value:.6,step:.01},{id:'inner',label:'Inn',min:.01,max:4,value:.4,step:.01}],t(xx,yy,l,N,p){const ro=p.outer*mm,ri=p.inner*mm,t=czeros(N);for(let i=0;i<N;i++){const r2=xx[i]*xx[i]+yy[i]*yy[i];t.re[i]=(r2>=ri*ri&&r2<=ro*ro)?1:0}return t}},
-  cross:{name:'Cross',sym:'✚',wlDep:false,params:[{id:'arm',label:'Arm',min:.05,max:5,value:.6,step:.01},{id:'width',label:'W',min:.01,max:2,value:.15,step:.01}],t(xx,yy,l,N,p){const a=p.arm*mm,w=p.width*mm/2,t=czeros(N);for(let i=0;i<N;i++){const ax=Math.abs(xx[i]),ay=Math.abs(yy[i]);t.re[i]=((ax<w&&ay<a)||(ay<w&&ax<a))?1:0}return t}},
-  'grating-bin':{name:'Grating',sym:'⫾',wlDep:false,params:[{id:'period',label:'Per',min:.01,max:2,value:.15,step:.005},{id:'width',label:'W',min:.1,max:15,value:3,step:.1},{id:'height',label:'H',min:.1,max:15,value:3,step:.1}],t(xx,yy,l,N,p){const P=p.period*mm,w=p.width*mm/2,h=p.height*mm/2,t=czeros(N);for(let i=0;i<N;i++){const x=xx[i],y=yy[i];if(Math.abs(x)<w&&Math.abs(y)<h)t.re[i]=(((x%P+P)%P)<P/2)?1:0}return t}},
-  'grating-phase':{name:'Phase Grating',sym:'≋',wlDep:true,params:[{id:'period',label:'Per',min:.01,max:2,value:.15,step:.005},{id:'width',label:'W',min:.1,max:15,value:3,step:.1},{id:'height',label:'H',min:.1,max:15,value:3,step:.1}],t(xx,yy,l,N,p){const P=p.period*mm,w=p.width*mm/2,h=p.height*mm/2,t=czeros(N);for(let i=0;i<N;i++){const x=xx[i],y=yy[i];if(Math.abs(x)<w&&Math.abs(y)<h){const ph=TAU*x/P;t.re[i]=Math.cos(ph);t.im[i]=Math.sin(ph)}}return t}},
-  'lens-ap':{name:'Lens',sym:'◉',wlDep:true,params:[{id:'f',label:'f',min:1,max:1000,value:50,step:1},{id:'radius',label:'R',min:.05,max:5,value:.4,step:.01}],t(xx,yy,l,N,p){const f=p.f*mm,a=p.radius*mm,t=czeros(N);for(let i=0;i<N;i++){const r2=xx[i]*xx[i]+yy[i]*yy[i];if(r2<a*a){const ph=-PI/(l*f)*r2;t.re[i]=Math.cos(ph);t.im[i]=Math.sin(ph)}}return t}},
-  fzp:{name:'Zone Plate',sym:'◎',wlDep:true,params:[{id:'f',label:'f',min:5,max:500,value:50,step:1},{id:'radius',label:'R',min:.05,max:5,value:.5,step:.01}],t(xx,yy,l,N,p){const f=p.f*mm,a=p.radius*mm,t=czeros(N);for(let i=0;i<N;i++){const r2=xx[i]*xx[i]+yy[i]*yy[i];if(r2<a*a){const ph=-(TAU/l)*(Math.sqrt(f*f+r2)-f);t.re[i]=Math.cos(ph);t.im[i]=Math.sin(ph)}}return t}},
-  text:{name:'Text',sym:'Aa',wlDep:false,params:[{id:'txt',label:'Text',type:'text',value:'davesgames.io'},{id:'sz',label:'Size',min:8,max:120,value:28,step:1}],t(xx,yy,l,N,p){const side=Math.round(Math.sqrt(N)),cv=document.createElement('canvas');cv.width=side;cv.height=side;const ctx=cv.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,side,side);ctx.fillStyle='#fff';ctx.font=`bold ${p.sz}px "JetBrains Mono",monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(p.txt||'A',side/2,side/2);return rasterToField(ctx.getImageData(0,0,side,side),side,N)}},
-  image:{name:'Image',sym:'◫',wlDep:false,params:[{id:'file',label:'Image',type:'file'},{id:'inv',label:'Invert',min:0,max:1,value:0,step:1}],t(xx,yy,l,N,p){if(!window._imgMask||window._imgMask.length!==N)return cones(N);const t=czeros(N),inv=p.inv>.5;for(let i=0;i<N;i++)t.re[i]=inv?1-window._imgMask[i]:window._imgMask[i];return t}},
+  hex:{name:'Hexagonal',wlDep:false,params:[{id:'radius',label:'R',min:.01,max:5,value:.7,step:.01}],t(xx,yy,l,N,p){const R=p.radius*mm,s3=Math.sqrt(3),t=czeros(N);for(let i=0;i<N;i++){const ax=Math.abs(xx[i]),ay=Math.abs(yy[i]);t.re[i]=(ax+ay/s3<=R&&ay<=R*s3/2)?1:0}return t}},
+  circular:{name:'Circle',wlDep:false,params:[{id:'radius',label:'R',min:.01,max:5,value:.5,step:.01}],t(xx,yy,l,N,p){const a=p.radius*mm,t=czeros(N);for(let i=0;i<N;i++)t.re[i]=(xx[i]*xx[i]+yy[i]*yy[i]<a*a)?1:0;return t}},
+  rect:{name:'Rect slit',wlDep:false,params:[{id:'width',label:'W',min:.01,max:5,value:.1,step:.01},{id:'height',label:'H',min:.01,max:10,value:3,step:.1}],t(xx,yy,l,N,p){const w=p.width*mm/2,h=p.height*mm/2,t=czeros(N);for(let i=0;i<N;i++)t.re[i]=(Math.abs(xx[i])<w&&Math.abs(yy[i])<h)?1:0;return t}},
+  double:{name:'Double slit',wlDep:false,params:[{id:'slit_w',label:'W',min:.005,max:1,value:.04,step:.005},{id:'sep',label:'Sep',min:.02,max:5,value:.3,step:.01},{id:'height',label:'H',min:.1,max:10,value:3,step:.1}],t(xx,yy,l,N,p){const w=p.slit_w*mm/2,d=p.sep*mm/2,h=p.height*mm/2,t=czeros(N);for(let i=0;i<N;i++){const x=xx[i],y=yy[i];t.re[i]=((Math.abs(x-d)<w||Math.abs(x+d)<w)&&Math.abs(y)<h)?1:0}return t}},
+  star:{name:'Star',wlDep:false,params:[{id:'pts',label:'Pts',min:3,max:12,value:5,step:1},{id:'radius',label:'R',min:.05,max:5,value:.6,step:.01},{id:'inner',label:'Inn',min:.1,max:.9,value:.38,step:.01}],t(xx,yy,l,N,p){const R=p.radius*mm,rI=R*p.inner,vs=starV(p.pts,R,rI),t=czeros(N);for(let i=0;i<N;i++)t.re[i]=inPoly(xx[i],yy[i],vs)?1:0;return t}},
+  heart:{name:'Heart',wlDep:false,params:[{id:'size',label:'Size',min:.05,max:5,value:.5,step:.01}],t(xx,yy,l,N,p){const s=p.size*mm,t=czeros(N);for(let i=0;i<N;i++){const xn=xx[i]/s,yn=-yy[i]/s+.35,r2=xn*xn+yn*yn-1;t.re[i]=(r2*r2*r2-xn*xn*yn*yn*yn<=0)?1:0}return t}},
+  ring:{name:'Ring',wlDep:false,params:[{id:'outer',label:'Out',min:.05,max:5,value:.6,step:.01},{id:'inner',label:'Inn',min:.01,max:4,value:.4,step:.01}],t(xx,yy,l,N,p){const ro=p.outer*mm,ri=p.inner*mm,t=czeros(N);for(let i=0;i<N;i++){const r2=xx[i]*xx[i]+yy[i]*yy[i];t.re[i]=(r2>=ri*ri&&r2<=ro*ro)?1:0}return t}},
+  cross:{name:'Cross',wlDep:false,params:[{id:'arm',label:'Arm',min:.05,max:5,value:.6,step:.01},{id:'width',label:'W',min:.01,max:2,value:.15,step:.01}],t(xx,yy,l,N,p){const a=p.arm*mm,w=p.width*mm/2,t=czeros(N);for(let i=0;i<N;i++){const ax=Math.abs(xx[i]),ay=Math.abs(yy[i]);t.re[i]=((ax<w&&ay<a)||(ay<w&&ax<a))?1:0}return t}},
+  'grating-bin':{name:'Grating',wlDep:false,params:[{id:'period',label:'Per',min:.01,max:2,value:.15,step:.005},{id:'width',label:'W',min:.1,max:15,value:3,step:.1},{id:'height',label:'H',min:.1,max:15,value:3,step:.1}],t(xx,yy,l,N,p){const P=p.period*mm,w=p.width*mm/2,h=p.height*mm/2,t=czeros(N);for(let i=0;i<N;i++){const x=xx[i],y=yy[i];if(Math.abs(x)<w&&Math.abs(y)<h)t.re[i]=(((x%P+P)%P)<P/2)?1:0}return t}},
+  'grating-phase':{name:'Phase grating',wlDep:true,params:[{id:'period',label:'Per',min:.01,max:2,value:.15,step:.005},{id:'width',label:'W',min:.1,max:15,value:3,step:.1},{id:'height',label:'H',min:.1,max:15,value:3,step:.1}],t(xx,yy,l,N,p){const P=p.period*mm,w=p.width*mm/2,h=p.height*mm/2,t=czeros(N);for(let i=0;i<N;i++){const x=xx[i],y=yy[i];if(Math.abs(x)<w&&Math.abs(y)<h){const ph=TAU*x/P;t.re[i]=Math.cos(ph);t.im[i]=Math.sin(ph)}}return t}},
+  'lens-ap':{name:'Lens',wlDep:true,params:[{id:'f',label:'f',min:1,max:1000,value:50,step:1},{id:'radius',label:'R',min:.05,max:5,value:.4,step:.01}],t(xx,yy,l,N,p){const f=p.f*mm,a=p.radius*mm,t=czeros(N);for(let i=0;i<N;i++){const r2=xx[i]*xx[i]+yy[i]*yy[i];if(r2<a*a){const ph=-PI/(l*f)*r2;t.re[i]=Math.cos(ph);t.im[i]=Math.sin(ph)}}return t}},
+  fzp:{name:'Zone plate',wlDep:true,params:[{id:'f',label:'f',min:5,max:500,value:50,step:1},{id:'radius',label:'R',min:.05,max:5,value:.5,step:.01}],t(xx,yy,l,N,p){const f=p.f*mm,a=p.radius*mm,t=czeros(N);for(let i=0;i<N;i++){const r2=xx[i]*xx[i]+yy[i]*yy[i];if(r2<a*a){const ph=-(TAU/l)*(Math.sqrt(f*f+r2)-f);t.re[i]=Math.cos(ph);t.im[i]=Math.sin(ph)}}return t}},
+  text:{name:'Text',wlDep:false,params:[{id:'txt',label:'Text',type:'text',value:'davesgames.io'},{id:'sz',label:'Size',min:8,max:120,value:28,step:1}],t(xx,yy,l,N,p){const side=Math.round(Math.sqrt(N)),cv=document.createElement('canvas');cv.width=side;cv.height=side;const ctx=cv.getContext('2d');ctx.fillStyle='#000';ctx.fillRect(0,0,side,side);ctx.fillStyle='#fff';ctx.font=`bold ${p.sz}px "JetBrains Mono",monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(p.txt||'A',side/2,side/2);return rasterToField(ctx.getImageData(0,0,side,side),side,N)}},
+  image:{name:'Image',wlDep:false,params:[{id:'file',label:'Image',type:'file'},{id:'inv',label:'Invert',min:0,max:1,value:0,step:1}],t(xx,yy,l,N,p){if(!window._imgMask||window._imgMask.length!==N)return cones(N);const t=czeros(N),inv=p.inv>.5;for(let i=0;i<N;i++)t.re[i]=inv?1-window._imgMask[i]:window._imgMask[i];return t}},
 };
 
 // Fill the element dropdown from EL, defaulting the selection to the text mask.
 /* Populate element select */
-(function(){const sel=document.getElementById('element-select');Object.entries(EL).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.sym+'  '+v.name;if(k==='hex')o.selected=true;sel.appendChild(o)})})();
+(function(){const sel=document.getElementById('element-select');Object.entries(EL).forEach(([k,v])=>{const o=document.createElement('option');o.value=k;o.textContent=v.name;if(k==='hex')o.selected=true;sel.appendChild(o)})})();
 
 // The single mutable state. source is 'mono' or 'white'; z is the propagation
 // distance in mm; extent is the physical grid width in mm; N is the grid side;
@@ -293,12 +293,12 @@ function recompute(){
   document.getElementById('st-main').textContent=`${N}² grid · dx ${(dx/um).toFixed(1)} µm`;
   // Fresnel number N_F = a²/(λz) classifies the regime: large means geometric
   // shadow, near one is Fresnel (near-field), small is Fraunhofer (far-field).
-  const aC=p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0;let nf='';if(aC>0&&S.z>0){const l0=(S.source==='mono'?S.lambda:550)*nm,Nf=(aC*mm)**2/(l0*z);nf=`N_F = ${Nf<.01?Nf.toExponential(1):Nf.toFixed(2)} · ${Nf>5?'shadow':Nf>.5?'Fresnel':'Fraunhofer'}`}document.getElementById('st-sub').textContent=nf;document.getElementById('eq-nf').textContent=nf||'–';
+  const aC=p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0;let nf='';if(aC>0&&S.z>0){const l0=(S.source==='mono'?S.lambda:550)*nm,Nf=(aC*mm)**2/(l0*z);nf=`N<sub>F</sub> = ${Nf<.01?Nf.toExponential(1):Nf.toFixed(2)} · ${Nf>5?'shadow':Nf>.5?'Fresnel':'Fraunhofer'}`}document.getElementById('st-sub').innerHTML=nf;document.getElementById('eq-nf').innerHTML=nf||'–';
   if(_apKey!==su.key){_apKey=su.key;drawAperture(el,p,su.xx,su.yy,N)}
   const lk=[S.source,S.lambda,S.scale,S.range,S.gainLin].join();if(_lgKey!==lk){_lgKey=lk;drawLegend()}
-  document.getElementById('qp-summary').textContent=el.sym+' '+el.name+' · '+(S.source==='white'?'D65':'λ='+S.lambda+'nm')+' · z='+S.z.toFixed(0)+'mm';
-  // Show the transmittance formula of the current element (MathJax SVG from
-  // equations.js, typeset by typeset.mjs).
+  document.getElementById('qp-summary').textContent=el.name+' · '+(S.source==='white'?'D65':'λ='+S.lambda+'nm')+' · z='+S.z.toFixed(0)+'mm';
+  // Show the transmittance formula of the current element (MathJax SVG,
+  // typeset at run time by equations.js).
   showTrans();
 }
 // Paint a finished frame: always the composite, and the isolated R/G/B cells
@@ -315,7 +315,10 @@ function drawLegend(){const bar=document.getElementById('legend-bar');if(!bar)re
 function sup(x){const m='⁰¹²³⁴⁵⁶⁷⁸⁹';const s=(Math.round(x*10)/10).toString();return s.split('').map(ch=>ch==='.'?'·':m[+ch]).join('')}
 function fmtG(v){return v>=.1?(+v.toFixed(2)).toString():v.toExponential(0)}
 // Put the element's transmittance formula into #eq-trans, once per element.
-let _transKey=null;function showTrans(){if(_transKey===S.element||!window.DiffEq)return;_transKey=S.element;document.getElementById('eq-t-label').textContent='Transmittance · '+EL[S.element].name;document.getElementById('eq-trans').innerHTML=DiffEq.trans[S.element]||''}
+// equations.js (a module, so it runs after this file) typesets it as MathJax
+// SVG. On 'diffeq-ready' the formula and the parameter symbols are typeset.
+let _transKey=null;function showTrans(){if(_transKey===S.element||!window.DiffEq)return;_transKey=S.element;document.getElementById('eq-t-label').textContent='Transmittance · '+EL[S.element].name;DiffEq.trans(document.getElementById('eq-trans'),S.element)}
+window.addEventListener('diffeq-ready',()=>{_transKey=null;showTrans()});
 // Equation column: beside the stage at 1280 px and wider, else a drawer.
 function setEqOpen(o){document.body.classList.toggle('eq-open',o);document.getElementById('eq-toggle').setAttribute('aria-expanded',o)}
 function eqLayout(){const narrow=innerWidth<1280||phone();document.body.classList.toggle('no-eq',narrow);if(!narrow)setEqOpen(false)}
@@ -346,8 +349,14 @@ function animLoop(){if(!animDir)return;if(animDwell>0){animDwell--;requestAnimat
 // recompute on change.
 /* ═══ PARAM UI ═══ */
 // Readable names and units for the element parameters (EL keeps short ids).
+// PSYM is the TeX symbol of each parameter as the transmittance formula in
+// equations.js writes it (PSYM_EL overrides it per element). The label shows
+// the symbol as MathJax SVG and the name in small dim text.
+const PSYM={radius:'R',width:'W',height:'H',slit_w:'W',sep:'d',pts:'n',inner:'r_i',size:'s',outer:'r_o',arm:'a',period:'\\Lambda',f:'f'};
+const PSYM_EL={star:{inner:'r_i/R'},cross:{width:'w'}};
+function paramLabel(pd){const nm_=PNAME[pd.id]||[pd.label,''],sym=(PSYM_EL[S.element]||{})[pd.id]||PSYM[pd.id];return sym?`<span class="sci-sym" data-sym="${sym}"></span><small>${nm_[0].toLowerCase()}</small>`:nm_[0]}
 const PNAME={radius:['Radius','mm'],width:['Width','mm'],height:['Height','mm'],slit_w:['Slit width','mm'],sep:['Separation','mm'],pts:['Points',''],inner:['Inner ratio',''],size:['Size','mm'],outer:['Outer radius','mm'],arm:['Arm length','mm'],period:['Period','mm'],f:['Focal length','mm'],sz:['Font size','px'],inv:['Invert','']};
-function buildParamUI(){const c=document.getElementById('params-container'),el=EL[S.element];c.innerHTML='';el.params.forEach(pd=>{if(pd.type==='text'){const d=document.createElement('div');d.innerHTML=`<input type="text" id="sl-p-${pd.id}" value="${pd.value}" class="qp-text-input" placeholder="${pd.label}">`;c.appendChild(d);d.querySelector('input').addEventListener('input',()=>scheduleRecompute())}else if(pd.type==='file'){const d=document.createElement('div');d.innerHTML=`<button class="qp-file-btn">Choose Image</button>`;c.appendChild(d);d.querySelector('button').addEventListener('click',()=>document.getElementById('file-input').click())}else{const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const nm_=PNAME[pd.id]||[pd.label,''],row=document.createElement('div');row.className='row';row.innerHTML=`<span class="row-lbl">${nm_[0]}</span><input type="range" id="sl-p-${pd.id}" min="${pd.min}" max="${pd.max}" value="${pd.value}" step="${pd.step}" aria-label="${nm_[0]}"><span class="val"><span id="vl-p-${pd.id}">${pd.value.toFixed(dec)}</span>${nm_[1]?' '+nm_[1]:''}</span>`;c.appendChild(row);const sl=row.querySelector('input');sg(sl);sl.addEventListener('input',function(){document.getElementById('vl-p-'+pd.id).textContent=(+this.value).toFixed(dec);sg(this);scheduleRecompute()})}});readParams()}
+function buildParamUI(){const c=document.getElementById('params-container'),el=EL[S.element];c.innerHTML='';el.params.forEach(pd=>{if(pd.type==='text'){const d=document.createElement('div');d.innerHTML=`<input type="text" id="sl-p-${pd.id}" value="${pd.value}" class="qp-text-input" placeholder="${pd.label}">`;c.appendChild(d);d.querySelector('input').addEventListener('input',()=>scheduleRecompute())}else if(pd.type==='file'){const d=document.createElement('div');d.innerHTML=`<button class="qp-file-btn">Choose image</button>`;c.appendChild(d);d.querySelector('button').addEventListener('click',()=>document.getElementById('file-input').click())}else{const dec=pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0;const nm_=PNAME[pd.id]||[pd.label,''],row=document.createElement('div');row.className='row';row.innerHTML=`<span class="row-lbl">${paramLabel(pd)}</span><input type="range" id="sl-p-${pd.id}" min="${pd.min}" max="${pd.max}" value="${pd.value}" step="${pd.step}" aria-label="${nm_[0]}"><span class="val"><span id="vl-p-${pd.id}">${pd.value.toFixed(dec)}</span>${nm_[1]?' '+nm_[1]:''}</span>`;c.appendChild(row);const sl=row.querySelector('input');sg(sl);sl.addEventListener('input',function(){document.getElementById('vl-p-'+pd.id).textContent=(+this.value).toFixed(dec);sg(this);scheduleRecompute()})}});if(window.DiffEq)DiffEq.symAll(c);readParams()}
 
 // Image upload: draw the chosen file centered on an N×N canvas, then read its
 // luminance (flipping Y) into window._imgMask for the 'image' element's mask.
@@ -553,16 +562,16 @@ document.getElementById('btn-export-vid').addEventListener('click',()=>{
 const PR=[
   {name:'Hex',el:'hex',p:{radius:.7},ext:5,z:200,div:15},
   {name:'Circle',el:'circular',p:{radius:.3},ext:3,z:150,div:15},
-  {name:'Star ★',el:'star',p:{pts:5,radius:.6,inner:.38},ext:3,z:200,div:15},
-  {name:'Heart ♥',el:'heart',p:{size:.5},ext:3,z:200,div:15},
-  {name:'Ring ◯',el:'ring',p:{outer:.6,inner:.4},ext:3,z:200,div:15},
-  {name:'Cross ✚',el:'cross',p:{arm:.6,width:.15},ext:3,z:200,div:15},
+  {name:'Star',el:'star',p:{pts:5,radius:.6,inner:.38},ext:3,z:200,div:15},
+  {name:'Heart',el:'heart',p:{size:.5},ext:3,z:200,div:15},
+  {name:'Ring',el:'ring',p:{outer:.6,inner:.4},ext:3,z:200,div:15},
+  {name:'Cross',el:'cross',p:{arm:.6,width:.15},ext:3,z:200,div:15},
   {name:'Young\'s',el:'double',p:{slit_w:.04,sep:.3,height:3},ext:5,z:300,div:15},
   {name:'Grating',el:'grating-bin',p:{period:.15,width:3,height:3},ext:5,z:200,div:15},
   {name:'Lens',el:'lens-ap',p:{f:80,radius:.4},ext:.6,z:80,div:12},
   {name:'FZP',el:'fzp',p:{f:60,radius:.5},ext:.6,z:60,div:12},
   {name:'Slit',el:'rect',p:{width:.1,height:3},ext:5,z:200,div:15},
-  {name:'6-Star',el:'star',p:{pts:6,radius:.6,inner:.45},ext:3,z:200,div:15},
+  {name:'6-star',el:'star',p:{pts:6,radius:.6,inner:.45},ext:3,z:200,div:15},
 ];
 // Apply one preset: copy its fields into S, sync every control to match, rebuild
 // the parameter UI, push the preset's param values, and recompute.
@@ -594,7 +603,7 @@ window.snSaver={enter(opts){
   st.textContent='html.saver .topbar,html.saver #panel,html.saver #eq-panel,html.saver #eq-toggle,html.saver #stage-bar,html.saver #dock,html.saver .cell-label,html.saver .ov{display:none!important}'+
     'html.saver #stage{position:fixed;inset:0;z-index:5;padding:0}html.saver #canvas-grid{padding:0}html.saver .canvas-cell{border-radius:0}html.saver #cv-rgb{cursor:none}';
   document.head.appendChild(st);document.documentElement.classList.add('saver');
-  const names=['Hex','Circle','Star ★','Heart ♥','Ring ◯','Cross ✚','Young\'s','Lens','FZP','6-Star'];
+  const names=['Hex','Circle','Star','Heart','Ring','Cross','Young\'s','Lens','FZP','6-star'];
   const list=names.map(n=>PR.find(p=>p.name===n)).filter(Boolean);
   const hold=Math.max(12,(+opts.seconds||60)/3),FADE=0.9;
   let pi=(opts.seed>>>0)%list.length,tp=0,tz=0,last=0;
