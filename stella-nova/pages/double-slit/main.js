@@ -62,6 +62,7 @@
 //      control wiring ...... "function bindRange"     sliders → P
 //      main loop ........... "function loop"          requestAnimationFrame driver
 //      saver detector ...... "function drawDetector"  summed I(y) into the field canvas
+//      saver plate ......... "function saverPlate"    opts.label: d, a, λ, L, TeX, fringe anchor
 //      screensaver hook .... "window.snSaver"         lib/screensaver.js mode
 // ============================================================================
 
@@ -580,13 +581,39 @@ function saverPlate(label){
   const lam=on.map(c=>P.lamNm[c]).join(' / ');
   const dy=on.map(c=>f(um(P.lamNm[c]/CELL_NM*g.L/g.d))).join(' / ');
   const tri=P.slitMode==='triple';
+  // Parameters and TeX. The classes are those of typeset.mjs: psi m2,
+  // a and d m3, lambda m6, c and alpha m1, sigma m4.
   label({
     title:tri?'Triple slit · summed intensity':'Double slit · summed intensity',
-    sub:'detector strip at the right edge · white = Σ <ψ²>, dashed = theory',
-    lines:['d = '+f(um(g.d))+' µm   a = '+f(um(g.a))+' µm','λ = '+lam+' nm','L = '+f(um(g.L))+' µm','fringe Δy = λL/d = '+dy+' µm','t = '+(simTime*C_FS_PER_STEP(P.dt)).toFixed(0)+' fs'],
+    sub:'The detector strip at the right edge: white is the sum of ⟨ψ²⟩, dashed is theory.',
+    params:[{sym:'d',name:'slit separation',value:f(um(g.d))+' µm',cls:'m3'},{sym:'a',name:'slit width',value:f(um(g.a))+' µm',cls:'m3'},
+      {sym:'\\lambda',name:'wavelengths',value:lam+' nm',cls:'m6'},{sym:'\\Delta y',name:'fringe spacing λL/d',value:dy+' µm'},
+      {sym:'L',name:'slit to screen',value:f(um(g.L))+' µm'}],
+    lines:['t = '+(simTime*C_FS_PER_STEP(P.dt)).toFixed(0)+' fs of simulated light.'],
+    tex:[tri?String.raw`I(y)\;\propto\;\Bigl[\frac{\sin(3\pi d y/\lambda L)}{3\sin(\pi d y/\lambda L)}\Bigr]^2\operatorname{sinc}^2\!\Bigl(\frac{\pi a y}{\lambda L}\Bigr)`
+        :String.raw`I(y)\;\propto\;\cos^2\!\Bigl(\frac{\pi d y}{\lambda L}\Bigr)\,\operatorname{sinc}^2\!\Bigl(\frac{\pi a y}{\lambda L}\Bigr)`,
+      String.raw`r_2-r_1=m\,\lambda,\qquad m=0,\pm1,\pm2,\dots`,
+      String.raw`\frac{\partial^2\psi}{\partial t^2}+\sigma\,\frac{\partial\psi}{\partial t}=c^2\,\nabla^2\psi`],
+    rules:[['\\psi','m2'],['\\sigma','m4'],['\\lambda','m6'],['d','m3'],['a','m3']],
     eq:tri?['I(y) ∝ [sin(3πdy/λL) / 3sin(πdy/λL)]² · sinc²(πay/λL)','I_total(y) = Σ_λ I_λ(y)']
           :['I(y) ∝ cos²(πdy/λL) · sinc²(πay/λL)','I_total(y) = Σ_λ I_λ(y)'],
+    anchor:fringeAnchor,
   });
+}
+// The fringes on the detector strip, for the plate leader. The canvas is
+// the NX x NY grid, scaled to its CSS box. The anchor is the screen column
+// at the centre row; the key points are the central bright fringe and the
+// first and second orders (y = ±m λL/d for the first wavelength on). The
+// anchor is a box (the shell takes w, h): the strip width, and a height
+// that holds the second orders. The strip is tall and thin, so a circle
+// would push the plate far from it.
+function fringeAnchor(){
+  if(!saverOn)return null;
+  const b=canvas.getBoundingClientRect(),kx=b.width/NX,ky=b.height/NY,g=slitGeom(),sx=screenX(),cy=NY/2;
+  const c=[0,1,2].find(i=>P.chOn[i]);if(c==null||!(g.d>0))return null;
+  const dy=P.lamNm[c]/CELL_NM*g.L/g.d,x=b.left+(sx+(NX-sx)/2)*kx,pts=[];
+  for(const m of [0,1,-1,2,-2]){const y=cy+m*dy;if(y>=0&&y<NY)pts.push({x:b.left+sx*kx,y:b.top+y*ky});}
+  return{x,y:b.top+cy*ky,w:(NX-sx)*kx,h:2*Math.min(2.2*dy,NY/2)*ky,pts};
 }
 
 // Screensaver hook (lib/screensaver.js has the protocol). The CSS under
