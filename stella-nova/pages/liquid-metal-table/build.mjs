@@ -461,6 +461,34 @@ const frag = ([name, , , , body, pre]) => (pre ? pre.trim() + '\n' : '') +
 const pack = HELPERS + `\n// ── the ${CELLS.length} cells ──────────────────────────────────────────────────────────\n` +
   CELLS.map(frag).join('\n\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// Most cells: a height h(p), the normal n = normalize(−∂h/∂x, −∂h/∂y, 1)
+// by finite differences, then chrome = env(reflect(−v, n))·F_Schlick(F₀, n_z).
+const CHROME = 'chrome = env(r)·(F₀ + (1 − F₀)(1 − n_z)⁵),  r = reflect(−v, n)';
+const SAVER_EQ = {
+  quicksilver: ['a = fbm₂(sq),  b = fbm₂(sq + w·a),  h = fbm(sq + w·b)/s', 's = 1.4…3 (scale),  w = 1.2…3 (warp)', 'n = normalize(−0.55∇h, 1)', CHROME],
+  mercury_pool: ['h = 0.01·fbm + Σᵢ A·sin(60x)·e^(−70x²)·(1 − φ)²', 'x = |p − cᵢ| − 0.8φ,  φ = fract(rate·t + i/4),  4 drips', 'rate = 0.12…0.4,  A = 0.0015…0.005', CHROME],
+  liquid_gold: ['h = warped fbm (as quicksilver) on p·(1, 1.3)', 's = 0.7…1.5,  w = 1.2…2.6,  F₀ = (1, 0.74, 0.32)', CHROME],
+  silk_ribbons: ['ribbon i: cᵢ(x) = A(0.7 sin(f₁x + ω₁t) + 0.3 sin(f₂x − 0.5t)) + offset', 'width = w·(0.06 + 0.94|cos θ|),  θ = x·τ(1.2…3.4) + ωt', 'sheen = (1 − |cos θ|)²,  n = 6…14,  A = 0.12…0.3'],
+  prism_ribbons: ['three ribbon stacks at y ± o, one per R, G, B', 'o = 0.004…0.03 (split),  t offset 0.05 per channel', 'ribbon width = w(0.06 + 0.94|cos θ|)'],
+  cinched_silk: ['q = R(−0.7)p,  waist = 1 − c·e^(−q_x²/0.02)', 'ribbons at (1.3q_x, q_y/waist),  c = 0.6…0.93 (pinch)', 'ribbon width = w(0.06 + 0.94|cos θ|)'],
+  satin_drape: ['a = f·x + 1.3 sin(1.7y + 2x + 0.4t) + 1.2 fbm(1.8p)', 'h = (0.9/f)·(sin a + 0.35 sin(2a + 1 + 0.3t)),  f = 12…26', 'c = cloth·(0.03 + 0.7(n·l)²) + sheen·(r·l)^(6…30) + (n·h)^(20…90)'],
+  wavy_bands: ['f = y·N + a·(sin(5x + 0.7t) + 2.2 fbm(2p + 0.08t))', 'band s = 2(fract f − ½)/0.86,  normal along ∇f', 'N = 5…12 bands,  a = 0.1…0.6 (wave)'],
+  orbit_blobs: ['F = Σᵢ rᵢ²/|p − cᵢ|²,  surface at F = 1', 'cᵢ = 0.22·(sin(ωᵢt + 2.4i), cos(ω′ᵢt + 1.1i + …))', 'n = 5…10 balls,  r = 0.07…0.12 (size)', CHROME],
+  contour_blobs: ['F = Σᵢ rᵢ²/|p − cᵢ|²,  surface at F = 1', 'contours at fract(F·m) = 0,  m = 3…9 (lines)', 'dark core where F > 2…5 (core)'],
+  lava_lamp: ['F = Σᵢ rᵢ²/|p − cᵢ|² + 0.06²/(y + 0.46)²  (the pool)', 'cᵢ = ((hᵢ − ½)0.3, 0.38 sin(ωhᵢt + 2.1i)),  ω = 0.1…0.4', 'wax = 0.15 + 0.7·max(n·l, 0) + back glow (1 − n_z)²'],
+  ferro_crown: ['h = 0.06·m + 0.07·m·g·max(1 − 1.8d, 0)^1.6', 'm = e^(−10r²),  d = distance to the hex spike center', 'lattice density 9…18,  g = 0.6…1 by pulse = ½ + ½ sin(ωt)', CHROME],
+  oil_slick: ['h = 0.04·fbm(sq + 1.6w)  (warped swell)', 'film thickness d = 160…620 nm by sin(h·(40…120) + 0.2t)', 'film(d) = Σλ CMF(λ)·(½ − ½ cos(2π·2·1.4·d·cos θ/λ)),  λ = 400…700'],
+  soap_bubble: ['sphere n = (q, √(1 − |q|²)),  R = 0.3…0.43', 'd = 60…900 nm·((1 − q_y)/2)^(0.6…1.8) + swirl·(80…400)', 'color = film(d, n_z),  η = 1.4,  OPD = 2ηd·cos θ'],
+  anodized_ti: ['h = 0.04·fbm(sq + 1.3w)/s', 'oxide d = V₀ + V₁·clamp(½ + 22.5·h·s, 0, 1),  V₀ = 20…50,  V₁ = 120…260 nm', 'color = complement of film(d, n_z, η = 2.4)'],
+  chrome_sea: ['Gerstner: x = w − Σᵢ Q·Aᵢ·d̂ᵢ cos(kᵢ d̂ᵢ·w + √(9.8kᵢ)·0.35t)', 'Lᵢ = 2.6·0.62ⁱ,  kᵢ = 2π/Lᵢ,  6 waves', 'Q = 0.2…1 (chop),  A = 0.9…2 (swell),  fog = 1 − e^(−0.08z)'],
+  molten_river: ['crust plates = Voronoi(s·p′),  p′ = p − (flow·t, 0) + warp', 'seam gap = 0.008 + 0.07·heat³,  s = 4…8 (plates)', 'heat = (0.5…1.3)·(0.55 + 0.45·smoothstep(0.4, −0.5, x))'],
+  shot_silk: ['h = (0.9/f)(sin a + 0.35 sin(2a + 1 + 0.3t)),  f = 18…34', 'color = mix(warp, weft, (1 − n_z)^0.8·(0.5…1.6))', 'Kajiya–Kay: (√(1 − (t̂·ĥ)²))^p,  p = 160 and 30'],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
@@ -469,6 +497,7 @@ const spec = {
     name, family, species, knobs,
     defaults: [0.5, 0.5, 0.5, 0.5],
     fn: 'fs_' + name,
+    ...(SAVER_EQ[name] ? { eq: SAVER_EQ[name] } : {}),
   })),
   gens: [
     { id: 'exposure', title: 'Exposure · brightness', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
