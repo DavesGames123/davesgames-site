@@ -15,11 +15,13 @@
    view with the NS_FIXED_VIEW line above, so this page opens on Burgers alone.
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts       Google Fonts stylesheet
-     2. KaTeX       CSS then JS, for the equations in the mathematics panel
-     3. importmap   maps the bare specifier "three" to the CDN; MUST stay
+     1. importmap   maps the bare specifier "three" to the CDN; MUST stay
                     inline (an import map cannot be an external file)
-     4. style.css   the page stylesheet
+     2. style.css   the shared page stylesheet (widgets/ns)
+     3. sci.css     lib/sci.css after style.css: fonts (it imports them) and
+                    the math colors .m1 to .m6
+   main.js typesets the equations and the slider symbols as MathJax SVG
+   with lib/sci-math.js. An element with data-tex is TeX to typeset.
    Scripts at the end of body, in dependency order:
      script-1.js  MATH content + buildMath   (defines a global, no DOM writes)
      script-2.js  FFT + solvers              (globals, no DOM)
@@ -32,16 +34,13 @@
      │ #qp        │ #stage                             │ #mp            │
      │  controls  │   #c2d  (2D field and plots)       │  the           │
      │  per view  │   #c3d  (WebGL: flow3d, vortex)    │  mathematics   │
-     │  sliders   │   #stage-overlay  KaTeX labels     │  panel,        │
+     │  sliders   │   #stage-overlay  MathJax labels   │  panel,        │
      │  toggles   │   #stage-scrub    timeline bar     │  built per     │
      │  readout   │   #stage-caption                   │  view          │
      └────────────┴───────────────────────────────────┴────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <script>window.NS_FIXED_VIEW='flow2d';</script>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -49,6 +48,7 @@
 } }
 </script>
 <link rel="stylesheet" href="../../widgets/ns/style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <div class="grid-bg"></div>
@@ -57,39 +57,39 @@
      (hidden by the .off class on a view-pinned page). -->
 <div class="topbar">
   <div class="topbar-l">
-    <div class="sys-name">Navier–<i>Stokes</i></div>
+    <div class="sys-name">Navier–Stokes</div>
     <div class="sys-status" id="status">running</div>
     <select id="chapter-sel"><option value="equations">1 · Navier–Stokes 1D</option><option value="burgers">2 · Burgers</option><option value="flow2d">3 · Flow 2D</option><option value="flow3d">4 · Flow 3D</option><option value="wave">5 · Wave</option><option value="cascade">6 · Cascade</option><option value="vortex">7 · Vortex</option></select>
   </div>
-  <div class="topbar-r">from the equations to the singularity · Córdoba–Martínez-Zoroa → Alpöge–Buckmaster → <a href="https://openai.com/index/navier-stokes-solution/" target="_blank" rel="noopener">OpenAI NS, Sep 2026</a></div>
+  <div class="topbar-r">From the equations to the singularity · Córdoba–Martínez-Zoroa → Alpöge–Buckmaster → <a href="https://openai.com/index/navier-stokes-solution/" target="_blank" rel="noopener">OpenAI NS, Sep 2026</a></div>
 </div>
 
-<!-- Stage: the two stacked canvases the engine draws into, the KaTeX label
+<!-- Stage: the two stacked canvases the engine draws into, the MathJax label
      overlay, the timeline scrubber bar, and the caption line. -->
 <div id="stage">
   <canvas id="c2d" class="active"></canvas>
   <canvas id="c3d"></canvas>
   <div id="stage-overlay"></div>
-  <div id="stage-scrub"><span class="ss-name" id="ss-name">timeline</span><input type="range" id="ss-range" min="0" max="0" step="1" value="0"><span class="ss-val" id="ss-val">—</span></div>
+  <div id="stage-scrub"><span class="ss-name" id="ss-name">Timeline</span><input type="range" id="ss-range" min="0" max="0" step="1" value="0"><span class="ss-val" id="ss-val">—</span></div>
   <div id="stage-caption"></div>
 </div>
 
 <!-- ═══════ LEFT: controls ═══════ -->
 <aside id="qp">
   <div class="qp-head">
-    <div class="qp-title" id="qp-title">wave<small>exact affine-wave ODE</small></div>
+    <div class="qp-title" id="qp-title">Wave<small>Exact affine-wave ODE</small></div>
     <button class="collapse-btn" id="qp-col" title="collapse">◀</button>
   </div>
   <div class="qp-body">
     <!-- View picker: the seven chapters. main.js wires each data-view button to
          setView; only one control section below is shown at a time. -->
     <div class="views">
-      <div class="grp">foundations — what a healthy equation does</div>
+      <div class="grp">Foundations — what a healthy equation does</div>
       <button class="view-btn on" data-view="equations"><span class="vn">Equations</span><span class="vd">Where Navier–Stokes comes from, what pressure is, what we can prove.</span></button>
       <button class="view-btn" data-view="burgers"><span class="vn">Burgers</span><span class="vd">1D. Steepening versus diffusion. Viscosity wins every time.</span></button>
       <button class="view-btn" data-view="flow2d"><span class="vn">Flow 2D</span><span class="vd">Live Navier–Stokes solver. Vorticity is only carried and diffused.</span></button>
       <button class="view-btn" data-view="flow3d"><span class="vn">Flow 3D</span><span class="vd">Live 3D solver. Vortex stretching, and the ledger that stays finite.</span></button>
-      <div class="grp">blowup — the forced construction</div>
+      <div class="grp">Blowup — the forced construction</div>
       <button class="view-btn" data-view="wave"><span class="vn">Wave</span><span class="vd">One layer: a plane wave riding a linear background. Exactly solvable.</span></button>
       <button class="view-btn" data-view="cascade"><span class="vn">Cascade</span><span class="vd">Infinitely many layers in finite time. Where the gradient goes to ∞.</span></button>
       <button class="view-btn" data-view="vortex"><span class="vn">Vortex</span><span class="vd">3D: the reported Navier–Stokes shape and its scaling.</span></button>
@@ -98,108 +98,108 @@
     <!-- Controls for each view; only the active section carries the .on class.
          Equations: one button to draw a fresh random field for the projection. -->
     <div class="sec on" id="sec-equations">
-      <div class="btnrow"><button class="btn primary" id="e-new">new random field</button></div>
-      <div class="sec-lbl">projection</div>
+      <div class="btnrow"><button class="btn primary" id="e-new">New random field</button></div>
+      <div class="sec-lbl">Projection</div>
       <div class="ro" id="e-ro"></div>
       <div class="note">Any smooth field <b>f</b> = <b>Pf</b> + <b>∇φ</b>. Solving the momentum equation means applying <b>P</b> to the transport term every instant: the pressure gradient is whatever is needed to keep the flow divergence-free. The middle panel is the only part the fluid ever sees.</div>
     </div>
     <!-- Burgers: play/reset, timeline scrub, profile choice, viscosity, speed. -->
     <div class="sec" id="sec-burgers">
-      <div class="btnrow"><button class="btn primary" id="b-play">pause</button><button class="btn" id="b-reset">reset</button></div>
-      <div class="ctl"><label>timeline — drag to scrub</label><span class="v" id="v-btl">—</span><input type="range" id="r-btl" min="0" max="0" step="1" value="0"></div>
-      <div class="sec-lbl">initial profile u₀</div>
-      <div class="btnrow"><button class="btn on" data-bic="sine">sin x</button><button class="btn" data-bic="bump">N-wave</button><button class="btn" data-bic="random">random</button></div>
-      <div class="ctl"><label>viscosity <i>ν</i></label><span class="v" id="v-bnu"></span><input type="range" id="r-bnu" min="-2.4" max="-0.7" step="0.01" value="-1.7"></div>
-      <div class="ctl"><label>sim speed</label><span class="v" id="v-bspd">1.0×</span><input type="range" id="r-bspd" min="0.2" max="4" step="0.1" value="1"></div>
-      <div class="sec-lbl">display</div>
-      <div class="tog-row" data-tog="chars"><span>characteristics on the space–time map</span><div class="tog on"></div></div>
-      <div class="tog-row" data-tog="inviscid"><span>inviscid solution overlay</span><div class="tog on"></div></div>
-      <div class="sec-lbl">live state</div>
+      <div class="btnrow"><button class="btn primary" id="b-play">Pause</button><button class="btn" id="b-reset">Reset</button></div>
+      <div class="ctl"><label>Timeline <span class="d">drag to scrub</span></label><span class="v" id="v-btl">—</span><input type="range" id="r-btl" min="0" max="0" step="1" value="0"></div>
+      <div class="sec-lbl">Initial profile <span class="sci-sym" data-tex="u_0" data-inline></span></div>
+      <div class="btnrow"><button class="btn on" data-bic="sine">sin x</button><button class="btn" data-bic="bump">N-wave</button><button class="btn" data-bic="random">Random</button></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="\nu" data-inline></span><span class="d">viscosity</span></label><span class="v" id="v-bnu"></span><input type="range" id="r-bnu" min="-2.4" max="-0.7" step="0.01" value="-1.7"></div>
+      <div class="ctl"><label>Sim speed</label><span class="v" id="v-bspd">1.0×</span><input type="range" id="r-bspd" min="0.2" max="4" step="0.1" value="1"></div>
+      <div class="sec-lbl">Display</div>
+      <div class="tog-row" data-tog="chars"><span>Characteristics on the space–time map</span><div class="tog on"></div></div>
+      <div class="tog-row" data-tog="inviscid"><span>Inviscid solution overlay</span><div class="tog on"></div></div>
+      <div class="sec-lbl">Live state</div>
       <div class="ro" id="b-ro"></div>
-      <div class="note"><b>What to watch.</b> Top: the profile. Tall parts move right faster than low parts, so the downhill front steepens; the red mark tracks the steepest point. Middle: the same run as a space–time map — the colour bands are what the characteristics carry, and where they would cross (red line, <b>t_b</b>) the inviscid profile turns vertical. With viscosity the bands merge into one sharp line, the shock, and the slope (right) saturates instead of diverging. Lower <b>ν</b>: sharper shock, higher ceiling, never infinite.</div>
+      <div class="note"><b>What to watch.</b> Top: the profile. Tall parts move right faster than low parts, so the downhill front steepens; the red mark tracks the steepest point. Middle: the same run as a space–time map — the colour bands are what the characteristics carry, and where they would cross (red line, <b><i>t</i><sub>b</sub></b>) the inviscid profile turns vertical. With viscosity the bands merge into one sharp line, the shock, and the slope (right) saturates instead of diverging. Lower <b>ν</b>: sharper shock, higher ceiling, never infinite.</div>
     </div>
     <!-- Flow 2D: play/reset/step, timeline, initial vorticity, viscosity, speed. -->
     <div class="sec" id="sec-flow2d">
-      <div class="btnrow"><button class="btn primary" id="f-play">pause</button><button class="btn" id="f-reset">reset</button><button class="btn" id="f-step">step ▸</button></div>
-      <div class="ctl"><label>timeline — drag to scrub</label><span class="v" id="v-ftl">—</span><input type="range" id="r-ftl" min="0" max="0" step="1" value="0"></div>
-      <div class="sec-lbl">initial vorticity</div>
-      <div class="btnrow wrap"><button class="btn on" data-fic="random">random</button><button class="btn" data-fic="taylor-green">Taylor–Green</button><button class="btn" data-fic="lamb-oseen">Lamb–Oseen</button><button class="btn" data-fic="dipole">dipole</button><button class="btn" data-fic="shear">shear layer</button></div>
-      <div class="ctl"><label>viscosity <i>ν</i></label><span class="v" id="v-fnu"></span><input type="range" id="r-fnu" min="-3.3" max="-1.2" step="0.01" value="-2.3"></div>
-      <div class="ctl"><label>sim speed</label><span class="v" id="v-fspd">1.0×</span><input type="range" id="r-fspd" min="0.1" max="4" step="0.1" value="1"></div>
-      <div class="sec-lbl">display</div>
-      <div class="tog-row" data-tog="arrows"><span>velocity arrows</span><div class="tog on"></div></div>
-      <div class="tog-row" data-tog="fixed"><span>fixed colour scale (see decay)</span><div class="tog on"></div></div>
-      <div class="sec-lbl">live state</div>
+      <div class="btnrow"><button class="btn primary" id="f-play">Pause</button><button class="btn" id="f-reset">Reset</button><button class="btn" id="f-step">Step</button></div>
+      <div class="ctl"><label>Timeline <span class="d">drag to scrub</span></label><span class="v" id="v-ftl">—</span><input type="range" id="r-ftl" min="0" max="0" step="1" value="0"></div>
+      <div class="sec-lbl">Initial vorticity</div>
+      <div class="btnrow wrap"><button class="btn on" data-fic="random">Random</button><button class="btn" data-fic="taylor-green">Taylor–Green</button><button class="btn" data-fic="lamb-oseen">Lamb–Oseen</button><button class="btn" data-fic="dipole">Dipole</button><button class="btn" data-fic="shear">Shear layer</button></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="\nu" data-inline></span><span class="d">viscosity</span></label><span class="v" id="v-fnu"></span><input type="range" id="r-fnu" min="-3.3" max="-1.2" step="0.01" value="-2.3"></div>
+      <div class="ctl"><label>Sim speed</label><span class="v" id="v-fspd">1.0×</span><input type="range" id="r-fspd" min="0.1" max="4" step="0.1" value="1"></div>
+      <div class="sec-lbl">Display</div>
+      <div class="tog-row" data-tog="arrows"><span>Velocity arrows</span><div class="tog on"></div></div>
+      <div class="tog-row" data-tog="fixed"><span>Fixed colour scale (see decay)</span><div class="tog on"></div></div>
+      <div class="sec-lbl">Live state</div>
       <div class="ro" id="f-ro"></div>
       <div class="note">Taylor–Green and Lamb–Oseen have <b>zero</b> nonlinear term and decay exactly — the red dashed curve. Dipole, shear and random are fully nonlinear: vortices merge, layers roll up, and still nothing ever exceeds its initial maximum.</div>
     </div>
     <!-- Flow 3D: play/reset, timeline, initial velocity, grid size, viscosity,
          tracer width and length, tracer and orbit-camera toggles. -->
     <div class="sec" id="sec-flow3d">
-      <div class="btnrow"><button class="btn primary" id="g-play">pause</button><button class="btn" id="g-reset">reset</button></div>
-      <div class="ctl"><label>timeline — drag to scrub</label><span class="v" id="v-gtl">—</span><input type="range" id="r-gtl" min="0" max="0" step="1" value="0"></div>
-      <div class="sec-lbl">initial velocity</div>
-      <div class="btnrow"><button class="btn on" data-gic="column">vortex column</button><button class="btn" data-gic="taylor-green">Taylor–Green</button><button class="btn" data-gic="abc">ABC</button></div>
-      <div class="sec-lbl">grid</div>
+      <div class="btnrow"><button class="btn primary" id="g-play">Pause</button><button class="btn" id="g-reset">Reset</button></div>
+      <div class="ctl"><label>Timeline <span class="d">drag to scrub</span></label><span class="v" id="v-gtl">—</span><input type="range" id="r-gtl" min="0" max="0" step="1" value="0"></div>
+      <div class="sec-lbl">Initial velocity</div>
+      <div class="btnrow"><button class="btn on" data-gic="column">Vortex column</button><button class="btn" data-gic="taylor-green">Taylor–Green</button><button class="btn" data-gic="abc">ABC</button></div>
+      <div class="sec-lbl">Grid</div>
       <div class="btnrow"><button class="btn" data-gn="16">16³ fast</button><button class="btn on" data-gn="32">32³</button></div>
-      <div class="ctl"><label>viscosity <i>ν</i></label><span class="v" id="v-gnu"></span><input type="range" id="r-gnu" min="-2.3" max="-0.9" step="0.01" value="-2"></div>
-      <div class="ctl"><label>tracer width (px)</label><span class="v" id="v-gw">1.4</span><input type="range" id="r-gw" min="0.5" max="5" step="0.1" value="1.4"></div>
-      <div class="ctl"><label>tracer length (world units)</label><span class="v" id="v-glen">6.0</span><input type="range" id="r-glen" min="1" max="20" step="0.5" value="6"></div>
-      <div class="sec-lbl">display</div>
-      <div class="tog-row" data-tog="trails"><span>tracers</span><div class="tog on"></div></div>
-      <div class="tog-row" data-tog="spin"><span>orbit camera</span><div class="tog on"></div></div>
-      <div class="sec-lbl">live state</div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="\nu" data-inline></span><span class="d">viscosity</span></label><span class="v" id="v-gnu"></span><input type="range" id="r-gnu" min="-2.3" max="-0.9" step="0.01" value="-2"></div>
+      <div class="ctl"><label>Tracer width <span class="d">px</span></label><span class="v" id="v-gw">1.4</span><input type="range" id="r-gw" min="0.5" max="5" step="0.1" value="1.4"></div>
+      <div class="ctl"><label>Tracer length <span class="d">world units</span></label><span class="v" id="v-glen">6.0</span><input type="range" id="r-glen" min="1" max="20" step="0.5" value="6"></div>
+      <div class="sec-lbl">Display</div>
+      <div class="tog-row" data-tog="trails"><span>Tracers</span><div class="tog on"></div></div>
+      <div class="tog-row" data-tog="spin"><span>Orbit camera</span><div class="tog on"></div></div>
+      <div class="sec-lbl">Live state</div>
       <div class="ro" id="g-ro"></div>
       <div class="note">The particles and tracers are advected through the <b>computed</b> velocity field of the 3D solver, not a cartoon. <b>Vortex column</b>: a Gaussian core with a helical kink and a weak axial jet — the well-behaved twin of the singular vortex; it spins, waves, diffuses and decays. <b>Taylor–Green</b>: enstrophy rises as sheets stretch, then viscosity wins. <b>ABC</b>: exact decay e<sup>−νt</sup>. Drag to orbit.</div>
     </div>
 
     <!-- WAVE controls -->
     <div class="sec" id="sec-wave">
-      <div class="phase"><div id="ph-growth">growth</div><div id="ph-steer">steer</div><div id="ph-hold">hold</div></div>
-      <div class="btnrow"><button class="btn primary" id="w-play">pause</button><button class="btn" id="w-reset">reset</button><button class="btn" id="w-step">step ▸</button></div>
-      <div class="ctl"><label>timeline — drag to scrub</label><span class="v" id="v-wtl">—</span><input type="range" id="r-wtl" min="0" max="0" step="1" value="0"></div>
-      <div class="sec-lbl">background &amp; wave</div>
-      <div class="ctl"><label>gradient <i>A</i> (cold above warm)</label><span class="v" id="v-A"></span><input type="range" id="r-A" min="0.3" max="3" step="0.05" value="1"></div>
-      <div class="ctl"><label>frequency <i>λ</i></label><span class="v" id="v-lam"></span><input type="range" id="r-lam" min="4" max="40" step="1" value="14"></div>
-      <div class="ctl"><label>tilt <i>s</i> of wavevector from vertical</label><span class="v" id="v-s"></span><input type="range" id="r-s" min="0.05" max="1.2" step="0.01" value="0.4"></div>
-      <div class="ctl"><label>log gain <i>L</i> before steering</label><span class="v" id="v-L"></span><input type="range" id="r-L" min="2" max="9" step="0.5" value="6"></div>
-      <div class="ctl"><label>sim speed</label><span class="v" id="v-spd"></span><input type="range" id="r-spd" min="0.2" max="6" step="0.1" value="1.5"></div>
-      <div class="sec-lbl">display</div>
-      <div class="tog-row" data-tog="arrows"><span>wave velocity <i>v</i> arrows</span><div class="tog on"></div></div>
+      <div class="phase"><div id="ph-growth">Growth</div><div id="ph-steer">Steer</div><div id="ph-hold">Hold</div></div>
+      <div class="btnrow"><button class="btn primary" id="w-play">Pause</button><button class="btn" id="w-reset">Reset</button><button class="btn" id="w-step">Step</button></div>
+      <div class="ctl"><label>Timeline <span class="d">drag to scrub</span></label><span class="v" id="v-wtl">—</span><input type="range" id="r-wtl" min="0" max="0" step="1" value="0"></div>
+      <div class="sec-lbl">Background and wave</div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="A" data-inline></span><span class="d">gradient, cold above warm</span></label><span class="v" id="v-A"></span><input type="range" id="r-A" min="0.3" max="3" step="0.05" value="1"></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="\lambda" data-inline></span><span class="d">frequency</span></label><span class="v" id="v-lam"></span><input type="range" id="r-lam" min="4" max="40" step="1" value="14"></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="s" data-inline></span><span class="d">tilt of wavevector from vertical</span></label><span class="v" id="v-s"></span><input type="range" id="r-s" min="0.05" max="1.2" step="0.01" value="0.4"></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="L" data-inline></span><span class="d">log gain before steering</span></label><span class="v" id="v-L"></span><input type="range" id="r-L" min="2" max="9" step="0.5" value="6"></div>
+      <div class="ctl"><label>Sim speed</label><span class="v" id="v-spd"></span><input type="range" id="r-spd" min="0.2" max="6" step="0.1" value="1.5"></div>
+      <div class="sec-lbl">Display</div>
+      <div class="tog-row" data-tog="arrows"><span>Wave velocity <i>v</i> arrows</span><div class="tog on"></div></div>
       <div class="tog-row" data-tog="phaseplane"><span>(Θ, Ω) phase plane</span><div class="tog on"></div></div>
-      <div class="tog-row" data-tog="series"><span>amplitude history</span><div class="tog on"></div></div>
-      <div class="sec-lbl">live state</div>
+      <div class="tog-row" data-tog="series"><span>Amplitude history</span><div class="tog on"></div></div>
+      <div class="sec-lbl">Live state</div>
       <div class="ro" id="w-ro"></div>
       <div class="note">Left field: total temperature <b>θ = G·x + Θ sin(λζ·x)</b>. Right field: the wave alone, auto-scaled — its true amplitude is in the readout. The wave's velocity is parallel to the crests, so it never advects itself; that is why the ODE is exact.</div>
     </div>
 
     <!-- CASCADE controls -->
     <div class="sec" id="sec-cascade">
-      <div class="sec-lbl">zoom into the origin</div>
-      <div class="ctl"><label>magnification 10<sup>z</sup></label><span class="v" id="v-zoom"></span><input type="range" id="r-zoom" min="0" max="4.6" step="0.01" value="0"></div>
-      <div class="btnrow"><button class="btn primary" id="c-auto">auto-zoom</button><button class="btn" id="c-zreset">reset</button></div>
-      <div class="sec-lbl">schedule (right plot)</div>
-      <div class="ctl"><label>frequency exponent <i>Q</i>: λ<sub>q</sub> = λ<sub>q−1</sub><sup>Q</sup></label><span class="v" id="v-Q"></span><input type="range" id="r-Q" min="1.15" max="3" step="0.01" value="1.5"></div>
-      <div class="ctl"><label>base ln λ<sub>1</sub></label><span class="v" id="v-l1"></span><input type="range" id="r-l1" min="2" max="10" step="0.1" value="4"></div>
-      <div class="ctl"><label>log gain <i>L</i> per layer</label><span class="v" id="v-CL"></span><input type="range" id="r-CL" min="1" max="8" step="0.1" value="3"></div>
-      <div class="sec-lbl">derived</div>
+      <div class="sec-lbl">Zoom into the origin</div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="10^z" data-inline></span><span class="d">magnification</span></label><span class="v" id="v-zoom"></span><input type="range" id="r-zoom" min="0" max="4.6" step="0.01" value="0"></div>
+      <div class="btnrow"><button class="btn primary" id="c-auto">Auto-zoom</button><button class="btn" id="c-zreset">Reset</button></div>
+      <div class="sec-lbl">Schedule (right plot)</div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="Q:\ \lambda_q=\lambda_{q-1}^{Q}" data-inline></span><span class="d">frequency exponent</span></label><span class="v" id="v-Q"></span><input type="range" id="r-Q" min="1.15" max="3" step="0.01" value="1.5"></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="\ln\lambda_1" data-inline></span><span class="d">base</span></label><span class="v" id="v-l1"></span><input type="range" id="r-l1" min="2" max="10" step="0.1" value="4"></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="L" data-inline></span><span class="d">log gain per layer</span></label><span class="v" id="v-CL"></span><input type="range" id="r-CL" min="1" max="8" step="0.1" value="3"></div>
+      <div class="sec-lbl">Derived</div>
       <div class="ro" id="c-ro"></div>
       <div class="note">The proof uses <b>Q ≥ 200</b>, which makes every stage after the second effectively instantaneous. Small <b>Q</b> here is only so the staircase is visible. Layer <b>q</b> is inserted inside the region where every earlier layer is still exactly linear; it never sees oscillation, only a steeper affine slope.</div>
     </div>
 
     <!-- VORTEX controls -->
     <div class="sec" id="sec-vortex">
-      <div class="btnrow"><button class="btn primary" id="x-play">pause</button><button class="btn" id="x-reset">reset</button></div>
-      <div class="ctl"><label>time <i>t</i> / <i>T</i><sub>*</sub></label><span class="v" id="v-xt"></span><input type="range" id="r-xt" min="0" max="0.985" step="0.001" value="0"></div>
-      <div class="ctl"><label>collapse exponent <i>γ</i>: ℓ ∝ (T<sub>*</sub>−t)<sup>γ</sup></label><span class="v" id="v-gam"></span><input type="range" id="r-gam" min="0.25" max="1" step="0.01" value="0.5"></div>
-      <div class="ctl"><label>circulation <i>Γ</i></label><span class="v" id="v-circ"></span><input type="range" id="r-circ" min="0.2" max="3" step="0.05" value="1.2"></div>
-      <div class="ctl"><label>play speed</label><span class="v" id="v-xspd"></span><input type="range" id="r-xspd" min="0.05" max="1" step="0.01" value="0.25"></div>
-      <div class="ctl"><label>tracer length (world units)</label><span class="v" id="v-xlen">6.0</span><input type="range" id="r-xlen" min="1" max="20" step="0.5" value="6"></div>
-      <div class="ctl"><label>tracer width (px)</label><span class="v" id="v-xw">1.4</span><input type="range" id="r-xw" min="0.5" max="5" step="0.1" value="1.4"></div>
-      <div class="sec-lbl">display</div>
-      <div class="tog-row" data-tog="trails"><span>trajectory trails</span><div class="tog on"></div></div>
-      <div class="tog-row" data-tog="spin"><span>orbit camera</span><div class="tog on"></div></div>
-      <div class="sec-lbl">scaling readout (Leray ansatz)</div>
+      <div class="btnrow"><button class="btn primary" id="x-play">Pause</button><button class="btn" id="x-reset">Reset</button></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="t/T_*" data-inline></span><span class="d">time</span></label><span class="v" id="v-xt"></span><input type="range" id="r-xt" min="0" max="0.985" step="0.001" value="0"></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="\gamma:\ \ell\propto(T_*-t)^{\gamma}" data-inline></span><span class="d">collapse exponent</span></label><span class="v" id="v-gam"></span><input type="range" id="r-gam" min="0.25" max="1" step="0.01" value="0.5"></div>
+      <div class="ctl"><label><span class="sci-sym" data-tex="\Gamma" data-inline></span><span class="d">circulation</span></label><span class="v" id="v-circ"></span><input type="range" id="r-circ" min="0.2" max="3" step="0.05" value="1.2"></div>
+      <div class="ctl"><label>Play speed</label><span class="v" id="v-xspd"></span><input type="range" id="r-xspd" min="0.05" max="1" step="0.01" value="0.25"></div>
+      <div class="ctl"><label>Tracer length <span class="d">world units</span></label><span class="v" id="v-xlen">6.0</span><input type="range" id="r-xlen" min="1" max="20" step="0.5" value="6"></div>
+      <div class="ctl"><label>Tracer width <span class="d">px</span></label><span class="v" id="v-xw">1.4</span><input type="range" id="r-xw" min="0.5" max="5" step="0.1" value="1.4"></div>
+      <div class="sec-lbl">Display</div>
+      <div class="tog-row" data-tog="trails"><span>Trajectory trails</span><div class="tog on"></div></div>
+      <div class="tog-row" data-tog="spin"><span>Orbit camera</span><div class="tog on"></div></div>
+      <div class="sec-lbl">Scaling readout (Leray ansatz)</div>
       <div class="ro" id="x-ro"></div>
       <div class="note">This view is a <b>schematic</b> of the geometry OpenAI describes — inward spiral, axial stretching, energy finite — driven by a self-similar kinematic field, not their actual profile. The numbers on the right are what any Leray-type collapse must satisfy.</div>
     </div>
@@ -210,7 +210,7 @@
 <!-- Mathematics panel: buildMath(view) fills #mp-body per view; on flow3d it also
      hosts the two live diagnostic canvases that main.js draws into. -->
 <aside id="mp">
-  <div class="mp-head"><span class="t">the mathematics</span><button class="collapse-btn" id="mp-col" title="collapse">▶</button></div>
+  <div class="mp-head"><span class="t">Mathematics</span><button class="collapse-btn" id="mp-col" title="collapse">▶</button></div>
   <div class="mp-body" id="mp-body"></div>
 </aside>
 
