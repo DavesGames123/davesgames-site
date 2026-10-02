@@ -88,6 +88,7 @@ window.SN_SAVER_CATALOG = {
     'resonance-figure': { tier: 1, default: true, note: 'Generic fallback is enough: #fig is already position:fixed inset:0 (style.css:38) and resize() reads its client size on window resize;' },
     'resonance-table': { tier: 5, note: 'Exclude. buildGrid (main.js:130) draws each Lissajous cell once into its own small canvas;' },
     'resonance-3d': { tier: 2, default: true, hook: true, note: '#gl is position:fixed inset:0 (style.css:27).' },
+    'chladni-plate': { tier: 3, default: true, hook: true, note: 'Sand plate with its own saver tour: glides from resonance to resonance on each plate, labelled with mode, Hz and the plate equation.' },
     'wave-membrane': { tier: 2, default: true, hook: true, note: 'Everything is inside an IIFE (G at main.js:56, view at :96, frame at :347);' },
     'watch-movement': { tier: 3, default: true, hook: true, note: 'three.js page. stage.js already runs a gentle idle orbit: after st.idle > 2.5 s, controls.autoRotate is on with speed -0.5*orbitAmt (stage.js:151-170).' },
     'watch-randomizer': { tier: 3, default: true, hook: true, note: 'Same stage as watch-movement (it imports ../watch-movement/stage.js), so the idle auto-orbit is already present.' },
