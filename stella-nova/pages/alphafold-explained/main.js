@@ -32,6 +32,7 @@
 //      formula fit ...... "function fitEq"
 //      loop ............. "function loop"
 //      screensaver ...... "window.snSaver"  one full-window 3D view, four scenes
+//      saver plate ...... "function saverPlate"  opts.label: protein, atoms, scene equation
 // ============================================================================
 import { PROT } from './data.js';
 import { encode, conservation, couplings, contacts, topPairs, weights } from './msa.js';
@@ -1139,6 +1140,56 @@ rafId = requestAnimationFrame(loop);
 // colour, and its caption is drawn in the canvas, so the recording has it.
 // The fold and the denoise use 70% and 75% of the scene time. The spin is
 // 0.18 to 0.06 rad/s (calm 0 to 1). The page loop runs the tick (register).
+// The screensaver plate (opts.label) for scene si at scene time p (0..1).
+// Every number comes from PROT (data.js): the chain, the heavy atoms by
+// element (the model has no H), the pLDDT bands of plddtColor, and the
+// share of residues whose phi/psi falls in the alpha and beta basins that
+// initRama draws. The equations are the ones of the matching cards, in
+// Unicode. The live value is the layer of frameAt or the noise level sigma.
+const SUBN = n => String(n).replace(/[0-9]/g, d => '₀₁₂₃₄₅₆₇₈₉'[d]);
+function saverStats() {
+  const el = [0, 0, 0, 0];
+  for (const a of ATOMS) el[a.el]++;
+  let ha = 0, sb = 0, n = 0;
+  for (let i = 1; i < L - 1; i++) {
+    const phi = G.dihedral(CC[i - 1], NN[i], CA[i], CC[i]), psi = G.dihedral(NN[i], CA[i], CC[i], NN[i + 1]);
+    n++;
+    if (((phi + 65) / 50) ** 2 + ((psi + 40) / 50) ** 2 <= 1) ha++;
+    else if (((phi + 115) / 75) ** 2 + ((psi - 135) / 60) ** 2 <= 1) sb++;
+  }
+  const mean = PL.reduce((a, b) => a + b, 0) / L;
+  const band = [PL.filter(v => v > 90).length, PL.filter(v => v > 70 && v <= 90).length, PL.filter(v => v > 50 && v <= 70).length, PL.filter(v => v <= 50).length];
+  return { el, ha: Math.round(100 * ha / n), sb: Math.round(100 * sb / n), mean, band };
+}
+function saverPlate(si, p, ST) {
+  const uni = (PROT.id.match(/AF-([A-Z0-9]+)-/) || [])[1] || '';
+  const name = PROT.name.split(' (')[0];
+  const common = [
+    `1 chain · ${L} residues · ${ATOMS.length} heavy atoms`,
+    `C${SUBN(ST.el[0])} N${SUBN(ST.el[1])} O${SUBN(ST.el[2])} S${SUBN(ST.el[3])} (heavy atoms; the model has no H)`,
+    `φ/ψ in the α basin ${ST.ha}% · in the β basin ${ST.sb}%`,
+  ];
+  const sub = `UniProt ${uni} · ${PROT.id}`;
+  if (si === 0) {
+    const lam = 8 * smooth(clamp(p / 0.7, 0, 1));
+    return { title: `${name} · structure module`, sub, lines: [...common, `layer ${lam.toFixed(1)} of 8 (illustrative path to the real frames)`],
+      eq: ['Tᵢ = (Rᵢ, tᵢ),  x(global) = Rᵢ x(local) + tᵢ', 'Tᵢ ← Tᵢ ∘ ((1, bᵢ, cᵢ, dᵢ) / √(1 + bᵢ² + cᵢ² + dᵢ²), tᵢ)'] };
+  }
+  if (si === 1) {
+    return { title: `${name} · pLDDT`, sub, lines: [...common, `mean pLDDT ${ST.mean.toFixed(1)}`, `> 90: ${ST.band[0]} · 70–90: ${ST.band[1]} · 50–70: ${ST.band[2]} · ≤ 50: ${ST.band[3]} residues`],
+      eq: ['pLDDTᵢ = Σ(b = 1…50) pᵢᵇ v_b', 'v_b = bin centre of lDDT-Cα ∈ [0, 100]'] };
+  }
+  if (si === 2) {
+    const STEPS = 200, SMAX = 40, SMIN = 0.05, RHO = 7;
+    const t = STEPS * smooth(clamp(p / 0.75, 0, 1));
+    const sg = Math.pow(Math.pow(SMAX, 1 / RHO) + t / STEPS * (Math.pow(SMIN, 1 / RHO) - Math.pow(SMAX, 1 / RHO)), RHO);
+    return { title: `${name} · AlphaFold 3 diffusion`, sub, lines: [...common, `step ${Math.round(t)} of ${STEPS} · σ = ${sg < 1 ? sg.toFixed(2) : sg.toFixed(1)} Å`],
+      eq: ['x̃ = x + σ ε,  ε ~ 𝒩(0, I)', 'σ(t) = (a + (t/T)(b − a))^ρ', `a = σmax^(1/ρ), b = σmin^(1/ρ)`, `σmax = ${SMAX} Å, σmin = ${SMIN} Å, ρ = ${RHO}, T = ${STEPS}`] };
+  }
+  return { title: `${name} · every atom`, sub, lines: [...common, `mean pLDDT ${ST.mean.toFixed(1)} · residues ≤ 50: ${ST.band[3]}`],
+    eq: ['FAPE = (1/Z) mean(i,j) min(d_clamp, eᵢⱼ)', 'eᵢⱼ = ‖Tᵢ⁻¹∘xⱼ − (Tᵢᵗʳᵘᵉ)⁻¹∘xⱼᵗʳᵘᵉ‖', 'Z = d_clamp = 10 Å'] };
+}
+
 window.snSaver = {
   enter(o = {}) {
     const calm = clamp(o.calm == null ? 0.7 : +o.calm, 0, 1);
@@ -1182,9 +1233,19 @@ window.snSaver = {
     let si = (o.seed >>> 0) % SCENES.length, t = 0, time = 0;
     const view = new View3D(cv, { radius: SCENES[si].r, yaw: 0.6, pitch: -0.25, spin: 0.06 + 0.12 * (1 - calm), build: add => SCENES[si].build(add, t / beat) });
     const g = view.ctx;
+    const ST = saverStats();
+    let plateAt = -1e9, plateSi = -1;
+    const plate = () => {
+      if (typeof o.label !== 'function') return;
+      // a new scene at once; the live value (layer, sigma) at most once a second
+      if (si === plateSi && (time - plateAt < 1 || si === 1 || si === 3)) return;
+      plateAt = time; plateSi = si;
+      try { o.label(saverPlate(si, t / beat, ST)); } catch (e) { /* the plate is optional */ }
+    };
     register(cv, dt => {
       t += dt; time += dt;
       if (t >= beat) { t = 0; si = (si + 1) % SCENES.length; view.radius = SCENES[si].r; }
+      plate();
       view.pitch = -0.25 + 0.15 * Math.sin(time * 0.05);
       view.dirty = true;
       view.tick(dt);
