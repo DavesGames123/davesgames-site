@@ -99,7 +99,7 @@ window.SN_SAVER_CATALOG = {
     'polar': { tier: 2, default: true, hook: true, note: 'Shared table-engine snSaver hook (see fields plan);' },
     'sdf2d': { tier: 2, default: true, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
     'color': { tier: 2, default: false, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
-    'postfx': { tier: 2, default: false, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
+    'postfx': { tier: 'excluded', note: 'Pulled from the screensaver by the user (2026-10-02). Its saver list stays in the page.' },
     'sampling': { tier: 2, default: false, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
     'lighting': { tier: 2, default: true, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
     'sdf-solids': { tier: 2, default: true, hook: true, note: 'Shared table-engine snSaver hook (see fields plan).' },
