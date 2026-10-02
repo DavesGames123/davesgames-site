@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Four-Stroke Engine — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   FOUR-STROKE ENGINE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. An inline four-cylinder four-stroke engine in 3D:
+   a cut-away block and head, crank, rods, pistons, camshafts, valves and
+   springs, timing chain and flywheel. It runs, comes apart in an exploded
+   view, and an analysis panel follows the Otto cycle live.
+   engine.js holds the mechanism (no DOM; tests.mjs runs it in Node),
+   scene.js the parts with kit.js, main.js the page.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts, style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel (controls) at the left, #ana (analysis) at the
+                 right, #view fills the rest. #read is the crank readout.
+                 #tipHover follows the mouse over a part; #tipPin is pinned
+                 to a part by a click, with the #leader line.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: Engine, View, Time, Show, Analysis and
+                 play. A tab opens #panel with only its .grp, or #ana, as
+                 a bottom sheet; the same tab closes it.
+
+   GREP MAP
+     grep -n 'function swapTo' main.js     build a valve train, cross-fade
+     grep -n 'const VIEWS' main.js         camera presets
+     grep -n 'window.snSaver' main.js      the screensaver hook
+     grep -n 'function pose' scene.js      every moving part from θ
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="An inline four-cylinder four-stroke engine in 3D: crank, rods, pistons, camshafts, valves, timing chain and flywheel, with a section view, an exploded view and a live analysis of the Otto cycle, the firing order and the valve timing.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Four-Stroke Engine</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+  <button id="anaBtn" type="button" aria-label="Show the analysis">∿ Analysis</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <svg id="leader" aria-hidden="true"><line/><circle class="pulse" r="6"/><circle class="dotA" r="3"/></svg>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint">hover a part to name it · click to pin its card · drag to orbit</div>
+  <div class="tip" id="tipHover" aria-live="polite"><div class="tip-in"></div></div>
+  <div class="tip pinned" id="tipPin" aria-live="polite"><button id="tipPinClose" type="button" aria-label="Unpin">✕</button><div class="tip-in"></div></div>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the engine cannot render.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" class="grip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" class="xbtn" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="engine">
+    <div class="sec-label first">Valve train</div>
+    <div class="grid2" id="trains">
+      <button data-id="dohc" type="button"><b>DOHC 16-valve</b><span>two cams · buckets</span></button>
+      <button data-id="sohc" type="button"><b>SOHC 8-valve</b><span>one cam · rockers</span></button>
+    </div>
+    <h1 id="trainTitle">Four-stroke engine</h1>
+    <div class="kind">Inline four · 2.0 L · firing order 1-3-4-2</div>
+    <p class="lede" id="trainLede"></p>
+    <div class="about">
+      <p><b>Four strokes.</b> Each cylinder draws in air and fuel, squeezes it, burns it, and pushes the burnt gas out: intake, compression, power, exhaust. That takes two turns of the crank.</p>
+      <p><b>Four cylinders.</b> The cylinders take turns, half a turn apart, in the order 1-3-4-2, so one of them is always on its power stroke. The flywheel smooths what is left.</p>
+      <p><b>The cut.</b> The block, head, cover and pan are cut on the plane of the bores. The cut faces are drawn in red, the way an engineering section is.</p>
+    </div>
+  </section>
+
+  <section class="grp" data-grp="view">
+    <div class="sec-label">View</div>
+    <div class="grid2" id="views">
+      <button data-view="three" type="button">Three-quarter</button>
+      <button data-view="section" type="button">Section</button>
+      <button data-view="end" type="button">Timing end</button>
+      <button data-view="valves" type="button">Valve train</button>
+      <button data-view="exploded" type="button" class="span2">Exploded</button>
+    </div>
+    <div class="sec-label">Explode</div>
+    <div class="row"><label for="explode">Spread</label><input type="range" id="explode" min="0" max="1" step="0.01" value="0"><span class="val" id="explodeV"></span></div>
+    <div class="toggles">
+      <button class="tog" id="assemble" type="button">Assemble</button>
+      <button class="tog" id="burst" type="button">Explode</button>
+    </div>
+  </section>
+
+  <section class="grp" data-grp="time">
+    <div class="sec-label">Speed</div>
+    <div class="grid3" id="rates">
+      <button data-rpm="0" type="button">❚❚ Pause</button>
+      <button data-rpm="5" type="button">5 rpm</button>
+      <button data-rpm="15" type="button">15 rpm</button>
+      <button data-rpm="60" type="button">60 rpm</button>
+      <button data-rpm="200" type="button">200 rpm</button>
+      <button data-rpm="800" type="button">800 idle</button>
+    </div>
+    <p class="note" id="rateNote"></p>
+    <div class="sec-label">Crank angle</div>
+    <div class="row"><label for="crank">θ</label><input type="range" id="crank" min="0" max="720" step="1" value="0"><span class="val">0–720°</span></div>
+  </section>
+
+  <section class="grp" data-grp="show">
+    <div class="sec-label">Show</div>
+    <div class="grid2">
+      <button class="tog on" id="tSection" type="button">Section cut</button>
+      <button class="tog on" id="tCastings" type="button">Castings</button>
+      <button class="tog on" id="tGas" type="button">Gas colours</button>
+      <button class="tog on" id="tLabels" type="button">Labels</button>
+      <button class="tog on" id="tOrbit" type="button">Gentle orbit</button>
+    </div>
+    <div class="legend">
+      <span><i style="background:#4aa3ff"></i>intake</span><span><i style="background:#b48cff"></i>compression</span>
+      <span><i style="background:#ffb14a"></i>power</span><span><i style="background:#a0948a"></i>exhaust</span>
+    </div>
+  </section>
+</aside>
+
+<aside id="ana" class="open" aria-label="Analysis">
+  <div id="anaGrip" class="grip" role="button" aria-label="Resize analysis"><span></span></div>
+  <button id="anaClose" class="xbtn" type="button" aria-label="Close analysis">✕</button>
+  <div class="sec-label first">Analysis · <span id="anaTrain"></span></div>
+  <div class="big"><div><span class="lo">crank θ</span><b id="anaTheta">0°</b></div><div><span class="lo">cam θ/2</span><b id="anaCam">0°</b></div></div>
+  <div class="eq">x(θ) = r cos θ + √(l² − r² sin² θ)</div>
+  <p class="eqlive" id="anaX"></p>
+  <p class="eqlive dim" id="anaXdot"></p>
+  <table class="readout" id="cylTable"></table>
+  <div class="torque"><span class="lo">gas torque on the crank</span><b id="anaTorque"></b><div class="tbar"><i id="anaTorqueBar"></i></div></div>
+  <div class="sec-label">Firing order 1-3-4-2</div>
+  <canvas id="cvFire" class="cv" style="height:96px"></canvas>
+  <div class="sec-label">Valve timing · cylinder 1</div>
+  <canvas id="cvTiming" class="cv" style="height:176px"></canvas>
+  <p class="note" id="anaEvents"></p>
+  <div class="sec-label">Piston x(ψ) and valve lift · cylinder 1</div>
+  <canvas id="cvLift" class="cv" style="height:110px"></canvas>
+  <div class="sec-label">p–V loop</div>
+  <canvas id="cvPV" class="cv" style="height:130px"></canvas>
+  <p class="note">A simple model: polytropic compression and expansion (n = 1.32), a Wiebe burn from the spark at 15° before TDC, full throttle, no gas inertia.</p>
+  <div class="specs" id="anaNums"></div>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="engine" type="button"><i>⚙</i><span>Engine</span></button>
+  <button class="tab" data-grp="view" type="button"><i>◈</i><span>View</span></button>
+  <button class="tab" data-grp="time" type="button"><i>◷</i><span>Speed</span></button>
+  <button class="tab" data-grp="show" type="button"><i>◐</i><span>Show</span></button>
+  <button class="tab" data-grp="ana" type="button"><i>∿</i><span>Analysis</span></button>
+  <button id="dockPlay" type="button" aria-label="Pause"><i>❚❚</i><span>Pause</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
