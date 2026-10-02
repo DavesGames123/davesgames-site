@@ -26,13 +26,17 @@
 //    spec.saver = { cells: [calm cell names], tempo: [at calm 0, at calm 1],
 //                   dpr: pixel-ratio cap, warmup: ms before a recording,
 //                   gens: { id: { fn, period, amp, bias } } generator settings,
-//                   knobs: [k0..k3 or null] knob values for the saver cell }
+//                   knobs: [k0..k3 or null] knob values for the saver cell,
+//                   cycle: cells per dwell, fade: seconds, minDwell: seconds }
 //  A gens period is multiplied by (0.5 + calm). PAGE.saver(t, opts), if the
 //  PAGE has it, sets page state (for example the source) for the saver cell.
+//  With cycle, the cells play in a seeded order, each for max(minDwell,
+//  seconds / cycle), behind a fade to black drawn in the saver canvas (so a
+//  recording has it). PAGE.leave(t) runs on the cell that goes off.
 //  A page with no spec.saver gets the generic screensaver mode.
 //
 //  grep -n targets: "function frame", "function sizeSurf", "function makeSurface",
-//  "function saverEnter", "saver.t === t"
+//  "function saverEnter", "function saverStep", "function saverFade", "saver.t === t"
 // ============================================================================
 import { TOUCH, HOVER_LABEL, fitTable, playhead, maxDpr, initMobile } from './table-mobile.js';
 
@@ -256,6 +260,7 @@ export async function bootTable(PAGE, data) {
     if (torn) return;
     requestAnimationFrame(frame);
     const dt = tickSignals(); const now = sigT; frameNo++;
+    if (saver && saver.per) saverStep();
     frames++; if (now - fpsT > 1) { $('fps').textContent = `${Math.round(frames / (now - fpsT))} FPS · ${tiles.filter(t => t.pipeline).length}/${tiles.length}`; fpsT = now; frames = 0; }
     if (PAGE.tick) { if (PAGE.tick(dt, now) === true) globalDirty = true; }
     const dpr = Math.min(devicePixelRatio || 1, maxDpr());
@@ -296,7 +301,7 @@ export async function bootTable(PAGE, data) {
     if (now <= activeUntil) {
       for (const t of tiles) if (t.rect) present(enc, t.surf);
       if (inspected) present(enc, msurf);
-      if (saver) present(enc, saver.surf);
+      if (saver) { present(enc, saver.surf); saverFade(enc); }
       device.queue.submit([enc.finish()]);
     }
   }
@@ -329,8 +334,7 @@ export async function bootTable(PAGE, data) {
       tg.fn = 'flat'; tg.bias = best;
     }
     for (const g of GENS) { const o = (cfg.gens || {})[g.id]; if (o) { Object.assign(g, o); if (o.period) g.period = o.period * (0.5 + calm); } }
-    (cfg.knobs || []).forEach((v, i) => { if (v !== null) t.knobs[i] = v; });
-    if (PAGE.saver) PAGE.saver(t, opts);
+    saverCell(t, opts);
     const style = document.createElement('style');
     style.textContent = `html.tbl-saver, html.tbl-saver body { background: #000 !important; overflow: hidden !important; cursor: none !important; }
 html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
@@ -340,7 +344,47 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
     document.body.appendChild(canvas); document.documentElement.classList.add('tbl-saver');
     close();
     saver = { t, canvas, style, surf: makeSurface(canvas), dpr: cfg.dpr || 2 };
+    if (cfg.cycle && list.length > 1) {
+      // seeded order that starts at the first cell; fade pass: out = canvas * (1 - a)
+      let r = (opts.seed >>> 0) || 1; const rnd = () => { r = (Math.imul(r, 1664525) + 1013904223) >>> 0; return r / 4294967296; };
+      const rest = list.filter(x => x !== t);
+      for (let i = rest.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [rest[i], rest[j]] = [rest[j], rest[i]]; }
+      const fm = device.createShaderModule({ code: `@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+  var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0)); return vec4f(p[i], 0.0, 1.0); }
+@fragment fn fs() -> @location(0) vec4f { return vec4f(0.0, 0.0, 0.0, 1.0); }` });
+      Object.assign(saver, { opts, order: [t, ...rest], i: 0, t0: performance.now() / 1000, dim: 1, fadeS: cfg.fade || 1.2,
+        per: Math.max(cfg.minDwell || 8, (+opts.seconds || 60) / cfg.cycle),
+        fadePipe: device.createRenderPipeline({ layout: 'auto', vertex: { module: fm, entryPoint: 'vs' }, primitive: { topology: 'triangle-list' },
+          fragment: { module: fm, entryPoint: 'fs', targets: [{ format, blend: { color: { srcFactor: 'zero', dstFactor: 'one-minus-constant' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } } }] } }) });
+    }
     return { canvas, warmupMs: cfg.warmup || 800 };
+  }
+  // the knobs and the page state for a cell that goes on in the saver
+  function saverCell(t, opts) {
+    (SPEC.saver.knobs || []).forEach((v, i) => { if (v !== null) t.knobs[i] = v; });
+    if (PAGE.saver) PAGE.saver(t, opts);
+  }
+  // Cycle mode: at the end of a dwell the next compiled cell goes on. dim is
+  // 1 at each end of a dwell and 0 in the middle, eased over fadeS seconds.
+  function saverStep() {
+    const s = saver, now = performance.now() / 1000;
+    if (now - s.t0 >= s.per) {
+      for (let k = 1; k < s.order.length; k++) {
+        const j = (s.i + k) % s.order.length, c = s.order[j];
+        if (!c.pipeline) continue;
+        if (PAGE.leave) PAGE.leave(s.t);
+        s.i = j; s.t = c; saverCell(c, s.opts); break;
+      }
+      s.t0 = now;
+    }
+    const u = Math.min(now - s.t0, s.per - (now - s.t0)) / s.fadeS;
+    s.dim = 1 - sstep(u);
+  }
+  function saverFade(enc) {
+    const s = saver, a = s.dim;
+    if (!s.fadePipe || !s.surf.drawn || !(a > 0.001)) return;
+    const pass = enc.beginRenderPass({ colorAttachments: [{ view: s.surf.gpu.getCurrentTexture().createView(), loadOp: 'load', storeOp: 'store' }] });
+    pass.setPipeline(s.fadePipe); pass.setBlendConstant({ r: a, g: a, b: a, a }); pass.draw(3); pass.end();
   }
   function saverExit() {
     if (!saver) return;
