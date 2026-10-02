@@ -24,7 +24,7 @@
 //      rules .............. "Board.prototype.check"
 //      drawing ............ "Board.prototype.draw"
 //      wall pieces ........ "function wallPiece"
-//      frame loop ......... "function loop"
+//      frame loop ......... "function loop"         GD.speed slows it (saver)
 // ============================================================================
 (function () {
   var D = window.SN_DATA || { entries: [] };
@@ -78,7 +78,7 @@
 
   // ---- board object --------------------------------------------------------------
   function Board(canvas, cols, rows) {
-    this.cv = canvas; this.cx = canvas.getContext('2d');
+    this.cv = canvas; this.cx = canvas.getContext('2d'); canvas.board = this;
     this.cols = cols; this.rows = rows; this.cell = 32;
     this.mods = []; this.items = []; this.marks = {}; this.rev = 0; this.E = null;
     this.visible = true;
@@ -267,7 +267,9 @@
 
   // ---- frame loop ---------------------------------------------------------------------
   // Each figure registers a step(t, dt) function. Only figures on screen run.
-  var figs = [];
+  // GD.speed (set only by the screensaver) scales the clock of every figure.
+  var figs = [], vt = 0;
+  GD.figs = figs;
   GD.figure = function (el, step) {
     var f = { el: el, step: step, on: true };
     figs.push(f);
@@ -277,7 +279,8 @@
   var last = 0;
   function loop(t) {
     var dt = Math.min(0.05, last ? (t - last) / 1000 : 0.016); last = t;
-    figs.forEach(function (f) { if (f.on) f.step(t / 1000, dt); });
+    if (GD.speed) { dt *= GD.speed; vt += dt; } else vt = t / 1000;
+    figs.forEach(function (f) { if (f.on) f.step(vt, dt); });
     requestAnimationFrame(loop);
   }
   requestAnimationFrame(loop);
