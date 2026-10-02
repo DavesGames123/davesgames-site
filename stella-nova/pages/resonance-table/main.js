@@ -11,11 +11,16 @@
      grep -n 'consonance' the ratio-complexity color map
      grep -n 'function drawCell'  the per-cell loop render, samples from the curve
      grep -n 'function buildGrid' the grid construction
+     grep -n 'TAB_RULES'  symbol -> math color class
    ========================================================================== */
 (() => {
   'use strict';
 
   const G = { N:7, baseHz:131, vol:55 };
+  // Math colors (lib/sci.css), the same as Resonance Figure: x m1, y m2,
+  // A m3, B m4. t, pi and f0 keep the default color.
+  const TAB_RULES = [['x', 'm1'], ['y', 'm2'], ['A', 'm3'], ['B', 'm4']];
+  import('../../lib/sci-math.js').then(m => m.typesetAll(document, TAB_RULES)).catch(err => console.error('[math]', err));
   let CELL = 104;                   // logical cell size in px, fitted per build
   const PHASE = Math.PI / 2;        // quarter-turn offset gives a circle at 1:1
   let dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -143,7 +148,7 @@
 
     // corner + column headers (A across the top)
     const corner = document.createElement('div');
-    corner.className = 'hd corner'; corner.textContent = 'A→ / B↓';
+    corner.className = 'hd corner'; corner.innerHTML = '<span class="m3">A</span> → / <span class="m4">B</span> ↓';
     grid.appendChild(corner);
     for (let a = 1; a <= G.N; a++) {
       const h = document.createElement('div'); h.className = 'hd col'; h.textContent = a;

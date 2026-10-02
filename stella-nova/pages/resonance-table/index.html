@@ -40,26 +40,25 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="A grid of resonances. Every cell traces the loop of one whole-number ratio, colored from consonant to dissonant. Tap a cell to hear the two tones.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
-  <div class="sys">SYS&nbsp;//&nbsp;MUSIC.RESONANCE</div>
-  <div class="pagetitle">Resonance Table</div>
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Resonance table</div>
 </div>
 
 <!-- Control strip: grid size, base note, volume, and the consonance legend. -->
 <div id="bar">
-  <div class="ctl"><label>Size</label><input type="range" id="size" min="4" max="9" step="1" value="7"><span class="val" id="sizeV"></span></div>
-  <div class="ctl"><label>Base</label><input type="range" id="base" min="80" max="330" step="1" value="131"><span class="val" id="baseV"></span></div>
+  <!-- The loop of each cell. main.js typesets [data-tex] (TAB_RULES). -->
+  <div class="ctl eq sci-eq" data-tex="x=\cos(2\pi A t+\tfrac{\pi}{2}),\quad y=\sin(2\pi B t)"></div>
+  <div class="ctl"><label>Grid size</label><input type="range" id="size" min="4" max="9" step="1" value="7"><span class="val" id="sizeV"></span></div>
+  <div class="ctl"><label><span class="sci-sym" data-tex="f_0" data-inline></span> <span class="w">base</span></label><input type="range" id="base" min="80" max="330" step="1" value="131"><span class="val" id="baseV"></span></div>
   <div class="ctl"><label>Volume</label><input type="range" id="vol" min="0" max="100" value="55"><span class="val" id="volV"></span></div>
-  <div class="legend"><span>consonant</span><i class="grad"></i><span>dissonant</span></div>
+  <div class="legend"><span>Consonant</span><i class="grad"></i><span>Dissonant</span></div>
 </div>
 
 <!-- main.js builds the grid of cells here. -->

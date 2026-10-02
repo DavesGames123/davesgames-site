@@ -3,41 +3,41 @@
    ----------------------------------------------------------------------------
    Dark shell with a control strip, a scrollable grid of loop cells, and a
    status bar. The grid uses CSS grid: a header row and column of integers plus
-   one canvas cell per ratio.
+   one canvas cell per ratio. Type comes from lib/sci.css (loaded after this
+   file): STIX Two Text for the site name, Inter for text, mono for numbers.
    ========================================================================== */
 :root{
   --bg:#05040a; --bg2:#0c0912; --ink:#d6cfe0; --dim:#8a7a9a; --faint:#3a2a48;
   --line:rgba(220,150,200,0.10); --line-b:rgba(240,150,120,0.22);
-  --warm:#fca35e; --pink:#cd4071; --blue:#9f2f7f;
-}
+  --warm:#fca35e; --pink:#cd4071; --blue:#9f2f7f}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);overscroll-behavior:none}
 body{
-  font-family:'JetBrains Mono',ui-monospace,Menlo,Consolas,monospace; color:var(--ink);
-  -webkit-font-smoothing:antialiased; display:flex; flex-direction:column;
-}
+  font-family:var(--sci-sans); color:var(--ink);
+  -webkit-font-smoothing:antialiased; display:flex; flex-direction:column}
 
 /* ---- topbar ---- */
 .topbar{
   height:52px; flex:0 0 auto; display:flex; align-items:center; gap:18px; padding:0 20px;
-  border-bottom:1px solid var(--line);
-}
-.brand{font-family:'Cormorant Garamond',Georgia,serif;font-size:1.35rem;letter-spacing:0.22em;color:#e8eef8;display:flex;align-items:center;gap:9px}
-.brand .dot{width:7px;height:7px;border-radius:50%;background:var(--warm);box-shadow:0 0 9px var(--warm)}
-.sys{font-size:0.62rem;letter-spacing:0.2em;color:var(--dim)}
-.pagetitle{font-size:0.72rem;letter-spacing:0.16em;color:var(--pink);margin-left:auto;text-transform:uppercase}
+  border-bottom:1px solid var(--line)}
+.brand{font-family:var(--sci-serif);font-size:1.15rem;color:#e8eef8;display:flex;align-items:center;gap:9px}
+.pagetitle{font-size:0.8rem;color:var(--dim)}
 html.in-frame .topbar{display:none}
 
 /* ---- control strip ---- */
 #bar{
   flex:0 0 auto; display:flex; align-items:center; gap:22px; flex-wrap:wrap;
-  padding:12px 20px; border-bottom:1px solid var(--line); background:var(--bg2);
-}
+  padding:12px 20px; border-bottom:1px solid var(--line); background:var(--bg2)}
 .ctl{display:flex;align-items:center;gap:9px}
-.ctl label{font-size:0.64rem;color:var(--dim)}
+.ctl label{font-size:0.78rem;color:var(--ink)}
+.ctl label .sci-sym{font-size:0.95rem}
+.ctl label .w{color:var(--dim)}
 .ctl input[type=range]{width:120px;accent-color:var(--warm);height:3px}
-.ctl .val{font-size:0.64rem;color:var(--ink);min-width:52px}
-.legend{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:0.6rem;color:var(--dim)}
+.ctl .val{font:0.76rem var(--sci-mono);color:var(--ink);min-width:52px}
+/* The cell equation: a .sci-eq box (lib/sci.css loads later; the #bar
+   prefix wins). font-size sets the formula size. */
+#bar .eq{font-size:0.95rem;color:#eef4ff}
+.legend{display:flex;align-items:center;gap:8px;margin-left:auto;font-size:0.76rem;color:var(--dim)}
 .legend .grad{width:120px;height:8px;border-radius:4px;background:linear-gradient(90deg,#fcfdbf,#fd9567,#f1605d,#9f2f7f,#451077)}
 
 /* ---- grid ---- */
@@ -45,44 +45,40 @@ html.in-frame .topbar{display:none}
 #grid{display:grid;gap:8px;width:max-content;margin:0 auto}
 .hd{
   display:flex;align-items:center;justify-content:center;color:var(--dim);
-  font-size:0.8rem;font-weight:500;
-}
-.hd.corner{color:var(--faint);font-size:0.62rem}
+  font-size:0.8rem;font-weight:500}
+.hd.corner{color:var(--faint);font-size:0.76rem}
 .hd.col{color:var(--warm)}
 .hd.row{color:var(--pink)}
 .cell{
   position:relative; border:1px solid var(--line); border-radius:8px; background:#0b0e14;
-  cursor:pointer; overflow:hidden; transition:transform 0.12s, border-color 0.12s, box-shadow 0.12s;
-}
+  cursor:pointer; overflow:hidden; transition:transform 0.12s, border-color 0.12s, box-shadow 0.12s}
 .cell canvas{display:block;width:100%;height:100%}
 .cell .lbl{
-  position:absolute; left:5px; bottom:4px; font-size:0.58rem; color:var(--ink);
-  text-shadow:0 0 6px #000; pointer-events:none;
-}
+  position:absolute; left:5px; bottom:4px; font-size:0.76rem; font-family:var(--sci-mono); color:var(--ink);
+   pointer-events:none}
 .cell .name{
-  position:absolute; left:5px; top:4px; right:5px; font-size:0.5rem; color:var(--dim);
-  text-shadow:0 0 6px #000; pointer-events:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
+  position:absolute; left:5px; top:4px; right:5px; font-size:0.76rem; color:var(--dim);
+   pointer-events:none; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .cell:hover{transform:scale(1.06);border-color:var(--line-b);z-index:5}
-.cell.on{border-color:var(--warm);box-shadow:0 0 0 1px var(--warm),0 0 16px rgba(255,200,50,0.3);z-index:6}
+.cell.on{border-color:var(--warm);box-shadow:0 0 0 1px var(--warm);z-index:6}
 
 /* ---- status ---- */
 #status{
   flex:0 0 auto; display:flex; gap:16px; align-items:center; padding:10px 20px;
-  border-top:1px solid var(--line); font-size:0.68rem; background:var(--bg2);
-}
+  border-top:1px solid var(--line); font-size:0.78rem; background:var(--bg2)}
 #status .fn{color:var(--warm)}
-#status .right{color:var(--dim);margin-left:auto}
+#status .right{color:var(--dim);margin-left:auto;font-family:var(--sci-mono)}
 
 @media(max-width:768px){
   .pagetitle{display:none}
   #bar{gap:12px 16px;padding:10px 14px}
   .ctl{flex:1 1 44%}
+  #bar .eq{flex:1 1 100%}
   .ctl input[type=range]{width:100%;height:22px}
   .legend{width:100%;margin-left:0;justify-content:flex-start}
   #gridwrap{padding:10px}
   #grid{gap:5px}
-  .cell .name{font-size:0.46rem}
-  .cell .lbl{font-size:0.52rem}
-  #status{font-size:0.6rem;padding:9px 14px}
+  .cell .name{font-size:0.76rem}
+  .cell .lbl{font-size:0.76rem}
+  #status{font-size:0.76rem;padding:9px 14px}
 }
