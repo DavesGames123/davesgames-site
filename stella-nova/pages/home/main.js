@@ -33,6 +33,7 @@
 //    directory columns .... "function balanceDirectory"
 //    video facade ......... "function initVideo"
 //    bug form ............. "function initBugForm"
+//    screensaver key ...... "function initSaverKey"
 //    reveal on scroll ..... "function initReveal"
 //    portal spotlight ..... "function initSpot"
 //
@@ -1020,6 +1021,21 @@ function buildCommits() {
   addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { if (scroll.clientWidth !== lw) { lw = scroll.clientWidth; cur = -1; tip.hidden = true; draw(); } }, 150); });
 }
 
+// A hidden control: a click on the "davesgames.io / observatory online"
+// eyebrow opens the shell screensaver menu (lib/screensaver.js). The home
+// page runs in the shell iframe, so it calls the shell through
+// window.parent. The eyebrow does not look like a button. Outside the
+// shell (file:// or the page alone), the click does nothing.
+function initSaverKey() {
+  const eb = document.querySelector('.hero .eyebrow') || document.querySelector('.eyebrow');
+  if (!eb) return;
+  eb.addEventListener('click', () => {
+    let ss = null;
+    try { ss = (window.parent && window.parent.snScreensaver) || window.snScreensaver; } catch (e) { ss = window.snScreensaver; }
+    if (ss && ss.open) ss.open();
+  });
+}
+
 buildCommits();
 buildFeatured();
 buildChart();
@@ -1032,6 +1048,7 @@ initDirectory();
 balanceDirectory();
 initVideo();
 initBugForm();
+initSaverKey();
 initReveal();
 initSpot();
 startSky();
