@@ -36,7 +36,9 @@
 //    boot                                  buildUI, syncUI, first preset, loop
 //    window.snSaver                        screensaver hook (lib/screensaver.js)
 //    function saverPlate                   screensaver plate: name, PDB id, counts, formula, ss
+//    function moleculeAnchor               the shown residues on screen, for the plate leader
 // ============================================================================
+import * as THREE from 'three';
 import { PRESETS, byId } from './presets.js';
 import { camera, canvas, controls, post } from './app/stage.js';
 import { S } from './app/state.js';
@@ -100,16 +102,47 @@ function saverPlate() {
   const id = p ? p.code : (s.meta.id || s.meta.name || '');
   const meth = (s.meta.method || '').toLowerCase().replace(/^x-ray diffraction$/, 'X-ray').replace(/^solution nmr$/, 'NMR').replace(/^electron microscopy$/, 'cryo-EM');
   const src = s.meta.af ? 'AlphaFold model' : [meth, s.meta.resolution ? s.meta.resolution.toFixed(1) + ' Å' : ''].filter(Boolean).join(' ');
-  const lines = [
-    `${chains} ${chains === 1 ? 'chain' : 'chains'}` + (chainsAll > chains ? ` shown of ${chainsAll}` : '') + ` · ${fmt(nRes)} residues · ${fmt(nAtom)} atoms`,
-    (el.H ? 'Formula ' : 'Heavy atoms (no H in the file) ') + formula + (other ? ` + ${other} other` : ''),
+  // Parameters: the counts and the secondary structure. The page has no
+  // equation colours, so the plate has no rules. The TeX is the H-bond
+  // energy of ss.js (Kabsch and Sander), which assigns the helix and strand
+  // share when the file has no records.
+  const params = [
+    { sym: 'N_{\\mathrm{res}}', name: `${chains} ${chains === 1 ? 'chain' : 'chains'}` + (chainsAll > chains ? ` of ${chainsAll}` : ''), value: fmt(nRes) },
+    { sym: 'N_{\\mathrm{atom}}', name: el.H ? 'atoms' : 'heavy atoms, no H', value: fmt(nAtom) },
   ];
   if (nProt) {
     const pc = k => Math.round(100 * k / nProt);
-    lines.push(`α-helix ${pc(helix)}% · β-strand ${pc(strand)}% · coil ${pc(nProt - helix - strand)}%` + (s.ssSource === 'computed' ? ' (from H-bonds)' : ' (file records)'));
+    params.push({ sym: '\\alpha', name: 'helix' + (s.ssSource === 'computed' ? ', from H-bonds' : ''), value: pc(helix) + '%' },
+      { sym: '\\beta', name: 'strand', value: pc(strand) + '%' });
   }
+  const lines = [formula + (other ? ` + ${other} other` : '')];
   if (p && p.why) lines.push(p.why);
-  return { title: p ? p.title : (s.meta.name || 'Structure'), sub: [id ? 'PDB ' + id : '', src].filter(Boolean).join(' · '), lines };
+  return { title: p ? p.title : (s.meta.name || 'Structure'), sub: [id ? 'PDB ' + id : '', src].filter(Boolean).join(' · '), params, lines,
+    tex: [String.raw`E=0.084\cdot 332\,\Bigl(\frac{1}{r_{ON}}+\frac{1}{r_{CH}}-\frac{1}{r_{OH}}-\frac{1}{r_{CN}}\Bigr)\ \text{kcal/mol}`,
+      String.raw`E<-0.5\ \text{kcal/mol}\ \Longrightarrow\ \text{H-bond}\ \ \mathrm{C{=}O}_i\cdots\mathrm{H{-}N}_j`],
+    rules: [], anchor: moleculeAnchor };
+}
+// The molecule on screen, for the plate leader: one atom per shown polymer
+// residue (S.wpos, the turned positions) through the camera to page px.
+// The centre is their mean; the radius holds all of them plus 12 px for the
+// cartoon width (a 90% radius let the plate cover a helix end). The key
+// points are the two chain ends of the first chain and the residue nearest
+// the centre.
+function moleculeAnchor() {
+  const s = S.s; if (!s || !S.wpos) return null;
+  const b = canvas.getBoundingClientRect(), v = new THREE.Vector3(), q = [];
+  for (const r of s.residues) {
+    if (!isPolymer(r) || (S.chainOn && !S.chainOn[r.chain]) || !r.atoms.length) continue;
+    const i = r.atoms[Math.min(1, r.atoms.length - 1)];
+    v.set(S.wpos[3 * i], S.wpos[3 * i + 1], S.wpos[3 * i + 2]).project(camera);
+    if (v.z < 1) q.push({ x: b.left + (v.x + 1) / 2 * b.width, y: b.top + (1 - v.y) / 2 * b.height, c: r.chain });
+  }
+  if (!q.length) return null;
+  let x = 0, y = 0; for (const p of q) { x += p.x; y += p.y; } x /= q.length; y /= q.length;
+  const d = q.map(p => Math.hypot(p.x - x, p.y - y)), ds = d.slice().sort((m, n) => m - n);
+  let c = 0; for (let k = 1; k < q.length; k++) if (d[k] < d[c]) c = k;
+  const first = q.filter(p => p.c === q[0].c);
+  return { x, y, r: ds[ds.length - 1] + 12, pts: [first[0], first[first.length - 1], q[c]].map(p => ({ x: p.x, y: p.y })) };
 }
 
 const SAVER_LIST = ['rhodopsin', 'ubiquitin', 'tim', 'deoxyhb', 'gb1', 'adkopen', 'bdna', 'afp53', 'crambin', 'villin'];
