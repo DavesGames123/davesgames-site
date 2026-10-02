@@ -46,6 +46,7 @@
 //      draw ................. "function frame"
 //      ladders .............. "function buildLadders"
 //      boot ................. "function boot"
+//      screensaver .......... "window.snSaver"      shell saver autopilot
 // ============================================================================
 (function () {
   'use strict';
@@ -349,6 +350,7 @@
     var dockTop = $('dock').getBoundingClientRect().top - stage.top;
     Y1 = Math.min(H - 20, dockTop - 54);
     if (Y1 - Y0 < 160) Y1 = Math.min(H - 10, Y0 + 160);
+    if (SV) { Y0 = H * 0.1; Y1 = H * 0.9; }
     if (!narrow()) $('toast').style.top = Y0 + 'px';
     S.cam = { x: W / 2, y: H / 2, z: 1 };
     ents = [];
@@ -361,7 +363,7 @@
     document.querySelectorAll('.tab').forEach(function (b, k) { b.classList.toggle('on', k === i); b.setAttribute('aria-selected', k === i ? 'true' : 'false'); });
     var on = document.querySelector('.tab.on');
     if (on && on.scrollIntoView) on.scrollIntoView({ block: 'nearest', inline: 'center' });
-    try { localStorage.setItem('sn_selection_lesson', String(i)); } catch (e) { /* storage off */ }
+    if (!SV) try { localStorage.setItem('sn_selection_lesson', String(i)); } catch (e) { /* storage off */ }
     updateZoomRo();
     updateReadout();
   }
@@ -821,9 +823,11 @@
     var dt = last ? Math.min(50, now - last) : 16; last = now;
     S.t = now;
     resize();
+    if (SV) { dt *= SV.slow; saverTick(now); }
     step(dt);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
+    if (SV) { var bg = ctx.createRadialGradient(W / 2, H * 0.4, 0, W / 2, H * 0.4, Math.max(W, H) * 0.75); bg.addColorStop(0, '#0f1422'); bg.addColorStop(1, '#07090f'); ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H); }
     // background dots and a world grid that pans and zooms with the camera
     stars.forEach(function (s) { ctx.fillStyle = 'rgba(200,220,255,' + s.a + ')'; ctx.fillRect(s.x, s.y, s.s, s.s); });
     var gs = 80 * S.cam.z, o = toScreen(0, 0);
@@ -846,6 +850,7 @@
       ctx.strokeStyle = ac; ctx.lineWidth = 1.2; ctx.setLineDash([6, 4]); ctx.strokeRect(x + 0.5, y + 0.5, w, h); ctx.setLineDash([]);
       if (S.preview && S.preview.length) label(ctx, S.preview.length + ' ' + (S.preview.length > 1 ? TYPES[S.preview[0].type].plural : TYPES[S.preview[0].type].label), x + w / 2, y + h + 14, ac);
     }
+    if (SV && SV.fade > 0) { ctx.fillStyle = 'rgba(7,9,15,' + SV.fade + ')'; ctx.fillRect(0, 0, W, H); }
     requestAnimationFrame(frame);
   }
 
@@ -925,6 +930,68 @@
     });
     window.addEventListener('resize', function () { var oW = W, oH = H; resize(); if (Math.abs(W - oW) > 80 || Math.abs(H - oH) > 160) loadLesson(S.lesson); });
   }
+  // ── screensaver ────────────────────────────────────────────────────────
+  // Shell saver hook (lib/screensaver.js). enter() hides the chrome, makes
+  // #stage fill the window and plays three lessons per dwell. In each lesson
+  // the autopilot alternates a slow box drag and a click, holds the result,
+  // then clears it. The Modifier and Category Lock lessons use three clicks,
+  // the second and third with the modifier. A fade to the stage colour hides each lesson respawn.
+  // calm 1 slows the drift and the gestures. No localStorage write in saver.
+  var SV = null;
+  function saverTick(now) {
+    var v = SV, t = now - v.t0;
+    if (t >= v.seg) { v.t0 = now; t = 0; v.k = 0; v.act = null; v.li = (v.li + 1) % LESSONS.length; loadLesson(v.li); }
+    v.fade = t < 900 ? 1 - t / 900 : t > v.seg - 900 ? (t - v.seg + 900) / 900 : 0;
+    var sm = function (x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+    var c = S.station && S.lesson === 5 ? toScreen(S.station.x, S.station.y) : { x: W / 2, y: H / 2 };
+    var zt = S.lesson === 5 ? 1.2 + 1.1 * sm(0.5 - 0.5 * Math.cos(t / v.seg * 2 * Math.PI)) : 1 + 0.1 * Math.sin(t / v.seg * Math.PI);
+    zoomAt(c.x, c.y, zt);
+    var a = v.act;
+    if (!a) {
+      if (t < 1200 || t > v.seg - 6000 * v.slow2) return;
+      var pool = ents.filter(function (e) { return live(e) && toScreen(e.x, e.y).x > W * 0.15 && toScreen(e.x, e.y).x < W * 0.85; });
+      if (!pool.length) return;
+      var e = pool[(v.rng() * pool.length) | 0], p = toScreen(e.x, e.y);
+      var many = S.lesson === 3 || S.lesson === 4;
+      a = v.act = { box: !many && v.k % 2 === 0, mod: many && v.k % 3 !== 0, keep: many && v.k % 3 !== 2, e: e, t0: now };
+      if (a.box) {
+        var hw = W * (0.1 + 0.12 * v.rng()), hh = H * (0.1 + 0.1 * v.rng()), dx = (v.rng() - 0.5) * hw, dy = (v.rng() - 0.5) * hh;
+        a.sx = p.x + dx - hw; a.sy = p.y + dy - hh; a.ex = p.x + dx + hw; a.ey = p.y + dy + hh;
+        if (v.rng() < 0.5) { var q = a.sx; a.sx = a.ex; a.ex = q; }
+      }
+      v.k++;
+    }
+    var u = (now - a.t0) / v.slow2;
+    if (a.box && u < 2200) {
+      var f = sm(u / 2200);
+      S.g = { mode: 'box', sx: a.sx, sy: a.sy, cx: a.sx + (a.ex - a.sx) * f, cy: a.sy + (a.ey - a.sy) * f };
+      S.preview = boxWinners(worldBox(S.g));
+    } else if (!a.box && u < 1200) S.hover = a.e;
+    else if (!a.done) {
+      a.done = true;
+      if (a.box) { doBox(worldBox(S.g), false); S.g = null; S.preview = null; } else { S.hover = null; doClick(a.e.x, a.e.y, a.mod); }
+      ents.forEach(function (e) { e.pulse = null; });
+      updateReadout();
+    } else if (u > (a.box ? 2200 : 1200) + 3000) {
+      if (!a.keep) { ents.forEach(function (e) { e.sel = false; }); updateReadout(); }
+      v.act = null;
+    }
+  }
+  window.snSaver = {
+    enter: function (opts) {
+      var calm = Math.max(0, Math.min(1, +opts.calm || 0)), seed = (opts.seed >>> 0) || 1;
+      var st = document.createElement('style');
+      st.textContent = 'html.saver #tabs,html.saver #hint,html.saver #readout,html.saver #toast,html.saver #press,html.saver #dock,html.saver #lesson,html.saver #scrim{display:none!important}' +
+        'html.saver #stage{position:fixed;inset:0}html.saver #cv{cursor:none}';
+      document.head.appendChild(st);
+      document.documentElement.classList.add('saver');
+      SV = { slow: 1 - 0.6 * calm, slow2: 1 + 0.6 * calm, seg: Math.max(14000, (+opts.seconds || 60) * 1000 / 3), li: seed % LESSONS.length, k: 0, act: null, fade: 1, t0: performance.now(),
+        rng: function () { seed = (seed + 0x6D2B79F5) >>> 0; var x = Math.imul(seed ^ seed >>> 15, 1 | seed); x ^= x + Math.imul(x ^ x >>> 7, 61 | x); return ((x ^ x >>> 14) >>> 0) / 4294967296; } };
+      resize();
+      loadLesson(SV.li);
+      return { canvas: cv, warmupMs: 1500 };
+    }
+  };
   window.__snSelection = { S: S, ents: function () { return ents; }, loadLesson: loadLesson, toScreen: toScreen, zoomAt: zoomAt };
   boot();
 })();
