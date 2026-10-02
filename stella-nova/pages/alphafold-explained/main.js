@@ -31,6 +31,7 @@
 //      08 limits ........ "function initLimits" "function initDepthChart"
 //      formula fit ...... "function fitEq"
 //      loop ............. "function loop"
+//      screensaver ...... "window.snSaver"  one full-window 3D view, four scenes
 // ============================================================================
 import { PROT } from './data.js';
 import { encode, conservation, couplings, contacts, topPairs, weights } from './msa.js';
@@ -1125,3 +1126,80 @@ addEventListener('pagehide', () => cancelAnimationFrame(rafId));
 const INITS = [initMini, initPipe, initMsa, initEmbed, initEvo, initTri, initStruct, initIpa, initRama, initRecycle, initFape, initOutputs, initDiffusion, initLimits, initDepthChart, initEqFit];
 for (const f of INITS) { try { f(); } catch (e) { console.error(f.name, e); } }
 rafId = requestAnimationFrame(loop);
+
+// ============================================================================
+//  screensaver
+// ============================================================================
+// Hook for the shell screensaver (lib/screensaver.js). The article has no
+// single canvas, so enter() hides the page and lays one full-window canvas
+// with its own View3D over it. It shows four scenes of the same SUMO1 model, one per
+// seconds/4 (10 s or more), from a seeded start: the structure module fold,
+// the Cα trace in pLDDT colours, the AF3 diffusion from noise, and all atoms
+// in pLDDT colours. Each scene fades in and out through the backdrop
+// colour, and its caption is drawn in the canvas, so the recording has it.
+// The fold and the denoise use 70% and 75% of the scene time. The spin is
+// 0.18 to 0.06 rad/s (calm 0 to 1). The page loop runs the tick (register).
+window.snSaver = {
+  enter(o = {}) {
+    const calm = clamp(o.calm == null ? 0.7 : +o.calm, 0, 1);
+    const beat = Math.max(10, (+o.seconds || 60) / 4), FADE = 1.2 + calm;
+    const css = document.createElement('style');
+    // visibility, not display: a card that drops to zero size throws in its
+    // ResizeObserver redraw (negative ellipse radii in drawMsa and basin)
+    css.textContent = 'html,body{overflow:hidden!important}body>*:not(#snSaverCv){visibility:hidden!important}' +
+      '#snSaverCv{position:fixed;inset:0;z-index:2147483647;width:100vw;height:100vh;display:block;cursor:none;touch-action:none}';
+    document.head.appendChild(css);
+    const cv = document.createElement('canvas'); cv.id = 'snSaverCv';
+    document.body.appendChild(cv);
+    const STEPS = 200, SMAX = 40, SMIN = 0.05, RHO = 7;   // the schedule of initDiffusion
+    const sigma = t => Math.pow(Math.pow(SMAX, 1 / RHO) + t / STEPS * (Math.pow(SMIN, 1 / RHO) - Math.pow(SMAX, 1 / RHO)), RHO);
+    const R = rng(3), EPS = ATOMS.map(() => [gauss(R), gauss(R), gauss(R)]);
+    // frame most of the chain, the low-confidence tails too (CORE_R is the core)
+    const RC = 0.72 * Math.max(...CA.map(G.norm)), RA = 0.72 * Math.max(...ATOMS.map(a => G.norm(a.p)));
+    const SCENES = [
+      { cap: 'Structure module · residue frames fold into place', r: RC, build(add, p) {
+        const F = FRAMES.map((_, i) => frameAt(i, 8 * smooth(clamp(p / 0.7, 0, 1))));
+        for (let i = 0; i < L - 1; i++) add.seg(F[i].t, F[i + 1].t, rainbow(i), 0.55);
+        for (let i = 0; i < L; i++) {
+          const Rm = F[i].R, q = F[i].t;
+          add.dot(q, rainbow(i), 0.42);
+          add.line(q, G.add(q, [Rm[0] * 2.4, Rm[3] * 2.4, Rm[6] * 2.4]), '#ff6b6b', 1.1);
+          add.line(q, G.add(q, [Rm[1] * 2.4, Rm[4] * 2.4, Rm[7] * 2.4]), '#5be08a', 1.1);
+          add.line(q, G.add(q, [Rm[2] * 2.4, Rm[5] * 2.4, Rm[8] * 2.4]), '#6aa8ff', 1.1);
+        }
+      } },
+      { cap: 'The predicted model · Cα trace in pLDDT confidence colours', r: RC, build(add) {
+        for (let i = 0; i < L - 1; i++) add.seg(CA[i], CA[i + 1], plddtColor(PL[i]), 1.0);
+      } },
+      { cap: 'AlphaFold 3 · diffusion takes noise to atoms', r: RA, build(add, p) {
+        const sg = sigma(STEPS * smooth(clamp(p / 0.75, 0, 1)));
+        ATOMS.forEach((a, k) => add.dot(G.add(a.p, G.scl(EPS[k], sg)), ELEM_COL[a.el], a.ca ? 0.75 : 0.55));
+      } },
+      { cap: 'Every atom · pLDDT confidence colours', r: RA, build(add) {
+        for (const a of ATOMS) add.dot(a.p, mix(plddtColor(PL[a.res]), ELEM_COL[a.el], a.el === 0 ? 0 : 0.35), a.ca ? 0.75 : 0.62);
+      } },
+    ];
+    let si = (o.seed >>> 0) % SCENES.length, t = 0, time = 0;
+    const view = new View3D(cv, { radius: SCENES[si].r, yaw: 0.6, pitch: -0.25, spin: 0.06 + 0.12 * (1 - calm), build: add => SCENES[si].build(add, t / beat) });
+    const g = view.ctx;
+    register(cv, dt => {
+      t += dt; time += dt;
+      if (t >= beat) { t = 0; si = (si + 1) % SCENES.length; view.radius = SCENES[si].r; }
+      view.pitch = -0.25 + 0.15 * Math.sin(time * 0.05);
+      view.dirty = true;
+      view.tick(dt);
+      // the backdrop under the scene (the recording is opaque), then the fade
+      const k = smooth(clamp(Math.min(t, beat - t) / FADE, 0, 1));
+      g.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+      g.globalCompositeOperation = 'destination-over';
+      g.fillStyle = 'rgb(10,12,19)'; g.fillRect(0, 0, view.w, view.h);
+      g.globalCompositeOperation = 'source-over';
+      if (k < 1) { g.fillStyle = `rgba(10,12,19,${1 - k})`; g.fillRect(0, 0, view.w, view.h); }
+      g.globalAlpha = 0.78 * k;
+      g.fillStyle = '#c3c8d6'; g.font = '500 15px Inter, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+      g.fillText(SCENES[si].cap, 28, view.h - 28);
+      g.globalAlpha = 1;
+    });
+    return { canvas: cv, warmupMs: 1500 };
+  },
+};
