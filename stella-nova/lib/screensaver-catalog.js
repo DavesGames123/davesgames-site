@@ -91,6 +91,7 @@ window.SN_SAVER_CATALOG = {
     'wave-membrane': { tier: 2, default: true, hook: true, note: 'Everything is inside an IIFE (G at main.js:56, view at :96, frame at :347);' },
     'watch-movement': { tier: 3, default: true, hook: true, note: 'three.js page. stage.js already runs a gentle idle orbit: after st.idle > 2.5 s, controls.autoRotate is on with speed -0.5*orbitAmt (stage.js:151-170).' },
     'watch-randomizer': { tier: 3, default: true, hook: true, note: 'Same stage as watch-movement (it imports ../watch-movement/stage.js), so the idle auto-orbit is already present.' },
+    'stirling-engine': { tier: 3, default: true, hook: true, note: 'Mechanism page with its own saver tour: explode and assemble cycles, labelled with the Stirling cycle.' },
     'origami': { tier: 3, default: true, hook: true, note: 'WebGPU. One canvas #gl (index.html:92) draws two panes by scissor rects measured from DOM #pane2d and #pane3d (app/layout.js paneGeom).' },
     'noise': { tier: 2, default: true, hook: true, note: 'Generic fallback fails: all 80 tiles are equal-size canvases in #stage, G.hoverOnly=true (state.js G) so no tile animates without pointerenter (gpu.js:73 sets t.hover).' },
     'fields': { tier: 2, default: true, hook: true, note: 'Shared hook for all table-engine pages, written once in lib/table-engine.js inside bootTable (closure owns G:32, GENS:51, tiles:132, makeSurface:197, frame:227)' },
