@@ -40,9 +40,27 @@
 //      presets grid ....... "======== PRESETS" build preset buttons
 //      randomize .......... "======== RANDOMIZE" draw a whole random solid
 //      input .............. "WHEEL ZOOM"       wheel, drag, touch, panel toggle
+//      screensaver ........ "======== SCREENSAVER" seeded look A, drift to B
 //      render loop ........ "RENDER LOOP"      orbit drift, uniforms, draw, FPS
+//
+//  SCREENSAVER  window.snSaver, for lib/screensaver.js
+//  ────────────────────────────────────────────────────────────────────────
+//      The hook is set before the shader fetch, so the shell finds it at
+//      once. enter() waits for GL setup, then hides the GUI and draws a
+//      chain of looks from opts.seed. Each look is one named solid with its
+//      own colours, optics and camera. The frame loop holds a look, then
+//      eases S to the next look with a cosine ease, so no change is a hard
+//      cut. All looks in one visit share poly_type and max_bounces, because
+//      integers cannot ease. When the named solid changes, opts.label gets
+//      its name, F/E/V counts and Schläfli symbol (table "const SOLIDS").
 // ============================================================================
 (async () => {
+// The screensaver hook must exist before the first await. enter() waits on
+// glReady and then calls saverEnter (defined in the SCREENSAVER section).
+let glReadyResolve, saverEnter = null;
+const glReady = new Promise(r => { glReadyResolve = r; });
+window.snSaver = { enter(o) { return glReady.then(() => saverEnter(o || {})); } };
+
 // Fetch both shader stages as text before any GL setup.
 const SH = {};
 for (const _n of ['shaders/raymarch.vert.glsl', 'shaders/raymarch.frag.glsl']) {
@@ -436,36 +454,45 @@ function syncAll() {
   for (const k of Object.keys(S)) syncSlider(k);
 }
 
-// Random helpers: float range, inclusive int range, and array pick.
+// Random helpers on a generator rnd (Math.random or a seeded one): float
+// range and inclusive int range.
 // ======== RANDOMIZE ========
-function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
-function randInt(lo, hi) { return Math.floor(rand(lo, hi + 1)); }
-function randPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function rand(lo, hi, rnd = Math.random) { return lo + rnd() * (hi - lo); }
+function randInt(lo, hi, rnd = Math.random) { return Math.floor(rand(lo, hi + 1, rnd)); }
 
 // Draw a whole new solid: symmetry, U/V/W, camera, optics, and every light, each
-// from a hand-tuned range so the result stays renderable. Then sync the panel.
+// from a hand-tuned range so the result stays renderable. Returns the values;
+// it does not change S.
+function drawParams(rnd = Math.random) {
+  const P = {};
+  const r = (lo, hi) => rand(lo, hi, rnd), ri = (lo, hi) => randInt(lo, hi, rnd);
+  P.poly_type = ri(2, 5);
+  P.poly_U = r(0, 2.5);
+  P.poly_V = r(0, 2.5);
+  P.poly_W = r(0, 2.5);
+  P.poly_zoom = r(1.2, 3.5);
+  P.inner_sphere = r(0.2, 2.0);
+  P.edge_thick = r(0.0008, 0.012);
+  P.rot_x = r(-3.14, 3.14);
+  P.rot_y = r(-3.14, 3.14);
+  P.orbit_speed = r(0.02, 0.4);
+  P.refr_index = r(0.4, 1.3);
+  P.max_bounces = ri(2, 10);
+  P.fov = r(1.0, 3.5);
+  P.cam_y = r(-1, 3);
+  P.cam_z = r(-8, -2.5);
+  P.sun_h = r(0, 1); P.sun_s = r(0.4, 1); P.sun_i = r(0.002, 0.05);
+  P.floor_h = r(0, 1); P.floor_s = r(0.3, 1); P.floor_i = r(0.2, 1.0);
+  P.sky_h = r(0, 1); P.sky_s = r(0.3, 1); P.sky_i = r(0.3, 1.5);
+  P.glow0_h = r(0, 1); P.glow0_s = r(0.3, 1); P.glow0_i = r(0.0003, 0.005);
+  P.glow1_h = r(0, 1); P.glow1_s = r(0.3, 1); P.glow1_i = r(0.0003, 0.005);
+  P.beer_h = r(0, 1); P.beer_s = r(0.3, 1); P.beer_i = r(0.5, 4.0);
+  return P;
+}
+
+// The Random button: copy one draw into S, then sync the panel.
 function randomize() {
-  S.poly_type = randInt(2, 5);
-  S.poly_U = rand(0, 2.5);
-  S.poly_V = rand(0, 2.5);
-  S.poly_W = rand(0, 2.5);
-  S.poly_zoom = rand(1.2, 3.5);
-  S.inner_sphere = rand(0.2, 2.0);
-  S.edge_thick = rand(0.0008, 0.012);
-  S.rot_x = rand(-3.14, 3.14);
-  S.rot_y = rand(-3.14, 3.14);
-  S.orbit_speed = rand(0.02, 0.4);
-  S.refr_index = rand(0.4, 1.3);
-  S.max_bounces = randInt(2, 10);
-  S.fov = rand(1.0, 3.5);
-  S.cam_y = rand(-1, 3);
-  S.cam_z = rand(-8, -2.5);
-  S.sun_h = rand(0, 1); S.sun_s = rand(0.4, 1); S.sun_i = rand(0.002, 0.05);
-  S.floor_h = rand(0, 1); S.floor_s = rand(0.3, 1); S.floor_i = rand(0.2, 1.0);
-  S.sky_h = rand(0, 1); S.sky_s = rand(0.3, 1); S.sky_i = rand(0.3, 1.5);
-  S.glow0_h = rand(0, 1); S.glow0_s = rand(0.3, 1); S.glow0_i = rand(0.0003, 0.005);
-  S.glow1_h = rand(0, 1); S.glow1_s = rand(0.3, 1); S.glow1_i = rand(0.0003, 0.005);
-  S.beer_h = rand(0, 1); S.beer_s = rand(0.3, 1); S.beer_i = rand(0.5, 4.0);
+  Object.assign(S, drawParams());
   syncAll();
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
 }
@@ -541,6 +568,141 @@ toggleBtn.onclick = () => {
   toggleBtn.textContent = panel.classList.contains('hidden') ? '▶' : '◀';
 };
 
+// Seeded generator (mulberry32). Returns floats in [0,1).
+// ======== SCREENSAVER ========
+function mulberry(a) {
+  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+
+// The seed point sits at U·A + V·B + W·C on the fundamental triangle. The
+// corner A is a 2-fold axis, B is a q-fold axis, and C is a 3-fold axis (q is
+// poly_type). The zero weights select the Wythoff solid. The table below was
+// checked by vertex-orbit counts.
+// Each row: [weights on, name, F, E, V, Schläfli symbol].
+const SOLIDS = {
+  3: [['A','Octahedron (rectified tetrahedron)',8,12,6,'r{3,3}'],
+      ['B','Tetrahedron',4,6,4,'{3,3}'], ['C','Tetrahedron',4,6,4,'{3,3}'],
+      ['AB','Truncated tetrahedron',8,18,12,'t{3,3}'], ['AC','Truncated tetrahedron',8,18,12,'t{3,3}'],
+      ['BC','Cuboctahedron (cantellated tetrahedron)',14,24,12,'rr{3,3}'],
+      ['ABC','Truncated octahedron (omnitruncated tetrahedron)',14,36,24,'tr{3,3}']],
+  4: [['A','Cuboctahedron',14,24,12,'r{4,3}'],
+      ['B','Octahedron',8,12,6,'{3,4}'], ['C','Cube',6,12,8,'{4,3}'],
+      ['AB','Truncated octahedron',14,36,24,'t{3,4}'], ['AC','Truncated cube',14,36,24,'t{4,3}'],
+      ['BC','Rhombicuboctahedron',26,48,24,'rr{4,3}'],
+      ['ABC','Truncated cuboctahedron',26,72,48,'tr{4,3}']],
+  5: [['A','Icosidodecahedron',32,60,30,'r{5,3}'],
+      ['B','Icosahedron',20,30,12,'{3,5}'], ['C','Dodecahedron',12,30,20,'{5,3}'],
+      ['AB','Truncated icosahedron',32,90,60,'t{3,5}'], ['AC','Truncated dodecahedron',32,90,60,'t{5,3}'],
+      ['BC','Rhombicosidodecahedron',62,120,60,'rr{5,3}'],
+      ['ABC','Truncated icosidodecahedron',62,180,120,'tr{5,3}']],
+};
+const GROUP = { 3: 'tetrahedral symmetry [3,3]', 4: 'octahedral symmetry [4,3]', 5: 'icosahedral symmetry [5,3]' };
+
+// The row of SOLIDS for the current S. computePoly() does not normalize the
+// B and C corners before it adds them, so their weights get the corner
+// lengths here. A weight under 8% of the largest one counts as zero, because
+// a cut that small does not show at screen size.
+function solidNow() {
+  const c = Math.cos(Math.PI / S.poly_type), s2 = Math.max(0, 0.75 - c * c);
+  const w = { A: S.poly_U, B: S.poly_V * Math.sqrt(s2 + 0.25), C: S.poly_W * Math.sqrt(s2 + c * c) };
+  const m = Math.max(w.A, w.B, w.C, 1e-6);
+  const on = ['A','B','C'].filter(k => w[k] > 0.08 * m).join('');
+  return (SOLIDS[S.poly_type] || []).find(r => r[0] === on) || null;
+}
+
+// One screensaver look: drawParams() with the camera and optics held in a
+// range where the solid fills the frame and stays clear. The look picks a
+// corner set and sets the other weights to exactly zero, so each look is
+// one named solid. The Platonic corners (B, C) get the most picks.
+const PATTERNS = ['B','C','B','C','A','AB','AC','BC','ABC'];
+function saverLook(rnd) {
+  const L = drawParams(rnd);
+  const r = (a, b) => a + rnd() * (b - a);
+  const pat = PATTERNS[Math.floor(rnd() * PATTERNS.length)];
+  L.poly_U = pat.includes('A') ? r(0.5, 2) : 0;
+  L.poly_V = pat.includes('B') ? r(0.5, 2) : 0;
+  L.poly_W = pat.includes('C') ? r(0.5, 2) : 0;
+  L.poly_zoom = r(1.4, 2.1);
+  L.inner_sphere = r(0.4, 1.6);
+  L.edge_thick = r(0.001, 0.006);
+  L.refr_index = r(0.6, 1.2);
+  L.fov = r(1.7, 2.5);
+  L.cam_y = r(-0.5, 2.5);
+  L.cam_z = r(-6, -4);
+  return L;
+}
+
+// Keys that ease from one look to the next. Hues (_h) take the short way
+// round the colour circle. Rotation is left to the orbit drift. poly_type and
+// max_bounces are integers, so they stay fixed for the whole visit.
+const DRIFT_KEYS = ['poly_U','poly_V','poly_W','poly_zoom','inner_sphere','edge_thick',
+  'refr_index','fov','cam_y','cam_z',
+  ...['sun','floor','sky','glow0','glow1','beer'].flatMap(c => [c+'_h', c+'_s', c+'_i'])];
+// While the screensaver plays: { A, B, t0, hold, dur, rnd, label, name }.
+// Each leg holds look A for hold ms, then eases to look B over dur ms.
+let drift = null;
+
+// Set S at u in [0,1] between look A and look B.
+function driftTo(u) {
+  const { A, B } = drift;
+  for (const k of DRIFT_KEYS) {
+    let d = B[k] - A[k];
+    if (k.endsWith('_h')) d = ((d % 1) + 1.5) % 1 - 0.5;
+    S[k] = A[k] + d * u;
+  }
+}
+
+// One frame of the drift. When a leg ends, B becomes A and a new look B
+// comes from the same seeded generator. The cosine ease starts and ends at
+// zero speed, so no leg has a hard edge.
+function driftStep(now) {
+  let x = (now - drift.t0 - drift.hold) / drift.dur;
+  if (x >= 1) {
+    const B = saverLook(drift.rnd);
+    B.poly_type = drift.A.poly_type; B.max_bounces = drift.A.max_bounces;
+    drift.A = drift.B; drift.B = B; drift.t0 = now; x = -drift.hold / drift.dur;
+  }
+  driftTo(0.5 - 0.5 * Math.cos(Math.PI * Math.max(0, x)));
+  const row = solidNow();
+  const name = row ? row[1] : '';
+  if (name !== drift.name) { drift.name = name; saverLabel(row); }
+}
+
+// Send the label plate for one row of SOLIDS to the shell.
+function saverLabel(row) {
+  if (!drift.label || !row) return;
+  const [, name, F, E, V, sch] = row;
+  try {
+    drift.label({ title: name, sub: 'Wythoff construction · ' + GROUP[S.poly_type],
+      lines: ['Faces ' + F + ' · Edges ' + E + ' · Vertices ' + V,
+              'Schläfli symbol ' + sch],
+      eq: ['V − E + F = ' + V + ' − ' + E + ' + ' + F + ' = 2'] });
+  } catch (e) {}
+}
+
+// Hide the GUI, set the first look, and start the chain of legs. calm
+// (1 = slowest) sets the orbit speed and the leg length.
+saverEnter = (o) => {
+  const calm = Math.max(0, Math.min(1, o.calm != null ? o.calm : 0.7));
+  const st = document.createElement('style');
+  st.textContent = 'body>*:not(#c){display:none!important}';
+  document.head.appendChild(st);
+  const rnd = mulberry((o.seed != null ? o.seed : Math.random() * 1e9) | 0);
+  const A = saverLook(rnd), B = saverLook(rnd);
+  A.poly_type = 3 + Math.floor(rnd() * 3);
+  A.max_bounces = 4 + Math.floor(rnd() * 5);
+  B.poly_type = A.poly_type; B.max_bounces = A.max_bounces;
+  Object.assign(S, A);
+  S.orbit_speed = 0.03 + 0.12 * (1 - calm);
+  const leg = (10 + 16 * calm) * 1000;
+  drift = { A, B, t0: performance.now(), hold: 0.35 * leg, dur: leg, rnd,
+            label: typeof o.label === 'function' ? o.label : null, name: null };
+  driftStep(performance.now());
+  return { canvas, warmupMs: 1000 };
+};
+glReadyResolve();
+
 // FPS accounting: lastTime for dt, accTime/frameCount to average over 0.5 s.
 // ======== RENDER LOOP ========
 let lastTime = 0;
@@ -566,7 +728,9 @@ function frame(now) {
     frameCount = 0; accTime = 0;
   }
 
-  updateAllSwatches();
+  // Screensaver: ease through the chain of seeded looks.
+  if (drift) driftStep(performance.now());
+  else updateAllSwatches();
 
   // Auto-rotate when idle. The two irrational-looking factors keep pitch and yaw
   // out of phase so the solid never settles into a repeating pose.
