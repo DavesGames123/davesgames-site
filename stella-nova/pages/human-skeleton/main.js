@@ -50,6 +50,7 @@
 //    window.__hs                                     debug and headless checks
 //    window.snSaver                                  screensaver tour (lib/screensaver.js)
 //    function saverPlate                             screensaver plate: layout, region, bone in focus
+//    function boneAnchor                             the bone in focus (landmarks) or the skeleton on screen
 //    // ── boot                                     start the page
 // ============================================================================
 import * as THREE from 'three';
@@ -108,24 +109,74 @@ function saverPlate(beat, rid, lit, focus) {
   const counted = S.bones.filter(b => b.counted).length;
   const teeth = S.bones.filter(b => b.type === 'tooth').length, cart = S.bones.filter(b => b.type === 'cartilage').length;
   const ear = S.regions.find(r => r.id === 'ear');
-  const total = `${counted} counted bones · ${teeth} teeth · ${cart} costal cartilages` + (ear && ear.count < ear.expected ? ` (the ${ear.expected} ear ossicles are not in the set)` : '');
+  // The page has no equations, so the plate has no TeX. The parameters
+  // carry the counts and the bone in focus.
   if (beat === 'region') {
     const reg = S.regions.find(r => r.id === rid) || { label: rid };
     const grp = S.M.groups.find(g => g.id === reg.group);
     const types = {};
     for (const i of lit) { const t = S.bones[i].type; types[t] = (types[t] || 0) + 1; }
-    const lines = [`${lit.length} pieces: ` + Object.keys(types).map(t => `${TYPE_NAME[t]} ${types[t]}`).join(' · ')];
     const b = S.bones[focus];
+    const params = [{ name: 'pieces lit', value: String(lit.length) }];
+    const lines = [Object.keys(types).map(t => `${TYPE_NAME[t]} ${types[t]}`).join(', ') + '.'];
     if (b) {
-      lines.push(`In focus: ${b.side ? SIDE_NAME[b.side].toLowerCase() + ' ' + b.name.toLowerCase() : b.name} (${b.latin})`);
-      lines.push(`${TYPE_NAME[b.type]} · ${b.len >= 100 ? Math.round(b.len) : b.len.toFixed(1)} mm` + (b.fma ? ` · FMA ${b.fma}` : ''));
+      params.push({ name: 'in focus', value: b.side ? SIDE_NAME[b.side].toLowerCase() + ' ' + b.name.toLowerCase() : b.name },
+        { name: 'type, length', value: `${TYPE_NAME[b.type]}, ${b.len >= 100 ? Math.round(b.len) : b.len.toFixed(1)} mm` });
+      if (b.fma) params.push({ name: 'FMA', value: String(b.fma) });
+      lines[0] = b.latin + '. ' + lines[0];
       if (b.fact) lines.push(b.fact);
     }
-    return { title: reg.label, sub: `Human skeleton · ${grp ? grp.label : ''}`, lines };
+    return { title: reg.label, sub: `Human skeleton · ${grp ? grp.label : ''}`, params, lines,
+      anchor: () => boneAnchor(b ? focus : -1, lit) };
   }
+  const params = [{ name: 'counted bones', value: String(counted) }, { name: 'teeth', value: String(teeth) }, { name: 'costal cartilages', value: String(cart) }];
   const per = S.M.groups.filter(g => g.id !== 'cartilage').map(g => `${g.label} ${S.bones.filter(b => b.group === g.id && b.counted).length}`);
   return { title: beat === 'open' ? `Human skeleton · ${MODE_NAME[S.mode] || 'Exploded'}` : 'Human skeleton', sub: beat === 'open' ? 'Exploded view' : 'Assembled',
-    lines: [total, per.slice(0, 4).join(' · '), per.slice(4).join(' · ')] };
+    params, lines: [per.join(', ') + '.'].concat(ear && ear.count < ear.expected ? [`The ${ear.expected} ear ossicles are not in the set.`] : []),
+    anchor: () => boneAnchor(-1, null) };
+}
+// The subject on screen, for the plate leader: a box anchor (the shell's
+// w, h form) round the bones of the set (the lit region, or every shown
+// bone), each centre plus its radius b.r, through the camera to page px.
+// A standing skeleton is tall and thin, so a box fits it better than a
+// circle. The key points are the landmarks of bone i (the bone in focus):
+// its centre (boneCentre), its joint to the parent bone and the two ends of
+// its longest box axis (qmin, qsize), moved by the same offset as the
+// centre. On the catalogue tray the bone turns, so there only the centre is
+// used. With no bone in focus, the key points are the eight longest bones.
+// A first version took the focus bone alone as the subject, and the plate
+// covered the rest of the lit foot.
+const av = new THREE.Vector3();
+function boneAnchor(i, set) {
+  if (!S.M || !S.cur) return null;
+  const b0 = canvas.getBoundingClientRect();
+  const P = v => { av.copy(v).project(camera); return av.z < 1 ? { x: b0.left + (av.x + 1) / 2 * b0.width, y: b0.top + (1 - av.y) / 2 * b0.height } : null; };
+  const ext = (c, r) => { const q = P(c), e = P(c.clone().addScaledVector(camera.up, r)); return q && e ? Math.hypot(e.x - q.x, e.y - q.y) : 0; };
+  const cs = [];
+  for (const b of (set && set.length ? set.map(k => S.bones[k]) : S.bones)) {
+    if (S.vis && !S.vis[b.i]) continue;
+    const c3 = boneCentre(b.i), q = P(c3); if (q) cs.push({ q, h: ext(c3, b.r), len: b.len });
+  }
+  if (!cs.length) return null;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const o of cs) { x0 = Math.min(x0, o.q.x - o.h); x1 = Math.max(x1, o.q.x + o.h); y0 = Math.min(y0, o.q.y - o.h); y1 = Math.max(y1, o.q.y + o.h); }
+  let pts = cs.slice().sort((m, n) => n.len - m.len).slice(0, 8).map(o => o.q);
+  if (i >= 0) {
+    const b = S.bones[i], c3 = boneCentre(i), c = P(c3);
+    if (c) {
+      const d = c3.clone().sub(new THREE.Vector3(...b.c));
+      pts = [c];
+      if (!(S.mode === 'catalogue' && S.cat)) {
+        if (b.joint) { const q = P(new THREE.Vector3(...b.joint).add(d)); if (q) pts.push(q); }
+        if (b.qmin && b.qsize) {
+          const k = b.qsize.indexOf(Math.max(...b.qsize)), lo = b.qmin.map((m, j) => m + b.qsize[j] / 2), hi = lo.slice();
+          lo[k] = b.qmin[k]; hi[k] = b.qmin[k] + b.qsize[k];
+          for (const e of [lo, hi]) { const q = P(new THREE.Vector3(...e).add(d)); if (q) pts.push(q); }
+        }
+      }
+    }
+  }
+  return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0, pts };
 }
 window.snSaver = {
   enter(o = {}) {
