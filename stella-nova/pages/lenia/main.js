@@ -30,7 +30,8 @@
      grep -n 'function placeCreature'   clear the world and stamp the creature
      grep -n 'function buildRule'       the m, s, T and scale sliders
      grep -n 'function drawPlots'       the kernel and growth plots
-     grep -n 'function renderEquations' the KaTeX lines for the current rule
+     grep -n 'function renderEquations' the MathJax lines for the current rule
+     grep -n 'const RULES'              symbol -> math color class
      grep -n 'function buildBrowser'    the grouped, searchable catalog
      grep -n 'function drawThumb'       catalog thumbnails
      grep -n 'function sizeWorld'       world size from the canvas aspect
@@ -41,6 +42,7 @@
      grep -n 'window.snSaver'           the shell screensaver hook
    ========================================================================== */
 import { createEngine, kernelShell, GROWTH, resample, PALETTES, paletteData } from './engine.js';
+import { typeset } from '../../lib/sci-math.js';
 
 const $ = id => document.getElementById(id);
 // The phone layout. This query matches the PHONE block in style.css.
@@ -257,10 +259,10 @@ function soup() {
 
 // ------------------------------------------------------------------- rule
 const RULE_ROWS = [
-  { key: 'm', label: 'm · center', min: 0.01, max: 0.6, step: 0.001, dec: 3 },
-  { key: 's', label: 's · width', min: 0.0005, max: 0.1, step: 0.0001, dec: 4 },
-  { key: 'T', label: 'T · steps', min: 1, max: 50, step: 1, dec: 0 },
-  { key: 'scale', label: 'scale', min: 0.4, max: 2.5, step: 0.05, dec: 2 },
+  { key: 'm', sym: 'm', word: 'center', min: 0.01, max: 0.6, step: 0.001, dec: 3 },
+  { key: 's', sym: 's', word: 'width', min: 0.0005, max: 0.1, step: 0.0001, dec: 4 },
+  { key: 'T', sym: 'T', word: 'steps', min: 1, max: 50, step: 1, dec: 0 },
+  { key: 'scale', label: 'Scale', min: 0.4, max: 2.5, step: 0.05, dec: 2 },
 ];
 function buildRule() {
   const box = $('rule');
@@ -268,7 +270,14 @@ function buildRule() {
   const c = S.c;
   for (const r of RULE_ROWS) {
     const row = document.createElement('div'); row.className = 'row';
-    const lab = document.createElement('label'); lab.textContent = r.label; lab.htmlFor = 'r-' + r.key; lab.title = r.label;
+    const lab = document.createElement('label'); lab.htmlFor = 'r-' + r.key; lab.title = r.word ? `${r.sym} · ${r.word}` : r.label;
+    // A rule symbol shows as MathJax SVG in its equation color (RULES).
+    if (r.sym) {
+      const m = document.createElement('span'); m.className = 'sci-sym ' + RULE_CLASS[r.sym]; m.textContent = r.sym;
+      const w = document.createElement('small'); w.textContent = r.word;
+      lab.append(m, w);
+      typeset(m, r.sym, { display: false, rules: RULES });
+    } else lab.textContent = r.label;
     const inp = document.createElement('input'); inp.type = 'range'; inp.id = 'r-' + r.key;
     const base = r.key === 'scale' ? c.scale : c[r.key];
     inp.min = Math.min(r.min, base); inp.max = Math.max(r.max, base * 2); inp.step = r.step; inp.value = S.rule[r.key];
@@ -353,7 +362,7 @@ function drawPlots() {
   }
   g.stroke();
   g.fillStyle = 'rgba(211,221,224,0.65)';
-  g.font = '9px JetBrains Mono, monospace';
+  g.font = '10px ui-monospace, Menlo, monospace';
   g.fillText('+1', x0 + 3, y0 + 8);
   g.fillText('−1', x0 + 3, y1 - 2);
   g.fillText('m', X(m) + 3, y1 - 2);
@@ -363,6 +372,12 @@ function drawPlots() {
 }
 
 // ---------------------------------------------------------------- equations
+// One color per quantity, in the equations, the rule labels and the About
+// text: the world A, the kernel K, the growth G, the time scale T, the
+// growth center m and the growth width s. The live values of m and s in
+// G(u) take the color of m and s.
+const RULES = [['A', 'm1'], ['K_c', 'm2'], ['K', 'm2'], ['G', 'm3'], ['T', 'm4'], ['m', 'm5'], ['s', 'm6']];
+const RULE_CLASS = Object.fromEntries(RULES);
 const GENERAL = String.raw`A^{t+\Delta t} = \Big[\,A^t + \tfrac{1}{T}\,G\big(K * A^t\big)\Big]_0^1`;
 const CORE_TEX = [
   String.raw`K_c(r) = \big(4r(1-r)\big)^4`,
@@ -371,16 +386,15 @@ const CORE_TEX = [
   String.raw`K_c(r) = \mathbf{1}\big[\tfrac14 \le r \le \tfrac34\big] + \tfrac12\,\mathbf{1}\big[r < \tfrac14\big]`,
 ];
 function growthTeX(gn, m, s) {
-  const M = m.toFixed(3), Sv = s.toFixed(4);
+  const M = `\\class{m5}{${m.toFixed(3)}}`, Sv = `\\class{m6}{${s.toFixed(4)}}`;
   if (gn === 1) return String.raw`G(u) = 2\Big(1 - \tfrac{(u-${M})^2}{9\cdot ${Sv}^2}\Big)_+^4 - 1`;
   if (gn === 3) return String.raw`G(u) = \pm 1,\ +1 \text{ if } |u-${M}| \le ${Sv}`;
   return String.raw`G(u) = 2\exp\!\Big(-\tfrac{(u-${M})^2}{2\cdot ${Sv}^2}\Big) - 1`;
 }
+// Typeset one TeX string into el as color-coded MathJax SVG.
 function tex(el, src, display = true) {
-  if (window.katex) {
-    try { window.katex.render(src, el, { displayMode: display, throwOnError: false }); return; } catch (e) { /* fall through */ }
-  }
-  el.textContent = src;
+  el.classList.add('sci-eq');
+  return typeset(el, src, { display, rules: RULES });
 }
 function renderEquations() {
   const c = S.c;
@@ -513,7 +527,7 @@ function setOpen(open) {
 }
 function setPlaying(on) {
   S.playing = on;
-  $('playBtn').textContent = on ? '❚❚ PAUSE' : '▶ PLAY';
+  $('playBtn').textContent = on ? 'Pause' : 'Play';
   $('playBtn').classList.toggle('on', !on);
   $('dockPlay').textContent = on ? '❚❚' : '▶';
   $('dockPlay').setAttribute('aria-label', on ? 'Pause' : 'Play');
@@ -533,7 +547,7 @@ function setTool(t) {
 }
 function setFollow(on) {
   S.view.follow = on;
-  $('followBtn').textContent = on ? 'FOLLOW · ON' : 'FOLLOW · OFF';
+  $('followBtn').textContent = on ? 'Follow on' : 'Follow off';
   $('followBtn').classList.toggle('on', on);
 }
 function setZoom(z) {

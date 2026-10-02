@@ -17,9 +17,11 @@
        A' = clip(A + G(U) / T, 0, 1) growth G in [-1, 1]
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts       Google Fonts stylesheet
-     2. KaTeX       CSS then JS, so main.js can render equations at once
-     3. style.css   the page stylesheet
+     1. style.css   the page stylesheet
+     2. sci.css     shared science type (STIX Two Text, Inter) and the
+                    math colors .m1 to .m6. It loads the fonts.
+   The equations are MathJax SVG. lib/sci-math.js loads MathJax when the
+   first equation is typeset.
    Scripts at end of body:
      main.js        ES module. It imports engine.js and fetches
                     creatures.json.
@@ -62,17 +64,14 @@
 <meta name="description" content="Lenia on the GPU: continuous cellular automata that move, turn and divide like small animals. Pick a creature from Bert Chan's catalog, change its rule, and stamp or draw on the world.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
-  <div class="sys">SYS&nbsp;//&nbsp;CONTINUOUS.CA</div>
+  <div class="brand">Stella Nova</div>
   <div class="pagetitle">Lenia</div>
 </div>
 
@@ -90,7 +89,7 @@
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" aria-label="Close controls">✕</button>
 
-  <div class="sec-label">CREATURE</div>
+  <div class="sec-label">Creature</div>
   <div class="cur">
     <div class="cur-top"><span class="chip" id="curFamily"></span><span class="cur-idx" id="curIdx"></span></div>
     <div class="cur-name" id="curName">Loading…</div>
@@ -98,25 +97,25 @@
   </div>
   <div class="modes">
     <button id="prevBtn" aria-label="Previous creature" title="Previous creature (←)">◀</button>
-    <button id="browseBtn" class="grow" title="Browse the catalog">BROWSE CATALOG</button>
+    <button id="browseBtn" class="grow" title="Browse the catalog">Browse catalog</button>
     <button id="nextBtn" aria-label="Next creature" title="Next creature (→)">▶</button>
   </div>
 
-  <div class="sec-label">RULE</div>
+  <div class="sec-label">Rule</div>
   <canvas id="plots" aria-label="Kernel and growth function"></canvas>
-  <div class="plot-key"><span>kernel K</span><span>growth G(u)</span></div>
+  <div class="plot-key"><span>Kernel <i class="m2">K</i></span><span>Growth <i class="m3">G</i>(<i>u</i>)</span></div>
   <div id="eqs"></div>
   <div id="rule"></div>
 
-  <div class="sec-label">RUN</div>
+  <div class="sec-label">Run</div>
   <div class="modes">
-    <button id="playBtn">❚❚ PAUSE</button>
-    <button id="stepBtn" title="Advance one step">STEP</button>
+    <button id="playBtn">Pause</button>
+    <button id="stepBtn" title="Advance one step">Step</button>
   </div>
   <div class="modes">
-    <button id="resetBtn" title="Place the creature again (R)">RESET</button>
-    <button id="soupBtn" title="Random soup (N)">SOUP</button>
-    <button id="clearBtn" title="Clear (C)">CLEAR</button>
+    <button id="resetBtn" title="Place the creature again (R)">Reset</button>
+    <button id="soupBtn" title="Random soup (N)">Soup</button>
+    <button id="clearBtn" title="Clear (C)">Clear</button>
   </div>
   <div class="row"><label for="speed">Speed</label><input type="range" id="speed" min="0.25" max="20" step="0.25" value="2"><span class="val" id="speedV"></span></div>
   <div class="row"><label for="worldSel">World</label><select id="worldSel">
@@ -133,26 +132,26 @@
     <option value="3">3× · slow</option>
   </select></div>
 
-  <div class="sec-label">TOOL</div>
+  <div class="sec-label">Tool</div>
   <div class="presets" id="tools">
-    <button data-tool="stamp" class="on">STAMP</button>
-    <button data-tool="draw">DRAW</button>
-    <button data-tool="erase">ERASE</button>
+    <button data-tool="stamp" class="on">Stamp</button>
+    <button data-tool="draw">Draw</button>
+    <button data-tool="erase">Erase</button>
   </div>
   <div class="row"><label for="brush">Brush</label><input type="range" id="brush" min="0.5" max="6" step="0.25" value="1.5"><span class="val" id="brushV"></span></div>
   <div class="hint" id="toolHint"></div>
 
-  <div class="sec-label">VIEW</div>
+  <div class="sec-label">View</div>
   <div class="swatches" id="palettes"></div>
   <div class="presets" id="modes">
-    <button data-mode="world" class="on" title="The world A (1)">WORLD</button>
-    <button data-mode="potential" title="The potential U = K * A (2)">POTENTIAL</button>
-    <button data-mode="growth" title="The growth G(U) (3)">GROWTH</button>
+    <button data-mode="world" class="on" title="The world A (1)">World</button>
+    <button data-mode="potential" title="The potential U = K * A (2)">Potential</button>
+    <button data-mode="growth" title="The growth G(U) (3)">Growth</button>
   </div>
   <div class="row"><label for="zoom">Zoom</label><input type="range" id="zoom" min="0.5" max="6" step="0.05" value="1"><span class="val" id="zoomV"></span></div>
-  <div class="modes"><button id="followBtn" title="Keep the mass in the center (F)">FOLLOW · OFF</button></div>
+  <div class="modes"><button id="followBtn" title="Keep the mass in the center (F)">Follow off</button></div>
 
-  <div class="sec-label">KEYS</div>
+  <div class="sec-label">Keys</div>
   <table class="readout keys">
     <tr><td>Space</td><td>play / pause</td></tr>
     <tr><td>R N C</td><td>reset / soup / clear</td></tr>
@@ -163,12 +162,12 @@
     <tr><td>Wheel</td><td>zoom · right drag to pan</td></tr>
   </table>
 
-  <div class="sec-label">ABOUT</div>
+  <div class="sec-label">About</div>
   <div class="about">
     <div class="eq" id="eq-general"></div>
-    <p><b>Lenia</b> is a cellular automaton with no grid of on and off cells. Each cell holds a number from 0 to 1, time moves in small steps, and each cell looks at a smooth ring of neighbours out to radius <i>R</i>. Bert Chan made it in 2015–2018 as a continuous form of Conway's Game of Life.</p>
-    <p>At each step, the <b>kernel</b> <i>K</i> takes a weighted mean of the ring around each cell. That mean is the <b>potential</b> <i>U</i>. The <b>growth function</b> <i>G</i> then turns it into a change: a cell grows when <i>U</i> is near <i>m</i>, within about <i>s</i>, and decays otherwise. The world adds <i>G / T</i> to every cell and clips the result to [0, 1].</p>
-    <p>From that one rule come hundreds of stable, moving patterns. Chan named and sorted them like a biologist: <i>Orbium</i> glides, <i>Gyrorbium</i> turns, <i>Scutium</i> and <i>Pterifera</i> fly in lines, and some <i>Geminium</i> divide in two. A small change to <i>m</i> or <i>s</i> can kill a creature, make it explode, or turn it into a new one.</p>
+    <p><b>Lenia</b> is a cellular automaton with no grid of on and off cells. Each cell holds a number from 0 to 1, time moves in small steps, and each cell looks at a smooth ring of neighbours out to radius <i class="v">R</i>. Bert Chan made it in 2015–2018 as a continuous form of Conway's Game of Life.</p>
+    <p>At each step, the <b>kernel</b> <i class="m2">K</i> takes a weighted mean of the ring around each cell. That mean is the <b>potential</b> <i class="v">U</i>. The <b>growth function</b> <i class="m3">G</i> then turns it into a change: a cell grows when <i class="v">U</i> is near <i class="m5">m</i>, within about <i class="m6">s</i>, and decays otherwise. The world adds <i class="m3">G</i> / <i class="m4">T</i> to every cell and clips the result to [0, 1].</p>
+    <p>From that one rule come hundreds of stable, moving patterns. Chan named and sorted them like a biologist: <i>Orbium</i> glides, <i>Gyrorbium</i> turns, <i>Scutium</i> and <i>Pterifera</i> fly in lines, and some <i>Geminium</i> divide in two. A small change to <i class="m5">m</i> or <i class="m6">s</i> can kill a creature, make it explode, or turn it into a new one.</p>
     <p>Try the <b>growth</b> view: amber is where the world grows, blue is where it decays. A moving creature grows at its front and decays at its back.</p>
     <p class="credit"><a href="https://github.com/Chakazul/Lenia" target="_blank" rel="noopener">Creatures and rule from Lenia by Bert Chan (MIT) — github.com/Chakazul/Lenia</a>. Chan, B. W.-C. (2019). Lenia: Biology of Artificial Life. <i>Complex Systems</i> 28(3), 251–286.</p>
   </div>
