@@ -322,6 +322,12 @@ requestAnimationFrame(frame);
 // step holds seconds/4 (at least 8 s). calm (1 = slowest) slows the orbit.
 // No URL hash writes while it plays. No exit(): the shell reloads the page.
 let saverOn = false;
+// escapement of each calibre, from the calibre headers and escapement.js imports
+const ESC_NAME = {
+  lever: 'Swiss lever', automatic: 'Swiss lever', tourbillon: 'Swiss lever in a one-minute cage',
+  verge: 'verge (crown wheel)', cylinder: 'cylinder', detent: 'Earnshaw spring detent',
+  pinlever: 'Roskopf pin lever', anchor: 'anchor (recoil)', deadbeat: 'Graham deadbeat', brocot: 'Brocot visible (near deadbeat)',
+};
 window.snSaver = {
   enter(o = {}) {
     saverOn = true;
@@ -346,7 +352,34 @@ window.snSaver = {
     const hold = Math.max(8, (o.seconds || 60) / 4) * 1000;
     const STEPS = ['exploded', 'escapement', 'dial'];
     let n = 0, k = 0;
-    const show = name => { setShow('bridges', true); setRate(1); setView(name); };
+    // The plate: the calibre, its escapement, beat rate and wheel train, all
+    // read from the calibre module. Live amplitude and beat count once a second.
+    const VIEW_NAME = { exploded: 'exploded view', escapement: 'escapement close-up', dial: 'dial side' };
+    let viewName = '';
+    const plate = () => {
+      if (!o.label || !S.cur || S.swapping) return;
+      const cal = S.cur.cal, c = cal.CAL, per = S.cur.per || cal.periods(), tr = cal.train;
+      const num = tr.every((r, i) => typeof r[2] === 'number' && (i === 0 || typeof r[3] === 'number'));
+      const ratio = num && per[tr[0][0]] && per[tr[tr.length - 1][0]] ? per[tr[0][0]] / per[tr[tr.length - 1][0]] : 0;
+      const eq = [];
+      if (ratio) eq.push(`${tr[0][1]} → ${tr[tr.length - 1][1]}: ` + tr.slice(1).map((r, i) => `${tr[i][2]}/${r[3]}`).join(' × ') + ` = ${Math.round(ratio).toLocaleString()}`);
+      eq.push(`θ(t) = A · sin(2π f t),  f = ${c.fBal} Hz`);
+      eq.push(`beats/h = 2 · 3600 · f = ${(2 * 3600 * c.fBal).toLocaleString()}`);
+      const st = S.cur.state, p = cal.pose(st);
+      o.label({
+        title: cal.name,
+        sub: `${cal.kind} · ${cal.era} · ${viewName}`,
+        lines: [
+          `Escapement: ${ESC_NAME[cal.id] || cal.id}`,
+          `Beat: ${cal.freq}`,
+          'Train: ' + tr.map(r => r[3] === '—' ? `${r[1]} ${r[2]}` : `${r[1]} ${r[2]}/${r[3]}`).join(' · '),
+          st.stopped ? 'stopped' : `amplitude ${(st.amp / D).toFixed(0)}° · beat ${p.beats.toLocaleString()}`,
+        ],
+        eq,
+      });
+    };
+    setInterval(plate, 1000);
+    const show = name => { setShow('bridges', true); setRate(1); setView(name); viewName = VIEW_NAME[name] || name; plate(); };
     async function step() {
       const s = n++ % 3;
       if (s === 0) {
