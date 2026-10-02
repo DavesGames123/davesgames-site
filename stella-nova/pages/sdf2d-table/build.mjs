@@ -1230,6 +1230,8 @@ const spec = {
     { id: 'tone', label: 'Outside', hex: '#5a8dff' },
     { id: 'cream', label: 'Inside', hex: '#ffd49a' },
   ],
+  // screensaver: calm cells and tempo for the table-engine hook (lib/table-engine.js)
+  saver: { cells: ['morph', 'domain_warp', 'smooth_poly', 'smooth_exp', 'smooth_circ', 'op_onion', 'iso_bands', 'repeat_mirror', 'repeat_inf', 'inner_glow', 'outer_glow', 'blobby_cross', 'signed_field', 'medial_axis', 'bend', 'heart', 'star'], tempo: [1, 0.35], dpr: 2 },
 };
 
 // ── emit index.html ──────────────────────────────────────────────────────────
