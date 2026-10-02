@@ -29,6 +29,8 @@
 //  SCREENSAVER  (lib/screensaver.js calls window.snSaver.enter(opts))
 //      enter() hides the page, adds one full-window canvas and draws one calm
 //      cell from SAVER_CELLS into it on each frame. grep -n "saverEnter", "saver.t"
+//      saverPlate() builds the shell plate (opts.label): the cell name, the
+//      knob values, scale, tempo and gain, and the formula from styles.json eq.
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
 import { $, G, stage, tiles } from './state.js';
@@ -170,8 +172,26 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
     const canvas = document.createElement('canvas'); canvas.className = 'tbl-saver-canvas';
     document.body.appendChild(canvas); document.documentElement.classList.add('tbl-saver');
     saver = { t, canvas, surf: makeSurface(canvas) };
+    // The plate goes now and again each second with the same title, so the
+    // shell swaps the live values in place. It runs only while saver is set.
+    if (typeof opts.label === 'function' && opts.labels !== false) {
+      const push = () => { if (saver) { try { opts.label(saverPlate(saver.t)); } catch (_) {} } };
+      push(); setInterval(push, 1000);
+    }
     return { canvas, warmupMs: 600 };
   };
+  // The saver plate for cell t: name, family, species, the named knob values,
+  // the scale, tempo and gain values, and the eq lines of styles.json.
+  function saverPlate(t) {
+    const s = t.s;
+    const knobs = s.knobs.map(([n], i) => n ? `${n} ${t.knobs[i].toFixed(2)}` : '').filter(Boolean);
+    return {
+      title: s.name.replace(/_/g, ' ').replace(/^./, m => m.toUpperCase()),
+      sub: s.family,
+      lines: [s.species, 'knobs  ' + knobs.join(' · '), `scale ${G.scale.toFixed(2)}x · tempo ${G.tempo.toFixed(2)}x · gain ${G.gain.toFixed(2)}x`],
+      eq: s.eq || [],
+    };
+  }
   saverReady();
   requestAnimationFrame(frame);
 } else saverFail(new Error('no WebGPU'));
