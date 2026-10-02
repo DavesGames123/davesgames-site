@@ -366,11 +366,12 @@ requestAnimationFrame(frame);
 //   r     the largest distance from (x, y) to a projected corner of the
 //         local box of a mesh: the circle holds every mesh of the subject
 //   pts   the projected key points (world Vector3) that are on screen
-// It returns null when the subject is not on screen.
+// It returns null when the subject is not on screen, or while the canvas
+// fades out for a swap (style opacity 0).
 const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
 function plateAnchor(objs, keys = []) {
-  const rc = $('view').getBoundingClientRect(), cam = stage.camera;
-  if (!rc.width || !rc.height) return null;
+  const cv = $('view'), rc = cv.getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height || cv.style.opacity === '0') return null;
   const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
   const ms = [];
   PA.box.makeEmpty();
