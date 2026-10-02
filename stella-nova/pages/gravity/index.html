@@ -4,21 +4,23 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>Gravity Playground // Stella Nova</title>
+<title>Gravity playground · Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    GRAVITY PLAYGROUND  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. The N-body physics and all canvas drawing live in
-   main.js; the coloured governing equations are rendered by katex.js. This
+   main.js; the color-coded governing equations come from equations.js. This
    file lays out the chrome those scripts bind to by id: the top status bar, a
    preset bar of scene cards, two side panels, and the canvas area between them.
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts        Google Fonts stylesheet
-     2. KaTeX CSS    then KaTeX JS from the CDN, needed by katex.js
-     3. style.css    the page stylesheet
-     4. body scripts katex.js then main.js, at the end of body
+     1. style.css    the page stylesheet
+     2. sci.css      shared science type (STIX Two Text, Inter) and the
+                     math colors .m1 to .m6. It loads the fonts.
+     3. body scripts main.js (classic), then equations.js (ES module). The
+                     module typesets the [data-tex] boxes as MathJax SVG
+                     through lib/sci-math.js.
 
    LAYOUT  (▸ marks an element id)
      ┌─────────────────────────────────────────────────────────────────┐
@@ -34,10 +36,8 @@
      └────────────┴───────────────────────────────────┴────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: mark the document when it runs inside the site shell's
@@ -49,8 +49,8 @@
      on the right, all updated by main.js. -->
 <div class="topbar">
   <div class="topbar-l">
-    <span class="sys-name">GRAVITY PLAYGROUND</span>
-    <div class="sys-status" id="simStatus">RUNNING</div>
+    <span class="sys-name">Gravity playground</span>
+    <div class="sys-status" id="simStatus">Running</div>
   </div>
   <div class="topbar-r">
     <span>Bodies <strong id="hud-bodies">4</strong></span>
@@ -94,8 +94,8 @@
       </svg>
     </span>
     <span class="pcard-meta">
-      <span class="pcard-name">Binary Star</span>
-      <span class="pcard-sub">Twin suns + planet</span>
+      <span class="pcard-name">Binary star</span>
+      <span class="pcard-sub">Two suns and a planet</span>
     </span>
   </button>
 
@@ -110,7 +110,7 @@
     </span>
     <span class="pcard-meta">
       <span class="pcard-name">Figure-8</span>
-      <span class="pcard-sub">3-body choreography</span>
+      <span class="pcard-sub">Three-body choreography</span>
     </span>
   </button>
 
@@ -129,8 +129,8 @@
       </svg>
     </span>
     <span class="pcard-meta">
-      <span class="pcard-name">Mini Solar</span>
-      <span class="pcard-sub">Sun + 5 planets</span>
+      <span class="pcard-name">Mini solar system</span>
+      <span class="pcard-sub">Sun and five planets</span>
     </span>
   </button>
 
@@ -147,7 +147,7 @@
       </svg>
     </span>
     <span class="pcard-meta">
-      <span class="pcard-name">5-Body Chaos</span>
+      <span class="pcard-name">Five-body chaos</span>
       <span class="pcard-sub">Unstable n-body</span>
     </span>
   </button>
@@ -166,19 +166,19 @@
       <div class="sec">
         <div class="sec-label">Simulation</div>
         <div class="sim-btns">
-          <button class="sim-btn green" id="playBtn" onclick="togglePause()">&#9208; Pause</button>
-          <button class="sim-btn" onclick="stepOnce()">&#9197; Step</button>
+          <button class="sim-btn green" id="playBtn" onclick="togglePause()">Pause</button>
+          <button class="sim-btn" onclick="stepOnce()">Step</button>
         </div>
         <div class="sim-btns">
-          <button class="sim-btn red" onclick="clearBodies()">&#x2715; Clear</button>
-          <button class="sim-btn" onclick="centerCamera()">&#9737; Center</button>
+          <button class="sim-btn red" onclick="clearBodies()">Clear</button>
+          <button class="sim-btn" onclick="centerCamera()">Center</button>
         </div>
         <div class="slider-row">
-          <div class="slider-label">Time scale <span class="sv" id="tsVal">1.0&times;</span></div>
+          <div class="slider-label"><span>Time scale</span><span class="sv" id="tsVal">1.0&times;</span></div>
           <input type="range" min="0" max="40" value="10" id="tsSlider" oninput="setTimeScale(this.value)">
         </div>
         <div class="slider-row">
-          <div class="slider-label">G constant <span class="sv" id="gVal">1000</span></div>
+          <div class="slider-label"><span><span class="sci-sym m5" data-sym="G">G</span><small>gravitational constant</small></span><span class="sv" id="gVal">1000</span></div>
           <input type="range" min="100" max="5000" value="1000" step="100" id="gSlider" oninput="G=+this.value;document.getElementById('gVal').textContent=this.value">
         </div>
       </div>
@@ -195,11 +195,11 @@
         <div class="tog-row"><span class="label"><span class="dot" style="background:var(--yellow)"></span>Force lines</span><div class="toggle" onclick="tog(this,'showLines')"></div></div>
         <div class="tog-row"><span class="label"><span class="dot" style="background:rgba(255,255,255,0.2)"></span>Grid</span><div class="toggle on" onclick="tog(this,'showGrid')"></div></div>
         <div class="slider-row" style="margin-top:6px">
-          <div class="slider-label">Trail length <span class="sv" id="tlVal">400</span></div>
+          <div class="slider-label"><span>Trail length</span><span class="sv" id="tlVal">400</span></div>
           <input type="range" min="50" max="2000" value="400" step="50" id="tlSlider" oninput="trailLen=+this.value;document.getElementById('tlVal').textContent=this.value">
         </div>
         <div class="slider-row">
-          <div class="slider-label">Vector scale <span class="sv" id="vsVal">1.0&times;</span></div>
+          <div class="slider-label"><span>Vector scale</span><span class="sv" id="vsVal">1.0&times;</span></div>
           <input type="range" min="1" max="40" value="10" id="vsSlider" oninput="vecScale=this.value/10;document.getElementById('vsVal').textContent=vecScale.toFixed(1)+'\u00d7'">
         </div>
       </div>
@@ -226,34 +226,34 @@
       <button class="zoom-btn" onclick="centerCamera()" title="Reset view">&#9737;</button>
     </div>
 
-    <!-- Governing equations: empty rows here; katex.js renders the coloured math
-         into each by id and wires the collapse button. -->
+    <!-- Governing equations: each row holds its TeX in data-tex. equations.js
+         typesets the rows as color-coded MathJax SVG and wires the collapse
+         button. -->
     <section class="eq-panel" id="eqPanel">
       <div class="eq-head">
-        <span class="eq-dot"></span>
-        <span class="lbl">Governing Equations</span>
+        <span class="lbl">Governing equations</span>
         <button class="eq-collapse" id="eqCollapseBtn" title="Collapse">&#9650;</button>
       </div>
       <div class="eq-block">
-        <div class="eq-sublabel">Newton &middot; Inverse Square Law</div>
-        <div class="eq-row" id="eq-newton"></div>
+        <div class="eq-sublabel">Newton: inverse-square law</div>
+        <div class="eq-row sci-eq" id="eq-newton" data-tex="F \;=\; G\,\frac{m_1\,m_2}{r^{2}}"></div>
       </div>
       <div class="eq-block">
-        <div class="eq-sublabel">Conserved Quantities</div>
-        <div class="eq-row" id="eq-energy"></div>
-        <div class="eq-row" id="eq-angmom"></div>
+        <div class="eq-sublabel">Conserved quantities</div>
+        <div class="eq-row sci-eq" id="eq-energy" data-tex="E \;=\; \underbrace{\tfrac{1}{2}m\,v^{2}}_{K} \;-\; \underbrace{G\,\tfrac{m_1 m_2}{r}}_{U}"></div>
+        <div class="eq-row sci-eq" id="eq-angmom" data-tex="L \;=\; m\,v\,r\,\sin\theta"></div>
       </div>
       <div class="eq-block">
-        <div class="eq-sublabel">Kepler &middot; Orbital Motion</div>
-        <div class="eq-row" id="eq-kepler2"></div>
-        <div class="eq-row" id="eq-kepler3"></div>
+        <div class="eq-sublabel">Kepler: orbital motion</div>
+        <div class="eq-row sci-eq" id="eq-kepler2" data-tex="\frac{dA}{dt} \;=\; \frac{L}{2\,m} \;=\; \text{const}"></div>
+        <div class="eq-row sci-eq" id="eq-kepler3" data-tex="T^{2} \;=\; \frac{4\pi^{2}}{G\,M}\,a^{3}"></div>
       </div>
     </section>
 
     <!-- Floating action buttons open the side panels as drawers on narrow screens;
          the backdrop closes them on tap. -->
-    <button class="fab left" id="fabL" onclick="toggleDrawer('l')">&#9776; Controls</button>
-    <button class="fab right" id="fabR" onclick="toggleDrawer('r')">Readouts &#9776;</button>
+    <button class="fab left" id="fabL" onclick="toggleDrawer('l')">Controls</button>
+    <button class="fab right" id="fabR" onclick="toggleDrawer('r')">Readouts</button>
     <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawers()"></div>
   </div>
 
@@ -263,7 +263,7 @@
     <div class="panel-body">
       <!-- System energy: kinetic, potential, total, plus the history graph. -->
       <div class="sec">
-        <div class="sec-label">System Energy</div>
+        <div class="sec-label">System energy</div>
         <div class="readout"><span class="rl">Kinetic K</span><span class="rv blue" id="eKin">0.00</span></div>
         <div class="readout"><span class="rl">Potential U</span><span class="rv red" id="ePot">0.00</span></div>
         <div class="readout"><span class="rl">Total E</span><span class="rv yellow" id="eTotal">0.00</span></div>
@@ -273,18 +273,18 @@
       <!-- Total linear momentum and its components; stays constant on a closed system. -->
       <div class="sec">
         <div class="sec-label">Momentum</div>
-        <div class="readout"><span class="rl">Total |p|</span><span class="rv green" id="eMom">0.00</span></div>
+        <div class="readout"><span class="rl">Total |p|</span><span class="rv" id="eMom">0.00</span></div>
         <div class="readout"><span class="rl">p<sub>x</sub></span><span class="rv" id="eMomX">0.00</span></div>
         <div class="readout"><span class="rl">p<sub>y</sub></span><span class="rv" id="eMomY">0.00</span></div>
       </div>
       <!-- Selected-body inspector: filled by updateSelPanel() when a body is picked. -->
       <div class="sec">
-        <div class="sec-label">Selected Body</div>
+        <div class="sec-label">Selected body</div>
         <div id="selBody"><span class="hint">Click a body to inspect.</span></div>
       </div>
       <!-- Resonance dial: each body's polar angle plotted on one circle. -->
       <div class="sec">
-        <div class="sec-label">Orbital Resonance</div>
+        <div class="sec-label">Orbital resonance</div>
         <canvas class="resonance-vis" id="resonanceCanvas"></canvas>
         <div class="hint">Angular positions on a shared circle. In resonance, the pattern repeats periodically.</div>
       </div>
@@ -293,11 +293,10 @@
 
 </div>
 
-<!-- katex.js renders the equation panel; main.js runs the simulation. Both are
-     classic scripts loaded at end of body so the DOM exists when they run. -->
-<script src="katex.js"></script>
-
+<!-- main.js runs the simulation (classic script). equations.js typesets the
+     equation panel (ES module). Both load at end of body so the DOM exists. -->
 <script src="main.js"></script>
+<script type="module" src="equations.js"></script>
 
 </body>
 </html>

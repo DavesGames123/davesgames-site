@@ -561,7 +561,7 @@ function render(){
       ctx.beginPath();ctx.arc(sp[0],sp[1],r+6,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);
     }
     if(camZoom>0.3){
-      ctx.fillStyle=hexToRGBA(b.color,0.75);ctx.font='600 11px JetBrains Mono';
+      ctx.fillStyle=hexToRGBA(b.color,0.75);ctx.font='500 11px Inter, system-ui, sans-serif';
       ctx.textAlign='center';ctx.textBaseline='top';ctx.fillText(b.name,sp[0],sp[1]+r+4);
     }
     // Fixed bodies carry no motion vectors. The per-vector constants (0.005,
@@ -579,7 +579,7 @@ function render(){
     ctx.beginPath();ctx.moveTo(dragSX,dragSY);ctx.lineTo(dragCX,dragCY);ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle='rgba(255,200,50,0.35)';ctx.beginPath();ctx.arc(dragSX,dragSY,7,0,Math.PI*2);ctx.fill();
     drawArrow(ctx,dragSX,dragSY,(dragCX-dragSX)*0.8,(dragCY-dragSY)*0.8,'rgba(122,216,122,0.55)',2);
-    ctx.fillStyle='rgba(255,200,50,0.7)';ctx.font='600 12px JetBrains Mono';ctx.textAlign='left';ctx.textBaseline='bottom';
+    ctx.fillStyle='rgba(255,200,50,0.7)';ctx.font='500 12px ui-monospace, Menlo, monospace';ctx.textAlign='left';ctx.textBaseline='bottom';
     var vLen=Math.sqrt(Math.pow(dragCX-dragSX,2)+Math.pow(dragCY-dragSY,2))*2/camZoom;
     ctx.fillText('v='+vLen.toFixed(0),dragCX+10,dragCY-6);
   }
@@ -642,19 +642,19 @@ function tog(el,prop){window[prop]=!window[prop];el.classList.toggle('on',window
 function togglePause(){
   paused=!paused;
   var btn=document.getElementById('playBtn');
-  btn.innerHTML=paused?'\u25b6 Play':'\u23f8 Pause';
+  btn.textContent=paused?'Play':'Pause';
   btn.classList.toggle('active',paused);
   var st=document.getElementById('simStatus');
-  st.textContent=paused?'PAUSED':'RUNNING';
+  st.textContent=paused?'Paused':'Running';
   st.style.color=paused?'var(--yellow)':'var(--green)';
 }
 // Single-step: pause if running, then advance exactly one base dt for inspection.
 function stepOnce(){
   if(!paused){
     paused=true;
-    document.getElementById('playBtn').innerHTML='\u25b6 Play';
+    document.getElementById('playBtn').textContent='Play';
     document.getElementById('playBtn').classList.add('active');
-    var st=document.getElementById('simStatus');st.textContent='PAUSED';st.style.color='var(--yellow)';
+    var st=document.getElementById('simStatus');st.textContent='Paused';st.style.color='var(--yellow)';
   }
   step(dt);
 }
@@ -685,17 +685,17 @@ function updateSelPanel(){
   // Exact only for a circular orbit; a quick gauge otherwise.
   var period=dist>1&&spd>0.01?2*Math.PI*dist/spd:0;
   var Lz=b.mass*(b.x*b.vy-b.y*b.vx); // 2D angular momentum L_z = m(x·vy − y·vx)
-  el.innerHTML='<div style="color:'+b.color+';font-size:13.5px;font-weight:700;margin-bottom:7px">'+b.name+'</div>'+
-    '<div class="readout"><span class="rl">Mass m</span><span class="rv orange">'+b.mass.toFixed(0)+'</span></div>'+
+  el.innerHTML='<div style="color:'+b.color+';font-size:0.85rem;font-weight:600;margin-bottom:7px">'+b.name+'</div>'+
+    '<div class="readout"><span class="rl">Mass m</span><span class="rv m2">'+b.mass.toFixed(0)+'</span></div>'+
     '<div class="readout"><span class="rl">Position</span><span class="rv">('+b.x.toFixed(1)+', '+b.y.toFixed(1)+')</span></div>'+
-    '<div class="readout"><span class="rl">Distance r</span><span class="rv blue">'+dist.toFixed(1)+'</span></div>'+
-    '<div class="readout"><span class="rl">Speed v</span><span class="rv green">'+spd.toFixed(2)+'</span></div>'+
-    '<div class="readout"><span class="rl">|Force F|</span><span class="rv cyan">'+fmag.toFixed(1)+'</span></div>'+
+    '<div class="readout"><span class="rl">Distance r</span><span class="rv m6">'+dist.toFixed(1)+'</span></div>'+
+    '<div class="readout"><span class="rl">Speed v</span><span class="rv m3">'+spd.toFixed(2)+'</span></div>'+
+    '<div class="readout"><span class="rl">|Force F|</span><span class="rv m1">'+fmag.toFixed(1)+'</span></div>'+
     '<div class="readout"><span class="rl">|Accel|</span><span class="rv">'+Math.sqrt(b.ax*b.ax+b.ay*b.ay).toFixed(3)+'</span></div>'+
-    '<div class="readout"><span class="rl">Ang. mom. L</span><span class="rv magenta">'+fmt(Lz)+'</span></div>'+
+    '<div class="readout"><span class="rl">Ang. mom. L</span><span class="rv m4">'+fmt(Lz)+'</span></div>'+
     '<div class="readout"><span class="rl">\u2248 Period T</span><span class="rv yellow">'+(period>0?period.toFixed(1):'N/A')+'</span></div>'+
     '<div class="readout"><span class="rl">Orbits</span><span class="rv">'+(Math.abs(b.angle)/(2*Math.PI)).toFixed(2)+'</span></div>'+
-    (b.fixed?'<div style="font-size:11px;color:var(--yellow);margin-top:6px;font-weight:600">FIXED: not affected by gravity</div>':'');
+    (b.fixed?'<div style="font-size:0.74rem;color:var(--yellow);margin-top:6px">Fixed: gravity does not move it</div>':'');
 }
 
 // Mobile drawers: open one side panel, close the other, and show the backdrop.
