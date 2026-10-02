@@ -109,6 +109,7 @@ const $ = (id) => document.getElementById(id);
 const canvas = $('gl');
 let device = null, ctx = null, format = 'bgra8unorm', code = null, limits = null;
 let engine = null, building = 0, pk = null, flowInfo = null;
+let lastCam3d = null;   // the 3D camera of the last frame (saver plate anchor)
 let steps = 6, gpuMs = 0, gpuPending = false, lastT = 0, fps = 60;
 let shapeDirty = false, flowDirty = false;
 const view = { zoom: 1, pan: [0, 0] };
@@ -383,6 +384,7 @@ function frame(t) {
     });
   } else {
     const cam = camera3d();
+    lastCam3d = cam;   // the saver plate anchor projects with it
     const nz = engine.nz;
     const y0 = 1.5, y1 = Math.min(engine.ny - 2, b.cy + b.h * 0.9);
     // A band around the centre plane: streaks pass over and beside the
@@ -846,8 +848,8 @@ function bindGestures() {
 // The label plate (opts.label) names the object and gives the lattice
 // equations that lbm3d.wgsl computes: pull streaming with BGK collision,
 // the second-order equilibrium, the Smagorinsky relaxation time and the
-// momentum-exchange force. The lines give the live Re of applyFlow() and
-// the smoothed C_D, C_L and drag of readForces(). tick() calls saverPlate()
+// momentum-exchange force. The params give the live Re of applyFlow() and
+// the smoothed C_D, C_L of readForces(); bodyAnchor() gives the object. tick() calls saverPlate()
 // every 1 s; a new object gives a new title, so the plate fades with it.
 const SAVER_TOUR = [['cow', 'Spherical cow'], ['car', 'Fastback'], ['airfoil', 'NACA 4412'], ['truck', 'Aero kit'], ['cow', 'Holstein'], ['sphere', 'Ball'], ['car', 'SUV']];
 let SAVER = null;
@@ -856,17 +858,30 @@ function saverPlate() {
   const s = SHAPES[G.shape], fi = flowInfo;
   const ok = !isNaN(cdS);
   const nuLat = U_LAT * pk.refCells / fi.Re, tau = Math.max(0.5 + 3 * nuLat, TAU_MIN);
-  const lines = [
-    `${FLUIDS[G.fluid].label} at ${fmtKmh(speedKmh())} · L = ${pk.realLen.toFixed(2)} m · ν = ${FLUIDS[G.fluid].nu.toExponential(1)} m²/s`,
-    `Re = ${sci(fi.Re)}` + (fi.clamped ? ` · grid Re ${sci(fi.ReGrid)}, eddy model above` : ' · fully on the grid'),
-    ok ? `C_D = ${cdS.toFixed(2)} · C_L = ${clS.toFixed(2)} · drag ${newtons(dragN, false)}` : 'C_D, C_L: the flow is still settling',
-    `grid ${engine.nx} × ${engine.ny} × ${engine.nz} · τ = ${tau.toFixed(4)} · U = ${U_LAT} · step ${engine.steps.toLocaleString()}`,
+  // Parameters: TeX symbol, short name, live value. The page has no
+  // equation colours, so the plate takes the fluid colours of the
+  // Navier-Stokes pages (u m1, nu m3, rho m5) and C_D m4, C_L m6.
+  const params = [
+    { sym: 'U', name: FLUIDS[G.fluid].label.toLowerCase() + ' speed', value: fmtKmh(speedKmh()) },
+    { sym: '\\mathrm{Re}', name: fi.clamped ? 'Reynolds, eddy model above grid' : 'Reynolds number', value: sci(fi.Re) },
+    { sym: 'C_D', name: 'drag coefficient', value: ok ? cdS.toFixed(2) : 'settling', cls: 'm4' },
+    { sym: 'C_L', name: 'lift coefficient', value: ok ? clS.toFixed(2) : 'settling', cls: 'm6' },
+    { sym: '\\tau', name: 'relaxation time', value: tau.toFixed(4) },
   ];
+  const lines = [`L = ${pk.realLen.toFixed(2)} m, grid ${engine.nx} × ${engine.ny} × ${engine.nz}.` + (ok ? ` Drag ${newtons(dragN, false)}.` : '')];
   try {
     SAVER.label({
       title: `${s.label} · ${SAVER.preset}`,
-      sub: 'Lattice Boltzmann, D3Q19 BGK + Smagorinsky',
+      sub: 'Lattice Boltzmann, D3Q19 BGK with a Smagorinsky eddy model',
+      params,
       lines,
+      tex: [
+        String.raw`f_i(\mathbf{x}+\mathbf{c}_i,\,t+1)=f_i-\frac{f_i-f_i^{\mathrm{eq}}}{\tau_e}`,
+        String.raw`f_i^{\mathrm{eq}}=w_i\,\rho\Big(1+3\,\mathbf{c}_i\!\cdot\mathbf{u}+\tfrac92(\mathbf{c}_i\!\cdot\mathbf{u})^2-\tfrac32 u^2\Big)`,
+        String.raw`C_D=\frac{F_x}{\tfrac12\rho\,U^2A},\qquad \mathrm{Re}=\frac{UL}{\nu}`,
+        String.raw`\tau=\tfrac12+3\,\nu_{\mathrm{lat}},\qquad \tau_e=\tfrac12\Big(\tau+\sqrt{\tau^2+0.764\,|\Pi^{\mathrm{neq}}|/\rho}\Big)`,
+      ],
+      rules: [['\\mathbf{u}', 'm1'], ['u', 'm1'], ['\\nu', 'm3'], ['\\rho', 'm5'], ['C_D', 'm4'], ['C_L', 'm6']],
       eq: [
         'fᵢ(x + cᵢ, t + 1) = fᵢ − (fᵢ − fᵢᵉᑫ) / τₑ',
         'fᵢᵉᑫ = wᵢρ(1 + 3cᵢ·u + 4.5(cᵢ·u)² − 1.5u²)',
@@ -875,8 +890,30 @@ function saverPlate() {
         'Re = VL/ν',
         'F = −2Σ(fᵢ − wᵢ)cᵢ,  C_D = F_x / (½ρU²A)',
       ],
+      anchor: bodyAnchor,
     });
   } catch { /* the shell plate is optional */ }
+}
+// The object on screen, for the plate leader. The eight corners of
+// objectBox() (lattice cells, centred on z = nz/2) go through the view
+// projection of the last 3D frame (engine.matrices with lastCam3d) to
+// canvas px. The anchor is the box (the shell's w, h form) round the
+// projected corners; the key points are the projected centre and the
+// nose and tail at mid height.
+function bodyAnchor() {
+  if (!SAVER || !engine || !pk || !lastCam3d || G.mode !== '3d') return null;
+  const cw = canvas.clientWidth, ch = canvas.clientHeight, r = canvas.getBoundingClientRect();
+  const m = engine.matrices(lastCam3d, cw, ch).vp, b = objectBox(), zc = engine.nz / 2;
+  const P = (x, y, z) => { const w = m[3] * x + m[7] * y + m[11] * z + m[15]; if (w <= 0) return null;
+    return { x: r.left + ((m[0] * x + m[4] * y + m[8] * z + m[12]) / w + 1) / 2 * cw, y: r.top + (1 - (m[1] * x + m[5] * y + m[9] * z + m[13]) / w) / 2 * ch }; };
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const dx of [-0.5, 0.5]) for (const dy of [-0.5, 0.5]) for (const dz of [-1, 1]) {
+    const q = P(b.cx + dx * b.len, b.cy + dy * b.h, zc + dz * b.w); if (!q) continue;
+    x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+  }
+  if (!isFinite(x0)) return null;
+  const pts = [P(b.cx, b.cy, zc), P(b.cx - 0.5 * b.len, b.cy, zc), P(b.cx + 0.5 * b.len, b.cy, zc)].filter(Boolean);
+  return { x: (x0 + x1) / 2, y: (y0 + y1) / 2, w: x1 - x0, h: y1 - y0, pts };
 }
 window.snSaver = {
   enter(opts) {
