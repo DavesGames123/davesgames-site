@@ -89,12 +89,44 @@ window.snSaver = {
       if (has('clearcoat')) eq.push('coat = F(0.04)·c·D(α_c)·¼/(v·h)²');
       if (has('sheen')) eq.push('sheen = D_charlie(r)·1/(4(n·l + n·v − n·l·n·v))');
       if (has('emissive')) eq.push(`emission = E·${(g.nodes && g.nodes[0] && g.nodes[0].params && g.nodes[0].params.emissiveStrength) || 1}`);
+      const tex = [
+        'f = (1 - F)(1 - t)\\,\\frac{c_{\\text{diff}}}{\\pi} + F\\,D\\,V',
+        'F = F_0 + (1 - F_0)\\,(1 - v\\cdot h)^5',
+        'D = \\frac{\\alpha^2}{\\pi\\left((n\\cdot h)^2(\\alpha^2 - 1) + 1\\right)^2}, \\qquad \\alpha = \\text{roughness}^2',
+        'V = \\frac{1/2}{(n\\cdot l)\\,\\Lambda(n\\cdot v) + (n\\cdot v)\\,\\Lambda(n\\cdot l)}',
+      ];
       opts.label({
         title: pr.label,
-        sub: `${(pr.tags || []).join(' · ')} · ${env ? env.label : envId} · ${MESH_NAME[mesh] || mesh}`,
-        lines: [pr.description, `${(g.nodes || []).length} nodes · ${(g.links || []).length} links`, 'Inputs: ' + ins.join(', ')],
+        sub: (pr.tags || []).join(', ').replace(/^./, c => c.toUpperCase()),
+        params: [
+          { name: 'environment', value: env ? env.label : envId },
+          { name: 'mesh', value: MESH_NAME[mesh] || mesh },
+          { name: 'graph', value: `${(g.nodes || []).length} nodes, ${(g.links || []).length} links` },
+          { name: 'inputs', value: String(ins.length) },
+        ],
+        lines: [pr.description, 'Inputs: ' + ins.join(', ')],
+        tex,
         eq,
+        anchor: meshAnchor,
       });
+    }
+    // The mesh on screen, for the shell's label plate. The page has no TeX
+    // or math colour classes, so the plate TeX above has no rules. The
+    // centre is cam.target through cam.proj x cam.view (column-major) to
+    // canvas px. vp.frame() fits the mesh bounding sphere r at the distance
+    // r 1.12 / sin(m / 2), m the narrower FOV, so the sphere shows with the
+    // angular radius asin(sin(m / 2) / 1.12) at any zoom. The key point is
+    // the centre. Null while the view is faded (exposure under -4 EV).
+    function meshAnchor() {
+      if (!cam || !cam.view || !cam.proj || (+state.view.exposure || 0) < -4) return null;
+      const c = document.getElementById('vp'), b = c.getBoundingClientRect(), t = cam.target;
+      const mul = (m, v) => [0, 1, 2, 3].map(r => m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r] * v[3]);
+      const q = mul(cam.proj, mul(cam.view, [t[0], t[1], t[2], 1]));
+      if (q[3] <= 0) return null;
+      const x = b.left + (q[0] / q[3] + 1) / 2 * b.width, y = b.top + (1 - q[1] / q[3]) / 2 * b.height;
+      const v = cam.fov * Math.PI / 180, hf = 2 * Math.atan(Math.tan(v / 2) * b.width / b.height), m = Math.min(v, hf);
+      const fpx = (b.height / 2) / Math.tan(v / 2), r = fpx * Math.tan(Math.asin(Math.sin(m / 2) / 1.12));
+      return { x, y, r, pts: [{ x, y }] };
     }
     let k = 0;
     async function nextState() {
