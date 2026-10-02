@@ -701,16 +701,34 @@ function saverPlate(){
   const sg=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(1);
   const net=wires.reduce((a,w)=>a+w.current,0);
   const [bx,by]=totalField(CW/2,CH/2);
-  const lines=[wires.map((w,i)=>'I'+sub(i+1)+' = '+sg(w.current)+' A'+(w.current>0?' ⊙':' ⊗')).join('   ')];
-  lines.push('net current ΣI = '+sg(net)+' A · '+wires.length+' wires, drifting and turning');
-  lines.push('|B| at centre = '+Math.hypot(bx,by).toExponential(2)+'  (μ₀ in display scale, r in px)');
-  lines.push('streamlines: tracers move along B');
+  // Parameters: one current per wire (up to four), the net current and |B| at
+  // the centre. The classes are RULES of equations.js: B m1, I m5, r m3.
+  const params=wires.slice(0,4).map((w,i)=>({sym:'I_{'+(i+1)+'}',name:w.current>0?'out of the screen':'into the screen',value:sg(w.current)+' A',cls:'m5'}));
+  params.push({sym:'\\vec{B}',name:'|B| at the centre',value:Math.hypot(bx,by).toExponential(2),cls:'m1'});
+  if(wires.length<4)params.splice(wires.length,0,{sym:'\\textstyle\\sum I',name:'net current',value:sg(net)+' A',cls:'m5'});
   saverLabel({
     title:'Biot–Savart · '+(SAVER_NAMES[saverName]||'straight wires'),
-    sub:'infinite straight wires ⊥ screen · ⊙ out, ⊗ in',
-    lines,
+    sub:'Infinite straight wires at right angles to the screen',
+    params,
+    lines:['Tracers move along B. μ₀ is in the display scale, r in px.'],
+    tex:[String.raw`\vec{B}(\vec{r})\;=\;\frac{\mu_0}{4\pi}\int_C\frac{I\,d\vec{\ell}\times\hat{s}}{s^{2}}`,String.raw`\vec{B}\;=\;\frac{\mu_0\,I}{2\pi\,r}\;\hat{\varphi}`,
+      String.raw`\vec{B}_{\text{total}}\;=\;\sum_i\frac{\mu_0\,I_i}{2\pi\,r_i}\;\hat{\varphi}_i`],
+    rules:[['\\vec{B}','m1'],['I_i','m5'],['I','m5'],['r_i','m3'],['s','m3'],['r','m3']],
     eq:['dB = (μ₀/4π) I dℓ × r̂ / r²',
         'one wire:  B = μ₀I/(2πr) φ̂',
         'B(x) = Σₖ μ₀Iₖ/(2πrₖ) φ̂ₖ   (superposition)'],
+    anchor:wireAnchor,
   });
 }
+// The wires on screen, for the plate leader: world to canvas px through CAM
+// (the inverse of screenToWorld), then to page px. The radius holds every
+// wire centre plus the dense tracer glow round it (40 + 15|I| px, from a
+// 1440x900 shot); the key points are the wires.
+function wireAnchor(){
+  if(!wires.length)return null;
+  const b=canvas.getBoundingClientRect(),sx=x=>b.left+(x-CW/2+CAM.x)*CAM.zoom+CW/2,sy=y=>b.top+(y-CH/2+CAM.y)*CAM.zoom+CH/2;
+  let cx=0,cy=0;for(const w of wires){cx+=sx(w.x);cy+=sy(w.y);}cx/=wires.length;cy/=wires.length;
+  let r=0;const pts=wires.map(w=>{const x=sx(w.x),y=sy(w.y);r=Math.max(r,Math.hypot(x-cx,y-cy)+(40+15*Math.abs(w.current))*CAM.zoom);return{x,y};});
+  return{x:cx,y:cy,r,pts:pts.slice(0,8)};
+}
+
