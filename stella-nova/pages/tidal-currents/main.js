@@ -948,19 +948,28 @@ function saverPlate() {
   saverPlateH = Math.floor(hour);
   const v = meta.variance?.vel, modes = meta.velModes || 12;
   const rate = timeScale * lastHour() / WEEK_SECONDS;
-  const lines = [
-    `${meta.region ? meta.region + ' · ' : ''}${meta.dates || ''}`.replace(/ · $/, ''),
-    `${stamp(hour)} · hour ${Math.floor(hour)} of ${lastHour()} · ${rate.toFixed(1)} model h per s`,
-    `surface current: mean + ${modes} EOF modes${v ? ` (${(v * 100).toFixed(1)} % of variance)` : ''}`,
+  // Parameters: TeX symbol, short name, live value. The page has no
+  // equation colours, so the plate takes the velocity colour of the fluid
+  // pages (u m1). The map fills the window, so the plate has no anchor.
+  const params = [
+    { sym: 't', name: 'model time', value: `${stamp(hour)}, h ${Math.floor(hour)}/${lastHour()}` },
+    { sym: 'K', name: 'EOF modes', value: String(modes) + (v ? `, ${(v * 100).toFixed(1)} %` : '') },
   ];
-  if (meta.peak?.knots) lines.push(`fastest this week: ${meta.peak.knots.toFixed(1)} kn at hour ${meta.peak.hour}`);
-  if (meta.tempC) lines.push(`water ${meta.tempC.min.toFixed(1)}–${meta.tempC.max.toFixed(1)} °C (colour)`);
-  if (meta.metersPerPixel) lines.push(`grid ${meta.width} × ${meta.height}, ${Math.round(meta.metersPerPixel)} m per cell`);
+  if (meta.peak?.knots) params.push({ sym: 'u_{\\max}', name: 'fastest', value: `${meta.peak.knots.toFixed(1)} kn, h ${meta.peak.hour}`, cls: 'm1' });
+  if (meta.tempC) params.push({ sym: 'T', name: 'water', value: `${meta.tempC.min.toFixed(1)}–${meta.tempC.max.toFixed(1)} °C` });
+  const lines = [`${meta.region ? meta.region + ', ' : ''}${meta.dates || ''}`.replace(/, $/, '') + '.',
+    `Colour is water temperature. ${rate.toFixed(1)} model hours per second` + (meta.metersPerPixel ? `, ${Math.round(meta.metersPerPixel)} m per cell.` : '.')];
   try {
     saverLabel({
       title: meta.title,
       sub: `${meta.modelLong || modelShort(meta)} (${modelShort(meta)})`,
+      params,
       lines,
+      tex: [
+        String.raw`u(\mathbf{x},t)=\bar{u}(\mathbf{x})+\sum_{k=1}^{K}a_k(t)\,\varphi_k(\mathbf{x})`,
+        String.raw`\mathbf{x}_{n+1}=\mathbf{x}_n+\Delta s\;\hat{u}\big(\mathbf{x}_n+\tfrac{\Delta s}{2}\hat{u}(\mathbf{x}_n)\big),\qquad \Delta s\propto\big(|u|/u_{\mathrm{ref}}\big)^{0.6}`,
+      ],
+      rules: [['u', 'm1'], ['\\bar{u}', 'm1'], ['\\hat{u}', 'm1']],
       eq: [
         `u(x, t) = ū(x) + Σₖ aₖ(t) φₖ(x),  k = 1…${modes}`,
         'aₖ(t): Catmull–Rom between hourly rows',
