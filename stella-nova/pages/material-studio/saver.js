@@ -22,6 +22,7 @@
 //      window.snSaver ....... the hook
 //      function fadeTo ...... the exposure ramp
 //      function nextState ... recipe, environment and mesh change
+//      function plate ....... the opts.label plate: material, inputs, BRDF terms
 // ============================================================================
 import { store, state } from './store.js';
 
@@ -67,12 +68,41 @@ window.snSaver = {
         requestAnimationFrame(step);
       });
     }
+    // The plate: the preset on screen, its environment and mesh, the Material
+    // Output inputs its graph drives, and the BRDF terms of shaders/pbr.wgsl
+    // (fs_main analytic lights). A lobe line shows only when the graph
+    // drives that input. One plate per material; it fades with the view.
+    const MESH_NAME = { shaderBall: 'shader ball', sphere: 'sphere', roundedCube: 'rounded cube', torus: 'torus' };
+    function plate(pr, envId, mesh) {
+      if (!opts.label || !pr) return;
+      const env = PRESETS.find(p => p.id === envId), g = pr.graph || {};
+      const ins = (g.links || []).filter(l => l.to && l.to[0] === 'out').map(l => l.to[1]);
+      const has = id => ins.includes(id);
+      const eq = [
+        'f = (1 − F)(1 − t)·c_diff/π + F·D·V',
+        'F = F₀ + (1 − F₀)(1 − v·h)⁵',
+        'D = α² / (π((n·h)²(α² − 1) + 1)²)',
+        'V = ½ / (n·l·Λ(n·v) + n·v·Λ(n·l))',
+        'Λ(x) = √(α² + (1 − α²)x²),  α = roughness²',
+      ];
+      if (has('anisotropy')) eq.push('anisotropic: α_t, α_b along tangent and bitangent');
+      if (has('clearcoat')) eq.push('coat = F(0.04)·c·D(α_c)·¼/(v·h)²');
+      if (has('sheen')) eq.push('sheen = D_charlie(r)·1/(4(n·l + n·v − n·l·n·v))');
+      if (has('emissive')) eq.push(`emission = E·${(g.nodes && g.nodes[0] && g.nodes[0].params && g.nodes[0].params.emissiveStrength) || 1}`);
+      opts.label({
+        title: pr.label,
+        sub: `${(pr.tags || []).join(' · ')} · ${env ? env.label : envId} · ${MESH_NAME[mesh] || mesh}`,
+        lines: [pr.description, `${(g.nodes || []).length} nodes · ${(g.links || []).length} links`, 'Inputs: ' + ins.join(', ')],
+        eq,
+      });
+    }
     let k = 0;
     async function nextState() {
       const baked = new Promise(res => { const u1 = store.once('bake:done', () => { u2(); res(); }); const u2 = store.once('bake:error', () => { u1(); res(); }); setTimeout(res, 8000); });
       if (mats.length) loadPreset(mats[k % mats.length]);
       store.setEnv({ preset: envs[k % envs.length], rotation: Math.round(rng() * 360 - 180) });
       if (vp) vp.setMesh(meshes[k % meshes.length]);
+      plate(mats[k % mats.length], envs[k % envs.length], meshes[k % meshes.length]);
       k++;
       await baked;
       if (vp) vp.frame();
