@@ -7,7 +7,8 @@
 //
 //  IN A SESSION  S.xr is set. loop.js then skips post.js (its full-screen
 //                pass can not draw two eyes) and the Å near and far planes,
-//                and the lib draws the scene. layers.js uses one step less
+//                and the lib draws the scene. The lib holds the session
+//                near and far planes in metres (lib CLIP). layers.js uses one step less
 //                sphere detail, and the layers are built again on entry and
 //                on exit.
 //  CAMERA        three takes the XR camera relative to the parent of the
@@ -86,18 +87,15 @@ function setHoverRes(ri) {
 // matrix puts it at the head, in scene space, each XR frame.
 const rig = new THREE.Group();
 rig.matrixAutoUpdate = false;
-let saved = null;
 function lightsTo(from, to) {
   const lights = from.children.filter(c => c.isLight);
   const move = [...lights, ...lights.map(l => l.target).filter(t => t && t.parent === from)];
   for (const c of move) to.add(c);
 }
 function onEnter() {
-  saved = { near: camera.near, far: camera.far };
   scene.remove(camera);
   lightsTo(camera, rig);
   scene.add(rig);
-  camera.near = 0.01; camera.far = 100; camera.updateProjectionMatrix();
   S.xr = true;
   if (S.s) rebuild();
 }
@@ -105,7 +103,6 @@ function onExit() {
   lightsTo(rig, camera);
   scene.remove(rig);
   scene.add(camera);
-  if (saved) { camera.near = saved.near; camera.far = saved.far; camera.updateProjectionMatrix(); saved = null; }
   S.xr = false;
   setHoverRes(-1);
   if (S.s) rebuild();
