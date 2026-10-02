@@ -164,7 +164,8 @@ w.SN_NAV = [
       ["resonance-figure", "Resonance Figure", "NEW"],
       ["resonance-table", "Resonance Table", "NEW"],
       ["resonance-3d", "Resonance 3D", "3D"],
-      ["wave-membrane", "Standing Wave Membrane", "SIM"]
+      ["wave-membrane", "Standing Wave Membrane", "SIM"],
+      ["chladni-plate", "Chladni Plate", "NEW"]
     ] }
   ] },
   { id: "machines", label: "Machines", short: "Machines", icon: "◷", color: "#e6c27a", color2: "#f0b27a", groups: [

@@ -152,6 +152,7 @@ const BLURBS = {
   'double-slit': 'Interference, one photon at a time.',
   attractorlab: 'Lorenz, Rossler, Thomas and friends.',
   'wave-membrane': 'Chladni modes of a vibrating drum.',
+  'chladni-plate': 'Sand finds the nodal lines of guitar and violin tops.',
   'reaction-diffusion': 'Gray-Scott patterns that grow and split.',
   lenia: 'Continuous cellular life.',
   chordlab: 'Sing or play: it names the chord live.',
