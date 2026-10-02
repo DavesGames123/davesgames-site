@@ -803,7 +803,33 @@ window.__fold = { S, get P() { return P; }, loadPreset, setTemp, startRamp, setR
 // (name, PDB id, residues, sequence and its helix/strand share), the energy
 // model of model.js written in Unicode, and the live values: T, the replica
 // mean energy E and the fraction of native contacts Q, with the ramp
-// direction. Plain text only (no KaTeX).
+// direction, as params with TeX symbols, and the TeX of typeset.mjs. The
+// plain lines stay: push() in the hook compares them.
+// Plate colours: the classes of typeset.mjs (r m1, V and E m2, Q m3, T m4,
+// gamma m5, F m6). The TeX is the TeX of typeset.mjs.
+const SV_RULES = [['\\mathbf r', 'm1'], ['r', 'm1'], ['V', 'm2'], ['E', 'm2'], ['Q', 'm3'], ['T', 'm4'], ['\\gamma', 'm5'], ['F', 'm6']];
+// The chain on screen, for the plate leader, when one replica is shown:
+// every bead (v.x in the group frame, through v.group.matrixWorld and the
+// render camera, as tags() does) in page px. The centre is their mean, the
+// radius holds all beads plus 10 px, and the key points are the N and C
+// ends. Two or more replicas fill the window in a grid, so then the plate
+// has no anchor (a 1440x900 run gave r = 611 px for four replicas).
+const atv = new THREE.Vector3();
+function chainAnchor() {
+  if (!renderer || !S.views || S.views.length !== 1) return null;
+  const b = canvas.getBoundingClientRect(), w = canvas.clientWidth, h = canvas.clientHeight, all = [], pts = [];
+  const P2 = (v, i) => { atv.set(v.x[3 * i], v.x[3 * i + 1], v.x[3 * i + 2]).applyMatrix4(v.group.matrixWorld).project(camera);
+    return atv.z < 1 ? { x: b.left + (atv.x + 1) / 2 * w, y: b.top + (1 - atv.y) / 2 * h } : null; };
+  for (const v of S.views) {
+    if (!v.x || !v.N) continue;
+    for (let i = 0; i < v.N; i++) { const q = P2(v, i); if (q) all.push(q); }
+    for (const i of [0, v.N - 1]) { const q = P2(v, i); if (q && pts.length < 8) pts.push(q); }
+  }
+  if (!all.length) return null;
+  let x = 0, y = 0; for (const q of all) { x += q.x; y += q.y; } x /= all.length; y /= all.length;
+  let r = 0; for (const q of all) r = Math.max(r, Math.hypot(q.x - x, q.y - y));
+  return { x, y, r: r + 10, pts };
+}
 function seqSummary(seq) { return seq.length <= 36 ? seq : `${seq.slice(0, 14)}…${seq.slice(-14)}`; }
 function saverPlate() {
   const pr = S.preset;
@@ -813,8 +839,11 @@ function saverPlate() {
     return {
       title: pr.name,
       sub: `HP lattice · ${S.hpDim === 2 ? 'square' : 'cubic'} · ${seq.length} beads · ${nh} H`,
-      lines: [seqSummary(seq),
-        f ? `E now ${f.E[0]} · best found ${f.bestE}${S.hpDim === 2 ? ` · best known ${pr.best}` : ''}` : 'searching…'],
+      lines: [seqSummary(seq), f ? 'One H–H lattice contact is −1 ε.' : 'Searching…'],
+      params: f ? [{ sym: 'E', name: 'energy now', value: f.E[0] + ' ε', cls: 'm2' }, { sym: 'E_{\\min}', name: 'best found', value: f.bestE + ' ε', cls: 'm2' }]
+        .concat(S.hpDim === 2 ? [{ sym: 'E^{*}', name: 'best known', value: pr.best + ' ε', cls: 'm2' }] : []) : [],
+      tex: [String.raw`E = -\sum_{i<j-1} h_i\,h_j\,\Delta(\mathbf r_i,\mathbf r_j), \qquad h_i = \begin{cases}1 & \text{H}\\ 0 & \text{P}\end{cases}`],
+      rules: SV_RULES, anchor: chainAnchor,
       eq: ['E = −Σ hᵢ hⱼ Δ(rᵢ, rⱼ)   (|i − j| > 1)', 'hᵢ = 1 for H, 0 for P', 'one H–H lattice contact = −1 ε'],
     };
   }
@@ -824,17 +853,18 @@ function saverPlate() {
   const ss = P.prot.ss, h = (ss.match(/H/g) || []).length, e = (ss.match(/E/g) || []).length;
   const pc = v => Math.round(100 * v / P.N) + '%';
   const Q = mean('Q'), folded = fr.filter(f => f.obs.Q >= 0.8).length;
-  let dir = '';
-  if (S.ramp) { const ph = S.ramp.phase % 2; dir = ph < 1 ? ' · cooling ↓' : ' · heating ↑'; }
   return {
     title: pr.name,
     sub: `PDB ${P.prot.pdb} · ${P.N} residues · ${P.nc} native contacts`,
-    lines: [
-      seqSummary(P.prot.seq),
-      `helix ${pc(h)} · strand ${pc(e)} · Go model, one bead per residue`,
-      `T = ${S.tFrac.toFixed(2)} Tm = ${(S.tFrac * P.tm).toFixed(2)} ε/kB${dir}`,
-      fr.length ? `E = ${mean('E').toFixed(1)} ε · Q = ${Q.toFixed(2)} (${Math.round(Q * P.nc)} of ${P.nc}) · ${folded}/${fr.length} folded` : 'starting…',
-    ],
+    lines: [seqSummary(P.prot.seq), `Helix ${pc(h)}, strand ${pc(e)}. Gō model, one bead per residue.`],
+    params: [{ sym: 'T', name: S.ramp ? (S.ramp.phase % 2 < 1 ? 'cooling' : 'heating') : 'temperature', value: `${S.tFrac.toFixed(2)} Tₘ`, cls: 'm4' }]
+      .concat(fr.length ? [{ sym: 'E', name: 'mean energy', value: mean('E').toFixed(1) + ' ε', cls: 'm2' },
+        { sym: 'Q', name: 'native contacts', value: `${Q.toFixed(2)} (${Math.round(Q * P.nc)} of ${P.nc})`, cls: 'm3' },
+        { sym: 'N_f', name: 'replicas folded', value: `${folded} of ${fr.length}` }] : []),
+    tex: [String.raw`V_{\text{nat}}=\sum_{\text{native } ij}\varepsilon\Big[5\Big(\frac{\sigma_{ij}}{r_{ij}}\Big)^{12}-6\Big(\frac{\sigma_{ij}}{r_{ij}}\Big)^{10}\Big]`,
+      String.raw`Q = \frac{1}{N_c}\sum_{ij\,\in\,\text{native}} \Theta\big(1.2\,\sigma_{ij} - r_{ij}\big)`,
+      String.raw`m\,\ddot{\mathbf r}_i = -\nabla_i V - \gamma m\,\dot{\mathbf r}_i + \sqrt{2\gamma m\,k_B T}\;\eta_i(t)`],
+    rules: SV_RULES, anchor: chainAnchor,
     eq: [
       'V = Σ K_b(r−r₀)² + Σ K_θ(θ−θ₀)²',
       '  + Σ K₁[1−cos(φ−φ₀)] + K₃[1−cos 3(φ−φ₀)]',
@@ -875,7 +905,7 @@ window.snSaver = {
         const fr = S.sims.map(s => s.frame).filter(Boolean);
         const q = fr.length ? fr.reduce((a, f) => a + f.obs.Q, 0) / fr.length : -1;
         const now = performance.now();
-        const txt = info.lines.join('|');
+        const txt = JSON.stringify(info.params || info.lines);
         const same = S.kind === 'hp' ? last && txt === last.txt
           : last && Math.abs(S.tFrac - last.t) < 0.04 && Math.abs(q - last.q) < 0.1 && (last.q >= 0 || q < 0);
         if (!force && (now - at < 4000 || same)) return;
