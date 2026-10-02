@@ -27,6 +27,7 @@
 //    function colours .......... residue colours for each colour mode
 //    function buildPanel ....... the control bindings
 //    initXR .................... VR and AR view (xr.js, lib/xr-view.js)
+//    window.snSaver ............ screensaver hook (lib/screensaver.js)
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -720,6 +721,28 @@ PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
 
 // debug and headless checks
 window.__fold = { S, get P() { return P; }, loadPreset, setTemp, startRamp, setRunning, restart, cards: () => cards, camera, pivot, controls, scene };
+
+// screensaver hook for the shell (lib/screensaver.js): hide the GUI so
+// insets() frees the full canvas, start the melt and refold ramp, and slow
+// the sim rate and the pivot orbit by opts.calm (1 = slowest). It keeps the
+// boot preset, because loadPreset writes the URL hash. No exit(): the shell
+// reloads the page on stop.
+window.snSaver = {
+  enter(o) {
+    const calm = clamp(o && o.calm != null ? o.calm : 0.7, 0, 1);
+    const st = document.createElement('style');
+    st.textContent = 'body *:not(#view){visibility:hidden!important;pointer-events:none!important}#view{visibility:visible!important}';
+    document.head.appendChild(st);
+    if (renderer) renderer.setClearColor(0x08090f, 1);   // --ink, so a recording is opaque
+    S.orbit = true; idle = 3;
+    controls.autoRotateSpeed = -0.6 * (1 - 0.6 * calm);
+    if (S.kind === 'go' && S.speed < 100) sendAll({ type: 'set', rate: Math.max(1, Math.round(speedToRate(S.speed, 3.6) * (1 - 0.75 * calm))) });
+    setRunning(true);
+    startRamp();
+    frameCamera();
+    return { canvas, warmupMs: 2000 };
+  },
+};
 
 // ── boot ─────────────────────────────────────────────────────────────────────
 buildPanel();
