@@ -73,6 +73,7 @@
 //      phone sheet ......... "function setOpen"     dock, sheet, and grip
 //      resize .............. "function resize"      canvas sizing and DPR
 //      loop ................ "function loop"        per-frame driver
+//      screensaver ......... "window.snSaver"      shell saver hook
 // ============================================================================
 // The drawing canvas and its 2D context. CW/CH are the CSS size; activeEq is the
 // index of the currently shown equation (0 to 3).
@@ -898,3 +899,69 @@ setTimeout(()=>{
   requestAnimationFrame(loop);
 },50);
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>fitScene());
+
+// Screensaver hook for the shell (lib/screensaver.js). enter() hides the GUI
+// and makes #canvas-wrap fill the window, so the observer calls resize(). The
+// card stays in the layout but is hidden, so fitScene keeps its band free.
+// The hook then draws the law name and the differential form into that band
+// on the canvas, because a recording holds only the canvas. The autopilot
+// shows each law for max(15, seconds/4) s, from opts.seed % 4. It fades the
+// canvas to the background colour across each law switch. Each law moves
+// slowly: the charges turn and the surface drifts, the magnet turns, and the
+// Faraday and Ampère clocks run. calm 1 runs the scene clock at 0.4.
+/* ═══ SCREENSAVER ═══ */
+window.snSaver={async enter(opts){
+  while(!lastTime)await new Promise(r=>setTimeout(r,50));
+  const calm=Math.max(0,Math.min(1,+opts.calm||0)),sp=1-0.6*calm;
+  const hold=Math.max(15,(+opts.seconds||60)/4),FADE=0.9;
+  const st=document.createElement('style');
+  st.textContent='html.saver #panel,html.saver .topbar,html.saver #dock,html.saver #readout,html.saver #legend,html.saver .card-int,html.saver .card-line{display:none!important}'+
+    'html.saver #card{visibility:hidden}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver #canvas-wrap::after{display:none}html.saver #sim-canvas{cursor:none}';
+  document.head.appendChild(st);document.documentElement.classList.add('saver');
+  // The differential form of each law as an image, from the MathJax SVG.
+  const eqImg=(window.MAXWELL_EQ||[]).map(e=>{
+    const svg=e.d.replace(/currentColor/g,COL.ink).replace(/ (role|style|aria-label|focusable)="[^"]*"/g,'');
+    const m=/viewBox="([^"]*)"/.exec(svg),vb=m?m[1].split(/\s+/).map(Number):[0,0,4,1];
+    const img=new Image();img.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+    return{img,vb};
+  });
+  STATE.charges=[{x:-55,y:0,q:1},{x:55,y:0,q:-1}];STATE.ampWires=[{x:0,y:WIRE_Y,I:2}];
+  STATE.faradayRate=1;STATE.gaussR=70;
+  let law=(opts.seed>>>0)%4,clock=0,tLaw=0,phi=0;
+  switchEq(law);
+  const base=render;
+  render=function(dt){
+    clock+=dt*sp;tLaw+=dt;
+    if(tLaw>hold){tLaw=0;law=(law+1)%4;switchEq(law);}
+    // Slow motion of the active scene, in scene units.
+    if(activeEq===0){
+      phi=clock*0.06;
+      const c=Math.cos(phi)*55,s=Math.sin(phi)*55;
+      STATE.charges[0].x=-c;STATE.charges[0].y=-s;STATE.charges[1].x=c;STATE.charges[1].y=s;
+      STATE.gaussX=100*Math.sin(clock*0.19);STATE.gaussY=35*Math.sin(clock*0.13);
+    }else if(activeEq===1){
+      STATE.dipAngle=0.6*Math.sin(clock*0.11)+clock*0.05;
+      STATE.dipX=30*Math.sin(clock*0.07);
+    }
+    base(dt*sp);
+    drawCaption();
+    // Fade out before a switch and in after it.
+    const f=Math.max(0,1-tLaw/FADE,1-(hold-tLaw)/FADE);
+    if(f>0){ctx.fillStyle=`rgba(10,12,18,${Math.min(1,f)})`;ctx.fillRect(0,0,CW,CH);}
+  };
+  // The law name and form at the card position, and the plain line at the base.
+  function drawCaption(){
+    const l=LAWS[activeEq],e=eqImg[activeEq],x=34,em=parseFloat(getComputedStyle(document.documentElement).fontSize)||16;
+    if('letterSpacing' in ctx)ctx.letterSpacing='0.2em';
+    ctx.textAlign='left';ctx.textBaseline='top';
+    ctx.font=`500 ${Math.round(0.7*em)}px "IBM Plex Mono", ui-monospace, monospace`;ctx.fillStyle=l.c;
+    ctx.fillText(`${l.num}   ${l.name.toUpperCase()}`,x,26);
+    if('letterSpacing' in ctx)ctx.letterSpacing='0px';
+    // MathJax units are 1/1000 em at the card font size, on a shared baseline.
+    if(e&&e.img.complete&&e.img.naturalWidth){const k=2.35*em/1000,y0=26+0.7*em+12+1.15*2.35*em;ctx.drawImage(e.img,x,y0+e.vb[1]*k,e.vb[2]*k,e.vb[3]*k);}
+    ctx.textBaseline='alphabetic';
+    ctx.font=`italic 400 ${Math.round(1.15*em)}px "Instrument Serif", Georgia, serif`;ctx.fillStyle=`rgba(${RGB.ink},0.72)`;
+    ctx.fillText(l.line,x,CH-26);
+  }
+  return{canvas,warmupMs:1500};
+}};
