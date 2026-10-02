@@ -198,6 +198,9 @@ a.sky-obj { cursor: pointer; }
 .commits-svg rect.off { fill: rgba(150, 200, 255, .06); }
 .commits-svg rect { transition: stroke .15s; stroke: transparent; stroke-width: 1.5; animation: cellIn .7s var(--ease) both; animation-delay: calc(1.7s + var(--d) * 14ms); }
 .commits-svg rect.hot { stroke: var(--ink); }
+.commits-svg .cm-ev { fill: none; stroke: #f4f1e8; stroke-width: 1.25; opacity: .9; pointer-events: none; }
+.commits-svg text.cm-evl { fill: #f4f1e8; }
+.commits-tip span.ev { color: var(--ink); }
 @keyframes cellIn { from { opacity: 0; } }
 .commits-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; margin-top: 12px; font-size: 0.76rem; color: var(--dim); }
 .commits-legend { display: inline-flex; align-items: center; gap: 7px; font: 500 0.68rem/1 var(--f-mono); color: var(--dim); }

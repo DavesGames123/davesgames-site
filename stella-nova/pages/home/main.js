@@ -939,6 +939,13 @@ function buildCommits() {
   const max = Math.max(...days), lmax = Math.log1p(max);
   const color = c => c ? plasma(0.18 + 0.82 * Math.log1p(c) / lmax) : null;
   const num = v => v.toLocaleString('en-US');
+  // Events on the calendar: an outline around each day of the event, a
+  // label over its first week, and the name in the tooltip. Dates are UTC
+  // days, both ends included. Steam Next Fest June 2026 ran 15 to 22 June
+  // (Steamworks: 10:00 PDT on the 15th to 10:00 PDT on the 22nd).
+  const EVENTS = [{ name: 'Steam Next Fest', short: 'Next Fest', from: '2026-06-15', to: '2026-06-22' }];
+  const dayIdx = s => Math.round((Date.parse(s + 'T00:00:00Z') - t0) / 864e5);
+  const eventAt = i => EVENTS.find(e => i >= dayIdx(e.from) && i <= dayIdx(e.to));
 
   // Stats: total, active days, peak day, longest streak, busiest month.
   const total = days.reduce((a, b) => a + b, 0), active = days.filter(Boolean).length;
@@ -970,8 +977,8 @@ function buildCommits() {
   function draw() {
     const w = scroll.clientWidth;
     cell = Math.max(11, Math.min(20, Math.floor((w - LX) / cols) - GAP));
-    const step = cell + GAP, W = LX + cols * step - GAP, H = TY + 7 * step - GAP;
-    let html = `<svg class="commits-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${num(total)} commits over ${n} days, ${active} active days, peak ${max} in one day">`;
+    const step = cell + GAP, W = LX + cols * step - GAP, H = TY + 7 * step - GAP, EVY = EVENTS.length ? 16 : 0;
+    let html = `<svg class="commits-svg" width="${W}" height="${H + EVY}" viewBox="0 0 ${W} ${H + EVY}" role="img" aria-label="${num(total)} commits over ${n} days, ${active} active days, peak ${max} in one day">`;
     // Month labels over the first week that holds the 1st of the month.
     let lastM = -1;
     for (let c = 0; c < cols; c++) {
@@ -984,6 +991,24 @@ function buildCommits() {
       const c = Math.floor(i / 7), r = i % 7, col = color(days[i]);
       html += `<rect x="${LX + c * step}" y="${TY + r * step}" width="${cell}" height="${cell}" rx="${Math.min(4, cell / 4)}"${col ? ` fill="${col}" class="on"` : ' class="off"'} style="--d:${c}"/>`;
     }
+    // Event outlines and labels go after the cells, so rect index i stays
+    // day i (show() reads svg rects by index). One outline goes around the
+    // event days: each cell edge with no event day next to it is drawn. The
+    // label goes under the grid, in the extra EVY band, clear of the months.
+    EVENTS.forEach(e => {
+      const a = Math.max(0, dayIdx(e.from)), b = Math.min(n - 1, dayIdx(e.to));
+      if (a > b) return;
+      const inEv = i => i >= a && i <= b;
+      let d = '';
+      for (let i = a; i <= b; i++) {
+        const c = Math.floor(i / 7), r = i % 7, x0 = LX + c * step - 1.5, y0 = TY + r * step - 1.5, x1 = x0 + step, y1 = y0 + step;
+        if (r === 0 || !inEv(i - 1)) d += `M${x0} ${y0}H${x1}`;
+        if (r === 6 || !inEv(i + 1)) d += `M${x0} ${y1}H${x1}`;
+        if (!inEv(i - 7)) d += `M${x0} ${y0}V${y1}`;
+        if (!inEv(i + 7)) d += `M${x1} ${y0}V${y1}`;
+      }
+      html += `<path class="cm-ev" d="${d}"/><text class="cm-evl" x="${LX + Math.floor(a / 7) * step - 1.5}" y="${H + EVY - 3}">${esc(e.short)} ${fmt(dayAt(a), { day: 'numeric' })}–${fmt(dayAt(b), { day: 'numeric', month: 'short' })}</text>`;
+    });
     scroll.innerHTML = html + '</svg>';
     svg = scroll.firstChild;
     scroll.scrollLeft = scroll.scrollWidth;
@@ -1004,7 +1029,8 @@ function buildCommits() {
     const rect = svg.querySelectorAll('rect')[i];
     rect.classList.add('hot');
     const c = days[i];
-    tip.innerHTML = `<b>${c ? num(c) : 'No'} commit${c === 1 ? '' : 's'}</b><span>${fmt(dayAt(i), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>`;
+    const ev = eventAt(i);
+    tip.innerHTML = `<b>${c ? num(c) : 'No'} commit${c === 1 ? '' : 's'}</b><span>${fmt(dayAt(i), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</span>${ev ? `<span class="ev">${esc(ev.name)}</span>` : ''}`;
     tip.hidden = false;
     const br = box.getBoundingClientRect(), rr = rect.getBoundingClientRect();
     const tw = tip.offsetWidth, th = tip.offsetHeight;
