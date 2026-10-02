@@ -30,6 +30,7 @@
 //    function placeCard ........ card position and its leader line
 //    function setOpen .......... panel, sheet and dock
 //    function frame ............ the loop
+//    window.snSaver ............ screensaver tour for lib/screensaver.js
 // ============================================================================
 import * as THREE from 'three';
 import { createStage, KEY_DIR } from './stage.js';
@@ -78,6 +79,7 @@ const S = {
   floorY: -140, aspectWide: null, introTimer: 0, selPoint: null,
 };
 let parts = [], motion = null, tray = null, man = null;
+let saver = null;   // the screensaver run (window.snSaver), or null
 
 // ── layouts ─────────────────────────────────────────────────────────────────
 function clearAspect() {
@@ -127,7 +129,7 @@ function setArrangement(name, { fly = true } = {}) {
   document.querySelectorAll('#arrs button').forEach(b => { const on = b.dataset.arr === name; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
   document.querySelectorAll('#arrList button').forEach(b => b.classList.toggle('on', b.dataset.arr === name));
   $('plateArr').textContent = '· ' + ARR[name].label;
-  try { history.replaceState(null, '', '#' + name); } catch (e) {}
+  if (!saver) try { history.replaceState(null, '', '#' + name); } catch (e) {}
 }
 
 // ── explode ─────────────────────────────────────────────────────────────────
@@ -629,5 +631,62 @@ window.__skull = {
   },
   selectKey: k => { const p = parts.find(q => q.m.key === k); if (p) select(p.i); },
   project: k => { const p = parts.find(q => q.m.key === k); const r = canvas.getBoundingClientRect(); const xy = project(p.mesh.position, canvas.clientWidth, canvas.clientHeight); return xy && [xy[0] + r.left, xy[1] + r.top]; },
+};
+
+// ── screensaver ─────────────────────────────────────────────────────────────
+// Hook for the shell screensaver (lib/screensaver.js). enter() hides all the
+// DOM but the canvas, paints the studio backdrop into the scene (the canvas
+// is transparent), and plays a tour: one beat per seconds/4 (8 s or more),
+// in a loop of three beats. Open a layout, then isolate one seeded bone
+// (the camera frames it, the rest turn to ghosts), then reconstruct. The next layout opens from the closed skull. Part moves and
+// camera flights take 1.6 to 2.8 times longer (calm 0 to 1), and the slow
+// orbit runs at 1.4 to 0.5 of its speed. No URL or storage writes.
+function saverBackdrop(t) {
+  const c = document.createElement('canvas'); c.width = 768; c.height = 512;
+  const g = c.getContext('2d'), dark = t !== 'light';
+  const fill = (stops, x, y, r) => {
+    const gr = g.createRadialGradient(x, y, 0, x, y, r);
+    for (const [k, col] of stops) gr.addColorStop(k, col);
+    g.fillStyle = gr; g.fillRect(0, 0, 768, 512);
+  };
+  fill(dark ? [[0, '#26252b'], [0.45, '#16161a'], [1, '#0a0a0d']] : [[0, '#fdfbf7'], [0.48, '#f1ece3'], [1, '#dfd7c9']], 445, 205, 560);
+  fill([[0.52, 'rgba(0,0,0,0)'], [1, dark ? 'rgba(0,0,0,0.55)' : 'rgba(90,70,40,0.16)']], 422, 230, 700);
+  const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
+  return tx;
+}
+window.snSaver = {
+  enter(o = {}) {
+    const calm = Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm));
+    const beat = Math.max(8, (+o.seconds || 60) / 4), pace = 1.6 + 1.2 * calm;
+    let seed = (o.seed >>> 0) || 1;
+    const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    saver = { calm, pace };
+    const css = document.createElement('style');
+    css.textContent = '#stage{top:0!important}#stage>*:not(#view),body>*:not(#stage){display:none!important}#view{cursor:none!important}';
+    document.head.appendChild(css);
+    stage.scene.background = saverBackdrop(theme);
+    stage.orbit = true; stage.orbitRate = 1.4 - 0.9 * calm;
+    const arrs = ['anatomy', 'symmetry', 'region'], a0 = Math.floor(rnd() * 3);
+    let k = 0;
+    // stretch the moves that the last call started, from now
+    const slow = () => {
+      const now = performance.now() / 1000;
+      for (const m of motion.M) if (m.t0 > -1e8 && m.t0 + m.dur > now) { m.t0 = now + Math.max(0, m.t0 - now) * pace; m.dur *= pace; }
+      if (stage.fly) stage.fly.dur *= pace;
+    };
+    const step = () => {
+      if (!S.ready || !motion || !parts.length) return;
+      const phase = k % 3;
+      if (phase === 0) { select(-1); setArrangement(arrs[(a0 + k / 3) % 3]); }
+      else if (phase === 1) {
+        const bones = parts.filter(p => p.m.group !== 'dentition');
+        isolate(bones[Math.floor(rnd() * bones.length)].i);   // the rest turn to ghosts
+        stage.hold = false;   // keep the orbit
+      } else { select(-1); setExplode(0, { animate: true }); }
+      slow(); k++;
+    };
+    saver.timer = setTimeout(() => { step(); saver.timer = setInterval(step, beat * 1000); }, 4000);
+    return { canvas, warmupMs: 3000 };
+  },
 };
 boot();

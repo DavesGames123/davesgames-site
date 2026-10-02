@@ -154,7 +154,7 @@ export function createStage(o) {
 
   const st = {
     THREE, renderer, scene, root, camera, controls, key, rim, floor,
-    orbit: !o.reduced, orbitAmt: 0, idle: 0, dragging: false, fly: null, theme: null, env: null,
+    orbit: !o.reduced, orbitAmt: 0, orbitRate: 1, idle: 0, dragging: false, fly: null, theme: null, env: null,
   };
 
   // ── themes ────────────────────────────────────────────────────────────────
@@ -310,7 +310,7 @@ export function createStage(o) {
     const want = st.orbit && !st.dragging && !st.fly && st.idle > 3 && !st.hold ? 1 : 0;
     st.orbitAmt += (want - st.orbitAmt) * Math.min(1, dt * (want > st.orbitAmt ? 0.5 : 5));
     controls.autoRotate = st.orbitAmt > 0.002;
-    controls.autoRotateSpeed = -0.32 * st.orbitAmt;
+    controls.autoRotateSpeed = -0.32 * st.orbitAmt * st.orbitRate;   // orbitRate: the screensaver
     controls.update(dt);
     resize(dt);
     renderer.render(scene, camera);
