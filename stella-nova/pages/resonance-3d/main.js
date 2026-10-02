@@ -18,6 +18,7 @@
      grep -n 'function glowSprite'   the soft point texture
      grep -n 'function frame'        the render loop and camera
      grep -n 'function buildUI'      the control panel construction
+     grep -n '__res3d'               the objects xr.js reads (VR and AR)
    ========================================================================== */
 (() => {
   'use strict';
@@ -395,4 +396,6 @@
   buildCurve();
   refreshStatus();
   requestAnimationFrame(frame);
+  // xr.js (a module, lib/xr-view.js) reads these for the VR and AR view
+  window.__res3d = { renderer, scene, camera: persp, G, S };
 })();
