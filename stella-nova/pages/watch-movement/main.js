@@ -17,6 +17,7 @@
 //    const VIEWS / function setView  camera presets
 //    function setOpen ........... the panel; on a phone one group per tab
 //    const xr = wireXR .......... the headset view (xr.js, lib/xr-view.js)
+//    window.snSaver ............. screensaver hook: a slow tour of views and calibres
 // ============================================================================
 import * as THREE from 'three';
 import { CALIBRES, metaById, loadCalibre as loadModule } from './calibres/index.js';
@@ -86,7 +87,7 @@ async function swapTo(id) {
     stage.setShadowExtent(Math.max(18, cal.plateR));
     stage.fitTo(fitDistance(cal), new THREE.Vector3(0, 0, midZ(cal) + explodeCentre(S.explodeTarget)));
     document.querySelectorAll('.mv').forEach(b => b.classList.toggle('on', b.dataset.id === id));
-    try { history.replaceState(null, '', '#' + id); } catch (e) {}
+    if (!saverOn) try { history.replaceState(null, '', '#' + id); } catch (e) {}
   } finally { S.swapping = false; }
 }
 const fitDistance = cal => cal.plateR * 6.3 * (innerWidth < innerHeight * 0.8 ? 1.3 : 1);
@@ -313,3 +314,49 @@ const start = (location.hash || '').slice(1);
 stage.place({ az: 36, el: 14, r: 150, target: new THREE.Vector3() });
 swapTo(/^[a-z0-9-]+$/.test(start) ? start : CALIBRES[0].id).catch(() => swapTo(CALIBRES[0].id));
 requestAnimationFrame(frame);
+
+// ── screensaver ─────────────────────────────────────────────────────────────
+// Hook for the shell (lib/screensaver.js). enter() hides the GUI, makes the
+// canvas opaque with the stage gradient, and tours each calibre: exploded,
+// escapement close-up, dial, then a cross-fade to the next calibre. Each
+// step holds seconds/4 (at least 8 s). calm (1 = slowest) slows the orbit.
+// No URL hash writes while it plays. No exit(): the shell reloads the page.
+let saverOn = false;
+window.snSaver = {
+  enter(o = {}) {
+    saverOn = true;
+    const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
+    let seed = (o.seed >>> 0) || 1;
+    const rnd = () => { seed = (seed + 0x6D2B79F5) >>> 0; let t = seed; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const st = document.createElement('style');
+    st.textContent = '.topbar,#panel,#dock,#hint,#labels,#leader,#read,.tip,#nogl,#gear{display:none!important}#view{cursor:none}';
+    document.head.appendChild(st);
+    setOpen(false);
+    setShow('labels', false);
+    // the canvas is alpha over the #stage gradient: draw that gradient in the scene
+    const g = document.createElement('canvas'); g.width = 512; g.height = 320;
+    const c2 = g.getContext('2d'), rg = c2.createRadialGradient(307, 128, 0, 307, 128, 420);
+    rg.addColorStop(0, '#161826'); rg.addColorStop(0.7, '#08090f'); rg.addColorStop(1, '#08090f');
+    c2.fillStyle = rg; c2.fillRect(0, 0, 512, 320);
+    const bg = new THREE.CanvasTexture(g); bg.colorSpace = THREE.SRGBColorSpace;
+    stage.scene.background = bg;
+    stage.orbit = true; stage.orbitK = 1 - 0.6 * calm;
+    const order = CALIBRES.map(c => c.id);
+    for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    const hold = Math.max(8, (o.seconds || 60) / 4) * 1000;
+    const STEPS = ['exploded', 'escapement', 'dial'];
+    let n = 0, k = 0;
+    const show = name => { setShow('bridges', true); setRate(1); setView(name); };
+    async function step() {
+      const s = n++ % 3;
+      if (s === 0) {
+        while (S.swapping) await new Promise(r => setTimeout(r, 100));
+        await swapTo(order[k++ % order.length]);
+        setTimeout(() => show(STEPS[0]), 1400);
+      } else show(STEPS[s]);
+      setTimeout(step, hold);
+    }
+    step();
+    return { canvas: $('view'), warmupMs: 1500 };
+  },
+};

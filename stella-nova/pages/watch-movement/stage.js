@@ -81,7 +81,7 @@ export function createStage(o) {
 
   const st = {
     THREE, renderer, scene, root, camera, controls, key,
-    orbit: !o.reduced, orbitAmt: 0, idle: 99, dragging: false, fly: null, fit: null, slow: false,
+    orbit: !o.reduced, orbitAmt: 0, orbitK: 1, idle: 99, dragging: false, fly: null, fit: null, slow: false,
   };
 
   // the key light and its shadow box scale with the model (R: its radius)
@@ -167,7 +167,7 @@ export function createStage(o) {
     const want = st.orbit && !st.dragging && !st.fly && st.idle > 2.5 ? (st.slow ? 0.3 : 1) : 0;
     st.orbitAmt += (want - st.orbitAmt) * Math.min(1, dt * (want > st.orbitAmt ? 0.6 : 4));
     controls.autoRotate = st.orbitAmt > 0.002;
-    controls.autoRotateSpeed = -0.5 * st.orbitAmt;
+    controls.autoRotateSpeed = -0.5 * st.orbitAmt * st.orbitK;   // orbitK: screensaver calm
     controls.update(dt);
     resize();
     renderer.render(scene, camera);
