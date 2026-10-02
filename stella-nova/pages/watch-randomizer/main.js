@@ -16,6 +16,7 @@
 //    function ringBell ........ the alarm sound (WebAudio, on a user tap)
 //    function frame ........... step, pose, fades, stage, cards
 //    const xr = wireXR ........ the headset view (../watch-movement/xr.js)
+//    window.snSaver ........... screensaver hook: rolls pieces and tours views
 // ============================================================================
 import * as THREE from 'three';
 import { loadCalibre } from '../watch-movement/calibres/index.js';
@@ -94,7 +95,7 @@ async function roll(seed = Gen.newSeed(), first = false) {
     $('tLid').hidden = !kase.has.lid; $('tBack').hidden = !kase.has.back; $('tRing').hidden = !kase.has.ring;
     $('tWrist').hidden = !(spec.type === 'wrist' && spec.movement.calibre === 'automatic');
     if (!kase.has.ring) setRing(false);
-    try { history.replaceState(null, '', `#seed=${seed}${S.type ? '&type=' + S.type : ''}`); } catch (e) {}
+    if (!saverOn) try { history.replaceState(null, '', `#seed=${seed}${S.type ? '&type=' + S.type : ''}`); } catch (e) {}
     $('seed').textContent = seed;
   } finally { S.busy = false; }
 }
@@ -343,3 +344,50 @@ const hp = new URLSearchParams((location.hash || '').slice(1));
 if (Gen.TYPES[hp.get('type')]) { S.type = hp.get('type'); document.querySelectorAll('#types button').forEach(x => x.classList.toggle('on', x.dataset.type === S.type)); }
 roll(hp.get('seed') || Gen.newSeed(), true);
 requestAnimationFrame(frame);
+
+// ── screensaver ─────────────────────────────────────────────────────────────
+// Hook for the shell (lib/screensaver.js). enter() hides the GUI, makes the
+// canvas opaque with the stage gradient, and plays a slow cycle: roll a new
+// piece and show its dial, then the exploded view, then the back. Each
+// step holds seconds/5 (at least 7 s). calm (1 = slowest) slows the orbit.
+// The alarm never rings and the URL hash does not change while it plays.
+// The seeds come from opts.seed. No exit(): the shell reloads the page.
+let saverOn = false;
+window.snSaver = {
+  enter(o = {}) {
+    saverOn = true;
+    const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
+    let sd = (o.seed >>> 0) || 1;
+    const rnd = () => { sd = (sd + 0x6D2B79F5) >>> 0; let t = sd; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const A = 'abcdefghjkmnpqrstuvwxyz23456789', seed = () => Array.from({ length: 8 }, () => A[Math.floor(rnd() * A.length)]).join('');
+    const st = document.createElement('style');
+    st.textContent = '.topbar,#panel,#dock,#hint,#labels,#leader,#read,#bigRoll,.tip,#nogl,#gear{display:none!important}#view{cursor:none}';
+    document.head.appendChild(st);
+    setOpen(false);
+    setRing(false);
+    S.showLabels = false;
+    // the canvas is alpha over the #stage gradient: draw that gradient in the scene
+    const g = document.createElement('canvas'); g.width = 512; g.height = 320;
+    const c2 = g.getContext('2d'), rg = c2.createRadialGradient(307, 128, 0, 307, 128, 420);
+    rg.addColorStop(0, '#161826'); rg.addColorStop(0.7, '#08090f'); rg.addColorStop(1, '#08090f');
+    c2.fillStyle = rg; c2.fillRect(0, 0, 512, 320);
+    const bg = new THREE.CanvasTexture(g); bg.colorSpace = THREE.SRGBColorSpace;
+    stage.scene.background = bg;
+    stage.orbit = true; stage.orbitK = 1 - 0.6 * calm;
+    setRate(1);
+    const hold = Math.max(7, (o.seconds || 60) / 5) * 1000;
+    let n = 0;
+    async function step() {
+      const s = n++ % 3;
+      if (s === 0) {
+        while (S.busy) await new Promise(r => setTimeout(r, 100));
+        setBack(false);
+        await roll(seed());
+        setTimeout(() => setView('dial'), 1300);
+      } else setView(s === 1 ? 'exploded' : 'back');
+      setTimeout(step, hold);
+    }
+    step();
+    return { canvas: $('view'), warmupMs: 1500 };
+  },
+};
