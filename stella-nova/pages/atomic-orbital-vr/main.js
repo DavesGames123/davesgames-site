@@ -29,7 +29,16 @@
 //      dirty? rebuild : spawnChunk ▶ evolve colors ▶ animateFlow ▶ tracers
 //      ▶ periodic B recompute ▶ nucleus spin ▶ XR input ▶ AR panel ▶ render
 //
+//  OPENING LOOK  pickLook(rng) draws one orbital from LOOKS plus a color mode
+//  and a camera angle. A normal visit draws from Math.random; the screensaver
+//  draws from opts.seed. A URL that names an orbital (#n=4&l=2&m=1, see
+//  readQNHash in ui.js) wins over the random draw.
+//
 //  SCREENSAVER  window.snSaver (end of file), for lib/screensaver.js
+//
+//  grep -n targets: "const LOOKS" | "function pickLook" | "function mulberry"
+//                   "window.snSaver" | "hashchange"
+
 // ============================================================================
 import * as THREE from 'three';
 import { renderer, scene, camera, controls, orbitalGroup, S, RT,
@@ -39,7 +48,7 @@ import { computeBField } from './bfield.js';
 import { updateFlowTracers, updateBTracers } from './tracers.js';
 import { updateARPanel } from './arpanel.js';
 import { handleVRInput } from './gestures.js';
-import { initUI, syncQN, applyQN, setAnimate } from './ui.js';
+import { initUI, syncQN, applyQN, setAnimate, setColorMode, readQNHash } from './ui.js';
 import './arsession.js';   // side effect: wires the AR button + window._arUpdate*
 
 // Bind the DOM controls and run the initial setters (setMagField / setAnimate
@@ -125,22 +134,54 @@ renderer.setAnimationLoop((time, frame)=>{
   renderer.render(scene,camera);
 });
 
-// Seed the display from the default sliders once wiring is complete.
-syncQN();
+// Orbitals that look good as a first view. All have m != 0: an m = 0 state
+// has no probability current, so it has no flow and no B streamers.
+const LOOKS=[[2,1,1],[3,1,1],[3,2,1],[3,2,2],[4,1,1],[4,2,1],[4,2,2],
+             [4,3,1],[4,3,2],[4,3,3],[5,2,1],[5,3,1],[5,3,2],[5,4,2],[5,4,3]];
+// Color modes for the draw. |psi|^2 and Phase show the shape best, so they
+// have two entries each.
+const LOOK_MODES=[0,0,3,3,1,2];
 
-// Screensaver hook for the shell (lib/screensaver.js). It hides the GUI, picks
-// one orbital from opts.seed, and turns on a slow camera orbit. opts.calm
+// Small seeded generator (mulberry32). Returns floats in [0,1).
+function mulberry(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+// Draw one look: an orbital from LOOKS (the sign of m is random), a color
+// mode, and a camera azimuth and elevation on the default orbit radius.
+function pickLook(rng){
+  const q=LOOKS[Math.floor(rng()*LOOKS.length)];
+  const m=rng()<0.5?q[2]:-q[2];
+  const mode=LOOK_MODES[Math.floor(rng()*LOOK_MODES.length)];
+  const az=rng()*Math.PI*2, el=0.08+rng()*0.32;
+  const R=Math.hypot(camera.position.x,camera.position.y,camera.position.z);
+  applyQN(q[0],q[1],m); S.dirty=true;
+  setColorMode(mode);
+  camera.position.set(R*Math.cos(el)*Math.sin(az),R*Math.sin(el),R*Math.cos(el)*Math.cos(az));
+  controls.target.set(0,0,0); controls.update();
+}
+
+// First view. A URL that names an orbital wins; other visits get a random look.
+const linked=readQNHash();
+if(linked){applyQN(linked[0],linked[1],linked[2]);S.dirty=true;}
+else pickLook(Math.random);
+
+// The shell sets the page hash on back, forward and a pasted link.
+window.addEventListener('hashchange',()=>{
+  const q=readQNHash(); if(!q) return;
+  if(q[0]===S.n&&q[1]===S.l&&q[2]===S.m) return;
+  applyQN(q[0],q[1],q[2]); S.dirty=true;
+});
+
+// Screensaver hook for the shell (lib/screensaver.js). It hides the GUI, draws
+// one look from opts.seed, and turns on a slow camera orbit. opts.calm
 // (1 = slowest) scales the orbit, flow and tracer speeds. The shell reloads
 // the page on stop, so enter() does not keep the old values.
-const SAVER_QN=[[3,1,1],[3,2,1],[4,2,2],[4,3,1],[5,3,2]];
 window.snSaver={
   enter(o){
     const calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
     const st=document.createElement('style');
     st.textContent='body>*:not(#c){display:none!important}';
     document.head.appendChild(st);
-    const qn=SAVER_QN[Math.abs((o&&o.seed)|0)%SAVER_QN.length];
-    applyQN(qn[0],qn[1],qn[2]); S.dirty=true;
+    pickLook(mulberry((o&&o.seed!=null?o.seed:Math.random()*1e9)|0));
     setAnimate(true);
     S.flowSpeed=0.5*(1-0.6*calm);
     S.timeSpeed=1-0.6*calm;

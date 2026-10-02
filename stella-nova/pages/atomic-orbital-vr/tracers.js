@@ -7,8 +7,11 @@
    Each list has a hard cap. At the B cap, a new tracer recycles the
    oldest one. Only the used part of each buffer goes to the GPU.
    Each trail fades as one smooth ramp from head to tail.
+   A B trail keeps one point for each S.bTrStride frames. Between two
+   kept points the head point moves with the tracer, so a trail is
+   longer in space for the same number of segments.
    GREP: updateFlowTracers | updateBTracers | ftLines | btLines
-         MAX_BT_LIVE | MAX_BT_SEG | trailFade | uploadUsed
+         MAX_BT_LIVE | MAX_BT_SEG | trailFade | uploadUsed | bTrStride
    ════════════════════════════════════════════════════════════ */
 import * as THREE from 'three';
 import { S, RT, orbitalGroup } from './core.js';
@@ -131,11 +134,14 @@ orbitalGroup.add(btLines);btLines.visible=false;
 // retire it when old or out of bounds. Spawn uses a fractional accumulator so the
 // spawn rate stays exact regardless of frame rate. Each trail point keeps the
 // field color from when it was made, so fieldColor runs once per point.
+// The tracer adds a new trail point only each bTrStride frames (tr.k counts
+// the frames). On the other frames, the head point moves to the tracer.
 export function updateBTracers(dt){
   if(!S.showBTr||!RT.bFieldData){btLines.visible=false;return;}
   btLines.visible=true;
   const bTracers=RT.bTracers;
   const{bTrSpeed,bTrSpawn,bTrTrail,bColGamma}=S;
+  const stride=Math.max(1,S.bTrStride|0);
   const ext=RT.bFieldExt;
 
   for(let i=bTracers.length-1;i>=0;i--){
@@ -143,7 +149,8 @@ export function updateBTracers(dt){
     const[dx,dy,dz,mag]=sampleBField(tr.x,tr.y,tr.z);
     tr.x+=dx*bTrSpeed*dt;tr.y+=dy*bTrSpeed*dt;tr.z+=dz*bTrSpeed*dt;
     const[r,g,b]=fieldColor(mag,bColGamma);
-    tr.trail.unshift([tr.x,tr.y,tr.z,r,g,b]);
+    if(++tr.k>=stride||tr.trail.length<2){tr.k=0;tr.trail.unshift([tr.x,tr.y,tr.z,r,g,b]);}
+    else{const h=tr.trail[0];h[0]=tr.x;h[1]=tr.y;h[2]=tr.z;h[3]=r;h[4]=g;h[5]=b;}
     while(tr.trail.length>bTrTrail)tr.trail.pop();
     if(tr.age>=tr.maxAge||Math.abs(tr.x)>ext||Math.abs(tr.y)>ext||Math.abs(tr.z)>ext)bTracers.splice(i,1);
   }
@@ -156,7 +163,7 @@ export function updateBTracers(dt){
   for(let s=0; s<spawnN; s++){
     const tr=bTracers.length>=MAX_BT_LIVE?bTracers.shift():{trail:[]};
     tr.x=(Math.random()*2-1)*e;tr.y=(Math.random()*2-1)*e;tr.z=(Math.random()*2-1)*e;
-    tr.trail.length=0;tr.age=0;tr.maxAge=2+Math.random()*2;
+    tr.trail.length=0;tr.k=0;tr.age=0;tr.maxAge=2.5+Math.random()*2;
     bTracers.push(tr);
   }
 

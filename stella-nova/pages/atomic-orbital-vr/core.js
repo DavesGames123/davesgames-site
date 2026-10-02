@@ -30,7 +30,10 @@ export const S={
   // B field — on by default at max resolution, minimum arrow scale, fast update
   showBField:true, bGridDim:24, bGridExtent:40,
   bArrowScale:0.1, bColGamma:1.0, bUpdateEvery:10,
-  showBTr:true, bTrSpeed:1.0, bTrSpawn:750, bTrTrail:50,
+  // B tracers: 100 trail points, one each 2 frames, so a streamer is about
+  // 3 s long at 60 Hz. The lower spawn rate keeps the segment count near the
+  // old 750 x 50 load.
+  showBTr:true, bTrSpeed:1.0, bTrSpawn:550, bTrTrail:100, bTrStride:2,
   // Misc
   showFlow:false, showAxes:false,
   psize:0.035,

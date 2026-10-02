@@ -5,8 +5,11 @@
    updateDisplay) plus initUI(), which registers every DOM listener
    and runs the initial setters. Inline-onclick targets stay reachable
    through the window.* assignments below.
+   The page hash holds a deep link to one orbital: #n=4&l=2&m=1.
+   readQNHash() parses it, and a manual change writes it again.
    GREP: updateDisplay | updateInfoBar | applyQN | syncQN | setN
          setColorMode | setAnimate | setMagField | initUI
+         readQNHash | writeQNHash
    ════════════════════════════════════════════════════════════ */
 import { S, RT, camera, renderer } from './core.js';
 import { pMat, startGrow, rebuildStaticFlow, axesHelper } from './particles.js';
@@ -83,6 +86,23 @@ export function applyQN(n,l,m){
   S.n=n;S.l=l;S.m=m;
   updateDisplay();
   if(ARP.mesh) ARP.dirty=true;
+}
+/* ── Deep link: #n=4&l=2&m=1 in the page hash (the shell shows it as
+   #orbital/n=4&l=2&m=1). Also reads ?n=&l=&m= in the query. ── */
+// Return [n,l,m] from the URL, or null when the URL names no orbital.
+export function readQNHash(){
+  const h=new URLSearchParams(location.hash.replace(/^#\/?/,''));
+  const q=new URLSearchParams(location.search);
+  const get=k=>h.has(k)?h.get(k):q.get(k);
+  if(get('n')==null) return null;
+  const n=parseInt(get('n'),10), l=parseInt(get('l')??'0',10), m=parseInt(get('m')??'0',10);
+  return Number.isFinite(n)&&Number.isFinite(l)&&Number.isFinite(m)?[n,l,m]:null;
+}
+// Write the current orbital to the hash. location.replace adds no history
+// entry, and its hashchange lets the shell copy the route to its own URL.
+export function writeQNHash(){
+  const h=`#n=${S.n}&l=${S.l}&m=${S.m}`;
+  if(location.hash!==h) try{location.replace(h);}catch(e){}
 }
 export function syncQN(){
   applyQN(+document.getElementById('sl-n').value,
@@ -163,13 +183,13 @@ export function initUI(){
       const qn=btn.dataset.qn,dir=+btn.dataset.dir;
       let{n,l,m}=S;
       if(qn==='n')n+=dir; else if(qn==='l')l+=dir; else if(qn==='m')m+=dir;
-      applyQN(n,l,m); S.dirty=true;
+      applyQN(n,l,m); S.dirty=true; writeQNHash();
     });
   });
   // QN sliders (advanced panel)
   ['sl-n','sl-l','sl-m'].forEach(id=>{
     const el=document.getElementById(id);
-    el.addEventListener('input',()=>{syncQN();S.dirty=true;});
+    el.addEventListener('input',()=>{syncQN();S.dirty=true;writeQNHash();});
     sg(el);
   });
 
@@ -250,6 +270,8 @@ export function initUI(){
   document.getElementById('sl-basc').value=S.bArrowScale;  sg(document.getElementById('sl-basc'));
   document.getElementById('sl-buev').value=S.bUpdateEvery; sg(document.getElementById('sl-buev'));
   document.getElementById('sl-bspwn').value=S.bTrSpawn;    sg(document.getElementById('sl-bspwn'));
+  document.getElementById('sl-btrl').value=S.bTrTrail;     sg(document.getElementById('sl-btrl'));
+  document.getElementById('vl-btrl').textContent=S.bTrTrail;
   document.getElementById('vl-bgext').textContent=S.bGridExtent;
   document.getElementById('vl-basc').textContent=S.bArrowScale.toFixed(1);
   document.getElementById('vl-buev').textContent=S.bUpdateEvery;
