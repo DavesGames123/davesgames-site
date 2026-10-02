@@ -296,7 +296,10 @@ function frame(now) {
   S.kL += (d.kL - S.kL) * a; S.kR += (d.kR - S.kR) * a;
   const kC = (S.kL + S.kR) / 2;
   const w0 = S.rpm / 60 * TAU;
-  S.phiC = (S.phiC + w0 * kC * dt) % (TAU * 1000);
+  // no wrap: the pinion turns 41/11 of the carrier, so a wrap of phiC by
+  // 1000 turns moved the pinion and its flange by 0.27 of a turn in one
+  // frame. A double keeps sub-micro-radian steps for years of run time.
+  S.phiC += w0 * kC * dt;
   S.delta += w0 * (S.kR - S.kL) / 2 * dt;
   const Q = pose(cur.id, S.phiC, S.delta);
   cur.sc.pose(Q);

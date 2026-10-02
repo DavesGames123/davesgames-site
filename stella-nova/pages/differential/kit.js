@@ -47,14 +47,17 @@ function canvasTex(n, draw, rep = [1, 1]) {
 function textures() {
   if (TEX) return TEX;
   let s = 11; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  // A roughness map multiplies the stated roughness, so the texel mean of
+  // each map stays near 0.9. A mean near 0.6 (turned) or 0.7 (cast) made
+  // the shafts, plates and housing a dark mirror of the studio.
   // turned finish: fine rings for the roughness of lathe parts
   const turned = canvasTex(256, (g, n) => {
-    for (let y = 0; y < n; y++) { const v = 150 + 50 * Math.sin(y * 1.7) * Math.sin(y * 0.13) + (rnd() - 0.5) * 30; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, n, 1); }
+    for (let y = 0; y < n; y++) { const v = 228 + 24 * Math.sin(y * 1.7) * Math.sin(y * 0.13) + (rnd() - 0.5) * 22; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, n, 1); }
   }, [1, 8]);
   // cast: blotchy sand-cast roughness
   const cast = canvasTex(256, (g, n) => {
-    g.fillStyle = 'rgb(190,190,190)'; g.fillRect(0, 0, n, n);
-    for (let i = 0; i < 2600; i++) { const v = 120 + rnd() * 120 | 0; g.fillStyle = `rgba(${v},${v},${v},0.5)`; const r = 0.6 + rnd() * 2.2; g.beginPath(); g.arc(rnd() * n, rnd() * n, r, 0, 6.3); g.fill(); }
+    g.fillStyle = 'rgb(232,232,232)'; g.fillRect(0, 0, n, n);
+    for (let i = 0; i < 2600; i++) { const v = 190 + rnd() * 65 | 0; g.fillStyle = `rgba(${v},${v},${v},0.5)`; const r = 0.6 + rnd() * 2.2; g.beginPath(); g.arc(rnd() * n, rnd() * n, r, 0, 6.3); g.fill(); }
   }, [3, 3]);
   // friction lining: a waffle of grooves on a warm brown
   const lining = canvasTex(256, (g, n) => {
@@ -89,12 +92,20 @@ const MAT_DEF = {
 
 // Back faces seen through the section cut: a hatch in screen space, lit by
 // nothing, so the cut reads as a flat drawing-office section.
+// Parts touch on shared faces (a bearing race in its bore, a thrust washer
+// on the carrier wall, a spider gear on its seat). Through the cut, the
+// hatch back face and the front face of the other part have the same
+// depth, so they fought. The hatch moves 0.04 % of its eye distance toward
+// the camera and wins. As 1 - z ≈ n f / ((f - n) d) at eye distance d,
+// (1 - z) k is that move.
 function cutPatch(m) {
   m.onBeforeCompile = sh => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
+      gl_FragDepth = gl_FragCoord.z;
       if (!gl_FrontFacing) {
         float h = step(0.5, fract((gl_FragCoord.x + gl_FragCoord.y) / 7.0));
         gl_FragColor = vec4(mix(vec3(0.19, 0.205, 0.24), vec3(0.33, 0.345, 0.39), h), gl_FragColor.a);
+        gl_FragDepth = gl_FragCoord.z - (1.0 - gl_FragCoord.z) * 4.0e-4;
       }`);
   };
   m.customProgramCacheKey = () => 'cut';
