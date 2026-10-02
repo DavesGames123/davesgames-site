@@ -330,12 +330,13 @@ function frame(now){requestAnimationFrame(frame);
 // dynamic import(). It typesets TeX as MathJax SVG. If MathJax does not load,
 // the TeX text stays in the box with the class "raw".
 const SCI=import("../../lib/sci-math.js").catch(err=>{console.error("[math]",err);return null;});
-// Remove each \textcolor{color}{body} wrapper and keep body.
+// Replace each \textcolor{color}{body} wrapper with {body}. The braces keep
+// a control word apart from the body (sin{x}, not sinx).
 function plainTeX(tex){let out="",i=0;const K="\\textcolor{";
   while(i<tex.length){const j=tex.indexOf(K,i);if(j<0){out+=tex.slice(i);break;}
     out+=tex.slice(i,j);let k=tex.indexOf("}",j+K.length)+1;   // skip the color group
     let d=0,e=k;for(;e<tex.length;e++){if(tex[e]==="{")d++;else if(tex[e]==="}"&&--d===0)break;}
-    out+=tex.slice(k+1,e);i=e+1;}
+    out+="{"+tex.slice(k+1,e)+"}";i=e+1;}
   return out;}
 // The TeX of a parameter symbol (the l field holds a Greek letter or a name).
 const GREEK={"σ":"\\sigma","ρ":"\\rho","β":"\\beta","α":"\\alpha","γ":"\\gamma","δ":"\\delta","ω":"\\omega"};
