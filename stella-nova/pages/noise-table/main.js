@@ -30,7 +30,8 @@
 //      enter() hides the page, adds one full-window canvas and draws one calm
 //      cell from SAVER_CELLS into it on each frame. grep -n "saverEnter", "saver.t"
 //      saverPlate() builds the shell plate (opts.label): the cell name, the
-//      knob values, scale, tempo and gain, and the formula from styles.json eq.
+//      knob values and tempo as params, and the formula as TeX (SAVER_TEX,
+//      from styles.json eq, which stays as the plain fallback).
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
 import { $, G, stage, tiles } from './state.js';
@@ -180,16 +181,60 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
     }
     return { canvas, warmupMs: 600 };
   };
-  // The saver plate for cell t: name, family, species, the named knob values,
-  // the scale, tempo and gain values, and the eq lines of styles.json.
+  // The saver plate TeX of each SAVER_CELLS cell: the first two lines of
+  // styles.json eq, written as TeX (the page has no TeX of its own). sym
+  // gives the TeX symbol of each knob, in knob order ('' for a knob with
+  // no name). Colours: v m1, p and q m2, t and tau m3, the knobs m4, m5,
+  // m6 in knob order (saverRules).
+  const SAVER_TEX = {
+    fbm: { sym: ['f', 'n', 'a', 'd'], tex: [String.raw`v = \tfrac12 + \tfrac12\,\mathrm{fbm}(f\,p + 0.2\,d\,t\,\hat{x})`,
+      String.raw`\mathrm{fbm}(p) = \frac{\sum_{i<n} a^i\,\mathrm{noise}(R^i\,2^i p)}{\sum_{i<n} a^i}`] },
+    warp: { sym: ['s', 'A', 'n', 'd'], tex: [String.raw`q = \big(\mathrm{fbm}(s\,p),\ \mathrm{fbm}(s\,p + (5.2, 1.3))\big)`,
+      String.raw`v = \tfrac12 + \tfrac12\,\mathrm{fbm}(s\,p + A\,r),\quad r = \mathrm{fbm}(s\,p + A\,q + \dots)`] },
+    warp_self: { sym: ['f', 'A', 'N', 'd'], tex: [String.raw`q \leftarrow q + 0.1\,A\,\big(-\partial_y \mathrm{noise},\ \partial_x \mathrm{noise}\big)\quad (N \text{ times})`,
+      String.raw`v = \tfrac12 + \tfrac12\,\mathrm{fbm}(q),\quad q_0 = f\,p`] },
+    marble: { sym: ['f', 'V', 'T', 'd'], tex: [String.raw`v = \tfrac12 + \tfrac12 \sin\big(V q_x + T\,\mathrm{turb}(q + 0.05\,d\,t)\big)`,
+      String.raw`\mathrm{turb}(q) = \sum_{i<5} a^i\,\big|\mathrm{noise}(2^i q)\big|,\quad q = f\,p`] },
+    wood: { sym: ['f', 'N', 'W', 'd'], tex: [String.raw`r = |q + (0.6, 0.2)| + W\,\mathrm{fbm}(2q + 0.05\,d\,t),\quad q = f\,p`,
+      String.raw`v = \mathrm{fract}(N r)^{1/2}`] },
+    caustics: { sym: ['f', 'A', 'k', '\\dot\\tau'], tex: [String.raw`q \leftarrow R(0.9)\,q + A\,\big(\sin(0.7\tau + i),\ \cos(0.5\tau - i)\big),\quad i = 1 \dots 4`,
+      String.raw`s = \sum_i \big|\sin(2q_x + \tau) + \sin(2.3\,q_y - 0.8\,\tau)\big|,\quad v = (1 - 0.1\,s)^k`] },
+    flow_lines: { sym: ['f', 'D', 'B', 'd'], tex: [String.raw`\theta = \operatorname{atan2}\big(\nabla \mathrm{fbm}(q)\big),\quad q = f\,p + 0.05\,d\,t`,
+      String.raw`v = \tfrac12 + \tfrac12 \sin\big(D\,p\cdot(\cos\theta, \sin\theta) + B\,\mathrm{fbm}(q)\big)`] },
+    gabor_noise: { sym: ['c', 'F', '\\iota', 'd'], tex: [String.raw`v = \tfrac12 + 0.35 \sum_i w_i\, g(x - x_i)`,
+      String.raw`g(x) = e^{-\pi |x|^2} \cos\big(2\pi F\, x \cdot (\cos\omega_i, \sin\omega_i)\big)`] },
+    plasma: { sym: ['f', '\\dot\\tau', 'b', ''], tex: [String.raw`V = \sin(x + \tau) + \sin(y + 0.7\tau) + \sin(x + y + 1.3\tau) + \sin(|q + 2c(\tau)| + \tau)`,
+      String.raw`v = \tfrac12 + \tfrac12 \sin(b\,V),\quad q = f\,p`] },
+    worley_smooth: { sym: ['f', 'k', '', 'd'], tex: [String.raw`v = -\frac{1}{k} \log_2 \sum_j 2^{-k\,|x - c_j|}`,
+      String.raw`x = f\,p + 0.3\,d\,t,\quad 3 \times 3 \text{ cells}`] },
+    perlin3d: { sym: ['f', 's', '', ''], tex: [String.raw`v = \tfrac12 + \tfrac12\,\mathrm{noise}_3(f\,p_x,\ f\,p_y,\ s\,t)`] },
+    gyroid: { sym: ['f', 'w', 'L', '\\sigma'], tex: [String.raw`g = \sin x \cos y + \sin y \cos z + \sin z \cos x`,
+      String.raw`v = 1 - \mathrm{smoothstep}\big(0, w, |g - L|\big),\quad (x, y, z) = (f\,p,\ \sigma t)`] },
+    contour: { sym: ['f', 'n', 'w', 'd'], tex: [String.raw`v = \tfrac12 + \tfrac12\,\mathrm{fbm}(f\,p + 0.1\,d\,t)`,
+      String.raw`\ell = 1 - \mathrm{smoothstep}\big(0, w, 2\,|\mathrm{fract}(n v) - \tfrac12|\big)`] },
+    interference: { sym: ['f', '\\alpha_0', '\\omega', ''], tex: [String.raw`v = \tfrac12 + \tfrac14 \big(\sin(f\,p_x) + \sin(f\,(R(\alpha)\,p)_x)\big)`,
+      String.raw`\alpha = \alpha_0 + 0.02 \sin(\omega t),\quad T_{\text{beat}} = \frac{2\pi}{f\alpha}`] },
+    billow: { sym: ['f', 'n', 'a', 'd'], tex: [String.raw`v = 1 - 1.6\,\mathrm{turb}(f\,p + 0.2\,d\,t\,\hat{x})`,
+      String.raw`\mathrm{turb}(p) = \frac{\sum_{i<n} a^i\,|\mathrm{noise}(2^i R^i p)|}{\sum_{i<n} a^i}`] },
+    sum_sines: { sym: ['f', 'k', '\\omega', ''], tex: [String.raw`v = \frac{\sum_i 0.6^i \big(\tfrac12 + \tfrac12 \sin(f_i\,\hat{d}_i \cdot p + \omega(1 + 0.3i)\,t)\big)^k}{\sum_i 0.6^i}`,
+      String.raw`f_i = f \cdot 1.6^i,\quad \hat{d}_i \text{ at angle } 1.9\,i,\quad 6 \text{ waves}`] },
+  };
+  const saverRules = sym => [['v', 'm1'], ['p', 'm2'], ['q', 'm2'], ['t', 'm3'], ['\\tau', 'm3']]
+    .concat(sym.filter(Boolean).slice(0, 3).map((k, i) => [k, 'm' + (4 + i)]));
+  // The saver plate for cell t: name, family, the knob settings (0 to 1, as
+  // the knob sliders show them) as params in the knob colours, the tempo,
+  // the species text, and the TeX of SAVER_TEX. eq of styles.json stays as
+  // the plain fallback. No anchor: the cell fills the window.
   function saverPlate(t) {
-    const s = t.s;
-    const knobs = s.knobs.map(([n], i) => n ? `${n} ${t.knobs[i].toFixed(2)}` : '').filter(Boolean);
+    const s = t.s, X = SAVER_TEX[s.name] || { sym: [], tex: [] }, named = X.sym.filter(Boolean);
+    const params = s.knobs.map(([n], i) => n && X.sym[i] ? { sym: X.sym[i], name: n, value: t.knobs[i].toFixed(2), cls: 'm' + (4 + named.indexOf(X.sym[i])) } : null)
+      .filter(Boolean).map(p => (p.cls === 'm7' || p.cls === 'm3' ? Object.assign(p, { cls: '' }) : p));
+    params.push({ sym: '\\dot t', name: 'tempo', value: G.tempo.toFixed(2) + '×' });
     return {
       title: s.name.replace(/_/g, ' ').replace(/^./, m => m.toUpperCase()),
-      sub: s.family,
-      lines: [s.species, 'knobs  ' + knobs.join(' · '), `scale ${G.scale.toFixed(2)}x · tempo ${G.tempo.toFixed(2)}x · gain ${G.gain.toFixed(2)}x`],
-      eq: s.eq || [],
+      sub: (s.family.length <= 3 ? s.family.toUpperCase() : s.family.replace(/^./, m => m.toUpperCase())) + ' noise',
+      params: params.slice(0, 5), lines: [s.species.replace(/^./, m => m.toUpperCase())],
+      tex: X.tex, rules: saverRules(X.sym), eq: s.eq || [],
     };
   }
   saverReady();
