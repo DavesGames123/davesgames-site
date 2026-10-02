@@ -583,7 +583,7 @@ setTimeout(hideHint, 9000);
 
 function setRunning(on) {
   S.running = on; sendAll({ type: 'set', running: on && !document.hidden });
-  $('runBtn').textContent = on ? '❚❚ Pause' : '▶ Run'; $('runBtn').classList.toggle('on', on);
+  $('runBtn').textContent = on ? 'Pause' : 'Run'; $('runBtn').classList.toggle('on', on);
   $('dockPlay').textContent = on ? '❚❚' : '▶'; $('dockPlay').setAttribute('aria-label', on ? 'Pause' : 'Run');
 }
 function restart() {

@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Protein Folding — Stella Nova · davesgames.io</title>
+<title>Protein folding — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    PROTEIN FOLDING  ·  page shell
@@ -23,7 +23,8 @@
 
    HEAD LOAD ORDER
      1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
-     2. fonts (Inter, STIX Two Text), style.css
+     2. style.css, then ../../lib/sci.css (Inter, STIX Two Text, the
+        system mono, the math colors .m1 to .m6; it loads the fonts)
      3. importmap for three r160, then main.js as a module (main.js loads
         xr.js, the VR and AR view; #bVR and #bAR in #xrSec stay hidden
         without WebXR)
@@ -61,26 +62,24 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="Watch a protein fold. A structure-based Go model of 27 real proteins from the PDB, plus the HP lattice model, with live Q, RMSD, contact maps and free-energy landscapes.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>Stella Nova</div>
-  <div class="pagetitle">Protein Folding</div>
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Protein folding</div>
   <button id="learnBtn" class="topbtn" type="button">How it works</button>
-  <button id="gear" class="topbtn" type="button" aria-label="Open controls">☰ Controls</button>
+  <button id="gear" class="topbtn" type="button" aria-label="Open controls">Controls</button>
 </div>
 
 <main id="stage">
   <canvas id="view"></canvas>
   <div id="read" class="pread" aria-live="off"></div>
   <div id="legend" class="legend"></div>
-  <div id="hint" class="phint">drag to orbit · pinch or scroll to zoom</div>
+  <div id="hint" class="phint">Drag to orbit · pinch or scroll to zoom</div>
   <button id="learnFab" type="button" aria-label="How it works">?</button>
 </main>
 <div id="nogl" hidden>WebGL is not available in this browser, so the chains cannot be drawn. The plots still run.</div>
@@ -99,7 +98,7 @@
 
   <div class="go-only">
     <div class="sec-label">Temperature</div>
-    <div class="row"><label for="temp">T / T<sub>m</sub></label><input type="range" id="temp" min="0.4" max="1.6" step="0.01" value="0.8"><span class="val" id="tempV"></span></div>
+    <div class="row"><label for="temp"><span class="sci-sym" id="eq-symT">T / T<sub>m</sub></span></label><input type="range" id="temp" min="0.4" max="1.6" step="0.01" value="0.8"><span class="val" id="tempV"></span></div>
     <div class="grid4" id="tempBtns">
       <button data-t="quench" type="button">Quench</button>
       <button data-t="fold" type="button">Fold</button>
@@ -109,14 +108,14 @@
     <p class="note" id="tempNote"></p>
 
     <div class="sec-label">Dynamics</div>
-    <div class="row"><label for="gamma">Friction γ</label><input type="range" id="gamma" min="-2" max="1" step="0.01" value="-0.3"><span class="val" id="gammaV"></span></div>
+    <div class="row"><label for="gamma">Friction <span class="sci-sym" id="eq-symGamma">γ</span></label><input type="range" id="gamma" min="-2" max="1" step="0.01" value="-0.3"><span class="val" id="gammaV"></span></div>
     <div class="row"><label for="speed">Speed</label><input type="range" id="speed" min="0" max="100" step="1" value="50"><span class="val" id="speedV"></span></div>
     <div class="seg-row"><span class="seg-lbl">Replicas</span><div class="segc" id="reps">
       <button data-r="1" type="button">1</button><button data-r="2" type="button">2</button><button data-r="4" type="button">4</button><button data-r="6" type="button">6</button><button data-r="8" type="button">8</button>
     </div></div>
 
     <div class="sec-label">Pull the termini</div>
-    <div class="row"><label for="pull">Force</label><input type="range" id="pull" min="0" max="8" step="0.05" value="0"><span class="val" id="pullV"></span></div>
+    <div class="row"><label for="pull">Force <span class="sci-sym" id="eq-symF">F</span></label><input type="range" id="pull" min="0" max="8" step="0.05" value="0"><span class="val" id="pullV"></span></div>
     <p class="note" id="pullNote">A constant force on the two ends, along the line between them. Start from native and raise it to unfold the protein, as in an AFM experiment. Here titin I27 and ubiquitin unfold at about 3 to 4 ε/Å.</p>
   </div>
 
@@ -140,7 +139,7 @@
 
   <div class="sec-label">Run</div>
   <div class="grid3">
-    <button id="runBtn" type="button" class="on">❚❚ Pause</button>
+    <button id="runBtn" type="button" class="on">Pause</button>
     <button id="stepBtn" type="button">Step</button>
     <button id="resetBtn" type="button">Restart</button>
   </div>
