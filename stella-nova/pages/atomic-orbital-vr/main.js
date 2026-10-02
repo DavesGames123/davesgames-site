@@ -49,6 +49,7 @@ import { startRebuild, spawnChunk, updateColors, animateFlow, pMat } from './par
 import { computeBField } from './bfield.js';
 import { updateFlowTracers, updateBTracers } from './tracers.js';
 import { updateARPanel } from './arpanel.js';
+import { buildRadialCDF } from './cdf.js';
 import { handleVRInput } from './gestures.js';
 import { initUI, syncQN, applyQN, setAnimate, setColorMode, readQNHash } from './ui.js';
 import './arsession.js';   // side effect: wires the AR button + window._arUpdate*
@@ -205,15 +206,22 @@ function saverPlate(){
   const lag=k===0?'':' · '+laguerreText(k,2*l+1);
   const E=-13.6057/(n*n);
   const mode=['|ψ|²','Re ψ','Im ψ','phase arg ψ'][S.colorMode]||'|ψ|²';
+  // params, the page's TeX (index.html data-tex) and its RULES from
+  // equations.js: n m1, ell m2, m m3, B m4, psi m5, J m6. eq is the plain
+  // fallback. The anchor is orbitalAnchor() below.
   return {
-    title:'Hydrogen '+name+' orbital, m = '+ms,
-    sub:'color: '+mode,
-    lines:[
-      '|'+n+', '+l+', '+ms+'⟩ · n = '+n+' (shell) · ℓ = '+l+' ('+(SUB_LETTERS[l]||'?')+') · m = '+ms,
-      'E'+sub(n)+' = −13.6 eV / '+n+'² = '+E.toFixed(2).replace('-','−')+' eV',
-      'Nodes: '+k+' radial (n−ℓ−1), '+l+' angular (ℓ)',
-      'Current: v_φ = ħm / (mₑ r sin θ), so B streams around the axis',
-    ],
+    title:'Hydrogen '+name+' orbital',
+    sub:'Color: '+mode,
+    params:[{sym:'n',name:'shell',value:String(n),cls:'m1'},
+      {sym:'\\ell',name:'angular, '+(SUB_LETTERS[l]||'?'),value:String(l),cls:'m2'},
+      {sym:'m',name:'magnetic',value:ms.replace('-','−'),cls:'m3'},
+      {sym:'E_n',name:'energy',value:'−13.6 eV / '+n+'² = '+E.toFixed(2).replace('-','−')+' eV'}],
+    lines:['Nodes: '+k+' radial (n − ℓ − 1), '+l+' angular (ℓ).',
+      'R'+sub(n)+sub(l)+'(r) ∝ '+rhoPart+lag+', ρ = 2r / '+n+'a₀'],
+    tex:['\\psi_{n,\\ell,m}(r,\\theta,\\varphi) \\;=\\; R_{n,\\ell}(r)\\,Y_{\\ell}^{m}(\\theta,\\varphi)',
+      '\\hat{H}\\,\\psi_{n,\\ell,m} \\;=\\; E_{n}\\,\\psi_{n,\\ell,m}',
+      '\\vec{B}(\\vec{r}) \\;=\\; \\frac{\\mu_0}{4\\pi}\\sum_{i} \\frac{\\vec{J}_i \\times (\\vec{r}-\\vec{r}_i)}{|\\vec{r}-\\vec{r}_i|^{3}}'],
+    rules:[['n','m1'],['\\ell','m2'],['m','m3'],['\\vec{B}','m4'],['\\psi','m5'],['\\vec{J}_i','m6']],
     eq:[
       'ψ'+sub(n)+sub(l)+(m<0?'₋':'')+sub(am)+' = R'+sub(n)+sub(l)+'(r) · Y'+sub(l)+(m<0?'₋':'')+sub(am)+'(θ,φ) · e^(−iE'+sub(n)+'t/ħ)',
       'R'+sub(n)+sub(l)+'(r) ∝ '+rhoPart+lag,
@@ -221,7 +229,33 @@ function saverPlate(){
       'Y'+sub(l)+(m<0?'₋':'')+sub(am)+' ∝ P'+sub(l)+sup(am)+'(cos θ) e^('+(m<0?'−':'')+'i'+(am===1?'':am)+'φ)',
       'B(r) = μ₀/4π Σᵢ Jᵢ × (r − rᵢ) / |r − rᵢ|³',
     ],
+    anchor:orbitalAnchor,
   };
+}
+// The orbital on screen, for the shell's label plate. The particles sit at
+// r·S.scale in orbitalGroup, with r drawn from buildRadialCDF(n, l). The
+// radius in the scene is the r that holds 90 percent of the probability
+// (the bright cloud), times S.scale. The centre (the nucleus) and a point
+// that far along the camera's right axis are projected with the page
+// camera to canvas px. The key point is the nucleus.
+let anchorKey='',anchorR3=0;
+const _c=new THREE.Vector3(),_e=new THREE.Vector3(),_rt=new THREE.Vector3();
+function orbitalAnchor(){
+  const key=S.n+','+S.l;
+  if(key!==anchorKey){
+    const d=buildRadialCDF(S.n,S.l);let i=0;while(i<d.M-1&&d.cdf[i]<0.9)i++;
+    anchorR3=i*d.rMax/(d.M-1);anchorKey=key;
+  }
+  const cv=renderer.domElement,b=cv.getBoundingClientRect();
+  orbitalGroup.updateMatrixWorld();
+  _c.setFromMatrixPosition(orbitalGroup.matrixWorld);
+  _rt.setFromMatrixColumn(camera.matrixWorld,0).normalize();
+  _e.copy(_c).addScaledVector(_rt,anchorR3*S.scale*orbitalGroup.scale.x);
+  _c.project(camera);_e.project(camera);
+  if(_c.z>1||Math.abs(_c.x)>1.2||Math.abs(_c.y)>1.2)return null;
+  const x=b.left+(_c.x+1)/2*b.width,y=b.top+(1-_c.y)/2*b.height;
+  const ex=b.left+(_e.x+1)/2*b.width,ey=b.top+(1-_e.y)/2*b.height;
+  return {x,y,r:Math.hypot(ex-x,ey-y),pts:[{x,y}]};
 }
 
 // Screensaver hook for the shell (lib/screensaver.js). It hides the GUI, draws
