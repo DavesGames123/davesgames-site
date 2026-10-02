@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>How AlphaFold Works — Stella Nova · davesgames.io</title>
+<title>How AlphaFold works — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    ALPHAFOLD EXPLAINED  ·  page shell
@@ -82,9 +82,8 @@
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
-  <div class="sys">SYS&nbsp;//&nbsp;BIO.STRUCTURE</div>
-  <div class="pagetitle">How AlphaFold Works</div>
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">How AlphaFold works</div>
 </div>
 
 <nav id="mini" aria-label="Pipeline steps">
@@ -131,7 +130,7 @@
 
   <div class="grid">
     <article class="card span-8">
-      <div class="card-top"><h3>Multiple sequence alignment</h3><span class="tag synth">synthetic MSA · illustrative</span></div>
+      <div class="card-top"><h3>Multiple sequence alignment</h3><span class="tag synth">Synthetic MSA · illustrative</span></div>
       <canvas id="msaCv" class="fig msa-fig" aria-label="MSA with conservation and co-variation arcs"></canvas>
       <div class="ctrl-row">
         <span class="ctrl-lab">MSA depth</span>
@@ -169,7 +168,7 @@
     <article class="card span-6">
       <div class="card-top"><h3>What the network actually receives</h3></div>
       <table class="dims">
-        <tr><th>feature</th><th>shape</th><th>content</th></tr>
+        <tr><th>Feature</th><th>Shape</th><th>Content</th></tr>
         <tr><td>msa_feat</td><td class="mono">N<sub>clust</sub> × N<sub>res</sub> × 49</td><td>one-hot residue + gap + mask (23), deletion flags and values, cluster profile (23)</td></tr>
         <tr><td>extra_msa</td><td class="mono">N<sub>extra</sub> × N<sub>res</sub> × 25</td><td>the unclustered rows, one-hot + deletions</td></tr>
         <tr><td>target_feat</td><td class="mono">N<sub>res</sub> × aa</td><td>query residue type, one-hot</td></tr>
@@ -186,7 +185,7 @@
   <div class="sec-head"><span class="num">02</span><div><h2>Embedding: two tensors</h2><p>AlphaFold thinks in two representations at once: an MSA representation and a pair representation.</p></div></div>
   <div class="grid">
     <article class="card span-7">
-      <div class="card-top"><h3>The working tensors</h3><span class="tag">float, per crop</span></div>
+      <div class="card-top"><h3>The working tensors</h3><span class="tag">Float, per crop</span></div>
       <svg id="tensorSvg" class="fig tensors" role="img" aria-label="MSA, extra MSA and pair tensors as blocks"></svg>
       <div class="ctrl-row">
         <label class="ctrl-lab" for="cropRange">N<sub>res</sub></label>
@@ -197,7 +196,7 @@
       <p class="cap">Sizes for one copy in fp32. The pair tensor grows as N², triangle attention logits as N³. That is why training used crops of <b>256</b> residues (then <b>384</b> in fine-tuning), and why long proteins need chunking and a big GPU.</p>
     </article>
     <article class="card span-5">
-      <div class="card-top"><h3>Pair initialisation</h3><span class="tag">one channel shown</span></div>
+      <div class="card-top"><h3>Pair initialisation</h3><span class="tag">One channel shown</span></div>
       <canvas id="pairInitCv" class="fig wide3" aria-label="Outer sum and relative position build the initial pair representation"></canvas>
       <div class="eq" data-eq="embed"></div>
       <div class="eq" data-eq="msaembed"></div>
@@ -216,7 +215,7 @@
   <div class="sec-head"><span class="num">03</span><div><h2>Evoformer: 48 blocks, two tracks</h2><p>Each block updates the MSA track and the pair track, and lets them talk. 48 blocks, separate weights.</p></div></div>
   <div class="grid">
     <article class="card span-7">
-      <div class="card-top"><h3>One Evoformer block</h3><span class="tag">tap an operation</span></div>
+      <div class="card-top"><h3>One Evoformer block</h3><span class="tag">Tap an operation</span></div>
       <svg id="evoSvg" class="fig evo" role="img" aria-label="Evoformer block diagram"></svg>
       <p class="cap">Teal: MSA track <span class="mono">m ∈ ℝ<sup>N<sub>seq</sub>×N<sub>res</sub>×256</sup></span>. Amber: pair track <span class="mono">z ∈ ℝ<sup>N<sub>res</sub>×N<sub>res</sub>×128</sup></span>. Two bridges: the pair track biases MSA row attention; the outer product mean writes MSA statistics into the pair track. Every operation is residual (x ← x + f(x)).</p>
     </article>
@@ -228,7 +227,7 @@
     </article>
 
     <article class="card span-12 tri-card">
-      <div class="card-top"><h3>The triangle update: the key idea</h3><span class="tag">tap a cell · drag across the matrix</span></div>
+      <div class="card-top"><h3>The triangle update: the key idea</h3><span class="tag">Tap a cell · drag across the matrix</span></div>
       <div class="tri-layout">
         <div class="tri-left">
           <canvas id="triCv" class="fig sq" aria-label="Pair matrix with the cells that update the chosen pair"></canvas>
@@ -236,7 +235,7 @@
         </div>
         <div class="tri-right">
           <canvas id="triGeo" class="fig tri-geo" aria-label="Triangle i, j, k with real distances and the bound on d_ij"></canvas>
-          <div class="ctrl-row"><button id="triPlay" class="btn">▶ sweep k</button><span class="readout" id="triRead"></span></div>
+          <div class="ctrl-row"><button id="triPlay" class="btn">Sweep k</button><span class="readout" id="triRead"></span></div>
           <div class="eq" id="triEq"></div>
           <div class="eq" data-eq="triineq"></div>
           <p class="cap">Treat z<sub>ij</sub> as a belief about the edge i–j. Edges i–k and j–k for a third residue k constrain it: three distances must form a triangle. The bar shows the bound that the true distances of every k already seen put on d<sub>ij</sub>; it shrinks onto the true value as k sweeps. AlphaFold does not compute this bound. The triangle operations give each edge exactly the wiring — <em>all</em> k at once — to learn consistency of this kind, and 48 blocks repeat it.</p>
@@ -251,11 +250,11 @@
   <div class="sec-head"><span class="num">04</span><div><h2>Structure module: a gas of rigid frames</h2><p>Each residue is a rigid body — a rotation and a translation. All start at the origin.</p></div></div>
   <div class="grid">
     <article class="card span-8">
-      <div class="card-top"><h3>From the "black hole" to a fold</h3><span class="tag synth">real final frames · illustrative path</span></div>
+      <div class="card-top"><h3>From the "black hole" to a fold</h3><span class="tag synth">Real final frames · illustrative path</span></div>
       <canvas id="smCv" class="fig view3d" aria-label="Residue frames moving from the origin to the folded structure"></canvas>
       <div class="ctrl-row">
-        <button id="smPlay" class="btn">▶ play</button>
-        <label class="ctrl-lab" for="smLayer">layer</label>
+        <button id="smPlay" class="btn">Play</button>
+        <label class="ctrl-lab" for="smLayer">Layer</label>
         <input type="range" id="smLayer" min="0" max="8" step="0.01" value="8">
         <output id="smOut" class="mono">8</output>
       </div>
@@ -273,12 +272,12 @@
     </article>
 
     <article class="card span-7">
-      <div class="card-top"><h3>Invariant Point Attention</h3><span class="tag">move the whole protein</span></div>
+      <div class="card-top"><h3>Invariant Point Attention</h3><span class="tag">Move the whole protein</span></div>
       <div class="ipa-layout">
         <canvas id="ipaCv" class="fig view3d small" aria-label="The protein under a global rotation"></canvas>
         <div class="ipa-side">
           <canvas id="ipaStrip" class="fig strip" aria-label="Attention weights of one residue, IPA and naive"></canvas>
-          <div class="ctrl-row"><label class="ctrl-lab" for="ipaRot">rotate + move all</label><input type="range" id="ipaRot" min="0" max="360" step="1" value="0"><output id="ipaOut" class="mono">0°</output></div>
+          <div class="ctrl-row"><label class="ctrl-lab" for="ipaRot">Rotate and move all</label><input type="range" id="ipaRot" min="0" max="360" step="1" value="0"><output id="ipaOut" class="mono">0°</output></div>
           <p class="readout" id="ipaRead"></p>
         </div>
       </div>
@@ -287,7 +286,7 @@
       <p class="cap">Each residue proposes query and key <em>points</em> in its own local frame (4 query points, 8 value points per head, 12 heads). The point term compares them in global space. A global move T<sub>g</sub> moves both points by the same rigid motion, and distances do not change — so the logits and the update do not depend on where the protein sits or how it is turned. The strip computes both terms live for residue <span id="ipaRes">50</span>: the IPA row stays fixed while you turn the protein; a naive score on raw global coordinates does not.</p>
     </article>
     <article class="card span-5">
-      <div class="card-top"><h3>Backbone torsions of the model</h3><span class="tag">computed from coordinates</span></div>
+      <div class="card-top"><h3>Backbone torsions of the model</h3><span class="tag">Computed from coordinates</span></div>
       <canvas id="ramaCv" class="fig sq" aria-label="Ramachandran plot of the model coloured by pLDDT"></canvas>
       <p class="readout" id="ramaRead"></p>
       <p class="cap">φ and ψ for every residue, read off the predicted backbone and coloured by pLDDT. Confident residues fall in the helix and strand basins; the floppy N-terminal tail scatters. Tap a dot.</p>
@@ -300,18 +299,18 @@
   <div class="sec-head"><span class="num">05</span><div><h2>Recycling and training losses</h2><p>The whole network runs again on its own output — then a loss in frame space tells it how wrong it was.</p></div></div>
   <div class="grid">
     <article class="card span-5">
-      <div class="card-top"><h3>Recycling</h3><span class="tag synth">illustrative maps</span></div>
+      <div class="card-top"><h3>Recycling</h3><span class="tag synth">Illustrative maps</span></div>
       <canvas id="recCv" class="fig sq" aria-label="Predicted distance map sharpening over recycles"></canvas>
-      <div class="ctrl-row"><label class="ctrl-lab" for="recRange">cycle</label><input type="range" id="recRange" min="0" max="3" step="0.01" value="0"><output id="recOut" class="mono">0</output></div>
+      <div class="ctrl-row"><label class="ctrl-lab" for="recRange">Cycle</label><input type="range" id="recRange" min="0" max="3" step="0.01" value="0"><output id="recOut" class="mono">0</output></div>
       <p class="cap">Inference does 1 + 3 passes through the same weights. In training the number of cycles is sampled (1–4) and the gradient flows only through the last, so the net learns to improve <em>any</em> earlier guess. The map here is the model's real Cβ distance matrix blurred less with each cycle — a picture of the idea, not of real intermediates.</p>
     </article>
     <article class="card span-7">
-      <div class="card-top"><h3>FAPE: frame aligned point error</h3><span class="tag">computed live</span></div>
+      <div class="card-top"><h3>FAPE: frame aligned point error</h3><span class="tag">Computed live</span></div>
       <div class="fape-layout">
         <canvas id="fapeCv" class="fig view3d small" aria-label="True structure and a perturbed copy"></canvas>
         <div class="fape-side">
           <div class="seg col" id="fapeModes" role="group" aria-label="Perturbation"></div>
-          <div class="ctrl-row"><label class="ctrl-lab" for="fapeBend">bend at 72</label><input type="range" id="fapeBend" min="0" max="90" step="1" value="30"><output id="fapeOut" class="mono">30°</output></div>
+          <div class="ctrl-row"><label class="ctrl-lab" for="fapeBend">Bend at 72</label><input type="range" id="fapeBend" min="0" max="90" step="1" value="30"><output id="fapeOut" class="mono">30°</output></div>
           <dl class="fape-read" id="fapeRead"></dl>
         </div>
       </div>
@@ -322,7 +321,7 @@
       <div class="card-top"><h3>The loss, term by term</h3></div>
       <div class="eq" data-eq="loss"></div>
       <table class="dims loss">
-        <tr><th>term</th><th>weight</th><th>supervises</th><th>head</th></tr>
+        <tr><th>Term</th><th>Weight</th><th>Supervises</th><th>Head</th></tr>
         <tr><td>FAPE (final, all atoms)</td><td class="mono">0.5</td><td>final structure in every frame</td><td>structure module</td></tr>
         <tr><td>aux (every layer, backbone)</td><td class="mono">0.5</td><td>backbone FAPE + torsions at each of 8 layers</td><td>structure module</td></tr>
         <tr><td>distogram</td><td class="mono">0.3</td><td>Cβ distance, 64 bins over 2–22 Å</td><td>pair → linear</td></tr>
@@ -348,12 +347,12 @@
       <div class="legend plddt-legend"><span><i class="sw" style="background:#0053d6"></i>&gt; 90 very high</span><span><i class="sw" style="background:#65cbf3"></i>70–90 confident</span><span><i class="sw" style="background:#ffdb13"></i>50–70 low</span><span><i class="sw" style="background:#ff7d45"></i>&lt; 50 very low</span></div>
     </article>
     <article class="card span-6">
-      <div class="card-top"><h3>Predicted aligned error</h3><span class="tag">tap a cell</span></div>
+      <div class="card-top"><h3>Predicted aligned error</h3><span class="tag">Tap a cell</span></div>
       <canvas id="paeCv" class="fig sq" aria-label="PAE matrix"></canvas>
       <p class="readout" id="paeRead">Tap or hover the map: residue i is the frame aligned on, j is the residue scored.</p>
     </article>
     <article class="card span-12">
-      <div class="card-top"><h3>pLDDT per residue</h3><span class="tag">tap a bar</span></div>
+      <div class="card-top"><h3>pLDDT per residue</h3><span class="tag">Tap a bar</span></div>
       <canvas id="plddtCv" class="fig bars" aria-label="Per-residue pLDDT"></canvas>
       <p class="readout" id="plRead"></p>
     </article>
@@ -393,11 +392,11 @@
   <div class="sec-head"><span class="num">07</span><div><h2>AlphaFold 3: pairs, then diffusion</h2><p>Same pair-centric trunk idea; a generative head over raw atom coordinates instead of frames.</p></div></div>
   <div class="grid">
     <article class="card span-7">
-      <div class="card-top"><h3>Denoising atom coordinates</h3><span class="tag synth">illustrative denoiser</span></div>
+      <div class="card-top"><h3>Denoising atom coordinates</h3><span class="tag synth">Illustrative denoiser</span></div>
       <canvas id="difCv" class="fig view3d" aria-label="Atoms denoised from noise to the structure"></canvas>
       <div class="ctrl-row">
-        <button id="difPlay" class="btn">▶ sample</button>
-        <label class="ctrl-lab" for="difRange">step</label>
+        <button id="difPlay" class="btn">Sample</button>
+        <label class="ctrl-lab" for="difRange">Step</label>
         <input type="range" id="difRange" min="0" max="200" step="1" value="200">
         <output id="difOut" class="mono">200</output>
       </div>

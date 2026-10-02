@@ -243,7 +243,7 @@ function initPipe() {
       const g = el('g', { class: 'node', 'data-go': n.go, tabindex: 0, role: 'link' });
       el('rect', { x, y, width: w, height: h, rx: 10, fill: '#0b0e16', stroke: n.c, 'stroke-width': 1.3 }, g);
       const t1 = el('text', { x: x + w / 2, y: y + h / 2 - 4, fill: '#fff', 'font-size': narrow ? 13 : 13.5, 'font-weight': 600, 'text-anchor': 'middle' }, g); t1.textContent = n.t;
-      const t2 = el('text', { x: x + w / 2, y: y + h / 2 + 13, fill: n.c, 'font-size': 10.5, 'text-anchor': 'middle', 'font-family': 'IBM Plex Mono, ui-monospace, monospace' }, g); t2.textContent = n.s;
+      const t2 = el('text', { x: x + w / 2, y: y + h / 2 + 13, fill: n.c, 'font-size': 10.5, 'text-anchor': 'middle', 'font-family': 'ui-monospace, SF Mono, Menlo, monospace' }, g); t2.textContent = n.s;
     }
     svg.querySelectorAll('.node').forEach(g => {
       const go = () => $(g.dataset.go).scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -310,7 +310,7 @@ function initMsa() {
         const k = i === sel ? 1 : 0.62;
         g.fillStyle = `rgba(${col[0]},${col[1]},${col[2]},${k})`;
         g.fillRect(padL + i * cw, y, Math.max(1, cw - (cw > 4 ? 0.6 : 0)), Math.max(0.8, rh - (rh > 4 ? 0.6 : 0)));
-        if (rh >= 11 && cw >= 8) { g.fillStyle = 'rgba(8,10,16,0.85)'; g.font = `500 ${Math.min(rh, cw) * 0.72}px IBM Plex Mono, ui-monospace, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(a, xc(i), y + rh / 2 + 0.5); }
+        if (rh >= 11 && cw >= 8) { g.fillStyle = 'rgba(8,10,16,0.85)'; g.font = `500 ${Math.min(rh, cw) * 0.72}px ui-monospace, SF Mono, Menlo, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(a, xc(i), y + rh / 2 + 0.5); }
       }
     }
     // query row
@@ -318,7 +318,7 @@ function initMsa() {
     for (let i = 0; i < L; i++) {
       const col = AA_COL[SEQ[i]];
       g.fillStyle = css(i === sel ? [255, 255, 255] : mix(col, [255, 255, 255], 0.15));
-      if (cw >= 7) { g.font = `600 ${Math.min(13, cw * 0.95)}px IBM Plex Mono, ui-monospace, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(SEQ[i], xc(i), qy + qH / 2); }
+      if (cw >= 7) { g.font = `600 ${Math.min(13, cw * 0.95)}px ui-monospace, SF Mono, Menlo, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(SEQ[i], xc(i), qy + qH / 2); }
       else { g.fillRect(padL + i * cw, qy + 2, cw - 0.4, qH - 4); }
     }
     // conservation bars
@@ -366,7 +366,7 @@ function initMsa() {
     g.strokeStyle = 'rgba(255,255,255,0.12)'; g.beginPath(); g.moveTo(pad, pad); g.lineTo(pad + L * s, pad + L * s); g.stroke();
     g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1;
     g.strokeRect(pad + sel * s, pad, s, L * s); g.strokeRect(pad, pad + sel * s, L * s, s);
-    g.fillStyle = '#8a91a5'; g.font = '9.5px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
+    g.fillStyle = '#8a91a5'; g.font = '9.5px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
     for (let t = 20; t <= L; t += 20) { g.fillText(t, pad + (t - 0.5) * s, pad - 3); g.save(); g.translate(pad - 3, pad + (t - 0.5) * s); g.rotate(-Math.PI / 2); g.fillText(t, 0, 0); g.restore(); }
     g.textAlign = 'right'; g.textBaseline = 'top'; g.fillStyle = '#9aa3b8'; g.font = '10px Inter, system-ui, sans-serif';
     g.fillText('true contacts', pad + L * s - 4, pad + 4);
@@ -410,7 +410,7 @@ function initEmbed() {
     el('rect', { x, y, width: w, height: h, fill: col, 'fill-opacity': 0.12, stroke: col, 'stroke-width': 1.2 });
     const grid = Math.max(3, Math.min(12, Math.round(w / 14)));
     for (let k = 1; k < grid; k++) el('line', { x1: x + w * k / grid, y1: y, x2: x + w * k / grid, y2: y + h, stroke: col, 'stroke-opacity': 0.18 });
-    const t = (tx, ty, s, a = {}) => { const e = el('text', Object.assign({ x: tx, y: ty, fill: '#c3c8d6', 'font-size': 11, 'font-family': 'IBM Plex Mono, ui-monospace, monospace' }, a)); e.textContent = s; };
+    const t = (tx, ty, s, a = {}) => { const e = el('text', Object.assign({ x: tx, y: ty, fill: '#c3c8d6', 'font-size': 11, 'font-family': 'ui-monospace, SF Mono, Menlo, monospace' }, a)); e.textContent = s; };
     t(x + w / 2, y + h + 14, labels[0], { 'text-anchor': 'middle' });
     t(x - 5, y + h / 2, labels[1], { 'text-anchor': 'end', 'dominant-baseline': 'middle' });
     t(x + w + dx + 3, y - dy + (h) / 2, labels[2], { 'text-anchor': 'start', 'dominant-baseline': 'middle' });
@@ -463,7 +463,7 @@ function initEmbed() {
     panels.forEach(([fn, lab], p) => {
       const x0 = 4 + p * (side + gap);
       for (let i = 0; i < L; i++) for (let j = 0; j < L; j++) { g.fillStyle = css(div(fn(i, j))); g.fillRect(x0 + j * s, top + i * s, s + 0.4, s + 0.4); }
-      g.fillStyle = '#c3c8d6'; g.font = '10.5px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'left'; g.textBaseline = 'bottom';
+      g.fillStyle = '#c3c8d6'; g.font = '10.5px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'left'; g.textBaseline = 'bottom';
       g.fillText(lab, x0, top - 4);
       if (p < 2) { g.fillStyle = '#c3c8d6'; g.font = '600 16px Inter, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(p === 0 ? '+' : '=', x0 + side + gap / 2, top + side / 2); }
     });
@@ -487,19 +487,19 @@ const OPS = [
   { id: 'opm', name: 'Outer product mean', track: 'MSA → pair', col: '#e8eaf0', eq: 'opm',
     dims: [['in', 'm → a, b: N_seq × N_res × 32'], ['outer', '32 × 32 = 1024 per (i, j)'], ['out', 'Lin → N_res × N_res × 128']],
     text: 'For each pair of columns i, j, take the outer product of their projections in each sequence and average over sequences. That is a learned, many-channel version of the column co-variation in 01. This is the MSA → pair bridge.' },
-  { id: 'tmo', name: 'Triangle update, outgoing edges', track: 'pair track', col: '#f4a64a', eq: 'triout', tri: 'out',
+  { id: 'tmo', name: 'Triangle update, outgoing edges', track: 'Pair track', col: '#f4a64a', eq: 'triout', tri: 'out',
     dims: [['in', 'z: N_res × N_res × 128'], ['hidden c', '128'], ['sum over', 'k: edges i→k and j→k'], ['cost', 'O(N_res³ · c)']],
     text: 'Edge i–j is updated from the two edges that leave i and j toward every third residue k. Multiplicative, gated, no softmax.' },
-  { id: 'tmi', name: 'Triangle update, incoming edges', track: 'pair track', col: '#f4a64a', eq: 'triin', tri: 'in',
+  { id: 'tmi', name: 'Triangle update, incoming edges', track: 'Pair track', col: '#f4a64a', eq: 'triin', tri: 'in',
     dims: [['in', 'z: N_res × N_res × 128'], ['hidden c', '128'], ['sum over', 'k: edges k→i and k→j']],
     text: 'Same, with the edges that arrive at i and j. z is not symmetric, so both directions are needed.' },
-  { id: 'tas', name: 'Triangle attention, starting node', track: 'pair track', col: '#f4a64a', eq: 'tristart', tri: 'start',
+  { id: 'tas', name: 'Triangle attention, starting node', track: 'Pair track', col: '#f4a64a', eq: 'tristart', tri: 'start',
     dims: [['in', 'z: N_res × N_res × 128'], ['heads × c', '4 × 32'], ['attend', 'edge ij → edges ik'], ['bias', 'from edge jk']],
     text: 'Edge i–j attends over all edges that start at i. The third side of the triangle, j–k, biases the logit.' },
-  { id: 'tae', name: 'Triangle attention, ending node', track: 'pair track', col: '#f4a64a', eq: 'triend', tri: 'end',
+  { id: 'tae', name: 'Triangle attention, ending node', track: 'Pair track', col: '#f4a64a', eq: 'triend', tri: 'end',
     dims: [['in', 'z: N_res × N_res × 128'], ['heads × c', '4 × 32'], ['attend', 'edge ij → edges kj'], ['bias', 'from edge ki']],
     text: 'Edge i–j attends over all edges that end at j, with bias from k–i.' },
-  { id: 'ptr', name: 'pair transition', track: 'pair track', col: '#f4a64a', eq: 'transition',
+  { id: 'ptr', name: 'Pair transition', track: 'Pair track', col: '#f4a64a', eq: 'transition',
     dims: [['in', 'z: N_res × N_res × 128'], ['hidden', '128 → 512 → 128']],
     text: 'A two-layer MLP at each (i, j). Then the block ends; 47 more follow with their own weights. After block 48, s_i = Lin(m_1i) — the first MSA row — goes to the structure module with z.' },
 ];
@@ -585,7 +585,7 @@ function initTri() {
   const cv = $('triCv'), geo = $('triGeo');
   let I = 22, J = 61, mode = 'out', k = 0, playing = true, acc = 0;
   let base = null;
-  const MODES = [['out', 'mult · outgoing'], ['in', 'mult · incoming'], ['start', 'attn · starting'], ['end', 'attn · ending']];
+  const MODES = [['out', 'Mult · outgoing'], ['in', 'Mult · incoming'], ['start', 'Attn · starting'], ['end', 'Attn · ending']];
   const EQ = { out: 'triout', in: 'triin', start: 'tristart', end: 'triend' };
   const setBtn = segButtons($('triModes'), MODES, m => { mode = m; draw(); }, mode);
   selectTriMode = m => { mode = m; setBtn(m); draw(); };
@@ -623,7 +623,7 @@ function initTri() {
     g.strokeRect(pad + ca * s - 1, pad + ra * s - 1, s + 2, s + 2); g.strokeRect(pad + cb * s - 1, pad + rb * s - 1, s + 2, s + 2);
     g.fillStyle = '#fff'; g.fillRect(pad + J * s - 1, pad + I * s - 1, s + 2, s + 2);
     g.strokeStyle = '#ff5d6c'; g.lineWidth = 2; g.beginPath(); g.arc(pad + (J + 0.5) * s, pad + (I + 0.5) * s, Math.max(6, s * 2.2), 0, 6.283); g.stroke();
-    g.fillStyle = '#8a91a5'; g.font = '9.5px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
+    g.fillStyle = '#8a91a5'; g.font = '9.5px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
     for (let t = 20; t <= L; t += 20) { g.fillText(t, pad + (t - 0.5) * s, pad - 3); g.save(); g.translate(pad - 3, pad + (t - 0.5) * s); g.rotate(-Math.PI / 2); g.fillText(t, 0, 0); g.restore(); }
     g.textAlign = 'left'; g.fillStyle = '#c3c8d6'; g.textBaseline = 'top'; g.font = '10px Inter, sans-serif';
     g.fillText('j →', pad + side - 22, 4); g.save(); g.translate(4, pad + side - 4); g.rotate(-Math.PI / 2); g.fillText('i →', 0, 0); g.restore();
@@ -643,7 +643,7 @@ function initTri() {
     const pk = [x0 + cx * sc, yb - cy * sc];
     const edge = (a, b, c, wd, lab) => {
       g.strokeStyle = c; g.lineWidth = wd; g.beginPath(); g.moveTo(...a); g.lineTo(...b); g.stroke();
-      g.fillStyle = c; g.font = '10.5px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillStyle = c; g.font = '10.5px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
       const mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1], n = Math.hypot(dx, dy) || 1;
       let nx = dy / n, ny = -dx / n; if (ny > 0 || (ny === 0 && a[1] === b[1])) { nx = -nx; ny = -ny; }
       if (a[1] === b[1]) { nx = 0; ny = 1; }
@@ -666,7 +666,7 @@ function initTri() {
     const l1 = Math.abs(dik - djk), h1 = dik + djk;
     if (valid(k)) { g.strokeStyle = 'rgba(255,255,255,0.4)'; g.lineWidth = 1; g.strokeRect(X(l1), by + 12, Math.max(1, X(h1) - X(l1)), 6); }
     g.strokeStyle = '#ff5d6c'; g.lineWidth = 2; g.beginPath(); g.moveTo(X(dij), by - 13); g.lineTo(X(dij), by + 22); g.stroke();
-    g.fillStyle = '#8a91a5'; g.font = '9.5px IBM Plex Mono, ui-monospace, monospace'; g.textBaseline = 'top'; g.textAlign = 'center';
+    g.fillStyle = '#8a91a5'; g.font = '9.5px ui-monospace, SF Mono, Menlo, monospace'; g.textBaseline = 'top'; g.textAlign = 'center';
     for (let d = 0; d <= maxD; d += 10) g.fillText(d, X(d), by + 26);
     g.textAlign = 'left'; g.fillStyle = '#c3c8d6';
     if (narrow) {
@@ -679,7 +679,7 @@ function initTri() {
     $('triRead').innerHTML = `i=<b>${I + 1}</b> j=<b>${J + 1}</b> k=<b>${k + 1}</b> · bound [${lo.toFixed(1)}, ${hi < Infinity ? hi.toFixed(1) : '∞'}] Å`;
   }
   const play = $('triPlay');
-  const setPlay = p => { playing = p; play.textContent = p ? '❚❚ pause' : '▶ sweep k'; };
+  const setPlay = p => { playing = p; play.textContent = p ? 'Pause' : 'Sweep k'; };
   play.addEventListener('click', () => { if (!playing && k >= L - 1) k = 0; setPlay(!playing); });
   onPoint(cv, (x, y, kind) => {
     const w = cv.getBoundingClientRect().width, s = (w - 28) / L;
@@ -735,9 +735,9 @@ function initStruct() {
   const slider = $('smLayer'), out = $('smOut'), play = $('smPlay');
   const set = v => { lam = v; slider.value = v; out.textContent = v.toFixed(1); view.dirty = true; };
   slider.addEventListener('input', () => { setPlay(false); set(+slider.value); });
-  const setPlay = p => { playing = p; play.textContent = p ? '❚❚ pause' : '▶ play'; };
+  const setPlay = p => { playing = p; play.textContent = p ? 'Pause' : 'Play'; };
   play.addEventListener('click', () => { if (!playing && lam >= 8) set(0); setPlay(!playing); });
-  segButtons($('smToggles'), [['frames', 'frames'], ['trace', 'Cα trace'], ['atoms', 'all atoms']], k => {
+  segButtons($('smToggles'), [['frames', 'Frames'], ['trace', 'Cα trace'], ['atoms', 'All atoms']], k => {
     show[k] = !show[k];
     $('smToggles').querySelectorAll('button').forEach(b => b.classList.toggle('on', show[b.dataset.key]));
     view.dirty = true;
@@ -780,7 +780,7 @@ function initIpa() {
     const rows = [[a, 'IPA point term  softmax_j', '#3ddc97'], [b, 'naive: softmax_j(x_j · u)', '#ff5d6c']];
     rows.forEach(([v, lab, col], r) => {
       const y0 = 14 + r * (rowH + 24), mx = Math.max(...v);
-      g.fillStyle = '#c3c8d6'; g.font = '10px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'left'; g.textBaseline = 'bottom';
+      g.fillStyle = '#c3c8d6'; g.font = '10px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'left'; g.textBaseline = 'bottom';
       g.fillText(lab, 0, y0 - 1);
       g.fillStyle = '#0a0c13'; g.fillRect(0, y0, w, rowH);
       const c = hex(col);
@@ -822,7 +822,7 @@ function initRama() {
     basin(-65, -40, 50, 50, 'α helix'); basin(-115, 135, 75, 60, 'β strand'); basin(60, 45, 30, 35, 'αL');
     g.strokeStyle = 'rgba(255,255,255,0.08)';
     for (let a = -180; a <= 180; a += 90) { g.beginPath(); g.moveTo(X(a), 6); g.lineTo(X(a), 6 + s); g.moveTo(pad, Y(a)); g.lineTo(pad + s, Y(a)); g.stroke(); }
-    g.fillStyle = '#8a91a5'; g.font = '9.5px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
+    g.fillStyle = '#8a91a5'; g.font = '9.5px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'top';
     for (let a = -180; a <= 180; a += 90) g.fillText(a, X(a), 6 + s + 2);
     g.textAlign = 'right'; g.textBaseline = 'middle';
     for (let a = -180; a <= 180; a += 90) g.fillText(a, pad - 3, Y(a));
@@ -870,7 +870,7 @@ function initRecycle() {
       const v = lerp(A[i * L + j], B[i * L + j], t); err += (v - DCB[i * L + j]) ** 2;
       g.fillStyle = css(distColor(v)); g.fillRect(pad + j * s, pad + i * s, s + 0.4, s + 0.4);
     }
-    g.fillStyle = '#8a91a5'; g.font = '9.5px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
+    g.fillStyle = '#8a91a5'; g.font = '9.5px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
     for (let q = 20; q <= L; q += 20) g.fillText(q, pad + (q - 0.5) * s, pad - 3);
     g.textAlign = 'left'; g.textBaseline = 'top'; g.fillStyle = '#fff'; g.font = '600 11px Inter, sans-serif';
     g.fillText(c < 0.05 ? 'pass 1 (no recycling)' : `after recycle ${c.toFixed(1)}`, pad + 6, pad + 6);
@@ -914,7 +914,7 @@ function initFape() {
       <dt>sees the change?</dt><dd>FAPE ${fa > 0.05 ? '<b>yes</b>' : 'no'} · distances ${dr > 0.05 ? '<b>yes</b>' : 'no'}</dd>`;
     view.dirty = true;
   }
-  segButtons($('fapeModes'), [['copy', 'exact copy'], ['move', 'rotate + move all'], ['mirror', 'mirror image'], ['bend', 'bend the C-term']], k => { mode = k; update(); }, mode);
+  segButtons($('fapeModes'), [['copy', 'Exact copy'], ['move', 'Rotate and move all'], ['mirror', 'Mirror image'], ['bend', 'Bend the C-term']], k => { mode = k; update(); }, mode);
   $('fapeBend').addEventListener('input', e => { theta = +e.target.value; $('fapeOut').textContent = theta + '°'; if (mode !== 'bend') { mode = 'bend'; $('fapeModes').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.key === 'bend')); } update(); });
   update();
   register(cv, dt => view.tick(dt));
@@ -940,7 +940,7 @@ function initOutputs() {
       }
       for (const [r, c] of [[selI, '#ffffff'], [selJ, '#ff5d6c']]) if (r != null) add.dot(CA[r], hex(c), 1.6, r);
     } });
-  segButtons($('outColor'), [['plddt', 'pLDDT'], ['rainbow', 'N → C'], ['atoms', 'all atoms']], k => { color = k; view.dirty = true; }, color);
+  segButtons($('outColor'), [['plddt', 'pLDDT'], ['rainbow', 'N → C'], ['atoms', 'All atoms']], k => { color = k; view.dirty = true; }, color);
   function drawBars() {
     const { g, w, h } = fitCanvas(bars);
     g.clearRect(0, 0, w, h);
@@ -948,7 +948,7 @@ function initOutputs() {
     for (const [lo, hi, c] of [[90, 100, '#0053d6'], [70, 90, '#65cbf3'], [50, 70, '#ffdb13'], [0, 50, '#ff7d45']]) { g.fillStyle = c; g.globalAlpha = 0.07; g.fillRect(padL, Y(hi), w - padL - 4, Y(lo) - Y(hi)); }
     g.globalAlpha = 1;
     for (let i = 0; i < L; i++) { g.fillStyle = css(plddtColor(PL[i])); g.fillRect(padL + i * s + 0.3, Y(PL[i]), Math.max(1, s - 0.6), Y(0) - Y(PL[i])); }
-    g.fillStyle = '#8a91a5'; g.font = '9.5px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    g.fillStyle = '#8a91a5'; g.font = '9.5px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
     for (const v of [50, 70, 90]) { g.fillText(v, padL - 4, Y(v)); g.strokeStyle = 'rgba(255,255,255,0.1)'; g.beginPath(); g.moveTo(padL, Y(v)); g.lineTo(w - 4, Y(v)); g.stroke(); }
     g.textAlign = 'center'; g.textBaseline = 'top';
     for (let t = 10; t <= L; t += 10) g.fillText(t, padL + (t - 0.5) * s, h - padB + 3);
@@ -966,7 +966,7 @@ function initOutputs() {
     }
     g.clearRect(0, 0, w, w);
     g.imageSmoothingEnabled = false; g.drawImage(paeImg, pad, pad, side, side);
-    g.fillStyle = '#8a91a5'; g.font = '9.5px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
+    g.fillStyle = '#8a91a5'; g.font = '9.5px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'center'; g.textBaseline = 'bottom';
     for (let t = 20; t <= L; t += 20) { g.fillText(t, pad + (t - 0.5) * s, pad - 3); g.save(); g.translate(pad - 3, pad + (t - 0.5) * s); g.rotate(-Math.PI / 2); g.fillText(t, 0, 0); g.restore(); }
     g.font = '10px Inter, sans-serif'; g.fillStyle = '#c3c8d6'; g.textAlign = 'right'; g.textBaseline = 'top';
     g.fillText('scored residue j →', pad + side - 2, 2);
@@ -1023,7 +1023,7 @@ function initDiffusion() {
     for (let t = 0; t <= STEPS; t++) { const x = X(t), y = Y(sigma(t)); t ? g.lineTo(x, y) : g.moveTo(x, y); }
     g.stroke();
     g.fillStyle = '#fff'; g.beginPath(); g.arc(X(step), Y(sigma(step)), 4, 0, 6.283); g.fill();
-    g.fillStyle = '#8a91a5'; g.font = '9.5px IBM Plex Mono, ui-monospace, monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
+    g.fillStyle = '#8a91a5'; g.font = '9.5px ui-monospace, SF Mono, Menlo, monospace'; g.textAlign = 'right'; g.textBaseline = 'middle';
     g.fillText('σ', pad - 18, h / 2); g.fillText(SMAX, pad - 3, Y(SMAX)); g.fillText(SMIN, pad - 3, Y(SMIN));
     g.textAlign = 'center'; g.textBaseline = 'bottom'; g.fillText('step', X(STEPS / 2), h - 1);
     $('difOut').textContent = step;
@@ -1031,7 +1031,7 @@ function initDiffusion() {
   const set = v => { step = v; range.value = v; drawSched(); view.dirty = true; };
   range.addEventListener('input', () => { setPlay(false); set(+range.value); });
   const play = $('difPlay');
-  const setPlay = p => { playing = p; play.textContent = p ? '❚❚ pause' : '▶ sample'; };
+  const setPlay = p => { playing = p; play.textContent = p ? 'Pause' : 'Sample'; };
   play.addEventListener('click', () => { if (!playing && step >= STEPS) set(0); setPlay(!playing); });
   onPoint(sched, (x, y, kind) => { if (kind === 'hover') return; const w = sched.getBoundingClientRect().width; setPlay(false); set(Math.round(clamp((x - 30) / (w - 38), 0, 1) * STEPS)); });
   watchSize(sched, drawSched); drawSched();
@@ -1108,7 +1108,7 @@ function initDepthChart() {
     if (!pts) return;
     const pl = 30, pr = 10, pt = 16, pb = 22;
     const X = n => pl + Math.log2(n / 4) / 7 * (w - pl - pr), Y = p => pt + (1 - p) * (h - pt - pb);
-    g.strokeStyle = 'rgba(255,255,255,0.08)'; g.fillStyle = '#8a91a5'; g.font = '9.5px IBM Plex Mono, ui-monospace, monospace';
+    g.strokeStyle = 'rgba(255,255,255,0.08)'; g.fillStyle = '#8a91a5'; g.font = '9.5px ui-monospace, SF Mono, Menlo, monospace';
     for (const p of [0, 0.5, 1]) { g.beginPath(); g.moveTo(pl, Y(p)); g.lineTo(w - pr, Y(p)); g.stroke(); g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillText(Math.round(p * 100) + '%', pl - 4, Y(p)); }
     g.textAlign = 'center'; g.textBaseline = 'top';
     for (const [n] of pts) g.fillText(n, X(n), h - pb + 4);
