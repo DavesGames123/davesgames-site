@@ -8,8 +8,26 @@
 //  SCREENSAVER: spec.saver lists calm sims. saver(t) runs each time the
 //  table-engine saver puts a cell on (behind its fade). It reseeds the cell,
 //  so a sim that converged or died starts again at each dwell.
+//  saverLabel(t, info) adds the live model parameters to the saver plate:
+//  SAVER_PARAMS maps each knob to the value its cs_* kernel computes with
+//  mix(lo, hi, k), and the line ends with the step count.
 // ============================================================================
 const MODES = {"life": 0, "brain": 0, "excitable": 1, "cyclic": 1, "forest": 8, "ising": 2, "rps": 7, "schelling": 2, "sandpile": 10, "dla": 11, "majority": 2, "hodgepodge": 1, "gray_scott": 3, "fitzhugh": 9, "mitosis": 3, "lenia": 4, "smoothlife": 4, "eden": 14, "heat": 16, "wave": 9, "advect": 4, "lbm": 5, "sand": 15, "erosion": 4, "highlife": 0, "daynight": 0, "seeds": 0, "maze": 0, "coral": 0, "replicator": 0, "anneal": 0, "gnarl": 0, "move": 0, "stains": 0, "amoeba": 0, "diamoeba": 0, "worms": 3, "waves_rd": 3, "labyrinth": 3, "solitons": 3, "holes": 3, "bz_spiral": 9, "fisher_kpp": 4, "allen_cahn": 9, "burgers": 9, "telegraph": 9, "perona_malik": 4, "ginzburg_landau": 9, "fog_reveal_memory": 17}; const STEPS = {"life": 1, "brain": 1, "excitable": 1, "cyclic": 1, "forest": 1, "ising": 2, "rps": 1, "schelling": 1, "sandpile": 4, "dla": 4, "majority": 1, "hodgepodge": 1, "gray_scott": 8, "fitzhugh": 4, "mitosis": 8, "lenia": 1, "smoothlife": 1, "eden": 2, "heat": 4, "wave": 2, "advect": 1, "lbm": 2, "sand": 3, "erosion": 2, "highlife": 1, "daynight": 1, "seeds": 1, "maze": 1, "coral": 1, "replicator": 1, "anneal": 1, "gnarl": 1, "move": 1, "stains": 1, "amoeba": 1, "diamoeba": 1, "worms": 8, "waves_rd": 8, "labyrinth": 8, "solitons": 8, "holes": 8, "bz_spiral": 4, "fisher_kpp": 4, "allen_cahn": 4, "burgers": 2, "telegraph": 2, "perona_malik": 4, "ginzburg_landau": 2, "fog_reveal_memory": 1};
+// [symbol, knob index, lo, hi, decimals]: the mix() calls of the saver cells in shaders/pack.wgsl
+const GS = (f0, f1, k0, k1) => [['F', 0, f0, f1, 4], ['k', 1, k0, k1, 4]];
+const SAVER_PARAMS = {
+  hodgepodge: [['k₁', 0, 1, 4, 2], ['k₂', 1, 1, 4, 2], ['g', 2, 5, 40, 1]],
+  gray_scott: GS(0.010, 0.070, 0.045, 0.070), mitosis: GS(0.030, 0.045, 0.060, 0.068),
+  waves_rd: GS(0.010, 0.020, 0.042, 0.050), labyrinth: GS(0.026, 0.034, 0.055, 0.062),
+  solitons: GS(0.028, 0.034, 0.058, 0.062), holes: GS(0.036, 0.042, 0.056, 0.060),
+  fitzhugh: [['a', 0, -0.1, 0.2, 3], ['ε', 1, 0.01, 0.1, 3], ['D_v', 2, 5, 60, 1]],
+  lenia: [['μ', 0, 0.10, 0.20, 3], ['σ', 1, 0.010, 0.030, 4]],
+  smoothlife: [['b₁', 0, 0.25, 0.30, 3], ['d₂', 1, 0.40, 0.50, 3], ['r', 2, 0.2, 1.0, 2]],
+  heat: [['D', 0, 0.05, 0.24, 3], ['r', 1, 0.06, 0.13, 3], ['κ', 2, 0.01, 0.06, 3]],
+  wave: [['c²', 0, 0.05, 0.45, 3], ['γ', 1, 0, 0.02, 4], ['p', 2, 0.01, 0.08, 3]],
+  allen_cahn: [['ε', 0, 0.5, 1.8, 2]],
+  ginzburg_landau: [['α', 0, 0, 1.4, 2], ['β', 1, -1.4, 1.4, 2]],
+};
 export const PAGE = {
   async init(ctx) {
     const { device, format, tiles, PACK, $ } = ctx; this.ctx = ctx; const N = 128;
@@ -33,6 +51,12 @@ export const PAGE = {
   },
   leave(t) { t.page.pendingReset = true; t.page.acc = 0; },
   saver(t) { const pg = t.page; pg.pendingReset = false; pg.reset = true; pg.seed = Math.random() * 100; pg.acc = 0; t.dirty = true; },
+  saverLabel(t, info) {
+    const ps = SAVER_PARAMS[t.s.name];
+    if (ps) info.lines.push(ps.map(([n, i, lo, hi, dp]) => `${n} = ${(lo + (hi - lo) * t.knobs[i]).toFixed(dp)}`).join(' · '));
+    info.lines.push(`step ${t.page.frame} · 128² grid`);
+    return info;
+  },
   tick(dt, now) { for (const t of this.ctx.tiles) { const pg = t.page; if (pg.pendingReset && t.rate <= 0.002) { pg.pendingReset = false; pg.reset = true; t.dirty = true; } } },
   knob(t, i) { if (i === 0 && ['life', 'brain', 'excitable', 'cyclic', 'majority', 'dla', 'ising'].includes(t.s.name)) t.page.reset = true; },
   step(enc, t, reset) {
