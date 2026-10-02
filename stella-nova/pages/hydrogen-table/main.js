@@ -40,6 +40,7 @@
      grep -n 'function sendFrame'   one animation frame: tiles in view
      grep -n 'function animDone'    frame time and the adaptive size
      grep -n 'window.snSaver'       screensaver hook (lib/screensaver.js)
+     grep -n 'function saverPlate'  screensaver label plate: n l m, R_nl, E_n, nodes
    ========================================================================== */
 import { shellTiles, colIndex, tileSpec, radialR, legendre, energyEV, meanR, L_LETTER, fillPose, poseMatrix } from './physics.js';
 import { MAPS, lut, colorize, outerGain } from './colormaps.js';
@@ -623,6 +624,54 @@ requestAnimationFrame(maybeExtend);
 startPool().then(() => { $('rdEngine').textContent = engine; render(); });
 
 // ------------------------------------------------------------ screensaver
+// The plate for opts.label (the shell draws it at the lower right). It names
+// the orbital in the detail view and copies the node, energy and <r> text
+// that openDetail wrote. The radial factor is written out from physics.js:
+// ρ = 2r/n, R ∝ ρ^l e^(−ρ/2) L_k^(2l+1)(ρ) with k = n − l − 1. Each term of
+// k!·L_k^a(ρ) = Σ (−1)^i C(k+a, k−i) (k!/i!) ρ^i is an integer.
+const SUP_D = '⁰¹²³⁴⁵⁶⁷⁸⁹', SUB_D = '₀₁₂₃₄₅₆₇₈₉';
+const sup = v => String(v).replace(/\d/g, c => SUP_D[c]);
+const sub = v => String(v).replace(/\d/g, c => SUB_D[c]).replace('-', '₋');
+const fact = k => { let f = 1; for (let i = 2; i <= k; i++) f *= i; return f; };
+const binom = (a, b) => (b < 0 || b > a ? 0 : fact(a) / (fact(b) * fact(a - b)));
+function laguerreText(k, a) {
+  if (k === 0) return '';
+  let s = '';
+  for (let i = 0; i <= k; i++) {
+    const c = binom(k + a, k - i) * fact(k) / fact(i), pw = i === 0 ? '' : i === 1 ? 'ρ' : 'ρ' + sup(i);
+    s += (i % 2 ? ' − ' : i ? ' + ' : '') + (c === 1 && i ? pw : c + pw);
+  }
+  return ' · (' + s + ')' + (k > 1 ? '/' + fact(k) : '');
+}
+function saverPlate(t) {
+  const { n, l, m } = t, am = Math.abs(m), k = n - l - 1, real = G.kind === 'real';
+  const rho = (l === 0 ? '' : l === 1 ? 'ρ' : 'ρ' + sup(l)) + 'e^(−ρ/2)';
+  const P = 'P' + sub(l) + (am ? sup(am) : '') + '(cos θ)';
+  const ang = m === 0 ? 'Y' + sub(l) + '₀ = N' + sub(l) + '₀ ' + P
+    : real ? 'Y = √2 N' + sub(l) + sub(am) + ' ' + P + ' · ' + (m > 0 ? 'cos ' : 'sin ') + (am === 1 ? '' : am) + 'φ'
+    : 'Y' + sub(l) + sub(m) + ' = N' + sub(l) + sub(am) + ' ' + P + ' · e^(' + (m < 0 ? '−' : '') + 'i' + (am === 1 ? '' : am) + 'φ)';
+  const txt = id => ($(id) && $(id).textContent) || '';
+  return {
+    title: 'Hydrogen ' + t.spec.name + ' orbital',
+    sub: real ? 'real orbital' : 'complex orbital, e^imφ',
+    lines: [
+      '|' + n + ', ' + l + ', ' + fmtM(m) + '⟩ · n = ' + n + ' (shell) · l = ' + l + ' (' + L_LETTER[l] + ') · m = ' + fmtM(m),
+      'E' + sub(n) + ' = ' + txt('dE').replace(/-/g, '−'),
+      'Radial nodes: ' + txt('dRad'),
+      'Angular nodes: ' + txt('dAng'),
+      '⟨r⟩ = (3n² − l(l+1))/2 = ' + txt('dR'),
+      'Cut: ' + txt('dPlane'),
+    ],
+    eq: [
+      'ψ' + sub(n) + sub(l) + sub(m) + '(r,θ,φ) = R' + sub(n) + sub(l) + '(r) · Y(θ,φ)',
+      'R' + sub(n) + sub(l) + '(r) ∝ ' + rho + laguerreText(k, 2 * l + 1),
+      'ρ = 2r / ' + n + 'a₀',
+      ang,
+      'Eₙ = −13.6057 eV / n²',
+    ],
+  };
+}
+
 // Hook for the shell screensaver (lib/screensaver.js). The table has no one
 // canvas to record, so the hook opens the detail view of one orbital, turns
 // it slowly with the rotation, and copies #dCanvas each frame into a new
@@ -649,6 +698,7 @@ window.snSaver = {
     const ctx = sv.getContext('2d', { alpha: false });
     const k = 1 - 0.6 * calm;
     A.rate = [6 * k, 2 * k, 9 * k]; FRAME_MS = 120;
+    const plate = typeof o.label === 'function' ? o.label : null;
     const css = getComputedStyle(document.documentElement);
     const serif = css.getPropertyValue('--serif').trim() || 'serif', sans = css.getPropertyValue('--sans').trim() || 'sans-serif';
     let alpha = 0, label = null;
@@ -686,6 +736,7 @@ window.snSaver = {
       detailSize = Math.min(1800, Math.round(side * dpr));
       if (cv.width !== detailSize) { cv.width = detailSize; cv.height = detailSize; }
       label = [t.spec.name, `|${t.n}, ${t.l}, ${fmtM(t.m)}⟩  ·  ${G.kind === 'real' ? 'real orbital' : 'complex, e^imφ'}`];
+      if (plate) plate(saverPlate(t));
     };
     (async () => {
       while (!pool.length || !TILES.length) await wait(100);
