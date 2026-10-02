@@ -563,6 +563,8 @@ const spec = {
     { id: 'tone', label: 'Tone', hex: '#e2531a' },
     { id: 'cream', label: 'Cream', hex: '#ffd27a' },
   ],
+  // screensaver: calm point-source cells, tempo and cell cycle for the table-engine hook (lib/table-engine.js)
+  saver: { cells: ['orbit', 'orbit_slow', 'lissajous', 'drift', 'figure8', 'spiral', 'comet', 'core_bloom', 'twin', 'triple', 'ring_source', 'cool_wave', 'vortex', 'plume_rise'], tempo: [0.8, 0.3], dpr: 2, cycle: 4, minDwell: 15, fade: 1.5 },
 };
 
 // ── emit index.html ──────────────────────────────────────────────────────────
@@ -650,6 +652,9 @@ const pageJs = `// =============================================================
 //  ping-ponged across two rgba32float textures. The present pass colors the
 //  temperature field through a metal palette (MODES picks it per cell). Same
 //  runtime as the simulation table. Regenerate with: node build.mjs
+//  SCREENSAVER: saver(t) runs each time the table-engine saver puts a cell
+//  on (behind its fade). It resets the cell to a cold plate with a new seed,
+//  so each cell builds its field from the source again.
 // ============================================================================
 const MODES = ${JSON.stringify(MODES)};
 const STEPS = ${JSON.stringify(STEPS)};
@@ -674,6 +679,7 @@ export const PAGE = {
     const rb = $('resetall'); if (rb) rb.addEventListener('click', () => { for (const t of tiles) { t.page.reset = true; t.page.seed = Math.random() * 100; t.dirty = true; } });
   },
   leave(t) { t.page.pendingReset = true; t.page.acc = 0; },
+  saver(t) { const pg = t.page; pg.pendingReset = false; pg.reset = true; pg.seed = Math.random() * 100; pg.acc = 0; t.dirty = true; },
   tick(dt, now) { for (const t of this.ctx.tiles) { const pg = t.page; if (pg.pendingReset && t.rate <= 0.002) { pg.pendingReset = false; pg.reset = true; t.dirty = true; } } },
   step(enc, t, reset) {
     const { device } = this.ctx; const pg = t.page; const d = pg.udata;

@@ -5,6 +5,9 @@
 //  ping-ponged across two rgba32float textures. The present pass colors the
 //  temperature field through a metal palette (MODES picks it per cell). Same
 //  runtime as the simulation table. Regenerate with: node build.mjs
+//  SCREENSAVER: saver(t) runs each time the table-engine saver puts a cell
+//  on (behind its fade). It resets the cell to a cold plate with a new seed,
+//  so each cell builds its field from the source again.
 // ============================================================================
 const MODES = {"orbit":0,"orbit_fast":0,"orbit_slow":1,"lissajous":1,"drift":0,"figure8":2,"spiral":1,"comet":0,"jitter":3,"wobble_ring":7,"billet":2,"billet_pulse":2,"soak":7,"blast":6,"even_glow":2,"core_bloom":1,"ramp_soak":2,"white_hot":6,"twin":0,"triple":1,"line_sweep_h":4,"line_sweep_v":2,"rain":0,"scatter":5,"chase":4,"ring_source":7,"pulse_grid":0,"dwell_stamp":0,"quench_fade":3,"hard_quench":3,"receding":5,"flicker_die":3,"cool_wave":5,"ember_die":3,"gutter":3,"breathe":5,"grain_h":2,"grain_v":2,"weave":5,"streaky":2,"fiber":7,"layered":5,"rolled":2,"diagonal":1,"advect_swirl":1,"vortex":0,"boil":1,"curl_drift":0,"eddies":4,"plume_rise":0,"convection":1,"storm":0,"smoke_heat":5,"combustion":0,"fire_front":2,"kpp_spread":1,"ignite_wander":0,"flare":4,"autocatalytic":6,"wildfire":0,"chain":1};
 const STEPS = {"orbit":4,"orbit_fast":4,"orbit_slow":5,"lissajous":4,"drift":4,"figure8":4,"spiral":4,"comet":5,"jitter":4,"wobble_ring":4,"billet":5,"billet_pulse":5,"soak":6,"blast":5,"even_glow":6,"core_bloom":5,"ramp_soak":5,"white_hot":5,"twin":4,"triple":4,"line_sweep_h":4,"line_sweep_v":4,"rain":4,"scatter":4,"chase":4,"ring_source":4,"pulse_grid":4,"dwell_stamp":4,"quench_fade":4,"hard_quench":4,"receding":4,"flicker_die":4,"cool_wave":4,"ember_die":4,"gutter":4,"breathe":5,"grain_h":4,"grain_v":4,"weave":4,"streaky":4,"fiber":4,"layered":4,"rolled":4,"diagonal":4,"advect_swirl":4,"vortex":4,"boil":4,"curl_drift":4,"eddies":4,"plume_rise":4,"convection":4,"storm":4,"smoke_heat":4,"combustion":6,"fire_front":6,"kpp_spread":6,"ignite_wander":6,"flare":6,"autocatalytic":6,"wildfire":6,"chain":6};
@@ -29,6 +32,7 @@ export const PAGE = {
     const rb = $('resetall'); if (rb) rb.addEventListener('click', () => { for (const t of tiles) { t.page.reset = true; t.page.seed = Math.random() * 100; t.dirty = true; } });
   },
   leave(t) { t.page.pendingReset = true; t.page.acc = 0; },
+  saver(t) { const pg = t.page; pg.pendingReset = false; pg.reset = true; pg.seed = Math.random() * 100; pg.acc = 0; t.dirty = true; },
   tick(dt, now) { for (const t of this.ctx.tiles) { const pg = t.page; if (pg.pendingReset && t.rate <= 0.002) { pg.pendingReset = false; pg.reset = true; t.dirty = true; } } },
   step(enc, t, reset) {
     const { device } = this.ctx; const pg = t.page; const d = pg.udata;
