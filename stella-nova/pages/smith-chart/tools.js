@@ -167,6 +167,7 @@
   // load, so a plain visit keeps a clean URL.
   let baseState = '', lastHash = '', writeT = 0;
   function scheduleWrite() {
+    if (SC.saverOn) return;               // the screensaver writes no hash
     clearTimeout(writeT);
     writeT = setTimeout(() => {
       const s = stateString();

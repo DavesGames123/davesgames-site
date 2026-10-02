@@ -47,6 +47,7 @@
      grep -n 'function onPointer'    drag the load, and the cursor
      grep -n 'function buildUI'      the panel bindings
      grep -n 'function setOpen'      the panel, the phone sheet, and the dock
+     grep -n 'window.snSaver'        the shell screensaver hook
 
    FRAMING. The panel, the dock, and the bars cover parts of the canvas.
    clearRect() measures them each frame. The chart center and radius then
@@ -674,6 +675,54 @@
     grip.addEventListener('pointercancel', () => { gripY = null; });
     SC.setGrid = setGrid; SC.setWalk = setWalk;
   }
+
+  // -------------------------------------------------------------- screensaver
+  // Shell screensaver hook (lib/screensaver.js). enter() hides the GUI, so
+  // clearRect() gives the full window and place() eases the chart to it. The
+  // autopilot moves the load on a slow loop in the gamma plane, eases the
+  // line length from 0 to 0.5 wavelength and back, and turns the grid
+  // through Z, Z + Y and Y three times per dwell, with a canvas fade. A top
+  // hook draws the load values on the canvas and fills the background under
+  // the chart, so a recording is opaque. SC.saverOn stops the hash write.
+  window.snSaver = {
+    enter(opts) {
+      const calm = Math.max(0, Math.min(1, +opts.calm || 0)), sp = 1 - 0.6 * calm;
+      const st = document.createElement('style');
+      st.textContent = 'html.saver #panel,html.saver .topbar,html.saver #status,html.saver #dock,html.saver #hint,html.saver #tip,'
+        + 'html.saver #gear,html.saver #toast,html.saver [data-occlude]{display:none!important}html.saver #chart{cursor:none}';
+      document.head.appendChild(st); document.documentElement.classList.add('saver');
+      SC.saverOn = true;
+      S.mode = 'z'; S.dir = 'gen'; S.circle = true; S.rim = true; setWalk(false);
+      if (SC.tools) { SC.tools.T.spec = 2; SC.tools.T.q = 0; SC.tools.T.marks = []; }
+      const grids = ['z', 'zy', 'y'], hold = Math.max(10, (+opts.seconds || 60) / 3), FADE = 0.8;
+      let gi = (opts.seed >>> 0) % 3, t = 0, tg = 0, last = 0;
+      const ph = ((opts.seed >>> 0) % 997) / 997 * TAU;
+      setGrid(grids[gi]);
+      SC.hooks.top.push((c, M) => {
+        c.save(); c.globalCompositeOperation = 'destination-over'; c.fillStyle = '#06080c'; c.fillRect(0, 0, W, H); c.restore();
+        c.font = `500 13px ${FONT}`; c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+        const m = abs(M.g), x = 28;
+        c.fillStyle = COL.load; c.fillText(`ZL  ${fmtC(M.Z, 'Ω')}   |Γ| ${m.toFixed(3)}   VSWR ${fmtVswr(m)}`, x, H - 48);
+        c.fillStyle = COL.zin; c.fillText(`Zin ${fmtC(M.Zin, 'Ω')}   ${(S.len).toFixed(3)} λ toward the generator`, x, H - 26);
+        c.fillStyle = COL.dim; c.fillText({ z: 'Z GRID', zy: 'Z + Y GRID', y: 'Y GRID' }[S.grid], x, 34);
+        const f = Math.max(0, 1 - tg / FADE, 1 - (hold - tg) / FADE);
+        if (f > 0) { c.fillStyle = `rgba(6,8,12,${Math.min(1, f)})`; c.fillRect(0, 0, W, H); }
+      });
+      (function drive(now) {
+        requestAnimationFrame(drive);
+        const dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
+        t += dt * sp; tg += dt;
+        if (tg > hold) { tg = 0; gi = (gi + 1) % 3; setGrid(grids[gi]); }
+        // The load: |gamma| from 0.2 to 0.75, the angle turns slowly.
+        const r = 0.47 + 0.27 * Math.sin(t * 0.21 + ph), a = ph + t * 0.09 + 0.6 * Math.sin(t * 0.13);
+        const Z = RF.scale(gammaToZ(cx(r * Math.cos(a), r * Math.sin(a))), S.z0);
+        S.R = Math.max(0, Z.re); S.X = Z.im;
+        S.len = 0.25 * (1 - Math.cos(t * 0.17));
+        dirty = true;
+      })(0);
+      return { canvas, warmupMs: 1500 };
+    },
+  };
 
   // ------------------------------------------------------------------- boot
   window.addEventListener('resize', resize);
