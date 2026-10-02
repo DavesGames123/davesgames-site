@@ -4,21 +4,22 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>MagnetLab // Stella Nova · davesgames.io</title>
+<title>MagnetLab — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    MAGNETLAB  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. main.js paints everything into #sim-canvas and binds
-   the panel controls by id; equations.js paints the KaTeX overlay. This file
+   the panel controls by id; equations.js typesets the equation overlay as
+   MathJax SVG (lib/sci-math.js) from the data-tex attributes. This file
    lays out the left control panel, the canvas area, and the status bar.
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts        Google Fonts stylesheet
-     2. katex css    KaTeX stylesheet, then the KaTeX script
-     3. style.css    the page stylesheet
-     4. equations.js classic script, paints the equation panel
-     5. main.js      classic script, runs the whole simulator
+     1. style.css    the page stylesheet
+     2. lib/sci.css  shared science type (STIX Two Text, Inter, the system
+                     mono) and the math colors .m1 to .m6; it loads the fonts
+     3. equations.js ES module, typesets the equation panel
+     4. main.js      classic script, runs the whole simulator
 
    LAYOUT  (# marks an element id)
      ┌─────────────────────────────────────────────────────────────────┐
@@ -26,7 +27,7 @@
      ├────────────┬────────────────────────────────────────────────────┤
      │ #panel     │  #canvas-wrap                                        │
      │  add grid  │    <canvas #sim-canvas>  field tracers, arrows, mags │
-     │  #mag-list │    #eq-panel  ▷  KaTeX overlay (collapsible)         │
+     │  #mag-list │    #eq-panel  ▷  MathJax overlay (collapsible)        │
      │  toggles   │                                                      │
      │  sim btns  │                                                      │
      ├────────────┴────────────────────────────────────────────────────┤
@@ -34,10 +35,8 @@
      └──────────────────────────────────────────────────────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In frame guard: when loaded inside the site shell iframe, add .in-frame so
@@ -50,8 +49,8 @@
 
 <!-- Top status strip; hidden when the page runs inside the shell. -->
 <div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">MagnetLab</span></div>
-  <div class="topbar-r">SYS // <strong>ELECTROMAGNETISM</strong></div>
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span></div>
+  <div class="topbar-r">MagnetLab</div>
 </div>
 
 <div id="main">
@@ -60,16 +59,16 @@
     <!-- Add Magnet: each button calls addMagnet(type); type strings match the
          switch in createMagnet() inside main.js. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Add Magnet</div>
+      <div class="p-sec-lbl">Add magnet</div>
       <div class="add-grid">
-        <button class="add-btn" onclick="addMagnet('bar')"><span class="icon">▮</span>Bar</button>
-        <button class="add-btn" onclick="addMagnet('dipole')"><span class="icon">◉</span>Dipole</button>
-        <button class="add-btn" onclick="addMagnet('solenoid')"><span class="icon">⊞</span>Solenoid</button>
-        <button class="add-btn" onclick="addMagnet('horseshoe')"><span class="icon">⊍</span>Horseshoe</button>
-        <button class="add-btn" onclick="addMagnet('buzzer')"><span class="icon">⊚</span>Buzzer</button>
-        <button class="add-btn" onclick="addMagnet('ring')"><span class="icon">◎</span>Ring</button>
-        <button class="add-btn" onclick="addMagnet('quadrupole')"><span class="icon">✦</span>Quad</button>
-        <button class="add-btn" onclick="addMagnet('halbach')"><span class="icon">⇶</span>Halbach</button>
+        <button class="add-btn" onclick="addMagnet('bar')">Bar</button>
+        <button class="add-btn" onclick="addMagnet('dipole')">Dipole</button>
+        <button class="add-btn" onclick="addMagnet('solenoid')">Solenoid</button>
+        <button class="add-btn" onclick="addMagnet('horseshoe')">Horseshoe</button>
+        <button class="add-btn" onclick="addMagnet('buzzer')">Buzzer</button>
+        <button class="add-btn" onclick="addMagnet('ring')">Ring</button>
+        <button class="add-btn" onclick="addMagnet('quadrupole')">Quad</button>
+        <button class="add-btn" onclick="addMagnet('halbach')">Halbach</button>
       </div>
     </div>
     <!-- Magnets: rebuildMagnetList() fills #mag-list with one card per magnet,
@@ -81,11 +80,11 @@
     <!-- Field Display: toggles for the three field visualisations plus the
          tracer count, speed, and trail sliders. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Field Display</div>
+      <div class="p-sec-lbl">Field display</div>
       <div style="display:flex;flex-direction:column;gap:4px">
-        <button class="tog-btn on" id="tog-tracers" onclick="toggleTracers()">⇌ Field Tracers</button>
-        <button class="tog-btn on" id="tog-arrows" onclick="toggleArrows()">→ Field Arrows</button>
-        <button class="tog-btn off" id="tog-grid" onclick="toggleGrid()">▦ Field Heatmap</button>
+        <button class="tog-btn on" id="tog-tracers" onclick="toggleTracers()">Field tracers</button>
+        <button class="tog-btn on" id="tog-arrows" onclick="toggleArrows()">Field arrows</button>
+        <button class="tog-btn off" id="tog-grid" onclick="toggleGrid()">Field heatmap</button>
       </div>
       <div class="mag-row" style="margin-top:6px">
         <span class="mag-row-lbl">Count</span>
@@ -108,10 +107,10 @@
     <div class="p-section">
       <div class="p-sec-lbl">Simulation</div>
       <div class="sim-btns">
-        <button class="sim-btn active" id="btn-play" onclick="togglePlay()">▶ Play</button>
-        <button class="sim-btn" onclick="stopAll()">■ Stop</button>
-        <button class="sim-btn" onclick="resetSim()">↺ Reset</button>
-        <button class="sim-btn warn" onclick="clearAll()">✕ Clear</button>
+        <button class="sim-btn active" id="btn-play" onclick="togglePlay()">Play</button>
+        <button class="sim-btn" onclick="stopAll()">Stop</button>
+        <button class="sim-btn" onclick="resetSim()">Reset</button>
+        <button class="sim-btn warn" onclick="clearAll()">Clear</button>
       </div>
     </div>
   </div></div>
@@ -126,22 +125,21 @@
          the collapse toggle. -->
     <section class="eq-panel collapsed" id="eq-panel">
       <div class="eq-head" id="eq-toggle">
-        <span class="dot"></span>
-        <span class="lbl">Maxwell's Equations</span>
-        <span class="arrow">▼</span>
+        <span class="lbl">Maxwell's equations</span>
+        <span class="arrow">Show</span>
       </div>
       <div class="eq-blocks">
         <div class="eq-block">
-          <div class="eq-sublabel">Gauss's Law · Magnetic</div>
-          <div class="eq-row" id="eq-gauss-b"></div>
+          <div class="eq-sublabel">Gauss's law, magnetic</div>
+          <div class="eq-row sci-eq" id="eq-gauss-b" data-tex="\nabla\cdot\vec{B}=0"></div>
         </div>
         <div class="eq-block">
           <div class="eq-sublabel">Ampère–Maxwell</div>
-          <div class="eq-row" id="eq-ampere"></div>
+          <div class="eq-row sci-eq" id="eq-ampere" data-tex="\nabla\times\vec{B}=\mu_0\vec{J}+\mu_0\epsilon_0\frac{\partial\vec{E}}{\partial t}"></div>
         </div>
         <div class="eq-block">
-          <div class="eq-sublabel">Dipole Field</div>
-          <div class="eq-row" id="eq-dipole"></div>
+          <div class="eq-sublabel">Dipole field</div>
+          <div class="eq-row sci-eq" id="eq-dipole" data-tex="\vec{B}(\vec{r})=\frac{\mu_0}{4\pi}\,\frac{3(\vec{m}\cdot\hat{r})\,\hat{r}-\vec{m}}{r^3}"></div>
         </div>
       </div>
     </section>
@@ -159,8 +157,8 @@
   <span id="st-dims">--</span>
 </div>
 
-<!-- KaTeX equation panel renderer; runs before the simulator. -->
-<script src="equations.js"></script>
+<!-- Equation panel renderer (MathJax SVG through lib/sci-math.js). -->
+<script type="module" src="equations.js"></script>
 
 <!-- The simulator: physics, tracers, rendering, and all control wiring. -->
 <script src="main.js"></script>

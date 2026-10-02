@@ -860,7 +860,7 @@ function drawBar(m,sel){
   ctx.fillStyle=sel?'rgba(220,60,60,0.85)':'rgba(200,50,50,0.65)';ctx.fillRect(0,-hh,hw,m.h);
   ctx.fillStyle=sel?'rgba(60,100,220,0.85)':'rgba(50,80,200,0.65)';ctx.fillRect(-hw,-hh,hw,m.h);
   ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.25)';ctx.lineWidth=sel?2:1;ctx.strokeRect(-hw,-hh,m.w,m.h);
-  ctx.font='bold 13px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='bold 13px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(255,255,255,0.8)';ctx.fillText('N',hw/2,0);ctx.fillText('S',-hw/2,0);
 }
 // Dipole: a split disc with an arrow showing moment direction.
@@ -881,7 +881,7 @@ function drawSolenoid(m,sel){
   ctx.strokeStyle='rgba(200,160,60,0.45)';ctx.lineWidth=1.5;
   for(let i=-3;i<=3;i++){ctx.beginPath();ctx.moveTo(i*10,-hh);ctx.lineTo(i*10,hh);ctx.stroke();}
   ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.25)';ctx.lineWidth=sel?2:1;ctx.strokeRect(-hw,-hh,m.w,m.h);
-  ctx.font='bold 11px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='bold 11px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(220,60,60,0.8)';ctx.fillText('N',hw-10,0);
   ctx.fillStyle='rgba(60,100,220,0.8)';ctx.fillText('S',-hw+10,0);
 }
@@ -895,7 +895,7 @@ function drawHorseshoe(m,sel){
   ctx.beginPath();ctx.moveTo(30,-30);ctx.lineTo(30,15);ctx.arc(0,15,30,0,Math.PI);ctx.lineTo(-30,-30);ctx.stroke();
   ctx.beginPath();ctx.moveTo(20,-30);ctx.lineTo(20,15);ctx.arc(0,15,20,0,Math.PI);ctx.lineTo(-20,-30);ctx.stroke();
   ctx.beginPath();ctx.moveTo(20,-30);ctx.lineTo(30,-30);ctx.moveTo(-20,-30);ctx.lineTo(-30,-30);ctx.stroke();
-  ctx.font='bold 10px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='bold 10px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(255,200,200,0.9)';ctx.fillText('N',25,-22);
   ctx.fillStyle='rgba(200,200,255,0.9)';ctx.fillText('S',-25,-22);
 }
@@ -916,7 +916,7 @@ function drawBuzzer(m,sel){
   ctx.strokeStyle='rgba(150,200,255,0.12)';ctx.beginPath();ctx.arc(0,0,r*0.55,0,Math.PI*2);ctx.stroke();
   // Center dot
   ctx.beginPath();ctx.arc(0,0,3,0,Math.PI*2);ctx.fillStyle='rgba(200,200,220,0.6)';ctx.fill();
-  ctx.font='bold 8px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='bold 8px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(255,255,255,0.7)';ctx.fillText('N',10,0);ctx.fillText('S',-10,0);
 }
 // Ring: an annulus with radial ticks marking the outward pole directions.
@@ -934,7 +934,7 @@ function drawRing(m,sel){
     const a=i*Math.PI/4;
     ctx.beginPath();ctx.moveTo(Math.cos(a)*ri,Math.sin(a)*ri);ctx.lineTo(Math.cos(a)*ro,Math.sin(a)*ro);ctx.stroke();
   }
-  ctx.font='bold 7px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='bold 7px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(255,255,255,0.5)';ctx.fillText('RING',0,0);
 }
 // Quadrupole: four pole circles on a cross, alternating N and S.
@@ -950,7 +950,7 @@ function drawQuadrupole(m,sel){
     ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);
     ctx.fillStyle=p.n?'rgba(220,60,60,0.55)':'rgba(60,100,220,0.55)';ctx.fill();
     ctx.strokeStyle=sel?'rgba(150,200,255,0.8)':'rgba(150,200,255,0.3)';ctx.lineWidth=sel?2:1;ctx.stroke();
-    ctx.font='bold 9px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold 9px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillStyle='rgba(255,255,255,0.8)';ctx.fillText(p.n?'N':'S',p.x,p.y);
   }
   // Center marker
@@ -982,7 +982,7 @@ function drawHalbach(m,sel){
   ctx.strokeStyle='rgba(150,200,255,0.15)';ctx.lineWidth=1;
   for(let i=1;i<ns;i++){const x=-hw+i*sw;ctx.beginPath();ctx.moveTo(x,-hh);ctx.lineTo(x,hh);ctx.stroke();}
   // Label
-  ctx.font='bold 8px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='bold 8px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(255,200,50,0.6)';ctx.fillText('HALBACH',0,hh+8);
 }
 
@@ -996,16 +996,16 @@ function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProp
 // Called after any add, remove, select, drag, or property change.
 function rebuildMagnetList(){
   const list=document.getElementById('mag-list');if(!list)return;list.innerHTML='';
-  const icons={bar:'▮',dipole:'◉',solenoid:'⊞',horseshoe:'⊍',buzzer:'⊚',ring:'◎',quadrupole:'✦',halbach:'⇶'};
+  const names={bar:'Bar',dipole:'Dipole',solenoid:'Solenoid',horseshoe:'Horseshoe',buzzer:'Buzzer',ring:'Ring',quadrupole:'Quadrupole',halbach:'Halbach'};
   magnets.forEach(mag=>{
     const c=document.createElement('div');
     c.className='mag-card'+(mag.id===SIM.selectedId?' selected':'');
     c.onclick=e=>{if(!e.target.closest('.mag-card-del'))selectMagnet(mag.id);};
-    c.innerHTML=`<div class="mag-card-head"><span class="mag-card-icon">${icons[mag.type]||'?'}</span><span class="mag-card-name">${mag.type.toUpperCase()} #${mag.id}</span><button class="mag-card-del" onclick="removeMagnet(${mag.id})">✕</button></div>
-      <div class="mag-row"><span class="mag-row-lbl">Str</span><input type="range" min="0.1" max="5" value="${mag.strength}" step="0.1" oninput="setMagProp(${mag.id},'strength',+this.value,this)"><span class="val">${mag.strength.toFixed(1)}</span></div>
+    c.innerHTML=`<div class="mag-card-head"><span class="mag-card-name">${names[mag.type]||mag.type} ${mag.id}</span><button class="mag-card-del" onclick="removeMagnet(${mag.id})" aria-label="Remove">Remove</button></div>
+      <div class="mag-row"><span class="mag-row-lbl">Strength</span><input type="range" min="0.1" max="5" value="${mag.strength}" step="0.1" oninput="setMagProp(${mag.id},'strength',+this.value,this)"><span class="val">${mag.strength.toFixed(1)}</span></div>
       <div class="mag-row"><span class="mag-row-lbl">Angle</span><input type="range" min="-3.14159" max="3.14159" value="${mag.angle}" step="0.05" oninput="setMagProp(${mag.id},'angle',+this.value,this)"><span class="val">${(mag.angle*180/Math.PI).toFixed(0)}°</span></div>
       <div class="mag-row"><span class="mag-row-lbl">Spin</span><input type="range" min="-24" max="24" value="${mag.spin}" step="0.5" oninput="setMagProp(${mag.id},'spin',+this.value,this)"><span class="val">${mag.spin.toFixed(1)}</span></div>
-      <button class="tog-btn ${mag.fixed?'off':'on'}" onclick="toggleFixed(${mag.id})">${mag.fixed?'🔒 Fixed':'🔓 Dynamic'}</button>`;
+      <button class="tog-btn ${mag.fixed?'off':'on'}" onclick="toggleFixed(${mag.id})">${mag.fixed?'Fixed':'Dynamic'}</button>`;
     list.appendChild(c);
     c.querySelectorAll('input[type=range]').forEach(sg);
   });
@@ -1067,7 +1067,7 @@ function toggleGrid(){SIM.showHeatmap=!SIM.showHeatmap;const b=document.getEleme
 function updateTracerCount(el){SIM.tracerCount=+el.value;document.getElementById('vl-tracer-count').textContent=el.value;sg(el);spawnTracers();document.getElementById('st-tracers').textContent=SIM.tracerCount+' tracers';}
 function updateTracerSpeed(el){SIM.tracerSpeed=+el.value;document.getElementById('vl-tracer-speed').textContent=(+el.value).toFixed(1);sg(el);}
 function updateTracerTrail(el){SIM.tracerTrail=+el.value;document.getElementById('vl-tracer-trail').textContent=el.value;sg(el);}
-function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'▶ Play':'▐▐ Pause';b.classList.toggle('active',SIM.playing);}
+function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'Play':'Pause';b.classList.toggle('active',SIM.playing);}
 function resetSim(){magnets.forEach(m=>{m.vx=0;m.vy=0;m.va=0;m.spin=0;});rebuildMagnetList();spawnTracers();}
 function stopAll(){magnets.forEach(m=>{m.vx=0;m.vy=0;m.va=0;m.spin=0;});rebuildMagnetList();}
 function clearAll(){magnets=[];SIM.selectedId=-1;rebuildMagnetList();spawnTracers();}
