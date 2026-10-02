@@ -812,7 +812,15 @@ window.snSaver={enter:function(o){
     loadPreset(name);computeForces();R=1;
     for(var b of bodies)R=Math.max(R,Math.hypot(b.x,b.y));
     var a=document.getElementById('canvasArea');
-    camZoom=Math.max(0.3,Math.min(2.2,0.44*Math.min(a.clientWidth,a.clientHeight)/R));
+    // A portrait phone docks the plate at the top or the base (about 330 px
+    // tall). Fit the system in the space below it, so the plate does not
+    // cover the orbits.
+    var tall=a.clientWidth<=760&&a.clientHeight>a.clientWidth+200;
+    camZoom=Math.max(0.3,Math.min(2.2,0.44*Math.min(a.clientWidth,a.clientHeight-(tall?340:0))/R));
+    // On a wide screen the plate (about 400 px wide) sits beside the system:
+    // move the system left until 450 px are free at the right.
+    var rad=camZoom*R;
+    camX=tall?0:-Math.max(0,Math.min(a.clientWidth/2-rad-28,450-(a.clientWidth/2-rad)));camY=tall?170:0;
   }
   // The plate (o.label) names the preset, its bodies and masses, the softened
   // pairwise law that computeForces() sums, the velocity-Verlet step, and the
@@ -832,10 +840,46 @@ window.snSaver={enter:function(o){
     lines.push('G = '+G+' · ε = 4 · h = '+(dt*timeScale).toFixed(4)+' · velocity Verlet · direct O(N²) pair sum');
     lines.push('t = '+simTime.toFixed(1)+' · KE = '+fmt(e.ke)+' · PE = '+fmt(e.pe));
     lines.push('E = '+fmt(e.total)+' · drift E/E₀ = '+(E0?(e.total/E0).toFixed(5):'1')+' · |p| = '+fmt(e.pmag));
-    label({title:TITLE[name]||'N-body gravity',sub:SUB[name]||'',lines:lines,
+    var drift=E0?(e.total/E0).toFixed(5):'1';
+    // The plate: the live values as parameters, and the page's own TeX
+    // (index.html data-tex) with its RULES from equations.js: F m1, m and M
+    // m2, v m3, L m4, G m5, r m6. E and t stay the default colour. eq is the
+    // plain fallback; lines keep the bodies and the integrator.
+    label({title:TITLE[name]||'N-body gravity',sub:(SUB[name]||'').replace(/ · /g,', '),
+      params:[{sym:'N',name:'bodies',value:String(bodies.length)},
+        {sym:'G',name:'constant',value:String(G),cls:'m5'},
+        {sym:'E',name:'total energy',value:fmt(e.total)},
+        {sym:'E/E_0',name:'drift',value:drift},
+        {sym:'t',name:'time',value:simTime.toFixed(1)}],
+      lines:[lines[0].replace(/^N = \d+ bodies · /,''),'Velocity Verlet, softening ε = 4, direct pair sum.'],
+      tex:['F \\;=\\; G\\,\\frac{m_1\\,m_2}{r^{2}}',
+        'E \\;=\\; \\underbrace{\\tfrac{1}{2}m\\,v^{2}}_{K} \\;-\\; \\underbrace{G\\,\\tfrac{m_1 m_2}{r}}_{U}',
+        'L \\;=\\; m\\,v\\,r\\,\\sin\\theta',
+        'T^{2} \\;=\\; \\frac{4\\pi^{2}}{G\\,M}\\,a^{3}'],
+      rules:[['F','m1'],['m_1','m2'],['m_2','m2'],['m','m2'],['M','m2'],['v','m3'],['L','m4'],['G','m5'],['r','m6']],
       eq:['aᵢ = Σⱼ G mⱼ (rⱼ − rᵢ) / (|rⱼ − rᵢ|² + ε)^³ᐟ²',
           'v += ½a h,   x += v h,   v += ½a h',
-          'E = Σ ½mᵢvᵢ² − Σᵢ<ⱼ G mᵢmⱼ / √(r²ᵢⱼ + ε)']});
+          'E = Σ ½mᵢvᵢ² − Σᵢ<ⱼ G mᵢmⱼ / √(r²ᵢⱼ + ε)'],
+      anchor:bodiesAnchor});
+  }
+  // The bodies on screen, for the shell's label plate. worldToScreen gives
+  // canvas px, and #canvasArea fills the window in saver mode, so they are
+  // window px. The radius holds each body plus its drawn radius (radius
+  // times camZoom). The key points are the eight heaviest bodies.
+  // A body that escapes the view does not count.
+  function bodiesAnchor(){
+    var a=document.getElementById('canvasArea'),W=a.clientWidth,H=a.clientHeight,on=[],i;
+    for(i=0;i<bodies.length;i++){var q=worldToScreen(bodies[i].x,bodies[i].y);
+      if(q[0]>=0&&q[0]<=W&&q[1]>=0&&q[1]<=H)on.push({x:q[0],y:q[1],r:Math.max(3,(bodies[i].radius||4)*camZoom),m:bodies[i].mass});}
+    if(!on.length)return null;
+    // A dominant mass (over half the total) is the centre: the orbits ring
+    // it. Else the centre of the bounding box of the bodies on screen.
+    var tot=0,big=on[0],x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;
+    on.forEach(function(p){tot+=p.m;if(p.m>big.m)big=p;x0=Math.min(x0,p.x-p.r);x1=Math.max(x1,p.x+p.r);y0=Math.min(y0,p.y-p.r);y1=Math.max(y1,p.y+p.r);});
+    var cx=big.m>tot/2?big.x:(x0+x1)/2,cy=big.m>tot/2?big.y:(y0+y1)/2;
+    var r=0;on.forEach(function(p){r=Math.max(r,Math.hypot(p.x-cx,p.y-cy)+p.r);});
+    on.sort(function(p,q){return q.m-p.m;});
+    return{x:cx,y:cy,r:r,pts:on.slice(0,8).map(function(p){return{x:p.x,y:p.y};})};
   }
   var baseLoad=load;
   load=function(){baseLoad();E0=0;plate();};
