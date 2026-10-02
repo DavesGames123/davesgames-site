@@ -779,6 +779,35 @@
       fleetSeed();
       fleet.paused = false; fleet.onScreen = true;
       fleetResize(); fleetKick();
+      // The plate: the livery (PRESETS name, the three colours, the trim
+      // pattern), the layer blend of composeShip, and the steering law of
+      // fleetStep for the flight mode. The mode does not change in the
+      // saver, so one plate holds for the whole dwell.
+      if (opts && typeof opts.label === 'function') {
+        var pr = PRESETS[seed % PRESETS.length], tr = TRIMS.filter(function (t) { return t.id === state.pattern; })[0];
+        var eq = fleet.mode === 'wander' ? [
+          'w = 0.8 sin(0.7t + p) + 0.5 sin(0.31t + 1.7p)',
+          'θ̇ = 1.2·(w + 2·min(1.5, |a|)·Δθ_a)',
+          'a = Σ_j d̂·(R − d)/R,  R = 1.3·size',
+          'x += v(cos θ, sin θ)dt',
+          'v = 1.4·size·speed·s_i'
+        ] : [
+          'leader c = (W(½ + 0.36 sin φ), H(½ + 0.32 sin(2φ + q)))',
+          'φ = 0.22t + 2πq/Q  (squadron q of Q)',
+          'slot g = c + rot(θ_c)(−r·gap, ±0.75·r·gap),  gap = 1.15·size',
+          'v += (ċ + 4(g − x) − v)·min(1, 6dt)'
+        ];
+        opts.label({
+          title: pr[0] + ' livery',
+          sub: (fleet.mode === 'wander' ? 'wander' : 'formation, squadrons of 7') + ' · ' + fleet.count + ' ships',
+          lines: [
+            'Hull ' + state.hull + ' · trim ' + state.trim + ' · accent ' + state.accent,
+            'Trim pattern: ' + (tr ? tr.name : state.pattern) + ' · cockpit keeps its own colours',
+            'Layers: hull, trim, cockpit, accent; tint a over grey b, cut by each mask'
+          ],
+          eq: ['overlay = b < ½ ? 2ab : 1 − 2(1 − a)(1 − b)'].concat(eq)
+        });
+      }
       return { canvas: fleet.canvas, warmupMs: 500 };
     }
   };
