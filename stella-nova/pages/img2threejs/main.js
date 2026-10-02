@@ -29,6 +29,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { MODELS } from './models/catalog.js';
+import { highlight } from '../../lib/code-highlight.js';
 
 const $ = id => document.getElementById(id);
 const PASS_NAMES = { 'blockout': 'Blockout', 'structural-pass': 'Structure', 'form-refinement': 'Form', 'material-pass': 'Material',
@@ -280,7 +281,7 @@ async function openSource() {
   $('sourceCode').textContent = 'loading…';
   $('source').showModal();
   if (!sources.has(P.file)) sources.set(P.file, fetch(P.file).then(r => r.text()));
-  $('sourceCode').textContent = await sources.get(P.file);
+  $('sourceCode').innerHTML = highlight(await sources.get(P.file), 'js');
 }
 $('bSource').addEventListener('click', openSource);
 $('bClose').addEventListener('click', () => $('source').close());
