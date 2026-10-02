@@ -7,13 +7,15 @@
 //
 //    node tools/saver-check.mjs <key> [--port 9500] [--server http://127.0.0.1:8963]
 //        [--out <dir>] [--calm 0.7] [--seconds 20] [--record] [--width 1280 --height 800]
+//        [--frame fill|vertical]
 //
 //  A static server must already serve the repo root at --server, for example:
 //    python3 -m http.server 8963 --bind 127.0.0.1
 //  Each parallel run needs its own --port (Chrome debug port) and --out.
 //
 //  Output (stdout, one JSON line): mode (hook or generic), the status line,
-//  page exceptions, console errors, and a motion score: the mean absolute
+//  page exceptions, console errors, the poster boxes (snScreensaver.plate()
+//  at the first screenshot), and a motion score: the mean absolute
 //  pixel change between the two screenshots, 0..255 (0 = frozen). The
 //  screenshots are <out>/<key>-a.png and <key>-b.png, taken 4 s and
 //  (seconds - 4) s after the page shows. With --record, the video goes to
@@ -39,6 +41,7 @@ const SERVER = opt('server', 'http://127.0.0.1:8963');
 const OUT = path.resolve(opt('out', `/tmp/saver-check-${key}`));
 const SECONDS = +opt('seconds', 20);
 const CALM = +opt('calm', 0.7);
+const FRAME = opt('frame', 'fill');   // 'fill' or 'vertical' (the 9:16 column)
 const W = +opt('width', 1280), H = +opt('height', 800);
 const RECORD = flag('record');
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
@@ -114,7 +117,7 @@ async function main() {
     // lib/screensaver.js), so without it the run plays the whole default
     // list instead of <key>. order 'nav' keeps the one page first.
     const catalogKeys = (() => { const w = {}; vm.runInNewContext(fs.readFileSync(path.join(ROOT, 'stella-nova/lib/screensaver-catalog.js'), 'utf8'), { window: w }); return Object.keys(w.SN_SAVER_CATALOG.pages); })();
-    const settings = { pages: [key], seenDefaults: catalogKeys, order: 'nav', seconds: SECONDS, fade: 0.5, calm: CALM, display: 'window', record: RECORD, recordWarmup: 2, loop: false, caption: false, wakeLock: false };
+    const settings = { pages: [key], seenDefaults: catalogKeys, order: 'nav', seconds: SECONDS, fade: 0.5, calm: CALM, display: 'window', frame: FRAME, record: RECORD, recordWarmup: 2, loop: false, caption: false, wakeLock: false };
     // lib/screensaver.js reads 'sn-saver-settings-v2' (the v2 key dropped older saved choices); write both keys
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{for(const k of ['sn-saver-settings','sn-saver-settings-v2'])localStorage.setItem(k, ${JSON.stringify(JSON.stringify(settings))})}catch(e){}` });
     await send('Page.navigate', { url: `${SERVER}/stella-nova/#home` });
@@ -132,13 +135,14 @@ async function main() {
     for (let i = 0; i < 80; i++) { hud = await ev(`(document.getElementById('sn-saver-hud')||{}).textContent||''`); if (/· (hook|generic)/.test(hud)) break; await sleep(250); }
     await sleep(4000);
     const a = await shot(`${key}-a.png`);
+    const poster = await ev(`snScreensaver.plate && snScreensaver.plate()`);
     await sleep(Math.max(1000, (SECONDS - 8) * 1000));
     const b = await shot(`${key}-b.png`);
     const frame = await ev(`(() => { const f = document.querySelector('#frame-wrap iframe'); const w = f && f.contentWindow; return w ? { hasHook: !!w.snSaver, generic: w.document.documentElement.classList.contains('sn-saver'), canvases: w.document.querySelectorAll('canvas').length } : null; })()`);
     await sleep(6000);
     const running = await ev(`snScreensaver.running`);
     const dl = fs.readdirSync(path.join(OUT, 'dl')).filter(f => /\.(mp4|webm)$/.test(f));
-    console.log(JSON.stringify({ key, mode: (hud.match(/· (hook|generic)/) || [])[1] || 'none', hud, frame, ...motion(a, b), stoppedAtEnd: running === false, downloads: dl, exceptions: exc, consoleErrors: errs.slice(0, 12), shots: [path.join(OUT, `${key}-a.png`), path.join(OUT, `${key}-b.png`)] }));
+    console.log(JSON.stringify({ key, mode: (hud.match(/· (hook|generic)/) || [])[1] || 'none', hud, frame, poster, ...motion(a, b), stoppedAtEnd: running === false, downloads: dl, exceptions: exc, consoleErrors: errs.slice(0, 12), shots: [path.join(OUT, `${key}-a.png`), path.join(OUT, `${key}-b.png`)] }));
   } finally {
     try { ws && ws.close(); } catch (e) {}
     chrome.kill('SIGKILL');
