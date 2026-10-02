@@ -742,17 +742,28 @@ async function boot() {
 // STALL. A sampler every 500 ms keeps (gen, pop). When the population range
 // over the last 400 generations is under 1.5 % of the population, the soup
 // is ash: the canvas fades out, a new seed fills the world, and it fades in.
-// The plate shows the rule, the live generation and the population.
+// The plate shows the rule as TeX, the live generation and the population.
 const SAVER_FADE_MS = 900;
 let saverTimer = 0;
 function saverGps(calm) { return calm >= 0.85 ? 12 : calm >= 0.55 ? 20 : 30; }
+// The rule TeX is the panel's (index.html, #learn), in GOL_RULES colours.
+const SAVER_TEX = [String.raw`s_{t+1}=\begin{cases}1 & s_t=0,\ N_t=3\\ 1 & s_t=1,\ N_t\in\{2,3\}\\ 0 & \text{otherwise}\end{cases}`,
+  String.raw`N_t=\sum_{j\in\mathcal{M}} s_t^{(j)}`];
+// No anchor: the soup fills the window, so the plate sits at the lower right.
 function saverPlate(label) {
   if (!label) return;
   const st = S.stats;
   label({
     title: "Conway's Game of Life",
-    sub: 'rule B3/S23 · ' + S.W + ' × ' + S.H + ' torus · ' + S.saverGps + ' gen/s',
-    lines: ['generation ' + fmt(S.gen), 'population ' + fmt(st.pop), 'births +' + fmt(st.births) + '  deaths −' + fmt(st.deaths)],
+    sub: 'Rule B3/S23 on a ' + S.W + ' × ' + S.H + ' torus',
+    params: [
+      { sym: 't', name: 'generation', value: fmt(S.gen) },
+      { sym: '\\sum s_t', name: 'population', value: fmt(st.pop), cls: 'm1' },
+      { sym: '\\pm', name: 'births, deaths', value: '+' + fmt(st.births) + ' / −' + fmt(st.deaths) },
+      { sym: 'f', name: 'step rate', value: S.saverGps + ' gen/s' },
+    ],
+    lines: ['M is the 8-cell Moore neighbourhood'],
+    tex: SAVER_TEX, rules: GOL_RULES,
     eq: ['B3: dead cell, n = 3  →  born', 'S23: live cell, n ∈ {2, 3}  →  survives', 'n = live cells of the 8 neighbours'],
   });
 }
