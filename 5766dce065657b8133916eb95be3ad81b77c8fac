@@ -1,0 +1,1 @@
+The commit body says 'curl of each new file from the local server -> HTTP 200'. That check did not run before the commit: the command failed on 'uniq -w' (not a macOS option). It ran after the commit: 20 of 20 files -> HTTP 200.
