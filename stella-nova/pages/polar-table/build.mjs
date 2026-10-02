@@ -998,6 +998,27 @@ const frag = ([name, , , , body]) =>
 const pack = HELPERS + `\n// ── the ${CELLS.length} cells ─────────────────────────────────────────────────────────────\n` +
   CELLS.map(frag).join('\n\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// (r, θ) are polar coordinates about the frame center, uv short side = 1.
+const SAVER_EQ = {
+  heart_spiral: ['q = (n/2π)·(θ + σ·ln r,  ln r) − (0, 0.3t)', 'heart scale = (0.45…0.68)·(1 + 0.3e^(−6φ)),  φ = fract(b·t − 0.11·row)', 'n = 5…11 hearts,  σ = −0.8…0.8 (shear),  b = 0.6…1.8 (beat)'],
+  petal_shear: ['f = (n/2π)·(θ + σ ln r,  θ − σ ln r) + ω t', 'σ = 0.8…2.4 + 0.35 sin 0.8t,  n = 8…21 petals', 'one floret per cell of fract(f),  bloom = ½ + ½ sin(3 ln r − 2t)'],
+  record_groove: ['groove phase = N·r − (θ − Ωt)/2π  (Archimedean spiral)', 'N = 36…80 grooves,  Ω = 0.4…2 (spin)', 'sheen = |cos(θ − 0.7)|^m,  m = 4…24'],
+  dot_drift: ['two dot lattices: g_A = fract(N·x),  g_B = fract(N·R(α)x)', 'α = 0.4°…5° + 1.2°·2w·sin 0.35t,  N = 16…32', 'color = tone·max(A, B) + cream·A·B  (moiré rosettes)'],
+  hex_wave: ['v = ½ + Σᵢ sin(k|c − sᵢ| − ωt)/6,  i = 1…3', 'sᵢ = 0.32·(cos aᵢ, sin aᵢ),  aᵢ = 2πi/3 + 0.4 + 0.15t', 'c = hex cell center,  k = 18…46,  ω = 1.5…5'],
+  hex_terrain: ['h = fbm(c·(2…6) + (0.25, 0.12)·d·t),  d = 0.3…2 (drift)', 'tile height = smoothstep(0.2, 0.8, h),  c = hex cell center', 'bevel light = n̂·(−0.6, 0.8)'],
+  hex_rings: ['v = ½ + ½ cos(κ·ring − ωt),  ring = hex distance from center', 'κ = 0.5…1.4,  ω = 1.5…5 (speed)', 'core radius = 0.1 + 0.22v,  stroke at hex distance 0.4'],
+  seigaiha: ['scales: circles of radius 1 on rows jΔy, Δy = 0.5, x offset (j mod 2)', 'arcs: ⌊n·d⌋ mod 2,  n = 3…6,  d = distance to the scale center', 'shimmer = ½ + ½ sin(0.8cₓ + 1.7c_y − ωt),  ω = 0.5…3'],
+  phyllotaxis: ['seed n at r = c√n,  θ = n·137.508°  (Vogel)', 'c = 0.024…0.014,  disk turns at (0.02…0.2)·t', 'pulse = exp(−((√n − w(t))/2.5)²),  seed radius ×(1 + 0.4·pulse)'],
+  gear_train: ['R = N·p/2π,  p = 0.06,  N = 20, 12, 8, 10 teeth', 'centers at R_A + R_B and so on (pitch circles touch)', 'θ_B = −θ_A·N_A/N_B + const,  θ_A = (0.2…1.2)·t'],
+  guilloche: ['r = 0.36 + A sin(n(θ + φᵢ) + ψ),  φᵢ = 2πi/(nM)', 'second band: r = 0.21 + 0.6A sin(n(θ − φᵢ) − 1.5ψ)', 'n = 5…13 lobes,  M = 5…13 strands,  A = 0.04…0.09,  ψ = (0.05…0.4)·t'],
+  rosette: ['S folds:  θ′ = |((θ − ωₗt) mod 2π/S) − π/S|', 'petal l = ellipse at rₗ = 0.1 + 0.105l,  l = 0…3', 'ωₗ = ±(0.05…0.4)/(1 + l/2),  S = 6…16'],
+  star_lattice: ['star = min(max(|x|, |y|), (|x| + |y|)/√2) − s', 's = 0.2…0.3 + 0.04 sin φ,  φ = ω t − 0.8·|cell|', 'ω = 0.5…2,  cell = round(x·(3…7)),  alternate cells turn ±'],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
@@ -1006,6 +1027,7 @@ const spec = {
     name, family, species, knobs,
     defaults: [0.5, 0.5, 0.5, 0.5],
     fn: 'fs_' + name,
+    ...(SAVER_EQ[name] ? { eq: SAVER_EQ[name] } : {}),
   })),
   gens: [
     { id: 'exposure', title: 'Exposure · brightness', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
