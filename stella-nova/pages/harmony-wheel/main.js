@@ -583,6 +583,7 @@ function wanderStep(){
   if(!next) next=outerMaj[Math.floor(rnd()*12)];
   const e=outE[cur.id].find(e=>e.b===next); if(e)spawnComet(e);
   sel=next;
+  if(saverOn) saverPlate(next,e);
   document.getElementById('fnMain').textContent='WANDER · '+funcText(next);
   playNode(next,(60000/(+tempo.value)*2)/1000*1.05);
 }
@@ -1061,9 +1062,39 @@ window.addEventListener('pointerdown',()=>audio(),{once:true});
 // early, so no AudioContext is made), seeds the walk, and starts Wander with
 // one step every 2.2 to 4.8 s (calm 0 to 1). draw() then fills the canvas,
 // eases every highlight, and drifts the camera. Nothing is stored.
+// The plate for the chord the walk reached: its tones and intervals from KIND,
+// the arrow it came by, and the equal-tempered pitch the pad uses in
+// playNode (f = 440 · 2^((m − 69)/12)), here with the root in octave 4.
+const KIND_NAME={maj:'major triad',min:'minor triad',dom:'dominant seventh',dim:'diminished seventh'};
+const IV_NAME={0:'R',3:'m3',4:'M3',6:'d5',7:'P5',9:'d7',10:'m7'};
+const EDGE_NAME={res:'resolution to the tonic',rel:'relative minor to major',five:'V to I, one step on the circle of fifths',star:'dim7 lift (symmetric)',sec:'to a secondary dominant'};
+let saverLabel=null;
+function saverPlate(n,e){
+  if(!saverLabel) return;
+  const flat=Math.floor(n.spoke/2)>=7, iv=KIND[n.kind].iv;
+  const tones=iv.map(i=>nm(n.pc+i,flat));
+  const hz=iv.map(i=>440*Math.pow(2,(60+n.pc+i-69)/12));
+  const key=spokeOuter(n.spoke);
+  saverLabel({
+    title:n.label+' · '+KIND_NAME[n.kind],
+    sub:'on the '+key.label+' spoke · wander',
+    lines:[
+      'Tones: '+tones.join(' – ')+'   ('+iv.map(i=>IV_NAME[i]).join(' ')+')',
+      'Semitones above the root: '+iv.join(', '),
+      funcText(n).replace(/^[^·]*· /,''),
+      e?'Arrow: '+EDGE_NAME[e.t]:'Start of the walk',
+    ],
+    eq:[
+      'f = 440 · 2^((m − 69)/12) Hz',
+      tones.map((t,i)=>t+(Math.floor((60+n.pc+iv[i])/12)-1)+' '+hz[i].toFixed(1)).join(' · '),
+      'ratios 2^(n/12): '+iv.slice(1).map(i=>IV_NAME[i]+' '+Math.pow(2,i/12).toFixed(3)).join(' · '),
+    ],
+  });
+}
 window.snSaver={
   enter(o){
     o=o||{};
+    saverLabel=typeof o.label==='function'?o.label:null;
     const calm=Math.max(0,Math.min(1,o.calm==null?0.7:+o.calm));
     let seed=(o.seed>>>0)||1;
     rnd=()=>{seed=(seed+0x6D2B79F5)|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};
@@ -1073,7 +1104,7 @@ window.snSaver={
     document.head.appendChild(st);
     resize();
     sel=outerMaj[FIFTHS[Math.floor(rnd()*12)]];
-    setMode('wander');
+    setMode('wander');               // its first wanderStep() sends the first plate
     clearInterval(wanderTimer); wanderTimer=setInterval(wanderStep,(2.2+2.6*calm)*1000);
     return {canvas:cvs,warmupMs:1500};
   },
