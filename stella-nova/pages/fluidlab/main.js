@@ -754,12 +754,23 @@ function saverStart(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));let s
 // stage. The params give nu, dt, the Jacobi sweeps and the jet and stirrer
 // count. The lines give the scene, the obstacle and the grid. The TeX and the
 // rules match the equations panel (equations.js). The director calls it every 1 s.
+// The plate code extract: shaders/jacobi.frag.glsl main(), laid out to read
+// (the shader file is minified onto one line). Keep the two in step.
+const SAVER_CODE={lang:'GLSL',name:'jacobi.frag · one pressure sweep',text:`// p_new = (p_L + p_R + p_D + p_U - div u) / 4
+void main() {
+  vec2 uv = vUV;
+  vec2 dx = vec2(uInvRes.x, 0), dy = vec2(0, uInvRes.y);
+  float p = sP(uv - dx) + sP(uv + dx)
+          + sP(uv - dy) + sP(uv + dy);
+  float div = texture(uDivergence, uv).x;
+  fragColor = vec4((p - div) * .25, 0, 0, 0);
+}`};
 const SAVER_SCENE_TEXT={crossfire:'jets from the four edges aim at the centre',carousel:'jets on a ring push round it',wake:'a jet from the left edge flows past an obstacle',fountain:'jets rise and fall from the top and bottom edges'};
 function saverPlate(R){if(!R.label)return;let jets=0,vort=0;for(const A of R.actors){if(A.e.type==='vortex')vort++;else jets++;}
   const ob=R.obstacle,nu=SIM.viscosity;
   // Parameters: TeX symbol, short name, live value. The classes are FL_RULES
   // in equations.js (u and w m1, p m2, nu m3, rho m5, f m6). The dye fills
-  // the whole canvas, so the plate has no anchor and sits at the lower right.
+  // the whole canvas, so the plate has no anchor and no leader line.
   const params=[{sym:'\\nu',name:'viscosity',value:nu>1e-4?nu.toFixed(3):'0, Re → ∞',cls:'m3'},
     {sym:'\\Delta t',name:'time step',value:(deltaTime*1000).toFixed(1)+' ms'},
     {sym:'p',name:'pressure solve',value:SIM.jacobiIters+' Jacobi sweeps',cls:'m2'},
@@ -769,7 +780,7 @@ function saverPlate(R){if(!R.label)return;let jets=0,vort=0;for(const A of R.act
   try{R.label({title:'Stable fluids · '+R.scene,sub:'2D incompressible Navier–Stokes (Stam 1999)',params,lines,
     tex:[String.raw`\frac{\partial\vec{u}}{\partial t}+(\vec{u}\cdot\nabla)\vec{u}=-\frac{1}{\rho}\nabla p+\nu\nabla^2\vec{u}+\vec{f}`,String.raw`\nabla\cdot\vec{u}=0`,
       String.raw`\nabla^2 p=\frac{\rho}{\Delta t}\nabla\cdot\vec{w}`,String.raw`\vec{u}=\vec{w}-\frac{\Delta t}{\rho}\nabla p`],
-    rules:[['u','m1'],['w','m1'],['p','m2'],['\\nu','m3'],['\\rho','m5'],['f','m6']],
+    rules:[['u','m1'],['w','m1'],['p','m2'],['\\nu','m3'],['\\rho','m5'],['f','m6']],code:SAVER_CODE,
     eq:['∂u/∂t + (u·∇)u = −∇p/ρ + ν∇²u + f','∇·u = 0','∇²p = (ρ/Δt) ∇·w','u = w − (Δt/ρ) ∇p']});}catch(e){}}
 window.snSaver={async enter(opts){
   await new Promise(r=>setTimeout(r,150));  // let the boot defaultSetup() run first
