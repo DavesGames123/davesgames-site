@@ -27,6 +27,7 @@
 //   grep -n 'function bindKeys'      keyboard shortcuts
 //   grep -n 'function occlusion'     the overlay margins that frame the view
 //   grep -n 'function teardown'      pagehide: stop the loop, free the GPU
+//   grep -n 'window.snSaver'         the shell screensaver hook
 import { createGpuEngine } from './engine-gpu.js';
 import { createCpuEngine } from './engine-cpu.js';
 import * as L from './life.js';
@@ -723,4 +724,28 @@ async function boot() {
   toast(COARSE_Q.matches ? 'One finger draws. Two fingers zoom and pan. ☰ has the patterns and rules.' : 'Draw on the world, or pick a pattern from the library to stamp it.', false, 4200);
   window.__life = { S, L, loadPattern, setRule, setTool, setRunning, stepOnce, randomFill, clearWorld, fitWorld, zoomAt, toCell, setLearn, setPanel, selectPattern };
 }
+// ------------------------------------------------------------ screensaver
+// Shell screensaver hook (lib/screensaver.js). enter() waits for boot, hides
+// every panel (occlusion() then sees no overlay, so the view centres on the
+// window), and turns the grid off with age colour and trails on. opts.seed
+// seeds a fresh full-frame soup at 3 or 4 px cells. calm above 0.5 runs
+// 6 gens/s, else 10/s, so period-2 blinkers do not strobe. A soup lives far
+// longer than one dwell, so nothing changes inside one dwell.
+window.snSaver = {
+  async enter(opts) {
+    while (!window.__life) await new Promise(r => setTimeout(r, 50));
+    const calm = clamp(+opts.calm || 0, 0, 1), st = document.createElement('style');
+    st.textContent = 'html.saver #panel,html.saver #learn,html.saver #dock,html.saver #status,html.saver #toast,html.saver #gear,html.saver #learnBtn,html.saver .topbar,html.saver #cpuNote,html.saver #ov{display:none!important}html.saver #gl{cursor:none}';
+    document.head.appendChild(st); document.documentElement.classList.add('saver');
+    setPanel(false); setLearn(false); S.hover = null; S.occ = occlusion();
+    S.grid = false; S.age = true; S.trails = true;
+    S.speedIdx = calm > 0.5 ? 3 : 4;
+    S.seed = (opts.seed >>> 0) || 1; randomFill();
+    S.view.cell = clamp(3 + (S.seed & 1), minCell(), MAX_CELL); S.view.cx = S.W / 2; S.view.cy = S.H / 2;
+    clampView(); setRunning(true);
+    resize();
+    return { canvas: $('gl'), warmupMs: 1500 };
+  },
+};
+
 boot();
