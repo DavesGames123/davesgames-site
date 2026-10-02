@@ -515,7 +515,7 @@ function plateFonts() {
   if (document.getElementById('sn-plate-fonts')) return;
   const l = document.createElement('link');
   l.id = 'sn-plate-fonts'; l.rel = 'stylesheet';
-  l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:wght@400;500&display=swap';
+  l.href = new URL('vendor/fonts/inter+stix-two-text.be9b8ad1.css', document.baseURI).href;
   document.head.appendChild(l);   // appended at run time, so it does not block the shell
 }
 // The leader overlay is SVG, so it needs the SVG namespace (el() makes HTML).

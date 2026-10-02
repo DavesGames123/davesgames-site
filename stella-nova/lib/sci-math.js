@@ -13,7 +13,8 @@
 //  writes static SVG (hydrogen-table, hohmann). This module is for pages
 //  that build TeX at run time, for example from a preset file.
 //
-//  If MathJax does not load (no network), the TeX text stays in the box
+//  MathJax loads from vendor/mathjax@3.2.2 (same origin, so the service
+//  worker can keep it). If it does not load, the TeX text stays in the box
 //  with the class "raw".
 //
 //  EXPORTS   (jump with grep -n "<anchor>" sci-math.js)
@@ -23,7 +24,9 @@
 //      typesetAll ..... "export function typesetAll"  every [data-tex] box
 // ============================================================================
 
-const SRC = 'https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js';
+// Local copy (vendor/), so TeX still renders with no network. MathJax finds
+// [tex]/html and [tex]/color next to tex-svg.js, in es5/input/tex/extensions/.
+const SRC = new URL('../vendor/mathjax@3.2.2/es5/tex-svg.js', import.meta.url).href;
 let loading = null;
 
 // Load MathJax once. The promise gives window.MathJax, or null on failure.

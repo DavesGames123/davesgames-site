@@ -19,7 +19,7 @@
      grep -n 'MATH'        .m1 to .m6 in HTML and in SVG
      grep -n 'EQUATION'    .sci-eq, the box for one display equation
    ========================================================================== */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap');
+@import url('../vendor/fonts/inter+stix-two-text.c614b9ad.css');
 
 /* TOKENS */
 :root{
