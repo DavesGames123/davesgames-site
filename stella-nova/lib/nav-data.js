@@ -173,6 +173,8 @@ w.SN_NAV = [
       ["watch-movement", "Watch Movement", "3D"],
       ["watch-randomizer", "Timepiece Randomizer", "3D"],
       ["stirling-engine", "Stirling Engine", "3D"],
+      ["four-stroke-engine", "Four-Stroke Engine", "3D"],
+      ["wankel-engine", "Wankel Rotary Engine", "3D"],
       ["origami", "Origami Simulator", "SIM"]
     ] }
   ] }
