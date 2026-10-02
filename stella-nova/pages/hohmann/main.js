@@ -81,19 +81,43 @@ window.snSaver={enter(opts){
     plate();
     return true;
   }
-  // The shell's label plate: the pair, the two burns and the equations
-  // that give them, in plain Unicode. It changes with each new pair.
+  // The shell's label plate: the pair, the burns as parameters, and the
+  // page's own TeX (typeset.mjs) for the equations. The page colours by hex
+  // in typeset.mjs; the plate uses the nearest sci.css class: r m1, a m2,
+  // v m3, phi and omega m4, mu and t m5, Delta v m6. eq is the plain fallback.
   function plate(){
     if(!opts||typeof opts.label!=='function') return;
     const x=xfer, k=v=>(v*AU2KMS).toFixed(2);
     opts.label({
       title:`${source.name} \u2192 ${target.name}`,
-      sub:`Hohmann transfer \u00b7 ${x.asc?'outward':'inward'} \u00b7 r\u2081 ${x.r1.toFixed(2)} AU \u2192 r\u2082 ${x.r2.toFixed(2)} AU`,
-      lines:[`\u0394v\u2081 ${k(x.dv1)} km/s  \u00b7  \u0394v\u2082 ${k(x.dv2)} km/s`,
-             `total ${k(x.dvTot)} km/s  \u00b7  coast ${(x.tTr*365.25).toFixed(0)} days`],
+      sub:`Hohmann transfer, ${x.asc?'outward':'inward'}`,
+      params:[
+        {sym:'r_1 \\to r_2',name:'orbit radii',value:`${x.r1.toFixed(2)} \u2192 ${x.r2.toFixed(2)} AU`,cls:'m1'},
+        {sym:'\\Delta v_1',name:'first burn',value:`${k(x.dv1)} km/s`,cls:'m6'},
+        {sym:'\\Delta v_2',name:'second burn',value:`${k(x.dv2)} km/s`,cls:'m6'},
+        {sym:'t_{\\mathrm{tr}}',name:'coast',value:`${(x.tTr*365.25).toFixed(0)} days`,cls:'m5'},
+      ],
+      lines:[`Total \u0394v ${k(x.dvTot)} km/s, two burns at the apsides.`],
+      tex:['v = \\sqrt{\\mu\\left(\\frac{2}{r} - \\frac{1}{a}\\right)}',
+           '\\Delta v_1 = \\big|\\,v_t(r_1) - v_c(r_1)\\,\\big|',
+           'a_t = \\frac{r_1 + r_2}{2}, \\qquad t_{\\mathrm{tr}} = \\pi\\sqrt{\\frac{a_t^{3}}{\\mu}}',
+           '\\varphi_{\\mathrm{req}} = \\pi - \\omega_{\\mathrm{tgt}}\\,t_{\\mathrm{tr}}'],
+      rules:[['\\Delta v_1','m6'],['\\Delta v_2','m6'],['v','m3'],['r','m1'],['a','m2'],['\\mu','m5'],
+             ['t_{\\mathrm{tr}}','m5'],['\\varphi_{\\mathrm{req}}','m4'],['\\omega_{\\mathrm{tgt}}','m4']],
       eq:['v = \u221a(\u03bc (2/r \u2212 1/a))','a\u209c = (r\u2081 + r\u2082) / 2',
           '\u0394v = |v(transfer) \u2212 v(circular)|','t = \u03c0 \u221a(a\u209c\u00b3 / \u03bc)'],
+      anchor:xferAnchor,
     });
+  }
+  // The transfer on screen, in window px (the canvas fills the window in
+  // saver mode). The centre is the Sun (CX, CY), the radius is the larger
+  // orbit (r2 or r1 times SCALE), and the key points are the Sun, the two
+  // planets (pPos) and the ship when it flies.
+  function xferAnchor(){
+    if(!source||!target||!xfer) return null;
+    const pts=[{x:CX,y:CY},pPos(source),pPos(target)];
+    if(ship&&isFinite(ship.x)&&isFinite(ship.y)) pts.push({x:ship.x,y:ship.y});
+    return {x:CX,y:CY,r:Math.max(xfer.r1,xfer.r2)*SCALE+6,pts};
   }
   system(PRESETS[pi]);
   const ofr=frame;
