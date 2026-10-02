@@ -364,7 +364,8 @@ requestAnimationFrame(frame);
 // camera (Vector3.project) to page CSS px of the canvas rect:
 //   x, y  the projected centre of the world box of the visible meshes
 //   r     the largest distance from (x, y) to a projected corner of the
-//         local box of a mesh: the circle holds every mesh of the subject
+//         local box of a mesh, clamped to the canvas: the circle holds
+//         every mesh of the subject that is on screen
 //   pts   the projected key points (world Vector3) that are on screen
 // It returns null when the subject is not on screen, or while the canvas
 // fades out for a swap (style opacity 0).
@@ -389,7 +390,9 @@ function plateAnchor(objs, keys = []) {
   let r = 0;
   for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
     PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
-    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(q.x - C.x, q.y - C.y));
+    // A corner off the canvas counts at the canvas edge: in a close view
+    // the circle holds the part of the subject that is on screen.
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(Math.max(rc.left, Math.min(rc.right, q.x)) - C.x, Math.max(rc.top, Math.min(rc.bottom, q.y)) - C.y));
   }
   if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
   const pts = [];
