@@ -30,6 +30,8 @@
 //      One full-window canvas shows one calm species at a time, centered on the
 //      ink ground. The species changes 3 times per dwell behind a fade to ink.
 //      Each species goes idle -> listening -> idle. Nothing else draws.
+//      saverPlate() sends opts.label the species record and the shared drive
+//      equations, refreshed once a second.
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
 import { $, STATES, SEED, ENTRY, ease, sstep, ACT_LIFT, LVL_LIFT, ATTACK, RELEASE, G, stage, clock, tiles, hexToRgb } from './state.js';
@@ -165,7 +167,8 @@ html.orb-saver body > :not(#orb-saver) { display: none !important; }
     const format = navigator.gpu.getPreferredCanvasFormat();
     const fade = device.createRenderPipeline({ layout: 'auto', vertex: { module: mod, entryPoint: 'vs' }, primitive: { topology: 'triangle-list' },
       fragment: { module: mod, entryPoint: 'fs', targets: [{ format, blend: { color: { srcFactor: 'constant', dstFactor: 'one-minus-constant' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } } }] } });
-    saver = { canvas, surf: makeSurface(canvas), fade, list, i: -1, t: null, t0: 0, per: Math.max(14, secs / 3), rnd, step: 0 };
+    saver = { canvas, surf: makeSurface(canvas), fade, list, i: -1, t: null, t0: 0, per: Math.max(14, secs / 3), rnd, step: 0,
+      label: typeof opts.label === 'function' ? opts.label : null, plateAt: 0, tone: SAVER_TONES[0] };
     saverNext(clock());
     return { canvas, warmupMs: 1200 };
   }
@@ -173,7 +176,31 @@ html.orb-saver body > :not(#orb-saver) { display: none !important; }
   function saverNext(now) {
     const s = saver; s.i = (s.i + 1) % s.list.length; s.t = s.list[s.i]; s.t0 = now; s.step = 0;
     const t = s.t; t.prev = t.cur = 'idle'; t.changedAt = now - 5; t.phase = 0; t.sig.fill(0);
-    G.tone = G.tone2 = hexToRgb(SAVER_TONES[Math.floor(s.rnd() * SAVER_TONES.length)]);
+    s.tone = SAVER_TONES[Math.floor(s.rnd() * SAVER_TONES.length)];
+    G.tone = G.tone2 = hexToRgb(s.tone);
+    saverPlate(now);
+  }
+  // The plate: the species record from styles.json (name, description, WGSL
+  // function, knobs) and the shared drive that fill() and frame() compute for
+  // every orb (state crossfade, phase rate, glow lift, voice signal). The
+  // per-species WGSL body is not restated. One title per species, so the
+  // live values refresh in place.
+  function saverPlate(now) {
+    const s = saver; if (!s.label || !s.t) return;
+    s.plateAt = now;
+    const t = s.t, tau = now - t.changedAt, from = SEED[t.prev], to = SEED[t.cur], k = ease(tau);
+    const mix = f => from[f] * (1 - k) + to[f] * k, f2 = v => v.toFixed(2);
+    s.label({ title: 'Presence orb · ' + t.s.name, sub: t.s.species,
+      eq: ['k = smoothstep(τ / 0.6)   (state crossfade)',
+        'x = x_from·(1 − k) + x_to·k',
+        'φ ← φ + dt·speed·(1 + 0.25·A)·tempo',
+        'glow = glow_state·(1 + 0.35·L)',
+        'voice ← voice + L^0.65·(1 or 0.55)·dφ',
+        'fade: out = ink·a + orb·(1 − a)'],
+      lines: ['fn ' + t.s.fn + ' · ' + t.s.family + ' pack · ' + t.s.knobs.map((q, i) => 'c' + i + ' ' + q[0] + ' ' + f2(t.knobs[i])).join(', '),
+        'state ' + (t.prev === t.cur ? t.cur : t.prev + ' → ' + t.cur) + ' · speed ' + f2(mix('speed')) + ' · glow ' + f2(mix('glow')) + ' · depth ' + f2(mix('depth')),
+        'listening from ' + Math.round(s.per * 0.34) + ' s to ' + Math.round(s.per * 0.7) + ' s of ' + Math.round(s.per) + ' s · tempo ' + f2(G.tempo),
+        'level L = ' + f2(G.live.level) + ' · activity A = ' + f2(G.live.activity) + ' · tone ' + s.tone] });
   }
   function saverState(t, st, now) { if (t.cur !== st) { t.prev = t.cur; t.cur = st; t.changedAt = now; } }
   function saverFrame(enc, now) {
@@ -181,6 +208,7 @@ html.orb-saver body > :not(#orb-saver) { display: none !important; }
     if (tau >= s.per) { saverNext(now); tau = 0; }
     const t = s.t;
     saverState(t, tau > s.per * 0.34 && tau < s.per * 0.7 ? 'listening' : 'idle', now);
+    if (now - s.plateAt >= 1) saverPlate(now);
     if (!t.pipeline) return;
     const cv = s.canvas, r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
     const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
