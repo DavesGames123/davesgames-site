@@ -55,6 +55,7 @@
 //      ui list ............ "rebuildList"      object cards + sliders
 //      presets ............ "function preset"  scene setups
 //      loop ............... "function loop"    rAF: step + display + FPS
+//      screensaver ........ "window.snSaver"   shell saver hook (lib/screensaver.js)
 // ============================================================================
 (async () => {
 // Fetch every shader stage in parallel before any GL setup, keyed by path.
@@ -677,4 +678,21 @@ overlayCanvas.addEventListener('touchstart',e=>{if(e.touches.length===1)onDown(e
 resize();renderCmapPreviews();
 setTimeout(()=>{defaultSetup();requestAnimationFrame(loop);},60);
 window.SIM=SIM;window.sg=sg;window.setCmap=setCmap;window.addEmitter=addEmitter;window.addShape=addShape;window.toggleDraw=toggleDraw;window.toggleErase=toggleErase;window.clearDrawn=clearDrawn;window.preset=preset;window.togglePlay=togglePlay;window.resetSim=resetSim;window.clearAll=clearAll;
+// Screensaver hook for the shell (lib/screensaver.js). enter() hides the GUI and
+// the outline overlay, makes #canvas-wrap fill the window (resize() then sizes
+// the buffer), and loads one scene chosen by opts.seed: the Karman street or the
+// boot scene (two jets and a disc). The other presets leave most of the full
+// window black. At full window the jets need more push to cross the frame, so
+// the emitter multiplier is 6 at calm 0 and 3 at calm 1. A prewarm runs three
+// extra solver steps per frame for 2.4 s, before the recording starts. The
+// scene does not change inside one dwell.
+window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0)),k=6*(1-0.5*calm);
+  await new Promise(r=>setTimeout(r,150));  // let the boot defaultSetup() run first
+  const st=document.createElement('style');st.textContent='html.saver #panel,html.saver #mob-btn,html.saver #vec-btn,html.saver #eq-panel,html.saver #status-bar,html.saver .topbar,html.saver #display-canvas{display:none!important}html.saver body::before,html.saver body::after{display:none}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver,html.saver body{cursor:none}';
+  document.head.appendChild(st);document.documentElement.classList.add('saver');
+  resize();SIM.showVectors=false;SIM.drawMode=SIM.eraseMode=false;SIM.playing=true;SIM.bloom=0.4;setCmap(3);
+  if((opts.seed>>>0)%2)preset('karman');else{clearAll();defaultSetup();}SIM.selectedId=-1;
+  emitters.forEach(e=>{e.mult=k;});
+  const until=performance.now()+2400;(function pw(){if(performance.now()<until){for(let i=0;i<3;i++){step();frame++;}requestAnimationFrame(pw);}})();
+  return{canvas,warmupMs:2500};}};
 })();
