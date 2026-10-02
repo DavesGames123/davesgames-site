@@ -14,6 +14,7 @@
 //      registry ........ buildRegistry / registerNodes
 //      debug hook ...... window.__studio, selfTest, selfTestOk, selfTestNote
 //      boot ............ the top-level await sequence
+//      screensaver ..... saver.js (window.snSaver), imported first
 //
 //  MODULE CONTRACT
 //      A module exports `async function init(ctx)`. ctx holds:
@@ -26,6 +27,7 @@
 //        modules   name -> imported module namespace (loaded so far)
 //      A module that registers an api with selfTest() joins __studio.selfTest().
 // ============================================================================
+import './saver.js';
 import * as contract from './contract.js';
 import { store, state } from './store.js';
 import { gpu, initGPU } from './gpu.js';
