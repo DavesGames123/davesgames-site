@@ -57,6 +57,7 @@
 //      headset .............. "headset (VR / AR)"  lib/xr-view.js on vortex, flow3d
 //      screensaver .......... "window.snSaver"     shell saver hook, ns-vortex only
 //      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d, flow3d, wave
+//      saver plate .......... "function svPlate"   opts.label: title, live params, TeX, anchor
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -1034,6 +1035,7 @@ if (FIXED === 'vortex') window.snSaver = { enter(opts) {
   VX.spd = Math.min(0.25 * (1 - 0.5 * calm), cap / (0.12 * secs)); VX.controls.autoRotateSpeed = 0.5 * (1 - 0.5 * calm);
   vxSeek(0); VX.playing = true; resize();
   const hold = () => { if (VX.u >= cap) VX.playing = false; requestAnimationFrame(hold); }; hold();
+  svLabels(opts);
   return { canvas: c3d, warmupMs: 1500 };
 } };
 
@@ -1118,5 +1120,73 @@ if (SV_VIEWS[FIXED]) window.snSaver = { enter(opts) {
   document.head.appendChild(st); document.documentElement.classList.add('saver'); document.body.classList.add('qp-collapsed', 'mp-collapsed');
   SCRUB[FIXED] = null; resize();
   SV = SV_VIEWS[FIXED](calm, Math.max(6, secs / 3 - 2 * fade), fade, svRng(opts.seed || 1));
+  svLabels(opts);
   return { canvas: FIXED === 'flow3d' ? c3d : c2d, warmupMs: 2000 };
 } };
+
+/* ───────── saver plate ───────── */
+// The shell label plate (opts.label in lib/screensaver.js) for the saver
+// views. svPlate() gives the title, the live parameters, the view's own TeX
+// (the same strings as script-1.js) and the colour rules NS_RULES, so a symbol
+// has the same class on the plate as in the mathematics panel. svLabels()
+// sends it once a second when it changes. Anchors are in page CSS px:
+//   burgers, flow2d, wave  the drawing fills the stage: no anchor
+//   flow3d                 the box and the column fill the stage: no anchor
+//   vortex                 the cloud and its core through VX.camera
+const SV_FMT = x => fmtE(x).replace('-', '−');
+// World point -> stage CSS px through a three.js camera, or null when behind it.
+function svProj(cam, x, y, z){ const v = new THREE.Vector3(x, y, z).project(cam); if (v.z > 1 || !isFinite(v.x)) return null;
+  const b = stage.getBoundingClientRect(), Hv = stageH(); return { x: b.left + (v.x + 1) / 2 * stage.clientWidth, y: b.top + (1 - v.y) / 2 * Hv }; }
+// Centre, tight radius and key points of a set of world points.
+function svAnchor(cam, centre, ring, keys){ const C = svProj(cam, ...centre); if (!C) return null; let r = 0;
+  for (const p of ring){ const q = svProj(cam, ...p); if (q) r = Math.max(r, Math.hypot(q.x - C.x, q.y - C.y)); }
+  const pts = keys.map(p => svProj(cam, ...p)).filter(Boolean); return { x: C.x, y: C.y, r, pts: pts.length ? pts : [C] }; }
+// The vortex: the tracers start at radius 0.2 to 3.6 and the outer parcels
+// stay near their start, so a ring of 3.2 world units holds the visible
+// cloud. The key points are the core and the axis just above and below it.
+function svVortexAnchor(){ if (!VX.camera) return null; const ring = [], R = 3.2;
+  for (let i = 0; i < 12; i++){ const a = i / 12 * 6.2832; ring.push([R * Math.cos(a), 0, R * Math.sin(a)]); }
+  return svAnchor(VX.camera, [0, 0, 0], ring, [[0, 0, 0], [0, 0.8, 0], [0, -0.8, 0]]); }
+function svPlate(){
+  const v = FIXED, rules = NS_RULES[v], [title] = TITLES[v];
+  if (v === 'burgers'){ const h = BG.hist[BG.hist.length - 1], tb = 1 / Math.max(BG.q0, 1e-9);
+    return { title: 'Burgers equation', sub: 'A ' + BG.ic + ' profile steepens into a shock', rules,
+      params: [{ sym: '\\nu', name: 'viscosity', value: BG.nu.toFixed(4), cls: 'm3' }, { sym: 't', name: 'time', value: BG.t.toFixed(2) },
+        { sym: 't_b', name: 'breaking time', value: tb.toFixed(2) }, { sym: 'q', name: 'steepest slope', value: h ? SV_FMT(h.q) : '—' }],
+      lines: ['Top: the profile. Below: the space–time map.'],
+      tex: [R`\partial_t u+u\,\partial_x u=\nu\,\partial_{xx}u`, R`\frac{Dq}{Dt}=-q^2\quad\Longrightarrow\quad q(t)=\frac{q_0}{1+q_0t}`, R`u=-2\nu\,\frac{\partial_x\varphi}{\varphi}\qquad\Longrightarrow\qquad \partial_t\varphi=\nu\,\partial_{xx}\varphi`],
+      eq: ['∂ₜu + u ∂ₓu = ν ∂ₓₓu', 'Dq/Dt = −q²,  q(t) = q₀/(1 + q₀t)'] }; }
+  if (v === 'flow2d') return { title: 'Navier–Stokes in 2D', sub: 'Vorticity of a ' + F2.ic + ' field, decaying', rules,
+    params: [{ sym: '\\nu', name: 'viscosity', value: F2.nu.toFixed(4), cls: 'm3' }, { sym: 'E', name: 'energy', value: SV_FMT(F2.lastE) },
+      { sym: 'Z', name: 'enstrophy', value: SV_FMT(F2.lastZ) }, { sym: '\\omega', name: 'max |ω| / initial', value: (F2.lastMax / F2.w0max).toFixed(3), cls: 'm4' }],
+    lines: ['Colour is vorticity, arrows are velocity.'],
+    tex: [R`\partial_t\omega+u\cdot\nabla\omega=\nu\Delta\omega,\qquad u=\nabla^\perp\psi,\quad \Delta\psi=\omega`, R`\frac{dZ}{dt}=-\nu\!\int|\nabla\omega|^2\le 0,\qquad \frac{dE}{dt}=-2\nu Z`],
+    eq: ['∂ₜω + u·∇ω = ν Δω', 'dZ/dt = −ν ∫|∇ω|² ≤ 0,  dE/dt = −2νZ'] };
+  if (v === 'flow3d'){ const s = F3.sim; return { title: 'Navier–Stokes in 3D', sub: F3.ic === 'column' ? 'A vortex column, stretched by the flow' : 'Taylor–Green vortex in a periodic box', rules,
+    params: [{ sym: '\\nu', name: 'viscosity', value: F3.nu.toFixed(4), cls: 'm3' }, { sym: 'Z/Z_0', name: 'enstrophy', value: (s.lastZ / s.Z0).toFixed(3) },
+      { sym: '\\omega', name: 'max |ω| / initial', value: (s.lastMax / s.m0).toFixed(3), cls: 'm4' }, { sym: 't', name: 'time', value: s.t.toFixed(2) }],
+    lines: ['Points show where |ω| is large. Tracers follow the flow.'],
+    tex: [R`\partial_t\omega+(u\cdot\nabla)\omega=\underbrace{(\omega\cdot\nabla)u}_{\text{stretching}}+\nu\Delta\omega`, R`\frac{dZ}{dt}=\int\omega\cdot S\,\omega\;-\;\nu\!\int|\nabla\omega|^2`,
+      F3.ic === 'column' ? R`\omega=\nabla\times u,\qquad \nabla\cdot u=0` : R`\text{Taylor–Green:}\quad u=(\sin x\cos y\cos z,\ -\cos x\sin y\cos z,\ 0)`],
+    eq: ['∂ₜω + (u·∇)ω = (ω·∇)u + ν Δω', 'dZ/dt = ∫ ω·Sω − ν ∫|∇ω|²'] }; }
+  if (v === 'wave'){ const g = WV.gamma(); return { title: 'Affine-wave blowup', sub: 'An exact Boussinesq wave, in its ' + WV.phase + ' phase', rules,
+    params: [{ sym: '\\Theta', name: 'amplitude', value: SV_FMT(WV.Th), cls: 'm5' }, { sym: '\\Omega', name: 'vorticity amplitude', value: SV_FMT(WV.Om), cls: 'm4' },
+      { sym: '\\lambda', name: 'frequency', value: String(WV.lam) }, { sym: '\\gamma', name: 'growth rate', value: g.toFixed(3) }],
+    lines: ['Left: temperature θ. Right: vorticity ω.'],
+    tex: [R`\partial_t\theta + u\cdot\nabla\theta = f_\theta,\qquad \partial_t\omega + u\cdot\nabla\omega = \partial_1\theta + \operatorname{curl} f_{u}`,
+      R`\dot{\zeta} = -D^{\mathsf T}\zeta,\qquad \dot{\Theta} = -\frac{J\zeta\cdot G}{\lambda|\zeta|^2}\,\Omega,\qquad \dot{\Omega} = \lambda\,\zeta_1\,\Theta`,
+      R`\nabla\vartheta(0,t)=\lambda\,\Theta\,\zeta`],
+    eq: ['∂ₜθ + u·∇θ = f_θ,  ∂ₜω + u·∇ω = ∂₁θ + curl f_u', 'Θ̇ = −(Jζ·G)/(λ|ζ|²) Ω,  Ω̇ = λ ζ₁ Θ'] }; }
+  if (v === 'vortex'){ const ell = VX.ell || 1; return { title: 'Self-similar vortex collapse', sub: 'The core shrinks as ℓ(t) and spins up', rules,
+    params: [{ sym: '\\ell', name: 'core length', value: SV_FMT(ell) }, { sym: 'T_*-t', name: 'time to blowup', value: SV_FMT(1 - VX.u) },
+      { sym: 'u', name: 'sup |u| ∼ ℓ⁻¹', value: SV_FMT(1 / ell), cls: 'm1' }, { sym: '\\omega', name: 'vorticity ∼ ℓ⁻²', value: SV_FMT(1 / (ell * ell)), cls: 'm4' }],
+    lines: ['A kinematic stand-in. Colour is angular speed.'],
+    tex: [R`u(x,t)=\frac{1}{\sqrt{T_*-t}}\;U\!\left(\frac{x}{\sqrt{T_*-t}}\right)`, R`u_\mu(x,t)=\mu\,u(\mu x,\mu^2 t),\qquad p_\mu=\mu^2 p(\mu x,\mu^2 t)`,
+      R`E(t)=\tfrac12\!\int|u|^2\,dx\ \sim\ \ell^{-2}\cdot\ell^{3}=\ell\to 0`],
+    eq: ['u(x,t) = U(x/√(T∗ − t)) / √(T∗ − t)', 'u_μ(x,t) = μ u(μx, μ²t)'], anchor: svVortexAnchor }; }
+  return { title }; }
+// Send the plate once a second, only when it changed (the anchor function is
+// not part of the comparison).
+function svLabels(opts){ if (!opts || typeof opts.label !== 'function') return; let last = '';
+  const send = () => { let L = null; try { L = svPlate(); } catch (e) { return; } const j = JSON.stringify(L); if (j !== last){ last = j; opts.label(L); } };
+  send(); setInterval(send, 1000); }
