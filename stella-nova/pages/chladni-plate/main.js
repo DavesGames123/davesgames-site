@@ -264,6 +264,26 @@ function eqText(plain) {
       d: String.raw`D_y=${c.DL.toFixed(2)},\ D_x=${c.DR.toFixed(2)},\ H=${H.toFixed(2)}\ \text{N·m}`,
       note: `${m.name} ${t}${st.arch && !c.iso ? ', arched' : ''}` };
 }
+// The driven response: the panel TeX (#eqResp), also on the saver plate.
+const SAVER_RESP = String.raw`w(\mathbf{x})=\sum_n \frac{\varphi_n(\mathbf{x})\,\varphi_n(\mathbf{x}_d)\,F}{\omega_n^2-\omega^2+2i\zeta\,\omega_n\,\omega}`;
+// The plate on screen, for the shell's label plate: the corners of the grid
+// rect through R.toScreen (the render camera), in page CSS px. Centre is
+// the middle of their screen box, r the larger half side (the outlines do
+// not fill the corners). pts: the plate centre and the drive point.
+function plateAnchor() {
+  if (!cur || !R || !R.toScreen) return null;
+  const cv = $('view'), rc = cv.getBoundingClientRect(), w = cv.clientWidth, h = cv.clientHeight;
+  const q = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([u, v]) => R.toScreen(u, v, w, h));
+  if (q.some(p => !p)) return null;
+  const xs = q.map(p => p[0]), ys = q.map(p => p[1]);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const pts = [{ x: rc.left + (x0 + x1) / 2, y: rc.top + (y0 + y1) / 2 }];
+  if (st.drive) {
+    const [gu, gv] = toGrid(st.drive), d = R.toScreen(gu / (cur.res.nx - 1), gv / (cur.res.ny - 1), w, h);
+    if (d) pts.push({ x: rc.left + d[0], y: rc.top + d[1] });
+  }
+  return { x: pts[0].x, y: pts[0].y, r: Math.max(x1 - x0, y1 - y0) / 2, pts };
+}
 // The driven response and the lift condition do not change: typeset once.
 let eqStatic = null;
 function staticEqs() {
@@ -310,8 +330,17 @@ function labels(force) {
     const key = S.name + sub;
     if (key !== lastSaverLabel) {
       lastSaverLabel = key;
-      saver.label({ title: S.name, sub, lines: [nm.on ? name.sub : 'between resonances', `${CP.MATERIALS[st.material].name} ${st.t.toFixed(1)} mm · ${st.bc} edges · Q ${(1 / (2 * st.zeta)).toFixed(0)}`],
-        eq: eqText(true).slice(0, 2).concat(['sand lifts where ω²|w| > g']) });
+      const c = CP.stiffness(st.material, st.t / 1000), M = CP.MATERIALS[st.material];
+      const params = [{ sym: 'f', name: 'drive frequency', value: fmtHz(st.f), cls: 'm6' },
+        { sym: 'h', name: 'thickness', value: st.t.toFixed(1) + ' mm', cls: 'm5' },
+        c.iso ? { sym: 'D', name: 'flexural rigidity', value: c.Dref.toFixed(2) + ' N·m', cls: 'm2' }
+          : { sym: 'D_y / D_x', name: 'grain stiffness ratio', value: (c.DL / c.DR).toFixed(1), cls: 'm2' },
+        { sym: '\\rho', name: 'density', value: M.rho + ' kg/m³', cls: 'm4' },
+        { sym: 'Q', name: 'quality factor', value: (1 / (2 * st.zeta)).toFixed(0) }];
+      saver.label({ title: S.name, sub: sub.charAt(0).toUpperCase() + sub.slice(1), params,
+        lines: [nm.on ? name.sub : 'Between resonances', `${M.name}, ${st.bc} edges`],
+        tex: [E.plate, SAVER_RESP, String.raw`\omega^2\,|w|>g`], rules: CP_RULES,
+        eq: eqText(true).slice(0, 2).concat(['sand lifts where ω²|w| > g']), anchor: plateAnchor });
     }
   }
 }
@@ -391,7 +420,14 @@ function setTone(on) {
 // The part of the canvas that no panel, card or chart covers, in CSS px.
 function clearRect() {
   const cv = $('view'), W = cv.clientWidth, H = cv.clientHeight, top0 = cv.getBoundingClientRect().top;
-  if (document.documentElement.classList.contains('sn-saver')) return { x: W * 0.04, y: H * 0.05, w: W * 0.92, h: H * 0.9 };
+  // Saver: keep room for the shell label plate, at the right of a wide
+  // screen and at the base of a tall one, so the plate sits beside the
+  // sand figure and not on it.
+  if (document.documentElement.classList.contains('sn-saver')) {
+    if (W > H * 1.2) { const k = Math.min(440, W * 0.36); return { x: W * 0.03, y: H * 0.05, w: W * 0.94 - k, h: H * 0.9 }; }
+    if (H > W * 1.2) { const k = Math.min(340, H * 0.4); return { x: W * 0.04, y: H * 0.03, w: W * 0.92, h: H * 0.95 - k }; }
+    return { x: W * 0.04, y: H * 0.05, w: W * 0.92, h: H * 0.9 };
+  }
   let x0 = 0, x1 = W, y0 = 0, y1 = H;
   const panel = $('panel'), open = panel.classList.contains('open');
   const pr = panel.getBoundingClientRect();

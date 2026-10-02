@@ -22,6 +22,7 @@
 //    camera fit ........ "function camera"
 //    frame ............. "draw("
 //    screen to plate ... "pick("
+//    plate to screen ... "toScreen("
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
 
@@ -271,6 +272,14 @@ export async function createRenderer(canvas, opt) {
       }
       gl.bindVertexArray(null);
       gl.disable(gl.BLEND);
+    },
+    // Plate uv (0..1 over the grid rect, as pick() gives) -> CSS px on the
+    // canvas, or null. The saver plate anchor in main.js uses it.
+    toScreen(u, v, cssW, cssH) {
+      if (!viewPV || !plate) return null;
+      const [rx, ry, rw, rh] = plate.rect, c = xform(viewPV, [rx + u * rw, ry - v * rh, 0]);
+      if (c[3] <= 0) return null;
+      return [(c[0] / c[3] + 1) / 2 * cssW, (1 - c[1] / c[3]) / 2 * cssH];
     },
     // CSS px on the canvas -> plate uv (0..1 over the grid rect), or null
     pick(px, py, cssW, cssH) {
