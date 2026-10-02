@@ -13,6 +13,8 @@
 //  FRAME ORDER  (function draw)
 //      space and stars ▶ grid ▶ room floors ▶ hull ▶ furniture ▶ turrets
 //      ▶ facing marks ▶ labels ▶ problems ▶ selection ▶ ghost or run preview
+//      The screensaver sets m.a (module alpha), UI.saver (no problem marks)
+//      and UI.fade (a dark veil on top). Nothing else sets them.
 //
 //  WALL PIECES  (function wallPiece)
 //      A one-cell structural module picks a sprite from its side contacts
@@ -310,12 +312,12 @@
       if (!vis[L]) return;
       PL.S.mods.forEach(function (m) {
         var t = PL.T[m.t]; if (!t || t.layer !== L) return;
-        drawModule(m, E, m.u === movingU ? 0.25 : (U.dimOthers && U.dimOthers !== L ? 0.4 : 1));
+        drawModule(m, E, m.u === movingU ? 0.25 : (U.dimOthers && U.dimOthers !== L ? 0.4 : m.a === undefined ? 1 : m.a));
       });
     });
-    PL.S.mods.forEach(function (m) { var t = PL.T[m.t]; if (t && vis[t.layer] && m.u !== movingU) drawFacing(m); });
-    if (cam.z >= 26) PL.S.mods.forEach(function (m) { var t = PL.T[m.t]; if (t && vis[t.layer] && !t.wall && m.u !== movingU) label(m); });
-    PL.problems().forEach(function (pr) { if (vis[PL.T[pr.m.t].layer]) outline(pr.m, 'rgba(255,96,96,0.9)', [5, 4]); });
+    PL.S.mods.forEach(function (m) { var t = PL.T[m.t]; if (t && vis[t.layer] && m.u !== movingU && !(m.a < 0.95)) drawFacing(m); });
+    if (cam.z >= 26) PL.S.mods.forEach(function (m) { var t = PL.T[m.t]; if (t && vis[t.layer] && !t.wall && m.u !== movingU && !(m.a < 0.95)) label(m); });
+    if (!U.saver) PL.problems().forEach(function (pr) { if (vis[PL.T[pr.m.t].layer]) outline(pr.m, 'rgba(255,96,96,0.9)', [5, 4]); });
     if (U.hoverU && U.tool !== 'build') { var hm = PL.find(U.hoverU); if (hm) outline(hm, U.tool === 'erase' ? 'rgba(255,96,96,0.95)' : 'rgba(150,200,255,0.65)'); }
     if (U.sel) { var sm = PL.find(U.sel); if (sm && sm.u !== movingU) outline(sm, '#ffc832', null, true); }
     // Ghost of the module to place, or of a module in a move.
@@ -327,6 +329,7 @@
       drawFacing({ t: gh.t, x: gh.x, y: gh.y, r: gh.r }, gh.ok ? '#ffc832' : '#ff6060');
     }
     if (U.run) U.run.cells.forEach(function (c) { cellBox(c[0], c[1], c[2]); if (c[2]) drawModule({ t: U.run.t, x: c[0], y: c[1], r: 0 }, null, 0.6); });
+    if (U.fade > 0) { cx.setTransform(1, 0, 0, 1, 0, 0); cx.fillStyle = 'rgba(7,9,14,' + U.fade + ')'; cx.fillRect(0, 0, cv.width, cv.height); cx.setTransform(DPR, 0, 0, DPR, 0, 0); }
   }
 
   function init(canvas) {

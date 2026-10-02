@@ -32,6 +32,7 @@
 //      share + file ....... "function shareURL"
 //      sheets (phone) ..... "function openSheet"
 //      boot ............... "function boot"
+//      screensaver ........ "window.snSaver"      build-up autopilot
 // ============================================================================
 (function () {
   var $ = function (id) { return document.getElementById(id); };
@@ -195,12 +196,13 @@
   }
 
   // ---- after an edit -------------------------------------------------------------
-  var saveT = 0;
+  var saveT = 0, SV = null;   // SV: the screensaver state, null when it is off
   function changed() {
     if (UI.sel && !PL.find(UI.sel)) UI.sel = 0;
     renderInspect(); renderSummary(); hint(); VW.ask();
     $('bUndo').disabled = !PL.S.undo.length; $('bRedo').disabled = !PL.S.redo.length;
     clearTimeout(saveT);
+    if (SV) return;
     saveT = setTimeout(function () {
       var h = '#s=' + PL.encode() + '&n=' + encodeURIComponent($('stationName').value || '');
       try { history.replaceState(null, '', h); } catch (e) {}
@@ -531,4 +533,75 @@
     });
   }
   boot();
+
+  // ---- screensaver ------------------------------------------------------------------
+  // Shell saver hook (lib/screensaver.js). enter() hides the panels and makes
+  // #stage fill the window. The autopilot then builds the example station one
+  // module at a time: the core, the hull outward from the core (each new
+  // module touches the built part), then the furniture. Each module fades in.
+  // The camera holds the fit of the full station with a slow drift. At the
+  // end of a cycle it holds, fades to black and builds again. One cycle is
+  // one dwell (opts.seconds). changed() writes no hash or localStorage here.
+  window.snSaver = {
+    enter: function (opts) {
+      var calm = Math.max(0, Math.min(1, +opts.calm || 0)), seed = (opts.seed >>> 0) || 1;
+      function rng() { seed = (seed + 0x6D2B79F5) >>> 0; var x = Math.imul(seed ^ seed >>> 15, 1 | seed); x ^= x + Math.imul(x ^ x >>> 7, 61 | x); return ((x ^ x >>> 14) >>> 0) / 4294967296; }
+      SV = { on: true }; clearTimeout(saveT);
+      var st = document.createElement('style');
+      st.textContent = 'html.saver header.bar,html.saver #side-l,html.saver #side-r,html.saver nav.dock,html.saver #scrim,html.saver #shareDlg,' +
+        'html.saver #stage>:not(#cv){display:none!important}html.saver #stage{position:fixed;inset:0;z-index:50}html.saver #cv{cursor:none}';
+      document.head.appendChild(st);
+      document.documentElement.classList.add('saver');
+      closeSheets(); setTool('select');
+      UI.saver = true; UI.sel = 0; UI.ghost = null; UI.run = null; UI.hoverU = 0; UI.drag = null;
+      var cycle = Math.max(24, +opts.seconds || 60) * 1000, ease = 500 + 500 * calm, plan = [], t0 = 0, n = 0, bx = [0, 0, 1, 1], phase = rng() * 6.283;
+      function order(list) {
+        // Hull first, then the rest. Among each group, the next module touches
+        // the built cells and is the nearest to the core, with a seeded jitter.
+        var done = {}, out = [];
+        PL.load([]); PL.S.mods.forEach(function (m) { PL.cellsOf(m).forEach(function (c) { done[PL.key(c[0], c[1])] = 1; }); });
+        var left = list.filter(function (m) { return !PL.T[m.t].core; }).map(function (m) { return { m: m, j: rng() * 1.5 }; });
+        while (left.length) {
+          var best = -1, bd = 1e9;
+          left.forEach(function (o, i) {
+            var cells = PL.cellsOf(o.m), touch = cells.some(function (c) { return done[PL.key(c[0] + 1, c[1])] || done[PL.key(c[0] - 1, c[1])] || done[PL.key(c[0], c[1] + 1)] || done[PL.key(c[0], c[1] - 1)]; });
+            var d = Math.hypot(o.m.x, o.m.y) + o.j + (touch ? 0 : 100) + (PL.T[o.m.t].layer === 'hull' ? 0 : 200);
+            if (d < bd) { bd = d; best = i; }
+          });
+          var o = left.splice(best, 1)[0];
+          PL.cellsOf(o.m).forEach(function (c) { done[PL.key(c[0], c[1])] = 1; });
+          out.push(o.m);
+        }
+        return out;
+      }
+      function restart(now) {
+        var ex = PL.example();
+        bx = [1e9, 1e9, -1e9, -1e9];
+        ex.forEach(function (m) { PL.cellsOf(m).forEach(function (c) { bx = [Math.min(bx[0], c[0]), Math.min(bx[1], c[1]), Math.max(bx[2], c[0] + 1), Math.max(bx[3], c[1] + 1)]; }); });
+        plan = order(ex); n = 0; t0 = now;
+        PL.S.mods.forEach(function (m) { m.a = 1; m.born = 0; });
+        PL.S.undo.length = 0; PL.S.redo.length = 0; changed();
+      }
+      function frame(now) {
+        var t = now - t0, build = cycle * 0.62, step = build / Math.max(1, plan.length);
+        if (t >= cycle) { restart(now); t = 0; }
+        while (n < plan.length && t >= 900 + n * step) {
+          var p = plan[n++], m = PL.add(p.t, p.x, p.y, p.r);
+          m.a = 0; m.born = now; PL.commit();
+        }
+        PL.S.mods.forEach(function (m) { if (m.born) m.a = Math.min(1, (now - m.born) / ease); });
+        UI.fade = Math.max(0, 1 - t / 900, (t - (cycle - 1100)) / 1100);
+        // Fit the full station to the window each frame (the stage size can
+        // change), then add a slow drift and a small zoom swell.
+        var sz = VW.size(), w = (now / 1000) * (0.05 - 0.035 * calm) + phase;
+        var z = Math.min(64, sz[0] / (bx[2] - bx[0] + 6), sz[1] / (bx[3] - bx[1] + 5));
+        VW.cam.x = (bx[0] + bx[2]) / 2 + Math.cos(w) * 1.2; VW.cam.y = (bx[1] + bx[3]) / 2 + Math.sin(w * 0.8) * 0.8; VW.cam.z = z * (1 + 0.05 * Math.sin(w * 0.6));
+        VW.ask();
+        requestAnimationFrame(frame);
+      }
+      restart(performance.now());
+      requestAnimationFrame(frame);
+      return { canvas: cv, warmupMs: 1500 };
+    }
+  };
 })();
