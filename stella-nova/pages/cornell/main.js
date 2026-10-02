@@ -792,7 +792,8 @@ var APP=(function(){
   // seconds/3 (at least 10 s) and converges; the change between stations is
   // behind a fade to black in the display pass (FADE), so the noisy restart
   // stays dark. calm (1 = slowest) makes the fades longer; opts.seed sets the
-  // order. No exit(): the shell reloads the page on stop.
+  // order. Each station sends opts.label a plate (plate()), and the sample
+  // count refreshes once a second. No exit(): the shell reloads the page on stop.
   window.snSaver={enter:function(o){ o=o||{};
     var calm=Math.max(0,Math.min(1,o.calm!=null?o.calm:0.7)), sd=(o.seed>>>0)||1;
     function rnd(){ sd=(sd+0x6D2B79F5)>>>0; var t=sd; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; }
@@ -802,7 +803,27 @@ var APP=(function(){
     var ST=[{az:90,el:14,R:2.45,p:'brand'},{az:85,el:9,R:2.2,p:'classic'},{az:95,el:12,R:2.3,p:'brand'},{az:90,el:4,R:2.4,p:'classic'},{az:93,el:7,R:1.95,p:'brand'},{az:87,el:12,R:2.3,p:'dim'}];
     for(var i=ST.length-1;i>0;i--){ var j=Math.floor(rnd()*(i+1)), q=ST[i]; ST[i]=ST[j]; ST[j]=q; }
     var hold=Math.max(10,(o.seconds||60)/3)*1000, fadeS=0.9+0.8*calm, n=0, phase='in', since=0, last=0;
-    function station(){ var s=ST[n++%ST.length]; CAM.az=s.az; CAM.el=s.el; CAM.R=s.R; CAM.fov=52; CAM.tx=0; CAM.ty=-0.10; CAM.tz=0; preset(s.p); resetRender(); }
+    // The plate: the integral radiance() estimates, the next-event term of
+    // sampleLightS, the glass Fresnel term, and the live sample count of the
+    // active backend. The title names the wall preset, so a station with a
+    // new preset fades to a new plate; the count refreshes in place.
+    var label=typeof o.label==='function'?o.label:null, wallSet='';
+    var MATN={0:'diffuse',2:'mirror',3:'glass',4:'glossy',5:'emitter'};
+    var WALLN={brand:'brand (teal, navy, grey)',classic:'classic (red, green, grey)',dim:'dim (green, plum, grey)'};
+    function plate(){ if(!label) return;
+      var a=active(), cv=usingGpu()?glCv:cpuCv, objs=SCENE.spheres.filter(function(q){ return q.vis!==false; });
+      var lines=['samples per pixel N = '+a.samples()+(usingGpu()?' (stops at 4000)':' (stops at 400)')+' · '+cv.width+' × '+cv.height+' px · '+(usingGpu()?'GPU':'CPU'),
+        '≤ '+SCENE.bounces+' bounces'+(usingGpu()?' (Russian roulette after 3)':'')+' · ceiling light E = '+SCENE.light+', square ±'+SCENE.lsize+' · walls '+(WALLN[wallSet]||wallSet)];
+      lines.push(objs.map(function(q){ return (q.name||'object')+': '+(MATN[q.mat]||'glossy'); }).join(' · '));
+      lines.push('camera az '+CAM.az+'°, el '+CAM.el+'°, R = '+CAM.R+' · fov '+CAM.fov+'°');
+      label({ title:'Cornell box · '+wallSet+' walls', sub:'Monte Carlo path trace with next-event estimation',
+        eq:['L(x, ω) = Lₑ + ∫ f_r · L(x′, ωᵢ) · (n·ωᵢ) dωᵢ',
+          'direct = ρ·E·A·(n·l)(n_L·l) / (π r²)',
+          'A = (2·'+SCENE.lsize+')²,  diffuse: ωᵢ ~ cos θ / π',
+          'glass: F = 0.04 + 0.96(1 − cos θ)⁵, η = 1.5',
+          'pixel = (1/N) Σ L  →  ACES  →  γ 1/2.2'],
+        lines:lines }); }
+    function station(){ var s=ST[n++%ST.length]; CAM.az=s.az; CAM.el=s.el; CAM.R=s.R; CAM.fov=52; CAM.tx=0; CAM.ty=-0.10; CAM.tz=0; preset(s.p); wallSet=s.p; resetRender(); plate(); }
     function tick(t){ var dt=Math.min(0.05,(t-(last||t))/1000); last=t; if(!since) since=t;
       if(phase==='show'&&t-since>hold) phase='out';
       else if(phase==='out'){ FADE=Math.min(1,FADE+dt/fadeS); if(FADE>=1){ station(); phase='dark'; since=t; } }
@@ -815,6 +836,7 @@ var APP=(function(){
       if(mode!=='render') setMode('render');
       resize(); resBase=Math.min(1200,Math.round(Math.min(WW,WH)*dpr)); applyRes();
       FADE=1; station(); phase='dark'; requestAnimationFrame(function(t){ since=t; requestAnimationFrame(tick); });
+      setInterval(plate,1000);
       res({canvas:usingGpu()?glCv:cpuCv, warmupMs:2500}); })(); }); }};
 
   return { init:init, setMode:setMode, setBackend:setBackend, setGizmo:setGizmo, resetView:resetView, preset:preset, tab:tab };
