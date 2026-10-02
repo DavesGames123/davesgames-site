@@ -376,15 +376,33 @@ window.snSaver = {
     stage.orbit = true; stage.orbitK = 1 - 0.6 * calm;
     setRate(1);
     const hold = Math.max(7, (o.seconds || 60) / 5) * 1000;
-    let n = 0;
+    let n = 0, viewName = 'dial side', seedNow = '';
+    // The plate: the piece rolled (Gen.describe, the same rows as the Spec
+    // panel) and the beat of its calibre. Live amplitude once a second.
+    const plate = () => {
+      if (!o.label || !S.cur || S.busy) return;
+      const { spec, cal, state } = S.cur, c = cal.CAL;
+      o.label({
+        title: spec.face.brand,
+        sub: `${Gen.TYPES[spec.type].name} · seed ${seedNow} · ${viewName}`,
+        lines: [
+          ...Gen.describe(spec).filter(r => r[0] !== 'Type').map(([k, v]) => `${k}: ${v}`),
+          `Beat: ${cal.freq}` + (state.stopped ? ' · stopped' : ` · amplitude ${(state.amp / D).toFixed(0)}°`),
+        ],
+        eq: [`θ(t) = A · sin(2π f t),  f = ${c.fBal} Hz`, `beats/h = 2 · 3600 · f = ${(2 * 3600 * c.fBal).toLocaleString()}`],
+      });
+    };
+    setInterval(plate, 1000);
     async function step() {
       const s = n++ % 3;
       if (s === 0) {
         while (S.busy) await new Promise(r => setTimeout(r, 100));
         setBack(false);
-        await roll(seed());
+        seedNow = seed();
+        await roll(seedNow);
+        viewName = 'dial side'; plate();
         setTimeout(() => setView('dial'), 1300);
-      } else setView(s === 1 ? 'exploded' : 'back');
+      } else { setView(s === 1 ? 'exploded' : 'back'); viewName = s === 1 ? 'exploded view' : 'case back'; plate(); }
       setTimeout(step, hold);
     }
     step();
