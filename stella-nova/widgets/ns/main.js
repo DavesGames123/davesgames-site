@@ -53,7 +53,7 @@
 //      main loop ............ "main loop"          view dispatch + error trap
 //      headset .............. "headset (VR / AR)"  lib/xr-view.js on vortex, flow3d
 //      screensaver .......... "window.snSaver"     shell saver hook, ns-vortex only
-//      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d, flow3d, wave
+//      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -764,9 +764,10 @@ function f2Field(gx,gy,S,fr){ const n=F2.n; const scale=TOG.fixed?F2.w0max:Math.
 // Render the Flow 2D view: step under a CFL-limited dt (budgeted to ~28 ms/frame),
 // draw the field, and plot the three monotone diagnostics plus the live check that
 // −dE/dt equals 2νZ.
+// Advance within a time budget so a small viscosity cannot stall the frame.
+function f2Advance(dt){ if(F2.playing){ let adv=dt*F2.spd*0.8; const t0=performance.now(); while(adv>0&&performance.now()-t0<28){ const h=Math.min(F2.dtCFL(),adv); F2.step(h); adv-=h; if(F2.t-F2.hist[F2.hist.length-1].t>0.02) F2.record(); f2Snap(); } } }
 function drawFlow2D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRect(0,0,W,H);
-  // Advance within a time budget so a small viscosity cannot stall the frame.
-  if(F2.playing){ let adv=dt*F2.spd*0.8; const t0=performance.now(); while(adv>0&&performance.now()-t0<28){ const h=Math.min(F2.dtCFL(),adv); F2.step(h); adv-=h; if(F2.t-F2.hist[F2.hist.length-1].t>0.02) F2.record(); f2Snap(); } }
+  f2Advance(dt);
   FT.sync(); const fr=FT.current(); const tmax=Math.max(1,F2.t*1.05); const scale=TOG.fixed?F2.w0max:Math.max(fr.max,1e-9);
   const hF=R`$\partial_t\omega+u\!\cdot\!\nabla\omega=\nu\Delta\omega$, &nbsp; $u=\nabla^{\perp}\psi$, $\Delta\psi=\omega$ &nbsp; at $t=$`+fr.t.toFixed(2)+'<br>'+ICTEX[F2.ic]+'. Colour scale ±'+fmt(scale,2)+(TOG.fixed?' (fixed at the initial maximum, so decay shows)':' (auto)')+R`; $128^2$ pseudo-spectral, 2/3 dealiased, RK4.`;
   const hP1=R`$E=\tfrac12\langle|u|^2\rangle$, &nbsp; $Z=\tfrac12\langle\omega^2\rangle$, &nbsp; $\|\omega\|_\infty$ — all three can only decrease in 2D`;
@@ -1029,6 +1030,17 @@ const SV_VIEWS = {
     return { draw(dt){ frameNo++; const k=clock(dt); const W=stage.clientWidth, H=stage.clientHeight; ctx.clearRect(0,0,W,H); bgAdvance(dt);
       BT.sync(); const fr=BT.current(), tb=1/Math.max(BG.q0,1e-9), m=Math.round(Math.max(16,Math.min(W,H)*0.05)), ph=(H-3*m)*0.4;
       bgProfile(m,m,W-2*m,ph,fr.u,fr.t,tb); bgWaterfall(m,2*m+ph,W-2*m,H-3*m-ph,fr.t,tb); svFinish(k); } };
+  },
+  // Flow 2D: the vorticity field covers the window (one period on the long
+  // side, centred), with faint velocity arrows. The colour scale follows the
+  // live maximum, so the decay does not fade the picture. Each state takes the
+  // next initial field (random, shear layer, dipole); random fields use rng.
+  flow2d(calm, show, fade, rng){
+    const ics=['random','shear','dipole']; let i=Math.floor(rng()*3);
+    const next=()=>{ i=(i+1)%3; svSeeded(rng,()=>{ F2.ic=ics[i]; f2Reset(); }); };
+    i=(i+2)%3; next(); F2.spd=1-0.6*calm; TOG.fixed=false; const clock=svClock(show,fade,next);
+    return { draw(dt){ frameNo++; const k=clock(dt); const W=stage.clientWidth, H=stage.clientHeight; ctx.clearRect(0,0,W,H); f2Advance(dt);
+      FT.sync(); const S=Math.max(W,H); f2Field((W-S)/2,(H-S)/2,S,FT.current()); svFinish(k); } };
   },
 };
 if (SV_VIEWS[FIXED]) window.snSaver = { enter(opts) {
