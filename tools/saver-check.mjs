@@ -107,7 +107,8 @@ async function main() {
     await send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: path.join(OUT, 'dl') });
     await send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
     const settings = { pages: [key], seconds: SECONDS, fade: 0.5, calm: CALM, display: 'window', record: RECORD, recordWarmup: 2, loop: false, caption: false, wakeLock: false };
-    await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('sn-saver-settings', ${JSON.stringify(JSON.stringify(settings))})}catch(e){}` });
+    // lib/screensaver.js reads 'sn-saver-settings-v2' (the v2 key dropped older saved choices); write both keys
+    await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{for(const k of ['sn-saver-settings','sn-saver-settings-v2'])localStorage.setItem(k, ${JSON.stringify(JSON.stringify(settings))})}catch(e){}` });
     await send('Page.navigate', { url: `${SERVER}/stella-nova/#home` });
     // The shell head waits for the Google Fonts stylesheet (near 3 s under
     // load), so poll for the controller instead of one fixed wait.
