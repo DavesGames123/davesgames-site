@@ -502,7 +502,8 @@ window.snSaver={
 // group sizes read from window.T24 (equations.js), Heaviside's four vector
 // laws, and the dipole field that fieldAt() computes. The live values are λ,
 // k = kOf(), the axis angle from the turn above, the phase t mod 2π, the
-// near/far crossover r = 1/k, and the amp, cNear and cRad weights.
+// near/far crossover r = 1/k. dipoleAnchor() gives the source and its near
+// zone to the plate leader.
 let saverLabel=null,saverTimer=0;
 function saverPlate(){
   if(!saverLabel)return;
@@ -510,20 +511,38 @@ function saverPlate(){
   const total=groups.reduce((a,c)=>a+c.lines.length,0);
   const short={gaussE:'Gauss E',gaussB:'Gauss B',faraday:'Faraday',ampere:'Ampère–Maxwell'};
   const lines=[];
-  if(groups.length)lines.push(total+' scalar lines: '+groups.map(c=>(short[c.key]||c.name.replace(/ relations$/,''))+' '+c.lines.length).join(' · '));
-  lines.push('λ = '+SIM.lambda.toFixed(0)+' px · k = 2π/λ = '+k.toFixed(4)+' /px · near/far r = 1/k = '+(1/k).toFixed(1)+' px');
-  lines.push('dipole axis θₐ = '+SIM.axisDeg.toFixed(1)+'° (turning) · phase t mod 2π = '+(SIM.t%(2*Math.PI)).toFixed(2));
-  lines.push('A = '+SIM.amp.toFixed(2)+' · near weight '+SIM.cNear.toFixed(2)+' · radiation weight '+SIM.cRad.toFixed(2));
-  lines.push('lines: E stream function · heatmap: B⊥');
+  if(groups.length)lines.push('Maxwell wrote '+total+' scalar lines: '+groups.map(c=>(short[c.key]||c.name.replace(/ relations$/,''))+' '+c.lines.length).join(', ')+'.');
+  lines.push('Lines: E stream function. Heat map: B⊥.');
+  // Parameters and TeX. The classes are those of typeset.mjs (E m2, B m1,
+  // J m5, rho m4, lambda m6), the same as the page's equation panel.
+  const params=[{sym:'\\lambda',name:'wavelength',value:SIM.lambda.toFixed(0)+' px',cls:'m6'},
+    {sym:'1/k',name:'near–far crossover',value:(1/k).toFixed(1)+' px'},
+    {sym:'\\theta_a',name:'dipole axis, turning',value:SIM.axisDeg.toFixed(1)+'°'},
+    {sym:'t',name:'phase mod 2π',value:(SIM.t%(2*Math.PI)).toFixed(2)}];
   saverLabel({
     title:'Twenty to Four · radiating dipole',
-    sub:'Maxwell 1865, twenty scalar lines → Heaviside 1884, four vector laws',
-    lines,
+    sub:'Maxwell 1865, twenty scalar lines; Heaviside 1884, four vector laws',
+    params,lines,
+    tex:[String.raw`\nabla\cdot\vec{E}=\frac{\rho}{\varepsilon_0},\qquad \nabla\cdot\vec{B}=0`,
+      String.raw`\nabla\times\vec{E}=-\frac{\partial\vec{B}}{\partial t},\qquad \nabla\times\vec{B}=\mu_0\vec{J}+\mu_0\varepsilon_0\frac{\partial\vec{E}}{\partial t}`,
+      String.raw`\vec{E}=A\Big[\Big(\frac{\cos u}{r^3}+\frac{k\sin u}{r^2}\Big)(3\cos\theta\,\hat{r}-\hat{a})+\frac{k^2\cos u}{r}(\hat{a}-\cos\theta\,\hat{r})\Big]`,
+      String.raw`B_\perp=A\,(\hat{r}\times\hat{a})\Big(\frac{k^2\cos u}{r}+\frac{k\sin u}{r^2}\Big),\qquad u=kr-t`],
+    rules:[['\\vec{E}','m2'],['\\vec{B}','m1'],['B_\\perp','m1'],['\\vec{J}','m5'],['\\rho','m4'],['\\lambda','m6']],
     eq:['∇·E = ρ/ε₀     ∇·B = 0',
         '∇×E = −∂B/∂t     ∇×B = μ₀J + μ₀ε₀ ∂E/∂t',
         'u = k r − t,   rad = k² cos u/r',
         'near = cos u/r³ + k sin u/r²',
         'E = A[near (3cosθ r̂ − â) + rad (â − cosθ r̂)]',
         'B⊥ = A (r̂ × â)(k² cos u/r + k sin u/r²)'],
+    anchor:dipoleAnchor,
   });
 }
+// The dipole on screen, for the plate leader. The field lines fill the
+// window, so the anchor is the source SRC and the bright closed loops round
+// it: they close within about half a wavelength, so the radius is
+// λ/2 + 20 px (at least 40 px). The key point is SRC.
+function dipoleAnchor(){
+  const b=canvas.getBoundingClientRect(),x=b.left+SRC.x,y=b.top+SRC.y;
+  return{x,y,r:Math.max(40,SIM.lambda/2+20),pts:[{x,y}]};
+}
+
