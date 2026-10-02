@@ -8,6 +8,12 @@
 //  phase advance, then an inverse FFT. White light sums many wavelengths through
 //  the CIE 1931 color-matching functions and the D65 illuminant into sRGB.
 //
+//  SPEED   The FFT of the mask and kz do not change with z, so asm.js keeps
+//  them per setup (element, params, light, grid, field width). A z change then
+//  costs one multiply and one inverse FFT per wavelength. A pool of workers
+//  (asm-worker.js) shares the wavelengths. The main thread only adds the
+//  intensities in wavelength order, tone-maps and paints.
+//
 //  PROPAGATION PIPELINE   (per wavelength λ)
 //  --------------------------------------------------------------------------
 //      aperture plane                 screen plane at z
@@ -37,10 +43,12 @@
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  --------------------------------------------------------------------------
-//      complex + FFT ....... "function fft1d"        radix-2 FFT, 1D and 2D
-//      propagator .......... "function prop"         the angular spectrum step
+//      complex + FFT ....... asm.js "function fft1d"  radix-2 FFT, 1D and 2D
+//      propagator .......... asm.js "function propI"  the angular spectrum step
+//      setup cache ......... "function getSetup"     grid, masks, XYZ weights
+//      worker pool ......... "WORKER POOL"           frames, sequence, fallback
 //      CIE + color ......... "function cieX"         color-matching and sRGB
-//      field to colour ..... "function fieldRGB"     tone map, mono and white light
+//      field to colour ..... "function composeRGB"   tone map, mono and white light
 //      overlays ............ "function placeOverlays" inset, scale bar, legend
 //      phone sheet ......... "function setSheet"     bottom sheet and dock
 //      geometry helpers .... "function inPoly"       point-in-polygon, star
@@ -48,7 +56,7 @@
 //      elements ............ "const EL="             aperture transmittances
 //      state ............... "const S="              the one mutable state
 //      channel cells ....... "BUILD 4 CELLS"         composite + RGB canvases
-//      canvas paint ........ "function renderCh"     field RGB → one canvas
+//      canvas paint ........ "function paintRGB"     field RGB → the cells
 //      recompute ........... "function recompute"    the live render path
 //      bar sync + anim ..... "SYNC 4 BARS"           z sliders and z animation
 //      param UI ............ "function buildParamUI" per-element sliders
@@ -63,32 +71,9 @@
 const PI=Math.PI,TAU=2*PI,mm=1e-3,um=1e-6,nm=1e-9;
 // Complex-array helpers: a field is stored as parallel real and imaginary
 // Float64Arrays. czeros makes an all-zero field; cones makes a uniform unit
-// field (the incident plane wave before the aperture).
+// field (the image element with no image). The FFT and the propagator are
+// in asm.js.
 function czeros(n){return{re:new Float64Array(n),im:new Float64Array(n)}}function cones(n){const r=new Float64Array(n);r.fill(1);return{re:r,im:new Float64Array(n)}}
-// Elementwise complex multiply (incident field times transmittance mask).
-function cmul(a,b){const n=a.re.length,o=czeros(n);for(let i=0;i<n;i++){o.re[i]=a.re[i]*b.re[i]-a.im[i]*b.im[i];o.im[i]=a.re[i]*b.im[i]+a.im[i]*b.re[i]}return o}
-// Squared magnitude |E|² of a complex field: the physical intensity.
-function cabs2(a){const n=a.re.length,o=new Float64Array(n);for(let i=0;i<n;i++)o[i]=a.re[i]*a.re[i]+a.im[i]*a.im[i];return o}
-// In-place radix-2 Cooley-Tukey FFT of one length-n row (n must be a power of
-// two). First a bit-reversal permutation, then log2(n) butterfly stages. inv
-// runs the inverse transform and divides by n. Twiddle factors advance by the
-// running complex root (uR,uI) instead of a per-index trig call.
-function fft1d(re,im,n,inv){for(let i=1,j=0;i<n;i++){let b=n>>1;for(;j&b;b>>=1)j^=b;j^=b;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t}}for(let len=2;len<=n;len<<=1){const h=len>>1,a=(inv?1:-1)*TAU/len,wR=Math.cos(a),wI=Math.sin(a);for(let i=0;i<n;i+=len){let uR=1,uI=0;for(let j=0;j<h;j++){const e=i+j,o=i+j+h,tR=uR*re[o]-uI*im[o],tI=uR*im[o]+uI*re[o];re[o]=re[e]-tR;im[o]=im[e]-tI;re[e]+=tR;im[e]+=tI;const nu=uR*wR-uI*wI;uI=uR*wI+uI*wR;uR=nu}}}if(inv)for(let i=0;i<n;i++){re[i]/=n;im[i]/=n}}
-// 2D FFT by separability: transform every row, then every column, reusing one
-// scratch buffer pair. Returns fresh real/imag arrays and leaves f untouched.
-function fft2d(f,Nx,Ny,inv){const re=new Float64Array(f.re),im=new Float64Array(f.im),rB=new Float64Array(Math.max(Nx,Ny)),iB=new Float64Array(Math.max(Nx,Ny));for(let y=0;y<Ny;y++){const o=y*Nx;for(let x=0;x<Nx;x++){rB[x]=re[o+x];iB[x]=im[o+x]}fft1d(rB,iB,Nx,inv);for(let x=0;x<Nx;x++){re[o+x]=rB[x];im[o+x]=iB[x]}}for(let x=0;x<Nx;x++){for(let y=0;y<Ny;y++){rB[y]=re[y*Nx+x];iB[y]=im[y*Nx+x]}fft1d(rB,iB,Ny,inv);for(let y=0;y<Ny;y++){re[y*Nx+x]=rB[y];im[y*Nx+x]=iB[y]}}return{re,im}}
-// fftshift: swap diagonal quadrants so the zero frequency moves to the center,
-// matching the centered fftfreqS frequency axis used to build the propagator.
-function fftshift(f,Nx,Ny){const n=Nx*Ny,re=new Float64Array(n),im=new Float64Array(n),hx=Nx>>1,hy=Ny>>1;for(let y=0;y<Ny;y++)for(let x=0;x<Nx;x++){const s=((y+hy)%Ny)*Nx+((x+hx)%Nx),d=y*Nx+x;re[d]=f.re[s];im[d]=f.im[s]}return{re,im}}
-// Centered spatial-frequency axis for a length-N transform with sample pitch d,
-// in cycles per meter. Zero sits at the middle, matching fftshift.
-function fftfreqS(N,d){const f=new Float64Array(N),h=N>>1;for(let i=0;i<N;i++)f[i]=(i-h)/(N*d);return f}
-// Angular spectrum propagation of field E over distance z at wavelength lam.
-// Steps: FFT to the spectrum, shift zero to center, build the transfer function
-// H = exp(i·kz·z) per frequency, multiply, shift back, inverse FFT. When
-// k² − kx² − ky² < 0 the wave is evanescent, so H becomes a real decaying
-// exponential instead of a phase. z = 0 returns a copy unchanged.
-function prop(E,Nx,Ny,dx,dy,z,lam){if(z===0)return{re:new Float64Array(E.re),im:new Float64Array(E.im)};let sp=fft2d(E,Nx,Ny,false);sp=fftshift(sp,Nx,Ny);const fx=fftfreqS(Nx,dx),fy=fftfreqS(Ny,dy),k=TAU/lam,k2=k*k,N=Nx*Ny,Hr=new Float64Array(N),Hi=new Float64Array(N);for(let iy=0;iy<Ny;iy++){const ky2=(TAU*fy[iy])**2;for(let ix=0;ix<Nx;ix++){const idx=iy*Nx+ix,kx2=(TAU*fx[ix])**2,arg=k2-kx2-ky2;if(arg>=0){const kz=Math.sqrt(arg);Hr[idx]=Math.cos(kz*z);Hi[idx]=Math.sin(kz*z)}else Hr[idx]=Math.exp(-Math.sqrt(-arg)*z)}}const sr=sp.re,si=sp.im;for(let i=0;i<N;i++){const a=sr[i]*Hr[i]-si[i]*Hi[i],b=sr[i]*Hi[i]+si[i]*Hr[i];sr[i]=a;si[i]=b}sp=fftshift({re:sr,im:si},Nx,Ny);return fft2d(sp,Nx,Ny,true)}
 // Asymmetric (piecewise) Gaussian: different spread below and above the mean mu.
 // It is the building block of the CIE color-matching function fits.
 function pG(x,mu,s1,s2){return Math.exp(-.5*((x-mu)/(x<mu?s1:s2))**2)}
@@ -123,25 +108,99 @@ function lamRGB(l){const c=xyz2rgb(cieX(l),cieY(l),cieZ(l)).map(v=>Math.max(0,v)
 //   log  log10(1 + u·10^D) / D over D decades (1..6): every lobe is visible
 // S.scale picks the curve. S.range holds D for log and the gain for lin.
 function tone(u){if(S.scale==='log'){const D=S.range,g=Math.pow(10,D);return Math.log10(1+u*g)/Math.log10(1+g)}return Math.min(1,u*S.gainLin)}
-// Propagate the element mask to z (metres) and return an sRGB byte buffer.
+/* ═══ FIELD ENGINE ═══ */
+// A setup holds everything that does not change with z: the sample grid, the
+// mask of each wavelength, and the XYZ weights. Its key names the element,
+// params, light, grid and field width. A z change keeps the setup, so a frame
+// costs one multiply and one inverse FFT per wavelength (asm.js).
+// A non-dispersive mask (wlDep false) is built once for all wavelengths.
+//   jobs[d] = {d, lam (m), w:[xw,yw,zw] (white only), re, im}
+let SETUP=null;const imgIds=new WeakMap();let imgSeq=0;
+function imgId(){const m=window._imgMask;if(!m)return 0;if(!imgIds.has(m))imgIds.set(m,++imgSeq);return imgIds.get(m)}
+function getSetup(el,p,Nx,Ny,dx,dy){
+  const key=JSON.stringify([S.element,p,S.source,S.source==='mono'?S.lambda:S.divs,Nx,Ny,dx,dy,S.element==='image'?imgId():0]);
+  if(SETUP&&SETUP.key===key)return SETUP;
+  const NN=Nx*Ny,xx=new Float64Array(NN),yy=new Float64Array(NN);
+  for(let iy=0;iy<Ny;iy++){const y_=dy*(iy-Ny/2);for(let ix=0;ix<Nx;ix++){xx[iy*Nx+ix]=dx*(ix-Nx/2);yy[iy*Nx+ix]=y_}}
+  const jobs=[],mono=S.source==='mono';
+  if(mono){const lam=S.lambda*nm,t=el.t(xx,yy,lam,NN,p);jobs.push({d:0,lam,re:t.re,im:t.im})}
+  else{const nD=S.divs,dl=(780-380)/nD,tC=el.wlDep?null:el.t(xx,yy,550*nm,NN,p);
+    for(let d=0;d<nD;d++){const ln=380+(d+.5)*dl,lam=ln*nm,Sd=d65(ln)*dl,t=tC||el.t(xx,yy,lam,NN,p);jobs.push({d,lam,w:[cieX(ln)*Sd,cieY(ln)*Sd,cieZ(ln)*Sd],re:t.re,im:t.im})}}
+  SETUP={key,el,p,Nx,Ny,dx,dy,xx,yy,mono,lambda:S.lambda,jobs};
+  return SETUP;
+}
+// Main-thread engine: the export path, and the live path when no worker runs.
+// It keeps the spectra of one setup key and one output buffer per wavelength.
+const LOCAL={key:null,specs:null,out:null};
+function localIs(su,z){
+  const NN=su.Nx*su.Ny;
+  if(LOCAL.key!==su.key){LOCAL.key=su.key;LOCAL.specs=null;LOCAL.out=su.jobs.map(()=>new Float64Array(NN))}
+  if(z===0)return su.jobs.map((j,i)=>DiffASM.maskI(j.re,j.im,LOCAL.out[i]));
+  if(!LOCAL.specs)LOCAL.specs=su.jobs.map(j=>DiffASM.makeSpec(j.re,j.im,su.Nx,su.Ny,su.dx,su.dy,j.lam));
+  return LOCAL.specs.map((sp,i)=>DiffASM.propI(sp,z,LOCAL.out[i]));
+}
+// Intensities (one |E|² per wavelength, in d order) to an sRGB byte buffer.
 // mono:  |E|² at one λ, tone-mapped, times the true colour of λ.
 // white: Σ over S.divs wavelengths of |E|² · D65 · x̄ȳz̄ → XYZ. The luminance
 //        Y is tone-mapped and XYZ scales with it, so the hue of each pixel
 //        stays. A pixel brighter than the gamut scales down as a whole, not
 //        per channel, so it keeps its hue and does not turn white.
-// A non-dispersive mask (wlDep false) is built once for all wavelengths.
-function fieldRGB(el,p,xx,yy,Nx,Ny,dx,dy,z){
-  const NN=Nx*Ny,rgb=new Uint8Array(NN*3);
-  if(S.source==='mono'){
-    const lam=S.lambda*nm,tr=el.t(xx,yy,lam,NN,p);let E=cmul(cones(NN),tr);E=prop(E,Nx,Ny,dx,dy,z,lam);const I=cabs2(E);let mx=0;for(let i=0;i<NN;i++)if(I[i]>mx)mx=I[i];if(mx<1e-30)mx=1;
-    const c=lamRGB(S.lambda);for(let i=0;i<NN;i++){const v=tone(I[i]/mx);rgb[i*3]=sGam(v*c[0])*255+.5|0;rgb[i*3+1]=sGam(v*c[1])*255+.5|0;rgb[i*3+2]=sGam(v*c[2])*255+.5|0}
+// The sum runs in d order, so the result does not depend on worker timing.
+let CB=null;function composeBufs(NN){if(!CB||CB.NN!==NN)CB={NN,rgb:new Uint8Array(NN*3),X:new Float64Array(NN),Y:new Float64Array(NN),Z:new Float64Array(NN)};return CB}
+function composeRGB(su,Is){
+  const NN=su.Nx*su.Ny,B=composeBufs(NN),rgb=B.rgb;rgb.fill(0);
+  if(su.mono){
+    const I=Is[0];let mx=0;for(let i=0;i<NN;i++)if(I[i]>mx)mx=I[i];if(mx<1e-30)mx=1;
+    const c=lamRGB(su.lambda);for(let i=0;i<NN;i++){const v=tone(I[i]/mx);rgb[i*3]=sGam(v*c[0])*255+.5|0;rgb[i*3+1]=sGam(v*c[1])*255+.5|0;rgb[i*3+2]=sGam(v*c[2])*255+.5|0}
     return rgb;
   }
-  const nD=S.divs,dl=(780-380)/nD,X=new Float64Array(NN),Y=new Float64Array(NN),Z=new Float64Array(NN);const tC=el.wlDep?null:el.t(xx,yy,550*nm,NN,p);
-  for(let d=0;d<nD;d++){const ln=380+(d+.5)*dl,lam=ln*nm,Sd=d65(ln)*dl,xw=cieX(ln)*Sd,yw=cieY(ln)*Sd,zw=cieZ(ln)*Sd,tr=tC||el.t(xx,yy,lam,NN,p);let E=cmul(cones(NN),tr);E=prop(E,Nx,Ny,dx,dy,z,lam);const I=cabs2(E);for(let i=0;i<NN;i++){X[i]+=I[i]*xw;Y[i]+=I[i]*yw;Z[i]+=I[i]*zw}}
+  const X=B.X,Y=B.Y,Z=B.Z;X.fill(0);Y.fill(0);Z.fill(0);
+  for(let d=0;d<su.jobs.length;d++){const I=Is[d],[xw,yw,zw]=su.jobs[d].w;for(let i=0;i<NN;i++){X[i]+=I[i]*xw;Y[i]+=I[i]*yw;Z[i]+=I[i]*zw}}
   let mY=0;for(let i=0;i<NN;i++)if(Y[i]>mY)mY=Y[i];if(mY<1e-30)mY=1;
   for(let i=0;i<NN;i++){const y=Y[i];if(y<=0)continue;const k=tone(y/mY)/y;let[r,g,b]=xyz2rgb(X[i]*k,y*k,Z[i]*k);r=Math.max(0,r);g=Math.max(0,g);b=Math.max(0,b);const m=Math.max(r,g,b);if(m>1){r/=m;g/=m;b/=m}rgb[i*3]=sGam(r)*255+.5|0;rgb[i*3+1]=sGam(g)*255+.5|0;rgb[i*3+2]=sGam(b)*255+.5|0}
   return rgb;
+}
+// Synchronous field to colour at z (metres), on the main thread. The export
+// path uses it. The returned buffer is reused by the next call.
+function fieldRGB(el,p,Nx,Ny,dx,dy,z){const su=getSetup(el,p,Nx,Ny,dx,dy);return composeRGB(su,localIs(su,z))}
+
+/* ═══ WORKER POOL ═══ */
+// The live path. min(hardwareConcurrency − 1, wavelengths) workers
+// (asm-worker.js) each hold the spectra of a set of wavelengths (d mod P).
+// One frame is in flight at a time. A request while a frame is in flight only
+// sets want, and the newest state goes out when the frame comes back. Each
+// frame has a sequence number. A reply with an old number, or a frame whose
+// setup key is no longer the live key, is dropped. If a worker cannot start or
+// fails, the pool turns off and frames run on the main thread (localIs).
+const POOL={ok:typeof Worker!=='undefined'&&location.protocol!=='file:',ws:[],key:null,act:[],seq:0,fly:null,want:false,live:null};
+function poolFail(){POOL.ok=false;POOL.ws.forEach(wk=>wk.w.terminate());POOL.ws=[];POOL.act=[];POOL.fly=null;POOL.key=null;requestFrame()}
+function poolSize(nD){return Math.max(1,Math.min((navigator.hardwareConcurrency||4)-1,nD))}
+function poolSetup(su){
+  const P=poolSize(su.jobs.length);
+  while(POOL.ws.length<P){let w;try{w=new Worker('asm-worker.js')}catch(e){poolFail();return false}const wk={w,free:[]};w.onmessage=e=>onWorker(wk,e.data);w.onerror=e=>{e.preventDefault();poolFail()};POOL.ws.push(wk)}
+  POOL.act=POOL.ws.slice(0,P);
+  POOL.act.forEach((wk,i)=>wk.w.postMessage({type:'setup',key:su.key,Nx:su.Nx,Ny:su.Ny,dx:su.dx,dy:su.dy,jobs:su.jobs.filter(j=>j.d%P===i).map(j=>({d:j.d,lam:j.lam,re:j.re,im:j.im}))}));
+  POOL.key=su.key;return true;
+}
+function requestFrame(){POOL.want=true;if(!POOL.fly)dispatchFrame()}
+function dispatchFrame(){
+  POOL.want=false;const L=POOL.live;if(!L)return;const su=L.setup,z=L.z;
+  if(!POOL.ok||z===0){paintRGB(composeRGB(su,localIs(su,z)),su);return}
+  if(POOL.key!==su.key&&!poolSetup(su))return;
+  const seq=++POOL.seq;POOL.fly={seq,su,need:POOL.act.length,Is:new Array(su.jobs.length)};
+  POOL.act.forEach(wk=>{const b=wk.free;wk.free=[];wk.w.postMessage({type:'frame',key:su.key,seq,z,bufs:b},b)});
+}
+function onWorker(wk,m){
+  if(m.type==='error'){console.error('diffraction worker:',m.msg);poolFail();return}
+  const f=POOL.fly;
+  if(!f||m.seq!==f.seq){m.res.forEach(r=>wk.free.push(r.buf));return}
+  if(!m.ok){POOL.fly=null;POOL.key=null;requestFrame();return}
+  m.res.forEach(r=>{f.Is[r.d]=new Float64Array(r.buf);wk.free.push(r.buf)});
+  if(--f.need>0)return;
+  POOL.fly=null;
+  // Compose and paint before the next dispatch moves the buffers back out.
+  if(POOL.live&&f.su.key===POOL.live.setup.key)paintRGB(composeRGB(f.su,f.Is),f.su);
+  if(POOL.want)dispatchFrame();
 }
 
 /* ═══ RASTER HELPER (flips Y so text/images appear right-side up) ═══ */
@@ -204,8 +263,11 @@ CHANNELS.forEach((ch,idx)=>{
 // Paint one channel of the computed rgb buffer to its canvas. Draw into an
 // offscreen ImageData at grid resolution (flipping Y so the image is upright),
 // then scale it, letterboxed and centered, into the visible canvas. ch selects
-// which channels to keep: 'rgb' composite, or 'r'/'g'/'b' isolated.
-function renderCh(canvas,rgb,Nx,Ny,ch){const cell=canvas.parentElement,dpr=devicePixelRatio,W=cell.clientWidth,H=cell.clientHeight,clear=clearHeight(cell);if(clear<1||W<1)return;const cw=Math.round(W*dpr),ch2=Math.round(H*dpr);canvas.width=cw;canvas.height=ch2;const ctx=canvas.getContext('2d');ctx.clearRect(0,0,cw,ch2);const off=document.createElement('canvas');off.width=Nx;off.height=Ny;const oc=off.getContext('2d'),img=oc.createImageData(Nx,Ny),d=img.data;for(let iy=0;iy<Ny;iy++)for(let ix=0;ix<Nx;ix++){const si=(Ny-1-iy)*Nx+ix,di=(iy*Nx+ix)*4,r=rgb[si*3],g=rgb[si*3+1],b=rgb[si*3+2];if(ch==='rgb'){d[di]=r;d[di+1]=g;d[di+2]=b}else if(ch==='r'){d[di]=r;d[di+1]=0;d[di+2]=0}else if(ch==='g'){d[di]=0;d[di+1]=g;d[di+2]=0}else{d[di]=0;d[di+1]=0;d[di+2]=b}d[di+3]=255}oc.putImageData(img,0,0);const side=Math.min(W,clear),x0=(W-side)/2,y0=(clear-side)/2;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(off,x0*dpr,y0*dpr,side*dpr,side*dpr);if(ch==='rgb')placeOverlays(cell,x0,y0,side,H)}
+// which channels to keep: 'rgb' composite, or 'r'/'g'/'b' isolated. The
+// offscreen canvas and its ImageData are kept (offGrid) and the visible canvas
+// is resized only when the cell size changes.
+let OFFG=null;function offGrid(Nx,Ny){if(!OFFG||OFFG.Nx!==Nx||OFFG.Ny!==Ny){const cv=document.createElement('canvas');cv.width=Nx;cv.height=Ny;const ctx=cv.getContext('2d');OFFG={Nx,Ny,cv,ctx,img:ctx.createImageData(Nx,Ny)}}return OFFG}
+function renderCh(canvas,rgb,Nx,Ny,ch){const cell=canvas.parentElement,dpr=devicePixelRatio,W=cell.clientWidth,H=cell.clientHeight,clear=clearHeight(cell);if(clear<1||W<1)return;const cw=Math.round(W*dpr),ch2=Math.round(H*dpr);if(canvas.width!==cw)canvas.width=cw;if(canvas.height!==ch2)canvas.height=ch2;const ctx=canvas.getContext('2d');ctx.clearRect(0,0,cw,ch2);const o=offGrid(Nx,Ny),off=o.cv,oc=o.ctx,img=o.img,d=img.data;for(let iy=0;iy<Ny;iy++)for(let ix=0;ix<Nx;ix++){const si=(Ny-1-iy)*Nx+ix,di=(iy*Nx+ix)*4,r=rgb[si*3],g=rgb[si*3+1],b=rgb[si*3+2];if(ch==='rgb'){d[di]=r;d[di+1]=g;d[di+2]=b}else if(ch==='r'){d[di]=r;d[di+1]=0;d[di+2]=0}else if(ch==='g'){d[di]=0;d[di+1]=g;d[di+2]=0}else{d[di]=0;d[di+1]=0;d[di+2]=b}d[di+3]=255}oc.putImageData(img,0,0);const side=Math.min(W,clear),x0=(W-side)/2,y0=(clear-side)/2;ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.drawImage(off,x0*dpr,y0*dpr,side*dpr,side*dpr);if(ch==='rgb')placeOverlays(cell,x0,y0,side,H)}
 // The height of a cell that the phone sheet (#panel) does not cover. On a
 // desktop the panel is beside the stage, so the whole cell is clear.
 function clearHeight(cell){const r=cell.getBoundingClientRect(),pr=document.getElementById('panel').getBoundingClientRect();if(!phone()||!document.body.classList.contains('sheet-open')||pr.left>r.left+r.width/2)return r.height;return Math.max(0,Math.min(r.height,pr.top-r.top))}
@@ -218,28 +280,31 @@ function placeOverlays(cell,x0,y0,side,H){const st=cell.style,pad=side<360?8:12;
 // and cache it on S. File-type params (image upload) are handled separately.
 function readParams(){const el=EL[S.element],p={};el.params.forEach(pd=>{if(pd.type==='file')return;const sl=document.getElementById('sl-p-'+pd.id);p[pd.id]=pd.type==='text'?(sl?sl.value:pd.value):(sl?parseFloat(sl.value):pd.value)});S.params=p;return p}
 
-// The live render path. Sample a physical grid centered on the aperture, build
-// the transmittance mask, propagate it to z, and convert intensity to an RGB
-// buffer, then paint the visible cells and update the readouts and equation.
+// The live render path. Get the setup (grid, masks; rebuilt only when the
+// element, params, light, grid or field width change), hand z to the worker
+// pool, and update the readouts and equation. The pool calls paintRGB when
+// the frame is ready. The aperture inset redraws only with a new setup.
+let _apKey=null,_lgKey=null;
 function recompute(){
   // Physical sample coordinates: dx,dy are the grid pitch (extent / N).
   const p=readParams(),el=EL[S.element],N=S.N,Nx=N,Ny=N,ext=S.extent*mm,dx=ext/Nx,dy=ext/Ny,z=S.z*mm;
-  const xx=new Float64Array(N*N),yy=new Float64Array(N*N);
-  for(let iy=0;iy<Ny;iy++){const y_=dy*(iy-Ny/2);for(let ix=0;ix<Nx;ix++){xx[iy*Nx+ix]=dx*(ix-Nx/2);yy[iy*Nx+ix]=y_}}
-  const rgb=fieldRGB(el,p,xx,yy,Nx,Ny,dx,dy,z);
-  // Always paint the composite; paint the isolated R/G/B cells only in 2×2 view.
-  renderCh(document.getElementById('cv-rgb'),rgb,Nx,Ny,'rgb');
-  if(S.viewMode===4){renderCh(document.getElementById('cv-r'),rgb,Nx,Ny,'r');renderCh(document.getElementById('cv-g'),rgb,Nx,Ny,'g');renderCh(document.getElementById('cv-b'),rgb,Nx,Ny,'b')}
+  const su=getSetup(el,p,Nx,Ny,dx,dy);
+  POOL.live={setup:su,z};requestFrame();
   document.getElementById('st-main').textContent=`${N}² grid · dx ${(dx/um).toFixed(1)} µm`;
   // Fresnel number N_F = a²/(λz) classifies the regime: large means geometric
   // shadow, near one is Fresnel (near-field), small is Fraunhofer (far-field).
   const aC=p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0;let nf='';if(aC>0&&S.z>0){const l0=(S.source==='mono'?S.lambda:550)*nm,Nf=(aC*mm)**2/(l0*z);nf=`N_F = ${Nf<.01?Nf.toExponential(1):Nf.toFixed(2)} · ${Nf>5?'shadow':Nf>.5?'Fresnel':'Fraunhofer'}`}document.getElementById('st-sub').textContent=nf;document.getElementById('eq-nf').textContent=nf||'–';
-  drawAperture(el,p,xx,yy,N);drawLegend();
+  if(_apKey!==su.key){_apKey=su.key;drawAperture(el,p,su.xx,su.yy,N)}
+  const lk=[S.source,S.lambda,S.scale,S.range,S.gainLin].join();if(_lgKey!==lk){_lgKey=lk;drawLegend()}
   document.getElementById('qp-summary').textContent=el.sym+' '+el.name+' · '+(S.source==='white'?'D65':'λ='+S.lambda+'nm')+' · z='+S.z.toFixed(0)+'mm';
   // Show the transmittance formula of the current element (MathJax SVG from
   // equations.js, typeset by typeset.mjs).
   showTrans();
 }
+// Paint a finished frame: always the composite, and the isolated R/G/B cells
+// only in 2×2 view. afterPaint (the screensaver sets it) runs last.
+let afterPaint=null;
+function paintRGB(rgb,su){const Nx=su.Nx,Ny=su.Ny;renderCh(document.getElementById('cv-rgb'),rgb,Nx,Ny,'rgb');if(S.viewMode===4){renderCh(document.getElementById('cv-r'),rgb,Nx,Ny,'r');renderCh(document.getElementById('cv-g'),rgb,Nx,Ny,'g');renderCh(document.getElementById('cv-b'),rgb,Nx,Ny,'b')}if(afterPaint)afterPaint()}
 // Aperture inset: |t| as brightness, and for a phase element the phase as
 // hue, over the same field width as the pattern. Drawn at 128 px.
 function drawAperture(el,p,xx,yy,N){const cv=document.getElementById('ap-cv');if(!cv)return;const t=el.t(xx,yy,(S.source==='mono'?S.lambda:550)*nm,N*N,p),off=document.createElement('canvas');off.width=N;off.height=N;const oc=off.getContext('2d'),img=oc.createImageData(N,N),d=img.data;let phase=false;for(let i=0;i<N*N;i++)if(Math.abs(t.im[i])>1e-6){phase=true;break}for(let iy=0;iy<N;iy++)for(let ix=0;ix<N;ix++){const si=(N-1-iy)*N+ix,di=(iy*N+ix)*4,re=t.re[si],im=t.im[si],a=Math.min(1,Math.hypot(re,im));if(phase&&a>0){const h=(Math.atan2(im,re)/TAU+1)%1,c=hsl(h);d[di]=c[0]*a;d[di+1]=c[1]*a;d[di+2]=c[2]*a}else{const v=a*235+12;d[di]=d[di+1]=d[di+2]=v}d[di+3]=255}oc.putImageData(img,0,0);const c=cv.getContext('2d');c.imageSmoothingEnabled=true;c.imageSmoothingQuality='high';c.drawImage(off,0,0,128,128);document.getElementById('ap-lbl').textContent=phase?'Aperture · phase':'Aperture'}
@@ -350,10 +415,7 @@ function renderFrame(Nx,Ny,exW,exH,z){
   const p=readParams(),el=EL[S.element];
   const maxN=Math.max(Nx,Ny),ext=S.extent*mm;
   const dx=ext/maxN,dy=ext/maxN; // isotropic sampling
-  const NN=Nx*Ny;
-  const xx=new Float64Array(NN),yy=new Float64Array(NN);
-  for(let iy=0;iy<Ny;iy++){const y_=dy*(iy-Ny/2);for(let ix=0;ix<Nx;ix++){xx[iy*Nx+ix]=dx*(ix-Nx/2);yy[iy*Nx+ix]=y_}}
-  const rgb=fieldRGB(el,p,xx,yy,Nx,Ny,dx,dy,z*mm);
+  const rgb=fieldRGB(el,p,Nx,Ny,dx,dy,z*mm);
   const simCv=document.createElement('canvas');simCv.width=Nx;simCv.height=Ny;
   const sc2=simCv.getContext('2d'),img=sc2.createImageData(Nx,Ny),d=img.data;
   for(let iy=0;iy<Ny;iy++)for(let ix=0;ix<Nx;ix++){const si=(Ny-1-iy)*Nx+ix,di=(iy*Nx+ix)*4;d[di]=rgb[si*3];d[di+1]=rgb[si*3+1];d[di+2]=rgb[si*3+2];d[di+3]=255}
@@ -523,8 +585,8 @@ function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=
 // from it in renderCh) fills the frame. One rAF driver eases z on a slow sine
 // around the preset distance and recomputes once per frame. It moves to the
 // next preset (from opts.seed) every max(12, seconds/3) s, with a canvas fade.
-// recompute is wrapped to fill the letterbox opaque, so a recording has no
-// transparency. White light uses 10 wavelengths to keep a frame cheap.
+// afterPaint fills the letterbox opaque after each frame, so a recording has
+// no transparency. White light uses 10 wavelengths to keep a frame cheap.
 /* ═══ SCREENSAVER ═══ */
 window.snSaver={enter(opts){
   const calm=Math.max(0,Math.min(1,+opts.calm||0)),sp=1-0.6*calm;
@@ -542,9 +604,7 @@ window.snSaver={enter(opts){
   if(saverLabel)saverTimer=setInterval(()=>saverPlate(list[pi]),1000);
   if(S.viewMode!==1){S.viewMode=1;document.getElementById('canvas-grid').classList.add('view-1');}
   show();
-  const base=recompute;
-  recompute=function(){
-    base();
+  afterPaint=function(){
     const cv=document.getElementById('cv-rgb'),c=cv.getContext('2d');
     c.save();c.setTransform(1,0,0,1,0,0);c.globalCompositeOperation='destination-over';c.fillStyle='#000';c.fillRect(0,0,cv.width,cv.height);
     c.globalCompositeOperation='source-over';
@@ -568,7 +628,7 @@ exit(){saverLabel=null;clearInterval(saverTimer);saverTimer=0;}};
 // parameters from readParams() with the units that EL[...].t() applies (mm,
 // except the star point count and inner ratio), and the live z, field width,
 // grid pitch and Fresnel number with the same formula and regime words as
-// recompute(). The equations are the angular spectrum step that prop() runs,
+// recompute(). The equations are the angular spectrum step that asm.js runs,
 // the white-light sum in fieldRGB(), and the transmittance of the element.
 let saverLabel=null,saverTimer=0;
 const SAVER_T={lens:'t = e^(−iπr²/(λf)) for r < R',fzp:'t = e^(−ik(√(f² + r²) − f)) for r < R'};
