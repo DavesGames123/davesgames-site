@@ -536,7 +536,10 @@ window.snSaver={enter(opts){
   const list=names.map(n=>PR.find(p=>p.name===n)).filter(Boolean);
   const hold=Math.max(12,(+opts.seconds||60)/3),FADE=0.9;
   let pi=(opts.seed>>>0)%list.length,tp=0,tz=0,last=0;
-  const show=()=>{applyP(list[pi]);S.divs=10;S.scale='log';S.range=2;animDir=0;tz=0;};
+  const show=()=>{applyP(list[pi]);S.divs=10;S.scale='log';S.range=2;animDir=0;tz=0;saverPlate(list[pi]);};
+  saverLabel=opts.labels!==false&&typeof opts.label==='function'?opts.label:null;
+  clearInterval(saverTimer);
+  if(saverLabel)saverTimer=setInterval(()=>saverPlate(list[pi]),1000);
   if(S.viewMode!==1){S.viewMode=1;document.getElementById('canvas-grid').classList.add('view-1');}
   show();
   const base=recompute;
@@ -559,4 +562,34 @@ window.snSaver={enter(opts){
     recompute();
   })(0);
   return{canvas:document.getElementById('cv-rgb'),warmupMs:2000};
-}};
+},
+exit(){saverLabel=null;clearInterval(saverTimer);saverTimer=0;}};
+// The plate (opts.label) names the preset and its element, the aperture
+// parameters from readParams() with the units that EL[...].t() applies (mm,
+// except the star point count and inner ratio), and the live z, field width,
+// grid pitch and Fresnel number with the same formula and regime words as
+// recompute(). The equations are the angular spectrum step that prop() runs,
+// the white-light sum in fieldRGB(), and the transmittance of the element.
+let saverLabel=null,saverTimer=0;
+const SAVER_T={lens:'t = e^(−iπr²/(λf)) for r < R',fzp:'t = e^(−ik(√(f² + r²) − f)) for r < R'};
+function saverPlate(pr){
+  if(!saverLabel||!pr)return;
+  const el=EL[S.element],p=readParams(),f2=v=>(+v).toFixed(v<.1?3:2);
+  const parts=el.params.filter(pd=>pd.type!=='file'&&pd.type!=='text').map(pd=>
+    pd.label+' = '+(+p[pd.id]).toFixed(pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0)+(pd.id==='pts'?'':S.element==='star'&&pd.id==='inner'?' R':' mm'));
+  const aC=p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0,lam0=S.source==='mono'?S.lambda:550;
+  const Nf=aC>0&&S.z>0?(aC*mm)**2/(lam0*nm*S.z*mm):0;
+  const lines=[el.name+' aperture · '+parts.join(' · ')];
+  lines.push('z = '+S.z.toFixed(0)+' mm · field '+S.extent+' mm · '+S.N+'² grid · dx = '+(S.extent*1000/S.N).toFixed(1)+' µm');
+  lines.push(S.source==='white'?'white light: D65, '+S.divs+' wavelengths from 380 to 780 nm':'λ = '+S.lambda+' nm');
+  if(Nf>0)lines.push('N_F = a²/(λz) = '+(Nf<.01?Nf.toExponential(1):Nf.toFixed(2))+' (a = '+f2(aC)+' mm, λ = '+lam0+' nm) · '+(Nf>5?'shadow':Nf>.5?'Fresnel':'Fraunhofer'));
+  const eq=['E(z) = F⁻¹{ F{t} · e^(i k_z z) }',
+    'k_z = √(k² − kₓ² − k_y²),   k = 2π/λ',
+    'I = |E|²,   XYZ = Σ_λ I · D65 · (x̄, ȳ, z̄)'];
+  eq.push(SAVER_T[pr.el==='lens-ap'?'lens':pr.el]||'t = 1 inside the aperture, 0 outside');
+  saverLabel({
+    title:'Diffraction · '+pr.name,
+    sub:'angular spectrum propagation · scalar field · log tone, 2 decades',
+    lines,eq,
+  });
+}
