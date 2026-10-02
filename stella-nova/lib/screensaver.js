@@ -41,7 +41,10 @@ if (window.snScreensaver) return;
 
 const CAT = window.SN_SAVER_CATALOG || { pages: {}, tiers: {} };
 const STORE = 'sn-saver-settings';
-const HOOK_WAIT_MS = 2500;   // how long a page has to define window.snSaver
+// How long a page has to define window.snSaver. A page that the catalog
+// marks hook: true gets the long wait (a module with a CDN import can take
+// seconds under load). Other pages go to the generic mode soon.
+const HOOK_WAIT_MS = 8000, NO_HOOK_WAIT_MS = 800;
 const LOAD_WAIT_MS = 15000;  // a page that never loads is skipped after this
 
 const DEFAULTS = {
@@ -355,7 +358,7 @@ async function showPage(key) {
   if (!w) { hud(`${key}: no load, skipped`); next(1); return; }
   r.frameWin = w;
   if (S.exitOnInput) armInput(w);
-  const got = await enterPage(w);
+  const got = await enterPage(w, key);
   if (run !== r || token !== r.token) return;
   const page = allPages().find(p => p.key === key) || { label: key, con: '', color: '#7f91ad' };
   cap.innerHTML = `<i>${esc(page.con)}</i><b>${esc(page.label)}</b>`;
@@ -371,9 +374,10 @@ async function showPage(key) {
 function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 
 // The page hook, or the generic mode when the page has none.
-async function enterPage(w) {
-  const t0 = performance.now();
-  while (!w.snSaver && performance.now() - t0 < HOOK_WAIT_MS) await wait(100);
+async function enterPage(w, key) {
+  const t0 = performance.now(), info = CAT.pages[key] || {};
+  const limit = info.hook ? HOOK_WAIT_MS : NO_HOOK_WAIT_MS;
+  while (!w.snSaver && performance.now() - t0 < limit) await wait(100);
   const opts = { calm: S.calm, seconds: S.seconds, caption: S.caption, seed: (Math.random() * 1e9) | 0 };
   if (w.snSaver && typeof w.snSaver.enter === 'function') {
     try {
