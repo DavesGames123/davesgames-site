@@ -46,6 +46,7 @@
 //      UI ................... "════════ UI"           panel wiring
 //      camera controls ...... "camera controls"      drag, wheel, pinch orbit
 //      resize / boot ........ "function resize"       size + first frame
+//      screensaver .......... "window.snSaver"        shell saver hook
 // ============================================================================
 "use strict";
 
@@ -137,7 +138,7 @@ const MAXP=1000, MAXT=400, CAP=MAXP*MAXT;
 // cur = selected system key; P = its live parameter values; particles = tracers.
 let cur="lorenz", P={}, particles=[];
 // cfg holds every render/tone control the UI writes; each field mirrors one widget.
-const cfg={count:100,trail:220,speed:1,glow:13,colMode:"speed",palette:"stella",gamma:1.0,contrast:1.0,exposure:1.0,autoRotate:true,fog:false};
+const cfg={count:100,trail:220,speed:1,glow:13,colMode:"speed",palette:"stella",gamma:1.0,contrast:1.0,exposure:1.0,autoRotate:true,fog:false,orbit:1};
 // view is the spherical camera: orbit center, zoom radius, azimuth theta, polar
 // phi, and autoTheta (the accumulated auto-orbit angle added on top of theta).
 const view={center:new THREE.Vector3(),radius:60,theta:0.9,phi:1.05,autoTheta:0};
@@ -305,7 +306,7 @@ function frame(now){requestAnimationFrame(frame);
   // ptr = point count for the HUD (two vertices per segment).
   const ptr=v>>1;
   // Advance the auto-orbit angle, then place the camera on the view sphere.
-  if(cfg.autoRotate)view.autoTheta+=0.0013;
+  if(cfg.autoRotate)view.autoTheta+=0.0013*cfg.orbit;
   const th=view.theta+view.autoTheta,ph=view.phi,R=view.radius;
   camera.position.set(view.center.x+R*Math.sin(ph)*Math.cos(th),view.center.y+R*Math.cos(ph),view.center.z+R*Math.sin(ph)*Math.sin(th));
   camera.lookAt(view.center);
@@ -408,3 +409,17 @@ if(window.ResizeObserver)new ResizeObserver(resize).observe(host);else window.ad
 // Boot after a short delay (lets layout settle so resize reads real sizes): size
 // the canvas, draw the tone curve, load Lorenz, and start the animation loop.
 setTimeout(()=>{resize();drawToneCurve();selectSystem("lorenz",false);requestAnimationFrame(frame);},40);
+
+// Screensaver hook for the shell (lib/screensaver.js). enter() waits for the boot
+// selectSystem, hides the GUI, makes #gl-host fill the window (the observer then
+// calls resize()), and shows one system chosen by opts.seed with 300 particles
+// and depth fog. calm 1 sets the flow speed to 0.4 and halves the auto-orbit.
+// The system does not change inside one dwell, so there is no reseed cut.
+window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));
+  while(!particles.length)await new Promise(r=>setTimeout(r,50));
+  const st=document.createElement("style");st.textContent="html.saver #panel,html.saver #mob-btn,html.saver .mob-overlay,html.saver #eq-panel,html.saver #hint,html.saver #status-bar,html.saver .topbar{display:none!important}html.saver #gl-host{position:fixed;inset:0;z-index:1}html.saver #gl{cursor:none}";
+  document.head.appendChild(st);document.documentElement.classList.add("saver");resize();
+  const keys=["lorenz","aizawa","thomas","halvorsen","rossler","dadras","chen"].filter(k=>ATTRACTORS[k]);
+  cfg.speed=1-0.6*calm;cfg.orbit=1-0.5*calm;cfg.count=300;cfg.fog=true;cfg.autoRotate=true;
+  view.theta=0.9;view.phi=1.05;view.autoTheta=0;selectSystem(keys[(opts.seed>>>0)%keys.length],false);
+  return{canvas:renderer.domElement,warmupMs:2500};}};
