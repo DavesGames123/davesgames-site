@@ -47,6 +47,7 @@
 //      camera controls ...... "camera controls"      drag, wheel, pinch orbit
 //      resize / boot ........ "function resize"       size + first frame
 //      screensaver .......... "window.snSaver"        shell saver hook
+//      saver plate .......... "function saverPlate"   ODE + parameters on the plate
 // ============================================================================
 "use strict";
 
@@ -415,6 +416,25 @@ setTimeout(()=>{resize();drawToneCurve();selectSystem("lorenz",false);requestAni
 // calls resize()), and shows one system chosen by opts.seed with 300 particles
 // and depth fog. calm 1 sets the flow speed to 0.4 and halves the auto-orbit.
 // The system does not change inside one dwell, so there is no reseed cut.
+// The label plate (opts.label) gives the ODE system of ATTRACTORS[cur].f in
+// plain Unicode (the shell plate takes no KaTeX), the live parameter values P,
+// the RK4 step dt and the tracer count. The system does not change inside one
+// dwell, so enter() calls saverPlate() once.
+const SAVER_EQ={
+  lorenz:["ẋ = σ(y − x)","ẏ = x(ρ − z) − y","ż = xy − βz"],
+  rossler:["ẋ = −y − z","ẏ = x + a·y","ż = b + z(x − c)"],
+  aizawa:["ẋ = (z − b)x − d·y","ẏ = d·x + (z − b)y","ż = c + a·z − z³/3 − (x² + y²)(1 + 0.25z) + 0.1z·x³"],
+  thomas:["ẋ = sin y − b·x","ẏ = sin z − b·y","ż = sin x − b·z"],
+  halvorsen:["ẋ = −a·x − 4y − 4z − y²","ẏ = −a·y − 4z − 4x − z²","ż = −a·z − 4x − 4y − x²"],
+  chen:["ẋ = a(y − x)","ẏ = (c − a)x − xz + c·y","ż = xy − b·z"],
+  dadras:["ẋ = y − a·x + b·yz","ẏ = c·y − xz + z","ż = d·xy − e·z"],
+  lorenz84:["ẋ = −a·x − y² − z² + a·F","ẏ = −y + xy − b·xz + G","ż = −z + b·xy + xz"]};
+function saverPlate(label){if(!label||!SAVER_EQ[cur])return;const A=ATTRACTORS[cur];
+  const fmt=v=>String(+(+v).toFixed(3));
+  const ps=Object.keys(A.params).map(k=>A.params[k].l+" = "+fmt(P[k])).join(" · ");
+  try{label({title:A.name+" attractor",sub:A.eq[0].sub,
+    lines:[ps,"RK4, Δt = "+A.dt+" · "+fmt(cfg.speed)+" steps per frame",cfg.count+" tracers seeded on the attractor, survey from ("+A.start.join(", ")+")"],
+    eq:SAVER_EQ[cur]});}catch(e){}}
 window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));
   while(!particles.length)await new Promise(r=>setTimeout(r,50));
   const st=document.createElement("style");st.textContent="html.saver #panel,html.saver #mob-btn,html.saver .mob-overlay,html.saver #eq-panel,html.saver #hint,html.saver #status-bar,html.saver .topbar{display:none!important}html.saver #gl-host{position:fixed;inset:0;z-index:1}html.saver #gl{cursor:none}";
@@ -422,4 +442,5 @@ window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0
   const keys=["lorenz","aizawa","thomas","halvorsen","rossler","dadras","chen"].filter(k=>ATTRACTORS[k]);
   cfg.speed=1-0.6*calm;cfg.orbit=1-0.5*calm;cfg.count=300;cfg.fog=true;cfg.autoRotate=true;
   view.theta=0.9;view.phi=1.05;view.autoTheta=0;selectSystem(keys[(opts.seed>>>0)%keys.length],false);
+  saverPlate(opts.labels===false||typeof opts.label!=="function"?null:opts.label);
   return{canvas:renderer.domElement,warmupMs:2500};}};
