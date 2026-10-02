@@ -21,7 +21,12 @@
 //
 //  FRAME LOOP  (function frame)
 //      advance currentTime ─▶ sample 3 curves ─▶ write uniforms ─▶ draw(3)
-//      also: redraw dope sheet, update FPS/time readouts, resize canvas
+//      also: feed the frame time to the render scale; outside the
+//      screensaver, redraw the dope sheet and the FPS/time readouts
+//
+//  COST  The march takes about 8 steps per pixel, so the frame cost is the
+//      pixel count. lib/render-scale.js caps the canvas at MAX_PIXELS and
+//      lowers it on a slow GPU. CSS scales the canvas up to the viewport.
 //
 //  SECTION MAP  (jump with grep -n "<anchor>" main.js)
 //  ----------------------------------------------------------------------------
@@ -37,6 +42,7 @@
 //      dope sheet edit ...... "dsCv.addEventListener" add / drag / remove points
 //      noise texture ........ "function makeNoiseTex"  LCG-filled 256x256 RGBA
 //      WebGPU init .......... "navigator.gpu"        device, pipeline, bind group
+//      render scale ......... "var MAX_PIXELS"       pixel budget + fps control
 //      frame loop ........... "function frame"       per-frame update + draw
 //      screensaver hook ..... "window.snSaver"       calm autopilot for the shell
 // ============================================================================
@@ -130,6 +136,8 @@ var mouseX=200, dragging=false, dragSX=0, mxS=0;
 var scrubbing=false;
 var FDT=1/60;
 var saverGain=1; // brightness gain; the screensaver fades it at each loop wrap
+var saverOn=false; // true in screensaver mode: the player chrome is hidden
+var onQuality=null; // set by the WebGPU init: resizes the canvas for a new tier
 document.getElementById('seedLabel').textContent=seed.toFixed(1);
 
 // ═══════════════════════════════════════════════════════════
@@ -147,7 +155,7 @@ document.getElementById('btnFrameBack').addEventListener('click',function(){play
 document.getElementById('btnFrameFwd').addEventListener('click',function(){playing=false;currentTime=Math.min(duration,currentTime+FDT);updPlayBtn();});
 document.getElementById('btnSeed').addEventListener('click',function(){seed=Math.floor(Math.random()*10000)/10;currentTime=0;document.getElementById('seedLabel').textContent=seed.toFixed(1);});
 document.querySelectorAll('[data-spd]').forEach(function(b){b.addEventListener('click',function(){speed=parseFloat(this.dataset.spd);document.querySelectorAll('[data-spd]').forEach(function(x){x.classList.remove('active');});this.classList.add('active');});});
-document.querySelectorAll('[data-q]').forEach(function(b){b.addEventListener('click',function(){quality=parseInt(this.dataset.q);document.querySelectorAll('[data-q]').forEach(function(x){x.classList.remove('active');});this.classList.add('active');});});
+document.querySelectorAll('[data-q]').forEach(function(b){b.addEventListener('click',function(){quality=parseInt(this.dataset.q);if(onQuality)onQuality();document.querySelectorAll('[data-q]').forEach(function(x){x.classList.remove('active');});this.classList.add('active');});});
 document.getElementById('sldZoom').addEventListener('input',function(){zoom=+this.value;document.getElementById('valZoom').textContent=zoom.toFixed(2);});
 // Map a pointer x within the timeline track to a time in seconds (16px insets).
 function timeFromMouse(e){var r=timeline.getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-r.left-16)/(r.width-32)))*duration;}
@@ -479,14 +487,22 @@ function makeNoiseTex(){var S=256,data=new Uint8Array(S*S*4),s=48271;for(var i=0
     {binding:1,resource:noiseTexture.createView()},
     {binding:2,resource:noiseSampler},
   ]});
-  // Match the canvas backing store to its CSS size times a quality-capped DPR,
-  // so higher quality tiers render at more pixels. Updates the resolution label.
-  function resize(){
-    var dpr=Math.min(window.devicePixelRatio,quality===0?1:quality===1?1.5:2);
-    var rect=cv.getBoundingClientRect();var w=Math.floor(rect.width*dpr),h=Math.floor(rect.height*dpr);
-    if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h;document.getElementById('resLabel').textContent=w+'x'+h;}
-  }
+  // Size the canvas backing store with lib/render-scale.js. The base is the
+  // CSS size times a quality-capped DPR (1, 1.5 or 2). The cost of a frame is
+  // the pixel count, so the size is capped at MAX_PIXELS, and the frame rate
+  // lowers it more on a slow GPU. CSS scales the canvas up to the viewport.
+  // The ResizeObserver reads the CSS size, so a frame does no layout read.
+  var MAX_PIXELS=2.0e6;
+  var cssW=0,cssH=0,resLabel=document.getElementById('resLabel');
+  var scaler=RenderScale.create({canvas:cv,fracDesktop:1,fracMobile:1,maxPixels:MAX_PIXELS,
+    cssSize:function(){return [cssW,cssH];},
+    maxDpr:function(){return quality===0?1:quality===1?1.5:2;}});
+  function resize(){var r=cv.getBoundingClientRect();cssW=r.width;cssH=r.height;scaler.resize();}
+  onQuality=resize;
   new ResizeObserver(resize).observe(cv);resize();
+  // Uniform staging array, made once and filled each frame.
+  var ud=new Float32Array(12);
+  var shownW=0,shownH=0;
   dbg('8:go');dbgEl.style.display='none';
   updPlayBtn();drawDopeSheet();
 
@@ -497,11 +513,16 @@ function makeNoiseTex(){var S=256,data=new Uint8Array(S*S*4),s=48271;for(var i=0
     var dt=lastTs?(ts-lastTs)/1000:0.016;lastTs=ts;
     if(playing&&!scrubbing){currentTime+=dt*speed;if(currentTime>duration)currentTime=0;}
     frames++;fpsTime+=dt;
-    if(fpsTime>=1){document.getElementById('fpsLabel').textContent=Math.round(frames/fpsTime)+' FPS';frames=0;fpsTime=0;}
-    document.getElementById('timeNow').textContent=currentTime.toFixed(2);
-    tlFill.style.width=(currentTime/duration*100)+'%';
-    drawDopeSheet();
-    resize();
+    scaler.tick(ts);
+    // The screensaver hides the chrome, so it skips the readouts and the
+    // dope-sheet redraw (a 2D canvas with 600 curve samples each frame).
+    if(!saverOn){
+      if(fpsTime>=1){document.getElementById('fpsLabel').textContent=Math.round(frames/fpsTime)+' FPS';frames=0;fpsTime=0;}
+      document.getElementById('timeNow').textContent=currentTime.toFixed(2);
+      tlFill.style.width=(currentTime/duration*100)+'%';
+      if(cv.width!==shownW||cv.height!==shownH){shownW=cv.width;shownH=cv.height;resLabel.textContent=shownW+'x'+shownH;}
+      drawDopeSheet();
+    }
 
     // Sample the three animation curves at the normalized playhead time.
     var tN=currentTime/duration;
@@ -511,7 +532,6 @@ function makeNoiseTex(){var S=256,data=new Uint8Array(S*S*4),s=48271;for(var i=0
 
     // Pack the uniforms in the shader's field order (resolution, time, mouseX,
     // zoom, density_scale, quality, brightness, seed, scale) and upload them.
-    var ud=new Float32Array(12);
     ud[0]=cv.width;ud[1]=cv.height;ud[2]=Math.max(0,currentTime);ud[3]=mouseX;
     ud[4]=zoom;ud[5]=curDensity;ud[6]=quality;ud[7]=curBright*saverGain;ud[8]=seed;ud[9]=curScale;
     device.queue.writeBuffer(uniformBuf,0,ud);
@@ -545,7 +565,7 @@ window.snSaver={
     document.head.appendChild(st);
     speed=0.15+0.35*(1-calm);
     seed=((opts&&opts.seed)||0)%1000;
-    playing=true;currentTime=0;zoom=0;
+    playing=true;currentTime=0;zoom=0;saverOn=true;
     var peak=1-0.35*calm; // a dimmer fireball at high calm
     var spin=0.03+0.07*(1-calm), last=0, prev=currentTime, self=this;
     function step(ts){
@@ -560,5 +580,5 @@ window.snSaver={
     this.raf=requestAnimationFrame(step);
     return {canvas:cv,warmupMs:500};
   },
-  exit:function(){cancelAnimationFrame(this.raf);speed=1;saverGain=1;}
+  exit:function(){cancelAnimationFrame(this.raf);speed=1;saverGain=1;saverOn=false;}
 };

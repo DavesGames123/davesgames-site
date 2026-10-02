@@ -1,13 +1,15 @@
 // render-scale.js — size a ray-march canvas by a pixel budget and the frame rate.
 //
-// A classic script (not a module), for the full-screen ray-march pages
-// (blackhole, ellis-wormhole). Those pages trace one geodesic per canvas
-// pixel, so the frame cost is the pixel count times the steps per ray. They
-// used to set the canvas to a fixed fraction of window x devicePixelRatio.
+// A classic script (not a module), for the ray-march pages (blackhole,
+// ellis-wormhole, and the WebGPU explosion page). Those pages trace one ray
+// per canvas pixel, so the frame cost is the pixel count times the steps per
+// ray. The first two pages used to set the canvas to a fixed fraction of
+// window x devicePixelRatio.
 // A 4K screen then got 1536x864, four times the pixels of a 1080p screen.
 //
 // The render size comes from three limits, in this order:
-//   1. base     window x min(dpr, 2) x frac  (frac is lower on phones)
+//   1. base     window (or cssSize) x min(dpr, maxDpr) x frac
+//               (frac is lower on phones)
 //   2. budget   at most maxPixels, with the window aspect kept
 //   3. level    a pixel factor q in [qMin, 1] that the frame rate sets
 //
@@ -17,6 +19,11 @@
 // Each failure lowers the ceiling, so q does not swing between two levels.
 // reset() puts the ceiling back to 1 when the page makes each pixel cheaper
 // (a quality preset, for example). A resize also resets the ceiling.
+//
+// Options for a canvas that does not fill the window, or a WebGPU page:
+//   cssSize   function that returns [w, h] in CSS px (default: the window)
+//   maxDpr    number or function, the dpr ceiling (default 2)
+//   gl        optional; a WebGPU page omits it, because it has no viewport
 //
 // The first WARM_WINDOWS windows are not used: shader compile and the first
 // frames are slow on every device. A frame gap over STALL_MS (a hidden tab)
@@ -32,6 +39,7 @@
 //
 //   grep -n 'MAX_PIXELS\|Q_MIN\|LOW_FPS\|HIGH_FPS'   the tuning constants
 //   grep -n 'function size'                          the three limits
+//   grep -n 'cssSize\|maxDpr'                         the options for a WebGPU page
 //   grep -n 'function tick'                          the frame-rate control
 (function () {
   'use strict';
@@ -48,6 +56,8 @@
     const fracDesktop = opts.fracDesktop || 0.4, fracMobile = opts.fracMobile || 0.25;
     const mobileWidth = opts.mobileWidth || 600;
     const maxPixels = opts.maxPixels || MAX_PIXELS;
+    const cssSize = opts.cssSize || function () { return [window.innerWidth, window.innerHeight]; };
+    const maxDpr = opts.maxDpr == null ? 2 : opts.maxDpr;
 
     let q = 1, ceil = 1;
     let last = -1, winStart = -1, frames = 0, warm = 0, good = 0;
@@ -56,8 +66,8 @@
     // budget, then the frame-rate factor q. Each of the last two scales
     // both axes by the square root, so the aspect stays the same.
     function size() {
-      const w = window.innerWidth, h = window.innerHeight;
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const css = cssSize(), w = css[0], h = css[1];
+      const dpr = Math.min(window.devicePixelRatio || 1, typeof maxDpr === 'function' ? maxDpr() : maxDpr);
       const frac = w < mobileWidth ? fracMobile : fracDesktop;
       let pw = w * dpr * frac, ph = h * dpr * frac;
       const cap = Math.min(1, Math.sqrt(maxPixels / Math.max(1, pw * ph)));
@@ -69,7 +79,7 @@
       const wh = size();
       if (canvas.width === wh[0] && canvas.height === wh[1]) return;
       canvas.width = wh[0]; canvas.height = wh[1];
-      gl.viewport(0, 0, wh[0], wh[1]);
+      if (gl) gl.viewport(0, 0, wh[0], wh[1]);
       if (label) label.textContent = wh[0] + '×' + wh[1];
     }
 
