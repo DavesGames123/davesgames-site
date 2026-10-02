@@ -40,6 +40,9 @@
 //
 //  Keys while it plays: Esc stops, Right and Left go to the next and the
 //  previous page, Space pauses the timer, H shows the status line.
+//  On a touch screen, a tap stops it ("function onTap"). A mouse click does
+//  not stop it: on a desktop only Esc does, unless the "Stop on any key or
+//  mouse move" setting is on.
 //
 //  grep -n targets
 //    settings + storage ... "const DEFAULTS"
@@ -142,6 +145,14 @@ function onKey(e) {
   else if (menu && !menu.hidden && e.key === 'Escape') { e.preventDefault(); closeMenu(); }
 }
 window.addEventListener('keydown', onKey, true);
+// A tap (touch or pen, not a mouse) stops the run and returns to the site.
+// The first 700 ms are ignored, so the tap on Start does not stop it.
+function onTap(e) {
+  if (!run || e.pointerType === 'mouse' || performance.now() - run.t0 < 700) return;
+  e.preventDefault(); e.stopPropagation();
+  stopSaver();
+}
+window.addEventListener('pointerdown', onTap, true);
 
 // Keys pressed inside the page iframe do not reach the shell. Listen in each
 // new frame too (same origin), and stop the run on input there if asked.
@@ -149,6 +160,7 @@ function hookFrame(f) {
   f.addEventListener('load', () => {
     let w; try { w = f.contentWindow; if (!w || w.location.href === 'about:blank') return; } catch (e) { return; }
     w.addEventListener('keydown', onKey, true);
+    w.addEventListener('pointerdown', onTap, true);
     if (run) run.onFrameLoad(f, w);
   });
 }
@@ -334,7 +346,7 @@ function buildMenu() {
   const fmt = recFormat();
   const combo = /Mac/.test(navigator.platform) ? '<kbd>⌘</kbd> <kbd>⌥</kbd> <kbd>S</kbd>' : '<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>S</kbd>';
   m.innerHTML = `<div class="box">
-  <header><h2>Screensaver</h2><p>${combo} opens this menu. <kbd>Esc</kbd> stops the screensaver.</p></header>
+  <header><h2>Screensaver</h2><p>${combo} opens this menu. <kbd>Esc</kbd> stops the screensaver. On a touch screen, tap to stop it.</p></header>
   <div class="cols">
     <div class="pages">
       <div class="bar" role="tablist">${tabs}<div class="quick"><button data-q="default">Defaults</button><button data-q="all">All</button><button data-q="none">None</button></div></div>
@@ -455,7 +467,7 @@ async function startSaver() {
   if (!keys.length || run) return;
   const order = S.order === 'shuffle' ? shuffle(keys.slice()) : keys;
   run = {
-    order, i: -1, timer: 0, paused: false, left: 0, started: 0,
+    order, i: -1, timer: 0, paused: false, left: 0, started: 0, t0: performance.now(),
     back: window.activeTab || null, rec: null, frameWin: null, lock: null, token: 0,
     onFrameLoad: () => {},
   };
