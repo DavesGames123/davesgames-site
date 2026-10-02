@@ -46,7 +46,7 @@
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" main.js)
 //  --------------------------------------------------------------------------
-//      color roles ......... "equation color roles"  KaTeX color constants
+//      color roles ......... "equation color roles"  old wrappers, sysRules map
 //      systems ............. "const SYS="            all flows + complex maps
 //      state ............... "const cfg="            live config + view + tracers
 //      canvas / transforms . "function resize"       sizing and world<->screen
@@ -62,7 +62,7 @@
 //      physical integrator . "function rk4"          RK4 for the model state
 //      main render ......... "function render"       grid, arrows, tracers, marker
 //      mini model .......... "function drawMSim"     the inset physical model
-//      equations ........... "function renderEquations"  KaTeX blocks
+//      equations ........... "function renderEquations"  MathJax SVG blocks
 //      UI .................. "function selectSystem" panel + controls wiring
 //      pan / zoom .......... "pan / zoom"            pointer, wheel, pinch
 //      loop ................ "function loop"         rAF update + draw + status
@@ -71,16 +71,17 @@
 // ============================================================================
 "use strict";
 
-/* ════════ equation color roles (matches the Stella Nova pages) ════════ */
-const ST="#45d3ff";   // state variables  x, y, θ, ω, z
-const PA="#ffc832";   // parameters       μ, ζ, a, b, ω, c
-const OP="#96c8ff";   // operators / time-derivatives  ẋ, d/dt
-const FN="#c890ff";   // potentials / named nonlinear functions
+/* ════════ equation color roles ════════ */
+// The eqs strings below still wrap symbols in \textcolor{ST|PA|OP|FN}{...}.
+// renderEquations() strips those wrappers (plainTeX) and colors the symbols
+// with the lib/sci.css classes instead (sysRules): state x, theta, z m1,
+// y m2, f and V m3, the first parameter m4, the second m5.
+const ST="ST", PA="PA", OP="OP", FN="FN";
 
 /* ════════ systems ════════
    flow:    field(x,y,P) -> [u,v]            (phase-space velocity)
    complex: cf(x,y) -> [u,v] = f(z);  tracers follow the Pólya field (u,-v)
-   eqs(P):  array of {sub, tex}  rendered with KaTeX
+   eqs():   array of {sub, tex}  typeset as MathJax SVG
    sim:     'pendulum' | 'well' | 'oscillator' | 'populations' | 'trajectory'
    view:    {cx,cy,span}  default framing in math units
    ic:      initial (x,y) for the physical-model integrator
@@ -89,7 +90,7 @@ const FN="#c890ff";   // potentials / named nonlinear functions
 // velocity directly in field(x,y,P); "complex" entries give f(z) in cf(x,y) and
 // the tracers follow the Polya field. view sets default framing, ic is the
 // physical-model start point, params declares the tunable sliders, eqs() returns
-// KaTeX blocks. positive:true confines the system to the first quadrant.
+// equation blocks. positive:true confines the system to the first quadrant.
 const SYS={
   // Damped pendulum. x=angle, y=angular velocity. -sin(x) is the restoring
   // torque; -z*y removes energy, so trajectories spiral into the rest state.
@@ -782,7 +783,7 @@ function drawMSim(){
   else drawTrajectory(X,Y);
 }
 // Small text helper for inset labels.
-function txt(s,x,y,col,size,align){mctx.fillStyle=col;mctx.font=(size||9)+"px 'JetBrains Mono',monospace";mctx.textAlign=align||"left";mctx.textBaseline="middle";mctx.fillText(s,x,y);}
+function txt(s,x,y,col,size,align){mctx.fillStyle=col;mctx.font=(size||9)+"px Inter,system-ui,sans-serif";mctx.textAlign=align||"left";mctx.textBaseline="middle";mctx.fillText(s,x,y);}
 // Pendulum inset: bob hangs at angle th from vertical, with an angle arc, a
 // tangential omega arrow, and a gravity marker.
 function drawPendulum(th,om){
@@ -893,16 +894,38 @@ function varCaption(){
 }
 
 /* ════════ equations ════════ */
-// Render the current system's governing-equation blocks with KaTeX. Falls back
-// to raw TeX text if KaTeX is absent or a block fails to parse.
+// lib/sci-math.js is an ES module; this classic script loads it with a
+// dynamic import(). It typesets TeX as MathJax SVG. If MathJax does not load,
+// the TeX text stays in the box with the class "raw".
+const SCI=import("../../lib/sci-math.js").catch(err=>{console.error("[math]",err);return null;});
+// Replace each \textcolor{color}{body} wrapper with {body}. The braces keep
+// a control word apart from the body (sin{x}, not sinx).
+function plainTeX(tex){let out="",i=0;const K="\\textcolor{";
+  while(i<tex.length){const j=tex.indexOf(K,i);if(j<0){out+=tex.slice(i);break;}
+    out+=tex.slice(i,j);const k=tex.indexOf("}",j+K.length)+1;   // skip the color group
+    let d=0,e=k;for(;e<tex.length;e++){if(tex[e]==="{")d++;else if(tex[e]==="}"&&--d===0)break;}
+    out+="{"+tex.slice(k+1,e)+"}";i=e+1;}
+  return out;}
+// A parameter label is "word symbol" ("damping ζ") or a symbol ("μ"). The
+// symbol is the last word. paramSym gives its TeX, paramWord the rest.
+const GREEK={"ζ":"\\zeta","μ":"\\mu","ω":"\\omega","θ":"\\theta"};
+const paramSym=l=>{const t=l.trim().split(/\s+/).pop();return GREEK[t]||t;};
+const paramWord=l=>{const w=l.trim().split(/\s+/);w.pop();return w.join(" ");};
+// Color rules of the current system: x, theta, z m1, y m2, f, V m3, then the
+// first two parameters m4 and m5.
+function sysRules(){const r=[["x","m1"],["\\theta","m1"],["z","m1"],["\\mathbf{z}","m1"],["y","m2"],["f","m3"],["V","m3"]];
+  Object.values(SYS[cur].params||{}).slice(0,2).forEach((d,i)=>r.push([paramSym(d.l),"m"+(4+i)]));return r;}
+// Typeset the current system's equation blocks into the panel as MathJax
+// SVG, in sysRules colors.
 function renderEquations(){
   const wrap=document.getElementById("eq-blocks"); wrap.innerHTML="";
-  const blocks=SYS[cur].eqs();
+  const blocks=SYS[cur].eqs(), rules=sysRules();
   blocks.forEach(b=>{
     const div=document.createElement("div"); div.className="eq-block";
-    div.innerHTML=(b.sub?`<div class="eq-sublabel">${b.sub}</div>`:"")+`<div class="eq-row"></div>`;
+    div.innerHTML=(b.sub?`<div class="eq-sublabel">${b.sub}</div>`:"")+`<div class="eq-row sci-eq"></div>`;
     wrap.appendChild(div);
-    if(window.katex){try{katex.render(b.tex,div.querySelector(".eq-row"),{throwOnError:false,displayMode:true});}catch(e){div.querySelector(".eq-row").textContent=b.tex;}}
+    const el=div.querySelector(".eq-row"), t=plainTeX(b.tex); el.dataset.tex=t;
+    SCI.then(m=>m?m.typeset(el,t,{rules}):(el.textContent=t,el.classList.add("raw")));
   });
 }
 
@@ -919,10 +942,15 @@ function buildParamUI(){
   const wrap=$("params"); wrap.innerHTML=""; const ps2=SYS[cur].params; if(!ps2)return;
   for(const k in ps2){
     const d=ps2[k], row=document.createElement("div"); row.className="mrow";
-    row.innerHTML=`<span class="mrow-lbl">${d.l}</span><input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${P[k]}"><span class="val">${P[k].toFixed(2)}</span>`;
+    const word=paramWord(d.l);
+    row.innerHTML=`<span class="mrow-lbl"><span class="sci-sym"></span>${word?` <span class="w">${word}</span>`:""}</span><input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${P[k]}"><span class="val">${P[k].toFixed(2)}</span>`;
     wrap.appendChild(row);
+    const sym=row.querySelector(".sci-sym"), t=paramSym(d.l); sym.dataset.tex=t; sym.dataset.inline="";
+    SCI.then(m=>m?m.typeset(sym,t,{display:false,rules:sysRules()}):(sym.textContent=d.l));
     const r=row.querySelector("input"); setRange(r);
-    r.addEventListener("input",()=>{P[k]=parseFloat(r.value);row.querySelector(".val").textContent=P[k].toFixed(2);setRange(r);domDirty=true;renderEquations();});
+    // The equations hold no parameter values, so a slider move does not
+    // typeset them again.
+    r.addEventListener("input",()=>{P[k]=parseFloat(r.value);row.querySelector(".val").textContent=P[k].toFixed(2);setRange(r);domDirty=true;});
   }
 }
 // Switch to a system: load its params and UI, equations, blurb, and labels,
@@ -930,7 +958,7 @@ function buildParamUI(){
 function selectSystem(key){
   cur=key; loadParams(); buildParamUI(); renderEquations();
   $("sysBlurb").innerHTML=`<b>${SYS[cur].name}.</b> ${SYS[cur].blurb}`;
-  $("msim-title").textContent = SYS[cur].sim==="trajectory" ? "Test Trajectory" : "Physical Model";
+  $("msim-title").textContent = SYS[cur].sim==="trajectory" ? "Test trajectory" : "Physical model";
   $("st-sys").textContent=SYS[cur].name;
   domDirty=true; frameSystem(false); resetPS(); spawnTracers();
 }
@@ -964,7 +992,7 @@ tog("tArr","arr");
 tog("tAxes","axes");
 tog("tSim","sim",()=>{$("msim-panel").classList.toggle("hidden",!cfg.sim);});
 // Playback controls: pause/resume the loop, reset the model + tracers, clear trails.
-$("btnPlay").addEventListener("click",function(){cfg.playing=!cfg.playing;this.textContent=cfg.playing?"▶ Play":"▐▐ Pause";this.classList.toggle("active",cfg.playing);});
+$("btnPlay").addEventListener("click",function(){cfg.playing=!cfg.playing;this.textContent=cfg.playing?"Play":"Pause";this.classList.toggle("active",cfg.playing);});
 $("btnReset").addEventListener("click",()=>{resetPS();spawnTracers();});
 $("btnClear").addEventListener("click",()=>{trLen.fill(0);});
 // Collapse/expand the governing-equations panel.
@@ -1045,9 +1073,8 @@ window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0
 /* ════════ saver equations ════════ */
 // Plain-text dx/dt and dy/dt of each system, the same field that fieldAt()
 // gives the tracers. A complex map shows its Pólya field (Re f, −Im f). The
-// KaTeX blocks of eqs() are not used here, for two reasons. KaTeX breaks in
-// the user's Safari, and eqs() has no dx/dt form for the Duffing well or the
-// complex maps.
+// TeX blocks of eqs() are not used here, for two reasons. The canvas takes no
+// TeX, and eqs() has no dx/dt form for the Duffing well or the complex maps.
 const ODE={
   pendulum:{sub:"x = θ,  y = ω",eq:["ẋ = y","ẏ = −sin x − ζ y"]},
   vdp:     {sub:"y = ẋ",eq:["ẋ = y","ẏ = μ (1 − x²) y − x"]},
@@ -1093,6 +1120,6 @@ function drawSaverEq(){
   ctx.font=fP+"px "+sans; ctx.fillStyle="#8ea3bd"; ctx.fillText(E.sub,x0+pad,y); y+=fP+gap*2;
   ctx.font=fE+"px "+mono; ctx.fillStyle="#eef3fb";
   for(const t of E.eq){ctx.fillText(t,x0+pad,y); y+=fE+gap;}
-  if(par){ctx.font=fP+"px "+mono; ctx.fillStyle=PA; ctx.fillText(par,x0+pad,y+gap*0.5);}
+  if(par){ctx.font=fP+"px "+mono; ctx.fillStyle="#ffc832"; ctx.fillText(par,x0+pad,y+gap*0.5);}
   ctx.restore();
 }

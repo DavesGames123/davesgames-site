@@ -14,9 +14,9 @@
    with its equation and physical-model overlays, and the bottom status bar.
 
    HEAD LOAD ORDER
-     1. fonts        Google Fonts stylesheet
-     2. KaTeX css + js  from CDN; renders the governing-equation blocks
-     3. style.css    the page stylesheet
+     1. style.css    the page stylesheet
+     2. lib/sci.css  science type and math colors .m1 to .m6 (@imports the
+                     fonts); main.js typesets the equations as MathJax SVG
      4. main.js      classic script at end of body; runs after the DOM parses
 
    LAYOUT  (# marks an element id)
@@ -25,7 +25,7 @@
      ├────────────┬──────────────────────────────────────────────────────┤
      │ #panel     │  #canvas-wrap                                          │
      │  system    │    #sim-canvas  (phase portrait, tracers)             │
-     │  params    │      ┌ #eq-panel  governing equations (KaTeX) ┐       │
+     │  params    │      ┌ #eq-panel  equations (MathJax SVG)      ┐       │
      │  tracers   │      └ #msim-panel physical-model inset       ┘       │
      │  color     │                                                        │
      │  tone      │                                                        │
@@ -42,15 +42,13 @@
      tone curve ....... id="toneCurve"    palette + gamma/contrast/exposure
      display .......... id="tDom"         domain / arrows / axes / model toggles
      stage ............ id="canvas-wrap"  canvas plus overlays
-     equations ........ id="eq-panel"     KaTeX equation blocks
+     equations ........ id="eq-panel"     MathJax equation blocks
      inset ............ id="msim-panel"   physical-model mini canvas
      status ........... id="status-bar"   bottom readouts
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In frame guard: inside the site shell iframe, add .in-frame so the CSS
@@ -60,8 +58,7 @@
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 
 <div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">FlowLab · ∂</span></div>
-  <div class="topbar-r">SYS // <strong>VECTOR FIELDS</strong></div>
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Vector fields</span></div>
 </div>
 
 <div id="main">
@@ -87,7 +84,7 @@
     </div>
     <!-- Tracer coloring: mode segment plus palette; feed the speed/phase ramps. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Tracer Color</div>
+      <div class="p-sec-lbl">Tracer color</div>
       <div class="seg" id="colMode">
         <button data-m="speed" class="on">Speed</button>
         <button data-m="phase">Phase</button>
@@ -96,12 +93,12 @@
       <div class="mrow" style="margin-top:9px"><span class="mrow-lbl">Palette</span><select id="palSel">
         <option value="stella">Stella</option><option value="plasma">Plasma</option><option value="viridis">Viridis</option><option value="inferno">Inferno</option><option value="ice">Ice</option><option value="ember">Ember</option>
       </select></div>
-      <div class="mini-note">Palette &amp; gamma/contrast shape Speed mode; Exposure brightens all modes.</div>
+      <div class="mini-note">Palette, gamma and contrast shape the speed mode. Exposure brightens all modes.</div>
     </div>
     <!-- Tone curve: preview canvas plus gamma/contrast/exposure that shape the
          speed-mode magnitude ramp. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Tone Curve</div>
+      <div class="p-sec-lbl">Tone curve</div>
       <canvas id="toneCurve" width="244" height="62"></canvas>
       <div class="mrow"><span class="mrow-lbl">Gamma</span><input type="range" id="rGamma" min="0.3" max="3" step="0.05" value="1"><span class="val" id="vGamma">1.00</span></div>
       <div class="mrow"><span class="mrow-lbl">Contrast</span><input type="range" id="rContrast" min="0.5" max="2" step="0.05" value="1"><span class="val" id="vContrast">1.00</span></div>
@@ -110,18 +107,18 @@
     <!-- Display toggles: domain image, field arrows, axes/grid, physical model. -->
     <div class="p-section">
       <div class="p-sec-lbl">Display</div>
-      <button class="tog-btn" id="tDom">▦ Domain coloring</button>
-      <button class="tog-btn" id="tArr">→ Field arrows</button>
-      <button class="tog-btn on" id="tAxes">✛ Axes &amp; grid</button>
-      <button class="tog-btn on" id="tSim">⚙ Physical model</button>
+      <button class="tog-btn" id="tDom">Domain coloring</button>
+      <button class="tog-btn" id="tArr">Field arrows</button>
+      <button class="tog-btn on" id="tAxes">Axes and grid</button>
+      <button class="tog-btn on" id="tSim">Physical model</button>
     </div>
     <!-- Playback: play/pause the loop, reset the model, clear tracer trails. -->
     <div class="p-section">
       <div class="p-sec-lbl">Simulation</div>
       <div class="sim-btns">
-        <button class="sim-btn active" id="btnPlay">▶ Play</button>
-        <button class="sim-btn" id="btnReset">↺ Reset</button>
-        <button class="sim-btn warn" id="btnClear">✕ Clear</button>
+        <button class="sim-btn active" id="btnPlay">Play</button>
+        <button class="sim-btn" id="btnReset">Reset</button>
+        <button class="sim-btn warn" id="btnClear">Clear</button>
       </div>
     </div>
   </div></div>
@@ -136,14 +133,14 @@
     <!-- Governing equations overlay; header toggles collapse. -->
     <section class="eq-panel" id="eq-panel">
       <div class="eq-head" id="eq-toggle">
-        <span class="dot"></span><span class="lbl">Governing Equations</span><span class="arrow">▲</span>
+        <span class="lbl">Equations</span><span class="arrow">▲</span>
       </div>
       <div class="eq-blocks" id="eq-blocks"></div>
     </section>
 
     <!-- Physical-model inset: its own small canvas plus a variable readout. -->
     <section id="msim-panel">
-      <div class="msim-head"><span class="dot"></span><span class="lbl" id="msim-title">Physical Model</span></div>
+      <div class="msim-head"><span class="lbl" id="msim-title">Physical model</span></div>
       <canvas id="msim-canvas"></canvas>
       <div id="msim-vars"></div>
     </section>
