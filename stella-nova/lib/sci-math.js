@@ -84,7 +84,9 @@ export function colorize(tex, rules) {
       if (/^\\[A-Za-z]+$/.test(p) && /[A-Za-z]/.test(next)) continue;
       hit = [p, cls]; break;
     }
-    if (hit) { out += `\\class{${hit[1]}}{${hit[0]}}`; i += hit[0].length; continue; }
+    // Braces make the coloured symbol one argument, so an accent before it
+    // (\bar Z, \hat x, \vec E) and a script after it stay valid TeX.
+    if (hit) { out += `{\\class{${hit[1]}}{${hit[0]}}}`; i += hit[0].length; continue; }
     const c = tex[i];
     if (c === '\\') {
       const m = /^\\([A-Za-z]+|.)/.exec(tex.slice(i));
