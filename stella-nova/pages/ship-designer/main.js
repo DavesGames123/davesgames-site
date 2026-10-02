@@ -608,6 +608,9 @@
     fleet.ships = ships;
   }
 
+  // Angle of the sprite nose in sprite space: hull.webp points down (+y).
+  var SPRITE_NOSE = Math.PI / 2;
+
   function wrapAngle(a) { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; }
 
   function fleetStep(dt) {
@@ -663,11 +666,11 @@
         var sp = Math.sqrt(s.vx * s.vx + s.vy * s.vy), max = base * 4;
         if (sp > max) { s.vx *= max / sp; s.vy *= max / sp; }
         s.x += s.vx * dt; s.y += s.vy * dt;
-        // Face the leader heading when in the slot, the flight path when not.
-        var off = Math.min(1, Math.sqrt(ex * ex + ey * ey) / (gap * 2));
-        var want = sp > 4 ? Math.atan2(s.vy, s.vx) : la;
-        want = la + wrapAngle(want - la) * off;
-        s.a = wrapAngle(s.a + wrapAngle(want - s.a) * Math.min(1, dt * 6));
+        // Face the flight path. The velocity is already smooth (the spring
+        // above eases it), so the nose follows it closely. A ship that is
+        // almost at rest faces the leader heading.
+        var want = sp > 2 ? Math.atan2(s.vy, s.vx) : la;
+        s.a = wrapAngle(s.a + wrapAngle(want - s.a) * Math.min(1, dt * 14));
       }
     }
   }
@@ -682,12 +685,17 @@
     for (var i = 0; i < fleet.ships.length; i++) {
       var s = fleet.ships[i];
       x.setTransform(d, 0, 0, d, s.x * d, s.y * d);
-      x.rotate(s.a + Math.PI / 2);
+      // The sprite nose (the rounded intake) is at local +y and the engine
+      // block is at local -y. Turn local +y onto the heading s.a.
+      x.rotate(s.a - SPRITE_NOSE);
       if (fleet.glow) {
         x.globalCompositeOperation = 'lighter';
         var fl = 0.8 + 0.2 * Math.sin(t * fleet.flick + i * 1.7);
         x.globalAlpha = 0.85;
-        x.drawImage(fleet.flame, -sz * 0.09, sz * 0.38, sz * 0.18, sz * 0.55 * fl);
+        // The flame comes out of the engine block, so mirror it onto -y.
+        x.scale(1, -1);
+        x.drawImage(fleet.flame, -sz * 0.09, sz * 0.4, sz * 0.18, sz * 0.55 * fl);
+        x.scale(1, -1);
         x.globalAlpha = 1;
         x.globalCompositeOperation = 'source-over';
       }
