@@ -2518,7 +2518,9 @@ animate(performance.now());
 // on a slow autoRotate and sets SIM.speed to 240x (calm 0) .. 60x (calm 1),
 // so the orbits sweep and the terminator moves. A tour eases the camera
 // with flyTo between four views (distance and latitude), about three per
-// dwell, each move 7 s long. opts.seed sets the view order. The hook makes
+// dwell, each move 7 s long. opts.seed sets the view order. Each move also
+// puts one object in focus (its orbit drawn) and names it on the label plate
+// with its TLE elements. The hook makes
 // no network request: the catalog comes from the boot snapshot. No exit():
 // the shell reloads the page on stop.
 window.snSaver = { enter(opts) {
@@ -2534,8 +2536,71 @@ window.snSaver = { enter(opts) {
     { r: 3.4, phi: 1.42 }, { r: 2.3, phi: 0.95 }, { r: 2.7, phi: 2.05 }, { r: 4.6, phi: 0.55 },
   ];
   let vi = seed % VIEWS.length;
+  // The plate (opts.label) names one object in focus and its TLE elements.
+  // Each tour move picks the next class in FOCUS_CATS and a seeded object of
+  // that class from the loaded snapshot. selectedIdx (with no chip lock)
+  // makes propagateAll() draw the glyph larger and maybeRebuildTrail() draw
+  // one orbit of it. The elements come from orbitalElements() and the
+  // satrec: a = (μ/n²)^(1/3), T = 2π/n, apogee and perigee a(1 ± e) − R⊕.
+  // The live lines come from satellite.propagate() at SIM.time.
+  const label = opts && opts.labels !== false && typeof opts.label === 'function' ? opts.label : null;
+  const FOCUS_CATS = ['station', 'payload', 'starlink', 'rocket', 'debris'];
+  const CAT_NAME = { station: 'crewed station', payload: 'payload', starlink: 'Starlink', rocket: 'rocket body', debris: 'debris' };
+  let fi = seed % FOCUS_CATS.length;
+  const D = 180 / Math.PI;
+  const pickFocus = () => {
+    for (let k = 0; k < FOCUS_CATS.length; k++) {
+      const cat = FOCUS_CATS[(fi + k) % FOCUS_CATS.length], pool = [];
+      for (let i = 0; i < sats.length; i++) if (sats[i].cat === cat && sats[i].satrec && !sats[i]._isStorm) pool.push(i);
+      if (!pool.length) continue;
+      fi = (fi + k + 1) % FOCUS_CATS.length;
+      seed = (seed * 1103515245 + 12345) >>> 0;
+      // A station dwell shows the ISS first when the snapshot has it.
+      const iss = cat === 'station' ? pool.find(i => sats[i].noradId === 25544) : undefined;
+      return iss !== undefined ? iss : pool[seed % pool.length];
+    }
+    return -1;
+  };
+  const plate = () => {
+    if (!label || selectedIdx < 0 || !sats[selectedIdx] || !sats[selectedIdx].satrec) return;
+    const s = sats[selectedIdx], r = s.satrec, oe = orbitalElements(r);
+    const a = oe.apogee / 2 + oe.perigee / 2 + EARTH_R_KM;
+    const yr = r.epochyr < 57 ? 2000 + r.epochyr : 1900 + r.epochyr;
+    const ep = new Date(Date.UTC(yr, 0, 1) + (r.epochdays - 1) * 86400000);
+    const pv = satellite.propagate(r, SIM.time);
+    let live = 'SGP4 has no solution at this time';
+    if (pv.position) {
+      const geo = satellite.eciToGeodetic(pv.position, satellite.gstime(SIM.time));
+      const v = pv.velocity ? Math.hypot(pv.velocity.x, pv.velocity.y, pv.velocity.z) : NaN;
+      live = 'now · alt ' + fmt(geo.height, 0) + ' km · lat ' + fmt(geo.latitude * D, 1) + '° · lon ' +
+        fmt(geo.longitude * D, 1) + '° · |v| ' + fmt(v, 2) + ' km/s';
+    }
+    const nObj = sats.reduce((c, q) => c + (q.satrec ? 1 : 0), 0);
+    label({
+      title: s.name,
+      sub: 'NORAD ' + s.noradId + ' · ' + CAT_NAME[s.cat] + ' · TLE epoch ' + ep.toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
+      lines: [
+        'a = ' + fmt(a, 0) + ' km · e = ' + r.ecco.toFixed(5) + ' · i = ' + fmt(oe.incDeg, 2) + '° · T = ' + fmt(oe.periodMin, 1) + ' min',
+        'Ω = ' + fmt(r.nodeo * D, 1) + '° · ω = ' + fmt(r.argpo * D, 1) + '° · M₀ = ' + fmt(r.mo * D, 1) + '° · n = ' + fmt(1440 / oe.periodMin, 3) + ' rev/day',
+        'apogee ' + fmt(oe.apogee, 0) + ' km · perigee ' + fmt(oe.perigee, 0) + ' km · μ = 398600.4418 km³/s² · R⊕ = 6378.137 km',
+        live,
+        'sim ' + SIM.time.toISOString().slice(0, 16).replace('T', ' ') + ' UTC · ' + fmtRate(SIM.speed) + ' · ' + nObj.toLocaleString() + ' objects',
+      ],
+      eq: ['n = 2π / T,   a = (μ / n²)^1/3',
+           'r_apo, r_peri = a (1 ± e) − R⊕',
+           'TLE → SGP4 → r, v (ECI) → ECEF at GMST'],
+    });
+  };
+  const focus = () => {
+    const idx = pickFocus();
+    if (idx < 0) return;
+    selectedIdx = idx;
+    maybeRebuildTrail();
+    plate();
+  };
   const tour = () => {
     if (chipLocked) unlockChip();
+    focus();
     vi = (vi + 1 + (seed = (seed * 1103515245 + 12345) >>> 0) % 2) % VIEWS.length;
     const sph = new THREE.Spherical().setFromVector3(camera.position);
     const to = new THREE.Vector3().setFromSpherical(new THREE.Spherical(VIEWS[vi].r, VIEWS[vi].phi, sph.theta + 0.6));
@@ -2551,6 +2616,8 @@ window.snSaver = { enter(opts) {
       SIM.playing = true;
       applyRate(rateSpeedToFrac(240 - 180 * calm));
       setInterval(tour, Math.max(12, secs / 3) * 1000);
+      focus();
+      if (label) setInterval(plate, 1000);
       res({ canvas, warmupMs: 2500 });
     };
     ready();
