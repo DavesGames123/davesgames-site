@@ -1020,6 +1020,8 @@ const spec = {
     { id: 'tone', label: 'Tone', hex: '#3a86c8' },
     { id: 'cream', label: 'Light', hex: '#f5dfa8' },
   ],
+  // screensaver: calm cells and tempo for the table-engine hook (lib/table-engine.js)
+  saver: { cells: ['phyllotaxis', 'guilloche', 'rosette', 'seigaiha', 'gear_train', 'record_groove', 'hex_terrain', 'hex_rings', 'star_lattice', 'petal_shear', 'heart_spiral', 'dot_drift', 'hex_wave'], tempo: [0.8, 0.2], dpr: 2 },
 };
 
 // ── emit index.html ──────────────────────────────────────────────────────────
