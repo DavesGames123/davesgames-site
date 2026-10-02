@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Spirograph — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   SPIROGRAPH  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A toothed wheel rolls inside a fixed ring, or around
+   a fixed wheel, and a pen in one of its holes draws the curve on a sheet
+   of paper. The tooth counts set the rolling with no slip:
+       x = (R - r) cos t + d cos((R - r)t/r)
+       y = (R - r) sin t - d sin((R - r)t/r)
+   The curve closes after r / gcd(R, r) laps, with R / gcd(R, r) petals.
+
+   FILES
+     spiro.js     gear units, tooth profile, kinematics, closure (no DOM)
+     rig.js       the plastic gears as canvas sprites
+     presets.js   the inks and the preset drawings (no DOM)
+     main.js      the sheet, the ink, the controls, the loop, the exports
+     tests.mjs    node tests of spiro.js (kinematics, tooth mesh, closure)
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  stops the frame loop when the shell swaps pages
+     2. style.css, then lib/sci.css (fonts, math colors .m1 to .m6)
+   The equations are MathJax SVG through lib/sci-math.js.
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left, #desk fills the rest. #sheet is the
+                 square paper in the middle of #desk. It holds four
+                 canvases: #paper (texture), #dry (finished traces),
+                 #wet (the trace that draws now), #rig (the gears).
+                 #caption is one line under the sheet.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: play, clear, the preset name (next
+                 preset), gears on or off, settings. #panel is a bottom
+                 sheet (portrait) or a drawer at the right (landscape).
+                 The sheet fits in the part of #desk that stays clear.
+
+   GREP MAP  (main.js)
+     grep -n 'function layout'       fit the sheet in the clear area
+     grep -n 'function startTrace'   lift the pen and start a new trace
+     grep -n 'function advance'      move t and lay ink
+     grep -n 'function drawRig'      the gears and the pen each frame
+     grep -n 'function redrawInk'    draw every trace again (resize, undo)
+     grep -n 'function loadPreset'   clear and queue the traces of a preset
+     grep -n 'function renderMath'   the MathJax equations and live numbers
+     grep -n 'function exportSVG'    the vector file
+     grep -n 'window.snSaver'        the screensaver hook
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A Spirograph with real toothed gears: a wheel rolls inside a ring or around a wheel, and a pen in one of its holes draws hypotrochoids and epitrochoids. Tooth counts set the petals and the laps. Export PNG or SVG.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Spirograph</div>
+</div>
+<button id="gear" aria-label="Controls">☰</button>
+
+<main id="desk">
+  <div id="sheet">
+    <canvas id="paper"></canvas>
+    <canvas id="dry"></canvas>
+    <canvas id="wet"></canvas>
+    <canvas id="rig"></canvas>
+  </div>
+  <div id="caption"></div>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" aria-label="Close controls">✕</button>
+
+  <div class="sec-label first">Presets</div>
+  <div id="presets" class="cards"></div>
+
+  <div class="sec-label">Equations</div>
+  <div class="eq" id="eqCurve"></div>
+  <div class="eq" id="eqClose"></div>
+  <div class="eq live" id="eqLive"></div>
+
+  <div class="sec-label">Gears</div>
+  <div class="seg" id="mode">
+    <button data-out="0" class="on">Inside the ring</button>
+    <button data-out="1">Outside the wheel</button>
+  </div>
+  <div class="prm"><div class="nm"><span id="lblR">Ring teeth</span> <span class="sci-sym m1" data-tex="R" data-inline>R</span></div><span class="val" id="RV"></span>
+    <input type="range" id="R" min="40" max="160" step="1" value="144" aria-label="Fixed gear teeth"></div>
+  <div class="prm"><div class="nm">Wheel teeth <span class="sci-sym m2" data-tex="r" data-inline>r</span></div><span class="val" id="rV"></span>
+    <input type="range" id="r" min="12" max="120" step="1" value="60" aria-label="Wheel teeth"></div>
+  <div class="prm"><div class="nm">Pen hole <span class="sci-sym m3" data-tex="d" data-inline>d</span></div><span class="val" id="holeV"></span>
+    <input type="range" id="hole" min="0" max="10" step="1" value="10" aria-label="Pen hole"></div>
+  <div class="prm"><div class="nm">Loops <span class="sci-sym m4" data-tex="L" data-inline>L</span></div><span class="val" id="loopsV"></span>
+    <input type="range" id="loops" min="1" max="5" step="1" value="5" aria-label="Loops"></div>
+
+  <div class="sec-label">Pen</div>
+  <div class="inks" id="inks"></div>
+  <div class="seg three" id="widths"></div>
+
+  <div class="sec-label">Drawing</div>
+  <div class="btns">
+    <button id="playBtn">Pause</button>
+    <button id="finishBtn" title="Draw the rest of the trace now (F)">Finish</button>
+  </div>
+  <div class="btns">
+    <button id="undoBtn" title="Remove the last trace (Z)">Undo</button>
+    <button id="clearBtn" title="Clear the paper (C)">Clear</button>
+  </div>
+  <div class="prm"><div class="nm">Speed</div><span class="val" id="speedV"></span>
+    <input type="range" id="speed" min="0" max="1" step="0.001" value="0.5" aria-label="Speed"></div>
+  <div class="seg" id="paperSeg">
+    <button data-paper="cream" class="on">Cream paper</button>
+    <button data-paper="night">Night paper</button>
+  </div>
+  <div class="btns"><button id="gearsBtn" class="on">Gears shown</button></div>
+  <p class="hint">Drag on the paper to turn the wheel by hand.</p>
+
+  <div class="sec-label">Export</div>
+  <div class="btns">
+    <button id="pngBtn">PNG</button>
+    <button id="svgBtn">SVG</button>
+  </div>
+
+  <div class="sec-label">How it works</div>
+  <div class="about">
+    <p>The wheel has <span class="m2">r</span> teeth and rolls on a ring with <span class="m1">R</span> teeth. All the teeth have the same pitch, so the radius of each gear is in proportion to its tooth count. At each step one tooth of the ring meets one tooth of the wheel: the wheel cannot slip.</p>
+    <div class="eq" id="eqSlip"></div>
+    <p>When the wheel center goes once round, <span class="m1">R</span> teeth of the ring pass the wheel. That is <span class="m1">R</span>/<span class="m2">r</span> turns of the wheel against the ring, and one turn less against the paper. The pen sits at distance <span class="m3">d</span> from the wheel center, so it adds a small circle that turns at that rate.</p>
+    <p>The pen comes back to its start when a whole number of laps brings a whole number of wheel turns. The smallest such number of laps is <span class="m4">L</span> = <span class="m2">r</span>/<span class="m5">g</span>, with <span class="m5">g</span> the greatest common divisor of the two tooth counts. In that time the pen makes <span class="m6">n</span> = <span class="m1">R</span>/<span class="m5">g</span> petals. Tooth counts with a small common divisor give dense lace. A large common divisor gives a few bold loops.</p>
+    <p>Outside the wheel, the wheel turns the other way, faster, and the pen draws an epitrochoid.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPlay" aria-label="Pause">❚❚</button>
+  <button id="dockClear" aria-label="Clear">✕</button>
+  <button id="dockPreset" class="name" aria-label="Next preset"><span id="dockName">…</span><i>›</i></button>
+  <button id="dockGears" class="on" aria-label="Show gears" aria-pressed="true">◎</button>
+  <button id="dockPanel" aria-label="Settings" aria-expanded="false">☰</button>
+</nav>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
