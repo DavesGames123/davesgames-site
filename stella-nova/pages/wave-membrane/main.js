@@ -197,6 +197,7 @@
     E0 = sim.energy();
     runMax = 1e-9;
     stepCarry = 0;
+    if (saverLabel) saverPlate();
     buildNodal();
     updateMesh();
     refreshReadout();
@@ -580,7 +581,41 @@
     square: [[2, 1, 1, 3], [3, 2, 1, 2], [2, 3, 4, 1], [1, 2, 3, 3]],
     circle: [[1, 2, 0, 2], [2, 1, 0, 3], [3, 1, 1, 2]],
   };
+  // The plate (opts.label) names the wave equation, the mode shape that
+  // setMode() in sim.js builds, and the live values: the mode numbers, the
+  // amplitudes, f = ω/2π from sim.omega(), c, the damping, the beat |f1 − f2|
+  // and the energy ratio. The solver is a lossless leapfrog, so the damping is
+  // 0 and E/E0 shows the drift. Sim time runs at STEP_RATE·speed·c·dt per real
+  // second, so a sim frequency times that rate is the frequency on screen.
+  // applyModes() calls saverPlate(), so a mode change updates the plate.
+  let saverLabel = null, saverTimer = 0;
+  const SUB = '₀₁₂₃₄₅₆₇₈₉';
+  const sub = v => String(v).replace(/[0-9]/g, d => SUB[+d]);
+  function saverPlate() {
+    if (!saverLabel || !sim) return;
+    const circ = G.shape === 'circle', TAUv = 2 * Math.PI;
+    const md = modeList(), f = md.map(q => sim.omega(q.m, q.n) / TAUv);
+    const rate = STEP_RATE * G.speed * G.c * sim.dt;      // sim time per real second
+    const fx = v => v.toFixed(3), hz = v => (v * rate).toFixed(2) + ' Hz';
+    const lines = md.map((q, k) => 'mode ' + (k + 1) + ' · (m, n) = (' + q.m + ', ' + q.n + ') · A = ' + q.amp.toFixed(2) +
+      ' · f' + sub(k + 1) + ' = ' + fx(f[k]) + ' (' + hz(f[k]) + ')');
+    lines.push('c = ' + G.c.toFixed(2) + (circ ? ' · drum, R = 0.5' : ' · square, side 1') + ' · damping γ = 0 (lossless)');
+    if (f.length > 1) {
+      const fb = Math.abs(f[0] - f[1]);
+      lines.push('beat |f₁ − f₂| = ' + fx(fb) + ' (' + hz(fb) + ', period ' + (fb > 0 ? (1 / (fb * rate)).toFixed(1) + ' s' : '∞') + ')');
+    }
+    lines.push('t = ' + sim.t.toFixed(2) + ' · E/E₀ = ' + (E0 > 0 ? (sim.energy() / E0).toFixed(4) : '1'));
+    saverLabel({
+      title: circ ? 'Drum membrane · two modes' : 'Square membrane · two modes',
+      sub: 'clamped edge · ' + GRID + ' × ' + GRID + ' leapfrog grid',
+      lines,
+      eq: circ
+        ? ['∂²u/∂t² = c²∇²u,   u = 0 at r = R', 'u = Σ Aₖ Jₘ(k r) cos(mθ) cos(ωₖ t)', 'k = jₘ,ₙ / R,   ω = c k,   f = ω/2π']
+        : ['∂²u/∂t² = c²∇²u,   u = 0 on the edge', 'u = Σ Aₖ sin(mₖπx) sin(nₖπy) cos(ωₖ t)', 'ω = cπ√(m² + n²),   f = ω/2π'],
+    });
+  }
   window.snSaver = {
+    exit() { saverLabel = null; clearInterval(saverTimer); saverTimer = 0; },
     enter(o) {
       const calm = o && o.calm != null ? o.calm : 0.7, seed = (o && o.seed) >>> 0;
       document.documentElement.classList.add('sn-saver');
@@ -594,6 +629,9 @@
       drawLegend();
       view.theta = VIEW0.theta + (seed % 628) / 100; view.phi = VIEW0.phi; view.zoom = 0.85;
       saverSpin = 0.04 * (1 - 0.5 * calm);
+      saverLabel = o && o.labels !== false && typeof o.label === 'function' ? o.label : null;
+      clearInterval(saverTimer); saverPlate();
+      if (saverLabel) saverTimer = setInterval(saverPlate, 1000);
       return { canvas, warmupMs: 500 };
     },
   };
