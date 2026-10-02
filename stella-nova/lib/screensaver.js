@@ -106,9 +106,18 @@ function allPages() {
 function defaultKeys() {
   return allPages().filter(p => CAT.pages[p.key] ? CAT.pages[p.key].default : (p.tier >= 1 && p.tier <= 2)).map(p => p.key);
 }
+// S.pages is a snapshot of the ticked boxes. A page that becomes a default
+// after that snapshot is not in it, so add each default that the snapshot
+// did not know (S.seenDefaults). A default that the user unticked stays off.
 function chosenKeys() {
   const known = new Set(allPages().filter(p => p.state !== 'no').map(p => p.key));
-  return (S.pages || defaultKeys()).filter(k => known.has(k));
+  const defs = defaultKeys();
+  let keys = S.pages || defs;
+  if (S.pages) {
+    const seen = new Set(S.seenDefaults || []);
+    keys = keys.concat(defs.filter(k => !seen.has(k) && !keys.includes(k)));
+  }
+  return keys.filter(k => known.has(k));
 }
 
 // ── key combination ────────────────────────────────────────────────────────
@@ -297,6 +306,7 @@ function buildMenu() {
   function sync() {
     const keys = boxes().filter(b => b.checked).map(b => b.value);
     S.pages = keys;
+    S.seenDefaults = defaultKeys();
     m.querySelectorAll('[data-o]').forEach(o => { o.textContent = units[o.dataset.o](S[o.dataset.o]); });
     const total = keys.length * S.seconds;
     m.querySelector('.sum').textContent = keys.length ? `${keys.length} pages · ${Math.round(total / 60)} min a pass${S.record ? ' · recording' : ''}` : 'Pick at least one page.';
