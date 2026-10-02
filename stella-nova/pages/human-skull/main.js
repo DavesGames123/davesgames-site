@@ -32,6 +32,7 @@
 //    function frame ............ the loop
 //    window.snSaver ............ screensaver tour for lib/screensaver.js
 //    function saverPlate ....... screensaver plate: layout or the isolated bone
+//    function partAnchor ....... the bone (landmarks) or the layout on screen
 // ============================================================================
 import * as THREE from 'three';
 import { createStage, KEY_DIR } from './stage.js';
@@ -665,16 +666,61 @@ function saverPlate() {
     const m = parts[S.iso].m, G = GROUPS[m.group];
     const side = m.side === 'mid' ? 'midline' : m.side;
     const pair = m.pair ? parts.find(q => q.m.key === m.pair) : null;
-    const lines = [m.latin, `${G.label} · ${side}` + (pair ? ` · pairs with the ${pair.m.name.toLowerCase()}` : ''), m.fact];
-    if (m.ext) lines.push(`Mesh ${m.ext.map(v => Math.round(v)).join(' × ')} mm · ${m.fma}`);
-    return { title: m.name, sub: `Human skull · part ${S.iso + 1} of ${parts.length}`, lines };
+    // Parameters: the mesh size and area from skull.json. The page has no
+    // equations, so the plate has no TeX.
+    const params = [{ name: 'group, side', value: `${G.label}, ${side}` }];
+    if (m.ext) params.push({ name: 'mesh size', value: m.ext.map(v => Math.round(v)).join(' × ') + ' mm' });
+    if (m.area) params.push({ name: 'surface area', value: Math.round(m.area / 100) + ' cm²' });
+    if (m.fma) params.push({ name: 'FMA', value: m.fma });
+    const lines = [m.latin + (pair ? `, pairs with the ${pair.m.name.toLowerCase()}` : '') + '.', m.fact];
+    return { title: m.name, sub: `Human skull · part ${S.iso + 1} of ${parts.length}`, params, lines, anchor: partAnchor };
   }
   const n = {};
   for (const p of parts) n[p.m.group] = (n[p.m.group] || 0) + 1;
-  const counts = Object.keys(GROUPS).filter(g => n[g]).map(g => `${GROUPS[g].short} ${n[g]}`).join(' · ');
+  const params = Object.keys(GROUPS).filter(g => n[g]).slice(0, 5).map(g => ({ name: GROUPS[g].label.toLowerCase(), value: String(n[g]) }));
   const open = S.e > 0.01;
   return { title: open ? `Human skull · ${ARR[S.arr].label}` : 'Human skull', sub: `${parts.length} parts · BodyParts3D meshes`,
-    lines: [counts, open ? ARR[S.arr].blurb : 'Reconstructed: every part back in place.'] };
+    params, lines: [open ? ARR[S.arr].blurb : 'Reconstructed: every part back in place.'], anchor: partAnchor };
+}
+// The subject on screen, for the plate leader. With a bone isolated, the
+// subject is that bone: its landmarks are the mesh vertices furthest along
+// ±x, ±y and ±z (found once per part, in the mesh frame) and its centre,
+// through mesh.matrixWorld and the stage camera (with its view offset) to
+// page px. The radius holds the landmarks. Else the subject is the whole
+// skull or layout: the centre of the box round all parts, a radius that
+// holds each part centre plus half its size, and the eight largest parts as
+// key points.
+const lmv = new THREE.Vector3();
+function partLandmarks(p) {
+  if (p.lm) return p.lm;
+  const a = p.mesh.geometry.attributes.position, best = [0, 0, 0, 0, 0, 0], val = [Infinity, -Infinity, Infinity, -Infinity, Infinity, -Infinity];
+  for (let i = 0; i < a.count; i++) for (let k = 0; k < 3; k++) {
+    const v = a.getComponent(i, k);
+    if (v < val[2 * k]) { val[2 * k] = v; best[2 * k] = i; }
+    if (v > val[2 * k + 1]) { val[2 * k + 1] = v; best[2 * k + 1] = i; }
+  }
+  return (p.lm = best.map(i => new THREE.Vector3(a.getX(i), a.getY(i), a.getZ(i))));
+}
+function partAnchor() {
+  if (!parts.length || !stage) return null;
+  const b = canvas.getBoundingClientRect(), cam = stage.camera;
+  const P = v => { lmv.copy(v).project(cam); return lmv.z < 1 ? { x: b.left + (lmv.x + 1) / 2 * b.width, y: b.top + (1 - lmv.y) / 2 * b.height } : null; };
+  if (S.iso >= 0) {
+    const p = parts[S.iso], c = P(p.mesh.getWorldPosition(new THREE.Vector3())); if (!c) return null;
+    const pts = partLandmarks(p).map(v => P(v.clone().applyMatrix4(p.mesh.matrixWorld))).filter(Boolean);
+    let r = 0; for (const q of pts) r = Math.max(r, Math.hypot(q.x - c.x, q.y - c.y));
+    return { x: c.x, y: c.y, r, pts: [c, ...pts].slice(0, 8) };
+  }
+  const w = new THREE.Vector3(), cs = [];
+  for (const p of parts) { const q = P(p.mesh.getWorldPosition(w)); if (!q) continue;
+    const e = P(w.clone().addScaledVector(cam.up, 0.5 * p.size * (p.mesh.getWorldScale(lmv.clone()).x || 1))); cs.push({ q, h: e ? Math.hypot(e.x - q.x, e.y - q.y) : 0, s: p.size }); }
+  if (!cs.length) return null;
+  // the box centre, not the mean: 28 teeth would pull a mean to the teeth
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const o of cs) { x0 = Math.min(x0, o.q.x - o.h); x1 = Math.max(x1, o.q.x + o.h); y0 = Math.min(y0, o.q.y - o.h); y1 = Math.max(y1, o.q.y + o.h); }
+  const x = (x0 + x1) / 2, y = (y0 + y1) / 2;
+  let r = 0; for (const o of cs) r = Math.max(r, Math.hypot(o.q.x - x, o.q.y - y) + o.h);
+  return { x, y, r, pts: cs.sort((m, n2) => n2.s - m.s).slice(0, 8).map(o => o.q) };
 }
 window.snSaver = {
   enter(o = {}) {
