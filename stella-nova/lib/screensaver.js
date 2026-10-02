@@ -157,7 +157,7 @@ body.sn-saver-on.sn-saver-nocursor, body.sn-saver-on.sn-saver-nocursor * { curso
 #sn-saver-label.on { opacity: .92; transform: none; }
 #sn-saver-label b { display: block; font-weight: 500; font-size: 1.05rem; color: #fff; }
 #sn-saver-label i { display: block; font-style: normal; font: 500 .66rem/1.5 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: var(--c, #8ec5ff); margin-top: 2px; }
-#sn-saver-label p { font-size: .82rem; line-height: 1.45; color: #b9c7db; margin-top: 6px; }
+#sn-saver-label p { font-size: .82rem; line-height: 1.45; color: #b9c7db; margin-top: 6px; white-space: pre-wrap; }
 #sn-saver-label code { display: block; font: 400 .92rem/1.5 'IBM Plex Mono', var(--f-mono, monospace); color: #eef3fb; margin-top: 6px; white-space: pre-wrap; }
 @media (max-width: 760px) { #sn-saver-label { left: 16px; right: 16px; bottom: 16px; max-width: none; } }
 #sn-saver-hud { position: fixed; right: 18px; top: 14px; z-index: 9001; font: 500 .7rem/1.4 var(--f-mono, monospace); color: #9fb3d1; background: rgba(8,10,16,.7); border: 1px solid rgba(150,200,255,.18); border-radius: 8px; padding: 6px 10px; pointer-events: none; }
