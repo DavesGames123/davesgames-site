@@ -55,6 +55,7 @@ export const S = {
   layoutMode: 'auto', ui: 1,
   frozen: false,         // the test hook stops the sim with this
   dragFraction: false,
+  veil: 0,               // 0..1: the screensaver fade to the canvas colour
 };
 
 export let gpu = null;

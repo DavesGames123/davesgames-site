@@ -40,6 +40,7 @@
 //   controls.js -- apply, resetView, uiZoom, onKey          [app.rs apply, main.rs window_event]
 //   input.js    -- onDown / onMove / onUp / onWheel, wireSheet, wire
 //   hook.js     -- installHook: window.__origami, the test hook the headless check drives
+//   saver.js    -- installSaver: window.snSaver, the screensaver autopilot (lib/screensaver.js)
 
 import * as patterns from './patterns.js';
 import { initGpu } from './gpu.js';
@@ -51,6 +52,7 @@ import { render } from './app/draw.js';
 import { uiZoom } from './app/controls.js';
 import { wire } from './app/input.js';
 import { installHook } from './app/hook.js';
+import { installSaver } from './app/saver.js';
 import { $, S, gpu, setGpu, load } from './app/state.js';
 
 let last = performance.now();
@@ -81,6 +83,7 @@ function frame(now) {
 }
 
 installHook();
+installSaver();
 
 // ── boot ────────────────────────────────────────────────────────────────────
 async function boot() {

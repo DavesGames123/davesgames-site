@@ -11,7 +11,7 @@
 //   disc / ring     -- the vertex dot and the mark ring
 //   style2d         -- crease colour and width by kind
 //   draw2d / draw3d -- the two panes
-//   render          -- measure, draw both panes, submit
+//   render          -- measure, draw both panes, the screensaver veil, submit
 
 import { Assignment } from '../model.js';
 import { reportOk } from '../foldability.js';
@@ -182,5 +182,10 @@ export function draw3d() {
 export function render() {
   measure();
   const p2 = draw2d(), p3 = draw3d();
+  // The screensaver fade: a veil of the canvas colour over both panes.
+  if (S.veil > 0) {
+    const c = [th.canvas[0], th.canvas[1], th.canvas[2], Math.min(1, S.veil)];
+    for (const p of [p2, p3]) { const r = p.rect; tri(p.over, [r[0], r[1]], [r[2], r[1]], [r[2], r[3]], c); tri(p.over, [r[0], r[1]], [r[2], r[3]], [r[0], r[3]], c); }
+  }
   gpu.frame(th.canvas, [p2, p3]);
 }
