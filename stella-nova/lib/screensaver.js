@@ -50,6 +50,9 @@
 (function () {
 'use strict';
 if (window.snScreensaver) return;
+// This script's own URL (lib/screensaver.js): plate fonts and sci-math
+// resolve against it, not against the page that loaded the script.
+const SELF = (document.currentScript && document.currentScript.src) || new URL('lib/screensaver.js', document.baseURI).href;
 
 const CAT = window.SN_SAVER_CATALOG || { pages: {}, tiers: {} };
 // v2: shuffle became the default; a new key drops older saved choices.
@@ -508,14 +511,14 @@ const PLATE_PHONE = matchMedia('(max-width: 760px), (max-height: 520px)');
 const texCache = new Map();
 let sciMath = null;
 function loadSciMath() {
-  if (!sciMath) sciMath = import(new URL('lib/sci-math.js', document.baseURI).href).catch(() => null);
+  if (!sciMath) sciMath = import(new URL('sci-math.js', SELF).href).catch(() => null);
   return sciMath;
 }
 function plateFonts() {
   if (document.getElementById('sn-plate-fonts')) return;
   const l = document.createElement('link');
   l.id = 'sn-plate-fonts'; l.rel = 'stylesheet';
-  l.href = new URL('vendor/fonts/inter+stix-two-text.be9b8ad1.css', document.baseURI).href;
+  l.href = new URL('../vendor/fonts/inter+stix-two-text.be9b8ad1.css', SELF).href;
   document.head.appendChild(l);   // appended at run time, so it does not block the shell
 }
 // The leader overlay is SVG, so it needs the SVG namespace (el() makes HTML).
