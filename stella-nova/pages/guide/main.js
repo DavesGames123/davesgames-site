@@ -110,13 +110,26 @@
         lastPlate = now;
         var sec = cur.el.closest('section.ch'), status = txt(cur.el.querySelector('.fig-status'));
         if (!sec) {
-          opts.label({ title: txt($('.hero h1')), sub: txt($('.hero .kick')), lines: [txt($('.hero .lead'))] });
+          opts.label({ title: txt($('.hero h1')), sub: txt($('.hero .kick')), lines: [txt($('.hero .lead'))], anchor: boardAnchor });
           return;
         }
+        // The shell plate takes at most two short notes: the lead and the
+        // figure status. The guide has no equations, so there is no TeX.
         var lines = [txt(sec.querySelector('.lead'))];
-        sec.querySelectorAll('.notes li').forEach(function (li) { lines.push('· ' + txt(li)); });
         if (status) lines.push('Figure: ' + status);
-        opts.label({ title: txt(sec.querySelector('h2')), sub: 'Station guide · lesson ' + txt(sec.querySelector('.num')), lines: lines });
+        opts.label({ title: txt(sec.querySelector('h2')), sub: 'Station guide, lesson ' + txt(sec.querySelector('.num')), lines: lines, anchor: boardAnchor });
+      }
+      // The figure on screen: frame() draws the board canvas at the centre
+      // of #sv-cv, so its CSS size is its device size over the #sv-cv scale.
+      // The radius is half the longer side. The key points are the midpoints
+      // of the four board edges, so the leader ends on the board edge.
+      // A board that covers 80 percent of the window both ways fills it:
+      // null, so the plate goes to the corner.
+      function boardAnchor() {
+        if (!cur || !cur.b.cv.width || !sv.width) return null;
+        var k = innerWidth / sv.width, w = cur.b.cv.width * k, h = cur.b.cv.height * k, x = innerWidth / 2, y = innerHeight / 2;
+        if (w > 0.8 * innerWidth && h > 0.8 * innerHeight) return null;
+        return { x: x, y: y, r: Math.max(w, h) / 2, pts: [{ x: x, y: y - h / 2 }, { x: x, y: y + h / 2 }, { x: x - w / 2, y: y }, { x: x + w / 2, y: y }] };
       }
       function show(k, now) {
         if (cur) cur.b.cv.parentNode.style.cssText = '';
