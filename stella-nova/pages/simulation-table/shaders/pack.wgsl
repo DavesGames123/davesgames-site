@@ -416,8 +416,39 @@ fn inferno(t: f32) -> vec3f {
 }
 // the square state covers the surface (crop, not letterbox), so a wide
 // inspector or saver canvas does not smear the clamped edge texels sideways
+//
+// SMOOTH PRESENT. The grid is N x N texels at all surface sizes. A 1920 x 1080
+// saver shows each texel as an 8 x 8 pixel block, and a tile shows it as 2 x 2.
+// A continuous field (modes 3, 4, 5, 6, 9, 12, 13, 16: reaction-diffusion,
+// height, flow, waves, heat) is smooth at the grid scale, so cell_cubic
+// rebuilds it per pixel with a Catmull-Rom filter. The result is clamped to
+// the four nearest texels, so a sharp edge gets no ring. The cost is 16 texel
+// loads per pixel and does not depend on N. A discrete automaton (modes 0, 1,
+// 2, 7, 8, 10, 11, 14, 15) keeps the nearest texel, because its cells are real.
+fn smooth_mode(m: i32) -> bool { return m == 3 || m == 4 || m == 5 || m == 6 || m == 9 || m == 12 || m == 13 || m == 16; }
+fn ld_p(i: vec2i) -> vec4f { return textureLoad(pTex, clamp(i, vec2i(0), vec2i(N - 1)), 0); }
+// Catmull-Rom weights of the texels at offsets -1, 0, 1, 2 for a fraction t
+fn cr_w(t: f32) -> vec4f {
+    let t2 = t * t; let t3 = t2 * t;
+    return vec4f(-0.5 * t3 + t2 - 0.5 * t, 1.5 * t3 - 2.5 * t2 + 1.0, -1.5 * t3 + 2.0 * t2 + 0.5 * t, 0.5 * t3 - 0.5 * t2);
+}
+fn cell_cubic(uv: vec2f) -> vec4f {
+    let g = uv * f32(N) - 0.5; let i = vec2i(floor(g)); let f = g - floor(g);
+    var wx = cr_w(f.x); var wy = cr_w(f.y);
+    var acc = vec4f(0.0); var lo = vec4f(3.0e38); var hi = vec4f(-3.0e38);
+    for (var y: i32 = 0; y < 4; y++) {
+        var row = vec4f(0.0);
+        for (var x: i32 = 0; x < 4; x++) {
+            let s = ld_p(i + vec2i(x - 1, y - 1)); row += s * wx[x];
+            if ((x == 1 || x == 2) && (y == 1 || y == 2)) { lo = min(lo, s); hi = max(hi, s); }
+        }
+        acc += row * wy[y];
+    }
+    return clamp(acc, lo, hi);
+}
 fn cell_state(fp: vec2f) -> vec4f {
     let pos = fp / pu.pixelScale; let uv = (pos - 0.5 * pu.size) / max(max(pu.size.x, pu.size.y), 1.0) + 0.5;
+    if (smooth_mode(i32(pu.reset))) { return cell_cubic(uv); }
     return textureLoad(pTex, clamp(vec2i(uv * f32(N)), vec2i(0), vec2i(N - 1)), 0);
 }
 // mode from pu.k.w set by the page: 0 binary+age, 1 states/k rainbow, 2 signed, 3 rd (v channel), 4 height, 5 rho/vel, 6 multi(x,y)
