@@ -35,8 +35,18 @@
 //  recording has it). PAGE.leave(t) runs on the cell that goes off.
 //  A page with no spec.saver gets the generic screensaver mode.
 //
+//  SAVER LABEL: when a saver cell goes on, the engine calls opts.label (the
+//  shell plate, lower right) with the cell name, its family, the
+//  species text, the named knob values, the generator values (tempo and so
+//  on) and the cell equation. The equation is cell.eq in spec.json (a string
+//  or a list of lines, plain Unicode maths). With no cell.eq, the engine uses
+//  spec.saver.eq[family]. The engine sends the label again each second with
+//  the same title, so the live values change in place. PAGE.saverLabel(t,
+//  info), if the PAGE has it, can change info before it goes to the shell.
+//
 //  grep -n targets: "function frame", "function sizeSurf", "function makeSurface",
-//  "function saverEnter", "function saverStep", "function saverFade", "saver.t === t"
+//  "function saverEnter", "function saverStep", "function saverFade", "saver.t === t",
+//  "function saverLabel"
 // ============================================================================
 import { TOUCH, HOVER_LABEL, fitTable, playhead, maxDpr, initMobile } from './table-mobile.js';
 
@@ -343,7 +353,9 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
     const canvas = document.createElement('canvas'); canvas.className = 'tbl-saver-canvas';
     document.body.appendChild(canvas); document.documentElement.classList.add('tbl-saver');
     close();
-    saver = { t, canvas, style, surf: makeSurface(canvas), dpr: cfg.dpr || 2 };
+    saver = { t, canvas, style, surf: makeSurface(canvas), dpr: cfg.dpr || 2, opts };
+    saverLabel();
+    if (typeof opts.label === 'function' && opts.labels !== false) saver.labelTimer = setInterval(saverLabel, 1000);
     if (cfg.cycle && list.length > 1) {
       // seeded order that starts at the first cell; fade pass: out = canvas * (1 - a)
       let r = (opts.seed >>> 0) || 1; const rnd = () => { r = (Math.imul(r, 1664525) + 1013904223) >>> 0; return r / 4294967296; };
@@ -373,12 +385,30 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
         const j = (s.i + k) % s.order.length, c = s.order[j];
         if (!c.pipeline) continue;
         if (PAGE.leave) PAGE.leave(s.t);
-        s.i = j; s.t = c; saverCell(c, s.opts); break;
+        s.i = j; s.t = c; saverCell(c, s.opts); saverLabel(); break;
       }
       s.t0 = now;
     }
     const u = Math.min(now - s.t0, s.per - (now - s.t0)) / s.fadeS;
     s.dim = 1 - sstep(u);
+  }
+  // The plate for the saver cell: name, family, species, live knob and
+  // generator values, and the equation (cell.eq, else spec.saver.eq[family]).
+  // A second call with the same title swaps the text in place in the shell.
+  function saverLabel() {
+    const s = saver;
+    if (!s || !s.opts || typeof s.opts.label !== 'function' || s.opts.labels === false) return;
+    const c = s.t.s, eqs = c.eq || ((SPEC.saver.eq || {})[c.family]) || [];
+    const knobs = c.knobs.map((k, i) => k ? `${k} ${s.t.knobs[i].toFixed(2)}` : '').filter(Boolean);
+    const gens = GENS.map(g => `${String(g.title || g.id).split(' · ')[0].toLowerCase()} ${g.unit(G[g.id])}`);
+    let info = {
+      title: c.name.replace(/_/g, ' ').replace(/^./, m => m.toUpperCase()),
+      sub: c.family,
+      lines: [c.species, knobs.length ? 'knobs  ' + knobs.join(' · ') : '', gens.join(' · ')].filter(Boolean),
+      eq: Array.isArray(eqs) ? eqs : [eqs],
+    };
+    if (PAGE.saverLabel) info = PAGE.saverLabel(s.t, info) || info;
+    try { s.opts.label(info); } catch (_) {}
   }
   function saverFade(enc) {
     const s = saver, a = s.dim;
@@ -388,6 +418,7 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
   }
   function saverExit() {
     if (!saver) return;
+    clearInterval(saver.labelTimer);
     saver.canvas.remove(); saver.style.remove(); document.documentElement.classList.remove('tbl-saver'); saver = null;
   }
   requestAnimationFrame(frame);
