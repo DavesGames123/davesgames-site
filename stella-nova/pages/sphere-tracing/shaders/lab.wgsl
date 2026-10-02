@@ -38,7 +38,7 @@ struct LabU {
     pn: vec4f,      // plane normal, offset
     pu: vec4f,      // plane u axis, show plane in 3D (0 or 1)
     pv: vec4f,      // plane v axis, omega for the compare view
-    scene: vec4f,   // twist, repeat period, repeat count, unused
+    scene: vec4f,   // twist, repeat period, repeat count, fade to black (screensaver; 0 = none)
     prims: array<Prim, 8>,
 };
 @group(0) @binding(0) var<uniform> u: LabU;
@@ -322,7 +322,7 @@ fn render(ro: vec3f, rd: vec3f, mode: i32, w: f32, pixel: f32) -> vec3f {
     if (mode == 6) { col = mix(col, vec3f(1.0), 1.0 - smoothstep(0.0, 1.5, abs(fp.x - size.x * 0.5))); }
     col = pow(col, vec3f(0.92));
     let vig = 1.0 - 0.25 * dot(uv * 0.6, uv * 0.6);
-    return vec4f(clamp(col * vig, vec3f(0.0), vec3f(1.0)), 1.0);
+    return vec4f(clamp(col * vig * (1.0 - u.scene.w), vec3f(0.0), vec3f(1.0)), 1.0);
 }
 
 // ── the slice view ──────────────────────────────────────────────────────────

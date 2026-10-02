@@ -22,6 +22,7 @@
 //    function layout .............. pane geometry around the panel and the dock
 //    function buildEditor ......... chips and the editor of one primitive
 //    function initGPU / function frame
+//    window.snSaver ............... screensaver hook: 3D view, slow orbit, faded presets
 // ============================================================================
 import * as SC from './scene.js';
 import { mountEquations } from './equations.js';
@@ -84,7 +85,7 @@ function packUniforms(now) {
   U.set([...Pl.n, Pl.off], 24);
   U.set([...Pl.u, S.showPlane ? 1 : 0], 28);
   U.set([...Pl.v, S.omega], 32);
-  U.set([S.twist, S.period, S.rep, 0], 36);
+  U.set([S.twist, S.period, S.rep, S.fade || 0], 36);
   S.prims.forEach((p, i) => U.set([...p.pos, p.type, ...p.size, p.op, p.k, p.color, p.rot, 0], 40 + i * 12));
 }
 
@@ -485,6 +486,52 @@ bind3d(); bindSlice();
 new ResizeObserver(sizeCanvases).observe($('panes'));
 layout();
 window.__lab = { S, loadPreset, setMode, setRelax, layout, stats: () => lastStats, trace: () => lastTrace, frames: () => frames, handle: () => handle.at, dirty, ready: false };
+
+// Screensaver hook for the shell (lib/screensaver.js). enter() hides the GUI,
+// the slice pane and the 2D overlays, so the 3D view (with the slice plane
+// painted in it) fills the window. The camera orbits slowly and the plane
+// drifts. Every seconds/4 (at least 8 s) the next preset and a calm mode
+// (shaded, AO, soft shadow) come in behind a fade to black in the shader
+// (S.fade, uniform scene.w). calm (1 = slowest) sets the speeds; opts.seed
+// sets the preset order. No exit(): the shell reloads the page on stop.
+window.snSaver = {
+  enter(o = {}) {
+    const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
+    let sd = (o.seed >>> 0) || 1;
+    const rnd = () => { sd = (sd + 0x6D2B79F5) >>> 0; let t = sd; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const st = document.createElement('style');
+    st.textContent = '.topbar,#panel,#dock,#gear,.plabel,.pread,.phint,#paneSlice,.ov,#nogpu{display:none!important}'
+      + '#panes{grid-template-columns:1fr!important;grid-template-rows:1fr!important;gap:0!important}#view{cursor:none}';
+    document.head.appendChild(st);
+    $('panel').classList.remove('open', 'full'); document.body.classList.add('panel-closed');
+    layout();
+    const names = Object.keys(SC.PRESETS);
+    for (let i = names.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [names[i], names[j]] = [names[j], names[i]]; }
+    const MODES_CALM = [0, 4, 0, 5];
+    const hold = Math.max(8, (o.seconds || 60) / 4) * 1000, FADE = 0.9;
+    const spin = 0.12 * (1 - 0.6 * calm), drift = 0.2 * (1 - 0.5 * calm);
+    let n = 0, yaw = 0.5, base = 0, dist = 5.6, phase = 'in', since = performance.now(), last = since, t = 0;
+    const next = () => {
+      loadPreset(names[n % names.length]);
+      dist = S.cam.dist; base = S.offset;
+      S.mode = MODES_CALM[n % MODES_CALM.length]; S.relax = false; n++;
+    };
+    next(); S.fade = 1;
+    const tick = now => {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+      yaw += dt * spin;
+      S.cam = { yaw, pitch: 0.32 + 0.1 * Math.sin(t * 0.07), dist };
+      S.offset = base + 0.45 * Math.sin(t * drift);
+      if (phase === 'show' && now - since > hold) phase = 'out';
+      else if (phase === 'out') { S.fade = Math.min(1, S.fade + dt / FADE); if (S.fade >= 1) { next(); phase = 'in'; } }
+      else if (phase === 'in') { S.fade = Math.max(0, S.fade - dt / FADE); if (S.fade <= 0) { phase = 'show'; since = now; } }
+      dirty(false);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    return { canvas: $('view'), warmupMs: 1500 };
+  },
+};
 try { await initGPU(); window.__lab.ready = true; } catch (e) { $('nogpu').hidden = false; console.error(e); }
 dirty();
 raf = requestAnimationFrame(frame);
