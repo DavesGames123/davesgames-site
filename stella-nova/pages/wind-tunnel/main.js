@@ -44,6 +44,7 @@
 //    grep -n 'function buildUI'       panel, dock, sheet
 //    grep -n 'function bindGestures'  drag, pinch, wheel, double tap
 //    grep -n 'window.snSaver'         screensaver hook and autopilot
+//    grep -n 'function saverPlate'    screensaver label plate
 // ============================================================================
 
 import { SHAPES, COMMON, FLUIDS, defaults, commonDefaults, packShape } from './shapes.js';
@@ -417,9 +418,9 @@ function frame(t) {
 }
 
 // ------------------------------------------------------------- readouts
-let lastStamp = -1, cdS = NaN, clS = NaN, readTick = 0;
+let lastStamp = -1, cdS = NaN, clS = NaN, readTick = 0, dragN = NaN;
 const trace = [];
-function resetTrace() { trace.length = 0; cdS = NaN; clS = NaN; lastStamp = -1; }
+function resetTrace() { trace.length = 0; cdS = NaN; clS = NaN; dragN = NaN; lastStamp = -1; }
 
 function readForces() {
   const st = engine.stats;
@@ -450,6 +451,7 @@ function readForces() {
   const V = flowInfo.V, rho = RHO[G.fluid];
   const area2 = G.mode === '2d' ? aSum * lenScale : aSum * lenScale * lenScale;
   const F = cdS * 0.5 * rho * V * V * area2;
+  dragN = F;
   $('cdV').textContent = cdS.toFixed(2);
   $('clV').textContent = clS.toFixed(2);
   $('reV').textContent = sci(flowInfo.Re);
@@ -840,8 +842,42 @@ function bindGestures() {
 // so each change happens at the bottom of a fade to black (f.dim in the
 // engine). The camera orbits slowly and the pitch eases between 0.2 and 0.4.
 // G.rate (1 - 0.5 calm) slows the flow. SAVER is null outside the saver.
+//
+// The label plate (opts.label) names the object and gives the lattice
+// equations that lbm3d.wgsl computes: pull streaming with BGK collision,
+// the second-order equilibrium, the Smagorinsky relaxation time and the
+// momentum-exchange force. The lines give the live Re of applyFlow() and
+// the smoothed C_D, C_L and drag of readForces(). tick() calls saverPlate()
+// every 1 s; a new object gives a new title, so the plate fades with it.
 const SAVER_TOUR = [['cow', 'Spherical cow'], ['car', 'Fastback'], ['airfoil', 'NACA 4412'], ['truck', 'Aero kit'], ['cow', 'Holstein'], ['sphere', 'Ball'], ['car', 'SUV']];
 let SAVER = null;
+function saverPlate() {
+  if (!SAVER || !SAVER.label || !engine || !pk || !flowInfo) return;
+  const s = SHAPES[G.shape], fi = flowInfo;
+  const ok = !isNaN(cdS);
+  const nuLat = U_LAT * pk.refCells / fi.Re, tau = Math.max(0.5 + 3 * nuLat, TAU_MIN);
+  const lines = [
+    `${FLUIDS[G.fluid].label} at ${fmtKmh(speedKmh())} · L = ${pk.realLen.toFixed(2)} m · ν = ${FLUIDS[G.fluid].nu.toExponential(1)} m²/s`,
+    `Re = ${sci(fi.Re)}` + (fi.clamped ? ` · grid Re ${sci(fi.ReGrid)}, eddy model above` : ' · fully on the grid'),
+    ok ? `C_D = ${cdS.toFixed(2)} · C_L = ${clS.toFixed(2)} · drag ${newtons(dragN, false)}` : 'C_D, C_L: the flow is still settling',
+    `grid ${engine.nx} × ${engine.ny} × ${engine.nz} · τ = ${tau.toFixed(4)} · U = ${U_LAT} · step ${engine.steps.toLocaleString()}`,
+  ];
+  try {
+    SAVER.label({
+      title: `${s.label} · ${SAVER.preset}`,
+      sub: 'Lattice Boltzmann, D3Q19 BGK + Smagorinsky',
+      lines,
+      eq: [
+        'fᵢ(x + cᵢ, t + 1) = fᵢ − (fᵢ − fᵢᵉᑫ) / τₑ',
+        'fᵢᵉᑫ = wᵢρ(1 + 3cᵢ·u + 4.5(cᵢ·u)² − 1.5u²)',
+        'τₑ = ½(τ + √(τ² + 0.764 |Πⁿᵉᑫ| / ρ))',
+        'τ = ½ + 3ν_lat,  ν_lat = U·L_cells / Re',
+        'Re = VL/ν',
+        'F = −2Σ(fᵢ − wᵢ)cᵢ,  C_D = F_x / (½ρU²A)',
+      ],
+    });
+  } catch { /* the shell plate is optional */ }
+}
 window.snSaver = {
   enter(opts) {
     const calm = Math.max(0, Math.min(1, +opts.calm || 0));
@@ -857,21 +893,27 @@ window.snSaver = {
     G.streaks = 'rake'; G.field = 0; G.slice = 3; G.paused = false; G.rate = 1 - 0.5 * calm;
     let i = Math.floor(rng() * SAVER_TOUR.length);
     const yaw0 = rng() * 6.283;
+    let presetNow = '';
     const next = () => {
       const [key, preset] = SAVER_TOUR[i];
       i = (i + 1) % SAVER_TOUR.length;
       G.params[key] = Object.assign(defaults(key), SHAPES[key].presets[preset]);
+      presetNow = preset;
       setShape(key);
     };
     next();
     let ph = 'in', pt = 0, tt = 0;
+    let lt = 1;
     SAVER = {
       k: 0,
+      get preset() { return presetNow; },
+      label: opts.labels === false || typeof opts.label !== 'function' ? null : opts.label,
       tick(dt) {
-        pt += dt; tt += dt;
+        pt += dt; tt += dt; lt += dt;
+        if (lt >= 1) { lt = 0; saverPlate(); }
         if (ph === 'in') { SAVER.k = Math.min(1, pt / fade); if (SAVER.k >= 1) { ph = 'show'; pt = 0; } }
         else if (ph === 'show') { if (pt >= show) { ph = 'out'; pt = 0; } }
-        else { SAVER.k = Math.max(0, 1 - pt / fade); if (SAVER.k <= 0) { next(); ph = 'in'; pt = 0; } }
+        else { SAVER.k = Math.max(0, 1 - pt / fade); if (SAVER.k <= 0) { next(); ph = 'in'; pt = 0; lt = 1; } }
         orbit.yaw = yaw0 + tt * 0.05 * (1 - 0.6 * calm);
         orbit.pitch = 0.3 - 0.1 * Math.cos(tt * 0.04);
         orbit.dist = 1; orbit.panY = 0;
