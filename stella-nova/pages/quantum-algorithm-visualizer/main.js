@@ -6,7 +6,7 @@
 import { VS, RT, controls, composer, currentStageFor, stageDuration, stageFrame, totalStackTime } from './core.js';
 import { buildTrace } from './quantum.js';
 import { presetGates, PRESET_N, densityToCell } from './presets.js';
-import { rebuildMeshes, frameCamera, resize, initScene } from './scene.js';
+import { rebuildMeshes, frameCamera, resize, initScene, tickScale } from './scene.js';
 import { updateStack, updateFloor } from './views.js';
 import { drawLens, followPlayhead, revealMode, initLens } from './lens.js';
 import { updateHud, updateHudStatic, initHud } from './hud.js';
@@ -46,9 +46,10 @@ function loadPreset(name){VS.preset=name;RT.initBasis=0;if(PRESET_N[name]){VS.nu
 let last=0,fc=0,ft=0;const TL_FPS=26;
 // Main render loop: advance the playhead (stack stage or floor frame index),
 // update the active view, redraw the score and HUD, sync the scrub slider, run
-// the sampler, then render through the bloom composer.
-function loop(t){requestAnimationFrame(loop);const dt=Math.min((t-last)/1000,0.05);last=t;
-  fc++;ft+=dt;if(ft>=0.5){document.getElementById('st-fps').textContent=Math.round(fc/ft)+' fps';fc=0;ft=0;}
+// the sampler, then render through the bloom composer. In the screensaver the
+// score, HUD and slider are hidden, so the loop skips them (RT.saver).
+function loop(t){requestAnimationFrame(loop);const dt=Math.min((t-last)/1000,0.05);last=t;tickScale(t);
+  if(!RT.saver){fc++;ft+=dt;if(ft>=0.5){document.getElementById('st-fps').textContent=Math.round(fc/ft)+' fps';fc=0;ft=0;}}
   if(RT.trace){
     if(VS.threshDirty){RT.builtStage=-1;RT.layerEndArr=[];RT.edgeEndArr=[];VS.threshDirty=false;}  // re-pack with the new heat cutoff
     const sc=document.getElementById('sl-scrub');
@@ -56,15 +57,15 @@ function loop(t){requestAnimationFrame(loop);const dt=Math.min((t-last)/1000,0.0
       if(VS.playing){VS.stageTime+=dt*VS.speed;if(VS.stageTime>=totalStackTime())VS.stageTime=0;}
       updateStack(dt);
       const stage=currentStageFor(VS.stageTime),sf=stageFrame(stage);
-      drawLens(sf);updateHud(sf);
-      if(document.activeElement!==sc){const f=VS.stageTime/Math.max(1e-6,totalStackTime());sc.value=Math.round(f*100);sc.style.setProperty('--pct',(f*100)+'%');document.getElementById('vl-scrub').textContent=Math.round(f*100)+'%';}
+      if(!RT.saver){drawLens(sf);updateHud(sf);}
+      if(!RT.saver&&document.activeElement!==sc){const f=VS.stageTime/Math.max(1e-6,totalStackTime());sc.value=Math.round(f*100);sc.style.setProperty('--pct',(f*100)+'%');document.getElementById('vl-scrub').textContent=Math.round(f*100)+'%';}
     } else {
       if(VS.playing){VS.frameIndex+=VS.speed*TL_FPS*dt;if(VS.frameIndex>=RT.trace.frames.length)VS.frameIndex=0;}
       const fi=Math.max(0,Math.min(RT.trace.frames.length-1,Math.floor(VS.frameIndex))),frame=RT.trace.frames[fi];
-      updateFloor(frame,dt);drawLens(frame);updateHud(frame);
-      if(document.activeElement!==sc){const f=fi/Math.max(1,RT.trace.frames.length-1);sc.value=Math.round(f*100);sc.style.setProperty('--pct',(f*100)+'%');document.getElementById('vl-scrub').textContent=Math.round(f*100)+'%';}
+      updateFloor(frame,dt);if(!RT.saver){drawLens(frame);updateHud(frame);}
+      if(!RT.saver&&document.activeElement!==sc){const f=fi/Math.max(1,RT.trace.frames.length-1);sc.value=Math.round(f*100);sc.style.setProperty('--pct',(f*100)+'%');document.getElementById('vl-scrub').textContent=Math.round(f*100)+'%';}
     }
-    followPlayhead();
+    if(!RT.saver)followPlayhead();
     if(RT.sampleAnim)updateSampling(dt);
   }
   controls.update();composer.render();}
@@ -93,7 +94,7 @@ window.snSaver={
       '#canvas-wrap,#gl-host{position:fixed!important;inset:0!important;z-index:2147483646}'+
       '#gl{visibility:visible!important;cursor:none!important}';
     document.head.appendChild(st);
-    VS.stepInspect=false;VS.grid2d=false;VS.autoRotate=true;
+    VS.stepInspect=false;VS.grid2d=false;VS.autoRotate=true;RT.saver=true;
     loadPreset(SAVER_PRESETS[Math.abs((o&&o.seed)|0)%SAVER_PRESETS.length]);
     VS.playing=true;VS.speed=2-1.4*calm;
     controls.autoRotate=true;controls.autoRotateSpeed=0.55*(1-0.5*calm);

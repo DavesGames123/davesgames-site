@@ -2,6 +2,7 @@
 // camera framing (frameCamera), viewport (resize/applyAutoOrient/applyMobileLayout),
 // GPU helpers (writeBoxEdges/disposeGroup/edgeColor3), and the init-state picker.
 //   grep -n "function rebuildMeshes" scene.js   grep -n "function frameCamera" scene.js
+//   grep -n "PIXEL_BUDGET" scene.js   (render scale: pixel budget + frame-rate factor)
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { VS, RT, scene, renderer, camera, controls, composer, grp, canvas, PITCH, CUBE, LAYER_GAP, MAXH, BARMAX, dummy, _col, _EH, _EI, ghostsEnabled, maxBuildableStage } from './core.js';
@@ -144,9 +145,41 @@ function applyMobileLayout(W){                              // narrow viewport: 
   else{VS.stepInspect=true;VS.grid2d=true;RT.grid2dDirty=true;RT.last2dLayer=-99;
     const a=document.getElementById('tog-inspect'),b=document.getElementById('tog-grid2d');if(a)a.classList.add('on');if(b)b.classList.add('on');}
 }
+// ── render scale: pixel budget + frame-rate factor ──
+// The GPU cost is the drawing-buffer pixel count times the passes: the scene,
+// the bloom chain and the OutputPass. At dpr 2 a full-screen 1512x982 window
+// was 3024x1964 (5.9 Mpx). The pixel ratio comes from three limits, in order:
+//   1. min(devicePixelRatio, 2)
+//   2. PIXEL_BUDGET drawing-buffer pixels (2560x1440 at dpr 1 still fits)
+//   3. a factor q in [Q_MIN, 1] that the frame rate sets (as lib/render-scale.js)
+// tickScale() counts frames in 1 s windows. Below LOW_FPS, q falls by 0.7 and
+// the ceiling goes to just below the failed level. After 3 windows at HIGH_FPS
+// or more, q rises by 1.2 up to the ceiling. A host resize resets the ceiling.
+const PIXEL_BUDGET=3.7e6,Q_MIN=0.45,LOW_FPS=45,HIGH_FPS=55;
+let rsQ=1,rsCeil=1,rsT0=-1,rsLast=-1,rsN=0,rsWarm=0,rsGood=0;
+function pixelRatioFor(W,H){
+  const dpr=Math.min(window.devicePixelRatio||1,2),cap=Math.sqrt(PIXEL_BUDGET/Math.max(1,W*H*dpr*dpr));
+  return dpr*Math.min(1,cap)*Math.sqrt(rsQ);
+}
 // Match renderer, composer, and camera to the GL host size, then re-apply the
 // auto orientation and mobile layout. Driven by a ResizeObserver on the host.
-function resize(){const w=document.getElementById('gl-host');const W=w.clientWidth||600,H=w.clientHeight||400;renderer.setSize(W,H,false);composer.setSize(W,H);camera.aspect=W/H;camera.updateProjectionMatrix();applyAutoOrient(W,H);applyMobileLayout(window.innerWidth||W);}
+function applySize(){const w=document.getElementById('gl-host');const W=w.clientWidth||600,H=w.clientHeight||400;
+  const pr=pixelRatioFor(W,H);renderer.setPixelRatio(pr);renderer.setSize(W,H,false);composer.setPixelRatio(pr);composer.setSize(W,H);
+  camera.aspect=W/H;camera.updateProjectionMatrix();applyAutoOrient(W,H);applyMobileLayout(window.innerWidth||W);}
+function resize(){rsCeil=1;rsT0=-1;rsN=0;rsGood=0;applySize();}
+// Once per frame with the rAF timestamp. A gap over 250 ms (hidden tab) starts
+// a new window. The first 2 windows are not used (shader compile).
+function tickScale(now){
+  const dt=rsLast<0?0:now-rsLast;rsLast=now;
+  if(dt>250){rsT0=-1;return;}
+  if(rsT0<0){rsT0=now;rsN=0;return;}
+  rsN++;if(now-rsT0<1000)return;
+  const fps=rsN*1000/(now-rsT0);rsT0=now;rsN=0;
+  if(rsWarm<2){rsWarm++;return;}
+  if(fps<LOW_FPS){rsGood=0;if(rsQ>Q_MIN){rsCeil=rsQ*0.9;rsQ=Math.max(Q_MIN,rsQ*0.7);applySize();}}
+  else if(fps>=HIGH_FPS&&rsQ<rsCeil){if(++rsGood>=3){rsGood=0;rsQ=Math.min(rsCeil,rsQ*1.2);applySize();}}
+  else rsGood=0;
+}
 
 /* ════════ init-state picker — hover bottom grid (layer 0) for |b⟩, click to set the start state ════════ */
 // Raycaster and scratch NDC vector for picking cells under the pointer.
@@ -220,4 +253,4 @@ canvas.addEventListener('pointerup',e=>{if(!_downXY)return;const dx=e.clientX-_d
 });
 }
 
-export { setBg, writeBoxEdges, disposeGroup, edgeColor3, rebuildMeshes, buildLabels, frameCamera, applyAutoOrient, applyMobileLayout, resize, ensureInitPicker, updateDiagGuide, hideInitHover };
+export { tickScale, setBg, writeBoxEdges, disposeGroup, edgeColor3, rebuildMeshes, buildLabels, frameCamera, applyAutoOrient, applyMobileLayout, resize, ensureInitPicker, updateDiagGuide, hideInitHover };

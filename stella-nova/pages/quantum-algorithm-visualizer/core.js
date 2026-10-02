@@ -32,12 +32,17 @@ const VS={numQubits:4,gates:[],target:0,control:1,angle:Math.PI/2,seed:24,subste
 // Derived render state. trace: the built simulation. layerStates/layerCell: one
 // entry per layer (state and its ρ cells). builtStage/layerEndArr/edgeEndArr:
 // the append-once cache of which cell/edge instances each layer occupies.
-// initBasis: the chosen start basis state |b⟩ (0 = |0…0⟩).
-const RT={trace:null,layerStates:[],layerCell:[],totalLayers:1,builtStage:-1,layerEndArr:[],edgeEndArr:[],initBasis:0,sampleAnim:null,DIM:8,cellMesh:null,edgeLines:null,edgeBuf:null,floorMesh:null,floorGrid:null,netLines:null,labelGroup:null,sampleMesh:null,histGroup:null,histBars:null,histMarks:null,inspMesh:null,lastInspStep:-99,last2dLayer:-99,grid2dDirty:true};
+// initBasis: the chosen start basis state |b⟩ (0 = |0…0⟩). saver: true while
+// the screensaver plays, so the loop skips the hidden score and HUD.
+const RT={saver:false,trace:null,layerStates:[],layerCell:[],totalLayers:1,builtStage:-1,layerEndArr:[],edgeEndArr:[],initBasis:0,sampleAnim:null,DIM:8,cellMesh:null,edgeLines:null,edgeBuf:null,floorMesh:null,floorGrid:null,netLines:null,labelGroup:null,sampleMesh:null,histGroup:null,histBars:null,histMarks:null,inspMesh:null,lastInspStep:-99,last2dLayer:-99,grid2dDirty:true};
 /* ════════ three.js scene ════════ */
 // Renderer with exact color (no tone mapping); OutputPass later does linear→sRGB.
+// No MSAA on the canvas: the scene draws into the composer's render target,
+// which has no samples, and only the OutputPass quad reaches the canvas. The
+// multisampled canvas cost a full-screen resolve per frame and changed no pixel.
+// scene.js resize() sets the pixel ratio (pixel budget and frame-rate scale).
 const canvas=document.getElementById('gl');
-const renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:false});
+const renderer=new THREE.WebGLRenderer({canvas,antialias:false,alpha:false});
 renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
 renderer.setClearColor(0x0a0d14,1);                  // dark navy-black, matches #canvas-wrap
 renderer.toneMapping=THREE.NoToneMapping;renderer.outputColorSpace=THREE.SRGBColorSpace; // exact colors, no highlight roll-off
