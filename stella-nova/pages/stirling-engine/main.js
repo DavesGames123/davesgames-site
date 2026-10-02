@@ -358,6 +358,47 @@ const start = (location.hash || '').slice(1);
 swapTo(VARIANTS.some(v => v.id === start) ? start : 'gamma');
 requestAnimationFrame(frame);
 
+// ── saver plate anchor ──────────────────────────────────────────────────────
+// The shell's label plate (lib/screensaver.js, "label plate") points at the
+// subject of each tour step. plateAnchor(objs, keys) projects with the page
+// camera (Vector3.project) to page CSS px of the canvas rect:
+//   x, y  the projected centre of the world box of the visible meshes
+//   r     the largest distance from (x, y) to a projected corner of the
+//         local box of a mesh: the circle holds every mesh of the subject
+//   pts   the projected key points (world Vector3) that are on screen
+// It returns null when the subject is not on screen.
+const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
+function plateAnchor(objs, keys = []) {
+  const rc = $('view').getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height) return null;
+  const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
+  const ms = [];
+  PA.box.makeEmpty();
+  for (const ob of objs) if (ob) ob.traverseVisible(m => {
+    if (!m.isMesh || (m.material && m.material.opacity === 0)) return;
+    let b;
+    if (m.isInstancedMesh) { if (!m.boundingBox) m.computeBoundingBox(); b = m.boundingBox; }
+    else { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b = m.geometry.boundingBox; }
+    if (!b || b.isEmpty()) return;
+    ms.push([m, b]); PA.mb.copy(b).applyMatrix4(m.matrixWorld); PA.box.union(PA.mb);
+  });
+  if (PA.box.isEmpty()) return null;
+  const C = px(PA.box.getCenter(PA.c));
+  if (!C) return null;
+  let r = 0;
+  for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
+    PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(q.x - C.x, q.y - C.y));
+  }
+  if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
+  const pts = [];
+  for (const k of keys) { const q = k && px(k); if (q && q.x >= rc.left && q.x <= rc.right && q.y >= rc.top && q.y <= rc.bottom) pts.push(q); }
+  return { x: C.x, y: C.y, r, pts };
+}
+// The world centre of the box of an object: a key point for a part whose
+// origin is not at its middle.
+const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Vector3());
+
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, draws the
 // stage gradient in the scene, and tours: the running engine in section,
@@ -391,14 +432,36 @@ window.snSaver = {
     let order = rnd() < 0.5 ? ['gamma', 'beta'] : ['beta', 'gamma'];
     const canvas = $('view');
     const fmt = (v, n = 2) => v.toFixed(n);
+    // Plate fields. params and TeX share one colour map (RULES): T_c m1,
+    // T_h and Q_h m2, V m3, T_r m4, P m5, θ and α m6. The plain eq lists
+    // stay as the fallback. Anchors: plateAnchor() on the step's parts, with
+    // the part centres as key points.
+    const RULES = [['T_c', 'm1'], ['T_h', 'm2'], ['Q_h', 'm2'], ['V', 'm3'], ['V_h', 'm3'], ['V_c', 'm3'], ['V_r', 'm3'], ['T_r', 'm4'], ['P', 'm5'], ['P_0', 'm5'], ['\\theta', 'm6'], ['\\alpha', 'm6']];
+    const P = (sym, name, value, cls) => ({ sym, name, value, cls });
+    const pT = () => [P('T_h', 'hot end', `${S.Th} K`, 'm2'), P('T_c', 'cold end', `${TC} K`, 'm1')];
+    const pAl = () => P('\\alpha', 'phase angle', `${Math.round(S.phase / D)}°`, 'm6');
+    const pTh = () => P('\\theta', 'crank angle', `${Math.round(S.th / D)}°`, 'm6');
+    const TCARNOT = String.raw`\eta_C = 1 - \frac{T_c}{T_h}`;
+    const TP = String.raw`P = \frac{M}{V_h/T_h + V_r/T_r + V_c/T_c}`;
+    const TW = String.raw`W = \oint P\,dV`;
+    const TY = String.raw`y = r\cos\theta + \sqrt{l^2 - r^2\sin^2\theta}`;
+    const part = id => S.cur.B.parts[id];
+    const an = (ids, keys) => () => {
+      // The whole engine leaves out the base board and the upright: they
+      // carry the engine, and their corners would double the radius.
+      const ps = ids ? ids.map(part).filter(Boolean) : Object.values(S.cur.B.parts).filter(q => q.id !== 'base' && q.id !== 'frame');
+      return plateAnchor(ps.map(q => q.holder), keys.map(part).filter(Boolean).map(q => centreOf(q.holder)));
+    };
+    const MOVERS = ['displacer', 'piston', 'flywheel'];
     const STEPS = [
-      { view: 'three', lab: () => ({ title: `${S.cur.E.g.name}`, sub: 'The Stirling cycle', lines: ['Heat in at the hot cap, out at the cooler', 'The displacer moves the gas; the piston takes the work', `Phase ${Math.round(S.phase / D)}° · Th ${S.Th} K · Tc ${TC} K`], eq: ['η = 1 − Tc/Th = ' + fmt(1 - TC / S.Th)] }) },
-      { view: 'hot', lab: () => ({ title: 'Hot end', sub: 'Heater band, hot cap, displacer', lines: ['The displacer falls: gas moves up to the hot space', 'Warmer gas, higher pressure, same volume', `Heat in per turn ${fmt(S.cyc.Qh, 3)} J`], eq: ['Qh = ∮ P dVh'] }) },
-      { view: 'regen', lab: () => ({ title: 'Regenerator', sub: 'Stacked wire screens', lines: ['Gas going down leaves its heat in the screens', 'Gas coming up takes it back', `Screens from ${S.Th} K at the top to ${TC} K at the base`], eq: ['Tr = (Th − Tc) / ln(Th/Tc) = ' + regenT().toFixed(0) + ' K'] }) },
-      { view: 'exploded', lab: () => ({ title: 'Exploded view', sub: `${S.cur.E.g.name} · ${S.cur.E.g.kind}`, lines: ['Cylinder, cooler, heater and hot cap lift off their axis', 'Displacer, piston and rods come forward', 'The flywheel slides off its shaft'], eq: ['y = r cos θ + √(l² − r² sin² θ)'] }) },
-      { view: 'front', lab: () => ({ title: 'P-V loop', sub: PROC[S.proc].name + ' now', lines: [`Work per turn ${fmt(S.cyc.W, 3)} J`, `Pressure ${fmt(S.cyc.Pmin / 1000, 0)} – ${fmt(S.cyc.Pmax / 1000, 0)} kPa`, `Efficiency ${fmt(S.cyc.eta * 100, 1)}%`], eq: ['W = ∮ P dV', 'P = M / (Vh/Th + Vr/Tr + Vc/Tc)'] }) },
-      { view: 'crank', lab: () => ({ title: 'Crank and flywheel', sub: `Phase angle ${Math.round(S.phase / D)}°`, lines: ['The displacer pin leads the power pin', 'The gas pushes only in expansion', 'The flywheel carries the crank through compression'], eq: ['T = (P − P₀) A dy/dθ'] }) },
+      { view: 'three', lab: () => ({ title: `${S.cur.E.g.name}`, sub: 'The Stirling cycle', params: [...pT(), pAl()], lines: ['Heat in at the hot cap, out at the cooler.', 'The displacer moves the gas; the piston takes the work.'], tex: [TCARNOT, TP], eq: ['η = 1 − Tc/Th = ' + fmt(1 - TC / S.Th)], anchor: an(null, MOVERS) }) },
+      { view: 'hot', lab: () => ({ title: 'Hot end', sub: 'Heater band, hot cap, displacer', params: [pT()[0], P('Q_h', 'heat in per turn', `${fmt(S.cyc.Qh, 3)} J`, 'm2')], lines: ['The displacer falls: gas moves up to the hot space.', 'Warmer gas, higher pressure, same volume.'], tex: [String.raw`Q_h = \oint P\,dV_h`, TP], eq: ['Qh = ∮ P dVh'], anchor: an(['hotcap', 'heater', 'displacer'], ['displacer', 'hotcap']) }) },
+      { view: 'regen', lab: () => ({ title: 'Regenerator', sub: 'Stacked wire screens', params: [...pT(), P('T_r', 'mean screen temperature', `${regenT().toFixed(0)} K`, 'm4')], lines: ['Gas going down leaves its heat in the screens.', 'Gas coming up takes it back.'], tex: [String.raw`T_r = \frac{T_h - T_c}{\ln(T_h / T_c)}`], eq: ['Tr = (Th − Tc) / ln(Th/Tc) = ' + regenT().toFixed(0) + ' K'], anchor: an(['regen', 'matrix'], ['regen']) }) },
+      { view: 'exploded', lab: () => ({ title: 'Exploded view', sub: `${S.cur.E.g.name}, ${S.cur.E.g.kind}`, params: [pAl()], lines: ['Cylinder, cooler, heater and hot cap lift off their axis.', 'Displacer, piston and rods come forward; the flywheel slides off.'], tex: [TY], eq: ['y = r cos θ + √(l² − r² sin² θ)'], anchor: an(null, MOVERS) }) },
+      { view: 'front', lab: () => ({ title: 'P-V loop', sub: PROC[S.proc].name + ' now', params: [P('W', 'work per turn', `${fmt(S.cyc.W, 3)} J`, ''), P('P', 'pressure range', `${fmt(S.cyc.Pmin / 1000, 0)}–${fmt(S.cyc.Pmax / 1000, 0)} kPa`, 'm5'), P('\\eta', 'efficiency', `${fmt(S.cyc.eta * 100, 1)} %`, '')], lines: [], tex: [TW, TP], eq: ['W = ∮ P dV', 'P = M / (Vh/Th + Vr/Tr + Vc/Tc)'], anchor: an(null, ['displacer', 'piston']) }) },
+      { view: 'crank', lab: () => ({ title: 'Crank and flywheel', sub: `Phase angle ${Math.round(S.phase / D)}°`, params: [pAl(), pTh()], lines: ['The displacer pin leads the power pin.', 'The flywheel carries the crank through compression.'], tex: [String.raw`T = (P - P_0)\,A\,\frac{dy}{d\theta}`, TY], eq: ['T = (P − P₀) A dy/dθ'], anchor: an(['crank', 'flywheel', 'dRod', 'piston', 'dispRod'], ['crank', 'flywheel']) }) },
     ];
+    STEPS.forEach(s => { const f = s.lab; s.lab = () => Object.assign(f(), { rules: RULES }); });
     const regenT = () => (S.Th - TC) / Math.log(S.Th / TC);
     let n = 0, ord = 0, stepT = 0, lastLab = '', labT = 0;
     const show = s => { setView(s.view, true); const l = s.lab(); lastLab = JSON.stringify(l); label(l); };
