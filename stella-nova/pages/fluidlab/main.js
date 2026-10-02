@@ -56,6 +56,7 @@
 //      presets ............ "function preset"  scene setups
 //      loop ............... "function loop"    rAF: step + display + FPS
 //      screensaver ........ "window.snSaver"   shell saver hook (lib/screensaver.js)
+//      saver plate ........ "function saverPlate" label plate: equations + live values
 // ============================================================================
 (async () => {
 // Fetch every shader stage in parallel before any GL setup, keyed by path.
@@ -726,13 +727,15 @@ function saverStart(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));let s
   if(R.scene==='wake'||(R.scene==='crossfire'&&rng()<0.5)){const types=['circle','airfoil','star','gear','circle'],t=types[Math.floor(rng()*types.length)];
     const s=createShape(t,CW*(R.scene==='wake'?0.28+rng()*0.1:0.4+rng()*0.2),CH*(0.4+rng()*0.2));const sz=Math.min(CW,CH)*(0.09+rng()*0.06);
     s.w=t==='airfoil'?sz*2.4:sz;s.h=t==='airfoil'?sz*0.55:sz;s.angle=t==='airfoil'?(rng()-0.5)*0.5:rng()*6.283;
-    if(t==='gear'||t==='star')s.spin=(rng()<0.5?-1:1)*(0.08+rng()*0.15)*rate;shapes.push(s);barrierDirty=true;}
+    if(t==='gear'||t==='star')s.spin=(rng()<0.5?-1:1)*(0.08+rng()*0.15)*rate;shapes.push(s);barrierDirty=true;R.obstacle=s;}
   const now=performance.now();
   // Start each slot part way through its life, so the first fades come at
   // different times; the first actors start at full strength.
   for(let i=0;i<R.slots;i++){const A=saverSpawn(R,i,now);const age=A.fade+rng()*(A.life-2*A.fade)*0.7;A.birth=now-age*1000;R.actors.push(A);emitters.push(A.e);}
   R.scene0=R.scene;saverRun=R;
+  R.label=opts.labels===false||typeof opts.label!=='function'?null:opts.label;R.plateT=0;
   let last=now;(function tick(t){if(saverRun!==R)return;R.raf=requestAnimationFrame(tick);const dt=Math.min((t-last)/1000,0.1);last=t;R.hueShift+=dt*rate*1.2;
+    if(R.label&&t-R.plateT>=1000){R.plateT=t;saverPlate(R);}
     const cw=CW,ch=CH;
     for(let j=R.actors.length-1;j>=0;j--){const A=R.actors[j],e=A.e,age=(t-A.birth)/1000;
       if(age>=A.life){R.actors.splice(j,1);const ix=emitters.indexOf(e);if(ix>=0)emitters.splice(ix,1);continue;}
@@ -744,6 +747,23 @@ function saverStart(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));let s
       const c=saverHsl(A.hue+R.hueShift,A.sat,A.lit),g=f*1.05;e.dyeR=c[0]*g;e.dyeG=c[1]*g;e.dyeB=c[2]*g;}
   })(now);
   return R;}
+// The label plate (opts.label) names the scene and gives the equations that
+// step() solves: momentum and incompressibility, then the projection (the
+// pressure Poisson solve by SIM.jacobiIters Jacobi sweeps and the gradient
+// subtraction). The saver sets SIM.viscosity to 0, so step() skips the viscous
+// stage. The lines give the live grid, dt, the jet and vortex count, the
+// obstacle and the dye decay of advect.frag.glsl. The director calls it every 1 s.
+const SAVER_SCENE_TEXT={crossfire:'jets from the four edges aim at the centre',carousel:'jets on a ring push round it',wake:'a jet from the left edge flows past an obstacle',fountain:'jets rise and fall from the top and bottom edges'};
+function saverPlate(R){if(!R.label)return;let jets=0,vort=0;for(const A of R.actors){if(A.e.type==='vortex')vort++;else jets++;}
+  const ob=R.obstacle,nu=SIM.viscosity;
+  const lines=['Scene '+R.scene+': '+SAVER_SCENE_TEXT[R.scene],
+    'grid '+simW+' × '+simH+' · Δt = '+(deltaTime*1000).toFixed(1)+' ms (frame time)',
+    nu>1e-4?'ν = '+nu.toFixed(3)+' (implicit diffusion, '+DIFFUSE_ITERS+' sweeps)':'ν = 0: viscous stage off, Re → ∞ (numerical diffusion only)',
+    'pressure: '+SIM.jacobiIters+' Jacobi sweeps per step',
+    jets+' jet'+(jets===1?'':'s')+(vort?' · '+vort+' vortex stirrer'+(vort===1?'':'s'):'')+(ob?' · obstacle: '+ob.type+(ob.spin?' (spins)':''):''),
+    'dye: semi-Lagrangian advection, × 0.997 per step'];
+  try{R.label({title:'Stable fluids · '+R.scene,sub:'2D incompressible Navier–Stokes (Stam 1999)',lines,
+    eq:['∂u/∂t + (u·∇)u = −∇p/ρ + ν∇²u + f','∇·u = 0','∇²p = (ρ/Δt) ∇·w','u = w − (Δt/ρ) ∇p']});}catch(e){}}
 window.snSaver={async enter(opts){
   await new Promise(r=>setTimeout(r,150));  // let the boot defaultSetup() run first
   const st=document.createElement('style');st.id='saver-style';st.textContent='html.saver #panel,html.saver #mob-btn,html.saver #vec-btn,html.saver #eq-panel,html.saver #status-bar,html.saver .topbar,html.saver #display-canvas{display:none!important}html.saver body::before,html.saver body::after{display:none}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver,html.saver body{cursor:none}';
