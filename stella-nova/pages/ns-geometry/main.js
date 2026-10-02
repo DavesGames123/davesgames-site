@@ -1,8 +1,9 @@
 // ============================================================================
 //  BLOWUP GEOMETRY  ·  figure renderer for the article page
 // ----------------------------------------------------------------------------
-//  One classic script (no modules, no three.js). It renders the display
-//  equations, then draws nine 2D-canvas figures for the essay. Each figure is
+//  One classic script (no three.js). It loads lib/sci-math.js with a dynamic
+//  import() and typesets the display equations and the slider symbols as
+//  MathJax SVG, then draws nine 2D-canvas figures for the essay. Each figure is
 //  wrapped in guarded() so one failing figure cannot take down the rest, and its
 //  error is shown in the page's #errbar.
 //
@@ -27,6 +28,7 @@
 //      colour + palette .... "function inferno"  inferno map and named colours
 //      canvas setup ........ "function setup"    DPR-aware sizing, resize redraw
 //      draw helpers ........ "function arrow"    arrow / label / heat
+//      math colors ......... "GEO_RULES"         TeX symbol -> .m1 to .m6
 //      figure 1 ............ "figure 1"          affine background
 //      figure 2 ............ "figure 2"          one wave, interactive tilt
 //      figure 3 ............ "figure 3"          same rate, gradients apart
@@ -40,9 +42,17 @@
 // ============================================================================
 // any error is shown on the page with its real message (the preview sandbox otherwise reports only "Script error.")
 window.addEventListener('error',e=>{ const b=document.getElementById('errbar'); b.style.display='block'; b.textContent+='error: '+(e.message||'?')+(e.lineno?' @ line '+e.lineno:'')+'\n'; });
-// Render every display equation from its data-tex attribute, falling back to raw
-// TeX if KaTeX is missing or throws.
-document.querySelectorAll('.eq[data-tex]').forEach(el=>{ if(window.katex){ try{ katex.render(el.dataset.tex,el,{displayMode:true,throwOnError:false}); }catch(err){ el.textContent=el.dataset.tex; } } else el.textContent=el.dataset.tex; });
+// GEO_RULES: math colors, [TeX symbol, class] for colorize() in
+// lib/sci-math.js. They are the same as the wave and cascade views of
+// widgets/ns (NS_LAYER): u velocity m1, vorticity omega and its wave
+// amplitudes Omega, varpi m4, temperature theta (vartheta, Theta) m5, the
+// density anomaly of the Boussinesq form, forcing f m6. No other symbol
+// gets a class.
+const GEO_RULES=[['u','m1'],['\\omega','m4'],['\\Omega','m4'],['\\varpi','m4'],['\\theta','m5'],['\\vartheta','m5'],['\\Theta','m5'],['f','m6']];
+// Typeset every [data-tex] element (display equations and inline slider
+// symbols). If MathJax does not load, sci-math.js leaves the TeX text with
+// the class "raw".
+import('../../lib/sci-math.js').then(m=>m.typesetAll(document,GEO_RULES)).catch(err=>console.error('[math]',err));
 // Run one figure's setup inside a try/catch so a failure stays local and is shown.
 function guarded(name,fn){ try{ fn(); }catch(err){ console.error('['+name+']',err); const b=document.getElementById('errbar'); b.style.display='block'; b.textContent+=name+': '+err.message+'\n'; } }
 // inferno colour map: the same degree-6 polynomial fit used by the solver pages.
@@ -60,8 +70,12 @@ function setup(id){ const c=document.getElementById(id); const DPR=Math.min(2,de
 const STATIC=[]; let _rt=null; window.addEventListener('resize',()=>{ clearTimeout(_rt); _rt=setTimeout(()=>{ for(const f of STATIC) f(); },120); });
 // Arrow with a filled head (first argument is the 2D context here).
 function arrow(x,x0,y0,x1,y1,col,w=1.2){ const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy); if(L<0.5) return; x.strokeStyle=col;x.fillStyle=col;x.lineWidth=w; x.beginPath();x.moveTo(x0,y0);x.lineTo(x1,y1);x.stroke(); const h=Math.min(8,L*0.5),ux=dx/L,uy=dy/L; x.beginPath();x.moveTo(x1,y1);x.lineTo(x1-h*ux+h*.5*uy,y1-h*uy-h*.5*ux);x.lineTo(x1-h*ux-h*.5*uy,y1-h*uy+h*.5*ux);x.closePath();x.fill(); }
-// Monospace canvas label.
-function label(x,t,px,py,col=DIM,size=11,al='left'){ x.fillStyle=col; x.font=`${size}px 'JetBrains Mono'`; x.textAlign=al; x.textBaseline='middle'; x.fillText(t,px,py); }
+// pow10: axis label 10^v with Unicode superscript digits, so no TeX caret
+// shows on the canvas.
+const SUPD={'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+const pow10=v=>'10'+String(v).replace(/[-0-9]/g,c=>SUPD[c]);
+// Canvas label in Inter (the sans of lib/sci.css).
+function label(x,t,px,py,col=DIM,size=11,al='left'){ x.fillStyle=col; x.font=`${size}px 'Inter', system-ui, sans-serif`; x.textAlign=al; x.textBaseline='middle'; x.fillText(t,px,py); }
 // Rasterise a scalar field fn over [-1,1]² into an n×n image (divergent inferno)
 // and blit it to (px,py) at size S.
 function heat(x,fn,px,py,S,n=96){ const cv=document.createElement('canvas'); cv.width=n; cv.height=n; const cx=cv.getContext('2d'); const img=cx.createImageData(n,n); const d=img.data; for(let j=0;j<n;j++) for(let i=0;i<n;i++){ const u=-1+2*(i+.5)/n, v=1-2*(j+.5)/n; const c=inferno(0.5+0.5*Math.max(-1,Math.min(1,fn(u,v)))); const k=4*(j*n+i); d[k]=c[0];d[k+1]=c[1];d[k+2]=c[2];d[k+3]=255; } cx.putImageData(img,0,0); x.imageSmoothingEnabled=true; x.drawImage(cv,px,py,S,S); }
@@ -102,7 +116,7 @@ guarded('figure 2',()=>{
 guarded('figure 3',()=>{
 /* 3 growth: same rate, different gradient */
 STATIC.push(function(){ const {x,W,H}=setup('f-growth'); x.clearRect(0,0,W,H); const M=40, gx=M, gy=16, gw=W-2*M, gh=H-40; x.strokeStyle='rgba(252,180,120,0.2)'; x.strokeRect(gx+.5,gy+.5,gw-1,gh-1);
-  const g=0.5, T=12, lo=-4, hi=4; const py=v=>gy+gh-(v-lo)/(hi-lo)*gh; for(let v=lo;v<=hi;v+=2){ x.strokeStyle='rgba(252,180,120,0.08)'; x.beginPath(); x.moveTo(gx,py(v)); x.lineTo(gx+gw,py(v)); x.stroke(); label(x,'10^'+v,gx+gw-4,py(v)-7,DIM,9,'right'); }
+  const g=0.5, T=12, lo=-4, hi=4; const py=v=>gy+gh-(v-lo)/(hi-lo)*gh; for(let v=lo;v<=hi;v+=2){ x.strokeStyle='rgba(252,180,120,0.08)'; x.beginPath(); x.moveTo(gx,py(v)); x.lineTo(gx+gw,py(v)); x.stroke(); label(x,pow10(v),gx+gw-4,py(v)-7,DIM,9,'right'); }
   const plot=(fn,col,w,dash)=>{ x.setLineDash(dash||[]); x.strokeStyle=col; x.lineWidth=w; x.beginPath(); for(let i=0;i<=100;i++){ const t=i/100*T; const v=fn(t); i?x.lineTo(gx+i/100*gw,py(v)):x.moveTo(gx+i/100*gw,py(v)); } x.stroke(); x.setLineDash([]); };
   const seed=1e-4; plot(t=>Math.log10(seed*Math.exp(g*t)),PALE,1); plot(t=>Math.log10(seed*Math.exp(g*t)),ACC,1,[4,3]);
   plot(t=>Math.log10(10*seed*Math.exp(g*t)),PALE,3); plot(t=>Math.log10(1000*seed*Math.exp(g*t)),ACC,3,[6,4]);
@@ -212,14 +226,14 @@ guarded('figure 9',()=>{
   const bind=(id,key,fmt)=>{ const el=document.getElementById(id), vv=document.getElementById(id+'-v'); const upd=()=>{ P[key]=parseFloat(el.value); if(vv) vv.textContent=fmt?fmt(P[key]):P[key]; }; UPD[key]=upd; el.addEventListener('input',()=>{ upd(); if(!['z','t'].includes(key)) scheduleRebuild(); else draw(); }); upd(); };
   // Debounce rebuilds so dragging a slider does not recompute on every input.
   let _rb=null; function scheduleRebuild(){ clearTimeout(_rb); _rb=setTimeout(rebuild,160); }
-  bind('x-A0','A0',v=>v.toFixed(2)); bind('x-lam','lam1',v=>v.toFixed(0)); bind('x-r','ratio',v=>'×'+v.toFixed(0)); bind('x-s','s',v=>v.toFixed(2)+' rad'); bind('x-sd','sd',v=>v.toFixed(2)); bind('x-L','L',v=>'e^'+v.toFixed(1)); bind('x-g','g',v=>'×'+v.toFixed(1)); bind('x-n','n',v=>v.toFixed(0)); bind('x-z','z',v=>'×'+Math.pow(10,v).toExponential(1)); bind('x-t','t',v=>'');
+  bind('x-A0','A0',v=>v.toFixed(2)); bind('x-lam','lam1',v=>v.toFixed(0)); bind('x-r','ratio',v=>'×'+v.toFixed(0)); bind('x-s','s',v=>v.toFixed(2)+' rad'); bind('x-sd','sd',v=>v.toFixed(2)); bind('x-L','L',v=>v.toFixed(1)+'  (×'+Math.exp(v).toFixed(0)+')'); bind('x-g','g',v=>'×'+v.toFixed(1)); bind('x-n','n',v=>v.toFixed(0)); bind('x-z','z',v=>'×'+Math.pow(10,v).toExponential(1)); bind('x-t','t',v=>'');
   for(const [id,key] of [['x-steer','steer'],['x-lin','lin'],['x-shear','shear'],['x-arrows','arrows']]) document.getElementById(id).addEventListener('change',e=>{ P[key]=e.target.checked; key==='arrows'?draw():scheduleRebuild(); });
   // Play toggles the time animation; randomize sets fresh parameters and rebuilds.
-  document.getElementById('x-play').onclick=()=>{ P.play=!P.play; document.getElementById('x-play').textContent=P.play?'pause':'play'; if(P.play) playTick(); };
+  document.getElementById('x-play').onclick=()=>{ P.play=!P.play; document.getElementById('x-play').textContent=P.play?'Pause':'Play'; if(P.play) playTick(); };
   const rnd=(a,b)=>a+Math.random()*(b-a); const setv=(id,key,v,dp=2)=>{ const el=document.getElementById(id); el.value=(+v).toFixed(dp); UPD[key](); };
   document.getElementById('x-rand').onclick=()=>{ setv('x-A0','A0',rnd(0.5,2.2)); setv('x-lam','lam1',Math.round(rnd(10,32)),0); setv('x-r','ratio',Math.round(rnd(8,32)),0); setv('x-s','s',rnd(0.15,0.6)); setv('x-sd','sd',rnd(0.35,0.8)); setv('x-L','L',rnd(3,7),1); setv('x-g','g',rnd(2,5),1); setv('x-n','n',Math.round(rnd(3,6)),0);
     P.t=1; document.getElementById('x-t').value=1; P.z=0; document.getElementById('x-z').value=0; UPD.z(); rebuild(); }; // always the finished construction, fully zoomed out
-  let auto=false; document.getElementById('x-auto').onclick=()=>{ auto=!auto; document.getElementById('x-auto').textContent=auto?'stop zoom':'auto-zoom'; if(auto) zoomTick(); };
+  let auto=false; document.getElementById('x-auto').onclick=()=>{ auto=!auto; document.getElementById('x-auto').textContent=auto?'Stop zoom':'Auto-zoom'; if(auto) zoomTick(); };
   // Two self-driving loops: playTick advances time, zoomTick ramps magnification.
   function playTick(){ if(!P.play) return; P.t+=0.004; if(P.t>1){ P.t=0; } document.getElementById('x-t').value=P.t; draw(); requestAnimationFrame(playTick); }
   function zoomTick(){ if(!auto) return; P.z+=0.012; if(P.z>4.5) P.z=0; document.getElementById('x-z').value=P.z; draw(); requestAnimationFrame(zoomTick); }
@@ -318,7 +332,8 @@ guarded('figure 9',()=>{
     // readouts beside the cone
     const rox=rx+cw+12; const grad=(()=>{ let G=[st.G0[0],st.G0[1]]; st.L.forEach(l=>{ if(!l.on) return; G[0]+=l.lam*l.Th*l.z[0]; G[1]+=l.lam*l.Th*l.z[1]; }); return Math.hypot(G[0],G[1]); })();
     const ro=[['T∗',RUN.T.toFixed(3)],['stages',RUN.stages.length],['gradient now',grad.toExponential(2)],['sup |θ| now',(P.A0+st.L.reduce((a,l)=>a+(l.on?Math.abs(l.Th):0),0)).toFixed(4)],['pulses μ',RUN.stages.filter(s=>s.mu!=null).map(s=>s.mu.toFixed(2)).join(' ')||'—']];
-    ro.forEach(([k,v],i)=>{ label(x,k,rox,ry+14+i*15,DIM,10); label(x,String(v),rx+rw-6,ry+14+i*15,ACC,10,'right'); });
+    // A long value (the pulse list) goes on the line under its key, so the two do not overlap.
+    ro.forEach(([k,v],i)=>{ const dn=String(v).length>12?1:0; label(x,k,rox,ry+14+i*15,DIM,10); label(x,String(v),rx+rw-6,ry+14+(i+dn)*15,ACC,10,'right'); });
     if(SV){ x.globalCompositeOperation='destination-over'; x.fillStyle='#0a0810'; x.fillRect(0,0,W,H); x.globalCompositeOperation='source-over'; if(SV.k<1){ x.fillStyle=`rgba(10,8,16,${(1-SV.k).toFixed(3)})`; x.fillRect(0,0,W,H); } } }
   // Screensaver hook (lib/screensaver.js). enter() hides the article and pins
   // #f-play to the window, with the height attribute set to innerHeight, so

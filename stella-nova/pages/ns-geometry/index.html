@@ -12,13 +12,14 @@
    A scrolling essay, not an app. It explains the singular construction one
    clause at a time; each numbered section carries a <canvas> figure that
    main.js draws. Unlike the ns-* solver pages this is a classic (non-module)
-   page with no three.js and no import map: KaTeX renders the equations, and one
-   plain script draws every figure onto a 2D canvas.
+   page with no three.js and no import map. One plain script draws every
+   figure onto a 2D canvas. It loads lib/sci-math.js with import() and
+   typesets the equations as color-coded MathJax SVG.
 
    HEAD LOAD ORDER
-     1. fonts       Google Fonts stylesheet
-     2. KaTeX       CSS then JS, for the display equations
-     3. style.css   the page stylesheet
+     1. style.css   the page stylesheet
+     2. sci.css     lib/sci.css after style.css: fonts (it imports them) and
+                    the math colors .m1 to .m6
      main.js loads at the end of body and draws all figures.
 
    FIGURES  (canvas id ▶ the draw block in main.js)
@@ -31,23 +32,22 @@
      #f-time   ▶ figure 7   stage lengths, finite T∗
      #f-tube   ▶ figure 8   vortex tube under axial strain
      #f-play   ▶ figure 9   "explore the construction", the one interactive figure
-   Equations use <div class="eq" data-tex="..."> and are rendered on load.
+   Equations use <div class="eq sci-eq" data-tex="...">. A slider symbol is a
+   <span class="sci-sym" data-tex="..." data-inline>. main.js typesets both.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <div class="grid"></div>
 <!-- Error bar: hidden until main.js catches a script error, then shown with the
      real message (the preview sandbox otherwise reports only "Script error."). -->
-<div id="errbar" style="display:none;white-space:pre-wrap;font-family:'JetBrains Mono',monospace;font-size:.7rem;color:#e34a6a;background:rgba(227,74,106,.08);border-bottom:1px solid rgba(227,74,106,.4);padding:8px 28px"></div>
-<div class="topbar"><div class="sys">Navier–<i>Stokes</i></div><div class="r">the shape of the singularity · Córdoba–Martínez-Zoroa → Alpöge–Buckmaster → OpenAI, Sep 2026</div></div>
+<div id="errbar" style="display:none;white-space:pre-wrap;font-family:ui-monospace,Menlo,monospace;font-size:.75rem;color:#e34a6a;background:rgba(227,74,106,.08);border-bottom:1px solid rgba(227,74,106,.4);padding:8px 28px"></div>
+<div class="topbar"><div class="sys">Navier–Stokes</div><div class="r">The shape of the singularity · Córdoba–Martínez-Zoroa → Alpöge–Buckmaster → OpenAI, Sep 2026</div></div>
 <main>
 <h1>The geometry</h1>
-<div class="sub">what the singular initial condition looks like, and how it is built one layer at a time · the time slider starts at the finished construction; drag it back to watch it being made</div>
+<div class="sub">What the singular initial condition looks like, and how it is built one layer at a time · the time slider starts at the finished construction; drag it back to watch it being made</div>
 
 <p>Every finite-time blowup constructed in 2026 — for the porous-medium equation, for Boussinesq, for 3D Euler, and now for Navier–Stokes with a smooth force — is the same object seen through different equations. It is worth understanding on its own terms, because it is not a chaotic mess and it is not a random field. It is a precise geometric construction, and each piece of it exists because it makes one term of the equation vanish.</p>
 <p>In one sentence: <b>stripes riding on strain, nested at wildly separated scales, all pointing into one cone, converging to a point.</b> The rest of this page is that sentence, one clause at a time.</p>
@@ -60,13 +60,21 @@
      controls below feed the parameter object P; changing a structural one rebuilds
      the run, while time and zoom only redraw. -->
 <figure><canvas id="f-play" height="600"></canvas>
-<div class="ctl"><button id="x-rand">randomize</button><span>time</span><input type="range" id="x-t" min="0" max="1" step="0.001" value="1"><button id="x-play">play</button><span>zoom</span><input type="range" id="x-z" min="0" max="4.5" step="0.01" value="0"><span class="v" id="x-z-v" style="min-width:60px"></span><button id="x-auto">auto-zoom</button></div>
-<div class="ctl"><span>background gradient A₀</span><input type="range" id="x-A0" min="0.3" max="3" step="0.05" value="1"><span class="v" id="x-A0-v" style="min-width:50px"></span><span>base frequency λ₁</span><input type="range" id="x-lam" min="8" max="40" step="1" value="20"><span class="v" id="x-lam-v" style="min-width:36px"></span></div>
-<div class="ctl"><span>frequency ratio</span><input type="range" id="x-r" min="4" max="40" step="1" value="20"><span class="v" id="x-r-v" style="min-width:40px"></span><span>layers</span><input type="range" id="x-n" min="1" max="6" step="1" value="4"><span class="v" id="x-n-v" style="min-width:24px"></span></div>
-<div class="ctl"><span>tilt s₁</span><input type="range" id="x-s" min="0.05" max="0.8" step="0.01" value="0.35"><span class="v" id="x-s-v" style="min-width:70px"></span><span>tilt decay per layer</span><input type="range" id="x-sd" min="0.3" max="1" step="0.01" value="0.55"><span class="v" id="x-sd-v" style="min-width:40px"></span></div>
-<div class="ctl"><span>log gain L</span><input type="range" id="x-L" min="2" max="8" step="0.1" value="5"><span class="v" id="x-L-v" style="min-width:50px"></span><span>gradient growth per layer</span><input type="range" id="x-g" min="1.1" max="6" step="0.1" value="3"><span class="v" id="x-g-v" style="min-width:40px"></span></div>
-<div class="ctl"><label><input type="checkbox" id="x-steer" checked> steering</label><label><input type="checkbox" id="x-shear" checked> shear coupling from unsteered layers</label><label><input type="checkbox" id="x-lin" checked> triangle profile (exactly linear core) — off: sine</label><label><input type="checkbox" id="x-arrows" checked> velocity of the active layer</label></div></figure>
-<div class="cap"><b>Figure 0.</b> Left: the field at the chosen time and magnification, contrast-stretched, with the active layer's velocity (arrows: along the crests, alternating) and the envelope of each inserted layer. Right, top: the gradient at the origin and the sum of amplitudes against time, with growth, steering and hold stages shaded. Middle: every layer's vorticity amplitude — with steering each is driven back to zero; without it they persist. Bottom: the wavevectors as they stand at this moment, and the background gradient. The frequency ratio here stands in for λ^{Q−1}; no picture can hold two adjacent layers of the real construction.</div>
+<div class="btnrow"><button id="x-rand">Randomize</button><button id="x-play">Play</button><button id="x-auto">Auto-zoom</button></div>
+<div class="prms">
+  <div class="prm"><label for="x-t">Time</label><span class="v"></span><input type="range" id="x-t" min="0" max="1" step="0.001" value="1"></div>
+  <div class="prm"><label for="x-z">Zoom</label><span class="v" id="x-z-v"></span><input type="range" id="x-z" min="0" max="4.5" step="0.01" value="0"></div>
+  <div class="prm"><label for="x-A0"><span class="sci-sym" data-tex="A_0" data-inline></span><span class="d">background gradient</span></label><span class="v" id="x-A0-v"></span><input type="range" id="x-A0" min="0.3" max="3" step="0.05" value="1"></div>
+  <div class="prm"><label for="x-lam"><span class="sci-sym" data-tex="\lambda_1" data-inline></span><span class="d">base frequency</span></label><span class="v" id="x-lam-v"></span><input type="range" id="x-lam" min="8" max="40" step="1" value="20"></div>
+  <div class="prm"><label for="x-r">Frequency ratio</label><span class="v" id="x-r-v"></span><input type="range" id="x-r" min="4" max="40" step="1" value="20"></div>
+  <div class="prm"><label for="x-n">Layers</label><span class="v" id="x-n-v"></span><input type="range" id="x-n" min="1" max="6" step="1" value="4"></div>
+  <div class="prm"><label for="x-s"><span class="sci-sym" data-tex="s_1" data-inline></span><span class="d">tilt</span></label><span class="v" id="x-s-v"></span><input type="range" id="x-s" min="0.05" max="0.8" step="0.01" value="0.35"></div>
+  <div class="prm"><label for="x-sd">Tilt decay per layer</label><span class="v" id="x-sd-v"></span><input type="range" id="x-sd" min="0.3" max="1" step="0.01" value="0.55"></div>
+  <div class="prm"><label for="x-L"><span class="sci-sym" data-tex="L" data-inline></span><span class="d">log gain</span></label><span class="v" id="x-L-v"></span><input type="range" id="x-L" min="2" max="8" step="0.1" value="5"></div>
+  <div class="prm"><label for="x-g">Gradient growth per layer</label><span class="v" id="x-g-v"></span><input type="range" id="x-g" min="1.1" max="6" step="0.1" value="3"></div>
+</div>
+<div class="checks"><label><input type="checkbox" id="x-steer" checked> Steering</label><label><input type="checkbox" id="x-shear" checked> Shear coupling from unsteered layers</label><label><input type="checkbox" id="x-lin" checked> Triangle profile (exactly linear core) — off: sine</label><label><input type="checkbox" id="x-arrows" checked> Velocity of the active layer</label></div></figure>
+<div class="cap"><b>Figure 0.</b> Left: the field at the chosen time and magnification, contrast-stretched, with the active layer's velocity (arrows: along the crests, alternating) and the envelope of each inserted layer. Right, top: the gradient at the origin and the sum of amplitudes against time, with growth, steering and hold stages shaded. Middle: every layer's vorticity amplitude — with steering each is driven back to zero; without it they persist. Bottom: the wavevectors as they stand at this moment, and the background gradient. The frequency ratio here stands in for λ<sup>Q−1</sup>; no picture can hold two adjacent layers of the real construction.</div>
 
 <h2>1 · The background is straight</h2>
 <p>Near the origin, before any wave is added, the flow is <b>affine</b>: velocity u = D·x with D a constant trace-free matrix, temperature θ = G·x with G a constant vector. Straight streamlines, uniform strain, uniform gradient. Nothing about this looks like it could blow up — it is the tamest flow imaginable. But it has one property that matters: a uniform strain stretches every material line at a constant exponential rate, and a uniform gradient sits there as a fixed source of energy for anything that tilts it.</p>
@@ -76,17 +84,17 @@
 
 <h2>2 · One wave, and why it is exact</h2>
 <p>Put a single plane wave on that background — a temperature wave Θ sin(λζ·x) and a vorticity wave Ω cos(λζ·x), stripes perpendicular to the wavevector ζ. The wave's velocity is v = (Ω/λ|ζ|²) Jζ sin(λζ·x), where J is a quarter-turn: the velocity points <b>along the crests</b>. That is the entire trick.</p>
-<div class="eq" data-tex="v\parallel J\zeta,\qquad \nabla\vartheta\parallel\zeta\qquad\Longrightarrow\qquad v\cdot\nabla\vartheta=v\cdot\nabla\varpi=0"></div>
+<div class="eq sci-eq" data-tex="v\parallel J\zeta,\qquad \nabla\vartheta\parallel\zeta\qquad\Longrightarrow\qquad v\cdot\nabla\vartheta=v\cdot\nabla\varpi=0"></div>
 <p>A wave whose velocity runs along its own crests cannot advect itself. Plugging the ansatz into the equation, every product of the wave with itself is identically zero — not small, zero. What survives is linear: the background strain turns the wavevector, ζ̇ = −Dᵀζ, and the background gradient feeds the amplitudes. The PDE has been reduced, exactly, to three ordinary differential equations. In 3D Euler these are Kelvin's waves of 1887; for Navier–Stokes they are the Craik–Criminale solutions — one of the very few families of exact nonlinear solutions the equations possess. The construction is built from the only exact object available.</p>
 <!-- Figure 2: one plane wave on the background; the tilt slider drives the growth
      rate curve √A·sin s. -->
 <figure><canvas id="f-wave" height="340"></canvas>
-<div class="ctl"><span>tilt s</span><input type="range" id="r-s" min="0" max="1.3" step="0.01" value="0.4"><span class="v" id="v-s"></span></div></figure>
+<div class="prms one"><div class="prm"><label for="r-s"><span class="sci-sym" data-tex="s" data-inline></span><span class="d">tilt</span></label><span class="v" id="v-s"></span><input type="range" id="r-s" min="0" max="1.3" step="0.01" value="0.4"></div></div></figure>
 <div class="cap"><b>Figure 2.</b> The wave on the background. Stripes perpendicular to ζ (orange arrow); the wave's velocity (white arrows) runs along the stripes and alternates in sign. Drag the tilt: the growth rate is √A·sin s, zero for vertical stripes, and it does not depend on λ at all.</div>
 
 <h2>3 · The tilt is where the energy comes in</h2>
 <p>Why tilt the stripes? Because vorticity is produced by <b>horizontal</b> variation of temperature — that is what ∂₁θ in the vorticity equation says. Vertical stripes have no horizontal variation and do nothing. Tilted stripes do: the horizontal component of the temperature wave creates vorticity along the stripes, the vorticity shears the fluid along the stripes, the shear carries warm fluid up and cold fluid down (cold over warm is Rayleigh–Taylor unstable), and that reinforces the temperature wave. A 2×2 linear system with eigenvalues ±√A sin s.</p>
-<div class="eq" data-tex="\dot\Theta=\frac{A\sin s}{\lambda}\,\Omega,\qquad \dot\Omega=\lambda\sin s\;\Theta,\qquad\text{eigenvalues }\pm\sqrt{A}\sin s,\qquad \nabla\vartheta(0)=\lambda\,\Theta\,\zeta"></div>
+<div class="eq sci-eq" data-tex="\dot{\Theta}=\frac{A\sin s}{\lambda}\,\Omega,\qquad \dot{\Omega}=\lambda\sin s\;\Theta,\qquad\text{eigenvalues }\pm\sqrt{A}\sin s,\qquad \nabla\vartheta(0)=\lambda\,\Theta\,\zeta"></div>
 <p>The growth rate contains A and s but not λ. So the frequency is a free parameter, and it can be made as large as one likes without slowing the growth. The amplitude Θ stays tiny; the gradient λΘ is whatever you want. This is the decoupling the whole proof rests on: <b>a wave can carry an enormous gradient while carrying almost no energy.</b></p>
 <!-- Figure 3: two waves, same rate, frequencies 100× apart — gradients diverge. -->
 <figure><canvas id="f-growth" height="240"></canvas></figure>
@@ -96,25 +104,25 @@
 <p>Growth leaves a problem behind. The vorticity wave Ω is now large, and it is a shear that the <i>next</i> layer would feel as a chaotic background. It has to be removed — and it can be, geometrically. Rotate the background gradient and the wavevector <b>together</b> by a common angle. A common rotation leaves Jζ·G and |ζ| unchanged, so the temperature equation does not notice it at all; but it changes the laboratory component ζ₁, and Ω̇ = λζ₁Θ flips sign when ζ passes vertical. A short overshoot past vertical drives Ω back to exactly zero, and then, with ζ vertical, both derivatives vanish and the layer is frozen: a large temperature gradient, no shear, standing straight.</p>
 <!-- Figure 4: steering animation — ζ and G rotate together and Ω lands on zero. -->
 <figure><canvas id="f-steer" height="300"></canvas>
-<div class="ctl"><button id="b-steer">replay</button><span id="v-steer"></span></div></figure>
+<div class="btnrow"><button id="b-steer">Replay</button><span class="v" id="v-steer"></span></div></figure>
 <div class="cap"><b>Figure 4.</b> Steering. Left: the wavevector ζ (orange) and gradient G (pale) rotate together; ζ swings past vertical and settles on it. Right: the vorticity amplitude Ω rises during growth, reverses during the overshoot, and lands on zero. The pulse size is chosen by shooting so that it lands exactly.</div>
 
 <h2>5 · Nesting: the same picture at every scale</h2>
-<p>Now replace the sine by a profile F that is <b>exactly linear</b> near zero. Then wherever |λζ·x| is small — a neighbourhood of the origin of size ~1/λ — the wave is not a wave but a straight ramp: a new affine background, steeper than the old one by the gradient just created. Insert the next wave there, at a far higher frequency λ' = λ^Q with Q ≥ 200. It sees only the sum of all earlier ramps, so the same exact reduction applies, with a larger A and therefore a faster growth.</p>
+<p>Now replace the sine by a profile F that is <b>exactly linear</b> near zero. Then wherever |λζ·x| is small — a neighbourhood of the origin of size ~1/λ — the wave is not a wave but a straight ramp: a new affine background, steeper than the old one by the gradient just created. Insert the next wave there, at a far higher frequency λ' = λ<sup>Q</sup> with Q ≥ 200. It sees only the sum of all earlier ramps, so the same exact reduction applies, with a larger A and therefore a faster growth.</p>
 <!-- Figure 5: three nested zooms — each parent flattens to a ramp for its child. -->
 <figure><canvas id="f-nest" height="300"></canvas></figure>
-<div class="cap"><b>Figure 5.</b> Three consecutive zooms toward the origin. In each frame the previous layer has flattened into a ramp (the smooth background gradient) and the next layer's stripes live inside it, slightly rotated. The real ratio between frames is λ^{Q−1} with Q ≥ 200; here it is drawn as ~15× so that the stripes stay visible.</div>
-<p>Two geometric facts make the nesting consistent. First, each new layer is placed inside a cut-off region so small that all earlier layers are still in their linear zone there — the layer never sees oscillation, only slope. Second, each new layer's gradient is made to <b>dominate</b> everything before it (the old gradient sum is at most a tiny fraction of the new one), so from the new layer's point of view the background is essentially just its immediate parent, freshly stood upright by steering. The picture is genuinely self-similar: zoom by λ_q, rotate slightly, and you are looking at the same thing.</p>
+<div class="cap"><b>Figure 5.</b> Three consecutive zooms toward the origin. In each frame the previous layer has flattened into a ramp (the smooth background gradient) and the next layer's stripes live inside it, slightly rotated. The real ratio between frames is λ<sup>Q−1</sup> with Q ≥ 200; here it is drawn as ~15× so that the stripes stay visible.</div>
+<p>Two geometric facts make the nesting consistent. First, each new layer is placed inside a cut-off region so small that all earlier layers are still in their linear zone there — the layer never sees oscillation, only slope. Second, each new layer's gradient is made to <b>dominate</b> everything before it (the old gradient sum is at most a tiny fraction of the new one), so from the new layer's point of view the background is essentially just its immediate parent, freshly stood upright by steering. The picture is genuinely self-similar: zoom by λ<sub>q</sub>, rotate slightly, and you are looking at the same thing.</p>
 
 <h2>6 · The cone, and the point</h2>
-<p>Every layer's gradient is steered into a single acute cone of directions. That is what makes the gradients <b>add</b> rather than cancel: ‖∇θ‖ at the origin is a sum of λ_q|Θ_q| over all layers, each term larger than the last, while the temperature itself, a sum of the tiny amplitudes λ_q^{−7/8}, stays bounded. Infinitely many stripe systems, each contributing a gradient in roughly the same direction, at scales converging to one point. The singularity is a point — the origin — which is the only kind of singularity Navier–Stokes is allowed to have: Caffarelli–Kohn–Nirenberg proved in 1982 that the singular set of any suitable weak solution has zero one-dimensional parabolic measure. A curve of singular points is impossible; an isolated point at an isolated time is not.</p>
+<p>Every layer's gradient is steered into a single acute cone of directions. That is what makes the gradients <b>add</b> rather than cancel: ‖∇θ‖ at the origin is a sum of λ<sub>q</sub>|Θ<sub>q</sub>| over all layers, each term larger than the last, while the temperature itself, a sum of the tiny amplitudes λ<sub>q</sub><sup>−7/8</sup>, stays bounded. Infinitely many stripe systems, each contributing a gradient in roughly the same direction, at scales converging to one point. The singularity is a point — the origin — which is the only kind of singularity Navier–Stokes is allowed to have: Caffarelli–Kohn–Nirenberg proved in 1982 that the singular set of any suitable weak solution has zero one-dimensional parabolic measure. A curve of singular points is impossible; an isolated point at an isolated time is not.</p>
 <!-- Figure 6: layer gradients inside one acute cone; the resultant grows unbounded. -->
 <figure><canvas id="f-cone" height="260"></canvas></figure>
 <div class="cap"><b>Figure 6.</b> Gradient contributions of successive layers, each inside the same acute cone. The resultant grows without bound; the amplitudes that produced it, drawn as the small discs, shrink summably.</div>
 
 <h2>7 · Why the whole thing takes finite time</h2>
-<p>Layer q must grow by a fixed factor e^{L} at rate ≈ σ_{q−1} sin s_q, where σ_{q−1}² is the gradient it sits on. The insertion angle is chosen as s_q ≈ σ_{q−2}/σ_{q−1}, which makes the stage length collapse to roughly 1/σ_{q−2}: each stage is as short as the growth scale two layers back. Because the gradients grow like λ_q^{1/8} and λ_q is a tower, those stage lengths shrink faster than any geometric series. The sum is finite. Infinitely many layers fit before T<sub>*</sub>.</p>
-<div class="eq" data-tex="T_*=\sum_q|\text{stage }q|\ \lesssim\ \sum_q\frac{1}{\sigma_{q-2}}<\infty,\qquad \sigma_q\sim\lambda_q^{1/16},\ \ \lambda_q=\lambda_{q-1}^{Q}"></div>
+<p>Layer q must grow by a fixed factor e<sup>L</sup> at rate ≈ σ<sub>q−1</sub> sin s<sub>q</sub>, where σ<sub>q−1</sub>² is the gradient it sits on. The insertion angle is chosen as s<sub>q</sub> ≈ σ<sub>q−2</sub>/σ<sub>q−1</sub>, which makes the stage length collapse to roughly 1/σ<sub>q−2</sub>: each stage is as short as the growth scale two layers back. Because the gradients grow like λ<sub>q</sub><sup>1/8</sup> and λ<sub>q</sub> is a tower, those stage lengths shrink faster than any geometric series. The sum is finite. Infinitely many layers fit before T<sub>*</sub>.</p>
+<div class="eq sci-eq" data-tex="T_*=\sum_q|\text{stage }q|\ \lesssim\ \sum_q\frac{1}{\sigma_{q-2}}<\infty,\qquad \sigma_q\sim\lambda_q^{1/16},\ \ \lambda_q=\lambda_{q-1}^{Q}"></div>
 <!-- Figure 7: stage lengths stacked to a finite T∗ (later stages vanish). -->
 <figure><canvas id="f-time" height="180"></canvas></figure>
 <div class="cap"><b>Figure 7.</b> Stage lengths, stacked. With the real exponents almost all of T<sub>*</sub> is spent on the first two layers; every later layer is effectively instantaneous.</div>
