@@ -116,7 +116,9 @@ export async function typeset(el, tex, { display = true, rules = null } = {}) {
   try {
     const node = await MJ.tex2svgPromise(colorize(tex, rules), { display });
     if (el.dataset.tex !== tex) return false;
-    if (node.querySelector('[data-mjx-error], merror, [data-mml-node="merror"]')) throw new Error('TeX error');
+    // A parse error gives merror. An undefined macro (noundefined) does not:
+    // MathJax draws its name as red text, so check for red fill too.
+    if (node.querySelector('[data-mjx-error], merror, [data-mml-node="merror"], [fill="red"]')) throw new Error('TeX error');
     // The hidden MathML copy needs the MathJax stylesheet to stay hidden.
     // aria-label carries the TeX, so remove the copy.
     node.querySelectorAll('mjx-assistive-mml').forEach(n => n.remove());
