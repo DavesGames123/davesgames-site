@@ -177,6 +177,7 @@ w.SN_NAV = [
       ["wankel-engine", "Wankel Rotary Engine", "3D"],
       ["differential", "Differential", "3D"],
       ["planetary-gearbox", "Planetary Gearbox", "3D"],
+      ["spirograph", "Spirograph", "NEW"],
       ["pin-tumbler-lock", "Pin Tumbler Lock", "3D"],
       ["origami", "Origami Simulator", "SIM"]
     ] }
