@@ -126,6 +126,10 @@
         if (x0 + x1 < w) o.l = Math.max(o.l, x1); else o.r = Math.max(o.r, w - x0);
       }
     }
+    // A saver on a tall screen: keep a band at the base for the shell label
+    // plate. The membrane then sits higher, so the shell docks the plate at
+    // the base, clear of it.
+    if (saverOn && h > w * 1.2) o.b = Math.max(o.b, Math.min(340, h * 0.4));
     return o;
   }
   // Camera distance that fits the membrane in the clear part. At R = 5.4 the
@@ -585,44 +589,77 @@
     square: [[2, 1, 1, 3], [3, 2, 1, 2], [2, 3, 4, 1], [1, 2, 3, 3]],
     circle: [[1, 2, 0, 2], [2, 1, 0, 3], [3, 1, 1, 2]],
   };
-  // The plate (opts.label) names the wave equation, the mode shape that
-  // setMode() in sim.js builds, and the live values: the mode numbers, the
-  // amplitudes, f = ω/2π from sim.omega(), c, the damping, the beat |f1 − f2|
-  // and the energy ratio. The solver is a lossless leapfrog, so the damping is
+  // The plate (opts.label) gives the wave equation and the mode shape that
+  // setMode() in sim.js builds as TeX, and the live values as params: the
+  // mode numbers and amplitudes, c, the beat |f1 − f2| (f = ω/2π from
+  // sim.omega()) and the energy ratio. The anchor is membraneAnchor(). The solver is a lossless leapfrog, so the damping is
   // 0 and E/E0 shows the drift. Sim time runs at STEP_RATE·speed·c·dt per real
   // second, so a sim frequency times that rate is the frequency on screen.
   // applyModes() calls saverPlate(), so a mode change updates the plate.
-  let saverLabel = null, saverTimer = 0;
-  const SUB = '₀₁₂₃₄₅₆₇₈₉';
-  const sub = v => String(v).replace(/[0-9]/g, d => SUB[+d]);
+  let saverLabel = null, saverTimer = 0, saverOn = false;
   function saverPlate() {
     if (!saverLabel || !sim) return;
     const circ = G.shape === 'circle', TAUv = 2 * Math.PI;
     const md = modeList(), f = md.map(q => sim.omega(q.m, q.n) / TAUv);
     const rate = STEP_RATE * G.speed * G.c * sim.dt;      // sim time per real second
-    const fx = v => v.toFixed(3), hz = v => (v * rate).toFixed(2) + ' Hz';
-    const lines = md.map((q, k) => 'mode ' + (k + 1) + ' · (m, n) = (' + q.m + ', ' + q.n + ') · A = ' + q.amp.toFixed(2) +
-      ' · f' + sub(k + 1) + ' = ' + fx(f[k]) + ' (' + hz(f[k]) + ')');
-    lines.push('c = ' + G.c.toFixed(2) + (circ ? ' · drum, R = 0.5' : ' · square, side 1') + ' · damping γ = 0 (lossless)');
+    const hz = v => (v * rate).toFixed(2) + ' Hz';
+    const P = [];
+    md.forEach((q, k) => P.push({ sym: '(m, n)_' + (k + 1), name: 'mode, amplitude', value: '(' + q.m + ', ' + q.n + '), ' + q.amp.toFixed(2), cls: 'm4' }));
+    P.push({ sym: 'c', name: 'wave speed', value: G.c.toFixed(2), cls: 'm2' });
     if (f.length > 1) {
       const fb = Math.abs(f[0] - f[1]);
-      lines.push('beat |f₁ − f₂| = ' + fx(fb) + ' (' + hz(fb) + ', period ' + (fb > 0 ? (1 / (fb * rate)).toFixed(1) + ' s' : '∞') + ')');
-    }
-    lines.push('t = ' + sim.t.toFixed(2) + ' · E/E₀ = ' + (E0 > 0 ? (sim.energy() / E0).toFixed(4) : '1'));
+      P.push({ sym: '|f_1 - f_2|', name: 'beat', value: hz(fb) + (fb > 0 ? ', ' + (1 / (fb * rate)).toFixed(1) + ' s' : '') });
+    } else P.push({ sym: 'f_1', name: 'frequency', value: hz(f[0]) });
+    P.push({ sym: 'E/E_0', name: 'energy ratio', value: E0 > 0 ? (sim.energy() / E0).toFixed(4) : '1', cls: 'm5' });
     saverLabel({
       title: circ ? 'Drum membrane · two modes' : 'Square membrane · two modes',
-      sub: 'clamped edge · ' + GRID + ' × ' + GRID + ' leapfrog grid',
-      lines,
+      sub: 'Clamped edge, ' + GRID + ' × ' + GRID + ' leapfrog grid',
+      params: P,
+      lines: [(circ ? 'Drum of radius 0.5' : 'Square of side 1') + ', lossless, so E/E₀ shows the drift'],
+      tex: circ ? SAVER_TEX.circle : SAVER_TEX.square, rules: SAVER_RULES,
       eq: circ
         ? ['∂²u/∂t² = c²∇²u,   u = 0 at r = R', 'u = Σ Aₖ Jₘ(k r) cos(mθ) cos(ωₖ t)', 'k = jₘ,ₙ / R,   ω = c k,   f = ω/2π']
         : ['∂²u/∂t² = c²∇²u,   u = 0 on the edge', 'u = Σ Aₖ sin(mₖπx) sin(nₖπy) cos(ωₖ t)', 'ω = cπ√(m² + n²),   f = ω/2π'],
+      anchor: membraneAnchor,
     });
   }
+  // The plate TeX: the mode equation of the panel (equations.js WM_EQ), the
+  // sum of the two modes, and the dispersion relation. SAVER_RULES are the
+  // panel WM_RULES (u m1, c m2, omega m3, A m4, E m5).
+  const SAVER_TEX = {
+    square: [String.raw`\frac{\partial^2 u}{\partial t^2}=c^2\nabla^2 u,\quad u=0 \text{ on the edge}`,
+      String.raw`u=\sum_k A_k \sin(m_k\pi x)\,\sin(n_k\pi y)\,\cos(\omega_k t)`,
+      String.raw`\omega=c\pi\sqrt{m^2+n^2},\quad f=\frac{\omega}{2\pi}`],
+    circle: [String.raw`\frac{\partial^2 u}{\partial t^2}=c^2\nabla^2 u,\quad u=0 \text{ at } r=R`,
+      String.raw`u=\sum_k A_k\, J_m(k r)\cos(m\theta)\cos(\omega_k t)`,
+      String.raw`k=\frac{j_{m,n}}{R},\quad \omega=c\,k,\quad f=\frac{\omega}{2\pi}`],
+  };
+  const SAVER_RULES = [['u', 'm1'], ['c', 'm2'], ['\\omega', 'm3'], ['\\omega_k', 'm3'], ['A', 'm4'], ['A_k', 'm4'], ['E', 'm5']];
+  // The membrane on screen, for the shell's label plate: the rim loop and
+  // the highest and lowest vertex, projected with the live camera onto the
+  // canvas rect. Centre is the middle of their screen box, r the largest
+  // distance from it. pts are the peak and the trough (the antinodes that
+  // move most). Page CSS px.
+  const _wa = new THREE.Vector3();
+  function membraneAnchor() {
+    if (!rim || !POS) return null;
+    const rc = canvas.getBoundingClientRect(), R = rim.geometry.attributes.position, p = POS.array;
+    const to = (x, y, z) => { _wa.set(x, y, z).project(camera); return { x: rc.left + (_wa.x + 1) / 2 * rc.width, y: rc.top + (1 - _wa.y) / 2 * rc.height }; };
+    let hi = 0, lo = 0;
+    for (let k = 3; k < p.length; k += 3) { if (p[k + 1] > p[hi + 1]) hi = k; if (p[k + 1] < p[lo + 1]) lo = k; }
+    const pk = [to(p[hi], p[hi + 1], p[hi + 2]), to(p[lo], p[lo + 1], p[lo + 2])], q = pk.slice();
+    for (let i = 0; i < R.count; i++) q.push(to(R.getX(i), R.getY(i), R.getZ(i)));
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const v of q) { x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    let r = 0; for (const v of q) r = Math.max(r, Math.hypot(v.x - cx, v.y - cy));
+    return { x: cx, y: cy, r, pts: pk };
+  }
   window.snSaver = {
-    exit() { saverLabel = null; clearInterval(saverTimer); saverTimer = 0; },
+    exit() { saverLabel = null; saverOn = false; clearInterval(saverTimer); saverTimer = 0; },
     enter(o) {
       const calm = o && o.calm != null ? o.calm : 0.7, seed = (o && o.seed) >>> 0;
-      document.documentElement.classList.add('sn-saver');
+      document.documentElement.classList.add('sn-saver'); saverOn = true;
       renderer.setClearColor(0x040308, 1);     // opaque, so a recording has no alpha
       resize();
       const shape = seed % 3 === 2 ? 'circle' : 'square', L = SAVER_PAIRS[shape];
