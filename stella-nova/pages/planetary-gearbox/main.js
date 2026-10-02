@@ -437,6 +437,48 @@ const start = (location.hash || '').slice(1);
 swapTo(VARIANTS.some(v => v.id === start) ? start : 'simple');
 requestAnimationFrame(frame);
 
+// ── saver plate anchor ──────────────────────────────────────────────────────
+// The shell's label plate (lib/screensaver.js, "label plate") points at the
+// subject of each tour step. plateAnchor(objs, keys) projects with the page
+// camera (Vector3.project) to page CSS px of the canvas rect:
+//   x, y  the projected centre of the world box of the visible meshes
+//   r     the largest distance from (x, y) to a projected corner of the
+//         local box of a mesh: the circle holds every mesh of the subject
+//   pts   the projected key points (world Vector3) that are on screen
+// It returns null when the subject is not on screen, or while the canvas
+// fades out for a swap (style opacity 0).
+const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
+function plateAnchor(objs, keys = []) {
+  const cv = $('view'), rc = cv.getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height || cv.style.opacity === '0') return null;
+  const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
+  const ms = [];
+  PA.box.makeEmpty();
+  for (const ob of objs) if (ob) ob.traverseVisible(m => {
+    if (!m.isMesh || (m.material && m.material.opacity === 0)) return;
+    let b;
+    if (m.isInstancedMesh) { if (!m.boundingBox) m.computeBoundingBox(); b = m.boundingBox; }
+    else { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b = m.geometry.boundingBox; }
+    if (!b || b.isEmpty()) return;
+    ms.push([m, b]); PA.mb.copy(b).applyMatrix4(m.matrixWorld); PA.box.union(PA.mb);
+  });
+  if (PA.box.isEmpty()) return null;
+  const C = px(PA.box.getCenter(PA.c));
+  if (!C) return null;
+  let r = 0;
+  for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
+    PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(q.x - C.x, q.y - C.y));
+  }
+  if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
+  const pts = [];
+  for (const k of keys) { const q = k && px(k); if (q && q.x >= rc.left && q.x <= rc.right && q.y >= rc.top && q.y <= rc.bottom) pts.push(q); }
+  return { x: C.x, y: C.y, r, pts };
+}
+// The world centre of the box of an object: a key point for a part whose
+// origin is not at its middle.
+const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Vector3());
+
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, draws the
 // stage gradient in the scene, and tours: the simple set in reduction,
@@ -476,7 +518,7 @@ window.snSaver = {
     const T0 = () => S.cur.L.sets[0];
     const iNow = () => ratioOf(S.sp1, S.md);
     const sim = (h, i) => ({ hold: h, input: i });
-    const STEPS = [
+    const STEPS0 = [
       { v: 'simple', view: 'three', mode: sim('R', 'S'), lab: () => ({ title: 'Planetary gear set', sub: 'Ring held · sun in · carrier out', lines: [`Sun ${T0().Zs} · planets ${T0().Zp} (×${T0().N}) · ring ${T0().Zr} teeth`, 'The planets roll round inside the held ring', `Reduction ${fmt(iNow(), 2)} : 1, torque × ${fmt(iNow(), 2)}`], eq: ['(ωs − ωc) / (ωr − ωc) = −Zr/Zs', `i = 1 + Zr/Zs = ${fmt(1 + T0().k)}`] }) },
       { v: 'simple', view: 'face', mode: sim('R', 'S'), lab: () => ({ title: 'Pitch circles', sub: 'Rolling without slip', lines: ['Each pair of pitch circles touches at one point', 'Riding on the carrier, the set is a plain gear train', `Zr = Zs + 2Zp = ${T0().Zs} + 2·${T0().Zp} = ${T0().Zr}`], eq: ['Zs ωs + Zr ωr = (Zs + Zr) ωc'] }) },
       { v: 'simple', view: 'back', mode: sim('S', 'C'), lab: () => ({ title: 'Overdrive', sub: 'Sun held · carrier in · ring out', lines: ['The ring turns faster than the input', `Ratio ${fmt(iNow())} : 1`, 'Output faster, torque down'], eq: [`i = Zr/(Zs + Zr) = ${fmt(T0().Zr / (T0().Zs + T0().Zr))}`] }) },
@@ -489,6 +531,38 @@ window.snSaver = {
       { v: 'simpson', view: 'back', gear: 'R', lab: () => ({ title: 'Reverse', sub: 'Sun driven · rear carrier held', lines: ['The rear set alone: sun in, ring out', 'The output turns backward', `Ratio ${fmt(iNow(), 2)} : 1`], eq: [`iR = −Zr/Zs = ${fmt(-T0().k)}`] }) },
       { v: 'simpson', view: 'exploded', gear: '1', lab: () => ({ title: 'Exploded view', sub: 'Simpson gear train', lines: ['Input shell, front ring and front carrier forward', 'Sun drum, bands, rear carrier and rear ring back', 'The output drum stays on the sun'], eq: ['Zs ωs + Zr ωr = (Zs + Zr) ωc  (each set)'] }) },
     ];
+    // Plate fields, added to each step's label by index. params and TeX
+    // share one colour map (RULES): sun Z_s, ω_s m1, ring Z_r, ω_r m2,
+    // planet Z_p, ω_p m3, carrier ω_c m4, ratio i m5. The plain eq lists
+    // stay as the fallback. Anchors: plateAnchor() on the gear set; the key
+    // points are the sun and planet centres (centreOf).
+    const RULES = [['Z_s', 'm1'], ['\\omega_s', 'm1'], ['Z_r', 'm2'], ['\\omega_r', 'm2'], ['Z_p', 'm3'], ['\\omega_p', 'm3'], ['\\omega_c', 'm4'], ['i', 'm5']];
+    const P = (sym, name, value, cls) => ({ sym, name, value, cls });
+    const pZ = () => [P('Z_s', 'sun teeth', String(T0().Zs), 'm1'), P('Z_p', `planet teeth, ${T0().N} planets`, String(T0().Zp), 'm3'), P('Z_r', 'ring teeth', String(T0().Zr), 'm2')];
+    const pI = () => P('i', 'ratio, input to output', `${fmt(iNow(), 2)} : 1`, 'm5');
+    const TWILLIS = String.raw`\frac{\omega_s - \omega_c}{\omega_r - \omega_c} = -\frac{Z_r}{Z_s}`;
+    const TBAL = String.raw`Z_s\,\omega_s + Z_r\,\omega_r = (Z_s + Z_r)\,\omega_c`;
+    const parts = re => Object.values(S.cur.B.parts).filter(q => re.test(q.id));
+    const an = (re, keys) => () => plateAnchor(parts(re).map(q => q.holder), parts(keys).map(q => centreOf(q.holder)));
+    const SET = /^(sun|ring\d?|pins|carrier[BF]|p\d_\d+|c\d\w*|outDrum|inWeb|sunDrum|band\d)$/, KEYS = /^p\d_\d+$/;
+    const ADD = [
+      () => ({ params: [...pZ(), pI()], tex: [TWILLIS, String.raw`i = 1 + \frac{Z_r}{Z_s}`] }),
+      () => ({ params: pZ(), tex: [TBAL, String.raw`Z_r = Z_s + 2Z_p`] }),
+      () => ({ params: [...pZ(), pI()], tex: [String.raw`i = \frac{Z_r}{Z_s + Z_r}`, TBAL] }),
+      () => ({ params: [...pZ(), pI()], tex: [String.raw`i = -\frac{Z_r}{Z_s}`, TBAL] }),
+      () => ({ params: pZ(), tex: [String.raw`\frac{Z_s + Z_r}{N} \in \mathbb{Z}`, TBAL] }),
+      () => ({ params: pZ(), tex: [String.raw`\omega_p - \omega_c = -\frac{Z_s}{Z_p}\,(\omega_s - \omega_c)`, TBAL] }),
+      () => ({ params: [P('Z_s', 'sun teeth', String(T0().Zs), 'm1'), P('Z_r', 'ring teeth', String(T0().Zr), 'm2'), pI()], tex: [String.raw`i_1 = 2 + \frac{Z_s}{Z_r}`, TBAL] }),
+      () => ({ params: [P('Z_s', 'sun teeth', String(T0().Zs), 'm1'), P('Z_r', 'ring teeth', String(T0().Zr), 'm2'), pI()], tex: [String.raw`i_2 = 1 + \frac{Z_s}{Z_r}`, TBAL] }),
+      () => ({ params: [pI()], tex: [String.raw`i_3 = 1`, TBAL] }),
+      () => ({ params: [P('Z_s', 'sun teeth', String(T0().Zs), 'm1'), P('Z_r', 'ring teeth', String(T0().Zr), 'm2'), pI()], tex: [String.raw`i_R = -\frac{Z_r}{Z_s}`, TBAL] }),
+      () => ({ params: pZ(), tex: [String.raw`${'Z_s'}\,\omega_s + Z_r\,\omega_r = (Z_s + Z_r)\,\omega_c \quad \text{(each set)}`] }),
+    ];
+    const STEPS = STEPS0.map((s0, k) => Object.assign({}, s0, { lab: () => {
+      const l = s0.lab();
+      // at most 2 notes: the old third line held the numbers, now params
+      return Object.assign(l, { lines: l.lines.filter(t => !/\d/.test(t)).slice(0, 2) }, ADD[k](), { rules: RULES, anchor: an(SET, KEYS) });
+    } }));
     let n = 0, stepT = 0, lastLab = '', labT = 0, busy = false;
     const canvas = $('view');
     const showLab = s => { const l = s.lab(); lastLab = JSON.stringify(l); label(l); };
