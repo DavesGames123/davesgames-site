@@ -31,6 +31,7 @@
 //    function setOpen .......... panel, sheet and dock
 //    function frame ............ the loop
 //    window.snSaver ............ screensaver tour for lib/screensaver.js
+//    function saverPlate ....... screensaver plate: layout or the isolated bone
 // ============================================================================
 import * as THREE from 'three';
 import { createStage, KEY_DIR } from './stage.js';
@@ -654,6 +655,27 @@ function saverBackdrop(t) {
   const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
   return tx;
 }
+// The screensaver plate (opts.label). With a bone isolated it names the
+// bone from skull.json (name, Latin name, group, side, mirror pair, the
+// fact of the card, the mesh size in mm, FMA). Else it names the layout
+// and counts the parts in each group.
+function saverPlate() {
+  if (!parts.length) return null;
+  if (S.iso >= 0) {
+    const m = parts[S.iso].m, G = GROUPS[m.group];
+    const side = m.side === 'mid' ? 'midline' : m.side;
+    const pair = m.pair ? parts.find(q => q.m.key === m.pair) : null;
+    const lines = [m.latin, `${G.label} · ${side}` + (pair ? ` · pairs with the ${pair.m.name.toLowerCase()}` : ''), m.fact];
+    if (m.ext) lines.push(`Mesh ${m.ext.map(v => Math.round(v)).join(' × ')} mm · ${m.fma}`);
+    return { title: m.name, sub: `Human skull · part ${S.iso + 1} of ${parts.length}`, lines };
+  }
+  const n = {};
+  for (const p of parts) n[p.m.group] = (n[p.m.group] || 0) + 1;
+  const counts = Object.keys(GROUPS).filter(g => n[g]).map(g => `${GROUPS[g].short} ${n[g]}`).join(' · ');
+  const open = S.e > 0.01;
+  return { title: open ? `Human skull · ${ARR[S.arr].label}` : 'Human skull', sub: `${parts.length} parts · BodyParts3D meshes`,
+    lines: [counts, open ? ARR[S.arr].blurb : 'Reconstructed: every part back in place.'] };
+}
 window.snSaver = {
   enter(o = {}) {
     const calm = Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm));
@@ -684,6 +706,7 @@ window.snSaver = {
         stage.hold = false;   // keep the orbit
       } else { select(-1); setExplode(0, { animate: true }); }
       slow(); k++;
+      if (typeof o.label === 'function') { try { o.label(saverPlate()); } catch (e) { /* the plate is optional */ } }
     };
     saver.timer = setTimeout(() => { step(); saver.timer = setInterval(step, beat * 1000); }, 4000);
     return { canvas, warmupMs: 3000 };
