@@ -100,11 +100,30 @@
         b.cv.parentNode.style.cssText = 'width:' + cell * b.cols + 'px;max-width:none;flex:none';
         b.resize();
       }
+      // The plate: the lesson on screen, read from its own section (number,
+      // heading, lead, notes) and the live status line of its figure. The
+      // hero takes the page heading. Refreshed once a second.
+      var lastPlate = 0;
+      function txt(el) { return el ? el.textContent.replace(/\s+/g, ' ').trim() : ''; }
+      function plate(now) {
+        if (!opts.label || !cur) return;
+        lastPlate = now;
+        var sec = cur.el.closest('section.ch'), status = txt(cur.el.querySelector('.fig-status'));
+        if (!sec) {
+          opts.label({ title: txt($('.hero h1')), sub: txt($('.hero .kick')), lines: [txt($('.hero .lead'))] });
+          return;
+        }
+        var lines = [txt(sec.querySelector('.lead'))];
+        sec.querySelectorAll('.notes li').forEach(function (li) { lines.push('· ' + txt(li)); });
+        if (status) lines.push('Figure: ' + status);
+        opts.label({ title: txt(sec.querySelector('h2')), sub: 'Station guide · lesson ' + txt(sec.querySelector('.num')), lines: lines });
+      }
       function show(k, now) {
         if (cur) cur.b.cv.parentNode.style.cssText = '';
         cur = LIST[k]; cur.b = cur.el.querySelector('canvas').board; cur.s = {};
         if (cur.start) cur.start(cur.el);
         fit(); t0 = now; u = 0;
+        plate(now);
       }
       window.addEventListener('resize', fit);
       function frame(now) {
@@ -112,6 +131,7 @@
         u += Math.min(0.05, last ? (now - last) / 1000 : 0) * GD.speed; last = now;
         GD.figs.forEach(function (f) { f.on = f.el === cur.el; });
         if (cur.tick) cur.tick(cur.b, u, cur.s);
+        if (now - lastPlate > 1000) plate(now);
         var t = now - t0, a = Math.min(1, t / 900, (seg - t) / 900);
         g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = '#07090e'; g.fillRect(0, 0, sv.width, sv.height);
         var c = cur.b.cv;
