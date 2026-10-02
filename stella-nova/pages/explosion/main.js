@@ -553,7 +553,8 @@ function makeNoiseTex(){var S=256,data=new Uint8Array(S*S*4),s=48271;for(var i=0
 // fills the window with the viewport, pulls the camera back, slows the
 // playback, dims the fireball and orbits the view.
 // The gain fades to black before the loop wrap and back in after it, and each
-// new loop gets a new seed, so the wrap is not a hard cut.
+// new loop gets a new seed, so the wrap is not a hard cut. Once a second it
+// sends opts.label the density field, the march and the live curve values.
 window.snSaver={
   raf:0,
   enter:function(opts){
@@ -578,7 +579,32 @@ window.snSaver={
       self.raf=requestAnimationFrame(step);
     }
     this.raf=requestAnimationFrame(step);
+    // The plate: the density field and march of shaders/explosion.wgsl with
+    // the three dope-sheet curves sampled at the playhead. One fixed title,
+    // so the values refresh in place once a second.
+    var label=typeof (opts&&opts.label)==='function'?opts.label:null;
+    function plate(){
+      if(!label)return;
+      var tN=currentTime/duration, sc=getCurveValue('scale',tN), br=getCurveValue('bright',tN), de=getCurveValue('density',tN);
+      var steps=quality>1.5?128:quality>0.5?86:56;
+      label({title:'Volumetric explosion',sub:'ray march of a noise-displaced sphere, front to back',
+        eq:['d(p) = s·[ |q| − 4 + fbm(50(q + o))',
+          '           + 2·S(0.41·q) ]',
+          'q = R_y(θ)·p / s,   o = seed·(100, 73, 37)',
+          'S(q) = Σ₈ (sin k·y + cos k·x)/k,  k ← 1.73·k',
+          'inside d < 0.1:  τ ← τ + (1 − τ)(0.1 − d)',
+          'C ← C + (1 − α)·0.2τ·c(τ, r)',
+          't ← t + max(0.1·|d|·max(min(r, |d|), 2), 0.02)'],
+        lines:['playhead '+currentTime.toFixed(2)+' / '+duration+' s · seed '+seed.toFixed(1),
+          'scale s = '+sc.toFixed(3)+' · brightness '+(br*saverGain).toFixed(2)+' · density '+de.toFixed(2)+' (dope-sheet curves)',
+          'c(τ, r): white-hot core to ember red as τ rises, cooler at radius r',
+          'S: 8 octaves from k₀ = 2, each with a fixed twist of q · fbm: 4 noise octaves',
+          '≤ '+steps+' march steps · '+cv.width+' × '+cv.height+' px · yaw θ = '+(((mouseX*0.008*180)%360+360)%360).toFixed(0)+'°']});
+    }
+    plate();
+    clearInterval(this.plateTimer);
+    this.plateTimer=setInterval(plate,1000);
     return {canvas:cv,warmupMs:500};
   },
-  exit:function(){cancelAnimationFrame(this.raf);speed=1;saverGain=1;saverOn=false;}
+  exit:function(){cancelAnimationFrame(this.raf);clearInterval(this.plateTimer);speed=1;saverGain=1;saverOn=false;}
 };
