@@ -48,16 +48,18 @@
 //
 //  GREP MAP
 //    window.__hs                                     debug and headless checks
+//    window.snSaver                                  screensaver tour (lib/screensaver.js)
 //    // ── boot                                     start the page
 // ============================================================================
+import * as THREE from 'three';
 import { $ } from './app/env.js';
-import { canvas, camera, controls } from './app/stage.js';
+import { canvas, camera, controls, scene } from './app/stage.js';
 import { T, S, toast } from './app/state.js';
 import { fitView } from './app/camera.js';
 import { pickAt } from './app/pick.js';
 import { loadAll } from './app/load.js';
 import { setMode, explode, reconstruct, setAmount, toggleRegionExplode } from './app/layouts.js';
-import { boneCentre, select, clearSelection, step } from './app/select.js';
+import { boneCentre, select, clearSelection, step, setHi } from './app/select.js';
 import { isolate, exitIsolate, focusBone, focusRegion } from './app/inspect.js';
 import { setRegionHidden } from './app/list.js';
 import { setOpen } from './app/panel.js';
@@ -75,6 +77,65 @@ window.__hs = {
     return { x: cr.left + (p.x + 1) / 2 * cr.width, y: cr.top + (1 - p.y) / 2 * cr.height, i: b.i };
   },
   busy: () => !!(S.tr || S.fly || S.springing.size || S.bones.some(b => S.loaded[b.i] && S.appear[b.i] < 1)),
+};
+
+// ── screensaver ─────────────────────────────────────────────────────────────
+// Hook for the shell screensaver (lib/screensaver.js). enter() hides all the
+// DOM but the canvas, paints the gallery backdrop into the scene (the canvas
+// is transparent), and turns the spin on at 0.38 to 0.86 of its speed (calm
+// 1 to 0). The tour has one beat per seconds/4 (8 s or more), in a loop of
+// three beats: explode (radial and regional in turn), fly to one seeded
+// region and glow its bones, reconstruct. The fits keep the spin angle. Moves and flights take 1.5 to 2.5
+// times longer. Nothing goes to localStorage or the URL.
+function saverBackdrop() {
+  const c = document.createElement('canvas'); c.width = 768; c.height = 512;
+  const g = c.getContext('2d'), light = S.theme === 'light';
+  const gr = g.createRadialGradient(384, 195, 0, 384, 195, 560);
+  const st = light ? ['#f7f3eb', '#efe9de', '#d9d1c3'] : ['#262119', '#1b1815', '#0c0b0a'];
+  gr.addColorStop(0, st[0]); gr.addColorStop(0.42, st[1]); gr.addColorStop(1, st[2]);
+  g.fillStyle = gr; g.fillRect(0, 0, 768, 512);
+  const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
+  return tx;
+}
+window.snSaver = {
+  enter(o = {}) {
+    const calm = Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm));
+    const beat = Math.max(8, (+o.seconds || 60) / 4), pace = 1.5 + calm;
+    let seed = (o.seed >>> 0) || 1;
+    const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    const css = document.createElement('style');
+    css.textContent = '#stage{top:0!important}#stage>*:not(#view),body>*:not(#stage){display:none!important}#view{cursor:none!important}';
+    document.head.appendChild(css);
+    setOpen(false);
+    scene.background = saverBackdrop();
+    controls.autoRotateSpeed = 0.8 * (0.38 + 0.48 * (1 - calm));
+    setShow('spin', true);
+    const regions = ['skull', 'thorax', 'hand-r', 'foot-l', 'pelvis', 'spine', 'hand-l', 'foot-r'];
+    for (let i = regions.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [regions[i], regions[j]] = [regions[j], regions[i]]; }
+    let k = 0, lit = [];
+    const glow = v => { for (const i of lit) setHi(i, 0, v); };
+    // stretch the transition and the flight that the last call started; a
+    // fit (keepDir) keeps the spin angle and does not swing back to the front
+    const slow = keepDir => {
+      if (S.tr && S.tr.t === 0) { S.tr.dur *= pace; S.tr.end *= pace; for (let i = 0; i < S.n; i++) S.delay[i] *= pace; }
+      if (S.fly && S.fly.t === 0) { S.fly.dur *= pace; if (keepDir) S.fly.u1 = null; }
+    };
+    const stepBeat = () => {
+      if (!S.ready || !T.allBones) return;
+      const phase = k % 3;
+      if (phase === 0) setMode(k % 6 === 0 ? 'radial' : 'regional');
+      else if (phase === 1) {
+        const rid = regions[(k / 3 | 0) % regions.length];
+        const want = rid === 'skull' ? new Set(['skull', 'teeth', 'hyoid', 'ear']) : new Set([rid]);
+        lit = S.bones.filter(b => want.has(b.region) && S.vis[b.i]).map(b => b.i);
+        glow(1);
+        focusRegion(rid);
+      } else { glow(0); lit = []; reconstruct(); }
+      slow(phase !== 1); k++;
+    };
+    setTimeout(() => { stepBeat(); setInterval(stepBeat, beat * 1000); }, 4000);
+    return { canvas, warmupMs: 3000 };
+  },
 };
 
 // ── boot ────────────────────────────────────────────────────────────────────
