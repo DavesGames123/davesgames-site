@@ -56,6 +56,7 @@
 //      loop ................. "function loop"        the frame driver
 //      hidden page .......... "visibilitychange"     stop / restart loop
 //      init ................. "INIT"                first magnet + start
+//      screensaver .......... "SCREENSAVER"         window.snSaver hook
 // ============================================================================
 
 /* ════════════════════════════════════════════════════════════
@@ -1252,3 +1253,38 @@ setTimeout(()=>{
   started=true; lastTime=performance.now();
   if(!document.hidden) rafId=requestAnimationFrame(loop);
 },50);
+
+/* ═══ SCREENSAVER ═══ */
+// Hook for the shell screensaver (lib/screensaver.js). enter() hides the panel,
+// status bar, equation card and overlays, so #canvas-wrap fills the window and
+// resize() sizes the canvas to it. It then builds a two-magnet scene chosen by
+// opts.seed. Both magnets stay fixed and turn slowly, so the field rotates with
+// no collisions. opts.calm (1 = slowest) scales the spin and the tracer speed.
+window.snSaver={
+  enter(opts){
+    const calm=Math.min(1,Math.max(0,opts.calm??0.7));
+    const st=document.createElement('style');
+    st.textContent='#panel,#mob-btn,#eq-panel,#status-bar{display:none!important}'+
+      '#canvas-wrap{position:fixed!important;inset:0}body::before,body::after{display:none}';
+    document.head.appendChild(st);
+    const ready=()=>started?Promise.resolve():new Promise(r=>setTimeout(()=>r(ready()),60));
+    return ready().then(()=>{
+      resize();
+      CAM.x=0; CAM.y=0; CAM.zoom=1;
+      const pairs=[['bar','horseshoe'],['quadrupole','ring'],['halbach','dipole'],['solenoid','buzzer'],['bar','quadrupole']];
+      const pair=pairs[(opts.seed>>>0)%pairs.length];
+      const slow=1-0.7*calm;
+      magnets=pair.map((type,i)=>{
+        const m=createMagnet(type,CW*(i?0.64:0.36),CH*(i?0.56:0.44));
+        m.spin=(i?-0.18:0.26)*slow;
+        return m;
+      });
+      SIM.selectedId=-1; SIM.playing=true;
+      SIM.showTracers=true; SIM.showArrows=false; SIM.showHeatmap=false;
+      SIM.tracerSpeed=0.6+0.6*slow; SIM.tracerTrail=60;
+      SIM.tracerCount=tracerBudget();
+      rebuildMagnetList(); spawnTracers();
+      return { canvas, warmupMs:1500 };
+    });
+  }
+};
