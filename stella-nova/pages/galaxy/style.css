@@ -1,4 +1,4 @@
-  @import url('https://fonts.googleapis.com/css2?family=Oxanium:wght@300;400;600&display=swap');
+  @import url('../../vendor/fonts/oxanium.7b2f1a69.css');
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #000; overflow: hidden; font-family: 'Oxanium', monospace; color: #fff; }
   canvas { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: block; cursor: crosshair; }

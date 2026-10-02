@@ -320,7 +320,7 @@ const earthUniforms = {
 async function buildEarthMap() {
   splash('fetch continents (110m)');
   setGauge('geo', 10);
-  const res = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/land-110m.json');
+  const res = await fetch(new URL('../../vendor/world-atlas@2.0.2/land-110m.json', import.meta.url));
   if (!res.ok) throw new Error('HTTP '+res.status);
   setGauge('geo', 40);
   const topo = await res.json();

@@ -509,7 +509,7 @@ const indexHtml = `<!DOCTYPE html>
    shader per cell.
   ════════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="../../vendor/fonts/cormorant-garamond+jetbrains-mono.4dfdb2d4.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>

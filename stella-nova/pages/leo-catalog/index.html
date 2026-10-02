@@ -44,9 +44,7 @@
    VR or AR support after the catalog loads.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<link href="../../vendor/fonts/vt323.df6eebd7.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body class="boot-wait">
@@ -312,12 +310,12 @@
 <!-- Libraries: SGP4 propagator and coastline decoder as globals, then the
      import map for three, then the module entry point. -->
 <!-- Libraries -->
-<script src="https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+<script src="../../vendor/satellite.js@5.0.0/dist/satellite.min.js"></script>
+<script src="../../vendor/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
 <script type="importmap">
 { "imports": {
-  "three":          "https://unpkg.com/three@0.160.0/build/three.module.js",
-  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  "three":          "../../vendor/three@0.160.0/build/three.module.js",
+  "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
 } }
 </script>
 

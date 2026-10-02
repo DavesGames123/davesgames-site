@@ -34,16 +34,14 @@
    The panel never covers the scene. main.js sizes the renderer to #stage.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
      this page's own topbar. Kept inline so it runs before the body renders. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    "three": "../../vendor/three@0.160.0/build/three.module.js",
+    "three/addons/": "../../vendor/three@0.160.0/examples/jsm/"
   }
 }
 </script>
