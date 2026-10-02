@@ -1153,8 +1153,9 @@ rafId = requestAnimationFrame(loop);
 // Every number comes from PROT (data.js): the chain, the heavy atoms by
 // element (the model has no H), the pLDDT bands of plddtColor, and the
 // share of residues whose phi/psi falls in the alpha and beta basins that
-// initRama draws. The equations are the ones of the matching cards, in
-// Unicode. The live value is the layer of frameAt or the noise level sigma.
+// initRama draws. The TeX is the TeX of the matching cards (typeset.mjs);
+// eq keeps the Unicode fallback. The live value is the layer of frameAt or
+// the noise level sigma. chainAnchor (in enter) gives the chain on screen.
 const SUBN = n => String(n).replace(/[0-9]/g, d => '₀₁₂₃₄₅₆₇₈₉'[d]);
 function saverStats() {
   const el = [0, 0, 0, 0];
@@ -1173,30 +1174,42 @@ function saverStats() {
 function saverPlate(si, p, ST) {
   const uni = (PROT.id.match(/AF-([A-Z0-9]+)-/) || [])[1] || '';
   const name = PROT.name.split(' (')[0];
-  const common = [
-    `1 chain · ${L} residues · ${ATOMS.length} heavy atoms`,
-    `C${SUBN(ST.el[0])} N${SUBN(ST.el[1])} O${SUBN(ST.el[2])} S${SUBN(ST.el[3])} (heavy atoms; the model has no H)`,
-    `φ/ψ in the α basin ${ST.ha}% · in the β basin ${ST.sb}%`,
-  ];
   const sub = `UniProt ${uni} · ${PROT.id}`;
+  // Parameters: TeX symbol, short name, live value. The classes are those
+  // of typeset.mjs: x m1, frames T, R, t m6, sigma m5. The TeX is the TeX
+  // of typeset.mjs for the matching card.
+  const base = [{ sym: 'L', name: 'residues, 1 chain', value: String(L) }, { sym: 'N', name: 'heavy atoms', value: String(ATOMS.length) }];
+  const lines = [`C${SUBN(ST.el[0])} N${SUBN(ST.el[1])} O${SUBN(ST.el[2])} S${SUBN(ST.el[3])}: the model has no H.`,
+    `φ/ψ in the α basin ${ST.ha}%, in the β basin ${ST.sb}%.`];
+  const rules = [['T_i', 'm6'], ['T_j', 'm6'], ['R_i', 'm6'], ['\\vec t_i', 'm6'], ['x', 'm1'], ['\\vec x_j', 'm1'], ['\\tilde x', 'm1'], ['\\sigma', 'm5']];
   if (si === 0) {
     const lam = 8 * smooth(clamp(p / 0.7, 0, 1));
-    return { title: `${name} · structure module`, sub, lines: [...common, `layer ${lam.toFixed(1)} of 8 (illustrative path to the real frames)`],
+    return { title: `${name} · structure module`, sub, rules, lines,
+      params: [...base, { sym: '\\ell', name: 'layer of 8, illustrative', value: lam.toFixed(1) }],
+      tex: [String.raw`T_i=(R_i,\vec t_i),\qquad x_{\mathrm{global}}=T_i\circ x_{\mathrm{local}}=R_i\,x_{\mathrm{local}}+\vec t_i`,
+        String.raw`T_i\leftarrow T_i\circ\Bigl(\tfrac{(1,\,b_i,\,c_i,\,d_i)}{\sqrt{1+b_i^2+c_i^2+d_i^2}},\;\vec t_i\Bigr)`],
       eq: ['Tᵢ = (Rᵢ, tᵢ),  x(global) = Rᵢ x(local) + tᵢ', 'Tᵢ ← Tᵢ ∘ ((1, bᵢ, cᵢ, dᵢ) / √(1 + bᵢ² + cᵢ² + dᵢ²), tᵢ)'] };
   }
-  if (si === 1) {
-    return { title: `${name} · pLDDT`, sub, lines: [...common, `mean pLDDT ${ST.mean.toFixed(1)}`, `> 90: ${ST.band[0]} · 70–90: ${ST.band[1]} · 50–70: ${ST.band[2]} · ≤ 50: ${ST.band[3]} residues`],
+  if (si === 1 || si === 3) {
+    const pl = { sym: '\\overline{\\mathrm{pLDDT}}', name: 'mean confidence', value: ST.mean.toFixed(1) };
+    const bands = { sym: '\\le 50', name: 'low-confidence residues', value: String(ST.band[3]) };
+    if (si === 1) return { title: `${name} · pLDDT`, sub, rules, lines: [`> 90: ${ST.band[0]}, 70–90: ${ST.band[1]}, 50–70: ${ST.band[2]}, ≤ 50: ${ST.band[3]} residues.`, lines[1]],
+      params: [...base, pl, bands],
+      tex: [String.raw`\mathrm{pLDDT}_i=\sum_{b=1}^{50}p^{\,b}_i\,v_b,\qquad v_b=\text{bin centre of lDDT-C}\alpha\in[0,100]`],
       eq: ['pLDDTᵢ = Σ(b = 1…50) pᵢᵇ v_b', 'v_b = bin centre of lDDT-Cα ∈ [0, 100]'] };
+    return { title: `${name} · every atom`, sub, rules, lines, params: [...base, pl, bands],
+      tex: [String.raw`\mathrm{FAPE}=\frac{1}{Z}\;\operatorname*{mean}_{i,j}\;\min\bigl(d_{\mathrm{clamp}},\;e_{ij}\bigr),\qquad Z=d_{\mathrm{clamp}}=10\,\text{Å}`,
+        String.raw`e_{ij}=\bigl\|T_i^{-1}\circ\vec x_j-\bigl(T_i^{\mathrm{true}}\bigr)^{-1}\circ\vec x_j^{\,\mathrm{true}}\bigr\|`],
+      eq: ['FAPE = (1/Z) mean(i,j) min(d_clamp, eᵢⱼ)', 'eᵢⱼ = ‖Tᵢ⁻¹∘xⱼ − (Tᵢᵗʳᵘᵉ)⁻¹∘xⱼᵗʳᵘᵉ‖', 'Z = d_clamp = 10 Å'] };
   }
-  if (si === 2) {
-    const STEPS = 200, SMAX = 40, SMIN = 0.05, RHO = 7;
-    const t = STEPS * smooth(clamp(p / 0.75, 0, 1));
-    const sg = Math.pow(Math.pow(SMAX, 1 / RHO) + t / STEPS * (Math.pow(SMIN, 1 / RHO) - Math.pow(SMAX, 1 / RHO)), RHO);
-    return { title: `${name} · AlphaFold 3 diffusion`, sub, lines: [...common, `step ${Math.round(t)} of ${STEPS} · σ = ${sg < 1 ? sg.toFixed(2) : sg.toFixed(1)} Å`],
-      eq: ['x̃ = x + σ ε,  ε ~ 𝒩(0, I)', 'σ(t) = (a + (t/T)(b − a))^ρ', `a = σmax^(1/ρ), b = σmin^(1/ρ)`, `σmax = ${SMAX} Å, σmin = ${SMIN} Å, ρ = ${RHO}, T = ${STEPS}`] };
-  }
-  return { title: `${name} · every atom`, sub, lines: [...common, `mean pLDDT ${ST.mean.toFixed(1)} · residues ≤ 50: ${ST.band[3]}`],
-    eq: ['FAPE = (1/Z) mean(i,j) min(d_clamp, eᵢⱼ)', 'eᵢⱼ = ‖Tᵢ⁻¹∘xⱼ − (Tᵢᵗʳᵘᵉ)⁻¹∘xⱼᵗʳᵘᵉ‖', 'Z = d_clamp = 10 Å'] };
+  const STEPS = 200, SMAX = 40, SMIN = 0.05, RHO = 7;
+  const t = STEPS * smooth(clamp(p / 0.75, 0, 1));
+  const sg = Math.pow(Math.pow(SMAX, 1 / RHO) + t / STEPS * (Math.pow(SMIN, 1 / RHO) - Math.pow(SMAX, 1 / RHO)), RHO);
+  return { title: `${name} · AlphaFold 3 diffusion`, sub, rules, lines,
+    params: [...base, { sym: '\\sigma', name: 'noise level', value: (sg < 1 ? sg.toFixed(2) : sg.toFixed(1)) + ' Å', cls: 'm5' }, { sym: 't', name: 'step', value: Math.round(t) + ' of ' + STEPS }],
+    tex: [String.raw`\tilde x=x+\sigma\,\varepsilon,\qquad \varepsilon\sim\mathcal{N}(0,I)`,
+      String.raw`\sigma(t)=\Bigl(\sigma_{\max}^{1/\rho}+\tfrac{t}{T}\bigl(\sigma_{\min}^{1/\rho}-\sigma_{\max}^{1/\rho}\bigr)\Bigr)^{\rho},\qquad \rho=7,\ T=200`],
+    eq: ['x̃ = x + σ ε,  ε ~ 𝒩(0, I)', 'σ(t) = (a + (t/T)(b − a))^ρ', `a = σmax^(1/ρ), b = σmin^(1/ρ)`, `σmax = ${SMAX} Å, σmin = ${SMIN} Å, ρ = ${RHO}, T = ${STEPS}`] };
 }
 
 window.snSaver = {
@@ -1214,11 +1227,13 @@ window.snSaver = {
     const STEPS = 200, SMAX = 40, SMIN = 0.05, RHO = 7;   // the schedule of initDiffusion
     const sigma = t => Math.pow(Math.pow(SMAX, 1 / RHO) + t / STEPS * (Math.pow(SMIN, 1 / RHO) - Math.pow(SMAX, 1 / RHO)), RHO);
     const R = rng(3), EPS = ATOMS.map(() => [gauss(R), gauss(R), gauss(R)]);
+    let shown = null;   // the Cα points the scene drew last (null: the model CA)
     // frame most of the chain, the low-confidence tails too (CORE_R is the core)
     const RC = 0.72 * Math.max(...CA.map(G.norm)), RA = 0.72 * Math.max(...ATOMS.map(a => G.norm(a.p)));
     const SCENES = [
       { cap: 'Structure module · residue frames fold into place', r: RC, build(add, p) {
         const F = FRAMES.map((_, i) => frameAt(i, 8 * smooth(clamp(p / 0.7, 0, 1))));
+        shown = F.map(f => f.t);   // the plate anchor follows the drawn frames
         for (let i = 0; i < L - 1; i++) add.seg(F[i].t, F[i + 1].t, rainbow(i), 0.55);
         for (let i = 0; i < L; i++) {
           const Rm = F[i].R, q = F[i].t;
@@ -1233,7 +1248,8 @@ window.snSaver = {
       } },
       { cap: 'AlphaFold 3 · diffusion takes noise to atoms', r: RA, build(add, p) {
         const sg = sigma(STEPS * smooth(clamp(p / 0.75, 0, 1)));
-        ATOMS.forEach((a, k) => add.dot(G.add(a.p, G.scl(EPS[k], sg)), ELEM_COL[a.el], a.ca ? 0.75 : 0.55));
+        shown = [];
+        ATOMS.forEach((a, k) => { const q = G.add(a.p, G.scl(EPS[k], sg)); if (a.ca) shown.push(q); add.dot(q, ELEM_COL[a.el], a.ca ? 0.75 : 0.55); });
       } },
       { cap: 'Every atom · pLDDT confidence colours', r: RA, build(add) {
         for (const a of ATOMS) add.dot(a.p, mix(plddtColor(PL[a.res]), ELEM_COL[a.el], a.el === 0 ? 0 : 0.35), a.ca ? 0.75 : 0.62);
@@ -1244,12 +1260,27 @@ window.snSaver = {
     const g = view.ctx;
     const ST = saverStats();
     let plateAt = -1e9, plateSi = -1;
+    // The chain on screen, for the plate leader: the Cα points that the
+    // scene drew (the frames of the fold, the noisy atoms of the diffusion,
+    // else the model CA) through view.project, plus the canvas offset. The
+    // centre is their mean; the radius holds 90% of them, so a few loose
+    // tail residues do not push the plate away. The key points are the two
+    // chain ends and the residue nearest the centre.
+    const chainAnchor = () => {
+      const b = cv.getBoundingClientRect(), q = ((si === 0 || si === 2) && shown ? shown : CA).map(p => view.project(p));
+      let x = 0, y = 0; for (const v of q) { x += v[0]; y += v[1]; } x /= q.length; y /= q.length;
+      const d = q.map(v => Math.hypot(v[0] - x, v[1] - y)).sort((m, n) => m - n);
+      let r = d[Math.floor(0.9 * (d.length - 1))];
+      let c = 0; for (let k = 1; k < q.length; k++) if (Math.hypot(q[k][0] - x, q[k][1] - y) < Math.hypot(q[c][0] - x, q[c][1] - y)) c = k;
+      const P = v => ({ x: b.left + v[0], y: b.top + v[1] });
+      return { x: b.left + x, y: b.top + y, r, pts: [P(q[0]), P(q[q.length - 1]), P(q[c])] };
+    };
     const plate = () => {
       if (typeof o.label !== 'function') return;
       // a new scene at once; the live value (layer, sigma) at most once a second
       if (si === plateSi && (time - plateAt < 1 || si === 1 || si === 3)) return;
       plateAt = time; plateSi = si;
-      try { o.label(saverPlate(si, t / beat, ST)); } catch (e) { /* the plate is optional */ }
+      try { o.label(Object.assign(saverPlate(si, t / beat, ST), { anchor: chainAnchor })); } catch (e) { /* the plate is optional */ }
     };
     register(cv, dt => {
       t += dt; time += dt;
@@ -1265,10 +1296,14 @@ window.snSaver = {
       g.fillStyle = 'rgb(10,12,19)'; g.fillRect(0, 0, view.w, view.h);
       g.globalCompositeOperation = 'source-over';
       if (k < 1) { g.fillStyle = `rgba(10,12,19,${1 - k})`; g.fillRect(0, 0, view.w, view.h); }
-      g.globalAlpha = 0.78 * k;
-      g.fillStyle = '#c3c8d6'; g.font = '500 15px Inter, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-      g.fillText(SCENES[si].cap, 28, view.h - 28);
-      g.globalAlpha = 1;
+      // The caption is for a recording: with the shell plate on, the plate
+      // names the scene, so the canvas caption is off.
+      if (typeof o.label !== 'function') {
+        g.globalAlpha = 0.78 * k;
+        g.fillStyle = '#c3c8d6'; g.font = '500 15px Inter, sans-serif'; g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+        g.fillText(SCENES[si].cap, 28, view.h - 28);
+        g.globalAlpha = 1;
+      }
     });
     return { canvas: cv, warmupMs: 1500 };
   },
