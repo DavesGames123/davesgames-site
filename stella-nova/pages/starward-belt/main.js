@@ -788,20 +788,44 @@ window.snSaver = {
       if (!opts.label || !map || now - lastPlate < 1000) return;
       lastPlate = now;
       const t = map.title, N = map.NODE_BY_ID, p = state.path, [a, b] = state.selected;
-      const lines = [];
+      const lines = [], params = [];
       if (a && b && p) {
         lines.push('Course: ' + p.nodes.map((id) => N[id].name).join(' › '));
-        lines.push(`${p.routes.length} jump${p.routes.length === 1 ? '' : 's'} · fuel −${p.cost}` + (p.routes.length > 1 ? ' = −(' + p.routes.map((ri) => map.ROUTES[ri].cost).join(' + ') + ')' : ''));
+        params.push({ sym: 'J', name: 'jumps', value: String(p.routes.length) },
+          { sym: 'C', name: 'fuel', value: '−' + p.cost + (p.routes.length > 1 ? ' = −(' + p.routes.map((ri) => map.ROUTES[ri].cost).join(' + ') + ')' : '') });
         lines.push('Needs: ' + TIERS.filter((x) => p.routes.some((ri) => map.ROUTES[ri].tier === x.id)).map((x) => x.label).join(', '));
-      } else if (a && b) lines.push(`Course: ${N[a].name} › ${N[b].name} · no course under these tiers`);
-      else lines.push(`${map.NODES.length} stations · ${map.ROUTES.length} routes · ${TIERS.length} tiers`);
-      lines.push('Tiers: ' + TIERS.map((x) => x.label).join(' · '));
+      } else if (a && b) lines.push(`Course: ${N[a].name} › ${N[b].name}, no course under these tiers`);
+      else lines.push('Tiers: ' + TIERS.map((x) => x.label).join(', '));
+      params.unshift({ sym: 'V', name: 'stations', value: String(map.NODES.length) }, { sym: 'E', name: 'routes', value: String(map.ROUTES.length) });
+      // New TeX for the relaxation step of cheapest() in route.js. The page
+      // has no TeX or math colour classes, so no rules. The anchor is the
+      // course while one is held; the map alone fills the window (null).
       opts.label({
         title: t.plate,
-        sub: `${t.game} · ${t.vector}${map.seed && !t.game.includes(map.seed) ? ' · seed ' + map.seed : ''}`,
-        lines,
+        sub: `${t.game}, ${t.vector}${map.seed && !t.game.includes(map.seed) ? ', seed ' + map.seed : ''}`,
+        params, lines,
+        tex: ['\\text{cost}(v) = \\min_{u}\\bigl(\\text{cost}(u) + c(u, v)\\bigr)',
+          '\\text{tie: fewer jumps } |P| \\text{ wins}'],
         eq: ['cost(v) = min over u ( cost(u) + c(u,v) )', 'Dijkstra; on a tie, fewer jumps wins'],
+        anchor: courseAnchor,
       });
+    };
+    // The held course on screen: camera.toScreen of each station on the
+    // path (window px: the stage fills the window). The centre is the middle
+    // of their screen box, the radius holds each station plus its disc and
+    // inner ring (44 px times the zoom, at least 30 px; the hit test uses
+    // 40), and the key points are up to 8 stations of the course.
+    const courseAnchor = () => {
+      const p = state.path;
+      if (!map || !camera || !p || !p.nodes || !p.nodes.length) return null;
+      const q = p.nodes.map((id) => camera.toScreen(map.NODE_BY_ID[id].x, map.NODE_BY_ID[id].y));
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (const o of q) { x0 = Math.min(x0, o.x); x1 = Math.max(x1, o.x); y0 = Math.min(y0, o.y); y1 = Math.max(y1, o.y); }
+      const x = (x0 + x1) / 2, y = (y0 + y1) / 2;
+      const pad = Math.max(30, 44 * camera.view().zoom);
+      let r = 0; for (const o of q) r = Math.max(r, Math.hypot(o.x - x, o.y - y) + pad);
+      const step = Math.max(1, Math.ceil(q.length / 8));
+      return { x, y, r, pts: q.filter((o, k) => k % step === 0 || k === q.length - 1).slice(0, 8) };
     };
     const auto = (now) => {
       if (!document.body.classList.contains('swapping')) plate(now);
