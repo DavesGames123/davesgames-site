@@ -115,6 +115,7 @@ const GAME_STARS = [
 const BLURBS = {
   'watch-movement': 'A pocket watch that runs, then comes apart.',
   'watch-randomizer': 'Roll a pocket watch, wristwatch, wall clock or alarm clock.',
+  'stirling-engine': 'A Stirling engine cut open, with a live P-V loop.',
   home: 'This page: the overview and the chart.',
   translate: 'Help put Stella Nova in your language.',
   wiki: 'Every item, module and tech, linked.',

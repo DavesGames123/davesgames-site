@@ -171,6 +171,7 @@ w.SN_NAV = [
     { h: null, p: [
       ["watch-movement", "Watch Movement", "3D"],
       ["watch-randomizer", "Timepiece Randomizer", "3D"],
+      ["stirling-engine", "Stirling Engine", "3D"],
       ["origami", "Origami Simulator", "SIM"]
     ] }
   ] }
