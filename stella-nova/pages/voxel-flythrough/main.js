@@ -936,23 +936,41 @@ window.snSaver={
     const label=typeof opts.label==='function'?opts.label:null;
     const plate=()=>{
       if(!label) return;
-      const m=steppedMorph(S.morphClock), p=camRO;
+      const m=steppedMorph(S.morphClock);
+      // A full-window flythrough has no one subject on screen, so the plate
+      // has no anchor: the shell puts it at the lower right with no leader.
+      // Colours: positions and the ray (p, q, u, r, delta) m1, the field
+      // rho m2, boid velocities and offsets (v, d) m3, the swarm weights
+      // (c, w) m4, the boid acceleration a m5, the terrain values (H, f,
+      // sigma, tau, m) m6.
       label({
         title:'Voxel flythrough',
         sub:'DDA ray march through an fBm voxel field',
+        params:[
+          {sym:'f',name:'frequency',value:U.uFreq.toFixed(3),cls:'m6'},
+          {sym:'H',name:'height',value:String(U.uHeight),cls:'m6'},
+          {sym:'\\tau',name:'threshold',value:String(U.uThresh),cls:'m6'},
+          {sym:'m',name:'morph',value:U.uMorphAmt+' × '+m.toFixed(2),cls:'m6'},
+        ].concat(BO.on?[{sym:'c',name:'cohesion',value:String(BO.cohesion),cls:'m4'}]:[]),
+        lines:[
+          U.uOct+' octaves, slope σ = '+U.uSlope+', up to '+U.uMaxSteps+' cells per ray; solid where ρ > 0',
+          BO.on?(BO.N.toLocaleString('en-US')+' boids, 12 neighbours each, wander w = '+BO.wander):'Boid swarm off (no float render target)',
+        ],
+        tex:[
+          '\\rho(\\mathbf{p}) = H\\,\\operatorname{fbm}(f\\,\\mathbf{p} + m\\,\\mathbf{u}) - \\sigma\\, y - \\tau',
+          '\\operatorname{fbm}(\\mathbf{q}) = \\frac{\\sum_i 0.5^i\\, n(2.02^i\\,\\mathbf{q})}{\\sum_i 0.5^i}',
+          'a = \\operatorname{argmin}_k\\, \\delta_k, \\qquad \\delta_a \\leftarrow \\delta_a + |1/\\hat r_a|',
+          '\\begin{aligned}\\mathbf{a} &= 0.9\\,c \\sum \\frac{\\mathbf{d}}{|\\mathbf{d}|^2} + 1.7\\,c\\,(\\bar{\\mathbf{v}} - \\mathbf{v})\\\\ &\\quad + 0.06\\,c\\,(\\bar{\\mathbf{p}} - \\mathbf{p}) + w\\,\\operatorname{curl}(\\mathbf{p})\\end{aligned}',
+        ],
+        rules:[['\\mathbf{p}','m1'],['\\mathbf{q}','m1'],['\\mathbf{u}','m1'],['\\delta','m1'],['\\hat r','m1'],['\\rho','m2'],
+          ['\\mathbf{v}','m3'],['\\mathbf{d}','m3'],['c','m4'],['w','m4'],['\\mathbf{a}','m5'],
+          ['H','m6'],['f','m6'],['\\sigma','m6'],['\\tau','m6'],['m','m6']],
         eq:[
           'ρ(p) = H·fbm(f·p + m·u) − σ·y − τ',
           'fbm(q) = Σᵢ 0.5ⁱ n(2.02ⁱ q) / Σᵢ 0.5ⁱ',
           'DDA: a = argmin dis,  dis_a += |1/rd_a|',
           'acc = 0.9c Σ d/|d|² + 1.7c (v̄ − v)',
           '      + 0.06c (p̄ − p) + w·curl(p)',
-        ],
-        lines:[
-          'f = '+U.uFreq.toFixed(3)+' · '+U.uOct+' octaves · H = '+U.uHeight+' · τ = '+U.uThresh+' · σ = '+U.uSlope,
-          'u = (0.5, 1, 0.4), plus the seed offset · solid where ρ > 0',
-          'morph m = '+U.uMorphAmt+' × '+m.toFixed(2)+' (terrain state '+Math.round(m)+', snap '+S.snapSec+' s)',
-          'camera ('+p[0].toFixed(0)+', '+p[1].toFixed(0)+', '+p[2].toFixed(0)+') · ≤ '+U.uMaxSteps+' cells per ray',
-          BO.on?(BO.N.toLocaleString('en-US')+' boids · c = '+BO.cohesion+' · w = '+BO.wander+' · 12 neighbours each'):'boid swarm off (no float render target)',
         ],
       });
     };
