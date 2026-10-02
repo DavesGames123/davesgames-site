@@ -812,17 +812,48 @@ var APP=(function(){
     var WALLN={brand:'brand (teal, navy, grey)',classic:'classic (red, green, grey)',dim:'dim (green, plum, grey)'};
     function plate(){ if(!label) return;
       var a=active(), cv=usingGpu()?glCv:cpuCv, objs=SCENE.spheres.filter(function(q){ return q.vis!==false; });
-      var lines=['samples per pixel N = '+a.samples()+(usingGpu()?' (stops at 4000)':' (stops at 400)')+' · '+cv.width+' × '+cv.height+' px · '+(usingGpu()?'GPU':'CPU'),
-        '≤ '+SCENE.bounces+' bounces'+(usingGpu()?' (Russian roulette after 3)':'')+' · ceiling light E = '+SCENE.light+', square ±'+SCENE.lsize+' · walls '+(WALLN[wallSet]||wallSet)];
-      lines.push(objs.map(function(q){ return (q.name||'object')+': '+(MATN[q.mat]||'glossy'); }).join(' · '));
-      lines.push('camera az '+CAM.az+'°, el '+CAM.el+'°, R = '+CAM.R+' · fov '+CAM.fov+'°');
+      var glass=objs.some(function(q){ return q.mat===3; }), A=4*SCENE.lsize*SCENE.lsize;
+      var params=[{sym:'N',name:'samples per pixel',value:a.samples()+' of '+(usingGpu()?4000:400),cls:'m6'},
+        {sym:'E',name:'ceiling light',value:String(SCENE.light),cls:'m5'},
+        {sym:'A',name:'light area',value:'(2 · '+SCENE.lsize+')² = '+A.toFixed(3),cls:'m6'}];
+      if(glass) params.push({sym:'\\eta',name:'glass index',value:'1.5',cls:'m4'});
+      var tex=['L(\\mathbf{x}, \\omega) = L_e + \\int_{\\Omega} f_r\\, L(\\mathbf{x}\', \\omega_i)\\,(\\mathbf{n}\\cdot\\omega_i)\\, d\\omega_i',
+        '\\hat L = \\frac{1}{N}\\sum_{k=1}^{N} \\frac{f_r\\, L_k\\,(\\mathbf{n}\\cdot\\omega_k)}{p(\\omega_k)}, \\qquad p(\\omega) = \\frac{\\cos\\theta}{\\pi}',
+        'L_{\\text{direct}} = \\frac{\\rho\\, E\\, A\\,(\\mathbf{n}\\cdot\\mathbf{l})(\\mathbf{n}_L\\cdot\\mathbf{l})}{\\pi\\, r^2}'];
+      if(glass) tex.push('F = 0.04 + 0.96\\,(1 - \\cos\\theta)^5, \\qquad \\eta = 1.5');
       label({ title:'Cornell box · '+wallSet+' walls', sub:'Monte Carlo path trace with next-event estimation',
+        params:params,
+        lines:[(usingGpu()?'GPU':'CPU')+', '+cv.width+' × '+cv.height+' px, up to '+SCENE.bounces+' bounces'+(usingGpu()?', Russian roulette after 3':''),
+          objs.map(function(q){ return (q.name||'object')+': '+(MATN[q.mat]||'glossy'); }).join(' · ')],
+        tex:tex,
+        // Colours: the path (x, omega, r) m1, normals and the light
+        // direction m3, the material (f_r, rho, F, eta) m4, radiance and
+        // the light (L, E) m5, the estimator sizes (N, A) m6.
+        rules:[['\\mathbf{x}','m1'],['\\omega','m1'],['r','m1'],['\\mathbf{n}_L','m3'],['\\mathbf{n}','m3'],['\\mathbf{l}','m3'],
+          ['f_r','m4'],['\\rho','m4'],['F','m4'],['\\eta','m4'],['L','m5'],['E','m5'],['N','m6'],['A','m6']],
         eq:['L(x, ω) = Lₑ + ∫ f_r · L(x′, ωᵢ) · (n·ωᵢ) dωᵢ',
           'direct = ρ·E·A·(n·l)(n_L·l) / (π r²)',
           'A = (2·'+SCENE.lsize+')²,  diffuse: ωᵢ ~ cos θ / π',
           'glass: F = 0.04 + 0.96(1 − cos θ)⁵, η = 1.5',
           'pixel = (1/N) Σ L  →  ACES  →  γ 1/2.2'],
-        lines:lines }); }
+        anchor:objAnchor }); }
+    // The objects on screen, for the shell's label plate (the box itself
+    // fills the window, so it is not the subject). Each visible object
+    // that is not text or a light gives its projected centre and a disc of
+    // its bounding radius (r times a factor per shape, from the wireframe
+    // sizes). The projection is project() with a fresh cameraBasis(), plus
+    // the offset of #canvas-wrap. pts are the object centres.
+    var SHB=[1,1.42,1.21,1.02,1.04,1.15,1,1.1];
+    function objAnchor(){
+      var cam=cameraBasis(), w=document.getElementById('canvas-wrap'), o=w?w.getBoundingClientRect():{left:0,top:0}, half=WH/2, d=[];
+      SCENE.spheres.forEach(function(q){ if(q.vis===false||q.shape===8||q.mat===5) return;
+        var rx=q.c[0]-cam.cp[0],ry=q.c[1]-cam.cp[1],rz=q.c[2]-cam.cp[2], dz=rx*cam.f[0]+ry*cam.f[1]+rz*cam.f[2]; if(dz<0.02) return;
+        var cx=rx*cam.rt[0]+ry*cam.rt[1]+rz*cam.rt[2], cy=rx*cam.up[0]+ry*cam.up[1]+rz*cam.up[2];
+        d.push({x:o.left+WW/2+(cx/dz)/cam.tan*half, y:o.top+WH/2-(cy/dz)/cam.tan*half, r:q.r*(SHB[q.shape]||1.2)/dz/cam.tan*half}); });
+      if(!d.length) return null;
+      var x0=Infinity,x1=-Infinity,y0=Infinity,y1=-Infinity; d.forEach(function(e){ x0=Math.min(x0,e.x-e.r); x1=Math.max(x1,e.x+e.r); y0=Math.min(y0,e.y-e.r); y1=Math.max(y1,e.y+e.r); });
+      var x=(x0+x1)/2, y=(y0+y1)/2, r=0; d.forEach(function(e){ r=Math.max(r,Math.hypot(e.x-x,e.y-y)+e.r); });
+      return {x:x,y:y,r:r,pts:d.slice(0,8).map(function(e){ return {x:e.x,y:e.y}; })}; }
     function station(){ var s=ST[n++%ST.length]; CAM.az=s.az; CAM.el=s.el; CAM.R=s.R; CAM.fov=52; CAM.tx=0; CAM.ty=-0.10; CAM.tz=0; preset(s.p); wallSet=s.p; resetRender(); plate(); }
     function tick(t){ var dt=Math.min(0.05,(t-(last||t))/1000); last=t; if(!since) since=t;
       if(phase==='show'&&t-since>hold) phase='out';
