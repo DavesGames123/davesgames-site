@@ -15,6 +15,7 @@
    GREP MAP
      grep -n 'AUDIO'        the three-tone Web Audio triad
      grep -n 'function buildCurve'   the knot geometry build
+     grep -n 'SAMPLE DENSITY'        sample count from the curve speed
      grep -n 'function glowSprite'   the soft point texture
      grep -n 'function frame'        the render loop and camera
      grep -n 'function buildUI'      the control panel construction
@@ -154,16 +155,32 @@
   // ------------------------------------------------------------------ buildCurve
   const _p = new THREE.Vector3(), _col = [0, 0, 0];
   let CURVE = null, COL = null, VT = null, VCOUNT = 0, RING = 0;
+  // SAMPLE DENSITY. The sample count comes from the curve, not a fixed
+  // count per period. The speed bound is 2 pi S sqrt((A + d)^2 + B^2 + C^2)
+  // world units per unit of u. One sample per SEG world units of it keeps
+  // each chord short (the box is 2 S = 3 units wide). A whole triple gets
+  // one period. A detuned triple gets as many periods as BUDGET allows
+  // (4 to 38), so a complex atonal triad gets fewer but round periods, not
+  // 38 polygon periods. While the phases animate, the budget is smaller,
+  // because buildCurve runs every frame then.
+  const SEG = 0.012;
   function buildCurve() {
     const whole = isWhole(), anim = animating();   // animating reduces detail for speed
-    const periods = whole ? 1 : (MOB ? 26 : 38);
-    const perPeriod = whole ? (anim ? (MOB ? 340 : 560) : (MOB ? 640 : 900)) : (anim ? (MOB ? 44 : 60) : (MOB ? 60 : 90));
+    const speed = TAU * S * Math.hypot(G.A + detv(), G.B, G.C);
+    const BUDGET = anim ? (MOB ? 1500 : 3000) : (MOB ? 8000 : 24000);
+    let perPeriod = Math.max(whole ? 900 : 90, Math.ceil(speed / SEG)), periods = 1;
+    if (whole) perPeriod = Math.min(perPeriod, BUDGET);
+    else {
+      perPeriod = Math.min(perPeriod, Math.floor(BUDGET / 4));
+      periods = Math.max(4, Math.min(MOB ? 26 : 38, Math.floor(BUDGET / perPeriod)));
+    }
     const n = periods * perPeriod;
     const pts = [];
     for (let i = 0; i < n; i++) pts.push(pt(i / perPeriod, new THREE.Vector3()));
     CURVE = new THREE.CatmullRomCurve3(pts, whole, 'centripetal');
+    CURVE.arcLengthDivisions = Math.max(200, n);   // getPointAt follows the samples, not 200 chords
 
-    const TUB = whole ? (anim ? (MOB ? 340 : 560) : (MOB ? 700 : 1200)) : n;   // tubular segments
+    const TUB = n;                                 // tubular segments: one per sample
     const RSEG = MOB ? 4 : 6;                      // segments around the tube
     const geo = new THREE.TubeGeometry(CURVE, TUB, whole ? 0.02 : 0.014, RSEG, whole);
     VCOUNT = geo.attributes.position.count;
@@ -184,13 +201,16 @@
   function updateHeat(tt) {
     if (!COL) return;
     const a = COL.array;
-    for (let i = 0; i < VCOUNT; i++) {
+    // All RING vertices of one tube ring share VT, so the color is found
+    // once per ring and copied (VCOUNT can be 24000 rings x RING now).
+    for (let i = 0; i < VCOUNT; i += RING) {
       let d = tt - VT[i]; if (d < 0) d += 1;      // distance behind the tip
       const heat = Math.exp(-d * 3.5);            // long, slow cool-down
       const temp = 0.25 + 0.75 * heat;            // magma parameter: indigo -> cream
       const glow = 0.5 + 1.7 * heat;              // dim base, very hot tip
       magma(temp, _col);
-      a[i * 3] = _col[0] * glow; a[i * 3 + 1] = _col[1] * glow; a[i * 3 + 2] = _col[2] * glow;
+      const r = _col[0] * glow, g = _col[1] * glow, bl = _col[2] * glow, e = Math.min(VCOUNT, i + RING);
+      for (let j = i; j < e; j++) { a[j * 3] = r; a[j * 3 + 1] = g; a[j * 3 + 2] = bl; }
     }
     COL.needsUpdate = true;
   }
