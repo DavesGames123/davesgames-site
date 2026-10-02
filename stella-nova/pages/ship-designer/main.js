@@ -33,6 +33,7 @@
 //      bottom sheet ....... "function buildSheet"
 //      PNG export ......... "function exportPng"
 //      fleet simulation ... "var fleet"
+//      screensaver hook ... "window.snSaver"
 //      boot ............... "function boot"
 // ============================================================================
 
@@ -209,7 +210,7 @@
     sx.imageSmoothingQuality = 'high';
     sx.drawImage(shipFull, 0, 0, 128, 128);
     syncUi();
-    writeHash();
+    if (!saverOn) writeHash();
   }
   function presetName() {
     for (var i = 0; i < PRESETS.length; i++) {
@@ -258,6 +259,7 @@
     return 'hull=' + state.hull.slice(1) + '&trim=' + state.trim.slice(1) + '&accent=' + state.accent.slice(1) + '&pattern=' + state.pattern;
   }
   var hashTimer = 0;
+  var saverOn = false;   // screensaver mode: no hash writes
   function writeHash() {
     clearTimeout(hashTimer);
     hashTimer = setTimeout(function () {
@@ -503,7 +505,8 @@
   var fleet = {
     canvas: null, ctx: null, w: 0, h: 0, dpr: 1, ships: [], t: 0, last: 0,
     mode: 'wander', paused: false, visible: true, onScreen: true, running: false,
-    count: 24, size: 44, speed: 1, glow: true, bg: null, flame: null, push: null
+    count: 24, size: 44, speed: 1, glow: true, bg: null, flame: null, push: null,
+    flick: 40   // engine flame flicker rate, rad per unit of fleet time
   };
 
   function fleetInit() {
@@ -682,7 +685,7 @@
       x.rotate(s.a + Math.PI / 2);
       if (fleet.glow) {
         x.globalCompositeOperation = 'lighter';
-        var fl = 0.8 + 0.2 * Math.sin(t * 40 + i * 1.7);
+        var fl = 0.8 + 0.2 * Math.sin(t * fleet.flick + i * 1.7);
         x.globalAlpha = 0.85;
         x.drawImage(fleet.flame, -sz * 0.09, sz * 0.38, sz * 0.18, sz * 0.55 * fl);
         x.globalAlpha = 1;
@@ -743,6 +746,34 @@
       fleetKick();
     });
   }
+
+  // ── SCREENSAVER HOOK ──
+  // The shell (lib/screensaver.js) calls enter() in screensaver mode. It pins
+  // #fleetWrap full frame, so the ResizeObserver sizes the canvas, and hides
+  // the rest of the page. The seed picks the livery and the flight mode. The
+  // calm value slows the fleet and the engine flicker.
+  window.snSaver = {
+    enter: function (opts) {
+      var calm = Math.max(0, Math.min(1, opts && opts.calm != null ? opts.calm : 0.7));
+      var seed = (opts && opts.seed) || 0;
+      saverOn = true;
+      var st = document.createElement('style');
+      st.textContent = 'html, body { overflow: hidden !important; }' +
+        'header.top, #hero, .card.fleet .card-head, #panel, .toast { display: none !important; }' +
+        '.card.fleet { backdrop-filter: none; -webkit-backdrop-filter: none; overflow: visible; border: 0; }' +
+        '#fleetWrap { position: fixed; inset: 0; height: auto; z-index: 100; cursor: none; }';
+      document.head.appendChild(st);
+      applyPreset(PRESETS[seed % PRESETS.length]);
+      fleet.speed = 1 - 0.6 * calm;
+      fleet.flick = 4 + 8 * (1 - calm);
+      fleet.size = 52; fleet.count = 20; fleet.push = null;
+      fleet.mode = seed % 2 ? 'wander' : 'formation';
+      fleetSeed();
+      fleet.paused = false; fleet.onScreen = true;
+      fleetResize(); fleetKick();
+      return { canvas: fleet.canvas, warmupMs: 500 };
+    }
+  };
 
   boot();
 })();
