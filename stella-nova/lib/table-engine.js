@@ -46,6 +46,7 @@ export async function bootTable(PAGE, data) {
   // The hook is defined now, so the shell finds it before the GPU is ready.
   // enter() waits for PAGE.init. If the GPU fails, enter() rejects and the
   // shell uses its generic mode. See saverEnter.
+  const SAVER_WAIT_MS = 12000;
   let saver = null, saverReady = null;
   if (SPEC.saver) {
     let ok, fail; saverReady = new Promise((a, b) => { ok = a; fail = b; }); saverReady.catch(() => {});
@@ -307,12 +308,16 @@ export async function bootTable(PAGE, data) {
   // seed) draws into a full-window canvas. The stage is hidden, so no other
   // tile draws. The tempo generator is set flat at a speed from opts.calm
   // (1 = slowest). The shell reloads the page when the screensaver stops.
-  function saverEnter(opts) {
+  // PAGE.init can return before the cell pipelines compile, so enter() waits
+  // up to SAVER_WAIT_MS for the chosen cell, then takes any compiled cell.
+  async function saverEnter(opts) {
     const cfg = SPEC.saver, calm = Math.min(1, Math.max(0, opts.calm ?? 0.7));
-    const pool = tiles.filter(t => (cfg.cells || []).includes(t.s.name) && t.pipeline);
-    const list = pool.length ? pool : tiles.filter(t => t.pipeline);
-    if (!list.length) throw new Error('no cell ready');
-    const t = list[(opts.seed >>> 0) % list.length];
+    const pool = tiles.filter(t => (cfg.cells || []).includes(t.s.name));
+    const list = pool.length ? pool : tiles;
+    let t = list[(opts.seed >>> 0) % list.length];
+    for (const t0 = performance.now(); !t.pipeline && performance.now() - t0 < SAVER_WAIT_MS;) await new Promise(r => setTimeout(r, 100));
+    if (!t.pipeline) t = list.find(x => x.pipeline) || tiles.find(x => x.pipeline);
+    if (!t) throw new Error('no cell compiled');
     const tg = GENS.find(g => g.id === 'tempo');
     if (tg && cfg.tempo) {
       const want = cfg.tempo[0] + (cfg.tempo[1] - cfg.tempo[0]) * calm; let best = 0.5, err = Infinity;
