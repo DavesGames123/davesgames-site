@@ -368,7 +368,11 @@ function buildBuf(fils,nodes){const edges=nodes-1,tot=fils.length*edges;
 // ═══════════════ CAMERA ═══════════════
 // Orbit state: theta, phi, distance, plus a render-resolution scale. resize
 // rebuilds the canvas and both FBOs to the scaled device resolution.
-let resScale=.85,camT=.5,camP=.25,camD=55,drg=false,lmx,lmy;
+// The page opens zoomed out so the whole cube and its filament rings fit the
+// frame. A portrait viewport has a narrow horizontal view, so the distance
+// grows by the inverse aspect there. Load and Reset use this distance.
+function homeCamD(){return Math.min(500,135*Math.max(1,innerHeight/Math.max(1,innerWidth)));}
+let resScale=.85,camT=.5,camP=.25,camD=homeCamD(),drg=false,lmx,lmy;
 function resize(){const d=Math.min(devicePixelRatio||1,2);
   canvas.width=Math.floor(innerWidth*d*resScale);canvas.height=Math.floor(innerHeight*d*resScale);
   gl.viewport(0,0,canvas.width,canvas.height);mkFBO(canvas.width,canvas.height);}
@@ -416,7 +420,7 @@ function buildUI(){pb.innerHTML='';
   rst.onclick=()=>{for(const[k,p]of Object.entries(P_)){cur[k]=p.v;
     const el=document.getElementById('p_'+k);if(el){el.value=p.v;document.getElementById('v_'+k).textContent=fmt(p.v);}}
     for(const[k,c]of Object.entries(C_)){chk[k]=c.v;const el=document.getElementById('c_'+k);if(el)el.checked=c.v;}
-    resScale=.85;camT=.5;camP=.25;camD=55;resize();};
+    resScale=.85;camT=.5;camP=.25;camD=homeCamD();resize();};
   btns.append(shuf,rst);pb.appendChild(btns);
   // ── standalone Time Scale at bottom ──
   const tsd=document.createElement('div');tsd.className='pr';tsd.style.marginTop='8px';tsd.style.borderTop='1px solid rgba(90,110,200,0.15)';tsd.style.paddingTop='8px';
