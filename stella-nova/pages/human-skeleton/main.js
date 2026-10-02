@@ -49,10 +49,11 @@
 //  GREP MAP
 //    window.__hs                                     debug and headless checks
 //    window.snSaver                                  screensaver tour (lib/screensaver.js)
+//    function saverPlate                             screensaver plate: layout, region, bone in focus
 //    // ── boot                                     start the page
 // ============================================================================
 import * as THREE from 'three';
-import { $ } from './app/env.js';
+import { $, TYPE_NAME, SIDE_NAME, MODE_NAME } from './app/env.js';
 import { canvas, camera, controls, scene } from './app/stage.js';
 import { T, S, toast } from './app/state.js';
 import { fitView } from './app/camera.js';
@@ -97,6 +98,35 @@ function saverBackdrop() {
   const tx = new THREE.CanvasTexture(c); tx.colorSpace = THREE.SRGBColorSpace;
   return tx;
 }
+// The screensaver plate (opts.label), from the manifest (S.M). beat is
+// 'open', 'region' or 'closed'. In a region beat, lit holds the glowing
+// bones and focus is the one that the plate names (name, Latin name,
+// type, side, length and the fact of the card). Else the plate counts the
+// bones in each body group.
+function saverPlate(beat, rid, lit, focus) {
+  if (!S.M) return null;
+  const counted = S.bones.filter(b => b.counted).length;
+  const teeth = S.bones.filter(b => b.type === 'tooth').length, cart = S.bones.filter(b => b.type === 'cartilage').length;
+  const ear = S.regions.find(r => r.id === 'ear');
+  const total = `${counted} counted bones · ${teeth} teeth · ${cart} costal cartilages` + (ear && ear.count < ear.expected ? ` (the ${ear.expected} ear ossicles are not in the set)` : '');
+  if (beat === 'region') {
+    const reg = S.regions.find(r => r.id === rid) || { label: rid };
+    const grp = S.M.groups.find(g => g.id === reg.group);
+    const types = {};
+    for (const i of lit) { const t = S.bones[i].type; types[t] = (types[t] || 0) + 1; }
+    const lines = [`${lit.length} pieces: ` + Object.keys(types).map(t => `${TYPE_NAME[t]} ${types[t]}`).join(' · ')];
+    const b = S.bones[focus];
+    if (b) {
+      lines.push(`In focus: ${b.side ? SIDE_NAME[b.side].toLowerCase() + ' ' + b.name.toLowerCase() : b.name} (${b.latin})`);
+      lines.push(`${TYPE_NAME[b.type]} · ${b.len >= 100 ? Math.round(b.len) : b.len.toFixed(1)} mm` + (b.fma ? ` · FMA ${b.fma}` : ''));
+      if (b.fact) lines.push(b.fact);
+    }
+    return { title: reg.label, sub: `Human skeleton · ${grp ? grp.label : ''}`, lines };
+  }
+  const per = S.M.groups.filter(g => g.id !== 'cartilage').map(g => `${g.label} ${S.bones.filter(b => b.group === g.id && b.counted).length}`);
+  return { title: beat === 'open' ? `Human skeleton · ${MODE_NAME[S.mode] || 'Exploded'}` : 'Human skeleton', sub: beat === 'open' ? 'Exploded view' : 'Assembled',
+    lines: [total, per.slice(0, 4).join(' · '), per.slice(4).join(' · ')] };
+}
 window.snSaver = {
   enter(o = {}) {
     const calm = Math.max(0, Math.min(1, o.calm == null ? 0.7 : +o.calm));
@@ -120,18 +150,28 @@ window.snSaver = {
       if (S.tr && S.tr.t === 0) { S.tr.dur *= pace; S.tr.end *= pace; for (let i = 0; i < S.n; i++) S.delay[i] *= pace; }
       if (S.fly && S.fly.t === 0) { S.fly.dur *= pace; if (keepDir) S.fly.u1 = null; }
     };
+    // the plate: one per beat; in a region beat the bone in focus steps
+    // through the lit bones, largest first, every 3 s with the same title
+    let pBeat = '', pRid = '', order = [], fk = 0;
+    const plate = () => {
+      if (typeof o.label !== 'function') return;
+      try { o.label(saverPlate(pBeat, pRid, lit, order.length ? order[fk % order.length] : -1)); } catch (e) { /* the plate is optional */ }
+    };
+    setInterval(() => { if (pBeat === 'region' && order.length > 1) { fk++; plate(); } }, 3000);
     const stepBeat = () => {
       if (!S.ready || !T.allBones) return;
       const phase = k % 3;
-      if (phase === 0) setMode(k % 6 === 0 ? 'radial' : 'regional');
+      if (phase === 0) { setMode(k % 6 === 0 ? 'radial' : 'regional'); pBeat = 'open'; }
       else if (phase === 1) {
         const rid = regions[(k / 3 | 0) % regions.length];
         const want = rid === 'skull' ? new Set(['skull', 'teeth', 'hyoid', 'ear']) : new Set([rid]);
         lit = S.bones.filter(b => want.has(b.region) && S.vis[b.i]).map(b => b.i);
         glow(1);
         focusRegion(rid);
-      } else { glow(0); lit = []; reconstruct(); }
+        pBeat = 'region'; pRid = rid; order = lit.slice().sort((a, b) => S.bones[b].len - S.bones[a].len); fk = 0;
+      } else { glow(0); lit = []; reconstruct(); pBeat = 'closed'; order = []; }
       slow(phase !== 1); k++;
+      plate();
     };
     setTimeout(() => { stepBeat(); setInterval(stepBeat, beat * 1000); }, 4000);
     return { canvas, warmupMs: 3000 };
