@@ -16,8 +16,9 @@
    large, with its nodes, its energy and its radial curve r^2 R^2.
 
    HEAD LOAD ORDER
-     1. fonts       Google Fonts stylesheet
-     2. style.css   the page stylesheet
+     1. style.css   the page stylesheet
+     2. sci.css     ../../lib/sci.css: STIX Two Text, Inter and the math
+                    colors .m1 to .m6. It loads the fonts.
    Scripts at end of body:
      equations.js   classic script, puts the formulas in as static SVG.
                     typeset.mjs makes it with MathJax (run by hand).
@@ -63,25 +64,22 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="The hydrogen wave function as a table of probability density plots, one tile for each (n, l, m), computed from the Schrödinger solution.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
-  <div class="sys">SYS&nbsp;//&nbsp;QUANTUM.HYDROGEN</div>
-  <div class="pagetitle">Hydrogen Table</div>
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Hydrogen table</div>
 </div>
 <button id="gear" aria-label="Controls">⚙</button>
 
 <div id="page">
   <header class="hero">
     <div class="hero-text">
-      <h1>Hydrogen Wave Function</h1>
+      <h1>Hydrogen wave function</h1>
       <p class="sub">Probability density plots</p>
     </div>
     <div class="hero-math">
@@ -97,9 +95,9 @@
   </header>
 
   <ul class="qn">
-    <li title="The principal quantum number. It sets the energy, E = −13.6 eV / n², and the size of the cloud, about n² Bohr radii."><b>n</b> the shell. It sets the size and the energy. Radial nodes: n − l − 1.</li>
-    <li title="The angular momentum quantum number, 0 to n − 1. Letters: s p d f g h i."><b>l</b> the shape: s p d f … It gives l angular nodes.</li>
-    <li title="The magnetic quantum number, −l to +l. It is the angular momentum about the z axis."><b>m</b> the turn about the z axis. |m| nodes pass through the axis.</li>
+    <li title="The principal quantum number. It sets the energy, E = −13.6 eV / n², and the size of the cloud, about n² Bohr radii."><b class="m1">n</b> the shell. It sets the size and the energy. Radial nodes: n − l − 1.</li>
+    <li title="The angular momentum quantum number, 0 to n − 1. Letters: s p d f g h i."><b class="m2">ℓ</b> the shape: s p d f … It gives l angular nodes.</li>
+    <li title="The magnetic quantum number, −l to +l. It is the angular momentum about the z axis."><b class="m3">m</b> the turn about the z axis. |m| nodes pass through the axis.</li>
   </ul>
 
   <main id="table" aria-label="Probability density table"></main>
@@ -110,46 +108,46 @@
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" aria-label="Close controls">✕</button>
 
-  <div class="sec-label">TABLE</div>
+  <div class="sec-label">Table</div>
   <div class="ratio-row">
     <div class="stepper" id="stepN"><button data-d="-1" aria-label="Fewer shells">−</button><span class="num" id="numN">10</span><button data-d="1" aria-label="More shells">+</button><span class="axis-tag">n max</span></div>
     <div class="hint" id="nHint" style="flex:1;margin:0 0 14px 8px"></div>
   </div>
 
-  <div class="sec-label">ORBITALS</div>
+  <div class="sec-label">Orbitals</div>
   <div class="modes" id="kindBtns">
-    <button data-kind="complex" class="on" title="Complex orbitals e^(imφ). |ψ|² is the same at every φ, so the x–z cut shows all of it.">COMPLEX |ψ|²</button>
-    <button data-kind="real" title="Real orbitals: cos(mφ) and sin(mφ) mixes, for example p_x and d_xy. Each tile is cut through its lobes.">REAL</button>
+    <button data-kind="complex" class="on" title="Complex orbitals e^(imφ). |ψ|² is the same at every φ, so the x–z cut shows all of it.">Complex |ψ|²</button>
+    <button data-kind="real" title="Real orbitals: cos(mφ) and sin(mφ) mixes, for example p_x and d_xy. Each tile is cut through its lobes.">Real</button>
   </div>
   <div class="hint" id="kindHint"></div>
 
-  <div class="sec-label">COLOR</div>
+  <div class="sec-label">Color</div>
   <div class="presets" id="cmapBtns"></div>
 
-  <div class="sec-label">BRIGHTNESS SCALE</div>
+  <div class="sec-label">Brightness scale</div>
   <div class="modes">
-    <button data-norm="outer" class="on" title="Scale each tile to the peak of its outer lobe, as the classic plot does. Inner peaks go to white.">OUTER LOBE</button>
-    <button data-norm="peak" title="Scale each tile to its own brightest point.">TILE PEAK</button>
+    <button data-norm="outer" class="on" title="Scale each tile to the peak of its outer lobe, as the classic plot does. Inner peaks go to white.">Outer lobe</button>
+    <button data-norm="peak" title="Scale each tile to its own brightest point.">Tile peak</button>
   </div>
 
-  <div class="sec-label">CONTRAST</div>
+  <div class="sec-label">Contrast</div>
   <div class="row"><label for="gamma">Gamma</label><input type="range" id="gamma" min="0.15" max="1.5" step="0.01" value="0.75"><span class="val" id="gammaV"></span></div>
   <div class="row"><label for="expo">Exposure</label><input type="range" id="expo" min="-1" max="4" step="0.01" value="0.3"><span class="val" id="expoV"></span></div>
-  <div class="modes"><button id="logBtn" title="Map log10 of the density. Faint outer lobes then show.">LOG DENSITY · OFF</button></div>
+  <div class="modes"><button id="logBtn" title="Map log10 of the density. Faint outer lobes then show.">Log density · off</button></div>
   <div class="row" id="decRow"><label for="dec">Decades</label><input type="range" id="dec" min="1.5" max="8" step="0.1" value="4"><span class="val" id="decV"></span></div>
   <div class="hint">Gamma below 1 lifts faint lobes. Exposure above 1 lets the peaks go to white.</div>
 
-  <div class="sec-label">ROTATE</div>
+  <div class="sec-label">Rotate</div>
   <div class="modes">
-    <button id="playBtn" title="Turn every orbital in 3D. The cut plane of each tile stays fixed.">▶ ROTATE</button>
-    <button id="poseReset" title="Go back to the start pose.">RESET POSE</button>
+    <button id="playBtn" title="Turn every orbital in 3D. The cut plane of each tile stays fixed.">Rotate</button>
+    <button id="poseReset" title="Go back to the start pose.">Reset pose</button>
   </div>
   <div class="row"><label for="rx">About x</label><input type="range" id="rx" min="-120" max="120" step="1" value="24"><span class="val" id="rxV"></span></div>
   <div class="row"><label for="ry">About y</label><input type="range" id="ry" min="-120" max="120" step="1" value="0"><span class="val" id="ryV"></span></div>
   <div class="row"><label for="rz">About z</label><input type="range" id="rz" min="-120" max="120" step="1" value="36"><span class="val" id="rzV"></span></div>
   <div class="hint">Rates in degrees per second. The orbital turns about x, then y, then z. With two or more rates it tumbles. While it turns, only the tiles on the screen fill, at a lower size. Pause for full detail.</div>
 
-  <div class="sec-label">READOUT</div>
+  <div class="sec-label">Readout</div>
   <table class="readout">
     <tr><td>tiles</td><td id="rdTiles"></td></tr>
     <tr><td>pixels</td><td id="rdPx"></td></tr>
@@ -159,7 +157,7 @@
     <tr><td>frame</td><td id="rdFrame"></td></tr>
   </table>
 
-  <div class="sec-label">ABOUT</div>
+  <div class="sec-label">About</div>
   <div class="about">
     <p>Each tile is a flat cut through the nucleus. Bright shows where the electron is likely to be. The vertical axis is z.</p>
     <p>Scroll down for more shells, to n = 10. "n max" sets the last shell.</p>
@@ -206,11 +204,11 @@
 <nav id="dock" aria-label="Quick controls">
   <button id="dockPanel" aria-label="Controls" aria-expanded="false">☰</button>
   <div id="dockKind" class="seg">
-    <button data-kind="complex" class="on">COMPLEX</button>
-    <button data-kind="real">REAL</button>
+    <button data-kind="complex" class="on">Complex</button>
+    <button data-kind="real">Real</button>
   </div>
   <button id="dockPlay" aria-label="Rotate">▶</button>
-  <button id="dockLog" aria-label="Log density">LOG</button>
+  <button id="dockLog" aria-label="Log density">Log</button>
 </nav>
 
 <script src="equations.js"></script>

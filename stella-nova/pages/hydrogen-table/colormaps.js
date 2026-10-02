@@ -33,11 +33,11 @@ export const STOPS = {
 };
 
 export const MAPS = [
-  { id: 'inferno', label: 'INFERNO' },
-  { id: 'magma',   label: 'MAGMA' },
-  { id: 'viridis', label: 'VIRIDIS' },
-  { id: 'ice',     label: 'ICE' },
-  { id: 'signed',  label: '± ψ SIGN' },
+  { id: 'inferno', label: 'Inferno' },
+  { id: 'magma',   label: 'Magma' },
+  { id: 'viridis', label: 'Viridis' },
+  { id: 'ice',     label: 'Ice' },
+  { id: 'signed',  label: '± ψ sign' },
 ];
 
 function parse(s) { return s.split(',').map(h => [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16))); }

@@ -509,7 +509,7 @@ function syncAnim() {
   const f = v => Math.round(((v % 360) + 360) % 360) + '°';
   $('rdPose').textContent = `x ${f(A.ang[0])} · y ${f(A.ang[1])} · z ${f(A.ang[2])}`;
   $('rdFrame').textContent = A.on ? `${A.ms.toFixed(0)} ms · ${Math.round(A.scale * 100)}% size` : 'paused';
-  $('playBtn').textContent = A.on ? '❚❚ PAUSE' : '▶ ROTATE';
+  $('playBtn').textContent = A.on ? 'Pause' : 'Rotate';
   $('playBtn').classList.toggle('on', A.on);
   $('dockPlay').textContent = A.on ? '❚❚' : '▶';
   $('dockPlay').classList.toggle('on', A.on);
@@ -527,7 +527,7 @@ function buildUI() {
     document.querySelectorAll('[data-kind]').forEach(b => b.classList.toggle('on', b.dataset.kind === G.kind));
     document.querySelectorAll('[data-cmap]').forEach(b => b.classList.toggle('on', b.dataset.cmap === G.cmap));
     document.querySelectorAll('[data-norm]').forEach(b => b.classList.toggle('on', (b.dataset.norm === 'outer') === G.outerLobe));
-    $('logBtn').textContent = `LOG DENSITY · ${G.log ? 'ON' : 'OFF'}`; $('logBtn').classList.toggle('on', G.log);
+    $('logBtn').textContent = `Log density · ${G.log ? 'on' : 'off'}`; $('logBtn').classList.toggle('on', G.log);
     $('dockLog').classList.toggle('on', G.log);
     $('decRow').classList.toggle('off', !G.log);
     $('gammaV').textContent = G.gamma.toFixed(2);
