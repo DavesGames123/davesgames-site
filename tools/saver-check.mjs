@@ -109,8 +109,10 @@ async function main() {
     const settings = { pages: [key], seconds: SECONDS, fade: 0.5, calm: CALM, display: 'window', record: RECORD, recordWarmup: 2, loop: false, caption: false, wakeLock: false };
     await send('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem('sn-saver-settings', ${JSON.stringify(JSON.stringify(settings))})}catch(e){}` });
     await send('Page.navigate', { url: `${SERVER}/stella-nova/#home` });
-    await sleep(3000);
-    const ok = await ev(`typeof snScreensaver === 'object'`);
+    // The shell head waits for the Google Fonts stylesheet (near 3 s under
+    // load), so poll for the controller instead of one fixed wait.
+    let ok = false;
+    for (let i = 0; i < 60 && ok !== true; i++) { await sleep(250); ok = await ev(`typeof snScreensaver === 'object'`); }
     if (ok !== true) throw new Error('window.snScreensaver missing in the shell');
     await ev(`snScreensaver.start(), 1`);
     // Wait until the status line names the page (it is set when the page shows).
