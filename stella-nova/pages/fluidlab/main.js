@@ -558,13 +558,13 @@ function rebuildList(){
       SIM.selectedId=capturedId;SIM.selectedType=capturedKind;rebuildList();
     });
 
-    let head=`<div class="obj-card-head"><span class="obj-card-icon">${isE?eI[obj.type]:sI[obj.type]}</span><span class="obj-card-name">${isE?'EMIT':'SHAPE'} · ${obj.type.toUpperCase()}</span><button class="obj-card-dup" style="background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:0.7rem;padding:2px 4px" title="Duplicate">⧉</button><button class="obj-card-del">✕</button></div>`;
+    let head=`<div class="obj-card-head"><span class="obj-card-name">${isE?'Emitter':'Shape'} · ${obj.type}</span><button class="obj-card-dup" style="background:transparent;border:none;color:var(--text-faint);cursor:pointer;font-size:0.7rem;padding:2px 4px" title="Duplicate">⧉</button><button class="obj-card-del">✕</button></div>`;
     let rows='';
     if(isE){
       const curMult=obj.mult||1;
-      rows=`<div class="mag-row"><span class="mag-row-lbl">Str</span><input type="range" data-p="strength" min="1" max="1000" value="${obj.strength}" step="5"><span class="val">${obj.strength}</span></div>`
+      rows=`<div class="mag-row"><span class="mag-row-lbl">Strength</span><input type="range" data-p="strength" min="1" max="1000" value="${obj.strength}" step="5"><span class="val">${obj.strength}</span></div>`
         +`<div style="display:flex;gap:2px;margin:2px 0 6px;flex-wrap:wrap">`
-        +[1,10,100,1e3,1e4,1e5].map(m=>`<button class="sim-btn${curMult===m?' active':''}" data-mult="${m}" style="flex:1;padding:4px 2px;font-size:0.5rem;min-width:0">×${m>=1000?(m/1000)+'K':m}</button>`).join('')
+        +[1,10,100,1e3,1e4,1e5].map(m=>`<button class="sim-btn${curMult===m?' active':''}" data-mult="${m}" style="flex:1;padding:4px 2px;font-size:.7rem;min-width:0">×${m>=1000?(m/1000)+'K':m}</button>`).join('')
         +`</div>`
         +`<div class="mag-row"><span class="mag-row-lbl">Width</span><input type="range" data-p="width" min="0.01" max="0.35" value="${obj.width}" step="0.005"><span class="val">${obj.width.toFixed(2)}</span></div>`
         +`<div class="mag-row"><span class="mag-row-lbl">Angle</span><input type="range" data-p="angle" min="-3.14159" max="3.14159" value="${obj.angle}" step="0.05"><span class="val">${(obj.angle*180/Math.PI).toFixed(0)}°</span></div>`
@@ -579,7 +579,7 @@ function rebuildList(){
         rows+=`<div class="mag-row"><span class="mag-row-lbl">Teeth</span><input type="range" data-p="teeth" min="3" max="24" value="${obj.teeth}" step="1"><span class="val">${obj.teeth}</span></div>`;
       if(obj.type==='star')
         rows+=`<div class="mag-row"><span class="mag-row-lbl">Points</span><input type="range" data-p="points" min="3" max="12" value="${obj.points}" step="1"><span class="val">${obj.points}</span></div>`;
-      rows+=`<button class="tog-btn ${obj.fixed?'off':'on'}">🔒 ${obj.fixed?'Fixed':'Dynamic'}</button>`;
+      rows+=`<button class="tog-btn ${obj.fixed?'off':'on'}">${obj.fixed?'Fixed':'Dynamic'}</button>`;
     }
     c.innerHTML=head+rows;
     list.appendChild(c);
@@ -636,7 +636,7 @@ function duplicateObj(id,kind){
   if(kind==='shape')barrierDirty=true;rebuildList();
 }
 // Play/pause, reset (reallocate the grid, keep objects), and clear everything.
-function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'▶ Play':'▐▐ Pause';b.classList.toggle('active',SIM.playing);}
+function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'Play':'Pause';b.classList.toggle('active',SIM.playing);}
 function resetSim(){frame=0;initFBOs();barrierDirty=true;}
 function clearAll(){emitters=[];shapes=[];SIM.selectedId=-1;if(drawnCtx)drawnCtx.clearRect(0,0,simW,simH);barrierDirty=true;resetSim();rebuildList();}
 
