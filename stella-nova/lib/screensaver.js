@@ -230,10 +230,17 @@ body.sn-saver-on.sn-saver-vert #content { flex: 0 0 auto; width: min(100vw, 56.2
 body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125vh) + 24px); }
 #sn-saver-label .slot-bot { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
 #sn-saver-label .col { display: flex; flex-direction: column; align-items: center; max-width: 100%; }
+/* Landscape frame. .slot-bot takes the full width: as a shrink-to-fit item
+   its 48% columns resolved against its own content and came out a few
+   hundred px wide, so the TeX scaled down and the notes wrapped. The
+   equations then set out in a row, larger, and wrap when they must. */
 @media (min-aspect-ratio: 5/4) {
-  body:not(.sn-saver-vert) #sn-saver-label .slot-bot { flex-direction: row; align-items: flex-end; justify-content: center; gap: 3.5em; }
-  body:not(.sn-saver-vert) #sn-saver-label .slot-bot .col { max-width: 48%; }
-  body:not(.sn-saver-vert) #sn-saver-label .slot-bot .code { margin-top: 0; max-width: 48%; }
+  body:not(.sn-saver-vert) #sn-saver-label .slot-bot { width: 100%; flex-direction: row; align-items: flex-end; justify-content: center; gap: 3.5em; }
+  body:not(.sn-saver-vert) #sn-saver-label .slot-bot .col { max-width: 92%; }
+  body:not(.sn-saver-vert) #sn-saver-label .slot-bot:has(.code) .col { max-width: 52%; }
+  body:not(.sn-saver-vert) #sn-saver-label .slot-bot .code { margin-top: 0; max-width: 44%; }
+  body:not(.sn-saver-vert) #sn-saver-label .eqs { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: .7em 2.4em; font-size: clamp(16px, calc(var(--fs) * .036), 30px); }
+  body:not(.sn-saver-vert) #sn-saver-label .notes { max-width: 46em; }
 }
 @media (max-width: 760px), (max-height: 520px) {
   #sn-saver-label .code { display: none; }
