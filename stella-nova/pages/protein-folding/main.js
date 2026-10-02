@@ -28,6 +28,7 @@
 //    function buildPanel ....... the control bindings
 //    initXR .................... VR and AR view (xr.js, lib/xr-view.js)
 //    window.snSaver ............ screensaver hook (lib/screensaver.js)
+//    function saverPlate ....... screensaver label plate: protein, model, live T E Q
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -722,11 +723,62 @@ PHONE_Q.addEventListener('change', e => setOpen(!e.matches));
 // debug and headless checks
 window.__fold = { S, get P() { return P; }, loadPreset, setTemp, startRamp, setRunning, restart, cards: () => cards, camera, pivot, controls, scene };
 
+// The screensaver plate (opts.label) for the current preset: the protein
+// (name, PDB id, residues, sequence and its helix/strand share), the energy
+// model of model.js written in Unicode, and the live values: T, the replica
+// mean energy E and the fraction of native contacts Q, with the ramp
+// direction. Plain text only (no KaTeX).
+function seqSummary(seq) { return seq.length <= 36 ? seq : `${seq.slice(0, 14)}…${seq.slice(-14)}`; }
+function saverPlate() {
+  const pr = S.preset;
+  if (!pr) return null;
+  if (S.kind === 'hp' && S.hp) {
+    const f = S.hp.frame, seq = pr.seq, nh = [...seq].filter(c => c === 'H').length;
+    return {
+      title: pr.name,
+      sub: `HP lattice · ${S.hpDim === 2 ? 'square' : 'cubic'} · ${seq.length} beads · ${nh} H`,
+      lines: [seqSummary(seq),
+        f ? `E now ${f.E[0]} · best found ${f.bestE}${S.hpDim === 2 ? ` · best known ${pr.best}` : ''}` : 'searching…'],
+      eq: ['E = −Σ hᵢ hⱼ Δ(rᵢ, rⱼ)   (|i − j| > 1)', 'hᵢ = 1 for H, 0 for P', 'one H–H lattice contact = −1 ε'],
+    };
+  }
+  if (!P) return null;
+  const fr = S.sims.map(s => s.frame).filter(Boolean);
+  const n = fr.length || 1, mean = k => fr.reduce((a, f) => a + f.obs[k], 0) / n;
+  const ss = P.prot.ss, h = (ss.match(/H/g) || []).length, e = (ss.match(/E/g) || []).length;
+  const pc = v => Math.round(100 * v / P.N) + '%';
+  const Q = mean('Q'), folded = fr.filter(f => f.obs.Q >= 0.8).length;
+  let dir = '';
+  if (S.ramp) { const ph = S.ramp.phase % 2; dir = ph < 1 ? ' · cooling ↓' : ' · heating ↑'; }
+  return {
+    title: pr.name,
+    sub: `PDB ${P.prot.pdb} · ${P.N} residues · ${P.nc} native contacts`,
+    lines: [
+      seqSummary(P.prot.seq),
+      `helix ${pc(h)} · strand ${pc(e)} · Go model, one bead per residue`,
+      `T = ${S.tFrac.toFixed(2)} Tm = ${(S.tFrac * P.tm).toFixed(2)} ε/kB${dir}`,
+      fr.length ? `E = ${mean('E').toFixed(1)} ε · Q = ${Q.toFixed(2)} (${Math.round(Q * P.nc)} of ${P.nc}) · ${folded}/${fr.length} folded` : 'starting…',
+    ],
+    eq: [
+      'V = Σ K_b(r−r₀)² + Σ K_θ(θ−θ₀)²',
+      '  + Σ K₁[1−cos(φ−φ₀)] + K₃[1−cos 3(φ−φ₀)]',
+      '  + Σ_nat ε[5(σᵢⱼ/r)¹² − 6(σᵢⱼ/r)¹⁰]',
+      '  + Σ_other ε(σ/r)¹²',
+      'Q = (1/N_c) Σ_nat Θ(1.2σᵢⱼ − rᵢⱼ)',
+    ],
+  };
+}
+
 // screensaver hook for the shell (lib/screensaver.js): hide the GUI so
 // insets() frees the full canvas, start the melt and refold ramp, and slow
 // the sim rate and the pivot orbit by opts.calm (1 = slowest). It keeps the
 // boot preset, because loadPreset writes the URL hash. No exit(): the shell
 // reloads the page on stop.
+// The plate (saverPlate) goes to opts.label at the start and then when T
+// has moved 0.04 Tm, or Q 0.1, since the last call (on the HP lattice: when
+// its energy line changes), at most once in 4 s.
+// The shell fades the plate out and in on each call, so a faster update
+// would keep it from ever showing in full.
 window.snSaver = {
   enter(o) {
     const calm = clamp(o && o.calm != null ? o.calm : 0.7, 0, 1);
@@ -740,6 +792,23 @@ window.snSaver = {
     setRunning(true);
     startRamp();
     frameCamera();
+    if (o && typeof o.label === 'function') {
+      let last = null, at = 0;
+      const push = force => {
+        const info = saverPlate(); if (!info) return;
+        const fr = S.sims.map(s => s.frame).filter(Boolean);
+        const q = fr.length ? fr.reduce((a, f) => a + f.obs.Q, 0) / fr.length : -1;
+        const now = performance.now();
+        const txt = info.lines.join('|');
+        const same = S.kind === 'hp' ? last && txt === last.txt
+          : last && Math.abs(S.tFrac - last.t) < 0.04 && Math.abs(q - last.q) < 0.1 && (last.q >= 0 || q < 0);
+        if (!force && (now - at < 4000 || same)) return;
+        last = { t: S.tFrac, q, txt }; at = now;
+        o.label(info);
+      };
+      push(true);
+      setInterval(() => push(false), 1000);
+    }
     return { canvas, warmupMs: 2000 };
   },
 };
