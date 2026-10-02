@@ -45,7 +45,7 @@ function studioScene() {
   panel(16, 16, 0xffffff, 2.5, -20, 30, -18);
   // the lock is seen face-on in its section view: a soft front fill so
   // flat metal faces toward the camera do not read black
-  panel(44, 16, 0xfff2e4, 0.9, 4, 0, 44);
+  panel(44, 16, 0xfff2e4, 0.75, 4, 0, 44);
   panel(16, 30, 0xf4f6ff, 1.2, 44, 2, 6);
   return sc;
 }

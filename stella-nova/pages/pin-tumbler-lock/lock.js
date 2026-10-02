@@ -27,6 +27,7 @@
 //    export function contact ...... where the key holds pin or wafer i
 //    export function makeLock ..... derived sizes and state(key, s, θ)
 //    export function keyspace ..... codes allowed by the MACS rule
+//    export function camPin ....... cam pin and yoke positions at θ
 // ============================================================================
 export const D = Math.PI / 180;
 export const TAU = Math.PI * 2;
@@ -48,7 +49,8 @@ const PIN = {
   },
   bitting: { right: [3, 7, 1, 5, 2], wrong: [3, 2, 6, 5, 0] },
   spring: { free: 13.0, rate: 0.12, wire: 0.22, coilR: 1.12, turns: 9 },
-  cam: { Rc: 8, pinR: 0.7 }, clearance: 1.2 * D, tol: 0.03,
+  // the cam pin runs in a vertical slot of the bolt yoke (a Scotch yoke)
+  cam: { Rc: 8, pinR: 0.7, slotW: 0.8, slotY0: -8.9, slotY1: 0.9 }, clearance: 1.2 * D, tol: 0.03,
 };
 
 const WAFER = {
@@ -171,4 +173,10 @@ export function makeLock(id) {
       bolt: L.pin ? g.cam.Rc * Math.sin(th) : 0 };
   };
   return L;
+}
+
+// the cam pin centre (y, z) and the bolt yoke centre z at plug angle th
+export function camPin(g, th) {
+  const Rc = g.cam.Rc;
+  return { y: -Rc * Math.cos(th), z: -Rc * Math.sin(th), yoke: -Rc * Math.sin(th) };
 }

@@ -12,8 +12,9 @@
 //                  the end of the plug and the resting pins
 //    tip ......... the tip ramp does not change where the right key holds
 //    cuts ........ each key keeps the MACS rule; the cam throws the bolt Rc
+//    yoke ........ the cam pin stays inside the yoke slot through the turn
 // ============================================================================
-import { makeLock, keyTop, contact, keyX, D } from './lock.js';
+import { makeLock, keyTop, contact, keyX, camPin, D } from './lock.js';
 
 let pass = 0, fail = 0;
 const ok = (c, name, info = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'}  ${name}${info ? '  ' + info : ''}`); };
@@ -41,7 +42,17 @@ for (const id of ['pin', 'wafer']) {
   ok(Math.abs(L.state('right', 1, 90 * D).theta - 90 * D) < 1e-12, 'right key turns 90°');
   ok(Math.abs(L.state('wrong', 1, 90 * D).theta - g.clearance) < 1e-12, 'wrong key turns only the clearance', `${f(g.clearance / D, 1)}°`);
   ok(L.state('right', 0.99, 90 * D).theta === 0, 'a key not home does not turn');
-  if (L.pin) ok(Math.abs(L.state('right', 1, 90 * D).bolt - g.cam.Rc) < 1e-12, 'cam throws the bolt Rc at 90°', `${g.cam.Rc} mm`);
+  if (L.pin) {
+    ok(Math.abs(L.state('right', 1, 90 * D).bolt - g.cam.Rc) < 1e-12, 'cam throws the bolt Rc at 90°', `${g.cam.Rc} mm`);
+    let side = 1e9, end = 1e9;
+    for (let t = 0; t <= 90; t += 0.25) {
+      const c = camPin(g, t * D);
+      side = Math.min(side, g.cam.slotW - g.cam.pinR - Math.abs(c.z - c.yoke));
+      // the slot ends are half circles of radius slotW
+      end = Math.min(end, (g.cam.slotY1 - g.cam.slotW) - c.y + (g.cam.slotW - g.cam.pinR), c.y - (g.cam.slotY0 + g.cam.slotW) + (g.cam.slotW - g.cam.pinR));
+    }
+    ok(side >= 0.1 - 1e-9 && end > 0, 'cam pin stays in the yoke slot, 0° to 90°', `side ${f(side)} mm, ends ${f(end)} mm`);
+  }
   // sweep
   for (const key of ['right', 'wrong']) {
     let jump = 0, minSpring = 1e9, maxOver = -1e9, prev = null, minTop = 1e9;

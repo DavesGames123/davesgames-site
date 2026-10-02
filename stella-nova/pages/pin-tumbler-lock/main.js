@@ -295,8 +295,8 @@ function liveValue(key) {
     case 'blocked': return ['Stacks across', `${st.blocked} of ${g.n}`];
     case 'gaps': return ['Gaps (mm)', gaps()];
     case 'state': return ['On the line', st.ch.map(q => q.ok ? '●' : '○').join(' ')];
-    case 'drivers': return ['Driver bottoms', st.ch.map(q => (q.db - g.Rp >= 0 ? '+' : '−') + Math.abs(q.db - g.Rp).toFixed(2)).join(' ')];
-    case 'springs': return ['Lengths (mm)', st.ch.map(q => q.spring.toFixed(1)).join(' ')];
+    case 'drivers': return ['Bottom − R (mm)', st.ch.map(q => { const d = q.db - g.Rp; return (d > 0.05 ? '+' : d < -0.05 ? '−' : '') + Math.abs(d).toFixed(1); }).join(' ')];
+    case 'springs': return ['Length (mm)', st.ch.map(q => q.spring.toFixed(1)).join(' ')];
     case 'force': return ['Load', `${st.ch.reduce((a, q) => a + q.force, 0).toFixed(2)} N`];
     case 'bolt': return ['Bolt out', `${st.bolt.toFixed(2)} mm`];
   }

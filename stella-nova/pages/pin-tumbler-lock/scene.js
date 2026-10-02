@@ -30,7 +30,7 @@
 // ============================================================================
 import * as THREE from 'three';
 import { lathe, rod, rrect, circlePath, slabXZ, slabXY, alongX, merge, zyExtrude, arcPts, plugCrown, createSpring, clipY, ease } from './kit.js';
-import { keyTop } from './lock.js';
+import { keyTop, camPin } from './lock.js';
 
 const PI = Math.PI;
 const circle = (r, n = 96, cz = 0, cy = 0) => arcPts(r, 0, 2 * PI, n, cz, cy).slice(0, -1);
@@ -179,7 +179,8 @@ function pinTumbler(B, L) {
   // bolt: a yoke with a slot for the cam pin (a Scotch yoke), and the bar
   const Bo = B.part('bolt', { explode: [-26, 0, 0], st: 0.04, label: 'Bolt', labelAt: [-31, -12, -20] });
   const bolt = [[3, 2.4], [-3, 2.4], [-3, -10.5], [-26, -10.5], [-26.8, -11.3], [-26.8, -13.0], [-26, -13.8], [3, -13.8]];
-  const slot = [...arcPts(0.8, 0, PI, 10, 0, 0.9 - 0.8), ...arcPts(0.8, PI, 2 * PI, 10, 0, -8.9 + 0.8)];
+  const cw = g.cam.slotW, sy0 = g.cam.slotY0, sy1 = g.cam.slotY1;
+  const slot = [...arcPts(cw, 0, PI, 10, 0, sy1 - cw), ...arcPts(cw, PI, 2 * PI, 10, 0, sy0 + cw)];
   B.mesh(Bo, zyExtrude(bolt, -32.0, -30.0, [slot]), 'satin');
 
   // case: a guide plate behind the bar, a strap over it, and the mounting
@@ -201,7 +202,7 @@ function pinTumbler(B, L) {
   out.apply = (st, ek) => {
     const th = st.theta, c = Math.cos(th), s = Math.sin(th);
     P.root.rotation.x = th; Cm.root.rotation.x = th;
-    Bo.root.position.z = -Rc * s;
+    Bo.root.position.z = camPin(g, th).yoke;
     const relax = ease((ek - 0.05) / 0.5);
     for (let i = 0; i < n; i++) {
       const q = st.ch[i];
