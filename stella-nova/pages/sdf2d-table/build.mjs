@@ -1206,6 +1206,31 @@ const pack = HELPERS + '\n// ── cell scenes ──────────�
   `\n\n// ── the ${CELLS.length} cells ─────────────────────────────────────────────────────────────\n` +
   CELLS.map(frag).join('\n\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// d(p) is the signed distance: d < 0 inside, d = 0 on the edge.
+const SAVER_EQ = {
+  star: ['d = sdStar(R(0.15t)·p, r = 0.68, n, m)', 'n = 4…10 points,  m = 2…n (sharpness)', 'm swings by 0.08·sin t'],
+  heart: ['d = s·sdHeart((p + (0, ½s))/s)', 'two arcs and two lines, exact', 's = 0.75…1.35 + 0.05 sin²3t (size)'],
+  blobby_cross: ['q = (||x| − |y||,  1 − |x| − |y|)/√2', 'd = parabola distance in q,  he = 0.12…0.48', 'shape turns at 0.2t'],
+  signed_field: ['d = max(smin(box, circle, 0.14), −hole)', 'a = 1 − e^(−2g|d|),  g = 1…4 (gain)', 'inside (d < 0) cream,  outside tone'],
+  iso_bands: ['band = ⌊d/Δ⌋,  Δ = 0.035…0.115 (step)', 'contour where |fract(d/Δ + ½) − ½| = 0', 'd = max(smin(box, circle, 0.14), −hole)'],
+  medial_axis: ['∇²d ≈ (d(p ± hx̂) + d(p ± hŷ) − 4d)/h,  h = 2.5 px', 'skeleton = smoothstep(0.08, 0.6…1.8, ∇²d)', 'd = min(star₅, bar):  the gradient folds on the axis'],
+  smooth_poly: ['h = max(k − |a − b|, 0)/k', 'smin(a, b) = min(a, b) − h²·k/4', 'k = 0.02…0.42,  a = rounded box,  b = circle'],
+  smooth_exp: ['smin(a, b) = −k·log₂(2^(−a/k) + 2^(−b/k))', 'k = 0.005…0.065', 'a = rounded box,  b = circle'],
+  smooth_circ: ['k′ = k/(1 − √½),  h = max(k′ − |a − b|, 0)/k′', 'smin = min(a, b) − ½k′·(1 + h − √(1 − h(h − 2)))', 'k = 0.02…0.32 (a circular fillet)'],
+  op_onion: ['d₀ = hexagon(R(0.15t)p, 0.42)', 'd = ||d₀| − 4τ| − 2τ  (and |d| − τ when layers > ½)', 'τ = 0.012…0.042 (thickness)'],
+  repeat_inf: ['q = p′ − s·round(p′/s),  p′ = p + (0.1, 0.06)·t', 'd = roundBox(R(0.4)q, (0.26s, 0.12s), 0.08s)', 's = 0.22…0.47 (period)'],
+  repeat_mirror: ['q = (p′ − s·id)·(±1, ±1),  odd cells flip', 'd = moon(q, 0.12s, 0.36s, 0.3s),  p′ = p + 0.08t·x̂', 's = 0.4…0.7 (period)'],
+  domain_warp: ['q = p + a·(sin(5y + 1.3t), sin(5x − 1.1t + 1))', 'd = box(R(0.3)q, (0.46, 0.3)) − 0.05', 'a = 0.02…0.16:  no longer an exact distance'],
+  morph: ['d = (1 − s)·star₅(p) + s·roundBox(p)', 's = clamp(½ + ½ sin 0.8t + (bias − ½), 0, 1)', 'a linear blend of two fields'],
+  bend: ['q = R(κx)·p  (rotation grows with x)', 'd = roundBox(q, (0.7, 0.1), 0.06)', 'κ = 3(bend − 0.2) + 0.6 sin 0.7t'],
+  inner_glow: ['g = e^(σd)·(0.8 + 0.2 sin 2t)  for d < 0', 'σ = 6…36 (spread)', 'd = roundBox(R(0.15 sin 0.6t)p, (0.55, 0.38), 0.16)'],
+  outer_glow: ['g = 1/(1 + (d/s)²)  (neon halo)', 'd₁ = |circle| − 0.006,  d₂ = |triangle(R(0.3t))| − 0.006', 's = 0.01…0.05 (halo)'],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
@@ -1214,6 +1239,7 @@ const spec = {
     name, family, species, knobs,
     defaults: [0.5, 0.5, 0.5, 0.5],
     fn: 'fs_' + name,
+    ...(SAVER_EQ[name] ? { eq: SAVER_EQ[name] } : {}),
   })),
   gens: [
     { id: 'exposure', title: 'Exposure · brightness', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
