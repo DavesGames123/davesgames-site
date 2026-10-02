@@ -596,12 +596,30 @@
         var lines = [];
         if (lastMod && PL.T[lastMod.t]) {
           var tt = PL.T[lastMod.t], tg = tt.tags.filter(function (k) { return k !== tt.layer; });
-          lines.push('Placed: ' + tt.name + ' · ' + LAYER_NAME[tt.layer] + (tg.length ? ' · ' + tg.map(function (k) { return TAG_NAME[k] || k; }).join(', ') : '') +
-            (tt.tags.indexOf('directional') >= 0 ? ' · faces ' + FACING[lastMod.r & 3] : ''));
+          lines.push('Placed: ' + tt.name + ', ' + LAYER_NAME[tt.layer] + (tg.length ? ', ' + tg.map(function (k) { return TAG_NAME[k] || k; }).join(', ') : '') +
+            (tt.tags.indexOf('directional') >= 0 ? ', faces ' + FACING[lastMod.r & 3] : ''));
         }
-        lines.push(PL.S.mods.length + ' modules · ' + order.length + ' types · ' + E.rooms.length + ' rooms · ' + probs.length + ' problems');
-        lines.push(order.slice(0, 4).map(function (k) { return PL.T[k].name + ' ×' + counts[k]; }).join(' · '));
-        opts.label({ title: 'Example station', sub: 'Station planner · build step ' + n + ' / ' + plan.length, lines: lines });
+        lines.push(order.slice(0, 4).map(function (k) { return PL.T[k].name + ' ×' + counts[k]; }).join(', '));
+        // The counts are params (no symbol: the planner has no equations, so
+        // the plate has no TeX), and the anchor is the built part.
+        opts.label({ title: 'Example station', sub: 'Station planner, build step ' + n + ' of ' + plan.length,
+          params: [{ name: 'modules', value: String(PL.S.mods.length) }, { name: 'types', value: String(order.length) },
+            { name: 'enclosed rooms', value: String(E.rooms.length) }, { name: 'problems', value: String(probs.length) }],
+          lines: lines, anchor: builtAnchor });
+      }
+      // The built modules on screen, for the shell's label plate. VW.toScreen
+      // maps grid cells to #cv px, and #stage fills the window in saver mode.
+      // The centre is the middle of the built cells' screen box, the radius
+      // holds its corners, and the key points are the box corners and the
+      // module placed last. Null before the first module and in the fades.
+      function builtAnchor() {
+        if (!PL.S.mods.length || UI.fade > 0.5) return null;
+        var b = [1e9, 1e9, -1e9, -1e9];
+        PL.S.mods.forEach(function (m) { PL.cellsOf(m).forEach(function (c) { b = [Math.min(b[0], c[0]), Math.min(b[1], c[1]), Math.max(b[2], c[0] + 1), Math.max(b[3], c[1] + 1)]; }); });
+        var p0 = VW.toScreen(b[0], b[1]), p1 = VW.toScreen(b[2], b[3]), x = (p0[0] + p1[0]) / 2, y = (p0[1] + p1[1]) / 2;
+        var pts = [{ x: p0[0], y: p0[1] }, { x: p1[0], y: p0[1] }, { x: p0[0], y: p1[1] }, { x: p1[0], y: p1[1] }];
+        if (lastMod) { var q = VW.toScreen(lastMod.x + 0.5, lastMod.y + 0.5); pts.push({ x: q[0], y: q[1] }); }
+        return { x: x, y: y, r: Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) / 2, pts: pts };
       }
       function frame(now) {
         var t = now - t0, build = cycle * 0.62, step = build / Math.max(1, plan.length);
