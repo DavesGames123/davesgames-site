@@ -132,6 +132,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .f-rendering{--fam:rgba(255,150,120,0.14);--fam-bg:rgba(255,150,120,0.06)}
 .f-glyphs{--fam:rgba(210,170,255,0.15);--fam-bg:rgba(210,170,255,0.06)}
 body .tm-fab{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace}
+#m-src{font-family:'IBM Plex Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace}
 .side-head .big{color:#ffd49a;font-style:normal;font-weight:300;letter-spacing:0.02em}
 .side-head .sub{font-style:normal;font-size:0.82rem;letter-spacing:0.04em}
 .sheet-side h3{font-style:normal;font-weight:300;font-size:1.9rem}
