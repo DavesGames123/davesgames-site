@@ -15,11 +15,14 @@
 //   LIST          -- the patterns the autopilot shows
 //   installSaver  -- set window.snSaver
 //   tick          -- the turn, the hold timer and the fade
+//   plate         -- the opts.label plate: model, creases, fold fraction, sim equations
 
 import * as patterns from '../patterns.js';
 import { S, gpu } from './state.js';
 import { loadPreset } from './edit.js';
 import { applyLayout, resize } from './layout.js';
+import { Assignment } from '../model.js';
+import { SimParams } from '../sim.js';
 
 // Patterns that fold cleanly to a recognisable form.
 const LIST = ['crane', 'kabuto', 'birdbase', 'waterbomb', 'miura', 'pinwheel', 'yakko', 'blintz', 'house', 'sailboat'];
@@ -51,6 +54,36 @@ export function installSaver() {
         if (order.length) await loadPreset(patterns.byId(order[k++ % order.length]));
         S.foldSpeed = speed; S.fraction = 0; S.autoDir = 1; S.auto = true; S.frozen = false;
       };
+      // The plate: the model, its crease counts and the live fold fraction,
+      // with the three spring laws of sim.js (SimParams constants). Once a
+      // second at most; a new model gives a new title.
+      let lastPlate = 0;
+      const plate = (now) => {
+        if (!o.label || !S.pattern || !S.mesh || now - lastPlate < 1000) return;
+        lastPlate = now;
+        const p = S.preset, as = S.pattern.assignment;
+        let m = 0, v = 0;
+        for (const a of as) { if (a === Assignment.Mountain) m++; else if (a === Assignment.Valley) v++; }
+        const name = p.label.charAt(0) + p.label.slice(1).toLowerCase();
+        const pct = Math.round(S.fraction * 100);
+        const grp = (patterns.GROUPS.find((g) => g.id === p.group) || { name: p.group }).name.toLowerCase();
+        o.label({
+          title: name,
+          sub: `${grp} · ${p.author || 'origami'}`,
+          lines: [
+            `${m} mountain · ${v} valley creases`,
+            `${S.mesh.nodeCount} nodes · ${S.mesh.tris.length} triangles · ${S.mesh.beams.length} bars`,
+            `fold fraction f = ${pct}% · ${S.autoDir > 0 ? 'folding' : 'unfolding'}`,
+            `crease error max |θ − f·θ₀| = ${(S.mesh.maxResidual() * 180 / Math.PI).toFixed(1)}°`,
+          ],
+          eq: [
+            `crease: τ = k_c·L₀(f·θ₀ − θ),  θ₀ = ∓π (M/V),  k_c = ${SimParams.crease}`,
+            `bar: F = (k_a/L₀)(1 − L₀/|d|)·d,  k_a = ${SimParams.axial}`,
+            `face: k_f·(α₀ − α),  k_f = ${SimParams.face}`,
+            'v += F·Δt,  x += v·Δt,  Δt = 0.9 / (2π·√k_max)',
+          ],
+        });
+      };
       S.veil = 1;
       await start();
       // the turn, the hold timer and the fade
@@ -65,6 +98,7 @@ export function installSaver() {
           S.veil = Math.max(0, S.veil - dt / FADE);
           if (S.veil <= 0) { phase = 'show'; since = now; }
         }
+        if (phase === 'show') plate(now);
         requestAnimationFrame(tick);
       };
       requestAnimationFrame(tick);
