@@ -20,7 +20,7 @@ function syncQiskitHL(){const ta=document.getElementById('qiskit-src'),hl=docume
 function setQiskitFromState(){                              // mirror the active algorithm into the editor (read-only display)
   const ta=document.getElementById('qiskit-src');ta.value=gatesToQiskit(VS.gates,VS.numQubits);ta.readOnly=true;
   document.getElementById('qiskit-custom').hidden=false;document.getElementById('qiskit-run').hidden=true;
-  const msg=document.getElementById('qiskit-msg');msg.textContent='live code for the active algorithm';msg.className='';
+  const msg=document.getElementById('qiskit-msg');msg.textContent='Live code for the active algorithm';msg.className='';
   syncQiskitHL();
 }
 // Switch the editor from read-only mirror to an editable custom circuit.
@@ -34,7 +34,7 @@ function sg(el){const pct=(el.value-el.min)/(el.max-el.min)*100;el.style.setProp
 // their readouts.
 function clampQ(){VS.target=Math.max(0,Math.min(VS.numQubits-1,VS.target));VS.control=Math.max(0,Math.min(VS.numQubits-1,VS.control));$('t-val').textContent=VS.target;$('c-val').textContent=VS.control;$('q-count').textContent=VS.numQubits;}
 // Rebuild the sequence list from VS.gates, one row per gate with a delete button.
-function renderList(){const list=$('gate-list');list.innerHTML='';if(VS.gates.length===0){list.innerHTML='<div class="gate-empty">pick a preset or build</div>';return;}
+function renderList(){const list=$('gate-list');list.innerHTML='';if(VS.gates.length===0){list.innerHTML='<div class="gate-empty">Pick a preset or build</div>';return;}
   VS.gates.forEach((g,i)=>{const d=document.createElement('div');d.className='gate-item';let q;
     if(g.kind==='measurement')q='all';else if(g.controls&&g.controls.length)q='c'+g.controls[0]+'→t'+g.targets[0];else if(g.name==='swap')q=g.targets[0]+'↔'+g.targets[1];else q='q'+g.targets[0]+(g.params&&g.params.length?' ('+g.params[0].toFixed(2)+')':'');
     d.innerHTML=`<span class="gi-idx">${i}</span><span class="gi-name">${g.kind==='measurement'?'MEAS':g.name.toUpperCase()}</span><span class="gi-q">${q}</span><button class="gi-del" data-i="${i}">✕</button>`;list.appendChild(d);});
@@ -129,7 +129,7 @@ document.getElementById('cd-qiskit-btn').onclick=function(){const p=document.get
 document.getElementById('qiskit-custom').onclick=function(){
   const ta=document.getElementById('qiskit-src');ta.readOnly=false;ta.focus();
   this.hidden=true;document.getElementById('qiskit-run').hidden=false;
-  const msg=document.getElementById('qiskit-msg');msg.textContent='editing — write your circuit, then Run';msg.className='';};
+  const msg=document.getElementById('qiskit-msg');msg.textContent='Editing: write your circuit, then Run';msg.className='';};
 (function(){const ta=document.getElementById('qiskit-src');
   ta.addEventListener('input',syncQiskitHL);
   ta.addEventListener('scroll',()=>{const hl=document.getElementById('qiskit-hl');hl.scrollTop=ta.scrollTop;hl.scrollLeft=ta.scrollLeft;});})();
@@ -137,8 +137,8 @@ document.getElementById('qiskit-run').onclick=()=>{const msg=document.getElement
   const {n,gates}=parseQiskit(document.getElementById('qiskit-src').value);
   VS.numQubits=n;VS.preset='custom';VS.gates=gates;RT.initBasis=0;clampQ();
   document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));
-  RT.rebuild();syncQiskitHL();msg.textContent='✓ '+gates.length+' ops on '+n+' qubits';msg.className='ok';
-}catch(e){msg.textContent='✕ '+e;msg.className='err';}};
+  RT.rebuild();syncQiskitHL();msg.textContent=gates.length+' ops on '+n+' qubits';msg.className='ok';
+}catch(e){msg.textContent='Error: '+e;msg.className='err';}};
 $('q-minus').onclick=()=>{VS.numQubits=Math.max(1,VS.numQubits-1);RT.initBasis=0;clampQ();if(VS.preset!=='custom')RT.loadPreset(VS.preset);else RT.rebuild();};
 $('q-plus').onclick=()=>{VS.numQubits=Math.min(8,VS.numQubits+1);RT.initBasis=0;clampQ();if(VS.preset!=='custom')RT.loadPreset(VS.preset);else RT.rebuild();};
 $('t-minus').onclick=()=>{VS.target--;clampQ();};$('t-plus').onclick=()=>{VS.target++;clampQ();};
@@ -158,8 +158,8 @@ document.querySelectorAll('.cmap-btn').forEach(b=>b.addEventListener('click',()=
 renderCmapPreviews();
 document.querySelectorAll('.shape-grid .mode-btn').forEach(b=>b.addEventListener('click',()=>{VS.shape=b.dataset.shape;document.querySelectorAll('.shape-grid .mode-btn').forEach(x=>x.classList.toggle('active',x===b));RT.builtStage=-1;RT.layerEndArr=[];RT.edgeEndArr=[];rebuildMeshes();}));
 document.querySelectorAll('.bg-sw').forEach(b=>b.addEventListener('click',()=>setBg(b.dataset.bg)));
-$('btn-play').onclick=function(){VS.playing=!VS.playing;if(VS.playing)revealMode();this.textContent=VS.playing?'▐▐ Pause':'▶ Play';this.classList.toggle('active',VS.playing);};
-$('btn-step').onclick=()=>{if(!RT.trace)return;revealMode();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');
+$('btn-play').onclick=function(){VS.playing=!VS.playing;if(VS.playing)revealMode();this.textContent=VS.playing?'Pause':'Play';this.classList.toggle('active',VS.playing);};
+$('btn-step').onclick=()=>{if(!RT.trace)return;revealMode();VS.playing=false;$('btn-play').textContent='Play';$('btn-play').classList.remove('active');
   if(VS.viewMode==='stack'){const ns=currentStageFor(VS.stageTime)+1;VS.stageTime=(ns>=RT.totalLayers?0:ns)*stageDuration();return;}
   const fi=Math.floor(VS.frameIndex),cur=RT.trace.frames[Math.min(fi,RT.trace.frames.length-1)].stepIndex;let j=fi+1;while(j<RT.trace.frames.length&&RT.trace.frames[j].stepIndex===cur)j++;VS.frameIndex=j<RT.trace.frames.length?j:0;};
 $('btn-restart').onclick=()=>{VS.frameIndex=0;VS.stageTime=0;RT.builtStage=-1;RT.layerEndArr=[];RT.edgeEndArr=[];};
@@ -171,12 +171,12 @@ curveCv.addEventListener('pointermove',e=>{if(curveDrag!==1)return;curveSet(e);}
 curveCv.addEventListener('pointerup',e=>{curveDrag=-1;try{curveCv.releasePointerCapture(e.pointerId);}catch(_){}drawCurveEditor();});
 $('curve-reset').onclick=()=>{CURVE.pts=[{x:0,y:0},{x:0.5,y:Math.pow(0.5,0.2)},{x:1,y:1}];curveDrag=-1;curveChanged();};
 drawCurveEditor();
-$('sl-scrub').addEventListener('input',function(){if(RT.trace){const f=+this.value/100;if(VS.viewMode==='stack')VS.stageTime=f*totalStackTime();else VS.frameIndex=f*(RT.trace.frames.length-1);revealMode();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');}sg(this);});
+$('sl-scrub').addEventListener('input',function(){if(RT.trace){const f=+this.value/100;if(VS.viewMode==='stack')VS.stageTime=f*totalStackTime();else VS.frameIndex=f*(RT.trace.frames.length-1);revealMode();VS.playing=false;$('btn-play').textContent='Play';$('btn-play').classList.remove('active');}sg(this);});
 $('sl-seed').addEventListener('input',function(){VS.seed=+this.value;$('vl-seed').textContent=this.value;sg(this);RT.rebuild();});sg($('sl-seed'));
 $('sl-shots').addEventListener('input',function(){$('vl-shots').textContent=this.value;sg(this);});sg($('sl-shots'));
 $('sl-gap').addEventListener('input',function(){$('vl-gap').textContent=(+this.value).toFixed(2)+'s';sg(this);if(RT.sampleAnim)RT.sampleAnim.gap=+this.value;});sg($('sl-gap'));
 $('tog-full').onclick=function(){VS.showFull=!VS.showFull;this.classList.toggle('on',VS.showFull);
-  if(VS.showFull){VS.stageTime=totalStackTime();VS.playing=false;$('btn-play').textContent='▶ Play';$('btn-play').classList.remove('active');}};
+  if(VS.showFull){VS.stageTime=totalStackTime();VS.playing=false;$('btn-play').textContent='Play';$('btn-play').classList.remove('active');}};
 $('tog-rotate').onclick=function(){VS.autoRotate=!VS.autoRotate;controls.autoRotate=VS.autoRotate;this.classList.toggle('on',VS.autoRotate);};
 $('tog-floor').onclick=function(){VS.floorGrid=!VS.floorGrid;this.classList.toggle('on',VS.floorGrid);};
 $('tog-net').onclick=function(){VS.network=!VS.network;this.classList.toggle('on',VS.network);};
@@ -189,8 +189,8 @@ $('orient-btn').onclick=function(){
   else if(VS.stackAxis==='vertical'){VS.stackAxis='horizontal';}         // vertical → horizontal
   else{VS.autoOrient=true;}                                              // horizontal → back to auto
   if(VS.autoOrient){const g=document.getElementById('gl-host');applyAutoOrient(g.clientWidth||600,g.clientHeight||400);
-    this.textContent=VS.stackAxis==='horizontal'?'⬌ Horizontal (auto)':'⬍ Vertical (auto)';}
-  else this.textContent=VS.stackAxis==='horizontal'?'⬌ Horizontal stack':'⬍ Vertical stack';
+    this.textContent=VS.stackAxis==='horizontal'?'Horizontal (auto)':'Vertical (auto)';}
+  else this.textContent=VS.stackAxis==='horizontal'?'Horizontal stack':'Vertical stack';
   if(VS.viewMode!=='stack'){VS.viewMode='stack';document.querySelectorAll('.dock-view').forEach(b=>b.classList.toggle('active',b.dataset.view==='stack'));}
   frameCamera();};
 }

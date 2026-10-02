@@ -52,19 +52,19 @@ function drawLens(frame){
     for(const q of g.targets){const gy=laneY(q,padT,laneH);
       cctx.fillStyle='rgba(8,12,20,0.96)';roundRect(cctx,x-bw/2,gy-bh/2,bw,bh,4);cctx.fill();
       cctx.strokeStyle=cs;cctx.lineWidth=active?2:1.3;roundRect(cctx,x-bw/2,gy-bh/2,bw,bh,4);cctx.stroke();
-      cctx.fillStyle=active?cs:'#cdd6e6';cctx.font='700 10px JetBrains Mono,monospace';cctx.textAlign='center';
+      cctx.fillStyle=active?cs:'#cdd6e6';cctx.font='700 10px ui-monospace,Menlo,monospace';cctx.textAlign='center';
       cctx.fillText(g.kind==='measurement'?'M':(g.name==='swap'?'×':g.name.toUpperCase()).slice(0,3),x,gy+0.5);
-      if(g.name==='rz'&&g.params){cctx.font='600 7px JetBrains Mono,monospace';cctx.fillStyle=(s===editSel)?'#ffb948':'rgba(150,200,255,0.62)';cctx.fillText(fmtPi(g.params[0]),x,gy-bh/2-6);}
+      if(g.name==='rz'&&g.params){cctx.font='600 7px ui-monospace,Menlo,monospace';cctx.fillStyle=(s===editSel)?'#ffb948':'rgba(150,200,255,0.62)';cctx.fillText(fmtPi(g.params[0]),x,gy-bh/2-6);}
     }}
   // layer numbers (beats) under each column
-  cctx.textAlign='center';cctx.textBaseline='top';cctx.font='500 8px JetBrains Mono,monospace';
+  cctx.textAlign='center';cctx.textBaseline='top';cctx.font='500 8px ui-monospace,Menlo,monospace';
   cctx.fillStyle=(cur<0)?'rgba(255,200,80,0.95)':'rgba(110,125,150,0.65)';cctx.fillText('L0',x0-4,padB+5);
   for(let s=0;s<steps;s++){cctx.fillStyle=(s===cur)?'rgba(255,200,80,0.95)':'rgba(110,125,150,0.65)';cctx.fillText('L'+(s+1),colX(s),padB+5);}
   // sticky qubit-label gutter (stays pinned while the score scrolls)
   if(cgut.width!==Math.round(GUT*dpr)||cgut.height!==Math.round(Hcss*dpr)){cgut.width=Math.round(GUT*dpr);cgut.height=Math.round(Hcss*dpr);}
   gctx.setTransform(dpr,0,0,dpr,0,0);gctx.clearRect(0,0,GUT,Hcss);
   const grd=gctx.createLinearGradient(0,0,GUT,0);grd.addColorStop(0,'rgba(11,16,28,0.98)');grd.addColorStop(0.65,'rgba(11,16,28,0.95)');grd.addColorStop(1,'rgba(11,16,28,0)');
-  gctx.fillStyle=grd;gctx.fillRect(0,0,GUT,Hcss);gctx.textAlign='left';gctx.textBaseline='middle';gctx.font='600 10px JetBrains Mono,monospace';gctx.fillStyle='#8fa0bd';
+  gctx.fillStyle=grd;gctx.fillRect(0,0,GUT,Hcss);gctx.textAlign='left';gctx.textBaseline='middle';gctx.font='600 10px ui-monospace,Menlo,monospace';gctx.fillStyle='#8fa0bd';
   for(let q=0;q<N;q++)gctx.fillText('q'+q,5,laneY(q,padT,laneH));
 }
 /* ── scrub by dragging on the score (== moving the Scrub slider) ── */
@@ -73,7 +73,7 @@ function revealMode(){VS.showFull=false;const t=document.getElementById('tog-ful
 function circuitScrubTo(clientX){if(!RT.trace)return;const rect=circ.getBoundingClientRect();const x=clientX-rect.left;
   const {colW,x0,steps}=circLayout;if(steps<1)return;let s=Math.floor((x-x0)/colW);s=Math.max(0,Math.min(steps-1,s));
   if(VS.viewMode==='stack')VS.stageTime=(s+1)*stageDuration()+1e-3;else VS.frameIndex=((s+0.5)/steps)*(RT.trace.frames.length-1);
-  revealMode();VS.playing=false;const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}}
+  revealMode();VS.playing=false;const pb=document.getElementById('btn-play');if(pb){pb.textContent='Play';pb.classList.remove('active');}}
 // Score pointer wiring: clicking an RZ note opens its angle editor; otherwise a
 // press-drag scrubs the playhead. Move sets the cursor and drives scrubbing.
 let scrubbing=false;
@@ -105,7 +105,7 @@ function buildRzEditor(){
   rzEd=document.createElement('div');rzEd.id='rz-editor';
   rzEd.style.cssText='position:fixed;z-index:500;display:none;width:218px;background:rgba(9,12,20,0.98);'
     +'border:1px solid var(--border-b);border-radius:9px;padding:11px 12px 12px;backdrop-filter:blur(9px);'
-    +"box-shadow:0 8px 30px rgba(0,0,0,0.6);font-family:'JetBrains Mono',monospace;user-select:none";
+    +"box-shadow:0 8px 30px rgba(0,0,0,0.6);font-family:var(--sci-mono);user-select:none";
   rzEd.innerHTML=
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'
       +'<span id="rz-title" style="font-size:0.64rem;letter-spacing:0.12em;color:#ffb948;font-weight:600"></span>'
@@ -143,7 +143,7 @@ function setAngle(v){
   if(editSel<0)return;
   VS.gates[editSel].params[0]=v;
   VS.preset='custom';document.querySelectorAll('.preset-btn').forEach(x=>x.classList.remove('active'));
-  VS.playing=false;const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}
+  VS.playing=false;const pb=document.getElementById('btn-play');if(pb){pb.textContent='Play';pb.classList.remove('active');}
   RT.rebuild(true);syncRzEditor();
 }
 // Open the editor for gate s near the pointer, clamped to stay on screen.
@@ -162,7 +162,7 @@ function closeAngleEditor(){editSel=-1;if(rzEd)rzEd.style.display='none';}
 // Advance or rewind by one layer (stack) or one gate's worth of frames (floor).
 function stepLayer(dir){
   if(!RT.trace)return;revealMode();VS.playing=false;
-  const pb=document.getElementById('btn-play');if(pb){pb.textContent='▶ Play';pb.classList.remove('active');}
+  const pb=document.getElementById('btn-play');if(pb){pb.textContent='Play';pb.classList.remove('active');}
   if(VS.viewMode==='stack'){
     let s=Math.max(0,Math.min(RT.totalLayers-1,currentStageFor(VS.stageTime)+dir));
     VS.stageTime=s*stageDuration()+1e-3;return;}

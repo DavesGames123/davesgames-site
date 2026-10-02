@@ -68,7 +68,7 @@ function showGridTip(e){const hc=gridCellFromEvent(e);if(!hc||!RT.trace){hideGri
   if(!g){gate='initial state';note='no gate at layer 0 — pure |0…0⟩';}
   else{two=!!(g.controls&&g.controls.length);let q;
     if(g.kind==='measurement')q='all';else if(two)q='ctrl q'+g.controls.join(',')+' → q'+g.targets[0];else if(g.name==='swap')q='q'+g.targets[0]+' ↔ q'+g.targets[1];else q='q'+g.targets[0];
-    gate=(g.kind==='measurement'?'MEASURE':g.name.toUpperCase())+' · '+q;
+    gate=(g.kind==='measurement'?'measure':g.name.toUpperCase())+' · '+q;
     const Q=(g.targets||[]).concat(g.controls||[]);let mask=0;for(const x of Q)mask|=(1<<x);
     const inSup=g.kind!=='measurement'&&Q.length<=2&&(((hc.r^hc.c)&~mask)===0);
     note=g.kind==='measurement'?'measurement keeps only the diagonal':(inSup?'★ this cell is coupled by the gate':'untouched by this gate (spectator qubits differ)');}
@@ -91,7 +91,7 @@ function drawStepInspector(si){                              // mini score-colum
   ictx.setTransform(dpr,0,0,dpr,0,0);ictx.clearRect(0,0,Wc,Hc);
   const lY=q=>padT+(N-1-q)*laneH+laneH/2,gx=LW+GW/2;        // q0 at the bottom
   const acted=g?new Set((g.targets||[]).concat(g.controls||[])):new Set();
-  ictx.textBaseline='middle';ictx.font='600 9px JetBrains Mono,monospace';
+  ictx.textBaseline='middle';ictx.font='600 9px ui-monospace,Menlo,monospace';
   for(let q=0;q<N;q++){const y=lY(q),hot=acted.has(q);
     ictx.strokeStyle=hot?'rgba(255,200,80,0.55)':'rgba(70,95,135,0.5)';ictx.lineWidth=1;ictx.beginPath();ictx.moveTo(LW,y);ictx.lineTo(Wc-4,y);ictx.stroke();
     ictx.fillStyle=hot?'#ffc850':'#7f90ad';ictx.textAlign='left';ictx.fillText('q'+q,3,y);}
@@ -103,13 +103,13 @@ function drawStepInspector(si){                              // mini score-colum
     for(const q of g.targets){const y=lY(q);
       ictx.fillStyle='rgba(8,12,20,0.96)';roundRect(ictx,gx-bw/2,y-bh/2,bw,bh,4);ictx.fill();
       ictx.strokeStyle=cs;ictx.lineWidth=2;roundRect(ictx,gx-bw/2,y-bh/2,bw,bh,4);ictx.stroke();
-      ictx.fillStyle=cs;ictx.font='700 10px JetBrains Mono,monospace';ictx.textAlign='center';
+      ictx.fillStyle=cs;ictx.font='700 10px ui-monospace,Menlo,monospace';ictx.textAlign='center';
       ictx.fillText(g.kind==='measurement'?'M':(g.name==='swap'?'×':g.name.toUpperCase().slice(0,3)),gx,y+0.5);}}
   let lbl,note='';
-  if(!g){lbl='<b>initial</b> state |0…0⟩';note='no gate applied yet';}
+  if(!g){lbl='<b>Initial</b> state |0…0⟩';note='No gate applied yet';}
   else{let q;if(g.kind==='measurement')q='all qubits';else if(g.controls&&g.controls.length)q='ctrl q'+g.controls.join(',')+' → q'+g.targets[0];
     else if(g.name==='swap')q='q'+g.targets[0]+' ↔ q'+g.targets[1];else q='q'+g.targets[0]+(g.params&&g.params.length?' · θ='+g.params[0].toFixed(2):'');
-    lbl='step <b>'+(si+1)+'</b>/'+VS.gates.length+' · '+(g.kind==='measurement'?'MEASURE':g.name.toUpperCase())+' · '+q;
+    lbl='Step <b>'+(si+1)+'</b>/'+VS.gates.length+' · '+(g.kind==='measurement'?'measure':g.name.toUpperCase())+' · '+q;
     if(g.kind==='measurement')note='collapses all qubits onto a basis state';
     else if(g.name==='swap')note='exchanges q'+g.targets[0]+' ↔ q'+g.targets[1]+' — lit cells are coupled';
     else if(g.controls&&g.controls.length)note='acts on q'+g.targets[0]+' only where q'+g.controls.join(',')+'=1 — lit block is its reach';
@@ -154,11 +154,13 @@ function updateHud(frame){const steps=VS.gates.length,si=frame?frame.stepIndex:0
   let outcome='—';if(RT.trace){const ms=RT.trace.steps.find(s=>s.selectedOutcome!=null);if(ms)outcome=ms.selectedOutcome;}
   document.getElementById('st-outcome').innerHTML='outcome <b>'+(outcome==='—'?'—':'|'+outcome+'⟩')+'</b>';
   const gname=frame&&frame.gateName!=='init'?frame.gateName.toUpperCase():'—';
-  document.getElementById('hud-tr').innerHTML='STATE: <b>op_'+(si<0?0:si)+'_'+gname.toLowerCase()+'</b><br>BLOCK: <b>['+Array.from({length:VS.numQubits},(_,i)=>i).join(',')+']</b><br>MODE: <b>'+(VS.viewMode==='stack'?'layer stack · full history':'floor field')+'</b><br>LAYERS: <b>'+(Math.max(0,si+1)+1)+'/'+RT.totalLayers+'</b><br>GATE: <span class="hi">'+gname+'</span><br>OUTCOME: <span class="hi">'+(outcome==='—'?'pending':'|'+outcome+'⟩')+'</span>';
+  // Plain readout of the step: the gate and the outcome. The step, layer
+  // and qubit counts are in #hud-step and the status bar.
+  document.getElementById('hud-tr').innerHTML='Gate <span class="hi">'+gname+'</span><br>Outcome <span class="hi">'+(outcome==='—'?'pending':'|'+outcome+'⟩')+'</span>';
   const b=document.getElementById('hud-bottom');
-  if(frame&&frame.measurement)b.innerHTML='<span class="tag">shot_stack:</span> collapsed outcome |'+(outcome==='—'?'?':outcome)+'⟩ is the bright cube; lines trace from the responsible diagonal source cells in the layer below.';
-  else if(VS.viewMode==='stack')b.innerHTML='<span class="tag">layer stack:</span> each slab is ρ = |ψ⟩⟨ψ| after one computation step; the circuit builds upward, one layer per gate. color = |ρ<sub>ij</sub>| heatmap.';
-  else b.innerHTML='<span class="tag">floor field:</span> single ρ(t) grid morphing on the animated floor. height ∝ |ρ<sub>ij</sub>|.';}
+  if(frame&&frame.measurement)b.innerHTML='<span class="tag">Shot stack:</span> the collapsed outcome |'+(outcome==='—'?'?':outcome)+'⟩ is the bright cube; lines trace from the responsible diagonal source cells in the layer below.';
+  else if(VS.viewMode==='stack')b.innerHTML='<span class="tag">Layer stack:</span> each slab is ρ = |ψ⟩⟨ψ| after one computation step; the circuit builds upward, one layer per gate. The color is the |ρ<sub>ij</sub>| heatmap.';
+  else b.innerHTML='<span class="tag">Floor field:</span> one ρ(t) grid that changes on the animated floor. The height is ∝ |ρ<sub>ij</sub>|.';}
 
 export function initHud(){
 g2dCv.addEventListener('mousemove',showGridTip);

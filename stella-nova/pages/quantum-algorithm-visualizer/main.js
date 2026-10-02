@@ -120,7 +120,7 @@ const GATE_EQ={h:'H = (1/√2)[[1, 1], [1, −1]]',x:'X = [[0, 1], [1, 0]]',cx:'
 function gateText(st){
   if(!st)return 'start state |'+RT.initBasis.toString(2).padStart(VS.numQubits,'0')+'⟩';
   const nm=st.name.toUpperCase(),c=st.controls||[],t=st.targets||[];
-  if(st.kind==='measurement')return 'MEASURE q'+t.join(',q')+(st.selectedOutcome!=null?' → |'+st.selectedOutcome+'⟩':'');
+  if(st.kind==='measurement')return 'Measure q'+t.join(',q')+(st.selectedOutcome!=null?' → |'+st.selectedOutcome+'⟩':'');
   let s=nm+(st.params&&st.params.length?'('+st.params[0].toFixed(3).replace('-','−')+')':'');
   if(c.length)s+=' control q'+c.join(',q')+' → target q'+t.join(',q');else s+=' on q'+t.join(',q');
   return s;

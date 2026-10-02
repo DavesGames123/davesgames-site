@@ -97,7 +97,7 @@ function buildLabels(){
   if(RT.DIM>16)return;
   const span=RT.DIM*PITCH,half=span/2,n=VS.numQubits;
   const tex=t=>{const c=document.createElement('canvas');c.width=64;c.height=32;const x=c.getContext('2d');
-    x.clearRect(0,0,64,32);x.fillStyle='#7a8aa6';x.font='600 16px JetBrains Mono,monospace';x.textAlign='center';x.textBaseline='middle';x.fillText(t,32,16);
+    x.clearRect(0,0,64,32);x.fillStyle='#7a8aa6';x.font='600 16px ui-monospace,Menlo,monospace';x.textAlign='center';x.textBaseline='middle';x.fillText(t,32,16);
     const tx=new THREE.CanvasTexture(c);tx.minFilter=THREE.LinearFilter;return tx;};
   for(let i=0;i<RT.DIM;i++){const lbl=i.toString(2).padStart(n,'0');
     const a=new THREE.Sprite(new THREE.SpriteMaterial({map:tex(lbl),transparent:true,depthWrite:false}));
@@ -132,7 +132,7 @@ function frameCamera(){
 function applyAutoOrient(W,H){                              // wide window → horizontal stack, tall → vertical
   if(!VS.autoOrient)return;const want=(W/H>=1.2)?'horizontal':'vertical';
   if(want!==VS.stackAxis){VS.stackAxis=want;const b=document.getElementById('orient-btn');
-    if(b)b.textContent=want==='horizontal'?'⬌ Horizontal (auto)':'⬍ Vertical (auto)';
+    if(b)b.textContent=want==='horizontal'?'Horizontal (auto)':'Vertical (auto)';
     if(typeof frameCamera==='function')frameCamera();}
 }
 // Tracks the last mobile/desktop decision so the layout only switches on change.
@@ -189,7 +189,7 @@ const _ray=new THREE.Raycaster(),_ndc=new THREE.Vector2();
 let pickPlane=null,pickHi=null,diagGuide=null,_downXY=null;
 const DIAG_CAP=300;
 const initTip=document.createElement('div');initTip.id='init-tip';
-initTip.style.cssText='position:fixed;z-index:600;pointer-events:none;display:none;background:rgba(9,12,20,0.97);border:1px solid rgba(150,200,255,0.35);border-radius:7px;padding:7px 10px;font-family:JetBrains Mono,monospace;font-size:0.68rem;color:#cdd6e6;box-shadow:0 6px 22px rgba(0,0,0,0.55);max-width:230px;line-height:1.4';
+initTip.style.cssText='position:fixed;z-index:600;pointer-events:none;display:none;background:rgba(9,12,20,0.97);border:1px solid rgba(150,200,255,0.35);border-radius:7px;padding:7px 10px;font-family:ui-monospace,Menlo,monospace;font-size:0.68rem;color:#cdd6e6;box-shadow:0 6px 22px rgba(0,0,0,0.55);max-width:230px;line-height:1.4';
 document.body.appendChild(initTip);
 // Lazily create the picker helpers (plane, highlight, diagonal guides) under grp.
 function ensureInitPicker(){

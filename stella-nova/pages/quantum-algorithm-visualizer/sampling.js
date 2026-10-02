@@ -49,7 +49,7 @@ function runSampling(){
   if(!RT.trace)return;
   if(VS.viewMode!=='stack'){VS.viewMode='stack';document.querySelectorAll('.dock-view').forEach(b=>b.classList.toggle('active',b.dataset.view==='stack'));}
   VS.showFull=true;const tf=document.getElementById('tog-full');if(tf)tf.classList.add('on');
-  VS.stageTime=totalStackTime();VS.playing=false;$('btn-play')&&($('btn-play').textContent='▶ Play',$('btn-play').classList.remove('active')); // reveal whole tower so the sampled layer is in view
+  VS.stageTime=totalStackTime();VS.playing=false;$('btn-play')&&($('btn-play').textContent='Play',$('btn-play').classList.remove('active')); // reveal whole tower so the sampled layer is in view
   let sampleLayer=RT.totalLayers-1;const mi=RT.trace.steps.findIndex(s=>s.kind==='measurement');
   if(mi>=0)sampleLayer=mi;                                   // the superposition right before measurement collapses it
   const st=RT.layerStates[sampleLayer],D=1<<VS.numQubits;
