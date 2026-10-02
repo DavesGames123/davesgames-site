@@ -7,7 +7,11 @@
 //  UNIFORM LAYOUT (96 bytes, struct HeatU in shaders/pack.wgsl)
 //    0..1 size · 2 time · 3 pixelScale · 4..7 ink · 8..11 tone · 12..15 cream
 //    16 energy · 17 zoom · 18 pad · 19 pad · 20..23 k
+//  SCREENSAVER: saver(t, opts) runs each time the table-engine saver puts a
+//  cell on (behind its fade). It picks the next photo from SAVER_PHOTOS in
+//  an order from opts.seed, through the same select() as a thumbnail click.
 // ============================================================================
+const SAVER_PHOTOS = ['astronaut', 'chelsea', 'coffee', 'camera', 'coins', 'moon', 'rocket', 'hubble_deep_field', 'motorcycle_left', 'horse'];
 export const PAGE = {
   async init(ctx) {
     const PHOTOS = ctx.photos;
@@ -32,6 +36,12 @@ export const PAGE = {
   },
   copyWork() { this.ctx.device.queue.copyExternalImageToTexture({ source: this.work }, { texture: this.tex }, [512, 512]); },
   tick() { if (!this.pending) return; const apply = this.pending; this.pending = null; apply(); return true; },
+  saver(t, opts) {
+    const ids = SAVER_PHOTOS.filter(id => this.photos[id]); if (!ids.length) return;
+    this.saverN = (this.saverN ?? (opts.seed >>> 0)) + 1;
+    const id = ids[this.saverN % ids.length], btns = this.ctx.$('thumbs').querySelectorAll('button');
+    this.select(id, btns[Object.keys(this.photos).indexOf(id)]);
+  },
   select(id, btn) {
     this.ctx.$('thumbs').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
     const img = this.photos[id]; if (!img) return;
