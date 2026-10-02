@@ -582,12 +582,29 @@ window.snSaver={
     // The plate: the density field and march of shaders/explosion.wgsl with
     // the three dope-sheet curves sampled at the playhead. One fixed title,
     // so the values refresh in place once a second.
+    // The plate TeX: the field and the march of shaders/explosion.wgsl
+    // (the Unicode eq list is the fallback). Colours: d m1, s m2, tau m3,
+    // C m4, theta m5.
+    var SAVER_TEX=[String.raw`d(p) = s\Big[\,|q| - 4 + \mathrm{fbm}\big(50(q + o)\big) + 2\,S(0.41\,q)\Big]`,
+      String.raw`q = \frac{R_y(\theta)\,p}{s},\quad S(q) = \sum_{8} \frac{\sin k y + \cos k x}{k},\quad k \leftarrow 1.73\,k`,
+      String.raw`\tau \leftarrow \tau + (1 - \tau)(0.1 - d)\quad (d < 0.1)`,
+      String.raw`C \leftarrow C + (1 - \alpha)\,0.2\,\tau\,c(\tau, r)`];
+    var SAVER_RULES=[['d','m1'],['s','m2'],['\\tau','m3'],['C','m4'],['\\theta','m5']];
     var label=typeof (opts&&opts.label)==='function'?opts.label:null;
     function plate(){
       if(!label)return;
       var tN=currentTime/duration, sc=getCurveValue('scale',tN), br=getCurveValue('bright',tN), de=getCurveValue('density',tN);
       var steps=quality>1.5?128:quality>0.5?86:56;
-      label({title:'Volumetric explosion',sub:'ray march of a noise-displaced sphere, front to back',
+      var yaw=((mouseX*0.008*180)%360+360)%360;
+      label({title:'Volumetric explosion',sub:'Ray march of a noise-displaced sphere, front to back',
+        params:[{sym:'s',name:'scale',value:sc.toFixed(3),cls:'m2'},
+          {sym:'\\rho',name:'density',value:de.toFixed(2)},
+          {sym:'b',name:'brightness',value:(br*saverGain).toFixed(2)},
+          {sym:'\\theta',name:'yaw',value:yaw.toFixed(0)+'°',cls:'m5'},
+          {sym:'t',name:'playhead',value:currentTime.toFixed(2)+' / '+duration+' s'}],
+        lines:['c(τ, r) runs from a white-hot core to ember red as τ rises',
+          '≤ '+steps+' march steps · '+cv.width+' × '+cv.height+' px · seed '+seed.toFixed(1)],
+        tex:SAVER_TEX,rules:SAVER_RULES,
         eq:['d(p) = s·[ |q| − 4 + fbm(50(q + o))',
           '           + 2·S(0.41·q) ]',
           'q = R_y(θ)·p / s,   o = seed·(100, 73, 37)',
@@ -595,11 +612,20 @@ window.snSaver={
           'inside d < 0.1:  τ ← τ + (1 − τ)(0.1 − d)',
           'C ← C + (1 − α)·0.2τ·c(τ, r)',
           't ← t + max(0.1·|d|·max(min(r, |d|), 2), 0.02)'],
-        lines:['playhead '+currentTime.toFixed(2)+' / '+duration+' s · seed '+seed.toFixed(1),
-          'scale s = '+sc.toFixed(3)+' · brightness '+(br*saverGain).toFixed(2)+' · density '+de.toFixed(2)+' (dope-sheet curves)',
-          'c(τ, r): white-hot core to ember red as τ rises, cooler at radius r',
-          'S: 8 octaves from k₀ = 2, each with a fixed twist of q · fbm: 4 noise octaves',
-          '≤ '+steps+' march steps · '+cv.width+' × '+cv.height+' px · yaw θ = '+(((mouseX*0.008*180)%360+360)%360).toFixed(0)+'°']});
+        anchor:fireballAnchor});
+    }
+    // The fireball on screen, for the shell's label plate. The shader camera
+    // sits at (0, 0, -6 + 1.6 zoom) and looks down +z with rd = ((frag -
+    // res/2) / res.y, 1), so the field centre is the canvas centre and the
+    // focal length is res.y px. The radius is the shader bound 1.3 x 4 s
+    // (boundRadiusSq): the noise pushes the visible edge out to about that.
+    // The screen radius is H tan(asin(R / D)). Null while the fireball is
+    // dark (fade out). Page CSS px.
+    function fireballAnchor(){
+      var tN=currentTime/duration;if(getCurveValue('bright',tN)*saverGain<0.05)return null;
+      var rc=cv.getBoundingClientRect(),D=6-1.6*zoom,q=Math.min(0.95,5.2*getCurveValue('scale',tN)/D);
+      var x=rc.left+rc.width/2,y=rc.top+rc.height/2;
+      return {x:x,y:y,r:rc.height*q/Math.sqrt(1-q*q),pts:[{x:x,y:y}]};
     }
     plate();
     clearInterval(this.plateTimer);
