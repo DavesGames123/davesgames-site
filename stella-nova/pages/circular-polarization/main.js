@@ -535,8 +535,39 @@ saverEnter((o = {}) => {
   // one full δ cycle in 100 to 160 s; the start phase comes from the seed
   saver = { t0: performance.now(), ph: (seed % 360) * Math.PI / 180, w: 2 * Math.PI / (100 + 60 * calm) };
   saverTick();
+  saverLabel = o.labels !== false && typeof o.label === 'function' ? o.label : null;
+  clearInterval(saverTimer); saverPlate();
+  if (saverLabel) saverTimer = setInterval(saverPlate, 1000);
   return { canvas, warmupMs: 500 };
 });
+window.snSaver.exit = () => { saverLabel = null; clearInterval(saverTimer); saverTimer = 0; };
+// The plate (opts.label) names the mode and shows the field that update()
+// draws, with the live state from polar.js: δ, the Jones vector from
+// jonesText(), the kind and tilt ψ, the turn sense in both conventions and
+// the ellipticity χ from polState(). k and ω are the live params.
+let saverLabel = null, saverTimer = 0;
+function saverPlate() {
+  if (!saverLabel) return;
+  const st = polState(params.delta), sg = v => (v < -0.05 ? '−' : '') + Math.abs(v).toFixed(1);
+  const hand = st.turn > 0 ? 'clockwise to the receiver · optics right, IEEE LHCP'
+    : st.turn < 0 ? 'counter-clockwise to the receiver · optics left, IEEE RHCP' : 'does not turn (linear)';
+  saverLabel({
+    title: 'Circular polarization · ' + (params.dist === 'single' ? 'one ray' : params.dist === 'ring' ? 'ring of ' + params.n + ' rays' : 'sphere of ' + params.n + ' rays'),
+    sub: 'outgoing wave · E helix amber, B helix cyan · δ drifts',
+    lines: [
+      'δ = ' + (params.delta < 0 ? '−' : '') + Math.abs(params.delta) + '° · Jones J = ' + jonesText(params.delta),
+      'state: ' + st.kind + (st.psi != null && st.kind !== 'circular' ? ' · tilt ψ = ' + (st.psi > 0 ? '+' : '−') + '45°' : '') + ' · χ = ' + sg(st.chi) + '°',
+      'turn: ' + hand,
+      'k = ' + params.k.toFixed(1) + ' · ω = ' + params.omega.toFixed(2) + (rScaled ? ' · drawn as r·E (far-field pattern)' : ' · E₀ = ' + params.amp.toFixed(1) + ', 1/r fall'),
+    ],
+    eq: [
+      'φ = k r − ω t',
+      'E = (E₀/r) [cos φ ê₁ + cos(φ − δ) ê₂]',
+      'B = (1/c) û_r × E',
+      'J = (1, e^(−iδ))/√2,   sin 2χ = sin δ',
+    ],
+  });
+}
 
 rebuild();
 updateReadouts();
