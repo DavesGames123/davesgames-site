@@ -415,6 +415,48 @@ const start = (location.hash || '').slice(1);
 swapTo(VARIANTS.some(v => v.id === start) ? start : 'pin');
 requestAnimationFrame(frame);
 
+// ── saver plate anchor ──────────────────────────────────────────────────────
+// The shell's label plate (lib/screensaver.js, "label plate") points at the
+// subject of each tour step. plateAnchor(objs, keys) projects with the page
+// camera (Vector3.project) to page CSS px of the canvas rect:
+//   x, y  the projected centre of the world box of the visible meshes
+//   r     the largest distance from (x, y) to a projected corner of the
+//         local box of a mesh: the circle holds every mesh of the subject
+//   pts   the projected key points (world Vector3) that are on screen
+// It returns null when the subject is not on screen, or while the canvas
+// fades out for a swap (style opacity 0).
+const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
+function plateAnchor(objs, keys = []) {
+  const cv = $('view'), rc = cv.getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height || cv.style.opacity === '0') return null;
+  const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
+  const ms = [];
+  PA.box.makeEmpty();
+  for (const ob of objs) if (ob) ob.traverseVisible(m => {
+    if (!m.isMesh || (m.material && m.material.opacity === 0)) return;
+    let b;
+    if (m.isInstancedMesh) { if (!m.boundingBox) m.computeBoundingBox(); b = m.boundingBox; }
+    else { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b = m.geometry.boundingBox; }
+    if (!b || b.isEmpty()) return;
+    ms.push([m, b]); PA.mb.copy(b).applyMatrix4(m.matrixWorld); PA.box.union(PA.mb);
+  });
+  if (PA.box.isEmpty()) return null;
+  const C = px(PA.box.getCenter(PA.c));
+  if (!C) return null;
+  let r = 0;
+  for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
+    PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(q.x - C.x, q.y - C.y));
+  }
+  if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
+  const pts = [];
+  for (const k of keys) { const q = k && px(k); if (q && q.x >= rc.left && q.x <= rc.right && q.y >= rc.top && q.y <= rc.bottom) pts.push(q); }
+  return { x: C.x, y: C.y, r, pts };
+}
+// The world centre of the box of an object: a key point for a part whose
+// origin is not at its middle.
+const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Vector3());
+
 // ── screensaver ─────────────────────────────────────────────────────────────
 // Hook for the shell (lib/screensaver.js). enter() hides the GUI, draws the
 // stage gradient in the scene, and tours one lock: the right key at work,
@@ -451,7 +493,7 @@ window.snSaver = {
     const canvas = $('view');
     const g = () => S.cur.L.g, pin = () => S.cur.L.pin;
     const gapsTxt = () => S.st ? S.st.ch.map(q => (q.gap > 0.0005 ? '+' : q.gap < -0.0005 ? '−' : '') + Math.abs(q.gap).toFixed(2)).join('  ') : '';
-    const STEPS = [
+    const STEPS0 = [
       { view: 'three', key: 'right', lab: () => ({ title: g().name, sub: g().kind, lines: [pin() ? 'Five pin stacks tie the plug to the housing' : 'Five wafers reach out of the plug into the housing', 'The right key lines every one up, and the plug turns', S.st && S.st.open ? `Open · plug at ${(S.st.theta / D).toFixed(0)}°` : `${S.st ? S.st.ok : 0} of ${g().n} on the line`], eq: [pin() ? 'yᵢ + kᵢ = R  (each chamber)' : '−R ≤ wafer ≤ R  (each wafer)'] }) },
       { view: 'pins', key: 'right', lab: () => ({ title: pin() ? 'The shear line' : 'Wafers in the plug', sub: pin() ? 'Key pins below, drivers above' : 'The plug surface, top and bottom', lines: [pin() ? 'Each key pin is cut so its top meets the line' : 'Each window top is set by one cut', `Gaps now (mm): ${gapsTxt()}`, `Key in ${Math.round((S.st ? S.st.s : 0) * 100)}%`], eq: [pin() ? 'kᵢ = R − yᵢ*' : 'oᵢ = max(o_rest, hᵢ − wᵢ)'] }) },
       { view: 'section', key: 'wrong', lab: () => ({ title: 'A wrong key', sub: 'Same blank, other cuts', lines: [pin() ? 'Too shallow: a key pin crosses the line' : 'Too high: a wafer stands into the upper groove', pin() ? 'Too deep: a driver stays across it' : 'Too low: a wafer stays in the lower groove', `The plug turns only ${(g().clearance / D).toFixed(1)}°`], eq: [`Gaps (mm): ${gapsTxt()}`] }) },
@@ -459,6 +501,35 @@ window.snSaver = {
       { view: 'drive', key: 'right', lab: () => pin() ? ({ title: 'Cam and bolt', sub: 'A Scotch yoke', lines: ['The cam turns with the back of the plug', 'Its pin slides in the slot of the bolt yoke', `Bolt out ${(S.st ? S.st.bolt : 0).toFixed(1)} of ${g().cam.Rc} mm`], eq: ['b = Rc · sin θ'] }) : ({ title: 'Cam bar', sub: 'A quarter turn', lines: ['Locked, the bar hangs behind the frame stop', 'Open, it swings clear', `Plug at ${(S.st ? S.st.theta / D : 0).toFixed(0)}°`], eq: ['θ ≤ 90° only when every wafer is flush'] }) },
       { view: 'keyway', key: 'none', section: false, lab: () => ({ title: 'Keyway and wards', sub: 'Only the right blank goes in', lines: ['Ridges in the keyway ride in grooves in the key', `Cuts ${g().key.angle}° apart, ${g().key.step} mm per depth step`, `${g().key.depths} depths × ${g().n} cuts`], eq: [`cᵢ = c₀ − ${g().key.step} · dᵢ`] }) },
     ];
+    // Plate fields, added to each step's label by index. params and TeX
+    // share one colour map (RULES): y m1, k m2, R m3, c and d m4, b m5,
+    // θ m6 (wafers: h m1, w m2). The plain eq lists stay as the fallback.
+    // Anchors: plateAnchor() on the step's parts; the key points are the
+    // key pin or wafer centres, or the cam and bolt (centreOf).
+    const RULES = [['y_i', 'm1'], ['k_i', 'm2'], ['R', 'm3'], ['c_i', 'm4'], ['c_0', 'm4'], ['d_i', 'm4'], ['b', 'm5'], ['\\theta', 'm6'], ['h_i', 'm1'], ['w_i', 'm2']];
+    const P = (sym, name, value, cls) => ({ sym, name, value, cls });
+    const pTh = () => P('\\theta', 'plug angle', `${(S.st ? S.st.theta / D : 0).toFixed(0)}°`, 'm6');
+    const pOk = () => P('n', 'on the line', `${S.st ? S.st.ok : 0} of ${g().n}`, '');
+    const pGap = () => P('g', 'largest gap', `${S.st ? Math.max(...S.st.ch.map(q => Math.abs(q.gap))).toFixed(2) : '0.00'} mm`, '');
+    const TLINE = () => pin() ? String.raw`y_i + k_i = R \quad\text{(each chamber)}` : String.raw`-R \le w_i \le R \quad\text{(each wafer)}`;
+    const TCUT = () => String.raw`c_i = c_0 - ${g().key.step}\,d_i`;
+    const parts = re => Object.values(S.cur.B.parts).filter(q => re.test(q.id));
+    const an = (re, keys) => () => plateAnchor(parts(re).map(q => q.holder), parts(keys).map(q => centreOf(q.holder)));
+    const LOCK = /^(?!keyWrong|strike)/, PINS = /^(kp|dp|sp|wf)\d+$/, KEYS = /^(kp|wf)\d+$/;
+    const ADD = [
+      () => ({ params: [pTh(), pOk()], tex: [TLINE(), TCUT()], anchor: an(LOCK, KEYS) }),
+      () => ({ params: [pGap(), P('s', 'key in', `${Math.round((S.st ? S.st.s : 0) * 100)} %`, '')], tex: pin() ? [String.raw`k_i = R - y_i^{*}`, TLINE()] : [String.raw`o_i = \max(o_{\text{rest}},\ h_i - w_i)`, TLINE()], anchor: an(PINS, KEYS) }),
+      () => ({ params: [pGap(), P('\\theta_{\\max}', 'free play', `${(g().clearance / D).toFixed(1)}°`, 'm6')], tex: [TLINE()], anchor: an(PINS, KEYS) }),
+      () => ({ params: [P('N', 'keyspace', pin() ? S.cur.L.keyspace.toLocaleString('en') : S.cur.L.keyspaceRaw.toLocaleString('en'), '')], tex: pin() ? [String.raw`N \le 10^5, \qquad \lvert d_i - d_{i+1}\rvert \le ${g().key.macs}`, TLINE()] : [String.raw`N = 5^5`, TLINE()], anchor: an(/./, KEYS) }),
+      () => pin() ? ({ params: [pTh(), P('b', 'bolt travel', `${(S.st ? S.st.bolt : 0).toFixed(1)} of ${g().cam.Rc} mm`, 'm5')], tex: [String.raw`b = r_c \sin\theta`], anchor: an(/^(cam|bolt|clip)$/, /^(cam|bolt)$/) })
+        : ({ params: [pTh()], tex: [String.raw`\theta \le 90^\circ \ \text{only when every wafer is flush}`], anchor: an(/^(cam|clip)$/, /^cam$/) }),
+      () => ({ params: [P('d_i', 'depth index of cut i', `0–${g().key.depths - 1}`, 'm4'), P('\\Delta', 'step per depth', `${g().key.step} mm`, ''), P('\\alpha', 'cut angle', `${g().key.angle}°`, '')], tex: [TCUT()], anchor: an(/^(key|plug)$/, /^key$/) }),
+    ];
+    const STEPS = STEPS0.map((s0, k) => Object.assign({}, s0, { lab: () => {
+      const l = s0.lab();
+      // at most 2 notes: the numbers are params now
+      return Object.assign(l, { lines: l.lines.filter(t => !/\d/.test(t)).slice(0, 2) }, ADD[k](), { rules: RULES });
+    } }));
     let n = 0, ord = 0, stepT = 0, lastLab = '', labT = 0, busy = false;
     const show = s => { setShow('section', s.section !== false); setView(s.view, true); const l = s.lab(); lastLab = JSON.stringify(l); label(l); };
     const fade = async fn => {
