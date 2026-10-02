@@ -516,23 +516,81 @@ function opText(op, x, di, k) {
   return ['min(' + x + ', ' + di + ')', 'max(' + x + ', −' + di + ')', 'max(' + x + ', ' + di + ')',
     'smin' + kk + '(' + x + ', ' + di + ')', '−smin' + kk + '(−' + x + ', ' + di + ')', '−smin' + kk + '(−' + x + ', −' + di + ')'][op];
 }
+// TeX of the field: the same fold as opText, with d_i for each primitive.
+function opTeX(op, x, di) {
+  const sm = '\\operatorname{smin}_k';
+  return ['\\min(' + x + ', ' + di + ')', '\\max(' + x + ', -' + di + ')', '\\max(' + x + ', ' + di + ')',
+    sm + '(' + x + ', ' + di + ')', '-' + sm + '(-' + x + ', ' + di + ')', '-' + sm + '(-' + x + ', -' + di + ')'][op];
+}
+// Colours of the plate: the ray (o, r, p, t) m1, the field d m2, the
+// normal n m3, the smooth-min width k m4, the tracer settings (s, epsilon,
+// N) m6.
+const PLATE_RULES = [['\\mathbf{o}', 'm1'], ['\\mathbf{r}', 'm1'], ['\\mathbf{p}', 'm1'], ['\\mathbf{l}', 'm3'], ['\\mathbf{n}', 'm3'], ['t', 'm1'],
+  ['d', 'm2'], ['k', 'm4'], ['s', 'm6'], ['\\varepsilon', 'm6'], ['N', 'm6']];
 function saverPlate() {
-  let field = 'd' + SUBS[0];
-  S.prims.forEach((pr, i) => { if (i) field = opText(pr.op, field, 'd' + SUBS[i], Math.max(pr.k, 1e-3)); });
+  let field = 'd' + SUBS[0], ftex = 'd_1';
+  S.prims.forEach((pr, i) => { if (i) { field = opText(pr.op, field, 'd' + SUBS[i], Math.max(pr.k, 1e-3)); ftex = opTeX(pr.op, ftex, 'd_' + (i + 1)); } });
   const eq = ['t ← t + s·d(o + t·r̂)', 'stop: d < ε, or t > ' + SC.TMAX + ', or ' + S.maxSteps + ' steps', 'd(p) = ' + field];
   if (S.rep > 0) eq.push('p.xz ← p.xz − c·clamp(round(p.xz/c), −n, n)');
   if (S.twist) eq.push('p.xz ← R(' + S.twist + '·y)·p.xz   (twist about y)');
-  if (S.prims.some(pr => pr.op >= 3)) eq.push('smin_k(a, b) = min(a, b) − h²k/4', 'h = max(k − |a − b|, 0)/k');
+  const smooth = S.prims.some((pr, i) => i && pr.op >= 3);
+  if (smooth) eq.push('smin_k(a, b) = min(a, b) − h²k/4', 'h = max(k − |a − b|, 0)/k');
   if (S.mode === 4) eq.push('AO = 1 − 2.4 Σᵢ 0.9ⁱ (hᵢ − d(p + hᵢn))');
   else if (S.mode === 5) eq.push('shadow = min over t of 12·d(p + t·l)/t', 't += clamp(d, 0.01, 0.3)');
   else eq.push('col ∝ (0.1 + 0.9·max(n·l, 0)·shadow)', '      × (0.4 + 0.6·AO) + specular');
-  const lines = [MODES[S.mode] + ': ' + MODE_NOTE[S.mode],
-    's = ' + S.stepScale + ' · ε = ' + SC.EPS + ' · plain tracer (no over-relaxation)'];
-  if (lastStats) lines.push('mean steps per pixel: ' + lastStats.plain.toFixed(1) + ' plain, ' + lastStats.relaxed.toFixed(1) + ' over-relaxed (ω = ' + Math.max(S.omega, 1.05) + ')');
-  S.prims.forEach((pr, i) => lines.push(primText(pr, i)));
-  if (S.rep > 0) lines.push('repeat: c = ' + S.period + ', n = ' + S.rep + ' (' + (2 * S.rep + 1) + ' × ' + (2 * S.rep + 1) + ' grid)');
-  lines.push(SC.PRESETS[S.preset] ? SC.PRESETS[S.preset].note : '');
-  return { title: 'Sphere tracing · ' + S.preset, sub: 'ray march by the distance bound d(p)', eq, lines };
+  // TeX: the step (equations.js "step", with the step scale s), the field
+  // of this preset, then the smooth min or the shading term of the mode,
+  // then the stop test. The shell shows the first two on a phone.
+  const tex = ['t_{n+1} = t_n + s\\, d(\\mathbf{o} + t_n\\,\\mathbf{r})', 'd(\\mathbf{p}) = ' + ftex];
+  if (smooth) tex.push('\\operatorname{smin}_k(a,b) = \\min(a,b) - \\tfrac{k}{4}\\,h^{2}, \\quad h = \\frac{\\max(k - |a-b|,\\,0)}{k}');
+  if (S.mode === 4) tex.push('\\text{AO} = 1 - 2.4 \\sum_{i=1}^{5} 0.9^{i}\\,\\bigl(h_i - d(\\mathbf{p} + h_i\\,\\mathbf{n})\\bigr)');
+  else if (S.mode === 5) tex.push('\\text{shadow} = \\min_t \\frac{12\\, d(\\mathbf{p} + t\\,\\mathbf{l})}{t}');
+  else tex.push('\\text{col} \\propto \\bigl(0.1 + 0.9 \\max(\\mathbf{n}\\cdot\\mathbf{l}, 0)\\,\\text{shadow}\\bigr)(0.4 + 0.6\\,\\text{AO})');
+  tex.push('\\text{stop if } d < \\varepsilon \\text{ or } t > ' + SC.TMAX + ' \\text{ or } n = N');
+  const params = [{ sym: 's', name: 'step scale', value: f2(S.stepScale), cls: 'm6' },
+    { sym: '\\varepsilon', name: 'hit threshold', value: String(SC.EPS), cls: 'm6' },
+    { sym: 'N', name: 'step cap', value: String(S.maxSteps), cls: 'm6' }];
+  if (smooth) params.push({ sym: 'k', name: 'blend width', value: f2(Math.max(...S.prims.filter((pr, i) => i && pr.op >= 3).map(pr => pr.k))), cls: 'm4' });
+  if (lastStats) params.push({ sym: '\\bar n', name: 'mean steps per pixel', value: lastStats.plain.toFixed(1), cls: '' });
+  const note = SC.PRESETS[S.preset] ? SC.PRESETS[S.preset].note : '', dot = note.indexOf('. ');
+  const lines = [MODES[S.mode] + ': ' + MODE_NOTE[S.mode], dot > 0 ? note.slice(0, dot + 1) : note].filter(Boolean);
+  return { title: 'Sphere tracing · ' + S.preset, sub: 'Ray march by the distance bound d(p)', params, lines, tex, rules: PLATE_RULES, eq, anchor: sceneAnchor };
+}
+// The solid on screen, for the shell's label plate. Each visible primitive
+// (the first one, and each union or smooth union after it; a cut or an
+// intersection only removes) gives a centre and a bounding radius from its
+// size. With repetition there is one copy per grid cell. SC.project, the
+// overlay projection, gives view px; the view rect adds the page offset.
+// x, y is the centre of the box round the projected discs, r the radius
+// that holds them all. pts are the primitive centres when there are 2 to 8.
+function primBound(pr) {
+  const [a, b, c] = pr.size;
+  return [a, Math.hypot(a, b, c), Math.hypot(a, b, c), a + b, Math.hypot(a, b), a + b, a][pr.type] || a;
+}
+function sceneAnchor() {
+  const v = $('view'); if (!v) return null;
+  const R = v.getBoundingClientRect(); if (R.width < 2) return null;
+  const C = cam(), m = Math.min(R.width, R.height), discs = [];
+  const offs = [];
+  if (S.rep > 0) { for (let i = -S.rep; i <= S.rep; i++) for (let j = -S.rep; j <= S.rep; j++) offs.push([i * S.period, j * S.period]); }
+  else offs.push([0, 0]);
+  S.prims.forEach((pr, i) => {
+    if (i && pr.op !== 0 && pr.op !== 3) return;
+    for (const [ox, oz] of offs) {
+      const X = [pr.pos[0] + ox, pr.pos[1], pr.pos[2] + oz];
+      const q = SC.project(C, X, R.width, R.height); if (!q) continue;
+      const z = (X[0] - C.eye[0]) * C.fwd[0] + (X[1] - C.eye[1]) * C.fwd[1] + (X[2] - C.eye[2]) * C.fwd[2];
+      discs.push({ x: q[0] + R.left, y: q[1] + R.top, r: primBound(pr) * SC.FOCAL / z * m / 2 });
+    }
+  });
+  if (!discs.length) return null;
+  const x0 = Math.min(...discs.map(d => d.x - d.r)), x1 = Math.max(...discs.map(d => d.x + d.r));
+  const y0 = Math.min(...discs.map(d => d.y - d.r)), y1 = Math.max(...discs.map(d => d.y + d.r));
+  const x = (x0 + x1) / 2, y = (y0 + y1) / 2;
+  const r = Math.max(...discs.map(d => Math.hypot(d.x - x, d.y - y) + d.r));
+  const out = { x, y, r };
+  if (S.rep === 0 && discs.length >= 2) out.pts = discs.slice(0, 8).map(d => ({ x: d.x, y: d.y }));
+  return out;
 }
 window.snSaver = {
   enter(o = {}) {
