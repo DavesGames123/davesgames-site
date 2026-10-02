@@ -67,7 +67,11 @@
     const strip = Math.round(avail * (MOB ? 0.28 : 0.32));   // wave panels: more space
     const r = Math.max(36, (avail - strip - gap) / 2);       // figure: less space
     const blk = strip + gap + 2 * r;                          // whole diagram block
-    const ox = Math.max(pad, (usableW - blk) / 2), oy = Math.max(pad, (usableH - blk) / 2);
+    // A saver on a tall screen: the shell docks the plate at the base when
+    // the subject is high, so the block centres in the part above a 260 px
+    // band for the plate.
+    const tall = SAVER.on && H > W * 1.2, room = tall ? Math.min(260, usableH - blk - pad) : 0;
+    const ox = Math.max(pad, (usableW - blk) / 2), oy = Math.max(pad, (usableH - room - blk) / 2);
     const cx = ox + strip + gap + r, cy = oy + strip + gap + r;
     return { cx, cy, r, strip, gap, pad,
       figL: cx - r, figR: cx + r, figT: cy - r, figB: cy + r };
@@ -508,9 +512,9 @@
   // hides the panel, gear, status and topbar), stops the tones, and plays a
   // seeded tour of SAVER_TOUR. Each figure holds for a dwell. Its phase δ
   // drifts at a slow rate, so the loop morphs. A detuned figure never closes.
-  // Each figure sends opts.label the two oscillator equations, the ratio, the
-  // interval name and the phase drift. calm 1 is the slowest. Audio stays off.
-  const SAVER = { on: false, opts: null, order: [], k: 0, t: 0, dwell: 18, slow: 1, st: null };
+  // Each figure sends opts.label (saverPlate) the page TeX, the ratio, the
+  // live phase and an anchor on the figure. calm 1 is the slowest. Audio stays off.
+  const SAVER = { on: false, opts: null, order: [], k: 0, t: 0, dwell: 18, slow: 1, st: null, name: '', lt: 0 };
   // [a, b, start phase δ0 in turns, base phase rate, detune ε]. saverFigure
   // drifts δ at 2 * rate * slow turns per second.
   const SAVER_TOUR = [
@@ -530,26 +534,51 @@
     SAVER.st = { a, b, d0, rate: 2 * rate * SAVER.slow, eps };
     G.A = a; G.B = b; G.phase = d0; G.detune = eps;
     clearTrail(); syncSteppers(); markPreset(); refreshStatus();
-    const name = nameFor(a, b), d1 = d0 + SAVER.st.rate * SAVER.dwell;
+    SAVER.name = nameFor(a, b); SAVER.lt = 0;
+    saverPlate();
+  }
+  // The label plate: the page's TeX (index.html, FIG_RULES colours), the
+  // ratio A : B, the live phase phi and the detune delta as params, and an
+  // anchor on the figure. saverStep() sends it again each 0.5 s, so phi is
+  // live (same title: the shell swaps the text with no fade).
+  const FIG_TEX = [String.raw`x(t)=\sin\!\big(2\pi(A+\delta)\,t+2\pi\varphi\big)`, String.raw`y(t)=\sin(2\pi B\,t)`,
+    String.raw`f_x=f_0\,(A+\delta),\qquad f_y=f_0\,B`];
+  function saverPlate() {
+    const o = SAVER.opts, st = SAVER.st;
+    if (!o || !o.label || o.labels === false || !st) return;
+    const { a, b, d0, eps } = st, name = SAVER.name, d1 = d0 + st.rate * SAVER.dwell;
     const eq = eps ? ['x = A sin((a + ε)ωt + δ)', 'y = B sin(bωt)'] : ['x = A sin(aωt + δ)', 'y = B sin(bωt)'];
-    eq.push('x = sin(' + (eps ? '(' + a + ' + ' + eps + ')' : a) + 'ωt + ' + turns(d0) + ')   y = sin(' + b + 'ωt)');
-    const lines = ['a : b = ' + a + ' : ' + b + ', ' + name.toLowerCase() + ', A = B = 1'];
-    if (eps) lines.push('ε = +' + eps + ': the loop never closes; it goes through every shape once in 1/ε = ' + Math.round(1 / eps) + ' periods');
-    else lines.push('δ drifts ' + turns(d0) + ' → ' + turns(d1) + ' (τ = 2π) over this figure');
     const times = n => n === 1 ? 'once' : n + ' times';
-    lines.push('x touches each side ' + times(a) + ' and y touches top and bottom ' + times(b) + ' in one period');
-    lines.push('tones ' + a + '·f₀ and ' + b + '·f₀ (sound off)');
-    if (SAVER.opts && SAVER.opts.label) SAVER.opts.label({
+    const lines = [eps ? 'The loop never closes: it goes through every shape once in 1/δ = ' + Math.round(1 / eps) + ' periods'
+      : 'φ drifts ' + turns(d0) + ' → ' + turns(d1) + ' (τ = 2π) over this figure',
+      'x touches each side ' + times(a) + ', y the top and bottom ' + times(b) + ' in one period'];
+    o.label({
       title: name + ' · ' + a + ' : ' + b,
-      sub: 'Lissajous figure · ' + (eps ? 'detuned, drifting' : 'closed loop'),
-      eq, lines,
+      sub: 'Lissajous figure, ' + (eps ? 'detuned and drifting' : 'closed loop'),
+      params: [
+        { sym: 'A', name: 'horizontal ratio', value: String(a), cls: 'm3' },
+        { sym: 'B', name: 'vertical ratio', value: String(b), cls: 'm4' },
+        { sym: '\\varphi', name: 'phase', value: turns(G.phase), cls: 'm5' },
+        { sym: '\\delta', name: 'detune', value: eps ? '+' + eps : '0', cls: 'm6' },
+      ],
+      lines, tex: FIG_TEX, rules: FIG_RULES, eq, anchor: figureAnchor,
     });
+  }
+  // The figure square of box() in page CSS px: centre (cx, cy), r 1.1 x
+  // the half side (the curve touches each side, the corners stay empty).
+  // pts: the moving point of the curve (the hot tip of draw()).
+  function figureAnchor() {
+    if (!W) return null;
+    const rc = cv.getBoundingClientRect(), bx = box(), u = simU % 1;
+    return { x: rc.left + bx.cx, y: rc.top + bx.cy, r: bx.r * 1.1,
+      pts: [{ x: rc.left + mapX(px(u), bx), y: rc.top + mapY(py(u), bx) }] };
   }
   function saverStep(dt) {
     SAVER.t += dt;
     if (SAVER.t >= SAVER.dwell) { saverFigure(SAVER.k + 1); return; }
     const st = SAVER.st;
     if (st && st.rate) G.phase = st.d0 + st.rate * SAVER.t;
+    if (st && st.rate && (SAVER.lt += dt) >= 0.5) { SAVER.lt = 0; saverPlate(); }
   }
   window.snSaver = {
     enter(o) {
