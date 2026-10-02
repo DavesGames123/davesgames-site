@@ -41,6 +41,7 @@
 //      presets .............. "data-preset"         flat / ramp / detune / random
 //      init ................. "setN(8)"             first paint
 //      formulas ............. "function fillEquations" MathJax SVG into [data-eq]
+//      screensaver .......... "window.snSaver"      autopilot for lib/screensaver.js
 // ============================================================================
 
 // $ is the id lookup shorthand; TAU is one turn; S is the single mutable state:
@@ -114,9 +115,14 @@ function resample(R){
 /* ── canvas helpers ── */
 // Size a canvas to its CSS box at device pixel ratio (capped at 2), reset the
 // transform, clear it, and return the 2D context and CSS dimensions.
-function fit(cv){const dpr=Math.min(devicePixelRatio||1,2),w=cv.clientWidth,h=cv.clientHeight;
+// In the screensaver (SV set) the canvas fills the window: the layout box is
+// SV.zoom times smaller than the CSS box, so the text and marks scale up while
+// the drawing buffer stays at the window size, and the clear is opaque.
+let SV=null;
+function fit(cv){const z=SV?SV.zoom:1,dpr=Math.min(devicePixelRatio||1,2)*z,w=cv.clientWidth/z,h=cv.clientHeight/z;
   if(cv.width!==(w*dpr|0)||cv.height!==(h*dpr|0)){cv.width=w*dpr|0;cv.height=h*dpr|0;}
-  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);return {c,w,h};}
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,w,h);
+  if(SV){c.fillStyle='#0b0e16';c.fillRect(0,0,w,h);}return {c,w,h};}
 // Map a phase to a hue so each phase dot is coloured by its value.
 const phaseHue=p=>{const n=(wrap(p)+Math.PI)/TAU;return `hsl(${(n*340+10)|0} 90% 62%)`;};
 
@@ -217,6 +223,8 @@ function drawOut(R){
   c.fillText(lab,left?px+6:px-6,Math.max(top+13,py-6));
   c.textAlign='left';c.fillStyle='rgba(86,100,128,0.92)';c.font="9px 'IBM Plex Mono',monospace";
   c.fillText('basis state '+(N0<=KET_CAP?'|b\u2099\u2026b\u2080\u27E9':'bin k')+'  (frequency)',padL,12);
+  // screensaver: fade to the background across a register change
+  if(SV&&SV.fade>0){c.globalAlpha=SV.fade;c.fillStyle='#0b0e16';c.fillRect(0,0,w,h);c.globalAlpha=1;}
 }
 
 /* ── stats / readouts ── */
@@ -351,3 +359,45 @@ setN(8);applyRamp(0);
 (function fillEquations(){const E=window.QFT_EQ||{};
   document.querySelectorAll('[data-eq]').forEach(el=>{const v=E[el.dataset.eq];
     if(v)el.innerHTML=v;else console.warn('qft-flow: no formula for data-eq='+el.dataset.eq);});})();
+
+// Screensaver hook for the shell (lib/screensaver.js). It moves #cv-out to
+// <body> and hides all other content, so the output spectrum fills the window
+// (fit() scales its layout by SV.zoom). The autopilot slides the ramp slope
+// so that the peak drifts across the bins, and it detunes qubit 0 slowly to
+// show the leakage. It changes n about three times per dwell, behind a fade
+// drawn into the canvas. opts.calm (1 = slowest) sets the drift speed;
+// opts.seed sets the start bin and the order of n. No exit(): the shell
+// reloads the page on stop.
+window.snSaver={enter(o={}){
+  const calm=Math.max(0,Math.min(1,o.calm??0.7)),secs=Math.max(20,+o.seconds||60);
+  let r=(o.seed>>>0)||1;const rnd=()=>(r=(r*1664525+1013904223)>>>0)/4294967296;
+  const cv=$('cv-out');document.body.appendChild(cv);
+  const st=document.createElement('style');
+  st.textContent='body>*:not(#cv-out){display:none!important}#cv-out{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;margin:0!important;cursor:none!important}';
+  document.head.appendChild(st);
+  SV={zoom:Math.max(1,Math.min(1.8,innerWidth/760)),fade:1};
+  S.shotsIdx=0;S.sampleCounts=null;
+  const NS=[4,5,6,7].sort(()=>rnd()-0.5);
+  const hold=Math.max(8,secs/3)*1000,fadeMs=(0.8+1.2*calm)*1000;
+  const rate=1/(60+90*calm);              // fraction of the bins per second
+  let ni=0,m=0,det=rnd()*TAU,t0=performance.now(),last=t0,phase='in',pt=t0,lastDraw=0;
+  setN(NS[0]);m=(0.1+0.6*rnd())*N();
+  function tick(now){
+    requestAnimationFrame(tick);
+    const dt=Math.min(0.1,(now-last)/1000);last=now;
+    if(now-lastDraw<33)return;lastDraw=now;   // about 30 fps
+    m=(m+rate*N()*dt)%N();det+=dt*0.12*(1-0.6*calm);
+    // fade state: in -> hold -> out -> (new n) -> in
+    if(phase==='in'){SV.fade=Math.max(0,1-(now-pt)/fadeMs);if(SV.fade===0){phase='hold';pt=now;}}
+    else if(phase==='hold'){if(now-pt>hold){phase='out';pt=now;}}
+    else if(phase==='out'){SV.fade=Math.min(1,(now-pt)/fadeMs);
+      if(SV.fade===1){ni=(ni+1)%NS.length;const f=m/N();setN(NS[ni]);m=f*N();phase='in';pt=now;}}
+    const a=TAU*m/N();
+    for(let j=0;j<S.n;j++)S.phi[j]=wrap(a*(1<<j));
+    S.phi[0]=wrap(S.phi[0]+0.7*Math.sin(det)*Math.max(0,Math.sin(det*0.37)));
+    $('alpha').value=a;
+    render();
+  }
+  requestAnimationFrame(tick);
+  return {canvas:cv,warmupMs:fadeMs+500};
+}};
