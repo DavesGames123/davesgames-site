@@ -257,7 +257,7 @@ function loadPreset(name,btn){
   resize();
   setBtnLaunch(false); setTbar(false);
   setEqPanelActive(false);
-  setStatus('AWAITING SELECTION');
+  setStatus('Select a planet');
   renderMath();
   // On narrow screens, hide the math drawer so the canvas is unobstructed.
   if(window.innerWidth<=980) closeMathDrawer();

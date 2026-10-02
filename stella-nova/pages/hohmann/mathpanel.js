@@ -63,7 +63,7 @@ function renderMath(){
       <div class="msec">
         <div class="msec-head"><span>Getting started</span></div>
         <div class="ph">
-          <span class="ic">Orbital Mechanics</span>
+          <span class="ic">Orbital mechanics</span>
           ${hopMode
             ?'Select your home planet to park your spacecraft there. Then pick any destination and launch repeated transfers in a chain.'
             :'Click any planet to set the source orbit, then click another to compute the Hohmann transfer and reveal the launch windows.'}

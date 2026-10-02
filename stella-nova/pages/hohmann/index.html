@@ -53,12 +53,12 @@
 <!-- Topbar: system name plus live readouts (status, planet count, FPS, time). -->
 <div class="topbar">
   <div class="topbar-l">
-    <span class="sys-name"><span class="dot"></span>Stella Nova</span>
-    <span class="sys-sub">Orbital Transfer Calculator</span>
-    <div class="sys-status" id="simStatus">Sim Active</div>
+    <span class="sys-name">Stella Nova</span>
+    <span class="sys-sub">Orbital transfer calculator</span>
+    <div class="sys-status" id="simStatus">Running</div>
   </div>
   <div class="topbar-r">
-    <span class="smsg" id="smsg">AWAITING SELECTION</span>
+    <span class="smsg" id="smsg">Select a planet</span>
     <span class="hide-narrow">Planets <strong id="bodyCount">0</strong></span>
     <span class="hide-narrow">FPS <strong id="fpsRead">60</strong></span>
     <span>t <strong id="timeRead">0.00</strong> yr</span>
@@ -145,9 +145,9 @@
 
   <!-- Actions: Launch fires the transfer (disabled until both orbits picked),
        Hop toggles chained-transfer mode, Clear resets the selection. -->
-  <button class="act-btn go" id="btnLaunch" disabled onclick="launch()">&#9654; Launch</button>
-  <button class="act-btn green" id="btnHop" onclick="toggleHopMode()">&#11041; Hop</button>
-  <button class="act-btn red" onclick="clearSel()">&#x2715; Clear</button>
+  <button class="act-btn go" id="btnLaunch" disabled onclick="launch()">Launch</button>
+  <button class="act-btn green" id="btnHop" onclick="toggleHopMode()">Hop</button>
+  <button class="act-btn red" onclick="clearSel()">Clear</button>
 
   <span class="ab-divider"></span>
 
@@ -190,7 +190,6 @@
          SVG. eqState flips to LIVE (main.js) once a transfer is computed. -->
     <section class="eq-panel" id="eqPanel">
       <div class="eq-head">
-        <span class="eq-dot"></span>
         <span class="lbl">Equations</span>
         <span class="eq-state" id="eqState">Reference</span>
         <button class="eq-collapse" id="eqCollapseBtn" title="Hide the equations" aria-expanded="true">&#9662;</button>

@@ -344,11 +344,11 @@ function drawGuidance(){
   if(hopMode){
     if(!source){
       line1='Hop mode';
-      line2='\u2460 Select a home planet';
+      line2='Step 1: select a home planet';
       sub='The spacecraft parks there and waits for the first transfer.';
     } else if(!target){
       line1=`Parked at ${source.name}`;
-      line2='\u2461 Select a destination';
+      line2='Step 2: select a destination';
       sub='Choose any other planet to compute the Hohmann transfer.';
     } else {
       line1=`${source.name} \u2192 ${target.name}`;
@@ -357,11 +357,11 @@ function drawGuidance(){
     }
   } else {
     if(!source){
-      line2='\u2460 Select a source planet';
+      line2='Step 1: select a source planet';
       sub='Click any planet to begin the transfer calculation.';
     } else if(!target){
       line1=`Source: ${source.name}`;
-      line2='\u2461 Select a target planet';
+      line2='Step 2: select a target planet';
       sub='Click another planet to compute the Hohmann transfer.';
     } else if(!ship){
       line1=`${source.name} \u2192 ${target.name}`;
@@ -616,7 +616,7 @@ function updateShip(){
       });
       hopHomePlanet=target;
       setTbar(true,`✓ ARRIVED AT ${target.name.toUpperCase()} — SELECT NEXT DESTINATION`, true);
-      setStatus(`AT ${target.name.toUpperCase()} — HOP ${hopLog.length} COMPLETE`);
+      setStatus(`At ${target.name}. Hop ${hopLog.length} complete.`);
       source=target; target=null; xfer=null; launchWindows=[];
       setBtnLaunch(false);
       setEqPanelActive(false);
@@ -624,7 +624,7 @@ function updateShip(){
     } else {
       // Normal mode: just report the completed transfer.
       setTbar(true,'✓ TRANSFER COMPLETE — SPACECRAFT IN TARGET ORBIT', true);
-      setStatus('TRANSFER COMPLETE');
+      setStatus('Transfer complete');
     }
     return;
   }

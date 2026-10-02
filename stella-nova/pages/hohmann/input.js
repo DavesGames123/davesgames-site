@@ -43,14 +43,14 @@ cvs.addEventListener('click',()=>{
         arriveAng:pos.ang, arriveT:simTime,
         arriveOmega:hovered.omega, r2:hovered.r
       };
-      setStatus(`PARKED AT ${hovered.name.toUpperCase()} — SELECT DESTINATION`);
+      setStatus(`Parked at ${hovered.name}. Select a destination.`);
       renderMath();
     // Second hop click: choose a destination and compute its transfer.
     } else if(hovered!==source&&!target&&ship&&ship.arrived){
       target=hovered;
       xfer=computeXfer(source.r,target.r);
       launchWindows=computeWindows(source,target,xfer,simTime);
-      setStatus(`${source.name.toUpperCase()} → ${target.name.toUpperCase()} — PRESS ▶ LAUNCH`);
+      setStatus(`${source.name} → ${target.name}. Press Launch.`);
       setBtnLaunch(true);
       setEqPanelActive(true);
       renderMath();
@@ -60,14 +60,14 @@ cvs.addEventListener('click',()=>{
   // Normal mode, first click: set the source orbit.
   if(!source){
     source=hovered;
-    setStatus(`SOURCE: ${source.name.toUpperCase()} — SELECT TARGET`);
+    setStatus(`Source: ${source.name}. Select a target.`);
     renderMath();
   // Normal mode, second click: set the target and compute the transfer.
   } else if(hovered!==source&&!target){
     target=hovered;
     xfer=computeXfer(source.r,target.r);
     launchWindows=computeWindows(source,target,xfer,simTime);
-    setStatus('TRANSFER COMPUTED — PRESS ▶ LAUNCH');
+    setStatus('Transfer computed. Press Launch.');
     setBtnLaunch(true);
     setEqPanelActive(true);
     renderMath();
@@ -103,7 +103,7 @@ document.addEventListener('keydown',e=>{
 function togglePause(){
   paused=!paused;
   const el=document.getElementById('simStatus');
-  el.textContent=paused?'Paused':'Sim Active';
+  el.textContent=paused?'Paused':'Running';
   el.className='sys-status'+(paused?' paused':'');
 }
 
@@ -122,7 +122,7 @@ function launch(){
         launchT:simTime, trail:[], arrived:false, x:0, y:0, r2:xfer.r2};
   launchWindows=[];
   setTbar(true,'⚡ TRANSFER IN PROGRESS — SPACECRAFT EN ROUTE');
-  setStatus('TRANSFERRING'); setBtnLaunch(false);
+  setStatus('Transferring'); setBtnLaunch(false);
 }
 
 // Toggle hop mode on or off. Either way, reset all selection and ship state and
@@ -133,20 +133,20 @@ function toggleHopMode(){
   if(hopMode){
     hopLog=[]; hopHomePlanet=null;
     btn.classList.add('active');
-    btn.innerHTML='&#11041; Hopping';
+    btn.textContent='Hopping';
     source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
     setBtnLaunch(false); setTbar(false);
     setEqPanelActive(false);
-    setStatus('HOP MODE — SELECT HOME PLANET');
+    setStatus('Hop mode. Select the home planet.');
     renderMath();
   } else {
     btn.classList.remove('active');
-    btn.innerHTML='&#11041; Hop';
+    btn.textContent='Hop';
     hopLog=[]; hopHomePlanet=null;
     source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
     setBtnLaunch(false); setTbar(false);
     setEqPanelActive(false);
-    setStatus('AWAITING SELECTION');
+    setStatus('Select a planet');
     renderMath();
   }
 }
@@ -154,8 +154,8 @@ function toggleHopMode(){
 // Clear the current selection and ship without leaving the current mode.
 function clearSel(){
   source=target=xfer=ship=null; launchWindows=[]; launchScore=null;
-  if(hopMode){ hopLog=[]; hopHomePlanet=null; setStatus('HOP MODE — SELECT HOME PLANET'); }
-  else setStatus('AWAITING SELECTION');
+  if(hopMode){ hopLog=[]; hopHomePlanet=null; setStatus('Hop mode. Select the home planet.'); }
+  else setStatus('Select a planet');
   setBtnLaunch(false); setTbar(false);
   setEqPanelActive(false);
   renderMath();
