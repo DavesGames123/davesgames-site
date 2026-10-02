@@ -39,6 +39,7 @@
      grep -n 'function setAnim'     start or pause the rotation
      grep -n 'function sendFrame'   one animation frame: tiles in view
      grep -n 'function animDone'    frame time and the adaptive size
+     grep -n 'window.snSaver'       screensaver hook (lib/screensaver.js)
    ========================================================================== */
 import { shellTiles, colIndex, tileSpec, radialR, legendre, energyEV, meanR, L_LETTER, fillPose, poseMatrix } from './physics.js';
 import { MAPS, lut, colorize, outerGain } from './colormaps.js';
@@ -443,7 +444,7 @@ function drawRadial(n, l, hw, nodes) {
 // detail view is open, only the large tile turns. On pause, render() fills
 // every tile at full size in the current pose.
 const A = { on: false, rate: [24, 0, 36], ang: [0, 0, 0], scale: 0.6, seq: 0, inflight: 0, sent: 0, last: 0, ms: 0 };
-const FRAME_MS = 33;
+let FRAME_MS = 33;   // the screensaver hook raises it: fewer, sharper frames
 function poseRot() { return A.ang.every(v => v === 0) ? null : poseMatrix(A.ang[0], A.ang[1], A.ang[2]); }
 
 function setAnim(on) {
@@ -620,3 +621,84 @@ new ResizeObserver(() => { clearTimeout(rsTimer); rsTimer = setTimeout(() => { i
 new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) maybeExtend(); }, { rootMargin: `0px 0px ${EXTEND_MARGIN}px 0px` }).observe($('foot'));
 requestAnimationFrame(maybeExtend);
 startPool().then(() => { $('rdEngine').textContent = engine; render(); });
+
+// ------------------------------------------------------------ screensaver
+// Hook for the shell screensaver (lib/screensaver.js). The table has no one
+// canvas to record, so the hook opens the detail view of one orbital, turns
+// it slowly with the rotation, and copies #dCanvas each frame into a new
+// window-size canvas (#svCanvas) on the darkest colour of the map. The name
+// and ket of the orbital go at the lower left of that canvas. Each orbital
+// shows for seconds / 3, and the copy fades to the background across each
+// change. opts.calm (1 = slowest) sets the turn rates; opts.seed picks the
+// orbitals (n = 2 to 4, l > 0) and the real or complex form. FRAME_MS is raised
+// so that the adaptive size stays high. The fonts are the page's own.
+// No exit(): the shell reloads the page on stop.
+window.snSaver = {
+  enter(o = {}) {
+    const calm = Math.max(0, Math.min(1, o.calm ?? 0.7)), secs = Math.max(20, +o.seconds || 60);
+    let r = (o.seed >>> 0) || 1;
+    const rnd = () => (r = (r * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const dpr = window.devicePixelRatio || 1;
+    const sv = document.createElement('canvas'); sv.id = 'svCanvas';
+    document.body.appendChild(sv);
+    const st = document.createElement('style');
+    st.textContent = 'body *{visibility:hidden!important}#svCanvas{visibility:visible!important;position:fixed;inset:0;width:100vw;height:100vh;z-index:9999;cursor:none}html,body{overflow:hidden!important}';
+    document.head.appendChild(st);
+    const size = () => { sv.width = Math.round(innerWidth * dpr); sv.height = Math.round(innerHeight * dpr); };
+    size(); window.addEventListener('resize', size);
+    const ctx = sv.getContext('2d', { alpha: false });
+    const k = 1 - 0.6 * calm;
+    A.rate = [6 * k, 2 * k, 9 * k]; FRAME_MS = 120;
+    const css = getComputedStyle(document.documentElement);
+    const serif = css.getPropertyValue('--serif').trim() || 'serif', sans = css.getPropertyValue('--sans').trim() || 'sans-serif';
+    let alpha = 0, label = null;
+    const fadeMs = (0.8 + 1.2 * calm) * 1000, hold = Math.max(8, secs / 3) * 1000;
+    (function draw() {
+      requestAnimationFrame(draw);
+      const L = lut(G.cmap === 'signed' ? 'inferno' : G.cmap), W = sv.width, H = sv.height;
+      ctx.globalAlpha = 1; ctx.fillStyle = `rgb(${L[0]},${L[1]},${L[2]})`; ctx.fillRect(0, 0, W, H);
+      if (alpha <= 0 || detailIndex < 0) return;
+      const d = $('dCanvas'), side = Math.round(Math.min(W, H) * 0.96);
+      ctx.globalAlpha = alpha; ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(d, (W - side) / 2, (H - side) / 2, side, side);
+      if (label) {
+        const f = Math.round(H / 34);
+        ctx.fillStyle = 'rgba(238,232,240,0.78)'; ctx.font = `italic 600 ${Math.round(f * 1.5)}px ${serif}`;
+        ctx.fillText(label[0], f * 1.6, H - f * 2.9);
+        ctx.fillStyle = 'rgba(200,190,205,0.6)'; ctx.font = `${f}px ${sans}`;
+        ctx.fillText(label[1], f * 1.6, H - f * 1.5);
+      }
+    })();
+    const wait = ms => new Promise(res => setTimeout(res, ms));
+    const fadeTo = to => new Promise(res => {
+      const from = alpha, t0 = performance.now();
+      const step = now => { const q = Math.min(1, (now - t0) / fadeMs); alpha = from + (to - from) * q * q * (3 - 2 * q); if (q < 1) requestAnimationFrame(step); else res(); };
+      requestAnimationFrame(step);
+    });
+    const show = () => {
+      const kind = rnd() < 0.65 ? 'real' : 'complex';
+      if (G.kind !== kind) document.querySelector(`[data-kind="${kind}"]`).click();
+      const pick = TILES.map((t, i) => i).filter(i => TILES[i].n >= 2 && TILES[i].n <= 4 && TILES[i].l > 0);
+      const i = pick[Math.floor(rnd() * pick.length)];
+      openDetail(i);
+      const t = TILES[i], side = Math.round(Math.min(innerWidth, innerHeight) * 0.96), cv = $('dCanvas');
+      cv.style.setProperty('--dsize', side + 'px');
+      detailSize = Math.min(1800, Math.round(side * dpr));
+      if (cv.width !== detailSize) { cv.width = detailSize; cv.height = detailSize; }
+      label = [t.spec.name, `|${t.n}, ${t.l}, ${fmtM(t.m)}⟩  ·  ${G.kind === 'real' ? 'real orbital' : 'complex, e^imφ'}`];
+    };
+    (async () => {
+      while (!pool.length || !TILES.length) await wait(100);
+      A.ang = [rnd() * 360, 0, rnd() * 360];
+      setAnim(true);
+      for (;;) {
+        show();
+        await wait(600);
+        await fadeTo(1);
+        await wait(hold);
+        await fadeTo(0);
+      }
+    })();
+    return { canvas: sv, warmupMs: 2500 };
+  },
+};
