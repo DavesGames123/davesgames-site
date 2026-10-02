@@ -39,6 +39,7 @@
 //      bottom sheet ....... "function buildSheet"
 //      PNG export ......... "function exportPng"
 //      cloth view ......... "var cloth"
+//      screensaver hook ... "window.snSaver"
 //      boot ............... "function boot"
 // ============================================================================
 
@@ -416,7 +417,7 @@
     cloth.setTexture();
     renderPatternThumbs();
     syncUi();
-    writeHash();
+    if (!saverOn) writeHash();
   }
   function presetMatch() {
     for (var i = 0; i < PRESETS.length; i++) {
@@ -466,6 +467,7 @@
       '&z=' + state.size + '&at=' + state.pos;
   }
   var hashTimer = 0;
+  var saverOn = false;   // screensaver mode: no hash writes, no name band
   function writeHash() {
     clearTimeout(hashTimer);
     hashTimer = setTimeout(function () { try { history.replaceState(null, '', '#' + hashString()); } catch (e) { /* ignore */ } }, 250);
@@ -723,7 +725,8 @@
     canvas: null, ctx: null, layer: null, lctx: null, bg: null, tex: null,
     w: 0, h: 0, dpr: 1, t: 0, last: 0, wind: 0.55, view: 'wave',
     paused: false, visible: true, onScreen: true, running: false,
-    TW: 600, TH: 400, N: 96
+    TW: 600, TH: 400, N: 96,
+    tScale: 1   // wave time scale; the screensaver slows it
   };
   cloth.setTexture = function () {
     cloth.tex = renderFlat(cloth.tex || makeCanvas(cloth.TW, cloth.TH), cloth.TW, cloth.TH, state, false);
@@ -776,7 +779,7 @@
   function clothRect() {
     var d = cloth.dpr, W = cloth.w, H = cloth.h;
     // Keep the top band free for the banner name; on a phone it is taller.
-    var narrow = W < 600, topBand = narrow ? 104 : Math.max(H * 0.2, 90);
+    var narrow = W < 600, topBand = saverOn ? H * 0.12 : narrow ? 104 : Math.max(H * 0.2, 90);
     var fw = Math.min(W * (narrow ? 0.74 : 0.66), (H - topBand - H * 0.12) * 1.5), fh = fw / 1.5;
     var x0 = (W - fw) / 2 + W * 0.02, y0 = Math.max(topBand, (H - fh) / 2 - H * 0.04);
     return { x: x0 * d, y: y0 * d, w: fw * d, h: fh * d };
@@ -848,7 +851,7 @@
     if (!cloth.running) return;
     if (cloth.view !== 'wave' || cloth.paused || !cloth.visible || !cloth.onScreen) { cloth.running = false; return; }
     var dt = cloth.last ? Math.min(0.05, (now - cloth.last) / 1000) : 0.016;
-    cloth.last = now; cloth.t += dt;
+    cloth.last = now; cloth.t += dt * cloth.tScale;
     clothDraw();
     requestAnimationFrame(clothFrame);
   }
@@ -872,5 +875,30 @@
     // Glyph metrics change when the web fonts arrive; rebuild the masks then.
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { maskCache = {}; maskKeys = []; schedulePaint(); });
   }
+  // ── SCREENSAVER HOOK ──
+  // The shell (lib/screensaver.js) calls enter() in screensaver mode. It pins
+  // #heroWrap full frame, so the ResizeObserver sizes the canvas, and hides
+  // the rest of the page. The seed picks the banner. The calm value lowers
+  // the wind and slows the wave.
+  window.snSaver = {
+    enter: function (opts) {
+      var calm = Math.max(0, Math.min(1, opts && opts.calm != null ? opts.calm : 0.7));
+      var p = PRESETS[((opts && opts.seed) || 0) % PRESETS.length];
+      saverOn = true;
+      var st = document.createElement('style');
+      st.textContent = 'html, body { overflow: hidden !important; }' +
+        'header.top, #panel, .hero-meta, .hero-bar, .toast { display: none !important; }' +
+        '.card.hero { backdrop-filter: none; -webkit-backdrop-filter: none; overflow: visible; border: 0; }' +
+        '#heroWrap { position: fixed; inset: 0; height: auto; z-index: 100; cursor: none; }';
+      document.head.appendChild(st);
+      setState({ c1: p[1], c2: p[2], c3: p[3], ce: p[4], pattern: p[5], shape: p[6], emblem: p[7], size: 50, pos: 'center' });
+      cloth.view = 'wave'; cloth.paused = false; cloth.onScreen = true;
+      cloth.wind = 0.25 + 0.3 * (1 - calm);
+      cloth.tScale = 1 - 0.5 * calm;
+      clothResize(); clothKick();
+      return { canvas: cloth.canvas, warmupMs: 500 };
+    }
+  };
+
   boot();
 })();
