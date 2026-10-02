@@ -139,7 +139,7 @@ const ATTRACTORS = {
 // (the live sliders) stay under these.
 const MAXP=1000, MAXT=400, CAP=MAXP*MAXT;
 // cur = selected system key; P = its live parameter values; particles = tracers.
-let cur="lorenz", P={}, particles=[];
+let cur="lorenz", P={}, particles=[], surveyPts=[];
 // cfg holds every render/tone control the UI writes; each field mirrors one widget.
 const cfg={count:100,trail:220,speed:1,glow:13,colMode:"speed",palette:"stella",gamma:1.0,contrast:1.0,exposure:1.0,autoRotate:true,fog:false,orbit:1};
 // view is the spherical camera: orbit center, zoom radius, azimuth theta, polar
@@ -212,7 +212,7 @@ function survey(){const att=ATTRACTORS[cur],f=att.f,dt=att.dt;let s=att.start.sl
 // otherwise frame the whole attractor at radius*2.6.
 function reseed(keepView){const sv=survey();view.center.set(sv.center[0],sv.center[1],sv.center[2]);
   if(!keepView)view.radius=sv.radius*2.6;
-  const S=sv.samples;particles=[];
+  const S=sv.samples;surveyPts=S;particles=[];
   for(let i=0;i<MAXP;i++){const base=S[(Math.random()*S.length)|0].slice();
     // Jitter each seed by 4% of the radius so co-located particles separate over time.
     base[0]+=(Math.random()-0.5)*sv.radius*0.04;base[1]+=(Math.random()-0.5)*sv.radius*0.04;base[2]+=(Math.random()-0.5)*sv.radius*0.04;
@@ -439,9 +439,10 @@ setTimeout(()=>{resize();drawToneCurve();selectSystem("lorenz",false);requestAni
 // calls resize()), and shows one system chosen by opts.seed with 300 particles
 // and depth fog. calm 1 sets the flow speed to 0.4 and halves the auto-orbit.
 // The system does not change inside one dwell, so there is no reseed cut.
-// The label plate (opts.label) gives the ODE system of ATTRACTORS[cur].f in
-// plain Unicode (the shell plate takes no TeX), the live parameter values P,
-// the RK4 step dt and the tracer count. The system does not change inside one
+// The label plate (opts.label) gives the ODE system of ATTRACTORS[cur] as
+// TeX in the sysRules() colours (SAVER_EQ is the plain Unicode fallback),
+// the parameter values P and the RK4 step dt as params, and an anchor on
+// the attractor (attractorAnchor). The system does not change inside one
 // dwell, so enter() calls saverPlate() once.
 const SAVER_EQ={
   lorenz:["ẋ = σ(y − x)","ẏ = x(ρ − z) − y","ż = xy − βz"],
@@ -452,12 +453,35 @@ const SAVER_EQ={
   chen:["ẋ = a(y − x)","ẏ = (c − a)x − xz + c·y","ż = xy − b·z"],
   dadras:["ẋ = y − a·x + b·yz","ẏ = c·y − xz + z","ż = d·xy − e·z"],
   lorenz84:["ẋ = −a·x − y² − z² + a·F","ẏ = −y + xy − b·xz + G","ż = −z + b·xy + xz"]};
+// Short names for the parameters of the plate. A system with no entry
+// shows "parameter".
+const PNAME={lorenz:{sigma:"Prandtl number",rho:"Rayleigh ratio",beta:"aspect factor"}};
 function saverPlate(label){if(!label||!SAVER_EQ[cur])return;const A=ATTRACTORS[cur];
-  const fmt=v=>String(+(+v).toFixed(3));
-  const ps=Object.keys(A.params).map(k=>A.params[k].l+" = "+fmt(P[k])).join(" · ");
-  try{label({title:A.name+" attractor",sub:A.eq[0].sub,
-    lines:[ps,"RK4, Δt = "+A.dt+" · "+fmt(cfg.speed)+" steps per frame",cfg.count+" tracers seeded on the attractor, survey from ("+A.start.join(", ")+")"],
-    eq:SAVER_EQ[cur]});}catch(e){}}
+  const fmt=v=>String(+(+v).toFixed(3)).replace("-","−");
+  // Parameters: the first three take m4..m6, as in sysRules(). A fourth
+  // keeps the default colour. The RK4 step is last.
+  const params=Object.keys(A.params).slice(0,4).map((k,i)=>({sym:symTeX(A.params[k].l),name:(PNAME[cur]||{})[k]||"parameter",value:fmt(P[k]),cls:i<3?"m"+(4+i):""}));
+  params.push({sym:"\\Delta t",name:"RK4 step",value:String(A.dt)});
+  try{label({title:A.name+" attractor",sub:A.eq[0].sub,params,
+    lines:[cfg.count+" tracers seeded on the attractor"],
+    tex:A.eq[0].lines.map(plainTeX),rules:sysRules(),eq:SAVER_EQ[cur],anchor:attractorAnchor});}catch(e){}}
+// The attractor on screen, for the shell's label plate. The survey samples
+// (about 1300 points on the attractor, fixed for one system) are projected
+// with the live camera onto the #gl rect. The centre is the middle of
+// their screen box, r the 95th percentile of their distance from it, and
+// pts the leftmost, rightmost, top and bottom samples. Page CSS px.
+const _av=new THREE.Vector3();
+function attractorAnchor(){const S=surveyPts;if(!S.length)return null;
+  const R=renderer.domElement.getBoundingClientRect();if(!R.width)return null;
+  const xs=new Float32Array(S.length),ys=new Float32Array(S.length);let n=0,x0=1e9,x1=-1e9,y0=1e9,y1=-1e9,iL=0,iR=0,iT=0,iB=0;
+  for(let i=0;i<S.length;i++){_av.set(S[i][0],S[i][1],S[i][2]).project(camera);if(_av.z>1)continue;
+    const x=R.left+(_av.x+1)/2*R.width,y=R.top+(1-_av.y)/2*R.height;xs[n]=x;ys[n]=y;
+    if(x<x0){x0=x;iL=n}if(x>x1){x1=x;iR=n}if(y<y0){y0=y;iT=n}if(y>y1){y1=y;iB=n}n++;}
+  if(n<8)return null;
+  const cx=(x0+x1)/2,cy=(y0+y1)/2,d=new Float32Array(n);
+  for(let i=0;i<n;i++)d[i]=Math.hypot(xs[i]-cx,ys[i]-cy);d.sort();
+  if(cx<R.left||cx>R.right||cy<R.top||cy>R.bottom)return null;
+  return{x:cx,y:cy,r:d[Math.floor(n*0.95)],pts:[iL,iR,iT,iB].map(i=>({x:xs[i],y:ys[i]}))};}
 window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));
   while(!particles.length)await new Promise(r=>setTimeout(r,50));
   const st=document.createElement("style");st.textContent="html.saver #panel,html.saver #mob-btn,html.saver .mob-overlay,html.saver #eq-panel,html.saver #hint,html.saver #status-bar,html.saver .topbar{display:none!important}html.saver #gl-host{position:fixed;inset:0;z-index:1}html.saver #gl{cursor:none}";
