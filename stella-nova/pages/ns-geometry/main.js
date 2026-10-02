@@ -39,6 +39,7 @@
 //      figure 8 ............ "figure 8"          vortex tube scalings
 //      figure 9 ............ "figure 9"          interactive explorer + ODE system
 //      screensaver ......... "window.snSaver"    saver hook on the explorer (#f-play)
+//      saver plate ......... "Saver plate"       opts.label: live run numbers, TeX, anchor
 // ============================================================================
 // any error is shown on the page with its real message (the preview sandbox otherwise reports only "Script error.")
 window.addEventListener('error',e=>{ const b=document.getElementById('errbar'); b.style.display='block'; b.textContent+='error: '+(e.message||'?')+(e.lineno?' @ line '+e.lineno:'')+'\n'; });
@@ -353,6 +354,23 @@ guarded('figure 9',()=>{
     const next=()=>{ const r=Math.random; Math.random=rng; try{ document.getElementById('x-rand').click(); } finally{ Math.random=r; }
       const lam=P.lam1*Math.pow(P.ratio,Math.max(0,P.n-2)); SV.zmax=Math.min(4.5,0.9*Math.log10(2*lam)); SV.t=0; };
     SV={k:0,t:0,zmax:0,ph:'in',pt:0}; next();
+    // Saver plate (opts.label): the run's live numbers, the article's own TeX
+    // and GEO_RULES, so a symbol has the same class as in the text. The
+    // anchor is the field square of draw() (S = min(H − 40, 0.55 W) at 16,
+    // 16 px): its centre, the radius S/2, and the origin as the key point.
+    // #f-play is fixed at the window origin, so canvas px are page px.
+    const plate=()=>{ if(typeof opts.label!=='function'||!RUN) return null;
+      return { title:'Layered blowup', sub:P.n+' wave layers, each steered then frozen', rules:GEO_RULES,
+        params:[{sym:'\\lambda_1',name:'first frequency',value:P.lam1.toFixed(0)},{sym:'\\lambda_q/\\lambda_{q-1}',name:'frequency ratio',value:'×'+P.ratio.toFixed(0)},
+          {sym:'s',name:'tilt',value:P.s.toFixed(2)+' rad'},{sym:'t/T_*',name:'time',value:P.t.toFixed(3)+' of '+RUN.T.toFixed(3)}],
+        lines:['Left: temperature θ near the origin, zoomed to the deepest layer.'],
+        tex:['\\dot{\\Theta}=\\frac{A\\sin s}{\\lambda}\\,\\Omega,\\qquad \\dot{\\Omega}=\\lambda\\sin s\;\\Theta,\\qquad \\nabla\\vartheta(0)=\\lambda\\,\\Theta\\,\\zeta',
+          'T_*=\\sum_q|\\text{stage }q|\\ \\lesssim\\ \\sum_q\\frac{1}{\\sigma_{q-2}}<\\infty,\\qquad \\sigma_q\\sim\\lambda_q^{1/16}',
+          'v\\parallel J\\zeta,\\qquad \\nabla\\vartheta\\parallel\\zeta\\qquad\\Longrightarrow\\qquad v\\cdot\\nabla\\vartheta=0'],
+        eq:['Θ̇ = (A sin s/λ) Ω,  Ω̇ = λ sin s Θ,  ∇ϑ(0) = λΘζ','T∗ = Σ|stage q| ≲ Σ 1/σ_(q−2) < ∞'],
+        anchor:()=>{ const W2=innerWidth, H2=innerHeight, S2=Math.min(H2-40,W2*0.55); return { x:16+S2/2, y:16+S2/2, r:S2/2, pts:[{x:16+S2/2,y:16+S2/2}] }; } }; };
+    let lastPlate=''; const sendPlate=()=>{ let L=null; try{ L=plate(); }catch(e){ return; } if(!L) return; const j=JSON.stringify(L); if(j!==lastPlate){ lastPlate=j; opts.label(L); } };
+    sendPlate(); setInterval(sendPlate,1000);
     let last=performance.now(); const tick=now=>{ const dt=Math.min(0.05,(now-last)/1000); last=now; SV.t+=dt; SV.pt+=dt;
       if(SV.ph==='in'){ SV.k=Math.min(1,SV.pt/fade); if(SV.k>=1){ SV.ph='show'; SV.pt=0; } } else if(SV.ph==='show'){ if(SV.pt>=show){ SV.ph='out'; SV.pt=0; } } else { SV.k=Math.max(0,1-SV.pt/fade); if(SV.k<=0){ next(); SV.ph='in'; SV.pt=0; } }
       const u=ease(SV.t/run); P.t=u; P.z=SV.zmax*u; draw(); requestAnimationFrame(tick); };
