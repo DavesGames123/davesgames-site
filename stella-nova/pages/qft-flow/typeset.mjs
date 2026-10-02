@@ -18,6 +18,7 @@
 //  with the same data-eq key in index.html.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" typeset.mjs)
+//      colors .......... "const c ="    symbol -> .mN class
 //      formulas ........ "const TEX"    [key, display, TeX source]
 //      svg cleanup ..... "function svg" MathJax output to inline SVG
 // ============================================================================
@@ -34,23 +35,36 @@ const { RegisterHTMLHandler } = require('mathjax-full/js/handlers/html.js');
 
 // [key, display, TeX]. key matches data-eq in index.html. display true is a
 // block formula, false is inline in a caption.
+// Symbol classes. ../../lib/sci.css colors .m1 to .m6. One class per
+// quantity, the same in every formula and on the control labels:
+//   m1  phase theta(x)          m5  qubit rotation phi_j (the phi sliders)
+//   m2  ramp slope alpha        m3  frequency bin k, kappa
+//   m4  probability P           m6  detuning delta_j
+// N, n, x, j, V and the numbers stay ink.
+const c = (k, t) => String.raw`\class{${k}}{${t}}`;
+const TH = c('m1', String.raw`\theta`), PH = c('m5', String.raw`\varphi_j`), AL = c('m2', String.raw`\alpha`);
+const K = c('m3', 'k'), KA = c('m3', String.raw`\kappa`), P = c('m4', 'P'), DJ = c('m6', String.raw`\delta_j`);
+
 const TEX = [
-  ["flow", false, String.raw`P(k)=\bigl|\tfrac{1}{N}\sum_{x} e^{i\theta(x)}\,e^{-2\pi i kx/N}\bigr|^2`],
-  ["in", true , String.raw`|\psi_{\text{in}}\rangle=\frac{1}{\sqrt{N}}\sum_{x=0}^{N-1} e^{\,i\theta(x)}\,|x\rangle,\qquad \theta(x)=\sum_{j=0}^{n-1}\varphi_j\,x_j,\quad N=2^{\,n}`],
-  ["ket-k", false, String.raw`|k\rangle`],
-  ["amp", true , String.raw`V[k]=\langle k|\,\mathrm{QFT}\,|\psi_{\text{in}}\rangle=\frac{1}{N}\sum_{x=0}^{N-1} e^{\,i\theta(x)}\,e^{-2\pi i\,kx/N}`],
-  ["vk2", false, String.raw`|V(\kappa)|^2`],
-  ["prob", true , String.raw`P(k)=\bigl|V[k]\bigr|^2,\qquad \kappa\in[0,N)\ \text{continuous}`],
-  ["ramp", true , String.raw`\varphi_j=\alpha\,2^{\,j}\;\Rightarrow\;\theta(x)=\alpha x\;\Rightarrow\;\text{peak at }k=\frac{\alpha N}{2\pi}`],
+  ["flow", false, String.raw`${P}(${K})=\bigl|\tfrac{1}{N}\sum_{x} e^{i${TH}(x)}\,e^{-2\pi i ${K}x/N}\bigr|^2`],
+  ["in", true , String.raw`|\psi_{\text{in}}\rangle=\frac{1}{\sqrt{N}}\sum_{x=0}^{N-1} e^{\,i${TH}(x)}\,|x\rangle,\qquad ${TH}(x)=\sum_{j=0}^{n-1}${PH}\,x_j,\quad N=2^{\,n}`],
+  ["ket-k", false, String.raw`|${K}\rangle`],
+  ["amp", true , String.raw`V[${K}]=\langle ${K}|\,\mathrm{QFT}\,|\psi_{\text{in}}\rangle=\frac{1}{N}\sum_{x=0}^{N-1} e^{\,i${TH}(x)}\,e^{-2\pi i\,${K}x/N}`],
+  ["vk2", false, String.raw`|V(${KA})|^2`],
+  ["prob", true , String.raw`${P}(${K})=\bigl|V[${K}]\bigr|^2,\qquad ${KA}\in[0,N)\ \text{continuous}`],
+  ["ramp", true , String.raw`${PH}=${AL}\,2^{\,j}\;\Rightarrow\;${TH}(x)=${AL} x\;\Rightarrow\;\text{peak at }${K}=\frac{${AL} N}{2\pi}`],
   ["j", false, String.raw`j`],
-  ["dj", false, String.raw`\delta_j`],
-  ["leak", true , String.raw`P_{\text{peak}}=\prod_{j=0}^{n-1}\cos^2\!\Bigl(\tfrac{\delta_j}{2}\Bigr)`],
-  ["wrap", true , String.raw`V[k+N]=V[k]\quad\Longleftrightarrow\quad |k\rangle\ \text{and}\ |k+N\rangle\ \text{label the same bin}`],
+  ["dj", false, String.raw`${DJ}`],
+  ["leak", true , String.raw`${P}_{\text{peak}}=\prod_{j=0}^{n-1}\cos^2\!\Bigl(\tfrac{${DJ}}{2}\Bigr)`],
+  ["wrap", true , String.raw`V[${K}+N]=V[${K}]\quad\Longleftrightarrow\quad |${K}\rangle\ \text{and}\ |${K}+N\rangle\ \text{label the same bin}`],
+  // control labels: the slope alpha, and phi_0 ... phi_19 (setN allows 20 qubits)
+  ["alpha", false, AL],
+  ...Array.from({ length: 20 }, (_, j) => ["phi" + j, false, c('m5', String.raw`\varphi_{${j}}`)]),
 ];
 
 const adaptor = liteAdaptor();
 RegisterHTMLHandler(adaptor);
-const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams'] }), OutputJax: new SVG({ fontCache: 'local' }) });
+const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams', 'html'] }), OutputJax: new SVG({ fontCache: 'local' }) });
 
 // MathJax output to inline SVG. The ex sizes stay, so CSS font-size scales
 // the formula. aria-hidden is removed and a label with the TeX is added.

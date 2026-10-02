@@ -4,7 +4,7 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>QFT Flow // Stella Nova · davesgames.io</title>
+<title>Quantum encoding — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    QFT FLOW  ·  page shell
@@ -26,12 +26,12 @@
      what you measure (rose bars wobble by √shot noise)
 
    HEAD LOAD ORDER  (order matters)
-     1. preconnect   warm the font host connections
-     2. fonts        Google Fonts: Space Grotesk, IBM Plex Mono, Instrument
-                     Serif (the shell set, see --f-sans / --f-mono / --f-serif)
-     3. equations.js MathJax SVG for every formula, written by typeset.mjs.
-                     main.js puts each one into its [data-eq] element.
-     4. style.css    the page stylesheet
+     1. style.css    the page stylesheet
+     2. sci.css      ../../lib/sci.css: STIX Two Text, Inter, the system
+                     mono and the math colors .m1 to .m6. It loads the fonts.
+     3. equations.js (end of body) color-coded MathJax SVG for every formula and for the
+                     alpha and phi_j labels, written by typeset.mjs. main.js
+                     puts each one into its [data-eq] element.
 
    PHONE  (max-width 768px, or a short landscape touch screen)
      The plots fill the page, output first. #dock at the base holds the
@@ -49,18 +49,16 @@
      └────────────────┴─────────────────────────────────────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
      this page's own topbar. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QFT · ρ→spectrum</span></div>
-  <div class="topbar-r">SYS // <strong>FOURIER TRANSFORM</strong></div>
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Quantum encoding</span></div>
+  <div class="topbar-r">Quantum Fourier transform</div>
 </div>
 <div id="main">
   <!-- Left control panel. n-minus/n-plus step the qubit count; #phi-sliders is
@@ -77,7 +75,7 @@
     <div class="card">
       <div class="lbl">Register <span class="tag">2ⁿ amplitudes</span></div>
       <div class="row">
-        <span class="name">qubits&nbsp;<b style="color:var(--ink)">n</b></span>
+        <span class="name">Qubits&nbsp;<b style="color:var(--ink)">n</b></span>
         <div class="stepper">
           <button id="n-minus" aria-label="Fewer qubits">−</button>
           <span class="v" id="n-val">4 <small id="dim-val">· 16 bins</small></span>
@@ -97,7 +95,7 @@
         <button class="amber" data-preset="random">Random</button>
       </div>
       <div class="slider">
-        <div class="head"><span class="k">slope <b>α</b></span><span class="val" id="alpha-val">0.00</span></div>
+        <div class="head"><span class="k">Slope <span class="tex" data-eq="alpha"></span></span><span class="val" id="alpha-val">0.00</span></div>
         <input type="range" class="amber" id="alpha" min="0" max="6.2832" step="0.001" value="0" aria-label="Ramp slope alpha">
       </div>
       <div class="note">A perfect <b>1:2:4:8</b> ramp is a pure tone, so one bin lights. Drag α to slide the tone across the spectrum. Nudge one φⱼ off the ramp to see energy <b>leak</b> into the neighbours.</div>
@@ -108,7 +106,7 @@
     <div class="card">
       <div class="lbl">Measurement <span class="tag">finite shots</span></div>
       <div class="slider with-btn">
-        <div class="head"><span class="k">shots <b>S</b></span><span class="val" id="shots-val">exact</span></div>
+        <div class="head"><span class="k">Shots <b>S</b></span><span class="val" id="shots-val">exact</span></div>
         <div class="slider-row">
           <input type="range" id="shots" min="0" max="20" step="1" value="0" aria-label="Shots">
           <button id="resample" class="mini" title="Draw a new measurement run" aria-label="Resample">↻</button>
@@ -128,14 +126,14 @@
   <!-- ══ VISUALS ══ -->
   <div id="viz">
     <header>
-      <div class="kicker">Quantum Fourier Transform · input → output</div>
-      <h1>Four knobs, <em>one spectrum</em></h1>
+      <div class="kicker">Quantum Fourier transform: input to output</div>
+      <h1>Four knobs, one spectrum</h1>
       <p class="sub">Turn <b>n</b> qubit phase rotations. The input encodes them as phase only. The output shows the <b>smooth spectrum</b> an ideal machine holds and the <b>bins</b> you measure.</p>
     </header>
     <!-- Stage ①: the encoded input. #cv-mag shows the flat magnitude (all bars
          equal, so magnitude carries no information); #cv-phase shows θ(x). -->
     <div class="card">
-      <div class="lbl">① Input signal <span class="tag">the n rotations, encoded</span></div>
+      <div class="lbl">Input signal <span class="tag">the n rotations, encoded</span></div>
       <div class="split">
         <div>
           <div class="viz-cap"><span class="t">|amplitude|<span>constant modulus</span></span><span class="r" id="mag-r">1/√N</span></div>
@@ -155,7 +153,7 @@
          The stat tiles below report peak bin, peak probability, spread, and the
          ramp→bin prediction. -->
     <div class="card">
-      <div class="lbl">② Output <span class="tag">smooth state vs measured histogram</span></div>
+      <div class="lbl">Output <span class="tag">smooth state vs measured histogram</span></div>
       <div class="viz-cap"><span class="t">P(k)<span>probability over the 2ⁿ basis states</span></span><span class="r" id="out-r"></span></div>
       <canvas class="viz" id="cv-out" height="300"></canvas>
       <div class="legend">
