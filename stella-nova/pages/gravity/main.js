@@ -52,6 +52,7 @@
 //      keys .............. "addEventListener('keydown'" keyboard shortcuts
 //      frame loop ........ "function loop"          per-frame update
 //      boot .............. "function init"          first preset, start loop
+//      screensaver ....... "/* SCREENSAVER */"      window.snSaver hook
 // ============================================================================
 
 /* SIMULATION STATE */
@@ -788,3 +789,40 @@ function init(){
   loop();
 }
 document.addEventListener('DOMContentLoaded',init);
+
+/* SCREENSAVER */
+// Hook for the shell screensaver (lib/screensaver.js). enter() pins canvasArea
+// to the window and resizes through resizeCanvas(), hides the panels, turns off
+// the vectors and the grid, and loads one stable preset from opts.seed. opts.calm
+// (1 = slowest) sets timeScale. A watchdog fades to black and reloads the preset
+// if a body escapes, so the dwell has no hard cut. No exit(): the shell reloads
+// the page on stop.
+window.snSaver={enter:function(o){
+  var calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
+  var st=document.createElement('style');
+  st.textContent='body *:not(#canvasArea):not(#simCanvas){visibility:hidden!important;pointer-events:none!important}'+
+    '#canvasArea{position:fixed!important;inset:0!important;z-index:2147483646;visibility:visible!important}'+
+    '#simCanvas{visibility:visible!important;cursor:none!important}';
+  document.head.appendChild(st);
+  showForce=showVel=showAcc=showGrid=showField=showLines=false;showTrails=true;trailLen=900;
+  paused=false;timeScale=1-0.5*calm;
+  var list=calm<0.5?['laplace','figure8','solar','binary','chaos']:['laplace','figure8','solar'];
+  var name=list[Math.abs((o&&o.seed)|0)%list.length],R=1,fade=0,dir=0;
+  function load(){
+    loadPreset(name);computeForces();R=1;
+    for(var b of bodies)R=Math.max(R,Math.hypot(b.x,b.y));
+    var a=document.getElementById('canvasArea');
+    camZoom=Math.max(0.3,Math.min(2.2,0.44*Math.min(a.clientWidth,a.clientHeight)/R));
+  }
+  resizeCanvas();load();
+  // A fade overlay drawn after each frame; dir is -1 while fading out, +1 in.
+  var base=render;
+  render=function(){
+    base();
+    if(dir===0&&bodies.some(function(b){return Math.hypot(b.x,b.y)>3*R;}))dir=-1;
+    if(dir<0){fade=Math.min(1,fade+0.02);if(fade>=1){load();dir=1;}}
+    else if(dir>0){fade=Math.max(0,fade-0.02);if(fade<=0)dir=0;}
+    if(fade>0){ctx.fillStyle='rgba(6,8,16,'+fade+')';ctx.fillRect(0,0,canvas.clientWidth,canvas.clientHeight);}
+  };
+  return{canvas:canvas,warmupMs:1500};
+}};
