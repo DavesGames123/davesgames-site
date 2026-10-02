@@ -493,7 +493,47 @@ window.__lab = { S, loadPreset, setMode, setRelax, layout, stats: () => lastStat
 // drifts. Every seconds/4 (at least 8 s) the next preset and a calm mode
 // (shaded, AO, soft shadow) come in behind a fade to black in the shader
 // (S.fade, uniform scene.w). calm (1 = slowest) sets the speeds; opts.seed
-// sets the preset order. No exit(): the shell reloads the page on stop.
+// sets the preset order. Each preset sends opts.label a plate (saverPlate),
+// refreshed once a second. No exit(): the shell reloads the page on stop.
+// The saver plate: the tracer step of SC.march and lab.wgsl, the field of the
+// current preset written from S.prims (scene.js sdPrim / combine / domain),
+// the shading term of the current mode, and the live step counts.
+const SUBS = '₁₂₃₄₅₆';
+function primText(pr, i) {
+  const [a, b, c] = pr.size, d = 'd' + SUBS[i] + ' ' + SC.TYPES[pr.type] + ': ';
+  switch (pr.type) {
+    case 0: return d + '|p − c| − r, r = ' + f2(a);
+    case 1: return d + '|max(q, 0)| + min(max qᵢ, 0), q = |p − c| − b, b = (' + [a, b, c].map(f2).join(', ') + ')';
+    case 2: return d + 'box of b − ρ, minus ρ = ' + f2(0.25 * Math.min(a, b, c)) + ', b = (' + [a, b, c].map(f2).join(', ') + ')';
+    case 3: return d + '|(|p.xz| − R, y)| − r, R = ' + f2(a) + ', r = ' + f2(b);
+    case 4: return d + '2D box of (|p.xz| − r, |y| − h), r = ' + f2(a) + ', h = ' + f2(b);
+    case 5: return d + '|p − clamp(y, −h, h)·ŷ| − r, r = ' + f2(a) + ', h = ' + f2(b);
+    default: return d + '(|x| + |y| + |z| − s)/√3, s = ' + f2(a);
+  }
+}
+function opText(op, x, di, k) {
+  const kk = '_' + f2(k);
+  return ['min(' + x + ', ' + di + ')', 'max(' + x + ', −' + di + ')', 'max(' + x + ', ' + di + ')',
+    'smin' + kk + '(' + x + ', ' + di + ')', '−smin' + kk + '(−' + x + ', ' + di + ')', '−smin' + kk + '(−' + x + ', −' + di + ')'][op];
+}
+function saverPlate() {
+  let field = 'd' + SUBS[0];
+  S.prims.forEach((pr, i) => { if (i) field = opText(pr.op, field, 'd' + SUBS[i], Math.max(pr.k, 1e-3)); });
+  const eq = ['t ← t + s·d(o + t·r̂)', 'stop: d < ε, or t > ' + SC.TMAX + ', or ' + S.maxSteps + ' steps', 'd(p) = ' + field];
+  if (S.rep > 0) eq.push('p.xz ← p.xz − c·clamp(round(p.xz/c), −n, n)');
+  if (S.twist) eq.push('p.xz ← R(' + S.twist + '·y)·p.xz   (twist about y)');
+  if (S.prims.some(pr => pr.op >= 3)) eq.push('smin_k(a, b) = min(a, b) − h²k/4', 'h = max(k − |a − b|, 0)/k');
+  if (S.mode === 4) eq.push('AO = 1 − 2.4 Σᵢ 0.9ⁱ (hᵢ − d(p + hᵢn))');
+  else if (S.mode === 5) eq.push('shadow = min over t of 12·d(p + t·l)/t', 't += clamp(d, 0.01, 0.3)');
+  else eq.push('col ∝ (0.1 + 0.9·max(n·l, 0)·shadow)', '      × (0.4 + 0.6·AO) + specular');
+  const lines = [MODES[S.mode] + ': ' + MODE_NOTE[S.mode],
+    's = ' + S.stepScale + ' · ε = ' + SC.EPS + ' · plain tracer (no over-relaxation)'];
+  if (lastStats) lines.push('mean steps per pixel: ' + lastStats.plain.toFixed(1) + ' plain, ' + lastStats.relaxed.toFixed(1) + ' over-relaxed (ω = ' + Math.max(S.omega, 1.05) + ')');
+  S.prims.forEach((pr, i) => lines.push(primText(pr, i)));
+  if (S.rep > 0) lines.push('repeat: c = ' + S.period + ', n = ' + S.rep + ' (' + (2 * S.rep + 1) + ' × ' + (2 * S.rep + 1) + ' grid)');
+  lines.push(SC.PRESETS[S.preset] ? SC.PRESETS[S.preset].note : '');
+  return { title: 'Sphere tracing · ' + S.preset, sub: 'ray march by the distance bound d(p)', eq, lines };
+}
 window.snSaver = {
   enter(o = {}) {
     const calm = Math.max(0, Math.min(1, o.calm ?? 0.7));
@@ -515,8 +555,14 @@ window.snSaver = {
       loadPreset(names[n % names.length]);
       dist = S.cam.dist; base = S.offset;
       S.mode = MODES_CALM[n % MODES_CALM.length]; S.relax = false; n++;
+      plate();
     };
+    const label = typeof o.label === 'function' ? o.label : null;
+    const plate = () => { if (label) label(saverPlate()); };
     next(); S.fade = 1;
+    // The mean steps per pixel arrive 160 ms after a preset loads (scheduleStats),
+    // so the plate refreshes in place once a second.
+    setInterval(plate, 1000);
     const tick = now => {
       const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
       yaw += dt * spin;
