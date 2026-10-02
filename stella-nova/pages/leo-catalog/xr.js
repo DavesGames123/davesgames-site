@@ -9,12 +9,11 @@
 //             radii, about 2200 km altitude). MEO and GEO objects (GPS,
 //             Galileo, GEO payloads) sit outside this box, as on the desktop.
 //  SIZES      'table' (default) the shell is TABLE_M tall: Earth is about
-//             0.6 m across. 'life' in the panel is the room size: the shell
-//             is ROOM_M tall and stands on the floor, and the viewer stands
-//             in the LEO band between the ground and the shell. The lib
-//             keeps the base in place on a size change, which can put the
-//             head inside the Earth, so update() places the model again
-//             after each size change.
+//             0.6 m across. 'room' (the lib life size, renamed with
+//             sizeLabels) the shell is ROOM_M tall and stands on the floor.
+//             Its centre is ROOM_D in front of the viewer, so the viewer
+//             stands in the LEO band between the ground and the shell. The
+//             lib places the model again on each size change.
 //  LOOP       main.js animate() runs on requestAnimationFrame. The lib calls
 //             it from the XR frame loop, so SGP4 propagation and the clock
 //             keep running. In a session the propagation rate drops to
@@ -44,6 +43,7 @@ const TABLE_M = 0.8;         // table size: shell height in metres
 const ROOM_M = 3.5;          // room size: shell height in metres. Placed
                              // 1.5 m out, the head is 1.16 Earth radii from
                              // the centre: inside the LEO band.
+const ROOM_D = 1.5;          // room size: centre distance from the viewer (m)
 const XR_PROP_HZ = 10;       // SGP4 rate in a session
 const HIT_M = 0.012;         // ray hit radius in metres (room space)
 const PICK_R = 8;             // raycast bounding sphere, Earth radii (GEO is 6.6)
@@ -64,7 +64,7 @@ export function wireXR(ctx) {
   // Hover cache, one entry per hand. The lib passes no hand id, so a ray
   // matches the entry with the nearest origin (hands are centimetres apart).
   const hov = [{ o: new THREE.Vector3(1e9, 0, 0), at: 0, idx: -1 }, { o: new THREE.Vector3(-1e9, 0, 0), at: 0, idx: -1 }];
-  let saved = null, lastSize = null;
+  let saved = null;
 
   // The nearest object along the ray, or -1. satPoints carries the scene
   // transform in its matrixWorld, so the room-space ray works as it is.
@@ -93,7 +93,7 @@ export function wireXR(ctx) {
   const xr = attachXR({
     renderer: ctx.renderer, scene: ctx.scene, camera: ctx.camera, controls: ctx.controls,
     bounds: () => new THREE.Box3(new THREE.Vector3(-SHELL_R, -SHELL_R, -SHELL_R), new THREE.Vector3(SHELL_R, SHELL_R, SHELL_R)),
-    lifeHeight: ROOM_M, tableHeight: TABLE_M,
+    lifeHeight: ROOM_M, tableHeight: TABLE_M, sizeLabels: { life: 'room' }, distance: { life: ROOM_D },
     vrButton: document.getElementById('bVR'), arButton: document.getElementById('bAR'),
     title: 'LEO catalog',
     hideInAR: ctx.stars ? [ctx.stars] : [],
@@ -131,12 +131,7 @@ export function wireXR(ctx) {
       ctx.setOverlay('satlabels', false, true);
       ctx.setPropHz(XR_PROP_HZ);
     },
-    update() {
-      if (lastSize !== null && xr.size !== lastSize) xr.reset();
-      lastSize = xr.size;
-    },
     onExit() {
-      lastSize = null;
       ctx.setPropHz(0);
       if (!saved) return;
       ctx.setOverlay('cities', saved.cities, true);
