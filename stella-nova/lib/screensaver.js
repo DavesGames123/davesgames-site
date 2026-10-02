@@ -1,7 +1,7 @@
 // ============================================================================
 //  SCREENSAVER  ·  lib/screensaver.js — the shell's screensaver mode
 // ----------------------------------------------------------------------------
-//  Cmd+Option+S (Ctrl+Alt+S off the Mac) opens the screensaver menu. Start
+//  Cmd+Option+S on the Mac, or Ctrl+Alt+S on any system, opens the menu. Start
 //  in the menu hides the shell chrome and plays a list of pages. Each page
 //  shows for a set time, behind a fade to black. The menu can also record
 //  each page canvas to a video file, which the browser saves in Downloads.
@@ -40,7 +40,8 @@
 if (window.snScreensaver) return;
 
 const CAT = window.SN_SAVER_CATALOG || { pages: {}, tiers: {} };
-const STORE = 'sn-saver-settings';
+// v2: shuffle became the default; a new key drops older saved choices.
+const STORE = 'sn-saver-settings-v2';
 // How long a page has to define window.snSaver. A page that the catalog
 // marks hook: true gets the long wait (a module with a CDN import can take
 // seconds under load). Other pages go to the generic mode soon.
@@ -50,7 +51,7 @@ const LOAD_WAIT_MS = 15000;  // a page that never loads is skipped after this
 const DEFAULTS = {
   pages: null,          // null = the catalog default list
   seconds: 60,          // time on each page
-  order: 'nav',         // 'nav' | 'shuffle'
+  order: 'shuffle',     // 'shuffle' | 'nav'
   loop: true,           // false = play the list once, then stop
   fade: 1.2,            // fade to black between pages, seconds
   calm: 0.7,            // passed to page hooks; 1 = slowest
@@ -76,12 +77,15 @@ function load() {
 function save() { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} }
 
 // ── catalog ────────────────────────────────────────────────────────────────
-// Every registered page, in nav order, with its constellation and tier.
+// Every registered page, in nav order, with its region, constellation and
+// tier. state: 'ready' (own hook, or tier 1 that is good as it is), 'later'
+// (tier 2-4 with no hook yet: generic mode only), 'no' (tier 5).
 function allPages() {
   const out = [];
   (window.SN_NAV || []).forEach(r => r.constellations.forEach(c => c.groups.forEach(g => g.p.forEach(p => {
-    const info = CAT.pages[p[0]] || {};
-    out.push({ key: p[0], label: p[1], con: c.label, color: c.color, tier: info.tier || 0, note: info.note || '', hook: !!info.hook });
+    const info = CAT.pages[p[0]] || {}, tier = info.tier || 0, hook = !!info.hook;
+    const state = hook || tier === 1 ? 'ready' : tier === 5 ? 'no' : 'later';
+    out.push({ key: p[0], label: p[1], region: r.id, regionName: r.label, con: c.label, color: c.color, tier, note: info.note || '', hook, state });
   }))));
   return out.filter(p => p.key !== 'home' && p.tier !== 'excluded');
 }
@@ -89,15 +93,16 @@ function defaultKeys() {
   return allPages().filter(p => CAT.pages[p.key] ? CAT.pages[p.key].default : (p.tier >= 1 && p.tier <= 2)).map(p => p.key);
 }
 function chosenKeys() {
-  const known = new Set(allPages().map(p => p.key));
+  const known = new Set(allPages().filter(p => p.state !== 'no').map(p => p.key));
   return (S.pages || defaultKeys()).filter(k => known.has(k));
 }
 
 // ── key combination ────────────────────────────────────────────────────────
-// On the Mac the Option key changes e.key ("ß"), so match the physical key.
+// Cmd+Option+S on the Mac, Ctrl+Alt+S everywhere (Windows, Linux, and a PC
+// keyboard on a Mac). Option and AltGr change e.key ("ß", "ś"), so match the
+// physical key with e.code.
 function isCombo(e) {
-  const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
-  return e.code === 'KeyS' && e.altKey && !e.shiftKey && (mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey);
+  return e.code === 'KeyS' && e.altKey && !e.shiftKey && (e.metaKey !== e.ctrlKey);
 }
 function onKey(e) {
   if (isCombo(e)) { e.preventDefault(); e.stopPropagation(); if (run) stopSaver(); else openMenu(); return; }
@@ -150,6 +155,13 @@ body.sn-saver-on.sn-saver-nocursor, body.sn-saver-on.sn-saver-nocursor * { curso
 #sn-saver-menu button { font: inherit; color: inherit; cursor: pointer; }
 #sn-saver-menu .chip { font: 500 .66rem/1 var(--f-mono, monospace); letter-spacing: .1em; text-transform: uppercase; padding: 7px 10px; border-radius: 999px; border: 1px solid rgba(150,200,255,.18); background: rgba(150,200,255,.04); }
 #sn-saver-menu .chip:hover { border-color: #6db8e0; color: #eef3fb; }
+#sn-saver-menu .sec { margin-top: 12px; border-top: 1px solid rgba(150,200,255,.09); padding-top: 8px; }
+#sn-saver-menu .sec > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; font-weight: 600; font-size: .95rem; color: #eef3fb; padding: 4px 2px; }
+#sn-saver-menu .sec > summary::-webkit-details-marker { display: none; }
+#sn-saver-menu .sec > summary::after { content: '\\203A'; margin-left: auto; color: #7f91ad; transition: transform .2s; }
+#sn-saver-menu .sec[open] > summary::after { transform: rotate(90deg); }
+#sn-saver-menu .sec > summary small { font: 500 .66rem/1 var(--f-mono, monospace); color: #7f91ad; }
+#sn-saver-menu .sec-no label.pg { opacity: .5; cursor: default; }
 #sn-saver-menu .con { margin-top: 10px; }
 #sn-saver-menu .con-h { display: flex; align-items: center; gap: 8px; font: 500 .66rem/1 var(--f-mono, monospace); letter-spacing: .18em; text-transform: uppercase; color: var(--c); padding: 6px 4px; cursor: pointer; user-select: none; }
 #sn-saver-menu label.pg { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: .86rem; cursor: pointer; }
@@ -193,32 +205,44 @@ function buildMenu() {
   m.id = 'sn-saver-menu'; m.hidden = true;
   m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', 'Screensaver options');
   const tiers = CAT.tiers || {};
-  const byCon = new Map();
-  allPages().forEach(p => { if (!byCon.has(p.con)) byCon.set(p.con, { color: p.color, pages: [] }); byCon.get(p.con).pages.push(p); });
+  // Three sections by readiness, each grouped by constellation. Only the
+  // ready section is open. Tier 5 pages show for reference, not to pick.
+  const SECTIONS = [
+    { id: 'ready', title: 'Ready', text: 'Pages with their own calm screensaver, or that are good as they are.', open: true },
+    { id: 'later', title: 'Not ready yet', text: 'These play in the generic mode: the picture fills the screen, but speed and framing are the page defaults.', open: false },
+    { id: 'no', title: 'Not for a screensaver', text: 'Text, forms, the microphone or the network. They cannot be picked.', open: false },
+  ];
   let list = '';
-  byCon.forEach((c, name) => {
-    list += `<div class="con" style="--c:${c.color}"><div class="con-h" data-con="${esc(name)}">${esc(name)}</div>`;
-    c.pages.forEach(p => {
-      const t = tiers[p.tier] || {};
-      list += `<label class="pg" title="${esc(p.note)}"><input type="checkbox" value="${p.key}"><span>${esc(p.label)}</span>${p.hook ? '<b class="hk" title="Has its own screensaver hook">HOOK</b>' : ''}<b class="tier t${p.tier}" title="${esc(t.name || 'Not rated')}: ${esc(t.text || '')}">${p.tier ? 'T' + p.tier : '?'}</b></label>`;
+  SECTIONS.forEach(sec => {
+    const pages = allPages().filter(p => p.state === sec.id);
+    if (!pages.length) return;
+    const byCon = new Map();
+    pages.forEach(p => { if (!byCon.has(p.con)) byCon.set(p.con, { color: p.color, pages: [] }); byCon.get(p.con).pages.push(p); });
+    list += `<details class="sec sec-${sec.id}"${sec.open ? ' open' : ''}><summary>${esc(sec.title)}<small>${pages.length}</small></summary><p class="note">${esc(sec.text)}</p>`;
+    byCon.forEach((c, name) => {
+      list += `<div class="con" style="--c:${c.color}"><div class="con-h" data-con="${esc(name)}">${esc(name)}</div>`;
+      c.pages.forEach(p => {
+        const t = tiers[p.tier] || {};
+        const badge = sec.id === 'ready' ? (p.hook ? '' : '<b class="tier t1" title="Good as it is">AS IS</b>') : `<b class="tier t${p.tier}" title="${esc(t.name || 'Not rated')}: ${esc(t.text || '')}">${esc(t.name || '?')}</b>`;
+        list += `<label class="pg" title="${esc(p.note)}"><input type="checkbox" value="${p.key}" data-region="${p.region}"${sec.id === 'no' ? ' disabled' : ''}><span>${esc(p.label)}</span>${badge}</label>`;
+      });
+      list += '</div>';
     });
-    list += '</div>';
+    list += '</details>';
   });
+  const regions = (window.SN_NAV || []).map(r => `<button class="chip" data-q="region:${r.id}">${esc(r.label)}</button>`).join('');
   const fmt = recFormat();
   m.innerHTML = `<div class="box">
-  <header><h2>Screen<em>saver</em></h2><p>${navigator.platform.includes('Mac') ? '⌘⌥S' : 'Ctrl+Alt+S'} · Esc to stop</p></header>
+  <header><h2>Screen<em>saver</em></h2><p>${/Mac/.test(navigator.platform) ? '⌘⌥S or Ctrl+Alt+S' : 'Ctrl+Alt+S'} · Esc to stop</p></header>
   <div class="cols">
     <div class="pages">
       <div class="quick">
-        <button class="chip" data-q="default">Default list</button>
-        <button class="chip" data-q="1">Tier 1</button>
-        <button class="chip" data-q="2">Tiers 1–2</button>
-        <button class="chip" data-q="3">Tiers 1–3</button>
-        <button class="chip" data-q="hook">Has hook</button>
-        <button class="chip" data-q="all">All rated</button>
+        <button class="chip" data-q="ready">All ready</button>
+        ${regions}
+        <button class="chip" data-q="everything">Ready + not ready</button>
         <button class="chip" data-q="none">None</button>
       </div>
-      <p class="note">T1 shows as it is. T2 needs a preset, T3 an autopilot, T4 made content. T5 is not for a screensaver. Click a constellation name to toggle it.</p>
+      <p class="note">A region button picks the ready pages of that region. Click a constellation name to toggle it.</p>
       ${list}
     </div>
     <div class="opts">
@@ -273,13 +297,15 @@ function buildMenu() {
   m.addEventListener('click', e => {
     const q = e.target.closest('[data-q]'), act = e.target.closest('[data-act]'), con = e.target.closest('.con-h');
     if (e.target === m) closeMenu();
-    if (con) { const bs = Array.from(con.parentElement.querySelectorAll('input')); const all = bs.every(b => b.checked); bs.forEach(b => { b.checked = !all; }); sync(); }
+    if (con) { const bs = Array.from(con.parentElement.querySelectorAll('input:not(:disabled)')); const all = bs.every(b => b.checked); bs.forEach(b => { b.checked = !all; }); sync(); }
     if (q) {
       const v = q.dataset.q, pages = Object.fromEntries(allPages().map(p => [p.key, p]));
       const def = new Set(defaultKeys());
       boxes().forEach(b => {
         const p = pages[b.value];
-        b.checked = v === 'none' ? false : v === 'default' ? def.has(p.key) : v === 'hook' ? p.hook : v === 'all' ? p.tier >= 1 && p.tier <= 4 : p.tier >= 1 && p.tier <= +v;
+        if (b.disabled) { b.checked = false; return; }
+        b.checked = v === 'none' ? false : v === 'ready' ? p.state === 'ready' : v === 'everything' ? p.state !== 'no'
+          : v.startsWith('region:') ? p.state === 'ready' && p.region === v.slice(7) : def.has(p.key);
       });
       sync();
     }
