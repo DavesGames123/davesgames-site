@@ -19,6 +19,16 @@
 //  PHONE AND TOUCH: table-mobile.js sets the column count, turns the sidebar
 //  into a bottom sheet and caps the pixel ratio. On a touch screen with no
 //  hover, the tiles under playhead() animate (t.focus) and carry .tm-live.
+//
+//  SCREENSAVER: when spec.saver exists, the engine defines window.snSaver for
+//  the shell screensaver (lib/screensaver.js). enter() hides the page, adds
+//  one full-window canvas and draws one calm cell into it on each frame.
+//    spec.saver = { cells: [calm cell names], tempo: [at calm 0, at calm 1],
+//                   dpr: pixel-ratio cap, warmup: ms before a recording }
+//  A page with no spec.saver gets the generic screensaver mode.
+//
+//  grep -n targets: "function frame", "function sizeSurf", "function makeSurface",
+//  "function saverEnter", "saver.t === t"
 // ============================================================================
 import { TOUCH, HOVER_LABEL, fitTable, playhead, maxDpr, initMobile } from './table-mobile.js';
 
@@ -31,6 +41,18 @@ export async function bootTable(PAGE, data) {
   const sstep = x => { const t = Math.min(Math.max(x, 0), 1); return t * t * (3 - 2 * t); };
   const G = { hoverOnly: true, tempo: 1 };
   for (const sw of SPEC.swatches) G[sw.id] = hexToRgb(sw.hex);
+
+  // ---------------------------------------------------------- screensaver hook
+  // The hook is defined now, so the shell finds it before the GPU is ready.
+  // enter() waits for PAGE.init. If the GPU fails, enter() rejects and the
+  // shell uses its generic mode. See saverEnter.
+  let saver = null, saverReady = null;
+  if (SPEC.saver) {
+    let ok, fail; saverReady = new Promise((a, b) => { ok = a; fail = b; }); saverReady.catch(() => {});
+    saverReady.ok = ok; saverReady.fail = fail;
+    window.snSaver = { enter: opts => saverReady.then(() => saverEnter(opts || {})), exit: () => saverExit() };
+  }
+  const saverFail = msg => { if (saverReady) saverReady.fail(new Error(msg)); };
 
   // ---------------------------------------------------------- table sizing
   const COLS = SPEC.cols; const stage = $('stage');
@@ -176,10 +198,10 @@ export async function bootTable(PAGE, data) {
   $('m-copy-pack').addEventListener('click', e => copy((PAGE.library) ? PAGE.library() : PACK, e.currentTarget, 'Copy library'));
 
   // ---------------------------------------------------------- GPU
-  if (!navigator.gpu) { $('nogpu').hidden = false; $('fps').textContent = 'no WebGPU'; (function loop() { requestAnimationFrame(loop); tickSignals(); })(); return; }
+  if (!navigator.gpu) { saverFail('no WebGPU'); $('nogpu').hidden = false; $('fps').textContent = 'no WebGPU'; (function loop() { requestAnimationFrame(loop); tickSignals(); })(); return; }
   let device;
   try { const adapter = await navigator.gpu.requestAdapter(); device = await adapter.requestDevice(); }
-  catch (e) { $('nogpu').hidden = false; $('fps').textContent = 'no WebGPU device'; return; }
+  catch (e) { saverFail('no WebGPU device'); $('nogpu').hidden = false; $('fps').textContent = 'no WebGPU device'; return; }
   // The tab shell swaps pages by removing this iframe. Removal fires pagehide,
   // so a handler here releases the device and stops the loop. Without it every
   // swap orphans a live device and the renderer runs out of GPU memory.
@@ -209,7 +231,8 @@ export async function bootTable(PAGE, data) {
   const msurf = makeSurface($('m-orb'));
   const ctx = { device, format, tiles, G, PACK, STYLES, $, sstep, makeSurface, msurf, fnSource, fnSourceFrom, indexFns, highlight, setStatus: (t, msg, err) => { t.status.textContent = msg; t.status.classList.toggle('err', !!err); }, markAllDirty: () => { for (const t of tiles) t.dirty = true; }, inspected: () => inspected, sigTime: () => sigT };
   Object.assign(ctx, data.aux || {});
-  try { await PAGE.init(ctx); } catch (e) { $('fps').textContent = 'init failed: ' + String(e.message || e).slice(0, 80); console.error(e); return; }
+  try { await PAGE.init(ctx); } catch (e) { $('fps').textContent = 'init failed: ' + String(e.message || e).slice(0, 80); console.error(e); saverFail('init failed'); return; }
+  if (saverReady) saverReady.ok();
 
   // ---------------------------------------------------------- frame loop
   // ANIM_CAP bounds how many easing-out tiles run the shader in one frame. A
@@ -240,7 +263,7 @@ export async function bootTable(PAGE, data) {
       if (t.pipeline && visible.has(t)) { const rect = t.canvas.getBoundingClientRect(); if (rect.width >= 1) t.rect = rect; }
       const focus = band !== null && !!t.rect && t.rect.top <= band && t.rect.bottom > band;
       if (focus !== !!t.focus) { t.focus = focus; t.el.classList.toggle('tm-live', focus); }
-      const want = (!G.hoverOnly || t.hover || t.focus || inspected === t) ? 1 : 0;
+      const want = (!G.hoverOnly || t.hover || t.focus || inspected === t || (saver && saver.t === t)) ? 1 : 0;
       t.rate += (want - t.rate) * (1 - Math.exp(-dt / 0.18));
       t.moving = t.rate > 0.002;
       if (!t.pipeline) { if (t.moving) t.phase += dt * t.rate * (G.tempo || 1); continue; }
@@ -257,8 +280,9 @@ export async function bootTable(PAGE, data) {
     // pass 2: advance the clocks of the tiles that draw, then draw
     for (const t of tiles) {
       if (!t.pipeline) continue;
-      if (t.moving && (t.go || !t.rect)) t.phase += dt * t.rate * (G.tempo || 1);
+      if (t.moving && (t.go || !t.rect || (saver && saver.t === t))) t.phase += dt * t.rate * (G.tempo || 1);
       if (inspected === t) { const r = msurf.canvas.getBoundingClientRect(); const rs = sizeSurf(msurf, r, dpr); if (t.moving || t.dirty || globalDirty || rs) { PAGE.draw(enc, t, msurf, r, dpr, dt, now, t.moving); any = true; } }
+      if (saver && saver.t === t) { const r = saver.canvas.getBoundingClientRect(), sd = Math.min(devicePixelRatio || 1, saver.dpr); sizeSurf(saver.surf, r, sd); PAGE.draw(enc, t, saver.surf, r, sd, dt, now, true); any = true; }
       if (!t.go || !t.rect) continue;
       PAGE.draw(enc, t, t.surf, t.rect, dpr, dt, now, t.moving); t.dirty = false; t.lastDraw = frameNo; any = true;
     }
@@ -267,6 +291,7 @@ export async function bootTable(PAGE, data) {
     if (now <= activeUntil) {
       for (const t of tiles) if (t.rect) present(enc, t.surf);
       if (inspected) present(enc, msurf);
+      if (saver) present(enc, saver.surf);
       device.queue.submit([enc.finish()]);
     }
   }
@@ -277,6 +302,37 @@ export async function bootTable(PAGE, data) {
     if (surf.cache) surf.cache.destroy();
     surf.cache = device.createTexture({ size: [w, h], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC | GPUTextureUsage.TEXTURE_BINDING });
     surf.drawn = false; surf.resized = true; return true;
+  }
+  // Screensaver mode: one calm cell from spec.saver.cells (chosen by the
+  // seed) draws into a full-window canvas. The stage is hidden, so no other
+  // tile draws. The tempo generator is set flat at a speed from opts.calm
+  // (1 = slowest). The shell reloads the page when the screensaver stops.
+  function saverEnter(opts) {
+    const cfg = SPEC.saver, calm = Math.min(1, Math.max(0, opts.calm ?? 0.7));
+    const pool = tiles.filter(t => (cfg.cells || []).includes(t.s.name) && t.pipeline);
+    const list = pool.length ? pool : tiles.filter(t => t.pipeline);
+    if (!list.length) throw new Error('no cell ready');
+    const t = list[(opts.seed >>> 0) % list.length];
+    const tg = GENS.find(g => g.id === 'tempo');
+    if (tg && cfg.tempo) {
+      const want = cfg.tempo[0] + (cfg.tempo[1] - cfg.tempo[0]) * calm; let best = 0.5, err = Infinity;
+      for (let i = 0; i <= 200; i++) { const e = Math.abs(tg.map(i / 200) - want); if (e < err) { err = e; best = i / 200; } }
+      tg.fn = 'flat'; tg.bias = best;
+    }
+    const style = document.createElement('style');
+    style.textContent = `html.tbl-saver, html.tbl-saver body { background: #000 !important; overflow: hidden !important; cursor: none !important; }
+html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
+.tbl-saver-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 2147483647; background: #000; }`;
+    document.head.appendChild(style);
+    const canvas = document.createElement('canvas'); canvas.className = 'tbl-saver-canvas';
+    document.body.appendChild(canvas); document.documentElement.classList.add('tbl-saver');
+    close();
+    saver = { t, canvas, style, surf: makeSurface(canvas), dpr: cfg.dpr || 2 };
+    return { canvas, warmupMs: cfg.warmup || 800 };
+  }
+  function saverExit() {
+    if (!saver) return;
+    saver.canvas.remove(); saver.style.remove(); document.documentElement.classList.remove('tbl-saver'); saver = null;
   }
   requestAnimationFrame(frame);
 }
