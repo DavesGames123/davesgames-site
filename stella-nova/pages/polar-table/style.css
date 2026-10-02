@@ -133,5 +133,5 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
 .f-ornament{--fam:rgba(245,215,150,0.14);--fam-bg:rgba(245,215,150,0.06)}
 .side-head .big{color:#f5dfa8}
 .legend span{text-transform:capitalize}
-#m-src,.fn{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+#m-src,.fn{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
 .val,.fps{font-variant-numeric:tabular-nums}

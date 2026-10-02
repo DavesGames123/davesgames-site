@@ -1070,6 +1070,7 @@ const indexHtml = `<!DOCTYPE html>
   ════════════════════════════════════════════════════════════════════════════
 -->
 <link href="../../vendor/fonts/stix-two-text+inter.1d522ac5.css" rel="stylesheet">
+<link href="../../vendor/fonts/ibm-plex-mono+ibm-plex-sans.0ec3f36e.css" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -1176,7 +1177,7 @@ const css = baseCss + `
 ${famCss}
 .side-head .big{color:#f5dfa8}
 .legend span{text-transform:capitalize}
-#m-src,.fn{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+#m-src,.fn{font-family:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace}
 .val,.fps{font-variant-numeric:tabular-nums}
 `;
 
