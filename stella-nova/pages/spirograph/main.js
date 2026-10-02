@@ -634,11 +634,13 @@ function saverLabel() {
   const eq = a.out
     ? ['x = (R + r) cos t − d cos((R + r)t / r)', 'y = (R + r) sin t − d sin((R + r)t / r)']
     : ['x = (R − r) cos t + d cos((R − r)t / r)', 'y = (R − r) sin t − d sin((R − r)t / r)'];
-  eq.push(`g = gcd(${a.R}, ${a.r}) = ${g} · n = R/g = ${petals} · L = r/g = ${laps}`);
+  eq.push(`g = gcd(${a.R}, ${a.r}) = ${g}`, `n = R/g = ${petals},  L = r/g = ${laps}`);
   s.label({
     title: PRESETS[S.preset] ? PRESETS[S.preset].name : 'Spirograph',
-    sub: `${a.out ? 'Epitrochoid' : 'Hypotrochoid'} · R = ${a.R}, r = ${a.r}, d = ${q} r`,
-    lines: [`${petals} petals, closes after ${laps} laps`],
+    // The shell sets sub in capitals, so the tooth counts go in lines:
+    // capitals would make r and R the same letter.
+    sub: a.out ? 'Epitrochoid' : 'Hypotrochoid',
+    lines: [`R = ${a.R}, r = ${a.r}, d = ${q} r`, `${petals} petals, closes after ${laps} laps`],
     eq,
   });
 }
