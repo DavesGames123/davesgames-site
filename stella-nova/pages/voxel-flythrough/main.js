@@ -911,6 +911,8 @@ setTimeout(boot,50);
 // status bar, path overlay and legend so #stage fills the window, renders at
 // full resolution with no scanlines, and cruises the flythrough slower as
 // opts.calm goes to 1. Terrain snaps stretch to 6 s so no state change cuts.
+// Once a second it sends opts.label the density, DDA and boid equations with
+// the live terrain values and camera position.
 /* ---- screensaver ---- */
 window.snSaver={
   enter(opts){
@@ -928,6 +930,36 @@ window.snSaver={
     S.morphSpeed=0.08*(1-0.6*calm);
     S.snapSec=6;
     resize();
+    // The plate: the density field and DDA walk of scene.frag.glsl, the boid
+    // force sum of boid-sim.frag.glsl, and the live terrain values from U and
+    // S. The title stays the same, so the numbers refresh in place each second.
+    const label=typeof opts.label==='function'?opts.label:null;
+    const plate=()=>{
+      if(!label) return;
+      const m=steppedMorph(S.morphClock), p=camRO;
+      label({
+        title:'Voxel flythrough',
+        sub:'DDA ray march through an fBm voxel field',
+        eq:[
+          'ρ(p) = H·fbm(f·p + m·u) − σ·y − τ',
+          'fbm(q) = Σᵢ 0.5ⁱ n(2.02ⁱ q) / Σᵢ 0.5ⁱ',
+          'DDA: a = argmin dis,  dis_a += |1/rd_a|',
+          'acc = 0.9c Σ d/|d|² + 1.7c (v̄ − v)',
+          '      + 0.06c (p̄ − p) + w·curl(p)',
+        ],
+        lines:[
+          'f = '+U.uFreq.toFixed(3)+' · '+U.uOct+' octaves · H = '+U.uHeight+' · τ = '+U.uThresh+' · σ = '+U.uSlope,
+          'u = (0.5, 1, 0.4), plus the seed offset · solid where ρ > 0',
+          'morph m = '+U.uMorphAmt+' × '+m.toFixed(2)+' (terrain state '+Math.round(m)+', snap '+S.snapSec+' s)',
+          'camera ('+p[0].toFixed(0)+', '+p[1].toFixed(0)+', '+p[2].toFixed(0)+') · ≤ '+U.uMaxSteps+' cells per ray',
+          BO.on?(BO.N.toLocaleString('en-US')+' boids · c = '+BO.cohesion+' · w = '+BO.wander+' · 12 neighbours each'):'boid swarm off (no float render target)',
+        ],
+      });
+    };
+    plate();
+    clearInterval(this._plate);
+    this._plate=setInterval(plate,1000);
     return { canvas, warmupMs:1000 };
-  }
+  },
+  exit(){ clearInterval(this._plate); }
 };
