@@ -534,7 +534,7 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 //   code                  a short source extract: a string, or { lang, name,
 //                         text }, or a list of them (the first shows). The
 //                         poster shows at most CODE_LINES lines.
-//   anchor                { x, y, r | w h, pts? } in page CSS px, or a function
+//   anchor                { x, y, r | w h, pts?, lead? } in page CSS px, or a function
 //                         that returns it each frame: the subject on
 //                         screen; pts are key points (nuclei, a gear
 //                         centre): the leader goes to the nearest one
@@ -550,9 +550,14 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 // with no label gets a poster with its nav name only (see "function
 // fallbackPoster"). The padding keeps clear of the safe-area insets (a
 // phone notch or home bar) when the browser reports them.
-// Pointer: with an anchor, a leader line goes from the poster block nearer
-// to the subject (top or bottom, at its centre line) to the subject edge,
-// and a ring marks the end. The poster does not move; only the line follows.
+// Pointer: a leader line goes from the poster block nearer to the subject
+// (top or bottom, at its centre line) to a part of the subject, and a ring
+// marks the end. The poster does not move; only the line follows.
+// The leader names a part, never the whole subject: the title already
+// names the whole. So it draws only when the anchor has a key point away
+// from the subject centre (more than 15% of r, or 24 px). A plain circle
+// or box, or one key point at the centre (explosion: the fireball), gets
+// no leader. anchor.lead true or false overrides this test.
 const CODE_LINES = 12;
 let labelTimer = 0, plate = null, plateRAF = 0;
 const texCache = new Map();
@@ -698,7 +703,9 @@ function plateAnchor() {
   // A rectangle (w, h round x, y) fits a tall or thin subject better than
   // a circle. r stays the circle radius, or half the diagonal of the box.
   const hw = +v.w > 0 ? v.w / 2 : 0, hh = +v.h > 0 ? v.h / 2 : 0, box = hw > 0 && hh > 0;
-  return { x: v.x + o.left, y: v.y + o.top, r: box && !(+v.r > 0) ? Math.hypot(hw, hh) : Math.max(0, +v.r || 0), box, hw, hh, pts: pts && pts.length ? pts : null };
+  const x = v.x + o.left, y = v.y + o.top, r = box && !(+v.r > 0) ? Math.hypot(hw, hh) : Math.max(0, +v.r || 0);
+  const part = typeof v.lead === 'boolean' ? v.lead : !!(pts && pts.some(q => Math.hypot(q.x - x, q.y - y) > Math.max(24, r * 0.15)));
+  return { x, y, r, box, hw, hh, pts: pts && pts.length ? pts : null, part };
 }
 // The leader starts under the top block or over the bottom block, at the
 // centre line, whichever start is nearer to the subject. It ends at the
@@ -706,7 +713,7 @@ function plateAnchor() {
 // reaches the start (it fills the frame), there is no leader.
 function drawLeader() {
   const p = document.getElementById('sn-saver-label'), lead = leadEl(), a = plateAnchor();
-  if (!p || !a || !p.classList.contains('on')) { lead.classList.remove('on'); if (plate) plate.lead = null; return; }
+  if (!p || !a || !a.part || !p.classList.contains('on')) { lead.classList.remove('on'); if (plate) plate.lead = null; return; }
   const top = p.querySelector('.top').getBoundingClientRect(), bot = p.querySelector('.bot').getBoundingClientRect();
   const cx = top.left + top.width / 2, gap = 14;
   const starts = [{ x: cx, y: top.bottom + gap, dir: 1 }];
