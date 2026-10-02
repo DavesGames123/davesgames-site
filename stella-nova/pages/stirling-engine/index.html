@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Stirling Engine — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   STIRLING ENGINE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A gamma and a beta Stirling engine in 3D, cut open,
+   that run, come apart in an exploded view, and show their cycle on a live
+   P-V diagram. engine.js holds the mechanism and the gas model (no DOM, no
+   THREE; tests.mjs runs it). scene.js builds the parts with kit.js. gas.js
+   draws the working gas, analysis.js the plots, main.js runs the page.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts, style.css
+     3. importmap for three r160, then main.js as a module
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left (engine, view, run, show), #anaPanel at
+                 the right (the analysis), #view fills the rest. #read is
+                 the cycle readout, top left of the view.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: five tabs (Engine, View, Run, Show,
+                 Cycle) and play. A tab opens #panel with only its .grp as a
+                 bottom sheet (portrait) or a drawer (landscape). main.js
+                 moves the analysis group into #panel on a phone.
+
+   GREP MAP  (main.js)
+     grep -n 'function swapTo'      build an engine and cross-fade to it
+     grep -n 'const VIEWS'          camera presets
+     grep -n 'function frame'       the loop
+     grep -n 'window.snSaver'       the screensaver tour
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A Stirling engine in 3D: gamma and beta layouts cut open, with the displacer, power piston, regenerator and a 90 degree crank. A live P-V diagram follows the four processes as the gas moves between the hot and cold ends.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Stirling Engine</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <div id="labels" aria-hidden="true"></div>
+  <svg id="leader" aria-hidden="true"><line/><circle class="pulse" r="6"/><circle class="dotA" r="3"/></svg>
+  <div id="read" class="pread"></div>
+  <div id="hint" class="phint">hover a part to name it · click to pin its card · drag to orbit</div>
+  <button id="anaOpen" type="button" hidden>∿ Cycle analysis</button>
+  <div class="tip" id="tipHover" aria-live="polite"><div class="tip-in"></div></div>
+  <div class="tip pinned" id="tipPin" aria-live="polite"><button id="tipPinClose" type="button" aria-label="Unpin">✕</button><div class="tip-in"></div></div>
+</main>
+<div id="nogl" hidden>WebGL is not available in this browser, so the engine cannot render.</div>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <section class="grp" data-grp="engine">
+    <div class="sec-label first">Engine</div>
+    <div id="variants"></div>
+    <div id="engInfo">
+      <h1 id="engTitle">Stirling engine</h1>
+      <div class="kind" id="engKind"></div>
+      <p class="lede" id="engLede"></p>
+    </div>
+    <div class="sec-label">Parts</div>
+    <div id="partList"></div>
+  </section>
+
+  <section class="grp" data-grp="view">
+    <div class="sec-label">View</div>
+    <div class="grid2" id="views">
+      <button data-view="three" type="button">Three-quarter</button>
+      <button data-view="front" type="button">Section face</button>
+      <button data-view="exploded" type="button">Exploded</button>
+      <button data-view="crank" type="button">Crank</button>
+      <button data-view="hot" type="button">Hot end</button>
+      <button data-view="regen" type="button">Regenerator</button>
+    </div>
+    <div class="sec-label">Explode</div>
+    <div class="row"><label for="explode">Spread</label><input type="range" id="explode" min="0" max="1" step="0.01" value="0"><span class="val" id="explodeV"></span></div>
+    <div class="toggles">
+      <button class="tog" id="assemble" type="button">Assemble</button>
+      <button class="tog" id="burst" type="button">Explode</button>
+    </div>
+  </section>
+
+  <section class="grp" data-grp="run">
+    <div class="sec-label">Run</div>
+    <div class="grid3" id="rates">
+      <button data-rpm="0" type="button">❚❚ Pause</button>
+      <button data-rpm="12" type="button">12 rpm</button>
+      <button data-rpm="45" type="button">45 rpm</button>
+      <button data-rpm="120" type="button">120 rpm</button>
+      <button data-rpm="300" type="button">300 rpm</button>
+      <button data-rpm="600" type="button">600 rpm</button>
+    </div>
+    <div class="row"><label for="rpm">Speed</label><input type="range" id="rpm" min="0" max="600" step="1" value="45"><span class="val" id="rpmV"></span></div>
+    <p class="note" id="rateNote"></p>
+    <div class="sec-label">Hot end</div>
+    <div class="row"><label for="th">T<sub>h</sub></label><input type="range" id="th" min="320" max="900" step="5" value="650"><span class="val" id="thV"></span></div>
+    <p class="note">The cold end stays at T<sub>c</sub> = 300 K. With no difference there is no loop and no work.</p>
+    <div class="sec-label">Phase angle</div>
+    <div class="row"><label for="phase">φ</label><input type="range" id="phase" min="30" max="150" step="1" value="90"><span class="val" id="phaseV"></span></div>
+    <div class="toggles"><button class="tog" id="phase90" type="button">Set 90°</button></div>
+    <p class="note" id="phaseNote">The displacer crank pin leads the power pin. Near 90° the loop is widest.</p>
+  </section>
+
+  <section class="grp" data-grp="show">
+    <div class="sec-label">Show</div>
+    <div class="grid2">
+      <button class="tog on" id="tSection" type="button">Section cut</button>
+      <button class="tog on" id="tGas" type="button">Working gas</button>
+      <button class="tog on" id="tLabels" type="button">Labels</button>
+      <button class="tog on" id="tOrbit" type="button">Gentle orbit</button>
+    </div>
+    <p class="note">Each dot is an equal parcel of the sealed air. Its colour is its temperature, blue at T<sub>c</sub>, amber at T<sub>h</sub>.</p>
+  </section>
+
+  <section class="grp ana" data-grp="cycle" id="anaSec">
+    <div class="sec-label first">Process now</div>
+    <div id="proc" class="proc"></div>
+    <div class="sec-label">P-V diagram · one turn</div>
+    <canvas id="pv" class="plot pv"></canvas>
+    <div class="sec-label">Phase · position against crank angle</div>
+    <canvas id="ph" class="plot ph"></canvas>
+    <div class="legend"><span class="ld"><i></i>displacer</span><span class="lp"><i></i>power piston</span></div>
+    <div class="sec-label">Where the gas is</div>
+    <div id="gasBar" class="gasbar"></div>
+    <div id="barLab" class="barlab"></div>
+    <div class="sec-label">Numbers</div>
+    <table class="readout" id="nums"></table>
+    <div class="sec-label">Relations</div>
+    <div id="eqs" class="eqs"></div>
+    <div class="sec-label">How it works</div>
+    <div class="about" id="about"></div>
+  </section>
+</aside>
+
+<aside id="anaPanel" aria-label="Cycle analysis">
+  <button id="anaClose" type="button" aria-label="Close the analysis">✕</button>
+</aside>
+
+<nav id="dock" aria-label="Controls">
+  <button class="tab" data-grp="engine" type="button"><i>◎</i><span>Engine</span></button>
+  <button class="tab" data-grp="view" type="button"><i>◈</i><span>View</span></button>
+  <button class="tab" data-grp="run" type="button"><i>◷</i><span>Run</span></button>
+  <button class="tab" data-grp="show" type="button"><i>◐</i><span>Show</span></button>
+  <button class="tab" data-grp="cycle" type="button"><i>∿</i><span>Cycle</span></button>
+  <button id="dockPlay" type="button" aria-label="Pause"><i>❚❚</i><span>Pause</span></button>
+</nav>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="main.js"></script>
+</body>
+</html>
