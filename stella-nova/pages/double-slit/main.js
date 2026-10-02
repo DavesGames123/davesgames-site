@@ -61,6 +61,7 @@
 //      screen profile ...... "function drawProfile"   <ψ²> plot with axes
 //      control wiring ...... "function bindRange"     sliders → P
 //      main loop ........... "function loop"          requestAnimationFrame driver
+//      saver detector ...... "function drawDetector"  summed I(y) into the field canvas
 //      screensaver hook .... "window.snSaver"         lib/screensaver.js mode
 // ============================================================================
 
@@ -503,7 +504,7 @@ function loop(){
   if(now-lastFT>500){fps=Math.round(fCount/((now-lastFT)/1000));fCount=0;lastFT=now;$('ofps').textContent=fps+' fps';}
   if(!paused)for(let k=0;k<P.spf;k++){step();accumI();}
   if(frameN%6===1)autoRef();
-  render();if(frameN%3===0)drawProfile();
+  render();if(saverOn)drawDetector();else if(frameN%3===0)drawProfile();
   $('ot').textContent=(simTime*C_FS_PER_STEP(P.dt)).toFixed(1);
   $('os').textContent=stepN;
   requestAnimationFrame(loop);
@@ -516,11 +517,85 @@ new ResizeObserver(()=>{clearTimeout(window._rt);window._rt=setTimeout(()=>{cons
 // Test hook for headless checks: the live state, read only by convention.
 window.__ds={get P(){return P},get u(){return u},get Iavg(){return Iavg},get NX(){return NX},get NY(){return NY},get step(){return stepN},get refA(){return refA},get refI(){return refI},screenX:()=>screenX(),sourceX:()=>sourceX(),fringeRows:l=>fringeRows(l)};
 
+// Saver detector. In saver mode the profile panel is hidden, so the field
+// canvas itself carries the result: the strip right of the screen column
+// becomes a detector. drawDetector() runs after render() each frame and
+// writes into waveCanvas (grid px), so a recording keeps it.
+//   film   a band of the summed colour Σ COL[c]·<ψ²>c, as a photo plate sees it
+//   curve  the summed intensity I(y) = Σ <ψ²>c, scaled to its peak, filled
+//   theory the Fraunhofer sum of cos²β·sinc²α (or the 3-slit factor) per
+//          channel, dashed, with sin θ = Y/√(Y² + L²) for the large angles
+// Geometry in cells: d = 2·⌊sep/2⌋ (double) or sep (triple), a = 2·⌊w/2⌋ + 1,
+// L = screenX() − (⌊NX·barrierX⌋ + 1.5), the same L that fringeRows() uses.
+let saverOn=false,saverTimer=0;
+function slitGeom(){
+  const d=P.slitMode==='double'?2*Math.floor(P.slitSep/2):P.slitSep,a=2*Math.floor(P.slitW/2)+1;
+  const L=screenX()-(Math.floor(NX*P.barrierX)+1.5);
+  return {d,a,L};
+}
+function theoryI(Y,lam,g){
+  const s=Y/Math.hypot(g.L,Y),be=Math.PI*g.d*s/lam,al=Math.PI*g.a*s/lam;
+  const sinc=Math.abs(al)<1e-6?1:Math.sin(al)/al;
+  let f;
+  if(P.slitMode==='triple'){const sb=Math.sin(be);f=Math.abs(sb)<1e-6?1:Math.sin(3*be)/(3*sb);}
+  else f=Math.cos(be);
+  return f*f*sinc*sinc;
+}
+function drawDetector(){
+  const sx=screenX(),x0=sx+1,w=NX-x0;if(w<12)return;
+  const cy=Math.floor(NY/2),g=slitGeom(),on=P.chOn;
+  const bw=Math.max(4,Math.round(w*0.2)),cx0=x0+bw+3,cw=NX-3-cx0;
+  ctx.fillStyle='rgb(6,9,14)';ctx.fillRect(x0,0,w,NY);
+  ctx.fillStyle='rgba(200,220,245,0.55)';ctx.fillRect(sx,0,1,NY);
+  // summed intensity per row, and its peak
+  const tot=new Float32Array(NY);let mx=0;
+  for(let y=0;y<NY;y++){let t=0;for(let c=0;c<3;c++)if(on[c])t+=Iavg[c][y*NX+sx];tot[y]=t;if(t>mx)mx=t;}
+  if(!(mx>0))return;
+  // film band: summed colour, square-root tone so the side orders show
+  const img=ctx.createImageData(bw,NY),d=img.data;
+  for(let y=0;y<NY;y++){
+    let r=0,gg=0,b=0;
+    for(let c=0;c<3;c++){if(!on[c])continue;const v=Math.sqrt(Iavg[c][y*NX+sx]/mx*3);r+=v*COL[c][0];gg+=v*COL[c][1];b+=v*COL[c][2];}
+    for(let x=0;x<bw;x++){const p=(y*bw+x)*4;d[p]=Math.min(255,8+247*r);d[p+1]=Math.min(255,10+245*gg);d[p+2]=Math.min(255,14+241*b);d[p+3]=255;}
+  }
+  ctx.putImageData(img,x0,0);
+  // the summed curve, filled from the left edge of the plot
+  ctx.beginPath();ctx.moveTo(cx0,0);
+  for(let y=0;y<NY;y++)ctx.lineTo(cx0+cw*tot[y]/mx,y+0.5);
+  ctx.lineTo(cx0,NY);ctx.closePath();ctx.fillStyle='rgba(235,240,250,0.16)';ctx.fill();
+  ctx.beginPath();for(let y=0;y<NY;y++){const x=cx0+cw*tot[y]/mx;if(y)ctx.lineTo(x,y+0.5);else ctx.moveTo(x,0.5);}
+  ctx.strokeStyle='rgba(240,244,252,0.92)';ctx.lineWidth=1;ctx.stroke();
+  // the Fraunhofer theory, summed over the channels that are on
+  let n=0;for(let c=0;c<3;c++)if(on[c])n++;
+  if(n&&P.slitMode!=='single'&&P.slitMode!=='none'&&g.L>0){
+    ctx.beginPath();
+    for(let y=0;y<NY;y++){let t=0;for(let c=0;c<3;c++)if(on[c])t+=theoryI(y-cy,P.lamNm[c]/CELL_NM,g);const x=cx0+cw*t/n;if(y)ctx.lineTo(x,y+0.5);else ctx.moveTo(x,0.5);}
+    ctx.setLineDash([3,3]);ctx.strokeStyle='rgba(255,214,110,0.7)';ctx.stroke();ctx.setLineDash([]);
+  }
+  ctx.fillStyle='rgba(200,220,245,0.25)';ctx.fillRect(cx0,0,1,NY);
+}
+function saverPlate(label){
+  if(!label)return;
+  const g=slitGeom(),f=v=>v.toFixed(2),on=[0,1,2].filter(c=>P.chOn[c]);
+  const lam=on.map(c=>P.lamNm[c]).join(' / ');
+  const dy=on.map(c=>f(um(P.lamNm[c]/CELL_NM*g.L/g.d))).join(' / ');
+  const tri=P.slitMode==='triple';
+  label({
+    title:tri?'Triple slit · summed intensity':'Double slit · summed intensity',
+    sub:'detector strip at the right edge · white = Σ <ψ²>, dashed = theory',
+    lines:['d = '+f(um(g.d))+' µm   a = '+f(um(g.a))+' µm','λ = '+lam+' nm','L = '+f(um(g.L))+' µm','fringe Δy = λL/d = '+dy+' µm','t = '+(simTime*C_FS_PER_STEP(P.dt)).toFixed(0)+' fs'],
+    eq:tri?['I(y) ∝ [sin(3πdy/λL) / 3sin(πdy/λL)]² · sinc²(πay/λL)','I_total(y) = Σ_λ I_λ(y)']
+          :['I(y) ∝ cos²(πdy/λL) · sinc²(πay/λL)','I_total(y) = Σ_λ I_λ(y)'],
+  });
+}
+
 // Screensaver hook (lib/screensaver.js has the protocol). The CSS under
 // html.sn-saver hides the panel, the profile and the overlays, so the field
 // fills the frame. init() re-grids to that size, then the sim runs ahead
 // under the shell's black cover until the fringes reach the screen column.
 // calm 1 gives one step per frame. The seed picks the slit count and gap.
+// saverOn makes loop() draw the detector strip (drawDetector) in place of
+// the hidden profile panel. The plate gets d, a, λ, L once a second.
 window.snSaver={async enter(o){
   const calm=o&&o.calm!=null?o.calm:0.7,seed=(o&&o.seed)>>>0;
   document.documentElement.classList.add('sn-saver');
@@ -532,8 +607,11 @@ window.snSaver={async enter(o){
   const need=(screenX()-sourceX())/P.dt+240,t0=performance.now();
   while(stepN<need&&performance.now()-t0<4000){for(let k=0;k<40;k++){step();accumI();}autoRef();await new Promise(r=>setTimeout(r,0));}
   for(let k=0;k<12;k++)autoRef();
+  saverOn=true;
+  const label=o&&o.labels!==false?o.label:null;
+  clearInterval(saverTimer);saverPlate(label);saverTimer=setInterval(()=>saverPlate(label),1000);
   return {canvas,warmupMs:1000};
-}};
+},exit(){saverOn=false;clearInterval(saverTimer);saverTimer=0;}};
 
 // Boot: a narrow field (a phone) uses 1 px cells, so the 40-cell PML and
 // the absorber do not take most of the grid. Then build the grid and start.
