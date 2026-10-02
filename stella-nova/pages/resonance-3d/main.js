@@ -21,10 +21,16 @@
      grep -n 'function buildUI'      the control panel construction
      grep -n '__res3d'               the objects xr.js reads (VR and AR)
      grep -n 'snSaver'               the screensaver hook (lib/screensaver.js)
+     grep -n 'R3_RULES'              symbol -> math color class
    ========================================================================== */
 (() => {
   'use strict';
   const TAU = Math.PI * 2, S = 1.5;
+  // Math colors (lib/sci.css), one per axis: x, A, phi_x m1; y, B, phi_y m2;
+  // z, C, phi_z m3; detune delta m4. u, pi and f0 keep the default color.
+  const R3_RULES = [['x', 'm1'], ['A', 'm1'], ['\\varphi_x', 'm1'], ['y', 'm2'], ['B', 'm2'], ['\\varphi_y', 'm2'],
+    ['z', 'm3'], ['C', 'm3'], ['\\varphi_z', 'm3'], ['\\delta', 'm4']];
+  import('../../lib/sci-math.js').then(m => m.typesetAll(document, R3_RULES)).catch(err => console.error('[math]', err));
 
   const G = {
     A:3, B:2, C:4,
@@ -102,7 +108,7 @@
   function makeLabel(text, hex) {
     const c = document.createElement('canvas'); c.width = c.height = 64;
     const g = c.getContext('2d');
-    g.fillStyle = hex; g.font = "bold 46px 'JetBrains Mono',monospace"; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = hex; g.font = "600 46px Inter,system-ui,sans-serif"; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(text, 32, 34);
     const t = new THREE.Texture(c); t.needsUpdate = true;
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthTest: false, depthWrite: false }));
@@ -263,7 +269,7 @@
   }
   function syncSoundBtn() {
     const b = document.getElementById('soundBtn');
-    b.textContent = G.playing ? '■ STOP TRIAD' : '▶ PLAY TRIAD';
+    b.textContent = G.playing ? 'Stop triad' : 'Play triad';
     b.classList.toggle('on', G.playing);
   }
 
@@ -383,7 +389,7 @@
     bindRange('vol', 'vol', v => v.toFixed(0) + '%', null);
 
     const projBtn = document.getElementById('projBtn');
-    const setOrtho = on => { useOrtho = on; projBtn.textContent = on ? 'ORTHOGRAPHIC' : 'PERSPECTIVE'; projBtn.classList.toggle('on', on); resize(); };
+    const setOrtho = on => { useOrtho = on; projBtn.textContent = on ? 'Orthographic' : 'Perspective'; projBtn.classList.toggle('on', on); resize(); };
     projBtn.addEventListener('click', () => setOrtho(!useOrtho));
 
     // snap straight onto a plane, in orthographic, looking down the third axis

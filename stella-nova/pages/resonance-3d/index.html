@@ -18,8 +18,9 @@
    plays one sine tone per axis.
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts       Google Fonts stylesheet
-     2. style.css   the page stylesheet
+     1. style.css   the page stylesheet
+     2. lib/sci.css science type and math colors .m1 to .m6 (@imports the
+                    fonts); main.js typesets [data-tex] with lib/sci-math.js
    Scripts at end of body: three.js r128 (defines global THREE), then main.js.
    main.js is a classic script and needs THREE present, so its tag comes after.
 
@@ -45,55 +46,58 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="A resonance in three axes. Three perpendicular swings trace a knot. A whole ratio closes it; an off ratio fills a denser shell. Drag to orbit, tap to hear the triad.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
-  <div class="sys">SYS&nbsp;//&nbsp;MUSIC.RESONANCE</div>
+  <div class="brand">Stella Nova</div>
   <div class="pagetitle">Resonance 3D</div>
 </div>
 
 <canvas id="gl"></canvas>
 <div id="hint">drag to orbit · pinch or scroll to zoom</div>
-<button id="gear" aria-label="Controls">⚙</button>
+<button id="gear" aria-label="Controls">☰</button>
 
 <div id="panel" class="open">
   <button id="panelClose" aria-label="Close controls">✕</button>
 
-  <div class="sec-label">RATIO  A : B : C</div>
+  <div class="sec-label">Equations</div>
+  <!-- main.js typesets the [data-tex] boxes (R3_RULES colors). -->
+  <div class="eq sci-eq" data-tex="x=\sin\!\big(2\pi(A+\delta)\,u+\varphi_x\big)"></div>
+  <div class="eq sci-eq" data-tex="y=\sin(2\pi B\,u+\varphi_y)"></div>
+  <div class="eq sci-eq" data-tex="z=\sin(2\pi C\,u+\varphi_z)"></div>
+
+  <div class="sec-label">Ratio <span class="sci-sym" data-tex="A:B:C" data-inline></span></div>
   <div class="ratio-row">
     <div class="stepper" id="stepA"><button data-d="-1">−</button><span class="num" id="numA">3</span><button data-d="1">+</button><span class="axis-tag" style="color:#ff5a5a">x</span></div>
     <div class="stepper" id="stepB"><button data-d="-1">−</button><span class="num" id="numB">2</span><button data-d="1">+</button><span class="axis-tag" style="color:#64d264">y</span></div>
     <div class="stepper" id="stepC"><button data-d="-1">−</button><span class="num" id="numC">4</span><button data-d="1">+</button><span class="axis-tag" style="color:#64a0ff">z</span></div>
   </div>
 
-  <div class="sec-label">KNOTS</div>
+  <div class="sec-label">Knots</div>
   <div class="presets" id="presets"></div>
 
-  <div class="sec-label">PHASE OFFSET</div>
-  <div class="row"><label>X</label><input type="range" id="phaseX" min="0" max="1" step="0.005" value="0"><span class="val" id="phaseXV"></span></div>
-  <div class="row"><label>Y</label><input type="range" id="phaseY" min="0" max="1" step="0.005" value="0.25"><span class="val" id="phaseYV"></span></div>
-  <div class="row"><label>Z</label><input type="range" id="phaseZ" min="0" max="1" step="0.005" value="0"><span class="val" id="phaseZV"></span></div>
+  <div class="sec-label">Phase offset</div>
+  <div class="row"><label><span class="sci-sym" data-tex="\varphi_x" data-inline></span></label><input type="range" id="phaseX" min="0" max="1" step="0.005" value="0"><span class="val" id="phaseXV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="\varphi_y" data-inline></span></label><input type="range" id="phaseY" min="0" max="1" step="0.005" value="0.25"><span class="val" id="phaseYV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="\varphi_z" data-inline></span></label><input type="range" id="phaseZ" min="0" max="1" step="0.005" value="0"><span class="val" id="phaseZV"></span></div>
 
-  <div class="sec-label">PHASE ANIMATION · turns/sec</div>
-  <div class="row"><label>X rate</label><input type="range" id="rateX" min="-0.5" max="0.5" step="0.005" value="0"><span class="val" id="rateXV"></span></div>
-  <div class="row"><label>Y rate</label><input type="range" id="rateY" min="-0.5" max="0.5" step="0.005" value="0"><span class="val" id="rateYV"></span></div>
-  <div class="row"><label>Z rate</label><input type="range" id="rateZ" min="-0.5" max="0.5" step="0.005" value="0"><span class="val" id="rateZV"></span></div>
+  <div class="sec-label">Phase rate (turns per second)</div>
+  <div class="row"><label><span class="sci-sym" data-tex="\dot{\varphi_x}" data-inline></span></label><input type="range" id="rateX" min="-0.5" max="0.5" step="0.005" value="0"><span class="val" id="rateXV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="\dot{\varphi_y}" data-inline></span></label><input type="range" id="rateY" min="-0.5" max="0.5" step="0.005" value="0"><span class="val" id="rateYV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="\dot{\varphi_z}" data-inline></span></label><input type="range" id="rateZ" min="-0.5" max="0.5" step="0.005" value="0"><span class="val" id="rateZV"></span></div>
   <div class="hint">A nonzero rate advances that component's phase over time, so the knot slowly rotates and morphs. Give each axis a different rate for a drifting weave.</div>
 
-  <div class="sec-label">DETUNE</div>
-  <div class="row"><label>Coarse</label><input type="range" id="detuneCoarse" min="-0.5" max="0.5" step="0.01" value="0"><span class="val" id="detuneCoarseV"></span></div>
-  <div class="row"><label>Fine</label><input type="range" id="detuneFine" min="-0.02" max="0.02" step="0.0005" value="0"><span class="val" id="detuneFineV"></span></div>
-  <div class="hint">Detune breaks the exact triple, so the knot stops closing and fills a denser shell. Coarse sweeps wide; fine nudges by thousandths.</div>
+  <div class="sec-label">Detune</div>
+  <div class="row"><label><span class="sci-sym" data-tex="\delta" data-inline></span> <span class="w">coarse</span></label><input type="range" id="detuneCoarse" min="-0.5" max="0.5" step="0.01" value="0"><span class="val" id="detuneCoarseV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="\delta" data-inline></span> <span class="w">fine</span></label><input type="range" id="detuneFine" min="-0.02" max="0.02" step="0.0005" value="0"><span class="val" id="detuneFineV"></span></div>
+  <div class="hint">Detune breaks the exact triple, so the knot stops closing and fills a denser shell. Coarse moves in hundredths, fine in thousandths.</div>
 
-  <div class="sec-label">VIEW</div>
-  <div class="modes"><button id="projBtn">PERSPECTIVE</button></div>
+  <div class="sec-label">View</div>
+  <div class="modes"><button id="projBtn">Perspective</button></div>
   <div class="presets" id="snaps">
     <button id="snapXY" title="Look down Z">XY</button>
     <button id="snapXZ" title="Look down Y">XZ</button>
@@ -101,15 +105,15 @@
   </div>
   <div class="row"><label>Spin</label><input type="range" id="spin" min="0" max="1" step="0.01" value="0"><span class="val" id="spinV"></span></div>
 
-  <div class="sec-label">SOUND</div>
-  <div class="modes"><button id="soundBtn">▶ PLAY TRIAD</button></div>
-  <div class="row"><label>Base</label><input type="range" id="base" min="80" max="330" step="1" value="131"><span class="val" id="baseV"></span></div>
+  <div class="sec-label">Sound</div>
+  <div class="modes"><button id="soundBtn">Play triad</button></div>
+  <div class="row"><label><span class="sci-sym" data-tex="f_0" data-inline></span> <span class="w">base</span></label><input type="range" id="base" min="80" max="330" step="1" value="131"><span class="val" id="baseV"></span></div>
   <div class="row"><label>Volume</label><input type="range" id="vol" min="0" max="100" value="50"><span class="val" id="volV"></span></div>
 
   <!-- VR and AR (xr.js). Shown only when the device has WebXR. -->
   <div id="xrSec" hidden>
-    <div class="sec-label">HEADSET</div>
-    <div class="modes"><button id="bVR" hidden>VIEW IN VR</button><button id="bAR" hidden>VIEW IN AR</button></div>
+    <div class="sec-label">Headset</div>
+    <div class="modes"><button id="bVR" hidden>View in VR</button><button id="bAR" hidden>View in AR</button></div>
   </div>
 </div>
 
