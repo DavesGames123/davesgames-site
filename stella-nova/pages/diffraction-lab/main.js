@@ -648,17 +648,27 @@ function saverPlate(pr){
     pd.label+' = '+(+p[pd.id]).toFixed(pd.step<.01?3:pd.step<.1?2:pd.step<1?1:0)+(pd.id==='pts'?'':S.element==='star'&&pd.id==='inner'?' R':' mm'));
   const aC=p.radius||p.outer||p.width||p.slit_w||p.arm||p.size||0,lam0=S.source==='mono'?S.lambda:550;
   const Nf=aC>0&&S.z>0?(aC*mm)**2/(lam0*nm*S.z*mm):0;
-  const lines=[el.name+' aperture · '+parts.join(' · ')];
-  lines.push('z = '+S.z.toFixed(0)+' mm · field '+S.extent+' mm · '+S.N+'² grid · dx = '+(S.extent*1000/S.N).toFixed(1)+' µm');
-  lines.push(S.source==='white'?'white light: D65, '+S.divs+' wavelengths from 380 to 780 nm':'λ = '+S.lambda+' nm');
-  if(Nf>0)lines.push('N_F = a²/(λz) = '+(Nf<.01?Nf.toExponential(1):Nf.toFixed(2))+' (a = '+f2(aC)+' mm, λ = '+lam0+' nm) · '+(Nf>5?'shadow':Nf>.5?'Fresnel':'Fraunhofer'));
+  // Parameters: TeX symbol, short name, live value. The classes are RULES
+  // of equations.js (lambda m1, t m2, k m3, z m4, E m5, F m6). The TeX is
+  // the TeX of equations.js: the angular spectrum step, the Fresnel number
+  // and the transmittance of the element (window.DiffEq.TRANS). The
+  // pattern fills the window, so the plate has no anchor.
+  const params=[{sym:'z',name:'distance',value:S.z.toFixed(0)+' mm',cls:'m4'},
+    {sym:'\\lambda',name:'light',value:S.source==='white'?'white, '+S.divs+' lines':S.lambda+' nm',cls:'m1'}];
+  if(Nf>0)params.push({sym:'N_F',name:Nf>5?'shadow':Nf>.5?'Fresnel':'Fraunhofer',value:Nf<.01?Nf.toExponential(1):Nf.toFixed(2)});
+  params.push({sym:'a',name:'aperture size',value:f2(aC)+' mm'});
+  const lines=[el.name+' aperture: '+parts.join(', ')+'.','Field '+S.extent+' mm on a '+S.N+'² grid.'];
   const eq=['E(z) = F⁻¹{ F{t} · e^(i k_z z) }',
     'k_z = √(k² − kₓ² − k_y²),   k = 2π/λ',
     'I = |E|²,   XYZ = Σ_λ I · D65 · (x̄, ȳ, z̄)'];
   eq.push(SAVER_T[pr.el==='lens-ap'?'lens':pr.el]||'t = 1 inside the aperture, 0 outside');
+  const D=window.DiffEq,zc=String.raw`\class{m4}{z}`;
+  const tex=[String.raw`E(x,y,${zc}) = \mathcal{F}^{-1}\Big\{\, \mathcal{F}\{\, t\,E_0 \}\; e^{\,i k_z ${zc}} \Big\},\qquad k_z = \sqrt{k^2 - k_x^2 - k_y^2}`,
+    String.raw`N_F = \frac{a^2}{\lambda\, ${zc}}`];
+  if(D&&D.TRANS&&D.TRANS[pr.el])tex.splice(1,0,D.TRANS[pr.el]);
   saverLabel({
     title:'Diffraction · '+pr.name,
-    sub:'angular spectrum propagation · scalar field · log tone, 2 decades',
-    lines,eq,
+    sub:'Angular spectrum propagation of a scalar field, log tone over 2 decades',
+    params,lines,tex,rules:(D&&D.RULES)||[['\\lambda','m1'],['t','m2'],['k_x','m3'],['k_y','m3'],['k_z','m3'],['k','m3'],['E','m5'],['\\mathcal{F}','m6']],eq,
   });
 }
