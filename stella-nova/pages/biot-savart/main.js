@@ -310,7 +310,7 @@ function renderWires(){
     ctx.lineWidth=sel?2.5:1.5;ctx.stroke();
     // Current symbol
     ctx.fillStyle=out?'#64c864':'#e05050';
-    ctx.font='bold 14px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.font='bold 14px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
     if(out){
       // ⊙ dot
       ctx.beginPath();ctx.arc(w.x,w.y,4,0,Math.PI*2);ctx.fill();
@@ -327,7 +327,7 @@ function renderWires(){
     ctx.beginPath();ctx.arc(w.x,w.y,ringR,0,Math.PI*2);ctx.stroke();
     ctx.setLineDash([]);
     // Label — larger
-    ctx.font='bold 11px "JetBrains Mono"';ctx.fillStyle='rgba(255,255,255,0.7)';
+    ctx.font='bold 11px Inter, system-ui, sans-serif';ctx.fillStyle='rgba(255,255,255,0.7)';
     ctx.fillText((w.current>0?'+':'')+w.current.toFixed(1)+'A',w.x,w.y-20);
   }
 }
@@ -412,13 +412,13 @@ function renderProbe(){
   ctx.beginPath();ctx.arc(0,0,3,0,Math.PI*2);
   ctx.fillStyle='#ffc832';ctx.fill();
   // N/S labels
-  ctx.font='bold 7px "JetBrains Mono"';ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.font='bold 7px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillStyle='rgba(255,200,200,0.9)';ctx.fillText('N',needleLen*0.55,0);
   ctx.fillStyle='rgba(200,200,255,0.9)';ctx.fillText('S',-needleLen*0.55,0);
   ctx.restore();
 
   // |B| label below compass
-  ctx.font='bold 10px "JetBrains Mono"';ctx.textAlign='center';ctx.fillStyle='rgba(255,200,50,0.7)';
+  ctx.font='bold 10px Inter, system-ui, sans-serif';ctx.textAlign='center';ctx.fillStyle='rgba(255,200,50,0.7)';
   ctx.fillText('|B|='+Bmag.toFixed(3),px,py+needleLen+16);
 
   // Update status
@@ -438,8 +438,8 @@ function rebuildWireList(){
     c.className='wire-card'+(w.id===SIM.selectedId?' selected':'');
     c.onclick=e=>{if(!e.target.closest('.wire-card-del')){SIM.selectedId=w.id;rebuildWireList();}};
     const col=WIRE_COLORS[i%WIRE_COLORS.length];
-    c.innerHTML=`<div class="wire-card-head"><span class="wire-card-icon" style="color:${col}">${w.current>0?'⊙':'⊗'}</span><span class="wire-card-name">Wire #${w.id}</span><button class="wire-card-del" onclick="removeWire(${w.id})">✕</button></div>
-      <div class="mag-row"><span class="mag-row-lbl">I</span><input type="range" min="-5" max="5" value="${w.current}" step="0.1" oninput="setWireProp(${w.id},'current',+this.value,this)"><span class="val">${w.current.toFixed(1)}</span></div>`;
+    c.innerHTML=`<div class="wire-card-head"><span class="wire-card-icon" style="color:${col}">${w.current>0?'⊙':'⊗'}</span><span class="wire-card-name">Wire ${w.id}</span><button class="wire-card-del" onclick="removeWire(${w.id})" aria-label="Remove">Remove</button></div>
+      <div class="mag-row"><span class="mag-row-lbl"><span class="sym">${(window.BS_SYM&&window.BS_SYM.I)||'I'}</span> <span class="d">Current</span></span><input type="range" min="-5" max="5" value="${w.current}" step="0.1" oninput="setWireProp(${w.id},'current',+this.value,this)"><span class="val">${w.current.toFixed(1)}</span></div>`;
     list.appendChild(c);
     c.querySelectorAll('input[type=range]').forEach(sg);
   });

@@ -4,20 +4,22 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Biot–Savart Law // Stella Nova · davesgames.io</title>
+<title>Biot–Savart law — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    BIOT–SAVART LAW  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
-   Static markup only. main.js draws everything on #sim-canvas; katex.js fills
-   the equation panel. This file lays out the control panel, the canvas, the
+   Static markup only. main.js draws everything on #sim-canvas. equations.js
+   typesets the equation panel as MathJax SVG (lib/sci-math.js) from the
+   data-tex attributes. This file lays out the control panel, the canvas, the
    equation panel, and the status bar, all bound to main.js by element id.
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts        Google Fonts stylesheet (absolute)
-     2. KaTeX        CSS then JS from CDN, so window.katex exists for katex.js
-     3. style.css    the page stylesheet
-   Scripts load at end of body: katex.js first, then main.js.
+     1. style.css    the page stylesheet
+     2. lib/sci.css  shared science type (STIX Two Text, Inter, the system
+                     mono) and the math colors .m1 to .m6; it loads the fonts
+   Scripts load at end of body: equations.js (ES module, runs after the
+   classic scripts), glow-lines.js, then main.js.
 
    LAYOUT  (● marks an element id)
      ┌──────────────────────────────────────────────────────────────────┐
@@ -34,10 +36,8 @@
      └──────────────────────────────────────────────────────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: inside the site shell's iframe, add .in-frame so the CSS
@@ -47,8 +47,8 @@
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 
 <div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Biot–Savart Law</span></div>
-  <div class="topbar-r">SYS // <strong>ELECTROMAGNETISM</strong></div>
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span></div>
+  <div class="topbar-r">Biot–Savart law</div>
 </div>
 
 <div id="main">
@@ -56,12 +56,12 @@
   <div id="panel"><div class="p-body">
     <!-- Add a wire carrying current out of (⊙) or into (⊗) the page. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Add Wire (cross-section)</div>
+      <div class="p-sec-lbl">Add wire (cross-section)</div>
       <div class="add-grid">
-        <button class="add-btn out" onclick="addWire(1)"><span class="icon">⊙</span>I Out (⊙)</button>
-        <button class="add-btn in" onclick="addWire(-1)"><span class="icon">⊗</span>I Into (⊗)</button>
+        <button class="add-btn out" onclick="addWire(1)"><span class="icon">⊙</span>Current out</button>
+        <button class="add-btn in" onclick="addWire(-1)"><span class="icon">⊗</span>Current in</button>
       </div>
-      <div style="margin-top:6px;font-size:0.52rem;color:var(--text-faint);line-height:1.5;letter-spacing:0.04em">
+      <div class="p-note">
         Place infinite wires perpendicular to screen. Each creates a circular B field via Biot–Savart.
       </div>
     </div>
@@ -73,22 +73,22 @@
     <!-- Probe controls: the draggable field sampler and step-through mode. -->
     <div class="p-section">
       <div class="p-sec-lbl">Probe</div>
-      <button class="tog-btn on" id="tog-probe" onclick="toggleProbe()">◎ Probe Point</button>
+      <button class="tog-btn on" id="tog-probe" onclick="toggleProbe()">Probe point</button>
       <div class="probe-info" id="probe-info" style="margin-top:6px">
-        Drag the <strong>yellow ◎</strong> probe to see individual wire contributions decomposed as vectors. Each colored arrow = one wire's dB. White arrow = total B.
+        Drag the <strong>yellow</strong> probe to see individual wire contributions decomposed as vectors. Each colored arrow = one wire's dB. White arrow = total B.
       </div>
-      <button class="tog-btn off" id="tog-step" onclick="toggleStep()" style="margin-top:4px">▶ Step Through</button>
-      <div id="step-info" style="display:none;margin-top:4px;font-size:0.52rem;color:var(--yellow);letter-spacing:0.04em;line-height:1.5">
+      <button class="tog-btn off" id="tog-step" onclick="toggleStep()" style="margin-top:4px">Step through</button>
+      <div id="step-info" class="step-info" style="display:none">
         Animates contributions one wire at a time, showing how B accumulates.
       </div>
     </div>
     <!-- Field visualization toggles and the tracer count/speed sliders. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Field Display</div>
+      <div class="p-sec-lbl">Field display</div>
       <div style="display:flex;flex-direction:column;gap:4px">
-        <button class="tog-btn on" id="tog-tracers" onclick="toggleOpt('showTracers','tog-tracers')">⇌ Field Tracers</button>
-        <button class="tog-btn on" id="tog-arrows" onclick="toggleOpt('showArrows','tog-arrows')">→ Field Arrows</button>
-        <button class="tog-btn off" id="tog-heat" onclick="toggleOpt('showHeatmap','tog-heat')">▦ Field Magnitude</button>
+        <button class="tog-btn on" id="tog-tracers" onclick="toggleOpt('showTracers','tog-tracers')">Field tracers</button>
+        <button class="tog-btn on" id="tog-arrows" onclick="toggleOpt('showArrows','tog-arrows')">Field arrows</button>
+        <button class="tog-btn off" id="tog-heat" onclick="toggleOpt('showHeatmap','tog-heat')">Field magnitude</button>
       </div>
       <div class="mag-row" style="margin-top:6px">
         <span class="mag-row-lbl">Count</span>
@@ -105,17 +105,17 @@
     <div class="p-section">
       <div class="p-sec-lbl">Presets</div>
       <div class="sim-btns" style="margin-bottom:6px">
-        <button class="sim-btn" onclick="preset('parallel')">∥ Parallel</button>
-        <button class="sim-btn" onclick="preset('anti')">⇅ Anti-∥</button>
+        <button class="sim-btn" onclick="preset('parallel')">Parallel</button>
+        <button class="sim-btn" onclick="preset('anti')">Antiparallel</button>
       </div>
       <div class="sim-btns">
-        <button class="sim-btn" onclick="preset('triangle')">△ Triangle</button>
-        <button class="sim-btn" onclick="preset('quad')">◇ Quad</button>
+        <button class="sim-btn" onclick="preset('triangle')">Triangle</button>
+        <button class="sim-btn" onclick="preset('quad')">Quad</button>
       </div>
     </div>
     <div class="p-section">
       <div class="sim-btns">
-        <button class="sim-btn warn" onclick="clearAll()">✕ Clear All</button>
+        <button class="sim-btn warn" onclick="clearAll()">Clear all</button>
       </div>
     </div>
   </div></div>
@@ -124,21 +124,21 @@
   <div id="canvas-wrap">
     <canvas id="sim-canvas"></canvas>
     <div class="mob-overlay" onclick="document.getElementById('panel').classList.remove('mob-open')"></div>
-    <!-- Collapsible equation panel, filled by katex.js. -->
+    <!-- Collapsible equation panel, typeset by equations.js. -->
     <section class="eq-panel" id="eq-panel">
-      <div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Biot–Savart Law</span><span class="arrow">▲</span></div>
+      <div class="eq-head" id="eq-toggle"><span class="lbl">Biot–Savart law</span><span class="arrow">Hide</span></div>
       <div class="eq-blocks">
         <div class="eq-block">
-          <div class="eq-sublabel">General · Line Current (s = r − ℓ)</div>
-          <div class="eq-row" id="eq-bs"></div>
+          <div class="eq-sublabel">General, line current (s = r − ℓ)</div>
+          <div class="eq-row sci-eq" id="eq-bs" data-tex="\vec{B}(\vec{r})\;=\;\frac{\mu_0}{4\pi}\int_C\frac{I\,d\vec{\ell}\times\hat{s}}{s^{2}}"></div>
         </div>
         <div class="eq-block">
-          <div class="eq-sublabel">Infinite Straight Wire</div>
-          <div class="eq-row" id="eq-wire"></div>
+          <div class="eq-sublabel">Infinite straight wire</div>
+          <div class="eq-row sci-eq" id="eq-wire" data-tex="\vec{B}\;=\;\frac{\mu_0\,I}{2\pi\,r}\;\hat{\varphi}"></div>
         </div>
         <div class="eq-block">
-          <div class="eq-sublabel">Superposition · Green's Function</div>
-          <div class="eq-row" id="eq-super"></div>
+          <div class="eq-sublabel">Superposition, Green's function</div>
+          <div class="eq-row sci-eq" id="eq-super" data-tex="\vec{B}_{\text{total}}\;=\;\sum_i\frac{\mu_0\,I_i}{2\pi\,r_i}\;\hat{\varphi}_i"></div>
         </div>
       </div>
     </section>
@@ -153,9 +153,8 @@
   <span id="st-probe">probe: --</span>
 </div>
 
-<!-- KaTeX equation-panel renderer; must run after the KaTeX CDN script. -->
-<!-- KaTeX -->
-<script src="katex.js"></script>
+<!-- Equation panel renderer (MathJax SVG through lib/sci-math.js). -->
+<script type="module" src="equations.js"></script>
 
 <!-- Main simulation: builds the canvas scene and drives the render loop. -->
 <script src="../../lib/glow-lines.js"></script>
