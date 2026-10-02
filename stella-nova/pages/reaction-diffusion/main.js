@@ -33,6 +33,7 @@
      grep -n 'function bindPointer'     painting and dock taps
      grep -n 'function bindKeys'        keyboard shortcuts
      grep -n 'function setOpen'         the panel, the phone sheet, the dock
+     grep -n 'window.snSaver'           the shell screensaver hook
    ========================================================================== */
 import { renderEquations, renderTeX, fitEquations, GENERAL } from './equations.js';
 
@@ -248,8 +249,10 @@ async function selectPreset(i) {
   $('spf').max = Math.max(100, S.spf * 4); $('spf').value = S.spf; $('spf').dispatchEvent(new Event('input'));
   markBrowser();
   const id = encodeURIComponent(p.id);
-  if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
-  lsSet(LS_KEY, p.id);
+  if (!S.saver) {           // the screensaver writes no hash and no storage
+    if (location.hash.slice(1) !== id) history.replaceState(null, '', '#' + id);
+    lsSet(LS_KEY, p.id);
+  }
   document.title = `${p.name} — Reaction–Diffusion — Stella Nova`;
 
   // One engine call at a time, in order. A call for a preset that is no
@@ -803,5 +806,107 @@ function bindKeys() {
     else if (e.key === '/' ) { e.preventDefault(); openBrowser(true); $('search').focus(); }
   });
 }
+
+// -------------------------------------------------------------- screensaver
+// Shell screensaver hook (lib/screensaver.js). enter() waits for the boot
+// preset, hides the GUI and gives #gl the full window, so observeSize()
+// resizes the engine to it. A 2D canvas over #gl takes a copy of each frame
+// and is the canvas to record: it can fade to black across a preset change,
+// which the WebGPU pass cannot. A grid that does not wrap is zoomed to
+// cover the window. The autopilot plays a list of moving
+// presets, from opts.seed, three to four per dwell. calm 1 runs 0.4 times
+// the steps per frame of each preset.
+const SAVER_IDS = ['gs-waves', 'gs-u-skate', 'gs-mitosis', 'gs-self-replicating', 'cgl-waves', 'ks-chaos',
+  'oregonator', 'rm-predator-prey', 'kobayashi-crystal', 'gs-coral'];
+// The label plate takes plain text, so each family has its equations in
+// Unicode here (the panel shows the KaTeX strings from presets.json). The
+// two chemicals a, b show as u, v. SAVER_SYM gives the plate name of each
+// parameter; a parameter with no entry shows with its own name.
+const SAVER_EQ = {
+  'Gray–Scott': ['∂u/∂t = Dᵤ∇²u − uv² + F(1 − u)', '∂v/∂t = Dᵥ∇²v + uv² − (F + k)v'],
+  'Ginzburg–Landau': ['∂u/∂t = Dᵤ∇²u + αu − γv + (−βu + δv)(u² + v²)', '∂v/∂t = Dᵥ∇²v + αv + γu + (−βv − δu)(u² + v²)',
+    'A = u + iv'],
+  'Kuramoto–Sivashinsky': ['∂u/∂t = w₄∇⁴u + w₂∇²u + c|∇u|² + s·u'],
+  'Oregonator': ['∂u/∂t = Dᵤ∇²u + (1/ε)(u − u² − f·v·(u − q)/(u + q))', '∂v/∂t = Dᵥ∇²v + u − v'],
+  'Rosenzweig–MacArthur': ['∂u/∂t = Dᵤ∇²u + u(1 − u) − uv/(u + h)', '∂v/∂t = Dᵥ∇²v + k·uv/(u + h) − m·v'],
+  'Phase field': ['τ ∂φ/∂t = ∇·(ε²∇φ) − ∂ₓ(εε′∂ᵧφ) + ∂ᵧ(εε′∂ₓφ) + φ(1 − φ)(φ − ½ + m)',
+    '∂T/∂t = ∇²T + K ∂φ/∂t', 'ε = ε̄(1 + δ cos j(θ + θ₀)),  m = (α/π) atan(γ(Tₑ − T))'],
+};
+const SAVER_SYM = {
+  D_a: 'Dᵤ', D_b: 'Dᵥ', alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', tau: 'τ', epsbar: 'ε̄',
+  anisotropy: 'j', rotate: 'θ₀', teq: 'Tₑ', stabilize: 's', gms_weight: 'c', lapweight: 'w₂', bilapweight: 'w₄',
+};
+// The values on the plate are the live ones: the slider of each parameter
+// in #params, in the order of p.params (buildParams makes one row each).
+function saverLabel(label) {
+  const p = S.preset;
+  if (!label || !p) return;
+  const inps = [...$('params').querySelectorAll('.prm input[type=range]')];
+  const vals = (p.params || []).map((q, i) => {
+    let nm = SAVER_SYM[q.name] || q.name;
+    if (p.family === 'Gray–Scott' && q.name === 'K') nm = 'k';
+    if (p.family === 'Phase field' && q.name === 'k') nm = 'K';
+    if (p.family === 'Phase field' && q.name === 'dy') return '';
+    const v = inps[i] ? +inps[i].value : q.value;
+    return `${nm} = ${fmt(v, q.step)}`;
+  }).filter(Boolean);
+  const lines = [];
+  for (let i = 0; i < vals.length; i += 3) lines.push(vals.slice(i, i + 3).join(' · '));
+  lines.push(`${p.width || 256} × ${p.height || p.width || 256} grid${p.wrap !== false ? ', wrapped' : ''}`);
+  label({ title: p.name, sub: `${p.family} reaction–diffusion`, eq: SAVER_EQ[p.family] || [], lines });
+}
+window.snSaver = {
+  async enter(opts) {
+    const calm = Math.max(0, Math.min(1, +opts.calm || 0)), slow = 1 - 0.6 * calm;
+    while (S.idx < 0 || S.busy) await new Promise(r => setTimeout(r, 50));
+    S.saver = true;
+    const st = document.createElement('style');
+    st.textContent = 'html.saver #panel,html.saver #gear,html.saver #toast,html.saver #cursor,html.saver #axes,html.saver #dock,html.saver #status,'
+      + 'html.saver #browser,html.saver #fail,html.saver .topbar{display:none!important}'
+      + 'html.saver #gl{left:0!important;width:100%!important;transition:none!important}'
+      + 'html.saver #saver-cv{position:fixed;inset:0;width:100%;height:100%;z-index:30;cursor:none;background:#000}';
+    document.head.appendChild(st); document.documentElement.classList.add('saver');
+    const gl = $('gl');
+    if (!S.engine) return { canvas: gl, warmupMs: 0 };
+    const cv = document.createElement('canvas'); cv.id = 'saver-cv'; document.body.appendChild(cv);
+    const c2 = cv.getContext('2d', { alpha: false });
+    const list = SAVER_IDS.map(id => S.presets.findIndex(p => p.id === id)).filter(i => i >= 0);
+    const hold = Math.max(15, (+opts.seconds || 60) / 4), FADE = 1.0;
+    let k = (opts.seed >>> 0) % list.length, t = 0, last = 0, loading = true;
+    const show = async () => {
+      loading = true;
+      await selectPreset(list[k]);
+      S.spf = Math.max(1, Math.round((S.preset.speed || 10) * slow * (ONE.includes(S.preset.id) ? 0.5 : 1)));
+      S.playing = true; t = 0; loading = false;
+      cover();
+      saverLabel(opts.label);
+    };
+    // A wrapped grid repeats to fill the window. Any other grid is zoomed to
+    // cover the window, so no letterbox shows. The crystal grows from one
+    // seed to fill its grid: it shows once, whole, on black, at half the
+    // steps, so the growth takes the full dwell.
+    const ONE = ['kobayashi-crystal'];
+    const cover = () => {
+      const p = S.preset, sx = gl.width / (p.width || 256), sy = gl.height / (p.height || p.width || 256);
+      if (ONE.includes(p.id)) { S.engine.setView({ zoom: 1, tile: false }); return; }
+      S.engine.setView({ zoom: p.wrap !== false ? 1 : Math.max(sx, sy) / Math.min(sx, sy), tile: null });
+    };
+    show();
+    (function drive(now) {
+      requestAnimationFrame(drive);
+      const dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
+      if (loading || S.busy) return;      // hold the black frame while a preset compiles
+      t += dt;
+      if (t > hold) { k = (k + 1) % list.length; show(); return; }
+      if (cv.width !== gl.width || cv.height !== gl.height) { cv.width = gl.width; cv.height = gl.height; cover(); }
+      if (S.failed) return;
+      try { S.engine.render(); } catch (e) { return; }
+      c2.drawImage(gl, 0, 0);
+      const f = Math.max(0, 1 - t / FADE, 1 - (hold - t) / FADE);
+      if (f > 0) { c2.fillStyle = `rgba(0,0,0,${Math.min(1, f)})`; c2.fillRect(0, 0, cv.width, cv.height); }
+    })(0);
+    return { canvas: cv, warmupMs: 2000 };
+  },
+};
 
 boot();
