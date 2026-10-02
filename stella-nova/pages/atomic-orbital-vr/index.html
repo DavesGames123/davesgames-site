@@ -4,28 +4,29 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Atomic Orbital // Stella Nova · Redesigned</title>
+<title>Atomic orbital · Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    ATOMIC ORBITAL VR  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. main.js draws the hydrogenic orbital as a particle cloud
-   into <canvas id="c">; katex.js typesets the governing equations. This file
+   into <canvas id="c">; equations.js typesets the governing equations. This file
    lays out the two control panels, the equations panel, the state readout, and
    the AR entry button that main.js binds to by id.
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts        Google Fonts stylesheet (absolute)
-     2. KaTeX        math css then the katex.min.js bundle (both absolute)
-     3. importmap    maps the bare specifier "three" to the CDN; MUST stay
+     1. importmap    maps the bare specifier "three" to the CDN; MUST stay
                      inline (an import map cannot be an external file)
-     4. style.css    the page stylesheet
-     5. katex.js     classic script; renders equations once KaTeX is ready
-     6. main.js      type=module; builds the scene and resolves "three"
+     2. style.css    the page stylesheet
+     3. sci.css      ../../lib; shared science type (STIX Two Text, Inter)
+                     and the math colors .m1 to .m6. It loads the fonts.
+     4. equations.js type=module; typesets the [data-tex] boxes and the
+                     [data-sym] labels as MathJax SVG (lib/sci-math.js)
+     5. main.js      type=module; builds the scene and resolves "three"
 
    LAYOUT  (the leading hash marks an element id)
      ┌─────────────────────────────────────────────────────────────────┐
-     │ topbar: "Stella Nova · Atomic Orbital Viewer"  (hidden in frame)  │
+     │ topbar: "Atomic orbital viewer · Quantum mechanics" (no frame)    │
      ├────────────┬───────────────────────────────────┬────────────────┤
      │ #quick     │                                    │ #adv-panel     │
      │  panel     │        <canvas id=c> particles     │  (slides in    │
@@ -42,9 +43,6 @@
      hands stay visible. #ar-hint and #ar-status give placement guidance.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script type="importmap">
 {
   "imports": {
@@ -54,19 +52,19 @@
 }
 </script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
      this page's own topbar. Inline so it runs before paint, with no topbar flash. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
-<div class="grid-bg"></div>
 <!-- The WebGL surface. main.js takes this canvas by id and renders the cloud. -->
 <canvas id="c"></canvas>
 
 <div id="ui">
   <div class="topbar">
-    <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Atomic Orbital Viewer</span></div>
-    <div class="topbar-r">SYS // <strong>QUANTUM MECHANICS</strong></div>
+    <div class="topbar-l"><span class="sys-name">Atomic orbital viewer</span></div>
+    <div class="topbar-r">Quantum mechanics</div>
   </div>
 
   <!-- ═══ QUICK PANEL — primary controls, redesigned ═══ -->
@@ -91,10 +89,10 @@
 
       <!-- ═══ Quantum Numbers ═══ -->
       <div class="qp-section">
-        <div class="qp-sec-lbl">Quantum Numbers</div>
+        <div class="qp-sec-lbl">Quantum numbers</div>
         <div class="qp-qns">
           <div class="qp-qn">
-            <span class="qp-qn-sym">n</span>
+            <span class="qp-qn-sym" title="Principal quantum number"><span class="sci-sym m1" data-sym="n">n</span><small>principal</small></span>
             <div class="qp-stepper">
               <button class="qp-step" data-qn="n" data-dir="-1">−</button>
               <span class="qp-qn-val" id="qp-n">3</span>
@@ -102,7 +100,7 @@
             </div>
           </div>
           <div class="qp-qn">
-            <span class="qp-qn-sym">ℓ</span>
+            <span class="qp-qn-sym" title="Angular momentum quantum number"><span class="sci-sym m2" data-sym="\ell">ℓ</span><small>angular</small></span>
             <div class="qp-stepper">
               <button class="qp-step" data-qn="l" data-dir="-1">−</button>
               <span class="qp-qn-val" id="qp-l">1</span>
@@ -110,7 +108,7 @@
             </div>
           </div>
           <div class="qp-qn">
-            <span class="qp-qn-sym">m</span>
+            <span class="qp-qn-sym" title="Magnetic quantum number"><span class="sci-sym m3" data-sym="m">m</span><small>magnetic</small></span>
             <div class="qp-stepper">
               <button class="qp-step" data-qn="m" data-dir="-1">−</button>
               <span class="qp-qn-val" id="qp-m">+1</span>
@@ -145,14 +143,14 @@
       <div class="qp-section">
         <div class="qp-sec-lbl">Effects</div>
         <div class="qp-togs">
-          <button class="qp-tog on"  id="qp-tog-anim">▶ Animate Phase Flow</button>
-          <button class="qp-tog on"  id="qp-tog-b">⊕ Magnetic Field</button>
+          <button class="qp-tog on"  id="qp-tog-anim">Animate phase flow</button>
+          <button class="qp-tog on"  id="qp-tog-b">Magnetic field</button>
         </div>
       </div>
 
       <!-- ═══ Advanced button ═══ -->
       <div class="qp-footer">
-        <button class="qp-adv-btn" id="qp-adv-btn" onclick="toggleAdv()">⚙ Advanced Settings</button>
+        <button class="qp-adv-btn" id="qp-adv-btn" onclick="toggleAdv()">Advanced settings</button>
       </div>
     </div>
   </div>
@@ -160,9 +158,7 @@
   <!-- ═══ ADVANCED PANEL — fine-tuning only (no duplicate N/L/M) ═══ -->
   <div id="adv-panel">
     <div class="adv-head">
-      <span class="adv-badge">ADV</span>
-      <span class="adv-title">Fine Tuning</span>
-      <span class="adv-live">Live</span>
+      <span class="adv-title">Fine tuning</span>
       <button class="adv-close" onclick="toggleAdv()">✕</button>
     </div>
     <div class="adv-body">
@@ -176,16 +172,16 @@
         <span id="vl-n">3</span><span id="vl-l">1</span><span id="vl-m">+1</span>
       </div>
 
-      <div class="sec-label">Particle Appearance</div>
+      <div class="sec-label">Particle appearance</div>
       <div class="row"><span class="row-lbl">Count</span><input type="range" id="sl-N" min="3000" max="300000" value="100000" step="1000"><span class="val" id="vl-N">100k</span></div>
       <div class="row"><span class="row-lbl">Size</span><input type="range" id="sl-sz" min="0.005" max="0.25" value="0.02" step="0.005"><span class="val" id="vl-sz">0.020</span></div>
       <div class="row"><span class="row-lbl">Scale</span><input type="range" id="sl-ls" min="50" max="3000" value="800" step="25"><span class="val" id="vl-ls">800</span></div>
 
-      <div class="sec-label">Time Evolution</div>
+      <div class="sec-label">Time evolution</div>
       <div class="tog-row"><span class="tog-lbl">Evolve phase</span><label class="tog"><input type="checkbox" id="cb-ev" checked><span class="tog-track"></span></label></div>
       <div class="row"><span class="row-lbl">Speed</span><input type="range" id="sl-sp" min="0.0" max="5.0" value="1.0" step="0.1"><span class="val" id="vl-sp">1.0</span></div>
 
-      <div class="sec-label">Probability Flow</div>
+      <div class="sec-label">Probability flow</div>
       <div class="tog-row"><span class="tog-lbl">Animate particles</span><label class="tog"><input type="checkbox" id="cb-flow-anim" checked><span class="tog-track"></span></label></div>
       <div class="tog-row"><span class="tog-lbl">Flow tracers</span><label class="tog"><input type="checkbox" id="cb-flow-tr"><span class="tog-track"></span></label></div>
       <div class="row"><span class="row-lbl">Speed</span><input type="range" id="sl-fspd" min="0.0" max="3.0" value="0.5" step="0.05"><span class="val" id="vl-fspd">0.50</span></div>
@@ -194,11 +190,10 @@
         <div class="row"><span class="row-lbl">Trail</span><input type="range" id="sl-ftr-tl" min="5" max="80" value="30" step="1"><span class="val" id="vl-ftr-tl">30</span></div>
       </div>
 
-      <div class="sec-label">Magnetic Field</div>
+      <div class="sec-label">Magnetic field</div>
       <button class="big-toggle" id="btn-bfield-toggle">
-        <span class="big-toggle-icon">■</span>
-        <span class="big-toggle-label">B Arrows</span>
-        <span class="big-toggle-state" id="bfield-state-lbl">ON</span>
+        <span class="big-toggle-label"><span class="sci-sym m4" data-sym="\vec{B}">B</span> arrows</span>
+        <span class="big-toggle-state" id="bfield-state-lbl">On</span>
       </button>
       <div id="bfield-opts" style="display:block">
         <div class="sec-label" style="margin-top:14px">Resolution</div>
@@ -211,15 +206,14 @@
         <div class="row"><span class="row-lbl">Extent</span><input type="range" id="sl-bgext" min="5" max="120" value="40" step="1"><span class="val" id="vl-bgext">40</span></div>
         <div class="row"><span class="row-lbl">Scale</span><input type="range" id="sl-basc" min="0.1" max="5" value="0.1" step="0.1"><span class="val" id="vl-basc">0.1</span></div>
         <div class="row"><span class="row-lbl">Gamma</span><input type="range" id="sl-bgam" min="0.2" max="4" value="1.0" step="0.1"><span class="val" id="vl-bgam">1.0</span></div>
-        <div class="row"><span class="row-lbl">Upd/fr</span><input type="range" id="sl-buev" min="10" max="180" value="10" step="10"><span class="val" id="vl-buev">10</span></div>
+        <div class="row"><span class="row-lbl">Update</span><input type="range" id="sl-buev" min="10" max="180" value="10" step="10"><span class="val" id="vl-buev">10</span></div>
         <div class="btn-row">
-          <button class="panel-btn" id="btn-brecompute">Recompute B</button>
+          <button class="panel-btn" id="btn-brecompute">Recompute field</button>
           <span class="status-txt ready" id="bstatus">ready</span>
         </div>
         <button class="big-toggle" id="btn-btr-toggle" style="margin-top:10px">
-          <span class="big-toggle-icon">⇌</span>
-          <span class="big-toggle-label">B Tracers</span>
-          <span class="big-toggle-state" id="btr-state-lbl">ON</span>
+          <span class="big-toggle-label"><span class="sci-sym m4" data-sym="\vec{B}">B</span> tracers</span>
+          <span class="big-toggle-state" id="btr-state-lbl">On</span>
         </button>
         <div id="btr-opts" style="display:block">
           <div class="row"><span class="row-lbl">Speed</span><input type="range" id="sl-bspd" min="0.1" max="20" value="1.0" step="0.1"><span class="val" id="vl-bspd">1.0</span></div>
@@ -228,7 +222,7 @@
         </div>
       </div>
 
-      <div class="sec-label">Cross-Section</div>
+      <div class="sec-label">Cross-section</div>
       <div class="view-row">
         <button class="view-btn active" data-view="0">Full</button>
         <button class="view-btn" data-view="1">Cross</button>
@@ -248,26 +242,26 @@
       <div class="tog-row"><span class="tog-lbl">Axes</span><label class="tog"><input type="checkbox" id="cb-axes"><span class="tog-track"></span></label></div>
 
       <div class="info-bar" id="info-bar">n=3 l=1 m=+1 · 8000 pts</div>
-      <div id="xr-perf-badge">⚡ XR mode — reduced quality</div>
+      <div id="xr-perf-badge">XR mode: reduced quality</div>
     </div>
   </div>
 
-  <!-- Governing-equations panel. katex.js fills #eq-schrod / #eq-wavefn /
-       #eq-biot; the collapse button toggles .collapsed on this section. -->
+  <!-- Governing-equations panel. Each row holds its TeX in data-tex;
+       equations.js typesets it and wires the collapse button, which toggles
+       .collapsed on this section. -->
   <section class="eq-panel" id="eq-panel">
     <button class="eq-collapse" id="eq-collapse-btn" title="Collapse equations">▲</button>
     <div class="eq-head">
-      <span class="dot"></span>
-      <span class="lbl">Governing Equations</span>
+      <span class="lbl">Governing equations</span>
     </div>
     <div class="eq-block">
-      <div class="eq-sublabel">Schrödinger · Hydrogenic Eigenstate</div>
-      <div class="eq-row" id="eq-schrod"></div>
-      <div class="eq-row" id="eq-wavefn"></div>
+      <div class="eq-sublabel">Schrödinger equation: hydrogenic eigenstate</div>
+      <div class="eq-row sci-eq" id="eq-schrod" data-tex="\hat{H}\,\psi_{n,\ell,m} \;=\; E_{n}\,\psi_{n,\ell,m}"></div>
+      <div class="eq-row sci-eq" id="eq-wavefn" data-tex="\psi_{n,\ell,m}(r,\theta,\varphi) \;=\; R_{n,\ell}(r)\,Y_{\ell}^{m}(\theta,\varphi)"></div>
     </div>
     <div class="eq-block">
-      <div class="eq-sublabel">Magnetic Field · Discrete Biot–Savart</div>
-      <div class="eq-row" id="eq-biot"></div>
+      <div class="eq-sublabel">Magnetic field: discrete Biot–Savart sum</div>
+      <div class="eq-row sci-eq" id="eq-biot" data-tex="\vec{B}(\vec{r}) \;=\; \frac{\mu_0}{4\pi}\sum_{i} \frac{\vec{J}_i \times (\vec{r}-\vec{r}_i)}{|\vec{r}-\vec{r}_i|^{3}}"></div>
     </div>
   </section>
 
@@ -278,7 +272,7 @@
     <div class="ket-sub"  id="orb-disp">3p orbital</div>
   </div>
   <!-- Shown while the chunked particle streamer fills the cloud. -->
-  <div id="loading">Generating···</div>
+  <div id="loading">Generating…</div>
   <!-- AR entry. main.js enables this once immersive-ar support is confirmed. -->
   <div id="vr-wrap"><button id="ar-btn" class="vr-btn-el">Enter AR</button></div>
   <div id="ar-hint">
@@ -290,9 +284,8 @@
   <div id="ar-status" class="ar-status-msg" style="display:none"></div>
 </div>
 
-<!-- Equations first (classic script, needs the DOM above it), then the module. -->
-<script src="katex.js"></script>
-
+<!-- equations.js typesets the math; main.js builds the scene. Both are modules. -->
+<script type="module" src="equations.js"></script>
 <script type="module" src="main.js"></script>
 
 </body>

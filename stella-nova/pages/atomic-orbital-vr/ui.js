@@ -64,7 +64,7 @@ function toggleAdv(){
   const b=document.getElementById('qp-adv-btn');
   const open=p.classList.toggle('adv-open');
   b.classList.toggle('adv-open-active',open);
-  b.textContent=open?'✕ Close Adv':'⚙ Advanced';
+  b.textContent=open?'Close advanced settings':'Advanced settings';
 }
 function toggleQPCollapse(){
   document.getElementById('quick-panel').classList.toggle('qp-collapsed');
@@ -139,7 +139,7 @@ export function setAnimate(on){
   document.getElementById('cb-flow-anim').checked=on;
   const tb=document.getElementById('qp-tog-anim');
   tb.classList.toggle('on',on); tb.classList.toggle('off',!on);
-  tb.textContent=on?'▶ Animate':'▐▐ Paused';
+  tb.textContent=on?'Animate phase flow':'Phase flow paused';
   const ib=document.getElementById('qp-icon-anim');
   if(ib){ib.classList.toggle('on',on);ib.classList.toggle('off',!on);}
 }
@@ -155,13 +155,13 @@ export function setMagField(on){
   const tb=document.getElementById('btn-btr-toggle');
   const tl=document.getElementById('btr-state-lbl');
   if(bb){bb.classList.toggle('active',on);bb.classList.toggle('off',!on);}
-  if(bl) bl.textContent=on?'ON':'OFF';
+  if(bl) bl.textContent=on?'On':'Off';
   if(tb){tb.classList.toggle('active',on);tb.classList.toggle('off',!on);}
-  if(tl) tl.textContent=on?'ON':'OFF';
+  if(tl) tl.textContent=on?'On':'Off';
   document.getElementById('bfield-opts').style.display=on?'block':'none';
   const qb=document.getElementById('qp-tog-b');
   qb.classList.toggle('on',on); qb.classList.toggle('off',!on);
-  qb.textContent=on?'⊕ B Field':'⊗ B Field';
+  qb.textContent=on?'Magnetic field':'Magnetic field off';
   const ib=document.getElementById('qp-icon-b');
   if(ib){ib.classList.toggle('on',on);ib.classList.toggle('off',!on);}
   if(!on){bArrowShaft.visible=false;btLines.visible=false;RT.bTracers=[];}
@@ -215,7 +215,7 @@ export function initUI(){
     const lbl=document.getElementById('btr-state-lbl');
     function sync(){
       btn.classList.toggle('active',S.showBTr);btn.classList.toggle('off',!S.showBTr);
-      lbl.textContent=S.showBTr?'ON':'OFF';
+      lbl.textContent=S.showBTr?'On':'Off';
       document.getElementById('btr-opts').style.display=S.showBTr?'block':'none';
       if(!S.showBTr){btLines.visible=false;RT.bTracers=[];}
     }

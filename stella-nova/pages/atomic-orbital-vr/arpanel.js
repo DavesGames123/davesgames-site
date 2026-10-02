@@ -115,12 +115,6 @@ function drawARPanel(){
   ctx.strokeStyle='rgba(150,200,255,0.28)';ctx.lineWidth=2;
   _rrect(ctx,1,1,W-2,H-2,20); ctx.stroke();
 
-  // Top accent gradient
-  const gr=ctx.createLinearGradient(0,0,W,0);
-  gr.addColorStop(0,'rgba(150,200,255,0)');
-  gr.addColorStop(0.5,'rgba(150,200,255,0.55)');
-  gr.addColorStop(1,'rgba(150,200,255,0)');
-  ctx.fillStyle=gr; ctx.fillRect(0,0,W,3);
 
   const SUBS=['s','p','d','f','g','h'];
   const{n,l,m}=S; const ms=(m>=0?'+':'')+m;
@@ -128,10 +122,10 @@ function drawARPanel(){
 
   // Title
   ctx.textAlign='center';
-  ctx.font='italic 500 26px "Cormorant Garamond",serif';
+  ctx.font='500 26px "STIX Two Text",serif';
   ctx.fillStyle='rgba(150,200,255,0.55)';
   ctx.fillText(`${n}${SUBS[l]??'?'} orbital`,W/2,y+26); y+=28;
-  ctx.font='500 13px "JetBrains Mono",monospace';
+  ctx.font='500 15px "STIX Two Text",serif';
   ctx.fillStyle='rgba(150,200,255,0.28)';
   ctx.fillText(`|${n},${l},${ms}⟩`,W/2,y+16); y+=28;
 
@@ -144,12 +138,12 @@ function drawARPanel(){
     const RH=68, BW=68, BH=46;
     const cx=W/2, by=y+(RH-BH)/2;
     // Label
-    ctx.font='italic 700 32px "Cormorant Garamond",serif';
+    ctx.font='italic 500 32px "STIX Two Text",serif';
     ctx.fillStyle='rgba(150,200,255,0.6)';
     ctx.textAlign='left';
     ctx.fillText(sym,20,y+RH*0.72);
     // Value
-    ctx.font='bold 24px "JetBrains Mono",monospace';
+    ctx.font='bold 24px Inter,sans-serif';
     ctx.fillStyle='#e8ecf4';
     ctx.textAlign='center';
     ctx.fillText(String(val),cx,y+RH*0.72);
@@ -160,7 +154,7 @@ function drawARPanel(){
       _rrect(ctx,bx,by,BW,BH,9); ctx.fill();
       ctx.strokeStyle='rgba(150,200,255,0.22)';ctx.lineWidth=1.2;
       _rrect(ctx,bx,by,BW,BH,9); ctx.stroke();
-      ctx.font='bold 24px "JetBrains Mono",monospace';
+      ctx.font='bold 24px Inter,sans-serif';
       ctx.fillStyle='rgba(150,200,255,0.75)';
       ctx.textAlign='center';
       ctx.fillText(lbl,bx+BW/2,by+BH*0.75);
@@ -189,10 +183,10 @@ function drawARPanel(){
   _rrect(ctx,16,y,W-32,66,12); ctx.fill();
   ctx.strokeStyle=bOn?'rgba(150,200,255,0.45)':'rgba(255,80,80,0.35)';
   ctx.lineWidth=1.5; _rrect(ctx,16,y,W-32,66,12); ctx.stroke();
-  ctx.font='bold 18px "JetBrains Mono",monospace';
+  ctx.font='bold 18px Inter,sans-serif';
   ctx.fillStyle=bOn?'#96c8ff':'#e06060';
   ctx.textAlign='center';
-  ctx.fillText(bOn?'⊕  B FIELD  ON':'⊗  B FIELD  OFF',W/2,y+42);
+  ctx.fillText(bOn?'Magnetic field on':'Magnetic field off',W/2,y+42);
   ARP.buttons.push({u0:16/W,v0:y/H,u1:(W-16)/W,v1:(y+66)/H,
     action:()=>{
       const enabling=!S.showBField;
@@ -206,10 +200,10 @@ function drawARPanel(){
 
   // ── Color mode ──
   // Four visualization modes (|ψ|², Re, Im, phase), highlighting the active one.
-  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.font='500 13px Inter,sans-serif';
   ctx.fillStyle='rgba(150,200,255,0.3)';
   ctx.textAlign='left';
-  ctx.fillText('VISUALIZE',18,y+13); y+=20;
+  ctx.fillText('Visualize',18,y+13); y+=20;
   const modes=['|ψ|²','Re','Im','∠'];
   const mw=(W-36)/4-5;
   for(let i=0;i<4;i++){
@@ -218,7 +212,7 @@ function drawARPanel(){
     _rrect(ctx,bx,y,mw,50,8); ctx.fill();
     ctx.strokeStyle=act?'rgba(255,200,50,0.5)':'rgba(150,200,255,0.14)';
     ctx.lineWidth=1.2; _rrect(ctx,bx,y,mw,50,8); ctx.stroke();
-    ctx.font=(act?'bold ':'')+'15px "JetBrains Mono",monospace';
+    ctx.font=(act?'bold ':'')+'15px Inter,sans-serif';
     ctx.fillStyle=act?'#ffc832':'rgba(150,200,255,0.55)';
     ctx.textAlign='center';
     ctx.fillText(modes[i],bx+mw/2,y+33);
@@ -232,10 +226,10 @@ function drawARPanel(){
 
   // ── Particle count presets ──
   // Fixed count choices tuned for AR headroom; the match test allows ±500.
-  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.font='500 13px Inter,sans-serif';
   ctx.fillStyle='rgba(150,200,255,0.3)';
   ctx.textAlign='left';
-  ctx.fillText('PARTICLES',18,y+13); y+=20;
+  ctx.fillText('Particles',18,y+13); y+=20;
   const presets=[['5k',5000],['10k',10000],['25k',25000],['50k',50000]];
   const pw=(W-36)/4-5;
   for(let i=0;i<4;i++){
@@ -244,7 +238,7 @@ function drawARPanel(){
     _rrect(ctx,bx,y,pw,46,8); ctx.fill();
     ctx.strokeStyle=act?'rgba(150,200,255,0.45)':'rgba(150,200,255,0.12)';
     ctx.lineWidth=1.2; _rrect(ctx,bx,y,pw,46,8); ctx.stroke();
-    ctx.font=(act?'bold ':'')+'14px "JetBrains Mono",monospace';
+    ctx.font=(act?'bold ':'')+'14px Inter,sans-serif';
     ctx.fillStyle=act?'#96c8ff':'rgba(150,200,255,0.5)';
     ctx.textAlign='center';
     ctx.fillText(presets[i][0],bx+pw/2,y+30);
@@ -259,10 +253,10 @@ function drawARPanel(){
   // ── Background opacity ──
   // Dim the AR passthrough behind the cloud: Pass keeps it fully see-through, VR
   // paints it solid black. Level feeds the camera-tracking bgDim plane.
-  ctx.font='11px "JetBrains Mono",monospace';
+  ctx.font='500 13px Inter,sans-serif';
   ctx.fillStyle='rgba(150,200,255,0.3)';
   ctx.textAlign='left';
-  ctx.fillText('BACKGROUND',18,y+13); y+=20;
+  ctx.fillText('Background',18,y+13); y+=20;
   const bgLevels=[[0,'Pass'],[0.25,'25%'],[0.5,'50%'],[0.75,'75%'],[1,'VR']];
   const bw=(W-36)/5-4;
   for(let i=0;i<5;i++){
@@ -272,7 +266,7 @@ function drawARPanel(){
     _rrect(ctx,bx,y,bw,46,7); ctx.fill();
     ctx.strokeStyle=act?(i===4?'rgba(255,200,50,0.5)':'rgba(150,200,255,0.45)'):'rgba(150,200,255,0.12)';
     ctx.lineWidth=1.2; _rrect(ctx,bx,y,bw,46,7); ctx.stroke();
-    ctx.font=(act?'bold ':'')+'13px "JetBrains Mono",monospace';
+    ctx.font=(act?'bold ':'')+'13px Inter,sans-serif';
     ctx.fillStyle=act?(i===4?'#ffc832':'#96c8ff'):'rgba(150,200,255,0.5)';
     ctx.textAlign='center';
     ctx.fillText(bgLevels[i][1],bx+bw/2,y+30);
