@@ -1289,7 +1289,8 @@ setTimeout(()=>{
 // black (saverOverlay). Each scene sends opts.label its field equation and its
 // live parameters. opts.calm (1 = slowest) scales every rate.
 //
-//   grep -n targets: "const SAVER_SCENES", "function saverStep",
+//   grep -n targets: "const SAVER_SCENES", "const SV_PLATE", "function saverPlate",
+//   "function svAnchor", "function saverStep",
 //   "function saverScene", "function renderFilings", "window.snSaver"
 let saverOn=false;
 const SV={opts:null,order:[],k:0,t:0,dwell:20,slow:1,scene:null,st:null,fade:1,cx:0,cy:0,R:200};
@@ -1408,6 +1409,57 @@ const SAVER_SCENES=[
       lines:['the bar '+Math.round(st.d)+' px above the gap turns ±34°','the horseshoe rocks ±29°']}) },
 ];
 
+// The plate fields for each scene: live parameters (TeX symbol, short name,
+// value), at most two notes, and TeX equations. The colours are RULES of
+// equations.js: B m1, m m3. saverPlate() merges them into the scene's label;
+// the plain eq of the scene stays as the fallback.
+const SV_RULES=[['\\vec{B}','m1'],['\\vec{E}','m2'],['\\vec{J}','m5'],['\\vec{m}','m3']];
+const DIPOLE_TEX=String.raw`\vec{B}(\vec{r})=\frac{\mu_0}{4\pi}\,\frac{3(\vec{m}\cdot\hat{r})\,\hat{r}-\vec{m}}{r^3}`;
+const SUM_TEX=String.raw`\vec{B}=\sum_i\frac{\mu_0}{4\pi}\,\frac{3(\vec{m}_i\cdot\hat{r}_i)\,\hat{r}_i-\vec{m}_i}{r_i^3}`;
+const DIV_TEX=String.raw`\nabla\cdot\vec{B}=0`;
+const svW=w=>({sym:'\\omega',name:'turn rate',value:om(w)+' rad/s'});
+const svGap=()=>({sym:'d',name:'gap',value:Math.round(Math.hypot(magnets[1].x-magnets[0].x,magnets[1].y-magnets[0].y))+' px'});
+const SV_PLATE={
+  dipole:st=>({params:[{sym:'\\vec{m}',name:'axis angle',value:((deg(magnets[0].angle)%360+360)%360)+'°',cls:'m3'},svW(st.w)],
+    tex:[DIPOLE_TEX,String.raw`|\vec{B}|\propto 1/r^3\ \text{far from the magnet}`,DIV_TEX]}),
+  attract:st=>({params:[svGap(),svW(st.w)],notes:['The field lines run across the gap.'],
+    tex:[String.raw`F=\frac{3\mu_0\,m_1m_2}{2\pi d^4}`,String.raw`U=-\vec{m}\cdot\vec{B},\qquad \vec{F}=\nabla(\vec{m}\cdot\vec{B})`,DIPOLE_TEX]}),
+  repel:st=>({params:[svGap(),svW(st.w)],notes:['The lines turn away from the gap.'],
+    tex:[String.raw`F=\frac{3\mu_0\,m_1m_2}{2\pi d^4}\ \text{(apart)}`,String.raw`\vec{B}=0\ \text{at the null point}`,DIPOLE_TEX]}),
+  quad:st=>({params:[{sym:'r',name:'bore radius',value:Math.round(st.r)+' px'},svW(st.w)],notes:['Lenses like this focus beams in accelerators.'],
+    tex:[String.raw`B_x=G\,y,\qquad B_y=G\,x`,String.raw`|\vec{B}|=G\,r\ \text{(zero on the axis)}`,DIV_TEX]}),
+  'halbach-ring':st=>({params:[{sym:'k',name:'pattern',value:String(st.k)},{sym:'n',name:'dipoles',value:String(st.n)},{sym:'r',name:'ring radius',value:Math.round(st.r)+' px'},svW(st.w)],
+    notes:[st.k===2?'k = 2: near-uniform field in the bore.':st.k===3?'k = 3: a quadrupole, zero at the centre.':'k = −2: the flux goes outside the ring.'],
+    tex:[String.raw`\hat{m}(\theta)=(\cos k\theta,\ \sin k\theta)`,String.raw`|\vec{B}|_{\text{bore}}\propto r^{\,k-2}`,SUM_TEX]}),
+  'halbach-line':st=>({params:[{sym:'n',name:'dipoles',value:String(st.n)},{sym:'\\lambda',name:'period',value:Math.round(st.gap*4)+' px'}],notes:['Strong face below, weak face above.'],
+    tex:[String.raw`\hat{m}(x)=(\cos kx,\ \sin kx),\qquad k=2\pi/\lambda`,String.raw`|\vec{B}|\propto e^{-k|y|}\ \text{on the strong face}`,SUM_TEX]}),
+  orbit:st=>({params:[{sym:'R',name:'orbit radius',value:Math.round(st.R)+' px'},svW(st.w),{sym:'T',name:'period',value:fx(2*Math.PI/(st.w*SV.slow),1)+' s'}],notes:['The disc moment stays along the orbit.'],
+    tex:[String.raw`|\vec{B}|=\mu_0 nI\ \text{(inside a long solenoid)}`,String.raw`x=R\cos\omega t,\qquad y=R\sin\omega t`,DIPOLE_TEX]}),
+  lattice:st=>({params:[{sym:'N',name:'grid',value:st.nx+' × '+st.ny},{sym:'a',name:'spacing',value:Math.round(st.sp)+' px'},
+      {sym:'\\omega_i',name:'turn rates',value:om(Math.min(...st.w.map(Math.abs)))+' to '+om(Math.max(...st.w.map(Math.abs)))+' rad/s'}],notes:['Neighbours turn in opposite directions.'],
+    tex:[SUM_TEX,String.raw`\theta_i(t)=\theta_{i0}+\omega_i t`]}),
+  horseshoe:st=>({params:[{sym:'d',name:'bar above the gap',value:Math.round(st.d)+' px'},{sym:'\\vec{m}',name:'bar angle',value:deg(magnets[1].angle)+'°',cls:'m3'}],notes:['The horseshoe rocks ±29°, the bar turns ±34°.'],
+    tex:[SUM_TEX,String.raw`\nabla\cdot\vec{B}=0:\ \text{each line from N returns to S}`]}),
+};
+// The magnets on screen, for the plate leader. CAM is at zoom 1 and no
+// offset in the saver, so a magnet's x, y are canvas CSS px. The radius holds
+// every magnet centre plus its half diagonal; the key points are the centres.
+function svAnchor(){
+  if(!saverOn||!magnets.length) return null;
+  const b=canvas.getBoundingClientRect(); let cx=0,cy=0;
+  for(const m of magnets){ cx+=m.x; cy+=m.y; } cx/=magnets.length; cy/=magnets.length;
+  let r=0; const pts=magnets.map(m=>{ r=Math.max(r,Math.hypot(m.x-cx,m.y-cy)+Math.hypot(m.w||20,m.h||20)/2); return {x:b.left+m.x,y:b.top+m.y}; });
+  return {x:b.left+cx,y:b.top+cy,r,pts:pts.slice(0,8)};
+}
+// The full plate for the current scene: the scene label, its plate fields
+// and the view name as the last note.
+function saverPlate(){
+  const sc=SV.scene, st=SV.st; if(!sc||!st) return null;
+  const L=sc.label(st), P=SV_PLATE[sc.id]?SV_PLATE[sc.id](st):{};
+  return {title:L.title,sub:L.sub.charAt(0).toUpperCase()+L.sub.slice(1),params:P.params,lines:(P.notes||[]).concat(['View: '+st.view.name+'.']),
+    tex:P.tex,rules:SV_RULES,eq:L.eq,anchor:svAnchor};
+}
+
 // Seeded random 0..1 (mulberry32), so a seed gives the same tour.
 function svRand(seed){ let a=seed>>>0; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^t>>>15,t|1);
   t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; }; }
@@ -1426,15 +1478,19 @@ function saverScene(k){
   SIM.tracerCount=v.tr?tracerBudget():0;
   CAM.x=0; CAM.y=0; CAM.zoom=1;
   spawnTracers(); seedFilings();
-  const L=sc.label(st); L.lines=(L.lines||[]).concat(['view: '+v.name]);
-  if(SV.opts && SV.opts.label) SV.opts.label(L);
+  SV.plateT=0; SV.plateJ='';
+  if(SV.opts && SV.opts.label) svSendPlate();
 }
+// Send the plate when it changed. saverStep() calls it once a second, so the
+// live values (angles, gaps) stay current.
+function svSendPlate(){ const L=saverPlate(); if(!L) return; const j=JSON.stringify(L); if(j!==SV.plateJ){ SV.plateJ=j; SV.opts.label(L); } }
 
 // Per frame, before integrateMagnets(): move the scene, and fade through
 // black around a scene change. SV.fade is the black cover, 0..1.
 function saverStep(dt){
   SV.t+=dt;
   if(SV.st) SV.scene.step(SV.st,SV.t*SV.slow);
+  if(SV.opts && SV.opts.label && SV.t-(SV.plateT||0)>=1){ SV.plateT=SV.t; svSendPlate(); }
   const left=SV.dwell-SV.t;
   if(left<=0){ saverScene(SV.k+1); SV.fade=1; return; }
   SV.fade=Math.max(0,Math.min(1,Math.max(1-SV.t/FADE_S,1-left/FADE_S)));
