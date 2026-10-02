@@ -11,14 +11,18 @@
 //        <repo>/stella-nova/pages/double-slit/typeset.mjs
 //  The script finds equations.js next to itself.
 //
-//  COLOURS  (the same tokens as style.css)
-//      ψ the field ......... --psi    gold
-//      c, α, Δt, Δx ........ --speed  cyan
-//      σ, c_a, c_b ......... --loss   coral
-//      λ, d, a, m, θ ....... --geom   violet
+//  COLOURS. Each quantity is wrapped in \class{mN}{...}. MathJax keeps the
+//  class on the SVG group, and lib/sci.css gives .m1 to .m6 a fill. The
+//  classes are the same as on the other wave pages (maxwells-equations,
+//  smith-chart, twenty-to-four).
+//      m2  the field ψ, ⟨ψ²⟩         m1  wave speed c, Courant number α
+//      m4  loss σ, c_a, c_b          m3  slit width a, separation d
+//      m6  wavelength λ
+//  m, θ, Δt and Δx stay ink.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" typeset.mjs)
 //      formulas ........ "const TEX"    the TeX source of each formula
+//      label symbols ... "const SYM"    inline symbols for control labels
 //      svg cleanup ..... "function svg" MathJax output to inline SVG
 // ============================================================================
 import { createRequire } from 'node:module';
@@ -32,49 +36,62 @@ const { SVG } = require('mathjax-full/js/output/svg.js');
 const { liteAdaptor } = require('mathjax-full/js/adaptors/liteAdaptor.js');
 const { RegisterHTMLHandler } = require('mathjax-full/js/handlers/html.js');
 
-const PSI = '#ffcf6b', SPEED = '#7fd6ff', LOSS = '#ff8f7a', GEOM = '#c7a6ff';
-const col = (c, t) => String.raw`{\color{${c}}{${t}}}`;
+const PSI = 'm2', SPEED = 'm1', LOSS = 'm4', GEOM = 'm3', LAM = 'm6';
+const col = (c, t) => c ? String.raw`\class{${c}}{${t}}` : String.raw`{${t}}`;
 const psi = s => col(PSI, String.raw`\psi${s || ''}`);
 
 const TEX = {
   wave: String.raw`\frac{\partial^2 ${psi()}}{\partial t^2}+${col(LOSS, String.raw`\sigma`)}\,\frac{\partial ${psi()}}{\partial t}=${col(SPEED, 'c^2')}\,\nabla^2 ${psi()}`,
   step: String.raw`${psi('^{\,n+1}')}=${col(LOSS, 'c_a')}\bigl(2${psi('^{\,n}')}+${col(SPEED, String.raw`\alpha^2`)}\,\nabla_h^2 ${psi('^{\,n}')}\bigr)-${col(LOSS, 'c_b')}\,${psi('^{\,n-1}')}`,
   coef: String.raw`${col(LOSS, 'c_a')}=\frac{1}{1+${col(LOSS, String.raw`\sigma`)}\Delta t/2},\qquad ${col(LOSS, 'c_b')}=\frac{1-${col(LOSS, String.raw`\sigma`)}\Delta t/2}{1+${col(LOSS, String.raw`\sigma`)}\Delta t/2}`,
-  courant: String.raw`${col(SPEED, String.raw`\alpha`)}=\frac{${col(SPEED, String.raw`c\,\Delta t`)}}{${col(SPEED, String.raw`\Delta x`)}}\;\le\;\frac{1}{\sqrt{2}}`,
-  bright: String.raw`r_2-r_1=${col(GEOM, 'm')}\,${col(GEOM, String.raw`\lambda`)},\qquad ${col(GEOM, 'm')}=0,\pm1,\pm2,\dots`,
-  far: String.raw`I(${col(GEOM, String.raw`\theta`)})\;\propto\;\cos^2\!\Bigl(\frac{\pi ${col(GEOM, 'd')}\sin${col(GEOM, String.raw`\theta`)}}{${col(GEOM, String.raw`\lambda`)}}\Bigr)\,\operatorname{sinc}^2\!\Bigl(\frac{\pi ${col(GEOM, 'a')}\sin${col(GEOM, String.raw`\theta`)}}{${col(GEOM, String.raw`\lambda`)}}\Bigr)`,
+  courant: String.raw`${col(SPEED, String.raw`\alpha`)}=\frac{${col(SPEED, 'c')}\,\Delta t}{\Delta x}\;\le\;\frac{1}{\sqrt{2}}`,
+  bright: String.raw`r_2-r_1=m\,${col(LAM, String.raw`\lambda`)},\qquad m=0,\pm1,\pm2,\dots`,
+  far: String.raw`I(\theta)\;\propto\;\cos^2\!\Bigl(\frac{\pi ${col(GEOM, 'd')}\sin\theta}{${col(LAM, String.raw`\lambda`)}}\Bigr)\,\operatorname{sinc}^2\!\Bigl(\frac{\pi ${col(GEOM, 'a')}\sin\theta}{${col(LAM, String.raw`\lambda`)}}\Bigr)`,
+};
+// Control label symbols (inline). equations.js puts each one into the
+// element with the matching data-sym.
+const SYM = {
+  lam1: col(LAM, String.raw`\lambda_1`), lam2: col(LAM, String.raw`\lambda_2`), lam3: col(LAM, String.raw`\lambda_3`),
+  a: col(GEOM, 'a'), d: col(GEOM, 'd'), alpha: col(SPEED, String.raw`\alpha`),
+  psi2: String.raw`\langle ${col(PSI, String.raw`\psi`)}^2\rangle`,
 };
 
 const adaptor = liteAdaptor();
 RegisterHTMLHandler(adaptor);
-const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams', 'color'] }), OutputJax: new SVG({ fontCache: 'local' }) });
+const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams', 'html'] }), OutputJax: new SVG({ fontCache: 'local' }) });
 
 // MathJax output to inline SVG. The ex sizes stay, so CSS font-size scales
 // the formula. aria-hidden is removed and a label with the TeX is added.
-function svg(tex) {
-  const node = doc.convert(tex, { display: true });
+function svg(tex, display = true) {
+  const node = doc.convert(tex, { display });
   let s = adaptor.innerHTML(node).replace(/ aria-hidden="true"/, '');
-  s = s.replace('<svg ', `<svg role="img" aria-label="${tex.replace(/\\color\{#[0-9a-f]+\}/g, '').replace(/"/g, '&quot;')}" `);
+  s = s.replace('<svg ', `<svg role="img" aria-label="${tex.replace(/\\class\{m\d\}/g, '').replace(/"/g, '&quot;')}" `);
   if (s.includes('merror')) throw new Error('TeX error in: ' + tex);
   return s;
 }
 
 const out = Object.fromEntries(Object.entries(TEX).map(([k, t]) => [k, svg(t)]));
+const sym = Object.fromEntries(Object.entries(SYM).map(([k, t]) => [k, svg(t, false)]));
 const js = `// ============================================================================
 //  DOUBLE-SLIT  ·  equation renderer  (GENERATED by typeset.mjs)
 // ----------------------------------------------------------------------------
 //  Do not edit by hand. Change the TeX in typeset.mjs and run it again.
 //  Each formula is static SVG from MathJax, with glyphs as paths. No font
 //  or math library loads at run time, so each browser shows the same shape.
-//  Each element with data-eq="<key>" gets the formula of that key.
+//  Each element with data-eq="<key>" gets the formula of that key, and each
+//  element with data-sym="<key>" gets an inline label symbol. Symbol colors
+//  are the .m1 to .m6 classes of lib/sci.css.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" equations.js)
 //      formulas ........ "const SVG"   ${Object.keys(out).join(', ')}
+//      label symbols ... "const SYM"   ${Object.keys(sym).join(', ')}
 //      mount ........... "data-eq"     fills the slots at load
 // ============================================================================
 (function(){
   const SVG = ${JSON.stringify(out, null, 1)};
+  const SYM = ${JSON.stringify(sym, null, 1)};
   document.querySelectorAll('[data-eq]').forEach(el => { const s = SVG[el.dataset.eq]; if (s) el.innerHTML = s; });
+  document.querySelectorAll('[data-sym]').forEach(el => { const s = SYM[el.dataset.sym]; if (s) el.innerHTML = s; });
 })();
 `;
 const here = fileURLToPath(new URL('.', import.meta.url));

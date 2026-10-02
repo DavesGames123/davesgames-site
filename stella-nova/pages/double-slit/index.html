@@ -4,7 +4,7 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Double-Slit Diffraction // Stella Nova</title>
+<title>Double-slit diffraction — Stella Nova</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    DOUBLE-SLIT DIFFRACTION  ·  page shell
@@ -15,9 +15,10 @@
    slot with a MathJax SVG formula. Nothing here computes the wave.
 
    HEAD LOAD ORDER   (order matters)
-     ● fonts        Space Grotesk, IBM Plex Mono, Instrument Serif (the shell set)
      ● style.css    the page stylesheet
-     ● equations.js at body end, fills the data-eq slots
+     ● lib/sci.css  shared science type (STIX Two Text, Inter, the system
+                    mono) and the math colors .m1 to .m6; it loads the fonts
+     ● equations.js at body end, fills the data-eq and data-sym slots
      ● main.js      at body end, runs the sim after the markup exists
 
    LAYOUT   (# marks an element id)
@@ -38,8 +39,8 @@
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
@@ -63,14 +64,14 @@
         </div>
       </div>
       <div id="profile">
-        <div class="prof-h">Screen <i>⟨ψ²⟩</i></div>
+        <div class="prof-h">Screen <span class="sym" data-sym="psi2">⟨ψ²⟩</span></div>
         <canvas id="profileCanvas"></canvas>
       </div>
     </div>
 
     <aside id="panel">
       <div class="panel-head">
-        <h1>Double-slit <em>diffraction</em></h1>
+        <h1>Double-slit diffraction</h1>
         <p>A plane wave meets a barrier. Each slit sends out its own wave, and where the two waves arrive in step the screen is bright.</p>
       </div>
 
@@ -97,19 +98,19 @@
         <h2>Light</h2>
         <div class="chan" data-ch="0">
           <button class="swatch on" id="tog-r" aria-pressed="true" title="Channel 1 on or off"></button>
-          <label for="sl-lr">λ<sub>1</sub></label>
+          <label for="sl-lr"><span class="sym" data-sym="lam1">λ<sub>1</sub></span></label>
           <input type="range" id="sl-lr" min="380" max="750" value="650" step="1">
           <output id="val-lr">650 nm</output>
         </div>
         <div class="chan" data-ch="1">
           <button class="swatch on" id="tog-g" aria-pressed="true" title="Channel 2 on or off"></button>
-          <label for="sl-lg">λ<sub>2</sub></label>
+          <label for="sl-lg"><span class="sym" data-sym="lam2">λ<sub>2</sub></span></label>
           <input type="range" id="sl-lg" min="380" max="750" value="532" step="1">
           <output id="val-lg">532 nm</output>
         </div>
         <div class="chan" data-ch="2">
           <button class="swatch on" id="tog-b" aria-pressed="true" title="Channel 3 on or off"></button>
-          <label for="sl-lb">λ<sub>3</sub></label>
+          <label for="sl-lb"><span class="sym" data-sym="lam3">λ<sub>3</sub></span></label>
           <input type="range" id="sl-lb" min="380" max="750" value="450" step="1">
           <output id="val-lb">450 nm</output>
         </div>
@@ -122,9 +123,9 @@
 
       <section class="sec">
         <h2>Slits</h2>
-        <div class="ctl"><label for="sl-sw">Slit width <i>a</i></label><output id="val-sw">0.35 µm</output></div>
+        <div class="ctl"><label for="sl-sw"><span class="sym" data-sym="a">a</span> <span class="d">Slit width</span></label><output id="val-sw">0.35 µm</output></div>
         <input type="range" id="sl-sw" min="2" max="120" value="20" step="1">
-        <div class="ctl"><label for="sl-ss">Separation <i>d</i></label><output id="val-ss">1.97 µm</output></div>
+        <div class="ctl"><label for="sl-ss"><span class="sym" data-sym="d">d</span> <span class="d">Separation</span></label><output id="val-ss">1.97 µm</output></div>
         <input type="range" id="sl-ss" min="4" max="300" value="111" step="1">
         <div class="ctl"><label for="sl-bx">Barrier position</label><output id="val-bx">30 %</output></div>
         <input type="range" id="sl-bx" min="0.10" max="0.70" value="0.30" step="0.01">
@@ -151,7 +152,7 @@
 
       <details class="sec" id="solver">
         <summary><h2>Solver</h2></summary>
-        <div class="ctl"><label for="sl-dt">Courant number α</label><output id="val-dt">0.50</output></div>
+        <div class="ctl"><label for="sl-dt"><span class="sym" data-sym="alpha">α</span> <span class="d">Courant number</span></label><output id="val-dt">0.50</output></div>
         <input type="range" id="sl-dt" min="0.10" max="0.70" value="0.50" step="0.05">
         <div class="ctl"><label for="sl-diss">Retention per step</label><output id="val-diss">1.000</output></div>
         <input type="range" id="sl-diss" min="0.990" max="1.000" value="1.000" step="0.001">
@@ -166,7 +167,7 @@
         <div class="eq"><div class="eq-l">Wave equation, lossy medium</div><div class="eq-row" data-eq="wave"></div></div>
         <div class="eq"><div class="eq-l">FDTD leapfrog step</div><div class="eq-row" data-eq="step"></div><div class="eq-row" data-eq="coef"></div></div>
         <div class="eq"><div class="eq-l">Stability</div><div class="eq-row" data-eq="courant"></div></div>
-        <div class="eq"><div class="eq-l">Bright fringes · far field</div><div class="eq-row" data-eq="bright"></div><div class="eq-row" data-eq="far"></div></div>
+        <div class="eq"><div class="eq-l">Bright fringes, far field</div><div class="eq-row" data-eq="bright"></div><div class="eq-row" data-eq="far"></div></div>
         <p class="note">1 cell = 17.7 nm. The marks on the screen give the exact bright-fringe rows, r₂ − r₁ = mλ, for each colour.</p>
       </details>
     </aside>

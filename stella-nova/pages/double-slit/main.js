@@ -393,12 +393,12 @@ function sizeOverlays(){
 // geometry or the size changes, not every frame.
 function drawFx(){
   const W=fxC.width,H=fxC.height,s=W/NX;fx.clearRect(0,0,W,H);
-  fx.font=`500 ${10*DPR}px "IBM Plex Mono", ui-monospace, monospace`;fx.textBaseline='top';
+  fx.font=`500 ${11*DPR}px Inter, system-ui, sans-serif`;fx.textBaseline='top';
   const mark=(x,label,dash,alpha)=>{fx.strokeStyle=`rgba(200,220,245,${alpha})`;fx.lineWidth=DPR;fx.setLineDash(dash.map(v=>v*DPR));fx.beginPath();fx.moveTo(x,0);fx.lineTo(x,H);fx.stroke();fx.setLineDash([]);fx.fillStyle='rgba(200,220,245,0.62)';fx.fillText(label,x+6*DPR,10*DPR);};
   const slitPx=(Math.floor(NX*P.barrierX)+4)*s;
-  if(P.plane){const x=(sourceX()+0.5)*s;mark(x,slitPx-x>70*DPR?'SOURCE':'',[2,5],0.22);}
-  if(P.slitMode!=='none'){fx.fillStyle='rgba(200,220,245,0.62)';fx.fillText('SLITS',slitPx+6*DPR,10*DPR);}
-  mark((screenX()+0.5)*s,'SCREEN',[6,5],0.45);
+  if(P.plane){const x=(sourceX()+0.5)*s;mark(x,slitPx-x>70*DPR?'Source':'',[2,5],0.22);}
+  if(P.slitMode!=='none'){fx.fillStyle='rgba(200,220,245,0.62)';fx.fillText('Slits',slitPx+6*DPR,10*DPR);}
+  mark((screenX()+0.5)*s,'Screen',[6,5],0.45);
   // scale bar, bottom right
   const L=1000/CELL_NM*s,x1=W-14*DPR,x0=x1-L,y=H-16*DPR;
   fx.strokeStyle='rgba(230,240,252,0.75)';fx.lineWidth=1.5*DPR;fx.beginPath();fx.moveTo(x0,y-4*DPR);fx.lineTo(x0,y);fx.lineTo(x1,y);fx.lineTo(x1,y-4*DPR);fx.stroke();
@@ -429,7 +429,7 @@ function drawProfile(){
   const padL=30*DPR,padR=8*DPR,pw=W-padL-padR,yOf=gy=>(gy+0.5)/NY*H;
   // axes: y ticks every 0.5, 1 or 2 µm
   const cy=Math.floor(NY/2),spanUm=um(NY/2),stepUm=spanUm>6?2:spanUm>2.5?1:0.5;
-  pctx.font=`500 ${9.5*DPR}px "IBM Plex Mono", ui-monospace, monospace`;pctx.textBaseline='middle';pctx.textAlign='right';
+  pctx.font=`500 ${9.5*DPR}px ui-monospace, "SF Mono", Menlo, monospace`;pctx.textBaseline='middle';pctx.textAlign='right';
   for(let v=-Math.floor(spanUm/stepUm)*stepUm;v<=spanUm;v+=stepUm){
     const y=yOf(cy+v*1000/CELL_NM);if(y<8*DPR||y>H-8*DPR)continue;
     pctx.fillStyle=v===0?'rgba(150,200,255,0.16)':'rgba(150,200,255,0.07)';pctx.fillRect(padL,y,pw,DPR);
