@@ -272,6 +272,6 @@ export function cycleLoop(n = 720) {
 
 // the layouts: one rotor, or two with eccentrics 180 degrees apart
 export const VARIANTS = [
-  { id: 'single', name: 'Single rotor', kind: '1 × 654 cm³ · bench engine', rotors: [{ zc: 0, s: 1, off: 0 }] },
-  { id: 'twin', name: 'Twin rotor', kind: '2 × 654 cm³ · car engine', rotors: [{ zc: 60, s: 1, off: 0 }, { zc: -60, s: -1, off: Math.PI }] },
+  { id: 'single', name: 'Single rotor', kind: '1 × 655 cm³ · bench engine', rotors: [{ zc: 0, s: 1, off: 0 }] },
+  { id: 'twin', name: 'Twin rotor', kind: '2 × 655 cm³ · car engine', rotors: [{ zc: 60, s: 1, off: 0 }, { zc: -60, s: -1, off: Math.PI }] },
 ];
