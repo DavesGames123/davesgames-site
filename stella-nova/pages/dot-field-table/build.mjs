@@ -896,6 +896,8 @@ const spec = {
     { id: 'tone', label: 'Dot', hex: '#1bb8a6' },
     { id: 'cream', label: 'Hot', hex: '#f4efdc' },
   ],
+  // screensaver: calm cells and tempo for the table-engine hook (lib/table-engine.js)
+  saver: { cells: ['breath_hex', 'ripple_hex', 'cross_waves', 'standing_nodes', 'dot_lens', 'horizon_arc', 'sine_band', 'nested_arches', 'lissajous_trace', 'ring_interference', 'drop_pond', 'warp_halftone', 'cmy_rosette', 'swirl_halftone', 'ign_clouds', 'clustered_dot'], tempo: [1, 0.3], dpr: 2 },
 };
 
 // ── emit index.html ──────────────────────────────────────────────────────────
