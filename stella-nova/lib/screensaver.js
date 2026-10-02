@@ -171,12 +171,12 @@ body.sn-saver-on.sn-saver-nocursor, body.sn-saver-on.sn-saver-nocursor * { curso
 #sn-saver-cap.on { opacity: .85; }
 #sn-saver-cap b { display: block; font: 400 1.6rem/1.2 'STIX Two Text', Georgia, serif; }
 #sn-saver-cap i { display: block; font: 400 .8rem/1.6 'Inter', system-ui, sans-serif; font-style: normal; color: var(--c, #7f91ad); }
-#sn-saver-label { --fw: 100vw; --fs: min(var(--fw), 80vh); position: fixed; top: 0; bottom: 0; left: 50%; width: var(--fw); transform: translateX(-50%); z-index: 9001; pointer-events: none; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: clamp(22px, calc(var(--fs) * .075), 96px) clamp(16px, calc(var(--fs) * .06), 80px) clamp(18px, calc(var(--fs) * .05), 64px); background: linear-gradient(to bottom, rgba(0,0,0,.62) 0, rgba(0,0,0,.25) 18%, transparent 30%, transparent 48%, rgba(0,0,0,.42) 66%, rgba(0,0,0,.78) 100%); color: #f1ede4; font: 400 16px/1.4 'STIX Two Text', Georgia, serif; text-shadow: 0 1px 14px rgba(0,0,0,.85); opacity: 0; transition: opacity 1s ease; }
+#sn-saver-label { --fw: 100vw; --fs: min(var(--fw), 80vh); position: fixed; top: 0; bottom: 0; left: 50%; width: var(--fw); transform: translateX(-50%); z-index: 9001; pointer-events: none; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; align-items: center; text-align: center; padding: max(clamp(22px, calc(var(--fs) * .075), 96px), calc(env(safe-area-inset-top, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-right, 0px) + 12px)) max(clamp(18px, calc(var(--fs) * .05), 64px), calc(env(safe-area-inset-bottom, 0px) + 14px)) max(clamp(16px, calc(var(--fs) * .06), 80px), calc(env(safe-area-inset-left, 0px) + 12px)); background: linear-gradient(to bottom, rgba(0,0,0,.62) 0, rgba(0,0,0,.25) 18%, transparent 30%, transparent 48%, rgba(0,0,0,.42) 66%, rgba(0,0,0,.78) 100%); color: #f1ede4; font: 400 16px/1.4 'STIX Two Text', Georgia, serif; text-shadow: 0 1px 14px rgba(0,0,0,.85); opacity: 0; transition: opacity 1s ease; }
 body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); }
 #sn-saver-label.on { opacity: 1; }
 #sn-saver-label .top, #sn-saver-label .bot { width: 100%; display: flex; flex-direction: column; align-items: center; }
 #sn-saver-label .cat { font: 500 clamp(9px, calc(var(--fs) * .017), 14px)/1 'Inter', system-ui, sans-serif; letter-spacing: .34em; text-transform: uppercase; color: var(--c, #8ec5ff); margin: 0 0 1.1em; padding-left: .34em; }
-#sn-saver-label .ttl { display: block; max-width: 24ch; font: 400 clamp(28px, calc(var(--fs) * .082), 84px)/1.04 'STIX Two Text', Georgia, serif; color: #f8f5ee; text-wrap: balance; }
+#sn-saver-label .ttl { display: block; max-width: 30ch; font: 400 clamp(28px, calc(var(--fs) * .082), 84px)/1.04 'STIX Two Text', Georgia, serif; color: #f8f5ee; text-wrap: balance; }
 #sn-saver-label .rule { display: block; width: min(78%, 560px); height: 1px; margin: .95em 0 .85em; font-size: clamp(14px, calc(var(--fs) * .03), 26px); background: linear-gradient(90deg, transparent, rgba(244,240,230,.92) 16%, rgba(244,240,230,.92) 84%, transparent); transform: scaleX(0); transition: transform 1.7s cubic-bezier(.22,.7,.12,1) .35s; }
 #sn-saver-label.on .rule { transform: scaleX(1); }
 #sn-saver-label .sub { max-width: 30em; font: italic 400 clamp(14px, calc(var(--fs) * .032), 28px)/1.3 'STIX Two Text', Georgia, serif; color: #e2ddd1; text-wrap: balance; }
@@ -198,10 +198,10 @@ body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); }
 #sn-saver-label .code pre { margin: 0; font: inherit; white-space: pre; }
 #sn-saver-label .code .k { color: #c9a8ff; } #sn-saver-label .code .t { color: #6cc8ff; } #sn-saver-label .code .n { color: #ffd27a; }
 #sn-saver-label .code .f { color: #8ee08a; } #sn-saver-label .code .a { color: #ff9f72; } #sn-saver-label .code .c { color: #6b7685; font-style: italic; }
-#sn-saver-label .rule2 { display: block; width: 46px; height: 1px; margin: 1.3em 0 0; font-size: clamp(11px, calc(var(--fs) * .022), 18px); background: rgba(244,240,230,.7); transform: scaleX(0); transition: transform 1.2s ease 1s; }
+#sn-saver-label .rule2 { display: block; width: 46px; height: 1px; margin: 1.15em 0 0; font-size: clamp(13px, calc(var(--fs) * .03), 24px); background: rgba(244,240,230,.7); transform: scaleX(0); transition: transform 1.2s ease 1s; }
 #sn-saver-label.on .rule2 { transform: scaleX(1); }
-#sn-saver-label .logo { margin-top: 1em; font: 500 clamp(11px, calc(var(--fs) * .022), 18px)/1 'STIX Two Text', Georgia, serif; letter-spacing: .26em; color: #f1ece1; white-space: nowrap; opacity: 0; transition: opacity 1.4s ease 1.3s; }
-#sn-saver-label.on .logo { opacity: .92; }
+#sn-saver-label .logo { margin-top: .85em; font: 500 clamp(13px, calc(var(--fs) * .03), 24px)/1 'STIX Two Text', Georgia, serif; letter-spacing: .24em; color: #f6f1e6; white-space: nowrap; padding: .5em .5em .5em .74em; border-radius: 3px; background: rgba(5,7,11,.58); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity 1.4s ease 1.3s; }
+#sn-saver-label.on .logo { opacity: 1; }
 #sn-saver-label .logo span { color: var(--c, #8ec5ff); letter-spacing: 0; padding: 0 .35em; }
 #sn-saver-label .m1 { color: #62c4ff; fill: #62c4ff; } #sn-saver-label .m2 { color: #ff9a62; fill: #ff9a62; } #sn-saver-label .m3 { color: #86dc7c; fill: #86dc7c; }
 #sn-saver-label .m4 { color: #e889dc; fill: #e889dc; } #sn-saver-label .m5 { color: #ffd666; fill: #ffd666; } #sn-saver-label .m6 { color: #a8a4ff; fill: #a8a4ff; }
@@ -222,6 +222,7 @@ body.sn-saver-on.sn-saver-vert #sn-saver-cap { left: calc(50% - min(50vw, 28.125
 }
 @media (max-width: 760px), (max-height: 520px) {
   #sn-saver-label .code { display: none; }
+  #sn-saver-label { background: linear-gradient(to bottom, rgba(0,0,0,.7) 0, rgba(0,0,0,.45) 26%, transparent 40%, transparent 58%, rgba(0,0,0,.5) 72%, rgba(0,0,0,.82) 100%); }
   #sn-saver-cap { left: 16px; bottom: 16px; }
 }
 #sn-saver-hud { position: fixed; right: 18px; top: 14px; z-index: 9001; font: 500 .7rem/1.4 var(--f-mono, monospace); color: #9fb3d1; background: rgba(8,10,16,.7); border: 1px solid rgba(150,200,255,.18); border-radius: 8px; padding: 6px 10px; pointer-events: none; }
@@ -540,12 +541,15 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 // The plate is a specimen poster across the frame, all text centred. Type
 // scales with --fs: the frame width, capped at 80vh for a landscape frame.
 //   top     catalogue line (number, constellation), title, a rule that draws
-//           from the centre, sub in italics, then the parameters
-//   bottom  equations, notes and code, a short rule, [ www.davesgames.io ]
+//           from the centre, sub in italics, the parameters, then a short
+//           rule and the site mark [ www.davesgames.io ] under them
+//   bottom  equations, notes and code
 // With no parameters, the equations and notes go to the top under the rule.
 // Code always goes to the bottom. In a landscape frame (wider than 5:4, not
-// the 9:16 column) the bottom text and the code sit side by side. A page with no label gets a poster with its
-// nav name only (see "function fallbackPoster").
+// the 9:16 column) the bottom text and the code sit side by side. A page
+// with no label gets a poster with its nav name only (see "function
+// fallbackPoster"). The padding keeps clear of the safe-area insets (a
+// phone notch or home bar) when the browser reports them.
 // Pointer: with an anchor, a leader line goes from the poster block nearer
 // to the subject (top or bottom, at its centre line) to the subject edge,
 // and a ring marks the end. The poster does not move; only the line follows.
@@ -614,9 +618,9 @@ function posterHTML(info, page) {
   const all = allPages(), n = page ? all.findIndex(q => q.key === page.key) + 1 : 0;
   const cat = page ? `<div class="cat">No. ${String(n).padStart(3, '0')} · ${esc(page.con || page.regionName || '')}</div>` : '';
   return `<div class="top">${cat}<b class="ttl">${esc(info.title || (page && page.label) || '')}</b><i class="rule"></i>`
-    + `<div class="sub">${esc(info.sub || '')}</div><div class="slot-top">${s.top}</div></div>`
-    + `<div class="bot"><div class="slot-bot">${s.bot}</div><i class="rule2"></i>`
-    + `<div class="logo"><span>[</span>www.davesgames.io<span>]</span></div></div>`;
+    + `<div class="sub">${esc(info.sub || '')}</div><div class="slot-top">${s.top}</div><i class="rule2"></i>`
+    + `<div class="logo"><span>[</span>www.davesgames.io<span>]</span></div></div>`
+    + `<div class="bot"><div class="slot-bot">${s.bot}</div></div>`;
 }
 // Fill each [data-tex] box from the cache, or typeset it once and keep the
 // SVG. A live label swaps the text often; the TeX rarely changes.
