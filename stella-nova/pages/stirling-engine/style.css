@@ -240,6 +240,7 @@ body.ana-open .phint{right:calc(var(--ana-w) + 14px)}
   #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;margin:0 -16px;background:linear-gradient(180deg,rgba(15,17,27,1) 70%,rgba(15,17,27,0));touch-action:none;cursor:grab}
   #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
   #panel h1{font-size:1.4rem}
+}
 
 /* LANDSCAPE phone. The panel is a drawer at the right edge; the dock is a
    tab at the lower left; the topbar is hidden to give the view the height. */
@@ -254,5 +255,6 @@ body.ana-open .phint{right:calc(var(--ana-w) + 14px)}
   #panel.open{transform:none}
   #sheetGrip{display:none}
   #panelClose{display:block;position:sticky;top:8px;margin:8px 0 0 auto;z-index:2;background:var(--ink2)}
+}
 @keyframes grpIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){#panel,#anaPanel,.phint,#labels .lb,.tip-in,#engInfo{transition:none}.tip-in.swap>*,#leader line,#leader .pulse{animation:none}}
