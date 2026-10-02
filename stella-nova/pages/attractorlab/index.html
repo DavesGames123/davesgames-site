@@ -14,9 +14,10 @@
    Nothing here computes the attractor.
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts       Google Fonts stylesheet
-     2. KaTeX       CSS then JS, from CDN; typesets the governing equations
-     3. style.css   the page stylesheet
+     1. style.css   the page stylesheet
+     2. lib/sci.css the science type and the math colors .m1 to .m6; it
+                    @imports the fonts. main.js typesets the equations as
+                    MathJax SVG with lib/sci-math.js (dynamic import).
    Scripts at end of body: three.js r128 (defines global THREE), then main.js.
    main.js is a classic script and needs THREE already present, so its tag
    comes after the three.js tag.
@@ -27,7 +28,7 @@
      ├────────────┬────────────────────────────────────────────────────┤
      │ #panel     │  #gl-host                                           │
      │  system    │    <canvas id="gl">   attractor tracers            │
-     │  params    │    #eq-panel  ▷ governing equations (KaTeX)         │
+     │  params    │    #eq-panel  ▷ equations (MathJax SVG)             │
      │  tracers   │    #hint      drag to orbit                        │
      │  color     │                                                    │
      │  tone      │                                                    │
@@ -37,10 +38,8 @@
      └──────────────────────────────────────────────────────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
@@ -50,8 +49,7 @@
 <button id="mob-btn" onclick="document.getElementById('panel').classList.toggle('mob-open')">☰</button>
 
 <div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">AttractorLab · ∞</span></div>
-  <div class="topbar-r">SYS // <strong>STRANGE ATTRACTORS</strong></div>
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Strange attractors</span></div>
 </div>
 
 <div id="main">
@@ -82,7 +80,7 @@
     </div>
     <!-- Tracer color: mode (speed/spectrum/mono) and the palette for speed mode. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Tracer Color</div>
+      <div class="p-sec-lbl">Tracer color</div>
       <div class="seg" id="colMode">
         <button data-m="speed" class="on">Speed</button>
         <button data-m="spectrum">Spectrum</button>
@@ -91,12 +89,12 @@
       <div class="mrow" style="margin-top:9px"><span class="mrow-lbl">Palette</span><select id="palSel">
         <option value="stella">Stella</option><option value="plasma">Plasma</option><option value="viridis">Viridis</option><option value="inferno">Inferno</option><option value="ice">Ice</option><option value="ember">Ember</option>
       </select></div>
-      <div class="mini-note">Palette &amp; gamma/contrast shape Speed mode; Exposure brightens all modes.</div>
+      <div class="mini-note">Palette, gamma and contrast shape the speed mode. Exposure brightens all modes.</div>
     </div>
     <!-- Tone curve: preview canvas plus gamma/contrast/exposure sliders that
          shape how speed maps to palette color. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Tone Curve</div>
+      <div class="p-sec-lbl">Tone curve</div>
       <canvas id="toneCurve" width="244" height="62"></canvas>
       <div class="mrow"><span class="mrow-lbl">Gamma</span><input type="range" id="rGamma" min="0.3" max="3" step="0.05" value="1"><span class="val" id="vGamma">1.00</span></div>
       <div class="mrow"><span class="mrow-lbl">Contrast</span><input type="range" id="rContrast" min="0.5" max="2" step="0.05" value="1"><span class="val" id="vContrast">1.00</span></div>
@@ -105,10 +103,10 @@
     <!-- View: auto-orbit and depth-fog toggles, plus a camera reset. -->
     <div class="p-section">
       <div class="p-sec-lbl">View</div>
-      <button class="tog-btn on" id="tRot">⟳ Auto-orbit</button>
-      <button class="tog-btn" id="tFog">≋ Depth fog</button>
+      <button class="tog-btn on" id="tRot">Auto-orbit</button>
+      <button class="tog-btn" id="tFog">Depth fog</button>
       <div class="sim-btns" style="margin-top:4px">
-        <button class="sim-btn" id="btnView">↺ Reset camera</button>
+        <button class="sim-btn" id="btnView">Reset camera</button>
       </div>
     </div>
     <!-- Headset: VR and AR (xr.js). Shown only when the device has WebXR. -->
@@ -127,9 +125,9 @@
   <!-- Render host: holds the WebGL canvas, the equation panel, and the hint. -->
   <div id="gl-host">
     <canvas id="gl"></canvas>
-    <!-- Governing equations: header toggles collapse; #eq-blocks filled by KaTeX. -->
+    <!-- Governing equations: header toggles collapse; #eq-blocks filled with MathJax SVG. -->
     <section class="eq-panel" id="eq-panel">
-      <div class="eq-head" id="eq-toggle"><span class="dot"></span><span class="lbl">Governing Equations</span><span class="arrow">▲</span></div>
+      <div class="eq-head" id="eq-toggle"><span class="lbl">Equations</span><span class="arrow">▲</span></div>
       <div class="eq-blocks" id="eq-blocks"></div>
     </section>
     <div id="hint">drag to orbit · scroll to zoom</div>

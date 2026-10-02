@@ -6,7 +6,7 @@
 //  (a polyline). All trails are drawn as one additive LineSegments buffer, so
 //  overlapping filaments glow. Per-vertex color carries the trail fade times a
 //  speed-mapped palette, shaped by a gamma/contrast/exposure tone curve. A
-//  spherical camera orbits the attractor's bounding sphere. KaTeX renders the
+//  spherical camera orbits the bounding sphere of the attractor. MathJax SVG shows the
 //  governing equations of the selected system.
 //
 //  This is a classic script (no modules): three.js r128 loads first and exposes
@@ -42,7 +42,7 @@
 //      integration .......... "════════ integration" rk4, survey, reseed
 //      color ................ "════════ color"       palettes, ramp, tone map
 //      main loop ............ "════════ loop"         step, build buffer, render
-//      equations ............ "════════ equations"   KaTeX render of eq lines
+//      equations ............ "════════ equations"   MathJax SVG of eq lines, sysRules
 //      UI ................... "════════ UI"           panel wiring
 //      camera controls ...... "camera controls"      drag, wheel, pinch orbit
 //      resize / boot ........ "function resize"       size + first frame
@@ -52,9 +52,11 @@
 "use strict";
 
 /* equation color roles */
-// Three hues reused across every LaTeX string: ST tints state variables (x,y,z),
-// PA tints tunable parameters, OP tints the derivative operators on the left.
-const ST="#45d3ff", PA="#ffc832", OP="#96c8ff";
+// The eq strings below still wrap symbols in \textcolor{ST|PA|OP}{...}.
+// renderEquations() strips those wrappers (plainTeX) and colors the symbols
+// with the lib/sci.css classes instead (sysRules): x m1, y m2, z m3, and the
+// first three parameters of the system m4, m5, m6.
+const ST="ST", PA="PA", OP="OP";
 
 /* ════════ attractor library ════════
    f(x,y,z,P)->[dx,dy,dz]; dt = step; eq = [{sub, lines:[latex...]}] */
@@ -324,15 +326,33 @@ function frame(now){requestAnimationFrame(frame);
 }
 
 /* ════════ equations ════════ */
-// Render the current system's LaTeX into the equation panel: one row per line,
-// typeset by KaTeX in display mode. throwOnError:false keeps a bad string from
-// breaking the panel; the whole thing is skipped if KaTeX has not loaded.
-function renderEquations(){const wrap=document.getElementById("eq-blocks");wrap.innerHTML="";
+// lib/sci-math.js is an ES module; this classic script loads it with a
+// dynamic import(). It typesets TeX as MathJax SVG. If MathJax does not load,
+// the TeX text stays in the box with the class "raw".
+const SCI=import("../../lib/sci-math.js").catch(err=>{console.error("[math]",err);return null;});
+// Remove each \textcolor{color}{body} wrapper and keep body.
+function plainTeX(tex){let out="",i=0;const K="\\textcolor{";
+  while(i<tex.length){const j=tex.indexOf(K,i);if(j<0){out+=tex.slice(i);break;}
+    out+=tex.slice(i,j);let k=tex.indexOf("}",j+K.length)+1;   // skip the color group
+    let d=0,e=k;for(;e<tex.length;e++){if(tex[e]==="{")d++;else if(tex[e]==="}"&&--d===0)break;}
+    out+=tex.slice(k+1,e);i=e+1;}
+  return out;}
+// The TeX of a parameter symbol (the l field holds a Greek letter or a name).
+const GREEK={"σ":"\\sigma","ρ":"\\rho","β":"\\beta","α":"\\alpha","γ":"\\gamma","δ":"\\delta","ω":"\\omega"};
+const symTeX=l=>GREEK[l]||l;
+// Color rules of the current system: x m1, y m2, z m3, then the first three
+// parameters m4 to m6. A fourth or later parameter keeps the default color.
+function sysRules(){const r=[["x","m1"],["y","m2"],["z","m3"]];
+  Object.values(ATTRACTORS[cur].params).slice(0,3).forEach((d,i)=>r.push([symTeX(d.l),"m"+(4+i)]));return r;}
+// Typeset the current system's equations into the panel: one display row
+// per line, in sysRules colors.
+function renderEquations(){const wrap=document.getElementById("eq-blocks");wrap.innerHTML="";const rules=sysRules();
   ATTRACTORS[cur].eq.forEach(b=>{const div=document.createElement("div");div.className="eq-block";
     let html=(b.sub?`<div class="eq-sublabel">${b.sub}</div>`:"");
-    b.lines.forEach((_,i)=>html+=`<div class="eq-row" data-i="${i}"></div>`);
+    b.lines.forEach((_,i)=>html+=`<div class="eq-row sci-eq" data-i="${i}"></div>`);
     div.innerHTML=html;wrap.appendChild(div);
-    if(window.katex)b.lines.forEach((tex,i)=>{try{katex.render(tex,div.querySelector('[data-i="'+i+'"]'),{throwOnError:false,displayMode:true});}catch(e){}});
+    b.lines.forEach((tex,i)=>{const el=div.querySelector('[data-i="'+i+'"]');const t=plainTeX(tex);el.dataset.tex=t;
+      SCI.then(m=>m?m.typeset(el,t,{rules}):(el.textContent=t,el.classList.add("raw")));});
   });}
 
 /* ════════ UI ════════ */
@@ -346,8 +366,10 @@ function loadParams(){P={};const ps=ATTRACTORS[cur].params;for(const k in ps)P[k
 // into P live. Rebuilt whenever the system, defaults, or randomize changes.
 function buildParamUI(){const wrap=$("params");wrap.innerHTML="";const ps=ATTRACTORS[cur].params;
   for(const k in ps){const d=ps[k],row=document.createElement("div");row.className="mrow";
-    row.innerHTML=`<span class="mrow-lbl">${d.l}</span><input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${P[k]}"><span class="val">${P[k].toFixed(3)}</span>`;
+    row.innerHTML=`<span class="mrow-lbl"><span class="sci-sym"></span></span><input type="range" min="${d.min}" max="${d.max}" step="${d.step}" value="${P[k]}"><span class="val">${P[k].toFixed(3)}</span>`;
     wrap.appendChild(row);const r=row.querySelector("input");setRange(r);
+    const sym=row.querySelector(".sci-sym"),t=symTeX(d.l);sym.dataset.tex=t;sym.dataset.inline="";
+    SCI.then(m=>m?m.typeset(sym,t,{display:false,rules:sysRules()}):(sym.textContent=d.l));
     r.addEventListener("input",()=>{P[k]=parseFloat(r.value);row.querySelector(".val").textContent=P[k].toFixed(3);setRange(r);});}}
 // Switch the active system: load its defaults, rebuild the param sliders and
 // equations, update the blurb/status, and reseed particles into its shape.
@@ -417,7 +439,7 @@ setTimeout(()=>{resize();drawToneCurve();selectSystem("lorenz",false);requestAni
 // and depth fog. calm 1 sets the flow speed to 0.4 and halves the auto-orbit.
 // The system does not change inside one dwell, so there is no reseed cut.
 // The label plate (opts.label) gives the ODE system of ATTRACTORS[cur].f in
-// plain Unicode (the shell plate takes no KaTeX), the live parameter values P,
+// plain Unicode (the shell plate takes no TeX), the live parameter values P,
 // the RK4 step dt and the tracer count. The system does not change inside one
 // dwell, so enter() calls saverPlate() once.
 const SAVER_EQ={
