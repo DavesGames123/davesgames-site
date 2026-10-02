@@ -64,7 +64,8 @@ const SECTOR = Object.fromEntries(SECTORS.map(s => [s.id, s]));
 const UNIQUE = [...new Map(PAGES.map(p => [p.key, p])).values()];
 $$('.page-count').forEach(el => { el.textContent = UNIQUE.length; });
 $$('.con-count').forEach(el => { el.textContent = SECTORS.length; });
-$$('.find-hero input').forEach(el => { el.placeholder = PHONE.matches ? `Search ${UNIQUE.length} pages` : `Search ${UNIQUE.length} pages: black hole, chord, fire, orbit`; });
+// The hero search text is a fixed "99+", not the live page count.
+$$('.find-hero input').forEach(el => { el.placeholder = PHONE.matches ? 'Search 99+ pages' : 'Search 99+ pages: black hole, chord, fire, orbit'; });
 
 // ── routing ────────────────────────────────────────────────────────────────
 // A page link is <a href="/stella-nova/#key" target="_top" data-key>. Inside
