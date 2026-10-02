@@ -779,15 +779,40 @@ window.snSaver = {
     // Autopilot: one course per period, held for 65 percent of it.
     const period = Math.max(10, (+opts.seconds || 60) / 3.5) * 1000 * (1 + 0.3 * calm);
     let next = performance.now() + 2500, shown = false;
+    // The plate: the map on screen (its own title and seed) and, while a
+    // course is held, the course as the card shows it: the chain of
+    // stations, the jumps, the fuel total and the tiers it needs. The
+    // equation is the relaxation step of cheapest() in route.js.
+    let lastPlate = 0;
+    const plate = (now) => {
+      if (!opts.label || !map || now - lastPlate < 1000) return;
+      lastPlate = now;
+      const t = map.title, N = map.NODE_BY_ID, p = state.path, [a, b] = state.selected;
+      const lines = [];
+      if (a && b && p) {
+        lines.push('Course: ' + p.nodes.map((id) => N[id].name).join(' › '));
+        lines.push(`${p.routes.length} jump${p.routes.length === 1 ? '' : 's'} · fuel −${p.cost}` + (p.routes.length > 1 ? ' = −(' + p.routes.map((ri) => map.ROUTES[ri].cost).join(' + ') + ')' : ''));
+        lines.push('Needs: ' + TIERS.filter((x) => p.routes.some((ri) => map.ROUTES[ri].tier === x.id)).map((x) => x.label).join(', '));
+      } else if (a && b) lines.push(`Course: ${N[a].name} › ${N[b].name} · no course under these tiers`);
+      else lines.push(`${map.NODES.length} stations · ${map.ROUTES.length} routes · ${TIERS.length} tiers`);
+      lines.push('Tiers: ' + TIERS.map((x) => x.label).join(' · '));
+      opts.label({
+        title: t.plate,
+        sub: `${t.game} · ${t.vector}${map.seed && !t.game.includes(map.seed) ? ' · seed ' + map.seed : ''}`,
+        lines,
+        eq: ['cost(v) = min over u ( cost(u) + c(u,v) )', 'Dijkstra; on a tie, fewer jumps wins'],
+      });
+    };
     const auto = (now) => {
+      if (!document.body.classList.contains('swapping')) plate(now);
       if (now >= next && map && map.NODES.length > 1 && !document.body.classList.contains('swapping')) {
         if (!shown) {
           const N = map.NODES, a = N[(rng() * N.length) | 0].id;
           let b = a;
           for (let i = 0; i < 8 && b === a; i++) b = N[(rng() * N.length) | 0].id;
-          state.selected = [a, b]; plot(true);
+          state.selected = [a, b]; plot(true); lastPlate = 0;
           next = now + period * 0.65;
-        } else { clearSelection(); goHome(); next = now + period * 0.35; }
+        } else { clearSelection(); goHome(); lastPlate = 0; next = now + period * 0.35; }
         shown = !shown;
       }
       wake();
