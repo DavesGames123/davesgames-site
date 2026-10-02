@@ -54,6 +54,7 @@
 //      controls ............. "function setPos"      register + control bindings
 //      phone dock ........... "PHONE DOCK"           sheet toggle, play, sample
 //      init ................. "buildCmapButtons"     first paint
+//      screensaver .......... "window.snSaver"       autopilot for lib/screensaver.js
 // ============================================================================
 import * as THREE from 'three';
 import { EQ_STATE } from './equation.js';
@@ -824,3 +825,54 @@ addEventListener('resize',drawScore);
 // position qubits (a 4×4 image). setPos triggers the first full render.
 shots.style.setProperty('--pct',((4000-64)/19936*100)+'%');gap.style.setProperty('--pct',(0.7/1.5*100)+'%');thr.style.setProperty('--pct','0%');
 buildCmapButtons();setTag();renderEquation();initGL();setPos(4);
+
+/* ===== SCREENSAVER ===== */
+// Hook for the shell screensaver (lib/screensaver.js). It moves #stack-gl-wrap
+// to <body> and hides all other content, so the rho stack fills the window
+// through resizeGL (the ResizeObserver calls it). Each image runs two parts:
+// the circuit builds the tower one slab at a time, then the final state is
+// sampled and the histogram grows. A full-screen quad in the scene fades to
+// the background colour across each camera reframe and image change, so the
+// recorded canvas has no hard cut. opts.calm (1 = slowest) sets the spin and
+// the step pace; opts.seed sets the order of the images. No exit(): the
+// shell reloads the page on stop.
+window.snSaver={enter(o={}){
+  const calm=Math.max(0,Math.min(1,o.calm??0.7)),secs=Math.max(20,+o.seconds||60);
+  let r=(o.seed>>>0)||1;const rnd=()=>(r=(r*1664525+1013904223)>>>0)/4294967296;
+  const wrap=document.getElementById('stack-gl-wrap');document.body.appendChild(wrap);
+  const st=document.createElement('style');
+  st.textContent='body>*:not(#stack-gl-wrap){display:none!important}#stack-gl-wrap>*:not(#stack-gl){display:none!important}'+
+    '#stack-gl-wrap{position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:1}#stack-gl{cursor:none!important}';
+  document.head.appendChild(st);
+  resizeGL();
+  controls.autoRotate=true;controls.autoRotateSpeed=0.5*(1-0.5*calm);
+  const fadeMat=new THREE.ShaderMaterial({transparent:true,depthTest:false,depthWrite:false,uniforms:{a:{value:1}},
+    vertexShader:'void main(){gl_Position=vec4(position.xy,0.0,1.0);}',
+    fragmentShader:'uniform float a;void main(){gl_FragColor=vec4(0.0392,0.051,0.0784,a);}'});
+  const fadeQ=new THREE.Mesh(new THREE.PlaneGeometry(2,2),fadeMat);fadeQ.frustumCulled=false;fadeQ.renderOrder=9999;scene.add(fadeQ);
+  const names=['cross','gradient','checker','phantom','rings'];
+  for(let i=names.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[names[i],names[j]]=[names[j],names[i]];}
+  const cycle=Math.max(16,secs/2)*1000,fadeMs=(0.7+1.0*calm)*1000;
+  const wait=ms=>new Promise(res=>setTimeout(res,ms));
+  const fadeTo=to=>new Promise(res=>{const from=fadeMat.uniforms.a.value,t0=performance.now();
+    const step=now=>{const k=Math.min(1,(now-t0)/fadeMs);fadeMat.uniforms.a.value=from+(to-from)*k*k*(3-2*k);if(k<1)requestAnimationFrame(step);else res();};
+    requestAnimationFrame(step);});
+  let n=0;
+  (async function run(){
+    for(;;){
+      // image change and reframe, under the fade
+      const b=document.querySelector('.preset-btn[data-preset="'+names[n++%names.length]+'"]');
+      stopSampling();b.click();setStage(0);frameCamera();
+      await fadeTo(0);
+      // build: one slab per step, about half the cycle
+      const stepMs=Math.max(350,(cycle*0.45-fadeMs)/Math.max(1,totalLayers-1));
+      while(stackStage<totalLayers-1){await wait(stepMs);setStage(stackStage+1);}
+      await wait(Math.max(1500,cycle*0.08));
+      // sample the final state, with the camera reframed for the histogram
+      await fadeTo(1);runSampling();await fadeTo(0);
+      await wait(Math.max(3000,cycle*0.47-3*fadeMs));
+      await fadeTo(1);
+    }
+  })();
+  return {canvas:document.getElementById('stack-gl'),warmupMs:fadeMs+500};
+}};
