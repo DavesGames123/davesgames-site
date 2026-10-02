@@ -438,6 +438,8 @@ const spec = {
     { id: 'tone', label: 'Smoke', hex: '#565c66' },
     { id: 'cream', label: 'Lit', hex: '#c9cdd4' },
   ],
+  // screensaver: calm cells, tempo and cell cycle for the table-engine hook (lib/table-engine.js)
+  saver: { cells: ['wispy_plume', 'lazy', 'thunderhead', 'incense', 'ribbon', 'serpentine', 'slow_haze', 'layered_drift', 'ground_fog', 'mist', 'valley_fog', 'rolling_fog', 'dawn_mist', 'smoke_ring', 'ring_train', 'vortex', 'marble'], tempo: [0.9, 0.3], dpr: 2, cycle: 4, minDwell: 12, fade: 1.5 },
 };
 
 // ── emit index.html ──────────────────────────────────────────────────────────
