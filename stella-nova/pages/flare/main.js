@@ -35,6 +35,7 @@
 //      frame loop ........... "function loop"      redraw all seven per frame
 //      selection ............ "function selectFlare" pick + load a column
 //      slider wiring ........ "CTRL_KEYS.forEach"  write edits back to params
+//      screensaver hook ..... "window.snSaver"     one calm column, full frame
 // ============================================================================
 (async () => {
 // Shader source lives in real .glsl files. Fetch both before building any
@@ -175,10 +176,12 @@ function drawInst(inst, p, t) {
 // Per-frame loop: keep sizes current, then redraw all seven flares at the same
 // shared time so their flicker stays in phase.
 var t0 = performance.now();
+var soloIdx = -1;   // >= 0 in screensaver mode: draw only that column
 function loop(now) {
   resize();
   var t = (now - t0) / 1000;
   for (var i = 0; i < 7; i++) {
+    if (soloIdx >= 0 && i !== soloIdx) continue;
     if (instances[i]) drawInst(instances[i], params[i], t);
   }
   requestAnimationFrame(loop);
@@ -251,4 +254,36 @@ document.getElementById('reset-btn').addEventListener('click', function() {
 selectFlare(0);
 // Expose selectFlare for the inline onclick handlers in the markup.
 window.selectFlare = selectFlare;
+
+// ── Screensaver hook (stella-nova/lib/screensaver.js) ─────────────────────────
+// The shell calls enter() in screensaver mode. It shows one column full frame
+// (the seed picks one of four hued presets), centres the plume, widens it,
+// lowers the intensity and the trail speed, and drifts the hue slowly.
+window.snSaver = {
+  raf: 0,
+  enter: function(opts) {
+    var calm = Math.max(0, Math.min(1, opts && opts.calm != null ? opts.calm : 0.7));
+    var i = [2, 3, 4, 5][((opts && opts.seed) || 0) % 4];
+    if (!instances[i]) return null;
+    soloIdx = i;
+    var st = document.createElement('style');
+    st.textContent = 'body::before,#label-bar,#ctrl-panel,.sel-ring,.var-tag{display:none!important}' +
+      '#col' + i + '{position:fixed;inset:0;z-index:100;border:0;cursor:none}';
+    document.head.appendChild(st);
+    var p = params[i];
+    p.posX = 0.5; p.trailWidth = 2; p.intensity = 5;
+    p.flickerSpeed = 0.6 + 1.0 * (1 - calm);
+    var hue = 0.015 + 0.03 * (1 - calm), last = 0, ph = 0, self = this;
+    function step(now) {
+      var dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
+      ph += dt * Math.PI * 2 / 60;   // one slow vertical sway per minute
+      p.colorShift = (p.colorShift + dt * hue) % (Math.PI * 2);
+      p.posY = 0.24 - 0.05 * Math.cos(ph);
+      self.raf = requestAnimationFrame(step);
+    }
+    this.raf = requestAnimationFrame(step);
+    return { canvas: instances[i].canvas, warmupMs: 300 };
+  },
+  exit: function() { cancelAnimationFrame(this.raf); soloIdx = -1; }
+};
 })();
