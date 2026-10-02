@@ -50,6 +50,7 @@
 //      pointer ............. "function ptr"           drag the source
 //      resize .............. "function resize"        canvas sizing and DPR
 //      loop ................ "function loop"          time advance and FPS
+//      screensaver ......... "window.snSaver"         hook for the shell
 // ============================================================================
 
 // The drawing canvas and its 2D context. CW/CH are the CSS pixel size (the
@@ -461,3 +462,34 @@ function loop(time){
 // loop after a short delay so the layout has settled.
 document.querySelectorAll('#tune input[type=range]').forEach(sg);
 setTimeout(()=>{resize();requestAnimationFrame(loop);},60);
+
+// Screensaver hook for the shell (lib/screensaver.js). enter() hides the equation
+// panel, legend, readout, caption, tune card and dock, and fixes #stage to the
+// window, so resize() sizes the canvas to it. The charge stays at the centre.
+// Vectors and fronts go off; lines, pulse and B stay. The axis turns slowly
+// through 90 +/- 60 degrees, so the radiation lobes rotate. opts.calm (1 =
+// slowest) sets the phase speed (the page's own slow button is 0.25) and the
+// axis period. opts.seed sets the start phase of the axis turn.
+/* ─── screensaver ─── */
+window.snSaver={
+  enter(opts){
+    const calm=Math.min(1,Math.max(0,opts.calm??0.7));
+    const st=document.createElement('style');
+    st.textContent='#eqpanel,#legend,#readout,#ovl-caption,#tune,#dock,.topbar{display:none!important}'+
+      '#stage{position:fixed!important;inset:0!important;height:auto!important;flex:none!important}';
+    document.head.appendChild(st);
+    window.__setOverlay(null);
+    SIM.playing=true; SIM.speed=0.25+0.5*(1-calm);
+    SIM.showVectors=false; SIM.showFronts=false;
+    SIM.showLines=true; SIM.showFlow=true; SIM.showB=true;
+    resize();
+    const period=90+90*calm, ph0=((opts.seed>>>0)%360)*Math.PI/180, t0=performance.now();
+    const turn=now=>{
+      SIM.axisDeg=90+60*Math.sin(ph0+(now-t0)/1000*2*Math.PI/period);
+      SRC.x=CW*0.5; SRC.y=CH*0.5;
+      requestAnimationFrame(turn);
+    };
+    requestAnimationFrame(turn);
+    return { canvas, warmupMs:1000 };
+  }
+};
