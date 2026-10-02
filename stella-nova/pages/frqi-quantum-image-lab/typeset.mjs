@@ -14,7 +14,7 @@
 //  The script finds equation.js next to itself.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" typeset.mjs)
-//      formula ......... "const TEX"    the TeX source
+//      formula ......... "const TEX"    the TeX source and its .mN classes
 //      svg cleanup ..... "function svg" MathJax output to inline SVG
 // ============================================================================
 import { createRequire } from 'node:module';
@@ -28,11 +28,15 @@ const { SVG } = require('mathjax-full/js/output/svg.js');
 const { liteAdaptor } = require('mathjax-full/js/adaptors/liteAdaptor.js');
 const { RegisterHTMLHandler } = require('mathjax-full/js/handlers/html.js');
 
-const TEX = String.raw`|\varphi\rangle=\frac{1}{\sqrt{N}}\sum_{i=0}^{N-1}\bigl(\cos\theta_i|0\rangle+\sin\theta_i|1\rangle\bigr)\otimes|i\rangle`;
+// Symbol classes. ../../lib/sci.css colors .m1 to .m6. The tile titles
+// in index.html use the same colors:
+//   m2  pixel angle theta_i       m1  color basis state |0>
+//   m5  color basis state |1>     m3  position register |i>
+const TEX = String.raw`|\varphi\rangle=\frac{1}{\sqrt{N}}\sum_{i=0}^{N-1}\bigl(\cos\class{m2}{\theta_i}\,\class{m1}{|0\rangle}+\sin\class{m2}{\theta_i}\,\class{m5}{|1\rangle}\bigr)\otimes\class{m3}{|i\rangle}`;
 
 const adaptor = liteAdaptor();
 RegisterHTMLHandler(adaptor);
-const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams'] }), OutputJax: new SVG({ fontCache: 'local' }) });
+const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams', 'html'] }), OutputJax: new SVG({ fontCache: 'local' }) });
 
 // MathJax output to inline SVG. The ex sizes stay, so CSS font-size scales
 // the formula. aria-hidden is removed and a label with the TeX is added.

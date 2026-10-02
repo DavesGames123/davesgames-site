@@ -4,7 +4,7 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Quantum Image Encoding // Stella Nova · davesgames.io</title>
+<title>Quantum image encoding — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    FRQI QUANTUM IMAGE LAB  ·  page shell
@@ -30,11 +30,11 @@
      P(|1⟩) per pixel ─▶ decode (arcsin√P or linear) ─▶ reconstruction + MAE
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts        Google Fonts: Space Grotesk, IBM Plex Mono and
-                     Instrument Serif, the same set as the shell
-     2. importmap    maps the bare specifier "three" to the CDN; MUST stay
+     1. importmap    maps the bare specifier "three" to the CDN; MUST stay
                      inline (an import map cannot be an external file)
-     3. style.css    the page stylesheet
+     2. style.css    the page stylesheet
+     3. sci.css      ../../lib/sci.css: STIX Two Text, Inter, the system
+                     mono and the math colors .m1 to .m6. It loads the fonts.
      4. main.js      type=module. It imports equation.js, the state
                      equation as MathJax SVG (written by typeset.mjs)
 
@@ -53,19 +53,18 @@
    #dock in portrait and a right drawer in landscape.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
 </script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <div class="topbar">
   <div class="topbar-l">
-    <span class="sys-name">Quantum&nbsp;<em>Image Encoding</em></span>
-    <span class="sys-status">Encoder Online</span>
+    <span class="sys-name">Quantum image encoding</span>
   </div>
-  <div class="topbar-r">Amplitude-encoded images · <strong>davesgames.io</strong></div>
+  <div class="topbar-r">Amplitude-encoded images</div>
 </div>
 
 <div id="main">
@@ -75,7 +74,7 @@
     <!-- Register: step position qubits (even only). Total qubits = position + 1
          color qubit; the grid is n×n where n = 2^(position/2). -->
     <div class="p-section">
-      <div class="p-sec-lbl">Quantum Register</div>
+      <div class="p-sec-lbl">Quantum register</div>
       <div class="qreg">
         <div class="qrow"><span class="ql">Position qubits</span>
           <div class="stepper"><button class="step" id="q-dn">−</button><span class="stepval" id="q-pos">4</span><button class="step" id="q-up">+</button></div></div>
@@ -87,7 +86,7 @@
 
     <!-- Source presets; data-preset picks a generated test image in makePreset. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Source Image</div>
+      <div class="p-sec-lbl">Source image</div>
       <div class="preset-grid">
         <button class="preset-btn active" data-preset="cross">Cross</button>
         <button class="preset-btn" data-preset="gradient">Gradient</button>
@@ -96,13 +95,13 @@
         <button class="preset-btn" data-preset="rings">Rings</button>
         <button class="preset-btn" data-preset="blank">Blank</button>
       </div>
-      <div class="note">Paint in the <b style="color:var(--blue)">SOURCE</b> tile, or load a photo — it downsamples to the grid.</div>
+      <div class="note">Paint in the <b style="color:var(--blue)">Source</b> tile, or load a photo — it downsamples to the grid.</div>
     </div>
 
     <!-- ρ colour: data-mode chooses magnitude, phase, or real part; the colour
          map grid, spin-label toggle, and heat threshold shape the stack. -->
     <div class="p-section">
-      <div class="p-sec-lbl">ρ Colour</div>
+      <div class="p-sec-lbl">ρ colour</div>
       <div class="mode-grid">
         <button class="btn active" data-mode="mag">|ρ|</button>
         <button class="btn" data-mode="phase">∠ρ</button>
@@ -112,7 +111,7 @@
       <!-- Less used: spin labels and the heat cut. Closed at load. -->
       <details class="p-more">
         <summary>Labels and heat cut</summary>
-        <button class="btn" id="spin-toggle" style="width:100%;margin-top:6px">Spin&nbsp;% labels: OFF</button>
+        <button class="btn" id="spin-toggle" style="width:100%;margin-top:6px">Spin&nbsp;% labels: off</button>
         <div class="slider-row"><span class="sl-lbl">Heat ≥</span><input type="range" id="thresh" min="0" max="0.5" value="0" step="0.005"><span class="val" id="thresh-v">0.00</span></div>
         <div class="note">Colour curve matches the Quantum Algorithm Visualizer.</div>
       </details>
@@ -121,7 +120,7 @@
     <!-- Quantum ops: data-xform applies a gate on the encoded state (color X,
          Z, S, or a position-bit X mirror) in applyXform. -->
     <div class="p-section">
-      <div class="p-sec-lbl">Quantum Operations</div>
+      <div class="p-sec-lbl">Quantum operations</div>
       <div class="xform-grid">
         <button class="xform-btn" data-xform="negative">Negative<span class="gx">X · color</span></button>
         <button class="xform-btn" data-xform="phaseZ">Phase flip<span class="gx">Z · color</span></button>
@@ -145,7 +144,7 @@
          (renderEquation, static SVG from equation.js). -->
     <!-- A readout only (no controls), so it is closed at load. -->
     <details class="p-section p-fold" style="border-bottom:none">
-      <summary class="p-sec-lbl">State Register</summary>
+      <summary class="p-sec-lbl">State register</summary>
       <div class="readout" id="readout"></div>
       <div id="eq-main"></div>
     </details>
@@ -157,32 +156,32 @@
     <!-- Module 1: paint the source, and see it split into |0⟩·cosθ and |1⟩·sinθ
          amplitude tiles (drawField). -->
     <div class="module" id="m-field">
-      <div class="mod-head"><span class="mod-title">Amplitude Field</span><span class="mod-sub">paint · split into |0⟩cos + |1⟩sin</span><span class="mod-tag" id="field-tag">MAG</span></div>
+      <div class="mod-head"><span class="mod-title">Amplitude field</span><span class="mod-sub">paint · split into |0⟩cos + |1⟩sin</span><span class="mod-tag" id="field-tag">|ρ|</span></div>
       <div class="mod-body" id="field-body">
         <!-- Paintable source grid plus its brush toolbar (ink, size, fill,
              clear, image upload). -->
         <div class="fld-src">
-          <div class="src-canvas-wrap"><canvas id="src-cv"></canvas><span class="panel-title" style="color:rgba(150,200,255,0.8)">SOURCE · paint</span></div>
+          <div class="src-canvas-wrap"><canvas id="src-cv"></canvas><span class="panel-title" style="color:rgba(150,200,255,0.8)">Source · paint</span></div>
           <!-- Three groups. The bar wraps between groups, never inside one. -->
           <div id="paint-bar">
-            <span class="pb-grp"><span class="pb-lbl">ink</span>
+            <span class="pb-grp"><span class="pb-lbl">Ink</span>
             <div class="sw" data-ink="0" style="background:#000" title="0"></div>
             <div class="sw" data-ink="64" style="background:#404040" title="64"></div>
             <div class="sw" data-ink="128" style="background:#808080" title="128"></div>
             <div class="sw" data-ink="192" style="background:#c0c0c0" title="192"></div>
             <div class="sw active" data-ink="255" style="background:#fff" title="255"></div></span>
-            <span class="pb-grp"><span class="pb-lbl">size</span>
+            <span class="pb-grp"><span class="pb-lbl">Size</span>
             <button class="pb-btn" id="brush-dn">−</button><span class="val" id="brush-sz" style="color:var(--blue);min-width:14px;text-align:center">1</span><button class="pb-btn" id="brush-up">+</button></span>
             <span class="pb-grp">
-            <button class="pb-btn" id="paint-fill">▦ fill</button>
-            <button class="pb-btn" id="paint-clear">✕ clear</button>
-            <button class="pb-btn" id="paint-upload">⤒ image</button></span>
+            <button class="pb-btn" id="paint-fill">Fill</button>
+            <button class="pb-btn" id="paint-clear">Clear</button>
+            <button class="pb-btn" id="paint-upload">Image</button></span>
             <input type="file" id="file-in" accept="image/*" style="display:none">
           </div>
         </div>
         <div class="fld-amp">
-          <div class="amp-cell"><canvas id="amp0-cv"></canvas><span class="panel-title" style="color:rgba(105,168,255,0.85)">|0⟩ · cos θ</span></div>
-          <div class="amp-cell"><canvas id="amp1-cv"></canvas><span class="panel-title" style="color:rgba(255,185,72,0.85)">|1⟩ · sin θ</span></div>
+          <div class="amp-cell"><canvas id="amp0-cv"></canvas><span class="panel-title m1">|0⟩ · cos θ</span></div>
+          <div class="amp-cell"><canvas id="amp1-cv"></canvas><span class="panel-title m5">|1⟩ · sin θ</span></div>
           <!-- The colour key and the gate caption sit under the tiles, so they
                never cover a tile. -->
           <div class="amp-foot"><span class="cap" id="field-cap"></span><div class="legend" id="field-legend"></div></div>
@@ -193,7 +192,7 @@
     <!-- Module 2: the 3D density-matrix stack. The score strip (#score-cv) and
          its pinned gutter drive the playhead; #stack-gl is the WebGL canvas. -->
     <div class="module" id="m-stack">
-      <div class="mod-head"><span class="mod-title">ρ(t) State Stack</span><span class="mod-sub">density matrix · scrub the score</span><span class="mod-tag">3D · drag</span></div>
+      <div class="mod-head"><span class="mod-title">ρ(t) state stack</span><span class="mod-sub">density matrix · scrub the score</span><span class="mod-tag">3D · drag</span></div>
       <div class="mod-body" style="display:flex;flex-direction:column">
         <div id="score-wrap"><canvas id="score-cv"></canvas></div>
         <canvas id="score-gutter"></canvas>
@@ -216,17 +215,17 @@
            slider row has its own grid cell, so a value never overlaps the
            next label. -->
       <div id="recon-foot">
-        <div class="rf-sl"><span>shots</span><input type="range" id="shots" min="64" max="20000" value="4000" step="64"><span class="val" id="shots-v">4000</span></div>
-        <div class="rf-sl"><span>gap</span><input type="range" id="gap" min="0" max="1.5" value="0.7" step="0.05"><span class="val" id="gap-v">0.70s</span></div>
-        <label class="rf-chk"><input type="checkbox" id="show-labels" checked><span>labels</span></label>
-        <button id="run-shots">⚲ Sample</button>
+        <div class="rf-sl"><span>Shots</span><input type="range" id="shots" min="64" max="20000" value="4000" step="64"><span class="val" id="shots-v">4000</span></div>
+        <div class="rf-sl"><span>Gap</span><input type="range" id="gap" min="0" max="1.5" value="0.7" step="0.05"><span class="val" id="gap-v">0.70s</span></div>
+        <label class="rf-chk"><input type="checkbox" id="show-labels" checked><span>Labels</span></label>
+        <button id="run-shots">Sample</button>
       </div>
     </div>
 
     <!-- Module 4: the encoding circuit (drawCircuit), scrubbable and synced to
          the stack playhead. Filled dots are 1-controls, open dots 0-controls. -->
     <div class="module" id="m-circuit">
-      <div class="mod-head"><span class="mod-title">Encoding Circuit</span><span class="mod-sub">click to scrub · synced to stack</span><span class="mod-tag"><b style="color:var(--text-dim)">○</b>=0 <b style="color:var(--amber)">●</b>=1</span></div>
+      <div class="mod-head"><span class="mod-title">Encoding circuit</span><span class="mod-sub">click to scrub · synced to stack</span><span class="mod-tag"><b style="color:var(--text-dim)">○</b>=0 <b style="color:var(--amber)">●</b>=1</span></div>
       <div class="mod-body" id="circuit-body"><canvas id="circuit-cv"></canvas></div>
     </div>
   </div>
@@ -236,9 +235,9 @@
      "PHONE DOCK". The panel is then a bottom sheet (portrait) or a right
      drawer (landscape), so the modules stay in view. -->
 <div id="dock">
-  <button id="dock-panel" aria-expanded="false">☰ Controls</button>
-  <button id="dock-play">▶ Play</button>
-  <button id="dock-sample">⚲ Sample</button>
+  <button id="dock-panel" aria-expanded="false">Controls</button>
+  <button id="dock-play">Play</button>
+  <button id="dock-sample">Sample</button>
 </div>
 <!-- Floating pixel/cell tooltip, positioned by main.js on hover. -->
 <div id="cell-tip"></div>
