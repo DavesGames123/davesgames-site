@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<title>Smith Chart — Stella Nova · davesgames.io</title>
+<title>Smith chart — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    SMITH CHART  ·  page shell
@@ -17,8 +17,9 @@
    units ("2.2n", "1.5G", "50 ohm").
 
    LOAD ORDER
-     <head>   gpu-guard, Google Fonts (Space Grotesk, IBM Plex Mono,
-              Instrument Serif), style.css
+     <head>   gpu-guard, style.css, then ../../lib/sci.css (shared science
+              type: STIX Two Text, Inter, the system mono, and the math
+              colors .m1 to .m6; it loads the fonts)
      <body>   rf.js         global RF (complex math, no DOM)
               main.js       global SC: state, chart, panel, loop
               match.js      L-network, stub and lambda/4 matching
@@ -26,11 +27,12 @@
                             the trace on the chart and the |S11| plot
               tools.js      Q and spec circles, markers, copy results, and
                             the state in the URL hash
-              equations.js  the formulas as static MathJax SVG
+              equations.js  the formulas and the label symbols as static
+                            MathJax SVG, color-coded with .m1 to .m6
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────────────────────────────────────────────┐
-     │ topbar: Stella Nova · Smith Chart                                  │
+     │ topbar: Stella Nova · Smith chart                                  │
      ├────────────┬─────────────────────────────────────────────────────┤
      │ #panel     │  #chart   the chart; drag to move the load            │
      │  system    │  #tip     the cursor readout under the pointer        │
@@ -61,20 +63,20 @@
 <meta name="description" content="A Smith chart for daily RF work: loads in ohms, VSWR or S11 dB, live readouts, line rotation and a hover cursor, L-network, stub and quarter-wave matching with part values, and sweeps of RLC models or Touchstone files.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>Stella&nbsp;Nova</div>
-  <div class="pagetitle">Smith <em>Chart</em></div>
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Smith chart</div>
 </div>
 
 <canvas id="chart"></canvas>
 <div id="tip"></div>
-<div id="hint">drag on the chart to move the load</div>
+<div id="hint">Drag on the chart to move the load</div>
 <div id="toast" role="status" aria-live="polite"></div>
 <button id="gear" aria-label="Controls">☰</button>
 
@@ -85,9 +87,9 @@
   <details class="sec" id="secSystem" open>
     <summary>System</summary>
     <div class="fields">
-      <label class="fld"><span>Z0</span><input id="fZ0" data-unit="Ω" spellcheck="false" autocomplete="off"><em>Ω</em></label>
-      <label class="fld"><span>f</span><input id="fF" data-unit="Hz" spellcheck="false" autocomplete="off"><em>Hz</em></label>
-      <label class="fld"><span>v<sub>f</sub></span><input id="fVf" spellcheck="false" autocomplete="off"><em>c</em></label>
+      <label class="fld"><span class="sym" data-sym="Z0">Z0</span><input id="fZ0" data-unit="Ω" spellcheck="false" autocomplete="off"><em>Ω</em></label>
+      <label class="fld"><span class="sym" data-sym="f">f</span><input id="fF" data-unit="Hz" spellcheck="false" autocomplete="off"><em>Hz</em></label>
+      <label class="fld"><span class="sym" data-sym="vf">v<sub>f</sub></span><input id="fVf" spellcheck="false" autocomplete="off"><em>c</em></label>
     </div>
     <div class="chips" id="z0Chips">
       <button data-z0="50">50 Ω</button><button data-z0="75">75 Ω</button><button data-z0="100">100 Ω</button>
@@ -105,18 +107,18 @@
       <button data-mode="s11">S11 dB ∠</button>
     </div>
     <div class="tabs three" id="modelTabs">
-      <button data-mode="series">series RLC</button>
-      <button data-mode="parallel">parallel RLC</button>
+      <button data-mode="series">Series RLC</button>
+      <button data-mode="parallel">Parallel RLC</button>
       <button data-mode="file">.s1p file</button>
     </div>
     <div class="fields" id="pointFields">
-      <label class="fld"><span id="pfA">R</span><input id="fA" spellcheck="false" autocomplete="off"><em id="pfAu">Ω</em></label>
-      <label class="fld"><span id="pfB">X</span><input id="fB" spellcheck="false" autocomplete="off"><em id="pfBu">Ω</em></label>
+      <label class="fld"><span id="pfA" class="sym" data-sym="R">R</span><input id="fA" spellcheck="false" autocomplete="off"><em id="pfAu">Ω</em></label>
+      <label class="fld"><span id="pfB" class="sym" data-sym="X">X</span><input id="fB" spellcheck="false" autocomplete="off"><em id="pfBu">Ω</em></label>
     </div>
     <div class="chips" id="presets">
-      <button data-r="0" data-x="0">short</button>
-      <button data-r="1e12" data-x="0">open</button>
-      <button data-r="1" data-x="0">match</button>
+      <button data-r="0" data-x="0">Short</button>
+      <button data-r="1e12" data-x="0">Open</button>
+      <button data-r="1" data-x="0">Match</button>
       <button data-r="0.5" data-x="0">Z0/2</button>
       <button data-r="1.2" data-x="-1.6">1.2 − j1.6</button>
       <button data-r="0.4" data-x="0.8">0.4 + j0.8</button>
@@ -133,9 +135,9 @@
     </div>
     <div class="off" data-model-box="file">
       <div class="tabs three">
-        <label class="filebtn">open file<input type="file" id="fileInput" accept=".s1p,.s2p,.snp,.txt,text/plain"></label>
-        <button id="pasteBtn">read paste</button>
-        <button id="exampleBtn">example</button>
+        <label class="filebtn">Open file<input type="file" id="fileInput" accept=".s1p,.s2p,.snp,.txt,text/plain"></label>
+        <button id="pasteBtn">Read paste</button>
+        <button id="exampleBtn">Example</button>
       </div>
       <textarea id="pasteBox" spellcheck="false" placeholder="Paste Touchstone text here, or drop a .s1p file on the page.&#10;# GHz S MA R 50&#10;2.40 0.31 -42.0"></textarea>
       <p class="note" id="fileInfo">Open, paste or drop a .s1p or .s2p file. Only S11 is used.</p>
@@ -146,28 +148,28 @@
   <details class="sec" id="secRead" open>
     <summary>Readout <span class="at" id="readAt"></span></summary>
     <table class="readout">
-      <tr><td>Z</td><td id="rdZ"></td></tr>
-      <tr><td>z = Z/Z0</td><td id="rdz"></td></tr>
-      <tr><td>Y</td><td id="rdY"></td></tr>
-      <tr><td>Γ</td><td id="rdG"></td></tr>
-      <tr><td>Γ re, im</td><td id="rdGri"></td></tr>
+      <tr><td><span class="sym" data-sym="Z">Z</span></td><td id="rdZ"></td></tr>
+      <tr><td><span class="sym" data-sym="z">z = Z/Z0</span></td><td id="rdz"></td></tr>
+      <tr><td><span class="sym" data-sym="Y">Y</span></td><td id="rdY"></td></tr>
+      <tr><td><span class="sym" data-sym="G">Γ</span></td><td id="rdG"></td></tr>
+      <tr><td><span class="sym" data-sym="G">Γ</span> re, im</td><td id="rdGri"></td></tr>
       <tr><td>VSWR</td><td id="rdS"></td></tr>
-      <tr><td>return loss</td><td id="rdRL"></td></tr>
-      <tr><td>mismatch loss</td><td id="rdML"></td></tr>
+      <tr><td>Return loss</td><td id="rdRL"></td></tr>
+      <tr><td>Mismatch loss</td><td id="rdML"></td></tr>
       <tr><td>Q</td><td id="rdQ"></td></tr>
-      <tr><td>series eq.</td><td id="rdSer"></td></tr>
-      <tr><td>parallel eq.</td><td id="rdPar"></td></tr>
-      <tr><td>on the rim</td><td id="rdW"></td></tr>
-      <tr class="zin"><td>Z<sub>in</sub> after line</td><td id="rdZin"></td></tr>
-      <tr class="zin"><td>Γ<sub>in</sub></td><td id="rdGin"></td></tr>
+      <tr><td>Series equivalent</td><td id="rdSer"></td></tr>
+      <tr><td>Parallel equivalent</td><td id="rdPar"></td></tr>
+      <tr><td>On the rim</td><td id="rdW"></td></tr>
+      <tr class="zin"><td><span class="sym" data-sym="Zin">Z<sub>in</sub></span> after line</td><td id="rdZin"></td></tr>
+      <tr class="zin"><td><span class="sym" data-sym="Gin">Γ<sub>in</sub></span></td><td id="rdGin"></td></tr>
     </table>
   </details>
 
   <details class="sec off" id="secSweep" open>
     <summary>Sweep</summary>
     <div class="fields">
-      <label class="fld"><span>start</span><input id="fFa" spellcheck="false" autocomplete="off"><em>Hz</em></label>
-      <label class="fld"><span>stop</span><input id="fFb" spellcheck="false" autocomplete="off"><em>Hz</em></label>
+      <label class="fld"><span>Start</span><input id="fFa" spellcheck="false" autocomplete="off"><em>Hz</em></label>
+      <label class="fld"><span>Stop</span><input id="fFb" spellcheck="false" autocomplete="off"><em>Hz</em></label>
     </div>
     <canvas id="sweepPlot" aria-label="|S11| in dB against frequency. Click to set f."></canvas>
     <p class="note" id="sweepInfo"></p>
@@ -176,14 +178,14 @@
   <details class="sec" id="secMatch" open>
     <summary>Match to Z0</summary>
     <div class="tabs" id="matchTabs">
-      <button data-method="off" class="on">off</button>
+      <button data-method="off" class="on">Off</button>
       <button data-method="lnet">L-network</button>
-      <button data-method="stub">stub</button>
+      <button data-method="stub">Stub</button>
       <button data-method="qw">λ/4</button>
     </div>
     <div class="tabs two off" id="stubKind">
-      <button data-stub="short" class="on">short stub</button>
-      <button data-stub="open">open stub</button>
+      <button data-stub="short" class="on">Short stub</button>
+      <button data-stub="open">Open stub</button>
     </div>
     <div id="matchSols" class="sols"></div>
     <p class="note" id="matchNote"></p>
@@ -192,16 +194,16 @@
   <details class="sec" id="secLine" open>
     <summary>Line</summary>
     <div class="fields">
-      <label class="fld"><span>ℓ</span><input id="fLen" spellcheck="false" autocomplete="off"><em>λ</em></label>
+      <label class="fld"><span class="sym" data-sym="len">ℓ</span><input id="fLen" spellcheck="false" autocomplete="off"><em>λ</em></label>
     </div>
     <input type="range" id="len" min="0" max="0.5" step="0.001" value="0" aria-label="Line length in wavelengths">
     <div class="tabs two" id="dirTabs">
-      <button data-dir="gen" class="on">toward generator ↻</button>
-      <button data-dir="load">toward load ↺</button>
+      <button data-dir="gen" class="on">Toward generator</button>
+      <button data-dir="load">Toward load</button>
     </div>
     <div class="tabs two">
-      <button id="walkBtn">▶ walk line</button>
-      <button id="lenReset">length 0</button>
+      <button id="walkBtn">Walk line</button>
+      <button id="lenReset">Length 0</button>
     </div>
     <p class="note" id="lenNote"></p>
   </details>
@@ -215,11 +217,11 @@
     </div>
     <div class="tabs two">
       <button id="circleBtn" class="on">VSWR circle</button>
-      <button id="rimBtn" class="on">rim scales</button>
+      <button id="rimBtn" class="on">Rim scales</button>
     </div>
     <div class="fields">
       <label class="fld"><span>Q circle</span><input id="fQ" spellcheck="false" autocomplete="off"></label>
-      <label class="fld"><span>spec VSWR</span><input id="fSpec" spellcheck="false" autocomplete="off"></label>
+      <label class="fld"><span>Spec VSWR</span><input id="fSpec" spellcheck="false" autocomplete="off"></label>
     </div>
     <p class="note">0 turns a circle off. The spec circle shows the VSWR limit, for example 2.</p>
   </details>
@@ -227,8 +229,8 @@
   <details class="sec" id="secMarks" open>
     <summary>Markers</summary>
     <div class="tabs two">
-      <button id="markPin">pin load (P)</button>
-      <button id="markClear" disabled>clear all</button>
+      <button id="markPin">Pin load (P)</button>
+      <button id="markClear" disabled>Clear all</button>
     </div>
     <ol id="markList" class="marks"></ol>
     <p class="note">Shift + click on the chart pins the point under the pointer.</p>
@@ -237,8 +239,8 @@
   <details class="sec" id="secShare" open>
     <summary>Share</summary>
     <div class="tabs two">
-      <button id="copyBtn">copy results</button>
-      <button id="linkBtn">copy link</button>
+      <button id="copyBtn">Copy results</button>
+      <button id="linkBtn">Copy link</button>
     </div>
     <p class="note">The link holds the whole setup except a loaded file.</p>
   </details>
@@ -254,6 +256,7 @@
     <div class="eq" id="eq-lnetP"></div>
     <div class="eq" id="eq-partsS"></div>
     <div class="eq" id="eq-partsP"></div>
+    <div class="eq" id="eq-partsQ"></div>
     <div class="eq" id="eq-qw"></div>
   </details>
 

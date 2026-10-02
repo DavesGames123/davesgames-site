@@ -12,7 +12,9 @@
 //  The script finds equations.js next to itself.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" typeset.mjs)
+//      colors .......... "COLOR"        symbol -> .mN class map
 //      formulas ........ "const TEX"    the TeX source of each formula
+//      label symbols ... "const SYM"    inline symbols for field labels
 //      svg cleanup ..... "function svg" MathJax output to inline SVG
 // ============================================================================
 import { createRequire } from 'node:module';
@@ -26,35 +28,59 @@ const { SVG } = require('mathjax-full/js/output/svg.js');
 const { liteAdaptor } = require('mathjax-full/js/adaptors/liteAdaptor.js');
 const { RegisterHTMLHandler } = require('mathjax-full/js/handlers/html.js');
 
+// COLOR. \class{mN}{...} puts a class on the symbol group of the SVG.
+// lib/sci.css gives .m1 to .m6 a color. The same class goes on the field
+// label that sets the quantity (SYM below), so they show the same color.
+//   m3  load impedance Z_L, Z_in, R_L, X_L, G_L, B_L   (impedance)
+//   m1  line impedance Z_0
+//   m4  reflection coefficient Γ
+//   m2  line length ℓ
+//   m6  wavelength λ
+//   m5  frequency f
+const S = String.raw;
+const k = (cls, t) => S`\class{${cls}}{${t}}`;
+const ZL = k('m3', 'Z_L'), Z0 = k('m1', 'Z_0'), G = k('m4', S`\Gamma`), L = k('m2', S`\ell`), LAM = k('m6', S`\lambda`), F = k('m5', 'f');
+const RL = k('m3', 'R_L'), XL = k('m3', 'X_L'), GL = k('m3', 'G_L'), BL = k('m3', 'B_L');
+
 // Each formula has a slot id in index.html: eq-<key>.
 const TEX = {
-  gamma: String.raw`\Gamma=\frac{Z_L-Z_0}{Z_L+Z_0}=|\Gamma|\,e^{j\theta}`,
-  vswr: String.raw`\mathrm{VSWR}=\frac{1+|\Gamma|}{1-|\Gamma|}`,
-  loss: String.raw`\mathrm{RL}=-20\log_{10}|\Gamma|\qquad \mathrm{ML}=-10\log_{10}\!\left(1-|\Gamma|^{2}\right)`,
-  zin: String.raw`Z_{in}=Z_0\,\frac{Z_L+jZ_0\tan\beta\ell}{Z_0+jZ_L\tan\beta\ell}`,
-  beta: String.raw`\beta\ell=\frac{2\pi\ell}{\lambda}\qquad \lambda=\frac{v_f\,c}{f}`,
-  lnetS: String.raw`X_s=-X_L\pm\sqrt{R_L Z_0-R_L^{2}}\quad (R_L\le Z_0)`,
-  lnetP: String.raw`B_p=-B_L\pm\sqrt{G_L/Z_0-G_L^{2}}\quad (G_L\le 1/Z_0)`,
-  partsS: String.raw`\text{series: }\ L=\frac{X}{\omega}\quad C=\frac{-1}{\omega X}`,
-  partsP: String.raw`\text{shunt: }\ C=\frac{B}{\omega}\quad L=\frac{-1}{\omega B}\qquad Q=\frac{|X|}{R}`,
-  qw: String.raw`Z_t=\sqrt{Z_0\,R}\qquad R=Z_0\,\mathrm{VSWR}\ \text{or}\ \frac{Z_0}{\mathrm{VSWR}}`,
+  gamma: S`${G}=\frac{${ZL}-${Z0}}{${ZL}+${Z0}}=|${G}|\,e^{j\theta}`,
+  vswr: S`\mathrm{VSWR}=\frac{1+|${G}|}{1-|${G}|}`,
+  loss: S`\begin{gathered}\mathrm{RL}=-20\log_{10}|${G}|\\ \mathrm{ML}=-10\log_{10}\!\left(1-|${G}|^{2}\right)\end{gathered}`,
+  zin: S`${k('m3', 'Z_{in}')}=${Z0}\,\frac{${ZL}+j${Z0}\tan\beta${L}}{${Z0}+j${ZL}\tan\beta${L}}`,
+  beta: S`\beta${L}=\frac{2\pi${L}}{${LAM}}\qquad ${LAM}=\frac{v_f\,c}{${F}}`,
+  lnetS: S`\begin{gathered}X_s=-${XL}\pm\sqrt{${RL} ${Z0}-${RL}^{2}}\\ \text{for } ${RL}\le ${Z0}\end{gathered}`,
+  lnetP: S`\begin{gathered}B_p=-${BL}\pm\sqrt{${GL}/${Z0}-${GL}^{2}}\\ \text{for } ${GL}\le 1/${Z0}\end{gathered}`,
+  partsS: S`\text{series: }\ L=\frac{X}{\omega}\quad C=\frac{-1}{\omega X}`,
+  partsP: S`\text{shunt: }\ C=\frac{B}{\omega}\quad L=\frac{-1}{\omega B}`,
+  partsQ: S`Q=\frac{|X|}{R}`,
+  qw: S`\begin{gathered}Z_t=\sqrt{${Z0}\,R}\\ R=${Z0}\,\mathrm{VSWR}\ \text{or}\ R=\frac{${Z0}}{\mathrm{VSWR}}\end{gathered}`,
+};
+
+// Field and readout labels as inline symbols. Each element with
+// data-sym="<key>" gets the symbol of that key.
+const SYM = {
+  Z0: Z0, f: F, vf: 'v_f', len: L, R: k('m3', 'R'), X: k('m3', 'X'), absG: S`|${G}|`,
+  Z: k('m3', 'Z'), z: S`z=${k('m3', 'Z')}/${Z0}`, Y: 'Y', G: G, Zin: k('m3', 'Z_{in}'), Gin: k('m4', S`\Gamma_{in}`),
 };
 
 const adaptor = liteAdaptor();
 RegisterHTMLHandler(adaptor);
-const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams'] }), OutputJax: new SVG({ fontCache: 'local' }) });
+const doc = mathjax.document('', { InputJax: new TeX({ packages: ['base', 'ams', 'html'] }), OutputJax: new SVG({ fontCache: 'local' }) });
 
 // MathJax output to inline SVG. The ex sizes stay, so CSS font-size scales
 // the formula. aria-hidden is removed and a label with the TeX is added.
-function svg(tex) {
-  const node = doc.convert(tex, { display: true });
+function svg(tex, display = true) {
+  const node = doc.convert(tex, { display });
   let s = adaptor.innerHTML(node).replace(/ aria-hidden="true"/, '');
-  s = s.replace('<svg ', `<svg role="img" aria-label="${tex.replace(/"/g, '&quot;')}" `);
+  const label = tex.replace(/\\class\{m\d\}/g, '').replace(/"/g, '&quot;');
+  s = s.replace('<svg ', `<svg role="img" aria-label="${label}" `);
   if (s.includes('merror')) throw new Error('TeX error in: ' + tex);
   return s;
 }
 
 const out = Object.fromEntries(Object.entries(TEX).map(([k, t]) => [k, svg(t)]));
+const sym = Object.fromEntries(Object.entries(SYM).map(([k, t]) => [k, svg(t, false)]));
 const js = `// ============================================================================
 //  SMITH CHART  ·  formula renderer  (GENERATED by typeset.mjs)
 // ----------------------------------------------------------------------------
@@ -62,13 +88,18 @@ const js = `// =================================================================
 //  Each formula is static SVG from MathJax, with glyphs as paths. No font
 //  or math library loads at run time, so each browser shows the same shape.
 //  Each formula goes into the element with id eq-<key>, if it is there.
+//  Each label symbol goes into the elements with data-sym="<key>".
+//  Symbol colors are the .m1 to .m6 classes of lib/sci.css.
 //
 //  SECTION MAP   (jump with grep -n "<anchor>" equations.js)
-//      formulas ........ "const SVG"  the formulas as SVG text
+//      formulas ........ "const SVG"         the formulas as SVG text
+//      label symbols ... "SMITH_SYM"         inline symbols for labels
 // ============================================================================
 (function(){
   const SVG = ${JSON.stringify(out, null, 2)};
   for (const k in SVG) { const el = document.getElementById('eq-' + k); if (el) el.innerHTML = SVG[k]; }
+  window.SMITH_SYM = ${JSON.stringify(sym, null, 2)};
+  document.querySelectorAll('[data-sym]').forEach(el => { const s = window.SMITH_SYM[el.dataset.sym]; if (s) el.innerHTML = s; });
 })();
 `;
 const dest = fileURLToPath(new URL('./equations.js', import.meta.url));

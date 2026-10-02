@@ -61,7 +61,7 @@
   const G_MAX = 0.995;                     // drag limit for |gamma|
   const PHONE_Q = window.matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
   const COL = { z: '80,220,232', y: '229,139,208', load: '#fca35e', zin: '#9db4ff', match: '#7ee0a0', ink: '#e6eef6', dim: '#71859a' };
-  const FONT = "'IBM Plex Mono', ui-monospace, monospace";
+  const FONT = "ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
 
   // Grid lines: [value, extent]. An r circle runs for |x| <= extent. An x arc
   // runs for r <= extent. A minor line stops on a major line, as on a paper chart.
@@ -529,7 +529,7 @@
   // --------------------------------------------------------------------- UI
   function setWalk(on) {
     S.walking = on;
-    $('walkBtn').textContent = on ? '❚❚ stop walk' : '▶ walk line';
+    $('walkBtn').textContent = on ? 'Stop walk' : 'Walk line';
     $('walkBtn').classList.toggle('on', on);
     $('dockPlay').textContent = on ? '❚❚' : '▶';
     $('dockPlay').classList.toggle('on', on);
@@ -552,10 +552,12 @@
   }
   SC.radio = radio;
 
-  // The labels of the two point fields in each form.
+  // The labels of the two point fields in each form: [text, unit, symbol].
+  // The symbol key selects an inline MathJax symbol from window.SMITH_SYM
+  // (equations.js). Without a key, the label stays text.
   const POINT_FORMS = {
-    z: { a: ['R', 'Ω'], b: ['X', 'Ω'] },
-    g: { a: ['|Γ|', ''], b: ['∠', '°'] },
+    z: { a: ['R', 'Ω', 'R'], b: ['X', 'Ω', 'X'] },
+    g: { a: ['|Γ|', '', 'absG'], b: ['∠', '°'] },
     vswr: { a: ['VSWR', ''], b: ['∠', '°'] },
     s11: { a: ['S11', 'dB'], b: ['∠', '°'] },
   };
@@ -591,8 +593,13 @@
   function setPointForm(mode) {
     S.mode = mode;
     const F = POINT_FORMS[mode];
-    $('pfA').textContent = F.a[0]; $('pfAu').textContent = F.a[1];
-    $('pfB').textContent = F.b[0]; $('pfBu').textContent = F.b[1];
+    const label = (el, [text, , sym]) => {
+      const svg = sym && window.SMITH_SYM && window.SMITH_SYM[sym];
+      if (sym) el.dataset.sym = sym; else delete el.dataset.sym;
+      if (svg) el.innerHTML = svg; else el.textContent = text;
+    };
+    label($('pfA'), F.a); $('pfAu').textContent = F.a[1];
+    label($('pfB'), F.b); $('pfBu').textContent = F.b[1];
     $('presets').classList.toggle('off', mode !== 'z');
     SC.syncFields();
   }
@@ -605,7 +612,7 @@
     $('loadNote').classList.toggle('off', !point);
     for (const el of document.querySelectorAll('[data-model-box]')) el.classList.toggle('off', el.dataset.modelBox !== mode);
     if (point) setPointForm(mode); else S.mode = mode;
-    $('hint').textContent = point ? 'drag on the chart to move the load' : 'the trace is Z(f) of the load model';
+    $('hint').textContent = point ? 'Drag on the chart to move the load' : 'The trace is Z(f) of the load model';
     SC.lastReadReset();
   };
 
@@ -707,7 +714,7 @@
         const m = abs(M.g), x = 28;
         c.fillStyle = COL.load; c.fillText(`ZL  ${fmtC(M.Z, 'Ω')}   |Γ| ${m.toFixed(3)}   VSWR ${fmtVswr(m)}`, x, H - 48);
         c.fillStyle = COL.zin; c.fillText(`Zin ${fmtC(M.Zin, 'Ω')}   ${(S.len).toFixed(3)} λ toward the generator`, x, H - 26);
-        c.fillStyle = COL.dim; c.fillText({ z: 'Z GRID', zy: 'Z + Y GRID', y: 'Y GRID' }[S.grid], x, 34);
+        c.fillStyle = COL.dim; c.fillText({ z: 'Z grid', zy: 'Z + Y grid', y: 'Y grid' }[S.grid], x, 34);
         const f = Math.max(0, 1 - tg / FADE, 1 - (hold - tg) / FADE);
         if (f > 0) { c.fillStyle = `rgba(6,8,12,${Math.min(1, f)})`; c.fillRect(0, 0, W, H); }
       });
