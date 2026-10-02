@@ -55,6 +55,7 @@
 //      phone dock ........... "PHONE DOCK"           sheet toggle, play, sample
 //      init ................. "buildCmapButtons"     first paint
 //      screensaver .......... "window.snSaver"       autopilot for lib/screensaver.js
+//      saver plate .......... "function saverPlate"  opts.label: |I⟩, qubits, step, MAE
 // ============================================================================
 import * as THREE from 'three';
 import { EQ_STATE } from './equation.js';
@@ -827,6 +828,46 @@ shots.style.setProperty('--pct',((4000-64)/19936*100)+'%');gap.style.setProperty
 buildCmapButtons();setTag();renderEquation();initGL();setPos(4);
 
 /* ===== SCREENSAVER ===== */
+// The plate for opts.label (the shell draws it at the lower right). All facts
+// are live page state: the preset, nPos, N(), the slab label that simulate()
+// wrote for stackStage, the gate count (nPos H + one controlled-RY for each
+// lit pixel), and during sampling the shots drawn and the MAE that drawRecon
+// also shows. One title for each image, so a call swaps the text in place.
+const supN=v=>String(v).replace(/\d/g,c=>'⁰¹²³⁴⁵⁶⁷⁸⁹'[c]);
+function stepText(lbl){
+  if(lbl==='init')return 'start state |'+initBasis.toString(2).padStart(nPos+1,'0')+'⟩';
+  if(/^H q/.test(lbl))return 'Hadamard on position qubit '+lbl.slice(3);
+  if(/^RY ×/.test(lbl))return lbl.slice(4)+' controlled-RY(2θᵢ) gates, grouped in one slab';
+  if(/^RY [01]+$/.test(lbl))return 'controlled-RY(2θᵢ) on the color qubit, pixel |'+lbl.slice(3)+'⟩';
+  return lbl;
+}
+function saverPlate(){
+  const n=N(),k=nPos,act=document.querySelector('.preset-btn.active');
+  const lines=[
+    k+' position qubits + 1 color qubit = '+(k+1)+' qubits',
+    side+' × '+side+' image, N = '+n+' pixels, state size 2N = '+(2*n),
+    'Circuit: '+k+' H + '+activePix.length+' controlled-RY = '+(k+activePix.length)+' gates',
+  ];
+  const A=sampleAnim;
+  if(A){
+    let mae=0;const rec=measured&&measured.vest;
+    if(rec){for(let i=0;i<n;i++)mae+=Math.abs(img[i]-rec[i]);mae/=n;}
+    lines.push('Sampling: '+A.drawn+' of '+A.shots+' shots'+(rec?' · MAE '+mae.toFixed(2):''));
+  }else lines.push('Step '+stackStage+' of '+(totalLayers-1)+': '+stepText(layerLabel[stackStage]||''));
+  return {
+    title:'FRQI image: '+(act?act.textContent.trim():'custom'),
+    sub:'flexible representation of quantum images',
+    lines,
+    eq:[
+      '|I⟩ = (1/√N) Σᵢ (cos θᵢ|0⟩ + sin θᵢ|1⟩) ⊗ |i⟩',
+      'i = 0 … '+(n-1)+',  1/√N = 1/2'+supN(k/2)+' = 1/'+Math.round(Math.sqrt(n)),
+      'θᵢ = (pixelᵢ / 255) · π/2',
+      decodeMode==='frqi'?'P₁(i) = sin²θᵢ,  pixelᵢ = (510/π) arcsin√P₁':'pixelᵢ ≈ 255 · P₁(i)  (linear decode)',
+      'ρ = |I⟩⟨I|,  cell height |ρ_rc| = |c_r||c_c|',
+    ],
+  };
+}
+
 // Hook for the shell screensaver (lib/screensaver.js). It moves #stack-gl-wrap
 // to <body> and hides all other content, so the rho stack fills the window
 // through resizeGL (the ResizeObserver calls it). Each image runs two parts:
@@ -874,5 +915,10 @@ window.snSaver={enter(o={}){
       await fadeTo(1);
     }
   })();
+  // Plate: at most one call each second, and only when the text changes.
+  // run() has already clicked the first preset, so the first plate names it.
+  if(typeof o.label==='function'){let last='';
+    const tick=()=>{const p=saverPlate(),j=JSON.stringify(p);if(j!==last){last=j;o.label(p);}};
+    tick();setInterval(tick,1000);}
   return {canvas:document.getElementById('stack-gl'),warmupMs:fadeMs+500};
 }};
