@@ -50,6 +50,7 @@
 //      resize ............... "function resize"     canvas sizing, DPR clamp
 //      loop ................. "function loop"       rAF: step, advect, render
 //      init ................. "INIT"                first layout, anti preset
+//      screensaver .......... "SCREENSAVER"         window.snSaver hook
 // ============================================================================
 /* ════════════════════════════════════════════════════════════
    BIOT-SAVART LAW — INTERACTIVE EDUCATIONAL SIMULATOR
@@ -632,3 +633,44 @@ setTimeout(()=>{
   preset('anti'); // start with anti-parallel — most educational
   requestAnimationFrame(loop);
 },50);
+
+/* ═══ SCREENSAVER ═══ */
+// Hook for the shell screensaver (lib/screensaver.js). enter() hides the panel,
+// status bar, equation card and overlays, so #canvas-wrap fills the window and
+// resize() sizes the canvas to it. It loads a preset chosen by opts.seed with
+// the probe, arrows and heatmap off, so only the streamlines show. Each wire
+// then drifts on a slow Lissajous path (+/-25 px, about 40 s) around its preset
+// spot. On a large window the layout and the drift grow by k, so the wires do
+// not crowd the centre. opts.calm (1 = slowest) scales tracer speed and drift.
+window.snSaver={
+  enter(opts){
+    const calm=Math.min(1,Math.max(0,opts.calm??0.7));
+    const st=document.createElement('style');
+    st.textContent='#panel,#mob-btn,#eq-panel,#status-bar{display:none!important}'+
+      '#canvas-wrap{position:fixed!important;inset:0}body::before,body::after{display:none}';
+    document.head.appendChild(st);
+    // Wait for the INIT timer, so its own anti preset cannot replace this one.
+    const ready=()=>wires.length?Promise.resolve():new Promise(r=>setTimeout(()=>r(ready()),60));
+    return ready().then(()=>{
+      resize();
+      CAM.x=0;CAM.y=0;CAM.zoom=1;
+      SIM.showProbe=false;SIM.showArrows=false;SIM.showHeatmap=false;SIM.showTracers=true;
+      SIM.stepping=false;
+      SIM.tracerSpeed=0.5+0.8*(1-calm);SIM.tracerTrail=50;
+      preset(['anti','triangle','quad','parallel'][(opts.seed>>>0)%4]);
+      SIM.selectedId=-1;
+      const k=Math.max(1,Math.min(CW,CH)/450);
+      const base=wires.map(w=>[CW/2+(w.x-CW/2)*k,CH/2+(w.y-CH/2)*k]), rate=(2*Math.PI/40)*(1-0.5*calm), t0=performance.now();
+      const drift=now=>{
+        const t=(now-t0)/1000*rate;
+        wires.forEach((w,i)=>{
+          w.x=base[i][0]+25*k*Math.sin(t+i*1.7);
+          w.y=base[i][1]+25*k*Math.sin(t*0.73+i*2.3);
+        });
+        requestAnimationFrame(drift);
+      };
+      requestAnimationFrame(drift);
+      return { canvas, warmupMs:1500 };
+    });
+  }
+};
