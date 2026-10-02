@@ -12,7 +12,8 @@ export const PAGE = {
     const NOISE_PACK = ctx.noisePack;
     const { device, format, tiles, PACK, $ } = ctx; this.ctx = ctx;
     this.tex = device.createTexture({ size: [512, 512], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT });
-    this.smp = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
+    // mirror-repeat: a wide canvas (the screensaver) reads past the square source; a square tile does not
+    this.smp = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'mirror-repeat', addressModeV: 'mirror-repeat' });
     this.bgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } }, { binding: 1, visibility: GPUShaderStage.FRAGMENT, texture: {} }, { binding: 2, visibility: GPUShaderStage.FRAGMENT, sampler: {} }] });
     const layout = device.createPipelineLayout({ bindGroupLayouts: [this.bgl] });
     const module = device.createShaderModule({ code: PACK });
@@ -56,6 +57,12 @@ export const PAGE = {
     this.ctx.$('thumbs').querySelectorAll('button').forEach(b => b.classList.toggle('active', b === btn));
     if (n === 'ramp' || n === 'radial') { this.draw2d(n, this.wctx, 512); this.pending = () => this.copyWork(); }
     else this.pending = () => this.renderNoise(n, this.tex.createView(), 512);
+  },
+  // screensaver (lib/table-engine.js saverEnter): a noise source from the seed
+  saver(t, opts) {
+    const ids = ['fbm', 'warp', 'marble', 'plasma', 'caustics', 'sum_sines'];
+    const id = ids[((opts.seed >>> 0) >>> 5) % ids.length];
+    this.select(id, this.ctx.$('thumbs').children[FIELDS.indexOf(id)]);
   },
   bind(surf) { if (!surf.page.bind) surf.page.bind = this.ctx.device.createBindGroup({ layout: this.bgl, entries: [{ binding: 0, resource: { buffer: surf.buf } }, { binding: 1, resource: this.tex.createView() }, { binding: 2, resource: this.smp }] }); return surf.page.bind; },
   draw(enc, t, surf, rect, dpr, dt, now, moving) {
