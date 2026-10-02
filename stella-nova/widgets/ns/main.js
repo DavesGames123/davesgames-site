@@ -1032,6 +1032,7 @@ if (FIXED === 'vortex') window.snSaver = { enter(opts) {
   st.textContent = 'html.saver .topbar,html.saver #qp,html.saver #mp,html.saver #stage-scrub,html.saver #stage-overlay,html.saver #stage-caption,html.saver .grid-bg{display:none!important}html.saver #stage{top:0!important;left:0!important;right:0!important;bottom:0!important;transition:none}html.saver #c3d{cursor:none}';
   document.head.appendChild(st); document.documentElement.classList.add('saver');
   SCRUB.vortex = null; TOG.spin = true; TOG.trails = true; VX.renderer.setClearColor(0x0a0810, 1);
+  svDolly(VX.camera, VX.controls, 1.4);
   VX.spd = Math.min(0.25 * (1 - 0.5 * calm), cap / (0.12 * secs)); VX.controls.autoRotateSpeed = 0.5 * (1 - 0.5 * calm);
   vxSeek(0); VX.playing = true; resize();
   const hold = () => { if (VX.u >= cap) VX.playing = false; requestAnimationFrame(hold); }; hold();
@@ -1048,6 +1049,11 @@ if (FIXED === 'vortex') window.snSaver = { enter(opts) {
 // in the canvas hides each reset, so the recording gets no hard cut. opts.seed
 // picks the first state and every random parameter.
 let SV = null;
+// Move a 3D saver camera away from its orbit target by k, so the whole model
+// shows in the window with space around it. On a portrait window the
+// horizontal field of view is the narrow one, so k gets larger by sqrt(H/W).
+function svDolly(cam,ctl,k){ const W=stage.clientWidth, H=stage.clientHeight; k*=Math.sqrt(Math.max(1,H/Math.max(1,W)));
+  cam.position.sub(ctl.target).multiplyScalar(k).add(ctl.target); cam.far=Math.max(cam.far,cam.position.distanceTo(ctl.target)*4); cam.updateProjectionMatrix(); ctl.update(); }
 // Seeded generator (mulberry32) for every saver choice.
 function svRng(seed){ let a=(seed>>>0)||1; return ()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; }; }
 // Run f with Math.random replaced by rng (the random initial fields use Math.random).
@@ -1109,6 +1115,7 @@ const SV_VIEWS = {
     const mats=[]; F3.scene.traverse(o=>{ if(o.material&&o.material.transparent) mats.push([o.material,o.material.opacity]); });
     const next=()=>{ i=(i+1)%2; F3.ic=ics[i]; svSeeded(rng,f3Reset); };
     F3.n=16; F3.rate=1-0.6*calm; TOG.spin=true; TOG.trails=true; F3.controls.autoRotateSpeed=0.4*(1-0.5*calm); VX.renderer.setClearColor(0x0a0810,1);
+    svDolly(F3.camera,F3.controls,2.0);
     i=(i+1)%2; next(); const clock=svClock(show,fade,next);
     return { draw(dt){ const k=clock(dt); for(const [m,o] of mats) m.opacity=o*k; drawFlow3D(dt); } };
   },
