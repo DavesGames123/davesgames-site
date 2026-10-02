@@ -35,6 +35,7 @@
 //    window.__pv                           debug and headless hooks
 //    boot                                  buildUI, syncUI, first preset, loop
 //    window.snSaver                        screensaver hook (lib/screensaver.js)
+//    function saverPlate                   screensaver plate: name, PDB id, counts, formula, ss
 // ============================================================================
 import { PRESETS, byId } from './presets.js';
 import { camera, canvas, controls, post } from './app/stage.js';
@@ -47,6 +48,7 @@ import { addMeasureAtom, setMeasure } from './app/measure.js';
 import { focusSelection, resetView } from './app/camera.js';
 import { setOpen } from './app/panel.js';
 import { buildUI, setColor, setRep, syncUI } from './app/ui.js';
+import { isPolymer } from './app/state.js';
 import { frame } from './app/loop.js';
 
 // debug and headless checks
@@ -67,6 +69,49 @@ requestAnimationFrame(frame);
 // composite pass (post.fade), so the recorded canvas has no hard cut. The
 // presets come from data/; fetchId (network) is never called. S.saver stops
 // the URL hash write in loadPreset. No exit(): the shell reloads the page.
+// The screensaver plate (opts.label) for the loaded structure. All counts
+// come from S.s and the chains that the preset shows (S.chainOn): chains
+// with a polymer, polymer residues, atoms, the element counts of the
+// polymer atoms as a formula, and the helix / strand / coil share of the
+// protein residues (ss from the file records, or from ss.js when computed).
+const SUB = n => String(n).replace(/[0-9]/g, d => '₀₁₂₃₄₅₆₇₈₉'[d]);
+function saverPlate() {
+  const s = S.s, p = S.preset;
+  if (!s) return null;
+  const on = ci => !S.chainOn || S.chainOn[ci];
+  let chains = 0, chainsAll = 0;
+  s.chains.forEach((c, ci) => {
+    if (!c.residues.some(ri => isPolymer(s.residues[ri]))) return;
+    chainsAll++; if (on(ci)) chains++;
+  });
+  let nRes = 0, nProt = 0, helix = 0, strand = 0, nAtom = 0;
+  const el = {};
+  for (const r of s.residues) {
+    if (!isPolymer(r) || !on(r.chain)) continue;
+    nRes++;
+    if (r.kind === 'protein') { nProt++; if (r.ss === 'H' || r.ss === 'G') helix++; else if (r.ss === 'E') strand++; }
+    for (const ai of r.atoms) { const e = s.atoms[ai].el; el[e] = (el[e] || 0) + 1; nAtom++; }
+  }
+  const order = ['C', 'H', 'N', 'O', 'P', 'S', 'SE'];
+  const nm = e => e === 'SE' ? 'Se' : e;
+  const formula = order.filter(e => el[e]).map(e => nm(e) + SUB(el[e])).join(' ');
+  const other = Object.keys(el).filter(e => !order.includes(e)).reduce((k, e) => k + el[e], 0);
+  const fmt = n => n.toLocaleString('en-US');
+  const id = p ? p.code : (s.meta.id || s.meta.name || '');
+  const meth = (s.meta.method || '').toLowerCase().replace(/^x-ray diffraction$/, 'X-ray').replace(/^solution nmr$/, 'NMR').replace(/^electron microscopy$/, 'cryo-EM');
+  const src = s.meta.af ? 'AlphaFold model' : [meth, s.meta.resolution ? s.meta.resolution.toFixed(1) + ' Å' : ''].filter(Boolean).join(' ');
+  const lines = [
+    `${chains} ${chains === 1 ? 'chain' : 'chains'}` + (chainsAll > chains ? ` shown of ${chainsAll}` : '') + ` · ${fmt(nRes)} residues · ${fmt(nAtom)} atoms`,
+    (el.H ? 'Formula ' : 'Heavy atoms (no H in the file) ') + formula + (other ? ` + ${other} other` : ''),
+  ];
+  if (nProt) {
+    const pc = k => Math.round(100 * k / nProt);
+    lines.push(`α-helix ${pc(helix)}% · β-strand ${pc(strand)}% · coil ${pc(nProt - helix - strand)}%` + (s.ssSource === 'computed' ? ' (from H-bonds)' : ' (file records)'));
+  }
+  if (p && p.why) lines.push(p.why);
+  return { title: p ? p.title : (s.meta.name || 'Structure'), sub: [id ? 'PDB ' + id : '', src].filter(Boolean).join(' · '), lines };
+}
+
 const SAVER_LIST = ['rhodopsin', 'ubiquitin', 'tim', 'deoxyhb', 'gb1', 'adkopen', 'bdna', 'afp53', 'crambin', 'villin'];
 window.snSaver = {
   enter(o = {}) {
@@ -97,17 +142,19 @@ window.snSaver = {
       };
       requestAnimationFrame(step);
     });
+    const plate = () => { if (typeof o.label === 'function') { try { o.label(saverPlate()); } catch (e) { /* the plate is optional */ } } };
     let n = 0;
     const next = async () => {
       await fadeTo(1);
       await loadPreset(order[n++ % order.length]);
+      plate();
       await new Promise(res => setTimeout(res, 300));
       await fadeTo(0);
       setTimeout(next, hold);
     };
     // start on a fresh molecule from the faded state
     post.fade = 1; S.dirty = true;
-    (async () => { await loadPreset(order[n++ % order.length]); await new Promise(res => setTimeout(res, 300)); await fadeTo(0); setTimeout(next, hold); })();
+    (async () => { await loadPreset(order[n++ % order.length]); plate(); await new Promise(res => setTimeout(res, 300)); await fadeTo(0); setTimeout(next, hold); })();
     return { canvas, warmupMs: 2500 };
   },
 };
