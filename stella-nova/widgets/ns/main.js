@@ -52,6 +52,7 @@
 //      flow3d ............... "Flow 3D:"           advected tracers + plots
 //      main loop ............ "main loop"          view dispatch + error trap
 //      headset .............. "headset (VR / AR)"  lib/xr-view.js on vortex, flow3d
+//      screensaver .......... "window.snSaver"     shell saver hook, ns-vortex only
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -968,3 +969,23 @@ if (FIXED === 'vortex' || FIXED === 'flow3d') import('../../lib/xr-view.js').the
   });
   window.__nsXR = { xr, V, VX, F3, TOG, FIXED };
 }).catch(e => console.warn('ns: xr-view did not load', e));
+
+/* ───────── screensaver ───────── */
+// Shell screensaver hook (lib/screensaver.js), on the page pinned to vortex
+// only. enter() hides the topbar, both panels, the scrubber and the labels,
+// makes #stage fill the window, and sets SCRUB.vortex to null so stageH()
+// gives the 3D viewport the full height. The clear colour becomes opaque for
+// the recording. The collapse runs from u = 0 up to a cap (0.95 at calm 0,
+// 0.85 at calm 1) over about one dwell, then holds while the camera orbits,
+// so the fast-spin end and the reset cut never show.
+if (FIXED === 'vortex') window.snSaver = { enter(opts) {
+  const calm = Math.max(0, Math.min(1, +opts.calm || 0)), secs = Math.max(20, +opts.seconds || 60), cap = 0.95 - 0.1 * calm;
+  const st = document.createElement('style');
+  st.textContent = 'html.saver .topbar,html.saver #qp,html.saver #mp,html.saver #stage-scrub,html.saver #stage-overlay,html.saver #stage-caption,html.saver .grid-bg{display:none!important}html.saver #stage{top:0!important;left:0!important;right:0!important;bottom:0!important;transition:none}html.saver #c3d{cursor:none}';
+  document.head.appendChild(st); document.documentElement.classList.add('saver');
+  SCRUB.vortex = null; TOG.spin = true; TOG.trails = true; VX.renderer.setClearColor(0x0a0810, 1);
+  VX.spd = Math.min(0.25 * (1 - 0.5 * calm), cap / (0.12 * secs)); VX.controls.autoRotateSpeed = 0.5 * (1 - 0.5 * calm);
+  vxSeek(0); VX.playing = true; resize();
+  const hold = () => { if (VX.u >= cap) VX.playing = false; requestAnimationFrame(hold); }; hold();
+  return { canvas: c3d, warmupMs: 1500 };
+} };
