@@ -785,7 +785,8 @@ window.batchQueue=batchQueue;window.renderQueue=renderQueue;
 // three planets per dwell. Before each one it eases the atmosphere, the
 // city lights and the normal map down over 1.5 s, so the live paint starts
 // on a plain sphere. pulse() is a no-op: no shockwave flash. The spin, a
-// slow tilt sway and a sun drift scale by opts.calm (1 = slowest). No
+// slow tilt sway and a sun drift scale by opts.calm (1 = slowest). Each
+// planet also goes on the label plate with its height field. No
 // exit(): the shell reloads the page on stop.
 window.snSaver={enter(opts){
   const calm=Math.max(0,Math.min(1,opts&&opts.calm!=null?+opts.calm:0.7));
@@ -802,6 +803,39 @@ window.snSaver={enter(opts){
   const TEMPS={terra:[1,2,3],water:[1,2,3],desert:[0,1,2],gas_giant:[0,1,2,3,4],ice:[3,4],selena:[1,2,3],ice_giant:[2,3,4]};
   let ti=Math.floor(rnd()*TYPES.length),busy=false;
   const btn=document.getElementById('btn-gen');
+  // The plate (opts.label) names the planet that the autopilot asked for:
+  // type, temperature, seed and map size, and the height field that
+  // GEN[type] computes per texel. Fₒ is fbm() and Rₒ is rig() with o
+  // octaves; "f l g" are the base frequency, lacunarity and gain from the
+  // code. The giants' band count N reads n3() after seedN(seed), so the
+  // plate fills it in when generate() is done.
+  const label=opts&&opts.labels!==false&&typeof opts.label==='function'?opts.label:null;
+  const NAME={selena:'Selena (moon)',desert:'Desert world',terra:'Terra',water:'Water world',ice:'Ice world',gas_giant:'Gas giant',ice_giant:'Ice giant'};
+  const SPEC={
+    selena:t=>({eq:'h = 0.7 R₈(p′) + 0.14 F₆(p) + 0.3',lines:['R₈ ridged: f 3.5 · l 2 · g 0.48 on p′ = warp(p, 1.8, 0.06)','F₆ fBm: f 12 · l 2.3 · g 0.4 · specular 0.03 + 0.02h']}),
+    desert:t=>({eq:'h = 0.4 B + 0.42 D + 0.05 F₅(p) + 0.18',lines:['B = ½F₇(p′) + ½ (f 2) · D = 0.35 |F₅(p′)| dunes (f 7)','p′ = warp(p, 1.5, 0.1) · fine grain F₅ f 18 · specular 0.03']}),
+    terra:t=>({eq:'h = 0.42 (F₆(p′) + 0.12 F₅(p)) + 0.5,   sea = 0.56 + 0.015 t',lines:['F₆ continents: f 1.6 · l 2.05 · g 0.44 on p′ = warp(p, 1.2, 0.18)',
+      'sea level '+(0.56+t*0.015).toFixed(3)+' · ocean specular 0.9 · biomes by |lat| · snow above 72 % land height','city lights (emissive) on land near coasts']}),
+    water:t=>({eq:'h = 0.3 F₅(p′) + 0.5,   sea = 0.72',lines:['F₅: f 1.5 · l 2 · g 0.45 on p′ = warp(p, 1, 0.2)','ocean specular 0.92 · sandy shoals above sea level']}),
+    ice:t=>({eq:'h = 0.5 (½F₆(p) + ½) + 0.5 (1 − R₆(p)) + 0.05 F₅(p)',lines:['F₆ plains f 2 · R₆ cracks f 5, l 2.3, g 0.46 · fine F₅ f 16','specular 0.3 + 0.4h']}),
+    gas_giant:t=>({eq:'h = ½ sin(N π y) + ½ + turb·edge + streak + storm',lines:['N = 14 + ⌊4 n3(0.1, 0.2, 0.3)⌋'+(nBand('gas_giant')?' = '+nBand('gas_giant'):'')+' bands · turbulence F₅ only at band edges','storm spots where F₄ > 0.55']}),
+    ice_giant:t=>({eq:'h = 0.3 sin(N π y) + 0.5 + 0.25 F₆(p′) + turb·edge',lines:['N = 8 + ⌊3 n3(0.5, 0.6, 0.7)⌋'+(nBand('ice_giant')?' = '+nBand('ice_giant'):'')+' bands · p′ = 3 domain warps','cloud wisps F₄ · specular 0.06 + 0.08 wisp']}),
+  };
+  let done=false;
+  function nBand(type){
+    if(!done)return 0;
+    return type==='gas_giant'?14+Math.floor(n3(0.1,0.2,0.3)*4):8+Math.floor(n3(0.5,0.6,0.7)*3);
+  }
+  function plate(){
+    if(!label)return;
+    const type=document.getElementById('sel-type').value,t=parseInt(document.getElementById('sel-temp').value);
+    const seed=parseInt(document.getElementById('inp-seed').value)||0,res=parseInt(document.getElementById('sel-res').value);
+    const sp=SPEC[type](t);
+    label({title:NAME[type]+' · seed #'+seed,
+      sub:TNAMES[t]+' (t = '+t+') · '+res+' × '+res/2+' maps · '+(done?'done':'generating'),
+      lines:sp.lines.concat(['p on the unit sphere: φ = 2πu, θ = πv · 3D simplex n3, seeded permutation']),
+      eq:[sp.eq,'Fₒ(p) = Σₖ gᵏ n3(f lᵏ p)   (fBm)','Rₒ(p) = Σₖ gᵏ wₖ (1 − |n3|)²   (ridged)']});
+  }
   const next=()=>{
     if(busy)return;busy=true;
     const type=TYPES[ti=(ti+1+Math.floor(rnd()*2))%TYPES.length],tl=TEMPS[type];
@@ -811,7 +845,8 @@ window.snSaver={enter(opts){
     document.getElementById('sel-res').value='1024';
     const a0=amat.uniforms.uIntensity.value,e0=pmat.emissiveIntensity,n0=pmat.normalScale.x;
     tween(1500,e=>{amat.uniforms.uIntensity.value=a0*(1-e);pmat.emissiveIntensity=e0*(1-e);pmat.normalScale.set(n0*(1-e),n0*(1-e))});
-    setTimeout(async()=>{try{await btn.onclick.call(btn)}finally{busy=false}},curMaps?1600:0);
+    done=false;plate();
+    setTimeout(async()=>{try{await btn.onclick.call(btn);done=true;plate()}finally{busy=false}},curMaps?1600:0);
   };
   const t0=performance.now();let tp=t0;
   (function drift(now){requestAnimationFrame(drift);const t=(now-t0)/1000,dt=Math.min(.1,(now-tp)/1000);tp=now;
