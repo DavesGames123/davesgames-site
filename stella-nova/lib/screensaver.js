@@ -171,54 +171,72 @@ body.sn-saver-on.sn-saver-nocursor, body.sn-saver-on.sn-saver-nocursor * { curso
 @media (max-width: 760px) { #sn-saver-label { left: 16px; right: 16px; bottom: 16px; max-width: none; } }
 #sn-saver-hud { position: fixed; right: 18px; top: 14px; z-index: 9001; font: 500 .7rem/1.4 var(--f-mono, monospace); color: #9fb3d1; background: rgba(8,10,16,.7); border: 1px solid rgba(150,200,255,.18); border-radius: 8px; padding: 6px 10px; pointer-events: none; }
 #sn-saver-hud[hidden] { display: none; }
-#sn-saver-menu { position: fixed; inset: 0; z-index: 9500; display: grid; place-items: center; background: rgba(4,6,10,.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+#sn-saver-menu { position: fixed; inset: 0; z-index: 9500; display: grid; place-items: center; background: rgba(3,5,9,.66); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 #sn-saver-menu[hidden] { display: none; }
-#sn-saver-menu .box { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 48px); display: grid; grid-template-rows: auto 1fr auto; background: #0d1018; border: 1px solid rgba(150,200,255,.18); border-radius: 16px; box-shadow: 0 30px 80px rgba(0,0,0,.6); color: #c8d4e6; font-family: var(--f-sans, system-ui); overflow: hidden; }
-#sn-saver-menu header { display: flex; align-items: baseline; gap: 14px; padding: 18px 22px 14px; border-bottom: 1px solid rgba(150,200,255,.09); }
-#sn-saver-menu header h2 { font-weight: 300; font-size: 1.5rem; color: #eef3fb; }
-#sn-saver-menu header h2 em { font-family: var(--f-serif, serif); color: #ffc832; }
-#sn-saver-menu header p { margin-left: auto; font: 500 .68rem/1 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: #7f91ad; }
-#sn-saver-menu .cols { display: grid; grid-template-columns: 1.3fr 1fr; min-height: 0; }
-#sn-saver-menu .pages { overflow: auto; padding: 12px 18px 18px; border-right: 1px solid rgba(150,200,255,.09); }
-#sn-saver-menu .opts { overflow: auto; padding: 14px 20px 18px; display: grid; gap: 12px; align-content: start; }
-#sn-saver-menu .quick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-#sn-saver-menu button { font: inherit; color: inherit; cursor: pointer; }
-#sn-saver-menu .chip { font: 500 .66rem/1 var(--f-mono, monospace); letter-spacing: .1em; text-transform: uppercase; padding: 7px 10px; border-radius: 999px; border: 1px solid rgba(150,200,255,.18); background: rgba(150,200,255,.04); }
-#sn-saver-menu .chip:hover { border-color: #6db8e0; color: #eef3fb; }
-#sn-saver-menu .sec { margin-top: 12px; border-top: 1px solid rgba(150,200,255,.09); padding-top: 8px; }
-#sn-saver-menu .sec > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; font-weight: 600; font-size: .95rem; color: #eef3fb; padding: 4px 2px; }
-#sn-saver-menu .sec > summary::-webkit-details-marker { display: none; }
-#sn-saver-menu .sec > summary::after { content: '\\203A'; margin-left: auto; color: #7f91ad; transition: transform .2s; }
-#sn-saver-menu .sec[open] > summary::after { transform: rotate(90deg); }
-#sn-saver-menu .sec > summary small { font: 500 .66rem/1 var(--f-mono, monospace); color: #7f91ad; }
-#sn-saver-menu .sec-no label.pg { opacity: .5; cursor: default; }
-#sn-saver-menu .con { margin-top: 10px; }
-#sn-saver-menu .con-h { display: flex; align-items: center; gap: 8px; font: 500 .66rem/1 var(--f-mono, monospace); letter-spacing: .18em; text-transform: uppercase; color: var(--c); padding: 6px 4px; cursor: pointer; user-select: none; }
-#sn-saver-menu label.pg { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: .86rem; cursor: pointer; }
-#sn-saver-menu label.pg:hover { background: rgba(150,200,255,.05); }
-#sn-saver-menu label.pg input { accent-color: #6db8e0; }
-#sn-saver-menu label.pg span { flex: 1; }
-#sn-saver-menu .tier { font: 500 .6rem/1 var(--f-mono, monospace); padding: 3px 6px; border-radius: 5px; border: 1px solid currentColor; opacity: .85; }
-#sn-saver-menu .t1 { color: #5fd38d; } #sn-saver-menu .t2 { color: #9fd35f; } #sn-saver-menu .t3 { color: #ffc832; }
-#sn-saver-menu .t4 { color: #ff8a3d; } #sn-saver-menu .t5 { color: #ff6b8a; } #sn-saver-menu .t0 { color: #7f91ad; }
-#sn-saver-menu .hk { font: 500 .6rem/1 var(--f-mono, monospace); color: #6db8e0; }
-#sn-saver-menu .row { display: grid; gap: 6px; }
-#sn-saver-menu .row > span { font: 500 .66rem/1 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: #7f91ad; }
-#sn-saver-menu .row output { color: #eef3fb; letter-spacing: 0; text-transform: none; }
-#sn-saver-menu input[type=range] { width: 100%; accent-color: #6db8e0; }
-#sn-saver-menu select { font: inherit; color: #eef3fb; background: #0a0c12; border: 1px solid rgba(150,200,255,.18); border-radius: 8px; padding: 6px 8px; }
-#sn-saver-menu .tg { display: flex; align-items: center; gap: 8px; font-size: .86rem; cursor: pointer; }
-#sn-saver-menu .tg input { accent-color: #6db8e0; }
-#sn-saver-menu fieldset { border: 1px solid rgba(150,200,255,.09); border-radius: 10px; padding: 10px 12px 12px; display: grid; gap: 10px; }
-#sn-saver-menu fieldset[disabled] > :not(legend) { opacity: .45; }
-#sn-saver-menu legend { padding: 0 6px; font: 500 .66rem/1 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: #7f91ad; }
-#sn-saver-menu .note { font-size: .76rem; color: #7f91ad; line-height: 1.45; }
-#sn-saver-menu footer { display: flex; align-items: center; gap: 12px; padding: 14px 22px; border-top: 1px solid rgba(150,200,255,.09); }
-#sn-saver-menu footer .sum { flex: 1; font-size: .82rem; color: #7f91ad; }
-#sn-saver-menu .go { padding: 11px 22px; border-radius: 10px; border: 0; background: #8ec5ff; color: #0a0c12; font-weight: 600; }
+#sn-saver-menu .box { width: min(1040px, calc(100vw - 32px)); height: min(720px, calc(100vh - 48px)); display: grid; grid-template-rows: auto 1fr auto; background: #0c0f15; border: 1px solid rgba(255,255,255,.08); border-radius: 14px; box-shadow: 0 24px 70px rgba(0,0,0,.55); color: #c9d2df; font: 400 14px/1.45 var(--f-sans, Inter, system-ui, sans-serif); overflow: hidden; }
+#sn-saver-menu button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; }
+#sn-saver-menu header { display: flex; align-items: baseline; gap: 16px; padding: 20px 24px 14px; }
+#sn-saver-menu header h2 { font-size: 1.2rem; font-weight: 600; color: #f1f4f8; margin: 0; }
+#sn-saver-menu header p { margin: 0; font-size: .8rem; color: #7d8898; }
+#sn-saver-menu kbd { font: 500 .75rem/1 var(--f-sans, system-ui); padding: 2px 5px; border-radius: 4px; border: 1px solid rgba(255,255,255,.14); color: #c9d2df; }
+#sn-saver-menu .cols { display: grid; grid-template-columns: 1fr 320px; min-height: 0; border-top: 1px solid rgba(255,255,255,.07); }
+#sn-saver-menu .pages { display: grid; grid-template-rows: auto 1fr; min-height: 0; border-right: 1px solid rgba(255,255,255,.07); }
+#sn-saver-menu .bar { display: flex; align-items: center; gap: 4px; padding: 0 16px; border-bottom: 1px solid rgba(255,255,255,.07); }
+#sn-saver-menu .tab { padding: 12px 10px 11px; color: #8591a3; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; }
+#sn-saver-menu .tab:hover { color: #dfe5ee; }
+#sn-saver-menu .tab.on { color: #f1f4f8; border-bottom-color: #8ec5ff; }
+#sn-saver-menu .tab small, #sn-saver-menu .card-h small { font-size: .75rem; color: #6c7788; font-variant-numeric: tabular-nums; margin-left: 6px; font-weight: 400; }
+#sn-saver-menu .quick { margin-left: auto; display: flex; gap: 2px; }
+#sn-saver-menu .quick button { padding: 5px 8px; border-radius: 6px; font-size: .8rem; color: #8591a3; }
+#sn-saver-menu .quick button:hover { color: #f1f4f8; background: rgba(255,255,255,.05); }
+#sn-saver-menu .panes { overflow: auto; padding: 16px; }
+#sn-saver-menu .pane { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; align-items: start; }
+#sn-saver-menu .pane[hidden] { display: none; }
+#sn-saver-menu .card { border: 1px solid rgba(255,255,255,.07); border-radius: 10px; padding: 4px 4px 6px; background: rgba(255,255,255,.015); }
+#sn-saver-menu .card-h { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 8px 6px; font-weight: 600; font-size: .86rem; color: #e6ebf2; text-align: left; border-radius: 6px; }
+#sn-saver-menu .card-h:hover { background: rgba(255,255,255,.04); }
+#sn-saver-menu .card-h i { width: 8px; height: 8px; border-radius: 50%; background: var(--c); flex: none; }
+#sn-saver-menu .card-h small { margin-left: auto; }
+#sn-saver-menu label.pg { display: flex; align-items: center; gap: 9px; padding: 5px 8px; border-radius: 6px; font-size: .86rem; cursor: pointer; color: #c9d2df; }
+#sn-saver-menu label.pg:hover { background: rgba(255,255,255,.04); }
+#sn-saver-menu label.pg span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sn-saver-menu label.pg em { font-style: normal; font-size: .72rem; color: #6c7788; }
+#sn-saver-menu .pg input { appearance: none; -webkit-appearance: none; width: 16px; height: 16px; margin: 0; flex: none; border: 1.5px solid rgba(255,255,255,.28); border-radius: 4px; display: grid; place-items: center; cursor: pointer; }
+#sn-saver-menu .pg input:checked { background: #8ec5ff; border-color: #8ec5ff; }
+#sn-saver-menu .pg input:checked::after { content: ''; width: 8px; height: 4px; border: 2px solid #0c0f15; border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+#sn-saver-menu .opts { overflow: auto; padding: 6px 20px 20px; }
+#sn-saver-menu .opts h3 { font-size: .8rem; font-weight: 600; color: #e6ebf2; margin: 18px 0 10px; }
+#sn-saver-menu .row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px 10px; margin: 0 0 12px; font-size: .86rem; }
+#sn-saver-menu .row output { color: #8591a3; font-variant-numeric: tabular-nums; font-size: .8rem; }
+#sn-saver-menu .row input[type=range] { grid-column: 1 / -1; width: 100%; margin: 0; accent-color: #8ec5ff; }
+#sn-saver-menu .seg { grid-column: 1 / -1; display: flex; padding: 2px; border-radius: 8px; background: rgba(255,255,255,.05); }
+#sn-saver-menu .seg label { flex: 1; text-align: center; padding: 5px 4px; border-radius: 6px; font-size: .8rem; color: #8591a3; cursor: pointer; }
+#sn-saver-menu .seg input { position: absolute; opacity: 0; pointer-events: none; }
+#sn-saver-menu .seg label:has(input:checked) { background: #1d2430; color: #f1f4f8; }
+#sn-saver-menu .sw { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: .86rem; cursor: pointer; }
+#sn-saver-menu .sw input { appearance: none; -webkit-appearance: none; flex: none; width: 30px; height: 18px; margin: 0; border-radius: 9px; background: rgba(255,255,255,.14); position: relative; cursor: pointer; transition: background .15s; }
+#sn-saver-menu .sw input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #dfe5ee; transition: transform .15s; }
+#sn-saver-menu .sw input:checked { background: #8ec5ff; }
+#sn-saver-menu .sw input:checked::after { transform: translateX(12px); background: #0c0f15; }
+#sn-saver-menu .rec-opts { margin-top: 8px; }
+#sn-saver-menu .rec-opts[hidden], #sn-saver-menu .sw[hidden] { display: none; }
+#sn-saver-menu .note { font-size: .76rem; color: #6c7788; line-height: 1.45; margin: 4px 0 0; }
+#sn-saver-menu footer { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-top: 1px solid rgba(255,255,255,.07); }
+#sn-saver-menu footer .sum { flex: 1; font-size: .84rem; color: #8591a3; font-variant-numeric: tabular-nums; }
+#sn-saver-menu footer .reset { font-size: .8rem; color: #8591a3; padding: 8px 10px; }
+#sn-saver-menu footer .reset:hover { color: #f1f4f8; }
+#sn-saver-menu .x { padding: 9px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,.12) !important; }
+#sn-saver-menu .go { padding: 9px 22px; border-radius: 8px; background: #8ec5ff !important; color: #0c0f15 !important; font-weight: 600; }
 #sn-saver-menu .go:disabled { opacity: .4; cursor: default; }
-#sn-saver-menu .x { padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(150,200,255,.18); background: none; }
-@media (max-width: 760px) { #sn-saver-menu .cols { grid-template-columns: 1fr; } #sn-saver-menu .pages { border-right: 0; max-height: 40vh; } }
+@media (max-width: 760px) {
+  #sn-saver-menu .box { height: calc(100dvh - 24px); }
+  #sn-saver-menu .cols { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
+  #sn-saver-menu .pages { border-right: 0; }
+  #sn-saver-menu .opts { max-height: 38dvh; border-top: 1px solid rgba(255,255,255,.07); }
+  #sn-saver-menu header p { display: none; }
+  #sn-saver-menu .bar { overflow-x: auto; }
+  #sn-saver-menu .tab { white-space: nowrap; }
+}
 `;
 document.head.appendChild(css);
 
@@ -234,82 +252,86 @@ function buildMenu() {
   const m = document.createElement('div');
   m.id = 'sn-saver-menu'; m.hidden = true;
   m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', 'Screensaver options');
-  const tiers = CAT.tiers || {};
-  // Three sections by readiness, each grouped by constellation. Only the
-  // ready section is open. Tier 5 pages show for reference, not to pick.
-  const SECTIONS = [
-    { id: 'ready', title: 'Ready', text: 'Pages with their own calm screensaver, or that are good as they are.', open: true },
-    { id: 'later', title: 'Not ready yet', text: 'These play in the generic mode: the picture fills the screen, but speed and framing are the page defaults.', open: false },
-    { id: 'no', title: 'Not for a screensaver', text: 'Text, forms, the microphone or the network. They cannot be picked.', open: false },
-  ];
-  let list = '';
-  SECTIONS.forEach(sec => {
-    const pages = allPages().filter(p => p.state === sec.id);
-    if (!pages.length) return;
-    const byCon = new Map();
-    pages.forEach(p => { if (!byCon.has(p.con)) byCon.set(p.con, { color: p.color, pages: [] }); byCon.get(p.con).pages.push(p); });
-    list += `<details class="sec sec-${sec.id}"${sec.open ? ' open' : ''}><summary>${esc(sec.title)}<small>${pages.length}</small></summary><p class="note">${esc(sec.text)}</p>`;
-    byCon.forEach((c, name) => {
-      list += `<div class="con" style="--c:${c.color}"><div class="con-h" data-con="${esc(name)}">${esc(name)}</div>`;
-      c.pages.forEach(p => {
-        const t = tiers[p.tier] || {};
-        const off = sec.id === 'ready' && !CAT.pages[p.key].default;
-        const badge = sec.id === 'ready' ? (off ? '<b class="tier t0" title="Not in the default list; tick it to add it">EXTRA</b>' : p.hook ? '' : '<b class="tier t1" title="Good as it is">AS IS</b>') : `<b class="tier t${p.tier}" title="${esc(t.name || 'Not rated')}: ${esc(t.text || '')}">${esc(t.name || '?')}</b>`;
-        list += `<label class="pg" title="${esc(p.note)}"><input type="checkbox" value="${p.key}" data-region="${p.region}"${sec.id === 'no' ? ' disabled' : ''}><span>${esc(p.label)}</span>${badge}</label>`;
-      });
-      list += '</div>';
+  // Pages: one tab per region, one card per constellation. Pages that cannot
+  // play (tier 5) do not show. A page with no hook of its own plays in the
+  // generic mode and gets a "Basic" tag.
+  const pages = allPages().filter(p => p.state !== 'no');
+  const regions = (window.SN_NAV || []).map(r => {
+    const cons = [];
+    r.constellations.forEach(c => {
+      const ps = pages.filter(p => p.region === r.id && p.con === c.label);
+      if (ps.length) cons.push({ label: c.label, color: c.color, pages: ps });
     });
-    list += '</details>';
-  });
-  const regions = (window.SN_NAV || []).map(r => `<button class="chip" data-q="region:${r.id}">${esc(r.label)}</button>`).join('');
+    return { id: r.id, label: r.label, cons };
+  }).filter(r => r.cons.length);
+  if (!regions.some(r => r.id === S.menuTab)) S.menuTab = regions[0] && regions[0].id;
+  const tabs = regions.map(r => `<button class="tab" role="tab" data-tab="${r.id}">${esc(r.label)}<small data-tc="${r.id}"></small></button>`).join('');
+  const panes = regions.map(r => `<div class="pane" role="tabpanel" data-pane="${r.id}">${r.cons.map(c => `<div class="card" style="--c:${c.color}">
+    <button class="card-h" title="Select or clear this group"><i></i>${esc(c.label)}<small></small></button>
+    ${c.pages.map(p => `<label class="pg" title="${esc(p.note)}"><input type="checkbox" value="${p.key}"><span>${esc(p.label)}</span>${p.state === 'later' ? '<em title="No screensaver of its own: it plays in the generic mode">Basic</em>' : ''}</label>`).join('')}
+  </div>`).join('')}</div>`).join('');
+  const seg = (k, opts) => `<div class="seg">${opts.map(([v, t]) => `<label><input type="radio" name="sn-${k}" data-k="${k}" value="${v}">${t}</label>`).join('')}</div>`;
+  const sw = (k, t) => `<label class="sw"><span>${t}</span><input type="checkbox" data-k="${k}"></label>`;
   const fmt = recFormat();
+  const combo = /Mac/.test(navigator.platform) ? '<kbd>⌘</kbd> <kbd>⌥</kbd> <kbd>S</kbd>' : '<kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>S</kbd>';
   m.innerHTML = `<div class="box">
-  <header><h2>Screen<em>saver</em></h2><p>${/Mac/.test(navigator.platform) ? '⌘⌥S or Ctrl+Alt+S' : 'Ctrl+Alt+S'} · Esc to stop</p></header>
+  <header><h2>Screensaver</h2><p>${combo} opens this menu. <kbd>Esc</kbd> stops the screensaver.</p></header>
   <div class="cols">
     <div class="pages">
-      <div class="quick">
-        <button class="chip" data-q="ready">All ready</button>
-        ${regions}
-        <button class="chip" data-q="everything">Ready + not ready</button>
-        <button class="chip" data-q="none">None</button>
-      </div>
-      <p class="note">A region button picks the ready pages of that region. Click a constellation name to toggle it.</p>
-      ${list}
+      <div class="bar" role="tablist">${tabs}<div class="quick"><button data-q="default">Defaults</button><button data-q="all">All</button><button data-q="none">None</button></div></div>
+      <div class="panes">${panes}</div>
     </div>
     <div class="opts">
-      <label class="row"><span>Time on each page <output data-o="seconds"></output></span><input type="range" data-k="seconds" min="10" max="600" step="5"></label>
-      <label class="row"><span>Order</span><select data-k="order"><option value="nav">Site order</option><option value="shuffle">Shuffle</option></select></label>
-      <label class="row"><span>Fade between pages <output data-o="fade"></output></span><input type="range" data-k="fade" min="0" max="4" step="0.1"></label>
-      <label class="row"><span>Calm <output data-o="calm"></output></span><input type="range" data-k="calm" min="0" max="1" step="0.05"></label>
-      <label class="tg"><input type="checkbox" data-k="loop">Loop the list</label>
-      <label class="tg"><input type="checkbox" data-k="caption">Show the page name</label>
-      <label class="tg"><input type="checkbox" data-k="labels">Show labels and equations</label>
-      <label class="row"><span>Display</span><select data-k="display"><option value="screen">Full screen (whole display)</option><option value="window">Fill the browser window</option></select></label>
-      <label class="tg"><input type="checkbox" data-k="hideCursor">Hide the cursor</label>
-      <label class="tg"><input type="checkbox" data-k="wakeLock">Keep the screen awake</label>
-      <label class="tg"><input type="checkbox" data-k="exitOnInput">Stop on any key or mouse move</label>
-      <fieldset${fmt ? '' : ' disabled'}><legend>Recording</legend>
-        <label class="tg"><input type="checkbox" data-k="record">Save each page as a video</label>
-        <label class="row"><span>Frame rate</span><select data-k="recordFps"><option value="24">24 fps</option><option value="30">30 fps</option><option value="60">60 fps</option></select></label>
-        <label class="row"><span>Bit rate <output data-o="recordMbps"></output></span><input type="range" data-k="recordMbps" min="2" max="40" step="1"></label>
-        <label class="row"><span>Wait before recording <output data-o="recordWarmup"></output></span><input type="range" data-k="recordWarmup" min="0" max="15" step="0.5"></label>
-        <p class="note">${fmt ? `Format: ${esc(fmt.split(';')[0])}${fmt.startsWith('video/mp4') ? '' : ' (this browser cannot record MP4)'}. Files go to your browser's download folder, normally Downloads. The browser can ask once to allow more than one download. Only the page canvas is recorded, not text over it.` : 'This browser cannot record a canvas.'}</p>
-      </fieldset>
+      <h3>Playback</h3>
+      <div class="row"><span>Time on each page</span><output data-o="seconds"></output><input type="range" data-k="seconds" min="10" max="600" step="5"></div>
+      <div class="row"><span>Order</span><span></span>${seg('order', [['nav', 'Site order'], ['shuffle', 'Shuffle']])}</div>
+      <div class="row"><span>Fade between pages</span><output data-o="fade"></output><input type="range" data-k="fade" min="0" max="4" step="0.1"></div>
+      <div class="row"><span>Calm</span><output data-o="calm"></output><input type="range" data-k="calm" min="0" max="1" step="0.05"></div>
+      ${sw('loop', 'Loop the list')}
+      <h3>Display</h3>
+      <div class="row">${seg('display', [['screen', 'Full screen'], ['window', 'Browser window']])}</div>
+      ${sw('caption', 'Show the page name')}
+      ${sw('labels', 'Show labels and equations')}
+      ${sw('hideCursor', 'Hide the cursor')}
+      ${sw('wakeLock', 'Keep the screen awake')}
+      ${sw('exitOnInput', 'Stop on any key or mouse move')}
+      <h3>Recording</h3>
+      ${fmt ? `${sw('record', 'Save each page as a video')}
+      <div class="rec-opts">
+        <div class="row"><span>Frame rate</span><span></span>${seg('recordFps', [['24', '24 fps'], ['30', '30 fps'], ['60', '60 fps']])}</div>
+        <div class="row"><span>Bit rate</span><output data-o="recordMbps"></output><input type="range" data-k="recordMbps" min="2" max="40" step="1"></div>
+        <div class="row"><span>Wait before recording</span><output data-o="recordWarmup"></output><input type="range" data-k="recordWarmup" min="0" max="15" step="0.5"></div>
+        <p class="note">${esc(fmt.split(';')[0])}${fmt.startsWith('video/mp4') ? '' : ' (this browser cannot record MP4)'}. Files go to the browser download folder. Only the page canvas is recorded, not text over it.</p>
+      </div>` : '<p class="note">This browser cannot record a canvas.</p>'}
     </div>
   </div>
-  <footer><span class="sum"></span><button class="x" data-act="close">Cancel</button><button class="go" data-act="start">Start</button></footer>
+  <footer><span class="sum"></span><button class="reset" data-act="reset">Reset to defaults</button><button class="x" data-act="close">Cancel</button><button class="go" data-act="start">Start</button></footer>
 </div>`;
   document.body.appendChild(m);
 
   const boxes = () => Array.from(m.querySelectorAll('.pg input'));
   const units = { seconds: v => v >= 60 ? `${Math.floor(v / 60)} min${v % 60 ? ' ' + v % 60 + ' s' : ''}` : v + ' s', fade: v => (+v).toFixed(1) + ' s', calm: v => Math.round(v * 100) + '%', recordMbps: v => v + ' Mbit/s', recordWarmup: v => (+v).toFixed(1) + ' s' };
+  function showTab() {
+    m.querySelectorAll('.tab').forEach(t => { const on = t.dataset.tab === S.menuTab; t.classList.toggle('on', on); t.setAttribute('aria-selected', on); });
+    m.querySelectorAll('.pane').forEach(p => { p.hidden = p.dataset.pane !== S.menuTab; });
+  }
   function sync() {
     const keys = boxes().filter(b => b.checked).map(b => b.value);
     S.pages = keys;
     S.seenDefaults = defaultKeys();
     m.querySelectorAll('[data-o]').forEach(o => { o.textContent = units[o.dataset.o](S[o.dataset.o]); });
+    m.querySelectorAll('.card').forEach(c => {
+      const bs = c.querySelectorAll('.pg input');
+      c.querySelector('.card-h small').textContent = `${[...bs].filter(b => b.checked).length} / ${bs.length}`;
+    });
+    m.querySelectorAll('[data-tc]').forEach(t => {
+      const bs = m.querySelectorAll(`[data-pane="${t.dataset.tc}"] .pg input`);
+      const n = [...bs].filter(b => b.checked).length;
+      t.textContent = n ? String(n) : '';
+    });
+    const rec = m.querySelector('.rec-opts'); if (rec) rec.hidden = !S.record;
     const total = keys.length * S.seconds;
-    m.querySelector('.sum').textContent = keys.length ? `${keys.length} pages · ${Math.round(total / 60)} min a pass${S.record ? ' · recording' : ''}` : 'Pick at least one page.';
+    m.querySelector('.sum').textContent = keys.length ? `${keys.length} pages, about ${Math.max(1, Math.round(total / 60))} min a pass${S.record ? ', recording' : ''}` : 'Select at least one page.';
     m.querySelector('.go').disabled = !keys.length;
     save();
   }
@@ -318,29 +340,35 @@ function buildMenu() {
     boxes().forEach(b => { b.checked = on.has(b.value); });
     m.querySelectorAll('[data-k]').forEach(el => {
       const k = el.dataset.k;
-      if (el.type === 'checkbox') el.checked = !!S[k]; else el.value = S[k];
+      if (el.type === 'radio') el.checked = String(S[k]) === el.value;
+      else if (el.type === 'checkbox') el.checked = !!S[k];
+      else el.value = S[k];
     });
+    showTab();
     sync();
   };
   m.addEventListener('input', e => {
-    const k = e.target.dataset.k;
-    if (k) S[k] = e.target.type === 'checkbox' ? e.target.checked : (e.target.type === 'range' || k === 'recordFps') ? +e.target.value : e.target.value;
+    const t = e.target, k = t.dataset.k;
+    if (k) S[k] = t.type === 'checkbox' ? t.checked : (t.type === 'range' || k === 'recordFps') ? +t.value : t.value;
     sync();
   });
   m.addEventListener('click', e => {
-    const q = e.target.closest('[data-q]'), act = e.target.closest('[data-act]'), con = e.target.closest('.con-h');
+    const tab = e.target.closest('.tab'), q = e.target.closest('[data-q]'), act = e.target.closest('[data-act]'), head = e.target.closest('.card-h');
     if (e.target === m) closeMenu();
-    if (con) { const bs = Array.from(con.parentElement.querySelectorAll('input:not(:disabled)')); const all = bs.every(b => b.checked); bs.forEach(b => { b.checked = !all; }); sync(); }
+    if (tab) { S.menuTab = tab.dataset.tab; showTab(); save(); }
+    if (head) { const bs = Array.from(head.parentElement.querySelectorAll('.pg input')); const all = bs.every(b => b.checked); bs.forEach(b => { b.checked = !all; }); sync(); }
     if (q) {
-      const v = q.dataset.q, pages = Object.fromEntries(allPages().map(p => [p.key, p]));
+      // The quick buttons act on the open tab only.
       const def = new Set(defaultKeys());
-      boxes().forEach(b => {
-        const p = pages[b.value];
-        if (b.disabled) { b.checked = false; return; }
-        b.checked = v === 'none' ? false : v === 'ready' ? def.has(p.key) : v === 'everything' ? p.state !== 'no'
-          : v.startsWith('region:') ? def.has(p.key) && p.region === v.slice(7) : def.has(p.key);
+      m.querySelectorAll(`[data-pane="${S.menuTab}"] .pg input`).forEach(b => {
+        b.checked = q.dataset.q === 'all' ? true : q.dataset.q === 'none' ? false : def.has(b.value);
       });
       sync();
+    }
+    if (act && act.dataset.act === 'reset') {
+      const tab = S.menuTab;
+      S = Object.assign({}, DEFAULTS, { menuTab: tab });
+      m.sync();
     }
     if (act && act.dataset.act === 'close') closeMenu();
     if (act && act.dataset.act === 'start') { closeMenu(); startSaver(); }
