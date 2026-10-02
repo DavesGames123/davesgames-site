@@ -1,0 +1,45 @@
+/* ============================================================================
+   SCI  ·  shared type and math colors for the science pages
+   ----------------------------------------------------------------------------
+   One look for the pages with equations: STIX Two Text for titles and for
+   math, Inter for the controls, the system mono for numbers only. Titles
+   are plain words in sentence case. Labels are not uppercase and do not get
+   letter-spacing.
+
+   MATH COLORS. Six classes, .m1 to .m6, color one symbol and every control
+   that sets it. lib/sci-math.js puts the class on the symbol in the MathJax
+   SVG with \class{mN}{...}. A page puts the same class on the parameter
+   label, so the slider and the symbol show the same color.
+
+   Load it after the page stylesheet:
+     <link rel="stylesheet" href="../../lib/sci.css">
+
+   GREP MAP
+     grep -n 'TOKENS'      fonts and the six math colors
+     grep -n 'MATH'        .m1 to .m6 in HTML and in SVG
+     grep -n 'EQUATION'    .sci-eq, the box for one display equation
+   ========================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap');
+
+/* TOKENS */
+:root{
+  --sci-serif:'STIX Two Text','Times New Roman',Georgia,serif;
+  --sci-sans:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --sci-mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  --m1:#62c4ff; --m2:#ff9a62; --m3:#86dc7c; --m4:#e889dc; --m5:#ffd666; --m6:#a8a4ff;
+}
+
+/* MATH. color for HTML text, fill for the MathJax glyph paths. */
+.m1{color:var(--m1)} .m2{color:var(--m2)} .m3{color:var(--m3)}
+.m4{color:var(--m4)} .m5{color:var(--m5)} .m6{color:var(--m6)}
+svg .m1{fill:var(--m1)} svg .m2{fill:var(--m2)} svg .m3{fill:var(--m3)}
+svg .m4{fill:var(--m4)} svg .m5{fill:var(--m5)} svg .m6{fill:var(--m6)}
+
+/* EQUATION. One display equation. A wide equation scrolls sideways. */
+.sci-eq{display:block;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;color:#eef2f4;line-height:0;padding:2px 0}
+.sci-eq::-webkit-scrollbar{display:none}
+.sci-eq mjx-container,.sci-eq > svg{margin:0!important}
+.sci-eq svg{max-width:none;overflow:visible}
+.sci-eq.raw{line-height:1.5;font:0.8rem/1.5 var(--sci-mono);color:#9aa6aa;white-space:pre-wrap;word-break:break-word}
+.sci-sym{display:inline-block;line-height:0;vertical-align:middle}
+.sci-sym svg{overflow:visible}
