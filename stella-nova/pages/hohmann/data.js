@@ -63,6 +63,7 @@
 //      launch/hop/clear ..... "function launch"       the action-bar buttons
 //      math panel ........... "MATH PANEL RENDERING"  live KaTeX walkthrough
 //      init ................. "/* INIT */"            first preset + start loop
+//      screensaver .......... "window.snSaver"        shell saver autopilot (main.js)
 // ============================================================================
 
 /* ═════════════════════════════════════════════════════════════
