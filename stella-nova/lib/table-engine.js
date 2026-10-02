@@ -408,8 +408,10 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
   //           cell.tex or spec.saver.tex[family] when the spec has them
   //   lines   the species text
   //   eq      cell.eq, else spec.saver.eq[family]: the plain fallback
-  // No anchor: a saver cell fills the window, so the plate sits at the
-  // lower right. A second call with the same title swaps the text in place.
+  //   code    the cell's own WGSL function (the inspector's first block,
+  //           with no callees); the poster shows its first lines
+  // No anchor: a saver cell fills the window, so the poster has no leader.
+  // A second call with the same title swaps the text in place.
   function saverLabel() {
     const s = saver;
     if (!s || !s.opts || typeof s.opts.label !== 'function' || s.opts.labels === false) return;
@@ -430,6 +432,8 @@ html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
       tex: tex ? (Array.isArray(tex) ? tex : [tex]) : undefined,
       eq: Array.isArray(eqs) ? eqs : [eqs],
     };
+    const fn = c.fn || ('n_' + c.name), own = fnIndex[fn] || (PAGE.source ? PAGE.source(s.t) : '');
+    if (own) info.code = { lang: 'WGSL', name: fn, text: own };
     if (PAGE.saverLabel) info = PAGE.saverLabel(s.t, info) || info;
     try { s.opts.label(info); } catch (_) {}
   }
