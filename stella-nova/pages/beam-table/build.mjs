@@ -431,6 +431,33 @@ const frag = ([name, , , , body, t0]) =>
 const pack = HELPERS + `\n// ── the ${CELLS.length} cells ──────────────────────────────────────────────────────────\n` +
   CELLS.map(frag).join('\n\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// Every line is a distance field d. glowLine(d, w) = crisp core where d < w,
+// plus the halo w′/(d + w′)·e^(−5d), w′ = 1.5w. Light adds in HDR, then fin().
+const GLOW = 'glow(d) = core(d < w) + w′/(d + w′)·e^(−5d),  w′ = 1.5w';
+const SAVER_EQ = {
+  beam_filament: ['strand i: y = A·pin(s)·fbm(f·s − v(1 + 0.37i)t + 7.1i)', 'pin(s) = sin(πs)^0.6,  A = 0.02…0.11,  f = 5…14', 'n = 2 + ⌊4·strands⌋,  v = 1.5…6 (speed)', GLOW],
+  beam_draw_on: ['c = fract((0.12…0.4)·t + 0.05)  (the cycle)', 'reveal = smoothstep(0, 0.55, c),  fade = 1 − smoothstep(0.82, 1, c)', 'beam = wave path of amplitude 0.04…0.16 up to the head', GLOW],
+  beam_path: ['packet phase = fract((s_acc + s·L)/P − v·t)', 'packet = e^(−(5(φ − ½))²),  P = 0.16…0.05,  v = 0.5…3', '4 segments,  5 nodes',  GLOW],
+  beam_charge: ['c = fract((0.15…0.45)·t + 0.3),  charge = smoothstep(0, 0.6, c)', 'fire = e^(−(c − 0.6)·(4…12)) for c ≥ 0.6', '14 motes: r = (1 − life)(0.3 − 0.1h) spiral in'],
+  curve_pulse: ['centripetal Catmull–Rom (α = ½), 60 segments', 'head s_h = fract((0.08…0.35)·t + 0.25)·L', 'tail = e^(−(s_h − s)/τ),  τ = 0.05…0.4'],
+  tracer_streak: ['3 rounds:  x = 1.5·fract(v·t + h) − 0.62', 'length = (0.1…0.28)·(1 + (0…0.8)·fbm(3t))', 'radius = mix(0.15, 1, s)·0.008  (tapered capsule)'],
+  tracer_fan: ['10 rounds at angle 0.42 + (h − ½)·S,  S = 0.2…0.9 (spread)', 'head = m + d̂·1.1·life,  life = fract(v·t + 3.1h)', 'tail length 0.05…0.16,  fade = 1 − smoothstep(0.7, 1, life)'],
+  tracer_heat_trail: ['head x_h = 1.35·fract((0.12…0.35)·t + 0.45) − 0.52', 'age a = (x_h − x)/L,  L = 0.3…0.95 (trail)', 'light = heatRamp(a)·(1 − a)^1.3,  width = 0.002…0.02 by a'],
+  tracer_plasma: ['teardrop body: r = mix(0.2R, R, s) along the axis', 'R = 0.045…0.09,  rim = (1 − n_z)^(1…4)', 'wobble 0.01·sin 7t'],
+  tracer_chain: ['rounds every 0.1 along d̂,  rate = 2…6 per s', 'every N-th round is a tracer,  N = 2 + ⌊4·ratio⌋', 'spread: y jitter = 0.06·(h − ½)·k·1.5x'],
+  tg_cone: ['pie: half angle θ = 0.25…1.2,  reach R = 0.45…0.8', 'front r_f = R·fract((0.12…0.45)·t + 0.3)', 'front glow = e^(−((r − r_f)/0.012)²)'],
+  tg_annulus: ['d = |r − (R₀ + R₁)/2| − (R₁ − R₀)/2,  R₀ = 0.08…0.24,  R₁ = 0.42', 'wave = (½ + ½ sin(40r − ωt))⁶,  ω = 1…6'],
+  tg_sweep: ['d = r − R,  R = 0.25…0.43', 'front r_f = R·fract((0.15…0.5)·t + 0.1)', 'front = e^(−((r − r_f)/w)²),  w = 0.006…0.025'],
+  sh_hex: ['bubble normal n = (uv/R, √(1 − |uv|²/R²)),  R = 0.38', 'Fresnel rim = (1 − n_z)^2.5,  hex etch at scale 4…10', 'hit ring = e^(−((|x − I| − 0.8c)/0.03)²)·(1 − c)'],
+  sh_bubble: ['rim = (1 − n_z)^p,  p = 1.5…5', 'caustic = (1 − |fbm(3·sphereUV + drift)|)⁸·(0.1…0.8)·n_z', 'specular = (n·h)⁹⁰'],
+  sh_multi: ['three hits at phase t·(0.2…0.55) + i/3', 'ring = Σ e^(−((dᵢ − 0.7cᵢ)/w)²)·(1 − cᵢ),  w = 0.015…0.05', 'the etch lights where the rings cross'],
+  sh_wall: ['panel: rounded box (0.3, 0.4), r = 0.05,  edge = e^(d·(15…45))', 'scan = (½ + ½ sin(14y − ωt))¹²,  ω = 1…5', 'three hits: ring radius 0.3·c'],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
@@ -439,6 +466,7 @@ const spec = {
     name, family, species, knobs,
     defaults: [0.5, 0.5, 0.5, 0.5],
     fn: 'fs_' + name,
+    ...(SAVER_EQ[name] ? { eq: SAVER_EQ[name] } : {}),
   })),
   gens: [
     { id: 'exposure', title: 'Exposure · brightness', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
