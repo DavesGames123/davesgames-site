@@ -248,7 +248,7 @@ w.SN_NAV = [
 // Pages that may start a WebXR session (VR or AR). The shell gives their
 // iframe allow="xr-spatial-tracking". Without it, a page in the shell cannot
 // ask for a session. tools/nav-sync.js checks that each key is registered.
-w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protein-folding', 'leo', 'watch-movement', 'watch-randomizer', 'polarization', 'ns-vortex', 'ns-flow3d'];
+w.SN_XR = ['orbital', 'human-skeleton', 'human-skull', 'protein-viewer', 'protein-folding', 'leo', 'watch-movement', 'watch-randomizer', 'polarization', 'ns-vortex', 'ns-flow3d', 'forge', 'attractorlab', 'resonance-3d'];
 
 // Flatten SN_NAV into one record per page, in nav order.
 function snPages() {
