@@ -26,6 +26,7 @@
 //   grep -n 'function setRule'       the rule picker and the custom field
 //   grep -n 'function bindKeys'      keyboard shortcuts
 //   grep -n 'function occlusion'     the overlay margins that frame the view
+//   grep -n 'GOL_RULES'              symbol -> math color class of the rule equation
 //   grep -n 'function teardown'      pagehide: stop the loop, free the GPU
 //   grep -n 'window.snSaver'         the shell screensaver hook
 import { createGpuEngine } from './engine-gpu.js';
@@ -33,6 +34,11 @@ import { createCpuEngine } from './engine-cpu.js';
 import * as L from './life.js';
 import { PATTERNS, CLASSES } from './patterns.js';
 import { initLearn } from './learn.js';
+import { typesetAll } from '../../lib/sci-math.js';
+
+// The rule equation in the Learn panel: state s m1, neighbour count N m2.
+const GOL_RULES = [['s', 'm1'], ['N', 'm2']];
+typesetAll(document.getElementById('learn') || document, GOL_RULES).catch(err => console.error('[math]', err));
 
 const $ = id => document.getElementById(id);
 const PHONE_Q = matchMedia('(max-width:768px), (max-height:500px) and (pointer:coarse)');
@@ -404,7 +410,7 @@ function buildRules() {
 function setRunning(on) {
   S.running = on; S.carry = 0;
   const pb = $('playBtn'), dp = $('dockPlay');
-  pb.textContent = on ? '❚❚ Pause' : '▶ Play'; pb.classList.toggle('paused', !on);
+  pb.textContent = on ? 'Pause' : 'Play'; pb.classList.toggle('paused', !on);
   dp.textContent = on ? '❚❚' : '▶'; dp.classList.toggle('paused', !on);
   dp.setAttribute('aria-label', on ? 'Pause' : 'Play');
   if (!on) S.countDue = true;

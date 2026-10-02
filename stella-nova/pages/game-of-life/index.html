@@ -63,16 +63,14 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="Conway's Game of Life on the GPU. Draw cells, stamp gliders, guns and spaceships from a library, try other Life-like rules, and learn how four simple rules make patterns that move, oscillate and compute.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="brand">Stella Nova</div>
   <div class="pagetitle">Game of Life</div>
 </div>
 
@@ -93,7 +91,7 @@
 
   <div class="sec-label">Run</div>
   <div class="modes">
-    <button id="playBtn" class="grow">❚❚ Pause</button>
+    <button id="playBtn" class="grow">Pause</button>
     <button id="stepBtn" title="One generation (N)">Step</button>
     <button id="clearBtn" title="Clear (C)">Clear</button>
   </div>
@@ -129,9 +127,9 @@
 
   <div class="sec-label">Tool</div>
   <div class="presets" id="tools">
-    <button data-tool="draw" class="on" title="Draw and erase (1)">✎ Draw</button>
-    <button data-tool="stamp" title="Stamp a pattern (2)">◫ Stamp</button>
-    <button data-tool="pan" title="Pan the view (3)">✥ Pan</button>
+    <button data-tool="draw" class="on" title="Draw and erase (1)">Draw</button>
+    <button data-tool="stamp" title="Stamp a pattern (2)">Stamp</button>
+    <button data-tool="pan" title="Pan the view (3)">Pan</button>
   </div>
   <div class="hint" id="toolHint"></div>
 
@@ -192,6 +190,11 @@
       <p>Each cell has eight neighbours: the cells that touch it on a side or a corner. This is the <b>Moore neighbourhood</b>. All cells change at the same time, from the counts of the generation before.</p>
     </div>
     <div class="rule-cards" id="ruleCards"></div>
+    <!-- The rule as one update equation. main.js typesets the [data-tex]
+         boxes with lib/sci-math.js (GOL_RULES: s m1, N m2). -->
+    <div class="ln-eq" data-tex="s_{t+1}=\begin{cases}1 &amp; s_t=0,\ N_t=3\\ 1 &amp; s_t=1,\ N_t\in\{2,3\}\\ 0 &amp; \text{otherwise}\end{cases}"></div>
+    <div class="ln-eq" data-tex="N_t=\sum_{j\in\mathcal{M}} s_t^{(j)}"></div>
+    <p class="ln-eqnote"><span class="sci-sym" data-tex="s_t" data-inline></span> is the state of the cell at generation <span class="sci-sym" data-tex="t" data-inline></span> (1 live, 0 dead). <span class="sci-sym" data-tex="N_t" data-inline></span> is the count of live cells in its Moore neighbourhood <span class="sci-sym" data-tex="\mathcal{M}" data-inline></span>.</p>
     <p class="bsline">Short form: <span class="bs">B3/S23</span>. A dead cell is <b>B</b>orn with exactly 3 live neighbours. A live cell <b>S</b>urvives with 2 or 3. Every other cell is dead in the next generation.</p>
   </section>
 
