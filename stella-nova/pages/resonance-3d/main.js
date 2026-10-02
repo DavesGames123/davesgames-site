@@ -245,8 +245,14 @@
   // ------------------------------------------------------------------ frame
   const TRACE = 0.06;                 // tip speed, in path lengths per second (gentle)
   let last = performance.now(), tt = 0;
+  // The first rAF timestamp can be earlier than the performance.now() that set
+  // last, so dt can be negative. A negative dt made tt negative (% keeps the
+  // sign), and CURVE.getPointAt(tt) then read past the curve points and threw.
+  // dt is clamped to 0..0.05 and tt is wrapped into 0..1.
+  // The next frame is requested first, so one bad frame cannot stop the loop.
   function frame(now) {
-    const dt = Math.min((now - last) / 1000, 0.05); last = now;
+    requestAnimationFrame(frame);
+    const dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;
     // live phases = static offset + rate * elapsed time
     const el = (now - startT) / 1000;
     ephX = (G.phaseX + G.pRateX * el) * TAU;
@@ -264,11 +270,10 @@
     }
     c.up.copy(view.up); c.lookAt(0, 0, 0);
     if (useOrtho) { ortho.zoom = 5 / view.R; ortho.updateProjectionMatrix(); }   // wheel/pinch still zoom
-    tt = (tt + dt * TRACE) % 1;
+    tt = (((tt + dt * TRACE) % 1) + 1) % 1;
     updateHeat(tt);
     if (CURVE) { CURVE.getPointAt(tt, _p); head.position.copy(_p); updateFrame(tt); }
     renderer.render(scene, c);
-    requestAnimationFrame(frame);
   }
 
   // ------------------------------------------------------- camera drag + pinch
