@@ -814,7 +814,33 @@ window.snSaver={enter:function(o){
     var a=document.getElementById('canvasArea');
     camZoom=Math.max(0.3,Math.min(2.2,0.44*Math.min(a.clientWidth,a.clientHeight)/R));
   }
+  // The plate (o.label) names the preset, its bodies and masses, the softened
+  // pairwise law that computeForces() sums, the velocity-Verlet step, and the
+  // live values from calcEnergy(): t, KE, PE and the energy drift E/E0. E0 is
+  // read again after each load(), so a reload starts the drift at 1.
+  var TITLE={laplace:'Laplace resonance 1:2:4',binary:'Binary star + planet',figure8:'Figure-eight three-body orbit',
+    solar:'Mini solar system',chaos:'Five-body chaos'};
+  var SUB={laplace:'Io, Europa, Ganymede · periods 1 : 2 : 4 · Kepler T² ∝ r³',binary:'two equal stars about the barycentre',
+    figure8:'Chenciner–Montgomery (1993) periodic solution',solar:'fixed Sun, near-circular orbits v = √(GM/r)',
+    chaos:'no dominant mass · orbits diverge'};
+  var label=o&&o.labels!==false&&typeof o.label==='function'?o.label:null,E0=0;
+  function plate(){
+    if(!label)return;
+    var e=calcEnergy(),lines=[];
+    if(!E0)E0=e.total;
+    lines.push('N = '+bodies.length+' bodies · '+bodies.map(function(b){return b.name+' '+(b.mass>=1000?b.mass.toFixed(0):b.mass.toFixed(b.mass%1?1:0))+(b.fixed?' (fixed)':'');}).join(', '));
+    lines.push('G = '+G+' · ε = 4 · h = '+(dt*timeScale).toFixed(4)+' · velocity Verlet · direct O(N²) pair sum');
+    lines.push('t = '+simTime.toFixed(1)+' · KE = '+fmt(e.ke)+' · PE = '+fmt(e.pe));
+    lines.push('E = '+fmt(e.total)+' · drift E/E₀ = '+(E0?(e.total/E0).toFixed(5):'1')+' · |p| = '+fmt(e.pmag));
+    label({title:TITLE[name]||'N-body gravity',sub:SUB[name]||'',lines:lines,
+      eq:['aᵢ = Σⱼ G mⱼ (rⱼ − rᵢ) / (|rⱼ − rᵢ|² + ε)^³ᐟ²',
+          'v += ½a h,   x += v h,   v += ½a h',
+          'E = Σ ½mᵢvᵢ² − Σᵢ<ⱼ G mᵢmⱼ / √(r²ᵢⱼ + ε)']});
+  }
+  var baseLoad=load;
+  load=function(){baseLoad();E0=0;plate();};
   resizeCanvas();load();
+  if(label)setInterval(plate,1000);
   // A fade overlay drawn after each frame; dir is -1 while fading out, +1 in.
   var base=render;
   render=function(){
