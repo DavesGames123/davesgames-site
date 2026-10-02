@@ -549,11 +549,39 @@ fn cell_state(fp: vec2f) -> vec4f {
 const pack = HELPERS + '\n// ── the 60 heat kernels ──────────────────────────────────────────────────────\n' +
   CELLS.map(kernel).join('\n\n') + '\n' + PRESENT;
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// Every cell steps the heat equation on a 128² grid (explicit Euler):
+// Tⁿ⁺¹ = (Tⁿ + D·∇²Tⁿ + S·source)·(1 − κ), ∇²T = T_E + T_W + T_N + T_S − 4T.
+const STEP = 'Tⁿ⁺¹ = (Tⁿ + D·∇²Tⁿ + S·q(x, t))·(1 − κ)';
+const LAPL = '∇²T = T_E + T_W + T_N + T_S − 4T  (128² grid)';
+const SPOT = 'q = e^(−|x − c(t)|²/r²)·flick,  flick = 0.55 + 0.45·hash(x, ⌊10t⌋)';
+const STD = 'D = 0.05…0.24,  κ = 0.01…0.06,  S = S₀·(0.55 + source)';
+const ADV = 'advect first:  T(x) ← T(x − u·Δ) (bilinear),  then diffuse';
+const SAVER_EQ = {
+  orbit: [STEP, LAPL, SPOT, 'c(t) = 0.30·(cos 0.7t, sin 0.9t),  S₀ = 0.35', 'r = (0.06…0.13)·(0.85 + 0.15 sin(5t + 40d)),  ' + STD],
+  orbit_slow: [STEP, LAPL, SPOT, 'c(t) = 0.28·(cos 0.35t, sin 0.35t),  S₀ = 0.35', 'r = (0.09…0.18)·(0.85 + 0.15 sin(5t + 40d)),  ' + STD],
+  lissajous: [STEP, LAPL, SPOT, 'c(t) = (0.32 sin 0.8t,  0.30 sin(1.3t + 1)),  S₀ = 0.35', STD],
+  drift: [STEP, LAPL, SPOT, 'c(t) = 0.30·(sin 0.4t + 0.4 sin 1.1t,  cos 0.5t)', STD],
+  figure8: [STEP, LAPL, SPOT, 'c(t) = (0.32 sin 0.9t,  0.26 sin 1.8t)  (a figure eight)', STD],
+  spiral: [STEP, LAPL, SPOT, 'c(t) = (0.06 + 0.26|sin 0.3t|)·(cos 2t, sin 2t)', STD],
+  comet: [STEP, LAPL, SPOT, 'c(t) = 0.32·(cos 1.3t, sin 1.1t),  S₀ = 0.5,  r = 0.05…0.09', 'D = 0.05…0.24,  κ = 0.01…0.06 (tail)'],
+  core_bloom: [STEP, LAPL, 'q = e^(−|x|²/r²),  r = (0.1…0.28)·(0.7 + 0.4 sin 1.5t)', 'S₀ = 0.45,  ' + STD],
+  twin: [STEP, LAPL, 'q = (e^(−|x − a|²/r²) + e^(−|x + a|²/r²))·flick', 'a(t) = 0.28·(cos 0.7t, sin 0.9t),  S = 0.35,  r = 0.06…0.11'],
+  triple: [STEP, LAPL, 'q = Σᵢ e^(−|x − 0.26(cos aᵢ, sin aᵢ)|²/r²)·flick', 'aᵢ = 2.094i + 0.6t,  S = 0.34,  r = 0.05…0.1'],
+  ring_source: [STEP, LAPL, 'q = e^(−(|x| − ρ(t))²/w)·flick,  ρ = 0.2 + 0.12 sin 1.2t', 'S = 0.4,  w = 0.001…0.006,  D = 0.05…0.22'],
+  cool_wave: ['Tⁿ⁺¹ = (Tⁿ + D∇²Tⁿ + 0.4e^(−|x|²/r²))·(1 − κ(1 + 2·front))', LAPL, 'front = smoothstep(cₓ + 0.2, cₓ − 0.2, x),  cₓ = 2·fract(0.12t) − 1', 'D = 0.06…0.22,  r = 0.15…0.3,  κ = 0.02…0.1'],
+  vortex: [ADV, 'u = (−y, x)/(|x| + 0.06)·(0.5…2.5)·128·0.02', STEP, 'source at (0.22, 0),  r = 0.06…0.12,  D = 0.03…0.1'],
+  plume_rise: [ADV, 'u = ((0, 0.3…1.2) + 0.3(sin(8y + t), 0))·128·0.02  (lift)', STEP, 'source at (0, −0.35),  S = 0.4,  r = 0.08…0.16'],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
   uniform_bytes: 96,
-  cells: CELLS.map(c => ({ name: c.name, family: c.family, species: c.species, knobs: c.knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'cs_' + c.name })),
+  cells: CELLS.map(c => ({ name: c.name, family: c.family, species: c.species, knobs: c.knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'cs_' + c.name, ...(SAVER_EQ[c.name] ? { eq: SAVER_EQ[c.name] } : {}) })),
   gens: [
     { id: 'tempo', title: 'Tempo · simulation speed', fn: 'flat', period: 8, amp: 0.0, bias: 0.5, phase: 0,
       map: 'y => 0.2 + 2.8 * y', unit: "v => v.toFixed(2) + 'x'" },
@@ -655,6 +683,7 @@ const pageJs = `// =============================================================
 //  SCREENSAVER: saver(t) runs each time the table-engine saver puts a cell
 //  on (behind its fade). It resets the cell to a cold plate with a new seed,
 //  so each cell builds its field from the source again.
+//  saverLabel(t, info) adds the live step count to the saver plate.
 // ============================================================================
 const MODES = ${JSON.stringify(MODES)};
 const STEPS = ${JSON.stringify(STEPS)};
@@ -680,6 +709,7 @@ export const PAGE = {
   },
   leave(t) { t.page.pendingReset = true; t.page.acc = 0; },
   saver(t) { const pg = t.page; pg.pendingReset = false; pg.reset = true; pg.seed = Math.random() * 100; pg.acc = 0; t.dirty = true; },
+  saverLabel(t, info) { info.lines.push('step ' + t.page.frame + ' · ' + STEPS[t.s.name] + ' steps per frame · 128² grid'); return info; },
   tick(dt, now) { for (const t of this.ctx.tiles) { const pg = t.page; if (pg.pendingReset && t.rate <= 0.002) { pg.pendingReset = false; pg.reset = true; t.dirty = true; } } },
   step(enc, t, reset) {
     const { device } = this.ctx; const pg = t.page; const d = pg.udata;
