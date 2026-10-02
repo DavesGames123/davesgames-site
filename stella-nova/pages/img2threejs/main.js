@@ -23,6 +23,7 @@
 //    function renderPass ..... pass card and dock
 //    function openSource ..... source dialog
 //    function loop ........... render loop
+//    window.snSaver .......... shell screensaver hook (orbit, pass tour, fades)
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -181,7 +182,7 @@ function frame() {
   const size = S.model.userData.size;
   const rad = size.length() * 0.5;
   const az = (M.view.az || 0) * Math.PI / 180, el = (M.view.el || 12) * Math.PI / 180;
-  const d = rad / Math.sin(camera.fov * Math.PI / 360) * (innerWidth < 860 ? 1.12 : 1.0);
+  const d = rad / Math.sin(camera.fov * Math.PI / 360) * (saver.on ? 1.15 : innerWidth < 860 ? 1.12 : 1.0);
   const target = new THREE.Vector3(0, size.y * 0.47, 0);
   camera.position.set(d * Math.cos(el) * Math.sin(az), target.y + d * Math.sin(el), d * Math.cos(el) * Math.cos(az));
   controls.target.copy(target);
@@ -281,8 +282,9 @@ let last = performance.now();
 function loop(t) {
   requestAnimationFrame(loop);
   const dt = Math.min(0.05, (t - last) / 1000); last = t;
+  if (saver.on) saverTick(dt);
   if (Math.abs(S.explode - S.explodeTo) > 1e-3) {
-    S.explode += (S.explodeTo - S.explode) * Math.min(1, dt * 5);
+    S.explode += (S.explodeTo - S.explode) * Math.min(1, dt * (saver.on ? 1.1 : 5));
     applyExplode(S.explode);
     S.dirty = true;
   }
@@ -291,6 +293,59 @@ function loop(t) {
   S.dirty = false;
   renderer.render(scene, camera);
 }
+
+// ── screensaver ────────────────────────────────────────────────────────────
+// Shell screensaver hook (lib/screensaver.js). enter() hides the header, the
+// side panel, the dock and the notes, and pins .stage to the window, so the
+// ResizeObserver sizes the renderer to the full window. The camera orbits
+// slowly (autoRotate, speed from opts.calm). Each model plays four steps of
+// max(10, seconds / 4) s: blockout in clay, form in clay, the final pass, and
+// the final pass exploded and assembled again. Each pass or model change
+// happens under a fade to the background colour. The fade is a plane on the
+// camera, so the recording has it. The first model comes from opts.seed.
+const saver = { on: false, fade: 1, fadeTo: 1, mesh: null };
+const FADE_S = 0.9;
+function saverTick(dt) {
+  const d = saver.fadeTo - saver.fade;
+  saver.fade += Math.sign(d) * Math.min(Math.abs(d), dt / FADE_S);
+  const f = saver.fade, a = f * f * (3 - 2 * f);
+  saver.mesh.material.opacity = a; saver.mesh.visible = a > 0.001;
+  S.dirty = true;
+}
+async function saverRun(m0, stepMs) {
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const fadeTo = v => { saver.fadeTo = v; return wait(FADE_S * 1000 + 100); };
+  for (let k = 0; saver.on; k++) {
+    const mi = (m0 + k) % MODELS.length, last = MODELS[mi].passes.length - 1;
+    for (const [pi, ex] of [[0, false], [2, false], [last, false], [last, true]]) {
+      if (!ex) {
+        await fadeTo(1);
+        if (pi === 0) { S.explode = S.explodeTo = 0; setExplode(false); S.m = mi; await load(mi, 0); }
+        else await load(mi, pi, { keepView: true });
+        await fadeTo(0);
+        await wait(stepMs - 2 * (FADE_S * 1000 + 100));
+      } else {
+        setExplode(true); await wait(stepMs * 0.5);
+        setExplode(false); await wait(stepMs * 0.5);
+      }
+    }
+  }
+}
+window.snSaver = { enter(opts) {
+  const calm = Math.max(0, Math.min(1, opts.calm ?? 0.7)), secs = Math.max(20, +opts.seconds || 60);
+  const st = document.createElement('style');
+  st.textContent = 'html.i2-saver,html.i2-saver body{overflow:hidden!important;background:#0d1119!important}'
+    + 'html.i2-saver header.top,html.i2-saver #side,html.i2-saver #dock,html.i2-saver #hint,html.i2-saver #loading,html.i2-saver .notes,html.i2-saver #source{display:none!important}'
+    + 'html.i2-saver .stage{position:fixed!important;inset:0!important;height:auto!important;min-height:0!important;z-index:2147483647}html.i2-saver .view canvas{cursor:none}';
+  document.head.appendChild(st); document.documentElement.classList.add('i2-saver');
+  saver.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: scene.background, transparent: true, opacity: 1, depthTest: false, depthWrite: false, toneMapped: false }));
+  saver.mesh.position.z = -0.1; saver.mesh.renderOrder = 999; saver.mesh.frustumCulled = false;
+  camera.add(saver.mesh); scene.add(camera);
+  controls.enabled = false; controls.autoRotate = true; controls.autoRotateSpeed = 1.1 * (1 - 0.6 * calm);
+  saver.on = true; saver.fade = saver.fadeTo = 1;
+  saverRun((opts.seed >>> 0) % MODELS.length, Math.max(10, secs / 4) * 1000);
+  return { canvas: renderer.domElement, warmupMs: 1500 };
+} };
 
 window.__img2 = { S, MODELS, renderer, scene, camera, controls, holder, setModel, setPass, setExplode, frame,
   dirty: () => { S.dirty = true; } };
