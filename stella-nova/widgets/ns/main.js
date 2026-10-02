@@ -53,7 +53,7 @@
 //      main loop ............ "main loop"          view dispatch + error trap
 //      headset .............. "headset (VR / AR)"  lib/xr-view.js on vortex, flow3d
 //      screensaver .......... "window.snSaver"     shell saver hook, ns-vortex only
-//      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d, wave
+//      saver autopilots ..... "SV_VIEWS"           saver hooks for burgers, flow2d, flow3d, wave
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -793,7 +793,7 @@ function drawFlow2D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRec
 // F3 holds the Flow 3D view: the solver instance, grid size n, particle count np,
 // tracer count nt, and the tracer arc-length budget. Particles and tracers are
 // advected through the solver's computed velocity field, not a cartoon.
-const F3={sim:null,n:32,playing:true,nu:0.01,spd:1,np:7000,nt:110,len:6.0,ic:'column',cylR:2.9}; const GT=new Timeline(240,0);
+const F3={sim:null,n:32,playing:true,nu:0.01,spd:1,rate:1,np:7000,nt:110,len:6.0,ic:'column',cylR:2.9}; const GT=new Timeline(240,0);
 const f3Nu=$('r-gnu'); const f3NuUpd=()=>{ F3.nu=Math.pow(10,parseFloat(f3Nu.value)); $('v-gnu').textContent=F3.nu.toFixed(4)+'  (Re≈'+(1/F3.nu).toFixed(0)+')'; }; f3Nu.addEventListener('input',()=>{f3NuUpd(); f3Reset();}); f3NuUpd();
 $('r-glen').addEventListener('input',e=>{F3.len=parseFloat(e.target.value);$('v-glen').textContent=F3.len.toFixed(1)});
 $('r-gw').addEventListener('input',e=>{const w=parseFloat(e.target.value);F3.bundle.setWidth(w);$('v-gw').textContent=w.toFixed(1)});
@@ -855,7 +855,7 @@ function f3Show(){ const frames=GT.frames, idx=GT.view<0?frames.length-1:GT.view
 // draw the two diagnostic plots into the mathematics panel (enstrophy growth, and
 // the Beale–Kato–Majda integral). The plots borrow ctx and restore it after.
 function drawFlow3D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRect(0,0,W,H); const s=F3.sim;
-  if(F3.playing){ const h=s.dtCFL(); s.step(h); s.record(); f3Advect(h,false); f3Snap(); }
+  if(F3.playing){ const h=s.dtCFL()*F3.rate; s.step(h); s.record(); f3Advect(h,false); f3Snap(); }
   GT.sync(); f3Show(); const fr=GT.current(); const tmax=Math.max(2,s.t*1.05);
   const icTxt={column:R`vortex column: $\omega_z=A\,e^{-\rho^2/r_0^2}$ on a helical axis, plus a weak axial jet — spins, waves, diffuses, decays`,'taylor-green':R`Taylor–Green: $u_0=(\sin x\cos y\cos z,\,-\cos x\sin y\cos z,\,0)$`,abc:R`ABC: $\omega=u$, so $u\times\omega=0$ and the flow decays exactly as $u_0e^{-\nu t}$`}[F3.ic];
   const hV=R`$\partial_t\omega+(u\!\cdot\!\nabla)\omega=(\omega\!\cdot\!\nabla)u+\nu\Delta\omega$ &nbsp; at $t=$`+fr.t.toFixed(2)+'<br>'+icTxt+R`. Particles and tracers ride the computed field; colour is speed. $`+F3.n+R`^3$ spectral, `+s.msStep.toFixed(0)+' ms per step.';
@@ -864,7 +864,7 @@ function drawFlow3D(dt){ frameNo++; const {W,H,narrow}=stageDims(); ctx.clearRec
   const ex=[]; if(F3.ic==='abc') for(let t=0;t<=tmax;t+=tmax/50) ex.push([t,s.E0*Math.exp(-2*s.nu*t)]);
   const P1=(x,y,w,h)=>logPlot(x,y,w,h,[{pts:s.hist.map(h=>[h.t,h.E]),col:COL.blue,width:1.6,label:'energy'},{pts:s.hist.map(h=>[h.t,h.Z]),col:COL.yellow,width:1.6,label:'enstrophy'},{pts:s.hist.map(h=>[h.t,h.m]),col:'rgba(243,238,238,0.7)',label:'max|ω|'},...(ex.length?[{pts:ex,col:COL.red,dash:[4,3],label:'ABC exact'}]:[])],tmax,Math.log10(Math.min(s.E0,s.Z0)*0.05),Math.log10(Math.max(s.m0,s.Z0)*4),{cursor:fr.t});
   const P2=(x,y,w,h)=>logPlot(x,y,w,h,[{pts:s.hist.map(h=>[h.t,h.bkm]),col:COL.green,width:1.8,label:'BKM integral'},{pts:s.hist.map(h=>[h.t,2*s.nu*h.Z]),col:COL.yellow,label:'2νZ = −dE/dt'}],tmax,-2.5,Math.log10(Math.max(1,s.bkm)*3)+0.3,{cursor:fr.t});
-  const r=VX.renderer; r.setScissorTest(false); r.clear(); const Hv=stageH(); if(!r.xr.isPresenting){ r.setViewport(0,SCRUB_H,stage.clientWidth,Hv); r.setScissor(0,SCRUB_H,stage.clientWidth,Hv); r.setScissorTest(true); } F3.camera.aspect=stage.clientWidth/Hv; F3.camera.updateProjectionMatrix();
+  const r=VX.renderer; r.setScissorTest(false); r.clear(); const Hv=stageH(), y0=SCRUB[VIEW]?SCRUB_H:0; if(!r.xr.isPresenting){ r.setViewport(0,y0,stage.clientWidth,Hv); r.setScissor(0,y0,stage.clientWidth,Hv); r.setScissorTest(true); } F3.camera.aspect=stage.clientWidth/Hv; F3.camera.updateProjectionMatrix();
   F3.controls.autoRotate=TOG.spin; F3.controls.update(); r.render(F3.scene,F3.camera); r.setScissorTest(false);
   ovBegin(); ovEnd();
   // diagnostics live in the mathematics panel
@@ -1052,6 +1052,20 @@ const SV_VIEWS = {
     next(); const clock=svClock(show,fade,next);
     return { draw(dt){ const k=clock(dt); const W=stage.clientWidth, H=stage.clientHeight; ctx.clearRect(0,0,W,H); if(WV.playing) wvAdvance(dt*WV.spd*1.4);
       const S=W<760?0:Math.max(80,Math.min(H-62,(W-70)/2)); ctx.save(); ctx.translate(0,W<760?0:Math.max(0,(H-S)/2-30)); drawWave(); ctx.restore(); svFinish(k); } };
+  },
+  // Flow 3D: the tracer scene of drawFlow3D on the full c3d, with the slow
+  // auto-orbit. The 16³ grid (5 ms a step) keeps the frame rate smooth. F3.rate
+  // scales the solver step, 1 - 0.6 * calm. Each state takes the next initial
+  // velocity: vortex column, then Taylor–Green. ABC is not in the cycle: its
+  // tracers do not show and the cloud looks static. The fade multiplies the
+  // opacity of every transparent material in the scene by the visibility.
+  flow3d(calm, show, fade, rng){
+    const ics=['column','taylor-green']; let i=Math.floor(rng()*2);
+    const mats=[]; F3.scene.traverse(o=>{ if(o.material&&o.material.transparent) mats.push([o.material,o.material.opacity]); });
+    const next=()=>{ i=(i+1)%2; F3.ic=ics[i]; svSeeded(rng,f3Reset); };
+    F3.n=16; F3.rate=1-0.6*calm; TOG.spin=true; TOG.trails=true; F3.controls.autoRotateSpeed=0.4*(1-0.5*calm); VX.renderer.setClearColor(0x0a0810,1);
+    i=(i+1)%2; next(); const clock=svClock(show,fade,next);
+    return { draw(dt){ const k=clock(dt); for(const [m,o] of mats) m.opacity=o*k; drawFlow3D(dt); } };
   },
 };
 if (SV_VIEWS[FIXED]) window.snSaver = { enter(opts) {
