@@ -189,15 +189,18 @@ body.sn-saver-vert #sn-saver-label { --fw: min(100vw, 56.25vh); }
 #sn-saver-label .eqs { display: grid; gap: .6em; justify-items: center; max-width: 100%; margin-top: 1em; font-size: clamp(14px, calc(var(--fs) * .03), 25px); color: #f4f1ea; }
 #sn-saver-label .eq { max-width: 100%; line-height: 0; overflow: hidden; }
 #sn-saver-label .eq svg { max-width: 100%; height: auto; overflow: visible; }
-#sn-saver-label .eq.plain, #sn-saver-label .eq.raw { line-height: 1.35; font-style: italic; white-space: pre-wrap; }
+#sn-saver-label .eq.raw { line-height: 1.35; font-style: italic; white-space: pre-wrap; }
 #sn-saver-label .notes { max-width: 32em; margin-top: .9em; font: italic 400 clamp(12px, calc(var(--fs) * .024), 19px)/1.4 'STIX Two Text', Georgia, serif; color: #cfc9bc; }
 #sn-saver-label .notes p { margin: 0; } #sn-saver-label .notes p + p { margin-top: .25em; }
-#sn-saver-label .code { max-width: 100%; margin-top: 1.1em; box-sizing: border-box; text-align: left; font: 400 clamp(8.5px, calc(var(--fs) * .0185), 14px)/1.5 ui-monospace, 'SF Mono', Menlo, monospace; color: #cdd5df; background: rgba(5,7,11,.7); border: 1px solid rgba(255,255,255,.09); border-radius: 6px; padding: .85em 1.1em .95em; text-shadow: none; overflow: hidden; }
+#sn-saver-label .code { max-width: 100%; margin-top: 1.1em; box-sizing: border-box; text-align: left; font: 400 clamp(8.5px, calc(var(--fs) * .0185), 14px)/1.55 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, monospace; font-variant-ligatures: none; color: #cdd5df; background: rgba(5,7,11,.7); border: 1px solid rgba(255,255,255,.09); border-radius: 6px; padding: .85em 1.1em .95em; text-shadow: none; overflow: hidden; }
 #sn-saver-label .code header { margin-bottom: .7em; font: 500 .8em/1 'Inter', system-ui, sans-serif; letter-spacing: .24em; text-transform: uppercase; color: var(--c, #8ec5ff); }
 #sn-saver-label .code header i { font-style: normal; color: #7d8794; letter-spacing: .12em; text-transform: none; margin-left: .8em; }
-#sn-saver-label .code pre { margin: 0; font: inherit; white-space: pre; }
-#sn-saver-label .code .k { color: #c9a8ff; } #sn-saver-label .code .t { color: #6cc8ff; } #sn-saver-label .code .n { color: #ffd27a; }
-#sn-saver-label .code .f { color: #8ee08a; } #sn-saver-label .code .a { color: #ff9f72; } #sn-saver-label .code .c { color: #6b7685; font-style: italic; }
+#sn-saver-label .code pre { margin: 0; font: inherit; white-space: pre; overflow: hidden; }
+#sn-saver-label .code.cut pre { -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent); mask-image: linear-gradient(90deg, #000 88%, transparent); }
+#sn-saver-label .code .tk-kw { color: #c9a8ff; } #sn-saver-label .code .tk-ty { color: #6cc8ff; } #sn-saver-label .code .tk-bi { color: #5fd4c4; }
+#sn-saver-label .code .tk-fn { color: #8ee08a; } #sn-saver-label .code .tk-num, #sn-saver-label .code .tk-con { color: #ffd27a; } #sn-saver-label .code .tk-st { color: #f0a36b; }
+#sn-saver-label .code .tk-at, #sn-saver-label .code .tk-pp { color: #ff9f72; } #sn-saver-label .code .tk-sw { color: #a9c1ff; } #sn-saver-label .code .tk-op { color: #9aa4b2; }
+#sn-saver-label .code .tk-cm { color: #6b7685; }
 #sn-saver-label .rule2 { display: block; width: 46px; height: 1px; margin: 1.15em 0 0; font-size: clamp(13px, calc(var(--fs) * .03), 24px); background: rgba(244,240,230,.7); transform: scaleX(0); transition: transform 1.2s ease 1s; }
 #sn-saver-label.on .rule2 { transform: scaleX(1); }
 #sn-saver-label .logo { margin-top: .85em; font: 500 clamp(13px, calc(var(--fs) * .03), 24px)/1 'STIX Two Text', Georgia, serif; letter-spacing: .24em; color: #f6f1e6; white-space: nowrap; padding: .5em .5em .5em .74em; border-radius: 3px; background: rgba(5,7,11,.58); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: 0; transition: opacity 1.4s ease 1.3s; }
@@ -569,35 +572,55 @@ function plateFonts() {
   if (document.getElementById('sn-plate-fonts')) return;
   const l = document.createElement('link');
   l.id = 'sn-plate-fonts'; l.rel = 'stylesheet';
-  // This file has the STIX Two Text italic faces that the poster uses.
-  l.href = new URL('../vendor/fonts/inter+stix-two-text.53c07ba3.css', SELF).href;
+  // This file has the STIX Two Text italic faces and IBM Plex Mono (code).
+  l.href = new URL('../vendor/fonts/stix-two-text+inter+ibm-plex-mono.c233e746.css', SELF).href;
   document.head.appendChild(l);   // appended at run time, so it does not block the shell
 }
 const arrOf = v => (Array.isArray(v) ? v : v ? [v] : []);
-// GLSL and WGSL: comments, attributes, numbers, keywords, types, calls.
-const CODE_RE = /(\/\/[^\n]*)|(@\w+)|(\b\d+(?:\.\d*)?(?:e[+-]?\d+)?[fuih]?\b|\.\d+\b)|\b(fn|let|var|const|return|if|else|for|while|loop|break|continue|struct|uniform|in|out|inout|void|discard|precision|highp|mediump|layout|override|switch|case|default)\b|\b(f32|f16|i32|u32|bool|float|int|uint|vec[234][fiuh]?|ivec[234]|mat[234](?:x[234])?[fh]?|array|ptr|texture_\w+|sampler\w*)\b|(\b[A-Za-z_]\w*(?=\s*\())/g;
-function codeHTML(src) {
-  let out = '', last = 0, m;
-  CODE_RE.lastIndex = 0;
-  while ((m = CODE_RE.exec(src))) {
-    out += esc(src.slice(last, m.index));
-    const cls = m[1] ? 'c' : m[2] ? 'a' : m[3] ? 'n' : m[4] ? 'k' : m[5] ? 't' : 'f';
-    out += `<span class="${cls}">${esc(m[0])}</span>`;
-    last = m.index + m[0].length;
-  }
-  return out + esc(src.slice(last));
+// Code and pseudocode are coloured by lib/code-highlight.js (an ES module,
+// loaded once). Until it loads, a listing shows as plain escaped text, and
+// fillCode colours it when the module arrives. After that, codeHTML colours
+// at once, so a live label swap does not flash plain text.
+let codeHL = null, codeHLP = null;
+function loadCodeHL() {
+  if (!codeHLP) codeHLP = import(new URL('code-highlight.js', SELF).href).then(M => (codeHL = M)).catch(() => null);
+  return codeHLP;
+}
+function codeHTML(src, lang) { return codeHL ? codeHL.highlight(src, lang) : esc(src); }
+function fillCode(box) {
+  fitCode(box);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitCode(box));
+  if (codeHL) return;
+  loadCodeHL().then(M => {
+    if (!M) return;
+    box.querySelectorAll('pre[data-lang]').forEach(n => { n.innerHTML = M.highlight(n.textContent, n.dataset.lang); });
+  });
+}
+// Shrink a listing until its longest line fits the box, to 72% at most.
+// A line still too long then ends in the fade (.code.cut).
+function fitCode(box) {
+  box.querySelectorAll('.code').forEach(c => {
+    const pre = c.querySelector('pre'); if (!pre) return;
+    pre.style.fontSize = '';
+    const k = pre.clientWidth / Math.max(1, pre.scrollWidth);
+    if (k < 1) pre.style.fontSize = Math.max(0.72, k * 0.99).toFixed(3) + 'em';
+    c.classList.toggle('cut', pre.scrollWidth > pre.clientWidth + 1);
+  });
+}
+// One listing box: a header (language, then the name) and the lines.
+function listing(label, name, lang, lines) {
+  const ind = Math.min(...lines.filter(l => l.trim()).map(l => l.match(/^ */)[0].length));
+  const body = lines.map(l => l.slice(ind)).slice(0, CODE_LINES);
+  if (lines.length > CODE_LINES) body.push('…');
+  return `<div class="code"><header>${esc(label)}${name ? `<i>${esc(name)}</i>` : ''}</header><pre data-lang="${esc(lang)}">${codeHTML(body.join('\n'), lang)}</pre></div>`;
 }
 function codeBlock(info) {
   let c = arrOf(info.code)[0];
   if (!c) return '';
   if (typeof c === 'string') c = { text: c };
   const lines = String(c.text || '').replace(/\t/g, '  ').replace(/^\n+|\s+$/g, '').split('\n');
-  // Drop the common indent, then cut to CODE_LINES.
-  const ind = Math.min(...lines.filter(l => l.trim()).map(l => l.match(/^ */)[0].length));
-  const body = lines.map(l => l.slice(ind)).slice(0, CODE_LINES);
-  if (lines.length > CODE_LINES) body.push('…');
-  const lang = c.lang || 'shader';
-  return `<div class="code"><header>${esc(lang)}${c.name ? `<i>${esc(c.name)}</i>` : ''}</header><pre>${codeHTML(body.join('\n'))}</pre></div>`;
+  const label = c.lang || 'shader';
+  return listing(label, c.name, c.lang || c.name || 'pseudo', lines);
 }
 // The two text slots. top: parameters (or, with none, equations and notes).
 // bottom: equations and notes when the top has parameters, then code.
@@ -612,12 +635,16 @@ function posterSlots(info) {
   const notes = lines.length ? `<div class="notes">${lines.map(t => `<p>${esc(t)}</p>`).join('')}</div>` : '';
   const tex = arrOf(info.tex).map(String), eq = arrOf(info.eq).map(String);
   const eqs = tex.length ? `<div class="eqs">${tex.map(t => `<div class="eq" data-tex="${esc(t)}">${esc(t)}</div>`).join('')}</div>`
-    : eq.length ? `<div class="eqs">${eq.map(t => `<div class="eq plain">${esc(t)}</div>`).join('')}</div>` : '';
+    : '';
   const code = codeBlock(info);
+  // Plain eq lines (no TeX) are pseudocode, for example the table pages'
+  // "color = mix(ground, ramp(ρ′), …)". They show as a coloured listing,
+  // not as italic text. With a real code extract, the extract replaces them.
+  const pseudo = !tex.length && eq.length && !code ? listing('pseudocode', '', 'pseudo', eq) : '';
   // .col holds the bottom text, so a landscape frame can set it beside the code.
   // The top holds only the header and the site mark. The parameters go
   // under the equations, so the description line stands alone.
-  return { top: '', bot: (eqs || pp || notes ? `<div class="col">${eqs + pp + notes}</div>` : '') + code };
+  return { top: '', bot: (eqs || pp || notes ? `<div class="col">${eqs + pp + notes}</div>` : '') + code + pseudo };
 }
 function posterHTML(info, page) {
   const s = posterSlots(info);
@@ -656,7 +683,7 @@ function setLabel(info, fallback) {
     const s = posterSlots(info);
     p.querySelector('.sub').textContent = info.sub || '';
     p.querySelector('.slot-top').innerHTML = s.top; p.querySelector('.slot-bot').innerHTML = s.bot;
-    fillTex(p, info.rules); plate.info = info;
+    fillTex(p, info.rules); fillCode(p); plate.info = info;
     return;
   }
   clearTimeout(labelTimer);
@@ -664,7 +691,7 @@ function setLabel(info, fallback) {
   if (!info || !S.labels || !run) { if (plate) plate.info = null; return; }
   const page = allPages().find(q => q.key === run.order[run.i]);
   labelTimer = setTimeout(() => {
-    p.innerHTML = posterHTML(info, page); fillTex(p, info.rules);
+    p.innerHTML = posterHTML(info, page); fillTex(p, info.rules); fillCode(p);
     p.dataset.title = String(info.title || '');
     if (page) p.style.setProperty('--c', page.color);
     plate = { info, lead: null };
