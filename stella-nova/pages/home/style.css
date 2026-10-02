@@ -579,6 +579,7 @@ main { position: relative; }
 .dir-col { display: grid; gap: 14px; }
 .dir-region { font: 500 0.7rem/1 var(--f-mono); letter-spacing: .22em; text-transform: uppercase; color: var(--dim); padding: 4px 4px 0; }
 .dir-region[hidden] { display: none; }
+.dir-region.cont { opacity: .55; }
 .dir-group { border-radius: 16px; border: 1px solid var(--line); background: var(--bg2); overflow: hidden; transition: border-color .3s; }
 .dir-group:hover { border-color: color-mix(in srgb, var(--c) 35%, transparent); }
 .dir-group summary { list-style: none; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 16px; cursor: pointer; border-bottom: 1px solid var(--line); }

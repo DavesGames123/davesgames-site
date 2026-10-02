@@ -30,6 +30,7 @@
 //    inline search ........ "function initFind"
 //    social links ......... "YOUTUBE_URL"
 //    directory filter ..... "function initDirectory"
+//    directory columns .... "function balanceDirectory"
 //    video facade ......... "function initVideo"
 //    bug form ............. "function initBugForm"
 //    reveal on scroll ..... "function initReveal"
@@ -769,10 +770,75 @@ function initDirectory() {
       $$('.dir-h', g).forEach(h => { h.hidden = !!q && !$$('li:not([hidden])', h.nextElementSibling).length; });
       g.hidden = n === 0; if (q && n) g.open = true; if (n) any = true;
     });
-    // A region heading hides when its column has no shown group.
-    $$('.dir-region').forEach(h => { h.hidden = !$$('.dir-group:not([hidden])', h.parentElement).length; });
     empty.hidden = any;
+    balanceDirectory();
   });
+  // A group that opens or closes changes its height, so balance again.
+  $('#dirList').addEventListener('toggle', () => balanceDirectory(), true);
+  let w = 0;
+  new ResizeObserver(([e]) => { const nw = Math.round(e.contentRect.width); if (nw !== w) { w = nw; balanceDirectory(); } }).observe($('#dirList'));
+}
+
+// ── directory columns ──────────────────────────────────────────────────────
+// The static HTML has one column per region (it works without script), but
+// Science has more groups than the other two regions together, so its column
+// was three times longer. This puts the groups, in nav order, into columns of
+// almost equal height. A column that starts inside a region gets that region
+// heading again. The column count is the count that the old auto-fit grid
+// gave (280px minimum, 14px gap). Hidden groups (filter) have no height and
+// make no heading.
+const DIR_MIN = 280, DIR_GAP = 14;
+let dirItems = null;
+function balanceDirectory() {
+  const dir = $('#dirList');
+  if (!dirItems) dirItems = $$('.dir-group', dir).map(g => ({ g, region: g.closest('.dir-col').dataset.region, name: $('.dir-region', g.closest('.dir-col')).textContent }));
+  const n = Math.max(1, Math.floor((dir.clientWidth + DIR_GAP) / (DIR_MIN + DIR_GAP)));
+  const shown = dirItems.filter(it => !it.g.hidden);
+  // Height of a region heading, from one that is in the DOM now.
+  const probe = $('.dir-region:not([hidden])', dir);
+  const hh = (probe ? probe.offsetHeight : 18) + DIR_GAP;
+  const h = shown.map(it => it.g.offsetHeight + DIR_GAP);
+  // cost(i, j): height of a column that holds shown[i..j).
+  const cost = (i, j) => { let t = 0; for (let k = i; k < j; k++) t += h[k] + (k === i || shown[k].region !== shown[k - 1].region ? hh : 0); return t; };
+  // Linear partition: split the list into k runs with the smallest tallest
+  // run. A big group can leave one run short, so try each count from n down
+  // to half of n and keep the most even one (the most columns on a tie).
+  const m = shown.length;
+  function split(k) {
+    const best = Array.from({ length: k + 1 }, () => new Array(m + 1).fill(Infinity));
+    const cut = Array.from({ length: k + 1 }, () => new Array(m + 1).fill(0));
+    best[0][0] = 0;
+    for (let c = 1; c <= k; c++) for (let j = 1; j <= m; j++) for (let i = c - 1; i < j; i++) {
+      const v = Math.max(best[c - 1][i], cost(i, j));
+      if (v < best[c][j]) { best[c][j] = v; cut[c][j] = i; }
+    }
+    const r = [];
+    for (let c = k, j = m; c > 0; c--) { const i = cut[c][j]; r.unshift([i, j]); j = i; }
+    const t = r.map(([i, j]) => cost(i, j));
+    return { r, spread: (Math.max(...t) - Math.min(...t)) / Math.max(...t) };
+  }
+  let runs = [[0, m]], spread = Infinity;
+  for (let k = Math.min(n, m); k >= Math.max(2, Math.ceil(n / 2)); k--) {
+    const s = split(k);
+    if (s.spread < spread - 0.04) { runs = s.r; spread = s.spread; }
+  }
+  // Build the columns. A hidden group goes after the shown group before it.
+  const out = runs.map(() => { const d = document.createElement('div'); d.className = 'dir-col'; return d; });
+  let col = 0, prev = null, si = 0;
+  const headed = new Set();
+  dirItems.forEach(it => {
+    if (it.g.hidden) { out[col].append(it.g); return; }
+    while (col < runs.length - 1 && si >= runs[col][1]) { col++; prev = null; }
+    if (it.region !== prev) {
+      const p = document.createElement('p');
+      p.className = 'dir-region'; p.textContent = it.name;
+      if (headed.has(it.region)) p.classList.add('cont');
+      out[col].append(p); prev = it.region; headed.add(it.region);
+    }
+    out[col].append(it.g); si++;
+  });
+  dir.style.gridTemplateColumns = `repeat(${out.length}, minmax(0, 1fr))`;
+  dir.replaceChildren(...out);
 }
 
 // ── video facade ───────────────────────────────────────────────────────────
@@ -963,6 +1029,7 @@ initDock();
 $$('[data-find]').forEach(initFind);
 initFindKey();
 initDirectory();
+balanceDirectory();
 initVideo();
 initBugForm();
 initReveal();
