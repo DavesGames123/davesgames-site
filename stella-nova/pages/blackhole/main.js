@@ -47,6 +47,7 @@
 //      toggles .............. "function setBtn"       geodesic, RK4, disc, bg
 //      resize ............... "RenderScale.create"    pixel budget + fps control
 //      frame loop ........... "function frame"        camera basis + uniforms
+//      screensaver hook ..... "window.snSaver"        UI off, sharper, slow orbit
 //      equations ............ "function renderEqs"    KaTeX metric + EFE
 // ============================================================================
 (async () => {
@@ -280,6 +281,37 @@ function frame(){
 // chrome the shell already provides. Then start the loop.
 if(window.self!==window.top)document.body.classList.add('in-frame');
 frame();
+
+// ─── Screensaver hook (stella-nova/lib/screensaver.js) ───
+// The shell calls enter() in screensaver mode. It hides the UI, swaps in a
+// sharper render scale (0.75 of the window, 2 Mpx budget, still fps-capped),
+// and replaces the idle spin with a slower yaw orbit and a gentle pitch sway.
+window.snSaver={
+  raf:0,
+  enter:function(opts){
+    var calm=Math.max(0,Math.min(1,opts&&opts.calm!=null?opts.calm:0.7));
+    var st=document.createElement('style');
+    st.textContent='#gpuWarn,.hud,.stats,#hint,#eqPanel,#bgBar,#ctrlWrap{display:none!important}canvas{cursor:none}';
+    document.head.appendChild(st);
+    window.removeEventListener('resize',renderScale.resize);
+    renderScale=RenderScale.create({canvas:canvas,gl:gl,fracDesktop:0.75,fracMobile:0.5,mobileWidth:600,maxPixels:2.0e6});
+    window.addEventListener('resize',renderScale.resize);renderScale.resize();
+    spinEnabled=false;autoSpin=false;if(spinTimer){clearTimeout(spinTimer);spinTimer=null;}
+    camYaw=(((opts&&opts.seed)||0)%628)/100;
+    var yawRate=0.048*(1.3-0.8*calm);   // rad/s; the page idles at 0.048
+    var last=0,ph=0,self=this;
+    function step(now){
+      var dt=last?Math.min(0.1,(now-last)/1000):0;last=now;
+      camYaw-=dt*yawRate;
+      ph+=dt*Math.PI*2/(60+60*calm);    // one pitch sway per 1-2 minutes
+      camPitch=0.15+0.12*Math.sin(ph);
+      self.raf=requestAnimationFrame(step);
+    }
+    this.raf=requestAnimationFrame(step);
+    return {canvas:canvas,warmupMs:1500};
+  },
+  exit:function(){cancelAnimationFrame(this.raf);}
+};
 
 // ─── KaTeX equations ───
 // Colors: R (curvature) amber, g (metric) blue, T (stress-energy) pink, G lavender, c cyan
