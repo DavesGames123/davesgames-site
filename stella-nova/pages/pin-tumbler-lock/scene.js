@@ -230,8 +230,10 @@ function waferLock(B, L) {
     ...arcPts(Rp, -PI / 2 + ga, PI / 2 - ga, 60).slice(1, -1)];
   B.mesh(H, zyExtrude(circle(g.Rh, 120), x0, x1, [hole]), 'housing');
   B.mesh(H, zyExtrude(circle(12.2, 120), x1, x1 + g.key.shoulder, [circle(Rp + 0.08, 96)]), 'housing');
-  // a nut thread look: shallow rings round the body
-  for (let x = x0 + 2; x < x1 - 3; x += 1.25) B.mesh(H, alongX(lathe([[[g.Rh - 0.01, x]], [[g.Rh + 0.35, x + 0.45]], [[g.Rh - 0.01, x + 0.9]]], 96)), 'housing', { pick: true });
+  // a nut thread look: shallow rings round the body. The ring base is
+  // 0.3 mm inside the body. At 0.01 mm inside, the faceted body (120
+  // sides) and ring (96 sides) crossed, and the faces z-fought.
+  for (let x = x0 + 2; x < x1 - 3; x += 1.25) B.mesh(H, alongX(lathe([[[g.Rh - 0.3, x]], [[g.Rh + 0.35, x + 0.45]], [[g.Rh - 0.3, x + 0.9]]], 96)), 'housing', { pick: true });
 
   // plug: solid segments with the keyway, split pieces at each wafer slot
   const P = B.part('plug', { cut: true, label: 'Plug', explode: [-25, 0, 0], st: 0.3, labelAt: [x0 + 1, -Rp, -2] });

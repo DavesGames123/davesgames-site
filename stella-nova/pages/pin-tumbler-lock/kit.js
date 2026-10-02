@@ -74,9 +74,11 @@ function textures() {
     g.strokeStyle = '#fff'; g.lineWidth = 3.2;
     for (let i = 0; i <= n; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, n); g.stroke(); g.beginPath(); g.moveTo(0, i); g.lineTo(n, i); g.stroke(); }
   }, [10, 6]);
-  // turned finish: fine rings for the roughness of lathe parts
+  // turned finish: fine rings for the roughness of lathe parts. The map
+  // multiplies the stated roughness, so its mean stays near 0.9: a mean
+  // near 0.6 made the brass housing and the zinc a dark mirror of the studio
   const turned = canvasTex(256, (g, n) => {
-    for (let y = 0; y < n; y++) { const v = 150 + 50 * Math.sin(y * 1.7) * Math.sin(y * 0.13) + (rnd() - 0.5) * 30; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, n, 1); }
+    for (let y = 0; y < n; y++) { const v = 228 + 24 * Math.sin(y * 1.7) * Math.sin(y * 0.13) + (rnd() - 0.5) * 22; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, n, 1); }
   }, [1, 8]);
   TEX = { wood, gauze, turned };
   return TEX;
@@ -114,12 +116,20 @@ const MAT_DEF = {
 
 // Back faces seen through the section cut: a hatch in screen space, lit by
 // nothing, so the cut reads as a flat drawing-office section.
+// Two solids of one part touch on shared faces (the plug body and its
+// crown at the keyway roof, the housing body and its tower on the shear
+// line, a screw end on the housing). Through the cut, the front face of
+// one and the back face of the other have the same depth, so they fought.
+// The hatch moves 0.04 % of its eye distance toward the camera and wins.
+// As 1 - z ≈ n f / ((f - n) d) at eye distance d, (1 - z) k is that move.
 function cutPatch(m) {
   m.onBeforeCompile = sh => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <dithering_fragment>', `#include <dithering_fragment>
+      gl_FragDepth = gl_FragCoord.z;
       if (!gl_FrontFacing) {
         float h = step(0.5, fract((gl_FragCoord.x + gl_FragCoord.y) / 7.0));
         gl_FragColor = vec4(mix(vec3(0.24, 0.20, 0.15), vec3(0.42, 0.36, 0.26), h), gl_FragColor.a);
+        gl_FragDepth = gl_FragCoord.z - (1.0 - gl_FragCoord.z) * 4.0e-4;
       }`);
   };
   m.customProgramCacheKey = () => 'cut';
@@ -166,10 +176,14 @@ export function rrect(w, h, r, cx = 0, cy = 0) {
   return s;
 }
 export const circlePath = (r, cx = 0, cy = 0, hole = true) => { const p = hole ? new THREE.Path() : new THREE.Shape(); p.absarc(cx, cy, r, 0, Math.PI * 2, hole); return p; };
+// ExtrudeGeometry has no shared vertices, so its curved walls were flat
+// facets (bands on the key bow). Creased normals make them smooth; edges
+// sharper than 50° (box corners) stay sharp.
 function extrude(shape, depth, bevel) {
   const g = new THREE.ExtrudeGeometry(shape, { depth: depth - 2 * bevel, bevelEnabled: bevel > 0, bevelThickness: bevel, bevelSize: bevel, bevelSegments: 2, curveSegments: 40 });
   g.translate(0, 0, bevel);
-  return g;
+  const c = toCreasedNormals(g, 20 * Math.PI / 180); g.dispose();
+  return c;
 }
 // a shape drawn as (x, -z) extruded up y from y0 by h (plates, flanges)
 export function slabXZ(shape, y0, h, bevel = 0.8) {
