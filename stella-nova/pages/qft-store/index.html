@@ -4,7 +4,7 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Quantum Decoding // Stella Nova · davesgames.io</title>
+<title>Quantum decoding — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    SPIN STORAGE  ·  page shell
@@ -24,10 +24,9 @@
      The simulator recovers it exactly; Holevo caps a real device at n bits.
 
    HEAD LOAD ORDER  (order matters)
-     1. preconnect   warm the font host connections
-     2. fonts        the shell fonts: Space Grotesk, IBM Plex Mono,
-                     Instrument Serif
-     3. style.css    the page stylesheet
+     1. style.css    the page stylesheet
+     2. sci.css      ../../lib/sci.css: STIX Two Text, Inter and the system
+                     mono. It loads the fonts.
 
    LAYOUT  (# marks an element id)
      ┌────────────────┬─────────────────────────────────────────────────┐
@@ -41,17 +40,15 @@
      └────────────────┴─────────────────────────────────────────────────┘
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head><body>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
      this page's own topbar. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 <div class="topbar">
-  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">QFT · storage</span></div>
-  <div class="topbar-r">SYS // <strong>SPIN DATA STORE</strong></div>
+  <div class="topbar-l"><span class="sys-name">Stella Nova</span><span class="sys-status">Quantum decoding</span></div>
+  <div class="topbar-r">Spin data store</div>
 </div>
 
 <div id="main">
@@ -73,12 +70,12 @@
     <div class="card reg" id="reg">
       <div class="lbl">Register <span class="tag">storage medium</span></div>
       <div class="row">
-        <span class="name">qubits&nbsp;<b style="color:var(--ink)">n</b></span>
+        <span class="name">Qubits&nbsp;<b style="color:var(--ink)">n</b></span>
         <div class="stepper"><button id="n-minus">−</button><span class="v" id="n-val">10</span><button id="n-plus">+</button></div>
       </div>
-      <div class="slider"><div class="head"><span class="k">bits / angle <b>B</b></span><span class="val" id="b-val">8</span></div>
+      <div class="slider"><div class="head"><span class="k">Bits per angle <b>B</b></span><span class="val" id="b-val">8</span></div>
         <input type="range" class="amber" id="bits" min="4" max="12" step="1" value="8"></div>
-      <div class="toggle-row"><span>amplitude axis too (θ)</span><button class="sw on" id="ampmode" aria-label="Store on the θ axis too"></button></div>
+      <div class="toggle-row"><span>Amplitude axis too (θ)</span><button class="sw on" id="ampmode" aria-label="Store on the θ axis too"></button></div>
       <!-- Readout: dials, bits and bytes of the register (render() fills it),
            then the Holevo ceiling of a real device. -->
       <div class="readout">
@@ -94,22 +91,22 @@
   <!-- Right column: the three stages of the store/read demonstration. -->
   <div id="viz">
     <header>
-      <div class="kicker">Lossless encode · spin rotations → bits → spin rotations</div>
-      <h1>Store data in <em>the angles</em></h1>
+      <div class="kicker">Lossless encoding: spin rotations to bits and back</div>
+      <h1>Store data in the angles</h1>
       <p class="sub">The honest way to use spin states as memory: write your bytes straight into the rotation angles each qubit actually controls, then read them back. n qubits give <b>2n real dials</b> (a θ and φ each); quantize each to B bits and you have a clean, exact <b>2nB-bit</b> register. No fitting, no approximation, no loss — the data lives where the hardware lives.</p>
     </header>
 
     <!-- Stage ①: one SVG dial per qubit, built by buildDials(); the needle
          angle is φ and the tilt shows θ. -->
     <div class="card">
-      <div class="lbl">① Register state <span class="tag" id="slots-tag"></span></div>
+      <div class="lbl">Register state <span class="tag" id="slots-tag"></span></div>
       <div id="dials"></div>
     </div>
 
     <!-- Stage ②: the decoded text and a badge saying whether the round trip was
          exact (or how many bytes were dropped for lack of capacity). -->
     <div class="card">
-      <div class="lbl">② Round trip <span class="tag">decode the angles back</span></div>
+      <div class="lbl">Round trip <span class="tag">decode the angles back</span></div>
       <div class="rt"><div class="rtlab">decoded</div><div class="rtval" id="decoded"></div></div>
       <div id="match"></div>
     </div>
@@ -117,7 +114,7 @@
     <!-- Stage ③: a decorative power spectrum of the stored rotations, drawn by
          drawWave(). It carries no meaning; the data lives in the angles. -->
     <div class="card">
-      <div class="lbl">③ The waveform your bytes make <span class="tag">spectrum of the stored state</span></div>
+      <div class="lbl">The waveform your bytes make <span class="tag">spectrum of the stored state</span></div>
       <canvas class="viz" id="cv-wave" height="170"></canvas>
       <div class="note">A fun aside: this is the power spectrum the stored rotations happen to produce. It carries no meaning — it's just what your data looks like as a quantum signal. The <b>meaning</b> is in the angles, recovered exactly above; the curve is a derived shadow.</div>
     </div>
