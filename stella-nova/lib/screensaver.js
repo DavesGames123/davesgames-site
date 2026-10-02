@@ -12,10 +12,16 @@
 //
 //  Page protocol. When a page is on screen, the controller waits for
 //  window.snSaver in the page (up to HOOK_WAIT_MS):
-//    snSaver.enter(opts)  opts = { calm, seconds, caption, seed }. calm is
-//                         0..1 (1 is slowest). The page hides its own GUI,
-//                         sets a preset and starts its autopilot. It can
-//                         return (or resolve to) { canvas, warmupMs }.
+//    snSaver.enter(opts)  opts = { calm, seconds, caption, seed, label }.
+//                         calm is 0..1 (1 is slowest). The page hides its
+//                         own GUI, sets a preset and starts its autopilot.
+//                         It can return (or resolve to) { canvas, warmupMs }.
+//    opts.label(info)     the page names what is on screen. info =
+//                         { title, sub, lines: [..], eq: [..] }, plain text
+//                         (Unicode maths, no KaTeX). Call it again when the
+//                         subject changes; label(null) clears it. The shell
+//                         draws it on a plate at the lower right. The plate
+//                         is DOM, so a recording does not hold it.
 //    snSaver.exit()       optional. The controller calls it when the user
 //                         stops the screensaver on that page.
 //  A page with no snSaver gets the generic mode: class sn-saver on <html>,
@@ -56,6 +62,7 @@ const DEFAULTS = {
   fade: 1.2,            // fade to black between pages, seconds
   calm: 0.7,            // passed to page hooks; 1 = slowest
   caption: true,        // page name at the lower left for a few seconds
+  labels: true,         // the page's own label plate (names, equations)
   display: 'screen',   // 'screen' = browser full screen | 'window' = fill the browser window
   hideCursor: true,
   exitOnInput: false,   // true = any key or mouse move stops it
@@ -139,6 +146,13 @@ body.sn-saver-on.sn-saver-nocursor, body.sn-saver-on.sn-saver-nocursor * { curso
 #sn-saver-cap.on { opacity: .85; }
 #sn-saver-cap b { display: block; font-weight: 300; font-size: 1.6rem; letter-spacing: .04em; }
 #sn-saver-cap i { display: block; font: 500 .7rem/1.6 var(--f-mono, monospace); letter-spacing: .22em; text-transform: uppercase; font-style: normal; color: var(--c, #7f91ad); }
+#sn-saver-label { position: fixed; right: 40px; bottom: 34px; z-index: 9001; max-width: min(460px, 38vw); pointer-events: none; padding: 14px 18px 15px; border-radius: 12px; background: rgba(6,8,13,.55); border: 1px solid rgba(150,200,255,.12); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: #dfe8f5; font-family: var(--f-sans, system-ui); opacity: 0; transform: translateY(6px); transition: opacity 1.2s ease, transform 1.2s ease; }
+#sn-saver-label.on { opacity: .92; transform: none; }
+#sn-saver-label b { display: block; font-weight: 500; font-size: 1.05rem; color: #fff; }
+#sn-saver-label i { display: block; font-style: normal; font: 500 .66rem/1.5 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: var(--c, #8ec5ff); margin-top: 2px; }
+#sn-saver-label p { font-size: .82rem; line-height: 1.45; color: #b9c7db; margin-top: 6px; }
+#sn-saver-label code { display: block; font: 400 .92rem/1.5 'IBM Plex Mono', var(--f-mono, monospace); color: #eef3fb; margin-top: 6px; white-space: pre-wrap; }
+@media (max-width: 760px) { #sn-saver-label { left: 16px; right: 16px; bottom: 16px; max-width: none; } }
 #sn-saver-hud { position: fixed; right: 18px; top: 14px; z-index: 9001; font: 500 .7rem/1.4 var(--f-mono, monospace); color: #9fb3d1; background: rgba(8,10,16,.7); border: 1px solid rgba(150,200,255,.18); border-radius: 8px; padding: 6px 10px; pointer-events: none; }
 #sn-saver-hud[hidden] { display: none; }
 #sn-saver-menu { position: fixed; inset: 0; z-index: 9500; display: grid; place-items: center; background: rgba(4,6,10,.72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
@@ -252,6 +266,7 @@ function buildMenu() {
       <label class="row"><span>Calm <output data-o="calm"></output></span><input type="range" data-k="calm" min="0" max="1" step="0.05"></label>
       <label class="tg"><input type="checkbox" data-k="loop">Loop the list</label>
       <label class="tg"><input type="checkbox" data-k="caption">Show the page name</label>
+      <label class="tg"><input type="checkbox" data-k="labels">Show labels and equations</label>
       <label class="row"><span>Display</span><select data-k="display"><option value="screen">Full screen (whole display)</option><option value="window">Fill the browser window</option></select></label>
       <label class="tg"><input type="checkbox" data-k="hideCursor">Hide the cursor</label>
       <label class="tg"><input type="checkbox" data-k="wakeLock">Keep the screen awake</label>
@@ -374,6 +389,7 @@ async function showPage(key) {
   await finishRecording(r);
   const cover = el('sn-saver-cover'), cap = el('sn-saver-cap');
   cap.classList.remove('on');
+  setLabel(null);
   cover.classList.add('on');
   await wait(S.fade * 1000);
   if (run !== r || token !== r.token) return;
@@ -384,7 +400,7 @@ async function showPage(key) {
   if (!w) { hud(`${key}: no load, skipped`); next(1); return; }
   r.frameWin = w;
   if (S.exitOnInput) armInput(w);
-  const got = await enterPage(w, key);
+  const got = await enterPage(w, key, r, token);
   if (run !== r || token !== r.token) return;
   const page = allPages().find(p => p.key === key) || { label: key, con: '', color: '#7f91ad' };
   cap.innerHTML = `<i>${esc(page.con)}</i><b>${esc(page.label)}</b>`;
@@ -399,12 +415,30 @@ async function showPage(key) {
 
 function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 
+// The label plate: fade out, swap the text, fade in. The page colour of the
+// run tints the subtitle.
+let labelTimer = 0;
+function setLabel(info) {
+  const p = el('sn-saver-label');
+  clearTimeout(labelTimer);
+  p.classList.remove('on');
+  if (!info || !S.labels || !run) return;
+  const arr = v => (Array.isArray(v) ? v : v ? [v] : []).map(String);
+  const html = (info.title ? `<b>${esc(info.title)}</b>` : '') + (info.sub ? `<i>${esc(info.sub)}</i>` : '')
+    + arr(info.lines).map(t => `<p>${esc(t)}</p>`).join('') + (arr(info.eq).length ? `<code>${esc(arr(info.eq).join('\n'))}</code>` : '');
+  if (!html) return;
+  const page = allPages().find(q => q.key === run.order[run.i]);
+  labelTimer = setTimeout(() => { p.innerHTML = html; if (page) p.style.setProperty('--c', page.color); p.classList.add('on'); }, p.innerHTML ? 700 : 0);
+}
+
 // The page hook, or the generic mode when the page has none.
-async function enterPage(w, key) {
+async function enterPage(w, key, r, token) {
   const t0 = performance.now(), info = CAT.pages[key] || {};
   const limit = info.hook ? HOOK_WAIT_MS : NO_HOOK_WAIT_MS;
   while (!w.snSaver && performance.now() - t0 < limit) await wait(100);
-  const opts = { calm: S.calm, seconds: S.seconds, caption: S.caption, seed: (Math.random() * 1e9) | 0 };
+  // label() from a page that is already gone (an old token) does nothing.
+  const label = info => { if (run === r && token === r.token) setLabel(info); };
+  const opts = { calm: S.calm, seconds: S.seconds, caption: S.caption, seed: (Math.random() * 1e9) | 0, label };
   if (w.snSaver && typeof w.snSaver.enter === 'function') {
     try {
       const res = (await w.snSaver.enter(opts)) || {};
@@ -489,6 +523,7 @@ async function stopSaver() {
   if (fsElement() && ex) Promise.resolve(ex.call(document)).catch(() => {});
   document.body.classList.remove('sn-saver-on', 'sn-saver-nocursor');
   el('sn-saver-cap').classList.remove('on');
+  setLabel(null);
   el('sn-saver-hud').hidden = true;
   // Reload the page the run stopped on, so the page GUI comes back.
   const key = r.order[r.i] || r.back || 'home';
@@ -532,5 +567,5 @@ async function finishRecording(r) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
-window.snScreensaver = { open: openMenu, start: startSaver, stop: stopSaver, settings: () => Object.assign({}, S), pages: allPages, get running() { return !!run; } };
+window.snScreensaver = { label: info => setLabel(info), open: openMenu, start: startSaver, stop: stopSaver, settings: () => Object.assign({}, S), pages: allPages, get running() { return !!run; } };
 })();
