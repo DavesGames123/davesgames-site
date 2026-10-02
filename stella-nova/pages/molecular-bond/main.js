@@ -40,6 +40,7 @@
 //      presets .............. "PRESETS"           named molecule setups
 //      frame loop ........... "function frame"    per-frame dispatch
 //      screensaver .......... "window.snSaver"    shell saver: preset tour + slow orbit
+//      saver plate .......... "function saverPlate"  opts.label: bond, LCAO, R and E live
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
 // Fetch both WGSL programs before any GPU setup, so init stays synchronous.
@@ -489,6 +490,32 @@ function frame(t){requestAnimationFrame(frame);var dt=Math.min((t-lastT)/1000,.0
 // eases ST.gain to 0 over 1.2 s (the heat ramp goes to black), loads the
 // preset while dark, then eases the gain back up. No exit(): the shell
 // reloads the page on stop.
+// The screensaver plate (opts.label) for preset key k. It reads the live atom
+// list AD: each atom's element, orbital, Z_eff and phase, the nearest
+// neighbour distance R, the pair energy totalEnergy() (the readout of the
+// page), and the pair model of ePair: the exact H2+ formula for two H 1s
+// atoms, else the Morse pair with its Re and De for this pair.
+var A0=0.529177,HA=27.2114;
+function saverPlate(k){var P=PRESETS[k];if(!P||!AD.length)return null;
+  var dot=P.desc.indexOf('. '),title=dot>0?P.desc.slice(0,dot):P.desc,rest=dot>0?P.desc.slice(dot+2):'';
+  var atoms=AD.map(function(a){return EL[a.el].s+' '+ORBS[a.ot].name+' (Z_eff '+EL[a.el].z.toFixed(2)+', '+(a.ph>0?'+':'−')+')'});
+  var R=Infinity;for(var i=0;i<AD.length;i++)for(var j=i+1;j<AD.length;j++)R=Math.min(R,Math.hypot(AD[j].x-AD[i].x,AD[j].y-AD[i].y,AD[j].z-AD[i].z));
+  var E=totalEnergy(),a=AD[0],b=AD[1],za=EL[a.el].z,zb=EL[b.el].z,pp=a.ph*b.ph;
+  var grp=[];atoms.forEach(function(t){var g=grp[grp.length-1];if(g&&g.t===t)g.n++;else grp.push({t:t,n:1})});
+  var lines=[grp.map(function(g){return(g.n>1?g.n+' × ':'')+g.t}).join(' + '),(AD.length>2?'nearest R = ':'R = ')+R.toFixed(2)+' a₀ ('+(R*A0).toFixed(2)+' Å)',
+    'E = '+E.toFixed(3).replace('-','−')+' Ha ('+(E*HA).toFixed(2).replace('-','−')+' eV)'+(AD.length>2?', sum over '+AD.length*(AD.length-1)/2+' pairs':'')];
+  var eq=['ψ = Σᵢ cᵢ φᵢ(r − Rᵢ),  cᵢ = ±1','φᵢ(r) = Z_eff^(3/2) φₙₗ(Z_eff r)'];
+  if(a.ot===0&&b.ot===0&&za<1.05&&zb<1.05){
+    lines.push('S(R) = '+overlapS(R).toFixed(3)+' (1s overlap)');
+    eq.push('E'+(pp>=0?'₊':'₋')+' = −½ + 1/R + (J '+(pp>=0?'+':'−')+' K)/(1 '+(pp>=0?'+':'−')+' S)','S(R) = e^(−R)(1 + R + R²/3)');
+  }else{
+    var zAvg=(za+zb)/2,nA=ORBS[a.ot].n,nB=ORBS[b.ot].n,nE=Math.max(nA,nB);
+    var Re=0.9+0.85*(nA+nB)/Math.sqrt(zAvg),De=0.11*Math.pow(zAvg,1.2)/Math.pow(nE,0.4);
+    if(pp<0)eq.push('E(R) = De e^(−(R − Re))  (antibonding)');else eq.push('E(R) = De (e^(−(R − Re)) − 1)² − De  (Morse)');
+    eq.push('Re = 0.9 + 0.85 (nA + nB)/√Z̄ = '+Re.toFixed(2)+' a₀','De = 0.11 Z̄^1.2 / n^0.4 = '+De.toFixed(3)+' Ha');
+  }
+  if(rest)lines.push(rest);
+  return{title:title,sub:'LCAO molecular orbital · '+AD.length+' atoms',lines:lines,eq:eq}}
 saverImpl=function(opts){
   var calm=Math.max(0,Math.min(1,opts&&opts.calm!=null?+opts.calm:0.7)),secs=Math.max(20,+(opts&&opts.seconds)||60);
   var s=((opts&&opts.seed)|0)||3;
@@ -502,10 +529,12 @@ saverImpl=function(opts){
   // Saver gain and camera-radius factor per preset, read from headless frames:
   // the autoTune gains (3.5 .. 18) burn the compact 2p and C 1s clouds white.
   var SV={h2:[1.8,.72],hf:[.5,.6],n2:[.4,.6],co:[.4,.6],lih:[1.2,.42],anti:[1.8,.72],chain:[.12,1]};
-  var load=function(){var k=keys[ki%keys.length];window.loadPresetUI(k);gT=SV[k][0];ST.gain=0;ST.colorDirty=true;cam.radius*=SV[k][1]};
+  var lastPlate=0,lastTxt='',plate=function(){if(!opts||typeof opts.label!=='function')return;try{var L=saverPlate(keys[ki%keys.length]),j=JSON.stringify(L);if(j!==lastTxt){lastTxt=j;opts.label(L)}}catch(e){}};
+  var load=function(){var k=keys[ki%keys.length];window.loadPresetUI(k);gT=SV[k][0];ST.gain=0;ST.colorDirty=true;cam.radius*=SV[k][1];plate();lastPlate=performance.now()};
   ST.colorMode=0;ST.psize=.03;ST.N=Math.min(ST.N,40000);load();
   (function tick(now){requestAnimationFrame(tick);var dt=Math.min(.1,(now-tp)/1000),t=(now-t0)/1000;tp=now;
     cam.phi+=dt*(.12-.08*calm);cam.theta=.3+.15*Math.sin(t*.05);
+    if(now-lastPlate>1000){lastPlate=now;plate()}
     if(phase==='hold'&&now>=tNext){phase='out';ph=0}
     if(phase==='in'||phase==='out'){
       if(rebuilding||ST.dirty)return;
