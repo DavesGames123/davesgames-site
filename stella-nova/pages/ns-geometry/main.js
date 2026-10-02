@@ -36,6 +36,7 @@
 //      figure 7 ............ "figure 7"          stage lengths
 //      figure 8 ............ "figure 8"          vortex tube scalings
 //      figure 9 ............ "figure 9"          interactive explorer + ODE system
+//      screensaver ......... "window.snSaver"    saver hook on the explorer (#f-play)
 // ============================================================================
 // any error is shown on the page with its real message (the preview sandbox otherwise reports only "Script error.")
 window.addEventListener('error',e=>{ const b=document.getElementById('errbar'); b.style.display='block'; b.textContent+='error: '+(e.message||'?')+(e.lineno?' @ line '+e.lineno:'')+'\n'; });
@@ -292,7 +293,8 @@ guarded('figure 9',()=>{
     cx.putImageData(img,0,0); x.imageSmoothingEnabled=true; x.drawImage(cv,px,py,S,S); x.strokeStyle='rgba(252,180,120,0.25)'; x.strokeRect(px+.5,py+.5,S-1,S-1);
     // velocity of the newest active layer: v = Ω/(λ|ζ|²) Jζ sin(λζ·x)
     const act=st.L[smp.q]; if(P.arrows&&act&&act.on&&Math.abs(act.Om)>0){ const m=11, cell=S/m, n2=act.z[0]**2+act.z[1]**2, Jz=J(act.z); for(let j=0;j<m;j++) for(let i=0;i<m;i++){ const u=(-1+2*(i+.5)/m)*w, v=(1-2*(j+.5)/m)*w; const r=Math.hypot(u,v); if(r>act.R) continue; const a=Math.sin(act.lam*(act.z[0]*u+act.z[1]*v))*Math.sign(act.Om); const vx=Jz[0]*a/Math.sqrt(n2), vy=Jz[1]*a/Math.sqrt(n2); const X=px+(i+.5)*cell, Y=py+(j+.5)*cell; arrow(x,X-vx*cell*.4,Y+vy*cell*.4,X+vx*cell*.4,Y-vy*cell*.4,'rgba(243,238,238,0.7)',1); } }
-    const ccx=px+S/2, ccy=py+S/2; st.L.forEach((l,q)=>{ const rp=l.R*Z*S/2; if(!l.on||rp<4||rp>S*1.5) return; x.setLineDash([3,4]); x.strokeStyle='rgba(252,241,164,0.6)'; x.beginPath(); x.arc(ccx,ccy,rp,0,7); x.stroke(); x.setLineDash([]); label(x,'layer '+(q+1),ccx+rp*0.71+4,ccy-rp*0.71-6,PALE,10); });
+    // (in the screensaver the layer circles are clipped to the field square)
+    const ccx=px+S/2, ccy=py+S/2; x.save(); if(SV){ x.beginPath(); x.rect(px,py,S,S); x.clip(); } st.L.forEach((l,q)=>{ const rp=l.R*Z*S/2; if(!l.on||rp<4||rp>S*1.5) return; x.setLineDash([3,4]); x.strokeStyle='rgba(252,241,164,0.6)'; x.beginPath(); x.arc(ccx,ccy,rp,0,7); x.stroke(); x.setLineDash([]); label(x,'layer '+(q+1),ccx+rp*0.71+4,ccy-rp*0.71-6,PALE,10); }); x.restore();
     label(x,'t = '+tt.toFixed(2)+' / T∗ = '+RUN.T.toFixed(2)+'   ·   layer '+(smp.q+1)+' '+smp.ph+'   ·   window 2/Z = '+(2*w).toExponential(1),px,py+S+14,DIM,10);
     // right column: gradient plot, Ω per layer, cone
     const rx=px+S+26, rw=W-rx-16; let ry=py; const ph=(H-32-2*12-rw*0.55)/2;
@@ -316,7 +318,32 @@ guarded('figure 9',()=>{
     // readouts beside the cone
     const rox=rx+cw+12; const grad=(()=>{ let G=[st.G0[0],st.G0[1]]; st.L.forEach(l=>{ if(!l.on) return; G[0]+=l.lam*l.Th*l.z[0]; G[1]+=l.lam*l.Th*l.z[1]; }); return Math.hypot(G[0],G[1]); })();
     const ro=[['T∗',RUN.T.toFixed(3)],['stages',RUN.stages.length],['gradient now',grad.toExponential(2)],['sup |θ| now',(P.A0+st.L.reduce((a,l)=>a+(l.on?Math.abs(l.Th):0),0)).toFixed(4)],['pulses μ',RUN.stages.filter(s=>s.mu!=null).map(s=>s.mu.toFixed(2)).join(' ')||'—']];
-    ro.forEach(([k,v],i)=>{ label(x,k,rox,ry+14+i*15,DIM,10); label(x,String(v),rx+rw-6,ry+14+i*15,ACC,10,'right'); }); }
+    ro.forEach(([k,v],i)=>{ label(x,k,rox,ry+14+i*15,DIM,10); label(x,String(v),rx+rw-6,ry+14+i*15,ACC,10,'right'); });
+    if(SV){ x.globalCompositeOperation='destination-over'; x.fillStyle='#0a0810'; x.fillRect(0,0,W,H); x.globalCompositeOperation='source-over'; if(SV.k<1){ x.fillStyle=`rgba(10,8,16,${(1-SV.k).toFixed(3)})`; x.fillRect(0,0,W,H); } } }
+  // Screensaver hook (lib/screensaver.js). enter() hides the article and pins
+  // #f-play to the window, with the height attribute set to innerHeight, so
+  // setup() sizes the drawing buffer to the window. Each state is one seeded
+  // randomize (the #x-rand handler with Math.random set to the seed generator).
+  // Time eases from 0 to 1 and the zoom eases from 0 toward the deepest layer
+  // over 60 to 90 percent of the show time (more at calm 1). A fade to the
+  // background colour in the canvas hides each rebuild. SV is null outside saver.
+  let SV=null;
+  window.snSaver={ enter(opts){
+    const calm=Math.max(0,Math.min(1,+opts.calm||0)), secs=Math.max(20,+opts.seconds||60), fade=1.6, show=Math.max(6,secs/3-2*fade), run=show*(0.6+0.3*calm);
+    let a=(opts.seed>>>0)||1; const rng=()=>{ a=(a+0x6D2B79F5)>>>0; let t=a; t=Math.imul(t^t>>>15,t|1); t^=t+Math.imul(t^t>>>7,t|61); return ((t^t>>>14)>>>0)/4294967296; };
+    const st=document.createElement('style'); st.textContent='html.saver,html.saver body{overflow:hidden}html.saver body *{visibility:hidden}html.saver #f-play{visibility:visible;position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:50;cursor:none}';
+    document.head.appendChild(st); document.documentElement.classList.add('saver'); P.play=false; auto=false;
+    const fit=()=>{ const c=document.getElementById('f-play'); c.setAttribute('height',String(innerHeight)); delete _fig['f-play']; }; fit(); window.addEventListener('resize',fit);
+    const ease=u=>u<=0?0:u>=1?1:u*u*(3-2*u);
+    const next=()=>{ const r=Math.random; Math.random=rng; try{ document.getElementById('x-rand').click(); } finally{ Math.random=r; }
+      const lam=P.lam1*Math.pow(P.ratio,Math.max(0,P.n-2)); SV.zmax=Math.min(4.5,0.9*Math.log10(2*lam)); SV.t=0; };
+    SV={k:0,t:0,zmax:0,ph:'in',pt:0}; next();
+    let last=performance.now(); const tick=now=>{ const dt=Math.min(0.05,(now-last)/1000); last=now; SV.t+=dt; SV.pt+=dt;
+      if(SV.ph==='in'){ SV.k=Math.min(1,SV.pt/fade); if(SV.k>=1){ SV.ph='show'; SV.pt=0; } } else if(SV.ph==='show'){ if(SV.pt>=show){ SV.ph='out'; SV.pt=0; } } else { SV.k=Math.max(0,1-SV.pt/fade); if(SV.k<=0){ next(); SV.ph='in'; SV.pt=0; } }
+      const u=ease(SV.t/run); P.t=u; P.z=SV.zmax*u; draw(); requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+    return { canvas: document.getElementById('f-play'), warmupMs: 1500 };
+  } };
   // Build once on load, and register draw so a resize repaints at the new width.
   rebuild(); STATIC.push(draw); }
 
