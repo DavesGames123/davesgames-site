@@ -1292,6 +1292,8 @@ const spec = {
     { id: 'tone', label: 'Deep', hex: '#8fc4f2' },
     { id: 'cream', label: 'White', hex: '#eef6ff' },
   ],
+  // screensaver: calm cells, tempo and cell cycle for the table-engine hook (lib/table-engine.js)
+  saver: { cells: ['dendrite_fingers', 'frost_surface', 'voronoi_crystals', 'gem_prism', 'sky_reflection', 'outside_in', 'wet_sheen', 'freeze_melt_loop', 'tendril_warp', 'fern_body'], tempo: [0.8, 0.3], dpr: 2, cycle: 4, minDwell: 12, fade: 1.5, gens: {sparkle: {bias: 0.3}} },
 };
 
 // ── emit index.html ──────────────────────────────────────────────────────────
