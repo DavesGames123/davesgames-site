@@ -14,8 +14,15 @@
 //    2. convert  BP3D mm (x left, y back, z up) to three.js (x left, y up,
 //                z front), centred on the skull box
 //    3. weld     merge equal positions, drop zero-area triangles
-//    4. decimate quadric edge collapse (Garland-Heckbert) to the part budget
-//    5. normals  smooth, angle-weighted
+//    4. decimate quadric edge collapse (Garland-Heckbert) to the part budget.
+//                The OBJ files are already 99 % reduced by DBCLS, so each
+//                budget is at or above the source count: no part loses
+//                triangles. Thin plates (ethmoid, vomer) lost their rims at
+//                a 60 % cut. decimate() stays for a denser source.
+//    5. normals  angle weighted, split at creases: two faces at a vertex
+//                share a normal only through a chain of edges that bend
+//                less than CREASE_DEG. Each side of a sharp rim gets its own
+//                vertex, so thin plates do not shade as round pillows.
 //    6. AO       two baked channels per vertex, by BVH ray casts:
 //                  .x self  (the part alone; true in any arrangement)
 //                  .y whole (every part assembled; true at home)
@@ -30,6 +37,8 @@
 //  GREP MAP
 //    const PARTS ........... the selection, the Latin names and the facts
 //    function decimate ..... quadric edge collapse
+//    const CREASE_DEG ...... the normal split angle
+//    function creased ...... crease split and normals
 //    function buildBVH ..... the ray-cast tree for the AO bake
 //    function bakeAO ....... the hemisphere sampler
 //    function pack ......... the binary layout
@@ -48,21 +57,21 @@ for (const z of Object.values(ZIP)) if (!existsSync(z)) { console.error('missing
 // ── 1. the selection ────────────────────────────────────────────────────────
 // [key, FJ file, zip, FMA, English, Latin, group, side, budget (triangles), fact]
 const BONES = [
-  ['frontal', 'FJ3200', 'partof', 'FMA52734', 'Frontal bone', 'Os frontale', 'cranial', 'mid', 12000,
+  ['frontal', 'FJ3200', 'partof', 'FMA52734', 'Frontal bone', 'Os frontale', 'cranial', 'mid', 15000,
     'Forms the forehead and the roofs of both orbits; it starts as two halves that usually fuse by age two.'],
-  ['parietal-r', 'FJ3380', 'partof', 'FMA52788', 'Right parietal bone', 'Os parietale dextrum', 'cranial', 'right', 11000,
+  ['parietal-r', 'FJ3380', 'partof', 'FMA52788', 'Right parietal bone', 'Os parietale dextrum', 'cranial', 'right', 13500,
     'A curved square plate that makes most of the side and roof of the cranial vault.'],
-  ['parietal-l', 'FJ3274', 'partof', 'FMA52789', 'Left parietal bone', 'Os parietale sinistrum', 'cranial', 'left', 11000,
+  ['parietal-l', 'FJ3274', 'partof', 'FMA52789', 'Left parietal bone', 'Os parietale sinistrum', 'cranial', 'left', 13500,
     'Meets its twin at the sagittal suture, along the top of the head.'],
   ['temporal-r', 'FJ3386', 'partof', 'FMA52738', 'Right temporal bone', 'Os temporale dextrum', 'cranial', 'right', 6000,
     'Holds the organs of hearing and balance inside its dense petrous part.'],
   ['temporal-l', 'FJ3281', 'partof', 'FMA52739', 'Left temporal bone', 'Os temporale sinistrum', 'cranial', 'left', 6000,
     'Carries the socket of the jaw joint and the mastoid process behind the ear.'],
-  ['occipital', 'FJ3309', 'partof', 'FMA52735', 'Occipital bone', 'Os occipitale', 'cranial', 'mid', 11000,
+  ['occipital', 'FJ3309', 'partof', 'FMA52735', 'Occipital bone', 'Os occipitale', 'cranial', 'mid', 12500,
     'The spinal cord passes through its foramen magnum; its condyles rest on the atlas.'],
-  ['sphenoid', 'FJ3394', 'partof', 'FMA52736', 'Sphenoid bone', 'Os sphenoidale', 'cranial', 'mid', 8000,
+  ['sphenoid', 'FJ3394', 'partof', 'FMA52736', 'Sphenoid bone', 'Os sphenoidale', 'cranial', 'mid', 8200,
     'The keystone of the cranial base, shaped like a moth; it touches every other cranial bone.'],
-  ['ethmoid', 'FJ3199', 'partof', 'FMA52740', 'Ethmoid bone', 'Os ethmoidale', 'cranial', 'mid', 9000,
+  ['ethmoid', 'FJ3199', 'partof', 'FMA52740', 'Ethmoid bone', 'Os ethmoidale', 'cranial', 'mid', 22300,
     'A light, sieve-like bone between the orbits; smell nerves pass through its cribriform plate.'],
   ['mandible', 'FJ3289', 'partof', 'FMA52748', 'Mandible', 'Mandibula', 'facial', 'mid', 6000,
     'The only movable bone of the skull, and the largest and strongest bone of the face.'],
@@ -82,17 +91,17 @@ const BONES = [
     'The smallest and most fragile bone of the face; the tear duct runs along it.'],
   ['lacrimal-l', 'FJ3265', 'partof', 'FMA53646', 'Left lacrimal bone', 'Os lacrimale sinistrum', 'facial', 'left', 800,
     'About the size of a fingernail, in the inner wall of the orbit.'],
-  ['palatine-r', 'FJ3379', 'partof', 'FMA53655', 'Right palatine bone', 'Os palatinum dextrum', 'facial', 'right', 1800,
+  ['palatine-r', 'FJ3379', 'partof', 'FMA53655', 'Right palatine bone', 'Os palatinum dextrum', 'facial', 'right', 2000,
     'An L-shaped bone that closes the back of the hard palate.'],
-  ['palatine-l', 'FJ3273', 'partof', 'FMA53656', 'Left palatine bone', 'Os palatinum sinistrum', 'facial', 'left', 1800,
+  ['palatine-l', 'FJ3273', 'partof', 'FMA53656', 'Left palatine bone', 'Os palatinum sinistrum', 'facial', 'left', 2000,
     'It reaches from the roof of the mouth up to the floor of the orbit.'],
-  ['concha-r', 'FJ3369', 'partof', 'FMA54737', 'Right inferior nasal concha', 'Concha nasalis inferior dextra', 'facial', 'right', 700,
+  ['concha-r', 'FJ3369', 'partof', 'FMA54737', 'Right inferior nasal concha', 'Concha nasalis inferior dextra', 'facial', 'right', 800,
     'A scroll of bone in the nasal cavity that warms and moistens the air you breathe.'],
-  ['concha-l', 'FJ3263', 'partof', 'FMA54738', 'Left inferior nasal concha', 'Concha nasalis inferior sinistra', 'facial', 'left', 700,
+  ['concha-l', 'FJ3263', 'partof', 'FMA54738', 'Left inferior nasal concha', 'Concha nasalis inferior sinistra', 'facial', 'left', 800,
     'Unlike the upper conchae, it is a separate bone, not part of the ethmoid.'],
-  ['vomer', 'FJ3395', 'partof', 'FMA9710', 'Vomer', 'Vomer', 'facial', 'mid', 3000,
+  ['vomer', 'FJ3395', 'partof', 'FMA9710', 'Vomer', 'Vomer', 'facial', 'mid', 7300,
     'A thin plough-shaped plate that forms the back and lower part of the nasal septum.'],
-  ['hyoid', 'FJ3201', 'partof', 'FMA52749', 'Hyoid bone', 'Os hyoideum', 'hyoid', 'mid', 1100,
+  ['hyoid', 'FJ3201', 'partof', 'FMA52749', 'Hyoid bone', 'Os hyoideum', 'hyoid', 'mid', 1200,
     'The only bone in the body that does not touch another bone; it anchors the tongue.'],
 ];
 // teeth: FDI-style key, FJ file, FMA, and the parts of the name
@@ -336,28 +345,56 @@ function decimate(m, target) {
   return { pos: Float64Array.from(pos), tri: Int32Array.from(tri) };
 }
 
-// ── 5. smooth normals, angle weighted ───────────────────────────────────────
-function normals(m) {
-  const n = new Float64Array(m.pos.length), P = m.pos;
-  for (let t = 0; t < m.tri.length; t += 3) {
-    const ids = [m.tri[t], m.tri[t + 1], m.tri[t + 2]];
-    const e = [];
-    for (let k = 0; k < 3; k++) {
-      const i = ids[k], j = ids[(k + 1) % 3];
-      e.push([P[3 * j] - P[3 * i], P[3 * j + 1] - P[3 * i + 1], P[3 * j + 2] - P[3 * i + 2]]);
-    }
+// ── 5. normals, split at creases ────────────────────────────────────────────
+// In the 99 % source, 0.3 % to 5 % of the edges bend more than 60 degrees
+// (the rims of the conchae, the nasal and lacrimal bones, the orbit plates).
+// Smooth bone surface bends less than 40 degrees at almost every edge.
+const CREASE_DEG = 45;
+// Returns a new mesh: a vertex is copied once for each group of its faces
+// that an edge chain under CREASE_DEG joins. Each copy gets the angle
+// weighted normal of its group only.
+function creased(m, deg = CREASE_DEG) {
+  const P = m.pos, T = m.tri, nt = T.length / 3, nv = P.length / 3, cosLim = Math.cos(deg * Math.PI / 180);
+  const fn = new Float64Array(nt * 3), fa = new Float64Array(nt * 3);      // unit face normal, corner angles
+  for (let t = 0; t < nt; t++) {
+    const id = [T[3 * t], T[3 * t + 1], T[3 * t + 2]];
+    const e = id.map((i, k) => { const j = id[(k + 1) % 3]; return [P[3 * j] - P[3 * i], P[3 * j + 1] - P[3 * i + 1], P[3 * j + 2] - P[3 * i + 2]]; });
     const [u, , w] = e, cx = u[1] * -w[2] - u[2] * -w[1], cy = u[2] * -w[0] - u[0] * -w[2], cz = u[0] * -w[1] - u[1] * -w[0];
     const cl = Math.hypot(cx, cy, cz) || 1e-12;
+    fn[3 * t] = cx / cl; fn[3 * t + 1] = cy / cl; fn[3 * t + 2] = cz / cl;
     for (let k = 0; k < 3; k++) {
-      const a = e[k], b = e[(k + 2) % 3];
-      const la = Math.hypot(...a) || 1e-12, lb = Math.hypot(...b) || 1e-12;
-      const ang = Math.acos(Math.max(-1, Math.min(1, -(a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (la * lb))));
-      const i = ids[k];
-      n[3 * i] += cx / cl * ang; n[3 * i + 1] += cy / cl * ang; n[3 * i + 2] += cz / cl * ang;
+      const a = e[k], b = e[(k + 2) % 3], la = Math.hypot(...a) || 1e-12, lb = Math.hypot(...b) || 1e-12;
+      fa[3 * t + k] = Math.acos(Math.max(-1, Math.min(1, -(a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) / (la * lb))));
     }
   }
-  for (let i = 0; i < n.length; i += 3) { const l = Math.hypot(n[i], n[i + 1], n[i + 2]) || 1; n[i] /= l; n[i + 1] /= l; n[i + 2] /= l; }
-  return n;
+  const vf = Array.from({ length: nv }, () => []);                          // [face, corner] per vertex
+  for (let t = 0; t < nt; t++) for (let k = 0; k < 3; k++) vf[T[3 * t + k]].push(t, k);
+  const pos = [], nrm = [], tri = new Int32Array(T.length);
+  for (let v = 0; v < nv; v++) {
+    const L = vf[v], n = L.length / 2, par = Array.from({ length: n }, (_, i) => i);
+    const root = i => { while (par[i] !== i) i = par[i] = par[par[i]]; return i; };
+    const byNbr = new Map();                                                // the other end of an edge at v -> fan slots
+    for (let s = 0; s < n; s++) {
+      const t = L[2 * s], k = L[2 * s + 1];
+      for (const o of [T[3 * t + (k + 1) % 3], T[3 * t + (k + 2) % 3]]) {
+        const q = byNbr.get(o);
+        if (q === undefined) { byNbr.set(o, s); continue; }
+        const f = L[2 * q], d = fn[3 * t] * fn[3 * f] + fn[3 * t + 1] * fn[3 * f + 1] + fn[3 * t + 2] * fn[3 * f + 2];
+        if (d >= cosLim) par[root(s)] = root(q);
+      }
+    }
+    const slot = new Map();
+    for (let s = 0; s < n; s++) {
+      const r = root(s), t = L[2 * s], k = L[2 * s + 1];
+      let j = slot.get(r);
+      if (j === undefined) { j = pos.length / 3; slot.set(r, j); pos.push(P[3 * v], P[3 * v + 1], P[3 * v + 2]); nrm.push(0, 0, 0); }
+      const a = fa[3 * t + k];
+      nrm[3 * j] += fn[3 * t] * a; nrm[3 * j + 1] += fn[3 * t + 1] * a; nrm[3 * j + 2] += fn[3 * t + 2] * a;
+      tri[3 * t + k] = j;
+    }
+  }
+  for (let i = 0; i < nrm.length; i += 3) { const l = Math.hypot(nrm[i], nrm[i + 1], nrm[i + 2]) || 1; nrm[i] /= l; nrm[i + 1] /= l; nrm[i + 2] /= l; }
+  return { pos: Float64Array.from(pos), tri, nrm: Float64Array.from(nrm) };
 }
 
 // ── 6. BVH and the AO bake ──────────────────────────────────────────────────
@@ -486,7 +523,12 @@ const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity
 for (const p of built) if (p.key !== 'hyoid') for (let i = 0; i < p.pos.length; i += 3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], p.pos[i + k]); hi[k] = Math.max(hi[k], p.pos[i + k]); }
 const C0 = [0, 1, 2].map(k => (lo[k] + hi[k]) / 2);
 for (const p of built) for (let i = 0; i < p.pos.length; i += 3) for (let k = 0; k < 3; k++) p.pos[i + k] -= C0[k];
-for (const p of built) p.nrm = normals(p);
+let splitV = 0;
+for (const p of built) {
+  const before = p.pos.length / 3, c = creased(p);
+  if (c.pos.length / 3 > 65535) throw new Error(`${p.key}: ${c.pos.length / 3} vertices do not fit Uint16 indices`);
+  p.pos = c.pos; p.tri = c.tri; p.nrm = c.nrm; splitV += c.pos.length / 3 - before;
+}
 // AO: self (each part alone, range 14 mm) and whole (all parts, range 42 mm)
 const allTris = [];
 for (const p of built) for (let t = 0; t < p.tri.length; t++) { const v = p.tri[t]; allTris.push(p.pos[3 * v], p.pos[3 * v + 1], p.pos[3 * v + 2]); }
@@ -544,4 +586,4 @@ mkdirSync(join(HERE, 'data'), { recursive: true });
 writeFileSync(join(HERE, 'data/skull.bin'), bin);
 writeFileSync(join(HERE, 'data/skull.json'), JSON.stringify(manifest, null, 1));
 const T = built.reduce((s, p) => s + p.tri.length / 3, 0), V = built.reduce((s, p) => s + p.pos.length / 3, 0);
-console.log(`parts ${built.length} · triangles ${rawTri} -> ${T} · vertices ${V} · skull.bin ${(bin.length / 1024).toFixed(0)} KB · ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+console.log(`parts ${built.length} · triangles ${rawTri} -> ${T} · vertices ${V} (${splitV} crease copies) · skull.bin ${(bin.length / 1024).toFixed(0)} KB · ${((Date.now() - t0) / 1000).toFixed(1)} s`);
