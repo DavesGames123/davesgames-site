@@ -286,6 +286,7 @@ frame();
 // The shell calls enter() in screensaver mode. It hides the UI, swaps in a
 // sharper render scale (0.75 of the window, 2 Mpx budget, still fps-capped),
 // and replaces the idle spin with a slower yaw orbit and a gentle pitch sway.
+// It also puts the metric, the geodesic equations and r_s on the label plate.
 window.snSaver={
   raf:0,
   enter:function(opts){
@@ -308,9 +309,32 @@ window.snSaver={
       self.raf=requestAnimationFrame(step);
     }
     this.raf=requestAnimationFrame(step);
+    // The plate (opts.label) names the metric, the geodesic equations that
+    // gRHS() in raytracer.frag.glsl integrates, and the live values that
+    // frame() pushes as uniforms: r_s (u_rs), the camera radius and pitch,
+    // the disc edges (u_discInner, u_discOuter) and the step budget.
+    var label=opts&&opts.labels!==false&&typeof opts.label==='function'?opts.label:null;
+    function sci(v){var e=Math.floor(Math.log10(Math.abs(v))),m=v/Math.pow(10,e),SUP='⁰¹²³⁴⁵⁶⁷⁸⁹';
+      return m.toFixed(2)+' × 10'+String(e).replace('-','⁻').replace(/[0-9]/g,function(d){return SUP[+d];});}
+    function plate(){
+      if(!label)return;
+      var scaleR=camRadius/(32*RS),rkR=Math.max(scaleR,1),k=useRK4?rkR:scaleR;
+      var steps=Math.max(1,Math.round(maxSteps*k));
+      label({title:'Schwarzschild black hole',sub:'Sgr A* mass M = 4.3 × 10⁶ M☉ · null geodesics · '+(useGeodesic?(useRK4?'RK4':'Euler'):'straight rays'),
+        lines:['r_s = 2GM/c² = '+sci(RS)+' m ('+(RS/1.495978707e11).toFixed(3)+' AU)',
+          'camera r = '+(camRadius/RS).toFixed(1)+' r_s = '+sci(camRadius)+' m · pitch '+(camPitch*180/Math.PI).toFixed(1)+'°',
+          'photon sphere r = 1.5 r_s = '+sci(1.5*RS)+' m · horizon r = r_s',
+          'accretion disc 3.0 – 5.1 r_s (inner edge at the ISCO, 3 r_s)',
+          'up to '+steps+' steps per ray · dl = '+sci(geodesicDl*k)+' m'],
+        eq:['ds² = −f c²dt² + dr²/f + r²dΩ²',
+          'r̈ = −(r_s/2r²)fṫ² + (r_s/2r²f)ṙ² + (r−r_s)φ̇²',
+          'φ̈ = −2ṙφ̇/r,   ṫ = E/f,   f = 1 − r_s/r']});
+    }
+    plate();
+    if(label)this.timer=setInterval(plate,1000);
     return {canvas:canvas,warmupMs:1500};
   },
-  exit:function(){cancelAnimationFrame(this.raf);}
+  exit:function(){cancelAnimationFrame(this.raf);clearInterval(this.timer);}
 };
 
 // ─── KaTeX equations ───
