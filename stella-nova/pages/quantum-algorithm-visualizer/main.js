@@ -2,6 +2,7 @@
 // and the boot sequence. Every subsystem lives in its own module; main wires
 // RT.rebuild/RT.loadPreset, runs each init in order, then starts the loop.
 //   grep -n "function rebuild" main.js   grep -n "function loop" main.js
+//   grep -n "window.snSaver" main.js   (screensaver hook for lib/screensaver.js)
 import { VS, RT, controls, composer, currentStageFor, stageDuration, stageFrame, totalStackTime } from './core.js';
 import { buildTrace } from './quantum.js';
 import { presetGates, PRESET_N, densityToCell } from './presets.js';
@@ -77,3 +78,26 @@ if(window.ResizeObserver)new ResizeObserver(resize).observe(document.getElementB
 
 // Boot: size to the host, clamp selections, load the default algorithm, start the loop.
 resize();clampQ();loadPreset('qft');requestAnimationFrame(loop);
+
+// Screensaver hook for the shell (lib/screensaver.js). It pins #gl-host to the
+// window (resize() sizes the drawing buffer from the host), hides the GUI and
+// the overlay canvases, and loads one algorithm from opts.seed. opts.calm
+// (1 = slowest) scales the playhead and the auto-orbit. No exit(): the shell
+// reloads the page on stop.
+const SAVER_PRESETS=['qft','ghz','grover','scramble','iqft'];
+window.snSaver={
+  enter(o){
+    const calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
+    const st=document.createElement('style');
+    st.textContent='body *{visibility:hidden!important;pointer-events:none!important}'+
+      '#canvas-wrap,#gl-host{position:fixed!important;inset:0!important;z-index:2147483646}'+
+      '#gl{visibility:visible!important;cursor:none!important}';
+    document.head.appendChild(st);
+    VS.stepInspect=false;VS.grid2d=false;VS.autoRotate=true;
+    loadPreset(SAVER_PRESETS[Math.abs((o&&o.seed)|0)%SAVER_PRESETS.length]);
+    VS.playing=true;VS.speed=2-1.4*calm;
+    controls.autoRotate=true;controls.autoRotateSpeed=0.55*(1-0.5*calm);
+    resize();
+    return {canvas:document.getElementById('gl'),warmupMs:1500};
+  }
+};
