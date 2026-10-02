@@ -17,6 +17,8 @@
      grep -n 'INTERVAL'     the ratio-to-interval-name table
      grep -n 'function magma'   the magma color ramp
      grep -n 'function draw'    the frame render
+     grep -n 'SAMPLE DENSITY'   samples per u from the curve, the trail ring
+     grep -n 'function smoothSeg'   midpoint quadratic joins
      grep -n 'drawAxisWaves'    the component sine waves on the axes
      grep -n 'drawFrame'    the velocity and perpendicular vectors
      grep -n 'buildUI'      the control panel construction
@@ -129,59 +131,115 @@
   }
 
   // ------------------------------------------------------------------ trail
+  // SAMPLE DENSITY. The sample count comes from the curve, not a fixed N.
+  // The tip speed in screen px per unit of u is at most
+  // 2 pi sqrt((A + detune)^2 + B^2) r, so one sample every SEG_PX px of that
+  // bound keeps each chord short at any ratio. A complex or detuned ratio
+  // (11:7 + 0.031) gets more samples per u than 3:2, so the loops stay
+  // round. The trail lives in typed ring buffers (CAP slots), so a frame
+  // allocates nothing. The draw joins the samples with quadratic curves
+  // through the chord midpoints (smoothPath), so a join has no corner.
   const LIFE = 7.5;             // seconds a point stays in the trail (long cool-down)
-  const MAXPTS = MOB ? 700 : 1600;
+  const SEG_PX = 1.5;           // the longest chord in screen px
+  const CAP = MOB ? 6000 : 16000;
+  const hx = new Float32Array(CAP), hy = new Float32Array(CAP);
+  const hu = new Float64Array(CAP), hb = new Float64Array(CAP);
+  let h0 = 0, hn = 0;           // the oldest slot and the sample count
   let simU = 0, prevU = 0, last = performance.now() / 1000;   // seconds, matches draw()
-  let hist = [];               // { x, y, u, born }
-  function clearTrail() { hist = []; }
+  function clearTrail() { h0 = 0; hn = 0; }
+  const hi = k => (h0 + k) % CAP;                     // slot of sample k, 0 = oldest
+  // The bound of the tip speed in screen px per unit of u.
+  const speedPx = b => TAU * Math.hypot(G.A + G.detune, G.B) * b.r;
 
-  // sample the arc densely, so the curve and its gradient stay smooth
-  function pushHistory(now, u0, u1) {
-    const du = u1 - u0, steps = Math.max(2, Math.ceil(du * 1600));
+  function pushHistory(now, u0, u1, b) {
+    const du = u1 - u0;
+    const steps = Math.min(CAP >> 2, Math.max(2, Math.ceil(du * speedPx(b) / SEG_PX)));
     for (let i = 1; i <= steps; i++) {
       const u = u0 + du * i / steps;
-      hist.push({ x: px(u), y: py(u), u, born: now });
+      let k;
+      if (hn < CAP) k = hi(hn++); else { k = h0; h0 = (h0 + 1) % CAP; }
+      hx[k] = px(u); hy[k] = py(u); hu[k] = u; hb[k] = now;
     }
     const cut = now - LIFE;
-    let k = 0; while (k < hist.length && hist[k].born < cut) k++;
-    if (hist.length - k > MAXPTS) k = hist.length - MAXPTS;
-    if (k) hist.splice(0, k);
+    while (hn > 0 && hb[h0] < cut) { h0 = (h0 + 1) % CAP; hn--; }
+  }
+
+  // Add one piece of the smooth trail to path p: from the midpoint of
+  // slots k0, k1 to the midpoint of k1, k2, with k1 as the control point.
+  // The first piece starts at k0 and the last piece ends at k2. k2 < 0 is
+  // a trail of two samples: a straight line. sx, sy map a slot to px.
+  function smoothSeg(p, k0, k1, k2, sx, sy, first, lastSeg) {
+    const ax = sx(k0), ay = sy(k0), bx = sx(k1), by = sy(k1);
+    const mx0 = (ax + bx) / 2, my0 = (ay + by) / 2;
+    if (first) p.moveTo(ax, ay); else p.moveTo(mx0, my0);
+    if (first) p.lineTo(mx0, my0);
+    if (k2 < 0) { p.lineTo(bx, by); return; }
+    const cx2 = sx(k2), cy2 = sy(k2);
+    if (lastSeg) p.quadraticCurveTo(bx, by, cx2, cy2);
+    else p.quadraticCurveTo(bx, by, (bx + cx2) / 2, (by + cy2) / 2);
   }
 
   // ------------------------------------------------------------------ draw parts
+  // The closed loop of a whole ratio, as a cached Path2D. It closes after
+  // u = 1 / gcd(A, B), so only that part is sampled, with the same SEG_PX
+  // rule as the trail.
+  let loopKey = '', loopPath = null;
   function drawContextLoop(b) {
+    const key = G.A + ':' + G.B + ':' + G.phase + ':' + b.cx + ':' + b.cy + ':' + b.r;
+    if (key !== loopKey) {
+      loopKey = key; loopPath = new Path2D();
+      const per = 1 / (gcd(G.A, G.B) || 1);
+      const N = Math.max(200, Math.min(40000, Math.ceil(per * speedPx(b) / SEG_PX)));
+      for (let i = 0; i <= N; i++) { const u = per * i / N, X = mapX(px(u), b), Y = mapY(py(u), b); i ? loopPath.lineTo(X, Y) : loopPath.moveTo(X, Y); }
+      loopPath.closePath();
+    }
     ctx.save(); ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'round'; ctx.lineJoin = 'round';
     ctx.strokeStyle = magStr(0.32, 0.16); ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    const N = 900;
-    for (let i = 0; i <= N; i++) { const u = i / N, X = mapX(px(u), b), Y = mapY(py(u), b); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
-    ctx.stroke(); ctx.restore();
+    ctx.stroke(loopPath); ctx.restore();
   }
 
-  // the magma trail: one soft glow pass, then a true per-segment gradient by age
+  // The magma trail: one soft glow pass, then the crisp line in HEAT_BINS
+  // bins by age. Each bin is one path, so the cost per frame does not grow
+  // with the sample count the way one stroke per segment did, and a bin has
+  // no overlap at its joins (no beads in the 'lighter' blend).
+  const HEAT_BINS = 48;
   function drawTrail(b, now) {
-    if (hist.length < 2) return;
+    if (hn < 2) return;
     ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const sx = k => mapX(hx[k], b), sy = k => mapY(hy[k], b);
 
     // pass 1: soft magma glow under the whole trail, one cheap stroke
-    ctx.beginPath();
-    for (let i = 0; i < hist.length; i++) { const X = mapX(hist[i].x, b), Y = mapY(hist[i].y, b); i ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); }
+    const glow = new Path2D();
+    glow.moveTo(sx(hi(0)), sy(hi(0)));
+    for (let i = 1; i < hn - 1; i++) {
+      const k = hi(i), k2 = hi(i + 1);
+      glow.quadraticCurveTo(sx(k), sy(k), (sx(k) + sx(k2)) / 2, (sy(k) + sy(k2)) / 2);
+    }
+    glow.lineTo(sx(hi(hn - 1)), sy(hi(hn - 1)));
     ctx.strokeStyle = magStr(0.72, 0.10); ctx.lineWidth = MOB ? 6 : 10;
-    ctx.shadowColor = magStr(0.82, 1); ctx.shadowBlur = MOB ? 8 : 16; ctx.stroke();
+    ctx.shadowColor = magStr(0.82, 1); ctx.shadowBlur = MOB ? 8 : 16; ctx.stroke(glow);
     ctx.shadowBlur = 0;
 
-    // pass 2: crisp color per segment, so the gradient is exact along the line
-    let px0 = mapX(hist[0].x, b), py0 = mapY(hist[0].y, b);
-    for (let i = 1; i < hist.length; i++) {
-      const p = hist[i], heat = 1 - (now - p.born) / LIFE;
-      const X = mapX(p.x, b), Y = mapY(p.y, b);
-      if (heat >= 0) {
-        ctx.beginPath(); ctx.moveTo(px0, py0); ctx.lineTo(X, Y);
-        ctx.strokeStyle = magStr(heat, 0.15 + 0.8 * heat);
-        ctx.lineWidth = (0.9 + heat * 2.8) * (MOB ? 0.9 : 1); ctx.stroke();
-      }
-      px0 = X; py0 = Y;
+    // pass 2: crisp color by age, one path per heat bin. Butt caps: two
+    // bins meet end to end at a shared midpoint with the same tangent, so
+    // round caps would overlap there and show a bright dot.
+    ctx.lineCap = 'butt';
+    const bins = new Array(HEAT_BINS);
+    for (let i = 0; i < hn - 1; i++) {
+      const k0 = hi(i), k1 = hi(i + 1), k2 = i + 2 < hn ? hi(i + 2) : -1;
+      if (k2 < 0 && hn > 2) break;               // the last piece already ends at k1
+      const heat = 1 - (now - hb[k1]) / LIFE;
+      if (heat < 0) continue;
+      const bi = Math.min(HEAT_BINS - 1, Math.floor(heat * HEAT_BINS));
+      const p = bins[bi] || (bins[bi] = new Path2D());
+      smoothSeg(p, k0, k1, k2, sx, sy, i === 0, i === hn - 3);
+    }
+    for (let bi = 0; bi < HEAT_BINS; bi++) {
+      if (!bins[bi]) continue;
+      const heat = (bi + 0.5) / HEAT_BINS;
+      ctx.strokeStyle = magStr(heat, 0.15 + 0.8 * heat);
+      ctx.lineWidth = (0.9 + heat * 2.8) * (MOB ? 0.9 : 1); ctx.stroke(bins[bi]);
     }
     ctx.restore();
   }
@@ -251,23 +309,23 @@
   // The two moving component sine waves. Amplitude aligns with the figure axis;
   // time runs away from the figure. The newest sample sits on the panel edge.
   function drawAxisWaves(b) {
-    if (hist.length < 2) return;
+    if (hn < 2) return;
     const pBot = b.figT - b.gap, pRight = b.figL - b.gap;
     const wX = winUX(), wY = winUY();
     ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.globalCompositeOperation = 'lighter';
     ctx.strokeStyle = magStr(0.86, 0.95); ctx.lineWidth = 2; ctx.shadowColor = magStr(0.86, 1); ctx.shadowBlur = 6;
     ctx.beginPath();                                             // horizontal component, top panel
-    for (let i = hist.length - 1, first = true; i >= 0; i--) {
-      const pa = simU - hist[i].u; if (pa > wX) break;
-      const X = mapX(hist[i].x, b), Y = pBot - (pa / wX) * b.strip;
+    for (let i = hn - 1, first = true; i >= 0; i--) {
+      const k = hi(i), pa = simU - hu[k]; if (pa > wX) break;
+      const X = mapX(hx[k], b), Y = pBot - (pa / wX) * b.strip;
       first ? (ctx.moveTo(X, Y), first = false) : ctx.lineTo(X, Y);
     }
     ctx.stroke();
     ctx.strokeStyle = magStr(0.66, 0.95); ctx.shadowColor = magStr(0.66, 1);
     ctx.beginPath();                                             // vertical component, left panel
-    for (let i = hist.length - 1, first = true; i >= 0; i--) {
-      const pa = simU - hist[i].u; if (pa > wY) break;
-      const X = pRight - (pa / wY) * b.strip, Y = mapY(hist[i].y, b);
+    for (let i = hn - 1, first = true; i >= 0; i--) {
+      const k = hi(i), pa = simU - hu[k]; if (pa > wY) break;
+      const X = pRight - (pa / wY) * b.strip, Y = mapY(hy[k], b);
       first ? (ctx.moveTo(X, Y), first = false) : ctx.lineTo(X, Y);
     }
     ctx.stroke(); ctx.restore();
@@ -356,9 +414,9 @@
     const t = now / 1000, dt = Math.min(Math.max(t - last, 0), 0.05); last = t;   // guard the first frame
     if (SAVER.on) saverStep(dt);
     prevU = simU; simU += dt * G.speed; if (simU > 1e6) { simU %= 1; prevU = simU; }
-    pushHistory(t, prevU, simU);
-
     const b = box();
+    pushHistory(t, prevU, simU, b);
+
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = '#05040a'; ctx.fillRect(0, 0, W, H);
