@@ -420,11 +420,42 @@ const frag = ([name, , , , body]) =>
 const pack = HELPERS + '\n// ── the 60 smoke cells ───────────────────────────────────────────────────────\n' +
   CELLS.map(frag).join('\n\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above.
+// uv: x centered, y = 0 at the floor. ρ is the smoke density.
+// billow = 1 − turb,  turb = Σ aᵢ|noise(2ⁱ·R(½)ⁱ·p)| / Σaᵢ.  curl ψ = (∂ψ/∂y, −∂ψ/∂x).
+const PLUME = ['plume: s = w(0.2 + 0.95y) + 0.04,  p = (x/s, 1.7y − R·t) + c·curl fbm(0.8p)', 'ρ = e^(−x²/1.6s²)·(0.28 + 1.15·billow(p))·taper(y) − 0.06y'];
+const FOG = ['fog: band = smoothstep(H + S, H − S, y)', 'ρ = band·(0.4 + 0.9·fbm(2.2x − 0.15t, 3y + 0.05t))'];
+const DRIFT = 'drift: p = (s·x − v·t, 0.8s·y) + 0.4·curl fbm(0.6p),  ρ = 1.1·billow(p)';
+const RING = ['ring: life = fract(v·t),  c = uv − (0, 0.15 + 0.7·life)', 'ρ = smoothstep(T, 0, ||(cₓ, 1.3c_y)| − 0.16|)·(0.5 + 0.8 fbm)·(1 − 0.7·life)'];
+const SHOW = 'color = mix(ground, ramp(ρ′), smoothstep(0.03, 0.55, ρ′)),  ρ′ = ((ρ − ½)·contrast + ½)·exposure';
+const SAVER_EQ = {
+  wispy_plume: [...PLUME, 'w = 0.12…0.22,  R = 1…1.8,  c = 0.8…1.6 (fray)', SHOW],
+  lazy: [...PLUME, 'y ← 1.3y,  w = 0.16…0.28,  R = 0.4…0.9,  c = 0.6…1.4', SHOW],
+  thunderhead: ['ρ = 1.15·billow(s·x, s·y − v·t)·(1.2…1.7)·smoothstep(−0.1, 0.6, y)', 's = 1.4…3 (scale),  v = 0.2…0.7 (drift),  5 octaves', SHOW],
+  incense: ['path(y) = A sin(3.5y + 1.2t),  A = 0.1…0.3,  x = (uₓ − path)/0.06', 'ρ = 1.6·(1 − smoothstep(0, 1.2, |x|))·billow(x, 4y − R·t)^p·taper', 'p = 1…2.5 (sharp),  R = 0.8…1.6'],
+  ribbon: ['p = (s·x, 2.5y − R·t),  pₓ += f·sin(1.5p_y + t)', 'ρ = 1.2·billow(p)·smoothstep(1.3, −0.05, y)', 's = 2…4,  f = 0.3…1 (fold),  R = 0.6…1.3'],
+  serpentine: ['path(y) = A sin(3y + 1.4t) + 0.08 sin(7y − t),  A = 0.12…0.32', 'x = (uₓ − path)/w,  w = 0.1…0.2', 'ρ = 1.5·(1 − smoothstep(0, 1.3, |x|))·billow(x, 3y − R·t)·taper'],
+  slow_haze: [DRIFT, 'ρ ×0.9,  v = 0.1…0.4 (speed),  s = 1.2…2.5 (scale)', SHOW],
+  layered_drift: ['ρ = max(drift(uv, t),  0.8·drift(uv + (0, 0.2), −(0.5…1)·t))', DRIFT, 'v = 0.3…0.9,  s = 2…4'],
+  ground_fog: [...FOG, 'H = 0.2…0.4 (height),  S = 0.1…0.3 (soft)', SHOW],
+  mist: [...FOG, 'ρ ×0.7 + 0.05,  H = 0.4…0.7,  S = 0.2…0.4', SHOW],
+  valley_fog: [...FOG, 'ρ ×1.3,  H = 0.35…0.6,  S = 0.05…0.2', SHOW],
+  rolling_fog: ['ρ = 0.7·fog(H, 0.2) + 0.6·drift·smoothstep(0.6, 0, y)', ...FOG, 'H = 0.3…0.55,  drift v = 0.2…0.6,  s = 2…3.5'],
+  dawn_mist: ['ρ = fog(H, 0.3)·(0.7 + L·y),  L = 0…0.8 (lift)', ...FOG, 'H = 0.4…0.7 (height)'],
+  smoke_ring: [...RING, 'v = 0.15…0.4 (speed),  T = 0.05…0.13 (thick)'],
+  ring_train: ['ρ = max over three rings at t, t + 1.7, t + 3.4', ...RING, 'v = 0.2…0.5,  T = 0.05…0.12'],
+  vortex: ['c = uv − (0, 0.4),  p = (1.5θ + 3r − ω·t,  s·r)', 'p += 0.6·curl fbm(½p),  ρ = 1.2·billow(p)·smoothstep(0.85, 0.05, r)', 'ω = 0.3…1 (spin),  s = 3…6 (scale)'],
+  marble: ['p = s·uv + A·(fbm(p + 0.05t), fbm(p + 5.2))', 'ρ = 1.2·fbm(p),  5 octaves', 's = 2…4 (scale),  A = 0.4…1.2 (flow)'],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
   uniform_bytes: 96,
-  cells: CELLS.map(([name, family, species, knobs]) => ({ name, family, species, knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'fs_' + name })),
+  cells: CELLS.map(([name, family, species, knobs]) => ({ name, family, species, knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'fs_' + name, ...(SAVER_EQ[name] ? { eq: SAVER_EQ[name] } : {}) })),
   gens: [
     { id: 'exposure', title: 'Exposure · density', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
       map: 'y => Math.pow(2, (y - 0.5) * 4)', unit: "v => (Math.log2(v) >= 0 ? '+' : '') + Math.log2(v).toFixed(1) + ' ev'" },
