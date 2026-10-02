@@ -184,14 +184,14 @@ const MATERIALS = {
 // Dref (N m) and the dimensionless weights the solver uses:
 //   energy = Dref/2 * (cxx wxx^2 + 2 c12 wxx wyy + cyy wyy^2 + 4 c66 wxy^2)
 // Grain runs along y, so cyy = 1 for wood.
-// arch (0..1): the model is a flat plate, but a violin plate is arched, and
-// the arch makes it much stiffer across the grain. arch = 1 multiplies the
-// cross-grain stiffness by 3.5 and the twist stiffness by 1.6. These are
-// fitted factors, not shell theory: they move the flat violin plate's mode 5
-// to a closed ring near 330 Hz, close to measured free arched plates.
-const ARCH_X = 2.5, ARCH_T = 0.6;
-function stiffness(mat, t, arch) {
-  arch = arch || 0;
+// ARCH: the model is a flat plate, but a violin plate is arched, and the
+// arch makes its middle much stiffer, most of all across the grain. Near
+// the edge a violin plate has a flat channel that stays flexible. The
+// solver gives each node a stiffness factor 1 + k w(d), where d is the
+// distance to the outer edge and w rises from 0 at e0 to 1 at e1 (cm, at
+// violin size). These factors are a fitted estimate, not shell theory.
+const ARCH = { x: 2.5, y: 0.0, t: 0.6, e0: 0.4, e1: 3.0 };
+function stiffness(mat, t) {
   const m = MATERIALS[mat], t3 = t * t * t;
   if (m.E) {
     const D = m.E * 1e9 * t3 / (12 * (1 - m.nu * m.nu));
@@ -200,8 +200,7 @@ function stiffness(mat, t, arch) {
   const nuRL = m.nu * m.ER / m.EL, den = 1 - m.nu * nuRL;
   const DL = m.EL * 1e9 * t3 / (12 * den), DR = m.ER * 1e9 * t3 / (12 * den);
   const D12 = m.nu * DR, D66 = m.G * 1e9 * t3 / 12;
-  const ax = 1 + ARCH_X * arch, at = 1 + ARCH_T * arch;
-  return { Dref: DL, cxx: ax * DR / DL, cyy: 1, c12: D12 / DL, c66: at * D66 / DL, iso: false, DL, DR: ax * DR, D12, D66: at * D66 };
+  return { Dref: DL, cxx: DR / DL, cyy: 1, c12: D12 / DL, c66: D66 / DL, iso: false, DL, DR, D12, D66 };
 }
 
 function pointInPoly(x, y, P) {
@@ -254,5 +253,5 @@ function geometry(id) {
   return (cache[id] = { id, outline, holes, bbox: [x0, y0, x1, y1], area: Math.abs(area / 2) });
 }
 
-root.CPlates = { SHAPES, ORDER, MATERIALS, braces, stiffness, geometry, inside, onBrace, pointInPoly, segDist };
+root.CPlates = { SHAPES, ORDER, MATERIALS, ARCH, braces, stiffness, geometry, inside, onBrace, pointInPoly, segDist };
 })(typeof self !== 'undefined' ? self : globalThis);

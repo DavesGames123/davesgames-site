@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="../../lib/gpu-guard.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Chladni Plate — Stella Nova · davesgames.io</title>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+   CHLADNI PLATE  ·  page shell
+  ───────────────────────────────────────────────────────────────────────────
+   Static markup only. A thin plate is driven at one point. Sand jumps off
+   the parts that move and stops on the nodal lines. The plate shapes are a
+   square, a disc, a guitar top, violin and cello plates and a ukulele top.
+   solver.js (a Web Worker) finds the bending modes of each shape with a
+   Kirchhoff plate model. sim.js adds up the driven modes and moves the sand.
+   render.js draws it with WebGL2.
+
+   HEAD LOAD ORDER
+     1. lib/gpu-guard.js  releases the WebGL context when the shell swaps
+     2. fonts, style.css
+   Scripts at end of body:
+     plates.js   classic: outlines, holes, braces, materials (self.CPlates)
+     main.js     module: imports sim.js, render.js, curve.js; starts the
+                 worker solver.js (which loads plates.js itself)
+
+   LAYOUT  (# marks an element id main.js binds to)
+     desktop ... #panel at the left. #view fills the window. #card (mode,
+                 frequency) at the upper left of the view, #eq (equations)
+                 at the upper right, #resp (frequency response) at the base.
+     phone ..... (max-width 768px, or a short landscape touch screen)
+                 #dock at the base: panel, previous mode, the mode label
+                 (a tap starts or stops the sweep), next mode, view.
+                 #panel is a bottom sheet (portrait) or a right drawer
+                 (landscape). #resp is a strip above the dock. #eq is in
+                 the panel.
+
+   GREP MAP  (main.js)
+     grep -n 'function solveFor'   worker requests and the mode cache
+     grep -n 'function usePlate'   swap to a solved plate
+     grep -n 'function frame'      the loop: glide, sweep, sand, draw
+     grep -n 'function clearRect'  the part of the view no panel covers
+     grep -n 'function labels'     the mode card and the equations
+     grep -n 'snSaver'             the screensaver tour (lib/screensaver.js)
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<meta name="description" content="A Chladni plate: drive a square, a disc, a guitar top or a violin plate, and watch sand gather on the nodal lines of each resonance. Real Kirchhoff plate modes, luthier tap-tone modes 1, 2 and 5.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
+
+<div class="topbar">
+  <div class="brand"><span class="dot"></span>Stella Nova</div>
+  <div class="pagetitle">Chladni Plate</div>
+  <button id="gear" type="button" aria-label="Open controls">☰ Controls</button>
+</div>
+
+<main id="stage">
+  <canvas id="view"></canvas>
+  <section id="card" aria-live="polite">
+    <div class="c-plate" id="cPlate">Square plate</div>
+    <div class="c-mode"><span id="cMode">—</span><span id="cTag" class="tag" hidden></span></div>
+    <div class="c-freq"><span id="cFreq">—</span><span class="c-g" id="cG"></span></div>
+    <div class="c-sub" id="cSub"></div>
+  </section>
+  <section id="eq">
+    <div class="eq-h">Kirchhoff plate</div>
+    <div class="eq-r" id="eqPlate"></div>
+    <div class="eq-s" id="eqD"></div>
+    <div class="eq-h">Driven response</div>
+    <div class="eq-r" id="eqResp">w(<b>x</b>) = Σ<sub>n</sub> φ<sub>n</sub>(<b>x</b>) φ<sub>n</sub>(<b>x</b><sub>d</sub>) F ⁄ (ω<sub>n</sub>² − ω² + 2iζω<sub>n</sub>ω)</div>
+    <div class="eq-s">sand lifts where ω²|w| &gt; g</div>
+  </section>
+  <section id="resp">
+    <div class="r-head"><span>Frequency response</span><span class="r-dim">peak acceleration on the plate · drag to tune</span></div>
+    <canvas id="curve"></canvas>
+  </section>
+  <div id="busy" hidden><span class="spin"></span><span id="busyT">Finding the plate modes…</span></div>
+  <div id="hint">tap the plate to move the drive point</div>
+  <div id="nogl" hidden>WebGL2 is not available in this browser, so the plate cannot render.</div>
+</main>
+
+<aside id="panel" class="open" aria-label="Controls">
+  <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
+  <button id="panelClose" type="button" aria-label="Close controls">✕</button>
+
+  <div class="sec-label first">Plate</div>
+  <div class="grid2" id="shapes"></div>
+  <div class="seg" id="bracing"></div>
+  <div class="seg" id="edges">
+    <button data-bc="free" type="button" class="on">Free edges</button>
+    <button data-bc="clamped" type="button">Clamped</button>
+  </div>
+  <div class="seg" id="arches">
+    <button data-arch="0" type="button">Flat</button>
+    <button data-arch="1" type="button">Arched</button>
+  </div>
+  <p class="note" id="shapeNote"></p>
+
+  <div class="sec-label">Drive</div>
+  <div class="row"><label for="freq">Frequency</label><input type="range" id="freq" min="0" max="1000" step="1" value="300"><span class="val" id="freqV"></span></div>
+  <div class="grid3">
+    <button id="prev" type="button">◀ Mode</button>
+    <button id="sweep" type="button" class="tog">Sweep</button>
+    <button id="next" type="button">Mode ▶</button>
+  </div>
+  <div class="row"><label for="damp">Damping</label><input type="range" id="damp" min="0" max="1000" step="1" value="420"><span class="val" id="dampV"></span></div>
+  <div class="row"><label for="drive">Drive</label><input type="range" id="drive" min="0" max="1000" step="1" value="500"><span class="val" id="driveV"></span></div>
+  <p class="note">Tap the plate to move the drive point. A mode with a node at the drive point does not ring.</p>
+
+  <div class="sec-label">Material</div>
+  <div class="grid3" id="mats"></div>
+  <div class="row"><label for="thick">Thickness</label><input type="range" id="thick" min="5" max="60" step="1" value="15"><span class="val" id="thickV"></span></div>
+  <p class="note" id="matNote"></p>
+
+  <div class="sec-label">Sand and view</div>
+  <div class="row"><label for="sand">Sand</label><input type="range" id="sand" min="10" max="200" step="5" value="70"><span class="val" id="sandV"></span></div>
+  <div class="grid3">
+    <button id="reset" type="button">Reset sand</button>
+    <button id="motion" type="button" class="tog">Motion</button>
+    <button id="tone" type="button" class="tog">Tone</button>
+  </div>
+  <div class="seg" id="views">
+    <button data-view="top" type="button" class="on">Top view</button>
+    <button data-view="tilt" type="button">Tilted</button>
+  </div>
+
+  <div class="grp-eq">
+    <div class="sec-label">Equations</div>
+    <div id="eqPhone"></div>
+  </div>
+
+  <div class="sec-label" id="luthLabel">Luthier’s tap tones</div>
+  <div id="luth"></div>
+
+  <div class="sec-label">How it works</div>
+  <div class="about">
+    <p>A thin plate bends. Its free modes solve D∇⁴w = ρhω²w: a stiffness D against the mass ρh per area. Each mode has a shape φ<sub>n</sub> and a frequency. The lines where φ<sub>n</sub> = 0 are its nodal lines.</p>
+    <p>The page finds the lowest 24 modes of each outline with a finite-difference model on a grid of about 5000 points, in a background worker. Wood is stiffer along the grain than across it, so wood plates use the orthotropic form.</p>
+    <p>Driven at one point, the plate moves as a sum of all modes. Near a mode’s frequency that one mode wins, and the sand finds its nodal lines. Sand only jumps where the plate’s acceleration is more than g, so between resonances the pattern stays still.</p>
+    <p>The plates are flat and of one thickness. A real violin plate is arched and graduated, so “Arched” makes it stiffer across the grain as an estimate of the arch.</p>
+  </div>
+</aside>
+
+<nav id="dock" aria-label="Quick controls">
+  <button id="dockPanel" type="button" aria-label="Controls" aria-expanded="false">☰</button>
+  <button id="dPrev" type="button" aria-label="Previous mode">◀</button>
+  <button id="dMode" type="button" aria-label="Sweep"><b id="dModeT">—</b><span id="dModeS">tap to sweep</span></button>
+  <button id="dNext" type="button" aria-label="Next mode">▶</button>
+  <button id="dView" type="button" aria-label="Change view">◩</button>
+</nav>
+
+<script src="plates.js"></script>
+<script type="module" src="main.js"></script>
+</body>
+</html>

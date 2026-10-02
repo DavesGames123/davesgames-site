@@ -14,6 +14,8 @@
 //  stencil that leaves the plate is not used. A clamped edge keeps every
 //  stencil on a plate node, with w = 0 on the nodes outside. A hole is
 //  always a free edge. M is the lumped mass, 1 per node, with h = 1.
+//  An arched wood plate (req.arch) scales the terms of each node by the
+//  arch factors of archProfile.
 //
 //  Shift-invert Lanczos gives the lowest modes. K + sI is factored once
 //  (band Cholesky). Full reorthogonalization keeps the Lanczos vectors
@@ -26,6 +28,7 @@
 //  grep -n targets
 //    grid and mask ..... "function buildGrid"
 //    stiffness terms ... "function forEachTerm"
+//    arch factors ...... "function archProfile"
 //    band Cholesky ..... "function cholBand"
 //    Lanczos ........... "function lanczos"
 //    Jacobi ............ "function jacobi"
@@ -100,7 +103,7 @@ function buildGrid(req) {
 // The term adds weight * (sum coef w)^2 / 2 to U, so K += weight * g g^T.
 // For the node term with both stencils, cb2 gets the two stencils.
 function forEachTerm(G, c, req, cb1, cb2) {
-  const { nx, ny, st, idx, brace } = G, free = req.bc === 'free', BR = req.braceGain || 14;
+  const { nx, ny, st, idx, brace } = G, free = req.bc === 'free', BR = req.braceGain || 14, AR = G.arch;
   const S = (i, j) => (i < 0 || i >= nx || j < 0 || j >= ny) ? 0 : st[j * nx + i];
   // A stencil node: an unknown index, -1 for a zero node (clamped rim),
   // or null when the stencil may not be used.
@@ -113,21 +116,26 @@ function forEachTerm(G, c, req, cb1, cb2) {
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
     const g = j * nx + i; if (st[g] !== 1) continue;
     const m = brace[g] ? BR : 1;
+    const Fx = AR ? AR.fx[g] : 1, Fy = AR ? AR.fy[g] : 1;
     const ax = [node(i - 1, j), idx[g], node(i + 1, j)];
     const ay = [node(i, j - 1), idx[g], node(i, j + 1)];
     const hasX = ax[0] !== null && ax[2] !== null, hasY = ay[0] !== null && ay[2] !== null;
     const sx = hasX ? [[ax[0], 1], [ax[1], -2], [ax[2], 1]].filter(p => p[0] >= 0) : null;
     const sy = hasY ? [[ay[0], 1], [ay[1], -2], [ay[2], 1]].filter(p => p[0] >= 0) : null;
-    if (sx) cb1(sx, m * c.cxx);
-    if (sy) cb1(sy, m * c.cyy);
-    if (sx && sy) cb2(sx, sy, m * c.c12);
+    if (sx) cb1(sx, m * Fx * c.cxx);
+    if (sy) cb1(sy, m * Fy * c.cyy);
+    if (sx && sy) cb2(sx, sy, m * Math.sqrt(Fx * Fy) * c.c12);
   }
   for (let j = -1; j < ny; j++) for (let i = -1; i < nx; i++) {
     const q = [node(i, j), node(i + 1, j), node(i, j + 1), node(i + 1, j + 1)];
     if (q.some(v => v === null) || q.every(v => v < 0)) continue;
-    let m = 1;
-    for (const [a, b] of [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]])
-      if (a >= 0 && a < nx && b >= 0 && b < ny && brace[b * nx + a]) m = BR;
+    let m = 1, ft = 0, nf = 0;
+    for (const [a, b] of [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]]) {
+      if (a < 0 || a >= nx || b < 0 || b >= ny) continue;
+      if (brace[b * nx + a]) m = BR;
+      if (AR && st[b * nx + a] === 1) { ft += AR.ft[b * nx + a]; nf++; }
+    }
+    if (nf) m *= ft / nf;
     const s = [[q[0], 1], [q[1], -1], [q[2], -1], [q[3], 1]].filter(p => p[0] >= 0);
     cb1(s, m * 4 * c.c66);
   }
@@ -434,9 +442,39 @@ function analyse(G, fill, phi, loops) {
   return out;
 }
 
+// The arch factors per node (see ARCH in plates.js): a chamfer distance
+// from each plate node to the outer rim, in cm, scaled to violin size.
+function archProfile(G, req) {
+  const { nx, ny, st } = G, N = nx * ny, d = new Float32Array(N).fill(1e9), A = P.ARCH;
+  const k = (P.SHAPES[req.shape].violin || 1), e0 = A.e0 * k, e1 = A.e1 * k;
+  for (let g = 0; g < N; g++) if (st[g] === 0) d[g] = 0;
+  const pass = (j0, j1, dj, i0, i1, di) => {
+    for (let j = j0; j !== j1; j += dj) for (let i = i0; i !== i1; i += di) {
+      const g = j * nx + i; if (!d[g]) continue;
+      let v = d[g];
+      const a = i - di, b = j - dj;
+      if (a >= 0 && a < nx) v = Math.min(v, d[j * nx + a] + 1);
+      if (b >= 0 && b < ny) v = Math.min(v, d[b * nx + i] + 1);
+      if (a >= 0 && a < nx && b >= 0 && b < ny) v = Math.min(v, d[b * nx + a] + 1.414);
+      if (b >= 0 && b < ny && i + di >= 0 && i + di < nx) v = Math.min(v, d[b * nx + i + di] + 1.414);
+      d[g] = v;
+    }
+  };
+  pass(0, ny, 1, 0, nx, 1); pass(ny - 1, -1, -1, nx - 1, -1, -1);
+  pass(0, ny, 1, nx - 1, -1, -1); pass(ny - 1, -1, -1, 0, nx, 1);
+  const fx = new Float32Array(N).fill(1), fy = new Float32Array(N).fill(1), ft = new Float32Array(N).fill(1);
+  for (let g = 0; g < N; g++) {
+    if (st[g] !== 1) continue;
+    const x = Math.min(1, Math.max(0, (d[g] * G.h - e0) / (e1 - e0))), w = x * x * (3 - 2 * x);
+    fx[g] = 1 + A.x * w; fy[g] = 1 + A.y * w; ft[g] = 1 + A.t * w;
+  }
+  G.arch = { fx, fy, ft };
+}
+
 function solve(req) {
   const t0 = Date.now();
-  const G = buildGrid(req), c = P.stiffness(req.material, 0.001, req.arch || 0);
+  const G = buildGrid(req), c = P.stiffness(req.material, 0.001);
+  if (req.arch && !c.iso) archProfile(G, req);
   const n = G.n, nl = Math.max(G.nx, G.ny);
   const s = 25 / Math.pow(nl, 4);
   const K = assemble(G, c, req, s);
@@ -468,7 +506,7 @@ function solve(req) {
     info.push(a);
   });
   return {
-    key: req.key, shape: req.shape, nx: G.nx, ny: G.ny, x0: G.x0, y0: G.y0, h: G.h, n,
+    key: req.key, shape: req.shape, bracing: req.bracing, nx: G.nx, ny: G.ny, x0: G.x0, y0: G.y0, h: G.h, n,
     idx: G.idx, st: G.st, brace: G.brace, fill, modes, lambda, norm2, info, k,
     band: K.b, ms: Date.now() - t0,
   };

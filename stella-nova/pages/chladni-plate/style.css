@@ -1,0 +1,174 @@
+/* ============================================================================
+   CHLADNI PLATE  ·  stylesheet
+   ----------------------------------------------------------------------------
+   A dark workshop shell with sand for the accent. Inter for the interface,
+   STIX Two Text for the headings and the equations, the system monospace
+   for numbers.
+     grep -n 'STAGE'      the canvas, the mode card, the equations
+     grep -n 'RESPONSE'   the frequency response chart
+     grep -n 'PANEL'      the control panel (desktop: left column)
+     grep -n 'TOUCH'      44px targets for any coarse pointer
+     grep -n 'PHONE'      dock, bottom sheet, the chart strip
+     grep -n 'LANDSCAPE'  the phone drawer at the right edge
+     grep -n 'sn-saver'   the screensaver mode (lib/screensaver.js)
+   ========================================================================== */
+:root{
+  --ink:#0a0908; --ink2:#12100e; --ink3:#1b1815; --text:#e2ddd2; --dim:#9a9184; --faint:#3d3830;
+  --sand:#e8d5a9; --amber:#f0a65a; --line:rgba(232,213,169,0.10); --line-b:rgba(232,213,169,0.24);
+  --panel-w:320px; --pl:320px; --top:52px; --resp-h:150px;
+  --sans:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --serif:'STIX Two Text','Times New Roman',Georgia,serif;
+  --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--ink);overscroll-behavior:none}
+body{font-family:var(--sans);color:var(--text);-webkit-font-smoothing:antialiased;font-size:13px}
+button{font-family:inherit;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:1px solid var(--sand);outline-offset:1px}
+[hidden]{display:none!important}
+
+.topbar{position:fixed;top:0;left:0;right:0;height:var(--top);z-index:30;display:flex;align-items:center;gap:18px;padding:0 18px;background:rgba(10,9,8,0.94);border-bottom:1px solid var(--line)}
+.brand{font-family:var(--serif);font-size:1.15rem;letter-spacing:0.08em;color:#f2efe6;display:flex;align-items:center;gap:9px}
+.brand .dot{width:7px;height:7px;border-radius:50%;background:var(--sand);box-shadow:0 0 9px var(--sand)}
+.pagetitle{font-size:0.72rem;letter-spacing:0.18em;color:var(--amber);text-transform:uppercase}
+#gear{margin-left:auto;display:none;height:34px;padding:0 14px;border:1px solid var(--line-b);border-radius:8px;background:var(--ink2);color:var(--text);font-size:0.75rem}
+#gear:hover{border-color:var(--sand);color:var(--sand)}
+html.in-frame{--top:0px}
+html.in-frame .topbar{display:none}
+html.in-frame #gear{display:none!important}
+
+/* STAGE. The canvas fills the window under the topbar. main.js fits the
+   plate into the part that the panel, the cards and the chart leave clear. */
+#stage{position:fixed;top:var(--top);left:0;right:0;bottom:0;overflow:hidden}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+#card,#eq{position:absolute;top:12px;z-index:5;background:rgba(12,11,10,0.74);border:1px solid var(--line);border-radius:12px;padding:10px 14px;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+#card{left:calc(var(--pl) + 14px);min-width:220px;max-width:340px;pointer-events:none}
+.c-plate{font-size:0.66rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--dim)}
+.c-mode{font-family:var(--serif);font-size:1.5rem;color:#f4eee2;margin-top:2px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.tag{font-family:var(--sans);font-size:0.66rem;letter-spacing:0.08em;color:var(--ink);background:var(--sand);border-radius:20px;padding:2px 8px;text-transform:uppercase}
+.c-freq{font:500 1.05rem/1.4 var(--mono);color:var(--amber);display:flex;gap:10px;align-items:baseline}
+.c-g{font-size:0.72rem;color:var(--dim)}
+.c-sub{font-size:0.72rem;color:var(--dim);line-height:1.5;margin-top:2px}
+#eq{right:14px;max-width:min(430px,calc(100% - var(--pl) - 300px));pointer-events:none}
+.eq-h{font-size:0.6rem;letter-spacing:0.16em;text-transform:uppercase;color:var(--dim);margin-top:6px}
+.eq-h:first-child{margin-top:0}
+.eq-r{font-family:var(--serif);font-size:1.02rem;color:#f4eee2;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eq-r sub,.eq-s sub{font-size:0.7em}
+.eq-s{font-family:var(--serif);font-size:0.8rem;color:var(--dim);line-height:1.45}
+#hint{position:absolute;left:calc(var(--pl) + 14px);right:14px;bottom:calc(var(--resp-h) + 18px);text-align:center;font-size:0.68rem;color:var(--dim);pointer-events:none;transition:opacity 0.8s}
+#hint.gone{opacity:0}
+#busy{position:absolute;left:calc(50% + var(--pl) / 2);top:46%;transform:translate(-50%,-50%);z-index:6;display:flex;gap:10px;align-items:center;padding:10px 16px;border-radius:20px;background:rgba(12,11,10,0.85);border:1px solid var(--line-b);font-size:0.74rem;color:var(--text)}
+.spin{width:12px;height:12px;border-radius:50%;border:2px solid var(--faint);border-top-color:var(--sand);animation:spin 0.9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#nogl{position:absolute;top:30%;left:calc(var(--pl) + 30px);right:30px;padding:14px 18px;border:1px solid rgba(255,120,100,0.4);color:#ffb0a0;background:var(--ink2);border-radius:8px}
+
+/* RESPONSE. The chart along the base of the view. */
+#resp{position:absolute;left:calc(var(--pl) + 14px);right:14px;bottom:12px;height:var(--resp-h);z-index:5;background:rgba(12,11,10,0.74);border:1px solid var(--line);border-radius:12px;padding:8px 10px 6px;display:flex;flex-direction:column;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.r-head{display:flex;gap:12px;align-items:baseline;font-size:0.6rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--dim);margin-bottom:2px}
+.r-dim{letter-spacing:0.04em;text-transform:none;color:var(--faint);color:#6f675b}
+#curve{flex:1;width:100%;min-height:0;display:block;touch-action:none;cursor:ew-resize}
+
+/* PANEL. Desktop: the left column. */
+#panel{position:fixed;top:var(--top);left:0;bottom:0;width:var(--panel-w);z-index:20;overflow-y:auto;padding:16px 16px 28px;background:rgba(12,11,10,0.97);border-right:1px solid var(--line);transform:translateX(-100%);transition:transform 0.28s cubic-bezier(0.4,0,0.2,1)}
+#panel.open{transform:none}
+#panelClose{position:absolute;top:10px;right:10px;width:30px;height:30px;border:1px solid var(--line);background:transparent;color:var(--dim);border-radius:7px}
+#sheetGrip,#dock,.grp-eq{display:none}
+.sec-label{font-size:0.62rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--amber);margin:20px 0 9px}
+.sec-label.first{margin-top:2px}
+.grid2,.grid3{display:grid;gap:6px}
+.grid2{grid-template-columns:1fr 1fr}
+.grid3{grid-template-columns:1fr 1fr 1fr;margin:6px 0}
+.grid2 button,.grid3 button,.seg button{padding:8px 6px;border:1px solid var(--line);background:var(--ink2);color:var(--text);border-radius:8px;font-size:0.72rem;line-height:1.25}
+.grid2 button:hover,.grid3 button:hover,.seg button:hover{border-color:var(--line-b)}
+.grid2 button.on,.grid3 button.on,.seg button.on{border-color:var(--sand);color:var(--sand);background:rgba(232,213,169,0.07)}
+.grid2 button small{display:block;font-size:0.6rem;color:var(--dim);margin-top:1px}
+.seg{display:flex;gap:6px;margin-top:6px}
+.seg button{flex:1}
+.row{display:flex;align-items:center;gap:10px;margin:8px 0}
+.row label{flex:0 0 72px;font-size:0.72rem;color:var(--dim)}
+.row input[type=range]{flex:1;min-width:0;accent-color:var(--sand)}
+.row .val{flex:0 0 66px;text-align:right;font:0.72rem var(--mono);color:var(--text)}
+.note{font-size:0.68rem;line-height:1.5;color:var(--dim);margin-top:6px}
+.about p{font-size:0.74rem;line-height:1.6;color:var(--dim);margin-bottom:8px}
+#luth{font-size:0.74rem;line-height:1.55;color:var(--dim)}
+#luth table{width:100%;border-collapse:collapse;margin:4px 0 8px;font-variant-numeric:tabular-nums}
+#luth td{padding:4px 0;border-bottom:1px solid var(--line)}
+#luth td:last-child{text-align:right;font-family:var(--mono);color:var(--text)}
+#luth button{background:none;border:0;color:var(--sand);text-decoration:underline;text-underline-offset:2px;font-size:inherit;padding:0}
+
+@media(min-width:769px){
+  body.panel-closed #gear{display:block}
+  body.panel-closed{--pl:0px}
+}
+
+/* TOUCH. Any coarse pointer: 44px targets, 11px text or more. */
+@media (pointer:coarse){
+  .grid2 button,.grid3 button,.seg button{min-height:44px;font-size:0.78rem}
+  .row{min-height:44px;margin:4px 0}
+  .row label,.row .val{font-size:0.78rem}
+  .note,.about p,#luth{font-size:0.8rem}
+  #panelClose{width:44px;height:44px}
+  .row input[type=range]{-webkit-appearance:none;appearance:none;height:44px;background:transparent}
+  .row input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:var(--faint)}
+  .row input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;margin-top:-10px;border-radius:50%;background:var(--sand);border:3px solid #1a1612}
+}
+
+/* PHONE. The query matches PHONE_Q in main.js. */
+@media (max-width:768px), (max-height:500px) and (pointer:coarse){
+  :root{--pl:0px;--top:calc(46px + env(safe-area-inset-top));--dock-h:calc(64px + env(safe-area-inset-bottom));--resp-h:92px}
+  html.in-frame{--top:0px}
+  .topbar{padding:env(safe-area-inset-top) 14px 0}
+  .brand{font-size:1rem}
+  #gear,body.panel-closed #gear{display:none}
+  #stage{bottom:var(--dock-h)}
+  #card{left:10px;right:10px;top:8px;max-width:none;min-width:0;padding:8px 12px;display:grid;grid-template-columns:1fr auto;column-gap:10px;align-items:baseline}
+  .c-plate{grid-column:1 / 3}
+  .c-mode{font-size:1.2rem}
+  .c-freq{font-size:0.95rem;justify-self:end}
+  .c-sub{grid-column:1 / 3;font-size:0.72rem}
+  #eq{display:none}
+  .grp-eq{display:block}
+  #eqPhone .eq-r{white-space:normal;font-size:0.95rem}
+  #resp{left:8px;right:8px;bottom:8px;padding:6px 8px 4px}
+  .r-dim{display:none}
+  #hint{left:10px;right:10px;bottom:calc(var(--resp-h) + 14px);font-size:0.74rem}
+  #busy{left:50%}
+  #dock{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:40;gap:6px;align-items:center;padding:8px calc(8px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left));background:rgba(12,11,10,0.96);border-top:1px solid var(--line-b)}
+  #dock > button{flex:0 0 48px;height:48px;border:1px solid var(--line-b);border-radius:12px;background:var(--ink2);color:var(--text);font-size:1.05rem}
+  #dock > button.on{border-color:var(--sand);color:var(--sand)}
+  #dock #dMode{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1.15}
+  #dModeT{font:500 0.84rem var(--sans);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  #dModeS{font-size:0.68rem;color:var(--dim)}
+  #dock #dMode.on #dModeS{color:var(--sand)}
+  #panel{top:auto;left:0;right:0;bottom:var(--dock-h);width:auto;height:min(52vh,540px);height:min(52dvh,540px);border-right:0;border-top:1px solid var(--line-b);border-radius:18px 18px 0 0;padding:0 calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));transform:translateY(calc(100% + var(--dock-h)));transition:transform 0.3s cubic-bezier(0.4,0,0.2,1),height 0.3s cubic-bezier(0.4,0,0.2,1);overscroll-behavior:contain;z-index:35;background:#0c0b0a}
+  #panel.open{transform:none}
+  #panel.full{height:calc(100vh - var(--dock-h) - 40px);height:calc(100dvh - var(--dock-h) - 40px)}
+  #panelClose{display:none}
+  #sheetGrip{display:flex;position:sticky;top:0;z-index:2;justify-content:center;align-items:center;height:40px;margin:0 -16px 4px;background:linear-gradient(180deg,rgba(12,11,10,1) 70%,rgba(12,11,10,0));touch-action:none;cursor:grab}
+  #sheetGrip span{width:46px;height:5px;border-radius:3px;background:var(--dim);opacity:0.6}
+  .sec-label.first{margin-top:0}
+}
+
+/* LANDSCAPE phone. The panel is a drawer at the right edge, the card is a
+   small box at the upper left, the chart sits at the lower left. */
+@media (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  :root{--resp-h:84px}
+  .topbar{display:none}
+  :root{--top:0px}
+  #card{right:auto;width:min(300px,40vw)}
+  #resp{right:auto;width:min(420px,50vw)}
+  #dock{right:auto;width:min(420px,56vw);border-right:1px solid var(--line-b);border-radius:0 16px 0 0}
+  #stage{bottom:0}
+  #panel,#panel.full{top:0;bottom:0;left:auto;right:0;width:min(46vw,380px);height:auto;border-top:0;border-left:1px solid var(--line-b);border-radius:0;padding:0 calc(14px + env(safe-area-inset-right)) 20px 14px;transform:translateX(100%)}
+  #panel.open{transform:none}
+  #sheetGrip{display:none}
+  #panelClose{display:block;position:sticky;top:8px;margin:8px 0 0 auto;z-index:2;background:var(--ink2)}
+}
+
+/* screensaver (lib/screensaver.js): the plate alone fills the frame */
+html.sn-saver .topbar,html.sn-saver #panel,html.sn-saver #dock,html.sn-saver #card,html.sn-saver #eq,
+html.sn-saver #resp,html.sn-saver #hint,html.sn-saver #busy,html.sn-saver #gear{display:none!important}
+html.sn-saver{--top:0px;--pl:0px}
+html.sn-saver #stage{top:0;bottom:0}
+html.sn-saver #view{cursor:none}
