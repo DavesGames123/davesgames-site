@@ -47,6 +47,7 @@
 //      sidebar ............ "// SIDEBAR"         map switch, download, generate
 //      batch .............. "BATCH GENERATION"   queue → ZIP of many planets
 //      xr hook ............ "window.__forge"     objects xr.js reads (VR, AR)
+//      screensaver ........ "window.snSaver"     shell saver: generate-a-planet tour
 // ============================================================================
 (async () => {
 "use strict";
@@ -512,7 +513,8 @@ resize();
 
 // Render loop: idle auto-spin, apply rotation to planet, atmosphere, the
 // placeholder globe and the scan ring, run tweens, frame the camera, draw.
-function anim(now){requestAnimationFrame(anim);if(!dr.d)dr.ry+=.0008;for(const m of [pmsh,amsh,holo,scanG]){m.rotation.x=dr.rx;m.rotation.y=dr.ry}runTweens(now||performance.now());fitCam(false);ren.render(scn,cam)}
+let spin=.0008; // idle spin per frame; the screensaver hook scales it by calm
+function anim(now){requestAnimationFrame(anim);if(!dr.d)dr.ry+=spin;for(const m of [pmsh,amsh,holo,scanG]){m.rotation.x=dr.rx;m.rotation.y=dr.ry}runTweens(now||performance.now());fitCam(false);ren.render(scn,cam)}
 anim();
 // xr.js (a module, lib/xr-view.js) reads these for the VR and AR view. They
 // are set here, after the shader fetch, so xr.js waits for them.
@@ -772,4 +774,50 @@ document.getElementById('batch-go').onclick=async function(){
 // Expose these two on window so the inline remove handler in each queue row
 // (onclick in renderQueue's markup) can reach them.
 window.batchQueue=batchQueue;window.renderQueue=renderQueue;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SCREENSAVER  (window.snSaver, the shell hook in lib/screensaver.js)
+// ═══════════════════════════════════════════════════════════════════════════════
+// enter() hides the topbar, both control bars, the sidebar and the overlays,
+// and makes #main and #viewport fill the window. The ResizeObserver on
+// #three-mount then sizes the renderer to the window. The autopilot clicks
+// #btn-gen with a seeded type, temperature and seed at 1024 x 512, about
+// three planets per dwell. Before each one it eases the atmosphere, the
+// city lights and the normal map down over 1.5 s, so the live paint starts
+// on a plain sphere. pulse() is a no-op: no shockwave flash. The spin, a
+// slow tilt sway and a sun drift scale by opts.calm (1 = slowest). No
+// exit(): the shell reloads the page on stop.
+window.snSaver={enter(opts){
+  const calm=Math.max(0,Math.min(1,opts&&opts.calm!=null?+opts.calm:0.7));
+  const secs=Math.max(20,+(opts&&opts.seconds)||60);
+  let s=((opts&&opts.seed)|0)||7;
+  const rnd=()=>{s=(s+0x6D2B79F5)|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296};
+  const st=document.createElement('style');
+  st.textContent='body>*:not(#app),#app>*:not(#main),#sidebar,#empty-state,#mob-sidebar-btn,#prog-wrap{display:none!important}'+
+    '#main,#viewport{position:fixed!important;inset:0!important}#viewport{cursor:none!important}';
+  document.head.appendChild(st);
+  pulse=function(){};
+  spin=.0008*(1.3-0.8*calm);
+  const TYPES=['terra','water','desert','gas_giant','ice','selena','ice_giant'];
+  const TEMPS={terra:[1,2,3],water:[1,2,3],desert:[0,1,2],gas_giant:[0,1,2,3,4],ice:[3,4],selena:[1,2,3],ice_giant:[2,3,4]};
+  let ti=Math.floor(rnd()*TYPES.length),busy=false;
+  const btn=document.getElementById('btn-gen');
+  const next=()=>{
+    if(busy)return;busy=true;
+    const type=TYPES[ti=(ti+1+Math.floor(rnd()*2))%TYPES.length],tl=TEMPS[type];
+    document.getElementById('sel-type').value=type;
+    document.getElementById('sel-temp').value=String(tl[Math.floor(rnd()*tl.length)]);
+    document.getElementById('inp-seed').value=String(1+Math.floor(rnd()*99998));
+    document.getElementById('sel-res').value='1024';
+    const a0=amat.uniforms.uIntensity.value,e0=pmat.emissiveIntensity,n0=pmat.normalScale.x;
+    tween(1500,e=>{amat.uniforms.uIntensity.value=a0*(1-e);pmat.emissiveIntensity=e0*(1-e);pmat.normalScale.set(n0*(1-e),n0*(1-e))});
+    setTimeout(async()=>{try{await btn.onclick.call(btn)}finally{busy=false}},curMaps?1600:0);
+  };
+  const t0=performance.now();let tp=t0;
+  (function drift(now){requestAnimationFrame(drift);const t=(now-t0)/1000,dt=Math.min(.1,(now-tp)/1000);tp=now;
+    dr.rx=.2+.18*Math.sin(t*.05*(1.2-.6*calm));sunPhi+=dt*.04*(1.2-.8*calm);updSun()})(t0);
+  next();
+  setInterval(next,Math.max(18,secs/3)*1000);
+  return {canvas:ren.domElement,warmupMs:1000};
+}};
 })();
