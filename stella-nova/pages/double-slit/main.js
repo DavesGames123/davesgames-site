@@ -61,6 +61,7 @@
 //      screen profile ...... "function drawProfile"   <ψ²> plot with axes
 //      control wiring ...... "function bindRange"     sliders → P
 //      main loop ........... "function loop"          requestAnimationFrame driver
+//      screensaver hook .... "window.snSaver"         lib/screensaver.js mode
 // ============================================================================
 
 // ── units and colour ────────────────────────────────────────────────────────
@@ -514,6 +515,25 @@ new ResizeObserver(()=>{clearTimeout(window._rt);window._rt=setTimeout(()=>{cons
 
 // Test hook for headless checks: the live state, read only by convention.
 window.__ds={get P(){return P},get u(){return u},get Iavg(){return Iavg},get NX(){return NX},get NY(){return NY},get step(){return stepN},get refA(){return refA},get refI(){return refI},screenX:()=>screenX(),sourceX:()=>sourceX(),fringeRows:l=>fringeRows(l)};
+
+// Screensaver hook (lib/screensaver.js has the protocol). The CSS under
+// html.sn-saver hides the panel, the profile and the overlays, so the field
+// fills the frame. init() re-grids to that size, then the sim runs ahead
+// under the shell's black cover until the fringes reach the screen column.
+// calm 1 gives one step per frame. The seed picks the slit count and gap.
+window.snSaver={async enter(o){
+  const calm=o&&o.calm!=null?o.calm:0.7,seed=(o&&o.seed)>>>0;
+  document.documentElement.classList.add('sn-saver');
+  $('preset-rgb').click();setPaused(false);P.plane=true;P.disp='amplitude';P.expo=0;buildTone();
+  P.slitMode=seed%4===3?'triple':'double';
+  setSlider('sl-ss',P.slitMode==='triple'?[60,72,84][(seed>>2)%3]:[90,111,130,150][(seed>>2)%4]);
+  setSlider('sl-spf',calm>=0.5?1:2);
+  init();
+  const need=(screenX()-sourceX())/P.dt+240,t0=performance.now();
+  while(stepN<need&&performance.now()-t0<4000){for(let k=0;k<40;k++){step();accumI();}autoRef();await new Promise(r=>setTimeout(r,0));}
+  for(let k=0;k<12;k++)autoRef();
+  return {canvas,warmupMs:1000};
+}};
 
 // Boot: a narrow field (a phone) uses 1 px cells, so the 40-cell PML and
 // the absorber do not take most of the grid. Then build the grid and start.

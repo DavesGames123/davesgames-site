@@ -18,6 +18,7 @@
      phone portrait ....... "PHONE PORTRAIT"
      phone landscape ...... "PHONE LANDSCAPE"
      touch targets ........ "pointer:coarse"
+     screensaver .......... "html.sn-saver"
    ========================================================================== */
 :root{
   --bg:#0a0c12;--bg2:#0d1018;--bg3:#121722;
@@ -150,3 +151,7 @@ input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;bac
   .eq-l,.sec h2,.prof-h,.sys-page{font-size:11px}
   .ctl output,.chan output{font-size:12px}
 }
+
+/* SCREENSAVER (lib/screensaver.js): the field alone fills the frame */
+html.sn-saver #panel,html.sn-saver #profile,html.sn-saver #readout,html.sn-saver #fxCanvas,html.sn-saver .topbar{display:none}
+html.sn-saver #waveCanvas{cursor:none}
