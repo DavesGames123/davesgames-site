@@ -8,9 +8,8 @@
 //
 //  The page loop (frame in main.js) runs on requestAnimationFrame and draws
 //  with one plain renderer.render, so in a session the lib runs it from the
-//  XR frame and three draws it for both eyes. The page camera is fixed at
-//  D0 = 100 in Å; its near plane of 1 would be 1 m in the headset, so on
-//  entry the near and far planes change to metres and on exit they go back.
+//  XR frame and three draws it for both eyes. The page camera is in Å; the
+//  lib holds the session near and far planes in metres (lib CLIP).
 //
 //  HEADSET PANEL run or pause, restart the fold, next protein, reset, exit.
 //  HOVER         the controller ray against a sphere round each replica
@@ -64,7 +63,6 @@ export function initXR(ctx) {
     if (xr.presenting) requestAnimationFrame(() => xr.reset());
   }
 
-  let saved = null;
   const xr = attachXR({
     renderer, scene, camera, controls,
     bounds: () => cube(ctx.bounds()), tableHeight: 0.7,
@@ -79,13 +77,6 @@ export function initXR(ctx) {
       if (kind !== 'hover') return false;
       const k = pickReplica(ray);
       return k >= 0 ? replicaName(k) : null;
-    },
-    onEnter() {
-      saved = { near: camera.near, far: camera.far };
-      camera.near = 0.01; camera.far = 100; camera.updateProjectionMatrix();
-    },
-    onExit() {
-      if (saved) { camera.near = saved.near; camera.far = saved.far; camera.updateProjectionMatrix(); saved = null; }
     },
     onSupport(s) { $('xrSec').hidden = !(s.vr || s.ar); },
   });
