@@ -17,6 +17,7 @@
 // grep: function relayout  function buildCover  function placeLabels
 //       function placeBlocks  function bestSpot  function switchTo  function frame
 //       function buildAtlas  const CAPTIONS  function captionHTML
+//       window.snSaver (shell screensaver hook)
 
 import { computeView, lonLatToScreen, metersPerScreenPx, viewCornersLonLat, coreOf } from './view.js';
 import { createLocator } from './locator.js';
@@ -96,6 +97,8 @@ let coverSrc = null;          // the canvas that holds the full mask at low res
 let locator = null;
 let locatorBlock = null;
 const metaCache = new Map();  // id -> meta (for the atlas)
+let saver = false;            // true in the shell screensaver (window.snSaver)
+let timeScale = 1;            // model-time rate; the screensaver slows it
 let renderScale = 1;          // backing store scale that the quality governor sets
 
 // Quality governor: fewer particles, then a smaller backing store, when the
@@ -795,8 +798,10 @@ async function switchTo(i, initial = false) {
   locIndex = i;
   const loc = locs[i];
   syncControls();
-  storeSet(loc.id);
-  if (location.hash.slice(1) !== loc.id) history.replaceState(null, '', '#' + loc.id);
+  if (!saver) {
+    storeSet(loc.id);
+    if (location.hash.slice(1) !== loc.id) history.replaceState(null, '', '#' + loc.id);
+  }
 
   fadeEl.classList.remove('clear');
   const slow = setTimeout(() => { if (token === switchToken) loadingEl.hidden = false; }, initial ? 0 : 380);
@@ -847,7 +852,7 @@ function frame(t) {
   if (!meta || !engine || !dataset) { governor.idle(rawMs); if (!meta) return; }
   const span = lastHour();
   if (playing && !scrubbing) {
-    hour += dt * (span / WEEK_SECONDS);
+    hour += dt * timeScale * (span / WEEK_SECONDS);
     if (hour >= span) hour -= span;
   }
   updateClockUI();
@@ -923,4 +928,28 @@ async function start() {
   requestAnimationFrame(frame);
 }
 
-start();
+// ─── screensaver ────────────────────────────────────────────────────────────
+// The shell screensaver (lib/screensaver.js) calls enter(). It hides the
+// controls and the sheets, keeps the title, legend and labels, and plays.
+// opts.seed picks the location. The switch fades through black, as a normal
+// switch does. calm 1 halves the model-time rate. In saver mode, switchTo()
+// does not write the URL hash or the session store.
+window.snSaver = {
+  async enter(opts) {
+    const calm = clamp(+opts.calm || 0, 0, 1);
+    await started;                  // the location list and the first dataset
+    saver = true;
+    timeScale = 1 / (1 + calm);
+    const st = document.createElement('style');
+    st.textContent = 'body.saver #controls,body.saver #caption,body.saver #atlas,body.saver #scrim,body.saver #loading{display:none!important}body.saver,body.saver #stage{cursor:none}';
+    document.head.appendChild(st);
+    document.body.classList.add('saver', 'idle');
+    setCaption(false); setAtlas(false);
+    setPlaying(true);
+    const i = (opts.seed >>> 0) % locs.length;
+    if (i !== locIndex) await switchTo(i);
+    return { canvas, warmupMs: 1500 };
+  },
+};
+
+const started = start();
