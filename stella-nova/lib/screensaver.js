@@ -494,7 +494,7 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 //   tex, rules            TeX equations, typeset as MathJax SVG through
 //                         lib/sci-math.js, coloured by rules [[sym, 'mN']]
 //   eq                    plain Unicode equations: the fallback when no tex
-//   anchor                { x, y, r, pts? } in page CSS px, or a function
+//   anchor                { x, y, r | w h, pts? } in page CSS px, or a function
 //                         that returns it each frame: the subject on
 //                         screen; pts are key points (nuclei, a gear
 //                         centre): the leader goes to the nearest one
@@ -595,7 +595,10 @@ function plateAnchor() {
   if (!v || !isFinite(v.x) || !isFinite(v.y)) return null;
   const f = document.querySelector('#frame-wrap iframe'), o = f ? f.getBoundingClientRect() : { left: 0, top: 0 };
   const pts = Array.isArray(v.pts) ? v.pts.filter(q => q && isFinite(q.x) && isFinite(q.y)).map(q => ({ x: q.x + o.left, y: q.y + o.top })) : null;
-  return { x: v.x + o.left, y: v.y + o.top, r: Math.max(0, +v.r || 0), pts: pts && pts.length ? pts : null };
+  // A rectangle (w, h round x, y) fits a tall or thin subject better than
+  // a circle. r stays the circle radius, or half the diagonal of the box.
+  const hw = +v.w > 0 ? v.w / 2 : 0, hh = +v.h > 0 ? v.h / 2 : 0, box = hw > 0 && hh > 0;
+  return { x: v.x + o.left, y: v.y + o.top, r: box && !(+v.r > 0) ? Math.hypot(hw, hh) : Math.max(0, +v.r || 0), box, hw, hh, pts: pts && pts.length ? pts : null };
 }
 // Choose a spot beside the subject: never over its circle when one fits,
 // inside the window, and the same side as before unless it no longer fits.
@@ -613,7 +616,8 @@ function placePlate(snap, dt = 0) {
     const cands = phone
       ? [['top', (W - pw) / 2, M], ['bottom', (W - pw) / 2, H - ph - M]]
       : [[0, 1, 0], [180, -1, 0], [-35, .82, -.57], [35, .82, .57], [-145, -.82, -.57], [145, -.82, .57], [-90, 0, -1], [90, 0, 1]].map(([k, dx, dy]) => {
-          const px = a.x + dx * (a.r + gap), py = a.y + dy * (a.r + gap);
+          const ex = a.box ? a.hw : a.r, ey = a.box ? a.hh : a.r;
+          const px = a.x + dx * (ex + gap), py = a.y + dy * (ey + gap);
           return [k, px - (dx < -.3 ? pw : dx > .3 ? 0 : pw / 2), py - (dy < -.3 ? ph : dy > .3 ? 0 : ph / 2)];
         });
     let best = null;
@@ -624,7 +628,11 @@ function placePlate(snap, dt = 0) {
       // the edge of the cloud.
       const dist = (px, py) => Math.hypot(px - Math.max(x, Math.min(px, x + pw)), py - Math.max(y, Math.min(py, y + ph)));
       const d = dist(a.x, a.y), dp = a.pts ? Math.min(...a.pts.map(q => dist(q.x, q.y))) : Infinity;
-      let score = (d < a.r + 8 ? 1e6 + (a.r + 8 - d) * 100 : 0) + (dp < 24 ? 2e6 + (24 - dp) * 1000 : 0) + Math.hypot(x - x0, y - y0) * 2 - Math.min(d, 400) * 0.2 - Math.min(dp, 300) * 0.5;
+      // sep: the clear space between the plate and the subject (circle or box).
+      const sep = a.box ? Math.hypot(Math.max(0, a.x - a.hw - (x + pw), x - (a.x + a.hw)), Math.max(0, a.y - a.hh - (y + ph), y - (a.y + a.hh)))
+        - (Math.max(0, a.x - a.hw - (x + pw), x - (a.x + a.hw)) === 0 && Math.max(0, a.y - a.hh - (y + ph), y - (a.y + a.hh)) === 0 ? Math.min(a.hw, a.hh) : 0)
+        : d - a.r;
+      let score = (sep < 8 ? 1e6 + (8 - sep) * 100 : 0) + (dp < 24 ? 2e6 + (24 - dp) * 1000 : 0) + Math.hypot(x - x0, y - y0) * 2 - Math.min(d, 400) * 0.2 - Math.min(dp, 300) * 0.5;
       if (k === plate.side) score -= 60;   // keep the side unless another is clearly better
       if (!best || score < best.score) best = { k, x, y, score };
     }
@@ -652,6 +660,18 @@ function placePlate(snap, dt = 0) {
       plate.lead = { qx, qy, ex, ey, to: 'pt', d };
       if (d > ring + 14) {
         lead.innerHTML = `<line x1="${qx.toFixed(1)}" y1="${qy.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"/><circle cx="${best.q.x.toFixed(1)}" cy="${best.q.y.toFixed(1)}" r="${ring}"/>`;
+        lead.classList.add('on');
+      } else lead.classList.remove('on');
+      return;
+    }
+    if (a.box) {
+      // The nearest point of the subject box to the plate, 4 px outside it.
+      const bx = Math.max(a.x - a.hw, Math.min(qx, a.x + a.hw)), by = Math.max(a.y - a.hh, Math.min(qy, a.y + a.hh));
+      const ux = qx - bx, uy = qy - by, k = Math.hypot(ux, uy) || 1;
+      ex = bx + ux / k * 4; ey = by + uy / k * 4; d = k;
+      plate.lead = { qx, qy, ex, ey, box: true, d };
+      if (k > 14) {
+        lead.innerHTML = `<line x1="${qx.toFixed(1)}" y1="${qy.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"/><circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="${ring}"/>`;
         lead.classList.add('on');
       } else lead.classList.remove('on');
       return;
