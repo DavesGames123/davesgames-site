@@ -960,19 +960,45 @@ const SAVER_GROWTH = ['G(u) = 2(1 − (u − m)²/9s²)₊⁴ − 1', 'G(u) = 2 
 const SAVER_CORE = ['k(r) = (4r(1 − r))⁴', 'k(r) = exp(4 − 1/(r(1 − r)))', 'k(r) = 1 if ¼ ≤ r ≤ ¾, else 0',
   'k(r) = 1 if ¼ ≤ r ≤ ¾, ½ if r < ¼, else 0'];
 // The values on the plate are the live rule (S.rule), so a slider change in
-// the panel shows here too.
+// the panel shows here too. tex is the panel TeX (GENERAL, growthTeX,
+// CORE_TEX) in the RULES colours. The growth line holds the values of m
+// and s already, so the plate gets the symbol form.
 function saverLabel(label) {
   const c = S.c;
   if (!label || !c) return;
   const R = Math.round(c.R * S.rule.scale * det() * 10) / 10;
-  const lines = [`m = ${S.rule.m.toFixed(3)} · s = ${S.rule.s.toFixed(4)} · T = ${S.rule.T}`,
-    `R = ${R} · β = (${c.b.map(v => +v.toFixed(3)).join(', ')}) · B = ${c.b.length}`];
-  if (c.cls === 'grow') lines.push('grows without limit');
+  const params = [
+    { sym: 'm', name: 'growth centre', value: S.rule.m.toFixed(3), cls: 'm5' },
+    { sym: 's', name: 'growth width', value: S.rule.s.toFixed(4), cls: 'm6' },
+    { sym: 'T', name: 'time resolution', value: String(S.rule.T), cls: 'm4' },
+    { sym: 'R', name: 'kernel radius', value: R + ' cells' },
+  ];
+  if (c.b.length > 1) params.push({ sym: '\\beta', name: 'ring heights', value: '(' + c.b.map(v => +v.toFixed(3)).join(', ') + ')' });
+  const growth = [String.raw`G(u) = 2\Big(1 - \tfrac{(u-m)^2}{9 s^2}\Big)_+^4 - 1`, String.raw`G(u) = 2\exp\!\Big(-\tfrac{(u-m)^2}{2 s^2}\Big) - 1`,
+    String.raw`G(u) = \pm 1,\ +1 \text{ if } |u-m| \le s`][c.gn - 1] || '';
   label({
-    title: c.name, sub: `Lenia · ${c.code}${c.cname ? ' · ' + c.cname : ''}`, lines,
+    title: c.name, sub: `Lenia · ${c.code}${c.cname ? ' · ' + c.cname : ''}`, params,
+    lines: c.cls === 'grow' ? ['Grows without limit'] : [],
+    tex: [GENERAL, growth, CORE_TEX[c.kn - 1] || CORE_TEX[0]].filter(Boolean), rules: RULES,
     eq: ['A(t + Δt) = clip₀¹[A(t) + (1/T)·G(K ∗ A(t))]', SAVER_GROWTH[c.gn - 1] || SAVER_GROWTH[0],
       'K(r) = β⌊Br/R⌋ · k(Br/R mod 1)', SAVER_CORE[c.kn - 1] || SAVER_CORE[0]],
+    anchor: c.cls === 'grow' ? null : creatureAnchor,
   });
+}
+// The creature on screen, for the shell's label plate, from the stats that
+// the follow camera reads. The centre is the centroid moved forward by the
+// velocity (as in frame()), mapped as the render shader does: canvas
+// centre + offset + (cell - view centre) x cellPx. r is twice the larger
+// circular standard deviation (a disc of radius a has sigma a / 2). Null
+// when the mass is spread over the torus (focus <= 0.2). Page CSS px.
+function creatureAnchor() {
+  const st = S.stats, E = S.engine;
+  if (!E || !st || st.mass < 1e-3 || st.focus <= 0.2 || st.sx == null) return null;
+  const rc = $('gl').getBoundingClientRect(), { W, H } = E.info, v = E.view, k = E.cellPx(), age = S.time - S.statT;
+  const tx = st.cx + S.vel.x * age, ty = st.cy + S.vel.y * age;
+  const x = rc.left + rc.width / 2 + v.ox + wrapDelta(tx - v.cx, W) * k, y = rc.top + rc.height / 2 + v.oy + wrapDelta(ty - v.cy, H) * k;
+  if (x < rc.left || x > rc.right || y < rc.top || y > rc.bottom) return null;
+  return { x, y, r: 2 * Math.max(st.sx, st.sy) * k, pts: [{ x, y }] };
 }
 window.snSaver = {
   async enter(opts) {

@@ -31,9 +31,11 @@
 //                                  op 'set': write the cells where patch > 0
 //                                  op 'erase': A = mix(A, 0, patch)
 //   engine.step(n)                 n steps in one command buffer
-//   engine.stats()                 Promise<{mass, cx, cy, max, rms}> or null
-//                                  when a readback is still in flight.
-//                                  cx, cy: the circular mean of A, in cells.
+//   engine.stats()                 Promise<{mass, cx, cy, sx, sy, max, rms,
+//                                  focus}> or null when a readback is still
+//                                  in flight. cx, cy: the circular mean of A,
+//                                  in cells. sx, sy: the circular standard
+//                                  deviation of A about it, in cells.
 //   engine.readState()             Promise<Float32Array(W * H)>
 //   engine.setView({mode, palette, zoom, cx, cy, ox, oy})
 //                                  mode 'world' | 'potential' | 'growth';
@@ -553,9 +555,13 @@ export async function createEngine(canvas, { mobile = false } = {}) {
       }
       const ang = (s, c, n) => ((Math.atan2(s, c) / (2 * Math.PI) + 1) % 1) * n;
       const N = info.W * info.H;
+      // The wrapped normal: a resultant length rl = exp(-sigma^2 / 2) in
+      // radians, so sigma = sqrt(-2 ln rl), times n / 2 pi for cells.
+      const sd = (s, c, n) => { const rl = mass > 0 ? Math.min(1, Math.hypot(s, c) / mass) : 0; return rl > 0 ? Math.sqrt(-2 * Math.log(rl)) * n / (2 * Math.PI) : n; };
       return {
         mass, max, rms: Math.sqrt(sq / N),
         cx: ang(sxx, cxx, info.W), cy: ang(syy, cyy, info.H),
+        sx: sd(sxx, cxx, info.W), sy: sd(syy, cyy, info.H),
         // 1 when the mass sits in one spot, near 0 when it is spread over the torus.
         focus: mass > 0 ? Math.min(Math.hypot(cxx, sxx), Math.hypot(cyy, syy)) / mass : 0,
       };
