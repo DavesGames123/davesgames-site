@@ -744,24 +744,46 @@
   function saverPlate() {
     if (!saverLabel) return;
     const M = model(), gname = { z: 'Z grid', zy: 'Z + Y grid', y: 'Y grid' }[S.grid] || 'Z grid';
-    const lines = ['Z₀ = ' + fmtN(S.z0) + ' Ω · f = ' + fmtEng(S.f, 'Hz', 4)];
+    // Parameters: TeX symbol, short name, live value. The classes are those
+    // of typeset.mjs: Z_0 m1, Z_L and Z_in m3, Gamma m4, ell m2, lambda m6, f m5.
+    const params = [];
     if (M.ok) {
-      const m = abs(M.g), gd = v => deg(arg(v)).toFixed(1) + '°', rl = RF.returnLossDb(m);
-      lines.push('Z_L = ' + fmtC(M.Z, 'Ω') + ' · z = ' + fmtC(M.z));
-      lines.push('Γ = ' + m.toFixed(3) + ' ∠ ' + gd(M.g) + ' · VSWR = ' + fmtVswr(m) + ' · return loss ' + (isFinite(rl) ? rl.toFixed(1) + ' dB' : '∞'));
-      lines.push('ℓ = ' + M.len.toFixed(3) + ' λ toward the generator · Γ_in ∠ ' + gd(M.gin));
-      lines.push('Z_in = ' + fmtC(M.Zin, 'Ω'));
+      const m = abs(M.g), gd = v => deg(arg(v)).toFixed(1) + '°';
+      params.push({ sym: 'Z_L', name: 'load', value: fmtC(M.Z, 'Ω'), cls: 'm3' },
+        { sym: '\\Gamma', name: 'reflection', value: m.toFixed(3) + ' ∠ ' + gd(M.g), cls: 'm4' },
+        { sym: '\\mathrm{VSWR}', name: 'standing wave ratio', value: fmtVswr(m) },
+        { sym: '\\ell', name: 'line length', value: M.len.toFixed(3) + ' λ', cls: 'm2' },
+        { sym: 'Z_{in}', name: 'input', value: fmtC(M.Zin, 'Ω'), cls: 'm3' });
     }
     saverLabel({
       title: 'Smith chart · ' + gname,
-      sub: 'lossless line · the load moves on a slow loop in the Γ plane',
-      lines,
+      sub: 'Lossless line. The load moves on a slow loop in the Γ plane.',
+      params,
+      lines: ['Z₀ = ' + fmtN(S.z0) + ' Ω, f = ' + fmtEng(S.f, 'Hz', 4) + '. The line turns Γ toward the generator.'],
+      tex: [String.raw`\Gamma=\frac{Z_L-Z_0}{Z_L+Z_0}=|\Gamma|\,e^{j\theta}`,
+        String.raw`Z_{in}=Z_0\,\frac{Z_L+jZ_0\tan\beta\ell}{Z_0+jZ_L\tan\beta\ell}`,
+        String.raw`\mathrm{VSWR}=\frac{1+|\Gamma|}{1-|\Gamma|}`,
+        String.raw`\beta\ell=\frac{2\pi\ell}{\lambda}`],
+      rules: [['Z_L', 'm3'], ['Z_{in}', 'm3'], ['Z_0', 'm1'], ['\\Gamma', 'm4'], ['\\ell', 'm2'], ['\\lambda', 'm6']],
       eq: ['Γ = (Z − Z₀)/(Z + Z₀) = (z − 1)/(z + 1)',
         'VSWR = (1 + |Γ|)/(1 − |Γ|),   RL = −20 log₁₀|Γ|',
         'Γ_in = Γ e^(−j4πℓ/λ)',
         'Z_in = Z₀ (1 + Γ_in)/(1 − Γ_in)'],
+      anchor: chartAnchor,
     });
   }
+  // The chart on screen, for the plate leader: the unit circle at view.cx,
+  // view.cy with radius view.R (canvas px, page px after the canvas offset).
+  // The key points are the load point Gamma and Gamma_in, as toX and toY
+  // draw them (the chart centre only when the model has no load).
+  function chartAnchor() {
+    if (!view.ready) return null;
+    const b = canvas.getBoundingClientRect(), M = model(), pts = [];
+    if (M.ok) { pts.push({ x: b.left + toX(M.g), y: b.top + toY(M.g) }); if (M.gin) pts.push({ x: b.left + toX(M.gin), y: b.top + toY(M.gin) }); }
+    if (!pts.length) pts.push({ x: b.left + view.cx, y: b.top + view.cy });
+    return { x: b.left + view.cx, y: b.top + view.cy, r: view.R, pts };
+  }
+
 
   // ------------------------------------------------------------------- boot
   window.addEventListener('resize', resize);
