@@ -24,7 +24,11 @@
 //  the shell screensaver (lib/screensaver.js). enter() hides the page, adds
 //  one full-window canvas and draws one calm cell into it on each frame.
 //    spec.saver = { cells: [calm cell names], tempo: [at calm 0, at calm 1],
-//                   dpr: pixel-ratio cap, warmup: ms before a recording }
+//                   dpr: pixel-ratio cap, warmup: ms before a recording,
+//                   gens: { id: { fn, period, amp, bias } } generator settings,
+//                   knobs: [k0..k3 or null] knob values for the saver cell }
+//  A gens period is multiplied by (0.5 + calm). PAGE.saver(t, opts), if the
+//  PAGE has it, sets page state (for example the source) for the saver cell.
 //  A page with no spec.saver gets the generic screensaver mode.
 //
 //  grep -n targets: "function frame", "function sizeSurf", "function makeSurface",
@@ -324,6 +328,9 @@ export async function bootTable(PAGE, data) {
       for (let i = 0; i <= 200; i++) { const e = Math.abs(tg.map(i / 200) - want); if (e < err) { err = e; best = i / 200; } }
       tg.fn = 'flat'; tg.bias = best;
     }
+    for (const g of GENS) { const o = (cfg.gens || {})[g.id]; if (o) { Object.assign(g, o); if (o.period) g.period = o.period * (0.5 + calm); } }
+    (cfg.knobs || []).forEach((v, i) => { if (v !== null) t.knobs[i] = v; });
+    if (PAGE.saver) PAGE.saver(t, opts);
     const style = document.createElement('style');
     style.textContent = `html.tbl-saver, html.tbl-saver body { background: #000 !important; overflow: hidden !important; cursor: none !important; }
 html.tbl-saver body > :not(.tbl-saver-canvas) { display: none !important; }
