@@ -79,20 +79,27 @@ function notchSpan(a, w) {
 }
 
 // a ribbon on the housing running face from z0 to z1, over the parameter
-// ranges given (radians); drawn with a polygon offset over the wall
+// ranges given (radians). The ribbon is RUN_IN mm in from the wall, and its
+// material has a polygon offset. On the wall surface with only the polygon
+// offset, the wall showed through the ribbon in streaks (z-fighting).
+const RUN_IN = 0.12;
 function runningFace(ranges, z0, z1) {
   const pos = [], idx = [];
   for (const [a0, a1] of ranges) {
     const n = Math.max(2, Math.ceil((a1 - a0) / TAU * 720)), base = pos.length / 3;
-    for (let i = 0; i <= n; i++) { const p = E.housingPt(a0 + (a1 - a0) * i / n); pos.push(p[0], p[1], z0, p[0], p[1], z1); }
-    for (let i = 0; i < n; i++) { const a = base + i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+    for (let i = 0; i <= n; i++) {
+      const a = a0 + (a1 - a0) * i / n, p = E.housingPt(a), q = E.housingNormal(a), x = p[0] - q[0] * RUN_IN, y = p[1] - q[1] * RUN_IN;
+      pos.push(x, y, z0, x, y, z1);
+    }
+    // the winding makes the front faces point into the cavity. With the
+    // other winding, the camera in the cavity saw only back faces, and the
+    // renderer culled the full running face.
+    for (let i = 0; i < n; i++) { const a = base + i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
-  g.computeVertexNormals();
-  // the normals face the cavity (inward): flip them
-  const nn = g.attributes.normal.array; for (let i = 0; i < nn.length; i++) nn[i] = -nn[i];
+  g.computeVertexNormals();   // from the winding: into the cavity
   return g;
 }
 
@@ -206,11 +213,15 @@ export function build(B, V) {
       const pos = [], idx = [];
       for (let k = 0; k < 3; k++) {
         const mid = Math.PI / 3 + k * TAU / 3, span = GEO.pocket.half * 0.98, m = 40, base = pos.length / 3;
+        // 0.2 mm above the recess floor: more than the chord sag and the
+        // depth step at the far camera, so the skin does not z-fight
         for (let i = 0; i <= m; i++) {
-          const psi = mid - span + 2 * span * i / m, r = E.flankR(psi) - GEO.clr - E.pocketDepth(psi) + 0.05;
+          const psi = mid - span + 2 * span * i / m, r = E.flankR(psi) - GEO.clr - E.pocketDepth(psi) + 0.2;
           pos.push(r * Math.cos(psi), r * Math.sin(psi), zP0 + 0.3, r * Math.cos(psi), r * Math.sin(psi), zP1 - 0.3);
         }
-        for (let i = 0; i < m; i++) { const a = base + i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+        // front faces point out of the rotor, to the chamber (the other
+        // winding pointed in, and the renderer culled the skin)
+        for (let i = 0; i < m; i++) { const a = base + i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
       }
       const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
       B.mesh(pk, g, 'soot', { shadow: false });
@@ -348,7 +359,11 @@ export function build(B, V) {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
       g.setIndex(idx);
-      const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide });
+      // The arc wall of the gas lies 0.18 mm in front of the running-face
+      // ribbon. Seen at a grazing angle, that gap is less than one depth step,
+      // so the gas fought with the ribbon in streaks. The polygon offset is
+      // larger than the offset of the ribbon (-1, -2), so the gas wins.
+      const m = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
       const mesh = new THREE.Mesh(g, m);
       mesh.userData.ownAlpha = true; mesh.castShadow = false; mesh.renderOrder = 2; mesh.frustumCulled = false;
       u.g.add(mesh);
@@ -357,6 +372,7 @@ export function build(B, V) {
     }
     return out;
   }
+  const GAS_IN = 0.3;   // mm, the gap between the gas and the walls round it
   const strokeCol = E.STROKES.map(s => new THREE.Color(s.col));
   const flameCol = new THREE.Color(0xffd27a);
   function poseGas(u, a, ch, op) {
@@ -364,9 +380,14 @@ export function build(B, V) {
       const G = u.gas[k], c = ch[k];
       G.mesh.visible = op > 0.01;
       if (!G.mesh.visible) continue;
-      const pts = E.chamberPoly(a + k * TAU / 3, G.n), NP = pts.length;
+      // The gas walls must not touch the housing wall or the flank: on the
+      // same surface the depth test gave a z-fight band at each gas vertex.
+      // The flank side moves GAS_IN out of the rotor, the arc side moves
+      // GAS_IN in from the housing along its normal.
+      const a0 = a + k * TAU / 3, pts = E.chamberPoly(a0, G.n, { clr: GEO.clr - GAS_IN }), NP = pts.length;
       for (let i = 0; i < NP; i++) {
         const p = pts[i];
+        if (i <= G.n) { const q = E.housingNormal(a0 + i / G.n * TAU / 3); p[0] -= q[0] * GAS_IN; p[1] -= q[1] * GAS_IN; }
         G.pos.set([p[0], p[1], G.z0], i * 3);
         G.pos.set([p[0], p[1], G.z1], (i + NP) * 3);
       }

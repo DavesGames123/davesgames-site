@@ -88,6 +88,9 @@ export function createStage(o) {
     rim.position.set(-R, -R * 0.5, -R);
     Object.assign(key.shadow.camera, { left: -1.6 * R, right: 1.6 * R, top: 1.6 * R, bottom: -1.6 * R, near: R * 0.5, far: R * 5 });
     key.shadow.camera.updateProjectionMatrix();
+    // depth precision follows the near plane: scale it with the model
+    // (controls.minDistance is 120 mm, so the near plane never cuts the model)
+    camera.near = Math.max(2, R * 0.06); camera.far = R * 60; camera.updateProjectionMatrix();
   };
 
   st.flyTo = ({ az, el, r, target, t = 1.4 }) => {

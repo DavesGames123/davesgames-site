@@ -43,15 +43,19 @@ function canvasTex(n, draw, rep = [1, 1]) {
 function textures() {
   if (TEX) return TEX;
   let s = 11; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+  // A roughness map multiplies the roughness value of its material. The
+  // texel mean is near 1 (about 0.9), so MAT_DEF keeps the roughness that it
+  // gives. A mean near 0.57 made each textured metal about half as rough,
+  // and the flat faces then showed the dark studio as almost black.
   // cast aluminium: a fine speckle for the roughness of the housings
   const cast = canvasTex(256, (g, n) => {
     const img = g.createImageData(n, n);
-    for (let i = 0; i < n * n; i++) { const v = 150 + (rnd() - 0.5) * 70; img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255; }
+    for (let i = 0; i < n * n; i++) { const v = 232 + (rnd() - 0.5) * 44; img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255; }
     g.putImageData(img, 0, 0);
   }, [0.02, 0.02]);
   // ground finish: fine lines for the shaft, the gears and the rotor faces
   const ground = canvasTex(256, (g, n) => {
-    for (let y = 0; y < n; y++) { const v = 140 + 45 * Math.sin(y * 1.9) * Math.sin(y * 0.11) + (rnd() - 0.5) * 34; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, n, 1); }
+    for (let y = 0; y < n; y++) { const v = 222 + 22 * Math.sin(y * 1.9) * Math.sin(y * 0.11) + (rnd() - 0.5) * 20; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(0, y, n, 1); }
   }, [0.03, 0.03]);
   TEX = { cast, ground };
   return TEX;
