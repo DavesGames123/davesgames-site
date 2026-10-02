@@ -12,7 +12,10 @@
 //      aux ..... extra fields merged into ctx (for example noisePack, photos)
 //
 //  PAGE hooks (all optional except init/draw): init(ctx), draw(enc,t,surf,rect,
-//  dpr,dt,now,moving), tick(dt,now), leave(t), knob(t,i), source(t), library().
+//  dpr,dt,now,moving), tick(dt,now), leave(t), knob(t,i), source(t), library(),
+//  inspect(t). inspect(t) runs when the inspector opens on cell t, after the
+//  engine fills the name, the WGSL and the knobs. A page uses it to add its own
+//  cell docs (field-table: TeX equations). A page with no inspect gets no change.
 //  ctx gives the PAGE the device, format, tiles, G, PACK, STYLES, helpers and
 //  the aux fields. The engine reads no DOM data; main.js fetches it and passes it.
 //
@@ -201,6 +204,7 @@ export async function bootTable(PAGE, data) {
       w.querySelector('input').addEventListener('input', e => { t.knobs[i] = +e.target.value; t.dirty = true; w.querySelector('output').textContent = t.knobs[i].toFixed(2); if (PAGE.knob) PAGE.knob(t, i); });
       kn.appendChild(w);
     });
+    if (PAGE.inspect) PAGE.inspect(t);
     modal.classList.add('open'); $('m-close').focus();
   }
   function close() { modal.classList.remove('open'); inspected = null; }
