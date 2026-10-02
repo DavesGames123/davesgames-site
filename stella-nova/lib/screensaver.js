@@ -158,17 +158,41 @@ body.sn-saver-on #content { width: 100vw; height: 100vh; }
 body.sn-saver-on.sn-saver-nocursor, body.sn-saver-on.sn-saver-nocursor * { cursor: none !important; }
 #sn-saver-cover { position: fixed; inset: 0; background: #000; opacity: 0; pointer-events: none; z-index: 9000; transition: opacity var(--fade, 1.2s) ease; }
 #sn-saver-cover.on { opacity: 1; }
-#sn-saver-cap { position: fixed; left: 40px; bottom: 34px; z-index: 9001; pointer-events: none; font-family: var(--f-sans, system-ui); color: #eef3fb; opacity: 0; transition: opacity 1.6s ease; text-shadow: 0 1px 12px rgba(0,0,0,.8); }
+#sn-saver-cap { position: fixed; left: 40px; bottom: 34px; z-index: 9001; pointer-events: none; font-family: 'Inter', var(--f-sans, system-ui), sans-serif; color: #eef3fb; opacity: 0; transition: opacity 1.6s ease; text-shadow: 0 1px 12px rgba(0,0,0,.8); }
 #sn-saver-cap.on { opacity: .85; }
-#sn-saver-cap b { display: block; font-weight: 300; font-size: 1.6rem; letter-spacing: .04em; }
-#sn-saver-cap i { display: block; font: 500 .7rem/1.6 var(--f-mono, monospace); letter-spacing: .22em; text-transform: uppercase; font-style: normal; color: var(--c, #7f91ad); }
-#sn-saver-label { position: fixed; right: 40px; bottom: 34px; z-index: 9001; max-width: min(460px, 38vw); pointer-events: none; padding: 14px 18px 15px; border-radius: 12px; background: rgba(6,8,13,.55); border: 1px solid rgba(150,200,255,.12); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); color: #dfe8f5; font-family: var(--f-sans, system-ui); opacity: 0; transform: translateY(6px); transition: opacity 1.2s ease, transform 1.2s ease; }
-#sn-saver-label.on { opacity: .92; transform: none; }
-#sn-saver-label b { display: block; font-weight: 500; font-size: 1.05rem; color: #fff; }
-#sn-saver-label i { display: block; font-style: normal; font: 500 .66rem/1.5 var(--f-mono, monospace); letter-spacing: .16em; text-transform: uppercase; color: var(--c, #8ec5ff); margin-top: 2px; }
-#sn-saver-label p { font-size: .82rem; line-height: 1.45; color: #b9c7db; margin-top: 6px; white-space: pre-wrap; }
-#sn-saver-label code { display: block; font: 400 .92rem/1.5 'IBM Plex Mono', var(--f-mono, monospace); color: #eef3fb; margin-top: 6px; white-space: pre-wrap; }
-@media (max-width: 760px) { #sn-saver-label { left: 16px; right: 16px; bottom: 16px; max-width: none; } }
+#sn-saver-cap b { display: block; font: 400 1.6rem/1.2 'STIX Two Text', Georgia, serif; }
+#sn-saver-cap i { display: block; font: 400 .8rem/1.6 'Inter', system-ui, sans-serif; font-style: normal; color: var(--c, #7f91ad); }
+#sn-saver-label { position: fixed; left: 0; top: 0; z-index: 9001; width: max-content; min-width: 220px; max-width: min(400px, 34vw); pointer-events: none; padding: 16px 18px 14px; border-radius: 12px; background: rgba(7,9,14,.72); border: 1px solid rgba(255,255,255,.09); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); color: #dfe6ef; font: 400 13px/1.45 'Inter', system-ui, sans-serif; opacity: 0; transition: opacity 1s ease; will-change: transform; }
+#sn-saver-label.on { opacity: .96; }
+#sn-saver-label header b { display: block; font: 400 1.35rem/1.2 'STIX Two Text', Georgia, serif; color: #f4f6fa; }
+#sn-saver-label header i { display: block; font-style: normal; font-size: .8rem; color: #8d98a8; margin-top: 3px; }
+#sn-saver-label header i::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--c, #8ec5ff); margin-right: 7px; vertical-align: 1px; }
+#sn-saver-label section { margin-top: 12px; padding-top: 11px; border-top: 1px solid rgba(255,255,255,.08); }
+#sn-saver-label dl { display: grid; grid-template-columns: auto 1fr auto; gap: 5px 10px; align-items: baseline; margin: 0; }
+#sn-saver-label dt { display: contents; }
+#sn-saver-label dt .sym { min-width: 18px; font-size: 1.02rem; color: #eef2f6; line-height: 1; }
+#sn-saver-label dt small { font-size: .76rem; color: #8d98a8; }
+#sn-saver-label dd { margin: 0; text-align: right; font: 400 .8rem ui-monospace, 'SF Mono', Menlo, monospace; color: #e6ecf3; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#sn-saver-label p { margin: 0; font-size: .8rem; color: #a3adbb; }
+#sn-saver-label p + p { margin-top: 4px; }
+#sn-saver-label .eqs { display: grid; gap: 8px; font-size: 1.02rem; color: #eef2f6; }
+#sn-saver-label .eq { line-height: 0; overflow: hidden; }
+#sn-saver-label .eq svg { max-width: 100%; height: auto; overflow: visible; }
+#sn-saver-label .eq.raw, #sn-saver-label code { line-height: 1.5; font: 400 .82rem/1.5 ui-monospace, 'SF Mono', Menlo, monospace; color: #c9d2de; white-space: pre-wrap; display: block; }
+#sn-saver-label .m1 { color: #62c4ff; fill: #62c4ff; } #sn-saver-label .m2 { color: #ff9a62; fill: #ff9a62; } #sn-saver-label .m3 { color: #86dc7c; fill: #86dc7c; }
+#sn-saver-label .m4 { color: #e889dc; fill: #e889dc; } #sn-saver-label .m5 { color: #ffd666; fill: #ffd666; } #sn-saver-label .m6 { color: #a8a4ff; fill: #a8a4ff; }
+#sn-saver-lead { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 9000; pointer-events: none; opacity: 0; transition: opacity 1s ease; }
+#sn-saver-lead.on { opacity: .9; }
+#sn-saver-lead line { stroke: rgba(235,240,247,.75); stroke-width: 1.1; }
+#sn-saver-lead circle { fill: none; stroke: rgba(235,240,247,.75); stroke-width: 1.25; }
+@media (max-width: 760px), (max-height: 520px) {
+  #sn-saver-label { max-width: calc(100vw - 24px); min-width: 0; padding: 12px 14px 10px; font-size: 12px; }
+  #sn-saver-label header b { font-size: 1.1rem; }
+  #sn-saver-label section { margin-top: 8px; padding-top: 8px; }
+  #sn-saver-label .eqs { font-size: .9rem; gap: 6px; }
+  #sn-saver-label section.notes, #sn-saver-label .eqs .eq:nth-child(n+3) { display: none; }
+  #sn-saver-cap { left: 16px; bottom: 16px; }
+}
 #sn-saver-hud { position: fixed; right: 18px; top: 14px; z-index: 9001; font: 500 .7rem/1.4 var(--f-mono, monospace); color: #9fb3d1; background: rgba(8,10,16,.7); border: 1px solid rgba(150,200,255,.18); border-radius: 8px; padding: 6px 10px; pointer-events: none; }
 #sn-saver-hud[hidden] { display: none; }
 #sn-saver-menu { position: fixed; inset: 0; z-index: 9500; display: grid; place-items: center; background: rgba(3,5,9,.66); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
@@ -461,28 +485,185 @@ async function showPage(key) {
 
 function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 
-// The label plate: fade out, swap the text, fade in. The page colour of the
-// run tints the subtitle.
-let labelTimer = 0;
+// ── label plate ────────────────────────────────────────────────────────────
+// The page names what is on screen with opts.label(info). Fields:
+//   title, sub            the name and one plain line under it
+//   params                [{ sym, name, value, cls }]: sym is TeX (typeset
+//                         inline), cls one of m1..m6, value plain text
+//   lines                 short plain notes
+//   tex, rules            TeX equations, typeset as MathJax SVG through
+//                         lib/sci-math.js, coloured by rules [[sym, 'mN']]
+//   eq                    plain Unicode equations: the fallback when no tex
+//   anchor                { x, y, r, pts? } in page CSS px, or a function
+//                         that returns it each frame: the subject on
+//                         screen; pts are key points (nuclei, a gear
+//                         centre): the leader goes to the nearest one
+// Three sections (title, parameters, equations) with a rule between them.
+// With an anchor, the plate sits beside the subject on the side with the
+// most room, follows it, and a leader line points at its edge. Without one,
+// it sits at the lower right. On a phone it docks at the top or the base,
+// whichever is further from the subject.
+let labelTimer = 0, plate = null, plateRAF = 0, plateT = 0;
+const PLATE_PHONE = matchMedia('(max-width: 760px), (max-height: 520px)');
+const texCache = new Map();
+let sciMath = null;
+function loadSciMath() {
+  if (!sciMath) sciMath = import(new URL('lib/sci-math.js', document.baseURI).href).catch(() => null);
+  return sciMath;
+}
+function plateFonts() {
+  if (document.getElementById('sn-plate-fonts')) return;
+  const l = document.createElement('link');
+  l.id = 'sn-plate-fonts'; l.rel = 'stylesheet';
+  l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:wght@400;500&display=swap';
+  document.head.appendChild(l);   // appended at run time, so it does not block the shell
+}
+// The leader overlay is SVG, so it needs the SVG namespace (el() makes HTML).
+function leadEl() {
+  let e = document.getElementById('sn-saver-lead');
+  if (!e) { e = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); e.id = 'sn-saver-lead'; document.body.appendChild(e); }
+  return e;
+}
+const arrOf = v => (Array.isArray(v) ? v : v ? [v] : []);
 function labelHTML(info) {
-  const arr = v => (Array.isArray(v) ? v : v ? [v] : []).map(String);
-  return (info.title ? `<b>${esc(info.title)}</b>` : '') + (info.sub ? `<i>${esc(info.sub)}</i>` : '')
-    + arr(info.lines).map(t => `<p>${esc(t)}</p>`).join('') + (arr(info.eq).length ? `<code>${esc(arr(info.eq).join('\n'))}</code>` : '');
+  const head = info.title || info.sub ? `<header>${info.title ? `<b>${esc(info.title)}</b>` : ''}${info.sub ? `<i>${esc(info.sub)}</i>` : ''}</header>` : '';
+  const params = arrOf(info.params).map(p => Array.isArray(p) ? { sym: p[0], value: p[1], name: p[2] } : p).filter(p => p && (p.sym || p.name));
+  const pp = params.length ? `<section><dl>${params.map(p => `<dt><span class="sym ${p.cls || ''}"${p.sym ? ` data-tex="${esc(p.sym)}" data-inline` : ''}>${p.sym ? esc(p.sym) : ''}</span><small>${esc(p.name || '')}</small></dt><dd>${esc(p.value == null ? '' : p.value)}</dd>`).join('')}</dl></section>` : '';
+  const lines = arrOf(info.lines).map(String);
+  const notes = lines.length ? `<section class="notes">${lines.map(t => `<p>${esc(t)}</p>`).join('')}</section>` : '';
+  const tex = arrOf(info.tex).map(String), eq = arrOf(info.eq).map(String);
+  const eqs = tex.length ? `<section class="eqs">${tex.map(t => `<div class="eq" data-tex="${esc(t)}">${esc(t)}</div>`).join('')}</section>`
+    : eq.length ? `<section><code>${esc(eq.join('\n'))}</code></section>` : '';
+  return head + pp + notes + eqs;
+}
+// Fill each [data-tex] box from the cache, or typeset it once and keep the
+// SVG. A live label swaps the text often; the TeX rarely changes.
+function fillTex(box, rules) {
+  const rk = JSON.stringify(rules || null);
+  box.querySelectorAll('[data-tex]').forEach(n => {
+    const tex = n.dataset.tex, inline = 'inline' in n.dataset, key = rk + (inline ? 'i:' : 'd:') + tex;
+    if (texCache.has(key)) { n.innerHTML = texCache.get(key); if (!texCache.get(key)) n.classList.add('raw'); return; }
+    loadSciMath().then(M => {
+      if (!M) { n.classList.add('raw'); return; }
+      const tmp = document.createElement('div');
+      M.typeset(tmp, tex, { display: !inline, rules: inline ? null : rules }).then(ok => {
+        const html = ok ? tmp.innerHTML : '';
+        texCache.set(key, html);
+        if (n.isConnected && n.dataset.tex === tex) { if (ok) n.innerHTML = html; else n.classList.add('raw'); }
+      });
+    });
+  });
 }
 function setLabel(info) {
   const p = el('sn-saver-label');
+  plateFonts();
   if (info && S.labels && run && p.classList.contains('on') && p.dataset.title === String(info.title || '')) {
     // Same subject: live values change, so swap the text with no fade.
-    p.innerHTML = labelHTML(info);
+    p.innerHTML = labelHTML(info); fillTex(p, info.rules); plate.info = info;
     return;
   }
   clearTimeout(labelTimer);
-  p.classList.remove('on');
-  if (!info || !S.labels || !run) return;
+  p.classList.remove('on'); leadEl().classList.remove('on');
+  if (!info || !S.labels || !run) { if (plate) plate.info = null; return; }
   const html = labelHTML(info);
   if (!html) return;
   const page = allPages().find(q => q.key === run.order[run.i]);
-  labelTimer = setTimeout(() => { p.innerHTML = html; p.dataset.title = String(info.title || ''); if (page) p.style.setProperty('--c', page.color); p.classList.add('on'); }, p.innerHTML ? 700 : 0);
+  labelTimer = setTimeout(() => {
+    p.innerHTML = html; fillTex(p, info.rules);
+    p.dataset.title = String(info.title || '');
+    if (page) p.style.setProperty('--c', page.color);
+    plate = { info, side: null, x: null, y: null };
+    placePlate(true);
+    p.classList.add('on');
+    if (!plateRAF) { plateT = performance.now(); plateRAF = requestAnimationFrame(plateLoop); }
+  }, p.innerHTML ? 700 : 0);
+}
+function plateLoop(t) {
+  if (!plate || !plate.info) { plateRAF = 0; return; }
+  // A rAF time can be older than the performance.now() that started the
+  // loop, so clamp dt below at 0: a negative dt makes the easing factor
+  // 1 - e^(-3 dt) negative and throws the plate off screen.
+  placePlate(false, Math.max(0, Math.min(0.1, (t - plateT) / 1000))); plateT = t;
+  plateRAF = requestAnimationFrame(plateLoop);
+}
+// The subject in shell px: the anchor is in the page frame's CSS px.
+function plateAnchor() {
+  const a = plate && plate.info && plate.info.anchor;
+  if (!a) return null;
+  let v = null;
+  try { v = typeof a === 'function' ? a() : a; } catch (e) { return null; }
+  if (!v || !isFinite(v.x) || !isFinite(v.y)) return null;
+  const f = document.querySelector('#frame-wrap iframe'), o = f ? f.getBoundingClientRect() : { left: 0, top: 0 };
+  const pts = Array.isArray(v.pts) ? v.pts.filter(q => q && isFinite(q.x) && isFinite(q.y)).map(q => ({ x: q.x + o.left, y: q.y + o.top })) : null;
+  return { x: v.x + o.left, y: v.y + o.top, r: Math.max(0, +v.r || 0), pts: pts && pts.length ? pts : null };
+}
+// Choose a spot beside the subject: never over its circle when one fits,
+// inside the window, and the same side as before unless it no longer fits.
+function placePlate(snap, dt = 0) {
+  const p = document.getElementById('sn-saver-label'), lead = leadEl();
+  if (!p || !plate) return;
+  // The layout viewport, and the same phone test as the CSS.
+  const de = document.documentElement, W = de.clientWidth || innerWidth, H = de.clientHeight || innerHeight;
+  const phone = PLATE_PHONE.matches, M = phone ? 12 : 28, gap = phone ? 18 : 40;
+  const pw = p.offsetWidth, ph = p.offsetHeight, a = plateAnchor();
+  const clampX = x => Math.max(M, Math.min(W - pw - M, x)), clampY = y => Math.max(M, Math.min(H - ph - M, y));
+  let side, tx, ty;
+  if (!a) { side = 'corner'; tx = W - pw - M; ty = H - ph - M; }
+  else {
+    const cands = phone
+      ? [['top', (W - pw) / 2, M], ['bottom', (W - pw) / 2, H - ph - M]]
+      : [[0, 1, 0], [180, -1, 0], [-35, .82, -.57], [35, .82, .57], [-145, -.82, -.57], [145, -.82, .57], [-90, 0, -1], [90, 0, 1]].map(([k, dx, dy]) => {
+          const px = a.x + dx * (a.r + gap), py = a.y + dy * (a.r + gap);
+          return [k, px - (dx < -.3 ? pw : dx > .3 ? 0 : pw / 2), py - (dy < -.3 ? ph : dy > .3 ? 0 : ph / 2)];
+        });
+    let best = null;
+    for (const [k, x0, y0] of cands) {
+      const x = clampX(x0), y = clampY(y0);
+      // Distance from the subject centre to the plate rectangle, and from
+      // the nearest key point: covering a nucleus costs more than covering
+      // the edge of the cloud.
+      const dist = (px, py) => Math.hypot(px - Math.max(x, Math.min(px, x + pw)), py - Math.max(y, Math.min(py, y + ph)));
+      const d = dist(a.x, a.y), dp = a.pts ? Math.min(...a.pts.map(q => dist(q.x, q.y))) : Infinity;
+      let score = (d < a.r + 8 ? 1e6 + (a.r + 8 - d) * 100 : 0) + (dp < 24 ? 2e6 + (24 - dp) * 1000 : 0) + Math.hypot(x - x0, y - y0) * 2 - Math.min(d, 400) * 0.2 - Math.min(dp, 300) * 0.5;
+      if (k === plate.side) score -= 60;   // keep the side unless another is clearly better
+      if (!best || score < best.score) best = { k, x, y, score };
+    }
+    side = best.k; tx = best.x; ty = best.y;
+  }
+  if (snap || plate.x == null) { plate.x = tx; plate.y = ty; }
+  else { const f = 1 - Math.exp(-dt * 3); plate.x += (tx - plate.x) * f; plate.y += (ty - plate.y) * f; }
+  plate.x = clampX(plate.x); plate.y = clampY(plate.y);   // never off screen, whatever the easing did
+  plate.side = side;
+  p.style.transform = `translate(${plate.x.toFixed(1)}px, ${plate.y.toFixed(1)}px)`;
+  // Leader: from the nearest point on the plate to the subject's edge.
+  if (a && p.classList.contains('on')) {
+    const qx = Math.max(plate.x, Math.min(a.x, plate.x + pw)), qy = Math.max(plate.y, Math.min(a.y, plate.y + ph));
+    // The leader ends at the subject's edge. When the plate has to overlap
+    // the circle (a subject that fills the window), it ends 24 px short of
+    // the plate instead, so it still points at the subject.
+    let ex, ey, ring = 2.5, d;
+    if (a.pts) {
+      // Point at the nearest key point of the subject (for example a
+      // nucleus), and ring it. The line stops at the ring.
+      let best = null;
+      for (const q of a.pts) { const k = Math.hypot(q.x - qx, q.y - qy); if (!best || k < best.k) best = { q, k }; }
+      const ux = qx - best.q.x, uy = qy - best.q.y; d = best.k || 1; ring = 7;
+      ex = best.q.x + ux / d * ring; ey = best.q.y + uy / d * ring;
+      plate.lead = { qx, qy, ex, ey, to: 'pt', d };
+      if (d > ring + 14) {
+        lead.innerHTML = `<line x1="${qx.toFixed(1)}" y1="${qy.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"/><circle cx="${best.q.x.toFixed(1)}" cy="${best.q.y.toFixed(1)}" r="${ring}"/>`;
+        lead.classList.add('on');
+      } else lead.classList.remove('on');
+      return;
+    }
+    const dx = qx - a.x, dy = qy - a.y, er = Math.min(a.r + 4, (d = Math.hypot(dx, dy) || 1) - 24);
+    ex = a.x + dx / d * er; ey = a.y + dy / d * er;
+    plate.lead = { qx, qy, ex, ey, r: a.r, d };
+    if (er > 6 && d - er > 10) {
+      lead.innerHTML = `<line x1="${qx.toFixed(1)}" y1="${qy.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}"/><circle cx="${ex.toFixed(1)}" cy="${ey.toFixed(1)}" r="${ring}"/>`;
+      lead.classList.add('on');
+    } else lead.classList.remove('on');
+  } else lead.classList.remove('on');
 }
 
 // The page hook, or the generic mode when the page has none.
@@ -621,5 +802,5 @@ async function finishRecording(r) {
   setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
-window.snScreensaver = { label: info => setLabel(info), open: openMenu, start: startSaver, stop: stopSaver, settings: () => Object.assign({}, S), pages: allPages, get running() { return !!run; } };
+window.snScreensaver = { plate: () => plate && { side: plate.side, x: plate.x, y: plate.y, anchor: plateAnchor(), lead: plate.lead || null }, label: info => setLabel(info), open: openMenu, start: startSaver, stop: stopSaver, settings: () => Object.assign({}, S), pages: allPages, get running() { return !!run; } };
 })();
