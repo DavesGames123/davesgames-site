@@ -312,16 +312,20 @@ function frame(){
     up=[fwd[1]*right[2]-fwd[2]*right[1],fwd[2]*right[0]-fwd[0]*right[2],fwd[0]*right[1]-fwd[1]*right[0]];
   }
 
-  // Scale the integration step and escape radius with distance, and spend fewer
-  // steps when far from the throat, so cost stays roughly constant per frame.
+  // Scale the integration step and escape radius with distance. The shader
+  // puts a floor under the step (STEP_GROW, STEP_THROAT), so a ray needs
+  // about 150 to 300 steps at any camera range. The budget only stops rays
+  // that wind round the throat. It no longer grows as the camera comes
+  // closer: the old divide by scaleR gave 4096 steps at camL = 8.
   var scaleR=absL/20.0;var dl=baseDl*scaleR;
   var distFactor=Math.min(1.0,Math.abs(camL)/(throatK*5.0));
   var dynSteps=Math.round(maxSteps*(0.35+0.65*distFactor));
-  var steps=Math.max(128,Math.round(dynSteps/Math.max(scaleR,0.5)));
+  var steps=Math.max(256,Math.round(dynSteps/Math.max(scaleR,1.0)));
   var escR=escMul*Math.max(scaleR,1.0);
   var universe=camL>=0?'Universe A':'Universe B';
   document.getElementById('mode').textContent=(useGeodesic?(useRK4?'RK4':'Euler'):'Straight')+' · '+universe;
   document.getElementById('hudSub').textContent='Ellis Metric · '+universe;
+  if(saverLabel&&universe!==saverUniverse){saverUniverse=universe;showSaverLabel();}
 
   // Push all camera and wormhole state into the shader, then draw one quad.
   // shaderL is nudged off exactly zero so the sign (universe) is well defined.
@@ -381,8 +385,17 @@ renderEqs();
 // control, and starts the descent. opts.calm (1 = slowest) halves the spin
 // and descent speeds at most; opts.seed picks the stars or the nebula sky.
 // No exit(): the shell reloads the page on stop.
+// The label plate names the universe the camera is in. frame() calls it
+// again when the descent crosses the throat.
+var saverLabel=null,saverUniverse='';
+function showSaverLabel(){
+  saverLabel({title:'Ellis wormhole',sub:saverUniverse,
+    lines:['Null geodesics through a traversable throat','throat radius k = '+throatK.toFixed(1)+', flat half-width a = '+throatA.toFixed(1)],
+    eq:['ds² = −dt² + dℓ² + r(ℓ)² dΩ²','r(ℓ) = √(k² + max(0, |ℓ| − a)²)']});
+}
 window.snSaver={enter:function(o){
   var calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
+  if(o&&typeof o.label==='function')saverLabel=o.label;
   var st=document.createElement('style');
   st.textContent='body>*:not(#c){display:none!important}canvas#c{cursor:none!important}';
   document.head.appendChild(st);

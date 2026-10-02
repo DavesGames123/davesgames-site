@@ -20,7 +20,8 @@
 //   --------------------------------------------------------------------------
 //     ray ─▶ buildOrbPlane()  reduce 3D ray to a 2D (radial, tangent) plane
 //         ─▶ initWRay()       state = (l, theta, dl, dtheta), null-normalised
-//         ─▶ step Euler/RK4   integrate the geodesic, adaptive dl near throat
+//         ─▶ step Euler/RK4   integrate the geodesic, adaptive dl near throat,
+//                             with a floor of max(STEP_GROW |l|, STEP_THROAT k)
 //         ─▶ escape at |l| > escapeR ─▶ sampleSky of universe A (l>0) or B (l<0)
 //         ─▶ segDisc()        optional accretion disc crossing in the y=0 plane
 //
@@ -37,6 +38,12 @@ uniform float u_useGeodesic,u_useRK4,u_showDisc,u_showGlow;
 uniform float u_bgMode,u_camL;
 out vec4 fragColor;
 const float PI=3.141592653589793;
+// Step floor, see traceGeodesic. STEP_GROW is a fraction of the ray radius |l|.
+// STEP_THROAT is a fraction of the throat radius k, so the crossing has a
+// fixed step count. The far camera steps 0.3 at the throat (k = 1.5), so
+// 0.05 k = 0.075 is still finer than the view that the page opens with.
+const float STEP_GROW=0.03;
+const float STEP_THROAT=0.05;
 
 // Value-noise helpers and a direction-to-equirectangular mapping for the skies.
 float hash21(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
@@ -227,8 +234,13 @@ TR traceGeodesic(vec3 ro,vec3 rd){
   // Fixed loop bound (GLSL requires it); effMax is the real budget.
   for(int i=0;i<8192;i++){
     if(i>=effMax)break;
-    // Take larger steps far from the throat, small steps where it curves hard.
-    float adaptDl=dl*clamp(u_throatK*2.0/max(abs(w.l),0.01),1.0,2.5);
+    // Step length: the camera step dl (longer near the throat), but never
+    // less than the floor max(STEP_GROW |l|, STEP_THROAT k). main.js makes dl
+    // small when the camera is close (dl = 0.006 at camL = 1). Without the
+    // floor, a close ray took that step all the way out to escR = 50, ran
+    // the full step budget, and the frame time went up about 10x.
+    float adaptDl=max(dl*clamp(u_throatK*2.0/max(abs(w.l),0.01),1.0,2.5),
+                      max(STEP_GROW*abs(w.l),STEP_THROAT*u_throatK));
     if(rk4)w=stepRK4(w,adaptDl);else w=stepEuler(w,adaptDl);
     minL=min(minL,abs(w.l));
     // Check the just-traversed segment against the accretion disc.
