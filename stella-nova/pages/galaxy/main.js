@@ -175,8 +175,13 @@ window.addEventListener('touchend',()=>dragging=false);
 window.addEventListener('touchmove',e=>{if(!dragging)return;const t=e.touches[0];dragX+=(t.clientX-lmx)*0.006;dragY+=(t.clientY-lmy)*0.006;lmx=t.clientX;lmy=t.clientY},{passive:true});
 
 // Wheel zoom, clamped to a wide range so the galaxy never inverts or vanishes.
+// zoom is relative to the default view. The shaders get zoom*fitZoom():
+// FIT_ZOOM at an 800 px tall CSS viewport, scaled with the shorter canvas
+// side, so the galaxy fills the same part of the frame at any size and DPR.
+const FIT_ZOOM=1.45, FIT_REF=800;
 let zoom=1.0;
-canvas.addEventListener('wheel',e=>{e.preventDefault();zoom*=e.deltaY>0?0.92:1.08;zoom=Math.max(0.05,Math.min(30,zoom))},{passive:false});
+function fitZoom(){return FIT_ZOOM*Math.min(canvas.width,canvas.height*1.6)/(FIT_REF*1.6)}
+canvas.addEventListener('wheel',e=>{e.preventDefault();zoom*=e.deltaY>0?0.92:1.08;zoom=Math.max(0.03,Math.min(20,zoom))},{passive:false});
 
 // Size the drawing buffer to the viewport at up to 2x device pixels.
 function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);canvas.width=window.innerWidth*dpr;canvas.height=window.innerHeight*dpr;gl.viewport(0,0,canvas.width,canvas.height);document.getElementById('res').textContent=canvas.width+'×'+canvas.height}
@@ -184,7 +189,7 @@ window.addEventListener('resize',resize);resize();
 
 // Live tunables. arms and TIME_OFFSET are randomized once per page load so each
 // visit starts a different galaxy at a different point in its rotation.
-let timescale=0.5,density=10000,spiral=0.7,tilt=2.8;
+let timescale=0.5,density=10000,spiral=0.7,tilt=2.0;
 const arms=Math.floor(Math.random()*4)+2;
 const TIME_OFFSET=500+Math.random()*800;
 // The density slider cannot rebuild the VBO mid-draw; it sets this flag and the
@@ -210,13 +215,13 @@ function frame(){
   frames++;if(now-lastT>500){document.getElementById('fps').textContent=Math.round(frames/((now-lastT)/1000))+' fps';frames=0;lastT=now}
   if(needsRegen){generateStars(density,arms);needsRegen=false}
 
-  const w=canvas.width,h=canvas.height;
+  const w=canvas.width,h=canvas.height,fit=fitZoom();
 
   // Pass 1: the core and disk glow, opaque, filling the whole frame.
   gl.disable(gl.BLEND);
   gl.useProgram(coreProg);
   gl.uniform2f(coreU.u_res,w,h);gl.uniform4f(coreU.u_mouse,dragX,dragY,0,0);
-  gl.uniform1f(coreU.u_zoom,zoom);gl.uniform1f(coreU.u_tilt,tilt);
+  gl.uniform1f(coreU.u_zoom,zoom*fit);gl.uniform1f(coreU.u_tilt,tilt);
   gl.bindBuffer(gl.ARRAY_BUFFER,quadBuf);
   gl.enableVertexAttribArray(coreAttrPos);
   gl.vertexAttribPointer(coreAttrPos,2,gl.FLOAT,false,0,0);
@@ -228,7 +233,7 @@ function frame(){
   gl.useProgram(starProg);
   gl.uniform1f(starU.u_time,time);gl.uniform1f(starU.u_timescale,timescale);
   gl.uniform2f(starU.u_res,w,h);gl.uniform4f(starU.u_mouse,dragX,dragY,0,0);
-  gl.uniform1f(starU.u_zoom,zoom);gl.uniform1f(starU.u_tilt,tilt);
+  gl.uniform1f(starU.u_zoom,zoom*fit);gl.uniform1f(starU.u_tilt,tilt);
   gl.uniform1f(starU.u_spiral,spiral);
   gl.bindVertexArray(starVAO);
   gl.drawArrays(gl.POINTS,0,starCount);
