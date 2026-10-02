@@ -42,6 +42,7 @@
 //      shader load .......... "loadShaders"          fetch .glsl before build
 //      presets .............. "PRESETS"              8 named parameter sets
 //      state ................ "const S ="            the one mutable state object
+//      pixel budget ......... "PIXEL_BUDGET"         cap on drawing-buffer pixels
 //      three.js setup ....... "THREE.JS SETUP"       scene, camera, renderer
 //      orb material ......... "const material ="      the ray-march ShaderMaterial
 //      atmosphere ........... "atmosphereMaterial"   the fresnel shell
@@ -129,6 +130,18 @@ const presets = {
 // ═══════════════════ STATE ═══════════════════
 const S = { preset:'Neutron', ...presets['Neutron'] };
 
+// ═══════════════════ PIXEL BUDGET ═══════════════════
+// The orb shader marches up to 64 steps per pixel, so the frame cost follows
+// the drawing-buffer pixel count. S.dpr is a factor on the CSS size. The
+// budget caps the product, so a large window (2560x1440 at dpr 1 is 3.7 Mpx)
+// gets the same buffer as a laptop window. The volume is soft, so the lower
+// resolution does not show.
+const PIXEL_BUDGET = 1.3e6;
+function pixelRatio(){
+  const cap = Math.sqrt(PIXEL_BUDGET / Math.max(1, innerWidth * innerHeight));
+  return Math.min(S.dpr, cap);
+}
+
 // Standard Three.js stack: a scene, a perspective camera 6 units out, and a
 // WebGL renderer inserted before the #ui overlay so the canvas sits behind the
 // panels. OrbitControls gives drag-to-orbit and scroll-to-zoom, with panning
@@ -140,9 +153,11 @@ scene.background = new THREE.Color(0x000000);
 const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
 camera.position.set(0, 0, 6);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// No MSAA: the scene draws into the composer's render target, which has no
+// samples, so a multisampled canvas only costs a resolve per frame.
+const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(S.dpr);
+renderer.setPixelRatio(pixelRatio());
 document.body.insertBefore(renderer.domElement, document.getElementById('ui'));
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -174,12 +189,14 @@ const uniforms = {
   uAsymmetry:{value:S.asymmetry}
 };
 
-// The orb material. Additive blending makes overlapping density read as light;
-// DoubleSide + depthWrite:false let the camera see the far wall of the volume,
-// so the ray can march all the way through the sphere.
+// The orb material. Additive blending makes overlapping density read as light.
+// Front faces only: the shader marches the full chord [tNear, tFar] from the
+// front face, and a back face gets edgeAA = 0 (its normal points away from the
+// camera), so DoubleSide paid for a second full march that added zero. The
+// camera cannot enter the sphere (controls.minDistance 3 > radius 2).
 const material = new THREE.ShaderMaterial({
   vertexShader, fragmentShader, uniforms,
-  transparent:true, side:THREE.DoubleSide, depthWrite:false, blending:THREE.AdditiveBlending
+  transparent:true, side:THREE.FrontSide, depthWrite:false, blending:THREE.AdditiveBlending
 });
 
 // Atmosphere
@@ -209,7 +226,7 @@ orb.add(atmosphereMesh);
 
 // Post-processing
 const composer = new EffectComposer(renderer);
-composer.setPixelRatio(S.dpr);
+composer.setPixelRatio(pixelRatio());
 composer.addPass(new RenderPass(scene, camera));
 
 // Chromatic aberration post pass: samples the rendered frame three times with a
@@ -240,8 +257,17 @@ function applyState(){
   atmosphereUniforms.uLevel.value=S.atmosphereLevel;
   atmosphereMesh.scale.setScalar(S.atmosphereScale);
   caPass.uniforms.uAmount.value=S.chromaticAberration;
-  renderer.setPixelRatio(S.dpr);
-  composer.setPixelRatio(S.dpr);
+  setRatio();
+}
+// Apply the pixel ratio only when it changes: setPixelRatio reallocates the
+// composer targets, and the saver autopilot calls applyState every 50 ms.
+let lastRatio=0;
+function setRatio(){
+  const r=pixelRatio();
+  if(r===lastRatio)return;
+  lastRatio=r;
+  renderer.setPixelRatio(r);
+  composer.setPixelRatio(r);
 }
 
 // ═══════════════════ UI SYNC ═══════════════════
@@ -402,6 +428,7 @@ window.addEventListener('resize',()=>{
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth,innerHeight);
   composer.setSize(innerWidth,innerHeight);
+  setRatio();
 });
 
 // The per-frame loop. It advances shader time by real elapsed seconds scaled by
@@ -441,7 +468,7 @@ animate();
 // ═══════════════════ SCREENSAVER HOOK ═══════════════════
 // The shell's screensaver (lib/screensaver.js) calls snSaver.enter(opts). It
 // hides the panels, loads a calm preset chosen by opts.seed, and slows time and
-// spin by opts.calm (1 = slowest). Every half dwell it eases the continuous
+// spin by opts.calm (1 = slowest), with a floor so the volume never freezes. Every half dwell it eases the continuous
 // fields toward the next calm preset over 8 s. fractalIters stays fixed, because
 // an integer step would pop. No storage, no URL writes.
 const SAVER_PRESETS=['Void','Gray','Ember','Default','Cyan'];
@@ -458,10 +485,17 @@ window.snSaver={
     st.textContent='body::before,body::after{display:none}';
     document.head.appendChild(st);
     // One preset in calm form: speeds scaled by calm, aberration halved, dpr 1
-    // so the drawing buffer matches the window.
+    // (the pixel budget still caps the buffer on a large screen).
+    // The internal churn turns at speed x internalAnim rad/s. Scaled by calm,
+    // the calm presets fell to 0.01-0.08 rad/s (Void: one turn in 9 min), and
+    // the volume looked frozen. A floor on that product and on the spin keeps
+    // the orb alive; calm 1 still gives the slowest motion.
+    const churnMin=0.35*(1-0.6*calm), spinMin=0.3*(1-0.6*calm);
     const calmOf=name=>{
       const p={...presets[name]};
       p.speed*=slow; p.orbRotation*=slow; p.internalAnim*=0.5+0.5*slow;
+      p.speed=Math.max(p.speed,churnMin/p.internalAnim);
+      p.orbRotation=Math.max(p.orbRotation,spinMin);
       p.chromaticAberration*=0.5; p.dpr=1;
       return p;
     };
