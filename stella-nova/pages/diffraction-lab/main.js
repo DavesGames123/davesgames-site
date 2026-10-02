@@ -55,6 +55,7 @@
 //      events .............. "EVENTS"                element/source/view wiring
 //      export .............. "EXPORT SYSTEM"         PNG still and WebM video
 //      presets ............. "const PR="             named element setups
+//      screensaver ......... "window.snSaver"        shell saver hook
 // ============================================================================
 
 // Base constants and unit scales. TAU = 2π; mm/um/nm convert millimeter,
@@ -516,3 +517,46 @@ function applyP(pr){animDir=0;S.element=pr.el;S.source=pr.src||'white';S.lambda=
 
 // Boot: set the wavelength swatch, build the param UI, sync the bars, and render.
 (function(){syncScale();const rgb=lamRGB(S.lambda).map(x=>sGam(x)*255|0),dot=document.getElementById('wl-dot'),cs=`rgb(${rgb})`;dot.style.backgroundColor=cs;dot.style.color=cs;applyP(PR[0]);document.querySelectorAll('.preset-btn')[0].classList.add('on')})();
+
+// Screensaver hook for the shell (lib/screensaver.js). enter() hides the GUI
+// and pins #stage to the window, so the composite cell (and #cv-rgb, sized
+// from it in renderCh) fills the frame. One rAF driver eases z on a slow sine
+// around the preset distance and recomputes once per frame. It moves to the
+// next preset (from opts.seed) every max(12, seconds/3) s, with a canvas fade.
+// recompute is wrapped to fill the letterbox opaque, so a recording has no
+// transparency. White light uses 10 wavelengths to keep a frame cheap.
+/* ═══ SCREENSAVER ═══ */
+window.snSaver={enter(opts){
+  const calm=Math.max(0,Math.min(1,+opts.calm||0)),sp=1-0.6*calm;
+  const st=document.createElement('style');
+  st.textContent='html.saver .topbar,html.saver #panel,html.saver #eq-panel,html.saver #eq-toggle,html.saver #stage-bar,html.saver #dock,html.saver .cell-label,html.saver .ov{display:none!important}'+
+    'html.saver #stage{position:fixed;inset:0;z-index:5;padding:0}html.saver #canvas-grid{padding:0}html.saver .canvas-cell{border-radius:0}html.saver #cv-rgb{cursor:none}';
+  document.head.appendChild(st);document.documentElement.classList.add('saver');
+  const names=['Hex','Circle','Star ★','Heart ♥','Ring ◯','Cross ✚','Young\'s','Lens','FZP','6-Star'];
+  const list=names.map(n=>PR.find(p=>p.name===n)).filter(Boolean);
+  const hold=Math.max(12,(+opts.seconds||60)/3),FADE=0.9;
+  let pi=(opts.seed>>>0)%list.length,tp=0,tz=0,last=0;
+  const show=()=>{applyP(list[pi]);S.divs=10;S.scale='log';S.range=2;animDir=0;tz=0;};
+  if(S.viewMode!==1){S.viewMode=1;document.getElementById('canvas-grid').classList.add('view-1');}
+  show();
+  const base=recompute;
+  recompute=function(){
+    base();
+    const cv=document.getElementById('cv-rgb'),c=cv.getContext('2d');
+    c.save();c.setTransform(1,0,0,1,0,0);c.globalCompositeOperation='destination-over';c.fillStyle='#000';c.fillRect(0,0,cv.width,cv.height);
+    c.globalCompositeOperation='source-over';
+    const f=Math.max(0,1-tp/FADE,1-(hold-tp)/FADE);
+    if(f>0){c.fillStyle=`rgba(0,0,0,${Math.min(1,f)})`;c.fillRect(0,0,cv.width,cv.height);}
+    c.restore();
+  };
+  (function drive(now){
+    requestAnimationFrame(drive);
+    const dt=last?Math.min(0.25,(now-last)/1000):0;last=now;
+    tp+=dt;tz+=dt*sp;
+    if(tp>hold){tp=0;pi=(pi+1)%list.length;show();}
+    // z from 0.8 to 2 times the preset distance, one slow cycle per 40 s at calm 0.
+    S.z=list[pi].z*(1.4-0.6*Math.cos(tz*TAU/40));
+    recompute();
+  })(0);
+  return{canvas:document.getElementById('cv-rgb'),warmupMs:2000};
+}};
