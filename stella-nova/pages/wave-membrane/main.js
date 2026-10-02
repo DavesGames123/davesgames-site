@@ -31,6 +31,7 @@
      grep -n 'function refreshReadout'  equation readout, energy, drift
      grep -n 'function buildUI'      the control panel construction
      grep -n 'function setOpen'      the panel, the phone sheet, and the dock
+     grep -n 'snSaver'               the screensaver hook (lib/screensaver.js)
 
    FRAMING. The panel, the dock, and the bars cover parts of the canvas.
    occlusion() measures them each frame. The camera then shifts its view so
@@ -344,7 +345,7 @@
   }
 
   // --------------------------------------------------------------- frame
-  let last = performance.now(), frameNo = 0;
+  let last = performance.now(), frameNo = 0, saverSpin = 0;
   function frame(now) {
     const dtReal = Math.min((now - last) / 1000, 0.05); last = now;
     if (!G.paused) {
@@ -353,6 +354,7 @@
       stepCarry -= k;
       if (k > 0) { sim.step(k); updateMesh(); }
     }
+    if (saverSpin) view.theta += saverSpin * dtReal;   // screensaver orbit only
     const w = canvas.clientWidth, h = canvas.clientHeight, o = occlusion(w, h);
     for (const k in occ) occ[k] += (o[k] - occ[k]) * 0.18;
     const wV = Math.max(80, w - occ.l - occ.r), hV = Math.max(80, h - occ.t - occ.b);
@@ -567,6 +569,34 @@
     inp.addEventListener('input', () => { show(); if (after) after(); refreshStatus(); });
     show();
   }
+
+  // ------------------------------------------------------------ screensaver
+  // lib/screensaver.js has the protocol. The CSS under html.sn-saver hides
+  // every overlay, so occlusion() reads no margins and the membrane sits in
+  // the center of the full frame. The seed picks the shape and a pair of
+  // modes with different omega, so the sum beats and the shape keeps moving.
+  // calm 1 gives the slowest time and orbit. Nothing changes during a dwell.
+  const SAVER_PAIRS = {
+    square: [[2, 1, 1, 3], [3, 2, 1, 2], [2, 3, 4, 1], [1, 2, 3, 3]],
+    circle: [[1, 2, 0, 2], [2, 1, 0, 3], [3, 1, 1, 2]],
+  };
+  window.snSaver = {
+    enter(o) {
+      const calm = o && o.calm != null ? o.calm : 0.7, seed = (o && o.seed) >>> 0;
+      document.documentElement.classList.add('sn-saver');
+      renderer.setClearColor(0x040308, 1);     // opaque, so a recording has no alpha
+      resize();
+      const shape = seed % 3 === 2 ? 'circle' : 'square', L = SAVER_PAIRS[shape];
+      const [m1, n1, m2, n2] = L[(seed >>> 2) % L.length];
+      Object.assign(G, { m1, n1, m2, n2, two: true, amp2: 0.6, amp: 0.7, paused: false, color: 'height', nodal: true });
+      G.speed = 0.35 + 0.4 * (1 - calm);
+      if (shape !== G.shape) { G.shape = shape; makeSolver(); } else applyModes();
+      drawLegend();
+      view.theta = VIEW0.theta + (seed % 628) / 100; view.phi = VIEW0.phi; view.zoom = 0.85;
+      saverSpin = 0.04 * (1 - 0.5 * calm);
+      return { canvas, warmupMs: 500 };
+    },
+  };
 
   // ------------------------------------------------------------------- boot
   resize();
