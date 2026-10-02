@@ -149,9 +149,13 @@ function initMini() {
   const secs = ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'].map($);
   const links = [...document.querySelectorAll('.mini-link')];
   const list = document.querySelector('.mini-list');
-  const go = el => el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  links.forEach(a => a.addEventListener('click', e => { e.preventDefault(); go($(a.dataset.target)); }));
-  let cur = -1;
+  // aim: the step of the last jump. A smooth scroll takes about a second,
+  // and cur follows the scroll position, so a second press of prev or next
+  // during the scroll counts from aim, not from the step it scrolls past.
+  let cur = -1, aim = -1, aimT = -1e9;
+  const goTo = k => { aim = k; aimT = performance.now(); secs[k].scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  const stepBy = d => goTo(clamp((performance.now() - aimT < 1200 ? aim : cur) + d, 0, secs.length - 1));
+  links.forEach((a, i) => a.addEventListener('click', e => { e.preventDefault(); goTo(i + 1); }));
   const update = () => {
     const y = innerHeight * 0.33;
     let k = 0;
@@ -171,8 +175,8 @@ function initMini() {
   let pend = false;
   addEventListener('scroll', () => { if (!pend) { pend = true; requestAnimationFrame(() => { pend = false; update(); }); } }, { passive: true });
   addEventListener('resize', update);
-  $('miniPrev').addEventListener('click', () => go(secs[Math.max(0, cur - 1)]));
-  $('miniNext').addEventListener('click', () => go(secs[Math.min(secs.length - 1, cur + 1)]));
+  $('miniPrev').addEventListener('click', () => stepBy(-1));
+  $('miniNext').addEventListener('click', () => stepBy(1));
   update();
 }
 
@@ -288,6 +292,10 @@ function initMsa() {
   function drawMsa() {
     const { g, w, h } = fitCanvas(cv);
     g.clearRect(0, 0, w, h);
+    // A box with no layout yet (hidden frame, collapsed card) gives a
+    // negative arc radius, and ellipse() throws. Draw nothing; the
+    // ResizeObserver draws again when the box has a size.
+    if (h < 40 || w < 40) return;
     const padL = 6, padR = 6, cw = (w - padL - padR) / L;
     const arcH = Math.min(70, h * 0.22), consH = 22, qH = Math.max(12, Math.min(16, cw * 1.6));
     const y0 = arcH + consH + qH + 8, areaH = h - y0 - 4;
@@ -806,6 +814,8 @@ function initRama() {
     const { g, w } = fitCanvas(cv);
     const pad = 30, s = w - pad - 8, X = phi => pad + (phi + 180) / 360 * s, Y = psi => 6 + (180 - psi) / 360 * s;
     g.clearRect(0, 0, w, w);
+    $('ramaRead').innerHTML = `residue <b>${sel.i + 1}${SEQ[sel.i]}</b> · φ <b>${sel.phi.toFixed(0)}°</b> ψ <b>${sel.psi.toFixed(0)}°</b> · pLDDT <b>${PL[sel.i].toFixed(1)}</b>`;
+    if (s < 40) return;   // no layout yet: a negative basin radius makes ellipse() throw
     g.fillStyle = '#0a0c13'; g.fillRect(pad, 6, s, s);
     // approximate basins (illustrative outlines)
     const basin = (phi, psi, rx, ry, lab) => { g.fillStyle = 'rgba(176,140,255,0.10)'; g.strokeStyle = 'rgba(176,140,255,0.35)'; g.beginPath(); g.ellipse(X(phi), Y(psi), rx / 360 * s, ry / 360 * s, 0, 0, 6.283); g.fill(); g.stroke(); g.fillStyle = '#b08cff'; g.font = '11px STIX Two Text, serif'; g.textAlign = 'center'; g.fillText(lab, X(phi), Y(psi) - ry / 360 * s - 4); };
@@ -820,7 +830,6 @@ function initRama() {
     g.save(); g.translate(pad + 10, 16); g.fillStyle = '#c3c8d6'; g.font = '11px STIX Two Text, serif'; g.fillText('ψ', 0, 0); g.restore();
     for (const p of pts) { g.fillStyle = css(plddtColor(PL[p.i])); g.beginPath(); g.arc(X(p.phi), Y(p.psi), 3.2, 0, 6.283); g.fill(); }
     g.strokeStyle = '#fff'; g.lineWidth = 1.6; g.beginPath(); g.arc(X(sel.phi), Y(sel.psi), 7, 0, 6.283); g.stroke();
-    $('ramaRead').innerHTML = `residue <b>${sel.i + 1}${SEQ[sel.i]}</b> · φ <b>${sel.phi.toFixed(0)}°</b> ψ <b>${sel.psi.toFixed(0)}°</b> · pLDDT <b>${PL[sel.i].toFixed(1)}</b>`;
   }
   onPoint(cv, (x, y) => {
     const w = cv.getBoundingClientRect().width, pad = 30, s = w - pad - 8;
