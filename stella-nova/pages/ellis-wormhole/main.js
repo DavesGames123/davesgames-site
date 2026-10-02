@@ -371,14 +371,39 @@ renderEqs();
 // The label plate names the universe the camera is in. frame() calls it
 // again when the descent crosses the throat.
 var saverLabel=null,saverUniverse='';
+// The plate holds live parameters, the page's TeX (index.html eq2, eq3)
+// and its EQ_RULES (ell m1, r m2, k m3, a m4, g m5, T m6). eq is the plain
+// fallback. enter() also calls it each second, so the camera values move.
 function showSaverLabel(){
-  saverLabel({title:'Ellis wormhole',sub:saverUniverse,
-    lines:['Null geodesics through a traversable throat','throat radius k = '+throatK.toFixed(1)+', flat half-width a = '+throatA.toFixed(1)],
-    eq:['ds² = −dt² + dℓ² + r(ℓ)² dΩ²','r(ℓ) = √(k² + max(0, |ℓ| − a)²)']});
+  var rl=Math.sqrt(throatK*throatK+Math.pow(Math.max(0,Math.abs(camL)-throatA),2));
+  saverLabel({title:'Ellis wormhole',sub:'Null geodesics, traversable throat, '+saverUniverse,
+    params:[{sym:'\\ell',name:'camera',value:camL.toFixed(1).replace('-','−')},
+      {sym:'r(\\ell)',name:'areal radius',value:rl.toFixed(2),cls:'m2'},
+      {sym:'k',name:'throat radius',value:throatK.toFixed(1),cls:'m3'},
+      {sym:'a',name:'flat half-width',value:throatA.toFixed(1),cls:'m4'}],
+    tex:['ds^2 = -dt^2 + d\\ell^2 + r(\\ell)^2\\,d\\Omega^2',
+      'r(\\ell) = \\sqrt{k^{2} + \\bigl[\\max(0,\\;|\\ell| - a)\\bigr]^{2}}',
+      'T^{\\mu}{}_{\\nu} = \\frac{k^{2}}{8\\pi\\,r^{4}}\\,\\mathrm{diag}(-1,\\,+1,\\,0,\\,0)'],
+    rules:EQ_RULES,
+    eq:['ds² = −dt² + dℓ² + r(ℓ)² dΩ²','r(ℓ) = √(k² + max(0, |ℓ| − a)²)'],
+    anchor:throatAnchor});
+}
+// The throat on screen. The camera looks at the centre (the saver damps the
+// look angles to 0), and the image plane is FOCAL_PER_H x height away. Rays
+// with impact parameter below k pass the throat, so its image has angular
+// radius asin(k / r(ell)). Close to the throat the image fills the window:
+// then return null (full field, the plate goes to the corner).
+function throatAnchor(){
+  var b=canvas.getBoundingClientRect(),f=FOCAL_PER_H*b.height;
+  var rl=Math.sqrt(throatK*throatK+Math.pow(Math.max(0,Math.abs(camL)-throatA),2));
+  var s=throatK/rl;if(s>=0.98)return null;
+  var R=f*s/Math.sqrt(1-s*s);if(R>0.45*Math.min(b.width,b.height))return null;
+  var cx=b.left+b.width/2,cy=b.top+b.height/2;
+  return {x:cx,y:cy,r:1.2*R,pts:[{x:cx,y:cy}]};
 }
 window.snSaver={enter:function(o){
   var calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
-  if(o&&typeof o.label==='function')saverLabel=o.label;
+  if(o&&typeof o.label==='function'){saverLabel=o.label;setInterval(function(){if(saverUniverse)showSaverLabel();},1000);}
   var st=document.createElement('style');
   st.textContent='body>*:not(#c){display:none!important}canvas#c{cursor:none!important}';
   document.head.appendChild(st);
