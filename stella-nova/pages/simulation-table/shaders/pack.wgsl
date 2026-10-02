@@ -414,8 +414,10 @@ fn inferno(t: f32) -> vec3f {
       + x * (vec3f(-71.31942824, 32.62606426, 73.20951986)
       + x * (vec3f(25.13112622, -12.24266895, -23.07032500)))))));
 }
+// the square state covers the surface (crop, not letterbox), so a wide
+// inspector or saver canvas does not smear the clamped edge texels sideways
 fn cell_state(fp: vec2f) -> vec4f {
-    let pos = fp / pu.pixelScale; let uv = (pos - 0.5 * pu.size) / max(min(pu.size.x, pu.size.y), 1.0) + 0.5;
+    let pos = fp / pu.pixelScale; let uv = (pos - 0.5 * pu.size) / max(max(pu.size.x, pu.size.y), 1.0) + 0.5;
     return textureLoad(pTex, clamp(vec2i(uv * f32(N)), vec2i(0), vec2i(N - 1)), 0);
 }
 // mode from pu.k.w set by the page: 0 binary+age, 1 states/k rainbow, 2 signed, 3 rd (v channel), 4 height, 5 rho/vel, 6 multi(x,y)

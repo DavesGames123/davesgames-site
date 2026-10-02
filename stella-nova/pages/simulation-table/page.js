@@ -5,6 +5,9 @@
 //  The shared table-engine drives this object through its ctx. main.js fetches
 //  the data and calls bootTable(PAGE, data); the engine calls PAGE.init and
 //  PAGE.draw from there.
+//  SCREENSAVER: spec.saver lists calm sims. saver(t) runs each time the
+//  table-engine saver puts a cell on (behind its fade). It reseeds the cell,
+//  so a sim that converged or died starts again at each dwell.
 // ============================================================================
 const MODES = {"life": 0, "brain": 0, "excitable": 1, "cyclic": 1, "forest": 8, "ising": 2, "rps": 7, "schelling": 2, "sandpile": 10, "dla": 11, "majority": 2, "hodgepodge": 1, "gray_scott": 3, "fitzhugh": 9, "mitosis": 3, "lenia": 4, "smoothlife": 4, "eden": 14, "heat": 16, "wave": 9, "advect": 4, "lbm": 5, "sand": 15, "erosion": 4, "highlife": 0, "daynight": 0, "seeds": 0, "maze": 0, "coral": 0, "replicator": 0, "anneal": 0, "gnarl": 0, "move": 0, "stains": 0, "amoeba": 0, "diamoeba": 0, "worms": 3, "waves_rd": 3, "labyrinth": 3, "solitons": 3, "holes": 3, "bz_spiral": 9, "fisher_kpp": 4, "allen_cahn": 9, "burgers": 9, "telegraph": 9, "perona_malik": 4, "ginzburg_landau": 9, "fog_reveal_memory": 17}; const STEPS = {"life": 1, "brain": 1, "excitable": 1, "cyclic": 1, "forest": 1, "ising": 2, "rps": 1, "schelling": 1, "sandpile": 4, "dla": 4, "majority": 1, "hodgepodge": 1, "gray_scott": 8, "fitzhugh": 4, "mitosis": 8, "lenia": 1, "smoothlife": 1, "eden": 2, "heat": 4, "wave": 2, "advect": 1, "lbm": 2, "sand": 3, "erosion": 2, "highlife": 1, "daynight": 1, "seeds": 1, "maze": 1, "coral": 1, "replicator": 1, "anneal": 1, "gnarl": 1, "move": 1, "stains": 1, "amoeba": 1, "diamoeba": 1, "worms": 8, "waves_rd": 8, "labyrinth": 8, "solitons": 8, "holes": 8, "bz_spiral": 4, "fisher_kpp": 4, "allen_cahn": 4, "burgers": 2, "telegraph": 2, "perona_malik": 4, "ginzburg_landau": 2, "fog_reveal_memory": 1};
 export const PAGE = {
@@ -29,6 +32,7 @@ export const PAGE = {
     $('resetall').addEventListener('click', () => { for (const t of tiles) { t.page.reset = true; t.page.seed = Math.random() * 100; t.dirty = true; } });
   },
   leave(t) { t.page.pendingReset = true; t.page.acc = 0; },
+  saver(t) { const pg = t.page; pg.pendingReset = false; pg.reset = true; pg.seed = Math.random() * 100; pg.acc = 0; t.dirty = true; },
   tick(dt, now) { for (const t of this.ctx.tiles) { const pg = t.page; if (pg.pendingReset && t.rate <= 0.002) { pg.pendingReset = false; pg.reset = true; t.dirty = true; } } },
   knob(t, i) { if (i === 0 && ['life', 'brain', 'excitable', 'cyclic', 'majority', 'dla', 'ising'].includes(t.s.name)) t.page.reset = true; },
   step(enc, t, reset) {
