@@ -199,7 +199,8 @@ fn rail(v: f32) -> vec3f { let lo = mix(qu.ink.rgb, qu.tone.rgb, smoothstep(0.0,
     let bg = mix(qu.ink.rgb, qu.tone.rgb, 0.10 + 0.10 * comb * smoothstep(0.0, 0.05, length(v)));
     let tp = vec2i(clamp((uv * 0.5 + 0.5) * f32(TS), vec2f(0.0), vec2f(f32(TS) - 1.0)));
     let tr = textureLoad(trailTex, tp, 0);
-    let glow = 1.0 - exp(-tr.x * 1.2);
+    // the trail covers uv in [-1, 1]; a wide canvas (the screensaver) fades it out past that square
+    let glow = (1.0 - exp(-tr.x * 1.2)) * (1.0 - smoothstep(1.0, 1.12, max(abs(uv.x), abs(uv.y))));
     let col = mix(bg, rail(0.55 + 0.45 * clamp(tr.y / max(tr.x, 1e-3) * 0.5, 0.0, 1.0)), glow);
     return vec4f(col, 1.0);
 }
