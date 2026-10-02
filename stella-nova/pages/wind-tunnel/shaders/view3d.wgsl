@@ -26,7 +26,7 @@ struct CamU {
   dims: vec4f,    // nx, ny, nz, U
   slice: vec4f,   // axis (0 x, 1 y, 2 z, 3 off), position (cells), field, alpha
   misc: vec4f,    // surface (0 material, 1 pressure), refL, ground, vorticity scale
-  misc2: vec4f,   // pressure scale, time (s), streak color mode, pad
+  misc2: vec4f,   // pressure scale, time (s), streak color mode, dim (0 = none, 1 = black)
 };
 
 struct PartU {
@@ -321,7 +321,7 @@ fn fsScene(i: SOut) -> FOut {
     let spec = pow(max(dot(n, hv), 0.0), 48.0) * shiny;
     let rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
     var c = base * (0.18 + 0.85 * dif + 0.22 * fill) + vec3f(spec) + vec3f(0.12, 0.2, 0.3) * rim * 0.5;
-    o.col = vec4f(c, 1.0);
+    o.col = vec4f(c * (1.0 - CAM.misc2.w), 1.0);
     o.depth = depthOf(p);
     return o;
   }
@@ -346,6 +346,7 @@ fn fsScene(i: SOut) -> FOut {
     o.col = vec4f(mix(sky, c, clamp(fade, 0.0, 1.0)), 1.0);
     o.depth = depthOf(p);
   }
+  o.col = vec4f(o.col.rgb * (1.0 - CAM.misc2.w), 1.0);
   return o;
 }
 
@@ -380,7 +381,7 @@ fn fsSlice(i: POut) -> @location(0) vec4f {
   if (solidAt(i.w)) { discard; }
   let c = fieldColor(i.w, u32(CAM.slice.z));
   let a = CAM.slice.w;
-  return vec4f(c * a, a);
+  return vec4f(c * a * (1.0 - CAM.misc2.w), a);
 }
 
 // ------------------------------------------------------------ streaks
@@ -440,5 +441,5 @@ fn fsLine(i: LOut) -> @location(0) vec4f {
   let hw = CAM.vpSize.z * 0.5;
   let edge = 1.0 - smoothstep(hw - 0.25, hw + 0.75, abs(i.across));
   let a = i.col.a * edge;
-  return vec4f(i.col.rgb * a, a);
+  return vec4f(i.col.rgb * a * (1.0 - CAM.misc2.w), a);
 }

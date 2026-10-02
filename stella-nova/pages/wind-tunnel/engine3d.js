@@ -18,7 +18,8 @@
 //
 // Camera: f.camera = { eye, target, fovY, shift: [sx, sy] }. shift moves the
 // projection center in NDC, so main.js can center the tunnel in the part of
-// the canvas that the panels leave clear.
+// the canvas that the panels leave clear. f.dim (0..1, default 0) darkens the
+// whole frame toward black, for the screensaver fade in main.js.
 //
 // Memory: populations 2 x 19 x n f32 (152 bytes per cell), types n u32,
 // macro texture 8 bytes per cell. The caller picks a grid that fits
@@ -279,7 +280,7 @@ export async function createEngine3D(device, code, opts) {
       cam.set([nx, ny, nz, flow.U], 40);
       cam.set(f.slice, 44);
       cam.set([f.surface, f.refL, f.ground, f.vortScale], 48);
-      cam.set([f.presScale, f.time, f.whiteStreaks ? 1 : 0, 0], 52);
+      cam.set([f.presScale, f.time, f.whiteStreaks ? 1 : 0, f.dim || 0], 52);
       device.queue.writeBuffer(camBuf, 0, cam);
 
       const count = Math.min(f.particles | 0, maxParticles);

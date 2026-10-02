@@ -43,6 +43,7 @@
 //    grep -n 'function drawLegend'    colorbar per field
 //    grep -n 'function buildUI'       panel, dock, sheet
 //    grep -n 'function bindGestures'  drag, pinch, wheel, double tap
+//    grep -n 'window.snSaver'         screensaver hook and autopilot
 // ============================================================================
 
 import { SHAPES, COMMON, FLUIDS, defaults, commonDefaults, packShape } from './shapes.js';
@@ -355,6 +356,7 @@ function frame(t) {
   const dt = lastT ? t - lastT : 16.7;
   lastT = t;
   fps += (1000 / Math.max(dt, 1) - fps) * 0.05;
+  if (SAVER) SAVER.tick(Math.min(dt, 50) / 1000);
   resize();
   if (shapeDirty) { shapeDirty = false; applyShape(); }
   if (flowDirty) { flowDirty = false; applyFlow(); }
@@ -394,7 +396,7 @@ function frame(t) {
       lineW: Math.max(1.3, 1.2 * dpr), lineAlpha: G.slice < 3 && G.field !== 4 ? 0.4 : 0.62, whiteStreaks: G.slice < 3 && G.field !== 4,
       particles: count, mode, life,
       rakeA: [2, 8, Math.max(y0, b.cy - b.h * 0.9), y1], rakeB: [nz / 2 - zw, nz / 2 + zw],
-      time: t / 1000,
+      time: t / 1000, dim: SAVER ? 1 - SAVER.k : 0,
     });
   }
 
@@ -829,5 +831,54 @@ function bindGestures() {
   }, { passive: false });
   setTimeout(hideHint, 9000);
 }
+
+// ------------------------------------------------------------- screensaver
+// Shell screensaver hook (lib/screensaver.js). enter() hides every overlay
+// with display:none, so occlusion() gives the camera the full canvas, and
+// keeps the 3D mode with rake streaks. The autopilot plays a seeded tour of
+// SAVER_TOUR, about three objects per dwell. setShape() restarts the flow,
+// so each change happens at the bottom of a fade to black (f.dim in the
+// engine). The camera orbits slowly and the pitch eases between 0.2 and 0.4.
+// G.rate (1 - 0.5 calm) slows the flow. SAVER is null outside the saver.
+const SAVER_TOUR = [['cow', 'Spherical cow'], ['car', 'Fastback'], ['airfoil', 'NACA 4412'], ['truck', 'Aero kit'], ['cow', 'Holstein'], ['sphere', 'Ball'], ['car', 'SUV']];
+let SAVER = null;
+window.snSaver = {
+  enter(opts) {
+    const calm = Math.max(0, Math.min(1, +opts.calm || 0));
+    const secs = Math.max(20, +opts.seconds || 60), fade = 2;
+    const show = Math.max(6, secs / 3 - 2 * fade);
+    let a = (opts.seed >>> 0) || 1;
+    const rng = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1); t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const st = document.createElement('style');
+    st.textContent = 'html.saver #hint,html.saver #gear,html.saver #card,html.saver #legend,html.saver #panel,html.saver #status,html.saver #dock,html.saver .topbar{display:none!important}html.saver #gl{cursor:none}';
+    document.head.appendChild(st);
+    document.documentElement.classList.add('saver');
+    if (G.mode !== '3d') setMode('3d');
+    G.streaks = 'rake'; G.field = 0; G.slice = 3; G.paused = false; G.rate = 1 - 0.5 * calm;
+    let i = Math.floor(rng() * SAVER_TOUR.length);
+    const yaw0 = rng() * 6.283;
+    const next = () => {
+      const [key, preset] = SAVER_TOUR[i];
+      i = (i + 1) % SAVER_TOUR.length;
+      G.params[key] = Object.assign(defaults(key), SHAPES[key].presets[preset]);
+      setShape(key);
+    };
+    next();
+    let ph = 'in', pt = 0, tt = 0;
+    SAVER = {
+      k: 0,
+      tick(dt) {
+        pt += dt; tt += dt;
+        if (ph === 'in') { SAVER.k = Math.min(1, pt / fade); if (SAVER.k >= 1) { ph = 'show'; pt = 0; } }
+        else if (ph === 'show') { if (pt >= show) { ph = 'out'; pt = 0; } }
+        else { SAVER.k = Math.max(0, 1 - pt / fade); if (SAVER.k <= 0) { next(); ph = 'in'; pt = 0; } }
+        orbit.yaw = yaw0 + tt * 0.05 * (1 - 0.6 * calm);
+        orbit.pitch = 0.3 - 0.1 * Math.cos(tt * 0.04);
+        orbit.dist = 1; orbit.panY = 0;
+      },
+    };
+    return { canvas, warmupMs: 3000 };
+  },
+};
 
 boot();
