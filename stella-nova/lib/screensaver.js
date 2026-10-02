@@ -23,7 +23,9 @@
 //    opts.label(info)     the page names what is on screen. info =
 //                         { title, sub, lines: [..], eq: [..] }, plain text
 //                         (Unicode maths, no KaTeX). Call it again when the
-//                         subject changes; label(null) clears it. The shell
+//                         subject changes (a new title fades to the new
+//                         plate; the same title swaps the text in place, for
+//                         live values); label(null) clears it. The shell
 //                         draws it on a plate at the lower right. The plate
 //                         is DOM, so a recording does not hold it.
 //    snSaver.exit()       optional. The controller calls it when the user
@@ -56,7 +58,8 @@ const STORE = 'sn-saver-settings-v2';
 // marks hook: true gets the long wait (a module with a CDN import can take
 // seconds under load). Other pages go to the generic mode soon.
 const HOOK_WAIT_MS = 8000, NO_HOOK_WAIT_MS = 800;
-const LOAD_WAIT_MS = 15000;  // a page that never loads is skipped after this
+const LOAD_WAIT_MS = 30000;  // a page that never loads is skipped after this
+                             // (a page with CDN scripts took 18-24 s under load)
 
 const DEFAULTS = {
   pages: null,          // null = the catalog default list
@@ -423,17 +426,25 @@ function wait(ms) { return new Promise(res => setTimeout(res, ms)); }
 // The label plate: fade out, swap the text, fade in. The page colour of the
 // run tints the subtitle.
 let labelTimer = 0;
+function labelHTML(info) {
+  const arr = v => (Array.isArray(v) ? v : v ? [v] : []).map(String);
+  return (info.title ? `<b>${esc(info.title)}</b>` : '') + (info.sub ? `<i>${esc(info.sub)}</i>` : '')
+    + arr(info.lines).map(t => `<p>${esc(t)}</p>`).join('') + (arr(info.eq).length ? `<code>${esc(arr(info.eq).join('\n'))}</code>` : '');
+}
 function setLabel(info) {
   const p = el('sn-saver-label');
+  if (info && S.labels && run && p.classList.contains('on') && p.dataset.title === String(info.title || '')) {
+    // Same subject: live values change, so swap the text with no fade.
+    p.innerHTML = labelHTML(info);
+    return;
+  }
   clearTimeout(labelTimer);
   p.classList.remove('on');
   if (!info || !S.labels || !run) return;
-  const arr = v => (Array.isArray(v) ? v : v ? [v] : []).map(String);
-  const html = (info.title ? `<b>${esc(info.title)}</b>` : '') + (info.sub ? `<i>${esc(info.sub)}</i>` : '')
-    + arr(info.lines).map(t => `<p>${esc(t)}</p>`).join('') + (arr(info.eq).length ? `<code>${esc(arr(info.eq).join('\n'))}</code>` : '');
+  const html = labelHTML(info);
   if (!html) return;
   const page = allPages().find(q => q.key === run.order[run.i]);
-  labelTimer = setTimeout(() => { p.innerHTML = html; if (page) p.style.setProperty('--c', page.color); p.classList.add('on'); }, p.innerHTML ? 700 : 0);
+  labelTimer = setTimeout(() => { p.innerHTML = html; p.dataset.title = String(info.title || ''); if (page) p.style.setProperty('--c', page.color); p.classList.add('on'); }, p.innerHTML ? 700 : 0);
 }
 
 // The page hook, or the generic mode when the page has none.
