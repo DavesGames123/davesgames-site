@@ -651,17 +651,29 @@ function saverPlate(t) {
     : real ? 'Y = √2 N' + sub(l) + sub(am) + ' ' + P + ' · ' + (m > 0 ? 'cos ' : 'sin ') + (am === 1 ? '' : am) + 'φ'
     : 'Y' + sub(l) + sub(m) + ' = N' + sub(l) + sub(am) + ' ' + P + ' · e^(' + (m < 0 ? '−' : '') + 'i' + (am === 1 ? '' : am) + 'φ)';
   const txt = id => ($(id) && $(id).textContent) || '';
+  // params, the page's TeX (typeset.mjs, split in two at R) and its RULES:
+  // n m1, ell m2, m m3, psi m5, E_n m6. eq is the plain fallback. The
+  // hook adds the anchor.
   return {
     title: 'Hydrogen ' + t.spec.name + ' orbital',
-    sub: real ? 'real orbital' : 'complex orbital, e^imφ',
+    sub: real ? 'Real orbital' : 'Complex orbital, e^imφ',
+    params: [
+      { sym: 'n', name: 'shell', value: String(n), cls: 'm1' },
+      { sym: '\\ell', name: 'angular, ' + L_LETTER[l], value: String(l), cls: 'm2' },
+      { sym: 'm', name: 'magnetic', value: fmtM(m), cls: 'm3' },
+      { sym: 'E_n', name: 'energy', value: txt('dE').replace(/-/g, '−'), cls: 'm6' },
+      { sym: '\\langle r\\rangle', name: 'mean radius', value: txt('dR') },
+    ],
     lines: [
-      '|' + n + ', ' + l + ', ' + fmtM(m) + '⟩ · n = ' + n + ' (shell) · l = ' + l + ' (' + L_LETTER[l] + ') · m = ' + fmtM(m),
-      'E' + sub(n) + ' = ' + txt('dE').replace(/-/g, '−'),
-      'Radial nodes: ' + txt('dRad'),
-      'Angular nodes: ' + txt('dAng'),
-      '⟨r⟩ = (3n² − l(l+1))/2 = ' + txt('dR'),
+      'Nodes: ' + txt('dRad') + ' radial, ' + txt('dAng') + ' angular.',
       'Cut: ' + txt('dPlane'),
     ],
+    tex: [
+      '\\psi_{n\\ell m}(r,\\vartheta,\\varphi) = R_{n\\ell}(r)\\,Y_{\\ell}^{m}(\\vartheta,\\varphi)',
+      'R_{n\\ell} = \\sqrt{\\left(\\frac{2}{n a_0}\\right)^{\\!3}\\frac{(n-\\ell-1)!}{2n\\,(n+\\ell)!}}\\,e^{-\\rho/2}\\,\\rho^{\\ell}\\,L^{2\\ell+1}_{n-\\ell-1}(\\rho)',
+      '\\rho=\\frac{2r}{n a_0},\\qquad E_n=-\\frac{13.6\\ \\mathrm{eV}}{n^{2}}',
+    ],
+    rules: [['n', 'm1'], ['\\ell', 'm2'], ['m', 'm3'], ['\\psi', 'm5'], ['E_n', 'm6']],
     eq: [
       'ψ' + sub(n) + sub(l) + sub(m) + '(r,θ,φ) = R' + sub(n) + sub(l) + '(r) · Y(θ,φ)',
       'R' + sub(n) + sub(l) + '(r) ∝ ' + rho + laguerreText(k, 2 * l + 1),
@@ -698,7 +710,7 @@ window.snSaver = {
     const ctx = sv.getContext('2d', { alpha: false });
     const k = 1 - 0.6 * calm;
     A.rate = [6 * k, 2 * k, 9 * k]; FRAME_MS = 120;
-    const plate = typeof o.label === 'function' ? o.label : null;
+    const plate = typeof o.label === 'function' ? o.label : null, ANCHOR_F = 0.36;
     const css = getComputedStyle(document.documentElement);
     const serif = css.getPropertyValue('--serif').trim() || 'serif', sans = css.getPropertyValue('--sans').trim() || 'sans-serif';
     let alpha = 0, label = null;
@@ -736,7 +748,13 @@ window.snSaver = {
       detailSize = Math.min(1800, Math.round(side * dpr));
       if (cv.width !== detailSize) { cv.width = detailSize; cv.height = detailSize; }
       label = [t.spec.name, `|${t.n}, ${t.l}, ${fmtM(t.m)}⟩  ·  ${G.kind === 'real' ? 'real orbital' : 'complex, e^imφ'}`];
-      if (plate) plate(saverPlate(t));
+      // The anchor: the centre of the copied detail image (#svCanvas fills
+      // the window), and a radius that holds the bright part of the density,
+      // ANCHOR_F of the image side. Null while the image is faded out.
+      if (plate) plate(Object.assign(saverPlate(t), {
+        anchor: () => (alpha < 0.3 || detailIndex < 0 ? null
+          : { x: innerWidth / 2, y: innerHeight / 2, r: ANCHOR_F * Math.min(innerWidth, innerHeight) * 0.96, pts: [{ x: innerWidth / 2, y: innerHeight / 2 }] }),
+      }));
     };
     (async () => {
       while (!pool.length || !TILES.length) await wait(100);
