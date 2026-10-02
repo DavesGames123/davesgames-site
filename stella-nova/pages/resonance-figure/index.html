@@ -19,7 +19,10 @@
    LOAD ORDER
      1. in-frame guard   adds .in-frame when embedded in the site shell iframe
      2. style.css        page stylesheet
-     3. main.js          classic script at end of body; builds and animates
+     3. lib/sci.css      science type and math colors .m1 to .m6 (@imports
+                         the fonts)
+     4. main.js          classic script at end of body; builds and animates;
+                         typesets the [data-tex] boxes with lib/sci-math.js
 
    LAYOUT  (# marks an element id that main.js writes into or reads)
      ┌──────────────────────────────────────────────────────────────────┐
@@ -42,10 +45,8 @@
   ═══════════════════════════════════════════════════════════════════════════
 -->
 <meta name="description" content="Two perpendicular swings trace one loop. A simple frequency ratio closes the loop and sounds consonant. Pick a ratio, hear the two tones, watch the shape.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: when embedded in the site shell iframe, tag <html> so the
@@ -53,53 +54,58 @@
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
-  <div class="sys">SYS&nbsp;//&nbsp;MUSIC.RESONANCE</div>
-  <div class="pagetitle">Resonance Figure</div>
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Resonance figure</div>
 </div>
 
 <!-- The figure canvas main.js draws into. -->
 <canvas id="fig"></canvas>
-<button id="gear" aria-label="Controls">⚙</button>
+<button id="gear" aria-label="Controls">☰</button>
 
 <!-- Control panel: main.js builds the ratio steppers, presets, sliders and the
      sound row inside these containers. -->
 <div id="panel" class="open">
   <button id="panelClose" aria-label="Close controls">✕</button>
 
-  <div class="sec-label">RATIO</div>
+  <div class="sec-label">Equations</div>
+  <!-- main.js typesets the [data-tex] boxes (FIG_RULES colors). -->
+  <div class="eq sci-eq" data-tex="x(t)=\sin\!\big(2\pi(A+\delta)\,t+2\pi\varphi\big)"></div>
+  <div class="eq sci-eq" data-tex="y(t)=\sin(2\pi B\,t)"></div>
+  <div class="eq sci-eq" data-tex="f_x=f_0\,(A+\delta),\qquad f_y=f_0\,B"></div>
+
+  <div class="sec-label">Ratio</div>
   <div class="ratio-row">
     <div class="stepper" id="stepA">
       <button data-d="-1" aria-label="A down">−</button>
       <span class="num" id="numA">3</span>
       <button data-d="1" aria-label="A up">+</button>
-      <span class="axis-tag ax">horizontal</span>
+      <span class="axis-tag ax"><span class="sci-sym" data-tex="A" data-inline></span> horizontal</span>
     </div>
     <span class="colon">:</span>
     <div class="stepper" id="stepB">
       <button data-d="-1" aria-label="B down">−</button>
       <span class="num" id="numB">2</span>
       <button data-d="1" aria-label="B up">+</button>
-      <span class="axis-tag ay">vertical</span>
+      <span class="axis-tag ay"><span class="sci-sym" data-tex="B" data-inline></span> vertical</span>
     </div>
   </div>
 
-  <div class="sec-label">COMMON INTERVALS</div>
+  <div class="sec-label">Common intervals</div>
   <div class="presets" id="presets"></div>
 
-  <div class="sec-label">SHAPE</div>
-  <div class="row"><label>Phase</label><input type="range" id="phase" min="0" max="1" step="0.005" value="0.25"><span class="val" id="phaseV"></span></div>
-  <div class="row"><label>Detune</label><input type="range" id="detune" min="-0.06" max="0.06" step="0.001" value="0"><span class="val" id="detuneV"></span></div>
-  <div class="row"><label>Speed</label><input type="range" id="speed" min="0.02" max="0.4" step="0.005" value="0.09"><span class="val" id="speedV"></span></div>
-  <div class="hint">Detune nudges one swing off the exact ratio, so the loop drifts and never quite sits still — as a real string does.</div>
+  <div class="sec-label">Shape</div>
+  <div class="row"><label><span class="sci-sym" data-tex="\varphi" data-inline></span> <span class="w">phase</span></label><input type="range" id="phase" min="0" max="1" step="0.005" value="0.25"><span class="val" id="phaseV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="\delta" data-inline></span> <span class="w">detune</span></label><input type="range" id="detune" min="-0.06" max="0.06" step="0.001" value="0"><span class="val" id="detuneV"></span></div>
+  <div class="row"><label>Trace speed</label><input type="range" id="speed" min="0.02" max="0.4" step="0.005" value="0.09"><span class="val" id="speedV"></span></div>
+  <div class="hint">Detune moves one swing off the exact ratio. The loop then drifts and does not close, as on a real string.</div>
 
-  <div class="sec-label">SOUND</div>
+  <div class="sec-label">Sound</div>
   <div class="modes">
-    <button id="soundBtn">▶ PLAY TONES</button>
+    <button id="soundBtn">Play tones</button>
   </div>
-  <div class="row"><label>Base</label><input type="range" id="base" min="80" max="330" step="1" value="131"><span class="val" id="baseV"></span></div>
+  <div class="row"><label><span class="sci-sym" data-tex="f_0" data-inline></span> <span class="w">base frequency</span></label><input type="range" id="base" min="80" max="330" step="1" value="131"><span class="val" id="baseV"></span></div>
   <div class="row"><label>Volume</label><input type="range" id="vol" min="0" max="100" value="55"><span class="val" id="volV"></span></div>
-  <div class="hint">Each axis is one tone. The horizontal tone is baseHz times A, the vertical is baseHz times B. Simple ratios beat slowly and lock; complex ratios clash.</div>
+  <div class="hint">Each axis is one tone. A simple ratio closes the loop and sounds consonant. A complex ratio makes a dense loop and clashes.</div>
 </div>
 
 <!-- Live readout main.js rewrites: the ratio, the nearest interval, whether the

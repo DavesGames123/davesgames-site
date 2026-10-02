@@ -23,10 +23,16 @@
      grep -n 'drawFrame'    the velocity and perpendicular vectors
      grep -n 'buildUI'      the control panel construction
      grep -n 'snSaver'      the screensaver hook and its figure tour
+     grep -n 'FIG_RULES'    symbol -> math color class
    ========================================================================== */
 (() => {
   'use strict';
   const TAU = Math.PI * 2;
+  // Math colors (lib/sci.css) of the panel equations and slider symbols:
+  // x m1, y m2, A m3, B m4, phase phi m5, detune delta m6. t, pi and the
+  // frequencies f keep the default color.
+  const FIG_RULES = [['x', 'm1'], ['y', 'm2'], ['A', 'm3'], ['B', 'm4'], ['\\varphi', 'm5'], ['\\delta', 'm6']];
+  import('../../lib/sci-math.js').then(m => m.typesetAll(document, FIG_RULES)).catch(err => console.error('[math]', err));
   const MOB = window.matchMedia('(max-width:768px)').matches || (window.matchMedia('(pointer:coarse)').matches);
 
   const G = { A:3, B:2, phase:0.25, detune:0, speed:0.09, baseHz:131, vol:55, playing:false };
@@ -52,7 +58,11 @@
     // In saver mode the status bar is hidden, and on a wide screen the block
     // moves left so the shell label plate (lower right) does not cover it.
     const botRes = SAVER.on ? 0 : (MOB ? 38 : 22);           // clear of the status bar
-    const usableW = SAVER.on && W > H * 1.2 ? W - Math.min(500, W * 0.4) : W, usableH = H - botRes;
+    // On a wide screen the open control panel covers the right edge, so the
+    // block centers in the part that is left.
+    const pnl = document.getElementById('panel');
+    const pw = !SAVER.on && !MOB && pnl && pnl.classList.contains('open') ? pnl.offsetWidth : 0;
+    const usableW = SAVER.on && W > H * 1.2 ? W - Math.min(500, W * 0.4) : W - pw, usableH = H - botRes;
     const avail = Math.min(usableW, usableH) - pad * 2;
     const strip = Math.round(avail * (MOB ? 0.28 : 0.32));   // wave panels: more space
     const r = Math.max(36, (avail - strip - gap) / 2);       // figure: less space
@@ -126,7 +136,7 @@
   }
   function syncSoundBtn() {
     const b = document.getElementById('soundBtn');
-    b.textContent = G.playing ? '■ STOP TONES' : '▶ PLAY TONES';
+    b.textContent = G.playing ? 'Stop tones' : 'Play tones';
     b.classList.toggle('on', G.playing);
   }
 
@@ -259,7 +269,7 @@
       ctx.beginPath(); ctx.moveTo(b.figL, gy); ctx.lineTo(b.figR, gy); ctx.stroke();
     }
     ctx.strokeStyle = BOX; ctx.lineWidth = 1.2; ctx.strokeRect(b.figL, b.figT, 2 * b.r, 2 * b.r);
-    ctx.fillStyle = TICK; ctx.font = "500 " + (MOB ? 9 : 11) + "px 'JetBrains Mono',monospace";
+    ctx.fillStyle = TICK; ctx.font = "500 " + (MOB ? 9 : 11) + "px Inter,system-ui,sans-serif";
     ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText('x', b.figR - 4, b.figB - 3);
     ctx.textAlign = 'left'; ctx.textBaseline = 'top'; ctx.fillText('y', b.figL + 4, b.figT + 3);
     ctx.restore();
@@ -269,7 +279,7 @@
     const pBot = b.figT - b.gap, pTop = pBot - b.strip;         // top panel
     const pRight = b.figL - b.gap, pLeft = pRight - b.strip;    // left panel
     ctx.save(); ctx.globalCompositeOperation = 'source-over'; ctx.lineWidth = 1;
-    ctx.font = "500 " + (MOB ? 8 : 10) + "px 'JetBrains Mono',monospace";
+    ctx.font = "500 " + (MOB ? 8 : 10) + "px Inter,system-ui,sans-serif";
 
     // ---- top panel: horizontal component; amplitude across, time up ----
     for (let k = -2; k <= 2; k++) {                             // amplitude grid (vertical)
