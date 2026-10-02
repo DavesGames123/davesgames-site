@@ -685,7 +685,10 @@ function observeSize() {
   const cv = $('gl');
   let sizeT = 0;
   const apply = () => {
-    const dpr = Math.min(devicePixelRatio || 1, 2);
+    // The screensaver draws at 1 px per CSS px. The bilinear cells are 8 CSS
+    // px or more, so a 2x canvas adds no detail but 4x the fill and the copy
+    // into #saver-cv.
+    const dpr = Math.min(devicePixelRatio || 1, S.saver ? 1 : 2);
     S.engine.resize(Math.round(cv.clientWidth * dpr), Math.round(cv.clientHeight * dpr), dpr);
   };
   new ResizeObserver(() => {
@@ -700,6 +703,7 @@ function observeSize() {
     }, 400);
   }).observe(cv);
   apply();
+  S.applySize = apply;   // the screensaver calls it after the dpr cap
 }
 
 // Canvas client px -> world cell (x, y), not wrapped.
@@ -945,6 +949,8 @@ function bindKeys() {
 // glider runs with the follow camera, zoomed in. A grower (a chain creature
 // that fills the world) runs at zoom 1 with no follow. calm 1 runs at 0.5
 // times the normal speed. A creature that dies is stamped again.
+// Speed: a zoomed creature gets a world cut to the screen part, and #gl
+// draws at 1 px per CSS px. See show() and observeSize().
 const SAVER_CODES = [
   ['O2u', 2.4], ['OG2g', 2.4], ['HN+m', 1], ['OV2u', 2], ['2S1f', 2.2], ['O4t', 1.6], ['PN+i', 1],
   ['P4al', 1.8], ['K4s', 2.2], ['HN+bs', 1],
@@ -973,6 +979,7 @@ window.snSaver = {
     const calm = Math.max(0, Math.min(1, +opts.calm || 0));
     while (S.idx < 0) await new Promise(r => setTimeout(r, 50));
     S.saver = true;
+    const SAVER_SHORT = S.worldShort;
     const st = document.createElement('style');
     st.textContent = 'html.saver #panel,html.saver #gear,html.saver #toast,html.saver #cursor,html.saver #dock,html.saver #status,'
       + 'html.saver #browser,html.saver #nogpu{display:none!important}'
@@ -980,6 +987,7 @@ window.snSaver = {
       + 'html.saver #saver-cv{position:fixed;inset:0;width:100%;height:100%;z-index:30;cursor:none;background:#000}';
     document.head.appendChild(st); document.documentElement.classList.add('saver');
     setOpen(false); openBrowser(false);
+    if (S.applySize) S.applySize();
     const gl = $('gl');
     if (!S.engine) return { canvas: gl, warmupMs: 0 };
     const cv = document.createElement('canvas'); cv.id = 'saver-cv'; document.body.appendChild(cv);
@@ -990,11 +998,19 @@ window.snSaver = {
     const show = () => {
       const e = list[k];
       setPlaying(true);
+      // The world of a zoomed creature is cut to the part that the screen
+      // shows (worldShort / zoom), not the full 128. The step cost is per
+      // cell, so zoom 2.4 costs about 5x less. The world keeps 4.5 R across
+      // its short side, so a glider does not feel itself across the wrap.
+      // The zoom goes up by the same factor, so a cell keeps its size.
+      const c = S.creatures[e.i];
+      const Rs = c.R * c.scale;
+      S.worldShort = Math.max(Math.ceil(4.5 * Rs), Math.round(SAVER_SHORT / e.zoom));
       selectCreature(e.i);
       sizeWorld(true);
       const grow = S.c.cls === 'grow';
       setFollow(!grow);
-      setZoom(e.zoom);
+      setZoom(e.zoom * S.worldShort / SAVER_SHORT);
       S.speed = 2 * (1 - 0.5 * calm);
       t = 0; dead = 0;
       saverLabel(opts.label);
