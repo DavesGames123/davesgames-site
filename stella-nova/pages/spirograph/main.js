@@ -627,7 +627,9 @@ function composite(cv) {
 // ── screensaver ────────────────────────────────────────────────────────────
 // lib/screensaver.js has the protocol. The tour draws one preset after
 // another. Each preset draws in about 70% of its dwell, rests, and fades.
-// The plate names the preset and gives the curve in plain Unicode.
+// The plate names the preset, gives the tooth counts as parameters, and the
+// panel's own TeX (TEX_IN or TEX_OUT, TEX_CLOSE, SLIP_*) with RULES. The
+// plain eq list stays as the fallback. The anchor is penAnchor().
 function saverLabel() {
   const s = S.saver, a = S.active; if (!s || !a) return;
   const { g, petals, laps } = closure(a.R, a.r), q = (a.d / a.r).toFixed(2);
@@ -637,12 +639,30 @@ function saverLabel() {
   eq.push(`g = gcd(${a.R}, ${a.r}) = ${g}`, `n = R/g = ${petals},  L = r/g = ${laps}`);
   s.label({
     title: PRESETS[S.preset] ? PRESETS[S.preset].name : 'Spirograph',
-    // The shell sets sub in capitals, so the tooth counts go in lines:
-    // capitals would make r and R the same letter.
-    sub: a.out ? 'Epitrochoid' : 'Hypotrochoid',
-    lines: [`R = ${a.R}, r = ${a.r}, d = ${q} r`, `${petals} petals, closes after ${laps} laps`],
+    sub: a.out ? 'Epitrochoid: the wheel rolls outside the ring' : 'Hypotrochoid: the wheel rolls inside the ring',
+    params: [
+      { sym: 'R', name: 'ring teeth', value: String(a.R), cls: 'm1' },
+      { sym: 'r', name: 'wheel teeth', value: String(a.r), cls: 'm2' },
+      { sym: 'd', name: 'pen hole offset', value: `${q} r`, cls: 'm3' },
+      { sym: 'n', name: `petals, closes in ${laps} laps`, value: String(petals), cls: 'm6' },
+    ],
+    lines: ['The wheel rolls without slip, so the pen closes the curve after L laps.'],
+    tex: [a.out ? TEX_OUT : TEX_IN, TEX_CLOSE, a.out ? SLIP_OUT : SLIP_IN],
+    rules: RULES,
     eq,
+    anchor: penAnchor,
   });
+}
+// The rig on screen, for the shell's label plate, in page CSS px. The rig
+// canvas maps one unit to S.k device px about the sheet centre, turned by
+// a.rot (see drawRig). x, y: the ring centre. r: the reach of the rig,
+// extent(R, r, out). pts: the pen hole (penAt), so the leader points at it.
+function penAnchor() {
+  const a = S.active; if (!a || !S.k) return null;
+  const q = sheet.getBoundingClientRect(); if (!q.width) return null;
+  const u = S.k / S.dpr, cx = q.left + q.width / 2, cy = q.top + q.height / 2;
+  const [px, py] = penAt(a.R, a.r, a.out, a.d, a.t), c = Math.cos(a.rot), s = Math.sin(a.rot);
+  return { x: cx, y: cy, r: extent(a.R, a.r, a.out) * u, pts: [{ x: cx + (px * c - py * s) * u, y: cy + (px * s + py * c) * u }] };
 }
 function saverStep(now) {
   const s = S.saver;
