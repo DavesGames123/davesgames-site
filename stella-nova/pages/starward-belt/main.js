@@ -23,7 +23,7 @@
 //       function randomize  function original  function setAnimate  function buildLegend  function showTitles
 //       function goHome  function pick  function plot  function frameCourse  function renderCard
 //       function buildScrub  function drawScrub  function onWheel  function toggleHelp  KEYS
-//       function tick  function wake  function boot
+//       function tick  function wake  function boot  window.snSaver
 
 import { TIERS, STARWARD_MAP, indexMap } from './data.js';
 import { createCamera } from './camera.js';
@@ -686,7 +686,7 @@ function tick(now) {
   raf = 0;
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
-  const moving = camera.step(dt);
+  const moving = camera.step(saver ? dt * saver.camRate : dt);
   const view = camera.view();
   // Any change of view, eased or instant, gets a new overlay layout.
   const key = `${view.cx} ${view.cy} ${view.zoom} ${view.w} ${view.h}`;
@@ -749,6 +749,82 @@ async function boot() {
     showFallback(`${err && err.message ? err.message : 'WebGPU is not available.'} The chart still works without the dust field.`);
   }
 }
+
+// ─── screensaver ────────────────────────────────────────────────────────────
+// Shell saver hook (lib/screensaver.js). enter() hides every control, turns
+// on the drift without a hash or storage write, and picks the map from
+// opts.seed (the original map or one seeded random map, swapped once). The
+// autopilot then plots a course between two seeded stations, glides to it,
+// holds, clears it and glides back home, three or four times per dwell. The
+// camera eases at a fraction of its normal rate (calm 1 = slowest).
+// Recording: the chart is SVG over the WebGPU field, so a hidden 2D canvas
+// (#saver-rec) composes both. Each frame draws the field and the last SVG
+// snapshot (serialized to an image) into it. Labels in that snapshot use a
+// fallback font, because an SVG image can not load the page font.
+let saver = null;
+window.snSaver = {
+  enter(opts) {
+    const calm = clamp(+opts.calm || 0, 0, 1);
+    let seed = (opts.seed >>> 0) || 1;
+    const rng = () => { seed = (seed + 0x6D2B79F5) >>> 0; let x = Math.imul(seed ^ seed >>> 15, 1 | seed); x ^= x + Math.imul(x ^ x >>> 7, 61 | x); return ((x ^ x >>> 14) >>> 0) / 4294967296; };
+    saver = { camRate: 0.3 - 0.18 * calm };
+    const st = document.createElement('style');
+    st.textContent = '#title,#legend,#toolbar,#zoom,#scrub,#card,#hint,#help,#fallback,#plate{display:none!important}.stage{cursor:none!important}';
+    document.head.append(st);
+    toggleHelp(false);
+    state.animate = true;
+    state.hover = null;
+    if (rng() < 0.7) { const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let code = ''; for (let i = 0; i < 6; i++) code += A[(rng() * A.length) | 0]; swapTo(code); }
+    else { state.selected = []; state.path = null; sync(); goHome(); }
+    // Autopilot: one course per period, held for 65 percent of it.
+    const period = Math.max(10, (+opts.seconds || 60) / 3.5) * 1000 * (1 + 0.3 * calm);
+    let next = performance.now() + 2500, shown = false;
+    const auto = (now) => {
+      if (now >= next && map && map.NODES.length > 1 && !document.body.classList.contains('swapping')) {
+        if (!shown) {
+          const N = map.NODES, a = N[(rng() * N.length) | 0].id;
+          let b = a;
+          for (let i = 0; i < 8 && b === a; i++) b = N[(rng() * N.length) | 0].id;
+          state.selected = [a, b]; plot(true);
+          next = now + period * 0.65;
+        } else { clearSelection(); goHome(); next = now + period * 0.35; }
+        shown = !shown;
+      }
+      wake();
+      compose();
+      requestAnimationFrame(auto);
+    };
+    // Recorder canvas: opaque, the size of the field buffer.
+    const rec = document.createElement('canvas');
+    rec.id = 'saver-rec';
+    rec.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;opacity:0;pointer-events:none;z-index:-1';
+    document.body.append(rec);
+    const g = rec.getContext('2d', { alpha: false });
+    const ser = new XMLSerializer();
+    let snap = null, busy = false;
+    function grab() {
+      busy = true;
+      svg.setAttribute('width', stage.clientWidth); svg.setAttribute('height', stage.clientHeight);
+      const url = URL.createObjectURL(new Blob([ser.serializeToString(svg)], { type: 'image/svg+xml' }));
+      const im = new Image();
+      im.onload = () => { URL.revokeObjectURL(url); snap = im; busy = false; };
+      im.onerror = () => { URL.revokeObjectURL(url); busy = false; };
+      im.src = url;
+    }
+    function compose() {
+      const dpr = window.devicePixelRatio || 1;
+      const w = field ? canvas.width : Math.round(stage.clientWidth * dpr), h = field ? canvas.height : Math.round(stage.clientHeight * dpr);
+      if (rec.width !== w || rec.height !== h) { rec.width = w; rec.height = h; }
+      g.fillStyle = '#0b0b0b'; g.fillRect(0, 0, w, h);
+      if (document.body.classList.contains('swapping')) return;
+      if (field) g.drawImage(canvas, 0, 0, w, h);
+      if (snap) g.drawImage(snap, 0, 0, w, h);
+      if (!busy) grab();
+    }
+    requestAnimationFrame(auto);
+    return { canvas: rec, warmupMs: 2000 };
+  },
+};
 
 window.__sb = {
   get camera() { return camera; }, get map() { return map; }, state,
