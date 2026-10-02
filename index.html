@@ -23,7 +23,13 @@
 <meta name="twitter:description" content="Stella Nova, a space colony builder by Dave, with its interactive wiki and an open lab of physics simulations and live WebGPU shaders you can play in your browser.">
 <meta name="twitter:image" content="https://davesgames.io/stella-nova/icons/og-image.jpg?v=2">
 
-<script>location.replace('/stella-nova/' + location.hash);</script>
+<script>
+// Register the offline service worker (sw.js, scope /), then go to the shell.
+// The shell registers it too (stella-nova/lib/offline.js). Not on file://.
+// Local servers (localhost, 127.0.0.1) do not register it: see lib/offline.js.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+location.replace('/stella-nova/' + location.hash);
+</script>
 <meta http-equiv="refresh" content="0;url=/stella-nova/">
 </head>
 </html>

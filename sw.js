@@ -27,21 +27,29 @@
 //  Responses are stored with no Content-Length and no Content-Encoding.
 //  The body in the cache is decoded, so those headers would be wrong.
 //
+//  Local servers (localhost, 127.0.0.1): the worker caches nothing unless
+//  it was registered as sw.js?local=1 (the shell does that only after an
+//  opt-in, see lib/offline.js). Otherwise it deletes the sn-* caches and
+//  unregisters itself, so a dev server always gives the files on disk.
+//
 //  When a live request fails and the worker answers from sn-live, it posts
 //  { type: 'sn-live-fallback', url, saved } to each window. The shell shows
 //  a notice with the date of the copy.
 //
 //  grep -n targets
 //    version stamp ........ "const VERSION"
+//    local-server guard ... "const DEV_OFF"
 //    live data rules ...... "const LIVE_PATH"
 //    install / precache ... "async function precache"
 //    background pass ...... "async function warm"
 //    request routing ..... "function route"
 // ============================================================================
 'use strict';
-const VERSION = '1a31a977cd609a79';
+const VERSION = 'd5d856418e98fc25';
 importScripts('sw-manifest.js');
 
+const DEV_OFF = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(self.location.hostname)
+  && !new URL(self.location.href).searchParams.has('local');
 const M = self.SN_OFFLINE;
 const SCOPE = new URL('./', self.location).href;     // site root, with slash
 const CORE = 'sn-core-' + VERSION;
@@ -119,13 +127,18 @@ async function precache() {
 }
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(precache().then(() => self.skipWaiting()));
+  e.waitUntil(DEV_OFF ? self.skipWaiting() : precache().then(() => self.skipWaiting()));
 });
 
 // Activate: delete old core caches, delete lazy entries that are gone or
 // changed, then take control of the open pages.
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
+    if (DEV_OFF) {
+      for (const n of await caches.keys()) if (n.startsWith('sn-')) await caches.delete(n);
+      await self.registration.unregister();
+      return;
+    }
     for (const n of await caches.keys()) if (n.startsWith('sn-core-') && n !== CORE) await caches.delete(n);
     const lazy = await caches.open(LAZY);
     for (const req of await lazy.keys()) {
@@ -180,10 +193,12 @@ self.addEventListener('message', (e) => {
 });
 
 // Network first; on failure, the last good copy from sn-live, with a notice.
+// cache: 'no-cache' makes the browser ask the server: with no network, an
+// HTTP cache copy must not count as a live answer.
 async function liveFirst(req) {
   const cache = await caches.open(LIVE);
   try {
-    const res = await fetch(req);
+    const res = await fetch(req.mode === 'navigate' ? req : new Request(req, { cache: 'no-cache' }));
     if (res.ok && res.type !== 'opaque') await cache.put(req.url, restamp(res.clone(), { 'x-sn-saved': new Date().toISOString() }));
     return res;
   } catch (err) {
@@ -251,6 +266,7 @@ function route(e) {
 }
 
 self.addEventListener('fetch', (e) => {
+  if (DEV_OFF) return;
   const p = route(e);
   if (p) e.respondWith(p.catch(() => new Response('offline: ' + e.request.url, { status: 504, statusText: 'Offline', headers: { 'content-type': 'text/plain' } })));
 });
