@@ -51,9 +51,12 @@ function castings(B, T) {
   const bores = CYLS.map(k => ({ c: [CYL_X[k], 0], r: GEO.bore / 2 }));
   const barrel = exXZ(shapeOf(xz([[-204, -70], [204, -70], [204, 70], [-204, 70]]), bores), GEO.deck - 95, 40);
   B.add(block, barrel, 'iron', { pos: [0, 95, 0] });
+  // The walls and ledges stop at x = ±200, where the end plates start, and
+  // the ledges stop at the walls. No two boxes share an outer face, so the
+  // outer faces do not z-fight.
   for (const s of [1, -1]) {
-    B.add(block, new THREE.BoxGeometry(408, 135, 10), 'iron', { pos: [0, 27.5, s * 95] });
-    B.add(block, new THREE.BoxGeometry(408, 10, 30), 'iron', { pos: [0, 90, s * 85] });
+    B.add(block, new THREE.BoxGeometry(400, 135, 10), 'iron', { pos: [0, 27.5, s * 95] });
+    B.add(block, new THREE.BoxGeometry(400, 10, 20), 'iron', { pos: [0, 90, s * 80] });
   }
   for (const x of JOURNALS) {
     const bh = shapeOf(zy([[-90, -40], [90, -40], [90, 70], [-90, 70]]), [{ c: [0, 0], r: 26 }]);
@@ -138,8 +141,10 @@ function bottomEnd(B, sc) {
   // flywheel with its ring gear
   const fw = Object.assign(B.part('flywheel', { ex: [-120, EX.crank, 0], delay: 0.5, label: 'Flywheel', labelAt: [-232, 110, 60] }), { kind: 'flywheel' });
   B.add(fw, new THREE.LatheGeometry([[0, -8], [128, -8], [130, -6], [130, 6], [100, 8], [60, 9], [44, 9], [0, 9]].map(([r, y]) => new THREE.Vector2(r, y)), 72).rotateZ(Math.PI / 2), 'forged', { pos: [-224, 0, 0] });
-  B.add(fw, exYZ(shapeOf(gearPts(110, 133.5, 140.5, 0.4), [{ c: [0, 0], r: 127 }]), 12, 8), 'steel', { pos: [-222, 0, 0] });
-  for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; B.add(fw, cylX(5, 6, 6), 'dark', { pos: [-213, 36 * Math.cos(a), 36 * Math.sin(a)] }); }
+  // the ring gear face sits 0.5 mm behind the flywheel face (x = −216), not on it
+  B.add(fw, exYZ(shapeOf(gearPts(110, 133.5, 140.5, 0.4), [{ c: [0, 0], r: 127 }]), 12, 8), 'steel', { pos: [-222.5, 0, 0] });
+  // the six bolt heads stand 0.5 mm into the flywheel face (x = −216), not on it
+  for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; B.add(fw, cylX(5, 6, 6), 'dark', { pos: [-213.5, 36 * Math.cos(a), 36 * Math.sin(a)] }); }
   // crank pulley (damper) at the nose
   const dm = Object.assign(B.part('damper', { ex: [60, EX.crank, 0], delay: 0.45, label: 'Crank pulley', labelAt: [252, 50, 30] }), { kind: 'damper' });
   B.add(dm, new THREE.LatheGeometry([[18, -8], [62, -8], [62, -4], [58, -2.5], [62, -1], [62, 1], [58, 2.5], [62, 4], [62, 8], [18, 8]].map(([r, y]) => new THREE.Vector2(r, y)), 64).rotateZ(Math.PI / 2), 'dark', { pos: [246, 0, 0] });
@@ -237,7 +242,7 @@ function valveTrain(B, T, sc, axisEx) {
     const ps = Object.assign(B.part(id + 'Sprocket', { ex: [ex[0] + 60, ex[1], ex[2]], delay: 0.1, label: side >= 0 ? 'Cam sprocket' : null, labelAt: [8, 40, 0] }), { kind: 'camSprocket' });
     ps.holder.position.set(KX.chainX, yc, zc);
     B.add(ps, exYZ(shapeOf(gearPts(36, 42.5, 49.5), [0, 1, 2, 3, 4].map(i => ({ c: [26 * Math.cos(i * 1.2566 + 0.3), 26 * Math.sin(i * 1.2566 + 0.3)], r: 9 }))), 8, 10), 'steel');
-    B.add(ps, cylX(16, 16, 28), 'forged', { pos: [-4, 0, 0] });
+    B.add(ps, cylX(16, 16, 28), 'forged', { pos: [-5, 0, 0] });     // hub face 1 mm inside the sprocket face
     sc.cams.push(pc, ps);
   }
   // rockers (SOHC)
@@ -299,12 +304,23 @@ export function chainPath(circles) {
   return { L, segs, at, lines: t };
 }
 function timingDrive(B, T, sc) {
-  const crankC = { c: [0, 0], r: 23 };
-  // counter-clockwise in (z, y): crank, intake cam (+z), exhaust cam (−z)
-  const circles = T.id === 'dohc' ? [crankC, { c: T.camPos(1), r: 46 }, { c: T.camPos(-1), r: 46 }] : [crankC, { c: T.camPos(), r: 46 }];
-  const path = chainPath(circles);
-  const N = Math.round(path.L / 8), pitch = path.L / N;
-  sc.chain = { path, N, pitch };
+  // The pin pitch must be the tooth pitch of the sprockets (2πr / 18 on the
+  // crank). Else each pin comes to the teeth at a different phase, and the
+  // pins move through the teeth as the chain turns. So the pitch radius r
+  // is solved for a whole number N of pins round the loop: L(r) = N · 2πr / 18.
+  // r stays within 0.25 mm of 23 mm. The cam circles have radius 2r (1 : 2).
+  let r = 23, path, N;
+  for (let it = 0; it < 12; it++) {
+    const crankC = { c: [0, 0], r };
+    // counter-clockwise in (z, y): crank, intake cam (+z), exhaust cam (−z)
+    const circles = T.id === 'dohc' ? [crankC, { c: T.camPos(1), r: 2 * r }, { c: T.camPos(-1), r: 2 * r }] : [crankC, { c: T.camPos(), r: 2 * r }];
+    path = chainPath(circles);
+    // N is even: the links go inner, outer round the whole loop
+    if (!N) N = 2 * Math.round(path.L / (Math.PI * 4 * r / 18));
+    r = path.L / N / (Math.PI * 2 / 18);
+  }
+  const crankC = { c: [0, 0], r }, pitch = path.L / N;
+  sc.chain = { path, N, pitch, r };
   const ch = Object.assign(B.part('chain', { ex: [EX.chain, 0, 0], delay: 0.15, label: 'Timing chain', labelAt: [6, 170, 0] }), { kind: 'chain' });
   const plate = new THREE.BoxGeometry(1.4, 10.5, 5.2);
   const mk = (gap, n) => {
@@ -324,6 +340,19 @@ function timingDrive(B, T, sc) {
   cs.holder.position.x = KX.chainX;
   B.add(cs, exYZ(shapeOf(gearPts(18, 19.6, 26)), 8, 8), 'steel');
   sc.movers.crank.push(cs);
+  // Turn the teeth of each sprocket so that a tooth gap meets the chain pins.
+  // Before, the pins went through the teeth. At θ = 0, pin i is at
+  // s = i · pitch and each sprocket is at angle 0. The chain and the
+  // sprockets move at the same pitch speed, so one fixed turn is enough.
+  // The turn comes from the pin nearest the middle of the arc on that
+  // sprocket (path.segs[2j] is the arc round circle j).
+  const cams = T.id === 'dohc' ? [['camInSprocket', T.camPos(1)], ['camExSprocket', T.camPos(-1)]] : [['camSprocket', T.camPos()]];
+  [[cs, 18, crankC.c], ...cams.map(([id, cc]) => [B.parts[id], 36, cc])].forEach(([p, n, c], j) => {
+    const arc = path.segs[2 * j], step = Math.PI * 2 / n;
+    const q = path.at(Math.round((arc.s0 + arc.len / 2) / pitch) * pitch);
+    const t = Math.atan2(q.y - c[1], -(q.z - c[0]));      // the angle in the gearPts (a, b) plane
+    p.meshes[0].rotation.x = (t / step - Math.round(t / step)) * step;
+  });
   // guides: rails outside the two long straights, and a tensioner shoe
   const gd = Object.assign(B.part('guides', { ex: [EX.chain, 0, 0], delay: 0.15, label: 'Chain guide', labelAt: [0, 0, 0] }), { kind: 'guides' });
   gd.holder.position.x = KX.chainX;
@@ -352,7 +381,9 @@ function mergeTwo(a, b) {
 function ignitionAndGas(B, T, sc) {
   const plugG = new THREE.LatheGeometry([[0, -1.5], [1.2, -1.5], [1.2, 0], [7, 0], [7, 19], [10.5, 19], [10.5, 28], [7.5, 28], [6.5, 31], [6.5, 66], [3.5, 68], [3.5, 76], [0, 76]].map(([r, y]) => new THREE.Vector2(r, y)), 6 * 4);
   const ceramic = new THREE.LatheGeometry([[6.4, 31], [6.6, 31], [6.6, 66], [6.4, 66]].map(([r, y]) => new THREE.Vector2(r, y)), 32);
-  const gasG = new THREE.CylinderGeometry(42.7, 42.7, 1, 48, 1, false).translate(0, 0.5, 0);
+  // The gas starts 0.4 mm above the crown and stays inside the piston radius
+  // (42.6 mm). On the crown plane, the gas and the crown z-fight.
+  const gasG = new THREE.CylinderGeometry(42.4, 42.4, 1, 48, 1, false).translate(0, 0.5, 0);
   const sparkG = new THREE.SphereGeometry(5, 16, 12);
   for (const k of CYLS) {
     const p = Object.assign(B.part('plug' + k, { info: 'plug' + k, ex: [0, EX.head + 240, 0], delay: 0.05, label: k === 1 ? 'Spark plug' : null, labelAt: [0, 70, 0] }), { kind: 'plug', cyl: k });
@@ -381,7 +412,7 @@ function pose(B, T, sc, th) {
     r.position.set(CYL_X[k], GEO.r * Math.cos(al * D), GEO.r * Math.sin(al * D));
     r.rotation.x = -E.rodLean(al);
     const g = sc.gas[k];
-    g.position.y = x + GEO.compH; g.scale.y = Math.max(0.1, GAS_TOP - (x + GEO.compH));
+    g.position.y = x + GEO.compH + 0.4; g.scale.y = Math.max(0.1, GAS_TOP - (x + GEO.compH + 0.4));
   }
   for (const c of sc.cams) c.holder.rotation.x = E.camAngle(th) * D;
   for (const rec of sc.valves) {
@@ -392,7 +423,7 @@ function pose(B, T, sc, th) {
     if (rec.rocker) rec.rocker.holder.rotation.x = rec.v.side * E.rockerAngle(T, E.lobeLiftOf(rec.v, th));
   }
   // chain: links move with the crank sprocket's pitch line, clockwise seen from the front
-  const C = sc.chain, s0 = -23 * a, mm = C.meshes;
+  const C = sc.chain, s0 = -C.r * a, mm = C.meshes;
   let ii = 0, io = 0;
   for (let i = 0; i < C.N; i++) {
     const s = s0 + i * C.pitch;
