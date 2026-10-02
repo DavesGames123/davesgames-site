@@ -661,7 +661,8 @@ window.snSaver={
       SIM.showProbe=false;SIM.showArrows=false;SIM.showHeatmap=false;SIM.showTracers=true;
       SIM.stepping=false;
       SIM.tracerSpeed=1.2+0.8*(1-calm);SIM.tracerTrail=50;
-      preset(['anti','triangle','quad','parallel'][(opts.seed>>>0)%4]);
+      const name=['anti','triangle','quad','parallel'][(opts.seed>>>0)%4];
+      preset(name);
       SIM.selectedId=-1;
       const k=Math.max(1,Math.min(CW,CH)/450);
       // Offsets from the centre. At calm 0.7, rate gives a wobble period of
@@ -678,7 +679,38 @@ window.snSaver={
         requestAnimationFrame(drift);
       };
       requestAnimationFrame(drift);
+      saverLabel=opts.labels!==false&&typeof opts.label==='function'?opts.label:null;
+      saverName=name;
+      clearInterval(saverTimer);saverPlate();
+      if(saverLabel)saverTimer=setInterval(saverPlate,1000);
       return { canvas, warmupMs:1500 };
     });
-  }
+  },
+  exit(){saverLabel=null;clearInterval(saverTimer);saverTimer=0;}
 };
+// The plate (opts.label) names the preset, the Biot-Savart law, the closed
+// form that wireField() uses for an infinite wire, and the live values: each
+// wire current I (signed, + is out of the screen), the net current and |B| at
+// the centre from totalField(). wireField() folds μ₀ into the display scale,
+// so B = I/(2πr) with r in px, and the plate says so.
+let saverLabel=null,saverTimer=0,saverName='';
+const SAVER_NAMES={anti:'Anti-parallel pair',parallel:'Parallel pair',triangle:'Three wires · alternating',quad:'Four wires · alternating'};
+function saverPlate(){
+  if(!saverLabel)return;
+  const SUB='₀₁₂₃₄₅₆₇₈₉',sub=v=>String(v).replace(/[0-9]/g,d=>SUB[+d]);
+  const sg=v=>(v>=0?'+':'−')+Math.abs(v).toFixed(1);
+  const net=wires.reduce((a,w)=>a+w.current,0);
+  const [bx,by]=totalField(CW/2,CH/2);
+  const lines=[wires.map((w,i)=>'I'+sub(i+1)+' = '+sg(w.current)+' A'+(w.current>0?' ⊙':' ⊗')).join('   ')];
+  lines.push('net current ΣI = '+sg(net)+' A · '+wires.length+' wires, drifting and turning');
+  lines.push('|B| at centre = '+Math.hypot(bx,by).toExponential(2)+'  (μ₀ in display scale, r in px)');
+  lines.push('streamlines: tracers move along B');
+  saverLabel({
+    title:'Biot–Savart · '+(SAVER_NAMES[saverName]||'straight wires'),
+    sub:'infinite straight wires ⊥ screen · ⊙ out, ⊗ in',
+    lines,
+    eq:['dB = (μ₀/4π) I dℓ × r̂ / r²',
+        'one wire:  B = μ₀I/(2πr) φ̂',
+        'B(x) = Σₖ μ₀Iₖ/(2πrₖ) φ̂ₖ   (superposition)'],
+  });
+}
