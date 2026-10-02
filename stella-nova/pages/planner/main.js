@@ -582,13 +582,35 @@
         PL.S.mods.forEach(function (m) { m.a = 1; m.born = 0; });
         PL.S.undo.length = 0; PL.S.redo.length = 0; changed();
       }
+      // The plate: the example station as it builds. The module just placed
+      // (name, layer, placement tags) and the Summary panel counts: modules,
+      // types, enclosed rooms, problems, and the commonest types. Once a
+      // second at most; the title stays, so the text swaps in place.
+      var lastPlate = 0, lastMod = null;
+      function plate(now) {
+        if (!opts.label || now - lastPlate < 1000) return;
+        lastPlate = now;
+        var counts = {}, order = [], E = PL.enclosure(), probs = PL.problems();
+        PL.S.mods.forEach(function (m) { if (!counts[m.t]) { counts[m.t] = 0; order.push(m.t); } counts[m.t]++; });
+        order.sort(function (a, b) { return counts[b] - counts[a] || PL.T[a].name.localeCompare(PL.T[b].name); });
+        var lines = [];
+        if (lastMod && PL.T[lastMod.t]) {
+          var tt = PL.T[lastMod.t], tg = tt.tags.filter(function (k) { return k !== tt.layer; });
+          lines.push('Placed: ' + tt.name + ' · ' + LAYER_NAME[tt.layer] + (tg.length ? ' · ' + tg.map(function (k) { return TAG_NAME[k] || k; }).join(', ') : '') +
+            (tt.tags.indexOf('directional') >= 0 ? ' · faces ' + FACING[lastMod.r & 3] : ''));
+        }
+        lines.push(PL.S.mods.length + ' modules · ' + order.length + ' types · ' + E.rooms.length + ' rooms · ' + probs.length + ' problems');
+        lines.push(order.slice(0, 4).map(function (k) { return PL.T[k].name + ' ×' + counts[k]; }).join(' · '));
+        opts.label({ title: 'Example station', sub: 'Station planner · build step ' + n + ' / ' + plan.length, lines: lines });
+      }
       function frame(now) {
         var t = now - t0, build = cycle * 0.62, step = build / Math.max(1, plan.length);
-        if (t >= cycle) { restart(now); t = 0; }
+        if (t >= cycle) { restart(now); t = 0; lastMod = null; }
         while (n < plan.length && t >= 900 + n * step) {
           var p = plan[n++], m = PL.add(p.t, p.x, p.y, p.r);
-          m.a = 0; m.born = now; PL.commit();
+          m.a = 0; m.born = now; PL.commit(); lastMod = p;
         }
+        plate(now);
         PL.S.mods.forEach(function (m) { if (m.born) m.a = Math.min(1, (now - m.born) / ease); });
         UI.fade = Math.max(0, 1 - t / 900, (t - (cycle - 1100)) / 1100);
         // Fit the full station to the window each frame (the stage size can
