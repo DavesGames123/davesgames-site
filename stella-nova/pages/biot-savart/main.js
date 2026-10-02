@@ -153,7 +153,10 @@ function updateTracers(dt){
     const Bmag=Math.sqrt(Bx*Bx+By*By);
     if(Bmag>1e-6){tr.x+=(Bx/Bmag)*speed*dt;tr.y+=(By/Bmag)*speed*dt;}
     // Push the new head onto the trail; drop the oldest past the trail length.
-    tr.trail.unshift([tr.x,tr.y,Bmag]);
+    // The point keeps its ramp color, so render() does not call
+    // fieldColorRGB once per segment (100k calls a frame at 2000 x 50).
+    const c=fieldColorRGB(Bmag);
+    tr.trail.unshift([tr.x,tr.y,Bmag,c[0],c[1],c[2]]);
     if(tr.trail.length>SIM.tracerTrail) tr.trail.pop();
     // Check if inside any wire
     let inWire=false;
@@ -261,7 +264,7 @@ function renderTracers(){
       const pt=tr.trail[s],pn=tr.trail[s+1];
       const a0=(1-s/SIM.tracerTrail)*ageA;
       if(a0<0.01)continue;
-      const[r,g,b]=fieldColorRGB(pt[2]||0);
+      const r=pt[3],g=pt[4],b=pt[5];
       GLOW.seg(pt[0],pt[1],pn[0],pn[1],r*a0*0.12,g*a0*0.12,b*a0*0.12,Math.max(1,5*a0));
       GLOW.seg(pt[0],pt[1],pn[0],pn[1],r*a0*0.55,g*a0*0.55,b*a0*0.55,Math.max(0.5,1.8*a0));
     }
@@ -283,7 +286,7 @@ function renderTracers2D(){
       const a0=(1-s/SIM.tracerTrail)*ageA;
       if(a0<0.01)continue;
       // Color the segment by the |B| that was recorded at that trail point.
-      const[r,g,b]=fieldColorRGB(pt[2]||0);
+      const r=pt[3],g=pt[4],b=pt[5];
       ctx.strokeStyle=`rgba(${(r*a0*0.12*255)|0},${(g*a0*0.12*255)|0},${(b*a0*0.12*255)|0},1)`;
       ctx.lineWidth=Math.max(1,5*a0);ctx.beginPath();ctx.moveTo(pt[0],pt[1]);ctx.lineTo(pn[0],pn[1]);ctx.stroke();
       ctx.strokeStyle=`rgba(${(r*a0*0.55*255)|0},${(g*a0*0.55*255)|0},${(b*a0*0.55*255)|0},1)`;
@@ -639,9 +642,10 @@ setTimeout(()=>{
 // status bar, equation card and overlays, so #canvas-wrap fills the window and
 // resize() sizes the canvas to it. It loads a preset chosen by opts.seed with
 // the probe, arrows and heatmap off, so only the streamlines show. Each wire
-// then drifts on a slow Lissajous path (+/-25 px, about 40 s) around its preset
-// spot. On a large window the layout and the drift grow by k, so the wires do
-// not crowd the centre. opts.calm (1 = slowest) scales tracer speed and drift.
+// then drifts on a Lissajous path (+/-35 px, about 15 s at calm 0.7) around its
+// preset spot, and the full layout turns about the centre (about 44 s). On a
+// large window the layout and the drift grow by k, so the wires do not crowd
+// the centre. opts.calm (1 = slowest) scales tracer speed and drift.
 window.snSaver={
   enter(opts){
     const calm=Math.min(1,Math.max(0,opts.calm??0.7));
@@ -656,16 +660,20 @@ window.snSaver={
       CAM.x=0;CAM.y=0;CAM.zoom=1;
       SIM.showProbe=false;SIM.showArrows=false;SIM.showHeatmap=false;SIM.showTracers=true;
       SIM.stepping=false;
-      SIM.tracerSpeed=0.5+0.8*(1-calm);SIM.tracerTrail=50;
+      SIM.tracerSpeed=1.2+0.8*(1-calm);SIM.tracerTrail=50;
       preset(['anti','triangle','quad','parallel'][(opts.seed>>>0)%4]);
       SIM.selectedId=-1;
       const k=Math.max(1,Math.min(CW,CH)/450);
-      const base=wires.map(w=>[CW/2+(w.x-CW/2)*k,CH/2+(w.y-CH/2)*k]), rate=(2*Math.PI/40)*(1-0.5*calm), t0=performance.now();
+      // Offsets from the centre. At calm 0.7, rate gives a wobble period of
+      // about 15 s and a layout turn of about 44 s. The +/-35 px wobble keeps
+      // neighbours (70 px apart) at least about 17 px apart.
+      const base=wires.map(w=>[(w.x-CW/2)*k,(w.y-CH/2)*k]), rate=(2*Math.PI/10)*(1-0.5*calm), t0=performance.now();
       const drift=now=>{
-        const t=(now-t0)/1000*rate;
+        const t=(now-t0)/1000*rate, a=t*0.35, ca=Math.cos(a), sa=Math.sin(a);
         wires.forEach((w,i)=>{
-          w.x=base[i][0]+25*k*Math.sin(t+i*1.7);
-          w.y=base[i][1]+25*k*Math.sin(t*0.73+i*2.3);
+          const ox=base[i][0]+35*k*Math.sin(t+i*1.7), oy=base[i][1]+35*k*Math.sin(t*0.73+i*2.3);
+          w.x=CW/2+ox*ca-oy*sa;
+          w.y=CH/2+ox*sa+oy*ca;
         });
         requestAnimationFrame(drift);
       };
