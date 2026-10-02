@@ -19,16 +19,18 @@
        chem_new   = chem + timestep * delta_chem       (forward Euler)
 
    HEAD LOAD ORDER  (order matters)
-     1. fonts       Google Fonts stylesheet
-     2. KaTeX       CSS then JS, so equations.js can render at once
-     3. style.css   the page stylesheet
+     1. style.css   the page stylesheet
+     2. sci.css     shared science type (STIX Two Text, Inter) and the
+                    math colors .m1 to .m6. It loads the fonts.
+   The equations are MathJax SVG. lib/sci-math.js loads MathJax when the
+   first equation is typeset.
    Scripts at end of body:
      main.js        ES module. It imports equations.js, engine.js and
                     colormaps.js, and fetches presets.json.
 
    LAYOUT  (# marks an element id main.js binds to)
      ┌──────────────────────────────────────────────────────────────────┐
-     │ topbar: Stella Nova · Reaction–Diffusion                          │
+     │ topbar: Stella Nova · Reaction–diffusion                          │
      ├────────────┬─────────────────────────────────────────────────────┤
      │ #panel     │  #gl       the grid; paint on it in brush mode        │
      │  preset    │  #axes     parameter-map axis labels and ticks        │
@@ -65,18 +67,15 @@
 <meta name="description" content="Reaction–diffusion patterns on the GPU: spots, stripes, spirals and waves from two to four chemicals. Pick a preset, change the rates, paint chemicals on the grid.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <script>if(window!==window.top)document.documentElement.classList.add('in-frame')</script>
 
 <div class="topbar">
-  <div class="brand"><span class="dot"></span>STELLA&nbsp;NOVA</div>
-  <div class="sys">SYS&nbsp;//&nbsp;REACTION.DIFFUSION</div>
-  <div class="pagetitle">Reaction–Diffusion</div>
+  <div class="brand">Stella Nova</div>
+  <div class="pagetitle">Reaction–diffusion</div>
 </div>
 
 <canvas id="gl"></canvas>
@@ -101,59 +100,59 @@
   <div id="sheetGrip" role="button" aria-label="Resize controls"><span></span></div>
   <button id="panelClose" aria-label="Close controls">✕</button>
 
-  <div class="sec-label">PRESET</div>
+  <div class="sec-label">Preset</div>
   <div class="cur">
     <div class="cur-top"><span class="chip" id="curFamily"></span><span class="cur-idx" id="curIdx"></span></div>
     <div class="cur-name" id="curName">Loading…</div>
   </div>
   <div class="modes">
     <button id="prevBtn" aria-label="Previous preset" title="Previous preset (←)">◀</button>
-    <button id="browseBtn" class="grow" title="Browse presets">BROWSE ALL</button>
+    <button id="browseBtn" class="grow" title="Browse presets">Browse all</button>
     <button id="nextBtn" aria-label="Next preset" title="Next preset (→)">▶</button>
   </div>
   <p class="desc" id="curDesc"></p>
 
-  <div class="sec-label">EQUATIONS</div>
+  <div class="sec-label">Equations</div>
   <div id="eqs"></div>
   <div class="cite" id="curCite"></div>
   <div class="credit"><a href="https://github.com/GollyGang/ready" target="_blank" rel="noopener">Patterns and equations from Ready (GollyGang) — github.com/GollyGang/ready</a></div>
 
-  <div class="sec-label">PARAMETERS</div>
+  <div class="sec-label">Parameters</div>
   <div id="params"></div>
   <div class="hint" id="mapHint" hidden></div>
 
-  <div class="sec-label">RUN</div>
+  <div class="sec-label">Run</div>
   <div class="modes">
-    <button id="playBtn">❚❚ PAUSE</button>
-    <button id="stepBtn" title="Advance one frame of steps">STEP</button>
+    <button id="playBtn">Pause</button>
+    <button id="stepBtn" title="Advance one frame of steps">Step</button>
   </div>
   <div class="modes">
-    <button id="resetBtn" title="Reset (R)">RESET</button>
-    <button id="seedBtn" title="Reset with a new random seed">NEW SEED</button>
+    <button id="resetBtn" title="Reset (R)">Reset</button>
+    <button id="seedBtn" title="Reset with a new random seed">New seed</button>
   </div>
   <div class="row"><label for="spf">Steps/frame</label><input type="range" id="spf" min="1" max="100" step="1" value="10"><span class="val" id="spfV"></span></div>
 
-  <div class="sec-label">BRUSH</div>
-  <div class="modes"><button id="brushBtn" title="Paint on the grid">BRUSH · OFF</button></div>
+  <div class="sec-label">Brush</div>
+  <div class="modes"><button id="brushBtn" title="Paint on the grid">Brush off</button></div>
   <div class="row"><label for="brushChem">Chemical</label><select id="brushChem"></select></div>
   <div class="presets two" id="brushKind">
-    <button data-kind="value" class="on">VALUE</button>
-    <button data-kind="noise">NOISE</button>
+    <button data-kind="value" class="on">Value</button>
+    <button data-kind="noise">Noise</button>
   </div>
   <div class="row" id="brushValRow"><label for="brushVal">Value</label><input type="range" id="brushVal" min="0" max="1" step="0.01" value="1"><span class="val" id="brushValV"></span></div>
   <div class="row"><label for="brushSize">Size</label><input type="range" id="brushSize" min="0.005" max="0.25" step="0.005" value="0.04"><span class="val" id="brushSizeV"></span></div>
   <div class="hint" id="brushHint">With the mouse, the brush is always on: drag on the grid to paint. Keys [ and ] change the size.</div>
 
-  <div class="sec-label">VIEW</div>
+  <div class="sec-label">View</div>
   <div class="swatches" id="cmaps"></div>
   <div class="row"><label for="viewChem">Show</label><select id="viewChem"></select></div>
   <div class="row"><label for="viewLo">Low</label><input type="range" id="viewLo" min="0" max="1" step="0.001"><span class="val" id="viewLoV"></span></div>
   <div class="row"><label for="viewHi">High</label><input type="range" id="viewHi" min="0" max="1" step="0.001"><span class="val" id="viewHiV"></span></div>
-  <div class="modes"><button id="heightBtn">RELIEF SHADING · OFF</button></div>
+  <div class="modes"><button id="heightBtn">Relief shading off</button></div>
   <div class="row" id="reliefRow"><label for="relief">Relief</label><input type="range" id="relief" min="1" max="24" step="0.5" value="6"><span class="val" id="reliefV"></span></div>
   <div class="row" id="lightRow"><label for="light">Light</label><input type="range" id="light" min="0" max="360" step="1" value="126"><span class="val" id="lightV"></span></div>
 
-  <div class="sec-label">KEYS</div>
+  <div class="sec-label">Keys</div>
   <table class="readout keys">
     <tr><td>Space</td><td>play / pause</td></tr>
     <tr><td>R</td><td>reset</td></tr>
@@ -161,7 +160,7 @@
     <tr><td>← →</td><td>previous / next preset</td></tr>
   </table>
 
-  <div class="sec-label">ABOUT</div>
+  <div class="sec-label">About</div>
   <div class="about">
     <div class="eq" id="eq-general"></div>
     <p>Each cell of the grid holds an amount of two or more chemicals. Two processes change these amounts. <b>Reaction</b>: at each cell, the chemicals make or use up one another, at rates that depend on how much of each is there. <b>Diffusion</b>: each chemical spreads to the cells next to it, from more to less.</p>

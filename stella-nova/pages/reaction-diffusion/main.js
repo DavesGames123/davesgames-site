@@ -35,7 +35,8 @@
      grep -n 'function setOpen'         the panel, the phone sheet, the dock
      grep -n 'window.snSaver'           the shell screensaver hook
    ========================================================================== */
-import { renderEquations, renderTeX, fitEquations, GENERAL } from './equations.js';
+import { renderEquations, renderTeX, GENERAL, GENERAL_RULES, presetRules, paramTeX } from './equations.js';
+import { typeset } from '../../lib/sci-math.js';
 
 const $ = id => document.getElementById(id);
 // The phone layout. This query matches the PHONE block in style.css.
@@ -178,7 +179,7 @@ async function boot() {
     S.gpu = false;
     document.body.classList.add('nogpu');
     $('nogpu').hidden = false;
-    renderTeX($('ngEq'), GENERAL);
+    renderTeX($('ngEq'), GENERAL, GENERAL_RULES);
     if (!/webgpu-unavailable/.test(String(e && e.message))) toast('The engine did not start: ' + (e && e.message), true);
   }
   if (S.engine) {
@@ -231,9 +232,10 @@ async function selectPreset(i) {
   setText('dockName', p.name || p.id);
   $('dockDot').style.setProperty('--c', familyColor(p.family || 'Other'));
   setText('curDesc', p.description || '');
-  renderEquations($('eqs'), p.equations);
-  // KaTeX fonts can arrive after the first render and make a line wider.
-  if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(() => fitEquations($('eqs')));
+  // One color per chemical and per parameter, in the equations and on the
+  // parameter labels (equations.js presetRules).
+  S.colors = presetRules(p);
+  renderEquations($('eqs'), p.equations, S.colors.rules);
   const cite = $('curCite'); cite.textContent = '';
   if (p.citation) cite.append(p.citation);
   if (p.source) {
@@ -306,8 +308,15 @@ function buildParams(p) {
     const step = q.step || (hi - lo) / 200;
     const row = document.createElement('div'); row.className = 'prm' + (mapped ? ' mapped' : '');
     const nm = document.createElement('div'); nm.className = 'nm';
-    nm.textContent = q.label || q.name;
-    if (q.label && q.label !== q.name) { const s = document.createElement('small'); s.textContent = q.name; nm.append(s); }
+    // A name with a TeX symbol shows the symbol in its equation color. A
+    // word name ('rampPower') shows as text.
+    const sym = paramTeX(q.name), cls = S.colors && S.colors.byName[q.name];
+    if (sym) {
+      const m = document.createElement('span'); m.className = 'sci-sym' + (cls ? ' ' + cls : '');
+      m.textContent = q.name; nm.append(m);
+      typeset(m, sym, { display: false, rules: cls ? [[sym, cls]] : null });
+    } else nm.textContent = q.label || q.name;
+    if (q.label && q.label !== q.name) { const s = document.createElement('small'); s.textContent = q.label; nm.append(s); }
     nm.title = q.label || q.name;
     const val = document.createElement('div'); val.className = 'val';
     const rst = document.createElement('button'); rst.className = 'rst same'; rst.textContent = '↺';
@@ -384,7 +393,7 @@ function setBrushRange(p) {
 }
 function setBrushOn(on) {
   S.brush.on = on;
-  const b = $('brushBtn'); b.textContent = on ? 'BRUSH · ON' : 'BRUSH · OFF'; b.classList.toggle('on', on);
+  const b = $('brushBtn'); b.textContent = on ? 'Brush on' : 'Brush off'; b.classList.toggle('on', on);
   const d = $('dockBrush'); d.classList.toggle('on', on); d.setAttribute('aria-pressed', String(on));
   if (on && PHONE_Q.matches) toast('Brush on: one finger paints. Tap ✎ to stop.', false, 1800);
 }
@@ -423,7 +432,7 @@ function setViewRange() {
 }
 function setHeightBtn() {
   const b = $('heightBtn');
-  b.textContent = S.view.height ? 'RELIEF SHADING · ON' : 'RELIEF SHADING · OFF';
+  b.textContent = S.view.height ? 'Relief shading on' : 'Relief shading off';
   b.classList.toggle('on', S.view.height);
   $('lightRow').style.display = S.view.height ? '' : 'none';
   $('reliefRow').style.display = S.view.height ? '' : 'none';
@@ -515,7 +524,7 @@ function setOpen(open) {
 }
 function setPlaying(on) {
   S.playing = on;
-  $('playBtn').textContent = on ? '❚❚ PAUSE' : '▶ PLAY';
+  $('playBtn').textContent = on ? 'Pause' : 'Play';
   $('playBtn').classList.toggle('on', !on);
   $('dockPlay').textContent = on ? '❚❚' : '▶';
   $('dockPlay').setAttribute('aria-label', on ? 'Pause' : 'Play');
@@ -530,7 +539,7 @@ function doReset(newSeed) {
 }
 
 function buildStatic() {
-  renderTeX($('eq-general'), GENERAL);
+  renderTeX($('eq-general'), GENERAL, GENERAL_RULES);
   $('prevBtn').addEventListener('click', () => selectPreset(S.idx - 1));
   $('nextBtn').addEventListener('click', () => selectPreset(S.idx + 1));
   $('browseBtn').addEventListener('click', () => openBrowser());
@@ -592,8 +601,6 @@ function buildStatic() {
   grip.addEventListener('pointercancel', () => { gripY = null; });
   // The sheet moves over the canvas, so the axis labels move with it.
   panel.addEventListener('transitionend', drawAxes);
-  let eqW = 0;
-  new ResizeObserver(() => { const w = $('eqs').clientWidth; if (w && Math.abs(w - eqW) > 4) { eqW = w; fitEquations($('eqs')); } }).observe($('eqs'));
   $('browser').addEventListener('transitionend', drawAxes);
   $('gl').addEventListener('transitionend', drawAxes);
 
@@ -819,7 +826,7 @@ function bindKeys() {
 const SAVER_IDS = ['gs-waves', 'gs-u-skate', 'gs-mitosis', 'gs-self-replicating', 'cgl-waves', 'ks-chaos',
   'oregonator', 'rm-predator-prey', 'kobayashi-crystal', 'gs-coral'];
 // The label plate takes plain text, so each family has its equations in
-// Unicode here (the panel shows the KaTeX strings from presets.json). The
+// Unicode here (the panel shows the TeX strings from presets.json). The
 // two chemicals a, b show as u, v. SAVER_SYM gives the plate name of each
 // parameter; a parameter with no entry shows with its own name.
 const SAVER_EQ = {
