@@ -5,7 +5,7 @@ function setBtnLaunch(v){document.getElementById('btnLaunch').disabled=!v}
 // Switch the floating equation panel between LIVE and REFERENCE styling.
 function setEqPanelActive(active){
   document.getElementById('eqPanel').classList.toggle('active',active);
-  document.getElementById('eqState').textContent=active?'LIVE':'REFERENCE';
+  document.getElementById('eqState').textContent=active?'Live':'Reference';
 }
 // Show or hide the transient banner over the canvas (green when a leg finishes).
 function setTbar(show,msg='',green){
@@ -28,7 +28,8 @@ requestAnimationFrame(frame);
 // window and calls resize(). It also makes the guidance box and the grade
 // card no-ops, and draws the unpicked orbits brighter. The autopilot then
 // flies one transfer at a time: pick a pair, show the launch windows, launch
-// at W1, coast, hold, fade to black and clear.
+// at W1, coast, hold, fade to black and clear. Each new pair goes to the
+// shell's label plate (opts.label): names, burns, coast time, equations.
 // After two transfers it loads the next system behind the same fade. The sim
 // speed comes from the innermost period, so one inner orbit takes 12 s (calm
 // 0) to 22 s (calm 1). The pair is the one whose wait plus coast fits the
@@ -39,7 +40,7 @@ window.snSaver={enter(opts){
   let s=((opts&&opts.seed)|0)||12345;
   const rnd=()=>{s=(s+0x6D2B79F5)|0;let t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296};
   const st=document.createElement('style');
-  st.textContent='.grid-bg,.topbar,.action-bar,#mathpanel,#eqPanel,#hoverbox,#fabMath,#drawerBackdrop,#tbar{display:none!important}'+
+  st.textContent='.topbar,.action-bar,#mathpanel,#guide,#hoverbox,#fabMath,#drawerBackdrop,#tbar{display:none!important}'+
     '#main,#canvasArea{position:fixed!important;inset:0!important}canvas#cvs{cursor:none}';
   document.head.appendChild(st);
   document.documentElement.classList.add('saver');
@@ -77,7 +78,22 @@ window.snSaver={enter(opts){
     source=o.a; target=o.b; xfer=o.x;
     launchWindows=computeWindows(source,target,xfer,simTime);
     tLaunch=simTime+launchWindows[0].dt;
+    plate();
     return true;
+  }
+  // The shell's label plate: the pair, the two burns and the equations
+  // that give them, in plain Unicode. It changes with each new pair.
+  function plate(){
+    if(!opts||typeof opts.label!=='function') return;
+    const x=xfer, k=v=>(v*AU2KMS).toFixed(2);
+    opts.label({
+      title:`${source.name} \u2192 ${target.name}`,
+      sub:`Hohmann transfer \u00b7 ${x.asc?'outward':'inward'} \u00b7 r\u2081 ${x.r1.toFixed(2)} AU \u2192 r\u2082 ${x.r2.toFixed(2)} AU`,
+      lines:[`\u0394v\u2081 ${k(x.dv1)} km/s  \u00b7  \u0394v\u2082 ${k(x.dv2)} km/s`,
+             `total ${k(x.dvTot)} km/s  \u00b7  coast ${(x.tTr*365.25).toFixed(0)} days`],
+      eq:['v = \u221a(\u03bc (2/r \u2212 1/a))','a\u209c = (r\u2081 + r\u2082) / 2',
+          '\u0394v = |v(transfer) \u2212 v(circular)|','t = \u03c0 \u221a(a\u209c\u00b3 / \u03bc)'],
+    });
   }
   system(PRESETS[pi]);
   const ofr=frame;

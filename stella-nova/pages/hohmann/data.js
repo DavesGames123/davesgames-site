@@ -35,7 +35,8 @@
 //  -----------------------------------------------------------
 //        world (x right, y up)  ──▶  screen: sx = CX + x·SCALE
 //                                             sy = CY − y·SCALE   (y flips)
-//        Sun sits at (CX,CY); SCALE fits the widest orbit to 42% of the view.
+//        Sun sits at (CX,CY), the centre of the canvas part above the DOM
+//        overlays; SCALE fits the widest orbit to 44% of that part.
 //
 //  FRAME LOOP  (frame(), one requestAnimationFrame tick)
 //  -----------------------------------------------------
@@ -61,7 +62,8 @@
 //      main loop ............ "MAIN LOOP"             per-frame update and draw
 //      input ................ "INPUT"                 pick planets, keys, touch
 //      launch/hop/clear ..... "function launch"       the action-bar buttons
-//      math panel ........... "MATH PANEL RENDERING"  live KaTeX walkthrough
+//      math panel ........... "MATH PANEL RENDERING"  live HTML walkthrough
+//      label placement ...... "function placeLabel"  canvas labels that never overlap
 //      init ................. "/* INIT */"            first preset + start loop
 //      screensaver .......... "window.snSaver"        shell saver autopilot (main.js)
 // ============================================================================
@@ -96,19 +98,36 @@ let currentPreset='random';
 const cvs=document.getElementById('cvs'), ctx=cvs.getContext('2d');
 const wrap=document.getElementById('canvasArea');
 // W,H are CSS pixels; CX,CY are the Sun (view centre); SCALE is AU→pixels.
-let W,H,CX,CY,SCALE;
+// CLEAR_B is the lowest canvas y that no DOM overlay (#guide, #hoverbox)
+// covers. UIS scales the canvas text and marks: 1 on a laptop, up to 1.4 on
+// a large monitor. The context transform already holds DPR, so draw sizes
+// are CSS pixels times UIS, never times DPR.
+let W,H,CX,CY,SCALE,CLEAR_B,UIS=1;
+// Canvas fonts, the same families as style.css.
+const F_SANS="Inter,system-ui,-apple-system,'Segoe UI',sans-serif";
+const F_MONO="ui-monospace,'SF Mono',Menlo,Consolas,monospace";
+const F_SERIF="'STIX Two Text','Times New Roman',Georgia,serif";
 
-// Match the backing store to the container and DPR, then pick SCALE so the
-// widest orbit fills 42% of the shorter view dimension.
+// Match the backing store to the container and DPR. Frame the orbits in the
+// part of the canvas above the DOM overlays on the base line, and pick SCALE
+// so the widest orbit fills 44% of the shorter side of that part.
 function resize(){
   const r=wrap.getBoundingClientRect();
   W=r.width; H=r.height;
   cvs.width=W*DPR; cvs.height=H*DPR;
   cvs.style.width=W+'px'; cvs.style.height=H+'px';
   ctx.setTransform(DPR,0,0,DPR,0,0);
-  CX=W/2; CY=H/2;
+  let bot=H;
+  ['guide','hoverbox'].forEach(id=>{
+    const e=document.getElementById(id);
+    if(e&&e.offsetParent){ const b=e.getBoundingClientRect(); if(b.height>0) bot=Math.min(bot,b.top-r.top-6); }
+  });
+  if(bot<H*0.55) bot=H;
+  CLEAR_B=bot;
+  UIS=Math.max(1,Math.min(1.4,Math.min(W,H)/900));
+  CX=W/2; CY=bot/2;
   const maxR=planets.length?Math.max(...planets.map(p=>p.r)):4;
-  SCALE=(Math.min(W,H)*0.42)/maxR;
+  SCALE=(Math.min(W,bot)*0.44)/maxR;
 }
 // Re-fit on resize and drop the cached starfield so it regenerates for new W,H.
 window.addEventListener('resize',()=>{resize();_sc=null});

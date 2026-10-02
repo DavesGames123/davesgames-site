@@ -15,6 +15,60 @@ function getStars(){
   _sc={W,H,d}; return d;
 }
 
+/* ═════════════════════════════════════════════════════════════
+   LABEL PLACEMENT
+   ═════════════════════════════════════════════════════════════ */
+// Each frame, every canvas label asks placeLabel for a free spot. LBOX holds
+// the boxes (screen px) already taken: the Sun, the planet discs, then the
+// labels in priority order (planet names, window tags, ellipse geometry, the
+// burn readout). A label tries its candidate centres in order and takes the
+// first one that overlaps no box and stays inside the clear canvas part. A
+// label with no free candidate is not drawn, unless it is forced.
+let LBOX=[];
+function lblReset(){ LBOX=[]; }
+function lblBlock(x0,y0,x1,y1){ LBOX.push([x0,y0,x1,y1]); }
+function lblFree(x0,y0,x1,y1){
+  if(x0<4||y0<4||x1>W-4||y1>CLEAR_B-2) return false;
+  for(const b of LBOX) if(x0<b[2]&&x1>b[0]&&y0<b[3]&&y1>b[1]) return false;
+  return true;
+}
+// Measure text in the current ctx.font and return the chosen centre, or null.
+// cands: [[cx,cy],..] centres. pad: extra space around the box.
+function placeLabel(text,cands,force,pad){
+  pad=pad==null?3:pad;
+  const w=ctx.measureText(text).width+pad*2, h=parseFloat(ctx.font.match(/([\d.]+)px/)[1])*1.25+pad;
+  for(const [cx,cy] of cands){
+    const x0=cx-w/2,y0=cy-h/2;
+    if(lblFree(x0,y0,x0+w,y0+h)){ lblBlock(x0,y0,x0+w,y0+h); return [cx,cy]; }
+  }
+  if(!force) return null;
+  const [cx,cy]=cands[0]; lblBlock(cx-w/2,cy-h/2,cx+w/2,cy+h/2); return [cx,cy];
+}
+// Draw centred text with a dark offset copy behind it for contrast.
+function shadowText(text,x,y,col){
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(0,0,0,0.75)'; ctx.fillText(text,x+1,y+1);
+  ctx.fillStyle=col; ctx.fillText(text,x,y);
+}
+// Lay out the planet names before any other label, so they win. The Sun and
+// every planet disc are blocked first. Source and target choose first. Each
+// name tries right, left, above and below its disc. It stores its centre in
+// p._lbl (null = no room, the name is not drawn this frame).
+function layoutPlanetLabels(){
+  const sr=13*UIS; lblBlock(CX-sr,CY-sr,CX+sr,CY+sr);
+  const pos=new Map();
+  planets.forEach(p=>{ const q=pPos(p); pos.set(p,q); const r=p.size*UIS+3; lblBlock(q.x-r,q.y-r,q.x+r,q.y+r); });
+  const order=[...planets].sort((a,b)=>((b===source||b===target)?1:0)-((a===source||a===target)?1:0));
+  ctx.font=`500 ${11*UIS}px ${F_SANS}`;
+  order.forEach(p=>{
+    const q=pos.get(p), w=ctx.measureText(p.name).width, g=p.size*UIS+7*UIS, hh=9*UIS;
+    const G=g*2.6;
+    p._lbl=placeLabel(p.name,[[q.x+g+w/2,q.y],[q.x-g-w/2,q.y],[q.x,q.y-g-hh*0.4],[q.x,q.y+g+hh*0.4],
+      [q.x+G*0.7+w/2,q.y-G*0.7],[q.x-G*0.7-w/2,q.y-G*0.7],[q.x+G*0.7+w/2,q.y+G*0.7],[q.x-G*0.7-w/2,q.y+G*0.7],
+      [q.x,q.y-G-hh*0.4],[q.x,q.y+G+hh*0.4]],p===source||p===target,2);
+  });
+}
+
 // Paint the deep-space backdrop: fill, stars, a slow radar sweep line, and the
 // glowing Sun at the view centre.
 function drawBg(){
@@ -61,14 +115,14 @@ function drawOrbit(p){
 function drawPlanet(p,pos,alpha){
   alpha=alpha!==undefined?alpha:1;
   const isSrc=p===source,isTgt=p===target,isHov=p===hovered;
-  const r=p.size*DPR;
+  const r=p.size*UIS;
   ctx.globalAlpha=alpha;
   if(alpha===1&&(isSrc||isTgt||isHov)){
     const gc=isSrc?'150,200,255':isTgt?'122,216,122':'200,220,255';
     const g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,r*5);
     g.addColorStop(0,`rgba(${gc},0.32)`); g.addColorStop(1,'rgba(0,0,0,0)');
     ctx.beginPath(); ctx.arc(pos.x,pos.y,r*5,0,TAU); ctx.fillStyle=g; ctx.fill();
-    ctx.beginPath(); ctx.arc(pos.x,pos.y,r+4*DPR,0,TAU);
+    ctx.beginPath(); ctx.arc(pos.x,pos.y,r+4*UIS,0,TAU);
     ctx.strokeStyle=isSrc?'rgba(150,200,255,0.78)':isTgt?'rgba(122,216,122,0.78)':'rgba(255,255,255,0.25)';
     ctx.lineWidth=1.1; ctx.stroke();
   }
@@ -80,11 +134,10 @@ function drawPlanet(p,pos,alpha){
 
 // Draw a planet's name beside it, with a dark drop shadow for legibility.
 function drawLabel(p,pos){
-  const col=p===source?'#96c8ff':p===target?'#7ad87a':`hsl(${p.hue},50%,68%)`;
-  ctx.font=`600 ${10*DPR}px 'JetBrains Mono',monospace`;
-  ctx.textAlign='left'; ctx.textBaseline='middle';
-  ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillText(p.name,pos.x+p.size*DPR+5*DPR+1,pos.y+1);
-  ctx.fillStyle=col; ctx.fillText(p.name,pos.x+p.size*DPR+5*DPR,pos.y);
+  if(!p._lbl) return;
+  const col=p===source?'#96c8ff':p===target?'#7ad87a':`hsl(${p.hue},50%,72%)`;
+  ctx.font=`500 ${11*UIS}px ${F_SANS}`;
+  shadowText(p.name,p._lbl[0],p._lbl[1],col);
 }
 
 // Map eccentric anomaly E to a screen point on the transfer ellipse. In the
@@ -113,7 +166,7 @@ function drawXferEllipse(tr,periAng,alpha,drawArc){
     // Stroke only the half-orbit (E0 to E0+pi) the ship coasts along.
     ctx.beginPath();
     for(let i=0;i<=100;i++){const[x,y]=eToXY(a_t,b_t,c_t,periAng,E0+i*Math.PI/100);i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)}
-    ctx.strokeStyle='#ffc832'; ctx.lineWidth=2.2*DPR; ctx.stroke();
+    ctx.strokeStyle='#ffc832'; ctx.lineWidth=2.2*UIS; ctx.stroke();
   }
   ctx.globalAlpha=1;
 }
@@ -166,72 +219,57 @@ function drawEllipseGeometry(tr,periAng){
 
   // Center marker (orange dot)
   ctx.beginPath();
-  ctx.arc(center[0],center[1],2.6*DPR,0,TAU);
+  ctx.arc(center[0],center[1],2.6*UIS,0,TAU);
   ctx.fillStyle='rgba(255,144,80,0.45)'; ctx.fill();
 
   // Empty focus marker (open circle + crosshair)
   ctx.beginPath();
-  ctx.arc(focus2[0],focus2[1],3.2*DPR,0,TAU);
+  ctx.arc(focus2[0],focus2[1],3.2*UIS,0,TAU);
   ctx.strokeStyle='rgba(180,190,220,0.4)'; ctx.lineWidth=1; ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(focus2[0]-2*DPR,focus2[1]); ctx.lineTo(focus2[0]+2*DPR,focus2[1]);
-  ctx.moveTo(focus2[0],focus2[1]-2*DPR); ctx.lineTo(focus2[0],focus2[1]+2*DPR);
+  ctx.moveTo(focus2[0]-2*UIS,focus2[1]); ctx.lineTo(focus2[0]+2*UIS,focus2[1]);
+  ctx.moveTo(focus2[0],focus2[1]-2*UIS); ctx.lineTo(focus2[0],focus2[1]+2*UIS);
   ctx.stroke();
 
-  // ── Labels ──
-  ctx.font=`italic 600 ${13.5*DPR}px 'Cormorant Garamond',serif`;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  // lbl: draw a serif math label with a dark shadow for contrast.
-  function lbl(text,x,y,color){
-    ctx.fillStyle='rgba(0,0,0,0.85)';
-    ctx.fillText(text,x+1,y+1);
-    ctx.fillStyle=color;
-    ctx.fillText(text,x,y);
+  // ── Labels ── each label tries its home spot on one side of its line,
+  // then the other side, then further out, through placeLabel. A label with
+  // no free spot is left out for this frame rather than drawn over another.
+  ctx.font=`italic 500 ${13*UIS}px ${F_SERIF}`;
+  const PX=16*UIS;
+  function geo(text,mid,side,col){
+    const c=[perpY(mid,side*PX),perpY(mid,-side*PX),perpY(mid,side*PX*2),perpY(mid,-side*PX*2),perpX(perpY(mid,side*PX),PX*2),perpX(perpY(mid,side*PX),-PX*2)];
+    const at=placeLabel(text,c,false,2);
+    if(at) shadowText(text,at[0],at[1],col);
   }
-  const PX=18*DPR;
-
-  // "a" — center→apo half, BELOW the axis (-PX in local +y → +PX along (-sp,-cp))
-  // perpY pushes +y in local, which means screen direction (-sp,-cp).
-  // To go to the OTHER side, pass negative n.
-  const aMid=ts(-c_t-a_t/2,0);
-  const aLbl=perpY(aMid,-PX);
-  lbl(`a = ${a_t.toFixed(3)}`, aLbl[0], aLbl[1], 'rgba(255,184,128,0.88)');
-
-  // "b" — upper-half of minor axis, offset toward -x local (away from sun side)
-  const bMid=ts(-c_t,b_t/2);
-  const bLbl=perpX(bMid,-PX);
-  lbl(`b = ${b_t.toFixed(3)}`, bLbl[0], bLbl[1], 'rgba(255,184,128,0.88)');
-
-  // "c" — between sun and center, BELOW the axis to keep it clear of r1/r2 above
-  const cMid=ts(-c_t/2,0);
-  const cLbl=perpY(cMid,-PX);
-  lbl(`c = ${c_t.toFixed(3)}`, cLbl[0], cLbl[1], 'rgba(190,200,225,0.7)');
-
-  // r1, r2 — sun→source-orbit-intersection and sun→target-orbit-intersection
-  // asc: source meets ellipse at perihelion (+x), target at aphelion (-x)
-  // Place each radius label at the midpoint of its tangent radius.
+  // r1, r2: the radii to the two tangent points, labelled above the axis.
+  // asc: the source meets the ellipse at periapsis (+x), the target at apoapsis.
   let r1X, r2X;
   if(asc){ r1X=rPer/2; r2X=-rApo/2; }
   else   { r1X=-rApo/2; r2X=rPer/2; }
-  const r1Mid=ts(r1X,0);
-  const r2Mid=ts(r2X,0);
-  const r1Lbl=perpY(r1Mid,PX);   // above
-  const r2Lbl=perpY(r2Mid,PX);   // above
-  lbl(`r\u2081 = ${r1.toFixed(3)}`, r1Lbl[0], r1Lbl[1], 'rgba(150,200,255,0.78)');
-  lbl(`r\u2082 = ${r2.toFixed(3)}`, r2Lbl[0], r2Lbl[1], 'rgba(150,200,255,0.78)');
+  geo(`r\u2081 = ${r1.toFixed(3)}`, ts(r1X,0), 1, 'rgba(150,200,255,0.9)');
+  geo(`r\u2082 = ${r2.toFixed(3)}`, ts(r2X,0), 1, 'rgba(150,200,255,0.9)');
+  // a: centre to apoapsis half, below the axis. c: Sun to centre, below.
+  geo(`a = ${a_t.toFixed(3)}`, ts(-c_t-a_t/2,0), -1, 'rgba(255,184,128,0.92)');
+  geo(`c = ${c_t.toFixed(3)}`, ts(-c_t/2,0), -1, 'rgba(190,200,225,0.8)');
+  // b: the upper half of the minor axis, beside the line.
+  const bMid=ts(-c_t,b_t/2);
+  const bc=[perpX(bMid,-PX*1.6),perpX(bMid,PX*1.6),perpX(bMid,-PX*3),perpX(bMid,PX*3)];
+  const bAt=placeLabel(`b = ${b_t.toFixed(3)}`,bc,false,2);
+  if(bAt) shadowText(`b = ${b_t.toFixed(3)}`,bAt[0],bAt[1],'rgba(255,184,128,0.92)');
 
   ctx.restore();
 }
 
 // Draw a small labelled circle at a burn point (Δv1 or Δv2).
 function burnMark(x,y,col,lbl){
-  const r=7*DPR;
-  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fillStyle=col+'22'; ctx.fill();
+  const r=9*UIS;
+  lblBlock(x-r,y-r,x+r,y+r);
+  ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fillStyle='rgba(8,9,15,0.85)'; ctx.fill();
   ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.strokeStyle=col; ctx.lineWidth=1.2; ctx.stroke();
   ctx.fillStyle=col;
-  ctx.font=`bold ${7*DPR}px 'JetBrains Mono',monospace`;
+  ctx.font=`600 ${8*UIS}px ${F_SANS}`;
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(lbl,x,y);
+  ctx.fillText(lbl,x,y+0.5);
 }
 
 // Draw ghost markers for the upcoming launch windows: for each, the source
@@ -245,7 +283,7 @@ function drawWindows(){
 
   launchWindows.forEach((w,i)=>{
     const al=alphas[i];
-    const sr=source.size*DPR, tr2=target.size*DPR;
+    const sr=source.size*UIS, tr2=target.size*UIS;
     const sx=CX+Math.cos(w.srcAng)*source.r*SCALE;
     const sy=CY-Math.sin(w.srcAng)*source.r*SCALE;
     const tx=CX+Math.cos(w.tgtAng)*target.r*SCALE;
@@ -269,20 +307,19 @@ function drawWindows(){
     const hg=ctx.createRadialGradient(sx,sy,0,sx,sy,sr*4.5);
     hg.addColorStop(0,'rgba(255,200,50,0.32)'); hg.addColorStop(1,'rgba(0,0,0,0)');
     ctx.beginPath(); ctx.arc(sx,sy,sr*4.5,0,TAU); ctx.fillStyle=hg; ctx.fill();
-    ctx.beginPath(); ctx.arc(sx,sy,sr+5*DPR,0,TAU);
+    ctx.beginPath(); ctx.arc(sx,sy,sr+5*UIS,0,TAU);
     ctx.strokeStyle=wCols[i]; ctx.lineWidth=i===0?1.6:0.85; ctx.stroke();
     ctx.globalAlpha=1;
 
-    // Window label (W1..W3) and its countdown in days above the source ghost.
+    // Window tag ("W1 · 109 d") beside the source ghost: above, below,
+    // left or right, wherever placeLabel finds room. W1 is always drawn.
     ctx.globalAlpha=al;
     const days=Math.round(w.dt*365.25);
-    ctx.font=`bold ${10*DPR}px 'JetBrains Mono',monospace`;
-    ctx.textAlign='center'; ctx.textBaseline='bottom';
-    const lx=sx, ly=sy-sr-7*DPR;
-    ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillText(w.label,lx+0.8,ly+0.8);
-    ctx.fillStyle=i===0?'#ffc832':'rgba(255,200,50,0.68)'; ctx.fillText(w.label,lx,ly);
-    ctx.font=`${8*DPR}px 'JetBrains Mono',monospace`;
-    ctx.fillStyle='rgba(255,200,50,0.55)'; ctx.fillText(days+'d',lx,ly+10*DPR);
+    const tag=`${w.label} \u00b7 ${days} d`;
+    ctx.font=`600 ${10*UIS}px ${F_SANS}`;
+    const g=sr+12*UIS, tw=ctx.measureText(tag).width/2+4;
+    const at=placeLabel(tag,[[sx,sy-g],[sx,sy+g],[sx+g+tw,sy],[sx-g-tw,sy]],i===0,2);
+    if(at) shadowText(tag,at[0],at[1],i===0?'#ffc832':'rgba(255,200,50,0.75)');
     ctx.globalAlpha=1;
 
     // For the nearest window, draw a faint radius from the Sun to the departure point.
@@ -297,97 +334,88 @@ function drawWindows(){
 // Draw the bottom prompt box that walks the user through the next action. The
 // text depends on how far selection has progressed and whether hop mode is on.
 function drawGuidance(){
+  const el=document.getElementById('guide');
+  if(!el) return;
   // Hide while a transfer is flying, or once everything is selected in normal mode.
-  if(ship&&!ship.arrived) return;
-  if(!hopMode&&source&&target&&ship) return;
+  let off=(ship&&!ship.arrived)||(!hopMode&&source&&target&&ship);
 
   // Choose the prompt lines for the current selection stage.
   let line1='', line2='', sub='';
   if(hopMode){
     if(!source){
-      line1='HOP MODE ACTIVE';
-      line2='① SELECT HOME PLANET';
-      sub='Your spacecraft will park there and await your first transfer.';
+      line1='Hop mode';
+      line2='\u2460 Select a home planet';
+      sub='The spacecraft parks there and waits for the first transfer.';
     } else if(!target){
-      line1=`PARKED AT ${source.name.toUpperCase()}`;
-      line2='② SELECT DESTINATION';
+      line1=`Parked at ${source.name}`;
+      line2='\u2461 Select a destination';
       sub='Choose any other planet to compute the Hohmann transfer.';
     } else {
-      line1=`${source.name} → ${target.name}`;
-      line2=`${launchWindows.length} LAUNCH WINDOWS SHOWN`;
-      sub='Wait for the W1 marker, then press ▶ Launch.';
+      line1=`${source.name} \u2192 ${target.name}`;
+      line2=`${launchWindows.length} launch windows shown`;
+      sub='Wait for the W1 marker, then press \u25b6 Launch.';
     }
   } else {
     if(!source){
-      line1='① SELECT SOURCE PLANET';
+      line2='\u2460 Select a source planet';
       sub='Click any planet to begin the transfer calculation.';
     } else if(!target){
-      line1=`SOURCE: ${source.name.toUpperCase()}`;
-      line2='② SELECT TARGET PLANET';
+      line1=`Source: ${source.name}`;
+      line2='\u2461 Select a target planet';
       sub='Click another planet to compute the Hohmann transfer.';
     } else if(!ship){
-      line1=`${source.name} → ${target.name}`;
-      line2=`${launchWindows.length} LAUNCH WINDOWS SHOWN`;
-      sub='Ghost markers show optimal launch positions. Press ▶ Launch when ready.';
-    }
+      line1=`${source.name} \u2192 ${target.name}`;
+      line2=`${launchWindows.length} launch windows shown`;
+      sub='The gold markers show where to launch. Press \u25b6 Launch when ready.';
+    } else off=true;
   }
-
-  // Size the box to the number of lines and draw it near the bottom centre.
-  const bw=Math.min(W*0.6,420), bx=CX-bw/2;
-  const lineH=14, subH=11, pad=13;
-  const linesCount=(line1?1:0)+(line2?1:0);
-  const bh=linesCount*lineH+subH+pad*2+4;
-  const by=H*0.82;
-
-  ctx.save();
-  ctx.globalAlpha=0.88;
-  ctx.fillStyle='rgba(8,12,22,0.92)';
-  ctx.strokeStyle='rgba(150,200,255,0.16)';
-  ctx.lineWidth=1;
-  rRect(ctx,bx,by,bw,bh,4); ctx.fill(); ctx.stroke();
-  ctx.globalAlpha=1;
-
-  let ty=by+pad;
-  ctx.textAlign='center'; ctx.textBaseline='top';
-  if(line1){
-    ctx.font=`${source?'500':'700'} 10.5px 'JetBrains Mono',monospace`;
-    ctx.fillStyle=source?'rgba(150,200,255,0.7)':'#96c8ff';
-    ctx.fillText(line1.toUpperCase(),CX,ty);
-    ty+=lineH;
+  // Touch the DOM only when the text changes. A change in the guide's height
+  // moves the clear canvas part, so resize() frames the orbits again.
+  const key=(off?'0':'1')+line1+'|'+line2+'|'+sub;
+  if(el._key===key) return;
+  el._key=key;
+  el.classList.toggle('off',!!off);
+  if(!off){
+    document.getElementById('guide1').textContent=line1;
+    document.getElementById('guide2').textContent=line2;
+    document.getElementById('guide3').textContent=sub;
   }
-  if(line2){
-    ctx.font=`700 10.5px 'JetBrains Mono',monospace`;
-    ctx.fillStyle='#96c8ff';
-    ctx.fillText(line2.toUpperCase(),CX,ty);
-    ty+=lineH+2;
-  }
-  ty+=2;
-  ctx.font=`400 9.5px 'JetBrains Mono',monospace`;
-  ctx.fillStyle='rgba(164,176,206,0.75)';
-  ctx.fillText(sub,CX,ty);
-  ctx.restore();
+  const h=el.offsetHeight;
+  if(el._h!==undefined&&el._h!==h){ resize(); _sc=null; }
+  el._h=h;
+}
+
+// The grade card's box. It sits where #guide sits (the guide hides while a
+// ship flies), so it covers the base line, not the orbits.
+function scoreRect(){
+  const u=UIS, bw=Math.min(W-28,320*u), bh=128*u;
+  const g=document.getElementById('guide');
+  let cx=CX, bot=H-14;
+  if(g&&g.offsetParent){ const rg=g.getBoundingClientRect(), rc=cvs.getBoundingClientRect(); cx=rg.left-rc.left+rg.width/2; bot=rg.bottom-rc.top; }
+  return {bx:cx-bw/2, by:bot-bh, bw, bh};
+}
+// The Δv1 arrow's ends in screen px, or null when it does not show: the
+// first 12% of the coast. fade runs 1 to 0 over that time.
+function burnArrow(){
+  if(!ship||!xfer) return null;
+  const dt=simTime-ship.launchT;
+  if(dt<0||dt>xfer.tTr*0.12) return null;
+  const fade=dt<0.001?1:Math.max(0,1-dt/(xfer.tTr*0.12));
+  const lx=CX+Math.cos(ship.launchAng)*xfer.r1*SCALE;
+  const ly=CY-Math.sin(ship.launchAng)*xfer.r1*SCALE;
+  // Tangent is 90 degrees ahead of the radius; sign follows ascent/descent.
+  const tanAng=ship.launchAng+Math.PI/2*(xfer.asc?1:-1);
+  // Arrow length in pixels, proportional to burn fraction, capped to the view.
+  const len=Math.min(xfer.dv1/xfer.vc1*xfer.r1*SCALE*5, Math.min(W,H)*0.32);
+  return {lx,ly,vx:lx+Math.cos(tanAng)*len,vy:ly-Math.sin(tanAng)*len,tanAng,len,fade};
 }
 
 // Draw the first-burn Δv arrow at the departure point, shown briefly after
 // launch then fading out. The arrow points along the tangent (the burn is
 // prograde) and its length scales with the burn fraction dv1/vc1.
 function drawBurnVector(){
-  if(!ship||!xfer) return;
-  // Only show for the first 12% of the transfer, fading over that window.
-  const dt=simTime-ship.launchT;
-  if(dt<0||dt>xfer.tTr*0.12) return;
-  const fade=dt<0.001?1:Math.max(0,1-dt/(xfer.tTr*0.12));
-
-  // Departure point on the source orbit, and the prograde tangent direction.
-  const lx=CX+Math.cos(ship.launchAng)*xfer.r1*SCALE;
-  const ly=CY-Math.sin(ship.launchAng)*xfer.r1*SCALE;
-  // Tangent is 90 degrees ahead of the radius; sign follows ascent/descent.
-  const tanAng=ship.launchAng+Math.PI/2*(xfer.asc?1:-1);
-  // Arrow length in pixels, proportional to burn fraction, capped to the view.
-  const dvPixels=Math.min(xfer.dv1/xfer.vc1*xfer.r1*SCALE*5, Math.min(W,H)*0.32);
-
-  const vx=lx+Math.cos(tanAng)*dvPixels;
-  const vy=ly-Math.sin(tanAng)*dvPixels;
+  const A=burnArrow(); if(!A) return;
+  const {lx,ly,vx,vy,tanAng,fade}=A, dvPixels=A.len;
 
   ctx.save();
   ctx.globalAlpha=fade*0.92;
@@ -396,25 +424,23 @@ function drawBurnVector(){
   ctx.beginPath(); ctx.arc(lx,ly,dvPixels*1.1,0,TAU); ctx.fillStyle=gl; ctx.fill();
 
   ctx.beginPath(); ctx.moveTo(lx,ly); ctx.lineTo(vx,vy);
-  ctx.strokeStyle='#5cd8e8'; ctx.lineWidth=2.5*DPR; ctx.lineCap='round'; ctx.stroke();
+  ctx.strokeStyle='#5cd8e8'; ctx.lineWidth=2.5*UIS; ctx.lineCap='round'; ctx.stroke();
 
   // Arrowhead as a filled triangle at the vector tip.
-  const headLen=10*DPR, headAng=0.42;
+  const headLen=10*UIS, headAng=0.42;
   ctx.beginPath();
   ctx.moveTo(vx,vy);
   ctx.lineTo(vx-headLen*Math.cos(tanAng-headAng), vy+headLen*Math.sin(tanAng-headAng));
   ctx.lineTo(vx-headLen*Math.cos(tanAng+headAng), vy+headLen*Math.sin(tanAng+headAng));
   ctx.closePath(); ctx.fillStyle='#5cd8e8'; ctx.fill();
 
-  ctx.font=`bold ${9*DPR}px 'JetBrains Mono',monospace`;
-  // Δv1 value in km/s, offset perpendicular to the arrow so it stays readable.
-  ctx.textAlign='center'; ctx.textBaseline='bottom';
+  // Δv1 value in km/s beside the arrow, on whichever side has room.
+  ctx.font=`600 ${11*UIS}px ${F_SANS}`;
   const mx=(lx+vx)/2, my=(ly+vy)/2;
-  const nx=-Math.sin(tanAng)*12*DPR, ny=Math.cos(tanAng)*12*DPR;
-  ctx.fillStyle='rgba(0,0,0,0.6)';
-  ctx.fillText(`Δv₁ = ${(xfer.dv1*AU2KMS).toFixed(2)} km/s`, mx+nx+0.8, my-ny+0.8);
-  ctx.fillStyle='#9ce8f4';
-  ctx.fillText(`Δv₁ = ${(xfer.dv1*AU2KMS).toFixed(2)} km/s`, mx+nx, my-ny);
+  const nx=-Math.sin(tanAng)*16*UIS, ny=Math.cos(tanAng)*16*UIS;
+  const txt=`\u0394v\u2081 = ${(xfer.dv1*AU2KMS).toFixed(2)} km/s`;
+  const at=placeLabel(txt,[[mx+nx,my-ny],[mx-nx,my+ny],[vx+nx,vy-ny],[vx-nx,vy+ny],[mx+nx*2.5,my-ny*2.5],[mx-nx*2.5,my+ny*2.5]],false,2);
+  if(at) shadowText(txt,at[0],at[1],'#9ce8f4');
   ctx.restore();
 }
 
@@ -429,49 +455,44 @@ function drawScoreOverlay(){
   if(launchScore.fadeT>hold) alpha=Math.max(0,1-(launchScore.fadeT-hold)/fade);
   if(alpha<=0){ launchScore=null; return; }
 
-  const sc=launchScore;
-  const bw=Math.min(W*0.5,340), bh=152;
-  const bx=CX-bw/2, by=H*0.18;
+  const sc=launchScore, u=UIS;
+  const {bx,by,bw,bh}=scoreRect();
 
   ctx.save();
   ctx.globalAlpha=alpha;
-  ctx.fillStyle='rgba(8,12,22,0.95)';
-  ctx.strokeStyle=sc.color+'55';
-  ctx.lineWidth=1.5;
-  rRect(ctx,bx,by,bw,bh,6); ctx.fill(); ctx.stroke();
-  ctx.fillStyle=sc.color+'30'; ctx.fillRect(bx+1,by+1,bw-2,3);
+  ctx.fillStyle='rgba(8,9,15,0.92)';
+  ctx.strokeStyle=sc.color+'66';
+  ctx.lineWidth=1;
+  rRect(ctx,bx,by,bw,bh,12*u); ctx.fill(); ctx.stroke();
 
-  ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.font=`700 ${56*DPR}px 'Cormorant Garamond',serif`;
+  // Grade at the left; timing on the right; the verdict line under both.
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.font=`600 ${46*u}px ${F_SERIF}`;
   ctx.fillStyle=sc.color;
-  ctx.shadowColor=sc.color; ctx.shadowBlur=20*DPR;
-  ctx.fillText(sc.grade, bx+bw*0.34, by+22);
+  ctx.shadowColor=sc.color; ctx.shadowBlur=16*u;
+  ctx.fillText(sc.grade, bx+bw*0.2, by+44*u);
   ctx.shadowBlur=0;
 
   const dStr=sc.dtDays<1 ? `${(sc.dtDays*24).toFixed(1)} hr` : `${sc.dtDays.toFixed(1)} days`;
-  ctx.font=`${9*DPR}px 'JetBrains Mono',monospace`;
-  ctx.textAlign='left';
-  ctx.fillStyle='rgba(150,200,255,0.65)';
-  ctx.fillText('LAUNCH TIMING', bx+bw*0.54, by+24);
+  const tx=bx+bw*0.4, tw=bw*0.56;
+  ctx.textAlign='left'; ctx.textBaseline='top';
+  ctx.font=`500 ${10*u}px ${F_SANS}`;
+  ctx.fillStyle='rgba(150,200,255,0.75)';
+  ctx.fillText('Launch timing', tx, by+18*u, tw);
   ctx.fillStyle=sc.color;
-  ctx.font=`700 ${14*DPR}px 'JetBrains Mono',monospace`;
-  ctx.fillText(dStr+' '+sc.timing, bx+bw*0.54, by+40);
-  ctx.font=`${10*DPR}px 'JetBrains Mono',monospace`;
-  ctx.fillStyle='rgba(200,210,230,0.55)';
-  const windowStr=sc.dtDays<0.5?'On window':'Off window by '+dStr;
-  ctx.fillText(windowStr, bx+bw*0.54, by+62);
+  ctx.font=`600 ${14*u}px ${F_SANS}`;
+  ctx.fillText(dStr+' '+sc.timing, tx, by+33*u, tw);
+  ctx.font=`400 ${11*u}px ${F_SANS}`;
+  ctx.fillStyle='rgba(210,215,230,0.65)';
+  ctx.fillText(sc.dtDays<0.5?'On window':'Off window by '+dStr, tx, by+54*u, tw);
 
-  ctx.strokeStyle='rgba(150,200,255,0.1)';
-  ctx.beginPath(); ctx.moveTo(bx+14,by+92); ctx.lineTo(bx+bw-14,by+92); ctx.stroke();
+  ctx.strokeStyle='rgba(150,200,255,0.12)';
+  ctx.beginPath(); ctx.moveTo(bx+14*u,by+80*u); ctx.lineTo(bx+bw-14*u,by+80*u); ctx.stroke();
 
-  ctx.font=`400 italic ${10*DPR}px 'Cormorant Garamond',serif`;
-  ctx.textAlign='center'; ctx.textBaseline='top';
-  ctx.fillStyle='rgba(200,210,230,0.7)';
-  ctx.fillText(sc.flavor, bx+bw/2, by+102);
-
-  ctx.font=`${8*DPR}px 'JetBrains Mono',monospace`;
-  ctx.fillStyle='rgba(110,122,152,0.45)';
-  ctx.fillText('LAUNCH EVALUATION // HOHMANN.SCORE', bx+bw/2, by+128);
+  ctx.font=`italic 400 ${13*u}px ${F_SERIF}`;
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle='rgba(215,220,235,0.8)';
+  ctx.fillText(sc.flavor, bx+bw/2, by+102*u, bw-24*u);
   ctx.restore();
 }
 
@@ -518,19 +539,19 @@ function drawShip(){
   }
 
   if(hopMode&&ship.arrived){
-    const g=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,18*DPR);
+    const g=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,18*UIS);
     g.addColorStop(0,'rgba(122,216,122,0.28)'); g.addColorStop(1,'rgba(0,0,0,0)');
-    ctx.beginPath(); ctx.arc(ship.x,ship.y,18*DPR,0,TAU); ctx.fillStyle=g; ctx.fill();
+    ctx.beginPath(); ctx.arc(ship.x,ship.y,18*UIS,0,TAU); ctx.fillStyle=g; ctx.fill();
   }
-  const eg=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,14*DPR);
+  const eg=ctx.createRadialGradient(ship.x,ship.y,0,ship.x,ship.y,14*UIS);
   eg.addColorStop(0,'rgba(255,220,120,0.24)'); eg.addColorStop(1,'rgba(0,0,0,0)');
-  ctx.beginPath(); ctx.arc(ship.x,ship.y,14*DPR,0,TAU); ctx.fillStyle=eg; ctx.fill();
+  ctx.beginPath(); ctx.arc(ship.x,ship.y,14*UIS,0,TAU); ctx.fillStyle=eg; ctx.fill();
 
   // Move to the ship and rotate the local frame to its heading, then draw.
   ctx.save();
   ctx.translate(ship.x,ship.y);
   ctx.rotate(heading);
-  const s=DPR;
+  const s=UIS;
   // Engine plume, only while under way; it flickers via a sine of sim time.
   if(!ship.arrived){
     const plumeLen=10*s, plumeW=4*s;
@@ -652,7 +673,26 @@ function frame(now){
   if(source&&target&&xfer&&(!ship||ship.arrived))
     launchWindows=computeWindows(source,target,xfer,simTime);
 
-  // Back to front: background, orbits, then the launch-window ghosts.
+  // Back to front: background, orbits, then the launch-window ghosts. The
+  // planet names claim their label spots first (layoutPlanetLabels).
+  lblReset();
+  // Marks that labels must not cover claim their boxes first: the grade
+  // card, the two burn markers, the ship, and the launch-window rings.
+  if(launchScore){ const R=scoreRect(); lblBlock(R.bx,R.by,R.bx+R.bw,R.by+R.bh); }
+  const BA=burnArrow();
+  if(BA) for(let k=0;k<=6;k++){ const x=BA.lx+(BA.vx-BA.lx)*k/6, y=BA.ly+(BA.vy-BA.ly)*k/6, q=5*UIS; lblBlock(x-q,y-q,x+q,y+q); }
+  if(ship&&xfer){
+    const br=10*UIS;
+    [[ship.launchAng,xfer.r1],[ship.launchAng+Math.PI,xfer.r2]].forEach(([g,rr])=>{
+      const x=CX+Math.cos(g)*rr*SCALE, y=CY-Math.sin(g)*rr*SCALE; lblBlock(x-br,y-br,x+br,y+br);
+    });
+    if(ship.x||ship.x===0){ const sr=11*UIS; lblBlock(ship.x-sr,ship.y-sr,ship.x+sr,ship.y+sr); }
+  }
+  if(source&&target&&xfer) launchWindows.forEach(w=>{
+    const sx=CX+Math.cos(w.srcAng)*source.r*SCALE, sy=CY-Math.sin(w.srcAng)*source.r*SCALE, rr=source.size*UIS+6*UIS;
+    lblBlock(sx-rr,sy-rr,sx+rr,sy+rr);
+  });
+  layoutPlanetLabels();
   drawBg();
   planets.forEach(p=>drawOrbit(p));
   drawWindows();

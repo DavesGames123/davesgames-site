@@ -17,12 +17,15 @@ cvs.addEventListener('mousemove',e=>{
     hb.innerHTML=`<strong style="color:${hovered.color}">${hovered.name}</strong>  r=${hovered.r.toFixed(3)} AU  ·  v=${(hovered.speed*AU2KMS).toFixed(2)} km/s  ·  T=${hovered.period.toFixed(2)} yr`;
     cvs.style.cursor='pointer';
   } else {
-    hb.textContent='hover over a planet';
+    hb.textContent=HOVER_IDLE;
     cvs.style.cursor='crosshair';
   }
 });
+// The idle hover-box text: a touch screen has no hover.
+const HOVER_IDLE=matchMedia('(pointer:coarse)').matches?'tap a planet':'hover over a planet';
+document.getElementById('hoverbox').textContent=HOVER_IDLE;
 // Leaving the canvas clears the hover state and resets the hover box.
-cvs.addEventListener('mouseleave',()=>{hovered=null;document.getElementById('hoverbox').textContent='hover over a planet';});
+cvs.addEventListener('mouseleave',()=>{hovered=null;document.getElementById('hoverbox').textContent=HOVER_IDLE;});
 
 // Click a planet to select it. Behaviour differs between hop mode (park, then
 // pick destinations) and normal mode (pick source, then target).

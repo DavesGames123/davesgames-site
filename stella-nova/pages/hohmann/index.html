@@ -10,14 +10,16 @@
    HOHMANN TRANSFER CALCULATOR  ·  page shell
   ───────────────────────────────────────────────────────────────────────────
    Static markup only. main.js draws the whole simulation into the single
-   canvas and wires every button and readout by id; this file just lays out the
-   frame. katex.js renders the reference equations into the floating panel.
+   canvas and wires every button and readout by id. This file lays out the
+   frame. equations.js fills the reference equations in the side panel with
+   static MathJax SVG (made by typeset.mjs). No math library loads at run
+   time, because KaTeX HTML layout fails in Safari.
 
    HEAD LOAD ORDER
-     1. fonts       Google Fonts stylesheet
-     2. KaTeX       CSS then JS from CDN (KaTeX must exist before katex.js runs)
-     3. style.css   the page stylesheet
-     (main.js and katex.js load at the end of body, after the markup exists)
+     1. fonts       Google Fonts: Inter (interface), STIX Two Text (headings
+                    and maths). Numbers use the system monospace.
+     2. style.css   the page stylesheet
+     (the scripts load at the end of body, after the markup exists)
 
    LAYOUT  (the ▓ mark shows an element id)
      ┌───────────────────────────────────────────────────────────────────┐
@@ -25,15 +27,22 @@
      ├───────────────────────────────────────────────────────────────────┤
      │ action bar: preset cards ▶ ▓btnLaunch ▓btnHop Clear ▓spSlider      │
      ├──────────────────────────────────────────┬────────────────────────┤
-     │ canvas ▓cvs   ▓hoverbox                   │  ▓mathpanel             │
-     │   floating eq panel ▓eqPanel             │   ▓tbar (banner)        │
-     │   ▓fabMath (opens drawer on mobile)      │   ▓mathcontent          │
+     │ canvas ▓cvs                              │  ▓mathpanel             │
+     │                                          │   ▓tbar (banner)        │
+     │                                          │   ▓eqPanel (reference)  │
+     │   ▓guide  (next step, centred)           │   ▓mathcontent (live)   │
+     │ ▓hoverbox                    ▓fabMath    │                         │
      └──────────────────────────────────────────┴────────────────────────┘
+   The canvas text never sits under a panel: resize() in data.js frames the
+   orbits in the part of the canvas above ▓guide and ▓hoverbox, and the
+   canvas labels go through placeLabel() in render.js, which skips a
+   position that overlaps a label already drawn.
   ═══════════════════════════════════════════════════════════════════════════
 -->
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=STIX+Two+Text:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -41,13 +50,10 @@
      hide this page's own topbar. Inline so it runs before the body paints. -->
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 
-<!-- Decorative background grid, painted by CSS. -->
-<div class="grid-bg"></div>
-
 <!-- Topbar: system name plus live readouts (status, planet count, FPS, time). -->
 <div class="topbar">
   <div class="topbar-l">
-    <span class="sys-name">Stella Nova</span>
+    <span class="sys-name"><span class="dot"></span>Stella Nova</span>
     <span class="sys-sub">Orbital Transfer Calculator</span>
     <div class="sys-status" id="simStatus">Sim Active</div>
   </div>
@@ -163,32 +169,8 @@
     <!-- Hover readout: shows the pointed-at planet's orbital data. -->
     <div class="hoverbox" id="hoverbox">hover over a planet</div>
 
-    <!-- FLOATING EQUATION PANEL -->
-    <!-- Reference formulas rendered by katex.js into the eq-* rows; eqState
-         flips to LIVE (set in main.js) once a transfer is computed. -->
-    <section class="eq-panel" id="eqPanel">
-      <div class="eq-head">
-        <span class="eq-dot"></span>
-        <span class="lbl">Hohmann Transfer Equations</span>
-        <span class="eq-state" id="eqState">REFERENCE</span>
-        <button class="eq-collapse" id="eqCollapseBtn" title="Collapse">&#9650;</button>
-      </div>
-      <div class="eq-block">
-        <div class="eq-sublabel">Vis-Viva &middot; Speed on any conic</div>
-        <div class="eq-row" id="eq-visviva"></div>
-      </div>
-      <div class="eq-block">
-        <div class="eq-sublabel">Transfer Ellipse &middot; &Delta;v Burns</div>
-        <div class="eq-row" id="eq-atransfer"></div>
-        <div class="eq-row" id="eq-dv1"></div>
-        <div class="eq-row" id="eq-dv2"></div>
-      </div>
-      <div class="eq-block">
-        <div class="eq-sublabel">Transit Time &middot; Launch Window</div>
-        <div class="eq-row" id="eq-time"></div>
-        <div class="eq-row" id="eq-phi"></div>
-      </div>
-    </section>
+    <!-- Next-step prompt. main.js (drawGuidance in render.js) sets its text. -->
+    <div class="guide" id="guide" aria-live="polite"><div class="g1" id="guide1"></div><div class="g2" id="guide2"></div><div class="g3" id="guide3"></div></div>
 
     <!-- Mobile: floating button and backdrop that open or close the math drawer. -->
     <button class="fab" id="fabMath" onclick="toggleMathDrawer()">Math &equiv;</button>
@@ -199,22 +181,51 @@
        the live step-by-step computation. -->
   <aside id="mathpanel">
     <div class="p-head">
-      <span>Live Computation</span>
-      <span class="tag">PKT.ORBITAL</span>
+      <span>Live computation</span>
+      <button class="p-close" onclick="closeMathDrawer()" aria-label="Close">&#x2715;</button>
     </div>
     <div id="tbar"></div>
-    <div id="mathscroll"><div id="mathcontent"></div></div>
+    <div id="mathscroll">
+    <!-- REFERENCE EQUATIONS. equations.js fills the eq-* rows with static
+         SVG. eqState flips to LIVE (main.js) once a transfer is computed. -->
+    <section class="eq-panel" id="eqPanel">
+      <div class="eq-head">
+        <span class="eq-dot"></span>
+        <span class="lbl">Equations</span>
+        <span class="eq-state" id="eqState">Reference</span>
+        <button class="eq-collapse" id="eqCollapseBtn" title="Hide the equations" aria-expanded="true">&#9662;</button>
+      </div>
+      <div class="eq-body">
+        <div class="eq-block">
+          <div class="eq-sublabel">Vis-viva · speed on any conic</div>
+          <div class="eq-row" id="eq-visviva"></div>
+        </div>
+        <div class="eq-block">
+          <div class="eq-sublabel">Transfer ellipse · Δv burns</div>
+          <div class="eq-row" id="eq-atransfer"></div>
+          <div class="eq-row" id="eq-dv1"></div>
+          <div class="eq-row" id="eq-dv2"></div>
+        </div>
+        <div class="eq-block">
+          <div class="eq-sublabel">Transit time · launch window</div>
+          <div class="eq-row" id="eq-time"></div>
+          <div class="eq-row" id="eq-phi"></div>
+        </div>
+      </div>
+    </section>
+      <div id="mathcontent"></div>
+    </div>
   </aside>
 
 </div>
 
-<!-- katex.js renders the reference equations; load it before main.js. -->
-<script src="katex.js"></script>
+<!-- equations.js mounts the static SVG reference equations. -->
+<script src="equations.js"></script>
 
 <!-- main.js split into ordered classic scripts. One shared global scope, run in
      sequence: data.js (constants, state, canvas, presets, orbital math, windows,
      grading) → render.js (drawing, ship, main loop) → input.js (interaction) →
-     mathpanel.js (live KaTeX panel) → main.js (HUD setters, INIT boot). -->
+     mathpanel.js (live maths panel, plain HTML) → main.js (HUD setters, INIT boot). -->
 <script src="data.js"></script>
 <script src="render.js"></script>
 <script src="input.js"></script>
