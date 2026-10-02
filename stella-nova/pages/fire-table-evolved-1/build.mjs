@@ -50,9 +50,13 @@ const P = arr => arr[Math.floor(rng() * arr.length)];  // pick one
 const C = p => rng() < p;                              // chance
 const SD = () => `${Math.floor(rng() * 90000) + 1000}u`; // WGSL u32 seed
 const OCT = () => P([3, 4, 5]);
+// the shared flame column of the fire-table pack, for the eq lines
+const FLAME_EQ = 'colFlame: x = (uₓ + sway)/w,  h = (1 − smoothstep(0, 1, |x|))·taper(y)·(0.4 + 1.2·fbm(1.8x, 2.3y − R·t)) − 0.32y';
 
 // ── the nine evolution templates ─────────────────────────────────────────────
-//  Each returns { knobs, tags, body }. body reads uv, t, k and returns a vec4f.
+//  Each returns { knobs, tags, body, eq }. body reads uv, t, k and returns a
+//  vec4f. eq is the same formula as plain Unicode lines with the baked
+//  constants, for the screensaver plate. It draws nothing from the PRNG.
 
 function tFirestorm() {
   const SX = R(2.2, 4.5), SY = R(1.6, 2.6), RISE = R(1.3, 2.6), O1 = OCT(), O2 = P([4, 5]),
@@ -69,7 +73,10 @@ function tFirestorm() {
   L.push(`  var h = m * sh * smoothstep(${wf(TOP)}, -0.05, uv.y) * (1.0 + ${wf(CH)} * k.y) - uv.y * ${wf(FALL)};`);
   if (ember) L.push(`  h += coals(uv, t) * 0.4;`);
   L.push(`  return firePresent(clamp(h, 0.0, 2.0));`);
-  return { knobs: ['scale', 'chaos', 'rise', ''], tags, body: L.join('\n') };
+  const eq = [`q = (${wf(SX)}·(0.7…1.3)·x,  ${wf(SY)}·y − ${wf(RISE)}·(0.6…1.4)·t)` + (curl ? `,  q ← R(${wf(ROT)}·y)·q` : ''),
+    `m = ridged(q)·(0.5 + fbm(${wf(MUL)}q)),  ridged = (1 − turb)²`,
+    `h = m·shape·smoothstep(${wf(TOP)}, −0.05, y)·(1 + ${wf(CH)}·chaos) − ${wf(FALL)}·y` + (ember ? ' + 0.4·coals' : '')];
+  return { knobs: ['scale', 'chaos', 'rise', ''], tags, body: L.join('\n'), eq };
 }
 
 function tCurtain() {
@@ -84,7 +91,10 @@ function tCurtain() {
   if (fold) L.push(`  n = abs(n - 0.5) * 2.0;`);
   if (sharp) L.push(`  n = pow(n, 1.8);`);
   L.push(`  return firePresent(clamp(n * smoothstep(1.15, -0.05, uv.y) * ${wf(AMP)} - uv.y * ${wf(FALL)}, 0.0, 2.0));`);
-  return { knobs: ['warp scale', 'warp amt', 'rise', ''], tags, body: L.join('\n') };
+  const eq = [`q = (${wf(SX)}·(0.6…1.4)·x,  ${wf(SY)}·y − ${wf(RISE)}·(0.6…1.4)·t)`,
+    `w = q + ${wf(WARP)}·(0.4…1.6)·(sin(${wf(FY)}q_y + ${wf(TS)}t),  sin(${wf(FX)}qₓ − ${wf(TS)}t))`,
+    `n = fbm(w)` + (fold ? ',  n ← 2|n − ½|' : '') + (sharp ? ',  n ← n^1.8' : '') + `,  h = ${wf(AMP)}·n·smoothstep(1.15, −0.05, y) − ${wf(FALL)}·y`];
+  return { knobs: ['warp scale', 'warp amt', 'rise', ''], tags, body: L.join('\n'), eq };
 }
 
 function tLicks() {
@@ -98,7 +108,10 @@ function tLicks() {
   L.push(`  let taper = smoothstep(1.1, -0.05, uv.y) * smoothstep(-0.1, 0.15, uv.y);`);
   L.push(`  let prof = 1.0 - smoothstep(0.0, ${wf(PROFW)}, abs(uv.x));`);
   L.push(`  return firePresent(clamp(s * taper * prof * ${wf(AMP)} - uv.y * ${wf(FALL)}, 0.0, 2.0));`);
-  return { knobs: ['sharpen', 'speed', 'width', ''], tags, body: L.join('\n') };
+  const eq = [`S = Σᵢ 0.6ⁱ·(½ + ½ sin(3·1.6ⁱ d̂ᵢ·q + 2t(1 + 0.3i)))^p / Σ 0.6ⁱ,  5 terms`,
+    `q = (${wf(SXX)}·(0.7…1.3)·x,  ${wf(SYY)}·y − ${wf(SP)}·(0.6…1.4)·t),  p = ${wf(SHARP)} + 2·sharpen` + (mirror ? ',  mirrored' : ''),
+    `h = ${wf(AMP)}·S·taper(y)·(1 − smoothstep(0, ${wf(PROFW)}, |x|)) − ${wf(FALL)}·y`];
+  return { knobs: ['sharpen', 'speed', 'width', ''], tags, body: L.join('\n'), eq };
 }
 
 function tFirefly() {
@@ -117,7 +130,9 @@ function tFirefly() {
   L.push(`    v += tw * pow(max(1.0 - d / ${wf(SIZE)}, 0.0), ${wf(EXP)});`);
   L.push(`  } }`);
   L.push(`  return firePresent(clamp(v * (1.2 + 0.8 * k.z), 0.0, 1.6));`);
-  return { knobs: ['count', 'twinkle', 'glow', ''], tags, body: L.join('\n') };
+  const eq = [`one coal per cell of 1/g where hash > ${wf(TH)},  g = ${wf(G)}·(0.6…1.4)` + (drift ? `,  rising ${wf(DR)}·t` : ''),
+    `h = (1.2…2)·Σ (0.6 + 0.4 sin(${wf(RATE)}·(0.5…1.5)·t + 2πr))·max(1 − d/${wf(SIZE)}, 0)^${wf(EXP)}`];
+  return { knobs: ['count', 'twinkle', 'glow', ''], tags, body: L.join('\n'), eq };
 }
 
 function tSparkShower() {
@@ -130,7 +145,9 @@ function tSparkShower() {
   L.push(`  var h = s * 1.3 + colFlame(uv, t, ${wf(BASEW)}, ${wf(BASER)}, 0.8) * (${wf(BASEAMT)} + 0.4 * k.z);`);
   if (coal) L.push(`  h += coals(uv, t) * 0.4;`);
   L.push(`  return firePresent(h);`);
-  return { knobs: ['density', 'speed', 'base', ''], tags, body: L.join('\n') };
+  const eq = [`h = 1.3·(sparks₁ + sparks₂) + colFlame(w = ${wf(BASEW)}, R = ${wf(BASER)})·(${wf(BASEAMT)} + 0.4·base)` + (coal ? ' + 0.4·coals' : ''),
+    `sparks: one per cell where hash > 0.55,  rising at v = ${wf(SP)}·(0.6…1.4)`, FLAME_EQ];
+  return { knobs: ['density', 'speed', 'base', ''], tags, body: L.join('\n'), eq };
 }
 
 function tCinders() {
@@ -144,7 +161,10 @@ function tCinders() {
   L.push(`  var h = smoothstep(0.3, 0.9, s) * smoothstep(1.1, -0.1, uv.y) * 1.4;`);
   if (twinkle) L.push(`  h *= 0.7 + 0.5 * sin(t * 3.0 + s * 6.0);`);
   L.push(`  return firePresent(h * (0.8 + 0.6 * k.z));`);
-  return { knobs: ['size', 'drift', 'glow', ''], tags, body: L.join('\n') };
+  const eq = [`q = (${wf(SX)}x + ½ sin ½t,  ${wf(SX)}(y − ${wf(DRIFT)}·(0.6…1.4)·t))`,
+    `spots = Σ r·e^(−|d|²/w²),  w = ${wf(W)}·(0.7…1.3)` + (layer2 ? ',  + 0.7·second layer' : ''),
+    `h = 1.4·smoothstep(0.3, 0.9, spots)·smoothstep(1.1, −0.1, y)` + (twinkle ? '·(0.7 + 0.5 sin(3t + 6·spots))' : '') + '·(0.8…1.4)'];
+  return { knobs: ['size', 'drift', 'glow', ''], tags, body: L.join('\n'), eq };
 }
 
 function tSparks() {
@@ -156,7 +176,9 @@ function tSparks() {
   L.push(`  var s = sparks(uv, t, dn, sp, ${SDv});`);
   if (twin) L.push(`  s += sparks(uv, t + 7.0, dn * 0.8, sp * 1.2, ${SD2}) * 0.8;`);
   L.push(`  return firePresent(s * (${wf(GLOW)} * (0.7 + 0.6 * k.z)) + coals(uv, t) * ${wf(COAL)});`);
-  return { knobs: ['density', 'speed', 'glow', ''], tags, body: L.join('\n') };
+  const eq = [`h = ${wf(GLOW)}·(0.7…1.3)·sparks` + (twin ? ' (+ 0.8·a second trail)' : '') + ` + ${wf(COAL)}·coals`,
+    `sparks: one per cell where hash > 0.55,  v = ${wf(SP)}·(0.6…1.4),  density ${wf(DENS)}·(0.6…1.4)`];
+  return { knobs: ['density', 'speed', 'glow', ''], tags, body: L.join('\n'), eq };
 }
 
 function tFurnace() {
@@ -169,7 +191,9 @@ function tFurnace() {
   L.push(`  h = h * 1.15 + coals(uv, t) * ${wf(COAL)};`);
   if (spark) L.push(`  h += sparks(uv, t, 0.5, 1.0, 71u) * 0.8;`);
   L.push(`  return firePresent(h);`);
-  return { knobs: ['width', 'detail', 'rise', ''], tags, body: L.join('\n') };
+  const eq = [`h = 1.15·colFlame(w = ${wf(W)}·(0.7…1.2),  R = ${wf(RISE)}·(0.6…1.4),  D = ${wf(DET)} + detail)` + (dbl ? ` ∪ twin at x + ${wf(OFF)}` : ''),
+    `+ ${wf(COAL)}·coals` + (spark ? ' + 0.8·sparks' : ''), FLAME_EQ];
+  return { knobs: ['width', 'detail', 'rise', ''], tags, body: L.join('\n'), eq };
 }
 
 function tGasJet() {
@@ -181,7 +205,9 @@ function tGasJet() {
   if (flick) L.push(`  h *= 0.7 + 0.3 * sin(t * ${wf(FR)} + fbm(vec2f(t * 0.7, 0.0), 2, 9u) * 3.0);`);
   L.push(`  let core = (1.0 - smoothstep(0.0, ${wf(COREW)}, abs(uv.x))) * smoothstep(0.6, 0.0, uv.y);`);
   L.push(`  return firePresent(h + core * (0.5 + 0.4 * k.z));`);
-  return { knobs: ['width', 'rise', 'core', ''], tags, body: L.join('\n') };
+  const eq = [`h = colFlame(w = ${wf(W)}·(0.7…1.3),  R = ${wf(RISE)}·(0.7…1.3),  D = 0.3)` + (flick ? `·(0.7 + 0.3 sin(${wf(FR)}t + 3·fbm))` : ''),
+    `+ core·(0.5 + 0.4·core knob),  core = (1 − smoothstep(0, ${wf(COREW)}, |x|))·smoothstep(0.6, 0, y)`, FLAME_EQ];
+  return { knobs: ['width', 'rise', 'core', ''], tags, body: L.join('\n'), eq };
 }
 
 // ── families (legend order, fire-hued) and their counts ──────────────────────
@@ -205,7 +231,7 @@ for (const f of FAMS) {
     const v = f.t();
     const name = `${f.key}_${String(i).padStart(2, '0')}`;
     const species = `${f.label} variant · ${v.tags.length ? v.tags.join(', ') : 'clean'}`;
-    CELLS.push([name, f.key, species, v.knobs, v.body]);
+    CELLS.push([name, f.key, species, v.knobs, v.body, v.eq]);
   }
 }
 
@@ -268,7 +294,9 @@ const pack = HELPERS + '// ── the 60 evolved cells ────────�
 const spec = {
   cols: 6,
   uniform_bytes: 96,
-  cells: CELLS.map(([name, family, species, knobs]) => ({ name, family, species, knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'fs_' + name })),
+  // eq: the cell formula with its baked constants, for the saver plate
+  // (lib/table-engine.js, saverLabel). The hand-written EXTRA cells have none.
+  cells: CELLS.map(([name, family, species, knobs, , eq]) => ({ name, family, species, knobs, defaults: [0.5, 0.5, 0.5, 0.5], fn: 'fs_' + name, ...(eq ? { eq } : {}) })),
   gens: [
     { id: 'exposure', title: 'Exposure · brightness', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
       map: 'y => Math.pow(2, (y - 0.5) * 5)', unit: "v => (Math.log2(v) >= 0 ? '+' : '') + Math.log2(v).toFixed(1) + ' ev'" },
