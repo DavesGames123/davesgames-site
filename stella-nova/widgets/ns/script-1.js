@@ -2,14 +2,16 @@
 //  MATHEMATICS PANEL CONTENT  ·  per-view prose and equations (loaded early)
 // ----------------------------------------------------------------------------
 //  MATH maps each view id to an ordered list of blocks; buildMath(view) turns
-//  that list into DOM inside #mp-body and renders the equations with KaTeX. This
-//  file is content, not logic: the one function at the bottom does the rendering.
+//  that list into DOM inside #mp-body. An equation becomes an empty .eq box
+//  with a data-tex attribute. main.js then typesets each box as MathJax SVG
+//  with lib/sci-math.js and the color map of the view (NS_RULES). This file is
+//  content, not logic.
 //
 //  BLOCK TUPLE  [kind, value]
 //  ----------------------------------------------------------------------------
 //      'h'    heading            → <h3>
 //      'p'    paragraph (HTML)   → <p>
-//      'e'    equation (TeX)     → KaTeX display block
+//      'e'    equation (TeX)     → .eq box with data-tex, typeset by main.js
 //      'c'    equation caption   → small line under an equation
 //      's'    sources            → reference footer (HTML)
 //      'live' live plot canvases → [[canvasId, caption], ...] (flow3d only)
@@ -25,7 +27,8 @@
 //      wave ........ "wave: ["         the exact affine-wave reduction
 //      cascade ..... "cascade: ["      nesting and the finite-time schedule
 //      vortex ...... "vortex: ["       the reported collapse and its scaling
-//      renderer .... "function buildMath"  list → DOM + KaTeX
+//      prose ....... "function sub"        e^{..}, x_q in prose → <sup>, <sub>
+//      renderer .... "function buildMath"  list → DOM, TeX in data-tex
 // ============================================================================
 const R = String.raw;
 // Per-view content. Each value is the ordered block list rendered by buildMath.
@@ -121,7 +124,7 @@ flow3d: [
 wave: [
  ['h','The equation'],
  ['p','Inviscid Boussinesq on the plane: a temperature anomaly θ carried by a divergence-free velocity u, feeding back through buoyancy. Vorticity ω = curl u is created wherever temperature varies horizontally.'],
- ['e', R`\partial_t\theta + u\cdot\nabla\theta = f_\theta,\qquad \partial_t\omega + u\cdot\nabla\omega = \partial_1\theta + \operatorname{curl} f_u`],
+ ['e', R`\partial_t\theta + u\cdot\nabla\theta = f_\theta,\qquad \partial_t\omega + u\cdot\nabla\omega = \partial_1\theta + \operatorname{curl} f_{u}`],
  ['p','The initial state is Rayleigh–Taylor unstable: cold, heavy fluid sits above warm, light fluid. Near the origin θ ≈ −A x₂. Push a parcel up and buoyancy pushes it further.'],
  ['h','The ansatz that solves the equation exactly'],
  ['p','Suppose the fields already built are affine near the origin, then add a plane wave with a slowly turning wavevector λζ(t):'],
@@ -129,7 +132,7 @@ wave: [
  ['p','The wave velocity is v = (Ω / λ|ζ|²) Jζ sin s, with J the quarter-turn. Because v ⟂ ζ while ∇ϑ ∥ ζ, the wave cannot transport itself: v·∇ϑ = v·∇ϖ = 0. The nonlinearity evaluated on this ansatz is <b>identically zero</b>. No error term, no approximation.'],
  ['h','Three ODEs'],
  ['p','Matching the sin s and cos s coefficients leaves a closed finite-dimensional system:'],
- ['e', R`\dot\zeta = -D^{\mathsf T}\zeta,\qquad \dot\Theta = -\frac{J\zeta\cdot G}{\lambda|\zeta|^2}\,\Omega,\qquad \dot\Omega = \lambda\,\zeta_1\,\Theta`],
+ ['e', R`\dot{\zeta} = -D^{\mathsf T}\zeta,\qquad \dot{\Theta} = -\frac{J\zeta\cdot G}{\lambda|\zeta|^2}\,\Omega,\qquad \dot{\Omega} = \lambda\,\zeta_1\,\Theta`],
  ['c','left: old velocity turns the wavevector · middle: new velocity moves old temperature · right: horizontal temperature gradient makes vorticity'],
  ['h','Growth'],
  ['p','Freeze D = 0, G = −A e₂, ζ = (sin φ, cos φ). The system is a 2×2 hyperbolic linear ODE:'],
@@ -180,17 +183,24 @@ vortex: [
 ]
 };
 // Render one view's block list into #mp-body: build the matching element per
-// block kind, rendering 'e' blocks with KaTeX (falling back to raw TeX on error)
-// and 'live' blocks as caption + canvas pairs that main.js later draws into.
+// block kind. An 'e' block is an empty .eq.sci-eq box that keeps the TeX in
+// data-tex. main.js typesets it (typesetAll in lib/sci-math.js). A 'live'
+// block is caption + canvas pairs that main.js later draws into.
+// Prose and captions use plain-text index notation (e^{−νt}, λ_q, T_*).
+// sub() turns it into HTML <sup> and <sub>, so no TeX marks show.
+function sub(t){
+  return t.replace(/\^\{([^{}]*)\}/g,'<sup>$1</sup>').replace(/_\{([^{}]*)\}/g,'<sub>$1</sub>')
+          .replace(/\^([A-Za-z0-9])/g,'<sup>$1</sup>').replace(/_([A-Za-z0-9*])/g,'<sub>$1</sub>');
+}
 function buildMath(view){
   const body=document.getElementById('mp-body'); body.innerHTML='';
   for(const [k,v] of MATH[view]){
     let el;
     if(k==='h'){el=document.createElement('h3');el.textContent=v}
-    else if(k==='p'){el=document.createElement('p');el.innerHTML=v}
-    else if(k==='c'){el=document.createElement('div');el.className='eq-cap';el.textContent=v}
+    else if(k==='p'){el=document.createElement('p');el.innerHTML=sub(v)}
+    else if(k==='c'){el=document.createElement('div');el.className='eq-cap';el.innerHTML=sub(v)}
     else if(k==='s'){el=document.createElement('div');el.className='src';el.innerHTML=v}
-    else if(k==='e'){el=document.createElement('div');el.className='eq';try{katex.render(v,el,{displayMode:true,throwOnError:false})}catch(e){el.textContent=v}}
+    else if(k==='e'){el=document.createElement('div');el.className=v.length>90?'eq sci-eq long':'eq sci-eq';el.dataset.tex=v}
     else if(k==='live'){el=document.createElement('div');el.className='live';el.innerHTML=v.map(([id,cap])=>`<div class="eq-cap" style="margin:0 0 4px">${cap}</div><div class="livebox"><canvas id="${id}"></canvas></div>`).join('')}
     body.appendChild(el);
   }
