@@ -46,6 +46,7 @@
 //      readouts ............. "function updateReadouts"
 //      controls ............. "Controls"
 //      animation loop ....... "function animate"
+//      screensaver hook ..... "window.snSaver" (stub), "saverEnter((" (hook)
 //      headset (VR / AR) .... "XR: the wave in a headset"
 // ============================================================================
 import { EQ } from './equations.js';
@@ -59,6 +60,15 @@ window.addEventListener('error', e => showErr((e.message || 'unknown') + ' @ ' +
 window.addEventListener('unhandledrejection', e => showErr('Promise: ' + (e.reason?.message || e.reason)));
 
 const $ = id => document.getElementById(id);
+
+// The screensaver stub is set before the three.js import, which can take
+// more than the shell's 2.5 s hook wait. enter() waits for the real hook
+// (saverEnter, set after the scene) and fails after 10 s, so the
+// shell then uses its generic mode.
+let saverEnter;
+const saverReady = new Promise(r => { saverEnter = r; });
+window.snSaver = { enter: o => Promise.race([saverReady.then(f => f(o)),
+  new Promise((_, no) => setTimeout(() => no(new Error('scene not ready')), 10000))]) };
 
 // Range fill: the CSS gradient reads --pct.
 function paintSlider(el) { el.style.setProperty('--pct', ((+el.value - +el.min) / (+el.max - +el.min) * 100) + '%'); }
@@ -478,6 +488,7 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
   if (params.playing) t += dt;
+  if (saver) saverTick();
   if (idleTimer >= 0) {
     idleTimer += dt;
     if (idleTimer > 5 && !controls.autoRotate && !tween) { controls.autoRotate = true; controls.autoRotateSpeed = 0.3; }
@@ -496,6 +507,36 @@ function animate() {
   controls.update();
   renderer.render(scene, camera);
 }
+
+// ─── Screensaver hook (lib/screensaver.js has the protocol) ───────────────
+// The CSS under html.sn-saver hides the panel, the legend and the hint, so
+// #stage and the renderer fill the frame. The seed picks one ray or the
+// ring (sphere is too busy). δ drifts slowly through circular, elliptical
+// and linear states, so no hard cut occurs. calm 1 gives the slowest wave
+// and orbit. The clear colour is opaque, so a recording has no alpha.
+let saver = null;
+function saverTick() {
+  const d = Math.round(90 * Math.cos(saver.ph + (performance.now() - saver.t0) / 1000 * saver.w));
+  if (d !== params.delta) setDelta(d);
+}
+saverEnter((o = {}) => {
+  const calm = o.calm ?? 0.7, seed = (o.seed >>> 0) || 0;
+  document.documentElement.classList.add('sn-saver');
+  renderer.setClearColor(0x0a0c12, 1);
+  resize();
+  const mode = seed % 3 === 2 ? 'ring' : 'single';
+  if (mode !== params.dist) document.querySelector(`.mode-btn[data-mode="${mode}"]`).click();
+  tween = null; frameFor(mode, true);
+  params.playing = true;
+  params.omega = 0.35 + 0.5 * (1 - calm);
+  idleTimer = -1;
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.15 + 0.25 * (1 - calm);
+  // one full δ cycle in 100 to 160 s; the start phase comes from the seed
+  saver = { t0: performance.now(), ph: (seed % 360) * Math.PI / 180, w: 2 * Math.PI / (100 + 60 * calm) };
+  saverTick();
+  return { canvas, warmupMs: 500 };
+});
 
 rebuild();
 updateReadouts();

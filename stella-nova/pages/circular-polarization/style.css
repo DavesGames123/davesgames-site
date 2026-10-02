@@ -16,6 +16,7 @@
      controls ............. ".ctrl"
      phone portrait ....... "@media (max-width:760px) and (orientation:portrait)"
      touch targets ........ "@media (pointer:coarse)"
+     screensaver .......... "html.sn-saver"
    ============================================================================ */
 :root{
   --bg:#0a0c12; --bg2:#0d1018; --panel:#0c0f17;
@@ -158,3 +159,9 @@ input[type="range"]:focus-visible{box-shadow:0 0 0 3px rgba(212,168,71,0.25)}
   input[type="range"]::-moz-range-thumb{width:26px;height:26px}
   .pol-read dt{font-size:0.7rem}
 }
+
+/* ═══ SCREENSAVER (lib/screensaver.js): the scene alone fills the frame ═══ */
+html.sn-saver #panel,html.sn-saver .legend,html.sn-saver .hint,html.sn-saver .topbar{display:none}
+html.sn-saver #stage{flex:1;height:auto}
+html.sn-saver .app{flex-direction:row}
+html.sn-saver canvas#scene{cursor:none}
