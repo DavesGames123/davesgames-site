@@ -9,7 +9,7 @@
    GREP MAP
      grep -n 'AUDIO'      the Web Audio tone pair
      grep -n 'consonance' the ratio-complexity color map
-     grep -n 'function drawCell'  the per-cell loop render
+     grep -n 'function drawCell'  the per-cell loop render, samples from the curve
      grep -n 'function buildGrid' the grid construction
    ========================================================================== */
 (() => {
@@ -100,6 +100,7 @@
   }
 
   // ------------------------------------------------------------------ drawCell
+  const SEG_PX = 0.75;              // the longest chord in CSS px (1.5 device px at dpr 2)
   function drawCell(canvas, A, B) {
     const cx = canvas.getContext('2d');
     canvas.width = Math.round(CELL * dpr); canvas.height = Math.round(CELL * dpr);
@@ -107,19 +108,25 @@
     cx.fillStyle = '#08060e'; cx.fillRect(0, 0, CELL, CELL);
     const r = CELL * 0.38, mx = CELL / 2, my = CELL / 2;
     const { rgb, alpha } = cellColor(A, B);
-    // the closed loop, drawn analytically because a whole ratio closes
-    const N = 900;
+    // The closed loop, drawn analytically because a whole ratio closes. It
+    // closes after u = 1 / gcd(A, B), so only that part is sampled. The
+    // sample count comes from the curve: the speed bound is
+    // 2 pi sqrt(A^2 + B^2) r px per unit of u, and one sample per SEG_PX
+    // of it keeps every chord short. A fixed N = 900 made 8:9 a polygon.
+    const g = gcd(A, B) || 1, per = 1 / g;
+    const N = Math.max(64, Math.min(20000, Math.ceil(per * 2 * Math.PI * Math.hypot(A, B) * r / SEG_PX)));
     cx.globalCompositeOperation = 'lighter';
     cx.lineCap = 'round'; cx.lineJoin = 'round';
     cx.shadowColor = rgb; cx.shadowBlur = 10;
     cx.strokeStyle = rgb; cx.globalAlpha = alpha; cx.lineWidth = 1.7;
     cx.beginPath();
     for (let i = 0; i <= N; i++) {
-      const u = i / N;
+      const u = per * i / N;
       const X = mx + Math.cos(2 * Math.PI * A * u + PHASE) * r;
       const Y = my - Math.sin(2 * Math.PI * B * u) * r;
       i ? cx.lineTo(X, Y) : cx.moveTo(X, Y);
     }
+    cx.closePath();
     cx.stroke();
     cx.shadowBlur = 0; cx.globalAlpha = Math.min(1, alpha + 0.2); cx.lineWidth = 0.7;
     cx.strokeStyle = 'rgba(255,245,225,0.8)'; cx.stroke();
