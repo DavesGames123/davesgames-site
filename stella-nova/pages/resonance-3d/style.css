@@ -96,3 +96,7 @@ html.in-frame #panel{padding-top:24px}
   .row input[type=range]{height:22px}
   .modes button{padding:14px}
 }
+
+/* screensaver (lib/screensaver.js): the knot alone fills the frame */
+html.sn-saver #panel,html.sn-saver #gear,html.sn-saver #hint,html.sn-saver #status,html.sn-saver .topbar{display:none}
+html.sn-saver #gl{cursor:none}

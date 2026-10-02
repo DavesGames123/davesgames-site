@@ -19,6 +19,7 @@
      grep -n 'function frame'        the render loop and camera
      grep -n 'function buildUI'      the control panel construction
      grep -n '__res3d'               the objects xr.js reads (VR and AR)
+     grep -n 'snSaver'               the screensaver hook (lib/screensaver.js)
    ========================================================================== */
 (() => {
   'use strict';
@@ -394,6 +395,27 @@
       el.classList.toggle('on', a === G.A && b === G.B && c === G.C && Math.abs(detv()) < 1e-6);
     });
   }
+
+  // ------------------------------------------------------------ screensaver
+  // lib/screensaver.js has the protocol. The CSS under html.sn-saver hides the
+  // panel, gear, hint and status; #gl is already full-window. The seed picks
+  // the knot. The camera spins and the Y phase drifts slowly, so the knot
+  // morphs with no hard cut. calm 1 is the slowest. The triad stays off.
+  window.snSaver = {
+    enter(o) {
+      const calm = o && o.calm != null ? o.calm : 0.7, seed = (o && o.seed) >>> 0;
+      document.documentElement.classList.add('sn-saver');
+      if (G.playing) stopTones();
+      renderer.setClearColor(0x040308, 1);     // opaque, so a recording has no alpha
+      const b = document.querySelectorAll('#presets button');
+      if (b.length) b[seed % b.length].click();
+      G.spin = 0.15 + 0.25 * (1 - calm);
+      G.pRateY = 0.008 + 0.012 * (1 - calm);
+      view.R = 6; view.snapUp = false;          // a margin round the knot
+      resize();
+      return { canvas, warmupMs: 500 };
+    },
+  };
 
   // ------------------------------------------------------------------- boot
   resize();
