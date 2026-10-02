@@ -84,6 +84,9 @@ function resize() {
   if (!w || !h) return;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
+  // Saver on a tall screen: the shell docks the label plate at the top, so
+  // a view offset moves the image of the model down by 0.12 of the height.
+  if (saver.on && h > w) camera.setViewOffset(w, h, 0, -Math.round(0.12 * h), w, h); else camera.clearViewOffset();
   camera.updateProjectionMatrix();
   S.dirty = true;
 }
@@ -182,7 +185,12 @@ function frame() {
   const size = S.model.userData.size;
   const rad = size.length() * 0.5;
   const az = (M.view.az || 0) * Math.PI / 180, el = (M.view.el || 12) * Math.PI / 180;
-  const d = rad / Math.sin(camera.fov * Math.PI / 360) * (saver.on ? 1.15 : innerWidth < 860 ? 1.12 : 1.0);
+  // In saver mode the bounding sphere takes 0.62 of the half height (less
+  // on a narrow screen), so the label plate fits beside the model:
+  // d = rad sqrt(1 + u^2) / u, with u = that fraction times tan(fov / 2).
+  const tf = Math.tan(camera.fov * Math.PI / 360);
+  const u = Math.min(0.62, 0.8 * (view.clientWidth || innerWidth) / (view.clientHeight || innerHeight)) * tf;
+  const d = saver.on ? rad * Math.sqrt(1 + u * u) / u : rad / Math.sin(camera.fov * Math.PI / 360) * (innerWidth < 860 ? 1.12 : 1.0);
   const target = new THREE.Vector3(0, size.y * 0.47, 0);
   camera.position.set(d * Math.cos(el) * Math.sin(az), target.y + d * Math.sin(el), d * Math.cos(el) * Math.cos(az));
   controls.target.copy(target);
@@ -313,21 +321,71 @@ function saverTick(dt) {
   S.dirty = true;
 }
 // The plate: the model, the pass on screen and its review scores, all from
-// models/catalog.js. A new model gives a new title; a new pass swaps the text.
+// models/catalog.js, and the maths this page applies to it: the shading of
+// MeshStandardMaterial (three.js, GGX), the explode offset of load() and
+// applyExplode, and the ACES tone map. A new model gives a new title; a
+// new pass swaps the text. Colours: positions x and the outward unit u m1,
+// n, l, v, h m3, the material terms (f_r, rho, F, F_0, D, G) m4, the
+// explode e and the size s m6.
 function saverPlate(label, mi, pi, exploded) {
   if (!label) return;
   const M = MODELS[mi], P = M.passes[pi], c = M.credit;
   const clay = PASS_ORDER.indexOf(P.id) < PASS_ORDER.indexOf(CLAY_BEFORE);
+  const size = S.model && S.model.userData.size;
   label({
     title: M.title,
-    sub: `pass ${pi + 1} / ${M.passes.length} · ${PASS_NAMES[P.id]}${clay ? ' · clay' : ''}${exploded ? ' · exploded' : ''}`,
+    sub: `Pass ${pi + 1} of ${M.passes.length}: ${PASS_NAMES[P.id]}${clay ? ', clay' : ''}${exploded ? ', exploded' : ''}`,
+    params: [{ sym: 'e', name: 'explode', value: exploded ? '0 → 1' : '0', cls: 'm6' },
+      { sym: 'N', name: 'components', value: String(M.components), cls: 'm6' }]
+      .concat(size ? [{ sym: '\\lVert\\mathbf{s}\\rVert', name: 'bounding box diagonal', value: (size.length() * 10).toFixed(0) + ' cm', cls: 'm6' }] : [])
+      .concat([{ sym: 'q', name: 'AI vision score', value: P.score != null ? P.score.toFixed(2) : '—', cls: '' }]),
     lines: [
-      `AI vision score ${P.score != null ? P.score.toFixed(2) : '—'}` + (P.sameAs ? ` · same code as ${PASS_NAMES[P.sameAs]}` : ''),
-      Object.entries(P.layers || {}).map(([k, v]) => `${LAYER_NAMES[k] || k} ${v.toFixed(2)}`).join(' · '),
-      `${M.components} components · ${M.materials.join(', ')}`,
+      `${M.materials.join(', ')}` + (P.sameAs ? `; same code as ${PASS_NAMES[P.sameAs]}` : ''),
       `Reference: ${c.artist}, ${c.work} (${c.licence})`,
     ],
+    tex: [
+      'f_r = (1 - F)\\,\\frac{\\rho}{\\pi} + \\frac{D\\,G\\,F}{4\\,(\\mathbf{n}\\cdot\\mathbf{l})(\\mathbf{n}\\cdot\\mathbf{v})}',
+      '\\mathbf{x}_i = \\mathbf{x}_i^{0} + 0.18\\, e\\, \\lVert\\mathbf{s}\\rVert\\, \\hat{\\mathbf{u}}_i',
+      'F = F_0 + (1 - F_0)(1 - \\mathbf{v}\\cdot\\mathbf{h})^5',
+      'c_{\\text{out}} = \\operatorname{ACES}(1.05\\, c_{\\text{lin}})',
+    ],
+    rules: [['\\mathbf{x}', 'm1'], ['\\hat{\\mathbf{u}}', 'm1'], ['\\mathbf{n}', 'm3'], ['\\mathbf{l}', 'm3'], ['\\mathbf{v}', 'm3'], ['\\mathbf{h}', 'm3'],
+      ['f_r', 'm4'], ['\\rho', 'm4'], ['F_0', 'm4'], ['F', 'm4'], ['D', 'm4'], ['G', 'm4'], ['e', 'm6'], ['\\mathbf{s}', 'm6'], ['N', 'm6']],
+    eq: ['f_r = (1 − F) ρ/π + D G F / (4 (n·l)(n·v))', 'x_i = x_i⁰ + 0.18 e |s| û_i', 'out = ACES(1.05 · linear)'],
+    anchor: modelAnchor,
   });
+}
+// The model on screen, for the shell's label plate. Each visible mesh gives
+// a disc: its world bounding sphere, projected with the page camera (the
+// saver view offset included). x, y is the centre of the box round the
+// discs, r the radius that holds them. pts are mesh centres: the largest
+// mesh and the leftmost, rightmost, highest and lowest ones, so the leader
+// ends on the model, not on the circle round a tall or wide model. Page
+// CSS px.
+const _bs = new THREE.Sphere(), _bv = new THREE.Vector3();
+function modelAnchor() {
+  if (!S.model) return null;
+  const R = renderer.domElement.getBoundingClientRect();
+  if (R.width < 2) return null;
+  const t = Math.tan(camera.fov * Math.PI / 360), half = R.height / 2, discs = [];
+  camera.updateMatrixWorld();
+  S.model.traverse(o => {
+    if (!o.isMesh || !o.visible || !o.geometry) return;
+    if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+    _bs.copy(o.geometry.boundingSphere).applyMatrix4(o.matrixWorld);
+    const z = -_bv.copy(_bs.center).applyMatrix4(camera.matrixWorldInverse).z;
+    if (z <= camera.near) return;
+    _bv.copy(_bs.center).project(camera);
+    discs.push({ x: R.left + (_bv.x + 1) / 2 * R.width, y: R.top + (1 - _bv.y) / 2 * R.height, r: _bs.radius / z / t * half });
+  });
+  if (!discs.length) return null;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const d of discs) { x0 = Math.min(x0, d.x - d.r); x1 = Math.max(x1, d.x + d.r); y0 = Math.min(y0, d.y - d.r); y1 = Math.max(y1, d.y + d.r); }
+  const x = (x0 + x1) / 2, y = (y0 + y1) / 2;
+  let r = 0; for (const d of discs) r = Math.max(r, Math.hypot(d.x - x, d.y - y) + d.r);
+  const pick = [discs.reduce((a, b) => (b.r > a.r ? b : a)), discs.reduce((a, b) => (b.x < a.x ? b : a)), discs.reduce((a, b) => (b.x > a.x ? b : a)),
+    discs.reduce((a, b) => (b.y < a.y ? b : a)), discs.reduce((a, b) => (b.y > a.y ? b : a))];
+  return { x, y, r, pts: [...new Set(pick)].map(d => ({ x: d.x, y: d.y })) };
 }
 async function saverRun(m0, stepMs) {
   const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -361,6 +419,7 @@ window.snSaver = { enter(opts) {
   camera.add(saver.mesh); scene.add(camera);
   controls.enabled = false; controls.autoRotate = true; controls.autoRotateSpeed = 1.1 * (1 - 0.6 * calm);
   saver.on = true; saver.fade = saver.fadeTo = 1; saver.label = opts.label;
+  resize();
   saverRun((opts.seed >>> 0) % MODELS.length, Math.max(10, secs / 4) * 1000);
   return { canvas: renderer.domElement, warmupMs: 1500 };
 } };
