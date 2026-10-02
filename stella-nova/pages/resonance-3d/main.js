@@ -433,8 +433,8 @@
   // seeded tour of SAVER_TOUR. Each figure holds for a dwell. One phase drifts
   // slowly, so the knot morphs, and the camera spins. A figure change fades
   // the tube out and in (tube, head and arrow opacity). Each figure sends
-  // opts.label the three oscillator equations, the ratio a:b:c, the phases
-  // and what the curve is. calm 1 is the slowest. The triad stays off.
+  // opts.label the page TeX (R3_TEX), the ratio A:B:C and the drifting phase
+  // as params, what the curve is, and an anchor on the curve (knotAnchor). calm 1 is the slowest. The triad stays off.
   const SAVER = { on: false, opts: null, order: [], k: 0, t: 0, dwell: 18, slow: 1, st: null };
   // [a, b, c, drifting axis (0 x, 1 y, 2 z, -1 none), start phase in turns,
   //  base drift rate in turns/s, detune ε]
@@ -481,18 +481,41 @@
       'y = B sin(bωt + δy) = ' + live(b, ph[1]),
       'z = C sin(cωt + δz) = ' + live(c, ph[2]),
     ];
-    const lines = ['a : b : c = ' + a + ' : ' + b + ' : ' + c + ', A = B = C = 1'];
-    if (eps) lines.push('ε = +' + eps + ': the loop closes only after 1/ε = ' + Math.round(1 / eps) + ' periods, so the path fills a shell');
-    else lines.push('δ' + AX[ax] + ' drifts ' + turns(d0) + ' → ' + turns(d1) + ' (τ = 2π) over this figure');
-    lines.push(eps ? 'a detuned 3D Lissajous curve'
-      : coprime ? 'pairwise coprime: a Lissajous knot, one closed loop with no self-crossing for most phases'
-      : 'closed 3D Lissajous curve; ' + a + ', ' + b + ', ' + c + ' are not pairwise coprime, so it can cross itself');
-    lines.push('arrows: velocity, normal, binormal · triad ' + a + '·f₀ ' + b + '·f₀ ' + c + '·f₀ (sound off)');
-    if (SAVER.opts && SAVER.opts.label) SAVER.opts.label({
+    const lines = [eps ? 'The loop closes only after 1/δ = ' + Math.round(1 / eps) + ' periods, so the path fills a shell'
+      : coprime ? 'Pairwise coprime: a Lissajous knot with no self-crossing for most phases'
+      : a + ', ' + b + ', ' + c + ' are not pairwise coprime, so the curve can cross itself'];
+    // Params: the ratio of each axis (R3_RULES colours), the drifting phase
+    // and the detune. The TeX is the page's own (index.html).
+    const PH = ['\\varphi_x', '\\varphi_y', '\\varphi_z'];
+    const params = [
+      { sym: 'A', name: 'x ratio', value: String(a), cls: 'm1' },
+      { sym: 'B', name: 'y ratio', value: String(b), cls: 'm2' },
+      { sym: 'C', name: 'z ratio', value: String(c), cls: 'm3' },
+      eps ? { sym: '\\delta', name: 'detune', value: '+' + eps, cls: 'm4' }
+        : { sym: PH[ax], name: 'drifting phase', value: turns(d0) + ' → ' + turns(d1), cls: 'm' + (ax + 1) },
+    ];
+    if (SAVER.opts && SAVER.opts.label && SAVER.opts.labels !== false) SAVER.opts.label({
       title: '3D Lissajous ' + (eps || !coprime ? 'curve' : 'knot') + ' · ' + a + ' : ' + b + ' : ' + c,
-      sub: 'three perpendicular oscillators · ' + (eps ? 'drifting shell' : 'closed loop'),
-      eq, lines,
+      sub: 'Three perpendicular oscillators, ' + (eps ? 'drifting shell' : 'closed loop'),
+      params, lines, tex: R3_TEX, rules: R3_RULES, eq, anchor: knotAnchor,
     });
+  }
+  const R3_TEX = [String.raw`x=\sin\!\big(2\pi(A+\delta)\,u+\varphi_x\big)`, String.raw`y=\sin(2\pi B\,u+\varphi_y)`,
+    String.raw`z=\sin(2\pi C\,u+\varphi_z)`];
+  // The curve on screen, for the shell's label plate: about 300 points of
+  // CURVE projected with the live camera (cam(), with the saver view
+  // offset) onto the canvas rect. Centre is the middle of their screen
+  // box, r the largest distance from it, pts the moving head. Page CSS px.
+  const _ka = new THREE.Vector3();
+  function knotAnchor() {
+    if (!CURVE) return null;
+    const rc = canvas.getBoundingClientRect(), C = cam(), P = CURVE.points, st = Math.max(1, Math.floor(P.length / 300));
+    const to = v => { _ka.copy(v).project(C); return { x: rc.left + (_ka.x + 1) / 2 * rc.width, y: rc.top + (1 - _ka.y) / 2 * rc.height }; };
+    const q = []; let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (let i = 0; i < P.length; i += st) { const p = to(P[i]); q.push(p); x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    let r = 0; for (const p of q) r = Math.max(r, Math.hypot(p.x - cx, p.y - cy));
+    return { x: cx, y: cy, r, pts: [to(head.position)] };
   }
   function saverStep(dt, el) {
     SAVER.t += dt;
