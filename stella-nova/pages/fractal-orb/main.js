@@ -51,6 +51,7 @@
 //      preset grid .......... "BUILD PRESET GRID"    build the preset buttons
 //      control bindings ..... "BIND QUICK PANEL"     wire inputs back to S
 //      animation loop ....... "function animate"     the per-frame update
+//      screensaver hook ..... "SCREENSAVER HOOK"     window.snSaver for the shell
 // ============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -436,3 +437,58 @@ function animate(){
 
 syncAllUI();
 animate();
+
+// ═══════════════════ SCREENSAVER HOOK ═══════════════════
+// The shell's screensaver (lib/screensaver.js) calls snSaver.enter(opts). It
+// hides the panels, loads a calm preset chosen by opts.seed, and slows time and
+// spin by opts.calm (1 = slowest). Every half dwell it eases the continuous
+// fields toward the next calm preset over 8 s. fractalIters stays fixed, because
+// an integer step would pop. No storage, no URL writes.
+const SAVER_PRESETS=['Void','Gray','Ember','Default','Cyan'];
+const SAVER_EASE=['speed','density','atmosphereGlow','atmosphereLevel','atmosphereScale',
+  'orbRotation','internalAnim','fractalScale','fractalDecay','smoothness','asymmetry','chromaticAberration'];
+window.snSaver={
+  enter(opts){
+    const calm=Math.min(1,Math.max(0,opts.calm??0.7));
+    const slow=1-0.7*calm;
+    ['ui','fps'].forEach(id=>document.getElementById(id).style.display='none');
+    document.querySelector('.grid-bg').style.display='none';
+    // The scanline and vignette overlays sit over the canvas on screen only.
+    const st=document.createElement('style');
+    st.textContent='body::before,body::after{display:none}';
+    document.head.appendChild(st);
+    // One preset in calm form: speeds scaled by calm, aberration halved, dpr 1
+    // so the drawing buffer matches the window.
+    const calmOf=name=>{
+      const p={...presets[name]};
+      p.speed*=slow; p.orbRotation*=slow; p.internalAnim*=0.5+0.5*slow;
+      p.chromaticAberration*=0.5; p.dpr=1;
+      return p;
+    };
+    let i=(opts.seed>>>0)%SAVER_PRESETS.length;
+    Object.assign(S,calmOf(SAVER_PRESETS[i]),{preset:SAVER_PRESETS[i]});
+    camera.position.setLength(6);
+    applyState();
+    // Autopilot: ease S toward the next preset, colours through THREE.Color.
+    const c=new THREE.Color();
+    const hold=Math.max(10,(opts.seconds||60)/2)*1000, ease=8000;
+    let a=null,b=null,a1=new THREE.Color(),a2=new THREE.Color(),b1=new THREE.Color(),b2=new THREE.Color(),t0=0;
+    const step=now=>{
+      if(!a){ if(now-t0<hold) return;
+        i=(i+1)%SAVER_PRESETS.length;
+        a={...S}; b=calmOf(SAVER_PRESETS[i]); t0=now;
+        a1.set(a.primaryEnergy); a2.set(a.secondaryEnergy); b1.set(b.primaryEnergy); b2.set(b.secondaryEnergy);
+      }
+      const k=Math.min(1,(now-t0)/ease), e=k*k*(3-2*k);
+      for(const f of SAVER_EASE) S[f]=a[f]+(b[f]-a[f])*e;
+      S.primaryEnergy='#'+c.copy(a1).lerp(b1,e).getHexString();
+      S.secondaryEnergy='#'+c.copy(a2).lerp(b2,e).getHexString();
+      applyState();
+      if(k>=1){ a=null; t0=now; S.preset=SAVER_PRESETS[i]; }
+    };
+    t0=performance.now();
+    this._timer=setInterval(()=>step(performance.now()),50);
+    return { canvas:renderer.domElement, warmupMs:500 };
+  },
+  exit(){ clearInterval(this._timer); }
+};
