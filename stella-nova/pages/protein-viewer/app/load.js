@@ -57,7 +57,8 @@ export async function loadPreset(id) {
     const s = parse(text, p.code);
     if (token !== S.token) return;
     setStructure(s, p);
-    try { history.replaceState(null, '', '#' + p.id); } catch (e) { /* sandboxed */ }
+    // the screensaver (S.saver) does not write the URL hash
+    if (!S.saver) try { history.replaceState(null, '', '#' + p.id); } catch (e) { /* sandboxed */ }
   } catch (e) {
     if (token === S.token) toast(`Could not load ${p.code}: ${e.message}`, true);
   } finally { if (token === S.token) hideLoading(); }

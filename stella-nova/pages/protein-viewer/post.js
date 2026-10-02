@@ -10,7 +10,8 @@
 //                   many sit behind the depth buffer
 //    3. composite . a 4x4 depth-aware blur of the AO (it cancels the 4x4
 //                   pattern), depth-edge outlines, depth fog into the
-//                   background gradient, a filmic tone curve, sRGB, dither
+//                   background gradient, a filmic tone curve, sRGB, dither;
+//                   Post.fade (0..1) mixes all of it into the background
 //  A transparent surface writes no depth, so it gets no AO or outline.
 //  On a screen of pixel ratio below 1.5 the scene target is 1.5x larger,
 //  for a little supersampling.
@@ -70,7 +71,7 @@ precision highp float;
 varying vec2 vUv;
 uniform sampler2D tColor, tDepth, tAO;
 uniform vec2 aoTexel, px, res;
-uniform float near, far, aoAmt, edgeAmt, fogNear, fogFar, fogAmt, ortho;
+uniform float near, far, aoAmt, edgeAmt, fogNear, fogFar, fogAmt, ortho, fade;
 uniform vec3 bgIn, bgOut, edgeCol;
 float linZ(float d) {
   float z = d * 2.0 - 1.0;
@@ -115,6 +116,8 @@ void main() {
       c = mix(c, back, f);
     }
   }
+  // fade: 0 = the scene, 1 = only the background (the screensaver hook)
+  c = mix(c, back, fade);
   c = srgb(aces(c * 1.05));
   // dither against banding in the dark gradient
   float n = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
@@ -164,7 +167,7 @@ export class Post {
         tColor: { value: this.rt.texture }, tDepth: { value: this.depth }, tAO: { value: this.aoRT.texture },
         aoTexel: { value: new THREE.Vector2() }, px: { value: new THREE.Vector2() }, res: { value: new THREE.Vector2() },
         near: { value: 1 }, far: { value: 100 }, aoAmt: { value: 0.85 }, edgeAmt: { value: 0.75 },
-        fogNear: { value: 50 }, fogFar: { value: 100 }, fogAmt: { value: 0.85 }, ortho: { value: 0 },
+        fogNear: { value: 50 }, fogFar: { value: 100 }, fogAmt: { value: 0.85 }, ortho: { value: 0 }, fade: { value: 0 },
         bgIn: { value: new THREE.Color('#161a2a') }, bgOut: { value: new THREE.Color('#05060a') }, edgeCol: { value: new THREE.Color('#020306') },
       },
     });
@@ -174,6 +177,7 @@ export class Post {
     this.compScene = new THREE.Scene(); this.compScene.add(this.compQ);
     this.opts = { ao: true, outline: true, fog: true };
     this.w = this.h = 0;
+    this.fade = 0;   // 0..1, the molecule fades into the background
   }
   setSize(w, h, dpr) {
     const ss = !this.coarse && dpr < 1.5 ? 1.5 : 1;
@@ -208,6 +212,7 @@ export class Post {
     u.edgeAmt.value = this.opts.outline ? 0.8 : 0;
     u.fogAmt.value = this.opts.fog ? 0.78 : 0;
     u.fogNear.value = fog[0]; u.fogFar.value = fog[1];
+    u.fade.value = this.fade;
     r.setRenderTarget(null);
     r.render(this.compScene, this.cam);
   }

@@ -26,6 +26,7 @@ export const S = {
   wpos: null, bound: { c: new THREE.Vector3(), r: 20 }, grid: null, pick: [], pickOver: [],
   vis: null, cells: null, surfCache: null, look: { ao: true, outline: true, fog: true }, frames: 0, ready: false,
   xr: false,   // true while a VR or AR session runs (app/xr.js)
+  saver: false,   // true in the shell screensaver (main.js window.snSaver)
 };
 export const dirty = () => { S.dirty = true; };
 
