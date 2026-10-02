@@ -47,6 +47,7 @@
 //      controls ............. "Controls"
 //      animation loop ....... "function animate"
 //      screensaver hook ..... "window.snSaver" (stub), "saverEnter((" (hook)
+//      saver plate .......... "function saverPlate", "function rayAnchor"
 //      headset (VR / AR) .... "XR: the wave in a headset"
 // ============================================================================
 import { EQ, SYM } from './equations.js';
@@ -555,22 +556,51 @@ function saverPlate() {
   const st = polState(params.delta), sg = v => (v < -0.05 ? '−' : '') + Math.abs(v).toFixed(1);
   const hand = st.turn > 0 ? 'clockwise to the receiver · optics right, IEEE LHCP'
     : st.turn < 0 ? 'counter-clockwise to the receiver · optics left, IEEE RHCP' : 'does not turn (linear)';
+  // Parameters: TeX symbol, short name, live value. The classes are those
+  // of typeset.mjs: E m2, B m1, e1 m4, e2 m6, delta m3, omega m5. The TeX
+  // is the panel TeX of typeset.mjs, the classes written as rules.
   saverLabel({
     title: 'Circular polarization · ' + (params.dist === 'single' ? 'one ray' : params.dist === 'ring' ? 'ring of ' + params.n + ' rays' : 'sphere of ' + params.n + ' rays'),
-    sub: 'outgoing wave · E helix amber, B helix cyan · δ drifts',
-    lines: [
-      'δ = ' + (params.delta < 0 ? '−' : '') + Math.abs(params.delta) + '° · Jones J = ' + jonesText(params.delta),
-      'state: ' + st.kind + (st.psi != null && st.kind !== 'circular' ? ' · tilt ψ = ' + (st.psi > 0 ? '+' : '−') + '45°' : '') + ' · χ = ' + sg(st.chi) + '°',
-      'turn: ' + hand,
-      'k = ' + params.k.toFixed(1) + ' · ω = ' + params.omega.toFixed(2) + (rScaled ? ' · drawn as r·E (far-field pattern)' : ' · E₀ = ' + params.amp.toFixed(1) + ', 1/r fall'),
+    sub: 'Outgoing wave: the E helix is amber, the B helix cyan. The phase δ drifts.',
+    params: [
+      { sym: '\\delta', name: 'phase, ' + st.kind, value: (params.delta < 0 ? '−' : '') + Math.abs(params.delta) + '°', cls: 'm3' },
+      { sym: '\\chi', name: 'ellipticity', value: sg(st.chi) + '°' },
+      { sym: 'k', name: 'wave number', value: params.k.toFixed(1) },
+      { sym: '\\omega', name: 'angular frequency', value: params.omega.toFixed(2), cls: 'm5' },
     ],
+    lines: ['Turn: ' + hand + '.', rScaled ? 'Drawn as r·E, the far-field pattern.' : 'E₀ = ' + params.amp.toFixed(1) + ', falling as 1/r.'],
+    tex: [
+      String.raw`\vec{E}=\frac{E_0}{r}\Big[\cos(kr-\omega t)\,\hat{e}_1+\cos(kr-\omega t-\delta)\,\hat{e}_2\Big]`,
+      String.raw`\vec{B}=\frac{1}{c}\,\hat{u}_r\times\vec{E}`,
+      String.raw`\mathbf{J}=\frac{1}{\sqrt{2}}\begin{pmatrix}1\\ e^{-i\delta}\end{pmatrix},\qquad \sin 2\chi=\sin\delta`,
+    ],
+    rules: [['\\vec{E}', 'm2'], ['\\vec{B}', 'm1'], ['\\hat{e}_1', 'm4'], ['\\hat{e}_2', 'm6'], ['\\delta', 'm3'], ['\\omega', 'm5']],
     eq: [
       'φ = k r − ω t',
       'E = (E₀/r) [cos φ ê₁ + cos(φ − δ) ê₂]',
       'B = (1/c) û_r × E',
       'J = (1, e^(−iδ))/√2,   sin 2χ = sin δ',
     ],
+    anchor: rayAnchor,
   });
+}
+// The rays on screen, for the plate leader: points along each ray from
+// R_MIN to R_MAX - 4 (the far end fades out), projected through the camera
+// to page px. The anchor is their mean, the radius holds them plus 30 px for
+// the helix width, and the key points are the source and the ray ends.
+// One ray for 'single', the equatorial ring for 'ring'; the sphere fills
+// the view, so it has no anchor.
+function rayAnchor() {
+  if (params.dist === 'sphere') return null;
+  const b = canvas.getBoundingClientRect(), v = new THREE.Vector3(), all = [], keys = [];
+  const P = (d, r) => { v.copy(d).multiplyScalar(r).project(camera); return v.z < 1 ? { x: b.left + (v.x + 1) / 2 * b.width, y: b.top + (1 - v.y) / 2 * b.height } : null; };
+  const dirs = params.dist === 'single' ? [SINGLE_DIR] : equatorialRing(params.n);
+  const src = P(SINGLE_DIR, 0); if (src) keys.push(src);
+  for (const d of dirs) for (let k = 0; k <= 6; k++) { const q = P(d, R_MIN + (R_MAX - 4 - R_MIN) * k / 6); if (q) { all.push(q); if (k === 6 && keys.length < 8) keys.push(q); } }
+  if (!all.length) return null;
+  let x = 0, y = 0; for (const q of all) { x += q.x; y += q.y; } x /= all.length; y /= all.length;
+  let r = 0; for (const q of all) r = Math.max(r, Math.hypot(q.x - x, q.y - y));
+  return { x, y, r: r + 30, pts: keys };
 }
 
 rebuild();
