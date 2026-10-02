@@ -48,7 +48,7 @@
 //      resize ............... "RenderScale.create"    pixel budget + fps control
 //      frame loop ........... "function frame"        camera basis + uniforms
 //      screensaver hook ..... "window.snSaver"        UI off, sharper, slow orbit
-//      equations ............ "function renderEqs"    KaTeX metric + EFE
+//      equations ............ "function renderEqs"    MathJax metric + EFE
 // ============================================================================
 (async () => {
 // Fetch both shader stages as text before compiling anything, so the rest of
@@ -337,28 +337,19 @@ window.snSaver={
   exit:function(){cancelAnimationFrame(this.raf);clearInterval(this.timer);}
 };
 
-// ─── KaTeX equations ───
-// Colors: R (curvature) amber, g (metric) blue, T (stress-energy) pink, G lavender, c cyan
+// ─── Equations ───
+// The [data-tex] boxes in index.html hold the TeX. lib/sci-math.js typesets
+// them as MathJax SVG. Each quantity has one math color class (lib/sci.css):
+//   g_{\mu\nu} metric -> m1, r_s Schwarzschild radius -> m2, r -> m3,
+//   T_{\mu\nu} stress-energy -> m4, R_{\mu\nu} and R curvature -> m5.
+// G, c, pi and the numbers stay the default color.
+var EQ_RULES=[['g_{\\mu\\nu}','m1'],['r_s','m2'],['r','m3'],['T_{\\mu\\nu}','m4'],['R_{\\mu\\nu}','m5'],['R','m5']];
 function renderEqs(){
-  if(typeof katex==='undefined'){setTimeout(renderEqs,100);return;}
-  var R_C='#ffb464', G_C='#96c8ff', T_C='#e8a0c8', GR_C='#c8a8e8', C_C='#7ce0d0';
-
-  // Schwarzschild metric tensor — 4×4 matrix form
-  katex.render(
-    '\\textcolor{'+G_C+'}{g_{\\mu\\nu}} = \\begin{pmatrix}'
-    + '-\\!\\left(1 - \\tfrac{\\textcolor{'+R_C+'}{r_s}}{\\textcolor{'+G_C+'}{r}}\\right)\\!\\textcolor{'+C_C+'}{c}^2 & 0 & 0 & 0 \\\\'
-    + '0 & \\left(1 - \\tfrac{\\textcolor{'+R_C+'}{r_s}}{\\textcolor{'+G_C+'}{r}}\\right)^{\\!-1} & 0 & 0 \\\\'
-    + '0 & 0 & \\textcolor{'+G_C+'}{r}^2 & 0 \\\\'
-    + '0 & 0 & 0 & \\textcolor{'+G_C+'}{r}^2 \\sin^2\\theta'
-    + '\\end{pmatrix}',
-    document.getElementById('eq1'),{throwOnError:false}
-  );
-
-  // Einstein field equations — full tensor equation
-  katex.render(
-    '\\textcolor{'+R_C+'}{R_{\\mu\\nu}} - \\tfrac{1}{2}\\textcolor{'+G_C+'}{g_{\\mu\\nu}}\\textcolor{'+R_C+'}{R} = \\frac{8\\pi \\textcolor{'+GR_C+'}{G}}{\\textcolor{'+C_C+'}{c}^4}\\textcolor{'+T_C+'}{T_{\\mu\\nu}}',
-    document.getElementById('eq2'),{throwOnError:false}
-  );
+  import(new URL('../../lib/sci-math.js',document.baseURI).href).then(function(m){
+    m.typesetAll(document.getElementById('eqPanel'),EQ_RULES);
+    // The zoom slider sets the camera distance in units of r_s.
+    m.typesetAll(document.getElementById('ctrlWrap'),EQ_RULES);
+  });
 }
 renderEqs();
 })();
