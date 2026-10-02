@@ -16,15 +16,19 @@
    HEAD LOAD ORDER  (order matters)
      1. fonts        Google Fonts stylesheet (absolute)
      2. style.css    the page stylesheet (from the old style block)
-     3. main.js      type=module; fetches the pack and spec, then boots
+     3. sci.css      the shared math colors (.m1 to .m6) and .sci-eq for the
+                     inspector docs; MathJax loads when the first equation is typeset
+     4. main.js      type=module; fetches the pack and spec, then boots
 
    LAYOUT  (the leading hash marks an element id)
      topbar (hidden in the site shell iframe through .in-frame)
      #side left · generators, palette; #stage grid of cells; #modal inspector
+     #m-doc in the inspector: the field TeX, knob map and integrator (docs.js)
   ════════════════════════════════════════════════════════════════════════════
 -->
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 
@@ -53,6 +57,7 @@
     </div>
     <div class="sheet-main">
       <div class="sheet-head"><span class="lbl" id="m-src-lbl">WGSL</span><button class="panel-btn" id="m-copy" type="button">Copy function</button><button class="panel-btn" id="m-copy-pack" type="button">Copy library</button><button class="panel-btn" id="m-close" type="button">Close ✕</button></div>
+      <div id="m-doc" class="doc" hidden></div>
       <pre id="m-src" tabindex="0"></pre>
     </div>
   </div>

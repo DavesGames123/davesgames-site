@@ -17,8 +17,15 @@
 //  large surface does not step the tile simulation. A new cell or a new size
 //  resets surf.page.hr.
 //
-//  grep -n targets: "HR_CAP", "HR_MIN", "hrState(", "fillU(", "stepSim("
+//  INSPECTOR DOCS. inspect(t) fills #m-doc from docs.js (the field as
+//  color-coded TeX, the knob map, the integrator) and puts the knob symbol
+//  and range on each slider label, in the color of the symbol.
+//
+//  grep -n targets: "HR_CAP", "HR_MIN", "hrState(", "fillU(", "stepSim(", "inspect(t)"
 // ============================================================================
+import { typeset } from '../../lib/sci-math.js';
+import { renderDoc, knobLabel } from './docs.js';
+
 const NP = 4096, TS = 256;          // the small tile simulation
 const HR_CAP = 2048;                // long side of the large trail, in texels
 const HR_MIN = 512;                 // a surface whose canvas long side is at most this stays in tile mode
@@ -113,6 +120,16 @@ export const PAGE = {
     pass.setPipeline(pg.pr); pass.setBindGroup(0, surf.page.bind); pass.draw(3); pass.end();
   },
   source(t) { return this.ctx.fnSource('v_' + t.s.name); },
+  // the inspector docs for cell t, and the TeX symbol on each knob label
+  inspect(t) {
+    const box = this.ctx.$('m-doc'); if (box) renderDoc(t, box);
+    t.s.knobs.forEach((name, i) => {
+      const kl = name && knobLabel(t.s.name, i); if (!kl) return;
+      const lab = document.querySelector(`#m-knobs label[for="knob-${t.s.name}-${i}"]`); if (!lab) return;
+      const m = document.createElement('span'); m.className = 'sci-sym knob-sym';
+      lab.classList.add('has-sym'); lab.appendChild(m); typeset(m, kl.tex + (kl.range ? ' \\in ' + kl.range : ''), { display: false });
+    });
+  },
 };
 
 
