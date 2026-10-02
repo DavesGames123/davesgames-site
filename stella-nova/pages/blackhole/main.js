@@ -320,15 +320,31 @@ window.snSaver={
       if(!label)return;
       var scaleR=camRadius/(32*RS),rkR=Math.max(scaleR,1),k=useRK4?rkR:scaleR;
       var steps=Math.max(1,Math.round(maxSteps*k));
-      label({title:'Schwarzschild black hole',sub:'Sgr A* mass M = 4.3 × 10⁶ M☉ · null geodesics · '+(useGeodesic?(useRK4?'RK4':'Euler'):'straight rays'),
-        lines:['r_s = 2GM/c² = '+sci(RS)+' m ('+(RS/1.495978707e11).toFixed(3)+' AU)',
-          'camera r = '+(camRadius/RS).toFixed(1)+' r_s = '+sci(camRadius)+' m · pitch '+(camPitch*180/Math.PI).toFixed(1)+'°',
-          'photon sphere r = 1.5 r_s = '+sci(1.5*RS)+' m · horizon r = r_s',
-          'accretion disc 3.0 – 5.1 r_s (inner edge at the ISCO, 3 r_s)',
-          'up to '+steps+' steps per ray · dl = '+sci(geodesicDl*k)+' m'],
+      // Parameters, the page's TeX and its EQ_RULES (r_s m2, r m3, g m1,
+      // T m4, R m5). eq is the plain fallback.
+      label({title:'Schwarzschild black hole',sub:'Sgr A* mass, null geodesics, '+(useGeodesic?(useRK4?'RK4':'Euler'):'straight rays'),
+        params:[{sym:'r_s',name:'horizon',value:sci(RS)+' m',cls:'m2'},
+          {sym:'r',name:'camera',value:(camRadius/RS).toFixed(1)+' rₛ · pitch '+(camPitch*180/Math.PI).toFixed(1)+'°',cls:'m3'},
+          {sym:'r_{\\text{disc}}',name:'accretion disc',value:'3.0 – 5.1 rₛ',cls:'m3'},
+          {sym:'N',name:'steps per ray',value:String(steps)}],
+        lines:['M = 4.3 × 10⁶ solar masses. The photon sphere is at 1.5 rₛ, the disc inner edge at the ISCO (3 rₛ).'],
+        tex:['ds^2 = -\\left(1 - \\tfrac{r_s}{r}\\right)c^2\\,dt^2 + \\frac{dr^2}{1 - r_s/r} + r^2\\,d\\Omega^2',
+          '\\ddot\\varphi = -\\frac{2\\,\\dot r\\,\\dot\\varphi}{r}, \\qquad \\dot t = \\frac{E}{1 - r_s/r}',
+          'R_{\\mu\\nu} - \\tfrac{1}{2}g_{\\mu\\nu}R = \\frac{8\\pi G}{c^4}T_{\\mu\\nu}'],
+        rules:EQ_RULES,
         eq:['ds² = −f c²dt² + dr²/f + r²dΩ²',
           'r̈ = −(r_s/2r²)fṫ² + (r_s/2r²f)ṙ² + (r−r_s)φ̇²',
-          'φ̈ = −2ṙφ̇/r,   ṫ = E/f,   f = 1 − r_s/r']});
+          'φ̈ = −2ṙφ̇/r,   ṫ = E/f,   f = 1 − r_s/r'],
+        anchor:holeAnchor});
+    }
+    // The hole on screen. The canvas fills the window, the camera looks at
+    // the hole, and the image plane is FOCAL_PER_H x height away, so a point
+    // at distance d beside the axis lands f d / camRadius px from the centre
+    // (f = canvas CSS height). The radius holds the disc outer edge (5.1 r_s)
+    // plus 20 percent for the lensed far side. The key point is the centre.
+    function holeAnchor(){
+      var b=canvas.getBoundingClientRect(),f=FOCAL_PER_H*b.height,cx=b.left+b.width/2,cy=b.top+b.height/2;
+      return {x:cx,y:cy,r:1.2*f*5.1*RS/camRadius,pts:[{x:cx,y:cy}]};
     }
     plate();
     if(label)this.timer=setInterval(plate,1000);
