@@ -26,12 +26,14 @@
 //      the four ............ "function four"       the summary grid
 //      20 / 4 switch ....... "window.eqView"       fold the scalar lines
 //      hover and tap ....... "function light"      line -> canvas overlay
+//      label symbols ....... "data-sym"            T24.sym into the labels
 // ============================================================================
 (function(){
   const T=window.T24; if(!T) return;
   const scroll=document.getElementById('eq-scroll');
   // Concept colour per block, as CSS tokens (style.css :root).
-  const CC={gaussE:'var(--e)',gaussB:'var(--b)',faraday:'var(--a)',ampere:'var(--disp)',const:'var(--dim)',contin:'var(--dim)'};
+  // The four take the color of their main symbol: E, B, A and J.
+  const CC={gaussE:'var(--e)',gaussB:'var(--b)',faraday:'var(--a)',ampere:'var(--j)',const:'var(--dim)',contin:'var(--dim)'};
   const pad=n=>String(n).padStart(2,'0');
   const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -64,6 +66,8 @@
       '</div><p class="foot">Light needs only these four: a changing E makes a curling B, a changing B makes a curling E, and the pair carries itself away at c.</p>';
     return f;
   }
+  // Label symbols: each [data-sym] element gets its MathJax SVG from T24.sym.
+  if(T.sym) document.querySelectorAll('[data-sym]').forEach(el=>{const v=T.sym[el.dataset.sym]; if(v) el.innerHTML=v;});
   T.concepts.forEach(c=>scroll.appendChild(block(c)));
   scroll.appendChild(four());
   ticks();

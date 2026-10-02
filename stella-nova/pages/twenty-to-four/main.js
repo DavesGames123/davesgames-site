@@ -75,21 +75,22 @@ const SIM={
 // being moved.
 const SRC={x:0,y:0};
 // One palette for the canvas and the equations (style.css :root has the same
-// values as CSS tokens). E is gold, B is cyan, the displacement current is
-// green, and indigo marks the negative side of a signed heatmap.
-const PAL={e:[255,200,100],b:[94,214,230],disp:[134,227,168],a:[185,164,255],neg:[125,136,255],ev:[242,227,198]};
+// values as CSS tokens). E is --m2 orange, B is --m1 blue, A is --m3 green
+// and the displacement current is --m5 yellow, the lib/sci.css math colors
+// of the same symbols. Indigo marks the negative side of a signed heatmap.
+const PAL={e:[255,154,98],b:[98,196,255],disp:[255,214,102],a:[134,220,124],neg:[125,136,255],ev:[242,227,198]};
 const rgbS=c=>c[0]+','+c[1]+','+c[2];
 let dragging=false,dragDX=0,dragDY=0;
 
-// Map a field magnitude to an RGB colour along the E ramp: deep amber, gold,
-// then warm white where the field is strongest. E is gold in the equations,
-// so the field lines are too. The magnitude is log-compressed because the
+// Map a field magnitude to an RGB colour along the E ramp: deep rust, orange,
+// then warm white where the field is strongest. E is orange in the
+// equations, so the field lines are too. The magnitude is log-compressed because the
 // field spans many orders between the near zone and the far zone.
 function fieldColorRGB(mag,gamma){
   gamma=gamma||1.0;
   const lv=Math.log10(1+mag*9e6)/6.6;
   const lc=Math.pow(Math.max(0,Math.min(1,lv)),1/Math.max(0.1,gamma));
-  const stops=[[0.30,0.15,0.05],[0.62,0.34,0.08],[0.92,0.62,0.22],[1,0.80,0.42],[1,0.90,0.68],[1,0.97,0.90]];
+  const stops=[[0.30,0.12,0.05],[0.62,0.27,0.12],[0.92,0.50,0.28],[1,0.62,0.40],[1,0.80,0.64],[1,0.95,0.88]];
   const sv=lc*5,si=Math.min(Math.floor(sv),4),sf=sv-si;
   return [stops[si][0]+sf*(stops[si+1][0]-stops[si][0]),
           stops[si][1]+sf*(stops[si+1][1]-stops[si][1]),
@@ -306,7 +307,7 @@ function render(){
   ctx.fillStyle='#0a0d14';ctx.fillRect(0,0,CW,CH);
   // A soft warm light round the charge, then a faint reference grid every 46 px.
   const R0=Math.hypot(CW,CH)*0.6,bg=ctx.createRadialGradient(SRC.x,SRC.y,0,SRC.x,SRC.y,R0);
-  bg.addColorStop(0,'rgba(255,200,100,0.05)');bg.addColorStop(0.5,'rgba(94,214,230,0.015)');bg.addColorStop(1,'rgba(0,0,0,0)');
+  bg.addColorStop(0,'rgba(255,154,98,0.05)');bg.addColorStop(0.5,'rgba(98,196,255,0.015)');bg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=bg;ctx.fillRect(0,0,CW,CH);
   ctx.strokeStyle='rgba(160,185,225,0.028)';ctx.lineWidth=1;
   for(let x=0;x<CW;x+=46){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,CH);ctx.stroke();}
@@ -415,7 +416,7 @@ function setDensity(el){SIM.density=+el.value;document.getElementById('vl-densit
 function setCoef(key,el){SIM[key]=+el.value;const m={amp:'vl-amp',cNear:'vl-near',cRad:'vl-rad'};document.getElementById(m[key]).textContent=(+el.value).toFixed(2);sg(el);}
 function tog(key,btn){SIM[key]=!SIM[key];btn.classList.toggle('on',SIM[key]);}
 // The play button shows the action it will take: pause while playing.
-function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'❚❚':'▶';b.classList.toggle('on',SIM.playing);}
+function togglePlay(){SIM.playing=!SIM.playing;const b=document.getElementById('btn-play');b.textContent=SIM.playing?'Pause':'Play';b.classList.toggle('on',SIM.playing);}
 function setSpeed(s){SIM.speed=s;document.getElementById('sp-slow').classList.toggle('on',s<1);document.getElementById('sp-1').classList.toggle('on',s>=1);}
 // The tune card (a bottom sheet on phones). open omitted = toggle.
 function tuneOpen(open){const t=document.getElementById('tune'),b=document.getElementById('tune-btn');const o=open===undefined?!t.classList.contains('open'):!!open;t.classList.toggle('open',o);b.classList.toggle('on',o);}

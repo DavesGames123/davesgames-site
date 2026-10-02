@@ -4,7 +4,7 @@
 <script src="../../lib/gpu-guard.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Twenty to Four // Stella Nova · davesgames.io</title>
+<title>Twenty to four — Stella Nova · davesgames.io</title>
 <!--
   ═══════════════════════════════════════════════════════════════════════════
    TWENTY TO FOUR  ·  page shell
@@ -16,8 +16,9 @@
    window.__setOverlay. Nothing here computes the field.
 
    LOAD ORDER   (order matters)
-     ● fonts         Space Grotesk, IBM Plex Mono, Instrument Serif
      ● style.css     the page stylesheet and the symbol colour tokens
+     ● lib/sci.css   shared science type (STIX Two Text, Inter, the system
+                     mono) and the math colors .m1 to .m6; it loads the fonts
      ● equations.js  window.T24, the typeset equations
      ● concepts.js   builds the equation column and the hover wiring
      ● main.js       runs the field sim and defines __setOverlay
@@ -39,8 +40,8 @@
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="../../lib/sci.css">
 </head>
 <body>
 <!-- In-frame guard: inside the site shell iframe, add .in-frame so the CSS hides
@@ -48,7 +49,7 @@
 <script>if(window!==window.top)document.documentElement.classList.add("in-frame")</script>
 
 <header class="topbar">
-  <span class="brand">Stella Nova</span><span class="crumb">Twenty to Four</span>
+  <span class="brand">Stella Nova</span><span class="crumb">Twenty to four</span>
 </header>
 
 <div id="main">
@@ -58,9 +59,9 @@
 
     <div id="legend" aria-label="Colour key">
       <div class="lg-h">An oscillating charge, radiating</div>
-      <div class="lg-row"><i class="sw sw-e"></i><span><b class="t-e">E</b> field lines</span></div>
-      <div class="lg-row"><i class="sw sw-bp"></i><span><b class="t-b">B</b> out of the page</span></div>
-      <div class="lg-row"><i class="sw sw-bn"></i><span><b class="t-b">B</b> into the page</span></div>
+      <div class="lg-row"><i class="sw sw-e"></i><span><span class="sym" data-sym="E">E</span> field lines</span></div>
+      <div class="lg-row"><i class="sw sw-bp"></i><span><span class="sym" data-sym="B">B</span> out of the page</span></div>
+      <div class="lg-row"><i class="sw sw-bn"></i><span><span class="sym" data-sym="B">B</span> into the page</span></div>
       <div class="lg-tip">Drag the glowing charge.</div>
     </div>
 
@@ -78,20 +79,20 @@
     <div id="tune" aria-label="Field controls">
       <div class="tune-h"><span>Tune the field</span><button class="x" onclick="tuneOpen(false)" aria-label="Close">×</button></div>
       <div class="t-grp">Source</div>
-      <label class="r-row"><span class="r-row-lbl">Frequency</span><input type="range" id="sl-freq" min="0.3" max="3" value="1" step="0.05" oninput="setFreq(this)"><span class="val" id="vl-freq">1.00</span></label>
-      <label class="r-row"><span class="r-row-lbl">Wavelength</span><input type="range" id="sl-lambda" min="70" max="260" value="140" step="5" oninput="setLambda(this)"><span class="val" id="vl-lambda">140</span></label>
-      <label class="r-row"><span class="r-row-lbl">Axis °</span><input type="range" id="sl-axis" min="0" max="180" value="90" step="1" oninput="setAxis(this)"><span class="val" id="vl-axis">90</span></label>
+      <label class="r-row"><span class="r-row-lbl"><span class="sym" data-sym="f"></span> <span class="d">Frequency</span></span><span class="val"><span id="vl-freq">1.00</span></span><input type="range" id="sl-freq" min="0.3" max="3" value="1" step="0.05" oninput="setFreq(this)"></label>
+      <label class="r-row"><span class="r-row-lbl"><span class="sym" data-sym="lambda"></span> <span class="d">Wavelength</span></span><span class="val"><span id="vl-lambda">140</span></span><input type="range" id="sl-lambda" min="70" max="260" value="140" step="5" oninput="setLambda(this)"></label>
+      <label class="r-row"><span class="r-row-lbl"><span class="sym" data-sym="axis"></span> <span class="d">Axis angle</span></span><span class="val"><span id="vl-axis">90</span>°</span><input type="range" id="sl-axis" min="0" max="180" value="90" step="1" oninput="setAxis(this)"></label>
       <div class="t-grp">Field</div>
-      <label class="r-row"><span class="r-row-lbl">Field lines</span><input type="range" id="sl-density" min="20" max="100" value="42" step="2" oninput="setDensity(this)"><span class="val" id="vl-density">42</span></label>
-      <label class="r-row"><span class="r-row-lbl">Strength</span><input type="range" id="sl-amp" min="0.2" max="4" value="1" step="0.05" oninput="setCoef('amp',this)"><span class="val" id="vl-amp">1.00</span></label>
-      <label class="r-row"><span class="r-row-lbl">Near 1/r³</span><input type="range" id="sl-near" min="0" max="3" value="1" step="0.05" oninput="setCoef('cNear',this)"><span class="val" id="vl-near">1.00</span></label>
-      <label class="r-row"><span class="r-row-lbl">Radiation 1/r</span><input type="range" id="sl-rad" min="0" max="3" value="1" step="0.05" oninput="setCoef('cRad',this)"><span class="val" id="vl-rad">1.00</span></label>
+      <label class="r-row"><span class="r-row-lbl">Field lines</span><span class="val"><span id="vl-density">42</span></span><input type="range" id="sl-density" min="20" max="100" value="42" step="2" oninput="setDensity(this)"></label>
+      <label class="r-row"><span class="r-row-lbl">Strength</span><span class="val"><span id="vl-amp">1.00</span></span><input type="range" id="sl-amp" min="0.2" max="4" value="1" step="0.05" oninput="setCoef('amp',this)"></label>
+      <label class="r-row"><span class="r-row-lbl">Near 1/r³</span><span class="val"><span id="vl-near">1.00</span></span><input type="range" id="sl-near" min="0" max="3" value="1" step="0.05" oninput="setCoef('cNear',this)"></label>
+      <label class="r-row"><span class="r-row-lbl">Radiation 1/r</span><span class="val"><span id="vl-rad">1.00</span></span><input type="range" id="sl-rad" min="0" max="3" value="1" step="0.05" oninput="setCoef('cRad',this)"></label>
       <p class="t-hint">Near sets the bound field close to the charge. Radiation sets the part that leaves as light.</p>
     </div>
 
     <!-- Dock: time, layers, and the tune toggle. -->
     <nav id="dock" aria-label="Playback and layers">
-      <button class="dk on" id="btn-play" onclick="togglePlay()" aria-label="Play or pause">❚❚</button>
+      <button class="dk on" id="btn-play" onclick="togglePlay()" aria-label="Play or pause">Pause</button>
       <div class="seg"><button class="dk" id="sp-slow" onclick="setSpeed(0.25)">¼×</button><button class="dk on" id="sp-1" onclick="setSpeed(1)">1×</button></div>
       <span class="dk-sep"></span>
       <button class="dk chip on" id="tog-lines" onclick="tog('showLines',this)"><i class="dot d-e"></i>Lines</button>
@@ -109,7 +110,7 @@
     <div class="eq-scroll" id="eq-scroll">
       <header class="eq-head">
         <p class="kicker"><span class="y1">Maxwell 1865</span><span class="ar">→</span><span class="y2">Heaviside 1884</span></p>
-        <h1>Twenty <em>to</em> Four</h1>
+        <h1>Twenty to four</h1>
         <p class="lede">Maxwell wrote electromagnetism as twenty equations, one component at a time. Heaviside’s vector calculus folds them into four. Hover or tap any line, and the field lights up the exact quantity that line governs.</p>
         <div class="collapse-bar">
           <div class="seg seg-big" role="tablist" aria-label="Show the scalar or the vector form">
