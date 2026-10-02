@@ -38,6 +38,7 @@
      grep -n 'function bindPointer'     tools, zoom and pan
      grep -n 'function bindKeys'        keyboard shortcuts
      grep -n 'function setOpen'         the panel, the phone sheet, the dock
+     grep -n 'window.snSaver'           the shell screensaver hook
    ========================================================================== */
 import { createEngine, kernelShell, GROWTH, resample, PALETTES, paletteData } from './engine.js';
 
@@ -186,7 +187,7 @@ function selectCreature(i) {
   const c = S.creatures[i];
   S.idx = i; S.c = c;
   S.rule = { m: c.m, s: c.s, T: c.T, scale: c.scale };
-  lsSet(LS_KEY, c.code);
+  if (!S.saver) lsSet(LS_KEY, c.code);   // the screensaver writes no storage
 
   const fam = familyOf(c);
   const chip = $('curFamily');
@@ -920,5 +921,85 @@ function bindKeys() {
     else if (e.key === '/') { e.preventDefault(); openBrowser(true); $('search').focus(); }
   });
 }
+
+// -------------------------------------------------------------- screensaver
+// Shell screensaver hook (lib/screensaver.js). enter() waits for the first
+// creature, hides the GUI and gives #gl the full window. A 2D canvas over
+// #gl takes a copy of each frame and is the canvas to record: it can fade to
+// black across a creature change, which the WebGPU pass cannot. The
+// autopilot plays SAVER_CODES from opts.seed, three to four per dwell. A
+// glider runs with the follow camera, zoomed in. A grower (a chain creature
+// that fills the world) runs at zoom 1 with no follow. calm 1 runs at 0.5
+// times the normal speed. A creature that dies is stamped again.
+const SAVER_CODES = [
+  ['O2u', 2.4], ['OG2g', 2.4], ['HN+m', 1], ['OV2u', 2], ['2S1f', 2.2], ['O4t', 1.6], ['PN+i', 1],
+  ['P4al', 1.8], ['K4s', 2.2], ['HN+bs', 1],
+];
+// Plate text, index gn - 1 and kn - 1 (the order of growthTeX and CORE_TEX).
+const SAVER_GROWTH = ['G(u) = 2(1 − (u − m)²/9s²)₊⁴ − 1', 'G(u) = 2 exp(−(u − m)²/2s²) − 1', 'G(u) = +1 if |u − m| ≤ s, else −1'];
+const SAVER_CORE = ['k(r) = (4r(1 − r))⁴', 'k(r) = exp(4 − 1/(r(1 − r)))', 'k(r) = 1 if ¼ ≤ r ≤ ¾, else 0',
+  'k(r) = 1 if ¼ ≤ r ≤ ¾, ½ if r < ¼, else 0'];
+// The values on the plate are the live rule (S.rule), so a slider change in
+// the panel shows here too.
+function saverLabel(label) {
+  const c = S.c;
+  if (!label || !c) return;
+  const R = Math.round(c.R * S.rule.scale * det() * 10) / 10;
+  const lines = [`m = ${S.rule.m.toFixed(3)} · s = ${S.rule.s.toFixed(4)} · T = ${S.rule.T}`,
+    `R = ${R} · β = (${c.b.map(v => +v.toFixed(3)).join(', ')}) · B = ${c.b.length}`];
+  if (c.cls === 'grow') lines.push('grows without limit');
+  label({
+    title: c.name, sub: `Lenia · ${c.code}${c.cname ? ' · ' + c.cname : ''}`, lines,
+    eq: ['A(t + Δt) = clip₀¹[A(t) + (1/T)·G(K ∗ A(t))]', SAVER_GROWTH[c.gn - 1] || SAVER_GROWTH[0],
+      'K(r) = β⌊Br/R⌋ · k(Br/R mod 1)', SAVER_CORE[c.kn - 1] || SAVER_CORE[0]],
+  });
+}
+window.snSaver = {
+  async enter(opts) {
+    const calm = Math.max(0, Math.min(1, +opts.calm || 0));
+    while (S.idx < 0) await new Promise(r => setTimeout(r, 50));
+    S.saver = true;
+    const st = document.createElement('style');
+    st.textContent = 'html.saver #panel,html.saver #gear,html.saver #toast,html.saver #cursor,html.saver #dock,html.saver #status,'
+      + 'html.saver #browser,html.saver #nogpu{display:none!important}'
+      + 'html.saver #gl{left:0!important;width:100%!important;transition:none!important}'
+      + 'html.saver #saver-cv{position:fixed;inset:0;width:100%;height:100%;z-index:30;cursor:none;background:#000}';
+    document.head.appendChild(st); document.documentElement.classList.add('saver');
+    setOpen(false); openBrowser(false);
+    const gl = $('gl');
+    if (!S.engine) return { canvas: gl, warmupMs: 0 };
+    const cv = document.createElement('canvas'); cv.id = 'saver-cv'; document.body.appendChild(cv);
+    const c2 = cv.getContext('2d', { alpha: false });
+    const list = SAVER_CODES.map(([code, zoom]) => ({ i: S.creatures.findIndex(c => c.code === code), zoom })).filter(e => e.i >= 0);
+    const hold = Math.max(15, (+opts.seconds || 60) / 4), FADE = 1.0;
+    let k = (opts.seed >>> 0) % list.length, t = 0, last = 0, dead = 0;
+    const show = () => {
+      const e = list[k];
+      setPlaying(true);
+      selectCreature(e.i);
+      sizeWorld(true);
+      const grow = S.c.cls === 'grow';
+      setFollow(!grow);
+      setZoom(e.zoom);
+      S.speed = 2 * (1 - 0.5 * calm);
+      t = 0; dead = 0;
+      saverLabel(opts.label);
+    };
+    show();
+    (function drive(now) {
+      requestAnimationFrame(drive);
+      const dt = last ? Math.min(0.1, (now - last) / 1000) : 0; last = now;
+      t += dt;
+      if (t > hold) { k = (k + 1) % list.length; show(); }
+      // A creature that dies leaves an empty world: stamp it again.
+      if (S.stats && S.stats.mass < 1e-3 && S.time > 2) { if ((dead += dt) > 1) { placeCreature(); dead = 0; } } else dead = 0;
+      if (cv.width !== gl.width || cv.height !== gl.height) { cv.width = gl.width; cv.height = gl.height; }
+      c2.drawImage(gl, 0, 0);
+      const f = Math.max(0, 1 - t / FADE, 1 - (hold - t) / FADE);
+      if (f > 0) { c2.fillStyle = `rgba(0,0,0,${Math.min(1, f)})`; c2.fillRect(0, 0, cv.width, cv.height); }
+    })(0);
+    return { canvas: cv, warmupMs: 1500 };
+  },
+};
 
 boot();
