@@ -40,6 +40,7 @@
 //      minimap .............. "function drawMinimap" throat cross-section canvas
 //      frame loop ........... "function frame"     camera basis + uniforms + draw
 //      equations ............ "function renderEqs" KaTeX metric / throat / T
+//      screensaver .......... "window.snSaver"     hook for lib/screensaver.js
 // ============================================================================
 (async () => {
 // Shader source lives in real .glsl files. Fetch both before building the
@@ -90,7 +91,7 @@ let useGeodesic=true,useRK4=false,showDisc=false,showGlow=true,bgMode=0;
 let baseDl=0.12,maxSteps=2048,escMul=50;
 // Idle auto-spin: on until the user interacts, then resumed after a delay.
 let autoSpin=true,spinEnabled=true;
-const SPIN_SPEED=0.0008;
+let SPIN_SPEED=0.0008;   // the screensaver hook lowers it by calm
 var spinTimer=null;
 const SPIN_RESUME_MS=4000;
 
@@ -137,7 +138,7 @@ window.toggleEqPanel=function(){var p=document.getElementById('eqPanel'),b=docum
 
 // Auto-descent: fly the camera along the axis, bouncing between the two
 // universes at the range limits. Start/stop toggles the play button.
-var descending=false,descentDir=0,lastFrameTime=0;
+var descending=false,descentDir=0,lastFrameTime=0,descentSpeed=4.0;
 window.toggleDescend=function(){
   if(descending){
     descending=false;
@@ -160,7 +161,7 @@ function updateDescent(){
   var dist=Math.abs(camL);
   var throatProximity=dist/(throatK*4.0);
   var speedMult=0.15+0.85*Math.min(1.0,throatProximity*throatProximity);
-  var baseSpeed=4.0;
+  var baseSpeed=descentSpeed;
   camL+=descentDir*baseSpeed*speedMult*dt;
   if(descentDir<0&&camL<-18){camL=-18;descentDir=1;}
   if(descentDir>0&&camL>18){camL=18;descentDir=-1;}
@@ -373,4 +374,23 @@ function renderEqs(){
   );
 }
 renderEqs();
+
+// Screensaver hook for the shell (lib/screensaver.js). It hides every element
+// but canvas#c (the GPU gate stays closed, so dismissWarn never runs), sizes
+// the canvas at full window resolution under the same pixel budget and fps
+// control, and starts the descent. opts.calm (1 = slowest) halves the spin
+// and descent speeds at most; opts.seed picks the stars or the nebula sky.
+// No exit(): the shell reloads the page on stop.
+window.snSaver={enter:function(o){
+  var calm=Math.max(0,Math.min(1,o&&o.calm!=null?o.calm:0.7));
+  var st=document.createElement('style');
+  st.textContent='body>*:not(#c){display:none!important}canvas#c{cursor:none!important}';
+  document.head.appendChild(st);
+  renderScale=RenderScale.create({canvas:canvas,gl:gl,fracDesktop:1,fracMobile:0.5,mobileWidth:768});
+  window.addEventListener('resize',renderScale.resize);renderScale.resize();
+  setBg(((o&&o.seed)|0)%2?3:0);
+  SPIN_SPEED=0.0008*(1-0.5*calm);descentSpeed=4.0*(1-0.5*calm);
+  if(!descending)toggleDescend();
+  return {canvas:canvas,warmupMs:2000};
+}};
 })();
