@@ -39,6 +39,7 @@
 //      dynamics ............. "stepDyn"           nuclear force integration
 //      presets .............. "PRESETS"           named molecule setups
 //      frame loop ........... "function frame"    per-frame dispatch
+//      screensaver .......... "window.snSaver"    shell saver: preset tour + slow orbit
 // ============================================================================
 import { loadShaders } from '../../lib/shaders.js';
 // Fetch both WGSL programs before any GPU setup, so init stays synchronous.
@@ -268,6 +269,16 @@ async function initGPU(){
   // dt is a getter so callers always read the current (possibly resized) texture.
   return{dv:dv,cx:cx,cv:cv,pB:pB,cB:cB,rU:rU,cU:cU,aB:aB,rP:rP,cP:cP,rG:rG,cG:cG,dt:function(){return dT}}}
 
+/* ═══ SCREENSAVER STUB ═══ */
+// The shell screensaver (lib/screensaver.js) waits only 2.5 s for
+// window.snSaver, and the GPU init below is async. So the hook is defined
+// here, and enter() waits for saverImpl, which the MAIN block sets once the
+// device exists. After 8 s with no device, enter() resolves to {} and the
+// shell records the largest canvas.
+var saverImpl=null,saverWait=[];
+window.snSaver={enter:function(o){return new Promise(function(res){
+  var go=function(){res(saverImpl(o))};if(saverImpl)go();else{saverWait.push(go);setTimeout(function(){res({})},8000)}})}};
+
 /* ═══ MAIN ═══ */
 // Entry point: initialize the GPU, then define the per-frame work and wire up
 // all the controls. Everything below closes over the GPU handle bundle G.
@@ -466,4 +477,43 @@ var lastT=0,rebT=0;
 function frame(t){requestAnimationFrame(frame);var dt=Math.min((t-lastT)/1000,.05);lastT=t;
   if(ST.releasing){stepDyn(dt);rebT+=dt;if(rebT>.08){rebT=0;rebuild()}else{updateDisplay();ST.colorDirty=true}}
   if(ST.dirty&&!ST.releasing)rebuild();if(ST.colorDirty)runCompute();renderFrame();drawOverlay()}
+// Screensaver hook body (see the stub above MAIN). It hides every element
+// but canvas #c, the scanline and vignette layers too. The bond overlay #ov
+// is a separate canvas, so the recording would not hold it either. Sprites
+// are half size and the cloud has at most 40k points. A table SV sets the
+// gain and the camera radius per preset, so the cloud shows the heat ramp
+// at full frame and does not burn to white.
+// The camera orbits at (0.12 - 0.08 calm) rad/s with a slow tilt sway. The tour
+// loads a seeded order of seven presets, about 3.5 per dwell. Release and
+// cluster are not used: their re-sample every 0.08 s flickers. Each change
+// eases ST.gain to 0 over 1.2 s (the heat ramp goes to black), loads the
+// preset while dark, then eases the gain back up. No exit(): the shell
+// reloads the page on stop.
+saverImpl=function(opts){
+  var calm=Math.max(0,Math.min(1,opts&&opts.calm!=null?+opts.calm:0.7)),secs=Math.max(20,+(opts&&opts.seconds)||60);
+  var s=((opts&&opts.seed)|0)||3;
+  var rnd=function(){s=(s+0x6D2B79F5)|0;var t=Math.imul(s^s>>>15,1|s);t^=t+Math.imul(t^t>>>7,61|t);return((t^t>>>14)>>>0)/4294967296};
+  var st=document.createElement('style');
+  st.textContent='body>*:not(#c){display:none!important}body::before,body::after{display:none!important}#c{cursor:none}';
+  document.head.appendChild(st);
+  var keys=['h2','hf','n2','co','lih','anti','chain'];
+  for(var i=keys.length-1;i>0;i--){var j=Math.floor(rnd()*(i+1)),k=keys[i];keys[i]=keys[j];keys[j]=k}
+  var ki=0,FADE=1.2,phase='in',ph=0,gT=0,t0=performance.now(),tp=t0,tNext=t0+Math.max(15,secs/3.5)*1000;
+  // Saver gain and camera-radius factor per preset, read from headless frames:
+  // the autoTune gains (3.5 .. 18) burn the compact 2p and C 1s clouds white.
+  var SV={h2:[1.8,.72],hf:[.5,.6],n2:[.4,.6],co:[.4,.6],lih:[1.2,.42],anti:[1.8,.72],chain:[.12,1]};
+  var load=function(){var k=keys[ki%keys.length];window.loadPresetUI(k);gT=SV[k][0];ST.gain=0;ST.colorDirty=true;cam.radius*=SV[k][1]};
+  ST.colorMode=0;ST.psize=.03;ST.N=Math.min(ST.N,40000);load();
+  (function tick(now){requestAnimationFrame(tick);var dt=Math.min(.1,(now-tp)/1000),t=(now-t0)/1000;tp=now;
+    cam.phi+=dt*(.12-.08*calm);cam.theta=.3+.15*Math.sin(t*.05);
+    if(phase==='hold'&&now>=tNext){phase='out';ph=0}
+    if(phase==='in'||phase==='out'){
+      if(rebuilding||ST.dirty)return;
+      ph=Math.min(1,ph+dt/FADE);var e=ph*ph*(3-2*ph);
+      ST.gain=gT*(phase==='in'?e:1-e);ST.colorDirty=true;
+      if(ph>=1){if(phase==='out'){ki++;load();phase='in';ph=0}else{phase='hold';tNext=now+Math.max(15,secs/3.5)*1000}}}
+  })(t0);
+  return {canvas:cv,warmupMs:2000};
+};
+saverWait.forEach(function(f){f()});
 requestAnimationFrame(frame)})()
