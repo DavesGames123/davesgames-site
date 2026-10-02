@@ -111,6 +111,14 @@
         <button class="sim-btn" id="btnView">↺ Reset camera</button>
       </div>
     </div>
+    <!-- Headset: VR and AR (xr.js). Shown only when the device has WebXR. -->
+    <div id="xrSec" hidden><div class="p-section">
+      <div class="p-sec-lbl">Headset</div>
+      <div class="sim-btns">
+        <button class="sim-btn" id="bVR" hidden>View in VR</button>
+        <button class="sim-btn" id="bAR" hidden>View in AR</button>
+      </div>
+    </div></div>
   </div></div>
 
   <!-- Tap-away scrim: closes the mobile panel when the canvas area is tapped. -->
@@ -136,8 +144,11 @@
   <span id="st-fps">-- fps</span>
 </div>
 
-<!-- three.js r128 first (defines global THREE), then main.js which uses it. -->
+<!-- three.js r128 first (defines global THREE), then main.js which uses it.
+     xr.js is a module (it runs after main.js) and passes this THREE to
+     lib/xr-view.js. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="main.js"></script>
+<script type="module" src="xr.js"></script>
 </body>
 </html>
