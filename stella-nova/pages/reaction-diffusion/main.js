@@ -825,10 +825,10 @@ function bindKeys() {
 // the steps per frame of each preset.
 const SAVER_IDS = ['gs-waves', 'gs-u-skate', 'gs-mitosis', 'gs-self-replicating', 'cgl-waves', 'ks-chaos',
   'oregonator', 'rm-predator-prey', 'kobayashi-crystal', 'gs-coral'];
-// The label plate takes plain text, so each family has its equations in
-// Unicode here (the panel shows the TeX strings from presets.json). The
-// two chemicals a, b show as u, v. SAVER_SYM gives the plate name of each
-// parameter; a parameter with no entry shows with its own name.
+// The label plate typesets the TeX strings of the preset (presets.json, the
+// same as the panel) in the panel colours (S.colors from presetRules).
+// SAVER_EQ is the plain Unicode fallback of each family: there the two
+// chemicals a, b show as u, v.
 const SAVER_EQ = {
   'Gray–Scott': ['∂u/∂t = Dᵤ∇²u − uv² + F(1 − u)', '∂v/∂t = Dᵥ∇²v + uv² − (F + k)v'],
   'Ginzburg–Landau': ['∂u/∂t = Dᵤ∇²u + αu − γv + (−βu + δv)(u² + v²)', '∂v/∂t = Dᵥ∇²v + αv + γu + (−βv − δu)(u² + v²)',
@@ -839,28 +839,35 @@ const SAVER_EQ = {
   'Phase field': ['τ ∂φ/∂t = ∇·(ε²∇φ) − ∂ₓ(εε′∂ᵧφ) + ∂ᵧ(εε′∂ₓφ) + φ(1 − φ)(φ − ½ + m)',
     '∂T/∂t = ∇²T + K ∂φ/∂t', 'ε = ε̄(1 + δ cos j(θ + θ₀)),  m = (α/π) atan(γ(Tₑ − T))'],
 };
-const SAVER_SYM = {
-  D_a: 'Dᵤ', D_b: 'Dᵥ', alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', tau: 'τ', epsbar: 'ε̄',
-  anisotropy: 'j', rotate: 'θ₀', teq: 'Tₑ', stabilize: 's', gms_weight: 'c', lapweight: 'w₂', bilapweight: 'w₄',
-};
+// The TeX symbol of a parameter that paramTeX cannot name, as the preset
+// TeX writes it, and a short name for the plate.
+const SAVER_TEX = { stabilize: 's', gms_weight: 'w_g', lapweight: 'w_2', bilapweight: 'w_4', epsbar: '\\bar\\epsilon',
+  teq: 'T_{eq}', anisotropy: 'j', rotate: '\\theta_0' };
+const SAVER_NAME = { K: 'kill rate', F: 'feed rate', stabilize: 'stabilizer', gms_weight: 'gradient weight',
+  lapweight: 'Laplacian weight', bilapweight: 'bi-Laplacian weight', m: 'predator death rate', h: 'half saturation',
+  k: 'conversion rate', epsilon: 'time-scale ratio', tau: 'relaxation time', epsbar: 'mean interface width',
+  teq: 'melting temperature', anisotropy: 'anisotropy mode' };
 // The values on the plate are the live ones: the slider of each parameter
 // in #params, in the order of p.params (buildParams makes one row each).
+// params: up to five parameters with a TeX symbol (paramTeX), each in its
+// panel class (S.colors.byName). No anchor: the pattern fills the window.
 function saverLabel(label) {
   const p = S.preset;
   if (!label || !p) return;
   const inps = [...$('params').querySelectorAll('.prm input[type=range]')];
-  const vals = (p.params || []).map((q, i) => {
-    let nm = SAVER_SYM[q.name] || q.name;
-    if (p.family === 'Gray–Scott' && q.name === 'K') nm = 'k';
-    if (p.family === 'Phase field' && q.name === 'k') nm = 'K';
-    if (p.family === 'Phase field' && q.name === 'dy') return '';
+  const by = (S.colors && S.colors.byName) || {};
+  const params = [];
+  (p.params || []).forEach((q, i) => {
+    if (p.family === 'Phase field' && q.name === 'dy') return;
     const v = inps[i] ? +inps[i].value : q.value;
-    return `${nm} = ${fmt(v, q.step)}`;
-  }).filter(Boolean);
-  const lines = [];
-  for (let i = 0; i < vals.length; i += 3) lines.push(vals.slice(i, i + 3).join(' · '));
-  lines.push(`${p.width || 256} × ${p.height || p.width || 256} grid${p.wrap !== false ? ', wrapped' : ''}`);
-  label({ title: p.name, sub: `${p.family} reaction–diffusion`, eq: SAVER_EQ[p.family] || [], lines });
+    const pfK = p.family === 'Phase field' && q.name === 'k';
+    const sym = pfK ? 'K' : SAVER_TEX[q.name] || paramTeX(q.name), d = /^D_([a-d])$/.exec(q.name);
+    if (sym && params.length < 5) params.push({ sym, name: (pfK ? 'latent heat' : SAVER_NAME[q.name]) || (d ? 'diffusion of ' + d[1] : 'parameter'), value: fmt(v, q.step), cls: by[q.name] || '' });
+  });
+  const grid = `${p.width || 256} × ${p.height || p.width || 256} grid${p.wrap !== false ? ', wrapped' : ''}`;
+  label({ title: p.name, sub: `${p.family} reaction–diffusion`, params, lines: [grid],
+    tex: (p.equations || []).slice(0, 4), rules: S.colors ? S.colors.rules : null,
+    eq: SAVER_EQ[p.family] || [] });
 }
 window.snSaver = {
   async enter(opts) {
