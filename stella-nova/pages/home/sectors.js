@@ -51,36 +51,38 @@ const DIRECTORY_ONLY = new Set(['qave', 'origami']);
 const THUMBS = new Set(THUMB_KEYS);
 
 // Chart text per constellation id. at is the centre [x, y] in chart units.
+// The centres are not on rows or columns, so the chart does not read as a
+// grid. tilt (degrees) turns the ring of groups, so no two sectors align.
 // lead is the page the inspector opens first. The game sector's lead is an
 // in-page anchor (#features).
 const SECTOR_TEXT = {
-  game: { at: [125, 120], lead: 'features',
+  game: { at: [100, 110], tilt: 20, lead: 'features',
     blurb: 'Stella Nova is a space-colony sim. Mine ore, smelt alloys, grow a grid station and govern a crew across a solar system that runs on real n-body physics.' },
-  wiki: { at: [125, 335], lead: 'wiki',
+  wiki: { at: [150, 300], tilt: -35, lead: 'wiki',
     blurb: 'The player handbook, live. Look up every item, module and tech, plan a station on the real grid, trace every crafting chain, design ships and flags, and meet your crew.' },
-  community: { at: [125, 530], lead: 'starward-belt',
+  community: { at: [120, 525], tilt: 50, lead: 'starward-belt',
     blurb: 'Pages made with and for the people around the game: a tribute, a player-made map of the belt, the translation tool, and two studio tools for sunlight and materials.' },
-  space: { at: [345, 105], lead: 'hohmann',
+  space: { at: [345, 140], tilt: -15, lead: 'hohmann',
     blurb: 'Orbits you can plan and planets you can fling: transfer burns, real satellites, an n-body sandbox, a galaxy, a black hole and a wormhole.' },
-  quantum: { at: [530, 95], lead: 'orbital',
+  quantum: { at: [565, 82], tilt: 30, lead: 'orbital',
     blurb: 'Atoms and qubits: hydrogen orbitals in 3D, two atoms that share an electron, and quantum circuits that encode and decode data and images.' },
-  life: { at: [705, 100], lead: 'protein-viewer',
+  life: { at: [730, 165], tilt: -40, lead: 'protein-viewer',
     blurb: 'Real protein structures, a chain that folds, how AlphaFold predicts a structure, and a human skull and skeleton you can pull apart.' },
-  fluids: { at: [885, 120], lead: 'fluidlab',
+  fluids: { at: [890, 95], tilt: 10, lead: 'fluidlab',
     blurb: 'Stable fluids, a wind tunnel, real tidal currents, and the Navier-Stokes equations from 1D to the open blowup question.' },
-  fields: { at: [370, 265], lead: 'magnetlab',
+  fields: { at: [375, 290], tilt: 40, lead: 'magnetlab',
     blurb: 'Magnets, currents and Maxwell’s equations, then light itself: aperture diffraction, the double slit and circular polarization.' },
-  patterns: { at: [555, 255], lead: 'attractorlab',
+  patterns: { at: [505, 222], tilt: -25, lead: 'attractorlab',
     blurb: 'Simple rules, rich results: strange attractors, vector fields, reaction-diffusion, Lenia and the Game of Life.' },
-  sound: { at: [735, 270], lead: 'chordlab',
+  sound: { at: [660, 325], tilt: 60, lead: 'chordlab',
     blurb: 'Hear the maths. A live chord detector, harmony wheels, and resonance figures and drums that turn vibration into shapes you can see.' },
-  machines: { at: [905, 290], lead: 'watch-movement',
+  machines: { at: [895, 262], tilt: -20, lead: 'watch-movement',
     blurb: 'Mechanisms that move: a pocket-watch movement that comes apart, and a timepiece generator.' },
-  shaders: { at: [395, 495], lead: 'sdf-solids',
+  shaders: { at: [420, 500], tilt: -30, lead: 'sdf-solids',
     blurb: 'Live WebGPU shader tables in WGSL: noises, fields, colour, lighting, sampling and signed-distance solids, each with its source one click away.' },
-  effects: { at: [625, 490], lead: 'fire',
+  effects: { at: [620, 548], tilt: 25, lead: 'fire',
     blurb: 'The visual effects of the game: explosions, engine plumes, beams, fire, smoke, heat haze and frost.' },
-  rendering: { at: [855, 495], lead: 'supernova',
+  rendering: { at: [850, 452], tilt: -50, lead: 'supernova',
     blurb: 'Rendering techniques you can steer: ray marching, sphere tracing, a path tracer, glass and mirrors, volumes and a voxel world.' },
 };
 
@@ -96,7 +98,7 @@ const SECTORS = [];
 NAV.forEach(r => r.constellations.forEach(c => {
   const t = SECTOR_TEXT[c.id] || { at: [500, 310], lead: c.groups[0].p[0][0], blurb: '' };
   SECTORS.push({ id: c.id, name: c.label, short: c.short, glyph: c.icon, color: c.color,
-    region: r.id, regionName: r.label, blurb: t.blurb, lead: t.lead, at: t.at, label: t.at });
+    region: r.id, regionName: r.label, blurb: t.blurb, lead: t.lead, at: t.at, tilt: t.tilt || 0, label: t.at });
 }));
 
 // The game constellation also points into this page and to the stores.
@@ -224,7 +226,8 @@ function allPages() {
 // Anchors [x, y, radius] for the groups the chart shows. A sector with one
 // group sits on its centre. More groups sit on a ring around the centre.
 // The radius grows with the star count, so a big group gets more room.
-// The label goes above the top of the constellation.
+// The label goes above the top of the constellation, pulled toward the
+// highest group, so the labels do not stack in columns.
 function layoutFor(sec, counts) {
   const [cx, cy] = sec.at;
   const rad = n => n <= 1 ? 0 : 12 + 10 * Math.sqrt(n);
@@ -237,11 +240,12 @@ function layoutFor(sec, counts) {
   const out = counts.map((n, i) => {
     // Two groups go on a diagonal, so a sector does not read as one long row.
     const a0 = counts.length === 2 ? -Math.PI / 4 : -Math.PI / 2 + Math.PI / counts.length;
-    const a = a0 + i * 2 * Math.PI / counts.length;
+    const a = a0 + sec.tilt * Math.PI / 180 + i * 2 * Math.PI / counts.length;
     return [cx + Math.cos(a) * ring * 1.25, cy + Math.sin(a) * ring * 0.8, rad(n)];
   });
+  const hi = out.reduce((h, q) => q[1] - q[2] < h[1] - h[2] ? q : h);
   const top = Math.min(...out.map(([, y, r]) => y - r * 0.78));
-  sec.label = [cx, top - 22];
+  sec.label = [(cx + hi[0]) / 2, top - 22];
   return out;
 }
 
