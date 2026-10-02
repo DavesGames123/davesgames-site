@@ -797,14 +797,26 @@
           'slot g = c + rot(θ_c)(−r·gap, ±0.75·r·gap),  gap = 1.15·size',
           'v += (ċ + 4(g − x) − v)·min(1, 6dt)'
         ];
+        // TeX of the same laws. The page has no TeX or math colour classes,
+        // so no rules. The fleet flies over the whole window, so no anchor.
+        var tex = fleet.mode === 'wander' ? [
+          '\\dot\\theta = 1.2\\left(w + 2\\min(1.5,\\,|a|)\\,\\Delta\\theta_a\\right)',
+          'w = 0.8\\sin(0.7t + p) + 0.5\\sin(0.31t + 1.7p)',
+          'a = \\sum_j \\hat d\\,\\frac{R - d}{R}, \\qquad R = 1.3\\,\\text{size}'
+        ] : [
+          'v \\mathrel{+}= \\left(\\dot c + 4(g - x) - v\\right)\\min(1,\\,6\\,dt)',
+          'g = c + \\mathrm{rot}(\\theta_c)\\,(-r\\,\\text{gap},\\ \\pm 0.75\\,r\\,\\text{gap})',
+          '\\varphi = 0.22\\,t + 2\\pi q/Q'
+        ];
         opts.label({
           title: pr[0] + ' livery',
-          sub: (fleet.mode === 'wander' ? 'wander' : 'formation, squadrons of 7') + ' · ' + fleet.count + ' ships',
-          lines: [
-            'Hull ' + state.hull + ' · trim ' + state.trim + ' · accent ' + state.accent,
-            'Trim pattern: ' + (tr ? tr.name : state.pattern) + ' · cockpit keeps its own colours',
-            'Layers: hull, trim, cockpit, accent; tint a over grey b, cut by each mask'
+          sub: (fleet.mode === 'wander' ? 'Wander' : 'Formation, squadrons of 7') + ', ' + fleet.count + ' ships',
+          params: [
+            { name: 'hull', value: state.hull }, { name: 'trim', value: state.trim }, { name: 'accent', value: state.accent },
+            { name: 'trim pattern', value: tr ? tr.name : state.pattern }
           ],
+          lines: ['Layers: hull, trim, cockpit, accent. Each tints a over grey b, cut by its mask.'],
+          tex: ['\\text{overlay}(a, b) = \\begin{cases} 2ab, & b < \\tfrac12 \\\\ 1 - 2(1 - a)(1 - b), & b \\ge \\tfrac12 \\end{cases}'].concat(tex),
           eq: ['overlay = b < ½ ? 2ab : 1 − 2(1 − a)(1 − b)'].concat(eq)
         });
       }
