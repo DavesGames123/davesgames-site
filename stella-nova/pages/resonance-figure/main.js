@@ -20,6 +20,7 @@
      grep -n 'drawAxisWaves'    the component sine waves on the axes
      grep -n 'drawFrame'    the velocity and perpendicular vectors
      grep -n 'buildUI'      the control panel construction
+     grep -n 'snSaver'      the screensaver hook and its figure tour
    ========================================================================== */
 (() => {
   'use strict';
@@ -46,8 +47,10 @@
   function box() {
     const pad = MOB ? 8 : 14;
     const gap = MOB ? 8 : 12;
-    const botRes = MOB ? 38 : 22;                            // clear of the status bar
-    const usableW = W, usableH = H - botRes;
+    // In saver mode the status bar is hidden, and on a wide screen the block
+    // moves left so the shell label plate (lower right) does not cover it.
+    const botRes = SAVER.on ? 0 : (MOB ? 38 : 22);           // clear of the status bar
+    const usableW = SAVER.on && W > H * 1.2 ? W - Math.min(500, W * 0.4) : W, usableH = H - botRes;
     const avail = Math.min(usableW, usableH) - pad * 2;
     const strip = Math.round(avail * (MOB ? 0.28 : 0.32));   // wave panels: more space
     const r = Math.max(36, (avail - strip - gap) / 2);       // figure: less space
@@ -351,6 +354,7 @@
   // ------------------------------------------------------------------ frame
   function draw(now) {
     const t = now / 1000, dt = Math.min(Math.max(t - last, 0), 0.05); last = t;   // guard the first frame
+    if (SAVER.on) saverStep(dt);
     prevU = simU; simU += dt * G.speed; if (simU > 1e6) { simU %= 1; prevU = simU; }
     pushHistory(t, prevU, simU);
 
@@ -430,6 +434,74 @@
       el.classList.toggle('on', a === G.A && b === G.B && Math.abs(G.detune) < 1e-6);
     });
   }
+
+  // ------------------------------------------------------------ screensaver
+  // lib/screensaver.js has the protocol. enter() adds html.sn-saver (style.css
+  // hides the panel, gear, status and topbar), stops the tones, and plays a
+  // seeded tour of SAVER_TOUR. Each figure holds for a dwell. Its phase δ
+  // drifts at a slow rate, so the loop morphs. A detuned figure never closes.
+  // Each figure sends opts.label the two oscillator equations, the ratio, the
+  // interval name and the phase drift. calm 1 is the slowest. Audio stays off.
+  const SAVER = { on: false, opts: null, order: [], k: 0, t: 0, dwell: 18, slow: 1, st: null };
+  // [a, b, start phase δ0 in turns, base phase rate, detune ε]. saverFigure
+  // drifts δ at 2 * rate * slow turns per second.
+  const SAVER_TOUR = [
+    [3, 2, 0.25, 0.006, 0], [1, 1, 0.0, 0.012, 0], [2, 1, 0.0, 0.008, 0], [4, 3, 0.1, 0.005, 0],
+    [5, 4, 0.2, 0.004, 0], [5, 3, 0.0, 0.005, 0], [3, 1, 0.15, 0.007, 0], [5, 2, 0.05, 0.005, 0],
+    [3, 2, 0.0, 0, 0.004], [8, 5, 0.1, 0.003, 0], [2, 1, 0.0, 0, 0.003],
+  ];
+  function saverRand(seed) {
+    let a = seed >>> 0;
+    return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61); return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  }
+  const turns = v => (((v % 1) + 1) % 1).toFixed(2) + 'τ';
+  function saverFigure(k) {
+    SAVER.k = k; SAVER.t = 0;
+    const [a, b, d0, rate, eps] = SAVER_TOUR[SAVER.order[k % SAVER.order.length]];
+    SAVER.st = { a, b, d0, rate: 2 * rate * SAVER.slow, eps };
+    G.A = a; G.B = b; G.phase = d0; G.detune = eps;
+    clearTrail(); syncSteppers(); markPreset(); refreshStatus();
+    const name = nameFor(a, b), d1 = d0 + SAVER.st.rate * SAVER.dwell;
+    const eq = eps ? ['x = A sin((a + ε)ωt + δ)', 'y = B sin(bωt)'] : ['x = A sin(aωt + δ)', 'y = B sin(bωt)'];
+    eq.push('x = sin(' + (eps ? '(' + a + ' + ' + eps + ')' : a) + 'ωt + ' + turns(d0) + ')   y = sin(' + b + 'ωt)');
+    const lines = ['a : b = ' + a + ' : ' + b + ', ' + name.toLowerCase() + ', A = B = 1'];
+    if (eps) lines.push('ε = +' + eps + ': the loop never closes; it goes through every shape once in 1/ε = ' + Math.round(1 / eps) + ' periods');
+    else lines.push('δ drifts ' + turns(d0) + ' → ' + turns(d1) + ' (τ = 2π) over this figure');
+    const times = n => n === 1 ? 'once' : n + ' times';
+    lines.push('x touches each side ' + times(a) + ' and y touches top and bottom ' + times(b) + ' in one period');
+    lines.push('tones ' + a + '·f₀ and ' + b + '·f₀ (sound off)');
+    if (SAVER.opts && SAVER.opts.label) SAVER.opts.label({
+      title: name + ' · ' + a + ' : ' + b,
+      sub: 'Lissajous figure · ' + (eps ? 'detuned, drifting' : 'closed loop'),
+      eq, lines,
+    });
+  }
+  function saverStep(dt) {
+    SAVER.t += dt;
+    if (SAVER.t >= SAVER.dwell) { saverFigure(SAVER.k + 1); return; }
+    const st = SAVER.st;
+    if (st && st.rate) G.phase = st.d0 + st.rate * SAVER.t;
+  }
+  window.snSaver = {
+    enter(o) {
+      o = o || {};
+      const calm = o.calm != null ? Math.min(1, Math.max(0, o.calm)) : 0.7;
+      document.documentElement.classList.add('sn-saver');
+      if (G.playing) stopTones();
+      document.getElementById('panel').classList.remove('open');
+      const rnd = saverRand(o.seed || 1);
+      SAVER.order = SAVER_TOUR.map((_, i) => i);
+      for (let i = SAVER.order.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [SAVER.order[i], SAVER.order[j]] = [SAVER.order[j], SAVER.order[i]]; }
+      SAVER.slow = 1 - 0.7 * calm;
+      SAVER.dwell = Math.max(12, Math.min(24, (o.seconds || 60) / 4));
+      SAVER.opts = o; SAVER.on = true;
+      G.speed = 0.05 + 0.06 * SAVER.slow;
+      resize(); saverFigure(0);
+      return { canvas: cv, warmupMs: 1500 };
+    },
+    exit() { SAVER.on = false; },
+  };
 
   // ------------------------------------------------------------------- boot
   resize(); buildUI(); refreshStatus(); requestAnimationFrame(draw);

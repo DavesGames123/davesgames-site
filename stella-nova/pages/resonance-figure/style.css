@@ -136,3 +136,7 @@ html.in-frame #panel{padding-top:24px}
 @media(max-width:768px) and (orientation:landscape){
   #panel{width:min(70vw,320px)}
 }
+
+/* ---- screensaver (lib/screensaver.js): only the figure shows ---- */
+html.sn-saver #panel,html.sn-saver #gear,html.sn-saver #status,html.sn-saver .topbar{display:none}
+html.sn-saver #fig{cursor:none}
