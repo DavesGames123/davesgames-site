@@ -2568,28 +2568,63 @@ window.snSaver = { enter(opts) {
     const yr = r.epochyr < 57 ? 2000 + r.epochyr : 1900 + r.epochyr;
     const ep = new Date(Date.UTC(yr, 0, 1) + (r.epochdays - 1) * 86400000);
     const pv = satellite.propagate(r, SIM.time);
-    let live = 'SGP4 has no solution at this time';
+    let live = 'SGP4 has no solution at this time.', alt = '—';
     if (pv.position) {
       const geo = satellite.eciToGeodetic(pv.position, satellite.gstime(SIM.time));
       const v = pv.velocity ? Math.hypot(pv.velocity.x, pv.velocity.y, pv.velocity.z) : NaN;
-      live = 'now · alt ' + fmt(geo.height, 0) + ' km · lat ' + fmt(geo.latitude * D, 1) + '° · lon ' +
-        fmt(geo.longitude * D, 1) + '° · |v| ' + fmt(v, 2) + ' km/s';
+      alt = fmt(geo.height, 0) + ' km';
+      live = 'Now: lat ' + fmt(geo.latitude * D, 1) + '°, lon ' + fmt(geo.longitude * D, 1) + '°, |v| ' + fmt(v, 2) + ' km/s';
     }
     const nObj = sats.reduce((c, q) => c + (q.satrec ? 1 : 0), 0);
+    // params, new TeX for the element formulas (the page has no TeX or math
+    // colour classes, so no rules), and the plain eq fallback.
     label({
       title: s.name,
-      sub: 'NORAD ' + s.noradId + ' · ' + CAT_NAME[s.cat] + ' · TLE epoch ' + ep.toISOString().slice(0, 16).replace('T', ' ') + ' UTC',
-      lines: [
-        'a = ' + fmt(a, 0) + ' km · e = ' + r.ecco.toFixed(5) + ' · i = ' + fmt(oe.incDeg, 2) + '° · T = ' + fmt(oe.periodMin, 1) + ' min',
-        'Ω = ' + fmt(r.nodeo * D, 1) + '° · ω = ' + fmt(r.argpo * D, 1) + '° · M₀ = ' + fmt(r.mo * D, 1) + '° · n = ' + fmt(1440 / oe.periodMin, 3) + ' rev/day',
-        'apogee ' + fmt(oe.apogee, 0) + ' km · perigee ' + fmt(oe.perigee, 0) + ' km · μ = 398600.4418 km³/s² · R⊕ = 6378.137 km',
-        live,
-        'sim ' + SIM.time.toISOString().slice(0, 16).replace('T', ' ') + ' UTC · ' + fmtRate(SIM.speed) + ' · ' + nObj.toLocaleString() + ' objects',
+      sub: 'NORAD ' + s.noradId + ', ' + CAT_NAME[s.cat] + ', TLE epoch ' + ep.toISOString().slice(0, 10),
+      params: [
+        { sym: 'h', name: 'altitude now', value: alt },
+        { sym: 'a', name: 'semi-major axis', value: fmt(a, 0) + ' km' },
+        { sym: 'e', name: 'eccentricity', value: r.ecco.toFixed(5) },
+        { sym: 'i', name: 'inclination', value: fmt(oe.incDeg, 2) + '°' },
+        { sym: 'T', name: 'period', value: fmt(oe.periodMin, 1) + ' min' },
       ],
+      lines: [live,
+        'Sim ' + SIM.time.toISOString().slice(0, 16).replace('T', ' ') + ' UTC, ' + fmtRate(SIM.speed) + ', ' + nObj.toLocaleString() + ' objects'],
+      tex: ['n = \\frac{2\\pi}{T}, \\qquad a = \\left(\\frac{\\mu}{n^2}\\right)^{1/3}',
+        'r_{\\text{apo}},\\ r_{\\text{peri}} = a\\,(1 \\pm e) - R_\\oplus',
+        '\\text{TLE} \\xrightarrow{\\text{SGP4}} (\\vec r, \\vec v)_{\\text{ECI}} \\to \\text{ECEF at GMST}'],
       eq: ['n = 2π / T,   a = (μ / n²)^1/3',
            'r_apo, r_peri = a (1 ± e) − R⊕',
            'TLE → SGP4 → r, v (ECI) → ECEF at GMST'],
+      anchor: orbitAnchor,
     });
+  };
+  // The orbit in focus on screen, for the shell's label plate. Earth (radius
+  // 1 in scene units) sits at the origin, and the orbit lies inside the
+  // sphere of radius a (1 + e) / R_earth. The centre is the projected
+  // origin; the radius is that sphere's silhouette, fpx tan(asin(R / d)),
+  // with d the camera distance. The key point is the object itself, from
+  // the positions buffer that propagateAll() fills (satPoints space). When
+  // the camera is inside that sphere, the anchor is the object alone.
+  const _ov = new THREE.Vector3();
+  const orbitAnchor = () => {
+    if (selectedIdx < 0 || !sats[selectedIdx] || !sats[selectedIdx].satrec) return null;
+    const rr = sats[selectedIdx].satrec, R = Math.pow(398600.4418 / Math.pow(rr.no / 60, 2), 1 / 3) * (1 + rr.ecco) / EARTH_R_KM;
+    const b = renderer.domElement.getBoundingClientRect(), d = camera.position.length();
+    const P = v => { v.project(camera); return v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1 ? null : { x: b.left + (v.x + 1) / 2 * b.width, y: b.top + (1 - v.y) / 2 * b.height }; };
+    const pts = [];
+    const k = selectedIdx * 3;
+    if (positions && Math.abs(positions[k]) < 1e3) {
+      satPoints.updateMatrixWorld();
+      const q = P(_ov.set(positions[k], positions[k + 1], positions[k + 2]).applyMatrix4(satPoints.matrixWorld));
+      if (q) pts.push(q);
+    }
+    // A high orbit (GEO, Molniya) holds the camera: anchor on the object.
+    if (d <= R * 1.02) return pts.length ? { x: pts[0].x, y: pts[0].y, r: 14, pts } : null;
+    const c = P(_ov.set(0, 0, 0));
+    if (!c) return null;
+    const fpx = (b.height / 2) / Math.tan(camera.fov * Math.PI / 360);
+    return { x: c.x, y: c.y, r: fpx * Math.tan(Math.asin(R / d)), pts: pts.length ? pts : [c] };
   };
   const focus = () => {
     const idx = pickFocus();
