@@ -470,7 +470,8 @@ animate();
 // hides the panels, loads a calm preset chosen by opts.seed, and slows time and
 // spin by opts.calm (1 = slowest), with a floor so the volume never freezes. Every half dwell it eases the continuous
 // fields toward the next calm preset over 8 s. fractalIters stays fixed, because
-// an integer step would pop. No storage, no URL writes.
+// an integer step would pop. Once a second it sends opts.label the fold and
+// march equations with the live values. No storage, no URL writes.
 const SAVER_PRESETS=['Void','Gray','Ember','Default','Cyan'];
 const SAVER_EASE=['speed','density','atmosphereGlow','atmosphereLevel','atmosphereScale',
   'orbRotation','internalAnim','fractalScale','fractalDecay','smoothness','asymmetry','chromaticAberration'];
@@ -522,7 +523,36 @@ window.snSaver={
     };
     t0=performance.now();
     this._timer=setInterval(()=>step(performance.now()),50);
+    // The plate: the fold the shader runs (shaders/orb.frag.glsl,
+    // evaluateStructure and traceEnergy) with the live values from S. The
+    // same title refreshes the numbers once a second; a new preset name
+    // gives a new title, so the plate fades to it.
+    const label=typeof opts.label==='function'?opts.label:null;
+    const plate=()=>{
+      if(!label) return;
+      const f=(v,d)=>Number(v).toFixed(d);
+      label({
+        title:'Fractal orb · '+S.preset,
+        sub:'fold fractal, ray-marched in a sphere r = 2',
+        eq:[
+          'q = √(p² + k),  p ← s·q/|q|² − s',
+          '(y, z) ← (y² − z², 2yz),  (x, y, z) ← (z, x, y)',
+          'ρ(p₀) = ½ Σₙ exp(β·|p·p₀|),  n = 1…'+S.fractalIters,
+          'E ← 0.99·E + 0.08·D·c(ρ)·(1.8ρ + ρ²)',
+          't ← t + 0.02·e^(−2ρ)  (march step)',
+        ],
+        lines:[
+          'N = '+S.fractalIters+' folds · s = '+f(S.fractalScale,2)+' · β = '+f(S.fractalDecay,1)+' · k = '+f(S.smoothness,3),
+          'asymmetry '+f(S.asymmetry,2)+' · density D = '+f(S.density,2)+' · ≤ 64 march steps per pixel',
+          'churn ω = '+f(S.speed*S.internalAnim,2)+' rad/s · spin '+f(S.orbRotation,2)+' rad/s',
+          'c(ρ) = mix('+S.secondaryEnergy+', '+S.primaryEnergy+', smoothstep(0, 0.4, ρ))',
+          a?'easing to '+SAVER_PRESETS[i]:'colour out = ½·ln(1 + E), clamped',
+        ],
+      });
+    };
+    plate();
+    this._plate=setInterval(plate,1000);
     return { canvas:renderer.domElement, warmupMs:500 };
   },
-  exit(){ clearInterval(this._timer); }
+  exit(){ clearInterval(this._timer); clearInterval(this._plate); }
 };
