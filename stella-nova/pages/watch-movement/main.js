@@ -328,6 +328,51 @@ const ESC_NAME = {
   verge: 'verge (crown wheel)', cylinder: 'cylinder', detent: 'Earnshaw spring detent',
   pinlever: 'Roskopf pin lever', anchor: 'anchor (recoil)', deadbeat: 'Graham deadbeat', brocot: 'Brocot visible (near deadbeat)',
 };
+// ── saver plate anchor ──────────────────────────────────────────────────────
+// The shell's label plate (lib/screensaver.js, "label plate") points at the
+// subject of each tour step. plateAnchor(objs, keys) projects with the page
+// camera (Vector3.project) to page CSS px of the canvas rect:
+//   x, y  the projected centre of the world box of the visible meshes
+//   r     the largest distance from (x, y) to a projected corner of the
+//         local box of a mesh, clamped to the canvas: the circle holds
+//         every mesh of the subject that is on screen
+//   pts   the projected key points (world Vector3) that are on screen
+// It returns null when the subject is not on screen, or while the canvas
+// fades out for a swap (style opacity 0).
+const PA = { box: new THREE.Box3(), mb: new THREE.Box3(), v: new THREE.Vector3(), c: new THREE.Vector3() };
+function plateAnchor(objs, keys = []) {
+  const cv = $('view'), rc = cv.getBoundingClientRect(), cam = stage.camera;
+  if (!rc.width || !rc.height || cv.style.opacity === '0') return null;
+  const px = w => { PA.v.copy(w).project(cam); return PA.v.z > 1 ? null : { x: rc.left + (PA.v.x + 1) / 2 * rc.width, y: rc.top + (1 - PA.v.y) / 2 * rc.height }; };
+  const ms = [];
+  PA.box.makeEmpty();
+  for (const ob of objs) if (ob) ob.traverseVisible(m => {
+    if (!m.isMesh || (m.material && m.material.opacity === 0)) return;
+    let b;
+    if (m.isInstancedMesh) { if (!m.boundingBox) m.computeBoundingBox(); b = m.boundingBox; }
+    else { if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); b = m.geometry.boundingBox; }
+    if (!b || b.isEmpty()) return;
+    ms.push([m, b]); PA.mb.copy(b).applyMatrix4(m.matrixWorld); PA.box.union(PA.mb);
+  });
+  if (PA.box.isEmpty()) return null;
+  const C = px(PA.box.getCenter(PA.c));
+  if (!C) return null;
+  let r = 0;
+  for (const [m, b] of ms) for (let i = 0; i < 8; i++) {
+    PA.c.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyMatrix4(m.matrixWorld);
+    // A corner off the canvas counts at the canvas edge: in a close view
+    // the circle holds the part of the subject that is on screen.
+    const q = px(PA.c); if (q) r = Math.max(r, Math.hypot(Math.max(rc.left, Math.min(rc.right, q.x)) - C.x, Math.max(rc.top, Math.min(rc.bottom, q.y)) - C.y));
+  }
+  if (C.x + r < rc.left || C.x - r > rc.right || C.y + r < rc.top || C.y - r > rc.bottom) return null;
+  const pts = [];
+  for (const k of keys) { const q = k && px(k); if (q && q.x >= rc.left && q.x <= rc.right && q.y >= rc.top && q.y <= rc.bottom) pts.push(q); }
+  return { x: C.x, y: C.y, r, pts };
+}
+// The world centre of the box of an object: a key point for a part whose
+// origin is not at its middle.
+const centreOf = ob => new THREE.Box3().setFromObject(ob).getCenter(new THREE.Vector3());
+
 window.snSaver = {
   enter(o = {}) {
     saverOn = true;
@@ -355,7 +400,25 @@ window.snSaver = {
     // The plate: the calibre, its escapement, beat rate and wheel train, all
     // read from the calibre module. Live amplitude and beat count once a second.
     const VIEW_NAME = { exploded: 'exploded view', escapement: 'escapement close-up', dial: 'dial side' };
-    let viewName = '';
+    let viewName = '', viewKey = '';
+    const P = (sym, name, value, cls) => ({ sym, name, value, cls });
+    // The subject of each view for the plate anchor (plateAnchor). Key
+    // points are part origins (the arbor of a wheel, the pivot of a
+    // pendulum, anchor or lever): the oscillator and the escape wheel.
+    const OSC = ['balance', 'pendulum', 'cylinder', 'verge', 'detent', 'anchor', 'pallet', 'escape'];
+    // The close-up circle holds the escape wheel and its locking part only:
+    // the balance staff runs toward the camera and would move the centre off
+    // the escapement. The oscillator origin stays a key point.
+    const ESC = /^(escape|pallet|anchor|cylinder|detent|passing|verge|contrate)$/;
+    const anchorNow = () => {
+      if (!S.cur || S.swapping) return null;
+      const B = S.cur.B, ps = Object.values(B.parts).filter(q => q.holder.visible);
+      const org = id => B.parts[id] && B.parts[id].holder.visible ? B.parts[id].root.localToWorld(new THREE.Vector3()) : null;
+      const keys = OSC.map(org).filter(Boolean);
+      if (viewKey === 'escapement') return plateAnchor(ps.filter(q => ESC.test(q.id)).map(q => q.holder), keys);
+      if (viewKey === 'dial') return plateAnchor(ps.filter(q => q.layer === 'dial' || q.layer === 'hands' || q.id === 'dial').map(q => q.holder), [org('dial')].filter(Boolean));
+      return plateAnchor(ps.map(q => q.holder), keys);
+    };
     const plate = () => {
       if (!o.label || !S.cur || S.swapping) return;
       const cal = S.cur.cal, c = cal.CAL, per = S.cur.per || cal.periods(), tr = cal.train;
@@ -366,20 +429,23 @@ window.snSaver = {
       eq.push(`θ(t) = A · sin(2π f t),  f = ${c.fBal} Hz`);
       eq.push(`beats/h = 2 · 3600 · f = ${(2 * 3600 * c.fBal).toLocaleString()}`);
       const st = S.cur.state, p = cal.pose(st);
+      const tex = [String.raw`\theta(t) = A\,\sin(2\pi f\,t)`, String.raw`N_b = 2\cdot 3600\,f = ${(2 * 3600 * c.fBal).toLocaleString('en').replace(/,/g, '{,}')}\ \text{beats/h}`];
+      if (ratio) tex.push(String.raw`i = ` + tr.slice(1).map((r, i) => String.raw`\frac{${tr[i][2]}}{${r[3]}}`).join(String.raw`\cdot`) + String.raw` = ${Math.round(ratio).toLocaleString('en').replace(/,/g, '{,}')}`);
+      const params = [P('f', 'oscillator frequency', `${c.fBal} Hz`, 'm3'), P('A', 'amplitude', st.stopped ? 'stopped' : `${(st.amp / D).toFixed(0)}°`, 'm2'), P('N_b', 'beat rate', cal.freq, 'm4')];
+      if (ratio) params.push(P('i', `${tr[0][1]} to ${tr[tr.length - 1][1]}`, Math.round(ratio).toLocaleString('en'), 'm5'));
       o.label({
         title: cal.name,
-        sub: `${cal.kind} · ${cal.era} · ${viewName}`,
-        lines: [
-          `Escapement: ${ESC_NAME[cal.id] || cal.id}`,
-          `Beat: ${cal.freq}`,
-          'Train: ' + tr.map(r => r[3] === '—' ? `${r[1]} ${r[2]}` : `${r[1]} ${r[2]}/${r[3]}`).join(' · '),
-          st.stopped ? 'stopped' : `amplitude ${(st.amp / D).toFixed(0)}° · beat ${p.beats.toLocaleString()}`,
-        ],
-        eq,
+        sub: `${cal.kind}, ${cal.era}, ${viewName}`,
+        params,
+        lines: [`Escapement: ${ESC_NAME[cal.id] || cal.id}.`, st.stopped ? 'The movement is stopped.' : 'Each beat lets the escape wheel turn one half tooth.'],
+        tex, eq,
+        // Plate fields: θ m1, A m2, f m3, N_b m4, i m5 in params and TeX.
+        rules: [['\\theta', 'm1'], ['A', 'm2'], ['f', 'm3'], ['N_b', 'm4'], ['i', 'm5']],
+        anchor: anchorNow,
       });
     };
     setInterval(plate, 1000);
-    const show = name => { setShow('bridges', true); setRate(1); setView(name); viewName = VIEW_NAME[name] || name; plate(); };
+    const show = name => { setShow('bridges', true); setRate(1); setView(name); viewName = VIEW_NAME[name] || name; viewKey = name; plate(); };
     async function step() {
       const s = n++ % 3;
       if (s === 0) {
