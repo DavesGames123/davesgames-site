@@ -475,6 +475,18 @@ animate();
 const SAVER_PRESETS=['Void','Gray','Ember','Default','Cyan'];
 const SAVER_EASE=['speed','density','atmosphereGlow','atmosphereLevel','atmosphereScale',
   'orbRotation','internalAnim','fractalScale','fractalDecay','smoothness','asymmetry','chromaticAberration'];
+// The orb on screen, for the shell's label plate: the projected centre of
+// the volume sphere (radius 2, the orb mesh), and the screen radius of its
+// silhouette, R/sqrt(D^2 - R^2) over tan(fov/2), in page CSS px. project()
+// includes the saver's view offset. No key
+// points: the orb is one volume, so the leader ends at its edge.
+const _orbC=new THREE.Vector3();
+function orbAnchor(){
+  const R=2, D=camera.position.length(); if(!(D>R)) return null;
+  _orbC.set(0,0,0).project(camera); if(_orbC.z>1) return null;
+  const h=innerHeight/2, t=Math.tan(THREE.MathUtils.degToRad(camera.fov)/2);
+  return { x:(_orbC.x+1)*innerWidth/2, y:(1-_orbC.y)*h, r:R/Math.sqrt(D*D-R*R)/t*h };
+}
 window.snSaver={
   enter(opts){
     const calm=Math.min(1,Math.max(0,opts.calm??0.7));
@@ -502,7 +514,21 @@ window.snSaver={
     };
     let i=(opts.seed>>>0)%SAVER_PRESETS.length;
     Object.assign(S,calmOf(SAVER_PRESETS[i]),{preset:SAVER_PRESETS[i]});
-    camera.position.setLength(6);
+    // Pull the camera back so that the orb takes about 0.31 of the height
+    // (0.44 of the width on a narrow screen). Then the label plate fits
+    // beside the orb, not over it. Never closer than the page's 6 units.
+    const fit=()=>{
+      const h=innerHeight/2, t=Math.tan(THREE.MathUtils.degToRad(camera.fov)/2);
+      const r=Math.min(0.31*innerHeight,0.44*innerWidth);
+      camera.position.setLength(Math.max(6,Math.hypot(2*h/(t*r),2)));
+      // On a tall screen the shell docks the plate at the top, so move the
+      // image of the orb down by 0.12 of the height (a view offset: the
+      // camera and its orbit stay the same).
+      const W=innerWidth,H=innerHeight;
+      if(H>W) camera.setViewOffset(W,H,0,-Math.round(0.12*H),W,H); else camera.clearViewOffset();
+      camera.updateProjectionMatrix();
+    };
+    fit(); addEventListener('resize',fit);
     applyState();
     // Autopilot: ease S toward the next preset, colours through THREE.Color.
     const c=new THREE.Color();
@@ -526,14 +552,33 @@ window.snSaver={
     // The plate: the fold the shader runs (shaders/orb.frag.glsl,
     // evaluateStructure and traceEnergy) with the live values from S. The
     // same title refreshes the numbers once a second; a new preset name
-    // gives a new title, so the plate fades to it.
+    // gives a new title, so the plate fades to it. Colours: p and t m1
+    // (ray), rho m2 (field), k and D m4, E m5 (emission), N, s, beta m6.
     const label=typeof opts.label==='function'?opts.label:null;
     const plate=()=>{
       if(!label) return;
       const f=(v,d)=>Number(v).toFixed(d);
       label({
         title:'Fractal orb · '+S.preset,
-        sub:'fold fractal, ray-marched in a sphere r = 2',
+        sub:'Fold fractal, ray-marched in a sphere of radius 2',
+        params:[
+          {sym:'N',name:'folds',value:String(S.fractalIters),cls:'m6'},
+          {sym:'s',name:'fold scale',value:f(S.fractalScale,2),cls:'m6'},
+          {sym:'\\beta',name:'decay',value:f(S.fractalDecay,1),cls:'m6'},
+          {sym:'k',name:'smoothness',value:f(S.smoothness,3),cls:'m4'},
+          {sym:'D',name:'density',value:f(S.density,2),cls:'m4'},
+        ],
+        lines:[
+          'Up to 64 march steps per pixel; colour out = ½ ln(1 + E)',
+          a?'Easing to '+SAVER_PRESETS[i]:'Churn '+f(S.speed*S.internalAnim,2)+' rad/s, spin '+f(S.orbRotation,2)+' rad/s',
+        ],
+        tex:[
+          '\\mathbf{q} = \\sqrt{\\mathbf{p}^2 + k}, \\qquad \\mathbf{p} \\leftarrow \\frac{s\\,\\mathbf{q}}{|\\mathbf{q}|^2} - s',
+          '\\rho(\\mathbf{p}_0) = \\tfrac12 \\sum_{n=1}^{N} e^{\\beta\\,|\\mathbf{p}_n \\cdot \\mathbf{p}_0|}',
+          'E \\leftarrow 0.99\\,E + 0.08\\,D\\,c(\\rho)\\,(1.8\\,\\rho + \\rho^2)',
+          't \\leftarrow t + 0.02\\,e^{-2\\rho}',
+        ],
+        rules:[['\\mathbf{p}','m1'],['\\mathbf{q}','m1'],['t','m1'],['\\rho','m2'],['k','m4'],['D','m4'],['E','m5'],['N','m6'],['s','m6'],['\\beta','m6']],
         eq:[
           'q = √(p² + k),  p ← s·q/|q|² − s',
           '(y, z) ← (y² − z², 2yz),  (x, y, z) ← (z, x, y)',
@@ -541,13 +586,7 @@ window.snSaver={
           'E ← 0.99·E + 0.08·D·c(ρ)·(1.8ρ + ρ²)',
           't ← t + 0.02·e^(−2ρ)  (march step)',
         ],
-        lines:[
-          'N = '+S.fractalIters+' folds · s = '+f(S.fractalScale,2)+' · β = '+f(S.fractalDecay,1)+' · k = '+f(S.smoothness,3),
-          'asymmetry '+f(S.asymmetry,2)+' · density D = '+f(S.density,2)+' · ≤ 64 march steps per pixel',
-          'churn ω = '+f(S.speed*S.internalAnim,2)+' rad/s · spin '+f(S.orbRotation,2)+' rad/s',
-          'c(ρ) = mix('+S.secondaryEnergy+', '+S.primaryEnergy+', smoothstep(0, 0.4, ρ))',
-          a?'easing to '+SAVER_PRESETS[i]:'colour out = ½·ln(1 + E), clamped',
-        ],
+        anchor:orbAnchor,
       });
     };
     plate();
