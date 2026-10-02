@@ -67,7 +67,7 @@
 //      pan / zoom .......... "pan / zoom"            pointer, wheel, pinch
 //      loop ................ "function loop"         rAF update + draw + status
 //      screensaver ......... "window.snSaver"        shell saver hook
-//      saver equations ..... "const ODE="            dx/dt, dy/dt drawn in the canvas
+//      saver plate ......... "function saverPlate"   label plate: TeX, params, notes
 // ============================================================================
 "use strict";
 
@@ -1022,7 +1022,6 @@ function loop(t){
   fc++;ft+=dt; if(ft>=0.5){$("st-fps").textContent=Math.round(fc/ft)+" fps";fc=0;ft=0;}
   if(cfg.playing){updateTracers(dt); updatePS(dt);}
   render();
-  if(saverEq) drawSaverEq();
   if(cfg.sim) drawMSim();
   capT+=dt;
   if(capT>0.12){capT=0;
@@ -1059,7 +1058,7 @@ setTimeout(()=>{
 // then calls resize() and respawns the tracers), and shows one system chosen by
 // opts.seed with no axes, arrows or inset. calm 1 halves the tracer speed. The
 // system does not change inside one dwell, so there is no respawn cut.
-// drawSaverEq() then draws the dx/dt and dy/dt of that system into the canvas.
+// saverPlate() then sends the shell label plate the equations of that system.
 window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0));
   while(!started)await new Promise(r=>setTimeout(r,50));
   const st=document.createElement("style");st.textContent="html.saver #panel,html.saver #mob-btn,html.saver .mob-overlay,html.saver #eq-panel,html.saver #msim-panel,html.saver #status-bar,html.saver .topbar{display:none!important}html.saver #canvas-wrap{position:fixed;inset:0;z-index:1}html.saver #sim-canvas{cursor:none}";
@@ -1067,14 +1066,13 @@ window.snSaver={async enter(opts){const calm=Math.max(0,Math.min(1,+opts.calm||0
   const keys=["vdp","duffing","lotka","pendulum","cjou","cinv","cz3","csin"].filter(k=>SYS[k]);
   cfg.sim=false;cfg.axes=false;cfg.arr=false;cfg.dom=false;cfg.playing=true;cfg.spd=14*(1-0.5*calm);cfg.trl=Math.max(cfg.trl,48);
   selectSystem(keys[(opts.seed>>>0)%keys.length]);resize();spawnTracers();
-  saverEq=saverLabelsOn(opts)&&ODE[cur]?{key:cur,t0:performance.now()}:null;
+  if(opts.labels!==false&&typeof opts.label==="function")try{opts.label(saverPlate());}catch(e){}
   return{canvas,warmupMs:2500};}};
 
-/* ════════ saver equations ════════ */
+/* ════════ saver plate ════════ */
 // Plain-text dx/dt and dy/dt of each system, the same field that fieldAt()
-// gives the tracers. A complex map shows its Pólya field (Re f, −Im f). The
-// TeX blocks of eqs() are not used here, for two reasons. The canvas takes no
-// TeX, and eqs() has no dx/dt form for the Duffing well or the complex maps.
+// gives the tracers: the Unicode fallback (eq) of the shell label plate. A
+// complex map shows its Pólya field (Re f, −Im f).
 const ODE={
   pendulum:{sub:"x = θ,  y = ω",eq:["ẋ = y","ẏ = −sin x − ζ y"]},
   vdp:     {sub:"y = ẋ",eq:["ẋ = y","ẏ = μ (1 − x²) y − x"]},
@@ -1089,37 +1087,25 @@ const ODE={
   csin:    {sub:"Pólya field (Re f, −Im f)",eq:["ẋ = sin x cosh y","ẏ = −cos x sinh y"]},
   clog:    {sub:"Pólya field (Re f, −Im f)",eq:["ẋ = ½ ln(x² + y²)","ẏ = −arg z"]}
 };
-// The shell menu option "Show labels and equations" (labels). The shell does
-// not pass it in opts yet, so read opts.labels when it is there, else the
-// shell settings in localStorage (same origin as this frame).
-function saverLabelsOn(opts){
-  if(opts&&typeof opts.labels==="boolean")return opts.labels;
-  try{const s=JSON.parse(localStorage.getItem("sn-saver-settings-v2")||"{}");return s.labels!==false;}catch(e){return true;}
-}
-// The equations are drawn into the canvas that the hook returns, so a
-// recording holds them. Plate at the lower right, fade in after 2.5 s.
-let saverEq=null;
-function drawSaverEq(){
-  const E=ODE[saverEq.key]; if(!E||saverEq.key!==cur)return;
-  const a=Math.max(0,Math.min(1,(performance.now()-saverEq.t0-2500)/3000)); if(a<=0)return;
-  const k=Math.max(0.8,Math.min(1.4,Math.min(CW,CH)/800));
-  const fT=Math.round(13*k), fE=Math.round(16*k), fP=Math.round(12*k), pad=Math.round(14*k), gap=Math.round(6*k);
-  const S=SYS[cur], pk=Object.keys(S.params||{});
-  const par=pk.map(n=>S.params[n].l.split(" ").pop()+" = "+(+P[n]).toFixed(2)).join("    ");
-  const sans="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif", mono="ui-monospace, Menlo, Consolas, monospace";
-  ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.textBaseline="top"; ctx.textAlign="left";
-  ctx.font="500 "+fT+"px "+sans; let w=ctx.measureText(S.name).width;
-  ctx.font=fP+"px "+sans; w=Math.max(w,ctx.measureText(E.sub).width, par?ctx.measureText(par).width:0);
-  ctx.font=fE+"px "+mono; for(const t of E.eq)w=Math.max(w,ctx.measureText(t).width);
-  const h=fT+gap+fP+gap*2+E.eq.length*(fE+gap)+(par?gap+fP:0);
-  const bw=w+pad*2, bh=h+pad*2, x0=CW-bw-Math.round(40*k*Math.min(1,CW/900)), y0=CH-bh-Math.round(34*k*Math.min(1,CW/900));
-  ctx.globalAlpha=a*0.55; ctx.fillStyle="rgb(6,8,13)";
-  ctx.beginPath(); if(ctx.roundRect)ctx.roundRect(x0,y0,bw,bh,12*k); else ctx.rect(x0,y0,bw,bh); ctx.fill();
-  ctx.globalAlpha=a*0.9; let y=y0+pad;
-  ctx.font="500 "+fT+"px "+sans; ctx.fillStyle="#dfe8f5"; ctx.fillText(S.name,x0+pad,y); y+=fT+gap;
-  ctx.font=fP+"px "+sans; ctx.fillStyle="#8ea3bd"; ctx.fillText(E.sub,x0+pad,y); y+=fP+gap*2;
-  ctx.font=fE+"px "+mono; ctx.fillStyle="#eef3fb";
-  for(const t of E.eq){ctx.fillText(t,x0+pad,y); y+=fE+gap;}
-  if(par){ctx.font=fP+"px "+mono; ctx.fillStyle="#ffc832"; ctx.fillText(par,x0+pad,y+gap*0.5);}
-  ctx.restore();
-}
+// The dx/dt, dy/dt form as TeX where eqs() has none (the Duffing well and
+// the complex maps): the Pólya field of each map, as in ODE.
+const ODE_TEX={
+  duffing:"\\dot{x}=y,\\qquad \\dot{y}=x-x^3-\\zeta\\,y",
+  cz2:"\\dot{x}=x^2-y^2,\\qquad \\dot{y}=-2xy",
+  cz3:"\\dot{x}=x^3-3xy^2,\\qquad \\dot{y}=y^3-3x^2y",
+  cinv:"\\dot{x}=\\frac{x}{x^2+y^2},\\qquad \\dot{y}=\\frac{y}{x^2+y^2}",
+  cjou:"\\dot{x}=x-\\frac{x}{x^2+y^2},\\qquad \\dot{y}=-y-\\frac{y}{x^2+y^2}",
+  csin:"\\dot{x}=\\sin x\\cosh y,\\qquad \\dot{y}=-\\cos x\\sinh y",
+  clog:"\\dot{x}=\\tfrac12\\ln(x^2+y^2),\\qquad \\dot{y}=-\\arg z"
+};
+// The shell label plate of the current system: the panel TeX of eqs() in
+// the sysRules() colours, then the dx/dt form of ODE_TEX. Params are the
+// system parameters (m4, m5 as in sysRules), the tracer count and the view
+// span. No anchor: the phase portrait fills the screen, so the plate sits
+// at the lower right.
+function saverPlate(){const S=SYS[cur],E=ODE[cur]||{sub:"",eq:[]};
+  const tex=S.eqs().map(b=>plainTeX(b.tex));if(ODE_TEX[cur])tex.splice(1,0,ODE_TEX[cur]);
+  const params=Object.keys(S.params||{}).slice(0,2).map((k,i)=>({sym:paramSym(S.params[k].l),name:paramWord(S.params[k].l)||"parameter",value:(+P[k]).toFixed(2),cls:"m"+(4+i)}));
+  params.push({sym:"N",name:"tracers",value:String(TR_N)},{sym:"L",name:"view span",value:S.view.span.toFixed(1)});
+  return{title:S.name,sub:S.group==="complex"?"Pólya field of a complex map":"Phase portrait of a planar flow",
+    params,lines:E.sub&&S.group!=="complex"?[E.sub]:[],tex:tex.slice(0,4),rules:sysRules(),eq:E.eq};}
