@@ -516,6 +516,8 @@ const spec = {
     { id: 'tone', label: 'Accent', hex: '#5b7cff' },
     { id: 'cream', label: 'Light', hex: '#fff1dc' },
   ],
+  // screensaver: calm cells and tempo for the table-engine hook (lib/table-engine.js)
+  saver: { cells: ['lava_lamp', 'soap_bubble', 'nebula_orb', 'mercury', 'oil_drops', 'wine_glass', 'hourglass', 'spinning_top', 'gear_train', 'ball_bearing', 'borromean', 'rainbow_knot', 'gyroid_core', 'morph_solid', 'marble_pair', 'teacup', 'plasma_ring', 'iris_blob'], tempo: [1, 0.35], dpr: 1, warmup: 1200 },
 };
 
 // ── emit index.html ──────────────────────────────────────────────────────────
