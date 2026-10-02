@@ -872,6 +872,30 @@ const frag = ([name, , , , body]) =>
 const pack = HELPERS + `\n// ── the ${CELLS.length} cells ─────────────────────────────────────────────────────────────\n` +
   CELLS.map(frag).join('\n\n') + '\n';
 
+// ── saver plate equations ───────────────────────────────────────────────────
+// SAVER_EQ[name] goes into spec.json as cell.eq. The table-engine sends it to
+// the screensaver plate (lib/table-engine.js, saverLabel). Plain Unicode text,
+// written from the cell bodies above. r is the distance of a dot center from
+// the frame center, in uv (short side = 1). s is the dot pitch in CSS px.
+const SAVER_EQ = {
+  breath_hex: ['φ = t·(0.3…0.9) − r·(0.8…3)', 'w = ½ + ½·clamp(g·sin 2πφ, −1, 1),  g = 1.5…8 (edge)', 'dot radius = s·(0.1…0.47 by w),  hex grid'],
+  ripple_hex: ['a = ½ + ½·sin(k·r − ω·t)·e^(−γr)', 'k = 50…18 (wavelength),  ω = 2…6,  γ = 0.3…3 (damping)', 'dot radius = ½s·(0.12…0.98 by a),  hex grid'],
+  cross_waves: ['w = ¼·(2 + sin(f·d̂₁·x − 2.3t) + sin(1.3f·d̂₂·x − 1.7t))', 'd̂₁ at angle α = 0.1…1.2 + 0.1 sin 0.3t,  d̂₂ at α + 2.1', 'f = 10…28,  square dot half-size = ½s·(0.12…0.96 by w)'],
+  standing_nodes: ['a = sin mπx·sin nπy·cos ωt + b·sin nπx·sin mπy·sin ωt', 'm = 2…5 (mode),  n = m + 1,  ω = 1.2…3.5,  b = 0.45…1', 'dot radius ∝ |a|,  tone = ½ + ½·sign·|a|'],
+  dot_lens: ['f(t) = c + 0.26·(sin 0.7vt, sin 1.1vt),  v = 0.3…1 (drift)', 'B = exp(−|p − f|²/R²),  R = 0.18…0.36 (radius)', 'q = f + (p − f)·mix(1, 0.55…0.25, B)  (magnified grid)'],
+  horizon_arc: ['d = |x − (0, −R − h)| − R,  R = 1.4,  h = 0.35…0.05', 'v = e^(−d²/0.0006) + g·e^(−9d) + Σᵢ (1 − aᵢ)²·e^(−(d − 0.9aᵢ)²/0.0012)', 'aᵢ = fract(0.35t + i/n),  n = 2…4 pulses'],
+  sine_band: ['f(x) = A sin X + 0.45A sin(2.7X − 1.3vt),  X = 8x + vt', 'v = e^(−d²/w²),  d = (y − f)/√(1 + f′²)', 'A = 0.08…0.2,  w = 0.02…0.07,  v = 0.4…1.4 (speed)'],
+  nested_arches: ['y′ = y + 0.45 + a·x²,  arch i = round(y′/Δ),  i = 1…9', 'band = e^(−dₗ²/0.00018)·(0.25 + 0.85·roll²)', 'roll = ½ + ½ sin(0.9i − ωt),  a = 1.2…3,  ω = 1.5…4'],
+  lissajous_trace: ['q(φ) = 0.38·(sin(3φ + 0.5), sin(b·φ)),  b = 2…4 (ratio)', 'head φ₀ = (0.4…1.2)·t,  tail L = 1.2…3.5', 'v = maxᵢ e^(−dᵢ²/0.0004)·(i/48)^1.6  over 48 segments'],
+  ring_interference: ['a = ½·(cos(k|x − s₁| − ωt) + cos(k|x − s₂| − ωt))', 's₁,₂ = (∓D, ±0.05 sin 0.4t),  D = 0.08…0.3 (spacing)', 'k = 60…25 (wavelength),  ω = 2…6,  dot radius ∝ |a|'],
+  drop_pond: ['h = Σ 1.4(1 − a)·sin(55q)·e^(−150q²),  q = |x − cᵢ| − 0.7a', 'a = fract((0.2…0.55)·t + hash),  one drop per cell of 0.6…0.35', 'dot shift ∝ ∇h,  lit = 0.22 + 0.7h + 2.5·max(∇h·(−0.6, 0.8), 0)'],
+  warp_halftone: ['q = fbm₂(2.2x),  r = fbm₂(2.2x + 3q),  F = ½ + 0.8·fbm(2.2x + 3r)', 'v = clamp((F − 0.3)·g, 0, 1),  g = 1.2…2.4 (gain)', 'AM screen at 0.35…1.22 rad:  dot radius = 0.707·s·√v'],
+  cmy_rosette: ['three screens at 15°, 75°, 0° (cyan, magenta, yellow)', 'F = swirl(x, t),  θ′ = θ + twist/(r + 0.25) − 0.6t', 'dot radius = 0.62·s·√F,  color = paper·Π (1 − cov·(1 − ink))'],
+  swirl_halftone: ['θ′ = θ + τ/(r + 0.25) − 0.6t,  τ = 0.5…3 (twist)', 'F = (½ + ½ sin(3θ′ + 9r))·smoothstep(0.62, 0.05, r)·(0.55 + 0.7n) + 0.35e^(−30r²)', 'screen turns at (0…0.25)·t,  dot radius = s·(0.55…0.78)·√F + 0.05s'],
+  ign_clouds: ['n = fbm(3x + (0.05…0.25)·t·x̂ + 0.02t·ŷ),  5 octaves', 'v = 0.85·smoothstep(c, 0.85, n) + 0.15·(½ − y)', 'out = ⌊v·(L − 1) + IGN(p)⌋/(L − 1),  IGN = fract(52.98·fract(0.0671x + 0.0058y)),  L = 2…5'],
+  clustered_dot: ['g = ½ + 0.9·x·(cos a, sin a),  a = (0.2…0.8)·t', 'v = g·(0.75 + 0.35·fbm(4x + a))', 'out = ⌊v·(L − 1) + T₄ₓ₄[p]⌋/(L − 1),  4×4 clustered threshold,  L = 2…4'],
+};
+
 // ── emit spec.json ───────────────────────────────────────────────────────────
 const spec = {
   cols: 6,
@@ -880,6 +904,7 @@ const spec = {
     name, family, species, knobs,
     defaults: [0.5, 0.5, 0.5, 0.5],
     fn: 'fs_' + name,
+    ...(SAVER_EQ[name] ? { eq: SAVER_EQ[name] } : {}),
   })),
   gens: [
     { id: 'exposure', title: 'Exposure · brightness', fn: 'flat', period: 10, amp: 0.4, bias: 0.5, phase: 0,
