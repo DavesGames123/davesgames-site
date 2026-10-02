@@ -490,6 +490,39 @@ window.snSaver={
       requestAnimationFrame(turn);
     };
     requestAnimationFrame(turn);
+    saverLabel=opts.labels!==false&&typeof opts.label==='function'?opts.label:null;
+    clearInterval(saverTimer);saverPlate();
+    if(saverLabel)saverTimer=setInterval(saverPlate,1000);
     return { canvas, warmupMs:1000 };
-  }
+  },
+  exit(){saverLabel=null;clearInterval(saverTimer);saverTimer=0;}
 };
+// The plate (opts.label) names the page: Maxwell's twenty scalar lines, the
+// group sizes read from window.T24 (equations.js), Heaviside's four vector
+// laws, and the dipole field that fieldAt() computes. The live values are λ,
+// k = kOf(), the axis angle from the turn above, the phase t mod 2π, the
+// near/far crossover r = 1/k, and the amp, cNear and cRad weights.
+let saverLabel=null,saverTimer=0;
+function saverPlate(){
+  if(!saverLabel)return;
+  const k=kOf(),groups=((window.T24&&window.T24.concepts)||[]);
+  const total=groups.reduce((a,c)=>a+c.lines.length,0);
+  const short={gaussE:'Gauss E',gaussB:'Gauss B',faraday:'Faraday',ampere:'Ampère–Maxwell'};
+  const lines=[];
+  if(groups.length)lines.push(total+' scalar lines: '+groups.map(c=>(short[c.key]||c.name.replace(/ relations$/,''))+' '+c.lines.length).join(' · '));
+  lines.push('λ = '+SIM.lambda.toFixed(0)+' px · k = 2π/λ = '+k.toFixed(4)+' /px · near/far r = 1/k = '+(1/k).toFixed(1)+' px');
+  lines.push('dipole axis θₐ = '+SIM.axisDeg.toFixed(1)+'° (turning) · phase t mod 2π = '+(SIM.t%(2*Math.PI)).toFixed(2));
+  lines.push('A = '+SIM.amp.toFixed(2)+' · near weight '+SIM.cNear.toFixed(2)+' · radiation weight '+SIM.cRad.toFixed(2));
+  lines.push('lines: E stream function · heatmap: B⊥');
+  saverLabel({
+    title:'Twenty to Four · radiating dipole',
+    sub:'Maxwell 1865, twenty scalar lines → Heaviside 1884, four vector laws',
+    lines,
+    eq:['∇·E = ρ/ε₀     ∇·B = 0',
+        '∇×E = −∂B/∂t     ∇×B = μ₀J + μ₀ε₀ ∂E/∂t',
+        'u = k r − t,   rad = k² cos u/r',
+        'near = cos u/r³ + k sin u/r²',
+        'E = A[near (3cosθ r̂ − â) + rad (â − cosθ r̂)]',
+        'B⊥ = A (r̂ × â)(k² cos u/r + k sin u/r²)'],
+  });
+}
