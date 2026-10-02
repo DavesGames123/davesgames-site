@@ -17,7 +17,7 @@
 // grep: function relayout  function buildCover  function placeLabels
 //       function placeBlocks  function bestSpot  function switchTo  function frame
 //       function buildAtlas  const CAPTIONS  function captionHTML
-//       window.snSaver (shell screensaver hook)
+//       window.snSaver (shell screensaver hook)  function saverPlate (its label plate)
 
 import { computeView, lonLatToScreen, metersPerScreenPx, viewCornersLonLat, coreOf } from './view.js';
 import { createLocator } from './locator.js';
@@ -856,6 +856,7 @@ function frame(t) {
     if (hour >= span) hour -= span;
   }
   updateClockUI();
+  if (saverLabel && (t - saverPlateT >= 1000 || Math.floor(hour) !== saverPlateH)) { saverPlateT = t; saverPlate(); }
   if (engine && dataset) {
     try {
       engine.render(hour, dt);
@@ -934,11 +935,47 @@ async function start() {
 // opts.seed picks the location. The switch fades through black, as a normal
 // switch does. calm 1 halves the model-time rate. In saver mode, switchTo()
 // does not write the URL hash or the session store.
+//
+// The label plate (opts.label) names the location, the ocean model and the
+// local model time, all from meta.json. The equations are the ones that
+// engine.js and the shaders compute: field.wgsl rebuilds the current from the
+// mean and the EOF modes, coefRows() interpolates the mode amplitudes over
+// hours, and advect.wgsl moves each tracer along the current by RK2. frame()
+// calls saverPlate() every 1 s, so the clock on the plate stays live.
+let saverLabel = null, saverPlateT = 0, saverPlateH = -1;
+function saverPlate() {
+  if (!saverLabel || !meta) return;
+  saverPlateH = Math.floor(hour);
+  const v = meta.variance?.vel, modes = meta.velModes || 12;
+  const rate = timeScale * lastHour() / WEEK_SECONDS;
+  const lines = [
+    `${meta.region ? meta.region + ' · ' : ''}${meta.dates || ''}`.replace(/ · $/, ''),
+    `${stamp(hour)} · hour ${Math.floor(hour)} of ${lastHour()} · ${rate.toFixed(1)} model h per s`,
+    `surface current: mean + ${modes} EOF modes${v ? ` (${(v * 100).toFixed(1)} % of variance)` : ''}`,
+  ];
+  if (meta.peak?.knots) lines.push(`fastest this week: ${meta.peak.knots.toFixed(1)} kn at hour ${meta.peak.hour}`);
+  if (meta.tempC) lines.push(`water ${meta.tempC.min.toFixed(1)}–${meta.tempC.max.toFixed(1)} °C (colour)`);
+  if (meta.metersPerPixel) lines.push(`grid ${meta.width} × ${meta.height}, ${Math.round(meta.metersPerPixel)} m per cell`);
+  try {
+    saverLabel({
+      title: meta.title,
+      sub: `${meta.modelLong || modelShort(meta)} (${modelShort(meta)})`,
+      lines,
+      eq: [
+        `u(x, t) = ū(x) + Σₖ aₖ(t) φₖ(x),  k = 1…${modes}`,
+        'aₖ(t): Catmull–Rom between hourly rows',
+        'tracer: RK2 along û, step ∝ (|u|/u_ref)^0.6',
+      ],
+    });
+  } catch { /* the shell plate is optional */ }
+}
 window.snSaver = {
   async enter(opts) {
     const calm = clamp(+opts.calm || 0, 0, 1);
     await started;                  // the location list and the first dataset
     saver = true;
+    saverLabel = opts.labels === false || typeof opts.label !== 'function' ? null : opts.label;
+    saverPlateT = 0;
     timeScale = 1 / (1 + calm);
     const st = document.createElement('style');
     st.textContent = 'body.saver #controls,body.saver #caption,body.saver #atlas,body.saver #scrim,body.saver #loading{display:none!important}body.saver,body.saver #stage{cursor:none}';
@@ -948,6 +985,7 @@ window.snSaver = {
     setPlaying(true);
     const i = (opts.seed >>> 0) % locs.length;
     if (i !== locIndex) await switchTo(i);
+    saverPlate();
     return { canvas, warmupMs: 1500 };
   },
 };
